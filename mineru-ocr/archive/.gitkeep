@@ -1,0 +1,2 @@
+# This file ensures the archive directory is tracked by git
+# while ignoring its contents via .gitignore

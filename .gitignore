@@ -1,4 +1,15 @@
 .DS_Store
 .specstory/
 .vscode/
+.claude/skills/
 dist/
+references/
+test/
+**/DECISIONS.md
+**/TASKS.md
+!CLAUDE.md
+**/*/CLAUDE.md
+
+# Archive directories - ignore content but keep directory structure
+**/archive/*
+!**/archive/.gitkeep
