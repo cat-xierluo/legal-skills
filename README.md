@@ -2,12 +2,11 @@
 
 > 面向律师办案的 Claude Skills 集合，将 Claude 从通用 AI 助手转变为专业的法律工作协作者。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/badge/GitHub-cat--xierluo-blue)](https://github.com/cat-xierluo/legal-skills)
 
 ## 📋 项目概述
 
-本项目旨在沉淀并分发面向律师办案的 Claude Skills，支持诉讼与非诉场景的 AI 协作。所有技能遵循统一的结构规范，确保可复用、可追溯、可扩展。
+本项目旨在沉淀并分发面向律师办案的 Claude Skills，支持诉讼与非诉场景的 AI 协作。
 
 ### 核心特点
 
@@ -18,52 +17,22 @@
 
 ## 🛠️ 技能列表
 
-### 已发布技能
+### 官方技能
+
+来自 Claude Code 官方的通用技能：
+
+| 技能 | 说明 |
+| :--- | :--- |
+| **[skill-creator](skill-creator/)** | 技能创建指南和工具集 |
+| **[pdf](pdf/)** | PDF 处理工具包：文本提取、表单填写、合并拆分 |
+
+### 自研技能
+
+面向法律场景定制开发的技能：
 
 | 技能 | 说明 | 状态 |
 | :--- | :--- | :--- |
 | **[mineru-ocr](mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 |
-| **[pdf](pdf/)** | PDF 处理工具包：文本提取、表单填写、合并拆分 | ✅ 稳定版 |
-| **[skill-creator](skill-creator/)** | 技能创建指南和工具集 | ✅ 工具类 |
-
-### 技能目录说明
-
-| 目录 | 说明 |
-| :--- | :--- |
-| `test/` | 调试中的技能，测试完成后移至根目录 |
-| `dist/` | 技能打包产物，用于分发 |
-| `references/` | 共享参考资料 |
-
-## 📁 技能结构规范
-
-每个技能遵循统一的扁平化结构：
-
-```
-skill-name/
-├── SKILL.md           # 技能定义文件（必填，含 frontmatter）
-├── CHANGELOG.md       # 变更日志（必填）
-├── DECISIONS.md       # 设计决策记录
-├── TASKS.md           # 任务跟踪
-├── config/            # 配置文件（按需，如 .env）
-│   ├── .env.example   # 配置模板
-│   └── .env           # 实际配置（不提交到 git）
-├── references/        # 参考资料（按需）
-├── scripts/           # 可执行脚本（按需）
-├── assets/            # 模板和静态资源（按需）
-└── archive/           # 处理结果归档（按需）
-```
-
-### SKILL.md 格式
-
-每个技能必须包含 YAML frontmatter：
-
-```yaml
----
-name: skill-name
-description: 技能描述，说明何时使用此技能
-allowed-tools: Read, Write, Bash, Grep
----
-```
 
 ## 📖 协作规范
 
