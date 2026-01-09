@@ -2,6 +2,7 @@
 .specstory/
 .vscode/
 .claude/skills/
+!.claude/skills/*/.claude-plugin/
 dist/
 references/
 test/
@@ -17,3 +18,4 @@ test/
 # Config files - ignore sensitive data but keep templates
 **/config/.env
 !**/config/.env.example
+.history/

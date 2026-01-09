@@ -32,6 +32,7 @@
 | 技能                             | 说明                                          | 状态      |
 | :------------------------------- | :-------------------------------------------- | :-------- |
 | **[mineru-ocr](mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 |
+| **[funasr-transcribe](funasr-transcribe/)** | 本地语音转文字，支持说话人分离和时间戳 | ✅ v1.1.1 |
 
 ### 其他创作者技能
 
@@ -47,3 +48,36 @@
 - **文档即上下文**：关键决策、任务、变更记录在文档中
 - **透明变更**：所有修改写入 CHANGELOG.md，遵循版本号规范
 - **保留证据**：输出引用可回溯，缺失信息明确标注
+
+## 🚀 安装方法
+
+### 方式一：通过 Claude Code Plugin Marketplace（推荐）
+
+在 Claude Code 中使用以下命令安装：
+
+```bash
+# 添加插件市场源
+/plugin marketplace add cat-xierluo/legal-skills
+
+# 安装技能集合
+/plugin install legal-skills
+```
+
+### 方式二：下载压缩包
+
+下载本项目压缩包，解压后将技能目录复制到 Claude Code 技能目录：
+
+```bash
+# macOS / Linux
+cp -r legal-skills/.claude/skills/skill-name ~/.claude/skills/
+
+# Windows
+xcopy legal-skills\.claude\skills\skill-name %USERPROFILE%\.claude\skills\skill-name /E /I
+```
+
+**示例**：安装 MinerU OCR 技能
+
+```bash
+# macOS / Linux
+cp -r legal-skills/.claude/skills/mineru-ocr ~/.claude/skills/
+```

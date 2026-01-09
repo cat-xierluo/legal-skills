@@ -80,6 +80,99 @@
 - 如处理未脱敏材料，提醒用户审查隐私与合规。
 - 不执行破坏性命令（如 `git reset --hard`），保持用户未提交的更改。
 
+## Plugin Marketplace 配置规范
+
+### 目录结构
+
+```text
+legal-skills/
+├── .claude-plugin/
+│   └── marketplace.json          # 插件市场主清单
+├── .claude/skills/
+│   ├── mineru-ocr/
+│   │   └── .claude-plugin/
+│   │       └── plugin.json       # 技能元数据
+│   └── funasr-transcribe/
+│       └── .claude-plugin/
+│           └── plugin.json       # 技能元数据
+```
+
+### marketplace.json 格式
+
+位于根目录 `.claude-plugin/marketplace.json`，定义插件集合的元数据和技能列表：
+
+```json
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "legal-skills",
+  "version": "1.0.0",
+  "description": "面向法律从业者的 Claude Skills 集合",
+  "owner": {
+    "name": "杨卫薪律师（微信ywxlaw）",
+    "email": "ywxlaw"
+  },
+  "homepage": "https://github.com/cat-xierluo/legal-skills",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cat-xierluo/legal-skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cat-xierluo/legal-skills/issues"
+  },
+  "plugins": [
+    {
+      "name": "skill-name",
+      "description": "技能描述",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": ".claude/skills/skill-name",
+      "category": "productivity",
+      "tags": ["tag1", "tag2"]
+    }
+  ]
+}
+```
+
+### plugin.json 格式
+
+位于每个技能目录下的 `.claude-plugin/plugin.json`，定义单个技能的元数据：
+
+```json
+{
+  "name": "skill-name",
+  "description": "技能描述",
+  "version": "1.0.0",
+  "author": {
+    "name": "杨卫薪律师（微信ywxlaw）",
+    "email": "ywxlaw"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/cat-xierluo/legal-skills/tree/main/.claude/skills/skill-name",
+  "category": "productivity",
+  "tags": ["tag1", "tag2", "legal"],
+  "requires": {
+    "runtime": "Python 3.8+",
+    "api": "Optional API name",
+    "api_url": "https://example.com"
+  }
+}
+```
+
+### 添加新技能到 Marketplace
+
+1. **创建技能元数据**：在技能目录下创建 `.claude-plugin/plugin.json`
+2. **更新主清单**：在根目录 `.claude-plugin/marketplace.json` 的 `plugins` 数组中添加技能条目
+3. **版本同步**：确保 `plugin.json` 中的 `version` 与技能 `CHANGELOG.md` 中的版本号一致
+4. **更新 README**：在根目录 `README.md` 的技能列表中添加新技能
+
+### 版本管理
+
+- **marketplace.json 版本**：反映插件集合的整体版本，重大变更时递增
+- **plugin.json 版本**：必须与对应技能的 `CHANGELOG.md` 版本号一致
+- **版本号规则**：遵循 CHANGELOG.md 规范（测试版 `0.x.x`，正式版 `1.x.x`）
+
 遵循以上约定，确保法律技能在不同 IDE/CLI（含 Claude Code）中可被可靠触发与复用。***
 
 ## 变更历史
