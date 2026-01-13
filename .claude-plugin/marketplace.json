@@ -40,12 +40,12 @@
     },
     {
       "name": "fetch-wechat-article",
-      "description": "抓取微信公众号文章内容。支持 Playwright headless 模式，自动检测并安装依赖，支持自动重试和错误处理，返回纯文本格式",
+      "description": "抓取微信公众号文章内容。使用 Playwright headless 模式，自动检测并安装依赖，支持自动重试和错误处理，返回纯文本格式",
       "version": "0.1.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
-      "source": "fetch-wechat-article",
+      "source": ".claude/skills/fetch-wechat-article",
       "category": "productivity",
       "tags": ["wechat", "web-scraping", "content-extraction", "playwright", "automation"]
     }
