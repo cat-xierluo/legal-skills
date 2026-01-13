@@ -1,0 +1,20 @@
+{
+  "name": "legal-skills",
+  "version": "1.0.0",
+  "description": "面向法律从业者的 Claude Skills 集合，包含文档转换、音频转录、网页抓取等专业工具",
+  "author": {
+    "name": "杨卫薪律师（微信ywxlaw）",
+    "email": "ywxlaw"
+  },
+  "repository": "https://github.com/cat-xierluo/legal-skills",
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "productivity",
+    "ocr",
+    "pdf",
+    "transcription",
+    "web-scraping",
+    "automation"
+  ]
+}

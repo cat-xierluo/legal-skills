@@ -1,8 +1,6 @@
 .DS_Store
 .specstory/
 .vscode/
-.claude/skills/
-!.claude/skills/*/.claude-plugin/
 dist/
 references/
 test/

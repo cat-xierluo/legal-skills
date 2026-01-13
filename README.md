@@ -31,9 +31,9 @@
 
 | 技能                              | 说明                                               | 状态      |
 | :-------------------------------- | :------------------------------------------------- | :-------- |
-| **[mineru-ocr](mineru-ocr/)**   | PDF/图片转 Markdown，支持 OCR、表格和公式识别      | ✅ v1.0.1 |
-| **[funasr-transcribe](funasr-transcribe/)** | 本地语音转文字，支持说话人分离和时间戳 | ✅ v1.1.1 |
-| **[fetch-wechat-article](fetch-wechat-article/)** | 抓取微信公众号文章内容，支持自动重试和错误处理 | 🧪 v0.1.1 |
+| **[mineru-ocr](skills/mineru-ocr/)**   | PDF/图片转 Markdown，支持 OCR、表格和公式识别      | ✅ v1.0.1 |
+| **[funasr-transcribe](skills/funasr-transcribe/)** | 本地语音转文字，支持说话人分离和时间戳 | ✅ v1.1.1 |
+| **[fetch-wechat-article](skills/fetch-wechat-article/)** | 抓取微信公众号文章内容，支持自动重试和错误处理 | 🧪 v0.1.1 |
 
 ### 其他创作者技能
 
@@ -70,15 +70,8 @@
 
 ```bash
 # macOS / Linux
-cp -r legal-skills/.claude/skills/skill-name ~/.claude/skills/
+cp -r legal-skills/skills/* ~/.claude/skills/
 
 # Windows
-xcopy legal-skills\.claude\skills\skill-name %USERPROFILE%\.claude\skills\skill-name /E /I
-```
-
-**示例**：安装 MinerU OCR 技能
-
-```bash
-# macOS / Linux
-cp -r legal-skills/.claude/skills/mineru-ocr ~/.claude/skills/
+xcopy legal-skills\skills\* %USERPROFILE%\.claude\skills\ /E /I
 ```

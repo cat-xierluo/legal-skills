@@ -1,53 +1,15 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.0.0",
-  "description": "面向法律从业者的 Claude Skills 集合，包含文档转换、音频转录等专业工具",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
     "email": "ywxlaw"
   },
-  "homepage": "https://github.com/cat-xierluo/legal-skills",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cat-xierluo/legal-skills.git"
-  },
-  "bugs": {
-    "url": "https://github.com/cat-xierluo/legal-skills/issues"
-  },
   "plugins": [
     {
-      "name": "mineru-ocr",
-      "description": "将 PDF 文档转换为 Markdown 格式。使用 MinerU API 进行转换，支持 OCR、表格和公式识别",
-      "version": "1.0.1",
-      "author": {
-        "name": "杨卫薪律师（微信ywxlaw）"
-      },
-      "source": ".claude/skills/mineru-ocr",
-      "category": "productivity",
-      "tags": ["ocr", "pdf", "markdown", "document-conversion", "legal"]
-    },
-    {
-      "name": "funasr-transcribe",
-      "description": "使用本地 FunASR 服务将音频或视频文件转录为带时间戳的 Markdown 文件。支持 mp4、mov、mp3、wav、m4a 等常见格式",
-      "version": "0.1.0",
-      "author": {
-        "name": "杨卫薪律师（微信ywxlaw）"
-      },
-      "source": ".claude/skills/funasr-transcribe",
-      "category": "productivity",
-      "tags": ["transcription", "audio", "video", "speech-to-text", "legal"]
-    },
-    {
-      "name": "fetch-wechat-article",
-      "description": "抓取微信公众号文章内容。使用 Playwright headless 模式，自动检测并安装依赖，支持自动重试和错误处理，返回纯文本格式",
-      "version": "0.1.1",
-      "author": {
-        "name": "杨卫薪律师（微信ywxlaw）"
-      },
-      "source": ".claude/skills/fetch-wechat-article",
-      "category": "productivity",
-      "tags": ["wechat", "web-scraping", "content-extraction", "playwright", "automation"]
+      "name": "legal-skills",
+      "source": "./",
+      "description": "面向法律从业者的 Claude Skills 集合，包含文档转换、音频转录、网页抓取等专业工具",
+      "version": "1.0.0"
     }
   ]
 }
