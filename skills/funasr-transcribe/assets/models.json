@@ -1,0 +1,28 @@
+{
+  "models": [
+    {
+      "id": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "name": "ASR 主模型 (Paraformer)",
+      "description": "语音识别核心模型，支持中文",
+      "required": true
+    },
+    {
+      "id": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+      "name": "VAD 模型",
+      "description": "语音活动检测，用于分段",
+      "required": true
+    },
+    {
+      "id": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+      "name": "标点模型",
+      "description": "自动恢复标点符号",
+      "required": true
+    },
+    {
+      "id": "damo/speech_campplus_speaker-diarization_common",
+      "name": "说话人分离模型 (CAM++)",
+      "description": "识别不同说话人 - Speaker Diarization",
+      "required": false
+    }
+  ]
+}
