@@ -4,6 +4,7 @@
 dist/
 references/
 test/
+.claude/
 **/DECISIONS.md
 **/TASKS.md
 !CLAUDE.md
