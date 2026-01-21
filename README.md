@@ -31,6 +31,7 @@
 
 | 技能 | 说明 | 状态 |
 | :--- | :--- | :--- |
+| **[skill-manager](skills/skill-manager/)** | 管理 Claude Skills 的安装、同步、卸载和列表查看 | ✅ v1.0.0 |
 | **[funasr-transcribe](skills/funasr-transcribe/)** | 本地语音转文字，支持会议记录、视频字幕、播客转录 | ✅ v1.1.1 |
 | **[mineru-ocr](skills/mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 |
 | **[piclist-upload](skills/piclist-upload/)** | 将 Markdown 中的本地图片上传到图床，自动替换为云端链接 | ✅ v1.1.0 |
