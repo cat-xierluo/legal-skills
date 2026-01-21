@@ -38,7 +38,7 @@
 | **[funasr-transcribe](skills/funasr-transcribe/)** | 本地语音转文字，支持会议记录、视频字幕、播客转录 | ✅ v1.1.1 |
 | **[mineru-ocr](skills/mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 |
 | **[piclist-upload](skills/piclist-upload/)** | 将 Markdown 中的本地图片上传到图床，自动替换为云端链接 | ✅ v1.1.0 |
-| **[wechat-article-fetch](skills/wechat-article-fetch/)** | 抓取微信公众号文章内容，支持自动重试和错误处理 | 🧪 v0.1.1 |
+| **[wechat-article-fetch](skills/wechat-article-fetch/)** | 抓取微信公众号文章内容，自动保存为 Markdown，支持 Windows 平台和智能回退 | ✅ v1.0.0 |
 
 #### 📚 开发类
 

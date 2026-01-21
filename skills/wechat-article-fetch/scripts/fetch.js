@@ -243,10 +243,20 @@ async function saveAsMarkdown(article, outputPath) {
       .replace(/\s+/g, '_') // 空格替换为下划线
       .substring(0, 100); // 限制长度
 
-    // 如果 outputDir 是目录，则使用标题作为文件名
+    // 检查是目录还是文件路径
     let finalPath = outputPath;
-    if (existsSync(outputPath) && (await import('fs/promises')).then(fs => fs.stat(outputPath)).then(s => s.isDirectory())) {
-      finalPath = join(outputPath, `${safeTitle}.md`);
+    try {
+      const stats = await stat(outputPath);
+      if (stats.isDirectory()) {
+        // 如果是目录，使用标题作为文件名
+        finalPath = join(outputPath, `${safeTitle}.md`);
+      }
+    } catch {
+      // 路径不存在或不是目录，直接使用给定的路径
+      // 确保路径以 .md 结尾
+      if (!finalPath.endsWith('.md')) {
+        finalPath = `${finalPath}.md`;
+      }
     }
 
     // 确保目录存在
@@ -310,22 +320,34 @@ const isMainModule = isMainModuleCheck();
 
 if (isMainModule) {
   const url = process.argv[2];
+  const outputPath = process.argv[3]; // 可选的输出路径
+
   if (!url) {
-    console.error('用法: node fetch.js <微信公众号文章URL>');
-    console.error('示例: node fetch.js "https://mp.weixin.qq.com/s/xxxxx"');
+    console.error('用法: node fetch.js <微信公众号文章URL> [输出路径]');
+    console.error('');
+    console.error('参数:');
+    console.error('  URL          微信公众号文章链接（必填）');
+    console.error('  输出路径      保存为 Markdown 文件的路径（可选）');
+    console.error('                可以是文件路径或目录，如果是目录则使用文章标题作为文件名');
+    console.error('');
+    console.error('示例:');
+    console.error('  node fetch.js "https://mp.weixin.qq.com/s/xxxxx"');
+    console.error('  node fetch.js "https://mp.weixin.qq.com/s/xxxxx" "./articles/my-article.md"');
+    console.error('  node fetch.js "https://mp.weixin.qq.com/s/xxxxx" "./articles/"');
     process.exit(1);
   }
 
-  fetchWechatArticle(url)
+  fetchWechatArticle(url, 3, outputPath)
     .then(result => {
       console.log('\n=== 抓取结果 ===');
       console.log('标题:', result.title);
       console.log('URL:', result.url);
       console.log('\n=== 文章内容 ===');
       console.log(result.content);
+      console.log('\n✅ 完成！');
     })
     .catch(error => {
-      console.error('错误:', error);
+      console.error('\n❌ 错误:', error.message);
       process.exit(1);
     });
 }
