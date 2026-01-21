@@ -49,9 +49,9 @@
 
 | 技能 | 说明 | 状态 | 作者 |
 | :--- | :--- | :--- | :--- |
-| **[wechat-article-fetch](skills/wechat-article-fetch/)** | 抓取微信公众号文章内容，自动保存为 Markdown，支持 Windows 平台和智能回退 | ✅ v1.0.0 | 杨卫薪 |
-| **[mineru-ocr](skills/mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 | 杨卫薪 |
-| **[funasr-transcribe](skills/funasr-transcribe/)** | 本地语音转文字，支持会议记录、视频字幕、播客转录 | ✅ v1.1.1 | 杨卫薪 |
+| **[wechat-article-fetch](skills/wechat-article-fetch/)** | 抓取微信公众号文章内容，自动保存为 Markdown，支持 Windows 平台和智能回退 | ✅ v1.0.0 | 杨卫薪 律师 |
+| **[mineru-ocr](skills/mineru-ocr/)** | PDF/图片转 Markdown，支持 OCR、表格和公式识别 | ✅ v1.0.1 | 杨卫薪 律师 |
+| **[funasr-transcribe](skills/funasr-transcribe/)** | 本地语音转文字，支持会议记录、视频字幕、播客转录 | ✅ v1.1.1 | 杨卫薪 律师 |
 
 #### 📤 内容处理
 
@@ -59,7 +59,7 @@
 
 | 技能 | 说明 | 状态 | 作者 |
 | :--- | :--- | :--- | :--- |
-| **[piclist-upload](skills/piclist-upload/)** | 将 Markdown 中的本地图片上传到图床，自动替换为云端链接 | ✅ v1.1.0 | 杨卫薪 |
+| **[piclist-upload](skills/piclist-upload/)** | 将 Markdown 中的本地图片上传到图床，自动替换为云端链接 | ✅ v1.1.0 | 杨卫薪 律师 |
 
 #### 🔧 开发工具
 
@@ -67,7 +67,7 @@
 
 | 技能 | 说明 | 状态 | 作者 |
 | :--- | :--- | :--- | :--- |
-| **[skill-manager](skills/skill-manager/)** | 管理 Claude Skills 的安装、同步、卸载和列表查看 | ✅ v1.0.0 | 杨卫薪 |
+| **[skill-manager](skills/skill-manager/)** | 管理 Claude Skills 的安装、同步、卸载和列表查看 | ✅ v1.0.0 | 杨卫薪 律师 |
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
 
