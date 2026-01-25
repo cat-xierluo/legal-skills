@@ -1,6 +1,7 @@
 ---
 name: piclist-upload
-description: "通过 PicList HTTP Server 将 Markdown 文件中的本地图片上传到图床，并替换为云端链接。使用场景：(1) 用户请求上传 Markdown 中的图片，(2) 处理包含本地图片引用的 Markdown（如 ![alt](./path/to/image.png)），(3) 批量处理多个 Markdown 文件或目录，(4) 替换本地路径为云端链接以实现跨设备访问。需要 PicList 应用运行并启用 HTTP Server（默认地址：http://127.0.0.1:36677/upload）。"
+description: 通过 PicList HTTP Server 将 Markdown 文件中的本地图片上传到图床，并替换为云端链接。本技能应在用户需要上传 Markdown 中的图片、处理包含本地图片引用的 Markdown、批量处理多个 Markdown 文件或目录、或替换本地路径为云端链接以实现跨设备访问时使用。
+license: Complete terms in LICENSE.txt
 ---
 
 # PicList 图片上传

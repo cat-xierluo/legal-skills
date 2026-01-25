@@ -1,6 +1,7 @@
 ---
 name: fetch-wechat-article
-description: 抓取微信公众号文章内容的工具,使用Playwright headless模式,无弹窗后台抓取,支持动态加载内容,自动提取标题和正文,自动保存为Markdown文件,支持Windows平台
+description: 抓取微信公众号文章内容，使用 Playwright headless 模式无弹窗后台抓取，支持动态加载内容，自动提取标题和正文并保存为 Markdown 文件。本技能应在用户需要抓取微信公众号文章内容时使用。
+license: Complete terms in LICENSE.txt
 ---
 # 微信公众号文章抓取工具
 

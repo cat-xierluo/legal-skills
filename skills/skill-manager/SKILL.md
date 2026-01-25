@@ -1,6 +1,7 @@
 ---
 name: skill-manager
-description: 管理 Claude Code Skills 和 Commands 的安装、同步、卸载和列表查看。支持从本地路径或 GitHub 仓库/子目录安装，自动识别并批量处理集合目录。使用场景：(1) 用户请求安装外部 skill/command，(2) 从 GitHub 仓库或子目录同步，(3) 批量安装本地目录，(4) 查看已安装的 items，(5) 卸载不需要的 item。
+description: 管理 Claude Code Skills 和 Commands 的安装、同步、卸载和列表查看，支持从本地路径或 GitHub 仓库/子目录安装。本技能应在用户需要安装外部 skill/command、从 GitHub 仓库同步、批量安装本地目录、查看已安装的 items、或卸载不需要的 item 时使用。
+license: Complete terms in LICENSE.txt
 ---
 
 # Skill & Command Manager

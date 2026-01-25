@@ -1,6 +1,7 @@
 ---
 name: funasr-transcribe
-description: 使用本地 FunASR 服务将音频或视频文件转录为带时间戳的 Markdown 文件。支持 mp4、mov、mp3、wav、m4a 等常见格式。用于语音转文字、会议记录、视频字幕、播客转录。
+description: 使用本地 FunASR 服务将音频或视频文件转录为带时间戳的 Markdown 文件，支持 mp4、mov、mp3、wav、m4a 等常见格式。本技能应在用户需要语音转文字、会议记录、视频字幕、播客转录时使用。
+license: Complete terms in LICENSE.txt
 ---
 # FunASR 语音转文字
 
