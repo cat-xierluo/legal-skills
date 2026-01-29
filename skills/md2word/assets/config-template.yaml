@@ -1,0 +1,172 @@
+# md2word 配置模板
+#
+# 使用方法：
+# 1. 复制此文件到你的工作目录
+# 2. 重命名为 my-config.yaml 或任意名称
+# 3. 修改下面的配置参数
+# 4. 使用：python md2word.py input.md --config=my-config.yaml
+#
+# 提示：
+# - 所有数值单位：页面尺寸为 cm，字体大小为 pt，间距为 pt（1pt ≈ 0.376mm）
+# - 对齐方式：left（左对齐）、center（居中）、right（右对齐）、justify（两端对齐）
+# - 颜色格式：十六进制，如 "#000000" 为黑色
+
+name: "自定义格式"
+description: "用户自定义格式配置"
+
+# ==================== 页面设置 ====================
+page:
+  width: 21.0      # 页面宽度 (cm) - A4 标准为 21.0
+  height: 29.7     # 页面高度 (cm) - A4 标准为 29.7
+  margin_top: 2.54     # 上边距 (cm)
+  margin_bottom: 2.54  # 下边距 (cm)
+  margin_left: 3.18    # 左边距 (cm)
+  margin_right: 3.18   # 右边距 (cm)
+
+# ==================== 字体设置 ====================
+fonts:
+  default:
+    name: "仿宋_GB2312"   # 中文字体名称
+    ascii: "Times New Roman"  # 英文字体名称
+    size: 12             # 字号 (pt) - 常用：小四=12, 五号=10.5, 四号=14, 三号=16, 二号=18, 小三=15
+    color: "#000000"     # 字体颜色 (十六进制)
+
+# ==================== 标题设置 ====================
+titles:
+  level1:  # 一级标题 (# 标题)
+    size: 15          # 字号 (pt)
+    bold: true        # 是否加粗
+    align: "center"   # 对齐方式
+    space_before: 6   # 段前间距 (pt)
+    space_after: 6    # 段后间距 (pt)
+    indent: 0         # 首行缩进 (pt)
+
+  level2:  # 二级标题 (## 标题)
+    size: 12
+    bold: true
+    align: "justify"
+    indent: 24
+
+  level3:  # 三级标题 (### 标题)
+    size: 12
+    bold: false
+    align: "justify"
+    indent: 24
+
+  level4:  # 四级标题 (#### 标题)
+    size: 12
+    bold: false
+    align: "justify"
+    indent: 24
+
+# ==================== 段落设置 ====================
+paragraph:
+  line_spacing: 1.5        # 行距倍数（1.0=单倍，1.5=1.5倍，2.0=双倍）
+  first_line_indent: 24   # 首行缩进 (pt) - 24pt ≈ 2个字符
+  align: "justify"       # 对齐方式
+
+# ==================== 页码设置 ====================
+page_number:
+  enabled: true         # 是否启用页码
+  format: "1/x"         # 页码格式（"1", "x", "1/x" 等）
+  font: "Times New Roman"  # 页码字体
+  size: 10.5           # 页码字号 (pt)
+  position: "center"   # 页码位置 (left/center/right)
+
+# ==================== 引号设置 ====================
+quotes:
+  convert_to_chinese: true   # 是否自动转换英文引号为中文引号
+
+# ==================== 表格设置 ====================
+table:
+  border_enabled: true        # 是否启用边框
+  border_color: "#000000"     # 边框颜色
+  border_width: 4            # 边框宽度 (1/8 pt)
+  line_spacing: 1.2          # 表格内行距
+  row_height_cm: 0.8          # 行高 (cm)
+  alignment: "center"         # 表格对齐方式 (left/center/right)
+  cell_margin:
+    top: 30                   # 单元格上边距 (dxa, 1dxa ≈ 0.0176mm)
+    bottom: 30                # 单元格下边距
+    left: 60                  # 单元格左边距
+    right: 60                 # 单元格右边距
+  vertical_align: "center"    # 垂直对齐 (top/center/bottom)
+
+  # 表格标题行（第一行）格式
+  header:
+    font: "Times New Roman"   # 标题行字体
+    size: 10.5                # 标题行字号 (pt) - 五号
+    bold: true                # 是否加粗
+    color: "#000000"          # 标题行颜色
+
+  # 表格正文格式
+  body:
+    font: "仿宋_GB2312"       # 正文字体
+    size: 10.5                # 正文字号 (pt)
+    color: "#000000"          # 正文字色
+
+# ==================== 代码块设置 ====================
+code_block:
+  # 语言标签格式（代码块开头的 [language] 标签）
+  label:
+    font: "Times New Roman"
+    size: 10                  # 标签字号 (pt)
+    color: "#808080"          # 灰色 (128,128,128)
+
+  # 代码内容格式
+  content:
+    font: "Times New Roman"
+    size: 10                  # 代码字号 (pt)
+    color: "#333333"          # 深灰色 (51,51,51)
+    left_indent: 24           # 左缩进 (pt)
+    line_spacing: 1.2         # 行距
+
+# ==================== 行内代码设置 ====================
+inline_code:
+  font: "Times New Roman"
+  size: 10                    # 字号 (pt)
+  color: "#333333"            # 深灰色 (51,51,51)
+
+# ==================== 引用块设置 ====================
+quote:
+  background_color: "#EAEAEA"  # 背景填充色 (浅灰色)
+  left_indent_inches: 0.2      # 左侧缩进 (英寸)
+  font_size: 9                 # 字号 (pt) - 小五号
+  line_spacing: 1.5            # 行距
+
+# ==================== 数学公式设置 ====================
+math:
+  font: "Times New Roman"
+  size: 11                    # 字号 (pt)
+  italic: true                # 是否斜体
+  color: "#00008B"            # 深蓝色 (0,0,139)
+
+# ==================== 图片设置 ====================
+image:
+  display_ratio: 0.92         # 相对于页面可用宽度的显示比例
+  max_width_cm: 14.2          # 最大显示宽度 (cm)
+  target_dpi: 260             # 目标DPI（用于图像压缩）
+  show_caption: true          # 是否显示图片标题
+
+# ==================== 分割线设置 ====================
+horizontal_rule:
+  character: "─"              # 分割线字符
+  repeat_count: 55            # 重复次数
+  font: "Times New Roman"
+  size: 12                    # 字号 (pt)
+  color: "#808080"            # 灰色 (128,128,128)
+  alignment: "center"         # 对齐方式
+
+# ==================== 列表设置 ====================
+lists:
+  bullet:
+    marker: "•"               # 无序列表标记
+    indent: 24                # 缩进 (pt)
+
+  numbered:
+    indent: 24                # 缩进 (pt)
+    preserve_format: true     # 保持原有编号格式（1. 2. 3.）
+
+  task:
+    unchecked: "☐"            # 未完成任务标记
+    checked: "☑"              # 已完成任务标记

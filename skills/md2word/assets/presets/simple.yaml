@@ -1,0 +1,156 @@
+name: "简单文档格式"
+description: "简单文档格式，无特殊要求，适合一般用途"
+
+# 页面设置
+page:
+  width: 21.0
+  height: 29.7
+  margin_top: 2.54
+  margin_bottom: 2.54
+  margin_left: 3.18
+  margin_right: 3.18
+
+# 字体设置
+fonts:
+  default:
+    name: "仿宋_GB2312"
+    ascii: "Times New Roman"
+    size: 12
+    color: "#000000"
+
+# 标题设置
+titles:
+  level1:
+    size: 15
+    bold: true
+    align: "center"
+    space_before: 6
+    space_after: 6
+    indent: 0
+  level2:
+    size: 12
+    bold: true
+    align: "left"
+    indent: 0
+  level3:
+    size: 12
+    bold: false
+    align: "left"
+    indent: 0
+  level4:
+    size: 12
+    bold: false
+    align: "left"
+    indent: 0
+
+# 段落设置
+paragraph:
+  line_spacing: 1.5
+  first_line_indent: 24
+  align: "justify"
+
+# 页码设置
+page_number:
+  enabled: true
+  format: "1/x"
+  font: "Times New Roman"
+  size: 10.5
+  position: "center"
+
+# 引号设置
+quotes:
+  convert_to_chinese: true
+
+# 表格设置
+table:
+  border_enabled: true
+  border_color: "#000000"
+  border_width: 4
+  line_spacing: 1.2
+  row_height_cm: 0.8
+  alignment: "center"
+  cell_margin:
+    top: 30
+    bottom: 30
+    left: 60
+    right: 60
+  vertical_align: "center"
+
+  # 表格标题行（第一行）格式
+  header:
+    font: "Times New Roman"
+    size: 10.5
+    bold: true
+    color: "#000000"
+
+  # 表格正文格式
+  body:
+    font: "仿宋_GB2312"
+    size: 10.5
+    color: "#000000"
+
+# 代码块设置
+code_block:
+  # 语言标签格式（代码块开头的 [language] 标签）
+  label:
+    font: "Times New Roman"
+    size: 10
+    color: "#808080"
+
+  # 代码内容格式
+  content:
+    font: "Times New Roman"
+    size: 10
+    color: "#333333"
+    left_indent: 24
+    line_spacing: 1.2
+
+# 行内代码设置
+inline_code:
+  font: "Times New Roman"
+  size: 10
+  color: "#333333"
+
+# 引用块设置
+quote:
+  background_color: "#EAEAEA"
+  left_indent_inches: 0.2
+  font_size: 9
+  line_spacing: 1.5
+
+# 数学公式设置
+math:
+  font: "Times New Roman"
+  size: 11
+  italic: true
+  color: "#00008B"
+
+# 图片设置
+image:
+  display_ratio: 0.92
+  max_width_cm: 14.2
+  target_dpi: 260
+  show_caption: true
+
+# 分割线设置
+horizontal_rule:
+  character: "─"
+  repeat_count: 55
+  font: "Times New Roman"
+  size: 12
+  color: "#808080"
+  alignment: "center"
+
+# 列表设置
+lists:
+  bullet:
+    marker: "•"
+    indent: 24
+
+  numbered:
+    indent: 24
+    preserve_format: true
+
+  task:
+    unchecked: "☐"
+    checked: "☑"
