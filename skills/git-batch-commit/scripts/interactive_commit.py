@@ -82,15 +82,33 @@ def display_groups(groups: Dict[str, List[str]], messages: Dict[str, str]):
     print("\n" + "=" * 60)
 
 
-def confirm_groups() -> bool:
-    """Ask user to confirm the proposed grouping."""
+def is_interactive() -> bool:
+    """Check if running in an interactive terminal."""
+    return sys.stdin.isatty()
+
+
+def confirm_groups(skip_confirm: bool = False) -> bool:
+    """Ask user to confirm the proposed grouping.
+
+    Args:
+        skip_confirm: If True, skip confirmation and proceed automatically
+    """
+    if skip_confirm:
+        return True
+
     print("\n选项:")
     print("  y - 是，创建这些提交")
     print("  n - 否，取消")
     print("  e - 编辑分组（手动模式）")
 
     while True:
-        response = input("\n是否继续创建这些提交？ [y/n/e]: ").strip().lower()
+        try:
+            response = input("\n是否继续创建这些提交？ [y/n/e]: ").strip().lower()
+        except (EOFError, OSError):
+            print("\n检测到非交互式环境，已取消操作。")
+            print("提示：使用 --yes 参数跳过确认，或使用 --dry-run 仅查看分组")
+            return False
+
         if response in ['y', 'yes', '是']:
             return True
         elif response in ['n', 'no', '否']:
@@ -102,8 +120,12 @@ def confirm_groups() -> bool:
             print("请输入 'y'、'n' 或 'e'。")
 
 
-def batch_commit():
-    """Main function to perform batch commit."""
+def batch_commit(skip_confirm: bool = False):
+    """Main function to perform batch commit.
+
+    Args:
+        skip_confirm: If True, skip confirmation and proceed automatically
+    """
     print("Git 批量提交工具")
     print("=" * 60)
 
@@ -132,7 +154,7 @@ def batch_commit():
     display_groups(groups, messages)
 
     # Confirm with user
-    if not confirm_groups():
+    if not confirm_groups(skip_confirm=skip_confirm):
         print("\n已取消。正在重新暂存原始文件...")
         stage_files(staged)
         return 0
@@ -171,12 +193,18 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Interactive batch commit tool for Git'
+        description='Interactive batch commit tool for Git',
+        epilog='示例: %(prog)s --yes    # 自动确认并创建提交'
     )
     parser.add_argument(
         '--dry-run',
         action='store_true',
         help='显示将要提交的内容而不实际提交'
+    )
+    parser.add_argument(
+        '--yes', '-y',
+        action='store_true',
+        help='跳过交互式确认，自动创建提交（适用于 CI/CD 或非交互式环境）'
     )
 
     args = parser.parse_args()
@@ -193,7 +221,7 @@ def main():
         display_groups(groups, messages)
         return 0
     else:
-        return batch_commit()
+        return batch_commit(skip_confirm=args.yes)
 
 
 if __name__ == '__main__':
