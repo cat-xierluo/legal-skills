@@ -14,7 +14,7 @@
 
 ## 依赖管理规范
 
-依赖说明应直接写在 `SKILL.md` 的"依赖"章节中，不使用单独的 `DEPENDENCIES.md` 文件。
+依赖说明应直接写在 `SKILL.md` 的"依赖"章节中。
 
 ### SKILL.md 依赖章节格式
 
@@ -44,7 +44,7 @@ pip install -r assets/requirements.txt
 
 ## 文件夹存放规范（主项目）
 
-- 正式发布的技能放在根目录（如 `med-extract/`），调试中的技能放在 `test/` 目录下。
+- 正式发布的技能放在 `skills/` 目录下（如 `skills/pdf/`），调试中的技能放在 `test/` 目录下。
 - 技能目录名与技能 name 保持一致。
 - 示例/原始材料与技能同级放置，命名清晰，避免混入其他技能资料。
 
@@ -95,78 +95,9 @@ pip install -r assets/requirements.txt
 - **内容要求**：明确说明变更的性质、影响和原因，避免模糊描述
 - **文件格式**：确保文件以单个换行符结尾
 
-## Skill 文档规范
+## Skill 开发指南
 
-### 最终产品目录结构
-
-基于官方 Claude Code skills（`skills/pdf`、`skills/skill-creator`）的标准格式：
-
-```text
-skill-name/
-├── SKILL.md          # 必需
-├── LICENSE.txt       # 可选
-├── scripts/          # 可选：可执行代码
-├── references/       # 可选：参考文档（按需加载）
-└── assets/           # 可选：输出资源文件（不加载到上下文）
-```
-
-**注意**：`test/` 目录中的 `DECISIONS.md`、`TASKS.md`、`CHANGELOG.md` 是**开发协作文件**，遵循本规范其他章节，不属于最终 skill 产品。
-
-### Frontmatter 元数据
-
-SKILL.md 必须以 YAML frontmatter 开头：
-
-```yaml
----
-name: skill-name
-description: 功能描述。This skill should be used when...
-license: Complete terms in LICENSE.txt
----
-```
-
-**说明**：
-- ✅ 有 `license` 字段
-- ❌ 无 `version` 字段（版本信息在 `CHANGELOG.md` 中管理）
-
-### description 写作规范
-
-**使用第三人称**：
-
-- ❌ "Use when..." 或 "当...时使用"
-- ✅ "This skill should be used when..."
-- ✅ "本技能应在...时使用"
-
-**示例**：
-
-```yaml
-# 英文
-description: Comprehensive PDF manipulation toolkit for extracting text and tables. This skill should be used when Claude needs to fill in a PDF form or programmatically process PDF documents at scale.
-
-# 中文
-description: 将法律文本转换为规范的 Markdown 格式。本技能应在用户需要处理法律条文（如民法典、刑法）、整理法律案例（如最高法典型案例）、或从粘贴文本中格式化法律文档时使用。
-```
-
-### 依赖说明
-
-**直接在 SKILL.md 中添加章节**：
-
-```markdown
-## 依赖
-
-本技能需要以下 Python 包：pypdf、pdfplumber
-
-安装：pip install pypdf pdfplumber
-```
-
-**说明**：不使用单独的 `DEPENDENCIES.md` 文件，依赖说明直接写在 SKILL.md 中。
-
-### Progressive Disclosure 设计
-
-Skills 使用三级加载系统管理上下文：
-
-- **Level 1**: SKILL.md 核心文档（始终加载）
-- **Level 2**: references/ 按需加载
-- **Level 3**: assets/ 不加载到上下文（用于输出）
+关于 Skill 的目录结构、Frontmatter 元数据、Progressive Disclosure 设计、文档编写最佳实践等详细规范,请参阅 [SKILL-GUIDE.md](./SKILL-GUIDE.md)。
 
 ## 多技能协作
 
@@ -286,9 +217,11 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                 |
 | :----- | :--------- | :----------------------------------------------------------------------------------------------------------------------- |
+| v1.3.0 | 2026-01-30 | 重构文档结构:将 Skill 开发相关内容分离到独立的 SKILL-GUIDE.md 文件,AGENTS.md 聚焦项目协作规范;通过引用链接两个文档 |
+| v1.2.0 | 2026-01-30 | 重新设计 Progressive Disclosure 层级:基于官方加载机制,将三级系统扩展为四级(Level 0: Frontmatter, Level 1: 核心文档, Level 2: 支持性文档, Level 3: 可执行资源);新增"文档编写最佳实践"章节;修正技能目录位置说明(`skills/` 目录);优化依赖管理说明,删除反向约束 |
 | v1.1.6 | 2026-01-23 | 新增 AGENTS.md 更新规范：要求每次修改 AGENTS.md 时必须同步更新底部的"变更历史"章节；定义版本号递增规则和自动更新要求                   |
 | v1.1.5 | 2026-01-23 | 新增 Skill 文档规范：基于官方 Claude Code skills 格式，定义 SKILL.md frontmatter 元数据、description 写作规范、依赖说明格式和 Progressive Disclosure 设计原则 |
-| v1.1.4 | 2026-01-22 | 简化依赖管理规范：依赖说明直接写在 SKILL.md 中，不使用单独的 DEPENDENCIES.md 文件 |
+| v1.1.4 | 2026-01-22 | 简化依赖管理规范：依赖说明直接写在 SKILL.md 中 |
 | v1.1.3 | 2026-01-21 | 强化中文回复要求：将"中文优先"提升为核心原则首位，明确为强制要求而非可选项                                               |
 | v1.1.2 | 2026-01-07 | 新增 `CHANGELOG.md` 格式规范：定义版本号规则（测试版 0.x.x、正式版 1.x.x）、版本记录格式、分类标签和内容要求           |
 | v1.1.1 | 2026-01-07 | 将 `config/` 纳入按需目录，支持需要配置文件的技能（如 API Token）；配置 archive/ 目录的 git 策略（忽略内容但保留目录） |
