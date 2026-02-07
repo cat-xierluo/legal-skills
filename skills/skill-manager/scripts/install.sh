@@ -41,13 +41,20 @@ detect_source_type() {
 }
 
 # 检测目标目录（支持 skills 和 commands）
-# 通过解析符号链接找到真实的 .claude 目录
+# 优先从当前工作目录查找 .claude，适用于在项目内调用
 find_claude_dir() {
-    local current="$MANAGER_DIR"
+    # 首先尝试从当前工作目录查找（项目本地）
+    local current="$PWD"
     local max_iterations=10
     local iteration=0
 
     while [ $iteration -lt $max_iterations ]; do
+        # 检查当前目录是否包含 .claude 子目录
+        if [ -d "$current/.claude" ]; then
+            echo "$current/.claude"
+            return 0
+        fi
+
         # 检查当前目录的父目录是否是 .claude
         local parent="$(dirname "$current")"
         local parent_name="$(basename "$parent")"
@@ -71,8 +78,8 @@ find_claude_dir() {
         ((iteration++))
     done
 
-    # 如果没找到，返回默认值
-    echo "$(dirname "$MANAGER_DIR")/../.claude"
+    # 如果没找到，返回默认值（使用当前工作目录）
+    echo "$PWD/.claude"
 }
 
 CLAUDE_DIR="$(find_claude_dir)"
