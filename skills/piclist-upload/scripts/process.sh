@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PicList Markdown image processor
 # Usage: ./process.sh [--dry-run] [--keep-local] [--in-place] <file.md|directory...>
 
@@ -95,28 +95,41 @@ process_markdown_file() {
     local content
     content=$(cat "$md_file")
 
-    # Process all image references using a while loop
-    local modified="$content"
+    # Process all image references using grep
     local md_dir
     md_dir="$(dirname "$md_file")"
 
-    # Find all image patterns
-    while [[ "$modified" =~ !\[([^\]]*)\]\(([^)]+)\) ]]; do
-        local full_match="${BASH_REMATCH[0]}"
-        local alt_text="${BASH_REMATCH[1]}"
-        local image_path="${BASH_REMATCH[2]}"
+    # Extract all image references using grep
+    local images
+    images=$(grep -o '!\[[^]]*\]([^)]*)' "$md_file" 2>/dev/null || true)
+
+    # Process each unique image
+    local processed_paths=""
+    while IFS= read -r match; do
+        [ -z "$match" ] && continue
+
+        # Extract alt text and path
+        local alt_text="${match#*\[}"
+        alt_text="${alt_text%\]*}"
+        local image_path="${match#*\]}"
+        image_path="${image_path#[\(]}"
+        image_path="${image_path%\)}"
+
+        # Skip if already processed this path
+        if [[ "$processed_paths" =~ "|$image_path|" ]]; then
+            : $((skip_count++))
+            continue
+        fi
+        processed_paths="$processed_paths|$image_path|"
 
         # Skip if already a URL
         if [[ "$image_path" =~ ^https?:// ]]; then
-            # Remove this match from consideration
-            modified="${modified#*"$full_match"}"
             : $((skip_count++))
             continue
         fi
 
         # Resolve relative path
-        local full_path
-        full_path="$md_dir/$image_path"
+        local full_path="$md_dir/$image_path"
 
         # Normalize path
         full_path=$(cd "$(dirname "$full_path")" 2>/dev/null && pwd)/$(basename "$full_path") 2>/dev/null || true
@@ -124,7 +137,6 @@ process_markdown_file() {
         # Check if file exists
         if [ ! -f "$full_path" ]; then
             echo "  ⚠️  File not found: $image_path" >&2
-            modified="${modified#*"$full_match"}"
             : $((fail_count++))
             continue
         fi
@@ -135,9 +147,8 @@ process_markdown_file() {
         new_url=$(upload_image "$full_path")
 
         if [ -n "$new_url" ]; then
-            # Replace in content
-            content="${content//"$full_match"/![${alt_text}](${new_url})}"
-            modified="${modified#*"$full_match"}"
+            # Replace all occurrences in content
+            content="${content//"$match"/![${alt_text}](${new_url})}"
             : $((upload_count++))
 
             # Track for deletion (use full_path as key)
@@ -146,10 +157,9 @@ process_markdown_file() {
             # Delete local file immediately after successful upload
             delete_local_image "$full_path"
         else
-            modified="${modified#*"$full_match"}"
             : $((fail_count++))
         fi
-    done
+    done <<< "$images"
 
     # Report results
     echo "  ✅ Uploaded: $upload_count, ⏭️  Skipped: $skip_count, ❌ Failed: $fail_count"
