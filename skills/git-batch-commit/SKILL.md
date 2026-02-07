@@ -1,13 +1,13 @@
 ---
 name: git-batch-commit
-description: 智能 Git 批量提交工具，自动将混合的文件修改按类型分类（依赖管理、文档更新、license 文件、配置、源代码等），并创建多个清晰聚焦的提交，使用标准化的提交信息格式。当用户暂存了多个不同类型的文件需要分开提交时使用，或者当用户创建包含混合文件类型的提交时（例如同时修改了文档、代码和依赖）。帮助保持清晰的 Git 历史，确保每个提交都有单一、明确的目的。支持的提交类型包括 Docs、Feat、Fix、Chore、License、Refactor、Config、Test、Style。
+description: 智能 Git 批量提交工具，自动将混合的文件修改按类型分类（依赖管理、文档更新、license 文件、配置、源代码等），并创建多个清晰聚焦的提交，使用标准化的提交信息格式。当用户暂存了多个不同类型的文件需要分开提交时使用，或者当用户创建包含混合文件类型的提交时（例如同时修改了文档、代码和依赖）。帮助保持清晰的 Git 历史，确保每个提交都有单一、明确的目的。使用英文前缀（docs:、feat:、fix: 等）加中文内容，支持 GitHub 彩色标签显示。
 ---
 
 # Git 批量提交工具
 
 ## 概述
 
-将混合的修改自动拆分为多个聚焦的、逻辑清晰的提交。而不是创建一个包含"更新各种文件"的大提交，而是创建多个清晰的提交，如"Docs: 更新 README"、"Chore: 更新依赖"、"License: 更新 license 文件"。
+将混合的修改自动拆分为多个聚焦的、逻辑清晰的提交。而不是创建一个包含"更新各种文件"的大提交，而是创建多个清晰的提交，如"docs: 更新 README"、"chore: 更新依赖"、"license: 更新 license 文件"。
 
 ## 使用场景
 
@@ -60,31 +60,33 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 | 类型 | 描述 | 示例文件 |
 |------|-------------| ---------------|
-| **Docs** | 文档变更 | `*.md`、`README*`、`CHANGELOG*`、`docs/` |
-| **Feat** | 新功能 | 添加了新内容的源文件 |
-| **Fix** | Bug 修复 | 包含修复关键字的源文件 |
-| **Refactor** | 代码重构 | 删除内容多于添加的源文件 |
-| **Style** | 代码风格 | 格式化或小改动的源文件 |
-| **Chore** | 依赖和工具 | `package.json`、`Makefile`、`.github/` |
-| **License** | License 更新 | `LICENSE`、`LICENSE.txt` |
-| **Config** | 配置文件 | `*.env.*`、`*.yaml`、`config/` |
-| **Test** | 测试变更 | `test_*.py`、`*_test.go`、`test/` |
+| **docs** | 文档变更 | `*.md`、`README*`、`CHANGELOG*`、`docs/` |
+| **feat** | 新功能 | 添加了新内容的源文件 |
+| **fix** | Bug 修复 | 包含修复关键字的源文件 |
+| **refactor** | 代码重构 | 删除内容多于添加的源文件 |
+| **style** | 代码风格 | 格式化或小改动的源文件 |
+| **chore** | 依赖和工具 | `package.json`、`Makefile`、`.github/` |
+| **license** | License 更新 | `LICENSE`、`LICENSE.txt` |
+| **config** | 配置文件 | `*.env.*`、`*.yaml`、`config/` |
+| **test** | 测试变更 | `test_*.py`、`*_test.go`、`test/` |
 
 ## 提交信息格式
 
 所有提交遵循格式：**`<类型>: <描述>`**
 
+使用英文前缀加中文内容，确保 GitHub 能识别并显示彩色标签。
+
 示例：
 
 ```text
-Docs: 更新 README 文档
-Feat: 添加用户认证功能
-Fix: 修复解析器内存泄漏
-Chore: 更新依赖
-License: 更新 license 文件
-Refactor: 简化数据层
-Config: 更新环境配置
-Test: 添加解析器单元测试
+docs: 更新 README 文档
+feat: 添加用户认证功能
+fix: 修复解析器内存泄漏
+chore: 更新依赖
+license: 更新 license 文件
+refactor: 简化数据层
+config: 更新环境配置
+test: 添加解析器单元测试
 ```
 
 ## 工作流程
@@ -136,17 +138,17 @@ Git 批量提交工具
 提议的提交分组
 ============================================================
 
-[分组 1] Chore: 更新 Python 依赖
+[分组 1] chore: 更新 Python 依赖
 类别: deps
 文件 (1):
   - requirements.txt
 
-[分组 2] Docs: 更新 README 文档
+[分组 2] docs: 更新 README 文档
 类别: docs
 文件 (1):
   - README.md
 
-[分组 3] Feat: 添加新功能
+[分组 3] feat: 添加新功能
 类别: feat
 文件 (3):
   - src/parser.py
@@ -164,13 +166,13 @@ Git 批量提交工具
 
 正在创建提交...
 
-  → Chore: 更新 Python 依赖
+  → chore: 更新 Python 依赖
     ✓ 已提交 1 个文件
 
-  → Docs: 更新 README 文档
+  → docs: 更新 README 文档
     ✓ 已提交 1 个文件
 
-  → Feat: 添加新功能
+  → feat: 添加新功能
     ✓ 已提交 3 个文件
 
 ============================================================

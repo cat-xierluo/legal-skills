@@ -2,16 +2,18 @@
 """
 Generate conventional commit messages based on change type and content.
 
-支持标准化中文前缀：
-- Docs：文档变更
-- Feat：新功能
-- Fix：Bug 修复
-- Refactor：代码重构
-- Style：代码风格调整
-- Chore：构建工具、依赖更新
-- Test：测试变更
-- Config：配置变更
-- License：许可证文件更新
+使用小写英文前缀 + 中文冒号 + 中文描述的格式：
+- docs：文档变更
+- feat：新功能
+- fix：Bug 修复
+- refactor：代码重构
+- style：代码风格调整
+- chore：构建工具、依赖更新
+- test：测试变更
+- config：配置变更
+- license：许可证文件更新
+
+注意：实际输出使用英文冒号 (:) 以支持 GitHub 彩色标签
 """
 
 import subprocess
@@ -20,20 +22,20 @@ import argparse
 from typing import List, Dict
 
 
-# Category to commit type mapping (中文)
+# Category to commit type mapping (小写英文)
 CATEGORY_TO_TYPE = {
-    'deps': 'Chore',
-    'docs': 'Docs',
-    'license': 'License',
-    'config': 'Config',
-    'test': 'Test',
-    'chore': 'Chore',
-    'feat': 'Feat',
-    'fix': 'Fix',
-    'refactor': 'Refactor',
-    'style': 'Style',
-    'code': 'Style',  # Default for uncategorized code
-    'other': 'Chore',
+    'deps': 'chore',
+    'docs': 'docs',
+    'license': 'license',
+    'config': 'config',
+    'test': 'test',
+    'chore': 'chore',
+    'feat': 'feat',
+    'fix': 'fix',
+    'refactor': 'refactor',
+    'style': 'style',
+    'code': 'style',  # Default for uncategorized code
+    'other': 'chore',
 }
 
 # Common commit message templates by category (中文)
@@ -194,7 +196,7 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     """
     生成约定式提交信息。
 
-    格式：<Type>：<描述>
+    格式：<type>: <描述>（使用英文冒号）
 
     Args:
         category: 变更类别 (deps, docs, feat 等)
@@ -204,13 +206,13 @@ def generate_commit_message(category: str, files: List[str]) -> str:
         格式化的提交信息
     """
     # Get commit type
-    commit_type = CATEGORY_TO_TYPE.get(category, 'Chore')
+    commit_type = CATEGORY_TO_TYPE.get(category, 'chore')
 
     # Generate description
     description = analyze_changes(files, category)
 
-    # Format: Type：Description (使用中文冒号)
-    return f"{commit_type}：{description}"
+    # Format: type: description (使用英文冒号以支持 GitHub 彩色标签)
+    return f"{commit_type}: {description}"
 
 
 def generate_commit_messages(groups: Dict[str, List[str]]) -> Dict[str, str]:
