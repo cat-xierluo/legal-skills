@@ -1,6 +1,7 @@
 ---
 name: litigation-analysis
 description: 诉讼分析工具 - 判决书深度分析，生成上诉/再审决策支持
+license: CC-BY-NC-SA-4.0
 ---
 
 # litigation-analysis

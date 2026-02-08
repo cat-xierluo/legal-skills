@@ -42,6 +42,51 @@
 pip install -r assets/requirements.txt
 ```
 
+## 许可证管理规范
+
+### 技能许可证分类
+
+1. **法律专业应用技能**：使用 CC BY-NC-SA 4.0（署名-非商业性使用-相同方式共享）
+   - 涉及法律业务分析、文书生成、专业咨询的技能
+   - 示例：`litigation-analysis`、`legal-proposal-generator`、`legal-text-format`、`legal-qa-extractor`
+
+2. **通用工具类技能**：使用 MIT 许可证
+   - 内容获取、格式转换、开发工具等通用功能
+   - 示例：`mineru-ocr`、`funasr-transcribe`、`skill-manager`、`piclist-upload`、`course-generator` 等
+
+3. **官方技能**：保持原有许可证不变
+   - `skill-creator`、`pdf`
+
+### SKILL.md Frontmatter 许可证字段
+
+- **法律专业应用**：`license: CC-BY-NC-SA-4.0`
+- **通用工具**：`license: MIT`
+- **官方技能**：`license: Complete terms in LICENSE.txt`
+
+### LICENSE.txt 文件
+
+每个技能目录应包含对应的 LICENSE.txt 文件，使用完整许可证文本：
+
+- CC BY-NC-SA 4.0 许可证模板位于 `templates/LICENSE-NC-APACHE.txt`
+- MIT 许可证使用标准 MIT 许可证文本
+
+### 版权信息规范
+
+所有自研技能的 LICENSE.txt 文件必须使用统一的版权信息格式：
+
+```text
+Copyright (c) 2025 杨卫薪律师（微信ywxlaw）
+```
+
+**例外情况**：
+
+- **官方技能**（skill-creator、pdf）：保持原作者版权信息
+- **协作技能**：如 mineru-ocr、funasr-transcribe 等基于外部项目的技能，可保留项目特定的版权信息（如 "MinerU Skill Contributors"）
+
+### README.md 许可证列
+
+在 README.md 技能列表表格中应包含"许可证"列，明确标注各技能的许可证类型。
+
 ## 文件夹存放规范（主项目）
 
 - 正式发布的技能放在 `skills/` 目录下（如 `skills/pdf/`），调试中的技能放在 `test/` 目录下。
@@ -242,8 +287,11 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 ## 变更历史
 
-| 版本   | 日期       | 更新内容                                                                                                                 |
-| :----- | :--------- | :----------------------------------------------------------------------------------------------------------------------- |
+| 版本   | 日期       | 更新内容                                                                                                                              |
+| :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.3.4 | 2026-02-08 | 新增版权信息规范：统一所有自研技能 LICENSE.txt 的版权信息为"杨卫薪律师（微信ywxlaw）"，并更新 4 个技能的 LICENSE.txt 文件 |
+| v1.3.3 | 2026-02-08 | 更新许可证管理规范：将法律专业应用技能的许可证从 Apache-2.0-NC 更改为 CC BY-NC-SA 4.0（署名-非商业性使用-相同方式共享），更新相关文档和模板 |
+| v1.3.2 | 2026-02-08 | 新增许可证管理规范：定义技能许可证分类（法律专业应用使用 Apache-2.0-NC、通用工具使用 MIT）、SKILL.md frontmatter 许可证字段、LICENSE.txt 文件要求和 README.md 许可证列 |
 | v1.3.1 | 2026-02-07 | 新增迁移类 Skill 版本历史保留规范：要求从 Command 或提示词迁移的 Skill 在 CHANGELOG 中保留原始版本历史，确保功能演进可追溯 |
 | v1.3.0 | 2026-01-30 | 重构文档结构:将 Skill 开发相关内容分离到独立的 SKILL-GUIDE.md 文件,AGENTS.md 聚焦项目协作规范;通过引用链接两个文档 |
 | v1.2.0 | 2026-01-30 | 重新设计 Progressive Disclosure 层级:基于官方加载机制,将三级系统扩展为四级(Level 0: Frontmatter, Level 1: 核心文档, Level 2: 支持性文档, Level 3: 可执行资源);新增"文档编写最佳实践"章节;修正技能目录位置说明(`skills/` 目录);优化依赖管理说明,删除反向约束 |

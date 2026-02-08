@@ -1,7 +1,7 @@
 ---
 name: legal-qa-extractor
 description: 从律师与客户沟通记录中提取有价值的法律问答对，生成结构化知识库内容。本技能应在用户需要整理客户咨询记录、从对话中提取可复用法律知识、创建问答知识库、或准备内容营销素材时使用。支持严格客户信息脱敏处理。
-license: Complete terms in LICENSE.txt
+license: CC-BY-NC-SA-4.0
 ---
 
 # 法律问答提取技能
