@@ -4,6 +4,7 @@
 dist/
 references/
 test/
+templates/
 .claude/
 **/DECISIONS.md
 **/TASKS.md
