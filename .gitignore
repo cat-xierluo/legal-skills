@@ -2,7 +2,7 @@
 .specstory/
 .vscode/
 dist/
-references/
+/references/
 !skills/*/references/
 test/
 templates/
