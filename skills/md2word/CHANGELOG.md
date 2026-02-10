@@ -2,6 +2,43 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [0.4.0] - 2026-02-10
+
+### 重构
+- **脚本模块化拆分**: 将 1955 行的单文件脚本拆分为 4 个模块
+  - `md2word.py`: 主入口 + 核心转换流程（800 行，减少 59%）
+  - `formatter.py`: 文本/段落格式化模块（388 行）
+  - `table_handler.py`: 表格处理模块（532 行）
+  - `chart_handler.py`: 图表渲染模块（248 行）
+  - 便于扩展新的图表类型支持
+
+- **依赖清理**: 移除冗余导入
+  - 移除未使用的 `sys`, `requests`, `base64`, `io` 等模块
+  - 移除未使用的 `WD_TAB_ALIGNMENT` 等 docx 枚举
+  - `BeautifulSoup` 移至 table_handler.py
+
+## [0.3.0] - 2026-02-10
+
+### 变更
+- **Skill 结构重构**: 按照 Skill 开发指南最佳实践重构
+  - 新增 `references/` 目录，实现渐进式披露
+  - 新增 `references/config-reference.md`：配置架构快速参考
+  - 新增 `references/examples.md`：使用示例和常见场景
+  - 精简 SKILL.md（从 ~350 行减至 ~90 行）
+  - 简化 `scripts/md2word.py` 头部注释
+  - 移除 `scripts/requirements.txt`（依赖在 SKILL.md 中说明）
+
+- **描述更新**: SKILL.md frontmatter description 更新为更通用的表述
+  - 去除"法律文书"的限定性描述
+  - 改为"符合中文排版标准的专业格式"
+  - 强调适用于正式文档、论文、报告等多种场景
+
+### 改进
+- 配置参考文档指向 `assets/presets/*.yaml` 避免重复
+- 参考文档与 SKILL.md 通过链接实现渐进式披露
+- 文档结构更清晰，便于维护和扩展
+- 移除 references 文档中的目录，保持简洁
+
 ## [0.2.1] - 2026-02-10
 
 ### 修复
@@ -85,7 +122,6 @@ md2word/
 │   └── config-template.yaml
 ├── scripts/
 │   ├── md2word.py       # 主转换脚本
-│   ├── config.py        # 配置管理模块
-│   └── requirements.txt
+│   └── config.py        # 配置管理模块
 └── SKILL.md             # 技能文档
 ```
