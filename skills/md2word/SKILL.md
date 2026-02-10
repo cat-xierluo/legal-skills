@@ -1,6 +1,6 @@
 ---
-name: md2word-skill
-description: This skill should be used when converting Markdown documents to professionally formatted Word documents, especially for legal documents, contracts, and formal papers requiring Chinese typography standards. It automatically applies proper formatting, fonts, spacing, and layout while preserving all Markdown formatting elements.
+name: md2word
+description: Markdown转Word文档技能。将Markdown文档转换为符合中国法律文书标准的专业格式Word文档，自动应用正确的排版、格式、间距和布局。适用于法律文书、合同、正式论文等需要中文排版标准的文档转换。
 ---
 
 # Markdown转Word文档Skill
@@ -346,4 +346,4 @@ def example():
 
 ---
 
-**Note**: This skill transforms the proven md2word.py functionality into a reusable Claude skill, providing professional document formatting capabilities for Chinese legal and business documents.
+**说明**: 本技能将成熟的 md2word.py 功能封装为可复用的 Claude 技能，为中国法律和商业文档提供专业的格式化能力。

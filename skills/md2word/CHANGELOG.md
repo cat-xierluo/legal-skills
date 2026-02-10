@@ -1,10 +1,24 @@
-# Changelog
+# 更新日志
 
-All notable changes to the md2word skill will be documented in this file.
+本文件记录 md2word 技能的所有重要变更。
+
+## [0.2.1] - 2026-02-10
+
+### 修复
+- **引号转换修复**: 修复英文引号转中文引号的左右配对问题
+  - 将"上下文感知"逻辑改为更可靠的"交替状态机"方法
+  - 修复了连续引号都变成闭引号的bug
+  - 修复了部分引号未被正确转换的问题
+  - 使用Unicode转义序列避免Python语法警告
+
+### 变更
+- **文档中文化**: SKILL.md 和 CHANGELOG.md 完全中文化
+  - frontmatter 的 name 和 description 改为中文
+  - 版本记录标题翻译（Added → 新增，Changed → 变更等）
 
 ## [0.2.0] - 2026-01-29
 
-### Added
+### 新增
 - **配置系统增强**: 添加完整的配置选项到 YAML 模板和预设文件
   - 代码块格式配置: 语言标签、内容字体、缩进、行距
   - 行内代码格式配置: 字体、字号、颜色
@@ -15,7 +29,7 @@ All notable changes to the md2word skill will be documented in this file.
   - 列表设置配置: 无序列表、有序列表、任务列表标记
   - 表格增强配置: 行高、单元格边距、垂直对齐、标题/正文格式
 
-### Changed
+### 变更
 - **md2word.py**: 重构所有格式化函数使用配置读取
   - `add_horizontal_line()`: 使用 `horizontal_rule` 配置
   - `add_code_block()`: 使用 `code_block` 配置
@@ -37,7 +51,7 @@ All notable changes to the md2word skill will be documented in this file.
 
 ## [0.1.0] - 2026-01-29
 
-### Added
+### 新增
 - **初始版本**: md2word 技能 - Markdown转Word配置化工具
   - YAML 配置系统支持
   - 4 种内置预设格式 (legal/academic/report/simple)
@@ -45,7 +59,7 @@ All notable changes to the md2word skill will be documented in this file.
   - Word 模板文件支持 (.docx)
   - 命令行参数: `--preset`, `--config`, `--list-presets`, `--template`
 
-### Features
+### 功能特性
 - 完整的 Markdown 到 Word 转换
 - 页面格式设置 (A4, 页边距)
 - 字体和字号配置
@@ -62,7 +76,7 @@ All notable changes to the md2word skill will be documented in this file.
 - 列表支持 (无序、有序、任务列表)
 - 引用块支持
 
-### Directory Structure
+### 目录结构
 ```
 md2word/
 ├── assets/
