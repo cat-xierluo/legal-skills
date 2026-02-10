@@ -3,6 +3,7 @@
 .vscode/
 dist/
 references/
+!skills/*/references/
 test/
 templates/
 .claude/
