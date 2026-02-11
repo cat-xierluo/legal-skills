@@ -2,6 +2,16 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [0.4.1] - 2026-02-11
+
+### 修复
+
+- **导入错误修复**: 修复模块化重构后导致的 `ImportError: cannot import name 'get_config' from 'config'`
+
+  - 将 `get_config()` 和 `set_config()` 函数从 `md2word.py` 移至 `config.py`
+  - 这些函数被所有子模块（formatter.py, table_handler.py, chart_handler.py）依赖，应属于配置管理模块
+  - 修复了 v0.4.0 重构时引入的循环导入问题
+
 ## [0.4.0] - 2026-02-10
 
 ### 重构

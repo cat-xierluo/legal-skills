@@ -7,7 +7,10 @@ md2word 配置管理模块
 
 import os
 import yaml
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from typing import Callable
 
 
 class Config:
@@ -43,6 +46,27 @@ class Config:
     def description(self) -> str:
         """配置描述"""
         return self.get('description', '')
+
+
+# ============================================================================
+# 全局配置管理
+# ============================================================================
+
+_current_config: Config = None
+
+
+def get_config() -> Config:
+    """获取当前配置"""
+    global _current_config
+    if _current_config is None:
+        _current_config = get_default_preset()
+    return _current_config
+
+
+def set_config(config: Config):
+    """设置当前配置"""
+    global _current_config
+    _current_config = config
 
 
 def load_config(path: str) -> Optional[Config]:

@@ -22,7 +22,7 @@ from docx.oxml.shared import OxmlElement
 from PIL import Image
 
 # 导入配置模块
-from config import Config, load_config, get_preset, get_default_preset, list_presets
+from config import Config, load_config, get_preset, get_default_preset, list_presets, get_config, set_config
 
 # 导入功能模块
 from formatter import (
@@ -39,27 +39,6 @@ from table_handler import (
     create_word_table_from_html,
 )
 from chart_handler import create_mermaid_chart
-
-
-# ============================================================================
-# 全局配置
-# ============================================================================
-
-_current_config: Config = None
-
-
-def get_config() -> Config:
-    """获取当前配置"""
-    global _current_config
-    if _current_config is None:
-        _current_config = get_default_preset()
-    return _current_config
-
-
-def set_config(config: Config):
-    """设置当前配置"""
-    global _current_config
-    _current_config = config
 
 
 # ============================================================================
