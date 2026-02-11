@@ -30,6 +30,7 @@ templates/
 
 /images/
 /others/
+research/
 
 # PDF files in root directory only
 /*.pdf
