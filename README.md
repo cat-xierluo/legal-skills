@@ -54,6 +54,7 @@
 | **[wechat-article-fetch](skills/wechat-article-fetch/)** | 使用 Playwright 无头模式抓取微信公众号文章，支持动态加载内容，保存为 Markdown                        | MIT    | v1.2.0 | 杨卫薪律师 |
 | **[mineru-ocr](skills/mineru-ocr/)**                     | 通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别         | MIT    | v1.0.1 | 杨卫薪律师 |
 | **[funasr-transcribe](skills/funasr-transcribe/)**       | 本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录 | MIT    | v1.1.1 | 杨卫薪律师 |
+| **[universal-media-downloader](skills/universal-media-downloader/)** | 输入视频网站/播客平台链接后自动下载，支持抖音/B站/YouTube/小宇宙等平台，可下载字幕和音频            | MIT    | v0.2.0 | 杨卫薪律师 |
 
 #### ⚖️ 法律专业应用
 
