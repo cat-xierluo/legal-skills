@@ -19,6 +19,10 @@ templates/
 # Config files - ignore sensitive data but keep templates
 **/config/.env
 !**/config/.env.example
+**/config/*.yaml
+!**/config/*.example.yaml
+**/config/*.json
+!**/config/*.example.json
 
 # User profile - ignore personal data but keep example
 **/reference/user-profile.md
@@ -46,6 +50,18 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+
+# Database files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Playwright browser data
+**/.playwright-data/
+
+# Log files
+**/logs/
+*.log
 
 # Skill downloads/output directories
 skills/*/downloads/
