@@ -38,6 +38,19 @@ CATEGORY_TO_TYPE = {
     'other': 'chore',
 }
 
+
+def parse_skill_category(category: str):
+    """
+    Parse skill:<name>:<type> format.
+
+    Returns (skill_name, commit_type) if skill category, else (None, None).
+    """
+    if category.startswith('skill:'):
+        parts = category.split(':')
+        if len(parts) == 3:
+            return parts[1], parts[2]  # (skill_name, commit_type)
+    return None, None
+
 # Common commit message templates by category (中文)
 MESSAGE_TEMPLATES = {
     'deps': {
@@ -203,17 +216,23 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     - 详细变更说明2
 
     Args:
-        category: 变更类别 (deps, docs, feat 等)
+        category: 变更类别 (deps, docs, feat 等，或 skill:<name>:<type>)
         files: 该类别中的变更文件列表
 
     Returns:
         格式化的提交信息（包含详细信息）
     """
-    # Get commit type
-    commit_type = CATEGORY_TO_TYPE.get(category, 'chore')
+    # Check if this is a skill category
+    skill_name, skill_type = parse_skill_category(category)
 
-    # Generate description
-    description = analyze_changes(files, category)
+    if skill_name:
+        # Skill-based commit
+        commit_type = skill_type
+        description = f"{skill_name} 技能更新"
+    else:
+        # Regular category
+        commit_type = CATEGORY_TO_TYPE.get(category, 'chore')
+        description = analyze_changes(files, category)
 
     # Generate detailed body based on files
     detail_lines = generate_detail_lines(files, category)

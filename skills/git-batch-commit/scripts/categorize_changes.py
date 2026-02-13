@@ -181,13 +181,15 @@ def detect_code_change_type(filepath: str) -> str:
         added_lines = len([l for l in diff_content.split('\n') if l.startswith('+')])
         removed_lines = len([l for l in diff_content.split('\n') if l.startswith('-')])
 
-        # Check for fix-related keywords
-        fix_keywords = ['fix', 'bug', 'issue', 'error', 'patch', 'hotfix']
+        # Check for fix-related keywords (English + Chinese)
+        fix_keywords = ['fix', 'bug', 'issue', 'error', 'patch', 'hotfix',
+                        '修复', '错误', '问题', '补丁']
         if any(keyword in diff_content.lower() for keyword in fix_keywords):
             return 'fix'
 
-        # Check for feature-related keywords
-        feat_keywords = ['add', 'new', 'implement', 'feature', 'support']
+        # Check for feature-related keywords (English + Chinese)
+        feat_keywords = ['add', 'new', 'implement', 'feature', 'support',
+                         '添加', '新增', '实现', '功能', '支持', '增加']
         if any(keyword in diff_content.lower() for keyword in feat_keywords):
             return 'feat'
 
@@ -203,9 +205,24 @@ def detect_code_change_type(filepath: str) -> str:
         return 'style'
 
 
+def extract_skill_name(filepath: str) -> str:
+    """
+    Extract skill name from a file path if it's under skills/ directory.
+
+    Returns skill name if found, None otherwise.
+    """
+    match = re.match(r'skills/([^/]+)/', filepath)
+    if match:
+        return match.group(1)
+    return None
+
+
 def group_changes(files: List[str], staged: bool = True) -> Dict[str, List[str]]:
     """
     Group files by category.
+
+    Special handling for skill directories: all files under the same skill
+    directory are grouped together as they represent a single logical change.
 
     Args:
         files: List of file paths
@@ -215,18 +232,48 @@ def group_changes(files: List[str], staged: bool = True) -> Dict[str, List[str]]
         Dictionary mapping category to list of files
     """
     groups = {}
+    skill_groups = {}  # Temporary storage for skill-based grouping
 
+    # First pass: separate skill files from others
     for filepath in files:
-        category = categorize_file(filepath)
+        skill_name = extract_skill_name(filepath)
+        if skill_name:
+            if skill_name not in skill_groups:
+                skill_groups[skill_name] = []
+            skill_groups[skill_name].append(filepath)
+        else:
+            # Non-skill files: categorize normally
+            category = categorize_file(filepath)
 
-        # For source code, further categorize
-        if category == 'code' and staged:
-            subcategory = detect_code_change_type(filepath)
-            category = subcategory
+            # For source code, further categorize
+            if category == 'code' and staged:
+                subcategory = detect_code_change_type(filepath)
+                category = subcategory
 
-        if category not in groups:
-            groups[category] = []
-        groups[category].append(filepath)
+            if category not in groups:
+                groups[category] = []
+            groups[category].append(filepath)
+
+    # Second pass: process skill groups
+    for skill_name, skill_files in skill_groups.items():
+        # Determine the change type based on the most significant change
+        # If any file has 'feat' keywords, use 'feat'
+        # Else if any file has 'fix' keywords, use 'fix'
+        # Else use 'style'
+        change_type = 'style'
+
+        for filepath in skill_files:
+            if staged:
+                file_type = detect_code_change_type(filepath)
+                if file_type == 'feat':
+                    change_type = 'feat'
+                    break
+                elif file_type == 'fix' and change_type != 'feat':
+                    change_type = 'fix'
+
+        # Use skill:<name> as the category key
+        category_key = f'skill:{skill_name}:{change_type}'
+        groups[category_key] = skill_files
 
     return groups
 
