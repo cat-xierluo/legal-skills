@@ -415,23 +415,28 @@ done
 
 #### 1.1 创建研究目录
 
-**新的目录结构（推荐）**：
+**统一目录结构**：
 
 ```bash
 research/
 └── YYYYMMDD-[topic]/    # 日期+主题目录
-    ├── repo-a/          # 研究的仓库
-    ├── repo-b/
+    ├── repo-name/       # 研究的仓库（即使是单个仓库也在子目录中）
+    ├── repo-b/          # 多仓库时会有多个子目录
     └── REPORT.md        # 研究报告
+
+# 单仓库示例：
+# research/20260213-vibe-working-tutorial/
+#     └── vibe-working-tutorial/   <- 仓库内容
+#     └── REPORT.md
+
+# 多仓库示例：
+# research/20260213-pdf-tools-comparison/
+#     └── pdf-lib/
+#     └── pdfkit/
+#     └── REPORT.md
 ```
 
-**旧的目录结构（向后兼容）**：
-
-```bash
-research/
-└── YYYYMMDD/            # 纯日期目录（已废弃，但仍然支持）
-    └── repo-name/       # 仓库名称
-```
+> **设计原则**：无论研究多少个仓库，都保持 `research/日期-主题/仓库名/` 的统一结构，便于后续管理和扩展。
 
 **命名格式**：`YYYYMMDD-[topic-slug]`
 - `topic-slug`：主题关键词，用连字符连接，小写
@@ -471,15 +476,28 @@ cd "${RESEARCH_DIR}"
 
 #### 1.2 克隆仓库
 
-```bash
-# 单仓库：直接克隆到当前目录
-git clone --depth 1 "$URL" .
+**⚠️ 重要**：无论是单仓库还是多仓库，都统一克隆到子目录中，保持目录结构一致。
 
-# 多仓库：分别克隆到子目录
+```bash
+# 统一方式：所有仓库都克隆到子目录
+# 这样可以保持 research/日期-主题/ 目录结构的一致性
+# 单仓库和多仓库的区别只在于克隆的次数
+
 for url in "${URLS[@]}"; do
     repo_name=$(basename "$url" .git)
     git clone --depth 1 "$url" "$repo_name"
 done
+
+# 单仓库示例（实际也是克隆到子目录）：
+# research/20260213-vibe-working-tutorial/
+#     └── vibe-working-tutorial/   <- 仓库内容
+#     └── REPORT.md                <- 研究报告
+
+# 多仓库示例：
+# research/20260213-pdf-tools-comparison/
+#     └── pdf-lib/                 <- 仓库A
+#     └── pdfkit/                  <- 仓库B
+#     └── REPORT.md                <- 研究报告
 ```
 
 ---
