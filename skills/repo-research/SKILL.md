@@ -134,9 +134,18 @@ fi
 
 ##### 4.1 创建研究目录
 
+**⚠️ 重要**：必须在**用户当前工作目录**下创建 research 文件夹。
+
 ```bash
+# 获取用户当前工作目录
+WORK_DIR="${PWD}"
+
 RESEARCH_DATE=$(date +%Y%m%d)
-RESEARCH_DIR="research/${RESEARCH_DATE}/topic-$(echo '$TOPIC' | tr ' ' '-')"
+# 将主题转换为 slug 格式（小写、空格替换为连字符）
+TOPIC_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+
+# 使用绝对路径确保在正确位置
+RESEARCH_DIR="${WORK_DIR}/research/${RESEARCH_DATE}-${TOPIC_SLUG}"
 mkdir -p "${RESEARCH_DIR}"
 cd "${RESEARCH_DIR}"
 ```
@@ -167,7 +176,7 @@ done
 > **研究日期**：YYYY-MM-DD
 > **搜索主题**：[主题关键词]
 > **研究仓库数**：[N] 个
-> **报告路径**：`./research/YYYYMMDD/topic-[slug]/REPORT.md`
+> **报告路径**：`./research/YYYYMMDD-[topic-slug]/REPORT.md`
 
 ---
 
@@ -393,7 +402,7 @@ done
 - 学习参考：[项目A]
 - 生产使用：[项目B]
 
-**详细报告已保存至**：`./research/YYYYMMDD/topic-[slug]/REPORT.md`
+**详细报告已保存至**：`./research/YYYYMMDD-[topic-slug]/REPORT.md`
 ```
 
 ---
@@ -406,36 +415,59 @@ done
 
 #### 1.1 创建研究目录
 
-```bash
-# 单仓库目录结构
-research/
-└── YYYYMMDD/           # 日期目录
-    └── repo-name/      # 仓库名称
+**新的目录结构（推荐）**：
 
-# 多仓库目录结构
+```bash
 research/
-└── YYYYMMDD/
-    └── comparison/     # 对比研究使用统一目录
-        ├── repo-a/
-        ├── repo-b/
-        └── REPORT.md   # 对比报告
+└── YYYYMMDD-[topic]/    # 日期+主题目录
+    ├── repo-a/          # 研究的仓库
+    ├── repo-b/
+    └── REPORT.md        # 研究报告
 ```
+
+**旧的目录结构（向后兼容）**：
+
+```bash
+research/
+└── YYYYMMDD/            # 纯日期目录（已废弃，但仍然支持）
+    └── repo-name/       # 仓库名称
+```
+
+**命名格式**：`YYYYMMDD-[topic-slug]`
+- `topic-slug`：主题关键词，用连字符连接，小写
+- 示例：`20260211-pdf-ocr-comparison`、`20260212-transcription-study`
+
+**主题来源**（优先级从高到低）：
+1. **用户指定**：调用时通过 `--topic` 参数提供
+2. **对话询问**：自动询问用户输入简短的主题描述
+3. **自动推断**：从仓库名称或研究内容推断（备选）
 
 使用 Bash 工具执行：
 
+**⚠️ 重要**：必须在**用户当前工作目录**下创建 research 文件夹，而非 skill 所在目录。
+
 ```bash
+# 获取用户当前工作目录（从环境变量或上下文推断）
+WORK_DIR="${PWD}"  # 使用当前工作目录
+
 REPO_DATE=$(date +%Y%m%d)
 
-# 单仓库
-REPO_NAME=$(basename "$URL" .git)
-RESEARCH_DIR="research/${REPO_DATE}/${REPO_NAME}"
+# 确定研究主题（通过对话询问或参数获取）
+# 示例：TOPIC="pdf-ocr-comparison"
+TOPIC_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
-# 多仓库（对比模式）
-RESEARCH_DIR="research/${REPO_DATE}/comparison"
+# 新格式（推荐）- 使用绝对路径确保位置正确
+RESEARCH_DIR="${WORK_DIR}/research/${REPO_DATE}-${TOPIC_SLUG}"
+
+# 旧格式（向后兼容，如果用户明确要求）
+# RESEARCH_DIR="${WORK_DIR}/research/${REPO_DATE}/${REPO_NAME}"
 
 mkdir -p "${RESEARCH_DIR}"
 cd "${RESEARCH_DIR}"
 ```
+
+**对话询问主题**：
+> "请为本次研究提供一个简短的主题描述（用于目录命名，如 `pdf-ocr`、`agent-framework`）："
 
 #### 1.2 克隆仓库
 
@@ -585,7 +617,7 @@ glob "tests/**/*"     # 测试
 > 研究日期：YYYY-MM-DD
 > 研究仓库：[列出所有仓库]
 > 对比项目：[本地项目路径]
-> 报告路径：`./research/YYYYMMDD/comparison/REPORT.md`
+> 报告路径：`./research/YYYYMMDD-[topic-slug]/REPORT.md`
 
 ---
 
@@ -691,7 +723,7 @@ glob "tests/**/*"     # 测试
 - [ ] [改进1]
 - [ ] [改进2]
 
-**详细报告已保存至**：`./research/YYYYMMDD/comparison/REPORT.md`
+**详细报告已保存至**：`./research/YYYYMMDD-[topic-slug]/REPORT.md`
 ```
 
 ---
