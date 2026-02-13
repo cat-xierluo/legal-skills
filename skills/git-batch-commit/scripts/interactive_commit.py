@@ -145,15 +145,10 @@ def batch_commit(skip_confirm: bool = False):
 
     print(f"发现 {len(staged)} 个已暂存文件")
 
-    # Unstage everything first to regroup
-    if not unstage_files(staged):
-        print("错误：无法取消暂存文件。")
-        return 1
-
-    # Group changes by category
+    # Group changes by category (using already staged files)
     groups = group_changes(staged, staged=True)
 
-    # Generate commit messages for each group
+    # Generate commit messages for each group (files are already staged)
     messages = generate_commit_messages(groups)
 
     # Display proposed groups
@@ -161,9 +156,13 @@ def batch_commit(skip_confirm: bool = False):
 
     # Confirm with user
     if not confirm_groups(skip_confirm=skip_confirm):
-        print("\n已取消。正在重新暂存原始文件...")
-        stage_files(staged)
+        print("\n已取消。")
         return 0
+
+    # Unstage everything first to regroup
+    if not unstage_files(staged):
+        print("错误：无法取消暂存文件。")
+        return 1
 
     # Create commits for each group
     print("\n正在创建提交...")
