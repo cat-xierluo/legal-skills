@@ -236,6 +236,24 @@ def format_timestamp(ms: int) -> str:
         return f"{minutes:02d}:{secs:02d}"
 
 
+def split_text_by_sentences(text: str) -> list:
+    """按句子分割文本（保留分隔符）"""
+    import re
+    # 匹配句子结束符（。！？）以及可选的引号和空格
+    # 格式：非结束符内容 + 结束符 + 可选引号 + 可选空格
+    pattern = r'[^。！？\n]+[。！？][」』""\"]?\s*'
+    sentences = re.findall(pattern, text)
+    # 过滤空字符串并清理空白，同时处理没有结束符的最后一段
+    result = [s.strip() for s in sentences if s.strip()]
+    # 检查是否有剩余文本（没有结束符的段落）
+    matched_len = sum(len(s) for s in sentences)
+    if matched_len < len(text):
+        remaining = text[matched_len:].strip()
+        if remaining:
+            result.append(remaining)
+    return result
+
+
 def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> str:
     """将转录结果转换为 Markdown 格式"""
     md_lines = []
@@ -244,7 +262,7 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> st
     md_lines.append(f"# 转录：{filename}\n")
     md_lines.append("## 转录内容\n")
 
-    # 处理句子信息
+    # 处理句子信息（说话人分离模式）
     if 'sentence_info' in result and result['sentence_info']:
         segments = result['sentence_info']
 
@@ -321,8 +339,56 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> st
                 md_lines.append(f"{start_ts}\n")
 
             md_lines.append(f"{combined_text}\n\n")
+
+    # 处理 timestamp 字段（标准模式，无说话人分离）
+    elif 'timestamp' in result and result['timestamp'] and 'text' in result:
+        text = result['text']
+        timestamps = result['timestamp']
+
+        # 按句子分割文本
+        sentences = split_text_by_sentences(text)
+
+        if not sentences:
+            # 无法分割时，输出整段
+            md_lines.append(f"发言人1 00:00\n")
+            md_lines.append(f"{text}\n\n")
+        else:
+            # 计算每个句子的字符范围
+            char_idx = 0
+            sentence_ranges = []
+            for sent in sentences:
+                # 计算句子在原文中的位置（考虑可能的空格差异）
+                sent_clean = sent.replace(' ', '')
+                text_from_idx = text.replace(' ', '')[char_idx:char_idx + len(sent_clean)]
+
+                start_char = char_idx
+                end_char = char_idx + len(sent_clean)
+                sentence_ranges.append((sent, start_char, end_char))
+                char_idx = end_char
+
+            # 为每个句子分配时间戳
+            # timestamp 列表中每个元素对应一个音频片段 [start_ms, end_ms]
+            # 我们需要估算每个句子对应多少个 timestamp
+            total_chars = len(text.replace(' ', ''))
+            total_timestamps = len(timestamps)
+
+            for sent, start_char, end_char in sentence_ranges:
+                # 根据字符位置比例计算时间戳索引
+                start_ts_idx = int(start_char / total_chars * total_timestamps)
+                end_ts_idx = min(int(end_char / total_chars * total_timestamps), total_timestamps - 1)
+
+                # 获取该句子的起始时间
+                if start_ts_idx < len(timestamps):
+                    start_ms = timestamps[start_ts_idx][0]
+                else:
+                    start_ms = timestamps[-1][0] if timestamps else 0
+
+                start_ts = format_timestamp(int(start_ms))
+                md_lines.append(f"发言人1 {start_ts}\n")
+                md_lines.append(f"{sent}\n\n")
+
     else:
-        # 简单文本输出 - 添加默认说话人标签和时间戳
+        # 兜底：简单文本输出 - 添加默认说话人标签和时间戳
         text = result.get('text', '')
         # 即使不启用说话人分离，也显示"发言人1"以保持格式一致
         md_lines.append(f"发言人1 00:00\n")
