@@ -3,26 +3,46 @@
     {
       "id": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
       "name": "ASR 主模型 (Paraformer)",
-      "description": "语音识别核心模型，支持中文",
-      "required": true
+      "description": "语音识别核心模型，支持中文 - 传统分模块架构",
+      "required": true,
+      "model_type": "pipeline"
     },
     {
       "id": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
       "name": "VAD 模型",
       "description": "语音活动检测，用于分段",
-      "required": true
+      "required": true,
+      "model_type": "pipeline"
     },
     {
       "id": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
       "name": "标点模型",
       "description": "自动恢复标点符号",
-      "required": true
+      "required": true,
+      "model_type": "pipeline"
     },
     {
       "id": "damo/speech_campplus_speaker-diarization_common",
       "name": "说话人分离模型 (CAM++)",
       "description": "识别不同说话人 - Speaker Diarization",
       "required": false
+    },
+    {
+      "id": "FunAudioLLM/fun-asr-nano-2512",
+      "name": "Fun-ASR-Nano-2512 (新版)",
+      "description": "端到端ASR模型，800M参数，支持31种语言、7种中文方言、26种地区口音，实时低延迟 [当前版本FunASR暂不兼容]",
+      "required": false,
+      "model_type": "e2e",
+      "compatible": false
+    },
+    {
+      "id": "FunAudioLLM/fun-asr-mlt-nano-2512",
+      "name": "Fun-ASR-MLT-Nano-2512 (多语言版)",
+      "description": "多语言端到端ASR模型，支持多语言转录 [当前版本FunASR暂不兼容]",
+      "required": false,
+      "model_type": "e2e",
+      "compatible": false
     }
-  ]
+  ],
+  "default_model": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
 }

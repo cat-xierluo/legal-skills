@@ -31,6 +31,10 @@ IDLE_TIMEOUT = 600  # 10分钟（600秒）
 SERVICE_RUNNING = True
 MONITOR_THREAD = None
 
+# 默认模型配置
+DEFAULT_MODEL = "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
+MODEL_CACHE = {}  # 模型实例缓存 {model_id: model_instance}
+
 
 def check_dependencies():
     """检查依赖是否安装"""
@@ -174,7 +178,7 @@ from funasr import AutoModel
 
 app = FastAPI(title="FunASR Transcribe API", version="1.0.0")
 
-# 全局模型实例
+# 全局模型实例（用于向后兼容）
 model = None
 model_with_spk = None
 
@@ -184,36 +188,86 @@ SUPPORTED_EXTENSIONS = {
 }
 
 
-def init_model(with_speaker: bool = False):
-    """初始化 ASR 模型"""
-    global model, model_with_spk
+def get_model_type(model_id: str) -> str:
+    """判断模型类型：pipeline 或 e2e"""
+    if model_id.startswith("FunAudioLLM/fun-asr"):
+        return "e2e"
+    return "pipeline"
 
-    if with_speaker and model_with_spk is None:
-        print("正在加载 ASR 模型（含说话人分离）...")
-        # 使用标准 ASR 模型 + CAM++ 说话人分离模型
-        model_with_spk = AutoModel(
-            model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-            punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-            spk_model="cam++",
-            disable_update=True,
-            disable_log=False,
-        )
-        print("模型加载完成（含说话人分离）")
-        return model_with_spk
 
-    if model is None:
-        print("正在加载 ASR 模型...")
-        model = AutoModel(
-            model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-            punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-            disable_update=True,
-            disable_log=False,
-        )
-        print("模型加载完成")
+def init_model(with_speaker: bool = False, model_id: str = None):
+    """初始化 ASR 模型
 
-    return model_with_spk if with_speaker else model
+    Args:
+        with_speaker: 是否启用说话人分离
+        model_id: 指定模型 ID（可选，默认使用 DEFAULT_MODEL）
+
+    Returns:
+        FunASR 模型实例
+    """
+    global model, model_with_spk, MODEL_CACHE
+
+    # 使用指定模型或默认模型
+    use_model_id = model_id or DEFAULT_MODEL
+    model_type = get_model_type(use_model_id)
+
+    # 构建缓存键值
+    cache_key = f"{use_model_id}_spk{with_speaker}"
+
+    # 检查缓存
+    if cache_key in MODEL_CACHE:
+        return MODEL_CACHE[cache_key]
+
+    print(f"正在加载 ASR 模型: {use_model_id}")
+    print(f"模型类型: {'端到端 (E2E)' if model_type == 'e2e' else '流水线 (Pipeline)'}")
+
+    if model_type == "e2e":
+        # 端到端模型（Fun-ASR-Nano）
+        if with_speaker:
+            # E2E 模型暂不支持说话人分离，降级处理
+            print("⚠️ 端到端模型不支持说话人分离，已禁用")
+            with_speaker = False
+
+        # E2E 模型（如 Nano）初始化参数
+        model_kwargs = {
+            "model": use_model_id,
+            "disable_update": True,
+            "disable_log": False,
+            "trust_remote_code": True,  # Nano 模型需要此参数
+        }
+
+        # 为 Nano 模型添加 VAD 模型以提高准确性
+        if "nano" in use_model_id.lower():
+            model_kwargs["vad_model"] = "fsmn-vad"
+            model_kwargs["vad_kwargs"] = {"max_single_segment_time": 30000}
+
+        model_instance = AutoModel(**model_kwargs)
+        print(f"模型加载完成: {use_model_id}")
+    else:
+        # 传统流水线模型
+        if with_speaker:
+            model_instance = AutoModel(
+                model=use_model_id,
+                vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+                punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+                spk_model="cam++",
+                disable_update=True,
+                disable_log=False,
+            )
+            print(f"模型加载完成（含说话人分离）")
+        else:
+            model_instance = AutoModel(
+                model=use_model_id,
+                vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+                punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+                disable_update=True,
+                disable_log=False,
+            )
+            print("模型加载完成")
+
+    # 缓存模型实例
+    MODEL_CACHE[cache_key] = model_instance
+    return model_instance
 
 
 def format_timestamp(ms: int) -> str:
@@ -402,12 +456,14 @@ class TranscribeRequest(BaseModel):
     file_path: str
     output_path: Optional[str] = None
     diarize: bool = False
+    model_id: Optional[str] = None  # 指定使用的模型 ID
 
 
 class BatchTranscribeRequest(BaseModel):
     directory: str
     output_dir: Optional[str] = None
     diarize: bool = False
+    model_id: Optional[str] = None  # 指定使用的模型 ID
 
 
 class TranscribeResponse(BaseModel):
@@ -460,6 +516,7 @@ async def transcribe(request: TranscribeRequest):
         - file_path: 文件路径（必需）
         - output_path: 输出 Markdown 文件路径（可选）
         - diarize: 是否启用说话人分离（可选，默认 false）
+        - model_id: 指定使用的模型 ID（可选，默认使用 Paraformer）
 
     返回:
         - success: 是否成功
@@ -492,10 +549,12 @@ async def transcribe(request: TranscribeRequest):
         if not output_path:
             output_path = str(Path(request.file_path).with_suffix('.md'))
 
-        # 获取模型
-        current_model = init_model(with_speaker=request.diarize)
+        # 获取模型（支持指定模型 ID）
+        current_model = init_model(with_speaker=request.diarize, model_id=request.model_id)
 
         print(f"正在转录: {request.file_path}")
+        if request.model_id:
+            print(f"使用模型: {request.model_id}")
 
         # 执行转录
         result = current_model.generate(input=request.file_path, cache={})
@@ -538,6 +597,7 @@ async def batch_transcribe(request: BatchTranscribeRequest):
         - directory: 目录路径（必需）
         - output_dir: 输出目录（可选，默认同目录）
         - diarize: 是否启用说话人分离（可选，默认 false）
+        - model_id: 指定使用的模型 ID（可选，默认使用 Paraformer）
     """
     try:
         # 更新活动时间
@@ -565,7 +625,8 @@ async def batch_transcribe(request: BatchTranscribeRequest):
             )
 
         results = []
-        current_model = init_model(with_speaker=request.diarize)
+        # 支持指定模型 ID
+        current_model = init_model(with_speaker=request.diarize, model_id=request.model_id)
 
         for file_path in files:
             try:

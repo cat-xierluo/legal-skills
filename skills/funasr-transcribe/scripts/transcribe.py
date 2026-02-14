@@ -26,6 +26,14 @@ except ImportError:
 
 DEFAULT_SERVER = "http://127.0.0.1:8765"
 
+# 可用模型列表
+# 注意: Nano 模型暂不支持当前 FunASR 版本 (1.3.1)，需要等待官方修复
+AVAILABLE_MODELS = {
+    "paraformer": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+    # "nano": "FunAudioLLM/fun-asr-nano-2512",  # 暂不可用
+    # "nano-mlt": "FunAudioLLM/fun-asr-mlt-nano-2512",  # 暂不可用
+}
+
 
 def check_server(server_url: str) -> bool:
     """检查服务是否运行"""
@@ -38,7 +46,8 @@ def check_server(server_url: str) -> bool:
 
 
 def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
-                    output_path: str = None, diarize: bool = False) -> dict:
+                    output_path: str = None, diarize: bool = False,
+                    model_id: str = None) -> dict:
     """
     转录单个文件
 
@@ -47,6 +56,7 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         server_url: 转录服务地址
         output_path: 输出 Markdown 文件路径
         diarize: 是否启用说话人分离
+        model_id: 指定使用的模型 ID（可选）
 
     Returns:
         转录结果字典
@@ -63,6 +73,8 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
     }
     if output_path:
         payload["output_path"] = os.path.abspath(output_path)
+    if model_id:
+        payload["model_id"] = model_id
 
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
@@ -87,7 +99,8 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
 
 
 def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
-                     output_dir: str = None, diarize: bool = False) -> dict:
+                     output_dir: str = None, diarize: bool = False,
+                     model_id: str = None) -> dict:
     """
     批量转录目录中的文件
 
@@ -96,6 +109,7 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
         server_url: 转录服务地址
         output_dir: 输出目录
         diarize: 是否启用说话人分离
+        model_id: 指定使用的模型 ID（可选）
 
     Returns:
         批量转录结果
@@ -123,6 +137,8 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
     }
     if output_dir:
         payload["output_dir"] = os.path.abspath(output_dir)
+    if model_id:
+        payload["model_id"] = model_id
 
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
@@ -150,7 +166,12 @@ def main():
     parser = argparse.ArgumentParser(
         description='FunASR 转录客户端 - 将音频/视频转换为 Markdown',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+可用模型:
+  paraformer  - Paraformer 大模型（默认，传统流水线）
+  nano        - Fun-ASR-Nano-2512（端到端，800M参数，支持方言）
+  nano-mlt    - Fun-ASR-MLT-Nano-2512（多语言版本）
+
 示例:
   # 转录单个文件
   python transcribe.py /path/to/audio.mp3
@@ -160,6 +181,9 @@ def main():
 
   # 启用说话人分离
   python transcribe.py /path/to/meeting.m4a --diarize
+
+  # 使用新模型 Fun-ASR-Nano
+  python transcribe.py /path/to/audio.mp3 --model nano
 
   # 批量转录目录
   python transcribe.py /path/to/media_folder/ --batch
@@ -183,8 +207,17 @@ def main():
     parser.add_argument('--json', action='store_true', help='以 JSON 格式输出结果')
     parser.add_argument('--no-summary', action='store_true', help='禁用 AI 总结功能（默认启用）')
     parser.add_argument('--claude-code', action='store_true', help='Claude Code 模式：自动请求 AI 生成并注入总结')
+    parser.add_argument('--model', choices=['paraformer'],
+                       help='选择使用的 ASR 模型（默认: paraformer）')
 
     args = parser.parse_args()
+
+    # 解析模型 ID
+    model_id = None
+    if args.model:
+        model_id = AVAILABLE_MODELS.get(args.model)
+        if model_id:
+            print(f"🔧 使用模型: {args.model} ({model_id})")
 
     # 检查服务是否运行
     if not check_server(args.server):
@@ -199,14 +232,16 @@ def main():
             args.path,
             server_url=args.server,
             output_dir=args.output,
-            diarize=args.diarize
+            diarize=args.diarize,
+            model_id=model_id
         )
     else:
         result = transcribe_file(
             args.path,
             server_url=args.server,
             output_path=args.output,
-            diarize=args.diarize
+            diarize=args.diarize,
+            model_id=model_id
         )
 
     # 输出结果
