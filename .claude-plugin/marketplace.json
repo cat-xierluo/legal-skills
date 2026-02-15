@@ -136,6 +136,17 @@
       "source": "skills/git-batch-commit",
       "category": "developer-tools",
       "tags": ["git", "commit", "automation"]
+    },
+    {
+      "name": "multi-search",
+      "description": "智能多主题深度研究工具，支持任意材料输入，使用独立研究 Agent 进行并行深度检索并生成系统化研究文档",
+      "version": "1.1.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/multi-search",
+      "category": "productivity",
+      "tags": ["research", "search", "analysis"]
     }
   ]
 }
