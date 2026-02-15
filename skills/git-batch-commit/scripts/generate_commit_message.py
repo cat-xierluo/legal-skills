@@ -143,6 +143,32 @@ def parse_skill_category(category: str):
             return parts[1], parts[2]  # (skill_name, commit_type)
     return None, None
 
+
+def detect_skill_name(files: List[str]) -> str | None:
+    """
+    检测文件是否属于某个技能，返回技能名称。
+
+    Args:
+        files: 文件列表
+
+    Returns:
+        技能名称，如果不属于任何技能则返回 None
+    """
+    if not files:
+        return None
+
+    for filepath in files:
+        # Check if this is a skill file (skills/<skill-name>/...)
+        if '/skills/' in filepath:
+            parts = filepath.split('/skills/')
+            if len(parts) > 1:
+                skill_path = parts[1]
+                skill_name = skill_path.split('/')[0]
+                if skill_name and skill_name != 'skills':
+                    return skill_name
+
+    return None
+
 # Common commit message templates by category (中文)
 MESSAGE_TEMPLATES = {
     'deps': {
@@ -302,7 +328,7 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     生成约定式提交信息，包含详细信息。
 
     格式：
-    <type>: <描述>
+    <type>(<技能名>): <描述>
 
     - 详细变更说明1
     - 详细变更说明2
@@ -326,11 +352,20 @@ def generate_commit_message(category: str, files: List[str]) -> str:
         commit_type = CATEGORY_TO_TYPE.get(category, 'chore')
         description = analyze_changes(files, category)
 
+    # Detect skill name from files for automatic formatting
+    detected_skill = detect_skill_name(files)
+
     # Generate detailed body based on files
     detail_lines = generate_detail_lines(files, category)
 
-    # Format: type: description (使用英文冒号以支持 GitHub 彩色标签)
-    message = f"{commit_type}: {description}"
+    # Format: type(skill-name): description (使用英文冒号以支持 GitHub 彩色标签)
+    # 如果已有 skill_name 或从文件中检测到技能名，则使用括号格式
+    if skill_name:
+        message = f"{commit_type}({skill_name}): {description}"
+    elif detected_skill:
+        message = f"{commit_type}({detected_skill}): {description}"
+    else:
+        message = f"{commit_type}: {description}"
 
     # Add detail lines if available
     if detail_lines:
