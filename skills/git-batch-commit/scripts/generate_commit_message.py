@@ -440,24 +440,43 @@ def analyze_diff_content(diff: str, filename: str) -> str:
 
 def analyze_markdown_changes(added: List[str], removed: List[str], filename: str) -> str:
     """分析 Markdown 文件变更。"""
-    # Check for new sections/headers
-    added_headers = [l for l in added if l.startswith('#')]
-
-    if added_headers:
-        header_text = added_headers[0].lstrip('#').strip()
-        return f"更新 {filename} - 添加 {header_text} 部分"
+    # Check for new sections/headers - collect all headers for better context
+    added_headers = [l.lstrip('#').strip() for l in added if l.startswith('#')]
 
     # SKILL.md is a skill core file, treat differently from regular docs
-    if filename == 'SKILL.md':
+    if filename == 'SKILL.md' or 'SKILL.md' in filename:
         # Extract skill name from path if available
+        skill_name = ""
+        if 'skills/' in filename:
+            parts = filename.split('skills/')
+            if len(parts) > 1:
+                skill_name = parts[1].split('/')[0]
+
+        # If we found added headers, generate specific description
+        if added_headers:
+            # Get the most important header (first h1 or h2)
+            header_text = added_headers[0]
+            if skill_name:
+                return f"{skill_name} 技能 - 添加 {header_text} 部分"
+            return f"添加 {header_text} 部分"
+
+        # Check for bullet points or list items (often contain具体的变更内容)
+        added_items = [l.strip() for l in added if l.strip().startswith('- ') or l.strip().startswith('* ')]
+        if added_items:
+            # Use first meaningful item as description
+            item_text = added_items[0][2:].strip()[:50]  # Limit length
+            if skill_name:
+                return f"{skill_name} 技能 - {item_text}"
+            return f"更新 {filename} - {item_text}"
+
+        if skill_name:
+            return f"更新 {skill_name} 技能"
         return f"更新技能定义文件"
 
-    # Check for skill file changes (skills/xxx/SKILL.md)
-    if 'SKILL.md' in filename or 'skills/' in filename:
-        skill_name = filename.split('/')[-1].replace('.md', '')
-        if '添加' in ' '.join(added) or '新增' in ' '.join(added):
-            return f"添加 {skill_name} 技能"
-        return f"更新 {skill_name} 技能"
+    # For regular markdown files with headers
+    if added_headers:
+        header_text = added_headers[0]
+        return f"更新 {filename} - 添加 {header_text} 部分"
 
     # Check for doc updates
     if added:
@@ -495,14 +514,25 @@ def extract_class_names(added: List[str]) -> List[str]:
     return class_names
 
 
+def extract_function_names(added: List[str]) -> List[str]:
+    """提取新增的函数名。"""
+    func_names = []
+    for line in added:
+        # Python: def function_name(
+        match = re.search(r'def\s+(\w+)\s*\(', line)
+        if match:
+            func_names.append(match.group(1))
+    return func_names
+
+
 def analyze_code_changes(added: List[str], removed: List[str], filename: str) -> str:
     """分析代码文件变更。"""
     # 先尝试获取功能描述
     func_desc = get_function_description(filename)
 
-    # 提取新增的类名
+    # 提取新增的类名和函数名
     added_classes = extract_class_names(added)
-    added_funcs = [l for l in added if 'def ' in l or 'function ' in l]
+    added_funcs = extract_function_names(added)
     added_imports = [l for l in added if 'import ' in l or 'from ' in l]
 
     # 判断变更类型
@@ -519,6 +549,19 @@ def analyze_code_changes(added: List[str], removed: List[str], filename: str) ->
         else:
             return f"新增 {filename}"
 
+    # 优先使用函数名来描述变更（比类名更具体）
+    if has_new_funcs:
+        if func_desc:
+            if len(added_funcs) == 1:
+                return f"更新 {func_desc} - 添加 {added_funcs[0]}() 函数"
+            else:
+                return f"更新 {func_desc} - 添加 {len(added_funcs)} 个函数"
+        else:
+            if len(added_funcs) == 1:
+                return f"更新 {filename} - 添加 {added_funcs[0]}() 函数"
+            else:
+                return f"更新 {filename} - 添加 {len(added_funcs)} 个函数"
+
     if has_new_classes:
         if func_desc:
             # 结合功能描述和类名
@@ -529,19 +572,16 @@ def analyze_code_changes(added: List[str], removed: List[str], filename: str) ->
         else:
             return f"更新 {filename} - 添加 {added_classes[0]}"
 
-    # 检查关键词
-    changes = []
+    # 检查关键词 - 生成更具体的描述
     if any('fix' in l.lower() or 'bug' in l.lower() for l in added + removed):
-        changes.append("修复问题")
-    if any('add' in l.lower() or 'new' in l.lower() for l in added + removed):
-        changes.append("添加新功能")
-    if any('update' in l.lower() for l in added + removed):
-        changes.append("更新功能")
-
-    if changes:
         if func_desc:
-            return f"更新 {func_desc} - {'、'.join(changes)}"
-        return f"更新 {filename} - {'、'.join(changes)}"
+            return f"修复 {func_desc} 中的问题"
+        return "修复代码问题"
+
+    if any('update' in l.lower() or 'refactor' in l.lower() for l in added + removed):
+        if func_desc:
+            return f"更新 {func_desc}"
+        return f"更新 {filename}"
 
     if added_imports and func_desc:
         return f"更新 {func_desc} - 添加导入"
