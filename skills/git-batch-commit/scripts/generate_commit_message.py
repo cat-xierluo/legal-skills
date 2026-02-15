@@ -850,3 +850,12 @@ def extract_test_data():
     '''Another test function'''
     pass
 
+
+def detect_new_feature():
+    '''Test function for detection'''
+    pass
+
+def extract_test_data():
+    '''Another test function'''
+    pass
+

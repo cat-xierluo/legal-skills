@@ -185,6 +185,13 @@ def detect_code_change_type(filepath: str) -> str:
         )
         diff_content = result.stdout
 
+        # Check for new function definitions (strong indicator of new feature)
+        # Match patterns like: +def function_name(
+        new_func_pattern = r'^\+def\s+\w+'
+        new_funcs = re.findall(new_func_pattern, diff_content, re.MULTILINE)
+        if new_funcs:
+            return 'feat'
+
         # Simple heuristic based on diff patterns
         # Additions dominate -> likely a feature
         # Deletions dominate -> likely a cleanup/refactor
