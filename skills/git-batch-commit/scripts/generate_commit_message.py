@@ -260,9 +260,18 @@ def analyze_changes(files: List[str], category: str) -> str:
     if not files:
         return ""
 
+    # Handle skill:<name>:<type> format - extract the actual type
+    actual_category = category
+    is_skill_format = False
+    if category.startswith('skill:'):
+        parts = category.split(':')
+        if len(parts) == 3:
+            actual_category = parts[2]  # Use the type (feat, fix, style, etc.)
+            is_skill_format = True
+
     # Try to match patterns
-    if category in MESSAGE_TEMPLATES:
-        templates = MESSAGE_TEMPLATES[category]
+    if actual_category in MESSAGE_TEMPLATES:
+        templates = MESSAGE_TEMPLATES[actual_category]
         if 'patterns' in templates:
             for pattern, message in templates['patterns']:
                 for filepath in files:
@@ -290,7 +299,7 @@ def analyze_changes(files: List[str], category: str) -> str:
                 filename = filepath.split('/')[-1]
 
                 # For markdown docs, extract doc name
-                if category == 'docs' and filename.endswith('.md'):
+                if actual_category == 'docs' and filename.endswith('.md'):
                     doc_name = filename.replace('.md', '')
                     # Handle special cases
                     if doc_name == 'README':
@@ -304,13 +313,13 @@ def analyze_changes(files: List[str], category: str) -> str:
                     else:
                         return f'更新 {doc_name} 文档'
 
-                # For skill files
-                if 'skills/' in filepath:
+                # For skill files (only for non-skill format)
+                if 'skills/' in filepath and not is_skill_format:
                     skill_name = filepath.split('skills/')[1].split('/')[0]
                     return f'添加 {skill_name} 技能'
 
                 # For config files, mention specific config
-                if category == 'config':
+                if actual_category == 'config':
                     if filename.endswith(('.yaml', '.yml')):
                         return f'更新 {filename} 配置'
                     elif filename.endswith('.toml'):
@@ -319,8 +328,8 @@ def analyze_changes(files: List[str], category: str) -> str:
             # Multiple files: mention count
             return f'{base_msg}({len(files)} 个文件)'
 
-    # Fallback: generic message based on category
-    return f'更新 {category} 文件'
+    # Fallback: generic message based on actual_category
+    return f'更新 {actual_category} 文件'
 
 
 def generate_commit_message(category: str, files: List[str]) -> str:
@@ -344,9 +353,9 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     skill_name, skill_type = parse_skill_category(category)
 
     if skill_name:
-        # Skill-based commit
+        # Skill-based commit: 使用 analyze_changes 生成具体描述
         commit_type = skill_type
-        description = f"{skill_name} 技能更新"
+        description = analyze_changes(files, category)
     else:
         # Regular category
         commit_type = CATEGORY_TO_TYPE.get(category, 'chore')
