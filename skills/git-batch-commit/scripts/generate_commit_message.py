@@ -525,6 +525,95 @@ def extract_function_names(added: List[str]) -> List[str]:
     return func_names
 
 
+# 函数名前缀到动作的语义映射
+FUNCTION_PREFIX_ACTIONS = {
+    # 检测/分析类
+    'detect_': '添加检测功能',
+    'analyze_': '添加分析功能',
+    'parse_': '添加解析功能',
+    'extract_': '添加提取功能',
+    'identify_': '添加识别功能',
+    'infer_': '添加推断功能',
+
+    # 生成/创建类
+    'generate_': '添加生成功能',
+    'create_': '添加创建功能',
+    'build_': '添加构建功能',
+    'make_': '添加制作功能',
+
+    # 处理/转换类
+    'process_': '添加处理功能',
+    'convert_': '添加转换功能',
+    'transform_': '添加转换功能',
+    'handle_': '改进处理逻辑',
+    'format_': '添加格式化功能',
+
+    # 获取/读取类
+    'get_': '添加获取功能',
+    'fetch_': '添加获取功能',
+    'load_': '添加加载功能',
+    'read_': '添加读取功能',
+
+    # 更新/修改类
+    'update_': '添加更新功能',
+    'modify_': '添加修改功能',
+    'edit_': '添加编辑功能',
+
+    # 删除/移除类
+    'delete_': '添加删除功能',
+    'remove_': '添加移除功能',
+
+    # 验证/检查类
+    'validate_': '添加验证功能',
+    'check_': '添加检查功能',
+    'verify_': '添加验证功能',
+    'is_': '添加验证逻辑',
+
+    # 优化/改进类
+    'optimize_': '优化性能',
+    'improve_': '改进功能',
+    'enhance_': '增强功能',
+    'fix_': '修复问题',
+}
+
+
+def infer_intent_from_function_name(func_name: str) -> str | None:
+    """根据函数名前缀推断意图。
+
+    示例:
+    - detect_skill_name -> 添加检测功能
+    - infer_intent -> 添加推断功能
+    - analyze_code_changes -> 添加分析功能(代码变更)
+    - extract_function_names -> 添加提取功能(函数名)
+    """
+    for prefix, action in FUNCTION_PREFIX_ACTIONS.items():
+        if func_name.startswith(prefix):
+            # 提取函数名中剩余的部分
+            rest = func_name[len(prefix):]
+
+            # 如果剩余部分很短（如单个词），直接返回动作描述
+            if len(rest) < 4:
+                return action
+
+            # 智能处理剩余部分 - 提取中间有意义的部分
+            if rest:
+                # 按下划线分割
+                parts = rest.split('_')
+                # 如果有多个部分，取中间有意义的部分
+                if len(parts) > 1:
+                    # 去掉第一部分（通常是动词）和常见后缀
+                    meaningful = [p for p in parts[1:]
+                                  if p.lower() not in ('name', 'file', 'path', 'content',
+                                                     'data', 'message', 'lines', 'from',
+                                                     'function', 'the', 'a', 'an', 'list')]
+                    if meaningful:
+                        readable = meaningful[0]  # 取第一个有意义的词
+                        return f"{action}({readable})"
+
+            return action
+    return None
+
+
 def analyze_code_changes(added: List[str], removed: List[str], filename: str) -> str:
     """分析代码文件变更。"""
     # 先尝试获取功能描述
@@ -535,8 +624,30 @@ def analyze_code_changes(added: List[str], removed: List[str], filename: str) ->
     added_funcs = extract_function_names(added)
     added_imports = [l for l in added if 'import ' in l or 'from ' in l]
 
-    # 判断变更类型
-    is_new_file = len(added) > 10 and len(removed) < 5  # 新文件通常添加多行，删除很少
+    # 判断变更类型 - 使用更精确的检测
+    # 1. 如果删除行数 > 0，说明是修改已有文件
+    # 2. 检查文件是否是新文件（通过 git ls-files）
+    is_modification = len(removed) > 0
+
+    # 判断是否为新文件（慎重判断）
+    is_new_file = False
+    if not is_modification and len(added) > 10:
+        # 检查文件是否已在 git 中跟踪
+        try:
+            result = subprocess.run(
+                ['git', 'ls-files', '--', filename],
+                capture_output=True,
+                text=True,
+                cwd='/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills'
+            )
+            # 如果已跟踪，说明是修改而不是新增
+            if result.stdout.strip():
+                is_new_file = False
+            else:
+                is_new_file = True
+        except:
+            # 默认保守处理：如果无法判断，视为修改
+            is_new_file = False
     has_new_classes = len(added_classes) > 0
     has_new_funcs = len(added_funcs) > 0
 
@@ -549,8 +660,22 @@ def analyze_code_changes(added: List[str], removed: List[str], filename: str) ->
         else:
             return f"新增 {filename}"
 
-    # 优先使用函数名来描述变更（比类名更具体）
+    # 优先使用函数名语义分析来描述变更（比类名更具体）
     if has_new_funcs:
+        # 尝试从第一个新增的函数名推断意图
+        intent = infer_intent_from_function_name(added_funcs[0])
+        if intent:
+            if len(added_funcs) == 1:
+                return f"更新 - {intent}"
+            else:
+                # 多个函数时，尝试推断所有函数的意图
+                intents = [infer_intent_from_function_name(f) for f in added_funcs]
+                valid_intents = [i for i in intents if i]
+                if valid_intents:
+                    return f"更新 - {valid_intents[0]}，共 {len(added_funcs)} 个函数"
+                return f"更新 - 添加 {len(added_funcs)} 个函数"
+
+        # 如果没有语义匹配，使用原来的描述
         if func_desc:
             if len(added_funcs) == 1:
                 return f"更新 {func_desc} - 添加 {added_funcs[0]}() 函数"
