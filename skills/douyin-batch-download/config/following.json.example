@@ -1,0 +1,18 @@
+{
+  "说明": "关注列表模板 - 首次运行后会自动更新此文件",
+  "users": [
+    {
+      "uid": "博主ID",
+      "sec_user_id": "安全用户ID",
+      "name": "博主名称",
+      "nickname": "博主昵称",
+      "avatar_url": "头像URL",
+      "signature": "个人简介",
+      "follower_count": 粉丝数,
+      "following_count": 关注数,
+      "video_count": 作品数,
+      "last_updated": "最后更新时间",
+      "last_fetch_time": null
+    }
+  ]
+}

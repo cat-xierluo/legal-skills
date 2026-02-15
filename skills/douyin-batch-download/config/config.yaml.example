@@ -1,0 +1,35 @@
+# Cookie 配置
+cookie:
+  # 优先从浏览器自动读取
+  auto_extract: true
+  # 失败时手动填写
+  manual: ""
+
+# 下载配置
+download_path: "/Users/maoking/Downloads/抖音视频下载/data/关注"
+naming_template: "{create}_{desc}_{aweme_id}"
+
+# 增量模式
+incremental:
+  enabled: true
+  # diff: 只下载主页有本地没有的
+  # sync: 同步主页（本地删的会重新下）
+
+# Cookie 有效期提醒
+cookie_expiry_days: 14
+
+# 视频压缩配置
+compression:
+  # 是否在下载后自动压缩
+  auto_compress: false
+  # 压缩质量 (0-51, 越小质量越好, 推荐28-38, 默认32)
+  # 数值越大压缩率越高，但质量会下降
+  crf: 32
+  # 压缩速度预设 (ultrafast~veryslow, 速度越慢压缩率越高)
+  preset: "fast"
+  # 压缩后是否替换原文件 (默认true，节省空间)
+  # 设置为 false 则保留原文件，生成 xxx_compressed.mp4
+  replace_original: true
+  # 小文件阈值 (字节)，小于此值不压缩 (默认5MB)
+  # 原因：小视频压缩后可能变大（编码开销 > 压缩收益）
+  skip_small_threshold: 5242880
