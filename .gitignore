@@ -19,7 +19,8 @@ templates/
 
 # Config files - ignore sensitive data but keep templates
 **/config/.env
-skills/*/assets/.env
+# All .env files - never commit sensitive data
+**/.env
 !**/config/.env.example
 **/config/*.yaml
 !**/config/*.example.yaml
