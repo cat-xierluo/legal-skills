@@ -44,12 +44,25 @@ detect_source_type() {
 
 # 检测目标目录（支持 skills 和 commands）
 # 优先从当前工作目录查找 .claude，适用于在项目内调用
+# 特殊规则：当在 ~/.openclaw/ 目录下时，使用 ~/.openclaw/skills/ 作为目标
 find_claude_dir() {
     # 首先尝试从调用者的原始工作目录查找（项目本地）
     local current="$ORIGINAL_PWD"
     local current_name="$(basename "$current")"
     local max_iterations=10
     local iteration=0
+
+    # 获取用户主目录
+    local home_dir="${HOME:-/Users/${USER}}"
+
+    # 特殊规则：检测是否在 ~/.openclaw/ 目录下
+    # 如果是，使用 ~/.openclaw/skills/ 作为目标目录
+    # 注意：返回 ~/.openclaw/ 而不是 ~/.openclaw/skills/，因为后续会自动拼接 /skills
+    if [[ "$current" == "$home_dir/.openclaw"* ]]; then
+        # 在 openclaw 目录下，直接使用 openclaw 目录本身
+        echo "$home_dir/.openclaw"
+        return 0
+    fi
 
     # 如果当前目录本身就是 .claude，直接使用
     if [ "$current_name" = ".claude" ]; then

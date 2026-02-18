@@ -10,10 +10,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANAGER_DIR="$(dirname "$SCRIPT_DIR")"
 
 # 查找 .claude 目录
+# 特殊规则：当在 ~/.openclaw/ 目录下时，使用 ~/.openclaw/ 作为目标
 find_claude_dir() {
     local current="$MANAGER_DIR"
     local max_iterations=10
     local iteration=0
+
+    # 获取用户主目录
+    local home_dir="${HOME:-/Users/${USER}}"
+
+    # 特殊规则：检测是否在 ~/.openclaw/ 目录下
+    # 如果是，使用 ~/.openclaw/ 作为目标目录
+    if [[ "$current" == "$home_dir/.openclaw"* ]]; then
+        echo "$home_dir/.openclaw"
+        return 0
+    fi
 
     while [ $iteration -lt $max_iterations ]; do
         local parent="$(dirname "$current")"
