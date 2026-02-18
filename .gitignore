@@ -17,10 +17,10 @@ templates/
 **/archive/*
 !**/archive/.gitkeep
 
-# Config files - ignore sensitive data but keep templates
-**/config/.env
-skills/*/assets/.env
-!**/config/.env.example
+# Environment files - ignore all .env files to prevent credential leaks
+# Use .env.example for templates
+**/.env
+!**/.env.example
 **/config/*.yaml
 !**/config/*.example.yaml
 **/config/*.json
