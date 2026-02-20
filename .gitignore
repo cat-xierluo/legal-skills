@@ -16,6 +16,7 @@ templates/
 # Archive directories - ignore content but keep directory structure
 **/archive/*
 !**/archive/.gitkeep
+/archive/
 
 # Environment files - ignore all .env files to prevent credential leaks
 # Use .env.example for templates
@@ -66,6 +67,9 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # Log files
 **/logs/
 *.log
+
+# Private skills - symlinked external repository
+/private-skills
 
 # Skill downloads/output directories
 skills/*/downloads/
