@@ -438,4 +438,22 @@ elif [ "$SOURCE_TYPE" = "github" ]; then
     echo "✓ 已安装: $TARGET_PATH"
 fi
 
+# 安全检查（仅 GitHub 来源）
+if [ "$SOURCE_TYPE" = "github" ] || [ "$SOURCE_TYPE" = "github-subdir" ]; then
+    if command -v python3 &> /dev/null; then
+        SECURITY_SCRIPT="$SCRIPT_DIR/security.py"
+        if [ -f "$SECURITY_SCRIPT" ]; then
+            echo ""
+            echo "🔍 正在进行安全检查..."
+            python3 "$SECURITY_SCRIPT" "$TARGET_PATH" 2>/dev/null || {
+                echo ""
+                echo "⚠️  安全检查发现问题，请查看上方报告"
+                echo "   如需继续使用，请自行评估风险"
+            }
+        fi
+    else
+        echo "💡 提示: 未检测到 Python，跳过安全检查"
+    fi
+fi
+
 ls -l "$TARGET_PATH"
