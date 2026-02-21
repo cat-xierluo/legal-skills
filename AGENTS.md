@@ -359,3 +359,13 @@ AI 代理在修改 AGENTS.md 时，必须：
 | v1.1.1 | 2026-01-07 | 将 `config/` 纳入按需目录，支持需要配置文件的技能（如 API Token）；配置 archive/ 目录的 git 策略（忽略内容但保留目录） |
 | v1.1.0 | 2026-01-07 | 精简文档结构：删除冗余的 `ROADMAP.md` 和 `JOURNAL.md`，保留核心文档 `DECISIONS.md`、`TASKS.md`、`CHANGELOG.md` |
 | v1.0.0 | 2026-01-07 | 初始版本，定义法律技能项目的核心协作规范：技能导向、文档即上下文、透明变更、目录约定、标准作业流程及安全合规要求         |
+
+## 私有项目说明（仅本地生效）
+
+`private-skills/` 目录是本项目的符号链接，指向 `../private-skills`，它是一个**独立的 Git 仓库**（不公开）。所有子项目的忽略规则统一由 `private-skills/.gitignore` 管理。
+
+**操作注意事项**：
+
+- 所有子项目的 `.gitignore` 规则统一写在 `private-skills/.gitignore` 中
+- Git 操作需要在该符号链接指向的实际目录（`../private-skills/`）中执行
+- 避免在 legal-skills 仓库中提交 private-skills 的内容

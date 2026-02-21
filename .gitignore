@@ -52,6 +52,8 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+**/venv/
+**/.venv/
 
 # Database files
 **/*.db
