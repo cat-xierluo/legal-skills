@@ -1,0 +1,39 @@
+# Repo Research 配置文件
+# 复制此文件为 config.yaml 并根据需要修改
+
+research:
+  # 输出目录
+  # 支持绝对路径、相对路径（相对于当前工作目录）、~ 展开
+  # 留空则使用默认值 ./research
+  output_dir: ""
+
+  # 示例：
+  # output_dir: "~/Documents/研究笔记"
+  # output_dir: "/Users/maoking/research-output"
+  # output_dir: "./my-research"
+
+  # 报告格式
+  # markdown: 生成 .md 文件
+  # html: 生成 .html 文件（未来支持）
+  report_format: "markdown"
+
+  # 克隆设置
+  shallow_clone: true  # 使用 --depth 1 浅克隆，节省时间和空间
+
+# 安全分析设置
+security:
+  # 是否启用安全分析
+  enabled: true
+
+  # 是否包含提示词安全检测
+  prompt_analysis: true
+
+  # 风险等级阈值
+  # 当风险等级达到此值时会在报告中突出显示
+  # 可选: critical, high, medium, low
+  warning_threshold: "high"
+
+# 注意：
+# 1. config.yaml 可能包含本地路径信息，建议添加到 .gitignore
+# 2. 如果 config.yaml 不存在，将使用默认配置
+# 3. 配置优先级：config.yaml > 默认值
