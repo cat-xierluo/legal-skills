@@ -1,0 +1,26 @@
+# repo-research 配置文件
+# 复制此文件为 config.yaml 并修改配置
+
+# 研究报告输出目录
+# 支持绝对路径和相对路径（相对于 skill 目录）
+# 示例：
+#   - 绝对路径："/Users/yourname/Desktop/Clawd/99 - 🦐 大虾研究/09 - 📋 研究报告"
+#   - 相对路径："./research-output"
+#   - 使用 ~ 展开："~/Documents/research"
+output_dir: ""
+
+# 默认研究主题（可选）
+# 如果不指定主题，会使用此默认值
+# default_topic: ""
+
+# 报告格式
+# 支持：markdown, json
+report_format: markdown
+
+# 是否自动打开报告（生成后）
+auto_open_report: false
+
+# 克隆深度
+# 1 = 浅克隆（默认，更快）
+# 0 = 完整克隆
+clone_depth: 1

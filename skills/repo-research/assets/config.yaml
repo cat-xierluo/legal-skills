@@ -1,0 +1,13 @@
+# repo-research 配置文件
+
+# 研究报告输出目录
+output_dir: "/Users/maoking/Desktop/Clawd/99 - 🦐 大虾研究/09 - 📋 研究报告"
+
+# 报告格式
+report_format: markdown
+
+# 是否自动打开报告
+auto_open_report: false
+
+# 克隆深度
+clone_depth: 1
