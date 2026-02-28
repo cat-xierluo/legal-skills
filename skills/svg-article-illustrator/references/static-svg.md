@@ -18,6 +18,20 @@
 - SVG 原生渲染，矢量图形显示
 - 完美支持 emoji、中文字体
 - 无需转换为 PNG
+- ⚠️ **注意**：禁止使用渐变填充（`fill="url(#gradient)"`），需使用纯色
+
+### ⚠️ 兼容性警告
+
+公众号 WebView 不支持 SVG 渐变，请使用纯色：
+
+```svg
+<!-- ❌ 错误：渐变 -->
+<linearGradient id="bg">...</linearGradient>
+<rect fill="url(#bg)"/>
+
+<!-- ✅ 正确：纯色 -->
+<rect fill="#f8f9fa"/>
+```
 
 ### Markdown 编辑器
 
