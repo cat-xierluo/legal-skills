@@ -6,7 +6,10 @@ cookie:
   manual: ""
 
 # 下载配置
-download_path: "/Users/maoking/Downloads/抖音视频下载/data/关注"
+# download_path: 留空则使用系统 Downloads 目录
+# macOS: ~/Downloads/抖音视频下载
+# Windows: C:\Users\<用户名>\Downloads\抖音视频下载
+download_path: ""
 naming_template: "{create}_{desc}_{aweme_id}"
 
 # 增量模式

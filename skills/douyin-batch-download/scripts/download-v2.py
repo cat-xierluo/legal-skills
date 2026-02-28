@@ -6,7 +6,7 @@
 工作流程：
 1. 使用 F2 Python API 下载视频（自动跳过已存在文件）
 2. 在下载过程中保存视频统计数据（点赞、评论、收藏等）到数据库
-3. 自动整理文件到 downloads/{uid}/
+3. 自动整理文件到下载目录/{博主昵称}/
 4. 同步 following.json
 
 用法：
@@ -16,6 +16,7 @@
 优势：
 - 不增加额外 API 请求（数据在下载时已获取）
 - 自动保存视频统计数据到数据库
+- 使用博主昵称作为文件夹名（更易识别）
 """
 
 import shutil
@@ -31,26 +32,22 @@ from typing import Dict, List
 
 # 强制使用脚本所在目录作为工作目录
 SKILL_DIR = Path(__file__).parent.parent.resolve()
-import os
 os.chdir(SKILL_DIR)
 
-CONFIG_PATH = SKILL_DIR / "config" / "config.yaml"
-DB_PATH = SKILL_DIR / "douyin_users.db"
-DOWNLOADS_PATH = SKILL_DIR / "downloads"
+# 导入统一配置模块
+from utils.config import (
+    get_download_path,
+    get_db_path,
+    get_user_folder_name,
+    sanitize_folder_name,
+    load_config,
+)
 
 # 导入 F2 模块
 from f2.apps.douyin.handler import DouyinHandler
 from f2.apps.douyin.db import AsyncUserDB, AsyncVideoDB
 from f2.utils.conf_manager import ConfigManager
 import f2
-
-
-def load_custom_config() -> dict:
-    """加载自定义配置文件"""
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    return {}
 
 
 def merge_config(main_conf: dict, custom_conf: dict) -> dict:
@@ -75,7 +72,7 @@ def get_f2_kwargs() -> dict:
         main_conf = {}
 
     # 加载自定义配置
-    custom_conf = load_custom_config()
+    custom_conf = load_config()
     douyin_custom = custom_conf.get("douyin", custom_conf)  # 兼容两种格式
 
     # 合并配置
@@ -85,8 +82,8 @@ def get_f2_kwargs() -> dict:
     kwargs["app_name"] = "douyin"
     kwargs["mode"] = "post"
 
-    # 设置路径
-    kwargs["path"] = str(DOWNLOADS_PATH)
+    # 设置路径 - 使用统一配置模块
+    kwargs["path"] = str(get_download_path())
 
     # 确保 cookie 存在
     if not kwargs.get("cookie"):
@@ -104,13 +101,15 @@ def get_f2_kwargs() -> dict:
 
 def create_video_metadata_table():
     """确保视频元数据表存在"""
-    conn = sqlite3.connect(str(DB_PATH))
+    db_path = get_db_path()
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS video_metadata (
             aweme_id TEXT PRIMARY KEY,
             uid TEXT NOT NULL,
+            nickname TEXT,
             desc TEXT,
             create_time INTEGER,
             duration INTEGER,
@@ -129,56 +128,24 @@ def create_video_metadata_table():
         CREATE INDEX IF NOT EXISTS idx_video_uid ON video_metadata(uid)
     """)
 
-    conn.commit()
-    conn.close()
-
-
-def save_video_metadata(videos: List[Dict]):
-    """保存视频元数据到数据库（从 F2 _to_list() 格式）"""
-    if not videos:
-        return 0
-
-    conn = sqlite3.connect(str(DB_PATH))
-    cursor = conn.cursor()
-
-    fetch_time = int(datetime.now().timestamp())
-    saved_count = 0
-
-    for video in videos:
-        aweme_id = video.get("aweme_id", "")
-        if not aweme_id:
-            continue
-
-        # F2 的 _to_list() 返回的数据没有 statistics，只有基本信息
-        cursor.execute("""
-            INSERT OR REPLACE INTO video_metadata
-            (aweme_id, uid, desc, create_time, duration,
-             digg_count, comment_count, collect_count, share_count, play_count,
-             fetch_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            aweme_id,
-            video.get("uid", ""),
-            video.get("desc", ""),
-            video.get("create_time", 0),
-            video.get("video_duration", 0),
-            0, 0, 0, 0, 0,  # 统计数据需要从原始数据获取
-            fetch_time
-        ))
-        saved_count += 1
+    # 添加 nickname 列（如果不存在）
+    try:
+        cursor.execute("ALTER TABLE video_metadata ADD COLUMN nickname TEXT")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
 
     conn.commit()
     conn.close()
-    return saved_count
 
 
-def save_video_metadata_from_raw(raw_data: dict):
+def save_video_metadata_from_raw(raw_data: dict, nickname: str = ""):
     """从原始 API 响应中提取并保存视频统计数据"""
     aweme_list = raw_data.get("aweme_list", [])
     if not aweme_list:
         return 0
 
-    conn = sqlite3.connect(str(DB_PATH))
+    db_path = get_db_path()
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
     fetch_time = int(datetime.now().timestamp())
@@ -192,16 +159,18 @@ def save_video_metadata_from_raw(raw_data: dict):
         # 从原始数据中获取统计信息
         stats = video.get("statistics", {}) or {}
         author = video.get("author", {}) or {}
+        video_nickname = author.get("nickname", nickname)
 
         cursor.execute("""
             INSERT OR REPLACE INTO video_metadata
-            (aweme_id, uid, desc, create_time, duration,
+            (aweme_id, uid, nickname, desc, create_time, duration,
              digg_count, comment_count, collect_count, share_count, play_count,
              fetch_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             aweme_id,
             author.get("uid", ""),
+            video_nickname,
             video.get("desc", ""),
             video.get("create_time", 0),
             video.get("video", {}).get("duration", 0) if video.get("video") else 0,
@@ -219,27 +188,17 @@ def save_video_metadata_from_raw(raw_data: dict):
     return saved_count
 
 
-def reorganize_files(nickname: str) -> str:
-    """整理文件到 downloads/{uid}/"""
-    old_path = DOWNLOADS_PATH / "douyin" / "post" / nickname
+def reorganize_files(nickname: str, uid: str) -> str:
+    """整理文件到下载目录/{博主昵称}/"""
+    downloads_path = get_download_path()
+    old_path = downloads_path / "douyin" / "post" / nickname
 
     if not old_path.exists():
         return None
 
-    # 从数据库获取 uid
-    try:
-        conn = sqlite3.connect(str(DB_PATH))
-        cursor = conn.cursor()
-        cursor.execute("SELECT uid FROM user_info_web ORDER BY ROWID DESC LIMIT 1")
-        result = cursor.fetchone()
-        conn.close()
-        if not result:
-            return None
-        uid = result[0]
-    except Exception:
-        return None
-
-    new_path = DOWNLOADS_PATH / str(uid)
+    # 使用博主昵称作为文件夹名
+    folder_name = get_user_folder_name(nickname, uid)
+    new_path = downloads_path / folder_name
     new_path.mkdir(parents=True, exist_ok=True)
 
     # 移动文件
@@ -259,17 +218,17 @@ def reorganize_files(nickname: str) -> str:
             pass
 
     if moved_count > 0:
-        print(f"  [移动] {nickname} -> {uid} ({moved_count} 文件)")
+        print(f"  [移动] {nickname} -> {folder_name} ({moved_count} 文件)")
 
-    return uid
+    return folder_name
 
 
-def update_last_fetch_time(uid: str):
+def update_last_fetch_time(uid: str, nickname: str = ""):
     """更新 following.json 中的 last_fetch_time"""
     try:
         from following import update_fetch_time
-        update_fetch_time(uid)
-        print(f"  [更新] last_fetch_time for {uid}")
+        update_fetch_time(uid, nickname)
+        print(f"  [更新] last_fetch_time for {nickname or uid}")
     except ImportError:
         pass
 
@@ -295,13 +254,16 @@ async def download_with_stats(url: str, max_counts: int = None):
     if max_counts:
         kwargs["max_counts"] = max_counts
 
+    downloads_path = get_download_path()
+
     # 清理临时目录
-    f2_temp_path = DOWNLOADS_PATH / "douyin"
+    f2_temp_path = downloads_path / "douyin"
     if f2_temp_path.exists():
         shutil.rmtree(f2_temp_path)
         print("[清理] F2 临时目录")
 
     print(f"[下载] 开始下载...")
+    print(f"[路径] {downloads_path}")
 
     # 创建元数据表
     create_video_metadata_table()
@@ -320,8 +282,21 @@ async def download_with_stats(url: str, max_counts: int = None):
     print(f"[信息] sec_user_id: {sec_user_id[:30]}...")
 
     # 获取用户信息并保存
-    async with AsyncUserDB("douyin_users.db") as db:
+    async with AsyncUserDB(str(get_db_path())) as db:
         user_path = await handler.get_or_add_user_data(kwargs, sec_user_id, db)
+
+    # 从数据库获取用户信息（昵称）
+    conn = sqlite3.connect(str(get_db_path()))
+    cursor = conn.cursor()
+    cursor.execute("SELECT uid, nickname FROM user_info_web ORDER BY ROWID DESC LIMIT 1")
+    user_info = cursor.fetchone()
+    conn.close()
+
+    uid = user_info[0] if user_info else ""
+    nickname = user_info[1] if user_info else ""
+
+    if nickname:
+        print(f"[博主] {nickname} (UID: {uid})")
 
     # 收集所有视频数据
     all_videos = []
@@ -342,7 +317,7 @@ async def download_with_stats(url: str, max_counts: int = None):
 
             # 从原始数据中保存统计数据（不增加额外请求）
             raw_data = aweme_data_list._to_raw()
-            stats_saved = save_video_metadata_from_raw(raw_data)
+            stats_saved = save_video_metadata_from_raw(raw_data, nickname)
             total_stats_saved += stats_saved
 
             # 创建下载任务
@@ -358,22 +333,24 @@ async def download_with_stats(url: str, max_counts: int = None):
 
     # 整理文件
     print("[整理] 重新组织文件...")
-    post_path = DOWNLOADS_PATH / "douyin" / "post"
-    uid = None
+    post_path = downloads_path / "douyin" / "post"
+    folder_name = None
     if post_path.exists():
         for folder in post_path.iterdir():
             if folder.is_dir():
-                uid = reorganize_files(folder.name)
+                folder_name = reorganize_files(folder.name, uid)
 
     # 更新 last_fetch_time
-    if uid:
-        update_last_fetch_time(uid)
+    if folder_name:
+        update_last_fetch_time(uid, nickname or folder_name)
 
     # 同步 following.json
     print("[同步] 更新 following.json...")
     run_sync()
 
     print(f"\n[完成] 共下载 {total_downloaded} 个视频")
+    if folder_name:
+        print(f"[位置] {downloads_path / folder_name}")
 
 
 async def main():
@@ -403,7 +380,8 @@ async def main():
 
     # 守护进程模式：立即输出进度信息后开始下载
     if daemon_mode and task_id:
-        log_file = DOWNLOADS_PATH / "logs" / f"{task_id}.log"
+        downloads_path = get_download_path()
+        log_file = downloads_path / "logs" / f"{task_id}.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
 
         # 打开日志文件并保持打开状态

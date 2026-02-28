@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-数据生成脚本 - 扫描 downloads 目录和 following.json，生成前端可用数据
+数据生成脚本 - 扫描下载目录和 following.json，生成前端可用数据
 包含视频元数据（点赞、评论、收藏、分享数）
 """
 import json
@@ -16,10 +16,35 @@ from datetime import datetime
 SKILL_DIR = Path(__file__).parent.parent.resolve()
 os.chdir(SKILL_DIR)
 
-DOWNLOADS_PATH = SKILL_DIR / "downloads"
-FOLLOWING_PATH = SKILL_DIR / "config" / "following.json"
-DB_PATH = SKILL_DIR / "douyin_users.db"
-OUTPUT_PATH = SKILL_DIR / "downloads" / "data.js"
+# 导入统一配置模块
+from utils.config import (
+    get_download_path,
+    get_db_path,
+    get_following_path,
+)
+
+# 技能目录
+SKILL_DIR = Path(__file__).parent.parent.resolve()
+
+DOWNLOADS_PATH = get_download_path()
+FOLLOWING_PATH = get_following_path()
+DB_PATH = get_db_path()
+OUTPUT_PATH = DOWNLOADS_PATH / "data.js"
+
+# index.html 模板位置
+INDEX_TEMPLATE = SKILL_DIR / "downloads" / "index.html"
+
+
+def copy_index_template():
+    """复制 index.html 模板到下载目录"""
+    if INDEX_TEMPLATE.exists():
+        dest = DOWNLOADS_PATH / "index.html"
+        # 只有当模板更新了才复制
+        if not dest.exists() or INDEX_TEMPLATE.stat().st_mtime > dest.stat().st_mtime:
+            import shutil
+            shutil.copy2(INDEX_TEMPLATE, dest)
+            return True
+    return False
 
 
 def extract_aweme_id(filename: str) -> str:
@@ -98,7 +123,7 @@ def get_video_metadata():
 
         cursor.execute("""
             SELECT
-                aweme_id, uid, desc, create_time, duration,
+                aweme_id, uid, nickname, desc, create_time, duration,
                 digg_count, comment_count, collect_count, share_count, play_count,
                 local_filename, file_size, fetch_time
             FROM video_metadata
@@ -112,17 +137,18 @@ def get_video_metadata():
             aweme_id = row[0]
             metadata[aweme_id] = {
                 "uid": row[1] or "",
-                "desc": row[2] or "",
-                "create_time": row[3] or 0,
-                "duration": row[4] or 0,
-                "digg_count": row[5] or 0,
-                "comment_count": row[6] or 0,
-                "collect_count": row[7] or 0,
-                "share_count": row[8] or 0,
-                "play_count": row[9] or 0,
-                "local_filename": row[10] or "",
-                "file_size": row[11] or 0,
-                "fetch_time": row[12] or 0,
+                "nickname": row[2] or "",
+                "desc": row[3] or "",
+                "create_time": row[4] or 0,
+                "duration": row[5] or 0,
+                "digg_count": row[6] or 0,
+                "comment_count": row[7] or 0,
+                "collect_count": row[8] or 0,
+                "share_count": row[9] or 0,
+                "play_count": row[10] or 0,
+                "local_filename": row[11] or "",
+                "file_size": row[12] or 0,
+                "fetch_time": row[13] or 0,
             }
         return metadata
     except sqlite3.OperationalError:
@@ -131,12 +157,12 @@ def get_video_metadata():
 
 
 def scan_videos_from_root(metadata: dict):
-    """扫描 downloads 目录下所有子目录中的视频文件"""
+    """扫描下载目录下所有子目录中的视频文件"""
     videos = []
     # 扫描所有子目录中的 mp4 文件
     for video_file in sorted(DOWNLOADS_PATH.rglob("*.mp4")):
         stat = video_file.stat()
-        # 获取视频文件的直接父目录名作为 folder (即 uid)
+        # 获取视频文件的直接父目录名作为 folder (即博主昵称)
         parent_dir = video_file.parent.name
 
         # 提取 aweme_id
@@ -162,14 +188,16 @@ def scan_videos_from_root(metadata: dict):
             video_data["desc"] = meta["desc"]
             video_data["create_time"] = meta["create_time"]
             video_data["duration"] = meta["duration"]
+            if meta["nickname"]:
+                video_data["nickname"] = meta["nickname"]
 
         videos.append(video_data)
     return videos
 
 
-def scan_user_videos(user_uid, metadata: dict):
-    """扫描指定用户目录的视频文件（子目录）"""
-    user_dir = DOWNLOADS_PATH / user_uid
+def scan_user_videos(user_folder: str, metadata: dict):
+    """扫描指定用户目录的视频文件"""
+    user_dir = DOWNLOADS_PATH / user_folder
 
     if not user_dir.exists():
         return []
@@ -183,7 +211,7 @@ def scan_user_videos(user_uid, metadata: dict):
             "name": video_file.stem,
             "aweme_id": aweme_id,
             "size": stat.st_size,
-            "folder": user_uid,
+            "folder": user_folder,
         }
 
         if aweme_id in metadata:
@@ -198,6 +226,8 @@ def scan_user_videos(user_uid, metadata: dict):
             video_data["desc"] = meta["desc"]
             video_data["create_time"] = meta["create_time"]
             video_data["duration"] = meta["duration"]
+            if meta["nickname"]:
+                video_data["nickname"] = meta["nickname"]
 
         videos.append(video_data)
     return videos
@@ -250,6 +280,7 @@ def main():
     # 3. 初始化数据结构
     data = {
         "generated_at": datetime.now().isoformat(),
+        "download_path": str(DOWNLOADS_PATH),
         "users": [],
         "videos": []
     }
@@ -266,16 +297,20 @@ def main():
         # 新格式：users 是数组
         for user in following["users"]:
             uid = user.get("uid")
+            nickname = user.get("nickname", user.get("name", ""))
+            folder = user.get("folder", nickname or uid)  # 使用 folder 字段或 nickname
+
             if not uid:
                 continue
 
-            # 从根目录扫描结果中筛选该用户的视频
-            user_videos = [v for v in all_videos if v["folder"] == uid]
+            # 从根目录扫描结果中筛选该用户的视频（按 folder 匹配）
+            user_videos = [v for v in all_videos if v["folder"] == folder]
             user_stats = calculate_user_stats(user_videos)
 
             data["users"].append({
                 "uid": uid,
-                "name": user.get("name", ""),
+                "name": nickname,
+                "folder": folder,
                 "avatar_url": user.get("avatar_url", ""),
                 "video_count": len(user_videos),
                 "stats": user_stats
@@ -285,18 +320,22 @@ def main():
         for uid, user_info in following.items():
             # 跳过非用户字段（如"说明"）
             if isinstance(user_info, dict) and user_info.get("uid"):
-                # 从根目录扫描结果中筛选该用户的视频
-                user_videos = [v for v in all_videos if v["folder"] == uid]
+                nickname = user_info.get("nickname", user_info.get("name", ""))
+                folder = user_info.get("folder", nickname or uid)
+
+                # 从根目录扫描结果中筛选该用户的视频（按 folder 匹配）
+                user_videos = [v for v in all_videos if v["folder"] == folder]
 
                 # 同时从用户目录扫描（如果存在）
-                subdir_videos = scan_user_videos(uid, metadata)
+                subdir_videos = scan_user_videos(folder, metadata)
                 user_videos.extend(subdir_videos)
 
                 user_stats = calculate_user_stats(user_videos)
 
                 data["users"].append({
                     "uid": uid,
-                    "name": user_info.get("name", ""),
+                    "name": nickname,
+                    "folder": folder,
                     "avatar_url": user_info.get("avatar_url", ""),
                     "video_count": len(user_videos),
                     "stats": user_stats
@@ -318,14 +357,18 @@ def main():
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write(";\n")
 
+    # 8. 复制 index.html 模板
+    copied = copy_index_template()
+
     print(f"✅ 数据已生成: {OUTPUT_PATH}")
+    print(f"   下载目录: {DOWNLOADS_PATH}")
     print(f"   博主: {len(data['users'])}")
     print(f"   视频: {len(data['videos'])}")
     print(f"   有统计数据的视频: {videos_with_stats}")
     print(f"   总大小: {format_size(total_size)}")
     print(f"   总点赞: {format_number(total_diggs)}")
     print("\n提示: 直接用浏览器打开 index.html 即可")
-    print("  或双击 index.html 文件")
+    print(f"       {DOWNLOADS_PATH / 'index.html'}")
 
 
 if __name__ == "__main__":
