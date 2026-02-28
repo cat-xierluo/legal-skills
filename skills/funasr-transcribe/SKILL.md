@@ -180,11 +180,105 @@ FastAPI 自动生成交互式 API 文档，访问：[http://127.0.0.1:8765/docs]
 
 ## 脚本说明
 
-| 脚本                      | 用途                   |
-| ------------------------- | ---------------------- |
-| `scripts/setup.py`      | 一键安装依赖和下载模型 |
-| `scripts/server.py`     | 启动 HTTP API 服务     |
-| `scripts/transcribe.py` | 命令行客户端           |
+| 脚本                         | 用途                                |
+| ---------------------------- | ----------------------------------- |
+| `scripts/setup.py`         | 一键安装依赖和下载模型              |
+| `scripts/server.py`        | 启动 HTTP API 服务                  |
+| `scripts/transcribe.py`    | 命令行客户端（Claude Code 用）      |
+| `scripts/auto_transcribe.py` | **自动化转录脚本（推荐）**         |
+
+---
+
+## OpenClaw 自动转录 + 总结流程
+
+本 skill 支持在 OpenClaw 中自动完成**转录 + 总结**全流程。
+
+### 方式一：使用自动化脚本（推荐）
+
+```bash
+# 自动转录 + 获取总结提示词
+python scripts/auto_transcribe.py /path/to/audio.aac
+
+# 自动转录 + 说话人分离
+python scripts/auto_transcribe.py /path/to/audio.aac --diarize
+
+# 只获取总结提示词，不生成总结
+python scripts/auto_transcribe.py /path/to/audio.aac --prompt-only
+```
+
+### 方式二：HTTP API 调用
+
+#### 1. 转录音频
+
+```bash
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/audio.aac"}'
+```
+
+#### 2. 获取总结提示词
+
+```bash
+curl -X POST http://127.0.0.1:8765/summary \
+  -H "Content-Type: application/json" \
+  -d '{"md_path": "/path/to/audio.md"}'
+```
+
+响应示例：
+```json
+{
+  "success": true,
+  "output_path": "/path/to/audio.md",
+  "summary_prompt": "你是一位擅长处理口语化中文对话...",
+  "text_preview": "转录文本前500字..."
+}
+```
+
+#### 3. 注入 AI 总结
+
+在 Agent（OpenClaw）中生成总结后，调用：
+
+```bash
+curl -X POST http://127.0.0.1:8765/inject_summary \
+  -H "Content-Type: application/json" \
+  -d '{
+    "md_path": "/path/to/audio.md",
+    "summary_content": "## AI 摘要\n\n### 全文总结\n...\n\n### 重点内容\n- ...\n\n### 关键词\n..."
+  }'
+```
+
+### 完整流程示例（OpenClaw）
+
+```
+用户：转录这个音频
+  ↓
+Agent：
+  1. curl -X POST /transcribe -d '{"file_path": "xxx.aac"}'
+  2. curl -X POST /summary -d '{"md_path": "xxx.md"}'
+  3. 用模型生成总结
+  4. curl -X POST /inject_summary -d '{"md_path": "xxx.md", "summary_content": "..."}'
+  ↓
+用户：收到带总结的 Markdown 文件
+```
+
+---
+
+### API 端点汇总
+
+| 端点                   | 方法 | 功能                        |
+| ---------------------- | ---- | --------------------------- |
+| `/health`             | GET  | 健康检查                    |
+| `/transcribe`         | POST | 转录音频/视频              |
+| `/batch_transcribe`   | POST | 批量转录目录               |
+| `/summary`            | POST | 生成 AI 总结提示词         |
+| `/inject_summary`     | POST | 将总结注入 Markdown 文件    |
+
+### 环境检测
+
+`server.py` 会自动检测运行环境：
+
+- **OpenClaw**: 检测 `OPENCLAW_SERVICE_MARKER=openclaw` 环境变量
+- **Claude Code**: 检测 `CLAUDE_API_KEY` 或 `ANTHROPIC_API_KEY` 环境变量
 
 ## 配置文件
 

@@ -23,6 +23,76 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 SKILL_DIR = SCRIPT_DIR.parent
 MODELS_CONFIG = SKILL_DIR / "assets" / "models.json"
 
+# 尝试导入 summary 模块（用于 AI 总结功能）
+SUMMARY_MODULE = None
+try:
+    from . import summary as summary_module
+    SUMMARY_MODULE = summary_module
+except ImportError:
+    try:
+        import summary as summary_module
+        SUMMARY_MODULE = summary_module
+    except ImportError:
+        pass
+
+
+# ============================================================================
+# 环境检测函数
+# ============================================================================
+
+def detect_agent_environment() -> dict:
+    """
+    检测当前运行环境
+    
+    Returns:
+        dict: {
+            "is_agent": bool,           # 是否在 Agent 环境中
+            "agent_type": str,          # "openclaude" | "claude_code" | None
+            "has_api_key": bool,        # 是否有 API key
+            "summary_prompt": str | None  # 总结提示词（如果在 Agent 环境中）
+        }
+    """
+    result = {
+        "is_agent": False,
+        "agent_type": None,
+        "has_api_key": False,
+        "summary_prompt": None
+    }
+    
+    # 检测 OpenClaw
+    if os.environ.get("OPENCLAW_SERVICE_MARKER") == "openclaw":
+        result["is_agent"] = True
+        result["agent_type"] = "openclaude"
+        result["has_api_key"] = bool(os.environ.get("OPENCLAW_GATEWAY_TOKEN"))
+    
+    # 检测 Claude Code
+    elif os.environ.get("CLAUDE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"):
+        result["is_agent"] = True
+        result["agent_type"] = "claude_code"
+        result["has_api_key"] = True
+    
+    return result
+
+
+def get_summary_prompt_from_file(md_path: str) -> tuple[bool, str, str]:
+    """
+    从转录文件中提取文本并生成总结提示词
+    
+    Returns:
+        tuple: (是否成功, 提示词, 提取的文本)
+    """
+    if not SUMMARY_MODULE:
+        return False, "Summary module not available", ""
+    
+    try:
+        path = Path(md_path)
+        if not path.exists():
+            return False, f"File not found: {md_path}", ""
+        
+        return SUMMARY_MODULE.summarize_file_for_claude(path)
+    except Exception as e:
+        return False, str(e), ""
+
 # 全局服务状态
 SERVICE_PID = os.getpid()
 SERVICE_START_TIME = time.time()
@@ -488,6 +558,21 @@ class HealthResponse(BaseModel):
     idle_time: int
 
 
+# Summary 请求和响应模型
+class SummaryRequest(BaseModel):
+    md_path: str  # 转录生成的 Markdown 文件路径
+    output_path: Optional[str] = None  # 输出路径（可选，默认原地更新）
+    summary_content: Optional[str] = None  # 总结内容（用于 inject_summary 时传递）
+
+
+class SummaryResponse(BaseModel):
+    success: bool
+    output_path: Optional[str] = None
+    summary_prompt: Optional[str] = None  # 总结提示词（供 Agent 使用）
+    text_preview: Optional[str] = None    # 转录文本预览（前500字）
+    error: Optional[str] = None
+
+
 @app.middleware("http")
 async def update_activity_middleware(request: Request, call_next):
     """更新活动时间的中间件"""
@@ -499,12 +584,126 @@ async def update_activity_middleware(request: Request, call_next):
 @app.get("/health", response_model=HealthResponse)
 async def health():
     """健康检查"""
+    env_info = detect_agent_environment()
     return HealthResponse(
         status="ok",
         service="FunASR Transcribe",
         uptime=int(time.time() - SERVICE_START_TIME),
         idle_time=get_idle_time()
     )
+
+
+@app.post("/summary", response_model=SummaryResponse)
+async def generate_summary(request: SummaryRequest):
+    """
+    生成 AI 总结
+    
+    此端点用于在 Agent 环境（OpenClaw / Claude Code）中自动生成总结。
+    它会：
+    1. 读取转录生成的 Markdown 文件
+    2. 提取纯文本内容
+    3. 生成总结提示词（供 Agent 调用 LLM 生成总结）
+    4. 将总结写入文件（如果提供了总结内容）
+    
+    请求参数:
+        - md_path: 转录生成的 Markdown 文件路径（必需）
+        - output_path: 输出路径（可选，默认原地更新）
+    
+    返回:
+        - success: 是否成功
+        - output_path: 输出文件路径
+        - summary_prompt: 总结提示词（供 Agent 使用）
+        - text_preview: 转录文本预览
+        - error: 错误信息（如果有）
+    """
+    try:
+        update_activity()
+        
+        md_path = Path(request.md_path)
+        if not md_path.exists():
+            raise HTTPException(status_code=400, detail=f"文件不存在: {request.md_path}")
+        
+        # 提取文本和提示词
+        success, prompt, text = get_summary_prompt_from_file(request.md_path)
+        
+        if not success:
+            return SummaryResponse(
+                success=False,
+                error=prompt,
+                md_path=request.md_path
+            )
+        
+        # 读取文件获取文本预览
+        content = md_path.read_text(encoding="utf-8")
+        text_preview = content[:500] if len(content) > 500 else content
+        
+        # 输出路径
+        output_path = request.output_path or request.md_path
+        
+        return SummaryResponse(
+            success=True,
+            output_path=output_path,
+            summary_prompt=prompt,
+            text_preview=text_preview
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return SummaryResponse(success=False, error=str(e))
+
+
+@app.post("/inject_summary")
+async def inject_summary(request: SummaryRequest):
+    """
+    将 AI 总结注入到 Markdown 文件
+    
+    此端点用于在 Agent 环境（OpenClaw / Claude Code）中，
+    在 LLM 生成总结后，将总结内容写入转录文件。
+    
+    请求参数:
+        - md_path: 转录生成的 Markdown 文件路径（必需）
+        - summary_content: 总结内容（必需）- 将写入文件
+        - output_path: 输出路径（可选，默认原地更新）
+    
+    返回:
+        - success: 是否成功
+        - output_path: 输出文件路径
+        - error: 错误信息（如果有）
+    """
+    try:
+        update_activity()
+        
+        md_path = Path(request.md_path)
+        if not md_path.exists():
+            raise HTTPException(status_code=400, detail=f"文件不存在: {request.md_path}")
+        
+        # 获取总结内容
+        summary_content = request.summary_content
+        
+        if not summary_content:
+            raise HTTPException(status_code=400, detail="summary_content 不能为空")
+        
+        if not SUMMARY_MODULE:
+            return {"success": False, "error": "Summary module not available"}
+        
+        # 写入总结到文件
+        output_path = Path(request.output_path) if request.output_path else md_path
+        SUMMARY_MODULE.inject_summary_to_file(md_path, summary_content)
+        
+        return {
+            "success": True,
+            "output_path": str(output_path)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
@@ -699,6 +898,8 @@ def main():
     print(f"📋 API 端点:")
     print(f"   POST /transcribe      - 转录单个文件")
     print(f"   POST /batch_transcribe - 批量转录")
+    print(f"   POST /summary         - 生成 AI 总结提示词（供 Agent 使用）")
+    print(f"   POST /inject_summary  - 将 AI 总结注入 Markdown 文件")
     print(f"   GET  /health          - 健康检查\n")
 
     # 导入 uvicorn（延迟导入以加快启动速度）
