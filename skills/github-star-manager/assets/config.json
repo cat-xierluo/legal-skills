@@ -1,0 +1,11 @@
+{
+  "$schema": "./config.schema.json",
+  "check_interval_days": 7,
+  "min_stars": 0,
+  "focus_areas": [],
+  "ignore_repos": [],
+  "report_format": "markdown",
+  "include_forks": false,
+  "max_repos": 200,
+  "cache_expiry_hours": 24
+}

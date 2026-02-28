@@ -1,0 +1,13 @@
+# GitHub Star 追踪器依赖
+
+# HTTP 请求
+requests>=2.31.0
+
+# 配置文件加载
+python-dotenv>=1.0.0
+
+# OpenAI API (可选，用于 AI 摘要)
+openai>=1.0.0
+
+# 如果需要更好的 JSON 处理
+# orjson>=3.9.0

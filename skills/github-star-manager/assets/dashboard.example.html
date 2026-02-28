@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Stars Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* ===== 主题变量 ===== */
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --border-color: #30363d;
+            --accent-blue: #58a6ff;
+            --accent-purple: #a371f7;
+            --accent-green: #22c55e;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f6f8fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f0f3f6;
+            --text-primary: #1f2328;
+            --text-secondary: #57606a;
+            --text-muted: #8b949e;
+            --border-color: #d0d7de;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            font-size: 14px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+
+        /* ===== 头部 ===== */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            margin-bottom: 20px;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        h1 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .stat-value {
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin-right: 4px;
+        }
+
+        /* 主题切换按钮 */
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .theme-toggle:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-blue);
+        }
+
+        /* ===== 筛选栏 ===== */
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-box {
+            flex: 1;
+            min-width: 240px;
+            position: relative;
+        }
+        .search-box input {
+            width: 100%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        .search-box input::placeholder { color: var(--text-muted); }
+
+        select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        select:hover { border-color: var(--accent-blue); }
+        select:focus { outline: none; border-color: var(--accent-blue); }
+
+        .page-size-select {
+            background: var(--bg-secondary);
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        /* ===== 时间维度筛选器（Tab 式） ===== */
+        .time-filter-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .time-filter-header {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+            background: var(--bg-tertiary);
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .time-tab {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .time-tab:hover { color: var(--text-primary); }
+        .time-tab.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .time-tab .tab-icon { font-size: 16px; }
+        .time-tab .tab-label { font-weight: 600; }
+        .time-tab .tab-count {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .time-tab.active[data-type="activity"] .tab-count { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+        .time-tab.active[data-type="star"] .tab-count { background: rgba(163, 113, 247, 0.15); color: var(--accent-purple); }
+
+        .time-filter-content { display: none; }
+        .time-filter-content.active { display: block; }
+
+        .time-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .time-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .time-chip:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+        .time-chip.active {
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+        }
+        .time-chip[data-type="star"].active {
+            border-color: var(--accent-purple);
+            background: rgba(163, 113, 247, 0.1);
+            color: var(--accent-purple);
+        }
+        .chip-icon { font-size: 14px; }
+        .chip-label { font-weight: 500; }
+        .chip-count {
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        /* ===== 标签云 ===== */
+        .tag-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .tag-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .tag-header:hover { background: var(--bg-tertiary); }
+        .tag-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .tag-toggle { color: var(--text-muted); font-size: 12px; }
+        .tag-cloud {
+            display: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 0 16px 12px;
+        }
+        .tag-cloud.show { display: flex; }
+        .tag {
+            background: var(--bg-tertiary);
+            color: var(--accent-blue);
+            padding: 4px 10px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+        .tag:hover { background: var(--accent-blue); color: #fff; }
+        .tag.active { background: var(--accent-blue); color: #fff; }
+
+        /* ===== 卡片网格 ===== */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+            transition: all 0.25s ease;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            min-height: 150px;
+            box-shadow: var(--card-shadow);
+        }
+        .card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-3px);
+            box-shadow: var(--card-shadow-hover);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .repo-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            text-decoration: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+        }
+        .repo-name:hover { text-decoration: underline; }
+        .category-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-weight: 500;
+        }
+        .description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex-grow: 1;
+        }
+        .topics-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 12px;
+        }
+        .topic-tag {
+            font-size: 10px;
+            padding: 2px 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        .metrics { display: flex; gap: 14px; flex-wrap: wrap; }
+        .metric { display: flex; align-items: center; gap: 5px; }
+        .language-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .time-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 3px;
+        }
+        .star-time {
+            font-size: 11px;
+            color: var(--accent-purple);
+            font-weight: 500;
+        }
+        .updated-recent { color: var(--accent-green); font-weight: 600; }
+
+        /* ===== 分页 ===== */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            padding: 16px 0;
+        }
+        .page-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .page-btn:hover:not(:disabled) { border-color: var(--accent-blue); }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .page-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #fff;
+        }
+        .page-info { color: var(--text-muted); font-size: 13px; padding: 0 8px; }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        /* ===== 隐藏的下拉框 ===== */
+        .hidden-select { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>⭐ GitHub Stars Tracker</h1>
+                <div class="stats">
+                    <span><span class="stat-value" id="totalRepos">-</span>个项目</span>
+                    <span><span class="stat-value" id="filteredCount">-</span>筛选中</span>
+                </div>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span id="themeIcon">🌙</span>
+                <span id="themeText">浅色模式</span>
+            </button>
+        </header>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索项目名、描述或标签...">
+            </div>
+            <select id="categoryFilter">
+                <option value="all">全部分类</option>
+                <option value="ai">🤖 AI/机器学习</option>
+                <option value="web">🌐 Web应用</option>
+                <option value="desktop">💻 桌面应用</option>
+                <option value="mobile">📱 移动应用</option>
+                <option value="devtools">🔧 开发工具</option>
+                <option value="productivity">⚡ 效率工具</option>
+                <option value="education">📚 教育学习</option>
+                <option value="reading">📖 阅读收藏</option>
+            </select>
+            <select id="pageSizeSelect" class="page-size-select">
+                <option value="20">20/页</option>
+                <option value="40" selected>40/页</option>
+                <option value="80">80/页</option>
+            </select>
+            <select id="activityFilter" class="hidden-select"><option value="all">全部</option></select>
+            <select id="starFilter" class="hidden-select"><option value="all">全部</option></select>
+        </div>
+
+        <!-- 时间维度筛选器（Tab 式） -->
+        <div class="time-filter-container">
+            <div class="time-filter-header">
+                <button class="time-tab active" data-type="star" onclick="switchTimeTab('star')">
+                    <span class="tab-icon">⭐</span>
+                    <span class="tab-label">我的Star时间</span>
+                    <span class="tab-count" id="starTotal">0</span>
+                </button>
+                <button class="time-tab" data-type="activity" onclick="switchTimeTab('activity')">
+                    <span class="tab-icon">📊</span>
+                    <span class="tab-label">项目更新活跃度</span>
+                    <span class="tab-count" id="activityTotal">0</span>
+                </button>
+            </div>
+
+            <div class="time-filter-content" id="activityContent">
+                <div class="time-chips" id="activityChips">
+                    <div class="time-chip active" data-filter="all" data-type="activity">
+                        <span class="chip-label">全部</span>
+                        <span class="chip-count" id="activityAll">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="week" data-type="activity">
+                        <span class="chip-icon">🆕</span><span class="chip-label">1周内</span>
+                        <span class="chip-count" id="countWeek">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="month" data-type="activity">
+                        <span class="chip-icon">🟢</span><span class="chip-label">1个月</span>
+                        <span class="chip-count" id="countMonth">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="quarter" data-type="activity">
+                        <span class="chip-icon">🟡</span><span class="chip-label">3个月</span>
+                        <span class="chip-count" id="countQuarter">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="halfyear" data-type="activity">
+                        <span class="chip-icon">🟠</span><span class="chip-label">半年</span>
+                        <span class="chip-count" id="countHalfYear">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="year" data-type="activity">
+                        <span class="chip-icon">🔴</span><span class="chip-label">1年</span>
+                        <span class="chip-count" id="countYear">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="twoyears" data-type="activity">
+                        <span class="chip-icon">🟣</span><span class="chip-label">2年</span>
+                        <span class="chip-count" id="countTwoYears">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="threeyears" data-type="activity">
+                        <span class="chip-icon">⚫</span><span class="chip-label">3年+</span>
+                        <span class="chip-count" id="countThreeYears">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="stale" data-type="activity">
+                        <span class="chip-icon">💀</span><span class="chip-label">更久</span>
+                        <span class="chip-count" id="countStale">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="time-filter-content active" id="starContent">
+                <div class="time-chips" id="starChips">
+                    <div class="time-chip active" data-filter="all" data-type="star">
+                        <span class="chip-label">全部</span>
+                        <span class="chip-count" id="starAll">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="week" data-type="star">
+                        <span class="chip-icon">🆕</span><span class="chip-label">1周内</span>
+                        <span class="chip-count" id="starCountWeek">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="month" data-type="star">
+                        <span class="chip-icon">🟢</span><span class="chip-label">1个月</span>
+                        <span class="chip-count" id="starCountMonth">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="quarter" data-type="star">
+                        <span class="chip-icon">🟡</span><span class="chip-label">3个月</span>
+                        <span class="chip-count" id="starCountQuarter">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="halfyear" data-type="star">
+                        <span class="chip-icon">🟠</span><span class="chip-label">半年</span>
+                        <span class="chip-count" id="starCountHalfYear">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="year" data-type="star">
+                        <span class="chip-icon">🔴</span><span class="chip-label">1年</span>
+                        <span class="chip-count" id="starCountYear">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="twoyears" data-type="star">
+                        <span class="chip-icon">🟣</span><span class="chip-label">2年</span>
+                        <span class="chip-count" id="starCountTwoYears">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="threeyears" data-type="star">
+                        <span class="chip-icon">⚫</span><span class="chip-label">3年+</span>
+                        <span class="chip-count" id="starCountThreeYears">0</span>
+                    </div>
+                    <div class="time-chip" data-filter="stale" data-type="star">
+                        <span class="chip-icon">💀</span><span class="chip-label">更久</span>
+                        <span class="chip-count" id="starCountStale">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tag-section">
+            <div class="tag-header" onclick="toggleTagCloud()">
+                <span class="tag-title">🏷 标签筛选 <span id="activeTagLabel"></span></span>
+                <span class="tag-toggle" id="tagToggleText">展开 ▾</span>
+            </div>
+            <div class="tag-cloud" id="tagCloud">
+                <span class="tag active" data-tag="all">全部</span>
+            </div>
+        </div>
+
+        <div class="grid" id="repoGrid"></div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <script>
+        let projects = [], filteredProjects = [], activeTag = 'all', activeCategory = 'all';
+        let activeActivity = 'all', activeStarFilter = 'all', currentPage = 1, pageSize = 40;
+        let tagCloudVisible = false, currentTimeTab = 'star';
+
+        // 分类数据（稍后从 data.js 加载）
+        let categories = { uncategorized: { id: 'uncategorized', name: '未分类', icon: '📦', color: '#6b7280' } };
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') !== 'light';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeIcon').textContent = isDark ? '☀️' : '🌙';
+            document.getElementById('themeText').textContent = isDark ? '深色模式' : '浅色模式';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+
+        function loadTheme() {
+            if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('themeIcon').textContent = '☀️';
+                document.getElementById('themeText').textContent = '深色模式';
+            }
+        }
+
+        function switchTimeTab(type) {
+            currentTimeTab = type;
+            document.querySelectorAll('.time-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+            document.getElementById('activityContent').classList.toggle('active', type === 'activity');
+            document.getElementById('starContent').classList.toggle('active', type === 'star');
+            if (type === 'activity') {
+                activeActivity = 'all';
+                activeStarFilter = 'all';
+                document.getElementById('activityFilter').value = 'all';
+                document.getElementById('starFilter').value = 'all';
+            } else {
+                activeActivity = 'all';
+                activeStarFilter = 'all';
+                document.getElementById('activityFilter').value = 'all';
+                document.getElementById('starFilter').value = 'all';
+            }
+            document.querySelectorAll('.time-chip').forEach(c => { c.classList.remove('active'); if (c.dataset.filter === 'all') c.classList.add('active'); });
+            filterProjects();
+        }
+
+        function getActivityCategory(dateStr) {
+            if (!dateStr) return 'stale';
+            const d = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+            if (d < 7) return 'week';
+            if (d < 30) return 'month';
+            if (d < 90) return 'quarter';
+            if (d < 180) return 'halfyear';
+            if (d < 365) return 'year';
+            if (d < 730) return 'twoyears';  // 2年以内
+            if (d < 1095) return 'threeyears';  // 3年以内
+            return 'stale';  // 3年以上
+        }
+
+        function updateActivityStats() {
+            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0 };
+            projects.forEach(p => c[getActivityCategory(p.updated_at || p.pushed_at)]++);
+            document.getElementById('activityAll').textContent = c.all;
+            document.getElementById('countWeek').textContent = c.week;
+            document.getElementById('countMonth').textContent = c.month;
+            document.getElementById('countQuarter').textContent = c.quarter;
+            document.getElementById('countHalfYear').textContent = c.halfyear;
+            document.getElementById('countYear').textContent = c.year;
+            document.getElementById('countTwoYears').textContent = c.twoyears;
+            document.getElementById('countThreeYears').textContent = c.threeyears;
+            document.getElementById('countStale').textContent = c.stale;
+            document.getElementById('activityTotal').textContent = c.all;
+        }
+
+        function updateStarStats() {
+            const c = { all: projects.length, week: 0, month: 0, quarter: 0, halfyear: 0, year: 0, twoyears: 0, threeyears: 0, stale: 0 };
+            projects.forEach(p => c[getActivityCategory(p.starred_at || p.updated_at)]++);
+            document.getElementById('starAll').textContent = c.all;
+            document.getElementById('starCountWeek').textContent = c.week;
+            document.getElementById('starCountMonth').textContent = c.month;
+            document.getElementById('starCountQuarter').textContent = c.quarter;
+            document.getElementById('starCountHalfYear').textContent = c.halfyear;
+            document.getElementById('starCountYear').textContent = c.year;
+            document.getElementById('starCountTwoYears').textContent = c.twoyears;
+            document.getElementById('starCountThreeYears').textContent = c.threeyears;
+            document.getElementById('starCountStale').textContent = c.stale;
+            document.getElementById('starTotal').textContent = c.all;
+        }
+
+        function loadProjects() {
+            // 加载分类数据（从 data.js）
+            if (typeof CATEGORIES_DATA !== 'undefined') {
+                categories = CATEGORIES_DATA;
+            }
+
+            if (typeof PROJECTS_DATA !== 'undefined') {
+                projects = PROJECTS_DATA; filteredProjects = [...projects];
+                updateCategoryFilter();  // 动态更新分类选项
+                renderTagCloud(); updateActivityStats(); updateStarStats();
+                switchTimeTab('star'); renderProjects(); updateStats();
+            } else {
+                document.getElementById('repoGrid').innerHTML = '<div class="empty-state">加载失败: data.js 文件不存在</div>';
+            }
+        }
+
+        // 动态更新分类筛选器选项
+        function updateCategoryFilter() {
+            const select = document.getElementById('categoryFilter');
+            const currentValue = select.value;
+
+            // 清空现有选项（保留 "全部"）
+            select.innerHTML = '<option value="all">全部分类</option>';
+
+            // 从 categories 对象生成选项
+            Object.values(categories).forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = `${cat.icon} ${cat.name}`;
+                select.appendChild(option);
+            });
+
+            // 恢复之前的选中值
+            select.value = currentValue || 'all';
+        }
+
+        function toggleTagCloud() {
+            tagCloudVisible = !tagCloudVisible;
+            document.getElementById('tagCloud').classList.toggle('show', tagCloudVisible);
+            document.getElementById('tagToggleText').textContent = tagCloudVisible ? '收起 ▴' : '展开 ▾';
+        }
+
+        function renderTagCloud() {
+            const t = new Map();
+            // 使用 topics 字段生成标签云（如果没有 matched_keywords）
+            projects.forEach(p => {
+                // 尝试 matched_keywords（优先）
+                if (p.matched_keywords && p.matched_keywords.length > 0) {
+                    p.matched_keywords.forEach(k => t.set(k, (t.get(k) || 0) + 1));
+                }
+                // 使用 topics 作为备选
+                else if (p.topics && p.topics.length > 0) {
+                    p.topics.forEach(k => t.set(k, (t.get(k) || 0) + 1));
+                }
+            });
+            const s = [...t.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+            document.getElementById('tagCloud').innerHTML = '<span class="tag active" data-tag="all">全部</span>' +
+                s.map(([k, n]) => `<span class="tag" data-tag="${k}">${k} <small style="opacity:0.6">${n}</small></span>`).join('');
+        }
+
+        function filterProjects() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const cat = document.getElementById('categoryFilter').value;
+            // 直接使用变量，而不是从隐藏的 select 元素读取
+            const act = activeActivity;
+            const star = activeStarFilter;
+            filteredProjects = projects.filter(p => {
+                // 搜索匹配：项目名、描述、topics
+                const projectTopics = p.topics || [];
+                const ms = !search || p.full_name.toLowerCase().includes(search) || (p.description || '').toLowerCase().includes(search) || projectTopics.some(k => k.toLowerCase().includes(search));
+                // 支持多分类：检查项目是否属于选中的分类
+                const projectCategories = p.categories || (p.category ? [p.category?.id || p.category] : []);
+                const mc = cat === 'all' || projectCategories.includes(cat);
+                // 标签匹配：支持 topics 和 matched_keywords
+                const allTags = [...(p.topics || []), ...(p.matched_keywords || [])];
+                const mt = activeTag === 'all' || allTags.includes(activeTag);
+                // 时间筛选
+                const ma = act === 'all' || getActivityCategory(p.updated_at || p.pushed_at) === act;
+                const ms2 = star === 'all' || getActivityCategory(p.starred_at || p.updated_at) === star;
+                return ms && mc && mt && ma && ms2;
+            });
+            currentPage = 1; renderProjects(); updateStats();
+        }
+
+        function renderProjects() {
+            const grid = document.getElementById('repoGrid');
+            if (filteredProjects.length === 0) { grid.innerHTML = '<div class="empty-state">没有找到匹配的项目</div>'; document.getElementById('pagination').innerHTML = ''; return; }
+            const tp = Math.ceil(filteredProjects.length / pageSize);
+            const pp = filteredProjects.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+            grid.innerHTML = pp.map(createCard).join('');
+            renderPagination(tp);
+        }
+
+        function renderPagination(total) {
+            if (total <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+            let h = `<button class="page-btn" onclick="goToPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+            const r = total <= 7 ? [...Array(total)].map((_, i) => i + 1) : currentPage <= 3 ? [1,2,3,4,5,'...',total] : currentPage >= total - 2 ? [1,'...',total-4,total-3,total-2,total-1,total] : [1,'...',currentPage-1,currentPage,currentPage+1,'...',total];
+            r.forEach(p => h += p === '...' ? '<span class="page-info">...</span>' : `<button class="page-btn ${p===currentPage?'active':''}" onclick="goToPage(${p})">${p}</button>`);
+            h += `<button class="page-btn" onclick="goToPage(${currentPage+1})" ${currentPage===total?'disabled':''}>›</button><span class="page-info">${currentPage}/${total}</span>`;
+            document.getElementById('pagination').innerHTML = h;
+        }
+
+        function goToPage(p) { const t = Math.ceil(filteredProjects.length / pageSize); if (p < 1 || p > t) return; currentPage = p; renderProjects(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+        function createCard(p) {
+            // 支持多分类显示
+            const projectCategories = p.categories || (p.category ? [p.category?.id || p.category] : []);
+            const categoryBadges = projectCategories.slice(0, 3).map(catId => {
+                const c = categories[catId] || { icon: '📁', color: '#8b949e' };
+                return `<span class="category-badge" style="background:${c.color}20;color:${c.color}">${c.icon}</span>`;
+            }).join('');
+            const uc = isRecent(p.updated_at) ? 'updated-recent' : '';
+            const th = (p.topics || []).slice(0, 3).map(t => `<span class="topic-tag">${t}</span>`).join('');
+            const st = p.starred_at ? `<span class="star-time">⭐ ${formatDate(p.starred_at)} Star</span>` : '';
+            return `<div class="card" onclick="window.open('${p.html_url}', '_blank')">
+                <div class="card-header"><a href="${p.html_url}" target="_blank" class="repo-name" onclick="event.stopPropagation()">${p.full_name}</a>
+                ${categoryBadges}</div>
+                <div class="description">${p.description || '暂无描述'}</div>${th ? `<div class="topics-row">${th}</div>` : ''}
+                <div class="card-footer"><div class="metrics">
+                    <span class="metric"><span class="language-dot" style="background:${getLangColor(p.language)}"></span>${p.language || '-'}</span>
+                    <span class="metric">⭐${formatNumber(p.stargazers_count)}</span><span class="metric">⑂${formatNumber(p.forks_count)}</span></div>
+                    <div class="time-info">${st}<span class="${uc}">${formatDate(p.updated_at)} 更新</span></div></div></div>`;
+        }
+
+        function getLangColor(l) { const c = {Python:'#3572A5',JavaScript:'#f1e05a',TypeScript:'#3178c6',Go:'#00ADD8',Rust:'#dea584',Java:'#b07219','C++':'#f34b7d',HTML:'#e34c26',CSS:'#563d7c',Kotlin:'#A97BFF',Swift:'#F05138',Dart:'#00B4AB'}; return c[l] || '#6e7681'; }
+        function formatNumber(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n; }
+        function isRecent(d) { return d && Math.floor((Date.now() - new Date(d)) / 86400000) < 7; }
+        function formatDate(d) { if (!d) return '-'; const n = Math.floor((Date.now() - new Date(d)) / 86400000); return n < 1 ? '今天' : n < 7 ? n + '天前' : n < 30 ? Math.floor(n / 7) + '周前' : n < 365 ? Math.floor(n / 30) + '月前' : new Date(d).getFullYear() + '年'; }
+        function updateStats() { document.getElementById('totalRepos').textContent = projects.length; document.getElementById('filteredCount').textContent = filteredProjects.length; }
+
+        document.getElementById('tagCloud').addEventListener('click', e => {
+            const t = e.target.classList.contains('tag') ? e.target : e.target.closest('.tag');
+            if (t) { activeTag = t.dataset.tag; document.querySelectorAll('.tag').forEach(x => x.classList.remove('active')); t.classList.add('active'); document.getElementById('activeTagLabel').textContent = activeTag === 'all' ? '' : ': ' + activeTag; filterProjects(); }
+        });
+        document.getElementById('categoryFilter').addEventListener('change', filterProjects);
+        document.getElementById('searchInput').addEventListener('input', filterProjects);
+        document.getElementById('pageSizeSelect').addEventListener('change', e => { pageSize = parseInt(e.target.value); currentPage = 1; renderProjects(); });
+
+        document.querySelectorAll('.time-chip').forEach(c => {
+            c.addEventListener('click', () => {
+                c.closest('.time-chips').querySelectorAll('.time-chip').forEach(x => x.classList.remove('active'));
+                c.classList.add('active');
+                if (c.dataset.type === 'activity') { activeActivity = c.dataset.filter; document.getElementById('activityFilter').value = c.dataset.filter; }
+                else { activeStarFilter = c.dataset.filter; document.getElementById('starFilter').value = c.dataset.filter; }
+                filterProjects();
+            });
+        });
+
+        loadTheme();
+    </script>
+    <script src="data.js"></script>
+    <script>loadProjects();</script>
+</body>
+</html>

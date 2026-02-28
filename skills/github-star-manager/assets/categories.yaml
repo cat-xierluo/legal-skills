@@ -1,0 +1,33 @@
+# GitHub Star 分类配置
+#
+# 说明：
+# - 此文件为默认模板，仅作为参考
+# - 实际分类会在首次运行时根据你的 Star 数据动态生成
+# - 生成的分类保存在 output/categories.yaml
+#
+# 使用方法：
+#   python scripts/generate_categories.py           # 增量更新
+#   python scripts/generate_categories.py --force   # 强制重新生成
+
+# 保留一个最基础的分类作为兜底
+categories:
+  - id: uncategorized
+    name: 未分类
+    icon: "📦"
+    color: "#6b7280"
+    description: "尚未匹配到分类的项目"
+    keywords: []
+
+# 以下是动态生成的分类示例（首次运行后会被替换）
+# 实际分类会根据你的 GitHub Star 数据中的 topics 频率自动生成
+# 例如：
+# - ai-agents: AI Agent 相关项目
+# - claude-code: Claude Code 生态
+# - llm: 大语言模型
+# - chinese-platform: 中国平台（微信、抖音等）
+# - devtools: 开发工具
+# - workflow: 工作流自动化
+# - productivity: 效率工具
+# - content-processing: 内容处理（OCR、PDF、TTS等）
+# - crawler: 爬虫/抓取
+# - rss: RSS/订阅
