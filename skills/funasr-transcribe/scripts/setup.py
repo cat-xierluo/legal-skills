@@ -232,6 +232,23 @@ def check_python_version():
     return True
 
 
+def is_externally_managed_env():
+    """检测是否为外部管理的 Python 环境（如 Homebrew）"""
+    try:
+        import sysconfig
+        stdlib_path = Path(sysconfig.get_path('stdlib'))
+        if (stdlib_path / 'EXTERNALLY-MANAGED').exists():
+            return True
+        # 尝试 dry-run 检测
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--dry-run", "pip"],
+            capture_output=True, text=True, timeout=10
+        )
+        return "externally-managed-environment" in result.stderr
+    except:
+        return False
+
+
 def install_dependencies():
     """安装 pip 依赖"""
     print_step("安装依赖包")
@@ -243,10 +260,17 @@ def install_dependencies():
     print(f"从 {REQUIREMENTS_FILE} 安装依赖...")
     print_info("这可能需要几分钟，请耐心等待...")
 
+    # 构建安装命令
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)]
+
+    # 检测是否为外部管理环境（如 Homebrew Python）
+    if is_externally_managed_env():
+        print_info("检测到外部管理的 Python 环境（如 Homebrew）")
+        print_info("使用 --break-system-packages 标志安装")
+        cmd.append("--break-system-packages")
+
     try:
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)
-        ])
+        subprocess.check_call(cmd)
         print_success("依赖安装完成")
         return True
     except subprocess.CalledProcessError as e:
