@@ -166,3 +166,61 @@
 - 公众号显示正常，动画无卡顿
 - 在丰富性和可读性之间保持平衡
 - 逻辑性动画优先于装饰性动画
+
+---
+
+## 六、⚠️ 兼容性警告
+
+### 禁止使用 SVG Filter
+
+**微信环境不兼容**：使用 `<g filter="url(#shadow)">` 会导致 SMIL 动画无法在微信中显示。
+
+```svg
+<!-- ❌ 错误：filter 会导致动画失效 -->
+<g filter="url(#shadow)">
+  <rect ...>
+    <animateTransform attributeName="transform" .../>
+  </rect>
+</g>
+
+<!-- ✅ 正确：直接使用 transform 定位 -->
+<g transform="translate(100, 120)">
+  <rect ...>
+    <animateTransform attributeName="transform" .../>
+  </rect>
+</g>
+```
+
+**解决方案**：
+1. 禁止在任何 SVG 元素上使用 `filter` 属性
+2. 使用 `transform` 替代 filter 进行视觉定位
+3. 阴影效果可以用边框颜色深浅或背景色区分来替代
+
+### 禁止渐变填充 + 动画组合
+
+**微信环境不兼容**：当 `fill="url(#gradient)"` 和 `<animateTransform>` 在同一个元素上时，渐变无法显示。
+
+```svg
+<!-- ❌ 错误：渐变和动画在同一元素上 -->
+<rect fill="url(#gradient)">
+  <animateTransform attributeName="transform" .../>
+</rect>
+
+<!-- ✅ 推荐：直接使用纯色 -->
+<rect fill="#10B981">
+  <animateTransform attributeName="transform" .../>
+</rect>
+```
+
+### 🚫 禁止所有渐变填充
+
+**公众号不支持所有渐变**：即使静态的渐变背景也无法渲染，请使用纯色。
+
+```svg
+<!-- ❌ 错误：渐变背景 -->
+<linearGradient id="bgGrad">...</linearGradient>
+<rect fill="url(#bgGrad)"/>
+
+<!-- ✅ 正确：使用纯色 -->
+<rect fill="#f8f9fa"/>
+```

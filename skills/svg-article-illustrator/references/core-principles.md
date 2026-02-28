@@ -174,3 +174,109 @@
 
 - 标准圆角 8-12px
 - 内部元素统一 rx/ry 值
+
+---
+
+## 十、兼容性踩坑记录
+
+### 🚫 禁止使用：SVG Filter
+
+**问题描述**：在 SVG 中使用 `<g filter="url(#shadow)">` 添加阴影效果时，SMIL 动画（animateTransform、animate）在微信 WebView 中无法正常显示。
+
+**原因分析**：filter 会在 SVG 中创建一个隔离的渲染层（filter region），与 WeChat WebView 的 SMIL 动画渲染引擎存在兼容性问题。
+
+**错误示例**：
+```svg
+<g filter="url(#shadow)">
+  <rect ...>
+    <animateTransform attributeName="transform" type="translate" .../>
+  </rect>
+</g>
+```
+
+**正确做法**：
+- ❌ 不要使用 `<g filter="url(#shadow)">` 或任何 filter 效果
+- ✅ 使用 `<g transform="translate(x, y)">` 进行定位
+- ✅ 动画直接应用在目标元素上，不要被 filter 包裹
+
+**视觉替代方案**：
+- 阴影效果 vs 扁平设计 → 选择扁平设计（符合极简原则）
+- 如必须体现层次感 → 使用不同颜色区分，而非阴影
+
+---
+
+### ⚠️ 渐变填充 + 动画组合
+
+**问题描述**：当 `fill="url(#gradient)"` 和 `<animateTransform>` 在同一个 `<rect>` 元素上时，渐变在微信 WebView 中无法显示。
+
+**原因分析**：渐变渲染和 SMIL 动画在同一个元素的坐标系中存在冲突。
+
+**错误示例**：
+```svg
+<!-- ❌ 错误：动画和渐变都在同一个 rect 上 -->
+<rect fill="url(#gradient)" ...>
+  <animateTransform attributeName="transform" .../>
+</rect>
+```
+
+**替代方案（推荐）**：
+- 直接使用纯色填充，配合极简设计原则
+- 如需渐变效果，使用不带动画的静态元素
+
+---
+
+### 🚫 禁止使用：所有渐变填充
+
+**问题描述**：在公众号中，即使是静态的渐变背景也无法渲染。
+
+**原因分析**：公众号 WebView 对 SVG 渐变的支持非常有限，无论是否带动画。
+
+**错误示例**：
+```svg
+<!-- 背景渐变 -->
+<linearGradient id="bgGrad">...</linearGradient>
+<rect fill="url(#bgGrad)"/>
+
+<!-- 元素渐变 -->
+<linearGradient id="stepGrad">...</linearGradient>
+<path fill="url(#stepGrad)"/>
+```
+
+**正确做法**：
+- 所有渐变都改为纯色
+- 背景使用：`#f8f9fa`、`#f0f4f8` 等浅色
+- 元素使用对应的主色调纯色
+
+---
+
+## 📋 公众号 SVG 兼容性汇总（实测）
+
+| 测试用例 | 结果 | 说明 |
+|---------|------|------|
+| 纯色 + 动画 | ✅ 正常 | 测试1、14、15 |
+| 虚线流动动画 | ✅ 正常 | 测试5 |
+| 箭头绘制动画 | ✅ 正常 | 测试6 |
+| Emoji 浮动动画 | ✅ 正常 | 测试9 |
+| 脉冲动画 | ✅ 正常 | 测试11 |
+| 复杂布局 | ✅ 正常 | 测试13 |
+| 渐变背景（无动画） | ❌ 失效 | 测试2、8 |
+| 渐变 + 动画（同元素） | ❌ 失效 | 测试3 |
+| SVG Filter + 动画 | ❌ 失效 | 测试4 |
+| 分离动画和渐变 | ❌ 失效 | 测试10 |
+| 纯色 + Filter（无动画） | ❌ 失效 | 测试12 |
+
+**结论**：
+
+| 特性 | 公众号支持 | 备注 |
+|------|------------|------|
+| 纯色填充 | ✅ 支持 | 推荐使用 |
+| SMIL 动画 | ✅ 支持 | 在无 filter/渐变时正常 |
+| SVG Filter | ❌ 不支持 | 任何情况都不支持 |
+| 渐变填充 | ❌ 不支持 | 任何情况都不支持 |
+
+**最佳实践**：
+1. ❌ 禁止使用 `<filter>` 元素
+2. ❌ 禁止使用 `<linearGradient>` / `fill="url(#gradient)"`
+3. ✅ 所有颜色使用纯色（如 `#10B981`、`#f8f9fa`）
+4. ✅ 动画使用 `<animateTransform>` 或 `<animate>`
+5. ✅ 元素定位使用 `transform="translate(x, y)"`
