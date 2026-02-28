@@ -16,7 +16,8 @@ license: MIT
 - **Cookie 管理** - 优先从浏览器自动读取，失败则提示手动配置
 - **关注列表管理** - 维护 following.json 记录已处理的博主
 - **差量更新** - 支持只下载主页有但本地没有的视频
-- **目录兼容** - 用数字 ID + 三层结构（视频/封面/转录文字）
+- **博主昵称文件夹** - 使用博主昵称作为文件夹名，更易识别
+- **自定义下载路径** - 支持自定义下载目录，默认使用系统 Downloads 目录
 - **视频压缩** - 使用 ffmpeg 压缩视频，节省存储空间
 - **视频元数据** - 抓取并保存视频统计数据（点赞、评论、收藏、分享数）
 - **数据可视化** - Web 界面展示博主和视频的统计信息，支持排序和筛选
@@ -28,6 +29,37 @@ license: MIT
 - 备份与迁移：视频文件分类存储，便于备份和后续处理
 - 内容分析：基于视频统计数据（点赞、评论、收藏）进行博主内容分析
 
+## 配置说明
+
+### 下载路径配置
+
+在 `config/config.yaml` 中配置下载路径：
+
+```yaml
+# 下载路径配置
+# 留空则使用系统 Downloads 目录下的 "抖音视频下载" 子目录
+# macOS: ~/Downloads/抖音视频下载
+# Windows: C:\Users\<用户名>\Downloads\抖音视频下载
+download_path: ""
+
+# 自定义路径示例：
+# download_path: "/Users/maoking/Movies/抖音"
+# download_path: "D:\\Videos\\抖音"
+```
+
+### 文件夹命名
+
+视频文件按博主昵称分类存储，例如：
+```
+~/Downloads/抖音视频下载/
+├── 博主A/
+│   ├── 2024-01-01_视频标题_xxx.mp4
+│   └── ...
+├── 博主B/
+│   └── ...
+└── data.js          # Web 界面数据
+```
+
 ## 视频元数据
 
 下载视频时，系统会自动提取并保存以下数据：
@@ -36,6 +68,7 @@ license: MIT
 |------|------|
 | `aweme_id` | 视频唯一 ID |
 | `uid` | 作者 UID |
+| `nickname` | 博主昵称 |
 | `desc` | 视频描述/文案 |
 | `create_time` | 发布时间 |
 | `duration` | 视频时长 |
@@ -84,7 +117,7 @@ python scripts/batch-download.py --sample
 python scripts/generate-data.py
 
 # 查看 Web 界面
-open downloads/index.html
+open ~/Downloads/抖音视频下载/index.html
 ```
 
 ## 推荐工作流
@@ -92,7 +125,7 @@ open downloads/index.html
 ```
 1. 添加博主 → python scripts/manage-following.py --batch
 2. 批量下载 → python scripts/batch-download.py --all
-3. 查看数据 → open downloads/index.html
+3. 查看数据 → open ~/Downloads/抖音视频下载/index.html
 ```
 
 下载时自动保存：
@@ -109,6 +142,8 @@ skills/douyin-batch-download/
 │   ├── INSTALLATION.md        # 详细安装依赖说明
 │   └── USAGE.md              # 详细使用说明
 ├── scripts/
+│   ├── utils/                # 工具模块
+│   │   └── config.py         # 统一配置加载
 │   ├── download-v2.py        # ✅ 推荐下载脚本（自动保存统计数据）
 │   ├── batch-download.py     # 批量下载入口
 │   ├── download.py           # ⚠️ 旧版下载脚本（已废弃）
@@ -122,10 +157,6 @@ skills/douyin-batch-download/
 ├── config/
 │   ├── config.yaml.example  # 配置模板
 │   └── following.json       # 关注列表（已下载的博主）
-├── downloads/
-│   ├── {uid}/               # 按博主 UID 分类的视频目录
-│   ├── data.js              # Web 界面数据文件
-│   └── index.html           # Web 管理界面
 └── douyin_users.db          # SQLite 数据库（用户信息 + 视频元数据）
 ```
 
@@ -143,7 +174,7 @@ skills/douyin-batch-download/
 ### Python 包
 
 | 包名 | 用途 |
-|------|------|----------|
+|------|------|
 | `f2` | 抖音视频下载框架 |
 | `playwright` | 浏览器自动化（扫码登录） |
 | `pyyaml` | YAML 配置文件解析 |

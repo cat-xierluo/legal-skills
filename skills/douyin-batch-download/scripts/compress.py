@@ -13,7 +13,7 @@
 
 用法：
     python scripts/compress.py                          # 压缩全部视频
-    python scripts/compress.py --user <uid>             # 压缩指定用户视频
+    python scripts/compress.py --user <folder>          # 压缩指定用户视频
     python scripts/compress.py --file <video.mp4>        # 压缩单个文件
     python scripts/compress.py --keep                    # 保留原文件
 """
@@ -28,7 +28,10 @@ import argparse
 SKILL_DIR = Path(__file__).parent.parent.resolve()
 os.chdir(SKILL_DIR)
 
-DOWNLOADS_PATH = SKILL_DIR / "downloads"
+# 导入统一配置模块
+from utils.config import get_download_path
+
+DOWNLOADS_PATH = get_download_path()
 
 # 小文件阈值（字节），小于此值的视频不压缩
 # 原因：小视频压缩后可能变大（编码开销 > 压缩收益）
@@ -223,7 +226,7 @@ def compress_user_dir(user_dir, replace=True, skip_small=True, **kwargs):
 
 
 def compress_all(replace=True, skip_small=True, **kwargs):
-    """压缩 downloads 目录下所有用户的视频"""
+    """压缩下载目录下所有用户的视频"""
     if not DOWNLOADS_PATH.exists():
         print(f"下载目录不存在: {DOWNLOADS_PATH}")
         return
@@ -233,6 +236,7 @@ def compress_all(replace=True, skip_small=True, **kwargs):
         print("没有找到用户目录")
         return
 
+    print(f"下载目录: {DOWNLOADS_PATH}")
     print(f"找到 {len(user_dirs)} 个用户目录\n")
 
     for user_dir in sorted(user_dirs):
@@ -246,7 +250,7 @@ def main():
         epilog="""
 示例:
   %(prog)s                          # 压缩全部视频（默认直接替换原文件）
-  %(prog)s --user 123456789          # 压缩指定用户视频
+  %(prog)s --user 博主昵称           # 压缩指定用户视频
   %(prog)s --file video.mp4           # 压缩单个文件
   %(prog)s --keep                    # 保留原文件（生成 xxx_compressed.mp4）
   %(prog)s --aggressive               # 激进压缩模式 (牺牲质量，压缩率70-80%%)
@@ -257,7 +261,7 @@ def main():
 
     parser.add_argument(
         "--user", "-u",
-        help="指定用户 UID，只压缩该用户的视频"
+        help="指定用户文件夹名称（博主昵称），只压缩该用户的视频"
     )
     parser.add_argument(
         "--file", "-f",
@@ -307,12 +311,14 @@ def main():
         print("  Windows: choco install ffmpeg")
         sys.exit(1)
 
+    print(f"下载目录: {DOWNLOADS_PATH}")
+
     # 执行压缩
     if args.file:
         # 压缩单个文件
         file_path = Path(args.file)
         if not file_path.is_absolute():
-            file_path = SKILL_DIR / file_path
+            file_path = DOWNLOADS_PATH / file_path
 
         if not file_path.exists():
             print(f"文件不存在: {file_path}")

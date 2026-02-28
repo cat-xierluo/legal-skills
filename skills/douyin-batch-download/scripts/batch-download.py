@@ -19,6 +19,7 @@
 特性：
     - 自动保存视频统计数据（点赞、评论、收藏、分享）
     - 零额外 API 请求（数据在下载时获取）
+    - 使用博主昵称作为文件夹名
 """
 
 import subprocess
@@ -33,6 +34,12 @@ SKILL_DIR = Path(__file__).parent.parent.resolve()
 # 切换到脚本目录（确保相对路径正确）
 os.chdir(SKILL_DIR)
 
+# 导入统一配置模块
+from utils.config import (
+    get_download_path,
+    get_user_folder_name,
+)
+
 from following import (
     list_users,
     get_user,
@@ -40,23 +47,24 @@ from following import (
 )
 
 DOWNLOAD_SCRIPT = SKILL_DIR / "scripts" / "download-v2.py"
-DOWNLOADS_PATH = SKILL_DIR / "downloads"
+DOWNLOADS_PATH = get_download_path()
 
 
-def get_local_video_count(uid: str) -> int:
+def get_local_video_count(folder: str) -> int:
     """获取本地视频数量"""
-    user_dir = DOWNLOADS_PATH / str(uid)
+    user_dir = DOWNLOADS_PATH / folder
     if user_dir.exists():
         return len(list(user_dir.glob("*.mp4")))
     return 0
 
 
-def download_user(uid: str, sec_user_id: str = None, max_counts: int = None, daemon: bool = False):
+def download_user(uid: str, sec_user_id: str = None, nickname: str = "", max_counts: int = None, daemon: bool = False):
     """下载单个用户的视频
 
     Args:
         uid: 用户 ID
         sec_user_id: 用户 sec_user_id
+        nickname: 用户昵称（用于文件夹命名）
         max_counts: 最大下载数量，None 表示不限制
         daemon: 是否后台运行
     """
@@ -83,6 +91,7 @@ def download_user(uid: str, sec_user_id: str = None, max_counts: int = None, dae
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"[任务创建] {task_id}\n")
             f.write(f"[UID] {uid}\n")
+            f.write(f"[昵称] {nickname}\n")
             f.write(f"[URL] {url}\n")
             f.write(f"[时间] {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 60 + "\n")
@@ -104,7 +113,7 @@ def download_user(uid: str, sec_user_id: str = None, max_counts: int = None, dae
     else:
         # 同步运行模式
         print(f"\n{'='*60}")
-        print(f"📥 开始下载: {uid}" + (f" (最多 {max_counts} 个)" if max_counts else ""))
+        print(f"📥 开始下载: {nickname or uid}" + (f" (最多 {max_counts} 个)" if max_counts else ""))
         print(f"{'='*60}")
 
         cmd = [sys.executable, str(DOWNLOAD_SCRIPT), url]
@@ -115,11 +124,11 @@ def download_user(uid: str, sec_user_id: str = None, max_counts: int = None, dae
 
         if result.returncode == 0:
             # 更新 last_fetch_time
-            update_fetch_time(uid)
-            print(f"✅ 下载完成: {uid}")
+            update_fetch_time(uid, nickname)
+            print(f"✅ 下载完成: {nickname or uid}")
             return True
         else:
-            print(f"❌ 下载失败: {uid}")
+            print(f"❌ 下载失败: {nickname or uid}")
             return False
 
 
@@ -138,7 +147,8 @@ def interactive_select():
     for i, user in enumerate(users, 1):
         uid = user.get("uid", "未知")
         name = user.get("nickname", user.get("name", "未知"))
-        local_count = get_local_video_count(uid)
+        folder = user.get("folder", name or uid)
+        local_count = get_local_video_count(folder)
         last_fetch = user.get("last_fetch_time", "未获取")
 
         # 显示状态标记
@@ -149,6 +159,7 @@ def interactive_select():
 
         print(f"  {i:2}. {name}")
         print(f"      UID: {uid}")
+        print(f"      文件夹: {folder}")
         print(f"      状态: {status} | 最后获取: {last_fetch or '未获取'}")
         print()
 
@@ -201,13 +212,14 @@ def download_selected_users(users: list):
 
         print(f"\n[{i}/{total}] 处理: {name}")
 
-        if download_user(uid, sec_user_id):
+        if download_user(uid, sec_user_id, name):
             success += 1
         else:
             failed += 1
 
     print("\n" + "=" * 60)
     print(f"✨ 批量下载完成: 成功 {success}，失败 {failed}")
+    print(f"📁 下载目录: {DOWNLOADS_PATH}")
     print("=" * 60)
 
 
@@ -231,6 +243,7 @@ def download_all_users(users: list = None, auto_confirm: bool = False, daemon: b
     if daemon:
         # 后台模式：直接启动所有任务
         print(f"\n🚀 后台模式：准备启动全部 {total} 个下载任务")
+        print(f"📁 下载目录: {DOWNLOADS_PATH}")
         print("-" * 60)
 
         task_ids = []
@@ -238,7 +251,7 @@ def download_all_users(users: list = None, auto_confirm: bool = False, daemon: b
             uid = user.get("uid")
             sec_user_id = user.get("sec_user_id", "")
             name = user.get("nickname", user.get("name", "未知"))
-            task_id = download_user(uid, sec_user_id, daemon=True)
+            task_id = download_user(uid, sec_user_id, name, daemon=True)
             if task_id:
                 task_ids.append((name, task_id))
 
@@ -248,11 +261,12 @@ def download_all_users(users: list = None, auto_confirm: bool = False, daemon: b
         for name, task_id in task_ids:
             print(f"   📺 {name}: {task_id}")
         print("-" * 60)
-        print("🔍 查看所有日志: ls downloads/logs/")
+        print("🔍 查看所有日志: ls {}/logs/")
         print("=" * 60)
     else:
         # 同步模式
         print(f"\n📥 准备下载全部 {total} 个博主")
+        print(f"📁 下载目录: {DOWNLOADS_PATH}")
         print("-" * 60)
 
         if not auto_confirm:
@@ -285,8 +299,9 @@ def download_by_uid(uid: str, max_counts: int = None, daemon: bool = False):
     if daemon:
         print(f"\n🚀 后台模式：准备启动下载任务")
         print(f"   📺 博主: {name} (UID: {uid})")
+        print(f"   📁 下载目录: {DOWNLOADS_PATH}")
         print("-" * 60)
-        task_id = download_user(uid, sec_user_id, max_counts, daemon=True)
+        task_id = download_user(uid, sec_user_id, name, max_counts, daemon=True)
         print("\n" + "=" * 60)
         if task_id:
             print(f"✅ 后台任务已启动")
@@ -294,7 +309,8 @@ def download_by_uid(uid: str, max_counts: int = None, daemon: bool = False):
         print("=" * 60)
     else:
         print(f"\n📥 下载博主: {name} (UID: {uid})")
-        download_user(uid, sec_user_id, max_counts)
+        print(f"📁 下载目录: {DOWNLOADS_PATH}")
+        download_user(uid, sec_user_id, name, max_counts)
 
 
 def download_sample(auto_confirm: bool = False, daemon: bool = False):
@@ -315,6 +331,7 @@ def download_sample(auto_confirm: bool = False, daemon: bool = False):
     if daemon:
         # 后台模式：直接启动所有任务
         print(f"\n🚀 后台模式：准备启动 {total} 个采样下载任务")
+        print(f"📁 下载目录: {DOWNLOADS_PATH}")
         print("-" * 60)
 
         task_ids = []
@@ -322,7 +339,7 @@ def download_sample(auto_confirm: bool = False, daemon: bool = False):
             uid = user.get("uid")
             sec_user_id = user.get("sec_user_id", "")
             name = user.get("nickname", user.get("name", "未知"))
-            task_id = download_user(uid, sec_user_id, max_counts=1, daemon=True)
+            task_id = download_user(uid, sec_user_id, name, max_counts=1, daemon=True)
             if task_id:
                 task_ids.append((name, task_id))
 
@@ -332,12 +349,13 @@ def download_sample(auto_confirm: bool = False, daemon: bool = False):
         for name, task_id in task_ids:
             print(f"   📺 {name}: {task_id}")
         print("-" * 60)
-        print("🔍 查看所有日志: ls downloads/logs/")
+        print("🔍 查看所有日志: ls {}/logs/")
         print("=" * 60)
     else:
         # 同步模式
         print(f"\n📥 采样下载：每个博主只下载 1 个视频")
         print(f"   共 {total} 个博主")
+        print(f"📁 下载目录: {DOWNLOADS_PATH}")
         print("-" * 60)
 
         if not auto_confirm:
@@ -356,7 +374,7 @@ def download_sample(auto_confirm: bool = False, daemon: bool = False):
 
             print(f"\n[{i}/{total}] 采样下载: {name}")
 
-            if download_user(uid, sec_user_id, max_counts=1):
+            if download_user(uid, sec_user_id, name, max_counts=1):
                 success += 1
             else:
                 failed += 1
@@ -402,7 +420,6 @@ def main():
         print("  python scripts/batch-download.py --uid <UID> # 指定博主")
         print("  --daemon                                # 后台运行模式")
         print("  --yes                                   # 跳过确认直接执行")
-        print("  --yes                                    # 跳过确认直接执行")
 
 
 if __name__ == "__main__":

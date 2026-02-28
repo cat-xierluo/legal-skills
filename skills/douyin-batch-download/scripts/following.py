@@ -3,7 +3,7 @@
 """
 following.json 统一读写模块
 
-数据格式: {users: [{uid, nickname, ...}, ...]}
+数据格式: {users: [{uid, nickname, folder, ...}, ...]}
 """
 
 import json
@@ -16,6 +16,21 @@ from typing import Optional
 SKILL_DIR = Path(__file__).parent.parent.resolve()
 FOLLOWING_PATH = SKILL_DIR / "config" / "following.json"
 DB_PATH = SKILL_DIR / "douyin_users.db"
+
+# 导入配置工具
+try:
+    from utils.config import sanitize_folder_name
+except ImportError:
+    def sanitize_folder_name(name: str) -> str:
+        """简单的文件夹名称清理"""
+        import re
+        if not name:
+            return "unknown"
+        name = name.strip()
+        name = re.sub(r'[<>:"/\\|?*]', '_', name)
+        name = re.sub(r'[\s_]+', '_', name)
+        name = name.strip('_')
+        return name[:100] if name else "unknown"
 
 
 def load_following() -> dict:
@@ -81,6 +96,11 @@ def add_user(uid: str, info: dict, merge: bool = True) -> bool:
     # 确保 info 包含 uid
     info["uid"] = uid
 
+    # 生成 folder 字段（如果提供了 nickname）
+    nickname = info.get("nickname") or info.get("name", "")
+    if nickname and "folder" not in info:
+        info["folder"] = sanitize_folder_name(nickname)
+
     if index >= 0:
         # 更新已有用户
         if merge:
@@ -89,6 +109,9 @@ def add_user(uid: str, info: dict, merge: bool = True) -> bool:
             for key, value in info.items():
                 if value is not None and value != "":
                     existing[key] = value
+            # 确保 folder 字段存在
+            if "folder" not in existing:
+                existing["folder"] = sanitize_folder_name(existing.get("nickname") or existing.get("name", "") or uid)
             info = existing
         data["users"][index] = info
         save_following(data)
@@ -99,6 +122,9 @@ def add_user(uid: str, info: dict, merge: bool = True) -> bool:
             info["last_updated"] = datetime.now().isoformat()
         if "last_fetch_time" not in info:
             info["last_fetch_time"] = None
+        # 确保 folder 字段存在
+        if "folder" not in info:
+            info["folder"] = sanitize_folder_name(nickname) if nickname else str(uid)
         data["users"].append(info)
         save_following(data)
         return True
@@ -116,13 +142,24 @@ def remove_user(uid: str) -> bool:
     return False
 
 
-def update_fetch_time(uid: str):
-    """更新用户的 last_fetch_time"""
+def update_fetch_time(uid: str, nickname: str = ""):
+    """更新用户的 last_fetch_time
+
+    Args:
+        uid: 用户 ID
+        nickname: 用户昵称（可选，用于更新 folder 字段）
+    """
     data = load_following()
     index = _find_user_index(data, uid)
 
     if index >= 0:
         data["users"][index]["last_fetch_time"] = datetime.now().isoformat()
+        # 如果提供了 nickname，也更新 folder
+        if nickname:
+            data["users"][index]["folder"] = sanitize_folder_name(nickname)
+            # 如果 nickname 字段为空，也更新它
+            if not data["users"][index].get("nickname"):
+                data["users"][index]["nickname"] = nickname
         save_following(data)
 
 
@@ -133,6 +170,7 @@ def create_empty_user(uid: str, sec_user_id: str = "") -> dict:
         "sec_user_id": sec_user_id,
         "name": "",
         "nickname": "",
+        "folder": str(uid),  # 默认使用 UID 作为 folder
         "avatar_url": "",
         "signature": "",
         "follower_count": 0,
@@ -180,11 +218,13 @@ def update_user_info_from_db(uid: str, last_fetch_time: str = None) -> bool:
         if not result:
             return False
 
+        nickname = result[2] or ""
         user_info = {
             "uid": result[0],
             "sec_user_id": result[1] or "",
-            "name": result[2] or "",
-            "nickname": result[2] or "",
+            "name": nickname,
+            "nickname": nickname,
+            "folder": sanitize_folder_name(nickname) if nickname else str(result[0]),
             "avatar_url": result[3] or "",
             "signature": result[4] or "",
             "follower_count": result[5] or 0,
