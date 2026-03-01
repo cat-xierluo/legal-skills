@@ -1,6 +1,6 @@
 # Legal Skills
 
-> 面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作。
+> 面向法律从业者的 AI Agent Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作。兼容 Claude Code、OpenClaw 等主流 AI Agent 平台。
 
 [![GitHub](https://img.shields.io/badge/GitHub-cat--xierluo-blue)](https://github.com/cat-xierluo/legal-skills)
 
@@ -19,7 +19,7 @@
 
 ## 📋 项目概述
 
-本项目旨在沉淀并分发面向法律工作者的 Claude Skills。法律从业者兼具专业工作者与创作者的双重身份——既要处理法律业务，也需要撰写专业文章、整理资料、分享知识。我们的技能围绕这一特点，构建完整的工作流支持。
+本项目旨在沉淀并分发面向法律工作者的 AI Agent Skills。法律从业者兼具专业工作者与创作者的双重身份——既要处理法律业务，也需要撰写专业文章、整理资料、分享知识。我们的技能围绕这一特点，构建完整的工作流支持。
 
 ### 技能体系
 
@@ -102,9 +102,11 @@
 
 | 技能                                                      | 说明                                                                                                                                         | 许可证          | 版本   | 作者       | 备注 |
 | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- | :----- | :--------- | :--- |
-| **[skill-manager](skills/skill-manager/)**             | 管理 Claude Skills 和 Commands 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理                           | MIT             | v1.1.0 | 杨卫薪律师 | |
+| **[skill-manager](skills/skill-manager/)**             | 管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理                           | MIT             | v1.1.0 | 杨卫薪律师 | |
+| **[skill-creator-plus](skills/skill-creator-plus/)**   | 技能创建向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性             | MIT             | v1.0.0 | 杨卫薪律师 | |
 | **[git-batch-commit](skills/git-batch-commit/)**       | 智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式                                      | MIT             | v1.1.0 | 杨卫薪律师 | |
-| **[github-auto-star](skills/github-auto-star/)**       | 从内容（文章、截图、文字）中自动提取 GitHub 仓库并 star，支持 URL 解析、图片分析、GitHub 搜索和批量 star 操作                                | MIT             | v1.0.0 | 杨卫薪律师 | |
+| **[github-star-manager](skills/github-star-manager/)** | GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统               | MIT             | v1.0.0 | 杨卫薪律师 | |
+| **[skill-lint](skills/skill-lint/)**                   | Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告                  | MIT             | v1.0.0 | 杨卫薪律师 | |
 | **[repo-research](skills/repo-research/)**             | GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告 | CC-BY-NC-SA-4.0 | v0.3.0 | 杨卫薪律师 | |
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
@@ -132,14 +134,20 @@
 /plugin install legal-skills
 ```
 
-### 方式二：下载压缩包
+### 方式二：OpenClaw 平台
 
-下载本项目压缩包，解压后将技能目录复制到 Claude Code 技能目录：
+将技能目录复制到 OpenClaw 的 skills 目录：
 
 ```bash
-# macOS / Linux
-cp -r legal-skills/skills/* ~/.claude/skills/
-
-# Windows
-xcopy legal-skills\skills\* %USERPROFILE%\.claude\skills\ /E /I
+cp -r legal-skills/skills/* /path/to/openclaw/skills/
 ```
+
+### 方式三：手动安装
+
+下载本项目压缩包，解压后将技能目录复制到对应平台的 skills 目录：
+
+| 平台 | 默认路径 |
+| :--- | :--- |
+| Claude Code (macOS/Linux) | `~/.claude/skills/` |
+| Claude Code (Windows) | `%USERPROFILE%\.claude\skills\` |
+| OpenClaw | 根据配置文件指定 |
