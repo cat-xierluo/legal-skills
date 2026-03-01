@@ -98,55 +98,12 @@ python scripts/main.py --check --user=maoking
 
 ---
 
-## 3. 可编排 Skill 设计要点
-
-### 3.1 明确输入/输出
-
-在 SKILL.md 中声明：
-
-```markdown
-## 输入/输出
-
-### 输入
-- 必需：GitHub 仓库 URL
-- 可选：--compare-with 本地项目路径
-
-### 输出
-- 研究报告：./research/YYYYMMDD-topic/REPORT.md
-```
-
-### 3.2 单一职责
-
-每个 Skill 只做一件事，便于灵活组合。
-
-### 3.3 幂等性
-
-多次执行结果相同，避免重复执行产生副作用。
-
----
-
-## 4. 定时运行
-
-使用 macOS launchd 或 cron 配置定时任务。
-
-**launchd 示例**：
-
-```xml
-<key>StartCalendarInterval</key>
-<dict>
-    <key>Weekday</key>
-    <integer>1</integer>  <!-- 每周一 -->
-    <key>Hour</key>
-    <integer>9</integer>
-</dict>
-```
-
----
-
 ## 变更历史
 
 | 版本 | 日期 | 更新内容 |
 |:-----|:-----|:---------|
+| v2.0.0 | 2026-02-28 | 删除 §3 可编排设计要点、§4 定时运行；聚焦编排核心理念 |
+| v1.3.0 | 2026-02-28 | 整合 OpenClaw 内容：增强 §4 定时运行（config.yaml cron 配置） |
 | v1.2.0 | 2026-02-14 | 大幅精简，聚焦核心理念，移除冗余示例和理论内容 |
 | v1.1.0 | 2026-02-14 | 重命名为 SKILL-ORCHESTRATION-GUIDE.md；新增与传统 Workflow 工具对比 |
 | v1.0.0 | 2026-02-14 | 初始版本 |

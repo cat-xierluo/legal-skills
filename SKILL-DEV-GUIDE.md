@@ -1,4 +1,4 @@
-# Claude Code Skills 开发指南
+# Skills 开发指南
 
 本指南面向 Skills 开发者,提供 Skills 文档编写的完整规范和最佳实践。
 
@@ -20,9 +20,53 @@ skill-name/
 - **官方规范**: `SKILL.md`、`LICENSE.txt`、`references/` 是 Claude Code 官方定义的标准目录
 - **扩展内容**: `scripts/`、`assets/` 是本项目的扩展约定,用于更好地组织代码和资源
 
+**目录层级规则**:
+
+- `references/`、`scripts/`、`assets/` 下保持**扁平结构**，只允许一级子目录
+- ❌ `references/docs/api/guide.md` (层级过深)
+- ✅ `references/api-guide.md` (扁平结构)
+
 **注意**: `test/` 目录中的 `DECISIONS.md`、`TASKS.md`、`CHANGELOG.md` 是**开发协作文件**,不属于最终 skill 产品。
 
-## 2. Frontmatter 元数据
+## 2. 模块化设计原则
+
+### 2.1 独立功能解耦
+
+**规则**: 对于独立、可复用的功能模块,应抽取成单独的脚本文件,而不是全部写在主脚本中。
+
+**为什么**:
+
+- **可复用性**: 其他 skill 可以通过 AI 协调调用该功能
+- **可维护性**: 功能边界清晰,易于测试和调试
+- **可扩展性**: 独立模块可以单独升级和增强
+
+**示例** (pdf-evaluator):
+
+```text
+pdf-evaluator/
+├── SKILL.md           # 技能定义
+├── evaluator.py       # 主流程:评价筛选
+├── summarizer.py      # 主流程:解读生成
+└── pdf_ocr.py         # 独立模块:OCR 文字提取(可复用)
+```
+
+**判断标准**:
+
+- ✅ 该功能是否可以独立使用?
+- ✅ 其他 skill 是否可能需要这个功能?
+- ✅ 该功能是否有清晰的输入输出?
+
+如果答案都是"是",则应该解耦成独立脚本。
+
+### 2.2 模块间协调
+
+**模块之间不直接调用**,而是通过 AI 协调:
+
+- ✅ `evaluator.py` 调用 `pdf_ocr.py`(同一 skill 内部)
+- ❌ `skill-a/main.py` 直接调用 `skill-b/main.py`(跨 skill)
+- ✅ AI 先调用 skill-a,再调用 skill-b(跨 skill 协调)
+
+## 3. Frontmatter 元数据
 
 SKILL.md 必须以 YAML frontmatter 开头:
 
@@ -39,7 +83,7 @@ license: Complete terms in LICENSE.txt
 - ✅ 有 `license` 字段
 - ❌ 无 `version` 字段(版本信息在 `CHANGELOG.md` 中管理)
 
-## 3. description 写作规范
+## 4. description 写作规范
 
 ### (1) 使用第三人称
 
@@ -47,21 +91,31 @@ license: Complete terms in LICENSE.txt
 - ✅ "This skill should be used when..."
 - ✅ "本技能应在...时使用"
 
-### (2) 示例
+### (2) 添加负向触发条件（Negative Triggers）
 
-**英文**:
-
-```yaml
-description: Comprehensive PDF manipulation toolkit for extracting text and tables. This skill should be used when Claude needs to fill in a PDF form or programmatically process PDF documents at scale.
-```
-
-**中文**:
+description 应包含**何时不应使用**的说明，帮助 AI 更精准地匹配技能：
 
 ```yaml
-description: 将法律文本转换为规范的 Markdown 格式。本技能应在用户需要处理法律条文(如民法典、刑法)、整理法律案例(如最高法典型案例)、或从粘贴文本中格式化法律文档时使用。
+# 示例：包含负向触发条件
+description: |
+  将法律文本转换为规范的 Markdown 格式。本技能应在用户需要处理法律条文、整理法律案例时使用。
+  不要用于：代码格式化、普通文本润色、非法律类文档处理。
 ```
 
-## 4. 依赖管理
+### (3) 长度限制
+
+- description 总长度不超过 **1024 字符**
+- 负向触发条件应简洁，1-3 条即可
+
+### (4) 完整示例
+
+```yaml
+description: |
+  将法律文本转换为规范的 Markdown 格式。本技能应在用户需要处理法律条文(如民法典、刑法)、整理法律案例(如最高法典型案例)、或从粘贴文本中格式化法律文档时使用。
+  不要用于：代码格式化、普通文章润色、非中文法律文档。
+```
+
+## 5. 依赖管理
 
 ### (1) 依赖说明位置
 
@@ -93,7 +147,7 @@ description: 将法律文本转换为规范的 Markdown 格式。本技能应在
 pip install -r assets/requirements.txt
 ```
 
-## 5. Progressive Disclosure 设计
+## 6. Progressive Disclosure 设计
 
 Skills 使用渐进式加载系统管理上下文:
 
@@ -110,12 +164,14 @@ Skills 使用渐进式加载系统管理上下文:
 - 应包含核心操作流程和常用示例
 - 避免大段代码,使用简洁示例
 - 通过引用指向 scripts/ 和 references/
+- **行数限制**: SKILL.md 正文应控制在 **500 行以内**，超出部分应拆分到 references/
 
 ### (3) Level 2: 支持性文档 (不自动加载,官方规范)
 
 - references/ 目录中的详细文档
 - 仅在 SKILL.md 中明确引用时由 AI 主动读取
 - 包含详细API文档、完整示例、边缘案例
+- **目录层级**: references/ 下保持**扁平结构**，只允许一级子目录
 
 ### (4) Level 3: 可执行资源 (调用不加载,扩展)
 
@@ -124,7 +180,7 @@ Skills 使用渐进式加载系统管理上下文:
 - 通过 Bash 工具直接调用,不占用上下文
 - 代码应放在这里,而非文档中
 
-## 6. 文档编写最佳实践
+## 7. 文档编写最佳实践
 
 ### (1) Frontmatter 优化
 
@@ -160,22 +216,22 @@ Skills 使用渐进式加载系统管理上下文:
 - 二进制资源
 - requirements.txt
 
-## 7. 配置文件规范
+## 8. 配置文件规范
 
 ### (1) 文件命名规则
 
-| 类型 | 格式 | 是否提交 | 说明 |
-|------|------|----------|------|
-| 模板文件 | `*.example.*` | ✅ 提交 | 包含示例值的模板，可直接复制使用 |
-| 配置文件 | `*` | ❌ 忽略 | 实际使用的配置文件，应被 .gitignore 忽略 |
+| 类型     | 格式            | 是否提交 | 说明                                     |
+| -------- | --------------- | -------- | ---------------------------------------- |
+| 模板文件 | `*.example.*` | ✅ 提交  | 包含示例值的模板，可直接复制使用         |
+| 配置文件 | `*`           | ❌ 忽略  | 实际使用的配置文件，应被 .gitignore 忽略 |
 
 **示例**:
 
 ```text
 .env.example            → 提交（模板）
 .env                    → 忽略（实际配置）
-config.json.example     → 提交（模板）
-config.json             → 忽略（实际配置）
+config.yaml.example     → 提交（模板）
+config.yaml             → 忽略（实际配置）
 ```
 
 ### (2) 自包含项目原则
@@ -188,34 +244,66 @@ config.json             → 忽略（实际配置）
 - ✅ 代码从项目目录读取配置文件
 - ❌ 不要要求用户复制到外部目录（如 `~/.xxx/`）
 
-### (3) 代码读取配置
+### (3) 配置文件格式选择
 
-代码使用 `python-dotenv` 从当前目录加载配置：
+根据配置复杂度选择：
+
+| 格式 | 适用场景 | 示例 |
+|:-----|:---------|:-----|
+| **.env** | API keys、tokens、简单环境变量 | `GITHUB_PAT=ghp_xxx` |
+| **config.yaml** | 多预设、嵌套结构、列表数据 | 见下方预设配置示例 |
+
+**.env 代码读取**：
 
 ```python
 from dotenv import load_dotenv
-load_dotenv()  # 自动加载项目目录下的 .env 文件
-
+load_dotenv()
 import os
-api_key = os.getenv("API_KEY")  # 从 .env 读取
+api_key = os.getenv("GITHUB_PAT")
 ```
+
+### (4) 预设配置格式
+
+```yaml
+# config.yaml.example
+presets:
+  quick:
+    path: ./notes
+    top_k: 5
+  personal:
+    path: ~/Documents/Obsidian
+    top_k: 10
+default: personal
+```
+
+```bash
+python3 skill.py "主题" --config config.yaml --preset quick
+```
+
+### (5) 输出路径配置
+
+**所有涉及文件输出的 Skill 都应支持可配置的输出路径**。
+
+```yaml
+# assets/config.yaml.example
+output_dir: ""  # 为空时默认保存到 skill 内部的 output/ 目录
+```
+
+### (6) 配置文件忽略
 
 **注意**: `.gitignore` 在项目根目录配置，涵盖所有需要忽略的文件。
 
-## 8. 技能间协作规范
+## 9. 技能间协作规范
 
-### (1) 松耦合原则
+### (1) 核心原则
 
-技能应保持**松耦合**，避免直接引用其他技能的内部实现：
+**Skill 之间通过 AI 智能协调，不直接在脚本中调用其他 skill 的内部脚本。**
 
-- ✅ 在 SKILL.md 中用自然语言描述协作场景
-- ✅ 说明技能"做什么"和"如何配合"
-- ❌ 不直接引用其他技能的内部脚本路径
-- ❌ 不在代码中 import 其他技能的模块
+### (2) 协作文档写法
 
-### (2) 协作文档示例
+在 SKILL.md 中使用自然语言描述协作关系：
 
-**推荐写法**（自然语言描述）：
+**推荐写法**：
 
 ```markdown
 ## 与其他技能配合
@@ -224,7 +312,7 @@ api_key = os.getenv("API_KEY")  # 从 .env 读取
 两个技能独立运行，可根据需要灵活组合使用。
 ```
 
-**避免写法**（直接引用实现）：
+**避免写法**：
 
 ```markdown
 ## 与其他技能配合
@@ -235,33 +323,97 @@ python ../../skills/funasr-transcribe/scripts/transcribe.py
 \`\`\`
 ```
 
-### (3) AI 作为协调中介
+### (3) 复杂编排
 
-技能协作由 **AI 负责理解和协调**，而非技能间直接调用：
+对于定时任务、条件分支、串行/并行执行等复杂编排，请参考 **[SKILL-ORCHESTRATION-GUIDE.md](SKILL-ORCHESTRATION-GUIDE.md)**。
 
-- 用户描述需求 → AI 理解涉及哪些技能 → AI 依次调用相应技能
-- 文档只需说明"可以配合使用"，AI 会自动处理协调细节
-- 这种设计促进技能的可研究性、可维护性和可复用性
+## 10. 安全审计
 
-### (4) 复杂编排
+### (1) 基本原则
 
-对于涉及多个技能的复杂编排（如定时任务、条件分支、串行/并行执行），请参考 **[SKILL-ORCHESTRATION-GUIDE.md](SKILL-ORCHESTRATION-GUIDE.md)**。
+- ❌ 不在 skill 中硬编码 API keys
+- ❌ 不读取 ~/.env 或其他敏感配置
+- ✅ 最小权限原则：只请求必要的工具权限
+- ✅ 第三方依赖使用官方库
+- ❌ **禁止使用 `rm -rf ~`、`rm -rf /`、`rm -rf $HOME` 等危险命令**
+- ✅ **使用 `trash` 或安全删除脚本替代 `rm -rf`**
 
-**两份文档的关系**：
+### (2) 安全删除规范
 
-| 文档 | 职责 |
-|:-----|:-----|
-| **SKILL-DEV-GUIDE.md**（本文档） | 单个 Skill 的开发规范 |
-| **SKILL-ORCHESTRATION-GUIDE.md** | 多个 Skill 的协作编排规范 |
+**禁止**：`rm -rf ~`、`rm -rf /`、`rm -rf $HOME` 等危险命令
 
-SKILL-ORCHESTRATION-GUIDE.md 涵盖：
-- 与传统 Workflow 工具（N8N/Dify）的区别
-- 协作模式（串行/并行/条件/循环）
-- 可编排 Skill 设计规范
-- 编排描述格式（WORKFLOW.md 模板）
-- 定时运行配置（launchd/cron）
+**推荐**：
 
-## 9. SKILL-DEV-GUIDE.md 更新规范
+```bash
+# 使用 trash 命令（移动到回收站）
+trash ./output
+
+# 清理目录内容（保留目录本身）
+find ./output -mindepth 1 -delete
+```
+
+### (3) 审计检查清单
+
+开发时确保：
+
+- [ ] 无硬编码的敏感信息
+- [ ] 无未授权的文件访问
+- [ ] 最小工具权限
+- [ ] 依赖来自可信源
+- [ ] **无 `rm -rf ~`、`rm -rf /` 等危险命令**
+- [ ] **Makefile/shell 脚本中的删除命令经过审查**
+
+## 11. 开发流程
+
+### (1) 创建新 Skill
+
+在 `skills/` 目录下创建 `scripts/` 和 `assets/` 子目录，创建 SKILL.md。如需配置文件则在 `assets/` 下创建 `config.yaml.example`。
+
+### (2) 开发时优先事项
+
+1. **通用性优先**
+   - 不假设特定用户/目录/配置
+   - 使用配置文件适配不同场景
+   - 支持命令行参数覆盖配置
+
+2. **自包含**
+   - 所有依赖明确列出
+   - 路径使用相对路径或配置
+   - 无外部硬依赖
+
+3. **可测试**
+   - 提供 --max-items 等测试参数
+   - 支持小范围数据验证
+
+## 12. 技能验证规范
+
+完成技能开发后，应进行以下验证测试：
+
+### (1) 发现验证 (Discovery Validation)
+
+验证 AI 能否正确识别技能触发条件：
+
+- 正向测试：给定相关用户请求，验证技能是否被正确触发
+- 负向测试：给定不相关请求，验证技能不会被误触发
+
+### (2) 逻辑验证 (Logic Validation)
+
+验证技能的核心逻辑是否正确：
+
+- 核心流程测试：执行技能的主要功能
+- 边缘案例测试：处理异常输入、空值、边界条件
+
+### (3) 格式合规检查
+
+使用 `skill-lint` 工具验证技能是否符合规范：
+
+- 目录结构合规
+- Frontmatter 格式正确
+- description 包含负向触发条件
+- SKILL.md 行数在 500 行以内
+- references/ 目录层级扁平
+
+## 13. SKILL-DEV-GUIDE.md 更新规范
 
 **重要**: 本指南文件(SKILL-DEV-GUIDE.md)的每次修改都必须同步更新底部的"变更历史"章节。
 
@@ -279,8 +431,8 @@ SKILL-ORCHESTRATION-GUIDE.md 涵盖：
 
 ### (3) 变更历史记录格式
 
-| 版本 | 日期 | 更新内容 |
-|------|------|----------|
+| 版本   | 日期       | 更新内容               |
+| ------ | ---------- | ---------------------- |
 | v1.0.0 | YYYY-MM-DD | 简要描述本次修改的内容 |
 
 ### (4) 自动更新要求
@@ -293,11 +445,15 @@ AI 代理在修改 SKILL-GUIDE.md 时,必须:
 
 ## 变更历史
 
-| 版本 | 日期 | 更新内容 |
-| ---- | ---- | -------- |
-| v1.3.0 | 2026-02-14 | 重命名为 SKILL-DEV-GUIDE.md；更新第8节引用为 SKILL-ORCHESTRATION-GUIDE.md |
-| v1.2.0 | 2026-02-14 | 在第8节新增(4)"复杂工作流编排"，引用 WORKFLOW-GUIDE.md，明确两份文档的职责分工 |
-| v1.1.0 | 2026-02-12 | 新增第8节"技能间协作规范"，明确技能应通过自然语言描述协作方式，避免直接引用其他技能的内部实现 |
-| v1.0.2 | 2026-02-12 | 修正配置文件规范章节;移除每个skill创建.gitignore的指引;修正复制规则说明（配置文件与模板同目录）;修复章节编号重复问题 |
-| v1.0.1 | 2026-01-30 | 为所有章节添加序号;明确标注 scripts/ 和 assets/ 为扩展内容,SKILL.md 和 references/ 为官方规范 |
+| 版本   | 日期       | 更新内容                                                                                                                                                    |
+| ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.3.0 | 2026-03-01 | 整合 mgechev/skills-best-practices：§1 目录层级规则、§4 负向触发条件、§6 行数限制(<500行)、新增 §12 技能验证规范、原 §12 顺延为 §13                        |
+| v2.2.0 | 2026-02-28 | 精简冗余示例（§4/§8/§10/§11）                                                                                   |
+| v2.1.0 | 2026-02-28 | 精简 §9 协作规范；删除 TDD 章节；调整编号                                                                                                                   |
+| v2.0.0 | 2026-02-28 | 整合 OpenClaw 内容：新增 §2 模块化设计、§10 安全审计、§11 TDD、§12 开发流程；增强 §8 配置规范；合并 §9 协作规范                                             |
+| v1.3.0 | 2026-02-14 | 重命名为 SKILL-DEV-GUIDE.md；更新第8节引用为 SKILL-ORCHESTRATION-GUIDE.md                                                                                   |
+| v1.2.0 | 2026-02-14 | 在第8节新增(4)"复杂工作流编排"，引用 WORKFLOW-GUIDE.md，明确两份文档的职责分工                                                                              |
+| v1.1.0 | 2026-02-12 | 新增第8节"技能间协作规范"，明确技能应通过自然语言描述协作方式，避免直接引用其他技能的内部实现                                                               |
+| v1.0.2 | 2026-02-12 | 修正配置文件规范章节;移除每个skill创建.gitignore的指引;修正复制规则说明（配置文件与模板同目录）;修复章节编号重复问题                                        |
+| v1.0.1 | 2026-01-30 | 为所有章节添加序号;明确标注 scripts/ 和 assets/ 为扩展内容,SKILL.md 和 references/ 为官方规范                                                               |
 | v1.0.0 | 2026-01-30 | 初始版本:从 AGENTS.md 中分离 Skill 文档规范,包含目录结构、Frontmatter 元数据、description 写作规范、依赖管理、Progressive Disclosure 设计、文档编写最佳实践 |
