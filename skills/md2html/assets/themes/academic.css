@@ -1,0 +1,273 @@
+/* 学术报告主题 - 清晰专业风格 */
+
+/* 基础布局 */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Times New Roman", "宋体", SimSun, Georgia, serif;
+    line-height: 1.8;
+    color: #333;
+    background-color: #fff;
+    max-width: 850px;
+    margin: 0 auto;
+    padding: 50px 30px;
+    font-size: 16px;
+}
+
+/* 标题样式 */
+h1 {
+    font-size: 1.8em;
+    font-weight: bold;
+    text-align: center;
+    color: #000;
+    margin-top: 0;
+    margin-bottom: 1.5em;
+}
+
+h2 {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-top: 2em;
+    margin-bottom: 1em;
+}
+
+h3 {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #333;
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+}
+
+h4 {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #333;
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+}
+
+/* 段落 */
+p {
+    margin: 1em 0;
+    text-align: justify;
+    text-indent: 2em;
+}
+
+/* 链接 */
+a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* 表格样式 - 三线表 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5em 0;
+    font-size: 0.95em;
+}
+
+th, td {
+    padding: 10px 15px;
+    text-align: left;
+    border: none;
+}
+
+/* 三线表边框 */
+table {
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+}
+
+thead {
+    border-bottom: 1px solid #000;
+}
+
+th {
+    font-weight: bold;
+    text-align: center;
+}
+
+.zebra-row {
+    background-color: #f9f9f9;
+}
+
+.case-info-table {
+    border: 1px solid #ccc;
+}
+
+.case-info-table th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+/* 引用块 */
+blockquote {
+    border-left: 3px solid #0066cc;
+    padding: 0.5em 1.5em;
+    margin: 1.5em 0;
+    background-color: #f9f9f9;
+    color: #555;
+    font-style: italic;
+}
+
+.law-quote {
+    background-color: #f0f7ff;
+    border-left-color: #004499;
+}
+
+/* 代码块 */
+pre, code {
+    font-family: "Courier New", Consolas, monospace;
+    background-color: #f5f5f5;
+}
+
+code {
+    padding: 2px 6px;
+    font-size: 0.9em;
+    border-radius: 3px;
+}
+
+pre {
+    padding: 1em;
+    overflow-x: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+pre code {
+    padding: 0;
+    background-color: transparent;
+}
+
+/* 列表 */
+ul, ol {
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+li {
+    margin: 0.5em 0;
+}
+
+/* 分隔线 */
+hr {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 2em 0;
+}
+
+/* 强调 */
+strong {
+    font-weight: bold;
+}
+
+em {
+    font-style: italic;
+}
+
+/* 目录样式 */
+.toc {
+    position: fixed;
+    right: 20px;
+    top: 20px;
+    width: 260px;
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.toc h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1em;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+
+.toc ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.toc li {
+    margin: 6px 0;
+}
+
+.toc a {
+    color: #333;
+    text-decoration: none;
+}
+
+.toc a:hover {
+    color: #0066cc;
+}
+
+/* 文档底部 */
+.document-footer {
+    margin-top: 3em;
+    padding-top: 1em;
+    border-top: 1px solid #ddd;
+    text-align: center;
+    font-size: 0.85em;
+    color: #666;
+}
+
+/* 打印样式 */
+@media print {
+    .toc {
+        display: none !important;
+    }
+    
+    body {
+        max-width: 100%;
+        padding: 0;
+        font-size: 12pt;
+    }
+    
+    h1 {
+        font-size: 16pt;
+    }
+    
+    h2 {
+        font-size: 14pt;
+    }
+    
+    h3 {
+        font-size: 12pt;
+    }
+    
+    .page-break {
+        page-break-before: always;
+    }
+    
+    .document-footer {
+        display: none;
+    }
+}
+
+/* 响应式 */
+@media (max-width: 1200px) {
+    .toc {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 20px 15px;
+    }
+}
