@@ -311,9 +311,106 @@ blockquote {
             print_style_block = """
 <style media="print">
 .toc { display: none; }
+.pdf-action-btn { display: none; }
 body { max-width: 100%; padding: 20mm; }
 .page-break { page-break-before: always; }
 </style>
+"""
+        
+        # PDF 按钮的样式和脚本
+        pdf_button_html = """
+<!-- PDF 操作按钮 -->
+<div class="pdf-action-btn" id="pdfBtn">
+    <button onclick="saveAsPDF()" title="保存为 PDF">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+        </svg>
+    </button>
+</div>
+
+<style>
+.pdf-action-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 1000;
+}
+
+.pdf-action-btn button {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+}
+
+.pdf-action-btn button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.pdf-action-btn button:active {
+    transform: translateY(-1px);
+}
+
+.pdf-action-btn button svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* 打印时隐藏 */
+@media print {
+    .pdf-action-btn {
+        display: none !important;
+    }
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .pdf-action-btn {
+        bottom: 20px;
+        right: 20px;
+    }
+    
+    .pdf-action-btn button {
+        width: 48px;
+        height: 48px;
+    }
+}
+</style>
+
+<script>
+function saveAsPDF() {
+    // 触发浏览器打印对话框
+    window.print();
+}
+
+// 滚动时隐藏按钮（可选）
+let lastScrollTop = 0;
+window.addEventListener('scroll', function() {
+    const btn = document.getElementById('pdfBtn');
+    const st = window.pageYOffset || document.documentElement.scrollTop;
+    
+    if (st > lastScrollTop && st > 200) {
+        // 向下滚动 - 隐藏
+        btn.style.opacity = '0.3';
+    } else {
+        // 向上滚动 - 显示
+        btn.style.opacity = '1';
+    }
+    lastScrollTop = st <= 0 ? 0 : st;
+});
+</script>
 """
         
         html = f"""<!DOCTYPE html>
@@ -328,6 +425,7 @@ body { max-width: 100%; padding: 20mm; }
 {print_style_block}
 </head>
 <body>
+{pdf_button_html}
 {toc}
 <article class="content">
 {body}
