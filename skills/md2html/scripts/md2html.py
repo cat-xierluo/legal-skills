@@ -388,14 +388,18 @@ class LegalHTMLGenerator:
         if not timeline:
             return ""
         
-        html = '<section class="timeline-section">\n  <h2>📅 案件时间轴</h2>\n  <div class="timeline">\n'
+        html = '''<section class="timeline-section">
+  <h2><i data-lucide="clock" class="icon"></i> 案件时间轴</h2>
+  <div class="timeline">
+'''
         
         for i, item in enumerate(timeline):
             html += f'''    <div class="timeline-item">
       <div class="timeline-dot"></div>
       <div class="timeline-date">{item['date']}</div>
       <div class="timeline-content">{item['event']}</div>
-    </div>\n'''
+    </div>
+'''
         
         html += '  </div>\n</section>\n'
         return html
@@ -426,17 +430,14 @@ class LegalHTMLGenerator:
         return '''
 <div class="pdf-action-btn" id="pdfBtn">
     <button onclick="saveAsPDF()" title="保存为 PDF">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="15" y2="15"></line>
-        </svg>
+        <i data-lucide="file-down"></i>
     </button>
 </div>
 
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script>
 function saveAsPDF() { window.print(); }
+lucide.createIcons();
 </script>
 
 <style>
@@ -450,7 +451,7 @@ function saveAsPDF() { window.print(); }
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
     color: white;
     border: none;
     cursor: pointer;
@@ -463,6 +464,10 @@ function saveAsPDF() { window.print(); }
 .pdf-action-btn button:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 20px rgba(30, 58, 95, 0.6);
+}
+.pdf-action-btn button i {
+    width: 24px;
+    height: 24px;
 }
 @media print {
     .pdf-action-btn { display: none !important; }
@@ -497,6 +502,20 @@ function saveAsPDF() { window.print(); }
 }
 
 * { box-sizing: border-box; }
+
+/* Lucide 图标 */
+.icon {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+h2 .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary);
+}
 
 body {
     font-family: "Source Han Sans CN", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
