@@ -1,0 +1,44 @@
+/* 海洋主题 - 清新专业 */
+
+:root {
+    /* 主色系 - 蓝色 */
+    --primary: #0ea5e9;
+    --primary-light: #38bdf8;
+    --primary-dark: #0284c7;
+    
+    /* 强调色 */
+    --accent: #06b6d4;
+    --accent-light: #22d3ee;
+    
+    /* 功能色 */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #0ea5e9;
+    
+    /* 中性色 */
+    --text: #0f172a;
+    --text-light: #475569;
+    --text-muted: #94a3b8;
+    --bg: #f0f9ff;
+    --bg-white: #ffffff;
+    --border: #e0f2fe;
+    --border-light: #f0f9ff;
+    
+    /* 卡片 */
+    --card-shadow: 0 2px 12px rgba(14, 165, 233, 0.08);
+    --card-shadow-hover: 0 4px 20px rgba(14, 165, 233, 0.12);
+    
+    /* 圆角 */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    
+    /* 间距 */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+}

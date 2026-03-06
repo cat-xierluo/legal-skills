@@ -257,6 +257,45 @@ done
 
 ---
 
+## 设计系统
+
+### 配色主题
+
+支持多套专业配色方案：
+
+| 主题 | 主色 | 风格 |
+|------|------|------|
+| `default` | 深蓝 `#1e3a5f` | 稳重专业（默认） |
+| `ocean` | 海洋蓝 `#0ea5e9` | 清新现代 |
+| `forest` | 森林绿 `#059669` | 稳重生态 |
+| `sunset` | 日落橙 `#ea580c` | 温暖活力 |
+| `violet` | 紫罗兰 `#7c3aed` | 优雅创意 |
+
+```bash
+# 使用不同主题
+python scripts/md2html.py report.md --theme=ocean
+python scripts/md2html.py report.md --theme=forest
+python scripts/md2html.py report.md --theme=sunset
+```
+
+### 图标系统
+
+使用 SVG 图标替代 Emoji，保持专业统一：
+
+- 线性风格
+- 统一 stroke-width
+- 颜色可自定义
+
+```
+📋 → ✓ 图标
+📅 → 日历图标
+⭐ → 星星图标
+⚖ → 天平图标
+📌 → 标记图标
+```
+
+---
+
 ## 未来计划
 
 - [ ] 智能目录生成（基于内容结构）
