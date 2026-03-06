@@ -280,19 +280,41 @@ python scripts/md2html.py report.md --theme=sunset
 
 ### 图标系统
 
-使用 SVG 图标替代 Emoji，保持专业统一：
+使用 **Lucide** 图标库（CDN 引入）：
 
-- 线性风格
-- 统一 stroke-width
-- 颜色可自定义
+- 线性风格，统一 stroke-width
+- 300+ 图标，覆盖所有场景
+- 无 Emoji，纯专业风格
 
+```html
+<!-- 引入图标库 -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+<!-- 使用图标 -->
+<i data-lucide="file-text"></i>
+<i data-lucide="scale"></i>
+<i data-lucide="gavel"></i>
+
+<!-- 初始化 -->
+<script>lucide.createIcons();</script>
 ```
-📋 → ✓ 图标
-📅 → 日历图标
-⭐ → 星星图标
-⚖ → 天平图标
-📌 → 标记图标
-```
+
+**常用图标映射**：
+
+| 场景 | 图标 |
+|------|------|
+| 文档 | `file-text` |
+| 案件 | `scale` |
+| 法院/判决 | `landmark` |
+| 时间 | `clock` |
+| 日期 | `calendar` |
+| 核验/确认 | `check-circle` |
+| 警示 | `alert-triangle` |
+| 行动 | `clipboard-list` |
+| 证据 | `file-evidence` |
+| 策略 | `target` |
+| 趋势上升 | `trending-up` |
+| 趋势下降 | `trending-down` |
 
 ---
 
