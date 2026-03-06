@@ -1,6 +1,16 @@
 # md2html 更新日志
 
-## 1.1.0 (2026-03-05)
+## 2.1.0 (2026-03-06)
+
+### 新增
+
+- **设计系统**
+  - 多套配色主题（default, ocean, forest, sunset, violet）
+  - 统一的设计 token（spacing, radius, colors）
+  - SVG 图标系统（替代 Emoji）
+  - 专业线性图标风格
+
+## 2.0.0 (2026-03-05)
 
 ### 新增
 

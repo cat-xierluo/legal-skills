@@ -1,0 +1,54 @@
+/* 
+SVG 图标组件
+使用方式：<svg class="icon"><use href="#icon-name"></use></svg>
+*/
+
+.icon {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vertical-align: middle;
+}
+
+.icon-sm { width: 16px; height: 16px; }
+.icon-lg { width: 24px; height: 24px; }
+.icon-xl { width: 32px; height: 32px; }
+
+/* 文档相关 */
+.icon-doc { stroke-width: 1.5; }
+.icon-file { stroke-width: 1.5; }
+.icon-book { stroke-width: 1.5; }
+
+/* 法律相关 */
+.icon-gavel { stroke: var(--accent); }
+.icon-scale { stroke: var(--primary); }
+.icon-seal { stroke-width: 1.5; }
+
+/* 通用 */
+.icon-check { stroke: var(--success); }
+.icon-cross { stroke: var(--danger); }
+.icon-star { stroke: var(--accent); fill: var(--accent); stroke-width: 0; }
+.icon-star-outline { stroke: var(--accent); }
+.icon-clock { stroke: var(--text-light); }
+.icon-calendar { stroke-width: 1.5; }
+.icon-flag { stroke: var(--danger); }
+.icon-target { stroke: var(--primary); }
+.icon-list { stroke-width: 1.5; }
+.icon-grid { stroke-width: 1.5; }
+.icon-link { stroke-width: 1.5; }
+.icon-download { stroke-width: 1.5; }
+.icon-print { stroke-width: 1.5; }
+.icon-share { stroke-width: 1.5; }
+.icon-user { stroke-width: 1.5; }
+.icon-users { stroke-width: 1.5; }
+.icon-building { stroke-width: 1.5; }
+.icon-briefcase { stroke-width: 1.5; }
+.icon-wallet { stroke-width: 1.5; }
+.icon-trend-up { stroke: var(--success); }
+.icon-trend-down { stroke: var(--danger); }
+.icon-alert { stroke: var(--warning); }
+.icon-info { stroke: var(--info); }
