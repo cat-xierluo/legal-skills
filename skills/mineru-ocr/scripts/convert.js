@@ -34,22 +34,24 @@ function loadConfig(skillRoot) {
     throw new Error(msg);
   }
 
-  const envContent = sh(`cat "${envPath}" 2>/dev/null || echo ""`);
+  // 使用 /bin/cat 读取文件内容
+  const envContent = app.doShellScript('/bin/cat "' + envPath + '" 2>/dev/null || echo ""');
   if (!envContent) {
     throw new Error("无法读取配置文件: " + envPath);
   }
 
+  // 解析配置 - 按行分割
+  const lines = envContent.match(/[^\r\n]+/g) || [];
   const config = {};
-  const lineData = sh(`cat "${envPath}" | tr '\\n' '|' 2>/dev/null || echo ""`);
-  const lines = lineData.split('|');
 
   for (const line of lines) {
     if (!line) continue;
     const trimmed = line.trim();
     if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
-      if (key && valueParts.length > 0) {
-        let value = valueParts.join('=').trim();
+      const equalIndex = trimmed.indexOf('=');
+      if (equalIndex > 0) {
+        const key = trimmed.substring(0, equalIndex).trim();
+        let value = trimmed.substring(equalIndex + 1).trim();
         if ((value.startsWith('"') && value.endsWith('"')) ||
             (value.startsWith("'") && value.endsWith("'"))) {
           value = value.slice(1, -1);
