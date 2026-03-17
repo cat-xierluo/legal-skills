@@ -296,10 +296,10 @@ def set_table_run_format(run, formats, is_header=False):
     font.color.rgb = hex_to_rgb(color_hex)
     font.bold = bold if is_header else False
 
-    # 设置字体映射：英文和数字用Times New Roman，中文用仿宋_GB2312
+    # 设置字体映射：英文和数字用Times New Roman，中文用配置的字体
     run._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
     run._element.rPr.rFonts.set(qn('w:hAnsi'), 'Times New Roman')
-    run._element.rPr.rFonts.set(qn('w:eastAsia'), '仿宋_GB2312')
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
     run._element.rPr.rFonts.set(qn('w:cs'), 'Times New Roman')
 
     # 应用Markdown格式

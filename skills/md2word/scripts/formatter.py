@@ -214,10 +214,13 @@ def set_run_format(run, title_level=0):
     font.italic = False
     font.underline = False
 
+    # 获取中文字体名称
+    east_asia_font = font_config.get('name', '仿宋_GB2312')
+
     # 设置字体映射
     run._element.rPr.rFonts.set(qn('w:ascii'), font_config.get('ascii', 'Times New Roman'))
     run._element.rPr.rFonts.set(qn('w:hAnsi'), font_config.get('ascii', 'Times New Roman'))
-    run._element.rPr.rFonts.set(qn('w:eastAsia'), font_config.get('name', '仿宋_GB2312'))
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), east_asia_font)
     run._element.rPr.rFonts.set(qn('w:cs'), font_config.get('ascii', 'Times New Roman'))
 
     # 根据标题级别设置字号和加粗
@@ -251,10 +254,13 @@ def set_run_format_with_styles(run, formats, title_level=0, is_quote=False):
     font.name = font_config.get('ascii', 'Times New Roman')
     font.color.rgb = RGBColor(0, 0, 0)
 
+    # 获取中文字体名称
+    east_asia_font = font_config.get('name', '仿宋_GB2312')
+
     # 设置字体映射
     run._element.rPr.rFonts.set(qn('w:ascii'), font_config.get('ascii', 'Times New Roman'))
     run._element.rPr.rFonts.set(qn('w:hAnsi'), font_config.get('ascii', 'Times New Roman'))
-    run._element.rPr.rFonts.set(qn('w:eastAsia'), font_config.get('name', '仿宋_GB2312'))
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), east_asia_font)
     run._element.rPr.rFonts.set(qn('w:cs'), font_config.get('ascii', 'Times New Roman'))
 
     # 设置基础格式
