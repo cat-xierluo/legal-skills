@@ -13,7 +13,8 @@ page:
 # 字体设置
 fonts:
   default:
-    name: "仿宋_GB2312"
+    name: "仿宋"
+    name_alt: "仿宋_GB2312"
     ascii: "Times New Roman"
     size: 12      # pt (小四)
     color: "#000000"
@@ -34,12 +35,12 @@ titles:
     indent: 24
   level3:
     size: 12      # pt (小四)
-    bold: false
+    bold: true
     align: "justify"
     indent: 24
   level4:
     size: 12      # pt (小四)
-    bold: false
+    bold: true
     align: "justify"
     indent: 24
 
@@ -85,7 +86,8 @@ table:
 
   # 表格正文格式
   body:
-    font: "仿宋_GB2312"
+    font: "仿宋"
+    font_alt: "仿宋_GB2312"
     size: 10.5
     color: "#000000"
 
