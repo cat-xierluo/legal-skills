@@ -6,7 +6,7 @@ All notable changes to this skill will be documented in this file.
 
 ### 新增
 
-- **skill-standards.md 统一**：与 skill-creator-plus 使用相同的规范文件
+- **skill-standards.md 统一**：与 skill-architect 使用相同的规范文件
 
 ### 修改
 

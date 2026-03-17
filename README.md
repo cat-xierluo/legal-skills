@@ -103,7 +103,7 @@
 | 技能                                                      | 说明                                                                                                                                         | 许可证          | 版本   | 作者       | 备注 |
 | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- | :----- | :--------- | :--- |
 | **[skill-manager](skills/skill-manager/)**             | 管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理                           | MIT             | v1.1.0 | 杨卫薪律师 | |
-| **[skill-creator-plus](skills/skill-creator-plus/)**   | 技能创建向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性             | MIT             | v1.0.0 | 杨卫薪律师 | |
+| **[skill-architect](skills/skill-architect/)**        | 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性             | MIT             | v1.0.0 | 杨卫薪律师 | |
 | **[git-batch-commit](skills/git-batch-commit/)**       | 智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式                                      | MIT             | v1.1.0 | 杨卫薪律师 | |
 | **[github-star-manager](skills/github-star-manager/)** | GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统               | MIT             | v1.0.0 | 杨卫薪律师 | |
 | **[skill-lint](skills/skill-lint/)**                   | Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告                  | MIT             | v1.0.0 | 杨卫薪律师 | |
@@ -122,17 +122,14 @@
 
 ## 🚀 安装方法
 
-### 方式一：通过 Claude Code Plugin Marketplace（推荐）
+### 方式一：让 Agent 安装（推荐）
 
-在 Claude Code 中使用以下命令安装：
+将以下内容复制给你的 Agent，让它帮你安装：
 
-```bash
-# 添加插件市场源
-/plugin marketplace add cat-xierluo/legal-skills
-
-# 安装技能集合
-/plugin install legal-skills
-```
+> 请帮我从 GitHub 安装 legal-skills 技能集合：
+>
+> - 仓库地址：<https://github.com/cat-xierluo/legal-skills>
+> - 安装方式：使用 `/skill install` 命令从仓库安装
 
 ### 方式二：OpenClaw 平台
 
