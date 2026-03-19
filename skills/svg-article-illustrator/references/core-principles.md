@@ -280,3 +280,45 @@
 3. ✅ 所有颜色使用纯色（如 `#10B981`、`#f8f9fa`）
 4. ✅ 动画使用 `<animateTransform>` 或 `<animate>`
 5. ✅ 元素定位使用 `transform="translate(x, y)"`
+
+---
+
+### 🚨 最高频错误：transform + animateTransform translate 冲突
+
+**问题描述**：当外层使用 `transform="translate(x,y)"` 定位，内层又使用 `<animateTransform type="translate">` 做浮动动画时，**动画会完全覆盖外层的定位**，导致所有元素堆叠到左上角 (0,0)。
+
+**错误示例**：
+```svg
+<!-- ❌ 错误：translate 定位 + translate 动画 = 元素飞到左上角 -->
+<g transform="translate(180, 200)">
+  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
+  <animateTransform type="translate" values="0,0; 0,-12; 0,0"/>
+</g>
+```
+
+**正确做法**：
+```svg
+<!-- ✅ 正确方法1：直接用 cx/cy 定位，内层包一层做动画 -->
+<g>
+  <circle cx="180" cy="200" r="80" fill="#4A90E2"/>
+  <g>
+    <animateTransform type="translate" values="0,0; 0,-12; 0,0"/>
+  </g>
+</g>
+
+<!-- ✅ 正确方法2：translate 定位 + scale 动画（不冲突） -->
+<g transform="translate(180, 200)">
+  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
+  <animateTransform type="scale" values="1; 1.1; 1"/>
+</g>
+```
+
+**核心原则**：
+| 定位方式 | 可用动画类型 | 是否安全 |
+|---------|------------|---------|
+| `transform="translate()"` | `type="scale"` | ✅ 安全 |
+| `transform="translate()"` | `type="rotate"` | ✅ 安全 |
+| `transform="translate()"` | `type="translate"` | ❌ **禁止！** |
+| `cx/cy` 或 `x/y` 直接定位 | `type="translate"` | ✅ 安全 |
+
+**记忆口诀**：translate 定位只能配 scale/rotate，要做浮动必须用 x/y/cx/cy 直接定位！

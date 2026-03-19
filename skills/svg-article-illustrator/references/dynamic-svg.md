@@ -87,18 +87,21 @@
 ### Emoji 浮动动画
 
 ```xml
-<text x="200" y="225" font-size="100" text-anchor="middle">😰</text>
+<!-- ✅ 正确：用 x/y 定位，内层 g 做浮动动画 -->
 <g>
   <text x="200" y="225" font-size="100" text-anchor="middle">😰</text>
-  <animateTransform attributeName="transform" type="translate"
-    values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"
-    calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"/>
+  <g>
+    <animateTransform attributeName="transform" type="translate"
+      values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"
+      calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"/>
+  </g>
 </g>
 ```
 
 ### Emoji 脉冲动画
 
 ```xml
+<!-- ✅ 正确：translate 定位 + scale 动画（scale 不覆盖 translate） -->
 <g transform="translate(400, 225)">
   <text x="0" y="35" font-size="100" text-anchor="middle">🎯</text>
   <animateTransform attributeName="transform" type="scale"
@@ -110,6 +113,7 @@
 ### Emoji + 几何图形组合
 
 ```xml
+<!-- ✅ 正确：translate 定位 + opacity 动画（不冲突） -->
 <g transform="translate(400, 225)">
   <circle cx="0" cy="0" r="90" fill="#E8F4F8">
     <animate attributeName="fill-opacity" values="0.6; 1; 0.6"
@@ -171,6 +175,43 @@
 
 ## 六、⚠️ 兼容性警告
 
+### 🚨 禁止 transform + animateTransform translate 组合
+
+**这是最常见的问题！** 当外层有 `transform="translate(x,y)"`，内层又有 `<animateTransform type="translate">` 时，动画会**完全覆盖**外层的定位，导致元素飞到左上角 (0,0)。
+
+```svg
+<!-- ❌ 错误：translate 定位 + translate 动画 = 元素堆到左上角 -->
+<g transform="translate(180, 200)">
+  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
+  <animateTransform type="translate" values="0,0; 0,-12; 0,0"/>
+</g>
+
+<!-- ✅ 正确方法1：直接用 cx/cy 定位，内层包一层做动画 -->
+<g>
+  <circle cx="180" cy="200" r="80" fill="#4A90E2"/>
+  <g>
+    <animateTransform type="translate" values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"/>
+  </g>
+</g>
+
+<!-- ✅ 正确方法2：translate 定位 + scale 动画（scale不会覆盖translate） -->
+<g transform="translate(180, 200)">
+  <circle cx="0" cy="0" r="80" fill="#4A90E2"/>
+  <animateTransform type="scale" values="1; 1.1; 1" dur="2s" repeatCount="indefinite"/>
+</g>
+
+<!-- ✅ 正确方法3：纯 emoji 浮动，用 x/y 定位 -->
+<text x="180" y="235" font-size="80" text-anchor="middle">🐎</text>
+<g>
+  <animateTransform type="translate" values="0,0; 0,-12; 0,0" dur="3s" repeatCount="indefinite"/>
+</g>
+```
+
+**核心原则**：
+- `transform="translate()"` 只能和 `type="scale"` 动画组合
+- 要做 `type="translate"` 浮动动画，必须直接用 `cx/cy` 或 `x/y` 定位
+- 永远不要嵌套两层 `translate`（一个静态一个动态）
+
 ### 禁止使用 SVG Filter
 
 **微信环境不兼容**：使用 `<g filter="url(#shadow)">` 会导致 SMIL 动画无法在微信中显示。
@@ -224,3 +265,18 @@
 <!-- ✅ 正确：使用纯色 -->
 <rect fill="#f8f9fa"/>
 ```
+
+---
+
+## 七、✅ 动画组合速查表
+
+| 定位方式 | 可用动画类型 | 示例 |
+|---------|------------|------|
+| `transform="translate()"` | `type="scale"` | ✅ 脉冲缩放 |
+| `transform="translate()"` | `type="rotate"` | ✅ 旋转 |
+| `transform="translate()"` | `type="translate"` | ❌ **禁止！会覆盖定位** |
+| `cx/cy` 或 `x/y` 直接定位 | `type="translate"` | ✅ 浮动动画 |
+| 任意定位 | `<animate>` 属性动画 | ✅ 颜色、透明度等 |
+
+**记忆口诀**：
+> translate 定位只能配 scale/rotate，要做浮动必须用 x/y/cx/cy 直接定位！
