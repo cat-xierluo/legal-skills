@@ -1,6 +1,53 @@
 # 更新日志
 
+## [1.0.4] - 2026-03-19
+
+### 修复
+
+- 🐛 **最高频 Bug**：修复 `transform="translate()"` 定位 + `<animateTransform type="translate">` 动画组合冲突问题
+  - **问题**：动画会完全覆盖外层定位，导致所有元素堆叠到左上角 (0,0)
+  - **影响文件**：core-principles.md、dynamic-svg.md
+
+### 新增
+
+- 📝 核心原则文档新增"最高频错误"章节：详解 transform + animateTransform translate 冲突
+- 📝 动态 SVG 文档新增"动画组合速查表"：清晰列出哪些定位方式与哪些动画类型可以安全组合
+- 📝 记忆口诀：**translate 定位只能配 scale/rotate，要做浮动必须用 x/y/cx/cy 直接定位！**
+
+### 技术细节
+
+- 正确做法 1：直接用 `cx/cy` 或 `x/y` 定位，内层 `<g>` 包动画
+- 正确做法 2：`transform="translate()"` 定位只能配 `type="scale"` 或 `type="rotate"` 动画
+
+---
+
 ## [1.0.2] - 2026-02-25
+
+### 新增
+
+- 🚫 兼容性警告：禁止在 SVG 中使用 filter 属性（会导致 SMIL 动画在微信中失效）
+- 🚫 兼容性警告：禁止渐变填充 + animateTransform 在同一元素上（会导致渐变失效）
+- 🚫 兼容性警告：禁止所有渐变填充（公众号不支持任何 SVG 渐变）
+- 📝 踩坑记录：详细说明 filter 与 SMIL 动画的兼容性问题
+- 📝 渐变兼容性解决方案：分离动画和渐变到不同元素
+- 📝 新增公众号 SVG 兼容性汇总表
+
+---
+
+## [1.0.2] - 2026-02-10
+
+### 新增
+
+- ✨ SKILL.md 添加占位符机制说明 `[[ILLUSTRATION:ID:描述]]`
+- ✨ 新增并行生成模式文档（≥ 8 张配图时启用）
+- ✨ 更新核心工作流程和归档流程
+- ✨ 添加 SVG 代码直接嵌入 Markdown 的重要说明
+- ✨ 新增归档脚本（scripts/archive.sh）
+- 📚 补充 5 个核心参考文档：core-principles.md、dynamic-svg.md、multi-agent-generation.md、png-export.md、static-svg.md
+
+---
+
+## [1.0.1] - 2026-02-07
 
 ### 新增
 
