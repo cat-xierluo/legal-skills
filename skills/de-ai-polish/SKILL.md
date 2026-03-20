@@ -1,5 +1,9 @@
 ---
 name: de-ai-polish
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.0.0"
 description: 检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔。
 ---
 # De AI Polish

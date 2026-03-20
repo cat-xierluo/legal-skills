@@ -1,5 +1,9 @@
 ---
 name: course-generator
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.3.1"
 description: 从多个文献内容中系统化提取并生成结构化课程。支持 1-100+ 个文献文件，智能识别内容类型（转录/文献/混合），自动进行主题识别、课程大纲生成、总览与章节内容撰写。采用可选模块架构，适应不同类型内容（理论/实践/案例/历史等）。本技能应在用户需要将多个文献整理为系统化课程、生成学习材料、处理转录内容、或从复杂文稿中提取结构化内容时使用。
 license: Complete terms in LICENSE.txt
 ---

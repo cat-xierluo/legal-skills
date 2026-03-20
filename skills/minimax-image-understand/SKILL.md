@@ -1,5 +1,9 @@
 ---
 name: minimax-image-understand
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "0.1.0"
 description: 通过 MiniMax MCP 进行图像理解，适用于 OpenClaw 平台。如果你是 Claude Code 用户，请忽略此技能。
 license: MIT
 ---

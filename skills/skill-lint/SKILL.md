@@ -1,5 +1,9 @@
 ---
 name: skill-lint
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.3.0"
 description: Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计。本技能应在用户需要审查 skill 格式合规性、检查文档与代码一致性、识别冗余内容、生成技能审计报告时使用。不要用于：代码审查、功能测试、非 skill 项目。
 license: MIT License - 详见 LICENSE.txt
 ---
