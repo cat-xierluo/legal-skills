@@ -1,5 +1,9 @@
 ---
 name: multi-search
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.1.0"
 description: 智能多主题深度研究工具，支持任意材料输入，使用独立研究 Agent进行并行深度检索并生成系统化研究文档。本技能应在用户需要深度研究多个相关课题、进行系统性信息检索、整合多角度分析时使用。
 license: CC-BY-NC-SA-4.0
 ---

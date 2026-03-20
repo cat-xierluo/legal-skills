@@ -1,5 +1,9 @@
 ---
 name: fetch-wechat-article
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.2.0"
 description: 抓取微信公众号文章内容，使用 Playwright headless 模式无弹窗后台抓取，支持动态加载内容，自动提取标题和正文并保存为 Markdown 文件。本技能应在用户需要抓取微信公众号文章内容时使用。
 license: Complete terms in LICENSE.txt
 ---

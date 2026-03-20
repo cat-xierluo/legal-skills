@@ -1,5 +1,9 @@
 ---
 name: skill-architect
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.3.0"
 description: 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查。本技能应在用户需要创建新技能、编辑现有技能、打包技能、或审查现有技能的格式合规性时使用。不要用于：创建非 Claude Code 技能、代码生成、通用编程任务。
 license: CC BY-NC-SA 4.0 - 详见 LICENSE.txt
 ---

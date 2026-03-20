@@ -1,5 +1,9 @@
 ---
 name: skill-manager
+source: https://github.com/cat-xierluo/legal-skills
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.2.0"
 description: 管理 Claude Code Skills 和 Commands 的安装、同步、卸载和列表查看，支持从本地路径或 GitHub 仓库/子目录安装。本技能应在用户需要安装外部 skill/command、从 GitHub 仓库同步、批量安装本地目录、查看已安装的 items、或卸载不需要的 item 时使用。
 license: Complete terms in LICENSE.txt
 ---
