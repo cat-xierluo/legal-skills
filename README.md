@@ -66,12 +66,12 @@
 | :---------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- | :----- | :----- | :--------- | :--------------- |
 | **[wechat-article-fetch](skills/wechat-article-fetch/)**             | 使用 Playwright 无头模式抓取微信公众号文章，支持动态加载内容，保存为 Markdown                        | MIT    | v1.2.0 | 杨卫薪律师 |                 |
 | **[mineru-ocr](skills/mineru-ocr/)**                                 | 通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别         | MIT    | v1.0.1 | 杨卫薪律师 |                 |
-| **[funasr-transcribe](skills/funasr-transcribe/)**                   | 本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录 | MIT    | v1.1.1 | 杨卫薪律师 |                 |
+| **[funasr-transcribe](skills/funasr-transcribe/)**                   | 本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录 | MIT    | v1.2.0 | 杨卫薪律师 |                 |
 | **[universal-media-downloader](skills/universal-media-downloader/)** | 输入视频网站/播客平台链接后自动下载，支持抖音/B站/YouTube/小宇宙等平台，可下载字幕和音频             | MIT    | v0.2.0 | 杨卫薪律师 |                 |
-| **[douyin-batch-download](skills/douyin-batch-download/)**         | 抖音视频批量下载工具，基于 F2 框架，支持单个/批量博主下载，自动 Cookie 管理，差量更新机制             | MIT    | v1.0.0 | 杨卫薪律师 |                 |
-| **[multi-search](skills/multi-search/)**                             | 智能多主题深度研究工具，使用独立 Subagent 进行并行深度检索，生成系统化研究文档                        | CC-BY-NC-SA-4.0 | v1.0.0 | 杨卫薪律师 |                 |
-| **[minimax-web-search](skills/minimax-web-search/)**                 | 通过 MiniMax MCP 进行网络搜索                                                                         | MIT    | v1.0.0 | 杨卫薪律师 | 适用于 OpenClaw |
-| **[minimax-image-understand](skills/minimax-image-understand/)**     | 通过 MiniMax MCP 进行图像理解                                                                         | MIT    | v1.0.0 | 杨卫薪律师 | 适用于 OpenClaw |
+| **[douyin-batch-download](skills/douyin-batch-download/)**         | 抖音视频批量下载工具，基于 F2 框架，支持单个/批量博主下载，自动 Cookie 管理，差量更新机制             | MIT    | v1.8.0 | 杨卫薪律师 |                 |
+| **[multi-search](skills/multi-search/)**                             | 智能多主题深度研究工具，使用独立 Subagent 进行并行深度检索，生成系统化研究文档                        | CC-BY-NC-SA-4.0 | v1.1.0 | 杨卫薪律师 |                 |
+| **[minimax-web-search](skills/minimax-web-search/)**                 | 通过 MiniMax MCP 进行网络搜索                                                                         | MIT    | v0.1.0 | 杨卫薪律师 | 适用于 OpenClaw |
+| **[minimax-image-understand](skills/minimax-image-understand/)**     | 通过 MiniMax MCP 进行图像理解                                                                         | MIT    | v0.1.0 | 杨卫薪律师 | 适用于 OpenClaw |
 
 #### ⚖️ 法律专业应用
 
@@ -91,7 +91,7 @@
 | 技能                                                              | 说明                                                                                                                                                                                         | 许可证          | 版本   | 作者       | 备注 |
 | :---------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- | :----- | :--------- | :--- |
 | **[course-generator](skills/course-generator/)**               | 从多个文献内容中系统化提取并生成结构化课程，支持 1-100+ 个文献文件，智能识别内容类型（转录/文献/混合），自动进行主题识别、课程大纲生成、总览与章节内容撰写，采用可选模块架构适应不同类型内容 | CC-BY-NC-SA-4.0 | v1.3.1 | 杨卫薪律师 | |
-| **[svg-article-illustrator](skills/svg-article-illustrator/)** | AI 驱动的 SVG 文章配图生成工具，支持动态 SVG、静态 SVG 和 PNG 导出三种模式，专为公众号文章等需要丰富视觉内容的平台设计                                                                       | MIT             | v1.0.1 | 杨卫薪律师 | |
+| **[svg-article-illustrator](skills/svg-article-illustrator/)** | AI 驱动的 SVG 文章配图生成工具，支持动态 SVG、静态 SVG 和 PNG 导出三种模式，专为公众号文章等需要丰富视觉内容的平台设计                                                                       | MIT             | v1.0.4 | 杨卫薪律师 | |
 | **[piclist-upload](skills/piclist-upload/)**                   | 通过 PicList HTTP Server 将 Markdown 中的本地图片上传到图床，自动替换为云端链接，支持批量处理和跨设备访问                                                                                    | MIT             | v1.1.1 | 杨卫薪律师 | |
 | **[md2word](skills/md2word/)**                                 | 将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式                                                                                               | MIT             | v0.4.0 | 杨卫薪律师 | |
 | **[de-ai-polish](skills/de-ai-polish/)**                       | 检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。整合 24 种 AI 写作检测规则，配备 5 维度质量评分系统                                                                      | MIT             | v1.0.0 | 杨卫薪律师 | |
@@ -102,12 +102,13 @@
 
 | 技能                                                      | 说明                                                                                                                                         | 许可证          | 版本   | 作者       | 备注 |
 | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- | :----- | :--------- | :--- |
-| **[skill-manager](skills/skill-manager/)**             | 管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理                           | MIT             | v1.1.0 | 杨卫薪律师 | |
-| **[skill-architect](skills/skill-architect/)**        | 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性             | MIT             | v1.0.0 | 杨卫薪律师 | |
+| **[skill-manager](skills/skill-manager/)**             | 管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理                           | MIT             | v1.2.0 | 杨卫薪律师 | |
+| **[skill-architect](skills/skill-architect/)**        | 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性             | MIT             | v1.3.0 | 杨卫薪律师 | |
 | **[git-batch-commit](skills/git-batch-commit/)**       | 智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式                                      | MIT             | v1.1.0 | 杨卫薪律师 | |
-| **[github-star-manager](skills/github-star-manager/)** | GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统               | MIT             | v1.0.0 | 杨卫薪律师 | |
-| **[skill-lint](skills/skill-lint/)**                   | Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告                  | MIT             | v1.0.0 | 杨卫薪律师 | |
-| **[repo-research](skills/repo-research/)**             | GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告 | CC-BY-NC-SA-4.0 | v0.3.0 | 杨卫薪律师 | |
+| **[github-star-manager](skills/github-star-manager/)** | GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统               | MIT             | v0.6.0 | 杨卫薪律师 | |
+| **[skill-lint](skills/skill-lint/)**                   | Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告                  | MIT             | v1.3.0 | 杨卫薪律师 | |
+| **[repo-research](skills/repo-research/)**             | GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告 | CC-BY-NC-SA-4.0 | v0.7.0 | 杨卫薪律师 | |
+| **[clawhub-sync](skills/clawhub-sync/)**               | 批量同步 Claude Code Skills 到 ClawHub 平台，支持交互式选择、发布状态检查、批量同步                             | MIT             | v1.0.0 | 杨卫薪律师 | |
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
 
