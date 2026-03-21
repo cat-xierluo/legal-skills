@@ -2,7 +2,7 @@
 
 All notable changes to this skill will be documented in this file.
 
-## [v1.3.0] - 2026-03-01
+## [1.3.0] - 2026-03-01
 
 ### 新增
 
@@ -15,7 +15,7 @@ All notable changes to this skill will be documented in this file.
 - 新增 §16 审查报告模板
 - 审查摘要新增 SKILL.md 行数、目录层级检查项
 
-## [v1.2.0] - 2026-03-01
+## [1.2.0] - 2026-03-01
 
 ### 新增
 
@@ -32,7 +32,7 @@ All notable changes to this skill will be documented in this file.
 - 审查报告模板更新：新增行数和目录层级检查项
 - 章节编号调整：5.3→SKILL.md 行数，5.4→目录层级，5.5-5.9 顺延
 
-## [v1.1.0] - 2026-02-28
+## [1.1.0] - 2026-02-28
 
 ### 新增
 
@@ -47,7 +47,7 @@ All notable changes to this skill will be documented in this file.
 - 审查模式检查清单新增 10. 模块化设计检查、11. 安全审计检查
 - skill-standards.md 章节编号调整（§2→模块化设计，§12→安全审计）
 
-## [v1.0.1] - 2026-02-28
+## [1.0.1] - 2026-02-28
 
 ### 新增
 
@@ -58,7 +58,7 @@ All notable changes to this skill will be documented in this file.
   1. **创建模式** - 创建新技能时遵循规范
   2. **审查模式** - 审查现有技能并生成报告
 
-## [v1.0.0] - 2026-02-28
+## [1.0.0] - 2026-02-28
 
 ### 新增
 
