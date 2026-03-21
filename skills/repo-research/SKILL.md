@@ -1,9 +1,9 @@
 ---
 name: repo-research
-source: https://github.com/cat-xierluo/legal-skills
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "0.7.0"
+license: MIT
 description: GitHub 仓库深度研究与整合分析工具。支持单个/多个仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告。克隆远程仓库到本地 research/ 目录，进行深度代码分析、架构评估、依赖解析，并生成结构化研究报告。触发条件：用户提供 GitHub URL 请求研究/分析/整合/对比时，或提供主题关键词请求搜索并研究相关仓库时。
 ---
 

@@ -1,6 +1,5 @@
 ---
 name: minimax-image-understand
-source: https://github.com/cat-xierluo/legal-skills
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "0.1.0"

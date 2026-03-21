@@ -1,9 +1,9 @@
 ---
 name: svg-article-illustrator
-source: https://github.com/cat-xierluo/legal-skills
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.0.4"
+license: MIT
 description: AI驱动的SVG文章配图生成工具，支持动态SVG、静态SVG和PNG导出三种输出模式。当用户需要为文章生成配图、创建SVG插图、将SVG转换为PNG，或提到"为文章配图"、"生成插图"时使用此技能。
 ---
 # SVG Article Illustrator

@@ -1,6 +1,5 @@
 ---
 name: legal-qa-extractor
-source: https://github.com/cat-xierluo/legal-skills
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.0.0"
