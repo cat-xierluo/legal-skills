@@ -301,6 +301,39 @@ legal-skills/
 
 遵循以上约定，确保法律技能在不同 IDE/CLI（含 Claude Code）中可被可靠触发与复用。***
 
+## ClawHub 发布适配
+
+如需将 Skill 发布到 ClawHub，SKILL.md frontmatter 需包含以下字段：
+
+### 必填字段
+
+| 字段 | 来源 | 说明 |
+|------|------|------|
+| `name` | 目录名 | 与目录名保持一致 |
+| `description` | 现有字段 | 技能的简洁描述 |
+
+### 推荐字段（可维护性）
+
+| 字段 | 来源 | 说明 |
+|------|------|------|
+| `version` | CHANGELOG | ClawHub 使用此字段而非 CHANGELOG，建议从最新版本号提取 |
+| `homepage` | 固定值 | 项目主页，`source` 可省略 |
+
+### 完整示例
+
+```yaml
+---
+name: <skill-name>
+description: <描述>
+version: "<x.y.z>"
+license: <许可证>
+author: 杨卫薪律师（微信ywxlaw）
+homepage: https://github.com/cat-xierluo/legal-skills
+---
+```
+
+**同步工具**：使用 [clawhub-sync](./skills/clawhub-sync/SKILL.md) 技能批量同步到 ClawHub。
+
 ## AGENTS.md 更新规范
 
 **重要**：本规范文件（AGENTS.md）的每次修改都必须同步更新底部的"变更历史"章节。
@@ -343,6 +376,11 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.5.4 | 2026-03-21 | 精简 SKILL.md frontmatter：删除 23 个技能的 source 字段，只保留 homepage（符合 ClawHub 规范：source/homepage 二选一）                 |
+| v1.5.3 | 2026-03-21 | 重构 ClawHub 同步指南：删除 CLAWHUB.md，创建 clawhub-sync skill 替代，提供交互式批量同步能力                                           |
+| v1.5.2 | 2026-03-21 | 完善 SKILL.md frontmatter 和 CHANGELOG 格式：为 5 个技能添加 license 字段，修复 3 个技能的 CHANGELOG 版本格式（douyin-batch-download、de-ai-polish、svg-article-illustrator） |
+| v1.5.1 | 2026-03-20 | 精简 ClawHub 发布适配章节：区分必填字段（name、description）与推荐字段（version、homepage），移除已删除脚本引用                                         |
+| v1.5.0 | 2026-03-20 | 新增 ClawHub 发布适配章节：定义 frontmatter 字段要求                                         |
 | v1.4.0 | 2026-02-18 | 新增敏感信息安全规范：定义敏感文件类型、Skill 开发安全检查清单、.gitignore 维护要求和泄露应急响应流程                                       |
 | v1.3.5 | 2026-02-13 | 新增"技能级文档"原则：明确 CHANGELOG.md 等文档为技能级别（位于各技能目录下），不创建项目级别文档；用户要求"更新文档"时默认指当前技能的文档 |
 | v1.3.4 | 2026-02-08 | 新增版权信息规范：统一所有自研技能 LICENSE.txt 的版权信息为"杨卫薪律师（微信ywxlaw）"，并更新 4 个技能的 LICENSE.txt 文件 |
