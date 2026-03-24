@@ -52,6 +52,8 @@ clawhub sync skills/<skill-name>
 clawhub sync --all
 ```
 
+> 注意：`--all` 会受 `skills/clawhub-sync/sync-allowlist.yaml` 约束。如果存在白名单文件，只同步其中列出的 skill。
+
 **交互式选择同步**：
 
 用户可以指定要同步的技能列表，我会逐个执行同步命令。
@@ -71,7 +73,28 @@ clawhub sync --all
 | `homepage` | 自动设置为 GitHub 仓库地址                   |
 | `version`  | 从 CHANGELOG.md 提取（如 SKILL.md 中未指定） |
 
-### 忽略规则
+### 同步范围控制（白名单机制）
+
+**配置文件：** `skills/clawhub-sync/sync-allowlist.yaml`（自包含在 skill 内部）
+
+**优先级：白名单 > 默认忽略规则**
+
+- 如果 `skills/clawhub-sync/sync-allowlist.yaml` **存在**：只同步文件中列出的 skill
+- 如果 `skills/clawhub-sync/sync-allowlist.yaml` **不存在**：使用默认忽略规则（忽略 test/、private-skills/、node_modules/）
+
+**配置格式：**
+
+```yaml
+# legal-qa-extractor:    # 带 # 表示不发布
+legal-qa-extractor:       # 无 # 表示发布
+litigation-analysis:
+```
+
+**配置文件：** `skills/clawhub-sync/sync-allowlist.yaml`（skill 自包含）
+
+### 默认忽略规则
+
+（当白名单文件不存在时生效）
 
 以下目录默认不同步：
 
