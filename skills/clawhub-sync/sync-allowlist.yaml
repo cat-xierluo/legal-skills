@@ -8,11 +8,14 @@ legal-qa-extractor:
 legal-text-format:
 litigation-analysis:
 legal-proposal-generator:
+patent-analysis:
+trademark-assistant:
 
 # ===== 文档处理 =====
 md2word:
 mineru-ocr:
 piclist-upload:
+de-ai-polish:
 
 # ===== 搜索与研究 =====
 multi-search:
@@ -26,9 +29,12 @@ wechat-article-fetch:
 # ===== 效率工具 =====
 skill-lint:
 skill-architect:
+skill-manager:
 git-batch-commit:
 
 # ===== 暂不发布 =====
+
+#  clawhub-sync:
 
 #  douyin-batch-download:
 #  universal-media-downloader:
