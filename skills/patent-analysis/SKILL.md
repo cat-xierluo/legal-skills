@@ -2,10 +2,9 @@
 name: patent-analysis
 description: 当需要分析专利文件、进行侵权评估、提取技术特征、或比较多个专利的保护范围时使用。触发场景包括专利比对、权利要求分析、侵权检查、专利技术要点总结、专利稳定性分析、专利价值评估、FTO分析。
 license: CC BY-NC-SA 4.0
-metadata:
-  author: 杨卫薪律师（微信ywxlaw）
-  version: "1.2.0"
-  homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.2.0"
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
 # 专利分析工具
