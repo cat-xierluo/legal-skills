@@ -74,3 +74,9 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # Skill downloads/output directories
 skills/*/downloads/
 skills/*/output/*
+
+# ClawHub sync records (contains internal IDs)
+skills/clawhub-sync/sync-records.yaml
+skills/clawhub-sync/sync-allowlist.yaml
+.claude/skills/clawhub-sync/sync-records.yaml
+.claude/skills/clawhub-sync/sync-allowlist.yaml
