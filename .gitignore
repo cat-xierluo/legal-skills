@@ -76,7 +76,5 @@ skills/*/downloads/
 skills/*/output/*
 
 # ClawHub sync records (contains internal IDs)
-skills/clawhub-sync/sync-records.yaml
-skills/clawhub-sync/sync-allowlist.yaml
-.claude/skills/clawhub-sync/sync-records.yaml
-.claude/skills/clawhub-sync/sync-allowlist.yaml
+skills/clawhub-sync/config/sync-records.yaml
+skills/clawhub-sync/config/sync-allowlist.yaml
