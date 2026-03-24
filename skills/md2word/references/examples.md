@@ -63,10 +63,10 @@ python scripts/md2word.py report.md --preset=report
 - 正文：仿宋_GB2312
 - 行距：1.5 倍
 
-### Simple 预设（简单文档格式）
+### Minimal 预设（极简文档格式）
 
 ```bash
-python scripts/md2word.py notes.md --preset=simple
+python scripts/md2word.py notes.md --preset=minimal
 ```
 
 **适用场景**：内部文档、笔记草稿
@@ -206,7 +206,7 @@ python scripts/md2word.py --list-presets
   - academic: 学术论文格式 - 宋体，小四号，双倍行距
   - legal: 正式文档格式 - 仿宋_GB2312，小四号，1.5倍行距
   - report: 工作报告格式 - 黑体标题，仿宋正文，1.5倍行距
-  - simple: 简单文档格式 - 无特殊格式要求
+  - minimal: 极简文档格式 - 无特殊格式要求
 ```
 
 ---
