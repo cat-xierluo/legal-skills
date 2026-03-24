@@ -1,5 +1,5 @@
 ---
-name: fetch-wechat-article
+name: wechat-article-fetch
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.2.0"
