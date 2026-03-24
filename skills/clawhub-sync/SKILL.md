@@ -132,3 +132,38 @@ litigation-analysis:
 
 - 同步结果报告（成功/失败列表）
 - 错误信息（如有）
+
+## 同步记录
+
+每次同步后，会更新 `sync-records.yaml` 记录文件，便于溯源和增量同步。
+
+### 记录字段
+
+| 字段 | 说明 |
+|------|------|
+| `version` | 同步时的版本号 |
+| `last_sync` | 最后同步时间 (ISO 8601) |
+| `git_hash` | 同步时的 commit hash |
+| `status` | `synced` / `pending` / `failed` |
+| `changelog_summary` | 变更摘要 |
+| `url` | ClawHub 发布地址 |
+| `publish_id` | ClawHub 内部 ID |
+
+### 记录示例
+
+```yaml
+trademark-assistant:
+  version: "1.5.0"
+  last_sync: "2026-03-24T16:42:00+08:00"
+  git_hash: "f5f0726"
+  status: synced
+  changelog_summary: "新增商标说明撰写、图形商标分析、商品清单生成"
+  url: "https://clawhub.ai/skills/trademark-assistant"
+  publish_id: "k97fmhvcnrh1tn2msya98nbxxd83gspe"
+```
+
+### 用途
+
+1. **增量同步**：只同步 `status: pending` 或版本更新的 skill
+2. **溯源**：通过 `git_hash` 追溯发布时的代码状态
+3. **快速访问**：通过 `url` 直接访问 ClawHub 上的 skill 页面
