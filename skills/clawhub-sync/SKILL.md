@@ -1,13 +1,56 @@
 ---
 name: clawhub-sync
-description: 批量同步 Claude Code Skills 到 ClawHub 平台。本技能应在用户需要将 skills 发布到 ClawHub、批量同步技能、检查发布状态时使用。
+description: 将本地开发的 Skills 批量同步到 ClawHub 平台。支持智能 .gitignore 过滤、白名单控制、增量同步。本技能应在用户需要将本地 skills 发布到 ClawHub、批量同步技能、检查发布状态时使用。
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 ---
 
 # ClawHub 同步工具
 
-批量同步 skills 目录中的技能到 ClawHub 平台。
+将本地开发的 Skills 批量同步到 ClawHub 平台。支持读取 `.gitignore` 智能忽略敏感文件和临时文件。
+
+## ⚠️ ClawHub 许可证政策（重要）
+
+**ClawHub 平台强制所有 skills 使用 `MIT-0` 许可证。**
+
+### 什么是 MIT-0？
+
+MIT-0 (MIT No Attribution) 是 MIT 许可证的变体：
+- ✅ 允许使用、修改、分发、商业使用
+- ❌ **不需要署名**
+- ❌ **没有任何限制条款**
+
+### 与其他许可证的冲突
+
+| 许可证 | 署名要求 | 商业使用 | 与 MIT-0 兼容 |
+|--------|----------|----------|---------------|
+| MIT-0 | ❌ 不需要 | ✅ 允许 | ✅ 兼容 |
+| MIT | ✅ 需要 | ✅ 允许 | ⚠️ 部分兼容 |
+| Apache-2.0 | ✅ 需要 | ✅ 允许 | ⚠️ 部分兼容 |
+| CC-BY-NC-SA-4.0 | ✅ 需要 | ❌ 禁止 | ❌ **冲突** |
+| CC-BY-SA-4.0 | ✅ 需要 | ✅ 允许 | ⚠️ 冲突 |
+
+### 法律影响
+
+**如果您的 skill 使用 CC-BY-NC-SA-4.0 等限制性许可证：**
+- 发布到 ClawHub 后，将失去对 skill 的法律追溯权利
+- 任何人可以不署名使用、修改、商业使用您的 skill
+- 平台不接受 per-skill license 自定义
+
+### 建议
+
+1. **MIT 许可证的 skill**：可以安全同步到 ClawHub
+2. **CC-BY-NC-SA-4.0 等限制性许可证**：
+   - 不要同步到 ClawHub
+   - 仅在 GitHub 等支持自定义许可证的平台发布
+   - 或考虑双许可证策略
+
+### 参考来源
+
+- [ClawHub Skill Format 文档](https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md)
+- [MIT-0 许可证说明](https://spdx.org/licenses/MIT-0.html)
+
+---
 
 ## 前置条件
 
@@ -52,7 +95,7 @@ clawhub sync skills/<skill-name>
 clawhub sync --all
 ```
 
-> 注意：`--all` 会受 `skills/clawhub-sync/sync-allowlist.yaml` 约束。如果存在白名单文件，只同步其中列出的 skill。
+> 注意：`--all` 会受 `skills/clawhub-sync/config/sync-allowlist.yaml` 约束。如果存在白名单文件，只同步其中列出的 skill。
 
 **交互式选择同步**：
 
@@ -75,12 +118,12 @@ clawhub sync --all
 
 ### 同步范围控制（白名单机制）
 
-**配置文件：** `skills/clawhub-sync/sync-allowlist.yaml`（自包含在 skill 内部）
+**配置文件：** `skills/clawhub-sync/config/sync-allowlist.yaml`（skill 自包含）
 
 **优先级：白名单 > 默认忽略规则**
 
-- 如果 `skills/clawhub-sync/sync-allowlist.yaml` **存在**：只同步文件中列出的 skill
-- 如果 `skills/clawhub-sync/sync-allowlist.yaml` **不存在**：使用默认忽略规则（忽略 test/、private-skills/、node_modules/）
+- 如果 `skills/clawhub-sync/config/sync-allowlist.yaml` **存在**：只同步文件中列出的 skill
+- 如果 `skills/clawhub-sync/config/sync-allowlist.yaml` **不存在**：使用默认忽略规则（忽略 test/、private-skills/、node_modules/）
 
 **配置格式：**
 
@@ -92,15 +135,74 @@ litigation-analysis:
 
 **配置文件：** `skills/clawhub-sync/sync-allowlist.yaml`（skill 自包含）
 
-### 默认忽略规则
+### 文件过滤规则
 
-（当白名单文件不存在时生效）
+发布时会自动应用 .gitignore 过滤规则，确保敏感文件和临时文件不会被上传。
 
-以下目录默认不同步：
+**双重过滤机制**：
 
-- `test/` - 测试中的技能
-- `private-skills/` - 私有技能
-- `skills/*/node_modules/` - 依赖目录
+1. **项目根目录 .gitignore** - 自动检测 Git 仓库根目录的 `.gitignore`
+2. **技能内部 .gitignore** - 如果技能目录有自己的 `.gitignore`，会额外应用
+
+**默认排除**（始终生效）：
+
+- `.git/` - Git 目录
+- `node_modules/` - Node.js 依赖
+- `__pycache__/` - Python 缓存
+- `.DS_Store` - macOS 系统文件
+
+### 同步流程
+
+每次同步前，会自动：
+
+1. **创建临时目录** - 在 `/tmp/clawhub-publish-<skill-name>` 创建临时目录
+2. **复制过滤后的文件** - 使用 rsync 遵循 .gitignore 规则复制文件
+3. **发布到 ClawHub** - 从临时目录执行发布命令
+4. **清理临时目录** - 发布完成后自动清理
+
+### 手动准备发布目录
+
+如需手动检查将要发布的文件：
+
+```bash
+# 准备发布目录（不实际发布）
+bash skills/clawhub-sync/scripts/prepare-publish.sh skills/trademark-assistant
+
+# 检查临时目录内容
+ls -la /tmp/clawhub-publish-trademark-assistant/
+```
+
+## 安全最佳实践
+
+### 发布前检查清单
+
+- [ ] 确认 `.gitignore` 包含所有敏感文件模式
+- [ ] 使用 `prepare-publish.sh` 检查将要发布的文件
+- [ ] 不要在技能中包含 API keys、密码等
+- [ ] 使用 `.env.example` 代替 `.env` 文件
+
+### 常见敏感文件
+
+- `.env` - 环境变量（使用 `.env.example` 作为模板）
+- `config.yaml` - 配置文件（使用 `config.example.yaml` 作为模板）
+- `*.db`, `*.sqlite` - 数据库文件
+- `logs/` - 日志目录
+- `downloads/`, `output/` - 输出目录
+
+### 修复已发布的技能
+
+如果发现已发布的技能包含敏感信息：
+
+1. **立即更新** - 从技能目录中删除敏感文件
+2. **更新 .gitignore** - 确保未来不会再次包含
+3. **重新发布** - 使用 `clawnet publish` 更新 ClawHub 上的技能
+4. **联系 ClawHub 支持** - 如果需要删除旧版本
+
+**重要提醒**：
+
+- **ClawHub 是公开平台**：发布的技能任何人都可以访问
+- **不要包含客户信息**：案例文件、沟通记录等应排除
+- **不要包含凭证**：API keys、tokens 等应使用环境变量
 
 ## 常见问题
 
@@ -125,8 +227,8 @@ litigation-analysis:
 
 ### 输入
 
-- 必需：`skills/` 目录下的技能
-- 可选：指定技能名称列表
+- 必需：本地开发的 skill 目录
+- 可选：指定技能名称列表、白名单配置
 
 ### 输出
 
@@ -135,7 +237,7 @@ litigation-analysis:
 
 ## 同步记录
 
-每次同步后，会更新 `sync-records.yaml` 记录文件，便于溯源和增量同步。
+每次同步后，会更新 `config/sync-records.yaml` 记录文件，便于溯源和增量同步。
 
 ### 记录字段
 
