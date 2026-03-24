@@ -2,10 +2,9 @@
 name: trademark-assistant
 description: 面向商标服务的类别规划、可注册性初筛及申请材料准备技能。本技能应在接到商标注册咨询、需要结构化输出建议与风险分级、或需要准备申请材料时使用。不要用于：替代正式法律意见、承诺注册成功率、处理复杂商标争议案件。
 license: CC BY-NC-SA 4.0
-metadata:
-  author: 杨卫薪律师（微信ywxlaw）
-  version: "1.5.0"
-  homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.5.0"
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
 # 商标助手
