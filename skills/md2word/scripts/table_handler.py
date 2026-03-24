@@ -12,10 +12,23 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import parse_xml
+from docx.oxml.shared import OxmlElement
 from bs4 import BeautifulSoup
 
 # 导入配置模块
 from config import Config, get_config
+
+
+def set_cell_background_color(cell, color_hex):
+    """设置单元格背景色"""
+    if not color_hex:
+        return
+    color = color_hex.lstrip('#')
+    shading_elm = OxmlElement('w:shd')
+    shading_elm.set(qn('w:val'), 'clear')
+    shading_elm.set(qn('w:color'), 'auto')
+    shading_elm.set(qn('w:fill'), color)
+    cell._tc.get_or_add_tcPr().append(shading_elm)
 
 
 def is_separator_line(line):
@@ -159,6 +172,9 @@ def create_word_table(doc, table_lines):
     except Exception:
         pass
 
+    # 获取表头背景色配置
+    header_bg_color = config.get('table.header', {}).get('background_color')
+
     # 填充标题行
     header_cells = table.rows[0].cells
     for j, cell_text in enumerate(header_row):
@@ -172,11 +188,20 @@ def create_word_table(doc, table_lines):
                 from formatter import convert_quotes_to_chinese
                 cell.text = convert_quotes_to_chinese(cell_text.strip())
                 set_table_cell_format(cell, is_header=True)
+            # 应用表头背景色
+            if header_bg_color:
+                set_cell_background_color(cell, header_bg_color)
+
+    # 获取交替行颜色配置
+    row_even_color = config.get('table.row_even', {}).get('background_color')
+    row_odd_color = config.get('table.row_odd', {}).get('background_color')
 
     # 填充数据行
     for i, row_data in enumerate(rows_data):
         if i + 1 < len(table.rows):
             row_cells = table.rows[i + 1].cells
+            # 确定当前行颜色（奇偶交替）
+            row_bg_color = row_odd_color if i % 2 == 0 else row_even_color
             for j, cell_text in enumerate(row_data):
                 if j < len(row_cells):
                     cell = row_cells[j]
@@ -188,6 +213,9 @@ def create_word_table(doc, table_lines):
                         from formatter import convert_quotes_to_chinese
                         cell.text = convert_quotes_to_chinese(cell_text.strip())
                         set_table_cell_format(cell, is_header=False)
+                    # 应用交替行背景色
+                    if row_bg_color:
+                        set_cell_background_color(cell, row_bg_color)
 
     # 调整列宽
     adjust_table_column_width(table)

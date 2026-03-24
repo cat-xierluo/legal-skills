@@ -97,7 +97,7 @@ def get_preset(name: str) -> Optional[Config]:
     获取内置预设配置
 
     Args:
-        name: 预设名称（legal, academic, report, simple）
+        name: 预设名称（legal, minimal, academic, report, service-plan）
 
     Returns:
         Config 对象，预设不存在返回 None
@@ -202,6 +202,65 @@ def get_fallback_config() -> Config:
             'border_width': 4,
             'line_spacing': 1.2,
         },
+        'code_block': {
+            'label': {
+                'font': 'Times New Roman',
+                'size': 10,
+                'color': '#808080',
+            },
+            'content': {
+                'font': 'Times New Roman',
+                'size': 10,
+                'color': '#333333',
+                'left_indent': 24,
+                'line_spacing': 1.2,
+            },
+        },
+        'inline_code': {
+            'font': 'Times New Roman',
+            'size': 10,
+            'color': '#333333',
+        },
+        'quote': {
+            'background_color': '#EAEAEA',
+            'left_indent_inches': 0.2,
+            'font_size': 9,
+            'line_spacing': 1.5,
+        },
+        'math': {
+            'font': 'Times New Roman',
+            'size': 11,
+            'italic': True,
+            'color': '#00008B',
+        },
+        'image': {
+            'display_ratio': 0.92,
+            'max_width_cm': 14.2,
+            'target_dpi': 260,
+            'show_caption': True,
+        },
+        'horizontal_rule': {
+            'character': '─',
+            'repeat_count': 55,
+            'font': 'Times New Roman',
+            'size': 12,
+            'color': '#808080',
+            'alignment': 'center',
+        },
+        'lists': {
+            'bullet': {
+                'marker': '•',
+                'indent': 24,
+            },
+            'numbered': {
+                'indent': 24,
+                'preserve_format': True,
+            },
+            'task': {
+                'unchecked': '☐',
+                'checked': '☑',
+            },
+        },
     })
 
 
@@ -235,13 +294,13 @@ def merge_configs(base: Config, override: Optional[Config]) -> Config:
 
 def list_presets() -> list:
     """
-    列出所有可用的预设
+    列出所有可用的预设名称
 
     Returns:
-        预设名称列表
+        预设名称列表，如 ['academic', 'legal', 'minimal', 'report', 'service-plan']
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    skill_dir = os.path.dirname(script_dir)  # 上级目录是 skill 根目录
+    skill_dir = os.path.dirname(script_dir)
     presets_dir = os.path.join(skill_dir, 'assets', 'presets')
 
     if not os.path.exists(presets_dir):
@@ -250,6 +309,59 @@ def list_presets() -> list:
     presets = []
     for file in os.listdir(presets_dir):
         if file.endswith('.yaml'):
-            presets.append(file[:-5])  # 移除 .yaml 后缀
+            presets.append(file[:-5])
 
     return sorted(presets)
+
+
+def list_presets_info() -> list:
+    """
+    列出所有可用预设的详细信息（从 YAML 文件动态读取）
+
+    Returns:
+        预设信息列表，如 [{'id': 'legal', 'name': '...', 'description': '...'}, ...]
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    skill_dir = os.path.dirname(script_dir)
+    presets_dir = os.path.join(skill_dir, 'assets', 'presets')
+
+    if not os.path.exists(presets_dir):
+        return []
+
+    result = []
+    for file in sorted(os.listdir(presets_dir)):
+        if not file.endswith('.yaml'):
+            continue
+        preset_id = file[:-5]
+        path = os.path.join(presets_dir, file)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+            result.append({
+                'id': preset_id,
+                'name': data.get('name', preset_id) if data else preset_id,
+                'description': data.get('description', '') if data else '',
+            })
+        except Exception:
+            result.append({'id': preset_id, 'name': preset_id, 'description': ''})
+
+    return result
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='md2word 配置管理工具')
+    parser.add_argument('--list', action='store_true', help='列出所有可用预设')
+    args = parser.parse_args()
+
+    if args.list:
+        presets = list_presets_info()
+        print(f"\n可用预设 ({len(presets)} 个)：\n")
+        for p in presets:
+            print(f"  {p['id']:15s} {p['name']}")
+            if p['description']:
+                print(f"  {' ' * 17}{p['description']}")
+            print()
+    else:
+        parser.print_help()

@@ -233,24 +233,12 @@ quotes:
 
 ---
 
-## 预设对比
+## 预设列表
 
-| 预设 | 适用场景 | 字体 | 字号 | 行距 | 特点 |
-|:-----|:---------|:-----|:-----|:-----|:-----|
-| **legal** | 正式文档 | 仿宋_GB2312 | 12pt (小四) | 1.5 | 标准中文正式文档格式 |
-| **academic** | 学术论文 | 宋体 | 12pt (小四) | 2.0 | 双倍行距，适合学术规范 |
-| **report** | 工作报告 | 仿宋_GB2312 | 12pt (小四) | 1.5 | 黑体标题，适合报告 |
-| **simple** | 简单文档 | 仿宋_GB2312 | 12pt (小四) | 1.5 | 无特殊要求，基础格式 |
+运行以下命令查看所有预设详情（从 YAML 动态读取）：
 
----
+```bash
+python scripts/config.py --list
+```
 
-## 完整配置文件
-
-所有预设的完整配置文件位于 `assets/presets/` 目录：
-
-- `assets/presets/legal.yaml` - 正式文档格式
-- `assets/presets/academic.yaml` - 学术论文格式
-- `assets/presets/report.yaml` - 工作报告格式
-- `assets/presets/simple.yaml` - 简单文档格式
-
-配置模板：`assets/config-template.yaml`
+完整配置文件位于 `assets/presets/` 目录，设计说明位于 `assets/theme-notes/`。

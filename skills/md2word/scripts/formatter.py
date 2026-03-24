@@ -223,23 +223,28 @@ def set_run_format(run, title_level=0):
     run._element.rPr.rFonts.set(qn('w:eastAsia'), east_asia_font)
     run._element.rPr.rFonts.set(qn('w:cs'), font_config.get('ascii', 'Times New Roman'))
 
-    # 根据标题级别设置字号和加粗
-    if title_level == 1:
-        title_config = config.get('titles.level1', {})
+    # 根据标题级别设置字号、加粗、字体和颜色
+    if title_level >= 1:
+        title_config = config.get(f'titles.level{title_level}', config.get('titles.level1', {}))
+        title_font = title_config.get('font')
+        title_font_alt = title_config.get('font_alt')
+        title_color = title_config.get('color')
+
+        # 应用标题字体（如果配置了）
+        if title_font:
+            font.name = title_font
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), title_font)
+            if title_font_alt:
+                run._element.rPr.rFonts.set(qn('w:ascii'), title_font_alt)
+                run._element.rPr.rFonts.set(qn('w:hAnsi'), title_font_alt)
+
+        # 应用标题颜色（如果配置了）
+        if title_color:
+            font.color.rgb = hex_to_rgb(title_color)
+
+        # 应用字号和加粗
         font.size = Pt(title_config.get('size', 15))
         font.bold = title_config.get('bold', True)
-    elif title_level == 2:
-        title_config = config.get('titles.level2', {})
-        font.size = Pt(title_config.get('size', 12))
-        font.bold = title_config.get('bold', True)
-    elif title_level == 3:
-        title_config = config.get('titles.level3', {})
-        font.size = Pt(title_config.get('size', 12))
-        font.bold = title_config.get('bold', False)
-    elif title_level == 4:
-        title_config = config.get('titles.level4', {})
-        font.size = Pt(title_config.get('size', 12))
-        font.bold = title_config.get('bold', False)
     else:
         font.size = Pt(font_config.get('size', 12))
         font.bold = False
@@ -264,13 +269,25 @@ def set_run_format_with_styles(run, formats, title_level=0, is_quote=False):
     run._element.rPr.rFonts.set(qn('w:cs'), font_config.get('ascii', 'Times New Roman'))
 
     # 设置基础格式
-    if title_level == 1:
-        title_config = config.get('titles.level1', {})
+    if title_level >= 1:
+        title_config = config.get(f'titles.level{title_level}', config.get('titles.level1', {}))
+        title_font = title_config.get('font')
+        title_font_alt = title_config.get('font_alt')
+        title_color = title_config.get('color')
+
+        # 应用标题字体（如果配置了）
+        if title_font:
+            font.name = title_font
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), title_font)
+            if title_font_alt:
+                run._element.rPr.rFonts.set(qn('w:ascii'), title_font_alt)
+                run._element.rPr.rFonts.set(qn('w:hAnsi'), title_font_alt)
+
+        # 应用标题颜色（如果配置了）
+        if title_color:
+            font.color.rgb = hex_to_rgb(title_color)
+
         font.size = Pt(title_config.get('size', 15))
-        font.bold = title_config.get('bold', True)
-    elif title_level == 2:
-        title_config = config.get('titles.level2', {})
-        font.size = Pt(title_config.get('size', 12))
         font.bold = title_config.get('bold', True)
     elif is_quote:
         # 引用使用较小字号

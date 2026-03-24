@@ -1,0 +1,183 @@
+name: "法律服务方案格式"
+description: "法律服务方案专用格式，含分层配色方案、表格交替行、高亮方案标注"
+
+# 配色方案 - 仅3色
+colors:
+  primary: "#1E3A5F"       # 深蓝 - 表头、一级标题
+  accent: "#927F76"        # 律所棕 - 高亮（方案名、价格）
+  alt: "#F5F0ED"           # 浅棕 - 交替行背景
+
+# 页面设置
+page:
+  width: 21.0
+  height: 29.7
+  margin_top: 2.54
+  margin_bottom: 2.54
+  margin_left: 3.18
+  margin_right: 3.18
+
+# 字体设置
+fonts:
+  default:
+    name: "仿宋"
+    name_alt: "仿宋_GB2312"
+    ascii: "Times New Roman"
+    size: 12
+  heading_sans:
+    name: "微软雅黑"
+    name_alt: "Microsoft YaHei"
+    ascii: "Arial"
+
+# 标题设置 - 按层级区分
+titles:
+  level1:
+    size: 16         # 小二
+    bold: true
+    align: "center"
+    color: "#1E3A5F"
+    font: "微软雅黑"
+    space_before: 16
+    space_after: 12
+  level2:
+    size: 14         # 小三
+    bold: true
+    align: "left"
+    color: "#1E3A5F"
+    font: "微软雅黑"
+    space_before: 14
+    space_after: 10
+    indent: 24
+  level3:
+    size: 12         # 小四
+    bold: true
+    align: "left"
+    color: "#1E3A5F"
+    font: "仿宋"
+    space_before: 12
+    space_after: 8
+    indent: 24
+  level4:
+    size: 12
+    bold: true
+    align: "left"
+    font: "仿宋"
+    space_before: 8
+    space_after: 4
+    indent: 24
+
+# 段落设置
+paragraph:
+  line_spacing: 1.5
+  first_line_indent: 24
+  align: "justify"
+
+# 页码设置
+page_number:
+  enabled: true
+  format: "1/x"
+  font: "Times New Roman"
+  size: 10.5
+  position: "center"
+
+# 引号设置
+quotes:
+  convert_to_chinese: true
+
+# 表格设置
+table:
+  border_enabled: true
+  border_color: "#CCCCCC"
+  border_width: 4
+  line_spacing: 1.5
+  row_height_cm: 0.8
+  alignment: "center"
+  cell_margin:
+    top: 40
+    bottom: 40
+    left: 60
+    right: 60
+  vertical_align: "center"
+
+  header:
+    font: "微软雅黑"
+    size: 12
+    bold: true
+    color: "#FFFFFF"
+    background_color: "#1E3A5F"
+
+  row_even:
+    background_color: "#FFFFFF"
+
+  row_odd:
+    background_color: "#F5F0ED"
+
+  row_highlight:
+    background_color: "#F5F0ED"
+
+  body:
+    font: "仿宋"
+    size: 12
+
+# 高亮文本
+highlight:
+  plan_label:
+    font: "微软雅黑"
+    size: 12
+    bold: true
+    color: "#927F76"
+
+  price:
+    font: "仿宋"
+    size: 12
+    bold: true
+    color: "#927F76"
+
+# 代码块
+code_block:
+  label:
+    font: "Times New Roman"
+    size: 10
+  content:
+    font: "Times New Roman"
+    size: 10
+    left_indent: 24
+    line_spacing: 1.2
+
+inline_code:
+  font: "Times New Roman"
+  size: 10
+
+# 引用块
+quote:
+  background_color: "#F5F0ED"
+  left_indent_inches: 0.2
+  font_size: 9
+  line_spacing: 1.5
+
+# 图片
+image:
+  display_ratio: 0.92
+  max_width_cm: 14.2
+  target_dpi: 260
+  show_caption: true
+
+# 分割线
+horizontal_rule:
+  character: "─"
+  repeat_count: 55
+  font: "Times New Roman"
+  size: 12
+  color: "#CCCCCC"
+  alignment: "center"
+
+# 列表
+lists:
+  bullet:
+    marker: "•"
+    indent: 24
+  numbered:
+    indent: 24
+    preserve_format: true
+  task:
+    unchecked: "☐"
+    checked: "☑"

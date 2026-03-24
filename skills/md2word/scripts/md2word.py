@@ -387,33 +387,51 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     """从Markdown文件创建格式化的Word文档"""
     if config is None:
         config = get_config()
-    
+
     print(f"📄 正在处理: {md_file_path}")
     print(f"📋 使用配置: {config.name}")
-    
+
     if config.get('quotes.convert_to_chinese', True):
         debug_quotes_in_file(md_file_path)
-    
+
+    # 用于存储模板的header/footer XML元素
+    template_header_xmls = []
+    template_footer_xmls = []
+    use_template_headers = False
+
     # 创建或加载文档
     if template_file and template_file != "none" and os.path.exists(template_file):
         print(f"📋 使用模板文件: {os.path.basename(template_file)}")
+
+        # 直接使用模板文件，保留所有格式（包括页眉页脚）
+        print("📄 直接打开模板文件")
         doc = Document(template_file)
-        try:
-            for paragraph in list(doc.paragraphs):
-                if paragraph != doc.paragraphs[0]:
-                    p = paragraph._element
-                    p.getparent().remove(p)
-                else:
-                    paragraph.clear()
-            for table in list(doc.tables):
-                t = table._element
-                t.getparent().remove(t)
-        except Exception as e:
-            print(f"⚠️ 清空模板内容失败: {e}")
+
+        # 清空模板中的正文内容（保留页眉页脚和sectPr）
+        # 获取body元素
+        body = doc._element.body
+
+        # 记住sectPr的位置和内容
+        sectPr = body.find(qn('w:sectPr'))
+
+        # 移除body中的所有子元素（除了sectPr）
+        for child in list(body):
+            if child.tag != qn('w:sectPr'):
+                body.remove(child)
+
+        use_template_headers = True
+        print("✅ 已清空模板内容，保留页眉页脚")
     else:
         print("📄 创建新文档（不使用模板）")
         doc = Document()
-    
+        template_header_xmls = []
+        template_footer_xmls = []
+        template_header_rels = []
+        template_footer_rels = []
+        template_media_files = []
+        template_sectPr_refs = []
+        template_doc_rels = {}
+
     # 设置默认字体
     try:
         normal_style = doc.styles['Normal']
@@ -426,7 +444,7 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         normal_style._element.rPr.rFonts.set(qn('w:cs'), font_config.get('ascii', 'Times New Roman'))
     except Exception as _:
         pass
-    
+
     # 设置页面大小和页边距
     for section in doc.sections:
         page_config = config.get('page', {})
@@ -605,8 +623,13 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         
         i += 1
     
-    add_page_number(doc)
+    # 添加页码（仅在没有模板时）
+    if not use_template_headers:
+        add_page_number(doc)
+
+    # 保存文档
     doc.save(output_path)
+
     print(f"✅ Word文档已生成: {output_path}")
 
 

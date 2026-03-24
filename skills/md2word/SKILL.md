@@ -46,12 +46,21 @@ python scripts/md2word.py input.md --config=my-config.yaml
 
 ### 内置预设
 
-- **legal**: 正式文档格式（默认）
-- **academic**: 学术论文格式
-- **report**: 工作报告格式
-- **simple**: 简单文档格式
+预设信息从 YAML 文件动态读取，运行以下命令查看完整列表：
 
-> 完整配置见 `assets/presets/*.yaml`
+```bash
+python scripts/config.py --list
+```
+
+常用预设：
+
+- **legal** — 法律文书格式（默认）
+- **service-plan** — 法律服务方案（含分层配色）
+- **minimal** — 极简格式
+- **academic** — 学术论文格式
+- **report** — 工作报告格式
+
+> 完整配置见 `assets/presets/*.yaml`，设计说明见 `assets/theme-notes/`
 
 ### 自定义配置
 
@@ -86,17 +95,20 @@ cp assets/config-template.yaml my-config.yaml
 md2word/
 ├── SKILL.md               # 本文档
 ├── CHANGELOG.md           # 版本记录
+├── STYLE_MAPPINGS.md      # 样式映射参考
 ├── references/            # 参考文档
 │   ├── config-reference.md
 │   └── examples.md
 ├── scripts/               # 转换脚本
 │   ├── md2word.py         # 主脚本
-│   ├── config.py          # 配置模块
+│   ├── config.py          # 配置模块（含 --list 查看预设）
+│   ├── extract_template_config.py  # 从 Word 模板提取配置
 │   ├── formatter.py       # 文本格式化模块
 │   ├── table_handler.py   # 表格处理模块
-│   ├── chart_handler.py   # 图表渲染模块
+│   └── chart_handler.py   # 图表渲染模块
 └── assets/                # 资源文件
     ├── presets/           # YAML 预设配置
+    ├── theme-notes/       # 预设设计说明文档
     ├── templates/         # Word 模板文件
     └── config-template.yaml
 ```
