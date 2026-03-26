@@ -8,46 +8,13 @@ license: MIT
 
 将本地开发的 Skills 批量同步到 ClawHub 平台。支持读取 `.gitignore` 智能忽略敏感文件和临时文件。
 
-## ⚠️ ClawHub 许可证政策（重要）
+## ⚠️ ClawHub 许可证说明
 
-**ClawHub 平台强制所有 skills 使用 `MIT-0` 许可证。**
-
-### 什么是 MIT-0？
-
-MIT-0 (MIT No Attribution) 是 MIT 许可证的变体：
-- ✅ 允许使用、修改、分发、商业使用
-- ❌ **不需要署名**
-- ❌ **没有任何限制条款**
-
-### 与其他许可证的冲突
-
-| 许可证 | 署名要求 | 商业使用 | 与 MIT-0 兼容 |
-|--------|----------|----------|---------------|
-| MIT-0 | ❌ 不需要 | ✅ 允许 | ✅ 兼容 |
-| MIT | ✅ 需要 | ✅ 允许 | ⚠️ 部分兼容 |
-| Apache-2.0 | ✅ 需要 | ✅ 允许 | ⚠️ 部分兼容 |
-| CC-BY-NC-SA-4.0 | ✅ 需要 | ❌ 禁止 | ❌ **冲突** |
-| CC-BY-SA-4.0 | ✅ 需要 | ✅ 允许 | ⚠️ 冲突 |
-
-### 法律影响
-
-**如果您的 skill 使用 CC-BY-NC-SA-4.0 等限制性许可证：**
-- 发布到 ClawHub 后，将失去对 skill 的法律追溯权利
-- 任何人可以不署名使用、修改、商业使用您的 skill
-- 平台不接受 per-skill license 自定义
-
-### 建议
-
-1. **MIT 许可证的 skill**：可以安全同步到 ClawHub
-2. **CC-BY-NC-SA-4.0 等限制性许可证**：
-   - 不要同步到 ClawHub
-   - 仅在 GitHub 等支持自定义许可证的平台发布
-   - 或考虑双许可证策略
-
-### 参考来源
-
-- [ClawHub Skill Format 文档](https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md)
-- [MIT-0 许可证说明](https://spdx.org/licenses/MIT-0.html)
+> **ClawHub 平台强制使用 MIT-0 许可证**（无需署名，允许商业使用）。
+> - MIT 许可证的 skill 可以同步
+> - CC-BY-NC-SA-4.0 等限制性许可证与 MIT-0 冲突，不应同步
+>
+> 详见 [ClawHub Skill Format](https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md)
 
 ---
 
