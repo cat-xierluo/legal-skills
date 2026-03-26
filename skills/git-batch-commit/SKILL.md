@@ -248,11 +248,16 @@ Git 批量提交工具
 bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
 ```
 
-**步骤 2：执行发布**
+**步骤 2：执行发布（使用 publish 命令）**
 ```bash
-cd /tmp/clawhub-publish-<skill-name>
-clawhub sync --root . --all --bump <type> --changelog "<变更说明>"
+clawhub publish /tmp/clawhub-publish-<skill-name> \
+  --version "<新版本号>" \
+  --changelog "<变更说明>"
 ```
+
+> **为什么用 `publish` 而不是 `sync`？**
+> - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
+> - `clawhub publish <path>` 只发布指定路径的单个 skill，更精确
 
 **步骤 3：更新同步记录**
 
