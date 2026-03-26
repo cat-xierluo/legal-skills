@@ -79,8 +79,9 @@ cp assets/config-template.yaml my-config.yaml
 
 ## 参考文档
 
-**配置参考**: See [references/config-reference.md](references/config-reference.md)
-**使用示例**: See [references/examples.md](references/examples.md)
+- **配置参考**: [references/config-reference.md](references/config-reference.md)
+- **样式映射**: [references/style-mappings.md](references/style-mappings.md)
+- **使用示例**: [references/examples.md](references/examples.md)
 
 ## 错误处理
 
@@ -95,9 +96,9 @@ cp assets/config-template.yaml my-config.yaml
 md2word/
 ├── SKILL.md               # 本文档
 ├── CHANGELOG.md           # 版本记录
-├── STYLE_MAPPINGS.md      # 样式映射参考
 ├── references/            # 参考文档
 │   ├── config-reference.md
+│   ├── style-mappings.md
 │   └── examples.md
 ├── scripts/               # 转换脚本
 │   ├── md2word.py         # 主脚本
