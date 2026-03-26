@@ -241,11 +241,27 @@ Git 批量提交工具
 
 ### 执行步骤
 
-对于每个需要同步的 skill：
+对于每个需要同步的 skill，按照 `clawhub-sync` 的"单个 Skill 同步工作流"执行：
 
+**步骤 1：准备发布目录**
 ```bash
-clawhub sync skills/<skill-name>
+bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
 ```
+
+**步骤 2：执行发布**
+```bash
+cd /tmp/clawhub-publish-<skill-name>
+clawhub sync --root . --all --bump <type> --changelog "<变更说明>"
+```
+
+**步骤 3：更新同步记录**
+
+更新 `skills/clawhub-sync/config/sync-records.yaml`：
+- 更新 `version` 为新版本号
+- 更新 `last_sync` 为当前时间
+- 更新 `git_hash` 为当前 commit hash
+- 更新 `status` 为 `synced`
+- 添加 `url` 和 `publish_id`（从命令输出获取）
 
 ### 失败处理
 
