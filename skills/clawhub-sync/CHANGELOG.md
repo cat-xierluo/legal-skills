@@ -1,9 +1,10 @@
 ## [1.4.1] - 2026-03-26
 
-### 变更
+### 修复
 
-- 修复发布命令：添加 `--slug` 参数确保正确的 skill 标识符
-- 修复发布命令：添加 `--name` 参数确保正确的 display name
+- 发布命令添加 `--slug` 参数：避免临时目录名导致的 slug 错误
+- 发布命令添加 `--name` 参数：确保 ClawHub 显示正确的名称
+- 删除错误命名的 skills：`clawhub-publish-clawhub-sync`、`clawhub-publish-git-batch-commit`
 
 ## [1.4.0] - 2026-03-26
 

@@ -252,12 +252,14 @@ bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
 ```bash
 clawhub publish /tmp/clawhub-publish-<skill-name> \
   --slug <skill-name> \
+  --name "<Display Name>" \
   --version "<新版本号>" \
   --changelog "<变更说明>"
 ```
 
-> **⚠️ 必须指定 --slug**
-> 临时目录名可能包含前缀，使用 `--slug` 确保正确的 skill 标识符。
+> **⚠️ 必须指定 --slug 和 --name**
+> - 临时目录名可能包含前缀，使用 `--slug` 确保正确的 skill 标识符
+> - 使用 `--name` 确保 ClawHub 上显示正确的名称
 
 > **为什么用 `publish` 而不是 `sync`？**
 > - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
