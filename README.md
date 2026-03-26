@@ -110,39 +110,9 @@
 | **[github-star-manager](skills/github-star-manager/)** | GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统               | MIT             | v0.6.0 | 杨卫薪律师 | |
 | **[skill-lint](skills/skill-lint/)**                   | Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告                  | MIT             | v1.3.0 | 杨卫薪律师 | |
 | **[repo-research](skills/repo-research/)**             | GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告 | CC-BY-NC-SA-4.0 | v0.7.0 | 杨卫薪律师 | |
-| **[clawhub-sync](skills/clawhub-sync/)**               | 批量同步 Claude Code Skills 到 ClawHub 平台，支持交互式选择、发布状态检查、批量同步                             | MIT             | v1.0.0 | 杨卫薪律师 | |
+| **[clawhub-sync](skills/clawhub-sync/)** | 将本地开发的 Skills 批量同步到 ClawHub 平台，支持智能 .gitignore 过滤、白名单控制、增量同步 | MIT | v1.0.0 | 杨卫薪律师 | [ClawHub 要求 MIT-0](https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md) |
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
-
-## ⚠️ ClawHub 许可证政策说明
-
-**重要：ClawHub 平台强制所有 skills 使用 `MIT-0` 许可证。**
-
-### 什么是 MIT-0？
-
-MIT-0 (MIT No Attribution) 是 MIT 许可证的变体：
-- ✅ 允许使用、修改、分发、商业使用
-- ❌ **不需要署名**
-- ❌ **没有任何限制条款**
-
-### 与本项目许可证的兼容性
-
-本项目的法律类技能（如 `trademark-assistant`、`patent-analysis` 等）使用 `CC-BY-NC-SA-4.0` 许可证，要求：
-
-- ✅ 需要署名
-- ❌ 禁止商业使用
-- ✅ 相同方式分享
-
-**因此，本项目的法律类技能不会同步到 ClawHub。**
-
-### 同步策略
-
-| 许可证类型 | GitHub | ClawHub |
-| :--- | :--- | :--- |
-| MIT / MIT-0 | ✅ | ✅ 可同步 |
-| CC-BY-NC-SA-4.0 | ✅ | ❌ 不同步 |
-
-详见 [clawhub-sync 技能文档](skills/clawhub-sync/SKILL.md)
 
 ## 📖 协作规范
 
