@@ -431,6 +431,16 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     return message
 
 
+def get_all_files_diff(files: List[str]) -> str:
+    """获取所有变更文件的 diff 内容"""
+    diffs = []
+    for filepath in files:
+        diff = get_file_diff(filepath)
+        if diff:
+            diffs.append(f"=== {filepath} ===\n{diff}")
+    return "\n\n".join(diffs)
+
+
 def get_file_diff(filepath: str) -> str:
     """Get git diff for a specific file."""
     try:
@@ -993,21 +1003,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-def detect_new_feature():
-    '''Test function for detection'''
-    pass
-
-def extract_test_data():
-    '''Another test function'''
-    pass
-
-
-def detect_new_feature():
-    '''Test function for detection'''
-    pass
-
-def extract_test_data():
-    '''Another test function'''
-    pass
-
