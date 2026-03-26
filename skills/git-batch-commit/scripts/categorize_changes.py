@@ -185,25 +185,24 @@ def detect_code_change_type(filepath: str) -> str:
         )
         diff_content = result.stdout
 
+        # Simple heuristic based on diff patterns
+        added_lines = len([l for l in diff_content.split('\n') if l.startswith('+')])
+        removed_lines = len([l for l in diff_content.split('\n') if l.startswith('-')])
+
+        # IMPORTANT: Check for fix-related keywords FIRST
+        # Even if adding new functions, fix keywords indicate a bug fix
+        # English + Chinese fix keywords
+        fix_keywords = ['fix', 'bug', 'issue', 'error', 'patch', 'hotfix',
+                        '修复', '错误', '问题', '补丁']
+        if any(keyword in diff_content.lower() for keyword in fix_keywords):
+            return 'fix'
+
         # Check for new function definitions (strong indicator of new feature)
         # Match patterns like: +def function_name(
         new_func_pattern = r'^\+def\s+\w+'
         new_funcs = re.findall(new_func_pattern, diff_content, re.MULTILINE)
         if new_funcs:
             return 'feat'
-
-        # Simple heuristic based on diff patterns
-        # Additions dominate -> likely a feature
-        # Deletions dominate -> likely a cleanup/refactor
-        # 'fix' or 'bug' in added lines -> likely a fix
-        added_lines = len([l for l in diff_content.split('\n') if l.startswith('+')])
-        removed_lines = len([l for l in diff_content.split('\n') if l.startswith('-')])
-
-        # Check for fix-related keywords (English + Chinese)
-        fix_keywords = ['fix', 'bug', 'issue', 'error', 'patch', 'hotfix',
-                        '修复', '错误', '问题', '补丁']
-        if any(keyword in diff_content.lower() for keyword in fix_keywords):
-            return 'fix'
 
         # Check for feature-related keywords (English + Chinese)
         feat_keywords = ['add', 'new', 'implement', 'feature', 'support',
