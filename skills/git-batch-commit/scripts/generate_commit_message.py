@@ -169,6 +169,44 @@ def detect_skill_name(files: List[str]) -> str | None:
 
     return None
 
+
+def is_new_skill_being_added(skill_name: str, files: List[str]) -> bool:
+    """
+    检测是否正在添加新技能（而非更新现有技能）。
+
+    判断逻辑：
+    1. 检查 SKILL.md 文件是否已存在于 HEAD 提交中
+    2. 如果不存在 → 新技能
+    3. 否则 → 更新现有技能
+
+    Args:
+        skill_name: 技能名称
+        files: 本次提交涉及的文件列表
+
+    Returns:
+        True 表示新技能，False 表示更新现有技能
+    """
+    # 检查 SKILL.md 是否是新文件（不存在于 HEAD 提交中）
+    for filepath in files:
+        if filepath.endswith('SKILL.md'):
+            try:
+                # 使用 git cat-file 检查文件是否在 HEAD 中存在
+                result = subprocess.run(
+                    ['git', 'cat-file', '-e', f'HEAD:{filepath}'],
+                    capture_output=True,
+                    text=True,
+                    cwd='/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills'
+                )
+                # 如果返回码非 0，说明文件不在 HEAD 中，是新技能
+                if result.returncode != 0:
+                    return True
+            except Exception:
+                # 出错时保守处理，视为更新
+                pass
+
+    return False
+
+
 # Common commit message templates by category (中文)
 MESSAGE_TEMPLATES = {
     'deps': {
@@ -219,7 +257,6 @@ MESSAGE_TEMPLATES = {
     },
     'feat': {
         'patterns': [
-            (r'skills/([^/]+)/', r'添加 \1 技能'),
             (r'scripts/([^/]+)', r'添加 \1 脚本'),
             (r'test/([^/]+)', r'添加 \1 测试'),
         ],
@@ -313,10 +350,14 @@ def analyze_changes(files: List[str], category: str) -> str:
                     else:
                         return f'更新 {doc_name} 文档'
 
-                # For skill files (only for non-skill format)
-                if 'skills/' in filepath and not is_skill_format:
-                    skill_name = filepath.split('skills/')[1].split('/')[0]
-                    return f'添加 {skill_name} 技能'
+                # For skill files (both skill format and non-skill format)
+                if 'skills/' in filepath:
+                    skill_name_from_path = filepath.split('skills/')[1].split('/')[0]
+                    # 检测是否为新技能（SKILL.md 未被 git 跟踪）
+                    if is_new_skill_being_added(skill_name_from_path, files):
+                        return f'添加 {skill_name_from_path} 技能'
+                    else:
+                        return f'更新 {skill_name_from_path} 技能'
 
                 # For config files, mention specific config
                 if actual_category == 'config':
