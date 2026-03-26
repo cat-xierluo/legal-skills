@@ -33,11 +33,15 @@ titles:
     bold: true
     align: "justify"
     indent: 24
+    space_before: 9   # 0.5行距 (12pt × 1.5 × 0.5)
+    space_after: 9    # 0.5行距
   level3:
     size: 12      # pt (小四)
     bold: true
     align: "justify"
     indent: 24
+    space_before: 9   # 0.5行距
+    space_after: 9    # 0.5行距
   level4:
     size: 12      # pt (小四)
     bold: true
