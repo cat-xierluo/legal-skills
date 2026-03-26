@@ -10,6 +10,7 @@
 ### 变更
 
 - description 更新，增加「单个 skill 同步」功能说明
+- **改用 `clawhub publish` 命令**：避免 `clawhub sync` 扫描其他目录导致的 slug 冲突
 
 ## [1.3.0] - 2026-03-24
 

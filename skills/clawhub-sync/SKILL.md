@@ -114,11 +114,16 @@ recorded_version 为 null → 需要同步（首次发布）
 bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
 ```
 
-**步骤 2：执行发布**
+**步骤 2：执行发布（使用 publish 命令）**
 ```bash
-cd /tmp/clawhub-publish-<skill-name>
-clawhub sync --root . --all --bump <type> --changelog "<变更说明>"
+clawhub publish /tmp/clawhub-publish-<skill-name> \
+  --version "<新版本号>" \
+  --changelog "<变更说明>"
 ```
+
+> **为什么用 `publish` 而不是 `sync`？**
+> - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
+> - `clawhub publish <path>` 只发布指定路径的单个 skill，更精确
 
 **步骤 3：更新同步记录**
 
@@ -150,9 +155,10 @@ grep "git-batch-commit:" skills/clawhub-sync/config/sync-allowlist.yaml
 # 3. 准备发布
 bash skills/clawhub-sync/scripts/prepare-publish.sh skills/git-batch-commit
 
-# 4. 执行发布
-cd /tmp/clawhub-publish-git-batch-commit
-clawhub sync --root . --all --bump minor --changelog "添加 ClawHub 同步工作流"
+# 4. 执行发布（使用 publish 命令）
+clawhub publish /tmp/clawhub-publish-git-batch-commit \
+  --version "1.2.0" \
+  --changelog "添加 ClawHub 同步工作流"
 
 # 5. 更新记录
 # 编辑 sync-records.yaml，更新 git-batch-commit 条目
