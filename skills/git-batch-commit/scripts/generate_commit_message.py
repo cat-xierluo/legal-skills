@@ -320,7 +320,7 @@ def analyze_changes(files: List[str], category: str) -> str:
                 # 分析具体变更内容，生成有意义的描述
                 diff = get_file_diff(filepath)
                 specific_change = analyze_diff_content(diff, filename)
-                return f'{skill_name_from_path} 技能 - {specific_change}'
+                return specific_change
 
     # Try to match patterns
     if actual_category in MESSAGE_TEMPLATES:
