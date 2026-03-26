@@ -573,55 +573,55 @@ def extract_function_names(added: List[str]) -> List[str]:
     return func_names
 
 
-# 函数名前缀到动作的语义映射
+# 函数名前缀到动作的语义映射（简洁动词形式）
 FUNCTION_PREFIX_ACTIONS = {
     # 检测/分析类
-    'detect_': '添加检测功能',
-    'analyze_': '添加分析功能',
-    'parse_': '添加解析功能',
-    'extract_': '添加提取功能',
-    'identify_': '添加识别功能',
-    'infer_': '添加推断功能',
+    'detect_': '检测',
+    'analyze_': '分析',
+    'parse_': '解析',
+    'extract_': '提取',
+    'identify_': '识别',
+    'infer_': '推断',
 
     # 生成/创建类
-    'generate_': '添加生成功能',
-    'create_': '添加创建功能',
-    'build_': '添加构建功能',
-    'make_': '添加制作功能',
+    'generate_': '生成',
+    'create_': '创建',
+    'build_': '构建',
+    'make_': '制作',
 
     # 处理/转换类
-    'process_': '添加处理功能',
-    'convert_': '添加转换功能',
-    'transform_': '添加转换功能',
-    'handle_': '改进处理逻辑',
-    'format_': '添加格式化功能',
+    'process_': '处理',
+    'convert_': '转换',
+    'transform_': '转换',
+    'handle_': '处理',
+    'format_': '格式化',
 
     # 获取/读取类
-    'get_': '添加获取功能',
-    'fetch_': '添加获取功能',
-    'load_': '添加加载功能',
-    'read_': '添加读取功能',
+    'get_': '获取',
+    'fetch_': '获取',
+    'load_': '加载',
+    'read_': '读取',
 
     # 更新/修改类
-    'update_': '添加更新功能',
-    'modify_': '添加修改功能',
-    'edit_': '添加编辑功能',
+    'update_': '更新',
+    'modify_': '修改',
+    'edit_': '编辑',
 
     # 删除/移除类
-    'delete_': '添加删除功能',
-    'remove_': '添加移除功能',
+    'delete_': '删除',
+    'remove_': '移除',
 
     # 验证/检查类
-    'validate_': '添加验证功能',
-    'check_': '添加检查功能',
-    'verify_': '添加验证功能',
-    'is_': '添加验证逻辑',
+    'validate_': '验证',
+    'check_': '检查',
+    'verify_': '验证',
+    'is_': '验证',
 
     # 优化/改进类
-    'optimize_': '优化性能',
-    'improve_': '改进功能',
-    'enhance_': '增强功能',
-    'fix_': '修复问题',
+    'optimize_': '优化',
+    'improve_': '改进',
+    'enhance_': '增强',
+    'fix_': '修复',
 }
 
 
@@ -629,10 +629,11 @@ def infer_intent_from_function_name(func_name: str) -> str | None:
     """根据函数名前缀推断意图。
 
     示例:
-    - detect_skill_name -> 添加检测功能
-    - infer_intent -> 添加推断功能
-    - analyze_code_changes -> 添加分析功能(代码变更)
-    - extract_function_names -> 添加提取功能(函数名)
+    - detect_skill_name -> 检测技能名
+    - infer_intent -> 推断意图
+    - analyze_code_changes -> 分析代码变更
+    - extract_function_names -> 提取函数名
+    - detect_modified_functions -> 检测被修改的函数
     """
     for prefix, action in FUNCTION_PREFIX_ACTIONS.items():
         if func_name.startswith(prefix):
@@ -643,130 +644,135 @@ def infer_intent_from_function_name(func_name: str) -> str | None:
             if len(rest) < 4:
                 return action
 
-            # 智能处理剩余部分 - 如果剩余部分包含新功能的特征词，直接返回简洁动作
-            if rest:
-                # 常见的"新功能"类词组，这些情况下直接返回简洁动作
-                simple_suffixes = ('new', 'test', 'feature', 'item')
-                if rest.lower().endswith(simple_suffixes) or rest.lower() in simple_suffixes:
-                    return action
+            # 常见的"新功能"类词组，这些情况下直接返回简洁动作
+            simple_suffixes = ('new', 'test', 'feature', 'item')
+            if rest.lower().endswith(simple_suffixes) or rest.lower() in simple_suffixes:
+                return action
 
-                # 按下划线分割
-                parts = rest.split('_')
-                # 过滤掉常见词，保留核心名词
-                filtered = [p for p in parts
-                           if p.lower() not in ('name', 'file', 'path', 'content',
-                                              'data', 'message', 'lines', 'from',
-                                              'function', 'the', 'a', 'an', 'list',
-                                              'new', 'test', 'feature')]
-                if filtered:
-                    readable = filtered[0]  # 取第一个有意义的词
-                    return f"{action}({readable})"
+            # 按下划线分割
+            parts = rest.split('_')
+            # 过滤掉常见词，保留核心名词
+            filtered = [p for p in parts
+                       if p.lower() not in ('name', 'file', 'path', 'content',
+                                          'data', 'message', 'lines', 'from',
+                                          'function', 'the', 'a', 'an', 'list',
+                                          'new', 'test', 'feature', 'removed',
+                                          'changes', 'added', 'modified', 'items')]
 
-            return action
+            # 如果过滤后只剩通用词（names, functions），使用函数名本身
+            generic_terms = ('names', 'functions', 'data', 'items', 'values')
+            if not filtered or all(f.lower() in generic_terms for f in filtered):
+                # 返回函数名的后半部分（去掉前缀后的部分），用更友好的格式
+                return rest.replace('_', ' ')
+
+            readable = '_'.join(filtered)  # 保留完整的剩余部分
+            return f"{action}({readable})"
+
     return None
 
 
+def extract_removed_function_names(removed: List[str]) -> List[str]:
+    """提取被删除的函数名。"""
+    func_names = []
+    for line in removed:
+        match = re.search(r'def\s+(\w+)\s*\(', line)
+        if match:
+            func_names.append(match.group(1))
+    return func_names
+
+
+def detect_modified_functions(added_funcs: List[str], removed_funcs: List[str]) -> List[str]:
+    """检测被修改的函数（既被删除又新增的同名函数）。"""
+    modified = []
+    for func in added_funcs:
+        if func in removed_funcs:
+            modified.append(func)
+    return modified
+
+
 def analyze_code_changes(added: List[str], removed: List[str], filename: str) -> str:
-    """分析代码文件变更。"""
+    """分析代码文件变更，生成有意义的描述。"""
     # 先尝试获取功能描述
     func_desc = get_function_description(filename)
 
-    # 提取新增的类名和函数名
+    # 提取新增和删除的类名和函数名
     added_classes = extract_class_names(added)
+    removed_classes = extract_class_names(removed)
     added_funcs = extract_function_names(added)
+    removed_funcs = extract_removed_function_names(removed)
     added_imports = [l for l in added if 'import ' in l or 'from ' in l]
 
-    # 判断变更类型 - 使用更精确的检测
-    # 1. 如果删除行数 > 0，说明是修改已有文件
-    # 2. 检查文件是否是新文件（通过 git ls-files）
-    is_modification = len(removed) > 0
-
-    # 判断是否为新文件（慎重判断）
-    is_new_file = False
-    if not is_modification and len(added) > 10:
-        # 检查文件是否已在 git 中跟踪
-        try:
-            result = subprocess.run(
-                ['git', 'ls-files', '--', filename],
-                capture_output=True,
-                text=True,
-                cwd='/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills'
-            )
-            # 如果已跟踪，说明是修改而不是新增
-            if result.stdout.strip():
-                is_new_file = False
-            else:
-                is_new_file = True
-        except:
-            # 默认保守处理：如果无法判断，视为修改
-            is_new_file = False
-    has_new_classes = len(added_classes) > 0
+    # 判断是否为修改（既有删除又有新增）
+    is_modification = len(removed) > 0 and len(added) > 0
     has_new_funcs = len(added_funcs) > 0
+    has_new_classes = len(added_classes) > 0
+
+    # 检测被修改的函数
+    modified_funcs = detect_modified_functions(added_funcs, removed_funcs)
 
     # 构建描述
-    if is_new_file:
-        if func_desc:
-            return f"新增 {func_desc}模块"
-        elif has_new_classes:
-            return f"新增 {added_classes[0]} 等类"
-        else:
-            return f"新增 {filename}"
+    # 优先处理修改场景（既有新增又有删除）
+    if is_modification:
+        if modified_funcs:
+            # 有函数被修改
+            intent = infer_intent_from_function_name(modified_funcs[0])
+            if intent:
+                return f"改进 {modified_funcs[0]}() - {intent}"
+            return f"改进 {modified_funcs[0]}() 函数"
 
-    # 优先使用函数名语义分析来描述变更（比类名更具体）
+        if has_new_funcs:
+            # 新增了函数
+            intent = infer_intent_from_function_name(added_funcs[0])
+            if intent:
+                return f"改进 {filename} - 新增 {intent}"
+            return f"改进 {filename} - 新增 {added_funcs[0]}() 函数"
+
+        if func_desc:
+            return f"改进 {func_desc}"
+
+        return f"改进 {filename} 代码"
+
+    # 新增函数场景
     if has_new_funcs:
-        # 尝试从第一个新增的函数名推断意图
         intent = infer_intent_from_function_name(added_funcs[0])
         if intent:
             if len(added_funcs) == 1:
-                return intent  # 直接返回意图，如 "添加推断功能"
+                return f"新增 {intent}"
             else:
-                # 多个函数时，尝试推断所有函数的意图
-                intents = [infer_intent_from_function_name(f) for f in added_funcs]
-                valid_intents = [i for i in intents if i]
-                if valid_intents:
-                    return f"{valid_intents[0]}，共 {len(added_funcs)} 个函数"
-                return f"添加 {len(added_funcs)} 个函数"
-
-        # 如果没有语义匹配，使用原来的描述
-        if func_desc:
-            if len(added_funcs) == 1:
-                return f"更新 {func_desc} - 添加 {added_funcs[0]}() 函数"
-            else:
-                return f"更新 {func_desc} - 添加 {len(added_funcs)} 个函数"
-        else:
-            if len(added_funcs) == 1:
-                return f"更新 {filename} - 添加 {added_funcs[0]}() 函数"
-            else:
-                return f"更新 {filename} - 添加 {len(added_funcs)} 个函数"
+                return f"新增 {len(added_funcs)} 个函数 - {intent}"
+        return f"新增 {added_funcs[0]}() 函数"
 
     if has_new_classes:
         if func_desc:
-            # 结合功能描述和类名
-            if len(added_classes) == 1:
-                return f"更新 {func_desc} - 添加 {added_classes[0]} 类"
-            else:
-                return f"更新 {func_desc} - 添加 {len(added_classes)} 个类"
-        else:
-            return f"更新 {filename} - 添加 {added_classes[0]}"
+            return f"新增 {added_classes[0]} 类到 {func_desc}"
+        return f"新增 {added_classes[0]} 类"
 
     # 检查关键词 - 生成更具体的描述
-    if any('fix' in l.lower() or 'bug' in l.lower() for l in added + removed):
+    fix_keywords = ['fix', 'bug', '修复', '错误', '问题']
+    if any(any(kw in l.lower() for kw in fix_keywords) for l in added + removed):
         if func_desc:
             return f"修复 {func_desc} 中的问题"
         return "修复代码问题"
 
-    if any('update' in l.lower() or 'refactor' in l.lower() for l in added + removed):
+    refactor_keywords = ['refactor', '重构', '优化', 'improve', 'optimize']
+    if any(any(kw in l.lower() for kw in refactor_keywords) for l in added + removed):
         if func_desc:
-            return f"更新 {func_desc}"
-        return f"更新 {filename}"
+            return f"重构 {func_desc}"
+        return "重构代码"
+
+    update_keywords = ['update', '改进', 'enhance', 'modify']
+    if any(any(kw in l.lower() for kw in update_keywords) for l in added + removed):
+        if func_desc:
+            return f"改进 {func_desc}"
+        return f"改进 {filename}"
 
     if added_imports and func_desc:
-        return f"更新 {func_desc} - 添加导入"
+        return f"改进 {func_desc} - 新增导入"
 
     if func_desc:
-        return f"更新 {func_desc}"
+        return f"改进 {func_desc}"
 
-    return f"更新 {filename} 代码"
+    return f"改进 {filename} 代码"
 
 
 def analyze_gitignore_changes(added: List[str], removed: List[str]) -> str:
