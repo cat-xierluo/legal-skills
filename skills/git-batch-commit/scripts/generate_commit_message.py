@@ -306,6 +306,22 @@ def analyze_changes(files: List[str], category: str) -> str:
             actual_category = parts[2]  # Use the type (feat, fix, style, etc.)
             is_skill_format = True
 
+    # 优先处理技能文件（跳过通用 patterns 匹配）
+    # 技能文件需要特殊处理，不能被 scripts/、test/ 等通用模式提前匹配
+    if len(files) == 1:
+        filepath = files[0]
+        if 'skills/' in filepath:
+            filename = filepath.split('/')[-1]
+            skill_name_from_path = filepath.split('skills/')[1].split('/')[0]
+            # 检测是否为新技能（SKILL.md 未被 git 跟踪）
+            if is_new_skill_being_added(skill_name_from_path, files):
+                return f'添加 {skill_name_from_path} 技能'
+            else:
+                # 分析具体变更内容，生成有意义的描述
+                diff = get_file_diff(filepath)
+                specific_change = analyze_diff_content(diff, filename)
+                return f'{skill_name_from_path} 技能 - {specific_change}'
+
     # Try to match patterns
     if actual_category in MESSAGE_TEMPLATES:
         templates = MESSAGE_TEMPLATES[actual_category]
@@ -349,15 +365,6 @@ def analyze_changes(files: List[str], category: str) -> str:
                         return '更新 Skill 开发指南'
                     else:
                         return f'更新 {doc_name} 文档'
-
-                # For skill files (both skill format and non-skill format)
-                if 'skills/' in filepath:
-                    skill_name_from_path = filepath.split('skills/')[1].split('/')[0]
-                    # 检测是否为新技能（SKILL.md 未被 git 跟踪）
-                    if is_new_skill_being_added(skill_name_from_path, files):
-                        return f'添加 {skill_name_from_path} 技能'
-                    else:
-                        return f'更新 {skill_name_from_path} 技能'
 
                 # For config files, mention specific config
                 if actual_category == 'config':
@@ -792,13 +799,111 @@ def analyze_gitignore_changes(added: List[str], removed: List[str]) -> str:
     return "更新 gitignore 忽略规则"
 
 
+# 配置项到语义描述的映射
+CONFIG_KEY_MEANINGS = {
+    # 间距相关
+    'space_before': '段前间距',
+    'space_after': '段后间距',
+    'margin': '边距',
+    'padding': '内边距',
+    'gap': '间隙',
+    'line_height': '行高',
+    'spacing': '间距',
+
+    # 字体相关
+    'font': '字体',
+    'font_size': '字号',
+    'font_family': '字体族',
+    'bold': '加粗',
+    'italic': '斜体',
+    'size': '尺寸',
+
+    # 对齐相关
+    'align': '对齐方式',
+    'indent': '缩进',
+
+    # 颜色相关
+    'color': '颜色',
+    'background': '背景色',
+    'fill': '填充色',
+
+    # 布局相关
+    'width': '宽度',
+    'height': '高度',
+    'layout': '布局',
+
+    # 内容相关
+    'content': '内容',
+    'text': '文本',
+    'title': '标题',
+    'value': '值',
+}
+
+
 def analyze_config_changes(added: List[str], removed: List[str], filename: str) -> str:
-    """分析配置文件变更。"""
-    if added:
-        # Look for key changes
-        added_keys = [l.split(':')[0].strip() for l in added if ':' in l]
-        if added_keys:
-            return f"更新 {filename} - 添加 {', '.join(added_keys[:2])} 配置"
+    """分析配置文件变更，生成具体的描述。"""
+    if not added:
+        if removed:
+            removed_keys = [l.split(':')[0].strip() for l in removed if ':' in l]
+            if removed_keys:
+                return f"更新 {filename} - 移除 {', '.join(removed_keys[:2])} 配置"
+        return f"更新 {filename} 配置"
+
+    # 分析添加的配置项
+    added_keys = []
+    semantic_descriptions = []
+
+    for line in added:
+        if ':' in line:
+            key = line.split(':')[0].strip()
+            added_keys.append(key)
+
+            # 查找语义描述
+            key_lower = key.lower()
+            for config_key, meaning in CONFIG_KEY_MEANINGS.items():
+                if config_key in key_lower:
+                    if meaning not in semantic_descriptions:
+                        semantic_descriptions.append(meaning)
+                    break
+
+    # 分析上下文：查找配置所属的分组（如 level3, level4）
+    context_info = []
+    for line in added:
+        line_stripped = line.strip()
+        # 检测 YAML 层级标识（如 "level3:", "level4:"）
+        if line_stripped and not line_stripped.startswith('#'):
+            # 检测缩进级别，判断是否是子配置
+            indent = len(line) - len(line.lstrip())
+            if indent == 0 and line_stripped.endswith(':'):
+                # 顶级配置项
+                section_name = line_stripped[:-1]
+                context_info.append(section_name)
+
+    # 构建描述
+    if semantic_descriptions:
+        # 有语义描述
+        desc = '、'.join(semantic_descriptions[:3])
+
+        # 如果有上下文信息，添加到描述中
+        if context_info:
+            context = context_info[0]
+            # 将 level3 转换为更友好的描述
+            context_map = {
+                'level1': '一级标题',
+                'level2': '二级标题',
+                'level3': '三级标题',
+                'level4': '四级标题',
+                'level5': '五级标题',
+                'level6': '六级标题',
+            }
+            context_desc = context_map.get(context, context)
+            return f"更新 {filename} - 为 {context_desc} 添加 {desc} 配置"
+
+        return f"更新 {filename} - 添加 {desc} 配置"
+
+    if added_keys:
+        # 没有语义匹配，使用原始 key
+        return f"更新 {filename} - 添加 {', '.join(added_keys[:3])} 配置"
 
     return f"更新 {filename} 配置"
 
