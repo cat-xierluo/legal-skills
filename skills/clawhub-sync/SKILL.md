@@ -1,6 +1,7 @@
 ---
 name: clawhub-sync
-description: 将本地开发的 Skills 批量同步到 ClawHub 平台。支持智能 .gitignore 过滤、白名单控制、增量同步。本技能应在用户需要将本地 skills 发布到 ClawHub、批量同步技能、检查发布状态时使用。
+version: "1.4.0"
+description: 将本地开发的 Skills 批量同步到 ClawHub 平台。支持智能 .gitignore 过滤、白名单控制、增量同步、单个 skill 同步。本技能应在用户需要将本地 skills 发布到 ClawHub、批量同步技能、检查发布状态时使用。
 license: MIT
 ---
 
@@ -66,6 +67,104 @@ clawhub sync --all
 **交互式选择同步**：
 
 用户可以指定要同步的技能列表，我会逐个执行同步命令。
+
+---
+
+## 单个 Skill 同步工作流
+
+当需要同步指定的 skill（而非全部）时，使用此工作流。
+
+### 前置检查
+
+1. **检查登录状态**
+   ```bash
+   clawhub whoami
+   ```
+
+2. **检查白名单**
+   - 读取 `skills/clawhub-sync/config/sync-allowlist.yaml`
+   - 确认目标 skill 在白名单中（未被 `#` 注释）
+
+3. **检查许可证**
+   - 读取目标 skill 的 SKILL.md frontmatter 中的 `license` 字段
+   - 只有 MIT 许可证的 skill 才能同步
+   - CC-BY-NC-SA-4.0 等限制性许可证不应同步
+
+### 版本检测
+
+比较两个版本号：
+
+| 来源 | 位置 | 格式 |
+|------|------|------|
+| **新版本** | `skills/<skill-name>/SKILL.md` frontmatter 的 `version` | `"1.2.0"` |
+| **已记录版本** | `skills/clawhub-sync/config/sync-records.yaml` 中的 `version` | `"1.1.0"` |
+
+**版本比较逻辑**（语义化版本）：
+```
+new_version > recorded_version → 需要同步
+new_version == recorded_version → 跳过（无变化）
+new_version < recorded_version → 警告（版本回退？）
+recorded_version 为 null → 需要同步（首次发布）
+```
+
+### 执行同步
+
+**步骤 1：准备发布目录**
+```bash
+bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
+```
+
+**步骤 2：执行发布**
+```bash
+cd /tmp/clawhub-publish-<skill-name>
+clawhub sync --root . --all --bump <type> --changelog "<变更说明>"
+```
+
+**步骤 3：更新同步记录**
+
+更新 `skills/clawhub-sync/config/sync-records.yaml`：
+
+```yaml
+<skill-name>:
+  version: "<新版本号>"
+  last_sync: "<ISO 8601 时间>"
+  git_hash: "<当前 commit hash>"
+  status: synced
+  changelog_summary: "<变更说明>"
+  url: "https://clawhub.ai/skills/<skill-name>"
+  publish_id: "<从命令输出获取>"
+```
+
+### 示例：同步 git-batch-commit
+
+```bash
+# 1. 检查白名单
+grep "git-batch-commit:" skills/clawhub-sync/config/sync-allowlist.yaml
+# 输出：git-batch-commit:           # MIT
+
+# 2. 比较版本
+# SKILL.md: version: "1.2.0"
+# sync-records.yaml: version: "1.1.0"
+# 结论：1.2.0 > 1.1.0，需要同步
+
+# 3. 准备发布
+bash skills/clawhub-sync/scripts/prepare-publish.sh skills/git-batch-commit
+
+# 4. 执行发布
+cd /tmp/clawhub-publish-git-batch-commit
+clawhub sync --root . --all --bump minor --changelog "添加 ClawHub 同步工作流"
+
+# 5. 更新记录
+# 编辑 sync-records.yaml，更新 git-batch-commit 条目
+```
+
+### 失败处理
+
+- 同步失败时记录 `status: failed`
+- 不重试，让用户决定后续操作
+- 记录失败原因到 `changelog_summary`
+
+---
 
 ## 同步策略
 
