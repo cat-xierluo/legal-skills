@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -147,6 +147,160 @@
       "source": "skills/multi-search",
       "category": "productivity",
       "tags": ["research", "search", "analysis"]
+    },
+    {
+      "name": "litigation-analysis",
+      "description": "诉讼分析工具，支持起诉状与证据分析、判决书深度分析、庭审笔录复盘，生成上诉/再审决策支持",
+      "version": "1.3.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/litigation-analysis",
+      "category": "legal",
+      "tags": ["legal", "litigation", "analysis", "court"]
+    },
+    {
+      "name": "patent-analysis",
+      "description": "专利分析工具，支持专利比对、权利要求分析、侵权检查、FTO分析、规避设计分析、专利价值评估",
+      "version": "1.2.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/patent-analysis",
+      "category": "legal",
+      "tags": ["legal", "patent", "analysis", "ip"]
+    },
+    {
+      "name": "trademark-assistant",
+      "description": "面向中国商标申请的类别规划、可注册性初筛及申请材料准备技能",
+      "version": "1.4.6",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/trademark-assistant",
+      "category": "legal",
+      "tags": ["legal", "trademark", "china", "ip"]
+    },
+    {
+      "name": "legal-proposal-generator",
+      "description": "根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告等）",
+      "version": "0.1.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/legal-proposal-generator",
+      "category": "legal",
+      "tags": ["legal", "proposal", "document", "generator"]
+    },
+    {
+      "name": "de-ai-polish",
+      "description": "检测并去除文章中的AI化表述模式，用于写作润色、文本优化，去AI腔",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/de-ai-polish",
+      "category": "productivity",
+      "tags": ["writing", "polish", "ai-detection"]
+    },
+    {
+      "name": "douyin-batch-download",
+      "description": "抖音视频批量下载工具，基于 F2 框架实现高效、增量的视频下载功能",
+      "version": "1.8.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/douyin-batch-download",
+      "category": "productivity",
+      "tags": ["douyin", "video", "download"]
+    },
+    {
+      "name": "universal-media-downloader",
+      "description": "输入各类视频网站/播客平台链接后自动下载，支持抖音/B站/YouTube/小宇宙等平台",
+      "version": "0.2.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/universal-media-downloader",
+      "category": "productivity",
+      "tags": ["video", "download", "youtube", "bilibili"]
+    },
+    {
+      "name": "clawhub-sync",
+      "description": "将本地开发的 Skills 批量同步到 ClawHub 平台，支持白名单控制、增量同步",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/clawhub-sync",
+      "category": "developer-tools",
+      "tags": ["clawhub", "sync", "skill"]
+    },
+    {
+      "name": "github-star-manager",
+      "description": "GitHub Star 项目管理工具，支持自动发现并 Star 项目，同步追踪更新",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/github-star-manager",
+      "category": "developer-tools",
+      "tags": ["github", "star", "manager"]
+    },
+    {
+      "name": "skill-architect",
+      "description": "技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/skill-architect",
+      "category": "developer-tools",
+      "tags": ["skill", "architect", "wizard"]
+    },
+    {
+      "name": "skill-lint",
+      "description": "Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/skill-lint",
+      "category": "developer-tools",
+      "tags": ["skill", "lint", "audit"]
+    },
+    {
+      "name": "repo-research",
+      "description": "GitHub 仓库深度研究与整合分析工具，支持主题驱动搜索、代码分析、架构评估",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/repo-research",
+      "category": "developer-tools",
+      "tags": ["github", "research", "code-analysis"]
+    },
+    {
+      "name": "minimax-web-search",
+      "description": "通过 MiniMax MCP 进行网络搜索，适用于 OpenClaw 平台",
+      "version": "0.1.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/minimax-web-search",
+      "category": "productivity",
+      "tags": ["minimax", "web-search", "openclaw"]
+    },
+    {
+      "name": "minimax-image-understand",
+      "description": "通过 MiniMax MCP 进行图像理解，适用于 OpenClaw 平台",
+      "version": "0.1.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/minimax-image-understand",
+      "category": "productivity",
+      "tags": ["minimax", "image", "openclaw"]
     }
   ]
 }
