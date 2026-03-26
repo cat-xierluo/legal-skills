@@ -2,7 +2,7 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.0"
+version: "1.2.0"
 license: MIT
 description: 智能 Git 批量提交工具。当用户说 "git 提交"、"git commit"、"批量提交"、"拆分提交"、"整理提交" 时使用，或者当用户暂存了多个不同类型的文件需要分开提交时使用。自动将混合的文件修改按类型分类（依赖管理、文档更新、license 文件、配置、源代码等），并创建多个清晰聚焦的提交，使用标准化的提交信息格式。帮助保持清晰的 Git 历史，确保每个提交都有单一、明确的目的。使用英文前缀（docs:、feat:、fix: 等）加中文内容，支持 GitHub 彩色标签显示。
 ---
@@ -217,3 +217,60 @@ Git 批量提交工具
 批量提交完成：3/3 个提交已创建
 ============================================================
 ```
+
+## ClawHub 同步工作流（可选）
+
+完成 Git 提交后，如果满足以下条件，自动触发 ClawHub 同步：
+
+### 触发条件（全部满足才执行）
+
+1. **本地存在 clawhub-sync 技能**
+   - 检查 `skills/clawhub-sync/` 目录是否存在
+
+2. **提交涉及 skills 目录**
+   - 提交的文件中包含 `skills/<skill-name>/` 下的文件
+
+3. **版本号有更新**
+   - 读取 `skills/<skill-name>/SKILL.md` 的 frontmatter 中的 `version` 字段
+   - 比较 `skills/clawhub-sync/config/sync-records.yaml` 中记录的版本
+   - 如果新版本 > 已记录版本（或记录中无版本），则需要同步
+
+4. **在白名单中**
+   - 检查 `skills/clawhub-sync/config/sync-allowlist.yaml`
+   - skill 必须在白名单中（未被 `#` 注释）
+
+### 执行步骤
+
+对于每个需要同步的 skill：
+
+```bash
+clawhub sync skills/<skill-name>
+```
+
+### 失败处理
+
+- 同步失败时仅显示警告信息
+- 不影响 Git 提交结果
+- 继续处理其他 skills
+
+### 版本比较逻辑
+
+```
+new_version = SKILL.md frontmatter 中的 version（如 "1.2.0"）
+recorded_version = sync-records.yaml 中记录的版本（如 "1.1.0"）
+
+if new_version > recorded_version:
+    执行同步
+```
+
+版本号按语义化版本规则比较（major.minor.patch）。
+
+### 示例场景
+
+| 场景 | 版本变化 | 白名单 | 结果 |
+|------|----------|--------|------|
+| 版本升级 | "1.0.0" → "1.1.0" | 在白名单 | ✅ 执行同步 |
+| 无版本变化 | "1.1.0" → "1.1.0" | 在白名单 | ❌ 跳过 |
+| 不在白名单 | 任意 | 被注释 | ❌ 跳过 |
+| 首次发布 | "1.0.0" | 在白名单 | ✅ 执行同步（记录中无版本） |
+| clawhub-sync 不存在 | - | - | ❌ 静默跳过整个工作流 |
