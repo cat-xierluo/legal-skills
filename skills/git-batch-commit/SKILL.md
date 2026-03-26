@@ -251,9 +251,13 @@ bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
 **步骤 2：执行发布（使用 publish 命令）**
 ```bash
 clawhub publish /tmp/clawhub-publish-<skill-name> \
+  --slug <skill-name> \
   --version "<新版本号>" \
   --changelog "<变更说明>"
 ```
+
+> **⚠️ 必须指定 --slug**
+> 临时目录名可能包含前缀，使用 `--slug` 确保正确的 skill 标识符。
 
 > **为什么用 `publish` 而不是 `sync`？**
 > - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
