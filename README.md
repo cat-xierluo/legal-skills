@@ -114,6 +114,14 @@
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
 
+## 📚 开发与编排指南
+
+- [SKILL-DEV-GUIDE.md](SKILL-DEV-GUIDE.md)：单个 Skill 的开发规范
+- [SKILL-ORCHESTRATION-GUIDE.md](SKILL-ORCHESTRATION-GUIDE.md)：多个 Skill 的协作编排规范
+- [SKILL-HANDOFF-GUIDE.md](SKILL-HANDOFF-GUIDE.md)：多个 Skill 之间的交接契约与 handoff package 规范
+
+---
+
 ## 📖 协作规范
 
 本项目遵循 [AGENTS.md](AGENTS.md) 定义的协作规范：
