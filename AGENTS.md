@@ -390,7 +390,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| v1.5.5 | 2026-03-24 | 新增 CC BY-NC-SA 4.0 商用许可联系方式规范：统一为 `secretxierluo@gmail.com` / 微信 ywxlaw |
+| v1.5.5 | 2026-03-24 | 新增 CC BY-NC-SA 4.0 商用许可联系方式规范，统一联系方式 |
 | v1.5.4 | 2026-03-21 | 精简 SKILL.md frontmatter：删除 23 个技能的 source 字段，只保留 homepage（符合 ClawHub 规范：source/homepage 二选一）                 |
 | v1.5.3 | 2026-03-21 | 重构 ClawHub 同步指南：删除 CLAWHUB.md，创建 clawhub-sync skill 替代，提供交互式批量同步能力                                           |
 | v1.5.2 | 2026-03-21 | 完善 SKILL.md frontmatter 和 CHANGELOG 格式：为 5 个技能添加 license 字段，修复 3 个技能的 CHANGELOG 版本格式（douyin-batch-download、de-ai-polish、svg-article-illustrator） |
