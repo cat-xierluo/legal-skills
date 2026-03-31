@@ -1,9 +1,10 @@
 # Skill 编排指南 (Skill Orchestration Guide)
 
-本指南是 [SKILL-DEV-GUIDE.md](SKILL-DEV-GUIDE.md) 的补充文档。
+本指南是 [SKILL-DEV-GUIDE.md](SKILL-DEV-GUIDE.md) 的补充文档；涉及上下游交接格式时，请结合 [SKILL-HANDOFF-GUIDE.md](SKILL-HANDOFF-GUIDE.md) 一并阅读。
 
 - **SKILL-DEV-GUIDE.md**：单个 Skill 的开发规范
 - **SKILL-ORCHESTRATION-GUIDE.md**：多个 Skill 的协作编排规范
+- **SKILL-HANDOFF-GUIDE.md**：多个 Skill 之间的交接契约规范
 
 ---
 
