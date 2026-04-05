@@ -2,6 +2,30 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.4.0] - 2026-04-05
+
+### 改进
+
+- **说话人分离默认启用** — `diarize` 参数默认值从 `false` 改为 `true`
+  - 两方以上对话是常态，默认启用更符合实际使用场景
+  - CLI 新增 `--no-diarize` 参数用于显式禁用
+- **转录后自动附带总结提示词** — `/transcribe` 响应新增 `summary_prompt` 和 `text_preview` 字段
+  - Agent 一次调用即可拿到转录结果 + 总结提示词，无需额外请求 `/summary`
+  - 直接生成总结 JSON 后调用 `/inject_summary` 即可完成全流程
+- **SKILL.md 新增默认工作流** — 平台无关的 Agent 工作流章节，任何 Agent 平台均可遵循
+- **移除环境检测** — 删除 `detect_agent_environment()` 函数，总结由 Agent 自行完成，server 无需感知运行平台
+
+### 清理
+
+- 移除 `detect_agent_environment()` 环境检测函数，server 无需感知运行平台
+- 移除 SKILL.md 中对特定平台的绑定描述（OpenClaw、Claude Code 等）
+- 移除 Nano/E2E 模型死代码（`get_model_type()` 函数、`init_model()` 中的 E2E 分支、`--model` 参数）
+- 移除 `models.json` 中不可用的 Nano 模型条目
+- 移除 `--claude-code` 参数（功能已被 `/transcribe` 返回 `summary_prompt` 取代）
+- 移除未使用的全局变量 `model`/`model_with_spk` 和 `inject_summary_to_file` 导入
+- 修复 API 文档字符串中 `diarize` 默认值描述（false → true）
+- 简化 `transcribe.py` 帮助文本，移除 Nano 模型示例
+
 ## [1.3.0] - 2026-04-05
 
 ### 新增

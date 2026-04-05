@@ -137,40 +137,6 @@ except ImportError:
 # 环境检测函数
 # ============================================================================
 
-def detect_agent_environment() -> dict:
-    """
-    检测当前运行环境
-    
-    Returns:
-        dict: {
-            "is_agent": bool,           # 是否在 Agent 环境中
-            "agent_type": str,          # "openclaude" | "claude_code" | None
-            "has_api_key": bool,        # 是否有 API key
-            "summary_prompt": str | None  # 总结提示词（如果在 Agent 环境中）
-        }
-    """
-    result = {
-        "is_agent": False,
-        "agent_type": None,
-        "has_api_key": False,
-        "summary_prompt": None
-    }
-    
-    # 检测 OpenClaw
-    if os.environ.get("OPENCLAW_SERVICE_MARKER") == "openclaw":
-        result["is_agent"] = True
-        result["agent_type"] = "openclaude"
-        result["has_api_key"] = bool(os.environ.get("OPENCLAW_GATEWAY_TOKEN"))
-    
-    # 检测 Claude Code
-    elif os.environ.get("CLAUDE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"):
-        result["is_agent"] = True
-        result["agent_type"] = "claude_code"
-        result["has_api_key"] = True
-    
-    return result
-
-
 def get_summary_prompt_from_file(md_path: str) -> tuple[bool, str, str]:
     """
     从转录文件中提取文本并生成总结提示词
@@ -345,21 +311,10 @@ from funasr import AutoModel
 
 app = FastAPI(title="FunASR Transcribe API", version="1.0.0")
 
-# 全局模型实例（用于向后兼容）
-model = None
-model_with_spk = None
-
 SUPPORTED_EXTENSIONS = {
     '.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm',  # 视频
     '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.opus', '.wma', '.caf'  # 音频
 }
-
-
-def get_model_type(model_id: str) -> str:
-    """判断模型类型：pipeline 或 e2e"""
-    if model_id.startswith("FunAudioLLM/fun-asr"):
-        return "e2e"
-    return "pipeline"
 
 
 def init_model(with_speaker: bool = False, model_id: str = None):
@@ -372,11 +327,10 @@ def init_model(with_speaker: bool = False, model_id: str = None):
     Returns:
         FunASR 模型实例
     """
-    global model, model_with_spk, MODEL_CACHE
+    global MODEL_CACHE
 
     # 使用指定模型或默认模型
     use_model_id = model_id or DEFAULT_MODEL
-    model_type = get_model_type(use_model_id)
 
     # 构建缓存键值
     cache_key = f"{use_model_id}_spk{with_speaker}"
@@ -386,51 +340,26 @@ def init_model(with_speaker: bool = False, model_id: str = None):
         return MODEL_CACHE[cache_key]
 
     print(f"正在加载 ASR 模型: {use_model_id}")
-    print(f"模型类型: {'端到端 (E2E)' if model_type == 'e2e' else '流水线 (Pipeline)'}")
 
-    if model_type == "e2e":
-        # 端到端模型（Fun-ASR-Nano）
-        if with_speaker:
-            # E2E 模型暂不支持说话人分离，降级处理
-            print("⚠️ 端到端模型不支持说话人分离，已禁用")
-            with_speaker = False
-
-        # E2E 模型（如 Nano）初始化参数
-        model_kwargs = {
-            "model": use_model_id,
-            "disable_update": True,
-            "disable_log": False,
-            "trust_remote_code": True,  # Nano 模型需要此参数
-        }
-
-        # 为 Nano 模型添加 VAD 模型以提高准确性
-        if "nano" in use_model_id.lower():
-            model_kwargs["vad_model"] = "fsmn-vad"
-            model_kwargs["vad_kwargs"] = {"max_single_segment_time": 30000}
-
-        model_instance = AutoModel(**model_kwargs)
-        print(f"模型加载完成: {use_model_id}")
+    if with_speaker:
+        model_instance = AutoModel(
+            model=use_model_id,
+            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+            spk_model="cam++",
+            disable_update=True,
+            disable_log=False,
+        )
+        print(f"模型加载完成（含说话人分离）")
     else:
-        # 传统流水线模型
-        if with_speaker:
-            model_instance = AutoModel(
-                model=use_model_id,
-                vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-                punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-                spk_model="cam++",
-                disable_update=True,
-                disable_log=False,
-            )
-            print(f"模型加载完成（含说话人分离）")
-        else:
-            model_instance = AutoModel(
-                model=use_model_id,
-                vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-                punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-                disable_update=True,
-                disable_log=False,
-            )
-            print("模型加载完成")
+        model_instance = AutoModel(
+            model=use_model_id,
+            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+            disable_update=True,
+            disable_log=False,
+        )
+        print("模型加载完成")
 
     # 缓存模型实例
     MODEL_CACHE[cache_key] = model_instance
@@ -658,7 +587,7 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False, slide
 class TranscribeRequest(BaseModel):
     file_path: str
     output_path: Optional[str] = None
-    diarize: bool = False
+    diarize: bool = True  # 默认启用说话人分离
     model_id: Optional[str] = None  # 指定使用的模型 ID
     extract_slides: bool = False  # 提取视频关键帧截图
     slide_threshold: float = 27.0  # 场景检测阈值
@@ -667,7 +596,7 @@ class TranscribeRequest(BaseModel):
 class BatchTranscribeRequest(BaseModel):
     directory: str
     output_dir: Optional[str] = None
-    diarize: bool = False
+    diarize: bool = True  # 默认启用说话人分离
     model_id: Optional[str] = None  # 指定使用的模型 ID
 
 
@@ -678,6 +607,8 @@ class TranscribeResponse(BaseModel):
     sentence_count: Optional[int] = None
     slide_count: Optional[int] = None  # 提取的关键帧数量
     archive_path: Optional[str] = None  # 归档目录路径
+    summary_prompt: Optional[str] = None  # 自动附带的 AI 总结提示词
+    text_preview: Optional[str] = None   # 转录文本预览（前500字）
     error: Optional[str] = None
 
 
@@ -721,7 +652,6 @@ async def update_activity_middleware(request: Request, call_next):
 @app.get("/health", response_model=HealthResponse)
 async def health():
     """健康检查"""
-    env_info = detect_agent_environment()
     return HealthResponse(
         status="ok",
         service="FunASR Transcribe",
@@ -851,7 +781,7 @@ async def transcribe(request: TranscribeRequest):
     请求参数:
         - file_path: 文件路径（必需）
         - output_path: 输出 Markdown 文件路径（可选）
-        - diarize: 是否启用说话人分离（可选，默认 false）
+        - diarize: 是否启用说话人分离（可选，默认 true）
         - model_id: 指定使用的模型 ID（可选，默认使用 Paraformer）
 
     返回:
@@ -939,6 +869,20 @@ async def transcribe(request: TranscribeRequest):
             slide_threshold=request.slide_threshold,
         )
 
+        # 自动生成总结提示词（供 Agent 直接使用，免去额外调用 /summary）
+        summary_prompt = None
+        text_preview = None
+        if SUMMARY_MODULE:
+            try:
+                ok, prompt, extracted_text = SUMMARY_MODULE.summarize_file_for_claude(Path(output_path))
+                if ok:
+                    summary_prompt = prompt
+                    text_preview = extracted_text[:500] if extracted_text else None
+                else:
+                    print(f"总结提示词生成跳过: {prompt}")
+            except Exception as e:
+                print(f"生成总结提示词失败（不影响转录结果）: {e}")
+
         return TranscribeResponse(
             success=True,
             output_path=output_path,
@@ -946,6 +890,8 @@ async def transcribe(request: TranscribeRequest):
             sentence_count=len(result.get('sentence_info', [])) if 'sentence_info' in result else 0,
             slide_count=slide_count,
             archive_path=archive_info.get("archive_path"),
+            summary_prompt=summary_prompt,
+            text_preview=text_preview,
         )
 
     except HTTPException:
@@ -964,7 +910,7 @@ async def batch_transcribe(request: BatchTranscribeRequest):
     请求参数:
         - directory: 目录路径（必需）
         - output_dir: 输出目录（可选，默认同目录）
-        - diarize: 是否启用说话人分离（可选，默认 false）
+        - diarize: 是否启用说话人分离（可选，默认 true）
         - model_id: 指定使用的模型 ID（可选，默认使用 Paraformer）
     """
     try:
