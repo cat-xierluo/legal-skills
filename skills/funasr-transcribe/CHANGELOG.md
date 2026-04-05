@@ -2,6 +2,33 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.3.0] - 2026-04-05
+
+### 新增
+
+- **视频关键帧（PPT 幻灯片）自动提取** — 转录视频时可同时提取画面变化截图
+  - 四层过滤流水线：场景检测+兜底采样 → pHash 去重 → 空白回查补帧 → 最终过滤
+  - PySceneDetect 检测画面变化 + 每 3 分钟兜底采样防止空白
+  - 5 分钟以上无变化区域自动回查补帧
+  - 截图插入转录文本对应时间戳位置
+  - 通过 `--slides` 参数启用
+- **转录归档（Archive）机制** — 每次转录自动归档完整记录
+  - 归档目录：`archive/YYYYMMDD_HHMMSS_文件名/`
+  - 包含：Markdown 副本、截图副本（如有）、`transcription_meta.json` 元数据
+  - API 响应新增 `archive_path` 字段
+
+### 改进
+
+- `result_to_markdown()` 支持在转录段落间插入截图引用
+- `/transcribe` 端点新增 `extract_slides`、`slide_threshold` 参数
+- `auto_transcribe.py` 新增 `--slides`、`--slide-threshold` 命令行参数
+- `assets/requirements.txt` 新增 `scenedetect[opencv]`、`imagehash` 依赖
+
+### 依赖
+
+- `scenedetect[opencv]>=0.6.4` — 视频场景检测
+- `imagehash>=4.3.1` — 感知哈希去重
+
 ## [1.2.0] - 2026-02-14
 
 ### 修复

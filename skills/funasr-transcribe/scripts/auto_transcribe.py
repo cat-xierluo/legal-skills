@@ -66,13 +66,15 @@ def start_server():
     return False
 
 
-def transcribe(file_path: str, output_path: str = None, diarize: bool = False, api_url: str = "http://127.0.0.1:8765") -> dict:
+def transcribe(file_path: str, output_path: str = None, diarize: bool = False, api_url: str = "http://127.0.0.1:8765", extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
     """转录音频文件"""
     print(f"📝 转录中: {file_path}")
-    
+
     payload = {
         "file_path": file_path,
-        "diarize": diarize
+        "diarize": diarize,
+        "extract_slides": extract_slides,
+        "slide_threshold": slide_threshold
     }
     if output_path:
         payload["output_path"] = output_path
@@ -143,6 +145,8 @@ def main():
     parser.add_argument("--no-summary", action="store_true", help="跳过总结步骤")
     parser.add_argument("--prompt-only", action="store_true", help="只返回总结提示词，不生成总结")
     parser.add_argument("--api", default="http://127.0.0.1:8765", help="API 地址")
+    parser.add_argument("--slides", action="store_true", help="提取视频关键帧截图（PPT幻灯片）")
+    parser.add_argument("--slide-threshold", type=float, default=27.0, help="场景检测阈值（默认27.0，值越低越灵敏）")
     
     args = parser.parse_args()
     
@@ -166,7 +170,9 @@ def main():
         str(file_path),
         output_path=output_path,
         diarize=args.diarize,
-        api_url=api_url
+        api_url=api_url,
+        extract_slides=args.slides,
+        slide_threshold=args.slide_threshold,
     )
     
     md_path = transcribe_result.get("output_path", output_path)

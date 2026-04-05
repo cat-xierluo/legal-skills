@@ -47,7 +47,8 @@ def check_server(server_url: str) -> bool:
 
 def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
                     output_path: str = None, diarize: bool = False,
-                    model_id: str = None) -> dict:
+                    model_id: str = None,
+                    extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
     """
     转录单个文件
 
@@ -57,6 +58,8 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         output_path: 输出 Markdown 文件路径
         diarize: 是否启用说话人分离
         model_id: 指定使用的模型 ID（可选）
+        extract_slides: 是否提取视频关键帧截图
+        slide_threshold: 场景检测阈值
 
     Returns:
         转录结果字典
@@ -69,7 +72,9 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
 
     payload = {
         "file_path": file_path,
-        "diarize": diarize
+        "diarize": diarize,
+        "extract_slides": extract_slides,
+        "slide_threshold": slide_threshold,
     }
     if output_path:
         payload["output_path"] = os.path.abspath(output_path)
@@ -209,6 +214,8 @@ def main():
     parser.add_argument('--claude-code', action='store_true', help='Claude Code 模式：自动请求 AI 生成并注入总结')
     parser.add_argument('--model', choices=['paraformer'],
                        help='选择使用的 ASR 模型（默认: paraformer）')
+    parser.add_argument('--slides', action='store_true', help='提取视频关键帧截图（PPT幻灯片）')
+    parser.add_argument('--slide-threshold', type=float, default=27.0, help='场景检测阈值（默认27.0，值越低越灵敏）')
 
     args = parser.parse_args()
 
@@ -241,7 +248,9 @@ def main():
             server_url=args.server,
             output_path=args.output,
             diarize=args.diarize,
-            model_id=model_id
+            model_id=model_id,
+            extract_slides=args.slides,
+            slide_threshold=args.slide_threshold,
         )
 
     # 输出结果

@@ -9,6 +9,7 @@ FunASR 转录服务 - HTTP API 服务器（FastAPI版）
 import os
 import sys
 import json
+import shutil
 import signal
 import time
 from datetime import datetime
@@ -16,12 +17,96 @@ from pathlib import Path
 from typing import Optional
 import argparse
 import threading
-from pathlib import Path
 
 # 获取脚本所在目录和 skill 根目录
 SCRIPT_DIR = Path(__file__).parent.absolute()
 SKILL_DIR = SCRIPT_DIR.parent
 MODELS_CONFIG = SKILL_DIR / "assets" / "models.json"
+ARCHIVE_ROOT = SKILL_DIR / "archive"
+
+
+def build_archive_subdir(source_file: str) -> Path:
+    """构建归档子目录路径：archive/YYYYMMDD_HHMMSS_文件名（去扩展名）"""
+    now = datetime.now()
+    date_str = now.strftime("%Y%m%d")
+    time_str = now.strftime("%H%M%S")
+    base_name = Path(source_file).stem
+    # 截断过长的文件名
+    if len(base_name) > 60:
+        base_name = base_name[:60]
+    return ARCHIVE_ROOT / f"{date_str}_{time_str}_{base_name}"
+
+
+def archive_transcription(source_file: str, output_md: str, slides: list = None,
+                          diarize: bool = False, slide_threshold: float = 27.0) -> dict:
+    """归档转录结果到 archive 目录
+
+    参照 mineru-ocr 的归档模式，每次转录后在 archive/ 下创建：
+      - YYYYMMDD_HHMMSS_文件名/transcription_meta.json  — 元数据
+      - YYYYMMDD_HHMMSS_文件名/文件名.md                 — 转录文件副本
+      - YYYYMMDD_HHMMSS_文件名/slides/                   — 关键帧截图（如有）
+
+    Args:
+        source_file: 原始音视频文件路径
+        output_md: 输出的 Markdown 文件路径
+        slides: SlideFrame 列表（可选）
+        diarize: 是否启用了说话人分离
+        slide_threshold: 场景检测阈值
+
+    Returns:
+        dict: {archive_path, slide_count, ...}
+    """
+    try:
+        archive_dir = build_archive_subdir(source_file)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. 复制 Markdown 文件
+        md_name = Path(output_md).name
+        archive_md = archive_dir / md_name
+        shutil.copy2(output_md, archive_md)
+
+        # 2. 复制 slides 图片（如果有）
+        slide_manifest = []
+        if slides:
+            archive_slides_dir = archive_dir / "slides"
+            archive_slides_dir.mkdir(exist_ok=True)
+            for s in slides:
+                src = s.image_path if hasattr(s, 'image_path') else str(s)
+                if os.path.exists(src):
+                    dest = archive_slides_dir / os.path.basename(src)
+                    shutil.copy2(src, dest)
+                    slide_manifest.append({
+                        "image": os.path.basename(src),
+                        "timestamp_ms": s.timestamp_ms if hasattr(s, 'timestamp_ms') else 0,
+                        "time_label": s.time_label if hasattr(s, 'time_label') else "",
+                    })
+
+        # 3. 写入元数据
+        meta = {
+            "source_file": str(Path(source_file).absolute()),
+            "output_markdown": str(Path(output_md).absolute()),
+            "archive_path": str(archive_dir),
+            "timestamp": datetime.now().isoformat(),
+            "options": {
+                "diarize": diarize,
+                "extract_slides": slides is not None and len(slides) > 0,
+                "slide_threshold": slide_threshold,
+            },
+            "slides": slide_manifest,
+            "slide_count": len(slide_manifest),
+        }
+        meta_path = archive_dir / "transcription_meta.json"
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        print(f"已归档到: {archive_dir}")
+        return {
+            "archive_path": str(archive_dir),
+            "slide_count": len(slide_manifest),
+        }
+    except Exception as e:
+        print(f"归档失败（不影响转录结果）: {e}")
+        return {"archive_path": None, "slide_count": 0, "error": str(e)}
 
 # 尝试导入 summary 模块（用于 AI 总结功能）
 SUMMARY_MODULE = None
@@ -32,6 +117,18 @@ except ImportError:
     try:
         import summary as summary_module
         SUMMARY_MODULE = summary_module
+    except ImportError:
+        pass
+
+# 尝试导入 slide_extractor 模块（用于视频关键帧提取）
+SLIDE_EXTRACTOR_AVAILABLE = False
+try:
+    from . import slide_extractor as slide_extractor_module
+    SLIDE_EXTRACTOR_AVAILABLE = True
+except ImportError:
+    try:
+        import slide_extractor as slide_extractor_module
+        SLIDE_EXTRACTOR_AVAILABLE = True
     except ImportError:
         pass
 
@@ -378,9 +475,34 @@ def split_text_by_sentences(text: str) -> list:
     return result
 
 
-def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> str:
-    """将转录结果转换为 Markdown 格式"""
+def result_to_markdown(result: dict, filename: str, diarize: bool = False, slides: list = None) -> str:
+    """将转录结果转换为 Markdown 格式
+
+    Args:
+        result: FunASR 转录结果
+        filename: 原始文件名
+        diarize: 是否启用说话人分离
+        slides: SlideFrame 列表（可选），用于在转录文本中插入关键帧截图
+    """
     md_lines = []
+
+    # 构建 slide 迭代器（按 timestamp_ms 排序）
+    # slide_queue 用于按时间顺序在转录段落前插入截图
+    slide_queue = list(slides) if slides else []
+    slide_idx = 0  # 当前未插入的 slide 索引
+
+    def _flush_slides_before(timestamp_ms: int):
+        """输出所有 timestamp_ms <= 给定时间的未插入 slides"""
+        nonlocal slide_idx, md_lines
+        while slide_idx < len(slide_queue):
+            s = slide_queue[slide_idx]
+            if s.timestamp_ms <= timestamp_ms:
+                # 使用相对于 Markdown 文件的路径
+                rel = s.relative_path or os.path.basename(s.image_path)
+                md_lines.append(f"\n![]({rel})\n")
+                slide_idx += 1
+            else:
+                break
 
     # 标题（不带转录时间）
     md_lines.append(f"# 转录：{filename}\n")
@@ -446,6 +568,8 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> st
         # 输出合并后的段落
         for seg in merged_segments:
             start_ts = format_timestamp(int(seg['start']))
+            # 插入该时间段之前的截图
+            _flush_slides_before(int(seg['start']))
             combined_text = ' '.join(seg['texts'])
             spk = seg.get('spk')
 
@@ -508,6 +632,8 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> st
                     start_ms = timestamps[-1][0] if timestamps else 0
 
                 start_ts = format_timestamp(int(start_ms))
+                # 插入该时间段之前的截图
+                _flush_slides_before(int(start_ms))
                 md_lines.append(f"发言人1 {start_ts}\n")
                 md_lines.append(f"{sent}\n\n")
 
@@ -518,6 +644,13 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False) -> st
         md_lines.append(f"发言人1 00:00\n")
         md_lines.append(f"{text}\n\n")
 
+    # 输出剩余未插入的 slides（在最后一段文字之后）
+    while slide_idx < len(slide_queue):
+        s = slide_queue[slide_idx]
+        rel = s.relative_path or os.path.basename(s.image_path)
+        md_lines.append(f"\n![]({rel})\n")
+        slide_idx += 1
+
     return '\n'.join(md_lines)
 
 
@@ -527,6 +660,8 @@ class TranscribeRequest(BaseModel):
     output_path: Optional[str] = None
     diarize: bool = False
     model_id: Optional[str] = None  # 指定使用的模型 ID
+    extract_slides: bool = False  # 提取视频关键帧截图
+    slide_threshold: float = 27.0  # 场景检测阈值
 
 
 class BatchTranscribeRequest(BaseModel):
@@ -541,6 +676,8 @@ class TranscribeResponse(BaseModel):
     output_path: Optional[str] = None
     text: Optional[str] = None
     sentence_count: Optional[int] = None
+    slide_count: Optional[int] = None  # 提取的关键帧数量
+    archive_path: Optional[str] = None  # 归档目录路径
     error: Optional[str] = None
 
 
@@ -764,7 +901,28 @@ async def transcribe(request: TranscribeRequest):
 
         # 转换为 Markdown
         filename = Path(request.file_path).name
-        markdown_content = result_to_markdown(result, filename, request.diarize)
+
+        # 视频关键帧提取（仅视频文件 + extract_slides=True）
+        slides = None
+        slide_count = 0
+        if request.extract_slides and SLIDE_EXTRACTOR_AVAILABLE:
+            if slide_extractor_module.SlideExtractor.is_video_file(request.file_path):
+                slides_dir = str(Path(output_path).parent / "slides")
+                extractor = slide_extractor_module.SlideExtractor(
+                    threshold=request.slide_threshold,
+                )
+                slides = extractor.extract(request.file_path, slides_dir)
+                # 设置相对路径
+                for s in slides:
+                    s.relative_path = f"slides/{os.path.basename(s.image_path)}"
+                slide_count = len(slides)
+                print(f"关键帧提取完成: {slide_count} 张")
+            else:
+                print("[slide_extractor] 非视频文件，跳过关键帧提取")
+        elif request.extract_slides and not SLIDE_EXTRACTOR_AVAILABLE:
+            print("[slide_extractor] 模块未安装，跳过关键帧提取（pip install scenedetect[opencv] imagehash）")
+
+        markdown_content = result_to_markdown(result, filename, request.diarize, slides=slides)
 
         # 保存文件
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -772,11 +930,22 @@ async def transcribe(request: TranscribeRequest):
 
         print(f"转录完成，已保存到: {output_path}")
 
+        # 归档
+        archive_info = archive_transcription(
+            source_file=request.file_path,
+            output_md=output_path,
+            slides=slides,
+            diarize=request.diarize,
+            slide_threshold=request.slide_threshold,
+        )
+
         return TranscribeResponse(
             success=True,
             output_path=output_path,
             text=result.get('text', ''),
-            sentence_count=len(result.get('sentence_info', [])) if 'sentence_info' in result else 0
+            sentence_count=len(result.get('sentence_info', [])) if 'sentence_info' in result else 0,
+            slide_count=slide_count,
+            archive_path=archive_info.get("archive_path"),
         )
 
     except HTTPException:

@@ -6,3 +6,5 @@ torch>=2.0.0
 torchaudio>=2.0.0
 openai>=1.0.0
 httpx>=0.20.0
+scenedetect[opencv]>=0.6.4
+imagehash>=4.3.1
