@@ -99,7 +99,7 @@
   "file_naming": {
     "format": "{title}（{case_name}）_{YYYYMMDD}收.pdf",
     "example": "受理通知书（张三与李四合同纠纷）_20260404收.pdf",
-    "target_directory": "08 - 🏛️ 法院送达",
+    "target_directory": null,
     "conflict_suffix": "_2"
   },
   "post_processing": {
