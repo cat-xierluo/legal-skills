@@ -1,0 +1,105 @@
+{
+  "download_link_patterns": [
+    {
+      "domain": "zxfw.court.gov.cn",
+      "description": "全国法院统一送达平台（最常见）",
+      "pattern": "https://zxfw\\.court\\.gov\\.cn/zxfw/#/pagesAjkj/app/wssd/index\\?[^\\s]*",
+      "required_params": ["qdbh", "sdbh", "sdsin"],
+      "param_extract": "从 URL query string 中提取 qdbh、sdbh、sdsin 三个参数值",
+      "download_strategy": "api_first",
+      "api": {
+        "endpoint": "https://zxfw.court.gov.cn/yzw/yzw-zxfw-sdfw/api/v1/sdfw/getWsListBySdbhNew",
+        "method": "POST",
+        "content_type": "application/json",
+        "request_body": { "qdbh": "{全局编号}", "sdbh": "{送达编号}", "sdsin": "{送达签名}" },
+        "response_fields": {
+          "document_name": "data[].c_wsmc",
+          "download_url": "data[].wjlj",
+          "court_name": "data[].c_fymc",
+          "document_id": "data[].c_wsbh",
+          "file_format": "data[].c_wjgs"
+        },
+        "download_method": "curl -sL -o \"{filename}\" \"{wjlj}\"",
+        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。"
+      }
+    },
+    {
+      "domain": "sd.gdems.com",
+      "description": "广东法院电子送达平台（限广东地区）",
+      "pattern": "https://sd\\.gdems\\.com/v3/dzsd/[a-zA-Z0-9]+",
+      "required_params": [],
+      "param_extract": "从 URL 路径末尾提取送达标识码",
+      "download_strategy": "browser_only",
+      "api": null,
+      "notes": "无公开 API，需通过浏览器打开页面后手动或 Playwright 自动化下载。页面可能需要输入验证码或手机号验证。"
+    },
+    {
+      "domain": "jysd.10102368.com",
+      "description": "集约送达平台（邮政集约送达服务）",
+      "pattern": "https://jysd\\.10102368\\.com/sd\\?key=[a-zA-Z0-9_\\-]+",
+      "required_params": ["key"],
+      "param_extract": "从 URL query string 中提取 key 参数值",
+      "download_strategy": "browser_only",
+      "api": null,
+      "notes": "无公开 API，需通过浏览器打开页面后下载。部分链接可能需要短信验证码验证身份。"
+    }
+  ],
+  "case_number_pattern": "[（(〔\\[]\\d{4}[）)\\]〕]\\s*[\\u4e00-\\u9fa5]{1,10}\\d+[\\u4e00-\\u9fa5]{1,5}\\d+号?",
+  "case_number_examples": [
+    "（2025）苏0981民初1234号",
+    "(2024)粤0604执保5678号",
+    "〔2025〕京0105民初901号"
+  ],
+  "sms_type_keywords": {
+    "document_delivery": ["文书送达", "请查收", "查收文书", "下载文书", "送达文书", "案件文书", "受理通知书", "缴费通知书", "告知书", "廉政监督卡"],
+    "filing_notification": ["已立案", "立案通知", "受理案件", "案件受理"],
+    "info_notification": ["开庭时间", "延期", "取消", "变更", "提醒"]
+  },
+  "document_titles": {
+    "受理案件通知书": "受理案件通知书",
+    "应诉通知书": "应诉通知书",
+    "传票": "传票",
+    "开庭传票": "传票",
+    "举证通知书": "举证通知书",
+    "判决书": "判决书",
+    "裁定书": "裁定书",
+    "调解书": "调解书",
+    "执行通知书": "执行通知书",
+    "诉讼权利义务告知书": "诉讼权利义务告知书",
+    "诉讼费用交费通知书": "诉讼费用交费通知书",
+    "廉政监督卡": "廉政监督卡",
+    "诉讼材料提交告知书": "诉讼材料提交告知书",
+    "出庭通知书": "出庭通知书",
+    "合议庭组成人员通知书": "合议庭组成人员通知书",
+    "举证期限通知书": "举证期限通知书",
+    "转换程序通知书": "转换程序通知书",
+    "参加诉讼通知书": "参加诉讼通知书"
+  },
+  "party_extraction": {
+    "company_patterns": [
+      "[\\u4e00-\\u9fa5]{2,30}(?:有限责任公司|股份有限公司)",
+      "[\\u4e00-\\u9fa5]{2,20}有限公司",
+      "[\\u4e00-\\u9fa5]{2,20}(?:集团|企业)"
+    ],
+    "versus_patterns": [
+      "{company}与{company}",
+      "{company}与{person}",
+      "{person}与{company}",
+      "{person}与{person}",
+      "{person}诉{person}",
+      "{person}诉{company}"
+    ],
+    "role_prefixes": ["原告", "被告", "申请人", "被申请人", "上诉人", "被上诉人", "申请执行人", "被执行人", "第三人"],
+    "exclude_keywords": [
+      "法院", "人民法院", "书记员", "法官", "审判员", "执行员",
+      "系统", "平台", "服务", "通知", "短信", "案件", "纠纷", "争议",
+      "你好", "收到", "查收", "下载", "链接", "请于", "联系"
+    ]
+  },
+  "file_naming": {
+    "format": "{title}（{case_name}）_{YYYYMMDD}收.pdf",
+    "example": "受理通知书（张三与李四合同纠纷）_20260404收.pdf",
+    "target_directory": "08 - 🏛️ 法院送达",
+    "conflict_suffix": "_2"
+  }
+}
