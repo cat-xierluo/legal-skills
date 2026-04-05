@@ -2,6 +2,40 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.4.1] - 2026-04-05
+
+### 改进
+
+- 收口 `code2patent` 的官方起草依据：不再把《专利法实施细则》或通用申请事项说明作为主依据，改为以《专利审查指南》第二部分第二章“说明书和权利要求书”为主
+- 调整 `references/patent-drafting-spec.md`，把说明书、权利要求书、摘要的起草要求重新压缩到《专利审查指南》的撰写规则上
+- 强化计算机程序相关发明的保护主题提示，在起草规范和模板中明确纳入“计算机程序产品”这一产品权利要求主题
+- 更新 `SKILL.md`、初稿模板、布局模板和自检模板，使“方法 / 装置 / 存储介质 / 程序产品”四类口径更一致
+- 同步更新 `README.md`、`TASKS.md` 和 `DECISIONS.md` 记录本次收口调整
+
+## [1.4.0] - 2026-04-05
+
+### 新增
+
+- 新增 `references/patent-drafting-spec.md`，沉淀中国发明专利初稿的结构基线、权利要求写法、充分公开要求和自检规则
+- 新增 `templates/invention-patent-claim-layout-template.md`，用于先搭建权利要求布局卡
+- 新增 `templates/invention-patent-claim-evidence-matrix-template.md`，用于把权利要求特征逐项回勾到代码证据
+- 新增 `templates/invention-patent-draft-self-check-template.md`，用于对初稿进行结构、证据和术语一致性检查
+
+### 改进
+
+- 将 `code2patent` 的起草链路升级为 `L1 代码证据映射 → L2 技术交底书 → L2.5 权利要求布局 → L3 发明专利初稿`
+- 在 `SKILL.md` 中固化“布局卡 → 证据矩阵 → 初稿 → 自检表”的两步写作规则
+- 重写发明专利初稿模板，使其覆盖说明书、三套平行保护主题草稿、摘要、请求书待填字段清单和待确认事项
+- 更新技术交底书模板，增加“权利要求布局准备”章节，明确 A / B / C 级证据进入不同起草位置
+- 更新 `references/code-extraction-spec.md`，将 A / B / C 级证据与独立权利要求、从属权利要求和实施例的写法对应起来
+- 将 `README.md` 中 `code2patent` 的版本和能力说明同步到本次增强
+
+### 技术优化
+
+- 默认法域收口为中国发明专利，并在 `SKILL.md` 中补充官方起草基线
+- 默认起草目标收口为“接近可申报版”，但继续保留“待代理师 / 研发确认事项”作为强制输出
+- 默认平行准备方法、系统 / 装置、计算机可读存储介质三套保护主题草稿，方便代理师择优整合
+
 ## [1.3.5] - 2026-03-18
 
 ### 改进
