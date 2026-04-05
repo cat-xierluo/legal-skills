@@ -7,6 +7,7 @@ dist/
 !skills/*/references/
 test/
 templates/
+!skills/*/templates/
 # Claude Code config - selective sync (keep skills symlink, ignore rest)
 .claude/commands/
 .claude/plans/
@@ -66,10 +67,14 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 
 # Playwright browser data
 **/.playwright-data/
+.playwright-mcp/
 
 # Log files
 **/logs/
 *.log
+
+# Claude Code internal
+.claude/scheduled_tasks.lock
 
 # Private skills - symlinked external repository
 /private-skills
@@ -81,3 +86,8 @@ skills/*/output/*
 # ClawHub sync records (contains internal IDs)
 skills/clawhub-sync/config/sync-records.yaml
 skills/clawhub-sync/config/sync-allowlist.yaml
+
+# Case directories created by court-sms skill (contain real case data)
+# Pattern: （YYYY）XXXX号 .../
+（*号/
+（*号 */
