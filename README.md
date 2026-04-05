@@ -82,7 +82,7 @@
 | **[court-sms](skills/court-sms/)** | 法院短信识别与文书下载技能，自动解析法院短信（文书送达、立案通知、开庭提醒等），提取案号、当事人、下载链接，下载文书并归档到对应案件目录 | MIT | v1.1.2 | 杨卫薪律师 | 参考自 [法穿](https://github.com/Lawyer-ray/FachuanHybridSystem) |
 | **[trademark-assistant](skills/trademark-assistant/)** | 商标服务助手，提供类别规划、可注册性初筛及申请材料准备。支持商品清单生成、商标说明撰写，整合尼斯分类与审查指南 | CC-BY-NC-SA-4.0 | v1.5.3 | 杨卫薪律师 | |
 | **[patent-analysis](skills/patent-analysis/)** | 专利分析工具，支持7种场景：单专利技术要点提取、多专利比对、侵权比对、稳定性/无效分析、FTO分析、规避设计分析、专利价值评估。强调权利要求解读方法论与侵权判断流程 | CC-BY-NC-SA-4.0 | v1.2.0 | 杨卫薪律师 | |
-| **[code2patent](skills/code2patent/)** | 从已开发代码项目中提取技术实现证据，围绕候选专利方案生成技术交底书，支持自动挖掘可申请技术方案和生成发明专利初稿 | CC-BY-NC-SA-4.0 | v1.3.5 | 杨卫薪律师 | |
+| **[code2patent](skills/code2patent/)** | 从已开发代码项目中提取技术实现证据，围绕候选专利方案生成技术交底书，并以“权利要求布局卡 → 发明专利初稿”两步法生成接近可申报版的中国发明专利起草材料；内置《专利审查指南》撰写规则与计算机程序发明保护主题提示 | CC-BY-NC-SA-4.0 | v1.4.1 | 杨卫薪律师 | |
 | **[litigation-analysis](skills/litigation-analysis/)** | 诉讼分析工具，支持起诉状与证据分析、判决书深度分析、庭审笔录复盘。覆盖诉讼全流程：案件初期评估→判决分析→庭审复盘，生成内部版/研究版/客户版三层输出，支持上诉/再审决策支持 | CC-BY-NC-SA-4.0 | v1.3.0 | 杨卫薪律师 | |
 | **[legal-proposal-generator](skills/legal-proposal-generator/)** | 根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档 | CC-BY-NC-SA-4.0 | v0.1.0 | 杨卫薪律师 | |
 | **[legal-text-format](skills/legal-text-format/)** | 将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，采用 archive 归档结构存储。推荐与[`wechat-article-fetch`](skills/wechat-article-fetch/) 配合使用实现完整工作流 | CC-BY-NC-SA-4.0 | v1.1.0 | 杨卫薪律师 | |
