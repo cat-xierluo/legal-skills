@@ -101,5 +101,27 @@
     "example": "受理通知书（张三与李四合同纠纷）_20260404收.pdf",
     "target_directory": "08 - 🏛️ 法院送达",
     "conflict_suffix": "_2"
+  },
+  "post_processing": {
+    "_doc": "PDF 后处理：检测拆分文件并合并 + 精简文件名。不默认启用，仅在检测到拆分时提示用户。合并偏好见 user-preferences.json。",
+    "trigger": {
+      "description": "扫描归档目录中的 PDF 文件名，按文书类型分组。任一组文件数 > 3 时触发提示。",
+      "group_rules": [
+        "证据类：文件名以'证据'开头，按编号分组（证据1、证据2、证据3…）",
+        "其他文书：按文书类型分组（传票、起诉状、应诉通知书…）"
+      ],
+      "threshold": 3
+    },
+    "preferences_file": "config/user-preferences.json",
+    "preferences_example": "config/user-preferences.example.json",
+    "default_merge_strategy": "per_evidence",
+    "user_prompt": {
+      "description": "检测到拆分文件时，使用 AskUserQuestion 提示用户",
+      "options": [
+        "是，合并所有 — 按偏好设置合并并重命名",
+        "让我选择 — 逐个确认哪些需要合并",
+        "跳过 — 不处理"
+      ]
+    }
   }
 }

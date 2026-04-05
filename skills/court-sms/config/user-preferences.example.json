@@ -1,0 +1,39 @@
+{
+  "_doc": "用户偏好配置示例。复制为 user-preferences.json 后根据个人习惯修改。",
+  "_usage": "court-sms skill 在第五步 PDF 后处理时读取此文件，获取用户的合并和重命名偏好。",
+
+  "merge_strategy": "per_evidence",
+
+  "merge_options": {
+    "per_evidence": {
+      "description": "按单个证据编号分别合并。证据3 有 10 个拆分 → 合并为一个证据3.pdf，其他证据不动",
+      "naming": "保留原始证据文件名中的标题部分，如「证据3：打印截图.pdf」"
+    },
+    "unified": {
+      "description": "将证据目录 + 所有证据合并为一个原告证据.pdf，并添加 PDF 书签方便跳转",
+      "output_name": "原告证据.pdf",
+      "bookmarks": {
+        "enabled": true,
+        "format": "简洁版：证据目录、证据1：仲裁申请书、证据2：劳动合同、…",
+        "naming_rule": "书签名 = 证据编号 + 冒号 + 证据标题（去除当事人和日期后缀）"
+      }
+    }
+  },
+
+  "rename": {
+    "enabled": true,
+    "description": "精简文件名：去掉括号内当事人信息、日期后缀等冗余内容",
+    "strip_patterns": [
+      "（[^）]+）",
+      "_\\d{8}收",
+      "（合并）",
+      "（素）-",
+      "（自贸法庭）",
+      "（自贸）"
+    ],
+    "special_mappings": {
+      "起诉状（素）": "起诉状（要素式）",
+      "开庭传票": "传票"
+    }
+  }
+}
