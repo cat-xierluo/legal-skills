@@ -2,6 +2,18 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.4.2] - 2026-04-06
+
+### 新增
+
+- 新增 `references/patent-drafting-quick-reference.md`，将《专利审查指南》撰写部分和计算机程序发明保护主题压缩成 agent 可直接执行的短版速查卡
+
+### 改进
+
+- 在 `SKILL.md` 中补充默认阅读顺序：起草层优先读速查卡，再按需下钻完整起草规范
+- 进一步降低 `code2patent` 进入初稿阶段的认知负担，使 agent 更容易稳定执行“证据映射 → 布局卡 → 初稿 → 自检”的链路
+- 同步更新 `README.md`、`TASKS.md` 和 `DECISIONS.md` 记录本次优化
+
 ## [1.4.1] - 2026-04-05
 
 ### 改进
