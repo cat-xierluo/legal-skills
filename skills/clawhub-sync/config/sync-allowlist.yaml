@@ -1,0 +1,57 @@
+# ClawHub 同步白名单配置文件
+# 只同步这里列出的 skill，未列出的不会被同步
+# 格式：skill 目录名（与 skills/ 下的目录名一致）
+# 如需启用某个 skill，删除其所在行开头的 #
+#
+# ⚠️ 重要提示：ClawHub 许可证政策
+# ClawHub 平台强制所有 skills 使用 MIT-0 许可证（无需署名，允许商业使用）。
+# 只有 MIT 许可证的 skill 才能同步到 ClawHub。
+# CC-BY-NC-SA-4.0 等有限制条款的许可证与 MIT-0 冲突，不应同步。
+# 详见：https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md
+
+# ===== 法律专业（MIT，可同步）=====
+court-sms:                   # MIT - 法院短信识别与文书下载
+# code2patent:              # CC-BY-NC-SA-4.0 - 不可同步
+
+# ===== 法律相关（CC-BY-NC-SA-4.0，不可同步）=====
+# legal-qa-extractor:       # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+# legal-text-format:        # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+# litigation-analysis:      # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+# legal-proposal-generator: # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+# patent-analysis:          # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+# trademark-assistant:      # CC-BY-NC-SA-4.0 - 需署名，禁止商业使用
+
+# ===== 文档处理（MIT，可同步）=====
+md2word:                     # MIT
+# mineru-ocr:               # 需检查 LICENSE.txt
+# piclist-upload:           # 需检查 LICENSE.txt
+de-ai-polish:               # MIT
+
+# ===== 搜索与研究 =====
+multi-search:                # MIT（已从 CC-BY-NC-SA-4.0 改为 MIT）
+repo-research:               # MIT
+yuandian-law-search:         # MIT - 元典法条与案例检索
+
+# ===== 媒体处理（MIT，可同步）=====
+svg-article-illustrator:    # MIT
+# funasr-transcribe:        # 需检查 LICENSE.txt
+# wechat-article-fetch:     # 需检查 LICENSE.txt
+
+# ===== 效率工具（MIT，可同步）=====
+skill-lint:                 # MIT
+# skill-architect:          # CC-BY-NC-SA-4.0 - 不可同步
+# skill-manager:            # 需检查 LICENSE.txt
+git-batch-commit:           # MIT
+clawhub-sync:               # MIT - 同步工具本身也可以发布
+
+# ===== 暂不发布 =====
+
+#  clawhub-sync:
+
+#  douyin-batch-download:
+#  universal-media-downloader:
+#  minimax-web-search:
+#  minimax-image-understand:
+#  course-generator:
+#  agent-reach:
+#  github-star-manager:
