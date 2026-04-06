@@ -177,10 +177,10 @@ records:
     changelog_summary: null
 
   git-batch-commit:
-    version: "1.2.2"
-    last_sync: "2026-03-26T13:19:00+08:00"
-    git_hash: "current"
+    version: "1.2.3"
+    last_sync: "2026-04-06T11:15:00+08:00"
+    git_hash: "791441b"
     status: synced
-    changelog_summary: "修复 display name 为 Git Batch Commit"
+    changelog_summary: "将 ClawHub 同步检查从可选改为提交后必做步骤"
     url: "https://clawhub.ai/skills/git-batch-commit"
-    publish_id: "k977tcxh9fhwv5fcfhss7rxtbh83njms"
+    publish_id: "k970722s5p735h822p8k1qmxc984bj3q"
