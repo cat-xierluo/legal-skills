@@ -79,6 +79,9 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # Private skills - symlinked external repository
 /private-skills
 
+# Local-only Fachuan research package
+/fachuan/
+
 # Skill downloads/output directories
 skills/*/downloads/
 skills/*/output/*
