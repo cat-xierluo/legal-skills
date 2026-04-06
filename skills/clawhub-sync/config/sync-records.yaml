@@ -186,10 +186,10 @@ records:
     changelog_summary: null
 
   git-batch-commit:
-    version: "1.2.3"
-    last_sync: "2026-04-06T11:15:00+08:00"
-    git_hash: "791441b"
+    version: "1.2.4"
+    last_sync: "2026-04-06T17:18:00+08:00"
+    git_hash: "60582db"
     status: synced
-    changelog_summary: "将 ClawHub 同步检查从可选改为提交后必做步骤"
+    changelog_summary: "ClawHub 同步新增检测 B/C 规则，覆盖新增 MIT 技能首次同步场景"
     url: "https://clawhub.ai/skills/git-batch-commit"
-    publish_id: "k970722s5p735h822p8k1qmxc984bj3q"
+    publish_id: "k97af4zg7yfnv027gmbczncj0x84b0av"
