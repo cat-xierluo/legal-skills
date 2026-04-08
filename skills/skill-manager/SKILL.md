@@ -2,12 +2,12 @@
 name: skill-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
-description: 管理 Claude Code Skills 和 Commands 的安装、同步、卸载和列表查看，支持从本地路径或 GitHub 仓库/子目录安装。本技能应在用户需要安装外部 skill/command、从 GitHub 仓库同步、批量安装本地目录、查看已安装的 items、或卸载不需要的 item 时使用。
+version: "1.3.0"
+description: 管理 Claude Code Skills 的安装、版本追踪和更新检查。支持从本地路径或 GitHub 仓库安装，自动记录每个 Skill 的安装时间、来源 URL 和版本号。自动检测 GitHub 上有更新的 Skill，并显示版本变更内容。
 license: Complete terms in LICENSE.txt
 ---
 
-# Skill & Command Manager
+# Skill Manager
 
 管理 Claude Code Skills 和 Commands 的安装、同步、卸载和列表查看。
 
@@ -109,6 +109,31 @@ scripts/update.sh [name]
 - 指定名称：更新指定的 skill
 - **注意**：符号链接的 items 会自动与源同步，无需手动更新
 
+### 检查更新
+
+```bash
+scripts/check.sh
+```
+
+检查所有已安装 Skills 的最新版本，对比当前安装版本，显示：
+- 📦 有可用更新的 Skills
+- ✅ 已是最新版本的 Skills
+- ⚠️ 检查失败的 Skills（无来源信息等）
+
+每次安装和更新都会自动记录到 `data/skill-registry.json`。
+
+### 查看已安装记录
+
+```bash
+python3 scripts/record.py list
+```
+
+显示所有已安装 Skills 的详细记录，包括：
+- 安装时间
+- 来源 URL
+- 当前版本
+- 描述信息
+
 ## 识别规则
 
 ### Skill 目录规则
@@ -127,7 +152,7 @@ scripts/update.sh [name]
 ## 使用示例
 
 ```bash
-# ========== Skills ==========
+# ========== 安装 ==========
 # 安装本地单个 skill
 skill-manager install ~/dev/my-skills/pdf-tool
 
@@ -143,28 +168,25 @@ skill-manager install anthropics/claude-code
 skill-manager install https://github.com/jgtolentino/insightpulse-odoo/tree/main/docs/claude-code-skills/community
 skill-manager install jgtolentino/insightpulse-odoo/main/docs/claude-code-skills/community
 
-# ========== Commands ==========
-# 安装本地单个 command
-skill-manager install ~/dev/my-commands/deepresearch.md
-
-# 批量安装本地目录下的所有 commands
-skill-manager install ~/dev/my-commands/
-
-# ========== 通用操作 ==========
-# 列出已安装的 skills 和 commands
+# ========== 查看与管理 ==========
+# 列出已安装的 skills
 skill-manager list
 
 # 卸载 skill
 skill-manager remove pdf-tool
 
-# 卸载 command
-skill-manager remove deepresearch
+# ========== 更新与检查 ==========
+# 检查所有 skills 的更新
+skill-manager check
 
 # 更新所有 git 克隆的 skills
 skill-manager update
 
 # 更新指定 skill
 skill-manager update claude-code
+
+# 查看安装记录
+python3 scripts/record.py list
 ```
 
 ## 安全检查
@@ -198,12 +220,19 @@ skill-manager update claude-code
 
 ```
 skill-manager/
-├── SKILL.md              # 本文件
+├── SKILL.md                    # 本文件
+├── CHANGELOG.md                # 变更日志
+├── CLAUDE.md                   # AI 开发助手说明
+├── LICENSE.txt                 # 许可证
 ├── scripts/
-│   ├── install.sh        # 安装脚本
-│   ├── list.sh           # 列表脚本
-│   ├── remove.sh         # 卸载脚本
-│   ├── update.sh         # 更新脚本
-│   └── security.py       # 安全检查模块
-└── CHANGELOG.md          # 变更日志
+│   ├── install.sh              # 安装脚本
+│   ├── list.sh                 # 列表脚本
+│   ├── remove.sh               # 卸载脚本
+│   ├── update.sh               # 更新脚本
+│   ├── check.sh                # 更新检查脚本
+│   ├── record.py               # 记录管理模块
+│   └── security.py             # 安全检查模块
+└── assets/                     # 资源文件
+    ├── skill-registry.json     # Skill 安装记录（运行时生成）
+    └── skill-registry.example.json  # 注册表示例
 ```

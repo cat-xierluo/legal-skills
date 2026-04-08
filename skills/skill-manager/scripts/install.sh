@@ -12,6 +12,21 @@ ORIGINAL_PWD="$PWD"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANAGER_DIR="$(dirname "$SCRIPT_DIR")"
 
+# 安装记录函数 - 记录 Skill 安装到注册表
+record_install() {
+    local skill_name="$1"
+    local source_url="$2"
+    local target_path="$3"
+    
+    # 调用 Python 记录模块
+    if command -v python3 &> /dev/null; then
+        RECORD_SCRIPT="$SCRIPT_DIR/record.py"
+        if [ -f "$RECORD_SCRIPT" ]; then
+            python3 "$RECORD_SCRIPT" install "$skill_name" "$source_url" --path "$target_path" 2>/dev/null || true
+        fi
+    fi
+}
+
 # 检测源类型（skill 或 command）
 detect_source_type() {
     local src="$1"
@@ -370,6 +385,9 @@ if [ "$SOURCE_TYPE" = "local" ]; then
         ln -s "$SOURCE" "$TARGET_PATH"
         echo "✓ 已链接 skill: $TARGET_PATH -> $SOURCE"
         ls -l "$TARGET_PATH"
+        
+        # 记录安装
+        record_install "$SKILL_NAME" "$SOURCE" "$TARGET_PATH"
         exit 0
     fi
 fi
@@ -436,6 +454,9 @@ elif [ "$SOURCE_TYPE" = "github" ]; then
     rm -rf "$TARGET_PATH/.git"
 
     echo "✓ 已安装: $TARGET_PATH"
+    
+    # 记录安装
+    record_install "$SKILL_NAME" "$CLONE_URL" "$TARGET_PATH"
 fi
 
 # 安全检查（仅 GitHub 来源）
