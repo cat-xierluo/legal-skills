@@ -355,7 +355,7 @@ def find_md_files():
 def generate_output_filename(md_file):
     """根据输入文件名生成输出文件名"""
     base_name = os.path.splitext(md_file)[0]
-    return f"{base_name}_完整版.docx"
+    return f"{base_name}.docx"
 
 
 def debug_quotes_in_file(file_path):
