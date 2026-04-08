@@ -86,6 +86,9 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 skills/*/downloads/
 skills/*/output/*
 
+# Search history (user-specific usage data)
+**/search_history.json
+
 # ClawHub sync records (contains internal IDs)
 skills/clawhub-sync/config/sync-records.yaml
 skills/clawhub-sync/config/sync-allowlist.yaml
@@ -94,3 +97,8 @@ skills/clawhub-sync/config/sync-allowlist.yaml
 # Pattern: （YYYY）XXXX号 .../
 （*号/
 （*号 */
+
+# Task state files (auto-generated at runtime)
+skills/zhihe-legal-research/assets/pending.json
+skills/zhihe-legal-research/assets/completed.json
+skills/zhihe-legal-research/assets/notified.json
