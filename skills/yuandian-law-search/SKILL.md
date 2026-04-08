@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.3.0"
+version: "0.3.1"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -130,11 +130,3 @@ python3 scripts/yd_search.py case-semantic "正当防卫的限度" --jarq-start 
 python3 scripts/yd_search.py raw /search "正当防卫" --extra '{"sxx":["现行有效"]}'
 ```
 
-## 与其他技能配合
-
-- **litigation-analysis**：分析判决书时，可先用本技能检索相关法条和类案
-- **legal-proposal-generator**：生成法律意见书时引用精确法条
-- **contract-review**：审查合同时检索相关法规验证合规性
-- **trademark-assistant / patent-analysis**：查找相关法律依据
-
-各技能独立运行，按需组合。
