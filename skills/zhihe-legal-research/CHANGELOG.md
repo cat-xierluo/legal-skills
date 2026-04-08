@@ -1,5 +1,26 @@
 # 变更日志
 
+## [1.2.1] - 2026-04-08
+
+### 新增
+
+- 手机号持久化存储：登录后自动保存手机号，token 过期时可省略手机号直接发送验证码
+- 自动重登流程：检测到 token 失效后只需提供验证码即可完成重登
+
+### 修复
+
+- 处理服务端 500 错误：token 过期时服务端返回 HTML 而非 JSON，导致 auth check 崩溃
+- 修复报告下载：报告 API 不返回 `has_report` 字段，改用 `code` 状态码判断
+- 修复 Unicode 文件名：中文全角问号 `？` 导致 `mkdir` 失败，改用 python3 处理
+- 修复归档文件名：`result.md` 改为主题命名，Word 转 MD 使用 `_报告.md` 后缀避免覆盖
+- 修复 query 提取：monitor.sh 从 status API 提取 query（result API 不含该字段）
+- 修复 JSON 注入：`submit_query`、`send_code`、`verify_code` 改用 `jq` 构造 JSON
+
+### 改进
+
+- 配置文件从 `config` 重命名为 `.env`，更符合惯例
+- 归档帮助文本更新为实际目录结构
+
 ## [1.2.0] - 2026-04-06
 
 ### 改进
