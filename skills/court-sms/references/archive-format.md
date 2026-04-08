@@ -22,10 +22,28 @@
   "download": {
     "source_url": "https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=XX&sdbh=XX&sdsin=XX",
     "params": { "qdbh": "XX", "sdbh": "XX", "sdsin": "XX" },
-    "method": "cli",
+    "method": "curl",
     "status": "success",
     "document_title": "受理通知书",
-    "api_response": null
+    "api_response": {
+      "c_fymc": "苏州工业园区人民法院",
+      "c_fybh": "1275",
+      "dt_cjsj": "2026-03-18T07:44:00.000+00:00",
+      "documents": [
+        {
+          "c_wsmc": "传票（东沙湖法庭）",
+          "c_wsbh": "ecb8fe64e4834804b50ea0f9257327e0",
+          "dt_cjsj": "2026-03-18T07:44:00.000+00:00"
+        }
+      ]
+    }
+  },
+  "document": {
+    "type": "一审判决书",
+    "sent_at": "2026-04-08T10:00:00+08:00",
+    "received_at": "2026-04-08T14:30:00+08:00",
+    "appeal_deadline": "2026-04-23T23:59:59+08:00",
+    "appeal_days_remaining": 15
   },
   "archive": {
     "matched_case": "260101 张三与李四合同纠纷",
@@ -46,10 +64,23 @@
 | `parsed.case_number` | 否 | 提取到的案号，未提取到时为 `null` |
 | `parsed.parties` | 否 | 提取到的当事人列表 |
 | `parsed.court` | 否 | 提取到的法院名称 |
+| `parsed.sent_at` | 否 | 法院发送时间，从短信或送达平台提取 |
+| `parsed.received_at` | 否 | 用户收到时间（如有） |
 | `download.source_url` | 否 | 原始下载链接 |
 | `download.params` | 否 | 从 URL 提取的参数（如 qdbh/sdbh/sdsin） |
 | `download.method` | 否 | 实际使用的下载方式：`curl` / `cli` / `mcp` / `manual` / `null`（无下载链接） |
 | `download.status` | 是 | 下载状态：`success` / `failed` / `manual` / `skipped` |
-| `download.api_response` | 否 | API 响应摘要（如有） |
+| `download.api_response` | 否 | API 完整响应，包含 c_fymc（法院名称）、c_fybh（法院编号）、dt_cjsj（送达时间）、documents 数组（每份文书详情） |
+| `download.api_response.c_fymc` | 否 | 法院名称（来自 API） |
+| `download.api_response.c_fybh` | 否 | 法院编号 |
+| `download.api_response.dt_cjsj` | 否 | 送达记录创建时间（ISO 8601），作为 sent_at 来源 |
+| `download.api_response.documents[].c_wsmc` | 否 | 文书名称 |
+| `download.api_response.documents[].c_wsbh` | 否 | 文书编号（UUID） |
+| `download.api_response.documents[].dt_cjsj` | 否 | 单份文书的送达时间 |
+| `document.type` | 否 | 文书类型：判决书/裁定书/调解书等（从 PDF 解析） |
+| `document.sent_at` | 否 | 法院发送时间（送达平台记录） |
+| `document.received_at` | 否 | 用户收到时间（手机短信网关时间） |
+| `document.appeal_deadline` | 否 | 上诉截止日期（根据案件类型计算） |
+| `document.appeal_days_remaining` | 否 | 剩余上诉天数 |
 | `archive.matched_case` | 否 | 匹配到的案件目录名 |
 | `archive.target_path` | 否 | 文书最终归档的相对路径 |

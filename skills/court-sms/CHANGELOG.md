@@ -2,6 +2,26 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.3.0] - 2026-04-08
+
+### 新增
+
+- **送达时间检测（P0）**：从 zxfw API 响应的 `dt_cjsj` 字段提取送达记录创建时间，作为 sent_at 使用，无需从 PDF 解析
+- **上诉期限自动计算（P1）**：识别判决书/裁定书时，根据送达时间自动计算上诉截止日期
+  - 民事一审判决：送达后15天
+  - 民事裁定：送达后10天
+  - 行政判决：送达后15天
+  - 刑事判决：送达后10日
+  - 刑事裁定：送达后5日
+- **归档 JSON 新增字段**：`document.type`、`document.sent_at`、`document.appeal_deadline`、`document.appeal_days_remaining`
+- **归档 JSON 完整保存 API 响应**：将 zxfw API 的完整响应（c_fymc、c_fybh、dt_cjsj、documents 数组）存入 `download.api_response`
+- **汇报格式新增**：上诉期限展示区块（第四部分），格式为 `⏰ 上诉期限提醒`
+- **sms-patterns.json 新增**：`sent_time_extraction`（送达时间提取规则）、`appeal_calculation`（上诉期限计算规则）
+
+### 引用
+
+对应 GitHub Issue：https://github.com/cat-xierluo/legal-skills/issues/10
+
 ## [1.2.1] - 2026-04-05
 
 ### 新增

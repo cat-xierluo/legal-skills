@@ -2,7 +2,7 @@
 name: court-sms
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.1"
+version: "1.3.0"
 license: MIT
 description: 本技能应在用户收到法院短信（文书送达、立案通知、开庭提醒等）时使用，自动提取案号、当事人、下载链接，下载文书并归档到对应案件目录。
 ---
@@ -78,6 +78,12 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 | 全国法院统一送达平台 | `zxfw.court.gov.cn` | curl API 直连 | qdbh, sdbh, sdsin |
 | 广东法院电子送达 | `sd.gdems.com` | 浏览器自动化 | 路径中的送达标识码 |
 | 集约送达平台 | `jysd.10102368.com` | 浏览器自动化 | key |
+
+**e) 发送时间提取（P0）**：从送达平台 API 响应中提取发送时间，用于后续上诉期限计算
+- **优先来源**：zxfw API 响应中的 `dt_cjsj` 字段（送达记录创建时间，ISO 8601 格式）
+- 短信网关时间：部分手机短信会显示发送时间，匹配 `发送：YYYY-MM-DD HH:mm` 格式
+- 如果无法提取送达时间，展示"送达时间待确认"，不阻塞后续流程
+- 记录到归档 JSON 的 `document.sent_at` 字段
 
 > **排除列表**：法院名称、法官姓名、地名、法律术语等不应作为当事人提取。详见 `sms-patterns.json` → `party_extraction.exclude_keywords`。
 
@@ -229,15 +235,34 @@ node scripts/download_court_docs.mjs --url "{短信链接}" --output /tmp/court-
    - **传票**：提取开庭时间、地点、法庭、案号，向用户高亮提醒
    - **通知书/告知书**：提取缴费期限、举证期限等关键日期
    - **起诉状/答辩状**：提取案由、当事人、诉讼请求概要
+   - **判决书**：识别为一审判决书，记录文书类型，触发上诉期限计算（P1）
    - **其他文书**：展示文书标题和法院名称
    - 如一次下载多份文书，逐一解析，汇总为一份报告
 
    > 深度分析（如判决书解读、合同审查）不在此技能范围内，请使用专用分析技能处理。
 
-8. **向用户汇报**：按 [`references/report-format.md`](references/report-format.md) 输出结构化报告
+8. **上诉期限计算（P1）**：当识别到判决书/裁定书时自动计算
+   - **适用条件**：文书类型为判决书/裁定书（包括一审判决书、民事判决书、裁定书等）
+   - **不同案件类型的上诉期限**（详见 `sms-patterns.json` → `appeal_calculation`）：
+     | 案件类型 | 上诉期限 |
+     |---------|---------|
+     | 民事一审判决 | 送达后15天 |
+     | 民事裁定 | 送达后10天 |
+     | 行政判决 | 送达后15天 |
+     | 刑事判决 | 送达后10天 |
+     | 刑事裁定 | 送达后5天 |
+   - **计算公式**：`上诉截止日期 = 送达日期 + 上诉期限天数`
+   - **送达日期来源**：
+     - 优先使用 zxfw API 响应的 `dt_cjsj` 字段（送达记录创建时间）
+     - 次选使用短信接收时间 `received_at`
+     - 无法确定时，展示"送达时间待确认"
+   - **归档 JSON 字段**：写入 `document.appeal_deadline` 和 `document.appeal_days_remaining`
+
+9. **向用户汇报**：按 [`references/report-format.md`](references/report-format.md) 输出结构化报告
    - 先确认归档完成（案号、法院、当事人、案由、文件数、位置）
    - 列出所有已归档的文书清单
    - 如含传票，⚠️ 高亮提醒开庭时间、地点、审理程序
+   - 如含判决书，⏰ 展示上诉期限信息
    - 如部分失败，列出失败文书和原始链接
 
 ### 第五步：PDF 后处理（可选）

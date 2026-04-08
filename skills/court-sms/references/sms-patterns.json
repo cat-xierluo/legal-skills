@@ -13,14 +13,16 @@
         "content_type": "application/json",
         "request_body": { "qdbh": "{全局编号}", "sdbh": "{送达编号}", "sdsin": "{送达签名}" },
         "response_fields": {
-          "document_name": "data[].c_wsmc",
-          "download_url": "data[].wjlj",
           "court_name": "data[].c_fymc",
+          "court_id": "data[].c_fybh",
+          "document_name": "data[].c_wsmc",
           "document_id": "data[].c_wsbh",
-          "file_format": "data[].c_wjgs"
+          "download_url": "data[].wjlj",
+          "file_format": "data[].c_wjgs",
+          "create_time": "data[].dt_cjsj"
         },
         "download_method": "curl -sL -o \"{filename}\" \"{wjlj}\"",
-        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。"
+        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。dt_cjsj 为送达记录创建时间，可作为 sent_at 使用。"
       }
     },
     {
@@ -62,6 +64,7 @@
     "开庭传票": "传票",
     "举证通知书": "举证通知书",
     "判决书": "判决书",
+    "民事判决书": "一审判决书",
     "裁定书": "裁定书",
     "调解书": "调解书",
     "执行通知书": "执行通知书",
@@ -74,6 +77,47 @@
     "举证期限通知书": "举证期限通知书",
     "转换程序通知书": "转换程序通知书",
     "参加诉讼通知书": "参加诉讼通知书"
+  },
+  "sent_time_extraction": {
+    "_doc": "送达时间提取规则，用于计算上诉期限等关键日期",
+    "api_field": "dt_cjsj",
+    "api_field_description": "送达平台 API 响应中的创建时间字段，即送达记录创建时间（北京时间）",
+    "patterns": [
+      {
+        "type": "sms_gateway",
+        "description": "短信网关时间（部分手机短信显示）",
+        "regex": "(?:发送|时间)[：:]?\\s*(\\d{4}[-/年]\\d{1,2}[-/月]\\d{1,2}[日]?\\s+\\d{1,2}[时:]?\\d{0,2})",
+        "format": "yyyy-MM-dd HH:mm"
+      }
+    ]
+  },
+  "appeal_calculation": {
+    "_doc": "上诉期限计算规则，不同案件类型上诉期限不同",
+    "first_instance_civil_judgment": {
+      "deadline_days": 15,
+      "description": "民事一审判决：送达后15天",
+      "document_types": ["一审判决书", "民事判决书", "判决书"]
+    },
+    "first_instance_civil_ruling": {
+      "deadline_days": 10,
+      "description": "民事裁定：送达后10天",
+      "document_types": ["裁定书"]
+    },
+    "first_instance_administrative": {
+      "deadline_days": 15,
+      "description": "行政判决：送达后15天",
+      "document_types": ["行政判决书"]
+    },
+    "first_instance_criminal_judgment": {
+      "deadline_days": 10,
+      "description": "刑事判决：送达后10天",
+      "document_types": ["刑事判决书"]
+    },
+    "first_instance_criminal_ruling": {
+      "deadline_days": 5,
+      "description": "刑事裁定：送达后5天",
+      "document_types": ["刑事裁定书"]
+    }
   },
   "party_extraction": {
     "company_patterns": [
