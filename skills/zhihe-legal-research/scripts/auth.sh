@@ -7,7 +7,7 @@
 #   ./auth.sh logout             - 清除登录凭证
 #
 # 配置文件:
-#   assets/config - 存储 Token（自包含在 skill 内部）
+#   assets/.env - 存储 Token 和手机号（自包含在 skill 内部）
 #
 # 环境变量:
 #   LEGAL_RESEARCH_TOKEN - JWT Token (自动加载)
@@ -21,7 +21,7 @@ SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # 基础配置
 BASE_URL="https://fc-openresearch-qzquocekez.cn-shanghai.fcapp.run"
 CONFIG_DIR="${SKILL_ROOT}/assets"
-ENV_FILE="${CONFIG_DIR}/config"
+ENV_FILE="${CONFIG_DIR}/.env"
 
 # 确保配置目录存在
 ensure_config_dir() {
@@ -35,6 +35,7 @@ load_token() {
         source "$ENV_FILE" 2>/dev/null || true
     fi
     export LEGAL_RESEARCH_TOKEN
+    export LEGAL_RESEARCH_PHONE
 }
 
 # 检查登录状态
@@ -46,17 +47,32 @@ check_auth() {
         return 1
     fi
 
-    curl -s -X GET "${BASE_URL}/api/user/profile" \
+    local response
+    response=$(curl -s -X GET "${BASE_URL}/api/user/profile" \
         -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" \
-        -H "Content-Type: application/json"
+        -H "Content-Type: application/json")
+
+    # 响应不是有效 JSON（如服务端 500 HTML 错误页），视为 token 失效
+    if [[ ! "$response" =~ ^\{ ]]; then
+        echo '{"code": 401, "message": "登录状态已失效，请重新登录", "is_vip": false}'
+        return 1
+    fi
+
+    echo "$response"
 }
 
 # 发送验证码
 send_code() {
     local phone="$1"
 
+    # 如果未提供手机号，尝试使用保存的手机号
     if [[ -z "$phone" ]]; then
-        echo '{"code": 400, "message": "请提供手机号"}'
+        load_token
+        phone="$LEGAL_RESEARCH_PHONE"
+    fi
+
+    if [[ -z "$phone" ]]; then
+        echo '{"code": 400, "message": "请提供手机号（未找到已保存的手机号）"}'
         return 1
     fi
 
@@ -66,9 +82,12 @@ send_code() {
         return 1
     fi
 
+    local payload
+    payload=$(jq -n --arg p "$phone" '{"phone": $p}')
+
     curl -s -X POST "${BASE_URL}/api/auth/send-code" \
         -H "Content-Type: application/json" \
-        -d "{\"phone\": \"${phone}\"}"
+        -d "$payload"
 }
 
 # 验证登录
@@ -87,10 +106,13 @@ verify_code() {
         return 1
     fi
 
+    local payload
+    payload=$(jq -n --arg p "$phone" --arg c "$code" '{"phone": $p, "code": $c}')
+
     local response
     response=$(curl -s -X POST "${BASE_URL}/api/auth/verify-code" \
         -H "Content-Type: application/json" \
-        -d "{\"phone\": \"${phone}\", \"code\": \"${code}\"}")
+        -d "$payload")
 
     # 提取 token 并保存
     local token
@@ -99,17 +121,26 @@ verify_code() {
     if [[ -n "$token" ]]; then
         ensure_config_dir
 
-        # 检查是否已存在该变量
+        # 更新或添加 TOKEN
         if [[ -f "$ENV_FILE" ]] && grep -q "^LEGAL_RESEARCH_TOKEN=" "$ENV_FILE" 2>/dev/null; then
-            # 更新现有值
             if [[ "$(uname)" == "Darwin" ]]; then
                 sed -i '' "s|^LEGAL_RESEARCH_TOKEN=.*|LEGAL_RESEARCH_TOKEN=${token}|" "$ENV_FILE"
             else
                 sed -i "s|^LEGAL_RESEARCH_TOKEN=.*|LEGAL_RESEARCH_TOKEN=${token}|" "$ENV_FILE"
             fi
         else
-            # 追加新值
             echo "LEGAL_RESEARCH_TOKEN=${token}" >> "$ENV_FILE"
+        fi
+
+        # 更新或添加 PHONE
+        if [[ -f "$ENV_FILE" ]] && grep -q "^LEGAL_RESEARCH_PHONE=" "$ENV_FILE" 2>/dev/null; then
+            if [[ "$(uname)" == "Darwin" ]]; then
+                sed -i '' "s|^LEGAL_RESEARCH_PHONE=.*|LEGAL_RESEARCH_PHONE=${phone}|" "$ENV_FILE"
+            else
+                sed -i "s|^LEGAL_RESEARCH_PHONE=.*|LEGAL_RESEARCH_PHONE=${phone}|" "$ENV_FILE"
+            fi
+        else
+            echo "LEGAL_RESEARCH_PHONE=${phone}" >> "$ENV_FILE"
         fi
 
         # 设置文件权限
@@ -178,7 +209,7 @@ case "${1:-}" in
         echo "  logout                 清除登录凭证"
         echo "  config                 显示配置信息"
         echo ""
-        echo "配置存储位置: assets/.data/config（skill 内部）"
+        echo "配置存储位置: assets/.env（skill 内部）"
         exit 1
         ;;
 esac

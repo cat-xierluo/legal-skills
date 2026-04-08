@@ -1,5 +1,5 @@
 # 敏感配置文件（不要提交）
-assets/config
+assets/.env
 
 # 任务状态文件（运行时数据）
 assets/pending.json
@@ -13,6 +13,7 @@ archive/
 # 环境变量文件
 *.env
 .env.*
+!.env.example
 
 # 系统文件
 .DS_Store

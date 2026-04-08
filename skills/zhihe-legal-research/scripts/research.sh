@@ -13,6 +13,7 @@
 #   LEGAL_RESEARCH_TOKEN - JWT Token
 
 set -e
+export LC_ALL=UTF-8
 
 # 获取 skill 根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +22,7 @@ SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # 基础配置
 BASE_URL="https://fc-openresearch-qzquocekez.cn-shanghai.fcapp.run"
 CONFIG_DIR="${SKILL_ROOT}/assets"
-ENV_FILE="${CONFIG_DIR}/config"
+ENV_FILE="${CONFIG_DIR}/.env"
 ARCHIVE_DIR="${SKILL_ROOT}/archive"
 
 # 默认轮询配置
@@ -61,10 +62,13 @@ submit_query() {
     load_token
     check_token
 
+    local payload
+    payload=$(jq -n --arg q "$query" '{"query": $q}')
+
     curl -s -X POST "${BASE_URL}/api/research/query" \
         -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" \
         -H "Content-Type: application/json" \
-        -d "{\"query\": \"${query}\"}"
+        -d "$payload"
 }
 
 # 查询任务状态
@@ -220,7 +224,7 @@ get_full_result() {
 
     # 获取报告（如果有）
     local report_response
-    report_response=$(get_report "$task_id" 2>/dev/null || echo '{"has_report":false}')
+    report_response=$(get_report "$task_id" 2>/dev/null || echo '{"code":404}')
 
     # 组合输出
     echo "{"
@@ -240,7 +244,14 @@ generate_archive_name() {
     # 提取研究主题：尝试从问题中提取关键词
     local topic
     # 移除特殊字符，提取前50个字符作为主题
-    topic=$(echo "$query" | sed 's/[\/\\:*?"<>|]/ /g' | sed 's/^[：:]*//' | cut -c1-50 | sed 's/ *$//')
+    topic=$(python3 -c "
+import re, sys
+q = sys.argv[1]
+q = re.sub(r'[/\\\\:*?\"<>|？]', ' ', q)
+q = q.lstrip('：:')
+q = q[:50].rstrip()
+print(q)
+" "$query")
 
     # 组合命名：YYMMDD 主题_法律研究报告
     echo "${date_prefix} ${topic}_法律研究报告"
@@ -254,7 +265,14 @@ generate_report_filename() {
 
     # 提取主题关键词（与文件夹名保持一致）
     local topic
-    topic=$(echo "$query" | sed 's/[\/\\:*?"<>|]/ /g' | sed 's/^[：:]*//' | cut -c1-50 | sed 's/ *$//')
+    topic=$(python3 -c "
+import re, sys
+q = sys.argv[1]
+q = re.sub(r'[/\\\\:*?\"<>|？]', ' ', q)
+q = q.lstrip('：:')
+q = q[:50].rstrip()
+print(q)
+" "$query")
 
     echo "${date_prefix} ${topic}_法律研究报告.md"
 }
@@ -300,11 +318,21 @@ archive_result() {
     local result_response
     result_response=$(get_result "$task_id")
 
-    # 提取查询和结果文本
+    # 从 status 获取 query（result API 不含 query 字段）
     local query
-    query=$(echo "$result_response" | grep -o '"query":"[^"]*"' | cut -d'"' -f4 | head -1)
+    query=$(echo "$status_response" | jq -r '.data.query // ""' 2>/dev/null || echo "")
     local text_result
-    text_result=$(echo "$result_response" | sed 's/.*"text_result":"\([^"]*\)".*/\1/' 2>/dev/null || echo "")
+    text_result=$(echo "$result_response" | jq -r '.data.text_result // .text_result // ""' 2>/dev/null || echo "")
+
+    # text_result 可能是 Python dict 格式，如 {'node_status': {}, 'Output': {'output': '...'}}
+    # 尝试提取 Output.output 中的实际内容
+    if echo "$text_result" | grep -q "'Output'" 2>/dev/null; then
+        local extracted
+        extracted=$(echo "$text_result" | sed "s/'/\"/g" | jq -r '.Output.output // empty' 2>/dev/null || echo "")
+        if [[ -n "$extracted" ]]; then
+            text_result="$extracted"
+        fi
+    fi
 
     # 生成归档目录名
     local archive_name
@@ -312,8 +340,9 @@ archive_result() {
     local task_archive_dir="${ARCHIVE_DIR}/${archive_name}"
     mkdir -p "$task_archive_dir"
 
-    # 保存结果为 Markdown
-    local result_file="${task_archive_dir}/result.md"
+    # 保存结果为 Markdown（使用主题命名）
+    local result_filename="${archive_name}.md"
+    local result_file="${task_archive_dir}/${result_filename}"
     {
         echo "# 法律研究报告"
         echo ""
@@ -331,19 +360,17 @@ archive_result() {
         echo "${text_result}"
     } > "$result_file"
 
-    local files=("result.md")
+    local files=("${result_filename}")
 
-    # 尝试下载报告
+    # 尝试下载报告（报告 API 返回 code 200 表示有报告，404 表示无）
     local report_response
-    report_response=$(get_report "$task_id" 2>/dev/null || echo '{"has_report":false}')
-    local has_report
-    has_report=$(echo "$report_response" | grep -o '"has_report":[^,}]*' | cut -d':' -f2)
+    report_response=$(get_report "$task_id" 2>/dev/null || echo '{"code":404}')
+    local report_code
+    report_code=$(echo "$report_response" | jq -r '.code // 404' 2>/dev/null)
 
-    if [[ "$has_report" == "true" ]]; then
+    if [[ "$report_code" == "200" ]]; then
         local report_url
-        report_url=$(echo "$report_response" | grep -o '"report_url":"[^"]*"' | cut -d'"' -f4)
-        local original_filename
-        original_filename=$(echo "$report_response" | grep -o '"filename":"[^"]*"' | cut -d'"' -f4)
+        report_url=$(echo "$report_response" | jq -r '.data.report_url // empty' 2>/dev/null)
 
         # 生成统一的报告文件名（与 Markdown 保持一致）
         local report_filename
@@ -351,27 +378,28 @@ archive_result() {
         local docx_file="${task_archive_dir}/${report_filename%.md}.docx"
 
         if [[ -n "$report_url" ]]; then
-            echo "正在下载报告: ${report_filename%.md}.docx"
-            if curl -sL "$report_url" -o "$docx_file" 2>/dev/null; then
-                echo "✅ 报告已保存: ${docx_file}"
+            echo "📥 正在下载报告: ${report_filename%.md}.docx"
+            if curl -sL "$report_url" -o "$docx_file" 2>/dev/null && [[ -s "$docx_file" ]]; then
+                echo "   - ${report_filename%.md}.docx (详细报告)"
                 files+=("${report_filename%.md}.docx")
 
-                # 尝试转换为 Markdown（使用带日期前缀的文件名）
-                local report_filename
-                report_filename=$(generate_report_filename "${query:-法律研究}")
-                local md_file="${task_archive_dir}/${report_filename}"
-                if convert_docx_to_md "$docx_file" "$md_file"; then
-                    echo "✅ 已转换为 Markdown: ${md_file}"
-                    files+=("${report_filename}")
+                # 尝试转换为 Markdown（使用 _报告 后缀避免覆盖文字结果）
+                local report_md_name="${report_filename%.md}_报告.md"
+                local report_md="${task_archive_dir}/${report_md_name}"
+                if convert_docx_to_md "$docx_file" "$report_md"; then
+                    echo "   - ${report_md_name} (Markdown版本)"
+                    files+=("${report_md_name}")
                 fi
             else
-                echo "⚠️ 报告下载失败，链接已保存到 result.md"
+                echo "⚠️ 报告下载失败，链接已保存到归档文件"
                 echo "" >> "$result_file"
                 echo "## 报告下载链接" >> "$result_file"
                 echo "" >> "$result_file"
-                echo "[${filename:-报告}](${report_url})" >> "$result_file"
+                echo "[报告](${report_url})" >> "$result_file"
             fi
         fi
+    else
+        echo "ℹ️ 该任务无 Word 报告（仅文字结果）"
     fi
 
     echo ""
@@ -460,8 +488,11 @@ case "${1:-}" in
         echo "  list-archive            列出所有归档"
         echo ""
         echo "归档目录结构:"
-        echo "  archive/<task_id>/result.md    - 研究结果"
-        echo "  archive/<task_id>/report.docx  - 详细报告（如有）"
+        echo "  archive/YYMMDD 主题_法律研究报告/"
+        echo "    ├── ...研究报告.md         - 研究结果摘要"
+        echo "    ├── ...研究报告.docx       - Word 报告（如有）"
+        echo "    ├── ...研究报告_报告.md    - Word 转 Markdown（如有）"
+        echo "    └── media/                  - 报告图片（如有）"
         echo ""
         echo "示例:"
         echo "  $0 submit \"劳动合同到期不续签需要赔偿吗？\""

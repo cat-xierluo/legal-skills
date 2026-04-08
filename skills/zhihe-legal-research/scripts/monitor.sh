@@ -22,7 +22,7 @@ CONFIG_DIR="${SKILL_ROOT}/assets"
 PENDING_FILE="${CONFIG_DIR}/pending.json"
 COMPLETED_FILE="${CONFIG_DIR}/completed.json"
 NOTIFIED_FILE="${CONFIG_DIR}/notified.json"
-ENV_FILE="${CONFIG_DIR}/config"
+ENV_FILE="${CONFIG_DIR}/.env"
 ARCHIVE_DIR="${SKILL_ROOT}/archive"
 
 BASE_URL="https://fc-openresearch-qzquocekez.cn-shanghai.fcapp.run"
@@ -143,7 +143,7 @@ get_report() {
     load_token
 
     curl -s -X GET "${BASE_URL}/api/research/report/${task_id}" \
-        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" 2>/dev/null || echo '{"has_report":false}'
+        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" 2>/dev/null || echo '{"code":404}'
 }
 
 # 生成归档目录名（格式：YYMMDD 主题_法律研究报告）
@@ -155,7 +155,14 @@ generate_archive_name() {
     # 提取研究主题：尝试从问题中提取关键词
     local topic
     # 移除特殊字符，提取前50个字符作为主题
-    topic=$(echo "$query" | sed 's/[\/\\:*?"<>|]/ /g' | sed 's/^[：:]*//' | cut -c1-50 | sed 's/ *$//')
+    topic=$(python3 -c "
+import re, sys
+q = sys.argv[1]
+q = re.sub(r'[/\\\\:*?\"<>|？]', ' ', q)
+q = q.lstrip('：:')
+q = q[:50].rstrip()
+print(q)
+" "$query")
 
     # 组合命名：YYMMDD 主题_法律研究报告
     echo "${date_prefix} ${topic}_法律研究报告"
@@ -169,7 +176,14 @@ generate_report_filename() {
 
     # 提取主题关键词（与文件夹名保持一致）
     local topic
-    topic=$(echo "$query" | sed 's/[\/\\:*?"<>|]/ /g' | sed 's/^[：:]*//' | cut -c1-50 | sed 's/ *$//')
+    topic=$(python3 -c "
+import re, sys
+q = sys.argv[1]
+q = re.sub(r'[/\\\\:*?\"<>|？]', ' ', q)
+q = q.lstrip('：:')
+q = q[:50].rstrip()
+print(q)
+" "$query")
 
     echo "${date_prefix} ${topic}_法律研究报告.md"
 }
@@ -207,8 +221,20 @@ auto_archive_result() {
     local text_result
     text_result=$(echo "$result_json" | jq -r '.data.text_result // .text_result // ""' 2>/dev/null || echo "")
 
-    # 保存结果为 Markdown
-    local result_file="${task_archive_dir}/result.md"
+    # text_result 可能是 Python dict 格式，如 {'node_status': {}, 'Output': {'output': '...'}}
+    # 尝试提取 Output.output 中的实际内容
+    if echo "$text_result" | grep -q "'Output'" 2>/dev/null; then
+        # 将 Python dict 的单引号转为双引号以便 jq 解析
+        local extracted
+        extracted=$(echo "$text_result" | sed "s/'/\"/g" | jq -r '.Output.output // empty' 2>/dev/null || echo "")
+        if [[ -n "$extracted" ]]; then
+            text_result="$extracted"
+        fi
+    fi
+
+    # 保存结果为 Markdown（使用主题命名）
+    local result_filename="${archive_name}.md"
+    local result_file="${task_archive_dir}/${result_filename}"
     {
         echo "# 法律研究报告"
         echo ""
@@ -227,17 +253,15 @@ auto_archive_result() {
     } > "$result_file"
 
     echo "📁 归档目录: ${archive_name}"
-    echo "   - result.md (研究结果)"
+    echo "   - ${result_filename} (研究结果)"
 
-    # 下载报告（如有）
-    local has_report
-    has_report=$(echo "$report_json" | jq -r '.data.has_report // .has_report // false' 2>/dev/null)
+    # 下载报告（报告 API 返回 code 200 表示有报告，404 表示无）
+    local report_code
+    report_code=$(echo "$report_json" | jq -r '.code // 404' 2>/dev/null)
 
-    if [[ "$has_report" == "true" ]]; then
+    if [[ "$report_code" == "200" ]]; then
         local report_url
-        report_url=$(echo "$report_json" | jq -r '.data.report_url // .report_url // ""' 2>/dev/null)
-        local original_filename
-        original_filename=$(echo "$report_json" | jq -r '.data.filename // .filename // "report.docx"' 2>/dev/null)
+        report_url=$(echo "$report_json" | jq -r '.data.report_url // empty' 2>/dev/null)
 
         # 生成统一的报告文件名（与 Markdown 保持一致）
         local report_filename
@@ -246,22 +270,25 @@ auto_archive_result() {
 
         if [[ -n "$report_url" && "$report_url" != "null" ]]; then
             echo "📥 正在下载报告: ${report_filename%.md}.docx"
-            if curl -sL "$report_url" -o "$docx_file" 2>/dev/null; then
+            if curl -sL "$report_url" -o "$docx_file" 2>/dev/null && [[ -s "$docx_file" ]]; then
                 echo "   - ${report_filename%.md}.docx (详细报告)"
 
-                # 尝试转换为 Markdown（使用带日期前缀的文件名）
-                local md_file="${task_archive_dir}/${report_filename}"
-                if convert_docx_to_md "$docx_file" "$md_file"; then
-                    echo "   - ${report_filename} (Markdown版本)"
+                # 尝试转换为 Markdown（使用 _报告 后缀避免覆盖文字结果）
+                local report_md_name="${report_filename%.md}_报告.md"
+                local report_md="${task_archive_dir}/${report_md_name}"
+                if convert_docx_to_md "$docx_file" "$report_md"; then
+                    echo "   - ${report_md_name} (Markdown版本)"
                 fi
             else
-                echo "⚠️ 报告下载失败，链接已保存到 result.md"
+                echo "⚠️ 报告下载失败，链接已保存到归档文件"
                 echo "" >> "$result_file"
                 echo "## 报告下载链接" >> "$result_file"
                 echo "" >> "$result_file"
-                echo "[${filename}](${report_url})" >> "$result_file"
+                echo "[报告](${report_url})" >> "$result_file"
             fi
         fi
+    else
+        echo "ℹ️ 该任务无 Word 报告（仅文字结果）"
     fi
 
     # 返回归档路径
@@ -299,9 +326,9 @@ monitor_task() {
                 local report
                 report=$(get_report "$task_id")
 
-                # 从结果中提取 query（如果之前没有）
+                # 从 status 响应中提取 query（如果之前没有）
                 if [[ -z "$query" ]]; then
-                    query=$(echo "$result" | jq -r '.data.query // .query // "法律研究"' 2>/dev/null || echo "法律研究")
+                    query=$(echo "$status_response" | jq -r '.data.query // "法律研究"' 2>/dev/null || echo "法律研究")
                 fi
 
                 # 合并结果
