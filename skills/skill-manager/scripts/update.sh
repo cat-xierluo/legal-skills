@@ -9,6 +9,20 @@ ITEM_NAME="$1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANAGER_DIR="$(dirname "$SCRIPT_DIR")"
 
+# 更新记录函数
+record_update() {
+    local skill_name="$1"
+    local old_version="$2"
+    local new_version="$3"
+    
+    if command -v python3 &> /dev/null; then
+        RECORD_SCRIPT="$SCRIPT_DIR/record.py"
+        if [ -f "$RECORD_SCRIPT" ]; then
+            python3 "$RECORD_SCRIPT" update "$skill_name" --from "$old_version" --to "$new_version" 2>/dev/null || true
+        fi
+    fi
+}
+
 # 查找 .claude 目录
 # 特殊规则：当在 ~/.openclaw/ 目录下时，使用 ~/.openclaw/ 作为目标
 find_claude_dir() {
@@ -68,6 +82,10 @@ update_skill() {
         echo "▶ 更新: $skill_name"
 
         cd "$skill_path"
+        
+        # 记录更新前的版本
+        local old_version=$(grep -oP 'version:\s*["\']?\K[\d.]+' SKILL.md 2>/dev/null || echo "")
+        
         git fetch -q origin 2>/dev/null || {
             echo "  ❌ 无法获取更新"
             cd - > /dev/null
@@ -79,7 +97,14 @@ update_skill() {
 
         if [ "$local_rev" != "$remote_rev" ] && [ -n "$remote_rev" ]; then
             git pull -q
-            echo "  ✓ 已更新"
+            
+            # 获取更新后的版本
+            local new_version=$(grep -oP 'version:\s*["\']?\K[\d.]+' SKILL.md 2>/dev/null || echo "")
+            
+            echo "  ✓ 已更新 ($old_version → $new_version)"
+            
+            # 记录更新
+            record_update "$skill_name" "$old_version" "$new_version"
         else
             echo "  ○ 已是最新"
         fi

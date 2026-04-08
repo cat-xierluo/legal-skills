@@ -1,0 +1,13 @@
+{
+  "_note": "Skill Manager 注册表示例 - 复制此文件为 skill-registry.json 使用",
+  "example-skill": {
+    "name": "example-skill",
+    "source": "https://github.com/owner/repo",
+    "installed_at": "2026-04-08T10:00:00+08:00",
+    "last_updated": "2026-04-08T10:00:00+08:00",
+    "installed_version": "1.0.0",
+    "current_version": "1.0.0",
+    "latest_version": "1.2.0",
+    "description": "示例 Skill 的描述信息"
+  }
+}

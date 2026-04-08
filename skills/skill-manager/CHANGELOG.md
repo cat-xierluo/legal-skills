@@ -1,5 +1,29 @@
 # 变更日志
 
+## [1.3.0] - 2026-04-08
+
+### 新增
+- **版本追踪**：自动记录每个 Skill 的安装时间、来源 URL 和版本号
+- **更新检查**：新增 `scripts/check.sh` 脚本，检查所有已安装 Skills 的最新版本
+- **更新提示**：显示有更新的 Skills 列表，包含版本对比和变更摘要
+- **持久化存储**：安装记录保存在 `assets/skill-registry.json`
+- **Changelog 获取**：自动从 GitHub 获取远程 CHANGELOG.md 内容
+- **Commits 获取**：当没有 CHANGELOG 时，自动获取最近的 commits 作为更新内容参考
+- **子目录支持**：支持 GitHub 仓库子目录中的 Skill 安装
+
+### 改进
+- 安装时自动调用记录模块，无需手动操作
+- 更新时自动记录版本变更历史
+- 无需 GitHub API，直接读取网页获取版本和变更信息
+- 检查更新时区分三类状态：有更新 / 已是最新 / 检查失败
+
+### 技术细节
+- 新增 `scripts/record.py` 核心记录管理模块
+- 新增 `scripts/check.sh` 更新检查脚本
+- 新增 `assets/` 目录存储注册表数据
+- 修改 `scripts/install.sh` 安装后自动记录
+- 修改 `scripts/update.sh` 更新后自动记录
+
 ## [1.2.0] - 2026-02-21
 
 ### 新增
