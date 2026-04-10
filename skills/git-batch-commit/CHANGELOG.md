@@ -1,5 +1,15 @@
 # 变更日志
 
+## [1.2.5] - 2026-04-10
+
+### 新增
+
+- 新增 `references/issue-pr-format.md`：定义 Issue 与 PR 命名规范
+- Issue 类型前缀：`feat`、`bug`、`enhancement`、`docs`、`question`
+- Issue 状态标记：`[done]`（自己完成）、`[resolved]`/`[answered]`（外部）
+- PR 格式与 Commit 保持一致：`类型(模块): 描述`
+- AI 读取规则：根据状态标记区分已处理和待处理任务
+
 ## [1.2.4] - 2026-04-06
 
 ### 新增

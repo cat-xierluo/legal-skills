@@ -2,7 +2,7 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.4"
+version: "1.2.5"
 license: MIT
 description: 智能 Git 批量提交工具。当用户说 "git 提交"、"git commit"、"批量提交"、"拆分提交"、"整理提交" 时使用，或者当用户暂存了多个不同类型的文件需要分开提交时使用。自动将混合的文件修改按类型分类（依赖管理、文档更新、license 文件、配置、源代码等），并创建多个清晰聚焦的提交，使用标准化的提交信息格式。帮助保持清晰的 Git 历史，确保每个提交都有单一、明确的目的。使用英文前缀（docs:、feat:、fix: 等）加中文内容，支持 GitHub 彩色标签显示。
 ---
