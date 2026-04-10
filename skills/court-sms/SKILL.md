@@ -2,7 +2,7 @@
 name: court-sms
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.4.0"
 license: MIT
 description: 本技能应在用户收到法院短信（文书送达、立案通知、开庭提醒等）时使用，自动提取案号、当事人、下载链接，下载文书并归档到对应案件目录。
 ---
@@ -38,7 +38,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 | 立案通知 | 含"已立案"等关键词 | 可能有 | 展示解析结果 |
 | 信息通知 | 无链接，纯信息 | 否 | 展示解析结果 |
 
-**支持的送达平台**：`zxfw.court.gov.cn`（全国）、`sd.gdems.com`（广东）、`jysd.10102368.com`（集约送达）。详见 `references/sms-patterns.json`。
+**支持的送达平台**：`zxfw.court.gov.cn`（全国）、`sd.gdems.com`（广东）、`jysd.10102368.com`（集约送达）、`dzsd.hbfy.gov.cn`（湖北）。详见 `references/sms-patterns.json`。
 
 ---
 
@@ -78,6 +78,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 | 全国法院统一送达平台 | `zxfw.court.gov.cn` | curl API 直连 | qdbh, sdbh, sdsin |
 | 广东法院电子送达 | `sd.gdems.com` | 浏览器自动化 | 路径中的送达标识码 |
 | 集约送达平台 | `jysd.10102368.com` | 浏览器自动化 | key |
+| 湖北电子送达 | `dzsd.hbfy.gov.cn` | HTTP API（免账号）/ 浏览器自动化（账号模式） | 免账号：msg；账号模式：账号+密码从正文提取 |
 
 **e) 发送时间提取（P0）**：从送达平台 API 响应中提取发送时间，用于后续上诉期限计算
 - **优先来源**：zxfw API 响应中的 `dt_cjsj` 字段（送达记录创建时间，ISO 8601 格式）
@@ -108,6 +109,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 > **平台判断**：根据第一步识别的链接域名，选择下载策略。
 > - `zxfw.court.gov.cn` → 方案一（API 直连）→ 方案二 → 方案三
 > - `sd.gdems.com` 或 `jysd.10102368.com` → 跳过方案一，直接方案二 → 方案三
+> - `dzsd.hbfy.gov.cn` → 湖北专属流程（见下方）
 > - 未知域名 → 提示用户提供链接信息
 >
 > **⛔ 降级铁律**：严格串行，禁止并行。当前方案成功即停止，绝不降级。禁止"双保险"并行尝试多个方案。
@@ -199,6 +201,48 @@ node scripts/download_court_docs.mjs --url "{短信链接}" --output /tmp/court-
 4. browser_click → 点击下载
 5. 等待下载完成，保存到临时目录
 ```
+
+#### 湖北平台下载流程（`dzsd.hbfy.gov.cn`）
+
+湖北电子送达平台有两种链路，根据 URL 格式自动选择：
+
+**链路一：免账号模式**（URL 含 `/hb/msg=xxx`）
+
+1. 从 URL 提取 `msg` 参数值
+2. 尝试 HTTP API 直连：
+
+```bash
+msg="从URL提取的msg值"
+mkdir -p /tmp/court-sms-staging/
+
+# 查询文书信息
+resp=$(curl -s -X POST "http://dzsd.hbfy.gov.cn/delimobile/tDeliSms/findSmsInfo?t=$(date +%s%3N)" \
+  -H "Content-Type: application/json" \
+  -H "Referer: http://dzsd.hbfy.gov.cn/deli-mobile-ui/" \
+  -d "{\"msg\":\"$msg\"}")
+
+# 检查是否需要验证码（data.isNeedCaptcha == "Y"）
+# 如需验证码或无可下载文书，降级到 Playwright MCP
+
+# 逐个下载文书
+echo "$resp" | jq -r '.data.docList[] | "\(.docName)\t\(.downloadPath)"' | while IFS=$'\t' read -r name path; do
+  if [ -n "$path" ]; then
+    curl -sL -o "/tmp/court-sms-staging/${name}.pdf" "http://dzsd.hbfy.gov.cn/delimobile${path}"
+  fi
+done
+```
+
+3. 如需验证码或 HTTP 失败，降级到 Playwright MCP（方案三）
+
+**链路二：账号模式**（URL 含 `/sfsddz`）
+
+1. 从短信正文提取凭证：
+   - 账号：匹配 `账号\s*(\d{15,20})`
+   - 默认密码：匹配 `默认密码[：:]\s*([0-9A-Za-z]+)`
+2. 需要浏览器自动化（Playwright MCP），登录页包含验证码
+3. 登录后遍历待签收/已签收/已过期文书列表，逐个下载
+
+> **提示**：湖北平台两种模式都可能遇到验证码。免账号模式优先尝试 HTTP API，账号模式建议引导用户手动打开链接或使用 Playwright MCP。
 
 #### 失败兜底
 
@@ -435,6 +479,23 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=DEMO1&sdbh=DEMO2&
 ```text
 【xx市xx区人民法院】提醒：您有（2025）苏0508民初567号案件，
 定于2025年3月15日上午9:30在第3法庭开庭，请准时到庭。
+```
+
+### 湖北电子送达短信（免账号）
+
+```text
+【xx人民法院】您有案件文书待查收，请点击链接查收：
+http://dzsd.hbfy.gov.cn/hb/msg=XXXXXXX
+如有疑问请联系法院。
+```
+
+### 湖北电子送达短信（账号模式）
+
+```text
+【xx人民法院】您有（2025）鄂xxxx民初xxxx号案件文书送达。
+账号 420xxxxxxxxxxxxx
+默认密码：xxxxxx
+请登录 http://dzsd.hbfy.gov.cn/sfsddz 查收。
 ```
 
 ---

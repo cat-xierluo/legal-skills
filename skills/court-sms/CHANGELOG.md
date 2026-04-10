@@ -2,7 +2,23 @@
 
 本项目的所有重要变更都将记录在此文件。
 
-## [1.3.0] - 2026-04-08
+## [1.4.0] - 2026-04-10
+
+### 新增
+
+- **湖北电子送达平台支持**：新增 `dzsd.hbfy.gov.cn`（湖北法院）的链接识别和文书下载
+  - 免账号模式：识别 `/hb/msg=xxx` 链接，支持 HTTP API 直连下载（`POST /delimobile/tDeliSms/findSmsInfo`），需验证码时降级到浏览器
+  - 账号模式：识别 `/sfsddz` 入口链接，从短信正文提取账号（`账号\s*(\d{15,20})`）和默认密码（`默认密码[：:]\s*([0-9A-Za-z]+)`）
+  - 新增 `sms-patterns.json` 中的 hbfy 平台配置段（含免账号/账号两种模式的 API 信息和凭证提取正则）
+- **平台支持扩展至 4 个**：全国法院统一送达（zxfw）、广东电子送达（gdems）、集约送达（jysd）、湖北电子送达（hbfy）
+- SKILL.md 新增湖北平台下载流程说明（免账号 HTTP API + 账号模式浏览器自动化）
+- SKILL.md 新增湖北短信格式示例（免账号模式和账号模式两种）
+
+### 引用
+
+- 上游参考：[FachuanHybridSystem][fachuan-repo] → `sms_parser_service.py`（短信解析新增 hbfy 正则）、`hbfy_scraper.py`（湖北平台完整下载逻辑）
+
+[fachuan-repo]: https://github.com/Lawyer-ray/FachuanHybridSystem
 
 ### 新增
 

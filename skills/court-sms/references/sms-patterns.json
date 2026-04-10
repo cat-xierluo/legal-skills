@@ -44,6 +44,39 @@
       "download_strategy": "browser_only",
       "api": null,
       "notes": "无公开 API，需通过浏览器打开页面后下载。部分链接可能需要短信验证码验证身份。"
+    },
+    {
+      "domain": "dzsd.hbfy.gov.cn",
+      "description": "湖北电子送达平台（限湖北地区法院）",
+      "pattern": "https?://dzsd\\.hbfy\\.gov\\.cn/(?:hb/msg=[a-zA-Z0-9]+|sfsddz\\b)",
+      "required_params": [],
+      "param_extract": "免账号模式：从 URL 路径提取 msg 参数值；账号模式：从短信正文提取账号和默认密码",
+      "download_strategy": "browser_only",
+      "api": {
+        "public_mode": {
+          "endpoint": "http://dzsd.hbfy.gov.cn/delimobile/tDeliSms/findSmsInfo",
+          "method": "POST",
+          "content_type": "application/json",
+          "request_body": { "msg": "{msg参数值}", "code": "{验证码（如需）}", "uuid": "{验证码UUID（如需）}" },
+          "response_fields": {
+            "need_captcha": "data.isNeedCaptcha",
+            "doc_list": "data.docList",
+            "doc_name": "data.docList[].docName",
+            "download_path": "data.docList[].downloadPath",
+            "pdf_path": "data.docList[].pdfPath"
+          },
+          "captcha_endpoint": "http://dzsd.hbfy.gov.cn/delimobile/loginCaptcha",
+          "notes": "免账号模式有 HTTP API，但可能需要验证码（OCR）。验证码获取：POST loginCaptcha，返回 data.uuid + data.img（base64）。"
+        },
+        "account_mode": {
+          "credential_patterns": {
+            "account": "账号\\s*([0-9]{15,20})",
+            "password": "默认密码[：:]\\s*([0-9A-Za-z]+)"
+          },
+          "notes": "账号模式需从短信正文提取账号和默认密码，登录需要验证码 OCR，建议使用 Playwright MCP 浏览器自动化。"
+        }
+      },
+      "notes": "湖北电子送达平台支持两种模式：1）免账号模式（短信含 /hb/msg= 链接）可直接通过 HTTP API 查询文书；2）账号模式（短信含 /sfsddz 入口）需登录后下载。两种模式都可能需要验证码。建议优先尝试免账号 HTTP API，失败后降级到 Playwright MCP。"
     }
   ],
   "case_number_pattern": "[（(〔\\[]\\d{4}[）)\\]〕]\\s*[\\u4e00-\\u9fa5]{1,10}\\d+[\\u4e00-\\u9fa5]{1,5}\\d+号?",
