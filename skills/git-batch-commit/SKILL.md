@@ -165,6 +165,7 @@ fix: svg-article-illustrator 修复 PNG 导出问题
 
 - **`commit-types.md`** - 详细的类别定义和检测逻辑
 - **`conventional-commits.md`** - 提交信息规范
+- **`issue-pr-format.md`** - Issue 与 PR 命名规范
 
 ## 使用示例
 
