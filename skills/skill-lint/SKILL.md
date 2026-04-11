@@ -215,6 +215,22 @@ All notable changes to this skill will be documented in this file.
 - 多次运行是否产生相同结果
 - 是否有累积效应（如追加写入而非覆盖）
 
+### 17. 检查依赖声明与防护
+
+对于包含脚本的技能（`scripts/` 目录非空），检查以下项：
+
+**检查项**：
+- [ ] SKILL.md 是否声明了依赖（哪些功能需要额外安装）
+- [ ] 脚本中的硬依赖是否有 try/except 包裹并给出安装提示
+- [ ] 脚本中的可选依赖是否有 try/except 包裹并设置降级标志
+- [ ] `requirements.txt` 是否存在且只包含硬依赖（可选依赖不应列出）
+- [ ] SKILL.md 中依赖安装说明是否就近放置（在对应功能章节内，而非文档末尾）
+
+**判断标准**：
+- 无脚本的纯 prompt 技能：跳过此检查
+- 有脚本但无外部依赖（仅用标准库）：在 SKILL.md 中注明"无需额外安装依赖"
+- 有脚本且有外部依赖：必须通过上述所有检查项
+
 ## 生成审查报告
 
 ### 报告格式
@@ -244,6 +260,7 @@ All notable changes to this skill will be documented in this file.
 | CHANGELOG | ✅/⚠️/❌ | N |
 | 版本号管理 | ✅/⚠️/❌ | N |
 | 可编排性 | ✅/⚠️/❌ | N |
+| 依赖声明与防护 | ✅/⚠️/❌ | N |
 
 ## 详细问题
 

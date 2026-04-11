@@ -37,11 +37,51 @@
 
 ### 依赖包文件（可选）
 
-如需管理大量 Python 依赖，可在 `assets/` 目录下使用 `requirements.txt`：
+如需管理大量 Python 依赖，可在 `assets/` 或 `scripts/` 目录下使用 `requirements.txt`：
 
 ```bash
-pip install -r assets/requirements.txt
+pip install -r scripts/requirements.txt
 ```
+
+### 脚本依赖防护要求
+
+**所有包含外部依赖的脚本必须做优雅降级处理**，确保用户未安装依赖时不会遇到晦涩的 `ImportError` 或 `ModuleNotFoundError`。
+
+**规则**：
+
+1. **硬依赖**（脚本核心功能所需）：用 try/except 包裹 import，捕获后输出清晰的安装提示并退出
+2. **可选依赖**（增强功能所需）：用 try/except 包裹 import，设置 `HAS_XXX = False` 标志，在对应功能处降级处理
+
+**示例 — 硬依赖**：
+
+```python
+try:
+    from docx import Document
+    from docx.shared import Pt, Cm
+except ImportError:
+    print("❌ 缺少依赖: python-docx")
+    print("   请运行: pip install python-docx")
+    print("   或运行: pip install -r scripts/requirements.txt")
+    raise SystemExit(1)
+```
+
+**示例 — 可选依赖**：
+
+```python
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+```
+
+### SKILL.md 依赖声明要求
+
+涉及脚本的技能，必须在 SKILL.md 中明确说明：
+
+1. **哪些功能需要依赖**：区分"开箱即用"功能和"需安装依赖"功能
+2. **安装方式**：提供一条命令即可完成安装（如 `pip install -r scripts/requirements.txt`）
+3. **安装位置**：在用户首次需要运行脚本的位置（如"转换为 Word 文档"章节）给出安装说明，不要藏在文档末尾
 
 ## 许可证管理规范
 
@@ -390,6 +430,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.6.0 | 2026-04-11 | 强化依赖管理规范：新增"脚本依赖防护要求"（硬依赖 try/except + 安装提示、可选依赖降级标志）、"SKILL.md 依赖声明要求"（区分开箱即用/需安装功能、安装位置就近原则） |
 | v1.5.5 | 2026-03-24 | 新增 CC BY-NC-SA 4.0 商用许可联系方式规范，统一联系方式 |
 | v1.5.4 | 2026-03-21 | 精简 SKILL.md frontmatter：删除 23 个技能的 source 字段，只保留 homepage（符合 ClawHub 规范：source/homepage 二选一）                 |
 | v1.5.3 | 2026-03-21 | 重构 ClawHub 同步指南：删除 CLAWHUB.md，创建 clawhub-sync skill 替代，提供交互式批量同步能力                                           |

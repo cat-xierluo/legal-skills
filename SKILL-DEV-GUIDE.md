@@ -141,11 +141,41 @@ description: |
 
 ### (3) 依赖包文件(可选,扩展)
 
-如需管理大量 Python 依赖,可在 `assets/` 目录下使用 `requirements.txt`:
+如需管理 Python 依赖,可在 `scripts/` 或 `assets/` 目录下使用 `requirements.txt`:
 
 ```bash
-pip install -r assets/requirements.txt
+pip install -r scripts/requirements.txt
 ```
+
+**注意**: `requirements.txt` 只应包含**硬依赖**(缺了脚本就跑不了的包)。可选依赖不应列入,而应在脚本中用 try/except 优雅降级。
+
+### (4) 脚本依赖防护
+
+所有包含外部依赖的脚本必须做优雅降级处理:
+
+- **硬依赖**: try/except 包裹 import,捕获后输出安装提示并退出
+- **可选依赖**: try/except 包裹 import,设置功能标志,静默降级
+
+```python
+# 硬依赖示例
+try:
+    from docx import Document
+except ImportError:
+    print("❌ 缺少依赖: python-docx")
+    print("   请运行: pip install -r scripts/requirements.txt")
+    raise SystemExit(1)
+
+# 可选依赖示例
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+```
+
+### (5) SKILL.md 依赖声明位置
+
+依赖安装说明应**就近放置**在需要该依赖的功能章节内,而非集中在文档末尾。用户在阅读某个功能时,应该能立刻看到需要安装什么。
 
 ## 6. Progressive Disclosure 设计
 
