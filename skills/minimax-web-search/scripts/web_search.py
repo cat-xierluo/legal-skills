@@ -38,7 +38,7 @@ async def web_search(query: str, max_results: int = DEFAULT_MAX_RESULTS):
             result_text = result.content[0].text if hasattr(result.content[0], 'text') else str(result)
             try:
                 data = json.loads(result_text)
-                organic_results = data.get("organic", [])
+                organic_results = data.get("organic", [])[:max_results]
                 return {
                     "query": query,
                     "results": [{"title": r.get("title", ""), "link": r.get("link", ""), "snippet": r.get("snippet", ""), "date": r.get("date", "")} for r in organic_results],
@@ -50,15 +50,22 @@ async def web_search(query: str, max_results: int = DEFAULT_MAX_RESULTS):
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python3 web_search.py <搜索查询>")
+        print("用法: python3 web_search.py <搜索查询> [最大结果数]")
         sys.exit(1)
 
     query = sys.argv[1]
+    max_results = DEFAULT_MAX_RESULTS
+    if len(sys.argv) >= 3:
+        try:
+            max_results = max(1, int(sys.argv[2]))
+        except ValueError:
+            print("错误: 最大结果数必须是正整数")
+            sys.exit(1)
     print(f"🔍 搜索: {query}")
     print("-" * 60)
 
     try:
-        result = asyncio.run(web_search(query))
+        result = asyncio.run(web_search(query, max_results=max_results))
         for i, r in enumerate(result.get("results", []), 1):
             print(f"\n{i}. {r['title']}")
             print(f"   📎 {r['link']}")

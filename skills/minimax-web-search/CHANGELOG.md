@@ -2,6 +2,18 @@
 
 本文件记录 minimax-web-search 技能的所有重要变更。
 
+## [0.1.1] - 2026-04-10
+
+### 修复
+
+- **路径口径统一**：将示例路径从旧目录 `minimax-mcp-web-search` 修正为当前目录 `minimax-web-search`
+- **配置说明修正**：将 `.env.example` 的复制路径明确为 `scripts/.env.example`
+- **结果数量参数生效**：`web_search(query, max_results=5)` 现在会按 `max_results` 截断返回结果，CLI 也支持传入第二个参数指定结果数
+
+### 文档完善
+
+- 在前置要求中补充 `uvx minimax-coding-plan-mcp` 可用性说明
+
 ## [0.1.0] - 2026-02-18
 
 ### 新增

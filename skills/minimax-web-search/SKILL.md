@@ -2,7 +2,7 @@
 name: minimax-web-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.1.0"
+version: "0.1.1"
 description: 通过 MiniMax MCP 进行网络搜索，适用于 OpenClaw 平台。如果你是 Claude Code 用户，请忽略此技能。
 license: MIT
 ---
@@ -34,12 +34,13 @@ license: MIT
 ## 前置要求
 
 1. 安装依赖：`pip install mcp`
-2. 配置环境变量：复制 `.env.example` 为 `.env` 并填入 API Key
+2. 配置环境变量：复制 `scripts/.env.example` 为 `scripts/.env` 并填入 API Key
+3. 安装并确保 `uvx minimax-coding-plan-mcp` 可用
 
 ## 使用方法
 
 ```bash
-cd ~/.openclaw/skills/minimax-mcp-web-search/scripts
+cd ~/.openclaw/skills/minimax-web-search/scripts
 source .env
 python3 web_search.py "搜索关键词"
 ```
@@ -49,7 +50,7 @@ python3 web_search.py "搜索关键词"
 ```python
 import sys
 import os
-sys.path.insert(0, "~/.openclaw/skills/minimax-mcp-web-search/scripts")
+sys.path.insert(0, "~/.openclaw/skills/minimax-web-search/scripts")
 os.environ["MINIMAX_API_KEY"] = "your-key"  # 或从 .env 加载
 from web_search import web_search
 result = await web_search("法律AI最新动态")
@@ -57,7 +58,7 @@ result = await web_search("法律AI最新动态")
 
 ## 配置文件
 
-`.env` 文件已放在 `scripts/` 目录下，格式：
+`.env` 文件建议放在 `scripts/` 目录下，格式：
 ```
 MINIMAX_API_KEY=your-api-key
 ```
