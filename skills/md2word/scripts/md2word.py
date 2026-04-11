@@ -12,6 +12,8 @@ import argparse
 import re
 import glob
 import tempfile
+import urllib.request
+import io
 
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
@@ -109,6 +111,22 @@ def insert_image_to_word(doc, image):
             os.unlink(temp_filename)
         except:
             pass
+
+
+def download_external_image(url):
+    """从URL下载图片并返回PIL Image对象"""
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=20) as response:
+            image_data = response.read()
+        image = Image.open(io.BytesIO(image_data))
+        image.load()  # 确保数据已加载
+        return image
+    except Exception as e:
+        print(f"⚠️  图片下载失败: {url[:80]}... ({e})")
+        return None
 
 
 # ============================================================================
@@ -587,6 +605,38 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 add_quote(doc, '\n'.join(quote_lines))
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
+            continue
+
+        # Markdown 图片（含外部URL）
+        img_match = re.match(r'^!\[([^\]]*)\]\((.+)\)$', line)
+        if img_match:
+            alt_text = convert_quotes_to_chinese(img_match.group(1))
+            img_url = img_match.group(2)
+
+            image = None
+            if img_url.startswith(('http://', 'https://')):
+                print(f"🖼️  下载外部图片: {alt_text[:40]}...")
+                image = download_external_image(img_url)
+            elif os.path.exists(img_url):
+                try:
+                    image = Image.open(img_url)
+                    image.load()
+                except Exception as e:
+                    print(f"⚠️  本地图片加载失败: {img_url} ({e})")
+
+            if image:
+                insert_image_to_word(doc, image)
+                print(f"✅ 插入图片: {alt_text[:50]}")
+            else:
+                # 降级处理：插入文字占位符
+                p = doc.add_paragraph()
+                parse_text_formatting(p, f"[图片: {alt_text}]")
+                set_paragraph_format(p)
+                print(f"⚠️  图片未能加载，已插入文字占位符: {alt_text[:40]}")
+
+            if not has_seen_h2:
+                has_body_before_first_h2 = True
+            i += 1
             continue
         
         # 标题

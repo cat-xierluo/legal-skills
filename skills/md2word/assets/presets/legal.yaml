@@ -133,8 +133,8 @@ math:
 
 # 图片设置
 image:
-  display_ratio: 0.92
-  max_width_cm: 14.2
+  display_ratio: 1.0
+  max_width_cm: 14.64
   target_dpi: 260
   show_caption: true
 

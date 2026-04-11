@@ -2,6 +2,16 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [0.5.0] - 2026-04-11
+
+### 新增
+- **外部URL图片支持**: 支持从 Markdown 中的外部 URL 图片自动下载并嵌入 Word 文档
+  - 新增 `download_external_image()` 函数，通过 `urllib.request` 下载外链图片
+  - 支持本地路径图片和 HTTP/HTTPS 外链图片
+  - 自动居中插入图片，复用现有 `_postprocess_image_for_word()` 和 `insert_image_to_word()` 管线
+  - 图片下载失败时自动降级为文字占位符 `[图片: alt文本]`
+  - 修复正则表达式以兼容 URL 中含括号的情况（如 `no_upscale()?imageUrl=...`）
+
 ## [0.4.1] - 2026-02-11
 
 ### 修复
