@@ -28,7 +28,7 @@ from datetime import datetime
 
 # skill 根目录
 SKILL_DIR = Path(__file__).resolve().parent.parent
-ENV_FILE = SKILL_DIR / "skill-env.json"
+ENV_FILE = SKILL_DIR / "assets" / "skill-env.json"
 
 # 必需工具
 REQUIRED_TOOLS = ["python3", "curl"]

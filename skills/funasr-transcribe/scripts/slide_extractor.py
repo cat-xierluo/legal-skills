@@ -43,18 +43,18 @@ class SlideExtractor:
     Args:
         threshold: ContentDetector 灵敏度阈值（默认 20.0，值越低越灵敏）
         min_scene_len: 最小场景时长（秒），短于此间隔的切换会被过滤
-        hash_threshold: pHash 汉明距离阈值，低于此值视为相同画面
-        fallback_interval: 兜底采样间隔（秒），保证每 N 秒至少有一帧
-        gap_threshold: 空白回查阈值（秒），间隔超过此值时触发二次扫描
+        hash_threshold: pHash 汉明距离阈值，低于此值视为相同画面（默认16）
+        fallback_interval: 兜底采样间隔（秒），保证每 N 秒至少有一帧（默认60）
+        gap_threshold: 空白回查阈值（秒），间隔超过此值时触发均匀补帧（默认180）
     """
 
     def __init__(
         self,
         threshold: float = 20.0,
         min_scene_len: float = 3.0,
-        hash_threshold: int = 12,
-        fallback_interval: int = 180,
-        gap_threshold: int = 300,
+        hash_threshold: int = 16,
+        fallback_interval: int = 60,
+        gap_threshold: int = 180,
     ):
         self.threshold = threshold
         self.min_scene_len = min_scene_len
@@ -247,7 +247,7 @@ class SlideExtractor:
 
     def _backfill_gaps(self, video_path: str, output_dir: str,
                        frames: list, fps: float, duration_ms: int) -> list:
-        """第 3 层：扫描空白区域，二次检测或强制补帧"""
+        """第 3 层：扫描空白区域，按间隔均匀补帧"""
         if len(frames) < 2:
             return frames
 
@@ -277,29 +277,33 @@ class SlideExtractor:
         idx = 1
 
         for start_ms, end_ms in gaps_to_fill:
-            # 用更低阈值对该区域重新检测
-            mid_ms = (start_ms + end_ms) // 2
-            mid_frame_pos = int(mid_ms / 1000.0 * fps)
+            # 按 fallback_interval 均匀采样，而非只补中间1帧
+            gap_ms = end_ms - start_ms
+            interval_ms = self.fallback_interval * 1000
+            ts_ms = start_ms + interval_ms  # 跳过起始位置（已有帧）
 
-            # 尝试在中间位置采样
-            cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame_pos)
-            ret, frame = cap.read()
-            if not ret:
-                continue
+            while ts_ms < end_ms:
+                frame_pos = int(ts_ms / 1000.0 * fps)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+                ret, frame = cap.read()
+                if not ret:
+                    ts_ms += interval_ms
+                    continue
 
-            ts_s = mid_ms / 1000.0
-            time_label = self._format_time_label(ts_s)
-            img_filename = f"slide_bf_{idx:03d}_{time_label}.jpg"
-            img_path = os.path.join(output_dir, img_filename)
-            cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                ts_s = ts_ms / 1000.0
+                time_label = self._format_time_label(ts_s)
+                img_filename = f"slide_bf_{idx:03d}_{time_label}.jpg"
+                img_path = os.path.join(output_dir, img_filename)
+                cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
-            backfill_frames.append(SlideFrame(
-                timestamp_ms=mid_ms,
-                image_path=img_path,
-                time_label=time_label,
-                is_fallback=True,
-            ))
-            idx += 1
+                backfill_frames.append(SlideFrame(
+                    timestamp_ms=ts_ms,
+                    image_path=img_path,
+                    time_label=time_label,
+                    is_fallback=True,
+                ))
+                idx += 1
+                ts_ms += interval_ms
 
         cap.release()
 

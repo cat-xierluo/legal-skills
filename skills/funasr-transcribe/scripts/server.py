@@ -590,7 +590,7 @@ class TranscribeRequest(BaseModel):
     diarize: bool = True  # 默认启用说话人分离
     model_id: Optional[str] = None  # 指定使用的模型 ID
     extract_slides: bool = False  # 提取视频关键帧截图
-    slide_threshold: float = 27.0  # 场景检测阈值
+    slide_threshold: float = 20.0  # 场景检测阈值
 
 
 class BatchTranscribeRequest(BaseModel):
