@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.0"
+version: "0.6.1"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -118,14 +118,14 @@ pip install -r assets/requirements.txt
 
 ```bash
 # 1. 复制示例配置文件
-cp .env.example .env
+cp assets/.env.example .env
 
 # 2. 编辑 .env 文件，填入你的 API 密钥
 # GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxx
 # OPENAI_API_KEY=sk-xxxxxxxxxxxx
 
 # 3. 安装依赖
-pip install -r requirements.txt
+pip install -r assets/requirements.txt
 ```
 
 #### 方式 2：环境变量
@@ -201,7 +201,7 @@ python scripts/main.py --check --user 你的用户名 --weekly
 | `assets/tags.json` | 标签管理和别名配置 |
 | `assets/.env.example` | 环境变量模板 |
 
-首次运行时，配置文件会自动复制到 `~/.github-star-tracker/` 目录。
+首次运行时，配置文件会自动复制到 `~/.github-star-manager/` 目录。
 
 ## 适用场景
 - **开发者**：及时了解依赖库的版本更新

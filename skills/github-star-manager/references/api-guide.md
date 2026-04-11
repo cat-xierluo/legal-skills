@@ -1,6 +1,6 @@
 # GitHub API 使用指南
 
-本文档说明 github-star-tracker 中使用的 GitHub API 端点。
+本文档说明 github-star-manager 中使用的 GitHub API 端点。
 
 ## 基础信息
 

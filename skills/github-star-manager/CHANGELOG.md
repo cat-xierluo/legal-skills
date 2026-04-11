@@ -4,6 +4,22 @@
 
 ---
 
+## [0.6.1] - 2026-04-10
+
+### 修复
+
+- **文档路径修正**：环境配置示例统一改为当前目录结构
+  - `cp .env.example .env` 修正为 `cp assets/.env.example .env`
+  - `pip install -r requirements.txt` 修正为 `pip install -r assets/requirements.txt`
+- **配置目录口径统一**：首次复制配置目录统一为 `~/.github-star-manager/`
+
+### 文档完善
+
+- `references/api-guide.md` 与 `references/dev-guide.md` 中的旧名称 `github-star-tracker` 已同步改为 `github-star-manager`
+- 开发指南中的测试目录示例改为当前目录 `skills/github-star-manager`
+
+---
+
 ## [0.6.0] - 2026-02-28
 
 ### 重构（Skill 整合）

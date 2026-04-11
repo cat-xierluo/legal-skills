@@ -1,6 +1,6 @@
 # 开发指南
 
-本文档面向 github-star-tracker 的开发者，提供架构说明和开发指导。
+本文档面向 github-star-manager 的开发者，提供架构说明和开发指导。
 
 ## 代码架构
 
@@ -70,7 +70,7 @@ class StarTracker:
 ### 手动测试
 ```bash
 # 进入脚本目录
-cd test/github-star-tracker
+cd skills/github-star-manager
 
 # 测试获取 Star（不使用 Token）
 python3 -c "from star_tracker import StarTracker; t = StarTracker(); print(t.get_starred_repos('yourname'))"
