@@ -44,10 +44,19 @@
 
 ## 案件进展
 
+```mermaid
+graph LR
+    A[📝 立案] --> B[🔍 开庭审理]
+    B --> C[⚖️ 判决]
+    C --> D[📤 上诉/执行]
+    style A fill:#27AE60,color:#FFFFFF
+    style B fill:#3498DB,color:#FFFFFF
+    style C fill:#95A5A6,color:#FFFFFF
+    style D fill:#95A5A6,color:#FFFFFF
 ```
-[立案] ----[开庭]----[判决]----[上诉]
-  未完成   进行中    未完成    未完成
-```
+
+> - 已完成阶段用绿色标注，当前阶段用蓝色标注，未到达阶段用灰色标注
+> - 根据案件实际进度调整颜色
 
 **当前位置**: [当前所处阶段]
 

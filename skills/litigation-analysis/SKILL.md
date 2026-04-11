@@ -2,15 +2,15 @@
 name: litigation-analysis
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.3.2"
 license: CC-BY-NC-SA-4.0
 description: 诉讼分析工具 - 判决书深度分析，生成上诉/再审决策支持
 ---
 
 # litigation-analysis
 
-**版本**: 1.3.0
-**最后更新**: 2026-02-07
+**版本**: 1.3.2
+**最后更新**: 2026-04-08
 **说明**: 诉讼分析工具，支持起诉状、判决书和庭审笔录全流程分析
 
 ## 功能概述
@@ -166,6 +166,11 @@ description: 诉讼分析工具 - 判决书深度分析，生成上诉/再审决
 - [客户版模板](templates/template-client.md) - 非法律专业人士通俗呈现
 - [研究版模板](templates/template-research.md) - 研究课题清单生成
 - [内部版模板](templates/template-internal.md) - 专业深度分析报告
+
+### 可视化
+
+- [可视化指南](references/visualization.md) - Mermaid 图表生成规范与示例
+  - 当事人关系图、案件时间轴、争议焦点关系图、上诉策略决策图、侵权比对图
 
 ### 领域扩展
 
