@@ -102,3 +102,9 @@ skills/clawhub-sync/config/sync-allowlist.yaml
 skills/zhihe-legal-research/assets/pending.json
 skills/zhihe-legal-research/assets/completed.json
 skills/zhihe-legal-research/assets/notified.json
+
+# Memory update files
+UPDATE_MEMORY.md
+
+# Litigation analysis lite (local-only development)
+skills/litigation-analysis-lite/
