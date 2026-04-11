@@ -1,0 +1,22 @@
+{
+  "env": {
+    "PATH": "/Users/maoking/.nvm/versions/node/v24.11.0/bin:/Users/maoking/.nvm/versions/node/v24.11.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin://Applications/Topaz Photo AI.app/Contents/Resources/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/usr/local/share/dotnet:~/.dotnet/tools:/Users/maoking/.local/bin:/opt/homebrew/opt/python@3.14/Frameworks/Python.framework/Versions/3.14/bin:/Users/maoking/.bun/bin:/Users/maoking/.pixi/bin:/Users/maoking/.opencode/bin:/Users/maoking/.antigravity/antigravity/bin:/Users/maoking/Library/Python/3.11/bin:/Users/maoking/.nvm/versions/node/v24.11.0/bin:/Users/maoking/.cargo/bin:/Users/maoking/.orbstack/bin:/Users/maoking/.cache/lm-studio/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/agent-sdk-dev/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/thedotmack/claude-mem/9.1.1/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/code-simplifier/1.0.0/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/context7/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/frontend-design/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/playground/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/playwright/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/ralph-loop/1.0.0/bin:/Users/maoking/.claude/plugins/cache/claude-plugins-official/skill-creator/8e9bf4929af5/bin:/Users/maoking/.claude/plugins/cache/superpowers-marketplace/superpowers/4.0.3/bin:/Users/maoking/.orbstack/bin",
+    "FUNASR_PYTHON": "/opt/homebrew/bin/python3"
+  },
+  "detected": {
+    "python3": "/opt/homebrew/bin/python3",
+    "curl": "/usr/bin/curl",
+    "ffmpeg": "/opt/homebrew/bin/ffmpeg",
+    "ffprobe": "/opt/homebrew/bin/ffprobe",
+    "python_version": "3.14.3",
+    "python_deps": {
+      "funasr": "1.3.1",
+      "torch": "2.11.0",
+      "fastapi": "0.135.3",
+      "uvicorn": "0.44.0"
+    },
+    "platform": "Darwin",
+    "machine": "arm64",
+    "detected_at": "2026-04-11T11:25:20.858937"
+  }
+}

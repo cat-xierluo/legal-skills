@@ -14,13 +14,14 @@ from pathlib import Path
 
 # 导入总结功能
 try:
-    from .summary import summarize_file_for_claude
+    from .summary import summarize_file_for_claude, generate_summary_via_api
 except ImportError:
     # 如果是直接运行
     try:
-        from summary import summarize_file_for_claude
+        from summary import summarize_file_for_claude, generate_summary_via_api
     except ImportError:
         summarize_file_for_claude = None
+        generate_summary_via_api = None
 
 
 DEFAULT_SERVER = "http://127.0.0.1:8765"
@@ -199,6 +200,7 @@ def main():
     parser.add_argument('--server', default=DEFAULT_SERVER, help=f'转录服务地址（默认 {DEFAULT_SERVER}）')
     parser.add_argument('--json', action='store_true', help='以 JSON 格式输出结果')
     parser.add_argument('--no-summary', action='store_true', help='禁用 AI 总结功能（默认启用）')
+    parser.add_argument('--auto-summary', action='store_true', help='自动调用 LLM 生成并注入总结（需要 API Key）')
     parser.add_argument('--model', choices=['paraformer'],
                        help='选择使用的 ASR 模型（默认: paraformer）')
     parser.add_argument('--slides', action='store_true', help='提取视频关键帧截图（PPT幻灯片）')
@@ -266,6 +268,18 @@ def main():
                 if not args.json and not args.no_summary and summarize_file_for_claude:
                     md_path = Path(result['output_path'])
 
+                    # 自动模式：生成总结请求，Claude Code 会自动处理
+                    if args.auto_summary and generate_summary_via_api:
+                        print("🤖 正在自动生成 AI 总结...")
+                        success, msg = generate_summary_via_api(md_path)
+                        if success:
+                            print(f"✅ {msg}")
+                        else:
+                            print(f"❌ 自动总结失败: {msg}")
+                        # 自动模式不需要再输出提示词
+                        return
+
+                    # 标准模式：输出提示词供 LLM 调用
                     print("🤖 正在准备 AI 总结...")
                     success, prompt, text = summarize_file_for_claude(md_path)
 

@@ -2,6 +2,86 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.6.0] - 2026-04-11
+
+### 新增
+
+- **环境自动检测与配置** — 新增 `scripts/init_env.py` 脚本
+  - 通过 login shell 获取完整 PATH，解决受限环境（如 Raycast Electron 沙箱）下命令不可用的问题
+  - 自动检测 python3、curl、ffmpeg 等工具的实际路径
+  - 检测 Python 版本和 funasr、torch 等关键依赖的安装状态
+  - 生成 `skill-env.json` 供 agent-executor 读取并注入执行环境
+  - 支持 `--check`（只检测不写文件）、`--force`（强制重新检测）参数
+
+### 改进
+
+- **setup.py 集成环境配置** — 安装和验证完成后自动调用 `init_env.py`
+  - `python3 scripts/setup.py` 安装完成后自动生成 `skill-env.json`
+  - `python3 scripts/setup.py --verify` 验证时刷新环境配置
+- **SKILL.md Agent 工作流优化** — 新增步骤 0 环境检测
+  - Agent 执行转录前自动检查 `skill-env.json` 是否存在
+  - 不存在则先运行环境检测，确保依赖就绪
+
+### 技术变更
+
+- 新增 `scripts/init_env.py` 环境检测与配置生成脚本
+- `scripts/setup.py` 安装/验证后自动调用 `init_env.py --force`
+
+## [1.5.1] - 2026-04-09
+
+### 改进
+
+- **移除外部 API Key 依赖** — 简化 `--auto-summary` 实现
+  - 不再依赖 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY`
+  - 直接利用 Claude Code 原生 AI 能力生成总结
+  - 脚本输出结构化总结请求，Claude Code 自动处理
+
+### 技术变更
+
+- `summary.py` 移除 `_call_claude_api()` 和 `_call_openai_api()` 外部 API 调用
+- `summary.py` 移除 `_is_claude_code_environment()` 检测函数
+- `generate_summary_via_api()` 改为输出结构化总结请求
+- `transcribe.py` 修复自动模式下的逻辑错误（成功时不再重复输出提示词）
+- 移除 `anthropic` 和 `openai` 依赖
+
+### 文档更新
+
+- SKILL.md 更新 `--auto-summary` 说明，明确无需外部 API Key
+
+## [1.5.0] - 2026-04-09
+
+### 新增
+
+- **自动 AI 总结生成** — 新增 `--auto-summary` 参数，转录后自动调用 LLM API 生成并注入总结
+  - 支持 `ANTHROPIC_API_KEY`（Claude）或 `OPENAI_API_KEY` 自动调用
+  - 无需手动复制提示词到 LLM，彻底自动化
+  - 使用方式：`python scripts/transcribe.py audio.m4a --auto-summary`
+- **summary.py 新增 `generate_summary_via_api()` 函数** — 直接调用 LLM API 生成总结并注入文件
+
+### 依赖更新
+
+- 新增 `anthropic>=0.18.0` — Claude API 支持
+- 新增 `openai>=1.0.0` — OpenAI API 支持（备选）
+
+## [1.4.1] - 2026-04-08
+
+### 修复
+
+- **修复说话人分离功能不可用** — 解决 `ClusterBackend` 导入失败的问题
+  - 原因：numpy 2.x 与用旧版本编译的 pandas/sklearn 二进制不兼容
+  - 修复：添加 `numpy>=1.20,<2`、`pandas>=1.3,<3`、`scikit-learn>=1.0,<2` 版本约束
+  - `setup.py --verify` 现在会检测 sklearn 导入状态和 numpy 版本兼容性
+
+### 改进
+
+- **requirements.txt 依赖声明完善** — 明确声明说话人分离所需的间接依赖
+  - 新增 `numpy>=1.20,<2` — 避免与 pandas/sklearn 的二进制兼容问题
+  - 新增 `pandas>=1.3,<3` — FunASR CAM++ speaker model 的传递依赖
+  - 新增 `scikit-learn>=1.0,<2` — 说话人分离核心依赖
+- **setup.py 验证增强** — 验证安装时会检查：
+  - scikit-learn 是否能正常导入
+  - numpy 版本是否与依赖兼容
+
 ## [1.4.0] - 2026-04-05
 
 ### 改进

@@ -398,6 +398,24 @@ def verify_installation():
     except ImportError:
         errors.append("PyTorch 未安装")
 
+    # 检查说话人分离依赖（scikit-learn）
+    try:
+        import sklearn
+        print_success(f"scikit-learn {sklearn.__version__} (说话人分离需要)")
+    except ImportError:
+        errors.append("scikit-learn 未安装，说话人分离功能将不可用")
+    except Exception as e:
+        errors.append(f"scikit-learn 导入失败: {e}，说话人分离功能将不可用")
+
+    # 检查 numpy 版本（避免不兼容问题）
+    try:
+        import numpy
+        print_success(f"numpy {numpy.__version__}")
+        if numpy.__version__.startswith('2.'):
+            print_warning("检测到 numpy 2.x，可能与部分依赖不兼容，建议使用 numpy<2")
+    except ImportError:
+        errors.append("numpy 未安装")
+
     # 检查模型
     config = load_models_config()
     if config:
@@ -447,6 +465,12 @@ def main():
     # 只验证安装
     if args.verify:
         success = verify_installation()
+        if success:
+            print_info("正在刷新环境配置 skill-env.json ...")
+            subprocess.run(
+                [sys.executable, str(SCRIPT_DIR / "init_env.py"), "--force"],
+                check=False,
+            )
         sys.exit(0 if success else 1)
 
     # 只检查环境
@@ -482,6 +506,16 @@ def main():
     print("现在可以启动服务:")
     print(f"  python {SCRIPT_DIR / 'server.py'}")
     print()
+
+    # 生成环境配置
+    print_info("正在生成环境配置 skill-env.json ...")
+    try:
+        subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "init_env.py"), "--force"],
+            check=False,
+        )
+    except Exception:
+        print_warning("生成 skill-env.json 失败，不影响正常使用")
 
 
 if __name__ == '__main__':

@@ -274,3 +274,47 @@ def summarize_file_for_claude(md_path: Path) -> tuple[bool, str, str]:
 
     except Exception as e:
         return False, f"提取转录文本失败: {str(e)}", ""
+
+
+def generate_summary_via_api(md_path: Path) -> tuple[bool, str]:
+    """
+    在 Claude Code 环境中生成总结
+
+    当检测到在 Claude Code 环境中时，输出结构化的总结请求，
+    Claude Code 会自动识别并处理这个请求，利用其原生的 AI 能力生成总结。
+
+    Args:
+        md_path: Markdown 文件路径
+
+    Returns:
+        tuple: (是否成功, 消息)
+    """
+    try:
+        # 提取转录文本
+        text = get_transcription_text(md_path)
+        if not text:
+            return False, "转录文件为空"
+
+        # 创建提示词
+        prompt = create_summary_prompt(text)
+
+        # 输出结构化请求，Claude Code 会自动识别并处理
+        print("\n" + "=" * 70)
+        print("🤖 AI_SUMMARY_REQUEST")
+        print("=" * 70)
+        print(f"FILE: {md_path}")
+        print(f"LENGTH: {len(text)}")
+        print("=" * 70)
+        print("PROMPT_START")
+        print(prompt)
+        print("PROMPT_END")
+        print("=" * 70)
+
+        # 将提示词写入临时文件，供 Claude Code 读取并处理
+        prompt_file = md_path.parent / f".summary_prompt_{md_path.stem}.txt"
+        prompt_file.write_text(prompt, encoding="utf-8")
+
+        return True, f"总结请求已生成: {prompt_file}"
+
+    except Exception as e:
+        return False, f"生成总结请求失败: {str(e)}"
