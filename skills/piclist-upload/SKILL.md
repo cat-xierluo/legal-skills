@@ -2,7 +2,7 @@
 name: piclist-upload
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.1"
+version: "1.1.2"
 description: 通过 PicList HTTP Server 将 Markdown 文件中的本地图片上传到图床，并替换为云端链接。本技能应在用户需要上传 Markdown 中的图片、处理包含本地图片引用的 Markdown、批量处理多个 Markdown 文件或目录、或替换本地路径为云端链接以实现跨设备访问时使用。
 license: Complete terms in LICENSE.txt
 ---
@@ -15,6 +15,8 @@ license: Complete terms in LICENSE.txt
 
 - 已安装 PicList 并启用 HTTP Server
 - 已在 PicList 中配置图床
+- 已安装 `jq`
+- 已安装 `curl`
 
 **首次配置**: 请参阅 [references/setup.md](references/setup.md) 安装和配置指南。
 
@@ -68,7 +70,7 @@ scripts/process.sh --in-place --keep-local README.md docs/guide.md
 scripts/process.sh --dry-run README.md
 ```
 
-查看将要进行的替换，不实际修改文件。
+预览将扫描到哪些本地图片，不实际上传，也不修改文件。
 
 ## 命令选项
 
@@ -76,7 +78,7 @@ scripts/process.sh --dry-run README.md
 |------|------|
 | `--in-place` | 直接修改原文件 |
 | `--keep-local` | 保留本地图片文件（默认删除） |
-| `--dry-run` | 预览模式，不修改文件 |
+| `--dry-run` | 预览模式，不上传、不修改文件 |
 
 ## 响应格式
 

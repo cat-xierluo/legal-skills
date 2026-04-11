@@ -141,6 +141,12 @@ process_markdown_file() {
             continue
         fi
 
+        if [ "$DRY_RUN" = true ]; then
+            echo "  🔍 Would upload: $image_path"
+            : $((upload_count++))
+            continue
+        fi
+
         # Upload image
         echo "  Uploading: $image_path..."
         local new_url
@@ -162,7 +168,11 @@ process_markdown_file() {
     done <<< "$images"
 
     # Report results
-    echo "  ✅ Uploaded: $upload_count, ⏭️  Skipped: $skip_count, ❌ Failed: $fail_count"
+    if [ "$DRY_RUN" = true ]; then
+        echo "  🔍 Preview candidates: $upload_count, ⏭️  Skipped: $skip_count, ❌ Failed: $fail_count"
+    else
+        echo "  ✅ Uploaded: $upload_count, ⏭️  Skipped: $skip_count, ❌ Failed: $fail_count"
+    fi
 
     # Update global counters (use let to avoid set -e issues)
     let "TOTAL_UPLOADED += upload_count" || true
@@ -170,7 +180,9 @@ process_markdown_file() {
     let "TOTAL_FAILED += fail_count" || true
 
     # Write output
-    if [ "$IN_PLACE" = true ]; then
+    if [ "$DRY_RUN" = true ]; then
+        echo "  👀 Dry run complete: $md_file (未上传、未修改)"
+    elif [ "$IN_PLACE" = true ]; then
         echo "$content" > "$temp_file"
         mv "$temp_file" "$md_file"
         echo "  ✏️  File updated: $md_file"
@@ -240,6 +252,10 @@ done
 
 echo
 echo "📊 Summary:"
-echo "  Total uploaded: $TOTAL_UPLOADED"
+if [ "$DRY_RUN" = true ]; then
+    echo "  Total preview candidates: $TOTAL_UPLOADED"
+else
+    echo "  Total uploaded: $TOTAL_UPLOADED"
+fi
 echo "  Total skipped: $TOTAL_SKIPPED"
 echo "  Total failed: $TOTAL_FAILED"
