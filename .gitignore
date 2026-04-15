@@ -108,3 +108,6 @@ UPDATE_MEMORY.md
 
 # Litigation analysis lite (local-only development)
 skills/litigation-analysis-lite/
+
+# Skill manager registry (contains local paths and machine-specific state)
+skills/skill-manager/assets/skill-registry.json
