@@ -8,7 +8,21 @@
 
 **杨卫薪律师** - 专注于技术类纠纷领域（知识产权、数据与 AI），同时热衷于将 AI 技术应用于法律实务。
 
-欢迎添加微信交流：
+欢迎添加微信交流（请注明来意），对于标注「非商用」许可证的 Skill 也可联系获取授权（见下方说明）：
+
+<details>
+<summary>📚 许可证说明</summary>
+
+本项目采用两种许可证：
+
+| 许可证 | 说明 | 示例技能 |
+|:------|:-----|:---------|
+| **MIT** | 可自由使用，包括商用，但需保留署名 | wechat-article-fetch、mineru-ocr、md2word 等 |
+| **CC-BY-NC** | 可自由使用，但**不可商用**，且需保留署名和相同方式共享 | litigation-analysis、patent-analysis、legal-proposal-generator 等 |
+
+> 💡 如需将技能用于商业目的，请添加微信（ywxlaw）联系授权
+
+</details>
 
 <div align="center">
   <img src="wechat-qr.jpg" width="200" alt="微信二维码"/>
@@ -91,6 +105,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href=”skills/paddle-ocr/”><strong>paddle-ocr</strong></a></td>
+<td style=”word-break:break-word”>面向法律 PDF 与扫描件的 PaddleOCR 结构化解析，将 PDF 或图片转换为 Markdown，支持表格识别、公式识别、版面分析，保留 archive 归档</td>
+<td style=”text-align:center”>MIT</td>
+<td style=”text-align:center”>v1.1.1</td>
+<td style=”text-align:center”>杨卫薪</td>
+<td>需配置 API Token</td>
+</tr>
+<tr>
 <td><a href=”skills/funasr-transcribe/”><strong>funasr-transcribe</strong></a></td>
 <td style=”word-break:break-word”>本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录</td>
 <td style=”text-align:center”>MIT</td>
@@ -161,14 +183,14 @@
 <td><a href=”skills/court-sms/”><strong>court-sms</strong></a></td>
 <td style=”word-break:break-word”>法院短信识别与文书下载技能，自动解析法院短信（文书送达、立案通知、开庭提醒等），提取案号、当事人、下载链接，下载文书并归档到对应案件目录</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v1.2.1</td>
+<td style=”text-align:center”>v1.5.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td>参考自 <a href=”https://github.com/Lawyer-ray/FachuanHybridSystem”>法穿</a></td>
 </tr>
 <tr>
 <td><a href=”skills/trademark-assistant/”><strong>trademark-assistant</strong></a></td>
 <td style=”word-break:break-word”>商标服务助手，提供类别规划、可注册性初筛及申请材料准备。支持商品清单生成、商标说明撰写，整合尼斯分类与审查指南</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.5.3</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -176,7 +198,7 @@
 <tr>
 <td><a href=”skills/patent-analysis/”><strong>patent-analysis</strong></a></td>
 <td style=”word-break:break-word”>专利分析工具，支持7种场景：单专利技术要点提取、多专利比对、侵权比对、稳定性/无效分析、FTO分析、规避设计分析、专利价值评估。强调权利要求解读方法论与侵权判断流程</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.2.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -184,7 +206,7 @@
 <tr>
 <td><a href=”skills/code2patent/”><strong>code2patent</strong></a></td>
 <td style=”word-break:break-word”>从已开发代码项目中提取技术实现证据，围绕候选专利方案生成技术交底书，并以”权利要求布局卡 → 发明专利初稿”两步法生成接近可申报版的中国发明专利起草材料；内置《专利审查指南》撰写规则、计算机程序发明保护主题提示和 agent 速查卡</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.4.2</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -192,7 +214,7 @@
 <tr>
 <td><a href=”skills/litigation-analysis/”><strong>litigation-analysis</strong></a></td>
 <td style=”word-break:break-word”>诉讼分析工具，支持起诉状与证据分析、判决书深度分析、庭审笔录复盘。覆盖诉讼全流程：案件初期评估→判决分析→庭审复盘，生成内部版/研究版/客户版三层输出，支持上诉/再审决策支持</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.3.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -200,7 +222,7 @@
 <tr>
 <td><a href=”skills/legal-proposal-generator/”><strong>legal-proposal-generator</strong></a></td>
 <td style=”word-break:break-word”>根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v0.2.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -208,7 +230,7 @@
 <tr>
 <td><a href=”skills/legal-text-format/”><strong>legal-text-format</strong></a></td>
 <td style=”word-break:break-word”>将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，采用 archive 归档结构存储。推荐与 <a href=”skills/wechat-article-fetch/”><strong>wechat-article-fetch</strong></a> 配合使用实现完整工作流</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.1.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -216,7 +238,7 @@
 <tr>
 <td><a href=”skills/legal-qa-extractor/”><strong>legal-qa-extractor</strong></a></td>
 <td style=”word-break:break-word”>从律师与客户沟通记录中提取有价值的法律问答对，生成结构化知识库内容。支持严格客户信息脱敏处理，适用于整理咨询记录、创建问答知识库、准备内容营销素材</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.0.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -232,7 +254,7 @@
 <tr>
 <td><a href=”skills/zhihe-legal-research/”><strong>zhihe-legal-research</strong></a></td>
 <td style=”word-break:break-word”>连接智合AI法律大模型平台进行法律研究，提交法律问题后自动进行调研分析，生成文字分析结果和 docx 格式研究报告</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.2.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td>需智合AI平台会员</td>
@@ -259,7 +281,7 @@
 <tr>
 <td><a href=”skills/course-generator/”><strong>course-generator</strong></a></td>
 <td style=”word-break:break-word”>从多个文献内容中系统化提取并生成结构化课程，支持 1-100+ 个文献文件，智能识别内容类型（转录/文献/混合），自动进行主题识别、课程大纲生成、总览与章节内容撰写，采用可选模块架构适应不同类型内容</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v1.3.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
@@ -358,7 +380,7 @@
 <tr>
 <td><a href=”skills/repo-research/”><strong>repo-research</strong></a></td>
 <td style=”word-break:break-word”>GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告</td>
-<td style=”text-align:center”>CC-BY-NC-SA-4.0</td>
+<td style=”text-align:center”>CC-BY-NC</td>
 <td style=”text-align:center”>v0.7.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>

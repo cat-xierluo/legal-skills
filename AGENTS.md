@@ -87,7 +87,7 @@ except ImportError:
 
 ### 技能许可证分类
 
-1. **法律专业应用技能**：使用 CC BY-NC-SA 4.0（署名-非商业性使用-相同方式共享）
+1. **法律专业应用技能**：使用 CC BY-NC（署名-非商业性使用）
    - 涉及法律业务分析、文书生成、专业咨询的技能
    - 示例：`litigation-analysis`、`legal-proposal-generator`、`legal-text-format`、`legal-qa-extractor`
 
@@ -100,7 +100,7 @@ except ImportError:
 
 ### SKILL.md Frontmatter 许可证字段
 
-- **法律专业应用**：`license: CC-BY-NC-SA-4.0`
+- **法律专业应用**：`license: CC-BY-NC`
 - **通用工具**：`license: MIT`
 - **官方技能**：`license: Complete terms in LICENSE.txt`
 
@@ -108,12 +108,12 @@ except ImportError:
 
 每个技能目录应包含对应的 LICENSE.txt 文件，使用完整许可证文本：
 
-- CC BY-NC-SA 4.0 许可证模板位于 `templates/LICENSE-NC-APACHE.txt`
+- CC BY-NC 许可证使用标准 Creative Commons  Attribution-NonCommercial 4.0 International 文本
 - MIT 许可证使用标准 MIT 许可证文本
 
-### CC BY-NC-SA 4.0 商用许可联系方式
+### CC BY-NC 商用许可联系方式
 
-使用 CC BY-NC-SA 4.0 许可证的技能，LICENSE.txt 中的商用许可联系信息必须统一为：
+使用 CC BY-NC 许可证的技能，LICENSE.txt 中的商用许可联系信息必须统一为：
 
 ```text
 Commercial License
@@ -123,7 +123,7 @@ Email: secretxierluo@gmail.com
 WeChat: ywxlaw (微信)
 ```
 
-**注意**：创建或更新 CC BY-NC-SA 技能时，必须确保 LICENSE.txt 中的联系方式与此规范一致。
+**注意**：创建或更新 CC BY-NC 技能时，必须确保 LICENSE.txt 中的联系方式与此规范一致。
 
 ### 版权信息规范
 
@@ -431,7 +431,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
 | v1.6.0 | 2026-04-11 | 强化依赖管理规范：新增"脚本依赖防护要求"（硬依赖 try/except + 安装提示、可选依赖降级标志）、"SKILL.md 依赖声明要求"（区分开箱即用/需安装功能、安装位置就近原则） |
-| v1.5.5 | 2026-03-24 | 新增 CC BY-NC-SA 4.0 商用许可联系方式规范，统一联系方式 |
+| v1.5.5 | 2026-03-24 | 新增 CC BY-NC 商用许可联系方式规范，统一联系方式 |
 | v1.5.4 | 2026-03-21 | 精简 SKILL.md frontmatter：删除 23 个技能的 source 字段，只保留 homepage（符合 ClawHub 规范：source/homepage 二选一）                 |
 | v1.5.3 | 2026-03-21 | 重构 ClawHub 同步指南：删除 CLAWHUB.md，创建 clawhub-sync skill 替代，提供交互式批量同步能力                                           |
 | v1.5.2 | 2026-03-21 | 完善 SKILL.md frontmatter 和 CHANGELOG 格式：为 5 个技能添加 license 字段，修复 3 个技能的 CHANGELOG 版本格式（douyin-batch-download、de-ai-polish、svg-article-illustrator） |
@@ -440,7 +440,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 | v1.4.0 | 2026-02-18 | 新增敏感信息安全规范：定义敏感文件类型、Skill 开发安全检查清单、.gitignore 维护要求和泄露应急响应流程                                       |
 | v1.3.5 | 2026-02-13 | 新增"技能级文档"原则：明确 CHANGELOG.md 等文档为技能级别（位于各技能目录下），不创建项目级别文档；用户要求"更新文档"时默认指当前技能的文档 |
 | v1.3.4 | 2026-02-08 | 新增版权信息规范：统一所有自研技能 LICENSE.txt 的版权信息为"杨卫薪律师（微信ywxlaw）"，并更新 4 个技能的 LICENSE.txt 文件 |
-| v1.3.3 | 2026-02-08 | 更新许可证管理规范：将法律专业应用技能的许可证从 Apache-2.0-NC 更改为 CC BY-NC-SA 4.0（署名-非商业性使用-相同方式共享），更新相关文档和模板 |
+| v1.3.3 | 2026-02-08 | 更新许可证管理规范：将法律专业应用技能的许可证从 Apache-2.0-NC 更改为 CC BY-NC（署名-非商业性使用-相同方式共享），更新相关文档和模板 |
 | v1.3.2 | 2026-02-08 | 新增许可证管理规范：定义技能许可证分类（法律专业应用使用 Apache-2.0-NC、通用工具使用 MIT）、SKILL.md frontmatter 许可证字段、LICENSE.txt 文件要求和 README.md 许可证列 |
 | v1.3.1 | 2026-02-07 | 新增迁移类 Skill 版本历史保留规范：要求从 Command 或提示词迁移的 Skill 在 CHANGELOG 中保留原始版本历史，确保功能演进可追溯 |
 | v1.3.0 | 2026-01-30 | 重构文档结构:将 Skill 开发相关内容分离到独立的 SKILL-GUIDE.md 文件,AGENTS.md 聚焦项目协作规范;通过引用链接两个文档 |
