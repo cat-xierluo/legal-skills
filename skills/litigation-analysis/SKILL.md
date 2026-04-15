@@ -3,7 +3,7 @@ name: litigation-analysis
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.3.2"
-license: CC-BY-NC-SA-4.0
+license: CC-BY-NC
 description: 诉讼分析工具 - 判决书深度分析，生成上诉/再审决策支持
 ---
 
