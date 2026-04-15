@@ -2,7 +2,7 @@
 name: court-sms
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.0"
+version: "1.5.0"
 license: MIT
 description: 本技能应在用户收到法院短信（文书送达、立案通知、开庭提醒等）时使用，自动提取案号、当事人、下载链接，下载文书并归档到对应案件目录。
 ---
@@ -38,7 +38,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 | 立案通知 | 含"已立案"等关键词 | 可能有 | 展示解析结果 |
 | 信息通知 | 无链接，纯信息 | 否 | 展示解析结果 |
 
-**支持的送达平台**：`zxfw.court.gov.cn`（全国）、`sd.gdems.com`（广东）、`jysd.10102368.com`（集约送达）、`dzsd.hbfy.gov.cn`（湖北）。详见 `references/sms-patterns.json`。
+**支持的送达平台**：`zxfw.court.gov.cn`（全国）、`sd.gdems.com`（广东）、`jysd.10102368.com`（集约送达）、`dzsd.hbfy.gov.cn`（湖北）、`sfpt.cdfy12368.gov.cn`（司法送达网）。同一平台可能使用不同域名（同构异域名），通过 URL 路径特征识别平台。详见 `references/sms-patterns.json`。
 
 ---
 
@@ -79,6 +79,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 | 广东法院电子送达 | `sd.gdems.com` | 浏览器自动化 | 路径中的送达标识码 |
 | 集约送达平台 | `jysd.10102368.com` | 浏览器自动化 | key |
 | 湖北电子送达 | `dzsd.hbfy.gov.cn` | HTTP API（免账号）/ 浏览器自动化（账号模式） | 免账号：msg；账号模式：账号+密码从正文提取 |
+| 司法送达网 | `sfpt.cdfy12368.gov.cn` | 纯 Playwright（无 API） | 验证码（手机尾号后6位 / 短信验证码） |
 
 **e) 发送时间提取（P0）**：从送达平台 API 响应中提取发送时间，用于后续上诉期限计算
 - **优先来源**：zxfw API 响应中的 `dt_cjsj` 字段（送达记录创建时间，ISO 8601 格式）
@@ -102,7 +103,7 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 
 1. **扫描当前工作目录**：识别目录结构，找到与短信案号或当事人匹配的案件目录
 2. **查找归档子目录**：在匹配到的案件目录下，查找法院文书相关的子目录（如 `08*`、`法院送达`、`court` 等）
-3. 如未找到匹配案件，询问用户选择归档位置或暂存
+3. 如未找到匹配案件，**自动在当前工作目录（项目根目录）下新建** `{案号} {当事人与案由}/`，不询问用户
 
 ### 第三步：文书下载
 
@@ -110,7 +111,9 @@ https://zxfw.court.gov.cn/zxfw/#/pagesAjkj/app/wssd/index?qdbh=xxx&sdbh=xxx&sdsi
 > - `zxfw.court.gov.cn` → 方案一（API 直连）→ 方案二 → 方案三
 > - `sd.gdems.com` 或 `jysd.10102368.com` → 跳过方案一，直接方案二 → 方案三
 > - `dzsd.hbfy.gov.cn` → 湖北专属流程（见下方）
-> - 未知域名 → 提示用户提供链接信息
+> - `sfpt.cdfy12368.gov.cn`（含广西实例 `171.106.48.55:28083`）→ SFDW 专属流程（见下方）
+> - 未知域名但 URL 路径匹配已知平台特征 → 按路径识别平台（同构异域名支持）
+> - 完全无法识别 → 提示用户提供链接信息
 >
 > **⛔ 降级铁律**：严格串行，禁止并行。当前方案成功即停止，绝不降级。禁止"双保险"并行尝试多个方案。
 
@@ -244,6 +247,32 @@ done
 
 > **提示**：湖北平台两种模式都可能遇到验证码。免账号模式优先尝试 HTTP API，账号模式建议引导用户手动打开链接或使用 Playwright MCP。
 
+#### 司法送达网下载流程（SFDW - `sfpt.cdfy12368.gov.cn`）
+
+司法送达网所有 POST 请求使用 TDHCryptoUtil 加密，无法通过 HTTP API 下载，只能使用纯 Playwright 流程。
+
+**广西实例**：`171.106.48.55:28083` 域名下的链接路由到同一 SFDW 平台，下载流程相同。
+
+**验证码获取**（两种方式，按优先级尝试）：
+
+1. **手机尾号后6位**（优先）：从案件分配信息中获取律师手机号，取后6位作为验证码输入
+2. **短信验证码**：从短信正文中提取，匹配 `验证码[：:]\s*(\w{4,6})`
+
+**Playwright MCP 流程**：
+
+```text
+1. browser_navigate → 打开短信中的 SFDW 链接
+2. 等待页面自动重定向到 pc.html?tdhParams=xxx
+3. browser_snapshot → 查看验证码输入页面（input#checkCode）
+4. 输入验证码（优先手机尾号后6位，其次短信验证码）
+5. browser_evaluate → 调用 Vue app.checkYzm() 触发验证
+6. 验证通过后 browser_evaluate → 获取 app.$data.wsList（文书列表）
+7. 遍历 wsList，逐个调用 downloadFile(app, ws) 下载文书
+8. 保存到 /tmp/court-sms-staging/
+```
+
+> **提示**：如手机尾号验证失败，提示用户查看短信中的验证码并手动输入。wsList 每项包含 wjmc（文件名）、wjgs（格式）。
+
 #### 失败兜底
 
 当三级均失败时：
@@ -268,13 +297,13 @@ done
 3. **确定文书标题**：
    - 优先使用 API 返回的标题
    - 否则根据 `sms-patterns.json` 中的 `document_titles` 映射推断
-   - 最后回退到 `未知文书`
+   - 最后回退到原始文件名（去除扩展名），如仍无法确定则使用 `未知文书`
 4. **构建文件名**：`{title}（{case_name}）_{YYYYMMDD}收.pdf`
    - 示例：`受理通知书（张三与李四合同纠纷）_20260404收.pdf`
    - 清理非法字符：`< > : " | ? * \ /`
    - 如同名文件已存在，追加 `_2` 后缀
 5. **移入目标目录**
-6. **写入内部记录**：保存本次处理的完整信息到 `archive/` 目录（格式详见 [`references/archive-format.md`](references/archive-format.md)）
+6. **写入内部记录**：保存本次处理的完整信息到 **skill 内部的 `archive/` 目录**（即 `.claude/skills/court-sms/archive/`），不是案件文件夹。格式详见 [`references/archive-format.md`](references/archive-format.md)
 7. **基础文书解析**：法院 PDF 通常带文字层，提取首页文本，快速识别文书类型和关键信息
    - **传票**：提取开庭时间、地点、法庭、案号，向用户高亮提醒
    - **通知书/告知书**：提取缴费期限、举证期限等关键日期
@@ -498,6 +527,14 @@ http://dzsd.hbfy.gov.cn/hb/msg=XXXXXXX
 请登录 http://dzsd.hbfy.gov.cn/sfsddz 查收。
 ```
 
+### 司法送达网短信
+
+```text
+【xx人民法院】您有（2025）川xxxx民初xxxx号案件文书送达。
+验证码：A1B2C3
+请点击链接查收：https://sfpt.cdfy12368.gov.cn/sfsdw//r/xxxxxxxxxxxx
+```
+
 ---
 
 ## 故障排除
@@ -512,6 +549,7 @@ http://dzsd.hbfy.gov.cn/hb/msg=XXXXXXX
 | 页面需要验证码 | 通知用户，暂停等待手动处理 |
 | 下载文件损坏 | 清理临时目录，重新尝试下载 |
 | 目标目录不存在 | 自动创建对应目录 |
+| SFDW 验证码验证失败 | 尝试手机尾号后6位和短信验证码两种方式，均失败时提示用户联系法院 |
 
 ---
 

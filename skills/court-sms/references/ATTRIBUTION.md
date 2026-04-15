@@ -17,9 +17,11 @@
 1. **短信解析服务** (`backend/apps/automation/services/sms/sms_parser_service.py`)
    - 短信类型分类逻辑（文书送达 / 信息通知 / 立案通知）
    - zxfw.court.gov.cn 下载链接正则匹配规则
+   - 同构异域名正则更新（从硬编码域名改为通用主机匹配，通过 URL 路径特征识别平台）
    - 案号提取正则模式
    - 当事人名称提取策略（公司名模式、对峙模式、角色前缀模式）
    - 当事人排除关键词列表
+   - 司法送达网（SFDW）链接正则和验证码提取规则
 
 2. **案件匹配算法** (`backend/apps/automation/services/sms/case_matcher.py`)
    - 三级匹配策略的设计思路（案号精确 → 当事人双向 → 特征筛选）
@@ -31,6 +33,11 @@
 4. **zxfw 下载策略** (`backend/apps/automation/services/scraper/scrapers/court_document/zxfw_scraper.py`)
    - 多级下载回退策略的架构设计
    - API 拦截与页面操作结合的思路
+
+5. **司法送达网下载策略** (`backend/apps/automation/services/scraper/scrapers/court_document/sfdw_scraper.py`)
+   - 纯 Playwright 下载流程（TDHCryptoUtil 加密导致无法使用 HTTP API）
+   - 验证码双模式策略：手机尾号后6位优先 + 短信验证码回退
+   - Vue app.checkYzm() → wsList → downloadFile() 页面交互流程
 
 ### 实现差异
 

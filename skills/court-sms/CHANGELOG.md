@@ -2,6 +2,34 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.5.0] - 2026-04-15
+
+### 新增
+
+- **司法送达网平台支持**：新增 `sfpt.cdfy12368.gov.cn`（司法送达网）的链接识别和文书下载
+  - 纯 Playwright 下载流程：所有 POST 请求使用 TDHCryptoUtil 加密，无法通过 HTTP API 下载
+  - 验证码双模式：优先手机尾号后6位（从案件分配中获取律师手机号），其次从短信正文提取验证码（`验证码[：:]\s*(\w{4,6})`）
+  - 广西实例支持：`171.106.48.55:28083` 域名路由到同一 SFDW 平台
+  - `sms-patterns.json` 新增 sfdw 平台配置段（含 verification、browser_flow 字段）
+- **同构异域名支持**：所有平台链接正则从硬编码域名改为通用主机匹配（`[^\s/]+`），通过 URL 路径特征识别平台而非域名
+  - zxfw: `https?://[^\s/]+/zxfw/#/pagesAjkj/app/wssd/index?...`
+  - gdems: `https?://[^\s/]+/v3/dzsd/[a-zA-Z0-9]+`
+  - jysd: `https?://[^\s/]+/sd?key=[a-zA-Z0-9_\-]+`
+  - hbfy: `https?://[^\s/]+/(?:hb/msg=[a-zA-Z0-9]+|sfsddz\b)`
+  - 新增 `canonical_domain` 字段保留已知主域名用于 API 调用
+- **平台支持扩展至 5 个**：全国法院统一送达（zxfw）、广东电子送达（gdems）、集约送达（jysd）、湖北电子送达（hbfy）、司法送达网（sfdw）
+- SKILL.md 新增 SFDW 下载流程说明（纯 Playwright + 验证码双模式 + 广西实例）
+- SKILL.md 新增 SFDW 短信格式示例
+
+### 改进
+
+- **文书重命名回退**：当文书标题无法识别时，优先使用原始文件名（去除扩展名），而非直接默认为"未知文书"
+- `sms-patterns.json` 新增 `rename_fallback` 顶层配置段
+
+### 引用
+
+- 上游参考：[FachuanHybridSystem][fachuan-repo] → `sfdw_scraper.py`（司法送达网纯 Playwright 下载逻辑）、`sms_parser_service.py`（同构异域名正则更新）、`jysd_scraper.py`（手机号验证策略参考）
+
 ## [1.4.0] - 2026-04-10
 
 ### 新增

@@ -2,8 +2,9 @@
   "download_link_patterns": [
     {
       "domain": "zxfw.court.gov.cn",
+      "canonical_domain": "zxfw.court.gov.cn",
       "description": "全国法院统一送达平台（最常见）",
-      "pattern": "https://zxfw\\.court\\.gov\\.cn/zxfw/#/pagesAjkj/app/wssd/index\\?[^\\s]*",
+      "pattern": "https?://[^\\s/]+/zxfw/#/pagesAjkj/app/wssd/index\\?[^\\s]*",
       "required_params": ["qdbh", "sdbh", "sdsin"],
       "param_extract": "从 URL query string 中提取 qdbh、sdbh、sdsin 三个参数值",
       "download_strategy": "api_first",
@@ -27,8 +28,9 @@
     },
     {
       "domain": "sd.gdems.com",
+      "canonical_domain": "sd.gdems.com",
       "description": "广东法院电子送达平台（限广东地区）",
-      "pattern": "https://sd\\.gdems\\.com/v3/dzsd/[a-zA-Z0-9]+",
+      "pattern": "https?://[^\\s/]+/v3/dzsd/[a-zA-Z0-9]+",
       "required_params": [],
       "param_extract": "从 URL 路径末尾提取送达标识码",
       "download_strategy": "browser_only",
@@ -37,8 +39,9 @@
     },
     {
       "domain": "jysd.10102368.com",
+      "canonical_domain": "jysd.10102368.com",
       "description": "集约送达平台（邮政集约送达服务）",
-      "pattern": "https://jysd\\.10102368\\.com/sd\\?key=[a-zA-Z0-9_\\-]+",
+      "pattern": "https?://[^\\s/]+/sd\\?key=[a-zA-Z0-9_\\-]+",
       "required_params": ["key"],
       "param_extract": "从 URL query string 中提取 key 参数值",
       "download_strategy": "browser_only",
@@ -47,8 +50,9 @@
     },
     {
       "domain": "dzsd.hbfy.gov.cn",
+      "canonical_domain": "dzsd.hbfy.gov.cn",
       "description": "湖北电子送达平台（限湖北地区法院）",
-      "pattern": "https?://dzsd\\.hbfy\\.gov\\.cn/(?:hb/msg=[a-zA-Z0-9]+|sfsddz\\b)",
+      "pattern": "https?://[^\\s/]+/(?:hb/msg=[a-zA-Z0-9]+|sfsddz\\b)",
       "required_params": [],
       "param_extract": "免账号模式：从 URL 路径提取 msg 参数值；账号模式：从短信正文提取账号和默认密码",
       "download_strategy": "browser_only",
@@ -77,6 +81,44 @@
         }
       },
       "notes": "湖北电子送达平台支持两种模式：1）免账号模式（短信含 /hb/msg= 链接）可直接通过 HTTP API 查询文书；2）账号模式（短信含 /sfsddz 入口）需登录后下载。两种模式都可能需要验证码。建议优先尝试免账号 HTTP API，失败后降级到 Playwright MCP。"
+    },
+    {
+      "domain": "sfpt.cdfy12368.gov.cn",
+      "alias_domains": ["171.106.48.55:28083"],
+      "description": "司法送达网（全国法院司法送达平台）",
+      "pattern": "https?://[^\\s/]+/sfsdw//r/[a-zA-Z0-9]+",
+      "required_params": [],
+      "param_extract": "从短信正文提取验证码（验证码[：:]\\s*(\\w{4,6})），或使用案件关联律师手机号后6位作为验证码。无 URL 参数。",
+      "download_strategy": "browser_only",
+      "api": null,
+      "verification": {
+        "modes": [
+          {
+            "type": "phone_tail",
+            "description": "手机尾号后6位验证（优先）",
+            "source": "从案件分配信息中获取律师手机号，取后6位"
+          },
+          {
+            "type": "sms_code",
+            "pattern": "验证码[：:]\\s*(\\w{4,6})",
+            "description": "从短信正文中提取验证码"
+          }
+        ]
+      },
+      "browser_flow": {
+        "description": "纯 Playwright 流程（无 API 可用，所有 POST 请求经 TDHCryptoUtil 加密）",
+        "steps": [
+          "browser_navigate → 打开短信中的 SFDW 链接",
+          "页面自动重定向到 pc.html?tdhParams=xxx",
+          "browser_snapshot → 查看验证码输入页面（input#checkCode）",
+          "输入验证码（优先手机尾号后6位，其次短信验证码）",
+          "browser_evaluate → 调用 Vue app.checkYzm() 触发验证",
+          "验证通过后 browser_evaluate → 获取 app.$data.wsList（文书列表）",
+          "遍历 wsList，逐个调用 downloadFile(app, ws) 下载文书",
+          "保存到 /tmp/court-sms-staging/"
+        ]
+      },
+      "notes": "司法送达网所有 POST 请求使用 TDHCryptoUtil 加密，无法通过 HTTP API 下载，只能使用纯 Playwright 流程。广西实例（171.106.48.55:28083）路由到同一平台，下载流程相同。wsList 每项包含 wjmc（文件名）、wjgs（格式）、sdjzwjid（文件ID）。"
     }
   ],
   "case_number_pattern": "[（(〔\\[]\\d{4}[）)\\]〕]\\s*[\\u4e00-\\u9fa5]{1,10}\\d+[\\u4e00-\\u9fa5]{1,5}\\d+号?",
@@ -172,6 +214,12 @@
       "系统", "平台", "服务", "通知", "短信", "案件", "纠纷", "争议",
       "你好", "收到", "查收", "下载", "链接", "请于", "联系"
     ]
+  },
+  "rename_fallback": {
+    "_doc": "当文书标题无法识别时的回退策略",
+    "strategy": "use_original_filename",
+    "description": "优先使用下载时的原始文件名（去除扩展名），而非默认为'未知文书'",
+    "fallback_title": "未知文书"
   },
   "file_naming": {
     "format": "{title}（{case_name}）_{YYYYMMDD}收.pdf",
