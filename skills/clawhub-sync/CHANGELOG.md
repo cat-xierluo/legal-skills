@@ -25,12 +25,12 @@
 ### 新增
 
 - SKILL.md 新增「ClawHub 许可证政策」章节，详细说明 MIT-0 与其他许可证的兼容性
-- 添加许可证兼容性对照表（MIT-0 vs CC-BY-NC-SA-4.0）
+- 添加许可证兼容性对照表（MIT-0 vs CC-BY-NC）
 - sync-allowlist.yaml 添加许可证标注，区分可同步/不可同步的 skill
 
 ### 变更
 
-- 白名单中注释掉 CC-BY-NC-SA-4.0 许可证的 skill（legal-*, patent-analysis, trademark-assistant 等）
+- 白名单中注释掉 CC-BY-NC 许可证的 skill（legal-*, patent-analysis, trademark-assistant 等）
 - 仅保留 MIT 许可证的 skill 为可同步状态
 
 ### 删除
