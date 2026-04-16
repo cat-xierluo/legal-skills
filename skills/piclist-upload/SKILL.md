@@ -20,64 +20,38 @@ license: Complete terms in LICENSE.txt
 
 **首次配置**: 请参阅 [references/setup.md](references/setup.md) 安装和配置指南。
 
-## 工作流程
+## ⚠️ 强制规则：必须通过脚本执行
 
-### 1. 确定处理范围
+**禁止手动 curl 上传。所有操作必须通过 `scripts/process.sh` 脚本执行。** 脚本已内置上传、URL 替换和本地文件删除的完整逻辑，手动操作容易遗漏步骤。
 
-- **单个文件**: `file.md`
-- **多个文件**: `file1.md file2.md`
-- **目录**: 扫描目录中所有 `.md` 文件
-- **多个目录**: 递归处理每个目录
-
-### 2. 提取和过滤图片路径
-
-解析 `![alt](path)` 模式：
-
-- 提取相对路径和绝对路径
-- **跳过已有 URL**: 忽略 `http://` 和 `https://` 链接
-- 保留 alt 文本描述
-
-### 3. 上传和替换
-
-1. 将相对路径解析为绝对路径
-2. 验证文件是否存在
-3. 通过 PicList HTTP Server 上传
-4. 将本地路径替换为云端 URL
-5. **删除本地图片文件**（除非使用 `--keep-local`）
-6. 直接修改原文件
+**默认行为是上传成功后删除本地图片。** 只有当用户明确要求保留时，才可添加 `--keep-local`。不得擅自保留本地图片。
 
 ## 使用方法
 
-### 处理目录（默认删除本地图片）
+### 处理文件或目录（默认删除本地图片）
 
 ```bash
-scripts/process.sh --in-place docs/
+bash scripts/process.sh --in-place <file.md|directory...>
 ```
 
-直接修改 `docs/` 中的所有 Markdown 文件，上传成功后删除本地图片。
-
-### 处理指定文件（保留本地图片）
+### 保留本地图片（仅在用户明确要求时使用）
 
 ```bash
-scripts/process.sh --in-place --keep-local README.md docs/guide.md
+bash scripts/process.sh --in-place --keep-local <file.md|directory...>
 ```
-
-直接修改指定的文件，但保留本地图片不删除。
 
 ### 预览模式（不修改文件）
 
 ```bash
-scripts/process.sh --dry-run README.md
+bash scripts/process.sh --dry-run <file.md|directory...>
 ```
-
-预览将扫描到哪些本地图片，不实际上传，也不修改文件。
 
 ## 命令选项
 
 | 选项 | 说明 |
 |------|------|
-| `--in-place` | 直接修改原文件 |
-| `--keep-local` | 保留本地图片文件（默认删除） |
+| `--in-place` | 直接修改原文件（必须指定，否则仅输出到终端） |
+| `--keep-local` | 保留本地图片文件。**仅在用户明确要求时使用** |
 | `--dry-run` | 预览模式，不上传、不修改文件 |
 
 ## 响应格式
