@@ -385,6 +385,12 @@ def verify_installation():
         errors.append("FunASR 未安装")
 
     try:
+        import funasr_onnx
+        print_success(f"funasr-onnx {getattr(funasr_onnx, '__version__', '已安装')}")
+    except ImportError:
+        errors.append("funasr-onnx 未安装，ONNX 加速功能不可用")
+
+    try:
         import torch
         print_success(f"PyTorch {torch.__version__}")
 

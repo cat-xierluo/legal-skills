@@ -2,6 +2,27 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.9.0] - 2026-04-16
+
+### 新增
+
+- **SenseVoice-Small ONNX 单人快速模式** — `/transcribe`、`transcribe.py`、`auto_transcribe.py` 支持 `fast` 快速路径与 `sensevoice` / `sensevoice-onnx` 模型别名，用于单人讲课、语音笔记等不需要 diarization 的场景
+- **ONNX 加速服务入口** — 新增 `scripts/server-onnx.py`，默认预设 `paraformer-onnx` 和 INT8 量化，便于直接启动快速服务
+- **运行时解析字段** — `/transcribe` 响应新增 `resolved_model`、`resolved_runtime`、`warnings`，方便客户端确认最终路由结果
+- **技能级协作文档** — 为 `funasr-transcribe` 新增 `TASKS.md` 与 `DECISIONS.md`，补齐 issue 驱动开发的上下文传递文档
+
+### 改进
+
+- **Paraformer ONNX 路由** — 服务端新增 `paraformer-onnx` 逻辑模型，支持通过 API / CLI 显式指定更快的 ONNX 路径
+- **ONNX diarization 组合路径** — `paraformer-onnx + diarize` 采用 `ONNX VAD + ONNX Paraformer + CAM++ 聚类` 的组合实现，保留多人对话场景的说话人分离能力
+- **依赖与环境检测同步** — `requirements.txt`、`setup.py`、`init_env.py`、`check_env.py` 增补 `funasr-onnx` 与 `server-onnx.py` 检测逻辑
+- **技能文档更新** — `SKILL.md` 与 `references/api-reference.md` 补充 ONNX、`--model`、`--fast`、`server-onnx.py` 的使用说明
+
+### 技术优化
+
+- **服务端模型路由层** — `server.py` 新增逻辑模型映射、自动参数解析与按需预加载能力，统一处理 `torch` / `onnx` 运行时
+- **按需下载 SenseVoice** — `assets/models.json` 增加可选 `SenseVoiceSmall` 条目，首次使用快速模式时自动拉取，不阻塞默认安装流程
+
 ## [1.8.0] - 2026-04-16
 
 ### 改进

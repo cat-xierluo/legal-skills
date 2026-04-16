@@ -2,6 +2,7 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.20.0
 funasr>=1.3.0
+funasr-onnx>=0.4.1
 modelscope>=1.33.0
 torch>=2.0.0
 torchaudio>=2.0.0

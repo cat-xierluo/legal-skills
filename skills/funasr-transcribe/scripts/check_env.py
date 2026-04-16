@@ -132,6 +132,7 @@ def check_skill_dirs():
     required_files = [
         "SKILL.md",
         "scripts/server.py",
+        "scripts/server-onnx.py",
         "scripts/transcribe.py",
         "scripts/auto_transcribe.py",
         "scripts/setup.py",
@@ -180,6 +181,7 @@ def main():
         print("  下一步：")
         print("    1. 运行安装脚本: python3 scripts/setup.py")
         print("    2. 启动服务: python3 scripts/server.py")
+        print("       或 ONNX 加速服务: python3 scripts/server-onnx.py --preload")
         print("    3. 开始转录！")
         print()
         return 0

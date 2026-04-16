@@ -26,12 +26,11 @@ except ImportError:
 
 DEFAULT_SERVER = "http://127.0.0.1:8765"
 
-# 可用模型列表
-# 注意: Nano 模型暂不支持当前 FunASR 版本 (1.3.1)，需要等待官方修复
 AVAILABLE_MODELS = {
-    "paraformer": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-    # "nano": "FunAudioLLM/fun-asr-nano-2512",  # 暂不可用
-    # "nano-mlt": "FunAudioLLM/fun-asr-mlt-nano-2512",  # 暂不可用
+    "paraformer": "FunASR 原生 Paraformer（默认，支持 diarization）",
+    "paraformer-onnx": "ONNX Paraformer（更快，支持 diarization）",
+    "sensevoice": "SenseVoice-Small ONNX（单人快速模式，不支持 diarization）",
+    "sensevoice-onnx": "SenseVoice-Small ONNX（sensevoice 别名）",
 }
 
 
@@ -47,7 +46,9 @@ def check_server(server_url: str) -> bool:
 
 def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
                     output_path: str = None, diarize: bool = False,
+                    model: str = None,
                     model_id: str = None,
+                    fast: bool = False,
                     extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
     """
     转录单个文件
@@ -73,11 +74,14 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
     payload = {
         "file_path": file_path,
         "diarize": diarize,
+        "fast": fast,
         "extract_slides": extract_slides,
         "slide_threshold": slide_threshold,
     }
     if output_path:
         payload["output_path"] = os.path.abspath(output_path)
+    if model:
+        payload["model"] = model
     if model_id:
         payload["model_id"] = model_id
 
@@ -105,7 +109,8 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
 
 def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
                      output_dir: str = None, diarize: bool = False,
-                     model_id: str = None) -> dict:
+                     model: str = None, model_id: str = None,
+                     fast: bool = False) -> dict:
     """
     批量转录目录中的文件
 
@@ -138,10 +143,13 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
 
     payload = {
         "directory": directory,
-        "diarize": diarize
+        "diarize": diarize,
+        "fast": fast,
     }
     if output_dir:
         payload["output_dir"] = os.path.abspath(output_dir)
+    if model:
+        payload["model"] = model
     if model_id:
         payload["model_id"] = model_id
 
@@ -182,6 +190,12 @@ def main():
   # 禁用说话人分离
   python transcribe.py /path/to/audio.mp3 --no-diarize
 
+  # 单人快速模式（SenseVoice-Small ONNX）
+  python transcribe.py /path/to/course.m4a --fast
+
+  # 指定 Paraformer ONNX
+  python transcribe.py /path/to/meeting.m4a --model paraformer-onnx
+
   # 批量转录目录
   python transcribe.py /path/to/media_folder/ --batch
 
@@ -201,19 +215,22 @@ def main():
     parser.add_argument('--json', action='store_true', help='以 JSON 格式输出结果')
     parser.add_argument('--no-summary', action='store_true', help='禁用 AI 总结功能（默认启用）')
     parser.add_argument('--auto-summary', action='store_true', help='自动调用 LLM 生成并注入总结（需要 API Key）')
-    parser.add_argument('--model', choices=['paraformer'],
-                       help='选择使用的 ASR 模型（默认: paraformer）')
+    parser.add_argument('--model', choices=list(AVAILABLE_MODELS.keys()),
+                       help='选择使用的 ASR 模型')
+    parser.add_argument('--fast', action='store_true', help='单人快速模式：自动走 SenseVoice-Small ONNX，并关闭 diarization')
     parser.add_argument('--slides', action='store_true', help='提取视频关键帧截图（PPT幻灯片）')
     parser.add_argument('--slide-threshold', type=float, default=27.0, help='场景检测阈值（默认27.0，值越低越灵敏）')
 
     args = parser.parse_args()
 
-    # 解析模型 ID
-    model_id = None
+    if args.fast and args.diarize:
+        args.diarize = False
+        print("⚡ fast 模式已自动关闭说话人分离")
+
     if args.model:
-        model_id = AVAILABLE_MODELS.get(args.model)
-        if model_id:
-            print(f"🔧 使用模型: {args.model} ({model_id})")
+        print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})")
+    elif args.fast:
+        print("⚡ 使用单人快速模式（SenseVoice-Small ONNX）")
 
     # 检查服务是否运行
     if not check_server(args.server):
@@ -229,7 +246,9 @@ def main():
             server_url=args.server,
             output_dir=args.output,
             diarize=args.diarize,
-            model_id=model_id
+            model=args.model,
+            model_id=None,
+            fast=args.fast,
         )
     else:
         result = transcribe_file(
@@ -237,7 +256,9 @@ def main():
             server_url=args.server,
             output_path=args.output,
             diarize=args.diarize,
-            model_id=model_id,
+            model=args.model,
+            model_id=None,
+            fast=args.fast,
             extract_slides=args.slides,
             slide_threshold=args.slide_threshold,
         )
@@ -261,6 +282,11 @@ def main():
                 # 单文件结果
                 print(f"✅ 转录完成")
                 print(f"📄 输出: {result['output_path']}")
+                if result.get('resolved_model'):
+                    print(f"🧠 模型: {result['resolved_model']} ({result.get('resolved_runtime', 'unknown')})")
+                if result.get('warnings'):
+                    for warning in result['warnings']:
+                        print(f"⚠️  {warning}")
                 if result.get('sentence_count'):
                     print(f"📝 句子数: {result['sentence_count']}")
 

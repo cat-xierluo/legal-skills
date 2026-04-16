@@ -15,6 +15,8 @@ FunASR 自动转录 + 总结脚本
 选项:
     --output PATH       输出 Markdown 文件路径（默认与音频同目录）
     --diarize           启用说话人分离
+    --model MODEL       指定模型（paraformer / paraformer-onnx / sensevoice）
+    --fast             单人快速模式（自动关闭 diarization）
     --no-summary       跳过总结步骤
     --prompt-only      只返回总结提示词，不生成总结
     --api URL          API 地址（默认 http://127.0.0.1:8765）
@@ -66,18 +68,24 @@ def start_server():
     return False
 
 
-def transcribe(file_path: str, output_path: str = None, diarize: bool = False, api_url: str = "http://127.0.0.1:8765", extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
+def transcribe(file_path: str, output_path: str = None, diarize: bool = False,
+               model: str = None, fast: bool = False,
+               api_url: str = "http://127.0.0.1:8765",
+               extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
     """转录音频文件"""
     print(f"📝 转录中: {file_path}")
 
     payload = {
         "file_path": file_path,
         "diarize": diarize,
+        "fast": fast,
         "extract_slides": extract_slides,
         "slide_threshold": slide_threshold
     }
     if output_path:
         payload["output_path"] = output_path
+    if model:
+        payload["model"] = model
     
     resp = requests.post(f"{api_url}/transcribe", json=payload, timeout=600)
     resp.raise_for_status()
@@ -143,6 +151,8 @@ def main():
     parser.add_argument("--output", "-o", help="输出 Markdown 文件路径")
     parser.add_argument("--diarize", action="store_true", default=True, help="启用说话人分离（默认启用）")
     parser.add_argument("--no-diarize", action="store_false", dest="diarize", help="禁用说话人分离")
+    parser.add_argument("--model", choices=["paraformer", "paraformer-onnx", "sensevoice", "sensevoice-onnx"], help="指定模型")
+    parser.add_argument("--fast", action="store_true", help="单人快速模式：自动切到 SenseVoice-Small ONNX")
     parser.add_argument("--no-summary", action="store_true", help="跳过总结步骤")
     parser.add_argument("--prompt-only", action="store_true", help="只返回总结提示词，不生成总结")
     parser.add_argument("--api", default="http://127.0.0.1:8765", help="API 地址")
@@ -152,6 +162,10 @@ def main():
     args = parser.parse_args()
     
     api_url = args.api
+
+    if args.fast and args.diarize:
+        args.diarize = False
+        print("⚡ fast 模式已自动关闭说话人分离")
     
     # 检查服务
     if not check_server(api_url):
@@ -171,6 +185,8 @@ def main():
         str(file_path),
         output_path=output_path,
         diarize=args.diarize,
+        model=args.model,
+        fast=args.fast,
         api_url=api_url,
         extract_slides=args.slides,
         slide_threshold=args.slide_threshold,

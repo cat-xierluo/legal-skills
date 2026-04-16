@@ -23,6 +23,12 @@
       "name": "说话人分离模型 (CAM++)",
       "description": "识别不同说话人",
       "required": false
+    },
+    {
+      "id": "iic/SenseVoiceSmall",
+      "name": "SenseVoice-Small（单人快速模式）",
+      "description": "单人讲课/语音笔记的快速模型，首次使用 ONNX 模式时按需下载",
+      "required": false
     }
   ],
   "default_model": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"

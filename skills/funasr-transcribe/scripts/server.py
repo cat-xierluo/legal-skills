@@ -12,11 +12,14 @@ import json
 import shutil
 import signal
 import time
+import copy
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import argparse
 import threading
+
+import numpy as np
 
 # 获取脚本所在目录和 skill 根目录
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -305,9 +308,37 @@ if not startup_check():
     sys.exit(1)
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from funasr import AutoModel
+
+try:
+    from funasr_onnx import Paraformer as ONNXParaformer
+    from funasr_onnx import SenseVoiceSmall as ONNXSenseVoiceSmall
+    from funasr_onnx import Fsmn_vad as ONNXFsmnVad
+    ONNX_RUNTIME_AVAILABLE = True
+except ImportError:
+    ONNXParaformer = None
+    ONNXSenseVoiceSmall = None
+    ONNXFsmnVad = None
+    ONNX_RUNTIME_AVAILABLE = False
+
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+except ImportError:
+    librosa = None
+    LIBROSA_AVAILABLE = False
+
+try:
+    from funasr.models.campplus.utils import sv_chunk, postprocess, distribute_spk
+    from funasr.models.campplus.cluster_backend import ClusterBackend
+    CAMPPLUS_AVAILABLE = True
+except Exception:
+    sv_chunk = None
+    postprocess = None
+    distribute_spk = None
+    ClusterBackend = None
+    CAMPPLUS_AVAILABLE = False
 
 app = FastAPI(title="FunASR Transcribe API", version="1.0.0")
 
@@ -316,54 +347,375 @@ SUPPORTED_EXTENSIONS = {
     '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.opus', '.wma', '.caf'  # 音频
 }
 
+VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm'}
 
-def init_model(with_speaker: bool = False, model_id: str = None):
-    """初始化 ASR 模型
+PARAFORMER_MODEL_ID = DEFAULT_MODEL
+SENSEVOICE_MODEL_ID = os.environ.get("FUNASR_SENSEVOICE_MODEL_ID", "iic/SenseVoiceSmall")
+VAD_MODEL_ID = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+SPK_MODEL_ID = "cam++"
+DEFAULT_MODEL_ALIAS = os.environ.get("FUNASR_SERVER_DEFAULT_MODEL", "paraformer")
+DEFAULT_ONNX_QUANTIZE = os.environ.get("FUNASR_SERVER_DEFAULT_QUANTIZE", "0").lower() in {
+    "1", "true", "yes", "on"
+}
+DEFAULT_ONNX_THREADS = int(os.environ.get("FUNASR_SERVER_ONNX_THREADS", "4"))
 
-    Args:
-        with_speaker: 是否启用说话人分离
-        model_id: 指定模型 ID（可选，默认使用 DEFAULT_MODEL）
+MODEL_ALIASES = {
+    "paraformer": {
+        "runtime": "torch",
+        "model_id": PARAFORMER_MODEL_ID,
+        "supports_diarization": True,
+        "onnx_class": None,
+    },
+    "paraformer-onnx": {
+        "runtime": "onnx",
+        "model_id": PARAFORMER_MODEL_ID,
+        "supports_diarization": True,
+        "onnx_class": "paraformer",
+    },
+    "sensevoice": {
+        "runtime": "onnx",
+        "model_id": SENSEVOICE_MODEL_ID,
+        "supports_diarization": False,
+        "onnx_class": "sensevoice",
+    },
+    "sensevoice-onnx": {
+        "runtime": "onnx",
+        "model_id": SENSEVOICE_MODEL_ID,
+        "supports_diarization": False,
+        "onnx_class": "sensevoice",
+    },
+}
 
-    Returns:
-        FunASR 模型实例
-    """
+
+def init_torch_model(with_speaker: bool = False, model_id: str = None):
+    """初始化 FunASR 原生模型。"""
     global MODEL_CACHE
 
-    # 使用指定模型或默认模型
     use_model_id = model_id or DEFAULT_MODEL
-
-    # 构建缓存键值
-    cache_key = f"{use_model_id}_spk{with_speaker}"
-
-    # 检查缓存
+    cache_key = f"torch::{use_model_id}::spk={with_speaker}"
     if cache_key in MODEL_CACHE:
         return MODEL_CACHE[cache_key]
 
-    print(f"正在加载 ASR 模型: {use_model_id}")
+    print(f"正在加载 FunASR 模型: {use_model_id}")
 
     if with_speaker:
         model_instance = AutoModel(
             model=use_model_id,
-            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            vad_model=VAD_MODEL_ID,
             punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-            spk_model="cam++",
+            spk_model=SPK_MODEL_ID,
             disable_update=True,
             disable_log=False,
         )
-        print(f"模型加载完成（含说话人分离）")
+        print("模型加载完成（FunASR + 说话人分离）")
     else:
         model_instance = AutoModel(
             model=use_model_id,
-            vad_model="iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+            vad_model=VAD_MODEL_ID,
             punc_model="iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
             disable_update=True,
             disable_log=False,
         )
-        print("模型加载完成")
+        print("模型加载完成（FunASR）")
 
-    # 缓存模型实例
     MODEL_CACHE[cache_key] = model_instance
     return model_instance
+
+
+def ensure_onnx_runtime_available():
+    """检查 ONNX 运行时依赖。"""
+    if not ONNX_RUNTIME_AVAILABLE:
+        raise RuntimeError(
+            "缺少 funasr-onnx 依赖，请先运行 `python3 scripts/setup.py` 或 `pip install funasr-onnx`"
+        )
+
+
+def ensure_diarization_support_available():
+    """检查 ONNX diarization 所需依赖。"""
+    if not LIBROSA_AVAILABLE:
+        raise RuntimeError("缺少 librosa 依赖，无法执行 ONNX 说话人分离流程")
+    if not CAMPPLUS_AVAILABLE:
+        raise RuntimeError("缺少 CAM++ 聚类依赖，无法执行 ONNX 说话人分离流程")
+
+
+def get_onnx_model_class(model_alias: str):
+    """根据逻辑模型名返回 ONNX 类。"""
+    config = MODEL_ALIASES.get(model_alias, {})
+    onnx_class = config.get("onnx_class")
+    if onnx_class == "paraformer":
+        return ONNXParaformer
+    if onnx_class == "sensevoice":
+        return ONNXSenseVoiceSmall
+    raise RuntimeError(f"模型 {model_alias} 不支持 ONNX 运行时")
+
+
+def init_onnx_model(model_alias: str, model_id: str = None, quantize: bool = False):
+    """初始化 ONNX ASR 模型。"""
+    ensure_onnx_runtime_available()
+
+    use_model_id = model_id or MODEL_ALIASES[model_alias]["model_id"]
+    cache_key = f"onnx::{model_alias}::{use_model_id}::quant={quantize}"
+    if cache_key in MODEL_CACHE:
+        return MODEL_CACHE[cache_key]
+
+    model_class = get_onnx_model_class(model_alias)
+    print(f"正在加载 ONNX 模型: {model_alias} ({use_model_id})")
+    model_instance = model_class(
+        use_model_id,
+        batch_size=1,
+        quantize=quantize,
+        intra_op_num_threads=DEFAULT_ONNX_THREADS,
+    )
+    MODEL_CACHE[cache_key] = model_instance
+    return model_instance
+
+
+def init_onnx_vad_model(quantize: bool = False):
+    """初始化 ONNX VAD 模型。"""
+    ensure_onnx_runtime_available()
+    cache_key = f"onnx::vad::{VAD_MODEL_ID}::quant={quantize}"
+    if cache_key in MODEL_CACHE:
+        return MODEL_CACHE[cache_key]
+
+    print("正在加载 ONNX VAD 模型")
+    model_instance = ONNXFsmnVad(
+        VAD_MODEL_ID,
+        quantize=quantize,
+        intra_op_num_threads=DEFAULT_ONNX_THREADS,
+    )
+    MODEL_CACHE[cache_key] = model_instance
+    return model_instance
+
+
+def init_speaker_model():
+    """初始化 CAM++ 说话人嵌入模型。"""
+    cache_key = f"torch::{SPK_MODEL_ID}"
+    if cache_key in MODEL_CACHE:
+        return MODEL_CACHE[cache_key]
+
+    print("正在加载 CAM++ 说话人模型")
+    speaker_model = AutoModel(
+        model=SPK_MODEL_ID,
+        disable_update=True,
+        disable_log=False,
+    )
+    MODEL_CACHE[cache_key] = speaker_model
+    return speaker_model
+
+
+def get_cluster_backend():
+    """获取说话人聚类后端。"""
+    cache_key = "cluster::cam++"
+    if cache_key not in MODEL_CACHE:
+        MODEL_CACHE[cache_key] = ClusterBackend()
+    return MODEL_CACHE[cache_key]
+
+
+def normalize_vad_segments(vad_result) -> list[list[int]]:
+    """将 VAD 输出归一化为 [[start_ms, end_ms], ...]。"""
+    if not isinstance(vad_result, list):
+        return []
+
+    if len(vad_result) == 2 and all(isinstance(x, (int, float)) for x in vad_result):
+        return [[int(vad_result[0]), int(vad_result[1])]]
+
+    normalized = []
+    for item in vad_result:
+        normalized.extend(normalize_vad_segments(item))
+    return normalized
+
+
+def offset_timestamps(timestamps: list, offset_ms: int) -> list:
+    """为时间戳整体加偏移量。"""
+    shifted = []
+    for ts in timestamps or []:
+        if isinstance(ts, list) and len(ts) >= 2:
+            shifted.append([int(ts[0]) + offset_ms, int(ts[1]) + offset_ms])
+    return shifted
+
+
+def build_onnx_result(output, offset_ms: int = 0) -> dict:
+    """将 ONNX 推理结果转换为与现有 server 兼容的结构。"""
+    if isinstance(output, str):
+        return {"text": output}
+
+    if isinstance(output, dict):
+        text = output.get("text") or output.get("preds") or ""
+        result = {"text": text}
+        timestamps = output.get("timestamp")
+        if timestamps:
+            result["timestamp"] = offset_timestamps(timestamps, offset_ms)
+        return result
+
+    return {"text": str(output)}
+
+
+def transcribe_with_onnx_model(file_path: str, model_alias: str, model_id: str = None,
+                               quantize: bool = False) -> dict:
+    """使用 ONNX 模型执行非 diarization 转录。"""
+    model_instance = init_onnx_model(model_alias, model_id=model_id, quantize=quantize)
+    result = model_instance(file_path)
+    if isinstance(result, list) and result:
+        return build_onnx_result(result[0])
+    return build_onnx_result(result)
+
+
+def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = None,
+                                                quantize: bool = False) -> dict:
+    """ONNX Paraformer + ONNX VAD + CAM++ 聚类组合路径。"""
+    ensure_onnx_runtime_available()
+    ensure_diarization_support_available()
+
+    vad_model = init_onnx_vad_model(quantize=quantize)
+    asr_model = init_onnx_model("paraformer-onnx", model_id=model_id, quantize=quantize)
+    speaker_model = init_speaker_model()
+    cluster_backend = get_cluster_backend()
+
+    waveform, sample_rate = librosa.load(file_path, sr=16000)
+    if sample_rate != 16000:
+        raise RuntimeError(f"ONNX diarization 需要 16k 音频，实际采样率为 {sample_rate}")
+
+    vad_segments = normalize_vad_segments(vad_model(file_path))
+    if not vad_segments:
+        raw_result = asr_model(file_path)
+        if isinstance(raw_result, list) and raw_result:
+            raw_result = raw_result[0]
+        result = build_onnx_result(raw_result)
+        result["sentence_info"] = []
+        return result
+
+    sentence_info = []
+    combined_texts = []
+    combined_timestamps = []
+    vad_segment_payloads = []
+
+    for start_ms, end_ms in vad_segments:
+        start_idx = max(0, int(start_ms / 1000 * 16000))
+        end_idx = min(len(waveform), int(end_ms / 1000 * 16000))
+        segment_audio = waveform[start_idx:end_idx]
+        if segment_audio.size == 0:
+            continue
+
+        vad_segment_payloads.append([start_ms / 1000.0, end_ms / 1000.0, segment_audio])
+        segment_result_raw = asr_model(segment_audio)
+        if isinstance(segment_result_raw, list) and segment_result_raw:
+            segment_result_raw = segment_result_raw[0]
+        segment_result = build_onnx_result(segment_result_raw, offset_ms=start_ms)
+        text = (segment_result.get("text") or "").strip()
+        if not text:
+            continue
+
+        combined_texts.append(text)
+        combined_timestamps.extend(segment_result.get("timestamp", []))
+        sentence_info.append(
+            {
+                "start": int(start_ms),
+                "end": int(end_ms),
+                "sentence": text,
+                "timestamp": segment_result.get("timestamp", []),
+            }
+        )
+
+    if not sentence_info:
+        return {"text": "", "timestamp": [], "sentence_info": []}
+
+    speaker_chunks = sv_chunk(vad_segment_payloads)
+    if speaker_chunks:
+        speaker_results, _ = speaker_model.model.inference(
+            [chunk[2] for chunk in speaker_chunks],
+            key=[f"spk_{idx}" for idx in range(len(speaker_chunks))],
+            **speaker_model.kwargs,
+        )
+        spk_embedding = speaker_results[0]["spk_embedding"]
+        labels = cluster_backend(spk_embedding.cpu().numpy(), oracle_num=None)
+        speaker_regions = postprocess(
+            speaker_chunks,
+            None,
+            labels,
+            spk_embedding.cpu().numpy(),
+        )
+        distribute_spk(sentence_info, speaker_regions)
+
+    return {
+        "text": " ".join(combined_texts),
+        "timestamp": combined_timestamps,
+        "sentence_info": sentence_info,
+    }
+
+
+def resolve_requested_model(model_name: Optional[str]) -> str:
+    """解析逻辑模型名。"""
+    if not model_name:
+        return DEFAULT_MODEL_ALIAS if DEFAULT_MODEL_ALIAS in MODEL_ALIASES else "paraformer"
+    if model_name not in MODEL_ALIASES:
+        supported = ", ".join(MODEL_ALIASES.keys())
+        raise RuntimeError(f"不支持的模型: {model_name}，支持的模型: {supported}")
+    return model_name
+
+
+def resolve_transcription_options(model_name: Optional[str], model_id: Optional[str],
+                                  diarize: bool, fast: bool,
+                                  quantize: Optional[bool]) -> dict:
+    """解析请求参数，得到最终运行时配置。"""
+    warnings = []
+    resolved_model = resolve_requested_model(model_name)
+    resolved_diarize = diarize
+    resolved_quantize = DEFAULT_ONNX_QUANTIZE if quantize is None else quantize
+
+    if fast:
+        if model_name and model_name not in {"sensevoice", "sensevoice-onnx"}:
+            warnings.append("已保留显式指定模型；fast 标记未自动覆盖模型选择。")
+        else:
+            resolved_model = "sensevoice"
+            if resolved_diarize:
+                warnings.append("fast 模式已自动关闭说话人分离，切换到 SenseVoice 单人快速路径。")
+            resolved_diarize = False
+
+    if resolved_model in {"sensevoice", "sensevoice-onnx"} and resolved_diarize:
+        raise RuntimeError("SenseVoice-Small 不支持说话人分离，请改用 paraformer 或 paraformer-onnx。")
+
+    model_config = MODEL_ALIASES[resolved_model]
+    runtime = model_config["runtime"]
+    resolved_model_id = model_id or model_config["model_id"]
+
+    if runtime == "torch":
+        resolved_quantize = False
+
+    return {
+        "model": resolved_model,
+        "model_id": resolved_model_id,
+        "runtime": runtime,
+        "diarize": resolved_diarize,
+        "quantize": resolved_quantize,
+        "warnings": warnings,
+    }
+
+
+def run_transcription(file_path: str, resolved: dict) -> dict:
+    """根据解析后的选项执行转录。"""
+    if resolved["runtime"] == "torch":
+        model_instance = init_torch_model(
+            with_speaker=resolved["diarize"],
+            model_id=resolved["model_id"],
+        )
+        result = model_instance.generate(input=file_path, cache={})
+        if isinstance(result, list) and result:
+            return result[0]
+        return result
+
+    if resolved["model"] == "paraformer-onnx" and resolved["diarize"]:
+        return transcribe_paraformer_onnx_with_diarization(
+            file_path,
+            model_id=resolved["model_id"],
+            quantize=resolved["quantize"],
+        )
+
+    return transcribe_with_onnx_model(
+        file_path,
+        model_alias=resolved["model"],
+        model_id=resolved["model_id"],
+        quantize=resolved["quantize"],
+    )
 
 
 def format_timestamp(ms: int) -> str:
@@ -588,7 +940,10 @@ class TranscribeRequest(BaseModel):
     file_path: str
     output_path: Optional[str] = None
     diarize: bool = True  # 默认启用说话人分离
+    model: Optional[str] = None  # 逻辑模型名（paraformer / paraformer-onnx / sensevoice）
     model_id: Optional[str] = None  # 指定使用的模型 ID
+    fast: bool = False  # 单人快速模式
+    quantize: Optional[bool] = None  # ONNX INT8 量化
     extract_slides: bool = False  # 提取视频关键帧截图
     slide_threshold: float = 20.0  # 场景检测阈值
 
@@ -597,7 +952,10 @@ class BatchTranscribeRequest(BaseModel):
     directory: str
     output_dir: Optional[str] = None
     diarize: bool = True  # 默认启用说话人分离
+    model: Optional[str] = None
     model_id: Optional[str] = None  # 指定使用的模型 ID
+    fast: bool = False
+    quantize: Optional[bool] = None
 
 
 class TranscribeResponse(BaseModel):
@@ -609,6 +967,9 @@ class TranscribeResponse(BaseModel):
     archive_path: Optional[str] = None  # 归档目录路径
     summary_prompt: Optional[str] = None  # 自动附带的 AI 总结提示词
     text_preview: Optional[str] = None   # 转录文本预览（前500字）
+    resolved_model: Optional[str] = None  # 最终使用的逻辑模型
+    resolved_runtime: Optional[str] = None  # 最终运行时（torch / onnx）
+    warnings: Optional[list[str]] = None  # 运行时提示
     error: Optional[str] = None
 
 
@@ -823,7 +1184,10 @@ async def transcribe(request: TranscribeRequest):
         - file_path: 文件路径（必需）
         - output_path: 输出 Markdown 文件路径（可选）
         - diarize: 是否启用说话人分离（可选，默认 true）
-        - model_id: 指定使用的模型 ID（可选，默认使用 Paraformer）
+        - model: 逻辑模型名（可选）
+        - model_id: 指定使用的底层模型 ID（可选）
+        - fast: 单人快速模式（可选）
+        - quantize: ONNX INT8 量化（可选）
 
     返回:
         - success: 是否成功
@@ -851,8 +1215,15 @@ async def transcribe(request: TranscribeRequest):
                 detail=f"不支持的文件格式: {ext}，支持的格式: {', '.join(SUPPORTED_EXTENSIONS)}"
             )
 
+        resolved = resolve_transcription_options(
+            request.model,
+            request.model_id,
+            request.diarize,
+            request.fast,
+            request.quantize,
+        )
+
         # 视频文件自动启用关键帧提取
-        VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm'}
         if not request.extract_slides and ext in VIDEO_EXTENSIONS:
             request.extract_slides = True
             print(f"[auto] 检测到视频文件，自动启用关键帧提取")
@@ -862,19 +1233,14 @@ async def transcribe(request: TranscribeRequest):
         if not output_path:
             output_path = str(Path(request.file_path).with_suffix('.md'))
 
-        # 获取模型（支持指定模型 ID）
-        current_model = init_model(with_speaker=request.diarize, model_id=request.model_id)
-
         print(f"正在转录: {request.file_path}")
-        if request.model_id:
-            print(f"使用模型: {request.model_id}")
+        print(
+            f"使用模型: {resolved['model']} "
+            f"(runtime={resolved['runtime']}, diarize={resolved['diarize']}, quantize={resolved['quantize']})"
+        )
 
         # 执行转录
-        result = current_model.generate(input=request.file_path, cache={})
-
-        # 处理结果
-        if isinstance(result, list) and len(result) > 0:
-            result = result[0]
+        result = run_transcription(request.file_path, resolved)
 
         # 转换为 Markdown
         filename = Path(request.file_path).name
@@ -899,7 +1265,7 @@ async def transcribe(request: TranscribeRequest):
         elif request.extract_slides and not SLIDE_EXTRACTOR_AVAILABLE:
             print("[slide_extractor] 模块未安装，跳过关键帧提取（pip install scenedetect[opencv] imagehash）")
 
-        markdown_content = result_to_markdown(result, filename, request.diarize, slides=slides)
+        markdown_content = result_to_markdown(result, filename, resolved["diarize"], slides=slides)
 
         # 保存文件
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -912,7 +1278,7 @@ async def transcribe(request: TranscribeRequest):
             source_file=request.file_path,
             output_md=output_path,
             slides=slides,
-            diarize=request.diarize,
+            diarize=resolved["diarize"],
             slide_threshold=request.slide_threshold,
         )
 
@@ -939,6 +1305,9 @@ async def transcribe(request: TranscribeRequest):
             archive_path=archive_info.get("archive_path"),
             summary_prompt=summary_prompt,
             text_preview=text_preview,
+            resolved_model=resolved["model"],
+            resolved_runtime=resolved["runtime"],
+            warnings=resolved["warnings"],
         )
 
     except HTTPException:
@@ -972,6 +1341,13 @@ async def batch_transcribe(request: BatchTranscribeRequest):
             )
 
         output_dir = request.output_dir or request.directory
+        resolved = resolve_transcription_options(
+            request.model,
+            request.model_id,
+            request.diarize,
+            request.fast,
+            request.quantize,
+        )
 
         # 查找所有支持的文件
         files = []
@@ -986,19 +1362,13 @@ async def batch_transcribe(request: BatchTranscribeRequest):
             )
 
         results = []
-        # 支持指定模型 ID
-        current_model = init_model(with_speaker=request.diarize, model_id=request.model_id)
-
         for file_path in files:
             try:
                 print(f"正在转录: {file_path}")
-                result = current_model.generate(input=str(file_path), cache={})
-
-                if isinstance(result, list) and len(result) > 0:
-                    result = result[0]
+                result = run_transcription(str(file_path), resolved)
 
                 output_path = Path(output_dir) / f"{file_path.stem}.md"
-                markdown_content = result_to_markdown(result, file_path.name, request.diarize)
+                markdown_content = result_to_markdown(result, file_path.name, resolved["diarize"])
 
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(markdown_content)
@@ -1006,7 +1376,9 @@ async def batch_transcribe(request: BatchTranscribeRequest):
                 results.append({
                     "file": str(file_path),
                     "output": str(output_path),
-                    "success": True
+                    "success": True,
+                    "resolved_model": resolved["model"],
+                    "resolved_runtime": resolved["runtime"],
                 })
             except Exception as e:
                 results.append({
@@ -1035,6 +1407,30 @@ def start_idle_monitor():
     print(f"🔍 空闲监控已启动（{IDLE_TIMEOUT // 60}分钟后自动关闭）")
 
 
+def preload_default_model():
+    """按环境变量预加载默认模型。"""
+    try:
+        resolved = resolve_transcription_options(
+            DEFAULT_MODEL_ALIAS,
+            None,
+            diarize=False,
+            fast=False,
+            quantize=DEFAULT_ONNX_QUANTIZE,
+        )
+        if resolved["runtime"] == "torch":
+            init_torch_model(with_speaker=False, model_id=resolved["model_id"])
+        elif resolved["model"] == "paraformer-onnx":
+            init_onnx_model("paraformer-onnx", model_id=resolved["model_id"], quantize=resolved["quantize"])
+        elif resolved["model"] in {"sensevoice", "sensevoice-onnx"}:
+            init_onnx_model(resolved["model"], model_id=resolved["model_id"], quantize=resolved["quantize"])
+        print(
+            f"✅ 默认模型已预加载: {resolved['model']} "
+            f"(runtime={resolved['runtime']}, quantize={resolved['quantize']})"
+        )
+    except Exception as exc:
+        print(f"⚠️  默认模型预加载失败，将按需加载: {exc}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='FunASR 转录服务 (FastAPI)')
     parser.add_argument('--port', type=int, default=8765, help='服务端口（默认 8765）')
@@ -1048,7 +1444,7 @@ def main():
     IDLE_TIMEOUT = args.idle_timeout
 
     if args.preload:
-        init_model()
+        preload_default_model()
 
     # 启动空闲监控
     start_idle_monitor()
@@ -1057,6 +1453,10 @@ def main():
     print(f"📍 地址: http://{args.host}:{args.port}")
     print(f"📚 API 文档: http://{args.host}:{args.port}/docs")
     print(f"🔍 空闲监控: {IDLE_TIMEOUT // 60}分钟自动关闭")
+    print(
+        f"⚙️ 默认模型: {DEFAULT_MODEL_ALIAS} "
+        f"(onnx_quantize={DEFAULT_ONNX_QUANTIZE})"
+    )
     print(f"📋 API 端点:")
     print(f"   POST /transcribe      - 转录单个文件")
     print(f"   POST /batch_transcribe - 批量转录")

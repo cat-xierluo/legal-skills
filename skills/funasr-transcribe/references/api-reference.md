@@ -51,7 +51,9 @@ Content-Type: application/json
 {
   "file_path": "/path/to/audio.mp3",
   "output_path": "/path/to/output.md",
-  "diarize": false
+  "diarize": true,
+  "model": "paraformer-onnx",
+  "fast": false
 }
 ```
 
@@ -61,7 +63,11 @@ Content-Type: application/json
 |------|------|------|------|
 | `file_path` | string | 是 | 要转录的文件绝对路径 |
 | `output_path` | string | 否 | 输出 Markdown 文件路径（默认：原文件同目录下的 .md 文件） |
-| `diarize` | boolean | 否 | 是否启用说话人分离（默认：false） |
+| `diarize` | boolean | 否 | 是否启用说话人分离（默认：true） |
+| `model` | string | 否 | 逻辑模型名：`paraformer`、`paraformer-onnx`、`sensevoice`、`sensevoice-onnx` |
+| `model_id` | string | 否 | 自定义底层模型 ID |
+| `fast` | boolean | 否 | 单人快速模式；自动切到 SenseVoice 并关闭 diarization |
+| `quantize` | boolean | 否 | ONNX 模式是否启用 INT8 量化 |
 
 **支持的格式**
 
@@ -75,7 +81,10 @@ Content-Type: application/json
   "success": true,
   "output_path": "/path/to/audio.md",
   "text": "这是转录的文本内容...",
-  "sentence_count": 25
+  "sentence_count": 25,
+  "resolved_model": "paraformer-onnx",
+  "resolved_runtime": "onnx",
+  "warnings": []
 }
 ```
 
@@ -87,6 +96,9 @@ Content-Type: application/json
 | `output_path` | string | 生成的 Markdown 文件路径 |
 | `text` | string | 转录的纯文本内容 |
 | `sentence_count` | integer | 转录句子数量 |
+| `resolved_model` | string | 最终生效的逻辑模型 |
+| `resolved_runtime` | string | 最终运行时（`torch` / `onnx`） |
+| `warnings` | array | 自动路由或兼容性提示 |
 | `error` | string | 错误信息（仅失败时返回） |
 
 **响应示例（失败）**
@@ -115,6 +127,16 @@ curl -X POST http://127.0.0.1:8765/transcribe \
 curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/meeting.m4a", "diarize": true}'
+
+# Paraformer ONNX + diarization
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/meeting.m4a", "model": "paraformer-onnx", "diarize": true}'
+
+# 单人快速模式（SenseVoice-Small ONNX）
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/course.m4a", "fast": true}'
 ```
 
 ## 3. 批量转录
@@ -130,7 +152,8 @@ Content-Type: application/json
 {
   "directory": "/path/to/media_folder",
   "output_dir": "/path/to/output_folder",
-  "diarize": false
+  "diarize": true,
+  "model": "paraformer"
 }
 ```
 
@@ -140,7 +163,9 @@ Content-Type: application/json
 |------|------|------|------|
 | `directory` | string | 是 | 要转录的目录绝对路径 |
 | `output_dir` | string | 否 | 输出目录（默认：同输入目录） |
-| `diarize` | boolean | 否 | 是否启用说话人分离（默认：false） |
+| `diarize` | boolean | 否 | 是否启用说话人分离（默认：true） |
+| `model` | string | 否 | 逻辑模型名 |
+| `fast` | boolean | 否 | 单人快速模式 |
 
 **响应示例（成功）**
 
@@ -199,6 +224,11 @@ curl -X POST http://127.0.0.1:8765/batch_transcribe \
 curl -X POST http://127.0.0.1:8765/batch_transcribe \
   -H "Content-Type: application/json" \
   -d '{"directory": "/path/to/meetings", "diarize": true}'
+
+# 批量单人快速模式
+curl -X POST http://127.0.0.1:8765/batch_transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"directory": "/path/to/courses", "fast": true}'
 ```
 
 ## 4. AI 总结功能（Claude Code 环境）
@@ -292,4 +322,3 @@ AI 总结功能会生成：
 请输出 JSON 格式的总结。
 ============================================================
 ```
-

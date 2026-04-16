@@ -35,7 +35,7 @@ REQUIRED_TOOLS = ["python3", "curl"]
 # 可选但建议的工具
 OPTIONAL_TOOLS = ["ffmpeg", "ffprobe"]
 # Python 依赖（检测是否已安装）
-PYTHON_DEPS = ["funasr", "torch", "fastapi", "uvicorn"]
+PYTHON_DEPS = ["funasr", "funasr_onnx", "torch", "fastapi", "uvicorn"]
 
 
 def get_login_shell_path():
