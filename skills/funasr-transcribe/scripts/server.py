@@ -641,6 +641,10 @@ class SummaryResponse(BaseModel):
     error: Optional[str] = None
 
 
+class VerifySummaryRequest(BaseModel):
+    md_path: str
+
+
 @app.middleware("http")
 async def update_activity_middleware(request: Request, call_next):
     """更新活动时间的中间件"""
@@ -773,6 +777,43 @@ async def inject_summary(request: SummaryRequest):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/verify_summary")
+async def verify_summary(request: VerifySummaryRequest):
+    """
+    验证 Markdown 文件中是否已注入 AI 摘要
+
+    请求参数:
+        - md_path: Markdown 文件路径（必需）
+
+    返回:
+        - has_summary: 是否存在摘要
+        - summary_length: 摘要字符数
+        - has_all_sections: 是否包含所有必需章节
+        - missing_sections: 缺失的章节名称
+    """
+    try:
+        update_activity()
+
+        md_path = Path(request.md_path)
+        if not md_path.exists():
+            raise HTTPException(status_code=400, detail=f"文件不存在: {request.md_path}")
+
+        if not SUMMARY_MODULE:
+            return {"success": False, "error": "Summary module not available"}
+
+        result = SUMMARY_MODULE.verify_summary_in_file(md_path)
+        result["md_path"] = str(md_path)
+        result["success"] = True
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe(request: TranscribeRequest):
     """
@@ -809,6 +850,12 @@ async def transcribe(request: TranscribeRequest):
                 status_code=400,
                 detail=f"不支持的文件格式: {ext}，支持的格式: {', '.join(SUPPORTED_EXTENSIONS)}"
             )
+
+        # 视频文件自动启用关键帧提取
+        VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm'}
+        if not request.extract_slides and ext in VIDEO_EXTENSIONS:
+            request.extract_slides = True
+            print(f"[auto] 检测到视频文件，自动启用关键帧提取")
 
         # 默认输出路径
         output_path = request.output_path
@@ -1015,6 +1062,7 @@ def main():
     print(f"   POST /batch_transcribe - 批量转录")
     print(f"   POST /summary         - 生成 AI 总结提示词（供 Agent 使用）")
     print(f"   POST /inject_summary  - 将 AI 总结注入 Markdown 文件")
+    print(f"   POST /verify_summary  - 验证摘要是否已注入")
     print(f"   GET  /health          - 健康检查\n")
 
     # 导入 uvicorn（延迟导入以加快启动速度）

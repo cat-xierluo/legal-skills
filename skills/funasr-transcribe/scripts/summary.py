@@ -1,9 +1,18 @@
 """
-FunASR 转录总结工具 - Claude Code 环境专用
+FunASR 转录总结工具 - Claude Code / Agent 环境专用
+
+支持：
+- 从转录文件中提取文本并生成总结提示词
+- 将总结注入到 Markdown 文件
+- 验证文件中是否存在总结
+- CLI 接口：python3 summary.py inject <md_path> <summary_file>
+             python3 summary.py verify <md_path>
 """
 from __future__ import annotations
 
+import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
@@ -318,3 +327,193 @@ def generate_summary_via_api(md_path: Path) -> tuple[bool, str]:
 
     except Exception as e:
         return False, f"生成总结请求失败: {str(e)}"
+
+
+# ============================================================================
+# 验证功能
+# ============================================================================
+
+def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
+    """验证 Markdown 文件中是否已注入 AI 摘要
+
+    Args:
+        md_path: Markdown 文件路径
+
+    Returns:
+        dict: {
+            has_summary: bool,           - 是否存在摘要
+            summary_length: int,         - 摘要字符数
+            has_all_sections: bool,      - 是否包含所有必需章节
+            missing_sections: list[str], - 缺失的章节名称
+        }
+    """
+    if not md_path.exists():
+        return {
+            "has_summary": False,
+            "summary_length": 0,
+            "has_all_sections": False,
+            "missing_sections": ["文件不存在"],
+        }
+
+    text = md_path.read_text(encoding="utf-8")
+
+    # 检查标记
+    has_start = SUMMARY_START in text
+    has_end = SUMMARY_END in text
+
+    if not (has_start and has_end):
+        return {
+            "has_summary": False,
+            "summary_length": 0,
+            "has_all_sections": False,
+            "missing_sections": ["AI-SUMMARY 标记"],
+        }
+
+    # 提取摘要块
+    pattern = re.compile(
+        re.escape(SUMMARY_START) + r"(.*?)" + re.escape(SUMMARY_END),
+        flags=re.DOTALL,
+    )
+    match = pattern.search(text)
+    if not match:
+        return {
+            "has_summary": False,
+            "summary_length": 0,
+            "has_all_sections": False,
+            "missing_sections": ["摘要内容"],
+        }
+
+    summary_block = match.group(1)
+
+    # 检查必需章节
+    required_sections = ["全文总结", "发言人总结", "重点内容", "关键词"]
+    missing = [s for s in required_sections if s not in summary_block]
+
+    return {
+        "has_summary": True,
+        "summary_length": len(summary_block.strip()),
+        "has_all_sections": len(missing) == 0,
+        "missing_sections": missing,
+    }
+
+
+def inject_from_file(md_path: Path, summary_file: Path) -> tuple[bool, str]:
+    """从文件读取总结内容并注入到 Markdown 文件
+
+    支持 JSON 和纯文本格式：
+    - JSON: 解析为结构化数据后格式化为 Markdown
+    - 纯文本: 直接作为 Markdown 注入
+
+    Args:
+        md_path: 目标 Markdown 文件路径
+        summary_file: 总结内容文件路径
+
+    Returns:
+        tuple: (是否成功, 消息)
+    """
+    if not md_path.exists():
+        return False, f"目标文件不存在: {md_path}"
+    if not summary_file.exists():
+        return False, f"总结文件不存在: {summary_file}"
+
+    raw = summary_file.read_text(encoding="utf-8").strip()
+    if not raw:
+        return False, "总结文件为空"
+
+    # 尝试解析为 JSON
+    content_to_inject = None
+    try:
+        # 去除可能的 markdown code fence
+        cleaned = re.sub(r"^```(?:json)?\s*\n?", "", raw)
+        cleaned = re.sub(r"\n?```\s*$", "", cleaned).strip()
+
+        # 尝试找到 JSON 对象
+        json_match = re.search(r"\{[\s\S]*\}", cleaned)
+        if json_match:
+            data = json.loads(json_match.group())
+
+            # 提取期望的发言人顺序
+            md_text = md_path.read_text(encoding="utf-8")
+            expected_orders = _extract_speaker_orders(md_text)
+
+            content_to_inject = _build_summary_markdown(data, expected_orders)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        pass  # 非 JSON 格式，当作纯文本处理
+
+    if content_to_inject is None:
+        # 纯文本格式，直接注入
+        content_to_inject = raw
+
+    inject_summary_to_file(md_path, content_to_inject)
+
+    # 验证注入结果
+    result = verify_summary_in_file(md_path)
+    if result["has_summary"]:
+        return True, f"总结已注入 ({result['summary_length']} 字符)"
+    else:
+        return False, "注入后验证失败，总结未写入文件"
+
+
+# ============================================================================
+# CLI 接口
+# ============================================================================
+
+def main():
+    """CLI 入口点"""
+    if len(sys.argv) < 2:
+        print("用法:")
+        print("  python3 summary.py inject <md_path> <summary_file>  - 从文件注入总结")
+        print("  python3 summary.py verify <md_path>                 - 验证总结是否存在")
+        print("  python3 summary.py prompt <md_path>                 - 生成总结提示词")
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    if command == "inject":
+        if len(sys.argv) < 4:
+            print("用法: python3 summary.py inject <md_path> <summary_file>")
+            sys.exit(1)
+        md_path = Path(sys.argv[2])
+        summary_file = Path(sys.argv[3])
+        success, msg = inject_from_file(md_path, summary_file)
+        if success:
+            print(f"✅ {msg}")
+        else:
+            print(f"❌ {msg}")
+            sys.exit(1)
+
+    elif command == "verify":
+        if len(sys.argv) < 3:
+            print("用法: python3 summary.py verify <md_path>")
+            sys.exit(1)
+        md_path = Path(sys.argv[2])
+        result = verify_summary_in_file(md_path)
+        if result["has_summary"]:
+            sections_status = "完整" if result["has_all_sections"] else f"缺少: {', '.join(result['missing_sections'])}"
+            print(f"✅ 摘要已存在 ({result['summary_length']} 字符, 章节{sections_status})")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"❌ 摘要不存在 (缺少: {', '.join(result['missing_sections'])})")
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            sys.exit(1)
+
+    elif command == "prompt":
+        if len(sys.argv) < 3:
+            print("用法: python3 summary.py prompt <md_path>")
+            sys.exit(1)
+        md_path = Path(sys.argv[2])
+        success, prompt, text = summarize_file_for_claude(md_path)
+        if success:
+            print(prompt)
+        else:
+            print(f"❌ {prompt}")
+            sys.exit(1)
+
+    else:
+        print(f"未知命令: {command}")
+        print("可用命令: inject, verify, prompt")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

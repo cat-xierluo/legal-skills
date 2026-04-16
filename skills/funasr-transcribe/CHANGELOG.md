@@ -2,6 +2,28 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.8.0] - 2026-04-16
+
+### 改进
+
+- **视频文件自动启用关键帧提取** — 转录 mp4/mov/avi/mkv/wmv/webm 等视频文件时，自动启用 `extract_slides`，无需手动传入参数。显式传 `"extract_slides": false` 可禁用
+- **slide 依赖升级为正式依赖** — `scenedetect[opencv]` 和 `imagehash` 不再标记为 optional，随 setup.py 一并安装
+
+### 新增
+
+- **文件级摘要注入 CLI** — `summary.py` 新增 `inject` 和 `verify` 子命令
+  - `python3 summary.py inject <md_path> <summary_file>` — 从 JSON/文本文件读取总结并注入，自动解析 JSON 格式化
+  - `python3 summary.py verify <md_path>` — 验证 Markdown 文件中是否存在 AI 摘要及章节完整性
+  - `python3 summary.py prompt <md_path>` — 生成总结提示词
+- **摘要验证端点** — server.py 新增 `POST /verify_summary` 端点，返回摘要存在状态、字符数、缺失章节
+- **摘要验证函数** — summary.py 新增 `verify_summary_in_file()` 和 `inject_from_file()` 函数
+
+### 修复
+
+- **摘要注入失败问题** — Agent（MiniMax）在多步骤工具调用中不可靠，声称完成注入但实际未执行。改为文件注入方式（写 JSON 到临时文件 → 调用 Python 脚本注入），避免 curl JSON 转义问题
+- **强制验证步骤** — 注入后必须运行 `summary.py verify` 验证，失败则重试，防止 Agent "声称完成但实际未执行"
+- **agent-executor 环境下命令找不到** — headless 模式 PATH 被限制为只有插件目录，`curl`/`python3` 找不到。SKILL.md 所有 bash 命令前加 `export PATH=...` 确保系统命令可用
+
 ## [1.6.0] - 2026-04-11
 
 ### 新增
