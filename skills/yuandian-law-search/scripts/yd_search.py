@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.0.0 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（v1.1.1 - 开放平台版）"""
 
 import argparse
 import hashlib
@@ -349,7 +349,7 @@ def format_enterprise_results(data):
 # ── 子命令处理 ──────────────────────────────────────────────
 
 
-def _print_footer(cached):
+def _print_footer():
     """打印调用成本提示"""
     print(f"\n--- {COST_PER_CALL} ---")
 
@@ -387,7 +387,7 @@ def cmd_search(args):
     result, cached = api_post("/open/law_vector_search", body)
     data = result.get("extra", {}).get("fatiao", result.get("data", []))
     print(format_law_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_keyword(args):
@@ -410,7 +410,7 @@ def cmd_keyword(args):
     result, cached = api_post("/open/rh_ft_search", body)
     data = result.get("data", [])
     print(format_law_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_detail(args):
@@ -422,7 +422,7 @@ def cmd_detail(args):
     data = result.get("data")
     items = [data] if isinstance(data, dict) else (data or [])
     print(format_law_results(items))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_case(args):
@@ -471,7 +471,7 @@ def cmd_case(args):
     if total is not None:
         print(f"共 {total} 条结果，显示前 {len(data)} 条\n")
     print(format_case_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_case_semantic(args):
@@ -504,7 +504,7 @@ def cmd_case_semantic(args):
     result, cached = api_post("/open/case_vector_search", body)
     data = result.get("extra", {}).get("wenshu", result.get("data", []))
     print(format_case_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_case_detail(args):
@@ -523,7 +523,7 @@ def cmd_case_detail(args):
         print(format_case_results(data))
     elif isinstance(data, dict):
         print(format_case_results([data]))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_regulation(args):
@@ -548,7 +548,7 @@ def cmd_regulation(args):
     result, cached = api_post("/open/rh_fg_search", body)
     data = result.get("data", [])
     print(format_regulation_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_regulation_detail(args):
@@ -569,7 +569,7 @@ def cmd_regulation_detail(args):
         print(format_regulation_results(data))
     elif isinstance(data, dict):
         print(format_regulation_results([data]))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_enterprise(args):
@@ -578,9 +578,13 @@ def cmd_enterprise(args):
     if args.num:
         params["num"] = args.num
     result, cached = api_get("/open/rh_company_info", params)
-    data = result.get("data", [])
+    raw = result.get("data")
+    data = raw.get("lst", []) if isinstance(raw, dict) else (raw or [])
+    total = raw.get("total") if isinstance(raw, dict) else None
+    if total is not None:
+        print(f"共 {total} 条结果，显示前 {len(data)} 条\n")
     print(format_enterprise_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_enterprise_detail(args):
@@ -596,7 +600,7 @@ def cmd_enterprise_detail(args):
     result, cached = api_get("/open/rh_company_detail", params)
     data = result.get("data", {})
     print(format_enterprise_results(data))
-    _print_footer(cached)
+    _print_footer()
 
 
 def cmd_archive_list(args):
@@ -663,7 +667,7 @@ def cmd_raw(args):
     else:
         result, cached = api_post(endpoint, body, use_cache=use_cache)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    _print_footer(cached)
+    _print_footer()
 
 
 # ── 参数解析 ──────────────────────────────────────────────
@@ -673,12 +677,6 @@ def _add_law_filters(parser):
     """法条通用筛选参数"""
     parser.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     parser.add_argument("--sxx", action="append", help="时效性（可多次指定）")
-
-
-def _add_case_filters(parser):
-    """案例通用筛选参数"""
-    parser.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
-    parser.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
 
 
 def build_parser():
@@ -775,7 +773,7 @@ def build_parser():
 
     # ── regulation ──
     p = sub.add_parser("regulation", help="法规关键词检索")
-    p.add_argument("query", nargs="?", default="", help="关键词")
+    p.add_argument("query", help="关键词")
     p.add_argument("--search-mode", choices=["and", "or"], default="and")
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")

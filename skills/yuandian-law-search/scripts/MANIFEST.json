@@ -1,13 +1,11 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "files": [
     "SKILL.md",
     "CHANGELOG.md",
     "scripts/yd_search.py",
     "scripts/updater.py",
     "scripts/.env.example",
-    "references/00-interface-priority.md",
-    "references/00-retrieval-mode-guide.md",
     "references/01-law-vector-search.md",
     "references/02-law-keyword-search.md",
     "references/03-law-detail.md",
