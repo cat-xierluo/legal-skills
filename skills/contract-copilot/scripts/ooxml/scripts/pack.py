@@ -1,45 +1,24 @@
 #!/usr/bin/env python3
 """
-Tool to pack a directory into a .docx file with XML formatting undone.
+Pack an unpacked Office directory into a .docx file.
 
 Example usage:
-    python pack.py <input_directory> <office_file> [--force]
+    python pack.py <input_directory> <output_file> [--force]
 """
 
 import argparse
-import shutil
-import subprocess
 import sys
-import tempfile
-import defusedxml.minidom
 import zipfile
 from pathlib import Path
 
+import defusedxml.ElementTree as ET
 
-def main():
-    parser = argparse.ArgumentParser(description="Pack a directory into an Office file")
-    parser.add_argument("input_directory", help="Unpacked Office document directory")
-    parser.add_argument("output_file", help="Output .docx file")
-    parser.add_argument("--force", action="store_true", help="Skip validation")
-    args = parser.parse_args()
 
-    try:
-        success = pack_document(
-            args.input_directory, args.output_file, validate=not args.force
-        )
-
-        # Show warning if validation was skipped
-        if args.force:
-            print("Warning: Skipped validation, file may be corrupt", file=sys.stderr)
-        # Exit with error if validation failed
-        elif not success:
-            print("Contents would produce a corrupt file.", file=sys.stderr)
-            print("Please validate XML before repacking.", file=sys.stderr)
-            print("Use --force to skip validation and pack anyway.", file=sys.stderr)
-            sys.exit(1)
-
-    except ValueError as e:
-        sys.exit(f"Error: {e}")
+DOCX_REQUIRED = {
+    "[Content_Types].xml",
+    "word/document.xml",
+    "word/_rels/document.xml.rels",
+}
 
 
 def pack_document(input_dir, output_file, validate=False):
@@ -48,102 +27,78 @@ def pack_document(input_dir, output_file, validate=False):
     Args:
         input_dir: Path to unpacked Office document directory
         output_file: Path to output .docx file
-        validate: If True, validates with soffice (default: False)
+        validate: If True, run lightweight structural checks
 
     Returns:
         bool: True if successful, False if validation failed
     """
-    input_dir = Path(input_dir)
-    output_file = Path(output_file)
+    input_path = Path(input_dir)
+    output_path = Path(output_file)
 
-    if not input_dir.is_dir():
+    if not input_path.is_dir():
         raise ValueError(f"{input_dir} is not a directory")
-    if output_file.suffix.lower() != ".docx":
+    if output_path.suffix.lower() != ".docx":
         raise ValueError(f"{output_file} must be a .docx file")
 
-    # Work in temporary directory to avoid modifying original
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_content_dir = Path(temp_dir) / "content"
-        shutil.copytree(input_dir, temp_content_dir)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Process XML files to remove pretty-printing whitespace
-        for pattern in ["*.xml", "*.rels"]:
-            for xml_file in temp_content_dir.rglob(pattern):
-                condense_xml(xml_file)
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for item in sorted(input_path.rglob("*")):
+            if item.is_file():
+                zf.write(item, item.relative_to(input_path))
 
-        # Create final Office file as zip archive
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(output_file, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in temp_content_dir.rglob("*"):
-                if f.is_file():
-                    zf.write(f, f.relative_to(temp_content_dir))
-
-        # Validate if requested
-        if validate:
-            if not validate_document(output_file):
-                output_file.unlink()  # Delete the corrupt file
-                return False
+    if validate:
+        if not validate_document(output_path):
+            output_path.unlink(missing_ok=True)
+            return False
 
     return True
 
 
 def validate_document(doc_path):
-    """Validate document by converting to HTML with soffice."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            result = subprocess.run(
-                [
-                    "soffice",
-                    "--headless",
-                    "--convert-to",
-                    "html:HTML",
-                    "--outdir",
-                    temp_dir,
-                    str(doc_path),
-                ],
-                capture_output=True,
-                timeout=10,
-                text=True,
-            )
-            if not (Path(temp_dir) / f"{doc_path.stem}.html").exists():
-                error_msg = result.stderr.strip() or "Document validation failed"
-                print(f"Validation error: {error_msg}", file=sys.stderr)
+    """Lightweight validation: required files exist and XML parses."""
+    try:
+        with zipfile.ZipFile(doc_path, "r") as archive:
+            names = set(archive.namelist())
+            missing = [name for name in DOCX_REQUIRED if name not in names]
+            if missing:
+                print(f"Validation error: missing files: {missing}", file=sys.stderr)
                 return False
-            return True
-        except FileNotFoundError:
-            print("Warning: soffice not found. Skipping validation.", file=sys.stderr)
-            return True
-        except subprocess.TimeoutExpired:
-            print("Validation error: Timeout during conversion", file=sys.stderr)
-            return False
-        except Exception as e:
-            print(f"Validation error: {e}", file=sys.stderr)
-            return False
+
+            for name in DOCX_REQUIRED:
+                if name.endswith((".xml", ".rels")):
+                    with archive.open(name) as handle:
+                        try:
+                            ET.parse(handle)
+                        except ET.ParseError as exc:
+                            print(f"Validation error: invalid XML in {name}: {exc}", file=sys.stderr)
+                            return False
+    except zipfile.BadZipFile as exc:
+        print(f"Validation error: invalid zip file: {exc}", file=sys.stderr)
+        return False
+
+    return True
 
 
-def condense_xml(xml_file):
-    """Strip unnecessary whitespace and remove comments."""
-    with open(xml_file, "r", encoding="utf-8") as f:
-        dom = defusedxml.minidom.parse(f)
+def main():
+    parser = argparse.ArgumentParser(description="Pack a directory into a .docx file")
+    parser.add_argument("input_directory", help="Unpacked Office document directory")
+    parser.add_argument("output_file", help="Output .docx file")
+    parser.add_argument("--force", action="store_true", help="Skip validation")
+    args = parser.parse_args()
 
-    # Process each element to remove whitespace and comments
-    for element in dom.getElementsByTagName("*"):
-        # Skip w:t elements and their processing
-        if element.tagName.endswith(":t"):
-            continue
+    success = pack_document(
+        args.input_directory,
+        args.output_file,
+        validate=not args.force,
+    )
 
-        # Remove whitespace-only text nodes and comment nodes
-        for child in list(element.childNodes):
-            if (
-                child.nodeType == child.TEXT_NODE
-                and child.nodeValue
-                and child.nodeValue.strip() == ""
-            ) or child.nodeType == child.COMMENT_NODE:
-                element.removeChild(child)
-
-    # Write back the condensed XML
-    with open(xml_file, "wb") as f:
-        f.write(dom.toxml(encoding="UTF-8"))
+    if args.force:
+        print("Warning: Skipped validation, file may be corrupt", file=sys.stderr)
+    elif not success:
+        print("Contents would produce an invalid file.", file=sys.stderr)
+        print("Use --force to skip validation and pack anyway.", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

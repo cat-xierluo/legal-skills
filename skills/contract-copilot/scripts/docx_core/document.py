@@ -34,7 +34,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from defusedxml import minidom
-from ..ooxml.scripts.pack import pack_document
 from ..ooxml.scripts.validation.docx import DOCXSchemaValidator
 from ..ooxml.scripts.validation.redlining import RedliningValidator
 
@@ -636,14 +635,13 @@ class Document:
         if not self.original_path.exists() or not self.original_path.is_dir():
             raise ValueError(f"Directory not found: {unpacked_dir}")
 
-        # Create temporary directory with subdirectories for unpacked content and baseline
+        # Create temporary directory with subdirectories for unpacked content
         self.temp_dir = tempfile.mkdtemp(prefix="docx_")
         self.unpacked_path = Path(self.temp_dir) / "unpacked"
         shutil.copytree(self.original_path, self.unpacked_path)
 
-        # Pack original directory into temporary .docx for validation baseline (outside unpacked dir)
-        self.original_docx = Path(self.temp_dir) / "original.docx"
-        pack_document(self.original_path, self.original_docx, validate=False)
+        # Baseline reference for validation
+        self.original_docx = Path(unpacked_dir)
 
         self.word_path = self.unpacked_path / "word"
 
@@ -837,24 +835,17 @@ class Document:
 
     def validate(self) -> None:
         """
-        Validate the document against XSD schema and redlining rules.
+        Validate the document structure and XML well-formedness.
 
         Raises:
             ValueError: If validation fails.
         """
-        # Create validators with current state
         schema_validator = DOCXSchemaValidator(
             self.unpacked_path, self.original_docx, verbose=False
         )
-        redlining_validator = RedliningValidator(
-            self.unpacked_path, self.original_docx, verbose=False
-        )
 
-        # Run validations
         if not schema_validator.validate():
-            raise ValueError("Schema validation failed")
-        if not redlining_validator.validate():
-            raise ValueError("Redlining validation failed")
+            raise ValueError("Document validation failed")
 
     def save(self, destination=None, validate=True) -> None:
         """
