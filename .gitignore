@@ -12,6 +12,7 @@ templates/
 .claude/commands/
 .claude/plans/
 .claude/*.json
+!.claude/settings.local.json
 **/DECISIONS.md
 **/TASKS.md
 !CLAUDE.md
