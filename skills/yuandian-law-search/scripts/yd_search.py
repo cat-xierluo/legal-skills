@@ -128,7 +128,7 @@ def _archive_save(endpoint, payload, response):
 def api_post(endpoint, body, use_cache=True):
     """发送 POST 请求到元典开放平台 API（支持归档查重）"""
     if use_cache:
-        cached, archive_path = _archive_lookup(endpoint, body)
+        cached, _ = _archive_lookup(endpoint, body)
         if cached is not None:
             return cached, True
 
@@ -153,7 +153,7 @@ def api_post(endpoint, body, use_cache=True):
 def api_get(endpoint, params=None, use_cache=True):
     """发送 GET 请求到元典开放平台 API（支持归档查重）"""
     if use_cache:
-        cached, archive_path = _archive_lookup(endpoint, params or {})
+        cached, _ = _archive_lookup(endpoint, params or {})
         if cached is not None:
             return cached, True
 
@@ -442,7 +442,7 @@ def cmd_case(args):
             body[field] = val
     if args.ajlb:
         body["ajlb"] = args.ajlb
-    for date_field in ("ja_start", "ja_end"):
+    for date_field in ("jarq_start", "jarq_end"):
         val = getattr(args, date_field, None)
         if val:
             body[date_field] = val
@@ -494,7 +494,7 @@ def cmd_case_semantic(args):
         wenshu_filter["dianxing"] = True
     if args.cj:
         wenshu_filter["cj"] = args.cj
-    for date_field in ("ja_start", "ja_end"):
+    for date_field in ("jarq_start", "jarq_end"):
         val = getattr(args, date_field, None)
         if val:
             wenshu_filter[date_field] = val

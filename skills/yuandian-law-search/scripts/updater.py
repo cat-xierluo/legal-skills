@@ -11,12 +11,13 @@
       skill_root=Path(__file__).resolve().parent.parent,
       repo_raw_base="https://raw.githubusercontent.com/{owner}/{repo}/main/{skill_subdir}",
       commits_feed="https://github.com/{owner}/{repo}/commits/main/{skill_subdir}.atom",
-      current_version="1.1.0",
+      current_version="1.1.1",
   )
   updater.check_for_update()
 """
 
 import json
+import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -97,8 +98,11 @@ class SkillUpdater:
 
     def _download_file(self, remote_rel_path):
         """从 GitHub 下载单个文件到 skill 目录"""
+        local_path = (self.skill_root / remote_rel_path).resolve()
+        if not local_path.is_relative_to(self.skill_root.resolve()):
+            print(f"  ⚠ 跳过非法路径: {remote_rel_path}", file=sys.stderr)
+            return False
         url = f"{self.repo_raw_base}/{remote_rel_path}"
-        local_path = self.skill_root / remote_rel_path
         req = Request(url, headers={"User-Agent": "skill-updater"})
         try:
             with urlopen(req, timeout=30) as resp:
@@ -249,7 +253,7 @@ class SkillUpdater:
         return True
 
     def cmd_do_update(self):
-        """执行更新：从远程下载 MANIFEST.txt 中的文件（仅覆盖 skill 目录，不碰 .env 和 archive）"""
+        """执行更新：从远程下载 MANIFEST.json 中的文件（仅覆盖 skill 目录，不碰 .env 和 archive）"""
         print(f"正在更新 ...")
         print(f"本地路径: {self.skill_root}")
         print(f"远程源:   {self.repo_raw_base}\n")
