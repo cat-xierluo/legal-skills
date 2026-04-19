@@ -611,6 +611,12 @@ def ensure_diarization_support_available():
         raise RuntimeError("缺少 CAM++ 聚类依赖，无法执行 ONNX 说话人分离流程")
 
 
+def ensure_onnx_segment_support_available():
+    """检查 ONNX VAD 分段转录所需依赖。"""
+    if not LIBROSA_AVAILABLE:
+        raise RuntimeError("缺少 librosa 依赖，无法执行 ONNX VAD 分段转录流程")
+
+
 def get_onnx_model_class(model_alias: str):
     """根据逻辑模型名返回 ONNX 类。"""
     config = MODEL_ALIASES.get(model_alias, {})
@@ -1005,20 +1011,18 @@ def transcribe_with_onnx_model(file_path: str, model_alias: str, model_id: str =
     return build_onnx_result(result, apply_punc=apply_punc)
 
 
-def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = None,
-                                                quantize: bool = False) -> dict:
-    """ONNX Paraformer + ONNX VAD + CAM++ 聚类组合路径。"""
+def transcribe_paraformer_onnx_segments(file_path: str, model_id: str = None,
+                                        quantize: bool = False) -> tuple[dict, list]:
+    """使用 ONNX VAD 切段执行 Paraformer ONNX 转录。"""
     ensure_onnx_runtime_available()
-    ensure_diarization_support_available()
+    ensure_onnx_segment_support_available()
 
     vad_model = init_onnx_vad_model(quantize=quantize)
     asr_model = init_onnx_model("paraformer-onnx", model_id=model_id, quantize=quantize)
-    speaker_model = init_speaker_model()
-    cluster_backend = get_cluster_backend()
 
     waveform, sample_rate = librosa.load(file_path, sr=16000)
     if sample_rate != 16000:
-        raise RuntimeError(f"ONNX diarization 需要 16k 音频，实际采样率为 {sample_rate}")
+        raise RuntimeError(f"ONNX VAD 分段转录需要 16k 音频，实际采样率为 {sample_rate}")
 
     vad_segments = normalize_vad_segments(call_onnx_vad_model(vad_model, waveform.astype(np.float32)))
     if not vad_segments:
@@ -1030,7 +1034,7 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
             result.get("text", ""),
             result.get("timestamp", []),
         )
-        return result
+        return result, []
 
     sentence_info = []
     combined_texts = []
@@ -1066,8 +1070,42 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
         )
 
     if not sentence_info:
-        return {"text": "", "timestamp": [], "sentence_info": []}
+        return {"text": "", "timestamp": [], "sentence_info": []}, vad_segment_payloads
 
+    return {
+        "text": join_text_fragments(combined_texts),
+        "timestamp": combined_timestamps,
+        "sentence_info": sentence_info,
+    }, vad_segment_payloads
+
+
+def transcribe_paraformer_onnx_single(file_path: str, model_id: str = None,
+                                      quantize: bool = False) -> dict:
+    """单人 Paraformer ONNX 路径：VAD 分段 ASR，不做说话人聚类。"""
+    result, _ = transcribe_paraformer_onnx_segments(
+        file_path,
+        model_id=model_id,
+        quantize=quantize,
+    )
+    return result
+
+
+def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = None,
+                                                quantize: bool = False) -> dict:
+    """ONNX Paraformer + ONNX VAD + CAM++ 聚类组合路径。"""
+    ensure_diarization_support_available()
+
+    result, vad_segment_payloads = transcribe_paraformer_onnx_segments(
+        file_path,
+        model_id=model_id,
+        quantize=quantize,
+    )
+    sentence_info = result.get("sentence_info", [])
+    if not sentence_info or not vad_segment_payloads:
+        return result
+
+    speaker_model = init_speaker_model()
+    cluster_backend = get_cluster_backend()
     speaker_chunks = sv_chunk(vad_segment_payloads)
     if speaker_chunks:
         speaker_results, _ = speaker_model.model.inference(
@@ -1090,11 +1128,7 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
         )
         distribute_spk(sentence_info, speaker_regions)
 
-    return {
-        "text": join_text_fragments(combined_texts),
-        "timestamp": combined_timestamps,
-        "sentence_info": sentence_info,
-    }
+    return result
 
 
 def resolve_requested_model(model_name: Optional[str]) -> str:
@@ -1153,8 +1187,14 @@ def run_transcription(file_path: str, resolved: dict) -> dict:
             return result[0]
         return result
 
-    if resolved["model"] == "paraformer-onnx" and resolved["diarize"]:
-        return transcribe_paraformer_onnx_with_diarization(
+    if resolved["model"] == "paraformer-onnx":
+        if resolved["diarize"]:
+            return transcribe_paraformer_onnx_with_diarization(
+                file_path,
+                model_id=resolved["model_id"],
+                quantize=resolved["quantize"],
+            )
+        return transcribe_paraformer_onnx_single(
             file_path,
             model_id=resolved["model_id"],
             quantize=resolved["quantize"],

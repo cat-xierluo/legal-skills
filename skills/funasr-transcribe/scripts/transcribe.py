@@ -193,8 +193,11 @@ def main():
   # 单人快速模式（关闭说话人分离，保留默认 Paraformer）
   python transcribe.py /path/to/course.m4a --fast
 
-  # 指定 Paraformer ONNX
+  # 指定 Paraformer ONNX（默认启用说话人分离）
   python transcribe.py /path/to/meeting.m4a --model paraformer-onnx
+
+  # Paraformer ONNX 单人路径（VAD 分段 ASR，不做说话人聚类）
+  python transcribe.py /path/to/course.m4a --model paraformer-onnx --no-diarize
 
   # 批量转录目录
   python transcribe.py /path/to/media_folder/ --batch

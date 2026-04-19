@@ -44,7 +44,28 @@ CLI、API 文档和服务端路由语义均同步为“fast = 不分轨”，而
 **影响**
 完整 18 分 07 秒多人样本耗时约 `291.332s`，约 `3.73x realtime`；相对原生多人 `551.59s` 仍约 `1.89x` 更快。
 
+### [DEC-004] - 2026-04-19 - 单人 Paraformer ONNX 也使用 VAD 分段 ASR
+
+**背景**
+排查 5 分钟单人讲课样本时发现，旧单人 `paraformer-onnx` 路径直接整段调用 ONNX ASR，而多人 `paraformer-onnx + diarize` 路径会先使用 ONNX VAD 切段，再逐段 ASR、清理文本、恢复标点并重建句子级时间戳。整段 ONNX 在长音频上质量塌缩明显，且速度没有优势。
+
+**决策**
+新增共享的 `transcribe_paraformer_onnx_segments()`，让单人 `paraformer-onnx` 与多人 `paraformer-onnx + diarize` 复用同一套 ONNX VAD 分段 ASR 后处理；多人路径仅额外执行 CAM++ 说话人聚类。
+
+**理由**
+同一 5 分钟样本上，旧整段 ONNX 耗时约 `37.489s`，相对原生 `paraformer` 文本相似度约 `0.6079`；VAD 分段 ONNX 稳态耗时约 `17.508s`，去除标点/空白后的相似度约 `0.9829`。这说明核心问题是单人路由参数和后处理不足，而不是 ONNX 模型本身不适合单人场景。
+
+**影响**
+显式指定 `model=paraformer-onnx, diarize=false` 或在 `server-onnx.py` 默认 ONNX 服务中使用 `fast=true` 时，单人路径会走 VAD 分段 ASR，不再整段转录。`sensevoice` / `sensevoice-onnx` 仍保留原直接 ONNX 路径。
+
 ## 工作日志
+
+### 2026-04-19 13:16 (Codex)
+
+- **目标:** 排查单人 `paraformer-onnx` 是否缺少多人 ONNX 的参数和后处理调优。
+- **操作:** 对比单人整段 ONNX、单人 VAD 分段 ONNX 与原生 Paraformer；将 `paraformer-onnx` 非 diarization 路由改为共享 ONNX VAD 分段 ASR；同步 SKILL、API 文档、任务和变更记录。
+- **结果:** 5 分钟样本旧整段 ONNX 耗时约 `37.489s` 且相似度约 `0.6079`；改后实际路由稳态耗时约 `17.508s`，去标点/空白相似度约 `0.9829`。
+- **下一步:** 如继续优化单人 ONNX，可优先补领域词表/AI 校对；不建议回到整段 ONNX 作为默认方案。
 
 ### 2026-04-19 00:55 (Codex)
 

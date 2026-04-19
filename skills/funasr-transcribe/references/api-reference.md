@@ -69,7 +69,7 @@ Content-Type: application/json
 | `fast` | boolean | 否 | 单人快速模式；关闭 diarization，默认保留 `paraformer` |
 | `quantize` | boolean | 否 | ONNX 模式是否启用 INT8 量化 |
 
-> `paraformer-onnx + diarize` 会在服务端补做 ONNX 文本清理、标点恢复和句子级时间戳映射；该路径适合需要多人分离且优先考虑速度的场景。质量优先时仍建议使用原生 `paraformer + diarize`。
+> `paraformer-onnx` 单人和多人路径都会先使用 ONNX VAD 分段，再补做 ONNX 文本清理、标点恢复和句子级时间戳映射；`diarize=true` 时额外执行 CAM++ 说话人聚类。质量优先时仍建议使用原生 `paraformer`。
 > 默认文本源为清理后的 `preds`；如需回退到 `raw_tokens`，可在启动服务前设置 `FUNASR_ONNX_TEXT_SOURCE=raw_tokens`。
 
 **支持的格式**
@@ -135,6 +135,11 @@ curl -X POST http://127.0.0.1:8765/transcribe \
 curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/meeting.m4a", "model": "paraformer-onnx", "diarize": true}'
+
+# Paraformer ONNX 单人路径（VAD 分段 ASR，不做说话人聚类）
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/course.m4a", "model": "paraformer-onnx", "diarize": false}'
 
 # 单人快速模式（关闭说话人分离，保留默认 Paraformer）
 curl -X POST http://127.0.0.1:8765/transcribe \

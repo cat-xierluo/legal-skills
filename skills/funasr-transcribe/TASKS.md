@@ -8,6 +8,7 @@
 - [x] 将 `fast` 语义调整为仅关闭 diarization，默认保留 `paraformer`
 - [x] 调参与修复多人 `paraformer-onnx + diarize` 输出质量，补齐文本重建、标点恢复和句子级时间戳
 - [x] 对多人 ONNX 参数进行 90 秒样本对比，确定默认保留 VAD 切段并改用清理后的 `preds` 文本源
+- [x] 修复单人 `paraformer-onnx` 未复用 VAD 分段后处理导致的速度和质量劣化
 
 ## 后续待办
 

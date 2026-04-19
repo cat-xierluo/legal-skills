@@ -15,8 +15,8 @@ FunASR 自动转录 + 总结脚本
 选项:
     --output PATH       输出 Markdown 文件路径（默认与音频同目录）
     --diarize           启用说话人分离
-    --model MODEL       指定模型（paraformer / paraformer-onnx / sensevoice）
-    --fast             单人快速模式（自动关闭 diarization）
+    --model MODEL       指定模型（paraformer / paraformer-onnx / sensevoice / sensevoice-onnx）
+    --fast             单人快速模式（自动关闭 diarization，保留当前模型路径）
     --no-summary       跳过总结步骤
     --prompt-only      只返回总结提示词，不生成总结
     --api URL          API 地址（默认 http://127.0.0.1:8765）
@@ -24,6 +24,7 @@ FunASR 自动转录 + 总结脚本
 示例:
     python auto_transcribe.py /path/to/audio.aac
     python auto_transcribe.py /path/to/audio.mp4 --diarize
+    python auto_transcribe.py /path/to/course.m4a --model paraformer-onnx --no-diarize
     python auto_transcribe.py /path/to/audio.m4a --prompt-only
 """
 
