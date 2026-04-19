@@ -2,6 +2,65 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.9.4] - 2026-04-19
+
+### 修复
+
+- **ONNX 导出依赖延迟加载** — 移除 `torch` 与 `funasr.utils.export_utils` 的模块级导入，仅在 ONNX 兼容导出时按需加载，避免非 ONNX 路径受 FunASR 内部导出模块变更影响
+- **ONNX 导出猴子补丁显式失败** — 对 `funasr.utils.export_utils._onnx` 增加存在性检查；当 FunASR 内部 API 变化时直接报错，而不是静默回退到不兼容导出路径
+
+### 改进
+
+- **模型下载与兼容缓存提示** — 模型缺失时打印下载提示，ONNX 兼容导出缓存增加 `compat_export_version` 过期检查，并提示缓存目录可删除后重建
+- **ONNX 后处理兼容说明** — 为 funasr-onnx VAD 兼容补丁、raw token 归一化和句子级时间戳近似映射补充注释与文档说明
+- **中文标点切句增强** — `split_text_by_punctuation()` 增补顿号和冒号，减少长句合并
+
+## [1.9.3] - 2026-04-19
+
+### 改进
+
+- **单人 Paraformer ONNX 全局标点恢复** — `paraformer-onnx` 关闭 diarization 时，先拼接 VAD 分段 ASR 文本，再统一做一次标点恢复，减少逐段标点带来的边界断裂
+- **单人 ONNX 速度进一步提升** — 5 分钟讲课样本中，单人 ONNX 分段路径的服务常驻第二次耗时从约 `17.508s` 降至约 `11.751s`
+- **单人 ONNX 文本格式更接近原生 Paraformer** — 同一样本中，原始文本相似度从约 `0.9607` 提升至约 `0.9733`，去除标点/空白后的相似度约 `0.9829`
+
+### 技术优化
+
+- **保留 VAD 默认阈值** — 对比 `max_end_sil=600/800/1000/1200` 及相邻段合并策略后，确认默认 `800ms` 在单人 5 分钟样本上质量最佳，暂不引入新的 VAD 合并参数
+
+## [1.9.2] - 2026-04-19
+
+### 修复
+
+- **单人 Paraformer ONNX 整段推理质量差** — `paraformer-onnx` 在关闭 diarization 时不再直接整段调用 ONNX ASR，改为复用多人路径的 ONNX VAD 分段 ASR、文本清理、标点恢复和句子级时间戳映射
+
+### 改进
+
+- **单人 ONNX 稳态速度提升** — 5 分钟讲课样本中，旧单人 ONNX 整段推理耗时约 `37.489s`；改为 VAD 分段后，服务常驻同进程第二次耗时约 `17.508s`
+- **单人 ONNX 质量恢复** — 同一样本中，旧整段 ONNX 相对原生 `paraformer` 的文本相似度约 `0.6079`；改为 VAD 分段后，去除标点/空白后的相似度约 `0.9829`
+- **ONNX 路由一致性** — `paraformer-onnx` 单人和多人现在共享同一套 VAD 分段 ASR 后处理，多人路径仅额外执行 CAM++ 说话人聚类
+
+## [1.9.1] - 2026-04-19
+
+### 修复
+
+- **ONNX 兼容导出失败** — 为 Python 3.14 / PyTorch 2.11 环境补充 FunASR ONNX 兼容导出层，强制使用 `dynamo=False` 与 opset 18，并将产物缓存到 `~/.cache/funasr-onnx-compat`
+- **ONNX VAD `feats_len` 兼容问题** — 修复 `funasr_onnx` 当前版本将数组长度当作标量处理导致的 VAD 调用失败
+- **auto_transcribe 自动启动服务失败** — 修复自动拉起服务后健康检查未传入 `api_url` 的问题，并按传入 API 地址设置 host/port
+
+### 改进
+
+- **多人 ONNX 文本质量优化** — `paraformer-onnx + diarize` 会清理 ONNX 文本输出，修复逐字空格问题，并补做标点恢复
+- **ONNX 文本源调参** — 默认文本源从 `raw_tokens` 调整为清理后的 `preds`，并保留 `FUNASR_ONNX_TEXT_SOURCE=raw_tokens` 回退开关；90 秒样本相对原生 `paraformer` 的文本相似度从约 `0.9911` 提升到 `0.9974`
+- **多人 ONNX 时间戳优化** — 按补完标点后的句子重新映射时间戳，避免整段 VAD 片段只输出一个粗时间点
+- **中文输出拼接优化** — 合并同一说话人的句子时使用中文友好的拼接逻辑，减少无意义空格
+- **fast 路由回归 Paraformer** — `fast` 仅关闭 diarization，不再自动切到 SenseVoice；`sensevoice` 保留为显式实验选项
+
+### 验证
+
+- 使用 18 分 07 秒多人微信通话样本验证：修复后的 `paraformer-onnx + diarize` 耗时约 `272.443s`，约 `3.99x realtime`
+- 文本源调参后同一完整样本耗时约 `291.332s`，约 `3.73x realtime`
+- 与此前同样本原生 `paraformer + diarize` 基线 `551.59s` 相比，最终默认配置仍保留约 `1.89x` 速度优势
+
 ## [1.9.0] - 2026-04-16
 
 ### 新增

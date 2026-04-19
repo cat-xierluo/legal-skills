@@ -66,8 +66,12 @@ Content-Type: application/json
 | `diarize` | boolean | 否 | 是否启用说话人分离（默认：true） |
 | `model` | string | 否 | 逻辑模型名：`paraformer`、`paraformer-onnx`、`sensevoice`、`sensevoice-onnx` |
 | `model_id` | string | 否 | 自定义底层模型 ID |
-| `fast` | boolean | 否 | 单人快速模式；自动切到 SenseVoice 并关闭 diarization |
+| `fast` | boolean | 否 | 单人快速模式；关闭 diarization，默认保留 `paraformer` |
 | `quantize` | boolean | 否 | ONNX 模式是否启用 INT8 量化 |
+
+> `paraformer-onnx` 单人和多人路径都会先使用 ONNX VAD 分段，再补做 ONNX 文本清理、标点恢复和句子级时间戳映射；`diarize=false` 时使用全局标点恢复，`diarize=true` 时使用逐段标点并额外执行 CAM++ 说话人聚类。质量优先时仍建议使用原生 `paraformer`。
+> 默认文本源为清理后的 `preds`；如需回退到 `raw_tokens`，可在启动服务前设置 `FUNASR_ONNX_TEXT_SOURCE=raw_tokens`。
+> ONNX 句子级时间戳通过字符比例近似映射 token 时间戳，适合段落级定位，不代表逐字强对齐。
 
 **支持的格式**
 
@@ -133,7 +137,12 @@ curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/meeting.m4a", "model": "paraformer-onnx", "diarize": true}'
 
-# 单人快速模式（SenseVoice-Small ONNX）
+# Paraformer ONNX 单人路径（VAD 分段 ASR，不做说话人聚类）
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/course.m4a", "model": "paraformer-onnx", "diarize": false}'
+
+# 单人快速模式（关闭说话人分离，保留默认 Paraformer）
 curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/course.m4a", "fast": true}'
@@ -225,7 +234,7 @@ curl -X POST http://127.0.0.1:8765/batch_transcribe \
   -H "Content-Type: application/json" \
   -d '{"directory": "/path/to/meetings", "diarize": true}'
 
-# 批量单人快速模式
+# 批量单人快速模式（关闭说话人分离，保留默认 Paraformer）
 curl -X POST http://127.0.0.1:8765/batch_transcribe \
   -H "Content-Type: application/json" \
   -d '{"directory": "/path/to/courses", "fast": true}'
