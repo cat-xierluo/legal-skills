@@ -2,7 +2,7 @@
 name: opc-legal-counsel
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.4"
+version: "0.2.5"
 description: 面向 OPC（One Person Company，一人公司 / 单人创业者 + AI 协同）与小微企业经营场景的常年法律顾问技能。适用于用户咨询公司设立、公私分离、股权架构、联合创始人安排、融资分诊、股权激励、合同审查、税务红线、AI 产品上线、数据与知识产权合规、劳动、监管、争议应对等问题时使用。先判断适用地域、公司阶段与问题性质，再进行多领域路由与定向检索编排，默认输出“一句话结论 + 关键事实缺口 + 红线风险 + 可执行动作 + 升级边界 + 法律依据”，不直接代替执业律师出具正式法律意见。
 license: CC-BY-NC
 ---

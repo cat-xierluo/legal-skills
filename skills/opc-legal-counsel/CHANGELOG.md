@@ -1,5 +1,21 @@
 # 变更日志
 
+## [0.2.5] - 2026-04-19
+
+### 改进
+
+- 精简目录结构：12 目录 → 9 目录，68 文件 → 63 文件
+- 扁平化 `assets/output-templates/` → `assets/template-*.md`，消除不必要的二级目录
+- 扁平化 `references/industry/` → `references/industry-*.md`，加前缀区分
+- 扁平化 `references/local-policies/opc/` → `references/local-policies/opc-*.md`，消除三级嵌套
+- 删除 4 个冗余子目录 README（examples/evals/industry/output-templates）
+- 删除 `assets/compliance-quick-ref.md`，消除与 references/ 的知识重复，改为直接加载对应核心领域文件
+
+### 移除
+
+- `DISCLAIMER.md`（免责声明已整合到 SKILL.md 和 README.md）
+- `examples/README.md`、`evals/README.md`、`references/industry/README.md`、`assets/output-templates/README.md`
+
 ## [0.2.4] - 2026-04-19
 
 ### 新增
