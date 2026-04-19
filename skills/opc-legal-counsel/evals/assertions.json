@@ -1,0 +1,375 @@
+{
+  "skill_name": "opc-legal-counsel",
+  "version": "0.2.4",
+  "answer_file_convention": "<outputs-dir>/<eval_id>.md",
+  "assertion_types": {
+    "contains_any": "回答文本至少包含 terms 中任一关键词",
+    "contains_all": "回答文本必须包含 terms 中全部关键词",
+    "contains_any_per_group": "每个分组至少命中一个关键词，用于检查多个要点是否同时覆盖",
+    "not_contains_any": "回答文本不得包含 terms 中任一高风险表述"
+  },
+  "cases": [
+    {
+      "eval_id": "foundation-02-first-client-contract",
+      "minimum_passed_assertions": 4,
+      "assertions": [
+        {
+          "id": "fixed-output-structure",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "结论", "terms": ["一句话结论", "结论"]},
+            {"label": "事实缺口", "terms": ["事实缺口", "当前假设", "需要确认"]},
+            {"label": "短期动作", "terms": ["24 小时", "24小时", "立即", "现在就做"]},
+            {"label": "升级边界", "terms": ["升级", "律师", "专业机构"]}
+          ]
+        },
+        {
+          "id": "contract-core-gaps",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "验收", "terms": ["验收标准", "验收方式", "验收期限", "视为验收"]},
+            {"label": "变更", "terms": ["变更流程", "需求变更", "追加费用", "返工"]},
+            {"label": "尾款", "terms": ["尾款", "剩余 40%", "剩余40%", "付款条件", "里程碑"]}
+          ]
+        },
+        {
+          "id": "ip-and-delivery-boundary",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "知识产权", "terms": ["知识产权", "代码归属", "著作权", "权属"]},
+            {"label": "交付边界", "terms": ["交付物", "源代码", "文档", "部署环境", "交付边界"]},
+            {"label": "留痕", "terms": ["留痕", "交付记录", "验收记录", "版本记录"]}
+          ]
+        },
+        {
+          "id": "no-vague-completion-trigger",
+          "type": "not_contains_any",
+          "terms": ["项目完成后支付即可", "按项目完成付款即可", "不需要明确验收", "先签了再说"]
+        }
+      ]
+    },
+    {
+      "eval_id": "foundation-03-private-account-collection",
+      "minimum_passed_assertions": 4,
+      "assertions": [
+        {
+          "id": "recognize-fund-mixing-red-line",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "私户收款", "terms": ["个人微信", "个人银行卡", "私户", "个人账户"]},
+            {"label": "公私混同", "terms": ["公私混同", "公私混用", "公私分离"]},
+            {"label": "红线", "terms": ["红线", "高风险", "重大风险"]}
+          ]
+        },
+        {
+          "id": "stop-and-remedy-actions",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "停止", "terms": ["立即停止", "停止继续", "不要再用个人账户", "立即停用", "停用私户", "停止用个人"]},
+            {"label": "流水", "terms": ["流水", "付款记录", "收款记录"]},
+            {"label": "合同发票", "terms": ["合同", "发票", "开票"]},
+            {"label": "记账", "terms": ["记账", "账务", "会计处理"]}
+          ]
+        },
+        {
+          "id": "multi-domain-risk",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "治理", "terms": ["治理", "股东责任", "人格混同", "公私混同", "法人人格否认", "人格独立"]},
+            {"label": "税务", "terms": ["税务", "纳税", "发票"]},
+            {"label": "争议", "terms": ["争议", "举证", "证据"]}
+          ]
+        },
+        {
+          "id": "no-simple-transfer-cure",
+          "type": "not_contains_any",
+          "terms": ["转回公司即可解决", "补开发票就没有问题", "问题不大", "无需处理历史记录"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-03-ai-launch-checklist",
+      "minimum_passed_assertions": 4,
+      "assertions": [
+        {
+          "id": "ai-launch-core-scope",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "用户协议", "terms": ["用户协议", "服务协议"]},
+            {"label": "隐私", "terms": ["隐私政策", "个人信息", "数据最小化"]},
+            {"label": "模型来源", "terms": ["第三方模型", "模型来源", "模型服务"]},
+            {"label": "投诉入口", "terms": ["投诉", "举报", "反馈入口"]}
+          ]
+        },
+        {
+          "id": "generated-content-and-marketing",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "生成内容标识", "terms": ["生成内容标识", "AI 生成", "人工智能生成", "标识"]},
+            {"label": "营销审查", "terms": ["营销表述", "夸大宣传", "误导宣传", "广告"]},
+            {"label": "日志", "terms": ["日志", "留痕", "风控记录"]}
+          ]
+        },
+        {
+          "id": "variable-rule-verification",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "备案或公示", "terms": ["备案", "公示", "名单"]},
+            {"label": "核验", "terms": ["核验", "最新", "官方", "监管公告"]}
+          ]
+        },
+        {
+          "id": "no-privacy-only-answer",
+          "type": "not_contains_any",
+          "terms": ["只需要隐私政策", "只要写用户协议就可以", "不用做生成内容标识"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-05-data-breach-public-incident",
+      "minimum_passed_assertions": 4,
+      "assertions": [
+        {
+          "id": "first-24h-containment",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "停止扩散", "terms": ["停止扩散", "阻断", "暂停", "止损"]},
+            {"label": "权限", "terms": ["回收权限", "权限控制", "访问权限", "限制访问", "切断", "阻断扩散", "停止相关权限", "锁定", "冻结"]},
+            {"label": "日志", "terms": ["封存日志", "日志", "留痕"]},
+            {"label": "时间线", "terms": ["时间线", "影响范围", "受影响范围"]}
+          ]
+        },
+        {
+          "id": "escalation-required",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "外部律师", "terms": ["外部律师", "律师介入", "法律顾问"]},
+            {"label": "安全合规", "terms": ["安全团队", "合规团队", "安全或合规", "安全负责人", "信息安全", "数据安全"]},
+            {"label": "监管或通知评估", "terms": ["监管", "通知用户", "通知个人", "通知客户", "通知合作方"]}
+          ]
+        },
+        {
+          "id": "avoid-premature-admission",
+          "type": "contains_any",
+          "terms": ["不要在事实未清前承认责任", "不宜随意承认责任", "事实未清前不要对外定性", "不要发布失真说明", "谨慎对外", "不急于承认", "事实查明前", "不要随意回应", "未完成事实核查前", "避免在未完成"]
+        },
+        {
+          "id": "no-evidence-destruction",
+          "type": "not_contains_any",
+          "terms": ["先压热度不留痕", "不要留记录", "先承认全部责任", "把日志清掉", "清理掉日志"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-06-local-overlay-qingdao",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "national-baseline-first",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "全国基线", "terms": ["全国通用", "全国基线", "公司法", "通用规则"]},
+            {"label": "地方覆盖层", "terms": ["青岛", "地方覆盖层", "本地指引", "地方实践"]},
+            {"label": "层级区分", "terms": ["先", "再", "叠加", "不能替代", "除了", "之上", "此外"]}
+          ]
+        },
+        {
+          "id": "qingdao-source-awareness",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "青岛", "terms": ["青岛"]},
+            {"label": "结构化摘录", "terms": ["结构化摘录", "地方材料", "本地材料", "地方指引"]},
+            {"label": "适用范围", "terms": ["仅适用于", "仅作为参考", "适用地域", "地域变化", "地方实践", "本地参考", "不能替代全国"]}
+          ]
+        },
+        {
+          "id": "variable-local-rule",
+          "type": "contains_any",
+          "terms": ["因地域变化而变化", "需核验当地最新要求", "以当地窗口或主管部门最新要求为准", "地方规则可能变化", "以最新政策为准", "具体以当地要求为准", "核验最新来源"]
+        },
+        {
+          "id": "no-local-as-national",
+          "type": "not_contains_any",
+          "terms": ["青岛规则全国适用", "全国都按青岛执行", "地方指引就是全国规则"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-07-growth-advisor-equity",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "tool-comparison",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "顾问股", "terms": ["顾问股"]},
+            {"label": "收益分成", "terms": ["收益分成", "分成"]},
+            {"label": "期权", "terms": ["期权", "虚拟股权"]},
+            {"label": "现股", "terms": ["现股", "直接持股"]}
+          ]
+        },
+        {
+          "id": "vesting-and-exit",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "服务期限", "terms": ["服务期限", "服务期", "合作期限", "顾问期限"]},
+            {"label": "归属条件", "terms": ["归属条件", "成熟", "分期归属"]},
+            {"label": "退出回收", "terms": ["退出机制", "回收机制", "离场", "回购"]}
+          ]
+        },
+        {
+          "id": "financing-impact",
+          "type": "contains_any",
+          "terms": ["融资", "股权结构表", "cap table", "投资人尽调", "历史口头承诺"]
+        },
+        {
+          "id": "no-direct-percent-answer",
+          "type": "not_contains_any",
+          "terms": ["给 3% 可以", "给3%可以", "直接给 3%", "口头约好即可", "融资前再补就行"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-12-industry-ai-saas-beta",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "ai-saas-beta-scope",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "beta 页面", "terms": ["beta 页面", "试用页面", "页面提示", "beta"]},
+            {"label": "试用协议", "terms": ["试用协议", "客户协议", "服务协议"]},
+            {"label": "客户数据边界", "terms": ["客户数据边界", "数据使用边界", "客户数据"]},
+            {"label": "删除机制", "terms": ["删除机制", "留存期限", "退出删除"]}
+          ]
+        },
+        {
+          "id": "recording-chat-data-risk",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "录音", "terms": ["通话录音", "录音"]},
+            {"label": "聊天记录", "terms": ["聊天记录", "客服聊天"]},
+            {"label": "个人信息", "terms": ["个人信息", "敏感个人信息", "敏感数据"]}
+          ]
+        },
+        {
+          "id": "beta-not-compliance-free",
+          "type": "contains_any",
+          "terms": ["beta 不是免合规", "试用不是免合规", "不能因为试用就忽略", "beta 阶段也要合规", "试用期间仍需", "不能因为是试用", "beta 也不能", "不等于免除合规义务"]
+        },
+        {
+          "id": "no-beta-exemption",
+          "type": "not_contains_any",
+          "terms": ["beta 阶段不用合规", "试用可以先不签协议", "客户少就不用处理数据合规"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-14-employment-contractor-core-dev",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "employment-and-contract-classification",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "劳动关系", "terms": ["劳动关系", "用工实质", "管理从属性"]},
+            {"label": "外包合同", "terms": ["外包", "服务合同", "承揽", "委托开发"]},
+            {"label": "核心模块", "terms": ["核心模块", "核心代码", "代码仓库"]}
+          ]
+        },
+        {
+          "id": "ip-ownership-evidence",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "知识产权", "terms": ["知识产权", "著作权", "代码归属", "权属"]},
+            {"label": "证据", "terms": ["提交记录", "commit", "代码仓库", "交付记录", "开发记录"]},
+            {"label": "权限", "terms": ["权限", "账号", "仓库权限", "访问控制"]}
+          ]
+        },
+        {
+          "id": "exit-and-preservation-actions",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "交接", "terms": ["交接", "离场", "移交"]},
+            {"label": "封存", "terms": ["封存", "备份", "证据保全"]},
+            {"label": "停止扩大", "terms": ["停止扩大争议", "暂停变更", "避免覆盖", "避免继续", "冻结代码", "暂停发布"]}
+          ]
+        },
+        {
+          "id": "no-summary-dismissal",
+          "type": "not_contains_any",
+          "terms": ["外包写的代码都归公司", "按月结算就一定是劳动关系", "直接删除他的权限和记录即可"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-16-regulatory-market-inquiry",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "regulatory-response-frame",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "监管", "terms": ["监管", "市场监管", "询问", "问询"]},
+            {"label": "事实材料", "terms": ["事实材料", "材料清单", "说明材料", "时间线"]},
+            {"label": "内部口径", "terms": ["统一口径", "口径", "对外说明", "对外回复", "统一对外", "指定发言人"]}
+          ]
+        },
+        {
+          "id": "ad-and-ai-claims",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "广告宣传", "terms": ["广告", "营销表述", "宣传"]},
+            {"label": "AI 能力", "terms": ["AI 能力", "算法能力", "模型能力", "智能"]},
+            {"label": "夸大或误导", "terms": ["夸大", "误导", "绝对化", "虚假宣传"]}
+          ]
+        },
+        {
+          "id": "escalation-if-formal-procedure",
+          "type": "contains_any",
+          "terms": ["正式调查", "立案", "处罚", "律师介入", "外部律师"]
+        },
+        {
+          "id": "no-casual-admission",
+          "type": "not_contains_any",
+          "terms": ["先承认违法", "随便解释一下", "不用准备材料", "不需要律师"]
+        }
+      ]
+    },
+    {
+      "eval_id": "reinforcement-18-cross-domain-user-complaint-ai-ecommerce",
+      "minimum_passed_assertions": 3,
+      "assertions": [
+        {
+          "id": "cross-domain-routing",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "电商或平台", "terms": ["电商", "平台", "商品页面", "平台规则"]},
+            {"label": "AI 内容", "terms": ["AI 生成", "AIGC", "生成内容", "AI 文案"]},
+            {"label": "监管", "terms": ["监管", "广告", "市场监管"]},
+            {"label": "争议", "terms": ["投诉", "争议", "退款", "赔偿"]}
+          ]
+        },
+        {
+          "id": "first-actions",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "下架或修改", "terms": ["下架", "修改", "撤回", "暂停展示"]},
+            {"label": "留痕", "terms": ["留痕", "保存记录", "发布记录", "截图"]},
+            {"label": "客服口径", "terms": ["客服口径", "统一回复", "对外回复", "沟通口径", "对外沟通", "回复口径", "统一话术"]}
+          ]
+        },
+        {
+          "id": "not-single-domain",
+          "type": "contains_any",
+          "terms": ["跨领域", "不能只从", "同时涉及", "联动处理", "综合判断", "横跨", "多个领域", "不是单一"]
+        },
+        {
+          "id": "no-fragmented-answer",
+          "type": "not_contains_any",
+          "terms": ["只属于广告问题", "只属于客服问题", "只要退款就解决", "不用看平台规则"]
+        }
+      ]
+    }
+  ]
+}

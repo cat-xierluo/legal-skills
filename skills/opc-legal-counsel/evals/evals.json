@@ -1,0 +1,684 @@
+{
+  "skill_name": "opc-legal-counsel",
+  "version": "0.2.4",
+  "default_output_sections": [
+    "一句话结论",
+    "涉及领域",
+    "关键事实缺口 / 当前假设",
+    "红线风险与风险等级",
+    "现在就做什么（24 小时内）",
+    "接下来怎么做（7 天 / 30 天）",
+    "何时必须升级给外部律师 / 会计师 / 专业机构",
+    "法律依据与适用层级"
+  ],
+  "evals": [
+    {
+      "id": "foundation-01-founder-equity-oral",
+      "layer": "foundation",
+      "prompt": "我和朋友准备一起做一个企业培训 SaaS，我出技术和现有代码，他出客户资源和销售，口头先说 50:50，等业务起来再补协议。这样先干起来可以吗？",
+      "expected_routing": [
+        "governance",
+        "contracts",
+        "tax"
+      ],
+      "expected_next_hop": [
+        "references/governance.md",
+        "references/contracts.md",
+        "references/tax.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "明确指出口头约定不能替代书面股权与合作安排",
+        "补问或写明主体是否已注册、代码归属、投入方式和退出机制等关键事实缺口",
+        "提醒至少补联合创始人协议或股东协议，覆盖股权成熟、分工、决策权、离场退出和知识产权归属",
+        "提醒技术入股或资源入股需要留痕，并关注估值和税务后果",
+        "回答应以动作清单落地，而不是只说“建议协商清楚”"
+      ],
+      "files": []
+    },
+    {
+      "id": "foundation-02-first-client-contract",
+      "layer": "foundation",
+      "prompt": "我们给第一家企业客户做定制化管理系统，客户发来的合同模板里没有写明确的验收标准、变更流程和尾款触发条件，只写“项目完成后支付剩余 40%”。我应该怎么改？",
+      "expected_routing": [
+        "contracts",
+        "ip",
+        "governance"
+      ],
+      "expected_next_hop": [
+        "references/contracts.md",
+        "references/ip.md",
+        "assets/contract-clauses.md",
+        "assets/output-samples/contract-review-report.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [
+        "assets/contract-clauses.md",
+        "assets/output-samples/contract-review-report.md"
+      ],
+      "expectations": [
+        "指出验收标准、验收方式、验收期限和视为验收条款是高优先级缺口",
+        "补充变更需求流程、追加费用和交付边界，避免无限制返工",
+        "提醒尾款应与明确的里程碑或验收动作绑定，而不是笼统写“项目完成”",
+        "提示代码、文档、部署环境和知识产权归属要写清楚",
+        "提醒保留需求确认、版本交付和验收留痕"
+      ],
+      "files": []
+    },
+    {
+      "id": "foundation-03-private-account-collection",
+      "layer": "foundation",
+      "prompt": "公司刚成立还没完全走顺，我先用个人微信和银行卡收了几笔客户服务费，之后再转给公司并补开发票，这样处理有没有问题？",
+      "expected_routing": [
+        "governance",
+        "tax",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/governance.md",
+        "references/tax.md",
+        "assets/output-samples/opc-separation-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-accountant",
+      "recommended_assets": [
+        "assets/output-samples/opc-separation-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expectations": [
+        "优先指出私户收公款和公私混用是红线风险，而不是把它说成单纯操作不规范",
+        "要求立即停止继续用个人账户收公司业务款",
+        "给出补救动作，包括梳理合同、付款流水、开票和记账路径",
+        "提醒如果金额较大、周期较长或已跨多个纳税期，应同步让会计或税务顾问介入",
+        "不要把后续补转回公司简单表述成当然可以消除风险"
+      ],
+      "files": []
+    },
+    {
+      "id": "foundation-04-first-hire-employee-vs-contractor",
+      "layer": "foundation",
+      "prompt": "我准备招第一个人，想让对方先以“兼职顾问”的形式帮我做运营，但实际上要固定坐班、固定考核、每月固定报酬。这样能不签劳动合同吗？",
+      "expected_routing": [
+        "employment",
+        "governance"
+      ],
+      "expected_next_hop": [
+        "references/employment.md",
+        "references/governance.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "指出劳动关系认定更看用工实质，不会因为名义上写“兼职顾问”就自动变成劳务关系",
+        "补问工作时间、管理方式、是否纳入考核和排班等事实",
+        "给出两条路径：按劳动关系规范化，或重构为真实的独立服务合作",
+        "提醒补保密、知识产权归属和交付留痕安排",
+        "不要只停留在“有争议风险，注意合规”这种空泛表达"
+      ],
+      "files": []
+    },
+    {
+      "id": "foundation-05-brand-code-rights",
+      "layer": "foundation",
+      "prompt": "我们的小程序准备上线，名字还没注册商标，代码有一部分是外包开发的，也没单独写知识产权归属。现在先上线再补可以吗？",
+      "expected_routing": [
+        "ip",
+        "contracts",
+        "governance"
+      ],
+      "expected_next_hop": [
+        "references/ip.md",
+        "references/contracts.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "提醒商标查询和申请应尽快前置，避免上线后被卡名称或产生侵权纠纷",
+        "明确支付开发费不当然等于拿到完整知识产权，需要补书面归属或转让安排",
+        "提示补源代码、设计稿、文档和交付物清单的权属条款",
+        "提醒保留创作完成时间、版本迭代和交付记录",
+        "回答应区分“先上线可做什么”和“上线前最好补什么”"
+      ],
+      "files": []
+    },
+    {
+      "id": "foundation-06-overdue-payment-collection",
+      "layer": "foundation",
+      "prompt": "客户拖了两个月尾款不付，目前我手里有合同、微信聊天、源代码交付记录和对方确认可以上线的消息。下一步怎么追款最稳？",
+      "expected_routing": [
+        "contracts",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/contracts.md",
+        "references/disputes.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "先梳理证据链，而不是直接建议起诉",
+        "提醒核对争议解决条款、付款条件、验收条款和违约责任约定",
+        "建议先发正式催款通知或律师函前置版本，并固定送达证据",
+        "提示继续保存交付、验收、上线和使用痕迹",
+        "说明在金额较大、对方明确抗辩或已准备反诉时，应升级给外部律师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-01-entity-choice-opc",
+      "layer": "reinforcement",
+      "prompt": "我现在一个人做 AI 客服 agent 外包，前期收入可能不高，但要和企业客户签合同、开票，后面也可能招人。我应该注册一人有限公司、个体工商户，还是个人独资企业？",
+      "expected_routing": [
+        "governance",
+        "tax",
+        "ai-compliance"
+      ],
+      "expected_next_hop": [
+        "references/governance.md",
+        "references/tax.md",
+        "references/industry/agency-outsourcing.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "不要默认只推荐一人有限公司，而应比较不同主体形态的责任、税务和经营适配性",
+        "结合 ToB 签约、开票、招人和后续融资或合作需求进行判断",
+        "指出这是小微企业基础盘问题，但要叠加 OPC 的公私分离风险",
+        "如果业务涉及 AI 服务，还要提示后续上线合规和客户数据处理义务",
+        "输出应当给出可执行的选择框架，而不是泛泛介绍主体概念"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-02-opc-fund-mixing-remedy",
+      "layer": "reinforcement",
+      "prompt": "我是一人有限公司股东，公司没钱时我经常先垫款，等回款到了再直接从公户转点钱给自己，有时候也会用公司卡付个人开销。这个在实务上怎么补救？",
+      "expected_routing": [
+        "governance",
+        "tax",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/governance.md",
+        "references/tax.md",
+        "assets/output-samples/opc-separation-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-accountant",
+      "recommended_assets": [
+        "assets/output-samples/opc-separation-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expectations": [
+        "优先强调 OPC 的公私分离红线，而不是把问题描述成普通报销瑕疵",
+        "区分股东借款、垫付款报销、工资分配、分红等不同法律与税务路径",
+        "要求补股东决定、借款凭证、报销单据和账务处理留痕",
+        "提醒停止继续用公司卡支付个人开销，并尽快做历史梳理和纠偏",
+        "如果金额较大、已持续较长时间或存在税务异常信号，应建议会计或律师介入"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-03-ai-launch-checklist",
+      "layer": "reinforcement",
+      "prompt": "我准备上线一个面向 C 端的 AI 写作工具，用户可以上传简历、产品资料和聊天记录，让系统自动生成简历、自我介绍和营销文案。上线前至少要做哪些合规动作？",
+      "expected_routing": [
+        "ai-compliance",
+        "data-compliance",
+        "regulatory",
+        "ip"
+      ],
+      "expected_next_hop": [
+        "references/ai-compliance.md",
+        "references/data-compliance.md",
+        "references/industry/ai-saas.md",
+        "assets/output-samples/ai-launch-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [
+        "assets/output-samples/ai-launch-report.md",
+        "assets/risk-checklist.md"
+      ],
+      "expectations": [
+        "要求输出上线前的清单式动作，而不是只讲抽象原则",
+        "覆盖用户协议、隐私政策、数据最小化、敏感信息识别和第三方模型服务核查",
+        "提示生成内容标识、投诉举报入口、日志留存和风控规则",
+        "提示核查营销表述，避免夸大 AI 能力或误导宣传",
+        "如果结论依赖最新官方规则或备案信息，应明确写出“需核验最新来源”"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-04-third-party-model-client-data",
+      "layer": "reinforcement",
+      "prompt": "我们给企业客户做合同摘要和会议纪要，底层调用第三方大模型 API。如果要把客户合同、会议纪要和联系人信息发给模型处理，合同和流程上要补哪些东西？",
+      "expected_routing": [
+        "ai-compliance",
+        "data-compliance",
+        "contracts"
+      ],
+      "expected_next_hop": [
+        "references/ai-compliance.md",
+        "references/data-compliance.md",
+        "references/contracts.md",
+        "references/industry/ai-saas.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "要求同时覆盖对外合同条款和内部处理流程，不要只答一边",
+        "提示客户授权范围、数据使用边界、第三方模型供应商披露和保密安排",
+        "补充留存期限、删除机制、日志留痕和敏感数据处理限制",
+        "提醒核查模型服务条款中关于训练、缓存、转处理和跨境传输的约定",
+        "如果事实不足，应补问客户类型、数据敏感度和是否涉及出境或医疗等高监管场景"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-05-data-breach-public-incident",
+      "layer": "reinforcement",
+      "prompt": "我们的 AI 客服系统把 200 多个用户的手机号和病历摘要错发给了别人，现在已经有人在社交媒体发帖，说要投诉监管部门。现在 24 小时内应该怎么处理？",
+      "expected_routing": [
+        "data-compliance",
+        "ai-compliance",
+        "disputes",
+        "regulatory"
+      ],
+      "expected_next_hop": [
+        "references/data-compliance.md",
+        "references/ai-compliance.md",
+        "references/disputes.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "lawyer-and-security-compliance",
+      "recommended_assets": [],
+      "expectations": [
+        "先给出止损动作，包括立即停止扩散、回收权限、封存日志和内部事件升级",
+        "明确这是高风险事件，应触发外部律师及安全或合规支持，而不是仅靠日常客服处理",
+        "提醒不要在事实未清前对外随意承认责任或发布失真说明",
+        "提示评估通知用户、合作方和监管的义务时要结合最新法源和具体事实核验",
+        "要求同步整理受影响范围、时间线、系统日志和处置记录"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-06-local-overlay-qingdao",
+      "layer": "reinforcement",
+      "prompt": "我人在青岛，准备注册一人有限公司做 AI 短视频代运营。除了全国通用规则外，有没有本地 OPC 指引或注册流程上需要特别注意的？",
+      "expected_routing": [
+        "governance",
+        "tax",
+        "regulatory"
+      ],
+      "expected_next_hop": [
+        "references/governance.md",
+        "references/tax.md",
+        "references/industry/agency-outsourcing.md",
+        "references/local-policies/opc/05-青岛指引-结构化摘录.md"
+      ],
+      "expected_local_overlay": "qingdao",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "先回答全国通用规则，再明确叠加青岛地方覆盖层，不要倒置顺序",
+        "清楚标注地方规则仅适用于青岛或相关地方实践，不得表述成全国统一结论",
+        "提示本地注册流程或地方指引只能作为覆盖层参考，核心判断仍应回到全国法规则",
+        "如果引用地方材料，应优先使用结构化摘录而不是直接依赖原始 OCR 全文",
+        "回答中应体现地域信息已经成为结论的一部分"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-07-growth-advisor-equity",
+      "layer": "reinforcement",
+      "prompt": "我们准备给一个兼职顾问 3%‘顾问股’，他主要帮介绍客户和行业资源，不全职，也不进公司。现在想先口头约好，后面融资前再补文件，这样行吗？",
+      "expected_routing": [
+        "growth-financing",
+        "governance",
+        "contracts",
+        "tax"
+      ],
+      "expected_next_hop": [
+        "references/growth-financing.md",
+        "references/governance.md",
+        "references/contracts.md",
+        "references/tax.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "先区分顾问股、收益分成、期权和现股，不要默认口头承诺一个比例就算完成",
+        "强调兼职顾问直接给现股风险高，应先判断是否改为附条件安排",
+        "补关键事实，包括顾问提供的具体对价、服务期限、归属条件和退出机制",
+        "提醒历史口头承诺会影响后续融资和股权结构表解释",
+        "回答应体现成长阶段模块已经被命中，而不是只用治理常识回答"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-08-growth-friend-investment",
+      "layer": "reinforcement",
+      "prompt": "我朋友想先打 50 万进公司帮我周转，后面如果项目做起来再转成股份。我们现在还没定估值，也没想好是借款还是投资。这个阶段应该先怎么设计？",
+      "expected_routing": [
+        "growth-financing",
+        "governance",
+        "contracts",
+        "tax"
+      ],
+      "expected_next_hop": [
+        "references/growth-financing.md",
+        "references/governance.md",
+        "references/contracts.md",
+        "references/tax.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer-accountant",
+      "recommended_assets": [],
+      "expectations": [
+        "先拆借款、增资、可转安排，不要直接给模糊建议",
+        "强调收钱之前要先定法律性质，否则后续治理和税务都会失控",
+        "补事实：主体、估值、控制权、期限、转换条件、利息或折扣机制",
+        "说明在正式文件落地前，不宜长期停留在‘朋友先打钱进来再说’状态",
+        "如果准备直接进入投资文件，应提示升级律师和会计师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-09-growth-employee-incentive",
+      "layer": "reinforcement",
+      "prompt": "我们第一个核心工程师准备全职加入，我想直接承诺给他 8% 期权，但现在公司还是一人有限公司，也没有完整期权方案。应该先补哪些东西？",
+      "expected_routing": [
+        "growth-financing",
+        "governance",
+        "tax",
+        "employment"
+      ],
+      "expected_next_hop": [
+        "references/growth-financing.md",
+        "references/governance.md",
+        "references/tax.md",
+        "references/employment.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "先提醒一人有限公司直接做股权激励要先看工具路径，不要把‘8% 期权’当成已经落地的权利",
+        "补归属条件、行权条件、离职回收、绩效触发和税务节点",
+        "提醒劳动关系、保密和知识产权归属要同步考虑",
+        "不要只回答‘可以先约定’这种泛化建议",
+        "回答应体现成长阶段模块和用工领域的联动"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-10-industry-ecommerce-complaint",
+      "layer": "reinforcement",
+      "prompt": "我们做护肤品私域电商，最近用 AI 生成了很多商品图和营销文案，里面有‘全网最低’‘7 天明显改善’这种表述。平台刚发来违规提醒，还担心图片版权有问题。现在怎么处理最稳？",
+      "expected_routing": [
+        "regulatory",
+        "ip",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/regulatory.md",
+        "references/ip.md",
+        "references/disputes.md",
+        "references/industry/ecommerce.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "体现电商行业 overlay 已被加载，而不是只给泛化广告法结论",
+        "先处理下架、修改和留痕，再处理对外回复和后续整改",
+        "指出绝对化表述、效果承诺和 AI 生成图片版权都是不同风险点",
+        "提醒保留商品图来源、提示词、生成时间和发布记录",
+        "回答应区分平台规则处置和正式法律责任"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-11-industry-agency-scope-creep",
+      "layer": "reinforcement",
+      "prompt": "我们给客户做代运营和内容投放，合同里只写了‘全年运营支持’，现在客户不断加需求，还要求我们承担素材侵权和投放效果不达标的责任。怎么把边界重新拉回来？",
+      "expected_routing": [
+        "contracts",
+        "disputes",
+        "ip"
+      ],
+      "expected_next_hop": [
+        "references/contracts.md",
+        "references/disputes.md",
+        "references/ip.md",
+        "references/industry/agency-outsourcing.md",
+        "assets/contract-clauses.md",
+        "assets/output-samples/contract-review-report.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [
+        "assets/contract-clauses.md",
+        "assets/output-samples/contract-review-report.md"
+      ],
+      "expectations": [
+        "体现代运营 / 外包交付 overlay 的作用，而不是只讲一般合同原则",
+        "先拆服务范围、变更机制、效果责任和素材来源责任四个层次",
+        "要求补充需求确认、追加报价、客户素材授权和免责边界",
+        "提醒继续留存需求变更和执行记录，为后续争议做证据准备",
+        "在争议已经升级时，提示升级律师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-12-industry-ai-saas-beta",
+      "layer": "reinforcement",
+      "prompt": "我们做一个面向企业的 AI 质检 SaaS，客户会上传通话录音和客服聊天记录，我们打算先开放 beta 给 10 家客户试用。现在合同、页面和流程上最少要补哪些东西？",
+      "expected_routing": [
+        "ai-compliance",
+        "data-compliance",
+        "contracts",
+        "regulatory"
+      ],
+      "expected_next_hop": [
+        "references/ai-compliance.md",
+        "references/data-compliance.md",
+        "references/contracts.md",
+        "references/industry/ai-saas.md",
+        "assets/output-samples/ai-launch-report.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [
+        "assets/output-samples/ai-launch-report.md"
+      ],
+      "expectations": [
+        "体现 AI SaaS overlay 和 AI 上线样稿都被命中",
+        "同时覆盖 beta 页面、试用协议、客户数据边界、日志留痕和模型来源公示",
+        "提醒录音和聊天记录可能触及个人信息和敏感数据，不得只从产品角度回答",
+        "指出 beta 不是免合规阶段，尤其不能因为是试用就忽略协议和删除机制",
+        "如果结论依赖最新监管公告，应明确提示核验"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-13-ip-aigc-complaint",
+      "layer": "reinforcement",
+      "prompt": "我们用 AI 生成了一批课程海报和宣传图，现在有人投诉说和他的插画风格太像，要求下架和赔偿。我们没有保存完整提示词，只剩部分成图和发布时间。现在应该怎么处理？",
+      "expected_routing": [
+        "ip",
+        "ai-compliance",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/ip.md",
+        "references/ai-compliance.md",
+        "references/disputes.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "先固定现有图片、发布时间、生成记录和投诉材料，不要直接删库",
+        "区分风格相似、实质性相似、权利基础和平台规则处置",
+        "指出提示词和生成日志缺失会削弱抗辩和创作过程证明",
+        "给出短期下架/替换/沟通和长期留痕机制两层动作",
+        "如果对方已发律师函或平台启动处罚，应提示升级律师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-14-employment-contractor-core-dev",
+      "layer": "reinforcement",
+      "prompt": "我们找了一个外包工程师长期远程开发核心模块，每周参加例会，按月结算，也有代码仓库权限。现在他准备离开，还说核心代码有一部分是他的。我们要怎么处理？",
+      "expected_routing": [
+        "employment",
+        "contracts",
+        "ip",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/employment.md",
+        "references/contracts.md",
+        "references/ip.md",
+        "references/disputes.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "同时判断用工关系边界、外包合同、代码权属和离职/退出争议",
+        "要求立即回收或分级调整代码仓库、密钥、后台和客户资料权限",
+        "补问合同、提交记录、付款记录、代码贡献和权属条款",
+        "提醒不要只用劳动或合同单一领域回答",
+        "如果核心代码权属已经发生争议，应提示升级律师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-15-data-deletion-request",
+      "layer": "reinforcement",
+      "prompt": "有用户要求删除账号和所有历史聊天记录，但我们的产品现在只有注销入口，没有真正删除底层日志和模型分析记录。客服该怎么回复，产品和流程上要补什么？",
+      "expected_routing": [
+        "data-compliance",
+        "ai-compliance",
+        "contracts"
+      ],
+      "expected_next_hop": [
+        "references/data-compliance.md",
+        "references/ai-compliance.md",
+        "references/contracts.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "none",
+      "recommended_assets": [],
+      "expectations": [
+        "指出注销入口不等于完整删除机制，需区分账号、内容、日志和备份",
+        "给客服回复边界：确认请求、说明处理范围和预计路径，不随意承诺无法完成事项",
+        "要求产品补真实可用的删除/注销流程和内部处理记录",
+        "提醒如涉及训练、分析或第三方模型处理，应核查数据链路",
+        "不要机械套用海外 72 小时或固定统一时限"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-16-regulatory-market-inquiry",
+      "layer": "reinforcement",
+      "prompt": "市场监管局通知我们去说明一个 AI 教育产品的宣传问题，页面上写过‘提分效果显著’和‘替代一对一老师’，但现在已经改掉了。去之前应该准备什么？",
+      "expected_routing": [
+        "regulatory",
+        "ai-compliance",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/regulatory.md",
+        "references/ai-compliance.md",
+        "references/disputes.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "先判断这是监管问询而非普通客服投诉，应谨慎准备事实材料",
+        "要求保留原页面、修改记录、投放记录和整改说明，不要只说已经改掉",
+        "指出教育和 AI 效果宣传属于高风险组合",
+        "提醒去说明前核对通知范围，不要在事实未核实时随意承认扩大责任",
+        "如果已经立案或有处罚告知，应提示升级律师"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-17-disputes-lawyer-letter",
+      "layer": "reinforcement",
+      "prompt": "我们收到一封律师函，说我们的 SaaS 抄袭了对方功能设计和页面，还要求 3 天内停止服务并赔 30 万。我们现在应该先回复还是先下架？",
+      "expected_routing": [
+        "disputes",
+        "ip",
+        "contracts"
+      ],
+      "expected_next_hop": [
+        "references/disputes.md",
+        "references/ip.md",
+        "references/contracts.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [],
+      "expectations": [
+        "先核查律师函、对方权利基础、具体侵权点和自身证据，不直接建议全面下架",
+        "要求固定自身产品版本、上线时间、设计来源和开发记录",
+        "区分功能思想、页面表达、代码复制和商业秘密等不同争议类型",
+        "给出短期处理：内部封存、风险评估、必要时临时调整高风险页面、谨慎回复",
+        "金额较大且对方给出明确期限时，应建议律师介入"
+      ],
+      "files": []
+    },
+    {
+      "id": "reinforcement-18-cross-domain-user-complaint-ai-ecommerce",
+      "layer": "reinforcement",
+      "prompt": "我们用 AI 给电商客户批量生成商品详情页，其中一个客户被消费者投诉虚假宣传，还说图片侵权。客户现在要求我们赔平台罚款和全部损失。这个问题应该从哪里开始拆？",
+      "expected_routing": [
+        "contracts",
+        "regulatory",
+        "ip",
+        "ai-compliance",
+        "disputes"
+      ],
+      "expected_next_hop": [
+        "references/contracts.md",
+        "references/regulatory.md",
+        "references/ip.md",
+        "references/ai-compliance.md",
+        "references/disputes.md",
+        "references/industry/ecommerce.md",
+        "references/industry/agency-outsourcing.md"
+      ],
+      "expected_local_overlay": "none",
+      "expected_escalation": "conditional-lawyer",
+      "recommended_assets": [
+        "assets/contract-clauses.md"
+      ],
+      "expectations": [
+        "体现这是跨合同、广告监管、IP、AI 合规和争议的综合问题",
+        "先看合同责任边界、客户确认记录、素材来源和平台处罚依据",
+        "区分客户自身商品事实、我方生成内容、客户审核发布和平台规则",
+        "提示先固定生成记录、客户确认、发布记录、投诉和处罚材料",
+        "不要直接把责任全部归给代运营方或客户一方"
+      ],
+      "files": []
+    }
+  ]
+}
