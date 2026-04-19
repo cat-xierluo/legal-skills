@@ -2,7 +2,7 @@
 name: funasr-transcribe
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.3"
+version: "1.9.4"
 license: Complete terms in LICENSE.txt
 description: 使用本地 FunASR 服务将音频或视频文件转录为带时间戳的 Markdown 文件，支持 mp4、mov、mp3、wav、m4a 等常见格式。本技能应在用户需要语音转文字、会议记录、视频字幕、播客转录时使用。
 ---
@@ -55,8 +55,11 @@ python3 scripts/setup.py
 |------|--------|------|
 | `FUNASR_ONNX_TEXT_SOURCE` | `preds` | 使用清理后的 ONNX `preds` 文本；如遇到异常可设为 `raw_tokens` 回退 |
 | `FUNASR_SERVER_ONNX_THREADS` | `4` | ONNX Runtime 推理线程数，主要影响速度，不直接改善识别质量 |
+| `FUNASR_ONNX_COMPAT_CACHE` | `~/.cache/funasr-onnx-compat` | ONNX 兼容导出缓存目录；兼容导出会复制模型目录，可删除该缓存后重新生成 |
 
 单人 `paraformer-onnx` 会将各 VAD 片段的识别文本先拼接，再做一次全局标点恢复；这样比逐片段恢复标点更接近原生 `paraformer`，也能减少重复调用标点模型的耗时。
+
+ONNX 句子级时间戳是根据字符位置和 token 时间戳做的近似映射，适合定位段落和发言轮次，不应视为逐字强对齐结果。
 
 已验证不建议作为默认的调参方向：
 

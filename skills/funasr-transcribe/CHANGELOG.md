@@ -2,6 +2,19 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.9.4] - 2026-04-19
+
+### 修复
+
+- **ONNX 导出依赖延迟加载** — 移除 `torch` 与 `funasr.utils.export_utils` 的模块级导入，仅在 ONNX 兼容导出时按需加载，避免非 ONNX 路径受 FunASR 内部导出模块变更影响
+- **ONNX 导出猴子补丁显式失败** — 对 `funasr.utils.export_utils._onnx` 增加存在性检查；当 FunASR 内部 API 变化时直接报错，而不是静默回退到不兼容导出路径
+
+### 改进
+
+- **模型下载与兼容缓存提示** — 模型缺失时打印下载提示，ONNX 兼容导出缓存增加 `compat_export_version` 过期检查，并提示缓存目录可删除后重建
+- **ONNX 后处理兼容说明** — 为 funasr-onnx VAD 兼容补丁、raw token 归一化和句子级时间戳近似映射补充注释与文档说明
+- **中文标点切句增强** — `split_text_by_punctuation()` 增补顿号和冒号，减少长句合并
+
 ## [1.9.3] - 2026-04-19
 
 ### 改进

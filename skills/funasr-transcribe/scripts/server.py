@@ -19,6 +19,7 @@ from typing import Optional
 import argparse
 import threading
 import re
+import logging
 
 import numpy as np
 
@@ -178,6 +179,8 @@ ONNX_COMPAT_CACHE = Path(
         os.path.expanduser("~/.cache/funasr-onnx-compat"),
     )
 )
+ONNX_COMPAT_EXPORT_VERSION = 2
+LOGGER = logging.getLogger(__name__)
 
 
 def check_dependencies():
@@ -224,6 +227,7 @@ def resolve_local_model_dir(model_id_or_path: str) -> Path:
         raise RuntimeError(f"无法解析模型目录，且 modelscope 不可用: {model_id_or_path}") from exc
 
     try:
+        print(f"模型未在本地缓存中找到，开始下载: {model_id_or_path}")
         return Path(snapshot_download(model_id_or_path))
     except Exception as exc:
         raise RuntimeError(f"无法下载模型: {model_id_or_path}") from exc
@@ -239,6 +243,22 @@ def get_onnx_compat_dir(model_id_or_path: str) -> Path:
     except ValueError:
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "__", str(local_dir))
         return ONNX_COMPAT_CACHE / safe_name
+
+
+def is_compat_export_current(marker_path: Path, source_dir: Path, quantize: bool) -> bool:
+    """检查 ONNX 兼容导出缓存是否匹配当前导出适配版本。"""
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    return (
+        marker.get("source_dir") == str(source_dir)
+        and marker.get("quantize") == quantize
+        and marker.get("opset_version") == 18
+        and marker.get("dynamo") is False
+        and marker.get("compat_export_version") == ONNX_COMPAT_EXPORT_VERSION
+    )
 
 
 def check_model_exists(model_id: str) -> bool:
@@ -351,8 +371,6 @@ if not startup_check():
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from funasr import AutoModel
-import torch
-import funasr.utils.export_utils as funasr_export_utils
 
 try:
     from funasr_onnx import Paraformer as ONNXParaformer
@@ -408,11 +426,37 @@ DEFAULT_ONNX_THREADS = int(os.environ.get("FUNASR_SERVER_ONNX_THREADS", "4"))
 DEFAULT_ONNX_TEXT_SOURCE = os.environ.get("FUNASR_ONNX_TEXT_SOURCE", "preds").lower()
 
 
+def load_onnx_export_dependencies():
+    """按需加载 ONNX 兼容导出依赖。"""
+    try:
+        import torch as torch_module
+    except ImportError as exc:
+        raise RuntimeError("ONNX 兼容导出需要 PyTorch，请先安装 torch。") from exc
+
+    try:
+        import funasr.utils.export_utils as export_utils
+    except Exception as exc:
+        raise RuntimeError(
+            "ONNX 兼容导出需要 FunASR 内部导出工具 funasr.utils.export_utils；"
+            "当前 FunASR 版本可能已调整内部路径。"
+        ) from exc
+
+    return torch_module, export_utils
+
+
 def patch_funasr_onnx_export():
     """强制 FunASR 导出走兼容的 torch.onnx 路径。"""
     global ONNX_EXPORT_PATCHED
     if ONNX_EXPORT_PATCHED:
         return
+
+    torch_module, export_utils = load_onnx_export_dependencies()
+    if not hasattr(export_utils, "_onnx"):
+        raise RuntimeError(
+            "当前 FunASR 版本缺少 funasr.utils.export_utils._onnx，"
+            "无法应用 ONNX 兼容导出补丁。请升级本 skill 的 ONNX 导出适配逻辑。"
+        )
+    LOGGER.warning("正在替换 FunASR 私有导出入口 export_utils._onnx 以兼容当前 PyTorch/ONNX 环境")
 
     def compat_onnx_export(
         model,
@@ -424,7 +468,7 @@ def patch_funasr_onnx_export():
     ):
         device = kwargs.get("device", "cpu")
         dummy_input = model.export_dummy_inputs()
-        if isinstance(dummy_input, torch.Tensor):
+        if isinstance(dummy_input, torch_module.Tensor):
             dummy_input = dummy_input.to(device)
         else:
             dummy_input = tuple(item.to(device) for item in dummy_input)
@@ -437,7 +481,7 @@ def patch_funasr_onnx_export():
             export_name = f"{export_name}.onnx"
         model_path = os.path.join(export_dir, export_name)
 
-        torch.onnx.export(
+        torch_module.onnx.export(
             model,
             dummy_input,
             model_path,
@@ -476,7 +520,7 @@ def patch_funasr_onnx_export():
                 nodes_to_exclude=nodes_to_exclude,
             )
 
-    funasr_export_utils._onnx = compat_onnx_export
+    export_utils._onnx = compat_onnx_export
     ONNX_EXPORT_PATCHED = True
 
 
@@ -487,10 +531,16 @@ def ensure_compat_onnx_model_dir(model_id_or_path: str, quantize: bool = False) 
     marker_path = compat_dir / ".codex_compat_export"
     target_model = compat_dir / ("model_quant.onnx" if quantize else "model.onnx")
 
-    if target_model.exists() and marker_path.exists():
+    if target_model.exists() and marker_path.exists() and is_compat_export_current(
+        marker_path,
+        source_dir,
+        quantize,
+    ):
         return compat_dir
 
     compat_dir.parent.mkdir(parents=True, exist_ok=True)
+    print(f"正在准备 ONNX 兼容导出缓存: {compat_dir}")
+    print("该步骤会复制模型目录用于导出；如需清理，可删除该缓存目录后重新生成。")
     shutil.copytree(source_dir, compat_dir, dirs_exist_ok=True)
     for stale_file in ("model.onnx", "model_quant.onnx", "model.onnx.onnx", "model_quant.onnx.onnx"):
         stale_path = compat_dir / stale_file
@@ -519,6 +569,7 @@ def ensure_compat_onnx_model_dir(model_id_or_path: str, quantize: bool = False) 
                 "quantize": quantize,
                 "opset_version": 18,
                 "dynamo": False,
+                "compat_export_version": ONNX_COMPAT_EXPORT_VERSION,
             },
             ensure_ascii=False,
             indent=2,
@@ -723,7 +774,7 @@ def normalize_vad_segments(vad_result) -> list[list[int]]:
 
 
 def call_onnx_vad_model(vad_model, audio_input) -> list:
-    """兼容 funasr_onnx 当前版本对 feats_len 标量假设的问题。"""
+    """兼容 funasr-onnx 1.3.x 对 feats_len 标量假设的问题。"""
     waveform_list = vad_model.load_data(audio_input, vad_model.frontend.opts.frame_opts.samp_freq)
     waveform_nums = len(waveform_list)
     segments = [[] for _ in range(vad_model.batch_size)]
@@ -782,7 +833,7 @@ def offset_timestamps(timestamps: list, offset_ms: int) -> list:
 
 def split_text_by_punctuation(text: str) -> list[str]:
     """按标点切分文本，保留句尾标点。"""
-    segments = re.findall(r"[^。！？!?；;，,\n]+[。！？!?；;，,]?", text)
+    segments = re.findall(r"[^。！？!?；;，,、：:\n]+[。！？!?；;，,、：:]?", text)
     return [segment.strip() for segment in segments if segment.strip()]
 
 
@@ -792,7 +843,7 @@ def normalize_text_for_timestamp_alignment(text: str) -> str:
 
 
 def normalize_onnx_tokens(raw_tokens: list) -> str:
-    """根据 raw_tokens 尽量恢复更自然的 ONNX 文本。"""
+    """根据 FunASR Paraformer ONNX raw_tokens 尽量恢复更自然的文本。"""
     if not raw_tokens:
         return ""
 
@@ -904,7 +955,7 @@ def restore_punctuation(text: str) -> str:
 def split_text_with_timestamps(text: str, timestamps: list,
                                default_start_ms: int = 0,
                                default_end_ms: int = 0) -> list[dict]:
-    """按补完标点后的句子重新映射时间戳。"""
+    """按补完标点后的句子近似映射时间戳。"""
     normalized_text = normalize_onnx_text(text)
     if not normalized_text:
         return []
@@ -1013,7 +1064,7 @@ def transcribe_with_onnx_model(file_path: str, model_alias: str, model_id: str =
 
 def transcribe_paraformer_onnx_segments(file_path: str, model_id: str = None,
                                         quantize: bool = False,
-                                        punctuation_mode: str = "segment") -> tuple[dict, list]:
+                                        punctuation_mode: str = "segment") -> tuple[dict, list[list[object]]]:
     """使用 ONNX VAD 切段执行 Paraformer ONNX 转录。"""
     ensure_onnx_runtime_available()
     ensure_onnx_segment_support_available()

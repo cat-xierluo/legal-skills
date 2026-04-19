@@ -116,7 +116,7 @@
 <td><a href=”skills/funasr-transcribe/”><strong>funasr-transcribe</strong></a></td>
 <td style=”word-break:break-word”>本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v1.9.3</td>
+<td style=”text-align:center”>v1.9.4</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>

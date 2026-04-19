@@ -10,6 +10,7 @@
 - [x] 对多人 ONNX 参数进行 90 秒样本对比，确定默认保留 VAD 切段并改用清理后的 `preds` 文本源
 - [x] 修复单人 `paraformer-onnx` 未复用 VAD 分段后处理导致的速度和质量劣化
 - [x] 优化单人 `paraformer-onnx` 标点恢复位置，改为 VAD 分段 ASR 后全局恢复标点
+- [x] 修复 PR #16 审查意见中的 ONNX 导出依赖加载和私有 API 补丁风险
 
 ## 后续待办
 

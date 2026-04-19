@@ -72,7 +72,28 @@ CLI、API 文档和服务端路由语义均同步为“fast = 不分轨”，而
 **影响**
 单人 ONNX 的输出格式更接近原生 `paraformer`，同时减少标点模型重复调用。多人 ONNX 行为不变。
 
+### [DEC-006] - 2026-04-19 - ONNX 兼容导出依赖改为按需加载并显式校验私有 API
+
+**背景**
+PR #16 审查指出，`server.py` 模块级导入 `torch` 和 `funasr.utils.export_utils` 会让非 ONNX 路径也依赖 FunASR 内部导出模块；同时直接 patch `export_utils._onnx` 可能在 FunASR 内部 API 变化时静默失效。
+
+**决策**
+移除模块级导入，改为 `patch_funasr_onnx_export()` 首次执行时按需加载 `torch` 和 `funasr.utils.export_utils`；对 `_onnx` 做 `hasattr` 校验，不存在时直接抛出清晰错误。ONNX 兼容导出缓存增加 `compat_export_version`，导出逻辑变化时会重新生成缓存。
+
+**理由**
+这样可以隔离原生 `paraformer` 路径与 ONNX 导出内部依赖，避免非 ONNX 场景因 FunASR 内部模块路径变化失败；同时避免 monkey patch 静默失效。
+
+**影响**
+ONNX 首次兼容导出时会打印模型下载和缓存准备提示；已有旧 marker 的兼容缓存会因版本号缺失而重新导出一次。
+
 ## 工作日志
+
+### 2026-04-19 15:39 (Codex)
+
+- **目标:** 修复 PR #16 审查意见中的阻塞问题。
+- **操作:** 将 `torch` / `funasr.utils.export_utils` 改为 ONNX 导出时按需加载；对 `export_utils._onnx` 增加存在性校验；补充模型下载提示、兼容缓存版本、VAD/token/time alignment 注释和文档说明；扩展中文标点切句。
+- **结果:** 阻塞项 #1/#2 已修复，并处理 #3/#4/#6/#8/#9/#10 的低风险部分；#5 通过缓存版本与清理提示降低风险，未改为选择性复制模型文件以避免破坏 FunASR 导出依赖。
+- **下一步:** 运行轻量检查后推送到 PR #16。
 
 ### 2026-04-19 15:20 (Codex)
 
