@@ -13,6 +13,22 @@
     {
       "name": "contract-copilot",
       "repo": "contract-copilot.skill"
+    },
+    {
+      "name": "trademark-assistant",
+      "repo": "trademark-assistant.skill"
+    },
+    {
+      "name": "md2word",
+      "repo": "md2word.skill"
+    },
+    {
+      "name": "de-ai-polish",
+      "repo": "de-ai-polish.skill"
+    },
+    {
+      "name": "patent-analysis",
+      "repo": "patent-analysis.skill"
     }
   ]
 }
