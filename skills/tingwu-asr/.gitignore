@@ -1,0 +1,8 @@
+config/cookies.json
+config/quota_history.jsonl
+.playwright-data/
+.env
+__pycache__/
+archive/*
+!archive/.gitkeep
+slides/

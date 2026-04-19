@@ -1,0 +1,12 @@
+{
+  "saved_at": "2026-01-01T00:00:00Z",
+  "cookies": {
+    "cna": "your_cna_value",
+    "login_aliyunid_ticket": "your_ticket_value",
+    "login_aliyunid_pk": "your_pk_value",
+    "hssid": "your_hssid_value",
+    "login_aliyunid_csrf": "your_csrf_value",
+    "atpsida": "your_atpsida_value",
+    "isg": "your_isg_value"
+  }
+}

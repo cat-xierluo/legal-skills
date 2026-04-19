@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(dd * of=/dev/*)",
+      "Bash(mkfs*)",
+      "Bash(git push --force * main*)",
+      "Bash(git push --force * master*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fdx*)"
+    ],
+    "allow": [
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Skill",
+      "mcp__plugin_context7",
+      "mcp__github",
+      "mcp__playwright",
+      "mcp__MiniMax",
+      "mcp__zai-mcp-server",
+      "mcp__pencil"
+    ]
+  },
+  "alwaysThinkingEnabled": true
+}
