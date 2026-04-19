@@ -41,7 +41,7 @@
 
 - 指出验收标准、变更机制、尾款触发条件是高优先级问题
 - 识别 `contracts + ip + governance`，而不是只讲付款
-- 调用或参考 `assets/contract-clauses.md` 与 `assets/output-samples/contract-review-report.md`
+- 调用或参考 `assets/contract-clauses.md` 与 `assets/template-contract-review-report.md`
 - 提醒需求确认、版本交付、验收和上线留痕
 - 不把“项目完成”当成足够明确的付款条件
 
@@ -74,7 +74,7 @@
 必须命中：
 
 - 识别 `ai-compliance + data-compliance + regulatory + ip`
-- 调用或参考 `assets/output-samples/ai-launch-report.md`
+- 调用或参考 `assets/template-ai-launch-report.md`
 - 覆盖用户协议、隐私政策、模型来源、公示、投诉入口和日志留痕
 - 提示生成内容标识和营销表述审查
 - 对备案、公示名单、监管公告等易变事项提示核验
@@ -109,7 +109,7 @@
 
 - 先给全国通用规则，再叠加青岛地方材料
 - 明确地方材料只作为青岛地方实践或指引参考
-- 优先读取 `references/local-policies/opc/05-青岛指引-结构化摘录.md`
+- 优先读取 `references/local-policies/opc-青岛指引-结构化摘录.md`
 - 不直接依赖原始 OCR 全文
 - 说明哪些结论会因地域变化而变化
 

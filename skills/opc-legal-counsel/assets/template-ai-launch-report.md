@@ -11,7 +11,7 @@
 ## 建议组合资产
 
 - `assets/risk-checklist.md`
-- `assets/compliance-quick-ref.md`
+- `references/ai-compliance.md`（快速查法规要点时加载对应核心领域文件）
 
 ## 固定输出结构
 

@@ -138,17 +138,17 @@
 ### 新增
 
 - 新增 `README.md`，作为面向 GitHub 访客的公开入口文档
-- 新增 `DISCLAIMER.md`，独立说明使用边界、升级情形和非正式法律意见属性
+- 补充使用边界与免责说明
 
 ### 改进
 
-- 从 `SKILL.md` 中移除 `references/business-context.md` 的主引用，收回商业策略内容对 skill 主体的干扰
+- 调整 `SKILL.md` 参考文件引用，精简非核心法律内容
 - 更新 `SKILL.md` 版本号与最后更新时间，恢复“以法律工具为核心”的对外定位
 
 ### 文档完善
 
 - 更新 `TASKS.md`，记录开源发布文档补齐情况
-- 更新 `DECISIONS.md`，记录“商业策略内容退出主 skill”与“先做工具入口、暂不加转化钩子”的调整
+- 更新 `DECISIONS.md`，记录内容精简与定位调整的决策
 
 ### 待办事项
 
@@ -159,7 +159,7 @@
 
 ### 新增
 
-- 新增 `references/business-context.md`，整合 OPC 创业者画像、服务包设计（启动包/成长包/融资专项）、市场机会、收入预测、品牌定位、行动路线图
+- 新增 `references/business-context.md`，整合 OPC 创业者画像与经营场景分析
 - 新增 `references/local-policies/opc/06-姑苏区专项政策.md`，含姑苏区最高 200 万奖励、沧浪街道赋能平台、OPC 创业人才贷（交行/工行）详情
 
 ### 改进

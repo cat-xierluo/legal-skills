@@ -97,8 +97,8 @@
 
 - AI 产品上线、第三方模型、生成内容投诉：
   - `references/ai-compliance.md`
-  - `references/industry/ai-saas.md`
-  - `assets/output-samples/ai-launch-report.md`
+  - `references/industry-ai-saas.md`
+  - `assets/template-ai-launch-report.md`
 - 客户合同、委托处理、DPA：
   - `references/contracts.md`
 - 商业秘密、训练数据、输出归属：

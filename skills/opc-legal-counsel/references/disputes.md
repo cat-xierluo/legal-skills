@@ -95,7 +95,7 @@
 
 - 合同追款、验收、违约：
   - `references/contracts.md`
-  - `assets/output-samples/contract-review-report.md`
+  - `assets/template-contract-review-report.md`
 - IP、AI 生成内容、商业秘密投诉：
   - `references/ip.md`
   - `references/ai-compliance.md`

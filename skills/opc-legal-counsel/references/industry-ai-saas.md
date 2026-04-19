@@ -24,7 +24,7 @@
 
 ## 高频场景的下一跳
 
-- 上线前核查：`references/ai-compliance.md` + `assets/output-samples/ai-launch-report.md`
+- 上线前核查：`references/ai-compliance.md` + `assets/template-ai-launch-report.md`
 - 企业客户上传材料：`references/data-compliance.md` + `references/contracts.md`
 - 宣传“替代人工”“准确率 100%”：`references/regulatory.md`
 - 输出版权和训练边界：`references/ip.md`

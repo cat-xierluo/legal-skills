@@ -83,11 +83,11 @@
 
 - AI 产品宣传、标识、公示和投诉：
   - `references/ai-compliance.md`
-  - `references/industry/ai-saas.md`
+  - `references/industry-ai-saas.md`
 - 电商、直播、平台提醒和售后投诉：
-  - `references/industry/ecommerce.md`
+  - `references/industry-ecommerce.md`
 - 代运营、投放素材和客户责任分配：
-  - `references/industry/agency-outsourcing.md`
+  - `references/industry-agency-outsourcing.md`
   - `references/contracts.md`
 - 图片、商标、素材、字体和竞品对比：
   - `references/ip.md`

@@ -16,11 +16,11 @@
 
 涉及地方 OPC 问题时，建议按以下顺序读取：
 
-1. `05-青岛指引-结构化摘录.md`
-2. `03-青岛OPC合规指引.md`
-3. `01-国家政策背景.md`（含省级政策）
-4. `06-姑苏区专项政策.md`（含苏州金融支撑、沧浪街道）
-5. `02-公司注册流程.md`
+1. `opc-青岛指引-结构化摘录.md`
+2. `opc-青岛OPC合规指引.md`
+3. `opc-国家政策背景.md`（含省级政策）
+4. `opc-姑苏区专项政策.md`（含苏州金融支撑、沧浪街道）
+5. `opc-公司注册流程.md`
 6. `archive/04-青岛OPC合规指引全文.md`（原始 OCR 已归档，仅在核对原文时读取）
 
 ## 使用原则
@@ -33,8 +33,8 @@
 
 如果后续增加更多地方资料，建议继续沿本目录扩展，例如：
 
-- `references/local-policies/opc/suzhou/`
-- `references/local-policies/opc/qingdao/`
-- `references/local-policies/opc/hangzhou/`
+- `references/local-policies/suzhou-*.md`
+- `references/local-policies/qingdao-*.md`
+- `references/local-policies/hangzhou-*.md`
 
-当前阶段为了保持轻量，仍采用平铺文件结构；等地方资料数量明显增多时，再按城市拆分子目录。
+当前阶段为了保持轻量，仍采用按城市前缀的平铺文件结构。

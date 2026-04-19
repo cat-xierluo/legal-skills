@@ -83,7 +83,7 @@
 
 - 涉及公私混同、股东借款、分红路径：
   - `references/governance.md`
-  - `assets/output-samples/opc-separation-report.md`
+  - `assets/template-opc-separation-report.md`
 - 涉及付款、开票、交易链路和合同约定：
   - `references/contracts.md`
 - 涉及融资、股权激励、转增或股权变动：

@@ -83,11 +83,11 @@
 
 - 审合同、改条款、补条款：
   - `assets/contract-clauses.md`
-  - `assets/output-samples/contract-review-report.md`
+  - `assets/template-contract-review-report.md`
 - 涉及技术开发、模型调用、成果归属：
   - `references/ip.md`
-  - `references/industry/ai-saas.md`
-  - `references/industry/agency-outsourcing.md`
+  - `references/industry-ai-saas.md`
+  - `references/industry-agency-outsourcing.md`
 - 涉及拖款、解除、违约追责：
   - `references/disputes.md`
 - 涉及开票、付款路径和税务后果：

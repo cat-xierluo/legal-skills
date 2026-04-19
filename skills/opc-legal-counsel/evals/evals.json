@@ -51,13 +51,13 @@
         "references/contracts.md",
         "references/ip.md",
         "assets/contract-clauses.md",
-        "assets/output-samples/contract-review-report.md"
+        "assets/template-contract-review-report.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "none",
       "recommended_assets": [
         "assets/contract-clauses.md",
-        "assets/output-samples/contract-review-report.md"
+        "assets/template-contract-review-report.md"
       ],
       "expectations": [
         "指出验收标准、验收方式、验收期限和视为验收条款是高优先级缺口",
@@ -80,13 +80,13 @@
       "expected_next_hop": [
         "references/governance.md",
         "references/tax.md",
-        "assets/output-samples/opc-separation-report.md",
+        "assets/template-opc-separation-report.md",
         "assets/risk-checklist.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "conditional-accountant",
       "recommended_assets": [
-        "assets/output-samples/opc-separation-report.md",
+        "assets/template-opc-separation-report.md",
         "assets/risk-checklist.md"
       ],
       "expectations": [
@@ -183,7 +183,7 @@
       "expected_next_hop": [
         "references/governance.md",
         "references/tax.md",
-        "references/industry/agency-outsourcing.md"
+        "references/industry-agency-outsourcing.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "none",
@@ -209,13 +209,13 @@
       "expected_next_hop": [
         "references/governance.md",
         "references/tax.md",
-        "assets/output-samples/opc-separation-report.md",
+        "assets/template-opc-separation-report.md",
         "assets/risk-checklist.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "conditional-accountant",
       "recommended_assets": [
-        "assets/output-samples/opc-separation-report.md",
+        "assets/template-opc-separation-report.md",
         "assets/risk-checklist.md"
       ],
       "expectations": [
@@ -240,14 +240,14 @@
       "expected_next_hop": [
         "references/ai-compliance.md",
         "references/data-compliance.md",
-        "references/industry/ai-saas.md",
-        "assets/output-samples/ai-launch-report.md",
+        "references/industry-ai-saas.md",
+        "assets/template-ai-launch-report.md",
         "assets/risk-checklist.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "none",
       "recommended_assets": [
-        "assets/output-samples/ai-launch-report.md",
+        "assets/template-ai-launch-report.md",
         "assets/risk-checklist.md"
       ],
       "expectations": [
@@ -272,7 +272,7 @@
         "references/ai-compliance.md",
         "references/data-compliance.md",
         "references/contracts.md",
-        "references/industry/ai-saas.md"
+        "references/industry-ai-saas.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "none",
@@ -325,8 +325,8 @@
       "expected_next_hop": [
         "references/governance.md",
         "references/tax.md",
-        "references/industry/agency-outsourcing.md",
-        "references/local-policies/opc/05-青岛指引-结构化摘录.md"
+        "references/industry-agency-outsourcing.md",
+        "references/local-policies/opc-青岛指引-结构化摘录.md"
       ],
       "expected_local_overlay": "qingdao",
       "expected_escalation": "none",
@@ -437,7 +437,7 @@
         "references/regulatory.md",
         "references/ip.md",
         "references/disputes.md",
-        "references/industry/ecommerce.md"
+        "references/industry-ecommerce.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "none",
@@ -464,15 +464,15 @@
         "references/contracts.md",
         "references/disputes.md",
         "references/ip.md",
-        "references/industry/agency-outsourcing.md",
+        "references/industry-agency-outsourcing.md",
         "assets/contract-clauses.md",
-        "assets/output-samples/contract-review-report.md"
+        "assets/template-contract-review-report.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "conditional-lawyer",
       "recommended_assets": [
         "assets/contract-clauses.md",
-        "assets/output-samples/contract-review-report.md"
+        "assets/template-contract-review-report.md"
       ],
       "expectations": [
         "体现代运营 / 外包交付 overlay 的作用，而不是只讲一般合同原则",
@@ -497,13 +497,13 @@
         "references/ai-compliance.md",
         "references/data-compliance.md",
         "references/contracts.md",
-        "references/industry/ai-saas.md",
-        "assets/output-samples/ai-launch-report.md"
+        "references/industry-ai-saas.md",
+        "assets/template-ai-launch-report.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "conditional-lawyer",
       "recommended_assets": [
-        "assets/output-samples/ai-launch-report.md"
+        "assets/template-ai-launch-report.md"
       ],
       "expectations": [
         "体现 AI SaaS overlay 和 AI 上线样稿都被命中",
@@ -663,8 +663,8 @@
         "references/ip.md",
         "references/ai-compliance.md",
         "references/disputes.md",
-        "references/industry/ecommerce.md",
-        "references/industry/agency-outsourcing.md"
+        "references/industry-ecommerce.md",
+        "references/industry-agency-outsourcing.md"
       ],
       "expected_local_overlay": "none",
       "expected_escalation": "conditional-lawyer",

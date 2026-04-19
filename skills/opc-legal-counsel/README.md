@@ -123,7 +123,6 @@
 opc-legal-counsel/
 ├── SKILL.md
 ├── README.md
-├── DISCLAIMER.md
 ├── CHANGELOG.md
 ├── DECISIONS.md
 ├── TASKS.md
@@ -134,18 +133,25 @@ opc-legal-counsel/
 │   ├── growth-financing.md
 │   ├── tax.md
 │   ├── ai-compliance.md
-│   ├── industry/
+│   ├── industry-ai-saas.md
+│   ├── industry-ecommerce.md
+│   ├── industry-agency-outsourcing.md
+│   ├── local-policies/
+│   │   └── opc-*.md
 │   └── ...
 ├── assets/
 │   ├── contract-clauses.md
 │   ├── risk-checklist.md
-│   ├── compliance-quick-ref.md
-│   └── output-samples/
+│   ├── template-ai-launch-report.md
+│   ├── template-opc-separation-report.md
+│   └── template-contract-review-report.md
 ├── examples/
-│   └── README.md
+│   ├── 01-联合创始人股权与技术入股.md
+│   ├── 02-公私混同补救.md
+│   └── 03-AI功能上线检查.md
 ├── evals/
-│   ├── README.md
-│   └── evals.json
+│   ├── evals.json
+│   └── outputs/
 ├── scripts/
 │   └── check-evals.py
 └── archive/
@@ -155,15 +161,12 @@ opc-legal-counsel/
 ## 关键文件
 
 - [SKILL.md](./SKILL.md)：正式 skill 入口
+- [references/file-index.md](./references/file-index.md)：完整文件清单
 - [references/growth-financing.md](./references/growth-financing.md)：成长阶段模块
-- [references/industry/README.md](./references/industry/README.md)：行业 overlay 说明
 - [evals/evals.json](./evals/evals.json)：当前回归样本
 - [evals/manual-review.md](./evals/manual-review.md)：重点样本人工评分说明
 - [evals/assertions.json](./evals/assertions.json)：重点样本机器可读断言
 - [scripts/check-evals.py](./scripts/check-evals.py)：评测结构与回答断言检查脚本
-- [assets/output-samples/README.md](./assets/output-samples/README.md)：标准输出样稿索引
-- [examples/README.md](./examples/README.md)：公开示例问题索引
-- [DISCLAIMER.md](./DISCLAIMER.md)：使用边界与免责声明
 
 ## 当前已经有的质量支撑
 
@@ -203,7 +206,7 @@ opc-legal-counsel/
 - 诉讼 / 仲裁代理
 - 刑事、重大交易、跨境、高监管行业的深度专项服务
 
-详见 [DISCLAIMER.md](./DISCLAIMER.md)。
+详见 [LICENSE.txt](./LICENSE.txt)。
 
 ## 许可证
 
