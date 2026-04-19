@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 import argparse
 import threading
+import re
 
 import numpy as np
 
@@ -170,6 +171,13 @@ MONITOR_THREAD = None
 # 默认模型配置
 DEFAULT_MODEL = "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
 MODEL_CACHE = {}  # 模型实例缓存 {model_id: model_instance}
+ONNX_EXPORT_PATCHED = False
+ONNX_COMPAT_CACHE = Path(
+    os.environ.get(
+        "FUNASR_ONNX_COMPAT_CACHE",
+        os.path.expanduser("~/.cache/funasr-onnx-compat"),
+    )
+)
 
 
 def check_dependencies():
@@ -198,6 +206,39 @@ def get_model_cache_dir():
     """获取 ModelScope 模型缓存目录"""
     cache_dir = os.environ.get('MODELSCOPE_CACHE', os.path.expanduser('~/.cache/modelscope/hub'))
     return Path(cache_dir) / "models"
+
+
+def resolve_local_model_dir(model_id_or_path: str) -> Path:
+    """解析模型 ID 或本地目录为真实可访问路径。"""
+    candidate = Path(model_id_or_path).expanduser()
+    if candidate.exists():
+        return candidate
+
+    cache_candidate = get_model_cache_dir() / model_id_or_path.replace('/', os.sep)
+    if cache_candidate.exists():
+        return cache_candidate
+
+    try:
+        from modelscope.hub.snapshot_download import snapshot_download
+    except Exception as exc:
+        raise RuntimeError(f"无法解析模型目录，且 modelscope 不可用: {model_id_or_path}") from exc
+
+    try:
+        return Path(snapshot_download(model_id_or_path))
+    except Exception as exc:
+        raise RuntimeError(f"无法下载模型: {model_id_or_path}") from exc
+
+
+def get_onnx_compat_dir(model_id_or_path: str) -> Path:
+    """返回兼容导出缓存目录。"""
+    local_dir = resolve_local_model_dir(model_id_or_path).resolve()
+    models_root = get_model_cache_dir().resolve()
+    try:
+        rel_path = local_dir.relative_to(models_root)
+        return ONNX_COMPAT_CACHE / rel_path
+    except ValueError:
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "__", str(local_dir))
+        return ONNX_COMPAT_CACHE / safe_name
 
 
 def check_model_exists(model_id: str) -> bool:
@@ -310,6 +351,8 @@ if not startup_check():
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from funasr import AutoModel
+import torch
+import funasr.utils.export_utils as funasr_export_utils
 
 try:
     from funasr_onnx import Paraformer as ONNXParaformer
@@ -353,11 +396,141 @@ PARAFORMER_MODEL_ID = DEFAULT_MODEL
 SENSEVOICE_MODEL_ID = os.environ.get("FUNASR_SENSEVOICE_MODEL_ID", "iic/SenseVoiceSmall")
 VAD_MODEL_ID = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
 SPK_MODEL_ID = "cam++"
+PUNC_MODEL_ID = os.environ.get(
+    "FUNASR_PUNC_MODEL_ID",
+    "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+)
 DEFAULT_MODEL_ALIAS = os.environ.get("FUNASR_SERVER_DEFAULT_MODEL", "paraformer")
 DEFAULT_ONNX_QUANTIZE = os.environ.get("FUNASR_SERVER_DEFAULT_QUANTIZE", "0").lower() in {
     "1", "true", "yes", "on"
 }
 DEFAULT_ONNX_THREADS = int(os.environ.get("FUNASR_SERVER_ONNX_THREADS", "4"))
+DEFAULT_ONNX_TEXT_SOURCE = os.environ.get("FUNASR_ONNX_TEXT_SOURCE", "preds").lower()
+
+
+def patch_funasr_onnx_export():
+    """强制 FunASR 导出走兼容的 torch.onnx 路径。"""
+    global ONNX_EXPORT_PATCHED
+    if ONNX_EXPORT_PATCHED:
+        return
+
+    def compat_onnx_export(
+        model,
+        data_in=None,
+        quantize: bool = False,
+        opset_version: int = 14,
+        export_dir: str = None,
+        **kwargs,
+    ):
+        device = kwargs.get("device", "cpu")
+        dummy_input = model.export_dummy_inputs()
+        if isinstance(dummy_input, torch.Tensor):
+            dummy_input = dummy_input.to(device)
+        else:
+            dummy_input = tuple(item.to(device) for item in dummy_input)
+
+        verbose = kwargs.get("verbose", False)
+        dynamo = kwargs.get("dynamo", False)
+        effective_opset = kwargs.get("opset_version", opset_version)
+        export_name = model.export_name if isinstance(model.export_name, str) else model.export_name()
+        if not export_name.endswith(".onnx"):
+            export_name = f"{export_name}.onnx"
+        model_path = os.path.join(export_dir, export_name)
+
+        torch.onnx.export(
+            model,
+            dummy_input,
+            model_path,
+            verbose=verbose,
+            do_constant_folding=True,
+            opset_version=effective_opset,
+            input_names=model.export_input_names(),
+            output_names=model.export_output_names(),
+            dynamic_axes=model.export_dynamic_axes(),
+            dynamo=dynamo,
+        )
+
+        if quantize:
+            try:
+                import onnx
+                from onnxruntime.quantization import QuantType, quantize_dynamic
+            except Exception as exc:
+                raise RuntimeError("量化 ONNX 模型需要先安装 onnx 和 onnxruntime。") from exc
+
+            quant_model_path = model_path.replace(".onnx", "_quant.onnx")
+            onnx_model = onnx.load(model_path)
+            nodes = [node.name for node in onnx_model.graph.node]
+            nodes_to_exclude = [
+                node_name
+                for node_name in nodes
+                if "output" in node_name or "bias_encoder" in node_name or "bias_decoder" in node_name
+            ]
+            print(f"Quantizing model from {model_path} to {quant_model_path}")
+            quantize_dynamic(
+                model_input=model_path,
+                model_output=quant_model_path,
+                op_types_to_quantize=["MatMul"],
+                per_channel=True,
+                reduce_range=False,
+                weight_type=QuantType.QUInt8,
+                nodes_to_exclude=nodes_to_exclude,
+            )
+
+    funasr_export_utils._onnx = compat_onnx_export
+    ONNX_EXPORT_PATCHED = True
+
+
+def ensure_compat_onnx_model_dir(model_id_or_path: str, quantize: bool = False) -> Path:
+    """确保模型在兼容导出缓存中存在可用 ONNX 文件。"""
+    source_dir = resolve_local_model_dir(model_id_or_path)
+    compat_dir = get_onnx_compat_dir(model_id_or_path)
+    marker_path = compat_dir / ".codex_compat_export"
+    target_model = compat_dir / ("model_quant.onnx" if quantize else "model.onnx")
+
+    if target_model.exists() and marker_path.exists():
+        return compat_dir
+
+    compat_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_dir, compat_dir, dirs_exist_ok=True)
+    for stale_file in ("model.onnx", "model_quant.onnx", "model.onnx.onnx", "model_quant.onnx.onnx"):
+        stale_path = compat_dir / stale_file
+        if stale_path.exists():
+            stale_path.unlink()
+
+    patch_funasr_onnx_export()
+    export_model = AutoModel(
+        model=str(source_dir),
+        disable_update=True,
+        disable_log=True,
+    )
+    export_model.export(
+        type="onnx",
+        quantize=quantize,
+        output_dir=str(compat_dir),
+        opset_version=18,
+        dynamo=False,
+        disable_update=True,
+        disable_log=True,
+    )
+    marker_path.write_text(
+        json.dumps(
+            {
+                "source_dir": str(source_dir),
+                "quantize": quantize,
+                "opset_version": 18,
+                "dynamo": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    for exported_name in ("model.onnx.onnx", "model_quant.onnx.onnx"):
+        exported_path = compat_dir / exported_name
+        if exported_path.exists():
+            normalized_name = exported_name.replace(".onnx.onnx", ".onnx")
+            exported_path.rename(compat_dir / normalized_name)
+    return compat_dir
 
 MODEL_ALIASES = {
     "paraformer": {
@@ -460,8 +633,9 @@ def init_onnx_model(model_alias: str, model_id: str = None, quantize: bool = Fal
 
     model_class = get_onnx_model_class(model_alias)
     print(f"正在加载 ONNX 模型: {model_alias} ({use_model_id})")
+    compat_model_dir = ensure_compat_onnx_model_dir(use_model_id, quantize=quantize)
     model_instance = model_class(
-        use_model_id,
+        str(compat_model_dir),
         batch_size=1,
         quantize=quantize,
         intra_op_num_threads=DEFAULT_ONNX_THREADS,
@@ -478,8 +652,9 @@ def init_onnx_vad_model(quantize: bool = False):
         return MODEL_CACHE[cache_key]
 
     print("正在加载 ONNX VAD 模型")
+    compat_model_dir = ensure_compat_onnx_model_dir(VAD_MODEL_ID, quantize=quantize)
     model_instance = ONNXFsmnVad(
-        VAD_MODEL_ID,
+        str(compat_model_dir),
         quantize=quantize,
         intra_op_num_threads=DEFAULT_ONNX_THREADS,
     )
@@ -501,6 +676,22 @@ def init_speaker_model():
     )
     MODEL_CACHE[cache_key] = speaker_model
     return speaker_model
+
+
+def init_punc_model():
+    """初始化标点恢复模型。"""
+    cache_key = f"torch::punc::{PUNC_MODEL_ID}"
+    if cache_key in MODEL_CACHE:
+        return MODEL_CACHE[cache_key]
+
+    print(f"正在加载标点恢复模型: {PUNC_MODEL_ID}")
+    punc_model = AutoModel(
+        model=PUNC_MODEL_ID,
+        disable_update=True,
+        disable_log=True,
+    )
+    MODEL_CACHE[cache_key] = punc_model
+    return punc_model
 
 
 def get_cluster_backend():
@@ -525,6 +716,55 @@ def normalize_vad_segments(vad_result) -> list[list[int]]:
     return normalized
 
 
+def call_onnx_vad_model(vad_model, audio_input) -> list:
+    """兼容 funasr_onnx 当前版本对 feats_len 标量假设的问题。"""
+    waveform_list = vad_model.load_data(audio_input, vad_model.frontend.opts.frame_opts.samp_freq)
+    waveform_nums = len(waveform_list)
+    segments = [[] for _ in range(vad_model.batch_size)]
+
+    for beg_idx in range(0, waveform_nums, vad_model.batch_size):
+        end_idx = min(waveform_nums, beg_idx + vad_model.batch_size)
+        waveform_batch = waveform_list[beg_idx:end_idx]
+        feats, feats_len = vad_model.extract_feat(waveform_batch)
+        waveform = np.array(waveform_batch)
+        in_cache = vad_model.prepare_cache([])
+        feats_len_value = int(np.max(feats_len))
+        step = int(min(feats_len_value, 6000))
+        t_offset = 0
+
+        while t_offset < feats_len_value:
+            current_step = min(step, feats_len_value - t_offset)
+            is_final = t_offset + current_step >= feats_len_value - 1
+            feats_package = feats[:, t_offset:int(t_offset + current_step), :]
+            waveform_package = waveform[
+                :,
+                t_offset * 160:min(
+                    waveform.shape[-1],
+                    (int(t_offset + current_step) - 1) * 160 + 400,
+                ),
+            ]
+
+            inputs = [feats_package]
+            inputs.extend(in_cache)
+            scores, out_caches = vad_model.infer(inputs)
+            in_cache = out_caches
+            segments_part = vad_model.vad_scorer(
+                scores,
+                waveform_package,
+                is_final=is_final,
+                max_end_sil=vad_model.max_end_sil,
+                online=False,
+            )
+
+            if segments_part:
+                for batch_num in range(0, len(segments_part)):
+                    segments[batch_num].extend(segments_part[batch_num])
+
+            t_offset += current_step
+
+    return segments
+
+
 def offset_timestamps(timestamps: list, offset_ms: int) -> list:
     """为时间戳整体加偏移量。"""
     shifted = []
@@ -534,13 +774,217 @@ def offset_timestamps(timestamps: list, offset_ms: int) -> list:
     return shifted
 
 
-def build_onnx_result(output, offset_ms: int = 0) -> dict:
+def split_text_by_punctuation(text: str) -> list[str]:
+    """按标点切分文本，保留句尾标点。"""
+    segments = re.findall(r"[^。！？!?；;，,\n]+[。！？!?；;，,]?", text)
+    return [segment.strip() for segment in segments if segment.strip()]
+
+
+def normalize_text_for_timestamp_alignment(text: str) -> str:
+    """移除空白和标点，便于用字符比例映射时间戳。"""
+    return re.sub(r"[\s，。！？、；：,.!?;:\"“”‘’（）()《》【】\[\]<>-]+", "", text or "")
+
+
+def normalize_onnx_tokens(raw_tokens: list) -> str:
+    """根据 raw_tokens 尽量恢复更自然的 ONNX 文本。"""
+    if not raw_tokens:
+        return ""
+
+    skip_tokens = {"<blank>", "<unk>", "<s>", "</s>"}
+    ascii_token_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9'._:/-]*$")
+    normalized_tokens = []
+    ascii_buffer = ""
+
+    for raw_token in raw_tokens:
+        token = str(raw_token).strip()
+        if not token or token in skip_tokens:
+            continue
+
+        continued = token.endswith("@@")
+        token = token[:-2] if continued else token
+        if not token:
+            continue
+
+        if ascii_token_pattern.fullmatch(token):
+            ascii_buffer += token
+            if not continued:
+                normalized_tokens.append(ascii_buffer)
+                ascii_buffer = ""
+            continue
+
+        if ascii_buffer:
+            normalized_tokens.append(ascii_buffer)
+            ascii_buffer = ""
+        normalized_tokens.append(token)
+
+    if ascii_buffer:
+        normalized_tokens.append(ascii_buffer)
+
+    if not normalized_tokens:
+        return ""
+
+    text_parts = []
+    for token in normalized_tokens:
+        is_ascii = bool(ascii_token_pattern.fullmatch(token))
+        if not text_parts:
+            text_parts.append(token)
+            continue
+
+        prev_token = text_parts[-1]
+        prev_is_ascii = bool(ascii_token_pattern.fullmatch(prev_token))
+        if is_ascii and prev_is_ascii:
+            text_parts.append(" ")
+            text_parts.append(token)
+        else:
+            text_parts.append(token)
+
+    return "".join(text_parts).strip()
+
+
+def normalize_onnx_text(text: str) -> str:
+    """清理 preds 中常见的逐字空格。"""
+    normalized = re.sub(r"\s+", " ", (text or "")).strip()
+    if not normalized:
+        return ""
+
+    normalized = re.sub(r"(?<=[\u4e00-\u9fff]) (?=[\u4e00-\u9fff])", "", normalized)
+    normalized = re.sub(r"(?<=[\u4e00-\u9fff]) (?=[，。！？、；：,.!?;])", "", normalized)
+    normalized = re.sub(r"(?<=[，。！？、；：,.!?;]) (?=[\u4e00-\u9fff])", "", normalized)
+    return normalized.strip()
+
+
+def extract_onnx_text(output: dict, text_source: str = None) -> str:
+    """从 ONNX 输出中按配置抽取文本。"""
+    source = (text_source or DEFAULT_ONNX_TEXT_SOURCE or "preds").lower()
+    preds_text = normalize_onnx_text(output.get("text") or output.get("preds") or "")
+    raw_token_text = normalize_onnx_tokens(output.get("raw_tokens") or [])
+
+    if source == "raw_tokens":
+        return raw_token_text or preds_text
+    if source == "auto":
+        # preds 经过 FunASR 自带 postprocess，通常中文质量更稳；raw_tokens 用作兜底。
+        return preds_text or raw_token_text
+    return preds_text or raw_token_text
+
+
+def restore_punctuation(text: str) -> str:
+    """为 ONNX 结果补做标点恢复。"""
+    normalized = normalize_onnx_text(text)
+    if not normalized:
+        return ""
+
+    try:
+        result = init_punc_model().generate(input=normalized, disable_pbar=True)
+    except Exception as exc:
+        print(f"标点恢复失败，回退原文本: {exc}")
+        return normalized
+
+    if isinstance(result, list) and result:
+        first_item = result[0]
+        if isinstance(first_item, dict):
+            punctuated = first_item.get("text") or first_item.get("preds") or normalized
+            return normalize_onnx_text(punctuated)
+        if isinstance(first_item, str):
+            return normalize_onnx_text(first_item)
+
+    if isinstance(result, dict):
+        punctuated = result.get("text") or result.get("preds") or normalized
+        return normalize_onnx_text(punctuated)
+    if isinstance(result, str):
+        return normalize_onnx_text(result)
+    return normalized
+
+
+def split_text_with_timestamps(text: str, timestamps: list,
+                               default_start_ms: int = 0,
+                               default_end_ms: int = 0) -> list[dict]:
+    """按补完标点后的句子重新映射时间戳。"""
+    normalized_text = normalize_onnx_text(text)
+    if not normalized_text:
+        return []
+
+    segments = split_text_by_punctuation(normalized_text) or [normalized_text]
+    if not timestamps:
+        return [
+            {
+                "start": int(default_start_ms),
+                "end": int(default_end_ms),
+                "sentence": normalized_text,
+                "timestamp": [],
+            }
+        ]
+
+    cleaned_full_text = normalize_text_for_timestamp_alignment(normalized_text)
+    if not cleaned_full_text:
+        return [
+            {
+                "start": int(default_start_ms or timestamps[0][0]),
+                "end": int(default_end_ms or timestamps[-1][1]),
+                "sentence": normalized_text,
+                "timestamp": timestamps,
+            }
+        ]
+
+    total_chars = len(cleaned_full_text)
+    total_timestamps = len(timestamps)
+    cursor = 0
+    sentence_info = []
+
+    for segment in segments:
+        cleaned_segment = normalize_text_for_timestamp_alignment(segment)
+        if not cleaned_segment:
+            continue
+
+        start_char = cursor
+        end_char = min(total_chars, cursor + len(cleaned_segment))
+        cursor = end_char
+
+        start_ts_idx = min(int(start_char / total_chars * total_timestamps), total_timestamps - 1)
+        end_ratio = end_char / total_chars if total_chars else 1
+        end_ts_idx = max(start_ts_idx, min(int(end_ratio * total_timestamps) - 1, total_timestamps - 1))
+
+        sentence_timestamps = timestamps[start_ts_idx:end_ts_idx + 1]
+        if sentence_timestamps:
+            start_ms = int(sentence_timestamps[0][0])
+            end_ms = int(sentence_timestamps[-1][1])
+        else:
+            start_ms = int(default_start_ms)
+            end_ms = int(default_end_ms)
+
+        sentence_info.append(
+            {
+                "start": start_ms,
+                "end": end_ms,
+                "sentence": segment,
+                "timestamp": sentence_timestamps,
+            }
+        )
+
+    if sentence_info:
+        return sentence_info
+
+    return [
+        {
+            "start": int(default_start_ms or timestamps[0][0]),
+            "end": int(default_end_ms or timestamps[-1][1]),
+            "sentence": normalized_text,
+            "timestamp": timestamps,
+        }
+    ]
+
+
+def build_onnx_result(output, offset_ms: int = 0, apply_punc: bool = False) -> dict:
     """将 ONNX 推理结果转换为与现有 server 兼容的结构。"""
     if isinstance(output, str):
-        return {"text": output}
+        text = normalize_onnx_text(output)
+        if apply_punc:
+            text = restore_punctuation(text)
+        return {"text": text}
 
     if isinstance(output, dict):
-        text = output.get("text") or output.get("preds") or ""
+        text = extract_onnx_text(output)
+        if apply_punc:
+            text = restore_punctuation(text)
         result = {"text": text}
         timestamps = output.get("timestamp")
         if timestamps:
@@ -555,9 +999,10 @@ def transcribe_with_onnx_model(file_path: str, model_alias: str, model_id: str =
     """使用 ONNX 模型执行非 diarization 转录。"""
     model_instance = init_onnx_model(model_alias, model_id=model_id, quantize=quantize)
     result = model_instance(file_path)
+    apply_punc = model_alias == "paraformer-onnx"
     if isinstance(result, list) and result:
-        return build_onnx_result(result[0])
-    return build_onnx_result(result)
+        return build_onnx_result(result[0], apply_punc=apply_punc)
+    return build_onnx_result(result, apply_punc=apply_punc)
 
 
 def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = None,
@@ -575,13 +1020,16 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
     if sample_rate != 16000:
         raise RuntimeError(f"ONNX diarization 需要 16k 音频，实际采样率为 {sample_rate}")
 
-    vad_segments = normalize_vad_segments(vad_model(file_path))
+    vad_segments = normalize_vad_segments(call_onnx_vad_model(vad_model, waveform.astype(np.float32)))
     if not vad_segments:
         raw_result = asr_model(file_path)
         if isinstance(raw_result, list) and raw_result:
             raw_result = raw_result[0]
-        result = build_onnx_result(raw_result)
-        result["sentence_info"] = []
+        result = build_onnx_result(raw_result, apply_punc=True)
+        result["sentence_info"] = split_text_with_timestamps(
+            result.get("text", ""),
+            result.get("timestamp", []),
+        )
         return result
 
     sentence_info = []
@@ -600,20 +1048,21 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
         segment_result_raw = asr_model(segment_audio)
         if isinstance(segment_result_raw, list) and segment_result_raw:
             segment_result_raw = segment_result_raw[0]
-        segment_result = build_onnx_result(segment_result_raw, offset_ms=start_ms)
+        segment_result = build_onnx_result(segment_result_raw, offset_ms=start_ms, apply_punc=True)
         text = (segment_result.get("text") or "").strip()
         if not text:
             continue
 
         combined_texts.append(text)
-        combined_timestamps.extend(segment_result.get("timestamp", []))
-        sentence_info.append(
-            {
-                "start": int(start_ms),
-                "end": int(end_ms),
-                "sentence": text,
-                "timestamp": segment_result.get("timestamp", []),
-            }
+        segment_timestamps = segment_result.get("timestamp", [])
+        combined_timestamps.extend(segment_timestamps)
+        sentence_info.extend(
+            split_text_with_timestamps(
+                text,
+                segment_timestamps,
+                default_start_ms=int(start_ms),
+                default_end_ms=int(end_ms),
+            )
         )
 
     if not sentence_info:
@@ -627,17 +1076,22 @@ def transcribe_paraformer_onnx_with_diarization(file_path: str, model_id: str = 
             **speaker_model.kwargs,
         )
         spk_embedding = speaker_results[0]["spk_embedding"]
-        labels = cluster_backend(spk_embedding.cpu().numpy(), oracle_num=None)
+        spk_embedding_np = (
+            spk_embedding.detach().cpu().numpy()
+            if hasattr(spk_embedding, "detach")
+            else spk_embedding.cpu().numpy()
+        )
+        labels = cluster_backend(spk_embedding_np, oracle_num=None)
         speaker_regions = postprocess(
             speaker_chunks,
             None,
             labels,
-            spk_embedding.cpu().numpy(),
+            spk_embedding_np,
         )
         distribute_spk(sentence_info, speaker_regions)
 
     return {
-        "text": " ".join(combined_texts),
+        "text": join_text_fragments(combined_texts),
         "timestamp": combined_timestamps,
         "sentence_info": sentence_info,
     }
@@ -663,13 +1117,9 @@ def resolve_transcription_options(model_name: Optional[str], model_id: Optional[
     resolved_quantize = DEFAULT_ONNX_QUANTIZE if quantize is None else quantize
 
     if fast:
-        if model_name and model_name not in {"sensevoice", "sensevoice-onnx"}:
-            warnings.append("已保留显式指定模型；fast 标记未自动覆盖模型选择。")
-        else:
-            resolved_model = "sensevoice"
-            if resolved_diarize:
-                warnings.append("fast 模式已自动关闭说话人分离，切换到 SenseVoice 单人快速路径。")
-            resolved_diarize = False
+        if resolved_diarize:
+            warnings.append("fast 模式已自动关闭说话人分离，保留当前模型路径。")
+        resolved_diarize = False
 
     if resolved_model in {"sensevoice", "sensevoice-onnx"} and resolved_diarize:
         raise RuntimeError("SenseVoice-Small 不支持说话人分离，请改用 paraformer 或 paraformer-onnx。")
@@ -736,6 +1186,34 @@ def format_timestamp(ms: int) -> str:
     else:
         # 否则显示 MM:SS
         return f"{minutes:02d}:{secs:02d}"
+
+
+def join_text_fragments(fragments: list[str]) -> str:
+    """智能拼接中文片段，避免无意义空格。"""
+    combined = ""
+    ascii_boundary = re.compile(r"[A-Za-z0-9]$")
+    ascii_prefix = re.compile(r"^[A-Za-z0-9]")
+    ascii_punctuation_boundary = re.compile(r"[.!?;:,]$")
+    word_prefix = re.compile(r"^[A-Za-z0-9\u4e00-\u9fff]")
+
+    for fragment in fragments:
+        text = (fragment or "").strip()
+        if not text:
+            continue
+        if not combined:
+            combined = text
+            continue
+
+        if (
+            ascii_boundary.search(combined) and ascii_prefix.search(text)
+        ) or (
+            ascii_punctuation_boundary.search(combined) and word_prefix.search(text)
+        ):
+            combined = f"{combined} {text}"
+        else:
+            combined = f"{combined}{text}"
+
+    return combined
 
 
 def split_text_by_sentences(text: str) -> list:
@@ -851,7 +1329,7 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False, slide
             start_ts = format_timestamp(int(seg['start']))
             # 插入该时间段之前的截图
             _flush_slides_before(int(seg['start']))
-            combined_text = ' '.join(seg['texts'])
+            combined_text = join_text_fragments(seg['texts'])
             spk = seg.get('spk')
 
             if spk is not None:

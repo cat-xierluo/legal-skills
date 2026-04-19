@@ -29,7 +29,7 @@ DEFAULT_SERVER = "http://127.0.0.1:8765"
 AVAILABLE_MODELS = {
     "paraformer": "FunASR 原生 Paraformer（默认，支持 diarization）",
     "paraformer-onnx": "ONNX Paraformer（更快，支持 diarization）",
-    "sensevoice": "SenseVoice-Small ONNX（单人快速模式，不支持 diarization）",
+    "sensevoice": "SenseVoice-Small ONNX（实验性单人路径，不支持 diarization）",
     "sensevoice-onnx": "SenseVoice-Small ONNX（sensevoice 别名）",
 }
 
@@ -190,7 +190,7 @@ def main():
   # 禁用说话人分离
   python transcribe.py /path/to/audio.mp3 --no-diarize
 
-  # 单人快速模式（SenseVoice-Small ONNX）
+  # 单人快速模式（关闭说话人分离，保留默认 Paraformer）
   python transcribe.py /path/to/course.m4a --fast
 
   # 指定 Paraformer ONNX
@@ -217,7 +217,7 @@ def main():
     parser.add_argument('--auto-summary', action='store_true', help='自动调用 LLM 生成并注入总结（需要 API Key）')
     parser.add_argument('--model', choices=list(AVAILABLE_MODELS.keys()),
                        help='选择使用的 ASR 模型')
-    parser.add_argument('--fast', action='store_true', help='单人快速模式：自动走 SenseVoice-Small ONNX，并关闭 diarization')
+    parser.add_argument('--fast', action='store_true', help='单人快速模式：关闭 diarization，保留当前模型路径')
     parser.add_argument('--slides', action='store_true', help='提取视频关键帧截图（PPT幻灯片）')
     parser.add_argument('--slide-threshold', type=float, default=27.0, help='场景检测阈值（默认27.0，值越低越灵敏）')
 
@@ -230,7 +230,7 @@ def main():
     if args.model:
         print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})")
     elif args.fast:
-        print("⚡ 使用单人快速模式（SenseVoice-Small ONNX）")
+        print("⚡ 使用单人快速模式（关闭说话人分离，保留默认 Paraformer）")
 
     # 检查服务是否运行
     if not check_server(args.server):

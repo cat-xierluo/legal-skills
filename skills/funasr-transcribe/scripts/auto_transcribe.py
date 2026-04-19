@@ -33,6 +33,7 @@ import os
 import sys
 import requests
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 def check_server(api_url: str) -> bool:
@@ -46,13 +47,16 @@ def check_server(api_url: str) -> bool:
     return False
 
 
-def start_server():
+def start_server(api_url: str):
     """尝试启动服务"""
     print("FunASR 服务未运行，尝试启动...")
     import subprocess
     script_dir = Path(__file__).parent.absolute()
+    parsed = urlparse(api_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = str(parsed.port or 8765)
     subprocess.Popen(
-        [sys.executable, str(script_dir / "server.py")],
+        [sys.executable, str(script_dir / "server.py"), "--host", host, "--port", port],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True
@@ -61,7 +65,7 @@ def start_server():
     import time
     for _ in range(30):
         time.sleep(1)
-        if check_server():
+        if check_server(api_url):
             print("✅ FunASR 服务已启动")
             return True
     print("❌ 无法启动 FunASR 服务")
@@ -152,7 +156,7 @@ def main():
     parser.add_argument("--diarize", action="store_true", default=True, help="启用说话人分离（默认启用）")
     parser.add_argument("--no-diarize", action="store_false", dest="diarize", help="禁用说话人分离")
     parser.add_argument("--model", choices=["paraformer", "paraformer-onnx", "sensevoice", "sensevoice-onnx"], help="指定模型")
-    parser.add_argument("--fast", action="store_true", help="单人快速模式：自动切到 SenseVoice-Small ONNX")
+    parser.add_argument("--fast", action="store_true", help="单人快速模式：关闭 diarization，保留当前模型路径")
     parser.add_argument("--no-summary", action="store_true", help="跳过总结步骤")
     parser.add_argument("--prompt-only", action="store_true", help="只返回总结提示词，不生成总结")
     parser.add_argument("--api", default="http://127.0.0.1:8765", help="API 地址")
@@ -169,7 +173,7 @@ def main():
     
     # 检查服务
     if not check_server(api_url):
-        if not start_server():
+        if not start_server(api_url):
             print("错误: FunASR 服务未运行且无法启动")
             sys.exit(1)
     

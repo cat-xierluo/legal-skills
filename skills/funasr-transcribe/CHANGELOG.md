@@ -2,6 +2,28 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.9.1] - 2026-04-19
+
+### 修复
+
+- **ONNX 兼容导出失败** — 为 Python 3.14 / PyTorch 2.11 环境补充 FunASR ONNX 兼容导出层，强制使用 `dynamo=False` 与 opset 18，并将产物缓存到 `~/.cache/funasr-onnx-compat`
+- **ONNX VAD `feats_len` 兼容问题** — 修复 `funasr_onnx` 当前版本将数组长度当作标量处理导致的 VAD 调用失败
+- **auto_transcribe 自动启动服务失败** — 修复自动拉起服务后健康检查未传入 `api_url` 的问题，并按传入 API 地址设置 host/port
+
+### 改进
+
+- **多人 ONNX 文本质量优化** — `paraformer-onnx + diarize` 会清理 ONNX 文本输出，修复逐字空格问题，并补做标点恢复
+- **ONNX 文本源调参** — 默认文本源从 `raw_tokens` 调整为清理后的 `preds`，并保留 `FUNASR_ONNX_TEXT_SOURCE=raw_tokens` 回退开关；90 秒样本相对原生 `paraformer` 的文本相似度从约 `0.9911` 提升到 `0.9974`
+- **多人 ONNX 时间戳优化** — 按补完标点后的句子重新映射时间戳，避免整段 VAD 片段只输出一个粗时间点
+- **中文输出拼接优化** — 合并同一说话人的句子时使用中文友好的拼接逻辑，减少无意义空格
+- **fast 路由回归 Paraformer** — `fast` 仅关闭 diarization，不再自动切到 SenseVoice；`sensevoice` 保留为显式实验选项
+
+### 验证
+
+- 使用 18 分 07 秒多人微信通话样本验证：修复后的 `paraformer-onnx + diarize` 耗时约 `272.443s`，约 `3.99x realtime`
+- 文本源调参后同一完整样本耗时约 `291.332s`，约 `3.73x realtime`
+- 与此前同样本原生 `paraformer + diarize` 基线 `551.59s` 相比，最终默认配置仍保留约 `1.89x` 速度优势
+
 ## [1.9.0] - 2026-04-16
 
 ### 新增
