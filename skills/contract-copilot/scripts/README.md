@@ -9,7 +9,7 @@
 
 - 必需 Python 包：`defusedxml`、`lxml`
 - OOXML 功能已内嵌在 `scripts/ooxml/` 和 `scripts/docx_core/` 中，无需外部依赖
-- 可选系统依赖：`soffice`（更严格的 DOCX 校验）、`pwsh` / `powershell`（Windows 包装器）
+- 可选系统依赖：`pwsh` / `powershell`（Windows 包装器）
 
 推荐先执行：
 

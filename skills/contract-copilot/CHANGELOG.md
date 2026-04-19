@@ -2,6 +2,22 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.5.0] - 2026-04-19
+
+### 重构
+
+- OOXML 模块轻量化：移除全部 XSD schema 文件和 PPTX/XLSX 验证代码，替换为轻量级结构检查（文件存在 + XML 解析），参照行业标准实现。
+- `pack.py` 简化：移除 XML 美化还原（`condense_xml`）和 `soffice` 依赖，改为直接 zip 打包。
+- `docx_core/document.py` 简化：移除 baseline 打包开销，验证改为轻量版。
+
+### 改进
+
+- 文件体系标准化：所有 reference 文件名改为英文，非发布文件移入 `archive/`。
+- 许可证从 CC BY-NC-SA 4.0 更新为 CC BY-NC 4.0，与项目统一。
+- README 精简为发布模板格式，新增作者信息和关联项目。
+- 自包含：移除对外部 `docx` skill 的依赖，OOXML 能力完全内嵌。
+- 注册为 subtree 独立仓库发布。
+
 ## [1.4.50] - 2026-04-09
 
 ### 改进
