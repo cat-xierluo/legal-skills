@@ -1,0 +1,9 @@
+{
+  "author": "",
+  "initials": "",
+  "organization": "",
+  "department": "",
+  "confirmed": false,
+  "time_gap_min_minutes": 5,
+  "time_gap_max_minutes": 10
+}
