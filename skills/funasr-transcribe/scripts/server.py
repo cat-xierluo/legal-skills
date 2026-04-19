@@ -1012,10 +1012,13 @@ def transcribe_with_onnx_model(file_path: str, model_alias: str, model_id: str =
 
 
 def transcribe_paraformer_onnx_segments(file_path: str, model_id: str = None,
-                                        quantize: bool = False) -> tuple[dict, list]:
+                                        quantize: bool = False,
+                                        punctuation_mode: str = "segment") -> tuple[dict, list]:
     """使用 ONNX VAD 切段执行 Paraformer ONNX 转录。"""
     ensure_onnx_runtime_available()
     ensure_onnx_segment_support_available()
+    if punctuation_mode not in {"segment", "global"}:
+        raise ValueError(f"不支持的 ONNX 标点恢复模式: {punctuation_mode}")
 
     vad_model = init_onnx_vad_model(quantize=quantize)
     asr_model = init_onnx_model("paraformer-onnx", model_id=model_id, quantize=quantize)
@@ -1052,7 +1055,11 @@ def transcribe_paraformer_onnx_segments(file_path: str, model_id: str = None,
         segment_result_raw = asr_model(segment_audio)
         if isinstance(segment_result_raw, list) and segment_result_raw:
             segment_result_raw = segment_result_raw[0]
-        segment_result = build_onnx_result(segment_result_raw, offset_ms=start_ms, apply_punc=True)
+        segment_result = build_onnx_result(
+            segment_result_raw,
+            offset_ms=start_ms,
+            apply_punc=punctuation_mode == "segment",
+        )
         text = (segment_result.get("text") or "").strip()
         if not text:
             continue
@@ -1060,14 +1067,27 @@ def transcribe_paraformer_onnx_segments(file_path: str, model_id: str = None,
         combined_texts.append(text)
         segment_timestamps = segment_result.get("timestamp", [])
         combined_timestamps.extend(segment_timestamps)
-        sentence_info.extend(
-            split_text_with_timestamps(
-                text,
-                segment_timestamps,
-                default_start_ms=int(start_ms),
-                default_end_ms=int(end_ms),
+        if punctuation_mode == "segment":
+            sentence_info.extend(
+                split_text_with_timestamps(
+                    text,
+                    segment_timestamps,
+                    default_start_ms=int(start_ms),
+                    default_end_ms=int(end_ms),
+                )
             )
-        )
+
+    if punctuation_mode == "global":
+        combined_text = join_text_fragments(combined_texts)
+        if not combined_text:
+            return {"text": "", "timestamp": [], "sentence_info": []}, vad_segment_payloads
+
+        punctuated_text = restore_punctuation(combined_text)
+        return {
+            "text": punctuated_text,
+            "timestamp": combined_timestamps,
+            "sentence_info": split_text_with_timestamps(punctuated_text, combined_timestamps),
+        }, vad_segment_payloads
 
     if not sentence_info:
         return {"text": "", "timestamp": [], "sentence_info": []}, vad_segment_payloads
@@ -1086,6 +1106,7 @@ def transcribe_paraformer_onnx_single(file_path: str, model_id: str = None,
         file_path,
         model_id=model_id,
         quantize=quantize,
+        punctuation_mode="global",
     )
     return result
 
