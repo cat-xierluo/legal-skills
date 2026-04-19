@@ -121,6 +121,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href=”skills/tingwu-asr/”><strong>tingwu-asr</strong></a></td>
+<td style=”word-break:break-word”>阿里云通义听悟云端语音转录，适用于长音频、高精度场景，支持说话人分离和 AI 摘要生成</td>
+<td style=”text-align:center”>MIT</td>
+<td style=”text-align:center”>v0.1.0</td>
+<td style=”text-align:center”>杨卫薪</td>
+<td></td>
+</tr>
+<tr>
 <td><a href=”skills/universal-media-downloader/”><strong>universal-media-downloader</strong></a></td>
 <td style=”word-break:break-word”>输入视频网站/播客平台链接后自动下载，支持抖音/B站/YouTube/小宇宙等平台，可下载字幕和音频</td>
 <td style=”text-align:center”>MIT</td>
@@ -148,7 +156,7 @@
 <td><a href=”skills/minimax-web-search/”><strong>minimax-web-search</strong></a></td>
 <td style=”word-break:break-word”>通过 MiniMax MCP 进行网络搜索</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v0.1.0</td>
+<td style=”text-align:center”>v0.1.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td>适用于 OpenClaw</td>
 </tr>
@@ -191,7 +199,7 @@
 <td><a href=”skills/trademark-assistant/”><strong>trademark-assistant</strong></a></td>
 <td style=”word-break:break-word”>商标服务助手，提供类别规划、可注册性初筛及申请材料准备。支持商品清单生成、商标说明撰写，整合尼斯分类与审查指南</td>
 <td style=”text-align:center”>CC-BY-NC</td>
-<td style=”text-align:center”>v1.5.3</td>
+<td style=”text-align:center”>v1.5.4</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -215,7 +223,7 @@
 <td><a href=”skills/litigation-analysis/”><strong>litigation-analysis</strong></a></td>
 <td style=”word-break:break-word”>诉讼分析工具，支持起诉状与证据分析、判决书深度分析、庭审笔录复盘。覆盖诉讼全流程：案件初期评估→判决分析→庭审复盘，生成内部版/研究版/客户版三层输出，支持上诉/再审决策支持</td>
 <td style=”text-align:center”>CC-BY-NC</td>
-<td style=”text-align:center”>v1.3.0</td>
+<td style=”text-align:center”>v1.3.2</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -247,7 +255,7 @@
 <td><a href=”skills/yuandian-law-search/”><strong>yuandian-law-search</strong></a></td>
 <td style=”word-break:break-word”>元典法条与案例检索，通过元典 API 检索中国法律法规条文和案例。支持法条语义/关键词/详情检索和案例关键词/向量语义检索，共 5 种检索模式</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v0.3.0</td>
+<td style=”text-align:center”>v1.1.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td>需配置 API Key</td>
 </tr>
@@ -258,6 +266,22 @@
 <td style=”text-align:center”>v1.2.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td>需智合AI平台会员</td>
+</tr>
+<tr>
+<td><a href=”skills/opc-legal-counsel/”><strong>opc-legal-counsel</strong></a></td>
+<td style=”word-break:break-word”>面向一人公司/单人创业者的常年法律顾问技能，覆盖公司设立、股权架构、融资、合同、税务、AI 产品合规、劳动等全场景，自动判断地域、阶段与问题性质并路由</td>
+<td style=”text-align:center”>CC-BY-NC</td>
+<td style=”text-align:center”>v0.2.5</td>
+<td style=”text-align:center”>杨卫薪</td>
+<td></td>
+</tr>
+<tr>
+<td><a href=”skills/contract-copilot/”><strong>contract-copilot</strong></a></td>
+<td style=”word-break:break-word”>合同起草与审查助手，基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式</td>
+<td style=”text-align:center”>CC-BY-NC</td>
+<td style=”text-align:center”>v1.4.50</td>
+<td style=”text-align:center”>杨卫薪</td>
+<td></td>
 </tr>
 </tbody>
 </table>
@@ -298,7 +322,7 @@
 <td><a href=”skills/piclist-upload/”><strong>piclist-upload</strong></a></td>
 <td style=”word-break:break-word”>通过 PicList HTTP Server 将 Markdown 中的本地图片上传到图床，自动替换为云端链接，支持批量处理和跨设备访问</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v1.1.1</td>
+<td style=”text-align:center”>v1.1.2</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -306,7 +330,7 @@
 <td><a href=”skills/md2word/”><strong>md2word</strong></a></td>
 <td style=”word-break:break-word”>将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v0.4.1</td>
+<td style=”text-align:center”>v1.0.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -341,7 +365,7 @@
 <td><a href=”skills/skill-manager/”><strong>skill-manager</strong></a></td>
 <td style=”word-break:break-word”>管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别并批量处理</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v1.2.0</td>
+<td style=”text-align:center”>v1.3.0</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -357,7 +381,7 @@
 <td><a href=”skills/git-batch-commit/”><strong>git-batch-commit</strong></a></td>
 <td style=”word-break:break-word”>智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v1.2.2</td>
+<td style=”text-align:center”>v1.2.5</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -365,7 +389,7 @@
 <td><a href=”skills/github-star-manager/”><strong>github-star-manager</strong></a></td>
 <td style=”word-break:break-word”>GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统</td>
 <td style=”text-align:center”>MIT</td>
-<td style=”text-align:center”>v0.6.0</td>
+<td style=”text-align:center”>v0.6.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td></td>
 </tr>
@@ -392,6 +416,14 @@
 <td style=”text-align:center”>v1.4.1</td>
 <td style=”text-align:center”>杨卫薪</td>
 <td><a href=”https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md”>ClawHub 要求 MIT-0</a></td>
+</tr>
+<tr>
+<td><a href=”skills/subtree-publish/”><strong>subtree-publish</strong></a></td>
+<td style=”word-break:break-word”>将 monorepo 中的子目录通过 git subtree 推送到独立 GitHub 仓库，支持注册清单、变更自动检测、增量推送</td>
+<td style=”text-align:center”>MIT</td>
+<td style=”text-align:center”>v1.5.0</td>
+<td style=”text-align:center”>杨卫薪</td>
+<td></td>
 </tr>
 </tbody>
 </table>
