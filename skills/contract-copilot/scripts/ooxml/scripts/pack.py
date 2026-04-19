@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tool to pack a directory into a .docx, .pptx, or .xlsx file with XML formatting undone.
+Tool to pack a directory into a .docx file with XML formatting undone.
 
 Example usage:
     python pack.py <input_directory> <office_file> [--force]
@@ -19,7 +19,7 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description="Pack a directory into an Office file")
     parser.add_argument("input_directory", help="Unpacked Office document directory")
-    parser.add_argument("output_file", help="Output Office file (.docx/.pptx/.xlsx)")
+    parser.add_argument("output_file", help="Output .docx file")
     parser.add_argument("--force", action="store_true", help="Skip validation")
     args = parser.parse_args()
 
@@ -43,11 +43,11 @@ def main():
 
 
 def pack_document(input_dir, output_file, validate=False):
-    """Pack a directory into an Office file (.docx/.pptx/.xlsx).
+    """Pack a directory into a .docx file.
 
     Args:
         input_dir: Path to unpacked Office document directory
-        output_file: Path to output Office file
+        output_file: Path to output .docx file
         validate: If True, validates with soffice (default: False)
 
     Returns:
@@ -58,8 +58,8 @@ def pack_document(input_dir, output_file, validate=False):
 
     if not input_dir.is_dir():
         raise ValueError(f"{input_dir} is not a directory")
-    if output_file.suffix.lower() not in {".docx", ".pptx", ".xlsx"}:
-        raise ValueError(f"{output_file} must be a .docx, .pptx, or .xlsx file")
+    if output_file.suffix.lower() != ".docx":
+        raise ValueError(f"{output_file} must be a .docx file")
 
     # Work in temporary directory to avoid modifying original
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -89,15 +89,6 @@ def pack_document(input_dir, output_file, validate=False):
 
 def validate_document(doc_path):
     """Validate document by converting to HTML with soffice."""
-    # Determine the correct filter based on file extension
-    match doc_path.suffix.lower():
-        case ".docx":
-            filter_name = "html:HTML"
-        case ".pptx":
-            filter_name = "html:impress_html_Export"
-        case ".xlsx":
-            filter_name = "html:HTML (StarCalc)"
-
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
             result = subprocess.run(
@@ -105,7 +96,7 @@ def validate_document(doc_path):
                     "soffice",
                     "--headless",
                     "--convert-to",
-                    filter_name,
+                    "html:HTML",
                     "--outdir",
                     temp_dir,
                     str(doc_path),
