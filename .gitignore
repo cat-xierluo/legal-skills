@@ -111,3 +111,6 @@ skills/litigation-analysis-lite/
 
 # Skill manager registry (contains local paths and machine-specific state)
 skills/skill-manager/assets/skill-registry.json
+
+# 元典 API archive (query results to save credits)
+skills/yuandian-law-search/archive/
