@@ -79,6 +79,7 @@ class XMLEditor:
         attrs: Optional[dict[str, str]] = None,
         line_number: Optional[Union[int, range]] = None,
         contains: Optional[str] = None,
+        occurrence: Optional[int] = None,
     ):
         """
         Get a DOM element by tag and identifier.
@@ -92,6 +93,7 @@ class XMLEditor:
             line_number: Line number (int) or line range (range) in original XML file (1-indexed)
             contains: Text string that must appear in any text node within the element.
                       Supports both entity notation (&#8220;) and Unicode characters (\u201c).
+            occurrence: 1-indexed occurrence number when multiple matches exist.
 
         Returns:
             defusedxml.minidom.Element: The matching DOM element
@@ -158,6 +160,8 @@ class XMLEditor:
                 filters.append(f"with attributes {attrs}")
             if contains is not None:
                 filters.append(f"containing '{contains}'")
+            if occurrence is not None:
+                filters.append(f"occurrence {occurrence}")
 
             filter_desc = " ".join(filters) if filters else ""
             base_msg = f"Node not found: <{tag}> {filter_desc}".strip()
@@ -173,6 +177,13 @@ class XMLEditor:
                 hint = "Try adding filters (attrs, line_number, or contains)."
 
             raise ValueError(f"{base_msg}. {hint}")
+        if occurrence is not None:
+            idx = occurrence - 1
+            if idx < 0 or idx >= len(matches):
+                raise ValueError(
+                    f"Occurrence {occurrence} out of range. Found {len(matches)} matches for <{tag}>."
+                )
+            return matches[idx]
         if len(matches) > 1:
             raise ValueError(
                 f"Multiple nodes found: <{tag}>. "

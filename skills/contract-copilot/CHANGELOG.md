@@ -2,6 +2,21 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.5.1] - 2026-04-20
+
+### 重构
+
+- scripts/ 按功能分为三个子包：`review/`（审查流程）、`report/`（报告生成）、`docx/`（文档引擎）。
+- 删除整个 `ooxml/` 子包（3 层嵌套），validation 合并为 `docx/validation.py`，`pack.py` 移入 `docx/`。
+- `docx_core/` 改名为 `docx/`。
+- XML 模板骨架内联为 `document.py` 中的 Python 字符串常量，删除 `templates/` 目录（之前被 `.gitignore` 屏蔽，从未进入 git）。
+- 文档路径全面更新：`SKILL.md`、`scripts/README.md`、`references/setup-dependencies.md`、`run_apply_review_plan.ps1` 中的旧路径和版本号已同步修正。
+
+### 修复
+
+- 修复批注时间戳随机化功能断裂：`Document` 类缺少 `set_operation_timestamp` / `clear_operation_timestamp` 方法，导致 `ReviewTimeline` 的两层错峰逻辑无法生效。已补入实现，批注/修订时间戳现在会正确使用本地时区偏移格式，并按设定间隔递增。
+- 修复 `utilities.py` 的 `get_node()` 方法缺少 `occurrence` 参数，导致多条重复文本定位时报错。
+
 ## [1.5.0] - 2026-04-19
 
 ### 重构

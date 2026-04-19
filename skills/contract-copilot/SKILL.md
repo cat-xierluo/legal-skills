@@ -1,6 +1,6 @@
 ---
 name: contract-copilot
-version: 1.5.0
+version: 1.5.1
 description: 合同起草与审查助手。基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式。用户通过飞书或其他 IM 对话发送合同文件并要求审查或起草时，也应使用本 skill，并优先沿原会话回传修订版和审查报告。
 license: CC BY-NC 4.0
 ---
@@ -168,14 +168,14 @@ license: CC BY-NC 4.0
 
 ## 八、文档操作（批注/修订/报告）
 
-直接运行 `scripts/*.py` 或 `scripts/run_apply_review_plan.ps1` 前，先确认 `references/setup-dependencies.md` 中的运行前提已经满足。最小要求是：本机 Python 已安装 `defusedxml` 与 `lxml`。OOXML 打包、解包和校验功能已内嵌在 `scripts/ooxml/` 中，无需外部依赖。
+直接运行 `scripts/*.py` 或 `scripts/run_apply_review_plan.ps1` 前，先确认 `references/setup-dependencies.md` 中的运行前提已经满足。最小要求是：本机 Python 已安装 `defusedxml` 与 `lxml`。OOXML 打包、解包和校验功能已内嵌在 `scripts/docx/` 中，无需外部依赖。
 
 ### 8.1 处理流程
 
 1. 一体化执行（推荐）：
 
 ```bash
-python scripts/apply_review_plan.py \
+python scripts/review/apply_review_plan.py \
   --input contract.docx \
   --plan review-plan.json \
   --output contract_reviewed.docx
@@ -208,7 +208,7 @@ reviewer.save()
 4. 生成阶段可先执行计划补全：
 
 ```bash
-python scripts/enrich_review_plan.py \
+python scripts/review/enrich_review_plan.py \
   --input review-plan.json \
   --output review-plan_enriched.json
 ```
@@ -357,5 +357,5 @@ python scripts/enrich_review_plan.py \
 
 ## 十二、版本
 
-- 当前版本：`1.4.50`
-- 更新日期：`2026-04-09`
+- 当前版本：`1.5.1`
+- 更新日期：`2026-04-19`

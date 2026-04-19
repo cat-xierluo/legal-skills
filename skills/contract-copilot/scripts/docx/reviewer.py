@@ -32,7 +32,7 @@ import html
 import difflib
 import re
 
-from .docx_core import Document, DocxXMLEditor
+from .document import Document, DocxXMLEditor
 
 MAX_VISIBLE_CHANGE_SEGMENTS = 6
 MERGEABLE_EQUAL_SEGMENT_LENGTH = 1

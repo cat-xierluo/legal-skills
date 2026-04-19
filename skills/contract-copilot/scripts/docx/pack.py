@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Pack an unpacked Office directory into a .docx file.
-
-Example usage:
-    python pack.py <input_directory> <output_file> [--force]
-"""
+"""Pack an unpacked Office directory into a .docx file."""
 
 import argparse
 import sys

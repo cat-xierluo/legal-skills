@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .ooxml.scripts.pack import pack_document
+from ..docx.pack import pack_document
 
 DOCUMENT_NAMESPACES = (
     'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" '

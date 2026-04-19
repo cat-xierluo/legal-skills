@@ -12,8 +12,8 @@
     reviewer.save()
 """
 
-from .reporting import render_review_report
-from .report_docx import write_review_report_docx
-from .reviewer import ContractReviewer
+from .docx.reviewer import ContractReviewer
+from .report.reporting import render_review_report
+from .report.report_docx import write_review_report_docx
 
 __all__ = ["ContractReviewer", "render_review_report", "write_review_report_docx"]

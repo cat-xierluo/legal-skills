@@ -9,7 +9,7 @@
 1. 本机需要可用的 `python3`（建议 3.9+）。
 2. 需要先安装 Python 包依赖：`defusedxml`、`lxml`。
 
-OOXML 打包、解包和校验功能已内嵌在 `scripts/ooxml/` 中，无需额外安装。
+OOXML 打包、解包和校验功能已内嵌在 `scripts/docx/` 中，无需额外安装。
 
 ## 二、必须安装的依赖
 
@@ -58,7 +58,7 @@ python3 -m pip install -r scripts/requirements.txt
 
 说明：
 
-- 如果你只运行 `python3 scripts/apply_review_plan.py`，不需要安装 PowerShell。
+- 如果你只运行 `python3 scripts/review/apply_review_plan.py`，不需要安装 PowerShell。
 - 如果你在 Windows、中文路径、OneDrive / 企业网盘目录下运行，建议优先使用该包装器。
 
 ## 四、推荐安装顺序
@@ -71,7 +71,7 @@ python3 -m pip install -r scripts/requirements.txt
 安装完成后，可以先用最小命令验证主入口是否可跑：
 
 ```bash
-python3 scripts/apply_review_plan.py --help
+python3 scripts/review/apply_review_plan.py --help
 ```
 
 ## 五、首次直接运行示例
@@ -79,7 +79,7 @@ python3 scripts/apply_review_plan.py --help
 ```bash
 cd /path/to/contract-copilot
 python3 -m pip install -r scripts/requirements.txt
-python3 scripts/apply_review_plan.py \
+python3 scripts/review/apply_review_plan.py \
   --input /path/to/contract.docx \
   --plan /path/to/review-plan.json \
   --output /path/to/contract_reviewed.docx

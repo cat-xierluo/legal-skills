@@ -21,7 +21,7 @@ try:
         archive_run,
         create_archive_run_dir,
     )
-    from .ooxml.scripts.pack import pack_document
+    from ..docx.pack import pack_document
     from .plan_loader import (
         enrich_plan,
         get_findings,
@@ -29,19 +29,19 @@ try:
         load_plan,
         normalize_edit_policy,
     )
-    from .report_docx import write_review_report_docx
-    from .reporting import render_review_report
+    from ..report.report_docx import write_review_report_docx
+    from ..report.reporting import render_review_report
     from .review_runtime import (
         ReviewTimeline,
         build_comment_author_display,
         resolve_review_context,
         resolve_reviewer_profile,
     )
-    from .reviewer import ContractReviewer
+    from ..docx.reviewer import ContractReviewer
 except ImportError:
     from action_executor import apply_finding
     from archive_service import DEFAULT_ARCHIVE_DIR, archive_run, create_archive_run_dir
-    from ooxml.scripts.pack import pack_document
+    from scripts.docx.pack import pack_document
     from plan_loader import (
         enrich_plan,
         get_findings,
@@ -49,15 +49,15 @@ except ImportError:
         load_plan,
         normalize_edit_policy,
     )
-    from report_docx import write_review_report_docx
-    from reporting import render_review_report
+    from scripts.report.report_docx import write_review_report_docx
+    from scripts.report.reporting import render_review_report
     from review_runtime import (
         ReviewTimeline,
         build_comment_author_display,
         resolve_review_context,
         resolve_reviewer_profile,
     )
-    from reviewer import ContractReviewer
+    from scripts.docx.reviewer import ContractReviewer
 
 
 def unpack_docx(input_docx: Path, output_dir: Path) -> None:

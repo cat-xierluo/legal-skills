@@ -43,3 +43,15 @@ class BaseValidator:
                     print(f"Invalid XML in {rel_path}: {exc}")
                 return False
         return True
+
+
+class DOCXSchemaValidator(BaseValidator):
+    required_files = (
+        "[Content_Types].xml",
+        "word/document.xml",
+        "word/_rels/document.xml.rels",
+    )
+
+
+class RedliningValidator(BaseValidator):
+    required_files = ("word/document.xml",)

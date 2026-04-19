@@ -34,13 +34,68 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from defusedxml import minidom
-from ..ooxml.scripts.validation.docx import DOCXSchemaValidator
-from ..ooxml.scripts.validation.redlining import RedliningValidator
+from .validation import DOCXSchemaValidator
 
 from .utilities import XMLEditor
 
-# Path to template files
-TEMPLATE_DIR = Path(__file__).parent / "templates"
+# --- Inline XML templates (replaces external templates/ directory) ---
+
+_NS = (
+    'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" '
+    'xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex" '
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+    'xmlns:aink="http://schemas.microsoft.com/office/drawing/2016/ink" '
+    'xmlns:o="urn:schemas-microsoft-com:office:office" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" '
+    'xmlns:v="urn:schemas-microsoft-com:vml" '
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    'xmlns:w10="urn:schemas-microsoft-com:office:word" '
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" '
+    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" '
+    'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" '
+    'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" '
+    'xmlns:w16="http://schemas.microsoft.com/office/word/2018/wordml" '
+    'xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" '
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" '
+    'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" '
+    'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" '
+    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '
+    'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"'
+)
+
+_TPL_PEOPLE = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">\n'
+    '</w15:people>'
+)
+
+_TPL_COMMENTS = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w:comments {_ns}>\n'
+    '</w:comments>'
+)
+
+_TPL_COMMENTS_EXTENDED = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w15:commentsEx {_ns}>\n'
+    '</w15:commentsEx>'
+)
+
+_TPL_COMMENTS_IDS = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w16cid:commentsIds {_ns}>\n'
+    '</w16cid:commentsIds>'
+)
+
+_TPL_COMMENTS_EXTENSIBLE = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    '<w16cex:commentsExtensible {_ns} xmlns:cr="http://schemas.microsoft.com/office/comments/2020/reactions"'
+    ' mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl cr w16du wp14"'
+    '>\n'
+    '</w16cex:commentsExtensible>'
+)
 
 
 class DocxXMLEditor(XMLEditor):
@@ -128,7 +183,7 @@ class DocxXMLEditor(XMLEditor):
         """
         from datetime import datetime, timezone
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = self._resolve_timestamp()
 
         def is_inside_deletion(elem):
             """Check if element is inside a w:del element."""
@@ -655,6 +710,7 @@ class Document:
 
         # Cache for lazy-loaded editors
         self._editors = {}
+        self._timestamp_provider = None
 
         # Comment file paths
         self.comments_path = self.word_path / "comments.xml"
@@ -708,6 +764,30 @@ class Document:
             )
         return self._editors[xml_path]
 
+    def set_operation_timestamp(self, provider):
+        """Set a callable that provides staggered timestamps for operations.
+
+        Args:
+            provider: A callable that returns a datetime when called.
+                      Each call should return the next timestamp in the sequence.
+        """
+        self._timestamp_provider = provider
+
+    def clear_operation_timestamp(self):
+        """Clear the timestamp provider, reverting to real-time timestamps."""
+        self._timestamp_provider = None
+
+    def _resolve_timestamp(self) -> str:
+        """Get formatted timestamp for the current operation.
+
+        Uses the timestamp provider if set (with local timezone offset),
+        otherwise generates a real-time UTC timestamp.
+        """
+        if self._timestamp_provider is not None:
+            dt = self._timestamp_provider()
+            return dt.astimezone().isoformat(timespec="seconds")
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def add_comment(self, start, end, text: str) -> int:
         """
         Add a comment spanning from one element to another.
@@ -728,7 +808,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = self._resolve_timestamp()
 
         # Add comment ranges to document.xml immediately
         self._document.insert_before(start, self._comment_range_start_xml(comment_id))
@@ -785,7 +865,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = self._resolve_timestamp()
 
         # Add comment ranges to document.xml immediately
         parent_start_elem = self._document.get_node(
@@ -946,7 +1026,7 @@ class Document:
         """Create people.xml if it doesn't exist."""
         if not path.exists():
             # Copy from template
-            shutil.copy(TEMPLATE_DIR / "people.xml", path)
+            path.write_text(_TPL_PEOPLE, encoding="utf-8")
 
     def _add_content_type_for_people(self, path):
         """Add people.xml content type to [Content_Types].xml if not already present."""
@@ -1061,7 +1141,7 @@ class Document:
     ):
         """Add a single comment to comments.xml."""
         if not self.comments_path.exists():
-            shutil.copy(TEMPLATE_DIR / "comments.xml", self.comments_path)
+            self.comments_path.write_text(_TPL_COMMENTS.format(_ns=_NS), encoding="utf-8")
 
         editor = self["word/comments.xml"]
         root = editor.get_node(tag="w:comments")
@@ -1082,8 +1162,8 @@ class Document:
     def _add_to_comments_extended_xml(self, para_id, parent_para_id):
         """Add a single comment to commentsExtended.xml."""
         if not self.comments_extended_path.exists():
-            shutil.copy(
-                TEMPLATE_DIR / "commentsExtended.xml", self.comments_extended_path
+            self.comments_extended_path.write_text(
+                _TPL_COMMENTS_EXTENDED.format(_ns=_NS), encoding="utf-8"
             )
 
         editor = self["word/commentsExtended.xml"]
@@ -1098,7 +1178,9 @@ class Document:
     def _add_to_comments_ids_xml(self, para_id, durable_id):
         """Add a single comment to commentsIds.xml."""
         if not self.comments_ids_path.exists():
-            shutil.copy(TEMPLATE_DIR / "commentsIds.xml", self.comments_ids_path)
+            self.comments_ids_path.write_text(
+                _TPL_COMMENTS_IDS.format(_ns=_NS), encoding="utf-8"
+            )
 
         editor = self["word/commentsIds.xml"]
         root = editor.get_node(tag="w16cid:commentsIds")
@@ -1109,8 +1191,8 @@ class Document:
     def _add_to_comments_extensible_xml(self, durable_id):
         """Add a single comment to commentsExtensible.xml."""
         if not self.comments_extensible_path.exists():
-            shutil.copy(
-                TEMPLATE_DIR / "commentsExtensible.xml", self.comments_extensible_path
+            self.comments_extensible_path.write_text(
+                _TPL_COMMENTS_EXTENSIBLE.format(_ns=_NS), encoding="utf-8"
             )
 
         editor = self["word/commentsExtensible.xml"]

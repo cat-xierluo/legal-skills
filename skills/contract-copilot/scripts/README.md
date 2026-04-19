@@ -8,7 +8,7 @@
 ## 依赖
 
 - 必需 Python 包：`defusedxml`、`lxml`
-- OOXML 功能已内嵌在 `scripts/ooxml/` 和 `scripts/docx_core/` 中，无需外部依赖
+- DOCX 编辑与验证功能内嵌在 `scripts/docx/` 中，无需外部依赖
 - 可选系统依赖：`pwsh` / `powershell`（Windows 包装器）
 
 推荐先执行：
@@ -19,23 +19,39 @@ python3 -m pip install -r scripts/requirements.txt
 
 完整安装说明、目录结构要求与常见报错排查见：`../references/setup-dependencies.md`
 
+## 目录结构
+
+```
+scripts/
+  review/              审查流程
+    apply_review_plan.py   流程编排入口
+    plan_loader.py         审查计划加载与校验
+    action_executor.py     动作分发与节点定位
+    enrich_review_plan.py  计划字段自动补全
+    review_runtime.py      审查人配置与上下文记忆
+    archive_service.py     归档服务
+  report/              报告生成
+    reporting.py           Markdown 审查意见书
+    report_docx.py         Word 审查意见书
+  docx/                文档引擎
+    document.py            Document / DocxXMLEditor 核心
+    utilities.py           XML 编辑器
+    validation.py          轻量级结构校验
+    reviewer.py            ContractReviewer 高层封装
+    pack.py                DOCX 打包
+```
+
 ## 脚本清单
 
 - `run_apply_review_plan.ps1`：Windows / 中文路径兼容包装器（调用 Python 主入口并回拷结果）
-- `reviewer.py`：封装 DOCX 编辑能力（批注、删除、插入、替换，含节点级替换）
-- `plan_loader.py`：审查计划加载与基础结构校验
-- `action_executor.py`：动作分发与节点定位（comment/report-only/delete/insert/replace/auto）
-- `enrich_review_plan.py`：在生成阶段补全 `needs_negotiation` / `deterministic_edit`
-- `archive_service.py`：执行归档服务（目录命名、文件复制、manifest）
-- `apply_review_plan.py`：流程编排入口（调用 plan/action/archive 三层模块）
-- `reporting.py`：独立渲染“审查意见书”Markdown（可单独调用）
-- `report_docx.py`：使用 OOXML 直接生成 Word 版审查意见书，并内置正式法律文书版式
-- `review_runtime.py`：管理审查人本地配置、客户/立场/口径记忆与错峰时间线
+- `review/`：审查流程相关脚本（详见上方目录结构）
+- `report/`：报告生成相关脚本
+- `docx/`：DOCX 文档编辑引擎
 
 ## 一体化执行（推荐）
 
 ```bash
-python scripts/apply_review_plan.py \
+python scripts/review/apply_review_plan.py \
   --input /path/to/合同.docx \
   --plan /path/to/review-plan.json \
   --output /path/to/合同_审核修订版.docx
@@ -132,7 +148,7 @@ pwsh -File ./scripts/run_apply_review_plan.ps1 `
 ## 生成阶段：自动补全计划字段（推荐）
 
 ```bash
-python scripts/enrich_review_plan.py \
+python scripts/review/enrich_review_plan.py \
   --input /path/to/review-plan.json \
   --output /path/to/review-plan_enriched.json
 ```
@@ -260,7 +276,7 @@ reviewer.save()
 ## 独立报告渲染
 
 ```bash
-python scripts/reporting.py \
+python scripts/report/reporting.py \
   --plan /path/to/review-plan.json \
   --execution /path/to/执行日志.json \
   --output /path/to/审查报告.md \

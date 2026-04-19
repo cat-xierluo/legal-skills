@@ -112,7 +112,7 @@ function Resolve-PythonInvocation {
 }
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pythonScript = Join-Path $scriptRoot "apply_review_plan.py"
+$pythonScript = Join-Path $scriptRoot "review/apply_review_plan.py"
 
 $resolvedInput = Resolve-AbsolutePath -PathValue $InputPath
 $resolvedPlan = Resolve-AbsolutePath -PathValue $PlanPath

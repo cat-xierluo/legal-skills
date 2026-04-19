@@ -6,9 +6,9 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from .reviewer import ContractReviewer
+    from ..docx.reviewer import ContractReviewer
 except ImportError:
-    from reviewer import ContractReviewer
+    from scripts.docx.reviewer import ContractReviewer
 
 
 DEFAULT_TAG_BY_ACTION = {
