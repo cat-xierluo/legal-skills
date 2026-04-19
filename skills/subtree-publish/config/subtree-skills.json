@@ -1,0 +1,18 @@
+{
+  "prefix": "skills",
+  "org": "cat-xierluo",
+  "skills": [
+    {
+      "name": "opc-legal-counsel",
+      "repo": "opc-legal-counsel.skill"
+    },
+    {
+      "name": "code2patent",
+      "repo": "code2patent.skill"
+    },
+    {
+      "name": "contract-copilot",
+      "repo": "contract-copilot.skill"
+    }
+  ]
+}
