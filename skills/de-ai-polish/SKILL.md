@@ -2,7 +2,7 @@
 name: de-ai-polish
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.1"
+version: "1.0.2"
 license: MIT
 description: 检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔。
 ---
