@@ -101,13 +101,46 @@ docs(litigation-analysis): 更新分析报告模板
 chore: 更新 GitHub Actions 依赖版本
 ```
 
+## PR 合并提交格式
+
+使用 squash merge 合并 PR 时，commit 标题**必须包含 PR 编号**。
+
+### 格式
+
+```
+<类型>(<模块>): <描述> (#<PR编号>)
+```
+
+### 规则
+
+1. **commit 标题末尾必须带 `(#N)`**，其中 N 是 PR 编号
+2. 通过 GitHub API 的 `merge_pull_request` 执行 squash merge 时，自定义 `commit_title` 不会自动追加编号，必须手动写入
+3. commit body 中使用 `Closes #<issue编号>` 关联相关 Issue
+
+### 示例
+
+```
+# 正确
+feat(funasr-transcribe): 新增 ONNX 优化转录路径 (#16)
+fix(skill-manager): 修复符号链接创建位置问题 (#12)
+docs: 更新 README (#8)
+
+# 错误 — 缺少 PR 编号
+feat(funasr-transcribe): 新增 ONNX 优化转录路径
+```
+
+### 为什么需要手动加编号？
+
+GitHub 网页端 squash merge 会自动在标题末尾追加 `(#N)`，但通过 GitHub API 自定义 `commit_title` 时**不会自动追加**。因此在 API 合并时必须手动在标题中包含编号，确保 `git log` 中可直接追溯 PR。
+
 ## 格式对比
 
-| 对象 | 格式 | 模块标识 |
-|------|------|----------|
-| Commit | `<类型>: <描述>` | 可选（multi-skill 仓库建议加） |
-| Issue | `<类型>: <描述>` | 不需要 |
-| PR | `<类型>(<模块>): <描述>` | 必须（multi-skill 仓库） |
+| 对象 | 格式 | 模块标识 | PR 编号 |
+|------|------|----------|--------|
+| Commit | `<类型>: <描述>` | 可选（multi-skill 仓库建议加） | 不需要 |
+| Issue | `<类型>: <描述>` | 不需要 | 不需要 |
+| PR | `<类型>(<模块>): <描述>` | 必须（multi-skill 仓库） | 不需要 |
+| Merge Commit | `<类型>(<模块>): <描述> (#N)` | 必须 | **必须** |
 
 ## 规范依据
 
