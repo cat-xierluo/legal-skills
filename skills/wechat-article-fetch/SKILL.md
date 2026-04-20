@@ -2,8 +2,8 @@
 name: wechat-article-fetch
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
-description: 抓取微信公众号文章内容，使用 Playwright headless 模式无弹窗后台抓取，支持动态加载内容，自动提取标题和正文并保存为 Markdown 文件。本技能应在用户需要抓取微信公众号文章内容时使用。
+version: "1.3.1"
+description: 抓取微信公众号文章内容，使用 Playwright headless 模式无弹窗后台抓取，支持动态加载内容，自动提取标题和正文并保存为 Markdown 文件。本技能应在用户需要抓取微信公众号文章内容时使用。检测到法律内容且项目中存在 legal-text-format 时自动链式调用格式化。默认保存到 skill 内部 archive 目录。
 license: Complete terms in LICENSE.txt
 ---
 # 微信公众号文章抓取工具
@@ -22,58 +22,63 @@ license: Complete terms in LICENSE.txt
 - ✅ **自动重试**: 失败时自动重试3次,提高成功率
 - ✅ **错误检测**: 识别"参数错误"等异常页面
 - ✅ **跨平台支持**: 完全支持 Windows、macOS 和 Linux
-- ✅ **智能工作流**: 检测法律内容时自动调用格式化技能
+- ✅ **法律内容自动格式化**: 检测到法律内容时自动链式调用 legal-text-format（强制执行协议）
 - ✅ **图片下载**: 自动下载文章中的所有图片到本地
 - ✅ **智能图片筛选**: 自动过滤小的装饰性图片（如社交媒体按钮、表情符号）
 - ✅ **图片位置保持**: 保留图片在原文档中的位置
 - ✅ **自动文件命名**: 根据文章标题生成文件名和资源文件夹
 
-## 与其他技能的协作
+## 抓取后法律格式化协议（强制执行）
 
-### 智能工作流
+**本节为必须遵守的执行指令，而非可选建议。**
 
-本技能专注于文章抓取，保持通用性。仅在检测到法律相关内容时，AI 会自动调用 `legal-text-format` 技能进行格式化。
+### 法律内容判定清单
 
-**AI 执行流程**：
+完成抓取后，你必须立即按以下清单判定内容是否为法律文本。**满足任意一条即为法律内容**：
 
-```text
-用户请求 → wechat-article-fetch 抓取 → [判断内容类型]
-                                              ↓
-                    ┌────────────────────────┴────────────────────────┐
-                    ↓                                                 ↓
-              检测到法律内容                                    普通文章
-                    ↓                                                 ↓
-          自动调用 legal-text-format                      保存原始内容到项目根目录
-                    ↓
-          输出到 archive/ 目录
-```
+- **标题关键词**：案例、裁判、判决、法规、条例、规定、办法、解释、通知、意见、规则、最高法、最高检、法院、检察院、司法解释
+- **内容特征**：包含案号（如 `(202X)XX民初XX号`）、法院名称、法律条文引用（如 `第X条第X款`）
+- **结构特征**：符合法律案例典型结构（基本案情、裁判结果、典型意义等）
 
-### 法律内容检测
+### 自动链式调用条件
 
-AI 会根据以下特征判断是否为法律内容：
+**以下两个条件同时满足时，必须立即调用 `legal-text-format`，不询问用户确认**：
 
-- **标题关键词**：包含"案例""裁判""判决""法规""条例""最高法""最高检"等
-- **内容特征**：包含案号、法院名称、法律条文引用等
-- **结构特征**：符合法律案例的典型结构（基本案情、裁判结果、典型意义等）
+1. 上方判定结果为"是法律内容"
+2. 本项目中存在 `skills/legal-text-format/SKILL.md`（通过 `ls skills/legal-text-format/SKILL.md` 或等效方式检查）
 
-### 默认保存位置
+### 链式调用步骤
 
-- **未指定路径**：保存到项目根目录
-- **指定相对路径**：相对于项目根目录
-- **指定绝对路径**：使用指定的完整路径
+条件满足时，按以下顺序执行：
 
-**示例**：
+1. 完成抓取，将 Markdown 保存到本技能 `archive/` 目录
+2. 按判定清单判断内容类型
+3. 如果是法律内容，检查 `skills/legal-text-format/SKILL.md` 是否存在
+4. **如果存在，立即调用 `legal-text-format` 技能**，传入抓取到的文件路径作为输入
+5. 使用下方对应模板汇报最终结果
 
-```bash
-# 保存到项目根目录
-node scripts/fetch.js "https://mp.weixin.qq.com/s/xxxxx"
+### 降级处理
 
-# 保存到指定目录
-node scripts/fetch.js "https://mp.weixin.qq.com/s/xxxxx" "./articles/"
+如果 `legal-text-format` 不存在：正常结束抓取流程，在汇报中附加提示：
 
-# 保存到指定文件
-node scripts/fetch.js "https://mp.weixin.qq.com/s/xxxxx" "./articles/case.md"
-```
+> 已检测到法律内容，但项目中未安装 `legal-text-format` 格式化技能。如需自动格式化，可通过 skill-manager 安装。
+
+### 结果存储
+
+- **抓取的原始内容**：保存在本技能的 `archive/` 目录（默认行为不变）
+- **格式化后的内容**：保存在 `legal-text-format` 的 `archive/` 目录（由该技能自行管理）
+
+### 汇报模板
+
+**仅抓取**（非法律内容，或 legal-text-format 未安装）：
+> 已完成抓取：{标题}
+> 保存位置：{文件路径}
+
+**抓取 + 格式化**（法律内容且 legal-text-format 已安装）：
+> 已完成抓取 + 法律格式化：{标题}
+> 原始内容：{wechat-article-fetch archive 路径}
+> 格式化内容：{legal-text-format archive 路径}
+> 文本类型：{法律条文/法律案例}
 
 ## 使用方法
 
