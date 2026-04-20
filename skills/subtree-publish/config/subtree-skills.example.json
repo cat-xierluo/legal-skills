@@ -1,0 +1,13 @@
+{
+  "prefix": "skills",
+  "org": "<your-github-org-or-username>",
+  "skills": [
+    {
+      "name": "<skill-directory-name>",
+      "repo": "<repo-name>.skill",
+      "version": "1.0.0",
+      "last_release": "v1.0.0",
+      "last_updated": "2026-01-01T12:00:00"
+    }
+  ]
+}

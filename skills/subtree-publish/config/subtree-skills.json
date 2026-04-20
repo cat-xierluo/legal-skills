@@ -4,31 +4,52 @@
   "skills": [
     {
       "name": "opc-legal-counsel",
-      "repo": "opc-legal-counsel.skill"
+      "repo": "opc-legal-counsel.skill",
+      "version": "0.2.5",
+      "last_release": "v0.2.5",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "code2patent",
-      "repo": "code2patent.skill"
+      "repo": "code2patent.skill",
+      "version": "1.4.2",
+      "last_release": "v1.4.2",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "contract-copilot",
-      "repo": "contract-copilot.skill"
+      "repo": "contract-copilot.skill",
+      "version": "1.5.1",
+      "last_release": "v1.5.1",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "trademark-assistant",
-      "repo": "trademark-assistant.skill"
+      "repo": "trademark-assistant.skill",
+      "version": "1.5.4",
+      "last_release": "v1.5.4",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "md2word",
-      "repo": "md2word.skill"
+      "repo": "md2word.skill",
+      "version": "1.0.1",
+      "last_release": "v1.0.1",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "de-ai-polish",
-      "repo": "de-ai-polish.skill"
+      "repo": "de-ai-polish.skill",
+      "version": "1.0.0",
+      "last_release": "v1.0.0",
+      "last_updated": "2026-04-20T00:39:00"
     },
     {
       "name": "patent-analysis",
-      "repo": "patent-analysis.skill"
+      "repo": "patent-analysis.skill",
+      "version": "1.2.0",
+      "last_release": "v1.2.0",
+      "last_updated": "2026-04-20T00:39:00"
     }
   ]
 }
