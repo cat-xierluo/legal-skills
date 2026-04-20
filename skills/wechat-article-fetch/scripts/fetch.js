@@ -20,8 +20,26 @@ import http from 'http';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// 获取 skill 根目录（archive 将创建在此目录下）
+const SKILL_ROOT = __dirname;
+
 // 检测平台
 const isWindows = process.platform === 'win32';
+
+/**
+ * 获取默认的 archive 目录路径
+ * @param {string} title - 文章标题
+ * @returns {string} archive 目录的完整路径
+ */
+function getDefaultArchiveDir(title) {
+  const now = new Date();
+  const dateStr = now.toISOString().replace(/[-:T]/g, '').substring(0, 14); // YYYYMMDD_HHMMSS
+  const safeTitle = title
+    .replace(/[<>:"/\\|?*]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 30);
+  return join(SKILL_ROOT, 'archive', `${dateStr}_${safeTitle}`);
+}
 
 // 图片筛选配置
 const IMAGE_FILTER_CONFIG = {
@@ -103,10 +121,16 @@ async function fetchWechatArticle(url, retries = 3, autoSavePath = null) {
       const result = await attemptFetch(chromium, url, { headless: true });
       console.log('✅ 抓取成功！');
 
-      // 如果指定了保存路径，保存为 Markdown 文件
-      if (autoSavePath) {
-        await saveAsMarkdown(result, autoSavePath);
-      }
+      // 如果没有指定保存路径，默认保存到 archive 目录
+      const savePath = autoSavePath || getDefaultArchiveDir(result.title);
+
+      // 确保 archive 目录存在
+      const archiveDir = typeof savePath === 'string' && !savePath.endsWith('.md')
+        ? savePath
+        : join(getDefaultArchiveDir(result.title).replace(/\.md$/, ''));
+      await mkdir(archiveDir, { recursive: true });
+
+      await saveAsMarkdown(result, savePath);
 
       return result;
     } catch (error) {
@@ -117,10 +141,14 @@ async function fetchWechatArticle(url, retries = 3, autoSavePath = null) {
           const result = await attemptFetch(chromium, url, { headless: false });
           console.log('✅ 有头模式抓取成功！');
 
-          // 如果指定了保存路径，保存为 Markdown 文件
-          if (autoSavePath) {
-            await saveAsMarkdown(result, autoSavePath);
-          }
+          // 如果没有指定保存路径，默认保存到 archive 目录
+          const savePath = autoSavePath || getDefaultArchiveDir(result.title);
+          const archiveDir = typeof savePath === 'string' && !savePath.endsWith('.md')
+            ? savePath
+            : join(getDefaultArchiveDir(result.title).replace(/\.md$/, ''));
+          await mkdir(archiveDir, { recursive: true });
+
+          await saveAsMarkdown(result, savePath);
 
           return result;
         } catch (headedError) {
