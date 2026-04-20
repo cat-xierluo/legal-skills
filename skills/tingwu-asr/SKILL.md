@@ -26,7 +26,7 @@ description: 使用阿里云通义听悟进行云端音频/视频转录。本技
 
 安装:
 ```bash
-pip3 install -r skills/tingwu-asr/assets/requirements.txt
+pip3 install -r skills/tingwu-asr/config/requirements.txt
 ```
 
 ## 首次使用：登录（通过 MCP Playwright）
@@ -44,7 +44,7 @@ pip3 install -r skills/tingwu-asr/assets/requirements.txt
    python3 skills/tingwu-asr/scripts/login.py --save-cookies '{"cna":"xxx","login_aliyunid_ticket":"xxx",...}'
    ```
 
-账号密码可预配置在 `.env` 文件中（从 `assets/.env.example` 复制）。
+账号密码可预配置在 `config/.env` 文件中（从 `config/.env.example` 复制）。
 
 ## 每日签到（领取免费额度）
 
@@ -96,7 +96,6 @@ python3 skills/funasr-transcribe/scripts/summary.py verify transcript.md
 ```
 skills/tingwu-asr/
   SKILL.md              ← 本文件
-  .env                  ← 账号密码凭证（gitignore，不提交）
   scripts/
     tingwu.py           ← 核心 API 客户端
     transcribe.py       ← CLI 入口
@@ -105,14 +104,50 @@ skills/tingwu-asr/
     daily_checkin.py    ← 额度检查 + 记录
     check_auth.py       ← 认证检查
   config/
-    cookies.json        ← 登录 Cookie（gitignore，不提交）
-    quota_history.jsonl ← 额度变更记录（gitignore，不提交）
-  assets/
-    requirements.txt    ← Python 依赖
-    cookie.example.json ← Cookie 文件模板
+    .env                ← 账号密码凭证（gitignore，不提交）
     .env.example        ← 账号密码模板
+    cookies.json        ← 登录 Cookie（gitignore，不提交）
+    cookie.example.json ← Cookie 文件模板
+    quota_history.jsonl ← 额度变更记录（gitignore，不提交）
+    requirements.txt    ← Python 依赖
   references/           ← API 文档和决策记录
   archive/              ← 转录结果归档
+```
+
+## 异步转录模式（推荐用于长视频）
+
+对于 1 小时以上的长视频，转录可能需要 20-30 分钟。使用异步模式上传后立即返回，后台自动轮询。
+
+### 1. 异步提交
+
+```bash
+python3 skills/tingwu-asr/scripts/transcribe.py /path/to/video.mp4 --async --speakers 2
+```
+
+上传完成后立即返回任务 ID，任务信息保存到 `config/pending_tasks.json`。
+
+### 2. 后台监控（Claude Code 增强模式）
+
+提交后，用 `Bash` 工具的 `run_in_background` 启动后台监控：
+
+```
+command: "python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor --timeout 3600 --interval 120"
+run_in_background: true
+timeout: 600000
+```
+
+**注意**：`timeout` 必须设为 `600000`（10 分钟），否则默认 2 分钟会超时。
+
+监控完成后会自动收到通知，此时展示转录结果路径给用户。
+
+### 3. 手动查询
+
+```bash
+# 检查所有待处理任务的状态
+python3 skills/tingwu-asr/scripts/poll_tasks.py
+
+# 阻塞式监控
+python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor
 ```
 
 ## 注意事项

@@ -1,7 +1,9 @@
 config/cookies.json
 config/quota_history.jsonl
+config/pending_tasks.json
+config/completed_tasks.json
 .playwright-data/
-.env
+config/.env
 __pycache__/
 archive/*
 !archive/.gitkeep

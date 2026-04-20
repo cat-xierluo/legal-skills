@@ -294,6 +294,26 @@ class TingwuClient:
             "word_count": result.get("wordCount"),
         }
 
+    def submit_transcribe(self, file_path, lang="cn", role_split_num=4):
+        """上传文件并启动转录，不等待结果。返回任务信息供异步轮询。"""
+        print("[1/3] 获取上传凭证...")
+        put_link = self.generate_put_link(file_path, lang=lang, role_split_num=role_split_num)
+        trans_id = put_link["transId"]
+        print(f"  任务ID: {trans_id}")
+
+        print("[2/3] 上传文件到 OSS...")
+        self.upload_to_oss(file_path, put_link)
+
+        print("[3/3] 确认上传（自动启动转录）...")
+        self.sync_put_link(put_link)
+
+        return {
+            "trans_id": trans_id,
+            "file_name": Path(file_path).name,
+            "lang": lang,
+            "role_split_num": role_split_num,
+        }
+
     # --- 智能分析 (Lab) ---
     def get_lab_info(self, trans_id):
         body = {"action": "getLabInfo", "version": "1.0", "transId": trans_id}

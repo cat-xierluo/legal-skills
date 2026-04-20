@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--no-archive", action="store_true", help="不保存归档")
     parser.add_argument("--no-lab", action="store_true", help="不获取智能分析（关键词/议程/重点等）")
     parser.add_argument("--ppt", action="store_true", help="下载 PPT 幻灯片图片并嵌入 Markdown（仅视频有效）")
+    parser.add_argument("--async", action="store_true", help="异步模式：上传后立即返回，用 poll_tasks.py 查询结果")
     parser.add_argument("--json", action="store_true", help="输出原始 JSON 结果")
 
     args = parser.parse_args()
@@ -78,7 +79,44 @@ def main():
         if not target.exists():
             print(f"文件不存在: {target}")
             sys.exit(1)
-        _transcribe_one(client, target, args, lang)
+        if getattr(args, 'async'):
+            _submit_async(client, target, args, lang)
+        else:
+            _transcribe_one(client, target, args, lang)
+
+
+def _submit_async(client, file_path, args, lang):
+    """异步模式：上传并提交转录，保存任务到 pending_tasks.json"""
+    from datetime import datetime
+
+    task = client.submit_transcribe(file_path, lang=lang, role_split_num=args.speakers)
+
+    pending_path = SKILL_ROOT / "config" / "pending_tasks.json"
+    if pending_path.exists():
+        tasks = json.loads(pending_path.read_text(encoding="utf-8"))
+    else:
+        tasks = []
+
+    entry = {
+        "trans_id": task["trans_id"],
+        "file_path": str(file_path.resolve()),
+        "file_name": task["file_name"],
+        "lang": task["lang"],
+        "role_split_num": task["role_split_num"],
+        "output_path": str(Path(args.output).resolve()) if args.output else None,
+        "ppt": args.ppt,
+        "no_lab": args.no_lab,
+        "no_archive": args.no_archive,
+        "submitted_at": datetime.now().isoformat(),
+        "status": "pending",
+    }
+    tasks.append(entry)
+    pending_path.write_text(json.dumps(tasks, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(f"\n异步任务已提交: {task['trans_id']}")
+    print(f"任务已保存到: {pending_path}")
+    print(f"查询状态: python3 scripts/poll_tasks.py")
+    print(f"后台监控: python3 scripts/poll_tasks.py --monitor")
 
 
 def _transcribe_one(client, file_path, args, lang):
