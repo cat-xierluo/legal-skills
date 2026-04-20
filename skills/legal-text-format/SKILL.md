@@ -2,9 +2,9 @@
 name: legal-text-format
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.0"
+version: "1.2.1"
 license: CC-BY-NC
-description: 将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，删除推广冗余信息。本技能应在用户需要处理法律条文（如民法典、刑法等）、整理法律案例（如最高法典型案例、裁判文书等）、或从粘贴文本中格式化法律文档时使用。注意：本技能只负责格式化和内容清理，不包含内容抓取能力。内容获取应由其他 skill（如 wechat-article-fetch）完成，AI 会自动判断技能协作顺序。
+description: 将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，删除推广冗余信息。本技能应在用户需要处理法律条文（如民法典、刑法等）、整理法律案例（如最高法典型案例、裁判文书等）、或从粘贴文本中格式化法律文档时使用。注意：本技能只负责格式化和内容清理，不包含内容抓取能力。内容获取应由其他 skill（如 wechat-article-fetch）完成，AI 会自动判断技能协作顺序。内置 archive 机制，所有结果自包含存储在 skill 目录内。
 ---
 
 # 法律文本格式化工具
@@ -197,6 +197,7 @@ archive/
 
 ## 元信息
 - **来源**：{原网页URL或"用户粘贴"}
+- **原文链接**：{从原始文件的 `> 原文链接:` 行提取，无则省略此行}
 - **处理时间**：{时间戳}
 - **文本类型**：{法律条文/法律案例}
 - **原始文件**：[{YYYYMMDD}_{主题}_raw.md]({YYYYMMDD}_{主题}_raw.md)
@@ -212,6 +213,8 @@ archive/
 
 {格式化后的正文内容}
 ```
+
+**原文链接提取规则**：当输入来自 `wechat-article-fetch` 时，原始 Markdown 文件头部包含 `> 原文链接: https://mp.weixin.qq.com/s/xxxxx`，必须提取该 URL 写入元信息的"原文链接"字段。
 
 ## 质量标准
 
@@ -238,3 +241,12 @@ archive/
 3. **本地文件**：已保存的 Markdown/文本文件
 
 **不接受**：网页链接（链接应由专门的抓取类 skill 处理）
+
+### 来自 wechat-article-fetch 的自动调用
+
+当 `wechat-article-fetch` 检测到法律内容且本技能已安装时，会自动链式调用本技能。此时输入为已保存的 Markdown 文件路径。处理流程不变：
+
+1. 读取指定路径的 Markdown 文件内容作为输入
+2. 按步骤 1-4 执行（分析类型、保存原始、格式化、验证）
+3. 结果保存到本技能的 `archive/` 目录
+4. 文件路径记录在 formatted.md 元信息的"来源"字段中
