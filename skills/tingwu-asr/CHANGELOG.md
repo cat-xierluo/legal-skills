@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.2.0] - 2026-04-20
+
+### Added
+- 多文件并行转录：支持传入多个文件路径，自动并行上传（最大并发数可通过 `--parallel` 参数控制，默认3）
+- 转录结果双路径保存：结果同时保存到源文件所在目录和 archive 目录
+- `--parallel N` 参数：指定并行转录的最大文件数
+
+### Changed
+- CLI 参数 `path` 改为 `paths`，支持多个文件路径
+- 批量模式（`--batch`）下目录内的文件也会并行处理
+
 ## [0.1.0] - 2026-04-18
 
 ### Added
