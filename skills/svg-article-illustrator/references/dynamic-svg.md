@@ -91,6 +91,42 @@
 - 虚线 `10,5`
 - 流动 0.8-1.5 秒
 
+### 效果 4：背景浮动圆形（全场漂移）
+
+在画布背景层放置 2-3 个大半径圆形，利用 `animateTransform type="translate"` 实现贯穿整个画布的漂移动画。为文章配图增加生动感。
+
+```xml
+<circle cx="100" cy="100" r="90" fill="#D4A574" fill-opacity="0.06">
+  <animateTransform attributeName="transform" type="translate"
+    values="0,0; 600,700; 0,0" dur="18s" repeatCount="indefinite"/>
+</circle>
+<circle cx="700" cy="200" r="70" fill="#10B981" fill-opacity="0.05">
+  <animateTransform attributeName="transform" type="translate"
+    values="0,0; -600,500; 0,0" dur="15s" repeatCount="indefinite"/>
+</circle>
+<circle cx="400" cy="750" r="55" fill="#435c68" fill-opacity="0.05">
+  <animateTransform attributeName="transform" type="translate"
+    values="0,0; 0,-600; 0,0" dur="12s" repeatCount="indefinite"/>
+</circle>
+```
+
+**参数**：
+- 圆形半径：50-100px（较大，视觉存在感强）
+- 透明度：0.04-0.08（极淡，装饰性不抢主体内容）
+- 颜色：使用配色方案中的主色或辅色
+- 位移距离：横跨整个画布（300-600px）
+- 动画周期：12-20 秒（较慢，优雅不眼花）
+- 多球方向错开：水平、垂直、对角线等不同方向
+
+**应用场景**：
+- 作者卡片、结尾引导等需要"有气场"的设计
+- 作为全局背景层，不影响前景内容
+
+**⚠️ 注意事项**：
+- 圆形必须放在所有内容元素之前（背景层）
+- 位移终点不能超出画布边界
+- 建议放在 SVG 顶层 `<g>` 的最前面，之后再放内容层
+
 ### 效果 3：箭头绘制
 
 展示流程指向
