@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
@@ -12,11 +13,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tingwu import TingwuClient, LANG_MAP
 from format_output import result_to_markdown, lab_to_markdown, save_archive
 
+AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".wma", ".aac", ".ogg", ".amr", ".flac", ".aiff",
+              ".mp4", ".wmv", ".m4v", ".flv", ".rmvb", ".dat", ".mov", ".mkv", ".webm", ".avi",
+              ".mpeg", ".3gp"}
+
 
 def main():
     parser = argparse.ArgumentParser(description="通义听悟云端语音转写")
-    parser.add_argument("path", nargs="?", help="音频/视频文件路径或目录（批量模式）")
-    parser.add_argument("-o", "--output", help="输出 Markdown 文件路径")
+    parser.add_argument("paths", nargs="*", help="音频/视频文件路径（支持多个文件并行转录）")
+    parser.add_argument("-o", "--output", help="输出 Markdown 文件路径（单文件模式）")
     parser.add_argument("--lang", default="cn", help="语言: cn/en/ja/cant/cn_en (默认: cn)")
     parser.add_argument("--speakers", type=int, default=4,
                         help="说话人数: 0=不区分, 1=单人, 2=两人, 4=多人 (默认: 4)")
@@ -30,6 +35,7 @@ def main():
     parser.add_argument("--ppt", action="store_true", help="下载 PPT 幻灯片图片并嵌入 Markdown（仅视频有效）")
     parser.add_argument("--async", action="store_true", help="异步模式：上传后立即返回，用 poll_tasks.py 查询结果")
     parser.add_argument("--json", action="store_true", help="输出原始 JSON 结果")
+    parser.add_argument("--parallel", type=int, default=3, help="并行转录的最大文件数 (默认: 3)")
 
     args = parser.parse_args()
 
@@ -50,39 +56,42 @@ def main():
             sys.exit(1)
         return
 
-    if not args.path:
+    if not args.paths:
         parser.print_help()
         sys.exit(1)
 
     lang = LANG_MAP.get(args.lang, args.lang)
-    target = Path(args.path)
 
-    if args.batch and target.is_dir():
-        files = [f for f in sorted(target.iterdir())
-                 if f.suffix.lower() in (AUDIO_EXTS := {".mp3", ".wav", ".m4a", ".wma", ".aac",
-                                                         ".ogg", ".amr", ".flac", ".aiff",
-                                                         ".mp4", ".wmv", ".m4v", ".flv", ".rmvb",
-                                                         ".dat", ".mov", ".mkv", ".webm", ".avi",
-                                                         ".mpeg", ".3gp"})]
-        if not files:
-            print(f"目录 {target} 中没有找到音视频文件")
-            sys.exit(1)
-        print(f"找到 {len(files)} 个文件，开始批量转录...")
-        for f in files:
-            print(f"\n{'='*50}")
-            print(f"转录: {f.name}")
-            try:
-                _transcribe_one(client, f, args, lang)
-            except Exception as e:
-                print(f"失败: {e}")
-    else:
-        if not target.exists():
-            print(f"文件不存在: {target}")
-            sys.exit(1)
-        if getattr(args, 'async'):
-            _submit_async(client, target, args, lang)
+    # 收集所有文件
+    all_files = []
+    for path_str in args.paths:
+        target = Path(path_str)
+        if args.batch and target.is_dir():
+            files = [f for f in sorted(target.iterdir())
+                     if f.suffix.lower() in AUDIO_EXTS]
+            all_files.extend(files)
         else:
-            _transcribe_one(client, target, args, lang)
+            if not target.exists():
+                print(f"文件不存在: {target}")
+                continue
+            all_files.append(target)
+
+    if not all_files:
+        print("没有找到音视频文件")
+        sys.exit(1)
+
+    # 异步模式不支持并行
+    if getattr(args, 'async'):
+        for file_path in all_files:
+            _submit_async(client, file_path, args, lang)
+        return
+
+    # 并行转录
+    if len(all_files) > 1:
+        print(f"找到 {len(all_files)} 个文件，开始并行转录（最大并发数: {args.parallel}）...")
+        _transcribe_parallel(client, all_files, args, lang)
+    else:
+        _transcribe_one(client, all_files[0], args, lang)
 
 
 def _submit_async(client, file_path, args, lang):
@@ -119,7 +128,52 @@ def _submit_async(client, file_path, args, lang):
     print(f"后台监控: python3 scripts/poll_tasks.py --monitor")
 
 
-def _transcribe_one(client, file_path, args, lang):
+def _transcribe_parallel(client, files, args, lang):
+    """并行转录多个文件"""
+    results = []
+
+    def transcribe_single(file_path):
+        try:
+            result = _transcribe_one(client, file_path, args, lang, verbose=False)
+            return {"success": True, "file": file_path, "result": result}
+        except Exception as e:
+            return {"success": False, "file": file_path, "error": str(e)}
+
+    with ThreadPoolExecutor(max_workers=args.parallel) as executor:
+        futures = {executor.submit(transcribe_single, f): f for f in files}
+        for future in as_completed(futures):
+            result = future.result()
+            results.append(result)
+            file_path = result["file"]
+            if result["success"]:
+                print(f"\n完成: {file_path.name}")
+                for out_path in result["result"].get("output_paths", []):
+                    print(f"  → {out_path}")
+            else:
+                print(f"\n失败: {file_path.name} - {result['error']}")
+
+    # 汇总
+    success_count = sum(1 for r in results if r["success"])
+    print(f"\n{'='*50}")
+    print(f"并行转录完成: {success_count}/{len(results)} 成功")
+
+    return results
+
+
+def _transcribe_one(client, file_path, args, lang, verbose=True):
+    """
+    转录单个文件，结果同时保存到文件所在目录和 archive 目录
+
+    Args:
+        client: TingwuClient 实例
+        file_path: 文件路径
+        args: 命令行参数
+        lang: 语言代码
+        verbose: 是否打印详细信息
+
+    Returns:
+        包含所有输出路径的结果字典
+    """
     result = client.transcribe(
         file_path,
         lang=lang,
@@ -128,31 +182,35 @@ def _transcribe_one(client, file_path, args, lang):
         poll_timeout=args.poll_timeout,
     )
 
+    # JSON 模式下直接输出并返回
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
+        return {"result": result, "output_paths": []}
 
     trans_result = result["result"]
+
+    if verbose:
+        print(f"[{file_path.name}] 获取 PPT 幻灯片...")
 
     # 获取 PPT 幻灯片（如果启用）
     ppt_slides = None
     if args.ppt:
         try:
-            print("获取 PPT 幻灯片...")
             ppt_slides = client.get_ppt_info(result["trans_id"])
             if not ppt_slides:
-                print("  未检测到 PPT 幻灯片")
+                if verbose:
+                    print(f"[{file_path.name}] 未检测到 PPT 幻灯片")
                 ppt_slides = None
             else:
-                print(f"  找到 {len(ppt_slides)} 张幻灯片")
-                if args.output:
-                    out_dir = Path(args.output).parent
-                else:
-                    out_dir = file_path.parent
+                if verbose:
+                    print(f"[{file_path.name}] 找到 {len(ppt_slides)} 张幻灯片")
+                out_dir = file_path.parent
                 downloaded = client.download_ppt_images(ppt_slides, out_dir)
-                print(f"  已下载 {len(downloaded)} 张幻灯片图片到 {out_dir / 'slides'}")
+                if verbose:
+                    print(f"[{file_path.name}] 已下载 {len(downloaded)} 张幻灯片图片到 {out_dir / 'slides'}")
         except Exception as e:
-            print(f"获取 PPT 失败（不影响转录结果）: {e}")
+            if verbose:
+                print(f"[{file_path.name}] 获取 PPT 失败: {e}")
             ppt_slides = None
 
     md = result_to_markdown(
@@ -164,35 +222,43 @@ def _transcribe_one(client, file_path, args, lang):
         ppt_slides=ppt_slides,
     )
 
-    if args.output:
-        out_path = Path(args.output)
-    else:
-        out_path = file_path.with_suffix(".md")
-
+    # 1. 保存到文件所在目录
+    out_path = file_path.with_suffix(".md")
     out_path.write_text(md, encoding="utf-8")
-    print(f"转录完成: {out_path}")
+    if verbose:
+        print(f"[{file_path.name}] 转录完成: {out_path}")
 
-    # 获取智能分析
+    # 2. 获取智能分析并追加
     if not args.no_lab:
         try:
-            print("获取智能分析...")
+            if verbose:
+                print(f"[{file_path.name}] 获取智能分析...")
             lab_data = client.get_lab_info(result["trans_id"])
             lab_md = lab_to_markdown(lab_data)
             if lab_md:
                 md += lab_md
                 out_path.write_text(md, encoding="utf-8")
-                print(f"智能分析已追加到: {out_path}")
+                if verbose:
+                    print(f"[{file_path.name}] 智能分析已追加到: {out_path}")
         except Exception as e:
-            print(f"获取智能分析失败（不影响转录结果）: {e}")
+            if verbose:
+                print(f"[{file_path.name}] 获取智能分析失败: {e}")
 
+    # 3. 保存到 archive 目录
+    output_paths = [str(out_path)]
     if not args.no_archive:
         archive_root = SKILL_ROOT / "archive"
         md_path, archive_dir = save_archive(
             file_path, md, result["trans_id"], trans_result, archive_root
         )
-        print(f"已归档: {archive_dir}")
+        if verbose:
+            print(f"[{file_path.name}] 已归档: {archive_dir}")
+        output_paths.append(str(md_path))
 
-    print(f"时长: {trans_result.get('duration', 'N/A')}秒 | 字数: {trans_result.get('wordCount', 'N/A')}")
+    if verbose:
+        print(f"[{file_path.name}] 时长: {trans_result.get('duration', 'N/A')}秒 | 字数: {trans_result.get('wordCount', 'N/A')}")
+
+    return {"result": result, "output_paths": output_paths}
 
 
 if __name__ == "__main__":

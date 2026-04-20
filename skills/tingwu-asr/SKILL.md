@@ -74,14 +74,39 @@ python3 skills/tingwu-asr/scripts/check_auth.py
 ### 2. 执行转录
 
 ```bash
+# 单文件转录
 python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio.mp3 --lang cn --speakers 4
+
+# 多文件并行转录（自动保存到文件所在目录 + archive 目录）
+python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/audio2.mp3 /path/to/video.mp4
+
+# 批量转录目录下所有文件（并行）
+python3 skills/tingwu-asr/scripts/transcribe.py /path/to/media_folder/ --batch
+
+# 指定并行数（默认3）
+python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/audio2.mp3 --parallel 5
 ```
 
 参数说明:
+- `paths` 音频/视频文件路径（支持多个文件并行转录）
 - `--lang cn` 语言: cn(中文,默认) / en(英文) / ja(日文) / cant(粤语) / cn_en(中英混合)
 - `--speakers 4` 说话人: 0(不区分) / 1(单人) / 2(两人) / 4(多人,默认)
 - `--batch` 批量转录目录下所有文件
-- `-o output.md` 指定输出路径
+- `--parallel N` 并行转录的最大文件数 (默认: 3)
+- `-o output.md` 指定输出路径（单文件模式）
+- `--no-archive` 不保存归档
+- `--no-lab` 不获取智能分析（关键词/议程/重点等）
+- `--ppt` 下载 PPT 幻灯片图片并嵌入 Markdown（仅视频有效）
+
+### 3. 输出说明
+
+转录结果会同时保存到两个位置：
+1. **源文件所在目录**：例如 `/path/to/audio.mp3` → `/path/to/audio.md`
+2. **archive 归档目录**：`archive/YYYYMMDD_HHMMSS_audio/audio.md`
+
+这样做的好处是：
+- 源文件目录方便直接访问
+- archive 目录便于集中管理和备份
 
 ### 3. 生成 AI 总结（复用 funasr-transcribe）
 
