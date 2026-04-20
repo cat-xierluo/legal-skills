@@ -24,13 +24,8 @@ ARCHIVE_DIR = SKILL_ROOT / "archive"
 # 版本信息
 CURRENT_VERSION = "1.1.1"
 
-# 通用更新模块实例
-_updater = SkillUpdater(
-    skill_root=SKILL_ROOT,
-    repo_raw_base="https://raw.githubusercontent.com/cat-xierluo/legal-skills/main/skills/yuandian-law-search",
-    commits_feed="https://github.com/cat-xierluo/legal-skills/commits/main/skills/yuandian-law-search.atom",
-    current_version=CURRENT_VERSION,
-)
+# 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
+_updater = SkillUpdater.from_skill_md(SKILL_ROOT)
 
 
 def load_api_key():

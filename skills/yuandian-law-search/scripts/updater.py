@@ -17,6 +17,7 @@
 """
 
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -38,6 +39,53 @@ class SkillUpdater:
 
         self.archive_dir = self.skill_root / "archive"
         self.version_check_file = self.archive_dir / "version_check.json"
+
+    @classmethod
+    def from_skill_md(cls, skill_root, check_interval_days=7):
+        """从 SKILL.md frontmatter 自动构造更新器。
+
+        读取 homepage 和 name，推导 GitHub 更新地址。
+        约定：skill 位于 monorepo 的 skills/{name}/ 目录下。
+        如需自定义路径，在 frontmatter 中添加 update_path 字段。
+        """
+        skill_root = Path(skill_root)
+        skill_md = skill_root / "SKILL.md"
+        if not skill_md.exists():
+            raise FileNotFoundError(f"SKILL.md not found in {skill_root}")
+
+        frontmatter = {}
+        in_fm = False
+        for line in skill_md.read_text("utf-8").splitlines():
+            if line.strip() == "---":
+                if in_fm:
+                    break
+                in_fm = True
+                continue
+            if in_fm and ":" in line:
+                key, value = line.split(":", 1)
+                frontmatter[key.strip()] = value.strip().strip('"').strip("'")
+
+        homepage = frontmatter.get("homepage", "")
+        name = frontmatter.get("name", "")
+        version = frontmatter.get("version", "0.0.0")
+
+        # https://github.com/owner/repo → owner/repo
+        repo_match = re.match(r'https?://github\.com/([^/]+/[^/]+)', homepage)
+        if not repo_match:
+            raise ValueError(f"Cannot parse GitHub repo from homepage: {homepage}")
+        repo = repo_match.group(1).rstrip("/")
+
+        update_path = frontmatter.get("update_path", f"skills/{name}")
+        repo_raw_base = f"https://raw.githubusercontent.com/{repo}/main/{update_path}"
+        commits_feed = f"https://github.com/{repo}/commits/main/{update_path}.atom"
+
+        return cls(
+            skill_root=skill_root,
+            repo_raw_base=repo_raw_base,
+            commits_feed=commits_feed,
+            current_version=version,
+            check_interval_days=check_interval_days,
+        )
 
     # ── 内部方法 ──────────────────────────────────────────
 
