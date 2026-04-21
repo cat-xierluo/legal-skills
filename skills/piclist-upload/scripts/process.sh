@@ -13,6 +13,10 @@ KEEP_LOCAL=false
 TOTAL_UPLOADED=0
 TOTAL_SKIPPED=0
 TOTAL_FAILED=0
+TOTAL_DIRS_REMOVED=0
+
+# Track directories where files were deleted
+declare -A deleted_dirs
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -75,8 +79,11 @@ delete_local_image() {
     fi
 
     if [ -f "$image_path" ]; then
+        local dir_path
+        dir_path="$(dirname "$image_path")"
         rm -f "$image_path"
         echo "  🗑️  Deleted: $image_path"
+        deleted_dirs["$dir_path"]=1
     fi
 }
 
@@ -250,6 +257,17 @@ for md_file in "${md_files[@]}"; do
     process_markdown_file "$md_file"
 done
 
+# Clean up empty directories left after deleting images
+if [ "$KEEP_LOCAL" = false ] && [ ${#deleted_dirs[@]} -gt 0 ]; then
+    for dir in "${!deleted_dirs[@]}"; do
+        if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+            rmdir "$dir"
+            echo "  🗑️  Removed empty dir: $dir"
+            : $((TOTAL_DIRS_REMOVED++))
+        fi
+    done
+fi
+
 echo
 echo "📊 Summary:"
 if [ "$DRY_RUN" = true ]; then
@@ -259,3 +277,6 @@ else
 fi
 echo "  Total skipped: $TOTAL_SKIPPED"
 echo "  Total failed: $TOTAL_FAILED"
+if [ "$KEEP_LOCAL" = false ]; then
+    echo "  Empty dirs removed: $TOTAL_DIRS_REMOVED"
+fi
