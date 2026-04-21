@@ -11,7 +11,7 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tingwu import TingwuClient
+from tingwu import TingwuClient, VIDEO_EXTS
 from format_output import result_to_markdown, lab_to_markdown, save_archive
 
 PENDING_PATH = SKILL_ROOT / "config" / "pending_tasks.json"
@@ -39,9 +39,10 @@ def finish_task(client, task):
     print(f"  获取转录结果...")
     trans_result = client.get_trans_result(trans_id)
 
-    # PPT
+    # PPT（视频自动启用）
     ppt_slides = None
-    if task.get("ppt"):
+    is_video = Path(task["file_path"]).suffix.lower() in VIDEO_EXTS
+    if task.get("ppt") or is_video:
         try:
             print(f"  获取 PPT 幻灯片...")
             ppt_slides = client.get_ppt_info(trans_id)

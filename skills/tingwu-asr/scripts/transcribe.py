@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tingwu import TingwuClient, LANG_MAP
+from tingwu import TingwuClient, LANG_MAP, VIDEO_EXTS
 from format_output import result_to_markdown, lab_to_markdown, save_archive
 
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".wma", ".aac", ".ogg", ".amr", ".flac", ".aiff",
@@ -23,8 +23,8 @@ def main():
     parser.add_argument("paths", nargs="*", help="音频/视频文件路径（支持多个文件并行转录）")
     parser.add_argument("-o", "--output", help="输出 Markdown 文件路径（单文件模式）")
     parser.add_argument("--lang", default="cn", help="语言: cn/en/ja/cant/cn_en (默认: cn)")
-    parser.add_argument("--speakers", type=int, default=4,
-                        help="说话人数: 0=不区分, 1=单人, 2=两人, 4=多人 (默认: 4)")
+    parser.add_argument("--speakers", type=int, default=2,
+                        help="说话人数: 0=不区分, 1=单人, 2=两人(默认), 4=多人")
     parser.add_argument("--batch", action="store_true", help="批量转录目录下所有音视频文件")
     parser.add_argument("--check-auth", action="store_true", help="检查登录状态")
     parser.add_argument("--cookie", help="Cookie 文件路径 (默认: config/cookies.json)")
@@ -113,7 +113,7 @@ def _submit_async(client, file_path, args, lang):
         "lang": task["lang"],
         "role_split_num": task["role_split_num"],
         "output_path": str(Path(args.output).resolve()) if args.output else None,
-        "ppt": args.ppt,
+        "ppt": args.ppt or file_path.suffix.lower() in VIDEO_EXTS,
         "no_lab": args.no_lab,
         "no_archive": args.no_archive,
         "submitted_at": datetime.now().isoformat(),
@@ -192,9 +192,10 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
     if verbose:
         print(f"[{file_path.name}] 获取 PPT 幻灯片...")
 
-    # 获取 PPT 幻灯片（如果启用）
+    # 获取 PPT 幻灯片（视频自动启用，音频需手动 --ppt）
     ppt_slides = None
-    if args.ppt:
+    is_video = file_path.suffix.lower() in VIDEO_EXTS
+    if is_video or args.ppt:
         try:
             ppt_slides = client.get_ppt_info(result["trans_id"])
             if not ppt_slides:

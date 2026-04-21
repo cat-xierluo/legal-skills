@@ -90,7 +90,7 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 参数说明:
 - `paths` 音频/视频文件路径（支持多个文件并行转录）
 - `--lang cn` 语言: cn(中文,默认) / en(英文) / ja(日文) / cant(粤语) / cn_en(中英混合)
-- `--speakers 4` 说话人: 0(不区分) / 1(单人) / 2(两人) / 4(多人,默认)
+- `--speakers 2` 说话人: 0(不区分) / 1(单人) / 2(两人,默认) / 4(多人)
 - `--batch` 批量转录目录下所有文件
 - `--parallel N` 并行转录的最大文件数 (默认: 3)
 - `-o output.md` 指定输出路径（单文件模式）

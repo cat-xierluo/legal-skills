@@ -131,6 +131,7 @@ class TingwuClient:
                 "translateSwitch": False,
                 "transTargetValue": "",
                 "originalFlag": 0,
+                "originalTag": json.dumps({"isVideo": 1 if is_video else 0}),
             },
         }
         result = self._post("/trans/request", body, params={"generatePutLink": ""})
