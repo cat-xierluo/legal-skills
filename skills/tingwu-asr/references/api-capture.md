@@ -36,6 +36,7 @@ POST /api/trans/request?generatePutLink
     "showName": "文件名",
     "fileFormat": "mp3",
     "fileType": "local",
+    "originalTag": "{\"isVideo\":0}",
     "lang": "cn",
     "roleSplitNum": 4,
     "translateSwitch": false,
@@ -44,6 +45,8 @@ POST /api/trans/request?generatePutLink
   }
 }
 ```
+
+> **视频文件**：`fileContentType` 改为视频 MIME 类型（如 `"video/mp4"`），`tag.fileFormat` 改为对应格式（如 `"mp4"`），`tag.originalTag` 改为 `{"isVideo":1}`（音频为 `{"isVideo":0}`）。`tag.fileType` 保持 `"local"` 不变。
 
 **响应**:
 ```json
