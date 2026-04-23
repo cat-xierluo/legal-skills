@@ -14,6 +14,10 @@ All notable changes to this skill will be documented in this file.
 - 进一步降低 `code2patent` 进入初稿阶段的认知负担，使 agent 更容易稳定执行“证据映射 → 布局卡 → 初稿 → 自检”的链路
 - 同步更新 `README.md`、`TASKS.md` 和 `DECISIONS.md` 记录本次优化
 
+### 文档完善
+
+- 2026-04-22：按独立仓库 README 新规范重写首页，突出代码证据映射、交底书、权利要求布局和专利初稿的交付链路，并补充安装方式、使用边界、核心设计、关键文件、Legal Skills 关联项目导流、作者联系入口和微信二维码
+
 ## [1.4.1] - 2026-04-05
 
 ### 改进
