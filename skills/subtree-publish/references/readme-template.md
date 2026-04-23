@@ -1,23 +1,30 @@
 # <skill-name>
 
-<一句话说明：这个 skill 帮谁，在什么场景下，完成什么结果。>
+<一句话说明：这个 skill 帮谁、在什么场景下、产出什么。>
 
-> <一句话价值主张：它能帮用户省掉什么麻烦，或让用户原来做不到的事变得可做。>
+> <一句话价值主张：让访客在 30 秒内知道为什么值得安装。>
 
 <!--
 README.md 面向独立 GitHub 仓库的人类访客，不是 skill runtime 文件。
 Release zip / 安装包中仍应排除 README.md，避免污染实际 skill 目录。
 
+个性化信息来源：
+- 优先读取 config/readme-profile.json（本地配置，不提交）
+- 可用 SUBTREE_README_* 环境变量临时覆盖
+- 公开发布只保留 config/readme-profile.example.json 作为字段示例
+
 写作原则：
-- outcome first：先讲结果，不先讲 YAML/frontmatter/文件结构
-- example first：尽早给一个真实使用场景
-- boundary clear：说明适合什么、不适合什么
-- install easy：让用户知道如何下载、安装和开始试用
+- outcome first：首屏先讲结果，不先讲 YAML/frontmatter/目录结构
+- example first：前半部分给真实用户提问和 AI 介入方式
+- install executable：安装步骤必须能照做；有依赖就就近写命令
+- boundary clear：适合/不适合分开写，高风险场景必须写清免责声明
+- trust supported：复杂 skill 补方法框架、覆盖范围、质量支撑和关键文件
+- metadata consistent：许可证、作者、项目链接必须与 SKILL.md / LICENSE.txt 一致
 
 复杂度 profile：
 - minimal：保留“典型场景 / 能产出什么 / 安装方式 / 使用边界 / 许可证 / 作者 / 关联项目”
-- standard：再加“适合谁用 / 当前覆盖范围”
-- showcase：再加“项目解决什么问题 / 核心设计 / 示例输出 / 项目结构 / 质量支撑”
+- standard：再加“适合谁用 / 当前覆盖范围 / 常见用法”
+- showcase：再加“项目解决什么问题 / 核心设计 / 示例输出 / 关键文件 / 质量支撑”
 -->
 
 ## 适合谁用
@@ -48,7 +55,12 @@ AI：<这个 skill 会如何介入，并产出什么>
 3. 解压后将 `<skill-name>/` 文件夹放入你的 skill 目录。
 4. 在支持 `SKILL.md` 的 Agent / Claude 环境中启用该 skill。
 
-> 如果你是从 monorepo 开发者视角维护本项目，请不要直接修改独立仓库。所有修改都应在 monorepo 中完成，再通过 git subtree 同步。
+<!-- 如果需要依赖，必须就近补充，例如：
+5. 安装依赖：`pip install -r scripts/requirements.txt`
+6. 配置 API Key：复制 `scripts/.env.example` 为 `scripts/.env` 并填入密钥
+-->
+
+<!-- 不要在 README 中写“通过 git subtree 同步”“所有修改在 monorepo 中进行”等内部维护机制。README 面向最终用户，应把这里留给安装、使用和项目导流。 -->
 
 ## 可以怎么用
 
@@ -152,10 +164,41 @@ AI：<这个 skill 会如何介入，并产出什么>
 
 本作品采用 [<许可证类型>](<许可证链接>) 许可证。
 
+<!-- CC BY-NC 类 skill 如需提示商用授权，写：
+如需商用授权，请以 LICENSE.txt 中的联系方式为准。
+-->
+
 ## 作者
 
-<从 SKILL.md frontmatter 的 author 字段提取>
+<从 config/readme-profile.json 的 author.display 读取；如未配置，再从 SKILL.md frontmatter 的 author 字段提取>
+
+<!-- 如 config/readme-profile.json 或环境变量配置了作者咨询入口，可加入二维码或联系方式，例如：
+
+<contact_messages.default / contact_messages.legal / contact_messages.tool 中匹配当前 skill 的联系文案>
+
+<div align="center">
+  <img src="<author.qr_image_url>" width="200" alt="微信二维码"/>
+  <p><em>微信：<author.wechat_id></em></p>
+</div>
+-->
 
 ## 关联项目
 
-本仓库是 [legal-skills](https://github.com/cat-xierluo/legal-skills) monorepo 的子项目。所有修改均在 monorepo 中进行，通过 git subtree 同步到本仓库。
+本仓库是 [<upstream.name>](<upstream.url>) 的子项目。<upstream.description>
+
+相关项目：
+
+- [<related_projects 中的相关项目 A>](<URL>)：<一句话说明>
+- [<related_projects 中的相关项目 B>](<URL>)：<一句话说明>
+- [<related_projects 中的相关项目 C>](<URL>)：<一句话说明>
+
+## 发布前检查
+
+- [ ] 首屏说明了目标用户、核心场景和输出结果
+- [ ] 前半部分有真实提问示例
+- [ ] 安装步骤可执行，依赖/API Key 说明就近出现
+- [ ] 适合/不适合场景分开写清楚
+- [ ] 法律、专利、商标、合规类 skill 写明不替代正式专业意见
+- [ ] 许可证、作者、关联项目与当前 skill 元数据一致
+- [ ] 关联项目面向最终用户导流，不暴露 monorepo/subtree 等内部维护机制
+- [ ] 删除模板占位符、内部维护口吻和过长目录树

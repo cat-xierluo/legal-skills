@@ -1,7 +1,7 @@
 ---
 name: subtree-publish
 author: 杨卫薪律师（微信 ywxlaw）
-version: "1.5.0"
+version: "1.7.0"
 license: MIT
 description: 将 monorepo 中的子目录通过 git subtree 推送到独立 GitHub 仓库。支持注册清单、变更自动检测、增量推送。本技能应在用户提交涉及已注册子项目的变更后，或手动请求推送到独立仓库时使用。不要用于初次创建 monorepo 或管理 git submodule。
 ---
@@ -63,16 +63,33 @@ ls <prefix>/<name>/README.md
 - **如果不存在**：必须先创建 README.md，才能继续后续步骤。不得跳过。创建时参照 `references/readme-template.md` 模板。
 - **如果已存在**：跳过创建，继续下一步。
 
-README.md 是独立 GitHub 仓库的人类展示页，不是 skill runtime 文件。创建时必须遵守：
+README.md 是独立 GitHub 仓库的人类展示页，不是 skill runtime 文件。创建或重写时必须遵守：
 
-- **固定骨架，不固定叙事**：必须回答“给谁用、解决什么、典型场景、能产出什么、如何安装、使用边界、许可证、作者、关联项目”，但可以根据 skill 复杂度增删扩展模块。
-- **结果优先**：优先说明 skill 帮用户完成什么结果，不要把 README 写成 `SKILL.md`、frontmatter 或目录结构说明。
-- **示例优先**：尽早给一个真实用户提问和 AI 介入方式，让访客能快速理解用途。
-- **边界清晰**：必须说明适合什么、不适合什么，尤其是法律、专利、合规等高风险 skill。
-- **按复杂度选择 profile**：
-  - `minimal`：简单工具型 skill，只保留核心骨架。
-  - `standard`：大多数公开 skill，增加目标用户和覆盖范围。
-  - `showcase`：重点推广或复杂 skill，增加问题背景、核心设计、示例输出、项目结构和质量支撑。
+- **首屏讲清结果**：标题、首段和引用句必须让访客在 30 秒内知道“这个 skill 帮谁，在什么场景下，产出什么”。不要先讲 frontmatter、目录结构或内部实现。
+- **真实提问开场**：在前半部分放一个真实用户提问和 AI 介入方式，优先展示“怎么用”，而不是罗列功能。
+- **安装路径可执行**：必须包含 GitHub Releases 下载、解压到 skill 目录、启用环境这三步；如需 Python/CLI/API Key 等依赖，必须就近写出安装或配置命令。
+- **产物可预期**：用清单说明会产出哪些文件、报告、表格、批注、检索结果或行动清单；避免只写“提高效率”“智能分析”等空泛词。
+- **边界与责任清楚**：必须分别说明适合与不适合的场景。法律、专利、商标、合规类 skill 必须写明“不替代正式法律意见/代理判断/注册成功承诺”等边界。
+- **可信度有支撑**：复杂或重点推广 skill 应说明方法框架、覆盖范围、关键文件、评测/示例/脚本等质量支撑，但不要把 README 写成完整技术文档。
+- **许可证一致**：README 的许可证类型必须与 `SKILL.md` frontmatter 和 `LICENSE.txt` 保持一致；CC BY-NC 类 skill 应提示商用授权联系方式以 `LICENSE.txt` 为准。
+- **外部导流收尾**：底部应说明本仓库所属的上游项目或技能集合，并推荐相关项目、主仓库或作者联系方式。不要把“所有修改在 monorepo 中进行”“通过 git subtree 同步”这类内部维护机制写给最终用户。
+
+如需统一作者信息、二维码、主仓库链接或相关项目推荐，先读取 `config/readme-profile.json`；该文件为本地个性化配置，默认不提交。没有本地配置时，参考 `config/readme-profile.example.json` 的字段结构，并用通用占位符生成 README。
+
+写作前按复杂度选择 profile：
+
+- `minimal`：简单工具型 skill。保留“典型场景 / 能产出什么 / 安装方式 / 使用边界 / 许可证 / 作者 / 关联项目”。
+- `standard`：大多数公开 skill。在 minimal 基础上增加“适合谁用 / 当前覆盖范围 / 常见用法”。
+- `showcase`：重点推广、复杂法律或高风险 skill。在 standard 基础上增加“项目解决什么问题 / 核心设计 / 示例输出 / 质量支撑 / 关键文件”。
+
+发布前用以下检查清单复核 README：
+
+1. 首屏是否能直接判断目标用户、核心场景和输出结果？
+2. 是否有真实用户提问示例，而不是只有功能列表？
+3. 安装步骤是否足以让外部用户开始试用？
+4. 是否写明适合/不适合，且高风险场景有免责声明？
+5. 许可证、作者、关联项目是否与当前 skill 元数据一致？
+6. 是否删除了模板占位符、内部维护口吻和过长目录树？
 
 **Step 3: 创建独立 GitHub 仓库**（如果需要首次设置）
 
@@ -174,6 +191,41 @@ README.md 面向独立仓库浏览者（GitHub 页面展示），不属于 skill
   - `version`: 当前 SKILL.md 中的版本号（可选，用于核查是否需要发布新 Release）
   - `last_release`: 最新已发布的 Release tag（可选，如 `v1.0.0`）
   - `last_updated`: 最近一次 subtree push 或 Release 更新时间（可选，格式 `YYYY-MM-DDTHH:MM:SS`）
+
+### config/readme-profile.json（可选）
+
+本地 README 个性化配置。用于统一生成独立仓库 README 的作者入口、二维码、上游项目导流和相关项目推荐。该文件通常包含个人或项目特定信息，应保留在本地；发布包和版本库只保留 `config/readme-profile.example.json`。
+
+读取优先级：
+
+1. 环境变量（临时覆盖）
+2. `config/readme-profile.json`（本地固定配置）
+3. `config/readme-profile.example.json`（字段结构示例）
+4. `references/readme-template.md` 中的通用占位符
+
+常用环境变量：
+
+- `SUBTREE_README_UPSTREAM_NAME`
+- `SUBTREE_README_UPSTREAM_URL`
+- `SUBTREE_README_AUTHOR_DISPLAY`
+- `SUBTREE_README_WECHAT_ID`
+- `SUBTREE_README_QR_IMAGE_URL`
+- `SUBTREE_README_CONTACT_DEFAULT`
+- `SUBTREE_README_CONTACT_LEGAL`
+- `SUBTREE_README_CONTACT_TOOL`
+
+推荐字段：
+
+- `upstream`: 上游项目或技能集合信息
+- `author`: 作者展示名、联系方式、二维码图片 URL
+- `contact_messages`: 默认、法律业务类、工具类联系文案
+- `related_projects`: 可推荐的相关项目池
+- `skill_overrides`: 按 skill 名定制推荐项目、联系文案或 profile
+
+发布规则：
+
+- 不要把真实的 `readme-profile.json` 写入公开发布包
+- `scripts/create-release.sh` 会排除非 example 的 `config/*.json`，保留 `*.example.json`
 
 ## 仓库名默认规则
 

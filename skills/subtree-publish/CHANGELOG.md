@@ -2,6 +2,36 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [v1.7.0] - 2026-04-23
+
+### 新增
+
+- 新增 `config/readme-profile.example.json`，用于定义独立仓库 README 的作者入口、二维码、上游项目导流和相关项目推荐字段
+- 支持通过本地 `config/readme-profile.json` 或 `SUBTREE_README_*` 环境变量提供 README 个性化信息
+
+### 改进
+
+- README 模板改为从 profile 配置读取作者展示名、联系文案、二维码图片、上游项目和相关项目推荐
+- Release 打包排除非 example 的 `config/*.json`，避免本地个性化配置进入公开发布包，同时保留 `*.example.json`
+
+### 文档完善
+
+- 更新 `SKILL.md`、`TASKS.md` 与 `DECISIONS.md`，说明 README profile 的读取优先级、字段结构和发布规则
+
+## [v1.6.0] - 2026-04-22
+
+### 改进
+
+- 强化独立仓库 README 写作要求：从栏目模板升级为首屏价值、真实提问、安装依赖、产物预期、边界责任、可信度支撑和许可证一致性的质量验收标准
+- 更新 `references/readme-template.md`，增加依赖/API Key 就近说明、CC BY-NC 商用授权提示和发布前检查清单
+- 明确已注册独立仓库 README 应按 skill 复杂度选择 `minimal` / `standard` / `showcase` profile，而不是机械套用固定长模板
+- 调整“关联项目”规范：README 应面向最终用户推荐上游项目、相关 skill 或作者入口，不再输出 monorepo/subtree 内部同步说明
+- README 模板保持通用占位符，不硬编码特定作者二维码或特定项目推广文案
+
+### 文档完善
+
+- 更新 `TASKS.md` 与 `DECISIONS.md`，记录 README 规范升级的背景、理由和影响范围
+
 ## [v1.5.0] - 2026-04-19
 
 ### 新增

@@ -1,0 +1,31 @@
+{
+  "upstream": {
+    "name": "<upstream-project-name>",
+    "url": "https://github.com/<owner>/<repo>",
+    "description": "如果需要更多相关 skill、示例和更新，可以关注上游项目。"
+  },
+  "author": {
+    "display": "<author-display-name>",
+    "wechat_id": "<wechat-id>",
+    "qr_image_url": "https://example.com/path/to/wechat-qr.jpg"
+  },
+  "contact_messages": {
+    "default": "如需使用交流、企业内部落地、定制开发或商用授权，欢迎添加微信（请注明来意）。",
+    "legal": "如需就具体业务、复杂法律问题、企业内部落地或商用授权进一步沟通，欢迎添加微信（请注明来意）。",
+    "tool": "如需使用交流、企业内部落地、定制开发或商用授权，欢迎添加微信（请注明来意）。"
+  },
+  "related_projects": [
+    {
+      "name": "<related-skill-name>",
+      "url": "https://github.com/<owner>/<repo>/tree/main/skills/<related-skill-name>",
+      "description": "<一句话说明>",
+      "tags": ["<tag>"]
+    }
+  ],
+  "skill_overrides": {
+    "<skill-name>": {
+      "contact_message_key": "default",
+      "related_projects": ["<related-skill-name>"]
+    }
+  }
+}

@@ -118,7 +118,8 @@ fi
 ZIP_FILE="/tmp/${NAME}-${VERSION}.zip"
 if [ "$DRY_RUN" = true ]; then
   echo "[dry-run] 将执行以下操作:"
-  echo "  1. 打包: cd ${PREFIX} && zip -r ${ZIP_FILE} ${NAME}/ -x '${NAME}/*.DS_Store' '${NAME}/README.md'"
+  echo "  1. 打包: cd ${PREFIX} && zip -r ${ZIP_FILE} ${NAME}/ -x '${NAME}/*.DS_Store' '${NAME}/README.md' '${NAME}/config/*.json'"
+  echo "     然后补回: ${NAME}/config/*.example.json"
   echo "  2. 创建 Release:"
   echo "     gh release create ${TAG} --repo ${FULL_REPO} --title '${TAG}' --notes '...'"
   echo "     附件: ${ZIP_FILE}"
@@ -127,7 +128,12 @@ fi
 
 echo "打包 ${NAME}/ ..."
 cd "$PREFIX"
-zip -r "$ZIP_FILE" "${NAME}/" -x "${NAME}/*.DS_Store" "${NAME}/README.md"
+zip -r "$ZIP_FILE" "${NAME}/" -x "${NAME}/*.DS_Store" "${NAME}/README.md" "${NAME}/config/*.json"
+if [ -d "${NAME}/config" ]; then
+  while IFS= read -r example_config; do
+    zip -r "$ZIP_FILE" "$example_config" >/dev/null
+  done < <(find "${NAME}/config" -maxdepth 1 -type f -name "*.example.json" | sort)
+fi
 cd - > /dev/null
 
 echo "创建 Release ${TAG}..."
