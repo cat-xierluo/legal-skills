@@ -16,6 +16,10 @@
 - `DISCLAIMER.md`（免责声明已整合到 SKILL.md 和 README.md）
 - `examples/README.md`、`evals/README.md`、`references/industry/README.md`、`assets/output-templates/README.md`
 
+### 文档完善
+
+- 2026-04-22：按独立仓库 README 新规范重写首页，强化 OPC / AI 小微企业法律顾问定位、典型咨询场景、输出产物、安装方式、边界责任、核心设计、质量支撑、关键文件、Legal Skills 关联项目导流、作者联系入口和微信二维码
+
 ## [0.2.4] - 2026-04-19
 
 ### 新增
