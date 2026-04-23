@@ -17,6 +17,10 @@
 - 修复批注时间戳随机化功能断裂：`Document` 类缺少 `set_operation_timestamp` / `clear_operation_timestamp` 方法，导致 `ReviewTimeline` 的两层错峰逻辑无法生效。已补入实现，批注/修订时间戳现在会正确使用本地时区偏移格式，并按设定间隔递增。
 - 修复 `utilities.py` 的 `get_node()` 方法缺少 `occurrence` 参数，导致多条重复文本定位时报错。
 
+### 文档完善
+
+- 2026-04-22：按独立仓库 README 新规范重写首页，补充适用用户、典型审查场景、DOCX 交付能力、安装依赖、使用边界、核心设计、关键文件、Legal Skills 关联项目导流、作者联系入口和微信二维码
+
 ## [1.5.0] - 2026-04-19
 
 ### 重构
