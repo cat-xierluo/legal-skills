@@ -34,15 +34,24 @@ license: MIT License - 详见 LICENSE.txt
 skill-name/
 ├── SKILL.md          # 必需
 ├── LICENSE.txt       # 可选
+├── CHANGELOG.md      # 可选（推荐）
+├── TASKS.md          # 可选（开发上下文，保留）
+├── DECISIONS.md      # 可选（开发上下文，保留）
 ├── references/       # 可选
 ├── scripts/          # 可选
+├── templates/        # 可选
 └── assets/           # 可选
 ```
 
 **检查项**：
 - [ ] SKILL.md 是否存在
 - [ ] 是否有不规范的目录（如 `test/`、`docs/` 应改为 `references/`）
-- [ ] 是否有不应提交的文件（如 `__pycache__/`、`.env`）
+- [ ] 是否有不应提交的文件（如 `__pycache__/`、`.env`、`.DS_Store`）
+
+**豁免文件**（以下文件为开发过程上下文，不应标记为不合规，不应建议删除）：
+- `TASKS.md` — 任务追踪
+- `DECISIONS.md` — 决策记录
+- `CHANGELOG.md` — 变更日志
 
 ### 3. 检查 Frontmatter
 
@@ -74,9 +83,12 @@ license: MIT License - 详见 LICENSE.txt
 ### 5. 检查目录层级
 
 **检查项**：
-- [ ] `references/` 是否为扁平结构（只允许一级子目录）
-- [ ] `scripts/` 是否为扁平结构（只允许一级子目录）
-- [ ] `assets/` 是否为扁平结构（只允许一级子目录）
+- [ ] `references/` 是否完全扁平（文件直接放在目录下，无子目录）
+- [ ] `scripts/` 是否完全扁平（文件直接放在目录下，无子目录）
+- [ ] `assets/` 是否完全扁平（文件直接放在目录下，无子目录）
+- [ ] `templates/` 是否完全扁平（文件直接放在目录下，无子目录）
+
+**注意**：所有二级目录（`references/`、`scripts/`、`assets/`、`templates/`）下禁止创建子目录，文件必须直接放在目录根。
 
 ### 6. 检查文档一致性
 
