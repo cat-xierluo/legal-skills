@@ -22,9 +22,13 @@ skill-name/
 
 **目录层级规则**:
 
-- `references/`、`scripts/`、`assets/` 下保持**扁平结构**，只允许一级子目录
+- `references/`、`scripts/`、`assets/`、`templates/` 下必须**完全扁平**，文件直接放在目录根，禁止创建任何子目录
 - ❌ `references/docs/api/guide.md` (层级过深)
-- ✅ `references/api-guide.md` (扁平结构)
+- ❌ `assets/presets/litigation.yaml` (禁止子目录)
+- ❌ `scripts/utils/helper.py` (禁止子目录)
+- ✅ `references/api-guide.md` (完全扁平)
+- ✅ `assets/litigation.yaml` (完全扁平)
+- ✅ `scripts/helper.py` (完全扁平)
 
 **注意**: `test/` 目录中的 `DECISIONS.md`、`TASKS.md`、`CHANGELOG.md` 是**开发协作文件**,不属于最终 skill 产品。
 
