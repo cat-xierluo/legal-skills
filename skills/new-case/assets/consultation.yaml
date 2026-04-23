@@ -1,0 +1,100 @@
+# consultation.yaml — 潜在项目/咨询预设
+# 轻量级3目录结构
+
+meta:
+  id: "consultation"
+  name: "潜在项目/咨询"
+  description: "潜在客户咨询、案件初步评估阶段"
+  case_id_format: "{YYMMDD} {客户/对方简称} {事项关键词}"
+  example_case_id: "260323 张美金 浙江腾宇包装公司 咨询"
+
+directories:
+  - id: "01"
+    icon: "💬"
+    name: "咨询记录"
+    description: "与客户的所有沟通记录：咨询录音、电话记录、微信聊天、转写文稿、视频录像"
+
+  - id: "02"
+    icon: "📎"
+    name: "证据材料"
+    description: "客户提供的原始材料：合同、声明、身份证明、鉴定报告、权属证明"
+
+  - id: "03"
+    icon: "📝"
+    name: "工作文件"
+    description: "律师内部工作产出：法律服务方案、内部沟通报告、法律问答提取、策略分析、案件摘要"
+
+root_files:
+  - pattern: "[YYMMDD]*法律服务方案*"
+    description: "当前最新版法律服务方案（面向客户的正式方案）"
+  - pattern: "*法律意见书*"
+    description: "正式法律意见书（面向客户的交付物）"
+  - pattern: "*咨询报告*"
+    description: "咨询分析报告（面向客户的交付物）"
+
+management_files:
+  case_info:
+    enabled: true
+    template: "templates/consultation-info.md"
+    output: "[项目编号] 项目信息.md"
+  timesheet:
+    enabled: false
+  deadline_yaml:
+    enabled: false
+  task_list:
+    enabled: true
+    template: "templates/task-list.md"
+    output: "[项目编号] 待办事项.md"
+
+detection:
+  path_patterns:
+    - "潜在项目"
+    - "咨询"
+  material_hints:
+    - "咨询"
+    - "录音"
+    - "聊天记录"
+    - "法律服务方案"
+    - "法律意见书"
+    - "法律问答"
+    - "内部沟通"
+    - "应对说明"
+  negative_hints:
+    - "传票"
+    - "应诉通知书"
+    - "判决书"
+
+classification:
+  # 01 - 咨询记录：所有与客户的沟通记录
+  - match: ["咨询", "通话记录", "电话"]
+    target: "01"
+  - match: ["聊天记录", "微信"]
+    target: "01"
+  - match: ["mp3", "aac", "wav", "m4a", "mp4"]
+    target: "01"
+  - match: ["转写", "语音"]
+    target: "01"
+
+  # 02 - 证据材料：客户提供的原始文件
+  - match: ["身份证", "营业执照", "授权书"]
+    target: "02"
+  - match: ["合同", "协议", "声明", "发票", "收据"]
+    target: "02"
+  - match: ["鉴定", "公证书", "评估"]
+    target: "02"
+  - match: ["版权", "著作权", "专利", "商标", "权属"]
+    target: "02"
+  - match: ["证据目录", "证据材料"]
+    target: "02"
+  - match: ["起诉状", "答辩状", "申请书"]
+    target: "02"
+
+  # 03 - 工作文件：律师内部产出
+  - match: ["内部沟通", "内部报告", "内部"]
+    target: "03"
+  - match: ["法律问答", "问答提取"]
+    target: "03"
+  - match: ["案件分析", "案件摘要", "应对说明"]
+    target: "03"
+  - match: ["策略", "方案草稿"]
+    target: "03"

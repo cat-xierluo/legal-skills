@@ -1,0 +1,129 @@
+# litigation.yaml — 诉讼案件预设
+# 12层标准诉讼目录架构
+
+meta:
+  id: "litigation"
+  name: "诉讼案件"
+  description: "已立案或即将立案的诉讼案件"
+  case_id_format: "{年}{月}{序号} {原告简称} 与 {被告简称} {案由}"
+  case_name_format: "{原告}+等+诉+{被告}+等+{案由}+案"
+  example_case_id: "260221 张家宁 与 pokebone 模型 著作权"
+
+directories:
+  - id: "00"
+    icon: "📅"
+    name: "日程管理"
+    description: "时间线、法定期限、工时统计、进度管理"
+    core_files:
+      - "[案件编号].yaml"
+      - "[案件编号]工时记录.md"
+      - "[案件编号]待办事项.md"
+
+  - id: "01"
+    icon: "🤝"
+    name: "委托材料"
+    description: "委托洽谈到签约的所有材料（委托合同、授权书、身份证明等）"
+
+  - id: "02"
+    icon: "📄"
+    name: "案件分析"
+    description: "案件初始分析、争议焦点、诉讼策略、SWOT分析"
+
+  - id: "03"
+    icon: "🔍"
+    name: "法律研究"
+    description: "争议焦点识别、法条检索、判例研究"
+
+  - id: "04"
+    icon: "📤"
+    name: "客户提供"
+    description: "客户主动提供的所有材料（初始材料、补充材料、沟通记录等）"
+
+  - id: "05"
+    icon: "📎"
+    name: "证据材料"
+    description: "证据清单、质证意见、证据分类（书证/物证/电子证据等）"
+
+  - id: "06"
+    icon: "📝"
+    name: "法律文书"
+    description: "律师起草的所有法律文书（起诉状、答辩状、代理词、上诉状等）"
+
+  - id: "07"
+    icon: "📥"
+    name: "对方提交"
+    description: "对方当事人及其代理人提交的所有材料"
+
+  - id: "08"
+    icon: "🏛️"
+    name: "法院送达"
+    description: "法院送达的文书和通知（传票、判决书、裁定书等）"
+
+  - id: "09"
+    icon: "🎯"
+    name: "庭审笔录"
+    description: "庭审过程记录与庭后分析"
+
+  - id: "10"
+    icon: "📊"
+    name: "综合报告"
+    description: "案件综合分析、阶段进展报告、客户汇报"
+
+  - id: "11"
+    icon: "📚"
+    name: "参考文件"
+    description: "辅助性参考材料（参考案例、法律条文、行业标准等）"
+
+management_files:
+  case_info:
+    enabled: true
+    template: "templates/case-info.md"
+    output: "[案件编号] 案件信息.md"
+  timesheet:
+    enabled: true
+    template: "templates/timesheet.md"
+    output: "[案件编号] 工时记录.md"
+  deadline_yaml:
+    enabled: true
+    template: "templates/deadline-yaml.md"
+    output: "[案件编号].yaml"
+  task_list:
+    enabled: true
+    template: "templates/task-list.md"
+    output: "[案件编号] 待办事项.md"
+
+detection:
+  path_patterns:
+    - "案件"
+    - "诉讼"
+    - "纠纷"
+  material_hints:
+    - "传票"
+    - "起诉状"
+    - "应诉通知书"
+    - "判决书"
+    - "裁定书"
+
+classification:
+  - match: ["身份证", "营业执照", "授权书", "委托合同", "委托协议"]
+    target: "01"
+  - match: ["法律服务方案", "案件分析", "诉讼策略"]
+    target: "02"
+  - match: ["判例", "法规", "法条", "司法解释", "指导案例", "检索报告"]
+    target: "03"
+  - match: ["客户提供", "微信记录", "聊天截图", "沟通记录"]
+    target: "04"
+  - match: ["证据", "鉴定", "公证书", "合同", "发票", "收据", "银行流水"]
+    target: "05"
+  - match: ["起诉状", "答辩状", "代理词", "上诉状", "申请书", "异议书"]
+    target: "06"
+  - match: ["对方", "被告提交", "原告提交", "反诉状"]
+    target: "07"
+  - match: ["传票", "判决书", "裁定书", "调解书", "应诉通知书", "举证通知书"]
+    target: "08"
+  - match: ["庭审", "开庭笔录", "质证意见"]
+    target: "09"
+  - match: ["汇报", "总结", "进展报告"]
+    target: "10"
+  - match: ["参考", "标准", "行业规范"]
+    target: "11"
