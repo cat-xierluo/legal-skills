@@ -115,3 +115,8 @@ skills/skill-manager/assets/skill-registry.json
 
 # 元典 API archive (query results to save credits)
 skills/yuandian-law-search/archive/
+
+# Claude Code 内置 skills（由系统管理，无需跟踪）
+skills/task-implement/
+skills/task-alignment/
+skills/ultra-research/
