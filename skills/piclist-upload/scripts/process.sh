@@ -9,11 +9,17 @@ DRY_RUN=false
 IN_PLACE=false
 KEEP_LOCAL=false
 
+# Throttling parameters
+UPLOAD_INTERVAL="${UPLOAD_INTERVAL:-0.5}"
+BATCH_SIZE="${BATCH_SIZE:-20}"
+BATCH_REST="${BATCH_REST:-3}"
+
 # Global counters
 TOTAL_UPLOADED=0
 TOTAL_SKIPPED=0
 TOTAL_FAILED=0
 TOTAL_DIRS_REMOVED=0
+TOTAL_SESSION_UPLOADED=0
 
 # Track directories where files were deleted
 declare -A deleted_dirs
@@ -58,11 +64,18 @@ upload_image() {
     fi
 
     local response
-    response=$(curl -s -X POST "$PICLIST_SERVER/upload" -F "file=@$image_path" 2>/dev/null)
+    response=$(curl -s -w "\n%{http_code}" -X POST "$PICLIST_SERVER/upload" -F "file=@$image_path" 2>/dev/null)
 
-    if echo "$response" | jq -e '.success == true' >/dev/null 2>&1; then
+    # Split response body and HTTP status code
+    local http_code
+    http_code=$(echo "$response" | tail -1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    # Check for success
+    if echo "$body" | jq -e '.success == true' >/dev/null 2>&1; then
         local url
-        url=$(echo "$response" | jq -r '.result[0]')
+        url=$(echo "$body" | jq -r '.result[0]')
         echo "$url"
         return 0
     else
@@ -169,6 +182,18 @@ process_markdown_file() {
 
             # Delete local file immediately after successful upload
             delete_local_image "$full_path"
+
+            # Throttle: basic interval after each upload
+            TOTAL_SESSION_UPLOADED=$((TOTAL_SESSION_UPLOADED + 1))
+            if [ "$(echo "$UPLOAD_INTERVAL > 0" | bc 2>/dev/null || echo 0)" = "1" ]; then
+                sleep "$UPLOAD_INTERVAL"
+            fi
+
+            # Throttle: batch rest after every BATCH_SIZE uploads
+            if [ $((TOTAL_SESSION_UPLOADED % BATCH_SIZE)) -eq 0 ]; then
+                echo "  ⏸️  Batch rest ($BATCH_SIZE uploaded, pausing ${BATCH_REST}s)..."
+                sleep "$BATCH_REST"
+            fi
         else
             : $((fail_count++))
         fi
