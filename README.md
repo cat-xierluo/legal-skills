@@ -304,9 +304,9 @@
 <tbody>
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
-<td style="word-break:break-word">从多个文献内容中系统化提取并生成结构化课程，支持 1-100+ 个文献文件，智能识别内容类型（转录/文献/混合），自动进行主题识别、课程大纲生成、总览与章节内容撰写，采用可选模块架构适应不同类型内容</td>
+<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、结构适配、问答融入、总览/章节生成和旧命名兼容</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.3.1</td>
+<td style="text-align:center">v2.2.0</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>

@@ -1,0 +1,18 @@
+# 课程生成器路径配置模板
+# 首次使用请复制为 paths.yaml，并改成你本机的真实绝对路径
+# 强烈建议使用绝对路径，避免因当前工作目录不同而找不到素材
+
+# 知识库根目录（绝对路径）
+knowledge_base: "/Users/yourname/Documents/工作文档/300 - 法律AI/2 - 📚 知识整理"
+
+# 课程归档路径（绝对路径）
+archive_root: "/Users/yourname/Documents/工作文档/300 - 法律AI/2 - 📚 知识整理"
+
+# 归档目录命名规范（{date} = YYMMDD, {topic} = 课程主题）
+archive_naming: "{date} {topic}"
+
+# 课程主题体系文件路径（绝对路径）
+curriculum_file: "/Users/yourname/Documents/工作文档/300 - 法律AI/2 - 📚 知识整理/课程体系/杨卫薪律师法律AI课程主题体系.md"
+
+# 课程培训材料根目录（绝对路径）
+training_root: "/Users/yourname/Documents/工作文档/300 - 法律AI/1 - 🎓 讲课培训"

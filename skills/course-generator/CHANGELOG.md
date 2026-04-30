@@ -1,5 +1,51 @@
 # 变更日志
 
+## [2.2.0] - 2026-05-01
+
+### 改进
+
+- **结构判断优化**：生成模式要求识别主讲内容、现场演示、问答和补充讨论四类素材，按主题组织章节并输出章节边界说明。
+- **问答融合规则**：Q&A 不再作为独立章节处理，而是融入对应正文，转化为常见疑问、补充解释、案例回应或实践注意事项。
+- **可读性优化**：专题文档要求三级标题使用编号格式，控制段落长度，避免长段堆叠。
+- **结构导览改为可选**：总览仅在素材确实包含流程链路、方法框架、能力模型或系统架构时加入导览，不固定生成工作流地图。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`。
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 描述和版本号。
+
+---
+
+## [2.1.0] - 2026-04-30
+
+### 新增
+
+- **用户词典术语纠错**：生成模式支持读取 `config/user_dictionary.yaml` 中的正确术语列表，在转录稿中识别高置信的近似误转写，并统一改为词典中的正确写法。
+- **词典模板**：新增 `config/user_dictionary.example.yaml`，用户只需维护正确术语，不需要维护错误词到正确词的映射表。
+
+### 改进
+
+- 更新 `SKILL.md`：在生成模式中增加用户词典读取、近似误转写校正和低置信不替换规则。
+- 更新 `references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`：贯穿术语校正和术语一致性要求，避免后续生成阶段恢复转录错误。
+- 更新 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 描述和版本号。
+
+---
+
+## [2.0.1] - 2026-04-24
+
+### 修复
+
+- **路径配置改为绝对路径优先**：补充 `config/paths.example.yaml` 模板说明，明确建议在 `config/paths.yaml` 中使用绝对路径，避免因当前工作目录不同导致找不到知识库、课程体系和培训目录
+- **兼容旧版总览命名**：提取模式和归档模式统一优先匹配 `00 [课程名称] - 总览.md`，同时兼容旧命名 `00_*.md`
+
+### 文档完善
+
+- 更新 `SKILL.md`：补充首次使用配置步骤、路径解析规则、总览文件命名兼容规则
+- 更新 `references/extract_prompt.md`：补充绝对路径要求和总览文件匹配规则
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 skill 描述和版本号
+
+---
+
 ## [2.0.0] - 2026-04-23
 
 ### 重大更新
@@ -7,14 +53,14 @@
 - **三模式架构**：从单一课程生成工具升级为课程内容管理平台
   - **生成模式**（保留）：转录稿/文献 → 结构化课程，新增自动归档
   - **归档模式**（新增）：将课程文件按 `YYMMDD 主题/` 规范整理到知识库
-  - **提取模式**（新增）：根据客户培训需求，从现有素材中提取重组课程方案
-- **配置系统**：新增 `config/paths.md`，可配置知识库路径、归档命名规范、课程主题体系路径
-- **课程主题体系**：新增 `references/curriculum.md`，嵌入 6 阶段 18 讲索引 + 素材来源目录映射
+- **提取模式**（新增）：根据客户培训需求，从现有素材中提取重组课程方案
+- **配置系统**：新增 `config/paths.yaml`，可配置知识库路径、归档命名规范、课程主题体系路径
+- **课程主题体系**：通过 `curriculum_file` 配置指向外部课程体系文件，不再内嵌到 skill 中
 
 ### 新增文件
 
-- `config/paths.md` — 路径配置（知识库、归档、课程体系）
-- `references/curriculum.md` — 课程主题体系精简索引
+- `config/paths.example.yaml` — 路径配置模板
+- `config/paths.yaml` — 本地路径配置（不提交到仓库）
 - `references/extract_prompt.md` — 提取模式提示词
 
 ### 改进
