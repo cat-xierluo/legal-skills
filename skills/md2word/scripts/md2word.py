@@ -545,7 +545,7 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                     break
                 i += 1
             if html_table_content:
-                create_word_table_from_html(doc, '\n'.join(html_table_content))
+                create_word_table_from_html(doc, '\n'.join(html_table_content), md_file_path)
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
             continue

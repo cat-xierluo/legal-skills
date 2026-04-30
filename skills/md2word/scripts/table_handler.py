@@ -6,14 +6,15 @@
 """
 
 import re
+import os
 from docx import Document
-from docx.shared import Pt, Cm
+from docx.shared import Pt, Cm, Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import parse_xml
 from docx.oxml.shared import OxmlElement
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 # 导入配置模块
 from config import Config, get_config
@@ -440,112 +441,153 @@ def parse_html_table(html_content):
         return None
 
 
-def create_word_table_from_html(doc, html_content):
-    """从HTML表格创建Word表格"""
-    rows_data = parse_html_table(html_content)
-    if not rows_data or len(rows_data) < 1:
-        print("⚠️  HTML表格数据为空或格式不正确")
+def _populate_cell_with_rich_content(cell_element, word_cell, md_file_path=None):
+    """将HTML单元格内容填充到Word单元格中，支持图片和富文本"""
+    from formatter import convert_quotes_to_chinese
+    config = get_config()
+    font_config = config.get('fonts.default', {})
+    font_name = font_config.get('name', '仿宋_GB2312')
+    font_size = font_config.get('size', 10.5)
+
+    # 清空默认段落
+    for p in word_cell.paragraphs:
+        p.clear()
+
+    first_paragraph = word_cell.paragraphs[0]
+    current_paragraph = first_paragraph
+
+    # 检查是否包含图片
+    img_tags = cell_element.find_all('img')
+    if img_tags:
+        for img_tag in img_tags:
+            src = img_tag.get('src', '')
+            img_width = img_tag.get('width', '130')
+            if src and md_file_path:
+                md_dir = os.path.dirname(os.path.abspath(md_file_path))
+                img_path = os.path.join(md_dir, src)
+                if os.path.exists(img_path):
+                    try:
+                        # 在当前段落插入图片
+                        run = current_paragraph.add_run()
+                        run.add_picture(img_path, width=Cm(int(img_width) / 96 * 2.54))
+                        # 图片后换新段落
+                        current_paragraph = word_cell.add_paragraph()
+                    except Exception as e:
+                        print(f"⚠️  表格图片插入失败: {e}")
         return
 
-    # 导入 convert_quotes_to_chinese 避免循环导入
-    from formatter import convert_quotes_to_chinese
+    # 处理文本内容：逐行解析，支持 Markdown 粗体、列表等
+    raw_text = cell_element.decode_contents()
+    lines = raw_text.strip().split('\n')
 
-    # 获取表格配置
-    config = get_config()
-    table_config = config.get('table', {})
-    border_enabled = table_config.get('border_enabled', True)
-    border_color = table_config.get('border_color', '#000000')
-    border_width = table_config.get('border_width', 4)
-    row_height_cm = table_config.get('row_height_cm', 0.8)
-    line_spacing = table_config.get('line_spacing', 1.2)
-    cell_margin = table_config.get('cell_margin', {})
-    vertical_align_str = table_config.get('vertical_align', 'center')
+    for line_idx, line in enumerate(lines):
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
 
-    # 创建Word表格
-    table = doc.add_table(rows=len(rows_data), cols=len(rows_data[0]))
+        # 如果不是第一行，添加新段落
+        if line_idx > 0:
+            current_paragraph = word_cell.add_paragraph()
 
-    # 设置表格对齐方式
-    alignment_str = table_config.get('alignment', 'center')
-    alignment_map = {
-        'left': WD_TABLE_ALIGNMENT.LEFT,
-        'center': WD_TABLE_ALIGNMENT.CENTER,
-        'right': WD_TABLE_ALIGNMENT.RIGHT
-    }
-    table.alignment = alignment_map.get(alignment_str.lower(), WD_TABLE_ALIGNMENT.CENTER)
+        # 处理 Markdown 列表
+        if line_stripped.startswith('- '):
+            line_stripped = line_stripped[2:]
+            # 添加列表标记
+            run = current_paragraph.add_run('• ')
+            run.font.size = Pt(font_size)
 
-    # 设置垂直对齐
-    vertical_align_map = {
-        'top': WD_ALIGN_VERTICAL.TOP,
-        'center': WD_ALIGN_VERTICAL.CENTER,
-        'bottom': WD_ALIGN_VERTICAL.BOTTOM
-    }
-    vertical_align = vertical_align_map.get(vertical_align_str.lower(), WD_ALIGN_VERTICAL.CENTER)
+        # 处理带 **粗体** 的文本
+        parts = re.split(r'(\*\*.*?\*\*)', line_stripped)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**'):
+                run = current_paragraph.add_run(convert_quotes_to_chinese(part[2:-2]))
+                run.bold = True
+                run.font.size = Pt(font_size)
+                run.font.name = font_config.get('ascii', 'Times New Roman')
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+            elif part:
+                run = current_paragraph.add_run(convert_quotes_to_chinese(part))
+                run.font.size = Pt(font_size)
+                run.font.name = font_config.get('ascii', 'Times New Roman')
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
-    # 设置表格边框和单元格边距
-    if border_enabled:
-        try:
-            tbl = table._tbl
-            color = border_color.lstrip('#')
-            borders_xml = f'''
-            <w:tblBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                <w:top w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-                <w:left w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-                <w:bottom w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-                <w:right w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-                <w:insideH w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-                <w:insideV w:val="single" w:sz="{border_width}" w:space="0" w:color="{color}"/>
-            </w:tblBorders>
-            '''
-            tbl.tblPr.append(parse_xml(borders_xml))
-        except Exception:
-            pass
 
+def create_word_table_from_html(doc, html_content, md_file_path=None):
+    """从HTML表格创建Word表格，支持图片和富文本"""
     try:
-        tbl = table._tbl
-        top = cell_margin.get('top', 30)
-        bottom = cell_margin.get('bottom', 30)
-        left = cell_margin.get('left', 60)
-        right = cell_margin.get('right', 60)
-        cell_margins_xml = f'''
-        <w:tblCellMar xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-            <w:top w:w="{top}" w:type="dxa"/>
-            <w:left w:w="{left}" w:type="dxa"/>
-            <w:bottom w:w="{bottom}" w:type="dxa"/>
-            <w:right w:w="{right}" w:type="dxa"/>
-        </w:tblCellMar>
-        '''
-        tbl.tblPr.append(parse_xml(cell_margins_xml))
-    except Exception:
-        pass
+        soup = BeautifulSoup(html_content, 'html.parser')
+        html_table = soup.find('table')
+        if not html_table:
+            print("⚠️  HTML表格数据为空或格式不正确")
+            return
 
-    # 设置行高和单元格对齐
-    try:
-        for row in table.rows:
-            row.height = Cm(row_height_cm)
-            for cell in row.cells:
-                cell.vertical_alignment = vertical_align
-                for paragraph in cell.paragraphs:
-                    pf = paragraph.paragraph_format
-                    pf.line_spacing = line_spacing
+        rows = html_table.find_all('tr')
+        if not rows:
+            print("⚠️  HTML表格无有效行")
+            return
+
+        # 获取表格配置
+        config = get_config()
+        table_config = config.get('table', {})
+
+        # 创建Word表格
+        table = doc.add_table(rows=len(rows), cols=len(rows[0].find_all(['td', 'th'])))
+
+        # 设置表格对齐方式
+        alignment_map = {
+            'left': WD_TABLE_ALIGNMENT.LEFT,
+            'center': WD_TABLE_ALIGNMENT.CENTER,
+            'right': WD_TABLE_ALIGNMENT.RIGHT
+        }
+        table.alignment = alignment_map.get(table_config.get('alignment', 'center').lower(), WD_TABLE_ALIGNMENT.CENTER)
+
+        # 设置垂直对齐
+        vertical_align_map = {
+            'top': WD_ALIGN_VERTICAL.TOP,
+            'center': WD_ALIGN_VERTICAL.CENTER,
+            'bottom': WD_ALIGN_VERTICAL.BOTTOM
+        }
+
+        # 处理每一行
+        for i, tr in enumerate(rows):
+            cells = tr.find_all(['td', 'th'])
+            if i >= len(table.rows):
+                break
+            word_row = table.rows[i]
+            for j, td in enumerate(cells):
+                if j >= len(word_row.cells):
+                    break
+                word_cell = word_row.cells[j]
+
+                # 根据 HTML valign 属性设置垂直对齐
+                valign_attr = td.get('valign', 'center')
+                word_cell.vertical_alignment = vertical_align_map.get(valign_attr, WD_ALIGN_VERTICAL.CENTER)
+
+                # 根据 HTML width 属性设置列宽
+                width_attr = td.get('width')
+                if width_attr:
+                    try:
+                        width_cm = int(width_attr) / 96 * 2.54  # px to cm
+                        word_cell.width = Cm(width_cm)
+                    except (ValueError, TypeError):
+                        pass
+
+                # 填充单元格内容
+                _populate_cell_with_rich_content(td, word_cell, md_file_path)
+
+                # 设置单元格格式
+                set_table_cell_format(word_cell, is_header=(td.name == 'th'))
+
+                # 设置段落格式
+                for para in word_cell.paragraphs:
+                    pf = para.paragraph_format
+                    pf.line_spacing = table_config.get('line_spacing', 1.2)
                     pf.space_before = Pt(2)
                     pf.space_after = Pt(2)
-    except Exception:
-        pass
 
-    # 填充表格数据
-    for i, row_data in enumerate(rows_data):
-        if i < len(table.rows):
-            row_cells = table.rows[i].cells
-            for j, cell_text in enumerate(row_cells):
-                if j < len(row_cells):
-                    cell = row_cells[j]
-                    cell.text = convert_quotes_to_chinese(cell_text.strip())
-                    # 第一行作为标题行处理
-                    set_table_cell_format(cell, is_header=(i == 0))
-
-    # 调整列宽
-    adjust_table_column_width(table)
-    print(f"✅ 处理HTML表格: {len(rows_data)} 行")
+        print(f"✅ 处理HTML表格: {len(rows)} 行")
+    except Exception as e:
+        print(f"⚠️  HTML表格处理失败: {e}")
 
 
 def hex_to_rgb(hex_color: str):
