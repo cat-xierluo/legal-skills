@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +17,35 @@ from format_output import result_to_markdown, lab_to_markdown, save_archive
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".wma", ".aac", ".ogg", ".amr", ".flac", ".aiff",
               ".mp4", ".wmv", ".m4v", ".flv", ".rmvb", ".dat", ".mov", ".mkv", ".webm", ".avi",
               ".mpeg", ".3gp"}
+
+
+def _load_task_history():
+    """加载 completed_tasks.json + pending_tasks.json，用于去重检查"""
+    history = []
+    for fname in ("completed_tasks.json", "pending_tasks.json"):
+        fpath = SKILL_ROOT / "config" / fname
+        if fpath.exists():
+            try:
+                data = json.loads(fpath.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    history.extend(data)
+            except (json.JSONDecodeError, OSError):
+                pass
+    return history
+
+
+def _find_duplicate(file_path, history):
+    """检查文件是否已有转录记录（已完成或进行中）。
+    返回最近一条匹配记录，不检查本地输出文件是否存在。
+    """
+    resolved = str(file_path.resolve())
+    for task in reversed(history):
+        if task.get("file_path") != resolved:
+            continue
+        status = task.get("status")
+        if status in ("completed", "pending", "transcribing"):
+            return task
+    return None
 
 
 def main():
@@ -32,10 +62,12 @@ def main():
     parser.add_argument("--poll-timeout", type=int, default=3600, help="轮询超时秒数 (默认: 3600)")
     parser.add_argument("--no-archive", action="store_true", help="不保存归档")
     parser.add_argument("--no-lab", action="store_true", help="不获取智能分析（关键词/议程/重点等）")
+    parser.add_argument("--no-summary", action="store_true", help="不自动生成 AI 总结")
     parser.add_argument("--ppt", action="store_true", help="下载 PPT 幻灯片图片并嵌入 Markdown（仅视频有效）")
     parser.add_argument("--async", action="store_true", help="异步模式：上传后立即返回，用 poll_tasks.py 查询结果")
     parser.add_argument("--json", action="store_true", help="输出原始 JSON 结果")
     parser.add_argument("--parallel", type=int, default=3, help="并行转录的最大文件数 (默认: 3)")
+    parser.add_argument("--force", action="store_true", help="强制重新上传，即使已有转录结果")
 
     args = parser.parse_args()
 
@@ -80,6 +112,52 @@ def main():
         print("没有找到音视频文件")
         sys.exit(1)
 
+    # 去重检查：跳过已转录或正在转录的文件；本地输出缺失时从云端重新下载
+    if not args.force:
+        history = _load_task_history()
+        deduped = []
+        redownload = []
+        for f in all_files:
+            dup = _find_duplicate(f, history)
+            if not dup:
+                deduped.append(f)
+                continue
+            dup_status = dup.get("status")
+            if dup_status in ("pending", "transcribing"):
+                tid = dup.get("trans_id", "?")
+                print(f"  跳过 {f.name} — 正在转录中 (任务 {tid})")
+            elif dup_status == "completed":
+                local_output = dup.get("result", {}).get("output_path")
+                if local_output and Path(local_output).exists():
+                    prev_spk = dup.get("role_split_num", "?")
+                    print(f"  跳过 {f.name} — 已有转录结果")
+                    if prev_spk != args.speakers:
+                        print(f"    (上次说话人={prev_spk}, 本次={args.speakers} — 如需重转请加 --force)")
+                    else:
+                        print(f"    输出: {local_output}")
+                else:
+                    redownload.append((f, dup))
+        # 从云端重新下载（不重新上传）
+        for f, task in redownload:
+            prev_spk = task.get("role_split_num", "?")
+            print(f"  {f.name} — 云端已有结果，直接下载...")
+            if prev_spk != args.speakers:
+                print(f"    (云端说话人={prev_spk}, 本次={args.speakers}，如需新参数请加 --force)")
+            try:
+                _transcribe_one(client, f, args, lang, existing_task=task)
+            except Exception as e:
+                print(f"  云端下载失败 ({e})，将重新上传")
+                deduped.append(f)
+        skipped = len(all_files) - len(deduped) - len(redownload)
+        if skipped > 0 or redownload:
+            print(f"\n去重: 跳过 {skipped} 个，云端下载 {len(redownload)} 个，剩余 {len(deduped)} 个待上传")
+        if not deduped and not redownload:
+            print("所有文件均已处理完成，无需重复操作。")
+            return
+        all_files = deduped
+        if not all_files:
+            return
+
     # 异步模式不支持并行
     if getattr(args, 'async'):
         for file_path in all_files:
@@ -112,10 +190,11 @@ def _submit_async(client, file_path, args, lang):
         "file_name": task["file_name"],
         "lang": task["lang"],
         "role_split_num": task["role_split_num"],
-        "output_path": str(Path(args.output).resolve()) if args.output else None,
+        "output_path": str(file_path.with_suffix(".md").resolve()),
         "ppt": args.ppt or file_path.suffix.lower() in VIDEO_EXTS,
         "no_lab": args.no_lab,
         "no_archive": args.no_archive,
+        "no_summary": args.no_summary,
         "submitted_at": datetime.now().isoformat(),
         "status": "pending",
     }
@@ -160,7 +239,7 @@ def _transcribe_parallel(client, files, args, lang):
     return results
 
 
-def _transcribe_one(client, file_path, args, lang, verbose=True):
+def _transcribe_one(client, file_path, args, lang, verbose=True, existing_task=None):
     """
     转录单个文件，结果同时保存到文件所在目录和 archive 目录
 
@@ -170,17 +249,34 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
         args: 命令行参数
         lang: 语言代码
         verbose: 是否打印详细信息
+        existing_task: 已有的任务记录（从云端重新下载时传入，跳过上传）
 
     Returns:
         包含所有输出路径的结果字典
     """
-    result = client.transcribe(
-        file_path,
-        lang=lang,
-        role_split_num=args.speakers,
-        poll_interval=args.poll_interval,
-        poll_timeout=args.poll_timeout,
-    )
+    if existing_task:
+        # 从云端重新下载已有结果，不重新上传
+        trans_id = existing_task["trans_id"]
+        speakers = existing_task.get("role_split_num", args.speakers)
+        if verbose:
+            print(f"[{file_path.name}] 从云端获取已有转录结果 (任务 {trans_id})...")
+        trans_result = client.get_trans_result(trans_id)
+        result = {
+            "trans_id": trans_id,
+            "task_info": None,
+            "result": trans_result,
+            "duration": trans_result.get("duration"),
+            "word_count": trans_result.get("wordCount"),
+        }
+    else:
+        speakers = args.speakers
+        result = client.transcribe(
+            file_path,
+            lang=lang,
+            role_split_num=speakers,
+            poll_interval=args.poll_interval,
+            poll_timeout=args.poll_timeout,
+        )
 
     # JSON 模式下直接输出并返回
     if args.json:
@@ -194,6 +290,7 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
 
     # 获取 PPT 幻灯片（视频自动启用，音频需手动 --ppt）
     ppt_slides = None
+    slides_ext = ".png"
     is_video = file_path.suffix.lower() in VIDEO_EXTS
     if is_video or args.ppt:
         try:
@@ -206,9 +303,11 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
                 if verbose:
                     print(f"[{file_path.name}] 找到 {len(ppt_slides)} 张幻灯片")
                 out_dir = file_path.parent
-                downloaded = client.download_ppt_images(ppt_slides, out_dir)
+                downloaded = client.download_ppt_images(ppt_slides, out_dir, file_stem=file_path.stem)
+                slides_subdir = f"{file_path.stem}_slides"
+                slides_ext = client.compress_slides(out_dir / slides_subdir)
                 if verbose:
-                    print(f"[{file_path.name}] 已下载 {len(downloaded)} 张幻灯片图片到 {out_dir / 'slides'}")
+                    print(f"[{file_path.name}] 已下载 {len(downloaded)} 张幻灯片图片到 {out_dir / slides_subdir}")
         except Exception as e:
             if verbose:
                 print(f"[{file_path.name}] 获取 PPT 失败: {e}")
@@ -219,12 +318,17 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
         file_path.name,
         duration=trans_result.get("duration"),
         word_count=trans_result.get("wordCount"),
-        max_speakers=args.speakers,
+        max_speakers=speakers,
         ppt_slides=ppt_slides,
+        slides_dir_name=f"{file_path.stem}_slides" if ppt_slides else "slides",
+        slides_ext=slides_ext,
     )
 
-    # 1. 保存到文件所在目录
-    out_path = file_path.with_suffix(".md")
+    # 1. 保存到文件所在目录（支持 --output 参数）
+    if args.output:
+        out_path = Path(args.output)
+    else:
+        out_path = file_path.with_suffix(".md")
     out_path.write_text(md, encoding="utf-8")
     if verbose:
         print(f"[{file_path.name}] 转录完成: {out_path}")
@@ -255,6 +359,26 @@ def _transcribe_one(client, file_path, args, lang, verbose=True):
         if verbose:
             print(f"[{file_path.name}] 已归档: {archive_dir}")
         output_paths.append(str(md_path))
+
+    # 4. 自动 AI 总结（除非指定 --no-summary）
+    if not getattr(args, "no_summary", False):
+        try:
+            summary_py = SKILL_ROOT.parent / "funasr-transcribe" / "scripts" / "summary.py"
+            if summary_py.exists():
+                if verbose:
+                    print(f"[{file_path.name}] 生成 AI 总结...")
+                subprocess.run(
+                    [
+                        "python3", str(summary_py), "inject",
+                        str(out_path), str(out_path.with_suffix(".json")),
+                    ],
+                    check=False, timeout=120,
+                )
+                if verbose:
+                    print(f"[{file_path.name}] AI 总结已生成")
+        except Exception as e:
+            if verbose:
+                print(f"[{file_path.name}] AI 总结失败: {e}")
 
     if verbose:
         print(f"[{file_path.name}] 时长: {trans_result.get('duration', 'N/A')}秒 | 字数: {trans_result.get('wordCount', 'N/A')}")

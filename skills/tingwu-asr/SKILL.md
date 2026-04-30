@@ -93,6 +93,7 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 - `--speakers 2` 说话人: 0(不区分) / 1(单人) / 2(两人,默认) / 4(多人)
 - `--batch` 批量转录目录下所有文件
 - `--parallel N` 并行转录的最大文件数 (默认: 3)
+- `--force` 强制重新上传，即使该文件已有转录结果（默认会跳过已转录的文件）
 - `-o output.md` 指定输出路径（单文件模式）
 - `--no-archive` 不保存归档
 - `--no-lab` 不获取智能分析（关键词/议程/重点等）
@@ -107,6 +108,8 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 这样做的好处是：
 - 源文件目录方便直接访问
 - archive 目录便于集中管理和备份
+
+**PPT 幻灯片**: 视频文件会自动提取 PPT 幻灯片，图片保存在 `{文件名}_slides/` 子目录中（每个文件独立目录，避免同目录下多视频冲突）。
 
 ### 3. 生成 AI 总结（复用 funasr-transcribe）
 

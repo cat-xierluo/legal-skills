@@ -37,32 +37,18 @@ def parse_result(result_data):
         if not segments:
             continue
 
-        current_speaker = None
-        current_start = None
+        # ui 是段落级说话人ID（"1"/"2"/...），si 是句子级递增编号
+        page_speaker = int(page.get("ui", 0)) or None
+        current_start = segments[0].get("bt", 0)
         current_text = []
 
         for seg in segments:
-            speaker = seg.get("si", 0)
-            bt = seg.get("bt", 0)
             text = seg.get("tc", "")
-
-            if current_speaker is not None and speaker != current_speaker:
-                paragraphs.append({
-                    "speaker": current_speaker,
-                    "start_ms": current_start,
-                    "text": "".join(current_text),
-                })
-                current_text = []
-                current_start = bt
-
-            if current_speaker is None:
-                current_start = bt
-            current_speaker = speaker
             current_text.append(text)
 
-        if current_speaker is not None and current_text:
+        if current_text:
             paragraphs.append({
-                "speaker": current_speaker,
+                "speaker": page_speaker,
                 "start_ms": current_start,
                 "text": "".join(current_text),
             })
@@ -148,7 +134,8 @@ def interleave_ppt_slides(paragraphs, slides):
 
 
 def result_to_markdown(result_data, file_name, duration=None, word_count=None,
-                       max_speakers=None, ppt_slides=None):
+                       max_speakers=None, ppt_slides=None, slides_dir_name="slides",
+                       slides_ext=".png"):
     """将听悟转录结果转换为 funasr 兼容的 Markdown"""
     paragraphs = parse_result(result_data)
     paragraphs = consolidate_speakers(paragraphs, max_speakers=max_speakers)
@@ -169,7 +156,7 @@ def result_to_markdown(result_data, file_name, duration=None, word_count=None,
     for p in paragraphs:
         if p.get("_ppt_slide"):
             idx = p.get("index", 0)
-            img_rel = f"./slides/slide_{idx:03d}.png"
+            img_rel = f"./{slides_dir_name}/slide_{idx:03d}{slides_ext}"
             ts = format_timestamp(p["time"])
             lines.append(f"![PPT 幻灯片 {idx}]({img_rel})")
             lines.append(f"> *{ts}*")

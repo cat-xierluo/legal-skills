@@ -350,9 +350,10 @@ class TingwuClient:
         slides.sort(key=lambda s: s["time"])
         return slides
 
-    def download_ppt_images(self, slides, output_dir):
-        """下载 PPT 幻灯片图片到指定目录"""
-        slides_dir = Path(output_dir) / "slides"
+    def download_ppt_images(self, slides, output_dir, file_stem=None):
+        """下载 PPT 幻灯片图片到指定目录。file_stem 非空时使用 {stem}_slides 子目录避免冲突。"""
+        dir_name = f"{file_stem}_slides" if file_stem else "slides"
+        slides_dir = Path(output_dir) / dir_name
         slides_dir.mkdir(parents=True, exist_ok=True)
         downloaded = []
         for slide in slides:
@@ -370,6 +371,107 @@ class TingwuClient:
             slide["local_path"] = img_path
             downloaded.append(slide)
         return downloaded
+
+    def compress_slides(self, slides_dir, target_kb=100):
+        """将 slides_dir 中的 PNG 图片压缩为 WebP 格式。
+
+        逐张适配质量参数，确保每张图片在 target_kb KB 以内。
+        压缩后删除原始 PNG 文件，返回新扩展名 '.webp'。
+        """
+        try:
+            from PIL import Image
+        except ImportError:
+            print("  跳过压缩: 需要 Pillow 库 (pip3 install Pillow)")
+            return ".png"
+
+        slides_dir = Path(slides_dir)
+        png_files = sorted(slides_dir.glob("slide_*.png"))
+        if not png_files:
+            return ".png"
+
+        print(f"  压缩 {len(png_files)} 张幻灯片 (目标 <{target_kb}KB)...")
+        compressed = 0
+        for png_path in png_files:
+            webp_path = png_path.with_suffix(".webp")
+            try:
+                img = Image.open(png_path)
+                # 跳过已经小于目标的文件
+                if png_path.stat().st_size <= target_kb * 1024:
+                    # 重命名为 webp 但保持 PNG 数据（实际上保留原文件即可）
+                    png_path.rename(webp_path)
+                    # 真正转一下格式以保持一致性
+                    img.save(str(webp_path), "WEBP", quality=95, lossless=False)
+                    compressed += 1
+                    continue
+
+                # 二分搜索最佳质量：从高到低尝试
+                lo, hi = 50, 95
+                best_quality = hi
+                while lo <= hi:
+                    mid = (lo + hi) // 2
+                    img.save(str(webp_path), "WEBP", quality=mid, lossless=False)
+                    if webp_path.stat().st_size <= target_kb * 1024:
+                        best_quality = mid
+                        hi = mid - 1
+                    else:
+                        lo = mid + 1
+                # 用找到的最佳质量重新保存
+                img.save(str(webp_path), "WEBP", quality=best_quality, lossless=False)
+                png_path.unlink()
+                compressed += 1
+            except Exception as e:
+                print(f"  压缩失败 {png_path.name}: {e}")
+                continue
+
+        if compressed:
+            total = sum(f.stat().st_size for f in slides_dir.glob("slide_*.webp"))
+            print(f"  压缩完成: {compressed} 张, 总计 {total / 1024 / 1024:.1f}MB")
+
+        # 压缩后更新 Markdown 中的图片引用（.png → .webp）
+        self._update_md_slide_refs(slides_dir, ".webp")
+
+        return ".webp"
+
+    def _update_md_slide_refs(self, slides_dir, new_ext):
+        """压缩后自动更新 Markdown 文件中的图片引用格式。
+
+        根据 slides 目录名推导对应的 .md 文件并替换引用。
+        """
+        import re
+
+        slides_dir = Path(slides_dir)
+        dir_name = slides_dir.name
+
+        # 推导 Markdown 文件路径：{stem}_slides → {stem}.md
+        md_path = None
+        if dir_name.endswith("_slides"):
+            stem = dir_name[:-7]
+            candidate = slides_dir.parent / f"{stem}.md"
+            if candidate.exists():
+                md_path = candidate
+
+        # 回退：扫描父目录下所有引用了该 slides 目录的 .md 文件
+        if not md_path:
+            for md_file in slides_dir.parent.glob("*.md"):
+                content = md_file.read_text(encoding="utf-8")
+                if f"./{dir_name}/slide_" in content:
+                    md_path = md_file
+                    break
+
+        if not md_path:
+            return
+
+        content = md_path.read_text(encoding="utf-8")
+        # 精确替换：./{dir_name}/slide_XXX.png → ./{dir_name}/slide_XXX.webp
+        updated = re.sub(
+            rf'(\./{re.escape(dir_name)}/slide_\d{{3}})\.png\)',
+            rf'\1{new_ext})',
+            content,
+        )
+        if updated != content:
+            md_path.write_text(updated, encoding="utf-8")
+            count = len(re.findall(rf'\./{re.escape(dir_name)}/slide_\d{{3}}{re.escape(new_ext)}\)', updated))
+            print(f"  已更新 {md_path.name} 中 {count} 处图片引用 (.png → {new_ext})")
 
     # --- 删除任务 ---
     def delete_trans(self, trans_ids, permanently=False):

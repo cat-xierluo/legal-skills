@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -41,18 +42,23 @@ def finish_task(client, task):
 
     # PPT（视频自动启用）
     ppt_slides = None
+    slides_ext = ".png"
     is_video = Path(task["file_path"]).suffix.lower() in VIDEO_EXTS
     if task.get("ppt") or is_video:
         try:
             print(f"  获取 PPT 幻灯片...")
             ppt_slides = client.get_ppt_info(trans_id)
             if ppt_slides:
+                file_stem = Path(task["file_path"]).stem
                 out_dir = Path(task["output_path"]).parent if task.get("output_path") else Path(task["file_path"]).parent
-                client.download_ppt_images(ppt_slides, out_dir)
-                print(f"  已下载 {len(ppt_slides)} 张幻灯片")
+                client.download_ppt_images(ppt_slides, out_dir, file_stem=file_stem)
+                slides_dir = out_dir / f"{file_stem}_slides"
+                slides_ext = client.compress_slides(slides_dir)
+                print(f"  已下载 {len(ppt_slides)} 张幻灯片到 {file_stem}_slides/")
         except Exception as e:
             print(f"  PPT 下载失败: {e}")
 
+    file_stem = Path(task["file_path"]).stem
     md = result_to_markdown(
         trans_result.get("result", "{}"),
         file_name,
@@ -60,6 +66,8 @@ def finish_task(client, task):
         word_count=trans_result.get("wordCount"),
         max_speakers=speakers,
         ppt_slides=ppt_slides,
+        slides_dir_name=f"{file_stem}_slides" if ppt_slides else "slides",
+        slides_ext=slides_ext,
     )
 
     if task.get("output_path"):
@@ -84,6 +92,23 @@ def finish_task(client, task):
     if not task.get("no_archive"):
         archive_root = SKILL_ROOT / "archive"
         save_archive(Path(task["file_path"]), md, trans_id, trans_result, archive_root)
+
+    # 自动 AI 总结
+    if not task.get("no_summary"):
+        try:
+            summary_py = SKILL_ROOT.parent / "funasr-transcribe" / "scripts" / "summary.py"
+            if summary_py.exists():
+                print(f"  生成 AI 总结...")
+                subprocess.run(
+                    [
+                        "python3", str(summary_py), "inject",
+                        str(out_path), str(out_path.with_suffix(".json")),
+                    ],
+                    check=False, timeout=120,
+                )
+                print(f"  AI 总结已生成")
+        except Exception as e:
+            print(f"  AI 总结失败: {e}")
 
     return {
         "output_path": str(out_path),
