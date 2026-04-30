@@ -1067,7 +1067,7 @@ function convert(source) {
 function run(argv) {
   try {
     if (!argv || argv.length === 0) {
-      return "用法: osascript -l JavaScript convert.js <文件路径或URL>\n      osascript -l JavaScript convert.js checktoken\n缺少文件路径或 URL 参数";
+      return "用法: osascript -l JavaScript convert.js <文件路径或URL...>\n      osascript -l JavaScript convert.js checktoken\n缺少文件路径或 URL 参数";
     }
 
     const command = argv[0];
@@ -1078,9 +1078,28 @@ function run(argv) {
       return verifyToken(sh, skillRoot, config);
     }
 
-    const result = convert(command);
-    return result.message;
+    // 支持多个路径传入：遍历 argv 中所有参数，分别转换
+    const results = [];
+    for (let i = 0; i < argv.length; i++) {
+      const source = argv[i];
+      if (!source || source.trim() === "") {
+        continue;
+      }
+      const result = convert(source);
+      results.push(result);
+    }
 
+    if (results.length === 0) {
+      return "没有有效的文件路径或 URL";
+    }
+    if (results.length === 1) {
+      return results[0].message;
+    }
+
+    // 多个结果汇总
+    const successCount = results.filter(r => r.success).length;
+    const messages = results.map((r, idx) => `(${idx + 1}) ${r.message}`).join("\n");
+    return `\n========== 批量转换结果 ==========\n${messages}\n==================================\n成功: ${successCount}/${results.length}`;
   } catch (error) {
     return `转换失败: ${error.message}`;
   }
