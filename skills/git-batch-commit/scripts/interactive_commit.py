@@ -105,11 +105,10 @@ def confirm_groups(skip_confirm: bool = False) -> bool:
     print("\n选项:")
     print("  y - 是，创建这些提交")
     print("  n - 否，取消")
-    print("  e - 编辑分组（手动模式）")
 
     while True:
         try:
-            response = input("\n是否继续创建这些提交？ [y/n/e]: ").strip().lower()
+            response = input("\n是否继续创建这些提交？ [y/n]: ").strip().lower()
         except (EOFError, OSError):
             print("\n检测到非交互式环境，已取消操作。")
             print("提示：使用 --yes 参数跳过确认，或使用 --dry-run 仅查看分组")
@@ -119,11 +118,8 @@ def confirm_groups(skip_confirm: bool = False) -> bool:
             return True
         elif response in ['n', 'no', '否']:
             return False
-        elif response in ['e', 'edit', '编辑']:
-            print("\n编辑模式尚未实现。请重新运行。")
-            return False
         else:
-            print("请输入 'y'、'n' 或 'e'。")
+            print("请输入 'y' 或 'n'。")
 
 
 def batch_commit(skip_confirm: bool = False):

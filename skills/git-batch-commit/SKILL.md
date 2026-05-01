@@ -2,7 +2,7 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.5"
+version: "1.3.0"
 license: MIT
 description: 智能 Git 批量提交工具。当用户说 "git 提交"、"git commit"、"批量提交"、"拆分提交"、"整理提交" 时使用，或者当用户暂存了多个不同类型的文件需要分开提交时使用。自动将混合的文件修改按类型分类（依赖管理、文档更新、license 文件、配置、源代码等），并创建多个清晰聚焦的提交，使用标准化的提交信息格式。帮助保持清晰的 Git 历史，确保每个提交都有单一、明确的目的。使用英文前缀（docs:、feat:、fix: 等）加中文内容，支持 GitHub 彩色标签显示。
 ---
@@ -38,43 +38,24 @@ python3 skills/git-batch-commit/scripts/interactive_commit.py --yes
 python3 skills/git-batch-commit/scripts/interactive_commit.py --dry-run
 ```
 
-脚本将：
-
-1. 分析已暂存的文件
-2. 按类别分组
-3. 显示提议的提交和提交信息
-4. 请求确认（使用 `--yes` 可跳过）
-5. 创建提交
-
 **命令行参数**：
-- `--yes`, `-y`：跳过交互式确认，自动创建提交（适用于 CI/CD 或 AI 助手等非交互式环境）
+- `--yes`, `-y`：跳过交互式确认，自动创建提交
 - `--dry-run`：仅显示分组建议，不实际创建提交
 
 ### 方式二：手动分类
 
 ```bash
-# 查看变更如何被分类
 python3 skills/git-batch-commit/scripts/categorize_changes.py
-
-# 或以 JSON 格式输出
 python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 ```
 
 ## 提交分类
 
-| 类型 | 描述 | 示例文件 |
-|------|-------------| ---------------|
-| **docs** | 文档变更 | `*.md`、`README*`、`CHANGELOG*`、`docs/` |
-| **feat** | 新功能 | 添加了新内容的源文件 |
-| **fix** | Bug 修复 | 包含修复关键字的源文件 |
-| **refactor** | 代码重构 | 删除内容多于添加的源文件 |
-| **style** | 代码风格 | 格式化或小改动的源文件 |
-| **chore** | 依赖和工具 | `package.json`、`Makefile`、`.github/` |
-| **license** | License 更新 | `LICENSE`、`LICENSE.txt` |
-| **config** | 配置文件 | `*.env.*`、`*.yaml`、`config/` |
-| **test** | 测试变更 | `test_*.py`、`*_test.go`、`test/` |
+支持类型：**docs**, **feat**, **fix**, **refactor**, **style**, **chore**, **license**, **config**, **test**
 
-### ⚠️ 技能核心文件的特殊处理
+完整定义和检测逻辑详见 `references/commit-types.md`
+
+### 技能核心文件的特殊处理
 
 **重要规则**：`SKILL.md` 虽然是 Markdown 格式，但它是**技能的核心功能文件**，不应归类为 `docs` 类型。
 
@@ -92,39 +73,21 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 ## 提交信息格式
 
-所有提交遵循格式：**`<类型>: <描述>`**
-
-使用英文前缀加中文内容，确保 GitHub 能识别并显示彩色标签。
-
-### 单一项目仓库
-
-对于只包含一个项目的仓库：
+所有提交遵循格式：
 
 ```text
-docs: 更新 README 文档
-feat: 添加用户认证功能
-fix: 修复解析器内存泄漏
-chore: 更新依赖
-license: 更新 license 文件
-refactor: 简化数据层
-config: 更新环境配置
-test: 添加解析器单元测试
+<类型>: <标题>
+
+<正文描述>
 ```
 
-### Multi-Module/Multi-Skill 仓库
+**重要规则：每个提交必须包含正文（body），不能只有标题。** 正文用于补充变更的具体内容和原因，方便后续追溯。
 
-对于包含多个独立模块或技能的仓库（如 skills 仓库），**描述中应包含模块名称**以确保聚焦：
+使用英文前缀加中文内容，确保 GitHub 能识别并显示彩色标签。完整示例见 `references/conventional-commits.md`
 
-```text
-docs: course-generator 更新 CHANGELOG
-fix: skill-manager 修复符号链接创建位置问题
-docs: legal-proposal-generator 优化模板文档
-fix: svg-article-illustrator 修复 PNG 导出问题
-```
-
-**重要规则**：
+**Multi-Module/Multi-Skill 仓库规则**：
+- 描述中应包含模块名称：`docs: course-generator 更新 CHANGELOG`
 - 如果一次修改涉及多个模块，**必须按模块分别提交**
-- 每个提交只包含一个模块的变更
 - 描述中的模块名称使用原始英文名称，不要翻译
 
 ## 工作流程
@@ -133,29 +96,9 @@ fix: svg-article-illustrator 修复 PNG 导出问题
 2. **运行交互式脚本** - 查看分类结果
 3. **审核** - 检查提议的提交分组
 4. **确认** - 创建提交或取消以调整
-5. **ClawHub 同步检查** - 检查本次提交是否需要同步到 ClawHub（详见下方「提交后检查：ClawHub 同步」章节）
-   - **前置条件**：仅在项目目录下存在 `skills/clawhub-sync/` 时才执行此步骤
-   - 如果 `skills/clawhub-sync/` 不存在，**直接跳到第6步，不提示、不输出任何信息**
-   - 存在时：按触发条件检查，如有需要同步的 skill 则提示用户
-6. **Subtree 推送检查** - 检查本次提交是否涉及已注册的 subtree 子项目（详见下方「提交后检查：Subtree 推送」章节）
-   - **前置条件**：仅在项目目录下存在 `skills/subtree-publish/config/subtree-skills.json` 时才执行此步骤
-   - 如果配置文件不存在，**直接跳到第7步，不提示、不输出任何信息**
-   - 存在时：检查本次提交的文件是否命中清单中的子目录，如有则提示用户是否推送
+5. **ClawHub 同步检查** - 仅当 `skills/clawhub-sync/` 存在时执行，详见 `references/clawhub-sync-check.md`。不存在则静默跳过
+6. **Subtree 推送检查** - 仅当 `skills/subtree-publish/config/subtree-skills.json` 存在时执行，详见 `references/subtree-push-check.md`。不存在则静默跳过
 7. **完成** - 获得清晰历史的聚焦提交
-
-## 实现说明
-
-分类使用两遍扫描方法：
-
-1. **文件模式匹配** - 文件按路径和扩展名模式分类
-2. **Diff 内容分析** - 对于源代码，分析实际的 git diff 以区分功能、修复、重构和风格变更
-
-检测规则：
-
-- **Fix**: diff 中包含 "fix"、"bug"、"error" 等关键字
-- **Feat**: diff 中包含 "add"、"new"、"implement" 等关键字且添加多于删除
-- **Refactor**: 删除多于添加
-- **Style**: 添加和删除平衡（源文件默认）
 
 ## 资源文件
 
@@ -170,252 +113,5 @@ fix: svg-article-illustrator 修复 PNG 导出问题
 - **`commit-types.md`** - 详细的类别定义和检测逻辑
 - **`conventional-commits.md`** - 提交信息规范
 - **`issue-pr-format.md`** - Issue 与 PR 命名规范
-
-## 使用示例
-
-```bash
-$ git add *.py *.md requirements.txt
-$ python3 skills/git-batch-commit/scripts/interactive_commit.py
-
-Git 批量提交工具
-============================================================
-发现 5 个已暂存文件
-
-============================================================
-提议的提交分组
-============================================================
-
-[分组 1] chore: 更新 Python 依赖
-类别: deps
-文件 (1):
-  - requirements.txt
-
-[分组 2] docs: 更新 README 文档
-类别: docs
-文件 (1):
-  - README.md
-
-[分组 3] feat: 添加新功能
-类别: feat
-文件 (3):
-  - src/parser.py
-  - src/utils.py
-  - tests/test_parser.py
-
-============================================================
-
-选项:
-  y - 是，创建这些提交
-  n - 否，取消
-  e - 编辑分组（手动模式）
-
-是否继续创建这些提交？ [y/n/e]: y
-
-正在创建提交...
-
-  → chore: 更新 Python 依赖
-    ✓ 已提交 1 个文件
-
-  → docs: 更新 README 文档
-    ✓ 已提交 1 个文件
-
-  → feat: 添加新功能
-    ✓ 已提交 3 个文件
-
-============================================================
-批量提交完成：3/3 个提交已创建
-============================================================
-```
-
-## 工作流第5步参考：ClawHub 同步检查
-
-> 本节是工作流第5步的详细参考。**核心规则：仅当项目目录下存在 `skills/clawhub-sync/` 时才执行——不存在则静默跳过，不输出任何提示。**
-
-完成 Git 提交后，执行以下检查。
-
-### 触发条件
-
-完成提交后，依次执行以下**三类检测**。任一命中即提示用户是否同步。
-
-#### 检测 A：已有技能版本升级
-
-全部满足时触发：
-
-1. **本地存在 clawhub-sync 技能**
-   - 检查 `skills/clawhub-sync/` 目录是否存在
-   - **不存在则静默跳过，不提示用户**
-
-2. **提交涉及 skills 目录**
-   - 提交的文件中包含 `skills/<skill-name>/` 下的文件
-
-3. **版本号有更新**
-   - 读取 `skills/<skill-name>/SKILL.md` 的 frontmatter 中的 `version` 字段
-   - 比较 `skills/clawhub-sync/config/sync-records.yaml` 中记录的版本
-   - 如果新版本 > 已记录版本（或记录中无版本），则需要同步
-
-4. **在白名单中**
-   - 检查 `skills/clawhub-sync/config/sync-allowlist.yaml`
-   - skill 必须在白名单中（未被 `#` 注释）
-
-#### 检测 B：新增 MIT 技能首次同步
-
-当提交新增了 `skills/<skill-name>/` 目录时触发：
-
-1. **识别新增技能**：检查提交中是否有 `skills/<skill-name>/SKILL.md` 为新文件（untracked → committed）
-
-2. **许可证为 MIT**：读取新技能 `SKILL.md` frontmatter 中的 `license` 字段，判断是否为 MIT
-
-3. **未在白名单中**：`sync-allowlist.yaml` 中无此 skill 的条目（无论是否被注释）
-
-4. **未在同步记录中**：`sync-records.yaml` 中无此 skill 的条目
-
-满足全部条件时，向用户提示：
-```
-🆕 发现新增 MIT 技能：<skill-name>
-该技能尚未加入 ClawHub 同步白名单。是否将其加入白名单并同步到 ClawHub？
-
-选项：
-  y - 加入白名单并同步
-  n - 跳过，暂不发布
-  s - 加入白名单但暂不同步
-```
-
-用户选择 `y` 时：
-- 在 `sync-allowlist.yaml` 中添加该 skill（添加到对应分类区域）
-- 执行 prepare-publish → publish → 更新 sync-records 流程
-- **注意**：发布前检查临时目录，确保不含 `.env`、密钥等敏感文件
-
-用户选择 `s` 时：
-- 仅在 `sync-allowlist.yaml` 中添加该 skill（被注释），下次版本更新时再同步
-
-#### 检测 C：白名单新增但未同步
-
-当白名单中有未被注释的 skill，但 `sync-records.yaml` 中没有对应记录时：
-
-1. 遍历 `sync-allowlist.yaml` 中未被注释的 skill
-2. 检查 `sync-records.yaml` 中是否有该 skill 的记录
-3. 如果白名单有但记录中没有，且 `SKILL.md` 存在，提示用户执行首次同步
-
-### 执行步骤
-
-对于每个需要同步的 skill，按照 `clawhub-sync` 的"单个 Skill 同步工作流"执行：
-
-**步骤 1：准备发布目录**
-```bash
-bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
-```
-
-**步骤 2：执行发布（使用 publish 命令）**
-```bash
-clawhub publish /tmp/clawhub-publish-<skill-name> \
-  --slug <skill-name> \
-  --name "<Display Name>" \
-  --version "<新版本号>" \
-  --changelog "<变更说明>"
-```
-
-> **⚠️ 必须指定 --slug 和 --name**
-> - 临时目录名可能包含前缀，使用 `--slug` 确保正确的 skill 标识符
-> - 使用 `--name` 确保 ClawHub 上显示正确的名称
-
-> **为什么用 `publish` 而不是 `sync`？**
-> - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
-> - `clawhub publish <path>` 只发布指定路径的单个 skill，更精确
-
-**步骤 3：更新同步记录**
-
-更新 `skills/clawhub-sync/config/sync-records.yaml`：
-- 更新 `version` 为新版本号
-- 更新 `last_sync` 为当前时间
-- 更新 `git_hash` 为当前 commit hash
-- 更新 `status` 为 `synced`
-- 添加 `url` 和 `publish_id`（从命令输出获取）
-
-### 失败处理
-
-- 同步失败时仅显示警告信息
-- 不影响 Git 提交结果
-- 继续处理其他 skills
-
-### 版本比较逻辑
-
-```
-new_version = SKILL.md frontmatter 中的 version（如 "1.2.0"）
-recorded_version = sync-records.yaml 中记录的版本（如 "1.1.0"）
-
-if new_version > recorded_version:
-    执行同步
-```
-
-版本号按语义化版本规则比较（major.minor.patch）。
-
-### 示例场景
-
-| 场景 | 版本变化 | 白名单 | 同步记录 | 结果 |
-|------|----------|--------|----------|------|
-| 版本升级（检测A） | "1.0.0" → "1.1.0" | 在白名单 | 有记录 | ✅ 执行同步 |
-| 无版本变化（检测A） | "1.1.0" → "1.1.0" | 在白名单 | 有记录 | ❌ 跳过 |
-| 不在白名单（检测A） | 任意 | 被注释 | - | ❌ 跳过 |
-| 白名单内首次发布（检测A/C） | "1.0.0" | 在白名单 | 无记录 | ✅ 执行同步 |
-| 新增 MIT 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择 |
-| 新增 CC 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ❌ 非 MIT 跳过 |
-| clawhub-sync 不存在 | - | - | - | ❌ 静默跳过整个工作流 |
-
-## 工作流第6步参考：Subtree 推送检查
-
-> 本节是工作流第6步的详细参考。**核心规则：仅当项目目录下存在 `skills/subtree-publish/config/subtree-skills.json` 时才执行——不存在则静默跳过，不输出任何提示。**
-
-完成 Git 提交后，检查本次提交是否涉及已注册的 subtree 子项目。
-
-### 触发条件
-
-1. **配置文件存在**
-   - 检查 `skills/subtree-publish/config/subtree-skills.json` 是否存在
-   - **不存在则静默跳过，不提示用户**
-
-2. **提交涉及已注册的子目录**
-   - 读取 `skills/subtree-publish/config/subtree-skills.json` 中的 `prefix` 和 `skills` 列表
-   - 获取本次提交涉及的文件列表（`git diff --name-only HEAD~1 HEAD`，或批量提交时使用最后一次 commit）
-   - 检查是否有文件路径以 `<prefix>/<skill-name>/` 开头
-   - 如果命中，收集所有命中的 skill 名称
-
-3. **remote 已配置**
-   - 检查是否存在对应的 `<name>-standalone` remote
-   - 如果 remote 不存在，说明该子项目尚未完成首次注册，跳过
-
-### 提示与执行
-
-满足触发条件时，向用户提示：
-
-```
-本次提交涉及已注册的 subtree 子项目：<name1>, <name2>
-是否推送到独立仓库？
-
-选项：
-  y - 推送所有命中的子项目
-  n - 跳过，暂不推送
-  s - 选择性推送
-```
-
-用户选择 `y` 时，对每个命中的子项目执行：
-
-```bash
-git subtree push --prefix=<prefix>/<name> <name>-standalone main
-```
-
-用户选择 `s` 时，逐个询问是否推送。
-
-### 失败处理
-
-- 推送失败时仅显示警告信息
-- 不影响 Git 提交结果
-- 继续处理其他子项目
-
-### 示例场景
-
-| 场景 | 配置文件 | 提交涉及子目录 | remote 存在 | 结果 |
-|------|----------|---------------|-------------|------|
-| 正常推送 | 存在 | 是 | 是 | ✅ 提示用户推送 |
-| 未涉及子目录 | 存在 | 否 | - | ❌ 静默跳过 |
-| 配置文件不存在 | 不存在 | - | - | ❌ 静默跳过 |
-| 首次注册未完成 | 存在 | 是 | 否 | ❌ 跳过（提示用户先完成首次注册） |
+- **`clawhub-sync-check.md`** - ClawHub 同步检查详细流程（工作流第5步）
+- **`subtree-push-check.md`** - Subtree 推送检查详细流程（工作流第6步）
