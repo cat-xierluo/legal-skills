@@ -304,9 +304,9 @@
 <tbody>
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
-<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、结构适配、问答融入、总览/章节生成和旧命名兼容</td>
+<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片引用保真、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v2.2.0</td>
+<td style="text-align:center">v2.3.2</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>
@@ -339,6 +339,14 @@
 <td style="word-break:break-word">检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。整合 24 种 AI 写作检测规则，配备 5 维度质量评分系统</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">杨卫薪</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/video-compressor/"><strong>video-compressor</strong></a></td>
+<td style="word-break:break-word">视频压缩与静默片段剪切工具，使用 FFmpeg CRF 模式压缩视频，自动检测硬件选择最优编码方案（Apple Silicon VideoToolbox 硬件加速），支持检测并去除静默静止片段</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.3.0</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>
