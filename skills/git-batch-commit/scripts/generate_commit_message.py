@@ -19,6 +19,8 @@ Generate conventional commit messages based on change type and content.
 import subprocess
 import re
 import argparse
+import yaml
+from pathlib import Path
 from typing import List, Dict
 
 
@@ -38,97 +40,27 @@ CATEGORY_TO_TYPE = {
     'other': 'chore',
 }
 
-# 文件名/路径到功能描述的映射
-# 用于生成更有意义的提交详情，而不是只显示 "添加 class XXX"
-FILE_TO_FUNCTION_MAP = {
-    # 搜索与查询
-    r'search\.py$': '代码语义搜索模块（支持函数/类/导入/文档搜索）',
-    r'qa\.py$': '智能问答模块（意图分类 + 结构化回答生成）',
-    r'query\.py$': '查询构建器（生成结构化查询语句）',
+# Load configuration from YAML
+_DATA_PATH = Path(__file__).parent.parent / 'references' / 'message-data.yaml'
+with open(_DATA_PATH, encoding='utf-8') as _f:
+    _DATA = yaml.safe_load(_f)
 
-    # 分析器
-    r'parser\.py$': '解析器（文本/代码/数据解析）',
-    r'analyzer\.py$': '分析器（代码/数据/性能分析）',
-    r'architecture\.py$': '架构分析器（目录结构/模块划分/设计模式检测）',
-    r'quality\.py$': '代码质量分析器（注释覆盖率/技术债务/潜在问题检测）',
+# Build FILE_TO_FUNCTION_MAP from YAML (list of {pattern, description})
+FILE_TO_FUNCTION_MAP = _DATA['file_to_function_map']
 
-    # 工具与辅助
-    r'utils\.py$': '通用工具函数库',
-    r'helpers\.py$': '辅助函数（特定场景的便捷方法）',
-    r'common\.py$': '公共模块（共享常量和函数）',
+# Build MESSAGE_TEMPLATES from YAML (convert patterns from list to tuple format)
+MESSAGE_TEMPLATES = {}
+for _cat, _tpl in _DATA['message_templates'].items():
+    if 'patterns' in _tpl:
+        MESSAGE_TEMPLATES[_cat] = {
+            'patterns': [(p['pattern'], p['message']) for p in _tpl['patterns']],
+            'default': _tpl['default'],
+        }
+    else:
+        MESSAGE_TEMPLATES[_cat] = {'default': _tpl['default']}
 
-    # 数据与类型
-    r'config\.py$': '配置管理模块（加载/解析/验证配置）',
-    r'models\.py$': '数据模型定义（ORM/Schema/Entity）',
-    r'types\.py$': '类型定义（Type Hints/Interfaces）',
-    r'constants\.py$': '常量定义（枚举/配置值/魔法数字）',
-    r'schemas\.py$': '数据 Schema 定义（验证规则/序列化）',
-
-    # 异常与验证
-    r'exceptions\.py$': '自定义异常类（错误码/错误消息）',
-    r'validators\.py$': '数据验证器（输入校验/格式检查）',
-
-    # 转换与处理
-    r'converters?\.py$': '数据转换器（格式转换/编码转换）',
-    r'formatters?\.py$': '格式化器（输出美化/模板渲染）',
-    r'renderers?\.py$': '渲染器（HTML/PDF/图片生成）',
-    r'generators?\.py$': '生成器（代码/文档/数据生成）',
-    r'extractors?\.py$': '提取器（从文本/网页/文件提取信息）',
-    r'transformers?\.py$': '数据转换管道（ETL/清洗/标准化）',
-
-    # 存储与加载
-    r'loaders?\.py$': '加载器（文件/网络/数据库加载）',
-    r'savers?\.py$': '保存器（持久化/导出/备份）',
-    r'storage\.py$': '存储层抽象（本地/云存储/缓存）',
-
-    # 处理与管理
-    r'handlers?\.py$': '事件处理器（HTTP/WebSocket/信号处理）',
-    r'managers?\.py$': '资源管理器（生命周期/连接池/状态）',
-    r'services?\.py$': '业务服务层（核心业务逻辑）',
-    r'processors?\.py$': '数据处理器（批处理/流处理/异步处理）',
-
-    # 网络与通信
-    r'clients?\.py$': 'API 客户端（HTTP/RPC/GraphQL）',
-    r'servers?\.py$': '服务端实现（路由/中间件/错误处理）',
-    r'api\.py$': 'API 接口定义（端点/参数/响应）',
-    r'routes?\.py$': '路由配置（URL 映射/参数提取）',
-    r'views?\.py$': '视图层（页面渲染/模板上下文）',
-    r'controllers?\.py$': '控制器（请求处理/响应封装）',
-    r'middleware\.py$': '中间件（请求/响应拦截器）',
-
-    # 安全与认证
-    r'auth\.py$': '认证模块（登录/登出/Token 管理）',
-    r'permissions?\.py$': '权限控制（角色/资源/操作检查）',
-    r'security\.py$': '安全模块（加密/签名/防护）',
-
-    # 数据库与缓存
-    r'database\.py$': '数据库连接管理（连接池/事务/会话）',
-    r'db\.py$': '数据库操作层（CRUD/查询构建）',
-    r'cache\.py$': '缓存层（Redis/Memcached/内存缓存）',
-    r'repository\.py$': '仓储层（数据访问抽象）',
-
-    # 日志与监控
-    r'logger\.py$': '日志模块（格式化/分级/输出）',
-    r'monitoring\.py$': '监控模块（指标收集/告警）',
-    r'metrics\.py$': '指标定义（计数器/仪表/直方图）',
-
-    # 测试
-    r'test.*\.py$': '单元测试/集成测试',
-    r'conftest\.py$': 'Pytest 配置与 Fixtures',
-    r'mock.*\.py$': 'Mock 对象与测试替身',
-
-    # 前端文件
-    r'\.tsx?$': 'TypeScript/React 前端组件',
-    r'\.vue$': 'Vue.js 组件（模板/脚本/样式）',
-    r'\.svelte$': 'Svelte 组件（编译时优化）',
-
-    # 配置和文档
-    r'__init__\.py$': 'Python 模块初始化（导出/版本）',
-    r'__main__\.py$': '命令行入口（python -m module）',
-    r'SKILL\.md$': 'Claude Code 技能定义文件',
-    r'CHANGELOG\.md$': '版本变更日志',
-    r'README\.md$': '项目说明文档',
-}
+FUNCTION_PREFIX_ACTIONS = _DATA['function_prefix_actions']
+CONFIG_KEY_MEANINGS = _DATA['config_key_meanings']
 
 
 def parse_skill_category(category: str):
@@ -195,7 +127,6 @@ def is_new_skill_being_added(skill_name: str, files: List[str]) -> bool:
                     ['git', 'cat-file', '-e', f'HEAD:{filepath}'],
                     capture_output=True,
                     text=True,
-                    cwd='/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills'
                 )
                 # 如果返回码非 0，说明文件不在 HEAD 中，是新技能
                 if result.returncode != 0:
@@ -205,87 +136,6 @@ def is_new_skill_being_added(skill_name: str, files: List[str]) -> bool:
                 pass
 
     return False
-
-
-# Common commit message templates by category (中文)
-MESSAGE_TEMPLATES = {
-    'deps': {
-        'patterns': [
-            (r'package\.json', '更新 JavaScript 依赖'),
-            (r'requirements\.txt', '更新 Python 依赖'),
-            (r'go\.(mod|sum)', '更新 Go 依赖'),
-            (r'Gemfile', '更新 Ruby 依赖'),
-            (r'Cargo\.toml', '更新 Rust 依赖'),
-            (r'pyproject\.toml', '更新 Python 项目配置'),
-        ],
-        'default': '更新依赖',
-    },
-    'docs': {
-        'patterns': [
-            (r'README', '更新 README 文档'),
-            (r'CHANGELOG', '更新变更日志'),
-            (r'CONTRIBUTING', '更新贡献指南'),
-            (r'ARCHITECTURE', '更新架构文档'),
-            (r'AGENTS\.md', '更新协作规范文档'),
-            (r'SKILL-GUIDE\.md', '更新 Skill 开发指南'),
-            (r'skills/([^/]+)/SKILL\.md', r'添加 \1 技能文档'),
-        ],
-        'default': '更新文档',
-    },
-    'license': {
-        'default': '更新许可证文件',
-    },
-    'config': {
-        'patterns': [
-            (r'\.env\.example', '更新环境变量示例'),
-            (r'\.yaml|\.yml', '更新 YAML 配置'),
-            (r'toml', '更新 TOML 配置'),
-        ],
-        'default': '更新配置',
-    },
-    'test': {
-        'default': '更新测试',
-    },
-    'chore': {
-        'patterns': [
-            (r'\.gitignore', '更新 gitignore 忽略规则'),
-            (r'Dockerfile', '更新 Docker 配置'),
-            (r'\.github/', '更新 GitHub 工作流'),
-            (r'Makefile', '更新 Makefile'),
-        ],
-        'default': '更新工具配置',
-    },
-    'feat': {
-        'patterns': [
-            (r'scripts/([^/]+)', r'添加 \1 脚本'),
-            (r'test/([^/]+)', r'添加 \1 测试'),
-        ],
-        'default': '添加新功能',
-    },
-    'fix': {
-        'default': '修复 Bug',
-    },
-    'refactor': {
-        'default': '重构代码',
-    },
-    'style': {
-        'default': '调整代码风格',
-    },
-}
-
-
-def get_file_changes(filepath: str) -> str:
-    """Get git diff for a specific file."""
-    try:
-        result = subprocess.run(
-            ['git', 'diff', '--cached', filepath],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout
-    except subprocess.CalledProcessError:
-        return ""
 
 
 def analyze_changes(files: List[str], category: str) -> str:
@@ -298,13 +148,10 @@ def analyze_changes(files: List[str], category: str) -> str:
         return ""
 
     # Handle skill:<name>:<type> format - extract the actual type
-    actual_category = category
-    is_skill_format = False
-    if category.startswith('skill:'):
-        parts = category.split(':')
-        if len(parts) == 3:
-            actual_category = parts[2]  # Use the type (feat, fix, style, etc.)
-            is_skill_format = True
+    skill_name_parsed, actual_category = parse_skill_category(category)
+    is_skill_format = skill_name_parsed is not None
+    if not is_skill_format:
+        actual_category = category
 
     # 优先处理技能文件（跳过通用 patterns 匹配）
     # 技能文件需要特殊处理，不能被 scripts/、test/ 等通用模式提前匹配
@@ -431,27 +278,21 @@ def generate_commit_message(category: str, files: List[str]) -> str:
     return message
 
 
-def get_all_files_diff(files: List[str]) -> str:
-    """获取所有变更文件的 diff 内容"""
-    diffs = []
-    for filepath in files:
-        diff = get_file_diff(filepath)
-        if diff:
-            diffs.append(f"=== {filepath} ===\n{diff}")
-    return "\n\n".join(diffs)
-
+_diff_cache: dict = {}
 
 def get_file_diff(filepath: str) -> str:
-    """Get git diff for a specific file."""
+    """Get git diff for a specific file (cached)."""
+    if filepath in _diff_cache:
+        return _diff_cache[filepath]
     try:
         result = subprocess.run(
             ['git', 'diff', '--cached', filepath],
             capture_output=True,
             text=True,
-            check=True
         )
+        _diff_cache[filepath] = result.stdout
         return result.stdout
-    except subprocess.CalledProcessError:
+    except Exception:
         return ""
 
 
@@ -545,15 +386,15 @@ def analyze_markdown_changes(added: List[str], removed: List[str], filename: str
     return f"更新 {filename}"
 
 
-def get_function_description(filename: str) -> str:
+def get_function_description(filename: str) -> str | None:
     """
     根据文件名获取功能描述。
 
     优先使用预定义的映射，如果没有匹配则返回 None。
     """
-    for pattern, description in FILE_TO_FUNCTION_MAP.items():
-        if re.search(pattern, filename, re.IGNORECASE):
-            return description
+    for entry in FILE_TO_FUNCTION_MAP:
+        if re.search(entry['pattern'], filename, re.IGNORECASE):
+            return entry['description']
     return None
 
 
@@ -561,13 +402,9 @@ def extract_class_names(added: List[str]) -> List[str]:
     """提取新增的类名。"""
     class_names = []
     for line in added:
-        # Python: class ClassName:
+        # Python/JavaScript/TypeScript: class ClassName
         match = re.search(r'class\s+(\w+)', line)
         if match:
-            class_names.append(match.group(1))
-        # JavaScript/TypeScript: class ClassName {
-        match = re.search(r'class\s+(\w+)', line)
-        if match and match.group(1) not in class_names:
             class_names.append(match.group(1))
     return class_names
 
@@ -581,58 +418,6 @@ def extract_function_names(added: List[str]) -> List[str]:
         if match:
             func_names.append(match.group(1))
     return func_names
-
-
-# 函数名前缀到动作的语义映射（简洁动词形式）
-FUNCTION_PREFIX_ACTIONS = {
-    # 检测/分析类
-    'detect_': '检测',
-    'analyze_': '分析',
-    'parse_': '解析',
-    'extract_': '提取',
-    'identify_': '识别',
-    'infer_': '推断',
-
-    # 生成/创建类
-    'generate_': '生成',
-    'create_': '创建',
-    'build_': '构建',
-    'make_': '制作',
-
-    # 处理/转换类
-    'process_': '处理',
-    'convert_': '转换',
-    'transform_': '转换',
-    'handle_': '处理',
-    'format_': '格式化',
-
-    # 获取/读取类
-    'get_': '获取',
-    'fetch_': '获取',
-    'load_': '加载',
-    'read_': '读取',
-
-    # 更新/修改类
-    'update_': '更新',
-    'modify_': '修改',
-    'edit_': '编辑',
-
-    # 删除/移除类
-    'delete_': '删除',
-    'remove_': '移除',
-
-    # 验证/检查类
-    'validate_': '验证',
-    'check_': '检查',
-    'verify_': '验证',
-    'is_': '验证',
-
-    # 优化/改进类
-    'optimize_': '优化',
-    'improve_': '改进',
-    'enhance_': '增强',
-    'fix_': '修复',
-}
 
 
 def infer_intent_from_function_name(func_name: str) -> str | None:
@@ -813,47 +598,6 @@ def analyze_gitignore_changes(added: List[str], removed: List[str]) -> str:
                 return f"更新 gitignore 忽略规则 - 添加 {', '.join(summary)}"
 
     return "更新 gitignore 忽略规则"
-
-
-# 配置项到语义描述的映射
-CONFIG_KEY_MEANINGS = {
-    # 间距相关
-    'space_before': '段前间距',
-    'space_after': '段后间距',
-    'margin': '边距',
-    'padding': '内边距',
-    'gap': '间隙',
-    'line_height': '行高',
-    'spacing': '间距',
-
-    # 字体相关
-    'font': '字体',
-    'font_size': '字号',
-    'font_family': '字体族',
-    'bold': '加粗',
-    'italic': '斜体',
-    'size': '尺寸',
-
-    # 对齐相关
-    'align': '对齐方式',
-    'indent': '缩进',
-
-    # 颜色相关
-    'color': '颜色',
-    'background': '背景色',
-    'fill': '填充色',
-
-    # 布局相关
-    'width': '宽度',
-    'height': '高度',
-    'layout': '布局',
-
-    # 内容相关
-    'content': '内容',
-    'text': '文本',
-    'title': '标题',
-    'value': '值',
-}
 
 
 def analyze_config_changes(added: List[str], removed: List[str], filename: str) -> str:
