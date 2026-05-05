@@ -67,10 +67,6 @@ result = await understand_image("image.jpg", "描述这张图片")
 - 系统 Python 为 3.9.6，`mcp` 包需 Python 3.10+（可用 `uv run --python 3.12 --with mcp` 绕过）
 - 图像分析在 Hermes 中会失败，需改用文字描述或 OpenClaw 协助读图
 
-## 图片路径
-
-图片保存位置：`~/.openclaw/media/inbound/`，文件名格式：`{uuid}.jpg`
-
 ## 配置文件
 
 `.env` 文件已放在 `scripts/` 目录下，格式：
