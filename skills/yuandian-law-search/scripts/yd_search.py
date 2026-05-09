@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.1.1 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（v1.2.0 - 开放平台版）"""
 
 import argparse
 import hashlib
@@ -22,7 +22,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.1.1"
+CURRENT_VERSION = "1.2.0"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -45,6 +45,22 @@ def load_api_key():
 
     print("错误：未找到 YD_API_KEY。请在 scripts/.env 文件中配置，或设置环境变量。", file=sys.stderr)
     sys.exit(1)
+
+
+def load_strategy():
+    """从环境变量或 .env 文件加载检索策略，默认 balanced"""
+    strategy = os.environ.get("YD_STRATEGY", "").strip().lower()
+    if strategy:
+        return strategy
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                if k.strip() == "YD_STRATEGY":
+                    return v.strip().lower()
+    return "balanced"
 
 
 def _common_headers():
@@ -665,6 +681,13 @@ def cmd_raw(args):
     _print_footer()
 
 
+def cmd_strategy(args):
+    """显示当前检索策略"""
+    labels = {"balanced": "均衡", "economical": "省钱", "aggressive": "激进"}
+    s = load_strategy()
+    print(f"当前策略：{labels.get(s, s)}（{s}）")
+
+
 # ── 参数解析 ──────────────────────────────────────────────
 
 
@@ -675,6 +698,8 @@ def _add_law_filters(parser):
 
 
 def build_parser():
+    _strategy = load_strategy()
+
     parser = argparse.ArgumentParser(
         description="元典法条检索命令行工具（开放平台版）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -697,7 +722,7 @@ def build_parser():
     _add_law_filters(p)
     p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询（默认 true）")
     p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=45, help="返回数量（默认 45）")
+    p.add_argument("--return-num", type=int, default=20 if _strategy == "economical" else 45, help="返回数量")
     p.add_argument("--law-start", help="法条生效起始日期 yyyy-MM-dd")
     p.add_argument("--law-end", help="法条生效结束日期 yyyy-MM-dd")
     p.set_defaults(func=cmd_search)
@@ -713,7 +738,7 @@ def build_parser():
     p.add_argument("--fbrq-end", help="发布日期终点")
     p.add_argument("--ssrq-start", help="实施日期起点")
     p.add_argument("--ssrq-end", help="实施日期终点")
-    p.add_argument("--top-k", type=int, help="返回条数上限（默认10，最大50）")
+    p.add_argument("--top-k", type=int, default=20 if _strategy == "aggressive" else None, help="返回条数上限")
     p.set_defaults(func=cmd_keyword)
 
     # ── detail ──
@@ -737,7 +762,7 @@ def build_parser():
     p.add_argument("--wszl", action="append", help="文书种类")
     p.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
     p.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
-    p.add_argument("--top-k", type=int, help="返回条数上限（默认10，最大50）")
+    p.add_argument("--top-k", type=int, default=20 if _strategy == "aggressive" else None, help="返回条数上限")
     p.add_argument("--fxgc", help="分析过程关键词")
     p.add_argument("--yyft", action="append", help="援引法条（可多次指定）")
     p.add_argument("--ft-search-mode", choices=["and", "or"], default="and", help="援引法条拼接模式")
@@ -754,7 +779,7 @@ def build_parser():
     p.add_argument("--cj", help="法院层级：最高/高级/中级/基层")
     p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询")
     p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=45, help="返回数量")
+    p.add_argument("--return-num", type=int, default=20 if _strategy == "economical" else 45, help="返回数量")
     p.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
     p.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
     p.set_defaults(func=cmd_case_semantic)
@@ -822,6 +847,10 @@ def build_parser():
     p.add_argument("--limit", type=int, default=20, help="显示条数（默认20）")
     p.set_defaults(func=cmd_archive_list)
 
+    # ── strategy ──
+    p = sub.add_parser("strategy", help="显示当前检索策略")
+    p.set_defaults(func=cmd_strategy)
+
     return parser
 
 
@@ -833,7 +862,7 @@ def main():
         sys.exit(0)
 
     # 自动版本检测（check-update / do-update 子命令除外）
-    if args.command not in ("check-update", "do-update", "archive-list"):
+    if args.command not in ("check-update", "do-update", "archive-list", "strategy"):
         try:
             _updater.check_for_update()
         except Exception:
