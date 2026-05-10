@@ -501,5 +501,5 @@ Filling a PDF form involves these steps:
 
 ## 规范参考
 
-- **SKILL-DEV-GUIDE.md** - 项目根目录
+- **SKILL-DEV-GUIDE.md** - `docs/` 目录
 - **Claude Code 官方规范** - skills/pdf, skills/skill-creator
