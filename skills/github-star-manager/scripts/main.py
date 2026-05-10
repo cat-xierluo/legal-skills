@@ -30,6 +30,12 @@ def init_command(tracker: StarTracker, args):
     repos = tracker.get_starred_repos(args.user, limit=args.limit)
     print(f"找到 {len(repos)} 个 Star 项目")
 
+    # 对 description 为 null 的项目重新抓取元数据
+    repos = tracker.retry_null_descriptions(repos)
+
+    # 记录数据质量日志
+    tracker.log_null_descriptions(repos, source="init")
+
     # 保存快照
     snapshot_file = tracker.save_latest(repos)
     print(f"✓ 原始数据已保存: {snapshot_file}")
@@ -71,9 +77,6 @@ def check_command(tracker: StarTracker, args):
     snapshot_time = snapshot.get("timestamp", "未知")[:16].replace("T", " ")
     print(f"上次保存: {snapshot_time}")
 
-    # 保存新数据
-    tracker.save_latest(current_repos)
-
     # 分析变化
     old_map = {r["full_name"]: r for r in snapshot["repos"]}
     current_map = {r["full_name"]: r for r in current_repos}
@@ -86,12 +89,51 @@ def check_command(tracker: StarTracker, args):
         if fn in old_map and repo.get("updated_at") != old_map[fn].get("updated_at"):
             updated_repos.append(repo)
 
+    # === 新增：star 变化触发元数据刷新 ===
+    repos_needing_refresh = []
+
+    # 新增 star 的项目：刷新元数据以确保 description/language 等字段完整
+    if new_repos:
+        print(f"\n🔄 新增 Star 检测到，正在刷新元数据...")
+        for repo in new_repos:
+            full_name = repo.get("full_name")
+            if full_name:
+                fresh_data = tracker.refresh_repo_metadata(full_name)
+                if fresh_data:
+                    # 用最新 API 数据更新 current_map 和 current_repos 中的条目
+                    repo["description"] = fresh_data.get("description")
+                    repo["language"] = fresh_data.get("language")
+                    repo["topics"] = fresh_data.get("topics", [])
+                    repo["homepage"] = fresh_data.get("homepage")
+                    repo["stargazers_count"] = fresh_data.get("stargazers_count", 0)
+                    repo["forks_count"] = fresh_data.get("forks_count", 0)
+                    current_map[full_name] = repo
+                repos_needing_refresh.append(full_name)
+        print(f"  ✓ 已刷新 {len(new_repos)} 个新增项目的元数据")
+
+    # 取消 star 的项目：也记录到日志（不再刷新，因为已不在 star 列表中）
+    if removed_repos:
+        print(f"\n📝 已记录 {len(removed_repos)} 个取消 Star 的项目")
+
+    # === 新增：description 为 null 时自动重试 ===
+    current_repos = tracker.retry_null_descriptions(current_repos)
+
+    # 更新 current_map 以反映重试后的结果
+    current_map = {r["full_name"]: r for r in current_repos}
+
+    # === 新增：数据质量日志 ===
+    tracker.log_null_descriptions(current_repos, source="check_incremental")
+
+    # 保存新数据（包含刷新后的元数据）
+    tracker.save_latest(current_repos)
+
     # 输出结果
     print("\n" + "=" * 50)
     if new_repos:
         print(f"\n🆕 新增 Star ({len(new_repos)} 个):")
         for repo in new_repos[:10]:
-            print(f"  • {repo['full_name']}")
+            desc = repo.get('description') or '(无描述)'
+            print(f"  • {repo['full_name']} - {desc[:50]}")
         if len(new_repos) > 10:
             print(f"  ... 还有 {len(new_repos) - 10} 个")
 
