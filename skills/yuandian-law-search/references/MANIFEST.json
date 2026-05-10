@@ -5,7 +5,8 @@
   "platform_categories": [
     "法律法规",
     "案例文书",
-    "企业信息"
+    "企业信息",
+    "幻觉检测"
   ],
   "interfaces": [
     {
@@ -117,14 +118,230 @@
       "tier": "附属",
       "category": "企业信息",
       "cost": 10
+    },
+    {
+      "id": 12,
+      "name": "法规/法条/案例幻觉检测",
+      "endpoint": "POST /open/hall_detect",
+      "tier": "附属",
+      "category": "幻觉检测",
+      "cost": 50,
+      "adapted": false
+    },
+    {
+      "id": 13,
+      "name": "企业检索（轻量候选列表）",
+      "endpoint": "GET /open/rh_enterpriseSearch",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 1,
+      "adapted": false
+    },
+    {
+      "id": 14,
+      "name": "企业基本信息",
+      "endpoint": "GET /open/rh_enterpriseBaseInfo",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10,
+      "adapted": false
+    },
+    {
+      "id": 15,
+      "name": "企业聚合总览",
+      "endpoint": "POST /open/rh_enterpriseAggregationSummary",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10,
+      "adapted": false
+    },
+    {
+      "id": 16,
+      "name": "企业对外投资信息列表",
+      "endpoint": "GET /open/rh_enterpriseOutInvest",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 17,
+      "name": "企业商标信息列表",
+      "endpoint": "GET /open/rh_enterpriseBrand",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 18,
+      "name": "企业专利信息列表",
+      "endpoint": "GET /open/rh_enterprisePatent",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 19,
+      "name": "企业软件著作权信息列表",
+      "endpoint": "GET /open/rh_enterpriseSoftRight",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 20,
+      "name": "企业作品著作权信息列表",
+      "endpoint": "GET /open/rh_enterpriseWorksRight",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 21,
+      "name": "企业网站备案信息列表",
+      "endpoint": "GET /open/rh_enterpriseIcp",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 22,
+      "name": "企业变更记录信息列表",
+      "endpoint": "GET /open/rh_enterpriseChangeInfo",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 23,
+      "name": "企业涉诉信息统计",
+      "endpoint": "GET /open/rh_enterpriseWritAgg",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10,
+      "adapted": false
+    },
+    {
+      "id": 24,
+      "name": "企业涉诉文书列表",
+      "endpoint": "GET /open/rh_enterpriseWritList",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10,
+      "adapted": false
+    },
+    {
+      "id": 25,
+      "name": "企业开庭公告列表",
+      "endpoint": "GET /open/rh_enterpriseCourtSessionNotice",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 26,
+      "name": "企业法院公告列表",
+      "endpoint": "GET /open/rh_enterpriseCourtNotice",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 27,
+      "name": "企业失信被执行人列表",
+      "endpoint": "GET /open/rh_enterpriseExecutions",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 28,
+      "name": "企业被执行人列表",
+      "endpoint": "GET /open/rh_enterpriseExecutedPerson",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 29,
+      "name": "企业股权冻结列表",
+      "endpoint": "GET /open/rh_enterpriseFrozenEquity",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 30,
+      "name": "企业行政处罚列表",
+      "endpoint": "GET /open/rh_enterprisePunishment",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 31,
+      "name": "企业股权出质列表",
+      "endpoint": "GET /open/rh_enterprisePledge",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 32,
+      "name": "企业对外担保列表",
+      "endpoint": "GET /open/rh_enterpriseGuaranty",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 33,
+      "name": "企业经营异常记录列表",
+      "endpoint": "GET /open/rh_enterpriseAbnormalOperation",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 34,
+      "name": "企业欠税公告记录列表",
+      "endpoint": "GET /open/rh_enterpriseCorporateTax",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
+    },
+    {
+      "id": 35,
+      "name": "企业严重违法记录列表",
+      "endpoint": "GET /open/rh_enterpriseSeriousIllegal",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 5,
+      "adapted": false
     }
   ],
   "check_history": [
     {
       "date": "2026-05-10",
-      "method": "平台首页 + 接口广场（需登录） + 外部仓库对比",
-      "result": "平台首页仍为 3 大分类（法律法规、案例文书、企业信息），与当前已适配 11 个接口完全覆盖。接口广场和文档页面需登录才能访问，未发现新分类或新接口。",
-      "new_interfaces_found": 0
+      "method": "平台首页 + 接口广场（需登录） + 外部仓库对比 + Playwright 浏览器实际访问",
+      "result": "通过 Playwright 浏览器实际访问元典开放平台接口广场（open.chineselaw.com/api-square），发现平台从 11 个 API 扩展到了 35 个。新增 1 个分类（幻觉检测）和 24 个未适配接口：1 个幻觉检测接口（hall_detect）+ 23 个企业信息接口（企业全息画像系列）。",
+      "new_interfaces_found": 24
     }
   ]
 }
