@@ -1,5 +1,71 @@
 # 变更日志
 
+## [2.3.3] - 2026-05-06
+
+### 修复
+
+- **图片正文插入过度**：修正 v2.3.2 容易把图片资产表中的图片全部插入正文的问题，避免章节退化为幻灯片堆叠。
+- **连续图片堆叠**：新增同一位置连续配图数量控制，原则上不超过 2 张，确有必要时最多 3 张。
+
+### 改进
+
+- **图片资产分级**：大纲阶段为每张图片标注 `核心图`、`辅助图`、`低价值图` 或 `跳过图`，并区分 `插入正文`、`仅资产表保留` 和 `跳过`。
+- **正文配图克制**：保留图片资产表的完整追溯能力，但正文只插入能支撑核心观点、流程、案例或工具界面的高价值图片。
+- **正文密度保护**：明确图片筛选只影响图片是否进入正文，不得同步压缩高价值观点、案例链路、工具取舍、真实疑问和实践细节。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`。
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 版本和描述。
+
+---
+
+## [2.3.2] - 2026-05-01
+
+### 修复
+
+- **图片引用保真**：修复生成模式中原始 Markdown 图片引用容易在总览和章节生成阶段丢失的问题。
+- **图片顺序稳定**：新增图片资产表，要求按原文顺序为图片分配 `IMG-xxx` 编号，并按章节归属保持顺序插入正文。
+- **图片归属规则**：要求根据图片邻近时间戳、前后文和主题判断归属章节；无法判断时放入时间位置最接近的章节，不直接删除。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`。
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 版本和描述。
+
+---
+
+## [2.3.1] - 2026-05-01
+
+### 修复
+
+- **独立正文去来源痕迹**：修正 v2.3.0 高保真正文增强后容易反复出现"现场演示""课程现场""现场问答"等来源叙述的问题。
+- **操作过程正文化**：要求将演示、问答和补充讨论转化为实践案例、应用场景、常见疑问或操作流程，而不是在章节中保留转录现场痕迹。
+- **英文专有名称保真**：明确保留 Skill 名称、工具名、项目名、产品名、命令名、API、文件名和框架名的原始英文写法，避免将 `Course Generator` 等专有名称意译成中文。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`、`config/user_dictionary.example.yaml`。
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 版本和描述。
+
+---
+
+## [2.3.0] - 2026-05-01
+
+### 改进
+
+- **高保真正文增强**：生成模式明确采用书稿素材取向，不再只做轻量摘要，要求少压缩、多保留有思想密度的观点、案例、判断、金句和实践细节。
+- **价值抽取标准强化**：大纲生成阶段新增高价值素材识别，覆盖方法论、工具选择理由、踩坑经验、反直觉判断、可迁移表达和现场问答中的真实疑惑。
+- **章节正文增强**：专题文档要求将案例背景、问题、做法、结果和启发写完整，并说明工具或方案取舍的适用条件与局限。
+- **问答融入规则固化**：Q&A 必须作为正文素材按主题融入章节，不单独成章，也不机械保留问答格式。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`references/outline_prompt.md`、`references/overview_prompt.md`、`references/chapter_prompt.md`。
+- 同步 `README.md` 与 `.claude-plugin/marketplace.json` 中的 course-generator 描述和版本号。
+
+---
+
 ## [2.2.0] - 2026-05-01
 
 ### 改进
