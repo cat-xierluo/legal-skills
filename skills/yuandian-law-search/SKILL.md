@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
+version: "1.2.1"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -272,6 +272,10 @@ python3 scripts/yd_search.py enterprise-detail --credit-code "9144030071526726XG
 | `--wenshu-type` | 案件类型：刑事案件/民事案件/行政案件 |
 
 ## Reference 文档索引
+
+### 接口清单
+
+`references/MANIFEST.json` 记录全部已适配接口的元数据（端点、子命令、分层、分类），以及平台接口排查历史。下次排查新增接口时，更新该文件的 `check_history` 即可。
 
 ### API 端点文档
 

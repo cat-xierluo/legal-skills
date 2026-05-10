@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.2.0 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（v1.2.1 - 开放平台版）"""
 
 import argparse
 import hashlib
@@ -22,7 +22,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.2.1"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)

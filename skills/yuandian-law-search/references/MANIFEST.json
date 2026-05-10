@@ -1,0 +1,130 @@
+{
+  "_comment": "元典开放平台 API 接口清单，用于追踪已适配接口与平台最新状态",
+  "last_checked": "2026-05-10",
+  "platform_url": "https://open.chineselaw.com",
+  "platform_categories": [
+    "法律法规",
+    "案例文书",
+    "企业信息"
+  ],
+  "interfaces": [
+    {
+      "id": 1,
+      "name": "法条语义检索",
+      "ref": "01-law-vector-search.md",
+      "endpoint": "POST /open/law_vector_search",
+      "subcommand": "search",
+      "tier": "核心",
+      "category": "法律法规",
+      "cost": 10
+    },
+    {
+      "id": 2,
+      "name": "法条关键词检索",
+      "ref": "02-law-keyword-search.md",
+      "endpoint": "POST /open/rh_ft_search",
+      "subcommand": "keyword",
+      "tier": "核心",
+      "category": "法律法规",
+      "cost": 10
+    },
+    {
+      "id": 3,
+      "name": "法条详情",
+      "ref": "03-law-detail.md",
+      "endpoint": "POST /open/rh_ft_detail",
+      "subcommand": "detail",
+      "tier": "核心",
+      "category": "法律法规",
+      "cost": 10
+    },
+    {
+      "id": 4,
+      "name": "案例语义检索",
+      "ref": "04-case-semantic-search.md",
+      "endpoint": "POST /open/case_vector_search",
+      "subcommand": "case-semantic",
+      "tier": "核心",
+      "category": "案例文书",
+      "cost": 10
+    },
+    {
+      "id": 5,
+      "name": "普通案例关键词检索",
+      "ref": "05-case-keyword-search.md",
+      "endpoint": "POST /open/rh_ptal_search",
+      "subcommand": "case",
+      "tier": "核心",
+      "category": "案例文书",
+      "cost": 10
+    },
+    {
+      "id": 6,
+      "name": "权威案例关键词检索",
+      "ref": "06-case-keyword-search-authority.md",
+      "endpoint": "POST /open/rh_qwal_search",
+      "subcommand": "case --authority-only",
+      "tier": "扩展",
+      "category": "案例文书",
+      "cost": 10
+    },
+    {
+      "id": 7,
+      "name": "案例详情",
+      "ref": "07-case-detail.md",
+      "endpoint": "GET /open/rh_case_details",
+      "subcommand": "case-detail",
+      "tier": "扩展",
+      "category": "案例文书",
+      "cost": 10
+    },
+    {
+      "id": 8,
+      "name": "法规关键词检索",
+      "ref": "08-regulation-search.md",
+      "endpoint": "POST /open/rh_fg_search",
+      "subcommand": "regulation",
+      "tier": "扩展",
+      "category": "法律法规",
+      "cost": 10
+    },
+    {
+      "id": 9,
+      "name": "法规详情",
+      "ref": "09-regulation-detail.md",
+      "endpoint": "POST /open/rh_fg_detail",
+      "subcommand": "regulation-detail",
+      "tier": "扩展",
+      "category": "法律法规",
+      "cost": 10
+    },
+    {
+      "id": 10,
+      "name": "企业名称检索",
+      "ref": "10-enterprise-search.md",
+      "endpoint": "GET /open/rh_company_info",
+      "subcommand": "enterprise",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10
+    },
+    {
+      "id": 11,
+      "name": "企业详情",
+      "ref": "11-enterprise-detail.md",
+      "endpoint": "GET /open/rh_company_detail",
+      "subcommand": "enterprise-detail",
+      "tier": "附属",
+      "category": "企业信息",
+      "cost": 10
+    }
+  ],
+  "check_history": [
+    {
+      "date": "2026-05-10",
+      "method": "平台首页 + 接口广场（需登录） + 外部仓库对比",
+      "result": "平台首页仍为 3 大分类（法律法规、案例文书、企业信息），与当前已适配 11 个接口完全覆盖。接口广场和文档页面需登录才能访问，未发现新分类或新接口。",
+      "new_interfaces_found": 0
+    }
+  ]
+}
