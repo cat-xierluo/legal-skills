@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.3.0 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（v1.3.1 - 开放平台版）"""
 
 import argparse
 import hashlib
@@ -22,7 +22,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.3.1"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -557,7 +557,20 @@ def cmd_search(args):
 
 def cmd_keyword(args):
     """法条关键词检索"""
-    body = {"keyword": args.query}
+    # 处理 --expand 扩展关键词
+    keyword = args.query
+    if args.expand:
+        expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
+        if expanded_terms:
+            keyword = f"{keyword} {' '.join(expanded_terms)}"
+            # 有扩展词时自动切换为 OR 模式（如果用户未显式指定 search_mode）
+            if not args.search_mode:
+                args.search_mode = "or"
+                print(f"[扩展检索] 已将关键词扩展为: {keyword}（OR 模式）")
+            else:
+                print(f"[扩展检索] 已将关键词扩展为: {keyword}")
+
+    body = {"keyword": keyword}
     if args.search_mode:
         body["search_mode"] = args.search_mode
     if args.fgmc:
@@ -593,8 +606,21 @@ def cmd_detail(args):
 def cmd_case(args):
     """案例关键词检索"""
     body = {}
-    if args.query:
-        body["qw"] = args.query
+    # 处理 --expand 扩展关键词
+    query = args.query
+    if args.expand:
+        expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
+        if expanded_terms:
+            query = f"{query} {' '.join(expanded_terms)}" if query else " ".join(expanded_terms)
+            # 有扩展词时自动切换为 OR 模式（如果用户未显式指定 search_mode）
+            if not args.search_mode:
+                args.search_mode = "or"
+                print(f"[扩展检索] 已将关键词扩展为: {query}（OR 模式）")
+            else:
+                print(f"[扩展检索] 已将关键词扩展为: {query}")
+
+    if query:
+        body["qw"] = query
     if args.search_mode:
         body["search_mode"] = args.search_mode
     for field in ("ah", "title"):
@@ -694,8 +720,20 @@ def cmd_case_detail(args):
 def cmd_regulation(args):
     """法规关键词检索"""
     body = {}
-    if args.query:
-        body["keyword"] = args.query
+    # 处理 --expand 扩展关键词
+    keyword = args.query
+    if args.expand:
+        expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
+        if expanded_terms:
+            keyword = f"{keyword} {' '.join(expanded_terms)}"
+            if not args.search_mode:
+                args.search_mode = "or"
+                print(f"[扩展检索] 已将关键词扩展为: {keyword}（OR 模式）")
+            else:
+                print(f"[扩展检索] 已将关键词扩展为: {keyword}")
+
+    if keyword:
+        body["keyword"] = keyword
     if args.search_mode:
         body["search_mode"] = args.search_mode
     if args.fgmc:
@@ -983,6 +1021,7 @@ def build_parser():
     # ── keyword ──
     p = sub.add_parser("keyword", help="法条关键词检索")
     p.add_argument("query", help="关键词，多个用空格分隔")
+    p.add_argument("--expand", help="扩展关键词，逗号分隔（如 '知识产权管辖,级别管辖'），自动追加到原始查询")
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     p.add_argument("--sxx", action="append", help="时效性（可多次指定）")
@@ -1004,6 +1043,7 @@ def build_parser():
     # ── case ──
     p = sub.add_parser("case", help="案例关键词检索")
     p.add_argument("query", nargs="?", default="", help="全文关键词")
+    p.add_argument("--expand", help="扩展关键词，逗号分隔（如 '质量纠纷,违约责任'），自动追加到原始查询")
     p.add_argument("--search-mode", choices=["and", "or"], default="and")
     p.add_argument("--authority-only", action="store_true", help="仅检索权威案例")
     p.add_argument("--ah", help="案号")
@@ -1047,6 +1087,7 @@ def build_parser():
     # ── regulation ──
     p = sub.add_parser("regulation", help="法规关键词检索")
     p.add_argument("query", help="关键词")
+    p.add_argument("--expand", help="扩展关键词，逗号分隔，自动追加到原始查询")
     p.add_argument("--search-mode", choices=["and", "or"], default="and")
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
