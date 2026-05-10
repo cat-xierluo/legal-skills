@@ -646,8 +646,6 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             parse_text_formatting(p, title, title_level=1)
             set_paragraph_format(p, title_level=1)
         elif line.startswith('## '):
-            if has_seen_h2 or has_body_before_first_h2:
-                doc.add_paragraph("")
             title = convert_quotes_to_chinese(line[3:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=2)

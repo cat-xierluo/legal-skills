@@ -269,6 +269,16 @@ def parse_table_cell_formatting(cell, text, is_header=False):
     # 清空单元格
     cell.text = ""
 
+    # 设置段落对齐方式（与 set_table_cell_format 保持一致）
+    config = get_config()
+    table_config = config.get('table', {})
+    line_spacing = table_config.get('line_spacing', 1.2)
+    for paragraph in cell.paragraphs:
+        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        paragraph.paragraph_format.line_spacing = line_spacing
+
     # 导入 convert_quotes_to_chinese 和 parse_formatted_text 避免循环导入
     from formatter import convert_quotes_to_chinese, parse_formatted_text
 
