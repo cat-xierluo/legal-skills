@@ -122,218 +122,242 @@
     {
       "id": 12,
       "name": "法规/法条/案例幻觉检测",
+      "ref": "12-hall-detect.md",
       "endpoint": "POST /open/hall_detect",
-      "tier": "附属",
+      "subcommand": "hall-detect",
+      "tier": "专项",
       "category": "幻觉检测",
-      "cost": 50,
-      "adapted": false
+      "cost": 50
     },
     {
       "id": 13,
       "name": "企业检索（轻量候选列表）",
+      "ref": "13-enterprise-search-lightweight.md",
       "endpoint": "GET /open/rh_enterpriseSearch",
+      "subcommand": "enterprise-search",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 1,
-      "adapted": false
+      "cost": 1
     },
     {
       "id": 14,
       "name": "企业基本信息",
+      "ref": "14-enterprise-base-info.md",
       "endpoint": "GET /open/rh_enterpriseBaseInfo",
+      "subcommand": "enterprise-base",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 10,
-      "adapted": false
+      "cost": 10
     },
     {
       "id": 15,
       "name": "企业聚合总览",
+      "ref": "15-enterprise-aggregation-summary.md",
       "endpoint": "POST /open/rh_enterpriseAggregationSummary",
+      "subcommand": "enterprise-summary",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 10,
-      "adapted": false
+      "cost": 10
     },
     {
       "id": 16,
       "name": "企业对外投资信息列表",
+      "ref": "16-enterprise-out-invest.md",
       "endpoint": "GET /open/rh_enterpriseOutInvest",
+      "subcommand": "enterprise-list --type invest",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 17,
       "name": "企业商标信息列表",
+      "ref": "17-enterprise-brand.md",
       "endpoint": "GET /open/rh_enterpriseBrand",
+      "subcommand": "enterprise-list --type brand",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 18,
       "name": "企业专利信息列表",
+      "ref": "18-enterprise-patent.md",
       "endpoint": "GET /open/rh_enterprisePatent",
+      "subcommand": "enterprise-list --type patent",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 19,
       "name": "企业软件著作权信息列表",
+      "ref": "19-enterprise-soft-right.md",
       "endpoint": "GET /open/rh_enterpriseSoftRight",
+      "subcommand": "enterprise-list --type soft-right",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 20,
       "name": "企业作品著作权信息列表",
+      "ref": "20-enterprise-works-right.md",
       "endpoint": "GET /open/rh_enterpriseWorksRight",
+      "subcommand": "enterprise-list --type works-right",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 21,
       "name": "企业网站备案信息列表",
+      "ref": "21-enterprise-icp.md",
       "endpoint": "GET /open/rh_enterpriseIcp",
+      "subcommand": "enterprise-list --type icp",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 22,
       "name": "企业变更记录信息列表",
+      "ref": "22-enterprise-change-info.md",
       "endpoint": "GET /open/rh_enterpriseChangeInfo",
+      "subcommand": "enterprise-list --type change-info",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 23,
       "name": "企业涉诉信息统计",
+      "ref": "23-enterprise-writ-agg.md",
       "endpoint": "GET /open/rh_enterpriseWritAgg",
+      "subcommand": "enterprise-list --type writ-agg",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 10,
-      "adapted": false
+      "cost": 10
     },
     {
       "id": 24,
       "name": "企业涉诉文书列表",
+      "ref": "24-enterprise-writ-list.md",
       "endpoint": "GET /open/rh_enterpriseWritList",
+      "subcommand": "enterprise-list --type writ-list",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 10,
-      "adapted": false
+      "cost": 10
     },
     {
       "id": 25,
       "name": "企业开庭公告列表",
+      "ref": "25-enterprise-court-session-notice.md",
       "endpoint": "GET /open/rh_enterpriseCourtSessionNotice",
+      "subcommand": "enterprise-list --type court-session",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 26,
       "name": "企业法院公告列表",
+      "ref": "26-enterprise-court-notice.md",
       "endpoint": "GET /open/rh_enterpriseCourtNotice",
+      "subcommand": "enterprise-list --type court-notice",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 27,
       "name": "企业失信被执行人列表",
+      "ref": "27-enterprise-executions.md",
       "endpoint": "GET /open/rh_enterpriseExecutions",
+      "subcommand": "enterprise-list --type execution",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 28,
       "name": "企业被执行人列表",
+      "ref": "28-enterprise-executed-person.md",
       "endpoint": "GET /open/rh_enterpriseExecutedPerson",
+      "subcommand": "enterprise-list --type executed-person",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 29,
       "name": "企业股权冻结列表",
+      "ref": "29-enterprise-frozen-equity.md",
       "endpoint": "GET /open/rh_enterpriseFrozenEquity",
+      "subcommand": "enterprise-list --type frozen-equity",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 30,
       "name": "企业行政处罚列表",
+      "ref": "30-enterprise-punishment.md",
       "endpoint": "GET /open/rh_enterprisePunishment",
+      "subcommand": "enterprise-list --type punishment",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 31,
       "name": "企业股权出质列表",
+      "ref": "31-enterprise-pledge.md",
       "endpoint": "GET /open/rh_enterprisePledge",
+      "subcommand": "enterprise-list --type pledge",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 32,
       "name": "企业对外担保列表",
+      "ref": "32-enterprise-guaranty.md",
       "endpoint": "GET /open/rh_enterpriseGuaranty",
+      "subcommand": "enterprise-list --type guaranty",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 33,
       "name": "企业经营异常记录列表",
+      "ref": "33-enterprise-abnormal-operation.md",
       "endpoint": "GET /open/rh_enterpriseAbnormalOperation",
+      "subcommand": "enterprise-list --type abnormal",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 34,
       "name": "企业欠税公告记录列表",
+      "ref": "34-enterprise-corporate-tax.md",
       "endpoint": "GET /open/rh_enterpriseCorporateTax",
+      "subcommand": "enterprise-list --type tax",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     },
     {
       "id": 35,
       "name": "企业严重违法记录列表",
+      "ref": "35-enterprise-serious-illegal.md",
       "endpoint": "GET /open/rh_enterpriseSeriousIllegal",
+      "subcommand": "enterprise-list --type serious-illegal",
       "tier": "附属",
       "category": "企业信息",
-      "cost": 5,
-      "adapted": false
+      "cost": 5
     }
   ],
   "check_history": [
