@@ -1,5 +1,16 @@
 # 变更日志
 
+## [1.3.2] - 2026-05-10
+
+### 新增
+- 新接口策略矩阵：为 hall-detect、enterprise-search、enterprise-base/summary、enterprise-list 四类新增接口补充 balanced/economical/aggressive 三种策略下的具体行为指导
+- 企业尽调工作流：enterprise-search → enterprise-base → enterprise-summary → enterprise-list 四步尽调流程
+- 幻觉检测工作流：引用识别 → AI 建议 → 用户确认 → hall-detect 检测 → 结果展示
+- 企业风险排查工作流：enterprise-summary 总览 → enterprise-list 深挖高风险项 → 风险画像汇总
+
+### 改进
+- enterprise-list 子命令新增策略感知默认 size：economical 模式默认 10 条，aggressive 模式默认 50 条，balanced 保持 30 条
+
 ## [1.3.1] - 2026-05-10
 
 ### 新增
