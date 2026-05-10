@@ -562,6 +562,9 @@ curl -X POST http://127.0.0.1:8765/inject_summary \
 
 ## 故障排除
 
+> 📌 B 站视频转录实战记录（2026-05-10）：`references/bilibili-transcribe-session.md`
+> 含路径问题根因 + Whisper CLI fallback 方案。
+
 **视频截图功能：**
 
 视频文件（mp4、mov、avi、mkv、wmv、webm）转录时会自动启用关键帧提取。
