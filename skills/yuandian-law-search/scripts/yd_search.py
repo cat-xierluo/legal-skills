@@ -1180,7 +1180,7 @@ def build_parser():
     p.add_argument("--id", help="企业 ID")
     p.add_argument("--uscc", help="统一社会信用代码")
     p.add_argument("--page", type=int, default=1, help="页码（默认 1）")
-    p.add_argument("--size", type=int, default=10 if _strategy == "economical" else (50 if _strategy == "aggressive" else 30), help="每页条数（默认 30，economical 10，aggressive 50）")
+    p.add_argument("--size", type=int, default={"economical": 10, "aggressive": 50}.get(_strategy, 30), help="每页条数（默认 30，economical 10，aggressive 50）")
     p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
     p.set_defaults(func=cmd_enterprise_list)
 

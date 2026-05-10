@@ -128,6 +128,8 @@ echo "当前策略：${STRATEGY:-balanced}"
 
 ### 新接口策略矩阵
 
+> 旧接口 `enterprise` 和 `enterprise-detail` 的策略行为不变，沿用上方"附属接口"的通用规则。
+
 新增接口（hall-detect、enterprise-search、enterprise-base、enterprise-summary、enterprise-list）在三种策略下的具体行为：
 
 | 接口 | 积分 | balanced | economical | aggressive |
@@ -263,13 +265,18 @@ AI 在完成检索后，应**主动告知用户检索结果摘要和积分消耗
 3. enterprise-summary 聚合总览（10 积分），了解哪些维度有数据
 4. 根据总览结果，用 enterprise-list 深挖具体维度（5 积分/次）
 
+> **策略差异**：economical 下 enterprise-base/enterprise-summary 需二次确认；enterprise-list 每次只查一种类型。aggressive 下可一次性查询多个相关类型（如涉诉+行政处罚+失信）。
+
 ### 幻觉检测场景
 
 用户在对话中引用了某法条或案例，AI 希望核验准确性
 
 1. 用户在对话中引用了某法条或案例
 2. AI 建议进行幻觉检测以核验准确性
-3. 用户确认后调用 hall-detect（50 积分）
+3. 确认调用（策略相关）：
+   - balanced：告知"检测需要 50 积分"后等待用户确认
+   - economical：二次确认（第一次展示积分提醒，等用户再次确认才调用）
+   - aggressive：直接使用，无需确认
 4. 展示检测结果：法规存在性、语义比对结论、案例核实情况
 
 ### 企业风险排查场景
