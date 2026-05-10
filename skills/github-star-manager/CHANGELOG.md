@@ -4,6 +4,24 @@
 
 ---
 
+## [0.6.2] - 2026-05-10
+
+### 修复
+
+- **description 为 null 时自动重试**：增量同步和首次同步时，对 description 为 null 的项目自动调用 GitHub API 重新抓取最新元数据，同时刷新 language、topics、homepage 等字段（Closes #9）
+- **star 变化触发元数据刷新**：检测到新增 star 时，同时刷新该项目的 description、language、topics 等元数据，确保存量项目改名后数据同步更新
+- **数据质量日志**：新增 `log_null_descriptions()` 方法，记录哪些项目 description 为 null 并输出到 `output/data_quality.log`，方便排查数据质量问题
+
+### 新增方法
+
+| 方法 | 位置 | 功能 |
+|------|------|------|
+| `refresh_repo_metadata()` | `star_tracker.py` | 通过 GitHub API 刷新单个仓库的最新元数据 |
+| `log_null_descriptions()` | `star_tracker.py` | 记录 description 为 null 的项目列表，写入数据质量日志 |
+| `retry_null_descriptions()` | `star_tracker.py` | 批量重试 description 为 null 的项目，自动刷新元数据 |
+
+---
+
 ## [0.6.1] - 2026-04-10
 
 ### 修复

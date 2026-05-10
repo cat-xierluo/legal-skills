@@ -281,6 +281,123 @@ class StarTracker:
             }
         return {}
 
+    def refresh_repo_metadata(self, repo_full_name: str) -> Optional[Dict]:
+        """刷新单个仓库的最新元数据（description、language 等）
+
+        通过 GitHub API 获取最新的仓库信息，用于：
+        1. description 为 null 时重新抓取
+        2. 项目改名后刷新存量数据
+        3. star 变化时同步更新元数据
+
+        Returns:
+            包含最新元数据的字典，失败时返回 None
+        """
+        url = f"{self.API_BASE}/repos/{repo_full_name}"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 404:
+            print(f"  ⚠ 仓库不存在或已删除: {repo_full_name}")
+        else:
+            print(f"  ⚠ 获取元数据失败 ({response.status_code}): {repo_full_name}")
+        return None
+
+    def log_null_descriptions(self, repos: List[Dict], source: str = "unknown") -> List[str]:
+        """记录 description 为 null 的项目，用于数据质量排查
+
+        Args:
+            repos: 仓库列表
+            source: 数据来源标识（如 "latest", "incremental"）
+
+        Returns:
+            description 为 null 的仓库 full_name 列表
+        """
+        null_desc_repos = []
+        for repo in repos:
+            full_name = repo.get("full_name", "unknown")
+            desc = repo.get("description")
+            if desc is None:
+                null_desc_repos.append(full_name)
+
+        if null_desc_repos:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"\n📊 [数据质量] 来源={source}, description 为 null 的项目 ({len(null_desc_repos)} 个):")
+            for fn in null_desc_repos[:20]:
+                print(f"  - {fn}")
+            if len(null_desc_repos) > 20:
+                print(f"  ... 还有 {len(null_desc_repos) - 20} 个")
+
+            # 写入数据质量日志文件
+            log_file = self.CACHE_DIR / "data_quality.log"
+            try:
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n[{timestamp}] source={source}\n")
+                    for fn in null_desc_repos:
+                        f.write(f"  null_description: {fn}\n")
+            except Exception as e:
+                print(f"  ⚠ 写入数据质量日志失败: {e}")
+
+        return null_desc_repos
+
+    def retry_null_descriptions(self, repos: List[Dict]) -> List[Dict]:
+        """对 description 为 null 的项目重新抓取元数据
+
+        逐个调用 GitHub API 获取最新仓库信息，用返回的 description 替换 null 值。
+        同时刷新 language、topics 等可能变化的元数据字段。
+
+        Args:
+            repos: 当前仓库列表
+
+        Returns:
+            更新后的仓库列表
+        """
+        null_repos = [r for r in repos if r.get("description") is None]
+        if not null_repos:
+            return repos
+
+        print(f"\n🔄 发现 {len(null_repos)} 个项目 description 为 null，正在重新抓取元数据...")
+        refreshed_count = 0
+        still_null = []
+
+        repo_map = {r["full_name"]: i for i, r in enumerate(repos)}
+
+        for repo in null_repos:
+            full_name = repo.get("full_name")
+            if not full_name:
+                continue
+
+            fresh_data = self.refresh_repo_metadata(full_name)
+            if fresh_data:
+                idx = repo_map[full_name]
+                # 更新 description
+                repos[idx]["description"] = fresh_data.get("description")
+                # 同时刷新其他可能变化的元数据
+                repos[idx]["language"] = fresh_data.get("language", repos[idx].get("language"))
+                repos[idx]["topics"] = fresh_data.get("topics", repos[idx].get("topics", []))
+                repos[idx]["homepage"] = fresh_data.get("homepage", repos[idx].get("homepage"))
+                repos[idx]["stargazers_count"] = fresh_data.get("stargazers_count", repos[idx].get("stargazers_count", 0))
+                repos[idx]["forks_count"] = fresh_data.get("forks_count", repos[idx].get("forks_count", 0))
+                repos[idx]["updated_at"] = fresh_data.get("updated_at", repos[idx].get("updated_at"))
+                repos[idx]["pushed_at"] = fresh_data.get("pushed_at", repos[idx].get("pushed_at"))
+
+                new_desc = fresh_data.get("description")
+                if new_desc is not None:
+                    refreshed_count += 1
+                    print(f"  ✓ {full_name}: description 已更新 → {new_desc[:60]}")
+                else:
+                    still_null.append(full_name)
+                    print(f"  - {full_name}: API 返回 description 仍为 null")
+            else:
+                still_null.append(full_name)
+                print(f"  ✗ {full_name}: 元数据获取失败")
+
+        print(f"\n📊 description 重试结果: 成功 {refreshed_count}/{len(null_repos)}")
+        if still_null:
+            print(f"  仍为 null 的项目: {', '.join(still_null[:10])}")
+
+        return repos
+
     def get_readme(self, repo_full_name: str) -> str:
         """获取 README 内容"""
         url = f"{self.API_BASE}/repos/{repo_full_name}/readme"
