@@ -101,6 +101,12 @@ RSYNC_ARGS=(
     --exclude='node_modules/'  # 排除 node_modules
     --exclude='__pycache__/'   # 排除 Python 缓存
     --exclude='.DS_Store'      # 排除 macOS 系统文件
+    --exclude='**/.env'        # 排除环境变量文件（防止凭证泄露）
+    --exclude='**/*.db'        # 排除数据库文件
+    --exclude='**/*.sqlite'    # 排除 SQLite 文件
+    --exclude='**/logs/'       # 排除日志目录
+    --exclude='**/output/'     # 排除输出目录
+    --exclude='**/downloads/'  # 排除下载目录
 )
 
 # 检查项目根目录的 .gitignore
