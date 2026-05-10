@@ -348,16 +348,16 @@ def set_paragraph_format(paragraph, title_level=0, is_quote=False):
         title_config = config.get('titles.level2', {})
         align_str = title_config.get('align', 'justify')
         paragraph_format.alignment = parse_alignment(align_str)
-        paragraph_format.space_before = Pt(0)
-        paragraph_format.space_after = Pt(0)
+        paragraph_format.space_before = Pt(title_config.get('space_before', 9))
+        paragraph_format.space_after = Pt(title_config.get('space_after', 9))
         paragraph_format.first_line_indent = Pt(title_config.get('indent', 24))
     elif title_level == 3:
         # 三级标题配置
         title_config = config.get('titles.level3', {})
         align_str = title_config.get('align', 'justify')
         paragraph_format.alignment = parse_alignment(align_str)
-        paragraph_format.space_before = Pt(0)
-        paragraph_format.space_after = Pt(0)
+        paragraph_format.space_before = Pt(title_config.get('space_before', 9))
+        paragraph_format.space_after = Pt(title_config.get('space_after', 9))
         paragraph_format.first_line_indent = Pt(title_config.get('indent', 24))
     elif title_level == 4:
         # 四级标题配置

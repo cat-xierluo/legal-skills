@@ -2,14 +2,14 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
+version: "1.3.0"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
 
 # 元典法条与案例检索
 
-通过元典开放平台 API 检索中国法律法规条文和案例。**每次 API 调用消耗 10 积分**。所有检索结果会自动归档到本地，方便后续回溯。
+通过元典开放平台 API 检索中国法律法规条文和案例。**每次 API 调用消耗 1-50 积分**（视接口而定）。所有检索结果会自动归档到本地，方便后续回溯。
 
 ## 前置要求（每次调用前自动检测）
 
@@ -62,7 +62,7 @@ echo "当前策略：${STRATEGY:-balanced}"
 
 ## 接口速查
 
-本技能共 11 个接口，分为三层。选择规则：
+本技能共 35 个接口，分为四层。选择规则：
 
 1. 用户问"XX法怎么规定的" → 先用 `search` 语义检索
 2. 用户问"关于XX的法律条文" → 用 `keyword` 关键词检索
@@ -70,10 +70,14 @@ echo "当前策略：${STRATEGY:-balanced}"
 4. 用户问"有没有XX相关的案例" → 用 `case` 关键词检索（默认普通案例）
 5. 用户问"类似XX的案件怎么判的" → 用 `case-semantic` 语义检索
 6. 用户要求更深入了解某案例 → 提醒用户将消耗积分，确认后用 `case-detail`
+7. 用户要求企业背景调查 → 先用 `enterprise-search` 定位，再用 `enterprise-base`/`enterprise-summary` 获取详情
+8. 用户要求查询企业分项信息（涉诉、商标、专利等） → 用 `enterprise-list --type TYPE`
+9. 用户要求检测文本中法规/案例是否准确 → 用 `hall-detect`
 
 **核心接口（默认使用）：** `search` · `keyword` · `detail` · `case` · `case-semantic`
 **扩展接口（需确认）：** `regulation` · `regulation-detail` · `case-detail` · `case --authority-only`
-**附属接口（仅限明确要求）：** `enterprise` · `enterprise-detail`
+**附属接口（仅限明确要求）：** `enterprise` · `enterprise-detail` · `enterprise-search` · `enterprise-base` · `enterprise-summary` · `enterprise-list`
+**专项接口（仅限明确要求）：** `hall-detect`
 
 ## 调用策略
 
@@ -83,12 +87,12 @@ echo "当前策略：${STRATEGY:-balanced}"
 
 ### 通用规则（所有策略共享）
 
-每次 API 调用消耗 10 积分。以下规则不受策略影响：
+每次 API 调用消耗 1-50 积分（视接口而定）。以下规则不受策略影响：
 
 1. **必须调用 API**：需要引用具体法条文号 / 需要确认时效性 / 用户明确要求检索 / 案例检索 / AI 对自身记忆不确定
 2. **可以不调用**：纯概念性问题 / 对话中已检索过相同内容 / 用户未要求查找 / 用户明确说不需要查
-3. **积分消耗模式**：每个接口每次 10 积分。法条检索通常一次足够。案例检索是两阶段消耗（摘要 10 + 详情 每个 10）
-4. **接口分层**：核心（search·keyword·detail·case·case-semantic）、扩展（regulation·regulation-detail·case-detail·case --authority-only）、附属（enterprise·enterprise-detail）
+3. **积分消耗模式**：大部分接口每次 5-10 积分，幻觉检测 50 积分，轻量企业检索 1 积分。法条检索通常一次足够。案例检索是两阶段消耗（摘要 10 + 详情 每个 10）
+4. **接口分层**：核心（search·keyword·detail·case·case-semantic）、扩展（regulation·regulation-detail·case-detail·case --authority-only）、附属（enterprise·enterprise-detail·enterprise-search·enterprise-base·enterprise-summary·enterprise-list）、专项（hall-detect）
 
 ### 均衡策略（balanced，默认）
 
@@ -253,6 +257,87 @@ python3 scripts/yd_search.py enterprise "华为" --num 5
 python3 scripts/yd_search.py enterprise-detail --credit-code "9144030071526726XG"
 ```
 
+## 幻觉检测
+
+### 11. 法规/法条/案例幻觉检测（hall-detect）
+
+检测文本中引用的法规、法条、案例是否存在幻觉（是否真实存在、内容是否准确）。**每次调用消耗 50 积分**。
+
+```bash
+python3 scripts/yd_search.py hall-detect "根据《中华人民共和国数据保护法》第35条规定，数据处理者应当..."
+```
+
+返回结果包含：
+- **法规检测**：每条法规是否真实存在（law_exists），语义比对结论和相似度
+- **案例检测**：每条案例是否真实存在，基本事实和裁判要点
+- **高亮文本**：标注了检测结果的原文本
+
+## 企业全息画像
+
+### 12. 企业检索（轻量候选列表，enterprise-search）
+
+**每次调用消耗 1 积分**。按名称检索企业，返回候选列表（仅含 ID、名称、信用代码），用于定位目标企业后调用其他企业接口。
+
+```bash
+python3 scripts/yd_search.py enterprise-search "华为" --top-k 5
+```
+
+### 13. 企业基本信息（enterprise-base）
+
+根据企业 ID 或统一社会信用代码获取企业完整信息（含股东、核心成员、分支机构等）。
+
+```bash
+python3 scripts/yd_search.py enterprise-base --uscc "9144030071526726XG"
+```
+
+### 14. 企业聚合总览（enterprise-summary）
+
+一次调用获取企业各维度数据的统计摘要。
+
+```bash
+python3 scripts/yd_search.py enterprise-summary --id "企业ID"
+```
+
+### 15. 企业分项列表（enterprise-list）
+
+查询企业各维度详细记录，支持分页。**每次调用消耗 5-10 积分**（涉诉统计和涉诉文书 10 积分，其余 5 积分）。
+
+```bash
+# 查询企业涉诉文书
+python3 scripts/yd_search.py enterprise-list --type writ-list --uscc "9144030071526726XG"
+
+# 查询企业对外投资
+python3 scripts/yd_search.py enterprise-list --type invest --uscc "9144030071526726XG" --page 1 --size 10
+
+# 查询企业商标
+python3 scripts/yd_search.py enterprise-list --type brand --uscc "9144030071526726XG"
+```
+
+#### 可用类型
+
+| TYPE | 名称 | 积分 |
+|------|------|------|
+| invest | 对外投资 | 5 |
+| brand | 商标 | 5 |
+| patent | 专利 | 5 |
+| soft-right | 软件著作权 | 5 |
+| works-right | 作品著作权 | 5 |
+| icp | 网站备案 | 5 |
+| change-info | 变更记录 | 5 |
+| writ-agg | 涉诉信息统计 | 10 |
+| writ-list | 涉诉文书 | 10 |
+| court-session | 开庭公告 | 5 |
+| court-notice | 法院公告 | 5 |
+| execution | 失信被执行人 | 5 |
+| executed-person | 被执行人 | 5 |
+| frozen-equity | 股权冻结 | 5 |
+| punishment | 行政处罚 | 5 |
+| pledge | 股权出质 | 5 |
+| guaranty | 对外担保 | 5 |
+| abnormal | 经营异常 | 5 |
+| tax | 欠税公告 | 5 |
+| serious-illegal | 严重违法 | 5 |
+
 ## 通用参数说明
 
 ### 法条检索通用筛选
@@ -273,6 +358,10 @@ python3 scripts/yd_search.py enterprise-detail --credit-code "9144030071526726XG
 
 ## Reference 文档索引
 
+### 接口清单
+
+`references/MANIFEST.json` 记录全部已适配接口的元数据（端点、子命令、分层、分类），以及平台接口排查历史。下次排查新增接口时，更新该文件的 `check_history` 即可。
+
 ### API 端点文档
 
 | # | 文件 | 接口 |
@@ -288,6 +377,30 @@ python3 scripts/yd_search.py enterprise-detail --credit-code "9144030071526726XG
 | 09 | [regulation-detail.md](references/09-regulation-detail.md) | 法规详情 |
 | 10 | [enterprise-search.md](references/10-enterprise-search.md) | 企业名称检索 |
 | 11 | [enterprise-detail.md](references/11-enterprise-detail.md) | 企业详情 |
+| 12 | [hall-detect.md](references/12-hall-detect.md) | 幻觉检测 |
+| 13 | [enterprise-search-lightweight.md](references/13-enterprise-search-lightweight.md) | 企业检索（轻量） |
+| 14 | [enterprise-base-info.md](references/14-enterprise-base-info.md) | 企业基本信息 |
+| 15 | [enterprise-aggregation-summary.md](references/15-enterprise-aggregation-summary.md) | 企业聚合总览 |
+| 16 | [enterprise-out-invest.md](references/16-enterprise-out-invest.md) | 对外投资 |
+| 17 | [enterprise-brand.md](references/17-enterprise-brand.md) | 商标 |
+| 18 | [enterprise-patent.md](references/18-enterprise-patent.md) | 专利 |
+| 19 | [enterprise-soft-right.md](references/19-enterprise-soft-right.md) | 软件著作权 |
+| 20 | [enterprise-works-right.md](references/20-enterprise-works-right.md) | 作品著作权 |
+| 21 | [enterprise-icp.md](references/21-enterprise-icp.md) | 网站备案 |
+| 22 | [enterprise-change-info.md](references/22-enterprise-change-info.md) | 变更记录 |
+| 23 | [enterprise-writ-agg.md](references/23-enterprise-writ-agg.md) | 涉诉信息统计 |
+| 24 | [enterprise-writ-list.md](references/24-enterprise-writ-list.md) | 涉诉文书 |
+| 25 | [enterprise-court-session-notice.md](references/25-enterprise-court-session-notice.md) | 开庭公告 |
+| 26 | [enterprise-court-notice.md](references/26-enterprise-court-notice.md) | 法院公告 |
+| 27 | [enterprise-executions.md](references/27-enterprise-executions.md) | 失信被执行人 |
+| 28 | [enterprise-executed-person.md](references/28-enterprise-executed-person.md) | 被执行人 |
+| 29 | [enterprise-frozen-equity.md](references/29-enterprise-frozen-equity.md) | 股权冻结 |
+| 30 | [enterprise-punishment.md](references/30-enterprise-punishment.md) | 行政处罚 |
+| 31 | [enterprise-pledge.md](references/31-enterprise-pledge.md) | 股权出质 |
+| 32 | [enterprise-guaranty.md](references/32-enterprise-guaranty.md) | 对外担保 |
+| 33 | [enterprise-abnormal-operation.md](references/33-enterprise-abnormal-operation.md) | 经营异常 |
+| 34 | [enterprise-corporate-tax.md](references/34-enterprise-corporate-tax.md) | 欠税公告 |
+| 35 | [enterprise-serious-illegal.md](references/35-enterprise-serious-illegal.md) | 严重违法 |
 
 ## 历史检索记录
 

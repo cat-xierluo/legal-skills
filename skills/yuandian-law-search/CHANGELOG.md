@@ -1,5 +1,35 @@
 # 变更日志
 
+## [1.3.0] - 2026-05-10
+
+### 新增
+- 适配 24 个元典开放平台新接口（从 11 个扩展至 35 个）
+- 新增 5 个子命令：
+  - `hall-detect`：法规/法条/案例幻觉检测（50 积分）
+  - `enterprise-search`：企业轻量检索（1 积分），返回候选列表
+  - `enterprise-base`：企业基本信息查询（含股东、核心成员、分支机构）
+  - `enterprise-summary`：企业聚合总览
+  - `enterprise-list`：企业分项列表查询，支持 20 种类型（对外投资、商标、专利、涉诉文书、行政处罚等）
+- 新增 `format_hall_detect_results`：幻觉检测结果格式化（法规存在性、语义比对、案例核实）
+- 新增 `format_enterprise_list_results`：企业分项列表通用格式化函数
+- 新增 24 个 Reference 文档（12-35），覆盖幻觉检测和企业全息画像系列接口
+- 所有新子命令支持 `--no-cache` 选项
+- MANIFEST.json 全部 35 个接口标记为已适配（`adapted` 字段移除，改为完整元数据）
+- SKILL.md 接口清单从 11 个扩展至 35 个，新增幻觉检测和企业全息画像使用说明
+
+### 改进
+- 接口分层新增"专项"层（hall-detect）
+- 附属接口层扩展：新增 enterprise-search·enterprise-base·enterprise-summary·enterprise-list
+- 积分消耗说明从"每次 10 积分"更新为"1-50 积分（视接口而定）"
+- CLI 帮助示例新增 5 个新子命令用法
+
+## [1.2.1] - 2026-05-10
+
+### 改进
+- 新增 `references/MANIFEST.json`：接口清单元数据文件，记录全部 11 个已适配接口的端点、子命令、分层和分类信息
+- MANIFEST.json 包含 `check_history` 字段，记录每次平台接口排查的时间、方法和结论
+- 排查元典开放平台（2026-05-10）：通过 Playwright 浏览器实际访问接口广场，发现平台从 11 个 API 扩展到了 35 个，新增 24 个未适配接口（1 个幻觉检测 + 23 个企业信息），已记录到 MANIFEST.json，待后续适配
+
 ## [1.2.0] - 2026-05-09
 
 ### 新增

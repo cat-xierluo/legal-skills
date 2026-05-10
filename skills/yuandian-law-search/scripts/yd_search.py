@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.2.0 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（v1.3.0 - 开放平台版）"""
 
 import argparse
 import hashlib
@@ -22,7 +22,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -353,6 +353,160 @@ def format_enterprise_results(data):
         if meta:
             lines.append(" | ".join(meta))
             lines.append("")
+
+    return "\n".join(lines)
+
+
+# ── 企业分项列表类型映射 ────────────────────────────────────
+
+ENTERPRISE_LIST_TYPES = {
+    "invest": ("/open/rh_enterpriseOutInvest", "对外投资"),
+    "brand": ("/open/rh_enterpriseBrand", "商标"),
+    "patent": ("/open/rh_enterprisePatent", "专利"),
+    "soft-right": ("/open/rh_enterpriseSoftRight", "软件著作权"),
+    "works-right": ("/open/rh_enterpriseWorksRight", "作品著作权"),
+    "icp": ("/open/rh_enterpriseIcp", "网站备案"),
+    "change-info": ("/open/rh_enterpriseChangeInfo", "变更记录"),
+    "writ-agg": ("/open/rh_enterpriseWritAgg", "涉诉信息统计"),
+    "writ-list": ("/open/rh_enterpriseWritList", "涉诉文书"),
+    "court-session": ("/open/rh_enterpriseCourtSessionNotice", "开庭公告"),
+    "court-notice": ("/open/rh_enterpriseCourtNotice", "法院公告"),
+    "execution": ("/open/rh_enterpriseExecutions", "失信被执行人"),
+    "executed-person": ("/open/rh_enterpriseExecutedPerson", "被执行人"),
+    "frozen-equity": ("/open/rh_enterpriseFrozenEquity", "股权冻结"),
+    "punishment": ("/open/rh_enterprisePunishment", "行政处罚"),
+    "pledge": ("/open/rh_enterprisePledge", "股权出质"),
+    "guaranty": ("/open/rh_enterpriseGuaranty", "对外担保"),
+    "abnormal": ("/open/rh_enterpriseAbnormalOperation", "经营异常"),
+    "tax": ("/open/rh_enterpriseCorporateTax", "欠税公告"),
+    "serious-illegal": ("/open/rh_enterpriseSeriousIllegal", "严重违法"),
+}
+
+
+def format_enterprise_list_results(data, label):
+    """格式化企业分项列表结果为 Markdown"""
+    if not data:
+        return f"未找到{label}相关记录。"
+    if isinstance(data, dict):
+        data = [data]
+
+    lines = []
+    for i, item in enumerate(data, 1):
+        # 尝试从常见字段中提取标题
+        title = ""
+        for key in ("name", "名称", "企业名称", "商标名称", "专利名称", "软件名称",
+                     "作品名称", "域名", "案号", "公告类型", "变更项目",
+                     "被执行人名称", "处罚决定书文号", "出质人", "担保人",
+                     "列入原因", "欠税税种", "违法行为"):
+            val = item.get(key, "")
+            if val:
+                title = str(val)
+                break
+        lines.append(f"### {i}. {title or label}")
+        lines.append("")
+
+        meta = []
+        for key, label_text in item.items():
+            val = item.get(key, "")
+            if val and key not in ("id",) and str(val).strip():
+                meta.append(f"{key}: {val}")
+        if meta:
+            # 限制显示字段数量，避免输出过长
+            for m in meta[:8]:
+                lines.append(f"- {m}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def format_hall_detect_results(data):
+    """格式化幻觉检测结果为 Markdown"""
+    if not data:
+        return "检测结果为空。"
+
+    lines = []
+
+    # 高亮文本
+    highlighted = data.get("highlighted_text", "")
+    if highlighted:
+        lines.append("## 检测文本（标注版）")
+        lines.append("")
+        lines.append(highlighted)
+        lines.append("")
+
+    # 法规检测结果
+    regulations = data.get("regulations", [])
+    if regulations:
+        lines.append(f"## 法规检测（共 {len(regulations)} 条）")
+        lines.append("")
+        for i, reg in enumerate(regulations, 1):
+            name = reg.get("name", "")
+            clause = reg.get("clause", "")
+            law_exists = reg.get("law_exists")
+            exists_label = "存在" if law_exists else "不存在（疑似幻觉）"
+            lines.append(f"### {i}. {name} {clause} — {exists_label}")
+            lines.append("")
+
+            if reg.get("content"):
+                lines.append(f"> {reg['content']}")
+                lines.append("")
+
+            if reg.get("url"):
+                lines.append(f"链接: {reg['url']}")
+                lines.append("")
+
+            sc = reg.get("semantic_compare", {})
+            if sc and not sc.get("skipped"):
+                conclusion = sc.get("结论", "")
+                similarity = sc.get("语义相似度", "")
+                lines.append(f"语义比对: {conclusion}（相似度: {similarity}）")
+                if sc.get("说明"):
+                    lines.append(f"说明: {sc['说明']}")
+                if sc.get("要点"):
+                    for point in sc["要点"]:
+                        lines.append(f"- {point}")
+                lines.append("")
+
+    # 案例检测结果
+    cases = data.get("cases", [])
+    if cases:
+        lines.append(f"## 案例检测（共 {len(cases)} 条）")
+        lines.append("")
+        for i, case in enumerate(cases, 1):
+            name = case.get("name", "")
+            case_number = case.get("case_number", "")
+            lines.append(f"### {i}. {name}（{case_number}）")
+            lines.append("")
+
+            meta = []
+            if case.get("case_type"):
+                meta.append(f"案件类型: {case['case_type']}")
+            if case.get("court"):
+                meta.append(f"法院: {case['court']}")
+            if case.get("judgment_date"):
+                meta.append(f"裁判日期: {case['judgment_date']}")
+            if meta:
+                lines.append(" | ".join(meta))
+                lines.append("")
+
+            if case.get("url"):
+                lines.append(f"链接: {case['url']}")
+                lines.append("")
+            if case.get("basic_facts"):
+                text = str(case["basic_facts"])
+                if len(text) > 300:
+                    text = text[:300] + "..."
+                lines.append(f"基本事实: {text}")
+                lines.append("")
+            if case.get("judgment_key_points"):
+                text = str(case["judgment_key_points"])
+                if len(text) > 300:
+                    text = text[:300] + "..."
+                lines.append(f"裁判要点: {text}")
+                lines.append("")
+
+    if not regulations and not cases:
+        lines.append("未检测到法规或案例引用。")
 
     return "\n".join(lines)
 
@@ -688,6 +842,100 @@ def cmd_strategy(args):
     print(f"当前策略：{labels.get(s, s)}（{s}）")
 
 
+def cmd_hall_detect(args):
+    """法规/法条/案例幻觉检测"""
+    body = {"text": args.text}
+    use_cache = not args.no_cache
+    result, cached = api_post("/open/hall_detect", body, use_cache=use_cache)
+    data = result.get("data", result)
+    print(format_hall_detect_results(data))
+    cost = 50
+    print(f"\n--- 本次调用消耗 {cost} 积分 ---")
+
+
+def cmd_enterprise_search(args):
+    """企业检索（轻量候选列表）"""
+    params = {"name": args.name}
+    if args.top_k:
+        params["top_k"] = args.top_k
+    use_cache = not args.no_cache
+    result, cached = api_get("/open/rh_enterpriseSearch", params, use_cache=use_cache)
+    data = result.get("data", [])
+    if isinstance(data, dict):
+        data = [data]
+    print(format_enterprise_results(data))
+    print(f"\n--- 本次调用消耗 1 积分 ---")
+
+
+def cmd_enterprise_base(args):
+    """企业基本信息"""
+    params = {}
+    if args.id:
+        params["id"] = args.id
+    if args.uscc:
+        params["uscc"] = args.uscc
+    if not params:
+        print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
+        sys.exit(1)
+    use_cache = not args.no_cache
+    result, cached = api_get("/open/rh_enterpriseBaseInfo", params, use_cache=use_cache)
+    data = result.get("data", {})
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    print(f"\n--- 本次调用消耗 10 积分 ---")
+
+
+def cmd_enterprise_summary(args):
+    """企业聚合总览"""
+    body = {}
+    if args.id:
+        body["id"] = args.id
+    if args.uscc:
+        body["uscc"] = args.uscc
+    if not body:
+        print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
+        sys.exit(1)
+    use_cache = not args.no_cache
+    result, cached = api_post("/open/rh_enterpriseAggregationSummary", body, use_cache=use_cache)
+    data = result.get("data", {})
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    print(f"\n--- 本次调用消耗 10 积分 ---")
+
+
+def cmd_enterprise_list(args):
+    """企业分项列表查询"""
+    if args.type not in ENTERPRISE_LIST_TYPES:
+        print(f"未知类型: {args.type}", file=sys.stderr)
+        print(f"可用类型: {', '.join(ENTERPRISE_LIST_TYPES.keys())}", file=sys.stderr)
+        sys.exit(1)
+
+    endpoint, label = ENTERPRISE_LIST_TYPES[args.type]
+    params = {"page": args.page, "size": args.size}
+    if args.id:
+        params["id"] = args.id
+    if args.uscc:
+        params["uscc"] = args.uscc
+    if not args.id and not args.uscc:
+        print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
+        sys.exit(1)
+    use_cache = not args.no_cache
+    result, cached = api_get(endpoint, params, use_cache=use_cache)
+
+    raw = result.get("data")
+    if isinstance(raw, dict):
+        items = raw.get("lst", raw.get("list", []))
+        total = raw.get("total")
+        if total is not None:
+            print(f"共 {total} 条结果，当前第 {args.page} 页（每页 {args.size} 条）\n")
+    elif isinstance(raw, list):
+        items = raw
+    else:
+        items = []
+
+    print(format_enterprise_list_results(items, label))
+    cost = 10 if args.type in ("writ-agg", "writ-list") else 5
+    print(f"\n--- 本次调用消耗 {cost} 积分 ---")
+
+
 # ── 参数解析 ──────────────────────────────────────────────
 
 
@@ -712,6 +960,11 @@ def build_parser():
   %(prog)s case-detail --ah "（2025）桂09民终192号"
   %(prog)s regulation "数据安全"
   %(prog)s enterprise "华为"
+  %(prog)s hall-detect "根据《中华人民共和国数据保护法》第35条规定..."
+  %(prog)s enterprise-search "华为" --top-k 5
+  %(prog)s enterprise-base --uscc "9144030071526726XG"
+  %(prog)s enterprise-summary --uscc "9144030071526726XG"
+  %(prog)s enterprise-list --type writ-list --uscc "9144030071526726XG" --page 1 --size 10
 """
     )
     sub = parser.add_subparsers(dest="command")
@@ -850,6 +1103,45 @@ def build_parser():
     # ── strategy ──
     p = sub.add_parser("strategy", help="显示当前检索策略")
     p.set_defaults(func=cmd_strategy)
+
+    # ── hall-detect ──
+    p = sub.add_parser("hall-detect", help="法规/法条/案例幻觉检测")
+    p.add_argument("text", help="待检测文本")
+    p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
+    p.set_defaults(func=cmd_hall_detect)
+
+    # ── enterprise-search ──
+    p = sub.add_parser("enterprise-search", help="企业检索（轻量候选列表，1积分）")
+    p.add_argument("name", help="企业名称检索词")
+    p.add_argument("--top-k", type=int, help="返回条数上限（默认10，范围1-50）")
+    p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
+    p.set_defaults(func=cmd_enterprise_search)
+
+    # ── enterprise-base ──
+    p = sub.add_parser("enterprise-base", help="企业基本信息")
+    p.add_argument("--id", help="企业 ID")
+    p.add_argument("--uscc", help="统一社会信用代码")
+    p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
+    p.set_defaults(func=cmd_enterprise_base)
+
+    # ── enterprise-summary ──
+    p = sub.add_parser("enterprise-summary", help="企业聚合总览")
+    p.add_argument("--id", help="企业 ID")
+    p.add_argument("--uscc", help="统一社会信用代码")
+    p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
+    p.set_defaults(func=cmd_enterprise_summary)
+
+    # ── enterprise-list ──
+    p = sub.add_parser("enterprise-list", help="企业分项列表查询")
+    p.add_argument("--type", required=True,
+                   choices=list(ENTERPRISE_LIST_TYPES.keys()),
+                   help="查询类型")
+    p.add_argument("--id", help="企业 ID")
+    p.add_argument("--uscc", help="统一社会信用代码")
+    p.add_argument("--page", type=int, default=1, help="页码（默认 1）")
+    p.add_argument("--size", type=int, default=30, help="每页条数（默认 30）")
+    p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
+    p.set_defaults(func=cmd_enterprise_list)
 
     return parser
 

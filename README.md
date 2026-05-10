@@ -201,7 +201,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.5.4</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/trademark-assistant.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/patent-analysis/"><strong>patent-analysis</strong></a></td>
@@ -209,7 +209,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.2.0</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/code2patent/"><strong>code2patent</strong></a></td>
@@ -217,7 +217,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.4.2</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/code2patent.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/litigation-analysis/"><strong>litigation-analysis</strong></a></td>
@@ -273,7 +273,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.2.5</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/opc-legal-counsel.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/contract-copilot/"><strong>contract-copilot</strong></a></td>
@@ -281,7 +281,7 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.4.50</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
 </tr>
 </tbody>
 </table>
@@ -304,9 +304,9 @@
 <tbody>
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
-<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片引用保真、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
+<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片资产保真与正文插图克制、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v2.3.2</td>
+<td style="text-align:center">v2.3.3</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>
@@ -332,7 +332,7 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.1</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/de-ai-polish/"><strong>de-ai-polish</strong></a></td>
@@ -340,7 +340,7 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.0</td>
 <td style="text-align:center">杨卫薪</td>
-<td></td>
+<td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
 </tr>
 <tr>
 <td><a href="skills/video-compressor/"><strong>video-compressor</strong></a></td>
@@ -403,7 +403,7 @@
 </tr>
 <tr>
 <td><a href="skills/skill-lint/"><strong>skill-lint</strong></a></td>
-<td style="word-break:break-word">Skill 格式审查工具，基于 SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告</td>
+<td style="word-break:break-word">Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.3.0</td>
 <td style="text-align:center">杨卫薪</td>
@@ -440,9 +440,9 @@
 
 ## 📚 开发与编排指南
 
-- [SKILL-DEV-GUIDE.md](SKILL-DEV-GUIDE.md)：单个 Skill 的开发规范
-- [SKILL-ORCHESTRATION-GUIDE.md](SKILL-ORCHESTRATION-GUIDE.md)：多个 Skill 的协作编排规范
-- [SKILL-HANDOFF-GUIDE.md](SKILL-HANDOFF-GUIDE.md)：多个 Skill 之间的交接契约与 handoff package 规范
+- [SKILL-DEV-GUIDE.md](docs/SKILL-DEV-GUIDE.md)：单个 Skill 的开发规范
+- [SKILL-ORCHESTRATION-GUIDE.md](docs/SKILL-ORCHESTRATION-GUIDE.md)：多个 Skill 的协作编排规范
+- [SKILL-HANDOFF-GUIDE.md](docs/SKILL-HANDOFF-GUIDE.md)：多个 Skill 之间的交接契约与 handoff package 规范
 
 ---
 
