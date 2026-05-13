@@ -1,5 +1,15 @@
 # 变更日志
 
+## [1.3.3] - 2026-05-13
+
+### 新增
+- archive 归档记录新增 `source_urls` 字段：自动提取/构造法条、案例、法规、企业的来源链接，方便后续检索时提供核实出处
+- `backfill-urls` 子命令：一次性回填现有 archive 的 source_urls（已回填 36 个文件）
+
+### 改进
+- 法条语义检索（law_vector_search）和案例语义检索（case_vector_search）等无 URL 的接口，根据 fgid/scid 自动构造完整链接
+- 法条详情（rh_ft_detail）、案例关键词（rh_ptal_search）等返回相对 URL 的接口，归档时自动转为完整 URL
+
 ## [1.3.2] - 2026-05-10
 
 ### 新增

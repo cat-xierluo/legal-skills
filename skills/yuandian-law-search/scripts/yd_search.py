@@ -22,7 +22,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.3.2"
+CURRENT_VERSION = "1.3.3"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -117,6 +117,144 @@ def _archive_lookup(endpoint, payload):
     return None, None
 
 
+YD_BASE = "https://ydzk.chineselaw.com"
+
+
+def _normalize_url(raw):
+    """将相对 URL 转为完整 URL，已经是完整的直接返回"""
+    if not raw:
+        return None
+    if raw.startswith("http"):
+        return raw
+    return f"{YD_BASE}{raw}"
+
+
+def _enrich_source_urls(endpoint, response):
+    """从 API 响应中提取/构造来源 URL 列表"""
+    urls = []
+    if not isinstance(response, dict):
+        return urls
+
+    # ── 法条语义检索 law_vector_search ──
+    if endpoint == "/open/law_vector_search":
+        for item in _iter_items(response, "extra.fatiao"):
+            fgid = item.get("fgid", "")
+            num = item.get("num", "")
+            title = item.get("fgtitle", "")
+            if fgid:
+                url = f"{YD_BASE}/zxt/statuteDetail/detailPage/{fgid}"
+                if num:
+                    tid = num.replace("第", "").replace("条", "")
+                    url += f"?text={tid}"
+                urls.append({"title": f"{title} {num}", "type": "法条", "url": url})
+
+    # ── 法条详情 rh_ft_detail ──
+    elif endpoint == "/open/rh_ft_detail":
+        data = response.get("data")
+        if isinstance(data, dict):
+            raw = data.get("url", "")
+            url = _normalize_url(raw)
+            if url:
+                urls.append({"title": data.get("title", ""), "type": "法条", "url": url})
+
+    # ── 法条关键词检索 rh_ft_search ──
+    elif endpoint == "/open/rh_ft_search":
+        for item in _iter_items(response, "data"):
+            raw = item.get("url", "")
+            url = _normalize_url(raw)
+            if not url:
+                fgid = item.get("fgid", "")
+                if fgid:
+                    tid = item.get("tid", "")
+                    url = f"{YD_BASE}/zxt/statuteDetail/detailPage/{fgid}"
+                    if tid:
+                        url += f"?text={tid}"
+            if url:
+                urls.append({"title": item.get("title", item.get("ftmc", "")), "type": "法条", "url": url})
+
+    # ── 法规详情 rh_fg_detail ──
+    elif endpoint == "/open/rh_fg_detail":
+        data = response.get("data")
+        if isinstance(data, dict):
+            raw = data.get("url", "")
+            url = _normalize_url(raw)
+            fgid = data.get("id") or data.get("fgid", "")
+            if not url and fgid:
+                url = f"{YD_BASE}/zxt/statuteDetail/detailPage/{fgid}"
+            if url:
+                urls.append({"title": data.get("title", data.get("fgmc", "")), "type": "法规", "url": url})
+
+    # ── 案例语义检索 case_vector_search ──
+    elif endpoint == "/open/case_vector_search":
+        for item in _iter_items(response, "extra.wenshu"):
+            scid = item.get("scid", "")
+            if scid:
+                urls.append({
+                    "title": f"{item.get('title', '')}（{item.get('ah', '')}）",
+                    "type": "案例",
+                    "url": f"{YD_BASE}/ydzk/caseDetail/case/{scid}",
+                })
+
+    # ── 案例关键词检索 rh_ptal_search ──
+    elif endpoint == "/open/rh_ptal_search":
+        for item in _iter_items(response, "data.lst"):
+            raw = item.get("url", "")
+            url = _normalize_url(raw)
+            cid = item.get("id", "")
+            if not url and cid:
+                url = f"{YD_BASE}/ydzk/caseDetail/case/{cid}"
+            if url:
+                urls.append({
+                    "title": f"{item.get('title', '')}（{item.get('ah', '')}）",
+                    "type": "案例",
+                    "url": url,
+                })
+
+    # ── 案例详情 rh_case_details ──
+    elif endpoint == "/open/rh_case_details":
+        for item in _iter_items(response, "data"):
+            raw = item.get("url", "")
+            url = _normalize_url(raw)
+            if url:
+                urls.append({
+                    "title": f"{item.get('title', '')}（{item.get('ah', '')}）",
+                    "type": "案例",
+                    "url": url,
+                })
+
+    # ── 企业检索 rh_enterpriseSearch ──
+    elif endpoint == "/open/rh_enterpriseSearch":
+        for item in _iter_items(response, "data"):
+            raw = item.get("url", "")
+            url = _normalize_url(raw)
+            if url:
+                urls.append({"title": item.get("企业名称", ""), "type": "企业", "url": url})
+
+    # ── 企业基本信息 rh_enterpriseBaseInfo ──
+    elif endpoint == "/open/rh_enterpriseBaseInfo":
+        data = response.get("data")
+        if isinstance(data, dict):
+            raw = data.get("url", "")
+            url = _normalize_url(raw)
+            if url:
+                urls.append({"title": data.get("企业名称", ""), "type": "企业", "url": url})
+
+    return urls
+
+
+def _iter_items(response, dotpath):
+    """按 dotpath（如 'extra.fatiao'）从 response 中迭代列表"""
+    obj = response
+    for key in dotpath.split("."):
+        if isinstance(obj, dict):
+            obj = obj.get(key)
+        else:
+            return []
+    if isinstance(obj, list):
+        return obj
+    return []
+
+
 def _archive_save(endpoint, payload, response):
     """将查询和响应归档"""
     ARCHIVE_DIR.mkdir(exist_ok=True)
@@ -124,12 +262,15 @@ def _archive_save(endpoint, payload, response):
     filename = _make_archive_name(endpoint, payload)
     path = ARCHIVE_DIR / filename
 
+    source_urls = _enrich_source_urls(endpoint, response)
+
     record = {
         "id": filename.replace(".json", ""),
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "endpoint": endpoint,
         "query": payload,
         "fingerprint": fingerprint,
+        "source_urls": source_urls,
         "response": response,
     }
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2), "utf-8")
@@ -852,6 +993,46 @@ def cmd_archive_list(args):
         print()
 
 
+def cmd_backfill_urls(_args):
+    """回填现有 archive 记录的 source_urls"""
+    if not ARCHIVE_DIR.exists():
+        print("archive 目录不存在。")
+        return
+
+    files = sorted(ARCHIVE_DIR.glob("*.json"))
+    updated = 0
+    skipped = 0
+
+    for f in files:
+        if f.name == "version_check.json":
+            continue
+        try:
+            record = json.loads(f.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        endpoint = record.get("endpoint", "")
+        response = record.get("response", {})
+        existing = record.get("source_urls")
+
+        new_urls = _enrich_source_urls(endpoint, response)
+
+        if new_urls and new_urls != existing:
+            record["source_urls"] = new_urls
+            # 保持字段顺序：把 source_urls 放在 response 之前
+            ordered = {}
+            for k in ("id", "timestamp", "endpoint", "query", "fingerprint", "source_urls", "response"):
+                if k in record:
+                    ordered[k] = record[k]
+            f.write_text(json.dumps(ordered, ensure_ascii=False, indent=2), "utf-8")
+            updated += 1
+            print(f"  已更新: {f.name} ({len(new_urls)} 条 URL)")
+        else:
+            skipped += 1
+
+    print(f"\n完成: 更新 {updated} 个文件，跳过 {skipped} 个文件")
+
+
 def cmd_raw(args):
     """原始 JSON 输出（用于调试）"""
     body = {"query": args.query}
@@ -1141,6 +1322,10 @@ def build_parser():
     p.add_argument("--limit", type=int, default=20, help="显示条数（默认20）")
     p.set_defaults(func=cmd_archive_list)
 
+    # ── backfill-urls ──
+    p = sub.add_parser("backfill-urls", help="回填现有 archive 的 source_urls")
+    p.set_defaults(func=cmd_backfill_urls)
+
     # ── strategy ──
     p = sub.add_parser("strategy", help="显示当前检索策略")
     p.set_defaults(func=cmd_strategy)
@@ -1195,7 +1380,7 @@ def main():
         sys.exit(0)
 
     # 自动版本检测（check-update / do-update 子命令除外）
-    if args.command not in ("check-update", "do-update", "archive-list", "strategy"):
+    if args.command not in ("check-update", "do-update", "archive-list", "backfill-urls", "strategy"):
         try:
             _updater.check_for_update()
         except Exception:
