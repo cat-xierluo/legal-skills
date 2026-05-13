@@ -1,17 +1,5 @@
 {
   "permissions": {
-    "deny": [
-      "Bash(rm -rf /)",
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~)",
-      "Bash(rm -rf ~/*)",
-      "Bash(dd * of=/dev/*)",
-      "Bash(mkfs*)",
-      "Bash(git push --force * main*)",
-      "Bash(git push --force * master*)",
-      "Bash(git reset --hard*)",
-      "Bash(git clean -fdx*)"
-    ],
     "allow": [
       "Bash",
       "Read",
@@ -28,7 +16,22 @@
       "mcp__playwright",
       "mcp__MiniMax",
       "mcp__zai-mcp-server",
-      "mcp__pencil"
+      "mcp__pencil",
+      "Bash(rm -f '/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/skills/legal-proposal-generator/config/images/*')",
+      "Bash(unzip -o '/Users/maoking/Documents/Mac同步文件夹/工作文档/200 - 产品方案/团队成员.docx' word/media/* -d '/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/skills/legal-proposal-generator/config/images')",
+      "Bash(mv '/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/skills/legal-proposal-generator/config/images/word/media/*' '/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/skills/legal-proposal-generator/config/images/')"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(dd * of=/dev/*)",
+      "Bash(mkfs*)",
+      "Bash(git push --force * main*)",
+      "Bash(git push --force * master*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fdx*)"
     ]
   },
   "alwaysThinkingEnabled": true
