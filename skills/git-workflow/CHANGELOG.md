@@ -1,5 +1,16 @@
 # 变更日志
 
+## [1.1.0] - 2026-05-17
+
+### 新增
+
+- PR 正文最低要求：`Summary`、`Test plan`、`Agent Attribution`、`Issue/Task` 和风险说明。
+- Monorepo PR diff 检查清单：跨目录污染、大量删除、敏感配置、lockfile/schema/版本清单不一致时阻断合并。
+
+### 改进
+
+- `references/gh-cli-quickref.md` 增加 `gh pr diff --stat` 和 PR 模板缺失时的 fail-closed 提醒。
+
 ## [1.0.0] - 2026-05-17
 
 ### 新增

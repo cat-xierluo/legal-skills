@@ -44,10 +44,13 @@ gh pr review <number> --comment --body "评论"
 ```bash
 gh pr view <number> --json title,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName
 gh pr diff <number> --name-only
+gh pr diff <number> --stat
 gh pr checks <number>
 ```
 
 diff 不可读、checks 未知、review 不明确、PR 是 draft、mergeable 不明确或 diff 超范围时，不要 merge。
+
+PR 正文缺少 Summary、Test plan、Agent Attribution 或 Issue/Task 关联时，先要求补齐。Monorepo PR 如果出现跨目录污染、大量删除、敏感配置或版本清单不一致，不要 merge。
 
 ```bash
 gh pr merge <number> --squash        # Squash merge

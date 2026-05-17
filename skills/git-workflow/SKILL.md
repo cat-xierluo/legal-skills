@@ -2,7 +2,7 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.0"
+version: "1.1.0"
 license: MIT
 description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突等 Git 操作时自动触发。
 ---
@@ -211,6 +211,20 @@ EOF
 )"
 ```
 
+### PR 正文最低要求
+
+创建或审查 PR 时，正文至少包含：
+
+| 区块 | 要求 |
+|------|------|
+| `Summary` | 说明改了什么，避免只有“update files” |
+| `Test plan` | 列出已运行或未能运行的验证；未运行要写原因 |
+| `Agent Attribution` | 若由 Agent 完成，写明 Agent ID、Git author、触发来源 |
+| `Issue/Task` | 关联 GitHub Issue、`docs/ISSUES.md` Issue ID 或用户指定任务 |
+| `Risk` | 涉及迁移、删除、权限、安全、跨模块改动时说明风险和回退方式 |
+
+缺失 `Summary` 或 `Test plan` 时，不应 approve；缺失 `Agent Attribution` 时，要求补齐后再合并。
+
 ### PR 标题格式
 
 ```
@@ -251,6 +265,24 @@ gh pr checks <number>
 - `reviewDecision` 为 `CHANGES_REQUESTED`，或应有 review 但没有明确通过：不合并
 - `gh pr checks` 有失败、等待中、未知状态，或无法读取：不合并
 - `gh pr diff --name-only` 显示跨模块污染、误删大量文件、敏感配置文件：不合并
+
+### Monorepo PR Diff 检查清单
+
+对 Monorepo 或多 Skill 仓库，合并前必须检查文件范围：
+
+```bash
+gh pr diff <number> --name-only
+gh pr diff <number> --stat
+```
+
+阻断条件：
+- PR 声称只改一个模块，但 diff 涉及多个无关目录。
+- 出现大量 `deleted` 或目录整体删除，且 PR 正文没有解释。
+- 改动包含 `.env`、`config/secrets.*`、`credentials.json`、私钥或 token 文件。
+- lockfile、schema、迁移文件、生成物变化无法对应到 Summary / Test plan。
+- `README.md`、Marketplace 清单、版本号、CHANGELOG 中的版本不一致。
+
+处理方式：要求拆 PR、缩小 diff、补说明或补测试。不要用“看起来问题不大”替代文件级检查。
 
 ```bash
 # Squash merge（推荐）
