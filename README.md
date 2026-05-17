@@ -40,7 +40,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                   |
 | :--------- | :------- | :------------------------------------------------ | :----- | :----------------------------------------------------------------------------------------- |
-| 2026-05-17 | 新上传   | [git-workflow](skills/git-workflow/)               | v1.0.0 | 新增 Git 全流程工作流 Skill，覆盖分支、PR 合并、Monorepo 安全合并、冲突恢复和 Cherry-pick 安全规则 |
+| 2026-05-17 | 更新     | [git-workflow](skills/git-workflow/)               | v1.1.0 | 补齐 PR 正文最低要求和 Monorepo diff 检查清单，强化合并前 fail-closed 门禁 |
 | 2026-05-17 | 更新     | [skill-manager](skills/skill-manager/)             | v1.4.0 | 新增 Codex 目标目录识别，支持在 `/Users/maoking/.codex` 或包含 `.codex` 配置的项目中安装 Skill |
 | 2026-05-17 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.3.0 | 新增 SVG 转 PNG 高分辨率转换、补齐 MIT 许可证，并修复转换超时与浏览器进程关闭问题          |
 | 2026-05-17 | 新上传   | [article2book](skills/article2book/)                 | v1.0.0 | 正式发布内容资产再组织 Skill，支持成书、小册子、课程、系列文章、实务手册和知识库等形态判断 |
@@ -428,7 +428,7 @@
 <td><a href="skills/git-batch-commit/"><strong>git-batch-commit</strong></a></td>
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.0</td>
+<td style="text-align:center">v1.4.0</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>
@@ -436,7 +436,7 @@
 <td><a href="skills/git-workflow/"><strong>git-workflow</strong></a></td>
 <td style="word-break:break-word">Git 全流程工作流助手，覆盖分支创建、Monorepo 安全合并、PR 创建/审查/合并、合并冲突恢复、Cherry-pick 安全流程和常规 Git 操作规则</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">v1.1.0</td>
 <td style="text-align:center">杨卫薪</td>
 <td></td>
 </tr>
