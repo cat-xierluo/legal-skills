@@ -9,7 +9,7 @@
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
 [![Skills](https://img.shields.io/badge/Skills-42-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
-`<br/>`
+<br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
 [![Latest Update](https://img.shields.io/badge/Latest%20Update-2026--05--17-success)](#-最近更新的-skill)
 [![GitHub stars](https://img.shields.io/github/stars/cat-xierluo/legal-skills?style=social)](https://github.com/cat-xierluo/legal-skills/stargazers)
@@ -47,15 +47,14 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-05-18 | 更新     | [skill-manager](skills/skill-manager/)               | v1.5.0 | 新增远程 Skill 更新检测（版本对比 + Commit 对比）、安装元数据追踪（commit/branch/subpath）、更新摘要自动生成 |
+| 2026-05-17 | 更新     | [opc-legal-counsel](skills/opc-legal-counsel/)       | v0.2.6 | 新增法源与政策来源登记表，明确专项技能触发边界，修复评测版本一致性检查并补入 marketplace 索引       |
 | 2026-05-17 | 更新     | [git-workflow](skills/git-workflow/)                 | v1.1.0 | 补齐 PR 正文最低要求和 Monorepo diff 检查清单，强化合并前 fail-closed 门禁                         |
-| 2026-05-17 | 更新     | [skill-manager](skills/skill-manager/)               | v1.4.0 | 新增 Codex 目标目录识别，支持在 `/Users/maoking/.codex` 或包含 `.codex` 配置的项目中安装 Skill |
 | 2026-05-17 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.3.0 | 新增 SVG 转 PNG 高分辨率转换、补齐 MIT 许可证，并修复转换超时与浏览器进程关闭问题                  |
 | 2026-05-17 | 新上传   | [article2book](skills/article2book/)                 | v1.0.0 | 正式发布内容资产再组织 Skill，支持成书、小册子、课程、系列文章、实务手册和知识库等形态判断         |
 | 2026-05-17 | 更新     | [agent-email](skills/agent-email/)                   | v0.3.1 | 修复邮件命令参数组装、显示名和正文空格处理，并同步配置示例                                         |
 | 2026-05-16 | 新上传   | [project-init](skills/project-init/)                 | v1.0.0 | 新增项目类型检测、配置驱动、Skill 安装委托、项目文档模板和 Skill 项目脚手架                        |
 | 2026-05-15 | 更新     | [git-batch-commit](skills/git-batch-commit/)         | v1.4.0 | 将 Issue 与 PR 命名规范迁移到更合适的 Git 工作流 Skill，聚焦批量提交职责                           |
-| 2026-05-13 | 更新     | [yuandian-law-search](skills/yuandian-law-search/)   | v1.3.3 | 归档记录新增来源链接字段，并提供现有 archive 的 source_urls 回填能力                               |
-| 2026-05-10 | 正式发布 | [legal-qa-extractor](skills/legal-qa-extractor/)     | v1.1.0 | 从测试目录迁移至正式 skills 目录，新增配置模板、增量扫描和项目级聚合                               |
 
 ## 📋 项目概述
 
@@ -302,7 +301,7 @@
 <td>专业·顾问</td>
 <td style="word-break:break-word">面向一人公司/单人创业者的常年法律顾问技能，覆盖公司设立、股权架构、融资、合同、税务、AI 产品合规、劳动等全场景，自动判断地域、阶段与问题性质并路由</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.2.5</td>
+<td style="text-align:center">v0.2.6</td>
 <td><a href="https://github.com/cat-xierluo/opc-legal-counsel.skill">独立仓库</a></td>
 </tr>
 </tbody>
@@ -428,7 +427,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别 Codex、Claude Code 和 OpenClaw 目标目录并批量处理</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.0</td>
+<td style="text-align:center">v1.5.0</td>
 <td></td>
 </tr>
 <tr>
