@@ -290,6 +290,25 @@ Copyright (c) 2025 杨卫薪律师（微信ywxlaw）
 3. **联系支持**：如通过 PR 泄露，联系 GitHub 支持请求删除
 4. **检查 forks**：提醒用户检查是否有 fork 保留了旧历史
 
+## Monorepo 合并规范
+
+本项目的 Monorepo 仓库（如 private-skills、legal-skills）中，每个子目录是独立 Skill。
+
+**禁止 `git merge` 直接合并 feature 分支到 main**——feature 分支若从旧 commit 创建，直接合并会误删所有不在分支里的文件。
+
+正确做法：只 checkout 目标 Skill 目录的改动：
+
+```bash
+git checkout main && git pull origin main
+git checkout <feature-branch> -- <skill-directory>/
+git diff --cached --stat   # 确认只改了目标目录
+git commit -m "feat(<skill>): 描述"
+```
+
+涉及多个 Skill 时逐个目录 checkout，每个目录一个提交。合并后验证：`git diff HEAD~1 --stat` 确认无误删，`.gitignore` 和 `.env` 文件还在。
+
+若用 GitHub PR 合并，须先 rebase feature 分支到最新 main，确保 base commit 包含所有文件。
+
 ## Plugin Marketplace 配置规范
 
 ### 目录结构
@@ -430,6 +449,11 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.7.4 | 2026-05-15 | 新增通用 Monorepo 合并规范：禁止 git merge 直接合并，改用目录级 checkout |
+| v1.7.3 | 2026-05-14 | 统一私有 Skill 与 Customer Skill 的私有仓库和忽略规则说明 |
+| v1.7.2 | 2026-05-14 | 明确 custom-skills 与 private-skills 一样为独立私有 Git 仓库，不公开 |
+| v1.7.1 | 2026-05-14 | 精简 custom-skills 本地目录说明：与 private-skills 合并说明，移除业务服务场景表述 |
+| v1.7.0 | 2026-05-14 | 新增 custom-skills 本地目录规范：按二级项目文件夹组织，项目 Skill 放入项目内 skills/ |
 | v1.6.0 | 2026-04-11 | 强化依赖管理规范：新增"脚本依赖防护要求"（硬依赖 try/except + 安装提示、可选依赖降级标志）、"SKILL.md 依赖声明要求"（区分开箱即用/需安装功能、安装位置就近原则） |
 | v1.5.5 | 2026-03-24 | 新增 CC BY-NC 商用许可联系方式规范，统一联系方式 |
 | v1.5.4 | 2026-03-21 | 精简 SKILL.md frontmatter：删除 23 个技能的 source 字段，只保留 homepage（符合 ClawHub 规范：source/homepage 二选一）                 |
@@ -454,12 +478,11 @@ AI 代理在修改 AGENTS.md 时，必须：
 | v1.1.0 | 2026-01-07 | 精简文档结构：删除冗余的 `ROADMAP.md` 和 `JOURNAL.md`，保留核心文档 `DECISIONS.md`、`TASKS.md`、`CHANGELOG.md` |
 | v1.0.0 | 2026-01-07 | 初始版本，定义法律技能项目的核心协作规范：技能导向、文档即上下文、透明变更、目录约定、标准作业流程及安全合规要求         |
 
-## 私有项目说明（仅本地生效）
+## 私有目录说明（仅本地生效）
 
-`private-skills/` 目录是本项目的符号链接，指向 `../private-skills`，它是一个**独立的 Git 仓库**（不公开）。所有子项目的忽略规则统一由 `private-skills/.gitignore` 管理。
+私有 Skill（`private-skills/`）与 Customer Skill（`custom-skills/`）均为本地私有符号链接目录，指向独立私有 Git 仓库（不公开），不作为公开发布目录；公开发布的正式技能仍以 `skills/` 和 marketplace 配置为准。
 
-**操作注意事项**：
-
-- 所有子项目的 `.gitignore` 规则统一写在 `private-skills/.gitignore` 中
-- Git 操作需要在该符号链接指向的实际目录（`../private-skills/`）中执行
-- 避免在 legal-skills 仓库中提交 private-skills 的内容
+- `private-skills/` 指向 `../private-skills`
+- `custom-skills/` 指向 `../custom-skills`，按二级项目文件夹组织，项目相关 Skill 放在该项目文件夹内的 `skills/` 目录
+- 两类私有仓库的忽略规则保持一致，在各自实际仓库的 `.gitignore` 中维护
+- 避免在 legal-skills 仓库中提交这两个目录的内容；需要做 Git 操作时，在符号链接指向的实际目录执行
