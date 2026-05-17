@@ -1,0 +1,127 @@
+---
+name: svg-book-illustrator
+homepage: https://github.com/cat-xierluo/legal-skills
+author: 杨卫薪律师（微信ywxlaw）
+version: "1.3.0"
+license: MIT
+description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
+---
+
+# SVG Book Illustrator
+
+为书籍章节和正式文章生成简洁专业的 SVG 技术配图。
+
+> 本 Skill 生成**静态 SVG**，直接嵌入 Markdown 文件（`<svg>` 标签），风格为白底简洁专业风，适合纸质出版。
+
+## 快速开始
+
+```
+/svg-book-illustrator @path/to/chapter.md
+```
+
+## 核心工作流程
+
+### 第一阶段：分析章节，规划插图
+
+1. 读取章节 Markdown 文件
+2. 如果 `references/diagram-catalog.md` 有当前章节的预定义插图，匹配之
+3. 扫描章节内容，识别适合配图的位置：
+   - 架构描述处（"X 层"、"体系"、"架构"等）
+   - 流程描述处（"步骤"、"流程"、"阶段"等）
+   - 对比描述处（"vs"、"对比"、"前后"等）
+   - 层次描述处（"层级"、"分类"、"金字塔"等）
+   - 循环描述处（"循环"、"迭代"、"闭环"等）
+   - 生态/关系描述处（"生态"、"要素"、"关系"等）
+4. 在合适位置插入占位符 `[[FIG:N:简要描述]]`（N 从 1 开始编号）
+5. 列出所有规划的插图（类型、位置、描述），除非用户明确要求先确认，否则继续生成 SVG
+
+**插图密度**：每章 3-8 张，宁精勿滥。优先覆盖 P0 核心插图。
+
+### 第二阶段：生成 SVG
+
+完成插图规划后，逐张生成：
+
+1. 根据插图描述选择布局模板（flow / layer / matrix / hub / tree / cycle，或组合模板）
+2. 读取 `references/layout-templates.md` 获取模板规范
+3. 按 `references/style-guide.md` 的设计规范生成 SVG 代码
+4. 将 `<svg>` 标签嵌入 Markdown，替换对应占位符
+5. 在 SVG 下方添加图注：`**图 N-X：图标题**`
+
+### 第三阶段：归档
+
+生成完成后，提取所有 SVG 到独立文件：
+
+```bash
+python scripts/extract_svgs.py path/to/chapter.md --output output/figures/
+```
+
+---
+
+## 布局模板
+
+8 种布局模板（6 种基础 + 2 种组合），详见 `references/layout-templates.md`。
+
+| 模板 | 适用场景 | 典型元素数 |
+|------|---------|-----------|
+| **flow** | 流程图、步骤图、管道图 | 3-5 个节点（水平≤4） |
+| **layer** | 层次架构、分层堆叠 | 3-4 层 |
+| **matrix** | 前后对比、并排比较 | 2 列 |
+| **hub** | 中心辐射、生态关系 | 1 核心 + 4-8 外围 |
+| **tree** | 层级结构、组织图、金字塔 | 3 层 |
+| **cycle** | 循环流程、迭代闭环 | 4-6 个节点 |
+| **flow+matrix** | 递进流程附带阶段对比 | 3-4 阶段 + 对比区 |
+| **flow+hub** | 编排流程中节点展开 | 主流程 + 展开节点 |
+
+---
+
+## 设计规范
+
+详见 `references/style-guide.md`。核心要点：
+
+- **画布**：720x400，白底，安全边距 40px（基于 16开 115mm 通栏物理尺寸推算）
+- **风格**：简洁、专业、静态（无动画、无渐变、无滤镜、无 emoji）
+- **颜色**：深灰线条 + 单一强调色（每图一个）
+- **文字**：PingFang SC / Microsoft YaHei，节点标签 18px 起（16开 115mm 通栏下物理 2.88mm = 8.2pt）
+- **形状**：圆角矩形（rx="6"）、简洁箭头、最小 24px 间距
+- **印刷**：黑白可辨，颜色不是唯一区分手段
+
+---
+
+## 插图目录
+
+`references/diagram-catalog.md` 定义插图目录格式和创建方法。
+
+---
+
+## PNG 导出
+
+出版社通常需要位图版本。使用 `scripts/svg2png.js` 将 SVG 转为高分辨率 PNG：
+
+```bash
+# 单张转换（默认 600 DPI）
+node scripts/svg2png.js input.svg
+
+# 指定输出文件和 DPI
+node scripts/svg2png.js input.svg output.png 300
+
+# 批量转换目录下所有 SVG
+find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
+```
+
+**依赖**：PNG 导出功能需要 Puppeteer 和 Chrome/Chromium。首次使用前运行：`npm install puppeteer`
+
+**印刷 DPI 建议**：
+- 300 DPI：最低印刷要求
+- 600 DPI：推荐，清晰锐利
+- 1200 DPI：线条图最高质量
+
+---
+
+## 成功标准
+
+- 每张图只表达 1-2 个核心概念
+- 架构图层次清晰，流程图逻辑通顺
+- 风格简洁专业，无装饰性元素
+- SVG 在 Markdown 预览中正确渲染
+- 图注格式统一：**图 N-X：标题**
+- 印刷友好：16开 115mm 通栏下文字 ≥8pt 清晰可读，黑白打印可辨
