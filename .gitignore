@@ -14,9 +14,8 @@ templates/
 .claude/*.json
 !.claude/settings.local.json
 
-# Codex CLI config - keep AGENTS.md, ignore runtime files
-.codex/*.json
-!.codex/AGENTS.md
+# Agent config - keep skills symlink, ignore runtime files
+.agents/*.json
 **/DECISIONS.md
 **/TASKS.md
 !skills/article2book/DECISIONS.md
