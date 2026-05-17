@@ -13,6 +13,10 @@ templates/
 .claude/plans/
 .claude/*.json
 !.claude/settings.local.json
+
+# Codex CLI config - keep AGENTS.md, ignore runtime files
+.codex/*.json
+!.codex/AGENTS.md
 **/DECISIONS.md
 **/TASKS.md
 !skills/article2book/DECISIONS.md
