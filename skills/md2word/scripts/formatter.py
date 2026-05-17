@@ -118,8 +118,15 @@ def parse_text_formatting(paragraph, text, title_level=0, is_quote=False):
         (r'__(.*?)__', {'bold': True}),
         (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
         (r'(?<!_)_([^_\n]+?)_(?!_)', {'italic': True}),
+        (r'<strong>(.*?)</strong>', {'bold': True}),
+        (r'<b>(.*?)</b>', {'bold': True}),
+        (r'<em>(.*?)</em>', {'italic': True}),
+        (r'<i>(.*?)</i>', {'italic': True}),
         (r'<u>(.*?)</u>', {'underline': True}),
         (r'~~(.*?)~~', {'strikethrough': True}),
+        (r'<s>(.*?)</s>', {'strikethrough': True}),
+        (r'<del>(.*?)</del>', {'strikethrough': True}),
+        (r'<strike>(.*?)</strike>', {'strikethrough': True}),
         (r'`([^`\n]+)`', {'code': True}),
         (r'\$([^$\n]+?)\$', {'math': True}),  # LaTeX数学公式支持
     ]

@@ -22,6 +22,7 @@ from docx.oxml.ns import qn
 from docx.oxml import parse_xml
 from docx.oxml.shared import OxmlElement
 from PIL import Image
+from bs4 import BeautifulSoup
 
 # 导入配置模块
 from config import Config, load_config, get_preset, get_default_preset, list_presets, get_config, set_config
@@ -480,7 +481,10 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     except UnicodeDecodeError:
         with open(md_file_path, 'r', encoding='gbk') as f:
             content = f.read()
-    
+
+    # 去除 HTML 注释，避免渲染到 Word 文档中
+    content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+
     lines = content.split('\n')
     has_body_before_first_h2 = False
     has_seen_h2 = False
@@ -548,6 +552,48 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 create_word_table_from_html(doc, '\n'.join(html_table_content), md_file_path)
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
+            continue
+
+        # HTML 块级元素（<div>, <p> 等）
+        html_block_match = re.match(r'^<(div|p)\b([^>]*)>', line, re.IGNORECASE)
+        if html_block_match:
+            tag_name = html_block_match.group(1).lower()
+            close_tag = f'</{tag_name}>'
+            style_attr = html_block_match.group(2)
+            html_lines = [line]
+            # 如果闭合标签在同一行
+            if close_tag in line.lower():
+                pass
+            else:
+                while i + 1 < len(lines):
+                    i += 1
+                    html_lines.append(lines[i])
+                    if close_tag in lines[i].lower():
+                        break
+            # 提取内容
+            block_html = '\n'.join(html_lines)
+            soup_html = BeautifulSoup(block_html, 'html.parser')
+            element = soup_html.find(tag_name)
+            if element:
+                text_content = element.get_text(separator='\n').strip()
+                # 解析 text-align 样式
+                align_style = re.search(r'text-align\s*:\s*(left|center|right|justify)', style_attr, re.IGNORECASE)
+                alignment = None
+                if align_style:
+                    alignment = parse_alignment(align_style.group(1).lower())
+                # 处理块内每一行
+                for text_line in text_content.split('\n'):
+                    text_line = text_line.strip()
+                    if not text_line:
+                        continue
+                    p = doc.add_paragraph()
+                    parse_text_formatting(p, text_line)
+                    set_paragraph_format(p)
+                    if alignment is not None:
+                        p.paragraph_format.alignment = alignment
+                    if not has_seen_h2:
+                        has_body_before_first_h2 = True
+            i += 1
             continue
         
         # Markdown 表格

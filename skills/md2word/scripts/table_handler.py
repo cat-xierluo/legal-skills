@@ -252,6 +252,13 @@ def contains_markdown_formatting(text):
         r'__.*?__',          # 加粗
         r'_.*?_',            # 斜体
         r'<u>.*?</u>',       # 下划线
+        r'<strong>.*?</strong>',  # HTML 加粗
+        r'<b>.*?</b>',       # HTML 加粗
+        r'<em>.*?</em>',     # HTML 斜体
+        r'<i>.*?</i>',       # HTML 斜体
+        r'<s>.*?</s>',       # HTML 删除线
+        r'<del>.*?</del>',   # HTML 删除线
+        r'<strike>.*?</strike>',  # HTML 删除线
         r'~~.*?~~',          # 删除线
         r'`.*?`',            # 行内代码
         r'<br\s*/?>',       # 换行标签
@@ -296,8 +303,15 @@ def parse_table_cell_formatting(cell, text, is_header=False):
         (r'__(.*?)__', {'bold': True}),
         (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
         (r'(?<!_)_([^_\n]+?)_(?!_)', {'italic': True}),
+        (r'<strong>(.*?)</strong>', {'bold': True}),
+        (r'<b>(.*?)</b>', {'bold': True}),
+        (r'<em>(.*?)</em>', {'italic': True}),
+        (r'<i>(.*?)</i>', {'italic': True}),
         (r'<u>(.*?)</u>', {'underline': True}),
         (r'~~(.*?)~~', {'strikethrough': True}),
+        (r'<s>(.*?)</s>', {'strikethrough': True}),
+        (r'<del>(.*?)</del>', {'strikethrough': True}),
+        (r'<strike>(.*?)</strike>', {'strikethrough': True}),
         (r'`([^`\n]+)`', {'code': True}),
         (r'\$([^$\n]+?)\$', {'math': True}),  # LaTeX数学公式支持
     ]
@@ -337,9 +351,13 @@ def set_table_run_format(run, formats, is_header=False):
 
     # 设置字体映射：英文和数字用Times New Roman，中文用配置的字体
     run._element.rPr.rFonts.set(qn('w:ascii'), 'Times New Roman')
-    run._element.rPr.rFonts.set(qn('w:hAnsi'), 'Times New Roman')
     run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
     run._element.rPr.rFonts.set(qn('w:cs'), 'Times New Roman')
+    # 对含 emoji/symbol 的文本使用覆盖更广的字体
+    if _contains_symbol_chars(run.text or ''):
+        run._element.rPr.rFonts.set(qn('w:hAnsi'), 'Segoe UI Symbol')
+    else:
+        run._element.rPr.rFonts.set(qn('w:hAnsi'), 'Times New Roman')
 
     # 应用Markdown格式
     if formats.get('bold', False):
@@ -412,19 +430,33 @@ def set_table_cell_format(cell, is_header=False):
 
 
 def adjust_table_column_width(table):
-    """调整表格列宽"""
+    """基于 P80 百分位按比例分配列宽（Markdown 表格）"""
     try:
-        # 获取表格总宽度（页面宽度减去页边距）
-        available_width = Cm(21.0 - 3.18 * 2)  # A4宽度减去左右页边距
-
-        # 平均分配列宽
+        config = get_config()
         col_count = len(table.columns)
-        if col_count > 0:
-            col_width = int(available_width / col_count)  # 转换为整数
-            for column in table.columns:
-                column.width = col_width
-    except Exception as e:
-        print(f"⚠️  表格列宽调整失败: {e}")
+        if col_count == 0:
+            return
+
+        # 收集每列每个单元格的内容长度
+        cell_lengths = {i: [] for i in range(col_count)}
+        seen = set()
+        for row in table.rows:
+            for ci, cell in enumerate(row.cells):
+                if ci >= col_count:
+                    continue
+                cell_id = id(cell._tc)
+                if cell_id in seen:
+                    continue
+                seen.add(cell_id)
+                text = cell.text.strip()
+                content_len = sum(2.0 if ord(c) > 127 else 1.0 for c in text)
+                cell_lengths[ci].append(content_len)
+
+        widths_cm = _calc_column_widths(cell_lengths, col_count, config)
+        for i, w in enumerate(widths_cm):
+            table.columns[i].width = Cm(w)
+    except Exception:
+        pass
 
 
 def parse_html_table(html_content):
@@ -486,9 +518,27 @@ def _populate_cell_with_rich_content(cell_element, word_cell, md_file_path=None)
                         print(f"⚠️  表格图片插入失败: {e}")
         return
 
-    # 处理文本内容：逐行解析，支持 Markdown 粗体、列表等
+    # 处理文本内容：逐行解析，支持 Markdown 粗体、HTML 内联标签、列表等
     raw_text = cell_element.decode_contents()
+    # 先将 <br> 标签转为换行符，确保 HTML 表格中的换行生效
+    raw_text = re.sub(r'<br\s*/?>|</br>', '\n', raw_text, flags=re.IGNORECASE)
     lines = raw_text.strip().split('\n')
+
+    # HTML 内联标签格式模式
+    html_format_patterns = [
+        (r'\*\*\*(.*?)\*\*\*', {'bold': True, 'italic': True}),
+        (r'\*\*(.*?)\*\*', {'bold': True}),
+        (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
+        (r'<strong>(.*?)</strong>', {'bold': True}),
+        (r'<b>(.*?)</b>', {'bold': True}),
+        (r'<em>(.*?)</em>', {'italic': True}),
+        (r'<i>(.*?)</i>', {'italic': True}),
+        (r'<u>(.*?)</u>', {'underline': True}),
+        (r'<s>(.*?)</s>', {'strikethrough': True}),
+        (r'<del>(.*?)</del>', {'strikethrough': True}),
+        (r'<strike>(.*?)</strike>', {'strikethrough': True}),
+        (r'~~(.*?)~~', {'strikethrough': True}),
+    ]
 
     for line_idx, line in enumerate(lines):
         line_stripped = line.strip()
@@ -506,25 +556,34 @@ def _populate_cell_with_rich_content(cell_element, word_cell, md_file_path=None)
             run = current_paragraph.add_run('• ')
             run.font.size = Pt(font_size)
 
-        # 处理带 **粗体** 的文本
-        parts = re.split(r'(\*\*.*?\*\*)', line_stripped)
-        for part in parts:
-            if part.startswith('**') and part.endswith('**'):
-                run = current_paragraph.add_run(convert_quotes_to_chinese(part[2:-2]))
-                run.bold = True
+        # 使用 parse_formatted_text 处理混合格式
+        from formatter import parse_formatted_text
+        text_parts = parse_formatted_text(line_stripped, html_format_patterns)
+        for part_text, formats in text_parts:
+            if part_text:
+                run = current_paragraph.add_run(convert_quotes_to_chinese(part_text))
                 run.font.size = Pt(font_size)
                 run.font.name = font_config.get('ascii', 'Times New Roman')
                 run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
-            elif part:
-                run = current_paragraph.add_run(convert_quotes_to_chinese(part))
-                run.font.size = Pt(font_size)
-                run.font.name = font_config.get('ascii', 'Times New Roman')
-                run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+                # 对含 emoji/symbol 的文本设置兼容字体
+                if _contains_symbol_chars(part_text):
+                    run._element.rPr.rFonts.set(qn('w:hAnsi'), 'Segoe UI Symbol')
+                if formats.get('bold'):
+                    run.font.bold = True
+                if formats.get('italic'):
+                    run.font.italic = True
+                if formats.get('underline'):
+                    run.font.underline = True
+                if formats.get('strikethrough'):
+                    run.font.strike = True
 
 
 def create_word_table_from_html(doc, html_content, md_file_path=None):
-    """从HTML表格创建Word表格，支持图片和富文本"""
+    """从HTML表格创建Word表格，支持合并单元格(colspan/rowspan)、边框和列宽优化"""
     try:
+        # 去除 HTML 注释
+        html_content = re.sub(r'<!--.*?-->', '', html_content, flags=re.DOTALL)
+
         soup = BeautifulSoup(html_content, 'html.parser')
         html_table = soup.find('table')
         if not html_table:
@@ -536,68 +595,245 @@ def create_word_table_from_html(doc, html_content, md_file_path=None):
             print("⚠️  HTML表格无有效行")
             return
 
-        # 获取表格配置
         config = get_config()
         table_config = config.get('table', {})
 
-        # 创建Word表格
-        table = doc.add_table(rows=len(rows), cols=len(rows[0].find_all(['td', 'th'])))
+        # ── 第一步：解析网格结构，处理 colspan / rowspan ──
+        occupancy = {}  # (row, col) -> cell_info
+        row_cells_list = []
 
-        # 设置表格对齐方式
+        for ri, tr in enumerate(rows):
+            cells = tr.find_all(['td', 'th'])
+            col_idx = 0
+            current_row_cells = []
+
+            for cell in cells:
+                # 跳过被上方 rowspan 占据的列
+                while (ri, col_idx) in occupancy:
+                    col_idx += 1
+
+                colspan = int(cell.get('colspan', 1))
+                rowspan = int(cell.get('rowspan', 1))
+
+                cell_info = {
+                    'element': cell,
+                    'colspan': colspan,
+                    'rowspan': rowspan,
+                    'is_header': cell.name == 'th',
+                    'origin_row': ri,
+                    'origin_col': col_idx,
+                }
+                current_row_cells.append(cell_info)
+
+                # 标记合并区域的所有位置
+                for dr in range(rowspan):
+                    for dc in range(colspan):
+                        occupancy[(ri + dr, col_idx + dc)] = cell_info
+
+                col_idx += colspan
+
+            row_cells_list.append(current_row_cells)
+
+        if not occupancy:
+            return
+
+        num_rows = max(r for (r, _) in occupancy) + 1
+        num_cols = max(c for (_, c) in occupancy) + 1
+
+        # ── 第二步：创建 Word 表格 ──
+        table = doc.add_table(rows=num_rows, cols=num_cols)
+
         alignment_map = {
             'left': WD_TABLE_ALIGNMENT.LEFT,
             'center': WD_TABLE_ALIGNMENT.CENTER,
-            'right': WD_TABLE_ALIGNMENT.RIGHT
+            'right': WD_TABLE_ALIGNMENT.RIGHT,
         }
-        table.alignment = alignment_map.get(table_config.get('alignment', 'center').lower(), WD_TABLE_ALIGNMENT.CENTER)
+        table.alignment = alignment_map.get(
+            table_config.get('alignment', 'center').lower(), WD_TABLE_ALIGNMENT.CENTER
+        )
 
-        # 设置垂直对齐
+        # ── 第三步：合并单元格 ──
+        for row_cells in row_cells_list:
+            for ci in row_cells:
+                if ci['colspan'] > 1 or ci['rowspan'] > 1:
+                    table.cell(ci['origin_row'], ci['origin_col']).merge(
+                        table.cell(
+                            ci['origin_row'] + ci['rowspan'] - 1,
+                            ci['origin_col'] + ci['colspan'] - 1,
+                        )
+                    )
+
+        # ── 第四步：设置边框和内边距 ──
+        _apply_table_borders(table, table_config)
+        _apply_table_cell_margins(table, table_config)
+
         vertical_align_map = {
             'top': WD_ALIGN_VERTICAL.TOP,
             'center': WD_ALIGN_VERTICAL.CENTER,
-            'bottom': WD_ALIGN_VERTICAL.BOTTOM
+            'bottom': WD_ALIGN_VERTICAL.BOTTOM,
         }
 
-        # 处理每一行
-        for i, tr in enumerate(rows):
-            cells = tr.find_all(['td', 'th'])
-            if i >= len(table.rows):
-                break
-            word_row = table.rows[i]
-            for j, td in enumerate(cells):
-                if j >= len(word_row.cells):
-                    break
-                word_cell = word_row.cells[j]
+        # ── 第五步：填充内容并设置格式 ──
+        header_bg_color = config.get('table.header', {}).get('background_color')
 
-                # 根据 HTML valign 属性设置垂直对齐
-                valign_attr = td.get('valign', 'center')
-                word_cell.vertical_alignment = vertical_align_map.get(valign_attr, WD_ALIGN_VERTICAL.CENTER)
+        for row_cells in row_cells_list:
+            for ci in row_cells:
+                word_cell = table.cell(ci['origin_row'], ci['origin_col'])
 
-                # 根据 HTML width 属性设置列宽
-                width_attr = td.get('width')
-                if width_attr:
-                    try:
-                        width_cm = int(width_attr) / 96 * 2.54  # px to cm
-                        word_cell.width = Cm(width_cm)
-                    except (ValueError, TypeError):
-                        pass
+                valign_attr = ci['element'].get('valign', 'center')
+                word_cell.vertical_alignment = vertical_align_map.get(
+                    valign_attr, WD_ALIGN_VERTICAL.CENTER
+                )
 
-                # 填充单元格内容
-                _populate_cell_with_rich_content(td, word_cell, md_file_path)
+                _populate_cell_with_rich_content(ci['element'], word_cell, md_file_path)
 
-                # 设置单元格格式
-                set_table_cell_format(word_cell, is_header=(td.name == 'th'))
-
-                # 设置段落格式
                 for para in word_cell.paragraphs:
                     pf = para.paragraph_format
                     pf.line_spacing = table_config.get('line_spacing', 1.2)
                     pf.space_before = Pt(2)
                     pf.space_after = Pt(2)
+                    if ci['is_header'] or ci['colspan'] > 1:
+                        para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
-        print(f"✅ 处理HTML表格: {len(rows)} 行")
+                if ci['is_header'] and header_bg_color:
+                    set_cell_background_color(word_cell, header_bg_color)
+
+        # ── 第六步：优化列宽 ──
+        _optimize_html_table_widths(table, num_cols, row_cells_list, config)
+
+        print(f"✅ 处理HTML表格: {num_rows} 行 x {num_cols} 列")
     except Exception as e:
         print(f"⚠️  HTML表格处理失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _apply_table_borders(table, table_config):
+    """为表格添加边框"""
+    border_enabled = table_config.get('border_enabled', True)
+    if not border_enabled:
+        return
+    border_color = table_config.get('border_color', '#000000').lstrip('#')
+    border_width = table_config.get('border_width', 4)
+    try:
+        tbl = table._tbl
+        borders_xml = (
+            f'<w:tblBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:top w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'<w:left w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'<w:bottom w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'<w:right w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'<w:insideH w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'<w:insideV w:val="single" w:sz="{border_width}" w:space="0" w:color="{border_color}"/>'
+            f'</w:tblBorders>'
+        )
+        tbl.tblPr.append(parse_xml(borders_xml))
+    except Exception:
+        pass
+
+
+def _apply_table_cell_margins(table, table_config):
+    """为表格设置单元格内边距"""
+    cell_margin = table_config.get('cell_margin', {})
+    try:
+        tbl = table._tbl
+        top = cell_margin.get('top', 30)
+        bottom = cell_margin.get('bottom', 30)
+        left = cell_margin.get('left', 60)
+        right = cell_margin.get('right', 60)
+        cell_margins_xml = (
+            f'<w:tblCellMar xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:top w:w="{top}" w:type="dxa"/>'
+            f'<w:left w:w="{left}" w:type="dxa"/>'
+            f'<w:bottom w:w="{bottom}" w:type="dxa"/>'
+            f'<w:right w:w="{right}" w:type="dxa"/>'
+            f'</w:tblCellMar>'
+        )
+        tbl.tblPr.append(parse_xml(cell_margins_xml))
+    except Exception:
+        pass
+
+
+def _calc_column_widths(cell_lengths_per_col, num_cols, config):
+    """基于每列单元格内容长度的百分位数，按比例分配列宽。
+
+    核心思路：用 P80（第 80 百分位）衡量每列"典型单元格有多长"，
+    而非 SUM（被大量短单元格撑大）或 MAX（被单个异常值拉高）。
+    P80 高的列说明"大多数单元格都很长"，应给更多宽度以减少折行。
+    """
+    page_config = config.get('page', {})
+    page_width = page_config.get('width', 21.0)
+    margin_left = page_config.get('margin_left', 3.18)
+    margin_right = page_config.get('margin_right', 3.18)
+    available_cm = page_width - margin_left - margin_right
+
+    MIN_CM = 0.8
+
+    # 计算每列的 P80 内容长度
+    col_weights = []
+    for i in range(num_cols):
+        lengths = cell_lengths_per_col.get(i, [])
+        if not lengths:
+            col_weights.append(0.0)
+        else:
+            lengths_sorted = sorted(lengths)
+            p80_idx = int(len(lengths_sorted) * 0.8)
+            col_weights.append(lengths_sorted[min(p80_idx, len(lengths_sorted) - 1)])
+
+    total_weight = sum(col_weights) or 1.0
+    total_min = MIN_CM * num_cols
+    extra_cm = max(0, available_cm - total_min)
+
+    widths_cm = []
+    for w in col_weights:
+        widths_cm.append(MIN_CM + extra_cm * w / total_weight)
+
+    # 缩放确保不超页面
+    if sum(widths_cm) > available_cm:
+        scale = available_cm / sum(widths_cm)
+        widths_cm = [w * scale for w in widths_cm]
+
+    return widths_cm
+
+
+def _optimize_html_table_widths(table, num_cols, row_cells_list, config):
+    """HTML 表格列宽优化"""
+    try:
+        # 收集每列所有单元格的内容长度
+        cell_lengths = {}
+        for row_cells in row_cells_list:
+            for ci in row_cells:
+                text = ci['element'].get_text(strip=True)
+                content_len = sum(2.0 if ord(c) > 127 else 1.0 for c in text)
+                colspan = ci['colspan']
+                origin_c = ci['origin_col']
+                if colspan == 1:
+                    cell_lengths.setdefault(origin_c, []).append(content_len)
+                else:
+                    per_col = content_len / colspan
+                    for dc in range(colspan):
+                        idx = origin_c + dc
+                        if idx < num_cols:
+                            cell_lengths.setdefault(idx, []).append(per_col)
+
+        widths_cm = _calc_column_widths(cell_lengths, num_cols, config)
+        for i, w in enumerate(widths_cm):
+            table.columns[i].width = Cm(w)
+    except Exception:
+        pass
+
+
+def _contains_symbol_chars(text):
+    """检查文本是否包含 emoji 或特殊 Unicode 符号"""
+    for c in text:
+        cp = ord(c)
+        if 0x2600 <= cp <= 0x27BF:  # Misc Symbols + Dingbats
+            return True
+        if 0x1F000 <= cp <= 0x1FFFF:  # Emoji
+            return True
+        if 0x2700 <= cp <= 0x27BF:  # Dingbats
+            return True
+    return False
 
 
 def hex_to_rgb(hex_color: str):
