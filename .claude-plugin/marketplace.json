@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -139,8 +139,8 @@
     },
     {
       "name": "skill-manager",
-      "description": "管理 Claude Skills 和 Commands 的安装、同步、卸载和列表查看",
-      "version": "1.1.0",
+      "description": "管理 Claude Code、Codex 和 OpenClaw Skills/Commands 的安装、同步、卸载和列表查看",
+      "version": "1.4.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -158,6 +158,17 @@
       "source": "skills/git-batch-commit",
       "category": "developer-tools",
       "tags": ["git", "commit", "automation"]
+    },
+    {
+      "name": "git-workflow",
+      "description": "Git 全流程工作流助手，覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决和 Cherry-pick 安全流程",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/git-workflow",
+      "category": "developer-tools",
+      "tags": ["git", "workflow", "pull-request", "merge"]
     },
     {
       "name": "multi-search",
