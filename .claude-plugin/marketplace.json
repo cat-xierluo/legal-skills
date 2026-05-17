@@ -25,7 +25,7 @@
       },
       "source": "skills/legal-text-format",
       "category": "productivity",
-      "tags": ["legal", "formatting", "markdown"]
+      "tags": ["通用", "文书", "legal", "formatting"]
     },
     {
       "name": "legal-qa-extractor",
@@ -36,7 +36,7 @@
       },
       "source": "skills/legal-qa-extractor",
       "category": "productivity",
-      "tags": ["legal", "qa", "knowledge", "consultation"]
+      "tags": ["通用", "文书", "legal", "qa", "knowledge"]
     },
     {
       "name": "wechat-article-fetch",
@@ -47,7 +47,7 @@
       },
       "source": "skills/wechat-article-fetch",
       "category": "productivity",
-      "tags": ["wechat", "scraper", "markdown"]
+      "tags": ["工具", "搜索", "wechat", "scraper"]
     },
     {
       "name": "mineru-ocr",
@@ -58,7 +58,7 @@
       },
       "source": "skills/mineru-ocr",
       "category": "productivity",
-      "tags": ["ocr", "pdf", "conversion"]
+      "tags": ["工具", "OCR", "pdf", "conversion"]
     },
     {
       "name": "funasr-transcribe",
@@ -69,7 +69,7 @@
       },
       "source": "skills/funasr-transcribe",
       "category": "productivity",
-      "tags": ["transcription", "audio", "video"]
+      "tags": ["工具", "ASR", "transcription", "audio"]
     },
     {
       "name": "course-generator",
@@ -80,7 +80,7 @@
       },
       "source": "skills/course-generator",
       "category": "productivity",
-      "tags": ["course", "education", "content"]
+      "tags": ["工具", "课程", "course", "education"]
     },
     {
       "name": "article2book",
@@ -91,7 +91,7 @@
       },
       "source": "skills/article2book",
       "category": "productivity",
-      "tags": ["content", "book", "course", "knowledge-base"]
+      "tags": ["工具", "课程", "content", "book"]
     },
     {
       "name": "svg-article-illustrator",
@@ -102,7 +102,7 @@
       },
       "source": "skills/svg-article-illustrator",
       "category": "productivity",
-      "tags": ["svg", "illustration", "graphics"]
+      "tags": ["工具", "配图", "svg", "illustration"]
     },
     {
       "name": "piclist-upload",
@@ -113,7 +113,7 @@
       },
       "source": "skills/piclist-upload",
       "category": "productivity",
-      "tags": ["image", "upload", "markdown"]
+      "tags": ["工具", "图床", "image", "upload"]
     },
     {
       "name": "md2word",
@@ -124,7 +124,7 @@
       },
       "source": "skills/md2word",
       "category": "productivity",
-      "tags": ["markdown", "word", "conversion"]
+      "tags": ["工具", "格式转换", "markdown", "word"]
     },
     {
       "name": "agent-email",
@@ -135,7 +135,7 @@
       },
       "source": "skills/agent-email",
       "category": "developer-tools",
-      "tags": ["agent", "email", "clawemail", "automation"]
+      "tags": ["工具", "邮件", "agent", "email"]
     },
     {
       "name": "skill-manager",
@@ -146,7 +146,7 @@
       },
       "source": "skills/skill-manager",
       "category": "developer-tools",
-      "tags": ["skill", "management", "cli"]
+      "tags": ["工具", "Skill开发", "skill", "management"]
     },
     {
       "name": "git-batch-commit",
@@ -157,7 +157,7 @@
       },
       "source": "skills/git-batch-commit",
       "category": "developer-tools",
-      "tags": ["git", "commit", "automation"]
+      "tags": ["工具", "Git", "commit", "automation"]
     },
     {
       "name": "git-workflow",
@@ -168,7 +168,7 @@
       },
       "source": "skills/git-workflow",
       "category": "developer-tools",
-      "tags": ["git", "workflow", "pull-request", "merge"]
+      "tags": ["工具", "Git", "workflow", "pull-request"]
     },
     {
       "name": "multi-search",
@@ -179,7 +179,7 @@
       },
       "source": "skills/multi-search",
       "category": "productivity",
-      "tags": ["research", "search", "analysis"]
+      "tags": ["工具", "搜索", "research", "analysis"]
     },
     {
       "name": "litigation-analysis",
@@ -190,7 +190,7 @@
       },
       "source": "skills/litigation-analysis",
       "category": "productivity",
-      "tags": ["legal", "litigation", "analysis"]
+      "tags": ["通用", "诉讼", "legal", "litigation"]
     },
     {
       "name": "patent-analysis",
@@ -201,7 +201,7 @@
       },
       "source": "skills/patent-analysis",
       "category": "productivity",
-      "tags": ["legal", "patent", "analysis"]
+      "tags": ["专业", "知产", "legal", "patent"]
     },
     {
       "name": "trademark-assistant",
@@ -212,7 +212,7 @@
       },
       "source": "skills/trademark-assistant",
       "category": "productivity",
-      "tags": ["legal", "trademark", "china"]
+      "tags": ["专业", "知产", "legal", "trademark"]
     },
     {
       "name": "legal-proposal-generator",
@@ -223,7 +223,7 @@
       },
       "source": "skills/legal-proposal-generator",
       "category": "productivity",
-      "tags": ["legal", "proposal", "document"]
+      "tags": ["通用", "文书", "legal", "proposal"]
     },
     {
       "name": "de-ai-polish",
@@ -234,7 +234,7 @@
       },
       "source": "skills/de-ai-polish",
       "category": "productivity",
-      "tags": ["writing", "polish", "ai-detection"]
+      "tags": ["工具", "写作", "writing", "polish"]
     },
     {
       "name": "douyin-batch-download",
@@ -245,7 +245,7 @@
       },
       "source": "skills/douyin-batch-download",
       "category": "productivity",
-      "tags": ["douyin", "download", "video"]
+      "tags": ["工具", "下载", "douyin", "video"]
     },
     {
       "name": "universal-media-downloader",
@@ -256,7 +256,7 @@
       },
       "source": "skills/universal-media-downloader",
       "category": "productivity",
-      "tags": ["download", "media", "video", "podcast"]
+      "tags": ["工具", "下载", "media", "video"]
     },
     {
       "name": "clawhub-sync",
@@ -267,7 +267,7 @@
       },
       "source": "skills/clawhub-sync",
       "category": "developer-tools",
-      "tags": ["clawhub", "sync", "publish"]
+      "tags": ["工具", "发布", "clawhub", "sync"]
     },
     {
       "name": "github-star-manager",
@@ -278,7 +278,7 @@
       },
       "source": "skills/github-star-manager",
       "category": "developer-tools",
-      "tags": ["github", "stars", "tracker"]
+      "tags": ["工具", "Skill开发", "github", "tracker"]
     },
     {
       "name": "skill-architect",
@@ -289,7 +289,7 @@
       },
       "source": "skills/skill-architect",
       "category": "developer-tools",
-      "tags": ["skill", "architecture", "creator"]
+      "tags": ["工具", "Skill开发", "skill", "architecture"]
     },
     {
       "name": "skill-lint",
@@ -300,7 +300,7 @@
       },
       "source": "skills/skill-lint",
       "category": "developer-tools",
-      "tags": ["skill", "lint", "validation"]
+      "tags": ["工具", "Skill开发", "skill", "validation"]
     },
     {
       "name": "repo-research",
@@ -311,7 +311,7 @@
       },
       "source": "skills/repo-research",
       "category": "developer-tools",
-      "tags": ["github", "research", "analysis"]
+      "tags": ["工具", "Skill开发", "github", "research"]
     },
     {
       "name": "minimax-web-search",
@@ -322,7 +322,7 @@
       },
       "source": "skills/minimax-web-search",
       "category": "productivity",
-      "tags": ["openclaw", "minimax", "search"]
+      "tags": ["工具", "搜索", "minimax", "openclaw"]
     },
     {
       "name": "minimax-image-understand",
@@ -333,7 +333,7 @@
       },
       "source": "skills/minimax-image-understand",
       "category": "productivity",
-      "tags": ["openclaw", "minimax", "image"]
+      "tags": ["工具", "搜索", "minimax", "image"]
     }
   ]
 }
