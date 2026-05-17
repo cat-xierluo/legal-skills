@@ -311,6 +311,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/article2book/"><strong>article2book</strong></a></td>
+<td style="word-break:break-word">现有内容资产再组织技能。基于文章、专栏、课程讲稿、逐字稿、访谈、课件、会议纪要、案例材料、PDF 文本、Word 文档和笔记等素材，判断最适合转化为书、小册子、课程、系列文章、实务手册或知识库，并输出精简策划意见</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">杨卫薪</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/svg-article-illustrator/"><strong>svg-article-illustrator</strong></a></td>
 <td style="word-break:break-word">AI 驱动的 SVG 文章配图生成工具，支持动态 SVG、静态 SVG 和 PNG 导出三种模式，专为公众号文章等需要丰富视觉内容的平台设计</td>
 <td style="text-align:center">MIT</td>

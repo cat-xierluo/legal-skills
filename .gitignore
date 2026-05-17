@@ -15,6 +15,8 @@ templates/
 !.claude/settings.local.json
 **/DECISIONS.md
 **/TASKS.md
+!skills/article2book/DECISIONS.md
+!skills/article2book/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 
