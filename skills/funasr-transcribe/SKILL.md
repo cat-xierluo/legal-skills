@@ -592,6 +592,43 @@ ffmpeg -i "/path/to/video.mp4" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "/tmp/au
 
 ## 故障排除
 
+### cv2 / opencv 导入失败（2026-05-18 实测）
+
+**症状**：`POST /transcribe` 返回 `{"detail":"No module named 'cv2'"}`，但 `pip show opencv-python-headless` 显示已安装。
+
+**根因**：服务进程使用的 Python 环境与 pip 安装目标不同。常见于 macOS Homebrew Python 3.14 环境，pip 安装到了系统 site-packages，但服务进程加载的是 Homebrew 路径。
+
+**排查步骤**：
+1. 在终端验证 cv2 是否可导入：`python3 -c "import cv2; print('ok')"`
+2. 如果导入失败，执行：`python3 -m pip install opencv-python-headless --break-system-packages`
+3. 确认服务进程的 Python 路径：`lsof -p <server_pid> | grep python`
+
+**正确启动流程**：
+```bash
+# 确认 cv2 可用后再启动服务
+python3 -c "import cv2; print('cv2 ok')"
+
+# 如服务已在运行，先杀掉再重启
+lsof -ti:8765 | xargs kill -9 2>/dev/null; sleep 1
+
+# 重启服务
+python3 scripts/server.py --idle-timeout 600 &
+```
+
+### 服务端口被占用
+
+**症状**：`Address already in use`（Errno 48）
+
+```bash
+# 杀掉占用端口的进程
+lsof -ti:8765 | xargs kill -9 2>/dev/null
+sleep 1
+```
+
+### FunASR 服务无响应 / 模型加载慢
+
+首次转录需要下载模型（约 1-2GB），耐心等待。后续请求模型已缓存，速度会快很多。
+
 > 📌 B 站视频转录实战记录（2026-05-10）：`references/bilibili-transcribe-session.md`
 > 含路径问题根因 + Whisper CLI fallback 方案。
 
