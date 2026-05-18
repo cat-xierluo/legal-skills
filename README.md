@@ -11,7 +11,6 @@
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
-[![Latest Update](https://img.shields.io/badge/Latest%20Update-2026--05--17-success)](#-最近更新的-skill)
 [![GitHub stars](https://img.shields.io/github/stars/cat-xierluo/legal-skills?style=social)](https://github.com/cat-xierluo/legal-skills/stargazers)
 
 </div>
@@ -43,7 +42,8 @@
 
 ---
 
-## 🆕 最近更新的 Skill
+<details>
+<summary>🆕 最近更新的 Skill</summary>
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
@@ -55,6 +55,8 @@
 | 2026-05-17 | 更新     | [agent-email](skills/agent-email/)                   | v0.3.1 | 修复邮件命令参数组装、显示名和正文空格处理，并同步配置示例                                         |
 | 2026-05-16 | 新上传   | [project-init](skills/project-init/)                 | v1.0.0 | 新增项目类型检测、配置驱动、Skill 安装委托、项目文档模板和 Skill 项目脚手架                        |
 | 2026-05-15 | 更新     | [git-batch-commit](skills/git-batch-commit/)         | v1.4.0 | 将 Issue 与 PR 命名规范迁移到更合适的 Git 工作流 Skill，聚焦批量提交职责                           |
+
+</details>
 
 ## 📋 项目概述
 
