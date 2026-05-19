@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Skill 安装：** 委托 skill-manager 处理符号链接创建
 - **CLAUDE.md 生成指南：** 6 种项目类型的段落定义、结构模板和脱敏范例（simple / development / frontend / comprehensive-development / data-analysis / skill-project），通过 `@include ~/.claude/CLAUDE.md` 引入全局协议
 - **大型项目可选段落：** 架构分层、禁止事项、测试层级、并行调度、实施范围说明等结构模板，按需组装
-- **项目文档模板：** ROADMAP.md、DECISIONS.md、ISSUES.md、ARCHITECTURE.md、DESIGN.md、CHANGELOG.md，格式对齐全局协议
+- **项目文档模板：** ROADMAP.md、DECISIONS.md、TASKS.md、ARCHITECTURE.md、DESIGN.md、CHANGELOG.md，格式对齐全局协议
 - **settings 模板：** 权限配置参考模板
 - **.gitignore 模板：** 通用 gitignore 模板
 - **Skill 项目脚手架：** 目录结构 + SKILL.md 模板 + LICENSE.txt
