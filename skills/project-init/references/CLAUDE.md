@@ -153,7 +153,7 @@ npm run build        # 构建生产版本
 3. `DESIGN.md` — 前端开发遵循的设计规范（如有前端）
 4. `docs/ROADMAP.md` — 当前阶段任务与完成状态
 5. `docs/DECISIONS.md` — 最近决策和工作日志
-6. `docs/TASKS.md` — 待办事项追踪
+6. 项目自选任务源文件（如适用）— 待办事项追踪
 ```
 
 #### 架构分层与边界

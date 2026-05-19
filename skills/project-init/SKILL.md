@@ -89,11 +89,11 @@ bash <skill-manager-path>/scripts/install.sh "<source_path>/<skill_name>"
 
 **不是复制空模板，而是基于全局协议的文档体系定义 + 项目分析结果生成有实际内容的文档。**
 
-参考 `references/CLAUDE.md` 中各项目类型的段落定义，结合全局协议中定义的格式（如 ROADMAP 的阶段速览表、DECISIONS 的 ADR 格式、TASKS 的表格格式），生成包含项目初始信息的文档：
+参考 `references/CLAUDE.md` 中各项目类型的段落定义，结合项目选择的协作文档体系，生成包含项目初始信息的文档：
 
 - **docs/ROADMAP.md**: 项目愿景（从 README/package.json 提取）、初始阶段规划
 - **docs/DECISIONS.md**: 第一条决策记录（项目初始化的技术选型）
-- **docs/TASKS.md**: 空表格，格式对齐全局协议
+- **任务清单文件**: 仅当项目选择文件化任务源时创建；文件名和格式由项目上下文决定
 - **docs/ARCHITECTURE.md**: 从目录结构和技术栈生成初始架构描述
 - **DESIGN.md**: 仅前端项目，从 `references/DESIGN.md` 了解九段式结构，结合实际技术栈生成
 

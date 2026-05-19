@@ -44,7 +44,6 @@ profiles:
     docs:                           # 项目初始化时创建的文档列表
       - docs/ROADMAP.md
       - docs/DECISIONS.md
-      - docs/TASKS.md
 
   # ── 示例 2：Skill 开发项目 ────────────────────────────
   # 使用 has_skill_md: true 检测包含 skill.md 的项目
@@ -87,7 +86,6 @@ profiles:
     docs:
       - docs/ROADMAP.md
       - docs/DECISIONS.md
-      - docs/TASKS.md
 
   # ── 示例 4：数据分析项目 ──────────────────────────────
   # 演示 dir_patterns（目录名匹配）和 glob 扩展名检测
