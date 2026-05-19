@@ -43,6 +43,31 @@ fix: 修复解析器内存泄漏
 chore: 更新依赖
 ```
 
+## Issue / Task 引用
+
+`git-batch-commit` 只负责轻量引用，不负责关闭 Issue：
+
+```text
+docs: 更新 README 文档 (#13)
+
+Refs #13
+
+- 补充安装说明
+- 添加使用示例
+```
+
+本地任务引用使用正文中的 `Refs:`，避免误关 GitHub Issue：
+
+```text
+docs: 更新任务材料
+
+Refs: docs/ISSUES.md Issue #13
+
+- 补充素材包说明
+```
+
+若需要使用 `Closes #N` 关闭 GitHub Issue，或需要合并 PR、推送远端、拉取 PR 到 `main`，遵循 `git-workflow`。
+
 ## 为什么要使用标准化提交？
 
 1. **更易阅读：** 快速理解改动内容

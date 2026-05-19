@@ -2,9 +2,9 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.0"
+version: "1.4.1"
 license: MIT
-description: '智能 Git 批量提交工具。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或暂存了多个不同类型文件时自动使用。按类型拆分为多个聚焦提交，使用标准化的英文前缀+中文提交信息格式。'
+description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。'
 ---
 
 # Git 批量提交工具
@@ -12,6 +12,20 @@ description: '智能 Git 批量提交工具。触发词："git 提交"、"批量
 ## 概述
 
 将混合的修改自动拆分为多个聚焦的、逻辑清晰的提交。而不是创建一个包含"更新各种文件"的大提交，而是创建多个清晰的提交，如"docs: 更新 README"、"chore: 更新依赖"、"license: 更新 license 文件"。
+
+## 与 git-workflow 的职责边界
+
+`git-batch-commit` 是提交拆分工具，不是完整 Git 工作流控制器。
+
+| 场景 | 使用哪个 Skill | 说明 |
+|------|---------------|------|
+| 将已暂存的混合变更拆成多个 commit | `git-batch-commit` | 本 Skill 的核心职责 |
+| 判断是否能 merge / push / close PR | `git-workflow` | 本 Skill 不做合并门禁 |
+| PR 合入 main 的 commit 标题是否带 `(#N)` | `git-workflow` | 本 Skill 只在生成普通 commit 时保留 Issue/Task 引用 |
+| 直接解决 GitHub Issue 是否应写 `Closes #N` | `git-workflow` | 本 Skill 只写 `Refs #N`，不关闭 Issue |
+| 本地 `docs/ISSUES.md` / `docs/TASKS.md` 任务引用 | `cross-agent-collab` 定任务来源，`git-batch-commit` 写引用 | 使用 `--local-ref "docs/ISSUES.md Issue #13"` |
+
+当用户只是说“把这些改动提交一下 / 拆分提交”，使用本 Skill；当用户说“合并 PR / 拉 PR 到 main / 推送 / 关闭 issue”，同时遵循 `git-workflow`。
 
 ## 使用场景
 
@@ -36,11 +50,19 @@ python3 skills/git-batch-commit/scripts/interactive_commit.py --yes
 
 # 使用 --dry-run 仅查看分组，不实际提交
 python3 skills/git-batch-commit/scripts/interactive_commit.py --dry-run
+
+# 这组提交关联 GitHub Issue #13：每个标题追加 (#13)，正文写 Refs #13
+python3 skills/git-batch-commit/scripts/interactive_commit.py --issue 13
+
+# 这组提交关联本地 docs/ISSUES.md 任务，不误关 GitHub Issue
+python3 skills/git-batch-commit/scripts/interactive_commit.py --local-ref "docs/ISSUES.md Issue #13"
 ```
 
 **命令行参数**：
 - `--yes`, `-y`：跳过交互式确认，自动创建提交
 - `--dry-run`：仅显示分组建议，不实际创建提交
+- `--issue N`：关联 GitHub Issue，提交标题追加 `(#N)`，正文写 `Refs #N`
+- `--local-ref "..."`：关联项目本地任务，如 `docs/ISSUES.md Issue #13`，只写 `Refs: ...`，不会关闭 GitHub Issue
 
 ### 方式二：手动分类
 
@@ -89,6 +111,12 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 - 描述中应包含模块名称：`docs: course-generator 更新 CHANGELOG`
 - 如果一次修改涉及多个模块，**必须按模块分别提交**
 - 描述中的模块名称使用原始英文名称，不要翻译
+
+**Issue / Task 引用规则**：
+- 若一组批量提交关联 GitHub Issue，使用 `--issue N`。每个提交标题会包含 `(#N)`，正文写 `Refs #N`。
+- 本 Skill 不生成 `Closes #N`。是否关闭 GitHub Issue 属于 `git-workflow` 的判断范围。
+- 若编号来自本地文档而非 GitHub Issue，使用 `--local-ref "docs/ISSUES.md Issue #N"` 或 `--local-ref "docs/TASKS.md Issue #N"`，不要写 `Closes #N`。
+- PR 合并提交的 `(#PR编号)` 规则不由本 Skill 决定，遵循 `git-workflow`。
 
 ## 工作流程
 

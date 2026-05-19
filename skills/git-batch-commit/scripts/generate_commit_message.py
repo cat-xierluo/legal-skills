@@ -720,6 +720,43 @@ def generate_commit_messages(groups: Dict[str, List[str]]) -> Dict[str, str]:
     return messages
 
 
+def add_issue_reference(
+    message: str,
+    github_issue: str | None = None,
+    local_ref: str | None = None,
+) -> str:
+    """
+    Add issue/task traceability to a generated commit message.
+
+    GitHub issues use a subject suffix like "(#13)" so git log can show the
+    source issue at a glance. This helper only writes references. Closing
+    semantics such as "Closes #13" belong to git-workflow, not this shortcut.
+    """
+    if not github_issue and not local_ref:
+        return message
+
+    lines = message.split('\n')
+    subject = lines[0]
+    body = '\n'.join(lines[1:]).strip()
+
+    reference = ""
+    if github_issue:
+        issue_num = github_issue.strip().lstrip('#')
+        suffix = f"(#{issue_num})"
+        if suffix not in subject:
+            subject = f"{subject} {suffix}"
+        reference = f"Refs #{issue_num}"
+    elif local_ref:
+        reference = f"Refs: {local_ref.strip()}"
+
+    if reference and reference not in body:
+        body = f"{reference}\n\n{body}".strip()
+
+    if body:
+        return f"{subject}\n\n{body}"
+    return subject
+
+
 def main():
     """命令行使用的主入口。"""
     parser = argparse.ArgumentParser(
@@ -735,11 +772,26 @@ def main():
         nargs='+',
         help='变更文件列表'
     )
+    parser.add_argument(
+        '--issue',
+        type=str,
+        help='关联的 GitHub Issue 编号，例如 13 或 #13；标题会追加 (#13)'
+    )
+    parser.add_argument(
+        '--local-ref',
+        type=str,
+        help='关联的本地任务引用，例如 "docs/ISSUES.md Issue #13"，不会关闭 GitHub Issue'
+    )
 
     args = parser.parse_args()
 
     if args.category and args.files:
         msg = generate_commit_message(args.category, args.files)
+        msg = add_issue_reference(
+            msg,
+            github_issue=args.issue,
+            local_ref=args.local_ref,
+        )
         print(msg)
     else:
         print("用法: generate_commit_message.py --category <类型> --files <文件1> [文件2...]")
