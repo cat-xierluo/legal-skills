@@ -2,7 +2,7 @@
 
 本规范只管理 GitHub Issue / PR 的标题、关闭标记和合并提交格式，确保 Git 历史可读、可追溯。
 
-边界说明：项目任务状态不由本文档维护。若项目存在 `docs/ISSUES.md`，常规任务领取、依赖和状态判断以 `cross-agent-collab` 解析的 `docs/ISSUES.md` 为准；GitHub Issue 只作为远程协作入口或外部问题追踪入口。
+边界说明：项目任务状态不由本文档维护。若项目存在 `docs/TASKS.md`，常规任务领取、依赖和状态判断以 `cross-agent-collab` 解析的 `docs/TASKS.md` 为准；GitHub Issue 只作为远程协作入口或外部问题追踪入口。
 
 ## Issue 命名格式
 
@@ -45,7 +45,7 @@
 AI 读取 GitHub Issue 标题或关闭评论时：
 - 看到 `[done]` → 已完成，跳过
 - 看到 `[resolved]`/`[answered]` 等 → 已处理，跳过
-- 其他 → 可作为待处理 GitHub 事项，但不得覆盖 `docs/ISSUES.md` 中的项目任务状态
+- 其他 → 可作为待处理 GitHub 事项，但不得覆盖 `docs/TASKS.md` 中的项目任务状态
 
 ### 示例
 

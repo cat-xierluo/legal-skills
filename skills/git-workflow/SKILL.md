@@ -2,7 +2,7 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.0"
+version: "1.1.1"
 license: MIT
 description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突等 Git 操作时自动触发。
 ---
@@ -55,13 +55,32 @@ refactor/sync-logic
 
 ### 分支命名规范
 
+分支名是远端协作和 PR 的公共标识，必须按任务语义命名，不按本地执行来源命名。不要在分支名前加 `tmux-`、`subagent-`、`team-`、`agentteam-` 等前缀；这些前缀属于本地 worktree 或 session 名称，由 `parallel-agent-workflow` 管理。
+
 | 前缀 | 用途 | 示例 |
 |:-----|:-----|:-----|
 | `feat/` | 新功能 | `feat/batch-export` |
 | `fix/` | Bug 修复 | `fix/null-pointer` |
 | `docs/` | 文档 | `docs/api-guide` |
+| `research/` | 调研/素材 | `research/issue-13-ch08-materials` |
 | `refactor/` | 重构 | `refactor/parser` |
 | `chore/` | 杂项 | `chore/update-deps` |
+
+推荐示例：
+
+```bash
+docs/ch01-agent-intro
+research/issue-13-ch08-materials
+fix/agent-session-shell
+```
+
+反例：
+
+```bash
+tmux-ch01
+subagent-fix-copy
+team-feature-a
+```
 
 ### 分支清理
 
@@ -81,17 +100,17 @@ git push origin --delete <branch-name>
 
 ```bash
 # 创建 worktree（自动创建新分支）
-git worktree add ../feature-ocr feat/ocr-support
+git worktree add ../pm-feature-ocr feat/ocr-support
 
 # 在 worktree 中工作
-cd ../feature-ocr
+cd ../pm-feature-ocr
 # ... 编辑、提交 ...
 
 # 完成后回到主工作目录
 cd -
 
 # 删除 worktree
-git worktree remove ../feature-ocr
+git worktree remove ../pm-feature-ocr
 
 # 查看所有 worktree
 git worktree list
@@ -220,7 +239,7 @@ EOF
 | `Summary` | 说明改了什么，避免只有“update files” |
 | `Test plan` | 列出已运行或未能运行的验证；未运行要写原因 |
 | `Agent Attribution` | 若由 Agent 完成，写明 Agent ID、Git author、触发来源 |
-| `Issue/Task` | 关联 GitHub Issue、`docs/ISSUES.md` Issue ID 或用户指定任务 |
+| `Issue/Task` | 关联 GitHub Issue、`docs/TASKS.md` Task ID 或用户指定任务 |
 | `Risk` | 涉及迁移、删除、权限、安全、跨模块改动时说明风险和回退方式 |
 
 缺失 `Summary` 或 `Test plan` 时，不应 approve；缺失 `Agent Attribution` 时，要求补齐后再合并。
@@ -299,6 +318,46 @@ gh pr merge <number> --rebase
 
 **重要**：通过 API 执行 squash merge 时，`commit_title` 不会自动追加 `(#N)`，必须手动写入。
 
+### 本地拉取 PR 到 main 的提交格式
+
+当用户要求“拉取 PR 到主分支 / 把 PR 拉进 main / 合入这个 PR”时，默认目标是让 `main` 历史中能直接看出来源 PR。不要用 `git pull --ff-only origin pull/<N>/head` 作为最终合入方式，因为 fast-forward 会保留 PR 原提交标题，通常不会显示 `(#N)`。
+
+默认使用 squash commit 方式在 `main` 上生成一个带 PR 编号的提交：
+
+```bash
+# 1. 更新 main
+git checkout main
+git pull --ff-only origin main
+
+# 2. 检查 PR 状态和 diff
+gh pr view <N> --json title,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,url
+gh pr diff <N> --name-only
+gh pr checks <N>
+
+# 3. 拉取 PR head 并 squash 到暂存区
+git fetch origin pull/<N>/head
+git merge --squash FETCH_HEAD
+git diff --cached --stat
+
+# 4. 使用 PR 标题 + PR 编号提交
+git commit -m "<PR 标题> (#<N>)" \
+  -m "PR: <PR URL>"
+
+# 5. 推送 main，并关闭原 PR（若 GitHub 未自动标记 merged）
+git push origin main
+gh pr close <N> --comment "已通过提交 <sha> 合入 main。"
+```
+
+提交标题示例：
+
+```text
+docs: 设定章节撰写默认使用 tmux Codex session (#7)
+docs(ch01): 从 Chatbot 到 Agent (#10)
+research(issue13): ch08 迭代解耦素材包 (#11)
+```
+
+若 PR 标题已经包含 `(#<N>)`，不要重复追加。若用户明确要求保留 PR 中多个原子 commit，不做 squash；但仍应提醒用户这种方式可能无法在每个 commit 标题中显示 PR 编号。
+
 ### Fail-Closed 合并门禁
 
 以下任一情况出现时，不得自动合并，必须停下并让人类确认或先修复信号来源：
@@ -311,7 +370,7 @@ gh pr merge <number> --rebase
 | PR diff 超出声明范围，尤其是 Monorepo 误删文件 | 不 merge；先缩小 diff 或拆分 PR |
 | 分支保护、required checks、linked issue 状态不清楚 | 不 merge；先查清仓库规则 |
 
-`git-workflow` 只维护这些 Git 安全规则；任务状态仍由 `cross-agent-collab` / `docs/ISSUES.md` 管理，本地 Agent 会话由 `parallel-agent-workflow` 管理。
+`git-workflow` 只维护这些 Git 安全规则；任务状态仍由 `cross-agent-collab` / `docs/TASKS.md` 管理，本地 Agent 会话由 `parallel-agent-workflow` 管理。
 
 ### PR 状态检查
 
@@ -457,7 +516,7 @@ git push origin --delete v1.0.0  # 删除远程 tag
 
 详细规范见 `references/issue-pr-format.md`，此处为速查。
 
-本节只管理 GitHub Issue / PR 的命名和合并提交格式。项目常规任务状态、依赖和可领取判断仍由 `cross-agent-collab` 基于 `docs/ISSUES.md` 维护。
+本节只管理 GitHub Issue / PR 的命名和合并提交格式。项目常规任务状态、依赖和可领取判断仍由 `cross-agent-collab` 基于 `docs/TASKS.md` 维护。
 
 ### Issue 格式
 
@@ -496,9 +555,49 @@ docs(litigation-analysis): 更新模板文档
 
 通过 API 执行 squash merge 时，`commit_title` 不会自动追加 `(#N)`，必须手动写入。
 
+### 直接解决 Issue 的 Commit 格式
+
+不是每个 Issue 都会通过“分支 + PR”解决。若用户要求直接在当前分支或 `main` 上修复/关闭某个 Issue，提交标题也必须显式带 Issue 编号，让 `git log --oneline` 能直接看出来源：
+
+```text
+<类型>(<模块>): <描述> (#<Issue编号>)
+```
+
+提交正文用关闭关键字绑定 GitHub Issue：
+
+```text
+Closes #<Issue编号>
+
+- 关键变更 1
+- 关键变更 2
+```
+
+示例：
+
+```text
+docs: 清理过期待定事项 (#1)
+
+Closes #1
+
+- 删除过期决策记录
+- 清理不再需要的待定项
+```
+
+如果编号来自项目本地文档（如 `docs/ISSUES.md`、`docs/TASKS.md`），而不是 GitHub Issue，不要使用 `Closes #N` 误关 GitHub Issue；改用正文标注：
+
+```text
+Refs: docs/ISSUES.md Issue #13
+```
+
 ## 8. 提交规范
 
 提交信息使用英文类型前缀 + 中文内容。每个 commit 必须有正文，不能只有标题。
+
+### 与 git-batch-commit 的职责边界
+
+`git-batch-commit` 是显式调用的提交快捷按钮，适合用户要求“git 提交 / 批量提交 / 拆分提交 / 整理提交”时，把已暂存变更按类型或模块拆成多个 commit。它可以把 GitHub Issue 写成标题后缀 `(#N)`，也可以在正文写 `Refs #N` 或本地任务引用。
+
+`git-workflow` 是 Git 规则层，负责分支、PR、push、merge、安全门禁和 Issue 关闭语义。凡涉及“合并 PR”“拉 PR 到 main”“推送到远端”“关闭 Issue”“是否使用 `Closes #N`”，都以本 Skill 为准。
 
 ### Commit 格式
 
