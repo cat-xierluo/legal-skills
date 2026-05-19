@@ -47,6 +47,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-05-18 | 更新     | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.3.0 | 重构文档类型判断逻辑，解决"建议书"与"方案"误匹配，新增案件性质优先级和禁止降级规则 |
 | 2026-05-18 | 更新     | [skill-manager](skills/skill-manager/)               | v1.5.0 | 新增远程 Skill 更新检测（版本对比 + Commit 对比）、安装元数据追踪（commit/branch/subpath）、更新摘要自动生成 |
 | 2026-05-17 | 更新     | [opc-legal-counsel](skills/opc-legal-counsel/)       | v0.2.6 | 新增法源与政策来源登记表，明确专项技能触发边界，修复评测版本一致性检查并补入 marketplace 索引       |
 | 2026-05-17 | 更新     | [git-workflow](skills/git-workflow/)                 | v1.1.0 | 补齐 PR 正文最低要求和 Monorepo diff 检查清单，强化合并前 fail-closed 门禁                         |
@@ -255,11 +256,7 @@
 <td>通用·文书</td>
 <td style="word-break:break-word">根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.2.0</td>
-<td></td>
-</tr>
-<tr>
-<td><a href="skills/legal-text-format/"><strong>legal-text-format</strong></a></td>
+<td style="text-align:center">v0.3.0</td>><strong>legal-text-format</strong></a></td>
 <td>通用·文书</td>
 <td style="word-break:break-word">将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，采用 archive 归档结构存储。推荐与 <a href="skills/wechat-article-fetch/"><strong>wechat-article-fetch</strong></a> 配合使用实现完整工作流</td>
 <td style="text-align:center">CC-BY-NC</td>
