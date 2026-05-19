@@ -29,7 +29,7 @@
 - PR 合并前检查命令序列：读取 PR 状态、draft 状态、mergeable、reviewDecision、diff 文件列表和 checks。
 - Cherry-pick 安全流程：工作区干净、先看 commit 范围、默认 `-x` 保留来源、回补后检查范围。
 - Monorepo 场景下的目录级提取规则，避免 cherry-pick 整个 commit 带入无关文件。
-- Issue / PR 命名参考增加边界说明：GitHub Issue 不作为项目常规任务状态源，项目任务仍以 `docs/TASKS.md` 为准。
+- Issue / PR 命名参考增加边界说明：GitHub Issue 不作为项目常规任务状态源，项目任务仍以项目配置的任务源为准。
 
 ### 改进
 

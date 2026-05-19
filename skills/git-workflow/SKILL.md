@@ -239,7 +239,7 @@ EOF
 | `Summary` | 说明改了什么，避免只有“update files” |
 | `Test plan` | 列出已运行或未能运行的验证；未运行要写原因 |
 | `Agent Attribution` | 若由 Agent 完成，写明 Agent ID、Git author、触发来源 |
-| `Issue/Task` | 关联 GitHub Issue、`docs/TASKS.md` Task ID 或用户指定任务 |
+| `Issue/Task` | 关联 GitHub Issue、项目任务 ID 或用户指定任务 |
 | `Risk` | 涉及迁移、删除、权限、安全、跨模块改动时说明风险和回退方式 |
 
 缺失 `Summary` 或 `Test plan` 时，不应 approve；缺失 `Agent Attribution` 时，要求补齐后再合并。
@@ -370,7 +370,7 @@ research(issue13): ch08 迭代解耦素材包 (#11)
 | PR diff 超出声明范围，尤其是 Monorepo 误删文件 | 不 merge；先缩小 diff 或拆分 PR |
 | 分支保护、required checks、linked issue 状态不清楚 | 不 merge；先查清仓库规则 |
 
-`git-workflow` 只维护这些 Git 安全规则；任务状态仍由 `cross-agent-collab` / `docs/TASKS.md` 管理，本地 Agent 会话由 `parallel-agent-workflow` 管理。
+`git-workflow` 只维护这些 Git 安全规则；任务状态仍由 `cross-agent-collab` 和项目任务源管理，本地 Agent 会话由 `parallel-agent-workflow` 管理。
 
 ### PR 状态检查
 
@@ -516,7 +516,7 @@ git push origin --delete v1.0.0  # 删除远程 tag
 
 详细规范见 `references/issue-pr-format.md`，此处为速查。
 
-本节只管理 GitHub Issue / PR 的命名和合并提交格式。项目常规任务状态、依赖和可领取判断仍由 `cross-agent-collab` 基于 `docs/TASKS.md` 维护。
+本节只管理 GitHub Issue / PR 的命名和合并提交格式。项目常规任务状态、依赖和可领取判断仍由 `cross-agent-collab` 基于项目任务源维护。
 
 ### Issue 格式
 
@@ -583,10 +583,10 @@ Closes #1
 - 清理不再需要的待定项
 ```
 
-如果编号来自项目本地文档（如 `docs/ISSUES.md`、`docs/TASKS.md`），而不是 GitHub Issue，不要使用 `Closes #N` 误关 GitHub Issue；改用正文标注：
+如果编号来自项目本地任务源，而不是 GitHub Issue，不要使用 `Closes #N` 误关 GitHub Issue；改用正文标注：
 
 ```text
-Refs: docs/ISSUES.md Issue #13
+Refs: project-task Issue #13
 ```
 
 ## 8. 提交规范
