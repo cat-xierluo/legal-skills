@@ -1,5 +1,5 @@
 # consultation.yaml — 潜在项目/咨询预设
-# 轻量级3目录结构
+# 轻量级2目录结构 + 参照度分级编号
 
 meta:
   id: "consultation"
@@ -7,30 +7,34 @@ meta:
   description: "潜在客户咨询、案件初步评估阶段"
   case_id_format: "{YYMMDD} {客户/对方简称} {事项关键词}"
   example_case_id: "260323 张美金 浙江腾宇包装公司 咨询"
+  numbering:
+    format: "{参照度}-{三位序号} {描述}.{扩展名}"
+    levels:
+      A: "活文档，持续迭代（律师分析、方案、测算）"
+      B: "常查，反复引用（关键转写、核心证据、数据）"
+      C: "存档，基本不再看（AI咨询文档、低信息量材料）"
+      D: "待激活，转化时可能需要（压缩包原件、未处理文件）"
+    rule: "序号全局唯一不重叠，参照度可随项目进展调整"
+    a_level_order: "一手沟通记录 → 案件分析 → 策略方案，一手信息编号最前"
 
 directories:
   - id: "01"
-    icon: "💬"
-    name: "咨询记录"
-    description: "与客户的所有沟通记录：咨询录音、电话记录、微信聊天、转写文稿、视频录像"
+    icon: "📂"
+    name: "客户材料"
+    description: "客户提供的所有材料：录音、截图、文档、聊天记录、AI咨询文档等。内部可按主题分子文件夹，但统一归入此目录"
 
   - id: "02"
-    icon: "📎"
-    name: "证据材料"
-    description: "客户提供的原始材料：合同、声明、身份证明、鉴定报告、权属证明"
-
-  - id: "03"
     icon: "📝"
     name: "工作文件"
-    description: "律师内部工作产出：法律服务方案、内部沟通报告、法律问答提取、策略分析、案件摘要"
+    description: "律师内部工作产出：案件分析、法律服务方案、法律研究、策略建议、谈判方案、事实梳理等"
 
 root_files:
-  - pattern: "[YYMMDD]*法律服务方案*"
-    description: "当前最新版法律服务方案（面向客户的正式方案）"
-  - pattern: "*法律意见书*"
-    description: "正式法律意见书（面向客户的交付物）"
-  - pattern: "*咨询报告*"
-    description: "咨询分析报告（面向客户的交付物）"
+  - pattern: "*项目信息*"
+    description: "项目信息卡片（管理文件）"
+  - pattern: "*待办事项*"
+    description: "待办事项（管理文件）"
+  - pattern: "*材料清单*"
+    description: "材料清单（管理文件）"
 
 management_files:
   case_info:
@@ -65,7 +69,19 @@ detection:
     - "判决书"
 
 classification:
-  # 01 - 咨询记录：所有与客户的沟通记录
+  # 01 - 客户材料：客户提供的一切材料
+  - match: ["身份证", "营业执照", "授权书"]
+    target: "01"
+  - match: ["合同", "协议", "声明", "发票", "收据"]
+    target: "01"
+  - match: ["鉴定", "公证书", "评估"]
+    target: "01"
+  - match: ["版权", "著作权", "专利", "商标", "权属"]
+    target: "01"
+  - match: ["证据目录", "证据材料"]
+    target: "01"
+  - match: ["起诉状", "答辩状", "申请书"]
+    target: "01"
   - match: ["咨询", "通话记录", "电话"]
     target: "01"
   - match: ["聊天记录", "微信"]
@@ -74,27 +90,25 @@ classification:
     target: "01"
   - match: ["转写", "语音"]
     target: "01"
+  - match: ["追问", "AI咨询", "原始咨询"]
+    target: "01"
+  - match: ["csv", "xlsx", "xls"]
+    target: "01"
 
-  # 02 - 证据材料：客户提供的原始文件
-  - match: ["身份证", "营业执照", "授权书"]
-    target: "02"
-  - match: ["合同", "协议", "声明", "发票", "收据"]
-    target: "02"
-  - match: ["鉴定", "公证书", "评估"]
-    target: "02"
-  - match: ["版权", "著作权", "专利", "商标", "权属"]
-    target: "02"
-  - match: ["证据目录", "证据材料"]
-    target: "02"
-  - match: ["起诉状", "答辩状", "申请书"]
-    target: "02"
-
-  # 03 - 工作文件：律师内部产出
+  # 02 - 工作文件：律师内部产出
   - match: ["内部沟通", "内部报告", "内部"]
-    target: "03"
+    target: "02"
   - match: ["法律问答", "问答提取"]
-    target: "03"
+    target: "02"
   - match: ["案件分析", "案件摘要", "应对说明"]
-    target: "03"
+    target: "02"
   - match: ["策略", "方案草稿"]
-    target: "03"
+    target: "02"
+  - match: ["法律服务方案"]
+    target: "02"
+  - match: ["事实梳理", "争议焦点", "评估", "测算", "检索报告"]
+    target: "02"
+  - match: ["法律研究", "法律分析"]
+    target: "02"
+  - match: ["核实清单", "沟通核实"]
+    target: "02"
