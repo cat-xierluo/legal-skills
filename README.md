@@ -2,6 +2,8 @@
 
 <img src="docs/legal-skills-icon.jpg" width="280" alt="Legal Skills"/>
 
+# Legal Skills
+
 面向法律从业者的 AI Agent Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作。
 
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
@@ -36,7 +38,7 @@
 </details>
 
 <div align="center">
-  <img src="docs/wechat-qr.png" width="200" alt="微信二维码"/>
+  <img src="docs/wechat-qr.jpg" width="200" alt="微信二维码"/>
   <p><em>微信：ywxlaw</em></p>
 </div>
 
