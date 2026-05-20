@@ -1,13 +1,13 @@
 <div align="center">
 
-# Legal Skills
+<img src="docs/legal-skills-icon.jpg" width="280" alt="Legal Skills"/>
 
 面向法律从业者的 AI Agent Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作。
 
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-42-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-45-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -36,7 +36,7 @@
 </details>
 
 <div align="center">
-  <img src="wechat-qr.jpg" width="200" alt="微信二维码"/>
+  <img src="docs/wechat-qr.png" width="200" alt="微信二维码"/>
   <p><em>微信：ywxlaw</em></p>
 </div>
 
@@ -47,15 +47,15 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-05-20 | 更新     | [skill-lint](skills/skill-lint/)                 | v1.4.0 | 更新 Frontmatter 校验规则：`version` 调整为推荐发布字段，并检查 CHANGELOG、README、marketplace 版本同步 |
+| 2026-05-20 | 更新     | [skill-architect](skills/skill-architect/)       | v1.4.0 | 创建与审查流程同步新版 Frontmatter 发布规范，默认纳入 version、author、homepage 推荐字段 |
+| 2026-05-20 | 更新     | [legal-ocr](skills/legal-ocr/)                   | v1.3.1 | 精简 description，仅保留 OCR、扫描识别、文档识别等功能触发条件和必要边界 |
+| 2026-05-20 | 新上传   | [release-workflow](skills/release-workflow/)                   | v1.1.0 | 通用化 GitHub 项目发布工作流：版本号管理 → Release Notes → tag → CI 监控 → 发布验证 → 清理 |
+| 2026-05-20 | 新上传   | [video-screenshot](skills/video-screenshot/)                 | v0.3.1 | 从录屏视频中自动抽取关键帧、去重并保存为图片，可用作法律证据 |
 | 2026-05-18 | 更新     | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.3.0 | 重构文档类型判断逻辑，解决"建议书"与"方案"误匹配，新增案件性质优先级和禁止降级规则 |
 | 2026-05-18 | 更新     | [skill-manager](skills/skill-manager/)               | v1.5.0 | 新增远程 Skill 更新检测（版本对比 + Commit 对比）、安装元数据追踪（commit/branch/subpath）、更新摘要自动生成 |
 | 2026-05-17 | 更新     | [opc-legal-counsel](skills/opc-legal-counsel/)       | v0.2.6 | 新增法源与政策来源登记表，明确专项技能触发边界，修复评测版本一致性检查并补入 marketplace 索引       |
 | 2026-05-17 | 更新     | [git-workflow](skills/git-workflow/)                 | v1.1.0 | 补齐 PR 正文最低要求和 Monorepo diff 检查清单，强化合并前 fail-closed 门禁                         |
-| 2026-05-17 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.3.0 | 新增 SVG 转 PNG 高分辨率转换、补齐 MIT 许可证，并修复转换超时与浏览器进程关闭问题                  |
-| 2026-05-17 | 新上传   | [article2book](skills/article2book/)                 | v1.0.0 | 正式发布内容资产再组织 Skill，支持成书、小册子、课程、系列文章、实务手册和知识库等形态判断         |
-| 2026-05-17 | 更新     | [agent-email](skills/agent-email/)                   | v0.3.1 | 修复邮件命令参数组装、显示名和正文空格处理，并同步配置示例                                         |
-| 2026-05-16 | 新上传   | [project-init](skills/project-init/)                 | v1.0.0 | 新增项目类型检测、配置驱动、Skill 安装委托、项目文档模板和 Skill 项目脚手架                        |
-| 2026-05-15 | 更新     | [git-batch-commit](skills/git-batch-commit/)         | v1.4.0 | 将 Issue 与 PR 命名规范迁移到更合适的 Git 工作流 Skill，聚焦批量提交职责                           |
 
 </details>
 
@@ -92,6 +92,10 @@
 
 从各种来源收集研究资料：
 
+##### OCR 使用建议
+
+`legal-ocr` 是当前推荐的统一 OCR 入口，已覆盖原 `mineru-ocr` 与 `paddle-ocr` 的主要文档识别和 Markdown 转换场景。新用户建议优先使用 `legal-ocr`；`mineru-ocr` 与 `paddle-ocr` 继续保留，主要用于兼容旧工作流或需要直接指定单一后端的场景。
+
 <table>
 <thead>
 <tr>
@@ -113,12 +117,20 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/legal-ocr/"><strong>legal-ocr</strong></a></td>
+<td>工具·OCR</td>
+<td style="word-break:break-word">OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.3.1</td>
+<td>推荐统一入口</td>
+</tr>
+<tr>
 <td><a href="skills/mineru-ocr/"><strong>mineru-ocr</strong></a></td>
 <td>工具·OCR</td>
 <td style="word-break:break-word">通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
-<td></td>
+<td>功能已由 legal-ocr 覆盖；建议新用户使用 legal-ocr</td>
 </tr>
 <tr>
 <td><a href="skills/paddle-ocr/"><strong>paddle-ocr</strong></a></td>
@@ -126,7 +138,7 @@
 <td style="word-break:break-word">面向法律 PDF 与扫描件的 PaddleOCR 结构化解析，将 PDF 或图片转换为 Markdown，支持表格识别、公式识别、版面分析，保留 archive 归档</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.1</td>
-<td>需配置 API Token</td>
+<td>功能已由 legal-ocr 覆盖；保留兼容旧工作流，需配置 API Token</td>
 </tr>
 <tr>
 <td><a href="skills/funasr-transcribe/"><strong>funasr-transcribe</strong></a></td>
@@ -228,6 +240,14 @@
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
 </tr>
 <tr>
+<td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
+<td>通用·证据</td>
+<td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.3.1</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
 <td style="word-break:break-word">将案件/咨询材料整理成标准化目录结构。支持诉讼案件（12目录）和潜在项目/咨询（3目录）两种预设，自动生成案件信息看板、工时记录和期限管理文件</td>
@@ -256,7 +276,11 @@
 <td>通用·文书</td>
 <td style="word-break:break-word">根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.3.0</td>><strong>legal-text-format</strong></a></td>
+<td style="text-align:center">v0.3.0</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/legal-text-format/"><strong>legal-text-format</strong></a></td>
 <td>通用·文书</td>
 <td style="word-break:break-word">将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，采用 archive 归档结构存储。推荐与 <a href="skills/wechat-article-fetch/"><strong>wechat-article-fetch</strong></a> 配合使用实现完整工作流</td>
 <td style="text-align:center">CC-BY-NC</td>
@@ -432,9 +456,9 @@
 <tr>
 <td><a href="skills/skill-architect/"><strong>skill-architect</strong></a></td>
 <td>工具·Skill开发</td>
-<td style="word-break:break-word">技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、审查格式合规性</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.0</td>
+<td style="word-break:break-word">技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、同步 Frontmatter 发布规范和审查格式合规性</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v1.4.0</td>
 <td></td>
 </tr>
 <tr>
@@ -454,6 +478,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
+<td>工具·发布</td>
+<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.1.0</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/github-star-manager/"><strong>github-star-manager</strong></a></td>
 <td>工具·Star管理</td>
 <td style="word-break:break-word">GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统</td>
@@ -464,9 +496,9 @@
 <tr>
 <td><a href="skills/skill-lint/"><strong>skill-lint</strong></a></td>
 <td>工具·Skill开发</td>
-<td style="word-break:break-word">Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查文档与代码一致性，识别冗余内容，生成技能审计报告</td>
+<td style="word-break:break-word">Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查 Frontmatter 与版本同步、文档与代码一致性，识别冗余内容，生成技能审计报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.0</td>
+<td style="text-align:center">v1.4.0</td>
 <td></td>
 </tr>
 <tr>
