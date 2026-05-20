@@ -234,7 +234,7 @@ Copyright (c) 2025 杨卫薪律师（微信ywxlaw）
 
 ## Skill 开发指南
 
-关于 Skill 的目录结构、Frontmatter 元数据、Progressive Disclosure 设计、文档编写最佳实践等详细规范,请参阅 [SKILL-GUIDE.md](./SKILL-GUIDE.md)。
+关于 Skill 的目录结构、Frontmatter 元数据、Progressive Disclosure 设计、文档编写最佳实践等详细规范,请参阅 [docs/SKILL-DEV-GUIDE.md](./docs/SKILL-DEV-GUIDE.md)。
 
 ## 多技能协作
 
@@ -459,6 +459,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.8.1 | 2026-05-20 | 修正 Skill 开发指南链接，明确后续 Skill 规范以 docs/SKILL-DEV-GUIDE.md 为准 |
 | v1.8.0 | 2026-05-17 | 新增 README 最近更新区维护规范：要求新增、正式发布或更新公开 Skill 时同步维护根 README 动态 |
 | v1.7.4 | 2026-05-15 | 新增通用 Monorepo 合并规范：禁止 git merge 直接合并，改用目录级 checkout |
 | v1.7.3 | 2026-05-14 | 统一私有 Skill 与 Customer Skill 的私有仓库和忽略规则说明 |

@@ -77,15 +77,21 @@ SKILL.md 必须以 YAML frontmatter 开头:
 ```yaml
 ---
 name: skill-name
-description: 功能描述。This skill should be used when...
-license: Complete terms in LICENSE.txt
+description: 本技能应在用户需要...时使用。不要用于：...
+version: "1.0.0"
+license: MIT
+author: 杨卫薪律师（微信ywxlaw）
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
 **字段说明**:
 
-- ✅ 有 `license` 字段
-- ❌ 无 `version` 字段(版本信息在 `CHANGELOG.md` 中管理)
+- **必填字段**: `name`、`description`
+- **推荐字段**: `version`、`license`、`author`、`homepage`
+- `version` 是公开发布推荐字段；如存在，必须与 `CHANGELOG.md` 最新版本一致
+- `CHANGELOG.md` 仍是完整版本历史的来源，README 和 marketplace 中的版本应同步到最新版本
+- `source` 可省略；如已提供 `homepage`，不强制填写 `source`
 
 ## 4. description 写作规范
 
@@ -188,7 +194,7 @@ Skills 使用渐进式加载系统管理上下文:
 ### (1) Level 0: Frontmatter (始终加载)
 
 - SKILL.md 的 YAML frontmatter
-- 仅包含 name、description、license
+- 保持精简，包含 name、description，并可包含 version、license、author、homepage 等发布元数据
 - 用于技能发现和匹配,必须极度精简
 
 ### (2) Level 1: 核心文档 (按需加载)
@@ -205,7 +211,7 @@ Skills 使用渐进式加载系统管理上下文:
 - references/ 目录中的详细文档
 - 仅在 SKILL.md 中明确引用时由 AI 主动读取
 - 包含详细API文档、完整示例、边缘案例
-- **目录层级**: references/ 下保持**扁平结构**，只允许一级子目录
+- **目录层级**: references/ 下保持**完全扁平**，文件直接放在目录根，禁止子目录
 
 ### (4) Level 3: 可执行资源 (调用不加载,扩展)
 
@@ -218,8 +224,10 @@ Skills 使用渐进式加载系统管理上下文:
 
 ### (1) Frontmatter 优化
 
-- description 必须精准,100字以内
+- description 必须精准,总长度不超过 1024 字符
 - 明确触发场景,使用"本技能应在...时使用"格式
+- 建议补充"不要用于..."说明技能边界
+- `version` 如存在,必须与 `CHANGELOG.md` 最新版本一致
 - 避免冗余关键词堆砌
 
 ### (2) SKILL.md 内容原则
@@ -453,7 +461,7 @@ find ./output -mindepth 1 -delete
 
 ### (1) 更新流程
 
-1. **修改内容**: 在 SKILL-GUIDE.md 中进行任何修改(新增/修改规范、调整格式等)
+1. **修改内容**: 在 SKILL-DEV-GUIDE.md 中进行任何修改(新增/修改规范、调整格式等)
 2. **更新变更历史**: 在"变更历史"表格顶部添加新的版本记录
 3. **版本号递增**: 根据修改性质递增版本号
 
@@ -471,7 +479,7 @@ find ./output -mindepth 1 -delete
 
 ### (4) 自动更新要求
 
-AI 代理在修改 SKILL-GUIDE.md 时,必须:
+AI 代理在修改 SKILL-DEV-GUIDE.md 时,必须:
 
 1. 检查是否对文件内容进行了实质性修改
 2. 如果是,自动在"变更历史"表格顶部添加新记录
@@ -481,6 +489,7 @@ AI 代理在修改 SKILL-GUIDE.md 时,必须:
 
 | 版本   | 日期       | 更新内容                                                                                                                                                    |
 | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.4.0 | 2026-05-20 | 更新 Frontmatter 规范：`version` 从禁止字段调整为公开发布推荐字段，新增版本同步要求，统一 ClawHub 推荐字段说明，并修正指南自引用名称                         |
 | v2.3.0 | 2026-03-01 | 整合 mgechev/skills-best-practices：§1 目录层级规则、§4 负向触发条件、§6 行数限制(<500行)、新增 §12 技能验证规范、原 §12 顺延为 §13                        |
 | v2.2.0 | 2026-02-28 | 精简冗余示例（§4/§8/§10/§11）                                                                                   |
 | v2.1.0 | 2026-02-28 | 精简 §9 协作规范；删除 TDD 章节；调整编号                                                                                                                   |
