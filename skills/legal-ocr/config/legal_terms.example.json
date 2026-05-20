@@ -1,0 +1,14 @@
+{
+  "replacements": [
+    {
+      "source": "某OCR误词",
+      "replacement": "正确法律词",
+      "description": "示例：客户名称、专有术语或高频误识别"
+    },
+    {
+      "pattern": "管[辖輖]权",
+      "replacement": "管辖权",
+      "description": "示例：使用正则修正常见 OCR 误识别"
+    }
+  ]
+}
