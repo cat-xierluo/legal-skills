@@ -94,10 +94,6 @@
 
 从各种来源收集研究资料：
 
-##### OCR 使用建议
-
-`legal-ocr` 是当前推荐的统一 OCR 入口，已覆盖原 `mineru-ocr` 与 `paddle-ocr` 的主要文档识别和 Markdown 转换场景。新用户建议优先使用 `legal-ocr`；`mineru-ocr` 与 `paddle-ocr` 继续保留，主要用于兼容旧工作流或需要直接指定单一后端的场景。
-
 <table>
 <thead>
 <tr>
