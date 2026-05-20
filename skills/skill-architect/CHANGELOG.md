@@ -2,6 +2,19 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.4.0] - 2026-05-20
+
+### 改进
+
+- 创建流程的 Frontmatter 模板改用新版发布规范，默认包含 `version`、`license`、`author`、`homepage` 推荐字段。
+- 将 `version` 从禁止字段调整为公开发布推荐字段，并要求与 `CHANGELOG.md` 最新版本一致。
+- 审查清单同步 README 与 marketplace 版本一致性检查，避免发布索引与技能版本漂移。
+
+### 文档完善
+
+- 同步 `references/SKILL-DEV-GUIDE.md` 至 v2.4.0。
+- 同步 `references/skill-standards.md` 与 skill-lint v1.4.0 规则。
+
 ## [1.3.0] - 2026-03-01
 
 ### 新增

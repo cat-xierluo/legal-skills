@@ -2,9 +2,9 @@
 name: skill-architect
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.4.0"
 license: CC BY-NC-SA 4.0 - 详见 LICENSE.txt
-description: 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查。本技能应在用户需要创建新技能、编辑现有技能、打包技能、或审查现有技能的格式合规性时使用。不要用于：创建非 Claude Code 技能、代码生成、通用编程任务。
+description: 技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查。本技能应在用户需要创建新技能、编辑现有技能、打包技能、同步 Frontmatter 发布规范、或审查现有技能的格式合规性时使用。不要用于：创建非 Claude Code 技能、代码生成、通用编程任务。
 ---
 
 # Skill Architect
@@ -116,19 +116,25 @@ skill-name/
 ```yaml
 ---
 name: skill-name                    # 小写字母 + 连字符
-description: 功能描述。本技能应在...时使用  # 第三人称 + 触发场景
-license: CC BY-NC-SA 4.0 - 详见 LICENSE.txt
+description: 本技能应在用户需要...时使用。不要用于：...  # 第三人称 + 触发边界
+version: "1.0.0"                   # 与 CHANGELOG 最新版本一致
+license: MIT                       # 或 CC-BY-NC
+author: 杨卫薪律师（微信ywxlaw）
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
 **description 写作要求**：
 - 使用第三人称："本技能应在...时使用"
 - 包含触发场景：明确说明何时使用
-- 长度控制在 100 字以内
+- 包含负向触发条件："不要用于..."说明边界
+- 长度控制在 1024 字符以内
 - 不要在 SKILL.md 正文中添加"何时使用"章节
 
-**禁止字段**：
-- `version` - 版本信息应在 CHANGELOG.md 中管理
+**发布字段要求**：
+- `version` 是公开发布推荐字段；如存在，必须与 `CHANGELOG.md` 最新版本一致
+- `CHANGELOG.md` 仍是完整版本历史来源
+- `homepage` 推荐保留；已有 `homepage` 时不强制 `source`
 
 ### 4.2 SKILL.md 内容规范
 
@@ -292,7 +298,8 @@ python ../../skills/funasr-transcribe/scripts/transcribe.py
 | description 使用第三人称 | ✅/❌ |
 | description 包含负向触发条件 | ✅/⚠️ |
 | description 长度 ≤ 1024 字符 | ✅/❌ |
-| 无 version 字段 | ✅/⚠️ |
+| version 与 CHANGELOG 最新版本一致 | ✅/⚠️ |
+| homepage/author/license 推荐字段完整 | ✅/⚠️ |
 
 ### 5.3 SKILL.md 行数
 
