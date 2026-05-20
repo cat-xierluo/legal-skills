@@ -2,6 +2,7 @@
 
 # Skill & Command Manager - Install Script
 # 安装或同步外部 skills/commands 到本地 Agent 配置目录
+# 自动检测所有 Agent 目录 (.codex/.claude/.openclaw) 并批量安装
 
 set -e
 
@@ -50,7 +51,7 @@ detect_source_type() {
     # 如果是目录
     elif [ -d "$src" ]; then
         # 优先检查是否为 skill（包含 SKILL.md 或 Agent 配置目录等）
-        if [ -f "$src/SKILL.md" ] || [ -f "$src/skill.md" ] || [ -d "$src/.codex" ] || [ -d "$src/.claude" ] || [ -d "$src/.openclaw" ]; then
+        if [ -f "$src/SKILL.md" ] || [ -f "$src/skill.md" ] || [ -d "$src/.codex" ] || [ -d "$src/.claude" ] || [ -d "$src/.openclaw" ] || [ -d "$src/.agents" ] || [ -d "$src/.agent" ]; then
             echo "skill"
         # 检查是否为 command 集合目录（包含多个 .md 文件，但不包含 SKILL.md）
         else
@@ -65,38 +66,6 @@ detect_source_type() {
         echo "unknown"
     fi
 }
-
-# 检测目标目录（支持 skills 和 commands）
-# 优先从调用目录向上查找 .codex/.claude/.openclaw。
-SCRIPT_AGENT_DIR="$(find_agent_config_dir "$MANAGER_DIR" "$PWD/.claude")"
-AGENT_DIR="$(find_agent_config_dir "$ORIGINAL_PWD" "$SCRIPT_AGENT_DIR")"
-SKILLS_DIR="$AGENT_DIR/skills"
-COMMANDS_DIR="$AGENT_DIR/commands"
-
-# 根据 source 类型确定目标目录
-if [ -f "$SOURCE" ] && [[ "$SOURCE" =~ \.md$ ]]; then
-    TARGET_DIR="$COMMANDS_DIR"
-    TARGET_TYPE="command"
-else
-    TARGET_DIR="$SKILLS_DIR"
-    TARGET_TYPE="skill"
-fi
-
-# 检查参数
-if [ -z "$SOURCE" ]; then
-    echo "❌ 错误: 请提供源路径或 URL"
-    echo ""
-    echo "使用方法:"
-    echo "  $0 <本地路径 | github-url | owner/repo>"
-    echo ""
-    echo "示例:"
-    echo "  本地单个 skill/command:  $0 ~/my-skills/pdf-tool"
-    echo "  本地 skills 集合:        $0 ~/skills/"
-    echo "  本地 commands 集合:      $0 ~/commands/"
-    echo "  GitHub 仓库:             $0 owner/repo"
-    echo "  GitHub 子目录:           $0 owner/repo/branch/path/to/skills"
-    exit 1
-fi
 
 # 检查是否为 skills 集合目录
 is_skills_collection() {
@@ -138,7 +107,24 @@ is_commands_collection() {
     [ "$found_commands" -gt 1 ]
 }
 
-# 检测来源类型
+# 检查参数
+if [ -z "$SOURCE" ]; then
+    echo "❌ 错误: 请提供源路径或 URL"
+    echo ""
+    echo "使用方法:"
+    echo "  $0 <本地路径 | github-url | owner/repo>"
+    echo ""
+    echo "示例:"
+    echo "  本地单个 skill/command:  $0 ~/my-skills/pdf-tool"
+    echo "  本地 skills 集合:        $0 ~/skills/"
+    echo "  本地 commands 集合:      $0 ~/commands/"
+    echo "  GitHub 仓库:             $0 owner/repo"
+    echo "  GitHub 子目录:           $0 owner/repo/branch/path/to/skills"
+    exit 1
+fi
+
+# ---- 检测来源类型 ----
+
 if [[ "$SOURCE" =~ ^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$ ]]; then
     # GitHub URL 到子目录 (blob 格式)
     OWNER="${BASH_REMATCH[1]}"
@@ -183,274 +169,340 @@ else
     SOURCE_TYPE="local"
 fi
 
-# 本地路径处理
-if [ "$SOURCE_TYPE" = "local" ]; then
-    # 检测源类型
-    DETECTED_TYPE=$(detect_source_type "$SOURCE")
+# ---- 检测所有 Agent 配置目录 ----
 
-    if [ "$DETECTED_TYPE" = "unknown" ]; then
-        if [ ! -e "$SOURCE" ]; then
-            echo "❌ 错误: 找不到源: $SOURCE"
-        else
-            echo "❌ 错误: 无法识别源类型，请确保是 skill 目录或 command .md 文件"
-        fi
-        exit 1
+FALLBACK_AGENT_DIR="$(find_agent_config_dir "$ORIGINAL_PWD" "$(find_agent_config_dir "$MANAGER_DIR" "$PWD/.claude")")"
+
+ALL_AGENT_DIRS=()
+while IFS= read -r dir; do
+    ALL_AGENT_DIRS+=("$dir")
+done < <(find_all_agent_config_dirs "$ORIGINAL_PWD" "$FALLBACK_AGENT_DIR")
+
+if [ ${#ALL_AGENT_DIRS[@]} -eq 0 ]; then
+    echo "❌ 错误: 未找到任何 Agent 配置目录 (.codex/.claude/.openclaw)"
+    exit 1
+fi
+
+# 显示检测到的目录
+AGENT_NAMES=()
+for dir in "${ALL_AGENT_DIRS[@]}"; do
+    AGENT_NAMES+=($(basename "$dir"))
+done
+echo "🔍 检测到 ${#ALL_AGENT_DIRS[@]} 个 Agent 配置目录: ${AGENT_NAMES[*]}"
+echo ""
+
+# ---- GitHub 预处理：克隆到临时目录（只克隆一次）----
+
+TEMP_CLONE_DIR=""
+INSTALL_COMMIT=""
+INSTALL_BRANCH=""
+GH_SKILL_NAME=""
+
+if [ "$SOURCE_TYPE" = "github-subdir" ] || [ "$SOURCE_TYPE" = "github" ]; then
+    if [ "$SOURCE_TYPE" = "github-subdir" ]; then
+        GH_SKILL_NAME=$(basename "$SUBPATH")
+    else
+        GH_SKILL_NAME="$REPO"
     fi
 
-    # 处理单个 command 文件
-    if [ "$DETECTED_TYPE" = "command" ]; then
-        COMMAND_NAME=$(basename "$SOURCE" .md)
-        TARGET_PATH="$TARGET_DIR/$COMMAND_NAME.md"
+    TEMP_CLONE_DIR=$(mktemp -d)
 
-        mkdir -p "$TARGET_DIR"
+    if [ "$SOURCE_TYPE" = "github-subdir" ]; then
+        echo "📦 正在从 GitHub 获取子目录..."
+        echo "  仓库: $CLONE_URL"
+        echo "  路径: $SUBPATH"
 
-        if [ -L "$TARGET_PATH" ]; then
-            echo "⚠ 发现现有符号链接，正在移除..."
-            rm "$TARGET_PATH"
-        elif [ -f "$TARGET_PATH" ]; then
-            if [ "$TARGET_PATH" -ef "$SOURCE" ]; then
-                echo "✓ 已指向相同文件"
-                exit 0
+        cd "$TEMP_CLONE_DIR"
+        git init -q
+        git remote add origin "$CLONE_URL"
+        git config core.sparseCheckout true
+        echo "$SUBPATH" > .git/info/sparse-checkout
+        git fetch --depth 1 origin "${BRANCH:-main}" -q 2>/dev/null || {
+            echo "❌ 错误: 无法从 GitHub 获取"
+            cd - > /dev/null
+            rm -rf "$TEMP_CLONE_DIR"
+            exit 1
+        }
+        git checkout "${BRANCH:-main}" -q
+
+        INSTALL_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+        INSTALL_BRANCH="${BRANCH:-main}"
+
+        cd - > /dev/null
+
+        # 移动到临时目录内的固定位置
+        mv "$TEMP_CLONE_DIR/$SUBPATH" "$TEMP_CLONE_DIR/$GH_SKILL_NAME"
+    else
+        echo "📦 正在从 GitHub 克隆..."
+        echo "  仓库: $CLONE_URL"
+
+        git clone --depth 1 -q "$CLONE_URL" "$TEMP_CLONE_DIR/$GH_SKILL_NAME" 2>/dev/null || {
+            echo "❌ 错误: 无法从 GitHub 克隆"
+            rm -rf "$TEMP_CLONE_DIR"
+            exit 1
+        }
+
+        INSTALL_COMMIT=$(cd "$TEMP_CLONE_DIR/$GH_SKILL_NAME" && git rev-parse --short HEAD 2>/dev/null || echo "")
+        INSTALL_BRANCH=$(cd "$TEMP_CLONE_DIR/$GH_SKILL_NAME" && git branch --show-current 2>/dev/null || echo "main")
+
+        # 删除 .git 目录
+        rm -rf "$TEMP_CLONE_DIR/$GH_SKILL_NAME/.git"
+    fi
+
+    echo "✓ GitHub 源准备完成"
+    echo ""
+fi
+
+# ---- 安装到每个 Agent 目录 ----
+
+install_count=0
+success_dirs=()
+fail_count=0
+
+for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
+    agent_name=$(basename "$AGENT_DIR")
+    SKILLS_DIR="$AGENT_DIR/skills"
+    COMMANDS_DIR="$AGENT_DIR/commands"
+
+    echo "───────────────────────────────────"
+    echo "📦 安装到 $agent_name"
+    echo "───────────────────────────────────"
+
+    # ---- 本地来源 ----
+    if [ "$SOURCE_TYPE" = "local" ]; then
+        DETECTED_TYPE=$(detect_source_type "$SOURCE")
+
+        if [ "$DETECTED_TYPE" = "unknown" ]; then
+            if [ ! -e "$SOURCE" ]; then
+                echo "❌ 错误: 找不到源: $SOURCE"
+            else
+                echo "❌ 错误: 无法识别源类型，请确保是 skill 目录或 command .md 文件"
             fi
-            echo "⚠ 目标已存在，正在备份到 ${TARGET_PATH}.backup..."
-            mv "$TARGET_PATH" "${TARGET_PATH}.backup"
+            ((fail_count++)) || true
+            echo ""
+            continue
         fi
 
-        echo "🔗 正在创建 command 符号链接..."
-        ln -s "$SOURCE" "$TARGET_PATH"
-        echo "✓ 已链接 command: $TARGET_PATH -> $SOURCE"
-        ls -l "$TARGET_PATH"
-        exit 0
-    fi
+        # 处理单个 command 文件
+        if [ "$DETECTED_TYPE" = "command" ]; then
+            COMMAND_NAME=$(basename "$SOURCE" .md)
+            TARGET_PATH="$COMMANDS_DIR/$COMMAND_NAME.md"
 
-    # 处理目录
-    if [ ! -d "$SOURCE" ]; then
-        echo "❌ 错误: 找不到源目录: $SOURCE"
-        exit 1
-    fi
+            mkdir -p "$COMMANDS_DIR"
 
-    # 检查是否为 skills 集合目录
-    if is_skills_collection "$SOURCE"; then
-        echo "📦 检测到 skills 集合目录，开始批量安装..."
-        echo ""
+            if [ -L "$TARGET_PATH" ]; then
+                echo "⚠ 发现现有符号链接，正在移除..."
+                rm "$TARGET_PATH"
+            elif [ -f "$TARGET_PATH" ]; then
+                if [ "$TARGET_PATH" -ef "$SOURCE" ]; then
+                    echo "✓ 已指向相同文件"
+                    ((install_count++)) || true
+                    success_dirs+=("$agent_name")
+                    echo ""
+                    continue
+                fi
+                echo "⚠ 目标已存在，正在备份到 ${TARGET_PATH}.backup..."
+                mv "$TARGET_PATH" "${TARGET_PATH}.backup"
+            fi
 
-        count=0
-        for skill_dir in "$SOURCE"/*; do
-            if [ -d "$skill_dir" ]; then
-                skill_name=$(basename "$skill_dir")
+            echo "🔗 正在创建 command 符号链接..."
+            ln -s "$SOURCE" "$TARGET_PATH"
+            echo "✓ 已链接 command: $TARGET_PATH -> $SOURCE"
+            ((install_count++)) || true
+            success_dirs+=("$agent_name")
+            echo ""
+            continue
+        fi
 
-                if [ -f "$skill_dir/SKILL.md" ] || [ -f "$skill_dir/skill.md" ] || [ -d "$skill_dir/.codex" ] || [ -d "$skill_dir/.claude" ] || [ -d "$skill_dir/.openclaw" ]; then
-                    echo "▶ 安装 skill: $skill_name"
+        # 处理目录
+        if [ ! -d "$SOURCE" ]; then
+            echo "❌ 错误: 找不到源目录: $SOURCE"
+            ((fail_count++)) || true
+            echo ""
+            continue
+        fi
 
-                    target_path="$TARGET_DIR/../skills/$skill_name"
+        # 检查是否为 skills 集合目录
+        if is_skills_collection "$SOURCE"; then
+            local_count=0
+            for skill_dir in "$SOURCE"/*; do
+                if [ -d "$skill_dir" ]; then
+                    skill_name=$(basename "$skill_dir")
+
+                    if [ -f "$skill_dir/SKILL.md" ] || [ -f "$skill_dir/skill.md" ] || [ -d "$skill_dir/.codex" ] || [ -d "$skill_dir/.claude" ] || [ -d "$skill_dir/.openclaw" ]; then
+                        target_path="$SKILLS_DIR/$skill_name"
+                        mkdir -p "$SKILLS_DIR"
+
+                        if [ -L "$target_path" ]; then
+                            rm "$target_path"
+                        elif [ -d "$target_path" ]; then
+                            if [ "$target_path" -ef "$skill_dir" ]; then
+                                continue
+                            fi
+                            rm -rf "${target_path}.backup"
+                            mv "$target_path" "${target_path}.backup"
+                        fi
+
+                        ln -s "$skill_dir" "$target_path"
+                        echo "  ✓ 已链接: $skill_name"
+                        ((local_count++)) || true
+                    fi
+                fi
+            done
+
+            echo "✓ 已安装 $local_count 个 skills"
+            ((install_count++)) || true
+            success_dirs+=("$agent_name")
+            echo ""
+            continue
+        fi
+
+        # 检查是否为 commands 集合目录
+        if is_commands_collection "$SOURCE"; then
+            local_count=0
+            for cmd_file in "$SOURCE"/*.md; do
+                if [ -f "$cmd_file" ]; then
+                    cmd_name=$(basename "$cmd_file" .md)
+                    target_path="$COMMANDS_DIR/$cmd_name.md"
+                    mkdir -p "$COMMANDS_DIR"
 
                     if [ -L "$target_path" ]; then
                         rm "$target_path"
-                    elif [ -d "$target_path" ]; then
-                        if [ "$target_path" -ef "$skill_dir" ]; then
-                            echo "  ✓ 已存在相同链接"
-                            echo ""
+                    elif [ -f "$target_path" ]; then
+                        if [ "$target_path" -ef "$cmd_file" ]; then
                             continue
                         fi
-                        rm -rf "${target_path}.backup"
                         mv "$target_path" "${target_path}.backup"
                     fi
 
-                    # 本地路径使用符号链接
-                    ln -s "$skill_dir" "$target_path"
-                    echo "  ✓ 已链接: $target_path -> $skill_dir"
+                    ln -s "$cmd_file" "$target_path"
+                    echo "  ✓ 已链接: $cmd_name"
+                    ((local_count++)) || true
+                fi
+            done
+
+            echo "✓ 已安装 $local_count 个 commands"
+            ((install_count++)) || true
+            success_dirs+=("$agent_name")
+            echo ""
+            continue
+        fi
+
+        # 单个本地 skill - 使用符号链接
+        if [ "$DETECTED_TYPE" = "skill" ]; then
+            SKILL_NAME=$(basename "$SOURCE")
+            TARGET_PATH="$SKILLS_DIR/$SKILL_NAME"
+
+            mkdir -p "$SKILLS_DIR"
+
+            if [ -L "$TARGET_PATH" ]; then
+                echo "⚠ 发现现有符号链接，正在移除..."
+                rm "$TARGET_PATH"
+            elif [ -d "$TARGET_PATH" ]; then
+                if [ "$TARGET_PATH" -ef "$SOURCE" ]; then
+                    echo "✓ 已指向相同目录"
+                    ((install_count++)) || true
+                    success_dirs+=("$agent_name")
                     echo ""
-                    ((count++))
+                    continue
                 fi
+                echo "⚠ 目标已存在，正在备份到 ${TARGET_PATH}.backup..."
+                rm -rf "${TARGET_PATH}.backup"
+                mv "$TARGET_PATH" "${TARGET_PATH}.backup"
             fi
-        done
 
-        echo "✓ 批量安装完成，共安装 $count 个 skills"
-        exit 0
+            echo "🔗 正在创建 skill 符号链接..."
+            ln -s "$SOURCE" "$TARGET_PATH"
+            echo "✓ 已链接 skill: $TARGET_PATH -> $SOURCE"
+
+            # 记录安装
+            record_install "$SKILL_NAME" "$SOURCE" "$TARGET_PATH"
+            ((install_count++)) || true
+            success_dirs+=("$agent_name")
+            echo ""
+            continue
+        fi
     fi
 
-    # 检查是否为 commands 集合目录
-    if is_commands_collection "$SOURCE"; then
-        echo "📦 检测到 commands 集合目录，开始批量安装..."
-        echo ""
+    # ---- GitHub 来源 ----
+    if [ "$SOURCE_TYPE" = "github-subdir" ] || [ "$SOURCE_TYPE" = "github" ]; then
+        TARGET_PATH="$SKILLS_DIR/$GH_SKILL_NAME"
+        mkdir -p "$SKILLS_DIR"
 
-        count=0
-        for cmd_file in "$SOURCE"/*.md; do
-            if [ -f "$cmd_file" ]; then
-                cmd_name=$(basename "$cmd_file" .md)
-                echo "▶ 安装 command: $cmd_name"
-
-                target_path="$TARGET_DIR/../commands/$cmd_name.md"
-
-                if [ -L "$target_path" ]; then
-                    rm "$target_path"
-                elif [ -f "$target_path" ]; then
-                    if [ "$target_path" -ef "$cmd_file" ]; then
-                        echo "  ✓ 已存在相同链接"
-                        echo ""
-                        continue
-                    fi
-                    mv "$target_path" "${target_path}.backup"
-                fi
-
-                # 本地路径使用符号链接
-                ln -s "$cmd_file" "$target_path"
-                echo "  ✓ 已链接: $target_path -> $cmd_file"
-                echo ""
-                ((count++))
-            fi
-        done
-
-        echo "✓ 批量安装完成，共安装 $count 个 commands"
-        exit 0
-    fi
-
-    # 单个本地 skill - 使用符号链接
-    if [ "$DETECTED_TYPE" = "skill" ]; then
-        SKILL_NAME=$(basename "$SOURCE")
-        TARGET_PATH="$TARGET_DIR/$SKILL_NAME"
-
-        mkdir -p "$TARGET_DIR"
-
-        if [ -L "$TARGET_PATH" ]; then
-            echo "⚠ 发现现有符号链接，正在移除..."
-            rm "$TARGET_PATH"
-        elif [ -d "$TARGET_PATH" ]; then
-            if [ "$TARGET_PATH" -ef "$SOURCE" ]; then
-                echo "✓ 已指向相同目录"
-                exit 0
-            fi
+        if [ -e "$TARGET_PATH" ]; then
             echo "⚠ 目标已存在，正在备份到 ${TARGET_PATH}.backup..."
             rm -rf "${TARGET_PATH}.backup"
             mv "$TARGET_PATH" "${TARGET_PATH}.backup"
         fi
 
-        echo "🔗 正在创建 skill 符号链接..."
-        ln -s "$SOURCE" "$TARGET_PATH"
-        echo "✓ 已链接 skill: $TARGET_PATH -> $SOURCE"
-        ls -l "$TARGET_PATH"
-        
+        cp -R "$TEMP_CLONE_DIR/$GH_SKILL_NAME" "$TARGET_PATH"
+        echo "✓ 已安装: $TARGET_PATH"
+
         # 记录安装
-        record_install "$SKILL_NAME" "$SOURCE" "$TARGET_PATH"
-        exit 0
-    fi
-fi
-
-# GitHub 处理（复制而非克隆）
-if [ "$SOURCE_TYPE" = "github-subdir" ]; then
-    SKILL_NAME=$(basename "$SUBPATH")
-elif [ "$SOURCE_TYPE" = "github" ]; then
-    SKILL_NAME="$REPO"
-fi
-
-TARGET_PATH="$TARGET_DIR/$SKILL_NAME"
-
-mkdir -p "$TARGET_DIR"
-
-# 处理已存在的目标
-if [ -e "$TARGET_PATH" ]; then
-    echo "⚠ 目标已存在，正在备份到 ${TARGET_PATH}.backup..."
-    rm -rf "${TARGET_PATH}.backup"
-    mv "$TARGET_PATH" "${TARGET_PATH}.backup"
-fi
-
-if [ "$SOURCE_TYPE" = "github-subdir" ]; then
-    # GitHub 子目录 - 使用稀疏克隆
-    echo "📦 正在从 GitHub 获取子目录..."
-    echo "  仓库: $CLONE_URL"
-    echo "  路径: $SUBPATH"
-
-    TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR"
-
-    git init -q
-    git remote add origin "$CLONE_URL"
-    git config core.sparseCheckout true
-    echo "$SUBPATH" > .git/info/sparse-checkout
-    git fetch --depth 1 origin "${BRANCH:-main}" -q 2>/dev/null || {
-        echo "❌ 错误: 无法从 GitHub 获取"
-        cd - > /dev/null
-        rm -rf "$TEMP_DIR"
-        exit 1
-    }
-    git checkout "${BRANCH:-main}" -q
-
-    # 捕获 commit hash 和 branch
-    INSTALL_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "")
-    INSTALL_BRANCH="${BRANCH:-main}"
-
-    cd - > /dev/null
-
-    # 移动到目标位置
-    mv "$TEMP_DIR/$SUBPATH" "$TARGET_PATH"
-    rm -rf "$TEMP_DIR"
-
-    echo "✓ 已安装: $TARGET_PATH"
-
-    # 记录安装（修复：子目录安装之前缺少记录）
-    if command -v python3 &> /dev/null; then
-        RECORD_SCRIPT="$SCRIPT_DIR/record.py"
-        if [ -f "$RECORD_SCRIPT" ]; then
-            python3 "$RECORD_SCRIPT" install "$SKILL_NAME" "$CLONE_URL" \
-                --path "$TARGET_PATH" \
-                --install-type remote \
-                --install-commit "$INSTALL_COMMIT" \
-                --install-branch "$INSTALL_BRANCH" \
-                --remote-url "$CLONE_URL/tree/${BRANCH:-main}/$SUBPATH" \
-                --remote-subpath "$SUBPATH" 2>/dev/null || true
+        if command -v python3 &> /dev/null; then
+            RECORD_SCRIPT="$SCRIPT_DIR/record.py"
+            if [ -f "$RECORD_SCRIPT" ]; then
+                local_args=()
+                if [ "$SOURCE_TYPE" = "github-subdir" ]; then
+                    local_args=(--remote-url "$CLONE_URL/tree/${INSTALL_BRANCH}/$SUBPATH" --remote-subpath "$SUBPATH")
+                else
+                    local_args=(--remote-url "$CLONE_URL")
+                fi
+                python3 "$RECORD_SCRIPT" install "$GH_SKILL_NAME" "$CLONE_URL" \
+                    --path "$TARGET_PATH" \
+                    --install-type remote \
+                    --install-commit "$INSTALL_COMMIT" \
+                    --install-branch "$INSTALL_BRANCH" \
+                    "${local_args[@]}" 2>/dev/null || true
+            fi
         fi
+
+        ((install_count++)) || true
+        success_dirs+=("$agent_name")
+        echo ""
     fi
 
-elif [ "$SOURCE_TYPE" = "github" ]; then
-    # GitHub 仓库 - 直接克隆
-    echo "📦 正在从 GitHub 克隆..."
-    echo "  仓库: $CLONE_URL"
+done
 
-    git clone --depth 1 -q "$CLONE_URL" "$TARGET_PATH" 2>/dev/null || {
-        echo "❌ 错误: 无法从 GitHub 克隆"
-        rm -rf "$TARGET_PATH"
-        exit 1
-    }
-
-    # 捕获 commit hash 和 branch（在删除 .git 之前）
-    INSTALL_COMMIT=$(cd "$TARGET_PATH" && git rev-parse --short HEAD 2>/dev/null || echo "")
-    INSTALL_BRANCH=$(cd "$TARGET_PATH" && git branch --show-current 2>/dev/null || echo "main")
-
-    # 删除 .git 目录
-    rm -rf "$TARGET_PATH/.git"
-
-    echo "✓ 已安装: $TARGET_PATH"
-
-    # 记录安装（含完整远程元数据）
-    if command -v python3 &> /dev/null; then
-        RECORD_SCRIPT="$SCRIPT_DIR/record.py"
-        if [ -f "$RECORD_SCRIPT" ]; then
-            python3 "$RECORD_SCRIPT" install "$SKILL_NAME" "$CLONE_URL" \
-                --path "$TARGET_PATH" \
-                --install-type remote \
-                --install-commit "$INSTALL_COMMIT" \
-                --install-branch "$INSTALL_BRANCH" \
-                --remote-url "$CLONE_URL" 2>/dev/null || true
-        fi
-    fi
+# ---- 清理临时目录 ----
+if [ -n "$TEMP_CLONE_DIR" ] && [ -d "$TEMP_CLONE_DIR" ]; then
+    rm -rf "$TEMP_CLONE_DIR"
 fi
 
-# 安全检查（仅 GitHub 来源）
+# ---- 安全检查（GitHub 来源，只检查一次）----
 if [ "$SOURCE_TYPE" = "github" ] || [ "$SOURCE_TYPE" = "github-subdir" ]; then
-    if command -v python3 &> /dev/null; then
-        SECURITY_SCRIPT="$SCRIPT_DIR/security.py"
-        if [ -f "$SECURITY_SCRIPT" ]; then
-            echo ""
-            echo "🔍 正在进行安全检查..."
-            python3 "$SECURITY_SCRIPT" "$TARGET_PATH" 2>/dev/null || {
-                echo ""
-                echo "⚠️  安全检查发现问题，请查看上方报告"
-                echo "   如需继续使用，请自行评估风险"
-            }
+    if [ ${#success_dirs[@]} -gt 0 ]; then
+        FIRST_AGENT_DIR="${ALL_AGENT_DIRS[0]}"
+        CHECK_PATH="$FIRST_AGENT_DIR/skills/$GH_SKILL_NAME"
+
+        if command -v python3 &> /dev/null && [ -d "$CHECK_PATH" ]; then
+            SECURITY_SCRIPT="$SCRIPT_DIR/security.py"
+            if [ -f "$SECURITY_SCRIPT" ]; then
+                echo "🔍 正在进行安全检查..."
+                python3 "$SECURITY_SCRIPT" "$CHECK_PATH" 2>/dev/null || {
+                    echo ""
+                    echo "⚠️  安全检查发现问题，请查看上方报告"
+                    echo "   如需继续使用，请自行评估风险"
+                }
+            fi
+        else
+            echo "💡 提示: 未检测到 Python，跳过安全检查"
         fi
-    else
-        echo "💡 提示: 未检测到 Python，跳过安全检查"
     fi
 fi
 
-ls -l "$TARGET_PATH"
+# ---- 汇总 ----
+echo ""
+echo "========================================"
+echo "📊 安装汇总"
+echo "========================================"
+if [ "$install_count" -gt 0 ]; then
+    echo "  成功: $install_count 个 Agent 目录"
+    for d in "${success_dirs[@]}"; do
+        echo "    ✅ $d"
+    done
+fi
+if [ "$fail_count" -gt 0 ]; then
+    echo "  失败: $fail_count"
+fi
+echo "========================================"
