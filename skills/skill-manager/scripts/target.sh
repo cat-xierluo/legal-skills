@@ -5,7 +5,7 @@
 
 is_agent_config_dir_name() {
     case "$1" in
-        .codex|.claude|.openclaw)
+        .codex|.claude|.openclaw|.agents|.agent)
             return 0
             ;;
         *)
@@ -39,7 +39,7 @@ find_agent_config_dir() {
     current="$(canonical_dir "$start_dir")"
 
     # Global config roots: support calls from ~/.codex, ~/.claude and ~/.openclaw.
-    for config_name in .codex .claude .openclaw; do
+    for config_name in .codex .claude .openclaw .agents .agent; do
         case "$current" in
             "$home_dir/$config_name"|"$home_dir/$config_name"/*)
                 printf '%s\n' "$home_dir/$config_name"
@@ -58,7 +58,7 @@ find_agent_config_dir() {
         fi
 
         # Project-local config directories. Prefer Codex when multiple configs coexist.
-        for config_name in .codex .claude .openclaw; do
+        for config_name in .codex .claude .openclaw .agents .agent; do
             if [ -d "$current/$config_name" ]; then
                 printf '%s\n' "$current/$config_name"
                 return 0
@@ -84,6 +84,83 @@ find_agent_config_dir() {
                 printf '%s\n' "$grandparent"
                 return 0
             fi
+        fi
+
+        current="$parent"
+        iteration=$((iteration + 1))
+    done
+
+    printf '%s\n' "$fallback_dir"
+}
+
+# Find ALL agent config directories in the project.
+# Returns newline-separated paths (one per line).
+# - SKILL_MANAGER_TARGET_DIR set → returns that single dir
+# - Called from global config root (~/codex etc.) → returns that single dir
+# - Project directory → walks up to project root, returns all .codex/.claude/.openclaw found
+# - Not found → returns fallback_dir
+find_all_agent_config_dirs() {
+    local start_dir="${1:-$PWD}"
+    local fallback_dir="${2:-$PWD/.claude}"
+    local current
+    local home_dir="${HOME:-/Users/${USER}}"
+    local max_iterations=20
+    local iteration=0
+
+    # Explicit override → single target
+    if [ -n "${SKILL_MANAGER_TARGET_DIR:-}" ]; then
+        printf '%s\n' "$SKILL_MANAGER_TARGET_DIR"
+        return 0
+    fi
+
+    current="$(canonical_dir "$start_dir")"
+
+    # Global config roots → single target (no multi-dir in global scope)
+    for config_name in .codex .claude .openclaw .agents .agent; do
+        case "$current" in
+            "$home_dir/$config_name"|"$home_dir/$config_name"/*)
+                printf '%s\n' "$home_dir/$config_name"
+                return 0
+                ;;
+        esac
+    done
+
+    # Walk up to find project root
+    while [ "$iteration" -lt "$max_iterations" ]; do
+        local current_name
+        current_name="$(basename "$current")"
+
+        # If inside an agent config dir, step out to project root
+        if is_agent_config_dir_name "$current_name"; then
+            current="$(dirname "$current")"
+        elif [ "$current_name" = "skills" ] || [ "$current_name" = "commands" ]; then
+            local parent
+            parent="$(dirname "$current")"
+            local parent_name
+            parent_name="$(basename "$parent")"
+            if is_agent_config_dir_name "$parent_name"; then
+                current="$(dirname "$parent")"
+            fi
+        fi
+
+        # Check for agent config dirs at this level
+        local found=0
+        for config_name in .codex .claude .openclaw .agents .agent; do
+            if [ -d "$current/$config_name" ]; then
+                printf '%s\n' "$current/$config_name"
+                found=1
+            fi
+        done
+
+        if [ "$found" -eq 1 ]; then
+            return 0
+        fi
+
+        local parent
+        parent="$(dirname "$current")"
+
+        if [ "$parent" = "$current" ]; then
+            break
         fi
 
         current="$parent"
