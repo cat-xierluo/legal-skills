@@ -42,7 +42,10 @@
 | `name` 字段存在 | ✅/❌ | 技能名称 |
 | `name` 格式正确 | ✅/❌ | 小写字母、连字符，如 `skill-name` |
 | `description` 字段存在 | ✅/❌ | 功能描述 |
-| `license` 字段存在 | ✅/⚠️ | 许可证声明 |
+| `license` 字段存在 | ✅/⚠️ | 推荐字段，许可证声明 |
+| `version` 字段同步 | ✅/⚠️ | 推荐字段；如存在，需与 CHANGELOG 最新版本一致 |
+| `author` 字段存在 | ✅/⚠️ | 推荐字段，作者信息 |
+| `homepage` 字段存在 | ✅/⚠️ | 推荐字段，项目主页 |
 
 ### 2.2 description 格式
 
@@ -54,11 +57,13 @@
 | 长度 ≤ 1024 字符 | ✅/❌ | 保持简洁 |
 | 无关键词堆砌 | ✅/⚠️ | 避免冗余 |
 
-### 2.3 不应存在的字段
+### 2.3 发布字段一致性
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| 无 `version` 字段 | ✅/⚠️ | 版本信息应在 CHANGELOG.md 中 |
+| `version` 不作为违规字段 | ✅/⚠️ | 公开发布推荐保留；禁止把存在 `version` 本身标为问题 |
+| `version` 与 CHANGELOG 同步 | ✅/⚠️ | `version` 存在时必须与 CHANGELOG 最新版本一致 |
+| `source` 不强制要求 | ✅/⚠️ | 已有 `homepage` 时可省略 `source` |
 
 ---
 
@@ -81,6 +86,10 @@
 | 依赖章节格式规范 | ✅/⚠️ | 使用表格格式 |
 | 系统依赖说明 | ✅/⚠️ | brew/apt-get 安装方式 |
 | Python 包说明 | ✅/⚠️ | pip install 命令 |
+| 硬依赖有 try/except 防护 | ✅/❌ | 缺失时报错并给出安装提示 |
+| 可选依赖有降级标志 | ✅/⚠️ | 缺失时静默降级 |
+| requirements.txt 只含硬依赖 | ✅/⚠️ | 可选依赖不应列入 |
+| 依赖安装说明就近放置 | ✅/⚠️ | 在对应功能章节内而非文档末尾 |
 
 ---
 
@@ -356,14 +365,15 @@ Filling a PDF form involves these steps:
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| SKILL.md 无 version 字段 | ✅/⚠️ | 版本信息应在 CHANGELOG.md 中 |
-| 版本统一在 CHANGELOG.md | ✅/⚠️ | 所有版本变更在 CHANGELOG.md 记录 |
+| SKILL.md version 与 CHANGELOG 一致 | ✅/⚠️ | `version` 是推荐发布字段，如存在必须同步 |
+| CHANGELOG 保留版本历史 | ✅/⚠️ | 所有版本变更在 CHANGELOG.md 记录 |
+| README/marketplace 版本同步 | ✅/⚠️ | 公开索引中的版本应与 CHANGELOG 最新版本一致 |
 
 ### 13.2 版本一致性
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| 版本号与 CHANGELOG 一致 | ✅/⚠️ | 如有版本号，应与最新 CHANGELOG 版本匹配 |
+| 版本号与 CHANGELOG 一致 | ✅/⚠️ | SKILL.md、README、marketplace 中的版本应与最新 CHANGELOG 版本匹配 |
 
 ---
 

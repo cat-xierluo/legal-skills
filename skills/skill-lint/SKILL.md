@@ -2,8 +2,8 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
-description: Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计。本技能应在用户需要审查 skill 格式合规性、检查文档与代码一致性、识别冗余内容、生成技能审计报告时使用。不要用于：代码审查、功能测试、非 skill 项目。
+version: "1.4.0"
+description: Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计。本技能应在用户需要审查 skill 格式合规性、检查 Frontmatter 与版本同步、检查文档与代码一致性、识别冗余内容、生成技能审计报告时使用。不要用于：代码审查、功能测试、非 skill 项目。
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -61,7 +61,10 @@ skill-name/
 ---
 name: skill-name
 description: 功能描述。本技能应在...时使用
-license: MIT License - 详见 LICENSE.txt
+version: "1.0.0"
+license: MIT
+author: 杨卫薪律师（微信ywxlaw）
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
@@ -73,7 +76,8 @@ license: MIT License - 详见 LICENSE.txt
 - [ ] `description` 是否包含负向触发条件（"不要用于..."）
 - [ ] `description` 长度是否 ≤ 1024 字符
 - [ ] 是否有 `license` 字段
-- [ ] 是否有多余的 `version` 字段（应删除）
+- [ ] 如有 `version` 字段，是否与 `CHANGELOG.md` 最新版本一致
+- [ ] 如有 README 或 marketplace 索引，版本是否同步
 
 ### 4. 检查 SKILL.md 行数
 
@@ -190,11 +194,12 @@ All notable changes to this skill will be documented in this file.
 ### 15. 检查版本号管理
 
 **检查项**：
-- [ ] SKILL.md frontmatter 中是否有多余的 `version` 字段（应删除）
-- [ ] 版本信息是否统一在 `CHANGELOG.md` 中管理
-- [ ] 如有版本号，是否与 CHANGELOG.md 最新版本一致
+- [ ] SKILL.md frontmatter 中如有 `version` 字段，是否与 `CHANGELOG.md` 最新版本一致
+- [ ] `CHANGELOG.md` 是否保留完整版本历史
+- [ ] README 和 marketplace 中的版本是否与 `CHANGELOG.md` 最新版本一致
+- [ ] `source` 是否未被不必要地强制要求（已有 `homepage` 时可省略）
 
-**注意**：版本号不应出现在 SKILL.md 的 frontmatter 中，所有版本变更应在 CHANGELOG.md 中记录。
+**注意**：`version` 是公开发布推荐字段，不再视为违规；但 `CHANGELOG.md` 仍是版本历史来源，所有公开索引中的版本必须同步。
 
 ### 16. 检查可编排性设计
 

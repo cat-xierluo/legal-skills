@@ -2,6 +2,19 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.4.0] - 2026-05-20
+
+### 改进
+
+- 将 SKILL.md frontmatter 中的 `version` 从违规字段调整为公开发布推荐字段。
+- 新增 `version` 与 `CHANGELOG.md`、README、marketplace 的一致性检查要求。
+- 同步 ClawHub 发布适配规范，明确 `homepage` 存在时不强制 `source` 字段。
+
+### 文档完善
+
+- 更新 Frontmatter 示例，补充 `version`、`author`、`homepage` 推荐字段。
+- 更新 `references/skill-standards.md` 的版本管理检查项。
+
 ## [1.3.0] - 2026-03-01
 
 ### 新增
