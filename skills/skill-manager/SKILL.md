@@ -30,7 +30,8 @@ license: Complete terms in LICENSE.txt
 - 在 `/Users/maoking/.codex` 或其子目录调用时，目标为 `/Users/maoking/.codex/skills/`
 - 在项目根目录包含 `.codex/`、`.claude/` 或 `.openclaw/` 时，目标为对应配置目录下的 `skills/` 或 `commands/`
 - 在 `.codex/skills/`、`.claude/skills/`、`.openclaw/skills/` 内调用时，目标为其上级配置目录
-- 如需显式指定目标根目录，可设置 `SKILL_MANAGER_TARGET_DIR=/path/to/.codex`
+- 如需显式指定目标根目录，可使用 `--target` 参数或设置 `SKILL_MANAGER_TARGET_DIR=/path/to/.codex`
+- 从全局配置目录（如 `~/.claude`）调用时，会尝试通过 git 自动发现项目本地目录，并打印告警
 
 ## 支持的来源类型
 
@@ -81,7 +82,7 @@ skill-manager install jgtolentino/insightpulse-odoo/main/docs/claude-code-skills
 
 ```bash
 # 使用脚本安装
-scripts/install.sh <source>
+scripts/install.sh [--target <dir>] <source>
 
 # 示例
 scripts/install.sh ~/dev/my-skills/pdf-tool
@@ -90,6 +91,9 @@ scripts/install.sh ~/dev/my-skills/
 scripts/install.sh ~/dev/my-commands/
 scripts/install.sh https://github.com/anthropics/claude-code
 scripts/install.sh jgtolentino/insightpulse-odoo/main/docs/claude-code-skills/community
+
+# 显式指定目标（从非项目目录调用时使用）
+scripts/install.sh --target /path/to/project/.claude ~/dev/my-skills/pdf-tool
 ```
 
 ### 列出已安装 Items
@@ -177,6 +181,9 @@ skill-manager install ../other-project/.claude/skills/
 # 在 Codex 全局目录中调用时，安装到 ~/.codex/skills/
 cd /Users/maoking/.codex
 skill-manager install ~/dev/my-skills/pdf-tool
+
+# 从全局目录调用但安装到指定项目（使用 --target 避免装错位置）
+skill-manager install --target /path/to/project/.claude ~/dev/my-skills/pdf-tool
 
 # 从 GitHub 仓库根目录安装
 skill-manager install https://github.com/anthropics/claude-code

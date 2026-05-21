@@ -6,9 +6,44 @@
 
 set -e
 
-SOURCE="$1"
+# Parse arguments: support --target flag for explicit target directory
+SOURCE=""
+TARGET_OVERRIDE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --target|-t)
+            if [ -z "${2:-}" ]; then
+                echo "❌ 错误: --target 需要指定目录路径"
+                exit 1
+            fi
+            TARGET_OVERRIDE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "用法: $0 [选项] <source>"
+            echo ""
+            echo "选项:"
+            echo "  --target, -t <dir>  指定目标 Agent 配置目录"
+            echo ""
+            echo "示例:"
+            echo "  $0 ~/skills/pdf-tool"
+            echo "  $0 --target /path/to/project/.claude ~/skills/pdf-tool"
+            exit 0
+            ;;
+        *)
+            SOURCE="$1"
+            shift
+            ;;
+    esac
+done
+
 # 保存调用者的原始工作目录（关键：用于定位项目 Agent 配置目录）
 ORIGINAL_PWD="$PWD"
+
+# Apply --target override
+if [ -n "$TARGET_OVERRIDE" ]; then
+    export SKILL_MANAGER_TARGET_DIR="$TARGET_OVERRIDE"
+fi
 # 获取脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANAGER_DIR="$(dirname "$SCRIPT_DIR")"
@@ -181,6 +216,49 @@ done < <(find_all_agent_config_dirs "$ORIGINAL_PWD" "$FALLBACK_AGENT_DIR")
 if [ ${#ALL_AGENT_DIRS[@]} -eq 0 ]; then
     echo "❌ 错误: 未找到任何 Agent 配置目录 (.codex/.claude/.openclaw)"
     exit 1
+fi
+
+# Safety: if target would be a global config root, try git-based project rescue
+_is_global_config_root() {
+    local dir="$1"
+    local _home="${HOME:-/Users/${USER}}"
+    case "$dir" in
+        "$_home/.codex"| "$_home/.claude"| "$_home/.openclaw"| "$_home/.agents"| "$_home/.agent") return 0 ;;
+    esac
+    return 1
+}
+
+if [ -z "${SKILL_MANAGER_TARGET_DIR:-}" ] && [ ${#ALL_AGENT_DIRS[@]} -gt 0 ]; then
+    _only_global=true
+    for _dir in "${ALL_AGENT_DIRS[@]}"; do
+        if ! _is_global_config_root "$_dir"; then
+            _only_global=false
+            break
+        fi
+    done
+
+    if [ "$_only_global" = true ]; then
+        # Try git-based project rescue
+        _git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        _rescued=false
+        if [ -n "$_git_root" ] && ! _is_global_config_root "$_git_root" && [ "$_git_root" != "$HOME" ]; then
+            for _cfg in .codex .claude .openclaw .agents .agent; do
+                if [ -d "$_git_root/$_cfg" ]; then
+                    echo "🔄 检测到从全局配置目录调用，已通过 git 发现项目: $_git_root"
+                    echo ""
+                    ALL_AGENT_DIRS=("$_git_root/$_cfg")
+                    _rescued=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$_rescued" = false ]; then
+            echo "⚠️  目标为全局配置目录 (${ALL_AGENT_DIRS[*]})"
+            echo "   如需安装到项目目录，请使用: $0 --target <project/.claude> <source>"
+            echo ""
+        fi
+    fi
 fi
 
 # 显示检测到的目录
