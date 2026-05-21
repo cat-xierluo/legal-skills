@@ -78,14 +78,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    choices=["scene", "keyframe", "interval", "smart"],
                    help="抽帧策略（默认: scene）")
     p.add_argument("--interval", type=float, default=1.0, help="间隔秒数（interval 模式，默认: 1.0）")
-    p.add_argument("--scene-threshold", type=float, default=0.25, help="场景变化阈值（scene 模式，默认: 0.25）")
-    p.add_argument("-d", "--dedup-threshold", type=int, default=8, help="dHash 汉明距离阈值（0=禁用，默认: 8）")
+    p.add_argument("--scene-threshold", type=float, default=0.10, help="场景变化阈值（scene 模式，默认: 0.10）")
+    p.add_argument("--sample-interval", type=float, default=5.0, help="定期采样间隔秒数（scene 模式保底，默认: 5.0，0=禁用）")
+    p.add_argument("-d", "--dedup-threshold", type=int, default=4, help="dHash 汉明距离阈值（0=禁用，默认: 4）")
     p.add_argument("--content-crop-top", type=float, default=0.12, help="内容区顶部裁剪比例（默认: 0.12）")
     p.add_argument("--content-crop-bottom", type=float, default=0.12, help="内容区底部裁剪比例（默认: 0.12）")
     p.add_argument("--content-crop-left", type=float, default=0.04, help="内容区左侧裁剪比例（默认: 0.04）")
     p.add_argument("--content-crop-right", type=float, default=0.04, help="内容区右侧裁剪比例（默认: 0.04）")
-    p.add_argument("--ssim-threshold", type=float, default=0.70, help="SSIM 结构相似度阈值（0=禁用，默认: 0.70）")
-    p.add_argument("--scroll-merge", action="store_true", default=True, help="滚动帧合并（默认开启）")
+    p.add_argument("--ssim-threshold", type=float, default=0.85, help="SSIM 结构相似度阈值（0=禁用，默认: 0.85）")
+    p.add_argument("--scroll-merge", action="store_true", default=False, help="滚动帧合并（默认关闭）")
     p.add_argument("--no-scroll-merge", action="store_false", dest="scroll_merge", help="禁用滚动帧合并")
     p.add_argument("--scroll-diff-threshold", type=float, default=32.0, help="滚动重叠平均像素差阈值（默认: 32.0）")
     p.add_argument("--ocr-dedup", action="store_true", help="启用 OCR 文本去重")
@@ -133,9 +134,9 @@ def main() -> None:
         print("错误: 未检测到 ffmpeg，请先安装: brew install ffmpeg", file=sys.stderr)
         sys.exit(1)
 
-    # 确定输出目录
+    # 确定输出目录（默认在视频文件同级目录下）
     video_stem = Path(video_path).stem
-    output_dir = args.output or f"{video_stem}_frames"
+    output_dir = args.output or str(Path(video_path).parent / f"{video_stem}_frames")
     output_dir = str(Path(output_dir).resolve())
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     cleanup_stats = _clean_output_dir(output_dir)
@@ -198,6 +199,8 @@ def main() -> None:
             max_size=args.max_size,
             quality=args.quality,
             timeout_seconds=ffmpeg_timeout,
+            frame_rate_fps=info.frame_rate_fps,
+            sample_interval=args.sample_interval,
         ):
             if "out_time_ms" in kv:
                 try:

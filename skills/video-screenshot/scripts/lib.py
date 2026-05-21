@@ -132,6 +132,8 @@ def build_ffmpeg_filter_args(
     interval_seconds: float,
     scene_threshold: float,
     max_size: int = 0,
+    frame_rate_fps: float | None = None,
+    sample_interval: float = 5.0,
 ) -> tuple[list[str], str, list[str]]:
     """构建 ffmpeg 滤镜参数，返回 (input_args, vf, extra_args)。"""
     # max_size=0 时保持原始分辨率，不缩放
@@ -148,8 +150,15 @@ def build_ffmpeg_filter_args(
     # 构建 scale 部分的滤镜链（可能为空）
     scale_part = f",{scale}" if scale else ""
 
+    # scene 策略：场景检测 + 定期采样保底（确保静态画面也有覆盖）
+    scene_expr = f"gt(scene,{float(scene_threshold)})"
+    if frame_rate_fps and frame_rate_fps > 0 and sample_interval and sample_interval > 0:
+        n_frames = max(1, round(frame_rate_fps * sample_interval))
+        scene_expr = f"{scene_expr}+not(mod(n\\,{n_frames}))"
+    scene_vf = f"select='{scene_expr}'{scale_part}{fmt}"
+
     strategy_map: dict[str, tuple[list[str], str, list[str]]] = {
-        "scene": ([], f"select='gt(scene,{float(scene_threshold)})'{scale_part},mpdecimate{fmt}", vfr_args),
+        "scene": ([], scene_vf, vfr_args),
         "keyframe": (["-skip_frame", "nokey"], f"{scale_part[1:]},mpdecimate{fmt}" if scale_part else f"mpdecimate{fmt}", vfr_args),
         "smart": ([], f"{scale_part[1:]},mpdecimate{fmt}" if scale_part else f"mpdecimate{fmt}", vfr_args),
     }
@@ -228,6 +237,8 @@ def run_ffmpeg_extract(
     max_size: int = 1280,
     quality: int = 6,
     timeout_seconds: float | None = None,
+    frame_rate_fps: float | None = None,
+    sample_interval: float = 5.0,
 ) -> Any:
     """运行 ffmpeg 抽帧，yield 进度字典。"""
     ffmpeg = find_tool("ffmpeg")
@@ -236,6 +247,8 @@ def run_ffmpeg_extract(
 
     input_args, vf, extra_args = build_ffmpeg_filter_args(
         strategy, interval_seconds, scene_threshold, max_size,
+        frame_rate_fps=frame_rate_fps,
+        sample_interval=sample_interval,
     )
 
     cmd = [
@@ -537,7 +550,7 @@ def calc_content_quality(image_bytes: bytes) -> dict[str, Any]:
 
     # 分类
     label = ""
-    if content_std < 10 or white_ratio > 0.85 or black_ratio > 0.85:
+    if content_std < 10 or white_ratio > 0.95 or black_ratio > 0.95:
         label = "blank"
     elif content_std < 35 and grid_high <= 2:
         label = "startup"
