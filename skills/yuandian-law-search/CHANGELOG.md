@@ -1,5 +1,14 @@
 # 变更日志
 
+## [1.3.4] - 2026-05-27
+
+### 新增
+- 新增 `scripts/yd-run` 干净环境运行入口，默认清理 Codex/代理相关环境变量后再调用 `yd_search.py`。
+- 新增 `scripts/yd-run --network-check` 网络预检，用于无积分消耗地检查 `open.chineselaw.com` 和 `ydzk.chineselaw.com` 的 DNS 与 TLS 连通性。
+
+### 文档完善
+- SKILL.md 和 README.md 改为推荐使用 `scripts/yd-run`，降低 Codex 网络沙箱、PATH 漂移和代理环境变量对元典检索的影响。
+
 ## [1.3.3] - 2026-05-13
 
 ### 新增

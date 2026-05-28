@@ -19,7 +19,13 @@ YD_API_KEY=sk-你的密钥
 ### 3. 执行检索
 
 ```bash
-python3 scripts/yd_search.py search "正当防卫的限度" --sxx 现行有效
+scripts/yd-run search "正当防卫的限度" --sxx 现行有效
+```
+
+`scripts/yd-run` 会用干净环境启动 Python，避免 Codex 进程环境、代理变量或 PATH 漂移影响元典接口访问。网络排查可先运行：
+
+```bash
+scripts/yd-run --network-check
 ```
 
 ## 设计理念：为什么这样设计这个 Skill
@@ -122,8 +128,8 @@ Skill 内置了从 GitHub monorepo 自动检测和下载更新的能力，无需
 
 1. **自动检测**：每次执行检索命令时，脚本会检查距上次版本检测是否超过 7 天。若超过，从 GitHub 读取远程 `SKILL.md` 的版本号，与本地对比
 2. **版本比对**：基于语义版本号（semver）比较，远程版本更高时打印更新提示
-3. **手动检查**：可随时执行 `python3 scripts/yd_search.py check-update`，显示当前版本、远程版本和最近提交记录
-4. **执行更新**：`python3 scripts/yd_search.py do-update` 从 GitHub 下载 `scripts/MANIFEST.txt` 中列出的所有文件
+3. **手动检查**：可随时执行 `scripts/yd-run check-update`，显示当前版本、远程版本和最近提交记录
+4. **执行更新**：`scripts/yd-run do-update` 从 GitHub 下载 `scripts/MANIFEST.txt` 中列出的所有文件
 
 ### 安全边界
 
