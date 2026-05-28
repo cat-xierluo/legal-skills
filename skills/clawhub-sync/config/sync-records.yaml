@@ -1,0 +1,231 @@
+# ClawHub 同步记录
+# 记录每次同步的 skill 状态、版本和 git 信息
+#
+# 字段说明：
+#   version: 同步时的版本号
+#   last_sync: 最后同步时间 (ISO 8601)
+#   git_hash: 同步时的 commit hash
+#   status: synced / pending / failed
+#   changelog_summary: 变更摘要
+#   url: ClawHub 发布地址
+#   publish_id: ClawHub 内部 ID
+
+records:
+  # ===== 同步工具 =====
+  clawhub-sync:
+    version: "1.4.1"
+    last_sync: "2026-03-26T13:18:00+08:00"
+    git_hash: "current"
+    status: synced
+    changelog_summary: "修复 display name 为 ClawHub Sync"
+    url: "https://clawhub.ai/skills/clawhub-sync"
+    publish_id: "k971q0zw7ftrrftqw4eksv4sb583mxjb"
+
+  # ===== 法律相关 =====
+  legal-qa-extractor:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  legal-text-format:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  litigation-analysis:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  legal-proposal-generator:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  patent-analysis:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  trademark-assistant:
+    version: "1.5.3"
+    last_sync: null
+    git_hash: null
+    status: deleted
+    changelog_summary: "已从 ClawHub 删除 - CC-BY-NC-SA-4.0 与 MIT-0 冲突"
+    url: null
+    publish_id: null
+    note: "ClawHub 只支持 MIT-0，法律类 skill 保留 CC-BY-NC-SA-4.0，不同步到 ClawHub"
+
+  # ===== 文档处理 =====
+  paddle-ocr:
+    version: "1.1.1"
+    last_sync: "2026-04-15T18:02:00+08:00"
+    git_hash: "current"
+    status: synced
+    changelog_summary: "面向法律 PDF 与扫描件的 PaddleOCR 结构化解析，支持表格识别、公式识别、版面分析"
+    url: "https://clawhub.ai/skills/paddle-ocr"
+    publish_id: "k971crrs9br9ty2wztq14rm9zx84wtth"
+
+  md2word:
+    version: "1.0.1"
+    last_sync: "2026-04-11T23:00:00+08:00"
+    git_hash: "92c1a38"
+    status: synced
+    changelog_summary: "支持外部URL图片下载嵌入，调整图片显示比例"
+    url: "https://clawhub.ai/skills/md2word"
+    publish_id: "k97e5qdgkvhv6p78n115n4wcns84mxpn"
+
+  mineru-ocr:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  piclist-upload:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  de-ai-polish:
+    version: "1.1.0"
+    last_sync: "2026-05-08T13:30:00+08:00"
+    git_hash: "acf8c7a"
+    status: synced
+    changelog_summary: "新增标点符号自动修正脚本，精简 SKILL.md 至 432 行解决 embedding 超限"
+    url: "https://clawhub.ai/skills/de-ai-polish"
+    publish_id: "k976tk849d2111xq47z8x5zfjh869zne"
+
+  # ===== 法律专业 =====
+  court-sms:
+    version: "1.5.0"
+    last_sync: "2026-04-15T18:35:00+08:00"
+    git_hash: "40d0a2b"
+    status: synced
+    changelog_summary: "新增司法送达网平台支持、同构异域名正则更新、文书重命名回退改进"
+    url: "https://clawhub.ai/skills/court-sms"
+    publish_id: "k974c33dxcty7v2vnh4tp13xcx84w5sf"
+
+  # ===== 搜索与研究 =====
+  zhihe-legal-research:
+    version: "1.2.0"
+    last_sync: "2026-04-15T19:00:00+08:00"
+    git_hash: "9463f7f"
+    status: synced
+    changelog_summary: "连接智合AI法律大模型平台进行法律研究，支持异步任务提交与结果查询"
+    url: "https://clawhub.ai/skills/zhihe-legal-research"
+    publish_id: "k9707exx5dw7gqakccf069qpts84wgg3"
+
+  multi-search:
+    version: "1.1.0"
+    last_sync: null
+    git_hash: null
+    status: slug_conflict
+    changelog_summary: "slug multi-search 已被占用，待用户确定新 slug 后发布"
+    note: "替代 slug 候选：legal-multi-search, deep-research-agent"
+
+  repo-research:
+    version: "0.7.0"
+    last_sync: "2026-03-24T21:28:00+08:00"
+    git_hash: "current"
+    status: synced
+    changelog_summary: "GitHub 仓库深度研究与整合分析工具"
+    url: "https://clawhub.ai/skills/repo-research"
+    publish_id: "k976p7s4ytx300bnh8javg1jbd83g75k"
+
+  yuandian-law-search:
+    version: "1.3.4"
+    last_sync: "2026-05-28T15:10:00+08:00"
+    git_hash: "37f17bc"
+    status: synced
+    changelog_summary: "新增 yd-run 干净环境运行入口和 --network-check 网络预检"
+    url: "https://clawhub.ai/skills/yuandian-law-search"
+    publish_id: "k977zw4mpqwj2xrd35mwpxahrx86nmpj"
+
+  # ===== 内容资产 =====
+  article2book:
+    version: "1.0.0"
+    last_sync: "2026-05-17T17:15:00+08:00"
+    git_hash: "a3ac8dd"
+    status: synced
+    changelog_summary: "基于现有内容资产再组织，支持七类形态判断，三档工作模式，两阶段交付"
+    url: "https://clawhub.ai/skills/article2book"
+    publish_id: "k979g8rs9jtwca2d9xhvkj5xt986wy7f"
+
+  # ===== 媒体处理 =====
+  video-compressor:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: slug_conflict
+    changelog_summary: "slug video-compressor 已被占用（/gaoq1/video-compressor），暂不发布"
+
+  svg-article-illustrator:
+    version: "1.0.5"
+    last_sync: "2026-03-24T20:32:00+08:00"
+    git_hash: "3a6c1c2"
+    status: synced
+    changelog_summary: "AI驱动的SVG文章配图生成工具"
+    url: "https://clawhub.ai/skills/svg-article-illustrator"
+    publish_id: "k97976zajpd6xke7b007yg7czx83herp"
+
+  funasr-transcribe:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  wechat-article-fetch:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  # ===== 效率工具 =====
+  skill-lint:
+    version: "1.3.0"
+    last_sync: "2026-04-05T14:54:00+08:00"
+    git_hash: "aae6473"
+    status: synced
+    changelog_summary: "Skill格式审查工具更新至v1.3.0，增强合规性审计能力"
+    url: "https://clawhub.ai/skills/skill-lint"
+    publish_id: "k975sqwrnntx0z3stqmbksp4n5849zsm"
+
+  skill-architect:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  skill-manager:
+    version: null
+    last_sync: null
+    git_hash: null
+    status: pending
+    changelog_summary: null
+
+  git-batch-commit:
+    version: "1.3.0"
+    last_sync: "2026-05-01T22:50:00+08:00"
+    git_hash: "7a46433"
+    status: synced
+    changelog_summary: "SKILL.md 瘦身至 117 行，数据外部化到 YAML，修复硬编码路径 bug"
+    url: "https://clawhub.ai/skills/git-batch-commit"
+    publish_id: "k970pbtxn83v5pjnf9xdewrst185xsq7"
+    publish_id: "k97af4zg7yfnv027gmbczncj0x84b0av"

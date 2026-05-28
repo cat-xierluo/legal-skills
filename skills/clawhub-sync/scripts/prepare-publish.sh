@@ -107,6 +107,7 @@ RSYNC_ARGS=(
     --exclude='**/logs/'       # 排除日志目录
     --exclude='**/output/'     # 排除输出目录
     --exclude='**/downloads/'  # 排除下载目录
+    --exclude='**/archive/'    # 排除运行时缓存目录
 )
 
 # 检查项目根目录的 .gitignore
@@ -143,6 +144,11 @@ fi
 # 执行 rsync
 echo -e "${GREEN}复制文件到临时目录...${NC}"
 rsync "${RSYNC_ARGS[@]}" "$SKILL_PATH/" "$TEMP_DIR/"
+
+# 强制清理 rsync 可能遗漏的运行时目录（.gitignore 路径相对于项目根时 rsync 无法匹配）
+for _DIR in archive output downloads logs; do
+    [ -d "$TEMP_DIR/$_DIR" ] && rm -rf "$TEMP_DIR/$_DIR" && echo -e "${YELLOW}强制移除: $_DIR/${NC}"
+done
 
 # 统计文件数量
 FILE_COUNT=$(find "$TEMP_DIR" -type f | wc -l | tr -d ' ')
