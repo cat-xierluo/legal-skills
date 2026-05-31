@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-45-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-44-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -49,6 +49,8 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
+| 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
 | 2026-05-20 | 更新     | [skill-lint](skills/skill-lint/)                 | v1.4.0 | 更新 Frontmatter 校验规则：`version` 调整为推荐发布字段，并检查 CHANGELOG、README、marketplace 版本同步 |
 | 2026-05-20 | 更新     | [skill-architect](skills/skill-architect/)       | v1.4.0 | 创建与审查流程同步新版 Frontmatter 发布规范，默认纳入 version、author、homepage 推荐字段 |
@@ -177,22 +179,6 @@
 <td style="text-align:center">v1.1.0</td>
 <td></td>
 </tr>
-<tr>
-<td><a href="skills/minimax-web-search/"><strong>minimax-web-search</strong></a></td>
-<td>工具·搜索</td>
-<td style="word-break:break-word">通过 MiniMax MCP 进行网络搜索</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.1.1</td>
-<td>适用于 OpenClaw</td>
-</tr>
-<tr>
-<td><a href="skills/minimax-image-understand/"><strong>minimax-image-understand</strong></a></td>
-<td>工具·图像理解</td>
-<td style="word-break:break-word">通过 MiniMax MCP 进行图像理解</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.1.0</td>
-<td>适用于 OpenClaw</td>
-</tr>
 </tbody>
 </table>
 
@@ -217,7 +203,7 @@
 <td>通用·检索</td>
 <td style="word-break:break-word">元典法条与案例检索，通过元典 API 检索中国法律法规条文和案例。支持法条语义/关键词/详情检索和案例关键词/向量语义检索，共 5 种检索模式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.3</td>
+<td style="text-align:center">v1.3.4</td>
 <td>需配置 API Key</td>
 </tr>
 <tr>
@@ -242,6 +228,14 @@
 <td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.3.1</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/pdf-organizer/"><strong>pdf-organizer</strong></a></td>
+<td>通用·PDF整理</td>
+<td style="word-break:break-word">法律 PDF 文书整理工具：按内容拆分、合并或直接重命名 OCR 后双层扫描件，生成页面索引、manifest 草稿和下游交接文件；支持旋转与倾斜校正，不做 OCR 或压缩</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.5.0</td>
 <td></td>
 </tr>
 <tr>
@@ -344,6 +338,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a href="skills/pdf-processor/"><strong>pdf-processor</strong></a></td>
+<td>工具·PDF处理</td>
+<td style="word-break:break-word">PDF 处理工具，支持扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。统一入口自动选择最短可用流程，配合 pdf-organizer 完成从预处理到文书整理的完整工作流</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v2.6.8</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
 <td>工具·课程</td>
 <td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片资产保真与正文插图克制、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
@@ -396,7 +398,7 @@
 <td>工具·写作</td>
 <td style="word-break:break-word">检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。整合 24 种 AI 写作检测规则，配备 5 维度质量评分系统</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.0</td>
+<td style="text-align:center">v1.2.0</td>
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -463,7 +465,7 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.0</td>
+<td style="text-align:center">v1.4.1</td>
 <td></td>
 </tr>
 <tr>
@@ -471,7 +473,7 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">Git 全流程工作流助手，覆盖分支创建、Monorepo 安全合并、PR 创建/审查/合并、合并冲突恢复、Cherry-pick 安全流程和常规 Git 操作规则</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.0</td>
+<td style="text-align:center">v1.1.1</td>
 <td></td>
 </tr>
 <tr>
@@ -496,14 +498,6 @@
 <td style="word-break:break-word">Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查 Frontmatter 与版本同步、文档与代码一致性，识别冗余内容，生成技能审计报告</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.4.0</td>
-<td></td>
-</tr>
-<tr>
-<td><a href="skills/repo-research/"><strong>repo-research</strong></a></td>
-<td>工具·研究</td>
-<td style="word-break:break-word">GitHub 仓库深度研究工具，支持单/多仓库研究、与本地项目对比分析、启发式整合建议。支持主题驱动搜索模式：自动搜索相关仓库、克隆、分析并生成报告</td>
-<td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.7.0</td>
 <td></td>
 </tr>
 <tr>
@@ -549,3 +543,13 @@
 将以下内容复制到你的 Agent 平台，让它帮你安装：
 
 > 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
+
+## 📦 已归档技能
+
+以下技能已停止维护，移至 `archive/` 目录（不随仓库发布）：
+
+| 技能 | 版本 | 说明 |
+|------|------|------|
+| minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill |
+| minimax-web-search | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill |
+| repo-research | v0.7.0 | 功能较简单，不再维护 |
