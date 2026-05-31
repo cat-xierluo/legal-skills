@@ -93,6 +93,16 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 - 如果修改的是**定义行为/功能**的文件（如 `SKILL.md`、`.py`、`.ts`），视为代码变更
 - 如果修改的是**记录/说明**性质的文件（如 `README.md`、`CHANGELOG.md`），视为文档变更
 
+### 同 Skill 内伴随变更合并规则
+
+**核心原则**：同一 Skill 内的功能变更及其直接关联的配套文件更新，应合并为一条提交，不要按文件类型拆分。
+
+具体规则：
+- 当 `SKILL.md` 有功能变更（feat/fix/style），同 Skill 下的 `CHANGELOG.md` 更新应**合并进同一条提交**，不单独拆出 `docs` 提交
+- 同理，版本号变更、配置微调（如删除 `.clawhubignore`）等配套小改动也一并合并
+- 判断标准：这些文件变动是否由**同一个功能变更**引起？如果是，就是一条提交
+- 只有当 CHANGELOG 独立更新（如补录历史版本）且无对应功能变更时，才单独使用 `docs` 类型
+
 ## 提交信息格式
 
 所有提交遵循格式：
