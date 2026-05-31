@@ -1,3 +1,0 @@
-# 排除大文件避免 embedding 超限（ClawHub 按字符截断而非 token）
-# 这些文件保留在 Git 仓库中，用户安装后可使用
-reference/
