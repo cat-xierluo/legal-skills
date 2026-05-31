@@ -1,0 +1,23 @@
+# PDF Processor - 依赖（PDF 处理功能）
+
+# PDF 转图像
+pdf2image>=1.17.0
+
+# 图像处理
+opencv-python>=4.9.0
+
+# 图像操作
+pillow>=10.0.0
+
+# 数值计算
+numpy>=1.24.0
+
+# PDF 文字层叠加、解密、水印检测、压缩
+pymupdf>=1.23.0
+
+# PDF 解密、合并辅助
+pypdf>=3.17.0
+
+# 本地 Paddle 双层实验后端（非默认生产链路，需要时再安装）
+# paddleocr
+# paddlepaddle
