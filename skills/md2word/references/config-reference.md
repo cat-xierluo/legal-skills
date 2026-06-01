@@ -31,6 +31,7 @@ md2word 使用 YAML 格式的配置文件来控制 Word 文档的格式化输出
 
 ```yaml
 page:
+  orientation: portrait    # 页面方向: portrait(纵向,默认) / landscape(横向)
   width: 21.0              # 纸张宽度 (cm)
   height: 29.7             # 纸张高度 (cm)
   margin_top: 2.54         # 上边距 (cm)

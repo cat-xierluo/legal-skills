@@ -18,6 +18,7 @@ import io
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.enum.section import WD_ORIENT
 from docx.oxml.ns import qn
 from docx.oxml import parse_xml
 from docx.oxml.shared import OxmlElement
@@ -467,8 +468,15 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     # 设置页面大小和页边距
     for section in doc.sections:
         page_config = config.get('page', {})
-        section.page_width = Cm(page_config.get('width', 21.0))
-        section.page_height = Cm(page_config.get('height', 29.7))
+        orientation = page_config.get('orientation', 'portrait')
+        if orientation == 'landscape':
+            section.orientation = WD_ORIENT.LANDSCAPE
+            section.page_width = Cm(page_config.get('height', 29.7))
+            section.page_height = Cm(page_config.get('width', 21.0))
+        else:
+            section.orientation = WD_ORIENT.PORTRAIT
+            section.page_width = Cm(page_config.get('width', 21.0))
+            section.page_height = Cm(page_config.get('height', 29.7))
         section.top_margin = Cm(page_config.get('margin_top', 2.54))
         section.bottom_margin = Cm(page_config.get('margin_bottom', 2.54))
         section.left_margin = Cm(page_config.get('margin_left', 3.18))
@@ -752,6 +760,7 @@ def main():
     parser.add_argument('--config', '-c', help='使用自定义配置文件 (YAML格式)')
     parser.add_argument('--list-presets', action='store_true', help='列出所有可用的预设配置')
     parser.add_argument('--template', '-t', help='Word模板文件路径')
+    parser.add_argument('--landscape', action='store_true', help='使用横向页面（Landscape）')
     
     args = parser.parse_args()
     
@@ -804,7 +813,12 @@ def main():
     
     output_file = args.output if args.output else generate_output_filename(md_file)
     template_file = args.template if args.template else find_template_file()
-    
+
+    if args.landscape:
+        if 'page' not in config._config:
+            config._config['page'] = {}
+        config._config['page']['orientation'] = 'landscape'
+
     try:
         create_word_document(md_file, output_file, template_file, config)
         print_success_info(output_file, config)
