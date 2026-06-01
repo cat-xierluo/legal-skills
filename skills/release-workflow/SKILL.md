@@ -67,7 +67,7 @@ git log ${PREV_TAG}..HEAD --oneline
 git log ${PREV_TAG}..HEAD --format="- %s (%h)"
 ```
 
-综合两个来源，按模板组织 Release Notes。模板和格式指南见 `references/release-notes-guide.md`。
+综合两个来源，按模板组织 Release Notes。模板和格式指南见 `references/release-notes-guide.md`。如果 `config/projects.yaml` 中存在 `release_notes.profile`，优先使用项目配置指定的结构；未配置时按项目类型选择默认结构。
 
 ### 第 3 步：提交并打 Tag
 
@@ -130,6 +130,7 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 1. 预期产物是否齐全（根据 `platforms` 和 `auto_update` 推导）
 2. `exclude_assets` 中列出的产物是否意外出现
 3. 产物命名是否符合规范
+4. Release Notes 是否符合 `release_notes.required_sections` 和 `release_notes.always_include` 约束
 
 ### 第 7 步：清理
 

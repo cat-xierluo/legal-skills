@@ -32,3 +32,27 @@ your-app:
   # exclude_assets:
   #   - "*.msi"
   #   - "*.msi.sig"
+
+  # Release Notes 结构配置
+  # profile 可选：desktop-standard | cli-standard | library-standard | web-standard
+  release_notes:
+    profile: desktop-standard
+    language: zh-CN
+    required_sections:
+      - Highlights
+      - 下载
+    optional_sections:
+      - 新增
+      - 变更
+      - 修复
+    always_include:
+      - no_duplicate_title
+      - summary_blockquote
+      - full_changelog_link
+      - auto_update_assets_note
+    warning:
+      include_when:
+        - macos_unsigned
+        - terminal_command_required
+        - breaking_change
+        - security_notice

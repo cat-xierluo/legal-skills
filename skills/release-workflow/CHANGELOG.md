@@ -1,5 +1,12 @@
 # 变更日志
 
+## [1.1.2] - 2026-06-01
+
+### 变更
+
+- 固定桌面应用 Release Notes 结构为摘要、Highlights、新增、变更、修复、Warning、下载和完整变更日志。
+- 新增 `release_notes` 项目配置示例，用于为 Folia 等项目指定专门的 Release Notes profile 和必备分区。
+
 ## [1.1.1] - 2026-06-01
 
 ### 变更
