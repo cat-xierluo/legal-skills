@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-44-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-45-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-05-31 | 新上传   | [img-to-pdf](skills/img-to-pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
@@ -400,6 +401,14 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
+</tr>
+<tr>
+<td><a href="skills/img-to-pdf/"><strong>img-to-pdf</strong></a></td>
+<td>工具·PDF排版</td>
+<td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片等）</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td></td>
 </tr>
 <tr>
 <td><a href="skills/video-compressor/"><strong>video-compressor</strong></a></td>
