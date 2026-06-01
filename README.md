@@ -49,7 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
-| 2026-05-31 | 新上传   | [img-to-pdf](skills/img-to-pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
+| 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
@@ -224,14 +224,6 @@
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
 </tr>
 <tr>
-<td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
-<td>通用·证据</td>
-<td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.1</td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/pdf-organizer/"><strong>pdf-organizer</strong></a></td>
 <td>通用·PDF整理</td>
 <td style="word-break:break-word">法律 PDF 文书整理工具：按内容拆分、合并或直接重命名 OCR 后双层扫描件，生成页面索引、manifest 草稿和下游交接文件；支持旋转与倾斜校正，不做 OCR 或压缩</td>
@@ -355,6 +347,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
+<td>工具·视频处理</td>
+<td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.3.1</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/article2book/"><strong>article2book</strong></a></td>
 <td>工具·内容</td>
 <td style="word-break:break-word">现有内容资产再组织技能。基于文章、专栏、课程讲稿、逐字稿、访谈、课件、会议纪要、案例材料、PDF 文本、Word 文档和笔记等素材，判断最适合转化为书、小册子、课程、系列文章、实务手册或知识库，并输出精简策划意见</td>
@@ -403,7 +403,7 @@
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
 </tr>
 <tr>
-<td><a href="skills/img-to-pdf/"><strong>img-to-pdf</strong></a></td>
+<td><a href="skills/img2pdf/"><strong>img2pdf</strong></a></td>
 <td>工具·PDF排版</td>
 <td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片等）</td>
 <td style="text-align:center">MIT</td>
