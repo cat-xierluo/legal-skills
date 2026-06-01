@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-45-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-47-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -49,17 +49,14 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-01 | 正式发布 | [cross-agent-coordination](skills/cross-agent-coordination/) | v1.0.0 | 跨平台 Agent 任务协调：围绕项目任务源分配任务、标记归属、能力路由和交接上下文 |
+| 2026-06-01 | 正式发布 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.8.2 | 本地多 Agent 执行编排：worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口 |
 | 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
 | 2026-05-20 | 更新     | [skill-lint](skills/skill-lint/)                 | v1.4.0 | 更新 Frontmatter 校验规则：`version` 调整为推荐发布字段，并检查 CHANGELOG、README、marketplace 版本同步 |
 | 2026-05-20 | 更新     | [skill-architect](skills/skill-architect/)       | v1.4.0 | 创建与审查流程同步新版 Frontmatter 发布规范，默认纳入 version、author、homepage 推荐字段 |
-| 2026-05-20 | 更新     | [legal-ocr](skills/legal-ocr/)                   | v1.3.1 | 精简 description，仅保留 OCR、扫描识别、文档识别等功能触发条件和必要边界 |
-| 2026-05-20 | 新上传   | [release-workflow](skills/release-workflow/)                   | v1.1.0 | 通用化 GitHub 项目发布工作流：版本号管理 → Release Notes → tag → CI 监控 → 发布验证 → 清理 |
-| 2026-05-20 | 新上传   | [video-screenshot](skills/video-screenshot/)                 | v0.3.1 | 从录屏视频中自动抽取关键帧、去重并保存为图片，可用作法律证据 |
-| 2026-05-18 | 更新     | [legal-proposal-generator](skills/legal-proposal-generator/) | v0.3.0 | 重构文档类型判断逻辑，解决"建议书"与"方案"误匹配，新增案件性质优先级和禁止降级规则 |
-| 2026-05-18 | 更新     | [skill-manager](skills/skill-manager/)               | v1.5.0 | 新增远程 Skill 更新检测（版本对比 + Commit 对比）、安装元数据追踪（commit/branch/subpath）、更新摘要自动生成 |
 
 </details>
 
@@ -483,6 +480,22 @@
 <td style="word-break:break-word">Git 全流程工作流助手，覆盖分支创建、Monorepo 安全合并、PR 创建/审查/合并、合并冲突恢复、Cherry-pick 安全流程和常规 Git 操作规则</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.1</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/cross-agent-coordination/"><strong>cross-agent-coordination</strong></a></td>
+<td>工具·Agent协作</td>
+<td style="word-break:break-word">跨平台 Agent 任务协调枢纽，围绕项目任务源分配任务、标记归属、能力路由并保留交接上下文</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/multi-agent-orchestration/"><strong>multi-agent-orchestration</strong></a></td>
+<td>工具·Agent协作</td>
+<td style="word-break:break-word">多 Agent 本地执行编排，支持 worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.8.2</td>
 <td></td>
 </tr>
 <tr>

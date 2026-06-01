@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.5.11",
+  "version": "1.6.0",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -180,6 +180,28 @@
       "source": "skills/git-workflow",
       "category": "developer-tools",
       "tags": ["工具", "Git", "workflow", "pull-request"]
+    },
+    {
+      "name": "cross-agent-coordination",
+      "description": "跨平台 Agent 任务协调枢纽，围绕项目任务源分配任务、标记归属、能力路由和交接上下文",
+      "version": "1.0.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/cross-agent-coordination",
+      "category": "developer-tools",
+      "tags": ["工具", "Agent协作", "coordination", "handoff"]
+    },
+    {
+      "name": "multi-agent-orchestration",
+      "description": "多 Agent 本地执行编排，支持 worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口",
+      "version": "1.8.2",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/multi-agent-orchestration",
+      "category": "developer-tools",
+      "tags": ["工具", "Agent协作", "orchestration", "worktree"]
     },
     {
       "name": "multi-search",
