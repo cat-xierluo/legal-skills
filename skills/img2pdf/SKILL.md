@@ -1,5 +1,5 @@
 ---
-name: img-to-pdf
+name: img2pdf
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.0.0"
@@ -7,7 +7,7 @@ description: 将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF。本
 license: MIT
 ---
 
-# img-to-pdf
+# img2pdf
 
 ## 定位
 
