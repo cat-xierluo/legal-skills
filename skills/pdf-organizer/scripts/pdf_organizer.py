@@ -1137,6 +1137,97 @@ def suggest_manifest_command(pdf_path: str, output_dir: str | None, output_path:
     return 0
 
 
+A4_PORTRAIT = (595.0, 842.0)
+A4_LANDSCAPE = (842.0, 595.0)
+
+
+def normalize_a4_pdf(input_file: Path, output_file: Path | None = None) -> dict[str, Any]:
+    """将 PDF 每页标准化为 A4 尺寸：横图→A4 横版，竖图→A4 竖版，等比缩放居中。"""
+    from pypdf import PdfReader, PdfWriter, Transformation
+
+    reader = PdfReader(str(input_file))
+    writer = PdfWriter()
+    page_stats: list[dict[str, Any]] = []
+
+    for page_idx, page in enumerate(reader.pages):
+        box = page.mediabox
+        w = float(box.width)
+        h = float(box.height)
+
+        is_landscape = w > h
+        target_w, target_h = A4_LANDSCAPE if is_landscape else A4_PORTRAIT
+
+        scale = min(target_w / w, target_h / h)
+        scaled_w = w * scale
+        scaled_h = h * scale
+        tx = (target_w - scaled_w) / 2
+        ty = (target_h - scaled_h) / 2
+
+        new_page = writer.add_blank_page(width=target_w, height=target_h)
+        op = Transformation().scale(scale, scale).translate(tx, ty)
+        new_page.merge_transformed_page(page, op)
+
+        page_stats.append({
+            "page": page_idx + 1,
+            "original_size": f"{w:.0f}x{h:.0f}",
+            "orientation": "landscape" if is_landscape else "portrait",
+            "target_size": f"{target_w:.0f}x{target_h:.0f}",
+            "scale": round(scale, 4),
+        })
+
+    target = output_file or input_file
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("wb") as f:
+        writer.write(f)
+
+    return {
+        "input_file": str(input_file),
+        "output_file": str(target),
+        "total_pages": len(reader.pages),
+        "pages": page_stats,
+    }
+
+
+def normalize_a4_command(paths: list[str], in_place: bool, output_dir: str | None) -> int:
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for raw_path in paths:
+        pdf_path = Path(raw_path).expanduser().resolve()
+        if not pdf_path.exists():
+            errors.append(f"{raw_path}: file not found")
+            continue
+        try:
+            if output_dir:
+                out_path = Path(output_dir).expanduser().resolve() / pdf_path.name
+            elif in_place:
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                result = normalize_a4_pdf(pdf_path, tmp_path)
+                shutil.move(str(tmp_path), str(pdf_path))
+                result["output_file"] = str(pdf_path)
+                results.append(result)
+                continue
+            else:
+                out_path = pdf_path
+            result = normalize_a4_pdf(pdf_path, out_path)
+            results.append(result)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{raw_path}: {exc}")
+
+    lines = ["# PDF A4 标准化结果", ""]
+    for result in results:
+        landscape_count = sum(1 for p in result["pages"] if p["orientation"] == "landscape")
+        portrait_count = result["total_pages"] - landscape_count
+        lines.append(f"- `{Path(result['output_file']).name}`: {result['total_pages']} 页"
+                     f"（横版 {landscape_count}，竖版 {portrait_count}）")
+    if errors:
+        lines.extend(["", "## Errors", ""])
+        lines.extend(f"- {e}" for e in errors)
+    print("\n".join(lines))
+    return 1 if errors else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Organize legal PDF documents according to a manifest.")
     parser.add_argument("--manifest", help="Path to organize_manifest.json")
@@ -1168,12 +1259,29 @@ def main() -> int:
     parser.add_argument("--include-text", action="store_true", help="Include full extracted page text in --inspect output.")
     parser.add_argument("--suggest-manifest", help="Generate a draft organize_manifest.json from one OCR PDF.")
     parser.add_argument("--dry-run", action="store_true", help="Preview planned outputs without writing PDFs")
+    parser.add_argument(
+        "--normalize-a4",
+        nargs="+",
+        help="Normalize PDF pages to A4: landscape pages to A4 landscape, portrait pages to A4 portrait.",
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        default=True,
+        help="Overwrite input files in place (default behavior for --normalize-a4).",
+    )
+    parser.add_argument(
+        "--normalize-output-dir",
+        help="Output directory for --normalize-a4 (defaults to in-place overwrite).",
+    )
     args = parser.parse_args()
 
     if args.text_check_pages < 1:
         parser.error("--text-check-pages must be greater than 0")
     if args.check_text_layer:
         return check_text_layer_command(args.check_text_layer, args.text_check_pages)
+    if args.normalize_a4:
+        return normalize_a4_command(args.normalize_a4, args.in_place, args.normalize_output_dir)
     if args.inspect:
         return inspect_command(args.inspect, args.inspect_output, args.include_text)
     if args.suggest_manifest:

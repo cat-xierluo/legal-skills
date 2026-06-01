@@ -22,6 +22,7 @@ license: MIT
 5. 生成页面级检查索引和 manifest 草稿，供 AI/人工复核。
 6. 生成下游 `handoff.json`，供案件材料整理、合同审查、诉讼分析等 Skill 协同使用。
 7. 在整理前后做轻量页面方向处理，例如 90/180/270 度旋转；倾斜校正作为可选预处理能力。
+8. 将 PDF 每页标准化为 A4 尺寸：横向页面自动适配 A4 横版（842×595 pt），竖向页面自动适配 A4 竖版（595×842 pt），等比缩放居中。
 
 本技能不做 OCR、不压缩 PDF，也不替代案件材料整体归类。若 PDF 还没有可检索文字层，先使用 OCR 工具；若需要复杂裁边、压缩、批量 OCR 或高质量图像预处理，优先使用 PDF Processor。
 
@@ -274,6 +275,18 @@ python3 scripts/pdf_organizer.py \
   --suggest-manifest "/path/to/ocr.pdf" \
   --output-dir "/path/to/organized" \
   --manifest-output "/path/to/organize_manifest.json"
+```
+
+### A4 标准化
+
+将一个或多个 PDF 的每页标准化为 A4 尺寸，横向页面→A4 横版，竖向页面→A4 竖版：
+
+```bash
+# 原地覆盖
+python3 scripts/pdf_organizer.py --normalize-a4 file1.pdf file2.pdf
+
+# 输出到指定目录
+python3 scripts/pdf_organizer.py --normalize-a4 file1.pdf file2.pdf --normalize-output-dir /path/to/output
 ```
 
 草稿只作为复核起点。脚本会保守使用 `待确认`，不要跳过人工/AI 复核直接执行。
