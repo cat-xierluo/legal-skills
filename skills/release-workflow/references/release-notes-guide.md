@@ -17,8 +17,6 @@
 ## 推荐模板
 
 ```markdown
-# <项目名> vX.Y.Z
-
 > 一句话概括本版本核心变更（让用户 5 秒内理解为什么要升级）
 
 ---
@@ -71,6 +69,7 @@
 
 | 决策 | 依据 |
 |------|------|
+| 正文不写版本标题 | GitHub Release 页面已经显示 release title，正文再写 `# <项目名> vX.Y.Z` 会重复；正文应直接从摘要、提示或 Highlights 开始 |
 | 中文撰写 | Clash Verge Rev（Tauri 项目）验证中文 Release Notes 完全可行 |
 | 顶部一句话 Highlights | Zettlr / Clash Verge 实践：小项目用户不会逐条读 changelog |
 | 表格列下载链接 | 比 `###` / `####` 分级轻量，比纯链接结构化 |

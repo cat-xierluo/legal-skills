@@ -117,6 +117,8 @@ EOF
 )"
 ```
 
+Release Notes 正文不要再写 `# <项目名> vX.Y.Z` 或其他重复版本标题；GitHub Release 页面自身已经显示标题，正文应直接从摘要、升级提示或 Highlights 开始。
+
 ### 第 6 步：验证
 
 ```bash
@@ -147,7 +149,7 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 
 - [ ] 所有平台 / 矩阵构建全部成功
 - [ ] GitHub Release 产物完整
-- [ ] Release Notes 已更新
+- [ ] Release Notes 已更新，且正文没有重复的版本标题
 - [ ] 镜像同步成功（如已配置）
 - [ ] 旧的失败 Actions runs 已清理
 - [ ] 项目文档已更新（TASKS / DECISIONS / CHANGELOG 等）
