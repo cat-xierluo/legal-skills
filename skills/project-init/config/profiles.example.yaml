@@ -73,13 +73,40 @@ profiles:
       min_count: 3
     skills:
       legal-skills:
-        - legal-ocr                 # OCR 识别
-        - pdf-processor             # PDF 处理
-        - pdf-organizer             # PDF 整理
-        - img2pdf                   # 图片转 PDF
-        - md2word                   # Markdown 转 Word
-        - legal-text-format         # 法律文本格式化
-        - yuandian-law-search       # 元典法律检索
+        # OCR 与文档处理
+        - legal-ocr
+        - pdf-processor
+        - pdf-organizer
+        - img2pdf
+        - md2word
+        - legal-text-format
+        # 语音转文字
+        - funasr-transcribe
+        - tingwu-asr
+        # 法律检索
+        - yuandian-law-search
+        - zhihe-legal-research
+        # 案件管理
+        - new-case
+        - court-sms
+        # 合同与诉讼
+        - litigation-analysis
+        - contract-review
+        - contract-copilot
+        - legal-proposal-generator
+        - legal-qa-extractor
+        # 知识产权
+        - patent-analysis
+        - code2patent
+        - trademark-assistant
+        # 常年法律顾问
+        - opc-legal-counsel
+        # 证据处理
+        - video-screenshot
+        - video-compressor
+        # 内容获取
+        - wechat-article-fetch
+        - piclist-upload
     claude_md: simple
 
   # ── 内容写作项目 ──────────────────────────────────────
