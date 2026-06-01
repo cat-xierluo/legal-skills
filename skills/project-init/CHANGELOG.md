@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0] - 2026-06-01
+
+### Changed
+- **精简项目类型为 4 种：** 开发项目、Skill 开发、法律文档、内容写作；移除前端和数据分析两个 profile
+- **开发项目：** 新增 git-workflow、release-workflow、multi-agent-orchestration、cross-agent-coordination、agent-email；移除 skill-lint、repo-research
+- **法律文档项目：** 用 legal-ocr 替代 mineru-ocr + paddle-ocr；新增 pdf-processor、pdf-organizer、img2pdf、yuandian-law-search
+- **移除 private-skills 和 myagents 技能源**，仅保留 legal-skills
+
 ## [v1.0.0] - 2026-05-16
 
 ### Added

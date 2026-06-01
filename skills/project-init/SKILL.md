@@ -54,22 +54,7 @@ description: |
 mkdir -p .claude/skills/
 ```
 
-**前置检查**：确认 `skill_sources` 中配置的路径是否存在，特别是 skill-manager 的路径。如果 skill-manager 不可用：
-
-1. 检查 `skill_sources.legal-skills` 路径下是否存在 `skill-manager/` 目录。
-2. 如果不存在，提示用户安装 skill-manager：
-   ```
-   skill-manager 未找到，需要先安装才能自动安装 Skill。
-   安装方式：skill-manager install https://github.com/cat-xierluo/legal-skills/tree/main/skills/skill-manager
-   或者手动指定：skill-manager install <skill-manager 本地路径>
-   ```
-3. 用户安装后继续，或者跳过 Skill 安装步骤。
-
-对 profile 中 `skills` 字段列出的每个 Skill，委托 skill-manager 安装：
-
-```bash
-bash <skill-manager-path>/scripts/install.sh "<source_path>/<skill_name>"
-```
+对 profile 中 `skills` 字段列出的每个 Skill，通过调用 skill-manager Skill 以符号链接方式安装到项目的 `.claude/skills/` 目录。skill-manager 会自动处理路径解析、去重和版本追踪。
 
 ### Step 7: 生成 CLAUDE.md
 
@@ -95,7 +80,7 @@ bash <skill-manager-path>/scripts/install.sh "<source_path>/<skill_name>"
 - **docs/DECISIONS.md**: 第一条决策记录（项目初始化的技术选型）
 - **任务清单文件**: 仅当项目选择文件化任务源时创建；文件名和格式由项目上下文决定
 - **docs/ARCHITECTURE.md**: 从目录结构和技术栈生成初始架构描述
-- **DESIGN.md**: 仅前端项目，从 `references/DESIGN.md` 了解九段式结构，结合实际技术栈生成
+- **DESIGN.md**: 仅包含前端的项目，从 `references/DESIGN.md` 了解九段式结构，结合实际技术栈生成
 
 仅创建不存在的文件。
 

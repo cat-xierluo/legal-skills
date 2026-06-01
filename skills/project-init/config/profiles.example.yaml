@@ -8,16 +8,13 @@
 # 值为技能目录的本地绝对路径（支持 ~ 展开）。
 skill_sources:
   legal-skills: ~/Library/Application Support/maoscripts/skills/legal-skills/skills
-  # private-skills: ~/Library/Application Support/maoscripts/skills/legal-skills/private-skills
-  # myagents: ~/.myagents/skills
 
 # ── 配置文件 ──────────────────────────────────────────────
 # 每个配置都是一个识别模板：通过 detect 规则自动匹配项目类型，
 # 并为匹配的项目注入技能、文档和 Claude 指令。
 profiles:
 
-  # ── 示例 1：开发项目 ──────────────────────────────────
-  # 检测到任意一个包管理文件即匹配
+  # ── 开发项目 ──────────────────────────────────────────
   development:
     display_name: 开发项目
     detect:
@@ -32,25 +29,24 @@ profiles:
         - build.gradle
         - composer.json
         - Makefile
-    skills:                         # 按 skill_sources 的键名分组
+    skills:
       legal-skills:
-        - git-batch-commit
-        - skill-lint
-        - repo-research
-      # myagents:
-      #   - task-alignment
-      #   - task-implement
-    claude_md: development          # 使用的 CLAUDE.md 模板名（templates/ 目录下）
-    docs:                           # 项目初始化时创建的文档列表
+        - git-batch-commit          # 智能 Git 批量提交
+        - git-workflow              # Git 全生命周期工作流
+        - release-workflow          # GitHub 发布工作流
+        - multi-agent-orchestration # 多 Agent 并行编排
+        - cross-agent-coordination  # 跨平台 Agent 协调
+        - agent-email               # Agent 邮件通信
+    claude_md: development
+    docs:
       - docs/ROADMAP.md
       - docs/DECISIONS.md
 
-  # ── 示例 2：Skill 开发项目 ────────────────────────────
-  # 使用 has_skill_md: true 检测包含 skill.md 的项目
+  # ── Skill 开发项目 ────────────────────────────────────
   skill-project:
     display_name: Skill 开发项目
     detect:
-      has_skill_md: true            # 项目根目录存在 skill.md 即匹配
+      has_skill_md: true
     skills:
       legal-skills:
         - skill-lint
@@ -58,7 +54,7 @@ profiles:
         - skill-manager
         - git-batch-commit
     claude_md: skill-project
-    scaffold:                       # 项目初始化时创建的子目录
+    scaffold:
       - references
       - scripts
       - assets
@@ -66,67 +62,27 @@ profiles:
       - CHANGELOG.md
       - DECISIONS.md
 
-  # ── 示例 3：前端项目 ──────────────────────────────────
-  frontend:
-    display_name: 前端项目
-    detect:
-      any_of:
-        - tailwind.config.js
-        - tailwind.config.ts
-        - next.config.js
-        - next.config.ts
-        - vite.config.ts
-        - nuxt.config.ts
-    skills:
-      legal-skills:
-        - frontend-design
-        - webapp-testing
-        - git-batch-commit
-    claude_md: frontend
-    docs:
-      - docs/ROADMAP.md
-      - docs/DECISIONS.md
-
-  # ── 示例 4：数据分析项目 ──────────────────────────────
-  # 演示 dir_patterns（目录名匹配）和 glob 扩展名检测
-  data-analysis:
-    display_name: 数据分析项目
-    detect:
-      any_of:
-        - '*.ipynb'                 # glob 模式匹配文件扩展名
-      dir_patterns:                 # 项目根目录下存在任一命名目录即匹配
-        - notebooks
-        - data
-        - analysis
-    skills:
-      legal-skills:
-        - data-analysis
-        - mineru-ocr
-    claude_md: data-analysis
-    docs:
-      - docs/ROADMAP.md
-      - docs/DECISIONS.md
-
-  # ── 示例 5：法律文档项目 ──────────────────────────────
-  # 演示 extensions + min_count 组合条件
+  # ── 法律文档项目 ──────────────────────────────────────
   legal-document:
     display_name: 法律文档项目
     detect:
-      extensions:                   # 统计项目根目录下这些扩展名的文件数
+      extensions:
         - .docx
         - .pdf
         - .doc
-      min_count: 3                  # 文件数 ≥ min_count 时匹配
+      min_count: 3
     skills:
       legal-skills:
-        - mineru-ocr
-        - paddle-ocr
-        - legal-text-format
-        - md2word
+        - legal-ocr                 # OCR 识别
+        - pdf-processor             # PDF 处理
+        - pdf-organizer             # PDF 整理
+        - img2pdf                   # 图片转 PDF
+        - md2word                   # Markdown 转 Word
+        - legal-text-format         # 法律文本格式化
+        - yuandian-law-search       # 元典法律检索
     claude_md: simple
 
-  # ── 示例 6：内容写作项目 ──────────────────────────────
-  # 纯 dir_patterns 检测示例
+  # ── 内容写作项目 ──────────────────────────────────────
   content-writing:
     display_name: 内容写作项目
     detect:
@@ -143,5 +99,4 @@ profiles:
     claude_md: simple
 
 # ── 默认配置 ──────────────────────────────────────────────
-# 所有 detect 规则均未匹配时使用此配置
 default_profile: development

@@ -28,6 +28,7 @@ templates/
 # project-init 参考文件：这些是模板，不是运行时生成的项目文件
 !skills/project-init/references/DECISIONS.md
 !skills/project-init/references/CLAUDE.md
+!skills/project-init/references/TASKS.md
 
 # Archive directories - ignore content but keep directory structure
 **/archive/*
