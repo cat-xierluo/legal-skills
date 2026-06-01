@@ -1,0 +1,98 @@
+# Default task type registry for cross-agent-coordination.
+# Projects can extend or override these values with config/task-types.yaml.
+
+task_types:
+  研究:
+    aliases: [research]
+    description: 信息收集/调研
+    output_hint: 报告/笔记/清单
+    examples:
+      - 法律案例检索
+      - AI 工具调研
+      - 政策法规梳理
+
+  写作:
+    aliases: [writing]
+    description: 内容创作
+    output_hint: 文章/脚本/章节
+    examples:
+      - 章节初稿
+      - 公众号文章
+      - 项目说明
+
+  整合:
+    aliases: [integration, integrate]
+    description: 多来源材料融合
+    output_hint: 统一稿/整合报告
+    examples:
+      - 多人稿件合并
+      - 调研材料整合
+
+  审阅:
+    aliases: [review]
+    description: 质量审查/事实核查
+    output_hint: 审阅意见/修订稿
+    examples:
+      - 事实核查
+      - 术语一致性检查
+      - 交叉审阅
+
+  课程:
+    aliases: [course]
+    description: 课程学习
+    output_hint: 课程笔记/学习记录
+    examples:
+      - 课程笔记
+      - 学习记录
+      - 课后作业
+
+  代码:
+    aliases: [code]
+    description: 代码项目
+    output_hint: 可运行的代码/工具
+    examples:
+      - 小工具开发
+      - 脚本编写
+      - PoC 验证
+
+  法律:
+    aliases: [legal]
+    description: 律师业务
+    output_hint: 方案/文档/分析
+    examples:
+      - 案件材料整理
+      - 诉讼方案
+      - 合同审查
+
+  实验:
+    aliases: [exp]
+    description: 实验性尝试
+    output_hint: 验证结果/经验总结
+    examples:
+      - 不确定方向的探索
+      - 新方法测试
+
+  同步:
+    aliases: [sync]
+    description: 知识同步/归档
+    output_hint: 整理后的文件
+    examples:
+      - 知识库归档
+      - 协作材料整理
+
+naming:
+  pattern: "{id}-{type}-{title}"
+  id_pattern: "YYMMDDNNN"
+  branch_pattern: "agent/{agent-id}/{slug}"
+  examples:
+    - "260305001-法律-CodingPlan数据条款综合"
+    - "260305002-研究-LegalSkill架构设计"
+    - "260305003-整合-多来源资料合并"
+
+statuses:
+  todo: 待开始
+  doing: 进行中
+  done: 已完成
+  blocked: 阻塞中
+  archived: 已归档
+  deprecated: 已废弃

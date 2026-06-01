@@ -1,0 +1,88 @@
+# 复制为项目仓库的 config/collab.yaml 并填入实际值。
+#
+# 注意：collab.yaml 是本地配置，禁止提交。
+# GitHub PAT 推荐通过环境变量提供；如确需写入本地 collab.yaml，
+# 必须确认该文件已被 .gitignore 忽略。
+
+project:
+  # task_folders: 在仓库根目录使用 {YYMMDDNNN}-{type}-{title}/README.md 管理任务
+  # single_repo: 不创建任务文件夹，仅用 Git author + branch + PR 记录归属
+  mode: task_folders
+  default_agent: codex
+  # 项目任务源文件；按项目约定填写。任务文件夹只作为材料包/交接包。
+  issue_file: project-tasks.md
+  task_context_mode: issues_primary # issues_primary | task_folders_primary | task_folders_only
+  status_map:
+    "⬜": pending_confirmation
+    "✅": ready
+    "🟢": created
+    "[ ]": todo
+    "[x]": done
+  available_statuses: [ready, created, todo]
+  dependency_done_statuses: [ready, created, done, resolved, closed]
+  # assigned_only: 只处理明确 assignee 为当前 agent 的 todo 任务
+  # claim_pool: 允许当前 agent 认领未分配的 todo 任务
+  claim_policy: assigned_only
+  task_types_file: config/task-types.yaml
+  template_dir: templates/tasks
+
+github:
+  repo_url: "https://github.com/<owner>/<repo>.git"
+  owner: "<owner>"
+  repo: "<repo>"
+  # token: "" # local ignored fallback only; prefer environment variables
+
+local:
+  repo_root: "~/work/cross-agent-project"
+
+agents:
+  codex:
+    name: "Codex"
+    email: "codex@agents.local"
+    github_user: "codex-bot"
+    token_env: "CODEX_GITHUB_TOKEN"
+    trigger_email: "codex-agent-inbox@example.com"
+    reply_to: "collab-dispatch@example.com"
+    from_alias: "Collab Dispatcher <collab-dispatch@example.com>"
+  claude_code:
+    name: "Claude Code"
+    email: "claude-code@agents.local"
+    github_user: "claude-code-bot"
+    token_env: "CLAUDE_CODE_GITHUB_TOKEN"
+    trigger_email: "claude-code-agent-inbox@example.com"
+    reply_to: "collab-dispatch@example.com"
+    from_alias: "Collab Dispatcher <collab-dispatch@example.com>"
+  manus:
+    name: "Manus Bot"
+    email: "manus@agents.local"
+    github_user: "manus-bot"
+    token_env: "MANUS_GITHUB_TOKEN"
+    trigger_email: "manus-agent-inbox@example.com"
+    reply_to: "collab-dispatch@example.com"
+    from_alias: "Collab Dispatcher <collab-dispatch@example.com>"
+    capabilities: [web_research, citation_collection]
+    trigger_modes: [email_draft]
+    handoff_format: pull_request
+  openclaw:
+    name: "OpenClaw"
+    email: "openclaw@agents.local"
+    github_user: "openclaw-bot"
+    token_env: "OPENCLAW_GITHUB_TOKEN"
+  anygen:
+    name: "AnyGen Bot"
+    email: "anygen@agents.local"
+    github_user: "anygen-bot"
+    token_env: "ANYGEN_GITHUB_TOKEN"
+    capabilities: [image_generation, visual_assets]
+    trigger_modes: [email_draft]
+    handoff_format: pull_request
+  coze:
+    name: "Coze"
+    email: "coze@agents.local"
+    github_user: "coze-bot"
+    token_env: "COZE_GITHUB_TOKEN"
+  hermes:
+    name: "Hermes"
+    email: "hermes@agents.local"
+    github_user: "hermes-bot"
+    token_env: "HERMES_GITHUB_TOKEN"
