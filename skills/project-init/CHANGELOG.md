@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.1] - 2026-06-03
+
+### Changed
+- **TASKS.md 模板：** 任务编号从 `#` 改为显式的 `Task-NNN` 格式（`Task-001`、`Task-002` …），跨文档全局唯一。原 `ISS-NNN` 写法不再使用，因多个 Task 常对应同一 Issue/PR，容易造成 1:1 映射的歧义。
+
 ## [v1.1.0] - 2026-06-01
 
 ### Changed
