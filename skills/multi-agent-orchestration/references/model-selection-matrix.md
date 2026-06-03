@@ -7,6 +7,8 @@
 
 ## 1. 模型分级（L0 / L1 / L2）
 
+模型路由只服务 worker，不绑定 PM 所在产品。Codex 做 PM 时可以启动 Claude Code 或 OpenCode worker；Claude Code 做 PM 时也可以启动 Codex 或 OpenCode worker。判断顺序是：任务复杂度 → 当前可用额度 → worker backend → 模型/环境变量。
+
 ### 1.1 能力定义
 
 | 级别 | 定位 | 典型模型 | 适合任务 |
@@ -28,11 +30,89 @@
 
 **经验法则**：任务描述包含"理解/分析/重构/设计"→ L2；包含"添加/补充/翻译/复制"→ L0；其余默认 L1。
 
-### 1.3 各执行模式下指定模型
+### 1.3 额度 Profile
 
-**Agent Teams 模式**：创建 Teammate 时直接指定 model 参数（`haiku` / `sonnet` / `opus`）。
+| Profile | 目标 | backend | 典型设置 |
+|---------|------|---------|----------|
+| `claude-provider` | 通过第三方 Anthropic-compatible API 启动 Claude Code | Claude Code | `claude --settings /path/to/provider.settings.json ...` |
+| `claude-oauth` | 用户明确要求时才消耗 Claude Code 订阅/OAuth 额度 | Claude Code | `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude ...` |
+| `codex-l1` | 消耗 Codex/OpenAI 额度做常规功能 | Codex | `codex exec -m <model> -a never -s danger-full-access -` |
+| `opencode-l0` | 消耗 OpenCode 已配置 provider 的轻量额度 | OpenCode | `opencode run --format json --model <provider/model> ...` |
+| `opencode-l1` | 消耗 OpenCode 已配置 provider 的常规额度 | OpenCode | `opencode run --format json --model <provider/model> ...` |
+| `opencode-acp` | 通过 OpenCode ACP server 接入结构化协议 | OpenCode / ACP | `opencode acp`，需要 PM 侧 ACP client/adapter |
+| `custom-cli` | 接入其他可一行命令启动的 Agent | custom CLI | `<agent-command> < /tmp/task.prompt.md` |
+| `oss-local` | 不消耗云端额度，适合低风险重复任务 | Codex OSS / shell | `codex exec --oss --local-provider lmstudio ...` 或脚本 |
 
-**tmux 降级模式**：
+默认 Claude Code worker 使用 `claude-provider`。每个第三方 provider 使用一个本地 settings JSON，参考 `config/claude-provider-settings.example.json`；真实 token 文件应放在项目或用户目录的忽略路径中。settings 是完整环境变量组，包含 Haiku/Sonnet/Opus 默认模型、timeout、thinking tokens 和行为开关，所以启动命令不要额外指定 `--model sonnet`。只有用户明确要走订阅/OAuth 时，才使用 `claude-oauth` 并清理 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN` 和第三方 `ANTHROPIC_BASE_URL`。
+
+### 1.4 各执行模式下指定模型
+
+**Claude Code Agent Teams 模式**：如果要走第三方 API，先让该 session 加载 provider settings。模型映射由 settings 里的 `ANTHROPIC_DEFAULT_*_MODEL` 变量提供。
+
+**Claude Code tmux worker（默认第三方 API settings）**：tmux 启动的是一个后台独立终端 session，可 attach 或 capture。默认启动交互式 Claude Code，使用 `--settings` 加载整份 provider profile。模板见 `config/claude-provider-settings.example.json`。
+
+```bash
+tmux new-session -d \
+  -s worker-claude-provider \
+  -c .claude/worktrees/tmux-feature \
+  'claude --settings /path/to/provider.settings.json --permission-mode auto'
+```
+
+批处理执行 prompt 时，再使用 Claude Code 的 `-p` 非交互模式：
+
+```bash
+tmux new-session -d \
+  -s worker-claude-provider \
+  -c .claude/worktrees/tmux-feature \
+  'claude --settings /path/to/provider.settings.json -p --permission-mode auto --output-format stream-json < /tmp/task.prompt.md'
+```
+
+**Claude Code tmux worker（可选订阅/OAuth）**：只在用户明确要求使用 Claude 订阅/OAuth 时启用，启动命令里清掉第三方 provider 环境，避免误走 API key 或代理服务。
+
+```bash
+tmux new-session -d \
+  -s worker-claude-oauth \
+  -c .claude/worktrees/tmux-feature \
+  'env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude --permission-mode auto'
+```
+
+**Codex tmux worker**：用 `-m` 或 profile 指定模型。
+
+```bash
+tmux new-session -d \
+  -s worker-codex-l1 \
+  -c .claude/worktrees/tmux-feature \
+  'codex exec -m <codex-model> -a never -s danger-full-access - < /tmp/task.prompt.md'
+```
+
+**OpenCode tmux worker**：模型格式通常是 `provider/model`，先用 `opencode models` 查看可用项。
+
+```bash
+tmux new-session -d \
+  -s worker-opencode-l1 \
+  -c .claude/worktrees/tmux-feature \
+  'opencode run --format json --model <provider/model> "$(cat /tmp/task.prompt.md)"'
+```
+
+**OpenCode ACP server**：仅在 PM 侧已有 ACP client/adapter 时使用。
+
+```bash
+tmux new-session -d \
+  -s worker-opencode-acp \
+  -c .claude/worktrees/tmux-feature \
+  'opencode acp'
+```
+
+**自定义 CLI worker**：用于其他一行命令 Agent。把模型、provider、profile、权限参数放进命令；PM 只要求它在指定 worktree 内执行，并产出 checkpoint 三件套，或至少可由 Git 状态巡检。
+
+```bash
+tmux new-session -d \
+  -s worker-custom \
+  -c .claude/worktrees/tmux-feature \
+  '<agent-command> < /tmp/task.prompt.md'
+```
+
+**交互式 tmux session**：只在需要人工接管时用 `/model` 或 CLI 内部菜单切换模型。
 
 ```bash
 # 启动 Claude Code 后切换模型
@@ -49,7 +129,7 @@ tmux send-keys -t session-name Enter
 [模型建议: 这是 i18n 任务，适合轻量模型。请先 /model 切换。]
 ```
 
-### 1.4 运行时升降级
+### 1.5 运行时升降级
 
 **升级（→ L2）**：Agent 反复失败 >2 次、任务复杂度超预期
 
@@ -57,7 +137,7 @@ tmux send-keys -t session-name Enter
 
 Agent Teams 模式下模型在创建时指定，升降级需重新创建 Teammate。
 
-tmux 降级模式下：
+tmux 交互模式下：
 
 ```bash
 # 中断 Agent 并切换模型
@@ -69,38 +149,52 @@ tmux send-keys -t session-name -l -- "模型已升级，继续刚才的任务。
 tmux send-keys -t session-name Enter
 ```
 
-### 1.5 批量调度模板
+Claude Code `-p` 批处理模式下，推荐停止旧 worker，保留 worktree，按更高 profile 重启，并在 prompt 中说明“接续当前 worktree 已有改动，不要回退”。
+
+### 1.6 批量调度模板
 
 ```bash
-# tasks.conf 格式: name  worktree路径  模型级别  prompt文件
-worker-1  .claude/worktrees/i18n-fixes    L0  /tmp/task-i18n.txt
-worker-2  .claude/worktrees/file-ops      L1  /tmp/task-fileops.txt
-worker-3  .claude/worktrees/refactor-core L2  /tmp/task-refactor.txt
+# tasks.conf 格式: name  backend  worktree路径  profile  prompt文件
+worker-1  claude  .claude/worktrees/i18n-fixes     claude-provider  /tmp/task-i18n.txt
+worker-2  codex   .claude/worktrees/file-ops       codex-l1   /tmp/task-fileops.txt
+worker-3  opencode .claude/worktrees/ui-copy       opencode-l0  /tmp/task-copy.txt
+worker-4  claude  .claude/worktrees/refactor-core  claude-provider  /tmp/task-refactor.txt
+worker-5  custom  .claude/worktrees/custom-agent    custom-cli  /tmp/task-custom.txt
 ```
 
 ---
 
 ## 2. 执行模式选择
 
-### 2.1 三元对比：Subagent / Agent Teams / tmux Session
+### 2.1 三档 Claude Code worker
 
-| 维度 | Subagent（Agent tool） | Agent Teams（Teammate） | tmux Session |
-|------|----------------------|----------------------|-------------|
-| **上下文** | 共享父会话（受窗口大小影响） | 独立完整上下文 | 独立完整上下文 |
-| **可见性** | 后台运行 | 独立终端窗格（split-panes） | 独立终端 pane |
-| **通信** | 单向汇报 | 双向邮箱 + 共享任务列表 | send-keys + capture-pane |
-| **生命周期** | 随父会话结束 | 随团队结束 | 独立存活 |
-| **模型** | 继承父会话 | 创建时独立指定 | 运行时切换 |
-| **文件隔离** | 在当前目录操作 | worktree + 分支 | worktree + 分支 |
-| **任务管理** | 无 | 共享任务列表（pending/in-progress/completed） | 外部脚本 |
-| **Agent 间协作** | 不支持 | 支持邮箱通信 | 不支持 |
-| **启动开销** | 几乎为零 | 低 | 中等 |
-| **适合时长** | ≤15 分钟 | 小时级 | 小时级 |
-| **并发上限** | 受上下文/API 限制 | 团队规模 | tmux session 数量 |
-| **可靠性** | 高（内置） | 高（官方内置） | 中（send-keys 脆弱） |
-| **环境要求** | 通用 | Claude Code + feature flag | tmux + 终端 |
+| 档位 | 命令形态 | 适合任务 | PM 巡检 |
+|------|----------|----------|---------|
+| 批处理 | `claude -p --output-format stream-json --max-turns 20 ...` | 独立、边界清楚、能一次完成的任务 | checkpoint + stream-json + final diff |
+| tmux 可接管终端 | `tmux new-session -d ... 'claude --settings ...'` | 长上下文、需要随时 attach/capture/send-keys | checkpoint + git + tmux pane |
+| 官方 agent view | `claude agents` / `claude --worktree --tmux` / 版本支持时 `claude --bg` 或 `/bg` | 需要 Claude 官方后台会话、peek/reply/attach | checkpoint + `claude agents --json` + agent view |
 
-### 2.2 路由矩阵
+`--max-turns`、`--worktree`、`--tmux`、`--bg` 的可用性随 Claude Code 版本变化；使用前以当前 `claude --help`、`claude agents --help` 为准。无论使用哪一档，worker 都必须写 `.claude/agent-sessions/{session}/STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md`。
+
+### 2.2 执行后端对比：Subagent / Agent Teams / tmux Session / ACP
+
+| 维度 | Subagent（Agent tool） | Agent Teams（Teammate） | tmux Session | ACP adapter |
+|------|----------------------|----------------------|-------------|-------------|
+| **上下文** | 共享父会话（受窗口大小影响） | 独立完整上下文 | 独立完整上下文 | adapter 决定 |
+| **可见性** | 后台运行 | 独立终端窗格（split-panes） | 独立终端 pane | 结构化事件流 |
+| **通信** | 单向汇报 | 双向邮箱 + 共享任务列表 | checkpoint 文件 + git + capture-pane 兜底 | JSON-RPC 事件 |
+| **生命周期** | 随父会话结束 | 随团队结束 | 独立存活 | adapter 决定 |
+| **模型** | 继承父会话 | 创建时独立指定 | 启动命令/profile 指定，支持 Claude/Codex/OpenCode | adapter 决定 |
+| **文件隔离** | 在当前目录操作 | worktree + 分支 | worktree + 分支 | 仍建议 worktree + 分支 |
+| **任务管理** | 无 | 共享任务列表（pending/in-progress/completed） | 外部脚本 + 状态文件 | adapter 事件 + 状态文件 |
+| **Agent 间协作** | 不支持 | 支持邮箱通信 | 通过 PM 转发 | 取决于 adapter |
+| **启动开销** | 几乎为零 | 低 | 中等 | 中到高 |
+| **适合时长** | ≤15 分钟 | 小时级 | 小时级 | 小时级 |
+| **并发上限** | 受上下文/API 限制 | 团队规模 | tmux session 数量 | adapter 资源 |
+| **可靠性** | 高（内置） | 高（官方内置） | 高（进程/文件），中（屏幕抓取） | 协议高，adapter 成熟度决定实际稳定性 |
+| **环境要求** | 通用 | Claude Code + feature flag | tmux + 对应 CLI | 可启动 ACP adapter |
+
+### 2.3 路由矩阵
 
 | 任务特征 | 推荐模式 | 理由 |
 |---------|---------|------|
@@ -120,14 +214,14 @@ worker-3  .claude/worktrees/refactor-core L2  /tmp/task-refactor.txt
 ├─ 是 → Subagent
 └─ 否 → 需独立 git 分支？
     ├─ 否 → Subagent
-    └─ 是 → 在 Claude Code 中？
-        ├─ 是 → Agent Teams 已启用？
-        │   ├─ 是 → Agent Teams（split-panes）
-        │   └─ 否 → tmux 降级
-        └─ 否 → tmux 降级
+    └─ 是 → 当前 PM 是 Claude Code 且 Agent Teams 已启用？
+        ├─ 是 → Agent Teams（split-panes）
+        └─ 否 → 需要跨产品或额度路由？
+            ├─ 是 → tmux worker（Claude/Codex/OpenCode）
+            └─ 否 → tmux worker
 ```
 
-### 2.3 混合模式
+### 2.4 混合模式
 
 ```
 PM（Team Lead）
@@ -139,4 +233,4 @@ PM（Team Lead）
 
 PM 在等待 Teammate 期间用 Subagent 处理短任务，不空闲。
 
-tmux 降级模式下，将 Teammate 替换为 tmux session 即可。
+tmux worker 模式下，将 Teammate 替换为独立 CLI session 即可。

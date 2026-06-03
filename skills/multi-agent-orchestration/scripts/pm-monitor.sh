@@ -4,6 +4,7 @@
 # 用法:
 #   pm-monitor.sh --project /path/to/repo --team-dir ~/.claude/teams/{name} \
 #     [--tasks-dir ~/.claude/tasks/{uuid}] \
+#     [--claude-agents-cwd /path/to/repo] \
 #     --branch feat/X:session-1 [--branch feat/Y:session-2] ...
 #
 # 在 Claude Code 的 Monitor 工具中启动，或直接在终端运行。
@@ -26,6 +27,14 @@
 #     PR 状态变化
 #   BRANCH_MERGED branch-name
 #     远程分支已删除
+#   CHECKPOINT_STATUS session status phase progress
+#     worker 写入 .claude/agent-sessions/{session}/STATUS.json
+#   CHECKPOINT_RESULT session path
+#     worker 写入 .claude/agent-sessions/{session}/RESULT.md
+#   CHECKPOINT_PATCH session path
+#     worker 写入 .claude/agent-sessions/{session}/PATCH_SUMMARY.md
+#   CLAUDE_AGENT_STATE name/session status kind cwd
+#     Claude Code 官方后台 session 状态变化（来自 claude agents --json）
 #   SESSION_GONE session-name (branch branch-name)
 #     tmux session 已退出
 #   PM_MONITOR_COMPLETE: all branches merged at <timestamp>
@@ -37,6 +46,7 @@ set -euo pipefail
 PROJECT_DIR=""
 TEAM_DIR=""
 TASKS_DIR=""
+CLAUDE_AGENTS_CWD=""
 STALE_THRESHOLD=300  # 5 分钟
 declare -A BRANCHES=()
 
@@ -52,6 +62,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tasks-dir)
       TASKS_DIR="$2"
+      shift 2
+      ;;
+    --claude-agents-cwd)
+      CLAUDE_AGENTS_CWD="$2"
       shift 2
       ;;
     --branch)
@@ -88,8 +102,38 @@ declare -A last_sha
 declare -A last_pr_state
 declare -A last_agent_status
 declare -A last_health_ts
+declare -A last_checkpoint_status
+declare -A last_checkpoint_result_mtime
+declare -A last_checkpoint_patch_mtime
+declare -A last_claude_agent_status
 
 # ========== 辅助函数 ==========
+
+worktree_for_branch() {
+  local branch="$1"
+  git worktree list --porcelain 2>/dev/null | awk -v target="refs/heads/$branch" '
+    /^worktree / { wt = substr($0, 10) }
+    /^branch / {
+      if (substr($0, 8) == target) {
+        print wt
+        exit
+      }
+    }
+  '
+}
+
+checkpoint_dir_for_session() {
+  local wt="$1"
+  local session="$2"
+  local preferred="$wt/.claude/agent-sessions/$session"
+  local legacy="$wt/.agent-context"
+
+  if [ -d "$preferred" ] || [ ! -d "$legacy" ]; then
+    echo "$preferred"
+  else
+    echo "$legacy"
+  fi
+}
 
 # 从 PM inbox 中提取 health_report 消息
 check_agent_health() {
@@ -194,16 +238,109 @@ check_task_states() {
   done
 }
 
+# 检查 worker checkpoint 文件状态变化
+check_file_checkpoints() {
+  for branch in "${!BRANCHES[@]}"; do
+    local session="${BRANCHES[$branch]}"
+    local wt
+    wt=$(worktree_for_branch "$branch")
+    [ -n "$wt" ] || continue
+
+    local checkpoint_dir
+    checkpoint_dir=$(checkpoint_dir_for_session "$wt" "$session")
+    local status_file="$checkpoint_dir/STATUS.json"
+    local result_file="$checkpoint_dir/RESULT.md"
+    local patch_file="$checkpoint_dir/PATCH_SUMMARY.md"
+
+    if [ -f "$status_file" ]; then
+      local status phase progress issues key prev
+      status=$(jq -r '.status // empty' "$status_file" 2>/dev/null || echo "")
+      phase=$(jq -r '.phase // empty' "$status_file" 2>/dev/null || echo "")
+      progress=$(jq -r '.progress // empty' "$status_file" 2>/dev/null || echo "")
+      issues=$(jq -r '.issues // [] | if length > 0 then join(", ") else "" end' "$status_file" 2>/dev/null || echo "")
+      [ -n "$status" ] || continue
+
+      key="$status|$phase|$progress|$issues"
+      prev="${last_checkpoint_status[$session]:-}"
+      if [ "$key" != "$prev" ]; then
+        echo "CHECKPOINT_STATUS: $session $status $phase $progress"
+        case "$status" in
+          done)    echo "AGENT_DONE: $session" ;;
+          failed)  echo "AGENT_FAILED: $session" ;;
+          blocked) echo "AGENT_BLOCKED: $session ($issues)" ;;
+        esac
+      fi
+      last_checkpoint_status[$session]="$key"
+    fi
+
+    if [ -f "$result_file" ]; then
+      local mtime prev_mtime
+      mtime=$(stat -f "%m" "$result_file" 2>/dev/null || stat -c "%Y" "$result_file" 2>/dev/null || echo "")
+      prev_mtime="${last_checkpoint_result_mtime[$session]:-}"
+      if [ -n "$mtime" ] && [ "$mtime" != "$prev_mtime" ]; then
+        echo "CHECKPOINT_RESULT: $session $result_file"
+      fi
+      last_checkpoint_result_mtime[$session]="$mtime"
+    fi
+
+    if [ -f "$patch_file" ]; then
+      local mtime prev_mtime
+      mtime=$(stat -f "%m" "$patch_file" 2>/dev/null || stat -c "%Y" "$patch_file" 2>/dev/null || echo "")
+      prev_mtime="${last_checkpoint_patch_mtime[$session]:-}"
+      if [ -n "$mtime" ] && [ "$mtime" != "$prev_mtime" ]; then
+        echo "CHECKPOINT_PATCH: $session $patch_file"
+      fi
+      last_checkpoint_patch_mtime[$session]="$mtime"
+    fi
+  done
+}
+
+# 检查 Claude Code 官方后台会话状态变化
+check_claude_agents() {
+  [ -z "$CLAUDE_AGENTS_CWD" ] && return
+  command -v claude >/dev/null 2>&1 || return
+  command -v jq >/dev/null 2>&1 || return
+
+  local agents_json
+  agents_json=$(claude agents --cwd "$CLAUDE_AGENTS_CWD" --json 2>/dev/null || echo "[]")
+
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+
+    local id name status kind cwd key prev
+    id=$(echo "$row" | jq -r '.sessionId // (.pid | tostring) // empty' 2>/dev/null || echo "")
+    [ -n "$id" ] || continue
+    name=$(echo "$row" | jq -r '.name // .sessionId // (.pid | tostring) // "unknown"' 2>/dev/null || echo "unknown")
+    status=$(echo "$row" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+    kind=$(echo "$row" | jq -r '.kind // "unknown"' 2>/dev/null || echo "unknown")
+    cwd=$(echo "$row" | jq -r '.cwd // ""' 2>/dev/null || echo "")
+
+    key="$status|$kind|$cwd|$name"
+    prev="${last_claude_agent_status[$id]:-}"
+    if [ "$key" != "$prev" ]; then
+      echo "CLAUDE_AGENT_STATE: $name $status $kind $cwd"
+    fi
+    last_claude_agent_status[$id]="$key"
+  done < <(echo "$agents_json" | jq -c '.[]?' 2>/dev/null)
+}
+
 # ========== 主循环 ==========
 echo "PM_MONITOR_STARTED at $(date)"
 echo "Tracking ${#BRANCHES[@]} branches: ${!BRANCHES[*]}"
 [ -n "$TEAM_DIR" ] && echo "Team inbox: $TEAM_DIR/inboxes/"
+[ -n "$CLAUDE_AGENTS_CWD" ] && echo "Claude agents cwd: $CLAUDE_AGENTS_CWD"
 
 while true; do
   git fetch origin --no-tags --quiet 2>/dev/null || true
 
   # 维度 1: Agent Teams inbox 通信
   check_agent_health
+
+  # 维度 1.2: worker checkpoint 文件
+  check_file_checkpoints
+
+  # 维度 1.3: Claude Code 官方后台 session
+  check_claude_agents
 
   # 维度 1.5: 任务列表状态监控
   if [ -n "$TASKS_DIR" ] && [ -d "$TASKS_DIR" ]; then
