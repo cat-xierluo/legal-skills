@@ -1,0 +1,54 @@
+{
+  "status": "running",
+  "phase": "bootstrap",
+  "progress": "0/5",
+  "updated_at": "{{iso_timestamp}}",
+  "heartbeat_interval_seconds": 300,
+  "task_source": {
+    "type": "{{task_source_type}}",
+    "id": "{{issue_id}}",
+    "title": "{{task_title}}"
+  },
+  "branch": "{{branch_name}}",
+  "worktree": "{{worktree_path}}",
+  "session_id": "{{session_id}}",
+  "session_context": "{{session_context_path}}",
+  "pm_host": "{{pm_host}}",
+  "worker_backend": "{{worker_backend}}",
+  "runtime_profile": "{{runtime_profile}}",
+  "runtime": {
+    "cwd": "{{worktree_path}}",
+    "tools": [
+      {
+        "name": "{{tool_name}}",
+        "path": "{{tool_path}}",
+        "version": "{{tool_version}}"
+      }
+    ]
+  },
+  "scope": {
+    "allowed_files": [],
+    "forbidden_files": []
+  },
+  "current_action": "bootstrap checkpoint",
+  "next_action": "{{next_action}}",
+  "git": {
+    "base_ref": "{{base_ref}}",
+    "head_ref": "{{branch_name}}",
+    "last_commit_sha": "",
+    "pr_number": null,
+    "pr_url": ""
+  },
+  "files_touched": [],
+  "tests": [],
+  "needs_input": false,
+  "pm_action_required": false,
+  "blocker": "",
+  "issues": [],
+  "risks": [],
+  "last_pm_correction": {
+    "received_at": "",
+    "summary": "",
+    "status": "none"
+  }
+}

@@ -27,7 +27,7 @@ inbox 通信示例：
 
 **tmux/custom worker**：默认不写 `~/.claude/teams/`，而是把 PM checkpoint 写在当前 worktree 的 `.claude/agent-sessions/{session}/`。只有明确接入 Agent Teams inbox 时，才额外写 health_report。
 
-**回退兼容**：如果 agent 未写 health_report（旧 agent / 非 Claude Code CLI），pm-monitor.sh 自动回退到 `.claude/agent-sessions/{session}/`、旧 `.agent-context/` 和 Git SHA 轮询。
+**回退兼容**：如果 agent 未写 health_report，pm-monitor.sh 自动回退到 `.claude/agent-sessions/{session}/` 和 Git SHA 轮询。
 
 ### A2. Teammate 创建失败
 
@@ -277,8 +277,6 @@ PM 的目标是节省主会话上下文，不是频繁读取 worker 全量日志
 .claude/agent-sessions/{session}/PATCH_SUMMARY.md
 ```
 
-旧 worker 写 `.agent-context/` 时可以兼容读取，但新 prompt 不应继续要求创建该目录。
-
 PM 巡检优先读 checkpoint 和 `git diff --stat`。只有以下情况才读取完整日志或 tmux pane：
 
 1. `STATUS.json` 超过 15 分钟未更新。
@@ -377,3 +375,26 @@ PM 直接改代码只适合四种例外：
 ```text
 Create .claude/agent-sessions/{session}/STATUS.json only. Include status=running, phase=bootstrap, branch, worktree, session_id, session_context, runtime_profile, allowed_files, forbidden_files, node/npm versions, updated_at. Do not read task files or implement yet. Reply when STATUS is written.
 ```
+
+### G16. STATUS v2 与 PM monitor 的经济性边界
+
+不要把 `STATUS.json` 扩成完整日志。它只应该回答 PM 的五个问题：
+
+1. worker 还活着吗。
+2. 现在在做什么，下一步是什么。
+3. 有没有越界、阻塞或需要 PM 输入。
+4. 测试和 PR 是否到了可 review 状态。
+5. 当前环境是否和 PM 假设不一致。
+
+详细实现过程、解释和风险放 `RESULT.md` / `PATCH_SUMMARY.md`，不要塞进 JSON。`STATUS.json` v2 新增字段是为了让 `pm-monitor.sh` 输出事件，而不是让 PM 每次读取更大的文件。
+
+经济型巡检优先级：
+
+| 场景 | 推荐 |
+|------|------|
+| 用户问进度、PM 准备介入 | `pm-monitor.sh --once` |
+| worker 长任务持续运行 | `pm-monitor.sh --interval 60 --log-file ...` 放后台 |
+| PM 只需知道是否异常 | 只读 log tail 中的 `AGENT_NEEDS_INPUT`、`CHECKPOINT_STALE`、`CHECKPOINT_TEST_FAILURE` |
+| 需要完整验收 | 再读 `RESULT.md`、`PATCH_SUMMARY.md` 和 PR diff |
+
+脚本本身不能保证唤醒 PM；是否自动唤起取决于宿主有没有 automation、monitor、webhook 或外部通知能力。没有这些能力时，也不要让 PM 前台盯屏；用 `--once` 或低频读取事件日志即可。

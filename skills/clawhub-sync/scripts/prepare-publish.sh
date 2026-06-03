@@ -125,25 +125,40 @@ if [ -f "$SKILL_PATH/.gitignore" ]; then
 fi
 
 # 应用过滤规则
-# 注意：rsync 的 --filter 顺序很重要，先应用的规则优先级更高
-# 我们希望技能内部的 .gitignore 优先级更高，所以后应用
+# 优先使用 git ls-files（100% 精确匹配 Git 追踪状态，避免 rsync 解析 gitignore 不完整导致敏感文件泄露）
+# 仅在非 Git 环境下回退到 rsync + 硬编码排除规则
 
-if [ -n "$PROJECT_GITIGNORE" ]; then
-    RSYNC_ARGS+=(--filter=":- $PROJECT_GITIGNORE")
+if [ -n "$PROJECT_ROOT" ]; then
+    RELATIVE_PATH="${SKILL_PATH#$PROJECT_ROOT/}"
+    RELATIVE_PATH="${RELATIVE_PATH%/}"
+
+    echo -e "${GREEN}复制文件到临时目录（git ls-files 模式）...${NC}"
+
+    COPIED=0
+    while IFS= read -r -d '' FILE; do
+        DEST="${FILE#$RELATIVE_PATH/}"
+        DEST_DIR="$TEMP_DIR/$(dirname "$DEST")"
+        mkdir -p "$DEST_DIR"
+        cp "$PROJECT_ROOT/$FILE" "$TEMP_DIR/$DEST"
+        COPIED=$((COPIED + 1))
+    done < <(cd "$PROJECT_ROOT" && git ls-files -z -- "$RELATIVE_PATH")
+
+    if [ "$COPIED" -eq 0 ]; then
+        echo -e "${RED}错误: git ls-files 未返回任何文件，确认技能已提交${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}已复制 $COPIED 个文件到临时目录${NC}"
+else
+    if [ -n "$PROJECT_GITIGNORE" ] || [ -n "$SKILL_GITIGNORE" ]; then
+        [ -n "$PROJECT_GITIGNORE" ] && RSYNC_ARGS+=(--filter=":- $PROJECT_GITIGNORE")
+        [ -n "$SKILL_GITIGNORE" ] && RSYNC_ARGS+=(--filter=":- $SKILL_GITIGNORE")
+    else
+        echo -e "${YELLOW}警告: 未找到任何 .gitignore 文件，将只排除默认目录${NC}"
+    fi
+
+    echo -e "${GREEN}复制文件到临时目录（rsync 模式）...${NC}"
+    rsync "${RSYNC_ARGS[@]}" "$SKILL_PATH/" "$TEMP_DIR/"
 fi
-
-if [ -n "$SKILL_GITIGNORE" ]; then
-    RSYNC_ARGS+=(--filter=":- $SKILL_GITIGNORE")
-fi
-
-# 如果没有任何 .gitignore，给出提示
-if [ -z "$PROJECT_GITIGNORE" ] && [ -z "$SKILL_GITIGNORE" ]; then
-    echo -e "${YELLOW}警告: 未找到任何 .gitignore 文件，将只排除默认目录${NC}"
-fi
-
-# 执行 rsync
-echo -e "${GREEN}复制文件到临时目录...${NC}"
-rsync "${RSYNC_ARGS[@]}" "$SKILL_PATH/" "$TEMP_DIR/"
 
 # 强制清理 rsync 可能遗漏的运行时目录（.gitignore 路径相对于项目根时 rsync 无法匹配）
 for _DIR in archive output downloads logs; do

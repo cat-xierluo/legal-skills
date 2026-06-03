@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.9.3] - 2026-06-03
+
+### Changed
+- 将 checkpoint 可复制模板从 `references/checkpoint-files.md` 移到 `templates/`，包括 `checkpoint-status.json`、`checkpoint-result.md` 和 `checkpoint-patch-summary.md`。
+- 新增 `templates/worker-prompt.md`，将 worker prompt 拆成 Bootstrap-only 和 Full worker 两段，并按 Context / Background / Mission / Scope / Deliverables / Process / Verification / Autonomy / Out of Scope / PM Correction 组织。
+- 精简 `SKILL.md` 与 `references/checkpoint-files.md`：正文只保留规则、字段经济性和模板路径，避免 Skill 主体继续膨胀。
+
+## [1.9.2] - 2026-06-03
+
+### Changed
+- 将 `STATUS.json` 升级为 v2 schema，补充 `task_source`、`current_action`、`next_action`、`scope`、`runtime`、`git`、`pm_action_required`、`blocker`、`risks` 和 `last_pm_correction` 等 PM 决策字段。
+- 明确 `STATUS.json` 的经济性边界：只记录 PM 自动监控和 review 决策必需的结构化信号，不记录 token、完整环境变量、settings 内容或长日志。
+- 增强 `pm-monitor.sh`：新增 `--once`、`--interval`、`--stale-threshold`、`--log-file`，支持一次性巡检、低频后台巡检和事件日志落盘。
+- `pm-monitor.sh` 现在会从 checkpoint 输出 `CHECKPOINT_STALE`、`AGENT_NEEDS_INPUT`、`CHECKPOINT_TEST_FAILURE`、`CHECKPOINT_PR` 等事件，减少 PM 前台轮询需求。
+- 补充经济型巡检规则：脚本负责事件输出和日志，是否自动唤起 PM 取决于宿主环境；无唤醒能力时用 `--once` 或低频读取 log tail。
+
 ## [1.9.1] - 2026-06-03
 
 ### Changed

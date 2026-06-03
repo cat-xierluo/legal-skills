@@ -50,14 +50,14 @@
 
 **诉讼项目的 Agent 路由矩阵**：
 
-| 任务类型 | 推荐内部 Agent | 推荐外部 Agent | 说明 |
-|---------|---------------|---------------|------|
-| 法条检索 | Research Agent | **元典 / 威科** | 精确法条查询 |
-| 类案检索 | Research Agent | **元典 / 智合** | 判例检索和分析 |
-| 证据整理 | Analysis Agent | **FunASR / MinerU** | 音频转写、OCR |
-| 文书起草 | Writer Agent | — | Claude/大模型直接生成 |
-| 文书审核 | Review Agent | — | 法律准确性 + 逻辑审查 |
-| 庭审预测 | Analysis Agent | — | 基于类案的推理 |
+| 任务类型 | 推荐角色 | 说明 |
+|---------|---------|------|
+| 法条检索 | Research Agent | 精确法条查询 |
+| 类案检索 | Research Agent | 判例检索和分析 |
+| 证据整理 | Analysis Agent | 音频转写、OCR、证据固定 |
+| 文书起草 | Writer Agent | 大模型直接生成 |
+| 文书审核 | Review Agent | 法律准确性 + 逻辑审查 |
+| 庭审预测 | Analysis Agent | 基于类案的推理 |
 
 ## 3. 非诉项目模板
 
@@ -129,7 +129,7 @@
   "owner": "claude",
   "platform": "claude-code",
   "archetype": "research",
-  "external_agents": ["yuandian", "weike"],
+  "external_agents": [],
   "deliverable": "research_report.md",
   "depends_on": [],
   "review_policy": "legal_accuracy",
@@ -141,7 +141,7 @@
 与软件开发相比新增的字段：
 - `project_type`：`litigation`（诉讼）/ `non_contentious`（非诉）/ `legal_research`（法律研究）
 - `phase`：项目阶段（对应上方模板中的 Phase 1-5）
-- `external_agents`：需要调用的外部法律 Agent（元典/智合/威科）
+- `external_agents`：需要调用的外部法律 Agent（按项目实际安装填写）
 - `deliverable`：产出物类型
 - `review_policy`：审核策略（`legal_accuracy` / `contract_review` / `compliance_check`）
 
@@ -178,20 +178,6 @@
 | **合同审查（多维度）** | Analysis × N + Writer | 维度并行 → 整合串行 |
 | **法律研究（深度）** | Research + Analysis | 串行（研究 → 分析） |
 | **批量律师函** | Writer × N + Review | 完全并行 |
-
-### 5.2 外部法律 Agent 的调度
-
-已有 Skill 封装的法律外部 Agent：
-
-| Agent | 调度方式 | 集成状态 |
-|-------|---------|---------|
-| 元典法律检索 | API 调用（11 个端点） | ✅ ready |
-| 智合 AI 法律大模型 | API 调用 | ✅ ready |
-| 威科先行 | Playwright SSO 浏览器自动化 | ✅ ready |
-| FunASR 语音转录 | 本地 Python 进程 | ✅ ready |
-| MinerU OCR | 本地 + 云端 | ✅ ready |
-
-这些 Agent 可在 Research Agent 内直接调用，不需要额外的编排层。
 
 ## 6. 使用边界
 

@@ -4,7 +4,7 @@ description: 多 Agent 本地执行编排与跨模型额度路由。本技能应
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.1"
+version: "1.9.3"
 ---
 
 # Multi-Agent Orchestration
@@ -114,7 +114,7 @@ git worktree add .claude/worktrees/team-agent-shell -b fix/agent-session-shell
 
 ### 4.1 Session Context 目录
 
-新 worker 的本地状态统一写到当前 worktree 的 `.claude/agent-sessions/<session-id>/`，不要再新建 `.agent-context/`。这样复用项目既有 `.claude/` 协作空间，又不会把它伪装成 Claude Code 官方 Agent Teams。
+Worker 的本地状态统一写到当前 worktree 的 `.claude/agent-sessions/<session-id>/`（下文简称 **Session Context**），复用项目既有 `.claude/` 协作空间，与 Claude Code 官方 Agent Teams 状态源明确区分。
 
 ```text
 .claude/agent-sessions/legal-ch01/STATUS.json
@@ -126,38 +126,15 @@ Claude Code 官方 Agent Teams 是另一套机制：团队配置在用户目录 
 
 `.claude/agent-sessions/` 是 PM 巡检状态，不属于业务 diff。PM 和 worker 都必须确认它不进入 commit / push / PR；需要时由 PM 在对应 worktree 的本地 exclude 中忽略。
 
-## 5. Worker Prompt 最小模板
-
-```text
-你是并行执行 worker，不是唯一协作者。不要回退或覆盖其他人的改动。
-
-PM Host: Codex / Claude Code / Other
-Worker Backend: Claude Code / Codex / OpenCode / custom CLI / shell / ACP
-Branch: docs/ch01-agent-intro
-Worktree: .claude/worktrees/tmux-ch01-agent-intro
-Session ID: legal-ch01
-Session Context: .claude/agent-sessions/legal-ch01
-Runtime Profile: L0/L1/L2；指定模型、额度来源和关键环境变量。
-Effort: 窄范围实现默认 low/medium；只有架构设计、复杂调试或用户明确要求时才用 high/xhigh。
-Mission: 在限定范围内完成可 review 的最小闭环，不扩大任务、不替 PM 做任务重分解。
-Delegation: PM 不会默认代你实现；你负责在本 worktree 内完成实现、测试、提交和 PR 草稿，PM 负责巡检、纠偏、验收和收口。
-Autonomy: 不要在部分完成后等待 PM 下一步；除非 `needs_input=true` 或明确 blocked，否则按 Finish 清单持续推进到 PR。
-Task Source: docs/TASKS.md 的 ISS-xxx / 指定 Issue；以该任务的验收标准为准。
-Scope: 只修改 manuscript/认知篇/ch01-从Chatbot到Agent.md；共享依赖、锁文件、环境配置和无关文档默认禁止修改。
-Goal: 完成 ch01 正式初稿。
-Inputs: AGENTS.md、docs/STYLE-GUIDE.md、对应大纲卡片、Issue、指定 research/source-material。
-Bootstrap: 启动后先创建 `Session Context/STATUS.json`，记录 branch、worktree、runtime_profile、node/npm/python/cargo 等关键版本和本轮允许修改范围。
-Checkpoint: 每 10-15 分钟或阶段变化时更新 `Session Context/STATUS.json`；每次写入都必须刷新 `updated_at` 和当前 `phase`。完成时写 `Session Context/RESULT.md` 和 `Session Context/PATCH_SUMMARY.md`。
-Checkpoint Git Rule: `Session Context` 是本地协作状态，绝不能 `git add`、commit、push 或进入 PR diff。
-Verify: git diff --check main...HEAD
-Finish: commit、push、创建 PR；PR 正文列出 Issue、来源材料、验证和风险；确认 PR diff 不包含 `Session Context`。
-Out of scope: 不更新协作文档，不扩展调研，不改其他章节；遇到依赖安装、运行时版本、锁文件、CI 配置、第三方 API 配置等范围外问题，只记录 blocked/needs_input，不自行修复。
-PM Correction: 如果收到 PM 纠偏指令，立即停止当前偏离动作，按 PM 指令收窄范围，更新 STATUS.json，并继续执行；不要把纠偏解释为停止任务。
-```
+## 5. Worker Prompt 模板
 
 Worker prompt 应像启动 subagent 一样给足上下文：任务来源、验收标准、允许文件、禁止文件、验证命令、checkpoint 协议和 PM 纠偏协议都要写清。不要只给一句“实现某功能”，否则 worker 容易把环境、依赖或相关技术债扩展成自己的任务。
 
-对高延迟 provider 或 high-effort 模型，优先用两段式启动：第一条消息只要求创建 `Session Context/STATUS.json` 并回报 runtime；PM 确认 checkpoint 后，再发送完整任务 prompt。这样能避免 worker 在长思考前没有可观测状态。
+模板放在 `templates/worker-prompt.md`，包含两个可复制段落：
+- Bootstrap-only prompt：只创建 `STATUS.json`，适合高延迟 provider 或 high-effort 模型的第一条消息。
+- Full worker prompt：按 Context / Background / Mission / Scope / Deliverables / Process / Verification / Autonomy / Out of Scope / PM Correction 组织，接近派发 subagent 时的写法。
+
+对高延迟 provider 或 high-effort 模型，优先用两段式启动：第一条消息使用 Bootstrap-only prompt 创建 `Session Context/STATUS.json` 并回报 runtime；PM 确认 checkpoint 后，再发送 Full worker prompt。这样能避免 worker 在长思考前没有可观测状态。
 
 ## 6. 启动方式
 
@@ -357,8 +334,17 @@ bash scripts/pm-monitor.sh \
   --team-dir ~/.claude/teams/team-name \
   --tasks-dir ~/.claude/tasks/tasks-uuid \
   --claude-agents-cwd /path/to/repo \
+  --interval 60 \
+  --log-file .claude/agent-sessions/pm-monitor/events.log \
   --branch docs/ch01-agent-intro:legal-ch01
 ```
+
+经济型巡检规则：
+- 不要让 PM 主会话每隔几分钟手动读取 worker 日志；那会抵消多 Agent 的 token efficiency。
+- 轻量检查用 `pm-monitor.sh --once`，由 PM 在需要判断是否介入时运行一次，只读取事件行。
+- 长任务用独立 shell/tmux/background job 运行 `pm-monitor.sh --log-file ...`，脚本持续写事件日志；PM 只在状态变化、用户询问、PR 收口或日志出现 `AGENT_NEEDS_INPUT` / `CHECKPOINT_STALE` / `CHECKPOINT_TEST_FAILURE` 时读取少量日志。
+- 当前脚本只负责输出事件和写日志；是否自动唤起 PM 取决于宿主环境是否提供 automation / monitor / webhook。没有宿主唤醒能力时，默认用 `--once` 或低频读取 log tail，仍比前台反复巡检节省上下文。
+- `STATUS.json` 只记录 PM 决策必需的结构化信号，详细实现说明继续写 `RESULT.md` 和 `PATCH_SUMMARY.md`。
 
 ## 8. 收口
 
@@ -408,3 +394,9 @@ tmux kill-session -t legal-ch01
 脚本：
 - `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session 多维监控。
 - `scripts/terminal-split.sh`：多终端分屏/新标签辅助，保留 iTerm2、Kitty、WezTerm、Warp、Ghostty、Zed、Terminal.app 支持。
+
+模板：
+- `templates/worker-prompt.md`：worker bootstrap 和完整派发 prompt 模板。
+- `templates/checkpoint-status.json`：`STATUS.json` 模板。
+- `templates/checkpoint-result.md`：完成/失败结果摘要模板。
+- `templates/checkpoint-patch-summary.md`：PR review 用 diff 摘要模板。
