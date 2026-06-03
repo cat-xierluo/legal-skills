@@ -75,6 +75,40 @@ LICENSEOF
     fi
 }
 
+# --- codex: 创建 .codex/ 目录结构 ---
+# 用法: init.sh codex <project_dir>
+handle_codex() {
+    local project_dir="$1"
+    local script_dir="$(cd "$(dirname "$0")/.." && pwd)"
+
+    # 创建 .codex 目录
+    mkdir -p "$project_dir/.codex/rules"
+
+    # 复制 config.toml
+    if [ ! -f "$project_dir/.codex/config.toml" ]; then
+        cp "$script_dir/references/codex-config.toml" "$project_dir/.codex/config.toml"
+        echo "OK: 创建 .codex/config.toml"
+    else
+        echo "OK: .codex/config.toml 已存在，跳过"
+    fi
+
+    # 复制 rules/default.rules
+    if [ ! -f "$project_dir/.codex/rules/default.rules" ]; then
+        cp "$script_dir/references/codex-default.rules" "$project_dir/.codex/rules/default.rules"
+        echo "OK: 创建 .codex/rules/default.rules"
+    else
+        echo "OK: .codex/rules/default.rules 已存在，跳过"
+    fi
+
+    # 创建 skills 软链 → ../.claude/skills
+    if [ ! -e "$project_dir/.codex/skills" ]; then
+        ln -s ../.claude/skills "$project_dir/.codex/skills"
+        echo "OK: 创建 .codex/skills → ../.claude/skills"
+    else
+        echo "OK: .codex/skills 已存在，跳过"
+    fi
+}
+
 # --- detect: 输出当前目录的指示文件列表 ---
 # 用法: init.sh detect <project_dir>
 handle_detect() {
@@ -151,12 +185,20 @@ case "$ACTION" in
         fi
         handle_detect "$2"
         ;;
+    codex)
+        if [ -z "$2" ]; then
+            echo "用法: $0 codex <project_dir>"
+            exit 1
+        fi
+        handle_codex "$2"
+        ;;
     *)
         echo "project-init 脚本"
         echo ""
         echo "用法:"
         echo "  $0 scaffold <project_dir> [skill_name]   创建 Skill 目录骨架"
         echo "  $0 detect <project_dir>                  检测项目指示文件"
+        echo "  $0 codex <project_dir>                   创建 .codex/ 目录结构"
         echo ""
         echo "注意: Skill 安装请使用 skill-manager/scripts/install.sh"
         ;;

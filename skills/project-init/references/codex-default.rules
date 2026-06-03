@@ -1,0 +1,77 @@
+# Project-local Codex execution policy.
+#
+# This file is for command permissions, not agent instructions. Codex loads
+# project-local rules from <repo>/.codex/rules/ when the project is trusted.
+
+# Common read/search/list commands.
+prefix_rule(pattern=["pwd"], decision="allow")
+prefix_rule(pattern=["ls"], decision="allow")
+prefix_rule(pattern=["find"], decision="allow")
+prefix_rule(pattern=["rg"], decision="allow")
+prefix_rule(pattern=["grep"], decision="allow")
+prefix_rule(pattern=["cat"], decision="allow")
+prefix_rule(pattern=["sed"], decision="allow")
+prefix_rule(pattern=["awk"], decision="allow")
+prefix_rule(pattern=["nl"], decision="allow")
+prefix_rule(pattern=["head"], decision="allow")
+prefix_rule(pattern=["tail"], decision="allow")
+prefix_rule(pattern=["wc"], decision="allow")
+prefix_rule(pattern=["test"], decision="allow")
+prefix_rule(pattern=["stat"], decision="allow")
+prefix_rule(pattern=["file"], decision="allow")
+
+# Common safe workspace setup.
+prefix_rule(pattern=["mkdir", "-p"], decision="allow")
+
+# Read-only Git inspection.
+prefix_rule(pattern=["git", "status"], decision="allow")
+prefix_rule(pattern=["git", "log"], decision="allow")
+prefix_rule(pattern=["git", "show"], decision="allow")
+prefix_rule(pattern=["git", "diff"], decision="allow")
+prefix_rule(pattern=["git", "branch", "--list"], decision="allow")
+prefix_rule(pattern=["git", "branch", "-vv"], decision="allow")
+prefix_rule(pattern=["git", "for-each-ref"], decision="allow")
+prefix_rule(pattern=["git", "rev-parse"], decision="allow")
+prefix_rule(pattern=["git", "merge-base"], decision="allow")
+prefix_rule(pattern=["git", "cherry"], decision="allow")
+prefix_rule(pattern=["git", "worktree", "list"], decision="allow")
+
+# Normal branch/worktree workflow.
+prefix_rule(pattern=["git", "checkout"], decision="allow")
+prefix_rule(pattern=["git", "worktree", "add"], decision="allow")
+prefix_rule(pattern=["git", "worktree", "remove"], decision="allow")
+prefix_rule(pattern=["git", "branch", "-d"], decision="allow")
+prefix_rule(pattern=["git", "branch", "-D"], decision="prompt")
+prefix_rule(pattern=["git", "add"], decision="allow")
+prefix_rule(pattern=["git", "commit"], decision="allow")
+prefix_rule(pattern=["git", "push"], decision="allow")
+
+# GitHub PR workflow.
+prefix_rule(pattern=["gh", "api"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "list"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "view"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "diff"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "status"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "create"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "check"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "comment"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "review"], decision="allow")
+
+# tmux worker orchestration.
+prefix_rule(pattern=["tmux", "list-sessions"], decision="allow")
+prefix_rule(pattern=["tmux", "new-session"], decision="allow")
+prefix_rule(pattern=["tmux", "capture-pane"], decision="allow")
+prefix_rule(pattern=["tmux", "display-message"], decision="allow")
+prefix_rule(pattern=["tmux", "has-session"], decision="allow")
+prefix_rule(pattern=["tmux", "send-keys"], decision="allow")
+prefix_rule(pattern=["tmux", "kill-session"], decision="allow")
+
+# Keep destructive operations blocked even in a trusted project.
+prefix_rule(pattern=["git", "reset", "--hard"], decision="forbidden")
+prefix_rule(pattern=["git", "clean", "-fdx"], decision="forbidden")
+prefix_rule(pattern=["git", "push", "--force"], decision="forbidden")
+prefix_rule(pattern=["git", "push", "--force-with-lease"], decision="prompt")
+prefix_rule(pattern=["rm", "-rf", "/"], decision="forbidden")
+prefix_rule(pattern=["rm", "-rf", "/*"], decision="forbidden")
+prefix_rule(pattern=["rm", "-rf", "~"], decision="forbidden")
+prefix_rule(pattern=["rm", "-rf", "~/*"], decision="forbidden")

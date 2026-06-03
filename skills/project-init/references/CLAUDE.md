@@ -1,7 +1,9 @@
-# CLAUDE.md 生成指南
+# AGENTS.md 生成指南
 
-本文件定义各项目类型 CLAUDE.md 应包含的段落和生成方式。
+本文件定义各项目类型 AGENTS.md 应包含的段落和生成方式。
 Claude 应基于全局协议 `~/.claude/CLAUDE.md` 和项目分析结果生成真实内容，不是复制模板。
+
+生成后，CLAUDE.md 仅写入 `@include ./AGENTS.md`，不重复内容。两个文件共享同一份项目协议。
 
 ---
 

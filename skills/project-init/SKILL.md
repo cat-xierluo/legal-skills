@@ -56,21 +56,42 @@ mkdir -p .claude/skills/
 
 对 profile 中 `skills` 字段列出的每个 Skill，通过调用 skill-manager Skill 以符号链接方式安装到项目的 `.claude/skills/` 目录。skill-manager 会自动处理路径解析、去重和版本追踪。
 
-### Step 7: 生成 CLAUDE.md
+### Step 7: 生成 AGENTS.md 和 CLAUDE.md
 
-**不是复制模板，而是基于全局协议 + 项目分析结果生成项目特定的 CLAUDE.md。**
+**不是复制模板，而是基于全局协议 + 项目分析结果生成项目特定的 AGENTS.md。**
 
-参考 `references/CLAUDE.md` 中各项目类型的结构指南和生成范例，结合 Step 4 的分析结果，生成包含真实项目信息的内容。
+参考 `references/CLAUDE.md` 中各项目类型的结构指南和生成范例，结合 Step 4 的分析结果，生成包含真实项目信息的内容，写入 `AGENTS.md`。
 
 `references/CLAUDE.md` 包含所有项目类型的段落定义、结构模板和脱敏范例，无需参考其他外部文件。
 
-已有 `CLAUDE.md` 时展示 diff，让用户决定覆盖/合并/跳过。
+`CLAUDE.md` 不重复写内容，仅写入：
+```
+@include ./AGENTS.md
+```
+
+这样 Claude Code 和 Codex 共享同一份项目协议，只维护一个源文件。
+
+已有 `AGENTS.md` 时展示 diff，让用户决定覆盖/合并/跳过。已有 `CLAUDE.md` 但内容不是纯 `@include` 时，同样展示 diff。
 
 ### Step 8: 生成 settings.json
 
 直接复制 `references/settings-template.json`。已有则跳过。
 
-### Step 9: 生成 docs/ 文档
+### Step 9: 创建 .codex/ 目录
+
+```bash
+bash scripts/init.sh codex "<project_dir>"
+```
+
+创建 `.codex/` 目录结构：
+
+- `config.toml`：从 `references/codex-config.toml` 复制
+- `rules/default.rules`：从 `references/codex-default.rules` 复制
+- `skills`：符号链接 → `../.claude/skills`（与 `.claude/skills/` 共享，不重复安装）
+
+已有则跳过。`.codex/skills` 软链确保 Codex 能直接访问 `.claude/skills/` 中已安装的 Skill。
+
+### Step 10: 生成 docs/ 文档
 
 **不是复制空模板，而是基于全局协议的文档体系定义 + 项目分析结果生成有实际内容的文档。**
 
@@ -84,11 +105,11 @@ mkdir -p .claude/skills/
 
 仅创建不存在的文件。
 
-### Step 10: 创建 .gitignore
+### Step 11: 创建 .gitignore
 
 从 `references/.gitignore` 复制。已有则跳过。
 
-### Step 11: Skill 脚手架（仅 skill-project 类型）
+### Step 12: Skill 脚手架（仅 skill-project 类型）
 
 ```bash
 bash scripts/init.sh scaffold "<project_dir>" "<skill_name>"

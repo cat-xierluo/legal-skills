@@ -1,0 +1,15 @@
+# Project-local Codex configuration.
+#
+# This is the Codex-side counterpart of `.claude/settings.local.json`.
+# It opens normal local file operations, shell execution, and web search for
+# trusted sessions in this repository. Destructive shell commands are still
+# constrained by `.codex/rules/default.rules` and by the project AGENTS.md.
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+network_access = "enabled"
+web_search = "live"
+
+[tools]
+web_search = { context_size = "high" }
+view_image = true
