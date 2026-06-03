@@ -172,18 +172,11 @@ def build_archive(
 ) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     archive_root = get_skill_root() / "archive" / f"{timestamp}_{sanitize_name(archive_name)}"
-    input_dir = archive_root / "input"
     output_dir = archive_root / "output"
     batches_dir = archive_root / "batches"
     backend_dir = archive_root / "backend_result"
 
-    input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    if source.path:
-        shutil.copy2(source.path, input_dir / source.path.name)
-    else:
-        write_text(input_dir / "source_url.txt", source.raw)
 
     shutil.copy2(output_md_path, output_dir / "result.md")
     write_text(output_dir / "result_raw.md", raw_markdown)

@@ -25,9 +25,6 @@
 ```text
 archive/
 └── 20260520_153000_某案卷宗/
-    ├── input/
-    │   ├── 原文件.pdf
-    │   └── source_url.txt
     ├── output/
     │   ├── result.md
     │   ├── result_raw.md
@@ -45,13 +42,12 @@ archive/
 
 说明：
 
-- `input/`：本地输入副本；远程 URL 保存为 `source_url.txt`。
 - `output/result.md`：最终 Markdown，可能经过基础后处理。
 - `output/result_raw.md`：后端原始 Markdown，未经过基础后处理。
 - `output/result.json`：统一结构化摘要。
 - `batches/`：PaddleOCR 分批结果；仅在适用时存在。
 - `backend_result/`：后端原始响应或结果包。
-- `metadata.json`：路由、后端、输出路径和处理配置。
+- `metadata.json`：路由、后端、输出路径和处理配置；输入文件信息（本地路径、sha256、size_bytes；或远程 URL）通过 `source` 字段记录，不再单独保存输入副本。
 - `postprocess_log.json`：基础标题识别和清理记录；仅在命中时存在。
 
 ## `output/result.json`

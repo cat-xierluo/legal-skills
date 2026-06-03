@@ -1,7 +1,7 @@
 ---
 name: legal-ocr
 description: 本技能应在用户需要 OCR、扫描识别、图片文字识别、文档识别，或将 PDF、图片、Office 文档、URL 转换为 Markdown 时使用。检测到法律材料时可进行保守的法律术语与文书结构优化。不要用于法律事实判断、补写缺失内容、语义改写、印章深度识别或图表实体分析。
-version: "1.3.1"
+version: "1.3.2"
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -152,16 +152,15 @@ uv run scripts/convert.py checktoken
 
 - Markdown 主文件：转换后的可编辑文本。
 - 图片目录：后端返回或 Markdown 引用的图片资源。
-- Archive：默认保存输入副本、原始结果、最终结果、后端响应、路由记录和后处理日志。
+- Archive：默认保存原始结果、最终结果、后端响应、路由记录和后处理日志；输入文件的 `path` / `sha256` / `size_bytes`（本地）或原始 URL（远程）通过 `metadata.json` 的 `source` 字段记录，不再单独复制输入副本。
 
 archive 内包含：
 
-- 输入文件或 URL 记录
 - `output/result.md`
 - `output/result_raw.md`
 - `output/result.json`
 - `backend_result/`
-- `metadata.json`
+- `metadata.json`（输入文件的 `path` / `sha256` / `size_bytes` 或远程 URL 通过 `source` 字段记录；不单独保存输入副本）
 - 必要时包含图片资源和 `postprocess_log.json`
 
 详细结构见 `references/output_schema.md`。

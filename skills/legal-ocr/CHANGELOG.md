@@ -1,5 +1,17 @@
 # 变更记录
 
+## [1.3.2] - 2026-06-03
+
+### 优化
+- archive 不再单独保存输入副本：移除 `archive/<时间戳>_<名称>/input/` 目录及对应的 `shutil.copy2` / `source_url.txt` 写入逻辑。
+- 输入文件元信息继续保留在 `metadata.json` 的 `source` 字段：本地文件记录 `path` / `sha256` / `size_bytes`；远程 URL 记录原始字符串。
+- 同步更新 `SKILL.md` 与 `references/output_schema.md` 的 archive 结构说明。
+
+### Reason
+- 现状：`skills/legal-ocr/archive/` 累计 649 MB；6 个 archive 平均 100 MB+，主要来自 `input/` 下的原 PDF 副本。
+- 风险：随着 OCR 任务增多本地磁盘会持续膨胀；archive 已在 `.gitignore` 内，不会被 push，但本地占用无法控制。
+- 取舍：放弃 archive 内"可重放原文件"的能力，换取固定占用；如需重新转换，使用 `metadata.json.source.path`（本地）或 `metadata.json.source.raw`（URL）重跑即可。
+
 ## [1.3.1] - 2026-05-20
 
 ### 文档完善
