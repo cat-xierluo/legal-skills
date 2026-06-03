@@ -1,6 +1,6 @@
 ---
 name: multi-agent-orchestration
-description: 多 Agent 本地执行编排与跨模型额度路由。本技能应在 2 个以上本地 Agent/会话需要并行推进、worktree 隔离、Claude Code/Codex/OpenCode/tmux worker 启动、PM 巡检、模型/额度分流和 PR 收口时使用。当前主会话可以是 Codex、Claude Code、OpenCode 或其他 Agent；PM 是角色，不是固定产品。不要用于单个短任务、跨平台任务状态管理，或 Git 分支/提交/PR/merge 安全规则。
+description: 当用户要求你并行推进多个任务、一次性开多个 worker/agent 同时工作、用 tmux 启动多个并行 session、或者你作为 PM 需要拆解并派发任务给多个独立 worker 时使用。触发词包括"并行推进""开多个""同时推进""派 worker""多 agent 并行""开 worker""tmux 启动""分派任务""一起做"。不要用于单个短任务、跨平台任务状态管理、或 Git 分支/提交/PR/merge 安全规则。
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
@@ -347,6 +347,28 @@ bash scripts/pm-monitor.sh \
 - `STATUS.json` 只记录 PM 决策必需的结构化信号，详细实现说明继续写 `RESULT.md` 和 `PATCH_SUMMARY.md`。
 
 ## 8. 收口
+
+### 8.0 PM 在 Worker 提 PR 后的持续同步
+
+worker 提 PR 不是 PM 收口完成的信号。从提 PR 到合并之间，PM 必须做两件事避免外部抢跑：
+
+1. **提 PR 之后立即跑 mergeable 检查**：
+
+   ```bash
+   gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName
+   ```
+
+   - `mergeable=CONFLICTING` / `mergeStateStatus=DIRTY` / `baseRefName` 落后：base 已被 doc-curator 或其他 PR 抢跑。立即按 `git-workflow` 的「base 落后 / 冲突处理」决策表（update branch vs rebase vs close-and-reopen）处理。
+   - `mergeable=MERGEABLE` 且 base 是最新：进入 review 流程。
+
+2. **PM 本地 main 立即 push**：
+   - PM 在主目录 commit docs / DEC 之后**立即** `git push origin main`，避免本地与 origin/main drift。
+   - drift 后 push 报 non-fast-forward，squash merge 引入的"内容相同但 history 不同"会让 git 误判冲突，恢复成本高。
+   - 看到 origin/main 领先本地时，先 `git fetch origin` + `git switch -C main origin/main`（不是 `git pull`，squash commit 不会自动 ff），再继续 PM 工作。
+
+worker backend 选择（subagent / tmux / Agent Teams）见 §2.1。
+
+### 8.1 收口标准步骤
 
 worker 完成后：
 1. 检查 `git status --short`、`git diff --check main...HEAD`、PR diff 范围。

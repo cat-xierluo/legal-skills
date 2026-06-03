@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.5] - 2026-06-03
+
+### Added
+- **§8.0 PM 在 Worker 提 PR 后的持续同步**（精简版）：
+  1. 提 PR 之后立即跑 `gh pr view <N> --json mergeable,mergeStateStatus,baseRefName`；冲突走 `git-workflow` 决策表。
+  2. PM 在主目录 commit docs / DEC 之后**立即** `git push origin main`，避免本地与 origin/main drift（squash merge 引入的"内容相同但 history 不同"会让 git 误判冲突）。
+
+### Reason
+- 来源：FaroPDF v0.1 Wave 1 真实合并 PR #18 / #19 前的根因复盘。
+- 主要根因：PM 没在 worker 提 PR 后立即跑 mergeable 检查；PM 本地 main commit DEC 后没立即 push。
+
 ## [1.9.4] - 2026-06-03
 
 ### Added
