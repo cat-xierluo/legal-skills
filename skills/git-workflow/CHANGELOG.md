@@ -1,5 +1,33 @@
 # 变更日志
 
+## [1.3.0] - 2026-06-03
+
+### Added
+- **「PR 创建后立即跑 mergeable 检查（强制）」**：Agent 在 `gh pr create` 成功后立即跑 `gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,files`。`mergeable=CONFLICTING` 时**不要**直接 `gh pr update-branch`，先按决策表选方案。
+- **「base 落后 / 冲突处理决策表」**：三选一方案：
+  - 方案 A：冲突仅在 docs 同步文件 → 本地 rebase + 重新编号 + `--force-with-lease` push
+  - 方案 B：冲突在共享代码 / 实质代码 → `gh pr close --delete-branch` + 重建分支 + cherry-pick 实质代码 + 重新写 docs + new PR
+  - 方案 C：冲突极少 / 1-2 个文件 → GitHub PR UI 手动解决
+  - **禁止** `git push --force`（不带 `--force-with-lease`）
+- **「远端 stale ref 清理」**：合入后跑 `git remote prune origin` 清理不存在的远端 ref；手动删某个远端分支用 `git push origin --delete <name>`。
+
+### Reason
+- 来源：FaroPDF v0.1 Wave 1 真实合并 PR #18 / #19 前的根因复盘。
+- 主要根因：提 PR 后没立即查 mergeable；本地 main 与 origin/main drift 后 push 报 non-fast-forward；squash merge 引入的"内容相同但 history 不同"被误判为冲突；多个 PR 共享 CHANGELOG 段、DEC 编号无 PM 收口。
+
+## [1.2.0] - 2026-06-03
+
+### 改进
+
+- 描述部分中文化：PR body 模板的 `## Summary` / `## Test plan` 改为 `## 摘要` / `## 测试计划`，PR 正文最低要求表区块改为「摘要」「测试计划」「Agent 归属」「关联任务」「风险」。
+- 表格与命令注释中文化：分支命名、Monorepo 合并、PR 合并、PR 状态检查等章节的表格与代码注释改为中文。
+- `references/issue-pr-format.md` 表格和说明中的 `Multi-Skill` 改为「多 Skill」。
+
+### 保留
+
+- 英文类型前缀（`feat` / `fix` / `docs` / `chore` / `refactor` 等）以兼容 GitHub 标签和 Conventional Commit 工具链。
+- 通用 Git 术语（`Rebase merge` / `Squash merge` / `Merge commit` / `cherry-pick` / `worktree` / `Monorepo` / `commit` / `PR` / `CI` / `checks` / `review` 等）保留英文，避免生硬翻译。
+
 ## [1.1.0] - 2026-05-17
 
 ### 新增

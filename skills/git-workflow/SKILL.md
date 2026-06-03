@@ -2,9 +2,9 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.1"
+version: "1.3.0"
 license: MIT
-description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突等 Git 操作时自动触发。
+description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突等 Git 操作时自动触发。PR 创建后、PR 合并后由 Agent 主动调起 doc-curator subagent 跑文档体检（post-action，非 hooks 门禁）。
 ---
 
 # Git 全流程工作流
@@ -219,11 +219,11 @@ git push -u origin <branch-name>
 gh pr create \
   --title "feat(module): 简短描述" \
   --body "$(cat <<'EOF'
-## Summary
+## 摘要
 - 关键变更 1
 - 关键变更 2
 
-## Test plan
+## 测试计划
 - [ ] 验证项 1
 - [ ] 验证项 2
 EOF
@@ -236,13 +236,13 @@ EOF
 
 | 区块 | 要求 |
 |------|------|
-| `Summary` | 说明改了什么，避免只有“update files” |
-| `Test plan` | 列出已运行或未能运行的验证；未运行要写原因 |
-| `Agent Attribution` | 若由 Agent 完成，写明 Agent ID、Git author、触发来源 |
-| `Issue/Task` | 关联 GitHub Issue、项目任务 ID 或用户指定任务 |
-| `Risk` | 涉及迁移、删除、权限、安全、跨模块改动时说明风险和回退方式 |
+| 摘要 | 说明改了什么，避免只有“update files” |
+| 测试计划 | 列出已运行或未能运行的验证；未运行要写原因 |
+| Agent 归属 | 若由 Agent 完成，写明 Agent ID、Git author、触发来源 |
+| 关联任务 | 关联 GitHub Issue、项目任务 ID 或用户指定任务 |
+| 风险 | 涉及迁移、删除、权限、安全、跨模块改动时说明风险和回退方式 |
 
-缺失 `Summary` 或 `Test plan` 时，不应 approve；缺失 `Agent Attribution` 时，要求补齐后再合并。
+缺失「摘要」或「测试计划」时，不应 approve；缺失「Agent 归属」时，要求补齐后再合并。
 
 ### PR 标题格式
 
@@ -250,7 +250,7 @@ EOF
 <类型>(<模块>): <描述>
 ```
 
-与 commit 格式一致，multi-skill 仓库必须带模块名。
+与 commit 格式一致，多 Skill 仓库必须带模块名。
 
 ### 审查 PR
 
@@ -261,7 +261,7 @@ gh pr view <number>
 # 查看 PR 文件变更
 gh pr diff <number>
 
-# 添加 review
+# 提交 review
 gh pr review <number> --approve --body "LGTM"
 gh pr review <number> --request-changes --body "建议修改..."
 ```
@@ -329,7 +329,7 @@ gh pr merge <number> --rebase
 git checkout main
 git pull --ff-only origin main
 
-# 2. 检查 PR 状态和 diff
+# 2. 检查 PR 状态与 diff
 gh pr view <N> --json title,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,url
 gh pr diff <N> --name-only
 gh pr checks <N>
@@ -380,10 +380,108 @@ gh pr checks <number>
 
 # 查看所有 PR 列表
 gh pr list --state open
-
-# 更新 PR 分支（同步最新 main）
-gh pr update-branch <number>
 ```
+
+### PR 创建后立即跑 mergeable 检查（强制）
+
+Agent 在 `gh pr create` 返回 PR URL 后，**不要等用户/PM 拍板合并**，立即跑一次完整状态检查，捕获 base 落后或 mergeable 冲突：
+
+```bash
+gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,files
+```
+
+判读规则：
+
+| `mergeable` | `mergeStateStatus` | 含义 | 处理 |
+|---|---|---|---|
+| `MERGEABLE` | `CLEAN` | 可直接合并 | 进入 review → 合并流程 |
+| `UNKNOWN` | 空 | CI 还在跑或权限不足 | 等 CI / 确认权限后再查 |
+| `CONFLICTING` | `DIRTY` | 有内容冲突 | **不要**直接 `gh pr update-branch`，按下方「base 落后 / 冲突处理决策表」选三选一方案 |
+| `MERGEABLE` | `BLOCKED` / `BEHIND` | base 落后但无内容冲突 | `gh pr update-branch <N>` 拉 base；如果失败再走决策表 |
+
+### base 落后 / 冲突处理决策表
+
+当 PR 出现 base 落后、有冲突、或 update branch 失败时，按下表三选一：
+
+| 情况 | 现象 | 推荐方案 |
+|---|---|---|
+| 冲突仅在 docs 同步文件（CHANGELOG / DECISIONS / TASKS） | `git diff main..HEAD -- docs/` 显示 diff 是 docs 同步段（版本号、DEC 编号、ISS 任务卡进度） | **方案 A：本地 rebase + 解决冲突**。接受 base 新内容，把 head 的 docs 段重新编号（如 DEC-026 → DEC-030）后 `git rebase --continue`；push 用 `--force-with-lease`。 |
+| 冲突在共享代码 / 实质代码 | `git diff main..HEAD` 涉及 src/ src-tauri/ src/shared/ 等多文件 | **方案 B：关掉 PR + 重建**。`gh pr close <N> --delete-branch`；`git switch -C <branch> origin/main`；cherry-pick 实质代码 commit（跳过 docs 同步 commit）；重新写 docs 同步（使用最新 main 已占用的编号 +1）；push + new PR。 |
+| 冲突极少 / 1-2 个文件 | `git diff main..HEAD` 改动小且冲突集中 | **方案 C：GitHub PR UI 手动解决**。在 PR 页面 "Resolve conflicts" → 编辑 → commit。 |
+
+**禁止** `git push --force`（不带 `--force-with-lease`），可能在远端已有他人 push 时覆盖。
+
+来源：FaroPDF v0.1 Wave 1 根因复盘（PR #15 / #16 base 落后 + squash merge 内容冲突）。
+
+### PR 创建后：调起 doc-curator 体检
+
+Agent 在 `gh pr create` 成功返回 PR URL 后，主动调起 `doc-curator` subagent 跑文档体检。
+
+目的：在 PR 进入 review 前，发现当次变更是否引入文档膨胀、超出归档指针、违反硬性规则；如果有问题，由 doc-curator 在 PR 自身或单独的 maintenance PR 内修掉，不让膨胀项进入 main。
+
+调用方式：
+
+```bash
+# 在 Agent 流程里，PR 创建完成后：
+# 1. 调起 doc-curator subagent（项目级 Skill，自定义 Agent）
+#    - 工作目录：仓库根
+#    - 输入：刚 push 的 commit hash（可选）
+#    - 期望输出：markdown 报告 + JSON 行
+
+# 2. 解析报告（subagent 内部完成），按规则分支：
+#    - 全部 ok → 不动作，继续 review 流程
+#    - 软提示 → 把提示写入 PR 描述的"跟进事项"小节，不阻断
+#    - 硬性 / 自适应告警 → 走 maintenance-pr.sh：
+#      - 工作区干净 → 自动创建 chore/doc-curator-<date> 分支、提一个 maintenance PR
+#      - 工作区不干净 → 仅报告，提示用户先清理
+
+# 3. 不阻塞当前 PR：把 maintenance PR 链接追加到当前 PR 描述，让 review 知道"已发现 N 项"
+```
+
+约束：
+
+- 这是 post-action 调起，不是 pre-PR 门禁（避免锁死 PR 创建流程）。
+- doc-curator 不会改 `src/` / `src-tauri/` / `tests/`；改动仅限于 `docs/` 维护类动作。
+- doc-curator 不会写 `CHANGELOG.md`（CHANGELOG 由 `release-workflow` 维护）。
+- 当前 PR 已 push 但 review 还没合并时，doc-curator 提的 maintenance PR 与当前 PR 并行存在；用户决定合并顺序。
+
+### PR 合并后：调起 doc-curator 体检
+
+Agent 在 `gh pr merge` 成功（或 squash 推送 main 完成）后，主动调起 `doc-curator` subagent 跑一次完整体检。
+
+目的：合并后文档库状态更新（新增 ISS 归档指针、DEC 编号推进、文件行数变化），基线可能漂移；及时发现新合并项是否引入膨胀，必要时自动提 maintenance PR。
+
+调用方式：
+
+```bash
+# 在 Agent 流程里，PR 合并完成后：
+# 1. 调起 doc-curator subagent 跑体检（项目级 Skill）
+# 2. 解析报告：
+#    - 全部 ok → 不动作，结束
+#    - 软提示 → 报告给用户，不自动 PR
+#    - 硬性 / 自适应告警 → 走 maintenance-pr.sh：
+#      - 工作区干净 → 自动提 maintenance PR（按 doc-curator 协议）
+#      - 工作区不干净 → 仅报告，让用户处理
+# 3. 如果报告项触发了 state.json 的基线更新（adaptive 阈值漂移），下一次体检会按新基线判定
+```
+
+约束：
+
+- 与"PR 创建后体检"互补：创建后体检关注"这次提交带来的变化"，合并后体检关注"main 整体健康度"。
+- 合并后体检**不阻塞合并动作**：它发生在合并完成之后，只用于发现后续问题。
+- 同一 PR 不重复触发两次（创建 + 合并各一次即可，不在中间 review 轮次再触发）。
+- doc-curator 不会因为"发现 main 不健康"而尝试 revert 刚合入的 commit；它只做文档级维护，不动代码与决策。
+
+### 总结：本 Skill 与 doc-curator 的关系
+
+| 时机 | 谁调起 | 做什么 | 阻塞？ |
+|:-----|:-------|:-------|:-------|
+| `gh pr create` 成功 | 本 Skill（Agent 主动） | 调 doc-curator 体检本次变更 | 不阻塞，输出报告 + 可选 maintenance PR |
+| `gh pr merge` 成功 | 本 Skill（Agent 主动） | 调 doc-curator 体检 main | 不阻塞，输出报告 + 可选 maintenance PR |
+| 用户手动跑 `scan.sh` | 用户 | 体检 | 不阻塞 |
+| SessionEnd / pre-commit | — | 不在本 Skill 范围 | — |
+
+`git-workflow` 只负责"什么时候调 doc-curator"，具体体检逻辑、维护动作、PR 生成全部由 `doc-curator` Skill 负责。两者通过 subagent 调起解耦：git-workflow 不直接执行文档 trim。
 
 ## 5. 合并冲突解决
 
@@ -501,6 +599,8 @@ git status
 git log --oneline -20    # 最近 20 条
 git diff --stat           # 概览变更文件
 git blame <file>          # 查看每行的修改者
+git remote prune origin   # 清理已不存在的远端 ref（合并后清理 stale ref）
+git push origin --delete <stale-branch>  # 手动删某个远端分支
 ```
 
 ### Tag 管理
@@ -540,7 +640,7 @@ git push origin --delete v1.0.0  # 删除远程 tag
 <类型>(<模块>): <描述>
 ```
 
-Multi-Skill 仓库必须带模块名：
+多 Skill 仓库必须带模块名：
 ```
 feat(skill-manager): 添加版本检查功能
 fix(pdf-processor): 修复大文件解析崩溃
@@ -622,9 +722,9 @@ Refs: project-task Issue #13
 | `config` | 配置变更 |
 | `license` | License 文件更新 |
 
-### Multi-Skill / Multi-Module 规则
+### 多 Skill / 多模块规则
 
-Multi-Skill 仓库必须在标题中写明模块名：
+多 Skill 仓库必须在标题中写明模块名：
 
 ```text
 feat(skill-name): 添加批量导出
