@@ -650,7 +650,7 @@ class ExtractParams:
     content_crop_bottom: float = 0.12
     content_crop_left: float = 0.04
     content_crop_right: float = 0.04
-    ssim_threshold: float = 0.70
+    ssim_threshold: float = 0.93
     scroll_merge: bool = True
     scroll_diff_threshold: float = 32.0
 
@@ -672,6 +672,7 @@ class DedupState:
     ocr_dups: int = 0
     blur_drops: int = 0
     quality_drops: int = 0
+    min_gap_drops: int = 0
     kept_count: int = 0
     total_count: int = 0
 
@@ -749,11 +750,11 @@ def is_frame_duplicate(
     params: ExtractParams,
     window: int = 20,
     pixel_diff_threshold: float = 8.0,
-) -> tuple[bool, bytes, bytes, Image.Image | None]:
-    """图像层级去重，返回 (is_dup, pixel_thumb, ssim_thumb, scroll_image)。"""
+) -> tuple[bool, str, bytes, bytes, Image.Image | None]:
+    """图像层级去重，返回 (is_dup, reason, pixel_thumb, ssim_thumb, scroll_image)。"""
     if digest in state.seen_sha256:
         state.sha256_dups += 1
-        return True, b"", b"", None
+        return True, "duplicate_sha256", b"", b"", None
 
     if (
         params.dedup_threshold
@@ -761,7 +762,7 @@ def is_frame_duplicate(
         and is_dhash_duplicate(dhash_hex, state.kept_dhashes, window, params.dedup_threshold)
     ):
         state.dhash_dups += 1
-        return True, b"", b"", None
+        return True, "duplicate_dhash", b"", b"", None
 
     thumb = b""
     if pixel_diff_threshold and state.kept_thumbs:
@@ -774,7 +775,7 @@ def is_frame_duplicate(
         )
         if thumb and is_pixel_duplicate(thumb, state.kept_thumbs, window, pixel_diff_threshold):
             state.pixel_dups += 1
-            return True, thumb, b"", None
+            return True, "duplicate_pixel", thumb, b"", None
 
     ssim_thumb = b""
     if params.ssim_threshold and params.ssim_threshold > 0 and state.kept_ssim_thumbs:
@@ -789,7 +790,7 @@ def is_frame_duplicate(
         )
         if ssim_thumb and is_ssim_duplicate(ssim_thumb, state.kept_ssim_thumbs, window, params.ssim_threshold):
             state.ssim_dups += 1
-            return True, thumb, ssim_thumb, None
+            return True, "duplicate_ssim", thumb, ssim_thumb, None
 
     scroll_image = None
     if params.scroll_merge and params.scroll_diff_threshold > 0 and state.kept_scroll_images:
@@ -806,9 +807,9 @@ def is_frame_duplicate(
             threshold=params.scroll_diff_threshold,
         ):
             state.scroll_dups += 1
-            return True, thumb, ssim_thumb, scroll_image
+            return True, "duplicate_scroll", thumb, ssim_thumb, scroll_image
 
-    return False, thumb, ssim_thumb, scroll_image
+    return False, "", thumb, ssim_thumb, scroll_image
 
 
 def calc_capture_time(

@@ -9,8 +9,8 @@
 适用：聊天录屏（页面滚动、消息变化时自动捕获）、操作录屏。
 
 参数：
-- `--scene-threshold 0.25`（默认）：中等敏感度，画面有 25% 以上变化才提取
-- `--scene-threshold 0.15`：更敏感，适合变化缓慢的录屏
+- `--scene-threshold 0.10`（默认）：较敏感，适合变化缓慢的录屏
+- `--scene-threshold 0.15`：稍严格，减少轻微变化带来的候选帧
 - `--scene-threshold 0.40`：更严格，只提取大幅变化
 
 ### keyframe（关键帧）
@@ -72,8 +72,8 @@
 dHash（差异哈希）将内容区缩至 9×8 灰度，比较相邻像素生成 64 位哈希。两帧的汉明距离（不同位数）小于阈值则视为重复。
 
 - `0`：禁用 dHash 去重
-- `8`（默认）：平衡，允许轻微变化
-- `4`：严格，仅非常相似的帧才被去除
+- `4`（默认）：严格，仅非常相似的帧才被去除
+- `8`：平衡，允许轻微变化
 - `12`：宽松，更多帧被去除
 
 ### 像素差异阈值
@@ -84,15 +84,15 @@ dHash（差异哈希）将内容区缩至 9×8 灰度，比较相邻像素生成
 
 SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32 灰度缩略图后比较亮度、对比度和结构一致性，更适合识别视觉上接近但 dHash 距离偏大的帧。
 
-- `--ssim-threshold 0.70`（默认）：保守去重，只跳过结构高度接近的帧
+- `--ssim-threshold 0.93`（默认）：严格去重，只跳过结构高度接近的帧
 - `--ssim-threshold 0`：禁用 SSIM 去重
-- `--ssim-threshold 0.60`：更激进，可能减少更多滚动冗余，但需要抽查输出
+- `--ssim-threshold 0.85`：更激进，可能减少更多滚动冗余，但需要抽查输出
 
 ### 滚动帧合并 (`--scroll-merge`)
 
 滚动帧合并用于处理聊天录屏、网页滚动、App 列表滚动等场景。它会比较当前帧与最近保留帧在纵向位移后的重叠区域：如果大部分内容只是上下移动，且重叠区域平均像素差低于阈值，则跳过当前帧。
 
-- `--scroll-merge`：启用滚动帧合并（默认开启）
+- `--scroll-merge`：启用滚动帧合并（默认关闭）
 - `--no-scroll-merge`：禁用滚动帧合并，适合需要完整保留滚动过程的场景
 - `--scroll-diff-threshold 32.0`（默认）：阈值越大，合并越激进
 
@@ -100,6 +100,14 @@ SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32
 - 证据需要尽量少图且便于审阅：可尝试 `--scroll-diff-threshold 36`
 - 担心漏掉边缘新内容：使用默认值或 `--scroll-diff-threshold 24`
 - 需要每个滚动位置都保留：使用 `--no-scroll-merge`
+
+### 最小时间间隔 (`--min-gap`)
+
+用于抑制同一时间段内保留过多截图。默认 `--min-gap 0.5`，表示两个保留帧之间至少间隔 0.5 秒。
+
+- `--min-gap 0`：禁用时间间隔过滤
+- `--min-gap 0.5`（默认）：减少同秒多图，同时尽量保留快速变化
+- `--min-gap 1.0`：更严格，每秒最多保留约一张，适合先压缩冗余再人工复核
 
 ### OCR 去重参数
 
@@ -109,6 +117,29 @@ SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32
 - `--ocr-min-new 8`（默认）：最少新字符数，防止因少量文字变化被误判为重复
 
 OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ 灰度 → 自动对比度 → 对比度增强 1.35x → 锐化 1.15x。动态范围 < 18 的帧跳过 OCR（如纯黑/纯白画面）。
+
+## 复合复核参数
+
+### 丢弃候选帧 (`--keep-drop-candidates`)
+
+开启后，脚本会把被去重或过滤规则丢弃的候选帧复制到 `_review_candidates/`，并在 `_report.json` 的 `review.drop_candidates` 中记录：
+
+- 候选帧文件名
+- 原始抽帧序号
+- 捕获时间戳
+- 丢弃原因（如 `duplicate_ssim`、`duplicate_scroll`、`min_gap`、`quality_transition`、`ocr_duplicate`）
+- SHA256 哈希
+
+该模式只保存复核材料，不自动调用大模型。当前模型或工具支持图像输入时，可由多模态模型检查候选帧是否需要补回；如果当前模型是文字模型，则跳过视觉复核。
+
+### 候选帧数量限制 (`--drop-candidate-limit`)
+
+默认 `--drop-candidate-limit 200`。长视频中被丢弃的候选帧可能很多，建议保留默认值；如需完整回查可设为 `0`。
+
+```bash
+uv run scripts/extract.py -i recording.mp4 --ocr-dedup --keep-drop-candidates
+uv run scripts/extract.py -i recording.mp4 --keep-drop-candidates --drop-candidate-limit 0
+```
 
 ## 输出参数
 
@@ -147,6 +178,18 @@ frame_NNN_MMmSSs.jpg
   "strategy": "scene",
   "total_extracted": 156,
   "kept_after_dedup": 42,
+  "review": {
+    "drop_candidates_enabled": true,
+    "drop_candidate_count": 12,
+    "vision_review_status": "not_run",
+    "drop_candidates": [
+      {
+        "filename": "_review_candidates/candidate_001_min_gap_00m01s.jpg",
+        "reason": "min_gap",
+        "capture_time_seconds": 1.2
+      }
+    ]
+  },
   "dedup_stats": {
     "sha256_duplicates": 3,
     "dhash_duplicates": 89,
