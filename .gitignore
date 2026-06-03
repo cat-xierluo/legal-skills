@@ -1,5 +1,6 @@
 .DS_Store
 .specstory/
+.omo/
 .vscode/
 *.code-workspace
 dist/
