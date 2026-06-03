@@ -39,6 +39,7 @@ templates/
 # Use .env.example for templates
 **/.env
 !**/.env.example
+**/.agent-profiles/
 **/config/*.yaml
 !**/config/*.example.yaml
 **/config/*.json

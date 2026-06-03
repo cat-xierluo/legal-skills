@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-02 | 更新     | [video-screenshot](skills/video-screenshot/) | v0.3.2 | 新增复合复核候选帧模式：保存被算法丢弃的候选帧和原因，支持多模态模型回查漏帧风险 |
 | 2026-06-01 | 正式发布 | [cross-agent-coordination](skills/cross-agent-coordination/) | v1.0.0 | 跨平台 Agent 任务协调：围绕项目任务源分配任务、标记归属、能力路由和交接上下文 |
 | 2026-06-01 | 正式发布 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.8.2 | 本地多 Agent 执行编排：worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口 |
 | 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
@@ -56,7 +57,6 @@
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
 | 2026-05-20 | 更新     | [skill-lint](skills/skill-lint/)                 | v1.4.0 | 更新 Frontmatter 校验规则：`version` 调整为推荐发布字段，并检查 CHANGELOG、README、marketplace 版本同步 |
-| 2026-05-20 | 更新     | [skill-architect](skills/skill-architect/)       | v1.4.0 | 创建与审查流程同步新版 Frontmatter 发布规范，默认纳入 version、author、homepage 推荐字段 |
 
 </details>
 
@@ -221,14 +221,6 @@
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
 </tr>
 <tr>
-<td><a href="skills/pdf-organizer/"><strong>pdf-organizer</strong></a></td>
-<td>通用·PDF整理</td>
-<td style="word-break:break-word">法律 PDF 文书整理工具：按内容拆分、合并或直接重命名 OCR 后双层扫描件，生成页面索引、manifest 草稿和下游交接文件；支持旋转与倾斜校正，不做 OCR 或压缩</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.5.0</td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
 <td style="word-break:break-word">将案件/咨询材料整理成标准化目录结构。支持诉讼案件（12目录）和潜在项目/咨询（3目录）两种预设，自动生成案件信息看板、工时记录和期限管理文件</td>
@@ -336,6 +328,22 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/img2pdf/"><strong>img2pdf</strong></a></td>
+<td>工具·PDF排版</td>
+<td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片等）</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/pdf-organizer/"><strong>pdf-organizer</strong></a></td>
+<td>通用·PDF整理</td>
+<td style="word-break:break-word">法律 PDF 文书整理工具：按内容拆分、合并或直接重命名 OCR 后双层扫描件，生成页面索引、manifest 草稿和下游交接文件；支持旋转与倾斜校正，不做 OCR 或压缩</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.5.0</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
 <td>工具·课程</td>
 <td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片资产保真与正文插图克制、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
@@ -348,7 +356,7 @@
 <td>工具·视频处理</td>
 <td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.1</td>
+<td style="text-align:center">v0.3.2</td>
 <td></td>
 </tr>
 <tr>
@@ -398,14 +406,6 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
-</tr>
-<tr>
-<td><a href="skills/img2pdf/"><strong>img2pdf</strong></a></td>
-<td>工具·PDF排版</td>
-<td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片等）</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.0</td>
-<td></td>
 </tr>
 <tr>
 <td><a href="skills/video-compressor/"><strong>video-compressor</strong></a></td>
