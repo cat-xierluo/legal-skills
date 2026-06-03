@@ -308,8 +308,10 @@ if [ "$SOURCE_TYPE" = "github-subdir" ] || [ "$SOURCE_TYPE" = "github" ]; then
 
         cd - > /dev/null
 
-        # 移动到临时目录内的固定位置
-        mv "$TEMP_CLONE_DIR/$SUBPATH" "$TEMP_CLONE_DIR/$GH_SKILL_NAME"
+        # 移动到临时目录内的固定位置（仅当源和目标不同时，避免单段路径 mv 到自身内部）
+        if [ "$TEMP_CLONE_DIR/$SUBPATH" != "$TEMP_CLONE_DIR/$GH_SKILL_NAME" ]; then
+            mv "$TEMP_CLONE_DIR/$SUBPATH" "$TEMP_CLONE_DIR/$GH_SKILL_NAME"
+        fi
     else
         echo "📦 正在从 GitHub 克隆..."
         echo "  仓库: $CLONE_URL"
