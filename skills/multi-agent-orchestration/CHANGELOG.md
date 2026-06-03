@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.4] - 2026-06-03
+
+### Added
+- `parallel-lessons.md` 新增 G17：任务编号从 `ISS-NNN` 改为 `Task-NNN`（与 project-init v1.1.1 对齐）。说明新约定、迁移规则，以及历史 lesson（如 G15 的 `FaroPDF ISS-018`）和 commit history 保持原样不改写。
+
 ## [1.9.3] - 2026-06-03
 
 ### Changed

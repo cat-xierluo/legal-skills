@@ -398,3 +398,16 @@ Create .claude/agent-sessions/{session}/STATUS.json only. Include status=running
 | 需要完整验收 | 再读 `RESULT.md`、`PATCH_SUMMARY.md` 和 PR diff |
 
 脚本本身不能保证唤醒 PM；是否自动唤起取决于宿主有没有 automation、monitor、webhook 或外部通知能力。没有这些能力时，也不要让 PM 前台盯屏；用 `--once` 或低频读取事件日志即可。
+
+### G17. 任务编号从 ISS-NNN 改为 Task-NNN
+
+project-init v1.1.1（2026-06-03）起，生成的 `docs/TASKS.md` 模板里任务编号从 `ISS-NNN` 改为 `Task-NNN`。
+
+**原因：** 一个 Issue 或 PR 经常对应多个 Task 改动（拆分提交、范围扩展、阶段切片等），`ISS` 前缀会暗示 1:1 映射造成歧义。
+
+**适用范围：**
+- 新生成的项目：直接用 `Task-001`、`Task-002` …… 递增。
+- 既有项目：可一次性把当前 `TASKS.md` 里的旧编号重命名为 `Task-NNN`，并相应更新 `DECISIONS.md`、commit、PR 描述里的引用。
+- 历史 lesson（如本文件 G15 的 `FaroPDF ISS-018`）：保持原样不改写，那是事件记录。commit history 也不动。
+
+`ISS-` 前缀仅作为过去事件的检索关键词存在，不再作为新任务的命名约定。
