@@ -52,6 +52,9 @@ command -v git >/dev/null 2>&1 || { echo "SKIP: git is required"; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
 
+deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend custom)
+assert_contains "$deps_out" "DEPENDENCY_CHECK_OK"
+
 profile_shell=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --backend custom \
   --runtime-profile smoke-profile \
