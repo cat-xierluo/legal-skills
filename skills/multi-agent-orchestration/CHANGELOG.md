@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.14.0] - 2026-06-05
+
+### Added
+- **runtime dependency matrix**：新增 `references/runtime-dependencies.md`，按 core、tmux/worktree、PR/GitHub、worker backend、Codex heartbeat、terminal split 和验证工具拆分依赖。
+- **dependency checker**：新增 `scripts/check-dependencies.sh`，可检查核心依赖、backend CLI、`gh` 和终端分屏工具；脚本只报告状态，不安装软件、不启动 worker。
+
+### Changed
+- **SKILL.md dependency section**：将依赖说明从单张系统依赖表升级为分层依赖说明，明确 `claude`、`codex`、`opencode`、`gh` 不是所有模式的硬依赖。
+- **smoke test**：`smoke-tmux-worker.sh` 纳入 dependency checker 基础回归。
+
+### Reason
+- 来源：用户指出使用本 Skill 可能还有常规依赖需要安装，当前文档没有写清楚。
+- 结论：依赖应按执行模式拆分，避免把所有可选 backend 都误解为必装，同时给 PM 一个启动前的本地检查入口。
+
 ## [1.13.0] - 2026-06-05
 
 ### Added

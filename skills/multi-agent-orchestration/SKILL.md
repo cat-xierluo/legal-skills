@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.13.0"
+version: "1.14.0"
 ---
 
 # Multi-Agent Orchestration
@@ -371,25 +371,47 @@ bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-
 
 ## 9. 依赖
 
-### 系统依赖
+依赖按模式分层；只读文档不需要安装任何工具。首次在新机器上启动 worker 前，先运行：
+
+```bash
+bash scripts/check-dependencies.sh
+bash scripts/check-dependencies.sh --backend claude-code --backend codex --check-gh
+```
+
+### 最小本地执行依赖
 
 | 依赖 | 安装方式 |
 |------|----------|
 | `git` | 通常随开发环境提供 |
-| `bash` 4+ | macOS: `brew install bash` 并确保新版 bash 在 PATH 中 |
-| `tmux` | macOS: `brew install tmux`<br>Linux: `sudo apt-get install tmux` |
+| `bash` | 常规脚本需要 bash；`pm-monitor.sh` 需要 bash 4+ |
 | `jq` | macOS: `brew install jq`<br>Linux: `sudo apt-get install jq` |
-| `gh` | macOS: `brew install gh`<br>Linux: 参考 GitHub CLI 官方安装方式 |
+| `tmux` | macOS: `brew install tmux`<br>Linux: `sudo apt-get install tmux` |
+
+常见 Unix 工具如 `awk`、`sed`、`grep`、`find`、`stat`、`date`、`mktemp` 通常由系统提供；日期解析已兼容 macOS/Linux。
+
+### 按模式启用的依赖
+
+| 模式 | 依赖 |
+|------|------|
+| PR / mergeability 巡检 | `gh`，且需要已登录 |
+| Claude Code worker | `claude`；第三方 provider 需要本地 settings 文件 |
+| Codex worker | `codex` |
+| OpenCode worker | `opencode` |
+| Codex heartbeat | Codex App automation 能力；创建/修改 automation 必须使用 `automation_update` |
+| Claude 官方 agent view / `--worktree --tmux` | `claude`，必要时还需要 `tmux` |
 
 ### 可选终端依赖
 
 `scripts/terminal-split.sh` 只在对应终端场景下需要额外工具：Kitty 需要 `kitty @`，WezTerm 需要 `wezterm cli`，macOS GUI 终端自动化依赖 `osascript`，Warp/Ghostty/Zed/Terminal.app 分屏或新标签能力取决于本机应用和辅助功能授权。
+
+完整依赖矩阵见 `references/runtime-dependencies.md`。依赖检查脚本只报告状态，不安装软件、不启动 worker、不改配置。
 
 ## 10. 参考
 
 只在需要细节时读取：
 - `references/model-selection-matrix.md`：模型与执行模式选择。
 - `config/claude-provider-settings.example.json`：Claude Code 第三方 API provider settings 模板。
+- `references/runtime-dependencies.md`：按模式拆分的本地依赖矩阵和安装建议。
 - `references/checkpoint-files.md`：`STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md` 的字段和模板。
 - `references/parallel-lessons.md`：tmux/Agent Teams 实战坑点。
 - `references/agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
@@ -403,6 +425,7 @@ bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-
 
 脚本：
 - `scripts/spawn-worker.sh`：创建隔离 worktree、Session Context 和 tmux session，并输出启动 gate。
+- `scripts/check-dependencies.sh`：检查核心依赖、backend CLI、GitHub CLI 和终端分屏工具。
 - `scripts/render-runtime-profile.sh`：按 backend/profile 生成 worker command、prompt context 和 spawn metadata。
 - `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session、Wave 和多信号进展监控。
 - `scripts/wait-worker.sh`：单 worker 等待器，可接 Claude Code background Bash 或 Codex heartbeat automation。
