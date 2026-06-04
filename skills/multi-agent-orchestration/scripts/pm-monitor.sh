@@ -6,7 +6,7 @@
 #     [--tasks-dir ~/.claude/tasks/{uuid}] \
 #     [--claude-agents-cwd /path/to/repo] \
 #     [--interval 30] [--stale-threshold 300] [--once] [--log-file /path/to/events.log] \
-#     [--base-ref main] [--commit-stale-threshold 1800] \
+#     [--base-ref main] [--wave-id wave-5] [--commit-stale-threshold 1800] [--progress-stale-threshold 1800] \
 #     --branch feat/X:session-1 [--branch feat/Y:session-2] ...
 #
 # 在 Claude Code 的 Monitor 工具中启动，或直接在终端运行。
@@ -49,6 +49,12 @@
 #     tmux session 已退出
 #   WORKER_STALE_NO_COMMIT session branch=branch-name threshold=Ns
 #     tmux session 仍存活，但分支在阈值内没有新提交
+#   WORKER_SILENT_PROGRESS session branch=branch-name files_newer=N
+#     STATUS 未刷新且无提交，但 worktree 文件在 STATUS 之后变动
+#   WORKER_NO_PROGRESS session branch=branch-name threshold=Ns
+#     STATUS、提交和文件变动三信号均无进展
+#   WORKER_FINISHED_NO_PHASE_DONE session branch=branch-name commits=N
+#     分支已有提交、工作区干净，但 STATUS/phase 未进入 done/complete
 #   PM_MONITOR_COMPLETE: all branches merged at <timestamp>
 #     全部分支已合并
 
@@ -69,7 +75,9 @@ ONCE=0
 LOG_FILE=""
 STALE_THRESHOLD=300  # 5 分钟
 BASE_REF="main"
+WAVE_ID=""
 COMMIT_STALE_THRESHOLD=1800
+PROGRESS_STALE_THRESHOLD=1800
 declare -A BRANCHES=()
 
 while [[ $# -gt 0 ]]; do
@@ -102,8 +110,16 @@ while [[ $# -gt 0 ]]; do
       BASE_REF="$2"
       shift 2
       ;;
+    --wave-id)
+      WAVE_ID="$2"
+      shift 2
+      ;;
     --commit-stale-threshold)
       COMMIT_STALE_THRESHOLD="$2"
+      shift 2
+      ;;
+    --progress-stale-threshold)
+      PROGRESS_STALE_THRESHOLD="$2"
       shift 2
       ;;
     --once)
@@ -125,7 +141,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "未知参数: $1" >&2
-      echo "用法: pm-monitor.sh --project /path/to/repo [--team-dir ~/.claude/teams/{name}] [--once] [--interval 30] [--base-ref main] [--commit-stale-threshold 1800] [--log-file /path/to/events.log] --branch feat/X:session-1" >&2
+      echo "用法: pm-monitor.sh --project /path/to/repo [--team-dir ~/.claude/teams/{name}] [--once] [--interval 30] [--base-ref main] [--wave-id wave-5] [--commit-stale-threshold 1800] [--progress-stale-threshold 1800] [--log-file /path/to/events.log] --branch feat/X:session-1" >&2
       exit 1
       ;;
   esac
@@ -146,6 +162,11 @@ if ! [[ "$COMMIT_STALE_THRESHOLD" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+if ! [[ "$PROGRESS_STALE_THRESHOLD" =~ ^[0-9]+$ ]]; then
+  echo "错误: --progress-stale-threshold 必须是秒数整数，0 表示关闭" >&2
+  exit 1
+fi
+
 cd "$PROJECT_DIR" || { echo "错误: 目录不存在 $PROJECT_DIR" >&2; exit 1; }
 
 [ -n "$LOG_FILE" ] && mkdir -p "$(dirname "$LOG_FILE")"
@@ -163,6 +184,7 @@ declare -A last_claude_agent_status
 declare -A last_orchestration_gate
 declare -A last_session_alive
 declare -A last_commit_stale
+declare -A last_progress_signal
 
 # ========== 辅助函数 ==========
 
@@ -221,6 +243,42 @@ checkpoint_dir_for_session() {
   fi
 }
 
+resolve_base_ref() {
+  local base="$BASE_REF"
+  if git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+    echo "$base"
+  elif git rev-parse --verify --quiet "origin/$BASE_REF^{commit}" >/dev/null; then
+    echo "origin/$BASE_REF"
+  else
+    echo ""
+  fi
+}
+
+stat_mtime_epoch() {
+  local path="$1"
+  stat -f "%m" "$path" 2>/dev/null || stat -c "%Y" "$path" 2>/dev/null || echo "0"
+}
+
+count_files_newer_than_status() {
+  local wt="$1"
+  local status_file="$2"
+  find "$wt" \
+    \( -path "$wt/.git" \
+      -o -path "$wt/node_modules" \
+      -o -path "$wt/target" \
+      -o -path "$wt/dist" \
+      -o -path "$wt/build" \
+      -o -path "$wt/.claude/agent-sessions" \) -prune \
+    -o -type f -newer "$status_file" -print 2>/dev/null \
+    | wc -l | tr -d ' '
+}
+
+dirty_count_for_worktree() {
+  local wt="$1"
+  git -C "$wt" status --porcelain 2>/dev/null \
+    | awk '$2 !~ /^\.claude(\/|$)/ { count++ } END { print count + 0 }'
+}
+
 check_tmux_session() {
   local branch="$1"
   local session="$2"
@@ -242,10 +300,10 @@ check_commit_staleness() {
   local branch="$1"
   local session="$2"
 
-  [ "$COMMIT_STALE_THRESHOLD" -gt 0 ] || return
-  command -v tmux >/dev/null 2>&1 || return
-  tmux has-session -t "$session" 2>/dev/null || return
-  git show-ref --verify --quiet "refs/heads/$branch" || return
+  [ "$COMMIT_STALE_THRESHOLD" -gt 0 ] || return 0
+  command -v tmux >/dev/null 2>&1 || return 0
+  tmux has-session -t "$session" 2>/dev/null || return 0
+  git show-ref --verify --quiet "refs/heads/$branch" || return 0
 
   local wt checkpoint_dir status_file status
   wt=$(worktree_for_branch "$branch")
@@ -255,23 +313,18 @@ check_commit_staleness() {
     if [ -f "$status_file" ]; then
       status=$(jq -r '.status // "unknown"' "$status_file" 2>/dev/null || echo "unknown")
       case "$status" in
-        done|failed|blocked|stopped) return ;;
+        done|failed|blocked|stopped) return 0 ;;
       esac
     fi
   fi
 
-  local base="$BASE_REF"
-  if ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
-    if git rev-parse --verify --quiet "origin/$BASE_REF^{commit}" >/dev/null; then
-      base="origin/$BASE_REF"
-    else
-      return
-    fi
-  fi
+  local base
+  base=$(resolve_base_ref)
+  [ -n "$base" ] || return 0
 
   local recent_commit
   recent_commit=$(git log "$base..$branch" --since="$COMMIT_STALE_THRESHOLD seconds ago" -1 --format="%H" 2>/dev/null || echo "")
-  [ -z "$recent_commit" ] || return
+  [ -z "$recent_commit" ] || return 0
 
   local topic_count topic_head now bucket key
   topic_count=$(git rev-list --count "$base..$branch" 2>/dev/null || echo "0")
@@ -285,6 +338,79 @@ check_commit_staleness() {
     emit "WORKER_STALE_NO_COMMIT: $session branch=$branch base=$base threshold=${COMMIT_STALE_THRESHOLD}s topic_commits=$topic_count last_topic_commit=$topic_head"
   fi
   last_commit_stale[$branch]="$key"
+  return 0
+}
+
+check_progress_signals() {
+  local branch="$1"
+  local session="$2"
+  local wt="$3"
+  local status_file="$4"
+  local status="$5"
+  local phase="$6"
+  local updated_at="$7"
+
+  [ "$PROGRESS_STALE_THRESHOLD" -gt 0 ] || return 0
+  case "$status" in
+    done|failed|blocked|stopped) return 0 ;;
+  esac
+
+  local status_epoch now age
+  status_epoch=0
+  if [ -n "$updated_at" ]; then
+    status_epoch=$(parse_iso_epoch "$updated_at")
+  fi
+  if [ "$status_epoch" -le 0 ]; then
+    status_epoch=$(stat_mtime_epoch "$status_file")
+  fi
+  [ "$status_epoch" -gt 0 ] || return 0
+
+  now=$(date +%s)
+  age=$(( now - status_epoch ))
+  [ "$age" -gt "$PROGRESS_STALE_THRESHOLD" ] || return 0
+
+  local base topic_count files_newer dirty_count bucket event key
+  base=$(resolve_base_ref)
+  [ -n "$base" ] || return 0
+  topic_count=$(git rev-list --count "$base..$branch" 2>/dev/null || echo "0")
+  files_newer=$(count_files_newer_than_status "$wt" "$status_file")
+  dirty_count=$(dirty_count_for_worktree "$wt")
+  bucket=$(( age / PROGRESS_STALE_THRESHOLD ))
+
+  if [ "$topic_count" -eq 0 ] && [ "$files_newer" -gt 0 ]; then
+    event="WORKER_SILENT_PROGRESS"
+    key="$event|$topic_count|$files_newer|$dirty_count|$bucket"
+    if [ "$key" != "${last_progress_signal[$session]:-}" ]; then
+      emit "$event: $session branch=$branch age=${age}s files_newer=$files_newer dirty=$dirty_count status_phase=${phase:-n/a}"
+    fi
+    last_progress_signal[$session]="$key"
+    return 0
+  fi
+
+  if [ "$topic_count" -eq 0 ] && [ "$files_newer" -eq 0 ]; then
+    event="WORKER_NO_PROGRESS"
+    key="$event|$topic_count|$files_newer|$dirty_count|$bucket"
+    if [ "$key" != "${last_progress_signal[$session]:-}" ]; then
+      emit "$event: $session branch=$branch age=${age}s threshold=${PROGRESS_STALE_THRESHOLD}s status_phase=${phase:-n/a}"
+      emit "AGENT_NEEDS_INPUT: $session no progress across STATUS, commits, and file mtimes"
+    fi
+    last_progress_signal[$session]="$key"
+    return 0
+  fi
+
+  if [ "$topic_count" -gt 0 ] && [ "$dirty_count" -eq 0 ]; then
+    case "$phase" in
+      done|complete|completed|finish|finished) return 0 ;;
+    esac
+    event="WORKER_FINISHED_NO_PHASE_DONE"
+    key="$event|$topic_count|$files_newer|$dirty_count|$bucket|$phase"
+    if [ "$key" != "${last_progress_signal[$session]:-}" ]; then
+      emit "$event: $session branch=$branch age=${age}s commits=$topic_count status=$status phase=${phase:-n/a}"
+      emit "AGENT_NEEDS_INPUT: $session commits exist and worktree is clean but STATUS phase is not done"
+    fi
+    last_progress_signal[$session]="$key"
+  fi
+  return 0
 }
 
 # 从 PM inbox 中提取 health_report 消息
@@ -405,6 +531,7 @@ check_file_checkpoints() {
     if [ -f "$status_file" ]; then
       local status phase progress issues updated_at needs_input pm_action_required key prev
       local task_id current_action next_action last_commit_sha last_commit_at commits_since_base pr_url failed_tests test_summary heartbeat threshold stale_key
+      local status_wave_id wave_worker_id wave_role wave_exit_state worker_type api_provider model_name provider_slot
       local gate_required gate_session gate_cwd gate_branch gate_worktree gate_degraded gate_escape gate_key
       status=$(jq -r '.status // empty' "$status_file" 2>/dev/null || echo "")
       phase=$(jq -r '.phase // empty' "$status_file" 2>/dev/null || echo "")
@@ -420,6 +547,14 @@ check_file_checkpoints() {
       last_commit_at=$(jq -r '.git.last_commit_at // empty' "$status_file" 2>/dev/null || echo "")
       commits_since_base=$(jq -r '.git.commits_since_base // empty' "$status_file" 2>/dev/null || echo "")
       pr_url=$(jq -r '.git.pr_url // .pr_url // empty' "$status_file" 2>/dev/null || echo "")
+      status_wave_id=$(jq -r '.wave.id // empty' "$status_file" 2>/dev/null || echo "")
+      wave_worker_id=$(jq -r '.wave.worker_id // empty' "$status_file" 2>/dev/null || echo "")
+      wave_role=$(jq -r '.wave.role // empty' "$status_file" 2>/dev/null || echo "")
+      wave_exit_state=$(jq -r '.wave.exit_state // empty' "$status_file" 2>/dev/null || echo "")
+      worker_type=$(jq -r '.worker_class.type // empty' "$status_file" 2>/dev/null || echo "")
+      api_provider=$(jq -r '.runtime.api_provider // empty' "$status_file" 2>/dev/null || echo "")
+      model_name=$(jq -r '.runtime.model // empty' "$status_file" 2>/dev/null || echo "")
+      provider_slot=$(jq -r '.runtime.provider_slot // empty' "$status_file" 2>/dev/null || echo "")
       test_summary=$(jq -r '[.tests[]? | "\(.command):\(.status)"] | join(", ")' "$status_file" 2>/dev/null || echo "")
       failed_tests=$(jq -r '[.tests[]? | select((.status // "") | test("fail|failed|error"; "i")) | .command] | join(", ")' "$status_file" 2>/dev/null || echo "")
       gate_required=$(jq -r '.orchestration_gate.required // false' "$status_file" 2>/dev/null || echo "false")
@@ -432,10 +567,10 @@ check_file_checkpoints() {
       [ -n "$status" ] || continue
 
       gate_key="$gate_required|$gate_session|$gate_cwd|$gate_branch|$gate_worktree|$gate_degraded|$gate_escape"
-      key="$status|$phase|$progress|$issues|$needs_input|$pm_action_required|$current_action|$next_action|$last_commit_sha|$last_commit_at|$commits_since_base|$pr_url|$test_summary|$gate_key"
+      key="$status|$phase|$progress|$issues|$needs_input|$pm_action_required|$current_action|$next_action|$last_commit_sha|$last_commit_at|$commits_since_base|$pr_url|$status_wave_id|$wave_worker_id|$wave_role|$wave_exit_state|$worker_type|$api_provider|$model_name|$provider_slot|$test_summary|$gate_key"
       prev="${last_checkpoint_status[$session]:-}"
       if [ "$key" != "$prev" ]; then
-        emit "CHECKPOINT_STATUS: $session $status $phase $progress task=${task_id:-n/a} action=${current_action:-n/a} next=${next_action:-n/a} commit=${last_commit_sha:-n/a} commit_at=${last_commit_at:-n/a} commits_since_base=${commits_since_base:-n/a}"
+        emit "CHECKPOINT_STATUS: $session $status $phase $progress wave=${status_wave_id:-${WAVE_ID:-n/a}} worker=${wave_worker_id:-n/a} type=${worker_type:-n/a} provider=${api_provider:-n/a} model=${model_name:-n/a} slot=${provider_slot:-n/a} task=${task_id:-n/a} action=${current_action:-n/a} next=${next_action:-n/a} commit=${last_commit_sha:-n/a} commit_at=${last_commit_at:-n/a} commits_since_base=${commits_since_base:-n/a}"
         case "$status" in
           done)    emit "AGENT_DONE: $session" ;;
           failed)  emit "AGENT_FAILED: $session" ;;
@@ -482,6 +617,8 @@ check_file_checkpoints() {
           fi
         fi
       fi
+
+      check_progress_signals "$branch" "$session" "$wt" "$status_file" "$status" "$phase" "$updated_at"
     fi
 
     if [ -f "$result_file" ]; then
@@ -538,9 +675,11 @@ check_claude_agents() {
 # ========== 主循环 ==========
 emit "PM_MONITOR_STARTED at $(date)"
 emit "Tracking ${#BRANCHES[@]} branches: ${!BRANCHES[*]}"
+[ -n "$WAVE_ID" ] && emit "Wave: $WAVE_ID"
 [ -n "$TEAM_DIR" ] && emit "Team inbox: $TEAM_DIR/inboxes/"
 [ -n "$CLAUDE_AGENTS_CWD" ] && emit "Claude agents cwd: $CLAUDE_AGENTS_CWD"
 [ "$COMMIT_STALE_THRESHOLD" -gt 0 ] && emit "Commit stale threshold: ${COMMIT_STALE_THRESHOLD}s base=$BASE_REF"
+[ "$PROGRESS_STALE_THRESHOLD" -gt 0 ] && emit "Progress stale threshold: ${PROGRESS_STALE_THRESHOLD}s base=$BASE_REF"
 [ "$ONCE" -eq 1 ] && emit "Mode: once"
 [ -n "$LOG_FILE" ] && emit "Log file: $LOG_FILE"
 

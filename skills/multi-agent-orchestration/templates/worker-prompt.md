@@ -15,7 +15,13 @@ Context:
 - Worktree: {{worktree_path}}
 - Session ID: {{session_id}}
 - Session Context: {{session_context_path}}
+- Wave ID: {{wave_id}}
+- Wave Worker ID: {{wave_worker_id}}
 - Runtime Profile: {{runtime_profile}}
+- API Provider: {{api_provider}}
+- Model: {{model_name}}
+- Provider Slot: {{provider_slot}}
+- Worker Type: {{worker_type}}
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
@@ -24,7 +30,7 @@ Isolation Gate:
 Task:
 1. 只创建 `{{session_context_path}}/STATUS.json`。
 2. 参考 skill 模板 `templates/checkpoint-status.json`。
-3. 写入当前 cwd、当前 branch、worktree、isolation gate 结果、可用 CLI 路径和版本、runtime profile、允许/禁止文件范围。
+3. 写入当前 cwd、当前 branch、worktree、wave 信息、worker type、provider/model/slot、isolation gate 结果、可用 CLI 路径和版本、runtime profile、允许/禁止文件范围。
 4. 不要写 token、完整环境变量、settings 内容或长日志。
 
 Finish:
@@ -44,7 +50,15 @@ Context:
 - Worktree: {{worktree_path}}
 - Session ID: {{session_id}}
 - Session Context: {{session_context_path}}
+- Wave ID: {{wave_id}}
+- Wave Worker ID: {{wave_worker_id}}
+- Wave Role: {{wave_role}}
+- Wave Exit Criteria: {{wave_exit_criteria}}
 - Runtime Profile: {{runtime_profile}}
+- API Provider: {{api_provider}}
+- Model: {{model_name}}
+- Provider Slot: {{provider_slot}}
+- Worker Type: {{worker_type_ui_wiring_contract_extension_tauri_command_docs_research_custom}}
 - Effort: {{effort_low_medium_high}}
 
 Isolation Gate:
@@ -65,6 +79,8 @@ Scope:
 - Allowed files: {{allowed_files}}
 - Forbidden files: {{forbidden_files}}
 - Shared dependencies / lockfiles / runtime config are forbidden unless the task explicitly allows them.
+- Risk class: {{low_medium_high}}
+- Shared-risk notes: {{shared_risk_notes}}
 
 Expected Deliverables:
 - Code/docs changes: {{deliverables}}
@@ -81,16 +97,31 @@ Process:
 4. Verify: run the commands below and record results.
 5. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
 
+Worker Type Rules:
+- `ui-wiring`: no new dependencies; all listed frontend verification commands must pass.
+- `contract-extension`: dependency, lockfile or shared contract changes are allowed only if listed in Scope; explain the shared impact in RESULT.
+- `tauri-command`: record local native dependency limits. If `cargo build` needs a missing system library, run and record `cargo check --manifest-path src-tauri/Cargo.toml --offline` as the floor instead of treating missing native libs as implementation failure.
+- `docs/research`: avoid DEC/TASK numbering races; see Decision ID Rule.
+
 Commit Cadence:
 - For long tasks, create a coherent checkpoint commit every 30-60 minutes or whenever a verified phase is complete.
 - Do not wait until a very large final diff if smaller reviewable commits are available.
 - Follow the project `git-workflow` / `git-batch-commit` rules for commit format; this prompt does not redefine them.
 - After each commit, refresh `STATUS.json.git.last_commit_sha` and the current phase/action fields.
 
+Decision ID Rule:
+- If editing project decision logs, first grep existing IDs such as `^## DEC-` or `^### [DEC-`.
+- Pick the next unused ID at write time. If another worker races and uses the same ID, renumber your entry during rebase instead of overwriting theirs.
+
 Verification:
 - {{verify_command_1}}
 - {{verify_command_2}}
 - {{verify_command_3}}
+
+Verification Floor:
+- For frontend/UI workers, run typecheck, tests, and build unless PM explicitly narrows verification.
+- For Tauri/Rust workers, run `cargo check --manifest-path src-tauri/Cargo.toml --offline` as the required Rust floor; run `cargo build` only when local native dependencies are available.
+- Record every skipped command with the exact reason in RESULT.md.
 
 Autonomy:
 - Do not wait for PM after partial completion.

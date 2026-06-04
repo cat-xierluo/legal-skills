@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.10.0"
+version: "1.11.0"
 ---
 
 # Multi-Agent Orchestration
@@ -101,9 +101,24 @@ PM 代理纪律：
 5. **选择 worker backend 和 runtime profile**：按任务复杂度、当前额度、模型偏好和是否需要独立进程，选择 Claude Code / Codex / OpenCode / custom CLI / shell / ACP。
 6. **PM 创建隔离环境**：默认由 PM 创建 worktree、分支和 session context 目录，再把路径交给 worker；只有 Claude Code 官方 Agent Teams / agent view 明确使用自身 `--worktree` 能力时，才允许由 Claude Code 创建，但 PM 仍要验收分支、路径和隔离状态。
 7. **启动 worker 并验证门禁**：给每个 worker 明确目标文件、允许修改范围、验证命令、session context 目录、提交和 PR 要求；确认 session 存活、cwd/branch 正确、`STATUS.json` 出现或已发送 bootstrap correction。
-8. **PM 巡检**：优先查看 `.claude/agent-sessions/<session-id>/STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md`、git status、commit/PR 状态；Claude 官方 Agent Teams 则优先读取 `~/.claude/teams/<team>/` 和 `~/.claude/tasks/<team>/`，`claude agents --json`、tmux pane 或 agent view 作为兜底观察。发现偏题、阻塞或范围扩大时介入。
+8. **PM 巡检**：优先查看 `.claude/agent-sessions/<session-id>/STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md`、git status、commit/PR 状态；Claude 官方 Agent Teams 则优先读取 `~/.claude/teams/<team>/` 和 `~/.claude/tasks/<team>/`，`claude agents --json`、tmux pane 或 agent view 作为兜底观察。发现偏题、阻塞、范围扩大或无阶段性提交时介入。
 9. **PM 验收而非代写**：PM 对 worker 结果做范围检查、测试复核和 review；发现问题优先发纠偏指令或派给 reviewer/另一个 worker，不默认自己改业务代码。
 10. **收口**：worker 提交并开 PR 后，PM 做范围检查、触发 review、按 `git-workflow` 合并和清理。
+
+### 3.1 Wave-Based Orchestration
+
+Wave 是在同一 base ref、同一批冲突假设下启动的一组并行 worker。它用来记录“本项目已经并行推进过几轮”、控制并发风险，并让 PM 在每轮结束后复盘 provider/model 表现。
+
+Wave 启动前，PM 必须写清：
+- `wave_id`、base ref、目标、worker 清单、每个 worker 的分支/worktree/session。
+- 每个 worker 的类型：`ui-wiring`（低风险 UI 接线）、`contract-extension`（共享契约/依赖变更）、`tauri-command`（Rust/Tauri/本机依赖）、`docs/research`、`custom`。
+- runtime profile / provider / model / 额度来源 / 并发槽位。超过 3-4 个 worker 时，不要压在单一 API provider 上；应跨 Claude provider、Codex/OpenAI、OpenCode、local/OSS 等 profile 分流。
+- 共享风险：`package.json`、锁文件、`src-tauri/`、`src/shared/`、全局布局、DEC 编号或同一模块入口。
+- 预期 PR 数、收口顺序、下一 Wave 进入条件。
+
+并发数量不是固定 3 个。文件范围独立、验证命令独立、无共享契约冲突时，默认目标可提高到 4-6 个 worker；纯文档、翻译、i18n、互不重叠 UI 接线可以更多。涉及共享依赖、锁文件、Tauri command、全局布局、DEC race 或同一模块入口时，降到 1-3 个并按依赖顺序推进。
+
+Wave 收口时，PM 记录每个 worker 的 `merged` / `done-unmerged` / `blocked` / `deferred` / `restarted`，并评估模型/provider 表现：Isolation Gate、STATUS 心跳、commit 节奏、范围遵循、验证通过率、review 修复次数、diff 质量、阻塞/幻觉/环境误判。下一 Wave 根据该评估调整任务分配：高风险任务给指令遵循和工程可靠性更好的 profile，低风险重复任务给成本或吞吐更优的 profile。
 
 ## 4. 命名规则
 
@@ -198,6 +213,7 @@ PM 巡检信号：
 - 有持续输出、checkpoint 更新或文件在增长时继续等待。
 - 启动后 1-2 分钟仍没有 `Session Context/STATUS.json` 时，先发送 checkpoint-only 纠偏；仍无响应时中断当前思考并重发 bootstrap 指令，不直接接管实现。
 - 长时间无落盘但仍在规划时，先发送更窄的“先写目标文件”命令。
+- worker 跳过 10-15 分钟 STATUS 心跳或 30-60 分钟阶段性 commit 时，PM 主动发送纠偏，要求立刻更新 STATUS 或提交当前已验证阶段；5 分钟内仍无 STATUS/commit/文件进展变化时，升级为重启 worker、派 reviewer 或 PM 窄范围收口。
 - 发现轻度偏题、范围扩大、开始修环境/依赖、等待确认或验证方式偏离时，优先通过 tmux / agent view / inbox 发送纠偏指令，让 worker 自己回到范围内执行。
 - 只有连续两次纠偏无效、worker 继续触碰禁止范围、准备执行破坏性 Git/文件操作、泄露敏感信息、或已无法在原 session 内恢复时，才停止 session 并由 PM 接管。
 - 失败、重启或停止前先保留 worktree 和 `Session Context`，避免丢失已落盘产物。
@@ -222,7 +238,9 @@ bash scripts/pm-monitor.sh \
   --team-dir ~/.claude/teams/team-name \
   --tasks-dir ~/.claude/tasks/tasks-uuid \
   --claude-agents-cwd /path/to/repo \
+  --wave-id wave-5 \
   --commit-stale-threshold 1800 \
+  --progress-stale-threshold 1800 \
   --interval 60 \
   --log-file .claude/agent-sessions/pm-monitor/events.log \
   --branch docs/ch01-agent-intro:legal-ch01
@@ -333,7 +351,7 @@ bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-
 
 脚本：
 - `scripts/spawn-worker.sh`：创建隔离 worktree、Session Context 和 tmux session，并输出启动 gate。
-- `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session 多维监控。
+- `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session、Wave 和多信号进展监控。
 - `scripts/wait-worker.sh`：单 worker 等待器，可接 Claude Code background Bash 或 Codex heartbeat automation。
 - `scripts/worktree-status.sh`：单 worker 只读总览。
 - `scripts/clean-worktree.sh`：worker session/worktree 安全清理，默认 dry-run。
@@ -343,6 +361,7 @@ bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-
 模板：
 - `templates/worker-prompt.md`：worker bootstrap 和完整派发 prompt 模板。
 - `templates/codex-heartbeat-wait.md`：Codex App heartbeat 巡检 prompt。
+- `templates/wave-summary.md`：每轮 Wave 收口和 provider/model 评估模板。
 - `templates/checkpoint-status.json`：`STATUS.json` 模板。
 - `templates/checkpoint-result.md`：完成/失败结果摘要模板。
 - `templates/checkpoint-patch-summary.md`：PR review 用 diff 摘要模板。

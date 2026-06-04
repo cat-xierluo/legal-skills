@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.11.0] - 2026-06-04
+
+### Added
+- **Wave-Based Orchestration**：SKILL.md 新增 Wave 一等调度概念，要求 PM 在每轮启动前记录 `wave_id`、worker 清单、base ref、共享风险、provider/model/slot、收口顺序和下一轮进入条件。
+- **跨 provider 并发池**：明确超过 3-4 个 worker 时不应压在单一 API provider 上，应跨 runtime profile/API 来源分流，并在 Wave 收口时评估模型/provider 表现。
+- **worker 类型与验证底线**：worker prompt 新增 `ui-wiring`、`contract-extension`、`tauri-command`、`docs/research` 等类型，明确 Tauri/Rust worker 的 `cargo check --offline` 验证底线和 skipped verification 记录要求。
+- **Wave checkpoint 字段与 summary 模板**：`checkpoint-status.json` 新增 `wave`、`worker_class`、provider/model/slot 和 `model_evaluation` 字段；新增 `templates/wave-summary.md`。
+- **多信号进展巡检**：`pm-monitor.sh` 新增 `--wave-id`、`--progress-stale-threshold`、`WORKER_SILENT_PROGRESS`、`WORKER_NO_PROGRESS` 和 `WORKER_FINISHED_NO_PHASE_DONE`，结合 STATUS、commit、file mtime 和 dirty state 判断 worker 是否真有进展。
+
+### Changed
+- **worker prompt**：加入 Wave 信息、provider slot、Decision ID race 规则、worker type rules 和验证底线。
+- **worktree-status.sh**：单 worker 只读总览增加 wave/provider/model/type 输出。
+- **parallel-lessons.md**：补充 Wave worker 类型、Vitest/Vite 二进制资源兼容、DEC 编号 race 和 provider 并发池实战记录。
+
+### Reason
+- 来源：用户要求评估 TASKS 中多个优化/升级建议，并把合理项升级为 `multi-agent-orchestration` 的正式机制。
+- 结论：Wave、provider 并发池、多信号巡检、worker 类型、验证底线和 DEC race 属于高复用执行协议；Agent Teams 发布状态、终端 split-panes、底层 adapter、Snap mode 等仍留作后续研究。
+
 ## [1.10.0] - 2026-06-04
 
 ### Added

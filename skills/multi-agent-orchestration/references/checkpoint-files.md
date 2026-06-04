@@ -31,14 +31,17 @@ Worker 必须把进度压缩到 `.claude/agent-sessions/<session-id>/`，避免 
 | 字段组 | 必要性 | PM 自动监控 |
 |--------|--------|-------------|
 | `status`、`phase`、`progress`、`updated_at`、`heartbeat_interval_seconds` | 判断 worker 是否健康、是否过期 | 是 |
-| `task_source`、`branch`、`worktree`、`session_id`、`session_context` | 把事件映射回任务、分支和 worktree | 是 |
+| `task_source`、`wave`、`branch`、`worktree`、`session_id`、`session_context` | 把事件映射回任务、Wave、分支和 worktree | 是 |
+| `worker_class`、`runtime.api_provider`、`runtime.model`、`runtime.provider_slot` | 记录 worker 类型、风险和 provider 并发槽位 | 是 |
 | `orchestration_gate` | 判断 session、cwd、branch、worktree 隔离是否通过，避免 PM/worker 逃逸 | 是 |
 | `current_action`、`next_action` | 避免 PM 读取完整日志也能判断是否偏题 | 是 |
 | `needs_input`、`pm_action_required`、`blocker`、`issues` | 触发 PM 介入 | 是 |
 | `tests`、`git.pr_url`、`git.last_commit_sha`、`git.last_commit_at`、`git.commits_since_base` | 判断是否进入 review/收口，识别长时间无提交的 worker | 是 |
-| `runtime`、`scope`、`files_touched`、`risks`、`last_pm_correction` | PM 手动 review 时快速定位风险 | 部分 |
+| `runtime`、`scope`、`files_touched`、`risks`、`model_evaluation`、`last_pm_correction` | PM 手动 review 和 Wave 收口时快速定位风险 | 部分 |
 
 长任务应在完成一个可验证阶段或每 30-60 分钟生成一次可 review 的阶段性 commit，并同步刷新 `git.last_commit_sha`、`git.last_commit_at` 和 `git.commits_since_base`。提交格式仍由项目 `git-workflow` / `git-batch-commit` 决定。
+
+Wave worker 应在 bootstrap 时写入 `wave.id`、`wave.worker_id`、`wave.role` 和 `worker_class.type`。收口时由 worker 或 PM 填写 `wave.exit_state` 和 `model_evaluation`，用于下一 Wave 的 provider/model 路由。
 
 不要把完整日志、长推理、完整环境变量或 token 写入 `STATUS.json`。`runtime` 只记录工具路径、版本和 profile 名，不记录密钥、认证头、完整 settings JSON 或完整 shell env。PM 读取 tmux pane 或 RESULT tail 时应使用 `wait-worker.sh` 的脱敏输出作为默认观察面。
 

@@ -9,6 +9,13 @@
     "id": "{{issue_id}}",
     "title": "{{task_title}}"
   },
+  "wave": {
+    "id": "{{wave_id}}",
+    "worker_id": "{{wave_worker_id}}",
+    "role": "{{wave_role}}",
+    "exit_criteria": "{{wave_exit_criteria}}",
+    "exit_state": ""
+  },
   "branch": "{{branch_name}}",
   "worktree": "{{worktree_path}}",
   "session_id": "{{session_id}}",
@@ -16,6 +23,11 @@
   "pm_host": "{{pm_host}}",
   "worker_backend": "{{worker_backend}}",
   "runtime_profile": "{{runtime_profile}}",
+  "worker_class": {
+    "type": "{{worker_type}}",
+    "risk": "{{risk_low_medium_high}}",
+    "shared_risk_notes": "{{shared_risk_notes}}"
+  },
   "orchestration_gate": {
     "required": true,
     "session_verified": false,
@@ -28,6 +40,9 @@
   },
   "runtime": {
     "cwd": "{{worktree_path}}",
+    "api_provider": "{{api_provider}}",
+    "model": "{{model_name}}",
+    "provider_slot": "{{provider_slot}}",
     "tools": [
       {
         "name": "{{tool_name}}",
@@ -58,6 +73,16 @@
   "blocker": "",
   "issues": [],
   "risks": [],
+  "model_evaluation": {
+    "isolation_gate_followed": null,
+    "status_heartbeat_followed": null,
+    "commit_cadence_followed": null,
+    "scope_followed": null,
+    "verification_passed": null,
+    "review_fix_count": 0,
+    "quality_notes": "",
+    "failure_modes": []
+  },
   "last_pm_correction": {
     "received_at": "",
     "summary": "",

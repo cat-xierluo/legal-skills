@@ -94,11 +94,18 @@ if [ -f "$STATUS_FILE" ]; then
     updated_at=$(jq -r '.updated_at // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     current_action=$(jq -r '.current_action // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     next_action=$(jq -r '.next_action // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    wave_id=$(jq -r '.wave.id // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    wave_worker_id=$(jq -r '.wave.worker_id // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    worker_type=$(jq -r '.worker_class.type // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    api_provider=$(jq -r '.runtime.api_provider // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    model_name=$(jq -r '.runtime.model // ""' "$STATUS_FILE" 2>/dev/null || echo "")
+    provider_slot=$(jq -r '.runtime.provider_slot // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     last_commit_sha=$(jq -r '.git.last_commit_sha // .last_commit_sha // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     last_commit_at=$(jq -r '.git.last_commit_at // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     commits_since_base=$(jq -r '.git.commits_since_base // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     pr_url=$(jq -r '.git.pr_url // .pr_url // ""' "$STATUS_FILE" 2>/dev/null || echo "")
     echo "CHECKPOINT_STATUS: status=${status:-unknown} phase=${phase:-n/a} progress=${progress:-n/a} updated_at=${updated_at:-n/a}"
+    echo "CHECKPOINT_WAVE: wave=${wave_id:-n/a} worker=${wave_worker_id:-n/a} type=${worker_type:-n/a} provider=${api_provider:-n/a} model=${model_name:-n/a} slot=${provider_slot:-n/a}"
     echo "CHECKPOINT_ACTION: current=${current_action:-n/a} next=${next_action:-n/a}"
     echo "CHECKPOINT_GIT: commit=${last_commit_sha:-n/a} commit_at=${last_commit_at:-n/a} commits_since_base=${commits_since_base:-n/a} pr=${pr_url:-n/a}"
   else
