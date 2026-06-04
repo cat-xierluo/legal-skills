@@ -11,15 +11,20 @@ Context:
 - PM Host: {{pm_host}}
 - Worker Backend: {{worker_backend}}
 - Branch: {{branch_name}}
+- Expected Base Ref: {{base_ref}}
 - Worktree: {{worktree_path}}
 - Session ID: {{session_id}}
 - Session Context: {{session_context_path}}
 - Runtime Profile: {{runtime_profile}}
 
+Isolation Gate:
+- Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
+- If cwd, branch, or worktree isolation is wrong, write `{{session_context_path}}/STATUS.json` with `status=blocked`, `phase=bootstrap`, the mismatch details, and stop. Do not implement in the PM/main workspace.
+
 Task:
 1. 只创建 `{{session_context_path}}/STATUS.json`。
 2. 参考 skill 模板 `templates/checkpoint-status.json`。
-3. 写入当前 cwd、可用 CLI 路径和版本、branch、worktree、runtime profile、允许/禁止文件范围。
+3. 写入当前 cwd、当前 branch、worktree、isolation gate 结果、可用 CLI 路径和版本、runtime profile、允许/禁止文件范围。
 4. 不要写 token、完整环境变量、settings 内容或长日志。
 
 Finish:
@@ -41,6 +46,11 @@ Context:
 - Session Context: {{session_context_path}}
 - Runtime Profile: {{runtime_profile}}
 - Effort: {{effort_low_medium_high}}
+
+Isolation Gate:
+- Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
+- Update `STATUS.json` with the isolation gate result.
+- If cwd, branch, or worktree isolation is wrong, set `status=blocked`, `phase=bootstrap`, `pm_action_required=true`, describe the mismatch, and stop. Do not implement in the PM/main workspace.
 
 Background:
 - Task Source: {{task_source}}
@@ -65,11 +75,17 @@ Expected Deliverables:
 - Git/PR: commit, push, create PR when the task is complete.
 
 Process:
-1. Bootstrap: create or update `STATUS.json` before deep work.
+1. Bootstrap: run the Isolation Gate and create or update `STATUS.json` before deep work.
 2. Implement: stay inside Scope; do not expand the task.
 3. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues every 10-15 minutes or on phase changes.
 4. Verify: run the commands below and record results.
 5. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
+
+Commit Cadence:
+- For long tasks, create a coherent checkpoint commit every 30-60 minutes or whenever a verified phase is complete.
+- Do not wait until a very large final diff if smaller reviewable commits are available.
+- Follow the project `git-workflow` / `git-batch-commit` rules for commit format; this prompt does not redefine them.
+- After each commit, refresh `STATUS.json.git.last_commit_sha` and the current phase/action fields.
 
 Verification:
 - {{verify_command_1}}
@@ -80,6 +96,7 @@ Autonomy:
 - Do not wait for PM after partial completion.
 - Continue until verified PR unless `needs_input=true`, `pm_action_required=true`, or the task is genuinely blocked.
 - If blocked, update STATUS with blocker, issues, current_action and next_action.
+- Do not ask PM to implement your assigned scope directly; ask only for missing input, permission, or correction.
 
 Out of Scope:
 - Do not modify forbidden files.

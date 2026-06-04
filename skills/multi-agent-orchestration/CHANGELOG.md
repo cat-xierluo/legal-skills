@@ -1,5 +1,75 @@
 # Changelog
 
+## [1.10.0] - 2026-06-04
+
+### Added
+- **worker 生命周期脚本**：新增 `spawn-worker.sh`、`worktree-status.sh`、`clean-worktree.sh` 和 `smoke-tmux-worker.sh`，把 worktree/session 创建、单 worker 状态总览、安全清理和端到端 smoke test 固化为可执行入口。
+- **commit stale 事件**：`pm-monitor.sh` 新增 `--commit-stale-threshold` 和 `WORKER_STALE_NO_COMMIT`，用于提示 session 存活但分支长时间没有阶段性提交的 worker。
+- **Codex heartbeat 模板**：新增 `templates/codex-heartbeat-wait.md`，明确 Codex App 用 `wait-worker.sh --once` 做轻量唤醒，创建/修改 automation 时必须使用 `automation_update` 工具。
+- **Worker commit cadence**：worker prompt 要求长任务每 30-60 分钟或阶段完成后生成可 review commit，并刷新 `STATUS.json` 的 Git 字段。
+
+### Changed
+- **wait-worker.sh 输出脱敏**：tmux pane tail 和 RESULT tail 默认过滤 token/key/secret/auth/password 等敏感行，并替换常见 secret token 片段。
+- **SKILL.md 压缩启动章节**：将长启动示例收束为 `spawn-worker.sh` + 常用 command 索引，保留防逃逸门禁和最小验证规则。
+- **checkpoint Git 字段**：`templates/checkpoint-status.json` 增加 `git.last_commit_at` 和 `git.commits_since_base`，`pm-monitor.sh` / `worktree-status.sh` 同步显示。
+- **脚本 shebang**：核心脚本统一使用 `/usr/bin/env bash`；`pm-monitor.sh` 增加 bash 4+ 版本门禁，避免 macOS 系统 `/bin/bash` 3.2 运行关联数组失败。
+- **UTC 时间解析**：`pm-monitor.sh` 和 `wait-worker.sh` 在 macOS 上按 UTC 解析 `updated_at` 的 `Z` 后缀，避免刚写入的 checkpoint 被误报 stale。
+
+### Reason
+- 来源：用户希望把 “tmux 独立 session 防逃逸” 做成可执行、可验证、可 smoke 的完整协议，并适配 Codex 的后台等待/heartbeat 方式。
+- 目标：让 PM 不再依赖手写命令和主观自律；启动、等待、监控、状态、清理和回归验证都有明确脚本入口。
+
+## [1.9.9] - 2026-06-03
+
+### Added
+- **wait-worker.sh tmux 诊断尾部输出**：新增 `--tmux-session`、`--pane-tail-lines`、`--include-pane-on` 和 `--stale-threshold`。默认只在 checkpoint 缺失、过期或终态时读取 tmux pane tail。
+- **状态源分层规则**：SKILL.md §7.1 明确 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 是主协议，`tmux capture-pane` 只作诊断窗口，不作为完成标准。
+
+### Reason
+- 来源：用户提出既然 background Bash 在运行，是否可以直接读取 tmux worker 输出。
+- 结论：可以读，但要作为诊断兜底而非主状态源，避免屏幕输出截断、清屏、敏感信息和上下文膨胀影响 PM 判断。
+
+## [1.9.8] - 2026-06-03
+
+### Added
+- **scripts/wait-worker.sh**：新增单 worker 等待器，可持续等待或 `--once` 快速检查 `.claude/agent-sessions/<session>/STATUS.json`，在 `done` / `failed` / `blocked` / `stopped` 时输出 RESULT/PATCH_SUMMARY 路径并退出。
+- **§7.1 主动等待与宿主唤醒**：明确 `wait-worker.sh` 不替代 `pm-monitor.sh`；Claude Code 可接 Bash background/run-in-background，Codex App 则用当前 thread 的 heartbeat automation 调用 `wait-worker.sh --once` 实现主动唤醒。
+
+### Reason
+- 来源：用户希望 Claude Code 的 Bash `run_in_background` 等待体验也能适配 Codex。
+- 结论：Codex CLI 没有同名自动通知机制；Codex 适配应通过“通用等待脚本 + Codex heartbeat/thread wakeup”完成，避免把核心 monitor 绑定到单一宿主。
+
+## [1.9.7] - 2026-06-03
+
+### Added
+- **防逃逸门禁**：当用户或项目明确要求 tmux / 独立 session / 开 worker 时，PM 在业务实现前必须创建 worktree/branch、启动 session、验证 cwd/branch、派发 worker prompt 并确认 `STATUS.json`，否则报告阻塞，不得静默降级为 PM 直接实现或普通 Subagent。
+- **Worker Isolation Gate**：`templates/worker-prompt.md` 要求 worker 在读任务或实现前确认 cwd、branch 和 worktree；不匹配时写 blocked `STATUS.json` 并停止。
+- **STATUS orchestration_gate 字段**：`templates/checkpoint-status.json` 新增 session/cwd/branch/worktree/degraded/escape 结构化门禁字段，`pm-monitor.sh` 会输出 `ORCHESTRATION_GATE_FAILED`。
+
+### Fixed
+- **pm-monitor.sh 本地未 push 分支误退出**：远端分支不存在时先查 merged PR；若本地分支仍存在，输出 `BRANCH_NOT_PUSHED` 并保持 monitor 运行。
+- **SESSION_GONE 去重**：tmux session 消失事件只在状态变化时输出，避免低频巡检日志重复刷屏。
+
+### Reason
+- 来源：用户反馈其他模型在 Claude Code 中反复没有按 tmux 独立 session 推进，需要把“不要逃逸”从建议性描述升级成可检查门禁。
+- 目标：让 PM、worker 和 monitor 三层都能暴露逃逸：PM 不能绕过启动门禁，worker 不能在错误目录继续实现，monitor 能报告 gate 失败和本地分支未 push。
+
+## [1.9.6] - 2026-06-03
+
+### Changed
+- **SKILL.md §6 tmux / Claude Code worker 例子**：去掉 `--max-turns 20` 的限制示例，加注"不要设 `--max-turns`；PM 重点是检测 worker 真在运转而不是限制 turn 数"。
+- **scripts/pm-monitor.sh BRANCH 状态区分**：远端 branch 不存在时，区分两种情况：
+  - 本地 branch HEAD == main HEAD → `BRANCH_NOT_PUSHED: $branch (waiting for worker to commit and push)`（**新事件**）
+  - 本地 branch HEAD != main HEAD → `BRANCH_MERGED: $branch`（保留原行为）
+  - 解决"branch 还没 push 被误判为 merged"导致 monitor 立刻退出的问题。
+
+### Reason
+- 来源：FaroPDF v0.1 Wave 2 启 worker 后 PM 监控失灵的根因分析。
+- 主要根因：
+  1. worker prompt 没强调"启动后立即写 STATUS.json 心跳"，导致 max-turns 触发时没 STATUS.json，PM 无从判断 worker 真在运转。
+  2. SKILL 自带 pm-monitor.sh 的 BRANCH_MERGED 判断只看 `origin/$branch` 是否存在，忽略了"branch 还没 push"的常见 case，导致 monitor 立刻退出。
+  3. SKILL 例子给的 `--max-turns 20` 让我误以为应该设上限，实际应让 worker 跑自然结束。
+
 ## [1.9.5] - 2026-06-03
 
 ### Added

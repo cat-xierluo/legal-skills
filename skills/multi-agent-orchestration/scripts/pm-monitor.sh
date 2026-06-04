@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # pm-monitor.sh — PM Monitor v4（Agent Teams inbox 通信 + Git SHA 轮询双维度）
 #
 # 用法:
@@ -6,6 +6,7 @@
 #     [--tasks-dir ~/.claude/tasks/{uuid}] \
 #     [--claude-agents-cwd /path/to/repo] \
 #     [--interval 30] [--stale-threshold 300] [--once] [--log-file /path/to/events.log] \
+#     [--base-ref main] [--commit-stale-threshold 1800] \
 #     --branch feat/X:session-1 [--branch feat/Y:session-2] ...
 #
 # 在 Claude Code 的 Monitor 工具中启动，或直接在终端运行。
@@ -40,14 +41,23 @@
 #     worker 写入 .claude/agent-sessions/{session}/RESULT.md
 #   CHECKPOINT_PATCH session path
 #     worker 写入 .claude/agent-sessions/{session}/PATCH_SUMMARY.md
+#   ORCHESTRATION_GATE_FAILED session details
+#     STATUS.json 中的启动/隔离门禁未通过
 #   CLAUDE_AGENT_STATE name/session status kind cwd
 #     Claude Code 官方后台 session 状态变化（来自 claude agents --json）
 #   SESSION_GONE session-name (branch branch-name)
 #     tmux session 已退出
+#   WORKER_STALE_NO_COMMIT session branch=branch-name threshold=Ns
+#     tmux session 仍存活，但分支在阈值内没有新提交
 #   PM_MONITOR_COMPLETE: all branches merged at <timestamp>
 #     全部分支已合并
 
 set -euo pipefail
+
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+  echo "ERROR: pm-monitor.sh requires bash 4+ for associative arrays. Install a modern bash and ensure it is first in PATH." >&2
+  exit 64
+fi
 
 # ========== 参数解析 ==========
 PROJECT_DIR=""
@@ -58,6 +68,8 @@ INTERVAL=30
 ONCE=0
 LOG_FILE=""
 STALE_THRESHOLD=300  # 5 分钟
+BASE_REF="main"
+COMMIT_STALE_THRESHOLD=1800
 declare -A BRANCHES=()
 
 while [[ $# -gt 0 ]]; do
@@ -86,6 +98,14 @@ while [[ $# -gt 0 ]]; do
       STALE_THRESHOLD="$2"
       shift 2
       ;;
+    --base-ref)
+      BASE_REF="$2"
+      shift 2
+      ;;
+    --commit-stale-threshold)
+      COMMIT_STALE_THRESHOLD="$2"
+      shift 2
+      ;;
     --once)
       ONCE=1
       shift
@@ -105,7 +125,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "未知参数: $1" >&2
-      echo "用法: pm-monitor.sh --project /path/to/repo [--team-dir ~/.claude/teams/{name}] [--once] [--interval 30] [--log-file /path/to/events.log] --branch feat/X:session-1" >&2
+      echo "用法: pm-monitor.sh --project /path/to/repo [--team-dir ~/.claude/teams/{name}] [--once] [--interval 30] [--base-ref main] [--commit-stale-threshold 1800] [--log-file /path/to/events.log] --branch feat/X:session-1" >&2
       exit 1
       ;;
   esac
@@ -118,6 +138,11 @@ fi
 
 if [ ${#BRANCHES[@]} -eq 0 ]; then
   echo "错误: 必须指定至少一个 --branch 参数" >&2
+  exit 1
+fi
+
+if ! [[ "$COMMIT_STALE_THRESHOLD" =~ ^[0-9]+$ ]]; then
+  echo "错误: --commit-stale-threshold 必须是秒数整数，0 表示关闭" >&2
   exit 1
 fi
 
@@ -135,6 +160,9 @@ declare -A last_checkpoint_stale
 declare -A last_checkpoint_result_mtime
 declare -A last_checkpoint_patch_mtime
 declare -A last_claude_agent_status
+declare -A last_orchestration_gate
+declare -A last_session_alive
+declare -A last_commit_stale
 
 # ========== 辅助函数 ==========
 
@@ -150,11 +178,21 @@ parse_iso_epoch() {
   local ts="$1"
   [ -z "$ts" ] && { echo "0"; return; }
 
-  local ts_clean
+  local ts_clean is_utc
+  is_utc=0
+  case "$ts" in
+    *Z) is_utc=1 ;;
+  esac
   ts_clean=$(echo "$ts" | sed 's/[+-][0-9][0-9]:..$//' | sed 's/Z$//' | sed 's/\..*$//')
-  date -j -f "%Y-%m-%dT%H:%M:%S" "$ts_clean" "+%s" 2>/dev/null \
-    || date -d "$ts" "+%s" 2>/dev/null \
-    || echo "0"
+  if [ "$is_utc" -eq 1 ]; then
+    date -j -u -f "%Y-%m-%dT%H:%M:%S" "$ts_clean" "+%s" 2>/dev/null \
+      || date -d "$ts" "+%s" 2>/dev/null \
+      || echo "0"
+  else
+    date -j -f "%Y-%m-%dT%H:%M:%S" "$ts_clean" "+%s" 2>/dev/null \
+      || date -d "$ts" "+%s" 2>/dev/null \
+      || echo "0"
+  fi
 }
 
 worktree_for_branch() {
@@ -181,6 +219,72 @@ checkpoint_dir_for_session() {
   else
     echo "$legacy"
   fi
+}
+
+check_tmux_session() {
+  local branch="$1"
+  local session="$2"
+  local alive=1
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    alive=0
+  fi
+
+  if [ "$alive" != "${last_session_alive[$branch]:-}" ]; then
+    if [ "$alive" -eq 0 ]; then
+      emit "SESSION_GONE: $session (branch $branch)"
+    fi
+    last_session_alive[$branch]="$alive"
+  fi
+}
+
+check_commit_staleness() {
+  local branch="$1"
+  local session="$2"
+
+  [ "$COMMIT_STALE_THRESHOLD" -gt 0 ] || return
+  command -v tmux >/dev/null 2>&1 || return
+  tmux has-session -t "$session" 2>/dev/null || return
+  git show-ref --verify --quiet "refs/heads/$branch" || return
+
+  local wt checkpoint_dir status_file status
+  wt=$(worktree_for_branch "$branch")
+  if [ -n "$wt" ]; then
+    checkpoint_dir=$(checkpoint_dir_for_session "$wt" "$session")
+    status_file="$checkpoint_dir/STATUS.json"
+    if [ -f "$status_file" ]; then
+      status=$(jq -r '.status // "unknown"' "$status_file" 2>/dev/null || echo "unknown")
+      case "$status" in
+        done|failed|blocked|stopped) return ;;
+      esac
+    fi
+  fi
+
+  local base="$BASE_REF"
+  if ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+    if git rev-parse --verify --quiet "origin/$BASE_REF^{commit}" >/dev/null; then
+      base="origin/$BASE_REF"
+    else
+      return
+    fi
+  fi
+
+  local recent_commit
+  recent_commit=$(git log "$base..$branch" --since="$COMMIT_STALE_THRESHOLD seconds ago" -1 --format="%H" 2>/dev/null || echo "")
+  [ -z "$recent_commit" ] || return
+
+  local topic_count topic_head now bucket key
+  topic_count=$(git rev-list --count "$base..$branch" 2>/dev/null || echo "0")
+  topic_head=$(git log "$base..$branch" -1 --format="%h" 2>/dev/null || echo "")
+  [ -n "$topic_head" ] || topic_head="none"
+  now=$(date +%s)
+  bucket=$(( now / COMMIT_STALE_THRESHOLD ))
+  key="$topic_head|$topic_count|$bucket"
+
+  if [ "$key" != "${last_commit_stale[$branch]:-}" ]; then
+    emit "WORKER_STALE_NO_COMMIT: $session branch=$branch base=$base threshold=${COMMIT_STALE_THRESHOLD}s topic_commits=$topic_count last_topic_commit=$topic_head"
+  fi
+  last_commit_stale[$branch]="$key"
 }
 
 # 从 PM inbox 中提取 health_report 消息
@@ -300,7 +404,8 @@ check_file_checkpoints() {
 
     if [ -f "$status_file" ]; then
       local status phase progress issues updated_at needs_input pm_action_required key prev
-      local task_id current_action next_action last_commit_sha pr_url failed_tests test_summary heartbeat threshold stale_key
+      local task_id current_action next_action last_commit_sha last_commit_at commits_since_base pr_url failed_tests test_summary heartbeat threshold stale_key
+      local gate_required gate_session gate_cwd gate_branch gate_worktree gate_degraded gate_escape gate_key
       status=$(jq -r '.status // empty' "$status_file" 2>/dev/null || echo "")
       phase=$(jq -r '.phase // empty' "$status_file" 2>/dev/null || echo "")
       progress=$(jq -r '.progress // empty' "$status_file" 2>/dev/null || echo "")
@@ -312,15 +417,25 @@ check_file_checkpoints() {
       current_action=$(jq -r '.current_action // empty' "$status_file" 2>/dev/null || echo "")
       next_action=$(jq -r '.next_action // empty' "$status_file" 2>/dev/null || echo "")
       last_commit_sha=$(jq -r '.git.last_commit_sha // .last_commit_sha // empty' "$status_file" 2>/dev/null || echo "")
+      last_commit_at=$(jq -r '.git.last_commit_at // empty' "$status_file" 2>/dev/null || echo "")
+      commits_since_base=$(jq -r '.git.commits_since_base // empty' "$status_file" 2>/dev/null || echo "")
       pr_url=$(jq -r '.git.pr_url // .pr_url // empty' "$status_file" 2>/dev/null || echo "")
       test_summary=$(jq -r '[.tests[]? | "\(.command):\(.status)"] | join(", ")' "$status_file" 2>/dev/null || echo "")
       failed_tests=$(jq -r '[.tests[]? | select((.status // "") | test("fail|failed|error"; "i")) | .command] | join(", ")' "$status_file" 2>/dev/null || echo "")
+      gate_required=$(jq -r '.orchestration_gate.required // false' "$status_file" 2>/dev/null || echo "false")
+      gate_session=$(jq -r '.orchestration_gate.session_verified // false' "$status_file" 2>/dev/null || echo "false")
+      gate_cwd=$(jq -r '.orchestration_gate.cwd_matches_worktree // false' "$status_file" 2>/dev/null || echo "false")
+      gate_branch=$(jq -r '.orchestration_gate.branch_matches_expected // false' "$status_file" 2>/dev/null || echo "false")
+      gate_worktree=$(jq -r '.orchestration_gate.worktree_isolated // false' "$status_file" 2>/dev/null || echo "false")
+      gate_degraded=$(jq -r '.orchestration_gate.degraded // false' "$status_file" 2>/dev/null || echo "false")
+      gate_escape=$(jq -r '.orchestration_gate.escape_attempted // false' "$status_file" 2>/dev/null || echo "false")
       [ -n "$status" ] || continue
 
-      key="$status|$phase|$progress|$issues|$needs_input|$pm_action_required|$current_action|$next_action|$last_commit_sha|$pr_url|$test_summary"
+      gate_key="$gate_required|$gate_session|$gate_cwd|$gate_branch|$gate_worktree|$gate_degraded|$gate_escape"
+      key="$status|$phase|$progress|$issues|$needs_input|$pm_action_required|$current_action|$next_action|$last_commit_sha|$last_commit_at|$commits_since_base|$pr_url|$test_summary|$gate_key"
       prev="${last_checkpoint_status[$session]:-}"
       if [ "$key" != "$prev" ]; then
-        emit "CHECKPOINT_STATUS: $session $status $phase $progress task=${task_id:-n/a} action=${current_action:-n/a} next=${next_action:-n/a} commit=${last_commit_sha:-n/a}"
+        emit "CHECKPOINT_STATUS: $session $status $phase $progress task=${task_id:-n/a} action=${current_action:-n/a} next=${next_action:-n/a} commit=${last_commit_sha:-n/a} commit_at=${last_commit_at:-n/a} commits_since_base=${commits_since_base:-n/a}"
         case "$status" in
           done)    emit "AGENT_DONE: $session" ;;
           failed)  emit "AGENT_FAILED: $session" ;;
@@ -337,6 +452,16 @@ check_file_checkpoints() {
         fi
       fi
       last_checkpoint_status[$session]="$key"
+
+      if [ "$gate_required" = "true" ]; then
+        if [ "$gate_session" != "true" ] || [ "$gate_cwd" != "true" ] || [ "$gate_branch" != "true" ] || [ "$gate_worktree" != "true" ] || [ "$gate_degraded" = "true" ] || [ "$gate_escape" = "true" ]; then
+          if [ "$gate_key" != "${last_orchestration_gate[$session]:-}" ]; then
+            emit "ORCHESTRATION_GATE_FAILED: $session session=$gate_session cwd=$gate_cwd branch=$gate_branch worktree=$gate_worktree degraded=$gate_degraded escape=$gate_escape"
+            emit "AGENT_NEEDS_INPUT: $session orchestration gate failed"
+          fi
+        fi
+        last_orchestration_gate[$session]="$gate_key"
+      fi
 
       if [ -n "$updated_at" ] && [ "$status" != "done" ]; then
         local cur_epoch
@@ -415,6 +540,7 @@ emit "PM_MONITOR_STARTED at $(date)"
 emit "Tracking ${#BRANCHES[@]} branches: ${!BRANCHES[*]}"
 [ -n "$TEAM_DIR" ] && emit "Team inbox: $TEAM_DIR/inboxes/"
 [ -n "$CLAUDE_AGENTS_CWD" ] && emit "Claude agents cwd: $CLAUDE_AGENTS_CWD"
+[ "$COMMIT_STALE_THRESHOLD" -gt 0 ] && emit "Commit stale threshold: ${COMMIT_STALE_THRESHOLD}s base=$BASE_REF"
 [ "$ONCE" -eq 1 ] && emit "Mode: once"
 [ -n "$LOG_FILE" ] && emit "Log file: $LOG_FILE"
 
@@ -444,9 +570,32 @@ while true; do
     # 检查远程分支是否还存在
     cur_sha=$(git log "origin/$branch" -1 --format="%h" 2>/dev/null || echo "")
     if [ -z "$cur_sha" ]; then
-      if [ "${last_sha[$branch]:-}" != "MERGED" ]; then
-        emit "BRANCH_MERGED: $branch"
-        last_sha[$branch]="MERGED"
+      merged_pr=$(gh pr list --head "$branch" --state merged --json number --jq 'if length > 0 then .[0].number else "" end' 2>/dev/null || echo "")
+
+      if [ -n "$merged_pr" ]; then
+        if [ "${last_sha[$branch]:-}" != "MERGED" ]; then
+          emit "BRANCH_MERGED: $branch (#$merged_pr)"
+          last_sha[$branch]="MERGED"
+        fi
+        continue
+      fi
+
+      if git show-ref --verify --quiet "refs/heads/$branch"; then
+        all_merged=0
+        local_sha=$(git log "$branch" -1 --format="%h" 2>/dev/null || echo "")
+        main_sha=$(git log "main" -1 --format="%h" 2>/dev/null || echo "")
+        branch_state="NOT_PUSHED:$local_sha:$main_sha"
+        if [ "$branch_state" != "${last_sha[$branch]:-}" ]; then
+          emit "BRANCH_NOT_PUSHED: $branch (origin missing, local=$local_sha main=$main_sha)"
+          last_sha[$branch]="$branch_state"
+        fi
+        check_tmux_session "$branch" "$session"
+        check_commit_staleness "$branch" "$session"
+      else
+        if [ "${last_sha[$branch]:-}" != "MERGED" ]; then
+          emit "BRANCH_MERGED: $branch"
+          last_sha[$branch]="MERGED"
+        fi
       fi
       continue
     fi
@@ -472,9 +621,8 @@ while true; do
     fi
 
     # tmux session 存活检测
-    if ! tmux has-session -t "$session" 2>/dev/null; then
-      emit "SESSION_GONE: $session (branch $branch)"
-    fi
+    check_tmux_session "$branch" "$session"
+    check_commit_staleness "$branch" "$session"
   done
 
   # 全部合并 → 自动停止

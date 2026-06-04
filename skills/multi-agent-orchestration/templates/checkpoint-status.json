@@ -16,6 +16,16 @@
   "pm_host": "{{pm_host}}",
   "worker_backend": "{{worker_backend}}",
   "runtime_profile": "{{runtime_profile}}",
+  "orchestration_gate": {
+    "required": true,
+    "session_verified": false,
+    "cwd_matches_worktree": false,
+    "branch_matches_expected": false,
+    "worktree_isolated": false,
+    "degraded": false,
+    "degrade_reason": "",
+    "escape_attempted": false
+  },
   "runtime": {
     "cwd": "{{worktree_path}}",
     "tools": [
@@ -36,6 +46,8 @@
     "base_ref": "{{base_ref}}",
     "head_ref": "{{branch_name}}",
     "last_commit_sha": "",
+    "last_commit_at": "",
+    "commits_since_base": 0,
     "pr_number": null,
     "pr_url": ""
   },
