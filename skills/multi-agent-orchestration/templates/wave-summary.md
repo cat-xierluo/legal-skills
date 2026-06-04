@@ -12,9 +12,9 @@
 
 ## Workers
 
-| Worker | Branch | Type | Provider / Model | Slot | Exit state | PR | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| {{wave_worker_id}} | {{branch_name}} | {{worker_type}} | {{api_provider}} / {{model_name}} | {{provider_slot}} | {{merged_blocked_deferred_restarted}} | {{pr_url}} | {{notes}} |
+| Worker | Branch | Type | Settings/Profile | Provider / Model | Slot | Exit state | PR | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| {{wave_worker_id}} | {{branch_name}} | {{worker_type}} | {{settings_or_profile_path}} | {{api_provider}} / {{model_name}} | {{provider_slot}} | {{merged_blocked_deferred_restarted}} | {{pr_url}} | {{notes}} |
 
 Exit states: `merged`, `done-unmerged`, `blocked`, `deferred`, `restarted`.
 

@@ -39,7 +39,7 @@ PM 可用 `scripts/worktree-status.sh` 读取 metadata 摘要；清理前 `scrip
 |--------|--------|-------------|
 | `status`、`phase`、`progress`、`updated_at`、`heartbeat_interval_seconds` | 判断 worker 是否健康、是否过期 | 是 |
 | `task_source`、`orchestration_goal`、`wave`、`branch`、`worktree`、`session_id`、`session_context` | 把事件映射回任务、Goal Loop、Wave、分支和 worktree | 是 |
-| `worker_class`、`runtime.api_provider`、`runtime.model`、`runtime.provider_slot` | 记录 worker 类型、风险和 provider 并发槽位 | 是 |
+| `worker_class`、`runtime.settings_profile_path`、`runtime.api_provider`、`runtime.model`、`runtime.provider_slot` | 记录 worker 类型、风险、settings/profile 路径和 provider 并发槽位 | 是 |
 | `orchestration_gate` | 判断 session、cwd、branch、worktree 隔离是否通过，避免 PM/worker 逃逸 | 是 |
 | `current_action`、`next_action` | 避免 PM 读取完整日志也能判断是否偏题 | 是 |
 | `needs_input`、`pm_action_required`、`blocker`、`issues` | 触发 PM 介入 | 是 |
@@ -50,7 +50,7 @@ PM 可用 `scripts/worktree-status.sh` 读取 metadata 摘要；清理前 `scrip
 
 Wave worker 应在 bootstrap 时写入 `orchestration_goal.id`、`orchestration_goal.loop_iteration`、`wave.id`、`wave.worker_id`、`wave.role` 和 `worker_class.type`。收口时由 worker 或 PM 填写 `wave.exit_state` 和 `model_evaluation`，用于下一 Wave 的 provider/model 路由。
 
-不要把完整日志、长推理、完整环境变量或 token 写入 `STATUS.json`。`runtime` 只记录工具路径、版本和 profile 名，不记录密钥、认证头、完整 settings JSON 或完整 shell env。PM 读取 tmux pane 或 RESULT tail 时应使用 `wait-worker.sh` 的脱敏输出作为默认观察面。
+不要把完整日志、长推理、完整环境变量或 token 写入 `STATUS.json`。`runtime.settings_profile_path` 只记录 settings 文件路径或 profile 名，不记录 settings 内容、密钥、认证头、完整 settings JSON 或完整 shell env。PM 读取 tmux pane 或 RESULT tail 时应使用 `wait-worker.sh` 的脱敏输出作为默认观察面。
 
 ## 4. RESULT.md
 

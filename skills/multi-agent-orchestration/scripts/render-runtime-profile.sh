@@ -224,6 +224,7 @@ if [ "$OUTPUT" = "prompt-context" ]; then
   cat <<EOF
 - Worker Backend: $BACKEND
 - Runtime Profile: $RUNTIME_PROFILE
+- Settings/Profile Path: ${SETTINGS:-${CODEX_PROFILE:+codex:$CODEX_PROFILE}}
 - API Provider: $API_PROVIDER
 - Model: $MODEL
 - Provider Slot: $PROVIDER_SLOT
@@ -235,6 +236,7 @@ fi
 
 printf 'WORKER_BACKEND=%q\n' "$BACKEND"
 printf 'RUNTIME_PROFILE=%q\n' "$RUNTIME_PROFILE"
+printf 'SETTINGS_PROFILE_PATH=%q\n' "${SETTINGS:-${CODEX_PROFILE:+codex:$CODEX_PROFILE}}"
 printf 'API_PROVIDER=%q\n' "$API_PROVIDER"
 printf 'MODEL=%q\n' "$MODEL"
 printf 'PROVIDER_SLOT=%q\n' "$PROVIDER_SLOT"

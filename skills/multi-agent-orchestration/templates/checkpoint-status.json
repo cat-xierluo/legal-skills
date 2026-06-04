@@ -44,6 +44,7 @@
   },
   "runtime": {
     "cwd": "{{worktree_path}}",
+    "settings_profile_path": "{{settings_or_profile_path}}",
     "api_provider": "{{api_provider}}",
     "model": "{{model_name}}",
     "provider_slot": "{{provider_slot}}",

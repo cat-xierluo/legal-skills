@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.14.1] - 2026-06-05
+
+### Changed
+- **script surface governance**：明确默认工具面只包含 dependency check、runtime profile render、spawn worker 和 PM monitor；status/clean/wait/test/terminal split 均按场景使用，避免 PM 被脚本数量牵引。
+- **provider slot planning**：超过 4 个 worker 时，改为显式声明 `backend + settings/profile path + provider + model + max concurrency`，而不是脚本自动猜测用哪个 settings.json。
+- **templates**：worker prompt、checkpoint、Goal Contract 和 Wave Summary 增加 settings/profile path，让每个 worker 的额度来源可审计但不暴露 settings 内容。
+
+### Reason
+- 来源：用户担心脚本数量过多、出现过度设计，并追问超过 4 个 worker 时到底如何分配 settings.json。
+- 结论：不新增自动 scheduler。现阶段应把 provider pool 做成 PM 可审计的显式 slot 表；如果只有一个可用 settings/profile，则并发 cap 降到 3-4，剩余任务进入下一 Wave。
+
 ## [1.14.0] - 2026-06-05
 
 ### Added

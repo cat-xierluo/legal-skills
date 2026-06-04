@@ -19,6 +19,7 @@ Context:
 - Wave ID: {{wave_id}}
 - Wave Worker ID: {{wave_worker_id}}
 - Runtime Profile: {{runtime_profile}}
+- Settings/Profile Path: {{settings_or_profile_path}}
 - API Provider: {{api_provider}}
 - Model: {{model_name}}
 - Provider Slot: {{provider_slot}}
@@ -31,7 +32,7 @@ Isolation Gate:
 Task:
 1. 只创建 `{{session_context_path}}/STATUS.json`。
 2. 参考 skill 模板 `templates/checkpoint-status.json`。
-3. 写入当前 cwd、当前 branch、worktree、wave 信息、worker type、provider/model/slot、isolation gate 结果、可用 CLI 路径和版本、runtime profile、允许/禁止文件范围。
+3. 写入当前 cwd、当前 branch、worktree、wave 信息、worker type、provider/model/slot、settings/profile 路径、isolation gate 结果、可用 CLI 路径和版本、runtime profile、允许/禁止文件范围。
 4. 不要写 token、完整环境变量、settings 内容或长日志。
 
 Finish:
@@ -58,6 +59,7 @@ Context:
 - Wave Role: {{wave_role}}
 - Wave Exit Criteria: {{wave_exit_criteria}}
 - Runtime Profile: {{runtime_profile}}
+- Settings/Profile Path: {{settings_or_profile_path}}
 - API Provider: {{api_provider}}
 - Model: {{model_name}}
 - Provider Slot: {{provider_slot}}
@@ -97,9 +99,12 @@ Expected Deliverables:
 Process:
 1. Bootstrap: run the Isolation Gate and create or update `STATUS.json` before deep work.
 2. Implement: stay inside Scope; do not expand the task.
-3. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues every 10-15 minutes or on phase changes.
-4. Verify: run the commands below and record results.
-5. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
+3. **Heartbeat cadence (mandatory)**: refresh `STATUS.json` (`updated_at` / `phase` / `current_action` / `next_action` / `git.commits_since_base` / `git.last_commit_sha`) **every 10 minutes at most**, even if no progress — write a `phase=thinking-deep` heartbeat entry with `current_action="still working on X, no change"` and `next_action="continue milestone Y"`. PM uses stale `updated_at` to detect silent workers. Do not wait until phase changes to write.
+4. Commit message discipline: prefix each commit with `[phase] feat|fix|docs|chore: ...` (e.g. `[m2] feat(forms): 字段校验规则引擎`). This lets PM grep phase progression from git log when STATUS.json is stale.
+5. Long thinking protocol: when a single decision takes >5 min to reason through, write a brief "considering X because Y" to `current_action` and `next_action` so PM can see *what* you're stuck on without reading your full thinking chain.
+6. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues on phase changes (in addition to the 10-min heartbeat).
+7. Verify: run the commands below and record results.
+8. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
 
 Worker Type Rules:
 - `ui-wiring`: no new dependencies; all listed frontend verification commands must pass.

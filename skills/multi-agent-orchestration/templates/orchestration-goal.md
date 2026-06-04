@@ -17,8 +17,13 @@
 - Max workers per wave: {{max_workers_per_wave}}
 - Max total workers: {{max_total_workers}}
 - Max runtime / budget: {{time_or_budget_limit}}
-- Provider slots: {{provider_slot_plan}}
 - Merge policy: {{merge_policy_summary}}
+
+Provider slot plan:
+
+| Slot | Backend | Settings/Profile | Provider | Model | Max concurrency | Best for | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| {{slot_id}} | {{backend}} | {{settings_or_profile_path}} | {{api_provider}} | {{model_name}} | {{max_concurrency}} | {{task_risk_or_type}} | {{notes}} |
 
 Autonomy modes:
 - `plan-only`: PM may propose the next Wave but must ask before launch.
