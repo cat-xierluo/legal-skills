@@ -1,7 +1,7 @@
 ---
 name: subtree-publish
 author: 杨卫薪律师（微信 ywxlaw）
-version: "1.7.0"
+version: "1.7.1"
 license: MIT
 description: 将 monorepo 中的子目录通过 git subtree 推送到独立 GitHub 仓库。支持注册清单、变更自动检测、增量推送。本技能应在用户提交涉及已注册子项目的变更后，或手动请求推送到独立仓库时使用。不要用于初次创建 monorepo 或管理 git submodule。
 ---
@@ -160,9 +160,23 @@ bash scripts/create-release.sh <name> [--dry-run]
 
 ### 压缩包内容
 
-压缩包解压后得到 `<name>/` 文件夹（如 `code2patent/`），用户直接放入 `.claude/skills/` 即可使用。排除 `README.md` 和 `.DS_Store`。
+压缩包解压后得到 `<name>/` 文件夹（如 `code2patent/`），用户直接放入 `.claude/skills/` 即可使用。
 
-README.md 面向独立仓库浏览者（GitHub 页面展示），不属于 skill 运行所需文件，因此不纳入压缩包。
+排除规则（`create-release.sh` 中 `zip -r` 的 `-x` 参数）：
+
+| 排除模式 | 理由 |
+|---------|------|
+| `*.DS_Store` | macOS 系统文件 |
+| `README.md` | 面向独立仓库浏览者，不属于 skill 运行时文件 |
+| `archive/`、`archive/**` | 历史审核/处理记录，含用户真实数据 |
+| `output/`、`output/**` | 运行时输出产物 |
+| `**/__pycache__`、`**/__pycache__/*` | Python 编译缓存 |
+| `**/*.pyc`、`**/*.log` | Python 编译缓存、日志 |
+| `**/*.tmp`、`**/*.bak` | 临时/备份文件 |
+| `**/.env`、`**/.env.*` | 环境变量文件（含密钥风险） |
+| `config/*.json` | 本地个性化配置，仅保留 `*.example.json` |
+
+排除规则的完整性通过比对 `.gitignore` 中 `**/archive/*`、`**/output/*`、`**/__pycache__/` 等规则保证。脚本不主动读 `.gitignore`，而是用显式 `-x` 模式覆盖常见场景。新增排除需求时同步更新此处表格。
 
 ### 版本跃迁
 

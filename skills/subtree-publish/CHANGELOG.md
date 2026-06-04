@@ -2,6 +2,21 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [v1.7.1] - 2026-06-04
+
+### 修复
+
+- 修复 `create-release.sh` 不读 `.gitignore` 的设计缺陷。`zip -r` 之前只排除 `.DS_Store`、`README.md`、`config/*.json`，未处理 `.gitignore` 中被全局排除的目录（`archive/`、`output/`、`__pycache__/`）和文件类型（`*.pyc`、`*.log`、`*.tmp`、`*.bak`、`.env*`）。
+  - 触发场景：contract-copilot v1.5.2 release 包含 242 个 archive/ 历史合同审核条目、60 个 __pycache__/ 条目、55 个 .pyc 编译缓存。
+  - 影响范围：archive/output/__pycache__ 等运行时产物可能被打包进独立仓库 release zip，潜在泄露用户数据（如合同审核历史）或污染 skill 安装目录。
+  - 修复后排除规则完整覆盖 .gitignore 中常见运行时产物类型。
+
+### 文档完善
+
+- 更新 `TASKS.md` 和 `DECISIONS.md`（本地）记录脚本设计缺陷。
+- 更新 `SKILL.md` "压缩包内容" 章节，文档化完整排除规则。
+- 排查其他 skill 历史 release：code2patent v1.5.3 / md2word v1.0.1 / de-ai-polish v1.0.0 / opc-legal-counsel v0.2.5 / contract-copilot v1.4.50 / v1.5.1 均无此问题。
+
 ## [v1.7.0] - 2026-04-23
 
 ### 新增
