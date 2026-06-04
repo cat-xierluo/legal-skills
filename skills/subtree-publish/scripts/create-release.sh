@@ -118,7 +118,7 @@ fi
 ZIP_FILE="/tmp/${NAME}-${VERSION}.zip"
 if [ "$DRY_RUN" = true ]; then
   echo "[dry-run] 将执行以下操作:"
-  echo "  1. 打包: cd ${PREFIX} && zip -r ${ZIP_FILE} ${NAME}/ -x '${NAME}/*.DS_Store' '${NAME}/README.md' '${NAME}/config/*.json'"
+  echo "  1. 打包: cd ${PREFIX} && zip -r ${ZIP_FILE} ${NAME}/ -x '${NAME}/*.DS_Store' '${NAME}/README.md' '${NAME}/config/*.json' '${NAME}/archive/*' '${NAME}/archive/**' '${NAME}/output/*' '${NAME}/output/**' '${NAME}/**/__pycache__' '${NAME}/**/__pycache__/*' '${NAME}/**/*.pyc' '${NAME}/**/*.log' '${NAME}/**/*.tmp' '${NAME}/**/*.bak' '${NAME}/**/.env' '${NAME}/**/.env.*'"
   echo "     然后补回: ${NAME}/config/*.example.json"
   echo "  2. 创建 Release:"
   echo "     gh release create ${TAG} --repo ${FULL_REPO} --title '${TAG}' --notes '...'"
@@ -128,7 +128,22 @@ fi
 
 echo "打包 ${NAME}/ ..."
 cd "$PREFIX"
-zip -r "$ZIP_FILE" "${NAME}/" -x "${NAME}/*.DS_Store" "${NAME}/README.md" "${NAME}/config/*.json"
+zip -r "$ZIP_FILE" "${NAME}/" \
+  -x "${NAME}/*.DS_Store" \
+     "${NAME}/README.md" \
+     "${NAME}/archive/*" \
+     "${NAME}/archive/**" \
+     "${NAME}/output/*" \
+     "${NAME}/output/**" \
+     "${NAME}/**/__pycache__" \
+     "${NAME}/**/__pycache__/*" \
+     "${NAME}/**/*.pyc" \
+     "${NAME}/**/*.log" \
+     "${NAME}/**/*.tmp" \
+     "${NAME}/**/*.bak" \
+     "${NAME}/**/.env" \
+     "${NAME}/**/.env.*" \
+     "${NAME}/config/*.json"
 if [ -d "${NAME}/config" ]; then
   while IFS= read -r example_config; do
     zip -r "$ZIP_FILE" "$example_config" >/dev/null
