@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR = SKILL_ROOT / "config"
 CONFIG_DIR = Path(
     os.environ.get("CONTRACT_COPILOT_CONFIG_DIR", str(DEFAULT_CONFIG_DIR))

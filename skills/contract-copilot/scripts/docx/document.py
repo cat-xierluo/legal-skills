@@ -111,7 +111,12 @@ class DocxXMLEditor(XMLEditor):
     """
 
     def __init__(
-        self, xml_path, rsid: str, author: str = "Claude", initials: str = "C"
+        self,
+        xml_path,
+        rsid: str,
+        author: str = "Claude",
+        initials: str = "C",
+        timestamp_provider=None,
     ):
         """Initialize with required RSID and optional author.
 
@@ -120,11 +125,22 @@ class DocxXMLEditor(XMLEditor):
             rsid: RSID to automatically apply to new elements
             author: Author name for tracked changes and comments (default: "Claude")
             initials: Author initials (default: "C")
+            timestamp_provider: Optional callable returning a datetime or timestamp string
         """
         super().__init__(xml_path)
         self.rsid = rsid
         self.author = author
         self.initials = initials
+        self._timestamp_provider = timestamp_provider
+
+    def _resolve_timestamp(self) -> str:
+        """Get formatted timestamp for injected OOXML attributes."""
+        if self._timestamp_provider is not None:
+            timestamp = self._timestamp_provider()
+            if isinstance(timestamp, datetime):
+                return timestamp.astimezone().isoformat(timespec="seconds")
+            return str(timestamp)
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _get_next_change_id(self):
         """Get the next available change ID by checking all tracked change elements."""
@@ -181,8 +197,6 @@ class DocxXMLEditor(XMLEditor):
         Args:
             nodes: List of DOM nodes to process
         """
-        from datetime import datetime, timezone
-
         timestamp = self._resolve_timestamp()
 
         def is_inside_deletion(elem):
@@ -760,7 +774,11 @@ class Document:
                 raise ValueError(f"XML file not found: {xml_path}")
             # Use DocxXMLEditor with RSID, author, and initials for all editors
             self._editors[xml_path] = DocxXMLEditor(
-                file_path, rsid=self.rsid, author=self.author, initials=self.initials
+                file_path,
+                rsid=self.rsid,
+                author=self.author,
+                initials=self.initials,
+                timestamp_provider=self._resolve_timestamp,
             )
         return self._editors[xml_path]
 

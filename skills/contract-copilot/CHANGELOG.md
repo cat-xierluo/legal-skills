@@ -2,6 +2,24 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.5.2] - 2026-06-04
+
+### 修复
+
+- 修复 `DocxXMLEditor` 在插入批注、修订和其他 OOXML 片段时缺少 `_resolve_timestamp()` 的问题，避免执行链路报 `AttributeError`。
+- 修复直接运行 `scripts/review/apply_review_plan.py` 时无法解析 `scripts` 包的问题；现在直接运行和 `python -m scripts.review.apply_review_plan` 两种方式都可进入。
+- 修复运行时配置默认目录错误指向 `scripts/config/` 的问题，审查人配置和审查记忆重新回到技能根目录 `config/`。
+- 修复默认归档目录错误指向 `scripts/archive/` 的隐患，默认归档路径重新回到技能根目录 `archive/`。
+
+### 技术优化
+
+- 新增 `scripts/tests/test_runtime_regressions.py`，覆盖时间戳注入、直接运行入口和默认路径解析三类回归。
+- `XMLEditor` 解析 XML 时改用上下文管理器打开文件，避免测试和运行时留下未关闭文件句柄警告。
+
+### 文档完善
+
+- 更新 `SKILL.md`、`TASKS.md`、`DECISIONS.md` 与根目录 `README.md`，同步本次脚本运行稳定性修复和版本号。
+
 ## [1.5.1] - 2026-04-20
 
 ### 重构

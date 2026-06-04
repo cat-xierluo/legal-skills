@@ -71,7 +71,8 @@ class XMLEditor:
         self.encoding = "ascii" if 'encoding="ascii"' in header else "utf-8"
 
         parser = _create_line_tracking_parser()
-        self.dom = defusedxml.minidom.parse(str(self.xml_path), parser)
+        with open(self.xml_path, "rb") as xml_stream:
+            self.dom = defusedxml.minidom.parse(xml_stream, parser)
 
     def get_node(
         self,
