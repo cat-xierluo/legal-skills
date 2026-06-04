@@ -48,7 +48,7 @@ done
 [ -n "$SESSION" ] || { usage; exit 64; }
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 
-PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)
+PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
 
 worktree_for_branch() {
   git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | awk -v target="refs/heads/$BRANCH" '
@@ -71,6 +71,7 @@ fi
 STATUS_FILE="$WT/.claude/agent-sessions/$SESSION/STATUS.json"
 RESULT_FILE="$WT/.claude/agent-sessions/$SESSION/RESULT.md"
 PATCH_FILE="$WT/.claude/agent-sessions/$SESSION/PATCH_SUMMARY.md"
+METADATA_FILE="$WT/.claude/agent-sessions/$SESSION/METADATA.json"
 
 current_branch=$(git -C "$WT" branch --show-current 2>/dev/null || echo "")
 dirty_count=$(git -C "$WT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
@@ -78,6 +79,32 @@ latest_commit=$(git -C "$WT" log -1 --format="%h %s" 2>/dev/null || echo "none")
 
 echo "WORKTREE_STATUS: branch=$BRANCH worktree=$WT current_branch=${current_branch:-unknown} dirty=$dirty_count"
 echo "WORKTREE_COMMIT: $latest_commit"
+
+if [ -f "$METADATA_FILE" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    metadata_base_ref=$(jq -r '.base_ref // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_base_sha=$(jq -r '.base_sha // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_created_at=$(jq -r '.created_at // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_backend=$(jq -r '.runtime.worker_backend // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_profile=$(jq -r '.runtime.runtime_profile // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_provider=$(jq -r '.runtime.api_provider // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_model=$(jq -r '.runtime.model // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_slot=$(jq -r '.runtime.provider_slot // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_wave=$(jq -r '.wave.id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_worker=$(jq -r '.wave.worker_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_verify=$(jq -r '(.verification.commands // []) | join(" | ")' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_pr=$(jq -r '.pr.url // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    echo "WORKTREE_METADATA: base=${metadata_base_ref:-n/a} base_sha=${metadata_base_sha:-n/a} created_at=${metadata_created_at:-n/a}"
+    echo "WORKTREE_RUNTIME: backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} provider=${metadata_provider:-n/a} model=${metadata_model:-n/a} slot=${metadata_slot:-n/a}"
+    echo "WORKTREE_WAVE: wave=${metadata_wave:-n/a} worker=${metadata_worker:-n/a}"
+    echo "WORKTREE_VERIFY: ${metadata_verify:-n/a}"
+    echo "WORKTREE_PR: ${metadata_pr:-n/a}"
+  else
+    echo "WORKTREE_METADATA: present jq_missing file=$METADATA_FILE"
+  fi
+else
+  echo "WORKTREE_METADATA: missing file=$METADATA_FILE"
+fi
 
 if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION" 2>/dev/null; then
   pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")

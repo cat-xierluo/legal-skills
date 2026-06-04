@@ -10,6 +10,14 @@ SESSION=""
 BASE_REF="main"
 COMMAND=""
 DRY_RUN=0
+WORKER_BACKEND=""
+RUNTIME_PROFILE=""
+API_PROVIDER=""
+MODEL=""
+PROVIDER_SLOT=""
+WAVE_ID=""
+WAVE_WORKER_ID=""
+VERIFY_COMMANDS=()
 
 usage() {
   cat >&2 <<'USAGE'
@@ -20,6 +28,19 @@ Options:
   --worktree PATH   Worktree path. Defaults to .claude/worktrees/tmux-{branch}
   --base-ref REF    Base ref for new branches. Default: main
   --command CMD     Command to run in tmux. Default: login shell
+  --worker-backend NAME
+                   Worker backend, e.g. claude-code, codex, opencode, custom
+  --runtime-profile NAME
+                   Runtime/settings/profile name used by the worker
+  --api-provider NAME
+                   API/provider name used by the worker
+  --model NAME     Model name used by the worker
+  --provider-slot SLOT
+                   Provider concurrency slot for this worker
+  --wave-id ID     Wave ID for this worker
+  --wave-worker-id ID
+                   Worker ID within the wave
+  --verify-cmd CMD Expected verification command; repeat for multiple commands
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -53,6 +74,38 @@ while [[ $# -gt 0 ]]; do
       COMMAND="$2"
       shift 2
       ;;
+    --worker-backend)
+      WORKER_BACKEND="$2"
+      shift 2
+      ;;
+    --runtime-profile)
+      RUNTIME_PROFILE="$2"
+      shift 2
+      ;;
+    --api-provider)
+      API_PROVIDER="$2"
+      shift 2
+      ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    --provider-slot)
+      PROVIDER_SLOT="$2"
+      shift 2
+      ;;
+    --wave-id)
+      WAVE_ID="$2"
+      shift 2
+      ;;
+    --wave-worker-id)
+      WAVE_WORKER_ID="$2"
+      shift 2
+      ;;
+    --verify-cmd)
+      VERIFY_COMMANDS+=("$2")
+      shift 2
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -74,8 +127,9 @@ done
 [ -n "$SESSION" ] || { usage; exit 64; }
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v tmux >/dev/null 2>&1 || { echo "ERROR: tmux is required" >&2; exit 64; }
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 
-PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)
+PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
 safe_branch=$(printf '%s' "$BRANCH" | tr '/[:space:]' '-' | tr -cd 'A-Za-z0-9._-')
 if [ -z "$WORKTREE" ]; then
   WORKTREE=".claude/worktrees/tmux-$safe_branch"
@@ -86,6 +140,7 @@ case "$WORKTREE" in
 esac
 
 SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
 [ -n "$COMMAND" ] || COMMAND="${SHELL:-/bin/bash} -l"
 
 run() {
@@ -107,6 +162,7 @@ if ! git -C "$PROJECT_DIR" rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev
   echo "ERROR: base ref not found: $BASE_REF" >&2
   exit 1
 fi
+BASE_SHA=$(git -C "$PROJECT_DIR" rev-parse "$BASE_REF^{commit}")
 
 existing_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v target="refs/heads/$BRANCH" '
   /^worktree / { wt = substr($0, 10) }
@@ -121,6 +177,7 @@ existing_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v target="r
 if [ -n "$existing_wt" ]; then
   WORKTREE="$existing_wt"
   SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
   echo "SPAWN_WORKER_REUSE_WORKTREE: $WORKTREE"
 elif [ -d "$WORKTREE" ]; then
   echo "ERROR: worktree path exists but is not registered for branch $BRANCH: $WORKTREE" >&2
@@ -131,7 +188,82 @@ else
   run git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "$BRANCH" "$BASE_REF"
 fi
 
+if [ "$DRY_RUN" -eq 0 ]; then
+  WORKTREE=$(cd "$WORKTREE" && pwd -P)
+  SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+fi
+
 run mkdir -p "$SESSION_CONTEXT"
+
+write_metadata() {
+  created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+  if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
+    verify_json=$(printf '%s\n' "${VERIFY_COMMANDS[@]}" | jq -R . | jq -s .)
+  else
+    verify_json="[]"
+  fi
+
+  echo "SPAWN_WORKER_METADATA: $METADATA_FILE"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
+
+  jq -n \
+    --arg schema "multi-agent-orchestration.worktree-metadata.v1" \
+    --arg created_at "$created_at" \
+    --arg project "$PROJECT_DIR" \
+    --arg worktree "$WORKTREE" \
+    --arg branch "$BRANCH" \
+    --arg base_ref "$BASE_REF" \
+    --arg base_sha "$BASE_SHA" \
+    --arg session "$SESSION" \
+    --arg session_context "$SESSION_CONTEXT" \
+    --arg command "$COMMAND" \
+    --arg worker_backend "$WORKER_BACKEND" \
+    --arg runtime_profile "$RUNTIME_PROFILE" \
+    --arg api_provider "$API_PROVIDER" \
+    --arg model "$MODEL" \
+    --arg provider_slot "$PROVIDER_SLOT" \
+    --arg wave_id "$WAVE_ID" \
+    --arg wave_worker_id "$WAVE_WORKER_ID" \
+    --argjson verification_commands "$verify_json" \
+    '{
+      schema: $schema,
+      created_at: $created_at,
+      project: $project,
+      worktree: $worktree,
+      branch: $branch,
+      base_ref: $base_ref,
+      base_sha: $base_sha,
+      session: {
+        id: $session,
+        context: $session_context
+      },
+      runtime: {
+        worker_backend: $worker_backend,
+        runtime_profile: $runtime_profile,
+        api_provider: $api_provider,
+        model: $model,
+        provider_slot: $provider_slot,
+        command: $command
+      },
+      wave: {
+        id: $wave_id,
+        worker_id: $wave_worker_id
+      },
+      verification: {
+        commands: $verification_commands
+      },
+      pr: {
+        number: null,
+        url: "",
+        state: ""
+      }
+    }' > "$METADATA_FILE"
+}
+
+write_metadata
 
 exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude)
 if [ "$DRY_RUN" -eq 0 ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file" 2>/dev/null; then
@@ -142,12 +274,16 @@ run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 
 if [ "$DRY_RUN" -eq 0 ]; then
   pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
+  pane_cwd_physical="$pane_cwd"
+  if [ -n "$pane_cwd" ] && [ -d "$pane_cwd" ]; then
+    pane_cwd_physical=$(cd "$pane_cwd" && pwd -P)
+  fi
   current_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
   echo "SPAWN_WORKER_SESSION: $SESSION"
   echo "SPAWN_WORKER_WORKTREE: $WORKTREE"
   echo "SPAWN_WORKER_CONTEXT: $SESSION_CONTEXT"
-  echo "SPAWN_WORKER_GATE: cwd=$pane_cwd branch=$current_branch expected_cwd=$WORKTREE expected_branch=$BRANCH"
-  if [ "$pane_cwd" != "$WORKTREE" ] || [ "$current_branch" != "$BRANCH" ]; then
+  echo "SPAWN_WORKER_GATE: cwd=$pane_cwd_physical branch=$current_branch expected_cwd=$WORKTREE expected_branch=$BRANCH"
+  if [ "$pane_cwd_physical" != "$WORKTREE" ] || [ "$current_branch" != "$BRANCH" ]; then
     echo "SPAWN_WORKER_GATE_FAILED" >&2
     exit 2
   fi

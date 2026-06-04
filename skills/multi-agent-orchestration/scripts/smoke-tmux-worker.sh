@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TMP_ROOT=$(mktemp -d)
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 SESSION="smoke-worker-$$"
 REPO="$TMP_ROOT/repo"
 BRANCH="feat/smoke-worker"
@@ -51,6 +52,32 @@ command -v git >/dev/null 2>&1 || { echo "SKIP: git is required"; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
 
+profile_shell=$("$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend custom \
+  --runtime-profile smoke-profile \
+  --api-provider smoke-provider \
+  --model smoke-model \
+  --provider-slot smoke-slot-1 \
+  --command "printf '%s\n' 'worker-start' 'TOKEN=abc123' 'worker-end'; sleep 60")
+eval "$profile_shell"
+
+claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend claude-code \
+  --settings config/minimax.settings.json \
+  --model claude-sonnet-4-5 \
+  --permission-mode auto \
+  --output command)
+assert_contains "$claude_command" "claude"
+assert_contains "$claude_command" "--settings"
+
+codex_context=$("$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend codex \
+  --runtime-profile codex-default \
+  --model gpt-5 \
+  --output prompt-context)
+assert_contains "$codex_context" "Worker Backend: codex"
+assert_contains "$codex_context" "Model: gpt-5"
+
 mkdir -p "$REPO"
 git -C "$REPO" init -q
 git -C "$REPO" config user.email "smoke@example.invalid"
@@ -59,9 +86,26 @@ printf 'smoke\n' > "$REPO/README.md"
 git -C "$REPO" add README.md
 git -C "$REPO" commit -q -m "init"
 git -C "$REPO" branch -M main
-git -C "$REPO" worktree add -q "$WT" -b "$BRANCH" main
 
-mkdir -p "$CTX"
+spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
+  --project "$REPO" \
+  --branch "$BRANCH" \
+  --worktree "$WT" \
+  --session "$SESSION" \
+  --base-ref main \
+  --command "$WORKER_COMMAND" \
+  --worker-backend "$WORKER_BACKEND" \
+  --runtime-profile "$RUNTIME_PROFILE" \
+  --api-provider "$API_PROVIDER" \
+  --model "$MODEL" \
+  --provider-slot "$PROVIDER_SLOT" \
+  --wave-id wave-smoke \
+  --wave-worker-id W1 \
+  --verify-cmd "npm run typecheck" \
+  --verify-cmd "npm test -- --run")
+assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
+assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
+
 now=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
 cat > "$STATUS_FILE" <<JSON
 {
@@ -98,8 +142,6 @@ cat > "$STATUS_FILE" <<JSON
   "issues": []
 }
 JSON
-
-tmux new-session -d -s "$SESSION" -c "$WT" "printf '%s\n' 'worker-start' 'TOKEN=abc123' 'worker-end'; sleep 60"
 sleep 0.5
 
 monitor_out=$("$SCRIPT_DIR/pm-monitor.sh" \
@@ -161,10 +203,15 @@ assert_not_contains "$wait_out" "SECRET=should-not-leak"
 
 status_out=$("$SCRIPT_DIR/worktree-status.sh" --project "$REPO" --branch "$BRANCH" --session "$SESSION")
 assert_contains "$status_out" "WORKTREE_STATUS: branch=$BRANCH"
+assert_contains "$status_out" "WORKTREE_METADATA: base=main"
+assert_contains "$status_out" "WORKTREE_RUNTIME: backend=custom profile=smoke-profile provider=smoke-provider model=smoke-model slot=smoke-slot-1"
+assert_contains "$status_out" "WORKTREE_WAVE: wave=wave-smoke worker=W1"
+assert_contains "$status_out" "WORKTREE_VERIFY: npm run typecheck | npm test -- --run"
 assert_contains "$status_out" "CHECKPOINT_STATUS: status=done"
 
 clean_out=$("$SCRIPT_DIR/clean-worktree.sh" --project "$REPO" --branch "$BRANCH" --session "$SESSION")
 assert_contains "$clean_out" "CLEAN_WORKTREE_MODE: dry-run"
+assert_contains "$clean_out" "CLEAN_WORKTREE_METADATA: base=main"
 assert_contains "$clean_out" "CLEAN_WORKTREE_DRY_RUN_DONE"
 
 echo "SMOKE_TMUX_WORKER_OK"

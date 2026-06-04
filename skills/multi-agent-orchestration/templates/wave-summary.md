@@ -3,6 +3,8 @@
 ## Wave
 
 - Wave ID: {{wave_id}}
+- Goal ID: {{goal_id}}
+- Loop iteration: {{loop_iteration}}
 - Base ref: {{base_ref}}
 - Goal: {{wave_goal}}
 - Started at: {{started_at}}
@@ -28,3 +30,11 @@ Exit states: `merged`, `done-unmerged`, `blocked`, `deferred`, `restarted`.
 - Provider routing: {{provider_routing_changes}}
 - Deferred items: {{deferred_items}}
 - Next wave entry criteria: {{next_wave_entry_criteria}}
+
+## Goal Loop Decision
+
+- Continue decision: {{continue_stop}}
+- Continue reason: {{continue_reason}}
+- Stop condition hit: {{stop_condition_or_none}}
+- Remaining executable tasks: {{remaining_executable_tasks}}
+- Next Wave ID: {{next_wave_id_or_none}}

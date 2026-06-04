@@ -9,6 +9,10 @@
     "id": "{{issue_id}}",
     "title": "{{task_title}}"
   },
+  "orchestration_goal": {
+    "id": "{{goal_id}}",
+    "loop_iteration": "{{loop_iteration}}"
+  },
   "wave": {
     "id": "{{wave_id}}",
     "worker_id": "{{wave_worker_id}}",

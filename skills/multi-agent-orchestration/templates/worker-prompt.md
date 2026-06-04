@@ -15,6 +15,7 @@ Context:
 - Worktree: {{worktree_path}}
 - Session ID: {{session_id}}
 - Session Context: {{session_context_path}}
+- Orchestration Goal ID: {{goal_id}}
 - Wave ID: {{wave_id}}
 - Wave Worker ID: {{wave_worker_id}}
 - Runtime Profile: {{runtime_profile}}
@@ -50,6 +51,8 @@ Context:
 - Worktree: {{worktree_path}}
 - Session ID: {{session_id}}
 - Session Context: {{session_context_path}}
+- Orchestration Goal ID: {{goal_id}}
+- Loop Iteration: {{loop_iteration}}
 - Wave ID: {{wave_id}}
 - Wave Worker ID: {{wave_worker_id}}
 - Wave Role: {{wave_role}}
@@ -74,6 +77,7 @@ Background:
 
 Mission:
 在限定范围内完成可 review 的最小闭环。PM 不会默认代你实现；你负责在本 worktree 内完成实现、验证、提交和 PR，PM 负责巡检、纠偏、review 和收口。
+不要自行领取 Goal 或任务源中的其他任务；多轮推进由 PM 在 Wave 收口后决定。
 
 Scope:
 - Allowed files: {{allowed_files}}

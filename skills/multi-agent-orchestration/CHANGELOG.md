@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.13.0] - 2026-06-05
+
+### Added
+- **runtime profile command helper**：新增 `scripts/render-runtime-profile.sh`，按 `claude-code`、`claude-oauth`、`codex`、`opencode`、`custom` backend 生成 worker command、prompt context 和 spawn metadata，减少 PM 手写 provider/profile 命令。
+- **Agent Teams troubleshooting**：新增 `references/agent-teams-troubleshooting.md`，覆盖 agent/team 不可见、错误 cwd、官方 worktree 状态映射、checkpoint 缺失、PR 收口和必须停止的场景。
+
+### Changed
+- **spawn flow**：SKILL.md 启动示例改为先用 `render-runtime-profile.sh` 生成 runtime 字段，再传给 `spawn-worker.sh`，保持启动命令生成与 worktree/session gate 分离。
+- **smoke test**：`smoke-tmux-worker.sh` 覆盖 runtime profile helper 的 custom、Claude Code 和 Codex 输出。
+
+### Reason
+- 来源：用户要求继续推进 TASKS 中可落地的优化项。
+- 结论：Agent Teams 排障指南和 runtime profile helper 都能本地落地并提升稳定性；Agent Teams feature flag、真实 Claude 原生 `--worktree --tmux` 后端和跨 PM/worker smoke 仍需要真实宿主环境验证。
+
+## [1.12.0] - 2026-06-05
+
+### Added
+- **Goal-Driven Multi-Wave Loop**：SKILL.md 新增 PM 级 Orchestration Goal Loop，支持在成功条件满足前自动收口当前 Wave、读取任务源、选择下一批安全任务并启动下一 Wave。
+- **Goal Contract 模板**：新增 `templates/orchestration-goal.md`，要求 PM 在连续推进前写清任务源、成功条件、自主级别、并发/预算上限、继续条件和停止条件。
+- **Goal Loop 状态映射**：`checkpoint-status.json` 增加 `orchestration_goal` 字段；`worker-prompt.md` 增加 Goal ID / Loop Iteration，并明确 worker 不得自行领取其他任务。
+
+### Changed
+- **Wave summary**：新增 Goal ID、loop iteration、continue/stop decision、remaining tasks 和 next Wave 字段，让每轮自动继续都有可审计记录。
+- **Skill 路由**：明确 Claude Code / Codex `/goal` 可作为 PM loop 的宿主续跑能力，但不替代 worktree、tmux、checkpoint、review 和 merge 门禁。
+
+### Reason
+- 来源：用户希望多 Agent 编排不止“一次运行一个 Wave”，而是在 PR 验收、验证和任务源状态正常时，能自动继续下一 Wave，直到目标范围内任务耗尽或触发停机条件。
+- 结论：连续推进应放在 PM 层，不放给 worker；worker 保持窄任务边界，PM 负责任务池、Wave 收口、继续/停止判断和合并门禁。
+
 ## [1.11.0] - 2026-06-04
 
 ### Added
@@ -8,10 +37,14 @@
 - **worker 类型与验证底线**：worker prompt 新增 `ui-wiring`、`contract-extension`、`tauri-command`、`docs/research` 等类型，明确 Tauri/Rust worker 的 `cargo check --offline` 验证底线和 skipped verification 记录要求。
 - **Wave checkpoint 字段与 summary 模板**：`checkpoint-status.json` 新增 `wave`、`worker_class`、provider/model/slot 和 `model_evaluation` 字段；新增 `templates/wave-summary.md`。
 - **多信号进展巡检**：`pm-monitor.sh` 新增 `--wave-id`、`--progress-stale-threshold`、`WORKER_SILENT_PROGRESS`、`WORKER_NO_PROGRESS` 和 `WORKER_FINISHED_NO_PHASE_DONE`，结合 STATUS、commit、file mtime 和 dirty state 判断 worker 是否真有进展。
+- **wait script lint**：新增 `scripts/lint-wait-script.sh`，用于检查 wait/monitor/custom wait 脚本的 `bash -n` 和 `${VAR:0:N}` substring 闭合错误。
+- **worktree metadata**：`spawn-worker.sh` 在 Session Context 写入 `METADATA.json`，记录 base、session、runtime profile、provider slot、验证命令和 PR 占位；`worktree-status.sh` / `clean-worktree.sh` 会展示该摘要。
 
 ### Changed
 - **worker prompt**：加入 Wave 信息、provider slot、Decision ID race 规则、worker type rules 和验证底线。
+- **spawn gate**：`spawn-worker.sh`、`worktree-status.sh` 和 `clean-worktree.sh` 使用物理路径解析，避免 macOS `/var` / `/private/var` 别名导致 cwd gate 误失败。
 - **worktree-status.sh**：单 worker 只读总览增加 wave/provider/model/type 输出。
+- **smoke test**：`smoke-tmux-worker.sh` 通过 `spawn-worker.sh` 创建 worker，覆盖 metadata 写入、总览展示和清理前摘要。
 - **parallel-lessons.md**：补充 Wave worker 类型、Vitest/Vite 二进制资源兼容、DEC 编号 race 和 provider 并发池实战记录。
 
 ### Reason

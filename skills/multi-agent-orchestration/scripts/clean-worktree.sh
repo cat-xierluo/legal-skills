@@ -87,7 +87,7 @@ done
 [ -n "$SESSION" ] || { usage; exit 64; }
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 
-PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)
+PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
 case "$WORKTREE" in
   "") ;;
   /*) ;;
@@ -114,6 +114,22 @@ run() {
 
 echo "CLEAN_WORKTREE_MODE: $([ "$EXECUTE" -eq 1 ] && echo execute || echo dry-run)"
 echo "CLEAN_WORKTREE_TARGET: branch=$BRANCH session=$SESSION worktree=${WORKTREE:-missing}"
+
+if [ -n "$WORKTREE" ] && [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json" ]; then
+  metadata_file="$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+  if command -v jq >/dev/null 2>&1; then
+    metadata_base_ref=$(jq -r '.base_ref // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_created_at=$(jq -r '.created_at // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_backend=$(jq -r '.runtime.worker_backend // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_profile=$(jq -r '.runtime.runtime_profile // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_pr=$(jq -r '.pr.url // ""' "$metadata_file" 2>/dev/null || echo "")
+    echo "CLEAN_WORKTREE_METADATA: base=${metadata_base_ref:-n/a} created_at=${metadata_created_at:-n/a} backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} pr=${metadata_pr:-n/a}"
+  else
+    echo "CLEAN_WORKTREE_METADATA: present jq_missing file=$metadata_file"
+  fi
+else
+  echo "CLEAN_WORKTREE_METADATA: missing"
+fi
 
 if [ "$KEEP_SESSION" -eq 0 ]; then
   if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION" 2>/dev/null; then
