@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
 | 2026-06-02 | 更新     | [video-screenshot](skills/video-screenshot/) | v0.3.2 | 新增复合复核候选帧模式：保存被算法丢弃的候选帧和原因，支持多模态模型回查漏帧风险 |
 | 2026-06-01 | 正式发布 | [cross-agent-coordination](skills/cross-agent-coordination/) | v1.0.0 | 跨平台 Agent 任务协调：围绕项目任务源分配任务、标记归属、能力路由和交接上下文 |
 | 2026-06-01 | 正式发布 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.8.2 | 本地多 Agent 执行编排：worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口 |
@@ -56,7 +57,6 @@
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 | 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
-| 2026-05-20 | 更新     | [skill-lint](skills/skill-lint/)                 | v1.4.0 | 更新 Frontmatter 校验规则：`version` 调整为推荐发布字段，并检查 CHANGELOG、README、marketplace 版本同步 |
 
 </details>
 
@@ -241,7 +241,7 @@
 <td>通用·合同</td>
 <td style="word-break:break-word">合同起草与审查助手，基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.5.1</td>
+<td style="text-align:center">v1.5.2</td>
 <td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
 </tr>
 <tr>
