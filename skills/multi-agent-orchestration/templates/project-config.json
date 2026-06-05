@@ -1,0 +1,101 @@
+{
+  "schema": "multi-agent-orchestration.project-config.v1",
+  "version": 1,
+  "trunk": "main",
+  "task_source": {
+    "type": "markdown",
+    "path": "docs/TASKS.md"
+  },
+  "worktree": {
+    "root": ".claude/worktrees",
+    "path_prefix": "tmux-"
+  },
+  "session_context": {
+    "root": ".claude/agent-sessions"
+  },
+  "verification": {
+    "default": [
+      "npm run typecheck",
+      "npm test",
+      "npm run build"
+    ],
+    "by_worker_type": {
+      "ui-wiring": [
+        "npm run typecheck",
+        "npm test",
+        "npm run build"
+      ],
+      "contract-extension": [
+        "npm run typecheck",
+        "npm test",
+        "npm run build"
+      ],
+      "tauri-command": [
+        "npm run typecheck",
+        "npm test",
+        "npm run build",
+        "cargo check --manifest-path src-tauri/Cargo.toml --offline"
+      ],
+      "docs/research": []
+    }
+  },
+  "provider_slots": [
+    {
+      "slot": "provider-a-1",
+      "backend": "claude-code",
+      "settings_profile_path": "config/provider-a.settings.json",
+      "api_provider": "provider-a",
+      "model": "model-name",
+      "max_concurrency": 3,
+      "best_for": [
+        "high-risk",
+        "contract-extension"
+      ]
+    },
+    {
+      "slot": "codex-1",
+      "backend": "codex",
+      "settings_profile_path": "codex:default",
+      "api_provider": "openai",
+      "model": "model-name",
+      "max_concurrency": 2,
+      "best_for": [
+        "docs/research",
+        "low-risk"
+      ]
+    }
+  ],
+  "config_copy": {
+    "allowed_non_sensitive": [
+      ".npmrc.example",
+      "config/local.example.json"
+    ],
+    "forbidden": [
+      ".env",
+      ".env.*",
+      "*settings.json",
+      "*token*",
+      "*secret*",
+      "*.pem",
+      "*.key"
+    ]
+  },
+  "hooks": {
+    "auto_run": false,
+    "post_create": [
+      "npm install --ignore-scripts"
+    ],
+    "pre_merge": [
+      "npm run typecheck",
+      "npm test",
+      "npm run build"
+    ]
+  },
+  "safety": {
+    "copy_env_files": false,
+    "copy_real_provider_settings": false,
+    "require_explicit_hook_approval": true,
+    "require_clean_worktree_before_merge": true,
+    "require_dry_run_before_clean": true
+  }
+}

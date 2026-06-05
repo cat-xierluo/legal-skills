@@ -4,11 +4,17 @@
 
 - Goal ID: {{goal_id}}
 - Objective: {{objective}}
+- Project config: {{project_config_path_or_none}}
 - Task source: {{task_source}}
 - Scope includes: {{included_task_types_or_sections}}
 - Scope excludes: {{excluded_task_types_or_files}}
 - Base ref: {{base_ref}}
 - Started at: {{started_at}}
+
+Project config usage:
+- Adopted fields: {{adopted_project_config_fields}}
+- Ignored fields and reason: {{ignored_project_config_fields}}
+- Config safety check: {{config_safety_check_result}}
 
 ## Autonomy
 

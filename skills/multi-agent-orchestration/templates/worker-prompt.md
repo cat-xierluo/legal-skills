@@ -10,6 +10,7 @@
 Context:
 - PM Host: {{pm_host}}
 - Worker Backend: {{worker_backend}}
+- Project Config: {{project_config_path_or_none}}
 - Branch: {{branch_name}}
 - Expected Base Ref: {{base_ref}}
 - Worktree: {{worktree_path}}
@@ -47,6 +48,7 @@ Finish:
 Context:
 - PM Host: {{pm_host}}
 - Worker Backend: {{worker_backend}}
+- Project Config: {{project_config_path_or_none}}
 - Branch: {{branch_name}}
 - Base Ref: {{base_ref}}
 - Worktree: {{worktree_path}}
@@ -73,6 +75,7 @@ Isolation Gate:
 
 Background:
 - Task Source: {{task_source}}
+- Project config fields adopted by PM: {{adopted_project_config_fields}}
 - Goal: {{goal}}
 - Why now: {{why_this_task_matters}}
 - Relevant inputs: {{inputs}}

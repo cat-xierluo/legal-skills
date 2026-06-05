@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.0] - 2026-06-05
+
+### Added
+- **optional project config template**：新增 `templates/project-config.json`，声明 trunk、任务源、worktree/session 默认路径、按 worker type 拆分的验证命令、provider slot、非敏感配置复制清单和 hook 边界。
+
+### Changed
+- **SKILL.md config discipline**：标准流程增加项目配置读取规则，明确配置只提供默认值，不替代 PM 判断。
+- **Goal/worker templates**：增加 project config 字段，要求 PM 写明采用了哪些配置字段、忽略了哪些字段以及安全检查结果。
+
+### Reason
+- 来源：TASKS 中仍有“评估项目级配置文件”待办，且用户关注脚本是否过度设计。
+- 结论：采用轻量模板，不新增脚本、不自动读取、不自动复制配置、不自动执行 hook；`.env`、真实 settings、token/key/cert 等继续默认禁止。
+
 ## [1.14.1] - 2026-06-05
 
 ### Changed
