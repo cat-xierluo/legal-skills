@@ -25,7 +25,8 @@ if [ "$#" -eq 0 ]; then
   set -- \
     "$SCRIPT_DIR/wait-worker.sh" \
     "$SCRIPT_DIR/pm-monitor.sh" \
-    "$SCRIPT_DIR/worktree-status.sh"
+    "$SCRIPT_DIR/worktree-status.sh" \
+    "$SCRIPT_DIR/sentinel.sh"
 fi
 
 status=0

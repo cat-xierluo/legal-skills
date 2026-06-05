@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 PROJECT_DIR=""
 BRANCH=""
 WORKTREE=""
@@ -18,6 +20,10 @@ PROVIDER_SLOT=""
 WAVE_ID=""
 WAVE_WORKER_ID=""
 VERIFY_COMMANDS=()
+WITH_SENTINEL=0
+SENTINEL_POLL_INTERVAL=5
+SENTINEL_MAX_WAIT=7200
+KEEP_TMUX_ON_TERMINAL=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -41,10 +47,20 @@ Options:
   --wave-worker-id ID
                    Worker ID within the wave
   --verify-cmd CMD Expected verification command; repeat for multiple commands
+  --with-sentinel   Print recommended sentinel.sh command (does NOT start sentinel itself)
+  --sentinel-poll-interval N
+                   Default 5; passed to the recommended sentinel command
+  --sentinel-max-wait SECONDS
+                   Default 7200; passed to the recommended sentinel command
+  --keep-tmux-on-terminal
+                   Pass --keep-tmux-on-terminal to the recommended sentinel command
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
 the Bootstrap-only or Full worker prompt and confirm STATUS.json appears.
+When --with-sentinel is set, spawn-worker.sh outputs the sentinel command but
+does NOT start the sentinel itself. The PM must run that command with
+run_in_background=true so the harness re-invokes PM on sentinel exit.
 USAGE
 }
 
@@ -105,6 +121,22 @@ while [[ $# -gt 0 ]]; do
     --verify-cmd)
       VERIFY_COMMANDS+=("$2")
       shift 2
+      ;;
+    --with-sentinel)
+      WITH_SENTINEL=1
+      shift
+      ;;
+    --sentinel-poll-interval)
+      SENTINEL_POLL_INTERVAL="$2"
+      shift 2
+      ;;
+    --sentinel-max-wait)
+      SENTINEL_MAX_WAIT="$2"
+      shift 2
+      ;;
+    --keep-tmux-on-terminal)
+      KEEP_TMUX_ON_TERMINAL=1
+      shift
       ;;
     --dry-run)
       DRY_RUN=1
@@ -290,3 +322,13 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 echo "SPAWN_WORKER_NEXT: send worker prompt, then wait for $SESSION_CONTEXT/STATUS.json"
+
+if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+  SENTINEL_SCRIPT="$SCRIPT_DIR/sentinel.sh"
+  SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --tmux-session $SESSION --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+  if [ "$KEEP_TMUX_ON_TERMINAL" -eq 1 ]; then
+    SENTINEL_CMD="$SENTINEL_CMD --keep-tmux-on-terminal"
+  fi
+  echo "SPAWN_WORKER_SENTINEL_CMD: $SENTINEL_CMD"
+  echo "SPAWN_WORKER_RECOMMENDED_NEXT: run the above command with Bash run_in_background=true (NOT from inside spawn-worker). Sentinel exit triggers harness task-notification and wakes PM."
+fi

@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.16.0] - 2026-06-05
+
+### Added
+- **Sentinel bash 模式**（Task #9）：每个 worker 配一个 `scripts/sentinel.sh` 进程，PM 用 `run_in_background=true` 启，harness 在 sentinel exit 时通过 task-notification 自动 re-invoke PM，实现事件驱动 PM 唤醒，零 idle token 消耗。
+- **`scripts/sentinel.sh`**：轮询 `STATUS.json` 终态（`done | failed | blocked | stopped`），命中后 capture tmux pane tail、`tmux kill-session`、`exit`。退出码 0/2/64/124 与 `wait-worker.sh` 对齐。复用 `redact_sensitive_stream` 内联（不抽公共库）。
+- **`templates/pm-sentinel-response.md`**：PM 收到 sentinel task-notification 后的标准动作清单，按 exit code 分支（0=done, 2=failed/blocked/stopped, 124=timeout, 64=usage error），含范围检查、graceful 降级到 `pm-monitor.sh` 路径。
+- **`references/sentinel-design.md`**：设计文档，复述 2026-06-05 3 phase spike 结果，解释为什么 Sentinel 模式与 DEC-030 假设不同（数量线性 / 单进程单 STATUS / 进程语义清晰 / graceful 降级）。
+- **`scripts/smoke-sentinel.sh`**：端到端 smoke test，覆盖 done 路径（sentinel exit 0 + tmux killed + pane tail captured + redaction 工作）和 timeout 路径（sentinel exit 124 + max-wait 触发）。
+
+### Changed
+- **`scripts/spawn-worker.sh`**：新增 `--with-sentinel`、`--sentinel-poll-interval`、`--sentinel-max-wait`、`--keep-tmux-on-terminal` 标志。`--with-sentinel` 启用时输出 `SPAWN_WORKER_SENTINEL_CMD: ...` 和 `SPAWN_WORKER_RECOMMENDED_NEXT: ...` 提示 PM 在下一次 Bash 调用里 `run_in_background=true` 启 sentinel。**不在 spawn-worker 内部启 sentinel**（职责分离 + 避免 auto mode 拒多 background）。
+- **`scripts/lint-wait-script.sh`**：默认 lint 集合加入 `sentinel.sh`，复用现有 `bash -n` + substring expansion 检查。
+- **`SKILL.md` §6 工具面**：列出 `sentinel.sh`；§7.1 增加脚注指向 §7.2（"§7.2 是本规则的限定条件下可工作变体"）；新增 §7.2 Sentinel bash 模式章节，描述 PM 端两次 Bash 调用模式、事件命名空间、降级路径、调优建议。
+- **`SKILL.md` frontmatter**：version bump `1.15.1` → `1.16.0`。
+- **`DECISIONS.md`**：新增 `[DEC-031] - 2026-06-05 - Sentinel bash 模式 (Task #9 实施)`，**限定条件下 supersede DEC-030**，明确 sentinel 数 = 未完结 worker 数（线性而非 N×N）、单进程单 STATUS、graceful 降级是默认行为。DEC-030 文本保留（历史判断）。
+
+### Reason
+- 来源：Wave 4/5 实际痛点——PM 用 `pm-monitor.sh --log-file` 巡检是 polling-based，事件驱动不闭环，PM 必须靠用户输入或低频轮询才能感知 worker 终态。Wave 5 收口时把 Task #9 标"designed, not implemented"。
+- 验证：2026-06-05 30 分钟 Spike 在 Claude Code 实测 `run_in_background=true` Bash 任务，3 phases 全部通过——harness 不区分 exit code（0/1/124 都 re-invoke），多次并发 notification 同 turn 批处理，单 background 拒率 spike 实测 1/6，graceful 降级是默认行为。
+- 结论：在限定条件下（sentinel 数线性、单进程单 STATUS、graceful 降级），`run_in_background=true` Bash 任务可以作为可靠的 PM 唤醒机制。Wave 6 启动时启用。
+
+### Out of Scope（避免在本次 PR 蔓延）
+- Codex / OpenCode worker 的 sentinel 集成：暂未实测，Codex 走 `templates/codex-heartbeat-wait.md`
+- 多 sentinel 对单 worker 去重：PM 行为层处理
+- 重写 `pm-monitor.sh`（Task #6 单独 PR）
+
+## [1.15.1] - 2026-06-05
+
+### Changed
+- **Claude Code background wait caveat**：修正 `run-in-background` 描述，明确 background Bash 只负责后台运行等待器，不保证把 worker 终态消息推回 PM / agent session。
+- **multi-worker monitoring**：多 worker / Wave 默认使用 `pm-monitor.sh --log-file` + 显式低频巡检，不再建议为每个 worker 启 background wait 并期待宿主自动回调。
+
+### Reason
+- 来源：用户在 Claude Code 中实测发现，background Bash 没有可靠触发 agent session；开启多个独立 worker 时可能没有任何消息返回。
+- 结论：完成通知必须回到结构化 checkpoint、事件日志和显式巡检；background job 只能作为日志写入器或人工可查看后台进程。
+
 ## [1.15.0] - 2026-06-05
 
 ### Added
