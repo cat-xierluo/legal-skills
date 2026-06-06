@@ -52,7 +52,7 @@
     {
       "name": "legal-ocr",
       "description": "OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化",
-      "version": "1.3.1",
+      "version": "1.3.3",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

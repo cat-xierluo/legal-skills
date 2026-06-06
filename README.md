@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-05 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.3.3 | 修复 PaddleOCR 大 PDF 同步结果缺页误判：返回页数不足时直接失败，并记录预期页数与实际返回页数 |
 | 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
 | 2026-06-02 | 更新     | [video-screenshot](skills/video-screenshot/) | v0.3.2 | 新增复合复核候选帧模式：保存被算法丢弃的候选帧和原因，支持多模态模型回查漏帧风险 |
 | 2026-06-01 | 正式发布 | [cross-agent-coordination](skills/cross-agent-coordination/) | v1.0.0 | 跨平台 Agent 任务协调：围绕项目任务源分配任务、标记归属、能力路由和交接上下文 |
@@ -56,7 +57,6 @@
 | 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 | 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
-| 2026-05-28 | 更新     | [code2patent](skills/code2patent/)               | v1.5.3 | 补强架构转译规则：理解代码架构后转为对象、关系、状态、动作、时序和输出，不写模块/技术选型清单 |
 
 </details>
 
@@ -118,7 +118,7 @@
 <td>工具·OCR</td>
 <td style="word-break:break-word">OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.1</td>
+<td style="text-align:center">v1.3.3</td>
 <td>推荐统一入口</td>
 </tr>
 <tr>
