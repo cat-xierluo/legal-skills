@@ -1,7 +1,7 @@
 ---
 name: legal-ocr
 description: 本技能应在用户需要 OCR、扫描识别、图片文字识别、文档识别，或将 PDF、图片、Office 文档、URL 转换为 Markdown 时使用。检测到法律材料时可进行保守的法律术语与文书结构优化。不要用于法律事实判断、补写缺失内容、语义改写、印章深度识别或图表实体分析。
-version: "1.3.2"
+version: "1.4.0"
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -112,12 +112,22 @@ uv run scripts/convert.py checktoken
 | `--paddle-api-protocol auto|sync|async` | PaddleOCR API 协议 |
 | `--paddle-api-extra-json <path>` | 合并额外 PaddleOCR optionalPayload |
 
+PaddleOCR 同步接口会校验后端实际返回页数。若返回页数少于本地 PDF 批次页数，转换会失败并提示降低 `PADDLEOCR_BATCH_PAGES` 或使用 `--pages` 重跑，避免缺页结果被误当作成功。
+
 ## 自动分流
 
 - `auto` 会先看用户实际配置了哪些 API；只配置一套时尽量统一走这一套，减少用户判断成本。
 - 两套 API 都配置时，按材料类型选择首选后端，并把另一个可用后端作为候选。
 - 如果后端返回 429、额度不足、余额不足、频率限制、鉴权失败、网络超时或服务失败，会在 `result.json` 和 `metadata.json` 的 `route.attempts` 中记录失败类别；存在候选后端时自动继续转换。
 - 当前没有接入独立额度预检接口；额度判断来自 API 响应码和错误信息。若服务商提供稳定 quota endpoint，再加入转换前检查。
+
+## 瞬态错误自动重试
+
+- 范围：所有 HTTP 调用（同步提交、异步提交、异步轮询、MinerU 上传/轮询/下载、Token 自检）都会被瞬态错误分类与重试包装。
+- 瞬态定义：当前为 `httpx.RequestError`（DNS 解析失败、连接失败、连接/读取超时、远端关闭连接、协议错误）。HTTP 4xx 仍立即抛出（鉴权、配额、参数错误），HTTP 5xx 和 429 在轮询路径下会被同样的重试包装覆盖。
+- 默认参数：3 次尝试（含首次），首次重试前 1.0 秒，单次重试等待上限 30.0 秒（指数退避 1 → 2 → 4 → 8 → ...）。
+- 配置项：统一用 `LEGAL_OCR_RETRY_ATTEMPTS` / `LEGAL_OCR_RETRY_BASE_DELAY` / `LEGAL_OCR_RETRY_MAX_DELAY`；可用 `PADDLEOCR_RETRY_*` 与 `MINERU_RETRY_*` 覆盖单后端。设置为 1 等于关闭重试。
+- 重试前会向 stderr 输出一行 `PaddleOCR/MinerU 瞬态错误 …` 日志，便于排查真实网络问题。
 
 ## OCR 与法律增强
 
@@ -174,6 +184,7 @@ archive 内包含：
 | 一个 API 额度用尽 | 同时配置另一套 API，并保持 `--backend auto`；转换时会自动尝试候选后端 |
 | 网页 URL 失败 | 网页 URL 需要 MinerU Token，不支持轻量模式 |
 | DOCX/PPTX 走 PaddleOCR 失败 | Office 文档只能走 MinerU，使用 `--backend auto` 或 `--backend mineru` |
+| PaddleOCR 返回页数不足 | 降低 `PADDLEOCR_BATCH_PAGES` 或使用 `--pages` 按较小范围重跑；当前云端接口实测单次稳定返回上限约 100 页 |
 | 转换质量需复核 | 查看 archive 中的 `result_raw.md`、`result.json` 和 `backend_result/` |
 
 ## 维护

@@ -1,5 +1,27 @@
 # 变更记录
 
+## [1.4.0] - 2026-06-06
+
+### 改进
+- 新增瞬态网络错误自动重试：所有 HTTP 调用（同步提交、异步提交、异步轮询、MinerU 上传/轮询/下载、Token 自检）通过统一的 `retry_with_backoff` 包装；DNS 失败、连接失败、读取超时等 `httpx.RequestError` 会被指数退避重试 2-3 次。
+- 退避参数通过环境变量控制：`LEGAL_OCR_RETRY_ATTEMPTS`（默认 3）、`LEGAL_OCR_RETRY_BASE_DELAY`（默认 1.0s）、`LEGAL_OCR_RETRY_MAX_DELAY`（默认 30.0s）；`PADDLEOCR_RETRY_*` 与 `MINERU_RETRY_*` 可覆盖单后端。
+- 重试前向 stderr 输出一行 `PaddleOCR/MinerU 瞬态错误 …` 日志，便于排查真实网络问题。
+
+### 文档完善
+- SKILL.md 新增「瞬态错误自动重试」章节，说明范围、瞬态定义、默认参数和配置项。
+- `.env.example` 顶部与各后端小节均补充 RETRY_* 变量。
+
+## [1.3.3] - 2026-06-05
+
+### 修复
+- PaddleOCR 同步接口新增返回页数校验：当 `result.dataInfo.numPages` 或 `result.dataInfo.pages` 长度少于本地 PDF 批次页数时，转换直接失败并提示降低 `PADDLEOCR_BATCH_PAGES` 或使用 `--pages` 重跑。
+
+### 改进
+- PaddleOCR 批次元数据新增 `expected_pages` 和 `returned_pages`，便于排查大 PDF 缺页、服务端单次返回上限等问题。
+
+### 文档完善
+- 在 `SKILL.md` 故障排除中补充“PaddleOCR 返回页数不足”的处理方式。
+
 ## [1.3.2] - 2026-06-03
 
 ### 优化

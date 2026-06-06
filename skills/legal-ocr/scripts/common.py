@@ -4,9 +4,16 @@ import hashlib
 import math
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable, TypeVar
 from urllib.parse import unquote, urlparse
+
+try:
+    import httpx
+except ImportError:  # pragma: no cover - httpx is required for OCR but optional for type-checkers
+    httpx = None  # type: ignore[assignment]
 
 
 SUPPORTED_IMAGE_SUFFIXES = (
@@ -264,6 +271,73 @@ def resolve_mineru_token(env: dict[str, str]) -> str:
         or sanitize_config_value(os.environ.get("MINERU_TOKEN"))
         or read_official_mineru_token()
     )
+
+
+def is_transient_httpx_error(exc: BaseException) -> bool:
+    """判断一个异常是否属于可安全重试的瞬态网络错误。
+
+    覆盖：
+    - DNS 解析失败（[Errno 8] nodename nor servname provided）
+    - TCP 连接失败、连接超时、读取超时
+    - 远端在写入响应中途关闭连接
+    - 协议层错误
+    """
+    if httpx is None:
+        return False
+    return isinstance(exc, httpx.RequestError)
+
+
+def is_transient_http_status(status_code: int) -> bool:
+    """判断 HTTP 状态码是否属于可重试的瞬态错误。"""
+    if status_code == 429:
+        return True
+    if 500 <= status_code < 600:
+        return True
+    return False
+
+
+T = TypeVar("T")
+
+
+def retry_with_backoff(
+    func: Callable[..., T],
+    *args: Any,
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    is_transient: Callable[[BaseException], bool] | None = None,
+    on_retry: Callable[[int, BaseException, float], None] | None = None,
+    **kwargs: Any,
+) -> T:
+    """以指数退避重试 ``func(*args, **kwargs)``，仅在 ``is_transient`` 判为瞬态时重试。
+
+    参数:
+    - ``max_attempts``: 最多尝试次数（含首次），默认 3。
+    - ``base_delay``: 首次重试前的等待秒数，默认 1.0。
+    - ``max_delay``: 单次重试等待上限，默认 30.0。
+    - ``is_transient``: 自定义瞬态判定；默认 ``is_transient_httpx_error``。
+    - ``on_retry``: 重试前回调，签名 ``(attempt, exc, delay) -> None``，用于记录日志。
+
+    非瞬态异常或达到最大次数后透传给调用方；首参后的 ``max_attempts`` 计数从 1 开始。
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts 必须 >= 1")
+    transient = is_transient or is_transient_httpx_error
+    last_exc: BaseException | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return func(*args, **kwargs)
+        except BaseException as exc:  # noqa: BLE001
+            if not transient(exc) or attempt >= max_attempts:
+                raise
+            last_exc = exc
+            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+            if on_retry:
+                on_retry(attempt, exc, delay)
+            time.sleep(delay)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("retry_with_backoff: 不可达分支")
 
 
 def has_paddle_config(env: dict[str, str]) -> bool:

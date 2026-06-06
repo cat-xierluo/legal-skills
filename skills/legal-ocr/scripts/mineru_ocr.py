@@ -24,6 +24,8 @@ from common import (
     first_non_empty,
     parse_bool,
     parse_positive_int,
+    parse_positive_float,
+    retry_with_backoff,
     resolve_mineru_token,
     sanitize_config_value,
     sanitize_name,
@@ -34,6 +36,9 @@ from pdf_tools import get_pdf_page_count
 LIGHT_API_BASE = "https://mineru.net/api/v1/agent"
 DEFAULT_TOKEN_API_BASE = "https://mineru.net/api/v4"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".jp2"}
+DEFAULT_RETRY_ATTEMPTS = 3
+DEFAULT_RETRY_BASE_DELAY = 1.0
+DEFAULT_RETRY_MAX_DELAY = 30.0
 
 
 def normalize_page_ranges(value: str | None) -> str:
@@ -173,6 +178,25 @@ class MinerUBackend:
         self.page_ranges = normalize_page_ranges(first_non_empty(env, "MINERU_PAGE_RANGES"))
         self.poll_max = parse_positive_int(first_non_empty(env, "MINERU_POLL_MAX"), default=20)
         self.poll_sleep = parse_positive_int(first_non_empty(env, "MINERU_POLL_SLEEP"), default=10)
+        self.retry_attempts = parse_positive_int(
+            first_non_empty(env, "MINERU_RETRY_ATTEMPTS", "LEGAL_OCR_RETRY_ATTEMPTS"),
+            default=DEFAULT_RETRY_ATTEMPTS,
+        )
+        self.retry_base_delay = parse_positive_float(
+            first_non_empty(env, "MINERU_RETRY_BASE_DELAY", "LEGAL_OCR_RETRY_BASE_DELAY"),
+            default=DEFAULT_RETRY_BASE_DELAY,
+        )
+        self.retry_max_delay = parse_positive_float(
+            first_non_empty(env, "MINERU_RETRY_MAX_DELAY", "LEGAL_OCR_RETRY_MAX_DELAY"),
+            default=DEFAULT_RETRY_MAX_DELAY,
+        )
+
+    def _log_retry(self, attempt: int, exc: BaseException, delay: float) -> None:
+        print(
+            f"MinerU 瞬态错误 {type(exc).__name__}：{exc}。"
+            f"第 {attempt}/{self.retry_attempts - 1} 次重试，等待 {delay:.1f}s",
+            file=__import__("sys").stderr,
+        )
 
     def verify_token(self) -> str:
         if not self.api_token:
@@ -180,10 +204,16 @@ class MinerUBackend:
         probe_task_id = "00000000-0000-0000-0000-000000000000"
         url = f"{self.api_base}/extract/task/{probe_task_id}"
         try:
-            response = httpx.get(
-                url,
-                headers={"Authorization": f"Bearer {self.api_token}"},
-                timeout=20,
+            response = retry_with_backoff(
+                lambda: httpx.get(
+                    url,
+                    headers={"Authorization": f"Bearer {self.api_token}"},
+                    timeout=20,
+                ),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
             )
         except httpx.RequestError as error:
             return f"Token 已读取，但当前无法连接到 {self.api_base}。诊断信息：{error}"
@@ -223,7 +253,13 @@ class MinerUBackend:
         backend_dir.mkdir(parents=True, exist_ok=True)
         zip_path = backend_dir / "result.zip"
         with self._client() as client:
-            response = client.get(result_url)
+            response = retry_with_backoff(
+                lambda: client.get(result_url),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
+            )
             if response.status_code != 200:
                 raise RuntimeError(f"下载 MinerU 结果包失败（HTTP {response.status_code}）")
             zip_path.write_bytes(response.content)
@@ -289,13 +325,19 @@ class MinerUBackend:
         upload_ticket_path = backend_dir / "upload_ticket.json"
 
         with self._client() as client:
-            response = client.post(
-                f"{self.api_base}/file-urls/batch",
-                headers={
-                    "Authorization": f"Bearer {self.api_token}",
-                    "Content-Type": "application/json",
-                },
-                json=request_body,
+            response = retry_with_backoff(
+                lambda: client.post(
+                    f"{self.api_base}/file-urls/batch",
+                    headers={
+                        "Authorization": f"Bearer {self.api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=request_body,
+                ),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
             )
             upload_ticket_path.parent.mkdir(parents=True, exist_ok=True)
             upload_ticket_path.write_text(response.text, encoding="utf-8")
@@ -315,7 +357,13 @@ class MinerUBackend:
             headers = _normalize_headers(oss_headers)
 
             with source.path.open("rb") as handle:
-                upload_response = client.put(upload_url, content=handle.read(), headers=headers)
+                upload_response = retry_with_backoff(
+                    lambda: client.put(upload_url, content=handle.read(), headers=headers),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
+                )
             if upload_response.status_code not in {200, 201}:
                 raise RuntimeError(f"MinerU 文件上传失败（HTTP {upload_response.status_code}）")
 
@@ -324,9 +372,15 @@ class MinerUBackend:
             last_payload: dict[str, Any] = {}
             for poll_count in range(1, self.poll_max + 1):
                 time.sleep(self.poll_sleep)
-                poll_response = client.get(
-                    f"{self.api_base}/extract-results/batch/{batch_id}",
-                    headers={"Authorization": f"Bearer {self.api_token}"},
+                poll_response = retry_with_backoff(
+                    lambda: client.get(
+                        f"{self.api_base}/extract-results/batch/{batch_id}",
+                        headers={"Authorization": f"Bearer {self.api_token}"},
+                    ),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
                 )
                 poll_path.write_text(poll_response.text, encoding="utf-8")
                 if poll_response.status_code in {401, 403}:
@@ -395,13 +449,19 @@ class MinerUBackend:
             request_body["page_ranges"] = page_ranges
 
         with self._client() as client:
-            create_response = client.post(
-                f"{self.api_base}/extract/task",
-                headers={
-                    "Authorization": f"Bearer {self.api_token}",
-                    "Content-Type": "application/json",
-                },
-                json=request_body,
+            create_response = retry_with_backoff(
+                lambda: client.post(
+                    f"{self.api_base}/extract/task",
+                    headers={
+                        "Authorization": f"Bearer {self.api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=request_body,
+                ),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
             )
             backend_dir.mkdir(parents=True, exist_ok=True)
             (backend_dir / "token_url_create.json").write_text(create_response.text, encoding="utf-8")
@@ -419,9 +479,15 @@ class MinerUBackend:
             last_payload: dict[str, Any] = {}
             for _poll_count in range(1, self.poll_max + 1):
                 time.sleep(self.poll_sleep)
-                poll_response = client.get(
-                    f"{self.api_base}/extract/task/{task_id}",
-                    headers={"Authorization": f"Bearer {self.api_token}"},
+                poll_response = retry_with_backoff(
+                    lambda: client.get(
+                        f"{self.api_base}/extract/task/{task_id}",
+                        headers={"Authorization": f"Bearer {self.api_token}"},
+                    ),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
                 )
                 poll_path.write_text(poll_response.text, encoding="utf-8")
                 if poll_response.status_code in {401, 403}:
@@ -482,10 +548,16 @@ class MinerUBackend:
         }
 
         with self._client() as client:
-            response = client.post(
-                f"{LIGHT_API_BASE}/parse/file",
-                headers={"Content-Type": "application/json"},
-                json=submit_body,
+            response = retry_with_backoff(
+                lambda: client.post(
+                    f"{LIGHT_API_BASE}/parse/file",
+                    headers={"Content-Type": "application/json"},
+                    json=submit_body,
+                ),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
             )
             backend_dir.mkdir(parents=True, exist_ok=True)
             (backend_dir / "light_submit.json").write_text(response.text, encoding="utf-8")
@@ -499,7 +571,13 @@ class MinerUBackend:
                 raise RuntimeError(f"MinerU 轻量接口提交失败：{submit_payload.get('msg') or submit_payload}")
 
             with source.path.open("rb") as handle:
-                upload_response = client.put(upload_url, content=handle.read())
+                upload_response = retry_with_backoff(
+                    lambda: client.put(upload_url, content=handle.read()),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
+                )
             if upload_response.status_code not in {200, 201}:
                 raise RuntimeError(f"MinerU 轻量接口文件上传失败（HTTP {upload_response.status_code}）")
 
@@ -508,7 +586,13 @@ class MinerUBackend:
             poll_path = backend_dir / "light_poll.json"
             for _poll_count in range(1, self.poll_max + 1):
                 time.sleep(self.poll_sleep)
-                poll_response = client.get(f"{LIGHT_API_BASE}/parse/{task_id}")
+                poll_response = retry_with_backoff(
+                    lambda: client.get(f"{LIGHT_API_BASE}/parse/{task_id}"),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
+                )
                 poll_path.write_text(poll_response.text, encoding="utf-8")
                 if poll_response.status_code not in {200, 201}:
                     raise RuntimeError(f"MinerU 轻量接口轮询失败（HTTP {poll_response.status_code}）：{poll_response.text[:500]}")
@@ -525,7 +609,13 @@ class MinerUBackend:
 
             extraction_root.mkdir(parents=True, exist_ok=True)
             markdown_file = extraction_root / "full.md"
-            markdown_response = client.get(markdown_url)
+            markdown_response = retry_with_backoff(
+                lambda: client.get(markdown_url),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
+            )
             if markdown_response.status_code not in {200, 201}:
                 raise RuntimeError(f"下载 MinerU 轻量接口 Markdown 失败（HTTP {markdown_response.status_code}）")
             markdown_file.write_bytes(markdown_response.content)
@@ -567,10 +657,16 @@ class MinerUBackend:
         }
 
         with self._client() as client:
-            response = client.post(
-                f"{LIGHT_API_BASE}/parse/url",
-                headers={"Content-Type": "application/json"},
-                json=submit_body,
+            response = retry_with_backoff(
+                lambda: client.post(
+                    f"{LIGHT_API_BASE}/parse/url",
+                    headers={"Content-Type": "application/json"},
+                    json=submit_body,
+                ),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
             )
             backend_dir.mkdir(parents=True, exist_ok=True)
             (backend_dir / "light_url_submit.json").write_text(response.text, encoding="utf-8")
@@ -587,7 +683,13 @@ class MinerUBackend:
             poll_path = backend_dir / "light_url_poll.json"
             for _poll_count in range(1, self.poll_max + 1):
                 time.sleep(self.poll_sleep)
-                poll_response = client.get(f"{LIGHT_API_BASE}/parse/{task_id}")
+                poll_response = retry_with_backoff(
+                    lambda: client.get(f"{LIGHT_API_BASE}/parse/{task_id}"),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
+                )
                 poll_path.write_text(poll_response.text, encoding="utf-8")
                 if poll_response.status_code not in {200, 201}:
                     raise RuntimeError(f"MinerU 轻量 URL 轮询失败（HTTP {poll_response.status_code}）：{poll_response.text[:500]}")
@@ -604,7 +706,13 @@ class MinerUBackend:
 
             extraction_root.mkdir(parents=True, exist_ok=True)
             markdown_file = extraction_root / "full.md"
-            markdown_response = client.get(markdown_url)
+            markdown_response = retry_with_backoff(
+                lambda: client.get(markdown_url),
+                max_attempts=self.retry_attempts,
+                base_delay=self.retry_base_delay,
+                max_delay=self.retry_max_delay,
+                on_retry=self._log_retry,
+            )
             if markdown_response.status_code not in {200, 201}:
                 raise RuntimeError(f"下载 MinerU 轻量 URL Markdown 失败（HTTP {markdown_response.status_code}）")
             markdown_file.write_bytes(markdown_response.content)

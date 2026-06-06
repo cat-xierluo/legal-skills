@@ -1,5 +1,22 @@
 # 决策记录
 
+## D-2026-06-06-01 瞬态网络错误统一自动重试
+
+- 日期: 2026-06-06
+- 背景: 90-审判-all 任务首次重试 26 段全部因 `[Errno 8] nodename nor servname provided, or not known` 失败；同一晚网络恢复后只需重跑一次即可全部成功。原 legal-ocr 把所有 `httpx.RequestError` 直接抛出，编排层只能等用户手动重试。
+- 决策: 在 `scripts/common.py` 新增 `is_transient_httpx_error` / `is_transient_http_status` / `retry_with_backoff` 三个工具；PaddleOCR 与 MinerU 的所有 HTTP 入口（同步提交、异步提交、异步轮询、MinerU 上传/轮询/下载、Token 自检）改为通过 `retry_with_backoff` 包装。
+- 瞬态定义: `httpx.RequestError` 全部子类（DNS、连接、读取/写入超时、协议错误、远端关闭连接）。HTTP 状态码 429 与 5xx 也视作瞬态。HTTP 4xx 立即抛出（鉴权、配额、参数错误）。
+- 参数: 统一默认 3 次尝试、首次重试前 1.0s、单次重试等待上限 30.0s（指数退避）。可被 `LEGAL_OCR_RETRY_*` 统一控制，被 `PADDLEOCR_RETRY_*` / `MINERU_RETRY_*` 单独覆盖。
+- 取舍: 轮询循环（`_poll_async_job` / MinerU 轮询）只把内部 `client.get` 包装 retry，外层 `for` 循环不重跑，避免一次瞬态错误导致整个任务从头开始（重新提交、重新上传）。
+- 影响: 编排层无需为偶发网络问题重排；状态库 `failed` 事件真正反映业务/数据问题，而不是瞬态抖动。后续如要区分业务失败与网络失败，可在此基础上扩展错误分类。
+
+## D-2026-06-05-01 PaddleOCR 同步结果必须校验返回页数
+
+- 日期: 2026-06-05
+- 背景: 在处理 283 页 PDF《要件审判九步法》时，PaddleOCR 同步接口接受整本上传并返回成功，但后端响应 `dataInfo.numPages` 仅为 100，实际 Markdown 只覆盖前 100 页。
+- 决策: 对 PaddleOCR 同步接口结果增加页数校验。PDF 批次提交后，脚本读取本地批次 PDF 页数作为预期页数，并从后端响应 `result.dataInfo.numPages` 与 `result.dataInfo.pages` 推导实际返回页数；实际返回页数少于预期时直接失败。
+- 影响: 超过服务端单次返回上限的大 PDF 不再生成看似成功但缺页的 Markdown。用户需降低 `PADDLEOCR_BATCH_PAGES` 或用 `--pages` 按较小范围重跑。
+
 ## D-2026-05-20-01 新建 legal-ocr，而不是修改旧 Skill
 
 - 日期: 2026-05-20
