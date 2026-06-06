@@ -498,7 +498,7 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 
 ```bash
 # 在 Agent 流程里，PR 创建完成后：
-# 1. 调起项目配置的 doc-curator subagent（如存在）
+# 1. 调起项目配置的文档体检流程（如存在）
 #    - 工作目录：仓库根
 #    - 输入：刚 push 的 commit hash（可选）
 #    - 期望输出：markdown 报告 + JSON 行
@@ -507,7 +507,7 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 #    - 全部 ok → 不动作，继续 review 流程
 #    - 软提示 → 把提示写入 PR 描述的"跟进事项"小节，不阻断
 #    - 硬性 / 自适应告警 → 走 maintenance-pr.sh：
-#      - 工作区干净 → 自动创建 chore/doc-curator-<date> 分支、提一个 maintenance PR
+#      - 工作区干净 → 自动创建维护分支、提一个 maintenance PR
 #      - 工作区不干净 → 仅报告，提示用户先清理
 
 # 3. 不阻塞当前 PR：把 maintenance PR 链接追加到当前 PR 描述，让 review 知道"已发现 N 项"
@@ -530,12 +530,12 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 
 ```bash
 # 在 Agent 流程里，PR 合并完成后：
-# 1. 调起项目配置的 doc-curator subagent 跑体检（如存在）
+# 1. 调起项目配置的文档体检流程跑体检（如存在）
 # 2. 解析报告：
 #    - 全部 ok → 不动作，结束
 #    - 软提示 → 报告给用户，不自动 PR
 #    - 硬性 / 自适应告警 → 走 maintenance-pr.sh：
-#      - 工作区干净 → 自动提 maintenance PR（按 doc-curator 协议）
+#      - 工作区干净 → 自动提 maintenance PR（按项目协议）
 #      - 工作区不干净 → 仅报告，让用户处理
 # 3. 如果报告项触发了 state.json 的基线更新（adaptive 阈值漂移），下一次体检会按新基线判定
 ```
