@@ -108,6 +108,7 @@ Process:
 6. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues on phase changes (in addition to the 10-min heartbeat).
 7. Verify: run the commands below and record results.
 8. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
+9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel's status machine matches the literal string `done` (defensively also `completed` / `finished` / `complete`, but **never rely on synonyms**). If you write `completed` or `finished` instead of `done`, the sentinel will not exit and PM will not be re-invoked via harness task-notification — the worker is effectively orphaned until `--max-wait 7200s` timeout. See DEC-060 for the Wave 6 finding.
 
 Worker Type Rules:
 - `ui-wiring`: no new dependencies; all listed frontend verification commands must pass.

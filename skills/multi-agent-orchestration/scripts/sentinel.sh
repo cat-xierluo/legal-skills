@@ -164,13 +164,22 @@ while true; do
   else
     status=$(jq -r '.status // "unknown"' "$STATUS_FILE" 2>/dev/null || echo "unknown")
     case "$status" in
-      done)
+      # Canonical success terminal is "done". The synonym set
+      # (completed|finished|complete) is defensive: worker LLM providers
+      # occasionally drift from the canonical string. PM should still write
+      # status="done" exactly per templates/worker-prompt.md, but the sentinel
+      # will not get stuck polling if the worker wrote a synonym.
+      done|completed|finished|complete)
         capture_pane_tail
         log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE"
         kill_tmux_if_requested
         exit 0
         ;;
-      failed|blocked|stopped)
+      # Canonical failure terminals: failed | blocked | stopped. Defensive
+      # synonyms added for the same reason as above. PM should still use
+      # the canonical strings, but a worker that wrote "aborted" or
+      # "cancelled" is also recognized as a non-success terminal.
+      failed|blocked|stopped|aborted|cancelled)
         capture_pane_tail
         log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE"
         kill_tmux_if_requested

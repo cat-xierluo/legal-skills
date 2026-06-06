@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.16.1] - 2026-06-05
+
+### Fixed
+- **`scripts/sentinel.sh` synonym 兜底**：case 分支接受 worker 实际写的 synonym 终态。成功终态 `done|completed|finished|complete` → exit 0；失败终态 `failed|blocked|stopped|aborted|cancelled` → exit 2。`SENTINEL_UNKNOWN_STATUS` 仍保留 `*)` 诊断 log，但不再让 worker 写 synonym 时死锁轮询到 `--max-wait`。
+
+### Changed
+- **`templates/worker-prompt.md` Process §9**：新增"Canonical terminal status (mandatory)"步骤，明确 worker 终态必须用 `status="done"` **exactly**；defensively sentinel 也认 `completed` / `finished` / `complete`，但 worker 不得依赖 synonym。引用项目侧 DEC-060 / skill 侧 [DEC-032]。
+
+### Reason
+- 来源：v1.16.0 sentinel bash 模式首次在 FaroPDF Wave 6 真用（2 worker 并行），两位 worker 写 `status="completed"` / `status="finished"` 逃过 sentinel case 分支的 `done` 严格判断，sentinel 持续空转，PM 收不到 harness task-notification，直到用户手动问"进度"才暴露。Spike 阶段只测了 `done` / `failed` 严格用法，没覆盖 LLM 写 synonym 的漂移。
+- 验证：Wave 6 实战触发，PM 收口时 kill 2 sentinel（exit 143）+ 写双侧 patch 后已修复。Wave 7+ 工人按 worker-prompt.md §9 写 `status="done"`，sentinel 事件驱动链路恢复。
+- 项目侧对应：FaroPDF 仓 `docs/DECISIONS.md` DEC-060（PR #48 / 2026-06-05）记录了实战触发 + 修复方案；本条 CHANGELOG 是 skill 侧 [DEC-032] 的实际交付记录。
+
 ## [1.16.0] - 2026-06-05
 
 ### Added
