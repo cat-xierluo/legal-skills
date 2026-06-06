@@ -167,8 +167,6 @@ git fetch --prune
 - ❌ **跳过用户确认直接 `git push origin --delete`**：远端删除对协作者可见，难撤销。
 - ❌ **用 `git branch -D` 强删本地以"对齐远端"**：会丢未推送的 WIP。
 
-来源：Folia 2026-06-06 清理时，4 个已 squash-merge 的远程分支（feat/statusbar-copy / fix/about-qr-align / fix/font-preview-live / fix/settings-flash）`git branch --merged origin/main` 无输出，必须通过 `gh pr list --state all` 交叉验证后才能批量删除。
-
 ### Worktree（工作树）
 
 当需要同时在多个分支上工作时，使用 worktree 避免频繁切换分支：
@@ -485,8 +483,6 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 | 冲突极少 / 1-2 个文件 | `git diff main..HEAD` 改动小且冲突集中 | **方案 C：GitHub PR UI 手动解决**。在 PR 页面 "Resolve conflicts" → 编辑 → commit。 |
 
 **禁止** `git push --force`（不带 `--force-with-lease`），可能在远端已有他人 push 时覆盖。
-
-来源：FaroPDF v0.1 Wave 1 根因复盘（PR #15 / #16 base 落后 + squash merge 内容冲突）。
 
 ### PR 创建后：可选文档体检扩展
 
