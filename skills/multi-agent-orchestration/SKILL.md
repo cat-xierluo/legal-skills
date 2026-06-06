@@ -366,7 +366,7 @@ Claude Code PM：
 - Bash background/run-in-background 只能让等待器在后台运行，不保证触发或唤醒当前 PM / agent session；多 worker 同时等待时尤其可能没有任何完成消息返回。
 - 不要把 background Bash 当作可靠完成通知机制。它最多作为日志写入器或人工可查看的后台 job；PM 仍必须靠 `STATUS.json`、`pm-monitor.sh --log-file`、`wait-worker.sh --once`、tmux/agent view 显式巡检来收口。
 - 单 worker 可临时用 background Bash 跑 `wait-worker.sh`，但启动时必须同时记录 log 文件或保留可查询命令；多 worker / Wave 默认使用 `pm-monitor.sh --log-file`，不要为每个 worker 启一个 background wait 并期待宿主逐个回调。
-- **限定条件例外**：§7.2 描述的 Sentinel 模式是本规则的"限定条件下可工作变体"——单 worker 单 sentinel、`run_in_background=true` 启、harness 100% re-invoke 实测验证（2026-06-05 spike）。Wave 6 启用 sentinel 之前仍按上述保守判断走。
+- **限定条件例外**：§7.2 描述的 Sentinel 模式是本规则的"限定条件下可工作变体"——单 worker 单 sentinel、`run_in_background=true` 启、harness 100% re-invoke 可工作。Wave 6 启用 sentinel 之前仍按上述保守判断走。
 
   ```bash
   bash scripts/wait-worker.sh \

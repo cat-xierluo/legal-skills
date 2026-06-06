@@ -592,7 +592,7 @@ ffmpeg -i "/path/to/video.mp4" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "/tmp/au
 
 ## 故障排除
 
-### cv2 / opencv 导入失败（2026-05-18 实测）
+### cv2 / opencv 导入失败
 
 **症状**：`POST /transcribe` 返回 `{"detail":"No module named 'cv2'"}`，但 `pip show opencv-python-headless` 显示已安装。
 
@@ -628,9 +628,6 @@ sleep 1
 ### FunASR 服务无响应 / 模型加载慢
 
 首次转录需要下载模型（约 1-2GB），耐心等待。后续请求模型已缓存，速度会快很多。
-
-> 📌 B 站视频转录实战记录（2026-05-10）：`references/bilibili-transcribe-session.md`
-> 含路径问题根因 + Whisper CLI fallback 方案。
 
 **视频截图功能：**
 
