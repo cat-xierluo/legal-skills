@@ -1,0 +1,125 @@
+# CHANGELOG
+
+## [0.2.6] - 2026-06-05
+
+### 新增
+
+- 新增 `references/analysis-engine-boundary.md`，明确 `legal-case-analysis` 是法律分析引擎，并说明与 `legal-proposal-generator` 的协作边界。
+- 新增 `references/element-litigation-nine-step.md`，沉淀要件式诉讼分析九步法，作为诉讼和争议解决场景的分析支架。
+
+### 改进
+
+- 调整 `SKILL.md` 定位：法律分析不等同于报告生成，报告只是可选交付形态。
+- 在 `references/workflow.md` 中加入分析底稿和要件式分析入口。
+- 在 `references/iteration-context.md` 中补充分析引擎定位、跨 Skill 边界和后续迭代方向。
+
+## [0.2.5] - 2026-06-05
+
+### 新增
+
+- 新增 `templates/simple-consultation-answer.md`，用于事实较少、目标单一的自然人咨询或简版法律答复。
+
+### 改进
+
+- 在 `SKILL.md` 输出类型和模板导航中加入简版咨询答复。
+- 将 `references/report-depth-control.md` 中的简版答复结构改为引用模板，保持“方法进 references、交付格式进 templates”的分层。
+- 在 `references/iteration-context.md` 中补充报告详略控制参考文件入口。
+- 同步修正 `TASKS.md` 中已删除展示模板的历史性表述，避免与当前模板结构混淆。
+
+## [0.2.4] - 2026-06-05
+
+### 新增
+
+- 新增 `references/report-depth-control.md`，用于按案件复杂度选择简版咨询、标准案件分析或复杂案件分阶段报告。
+
+### 改进
+
+- 在 `SKILL.md` 的工作方法导航中加入报告详略控制入口。
+- 在 `references/workflow.md` 启动阶段增加复杂度和报告深度判断。
+- 在 `references/iteration-context.md` 的后续迭代方向中加入报告详略控制校准样例。
+
+## [0.2.3] - 2026-06-05
+
+### 新增
+
+- 新增 `references/iteration-context.md`，记录长期迭代上下文、分层原则、非目标、输出风格和后续演进方向。
+- 新增 `LICENSE.txt`，按法律专业应用 Skill 使用 CC-BY-NC 许可证。
+
+### 改进
+
+- 补全 `SKILL.md` frontmatter：新增 `homepage`、`author`、`license` 字段，并将版本更新为 `0.2.3`。
+- 在 `SKILL.md` 的工作方法导航中加入迭代上下文入口。
+
+## [0.2.2] - 2026-06-05
+
+### 改进
+
+- 精简 `SKILL.md`：主文件只保留入口说明、核心原则、输入输出和资源导航。
+- 将分析过程、工作方法和交付检查沉淀到 `references/`。
+- 将最终交付格式集中到 `templates/`，保留法律分析报告、检索任务清单和客户说明模板。
+
+### 文档完善
+
+- 在 `references/workflow.md` 中补充交付前检查。
+- 从主文件中移除试跑样例入口，降低主上下文负担。
+
+### 调整
+
+- 删除 `templates/presentation-outline.md`，避免将展示提纲与法律报告/检索交付模板混放。
+
+## [0.2.1] - 2026-06-05
+
+### 文档完善
+
+- 将 `legal-case-analysis` 从竞赛方案目录迁入 `legal-skills/skills/` 项目目录，便于后续持续迭代。
+- 保留现有 `references/`、`templates/`、`examples/` 和技能级文档结构。
+
+### 待办事项
+
+- 如后续正式公开发布，再补齐 marketplace 和 README 条目。
+
+## [0.2.0] - 2026-06-05
+
+### 新增
+
+- 新增 `references/civil-commercial-analysis-workflow.md`，明确复杂民商事案件在法律检索之外的分析步骤。
+
+### 改进
+
+- 强化 `yuandian-law-search` 的默认优先检索地位：先检索现行法条、司法解释和类案，再基于检索结果分析。
+- 在 `SKILL.md` 中补充“按法律分析步骤拆解案件”工作流。
+- 在法律检索衔接规则中增加 `yuandian-law-search` 推荐调用顺序。
+- 在报告模板中增加请求权基础、构成要件和检索结果回填要求。
+
+## [0.1.2] - 2026-06-05
+
+### 新增
+
+- 新增 `examples/contest-sample-analysis.md`，基于竞赛案例生成脱敏试跑报告。
+- 新增 `examples/skill-iteration-evaluation.md`，记录试跑暴露的问题和后续迭代方向。
+
+### 改进
+
+- 在 `SKILL.md` 中补充试跑样例入口。
+
+## [0.1.1] - 2026-06-05
+
+### 改进
+
+- 精简 `SKILL.md` 元数据，仅保留名称、描述和版本。
+- 移除包含署名、主页、联系方式和版权信息的授权文件。
+
+## [0.1.0] - 2026-06-04
+
+### 新增
+
+- 创建 `legal-case-analysis` 通用法律分析 Skill 初稿。
+- 新增核心工作流：案件画像、事实证据台账、法律问题树、检索任务、法律论证、报告输出。
+- 新增与 `yuandian-law-search`、`zhihe-legal-research`、OCR 工具和 `md2word` 的松耦合协作说明。
+- 新增四份参考文档：事实证据抽取、问题识别、法律检索衔接、论证与风险评估。
+- 新增四份输出模板：法律分析报告、法律检索任务清单、客户说明、路演展示提纲。
+
+### 待办事项
+
+- 使用竞赛赛题材料试跑并根据结果迭代模板。
+- 如正式发布至 legal-skills 仓库，补齐 marketplace 和 README 配置。
