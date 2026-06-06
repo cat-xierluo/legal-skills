@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-06 | 新上传   | [legal-case-analysis](skills/legal-case-analysis/) | v0.2.6 | 新增通用法律分析技能：多场景分析支架与法律任务的前置分析引擎，不要求每次都生成报告 |
 | 2026-06-06 | 更新     | [git-workflow](skills/git-workflow/) | v1.4.1 | 精简触发描述，同步公开索引版本，并将文档体检改为项目配置后才执行的可选扩展 |
 | 2026-06-05 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.3.3 | 修复 PaddleOCR 大 PDF 同步结果缺页误判：返回页数不足时直接失败，并记录预期页数与实际返回页数 |
 | 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
@@ -243,6 +244,14 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.5.2</td>
 <td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
+</tr>
+<tr>
+<td><a href="skills/legal-case-analysis/"><strong>legal-case-analysis</strong></a></td>
+<td>通用·分析</td>
+<td style="word-break:break-word">通用法律分析技能，基于案件材料、咨询材料、合同资料、证据材料或检索结果进行法律分析、案件研判、风险评估与诉讼/非诉策略；前置分析引擎，报告为可选交付形态</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.2.6</td>
+<td></td>
 </tr>
 <tr>
 <td><a href="skills/legal-proposal-generator/"><strong>legal-proposal-generator</strong></a></td>
