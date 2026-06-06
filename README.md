@@ -49,6 +49,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-06 | 更新     | [git-workflow](skills/git-workflow/) | v1.4.1 | 精简触发描述，同步公开索引版本，并将文档体检改为项目配置后才执行的可选扩展 |
 | 2026-06-05 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.3.3 | 修复 PaddleOCR 大 PDF 同步结果缺页误判：返回页数不足时直接失败，并记录预期页数与实际返回页数 |
 | 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
 | 2026-06-02 | 更新     | [video-screenshot](skills/video-screenshot/) | v0.3.2 | 新增复合复核候选帧模式：保存被算法丢弃的候选帧和原因，支持多模态模型回查漏帧风险 |
@@ -56,7 +57,6 @@
 | 2026-06-01 | 正式发布 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.8.2 | 本地多 Agent 执行编排：worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口 |
 | 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
 | 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
-| 2026-05-31 | 新上传   | [pdf-organizer](skills/pdf-organizer/)             | v0.5.0 | 法律 PDF 文书整理：按内容拆分、合并或直接重命名，生成页面索引和下游交接文件，支持旋转与倾斜校正 |
 
 </details>
 
@@ -477,9 +477,9 @@
 <tr>
 <td><a href="skills/git-workflow/"><strong>git-workflow</strong></a></td>
 <td>工具·Git</td>
-<td style="word-break:break-word">Git 全流程工作流助手，覆盖分支创建、Monorepo 安全合并、PR 创建/审查/合并、合并冲突恢复、Cherry-pick 安全流程和常规 Git 操作规则</td>
+<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退和已合并分支清理</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.1</td>
+<td style="text-align:center">v1.4.1</td>
 <td></td>
 </tr>
 <tr>

@@ -2,9 +2,9 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.0"
+version: "1.4.1"
 license: MIT
-description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、已合并分支审计与清理（含 squash/rebase merge 场景，权威依据是 `gh pr list --state merged`，不可仅信 `git branch --merged`）、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突、清理 stale 分支（"有没有分支没清理""branch cleanup""清理已合并的远程分支"）等 Git 操作时自动触发。PR 创建后、PR 合并后由 Agent 主动调起 doc-curator subagent 跑文档体检（post-action，非 hooks 门禁）。
+description: Git 工作流安全助手。本技能应在需要执行分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退，以及 stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 ---
 
 # Git 全流程工作流
@@ -488,17 +488,17 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 
 来源：FaroPDF v0.1 Wave 1 根因复盘（PR #15 / #16 base 落后 + squash merge 内容冲突）。
 
-### PR 创建后：调起 doc-curator 体检
+### PR 创建后：可选文档体检扩展
 
-Agent 在 `gh pr create` 成功返回 PR URL 后，主动调起 `doc-curator` subagent 跑文档体检。
+若当前项目明确配置了 `doc-curator` subagent 或同等文档体检流程，Agent 在 `gh pr create` 成功返回 PR URL 后，可以按项目协议触发一次文档体检；未配置时跳过，不影响本 Skill 的 Git 流程。
 
-目的：在 PR 进入 review 前，发现当次变更是否引入文档膨胀、超出归档指针、违反硬性规则；如果有问题，由 doc-curator 在 PR 自身或单独的 maintenance PR 内修掉，不让膨胀项进入 main。
+目的：在 PR 进入 review 前，发现当次变更是否引入文档膨胀、超出归档指针、违反硬性规则；如果有问题，由项目内的文档体检流程在 PR 自身或单独的 maintenance PR 内修正，不让膨胀项进入 main。
 
 调用方式：
 
 ```bash
 # 在 Agent 流程里，PR 创建完成后：
-# 1. 调起 doc-curator subagent（项目级 Skill，自定义 Agent）
+# 1. 调起项目配置的 doc-curator subagent（如存在）
 #    - 工作目录：仓库根
 #    - 输入：刚 push 的 commit hash（可选）
 #    - 期望输出：markdown 报告 + JSON 行
@@ -516,13 +516,13 @@ Agent 在 `gh pr create` 成功返回 PR URL 后，主动调起 `doc-curator` su
 约束：
 
 - 这是 post-action 调起，不是 pre-PR 门禁（避免锁死 PR 创建流程）。
-- doc-curator 不会改 `src/` / `src-tauri/` / `tests/`；改动仅限于 `docs/` 维护类动作。
-- doc-curator 不会写 `CHANGELOG.md`（CHANGELOG 由 `release-workflow` 维护）。
-- 当前 PR 已 push 但 review 还没合并时，doc-curator 提的 maintenance PR 与当前 PR 并行存在；用户决定合并顺序。
+- 文档体检扩展不得改 `src/` / `src-tauri/` / `tests/`；改动仅限于 `docs/` 维护类动作。
+- 文档体检扩展不写 `CHANGELOG.md`（CHANGELOG 由 `release-workflow` 或项目发布流程维护）。
+- 当前 PR 已 push 但 review 还没合并时，maintenance PR 与当前 PR 并行存在；用户决定合并顺序。
 
-### PR 合并后：调起 doc-curator 体检
+### PR 合并后：可选文档体检扩展
 
-Agent 在 `gh pr merge` 成功（或 squash 推送 main 完成）后，主动调起 `doc-curator` subagent 跑一次完整体检。
+若当前项目明确配置了 `doc-curator` subagent 或同等文档体检流程，Agent 在 `gh pr merge` 成功（或 squash 推送 main 完成）后，可以按项目协议触发一次完整体检；未配置时跳过。
 
 目的：合并后文档库状态更新（新增 ISS 归档指针、DEC 编号推进、文件行数变化），基线可能漂移；及时发现新合并项是否引入膨胀，必要时自动提 maintenance PR。
 
@@ -530,7 +530,7 @@ Agent 在 `gh pr merge` 成功（或 squash 推送 main 完成）后，主动调
 
 ```bash
 # 在 Agent 流程里，PR 合并完成后：
-# 1. 调起 doc-curator subagent 跑体检（项目级 Skill）
+# 1. 调起项目配置的 doc-curator subagent 跑体检（如存在）
 # 2. 解析报告：
 #    - 全部 ok → 不动作，结束
 #    - 软提示 → 报告给用户，不自动 PR
@@ -545,18 +545,18 @@ Agent 在 `gh pr merge` 成功（或 squash 推送 main 完成）后，主动调
 - 与"PR 创建后体检"互补：创建后体检关注"这次提交带来的变化"，合并后体检关注"main 整体健康度"。
 - 合并后体检**不阻塞合并动作**：它发生在合并完成之后，只用于发现后续问题。
 - 同一 PR 不重复触发两次（创建 + 合并各一次即可，不在中间 review 轮次再触发）。
-- doc-curator 不会因为"发现 main 不健康"而尝试 revert 刚合入的 commit；它只做文档级维护，不动代码与决策。
+- 文档体检扩展不会因为"发现 main 不健康"而尝试 revert 刚合入的 commit；它只做文档级维护，不动代码与决策。
 
-### 总结：本 Skill 与 doc-curator 的关系
+### 总结：本 Skill 与文档体检扩展的关系
 
 | 时机 | 谁调起 | 做什么 | 阻塞？ |
 |:-----|:-------|:-------|:-------|
-| `gh pr create` 成功 | 本 Skill（Agent 主动） | 调 doc-curator 体检本次变更 | 不阻塞，输出报告 + 可选 maintenance PR |
-| `gh pr merge` 成功 | 本 Skill（Agent 主动） | 调 doc-curator 体检 main | 不阻塞，输出报告 + 可选 maintenance PR |
+| `gh pr create` 成功 | 本 Skill（如项目配置） | 体检本次变更 | 不阻塞，输出报告 + 可选 maintenance PR |
+| `gh pr merge` 成功 | 本 Skill（如项目配置） | 体检 main | 不阻塞，输出报告 + 可选 maintenance PR |
 | 用户手动跑 `scan.sh` | 用户 | 体检 | 不阻塞 |
 | SessionEnd / pre-commit | — | 不在本 Skill 范围 | — |
 
-`git-workflow` 只负责"什么时候调 doc-curator"，具体体检逻辑、维护动作、PR 生成全部由 `doc-curator` Skill 负责。两者通过 subagent 调起解耦：git-workflow 不直接执行文档 trim。
+`git-workflow` 只负责说明可选体检时机；具体体检逻辑、维护动作、PR 生成全部由项目配置的文档体检流程负责。两者通过 subagent 或项目协议解耦：git-workflow 不直接执行文档 trim。
 
 ## 5. 合并冲突解决
 

@@ -1,8 +1,19 @@
 # 变更日志
 
+## [1.4.1] - 2026-06-06
+
+### 改进
+- 精简 `SKILL.md` frontmatter `description`：保留分支管理、Monorepo 安全合并、PR、冲突处理、cherry-pick、安全回退和 branch cleanup 等触发边界，删除具体命令细节和项目特定后置动作。
+- 将 `doc-curator` 文档体检从默认动作调整为可选项目扩展：仅在当前项目明确配置 `doc-curator` subagent 或同等流程时执行；未配置时跳过，不影响 Git 工作流。
+
+### 文档完善
+- 同步 README 技能列表、最近更新区和 Marketplace 清单中的 `git-workflow` 描述与版本号。
+- 为 `skills/git-workflow/DECISIONS.md` 和 `skills/git-workflow/TASKS.md` 增加 `.gitignore` 例外，使技能级决策与任务记录可随仓库追踪。
+- 将最近版本记录中的 `Added` / `Reason` 标签调整为中文分类，符合本项目 CHANGELOG 规范。
+
 ## [1.4.0] - 2026-06-06
 
-### Added
+### 新增
 - **§2 新增「批量审计：已合并分支清理」子节**：仓库累积一批已合并 PR 后做集中清理时，权威依据是 `gh pr list --state merged`，不能仅信 `git branch --merged`。
   - 核心陷阱：`git branch --merged` 只识别"提交可达"，对 **squash merge** / **rebase merge** 一律失效（main 上的合并 commit 是新生 SHA，原分支 tip 不在 main 历史里，分支被误判为未合并）。
   - 完整流程：snapshot → 列候选（参考用）→ `gh pr list --state merged --search "head:<branch>"` 交叉验证 → 候选表展示 → 用户确认 → 批量删除 → `git fetch --prune`。
@@ -12,14 +23,14 @@
 - **description / frontmatter 关键词扩充**："已合并分支审计""清理已合并的远程分支""branch cleanup""有没有分支没清理"加入自动触发词。
 - **§6 速查**：`git remote prune origin` / `git push origin --delete` 两行下方加导引指针，指向 §2 完整流程。
 
-### Reason
+### 决策依据
 - 来源：Folia 2026-06-06 实操。4 个已 squash-merge 的远程分支（feat/statusbar-copy / fix/about-qr-align / fix/font-preview-live / fix/settings-flash）跑 `git branch --merged origin/main` 完全没有输出，Agent 第一时间没意识到 squash merge 会让这条检查失效，差点漏判。
 - 现状：§2 原「分支清理」只列了 `git branch -d` / `git push origin --delete` 两条命令，没说明何时安全何时不安全；§6 速查的 `git remote prune origin` 注释只解决"远端已删，本地 ref 还在"的反向场景，不覆盖"本地/远端分支还在，但 PR 已合并"。
 - 决策：在 §2 新增完整子流程，保留 §6 速查命令但加导引指针，避免速查表膨胀。
 
 ## [1.3.0] - 2026-06-03
 
-### Added
+### 新增
 - **「PR 创建后立即跑 mergeable 检查（强制）」**：Agent 在 `gh pr create` 成功后立即跑 `gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,files`。`mergeable=CONFLICTING` 时**不要**直接 `gh pr update-branch`，先按决策表选方案。
 - **「base 落后 / 冲突处理决策表」**：三选一方案：
   - 方案 A：冲突仅在 docs 同步文件 → 本地 rebase + 重新编号 + `--force-with-lease` push
@@ -28,7 +39,7 @@
   - **禁止** `git push --force`（不带 `--force-with-lease`）
 - **「远端 stale ref 清理」**：合入后跑 `git remote prune origin` 清理不存在的远端 ref；手动删某个远端分支用 `git push origin --delete <name>`。
 
-### Reason
+### 决策依据
 - 来源：FaroPDF v0.1 Wave 1 真实合并 PR #18 / #19 前的根因复盘。
 - 主要根因：提 PR 后没立即查 mergeable；本地 main 与 origin/main drift 后 push 报 non-fast-forward；squash merge 引入的"内容相同但 history 不同"被误判为冲突；多个 PR 共享 CHANGELOG 段、DEC 编号无 PM 收口。
 
