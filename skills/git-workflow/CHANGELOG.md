@@ -1,5 +1,22 @@
 # 变更日志
 
+## [1.4.0] - 2026-06-06
+
+### Added
+- **§2 新增「批量审计：已合并分支清理」子节**：仓库累积一批已合并 PR 后做集中清理时，权威依据是 `gh pr list --state merged`，不能仅信 `git branch --merged`。
+  - 核心陷阱：`git branch --merged` 只识别"提交可达"，对 **squash merge** / **rebase merge** 一律失效（main 上的合并 commit 是新生 SHA，原分支 tip 不在 main 历史里，分支被误判为未合并）。
+  - 完整流程：snapshot → 列候选（参考用）→ `gh pr list --state merged --search "head:<branch>"` 交叉验证 → 候选表展示 → 用户确认 → 批量删除 → `git fetch --prune`。
+  - 判定规则表（merge commit / squash-rebase merge / closed 非 merged / 未推送 WIP / stale ref）。
+  - 辅助指纹：`git rev-list --left-right --count main...origin/<branch>` 返回 "ahead N, behind 1" 是 squash-merged 的典型形态，**仅是提示**，仍以 PR 状态为准。
+  - 红线（fail-closed）：仅凭 `git branch --merged` 删 / 仅凭 ahead-behind 删 / 把 CLOSED 当 MERGED / 跳过确认就推删除 / `-D` 强删本地以"对齐远端"。
+- **description / frontmatter 关键词扩充**："已合并分支审计""清理已合并的远程分支""branch cleanup""有没有分支没清理"加入自动触发词。
+- **§6 速查**：`git remote prune origin` / `git push origin --delete` 两行下方加导引指针，指向 §2 完整流程。
+
+### Reason
+- 来源：Folia 2026-06-06 实操。4 个已 squash-merge 的远程分支（feat/statusbar-copy / fix/about-qr-align / fix/font-preview-live / fix/settings-flash）跑 `git branch --merged origin/main` 完全没有输出，Agent 第一时间没意识到 squash merge 会让这条检查失效，差点漏判。
+- 现状：§2 原「分支清理」只列了 `git branch -d` / `git push origin --delete` 两条命令，没说明何时安全何时不安全；§6 速查的 `git remote prune origin` 注释只解决"远端已删，本地 ref 还在"的反向场景，不覆盖"本地/远端分支还在，但 PR 已合并"。
+- 决策：在 §2 新增完整子流程，保留 §6 速查命令但加导引指针，避免速查表膨胀。
+
 ## [1.3.0] - 2026-06-03
 
 ### Added

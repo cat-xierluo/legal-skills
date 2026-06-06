@@ -2,9 +2,9 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.4.0"
 license: MIT
-description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突等 Git 操作时自动触发。PR 创建后、PR 合并后由 Agent 主动调起 doc-curator subagent 跑文档体检（post-action，非 hooks 门禁）。
+description: Git 全流程工作流助手。覆盖分支创建、Monorepo 安全合并、PR 管理、已合并分支审计与清理（含 squash/rebase merge 场景，权威依据是 `gh pr list --state merged`，不可仅信 `git branch --merged`）、合并冲突解决、常规 Git 操作。当用户进行分支管理、合并代码、创建/审查 PR、解决冲突、清理 stale 分支（"有没有分支没清理""branch cleanup""清理已合并的远程分支"）等 Git 操作时自动触发。PR 创建后、PR 合并后由 Agent 主动调起 doc-curator subagent 跑文档体检（post-action，非 hooks 门禁）。
 ---
 
 # Git 全流程工作流
@@ -93,6 +93,81 @@ git branch -d <branch-name>
 # 删除远程分支
 git push origin --delete <branch-name>
 ```
+
+### 批量审计：已合并分支清理
+
+仓库累积了一批已合并 PR 后做集中清理时，**不要**只用 `git branch --merged main` 判断。
+
+**核心陷阱**：`git branch --merged` 只识别"提交可达"，对 **squash merge** / **rebase merge** 一律失效——main 上的合并 commit 是新生 SHA，原分支 tip 不在 main 历史里，分支会被误判为未合并。
+
+**权威依据**：PR 在远端的 `state == MERGED`。
+
+#### 审计流程
+
+```bash
+# 1. 快照当前状态
+git branch -vv                   # 本地分支 + 跟踪信息
+git branch -r                    # 远程分支
+git worktree list                # worktree 占用情况
+
+# 2. 列候选（仅作为参考，不能作为删除依据）
+git branch --merged main
+git branch -r --merged origin/main | grep -v 'origin/main\|origin/HEAD'
+git branch --no-merged main
+git branch -r --no-merged origin/main | grep -v 'origin/main\|origin/HEAD'
+
+# 3. 关键：用 PR 状态交叉验证（squash/rebase merge 必须）
+gh pr list --state merged --search "head:<branch>" \
+  --json number,title,mergedAt
+
+# 或批量映射近期 PR ↔ 分支
+gh pr list --state all --limit 50 \
+  --json number,state,headRefName,mergedAt,closedAt
+```
+
+#### 判定规则
+
+| 信号 | 处理 |
+|------|------|
+| 分支 tip 可达 `main`（Step 2 "merged" 输出） | 安全删除（merge commit 形式） |
+| `gh pr list --state merged` 能查到对应 PR | 安全删除（squash / rebase merge） |
+| `gh pr list` 显示 `state == CLOSED` 且非 `MERGED` | **询问用户**：工作可能已废弃，但分支不一定该删 |
+| 本地分支无对应远程 PR 且未推送 | **询问用户**：可能是未推送的 WIP |
+| 远程跟踪 ref 在远端已不存在 | `git fetch --prune` 或 `git remote prune origin` 清理本地引用 |
+
+辅助指纹：`git rev-list --left-right --count main...origin/<branch>` 返回 "ahead N, behind 1" 是 squash-merged 的典型形态（分支自身的 commits 不在 main，main 的 squash commit 不在分支）。它是**提示**而非证据，仍以 `gh pr list` 为准。
+
+#### 删除（fail-closed，必须先取得用户确认）
+
+向用户展示候选表后再批量删除：
+
+| 分支 | 本地 | 远程 | PR | 判定 |
+|------|------|------|----|----|
+| feat/foo | 无 | 有 | #27 MERGED | 安全删除 |
+| fix/bar | 有 | 有 | #28 MERGED | 安全删除 |
+| wip/baz | 有 | 无 | — | 询问用户 |
+
+```bash
+# 批量删除远程分支
+git push origin --delete <b1> <b2> <b3>
+
+# 删除本地分支（先 -d；refuse 后再讨论是否升级到 -D）
+git branch -d <branch>
+
+# 清理本地的 stale 远程跟踪 ref
+git fetch --prune
+# 或 git remote prune origin
+```
+
+#### 红线（fail-closed）
+
+- ❌ **仅凭 `git branch --merged` 删除**：在 squash/rebase merge 仓库会漏判，在 merge commit 仓库才完整。
+- ❌ **仅凭 ahead/behind 删除**：WIP 分支也会"ahead 多个 commit"。
+- ❌ **把 `CLOSED` 当 `MERGED`**：closed-without-merge 是被废弃，删除前必须问用户。
+- ❌ **跳过用户确认直接 `git push origin --delete`**：远端删除对协作者可见，难撤销。
+- ❌ **用 `git branch -D` 强删本地以"对齐远端"**：会丢未推送的 WIP。
+
+来源：Folia 2026-06-06 清理时，4 个已 squash-merge 的远程分支（feat/statusbar-copy / fix/about-qr-align / fix/font-preview-live / fix/settings-flash）`git branch --merged origin/main` 无输出，必须通过 `gh pr list --state all` 交叉验证后才能批量删除。
 
 ### Worktree（工作树）
 
@@ -601,6 +676,7 @@ git diff --stat           # 概览变更文件
 git blame <file>          # 查看每行的修改者
 git remote prune origin   # 清理已不存在的远端 ref（合并后清理 stale ref）
 git push origin --delete <stale-branch>  # 手动删某个远端分支
+# 集中审计 squash/rebase merge 后未清理的分支 → 见 §2「批量审计：已合并分支清理」
 ```
 
 ### Tag 管理
