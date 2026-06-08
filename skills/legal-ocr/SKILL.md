@@ -187,6 +187,33 @@ archive 内包含：
 | PaddleOCR 返回页数不足 | 降低 `PADDLEOCR_BATCH_PAGES` 或使用 `--pages` 按较小范围重跑；当前云端接口实测单次稳定返回上限约 100 页 |
 | 转换质量需复核 | 查看 archive 中的 `result_raw.md`、`result.json` 和 `backend_result/` |
 
+## 归档技能：paddle-ocr 与 mineru-ocr
+
+本技能（legal-ocr）是法律 OCR 的统一入口，吸收了以下已归档技能的功能：
+
+### paddle-ocr（已归档）
+
+原 `paddle-ocr` 专注于 PaddleOCR API 处理法律 PDF，核心能力现已整合：
+
+- **批量处理**：PDF 自动分批，大文档稳定处理
+- **法律归档**：完整保留 archive（input/result/result.json/batches/metadata）
+- **页码拆分**：`scripts/split_pdf.py` 支持自定义页码范围
+- **底层调试**：`scripts/layout_caller.py` 可直接获取原始 JSON 坐标和表格结构
+
+原 `paddle-ocr/config/.env` 配置项可直接迁移到 `legal-ocr/config/.env`。
+
+### mineru-ocr（已归档）
+
+原 `mineru-ocr` 专注于 MinerU API 处理，核心能力现已整合：
+
+- **多格式支持**：PDF、图片、Office 文档、URL 均支持
+- **云端 API**：配置 `MINERU_API_TOKEN` 后自动路由
+- **法律增强**：自动检测法律材料并启用术语优化
+
+如需手动调用 PaddleOCR 或 MinerU 独立接口，参考：
+- `references/paddle-ocr-commands.md` — PaddleOCR 底层调用示例
+- `references/mineru-ocr-commands.md` — MinerU 底层调用示例
+
 ## 维护
 
 修改本技能后，同步更新本目录下的 `TASKS.md`、`DECISIONS.md` 和 `CHANGELOG.md`。
