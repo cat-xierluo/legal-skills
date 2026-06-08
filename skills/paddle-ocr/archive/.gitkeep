@@ -1,0 +1,5 @@
+# 此目录用于存储转换历史和归档文件
+# 每次转换会创建一个子目录，包含：
+# - input.*: 原始输入文件
+# - response.json: API 响应
+# - result.md: 转换后的 Markdown 文件

@@ -194,23 +194,6 @@ node scripts/svg2png.js input.svg [output.png] [dpi]
 
 ---
 
-## 书籍/章节配图模式（已归档 → 移至 svg-book-illustrator 参考）
-
-`svg-book-illustrator` 已并入本技能。书籍/章节配图（架构图、流程图、层次图等专业技术配图）的工作流和布局模板详见：
-
-- `references/svg-book-illustrator_workflow.md` — 书籍配图的完整工作流
-- `references/layout-templates.md` — 8 种布局模板（flow/layer/matrix/hub/tree/cycle）
-- `references/diagram-catalog.md` — 预定义插图目录格式
-
-**与文章配图的区别**：
-
-| 维度 | 文章配图（本文） | 书籍配图（已归档） |
-|------|-----------------|-------------------|
-| 画布 | 800×450（16:9） | 720×400 |
-| 风格 | 可含动画/emoji | 纯静态白底专业风 |
-| 布局 | 动态/静态/PNG导出 | 8 种结构化模板 |
-| 输出 | `<svg>` 嵌入 Markdown | `<svg>` 嵌入 + 图注 |
-
 ## 成功标准
 
 - 配图密度 10-15 张，有效增强视觉吸引力

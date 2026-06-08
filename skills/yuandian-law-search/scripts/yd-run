@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -n "${YD_PYTHON:-}" ]]; then
+  PYTHON="$YD_PYTHON"
+else
+  PYTHON="$(command -v python3 || true)"
+fi
+
+if [[ -z "$PYTHON" || ! -x "$PYTHON" ]]; then
+  echo "错误：未找到可执行的 python3。请先安装 Python，或设置 YD_PYTHON=/path/to/python3。" >&2
+  exit 127
+fi
+
+CLEAN_PATH="${YD_CLEAN_PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
+
+ENV_ARGS=(
+  "HOME=${HOME:-}"
+  "USER=${USER:-}"
+  "LOGNAME=${LOGNAME:-${USER:-}}"
+  "SHELL=${SHELL:-/bin/zsh}"
+  "TERM=${TERM:-xterm-256color}"
+  "TMPDIR=${TMPDIR:-/tmp}"
+  "LANG=${LANG:-C.UTF-8}"
+  "LC_ALL=${LC_ALL:-${LANG:-C.UTF-8}}"
+  "PATH=$CLEAN_PATH"
+  "NO_PROXY=*"
+  "no_proxy=*"
+)
+
+[[ -n "${YD_API_KEY:-}" ]] && ENV_ARGS+=("YD_API_KEY=$YD_API_KEY")
+[[ -n "${YD_STRATEGY:-}" ]] && ENV_ARGS+=("YD_STRATEGY=$YD_STRATEGY")
+
+if [[ "${1:-}" == "--network-check" ]]; then
+  cd "$SKILL_DIR"
+  env -i "${ENV_ARGS[@]}" "$PYTHON" - <<'PY'
+import socket
+import ssl
+import sys
+
+failed = False
+for host in ("open.chineselaw.com", "ydzk.chineselaw.com"):
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        addrs = sorted({item[4][0] for item in infos})
+        print(f"{host}: DNS OK ({', '.join(addrs[:4])})")
+        with socket.create_connection((host, 443), timeout=8) as raw:
+            with ssl.create_default_context().wrap_socket(raw, server_hostname=host) as tls:
+                print(f"{host}: TLS OK ({tls.version()})")
+    except Exception as exc:
+        failed = True
+        print(f"{host}: FAIL {type(exc).__name__}: {exc}", file=sys.stderr)
+
+sys.exit(1 if failed else 0)
+PY
+  exit $?
+fi
+
+cd "$SKILL_DIR"
+exec env -i "${ENV_ARGS[@]}" "$PYTHON" "$SCRIPT_DIR/yd_search.py" "$@"
