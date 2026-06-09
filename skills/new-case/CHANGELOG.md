@@ -2,6 +2,22 @@
 
 本文档记录 new-case skill 的重要变更。
 
+## [1.3.0] - 2026-06-08
+
+### 新增
+
+- **商标案件预设 (trademark)**：覆盖商标注册 / 异议 / 驳回复审 / 无效宣告 / 变更转让 5 种子业务
+  - `assets/trademark.yaml` — 目录配置、分类规则、detection、业务子类型枚举
+  - `templates/trademark-info.md` — 商标项目信息卡
+  - `templates/trademark-task-list.md` — 含续展提醒表 + 法定期限追踪表
+- **模板子目录模式**：`assets/*.yaml` 的 `directories` 字段支持 `template: true` + `subdirectories`，运行时按用户输入参数动态复制生成子目录
+
+### 变更
+
+- SKILL.md：新增商标预设到触发方式和适用场景；`--case-type` 扩展支持 `商标`/`注册`/`异议`/`复审`/`无效`/`变更`；多步骤加入商标条目
+- `references/naming-conventions.md`：新增"商标项目"小节；管理文件表加商标列
+- `references/classification-guide.md`：新增"商标项目分类"小节；对比表扩展为三列
+
 ## [1.2.2] - 2026-04-23
 
 ### 改进
