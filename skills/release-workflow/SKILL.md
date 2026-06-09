@@ -1,6 +1,6 @@
 ---
 name: release-workflow
-description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"时触发。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
+description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -26,6 +26,85 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 | CI 工作流存在 | `.github/workflows/` 中有 release 相关工作流且 tag 触发配置正确 |
 
 任一条件不满足，先修复再继续。
+
+## ⚠️ Release ≠ 测试 — 强制约束
+
+**打 tag / 创建 GitHub Release 是把版本号给真实用户**，不是 CI 验证机制。**把 release workflow 当作"看 CI 跑没跑通"或"我下载个 artifact 自己测一下"是反模式，必须禁止。**
+
+### 为什么是绝对规则
+
+- **Actions 配额是有限共享资源**。单次跨平台 release（macOS × N + Windows + Linux）通常消耗 300-600 配额分钟，macOS runner 是 10× 费率，贡献最大。
+- **错把 release 当测试的隐性成本**：
+  - GitHub Release 一旦创建（即使是 draft）就被计入资产历史，污染 release feed
+  - tag 推送后 commit 被人看到会误以为已发布
+  - 自动更新用户可能在升级检查时看到不稳定的版本
+  - 配额快速耗尽，真正紧急的 hotfix 反而跑不动 CI
+- **过去能这么干不代表现在该这么干**。GitHub 免费配额调整、macOS runner 涨价都发生过，使用模式必须随成本变化更新。
+
+### 禁止的反模式
+
+| 反模式 | 表现 | 为什么错 |
+|--------|------|----------|
+| **把 tag 当 smoke test** | "我改了一行，打个 tag 看看 CI 跑不跑得通" | 一次 release 吃掉 300+ 配额分钟，5 次测试 = 一月配额清零 |
+| **用 release 验证构建产物** | "我想看 .dmg 长什么样，必须跑 release" | 应该用专门的 preview / draft build workflow（见下） |
+| **同一天 / 24h 内发多个 patch** | v0.3.16 / 17 / 18 一天内连发，各是同一个 bug 的连续小修 | 全部攒到下次一起发，成本立省 60%+ |
+| **draft release 当"先跑一次试试"** | "我先 draft release 看 artifact 行不行" | draft 一样跑完整 CI，一样消耗配额，一样污染 release 历史 |
+| **单平台 dry-run 验构建** | "先跑 Linux dry-run 看看，不发全平台" | dry-run 一样消耗 CI 时间，开了口子就停不下来；改走 preview workflow |
+| **小改动发 patch** | "我改了 typo / 改了一行文档，必须 vX.Y.Z" | 纯 typo / 文档小改 / 单文件改动不构成发版理由，合并到下个有实质内容的版本 |
+| **"已经打 tag 了，跑都跑了"** | "v0.3.22 tag 已经推上去了，CI 反正也在跑" | "已经做了"不是继续做的理由；记录这次浪费并阻止下次重复 |
+
+### 正确做法
+
+**A. 想验证 CI 跑不跑得通 / 看构建产物长什么样？**
+
+- 用 `pull_request` 触发的 preview workflow（可只跑 ubuntu / 单一平台，几十分钟完成）
+- 或在 main 上用 `workflow_dispatch` 手动触发 dry build，**不**触发 release workflow
+- 这两种都不消耗 macOS 高倍率配额，artifact 只对自己可见
+
+**B. 真的有用户能拿到的修复要发？**
+
+- 等攒到 3-5 个实质修复（bug fix / feature / 性能 / 兼容性改动）
+- 一次性打 tag 发版，**只发一次**
+- CHANGELOG 必须有结构化条目，不能空
+- 距离上次 tag 至少 24 小时（防止把单个 hotfix 拆成多个 patch）
+
+### 打 tag 前强制自检
+
+打 tag 之前，**先回答五个问题**：
+
+1. 这是给真实用户装的，还是只给自己看 artifact？
+2. CHANGELOG 已经有结构化的本版本条目（不是空、不是单行 typo）？
+3. 距上次 tag ≥ 24 小时？
+4. 本次累计有 ≥ 1 个实质修复 / 特性 / 改动（纯文档 / typo / 单行 README 修改不算）？
+5. 如果上述任一不满足：能合并到下次发版吗？
+
+**任一答"否"或"不知道"：不要打 tag，改走 preview workflow 或合并到下次。**
+
+### 借口反驳表
+
+| 借口 | 现实 |
+|------|------|
+| "我就看一眼，tag 一下马上回滚" | tag 推送已经触发了完整 CI，回滚 tag 不能退款 Actions 分钟 |
+| "用户催着要" | 用户不知道你的 Actions 配额，告诉 ta 合并到明天的成本和时间，让 ta 选 |
+| "反正之前都这么干" | 之前能用不等于现在合理，这正是 91% 配额的直接成因 |
+| "只有 release workflow 跑完整矩阵" | 加一个 preview workflow（成本是 release 的 10-20%），不要用 release 凑合 |
+| "draft release 不算正式发布" | draft 一样跑完整 CI、一样消耗配额、一样污染 release 历史 |
+| "小改动发 patch 很常见" | 纯 typo / 文档 / 单行不构成发版理由，合并到下个有实质内容的版本 |
+| "我已经打 tag 了，跑都跑了" | "已经做了"不是继续做的理由；记录这次浪费，阻止下次重复 |
+| "单平台先 dry-run 一下" | dry-run 一样消耗 CI 时间，开了口子就停不下来；改走 preview workflow |
+| "这次不一样，这次真的需要发" | SemVer 的 patch 版本本来就允许累积；下次发版不是更优解吗 |
+
+### 红灯（看到任一就停）
+
+- 同一工作日内想发第二次 tag
+- 距上次 tag < 24 小时
+- CHANGELOG 没有本版本的结构化条目就想发
+- 想用 "draft release" 当测试
+- 想用 `workflow_dispatch` 触发 release workflow 当测试（应该触发独立的 preview workflow）
+- 本次只有 typo / 文档 / 单行修改
+- macOS 10× 配额当月累计用量已 > 70%
+
+**以上任一出现：删掉 tag（如已打），改走 preview workflow 或合并到下次。**
 
 ## 发布流程
 
@@ -146,7 +225,15 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 
 ## 检查清单
 
-发布完成后确认：
+**打 tag 前（强制）** — 见上文 `## ⚠️ Release ≠ 测试 — 强制约束`：
+
+- [ ] 这是给真实用户装的，不是只给自己看 artifact
+- [ ] CHANGELOG 有结构化的本版本条目
+- [ ] 距上次 tag ≥ 24 小时
+- [ ] 本次有 ≥ 1 个实质修复 / 特性 / 改动
+- [ ] 已通过五问自检
+
+**发布完成后确认：**
 
 - [ ] 所有平台 / 矩阵构建全部成功
 - [ ] GitHub Release 产物完整
