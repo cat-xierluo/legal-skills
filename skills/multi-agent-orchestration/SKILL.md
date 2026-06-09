@@ -104,6 +104,7 @@ PM 代理纪律：
 8. **PM 巡检**：优先查看 `.claude/agent-sessions/<session-id>/STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md`、git status、commit/PR 状态；Claude 官方 Agent Teams 则优先读取 `~/.claude/teams/<team>/` 和 `~/.claude/tasks/<team>/`，`claude agents --json`、tmux pane 或 agent view 作为兜底观察。发现偏题、阻塞、范围扩大或无阶段性提交时介入。
 9. **PM 验收而非代写**：PM 对 worker 结果做范围检查、测试复核和 review；发现问题优先发纠偏指令或派给 reviewer/另一个 worker，不默认自己改业务代码。
 10. **收口**：worker 提交并开 PR 后，PM 做范围检查、触发 review、按 `git-workflow` 合并和清理。
+11. **PM 必做实操验证**：任何软件功能修改（不论 L1/L2/L3）worker 声称"完成"前，PM 必须真正启动 dev server（Vite dev / Tauri dev / 对应入口），用 Playwright MCP 或截图实际打开应用、点击按钮、切换 tab、调整窗口、输入文本，把验证证据（DOM 测量、关键断言、截图）写入 `goal-contract.md` 或对应 `RESULT.md`。仅靠 typecheck / 单测 / lint / build 全部通过就宣称"完成"是不充分的——这些只证明"代码能编译"，不证明"功能真的能用"。
 
 ### 3.1 Wave-Based Orchestration
 
