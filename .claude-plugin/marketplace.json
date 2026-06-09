@@ -326,25 +326,14 @@
     },
     {
       "name": "skill-architect",
-      "description": "技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持同步 Frontmatter 发布规范",
-      "version": "1.4.0",
+      "description": "技能架构师与格式审查一体化工具，整合官方 skill-creator 流程、原 skill-lint 合规检查和发布规范同步",
+      "version": "1.6.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
       "source": "skills/skill-architect",
       "category": "developer-tools",
       "tags": ["工具", "Skill开发", "skill", "architecture"]
-    },
-    {
-      "name": "skill-lint",
-      "description": "Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范审查 Frontmatter、版本同步和文档一致性",
-      "version": "1.4.0",
-      "author": {
-        "name": "杨卫薪律师（微信ywxlaw）"
-      },
-      "source": "skills/skill-lint",
-      "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "validation"]
     },
     {
       "name": "repo-research",
@@ -378,6 +367,17 @@
       "source": "skills/minimax-image-understand",
       "category": "productivity",
       "tags": ["工具", "搜索", "minimax", "image"]
+    },
+    {
+      "name": "transcription-corrector",
+      "description": "转录稿纠错与轻度二次优化：按用户词典纠正同音字、英文专有名称大小写与拼写（人名、产品名、术语），可选合并同一发言人连续发言、清理口癖、规范标点。支持 TXT 自动转 Markdown。原始文件保持不动",
+      "version": "1.0.7",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/transcription-corrector",
+      "category": "productivity",
+      "tags": ["工具", "校对", "ASR", "transcription", "correction"]
     }
   ]
 }
