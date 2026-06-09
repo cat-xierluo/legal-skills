@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import datetime
+import fcntl
 import json
 import re
 import shutil
@@ -50,6 +52,7 @@ DEFAULT_RETRY_BASE_DELAY = 1.0
 DEFAULT_RETRY_MAX_DELAY = 30.0
 PADDLE_JOB_MODEL = "PP-OCRv5"
 PADDLE_VL_MODEL = "PaddleOCR-VL-1.5"
+VL_MODEL_PREFIX = "PaddleOCR-VL"
 ASYNC_PATH_MARKER = "/api/v2/ocr/jobs"
 
 VL_TEXT_LABELS = {
@@ -329,6 +332,9 @@ class PaddleOCRBackend:
             first_non_empty(env, "PADDLEOCR_MODEL", "PADDLE_MODEL", "PADDLEOCR_API_MODEL")
             or (PADDLE_VL_MODEL if self.protocol == "async" else "layout-parsing")
         )
+        fallback_raw = first_non_empty(env, "PADDLEOCR_MODEL_FALLBACK") or ""
+        self.model_fallback = [m.strip() for m in fallback_raw.split(",") if m.strip()]
+        self._fallback_index = 0
         self.doc_orientation = parse_bool(
             first_non_empty(env, "PADDLEOCR_DOC_ORIENTATION", "PADDLEOCR_VL_DOC_ORIENTATION"),
             default=self.protocol == "async",
@@ -383,6 +389,14 @@ class PaddleOCRBackend:
         self.retry_max_delay = parse_positive_float(
             first_non_empty(env, "PADDLEOCR_RETRY_MAX_DELAY", "LEGAL_OCR_RETRY_MAX_DELAY"),
             default=DEFAULT_RETRY_MAX_DELAY,
+        )
+        self.daily_page_limit = parse_positive_int(
+            first_non_empty(env, "PADDLEOCR_DAILY_PAGE_LIMIT"),
+            default=0,
+        )
+        self._daily_usage_file = Path(
+            first_non_empty(env, "PADDLEOCR_DAILY_USAGE_FILE")
+            or "/tmp/paddleocr_daily_usage.json",
         )
 
     def _make_request(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -462,8 +476,11 @@ class PaddleOCRBackend:
         payload["visualize"] = False
         return self._make_request(payload)
 
+    def _is_vl_model(self) -> bool:
+        return self.model.startswith(VL_MODEL_PREFIX)
+
     def _build_async_optional_payload(self) -> dict[str, Any]:
-        if self.model == PADDLE_VL_MODEL:
+        if self._is_vl_model():
             payload: dict[str, Any] = {
                 "useDocOrientationClassify": self.doc_orientation,
                 "useDocUnwarping": self.doc_unwarp,
@@ -590,8 +607,90 @@ class PaddleOCRBackend:
                     raise RuntimeError(f"PaddleOCR 异步任务轮询超时（{self.poll_timeout}s）：{last_payload}")
                 time.sleep(max(1, self.poll_interval))
 
+    def _with_daily_lock(self, fn):
+        self._daily_usage_file.parent.mkdir(parents=True, exist_ok=True)
+        fd = open(self._daily_usage_file, "a+")  # noqa: SIM115
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            fd.seek(0)
+            fn(fd)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+
+    def _read_daily_usage(self) -> dict[str, Any]:
+        try:
+            text = self._daily_usage_file.read_text(encoding="utf-8")
+            data = json.loads(text)
+            if data.get("date") == datetime.date.today().isoformat():
+                return data
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
+        return {"date": datetime.date.today().isoformat(), "models": {}}
+
+    def _write_daily_usage(self, data: dict[str, Any]) -> None:
+        tmp = self._daily_usage_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(self._daily_usage_file)
+
+    def _add_daily_pages(self, model: str, pages: int) -> None:
+        if not self.daily_page_limit or pages <= 0:
+            return
+
+        def _update(fd):
+            fd.seek(0)
+            raw = fd.read()
+            try:
+                data = json.loads(raw) if raw.strip() else {}
+            except json.JSONDecodeError:
+                data = {}
+            if data.get("date") != datetime.date.today().isoformat():
+                data = {"date": datetime.date.today().isoformat(), "models": {}}
+            models = data.setdefault("models", {})
+            models[model] = models.get(model, 0) + pages
+            fd.seek(0)
+            fd.truncate()
+            fd.write(json.dumps(data, ensure_ascii=False))
+
+        self._with_daily_lock(_update)
+
+    def _check_daily_limit(self) -> None:
+        if not self.daily_page_limit:
+            return
+        data = self._read_daily_usage()
+        used = data.get("models", {}).get(self.model, 0)
+        if used >= self.daily_page_limit:
+            raise RuntimeError(
+                f"PaddleOCR 每日限额：模型 {self.model} 今日已用 {used} 页，"
+                f"限额 {self.daily_page_limit} 页（PADDLEOCR_DAILY_PAGE_LIMIT）"
+            )
+
+    def _is_quota_error(self, exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return ("429" in msg or "403" in msg or "quota" in msg
+                or "频率过高" in msg or "配额" in msg or "limit" in msg
+                or "每日页数上限" in msg)
+
+    def _try_model_fallback(self) -> bool:
+        if self._fallback_index >= len(self.model_fallback):
+            return False
+        new_model = self.model_fallback[self._fallback_index]
+        self._fallback_index += 1
+        print(f"[fallback] 模型回退：{self.model} → {new_model}")
+        self.model = new_model
+        return True
+
     def _parse_document_async(self, input_path: Path, backend_dir: Path, label: str) -> dict[str, Any]:
-        job_id, submit_meta = self._submit_async_job(input_path)
+        self._check_daily_limit()
+        try:
+            job_id, submit_meta = self._submit_async_job(input_path)
+        except RuntimeError as exc:
+            if self._is_quota_error(exc) and self._try_model_fallback():
+                return self._parse_document_async(input_path, backend_dir, label)
+            raise
+        jsonl_text = self._poll_async_job(job_id)
+        estimated_pages = get_pdf_page_count(input_path) or 1
+        self._add_daily_pages(self.model, estimated_pages)
         jsonl_text = self._poll_async_job(job_id)
         text, images, objects = parse_jsonl_markdown(jsonl_text)
         if not text.strip():

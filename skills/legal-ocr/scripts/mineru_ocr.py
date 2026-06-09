@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+import fcntl
 import json
 import re
 import shutil
@@ -190,6 +192,14 @@ class MinerUBackend:
             first_non_empty(env, "MINERU_RETRY_MAX_DELAY", "LEGAL_OCR_RETRY_MAX_DELAY"),
             default=DEFAULT_RETRY_MAX_DELAY,
         )
+        self.daily_page_limit = parse_positive_int(
+            first_non_empty(env, "MINERU_DAILY_PAGE_LIMIT"),
+            default=0,
+        )
+        self._daily_usage_file = Path(
+            first_non_empty(env, "MINERU_DAILY_USAGE_FILE")
+            or "/tmp/mineru_daily_usage.json",
+        )
 
     def _log_retry(self, attempt: int, exc: BaseException, delay: float) -> None:
         print(
@@ -235,6 +245,57 @@ class MinerUBackend:
 
     def _effective_page_ranges(self, options: ConvertOptions) -> str:
         return normalize_page_ranges(options.pages or self.page_ranges)
+
+    def _with_daily_lock(self, fn):
+        self._daily_usage_file.parent.mkdir(parents=True, exist_ok=True)
+        fd = open(self._daily_usage_file, "a+")  # noqa: SIM115
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            fd.seek(0)
+            fn(fd)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+
+    def _read_daily_usage(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self._daily_usage_file.read_text(encoding="utf-8"))
+            if data.get("date") == datetime.date.today().isoformat():
+                return data
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
+        return {"date": datetime.date.today().isoformat(), "pages": 0}
+
+    def _add_daily_pages(self, pages: int) -> None:
+        if not self.daily_page_limit or pages <= 0:
+            return
+
+        def _update(fd):
+            fd.seek(0)
+            raw = fd.read()
+            try:
+                data = json.loads(raw) if raw.strip() else {}
+            except json.JSONDecodeError:
+                data = {}
+            if data.get("date") != datetime.date.today().isoformat():
+                data = {"date": datetime.date.today().isoformat(), "pages": 0}
+            data["pages"] = data.get("pages", 0) + pages
+            fd.seek(0)
+            fd.truncate()
+            fd.write(json.dumps(data, ensure_ascii=False))
+
+        self._with_daily_lock(_update)
+
+    def _check_daily_limit(self) -> None:
+        if not self.daily_page_limit:
+            return
+        data = self._read_daily_usage()
+        used = data.get("pages", 0)
+        if used >= self.daily_page_limit:
+            raise RuntimeError(
+                f"MinerU 每日限额：今日已用 {used} 页，"
+                f"限额 {self.daily_page_limit} 页（MINERU_DAILY_PAGE_LIMIT）"
+            )
 
     def _check_light_limits(self, source: SourceInfo) -> None:
         if source.source_type == "remote_html_url":
@@ -284,6 +345,8 @@ class MinerUBackend:
             raise RuntimeError("MinerU 完成，但 Markdown 为空")
         images = _copy_local_image_assets(extraction_root, assets_dir)
         images.extend(_download_remote_markdown_images(markdown, assets_dir))
+        page_count = metadata.get("total_pages") or metadata.get("page_count") or 1
+        self._add_daily_pages(int(page_count))
         return BackendResult(
             backend=self.name,
             mode=mode,
@@ -748,6 +811,7 @@ class MinerUBackend:
         if source.source_type == "local_file" and source.suffix not in MINERU_LOCAL_SUFFIXES:
             raise ValueError(f"MinerU 不支持该本地文件类型：{source.suffix}")
 
+        self._check_daily_limit()
         mode = self._mode()
         if mode == "token":
             if source.source_type == "local_file":
