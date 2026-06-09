@@ -38,7 +38,7 @@
 1. 区分“格式合规”与“任务效果”
 2. 让复杂法律 Skill 具备可比较、可复测、可迭代的评估基础
 3. 将人工复核从“每次从头判断”变成“按统一标准审看”
-4. 为后续的 `skill-architect`、`skill-lint`、专门 eval skill 提供统一语言
+4. 为后续的 `skill-architect` 创建/审查模式、专门 eval skill 提供统一语言
 
 ## 3. 基本判断
 
@@ -330,7 +330,7 @@
 
 执行者：
 
-- `skill-lint`
+- `skill-architect` 审查模式
 
 ### 8.2 第二步：基础验证
 
@@ -387,7 +387,7 @@
 
 ## 10. 三类工具的职责分工
 
-### 10.1 `skill-architect`
+### 10.1 `skill-architect` 创建模式
 
 后续负责回答：
 
@@ -395,7 +395,7 @@
 - 哪类 Skill 需要哪种强度的 benchmark 与人工复核
 - 如何定义输入、输出、边界、Hard Fail
 
-### 10.2 `skill-lint`
+### 10.2 `skill-architect` 审查模式
 
 后续负责回答：
 
@@ -456,9 +456,8 @@
 当前阶段最合理的策略不是立刻重写所有 Skill，而是：
 
 1. 先统一评估语言
-2. 再决定如何改 `skill-architect`
-3. 再决定如何改 `skill-lint`
-4. 最后逐个 Skill 补 benchmark、rubric 和回归机制
+2. 再决定如何把评估检查项并入 `skill-architect` 的创建与审查模式
+3. 最后逐个 Skill 补 benchmark、rubric 和回归机制
 
 换句话说，下一步不是问“这个 Skill 写得像不像”，而是问：
 
@@ -468,7 +467,7 @@
 
 - 补一份 benchmark case 文件模板
 - 补一份人工复核记录模板
-- 为 `skill-lint` 设计“评估基础设施检查”章节
+- 为 `skill-architect` 审查模式设计“评估基础设施检查”章节
 - 为现有专门 eval skill 定义统一输入/输出契约
 - 选 2 个法律 Skill 做第一轮试点评估
 
