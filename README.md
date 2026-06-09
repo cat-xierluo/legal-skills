@@ -9,11 +9,12 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-47-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-48-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
 [![GitHub stars](https://img.shields.io/github/stars/cat-xierluo/legal-skills?style=social)](https://github.com/cat-xierluo/legal-skills/stargazers)
+[![Homepage](https://img.shields.io/badge/Homepage-Website-2563EB)](https://cat-xierluo.github.io/legal-skills/)
 
 </div>
 
@@ -49,15 +50,12 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-08 | 新上传   | [transcription-corrector](skills/transcription-corrector/) | v1.0.7 | 新增转录稿纠错与轻度二次优化：按用户词典纠正同音字与英文专有名称漂移，可选合并同发言人发言和清理标点；与 course-generator 共用词典格式，原始文件保持不动 |
+| 2026-06-08 | 更新     | [skill-architect](skills/skill-architect/) | v1.6.1 | 整合原 skill-lint 审查入口，统一创建、编辑、打包、格式审查和审计报告能力，并调整为 MIT 许可证；新增 5.11-5.17 共 7 条格式审查规则 |
 | 2026-06-06 | 新上传   | [legal-case-analysis](skills/legal-case-analysis/) | v0.2.6 | 新增通用法律分析技能：多场景分析支架与法律任务的前置分析引擎，不要求每次都生成报告 |
 | 2026-06-06 | 更新     | [git-workflow](skills/git-workflow/) | v1.4.1 | 精简触发描述，同步公开索引版本，并将文档体检改为项目配置后才执行的可选扩展 |
 | 2026-06-05 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.3.3 | 修复 PaddleOCR 大 PDF 同步结果缺页误判：返回页数不足时直接失败，并记录预期页数与实际返回页数 |
 | 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
-| 2026-06-02 | 更新     | [video-screenshot](skills/video-screenshot/) | v0.3.2 | 新增复合复核候选帧模式：保存被算法丢弃的候选帧和原因，支持多模态模型回查漏帧风险 |
-| 2026-06-01 | 正式发布 | [cross-agent-coordination](skills/cross-agent-coordination/) | v1.0.0 | 跨平台 Agent 任务协调：围绕项目任务源分配任务、标记归属、能力路由和交接上下文 |
-| 2026-06-01 | 正式发布 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.8.2 | 本地多 Agent 执行编排：worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口 |
-| 2026-05-31 | 新上传   | [img2pdf](skills/img2pdf/)                     | v1.0.0 | 图片/PDF 页面按 N 张/页编排为标准化 A4 PDF，适用于法律证据材料整理 |
-| 2026-05-31 | 新上传   | [pdf-processor](skills/pdf-processor/)             | v2.6.8 | PDF 处理工具：扫描件预处理、OCR 双层 PDF、页码添加、合并、解密、水印去除和压缩 |
 
 </details>
 
@@ -361,6 +359,14 @@
 <td></td>
 </tr>
 <tr>
+<td><a href="skills/transcription-corrector/"><strong>transcription-corrector</strong></a></td>
+<td>工具·校对</td>
+<td style="word-break:break-word">ASR 转录稿纠错与轻度优化工具：按用户词典统一替换同音字与英文专有名称漂移，可选合并同发言人发言、清理标点和切分段落；与 course-generator 共用词典格式，原始文件保持不动并双写归档</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.7</td>
+<td></td>
+</tr>
+<tr>
 <td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
 <td>工具·视频处理</td>
 <td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
@@ -470,9 +476,9 @@
 <tr>
 <td><a href="skills/skill-architect/"><strong>skill-architect</strong></a></td>
 <td>工具·Skill开发</td>
-<td style="word-break:break-word">技能架构师向导与审查工具，整合官方 skill-creator 流程与内置合规检查，支持创建新技能、编辑现有技能、打包技能、同步 Frontmatter 发布规范和审查格式合规性</td>
-<td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.4.0</td>
+<td style="word-break:break-word">技能架构师与格式审查一体化工具，整合官方 skill-creator 流程、原 skill-lint 合规检查和发布规范同步，支持创建新技能、编辑现有技能、打包技能、格式审查和技能审计报告</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.6.1</td>
 <td></td>
 </tr>
 <tr>
@@ -524,14 +530,6 @@
 <td></td>
 </tr>
 <tr>
-<td><a href="skills/skill-lint/"><strong>skill-lint</strong></a></td>
-<td>工具·Skill开发</td>
-<td style="word-break:break-word">Skill 格式审查工具，基于 docs/SKILL-DEV-GUIDE.md 规范对技能进行合规性审计，检查 Frontmatter 与版本同步、文档与代码一致性，识别冗余内容，生成技能审计报告</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.0</td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/clawhub-sync/"><strong>clawhub-sync</strong></a></td>
 <td>工具·发布</td>
 <td style="word-break:break-word">将本地开发的 Skills 批量同步到 ClawHub 平台，支持智能 .gitignore 过滤、白名单控制、增量同步</td>
@@ -575,12 +573,13 @@
 
 > 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
 
-## 📦 已归档技能
+## 📦 已归档/已合并技能
 
-以下技能已停止维护，移至 `archive/` 目录（不随仓库发布）：
+以下技能已停止维护、归档或合并到其他技能，不再作为独立 Skill 随仓库发布：
 
 | 技能 | 版本 | 说明 |
 |------|------|------|
+| skill-lint | v1.4.0 | 已合并到 [skill-architect](skills/skill-architect/) v1.5.0，由其审查模式承接格式合规检查能力 |
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill |
 | minimax-web-search | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill |
 | repo-research | v0.7.0 | 功能较简单，不再维护 |
