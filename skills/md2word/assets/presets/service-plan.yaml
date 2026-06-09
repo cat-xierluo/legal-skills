@@ -1,11 +1,29 @@
 name: "法律服务方案格式"
-description: "法律服务方案专用格式，含分层配色方案、表格交替行、高亮方案标注"
+description: "法律服务方案专用格式，含封面页、分层配色方案、表格交替行、高亮方案标注"
 
 # 配色方案 - 仅3色
 colors:
-  primary: "#1E3A5F"       # 深蓝 - 表头、一级标题
-  accent: "#927F76"        # 律所棕 - 高亮（方案名、价格）
+  primary: "#5A4E48"       # 深蓝 - 表头、一级标题
+  accent: "#5A4E48"        # 深棕 - 高亮（方案名、价格）
   alt: "#F5F0ED"           # 浅棕 - 交替行背景
+
+# 封面页
+cover_page:
+  enabled: true
+  title:
+    font: "微软雅黑"
+    size: 22
+    bold: true
+    color: "#5A4E48"
+    alignment: center
+    space_before_pt: 120
+    space_after_pt: 36
+  meta:
+    font: "仿宋"
+    size: 12
+    color: "#333333"
+    alignment: center
+    line_spacing: 1.8
 
 # 页面设置
 page:
@@ -34,7 +52,7 @@ titles:
     size: 16         # 小二
     bold: true
     align: "center"
-    color: "#1E3A5F"
+    color: "#5A4E48"
     font: "微软雅黑"
     space_before: 16
     space_after: 12
@@ -42,7 +60,7 @@ titles:
     size: 14         # 小三
     bold: true
     align: "left"
-    color: "#1E3A5F"
+    color: "#5A4E48"
     font: "微软雅黑"
     space_before: 14
     space_after: 10
@@ -51,7 +69,7 @@ titles:
     size: 12         # 小四
     bold: true
     align: "left"
-    color: "#1E3A5F"
+    color: "#5A4E48"
     font: "仿宋"
     space_before: 12
     space_after: 8
@@ -103,7 +121,7 @@ table:
     size: 12
     bold: true
     color: "#FFFFFF"
-    background_color: "#1E3A5F"
+    background_color: "#5A4E48"
 
   row_even:
     background_color: "#FFFFFF"
@@ -124,13 +142,13 @@ highlight:
     font: "微软雅黑"
     size: 12
     bold: true
-    color: "#927F76"
+    color: "#5A4E48"
 
   price:
     font: "仿宋"
     size: 12
     bold: true
-    color: "#927F76"
+    color: "#5A4E48"
 
 # 代码块
 code_block:
@@ -150,8 +168,8 @@ inline_code:
 # 引用块
 quote:
   background_color: "#F5F0ED"
-  left_indent_inches: 0.2
-  font_size: 9
+  left_indent_inches: 0
+  font_size: 12
   line_spacing: 1.5
 
 # 图片

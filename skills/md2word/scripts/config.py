@@ -224,7 +224,7 @@ def get_fallback_config() -> Config:
         'quote': {
             'background_color': '#EAEAEA',
             'left_indent_inches': 0.2,
-            'font_size': 9,
+            'font_size': 12,
             'line_spacing': 1.5,
         },
         'math': {

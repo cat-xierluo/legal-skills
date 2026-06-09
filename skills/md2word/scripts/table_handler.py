@@ -505,8 +505,15 @@ def _populate_cell_with_rich_content(cell_element, word_cell, md_file_path=None)
             src = img_tag.get('src', '')
             img_width = img_tag.get('width', '130')
             if src and md_file_path:
-                md_dir = os.path.dirname(os.path.abspath(md_file_path))
-                img_path = os.path.join(md_dir, src)
+                # 支持 file:// 协议、绝对路径和相对路径
+                if src.startswith('file://'):
+                    from urllib.parse import unquote
+                    img_path = unquote(src[7:])  # 去掉 file:// 前缀，保留 /path
+                elif os.path.isabs(src):
+                    img_path = src
+                else:
+                    md_dir = os.path.dirname(os.path.abspath(md_file_path))
+                    img_path = os.path.join(md_dir, src)
                 if os.path.exists(img_path):
                     try:
                         # 在当前段落插入图片
@@ -514,8 +521,11 @@ def _populate_cell_with_rich_content(cell_element, word_cell, md_file_path=None)
                         run.add_picture(img_path, width=Cm(int(img_width) / 96 * 2.54))
                         # 图片后换新段落
                         current_paragraph = word_cell.add_paragraph()
+                        print(f"✅ 表格图片插入成功: {os.path.basename(img_path)}")
                     except Exception as e:
                         print(f"⚠️  表格图片插入失败: {e}")
+                else:
+                    print(f"⚠️  表格图片路径不存在: {img_path}")
         return
 
     # 处理文本内容：逐行解析，支持 Markdown 粗体、HTML 内联标签、列表等

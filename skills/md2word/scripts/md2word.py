@@ -204,7 +204,7 @@ def add_quote(doc, text):
     
     bg_color = quote_config.get('background_color', '#EAEAEA')
     left_indent = quote_config.get('left_indent_inches', 0.2)
-    font_size = quote_config.get('font_size', 9)
+    font_size = quote_config.get('font_size', 12)
     line_spacing = quote_config.get('line_spacing', 1.5)
     
     for line_index, line in enumerate(lines):
@@ -496,6 +496,7 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     lines = content.split('\n')
     has_body_before_first_h2 = False
     has_seen_h2 = False
+    has_seen_first_hr = False  # 追踪第一个分隔符
     i = 0
     
     while i < len(lines):
@@ -603,7 +604,19 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                         has_body_before_first_h2 = True
             i += 1
             continue
-        
+
+        # 分割线（必须在 Markdown 表格检测之前，避免 --- 被误判为表格分隔行）
+        if line in ['---', '***', '___']:
+            if not has_seen_first_hr:
+                # 第一个分隔符视为封面与正文的分界，渲染为分页符
+                has_seen_first_hr = True
+                doc.add_page_break()
+                print("✅ 封面分隔符 → 分页符")
+            else:
+                add_horizontal_line(doc)
+            i += 1
+            continue
+
         # Markdown 表格
         if is_table_row(line):
             table_lines = []
@@ -615,14 +628,6 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
                 print(f"✅ 处理Markdown表格: {len(table_lines)} 行")
-            continue
-        
-        # 分割线
-        if line in ['---', '***', '___']:
-            add_horizontal_line(doc)
-            if not has_seen_h2:
-                has_body_before_first_h2 = True
-            i += 1
             continue
         
         # 任务列表

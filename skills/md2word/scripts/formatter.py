@@ -298,7 +298,7 @@ def set_run_format_with_styles(run, formats, title_level=0, is_quote=False):
         font.bold = title_config.get('bold', True)
     elif is_quote:
         # 引用使用较小字号
-        font.size = Pt(9)
+        font.size = Pt(12)
         font.bold = False
     else:
         font.size = Pt(font_config.get('size', 12))
