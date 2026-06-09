@@ -25,6 +25,10 @@ templates/
 !skills/legal-ocr/TASKS.md
 !skills/git-workflow/DECISIONS.md
 !skills/git-workflow/TASKS.md
+!skills/skill-architect/DECISIONS.md
+!skills/skill-architect/TASKS.md
+!skills/transcription-corrector/DECISIONS.md
+!skills/transcription-corrector/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 

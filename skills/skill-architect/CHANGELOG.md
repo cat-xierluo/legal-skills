@@ -2,6 +2,47 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.6.1] - 2026-06-08
+
+### 新增
+
+- **5.17 description 内容边界（只写三件事）**：description 仅含"功能 / 触发 / 不触发"三件事；不含归档 / 输出位置 / 写入策略 / 内部步骤 / 开关状态 / 默认行为 / 产物结构 / 副作用 / 双写策略。附"三件事内容定义表 + 反例表 + 判定命令 + 反例案例"。来源：用户在 transcription-corrector v1.0.7 描述优化中明确"description 只需写功能 / 怎么触发 / 不被什么触发，归档和运作方式不该写在里面"。
+
+## [1.6.0] - 2026-06-08
+
+### 新增
+
+- **5.11 references/ 子文件 frontmatter 限制**：references/*.md 不应携带 frontmatter，元数据唯一来源 = SKILL.md frontmatter；附 bash 扫描命令。来源：审查 transcription-corrector v1.0.6 时发现 `references/skill_overview.md` 携带冗余 frontmatter。v1.0.7 已删除该文件并拆分为 `scope.md` / `config-decoupling.md`（新建时即不带 frontmatter）。
+- **5.12 references/ 命名与 SKILL.md 的概念边界**：文件名应反映"具体职责"（first_use / correction_patterns / boundaries）而非通用词（overview / guide）；避免与 SKILL.md 概念重叠的命名（skill_overview / skill_intro）。
+- **5.13 公开内容清洁度**：SKILL.md / references/ / CHANGELOG.md / config/*.example.* / DECISIONS.md / TASKS.md 不应出现其他 skill 名 / 私有工作流项目名 / 自家平台名；涉及上下游协作时用通用描述。附反例 + grep 命令。
+- **5.14 Git 跟踪状态**：skill 已注册到 marketplace.json / README 时必须 `git ls-files` 验证入仓；整个 skill 目录若 `git status` 显示 `??` 视为严重问题。附三条判定命令。来源：审查 transcription-corrector v1.0.6 时发现整个 skill 目录未跟踪但已注册到 marketplace.json。
+- **5.15 CHANGELOG 历史一致性**：v1.0.0 段落应仅描述"v1.0.0 当下"能力；后续版本能力增量在对应版本段落补写，不得"穿越"。来源：审查 transcription-corrector v1.0.0 段落描述了 v1.0.6 才完整的能力。
+- **5.16 archive/ 内部一致性**：archive/ 子目录数 ≥ 5 时 STABLE.md / DECISIONS.md 应记录保留策略；STABLE.md 中 `[DEC-XXX]` 引用须与 DECISIONS.md 一致；STABLE.md 内数据自洽。
+
+### 改进
+
+- **5.2 Frontmatter description 长度收紧**：保留 ≤ 1024 字符硬约束，新增"最佳 ≤ 250 字符"建议项（信息密度 vs 长描述的反例）。
+- **5.2 references/ 子文件无 frontmatter**：明确为强制项（✅/❌），与 5.11 互为引用。
+
+## [1.5.0] - 2026-06-07
+
+### 新增
+
+- 整合原 `skill-lint` 的独立审查入口：用户提到 `skill-lint` 时，统一按 `skill-architect` 的审查模式处理。
+- 新增技能级 `TASKS.md` 与 `DECISIONS.md`，记录本次整合任务、取舍和完成状态。
+
+### 改进
+
+- 更新 `SKILL.md` frontmatter 与正文，将创建、编辑、打包、格式审查、版本同步和审计报告统一为一个技能入口。
+- 将许可证调整为 MIT，避免整合后收窄原 `skill-lint` 审查能力的使用权限，并对齐通用工具类 Skill 的许可证规范。
+- 同步公开索引和 Marketplace 元数据，将 `skill-lint` 从独立发布项下线。
+
+### 文档完善
+
+- 更新开发指南中的格式合规检查入口，将 `skill-lint` 改为 `skill-architect` 审查模式。
+- 更新 README 的已归档/已合并技能说明，补充 `skill-lint` 合并去向。
+- 保留历史版本中对 `skill-lint` 的引用，作为当时版本演进记录。
+
 ## [1.4.0] - 2026-05-20
 
 ### 改进
