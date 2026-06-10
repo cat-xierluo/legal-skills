@@ -35,6 +35,7 @@ from formatter import (
     set_run_format_with_styles,
     set_paragraph_format,
     parse_alignment,
+    extract_alignment,
     hex_to_rgb,
 )
 from table_handler import (
@@ -349,19 +350,30 @@ def add_page_number(doc):
 # 工具函数
 # ============================================================================
 
-def find_template_file():
-    """查找模板文件"""
+def find_template_file(auto: bool = False):
+    """查找 `assets/templates/` 下的 .docx 模板。
+
+    参数:
+        auto: 默认 False → 返回 None（不自动加载模板，避免律所 logo 等视觉元素
+              出现在用户没显式要求的 docx 里）。CLI 用 `--auto-template` 显式开启
+              时传 True，才会真正去扫描 templates 目录。
+
+    返回:
+        模板文件绝对路径；找不到时返回 None。
+    """
+    if not auto:
+        return None
     script_dir = os.path.dirname(os.path.abspath(__file__))
     skill_dir = os.path.dirname(script_dir)
     templates_dir = os.path.join(skill_dir, 'assets', 'templates')
     docx_files = glob.glob(os.path.join(templates_dir, "*.docx"))
-    
+
     for docx_file in docx_files:
         filename = os.path.basename(docx_file).lower()
         if not any(keyword in filename for keyword in ['完整版', 'test', 'output', '输出']):
             if '模板' in filename or 'template' in filename:
                 return docx_file
-    
+
     return docx_files[0] if docx_files else None
 
 
@@ -563,8 +575,8 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                     has_body_before_first_h2 = True
             continue
 
-        # HTML 块级元素（<div>, <p> 等）
-        html_block_match = re.match(r'^<(div|p)\b([^>]*)>', line, re.IGNORECASE)
+        # HTML 块级元素（<div>, <p>, <span>, <section>, <article> 等）
+        html_block_match = re.match(r'^<(div|p|span|section|article)\b([^>]*)>', line, re.IGNORECASE)
         if html_block_match:
             tag_name = html_block_match.group(1).lower()
             close_tag = f'</{tag_name}>'
@@ -585,11 +597,8 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             element = soup_html.find(tag_name)
             if element:
                 text_content = element.get_text(separator='\n').strip()
-                # 解析 text-align 样式
-                align_style = re.search(r'text-align\s*:\s*(left|center|right|justify)', style_attr, re.IGNORECASE)
-                alignment = None
-                if align_style:
-                    alignment = parse_alignment(align_style.group(1).lower())
+                # 解析对齐（CSS text-align 或 HTML align 属性）
+                alignment = extract_alignment(style_attr)
                 # 处理块内每一行
                 for text_line in text_content.split('\n'):
                     text_line = text_line.strip()
@@ -765,6 +774,8 @@ def main():
     parser.add_argument('--config', '-c', help='使用自定义配置文件 (YAML格式)')
     parser.add_argument('--list-presets', action='store_true', help='列出所有可用的预设配置')
     parser.add_argument('--template', '-t', help='Word模板文件路径')
+    parser.add_argument('--auto-template', action='store_true',
+                        help='自动从 assets/templates/ 加载第一个 .docx 模板（默认关闭，避免律所 logo 等视觉元素出现在用户没显式要求的 docx 里）')
     parser.add_argument('--landscape', action='store_true', help='使用横向页面（Landscape）')
     
     args = parser.parse_args()
@@ -817,7 +828,10 @@ def main():
         return
     
     output_file = args.output if args.output else generate_output_filename(md_file)
-    template_file = args.template if args.template else find_template_file()
+    if args.template:
+        template_file = args.template
+    else:
+        template_file = find_template_file(auto=args.auto_template)
 
     if args.landscape:
         if 'page' not in config._config:

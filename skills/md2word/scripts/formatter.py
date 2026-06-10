@@ -367,12 +367,12 @@ def set_paragraph_format(paragraph, title_level=0, is_quote=False):
         paragraph_format.space_after = Pt(title_config.get('space_after', 9))
         paragraph_format.first_line_indent = Pt(title_config.get('indent', 24))
     elif title_level == 4:
-        # 四级标题配置
+        # 四级标题配置（与 H1-H3 对齐读 titles.level4，未配置时回退 0）
         title_config = config.get('titles.level4', {})
         align_str = title_config.get('align', 'justify')
         paragraph_format.alignment = parse_alignment(align_str)
-        paragraph_format.space_before = Pt(0)
-        paragraph_format.space_after = Pt(0)
+        paragraph_format.space_before = Pt(title_config.get('space_before', 0))
+        paragraph_format.space_after = Pt(title_config.get('space_after', 0))
         paragraph_format.first_line_indent = Pt(title_config.get('indent', 24))
     elif is_quote:
         # 引用：两端对齐，无首行缩进
@@ -405,6 +405,39 @@ def parse_alignment(align_str: str):
         return WD_PARAGRAPH_ALIGNMENT.RIGHT
     else:  # justify
         return WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+
+
+_ALIGN_VALUES = r'(left|center|right|justify)'
+# 支持的引号字符：ASCII 双/单 + 中文双开/闭 + 中文单开/闭
+_QUOTE_CHARS = r'["\'“”‘’]'
+
+
+def extract_alignment(style_attr: str):
+    """从 HTML 标签属性串中解析对齐方式。
+
+    支持写法（按优先级）：
+    1. CSS  ``text-align: <value>`` （如 ``<div style="text-align: right">``）
+    2. HTML ``align="<value>"`` / ``align=<value>`` / ``align='<value>'`` （ASCII 与中文引号均支持）
+
+    大小写不敏感。未命中时返回 ``None``，调用方保持默认行为。
+    """
+    if not style_attr:
+        return None
+    # 1. CSS text-align
+    m = re.search(r'text-align\s*:\s*' + _ALIGN_VALUES, style_attr, re.IGNORECASE)
+    if m:
+        return parse_alignment(m.group(1).lower())
+    # 2. HTML align 属性
+    # 要求 align 前面不是 word 字符也不是 `-`（避免误匹配 data-align / xalign），
+    # 且 value 之后必须是引号、空白或字符串末尾（避免误匹配 justifyAll）
+    m = re.search(
+        r'(?<![\w-])align\s*=\s*' + _QUOTE_CHARS + '?' + _ALIGN_VALUES + r'(?:' + _QUOTE_CHARS + r'|\s|$)',
+        style_attr,
+        re.IGNORECASE,
+    )
+    if m:
+        return parse_alignment(m.group(1).lower())
+    return None
 
 
 def hex_to_rgb(hex_color: str):

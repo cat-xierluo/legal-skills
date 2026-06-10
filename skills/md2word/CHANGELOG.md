@@ -6,18 +6,46 @@
 
 ### Word 格式微调（持续优化中）
 
-**已完成：**
-- 表格中含格式文本（加粗等）的单元格未居中 → 修复 `table_handler.py` 中 `parse_table_cell_formatting()` 缺少段落对齐设置
-- 二级/三级标题段前段后硬编码为 0pt → 改为读取配置值（legal 预设为 9pt，约 0.5 行）
-- 二级标题前自动插入空段落导致多余空行 → 移除该逻辑，间距由标题样式的 space_before/space_after 控制
+**已完成（已并入 [1.0.3]）：**
+- 表格中含格式文本（加粗等）的单元格未居中
+- 二级/三级标题段前段后硬编码为 0pt
+- 二级标题前自动插入空段落
 
-**待观察/后续可能调整：**
+**仍待观察/后续可能调整：**
 - 四级标题的 space_before/space_after 同样硬编码为 0pt，是否需要读取配置
 - 正文段落的段前段后间距（目前为 0pt），实际使用中是否需要微调
 - 表格列宽自动分配策略，当前列宽是否合理
 - 列表项的行距和缩进，与正文的协调性
 
-## [0.5.0] - 2026-04-11
+## [1.0.3] - 2026-06-09
+
+### 改进
+- **HTML/CSS 对齐语法扩展**：原脚本只支持 CSS `style="text-align: ..."` 写法，现扩展为同时支持 HTML `align` 属性
+  - 支持 `<div align="right">` / `<div align=right>`（无引号） / `<div align='right'>` 三种写法
+  - 大小写不敏感：`<DIV ALIGN="RIGHT">` 也能正确识别
+  - 支持中文引号（`align="right"`）
+  - 块级标签范围扩展到 `span` / `section` / `article`（原仅 `div` / `p`）
+  - 重构对齐解析为独立函数 `formatter.extract_alignment(style_attr)`，便于后续任务（HTML 样式扩展）复用
+- **模板加载行为变更（默认关闭）**：`find_template_file()` 默认返回 `None`（`auto=False`），解决"默认 docx 带了律所 logo 页眉"问题
+  - 根因：原 `find_template_file()` 默认会从 `assets/templates/` 自动加载第一个 `.docx` 模板，模板 header 含律所 logo
+  - 用户显式需要时可用 `--template path/to/file.docx` 或新加的 `--auto-template` 开关
+  - **`create_word_document(template_file=None)` 显式不加载模板的行为保持不变**（向后兼容）
+
+### 修复
+- **表格中含格式文本（加粗等）的单元格未居中**：修复 `table_handler.py:274` `parse_table_cell_formatting()` 缺少段落对齐设置（沿用 [1.0.2] 之后的格式微调）
+- **二级/三级标题段前段后硬编码为 0pt**：改为读取 `formatter.py:358-359, 366-367` 中 `titles.levelN` 配置值（legal 预设为 9pt）
+- **二级标题前自动插入空段落导致多余空行**：移除该逻辑，间距由标题样式的 `space_before` / `space_after` 控制
+- **四级标题段前段后硬编码为 0pt**：`formatter.py:374-375` 改为读取 `titles.level4` 配置（与 H1-H3 对齐），未配置时回退 0pt。用户调 `legal.yaml` 的 `titles.level4.space_before/space_after` 现在生效。
+
+### 技术优化
+- **测试基建**：建立 `pytest` 测试体系（`pytest.ini` + `tests/conftest.py` + `.venv/`），含 6 个端到端测试（`tests/test_html_alignment.py`）、17 个 `extract_alignment` 单元测试（`tests/test_extract_alignment.py`）、5 个模板加载测试（`tests/test_template_loading.py`）、4 个标题间距测试（`tests/test_heading_spacing.py`），全部 32 个测试通过
+- **解析函数抽离**：将 HTML 对齐解析从主流程 `md2word.py` 抽到 `formatter.extract_alignment`，明确职责边界
+- **依赖防护**：`.venv/` 包含 `pytest` / `python-docx` / `beautifulsoup4` / `Pillow` / `PyYAML`，完整可运行环境
+
+### 文档完善
+- **TASKS.md 结构化**：从简单 bullet 升级为结构化任务卡片（字段：优先级 / 关联文件 / 估计工作量 / 依赖 / 背景 / 验收）；原 8 条任务按"已完成/高/中/调研/远期"5 档重排，所有远期任务补全详细说明
+
+## [1.0.2] - 2026-04-11
 
 ### 新增
 - **外部URL图片支持**: 支持从 Markdown 中的外部 URL 图片自动下载并嵌入 Word 文档
@@ -30,7 +58,7 @@
 ### 文档完善
 - 2026-04-22：按独立仓库 README 新规范重写首页，补充典型场景、预设范围、可执行安装命令、使用示例、边界说明、关键文件入口、Legal Skills 关联项目导流、作者联系入口和微信二维码
 
-## [0.4.1] - 2026-02-11
+## [1.0.1] - 2026-02-11
 
 ### 修复
 
@@ -38,9 +66,9 @@
 
   - 将 `get_config()` 和 `set_config()` 函数从 `md2word.py` 移至 `config.py`
   - 这些函数被所有子模块（formatter.py, table_handler.py, chart_handler.py）依赖，应属于配置管理模块
-  - 修复了 v0.4.0 重构时引入的循环导入问题
+  - 修复了 v1.0.0 重构时引入的循环导入问题
 
-## [0.4.0] - 2026-02-10
+## [1.0.0] - 2026-02-10
 
 ### 重构
 - **脚本模块化拆分**: 将 1955 行的单文件脚本拆分为 4 个模块
