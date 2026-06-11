@@ -1,5 +1,58 @@
 # 变更日志
 
+## [1.5.1] - 2026-06-10
+
+### 新增
+- **consolidate 项目子目录组织**（用户反馈：一次研究任务会产生多个 .json + .md，平铺在 archive/ 不便按项目查找）
+  - 新增 `--project "<name>"` 参数（可选，默认从 `--title` 自动 slugify）
+  - consolidate 创建 `archive/<project>/` 子目录作为"项目包"
+  - per-call .md 从 CWD **复制**到项目子目录（CWD 保留工作副本）
+  - per-call .json 从 `archive/` 根目录**移动**到项目子目录（archive 根保持清爽，不重复）
+  - 法律检索报告双写：`archive/<project>/<ts>_法律检索报告.md`（项目包）+ CWD（工作副本）
+  - 报告末尾"项目包"标识：`> 项目包：archive/<project>/`
+  - 重复运行 consolidate 同一项目：idempotent，文件已在子目录则跳过移动/复制
+
+### 改进
+- consolidate 报告头增加项目包路径引用，方便用户定位
+
+## [1.5.0] - 2026-06-10
+
+### 新增
+- **session-level 法律检索报告**（`consolidate` 子命令）：把多次检索的 per-call 报告汇总成一份标准结构的法律检索报告
+  - 调用方显式传 `--case` / `--strategy` / `--analysis` 三个核心字段（AI 填）
+  - `--include` 必填，逗号分隔的查询子串，明确指定"本次任务范围"（不取最近 N 条）
+  - 6 节标准结构：案情简介 / 检索目的与问题 / 检索思路与方法 / 检索结果（4.1 法条 + 4.2 案例 + 4.3 法规 + 4.4 其他，按 endpoint 自动分组）/ 分析与判断 / 检索结论
+  - 附录"本次检索明细"表格：时间/检索词/接口/积分/[md](CWD相对路径)·[json](file://绝对路径)
+  - 4.4 其他：自动收纳未归类到法律/案例/法规的检索（如 hall-detect、enterprise-*）
+  - `--purpose` 可选：不传则基于检索词自动推断
+  - `--conclusion` 可选：不传则提示"详见第五节"
+  - `--output` 可选：默认 `<cwd>/<ts>_法律检索报告.md`
+
+### 改进
+- per-call .md 报告元信息移除"检索接口"字段（用户反馈：API 端点太技术化，不属于报告内容）
+
+### 架构关系
+- per-call .md = 检索明细（数据底稿，每次检索自动写 archive + CWD）
+- session 报告 = 主交付物（法律检索报告，按任务粒度由 AI 触发 consolidate 生成）
+- session 报告的"检索明细表"链接到 per-call .md，整套形成完整溯源链
+
+## [1.4.0] - 2026-06-10
+
+### 新增
+- 检索报告 .md 自动落盘：每次实际检索（cache miss 时）落盘两份结构化 Markdown 报告
+  - `archive/<ts>_<query>.md`：与 archive JSON 配对，技能内部归档
+  - `<CWD>/<ts>_<query>.md`：用户运行命令时的工作目录副本，方便附卷/分享
+- 报告模板：元信息（时间/接口/关键词/积分/原始数据路径/工作目录副本）+ 检索结果（与 stdout 一致）+ 引用来源（按类型分组）+ 数据来源声明
+- 复用现有 5 个 formatter（format_law_results / format_case_results / format_regulation_results / format_enterprise_results / format_hall_detect_results）填充"检索结果"段，零行为变化
+- 新增 `--no-report` 全局 flag：跳过 .md 报告生成（archive + CWD），仅写 archive JSON
+- 新增 `--no-cwd-report` 全局 flag：仅跳过 CWD 副本，仍写 archive/ 报告
+- 调用结束后 footer 追加报告路径提示（archive + CWD，CWD 失败时不显示第二行）
+- CWD 副本写入失败时 stderr 警告但不中断（archive 副本是主落点，best-effort 容错）
+
+### 改进
+- `api_post` / `api_get` 返回值从 2-tuple 改为 3-tuple `(result, cached, archive_path)`，让 cmd_* 能拿到 archive 路径以驱动报告生成
+- 5 个有自定义成本的端点（hall-detect 50、enterprise-search 1、enterprise-base 10、enterprise-summary 10、enterprise-list 5/10）准确把成本传递到报告元信息头
+
 ## [1.3.4] - 2026-05-27
 
 ### 新增

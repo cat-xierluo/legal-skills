@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.4"
+version: "1.5.1"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -315,6 +315,12 @@ AI 在完成检索后，应**主动告知用户检索结果摘要和积分消耗
 5. **法条语义检索已含全文**：不需要额外补充
 6. **用自然语言与用户沟通**：不要向用户暴露命令行语法，AI 后台执行脚本即可
 7. **补充检索取决于策略**：balanced/economical 一次只用一种检索模式；aggressive 对重要问题自动同时运行语义+关键词检索，合并去重
+8. **检索报告 .md 自动落盘**：每次实际检索（cache miss 时）会同时落盘两份结构化 Markdown 报告，可作为内容底稿附卷/分享：
+   - `archive/<ts>_<query>.md`：与 archive JSON 配对，技能内部归档，便于复盘
+   - `<CWD>/<ts>_<query>.md`：用户当前工作目录副本（运行命令时所在的文件夹），便于直接放入案件文件夹
+   - 报告内容包含元信息（时间/接口/关键词/积分/原始数据路径/工作目录副本）+ 检索结果 + 引用来源
+   - footer 会输出报告路径，AI 应在对话中告知用户（特别是用户需要"内容底稿"时）
+   - 默认双副本写入；可用 `--no-report` 完全跳过、`--no-cwd-report` 仅跳过工作目录副本
 
 ## 检索模式选择
 
@@ -551,6 +557,8 @@ scripts/yd-run enterprise-list --type brand --uscc "9144030071526726XG"
 
 每次 API 调用的完整结果会自动归档到 `archive/` 目录。当用户提到"之前查过什么"时，AI 可以直接从归档中提取历史结果，无需重新调用 API。
 
+`archive/<ts>_<query>.json` 是机器可读版（response/query/fingerprint/source_urls 全字段），`archive/<ts>_<query>.md` 是同次检索的人类可读版（结构化报告），两者一一对应。同一份报告的副本会同步写入用户运行命令时的工作目录（`<CWD>/<ts>_<query>.md`），便于附卷。
+
 浏览历史记录：
 
 ```bash
@@ -565,6 +573,76 @@ scripts/yd-run archive-list --keyword "正当防卫"
 ```bash
 scripts/yd-run raw /open/law_vector_search "正当防卫" --extra '{"fatiao_filter":{"sxx":["现行有效"]}}'
 ```
+
+## 法律检索报告（consolidate）
+
+多次检索之后，把 per-call 报告汇总成一份完整的法律检索报告。**这是律师/客户看的交付物**，per-call 报告是数据底稿。
+
+### 6 节标准结构
+
+1. **案情简介** — 当事人、争议焦点、当前阶段
+2. **检索目的与问题** — 本次检索要回答的法律问题
+3. **检索思路与方法** — 关键词组合、筛选条件、检索顺序
+4. **检索结果** — 按 endpoint 自动分组：4.1 法律依据 / 4.2 司法案例 / 4.3 行政法规 / 4.4 其他
+5. **分析与判断** — 法条对本案的适用、案例的参考价值
+6. **检索结论** — 一句话定性 + 风险点 + 后续建议
+
+末尾附"本次检索明细"表格，链接到每条 per-call 报告。
+
+### 调用方式
+
+```bash
+scripts/yd-run consolidate \
+    --title "张某买卖合同违约金调整" \
+    --project "case-2024-zhangsan" \
+    --case "案情：..." \
+    --strategy "检索思路：..." \
+    --analysis "分析与判断：..." \
+    --include "违约金,高空抛物"
+```
+
+- `--case` / `--strategy` / `--analysis` 必填：AI 显式传本次任务的案情/思路/判断
+- `--include` 必填：逗号分隔的查询子串，明确指定"本次任务范围"（不取最近 N 条）
+  - 匹配规则：CWD 中所有符合 `<8位时间戳>_<6位时间戳>_<查询>.md` 命名的 .md 文件，文件名包含任一子串即被纳入
+- `--project` 可选：项目子目录名。默认从 `--title` slugify（如 "张某买卖合同违约金调整" → "张某买卖合同违约金调整"）。用于 `archive/<project>/` 归类
+- `--title` / `--purpose` / `--conclusion` / `--output` 可选
+  - `--purpose` 不传则基于检索词自动生成
+  - `--conclusion` 不传则提示"详见第五节"
+  - `--output` 默认同时写 CWD 和 `archive/<project>/`；指定则只写到指定路径
+
+### 项目子目录组织
+
+consolidate 会把这次任务的所有文件归类到 `archive/<project>/` 子目录：
+
+```
+archive/
+  case-2024-zhangsan/
+    20260610_192031_货款逾期违约金_司法实践.json   ← 从 archive/ 根目录移入
+    20260610_192031_货款逾期违约金_司法实践.md    ← 从 CWD 复制
+    20260610_192032_逾期付款_违约金_调整.json
+    20260610_192032_逾期付款_违约金_调整.md
+    20260610_192058_法律检索报告.md                ← 主交付物
+```
+
+- **.md 复制**（CWD 保留工作副本）：用户的工作目录不被破坏
+- **.json 移动**（archive 根目录已清理）：避免根目录重复积累，扁平区只放"in-flight 暂存"
+- 重复运行 consolidate 同一项目：idempotent，文件已在子目录则跳过
+
+### 与 per-call 报告的关系
+
+```
+多次 yd-run 检索（自动写 per-call .md 到 archive + CWD）
+       ↓
+AI 汇总判断后调 consolidate --project "case-x"
+       ↓
+创建 archive/case-x/，.md 复制进来，.json 移进来，法律检索报告写进去
+       ↓
+CWD 也有法律检索报告副本，per-call .md 仍在 CWD（工作副本）
+       ↓
+报告末尾的"检索明细表"链接回 archive/case-x/ 里的副本
+```
+
+per-call .md 是数据底稿，可独立查看；session 报告是主交付物，附案情/思路/判断；项目子目录是组织容器。
 
 ## 版本更新
 

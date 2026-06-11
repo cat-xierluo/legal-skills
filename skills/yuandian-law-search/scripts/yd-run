@@ -34,9 +34,12 @@ ENV_ARGS=(
 [[ -n "${YD_API_KEY:-}" ]] && ENV_ARGS+=("YD_API_KEY=$YD_API_KEY")
 [[ -n "${YD_STRATEGY:-}" ]] && ENV_ARGS+=("YD_STRATEGY=$YD_STRATEGY")
 
+# 捕获用户原始工作目录（cd 之前），透传给 Python 用于报告副本落点
+USER_CWD="$(pwd)"
+
 if [[ "${1:-}" == "--network-check" ]]; then
   cd "$SKILL_DIR"
-  env -i "${ENV_ARGS[@]}" "$PYTHON" - <<'PY'
+  env -i "${ENV_ARGS[@]}" "YD_USER_CWD=$USER_CWD" "$PYTHON" - <<'PY'
 import socket
 import ssl
 import sys
@@ -60,4 +63,4 @@ PY
 fi
 
 cd "$SKILL_DIR"
-exec env -i "${ENV_ARGS[@]}" "$PYTHON" "$SCRIPT_DIR/yd_search.py" "$@"
+exec env -i "${ENV_ARGS[@]}" "YD_USER_CWD=$USER_CWD" "$PYTHON" "$SCRIPT_DIR/yd_search.py" "$@"

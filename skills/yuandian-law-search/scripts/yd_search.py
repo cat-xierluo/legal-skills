@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.3.3"
+CURRENT_VERSION = "1.5.1"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -277,12 +278,125 @@ def _archive_save(endpoint, payload, response):
     return str(path)
 
 
+def _archive_write_report(archive_path, formatted_text, cost_label,
+                          no_report=False, no_cwd_report=False):
+    """根据归档记录 + 格式化文本生成结构化 .md 报告，落盘到 archive + 用户工作目录。
+
+    Args:
+        archive_path: archive/*.json 的绝对路径（cache hit 时为 None，函数直接返回）
+        formatted_text: cmd_* 已经格式化好的 Markdown 内容（即 stdout 主输出）
+        cost_label: 例如 "10 积分" / "50 积分"
+        no_report: True 时整个跳过（不写 archive / 也不写 CWD）
+        no_cwd_report: True 时只跳过 CWD 副本
+
+    Returns:
+        (archive_md_path, cwd_md_path_or_None)
+        - archive 路径永远写入（如果 archive_path 有效且 no_report=False）
+        - CWD 路径 best-effort，失败 stderr 警告并返回 None
+    """
+    if no_report or not archive_path:
+        return None, None
+
+    json_path = Path(archive_path)
+    record = json.loads(json_path.read_text("utf-8"))
+
+    # 提取 query_summary: 从文件名扣除时间戳部分 (e.g. "20260419_152314_民法典.json" -> "民法典")
+    stem = json_path.stem
+    parts = stem.split("_", 2)
+    query_summary = parts[2] if len(parts) >= 3 else stem
+
+    # 提取 query 关键字段，拼成可读字符串
+    query_str_parts = []
+    for key in ("query", "keyword", "qw", "fgmc", "name", "ah"):
+        val = record.get("query", {}).get(key, "")
+        if val:
+            query_str_parts.append(f"{key}={val}")
+    query_keyword_str = " · ".join(query_str_parts) if query_str_parts else "(无关键词)"
+
+    # 引用来源：按 type 分组
+    source_urls = record.get("source_urls", []) or []
+    if source_urls:
+        grouped = {}
+        for su in source_urls:
+            grouped.setdefault(su.get("type", "其他"), []).append(su)
+        sources_lines = []
+        for type_name, items in grouped.items():
+            sources_lines.append(f"**{type_name}（{len(items)}）**")
+            sources_lines.append("")
+            for su in items:
+                title = su.get("title", "")
+                url = su.get("url", "")
+                if url:
+                    sources_lines.append(f"- [{title}]({url})")
+                else:
+                    sources_lines.append(f"- {title}")
+            sources_lines.append("")
+        sources_md = "\n".join(sources_lines).rstrip()
+    else:
+        sources_md = "_（本次检索无引用来源）_"
+
+    # 拼接完整报告
+    timestamp = record.get("timestamp", "")
+    md_content = (
+        f"# 检索报告 · {query_summary}\n"
+        f"\n"
+        f"## 元信息\n"
+        f"\n"
+        f"- 检索时间：{timestamp}\n"
+        f"- 检索关键词：{query_keyword_str}\n"
+        f"- 积分消耗：{cost_label}\n"
+        f"- 报告 ID：`{stem}`\n"
+        f"- 原始数据：`archive/{json_path.name}`\n"
+        f"- 数据来源：元典开放平台 open.chineselaw.com\n"
+        f"\n"
+        f"## 检索结果\n"
+        f"\n"
+        f"{formatted_text.rstrip()}\n"
+        f"\n"
+        f"## 引用来源\n"
+        f"\n"
+        f"{sources_md}\n"
+        f"\n"
+        f"---\n"
+        f"\n"
+        f"*本报告由 yuandian-law-search 技能自动生成于 {timestamp}*\n"
+    )
+
+    # 1) archive 副本（必写）
+    archive_md_path = json_path.with_suffix(".md")
+    archive_md_path.write_text(md_content, "utf-8")
+
+    # 2) CWD 副本（best-effort，--no-cwd-report 时跳过）
+    #    优先用 yd-run 透传的用户原始工作目录（YD_USER_CWD），
+    #    退而求其次用 Python 当前工作目录（Path.cwd() 在 yd-run 内部会被 cd 改成 skill 根）
+    cwd_md_str = None
+    if not no_cwd_report:
+        cwd_target = os.environ.get("YD_USER_CWD") or str(Path.cwd())
+        try:
+            cwd_md_path = Path(cwd_target) / archive_md_path.name
+            cwd_md_path.write_text(md_content, "utf-8")
+            cwd_md_str = str(cwd_md_path)
+        except OSError as e:
+            print(
+                f"警告：报告副本写入工作目录失败 ({e})，仅 archive/ 副本可用",
+                file=sys.stderr,
+            )
+
+    return str(archive_md_path), cwd_md_str
+
+
 def api_post(endpoint, body, use_cache=True):
-    """发送 POST 请求到元典开放平台 API（支持归档查重）"""
+    """发送 POST 请求到元典开放平台 API（支持归档查重）
+
+    Returns:
+        (result, cached, archive_path) 三元组
+        - cached: True 表示命中 archive，未发起实际请求
+        - archive_path: cache miss 时为新落盘的 .json 路径；cache hit 时为 None
+    """
     if use_cache:
         cached, _ = _archive_lookup(endpoint, body)
         if cached is not None:
-            return cached, True
+            return cached, True, None
 
     url = f"{BASE_URL}{endpoint}"
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -297,17 +411,22 @@ def api_post(endpoint, body, use_cache=True):
         print(f"网络错误: {e.reason}", file=sys.stderr)
         sys.exit(1)
 
+    archive_path = None
     if use_cache:
-        _archive_save(endpoint, body, result)
-    return result, False
+        archive_path = _archive_save(endpoint, body, result)
+    return result, False, archive_path
 
 
 def api_get(endpoint, params=None, use_cache=True):
-    """发送 GET 请求到元典开放平台 API（支持归档查重）"""
+    """发送 GET 请求到元典开放平台 API（支持归档查重）
+
+    Returns:
+        (result, cached, archive_path) 三元组（语义同 api_post）
+    """
     if use_cache:
         cached, _ = _archive_lookup(endpoint, params or {})
         if cached is not None:
-            return cached, True
+            return cached, True, None
 
     url = f"{BASE_URL}{endpoint}"
     if params:
@@ -329,9 +448,10 @@ def api_get(endpoint, params=None, use_cache=True):
         print(f"网络错误: {e.reason}", file=sys.stderr)
         sys.exit(1)
 
+    archive_path = None
     if use_cache:
-        _archive_save(endpoint, params or {}, result)
-    return result, False
+        archive_path = _archive_save(endpoint, params or {}, result)
+    return result, False, archive_path
 
 
 # ── 格式化输出 ──────────────────────────────────────────────
@@ -655,9 +775,22 @@ def format_hall_detect_results(data):
 # ── 子命令处理 ──────────────────────────────────────────────
 
 
-def _print_footer():
-    """打印调用成本提示"""
-    print(f"\n--- {COST_PER_CALL} ---")
+def _print_footer(cost_label=None, archive_md=None, cwd_md=None):
+    """打印调用成本提示 + 报告路径
+
+    Args:
+        cost_label: 自定义成本字符串（默认走 COST_PER_CALL）
+        archive_md: archive 报告路径
+        cwd_md: 工作目录报告路径（写入失败时为 None）
+    """
+    if cost_label is None:
+        cost_label = COST_PER_CALL
+    print(f"\n--- {cost_label} ---")
+    if archive_md:
+        print(f"报告已保存：")
+        print(f"  - archive: {archive_md}")
+        if cwd_md:
+            print(f"  - 工作目录: {cwd_md}")
 
 
 # ── 版本检测（委托给 updater 模块）──────────────────────
@@ -690,10 +823,15 @@ def cmd_search(args):
     if fatiao_filter:
         body["fatiao_filter"] = fatiao_filter
 
-    result, cached = api_post("/open/law_vector_search", body)
+    result, cached, archive_path = api_post("/open/law_vector_search", body)
     data = result.get("extra", {}).get("fatiao", result.get("data", []))
-    print(format_law_results(data))
-    _print_footer()
+    formatted = format_law_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_keyword(args):
@@ -726,10 +864,15 @@ def cmd_keyword(args):
             body[date_field] = val
     if args.top_k:
         body["top_k"] = args.top_k
-    result, cached = api_post("/open/rh_ft_search", body)
+    result, cached, archive_path = api_post("/open/rh_ft_search", body)
     data = result.get("data", [])
-    print(format_law_results(data))
-    _print_footer()
+    formatted = format_law_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_detail(args):
@@ -737,11 +880,16 @@ def cmd_detail(args):
     body = {"fgmc": args.query, "ftnum": args.ft_name}
     if args.reference_date:
         body["refer_date"] = args.reference_date
-    result, cached = api_post("/open/rh_ft_detail", body)
+    result, cached, archive_path = api_post("/open/rh_ft_detail", body)
     data = result.get("data")
     items = [data] if isinstance(data, dict) else (data or [])
-    print(format_law_results(items))
-    _print_footer()
+    formatted = format_law_results(items)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_case(args):
@@ -796,14 +944,22 @@ def cmd_case(args):
     else:
         endpoint = "/open/rh_ptal_search"
 
-    result, cached = api_post(endpoint, body)
+    result, cached, archive_path = api_post(endpoint, body)
     raw = result.get("data")
     data = raw.get("lst", []) if isinstance(raw, dict) else (raw or [])
     total = raw.get("total") if isinstance(raw, dict) else None
+    header = ""
     if total is not None:
-        print(f"共 {total} 条结果，显示前 {len(data)} 条\n")
-    print(format_case_results(data))
-    _print_footer()
+        header = f"共 {total} 条结果，显示前 {len(data)} 条\n"
+        print(header, end="")
+    formatted = format_case_results(data)
+    print(formatted)
+    report_body = (header + formatted) if header else formatted
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, report_body, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_case_semantic(args):
@@ -833,10 +989,15 @@ def cmd_case_semantic(args):
     if wenshu_filter:
         body["wenshu_filter"] = wenshu_filter
 
-    result, cached = api_post("/open/case_vector_search", body)
+    result, cached, archive_path = api_post("/open/case_vector_search", body)
     data = result.get("extra", {}).get("wenshu", result.get("data", []))
-    print(format_case_results(data))
-    _print_footer()
+    formatted = format_case_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_case_detail(args):
@@ -849,13 +1010,21 @@ def cmd_case_detail(args):
     if not args.id and not args.ah:
         print("错误：请提供 --id 或 --ah 参数", file=sys.stderr)
         sys.exit(1)
-    result, cached = api_get("/open/rh_case_details", params)
+    result, cached, archive_path = api_get("/open/rh_case_details", params)
     data = result.get("data", {})
     if isinstance(data, list):
-        print(format_case_results(data))
+        formatted = format_case_results(data)
     elif isinstance(data, dict):
-        print(format_case_results([data]))
-    _print_footer()
+        formatted = format_case_results([data])
+    else:
+        formatted = ""
+    if formatted:
+        print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_regulation(args):
@@ -889,10 +1058,15 @@ def cmd_regulation(args):
             body[date_field] = val
     if args.top_k:
         body["top_k"] = args.top_k
-    result, cached = api_post("/open/rh_fg_search", body)
+    result, cached, archive_path = api_post("/open/rh_fg_search", body)
     data = result.get("data", [])
-    print(format_regulation_results(data))
-    _print_footer()
+    formatted = format_regulation_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_regulation_detail(args):
@@ -907,13 +1081,21 @@ def cmd_regulation_detail(args):
         sys.exit(1)
     if args.reference_date:
         body["refer_date"] = args.reference_date
-    result, cached = api_post("/open/rh_fg_detail", body)
+    result, cached, archive_path = api_post("/open/rh_fg_detail", body)
     data = result.get("data", {})
     if isinstance(data, list):
-        print(format_regulation_results(data))
+        formatted = format_regulation_results(data)
     elif isinstance(data, dict):
-        print(format_regulation_results([data]))
-    _print_footer()
+        formatted = format_regulation_results([data])
+    else:
+        formatted = ""
+    if formatted:
+        print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise(args):
@@ -921,14 +1103,22 @@ def cmd_enterprise(args):
     params = {"name": args.query}
     if args.num:
         params["num"] = args.num
-    result, cached = api_get("/open/rh_company_info", params)
+    result, cached, archive_path = api_get("/open/rh_company_info", params)
     raw = result.get("data")
     data = raw.get("lst", []) if isinstance(raw, dict) else (raw or [])
     total = raw.get("total") if isinstance(raw, dict) else None
+    header = ""
     if total is not None:
-        print(f"共 {total} 条结果，显示前 {len(data)} 条\n")
-    print(format_enterprise_results(data))
-    _print_footer()
+        header = f"共 {total} 条结果，显示前 {len(data)} 条\n"
+        print(header, end="")
+    formatted = format_enterprise_results(data)
+    print(formatted)
+    report_body = (header + formatted) if header else formatted
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, report_body, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise_detail(args):
@@ -941,10 +1131,15 @@ def cmd_enterprise_detail(args):
     if not params:
         print("错误：请提供 --id 或 --credit-code 参数", file=sys.stderr)
         sys.exit(1)
-    result, cached = api_get("/open/rh_company_detail", params)
+    result, cached, archive_path = api_get("/open/rh_company_detail", params)
     data = result.get("data", {})
-    print(format_enterprise_results(data))
-    _print_footer()
+    formatted = format_enterprise_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_archive_list(args):
@@ -1047,11 +1242,16 @@ def cmd_raw(args):
     use_cache = not args.no_cache
     if args.get:
         params = body
-        result, cached = api_get(endpoint, params, use_cache=use_cache)
+        result, cached, archive_path = api_get(endpoint, params, use_cache=use_cache)
     else:
-        result, cached = api_post(endpoint, body, use_cache=use_cache)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    _print_footer()
+        result, cached, archive_path = api_post(endpoint, body, use_cache=use_cache)
+    formatted = json.dumps(result, ensure_ascii=False, indent=2)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, f"```json\n{formatted}\n```\n", "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_strategy(args):
@@ -1065,11 +1265,15 @@ def cmd_hall_detect(args):
     """法规/法条/案例幻觉检测"""
     body = {"text": args.text}
     use_cache = not args.no_cache
-    result, cached = api_post("/open/hall_detect", body, use_cache=use_cache)
+    result, cached, archive_path = api_post("/open/hall_detect", body, use_cache=use_cache)
     data = result.get("data", result)
-    print(format_hall_detect_results(data))
-    cost = 50
-    print(f"\n--- 本次调用消耗 {cost} 积分 ---")
+    formatted = format_hall_detect_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "50 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(cost_label="本次调用消耗 50 积分", archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise_search(args):
@@ -1078,12 +1282,17 @@ def cmd_enterprise_search(args):
     if args.top_k:
         params["top_k"] = args.top_k
     use_cache = not args.no_cache
-    result, cached = api_get("/open/rh_enterpriseSearch", params, use_cache=use_cache)
+    result, cached, archive_path = api_get("/open/rh_enterpriseSearch", params, use_cache=use_cache)
     data = result.get("data", [])
     if isinstance(data, dict):
         data = [data]
-    print(format_enterprise_results(data))
-    print(f"\n--- 本次调用消耗 1 积分 ---")
+    formatted = format_enterprise_results(data)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, formatted, "1 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(cost_label="本次调用消耗 1 积分", archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise_base(args):
@@ -1097,10 +1306,15 @@ def cmd_enterprise_base(args):
         print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
         sys.exit(1)
     use_cache = not args.no_cache
-    result, cached = api_get("/open/rh_enterpriseBaseInfo", params, use_cache=use_cache)
+    result, cached, archive_path = api_get("/open/rh_enterpriseBaseInfo", params, use_cache=use_cache)
     data = result.get("data", {})
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"\n--- 本次调用消耗 10 积分 ---")
+    formatted = json.dumps(data, ensure_ascii=False, indent=2)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, f"```json\n{formatted}\n```\n", "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise_summary(args):
@@ -1114,10 +1328,15 @@ def cmd_enterprise_summary(args):
         print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
         sys.exit(1)
     use_cache = not args.no_cache
-    result, cached = api_post("/open/rh_enterpriseAggregationSummary", body, use_cache=use_cache)
+    result, cached, archive_path = api_post("/open/rh_enterpriseAggregationSummary", body, use_cache=use_cache)
     data = result.get("data", {})
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"\n--- 本次调用消耗 10 积分 ---")
+    formatted = json.dumps(data, ensure_ascii=False, indent=2)
+    print(formatted)
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, f"```json\n{formatted}\n```\n", "10 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md)
 
 
 def cmd_enterprise_list(args):
@@ -1137,22 +1356,345 @@ def cmd_enterprise_list(args):
         print("错误：请提供 --id 或 --uscc 参数", file=sys.stderr)
         sys.exit(1)
     use_cache = not args.no_cache
-    result, cached = api_get(endpoint, params, use_cache=use_cache)
+    result, cached, archive_path = api_get(endpoint, params, use_cache=use_cache)
 
     raw = result.get("data")
     if isinstance(raw, dict):
         items = raw.get("lst", raw.get("list", []))
         total = raw.get("total")
+        header = ""
         if total is not None:
-            print(f"共 {total} 条结果，当前第 {args.page} 页（每页 {args.size} 条）\n")
+            header = f"共 {total} 条结果，当前第 {args.page} 页（每页 {args.size} 条）\n"
+            print(header, end="")
     elif isinstance(raw, list):
         items = raw
+        header = ""
     else:
         items = []
+        header = ""
 
-    print(format_enterprise_list_results(items, label))
+    formatted = format_enterprise_list_results(items, label)
+    print(formatted)
     cost = 10 if args.type in ("writ-agg", "writ-list") else 5
-    print(f"\n--- 本次调用消耗 {cost} 积分 ---")
+    cost_label = f"本次调用消耗 {cost} 积分"
+    report_body = (header + formatted) if header else formatted
+    archive_md, cwd_md = _archive_write_report(
+        archive_path, report_body, f"{cost} 积分",
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+    _print_footer(cost_label=cost_label, archive_md=archive_md, cwd_md=cwd_md)
+
+
+# ── consolidate：把多次 per-call 报告汇总成法律检索报告 ──────────────
+
+
+ENDPOINT_CATEGORY = {
+    "/open/law_vector_search": "法律依据",
+    "/open/rh_ft_search": "法律依据",
+    "/open/rh_ft_detail": "法律依据",
+    "/open/case_vector_search": "司法案例",
+    "/open/rh_ptal_search": "司法案例",
+    "/open/rh_qwal_search": "司法案例",
+    "/open/rh_case_details": "司法案例",
+    "/open/rh_fg_search": "行政法规",
+    "/open/rh_fg_detail": "行政法规",
+}
+
+CATEGORY_ORDER = ["法律依据", "司法案例", "行政法规"]
+CATEGORY_HEADING = {
+    "法律依据": "### 4.1 法律依据",
+    "司法案例": "### 4.2 司法案例",
+    "行政法规": "### 4.3 行政法规",
+}
+YUANDIAN_MD_PATTERN = re.compile(r"^\d{8}_\d{6}_.+\.md$")
+
+
+def _consolidate_slugify(s):
+    """把标题转成安全的目录名：保留中文，去掉文件不安全字符，多空白压成 _。"""
+    if not s:
+        return ""
+    s = re.sub(r'[/\\:*?"<>|？]', '_', s)
+    s = re.sub(r'\s+', '_', s.strip())
+    return s[:80]
+
+
+def _consolidate_resolve_includes(include_str, cwd):
+    """解析 --include 逗号分隔的查询子串，匹配 CWD 中所有 yuandian 报告 .md。
+
+    Returns: list of (md_path, json_path_or_None, query_summary) tuples，按时间戳升序。
+    """
+    patterns = [p.strip() for p in include_str.split(",") if p.strip()]
+    if not patterns:
+        return []
+
+    archive_dir = SKILL_ROOT / "archive"
+    matched = []
+
+    for md_path in cwd.glob("*.md"):
+        if not YUANDIAN_MD_PATTERN.match(md_path.name):
+            continue
+        for pattern in patterns:
+            if pattern in md_path.name:
+                json_path = archive_dir / md_path.name.replace(".md", ".json")
+                json_p = json_path if json_path.exists() else None
+                # 提取 query_summary（从文件名扣除时间戳）
+                stem = md_path.stem
+                parts = stem.split("_", 2)
+                query_summary = parts[2] if len(parts) >= 3 else stem
+                matched.append((md_path, json_p, query_summary))
+                break
+
+    return sorted(matched, key=lambda x: x[0].name)
+
+
+def _consolidate_extract_body(md_path):
+    """从 per-call .md 提取 '## 检索结果' 到 '## 引用来源' 之间的正文。
+
+    同时去掉 per-call 报告里的 '共 X 条结果' 提示行（consolidate 中冗余，
+    因为检索明细表里已经能看到每条的命中数）。
+    """
+    try:
+        content = md_path.read_text("utf-8")
+    except OSError:
+        return ""
+    start_marker = "## 检索结果"
+    end_marker = "## 引用来源"
+    start_idx = content.find(start_marker)
+    if start_idx < 0:
+        return content
+    end_idx = content.find(end_marker, start_idx)
+    if end_idx < 0:
+        end_idx = len(content)
+    body = content[start_idx + len(start_marker):end_idx]
+    # 去掉 per-call 的"共 X 条结果..."提示行
+    body = re.sub(r"^共\s+\d+\s+条结果[，,]\s*显示前\s+\d+\s+条\s*\n+", "", body, flags=re.MULTILINE)
+    body = re.sub(r"^共\s+\d+\s+条结果，当前第\s+\d+\s+页（每页\s+\d+\s+条）\s*\n+", "", body, flags=re.MULTILINE)
+    return body.strip()
+
+
+def _consolidate_extract_meta(json_path):
+    """从 per-call .json 提取元信息（时间/接口）。"""
+    if json_path is None:
+        return {}
+    try:
+        record = json.loads(json_path.read_text("utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return {
+        "endpoint": record.get("endpoint", ""),
+        "timestamp": record.get("timestamp", ""),
+    }
+
+
+def _consolidate_extract_cost_from_md(md_path):
+    """从 per-call .md 提取 '积分消耗：X 积分' 字段。"""
+    try:
+        content = md_path.read_text("utf-8")
+    except OSError:
+        return "?"
+    m = re.search(r"积分消耗：(\S+\s*\S+?)\s*$", content, re.MULTILINE)
+    return m.group(1) if m else "?"
+
+
+def cmd_consolidate(args):
+    """把多次检索的 per-call 报告汇总成一份法律检索报告，并归类到项目子目录"""
+    cwd = Path(os.environ.get("YD_USER_CWD") or str(Path.cwd()))
+    include_str = args.include
+    if not include_str:
+        print("错误：--include 必填，逗号分隔的查询子串（如 '违约金,高空抛物'）", file=sys.stderr)
+        sys.exit(1)
+
+    pairs = _consolidate_resolve_includes(include_str, cwd)
+    if not pairs:
+        print(f"错误：未在 {cwd} 中匹配到任何 yuandian 报告", file=sys.stderr)
+        print(f"  - --include：{include_str}", file=sys.stderr)
+        print(f"  - 匹配规则：*<子串>*.md 且符合 <8位时间戳>_<6位时间戳>_<查询>.md 命名", file=sys.stderr)
+        sys.exit(1)
+
+    # 解析项目子目录名
+    title = args.title or "法律检索报告"
+    if args.project:
+        project_name = args.project
+    elif args.title:
+        project_name = _consolidate_slugify(args.title) or f"untitled-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    else:
+        project_name = f"untitled-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    project_dir = SKILL_ROOT / "archive" / project_name
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    # 移动 per-call .md 和 .json 到项目子目录
+    # - .md: 从 archive/ 根目录的"v1.4.0 副本"移动（v1.4.0 同时也写了 CWD 副本，工作副本不丢）
+    #        老 per-call（v1.4.0 之前的 .json 没有 .md 副本）则从 CWD 复制
+    # - .json: 从 archive/ 根目录移动
+    moved_md = 0
+    copied_md = 0
+    moved_json = 0
+    for md_path, json_path, _ in pairs:
+        project_md = project_dir / md_path.name
+        if md_path.resolve() == project_md.resolve():
+            pass  # 已经在子目录里（重复运行 consolidate）
+        else:
+            archive_md = SKILL_ROOT / "archive" / md_path.name
+            if archive_md.exists() and archive_md.resolve() != project_md.resolve():
+                shutil.move(str(archive_md), str(project_md))
+                moved_md += 1
+            else:
+                # archive/ 根没有 .md 副本（v1.4.0 之前的旧 per-call），从 CWD 复制
+                shutil.copy2(md_path, project_md)
+                copied_md += 1
+        if json_path and json_path.exists():
+            project_json = project_dir / json_path.name
+            if json_path.resolve() != project_json.resolve():
+                shutil.move(str(json_path), str(project_json))
+                moved_json += 1
+
+    # 按 endpoint 类别分组
+    by_category = {cat: [] for cat in CATEGORY_ORDER}
+    other_records = []
+
+    for md_path, json_path, query_summary in pairs:
+        meta = _consolidate_extract_meta(json_path) if json_path else {}
+        endpoint = meta.get("endpoint", "")
+        category_key = ENDPOINT_CATEGORY.get(endpoint)
+        body = _consolidate_extract_body(md_path)
+        record = {
+            "md_path": md_path,
+            "json_path": json_path,
+            "query_summary": query_summary,
+            "endpoint": endpoint,
+            "timestamp": meta.get("timestamp", ""),
+            "cost": _consolidate_extract_cost_from_md(md_path),
+            "body": body,
+        }
+        if category_key in by_category:
+            by_category[category_key].append(record)
+        else:
+            other_records.append(record)
+
+    # 渲染报告
+    timestamp = datetime.now().isoformat(timespec="seconds")
+
+    # 检索目的
+    if args.purpose:
+        purpose_section = args.purpose
+    else:
+        topics = [q for _, _, q in pairs]
+        topics_str = "、".join(topics)
+        purpose_section = f"本次检索围绕 **{topics_str}** 等方向展开。"
+
+    # 检索结论
+    if args.conclusion:
+        conclusion_section = args.conclusion
+    else:
+        conclusion_section = "（详见第五节分析与判断）"
+
+    # 检索结果（按类别）
+    result_sections = []
+    for cat in CATEGORY_ORDER:
+        records = by_category[cat]
+        if not records:
+            continue
+        heading = CATEGORY_HEADING[cat]
+        bodies = "\n\n---\n\n".join(r["body"] for r in records if r["body"])
+        if bodies:
+            result_sections.append(f"{heading}\n\n{bodies}")
+
+    if other_records:
+        other_bodies = "\n\n---\n\n".join(r["body"] for r in other_records if r["body"])
+        if other_bodies:
+            result_sections.append(f"### 4.4 其他检索\n\n{other_bodies}")
+
+    # 检索明细表（链接指向项目子目录里的副本，json 仍用 file://）
+    detail_rows = []
+    for i, (md_path, json_path, query_summary) in enumerate(pairs, 1):
+        meta = _consolidate_extract_meta(json_path) if json_path else {}
+        ts = meta.get("timestamp", "")[:16].replace("T", " ")
+        endpoint = meta.get("endpoint", "").replace("/open/", "")
+        cost = _consolidate_extract_cost_from_md(md_path)
+        # 链接都指向项目子目录（json 移过去了，md 是副本）
+        project_md_rel = md_path.name
+        project_json_in_subdir = project_dir / md_path.name.replace(".md", ".json")
+        if project_json_in_subdir.exists():
+            json_link = project_json_in_subdir.as_uri()
+        else:
+            json_link = "（无 .json）"
+        detail_rows.append(
+            f"| {i} | {ts} | {query_summary} | `{endpoint}` | {cost} | [md]({project_md_rel}) · [json]({json_link}) |"
+        )
+    detail_table = "\n".join(detail_rows)
+
+    # 拼装
+    md_content = (
+        f"# 法律检索报告 · {title}\n"
+        f"\n"
+        f"> 生成时间：{timestamp}\n"
+        f"> 引用检索明细：{len(pairs)} 条\n"
+        f"> 项目包：`archive/{project_name}/`\n"
+        f"\n"
+        f"## 一、案情简介\n"
+        f"\n"
+        f"{args.case}\n"
+        f"\n"
+        f"## 二、检索目的与问题\n"
+        f"\n"
+        f"{purpose_section}\n"
+        f"\n"
+        f"## 三、检索思路与方法\n"
+        f"\n"
+        f"{args.strategy}\n"
+        f"\n"
+        f"## 四、检索结果\n"
+        f"\n"
+        f"{chr(10).join(result_sections) if result_sections else '_（本次检索未匹配到法律/案例/法规类别）_'}\n"
+        f"\n"
+        f"## 五、分析与判断\n"
+        f"\n"
+        f"{args.analysis}\n"
+        f"\n"
+        f"## 六、检索结论\n"
+        f"\n"
+        f"{conclusion_section}\n"
+        f"\n"
+        f"## 附：本次检索明细\n"
+        f"\n"
+        f"| # | 时间 | 检索词 | 接口 | 积分 | 报告 |\n"
+        f"|---|------|--------|------|------|------|\n"
+        f"{detail_table}\n"
+        f"\n"
+        f"---\n"
+        f"\n"
+        f"*本报告由 yuandian-law-search 技能 `consolidate` 子命令生成*\n"
+    )
+
+    # 主交付物：写入项目子目录
+    report_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_法律检索报告.md"
+    project_report_path = project_dir / report_filename
+    project_report_path.write_text(md_content, "utf-8")
+
+    # 同时在 CWD 也写一份（除非 --output 指定）
+    cwd_copy = None
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(md_content, "utf-8")
+    else:
+        cwd_copy = cwd / report_filename
+        cwd_copy.write_text(md_content, "utf-8")
+
+    print(f"已生成项目包：{project_dir}")
+    print(f"  - 项目名称：{project_name}")
+    print(f"  - 法律检索报告：{project_report_path}")
+    if cwd_copy:
+        print(f"  - CWD 副本：{cwd_copy}")
+    print(f"  - per-call .md：移动 {moved_md} 份 + 复制 {copied_md} 份到项目子目录（CWD 保留工作副本）")
+    print(f"  - per-call .json：移动 {moved_json} 份到项目子目录（archive 根目录已清理）")
+    print(f"  - 检索明细：{len(pairs)} 条")
+    for cat in CATEGORY_ORDER:
+        n = len(by_category[cat])
+        if n:
+            print(f"  - {cat}：{n} 条")
+    if other_records:
+        print(f"  - 其他（未分类）：{len(other_records)} 条")
 
 
 # ── 参数解析 ──────────────────────────────────────────────
@@ -1186,6 +1728,10 @@ def build_parser():
   %(prog)s enterprise-list --type writ-list --uscc "9144030071526726XG" --page 1 --size 10
 """
     )
+    parser.add_argument("--no-report", action="store_true",
+                        help="跳过 .md 检索报告生成（archive + CWD），仅写 archive JSON")
+    parser.add_argument("--no-cwd-report", action="store_true",
+                        help="仅跳过工作目录副本，仍写 archive/ 报告（默认同时写两份）")
     sub = parser.add_subparsers(dest="command")
 
     # ── search ──
@@ -1329,6 +1875,19 @@ def build_parser():
     # ── strategy ──
     p = sub.add_parser("strategy", help="显示当前检索策略")
     p.set_defaults(func=cmd_strategy)
+
+    # ── consolidate ──
+    p = sub.add_parser("consolidate", help="把多次检索的 per-call 报告汇总成一份法律检索报告")
+    p.add_argument("--title", help="报告标题（默认 '法律检索报告'）")
+    p.add_argument("--project", help="项目子目录名（默认从 --title slugify；用于 archive/<project>/ 归类）")
+    p.add_argument("--case", required=True, help="案情简介（一、案情简介）")
+    p.add_argument("--strategy", required=True, help="检索思路与方法（三、检索思路与方法）")
+    p.add_argument("--analysis", required=True, help="分析与判断（五、分析与判断）")
+    p.add_argument("--include", required=True, help="要包含的 per-call 报告（逗号分隔的查询子串）")
+    p.add_argument("--purpose", help="检索目的与问题（二、可选；不传则基于检索词自动推断）")
+    p.add_argument("--conclusion", help="检索结论（六、可选；不传则引用第五节）")
+    p.add_argument("--output", help="输出文件路径（默认同时写 CWD 和 archive/<project>/；指定则只写到指定路径）")
+    p.set_defaults(func=cmd_consolidate)
 
     # ── hall-detect ──
     p = sub.add_parser("hall-detect", help="法规/法条/案例幻觉检测")
