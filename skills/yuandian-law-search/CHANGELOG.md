@@ -1,5 +1,49 @@
 # 变更日志
 
+## [1.6.0] - 2026-06-11
+
+### 战略转向
+- 元典官方已发布 MCP（https://open.chineselaw.com/mcp-config），3 个 servers：yuandian-law / yuandian-case / yuandian-company
+- 本 skill 价值从"API 包装"转向"**归档 + 法律检索报告生成**"——agent 用 MCP 调数据，本 skill 负责沉淀
+- v1.6.0 起，本 skill 同时支持两种调用模式：
+  1. **直接 API 模式**（原有 `search/case/...` 子命令，保留兼容）
+  2. **MCP 协同模式**（新增 `ingest` 子命令，消费 MCP 输出 JSON）
+
+### 新增
+- **`ingest` 子命令**（v1.6.0 核心）：
+  - 用法：`yd-run ingest --query "<Q>" --endpoint "/open/<E>" --input <file.json>`（或 stdin pipe）
+  - 必填：`--query`、`--endpoint`
+  - 可选：`--cost`（默认 "10 积分"）、`--no-report`、`--no-cwd-report`
+  - 消费外部 JSON（来自 MCP 或其他源），路由到对应 formatter，**走与直接 API 相同的归档 + .md 流程**
+  - 归档记录额外加 `"ingest": true` 标记，便于区分数据来源
+- **`INGEST_ROUTING` 表**（36 个 endpoint 覆盖）：
+  - 法条 4 个（law_vector_search / rh_ft_search / rh_ft_detail + 1）
+  - 法规 2 个（rh_fg_search / rh_fg_detail）
+  - 案例 4 个（case_vector_search / rh_ptal_search / rh_qwal_search / rh_case_details）
+  - 企业主接口 4 个（rh_enterpriseSearch / rh_company_info / rh_company_detail / rh_enterpriseBaseInfo）
+  - 企业分项列表 21 个（OutInvest/Brand/Patent/SoftRight/WorksRight/Icp/ChangeInfo/WritAgg/WritList/CourtSessionNotice/CourtNotice/Executions/ExecutedPerson/FrozenEquity/Punishment/Pledge/Guaranty/AbnormalOperation/CorporateTax/SeriousIllegal/AnnualReport）
+  - 特殊 2 个（hall_detect 用对应 formatter；rh_enterpriseAggregationSummary 用 raw JSON 包装）
+  - 未知 endpoint 走 raw JSON 兜底（包装为 ```json ... ``` 代码块）
+- **`.mcp.json.example` 模板**（skill 根目录）：
+  - 3 个 yuandian-* MCP servers 配置（law/case/company）
+  - `Authorization: Bearer ${YD_API_KEY}` 鉴权
+  - 用户复制为 `.mcp.json` 后让 Claude Code / Cursor / Codex 等客户端自动加载
+- **企业分项列表 endpoint 自动 label 推断**（如 `/open/rh_enterpriseOutInvest` → "对外投资"），无需 --label 参数
+
+### 改进
+- SKILL.md 新增"MCP 协同工作流"章节，描述 agent 如何同时使用 `mcp__yuandian__*` 工具 + `yd-run ingest` + `yd-run consolidate`
+- INGEST_ROUTING 路由表覆盖元典 MCP 暴露的全部 24 个数据 tools（不含 2 个 meta tools）
+
+### 架构关系
+```
+agent 调用流程:
+1. mcp__yuandian_law__yuandian_law_vector_search("违约金")  ← MCP 直接调元典
+2. 把响应 JSON 喂给 yd-run ingest                             ← 本 skill 归档
+3. 多次 ingest 后, yd-run consolidate --project "..."        ← 生成 6 节法律检索报告
+```
+
+向后兼容：原有 `search/case/detail/...` 直接 API 子命令完全保留，YD_API_KEY 用户可继续用。
+
 ## [1.5.1] - 2026-06-10
 
 ### 新增

@@ -23,7 +23,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.5.1"
+CURRENT_VERSION = "1.6.0"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -770,6 +770,316 @@ def format_hall_detect_results(data):
         lines.append("未检测到法规或案例引用。")
 
     return "\n".join(lines)
+
+
+# ── ingest：从 MCP / 外部数据源消费 JSON，走与直接 API 相同的归档流程 ──────
+
+
+def _ingest_extract_single_or_list(response):
+    """data 是单个 dict 或 list 时，归一为 list。"""
+    data = response.get("data")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [data]
+    return []
+
+
+def _ingest_extract_lst_or_list(response):
+    """data 是 {lst: [...]} 或裸 list 时，归一为 list。"""
+    raw = response.get("data")
+    if isinstance(raw, dict):
+        return raw.get("lst", raw.get("list", []))
+    if isinstance(raw, list):
+        return raw
+    return []
+
+
+def _ingest_format_raw_json(response):
+    """未知 endpoint 的兜底：把整个 response 包装成 JSON 代码块。"""
+    return f"```json\n{json.dumps(response, ensure_ascii=False, indent=2)}\n```"
+
+
+# endpoint → (类别, data 提取函数, formatter)
+# - "类别" 用于 consolidate 分组（和 ENDPOINT_CATEGORY 一致）
+# - 提取函数：response → 列表/字典
+# - formatter：列表/字典 → Markdown 字符串
+INGEST_ROUTING = {
+    # ── 法条（4 个）──
+    "/open/law_vector_search": (
+        "law",
+        lambda r: r.get("extra", {}).get("fatiao", r.get("data", [])),
+        format_law_results,
+    ),
+    "/open/rh_ft_search": (
+        "law",
+        lambda r: r.get("data", []),
+        format_law_results,
+    ),
+    "/open/rh_ft_detail": (
+        "law",
+        _ingest_extract_single_or_list,
+        format_law_results,
+    ),
+    # ── 法规（2 个）──
+    "/open/rh_fg_search": (
+        "regulation",
+        lambda r: r.get("data", []),
+        format_regulation_results,
+    ),
+    "/open/rh_fg_detail": (
+        "regulation",
+        _ingest_extract_single_or_list,
+        format_regulation_results,
+    ),
+    # ── 案例（4 个）──
+    "/open/case_vector_search": (
+        "case",
+        lambda r: r.get("extra", {}).get("wenshu", r.get("data", [])),
+        format_case_results,
+    ),
+    "/open/rh_ptal_search": (
+        "case",
+        _ingest_extract_lst_or_list,
+        format_case_results,
+    ),
+    "/open/rh_qwal_search": (
+        "case",
+        _ingest_extract_lst_or_list,
+        format_case_results,
+    ),
+    "/open/rh_case_details": (
+        "case",
+        _ingest_extract_single_or_list,
+        format_case_results,
+    ),
+    # ── 企业主接口（4 个）──
+    "/open/rh_enterpriseSearch": (
+        "enterprise",
+        lambda r: r.get("data", []),
+        format_enterprise_results,
+    ),
+    "/open/rh_company_info": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        format_enterprise_results,
+    ),
+    "/open/rh_company_detail": (
+        "enterprise",
+        _ingest_extract_single_or_list,
+        format_enterprise_results,
+    ),
+    "/open/rh_enterpriseBaseInfo": (
+        "enterprise",
+        _ingest_extract_single_or_list,
+        format_enterprise_results,
+    ),
+    # ── 企业分项列表（22 个，自动从 endpoint 推断 label）──
+    "/open/rh_enterpriseOutInvest": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "对外投资"),
+    ),
+    "/open/rh_enterpriseBrand": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "商标"),
+    ),
+    "/open/rh_enterprisePatent": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "专利"),
+    ),
+    "/open/rh_enterpriseSoftRight": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "软件著作权"),
+    ),
+    "/open/rh_enterpriseWorksRight": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "作品著作权"),
+    ),
+    "/open/rh_enterpriseIcp": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "网站备案"),
+    ),
+    "/open/rh_enterpriseChangeInfo": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "变更记录"),
+    ),
+    "/open/rh_enterpriseWritAgg": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "涉诉信息"),
+    ),
+    "/open/rh_enterpriseWritList": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "涉诉文书"),
+    ),
+    "/open/rh_enterpriseCourtSessionNotice": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "开庭公告"),
+    ),
+    "/open/rh_enterpriseCourtNotice": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "法院公告"),
+    ),
+    "/open/rh_enterpriseExecutions": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "失信被执行人"),
+    ),
+    "/open/rh_enterpriseExecutedPerson": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "被执行人"),
+    ),
+    "/open/rh_enterpriseFrozenEquity": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "股权冻结"),
+    ),
+    "/open/rh_enterprisePunishment": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "行政处罚"),
+    ),
+    "/open/rh_enterprisePledge": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "股权出质"),
+    ),
+    "/open/rh_enterpriseGuaranty": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "对外担保"),
+    ),
+    "/open/rh_enterpriseAbnormalOperation": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "经营异常"),
+    ),
+    "/open/rh_enterpriseCorporateTax": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "欠税公告"),
+    ),
+    "/open/rh_enterpriseSeriousIllegal": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "严重违法"),
+    ),
+    "/open/rh_enterpriseAnnualReport": (
+        "enterprise",
+        _ingest_extract_lst_or_list,
+        lambda data: format_enterprise_list_results(data, "企业年报"),
+    ),
+    # ── 特殊 ──
+    "/open/hall_detect": (
+        "other",
+        lambda r: r.get("data", r),
+        format_hall_detect_results,
+    ),
+    "/open/rh_enterpriseAggregationSummary": (
+        "other",
+        lambda r: r.get("data", r),
+        _ingest_format_raw_json,
+    ),
+}
+
+
+def cmd_ingest(args):
+    """从 MCP / 外部 JSON 源消费数据，走与直接 API 相同的归档 + .md 流程。
+
+    使用场景：agent 调 mcp__yuandian__* 工具拿到 JSON，把 JSON 喂给本命令，
+    即可走完归档 + 结构化报告 + 后续 consolidate 全流程。
+    """
+    # 1. 读 JSON
+    if args.input:
+        input_path = Path(args.input)
+        if not input_path.exists():
+            print(f"错误：--input 文件不存在：{input_path}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            response = json.loads(input_path.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"错误：JSON 解析失败：{e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # 从 stdin 读
+        if sys.stdin.isatty():
+            print("错误：--input 未指定且 stdin 是 TTY，请提供 --input <file> 或通过 pipe 喂 JSON", file=sys.stderr)
+            print("  示例：cat result.json | yd-run ingest --query \"违约金\" --endpoint /open/law_vector_search", file=sys.stderr)
+            sys.exit(1)
+        try:
+            response = json.loads(sys.stdin.read())
+        except json.JSONDecodeError as e:
+            print(f"错误：stdin JSON 解析失败：{e}", file=sys.stderr)
+            sys.exit(1)
+
+    if not isinstance(response, dict):
+        print(f"错误：JSON 顶层必须是 dict（API 响应格式），实际是 {type(response).__name__}", file=sys.stderr)
+        sys.exit(1)
+
+    # 1.5 识别 MCP 响应（带 jsonrpc 包装层），提取 structuredContent.data 作为内层响应
+    # MCP structuredContent = {requestId, ..., data: {msg, code, extra: {...}, ...}}
+    # 直接 API response = {code, data: {...}, extra: {...}, message, status}
+    # 取 sc.data 后与直接 API 格式对齐（都含 extra.fatiao 等字段）
+    if "jsonrpc" in response and "result" in response:
+        sc = response["result"].get("structuredContent")
+        if sc and "data" in sc:
+            print("检测到 MCP 响应（jsonrpc 包装），已提取 result.structuredContent.data", file=sys.stderr)
+            response = sc["data"]
+        elif sc:
+            print("检测到 MCP 响应（jsonrpc 包装），但 structuredContent 无 data 字段", file=sys.stderr)
+            response = sc
+
+    # 2. 路由：按 endpoint 找提取函数和 formatter
+    if args.endpoint not in INGEST_ROUTING:
+        # 未知 endpoint：兜底用 raw JSON 包装
+        category = "other"
+        data = response.get("data", response)
+        formatted = _ingest_format_raw_json(response)
+        print(f"提示：endpoint {args.endpoint} 未在 INGEST_ROUTING 中，按 raw JSON 包装处理", file=sys.stderr)
+    else:
+        category, extract_fn, format_fn = INGEST_ROUTING[args.endpoint]
+        data = extract_fn(response)
+        formatted = format_fn(data)
+
+    # 3. 构造 archive 记录
+    # payload 用 {"query": query} 作为占位，与直接 API 的 query 字段对齐
+    payload = {"query": args.query}
+    fingerprint = _query_fingerprint(args.endpoint, payload)
+    source_urls = _enrich_source_urls(args.endpoint, response)
+    filename = _make_archive_name(args.endpoint, payload)
+    json_path = ARCHIVE_DIR / filename
+    record = {
+        "id": filename.replace(".json", ""),
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "endpoint": args.endpoint,
+        "query": payload,
+        "fingerprint": fingerprint,
+        "source_urls": source_urls,
+        "response": response,
+        "ingest": True,  # 标记：从 MCP / 外部源消费，非直接 API
+    }
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), "utf-8")
+
+    # 4. 走 _archive_write_report 生成 .md（archive + CWD）
+    archive_md, cwd_md = _archive_write_report(
+        str(json_path), formatted, args.cost,
+        no_report=args.no_report, no_cwd_report=args.no_cwd_report,
+    )
+
+    # 5. 打印 footer
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
 
 
 # ── 子命令处理 ──────────────────────────────────────────────
@@ -1853,6 +2163,16 @@ def build_parser():
     p.add_argument("--get", action="store_true", help="使用 GET 方法")
     p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
     p.set_defaults(func=cmd_raw)
+
+    # ── ingest ──
+    p = sub.add_parser("ingest", help="从 MCP / 外部 JSON 源消费数据，走与直接 API 相同的归档 + .md 流程")
+    p.add_argument("--query", required=True, help="查询关键词（用于文件名 + 元信息）")
+    p.add_argument("--endpoint", required=True, help="对应 API 路径，如 /open/law_vector_search；用于 routing 到对应 formatter")
+    p.add_argument("--input", help="包含 API 响应 JSON 的文件路径；省略则从 stdin 读")
+    p.add_argument("--cost", default="10 积分", help="成本标签（默认 '10 积分'）")
+    p.add_argument("--no-report", action="store_true", help="跳过 .md 报告生成")
+    p.add_argument("--no-cwd-report", action="store_true", help="仅跳过工作目录副本")
+    p.set_defaults(func=cmd_ingest)
 
     # ── check-update ──
     p = sub.add_parser("check-update", help="检查版本更新")
