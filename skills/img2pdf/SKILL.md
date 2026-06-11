@@ -3,7 +3,7 @@ name: img2pdf
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.0.0"
-description: 将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF。本技能应在用户需要将截图（手机截图、视频截图）、照片或已有 PDF 页面合并为紧凑的 A4 排版 PDF 时使用。不要用于：OCR 文字识别、PDF 内容编辑、图片格式转换。
+description: 将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，或将长截图渲染为单张自适应高度 PDF。本技能应在用户需要将截图（手机截图、视频截图）、照片、已有 PDF 页面或长截图（微信聊天、庭审笔录）合并为 PDF 时使用。不要用于：OCR 文字识别、PDF 内容编辑、图片格式转换。
 license: MIT
 ---
 
@@ -11,7 +11,7 @@ license: MIT
 
 ## 定位
 
-本技能解决"大量截图/照片需要编排为紧凑 PDF 提交"的问题。核心场景是法律证据材料整理——手机截图、视频取证截图、现场照片等通常数量多且单张占满一页，浪费纸张且不利于阅读。
+本技能解决"大量截图/照片需要编排为紧凑 PDF 提交"以及"超长截图（微信聊天、庭审笔录）需要保留上下逻辑转为 PDF"的问题。核心场景是法律证据材料整理。
 
 核心职责：
 
@@ -19,6 +19,7 @@ license: MIT
 2. 将已有 PDF 的每页重新编排为 N 张每页的紧凑布局。
 3. 自动检测图片横竖方向，选择合适的 A4 页面方向。
 4. 可配置页边距，确保打印效果良好。
+5. **v1.2.0** 长截图模式：按 A4 比例自动切割超长图再编排（微信聊天场景），或将整张长图渲染为单张自适应高度 PDF（庭审笔录场景）。
 
 本技能不做 OCR、不编辑 PDF 内容、不处理视频文件。若需要从视频提取截图，先使用 video-screenshot。
 
@@ -145,6 +146,39 @@ python3 scripts/img_to_pdf.py \
   --per-page 3
 ```
 
+### 微信聊天长截图（v1.2.0，按 A4 比例自动切 + 3 张/页）
+
+```bash
+python3 scripts/img_to_pdf.py \
+  --input /path/to/wechat_long.png \
+  --output /path/to/wechat.pdf \
+  --split \
+  --per-page 3
+# 1080×6000 → 按 1080×√2≈1527px 切 4 段 → 2 页 A4 横版
+```
+
+### 微信聊天长截图（显式切割段高）
+
+```bash
+python3 scripts/img_to_pdf.py \
+  --input /path/to/wechat_long.png \
+  --output /path/to/wechat.pdf \
+  --split \
+  --split-height 1500 \
+  --per-page 3
+```
+
+### 庭审笔录长截图（v1.2.0 vertical 模式，整图一长页）
+
+```bash
+python3 scripts/img_to_pdf.py \
+  --input /path/to/transcript.png \
+  --output /path/to/transcript.pdf \
+  --mode vertical
+# 不切割，1080×5000 → 1 页 595×2573pt
+# 页面高度按图等比缩放，保留上下逻辑
+```
+
 ### 预览（不写入文件）
 
 ```bash
@@ -160,18 +194,32 @@ python3 scripts/img_to_pdf.py \
 |------|------|--------|
 | `--input` / `-i` | 图片文件、PDF 文件或目录（必填） | - |
 | `--output` / `-o` | 输出 PDF 路径 | `<输入名>_编排.pdf` |
-| `--per-page` / `-n` | 每页图片数：`1`/`2`/`3`/`4`，或省略自动 | `auto`（竖版3张，横版1张） |
+| `--mode` | 编排模式：`nup`（N 张/页）或 `vertical`（单图一长页） | `nup` |
+| `--per-page` / `-n` | nup 模式下每页图片数：`1`/`2`/`3`/`4`，或省略自动 | `auto`（竖版3张，横版1张） |
 | `--margin` / `-m` | 页边距（pt） | `25` |
-| `--orientation` | 页面方向：`auto`/`landscape`/`portrait` | `auto` |
+| `--orientation` | nup 模式页面方向：`auto`/`landscape`/`portrait` | `auto` |
 | `--sort` | 排序：`name`/`time`/`none` | `name` |
+| `--split` | 启用长截图切割（nup 模式） | 关闭 |
+| `--split-height` | 切割段高（px）；不传 = 按 A4 比例（`图宽 × √2`）；vertical 模式忽略 | A4 比例 |
 | `--dry-run` | 仅预览不输出 | `false` |
+
+### 两种模式对照
+
+| 维度 | nup | vertical |
+|------|-----|----------|
+| 是否切割 | 视 `--split` 而定 | 不切（强制） |
+| 每页图数 | 1/2/3/4 | 必为 1 |
+| 页面尺寸 | A4 固定 | 宽度固定 A4 595pt，高度按图等比 |
+| 适用场景 | 微信聊天、视频截图、证据照片 | 庭审笔录、单页长截图 |
 
 ## 交付检查
 
 完成后检查：
 
-1. 输出 PDF 页数 = ceil(总图片数 / per-page)。
+1. 输出 PDF 页数 = ceil(总图片数 / per-page)（nup 模式）或 = 图片数（vertical 模式）。
 2. 每页图片清晰可读，没有超出页面边界。
 3. 页边距合理，打印时不会裁切内容。
 4. 横竖方向正确（手机截图横版并排，视频截图三列等）。
 5. 原始图片和 PDF 未被修改或删除。
+6. **长截图模式**：切割段高符合 `--split-height` 或 A4 比例默认；vertical 模式页面高度 = 图高 × (A4 宽 - 2×margin) / 图宽 + 2×margin。
+7. **vertical 模式**：临时目录已清理（`/tmp/img2pdf-splits-*` 不残留）。
