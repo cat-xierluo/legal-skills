@@ -59,7 +59,7 @@ def is_table_row(line):
     return False
 
 
-def create_word_table(doc, table_lines):
+def create_word_table(doc, table_lines, md_file_path=None):
     """从Markdown表格行创建Word表格"""
 
     if len(table_lines) < 2:
@@ -183,7 +183,7 @@ def create_word_table(doc, table_lines):
             cell = header_cells[j]
             # 处理表格单元格中的格式
             if contains_markdown_formatting(cell_text.strip()):
-                parse_table_cell_formatting(cell, cell_text.strip(), is_header=True)
+                parse_table_cell_formatting(cell, cell_text.strip(), is_header=True, md_file_path=md_file_path)
             else:
                 # 导入 convert_quotes_to_chinese 避免循环导入
                 from formatter import convert_quotes_to_chinese
@@ -208,7 +208,7 @@ def create_word_table(doc, table_lines):
                     cell = row_cells[j]
                     # 处理表格单元格中的格式
                     if contains_markdown_formatting(cell_text.strip()):
-                        parse_table_cell_formatting(cell, cell_text.strip(), is_header=False)
+                        parse_table_cell_formatting(cell, cell_text.strip(), is_header=False, md_file_path=md_file_path)
                     else:
                         # 导入 convert_quotes_to_chinese 避免循环导入
                         from formatter import convert_quotes_to_chinese
@@ -245,6 +245,7 @@ def parse_table_row(line):
 def contains_markdown_formatting(text):
     """检查文本是否包含Markdown格式标记"""
     format_patterns = [
+        r'!\[.*?\]\([^)]+\)',  # 图片语法
         r'\*\*\*.*?\*\*\*',  # 加粗斜体
         r'\*\*.*?\*\*',      # 加粗
         r'\*.*?\*',          # 斜体
@@ -271,8 +272,8 @@ def contains_markdown_formatting(text):
     return False
 
 
-def parse_table_cell_formatting(cell, text, is_header=False):
-    """解析表格单元格中的格式化文本"""
+def parse_table_cell_formatting(cell, text, is_header=False, md_file_path=None):
+    """解析表格单元格中的格式化文本（含图片）"""
     # 清空单元格
     cell.text = ""
 
@@ -287,6 +288,78 @@ def parse_table_cell_formatting(cell, text, is_header=False):
         paragraph.paragraph_format.line_spacing = line_spacing
 
     # 导入 convert_quotes_to_chinese 和 parse_formatted_text 避免循环导入
+    from formatter import convert_quotes_to_chinese, parse_formatted_text
+
+    # 转换引号
+    text = convert_quotes_to_chinese(text)
+
+    # 先把 markdown 图片语法 ![alt](path) 提取出来，单独处理；剩余文本按格式处理
+    img_pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+    matches = list(img_pattern.finditer(text))
+
+    if matches and md_file_path:
+        # 把文本按图片位置切成"图片前文本/图片/图片后文本/..."
+        cursor = 0
+        for m in matches:
+            alt = m.group(1)
+            raw = m.group(2).strip().split()[0]  # 去掉可能的 title
+            # URL 解码 + 相对路径解析（基于 md_file_path 所在目录）
+            from urllib.parse import unquote
+            raw = unquote(raw)
+            if not raw.startswith(('http://', 'https://')):
+                if os.path.isabs(raw):
+                    candidate = raw
+                else:
+                    md_dir = os.path.dirname(os.path.abspath(md_file_path))
+                    candidate = os.path.normpath(os.path.join(md_dir, raw))
+            else:
+                candidate = raw
+
+            # 先写图片前的文本
+            pre_text = text[cursor:m.start()]
+            if pre_text.strip():
+                _render_text_into_cell(cell, pre_text, is_header)
+            # 插入图片
+            if os.path.exists(candidate):
+                try:
+                    from PIL import Image as _PILImage
+                    with _PILImage.open(candidate) as pil_img:
+                        # 表格中图片按 130px 宽对应 Cm 计算
+                        from docx.shared import Cm as _Cm
+                        run = cell.paragraphs[-1].add_run()
+                        run.add_picture(candidate, width=_Cm(5.0))
+                    # 在图片下另起一段写 alt 文字（作为说明）
+                    if alt.strip():
+                        cap_p = cell.add_paragraph()
+                        cap_p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                        cap_run = cap_p.add_run(alt)
+                        set_table_run_format(cap_run, {'italic': True}, is_header)
+                    print(f"✅ 表格图片插入成功: {os.path.basename(candidate)}")
+                except Exception as e:
+                    print(f"⚠️  表格图片插入失败: {candidate} ({e})")
+                    # 降级：把整段原样写入
+                    fallback = cell.add_paragraph()
+                    fallback_run = fallback.add_run(m.group(0))
+                    set_table_run_format(fallback_run, {}, is_header)
+            else:
+                print(f"⚠️  表格图片路径不存在: {candidate}")
+                # 降级：原样写入
+                fallback = cell.add_paragraph()
+                fallback_run = fallback.add_run(m.group(0))
+                set_table_run_format(fallback_run, {}, is_header)
+            cursor = m.end()
+        # 写图片后剩余文本
+        tail_text = text[cursor:]
+        if tail_text.strip():
+            _render_text_into_cell(cell, tail_text, is_header)
+        return
+
+    # 无图片：走原逻辑
+    _render_text_into_cell(cell, text, is_header)
+
+
+def _render_text_into_cell(cell, text, is_header):
+    """将格式化文本（不含图片 markdown 语法）写入表格 cell"""
     from formatter import convert_quotes_to_chinese, parse_formatted_text
 
     # 转换引号

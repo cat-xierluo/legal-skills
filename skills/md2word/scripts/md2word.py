@@ -634,7 +634,7 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 table_lines.append(lines[i].strip())
                 i += 1
             if len(table_lines) >= 2:
-                create_word_table(doc, table_lines)
+                create_word_table(doc, table_lines, md_file_path=md_file_path)
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
                 print(f"✅ 处理Markdown表格: {len(table_lines)} 行")
