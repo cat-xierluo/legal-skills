@@ -681,8 +681,8 @@ class PaddleOCRBackend:
         return True
 
     def _parse_document_async(self, input_path: Path, backend_dir: Path, label: str) -> dict[str, Any]:
-        self._check_daily_limit()
         try:
+            self._check_daily_limit()
             job_id, submit_meta = self._submit_async_job(input_path)
         except RuntimeError as exc:
             if self._is_quota_error(exc) and self._try_model_fallback():
