@@ -50,6 +50,10 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-11 | 更新     | [img2pdf](skills/img2pdf/) | v1.2.0 | 新增长截图模式：`--mode {nup, vertical}` 切换、`--split` 长截图自动切割（按 A4 比例自动算段高）、`--split-height` 显式段高控制；vertical 模式不切割、单图成单页、页面高度按图等比自适应；解决微信聊天记录 / 庭审笔录两类典型长截图 → PDF 需求 |
+| 2026-06-11 | 更新     | [new-case](skills/new-case/) | v1.3.5 | 商标预设拆 2 个业务子模板（注册 7 目录含独立商标注册证 / 异议复审无效 8 目录含独立商标注册证 + 证据材料）；命名规范文档占位符化（去除真实客户 / 案件 / 申请号）；新增 1 客户含 ≥2 独立业务子项目时按「1 根 + N 子项目」拆分的整理规则，每个子项目独立 7/8 目录模板 |
+| 2026-06-11 | 更新     | [md2word](skills/md2word/) | v1.0.1 | 修复图片 src 解析：支持 URL 解码、相对路径（基于 md 文件目录）、markdown title 标签去除；新增表格单元格内 markdown 图片语法支持，图片按 5cm 宽插入 + 居中斜体 alt 文字作图注，路径不存在时降级原样写入不丢内容 |
+| 2026-06-11 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.4.0 | 修复 PaddleOCR/MinerU 每日页数配额超限时的模型回退路径：`_check_daily_limit` 移入 try 块，使配额异常能触发 `_try_model_fallback` 兜底（v1.3.4 引入的「每日页数限额与模型回退」设计正式收口） |
 | 2026-06-08 | 新上传   | [transcription-corrector](skills/transcription-corrector/) | v1.0.7 | 新增转录稿纠错与轻度二次优化：按用户词典纠正同音字与英文专有名称漂移，可选合并同发言人发言和清理标点；与 course-generator 共用词典格式，原始文件保持不动 |
 | 2026-06-08 | 更新     | [skill-architect](skills/skill-architect/) | v1.6.1 | 整合原 skill-lint 审查入口，统一创建、编辑、打包、格式审查和审计报告能力，并调整为 MIT 许可证；新增 5.11-5.17 共 7 条格式审查规则 |
 | 2026-06-06 | 新上传   | [legal-case-analysis](skills/legal-case-analysis/) | v0.2.6 | 新增通用法律分析技能：多场景分析支架与法律任务的前置分析引擎，不要求每次都生成报告 |
@@ -117,7 +121,7 @@
 <td>工具·OCR</td>
 <td style="word-break:break-word">OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.3</td>
+<td style="text-align:center">v1.4.0</td>
 <td>推荐统一入口</td>
 </tr>
 <tr>
@@ -224,7 +228,7 @@
 <td>通用·案件管理</td>
 <td style="word-break:break-word">将案件/咨询材料整理成标准化目录结构。支持诉讼案件（12目录）和潜在项目/咨询（3目录）两种预设，自动生成案件信息看板、工时记录和期限管理文件</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.2.2</td>
+<td style="text-align:center">v1.3.5</td>
 <td></td>
 </tr>
 <tr>
@@ -337,9 +341,9 @@
 <tr>
 <td><a href="skills/img2pdf/"><strong>img2pdf</strong></a></td>
 <td>工具·PDF排版</td>
-<td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片等）</td>
+<td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，或将长截图渲染为单张自适应高度 PDF；支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片、长截图等）</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">v1.2.0</td>
 <td></td>
 </tr>
 <tr>
