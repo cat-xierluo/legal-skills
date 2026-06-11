@@ -307,7 +307,7 @@ license: CC BY-NC-SA 4.0 - 详见 LICENSE.txt
 现有预设：
 - `assets/litigation.yaml` — 诉讼案件（12目录）
 - `assets/consultation.yaml` — 潜在项目/咨询（2目录）
-- `assets/trademark.yaml` — 商标案件（单一预设下挂 2 个业务子模板：注册 6 目录/异议复审无效 7 目录；目录顺序按项目进展）
+- `assets/trademark.yaml` — 商标案件（单一预设下挂 2 个业务子模板：注册 7 目录含独立商标注册证/异议复审无效 8 目录含独立商标注册证；目录顺序按项目进展）
 - `assets/patent.yaml` — 专利案件（单一预设下挂 3 个业务子模板：申请 8 目录/复审无效 9 目录/检索其他 5 目录；目录顺序按项目进展）
 
 ### 新增预设
