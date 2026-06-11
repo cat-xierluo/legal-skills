@@ -13,6 +13,7 @@ import re
 import glob
 import tempfile
 import urllib.request
+import urllib.parse
 import io
 
 from docx import Document
@@ -679,18 +680,35 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         img_match = re.match(r'^!\[([^\]]*)\]\((.+)\)$', line)
         if img_match:
             alt_text = convert_quotes_to_chinese(img_match.group(1))
-            img_url = img_match.group(2)
+            img_raw = img_match.group(2)
+
+            # 解析图片路径：支持 URL、绝对路径、相对 md 文件的相对路径；处理 URL 编码（含 %20、空格、中文）
+            img_url = img_raw.strip()
+            if not img_url.startswith(('http://', 'https://')):
+                # 去掉 markdown 链接中可能附带的 title（"path" title）或锚点
+                img_url = img_url.split()[0] if ' ' in img_url else img_url
+                img_url = unquote(img_url)
+                # 相对路径：基于 md 文件所在目录解析
+                if not os.path.isabs(img_url):
+                    md_dir = os.path.dirname(os.path.abspath(md_file_path))
+                    candidate = os.path.normpath(os.path.join(md_dir, img_url))
+                else:
+                    candidate = img_url
+            else:
+                candidate = img_url
 
             image = None
             if img_url.startswith(('http://', 'https://')):
                 print(f"🖼️  下载外部图片: {alt_text[:40]}...")
                 image = download_external_image(img_url)
-            elif os.path.exists(img_url):
+            elif os.path.exists(candidate):
                 try:
-                    image = Image.open(img_url)
+                    image = Image.open(candidate)
                     image.load()
                 except Exception as e:
-                    print(f"⚠️  本地图片加载失败: {img_url} ({e})")
+                    print(f"⚠️  本地图片加载失败: {candidate} ({e})")
+            else:
+                print(f"⚠️  本地图片不存在: {candidate}")
 
             if image:
                 insert_image_to_word(doc, image)
