@@ -2,6 +2,115 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.0.8] - 2026-06-12
+
+### 新增
+
+- 新增 `references/security-assessment-standards.md`，将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入独立安全评估模块。
+
+### 改进
+
+- 更新 `SKILL.md`、`skill-standards.md`、`reporting-standards.md`、质量意见报告模板和审查配置示例，要求正式审查报告包含“安全评估”维度，并区分安全级别与普通质量问题分级。
+- 参考 `skill-manager` 的安全检查分类，但保持 `skill-lint` 作为质量意见工具，不直接依赖安装流程或运行时拦截。
+
+## [2.0.7] - 2026-06-12
+
+### 新增
+
+- 新增 `references/repository-skill-discovery-standards.md`，要求审查 GitHub 仓库或 monorepo 时先发现最小 Skill 单元，再进入结构、frontmatter 和业务流审查。
+
+### 改进
+
+- 更新 `SKILL.md`、`skill-standards.md`、`structure-standards.md`、`reporting-standards.md` 和质量意见报告模板，明确仓库根目录缺少 `SKILL.md` 不等于 monorepo 不合格；只有用户指定或发布声明的 Skill 单元缺少 `SKILL.md` 时才判严重问题。
+- 报告模板新增“审查单元发现”部分，用于列出已确认 Skill、Skill-like 文档、README 索引项和未纳入范围。
+- 将归档元数据示例中的 `skill_lint_version` 改为占位符，避免示例版本号随发布漂移。
+
+## [2.0.6] - 2026-06-12
+
+### 新增
+
+- 新增 `archive/.gitkeep`，为正式质量意见报告提供技能内部归档目录。
+- 新增 `references/archive-standards.md`，定义归档触发场景、目录命名、归档文件、Git 忽略规则、隐私安全和复查关系。
+
+### 改进
+
+- 更新 `SKILL.md`、`reporting-standards.md`、`structure-standards.md` 和质量意见报告模板，要求正式报告按需写入 `archive/YYYYMMDD_HHMMSS_<target-slug>/`，且真实归档内容不提交到 Git。
+
+## [2.0.5] - 2026-06-12
+
+### 新增
+
+- 新增 `templates/skill-quality-opinion-report.md`，作为审查 Skill 后出具最终质量意见报告的模板。
+
+### 改进
+
+- 更新 `SKILL.md` 和 `reporting-standards.md`，要求最终质量意见报告明确问题、影响、修正方式和复查标准。
+- 将 `templates/` 纳入结构规范的可选资源目录，用于放置可复用文本模板。
+
+## [2.0.4] - 2026-06-12
+
+### 改进
+
+- 将 `references/skill-standards.md` 从巨型检查清单重构为审查索引，只负责模块路由和默认审查顺序。
+- 新增模块化 reference：`structure-standards.md`、`trigger-description-standards.md`、`configuration-privacy-standards.md`、`publishing-standards.md`、`workflow-output-standards.md`、`reporting-standards.md`。
+- 将 `LICENSE.txt`、`version`、README、Marketplace 等规则明确归入发布治理，避免普通 Skill 结构审查误判。
+
+### 文档完善
+
+- 更新 `SKILL.md` 审查流程和参考规则列表，说明先读审查索引，再按问题类型读取对应模块。
+
+## [2.0.3] - 2026-06-12
+
+### 新增
+
+- 新增 `config/review-profile.example.yaml`，提供可复制的个人/项目审查配置模板，用于配置发布字段策略、隐私去具体化规则、严重程度和报告暴露策略。
+
+### 改进
+
+- 在 `SKILL.md` 和 frontmatter 元数据策略中说明：本地配置应复制为 `config/review-profile.local.yaml` 使用，不提交到仓库。
+
+## [2.0.2] - 2026-06-12
+
+### 新增
+
+- 新增 `references/frontmatter-metadata-policy.md`，明确普通 Skill 的通用 frontmatter 只硬性要求 `name` 和 `description`。
+- 将 `homepage`、`author`、`version`、`license`、`source` 明确划入项目/平台发布字段，不再作为普通 Skill 的通用必填或默认推荐项。
+
+### 改进
+
+- 更新 frontmatter 检查清单，区分“通用必需字段”和“发布字段分层”，避免将个人作者、个人主页、许可证默认值硬编码进通用 Skill 模板。
+
+## [2.0.1] - 2026-06-12
+
+### 新增
+
+- 新增示例配置与公开内容去具体化规则：`config/*.example.*`、SKILL.md、references、CHANGELOG、TASKS、DECISIONS 中不应出现真实人名、客户名、案件项目、案号、联系方式或可反查组合信息。
+- 在审查规则中明确“智能判断”要求：不只依赖关键词黑名单，应识别疑似真实业务材料、具名人员、客户简称、法院 + 案由 + 时间组合等具体信息。
+
+## [2.0.0] - 2026-06-12
+
+### 重大变更
+
+- 将公开入口从 `skill-architect` 重定位为 `skill-lint`，目录迁移到 `skills/skill-lint/`，frontmatter `name` 改为 `skill-lint`。
+- 移除“创建 + 审查一体化”定位，主入口改为专门的后置质量验收、格式审查和审计报告工具。
+
+### 新增
+
+- 新增 `references/business-flow-rubric.md`，用于审查业务流深度、Hard Fail、五层评估对象和可评估性基础设施。
+- 审查报告模板新增“业务流深度”和“可评估性”两部分。
+
+### 改进
+
+- 重写 `SKILL.md`，聚焦目录结构、Frontmatter、引用一致性、发布版本、业务流深度和可评估性审查。
+- 同步 README、Marketplace、ClawHub 示例配置、项目初始化配置和根目录开发/评估指南中的入口名称。
+
+## [1.6.2] - 2026-06-12
+
+### 改进
+
+- 统一 `references/` 内参考文档文件名为小写：`skill-dev-guide.md`、`skill-orchestration-guide.md`、`skill-standards.md`。
+- 在命名检查中补充 `references/` 文件名全小写、多个词用连字符（kebab-case）的规则，并同步内部引用。
+
 ## [1.6.1] - 2026-06-08
 
 ### 新增
@@ -53,7 +162,7 @@ All notable changes to this skill will be documented in this file.
 
 ### 文档完善
 
-- 同步 `references/SKILL-DEV-GUIDE.md` 至 v2.4.0。
+- 同步 `references/skill-dev-guide.md` 至 v2.4.0。
 - 同步 `references/skill-standards.md` 与 skill-lint v1.4.0 规则。
 
 ## [1.3.0] - 2026-03-01
@@ -77,7 +186,7 @@ All notable changes to this skill will be documented in this file.
 - **SKILL.md 行数检查**（5.3）：限制 ≤ 500 行
 - **目录层级检查**（5.4）：references/scripts/assets 扁平结构
 - **description 长度检查**：≤ 1024 字符
-- 同步 SKILL-DEV-GUIDE.md 至 v2.3.0
+- 同步 skill-dev-guide.md 至 v2.3.0
 
 ### 修改
 
@@ -92,8 +201,8 @@ All notable changes to this skill will be documented in this file.
 
 - **模块化设计检查**（§2）：独立功能解耦、跨 skill 协调规范
 - **安全审计检查**（§12）：禁止危险删除命令、API keys 硬编码检查
-- 同步 SKILL-DEV-GUIDE.md 至 v2.2.0
-- 同步 SKILL-ORCHESTRATION-GUIDE.md 至 v2.0.0
+- 同步 skill-dev-guide.md 至 v2.2.0
+- 同步 skill-orchestration-guide.md 至 v2.0.0
 
 ### 修改
 
@@ -138,5 +247,5 @@ All notable changes to this skill will be documented in this file.
 - LICENSE.txt - CC BY-NC-SA 4.0 非商用许可证
 - CHANGELOG.md - 版本变更记录
 - references/skill-standards.md - 技能规范标准（详细检查清单）
-- 参考/SKILL-DEV-GUIDE.md - 开发规范参考
-- 参考/SKILL-ORCHESTRATION-GUIDE.md - 编排规范参考
+- 参考/skill-dev-guide.md - 开发规范参考
+- 参考/skill-orchestration-guide.md - 编排规范参考

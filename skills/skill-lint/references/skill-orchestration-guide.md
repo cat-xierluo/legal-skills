@@ -1,9 +1,9 @@
 # Skill 编排指南 (Skill Orchestration Guide)
 
-本指南是 [SKILL-DEV-GUIDE.md](SKILL-DEV-GUIDE.md) 的补充文档。
+本指南是 [skill-dev-guide.md](skill-dev-guide.md) 的补充文档。
 
-- **SKILL-DEV-GUIDE.md**：单个 Skill 的开发规范
-- **SKILL-ORCHESTRATION-GUIDE.md**：多个 Skill 的协作编排规范
+- **skill-dev-guide.md**：单个 Skill 的开发规范
+- **skill-orchestration-guide.md**：多个 Skill 的协作编排规范
 
 ---
 
@@ -105,5 +105,5 @@ python scripts/main.py --check --user=maoking
 | v2.0.0 | 2026-02-28 | 删除 §3 可编排设计要点、§4 定时运行；聚焦编排核心理念 |
 | v1.3.0 | 2026-02-28 | 整合 OpenClaw 内容：增强 §4 定时运行（config.yaml cron 配置） |
 | v1.2.0 | 2026-02-14 | 大幅精简，聚焦核心理念，移除冗余示例和理论内容 |
-| v1.1.0 | 2026-02-14 | 重命名为 SKILL-ORCHESTRATION-GUIDE.md；新增与传统 Workflow 工具对比 |
+| v1.1.0 | 2026-02-14 | 重命名为 skill-orchestration-guide.md；新增与传统 Workflow 工具对比 |
 | v1.0.0 | 2026-02-14 | 初始版本 |

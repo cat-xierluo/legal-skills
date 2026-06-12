@@ -78,20 +78,16 @@ SKILL.md 必须以 YAML frontmatter 开头:
 ---
 name: skill-name
 description: 本技能应在用户需要...时使用。不要用于：...
-version: "1.0.0"
-license: MIT
-author: 杨卫薪律师（微信ywxlaw）
-homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
 **字段说明**:
 
 - **必填字段**: `name`、`description`
-- **推荐字段**: `version`、`license`、`author`、`homepage`
-- `version` 是公开发布推荐字段；如存在，必须与 `CHANGELOG.md` 最新版本一致
-- `CHANGELOG.md` 仍是完整版本历史的来源，README 和 marketplace 中的版本应同步到最新版本
-- `source` 可省略；如已提供 `homepage`，不强制填写 `source`
+- **发布字段**: `version`、`license`、`author`、`homepage`、`source` 属于项目或平台发布策略，不是普通 Skill 的通用必填
+- 普通 Skill 缺少发布字段不应判错；若项目规则或发布平台要求，再按对应规则补充
+- `version` 如存在，必须与 `CHANGELOG.md` 最新版本一致
+- 不应在通用模板中硬编码个人作者、个人主页或特定仓库地址
 
 ## 4. description 写作规范
 
@@ -194,7 +190,7 @@ Skills 使用渐进式加载系统管理上下文:
 ### (1) Level 0: Frontmatter (始终加载)
 
 - SKILL.md 的 YAML frontmatter
-- 保持精简，包含 name、description，并可包含 version、license、author、homepage 等发布元数据
+- 保持精简，普通 Skill 只硬性要求 name、description；version、license、author、homepage 等发布元数据按项目规则添加
 - 用于技能发现和匹配,必须极度精简
 
 ### (2) Level 1: 核心文档 (按需加载)
@@ -228,6 +224,7 @@ Skills 使用渐进式加载系统管理上下文:
 - 明确触发场景,使用"本技能应在...时使用"格式
 - 建议补充"不要用于..."说明技能边界
 - `version` 如存在,必须与 `CHANGELOG.md` 最新版本一致
+- 不要把个人默认作者、主页、许可证写进通用 Skill 模板
 - 避免冗余关键词堆砌
 
 ### (2) SKILL.md 内容原则
@@ -367,7 +364,7 @@ python ../../skills/funasr-transcribe/scripts/transcribe.py
 
 ### (3) 复杂编排
 
-对于定时任务、条件分支、串行/并行执行等复杂编排，请参考 **[SKILL-ORCHESTRATION-GUIDE.md](SKILL-ORCHESTRATION-GUIDE.md)**。
+对于定时任务、条件分支、串行/并行执行等复杂编排，请参考 **[skill-orchestration-guide.md](skill-orchestration-guide.md)**。
 
 ## 10. 安全审计
 
@@ -447,7 +444,7 @@ find ./output -mindepth 1 -delete
 
 ### (3) 格式合规检查
 
-使用 `skill-architect` 的审查模式验证技能是否符合规范：
+使用 `skill-lint` 验证技能是否符合规范：
 
 - 目录结构合规
 - Frontmatter 格式正确
@@ -455,13 +452,13 @@ find ./output -mindepth 1 -delete
 - SKILL.md 行数在 500 行以内
 - references/ 目录层级扁平
 
-## 13. SKILL-DEV-GUIDE.md 更新规范
+## 13. skill-dev-guide.md 更新规范
 
-**重要**: 本指南文件(SKILL-DEV-GUIDE.md)的每次修改都必须同步更新底部的"变更历史"章节。
+**重要**: 本指南文件(skill-dev-guide.md)的每次修改都必须同步更新底部的"变更历史"章节。
 
 ### (1) 更新流程
 
-1. **修改内容**: 在 SKILL-DEV-GUIDE.md 中进行任何修改(新增/修改规范、调整格式等)
+1. **修改内容**: 在 skill-dev-guide.md 中进行任何修改(新增/修改规范、调整格式等)
 2. **更新变更历史**: 在"变更历史"表格顶部添加新的版本记录
 3. **版本号递增**: 根据修改性质递增版本号
 
@@ -479,7 +476,7 @@ find ./output -mindepth 1 -delete
 
 ### (4) 自动更新要求
 
-AI 代理在修改 SKILL-DEV-GUIDE.md 时,必须:
+AI 代理在修改 skill-dev-guide.md 时,必须:
 
 1. 检查是否对文件内容进行了实质性修改
 2. 如果是,自动在"变更历史"表格顶部添加新记录
@@ -489,13 +486,15 @@ AI 代理在修改 SKILL-DEV-GUIDE.md 时,必须:
 
 | 版本   | 日期       | 更新内容                                                                                                                                                    |
 | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.4.3 | 2026-06-12 | 调整 Frontmatter 元数据分层：普通 Skill 只硬性要求 `name` / `description`，发布字段按项目规则处理 |
+| v2.4.2 | 2026-06-12 | 将格式合规检查入口从 `skill-architect` 更新为 `skill-lint`，适配审查工具重新独立定位 |
 | v2.4.1 | 2026-06-07 | 将格式合规检查入口从 `skill-lint` 更新为 `skill-architect` 审查模式，适配两个 Skill 的整合 |
 | v2.4.0 | 2026-05-20 | 更新 Frontmatter 规范：`version` 从禁止字段调整为公开发布推荐字段，新增版本同步要求，统一 ClawHub 推荐字段说明，并修正指南自引用名称                         |
 | v2.3.0 | 2026-03-01 | 整合 mgechev/skills-best-practices：§1 目录层级规则、§4 负向触发条件、§6 行数限制(<500行)、新增 §12 技能验证规范、原 §12 顺延为 §13                        |
 | v2.2.0 | 2026-02-28 | 精简冗余示例（§4/§8/§10/§11）                                                                                   |
 | v2.1.0 | 2026-02-28 | 精简 §9 协作规范；删除 TDD 章节；调整编号                                                                                                                   |
 | v2.0.0 | 2026-02-28 | 整合 OpenClaw 内容：新增 §2 模块化设计、§10 安全审计、§11 TDD、§12 开发流程；增强 §8 配置规范；合并 §9 协作规范                                             |
-| v1.3.0 | 2026-02-14 | 重命名为 SKILL-DEV-GUIDE.md；更新第8节引用为 SKILL-ORCHESTRATION-GUIDE.md                                                                                   |
+| v1.3.0 | 2026-02-14 | 重命名为 skill-dev-guide.md；更新第8节引用为 skill-orchestration-guide.md                                                                                   |
 | v1.2.0 | 2026-02-14 | 在第8节新增(4)"复杂工作流编排"，引用 WORKFLOW-GUIDE.md，明确两份文档的职责分工                                                                              |
 | v1.1.0 | 2026-02-12 | 新增第8节"技能间协作规范"，明确技能应通过自然语言描述协作方式，避免直接引用其他技能的内部实现                                                               |
 | v1.0.2 | 2026-02-12 | 修正配置文件规范章节;移除每个skill创建.gitignore的指引;修正复制规则说明（配置文件与模板同目录）;修复章节编号重复问题                                        |

@@ -1,0 +1,120 @@
+# Skill Lint 审查配置示例。
+# 复制为 config/review-profile.local.yaml 后，再填入个人或项目本地规则。
+# local 文件不要提交到 Git。本 example 只能使用占位符，不得出现真实个人、
+# 客户、案件、项目、账号、地址、手机号或邮箱信息。
+
+schema_version: 1
+
+profile:
+  name: example-review-profile
+  mode: personal_or_project
+  description: "用于审查个人或项目 Skill 的示例配置；复制后替换占位符。"
+
+frontmatter:
+  # 普通 Skill 的通用必需字段。审查他人 Skill 时，只把这两个字段作为硬性要求。
+  minimal_required:
+    - name
+    - description
+
+  # 发布字段只在项目发布、Marketplace、ClawHub 或用户明确要求时检查。
+  # 不要把这些默认值写进通用 Skill 模板。
+  publishing_fields:
+    enabled: true
+    required_when: project_publish
+    fields:
+      version:
+        required: true
+        source: changelog_latest
+        default: "<x.y.z>"
+      license:
+        required: true
+        default: "<MIT|CC-BY-NC|other-project-license>"
+      author:
+        required: true
+        default: "<author-or-organization>"
+      homepage:
+        required: true
+        default: "<project-homepage-url>"
+      source:
+        required: false
+        default: "<optional-source-path-or-url>"
+
+  # 审查第三方普通 Skill 时，缺少发布字段不判错；若误用了本地默认值则提示。
+  third_party_review:
+    missing_publishing_fields: ignore
+    warn_if_profile_defaults_appear: true
+
+privacy:
+  public_files_must_be_generic: true
+  placeholder_style: angle_brackets
+  public_file_scope:
+    - SKILL.md
+    - references/
+    - CHANGELOG.md
+    - TASKS.md
+    - DECISIONS.md
+    - config/*.example.*
+  forbidden_real_values:
+    - real_person_name
+    - real_client_name
+    - real_case_name
+    - real_project_code
+    - real_case_number
+    - real_phone
+    - real_email
+    - real_address
+    - real_account
+  suspicious_combinations:
+    - court_plus_case_type_plus_date
+    - company_plus_project_plus_date
+    - client_alias_plus_case_stage
+
+security:
+  enabled: true
+  strictness: standard
+  apply_to:
+    - third_party_skill
+    - github_repository
+    - skill_with_scripts
+    - skill_with_mcp
+    - skill_with_network_access
+  report_overall_risk: true
+  checks:
+    credentials_and_secrets: true
+    dangerous_execution: true
+    sensitive_file_access: true
+    network_exfiltration: true
+    dependency_and_install_hooks: true
+    mcp_permission_boundary: true
+    prompt_security: true
+    git_history_sensitive_leak: true
+  allowed_capabilities_require_explanation:
+    - subprocess_or_external_tool
+    - user_file_read_write
+    - network_request
+    - api_key_required_feature
+    - mcp_server_or_external_agent
+  hard_fail_categories:
+    - hardcoded_real_secret
+    - download_and_execute
+    - privilege_escalation
+    - persistence_without_user_consent
+    - data_exfiltration_without_user_consent
+    - destructive_file_operation_without_boundary
+    - prompt_instruction_to_bypass_higher_priority_rules
+
+severity:
+  missing_minimal_frontmatter: error
+  invalid_description_boundary: warning
+  missing_project_publish_field: warning
+  real_entity_in_public_file: error
+  suspicious_entity_in_public_file: warning
+  critical_security_risk: error
+  high_security_risk: error
+  medium_security_risk: warning
+  low_security_risk: info
+
+report:
+  include_profile_name: true
+  include_profile_values: false
+  redact_profile_values: true
