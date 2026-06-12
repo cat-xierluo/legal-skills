@@ -270,6 +270,17 @@
       "tags": ["专业", "顾问", "legal", "opc", "ai-compliance"]
     },
     {
+      "name": "legal-visualization",
+      "description": "面向法律业务场景的法律图解与图表生成技能：把案件材料、合同、合规、交易、证据链、诉讼流程、时间轴、法律关系、客户汇报和服务方案整理成关系图、流程图、时间轴、证据链、风险图和路线图，默认交付 .drawio + .svg + .png 三件套",
+      "version": "0.6.14",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/legal-visualization",
+      "category": "productivity",
+      "tags": ["专业", "可视化", "legal", "drawio", "diagram"]
+    },
+    {
       "name": "de-ai-polish",
       "description": "检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔",
       "version": "1.1.0",
@@ -325,15 +336,15 @@
       "tags": ["工具", "Skill开发", "github", "tracker"]
     },
     {
-      "name": "skill-architect",
-      "description": "技能架构师与格式审查一体化工具，整合官方 skill-creator 流程、原 skill-lint 合规检查和发布规范同步",
-      "version": "1.6.1",
+      "name": "skill-lint",
+      "description": "Skill 质量验收与格式审查工具，支持目录结构、Frontmatter、引用一致性、发布版本、业务流深度、可评估性和安全风险审查",
+      "version": "2.0.8",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
-      "source": "skills/skill-architect",
+      "source": "skills/skill-lint",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "architecture"]
+      "tags": ["工具", "Skill开发", "skill", "lint"]
     },
     {
       "name": "repo-research",

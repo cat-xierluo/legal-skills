@@ -50,16 +50,15 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
+| 2026-06-12 | 更新     | [skill-lint](skills/skill-lint/) | v2.0.8 | 新增安全评估模块：将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入正式质量意见报告 |
 | 2026-06-11 | 更新     | [img2pdf](skills/img2pdf/) | v1.2.0 | 新增长截图模式：`--mode {nup, vertical}` 切换、`--split` 长截图自动切割（按 A4 比例自动算段高）、`--split-height` 显式段高控制；vertical 模式不切割、单图成单页、页面高度按图等比自适应；解决微信聊天记录 / 庭审笔录两类典型长截图 → PDF 需求 |
 | 2026-06-11 | 更新     | [new-case](skills/new-case/) | v1.3.5 | 商标预设拆 2 个业务子模板（注册 7 目录含独立商标注册证 / 异议复审无效 8 目录含独立商标注册证 + 证据材料）；命名规范文档占位符化（去除真实客户 / 案件 / 申请号）；新增 1 客户含 ≥2 独立业务子项目时按「1 根 + N 子项目」拆分的整理规则，每个子项目独立 7/8 目录模板 |
 | 2026-06-11 | 更新     | [md2word](skills/md2word/) | v1.0.1 | 修复图片 src 解析：支持 URL 解码、相对路径（基于 md 文件目录）、markdown title 标签去除；新增表格单元格内 markdown 图片语法支持，图片按 5cm 宽插入 + 居中斜体 alt 文字作图注，路径不存在时降级原样写入不丢内容 |
 | 2026-06-11 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.4.0 | 修复 PaddleOCR/MinerU 每日页数配额超限时的模型回退路径：`_check_daily_limit` 移入 try 块，使配额异常能触发 `_try_model_fallback` 兜底（v1.3.4 引入的「每日页数限额与模型回退」设计正式收口） |
 | 2026-06-08 | 新上传   | [transcription-corrector](skills/transcription-corrector/) | v1.0.7 | 新增转录稿纠错与轻度二次优化：按用户词典纠正同音字与英文专有名称漂移，可选合并同发言人发言和清理标点；与 course-generator 共用词典格式，原始文件保持不动 |
-| 2026-06-08 | 更新     | [skill-architect](skills/skill-architect/) | v1.6.1 | 整合原 skill-lint 审查入口，统一创建、编辑、打包、格式审查和审计报告能力，并调整为 MIT 许可证；新增 5.11-5.17 共 7 条格式审查规则 |
 | 2026-06-06 | 新上传   | [legal-case-analysis](skills/legal-case-analysis/) | v0.2.6 | 新增通用法律分析技能：多场景分析支架与法律任务的前置分析引擎，不要求每次都生成报告 |
 | 2026-06-06 | 更新     | [git-workflow](skills/git-workflow/) | v1.4.1 | 精简触发描述，同步公开索引版本，并将文档体检改为项目配置后才执行的可选扩展 |
-| 2026-06-05 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.3.3 | 修复 PaddleOCR 大 PDF 同步结果缺页误判：返回页数不足时直接失败，并记录预期页数与实际返回页数 |
-| 2026-06-04 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.2 | 修复 DOCX 时间戳注入、直接运行入口、配置目录和默认归档目录的重构回归 |
 
 </details>
 
@@ -311,6 +310,14 @@
 <td style="text-align:center">v0.2.6</td>
 <td><a href="https://github.com/cat-xierluo/opc-legal-counsel.skill">独立仓库</a></td>
 </tr>
+<tr>
+<td><a href="skills/legal-visualization/"><strong>legal-visualization</strong></a></td>
+<td>专业·可视化</td>
+<td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件材料、合同、合规、交易、证据链、诉讼流程、时间轴、法律关系、客户汇报和服务方案整理成关系图/流程图/时间轴/证据链/风险图/路线图，先按受众和任务路由场景再出图，默认交付 .drawio + .svg + .png 三件套</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.6.14</td>
+<td></td>
+</tr>
 </tbody>
 </table>
 
@@ -478,11 +485,11 @@
 <td></td>
 </tr>
 <tr>
-<td><a href="skills/skill-architect/"><strong>skill-architect</strong></a></td>
+<td><a href="skills/skill-lint/"><strong>skill-lint</strong></a></td>
 <td>工具·Skill开发</td>
-<td style="word-break:break-word">技能架构师与格式审查一体化工具，整合官方 skill-creator 流程、原 skill-lint 合规检查和发布规范同步，支持创建新技能、编辑现有技能、打包技能、格式审查和技能审计报告</td>
+<td style="word-break:break-word">Skill 质量验收与格式审查工具，支持审查目录结构、Frontmatter、引用一致性、发布版本、业务流深度、可评估性和安全风险，生成结构化审查报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.1</td>
+<td style="text-align:center">v2.0.8</td>
 <td></td>
 </tr>
 <tr>
@@ -583,7 +590,7 @@
 
 | 技能 | 版本 | 说明 |
 |------|------|------|
-| skill-lint | v1.4.0 | 已合并到 [skill-architect](skills/skill-architect/) v1.5.0，由其审查模式承接格式合规检查能力 |
+| skill-architect | v1.6.2 | 已重定位为 [skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护 |
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill |
 | minimax-web-search | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill |
 | repo-research | v0.7.0 | 功能较简单，不再维护 |
