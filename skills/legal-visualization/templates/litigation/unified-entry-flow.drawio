@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：统一入口流程图（unified-entry-flow）
+  适用场景：G-09 统一入口流程图；R-02 土地招拍挂流程；LP-03 管辖与程序选择
+  必要输入字段：entry.label, decisions[].condition, outcomes[].label
+  默认布局：单入口居左，判断节点居中，结果路径居右
+  可变参数：判断层级、是否含正常流程与本案流程对比
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="统一入口流程图（条件分支）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="entry" value="统一入口&#10;（待补充：申请/争议/程序）"
+      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="180" width="160" height="72" as="geometry"/>
+    </mxCell>
+    <mxCell id="d1" value="条件一是否满足？"
+      style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=13;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="330" y="160" width="150" height="110" as="geometry"/>
+    </mxCell>
+    <mxCell id="d2" value="是否存在例外/瑕疵？"
+      style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=13;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="570" y="80" width="150" height="110" as="geometry"/>
+    </mxCell>
+    <mxCell id="out1" value="路径 A&#10;可继续推进"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=13;"
+      vertex="1" parent="1">
+      <mxGeometry x="820" y="80" width="170" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="out2" value="路径 B&#10;需补正/改道"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=13;"
+      vertex="1" parent="1">
+      <mxGeometry x="820" y="230" width="170" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="out3" value="路径 C&#10;暂不启动"
+      style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;fontSize=13;"
+      vertex="1" parent="1">
+      <mxGeometry x="570" y="320" width="170" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="entry" target="d1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="是" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="d1" target="d2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="无例外" style="endArrow=classic;strokeWidth=2;strokeColor=#43A047;edgeStyle=orthogonalEdgeStyle;" edge="1" source="d2" target="out1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="有瑕疵" style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="d2" target="out2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="否" style="endArrow=classic;dashed=1;strokeWidth=2;strokeColor=#666666;edgeStyle=orthogonalEdgeStyle;" edge="1" source="d1" target="out3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="note" value="使用要求：所有分支必须从同一入口进入；判断节点只能写可回答的问题；结果节点写行动或法律后果。"
+      style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;fontSize=10;fontColor=#757575;align=left;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="430" width="860" height="42" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

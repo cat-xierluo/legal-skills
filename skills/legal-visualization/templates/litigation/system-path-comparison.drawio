@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：制度路径对比图（system-path-comparison）
+  适用场景：G-16 制度路径模拟图；R-08 土地处置制度冲突图
+  必要输入字段：entry.label, paths[].rule, paths[].steps, paths[].outcome
+  默认布局：同一起点，左右两套制度路径，末端结果对比
+  可变参数：路径数、是否显示资金/权利最终归属
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="制度路径对比图"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="entry" value="同一事实起点&#10;（待补充：财产/合同/程序）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="410" y="80" width="220" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="pathA" value="路径 A：规则一"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="190" width="390" height="260" as="geometry"/>
+    </mxCell>
+    <mxCell id="pathB" value="路径 B：规则二"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#C0392B;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="570" y="190" width="390" height="260" as="geometry"/>
+    </mxCell>
+    <mxCell id="a1" value="步骤 A1&#10;适用条件" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="130" y="250" width="130" height="58" as="geometry"/></mxCell>
+    <mxCell id="a2" value="步骤 A2&#10;处置/分配" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="310" y="250" width="130" height="58" as="geometry"/></mxCell>
+    <mxCell id="a3" value="结果 A&#10;权益归属一" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="210" y="350" width="150" height="64" as="geometry"/></mxCell>
+    <mxCell id="b1" value="步骤 B1&#10;适用条件" style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;fontSize=12;" vertex="1" parent="1"><mxGeometry x="620" y="250" width="130" height="58" as="geometry"/></mxCell>
+    <mxCell id="b2" value="步骤 B2&#10;收缴/转付" style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;fontSize=12;" vertex="1" parent="1"><mxGeometry x="800" y="250" width="130" height="58" as="geometry"/></mxCell>
+    <mxCell id="b3" value="结果 B&#10;权益归属二" style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="700" y="350" width="150" height="64" as="geometry"/></mxCell>
+    <mxCell id="e0a" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#1f77b4;edgeStyle=orthogonalEdgeStyle;" edge="1" source="entry" target="a1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e0b" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="entry" target="b1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea1" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#1f77b4;edgeStyle=orthogonalEdgeStyle;" edge="1" source="a1" target="a2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="ea2" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#43A047;edgeStyle=orthogonalEdgeStyle;" edge="1" source="a2" target="a3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="eb1" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="b1" target="b2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="eb2" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="b2" target="b3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

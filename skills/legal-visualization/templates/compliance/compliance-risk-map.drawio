@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：合规风险地图（compliance-risk-map）
+  适用场景：CG-01 合规风险地图；DR 债务化解风险分布
+  必要输入字段：sections[].label, sections[].purpose
+  默认布局：5 业务模块分区，每区按风险等级配色（绿/黄/红）
+  可变参数：业务模块数（销售/采购/财务/人事/IT）、风险等级阈值
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="合规风险地图（按业务模块）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="legendTitle" value="图例"
+      style="text;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;"
+      vertex="1" parent="1">
+      <mxGeometry x="780" y="80" width="120" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="lg1" value="低风险"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=10;"
+      vertex="1" parent="1">
+      <mxGeometry x="780" y="105" width="120" height="24" as="geometry"/>
+    </mxCell>
+    <mxCell id="lg2" value="中风险"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=10;"
+      vertex="1" parent="1">
+      <mxGeometry x="780" y="135" width="120" height="24" as="geometry"/>
+    </mxCell>
+    <mxCell id="lg3" value="高风险"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=10;"
+      vertex="1" parent="1">
+      <mxGeometry x="780" y="165" width="120" height="24" as="geometry"/>
+    </mxCell>
+    <mxCell id="sale" value="销售&#10;（待补充：合同审查率）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="120" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="proc" value="采购&#10;（待补充：供应商集中度）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="320" y="120" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="fin" value="财务&#10;（待补充：关联交易）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="540" y="120" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="hr" value="人事&#10;（待补充：劳动合同覆盖率）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="240" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="it" value="IT/数据&#10;（待补充：个人信息合规）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="320" y="240" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="com" value="商业贿赂&#10;（待补充：举报渠道）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="540" y="240" width="180" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="footer" value="整改优先级：高风险模块 > 中风险模块 > 低风险模块"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="380" width="700" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：争点-证据矩阵（issue-evidence-matrix）
+  适用场景：G-15 争点-证据矩阵；E-04 图表化证据目录；EV-04 证明责任分配
+  必要输入字段：issues[].label, evidence[].code, evidence[].purpose, evidence[].status
+  默认布局：行=争点，列=证明责任/关键证据/证明目的/缺口
+  可变参数：争点数量、证据列数量、是否增加页码或卷宗位置
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="争点-证据矩阵"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="h1" value="争点" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="80" y="90" width="180" height="48" as="geometry"/></mxCell>
+    <mxCell id="h2" value="证明责任" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="260" y="90" width="150" height="48" as="geometry"/></mxCell>
+    <mxCell id="h3" value="关键证据" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="410" y="90" width="240" height="48" as="geometry"/></mxCell>
+    <mxCell id="h4" value="证明目的" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="650" y="90" width="180" height="48" as="geometry"/></mxCell>
+    <mxCell id="h5" value="缺口/异议" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="830" y="90" width="170" height="48" as="geometry"/></mxCell>
+    <mxCell id="r1c1" value="争点一&#10;合同是否成立" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="138" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c2" value="主张方" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="138" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c3" value="E01 合同&#10;E02 付款凭证" style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="410" y="138" width="240" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c4" value="证明合意与履行" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="650" y="138" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c5" value="待补充：签章权限" style="rounded=0;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;fontSize=12;" vertex="1" parent="1"><mxGeometry x="830" y="138" width="170" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c1" value="争点二&#10;违约责任归属" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="210" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c2" value="双方" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="210" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c3" value="E08 催告函&#10;E12 会议纪要" style="rounded=0;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="410" y="210" width="240" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c4" value="证明履约顺序与迟延" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="650" y="210" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c5" value="争议：因果关系" style="rounded=0;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;fontSize=12;" vertex="1" parent="1"><mxGeometry x="830" y="210" width="170" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c1" value="争点三&#10;损失范围" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="282" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c2" value="主张方" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="282" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c3" value="E20 台账&#10;E21 鉴定意见" style="rounded=0;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="410" y="282" width="240" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c4" value="证明金额与扣减" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="650" y="282" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c5" value="待补强：计算口径" style="rounded=0;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;fontSize=12;" vertex="1" parent="1"><mxGeometry x="830" y="282" width="170" height="72" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

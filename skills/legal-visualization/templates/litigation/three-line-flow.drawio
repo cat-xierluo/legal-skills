@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：三线流向图（three-line-flow）
+  适用场景：B-07 三线合一票据图；I-07 多方货运/付款关系图
+  必要输入字段：entities[].role, relations[].relation_type=ticket/actual/fund
+  默认布局：主体横向排列，票面流转/实际流转/资金流向三种线型叠加
+  可变参数：主体数、是否拆上下两张票据、是否显示损失差额
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="三线流向图（票面·实际·资金）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="issuer" value="出票/发货主体"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="120" width="150" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="holder" value="名义持有人"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="300" y="120" width="150" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="operator" value="实际经手人"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="520" y="120" width="150" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="bank" value="银行/承运/第三方"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="740" y="120" width="180" height="64" as="geometry"/>
+    </mxCell>
+    <mxCell id="ticket-label" value="票面/单据流"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FFFFFF;fontColor=#1f77b4;fontSize=11;fontStyle=1;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="515" y="68" width="100" height="24" as="geometry"/>
+    </mxCell>
+    <mxCell id="actual-label" value="实际流转"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FFFFFF;fontColor=#FF8C00;fontSize=11;fontStyle=1;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="455" y="196" width="82" height="28" as="geometry"/>
+    </mxCell>
+    <mxCell id="fund-label" value="资金流向"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FFFFFF;fontColor=#C0392B;fontSize=11;fontStyle=1;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="665" y="196" width="82" height="28" as="geometry"/>
+    </mxCell>
+    <mxCell id="return-label" value="待补充：返还/回流金额"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FFFFFF;fontColor=#666666;fontSize=11;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="275" y="242" width="150" height="24" as="geometry"/>
+    </mxCell>
+    <mxCell id="ticket1" value=""
+      style="endArrow=classic;strokeWidth=3;strokeColor=#1f77b4;edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.15;entryX=0;entryY=0.15;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="issuer" target="holder" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="ticket2" value=""
+      style="endArrow=classic;strokeWidth=3;strokeColor=#1f77b4;edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.15;entryX=0;entryY=0.15;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="holder" target="bank" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="actual1" value=""
+      style="endArrow=classic;dashed=1;strokeWidth=3;strokeColor=#FF8C00;edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.45;entryX=0;entryY=0.45;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="holder" target="operator" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="actual2" value=""
+      style="endArrow=classic;dashed=1;strokeWidth=3;strokeColor=#FF8C00;edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.45;entryX=0;entryY=0.45;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="operator" target="bank" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="fund1" value=""
+      style="endArrow=classic;strokeWidth=3;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.78;entryX=1;entryY=0.78;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="bank" target="operator" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="fund2" value=""
+      style="endArrow=classic;dashed=1;strokeWidth=2;strokeColor=#666666;edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.9;entryX=1;entryY=0.9;exitPerimeter=1;entryPerimeter=1;"
+      edge="1" source="operator" target="issuer" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：蓝色实线=票面/单据；橙色虚线=实际流转；红色实线=资金；灰色虚线=返还或需核对回流"
+      style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;fontSize=10;fontColor=#757575;align=left;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="270" width="840" height="48" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

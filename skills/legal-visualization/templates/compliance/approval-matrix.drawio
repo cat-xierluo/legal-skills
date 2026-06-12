@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：审批矩阵（approval-matrix）
+  适用场景：CG-02 组织权限与审批矩阵；CG-10 关联交易识别
+  必要输入字段：sections[].label（事项类型），relations[].actor（角色）
+  默认布局：行=事项类型，列=角色（发起/审核/批准/备案/监督），格内动作
+  可变参数：事项类型数、角色数、是否含金额阈值
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="组织权限与审批矩阵"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="header1" value="事项类型 \\ 角色"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="100" width="160" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="h2" value="发起"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="240" y="100" width="120" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="h3" value="审核"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="360" y="100" width="120" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="h4" value="批准"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="480" y="100" width="120" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="h5" value="备案"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="100" width="120" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="h6" value="监督"
+      style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="720" y="100" width="120" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1l" value="采购合同&#10;（金额阈值：待补充）"
+      style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=1;fontSize=11;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="150" width="160" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1c1" value="业务部门"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="240" y="150" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1c2" value="法务/财务"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="360" y="150" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1c3" value="管理层"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="480" y="150" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1c4" value="董事会"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="150" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1c5" value="内审"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="720" y="150" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2l" value="付款审批"
+      style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=1;fontSize=11;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="210" width="160" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2c1" value="业务/财务"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="240" y="210" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2c2" value="财务总监"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="360" y="210" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2c3" value="CFO"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="480" y="210" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2c4" value="—"
+      style="rounded=0;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="210" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2c5" value="内审"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="720" y="210" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3l" value="关联交易"
+      style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=1;fontSize=11;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="270" width="160" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3c1" value="业务部门"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="240" y="270" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3c2" value="法务/财务"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="360" y="270" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3c3" value="—"
+      style="rounded=0;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="480" y="270" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3c4" value="董事会/股东会"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="270" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3c5" value="独立董事/监事会"
+      style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=10;align=center;"
+      vertex="1" parent="1">
+      <mxGeometry x="720" y="270" width="120" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：橙色=终审/最高决策；灰色=不参与"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="350" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

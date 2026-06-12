@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：法律服务路线图（service-roadmap）
+  适用场景：SP-03 法律服务路线图；SP-05 服务阶段里程碑图；SP-12 法律顾问年度服务地图
+  必要输入字段：events[].label, events[].date, events[].actor, deliverables[].label
+  默认布局：阶段横向展开，每阶段列任务、交付物和委托人配合事项
+  可变参数：阶段数、是否显示费用节点、是否拆年度/专项
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="法律服务路线图"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="1040" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="phase1" value="1. 诊断"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="100" width="230" height="300" as="geometry"/>
+    </mxCell>
+    <mxCell id="phase2" value="2. 方案"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="330" y="100" width="230" height="300" as="geometry"/>
+    </mxCell>
+    <mxCell id="phase3" value="3. 执行"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="580" y="100" width="230" height="300" as="geometry"/>
+    </mxCell>
+    <mxCell id="phase4" value="4. 交付/复盘"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="830" y="100" width="230" height="300" as="geometry"/>
+    </mxCell>
+    <mxCell id="p1task" value="任务&#10;访谈、材料清单、风险初筛" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="105" y="155" width="180" height="62" as="geometry"/></mxCell>
+    <mxCell id="p1out" value="交付&#10;问题诊断图" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="105" y="245" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p1client" value="委托人配合&#10;补材料/确认目标" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="105" y="325" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p2task" value="任务&#10;路径设计、报价、范围确认" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="355" y="155" width="180" height="62" as="geometry"/></mxCell>
+    <mxCell id="p2out" value="交付&#10;服务方案/交付物矩阵" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="355" y="245" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p2client" value="委托人配合&#10;确认预算和路径" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="355" y="325" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p3task" value="任务&#10;执行、沟通、阶段复核" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="605" y="155" width="180" height="62" as="geometry"/></mxCell>
+    <mxCell id="p3out" value="交付&#10;阶段成果/会议纪要" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="605" y="245" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p3client" value="委托人配合&#10;业务反馈/决策" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="605" y="325" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p4task" value="任务&#10;定稿、交付、复盘" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="855" y="155" width="180" height="62" as="geometry"/></mxCell>
+    <mxCell id="p4out" value="交付&#10;正式成果/续约建议" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="855" y="245" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="p4client" value="委托人配合&#10;验收/付款/归档" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="855" y="325" width="180" height="54" as="geometry"/></mxCell>
+    <mxCell id="e1" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p1task" target="p2task" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p2task" target="p3task" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p3task" target="p4task" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

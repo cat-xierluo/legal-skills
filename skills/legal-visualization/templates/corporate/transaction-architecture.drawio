@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：交易架构图（transaction-architecture）
+  适用场景：MA-01 交易架构；S-08 境内外架构；C-18 BOT 模式结构
+  必要输入字段：entities[].role, relations[].relation_type=contract/payment/equity
+  默认布局：四方居中关系图（买方/卖方/标的公司/中介），合同实线+资金虚线双层
+  可变参数：主体数、是否含境外/离岸、是否含 SPV
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="交易架构图（股权转让）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="buyer" value="买方（投资人）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="200" width="200" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="seller" value="卖方（创始股东）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="200" width="200" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="target" value="目标公司"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=3;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="340" y="380" width="200" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="spa" value="SPA 股权转让协议&#10;（待补充：签约日、价款）"
+      style="shape=document;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="340" y="200" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="escrow" value="资金监管账户&#10;（待补充：开户行）"
+      style="shape=cylinder3;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;size=10;"
+      vertex="1" parent="1">
+      <mxGeometry x="340" y="100" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="签署"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="buyer" target="spa" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value="签署"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=0;exitY=0.5;entryX=1;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="seller" target="spa" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value="股权转让"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=0;entryX=1;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="target" target="seller" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" value="支付价款（待补充：金额）"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;dashed=1;exitX=0.5;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="buyer" target="escrow" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="180" y="130"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e5" value="支付至卖方（条件成就后）"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="escrow" target="seller" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="800" y="130"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="legend" value="图例：实线=合同/法律关系；红色虚线=资金/付款"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="500" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

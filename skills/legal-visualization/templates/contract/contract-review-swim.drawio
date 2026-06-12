@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：合同审查泳道图（contract-review-swim）
+  适用场景：CT-02 合同审查泳道图；CT-07 供应商/客户准入流程
+  必要输入字段：events[].actor, events[].label
+  默认布局：5 泳道（业务/法务/财务/管理层/签署）横向阶段（起草→提交→审查→修改→批准→签署）
+  可变参数：泳道数（2-6）、阶段数、是否含修订回路
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="合同审查泳道图"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="1100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="biz" value="业务部门"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="100" width="1100" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="law" value="法务"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="180" width="1100" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="fin" value="财务"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="260" width="1100" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="mgmt" value="管理层"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="340" width="1100" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="sign" value="签署用印"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="420" width="1100" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="b1" value="起草"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="135" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="l1" value="合规审查"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="280" y="215" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="f1" value="财务评审"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="460" y="295" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="m1" value="审批"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="640" y="375" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="b2" value="修改"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="820" y="135" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="s1" value="签署盖章"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="1000" y="455" width="120" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="提交"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="b1" target="l1" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="200" y="200"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e2" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="l1" target="f1" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="380" y="280"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e3" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="f1" target="m1" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="560" y="360"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e4" value="退修"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#9E9E9E;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="m1" target="b2" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="780" y="320"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e5" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0.5;entryY=0;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="b2" target="s1" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="1060" y="280"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="legend" value="图例：实线=推进；橙色=终审；虚线=退修回路"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="520" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

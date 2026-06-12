@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：案件办理路线图（litigation-route）
+  适用场景：LP-01 案件办理全流程（诉前评估→起诉→庭审→判后→执行→再审）
+  必要输入字段：events[].date, events[].label, events[].actor
+  默认布局：6 阶段横向流程 + 上方任务/下方交付物
+  可变参数：阶段数（可裁剪到 4-5）、分支（调解/和解旁路）
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="案件办理路线图（民事诉讼主流程）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="1100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="s1" value="诉前评估"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="s2" value="起诉准备"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="260" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="s3" value="庭审"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="440" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="s4" value="判后"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="620" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="s5" value="执行"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="800" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="s6" value="再审/监督"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="980" y="120" width="150" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="t1" value="初步法律意见&#10;证据初步梳理"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="t2" value="起诉状、证据目录&#10;财产保全"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="260" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="t3" value="举证质证、辩论&#10;庭审提纲"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="440" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="t4" value="裁判文书&#10;上诉/履行评估"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="620" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="t5" value="执行申请&#10;财产线索"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="800" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="t6" value="再审申请/检察建议&#10;（非常规路径）"
+      style="text;fontSize=11;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="980" y="200" width="150" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="s1" target="s2" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="s2" target="s3" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="s3" target="s4" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="s4" target="s5" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e5" value="可选"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#9E9E9E;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="s5" target="s6" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：实线=主流程；橙色=非常规路径；虚线=可选"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="280" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

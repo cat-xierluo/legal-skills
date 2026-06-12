@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：工期延误进度图（construction-delay-progress）
+  适用场景：C-10 工期延误责任图；C-11 多楼栋工期节点图；C-12 抽象进度因果图；C-13 核心工序放大图
+  必要输入字段：events[].date, events[].actor, events[].legal_effect, sections[].label
+  默认布局：计划进度在上，实际进度在下，延误区间用强调色连接
+  可变参数：楼栋/工序数量、延误区间数量、是否显示延误天数占比
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="工期延误进度图（计划与实际对比）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="lanePlan" value="计划进度"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="110" width="900" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="laneActual" value="实际进度"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="260" width="900" height="120" as="geometry"/>
+    </mxCell>
+    <mxCell id="p1" value="开工" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="150" width="90" height="42" as="geometry"/></mxCell>
+    <mxCell id="p2" value="关键工序应完成" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="380" y="150" width="130" height="42" as="geometry"/></mxCell>
+    <mxCell id="p3" value="计划竣工" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="720" y="150" width="110" height="42" as="geometry"/></mxCell>
+    <mxCell id="a1" value="实际开工" style="ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="300" width="90" height="42" as="geometry"/></mxCell>
+    <mxCell id="a2" value="关键工序实际完成" style="ellipse;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="520" y="300" width="150" height="42" as="geometry"/></mxCell>
+    <mxCell id="a3" value="实际竣工" style="ellipse;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="850" y="300" width="100" height="42" as="geometry"/></mxCell>
+    <mxCell id="bar" value="待补充：延误区间&#10;天数与责任主体"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="400" y="410" width="360" height="42" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p1" target="p2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p2" target="p3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="a1" target="a2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="" style="endArrow=classic;strokeWidth=2;strokeColor=#333333;edgeStyle=orthogonalEdgeStyle;" edge="1" source="a2" target="a3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="delay1" value="延误" style="endArrow=none;dashed=1;strokeWidth=3;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p2" target="a2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="delay2" value="延误" style="endArrow=none;dashed=1;strokeWidth=3;strokeColor=#C0392B;edgeStyle=orthogonalEdgeStyle;" edge="1" source="p3" target="a3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="note" value="使用要求：主图只保留关键工序；楼栋明细、监理记录、签证材料放附图或材料矩阵。"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="470" width="760" height="24" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：工作范围与交付物矩阵（scope-deliverable-matrix）
+  适用场景：SP-04 工作范围与交付物矩阵；SP-06 风险-措施-责任矩阵
+  必要输入字段：sections[].label, deliverables[].label, entities[].role, relations[].status
+  默认布局：行=工作模块，列=交付物/责任人/是否包含/委托人配合
+  可变参数：工作模块数、是否含费用、是否标注不包含事项
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="工作范围与交付物矩阵"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="1020" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="h1" value="工作模块" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="80" y="90" width="180" height="48" as="geometry"/></mxCell>
+    <mxCell id="h2" value="交付物" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="260" y="90" width="220" height="48" as="geometry"/></mxCell>
+    <mxCell id="h3" value="责任人" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="480" y="90" width="150" height="48" as="geometry"/></mxCell>
+    <mxCell id="h4" value="是否包含" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="630" y="90" width="140" height="48" as="geometry"/></mxCell>
+    <mxCell id="h5" value="委托人配合/边界" style="rounded=0;whiteSpace=wrap;fillColor=#1f77b4;strokeColor=#1f77b4;fontColor=#FFFFFF;fontSize=13;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="770" y="90" width="250" height="48" as="geometry"/></mxCell>
+    <mxCell id="r1c1" value="模块一&#10;事实梳理" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="138" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c2" value="材料清单&#10;问题诊断图" style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="138" width="220" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c3" value="律师团队" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="480" y="138" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c4" value="包含" style="rounded=0;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#BDBDBD;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="630" y="138" width="140" height="72" as="geometry"/></mxCell>
+    <mxCell id="r1c5" value="委托人需提供基础材料和联系人" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="770" y="138" width="250" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c1" value="模块二&#10;方案设计" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="210" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c2" value="服务路线图&#10;风险-措施矩阵" style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="210" width="220" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c3" value="主办律师" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="480" y="210" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c4" value="包含" style="rounded=0;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#BDBDBD;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="630" y="210" width="140" height="72" as="geometry"/></mxCell>
+    <mxCell id="r2c5" value="委托人确认目标、预算和决策口径" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="770" y="210" width="250" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c1" value="模块三&#10;专项执行" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="80" y="282" width="180" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c2" value="正式文书&#10;沟通纪要/交付包" style="rounded=0;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="260" y="282" width="220" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c3" value="项目团队" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;" vertex="1" parent="1"><mxGeometry x="480" y="282" width="150" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c4" value="另行确认" style="rounded=0;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#BDBDBD;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="630" y="282" width="140" height="72" as="geometry"/></mxCell>
+    <mxCell id="r3c5" value="范围外事项另行报价或变更确认" style="rounded=0;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;fontSize=12;" vertex="1" parent="1"><mxGeometry x="770" y="282" width="250" height="72" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>

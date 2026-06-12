@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：单公司股权结构（equity-structure）
+  适用场景：S-04 单公司股权表；S-05 股权饼图；S-06 单公司股权树状图
+  必要输入字段：entities[].role, entities[].group, relations[].label
+  默认布局：树状图自上而下 3-4 层；控股加粗
+  可变参数：股东数、是否显示控股比例、是否标"实际控制人"
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="公司股权结构图（含控股比例）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="ctrl" value="实际控制人（待补充：身份证号）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=3;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="380" y="100" width="240" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="holdA" value="控股平台 A&#10;（待补充：注册地）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="120" y="220" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="holdB" value="控股平台 B"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="380" y="220" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="minor" value="小股东（员工持股）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=1;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="640" y="220" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="company" value="目标公司&#10;（注册资本：待补充）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=3;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="280" y="380" width="320" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="100%"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=1;entryX=0.5;entryY=0;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="ctrl" target="holdA" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value="100%"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=1;entryX=0.5;entryY=0;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="ctrl" target="holdB" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value="60%"
+      style="endArrow=classic;strokeWidth=3;strokeColor=#333333;exitX=0.5;exitY=1;entryX=0.25;entryY=0;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="holdA" target="company" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" value="30%"
+      style="endArrow=classic;strokeWidth=3;strokeColor=#333333;exitX=0.5;exitY=1;entryX=0.5;entryY=0;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="holdB" target="company" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e5" value="10%"
+      style="endArrow=classic;strokeWidth=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.75;entryY=0;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="minor" target="company" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：粗线=控股；细线=参股；橙色=实际控制人"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="490" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

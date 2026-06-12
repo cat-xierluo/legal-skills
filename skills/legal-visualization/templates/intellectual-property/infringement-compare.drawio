@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：侵权对比图（infringement-compare）
+  适用场景：IP 专利侵权对比；技术特征逐项比对
+  必要输入字段：sections[].label（权利要求 vs 技术特征），relations[].status
+  默认布局：左右双栏 + 中间比对结果连线
+  可变参数：技术特征数（3-10）、是否含等同原则标注
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="专利侵权对比图（权利要求 vs 被控技术特征）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="sub" value="（待补充：专利号、被控产品）"
+      style="text;fontSize=12;align=center;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="60" width="880" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="leftTitle" value="权利要求（原告专利）"
+      style="text;fontSize=14;fontStyle=1;align=center;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="100" width="320" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="rightTitle" value="被控技术特征（被告产品）"
+      style="text;fontSize=14;fontStyle=1;align=center;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="560" y="100" width="320" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="f1l" value="特征 1：A 结构"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="160" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="f1r" value="特征 1：A' 等同结构"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="580" y="160" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="f2l" value="特征 2：B 部件"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="240" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="f2r" value="特征 2：B 部件"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="580" y="240" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="f3l" value="特征 3：C 连接方式"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="320" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="f3r" value="特征 3：待补充"
+      style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="580" y="320" width="280" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="等同"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#FF8C00;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="f1l" target="f1r" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="480" y="155"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e2" value="相同"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#1f77b4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="f2l" target="f2r" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="480" y="265"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="e3" value="缺失"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#9E9E9E;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
+      edge="1" source="f3l" target="f3r" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="480" y="345"/>
+        </Array>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="conclusion" value="结论栏：特征 1 等同侵权，特征 2 相同侵权，特征 3 待补充"
+      style="text;fontSize=13;align=center;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="410" width="760" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：蓝色=相同；橙色=等同；灰色=缺失/待补充"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="100" y="470" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

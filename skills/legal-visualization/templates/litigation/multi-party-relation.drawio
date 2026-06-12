@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：多主体关系图（multi-party-relation）
+  适用场景：L-01 签订主体与履行主体不一致；L-02 多合同与关联主体借款
+  必要输入字段：entities[].role, relations[].status, sections
+  默认布局：左名义 / 中核心 / 右实际 三列，核心主体居中
+  可变参数：主体数量、合同/资金线数量、强调色
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="多主体借款关系图（名义与实际分离）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="subtitle" value="L-01 套路：名义借款人 / 实际用款人 / 收款第三人"
+      style="text;fontSize=14;align=center;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="60" width="880" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="lender" value="贷款人（原告）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="380" y="120" width="240" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="nominal" value="名义借款人（被告）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="280" width="240" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="actual" value="实际用款人（第三人）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="380" y="280" width="240" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="account" value="收款账户（待补充：开户行）"
+      style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="680" y="280" width="240" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="contract" value="借款合同（待补充：签订日期、金额）"
+      style="shape=document;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="160" width="200" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="签订合同（已证）"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=0;entryX=0.5;entryY=1;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="nominal" target="lender" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value="实际用款（推定）"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#9E9E9E;dashed=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="actual" target="nominal" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value="资金流向（待补充）"
+      style="endArrow=classic;strokeWidth=2;strokeColor=#9E9E9E;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="actual" target="account" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="图例：实线=已证；虚线灰=推定/待补充；橙色=第三人"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="400" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

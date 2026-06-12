@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：项目平面标注图（project-site-map）
+  适用场景：R-05 房地产项目平面图；G-17 平面/路线/现场图
+  必要输入字段：sections[].label, sections[].status, evidence[].source
+  默认布局：项目平面为底，楼栋/区域编号，右侧图例说明有异议范围
+  可变参数：楼栋数量、争议区域数量、是否导入真实底图
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="房地产项目平面标注图"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="site" value="项目范围（示意）"
+      style="rounded=0;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=12;fontColor=#757575;verticalAlign=top;align=left;spacing=8;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="90" width="660" height="420" as="geometry"/>
+    </mxCell>
+    <mxCell id="b1" value="1号楼&#10;已完工" style="rounded=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="130" y="150" width="130" height="70" as="geometry"/></mxCell>
+    <mxCell id="b2" value="争议：2号楼&#10;范围有异议" style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=3;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="310" y="150" width="130" height="70" as="geometry"/></mxCell>
+    <mxCell id="b3" value="待补充：3号楼&#10;权属需核对" style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;dashed=1;fontSize=12;" vertex="1" parent="1"><mxGeometry x="490" y="150" width="130" height="70" as="geometry"/></mxCell>
+    <mxCell id="road" value="主入口/道路" style="rounded=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#9E9E9E;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="130" y="280" width="490" height="42" as="geometry"/></mxCell>
+    <mxCell id="area1" value="待补充：地下车库/配套用房&#10;面积需补充" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="180" y="370" width="380" height="70" as="geometry"/></mxCell>
+    <mxCell id="legend" value="图例&#10;绿色：无异议/已完工&#10;红色：有异议范围&#10;灰色虚线：需核对权属&#10;橙色：配套/需分配区域"
+      style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=12;align=left;spacing=8;"
+      vertex="1" parent="1">
+      <mxGeometry x="780" y="120" width="220" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="source" value="待补充：底图来源；比例：示意，非测绘图"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="80" y="530" width="520" height="24" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

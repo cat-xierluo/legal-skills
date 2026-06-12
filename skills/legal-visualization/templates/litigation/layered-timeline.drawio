@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：分层程序时间轴（layered-timeline）
+  适用场景：G-05 分层程序时间轴；C-09 开工时间认定；B-02 票据时间图
+  必要输入字段：events[].date, events[].actor, events[].legal_effect
+  默认布局：3 泳道（原告/法院/被告）横向时间轴
+  可变参数：泳道数、时间节点数、强调事件着色
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="分层程序时间轴（原告·法院·被告）"
+      style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="laneP" value="原告"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="100" width="880" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="laneC" value="法院"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="210" width="880" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="laneO" value="被告"
+      style="swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;fontSize=14;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="320" width="880" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="p1" value="起诉"
+      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="120" y="135" width="100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="c1" value="立案"
+      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="280" y="245" width="100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="o1" value="答辩"
+      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="440" y="355" width="100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="c2" value="开庭"
+      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      vertex="1" parent="1">
+      <mxGeometry x="600" y="245" width="100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="c3" value="判决"
+      style="ellipse;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
+      vertex="1" parent="1">
+      <mxGeometry x="760" y="245" width="100" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="p1" target="c1" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="c1" target="o1" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="o1" target="c2" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" value=""
+      style="endArrow=classic;strokeWidth=2;strokeColor=#333333;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;"
+      edge="1" source="c2" target="c3" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="蓝色=当事人动作/法院常规程序；橙色=终局裁判；时间从左到右"
+      style="text;fontSize=10;align=left;fillColor=none;strokeColor=none;fontColor=#757575;"
+      vertex="1" parent="1">
+      <mxGeometry x="60" y="440" width="600" height="20" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>
