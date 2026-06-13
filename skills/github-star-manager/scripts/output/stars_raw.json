@@ -1,0 +1,5312 @@
+[
+  {
+    "description": "\"OpenHarness: Open Agent Harness with a Built-in Personal Agent--Ohmo!\"",
+    "full_name": "HKUDS/OpenHarness",
+    "id": 1198616956,
+    "language": "Python",
+    "name": "OpenHarness",
+    "starred_at": "2026-06-12T09:37:54Z",
+    "stars": 13792
+  },
+  {
+    "description": "AI agent workspace with Code and Write modes built into your application.",
+    "full_name": "KunAgent/Kun",
+    "id": 1245699721,
+    "language": "TypeScript",
+    "name": "Kun",
+    "starred_at": "2026-06-10T13:44:04Z",
+    "stars": 3856
+  },
+  {
+    "description": "DeepSeek-native AI coding agent for your terminal. Engineered around prefix-cache stability — leave it running.",
+    "full_name": "esengine/DeepSeek-Reasonix",
+    "id": 1216785679,
+    "language": "Go",
+    "name": "DeepSeek-Reasonix",
+    "starred_at": "2026-06-10T13:41:20Z",
+    "stars": 21557
+  },
+  {
+    "description": "SkillOpt is a text-space optimizer that trains reusable natural-language skills for frozen LLM agents through trajectory-driven edits, validation-gated updates, and deployable best_skill.md artifacts.",
+    "full_name": "microsoft/SkillOpt",
+    "id": 1232669890,
+    "language": "Python",
+    "name": "SkillOpt",
+    "starred_at": "2026-06-08T12:41:00Z",
+    "stars": 6023
+  },
+  {
+    "description": "Turn any technical book PDF into a Claude Code skill — ready to study, reference, and use while you work.",
+    "full_name": "virgiliojr94/book-to-skill",
+    "id": 1226123343,
+    "language": "Python",
+    "name": "book-to-skill",
+    "starred_at": "2026-06-08T09:54:49Z",
+    "stars": 5266
+  },
+  {
+    "description": "📚 给中国律师/法务的一站式开源 AI 工具地图｜200+ 个 gh 核验开源仓·按工作场景分类·能否商用标注｜awesome list",
+    "full_name": "lilialla/awesome-legal-ai-zh",
+    "id": 1262097785,
+    "language": "Shell",
+    "name": "awesome-legal-ai-zh",
+    "starred_at": "2026-06-08T01:54:49Z",
+    "stars": 18
+  },
+  {
+    "description": "Agent plugins for Microsoft Office but BYOK for any model and provider",
+    "full_name": "hewliyang/office-agents",
+    "id": 1146582316,
+    "language": "TypeScript",
+    "name": "office-agents",
+    "starred_at": "2026-06-05T14:34:13Z",
+    "stars": 529
+  },
+  {
+    "description": "Claude / Codex / Gemini API Proxy - CCX",
+    "full_name": "BenedictKing/ccx",
+    "id": 1146425139,
+    "language": "Go",
+    "name": "ccx",
+    "starred_at": "2026-06-05T11:04:00Z",
+    "stars": 3566
+  },
+  {
+    "description": "Programmatic video for coding agents — HTML to video on your laptop. Turn HTML, CSS & data into real MP4s with pluggable render engines, 21 templates, AI soundtrack. Apache-2.0, no per-render fees. An official project by the Open Design team.",
+    "full_name": "nexu-io/html-video",
+    "id": 1250822765,
+    "language": "HTML",
+    "name": "html-video",
+    "starred_at": "2026-06-05T09:49:14Z",
+    "stars": 2937
+  },
+  {
+    "description": "LLM Wiki is a cross-platform desktop application that turns your documents into an organized, interlinked knowledge base — automatically. Instead of traditional RAG (retrieve-and-answer from scratch every time), the LLM incrementally builds and maintains a persistent wiki from your sources。",
+    "full_name": "nashsu/llm_wiki",
+    "id": 1204828304,
+    "language": "TypeScript",
+    "name": "llm_wiki",
+    "starred_at": "2026-06-02T10:08:40Z",
+    "stars": 11284
+  },
+  {
+    "description": "Your infinite canvas workspace for agents, tasks, knowledge, and research. An infinite canvas for Claude Code, Codex, terminals, tasks, and notes.",
+    "full_name": "DeadWaveWave/opencove",
+    "id": 1176808813,
+    "language": "TypeScript",
+    "name": "opencove",
+    "starred_at": "2026-05-30T18:05:12Z",
+    "stars": 1434
+  },
+  {
+    "description": "FreeCAD MCP(Model Context Protocol) server",
+    "full_name": "neka-nat/freecad-mcp",
+    "id": 723307046,
+    "language": "Python",
+    "name": "freecad-mcp",
+    "starred_at": "2026-05-30T18:04:31Z",
+    "stars": 1107
+  },
+  {
+    "description": "Describe what you need — a presentation, lesson, or story — and let the AI build clean, beautiful HTML slides for you. Local-first. Works offline. Works for you.",
+    "full_name": "arcsin1/oh-my-ppt",
+    "id": 1219896053,
+    "language": "TypeScript",
+    "name": "oh-my-ppt",
+    "starred_at": "2026-05-30T10:49:40Z",
+    "stars": 1558
+  },
+  {
+    "description": "一款完全开源的微信公众号文章获取、 RSS 订阅API服务，支持IP代理池反风控。",
+    "full_name": "tmwgsicp/wechat-download-api",
+    "id": 1164859248,
+    "language": "Python",
+    "name": "wechat-download-api",
+    "starred_at": "2026-05-30T10:48:42Z",
+    "stars": 684
+  },
+  {
+    "description": "A library of HTML slide templates designed so any coding agent can pick the right one and produce a beautiful deck on the user's behalf, automatically.",
+    "full_name": "zarazhangrui/beautiful-html-templates",
+    "id": 1229531271,
+    "language": "HTML",
+    "name": "beautiful-html-templates",
+    "starred_at": "2026-05-29T10:41:45Z",
+    "stars": 2793
+  },
+  {
+    "description": "Skills for Real Engineers. Straight from my .claude directory.",
+    "full_name": "mattpocock/skills",
+    "id": 1148788086,
+    "language": "Shell",
+    "name": "skills",
+    "starred_at": "2026-05-29T10:41:10Z",
+    "stars": 126882
+  },
+  {
+    "description": "Official AI skills for GSAP. These skills teach AI coding agents how to correctly use GSAP (GreenSock Animation Platform), including best practices, common animation patterns, and plugin usage.",
+    "full_name": "greensock/gsap-skills",
+    "id": 1172781277,
+    "language": null,
+    "name": "gsap-skills",
+    "starred_at": "2026-05-29T10:33:01Z",
+    "stars": 9047
+  },
+  {
+    "description": "macOS menu bar app that tells you, in plain English, what each USB-C cable plugged into your Mac can actually do",
+    "full_name": "darrylmorley/whatcable",
+    "id": 1226286910,
+    "language": "Swift",
+    "name": "whatcable",
+    "starred_at": "2026-05-29T10:32:42Z",
+    "stars": 5709
+  },
+  {
+    "description": "A Claude Code plugin that maintains `FILETREE.md`.",
+    "full_name": "nekocode/filetree-skill",
+    "id": 1249888354,
+    "language": "Python",
+    "name": "filetree-skill",
+    "starred_at": "2026-05-29T09:59:06Z",
+    "stars": 139
+  },
+  {
+    "description": null,
+    "full_name": "manmonthW/wechat-daily-summary",
+    "id": 1239323734,
+    "language": "Python",
+    "name": "wechat-daily-summary",
+    "starred_at": "2026-05-17T10:17:14Z",
+    "stars": 9
+  },
+  {
+    "description": "A curated list of HTML slide generation skills and template libraries for Claude Code, Codex, Cursor, OpenClaw, and Hermes. 精选 HTML 演示文稿 Skill 与模板库。",
+    "full_name": "ToseaAI/awesome-html-slide-skills",
+    "id": 1237257052,
+    "language": null,
+    "name": "awesome-html-slide-skills",
+    "starred_at": "2026-05-17T07:27:17Z",
+    "stars": 42
+  },
+  {
+    "description": "Open-source local Agent orchestration for self-improving agent teams: run agents, review work, and turn feedback into reusable skills.",
+    "full_name": "Undertone0809/rudder",
+    "id": 1196009807,
+    "language": "TypeScript",
+    "name": "rudder",
+    "starred_at": "2026-05-15T16:04:50Z",
+    "stars": 166
+  },
+  {
+    "description": "DeepSeek + MiMo coding agent in terminal",
+    "full_name": "Hmbown/CodeWhale",
+    "id": 1137711311,
+    "language": "Rust",
+    "name": "CodeWhale",
+    "starred_at": "2026-05-11T08:14:59Z",
+    "stars": 38156
+  },
+  {
+    "description": "Evaluate agent skill quality. Find the weakest link. Fix it. Prove it worked.",
+    "full_name": "Evol-ai/SkillCompass",
+    "id": 1186304875,
+    "language": "JavaScript",
+    "name": "SkillCompass",
+    "starred_at": "2026-05-10T08:50:40Z",
+    "stars": 224
+  },
+  {
+    "description": "一人公司系列教程",
+    "full_name": "xiaotianfotos/OPC",
+    "id": 1202561293,
+    "language": "Python",
+    "name": "OPC",
+    "starred_at": "2026-05-09T14:10:17Z",
+    "stars": 661
+  },
+  {
+    "description": "The open-source app everyone uses to manage agents at work",
+    "full_name": "paperclipai/paperclip",
+    "id": 1170821064,
+    "language": "TypeScript",
+    "name": "paperclip",
+    "starred_at": "2026-05-09T10:12:14Z",
+    "stars": 70201
+  },
+  {
+    "description": "OSS AI Legal Platform",
+    "full_name": "willchen96/mike",
+    "id": 1224854794,
+    "language": "TypeScript",
+    "name": "mike",
+    "starred_at": "2026-05-09T09:59:47Z",
+    "stars": 3716
+  },
+  {
+    "description": "🎨 Local-first, open-source Claude Design alternative. 🖥️ Native desktop app. ⚡ 259+ Skills · ✨ 142+ Design Systems 🖼️ Web · desktop · mobile prototypes · slides · images · videos · HyperFrames 📦 Sandboxed preview · HTML/PDF/PPTX/MP4 export 🤖 Claude Code / OpenClaw / Codex / Cursor / OpenCode / Qwen / Copilot / Hermes / Kimi & 17+ CLIs.",
+    "full_name": "nexu-io/open-design",
+    "id": 1223170290,
+    "language": "TypeScript",
+    "name": "open-design",
+    "starred_at": "2026-05-08T08:58:12Z",
+    "stars": 63965
+  },
+  {
+    "description": "Bridge local AI coding agents (Claude Code, Cursor, Gemini CLI, Codex) to messaging platforms (Feishu/Lark, DingTalk, Slack, Telegram, Discord, LINE, WeChat Work). Chat with your AI dev assistant from anywhere — no public IP required for most platforms.",
+    "full_name": "chenhg5/cc-connect",
+    "id": 1168978399,
+    "language": "Go",
+    "name": "cc-connect",
+    "starred_at": "2026-05-06T11:56:42Z",
+    "stars": 12266
+  },
+  {
+    "description": "GitNexus: The Zero-Server Code Intelligence Engine -       GitNexus is a client-side knowledge graph creator that runs entirely in your browser. Drop in a GitHub repo or ZIP file, and get an interactive knowledge graph wit a built in Graph RAG Agent. Perfect for code exploration",
+    "full_name": "abhigyanpatwari/GitNexus",
+    "id": 1031059905,
+    "language": "TypeScript",
+    "name": "GitNexus",
+    "starred_at": "2026-05-06T11:39:28Z",
+    "stars": 42026
+  },
+  {
+    "description": "AI coding assistant skill (Claude Code, Codex, OpenCode, Cursor, Gemini CLI, and more). Turn any folder of code, SQL schemas, R scripts, shell scripts, docs, papers, images, or videos into a queryable knowledge graph. App code + database schema + infrastructure in one graph.",
+    "full_name": "safishamsi/graphify",
+    "id": 1200597263,
+    "language": "Python",
+    "name": "graphify",
+    "starred_at": "2026-05-06T11:39:25Z",
+    "stars": 66264
+  },
+  {
+    "description": "The open-source managed agents platform. Turn coding agents into real teammates — assign tasks, track progress, compound skills.",
+    "full_name": "multica-ai/multica",
+    "id": 1133707766,
+    "language": "Go",
+    "name": "multica",
+    "starred_at": "2026-05-06T11:29:24Z",
+    "stars": 36411
+  },
+  {
+    "description": "Edit videos with coding agents",
+    "full_name": "browser-use/video-use",
+    "id": 1208221543,
+    "language": "Python",
+    "name": "video-use",
+    "starred_at": "2026-05-06T08:41:53Z",
+    "stars": 9569
+  },
+  {
+    "description": "tmux config with built-in terminal automation and agent-to-agent communication.",
+    "full_name": "ShawnPana/smux",
+    "id": 1169455604,
+    "language": "Shell",
+    "name": "smux",
+    "starred_at": "2026-05-06T06:29:26Z",
+    "stars": 1437
+  },
+  {
+    "description": "Claude Code 泄露源码 - 本地可运行版本，新增跨平台桌面端软件补齐Computer Use（附带核心模块解析）",
+    "full_name": "NanmiCoder/cc-haha",
+    "id": 1197569406,
+    "language": "TypeScript",
+    "name": "cc-haha",
+    "starred_at": "2026-04-22T10:28:55Z",
+    "stars": 12550
+  },
+  {
+    "description": "🦦 Crayotter: A Multimodal AI-Agent for Video-Editing, Video-Composing, and Video Production. Powered by Multimodal LLMs for autonomous Text-to-Video agentic framework. | 基于多模态大模型 (Multimodal LLMs) 的 AI 剪辑智能体，支持从文字需求到视频成品的端到端全自动生产与创作。",
+    "full_name": "idwts/Crayotter",
+    "id": 1173393423,
+    "language": "Python",
+    "name": "Crayotter",
+    "starred_at": "2026-04-21T12:26:12Z",
+    "stars": 115
+  },
+  {
+    "description": "The open-source AI voice studio. Clone, dictate, create.",
+    "full_name": "jamiepine/voicebox",
+    "id": 1141782198,
+    "language": "TypeScript",
+    "name": "voicebox",
+    "starred_at": "2026-04-21T11:27:13Z",
+    "stars": 29815
+  },
+  {
+    "description": "Huashu Design · HTML-native design skill for Claude Code · Claude Code 里 HTML 原生的设计 skill · 高保真原型 / 幻灯片 / 动画 + 20 设计哲学 + 5 维评审 + MP4 导出 · Agent-agnostic",
+    "full_name": "alchaincyf/huashu-design",
+    "id": 1215145625,
+    "language": "HTML",
+    "name": "huashu-design",
+    "starred_at": "2026-04-21T11:18:40Z",
+    "stars": 18485
+  },
+  {
+    "description": "Local-first AI time tracking and analytics for macOS and Windows, built with Tauri.",
+    "full_name": "gitxuzhefeng/timelines",
+    "id": 1195900462,
+    "language": "Rust",
+    "name": "timelines",
+    "starred_at": "2026-04-19T14:54:55Z",
+    "stars": 14
+  },
+  {
+    "description": null,
+    "full_name": "ant-design/antd-skill",
+    "id": 1144788538,
+    "language": null,
+    "name": "antd-skill",
+    "starred_at": "2026-04-19T14:54:17Z",
+    "stars": 97
+  },
+  {
+    "description": "数字生命卡兹克开源的 AI Skills 合集",
+    "full_name": "KKKKhazix/khazix-skills",
+    "id": 1202599845,
+    "language": "Python",
+    "name": "khazix-skills",
+    "starred_at": "2026-04-19T14:53:58Z",
+    "stars": 14608
+  },
+  {
+    "description": "Generate beautiful dark-themed system architecture diagrams as standalone HTML/SVG files. Works as a Claude AI skill.    ",
+    "full_name": "Cocoon-AI/architecture-diagram-generator",
+    "id": 1121262780,
+    "language": "HTML",
+    "name": "architecture-diagram-generator",
+    "starred_at": "2026-04-19T14:48:14Z",
+    "stars": 5884
+  },
+  {
+    "description": "HTML PPT Studio — AgentSkill with 24 themes, 31 layouts, 20+ animations for building professional HTML presentations",
+    "full_name": "lewislulu/html-ppt-skill",
+    "id": 1211235520,
+    "language": "HTML",
+    "name": "html-ppt-skill",
+    "starred_at": "2026-04-19T14:43:46Z",
+    "stars": 5956
+  },
+  {
+    "description": "Ralph is an autonomous AI agent loop that runs repeatedly until all PRD items are complete. ",
+    "full_name": "snarktank/ralph",
+    "id": 1129759677,
+    "language": "TypeScript",
+    "name": "ralph",
+    "starred_at": "2026-04-19T14:00:19Z",
+    "stars": 20188
+  },
+  {
+    "description": "Write HTML. Render video. Built for agents.",
+    "full_name": "heygen-com/hyperframes",
+    "id": 1177402105,
+    "language": "TypeScript",
+    "name": "hyperframes",
+    "starred_at": "2026-04-19T13:59:27Z",
+    "stars": 27091
+  },
+  {
+    "description": "一套完整的 AI 内容生产系统，支持采集、选题、创作、小红书卡图、发布与计划任务。",
+    "full_name": "CheeMao/ai-content",
+    "id": 1187228657,
+    "language": "TypeScript",
+    "name": "ai-content",
+    "starred_at": "2026-04-19T06:42:53Z",
+    "stars": 268
+  },
+  {
+    "description": "Browser Harness | Self-healing harness that enables LLMs to complete any task.",
+    "full_name": "browser-use/browser-harness",
+    "id": 1213049020,
+    "language": "Python",
+    "name": "browser-harness",
+    "starred_at": "2026-04-19T06:42:44Z",
+    "stars": 14716
+  },
+  {
+    "description": "AI generates a real, editable PowerPoint from any document — native shapes & animations, speaker notes voiced as audio narration, and the option to follow your own .pptx template, not slide images · by Hugo He",
+    "full_name": "hugohe3/ppt-master",
+    "id": 1113573066,
+    "language": "Python",
+    "name": "ppt-master",
+    "starred_at": "2026-04-19T05:16:49Z",
+    "stars": 26983
+  },
+  {
+    "description": "A Dynamic Island-style command center for managing all your AI coding agents on macOS.",
+    "full_name": "erha19/ping-island",
+    "id": 1200530675,
+    "language": "Swift",
+    "name": "ping-island",
+    "starred_at": "2026-04-19T05:14:36Z",
+    "stars": 874
+  },
+  {
+    "description": "open-source skill that learns any brand and turns it into a complete design system. works on claude code and codex. install once, every UI your assistant builds matches your brand.",
+    "full_name": "dominikmartn/hue",
+    "id": 1208451003,
+    "language": "JavaScript",
+    "name": "hue",
+    "starred_at": "2026-04-19T05:09:33Z",
+    "stars": 698
+  },
+  {
+    "description": "Extract any website's complete design system with one command. DTCG tokens, semantic+primitive+composite, MCP server for Claude Code/Cursor/Windsurf, multi-platform emitters (iOS SwiftUI, Android Compose, Flutter, WordPress), Tailwind v4, Figma variables, shadcn/ui, CSS health audit, WCAG remediation, Chrome extension. MIT, Playwright, Node 20+.",
+    "full_name": "Manavarya09/design-extract",
+    "id": 1211361116,
+    "language": "JavaScript",
+    "name": "design-extract",
+    "starred_at": "2026-04-19T05:09:30Z",
+    "stars": 3175
+  },
+  {
+    "description": null,
+    "full_name": "craft-ai-agents/craft-agents-oss",
+    "id": 1137411798,
+    "language": "TypeScript",
+    "name": "craft-agents-oss",
+    "starred_at": "2026-04-16T08:56:40Z",
+    "stars": 6267
+  },
+  {
+    "description": "A multi-model AI agent desktop client — connect any AI provider, extend with MCP & skills, control from your phone. Built with Electron + Next.js.",
+    "full_name": "op7418/CodePilot",
+    "id": 1151411061,
+    "language": "TypeScript",
+    "name": "CodePilot",
+    "starred_at": "2026-04-14T15:58:27Z",
+    "stars": 6000
+  },
+  {
+    "description": "Show usage stats for OpenAI Codex and Claude Code, without having to login.",
+    "full_name": "steipete/CodexBar",
+    "id": 1097695258,
+    "language": "Swift",
+    "name": "CodexBar",
+    "starred_at": "2026-04-10T07:22:20Z",
+    "stars": 14692
+  },
+  {
+    "description": null,
+    "full_name": "wxtsky/CodeIsland",
+    "id": 1202555904,
+    "language": "Swift",
+    "name": "CodeIsland",
+    "starred_at": "2026-04-10T07:22:13Z",
+    "stars": 1821
+  },
+  {
+    "description": "ClawdHome securely isolates and manages multiple OpenClaw gateway instances on one Mac.",
+    "full_name": "ThinkInAIXYZ/clawdhome",
+    "id": 1162466002,
+    "language": "Swift",
+    "name": "clawdhome",
+    "starred_at": "2026-04-10T05:28:40Z",
+    "stars": 312
+  },
+  {
+    "description": "Burning through your subscriptions too fast? Paying for stuff you never use? Stop guessing. OpenUsage is free and open source.",
+    "full_name": "robinebers/openusage",
+    "id": 1147103080,
+    "language": "JavaScript",
+    "name": "openusage",
+    "starred_at": "2026-04-10T05:28:27Z",
+    "stars": 2856
+  },
+  {
+    "description": "All-in-One Native Local Development Environment for Windows, macOS & Linux. Docker alternative for PHP, Node.js, Python and more. Faster alternative to XAMPP, Laragon, MAMP and Laravel Herd with databases, Cron Jobs and runtime management.",
+    "full_name": "xpf0000/FlyEnv",
+    "id": 254879070,
+    "language": "TypeScript",
+    "name": "FlyEnv",
+    "starred_at": "2026-04-10T05:28:11Z",
+    "stars": 2938
+  },
+  {
+    "description": "The agent that grows with you",
+    "full_name": "NousResearch/hermes-agent",
+    "id": 1024554267,
+    "language": "Python",
+    "name": "hermes-agent",
+    "starred_at": "2026-04-09T08:53:08Z",
+    "stars": 191929
+  },
+  {
+    "description": "把最丝滑的通用 Agent 体验带进你的工作流，为 100x 专业用户而生的未来产品，正在实现 proactive Agent 阶段。基于 Claude Agent SDK 的完整开源实践，原生支持飞书群聊调用、灵活接入任意大模型供应商 —— 让顶级 Agent 能力真正跑在你每天用的地方。",
+    "full_name": "proma-ai/Proma",
+    "id": 1146471921,
+    "language": "TypeScript",
+    "name": "Proma",
+    "starred_at": "2026-04-09T05:51:22Z",
+    "stars": 1257
+  },
+  {
+    "description": "用AI创作高质量内容，用gpt-image-2创作的最佳生图工具，AI图片自动编排，小红书版Openclaw，自媒体创作者的AI工作台，小红书创作AI工具RedClaw，支持小红书图文下载、创作风格学习、小红书AI创作｜🌟 Star if you like it! ｜ 你桌面盒子里的AI小河狸🦫",
+    "full_name": "Jamailar/RedBox",
+    "id": 995842113,
+    "language": "TypeScript",
+    "name": "RedBox",
+    "starred_at": "2026-04-07T15:33:30Z",
+    "stars": 1060
+  },
+  {
+    "description": "给 Claude Code 装上完整联网能力的 skill：三层通道调度 + 浏览器 CDP + 并行分治",
+    "full_name": "eze-is/web-access",
+    "id": 1184985738,
+    "language": "JavaScript",
+    "name": "web-access",
+    "starred_at": "2026-04-07T15:25:04Z",
+    "stars": 7513
+  },
+  {
+    "description": "Co-creation infrastructure for humans and code agents — visual environment, skills, continuous learning, and distribution.",
+    "full_name": "pandazki/pneuma-skills",
+    "id": 1167377457,
+    "language": "TypeScript",
+    "name": "pneuma-skills",
+    "starred_at": "2026-04-07T15:24:18Z",
+    "stars": 149
+  },
+  {
+    "description": "✨ The open-source multi-agent platform. Every agent gets its own computer, desktop, network, and long-term memory. ",
+    "full_name": "memohai/Memoh",
+    "id": 1132664039,
+    "language": "Go",
+    "name": "Memoh",
+    "starred_at": "2026-04-07T15:23:58Z",
+    "stars": 1902
+  },
+  {
+    "description": "一句话生成大师级海报、书籍封面、专辑封面和各类设计作品。无需懂PS、配色或艺术史，AI自动选择最佳风格（基于20位传奇海报设计师）。支持电影海报、读书笔记、公众号封面、小红书配图等。默认9:16竖版，完美适配社交媒体。包含AI提示词优化、风格对比、图生图转换功能。触发词：\"Mondo风格\"、\"书籍封",
+    "full_name": "joeseesun/qiaomu-mondo-poster-design",
+    "id": 1175849859,
+    "language": "Python",
+    "name": "qiaomu-mondo-poster-design",
+    "starred_at": "2026-04-07T15:23:13Z",
+    "stars": 854
+  },
+  {
+    "description": "A collection of DESIGN.md files analysis by popular brand design systems. Drop one into your project and let coding agents generate a matching UI.",
+    "full_name": "VoltAgent/awesome-design-md",
+    "id": 1197515131,
+    "language": null,
+    "name": "awesome-design-md",
+    "starred_at": "2026-04-07T15:22:39Z",
+    "stars": 89788
+  },
+  {
+    "description": "为访谈视频添加综艺风格视觉特效的 Claude Skill。AI 分析字幕内容生成建议，用户审批后自动渲染。A Claude Skill for adding variety-show-style visual effects to interview videos. The AI analyzes subtitle content to generate suggestions",
+    "full_name": "op7418/Video-Wrapper-Skills",
+    "id": 1143906480,
+    "language": "Python",
+    "name": "Video-Wrapper-Skills",
+    "starred_at": "2026-04-07T15:20:50Z",
+    "stars": 306
+  },
+  {
+    "description": "AutoCLI is a  Blazing fast, memory-safe command-line tool — Fetch information from any website with a single command. Covers Twitter/X, Reddit, YouTube, HackerNews, Bilibili, Zhihu, Xiaohongshu, and 55+ sites, with support for controlling Electron desktop apps, integrating local CLI tools (gh, docker, kubectl), now powered by AutoCLI.ai .",
+    "full_name": "nashsu/AutoCLI",
+    "id": 1190171426,
+    "language": "Rust",
+    "name": "AutoCLI",
+    "starred_at": "2026-04-07T15:20:09Z",
+    "stars": 2778
+  },
+  {
+    "description": "Claude Code-powered AI short video generation pipeline",
+    "full_name": "runesleo/claude-video-kit",
+    "id": 1202547449,
+    "language": "TypeScript",
+    "name": "claude-video-kit",
+    "starred_at": "2026-04-07T15:20:05Z",
+    "stars": 104
+  },
+  {
+    "description": "Open-source agent skills for generating editorial-style information cards from natural-language input.",
+    "full_name": "shaom/infocard-skills",
+    "id": 1176061718,
+    "language": "HTML",
+    "name": "infocard-skills",
+    "starred_at": "2026-04-07T14:40:05Z",
+    "stars": 418
+  },
+  {
+    "description": "Turn reference UIs (images, screenshots, URLs) into quantified Design DNA JSON—tokens, qualitative style, visual effects—then generate matching UI from your content.",
+    "full_name": "zanwei/design-dna",
+    "id": 1189432033,
+    "language": null,
+    "name": "design-dna",
+    "starred_at": "2026-04-07T14:39:37Z",
+    "stars": 738
+  },
+  {
+    "description": " An HTML slide design skill grounded in cognitive science and instructional design. Outputs presentation decks optimized for knowledge retention. 基于认知科学与教学设计的 HTML slides 生成工具。面向教师、研究者与内容创作者，输出针对知识留存优化的演示文稿。",
+    "full_name": "edu-ai-builders/visual-cognition-slides",
+    "id": 1181194548,
+    "language": "Python",
+    "name": "visual-cognition-slides",
+    "starred_at": "2026-04-07T14:09:49Z",
+    "stars": 70
+  },
+  {
+    "description": "Marketing skills for Claude Code and AI agents. CRO, copywriting, SEO, analytics, and growth engineering.",
+    "full_name": "coreyhaines31/marketingskills",
+    "id": 1135212071,
+    "language": "JavaScript",
+    "name": "marketingskills",
+    "starred_at": "2026-04-07T14:07:17Z",
+    "stars": 33062
+  },
+  {
+    "description": "A set of beautifully-designed, accessible components and a code distribution platform. Works with your favorite frameworks. Open Source. Open Code.",
+    "full_name": "shadcn-ui/ui",
+    "id": 585146387,
+    "language": "TypeScript",
+    "name": "ui",
+    "starred_at": "2026-04-06T12:12:57Z",
+    "stars": 116417
+  },
+  {
+    "description": "OpenClaw Dashboard Builder - Create custom dashboards",
+    "full_name": "Curbob/LobsterBoard",
+    "id": 1151068646,
+    "language": "JavaScript",
+    "name": "LobsterBoard",
+    "starred_at": "2026-04-06T09:39:44Z",
+    "stars": 976
+  },
+  {
+    "description": "Use Claude Code as the foundation for coding infrastructure, allowing you to decide how to interact with the model while enjoying updates from Anthropic.",
+    "full_name": "musistudio/claude-code-router",
+    "id": 938468965,
+    "language": "TypeScript",
+    "name": "claude-code-router",
+    "starred_at": "2026-04-05T04:42:04Z",
+    "stars": 34933
+  },
+  {
+    "description": "Create best skills based on best books",
+    "full_name": "simbajigege/book2skills",
+    "id": 1190133632,
+    "language": "Python",
+    "name": "book2skills",
+    "starred_at": "2026-04-01T08:16:31Z",
+    "stars": 79
+  },
+  {
+    "description": "The official Lark/Feishu CLI tool, maintained by the larksuite team — built for humans and AI Agents. Covers core business domains including Messenger, Docs, Base, Sheets, Calendar, Mail, Tasks, Meetings, and more, with 200+ commands and 20+ AI Agent Skills.",
+    "full_name": "larksuite/cli",
+    "id": 1191372811,
+    "language": "Go",
+    "name": "cli",
+    "starred_at": "2026-04-01T05:45:58Z",
+    "stars": 14013
+  },
+  {
+    "description": "One-script macOS terminal setup: Ghostty + Fish + Starship + Nerd Font + modern CLI tools",
+    "full_name": "lewislulu/terminal-setup",
+    "id": 1188732052,
+    "language": "Shell",
+    "name": "terminal-setup",
+    "starred_at": "2026-04-01T05:38:43Z",
+    "stars": 635
+  },
+  {
+    "description": "A terminal workspace with batteries included",
+    "full_name": "zellij-org/zellij",
+    "id": 292014229,
+    "language": "Rust",
+    "name": "zellij",
+    "starred_at": "2026-04-01T05:38:18Z",
+    "stars": 33568
+  },
+  {
+    "description": "Agent-SDK without CLI dependencies, as an alternative to claude-agent-sdk, completely open source",
+    "full_name": "codeany-ai/open-agent-sdk-typescript",
+    "id": 1197357033,
+    "language": "TypeScript",
+    "name": "open-agent-sdk-typescript",
+    "starred_at": "2026-04-01T05:35:25Z",
+    "stars": 2703
+  },
+  {
+    "description": "Use Codex from Claude Code to review code or delegate tasks.",
+    "full_name": "openai/codex-plugin-cc",
+    "id": 1196321162,
+    "language": "JavaScript",
+    "name": "codex-plugin-cc",
+    "starred_at": "2026-04-01T05:11:47Z",
+    "stars": 20808
+  },
+  {
+    "description": null,
+    "full_name": "MiniMax-AI/skills",
+    "id": 1184030270,
+    "language": "C#",
+    "name": "skills",
+    "starred_at": "2026-04-01T05:00:43Z",
+    "stars": 12600
+  },
+  {
+    "description": "The simplest desktop client for OpenClaw 🦞 — bridge your Agent to WeChat, Feishu, Slack & Discord in one click. Works with Claude Code, Codex & any LLM. BYOK, Oauth, local-first, chat from your phone 24/7.",
+    "full_name": "nexu-io/nexu",
+    "id": 1166243835,
+    "language": "TypeScript",
+    "name": "nexu",
+    "starred_at": "2026-04-01T04:50:49Z",
+    "stars": 3111
+  },
+  {
+    "description": "Fast, accurate & comprehensive text measurement & layout",
+    "full_name": "chenglou/pretext",
+    "id": 1175538883,
+    "language": "TypeScript",
+    "name": "pretext",
+    "starred_at": "2026-04-01T04:49:19Z",
+    "stars": 48390
+  },
+  {
+    "description": "将冰冷的离别化为温暖的 Skill，欢迎加入数字生命1.0！Transforming cold farewells into warm skills? It's giving rebirth era. Welcome to Digital Life 1.0. 🫶",
+    "full_name": "titanwings/colleague-skill",
+    "id": 1195828337,
+    "language": "Python",
+    "name": "colleague-skill",
+    "starred_at": "2026-04-01T04:42:34Z",
+    "stars": 19327
+  },
+  {
+    "description": null,
+    "full_name": "zengwenliang416/ppt-agent",
+    "id": 1187945122,
+    "language": "HTML",
+    "name": "ppt-agent",
+    "starred_at": "2026-03-30T04:24:45Z",
+    "stars": 808
+  },
+  {
+    "description": "Collaborator is a place to create with agents.",
+    "full_name": "collabs-inc/collab-public",
+    "id": 1182216394,
+    "language": "TypeScript",
+    "name": "collab-public",
+    "starred_at": "2026-03-26T12:26:45Z",
+    "stars": 2527
+  },
+  {
+    "description": "An infinite canvas desktop app for visually managing terminals",
+    "full_name": "blueberrycongee/termcanvas",
+    "id": 1182016128,
+    "language": "TypeScript",
+    "name": "termcanvas",
+    "starred_at": "2026-03-26T12:26:42Z",
+    "stars": 321
+  },
+  {
+    "description": "Terminal session manager for AI coding agents. One TUI for Claude, Gemini, OpenCode, Codex, and more.",
+    "full_name": "asheshgoplani/agent-deck",
+    "id": 1109341946,
+    "language": "Go",
+    "name": "agent-deck",
+    "starred_at": "2026-03-26T12:07:32Z",
+    "stars": 2695
+  },
+  {
+    "description": "OpenClaw/Codex Skill: Auto video editing for talk/vlog videos — speech recognition, sentence splitting, subtitle burning, and clip merging",
+    "full_name": "maxazure/video-editing-skill",
+    "id": 1188135727,
+    "language": "Python",
+    "name": "video-editing-skill",
+    "starred_at": "2026-03-26T06:43:39Z",
+    "stars": 81
+  },
+  {
+    "description": "openclaw hosting service",
+    "full_name": "fastclaw-ai/clawhost",
+    "id": 1145886862,
+    "language": "Go",
+    "name": "clawhost",
+    "starred_at": "2026-03-26T06:38:14Z",
+    "stars": 392
+  },
+  {
+    "description": null,
+    "full_name": "ponyflash/ponyflash-skill",
+    "id": 1177920491,
+    "language": "Shell",
+    "name": "ponyflash-skill",
+    "starred_at": "2026-03-26T06:31:28Z",
+    "stars": 33
+  },
+  {
+    "description": "An Obsidian plugin to import Xiaohongshu (小红书) notes into your vault. Extract titles, content, images, videos, and tags from share links, with customizable categories and optional local media downloads.",
+    "full_name": "bnchiang96/xiaohongshu-importer",
+    "id": 945707130,
+    "language": "TypeScript",
+    "name": "xiaohongshu-importer",
+    "starred_at": "2026-03-26T06:27:21Z",
+    "stars": 97
+  },
+  {
+    "description": null,
+    "full_name": "rookie-ricardo/erduo-skills",
+    "id": 1138443863,
+    "language": "JavaScript",
+    "name": "erduo-skills",
+    "starred_at": "2026-03-26T02:28:13Z",
+    "stars": 887
+  },
+  {
+    "description": null,
+    "full_name": "lijigang/ljg-skills",
+    "id": 1175688481,
+    "language": "HTML",
+    "name": "ljg-skills",
+    "starred_at": "2026-03-25T15:02:16Z",
+    "stars": 5656
+  },
+  {
+    "description": "Markdown to WeChat CLI | 一键排版发布到微信公众号：支持 40+ 排版样式和专业主题 、AI 配图 、批量发布",
+    "full_name": "geekjourneyx/md2wechat-skill",
+    "id": 1132020002,
+    "language": "Go",
+    "name": "md2wechat-skill",
+    "starred_at": "2026-03-24T08:36:25Z",
+    "stars": 2823
+  },
+  {
+    "description": "AI agents running research on single-GPU nanochat training automatically",
+    "full_name": "karpathy/autoresearch",
+    "id": 1174820787,
+    "language": "Python",
+    "name": "autoresearch",
+    "starred_at": "2026-03-24T05:38:08Z",
+    "stars": 86407
+  },
+  {
+    "description": "A complete AI agency at your fingertips - From frontend wizards to Reddit community ninjas, from whimsy injectors to reality checkers. Each agent is a specialized expert with personality, processes, and proven deliverables.",
+    "full_name": "msitarzewski/agency-agents",
+    "id": 1075372545,
+    "language": "Shell",
+    "name": "agency-agents",
+    "starred_at": "2026-03-22T08:18:49Z",
+    "stars": 112338
+  },
+  {
+    "description": "Fetch any URL as clean Markdown via proxy services (r.jina.ai / defuddle.md) or built-in scripts. Works with login-required pages like X/Twitter, WeCh",
+    "full_name": "joeseesun/qiaomu-markdown-proxy",
+    "id": 1188153817,
+    "language": "Python",
+    "name": "qiaomu-markdown-proxy",
+    "starred_at": "2026-03-22T08:11:47Z",
+    "stars": 474
+  },
+  {
+    "description": "dontbesilent 的商业诊断 Skills",
+    "full_name": "dontbesilent2025/dbskill",
+    "id": 1187377394,
+    "language": "JavaScript",
+    "name": "dbskill",
+    "starred_at": "2026-03-22T08:10:32Z",
+    "stars": 6542
+  },
+  {
+    "description": "A Claude Code plugin that shows what's happening - context usage, active tools, running agents, and todo progress",
+    "full_name": "jarrodwatts/claude-hud",
+    "id": 1126473386,
+    "language": "JavaScript",
+    "name": "claude-hud",
+    "starred_at": "2026-03-22T08:10:13Z",
+    "stars": 25077
+  },
+  {
+    "description": "一款在线的 微信公众号文章批量下载 工具，支持导出阅读量与评论数据，无需搭建任何环境，可通过 在线网站 使用，支持 docker 私有化部署和 Cloudflare 部署。  支持下载各种文件格式，其中 HTML 格式可100%还原文章排版与样式。",
+    "full_name": "wechat-article/wechat-article-exporter",
+    "id": 830077101,
+    "language": "TypeScript",
+    "name": "wechat-article-exporter",
+    "starred_at": "2026-03-22T08:09:45Z",
+    "stars": 11398
+  },
+  {
+    "description": "MagicSkills：Stop copying skills between agents. MagicSkills turns scattered SKILL.md folders into reusable, composable, tool-ready capabilities.",
+    "full_name": "Narwhal-Lab/MagicSkills",
+    "id": 1124765513,
+    "language": "Python",
+    "name": "MagicSkills",
+    "starred_at": "2026-03-22T05:17:43Z",
+    "stars": 300
+  },
+  {
+    "description": "Lenny Rachitsky 播客与 Newsletter 知识库。搜索、阅读、学习 Lenny 的 638 篇内容（289 播客转录 + 349 篇 Newsletter）。 涵盖产品管理、增长、设计、工程、AI、创业、领导力等 17 个主题。 触发词：Lenny、Lenny's Newslet",
+    "full_name": "joeseesun/lennys-podcast-newsletter",
+    "id": 1188184342,
+    "language": "Python",
+    "name": "lennys-podcast-newsletter",
+    "starred_at": "2026-03-22T05:15:33Z",
+    "stars": 169
+  },
+  {
+    "description": "Use Garry Tan's exact Claude Code setup: 23 opinionated tools that serve as CEO, Designer, Eng Manager, Release Manager, Doc Engineer, and QA",
+    "full_name": "garrytan/gstack",
+    "id": 1179264259,
+    "language": "TypeScript",
+    "name": "gstack",
+    "starred_at": "2026-03-22T03:12:56Z",
+    "stars": 109517
+  },
+  {
+    "description": "AI builders digest — monitors top AI builders on X and YouTube podcasts, remixes their content into digestible summaries. Follow builders, not influencers.",
+    "full_name": "zarazhangrui/follow-builders",
+    "id": 1181795380,
+    "language": "JavaScript",
+    "name": "follow-builders",
+    "starred_at": "2026-03-22T03:04:05Z",
+    "stars": 5147
+  },
+  {
+    "description": "Sub2API is an open-source relay platform that unifies Claude, OpenAI, Gemini, and Antigravity subscriptions into a single endpoint. It supports account sharing and cost-sharing, with seamless native tool compatibility.",
+    "full_name": "Wei-Shaw/sub2api",
+    "id": 1118601518,
+    "language": "Go",
+    "name": "sub2api",
+    "starred_at": "2026-03-22T02:59:18Z",
+    "stars": 27442
+  },
+  {
+    "description": "跨境可信数据空间基础设施建设，进出口制裁Skills",
+    "full_name": "TracyWang95/DataInftra-CrossBoardTrustedDataPace-SanctionScreening",
+    "id": 1186463660,
+    "language": "Python",
+    "name": "DataInftra-CrossBoardTrustedDataPace-SanctionScreening",
+    "starred_at": "2026-03-21T11:10:00Z",
+    "stars": 15
+  },
+  {
+    "description": "AI Agent Assistant & development framework that integrates lots of IM platforms, LLMs, plugins and AI feature, and can be your openclaw alternative. ✨",
+    "full_name": "AstrBotDevs/AstrBot",
+    "id": 575865240,
+    "language": "Python",
+    "name": "AstrBot",
+    "starred_at": "2026-03-21T11:08:38Z",
+    "stars": 34541
+  },
+  {
+    "description": "A pixel desktop pet that watches Claude Code, Codex, Cursor & other AI coding agents — so you don't have to.",
+    "full_name": "rullerzhou-afk/clawd-on-desk",
+    "id": 1185122623,
+    "language": "JavaScript",
+    "name": "clawd-on-desk",
+    "starred_at": "2026-03-21T11:07:43Z",
+    "stars": 4208
+  },
+  {
+    "description": null,
+    "full_name": "jgraph/drawio-mcp",
+    "id": 1148214569,
+    "language": "JavaScript",
+    "name": "drawio-mcp",
+    "starred_at": "2026-03-21T09:12:14Z",
+    "stars": 4377
+  },
+  {
+    "description": "\"ClawTeam: Agent Swarm Intelligence\" (One Command → Full Automation)",
+    "full_name": "HKUDS/ClawTeam",
+    "id": 1184391618,
+    "language": "Python",
+    "name": "ClawTeam",
+    "starred_at": "2026-03-21T09:03:48Z",
+    "stars": 5317
+  },
+  {
+    "description": "A collection of LLM memes",
+    "full_name": "fenxer/llm-things",
+    "id": 1043089488,
+    "language": null,
+    "name": "llm-things",
+    "starred_at": "2026-03-16T13:11:37Z",
+    "stars": 576
+  },
+  {
+    "description": "Bash is all you need -  A nano claude code–like 「agent harness」, built from 0 to 1",
+    "full_name": "shareAI-lab/learn-claude-code",
+    "id": 1010681419,
+    "language": "Python",
+    "name": "learn-claude-code",
+    "starred_at": "2026-03-15T14:32:54Z",
+    "stars": 66296
+  },
+  {
+    "description": "Bộ công cụ tạo AI Skill từ ý tưởng — Dành cho Antigravity, Claude Code, Cursor, Windsurf. Đánh giá 100/100 S-tier. ",
+    "full_name": "marketingjuliancongdanh79-pixel/skill-generator",
+    "id": 1171497023,
+    "language": "Python",
+    "name": "skill-generator",
+    "starred_at": "2026-03-15T14:20:31Z",
+    "stars": 340
+  },
+  {
+    "description": "Cognee is the open-source AI memory platform for agents. Give your AI agents persistent long-term memory across sessions with a self-hosted knowledge graph engine.",
+    "full_name": "topoteretes/cognee",
+    "id": 679343504,
+    "language": "Python",
+    "name": "cognee",
+    "starred_at": "2026-03-15T14:11:23Z",
+    "stars": 17801
+  },
+  {
+    "description": "Your 24/7 all-scenario AI agent that gets work done for you.",
+    "full_name": "netease-youdao/LobsterAI",
+    "id": 1156137396,
+    "language": "TypeScript",
+    "name": "LobsterAI",
+    "starred_at": "2026-03-12T05:44:00Z",
+    "stars": 5266
+  },
+  {
+    "description": "飞书官方出品的 OpenClaw 飞书/Lark Channel 插件",
+    "full_name": "larksuite/openclaw-lark",
+    "id": 1176613354,
+    "language": "TypeScript",
+    "name": "openclaw-lark",
+    "starred_at": "2026-03-11T12:52:41Z",
+    "stars": 2275
+  },
+  {
+    "description": "LLM inference server with continuous batching & SSD caching for Apple Silicon — managed from the macOS menu bar",
+    "full_name": "jundot/omlx",
+    "id": 1157171418,
+    "language": "Python",
+    "name": "omlx",
+    "starred_at": "2026-03-11T04:55:16Z",
+    "stars": 16497
+  },
+  {
+    "description": null,
+    "full_name": "TracyWang95/DataInfra-Agentic-Contract-Filler-Skill",
+    "id": 1165673760,
+    "language": "Python",
+    "name": "DataInfra-Agentic-Contract-Filler-Skill",
+    "starred_at": "2026-03-10T07:37:07Z",
+    "stars": 7
+  },
+  {
+    "description": "提取抖音无水印视频链接，视频文案，douyin-mcp-server，mcp，claude skill，支持龙虾",
+    "full_name": "yzfly/douyin-mcp-server",
+    "id": 988157563,
+    "language": "HTML",
+    "name": "douyin-mcp-server",
+    "starred_at": "2026-03-07T16:05:51Z",
+    "stars": 1104
+  },
+  {
+    "description": "统一搜索工具集 - 跨平台内容搜索解决方案，支持 B 站/抖音/小红书/GitHub/Twitter 等 20+ 平台",
+    "full_name": "runningZ1/union-search-skill",
+    "id": 1146757171,
+    "language": "Python",
+    "name": "union-search-skill",
+    "starred_at": "2026-03-07T15:33:34Z",
+    "stars": 561
+  },
+  {
+    "description": "AutoClip : AI-powered video clipping and highlight generation · 一款智能高光提取与剪辑的二创工具",
+    "full_name": "zhouxiaoka/autoclip",
+    "id": 1015815983,
+    "language": "Python",
+    "name": "autoclip",
+    "starred_at": "2026-03-07T15:30:26Z",
+    "stars": 5626
+  },
+  {
+    "description": "Bridge Claude Code / Codex to IM platforms — chat with AI coding agents from Telegram, Discord, or Feishu/Lark.",
+    "full_name": "op7418/Claude-to-IM-skill",
+    "id": 1173427820,
+    "language": "TypeScript",
+    "name": "Claude-to-IM-skill",
+    "starred_at": "2026-03-07T15:25:11Z",
+    "stars": 2706
+  },
+  {
+    "description": "The design language that makes your AI harness better at design.",
+    "full_name": "pbakaus/impeccable",
+    "id": 1097346685,
+    "language": "JavaScript",
+    "name": "impeccable",
+    "starred_at": "2026-03-07T15:17:46Z",
+    "stars": 37816
+  },
+  {
+    "description": "Symphony turns project work into isolated, autonomous implementation runs, allowing teams to manage work instead of supervising coding agents.",
+    "full_name": "openai/symphony",
+    "id": 1167965563,
+    "language": "Elixir",
+    "name": "symphony",
+    "starred_at": "2026-03-07T15:15:27Z",
+    "stars": 25278
+  },
+  {
+    "description": "PM Skills Marketplace: 100+ agentic skills, commands, and plugins — from discovery to strategy, execution, launch, and growth.",
+    "full_name": "phuryn/pm-skills",
+    "id": 1170266927,
+    "language": null,
+    "name": "pm-skills",
+    "starred_at": "2026-03-07T15:14:43Z",
+    "stars": 16923
+  },
+  {
+    "description": "Product Management skills framework built on battle-tested methods for Claude Code, Cowork, Codex, and AI agents.",
+    "full_name": "deanpeters/Product-Manager-Skills",
+    "id": 1150205470,
+    "language": "Shell",
+    "name": "Product-Manager-Skills",
+    "starred_at": "2026-03-07T14:10:23Z",
+    "stars": 5086
+  },
+  {
+    "description": "Python SDK, Proxy Server (AI Gateway) to call 100+ LLM APIs in OpenAI (or native) format, with cost tracking, guardrails, loadbalancing and logging. [Bedrock, Azure, OpenAI, VertexAI, Cohere, Anthropic, Sagemaker, HuggingFace, VLLM, NVIDIA NIM]",
+    "full_name": "BerriAI/litellm",
+    "id": 671269505,
+    "language": "Python",
+    "name": "litellm",
+    "starred_at": "2026-03-07T13:45:57Z",
+    "stars": 50190
+  },
+  {
+    "description": "🎬 智能媒体下载器 - 根据用户描述自动搜索和下载图片、视频片段 | Smart Media Downloader - Auto search and download images/videos based on description",
+    "full_name": "yizhiyanhua-ai/media-downloader",
+    "id": 1138290582,
+    "language": "Python",
+    "name": "media-downloader",
+    "starred_at": "2026-03-07T11:55:31Z",
+    "stars": 388
+  },
+  {
+    "description": "Use Claude Code, OpenCode, Cursor CLI, and Codex on mobile and web with CloudCLI (aka Claude Code UI). CloudCLI is a free open source webui/GUI that helps you manage your Claude Code session and projects remotely.",
+    "full_name": "siteboon/claudecodeui",
+    "id": 1008373485,
+    "language": "TypeScript",
+    "name": "claudecodeui",
+    "starred_at": "2026-03-07T11:54:06Z",
+    "stars": 11835
+  },
+  {
+    "description": "Create beautiful slides on the web using a coding agent's frontend skills",
+    "full_name": "zarazhangrui/frontend-slides",
+    "id": 1143767804,
+    "language": "JavaScript",
+    "name": "frontend-slides",
+    "starred_at": "2026-03-07T11:49:03Z",
+    "stars": 21421
+  },
+  {
+    "description": "🐾 OpenClaw 101 — 从零开始，7天掌握你的AI私人助理 | 全网资源聚合站",
+    "full_name": "mengjian-github/openclaw101",
+    "id": 1147694880,
+    "language": "TypeScript",
+    "name": "openclaw101",
+    "starred_at": "2026-03-07T11:45:07Z",
+    "stars": 2918
+  },
+  {
+    "description": "Headless CLI client for stateful Agent Client Protocol (ACP) sessions",
+    "full_name": "openclaw/acpx",
+    "id": 1160289278,
+    "language": "TypeScript",
+    "name": "acpx",
+    "starred_at": "2026-03-07T11:44:38Z",
+    "stars": 2854
+  },
+  {
+    "description": "A lightweight window border system for macOS",
+    "full_name": "FelixKratz/JankyBorders",
+    "id": 713490206,
+    "language": "C",
+    "name": "JankyBorders",
+    "starred_at": "2026-03-07T11:42:14Z",
+    "stars": 3616
+  },
+  {
+    "description": "Capture and visualize the data that matters in your life",
+    "full_name": "dsebastien/obsidian-life-tracker-base-view",
+    "id": 1114245230,
+    "language": "TypeScript",
+    "name": "obsidian-life-tracker-base-view",
+    "starred_at": "2026-03-05T14:29:30Z",
+    "stars": 222
+  },
+  {
+    "description": "A lightweight macOS launcher for Claude Code Skills with streaming output",
+    "full_name": "Ceeon/SkillLauncher",
+    "id": 1143231228,
+    "language": "Swift",
+    "name": "SkillLauncher",
+    "starred_at": "2026-03-05T12:02:33Z",
+    "stars": 14
+  },
+  {
+    "description": "Visual design deck for presenting multi-slide options with high-fidelity previews",
+    "full_name": "nicobailon/pi-design-deck",
+    "id": 1164965335,
+    "language": "TypeScript",
+    "name": "pi-design-deck",
+    "starred_at": "2026-03-04T08:39:52Z",
+    "stars": 271
+  },
+  {
+    "description": "An AI-powered personal productivity system where knowledge management and daily task planning are intelligently orchestrated by your AI assistant.",
+    "full_name": "MarsWang42/OrbitOS",
+    "id": 1140960838,
+    "language": null,
+    "name": "OrbitOS",
+    "starred_at": "2026-03-04T02:51:43Z",
+    "stars": 853
+  },
+  {
+    "description": "Universal content reader MCP Server for 10+ platforms",
+    "full_name": "runesleo/x-reader",
+    "id": 1163850095,
+    "language": "Python",
+    "name": "x-reader",
+    "starred_at": "2026-03-04T02:51:21Z",
+    "stars": 944
+  },
+  {
+    "description": "Taste-Skill - gives your AI good taste. stops the AI from generating boring, generic slop ",
+    "full_name": "Leonxlnx/taste-skill",
+    "id": 1162099055,
+    "language": "Shell",
+    "name": "taste-skill",
+    "starred_at": "2026-03-04T02:46:43Z",
+    "stars": 42329
+  },
+  {
+    "description": "Give your AI agent eyes to see the entire internet. Read & search Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu — one CLI, zero API fees.",
+    "full_name": "Panniantong/Agent-Reach",
+    "id": 1165277268,
+    "language": "Python",
+    "name": "Agent-Reach",
+    "starred_at": "2026-03-04T02:46:41Z",
+    "stars": 26735
+  },
+  {
+    "description": "A GUI that runs on your Openclaw host and lets you totally manage it without touching the CLI. Not a technical user? Deploy it on agentbay.space",
+    "full_name": "robsannaa/openclaw-mission-control",
+    "id": 1158411922,
+    "language": "TypeScript",
+    "name": "openclaw-mission-control",
+    "starred_at": "2026-03-04T02:46:30Z",
+    "stars": 614
+  },
+  {
+    "description": "Your Personal AI Assistant; easy to install, deploy on your own machine or on the cloud; supports multiple chat apps with easily extensible capabilities.",
+    "full_name": "agentscope-ai/QwenPaw",
+    "id": 1165324947,
+    "language": "Python",
+    "name": "QwenPaw",
+    "starred_at": "2026-03-02T14:15:17Z",
+    "stars": 17463
+  },
+  {
+    "description": "A Claude Code GUI — Tauri 2 + React 19 + TypeScript + Tailwind CSS 4",
+    "full_name": "yiliqi78/TOKENICODE",
+    "id": 1156800195,
+    "language": "TypeScript",
+    "name": "TOKENICODE",
+    "starred_at": "2026-03-01T10:54:20Z",
+    "stars": 302
+  },
+  {
+    "description": "A pixel office for your OpenClaw: turn invisible work states into a cozy little space with characters, daily notes, and guest agents. Code under MIT; art assets for non-commercial learning only.",
+    "full_name": "ringhyacinth/Star-Office-UI",
+    "id": 1167209519,
+    "language": "HTML",
+    "name": "Star-Office-UI",
+    "starred_at": "2026-03-01T10:53:31Z",
+    "stars": 7295
+  },
+  {
+    "description": "The open, universal, coding agent skills, agents, rules, and commands organizer and package manager.",
+    "full_name": "enulus/OpenPackage",
+    "id": 1076555809,
+    "language": "TypeScript",
+    "name": "OpenPackage",
+    "starred_at": "2026-03-01T10:49:53Z",
+    "stars": 577
+  },
+  {
+    "description": "A lightweight CLI tool wrapping Jina AI Reader API for AI Agents. Fetch and parse any URL into LLM-friendly   formats (Markdown/Text/HTML). Perfect for reading X(Twitter), blogs, and news sites.",
+    "full_name": "geekjourneyx/jina-cli",
+    "id": 1169145602,
+    "language": "Go",
+    "name": "jina-cli",
+    "starred_at": "2026-03-01T07:19:44Z",
+    "stars": 301
+  },
+  {
+    "description": "The memory harness for proactive AI agents — structured storage, intent capture, 10x token reduction.",
+    "full_name": "NevaMind-AI/memU",
+    "id": 1028070615,
+    "language": "Python",
+    "name": "memU",
+    "starred_at": "2026-03-01T04:16:41Z",
+    "stars": 13842
+  },
+  {
+    "description": "支持小红书自动发布、自动评论、自动检索的 Skill。支持 OpenClaw、Codex、CC 等",
+    "full_name": "white0dew/XiaohongshuSkills",
+    "id": 1153564598,
+    "language": "Python",
+    "name": "XiaohongshuSkills",
+    "starred_at": "2026-03-01T04:15:31Z",
+    "stars": 3010
+  },
+  {
+    "description": "Vibe Coding 从入门到精通教程｜AI 结对编程工作流｜Prompt、Skill、Workflow、上下文管理、codex实战指南",
+    "full_name": "tradecatlabs/vibe-coding-cn",
+    "id": 1102195393,
+    "language": "Python",
+    "name": "vibe-coding-cn",
+    "starred_at": "2026-02-27T08:33:25Z",
+    "stars": 14640
+  },
+  {
+    "description": "Build App with Makepad and AI skills",
+    "full_name": "ZhangHanDong/makepad-skills",
+    "id": 1131593725,
+    "language": null,
+    "name": "makepad-skills",
+    "starred_at": "2026-02-27T08:30:53Z",
+    "stars": 740
+  },
+  {
+    "description": "Run AI agents on your Android phone — no terminal, no CLI, just a guided setup.",
+    "full_name": "zhixianio/botdrop-android",
+    "id": 1149756272,
+    "language": "Java",
+    "name": "botdrop-android",
+    "starred_at": "2026-02-27T08:08:19Z",
+    "stars": 388
+  },
+  {
+    "description": null,
+    "full_name": "victorGPT/vibeusage",
+    "id": 1118243664,
+    "language": "JavaScript",
+    "name": "vibeusage",
+    "starred_at": "2026-02-27T03:25:34Z",
+    "stars": 126
+  },
+  {
+    "description": "📚 Real-world OpenClaw automation examples from Moltbook",
+    "full_name": "EvoLinkAI/awesome-openclaw-usecases-moltbook",
+    "id": 1161785306,
+    "language": null,
+    "name": "awesome-openclaw-usecases-moltbook",
+    "starred_at": "2026-02-24T13:37:47Z",
+    "stars": 995
+  },
+  {
+    "description": "AI 朝廷搭建完整教程 - 从零基础到进阶",
+    "full_name": "wanikua/danghuangshang",
+    "id": 1164125099,
+    "language": "TypeScript",
+    "name": "danghuangshang",
+    "starred_at": "2026-02-24T05:13:22Z",
+    "stars": 2688
+  },
+  {
+    "description": "将 Markdown 文稿转换为微信公众号兼容的 HTML 格式 - Claude Skill",
+    "full_name": "vigorX777/wechat-article-formatter",
+    "id": 1141892784,
+    "language": "TypeScript",
+    "name": "wechat-article-formatter",
+    "starred_at": "2026-02-22T06:27:49Z",
+    "stars": 19
+  },
+  {
+    "description": "ppt-svg-generator 是一个 Skill，帮助你将 Markdown 文稿快速转化PPT 或 PDF，并支持多种预设风格选择，效果美观且可控。 使用流程参考公众号：懂点儿 AI 👇",
+    "full_name": "vigorX777/ppt-svg-generator",
+    "id": 1139117869,
+    "language": "HTML",
+    "name": "ppt-svg-generator",
+    "starred_at": "2026-02-22T06:26:56Z",
+    "stars": 232
+  },
+  {
+    "description": "从 Andrej Karpathy 推荐的 90 顶级技术博客中抓取最新文章，AI 多维评分筛选，生成一份每日精选日报。更多可见公众号：懂点儿AI",
+    "full_name": "vigorX777/ai-daily-digest",
+    "id": 1157721932,
+    "language": "TypeScript",
+    "name": "ai-daily-digest",
+    "starred_at": "2026-02-22T06:26:21Z",
+    "stars": 1601
+  },
+  {
+    "description": "自动从 X (Twitter) 抓取推文，通过多维评分（数据指标 + AI 分析）生成选题推荐报告，帮助内容创作者高效筛选优质选题。",
+    "full_name": "vigorX777/x-ai-topic-selector",
+    "id": 1147263780,
+    "language": "TypeScript",
+    "name": "x-ai-topic-selector",
+    "starred_at": "2026-02-22T06:25:50Z",
+    "stars": 53
+  },
+  {
+    "description": "Fix X/Twitter and Bluesky embeds! Use multiple images, videos, polls, translations and more on Discord, Telegram and others",
+    "full_name": "FxEmbed/FxEmbed",
+    "id": 513704529,
+    "language": "TypeScript",
+    "name": "FxEmbed",
+    "starred_at": "2026-02-21T07:39:28Z",
+    "stars": 4700
+  },
+  {
+    "description": "Agent skill that generates rich HTML pages or slide decks for diagrams, diff reviews, plan audits, data tables, and project recaps",
+    "full_name": "nicobailon/visual-explainer",
+    "id": 1159484260,
+    "language": "HTML",
+    "name": "visual-explainer",
+    "starred_at": "2026-02-21T07:29:51Z",
+    "stars": 8746
+  },
+  {
+    "description": "🌊 The leading agent orchestration platform for Claude. Deploy intelligent multi-agent swarms, coordinate autonomous workflows, and build conversational AI systems. Features enterprise-grade architecture, distributed swarm intelligence, RAG integration, and native Claude Code support via MCP protocol. Ranked #1 in agent-based frameworks.",
+    "full_name": "ceeefuuu/claude-flows",
+    "id": 1160260447,
+    "language": "Shell",
+    "name": "claude-flows",
+    "starred_at": "2026-02-21T07:04:41Z",
+    "stars": 112
+  },
+  {
+    "description": "ClawPal - Manage OpenClaw agents, models, and configs with a visual interface. Stop editing JSON by hand.",
+    "full_name": "zhixianio/clawpal",
+    "id": 1161354508,
+    "language": "Rust",
+    "name": "clawpal",
+    "starred_at": "2026-02-21T07:02:33Z",
+    "stars": 352
+  },
+  {
+    "description": " 本地运行的法院电子送达文书批量下载助手。粘贴短信，自动获取文书列表并支持一键打包下载为ZIP。基于Python FastAPI，注重隐私，提供Win/macOS/Linux启动脚本。",
+    "full_name": "kamjin3086/court-downloder",
+    "id": 974682773,
+    "language": "HTML",
+    "name": "court-downloder",
+    "starred_at": "2026-02-19T18:06:46Z",
+    "stars": 12
+  },
+  {
+    "description": "Run Qwen3-TTS text-to-speech locally on Mac (M1/M2/M3/M4). Voice cloning, voice design, custom voices. 100% offline using MLX.",
+    "full_name": "kapi2800/qwen3-tts-apple-silicon",
+    "id": 1144376318,
+    "language": "Python",
+    "name": "qwen3-tts-apple-silicon",
+    "starred_at": "2026-02-19T09:13:19Z",
+    "stars": 505
+  },
+  {
+    "description": "NextClaw: Your omnipotent personal assistant, residing above the digital realm. Basically Ultra-Lightweight OpenClaw Pro Max.",
+    "full_name": "Peiiii/nextclaw",
+    "id": 1154718152,
+    "language": "TypeScript",
+    "name": "nextclaw",
+    "starred_at": "2026-02-19T06:32:56Z",
+    "stars": 214
+  },
+  {
+    "description": "Powerful MacOS Launcher",
+    "full_name": "SuperCmdLabs/SuperCmd",
+    "id": 1157218614,
+    "language": "TypeScript",
+    "name": "SuperCmd",
+    "starred_at": "2026-02-18T16:25:53Z",
+    "stars": 2899
+  },
+  {
+    "description": "Claude Code plugin that generates individualized knowledge systems from conversation. You describe how you think and work, have a conversation and get a complete second brain as markdown files you own.",
+    "full_name": "agenticnotetaking/arscontexta",
+    "id": 1158631460,
+    "language": "Shell",
+    "name": "arscontexta",
+    "starred_at": "2026-02-18T03:56:23Z",
+    "stars": 3401
+  },
+  {
+    "description": "OpenViking is an open-source context database designed specifically for AI Agents(such as openclaw). OpenViking unifies the management of context (memory, resources, and skills) that Agents need through a file system paradigm, enabling hierarchical context delivery and self-evolving.",
+    "full_name": "volcengine/OpenViking",
+    "id": 1128123594,
+    "language": "Python",
+    "name": "OpenViking",
+    "starred_at": "2026-02-18T03:53:06Z",
+    "stars": 25566
+  },
+  {
+    "description": "AI agent toolkit: unified LLM API, agent loop, TUI, coding agent CLI",
+    "full_name": "earendil-works/pi",
+    "id": 1035029907,
+    "language": "TypeScript",
+    "name": "pi",
+    "starred_at": "2026-02-18T03:51:32Z",
+    "stars": 62062
+  },
+  {
+    "description": "🐾 ClawPanel — OpenClaw AI 助手可视化管理面板。Go 单二进制部署，支持 20+ 通道统一管理，跨平台，实时日志监控。",
+    "full_name": "zhaoxinyi02/ClawPanel",
+    "id": 1151379841,
+    "language": "Go",
+    "name": "ClawPanel",
+    "starred_at": "2026-02-17T13:41:03Z",
+    "stars": 855
+  },
+  {
+    "description": "Open source Loom alternative. Beautiful, shareable screen recordings.",
+    "full_name": "CapSoftware/Cap",
+    "id": 720209383,
+    "language": "TypeScript",
+    "name": "Cap",
+    "starred_at": "2026-02-17T04:58:41Z",
+    "stars": 19565
+  },
+  {
+    "description": "Stand on the shoulders of giants — Create AI skills built on proven methodologies from domain experts.",
+    "full_name": "GBSOSS/skill-from-masters",
+    "id": 1130096697,
+    "language": null,
+    "name": "skill-from-masters",
+    "starred_at": "2026-02-16T12:10:53Z",
+    "stars": 1420
+  },
+  {
+    "description": "收藏到就是学到，解决光收藏不看的问题。收藏的当下立刻学习或者丢弃",
+    "full_name": "iamzifei/bookmark-is-learned",
+    "id": 1154171625,
+    "language": "JavaScript",
+    "name": "bookmark-is-learned",
+    "starred_at": "2026-02-16T11:53:08Z",
+    "stars": 364
+  },
+  {
+    "description": "Skill Compose is an open-source agent builder and runtime platform for skill-powered agents. No workflow graphs. No CLI.",
+    "full_name": "dp-archive/archive",
+    "id": 1156317000,
+    "language": "Python",
+    "name": "archive",
+    "starred_at": "2026-02-16T11:50:30Z",
+    "stars": 1103
+  },
+  {
+    "description": "A community collection of OpenClaw use cases for making life easier.",
+    "full_name": "hesamsheikh/awesome-openclaw-usecases",
+    "id": 1153093670,
+    "language": null,
+    "name": "awesome-openclaw-usecases",
+    "starred_at": "2026-02-16T11:50:18Z",
+    "stars": 31353
+  },
+  {
+    "description": "\"ClawWork: OpenClaw as Your AI Coworker - 💰 $15K earned in 11 Hours\"",
+    "full_name": "HKUDS/ClawWork",
+    "id": 1158605484,
+    "language": "Python",
+    "name": "ClawWork",
+    "starred_at": "2026-02-16T11:44:45Z",
+    "stars": 8204
+  },
+  {
+    "description": "An AI agent that can get things done across iPhone apps.",
+    "full_name": "rounak/PhoneAgent",
+    "id": 993002543,
+    "language": "Swift",
+    "name": "PhoneAgent",
+    "starred_at": "2026-02-16T11:42:23Z",
+    "stars": 770
+  },
+  {
+    "description": "Fetch X/Twitter tweets, replies, timelines, and articles without login or API keys — field tool for AI agents.",
+    "full_name": "ythx-101/x-tweet-fetcher",
+    "id": 1157855507,
+    "language": "Python",
+    "name": "x-tweet-fetcher",
+    "starred_at": "2026-02-16T11:40:22Z",
+    "stars": 870
+  },
+  {
+    "description": "🎃 A fast, out-of-the-box terminal built for AI coding.",
+    "full_name": "tw93/Kaku",
+    "id": 1152157239,
+    "language": "Rust",
+    "name": "Kaku",
+    "starred_at": "2026-02-16T11:01:14Z",
+    "stars": 5362
+  },
+  {
+    "description": "Code Editor for the AI Agents Era - Run an army of Claude Code, Codex, etc. on your machine",
+    "full_name": "superset-sh/superset",
+    "id": 1080370450,
+    "language": "TypeScript",
+    "name": "superset",
+    "starred_at": "2026-02-15T07:55:11Z",
+    "stars": 11768
+  },
+  {
+    "description": "面向 Claude Code、Codex、Open Code等Ai Agent 的确定性公文排版 Skill，可直接渲染为规范公文格式的 .docx（字体、字号、行距、页码等）。",
+    "full_name": "wzbwan/gongwen-format-skill",
+    "id": 1146068694,
+    "language": "Python",
+    "name": "gongwen-format-skill",
+    "starred_at": "2026-02-15T05:56:44Z",
+    "stars": 48
+  },
+  {
+    "description": "小红书内容创作自动驾驶 — AI Agent 全流程自动化",
+    "full_name": "Jinsong-Zhou/xhs-autopilot",
+    "id": 1155802684,
+    "language": "Python",
+    "name": "xhs-autopilot",
+    "starred_at": "2026-02-15T05:39:31Z",
+    "stars": 17
+  },
+  {
+    "description": "The agent-native LLM router for OpenClaw. 41+ models, <1ms routing, USDC payments on Base & Solana via x402.",
+    "full_name": "BlockRunAI/ClawRouter",
+    "id": 1149071982,
+    "language": "TypeScript",
+    "name": "ClawRouter",
+    "starred_at": "2026-02-15T05:38:13Z",
+    "stars": 6563
+  },
+  {
+    "description": "📕 skills that help you connect to rednote (xiaohongshu)",
+    "full_name": "MrMao007/rednote-skills",
+    "id": 1153377680,
+    "language": "Python",
+    "name": "rednote-skills",
+    "starred_at": "2026-02-15T05:37:40Z",
+    "stars": 48
+  },
+  {
+    "description": "OpenClaw 贾维斯看板是一个面向 OpenClaw 多 Agent 系统的实时作战指挥中心。 它提供系统健康、Agent 运行态、任务管理与多模型用量看板（MiniMax / OpenAI / Gemini / GLM）的统一视图，支持本地 API、实时刷新与可视化配置，帮助你在一页内快速完成监控、诊断和操作。",
+    "full_name": "FSZJ/Openclaw-Jarvis-dashboard",
+    "id": 1157591455,
+    "language": "Python",
+    "name": "Openclaw-Jarvis-dashboard",
+    "starred_at": "2026-02-15T05:34:02Z",
+    "stars": 38
+  },
+  {
+    "description": "ClawX is a desktop app that provides a graphical interface for OpenClaw AI agents. It turns CLI-based AI orchestration into a desktop experience without using the terminal. China website is https://clawx.com.cn.",
+    "full_name": "ValueCell-ai/ClawX",
+    "id": 1150626239,
+    "language": "TypeScript",
+    "name": "ClawX",
+    "starred_at": "2026-02-15T05:27:40Z",
+    "stars": 7413
+  },
+  {
+    "description": "Agent Skills for Solopreneurs",
+    "full_name": "ReScienceLab/opc-skills",
+    "id": 1136152017,
+    "language": "Python",
+    "name": "opc-skills",
+    "starred_at": "2026-02-11T08:12:18Z",
+    "stars": 927
+  },
+  {
+    "description": "A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.",
+    "full_name": "ZapYap-com/note67",
+    "id": 1122879500,
+    "language": "TypeScript",
+    "name": "note67",
+    "starred_at": "2026-02-11T08:12:11Z",
+    "stars": 207
+  },
+  {
+    "description": "🦞 一个可爱的桌面龙虾AI助手 - Desktop lobster pet with OpenClaw AI, Edge TTS voice, and emotion animations",
+    "full_name": "kk43994/kkclaw",
+    "id": 1151333973,
+    "language": "JavaScript",
+    "name": "kkclaw",
+    "starred_at": "2026-02-11T07:11:51Z",
+    "stars": 168
+  },
+  {
+    "description": "AI-Powered Universal RSS Subscription Manager — YouTube, Vimeo, Behance, Twitter/X, 知识星球, B站, 微博, 抖音, 小红书 | Claude Skill for AI IDEs",
+    "full_name": "ALBEDO-TABAI/lets-go-rss",
+    "id": 1154379381,
+    "language": "Python",
+    "name": "lets-go-rss",
+    "starred_at": "2026-02-11T07:10:36Z",
+    "stars": 92
+  },
+  {
+    "description": "Convert PDF to markdown + JSON quickly with high accuracy",
+    "full_name": "datalab-to/marker",
+    "id": 712111618,
+    "language": "Python",
+    "name": "marker",
+    "starred_at": "2026-02-08T09:09:46Z",
+    "stars": 36042
+  },
+  {
+    "description": "Video Copy Analyzer - AI-powered video transcription and copywriting analysis skill",
+    "full_name": "ALBEDO-TABAI/video-copy-analyzer",
+    "id": 1148782556,
+    "language": "Python",
+    "name": "video-copy-analyzer",
+    "starred_at": "2026-02-08T09:08:45Z",
+    "stars": 183
+  },
+  {
+    "description": "A curated list of awesome Agent Skills for automating legal work",
+    "full_name": "lawve-ai/awesome-legal-skills",
+    "id": 1118981983,
+    "language": "Python",
+    "name": "awesome-legal-skills",
+    "starred_at": "2026-02-08T09:06:54Z",
+    "stars": 415
+  },
+  {
+    "description": "Fast web client for OpenClaw",
+    "full_name": "ibelick/webclaw",
+    "id": 1150359002,
+    "language": "TypeScript",
+    "name": "webclaw",
+    "starred_at": "2026-02-08T08:58:04Z",
+    "stars": 637
+  },
+  {
+    "description": null,
+    "full_name": "thomaskeym/openclaw-dashboard",
+    "id": 1151468243,
+    "language": "JavaScript",
+    "name": "openclaw-dashboard",
+    "starred_at": "2026-02-08T08:36:48Z",
+    "stars": 33
+  },
+  {
+    "description": "SUZENT: YOUR SOVEREIGN DIGITAL CO-WORKER",
+    "full_name": "cyzus/suzent",
+    "id": 1027007337,
+    "language": "Python",
+    "name": "suzent",
+    "starred_at": "2026-02-08T08:11:39Z",
+    "stars": 61
+  },
+  {
+    "description": "法律文件脱敏/还原工具 - 智能识别敏感 信息，支持批量处理",
+    "full_name": "moyupeng0422/legal-doc-redactor",
+    "id": 1151530817,
+    "language": "HTML",
+    "name": "legal-doc-redactor",
+    "starred_at": "2026-02-08T08:00:00Z",
+    "stars": 83
+  },
+  {
+    "description": "一个利用小模型实现的本地文档脱敏工具",
+    "full_name": "NextDoorLaoHuang-HF/Local_Document_AI_Desensitization_Tool",
+    "id": 955827197,
+    "language": "Python",
+    "name": "Local_Document_AI_Desensitization_Tool",
+    "starred_at": "2026-02-08T07:59:24Z",
+    "stars": 48
+  },
+  {
+    "description": "AI-powered article illustrations with intelligent position detection and cover learning system. Claude Code Skill.",
+    "full_name": "axtonliu/smart-illustrator",
+    "id": 1147375813,
+    "language": "TypeScript",
+    "name": "smart-illustrator",
+    "starred_at": "2026-02-08T07:58:43Z",
+    "stars": 483
+  },
+  {
+    "description": null,
+    "full_name": "lukilabs/beautiful-mermaid",
+    "id": 1144386801,
+    "language": "TypeScript",
+    "name": "beautiful-mermaid",
+    "starred_at": "2026-02-03T09:14:56Z",
+    "stars": 10361
+  },
+  {
+    "description": "To provide AI with Mermaid chart rendering capability, supporting both SVG and ASCII output formats",
+    "full_name": "imxv/Pretty-mermaid-skills",
+    "id": 1145741988,
+    "language": "JavaScript",
+    "name": "Pretty-mermaid-skills",
+    "starred_at": "2026-02-03T09:14:17Z",
+    "stars": 752
+  },
+  {
+    "description": "飞书 MCP 配置指南 - 让 AI 读写飞书文档、多维表格、知识库 | Feishu/Lark MCP for openclaw, Cursor, Claude Desktop",
+    "full_name": "AlexAnys/feishu-mcp",
+    "id": 1144702895,
+    "language": "Shell",
+    "name": "feishu-mcp",
+    "starred_at": "2026-02-03T05:43:17Z",
+    "stars": 24
+  },
+  {
+    "description": "The best free and open-source automated time tracker. Cross-platform, extensible, privacy-focused.",
+    "full_name": "ActivityWatch/activitywatch",
+    "id": 57224308,
+    "language": "Python",
+    "name": "activitywatch",
+    "starred_at": "2026-02-03T04:45:02Z",
+    "stars": 17870
+  },
+  {
+    "description": "中文社区版OpenClaw，同原版保持定期更新，已内置钉钉、企业微信、飞书、QQ、微信以及国内网络环境优化。你的专属个人AI助手。支持所有操作系统和平台。🦞",
+    "full_name": "mf-yang/openclaw-cn",
+    "id": 1142662831,
+    "language": "TypeScript",
+    "name": "openclaw-cn",
+    "starred_at": "2026-02-03T02:43:27Z",
+    "stars": 4741
+  },
+  {
+    "description": "Installable GitHub library of 1,500+ agentic skills for Claude Code, Cursor, Codex CLI, Gemini CLI, Antigravity, and more. Includes specialized plugins, installer CLI, bundles, workflows, and official/community skill collections.",
+    "full_name": "sickn33/antigravity-awesome-skills",
+    "id": 1134426800,
+    "language": "Python",
+    "name": "antigravity-awesome-skills",
+    "starred_at": "2026-02-03T01:34:49Z",
+    "stars": 40489
+  },
+  {
+    "description": "The awesome collection of OpenClaw skills. 5,400+ skills filtered and categorized from the official OpenClaw Skills Registry.🦞",
+    "full_name": "VoltAgent/awesome-openclaw-skills",
+    "id": 1141704318,
+    "language": null,
+    "name": "awesome-openclaw-skills",
+    "starred_at": "2026-02-03T00:58:50Z",
+    "stars": 50153
+  },
+  {
+    "description": "ClawdChat - Moltbook 深度分析 Skill for Claude Code. 抓取和分析 AI agents 社交网络，挖掘核心问题和解决方案。",
+    "full_name": "yangliu2060/clawdchat-analysis",
+    "id": 1146691312,
+    "language": null,
+    "name": "clawdchat-analysis",
+    "starred_at": "2026-02-02T15:13:20Z",
+    "stars": 90
+  },
+  {
+    "description": "法穿AI Copilot",
+    "full_name": "Lawyer-ray/FachuanHybridSystem",
+    "id": 1122237703,
+    "language": "Python",
+    "name": "FachuanHybridSystem",
+    "starred_at": "2026-02-02T02:45:43Z",
+    "stars": 185
+  },
+  {
+    "description": "DataInfra Series. Redact EVERYTHING with local llms and vlms.",
+    "full_name": "TracyWang95/DataInfra-RedactionEverything",
+    "id": 1144160971,
+    "language": "TypeScript",
+    "name": "DataInfra-RedactionEverything",
+    "starred_at": "2026-02-01T06:31:38Z",
+    "stars": 700
+  },
+  {
+    "description": "A physics-based multi-material FDM color system. Converts images to full-color 3D prints via calibrated light-transmission mixing. Supports 2-8 color systems with slicer-ready 3MF export (BambuStudio/OrcaSlicer).",
+    "full_name": "lumina-layer-studio/Lumina-Layers",
+    "id": 1134734471,
+    "language": "Python",
+    "name": "Lumina-Layers",
+    "starred_at": "2026-01-26T15:45:47Z",
+    "stars": 842
+  },
+  {
+    "description": "A Claude Code Skill for creating programmatic videos with Remotion framework",
+    "full_name": "wshuyi/remotion-video-skill",
+    "id": 1141555193,
+    "language": "Python",
+    "name": "remotion-video-skill",
+    "starred_at": "2026-01-26T02:41:23Z",
+    "stars": 273
+  },
+  {
+    "description": "Your own personal AI assistant. Any OS. Any Platform. The lobster way. 🦞 ",
+    "full_name": "openclaw/openclaw",
+    "id": 1103012935,
+    "language": "TypeScript",
+    "name": "openclaw",
+    "starred_at": "2026-01-26T02:19:05Z",
+    "stars": 378391
+  },
+  {
+    "description": "MyAgents - 优雅、易用的 Agent 桌面端 ，一站式 Agent 工作台与任务中心",
+    "full_name": "hAcKlyc/MyAgents",
+    "id": 1140484636,
+    "language": "TypeScript",
+    "name": "MyAgents",
+    "starred_at": "2026-01-26T02:02:14Z",
+    "stars": 867
+  },
+  {
+    "description": "Desktop Agent for Any Task",
+    "full_name": "workany-ai/workany",
+    "id": 1137285687,
+    "language": "TypeScript",
+    "name": "workany",
+    "starred_at": "2026-01-25T05:37:07Z",
+    "stars": 1479
+  },
+  {
+    "description": "🌐 Make websites accessible for AI agents. Automate tasks online with ease.",
+    "full_name": "browser-use/browser-use",
+    "id": 881458615,
+    "language": "Python",
+    "name": "browser-use",
+    "starred_at": "2026-01-24T13:28:10Z",
+    "stars": 98507
+  },
+  {
+    "description": "Breakthrough Method for Agile Ai Driven Development",
+    "full_name": "bmad-code-org/BMAD-METHOD",
+    "id": 965615190,
+    "language": "JavaScript",
+    "name": "BMAD-METHOD",
+    "starred_at": "2026-01-24T11:34:48Z",
+    "stars": 49023
+  },
+  {
+    "description": null,
+    "full_name": "a2ui-project/a2ui",
+    "id": 1063641074,
+    "language": "TypeScript",
+    "name": "a2ui",
+    "starred_at": "2026-01-24T06:51:35Z",
+    "stars": 15291
+  },
+  {
+    "description": "我的Claude Code配置，包括commands，skills等",
+    "full_name": "bahayonghang/my-ai-cli-toolkit",
+    "id": 1126583427,
+    "language": "Python",
+    "name": "my-ai-cli-toolkit",
+    "starred_at": "2026-01-24T06:10:02Z",
+    "stars": 15
+  },
+  {
+    "description": "The open agent skills tool - npx skills",
+    "full_name": "vercel-labs/skills",
+    "id": 1134543109,
+    "language": "TypeScript",
+    "name": "skills",
+    "starred_at": "2026-01-24T05:47:51Z",
+    "stars": 22167
+  },
+  {
+    "description": "Qwen3-TTS is an open-source series of TTS models developed by the Qwen team at Alibaba Cloud, supporting stable, expressive, and streaming speech generation, free-form voice design, and vivid voice cloning.",
+    "full_name": "QwenLM/Qwen3-TTS",
+    "id": 1138817132,
+    "language": "Python",
+    "name": "Qwen3-TTS",
+    "starred_at": "2026-01-23T03:15:04Z",
+    "stars": 11920
+  },
+  {
+    "description": "AI-native IDE workspace for legal and document-heavy workflows: files, agents, plugins, WPS editing, OCR, evidence chains. VS Code for lawyers.",
+    "full_name": "zeweihan/aiworkdeck",
+    "id": 1138989235,
+    "language": "Java",
+    "name": "aiworkdeck",
+    "starred_at": "2026-01-23T02:38:50Z",
+    "stars": 32
+  },
+  {
+    "description": "Agent Skills",
+    "full_name": "remotion-dev/skills",
+    "id": 1137388347,
+    "language": "TypeScript",
+    "name": "skills",
+    "starred_at": "2026-01-22T09:18:38Z",
+    "stars": 3615
+  },
+  {
+    "description": "The agent harness performance optimization system. Skills, instincts, memory, security, and research-first development for Claude Code, Codex, Opencode, Cursor and beyond.",
+    "full_name": "affaan-m/ECC",
+    "id": 1136590548,
+    "language": "JavaScript",
+    "name": "ECC",
+    "starred_at": "2026-01-22T09:17:53Z",
+    "stars": 214257
+  },
+  {
+    "description": "⭐AI-driven public opinion & trend monitor with multi-platform aggregation, RSS, and smart alerts.🎯 告别信息过载，你的 AI 舆情监控助手与热点筛选工具！聚合多平台热点 +  RSS 订阅，支持关键词精准筛选。AI 智能筛选新闻 + AI 翻译 +  AI 分析简报直推手机，也支持接入 MCP 架构，赋能 AI 自然语言对话分析、情感洞察与趋势预测等。支持 Docker ，数据本地/云端自持。集成微信/飞书/钉钉/Telegram/邮件/ntfy/bark/slack 等渠道智能推送。",
+    "full_name": "sansan0/TrendRadar",
+    "id": 974186260,
+    "language": "Python",
+    "name": "TrendRadar",
+    "starred_at": "2026-01-22T06:59:37Z",
+    "stars": 59360
+  },
+  {
+    "description": "Xiaohongshu (Little Red Book) infographic series generator - Claude Skill for creating eye-catching social media graphics",
+    "full_name": "manwithshit/xhs-images",
+    "id": 1137299946,
+    "language": null,
+    "name": "xhs-images",
+    "starred_at": "2026-01-21T08:58:52Z",
+    "stars": 38
+  },
+  {
+    "description": "Humanizer 的汉化版本，Claude Code Skills，旨在消除文本中 AI 生成的痕迹。",
+    "full_name": "op7418/Humanizer-zh",
+    "id": 1137212306,
+    "language": null,
+    "name": "Humanizer-zh",
+    "starred_at": "2026-01-21T08:58:29Z",
+    "stars": 10047
+  },
+  {
+    "description": "A self-learning system for Claude Code that captures corrections, positive feedback, and preferences — then syncs them to CLAUDE.md and AGENTS.md.",
+    "full_name": "BayramAnnakov/claude-reflect",
+    "id": 1127415267,
+    "language": "Python",
+    "name": "claude-reflect",
+    "starred_at": "2026-01-20T08:56:17Z",
+    "stars": 1061
+  },
+  {
+    "description": "A Claude Code skill for autonomous skill extraction and continuous learning. Have Claude Code get smarter as it works.",
+    "full_name": "blader/Claudeception",
+    "id": 1136478079,
+    "language": "Shell",
+    "name": "Claudeception",
+    "starred_at": "2026-01-20T08:56:15Z",
+    "stars": 2355
+  },
+  {
+    "description": "A tool supports OPENAI and other LLMs with Claude Skills, you can also use it as a subagent",
+    "full_name": "smallnest/goskills",
+    "id": 1097321793,
+    "language": "Go",
+    "name": "goskills",
+    "starred_at": "2026-01-20T07:22:36Z",
+    "stars": 182
+  },
+  {
+    "description": "Specification and documentation for Agent Skills",
+    "full_name": "agentskills/agentskills",
+    "id": 1117639997,
+    "language": "Python",
+    "name": "agentskills",
+    "starred_at": "2026-01-20T07:16:36Z",
+    "stars": 20399
+  },
+  {
+    "description": "Fogsight is an AI agent and animation engine powered by Large Language Models.",
+    "full_name": "fogsightai/fogsight",
+    "id": 1021622358,
+    "language": "JavaScript",
+    "name": "fogsight",
+    "starred_at": "2026-01-20T07:10:58Z",
+    "stars": 2480
+  },
+  {
+    "description": "Turn any AI agent into an AI Scientist. The #1 Agent Skills library for science, used by 160,000+ scientists worldwide. 140 ready-to-use skills plus 100+ scientific databases covering biology, chemistry, medicine, and drug discovery. Compatible with Cursor, Claude Code, Codex, Antigravity, and the open Agent Skills standard.",
+    "full_name": "K-Dense-AI/scientific-agent-skills",
+    "id": 1079456184,
+    "language": "Python",
+    "name": "scientific-agent-skills",
+    "starred_at": "2026-01-20T07:10:09Z",
+    "stars": 28074
+  },
+  {
+    "description": " 一个自动撰写小红书笔记，自动生成图片，自动发布的 Skills",
+    "full_name": "comeonzhj/Auto-Redbook-Skills",
+    "id": 1136860943,
+    "language": "Python",
+    "name": "Auto-Redbook-Skills",
+    "starred_at": "2026-01-20T07:06:30Z",
+    "stars": 1864
+  },
+  {
+    "description": null,
+    "full_name": "JimLiu/baoyu-skills",
+    "id": 1133207146,
+    "language": "TypeScript",
+    "name": "baoyu-skills",
+    "starred_at": "2026-01-20T06:58:45Z",
+    "stars": 21358
+  },
+  {
+    "description": "用 Claude Code Skills 做的视频剪辑 Agent",
+    "full_name": "Ceeon/videocut-skills",
+    "id": 1134568207,
+    "language": "JavaScript",
+    "name": "videocut-skills",
+    "starred_at": "2026-01-17T11:10:42Z",
+    "stars": 1946
+  },
+  {
+    "description": "Visual Skills Pack for Obsidian: generate Canvas, Excalidraw, and Mermaid diagrams from text with Claude Code",
+    "full_name": "axtonliu/axton-obsidian-visual-skills",
+    "id": 1131797886,
+    "language": null,
+    "name": "axton-obsidian-visual-skills",
+    "starred_at": "2026-01-16T15:44:28Z",
+    "stars": 2996
+  },
+  {
+    "description": "open cowork - 你的数字同事",
+    "full_name": "Safphere/opencowork",
+    "id": 1134360407,
+    "language": "TypeScript",
+    "name": "opencowork",
+    "starred_at": "2026-01-16T12:22:51Z",
+    "stars": 331
+  },
+  {
+    "description": null,
+    "full_name": "langchain-ai/openwork",
+    "id": 1133793135,
+    "language": "TypeScript",
+    "name": "openwork",
+    "starred_at": "2026-01-16T12:20:43Z",
+    "stars": 1398
+  },
+  {
+    "description": "Use this skill to enable Claude Code to communicate directly with your Google NotebookLM notebooks. Query your uploaded documents and get source-grounded, citation-backed answers from Gemini. Features browser automation, library management, persistent authentication, and answers exclusively from your own knowledge base.",
+    "full_name": "PleasePrompto/notebooklm-skill",
+    "id": 1079107863,
+    "language": "Python",
+    "name": "notebooklm-skill",
+    "starred_at": "2026-01-16T09:57:44Z",
+    "stars": 7003
+  },
+  {
+    "description": "Multi-agent orchestration workflow (Claude Code  Codex Gemini OpenCode)",
+    "full_name": "stellarlinkco/myclaude",
+    "id": 1021287722,
+    "language": "Go",
+    "name": "myclaude",
+    "starred_at": "2026-01-16T09:57:05Z",
+    "stars": 2688
+  },
+  {
+    "description": "A macOS menu bar application that monitors AI coding assistant usage quotas. Keep track of your Claude, Codex, Antigravity ,and Gemini usage at a glance.",
+    "full_name": "tddworks/ClaudeBar",
+    "id": 1120106077,
+    "language": "Swift",
+    "name": "ClaudeBar",
+    "starred_at": "2026-01-16T09:55:06Z",
+    "stars": 1236
+  },
+  {
+    "description": "Eigent: The Open Source Cowork Desktop to Unlock Your Exceptional Productivity. Local and Free Alternative to Claude Cowork.",
+    "full_name": "eigent-ai/eigent",
+    "id": 1028492186,
+    "language": "TypeScript",
+    "name": "eigent",
+    "starred_at": "2026-01-16T09:49:16Z",
+    "stars": 14262
+  },
+  {
+    "description": "开源剪映小助手｜剪映API | 扣子插件 | Open-source CapCut automation toolkit to generate & download draft files.  | skills",
+    "full_name": "Hommy-master/capcut-mate",
+    "id": 1047822585,
+    "language": "Python",
+    "name": "capcut-mate",
+    "starred_at": "2026-01-16T09:46:27Z",
+    "stars": 1163
+  },
+  {
+    "description": "Vercel's official collection of agent skills",
+    "full_name": "vercel-labs/agent-skills",
+    "id": 1112540808,
+    "language": "JavaScript",
+    "name": "agent-skills",
+    "starred_at": "2026-01-16T09:37:08Z",
+    "stars": 27853
+  },
+  {
+    "description": "Agent Orchestration Command Center",
+    "full_name": "RunMaestro/Maestro",
+    "id": 1102197464,
+    "language": "TypeScript",
+    "name": "Maestro",
+    "starred_at": "2026-01-15T08:53:54Z",
+    "stars": 3011
+  },
+  {
+    "description": "🚀 Feishu/Lark Docs、Sheet、Bitable <-> Markdown | AI Agent-friendly knowledge base exporter and writer with OAuth 2.0, CLI, TUI & Claude Skills support - 飞书文档 <写入/导出> Markdown | AI Agent 友好型导出-写入工具",
+    "full_name": "leemysw/feishu-docx",
+    "id": 1131521392,
+    "language": "Python",
+    "name": "feishu-docx",
+    "starred_at": "2026-01-13T07:50:54Z",
+    "stars": 217
+  },
+  {
+    "description": "A configuration framework that enhances Claude Code with specialized commands, cognitive personas, and development methodologies.",
+    "full_name": "SuperClaude-Org/SuperClaude_Framework",
+    "id": 1006496207,
+    "language": "Python",
+    "name": "SuperClaude_Framework",
+    "starred_at": "2026-01-13T07:03:01Z",
+    "stars": 23274
+  },
+  {
+    "description": "A collection of Claude Code skills including autoskill - a meta-skill that learns from your corrections and updates other skills automatically.",
+    "full_name": "AI-Unleashed/Claude-Skills",
+    "id": 1131390481,
+    "language": null,
+    "name": "Claude-Skills",
+    "starred_at": "2026-01-13T06:59:32Z",
+    "stars": 64
+  },
+  {
+    "description": "Curated plugin marketplace for AI agents - works with Claude Code, Codex, and openskills",
+    "full_name": "numman-ali/n-skills",
+    "id": 1126723945,
+    "language": "TypeScript",
+    "name": "n-skills",
+    "starred_at": "2026-01-13T06:55:34Z",
+    "stars": 997
+  },
+  {
+    "description": "Browser automation CLI for AI agents",
+    "full_name": "vercel-labs/agent-browser",
+    "id": 1132001614,
+    "language": "Rust",
+    "name": "agent-browser",
+    "starred_at": "2026-01-12T11:53:57Z",
+    "stars": 35928
+  },
+  {
+    "description": "自媒体写作交互式助手 - Claude Code Skill",
+    "full_name": "Ceeon/writing-assistant-skill",
+    "id": 1099368910,
+    "language": null,
+    "name": "writing-assistant-skill",
+    "starred_at": "2026-01-10T12:28:56Z",
+    "stars": 96
+  },
+  {
+    "description": null,
+    "full_name": "Ceeon/AIPPT2",
+    "id": 1121274996,
+    "language": "HTML",
+    "name": "AIPPT2",
+    "starred_at": "2026-01-10T12:28:48Z",
+    "stars": 83
+  },
+  {
+    "description": "Create multiple isolated Claude Code variants with custom providers (Z.ai, MiniMax, OpenRouter, LiteLLM)",
+    "full_name": "numman-ali/cc-mirror",
+    "id": 1126960247,
+    "language": "TypeScript",
+    "name": "cc-mirror",
+    "starred_at": "2026-01-10T09:16:49Z",
+    "stars": 2235
+  },
+  {
+    "description": "Cross-platform desktop notifications for Claude Code, Codex, and Gemini CLI. Install via Homebrew, npm, or script.",
+    "full_name": "mylee04/code-notify",
+    "id": 1028437757,
+    "language": "Shell",
+    "name": "code-notify",
+    "starred_at": "2026-01-10T09:13:23Z",
+    "stars": 242
+  },
+  {
+    "description": "🔂 Ralph loop with PRs: Run Claude Code in a continuous loop, autonomously creating PRs, waiting for checks, and merging",
+    "full_name": "AnandChowdhary/continuous-claude",
+    "id": 1096955196,
+    "language": "Shell",
+    "name": "continuous-claude",
+    "starred_at": "2026-01-10T09:12:18Z",
+    "stars": 1350
+  },
+  {
+    "description": "Agent skills for Obsidian. Teach your agent to use Obsidian CLI and open formats including Markdown, Bases, JSON Canvas.",
+    "full_name": "kepano/obsidian-skills",
+    "id": 1126947080,
+    "language": null,
+    "name": "obsidian-skills",
+    "starred_at": "2026-01-10T09:12:13Z",
+    "stars": 35433
+  },
+  {
+    "description": "Persistent file-based planning for long-running agentic tasks. Crash-proof markdown plans, deterministic completion gate, multi-agent shared state on disk. Works with Claude Code, Codex CLI, Cursor, Hermes agent, Pi, Kiro, OpenCode and 60+ agents via the SKILL.md standard.",
+    "full_name": "OthmanAdi/planning-with-files",
+    "id": 1127110039,
+    "language": "Python",
+    "name": "planning-with-files",
+    "starred_at": "2026-01-10T09:10:01Z",
+    "stars": 23105
+  },
+  {
+    "description": null,
+    "full_name": "Ceeon/AIPPT-Enterprise",
+    "id": 1127245982,
+    "language": "JavaScript",
+    "name": "AIPPT-Enterprise",
+    "starred_at": "2026-01-10T09:09:36Z",
+    "stars": 58
+  },
+  {
+    "description": "A Claude Skill to give your agent the ability to use a web browser",
+    "full_name": "SawyerHood/dev-browser",
+    "id": 1108682714,
+    "language": "TypeScript",
+    "name": "dev-browser",
+    "starred_at": "2026-01-10T09:09:20Z",
+    "stars": 6247
+  },
+  {
+    "description": "A comprehensive collection of Agent Skills for context engineering, multi-agent architectures, and production agent systems. Use when building, optimizing, or debugging agent systems that require effective context management.",
+    "full_name": "muratcankoylan/Agent-Skills-for-Context-Engineering",
+    "id": 1120349776,
+    "language": "Python",
+    "name": "Agent-Skills-for-Context-Engineering",
+    "starred_at": "2026-01-10T09:06:13Z",
+    "stars": 16507
+  },
+  {
+    "description": "MiroThinker is a deep research agent optimized for complex research and prediction tasks. Our latest models, MiroThinker-1.7, achieves 74.0 and 75.3 on the BrowseComp and BrowseComp Zh, respectively.",
+    "full_name": "MiroMindAI/MiroThinker",
+    "id": 1033873680,
+    "language": "Python",
+    "name": "MiroThinker",
+    "starred_at": "2026-01-10T09:04:32Z",
+    "stars": 8266
+  },
+  {
+    "description": "Official, Anthropic-managed directory of high quality Claude Code Plugins.",
+    "full_name": "anthropics/claude-plugins-official",
+    "id": 1100776768,
+    "language": "Python",
+    "name": "claude-plugins-official",
+    "starred_at": "2026-01-10T09:04:04Z",
+    "stars": 30001
+  },
+  {
+    "description": "DeepTutor: Agent-native, Open-sourced Personalized Tutoring. https://deeptutor.info/.",
+    "full_name": "HKUDS/DeepTutor",
+    "id": 1124219907,
+    "language": "Python",
+    "name": "DeepTutor",
+    "starred_at": "2026-01-09T14:02:56Z",
+    "stars": 24728
+  },
+  {
+    "description": "CC Workflow Studio",
+    "full_name": "breaking-brake/cc-wf-studio",
+    "id": 1087772670,
+    "language": "TypeScript",
+    "name": "cc-wf-studio",
+    "starred_at": "2026-01-07T14:25:15Z",
+    "stars": 5112
+  },
+  {
+    "description": "A curated catalogue of awesome agentic AI patterns",
+    "full_name": "nibzard/awesome-agentic-patterns",
+    "id": 993717808,
+    "language": "HTML",
+    "name": "awesome-agentic-patterns",
+    "starred_at": "2026-01-07T14:25:09Z",
+    "stars": 4667
+  },
+  {
+    "description": "Convert Markdown files to DOCX format with support for both browser and Node.js environments.  将 Markdown 文件转换为 DOCX 格式，支持浏览器和 Node.js 环境。",
+    "full_name": "vace/markdown-docx",
+    "id": 967260891,
+    "language": "TypeScript",
+    "name": "markdown-docx",
+    "starred_at": "2026-01-07T14:08:49Z",
+    "stars": 323
+  },
+  {
+    "description": "Tracking prompts, feature flags and metadata of Claude Code releases. Subscribe to ↓",
+    "full_name": "marckrenn/claude-code-changelog",
+    "id": 1032498247,
+    "language": null,
+    "name": "claude-code-changelog",
+    "starred_at": "2026-01-07T09:14:28Z",
+    "stars": 842
+  },
+  {
+    "description": "这里是歸藏的提示词储存库，存放着歸藏撰写的所有 AI 模型提示词（This is Guizang's prompt repository, containing all AI model prompts written by Guizang.）",
+    "full_name": "op7418/guizang-s-prompt",
+    "id": 1124452481,
+    "language": null,
+    "name": "guizang-s-prompt",
+    "starred_at": "2026-01-07T09:14:01Z",
+    "stars": 1376
+  },
+  {
+    "description": "Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster by executing routine tasks, explaining complex code, and handling git workflows - all through natural language commands.",
+    "full_name": "anthropics/claude-code",
+    "id": 937253475,
+    "language": "Python",
+    "name": "claude-code",
+    "starred_at": "2026-01-07T05:56:22Z",
+    "stars": 132058
+  },
+  {
+    "description": "Skills Catalog for Codex",
+    "full_name": "openai/skills",
+    "id": 1103643573,
+    "language": "Python",
+    "name": "skills",
+    "starred_at": "2026-01-07T05:56:08Z",
+    "stars": 22034
+  },
+  {
+    "description": "A desktop app for isolated, parallel agentic development",
+    "full_name": "coder/mux",
+    "id": 1058825816,
+    "language": "TypeScript",
+    "name": "mux",
+    "starred_at": "2026-01-06T14:11:45Z",
+    "stars": 1830
+  },
+  {
+    "description": "利用claude code agent框架一步一步实现deep research！很强大很简单的skills。我一步一步介绍实现deep research，因为deep research就是agent框架第一应用，对比一下各个框架实现这个deep research，就知道哪个框架才是真厉害。",
+    "full_name": "liangdabiao/Claude-Code-Deep-Research-main",
+    "id": 1122775283,
+    "language": null,
+    "name": "Claude-Code-Deep-Research-main",
+    "starred_at": "2026-01-05T05:42:06Z",
+    "stars": 253
+  },
+  {
+    "description": "Autonomous multi-session AI coding",
+    "full_name": "AndyMik90/Aperant",
+    "id": 1110222585,
+    "language": "TypeScript",
+    "name": "Aperant",
+    "starred_at": "2026-01-03T15:24:50Z",
+    "stars": 14347
+  },
+  {
+    "description": "An AI SKILL that provide design intelligence for building professional UI/UX multiple platforms",
+    "full_name": "nextlevelbuilder/ui-ux-pro-max-skill",
+    "id": 1106996539,
+    "language": "Python",
+    "name": "ui-ux-pro-max-skill",
+    "starred_at": "2026-01-03T15:16:39Z",
+    "stars": 90948
+  },
+  {
+    "description": "The HTML Presentation Framework",
+    "full_name": "hakimel/reveal.js",
+    "id": 1861458,
+    "language": "JavaScript",
+    "name": "reveal.js",
+    "starred_at": "2026-01-03T15:12:06Z",
+    "stars": 71678
+  },
+  {
+    "description": "Coordinate your coding agents like a group chat — read receipts, delivery tracking, and remote ops from your phone. One pip install, zero infrastructure. A production‑minded orchestrator for 24/7 workflow",
+    "full_name": "ChesterRa/cccc",
+    "id": 1038413113,
+    "language": "Python",
+    "name": "cccc",
+    "starred_at": "2026-01-01T06:26:26Z",
+    "stars": 897
+  },
+  {
+    "description": "omo/lazycodex: The coding agent for tokenmaxxers;the one and only agent harness for complex codebases. For your Codex, for your OpenCode",
+    "full_name": "code-yeongyu/oh-my-openagent",
+    "id": 1108837393,
+    "language": "TypeScript",
+    "name": "oh-my-openagent",
+    "starred_at": "2026-01-01T06:26:01Z",
+    "stars": 62027
+  },
+  {
+    "description": "Deck is a modern, native, privacy-first clipboard manager for macOS.",
+    "full_name": "yuzeguitarist/Deck",
+    "id": 1111053300,
+    "language": "Swift",
+    "name": "Deck",
+    "starred_at": "2026-01-01T06:17:02Z",
+    "stars": 1278
+  },
+  {
+    "description": "Wrap Gemini CLI, Antigravity, ChatGPT Codex, Claude Code, Grok Build as an OpenAI/Gemini/Claude/Codex compatible API service, allowing you to enjoy the free Gemini 3.1 Pro, GPT 5.5, Grok 4.3, Claude model through API",
+    "full_name": "router-for-me/CLIProxyAPI",
+    "id": 1012087571,
+    "language": "Go",
+    "name": "CLIProxyAPI",
+    "starred_at": "2025-12-31T15:18:25Z",
+    "stars": 37337
+  },
+  {
+    "description": null,
+    "full_name": "Tongyi-MAI/Z-Image",
+    "id": 1104481835,
+    "language": "Python",
+    "name": "Z-Image",
+    "starred_at": "2025-12-31T13:26:41Z",
+    "stars": 11528
+  },
+  {
+    "description": " A protocol for connecting any editor to any agent",
+    "full_name": "agentclientprotocol/agent-client-protocol",
+    "id": 1007251296,
+    "language": "Rust",
+    "name": "agent-client-protocol",
+    "starred_at": "2025-12-30T14:59:44Z",
+    "stars": 3384
+  },
+  {
+    "description": "An Obsidian plugin that embeds Claude Code/Codex as an AI collaborator in your vault",
+    "full_name": "YishenTu/claudian",
+    "id": 1110782890,
+    "language": "TypeScript",
+    "name": "claudian",
+    "starred_at": "2025-12-30T14:49:49Z",
+    "stars": 12705
+  },
+  {
+    "description": null,
+    "full_name": "anyme123/Any-code",
+    "id": 1024371336,
+    "language": "TypeScript",
+    "name": "Any-code",
+    "starred_at": "2025-12-30T05:04:37Z",
+    "stars": 1337
+  },
+  {
+    "description": "Building AI agents, atomically",
+    "full_name": "Eigenwise/atomic-agents",
+    "id": 809673506,
+    "language": "Python",
+    "name": "atomic-agents",
+    "starred_at": "2025-12-30T05:02:23Z",
+    "stars": 5978
+  },
+  {
+    "description": "100% free and full open-source edge Firecrawl alternative with better links extraction for agents - that you can deploy to cloudflare or vercel by yourself.",
+    "full_name": "lumpinif/deepcrawl",
+    "id": 988419198,
+    "language": "TypeScript",
+    "name": "deepcrawl",
+    "starred_at": "2025-12-30T05:01:47Z",
+    "stars": 580
+  },
+  {
+    "description": "AI coding dream team of agents for VS Code. Claude Code + openai Codex collaborate in brainstorm mode, debate solutions, and synthesize the best approach for your code.",
+    "full_name": "DeepMyst/Mysti",
+    "id": 1106550266,
+    "language": "TypeScript",
+    "name": "Mysti",
+    "starred_at": "2025-12-30T05:00:37Z",
+    "stars": 1069
+  },
+  {
+    "description": "Stop juggling AI accounts. Quotio is a beautiful native macOS menu bar app that unifies your Claude, Gemini, OpenAI, Qwen, and Antigravity subscriptions – with real-time quota tracking and smart auto-failover for AI coding tools like Claude Code, OpenCode, and Droid.",
+    "full_name": "nguyenphutrong/quotio",
+    "id": 1122347787,
+    "language": "Swift",
+    "name": "quotio",
+    "starred_at": "2025-12-30T04:59:53Z",
+    "stars": 4468
+  },
+  {
+    "description": null,
+    "full_name": "eondrcode/obsidian-i18n",
+    "id": 757321220,
+    "language": "TypeScript",
+    "name": "obsidian-i18n",
+    "starred_at": "2025-12-29T05:28:32Z",
+    "stars": 715
+  },
+  {
+    "description": "调用你喜欢的AI（LLM）翻译Obsidian中的任何文本，支持词典导入导出",
+    "full_name": "dangehub/obsidian-translay-translator",
+    "id": 1109623295,
+    "language": "TypeScript",
+    "name": "obsidian-translay-translator",
+    "starred_at": "2025-12-29T05:27:52Z",
+    "stars": 62
+  },
+  {
+    "description": "Production-level agent skills",
+    "full_name": "AnswerZhao/agent-skills",
+    "id": 1122826275,
+    "language": "Python",
+    "name": "agent-skills",
+    "starred_at": "2025-12-29T05:18:04Z",
+    "stars": 26
+  },
+  {
+    "description": "Professional Antigravity Account Manager & Switcher. One-click seamless account switching for Antigravity Tools. Built with Tauri v2 + React (Rust).专业的 Antigravity 账号管理与切换工具。为 Antigravity 提供一键无缝账号切换功能。",
+    "full_name": "lbjlaq/Antigravity-Manager",
+    "id": 1104535633,
+    "language": "Rust",
+    "name": "Antigravity-Manager",
+    "starred_at": "2025-12-28T03:34:34Z",
+    "stars": 29733
+  },
+  {
+    "description": "Styled banners for your Readme made with html/css in SVG !!",
+    "full_name": "Akshay090/svg-banners",
+    "id": 281745012,
+    "language": "JavaScript",
+    "name": "svg-banners",
+    "starred_at": "2025-12-27T06:18:20Z",
+    "stars": 401
+  },
+  {
+    "description": "Light Image Video Generation Inference Framework",
+    "full_name": "ModelTC/LightX2V",
+    "id": 953945624,
+    "language": "Python",
+    "name": "LightX2V",
+    "starred_at": "2025-12-27T02:56:04Z",
+    "stars": 2376
+  },
+  {
+    "description": "结合知识库、知识图谱管理的 多租户 Agent Harness 平台。 An agent harness that integrates a LightRAG knowledge base and knowledge graphs. Build with LangChain + Vue + FastAPI, support DeepAgents、MinerU PDF、Neo4j 、MCP.",
+    "full_name": "xerrors/Yuxi",
+    "id": 824541776,
+    "language": "Python",
+    "name": "Yuxi",
+    "starred_at": "2025-12-27T02:01:43Z",
+    "stars": 5545
+  },
+  {
+    "description": "🦋 An Infographic Generation and Rendering Framework, bring words to life with AI!",
+    "full_name": "antvis/Infographic",
+    "id": 1054812421,
+    "language": "TypeScript",
+    "name": "Infographic",
+    "starred_at": "2025-12-26T03:24:37Z",
+    "stars": 5422
+  },
+  {
+    "description": "🧞‍♂️ MESH·Y is a design tool to generate beautiful & colorful mesh gradients.",
+    "full_name": "anup-a/meshy",
+    "id": 446045359,
+    "language": "JavaScript",
+    "name": "meshy",
+    "starred_at": "2025-12-26T03:12:37Z",
+    "stars": 417
+  },
+  {
+    "description": "Agent Zero AI framework",
+    "full_name": "agent0ai/agent-zero",
+    "id": 812975380,
+    "language": "Python",
+    "name": "agent-zero",
+    "starred_at": "2025-12-26T03:11:20Z",
+    "stars": 18048
+  },
+  {
+    "description": "A curated collection of 1000+ agent skills from official dev teams and the community, compatible with Claude Code, Codex, Gemini CLI, Cursor, and more.",
+    "full_name": "VoltAgent/awesome-agent-skills",
+    "id": 1084853233,
+    "language": null,
+    "name": "awesome-agent-skills",
+    "starred_at": "2025-12-25T08:38:23Z",
+    "stars": 25141
+  },
+  {
+    "description": "A curated list of awesome Claude Skills, resources, and tools for customizing Claude AI workflows — particularly Claude Code",
+    "full_name": "travisvn/awesome-claude-skills",
+    "id": 1077850011,
+    "language": null,
+    "name": "awesome-claude-skills",
+    "starred_at": "2025-12-25T08:38:07Z",
+    "stars": 13414
+  },
+  {
+    "description": "Draw any professional and beautiful diagram you can imagine in the simplest way",
+    "full_name": "liujuntao123/smart-draw",
+    "id": 1093366718,
+    "language": "JavaScript",
+    "name": "smart-draw",
+    "starred_at": "2025-12-25T07:10:11Z",
+    "stars": 423
+  },
+  {
+    "description": "飞书文档导出服务",
+    "full_name": "eternalfree/feishu-doc-export",
+    "id": 659573821,
+    "language": "C#",
+    "name": "feishu-doc-export",
+    "starred_at": "2025-12-25T06:03:10Z",
+    "stars": 802
+  },
+  {
+    "description": "用于备份飞书文档，可以将飞书文档转成markdown下载。",
+    "full_name": "dicarne/feishu-backup",
+    "id": 432127334,
+    "language": "TypeScript",
+    "name": "feishu-backup",
+    "starred_at": "2025-12-25T06:02:50Z",
+    "stars": 574
+  },
+  {
+    "description": "Local-first chat history analyzer with AI. | 本地优先的 AI 聊天记录分析工具",
+    "full_name": "ChatLab/ChatLab",
+    "id": 1104370536,
+    "language": "TypeScript",
+    "name": "ChatLab",
+    "starred_at": "2025-12-25T04:40:48Z",
+    "stars": 6675
+  },
+  {
+    "description": "一款包含了 Prompt管理，Skill管理，Agent管理的一站式AI工具箱，助你高效管理提示词，一键分发skills ，一站式管理Agent资产，并实现云同步，备份，版本管理 | An all-in-one AI toolbox for prompt, agent, and skills management. Reuse prompts, distribute skills with one click, manage agent assets, and support cloud sync, backup, and version control",
+    "full_name": "legeling/PromptHub",
+    "id": 1106401972,
+    "language": "TypeScript",
+    "name": "PromptHub",
+    "starred_at": "2025-12-24T14:42:23Z",
+    "stars": 1353
+  },
+  {
+    "description": "Simulates Gemini CLI, Antigravity, Codex, Grok, and Kiro client requests, compatible with the OpenAI API. It supports thousands of Gemini model requests per day and offers free use of the built-in Claude model in Kiro. Easily connect to any client via the API, making AI development more efficient!",
+    "full_name": "justlovemaki/AIClient2API",
+    "id": 1022937426,
+    "language": "JavaScript",
+    "name": "AIClient2API",
+    "starred_at": "2025-12-24T14:35:02Z",
+    "stars": 8221
+  },
+  {
+    "description": "📚 《从零开始构建智能体》——从零开始的智能体原理与实践教程",
+    "full_name": "datawhalechina/hello-agents",
+    "id": 1052050442,
+    "language": "Python",
+    "name": "hello-agents",
+    "starred_at": "2025-12-23T13:32:10Z",
+    "stars": 58760
+  },
+  {
+    "description": "Generation of diagrams like flowcharts or sequence diagrams from text in a similar manner as markdown",
+    "full_name": "mermaid-js/mermaid",
+    "id": 26066727,
+    "language": "TypeScript",
+    "name": "mermaid",
+    "starred_at": "2025-12-23T13:24:58Z",
+    "stars": 88617
+  },
+  {
+    "description": null,
+    "full_name": "2025Emma/vibe-coding-cn",
+    "id": 1117874367,
+    "language": "Python",
+    "name": "vibe-coding-cn",
+    "starred_at": "2025-12-23T13:22:40Z",
+    "stars": 21642
+  },
+  {
+    "description": "Fabric is an open-source framework for augmenting humans using AI. It provides a modular system for solving specific problems using a crowdsourced set of AI prompts that can be used anywhere.",
+    "full_name": "danielmiessler/Fabric",
+    "id": 738733003,
+    "language": "Go",
+    "name": "Fabric",
+    "starred_at": "2025-12-23T13:21:42Z",
+    "stars": 42319
+  },
+  {
+    "description": null,
+    "full_name": "zh-xx/LawTab-Draft",
+    "id": 1120470341,
+    "language": "TypeScript",
+    "name": "LawTab-Draft",
+    "starred_at": "2025-12-23T09:21:12Z",
+    "stars": 5
+  },
+  {
+    "description": "A simple app-updater for macOS, checks your GitHub releases for a binary asset and silently updates your app.",
+    "full_name": "s1ntoneli/AppUpdater",
+    "id": 792246136,
+    "language": "Swift",
+    "name": "AppUpdater",
+    "starred_at": "2025-12-15T07:48:48Z",
+    "stars": 243
+  },
+  {
+    "description": "Smart, snappy, and multilingual AI assistant for your vault.",
+    "full_name": "Lapis0x0/obsidian-yolo",
+    "id": 994995137,
+    "language": "TypeScript",
+    "name": "obsidian-yolo",
+    "starred_at": "2025-12-12T05:16:58Z",
+    "stars": 1142
+  },
+  {
+    "description": "An Open Phone Agent Model & Framework. Unlocking the AI Phone for Everyone",
+    "full_name": "zai-org/Open-AutoGLM",
+    "id": 1112189620,
+    "language": "Python",
+    "name": "Open-AutoGLM",
+    "starred_at": "2025-12-11T02:05:13Z",
+    "stars": 25500
+  },
+  {
+    "description": "A next.js web application that integrates AI capabilities with draw.io diagrams. This app allows you to create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.",
+    "full_name": "DayuanJiang/next-ai-draw-io",
+    "id": 953521037,
+    "language": "TypeScript",
+    "name": "next-ai-draw-io",
+    "starred_at": "2025-12-09T04:43:22Z",
+    "stars": 31871
+  },
+  {
+    "description": "Persistent Context Across Sessions for Every Agent –  Captures everything your agent does during sessions, compresses it with AI, and injects relevant context back into future sessions. Works with Claude Code, OpenClaw, Codex, Gemini, Hermes, Copilot, OpenCode + More",
+    "full_name": "thedotmack/claude-mem",
+    "id": 1048065319,
+    "language": "JavaScript",
+    "name": "claude-mem",
+    "starred_at": "2025-12-09T04:28:13Z",
+    "stars": 81994
+  },
+  {
+    "description": "The open document intelligence platform for builders and hackers - DMS for the agentic world",
+    "full_name": "Open-Source-Legal/OpenContracts",
+    "id": 556553471,
+    "language": "Python",
+    "name": "OpenContracts",
+    "starred_at": "2025-12-06T11:24:52Z",
+    "stars": 1351
+  },
+  {
+    "description": "Universal memory layer for AI Agents. It provides scalable, extensible, and interoperable memory storage and retrieval to streamline AI agent state management for next-generation autonomous systems.",
+    "full_name": "MemMachine/MemMachine",
+    "id": 1038686658,
+    "language": "Python",
+    "name": "MemMachine",
+    "starred_at": "2025-12-06T08:37:48Z",
+    "stars": 3112
+  },
+  {
+    "description": "Zep | Examples, Integrations, & More",
+    "full_name": "getzep/zep",
+    "id": 634244448,
+    "language": "Python",
+    "name": "zep",
+    "starred_at": "2025-12-06T07:39:45Z",
+    "stars": 4659
+  },
+  {
+    "description": "Memory and context engine + app that is extremely fast, scalable, and can be run fully locally. The Memory API for the AI era.",
+    "full_name": "supermemoryai/supermemory",
+    "id": 764287615,
+    "language": "TypeScript",
+    "name": "supermemory",
+    "starred_at": "2025-12-06T07:39:43Z",
+    "stars": 26886
+  },
+  {
+    "description": "A modern, cross-platform, and free AI RSS reader. 一个现代化、跨平台且免费的 AI RSS 阅读器.",
+    "full_name": "WCY-dt/MrRSS",
+    "id": 798901284,
+    "language": "Go",
+    "name": "MrRSS",
+    "starred_at": "2025-12-06T07:18:27Z",
+    "stars": 2304
+  },
+  {
+    "description": "Open Immersive Translate. A revolutionary open-source browser translation plugin that enables everyone to have a native-like reading experience. 开源的沉浸式翻译，一款革命性的浏览器翻译插件，让所有人都能够拥有母语般的阅读体验。",
+    "full_name": "Bistutu/FluentRead",
+    "id": 734569425,
+    "language": "TypeScript",
+    "name": "FluentRead",
+    "starred_at": "2025-12-06T07:03:39Z",
+    "stars": 7052
+  },
+  {
+    "description": "Give git-like & traceable memory to OpenClaw and any coding agents. By https://memov.ai/ aka Entire CLI for every coding agents by MCP. Self-evolution for skills.",
+    "full_name": "memovai/memov",
+    "id": 1036091980,
+    "language": "Python",
+    "name": "memov",
+    "starred_at": "2025-12-06T07:00:40Z",
+    "stars": 193
+  },
+  {
+    "description": "通过对话挖掘用户需求，并自动生成专业的提示词，支持系统/用户提示词优化、效果对比，版本管理和支持即时渲染的操练场，新增通过多轮对话绘图改图，图片逆推提示词、绘图提示词优化，https://yprompt.252035.xyz   公共账号：demo / demo",
+    "full_name": "fish2018/YPrompt",
+    "id": 1061023885,
+    "language": null,
+    "name": "YPrompt",
+    "starred_at": "2025-12-06T06:59:58Z",
+    "stars": 1698
+  },
+  {
+    "description": "Claude Code settings, commands and agents for vibe coding",
+    "full_name": "feiskyer/claude-code-settings",
+    "id": 1021907170,
+    "language": "Python",
+    "name": "claude-code-settings",
+    "starred_at": "2025-12-06T04:44:18Z",
+    "stars": 1551
+  },
+  {
+    "description": "The open source coding agent.",
+    "full_name": "anomalyco/opencode",
+    "id": 975734319,
+    "language": "TypeScript",
+    "name": "opencode",
+    "starred_at": "2025-12-05T15:52:01Z",
+    "stars": 173700
+  },
+  {
+    "description": "Draw.io Model Context Protocol (MCP) Server",
+    "full_name": "lgazo/drawio-mcp-server",
+    "id": 970201112,
+    "language": "TypeScript",
+    "name": "drawio-mcp-server",
+    "starred_at": "2025-12-04T05:22:06Z",
+    "stars": 1278
+  },
+  {
+    "description": "Red Ink - A one-stop Xiaohongshu image-and-text generator based on the 🍌Nano Banana Pro🍌, \"One Sentence, One Image: Generate Xiaohongshu Text and Images.\"",
+    "full_name": "HisMax/RedInk",
+    "id": 1103772881,
+    "language": "Python",
+    "name": "RedInk",
+    "starred_at": "2025-12-01T22:44:00Z",
+    "stars": 5324
+  },
+  {
+    "description": "Lightweight clipboard manager for macOS",
+    "full_name": "p0deje/Maccy",
+    "id": 119637215,
+    "language": "Swift",
+    "name": "Maccy",
+    "starred_at": "2025-11-29T08:01:09Z",
+    "stars": 20285
+  },
+  {
+    "description": "Clipboard manager with advanced features",
+    "full_name": "hluk/CopyQ",
+    "id": 344809,
+    "language": "C++",
+    "name": "CopyQ",
+    "starred_at": "2025-11-29T08:00:48Z",
+    "stars": 11841
+  },
+  {
+    "description": "Open Source Alternatives to Paste",
+    "full_name": "Ineffable919/clipboard",
+    "id": 1094681768,
+    "language": "Swift",
+    "name": "clipboard",
+    "starred_at": "2025-11-28T10:03:56Z",
+    "stars": 74
+  },
+  {
+    "description": null,
+    "full_name": "zh-xx/lexai-space",
+    "id": 1034905278,
+    "language": "HTML",
+    "name": "lexai-space",
+    "starred_at": "2025-11-25T08:44:54Z",
+    "stars": 7
+  },
+  {
+    "description": "Self-evolving memory across Agent and platform. The one portable memory layer for every agent they use - Claude Code, Codex, OpenClaw, Hermes, and more",
+    "full_name": "EverMind-AI/EverOS",
+    "id": 1085086903,
+    "language": "Python",
+    "name": "EverOS",
+    "starred_at": "2025-11-25T07:33:25Z",
+    "stars": 7355
+  },
+  {
+    "description": "A smart, powerful, and beautiful excalidraw drawing tool.Draw Professional Charts with Natural Language",
+    "full_name": "liujuntao123/smart-excalidraw-next",
+    "id": 1086140165,
+    "language": "JavaScript",
+    "name": "smart-excalidraw-next",
+    "starred_at": "2025-11-25T06:23:37Z",
+    "stars": 3405
+  },
+  {
+    "description": "Convert Lark Doc to Markdown",
+    "full_name": "whale4113/cloud-document-converter",
+    "id": 751729393,
+    "language": "TypeScript",
+    "name": "cloud-document-converter",
+    "starred_at": "2025-11-25T04:55:32Z",
+    "stars": 1177
+  },
+  {
+    "description": "An Open Source implementation of Notebook LM with more flexibility and features",
+    "full_name": "lfnovo/open-notebook",
+    "id": 876286167,
+    "language": "TypeScript",
+    "name": "open-notebook",
+    "starred_at": "2025-11-22T05:37:03Z",
+    "stars": 29496
+  },
+  {
+    "description": "Terminal UI OS (Terminal Multiplexer)",
+    "full_name": "Gaurav-Gosain/tuios",
+    "id": 1051789550,
+    "language": "Go",
+    "name": "tuios",
+    "starred_at": "2025-11-22T05:36:51Z",
+    "stars": 2673
+  },
+  {
+    "description": "Multilingual speech understanding: ASR + emotion recognition + audio event detection. 50+ languages, 15x faster than Whisper, non-autoregressive.",
+    "full_name": "FunAudioLLM/SenseVoice",
+    "id": 823429665,
+    "language": "Python",
+    "name": "SenseVoice",
+    "starred_at": "2025-11-20T15:47:35Z",
+    "stars": 8547
+  },
+  {
+    "description": "Open-source industrial-grade ASR models supporting Mandarin, Chinese dialects and English, achieving a new SOTA on public Mandarin ASR benchmarks, while also offering outstanding singing lyrics recognition capability.",
+    "full_name": "FireRedTeam/FireRedASR",
+    "id": 921662138,
+    "language": "Python",
+    "name": "FireRedASR",
+    "starred_at": "2025-11-20T15:47:30Z",
+    "stars": 1905
+  },
+  {
+    "description": "An app for managing github starred repositories. ",
+    "full_name": "AmintaCCCP/GithubStarsManager",
+    "id": 1010561139,
+    "language": "TypeScript",
+    "name": "GithubStarsManager",
+    "starred_at": "2025-11-16T06:26:56Z",
+    "stars": 3019
+  },
+  {
+    "description": "Open Cut API.",
+    "full_name": "sun-guannan/VectCutAPI",
+    "id": 1017922137,
+    "language": "Python",
+    "name": "VectCutAPI",
+    "starred_at": "2025-11-16T06:10:43Z",
+    "stars": 1982
+  },
+  {
+    "description": "🎥      Make videos programmatically with React",
+    "full_name": "remotion-dev/remotion",
+    "id": 274495425,
+    "language": "TypeScript",
+    "name": "remotion",
+    "starred_at": "2025-11-14T14:35:19Z",
+    "stars": 49924
+  },
+  {
+    "description": "The open-source CapCut alternative",
+    "full_name": "OpenCut-app/OpenCut",
+    "id": 1006414368,
+    "language": "TypeScript",
+    "name": "OpenCut",
+    "starred_at": "2025-11-14T14:35:05Z",
+    "stars": 55480
+  },
+  {
+    "description": "A lightweight, flexible, and easy-to-use Python tool for generating and exporting CapCut drafts to build fully automated video editing/remix pipelines! Another similar project: https://github.com/GuanYixuan/pyJianYingDraft",
+    "full_name": "GuanYixuan/pyCapCut",
+    "id": 1031588815,
+    "language": "Python",
+    "name": "pyCapCut",
+    "starred_at": "2025-11-14T14:35:03Z",
+    "stars": 526
+  },
+  {
+    "description": "A curated list of awesome Claude Skills, resources, and tools for customizing Claude AI workflows",
+    "full_name": "ComposioHQ/awesome-claude-skills",
+    "id": 1078079172,
+    "language": "Python",
+    "name": "awesome-claude-skills",
+    "starred_at": "2025-11-12T10:32:45Z",
+    "stars": 64335
+  },
+  {
+    "description": "Local-first Video Knowledge Base. Index your video library with multi-modal analysis (YOLO, DeepFace, Whisper), search semantically via natural language, Docker-ready.",
+    "full_name": "IliasHad/edit-mind",
+    "id": 1079947190,
+    "language": "TypeScript",
+    "name": "edit-mind",
+    "starred_at": "2025-11-12T05:39:18Z",
+    "stars": 1442
+  },
+  {
+    "description": "Professional Claude Code skills marketplace featuring production-ready skills for enhanced development workflows.",
+    "full_name": "daymade/claude-code-skills",
+    "id": 1081140442,
+    "language": "Python",
+    "name": "claude-code-skills",
+    "starred_at": "2025-11-11T01:53:16Z",
+    "stars": 1175
+  },
+  {
+    "description": "「来剪」轻量级视频编辑器。网页版、桌面版等均可免费使用，功能灵感源自 CapCut 等编辑器。A Lightweight Video Editor. Free for the web, desktop, and more, with features inspired by editors like CapCut.",
+    "full_name": "juntaosun/ComeCut",
+    "id": 1051781624,
+    "language": "HTML",
+    "name": "ComeCut",
+    "starred_at": "2025-11-10T04:38:59Z",
+    "stars": 551
+  },
+  {
+    "description": "飞书/Lark官方 OpenAPI MCP",
+    "full_name": "larksuite/lark-openapi-mcp",
+    "id": 967301424,
+    "language": "TypeScript",
+    "name": "lark-openapi-mcp",
+    "starred_at": "2025-11-09T15:36:35Z",
+    "stars": 737
+  },
+  {
+    "description": " Feishu / Lark 飞书文档与任务管理工具，支持 MCP 服务器和 CLI + Skill 两种使用方式，可无缝集成 Cursor、Claude Code、Cline 等 AI 编码工具",
+    "full_name": "cso1z/Feishu-MCP",
+    "id": 949425801,
+    "language": "TypeScript",
+    "name": "Feishu-MCP",
+    "starred_at": "2025-11-09T15:36:28Z",
+    "stars": 689
+  },
+  {
+    "description": "用于Claude Code的功能强大的图形用户界面应用程序和工具包-创建自定义代理、管理交互式Claude Code会话、运行安全的后台代理等。",
+    "full_name": "yovinchen/claudia",
+    "id": 1013581367,
+    "language": "TypeScript",
+    "name": "claudia",
+    "starred_at": "2025-11-07T14:40:18Z",
+    "stars": 45
+  },
+  {
+    "description": "Agent Workstation for Codex CLI + Claude Code — with task scheduler, git worktree & remote control, skills management",
+    "full_name": "milisp/codexia",
+    "id": 1037241902,
+    "language": "TypeScript",
+    "name": "codexia",
+    "starred_at": "2025-11-07T14:30:59Z",
+    "stars": 722
+  },
+  {
+    "description": "Semi-Structured Agentic Framework. Workflows build themselves as agents discover what needs to be done, not what you predicted upfront.",
+    "full_name": "Ido-Levi/Hephaestus",
+    "id": 1057591647,
+    "language": "Python",
+    "name": "Hephaestus",
+    "starred_at": "2025-11-07T06:13:32Z",
+    "stars": 1151
+  },
+  {
+    "description": "Like catnip, a highly addictive agentic coding tool",
+    "full_name": "wandb/catnip",
+    "id": 1017023911,
+    "language": "Go",
+    "name": "catnip",
+    "starred_at": "2025-11-07T06:13:02Z",
+    "stars": 485
+  },
+  {
+    "description": "Universal skills loader for AI coding agents - npm i -g openskills",
+    "full_name": "numman-ali/openskills",
+    "id": 1083829346,
+    "language": "TypeScript",
+    "name": "openskills",
+    "starred_at": "2025-11-07T06:09:02Z",
+    "stars": 10389
+  },
+  {
+    "description": "MCP server that interacts with Obsidian via the Obsidian rest API community plugin",
+    "full_name": "MarkusPfundstein/mcp-obsidian",
+    "id": 896007696,
+    "language": "Python",
+    "name": "mcp-obsidian",
+    "starred_at": "2025-11-07T06:08:19Z",
+    "stars": 3893
+  },
+  {
+    "description": null,
+    "full_name": "ByronLeeeee/ElementalLegalDocGenerator",
+    "id": 914659117,
+    "language": "Python",
+    "name": "ElementalLegalDocGenerator",
+    "starred_at": "2025-11-03T12:12:59Z",
+    "stars": 19
+  },
+  {
+    "description": "Industrial-grade speech recognition toolkit: 170x realtime, 50+ languages, speaker diarization, emotion detection, streaming, and OpenAI-compatible API.",
+    "full_name": "modelscope/FunASR",
+    "id": 569959091,
+    "language": "Python",
+    "name": "FunASR",
+    "starred_at": "2025-11-03T12:03:55Z",
+    "stars": 17898
+  },
+  {
+    "description": "🚀 Screenshots, word marking, OCR, AI, translation software || 截图、划词、文字识别、AI、翻译软件",
+    "full_name": "InkTimeRecord/TTime",
+    "id": 583226759,
+    "language": "TypeScript",
+    "name": "TTime",
+    "starred_at": "2025-11-03T11:53:37Z",
+    "stars": 3201
+  },
+  {
+    "description": "CodMate is a macOS SwiftUI app for managing CLI AI sessions: browse, search, organize, resume, and review work produced by Codex, Claude Code, and Gemini CLI.  It focuses on speed, a compact three-column UI, and “ship it” workflows like Project Review (Git Changes) and one-click Resume/New.",
+    "full_name": "loocor/codmate",
+    "id": 1078131499,
+    "language": "Swift",
+    "name": "codmate",
+    "starred_at": "2025-11-02T04:54:11Z",
+    "stars": 668
+  },
+  {
+    "description": "📕 小红书创作者MCP工具包 - 支持与AI客户端集成的内容创作和发布工具",
+    "full_name": "aki66938/xhs-toolkit",
+    "id": 994681424,
+    "language": "Python",
+    "name": "xhs-toolkit",
+    "starred_at": "2025-11-01T14:34:45Z",
+    "stars": 1294
+  },
+  {
+    "description": "A full-featured web-based Claude Code client that provides complete interactive functionality for managing Claude Code projects",
+    "full_name": "d-kimuson/claude-code-viewer",
+    "id": 1047778772,
+    "language": "TypeScript",
+    "name": "claude-code-viewer",
+    "starred_at": "2025-11-01T05:57:41Z",
+    "stars": 1218
+  },
+  {
+    "description": null,
+    "full_name": "nutstore/obsidian-nutstore-sync",
+    "id": 947718515,
+    "language": "TypeScript",
+    "name": "obsidian-nutstore-sync",
+    "starred_at": "2025-11-01T05:57:40Z",
+    "stars": 513
+  },
+  {
+    "description": "基于小红书 Web 端进行的请求封装。https://reajason.github.io/xhs/",
+    "full_name": "ReaJason/xhs",
+    "id": 622797487,
+    "language": "Python",
+    "name": "xhs",
+    "starred_at": "2025-10-31T12:17:41Z",
+    "stars": 2160
+  },
+  {
+    "description": "微舆：人人可用的多Agent舆情分析助手，打破信息茧房，还原舆情原貌，预测未来走向，辅助决策！从0实现，不依赖任何框架。",
+    "full_name": "666ghj/BettaFish",
+    "id": 822604462,
+    "language": "Python",
+    "name": "BettaFish",
+    "starred_at": "2025-10-30T05:59:29Z",
+    "stars": 41358
+  },
+  {
+    "description": "PatentWriterAgent Demo",
+    "full_name": "ninehills/PatentWriterAgent",
+    "id": 1080212356,
+    "language": "Mermaid",
+    "name": "PatentWriterAgent",
+    "starred_at": "2025-10-30T05:31:29Z",
+    "stars": 550
+  },
+  {
+    "description": "An agentic skills framework & software development methodology that works.",
+    "full_name": "obra/superpowers",
+    "id": 1073224795,
+    "language": "Shell",
+    "name": "superpowers",
+    "starred_at": "2025-10-30T02:42:24Z",
+    "stars": 225932
+  },
+  {
+    "description": "Turn any browser into your terminal & command your agents on the go.",
+    "full_name": "amantus-ai/vibetunnel",
+    "id": 1002552148,
+    "language": "TypeScript",
+    "name": "vibetunnel",
+    "starred_at": "2025-10-30T02:42:23Z",
+    "stars": 4536
+  },
+  {
+    "description": "Claude Skills developed for brain-workers. Dev by Fleury, an Ex-McKinsey and now AI product manager. 小红书/RedNote@如宝｜AI&Anlalytics. Email me @fleurytian@gmail.com",
+    "full_name": "fleurytian/awesome-claude-skills",
+    "id": 1083431753,
+    "language": "Python",
+    "name": "awesome-claude-skills",
+    "starred_at": "2025-10-30T02:41:38Z",
+    "stars": 293
+  },
+  {
+    "description": "The App Store for your multi-account eco system.",
+    "full_name": "Lakr233/Asspp",
+    "id": 827603038,
+    "language": "Swift",
+    "name": "Asspp",
+    "starred_at": "2025-10-30T02:41:36Z",
+    "stars": 4990
+  },
+  {
+    "description": "🤖 24/7 AI agent that maximizes Claude Code Pro usage via Slack. Auto-processes tasks, manages isolated workspaces, creates Git commits/PRs, and optimizes day/night usage thresholds.",
+    "full_name": "context-machine-lab/sleepless-agent",
+    "id": 1080688707,
+    "language": "Python",
+    "name": "sleepless-agent",
+    "starred_at": "2025-10-30T02:40:56Z",
+    "stars": 825
+  },
+  {
+    "description": "Go server implementing Model Context Protocol (MCP) for filesystem operations.",
+    "full_name": "mark3labs/mcp-filesystem-server",
+    "id": 895547074,
+    "language": "Go",
+    "name": "mcp-filesystem-server",
+    "starred_at": "2025-10-29T15:28:38Z",
+    "stars": 650
+  },
+  {
+    "description": null,
+    "full_name": "dvcrn/mcp-server-devonthink",
+    "id": 1022002954,
+    "language": "TypeScript",
+    "name": "mcp-server-devonthink",
+    "starred_at": "2025-10-29T15:28:36Z",
+    "stars": 100
+  },
+  {
+    "description": "Chrome DevTools for coding agents",
+    "full_name": "ChromeDevTools/chrome-devtools-mcp",
+    "id": 1054793726,
+    "language": "TypeScript",
+    "name": "chrome-devtools-mcp",
+    "starred_at": "2025-10-28T03:01:29Z",
+    "stars": 43471
+  },
+  {
+    "description": "Enable Claude Code to call Codex (GPT-5) asynchronously, filtering out thinking processes to save 95% context tokens.",
+    "full_name": "jeanchristophe13v/codex-mcp-async",
+    "id": 1083942891,
+    "language": "Python",
+    "name": "codex-mcp-async",
+    "starred_at": "2025-10-28T03:00:59Z",
+    "stars": 43
+  },
+  {
+    "description": "425 plugins, 2,810 skills, 200 agents for Claude Code. Open-source marketplace at tonsofskills.com with the ccpi CLI package manager.",
+    "full_name": "jeremylongshore/claude-code-plugins-plus-skills",
+    "id": 1073337396,
+    "language": "Python",
+    "name": "claude-code-plugins-plus-skills",
+    "starred_at": "2025-10-28T01:57:40Z",
+    "stars": 2364
+  },
+  {
+    "description": " Transcribe and summarize videos and podcasts using AI. Open-source, multi-platform, and supports multiple languages.",
+    "full_name": "wendy7756/AI-Video-Transcriber",
+    "id": 1046070227,
+    "language": "Python",
+    "name": "AI-Video-Transcriber",
+    "starred_at": "2025-10-25T14:05:15Z",
+    "stars": 2749
+  },
+  {
+    "description": "Collect, organize, use, and share, all in OmniBox.",
+    "full_name": "import-ai/omnibox",
+    "id": 910336786,
+    "language": "Python",
+    "name": "omnibox",
+    "starred_at": "2025-10-25T12:47:13Z",
+    "stars": 1444
+  },
+  {
+    "description": "A curated list of Claude Skills.",
+    "full_name": "BehiSecc/awesome-claude-skills",
+    "id": 1078332194,
+    "language": null,
+    "name": "awesome-claude-skills",
+    "starred_at": "2025-10-25T12:42:57Z",
+    "stars": 9492
+  },
+  {
+    "description": "Public repository for Agent Skills",
+    "full_name": "anthropics/skills",
+    "id": 1061953414,
+    "language": "Python",
+    "name": "skills",
+    "starred_at": "2025-10-25T11:57:42Z",
+    "stars": 149924
+  },
+  {
+    "description": "Mobile and Web client for Codex and Claude Code, with realtime voice, encryption and fully featured",
+    "full_name": "slopus/happy",
+    "id": 1021895365,
+    "language": "TypeScript",
+    "name": "happy",
+    "starred_at": "2025-10-25T11:46:44Z",
+    "stars": 21846
+  },
+  {
+    "description": "The next-generation file converter. Open source, fully local* and free forever.",
+    "full_name": "VERT-sh/VERT",
+    "id": 886745826,
+    "language": "Svelte",
+    "name": "VERT",
+    "starred_at": "2025-10-24T04:26:16Z",
+    "stars": 15120
+  },
+  {
+    "description": "Kimi Code CLI is your next CLI agent.",
+    "full_name": "MoonshotAI/kimi-cli",
+    "id": 1076863218,
+    "language": "Python",
+    "name": "kimi-cli",
+    "starred_at": "2025-10-24T04:20:49Z",
+    "stars": 8963
+  },
+  {
+    "description": "Spec-driven development (SDD) for AI coding assistants.",
+    "full_name": "Fission-AI/OpenSpec",
+    "id": 1032459340,
+    "language": "TypeScript",
+    "name": "OpenSpec",
+    "starred_at": "2025-10-20T15:10:57Z",
+    "stars": 54523
+  },
+  {
+    "description": "💫 Toolkit to help you get started with Spec-Driven Development",
+    "full_name": "github/spec-kit",
+    "id": 1042367133,
+    "language": "Python",
+    "name": "spec-kit",
+    "starred_at": "2025-10-20T13:37:53Z",
+    "stars": 111751
+  },
+  {
+    "description": "Convert documentation websites, GitHub repositories, and PDFs into Claude AI skills with automatic conflict detection",
+    "full_name": "yusufkaraaslan/Skill_Seekers",
+    "id": 1078319457,
+    "language": "Python",
+    "name": "Skill_Seekers",
+    "starred_at": "2025-10-19T12:18:37Z",
+    "stars": 14060
+  },
+  {
+    "description": null,
+    "full_name": "JayZeeDesign/ManyMany.dev",
+    "id": 1043254535,
+    "language": "TypeScript",
+    "name": "ManyMany.dev",
+    "starred_at": "2025-10-19T12:15:29Z",
+    "stars": 61
+  },
+  {
+    "description": "Qwen3-VL is the multimodal large language model series developed by Qwen team, Alibaba Cloud.",
+    "full_name": "QwenLM/Qwen3-VL",
+    "id": 849239437,
+    "language": "Jupyter Notebook",
+    "name": "Qwen3-VL",
+    "starred_at": "2025-10-17T12:11:13Z",
+    "stars": 19365
+  },
+  {
+    "description": "MCP for xiaohongshu.com",
+    "full_name": "xpzouying/xiaohongshu-mcp",
+    "id": 1031215137,
+    "language": "Go",
+    "name": "xiaohongshu-mcp",
+    "starred_at": "2025-10-17T08:50:46Z",
+    "stars": 14119
+  },
+  {
+    "description": "花生公众号排版器",
+    "full_name": "alchaincyf/huasheng_editor",
+    "id": 1075488096,
+    "language": "JavaScript",
+    "name": "huasheng_editor",
+    "starred_at": "2025-10-16T08:45:41Z",
+    "stars": 611
+  },
+  {
+    "description": "本项目是基于dify开源项目实现的dsl工作流脚本合集",
+    "full_name": "wwwzhouhui/dify-for-dsl",
+    "id": 888790470,
+    "language": "Python",
+    "name": "dify-for-dsl",
+    "starred_at": "2025-10-15T07:42:41Z",
+    "stars": 3769
+  },
+  {
+    "description": "Windows下的claude code配置可视化管理工具",
+    "full_name": "ronghuaxueleng/claude-code-config-manage-gui",
+    "id": 1055265399,
+    "language": "Rust",
+    "name": "claude-code-config-manage-gui",
+    "starred_at": "2025-10-14T07:06:16Z",
+    "stars": 255
+  },
+  {
+    "description": "OpenMemory Chrome Extension: Long-term memory for ChatGPT, Claude, Perplexity, Grok etc",
+    "full_name": "mem0ai/mem0-chrome-extension",
+    "id": 848204202,
+    "language": "TypeScript",
+    "name": "mem0-chrome-extension",
+    "starred_at": "2025-10-10T05:44:18Z",
+    "stars": 676
+  },
+  {
+    "description": "A Cursor-inspired AI assistant for Obsidian that offers smart autocomplete and interactive chat with your selected notes",
+    "full_name": "infiolab/infio-copilot",
+    "id": 912238250,
+    "language": "TypeScript",
+    "name": "infio-copilot",
+    "starred_at": "2025-10-05T02:52:08Z",
+    "stars": 666
+  },
+  {
+    "description": "CLI tool for configuring and monitoring Claude Code",
+    "full_name": "davila7/claude-code-templates",
+    "id": 1013480284,
+    "language": "Python",
+    "name": "claude-code-templates",
+    "starred_at": "2025-10-01T12:00:12Z",
+    "stars": 28011
+  },
+  {
+    "description": null,
+    "full_name": "sunbooshi/note-to-mp",
+    "id": 773673544,
+    "language": "TypeScript",
+    "name": "note-to-mp",
+    "starred_at": "2025-10-01T07:05:54Z",
+    "stars": 322
+  },
+  {
+    "description": "一个基于 AI 的 Hacker News 中文播客项目，每天自动抓取 Hacker News 热门文章，通过 AI 生成中文总结并转换为播客内容。",
+    "full_name": "miantiao-me/hacker-podcast",
+    "id": 933044155,
+    "language": "TypeScript",
+    "name": "hacker-podcast",
+    "starred_at": "2025-09-28T04:32:22Z",
+    "stars": 2541
+  },
+  {
+    "description": "The automatic work journal. Privately turns your screen into a timeline of what you actually accomplished. Open-source and local-first.",
+    "full_name": "JerryZLiu/Dayflow",
+    "id": 1062234789,
+    "language": "Swift",
+    "name": "Dayflow",
+    "starred_at": "2025-09-27T13:29:22Z",
+    "stars": 6097
+  },
+  {
+    "description": "tore your decisions and principles. Claude reads them to make better choices.",
+    "full_name": "kingkongshot/Pensieve",
+    "id": 1009758627,
+    "language": "Shell",
+    "name": "Pensieve",
+    "starred_at": "2025-09-26T09:30:36Z",
+    "stars": 2525
+  },
+  {
+    "description": "A cross-platform desktop All-in-One assistant for Claude Code, Codex, OpenCode, OpenClaw, Gemini CLI & Hermes Agent. Only official website: ccswitch.io",
+    "full_name": "farion1231/cc-switch",
+    "id": 1031912724,
+    "language": "Rust",
+    "name": "cc-switch",
+    "starred_at": "2025-09-26T09:02:26Z",
+    "stars": 99349
+  },
+  {
+    "description": "GKD 第三方订阅规则",
+    "full_name": "AIsouler/GKD_subscription",
+    "id": 738405627,
+    "language": "TypeScript",
+    "name": "GKD_subscription",
+    "starred_at": "2025-09-23T12:48:57Z",
+    "stars": 11749
+  },
+  {
+    "description": "开源免费的 Wispr Flow 替代方案 | 集成FunASR本地模型和可配置大语言模型的下一代中文桌面语音工作流",
+    "full_name": "yan5xu/ququ",
+    "id": 1060564078,
+    "language": "JavaScript",
+    "name": "ququ",
+    "starred_at": "2025-09-23T11:50:14Z",
+    "stars": 2198
+  },
+  {
+    "description": "The Complete Claude Code CLI Guide - Live & Auto-Updated Every 2 Days",
+    "full_name": "Cranot/claude-code-guide",
+    "id": 1028249247,
+    "language": "Shell",
+    "name": "claude-code-guide",
+    "starred_at": "2025-09-22T03:01:47Z",
+    "stars": 2801
+  },
+  {
+    "description": "A vscode extension to make your vscode become a  full-featured WYSIWYG markdown editor ",
+    "full_name": "zaaack/vscode-markdown-editor",
+    "id": 355757236,
+    "language": "TypeScript",
+    "name": "vscode-markdown-editor",
+    "starred_at": "2025-09-21T13:59:06Z",
+    "stars": 587
+  },
+  {
+    "description": "A vscode extension to make your vscode become a  full-featured WYSIWYG markdown editor ",
+    "full_name": "vincent-zheng/vscode-markdown-editor",
+    "id": 1016791388,
+    "language": "TypeScript",
+    "name": "vscode-markdown-editor",
+    "starred_at": "2025-09-21T13:58:29Z",
+    "stars": 1
+  },
+  {
+    "description": "♏  一款浏览器端的 Markdown 编辑器，支持所见即所得（富文本）、即时渲染（类似 Typora）和分屏预览模式。An In-browser Markdown editor, support WYSIWYG (Rich Text),  Instant Rendering (Typora-like) and Split View modes.",
+    "full_name": "Vanessa219/vditor",
+    "id": 224841533,
+    "language": "TypeScript",
+    "name": "vditor",
+    "starred_at": "2025-09-21T13:58:09Z",
+    "stars": 11035
+  },
+  {
+    "description": "A vscode extension to make your vscode become a  full-featured WYSIWYG markdown editor ",
+    "full_name": "aqz236/vscode-markdown-editor",
+    "id": 1015099705,
+    "language": "TypeScript",
+    "name": "vscode-markdown-editor",
+    "starred_at": "2025-09-21T13:57:33Z",
+    "stars": 6
+  },
+  {
+    "description": "A powerful GUI app and Toolkit for Claude Code - Create custom agents, manage interactive Claude Code sessions, run secure background agents, and more.",
+    "full_name": "winfunc/opcode",
+    "id": 1004995740,
+    "language": "TypeScript",
+    "name": "opcode",
+    "starred_at": "2025-09-17T12:59:02Z",
+    "stars": 22052
+  },
+  {
+    "description": "一键生成产品营销与泛内容短视频，AI批量自动剪辑，高颜值跨平台桌面端工具 One click generation of product marketing and general content short videos, AI batch automatic cliping, beautiful cross platform desktop tool",
+    "full_name": "YILS-LIN/short-video-factory",
+    "id": 1016509116,
+    "language": "TypeScript",
+    "name": "short-video-factory",
+    "starred_at": "2025-09-17T08:40:45Z",
+    "stars": 4073
+  },
+  {
+    "description": "280+ free n8n automation templates — ready-to-use workflows for Gmail, Telegram, Slack, Discord, WhatsApp, Google Drive, Notion, OpenAI, and more. AI agents, RAG   chatbots, email automation, social media, DevOps, and document processing. The largest open-source n8n template collection.",
+    "full_name": "enescingoz/awesome-n8n-templates",
+    "id": 980205160,
+    "language": null,
+    "name": "awesome-n8n-templates",
+    "starred_at": "2025-09-17T03:21:36Z",
+    "stars": 22949
+  },
+  {
+    "description": "Claudable is an open-source web builder that leverages local CLI agents, such as Claude Code, Codex, Gemini CLI, Qwen Code, and Cursor Agent, to build and deploy products effortlessly.",
+    "full_name": "opactorai/Claudable",
+    "id": 1041176052,
+    "language": "TypeScript",
+    "name": "Claudable",
+    "starred_at": "2025-09-11T02:20:34Z",
+    "stars": 3991
+  },
+  {
+    "description": "Multi-harness agentic plugin marketplace for Claude Code, Codex CLI, Cursor, OpenCode, GitHub Copilot, and Gemini CLI",
+    "full_name": "wshobson/agents",
+    "id": 1025856648,
+    "language": "Python",
+    "name": "agents",
+    "starred_at": "2025-09-09T07:49:05Z",
+    "stars": 36665
+  },
+  {
+    "description": "Awesome curated collection of images and prompts generated by gemini-2.5-flash-image (aka Nano Banana) state-of-the-art image generation and editing model. Explore AI generated visuals created with Gemini, showcasing Google’s advanced image generation capabilities.",
+    "full_name": "JimmyLv/awesome-nano-banana",
+    "id": 1047317363,
+    "language": "JavaScript",
+    "name": "awesome-nano-banana",
+    "starred_at": "2025-09-02T08:39:08Z",
+    "stars": 8755
+  },
+  {
+    "description": "PDF补丁丁——PDF工具箱，可以编辑书签、剪裁旋转页面、解除限制、提取或合并文档，探查文档结构，提取图片、转成图片等等",
+    "full_name": "wmjordan/PDFPatcher",
+    "id": 441460974,
+    "language": "C#",
+    "name": "PDFPatcher",
+    "starred_at": "2025-08-28T05:37:17Z",
+    "stars": 12475
+  },
+  {
+    "description": "A Model Context Protocol server for converting almost anything to Markdown",
+    "full_name": "zcaceres/markdownify-mcp",
+    "id": 905450127,
+    "language": "TypeScript",
+    "name": "markdownify-mcp",
+    "starred_at": "2025-08-19T12:40:31Z",
+    "stars": 2731
+  },
+  {
+    "description": "完整的微信文章抓取MCP服务器 - 基于Model Context Protocol (MCP)的智能网页抓取工具，专为Cursor IDE和AI工具设计。",
+    "full_name": "wutongci/crawl-mcp",
+    "id": 1003592691,
+    "language": "TypeScript",
+    "name": "crawl-mcp",
+    "starred_at": "2025-08-06T02:07:22Z",
+    "stars": 38
+  },
+  {
+    "description": "The best open-source alternative to Superwhisper & Wispr Flow. Voice-to-text app for macOS with no subscription",
+    "full_name": "Beingpax/VoiceInk",
+    "id": 875661263,
+    "language": "Swift",
+    "name": "VoiceInk",
+    "starred_at": "2025-07-28T15:42:12Z",
+    "stars": 5247
+  },
+  {
+    "description": "A software update framework for macOS",
+    "full_name": "sparkle-project/Sparkle",
+    "id": 274782,
+    "language": "Objective-C",
+    "name": "Sparkle",
+    "starred_at": "2025-07-28T15:39:56Z",
+    "stars": 9142
+  },
+  {
+    "description": "Ruler — apply the same rules to all coding agents",
+    "full_name": "intellectronica/ruler",
+    "id": 986861312,
+    "language": "TypeScript",
+    "name": "ruler",
+    "starred_at": "2025-07-25T09:14:48Z",
+    "stars": 2743
+  },
+  {
+    "description": "对微信聊天记录录屏实现自动化截图、比对，确保每张截图相比前一张截图文字相似度不高于25%，适用于需要取证的相关行业",
+    "full_name": "tukihibiki/wechat_screenshot_tool",
+    "id": 979272108,
+    "language": "Python",
+    "name": "wechat_screenshot_tool",
+    "starred_at": "2025-07-17T04:30:48Z",
+    "stars": 2
+  },
+  {
+    "description": "Get 10X more out of Claude Code, Codex or any coding agent",
+    "full_name": "BloopAI/vibe-kanban",
+    "id": 1002125012,
+    "language": "Rust",
+    "name": "vibe-kanban",
+    "starred_at": "2025-07-16T04:37:49Z",
+    "stars": 26967
+  },
+  {
+    "description": "Self-evolving memory OS for LLM & AI Agents: ultra-persistent memory, hybrid-retrieval, and cross-task skill reuse, with 35.24% token savings",
+    "full_name": "MemTensor/MemOS",
+    "id": 1014729376,
+    "language": "TypeScript",
+    "name": "MemOS",
+    "starred_at": "2025-07-12T03:40:13Z",
+    "stars": 9837
+  },
+  {
+    "description": "This open-source curriculum introduces the fundamentals of Model Context Protocol (MCP) through real-world, cross-language examples in .NET, Java, TypeScript, JavaScript, Rust and Python. Designed for developers, it focuses on practical techniques for building modular, scalable, and secure AI workflows from session setup to service orchestration.",
+    "full_name": "microsoft/mcp-for-beginners",
+    "id": 960665821,
+    "language": "Jupyter Notebook",
+    "name": "mcp-for-beginners",
+    "starred_at": "2025-07-12T03:36:15Z",
+    "stars": 16517
+  },
+  {
+    "description": "✨符合阅读习惯的微信公众号助手、微信公众号转MarkDown、微信公众号转PDF、定时更新订阅公众号文章、生成微信公众号RSS订阅源、导出微信公众号订阅源、支持微信公众号Webhook/微信公众号API/AI Agent接入微信公众号微信公众号、订阅微信公众号、微信公众号助手 、微信公众号阅读、微信公众号接口、微信公众号爬虫、微信公众号监测、标签订阅微信公众号、微信公众号源、微信公众号读书、微信公众号文章、微信公众号框架、微信公众号管理、微信公众号源、微信公众号平台、微信公众号代码、微信公众号系统、微信公众号源码",
+    "full_name": "rachelos/we-mp-rss",
+    "id": 983305992,
+    "language": "Python",
+    "name": "we-mp-rss",
+    "starred_at": "2025-07-12T02:03:12Z",
+    "stars": 3506
+  },
+  {
+    "description": "Cursor Project Master (CPM) — turn a Markdown PRD into a live Kanban and fully-built app, all inside Cursor.",
+    "full_name": "heyzgj/cursor-project-master",
+    "id": 995833024,
+    "language": "TypeScript",
+    "name": "cursor-project-master",
+    "starred_at": "2025-07-11T09:53:27Z",
+    "stars": 170
+  },
+  {
+    "description": "n8n 微信公众号",
+    "full_name": "other-blowsnow/n8n-nodes-wechat-offiaccount",
+    "id": 930985591,
+    "language": "TypeScript",
+    "name": "n8n-nodes-wechat-offiaccount",
+    "starred_at": "2025-07-05T11:15:38Z",
+    "stars": 876
+  },
+  {
+    "description": "A browser extension for syncing cookies and localStorage to Cloudflare KV or GitHub Gist",
+    "full_name": "jackluson/sync-your-cookie",
+    "id": 840300213,
+    "language": "TypeScript",
+    "name": "sync-your-cookie",
+    "starred_at": "2025-07-05T11:15:13Z",
+    "stars": 682
+  },
+  {
+    "description": "🚀 One-stop solution for creating your AI twin from chat history 💡 Fine-tune LLMs with your chat logs to capture your unique style, then bind to a chatbot to bring your digital self to life.  ",
+    "full_name": "xming521/WeClone",
+    "id": 750678695,
+    "language": "Python",
+    "name": "WeClone",
+    "starred_at": "2025-07-03T05:12:31Z",
+    "stars": 18014
+  },
+  {
+    "description": "Obsidian plugin to render note as WeChat MP article. ",
+    "full_name": "learnerchen-forever/wewrite",
+    "id": 894500863,
+    "language": "TypeScript",
+    "name": "wewrite",
+    "starred_at": "2025-06-26T08:46:20Z",
+    "stars": 38
+  },
+  {
+    "description": "Package Python projects into executables",
+    "full_name": "TanixLu/pyfuze",
+    "id": 979811011,
+    "language": "C",
+    "name": "pyfuze",
+    "starred_at": "2025-06-21T09:07:21Z",
+    "stars": 895
+  },
+  {
+    "description": "chat log tool, easily use your own chat data. 聊天记录工具，轻松使用自己的聊天数据",
+    "full_name": "sjzar/chatlog",
+    "id": 944487482,
+    "language": null,
+    "name": "chatlog",
+    "starred_at": "2025-06-21T09:01:03Z",
+    "stars": 9174
+  },
+  {
+    "description": "保存微信历史版本",
+    "full_name": "zsbai/wechat-versions",
+    "id": 526663106,
+    "language": "Python",
+    "name": "wechat-versions",
+    "starred_at": "2025-06-15T06:34:12Z",
+    "stars": 1067
+  },
+  {
+    "description": "一键将 Obsidian 笔记转换为小红书图片进行导出",
+    "full_name": "Yeban8090/note-to-red",
+    "id": 947652568,
+    "language": "TypeScript",
+    "name": "note-to-red",
+    "starred_at": "2025-06-14T10:07:44Z",
+    "stars": 125
+  },
+  {
+    "description": "🪐 Markdown with superpowers: from ideas to papers, presentations, websites, books, and knowledge bases.",
+    "full_name": "iamgio/quarkdown",
+    "id": 750550657,
+    "language": "Kotlin",
+    "name": "quarkdown",
+    "starred_at": "2025-06-12T12:51:11Z",
+    "stars": 15503
+  },
+  {
+    "description": "Python tool for converting files and office documents to Markdown.",
+    "full_name": "microsoft/markitdown",
+    "id": 888092115,
+    "language": "Python",
+    "name": "markitdown",
+    "starred_at": "2025-06-10T14:09:14Z",
+    "stars": 152031
+  },
+  {
+    "description": null,
+    "full_name": "teelaitila/deep-research-mcp",
+    "id": 933319562,
+    "language": "TypeScript",
+    "name": "deep-research-mcp",
+    "starred_at": "2025-06-10T09:15:58Z",
+    "stars": 321
+  },
+  {
+    "description": "An on-premises, OCR-free unstructured data extraction, markdown conversion and benchmarking toolkit. (https://idp-leaderboard.org/)",
+    "full_name": "NanoNets/docext",
+    "id": 954420906,
+    "language": "Python",
+    "name": "docext",
+    "starred_at": "2025-06-10T05:46:43Z",
+    "stars": 2026
+  },
+  {
+    "description": "MCP 资源精选， MCP指南，Claude MCP，MCP Servers, MCP Clients",
+    "full_name": "yzfly/Awesome-MCP-ZH",
+    "id": 959543974,
+    "language": null,
+    "name": "Awesome-MCP-ZH",
+    "starred_at": "2025-06-01T05:13:23Z",
+    "stars": 7277
+  },
+  {
+    "description": "一键将音视频转化为小红书/公众号/知识笔记/思维导图/视频字幕等各种风格的文档。",
+    "full_name": "hanshuaikang/AI-Media2Doc",
+    "id": 964996396,
+    "language": "Vue",
+    "name": "AI-Media2Doc",
+    "starred_at": "2025-05-24T09:25:23Z",
+    "stars": 3837
+  },
+  {
+    "description": "WeChat Auxiliary Public",
+    "full_name": "HdShare/WAuxiliary_Public",
+    "id": 933925277,
+    "language": "Kotlin",
+    "name": "WAuxiliary_Public",
+    "starred_at": "2025-05-21T09:20:02Z",
+    "stars": 3863
+  },
+  {
+    "description": "[NeurIPS 2025] OmniSVG is the first family of end-to-end multimodal SVG generators that leverage pre-trained Vision-Language Models (VLMs), capable of generating complex and detailed SVGs, from simple icons to intricate anime characters.",
+    "full_name": "OmniSVG/OmniSVG",
+    "id": 961914674,
+    "language": "Python",
+    "name": "OmniSVG",
+    "starred_at": "2025-04-14T01:44:16Z",
+    "stars": 2524
+  },
+  {
+    "description": "AI productivity studio with smart chat, autonomous agents, and 300+ assistants. Unified access to frontier LLMs",
+    "full_name": "CherryHQ/cherry-studio",
+    "id": 805155266,
+    "language": "TypeScript",
+    "name": "cherry-studio",
+    "starred_at": "2025-04-08T05:55:11Z",
+    "stars": 47250
+  },
+  {
+    "description": "自动化上传视频到社交媒体：抖音、小红书、视频号、tiktok、youtube、bilibili",
+    "full_name": "dreammis/social-auto-upload",
+    "id": 727109010,
+    "language": "Python",
+    "name": "social-auto-upload",
+    "starred_at": "2025-04-06T09:23:21Z",
+    "stars": 12540
+  },
+  {
+    "description": "A collection of MCP servers.",
+    "full_name": "punkpeye/awesome-mcp-servers",
+    "id": 896335270,
+    "language": null,
+    "name": "awesome-mcp-servers",
+    "starred_at": "2025-04-04T08:04:23Z",
+    "stars": 88957
+  },
+  {
+    "description": "🚀 Truly open-source AI avatar(digital human) toolkit for offline video generation and digital human cloning.",
+    "full_name": "duixcom/Duix-Avatar",
+    "id": 907627874,
+    "language": "C",
+    "name": "Duix-Avatar",
+    "starred_at": "2025-04-01T13:54:30Z",
+    "stars": 13607
+  },
+  {
+    "description": "Authenticator generates 2-Step Verification codes in your browser.",
+    "full_name": "Authenticator-Extension/Authenticator",
+    "id": 121876351,
+    "language": "TypeScript",
+    "name": "Authenticator",
+    "starred_at": "2025-03-29T05:58:50Z",
+    "stars": 4502
+  },
+  {
+    "description": "Conversational RPA SDK for Chatbot Makers. Join our Discord: https://discord.gg/7q8NBZbQzt",
+    "full_name": "wechaty/wechaty",
+    "id": 57602001,
+    "language": "TypeScript",
+    "name": "wechaty",
+    "starred_at": "2025-03-10T02:39:38Z",
+    "stars": 22844
+  },
+  {
+    "description": "TrendPublish: 全自动 AI 内容生成与发布系统 | 微信公众号自动化 | 多源数据抓取 (Twitter/X、网站) | DeepseekAI、千问、讯飞模型 | 智能内容分析排序 | 定时发布 | 多模板支持 | Node.js | TypeScript | AI 技术趋势跟踪工具",
+    "full_name": "liyown/ai-trend-publish",
+    "id": 916084587,
+    "language": "TypeScript",
+    "name": "ai-trend-publish",
+    "starred_at": "2025-02-28T05:18:48Z",
+    "stars": 2988
+  },
+  {
+    "description": "AIGCPanel 是一个简单易用的一站式AI数字人系统，支持视频合成、声音合成、声音克隆，简化本地模型管理、一键导入和使用AI模型。",
+    "full_name": "modstart-lib/aigcpanel",
+    "id": 874718872,
+    "language": "TypeScript",
+    "name": "aigcpanel",
+    "starred_at": "2025-02-25T14:04:29Z",
+    "stars": 5124
+  },
+  {
+    "description": "Highlight and capture the web in your favorite browser. The official Web Clipper extension for Obsidian.",
+    "full_name": "obsidianmd/obsidian-clipper",
+    "id": 849500524,
+    "language": "TypeScript",
+    "name": "obsidian-clipper",
+    "starred_at": "2025-02-02T15:25:02Z",
+    "stars": 4552
+  },
+  {
+    "description": "小红书（XiaoHongShu、RedNote）链接提取/作品采集工具：提取账号发布、收藏、点赞、专辑作品链接；提取搜索结果作品、用户链接；采集小红书作品信息；提取小红书作品下载地址；下载小红书作品文件",
+    "full_name": "JoeanAmier/XHS-Downloader",
+    "id": 679219059,
+    "language": "Python",
+    "name": "XHS-Downloader",
+    "starred_at": "2025-01-26T07:17:29Z",
+    "stars": 11532
+  },
+  {
+    "description": "The first open-source agent skills builder. Define skills by vibe workflow, run on Claude Code, Cursor, Codex & more. Build Clawdbot 🦞· APIs for Lovable · Bots for Slack & Lark/Feishu · Skills are infrastructure, not prompts.",
+    "full_name": "refly-ai/refly",
+    "id": 759799529,
+    "language": "TypeScript",
+    "name": "refly",
+    "starred_at": "2025-01-24T11:05:40Z",
+    "stars": 7361
+  },
+  {
+    "description": "E2M converts various file types (doc, docx, epub, html, htm, url, pdf, ppt, pptx, mp3, m4a) into Markdown. It’s easy to install, with dedicated parsers and converters, supporting custom configs. E2M offers an all-in-one, flexible, and open-source solution.",
+    "full_name": "wisupai/e2m",
+    "id": 837805171,
+    "language": "Jupyter Notebook",
+    "name": "e2m",
+    "starred_at": "2025-01-16T03:27:26Z",
+    "stars": 1293
+  },
+  {
+    "description": "A unified AI model hub for aggregation & distribution. It supports cross-converting various LLMs into OpenAI-compatible, Claude-compatible, or Gemini-compatible formats. A centralized gateway for personal and enterprise model management. 🍥",
+    "full_name": "QuantumNous/new-api",
+    "id": 717197250,
+    "language": "Go",
+    "name": "new-api",
+    "starred_at": "2025-01-09T03:21:01Z",
+    "stars": 38526
+  },
+  {
+    "description": "🚀🤖 Crawl4AI: Open-source LLM Friendly Web Crawler & Scraper. Don't be shy, join here: https://discord.gg/jP8KfhDhyN",
+    "full_name": "unclecode/crawl4ai",
+    "id": 798201435,
+    "language": "Python",
+    "name": "crawl4ai",
+    "starred_at": "2025-01-05T13:30:43Z",
+    "stars": 68342
+  },
+  {
+    "description": "bestblogs.dev - 汇集顶级编程、人工智能、产品、科技文章，大语言模型摘要评分辅助阅读，探索编程和技术未来",
+    "full_name": "ginobefun/BestBlogs",
+    "id": 739576520,
+    "language": "TypeScript",
+    "name": "BestBlogs",
+    "starred_at": "2024-12-31T06:36:41Z",
+    "stars": 3819
+  },
+  {
+    "description": "小视频宝：AI 驱动的视频生成工具，一键生成高质量营销视频 AI-powered video generation tool for creating high-quality marketing videos with one click.",
+    "full_name": "clipturbo/clipturbo",
+    "id": 881667695,
+    "language": null,
+    "name": "clipturbo",
+    "starred_at": "2024-11-25T01:59:45Z",
+    "stars": 835
+  },
+  {
+    "description": "YC (S26) | AI that knows what you've seen, said, or heard. Records everything you do, say, hear 24/7, local, private, secure",
+    "full_name": "screenpipe/screenpipe",
+    "id": 817326197,
+    "language": "Rust",
+    "name": "screenpipe",
+    "starred_at": "2024-11-21T02:20:38Z",
+    "stars": 19269
+  },
+  {
+    "description": "⚙️ All-in-One menu bar app, hide 💻MacBook Pro's notch, dark mode, AirPods, Shortcuts",
+    "full_name": "jacklandrin/OnlySwitch",
+    "id": 433619938,
+    "language": "Swift",
+    "name": "OnlySwitch",
+    "starred_at": "2024-11-14T06:36:05Z",
+    "stars": 5723
+  },
+  {
+    "description": "小红书数据采集、网站图片、视频资源批量下载工具，颜值超高的数据采集工具（批量下载，视频提取，图片）Telegram:https://t.me/+ZtLSwuIKTo44MDY1",
+    "full_name": "xisuo67/XHS-Spider",
+    "id": 632286055,
+    "language": null,
+    "name": "XHS-Spider",
+    "starred_at": "2024-11-04T13:47:56Z",
+    "stars": 1413
+  },
+  {
+    "description": "LSPatch: A non-root Xposed framework extending from LSPosed",
+    "full_name": "LSPosed/LSPatch",
+    "id": 343535217,
+    "language": "Java",
+    "name": "LSPatch",
+    "starred_at": "2024-10-19T16:59:04Z",
+    "stars": 9176
+  },
+  {
+    "description": "独立开发/出海开发相关技术栈及工具收录 / Find the best tools for indie hackers here",
+    "full_name": "iAmCorey/awesome-indie-hacker-tools",
+    "id": 865536628,
+    "language": "TypeScript",
+    "name": "awesome-indie-hacker-tools",
+    "starred_at": "2024-10-18T06:44:41Z",
+    "stars": 1369
+  },
+  {
+    "description": "小红书爬虫数据采集，小红书全域运营解决方案",
+    "full_name": "cv-cat/Spider_XHS",
+    "id": 675981554,
+    "language": "JavaScript",
+    "name": "Spider_XHS",
+    "starred_at": "2024-10-12T06:14:32Z",
+    "stars": 6340
+  },
+  {
+    "description": "SafeLine is a self-hosted WAF(Web Application Firewall) / reverse proxy to protect your web apps from attacks and exploits.",
+    "full_name": "chaitin/SafeLine",
+    "id": 626896474,
+    "language": "Go",
+    "name": "SafeLine",
+    "starred_at": "2024-10-06T10:32:01Z",
+    "stars": 21501
+  },
+  {
+    "description": "CasaOS - A simple, easy-to-use, elegant open-source Personal Cloud system.",
+    "full_name": "IceWhaleTech/CasaOS",
+    "id": 410430370,
+    "language": "Go",
+    "name": "CasaOS",
+    "starred_at": "2024-09-25T03:03:02Z",
+    "stars": 34064
+  },
+  {
+    "description": "Transforms complex documents like PDFs and Office docs into LLM-ready markdown/JSON for your Agentic workflows.",
+    "full_name": "opendatalab/MinerU",
+    "id": 765083837,
+    "language": "Python",
+    "name": "MinerU",
+    "starred_at": "2024-09-11T07:54:45Z",
+    "stars": 67370
+  },
+  {
+    "description": "一款基于各大企业信息API的工具，解决在遇到的各种针对国内企业信息收集难题。一键收集控股公司ICP备案、APP、小程序、微信公众号等信息聚合导出。支持MCP接入",
+    "full_name": "wgpsec/ENScan_GO",
+    "id": 444442096,
+    "language": "Go",
+    "name": "ENScan_GO",
+    "starred_at": "2024-09-07T09:59:11Z",
+    "stars": 4452
+  },
+  {
+    "description": "Collection of Free English/Chinese Fonts for Commercial Use. 收录可商用的免费英文/汉字字体。",
+    "full_name": "jaywcjlove/free-font",
+    "id": 829457526,
+    "language": "JavaScript",
+    "name": "free-font",
+    "starred_at": "2024-09-02T12:53:22Z",
+    "stars": 3909
+  },
+  {
+    "description": "分享一些好用的 Dify DSL 工作流程，自用、学习两相宜。 Sharing some Dify workflows.",
+    "full_name": "svcvit/Awesome-Dify-Workflow",
+    "id": 829257235,
+    "language": null,
+    "name": "Awesome-Dify-Workflow",
+    "starred_at": "2024-08-18T06:43:49Z",
+    "stars": 10582
+  },
+  {
+    "description": "An Obsidian plugin to bridge MarginNote 3 and Obsidian.md",
+    "full_name": "pazerW/marginnote-companion",
+    "id": 615744352,
+    "language": "TypeScript",
+    "name": "marginnote-companion",
+    "starred_at": "2024-08-16T07:15:48Z",
+    "stars": 16
+  },
+  {
+    "description": "很多镜像都在国外。比如 gcr 。国内下载很慢，需要加速。致力于提供连接全世界的稳定可靠安全的容器镜像服务。",
+    "full_name": "DaoCloud/public-image-mirror",
+    "id": 404565294,
+    "language": "Shell",
+    "name": "public-image-mirror",
+    "starred_at": "2024-08-08T16:08:48Z",
+    "stars": 14368
+  },
+  {
+    "description": "A Comprehensive Toolkit for High-Quality PDF Content Extraction",
+    "full_name": "opendatalab/PDF-Extract-Kit",
+    "id": 820927427,
+    "language": "Python",
+    "name": "PDF-Extract-Kit",
+    "starred_at": "2024-07-22T12:43:22Z",
+    "stars": 9718
+  },
+  {
+    "description": "Universal memory layer for AI Agents",
+    "full_name": "mem0ai/mem0",
+    "id": 656099147,
+    "language": "Python",
+    "name": "mem0",
+    "starred_at": "2024-07-22T07:37:28Z",
+    "stars": 58448
+  },
+  {
+    "description": "PDF Guru Anki是你整个知识世界的“中枢转换器”，与 Anki 的强大记忆引擎无缝融合，能将来自任何地方、任何格式的知识精华，高效、系统、可持续地转化为牢固的长期记忆资产，打造专属自己的个性化Anki知识库，助你高效学习、轻松记忆。",
+    "full_name": "kevin2li/PDF-Guru",
+    "id": 661190665,
+    "language": "Vue",
+    "name": "PDF-Guru",
+    "starred_at": "2024-07-22T07:37:11Z",
+    "stars": 4101
+  },
+  {
+    "description": "Crawlee—A web scraping and browser automation library for Python to build reliable crawlers. Extract data for AI, LLMs, RAG, or GPTs. Download HTML, PDF, JPG, PNG, and other files from websites. Works with Parsel, BeautifulSoup, Playwright, and raw HTTP. Both headful and headless mode. With proxy rotation.",
+    "full_name": "apify/crawlee-python",
+    "id": 741365632,
+    "language": "Python",
+    "name": "crawlee-python",
+    "starred_at": "2024-07-22T05:44:47Z",
+    "stars": 9167
+  },
+  {
+    "description": "大概是2020年最全的免费可商用字体，这里收录的商免字体都能找到明确的授权出处，可以放心使用，持续更新中...",
+    "full_name": "wordshub/free-font",
+    "id": 232526165,
+    "language": "JavaScript",
+    "name": "free-font",
+    "starred_at": "2024-07-18T12:25:41Z",
+    "stars": 6304
+  },
+  {
+    "description": "一键同步文章到多个内容平台，支持今日头条、WordPress、知乎、简书、掘金、CSDN、typecho各大平台，一次发布，多平台同步发布。解放个人生产力",
+    "full_name": "wechatsync/Wechatsync",
+    "id": 291947996,
+    "language": "TypeScript",
+    "name": "Wechatsync",
+    "starred_at": "2024-07-18T02:20:30Z",
+    "stars": 5718
+  },
+  {
+    "description": "Turn any PDF or image document into structured data for your AI. A powerful, lightweight OCR toolkit that bridges the gap between images/PDFs and LLMs. Supports 100+ languages.",
+    "full_name": "PaddlePaddle/PaddleOCR",
+    "id": 262296122,
+    "language": "Python",
+    "name": "PaddleOCR",
+    "starred_at": "2024-07-17T03:25:42Z",
+    "stars": 82011
+  },
+  {
+    "description": "微信公众号文章批量下载工具，支持评论、合集下载，支持保存html/mhtml/md/pdf/docx/csv文件，保存文章内图片、视频、音频文件，支持MCP/Skill调用",
+    "full_name": "qiye45/wechatDownload",
+    "id": 673881338,
+    "language": "HTML",
+    "name": "wechatDownload",
+    "starred_at": "2024-07-11T02:27:00Z",
+    "stars": 8078
+  },
+  {
+    "description": "OCRmyPDF adds an OCR text layer to scanned PDF files, allowing them to be searched",
+    "full_name": "ocrmypdf/OCRmyPDF",
+    "id": 15333471,
+    "language": "Python",
+    "name": "OCRmyPDF",
+    "starred_at": "2024-07-10T13:14:22Z",
+    "stars": 33869
+  },
+  {
+    "description": "🔥 MaxKB is an open-source platform for building enterprise-grade agents.  强大易用的开源企业级智能体平台。",
+    "full_name": "1Panel-dev/MaxKB",
+    "id": 691347156,
+    "language": "Python",
+    "name": "MaxKB",
+    "starred_at": "2024-07-06T13:51:11Z",
+    "stars": 21253
+  },
+  {
+    "description": "Multi-lingual large voice generation model, providing inference, training and deployment full-stack ability.",
+    "full_name": "FunAudioLLM/CosyVoice",
+    "id": 823430322,
+    "language": "Python",
+    "name": "CosyVoice",
+    "starred_at": "2024-07-06T13:03:05Z",
+    "stars": 21621
+  },
+  {
+    "description": "SOTA Open Source TTS",
+    "full_name": "fishaudio/fish-speech",
+    "id": 702796244,
+    "language": "Python",
+    "name": "fish-speech",
+    "starred_at": "2024-07-04T13:12:04Z",
+    "stars": 30779
+  },
+  {
+    "description": "The Cradle framework is a first attempt at General Computer Control (GCC). Cradle supports agents to ace any computer task by enabling strong reasoning abilities, self-improvment, and skill curation, in a standardized general environment with minimal requirements.",
+    "full_name": "BAAI-Agents/Cradle",
+    "id": 766445602,
+    "language": "Python",
+    "name": "Cradle",
+    "starred_at": "2024-07-04T02:49:14Z",
+    "stars": 2537
+  },
+  {
+    "description": "🚀 The best real-time interactive AI avatar(digital human) with on-premise deployment and <1.5 s latency.",
+    "full_name": "duixcom/Duix-Mobile",
+    "id": 801459371,
+    "language": "C++",
+    "name": "Duix-Mobile",
+    "starred_at": "2024-07-03T15:58:53Z",
+    "stars": 8076
+  },
+  {
+    "description": "微信视频号下载工具，支持视频号视频、直播回放、直播、图片下载",
+    "full_name": "qiye45/wechatVideoDownload",
+    "id": 743612530,
+    "language": null,
+    "name": "wechatVideoDownload",
+    "starred_at": "2024-07-03T07:08:07Z",
+    "stars": 5253
+  },
+  {
+    "description": "开发ing，将Dify接入飞书机器人",
+    "full_name": "Mr-KID-github/Dify-FeiShu-bot",
+    "id": 815393013,
+    "language": "Python",
+    "name": "Dify-FeiShu-bot",
+    "starred_at": "2024-07-03T02:20:14Z",
+    "stars": 151
+  },
+  {
+    "description": "这是一个 ( QQ Wechat 短信 通话记录 照片 等) 记录导出归档的 大 项目.",
+    "full_name": "lqzhgood/Shmily",
+    "id": 239939912,
+    "language": null,
+    "name": "Shmily",
+    "starred_at": "2024-05-31T07:36:01Z",
+    "stars": 1502
+  },
+  {
+    "description": "A generative speech model for daily dialogue.",
+    "full_name": "2noise/ChatTTS",
+    "id": 806709826,
+    "language": "Python",
+    "name": "ChatTTS",
+    "starred_at": "2024-05-28T14:24:13Z",
+    "stars": 39438
+  },
+  {
+    "description": "小红书笔记 | 评论爬虫、抖音视频 | 评论爬虫、快手视频 | 评论爬虫、B 站视频 ｜ 评论爬虫、微博帖子 ｜ 评论爬虫、百度贴吧帖子 ｜ 百度贴吧评论回复爬虫  | 知乎问答文章｜评论爬虫",
+    "full_name": "NanmiCoder/MediaCrawler",
+    "id": 651517185,
+    "language": "Python",
+    "name": "MediaCrawler",
+    "starred_at": "2024-05-16T04:29:32Z",
+    "stars": 51118
+  },
+  {
+    "description": "The API to search, scrape, and interact with the web at scale. 🔥",
+    "full_name": "firecrawl/firecrawl",
+    "id": 787076358,
+    "language": "TypeScript",
+    "name": "firecrawl",
+    "starred_at": "2024-05-14T12:15:51Z",
+    "stars": 131960
+  },
+  {
+    "description": "Open-source, accurate and easy-to-use video speech recognition & clipping tool. LLM-based AI clipping integrated.",
+    "full_name": "modelscope/FunClip",
+    "id": 641795100,
+    "language": "Python",
+    "name": "FunClip",
+    "starred_at": "2024-04-23T02:42:24Z",
+    "stars": 5807
+  },
+  {
+    "description": "A telegram bot  for rss reader. 一个支持应用内阅读的 Telegram RSS Bot。",
+    "full_name": "indes/flowerss-bot",
+    "id": 165052804,
+    "language": "Go",
+    "name": "flowerss-bot",
+    "starred_at": "2024-04-22T16:14:08Z",
+    "stars": 1838
+  },
+  {
+    "description": "Convert any URL to an LLM-friendly input with a simple prefix https://r.jina.ai/",
+    "full_name": "jina-ai/reader",
+    "id": 784546140,
+    "language": "TypeScript",
+    "name": "reader",
+    "starred_at": "2024-04-18T02:57:04Z",
+    "stars": 11181
+  },
+  {
+    "description": "RAGFlow is a leading open-source Retrieval-Augmented Generation (RAG) engine that fuses cutting-edge RAG with Agent capabilities to create a superior context layer for LLMs",
+    "full_name": "infiniflow/ragflow",
+    "id": 730534580,
+    "language": "Python",
+    "name": "ragflow",
+    "starred_at": "2024-04-17T14:16:14Z",
+    "stars": 82575
+  },
+  {
+    "description": "抖音去水印批量下载用户主页作品、喜欢、收藏、图文、音频",
+    "full_name": "Johnserf-Seed/TikTokDownload",
+    "id": 330909490,
+    "language": "Python",
+    "name": "TikTokDownload",
+    "starred_at": "2024-04-15T08:14:06Z",
+    "stars": 8655
+  },
+  {
+    "description": "如何在Mac上通过脚本实现微信双开，并通过自动操作创建应用程序，修改图标后直接当作第二个微信使用，无需打开终端输入代码，且双开后无终端出现。",
+    "full_name": "CLOUDUH/dual-wechat",
+    "id": 567131362,
+    "language": null,
+    "name": "dual-wechat",
+    "starred_at": "2024-04-11T02:13:35Z",
+    "stars": 328
+  },
+  {
+    "description": "基于C#的微信PC版聊天记录备份工具，提供图形界面，解密微信数据库并导出聊天记录。",
+    "full_name": "SuxueCode/WechatBakTool",
+    "id": 677585649,
+    "language": null,
+    "name": "WechatBakTool",
+    "starred_at": "2024-04-09T05:23:53Z",
+    "stars": 3724
+  },
+  {
+    "description": "🔥 1Panel is a modern, open-source VPS control panel — and the only one with native AI agent support. Run Ollama models, deploy OpenClaw agents, and manage your entire server stack from one clean web interface.",
+    "full_name": "1Panel-dev/1Panel",
+    "id": 515647260,
+    "language": "Go",
+    "name": "1Panel",
+    "starred_at": "2024-04-08T13:56:54Z",
+    "stars": 35865
+  },
+  {
+    "description": "🚀「Douyin_TikTok_Download_API」是一个开箱即用的高性能异步抖音、快手、TikTok、Bilibili数据爬取工具，支持API调用，在线批量解析及下载。",
+    "full_name": "Evil0ctal/Douyin_TikTok_Download_API",
+    "id": 425387994,
+    "language": "Python",
+    "name": "Douyin_TikTok_Download_API",
+    "starred_at": "2024-04-02T01:37:10Z",
+    "stars": 18291
+  },
+  {
+    "description": "《一人企业方法论》第二版，也适合做其他副业（比如自媒体、电商、数字商品）的非技术人群。",
+    "full_name": "easychen/opc-methodology",
+    "id": 778210042,
+    "language": "PHP",
+    "name": "opc-methodology",
+    "starred_at": "2024-03-28T08:27:22Z",
+    "stars": 16027
+  },
+  {
+    "description": "小米摄像头录像合并工具，支持docker，可在NAS使用",
+    "full_name": "hslr-s/xiaomi-camera-merge",
+    "id": 709309463,
+    "language": "Go",
+    "name": "xiaomi-camera-merge",
+    "starred_at": "2024-03-23T06:03:32Z",
+    "stars": 88
+  },
+  {
+    "description": "支持 Python3、JavaScript、Shell、Typescript 的定时任务管理平台（Timed task management platform supporting Python3, JavaScript, Shell, Typescript）",
+    "full_name": "whyour/qinglong",
+    "id": 347404990,
+    "language": "TypeScript",
+    "name": "qinglong",
+    "starred_at": "2024-03-22T15:55:34Z",
+    "stars": 19606
+  },
+  {
+    "description": "A free, self-hostable news aggregator…",
+    "full_name": "FreshRSS/FreshRSS",
+    "id": 6322699,
+    "language": "PHP",
+    "name": "FreshRSS",
+    "starred_at": "2024-03-21T05:29:34Z",
+    "stars": 15287
+  },
+  {
+    "description": "Read RSS Feeds from inside Obsidian",
+    "full_name": "joethei/obsidian-rss",
+    "id": 408695800,
+    "language": "TypeScript",
+    "name": "obsidian-rss",
+    "starred_at": "2024-03-18T11:53:33Z",
+    "stars": 468
+  },
+  {
+    "description": "支持谷歌翻译、百度翻译、有道翻译的免费接口，基于Django、PyMuPDF实现了pdf文档英译汉的功能，翻译后的pdf格式基本保持不变，可以下载docx和pdf格式的翻译文档，基本解决复制caj中文论文时的格式问题，简单的满足看论文以及写总结的需求。",
+    "full_name": "QPromise/EasyTrans",
+    "id": 188054205,
+    "language": "Python",
+    "name": "EasyTrans",
+    "starred_at": "2024-03-15T07:52:20Z",
+    "stars": 579
+  },
+  {
+    "description": "视频号、小程序、抖音、快手、小红书、直播流、m3u8、酷狗、QQ音乐等常见网络资源下载!",
+    "full_name": "putyy/res-downloader",
+    "id": 685877018,
+    "language": "Go",
+    "name": "res-downloader",
+    "starred_at": "2024-03-08T02:14:28Z",
+    "stars": 18110
+  },
+  {
+    "description": "🤗更优雅的微信公众号订阅方式，支持私有化部署、微信公众号RSS生成（基于微信读书）",
+    "full_name": "cooderl/wewe-rss",
+    "id": 764165494,
+    "language": "TypeScript",
+    "name": "wewe-rss",
+    "starred_at": "2024-03-05T14:35:56Z",
+    "stars": 9551
+  },
+  {
+    "description": "Obsidian Wechat public Plugin (微信公众平台) is a plugin to release article from your Obsidian Vault to WeChat, Baidu baiJiahao or other platforms.",
+    "full_name": "ai-chen2050/obsidian-wechat-public-platform",
+    "id": 733405671,
+    "language": "TypeScript",
+    "name": "obsidian-wechat-public-platform",
+    "starred_at": "2024-03-04T04:34:32Z",
+    "stars": 149
+  },
+  {
+    "description": "运行在Cloudflare Worker上的RSS订阅生成器",
+    "full_name": "yllhwa/RSSWorker",
+    "id": 702034002,
+    "language": "JavaScript",
+    "name": "RSSWorker",
+    "starred_at": "2024-02-17T13:43:45Z",
+    "stars": 772
+  },
+  {
+    "description": "A server, NAS navigation panel, Homepage, browser homepage. | 一个服务器、NAS导航面板、Homepage、浏览器首页。",
+    "full_name": "hslr-s/sun-panel",
+    "id": 716412370,
+    "language": "Vue",
+    "name": "sun-panel",
+    "starred_at": "2024-02-13T04:51:50Z",
+    "stars": 5177
+  },
+  {
+    "description": "A fancy, easy-to-use and reactive self-hosted docker compose.yaml stack-oriented manager",
+    "full_name": "louislam/dockge",
+    "id": 708775091,
+    "language": "TypeScript",
+    "name": "dockge",
+    "starred_at": "2024-02-05T04:40:35Z",
+    "stars": 23484
+  },
+  {
+    "description": "Digital Avatar Conversational System - Linly-Talker. 😄✨ Linly-Talker is an intelligent AI system that combines large language models (LLMs) with visual models to create a novel human-AI interaction method. 🤝🤖 It integrates various technologies like Whisper, Linly, Microsoft Speech Services, and SadTalker talking head generation system. 🌟🔬",
+    "full_name": "Kedreamix/Linly-Talker",
+    "id": 706012006,
+    "language": "Python",
+    "name": "Linly-Talker",
+    "starred_at": "2024-01-31T13:48:21Z",
+    "stars": 3361
+  },
+  {
+    "description": " Mobile-Agent: The Powerful GUI Agent Family",
+    "full_name": "X-PLUG/MobileAgent",
+    "id": 748674684,
+    "language": "Python",
+    "name": "MobileAgent",
+    "starred_at": "2024-01-31T13:15:15Z",
+    "stars": 8815
+  },
+  {
+    "description": "🗂️A file list/WebDAV program that supports multiple storages, powered by Gin and Solidjs. / 一个支持多存储的文件列表/WebDAV程序，使用 Gin 和 Solidjs。",
+    "full_name": "AlistGo/alist",
+    "id": 323965659,
+    "language": "Go",
+    "name": "alist",
+    "starred_at": "2024-01-29T03:15:26Z",
+    "stars": 49650
+  },
+  {
+    "description": "Fair-code workflow automation platform with native AI capabilities. Combine visual building with custom code, self-host or cloud, 400+ integrations.",
+    "full_name": "n8n-io/n8n",
+    "id": 193215554,
+    "language": "TypeScript",
+    "name": "n8n",
+    "starred_at": "2024-01-28T08:36:34Z",
+    "stars": 192226
+  },
+  {
+    "description": "ai副业赚钱大集合，教你如何利用ai做一些副业项目，赚取更多额外收益。The Ultimate Guide to Making Money with AI Side Hustles: Learn how to leverage AI for some cool side gigs and rake in some extra cash. Check out the English version for more insights.",
+    "full_name": "bleedline/aimoneyhunter",
+    "id": 731450488,
+    "language": null,
+    "name": "aimoneyhunter",
+    "starred_at": "2024-01-22T11:08:13Z",
+    "stars": 17345
+  },
+  {
+    "description": "Official code for \"Towards An End-to-End Framework for Flow-Guided Video Inpainting\" (CVPR2022)",
+    "full_name": "MCG-NKU/E2FGVI",
+    "id": 472297798,
+    "language": "Python",
+    "name": "E2FGVI",
+    "starred_at": "2024-01-20T10:51:46Z",
+    "stars": 1153
+  },
+  {
+    "description": "最新Docker容器技术，从真实案例中学习最佳实践！| Learn and understand Docker&Container technologies, with real DevOps practice!",
+    "full_name": "yeasy/docker_practice",
+    "id": 23689830,
+    "language": "Go",
+    "name": "docker_practice",
+    "starred_at": "2024-01-18T11:48:45Z",
+    "stars": 26099
+  },
+  {
+    "description": "vits2 backbone with multilingual-bert",
+    "full_name": "fishaudio/Bert-VITS2",
+    "id": 672224983,
+    "language": "Python",
+    "name": "Bert-VITS2",
+    "starred_at": "2024-01-17T12:01:48Z",
+    "stars": 8761
+  },
+  {
+    "description": "1 min voice data can also be used to train a good TTS model! (few shot voice cloning)",
+    "full_name": "RVC-Boss/GPT-SoVITS",
+    "id": 743230067,
+    "language": "Python",
+    "name": "GPT-SoVITS",
+    "starred_at": "2024-01-17T11:52:57Z",
+    "stars": 58621
+  },
+  {
+    "description": "User-friendly AI Interface (Supports Ollama, OpenAI API, ...)",
+    "full_name": "open-webui/open-webui",
+    "id": 701547123,
+    "language": "Python",
+    "name": "open-webui",
+    "starred_at": "2024-01-13T13:15:26Z",
+    "stars": 141261
+  },
+  {
+    "description": "FastGPT is a knowledge-based platform built on the LLMs, offers a comprehensive suite of out-of-the-box capabilities such as data processing, RAG retrieval, and visual AI workflow orchestration, letting you easily develop and deploy complex question-answering systems without the need for extensive setup or configuration.",
+    "full_name": "labring/FastGPT",
+    "id": 605673387,
+    "language": "TypeScript",
+    "name": "FastGPT",
+    "starred_at": "2024-01-13T12:19:30Z",
+    "stars": 28377
+  },
+  {
+    "description": "FaceChain is a deep-learning toolchain for generating your Digital-Twin.",
+    "full_name": "modelscope/facechain",
+    "id": 676931962,
+    "language": "Jupyter Notebook",
+    "name": "facechain",
+    "starred_at": "2024-01-10T01:35:07Z",
+    "stars": 9496
+  },
+  {
+    "description": "毒奶去网页广告计划用户脚本 For Quantumult X & Surge & Shadowrocket & Loon & Stash & 油猴 ；1.导航 2.通过 JS/CSS 移除特定网站网页广告 —— 搜索引擎（Bing/Google）广告及内容农场结果清除/低端影视/欧乐影院/iyf爱壹帆/哔滴影视/Pornhub/Javbus/Supjav/Jable(M3U8)/MissAv/91porn/hitomi/紳士漫畫/禁漫天堂/等视频&ACG&小说&漫画网站上的弹窗广告&视频广告&Gif广告，沉浸式翻译/提取M3U8等，保持网页清爽干净无打扰！ P.S. 欢迎提交issue",
+    "full_name": "limbopro/Adblock4limbo",
+    "id": 307125642,
+    "language": "JavaScript",
+    "name": "Adblock4limbo",
+    "starred_at": "2024-01-07T10:29:05Z",
+    "stars": 4422
+  },
+  {
+    "description": "自用Surge等代理app规则与配置，自用js脚本，爬虫每周自动更新规则",
+    "full_name": "zqzess/rule_for_quantumultX",
+    "id": 306560076,
+    "language": "JavaScript",
+    "name": "rule_for_quantumultX",
+    "starred_at": "2024-01-07T04:01:22Z",
+    "stars": 2047
+  },
+  {
+    "description": "《独立开发者的艺术》打造最全的独立开发者指南，一人公司。",
+    "full_name": "hua1995116/indiehackers-steps",
+    "id": 734792026,
+    "language": null,
+    "name": "indiehackers-steps",
+    "starred_at": "2023-12-25T08:31:30Z",
+    "stars": 3662
+  },
+  {
+    "description": "✍ WeChat Markdown Editor | 一款高度简洁的微信 Markdown 编辑器：支持 Markdown 语法、自定义主题样式、内容管理、多图床、AI 助手等特性",
+    "full_name": "doocs/md",
+    "id": 218952803,
+    "language": "Vue",
+    "name": "md",
+    "starred_at": "2023-12-22T12:43:43Z",
+    "stars": 12816
+  },
+  {
+    "description": "微信HOOK、微信机器人   wxhook，数据库解密 微信公众号采集 微信公众号爬虫，企业微信HOOK",
+    "full_name": "TonyChen56/WeChatRobot",
+    "id": 198018985,
+    "language": "C++",
+    "name": "WeChatRobot",
+    "starred_at": "2023-12-18T12:47:58Z",
+    "stars": 7139
+  },
+  {
+    "description": "A command-line tool for tweaking WeChat - 首款微信 macOS 客户端撤回拦截与多开 🔨",
+    "full_name": "sunnyyoung/WeChatTweak",
+    "id": 79307564,
+    "language": "Swift",
+    "name": "WeChatTweak",
+    "starred_at": "2023-12-14T08:21:21Z",
+    "stars": 13731
+  },
+  {
+    "description": "Protect your SSH keys with your Mac's Secure Enclave",
+    "full_name": "maxgoedjen/secretive",
+    "id": 241524703,
+    "language": "Swift",
+    "name": "secretive",
+    "starred_at": "2023-12-11T04:29:37Z",
+    "stars": 8606
+  },
+  {
+    "description": "OCR software, free and offline. 开源、免费的离线OCR软件。支持截屏/批量导入图片，PDF文档识别，排除水印/页眉页脚，扫描/生成二维码。内置多国语言库。",
+    "full_name": "hiroi-sora/Umi-OCR",
+    "id": 474839179,
+    "language": "Python",
+    "name": "Umi-OCR",
+    "starred_at": "2023-12-10T14:01:06Z",
+    "stars": 45154
+  },
+  {
+    "description": "LLM API 管理 & 分发系统，支持 OpenAI、Azure、Anthropic Claude、Google Gemini、DeepSeek、字节豆包、ChatGLM、文心一言、讯飞星火、通义千问、360 智脑、腾讯混元等主流模型，统一 API 适配，可用于 key 管理与二次分发。单可执行文件，提供 Docker 镜像，一键部署，开箱即用。LLM API management & key redistribution system, unifying multiple providers under a single API. Single binary, Docker-ready, with an English UI.",
+    "full_name": "songquanpeng/one-api",
+    "id": 631254164,
+    "language": "JavaScript",
+    "name": "one-api",
+    "starred_at": "2023-12-04T04:32:08Z",
+    "stars": 34884
+  },
+  {
+    "description": null,
+    "full_name": "LC044/WeChatMsg",
+    "id": 587586087,
+    "language": null,
+    "name": "WeChatMsg",
+    "starred_at": "2023-12-04T04:30:33Z",
+    "stars": 41633
+  },
+  {
+    "description": "Crawlee—A web scraping and browser automation library for Node.js to build reliable crawlers. In JavaScript and TypeScript. Extract data for AI, LLMs, RAG, or GPTs. Download HTML, PDF, JPG, PNG, and other files from websites. Works with Puppeteer, Playwright, Cheerio, JSDOM, and raw HTTP. Both headful and headless mode. With proxy rotation.",
+    "full_name": "apify/crawlee",
+    "id": 66670819,
+    "language": "TypeScript",
+    "name": "crawlee",
+    "starred_at": "2023-11-21T04:58:17Z",
+    "stars": 23751
+  },
+  {
+    "description": null,
+    "full_name": "LawRefBook/Laws",
+    "id": 472166607,
+    "language": "Python",
+    "name": "Laws",
+    "starred_at": "2023-11-12T13:43:49Z",
+    "stars": 1815
+  },
+  {
+    "description": "QuantumultX QX quantumult 圈X quanx 重写 脚本 rewrite 规则 分流 破解 解锁",
+    "full_name": "deezertidal/QuantumultX-Rewrite",
+    "id": 537346076,
+    "language": "JavaScript",
+    "name": "QuantumultX-Rewrite",
+    "starred_at": "2023-11-02T04:43:15Z",
+    "stars": 3251
+  },
+  {
+    "description": "小火箭 shadowrocket 配置文件 模块 脚本 module sgmodule 图文教程 规则 分流 破解 解锁",
+    "full_name": "deezertidal/shadowrocket-rules",
+    "id": 501087164,
+    "language": "JavaScript",
+    "name": "shadowrocket-rules",
+    "starred_at": "2023-11-02T04:43:08Z",
+    "stars": 6494
+  },
+  {
+    "description": "m3u8 视频在线提取工具",
+    "full_name": "Momo707577045/m3u8-downloader",
+    "id": 243193350,
+    "language": "JavaScript",
+    "name": "m3u8-downloader",
+    "starred_at": "2023-10-24T12:45:38Z",
+    "stars": 7008
+  },
+  {
+    "description": "去广告规则",
+    "full_name": "Shu-Ji/shadowrocket-anti-ad",
+    "id": 410434775,
+    "language": "Python",
+    "name": "shadowrocket-anti-ad",
+    "starred_at": "2023-10-21T10:13:17Z",
+    "stars": 146
+  },
+  {
+    "description": "An AI QR Code Generator",
+    "full_name": "Nutlope/qrGPT",
+    "id": 692565881,
+    "language": "TypeScript",
+    "name": "qrGPT",
+    "starred_at": "2023-10-11T04:46:50Z",
+    "stars": 784
+  },
+  {
+    "description": "A markdown editor that you can deploy on your own servers to achieve cloud storage and device synchronization（支持私有部署的云端存储双链笔记软件）",
+    "full_name": "blossom-editor/blossom",
+    "id": 675481198,
+    "language": "Java",
+    "name": "blossom",
+    "starred_at": "2023-10-07T06:19:42Z",
+    "stars": 3794
+  },
+  {
+    "description": "Milvus is a high-performance, cloud-native vector database built for scalable vector ANN search",
+    "full_name": "milvus-io/milvus",
+    "id": 208728772,
+    "language": "Go",
+    "name": "milvus",
+    "starred_at": "2023-10-06T08:56:52Z",
+    "stars": 44748
+  },
+  {
+    "description": "A programming framework for agentic AI",
+    "full_name": "microsoft/autogen",
+    "id": 680120071,
+    "language": "Python",
+    "name": "autogen",
+    "starred_at": "2023-10-03T04:16:39Z",
+    "stars": 58905
+  },
+  {
+    "description": "12 Weeks, 24 Lessons, AI for All!",
+    "full_name": "microsoft/AI-For-Beginners",
+    "id": 344190478,
+    "language": "Jupyter Notebook",
+    "name": "AI-For-Beginners",
+    "starred_at": "2023-10-01T05:24:45Z",
+    "stars": 48099
+  },
+  {
+    "description": "Production-ready platform for agentic workflow development.",
+    "full_name": "langgenius/dify",
+    "id": 626805178,
+    "language": "TypeScript",
+    "name": "dify",
+    "starred_at": "2023-10-01T05:23:41Z",
+    "stars": 144989
+  },
+  {
+    "description": "🤯 LobeHub is your Chief Agent Operator, organizing your agents into 7×24 operations by hiring, scheduling, and reporting on your entire AI team.",
+    "full_name": "lobehub/lobehub",
+    "id": 643445235,
+    "language": "TypeScript",
+    "name": "lobehub",
+    "starred_at": "2023-09-25T14:14:05Z",
+    "stars": 78574
+  },
+  {
+    "description": "基于无障碍，高级选择器，订阅规则的自定义屏幕点击安卓应用 | An Android APP with custom screen tapping based on Accessibility, Advanced Selectors, and Subscription Rules",
+    "full_name": "gkd-kit/gkd",
+    "id": 661957079,
+    "language": "Kotlin",
+    "name": "gkd",
+    "starred_at": "2023-09-25T14:05:50Z",
+    "stars": 39431
+  },
+  {
+    "description": "The most powerful and modular diffusion model GUI, api and backend with a graph/nodes interface.",
+    "full_name": "Comfy-Org/ComfyUI",
+    "id": 589831718,
+    "language": "Python",
+    "name": "ComfyUI",
+    "starred_at": "2023-09-19T13:27:50Z",
+    "stars": 116752
+  },
+  {
+    "description": "A script allowing you to download images and videos from Telegram web even if the group restricts downloading.",
+    "full_name": "Neet-Nestor/Telegram-Media-Downloader",
+    "id": 502268029,
+    "language": "JavaScript",
+    "name": "Telegram-Media-Downloader",
+    "starred_at": "2023-09-13T14:32:30Z",
+    "stars": 4424
+  },
+  {
+    "description": "A Kernel based root solution for Android",
+    "full_name": "tiann/KernelSU",
+    "id": 576303915,
+    "language": "Kotlin",
+    "name": "KernelSU",
+    "starred_at": "2023-09-12T05:02:32Z",
+    "stars": 16809
+  },
+  {
+    "description": "监测RSS变动，并发送最新内容到微信、Webhook 和 Telegram, Discord, Slack, Amazon SNS, Gotify 等数十个消息通道。",
+    "full_name": "easychen/rsspush",
+    "id": 532179549,
+    "language": null,
+    "name": "rsspush",
+    "starred_at": "2023-09-12T04:39:16Z",
+    "stars": 628
+  },
+  {
+    "description": "Applescripts, smart rules and templates for DEVONthink 3",
+    "full_name": "bcdavasconcelos/DEVONthink-3",
+    "id": 260726051,
+    "language": null,
+    "name": "DEVONthink-3",
+    "starred_at": "2023-09-09T12:36:43Z",
+    "stars": 62
+  },
+  {
+    "description": "Original Shortcut Actions craft by Minja.",
+    "full_name": "BlackwinMin/shortcuts-actions-gallery",
+    "id": 177382365,
+    "language": null,
+    "name": "shortcuts-actions-gallery",
+    "starred_at": "2023-09-09T12:17:32Z",
+    "stars": 319
+  },
+  {
+    "description": "Original macOS Alfred actions by Minja.",
+    "full_name": "BlackwinMin/alfred-gallery",
+    "id": 175548455,
+    "language": null,
+    "name": "alfred-gallery",
+    "starred_at": "2023-09-09T12:17:18Z",
+    "stars": 166
+  },
+  {
+    "description": "Original macOS Automator actions by Minja.",
+    "full_name": "BlackwinMin/automator-gallery",
+    "id": 175546862,
+    "language": "Shell",
+    "name": "automator-gallery",
+    "starred_at": "2023-09-09T12:17:15Z",
+    "stars": 206
+  },
+  {
+    "description": "Original macOS Keyboard Maestro actions by Minja.",
+    "full_name": "BlackwinMin/keyboard-maestro-gallery",
+    "id": 175548851,
+    "language": null,
+    "name": "keyboard-maestro-gallery",
+    "starred_at": "2023-09-09T12:17:13Z",
+    "stars": 313
+  },
+  {
+    "description": "基于C#实现的获取微信数据库密钥的小工具",
+    "full_name": "Ormicron/Sharp-dumpkey",
+    "id": 436106794,
+    "language": "C#",
+    "name": "Sharp-dumpkey",
+    "starred_at": "2023-09-08T03:43:33Z",
+    "stars": 485
+  },
+  {
+    "description": "基于Java实现的图形化微信聊天记录解密查看器",
+    "full_name": "Ormicron/chatViewTool",
+    "id": 504062504,
+    "language": null,
+    "name": "chatViewTool",
+    "starred_at": "2023-09-08T03:43:28Z",
+    "stars": 580
+  },
+  {
+    "description": "Obsidian 优秀中文插件、主题与资源",
+    "full_name": "PKM-er/awesome-obsidian-zh",
+    "id": 530037177,
+    "language": null,
+    "name": "awesome-obsidian-zh",
+    "starred_at": "2023-09-03T11:15:10Z",
+    "stars": 646
+  },
+  {
+    "description": "🧡 Browser extension that simplifies finding and subscribing RSS and RSSHub",
+    "full_name": "DIYgod/RSSHub-Radar",
+    "id": 197205035,
+    "language": "TypeScript",
+    "name": "RSSHub-Radar",
+    "starred_at": "2023-09-02T14:23:34Z",
+    "stars": 7222
+  },
+  {
+    "description": "🧡 Everything is RSSible",
+    "full_name": "DIYgod/RSSHub",
+    "id": 127769231,
+    "language": "TypeScript",
+    "name": "RSSHub",
+    "starred_at": "2023-09-02T14:18:02Z",
+    "stars": 44667
+  },
+  {
+    "description": "同步和更新大佬脚本库，更新懒人配置",
+    "full_name": "w37fhy/QuantumultX",
+    "id": 290135452,
+    "language": "JavaScript",
+    "name": "QuantumultX",
+    "starred_at": "2023-08-29T12:40:43Z",
+    "stars": 5888
+  },
+  {
+    "description": null,
+    "full_name": "Orz-3/QuantumultX",
+    "id": 273100139,
+    "language": "JavaScript",
+    "name": "QuantumultX",
+    "starred_at": "2023-08-29T12:40:43Z",
+    "stars": 4518
+  },
+  {
+    "description": "Infrared remote library for ESP8266/ESP32: send and receive infrared signals with multiple protocols. Based on: https://github.com/shirriff/Arduino-IRremote/",
+    "full_name": "crankyoldgit/IRremoteESP8266",
+    "id": 37022659,
+    "language": "C++",
+    "name": "IRremoteESP8266",
+    "starred_at": "2023-08-10T09:29:41Z",
+    "stars": 3485
+  },
+  {
+    "description": "🌟 The Multi-Agent Framework: First AI Software Company, Towards Natural Language Programming",
+    "full_name": "FoundationAgents/MetaGPT",
+    "id": 660551251,
+    "language": "Python",
+    "name": "MetaGPT",
+    "starred_at": "2023-08-03T12:43:58Z",
+    "stars": 68752
+  },
+  {
+    "description": "🌈一个跨平台的划词翻译和OCR软件 | A cross-platform software for text translation and recognition.",
+    "full_name": "pot-app/pot-desktop",
+    "id": 606762843,
+    "language": "JavaScript",
+    "name": "pot-desktop",
+    "starred_at": "2023-07-20T04:26:41Z",
+    "stars": 18735
+  },
+  {
+    "description": "List of useful Quick Look plugins for developers",
+    "full_name": "sindresorhus/quick-look-plugins",
+    "id": 15008072,
+    "language": null,
+    "name": "quick-look-plugins",
+    "starred_at": "2023-07-17T13:18:17Z",
+    "stars": 18656
+  },
+  {
+    "description": "ChatLaw：A Powerful LLM Tailored for Chinese Legal. 中文法律大模型",
+    "full_name": "PKU-YuanGroup/ChatLaw",
+    "id": 650600874,
+    "language": null,
+    "name": "ChatLaw",
+    "starred_at": "2023-07-07T01:25:24Z",
+    "stars": 7521
+  },
+  {
+    "description": "A visual no-code/code-free web crawler/spider易采集：一个可视化浏览器自动化测试/数据采集/网页爬虫软件，可以无代码图形化的设计和执行爬虫任务。别名：ServiceWrapper面向Web应用的智能化服务封装系统。",
+    "full_name": "NaiboWang/EasySpider",
+    "id": 280567579,
+    "language": "JavaScript",
+    "name": "EasySpider",
+    "starred_at": "2023-06-09T14:02:12Z",
+    "stars": 43970
+  },
+  {
+    "description": "⚖️ AI 法律助手",
+    "full_name": "lvwzhen/law-cn-ai",
+    "id": 630755965,
+    "language": "MDX",
+    "name": "law-cn-ai",
+    "starred_at": "2023-06-04T11:56:54Z",
+    "stars": 4904
+  },
+  {
+    "description": "A RWKV management and startup tool, full automation, only 8MB. And provides an interface compatible with the OpenAI API. RWKV is a large language model that is fully open source and available for commercial use.",
+    "full_name": "josStorer/RWKV-Runner",
+    "id": 636535720,
+    "language": "TypeScript",
+    "name": "RWKV-Runner",
+    "starred_at": "2023-06-03T02:59:41Z",
+    "stars": 6393
+  },
+  {
+    "description": "这是一款提高ChatGPT的数据安全能力和效率的插件。并且免费共享大量创新功能，如：自动刷新、保持活跃、数据安全、取消审计、克隆对话、言无不尽、净化页面、展示大屏、拦截跟踪、日新月异、明察秋毫等。让我们的AI体验无比安全、顺畅、丝滑、高效、简洁。",
+    "full_name": "xcanwin/KeepChatGPT",
+    "id": 620458878,
+    "language": "JavaScript",
+    "name": "KeepChatGPT",
+    "starred_at": "2023-04-23T01:25:15Z",
+    "stars": 14888
+  },
+  {
+    "description": "简悦 ( SimpRead ) - 让你瞬间进入沉浸式阅读的扩展",
+    "full_name": "Kenshin/simpread",
+    "id": 76822722,
+    "language": "JavaScript",
+    "name": "simpread",
+    "starred_at": "2023-02-17T01:43:13Z",
+    "stars": 8644
+  },
+  {
+    "description": "Obsidian Weread Plugin is a plugin to sync Weread(微信读书) hightlights and annotations into your Obsidian Vault.",
+    "full_name": "zhaohongxuan/obsidian-weread-plugin",
+    "id": 489844065,
+    "language": "TypeScript",
+    "name": "obsidian-weread-plugin",
+    "starred_at": "2022-09-26T13:09:48Z",
+    "stars": 2104
+  },
+  {
+    "description": "一个基于 Electron 的音乐软件",
+    "full_name": "lyswhut/lx-music-desktop",
+    "id": 202367615,
+    "language": "TypeScript",
+    "name": "lx-music-desktop",
+    "starred_at": "2022-09-25T11:01:24Z",
+    "stars": 51527
+  },
+  {
+    "description": "An obsidian toolbar plugin, modified from the Cmenu plugin",
+    "full_name": "PKM-er/obsidian-editing-toolbar",
+    "id": 532797913,
+    "language": "TypeScript",
+    "name": "obsidian-editing-toolbar",
+    "starred_at": "2022-09-18T05:41:18Z",
+    "stars": 1412
+  },
+  {
+    "description": "A No-Bullshit NSP, NSZ, XCI, and XCZ Installer for Nintendo Switch",
+    "full_name": "Huntereb/Awoo-Installer",
+    "id": 215877724,
+    "language": "C++",
+    "name": "Awoo-Installer",
+    "starred_at": "2022-09-11T12:19:32Z",
+    "stars": 1880
+  },
+  {
+    "description": "A browser extension for automating your browser by connecting blocks",
+    "full_name": "AutomaApp/automa",
+    "id": 412741449,
+    "language": "Vue",
+    "name": "automa",
+    "starred_at": "2021-11-17T07:58:10Z",
+    "stars": 21402
+  },
+  {
+    "description": "Zotero translator中文网页抓取翻译器🎉This is Zotero translators for Chinese Sites(beta), not the official Zotero repo",
+    "full_name": "l0o0/translators_CN",
+    "id": 223101787,
+    "language": "JavaScript",
+    "name": "translators_CN",
+    "starred_at": "2021-02-01T02:42:58Z",
+    "stars": 4673
+  },
+  {
+    "description": "A Zotero add-on to retrive CNKI meta data. 一个简单的Zotero 插件，用于识别中文元数据",
+    "full_name": "l0o0/jasminum",
+    "id": 272731386,
+    "language": "TypeScript",
+    "name": "jasminum",
+    "starred_at": "2021-01-30T05:41:07Z",
+    "stars": 7004
+  },
+  {
+    "description": null,
+    "full_name": "linuxserver/docker-calibre-web",
+    "id": 85645586,
+    "language": "Dockerfile",
+    "name": "docker-calibre-web",
+    "starred_at": "2020-06-12T04:34:43Z",
+    "stars": 1397
+  },
+  {
+    "description": "AI & parametric QR code generator. AI & 参数化二维码生成器。https://qrbtf.com",
+    "full_name": "latentcat/qrbtf",
+    "id": 260379216,
+    "language": "TypeScript",
+    "name": "qrbtf",
+    "starred_at": "2020-06-11T12:09:20Z",
+    "stars": 6941
+  },
+  {
+    "description": "An unidentifiable mechanism that helps you bypass GFW.",
+    "full_name": "trojan-gfw/trojan",
+    "id": 107794782,
+    "language": "C++",
+    "name": "trojan",
+    "starred_at": "2020-06-07T11:30:49Z",
+    "stars": 19723
+  },
+  {
+    "description": "提供多款 Shadowrocket 规则，带广告过滤功能。用于 iOS 未越狱设备选择性地自动翻墙。",
+    "full_name": "h2y/Shadowrocket-ADBlock-Rules",
+    "id": 65593050,
+    "language": "Python",
+    "name": "Shadowrocket-ADBlock-Rules",
+    "starred_at": "2020-06-07T11:30:47Z",
+    "stars": 16626
+  },
+  {
+    "description": "Next Generation of ShadowsocksX",
+    "full_name": "shadowsocks/ShadowsocksX-NG",
+    "id": 60844036,
+    "language": "Swift",
+    "name": "ShadowsocksX-NG",
+    "starred_at": "2020-06-07T11:30:47Z",
+    "stars": 32887
+  },
+  {
+    "description": "LuCI - OpenWrt Configuration Interface",
+    "full_name": "openwrt/luci",
+    "id": 24997096,
+    "language": "JavaScript",
+    "name": "luci",
+    "starred_at": "2020-06-07T11:30:45Z",
+    "stars": 7667
+  },
+  {
+    "description": "A plugin for Mac WeChat",
+    "full_name": "MustangYM/WeChatExtension-ForMac",
+    "id": 183345962,
+    "language": "Objective-C",
+    "name": "WeChatExtension-ForMac",
+    "starred_at": "2020-06-07T11:30:42Z",
+    "stars": 22627
+  }
+]
