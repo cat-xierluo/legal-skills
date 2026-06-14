@@ -147,5 +147,8 @@ skills/ultra-research
 # Custom skills（用户自定义符号链接）
 custom-skills
 
+# myagents-cli (symlink to ~/.myagents/skills/myagents-cli)
+skills/myagents-cli
+
 # Packed skills（打包输出目录）
 pack-skills/
