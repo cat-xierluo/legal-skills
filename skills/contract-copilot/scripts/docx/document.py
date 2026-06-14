@@ -92,7 +92,6 @@ _TPL_COMMENTS_IDS = (
 _TPL_COMMENTS_EXTENSIBLE = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
     '<w16cex:commentsExtensible {_ns} xmlns:cr="http://schemas.microsoft.com/office/comments/2020/reactions"'
-    ' mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl cr w16du wp14"'
     '>\n'
     '</w16cex:commentsExtensible>'
 )
@@ -133,14 +132,35 @@ class DocxXMLEditor(XMLEditor):
         self.initials = initials
         self._timestamp_provider = timestamp_provider
 
-    def _resolve_timestamp(self) -> str:
-        """Get formatted timestamp for injected OOXML attributes."""
+    @staticmethod
+    def _format_local_timestamp(timestamp) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.astimezone().isoformat(timespec="seconds")
+        return str(timestamp)
+
+    @staticmethod
+    def _format_utc_timestamp(timestamp) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return str(timestamp)
+
+    def _resolve_timestamp_value(self):
+        """Get the raw timestamp value for injected OOXML attributes."""
         if self._timestamp_provider is not None:
-            timestamp = self._timestamp_provider()
-            if isinstance(timestamp, datetime):
-                return timestamp.astimezone().isoformat(timespec="seconds")
-            return str(timestamp)
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return self._timestamp_provider()
+        return datetime.now(timezone.utc)
+
+    def _resolve_timestamps(self) -> tuple[str, str]:
+        """Get local-display and UTC timestamps from one provider call."""
+        timestamp = self._resolve_timestamp_value()
+        return (
+            self._format_local_timestamp(timestamp),
+            self._format_utc_timestamp(timestamp),
+        )
+
+    def _resolve_timestamp(self) -> str:
+        """Get formatted local timestamp for injected OOXML attributes."""
+        return self._format_local_timestamp(self._resolve_timestamp_value())
 
     def _get_next_change_id(self):
         """Get the next available change ID by checking all tracked change elements."""
@@ -197,7 +217,13 @@ class DocxXMLEditor(XMLEditor):
         Args:
             nodes: List of DOM nodes to process
         """
-        timestamp = self._resolve_timestamp()
+        resolved_timestamps: tuple[str, str] | None = None
+
+        def get_timestamps() -> tuple[str, str]:
+            nonlocal resolved_timestamps
+            if resolved_timestamps is None:
+                resolved_timestamps = self._resolve_timestamps()
+            return resolved_timestamps
 
         def is_inside_deletion(elem):
             """Check if element is inside a w:del element."""
@@ -239,18 +265,21 @@ class DocxXMLEditor(XMLEditor):
             if not elem.hasAttribute("w:author"):
                 elem.setAttribute("w:author", self.author)
             if not elem.hasAttribute("w:date"):
+                timestamp, _ = get_timestamps()
                 elem.setAttribute("w:date", timestamp)
-            # Add w16du:dateUtc for tracked changes (same as w:date since we generate UTC timestamps)
+            # Add the UTC companion timestamp for tracked changes.
             if elem.tagName in ("w:ins", "w:del") and not elem.hasAttribute(
                 "w16du:dateUtc"
             ):
+                _, timestamp_utc = get_timestamps()
                 self._ensure_w16du_namespace()
-                elem.setAttribute("w16du:dateUtc", timestamp)
+                elem.setAttribute("w16du:dateUtc", timestamp_utc)
 
         def add_comment_attrs(elem):
             if not elem.hasAttribute("w:author"):
                 elem.setAttribute("w:author", self.author)
             if not elem.hasAttribute("w:date"):
+                timestamp, _ = get_timestamps()
                 elem.setAttribute("w:date", timestamp)
             if not elem.hasAttribute("w:initials"):
                 elem.setAttribute("w:initials", self.initials)
@@ -258,8 +287,9 @@ class DocxXMLEditor(XMLEditor):
         def add_comment_extensible_date(elem):
             # Add w16cex:dateUtc for comment extensible elements
             if not elem.hasAttribute("w16cex:dateUtc"):
+                _, timestamp_utc = get_timestamps()
                 self._ensure_w16cex_namespace()
-                elem.setAttribute("w16cex:dateUtc", timestamp)
+                elem.setAttribute("w16cex:dateUtc", timestamp_utc)
 
         def add_xml_space_to_t(elem):
             # Add xml:space="preserve" to w:t if text has leading/trailing whitespace
@@ -778,7 +808,7 @@ class Document:
                 rsid=self.rsid,
                 author=self.author,
                 initials=self.initials,
-                timestamp_provider=self._resolve_timestamp,
+                timestamp_provider=self._resolve_timestamp_value,
             )
         return self._editors[xml_path]
 
@@ -795,16 +825,35 @@ class Document:
         """Clear the timestamp provider, reverting to real-time timestamps."""
         self._timestamp_provider = None
 
-    def _resolve_timestamp(self) -> str:
-        """Get formatted timestamp for the current operation.
+    @staticmethod
+    def _format_local_timestamp(timestamp) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.astimezone().isoformat(timespec="seconds")
+        return str(timestamp)
 
-        Uses the timestamp provider if set (with local timezone offset),
-        otherwise generates a real-time UTC timestamp.
-        """
+    @staticmethod
+    def _format_utc_timestamp(timestamp) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return str(timestamp)
+
+    def _resolve_timestamp_value(self):
+        """Get the raw timestamp value for the current operation."""
         if self._timestamp_provider is not None:
-            dt = self._timestamp_provider()
-            return dt.astimezone().isoformat(timespec="seconds")
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return self._timestamp_provider()
+        return datetime.now(timezone.utc)
+
+    def _resolve_timestamps(self) -> tuple[str, str]:
+        """Get local-display and UTC timestamps from one provider call."""
+        timestamp = self._resolve_timestamp_value()
+        return (
+            self._format_local_timestamp(timestamp),
+            self._format_utc_timestamp(timestamp),
+        )
+
+    def _resolve_timestamp(self) -> str:
+        """Get formatted local timestamp for the current operation."""
+        return self._format_local_timestamp(self._resolve_timestamp_value())
 
     def add_comment(self, start, end, text: str) -> int:
         """
@@ -826,7 +875,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = self._resolve_timestamp()
+        timestamp, timestamp_utc = self._resolve_timestamps()
 
         # Add comment ranges to document.xml immediately
         self._document.insert_before(start, self._comment_range_start_xml(comment_id))
@@ -850,7 +899,7 @@ class Document:
         self._add_to_comments_ids_xml(para_id, durable_id)
 
         # Add to commentsExtensible.xml immediately
-        self._add_to_comments_extensible_xml(durable_id)
+        self._add_to_comments_extensible_xml(durable_id, timestamp_utc)
 
         # Update existing_comments so replies work
         self.existing_comments[comment_id] = {"para_id": para_id}
@@ -883,7 +932,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = self._resolve_timestamp()
+        timestamp, timestamp_utc = self._resolve_timestamps()
 
         # Add comment ranges to document.xml immediately
         parent_start_elem = self._document.get_node(
@@ -918,7 +967,7 @@ class Document:
         self._add_to_comments_ids_xml(para_id, durable_id)
 
         # Add to commentsExtensible.xml immediately
-        self._add_to_comments_extensible_xml(durable_id)
+        self._add_to_comments_extensible_xml(durable_id, timestamp_utc)
 
         # Update existing_comments so replies work
         self.existing_comments[comment_id] = {"para_id": para_id}
@@ -1164,12 +1213,13 @@ class Document:
         editor = self["word/comments.xml"]
         root = editor.get_node(tag="w:comments")
 
-        escaped_text = (
-            text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
+        escaped_author = html.escape(author, quote=True)
+        escaped_initials = html.escape(initials, quote=True)
+        escaped_timestamp = html.escape(timestamp, quote=True)
+        escaped_text = html.escape(text, quote=False)
         # Note: w:rsidR, w:rsidRDefault, w:rsidP on w:p, w:rsidR on w:r,
-        # and w:author, w:date, w:initials on w:comment are automatically added by DocxXMLEditor
-        comment_xml = f'''<w:comment w:id="{comment_id}">
+        # and text spacing are automatically added by DocxXMLEditor.
+        comment_xml = f'''<w:comment w:id="{comment_id}" w:author="{escaped_author}" w:date="{escaped_timestamp}" w:initials="{escaped_initials}">
   <w:p w14:paraId="{para_id}" w14:textId="77777777">
     <w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>
     <w:r><w:rPr><w:color w:val="000000"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>{escaped_text}</w:t></w:r>
@@ -1206,7 +1256,7 @@ class Document:
         xml = f'<w16cid:commentId w16cid:paraId="{para_id}" w16cid:durableId="{durable_id}"/>'
         editor.append_to(root, xml)
 
-    def _add_to_comments_extensible_xml(self, durable_id):
+    def _add_to_comments_extensible_xml(self, durable_id, timestamp_utc):
         """Add a single comment to commentsExtensible.xml."""
         if not self.comments_extensible_path.exists():
             self.comments_extensible_path.write_text(
@@ -1216,7 +1266,8 @@ class Document:
         editor = self["word/commentsExtensible.xml"]
         root = editor.get_node(tag="w16cex:commentsExtensible")
 
-        xml = f'<w16cex:commentExtensible w16cex:durableId="{durable_id}"/>'
+        escaped_timestamp = html.escape(timestamp_utc, quote=True)
+        xml = f'<w16cex:commentExtensible w16cex:durableId="{durable_id}" w16cex:dateUtc="{escaped_timestamp}"/>'
         editor.append_to(root, xml)
 
     # ==================== Private: XML Fragments ====================

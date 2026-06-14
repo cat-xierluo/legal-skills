@@ -2,6 +2,23 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.5.3] - 2026-06-13
+
+### 修复
+
+- 修复批注时间线错峰失效问题：新增批注现在只消耗一次运行时时间戳，`comments.xml` 与 `commentsExtensible.xml` 会写入同一时点，不再因为内部 XML 插入步骤反复推进或回落到实时默认值。
+- 修复新增 `commentsExtensible.xml` 时模板含重复 `mc:Ignorable` 属性的问题，避免源 DOCX 原本没有批注扩展部件时新增批注失败。
+- 修正扩展 UTC 字段写入策略：`w:date` 保持本地时区偏移格式，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式，减少 Word / WPS 对时区字段的显示偏差。
+
+### 技术优化
+
+- 新增运行时回归测试，覆盖缺失批注扩展部件自动创建、单条批注只消耗一次时间戳、连续批注按 provider 顺序错峰，以及修订扩展时间字段为 UTC 的行为。
+
+### 文档完善
+
+- 更新 `SKILL.md` 与 `scripts/README.md`，明确本地展示时间和 UTC 扩展字段的分工。
+- 修正 `SKILL.md` frontmatter：补齐结束分隔符，规范 `version` 引号与 `license: CC-BY-NC` 写法。
+
 ## [1.5.2] - 2026-06-04
 
 ### 改进
