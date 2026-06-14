@@ -5,7 +5,7 @@
 #   iTerm2       — 原生 AppleScript (最佳)
 #   Kitty        — kitty @ 远程控制 API
 #   WezTerm      — wezterm cli
-#   Warp         — 鼠标定位 + 剪贴板
+#   Warp         — 快捷键分屏 + 剪贴板
 #   Ghostty      — 菜单点击 + 剪贴板
 #   Zed          — 菜单点击 + 剪贴板
 #   Terminal.app — 菜单点击 + 剪贴板 (不支持分屏，退化为新标签页)
@@ -37,6 +37,29 @@ set -euo pipefail
 
 DIRECTION="${1:-right}"
 COMMAND="${2:-}"
+
+if [ "$DIRECTION" = "--help" ] || [ "$DIRECTION" = "-h" ]; then
+  cat <<'USAGE'
+terminal-split.sh — 跨终端/编辑器分屏并执行命令
+
+用法: terminal-split.sh [方向] [命令]
+方向: right (默认), left, down, up, tab
+      tab = 新建标签页（而非分屏）
+命令: 要在新 pane/tab 中执行的命令
+
+示例:
+  terminal-split.sh right "tmux attach -t worker-1"
+  terminal-split.sh tab  "tmux attach -t worker-2"
+  terminal-split.sh down "htop"
+  terminal-split.sh             # 仅分屏，不执行命令
+
+终端检测: TERM_PROGRAM (WarpTerminal/iTerm.app/ghostty/...)
+         可用 TERMINAL_OVERRIDE=warp|iterm2|kitty|wezterm|ghostty|zed|terminal_app 强制指定
+
+Warp 分屏快捷键: Cmd+D = 右分屏, Cmd+Shift+D = 下分屏
+USAGE
+  exit 0
+fi
 
 # ========== 检测当前终端 ==========
 detect_terminal() {
@@ -170,99 +193,69 @@ split_wezterm() {
   fi
 }
 
-# ========== Warp: 菜单分屏 + 鼠标定位 + 剪贴板 ==========
-# Warp 分屏后通过鼠标点击定位新面板（菜单/键盘切换不可靠）
-# 先定位到当前项目的 Tab，避免操作错误的窗口
+# ========== Warp: 窗口定位 + 快捷键分屏 + 剪贴板 ==========
+# 分两步，缺一不可：
+#   1. 先通过 pwd basename 匹配 Warp 窗口标题并前置正确窗口，
+#      否则多个 Warp 窗口时 Cmd+D 会分屏到别的窗口。
+#   2. 再在（已前置的）主窗口用应用层快捷键分屏（不依赖菜单名、不受 Block 输入模式影响）：
+#        Cmd+D        = Split Pane Right (right/left)
+#        Cmd+Shift+D  = Split Pane Down  (down/up)
+#   3. 分屏后新 pane 自动获焦，用 set clipboard + Cmd+V 粘贴命令再回车提交。
+# 局限：窗口前置到「窗口级」；若同一窗口有多个 tab，需保证 PM 在当前 tab（通常成立）。
+#       匹配不到窗口标题时静默跳过，可能在非目标窗口分屏——此时改用 tab 模式或手动。
 split_warp() {
   local dir="$1" cmd="$2"
-  local menu_item
+  local ks
   case "$dir" in
-    right) menu_item="Split Pane Right" ;; left) menu_item="Split Pane Left" ;;
-    down)  menu_item="Split Pane Down"  ;; up)   menu_item="Split Pane Up" ;;
+    right|left) ks='keystroke "d" using command down' ;;
+    down|up)    ks='keystroke "d" using {command down, shift down}' ;;
+    *) echo "warp: 未知方向 '$dir' (支持 right/left/down/up)" >&2; exit 1 ;;
   esac
 
-  # 先激活包含当前项目的 Tab（通过 pwd 匹配窗口标题）
+  # 1. 定位到当前项目的 Warp 窗口（pwd basename 匹配窗口标题，前置）
   local project_name
   project_name=$(basename "$(pwd)")
-  osascript -e "
-tell application \"System Events\"
-  tell process \"Warp\"
+  osascript <<EOF 2>/dev/null || true
+tell application "System Events"
+  tell process "Warp"
     set windowCount to count of windows
     repeat with i from 1 to windowCount
-      set windowTitle to name of window i
-      if windowTitle contains \"${project_name}\" then
+      if name of window i contains "${project_name}" then
         set index of window i to 1
         exit repeat
       end if
     end repeat
   end tell
-end tell" 2>/dev/null || true
+end tell
+EOF
 
-  # 获取窗口边界（分屏前，用于计算新面板位置）
-  local bounds=""
-  if [ -n "$cmd" ]; then
-    bounds=$(osascript -e '
-tell application "System Events"
-  tell process "Warp"
-    set p to position of window 1
-    set s to size of window 1
-    return (item 1 of p as text) & "," & (item 2 of p as text) & "," & (item 1 of s as text) & "," & (item 2 of s as text)
-  end tell
-end tell' 2>/dev/null || echo "")
-  fi
-
-  # 分屏
+  # 2. 激活 Warp 并在（已前置的）主窗口当前 tab 触发分屏快捷键
   osascript <<EOF
 tell application "Warp" to activate
-delay 0.2
+delay 0.3
 tell application "System Events"
-  tell process "Warp"
-    click menu item "${menu_item}" of menu "Tab" of menu bar 1
-  end tell
+  ${ks}
 end tell
 EOF
 
-  if [ -n "$cmd" ] && [ -n "$bounds" ]; then
-    local wx wy ww wh cx cy
-    IFS=',' read -r wx wy ww wh <<< "$bounds"
-
-    # 计算新面板的中心坐标
-    case "$dir" in
-      right) cx=$((wx + ww * 3 / 4)); cy=$((wy + wh / 2)) ;;
-      left)  cx=$((wx + ww / 4));     cy=$((wy + wh / 2)) ;;
-      down)  cx=$((wx + ww / 2));     cy=$((wy + wh * 3 / 4)) ;;
-      up)    cx=$((wx + ww / 2));     cy=$((wy + wh / 4)) ;;
-    esac
-
-    # 点击新面板获取焦点
-    sleep 0.5
-    click_at "$cx" "$cy" || true
-    sleep 0.3
-
-    # 粘贴命令（先激活 Warp 确保焦点正确）
+  # 分屏后在当前（新）pane 粘贴命令并提交
+  if [ -n "$cmd" ]; then
     local orig_clipboard
     orig_clipboard=$(pbpaste 2>/dev/null || true)
-
     osascript <<EOF
 tell application "Warp" to activate
-delay 0.2
+delay 0.4
 tell application "System Events"
-  tell process "Warp"
-    set the clipboard to "${cmd}"
-    keystroke "v" using command down
-    delay 0.2
-    keystroke return
-  end tell
+  set the clipboard to "${cmd}"
+  delay 0.1
+  keystroke "v" using command down
+  delay 0.2
+  keystroke return
 end tell
 EOF
-
     if [ -n "$orig_clipboard" ]; then
       (sleep 1 && printf '%s' "$orig_clipboard" | pbcopy) &>/dev/null &
     fi
-  elif [ -n "$cmd" ]; then
-    # 回退：无法获取窗口坐标时使用菜单切换（不可靠）
-    paste_command "$cmd" "Warp" \
-      'click menu item "Activate Next Pane" of menu "Tab" of menu bar 1'
   fi
 }
 
@@ -487,7 +480,7 @@ case "$TERMINAL" in
   iterm2)       echo "iTerm2 — 原生 AppleScript"; split_iterm2 "$DIRECTION" "$COMMAND" ;;
   kitty)        echo "Kitty — kitty @ API"; split_kitty "$DIRECTION" "$COMMAND" ;;
   wezterm)      echo "WezTerm — wezterm cli"; split_wezterm "$DIRECTION" "$COMMAND" ;;
-  warp)         echo "Warp — 鼠标定位 + 剪贴板"; split_warp "$DIRECTION" "$COMMAND" ;;
+  warp)         echo "Warp — 快捷键分屏 + 剪贴板"; split_warp "$DIRECTION" "$COMMAND" ;;
   ghostty)      echo "Ghostty — 菜单点击 + 剪贴板"; split_ghostty "$DIRECTION" "$COMMAND" ;;
   zed)          echo "Zed — 菜单点击 + 剪贴板"; split_zed "$DIRECTION" "$COMMAND" ;;
   terminal_app) echo "Terminal.app — 新标签页 (不支持分屏)"; split_terminal_app "$DIRECTION" "$COMMAND" ;;
