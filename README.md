@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
 | 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
 | 2026-06-12 | 更新     | [skill-lint](skills/skill-lint/) | v2.0.8 | 新增安全评估模块：将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入正式质量意见报告 |
 | 2026-06-11 | 更新     | [img2pdf](skills/img2pdf/) | v1.2.0 | 新增长截图模式：`--mode {nup, vertical}` 切换、`--split` 长截图自动切割（按 A4 比例自动算段高）、`--split-height` 显式段高控制；vertical 模式不切割、单图成单页、页面高度按图等比自适应；解决微信聊天记录 / 庭审笔录两类典型长截图 → PDF 需求 |
@@ -57,8 +58,6 @@
 | 2026-06-11 | 更新     | [md2word](skills/md2word/) | v1.0.1 | 修复图片 src 解析：支持 URL 解码、相对路径（基于 md 文件目录）、markdown title 标签去除；新增表格单元格内 markdown 图片语法支持，图片按 5cm 宽插入 + 居中斜体 alt 文字作图注，路径不存在时降级原样写入不丢内容 |
 | 2026-06-11 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.4.0 | 修复 PaddleOCR/MinerU 每日页数配额超限时的模型回退路径：`_check_daily_limit` 移入 try 块，使配额异常能触发 `_try_model_fallback` 兜底（v1.3.4 引入的「每日页数限额与模型回退」设计正式收口） |
 | 2026-06-08 | 新上传   | [transcription-corrector](skills/transcription-corrector/) | v1.0.7 | 新增转录稿纠错与轻度二次优化：按用户词典纠正同音字与英文专有名称漂移，可选合并同发言人发言和清理标点；与 course-generator 共用词典格式，原始文件保持不动 |
-| 2026-06-06 | 新上传   | [legal-case-analysis](skills/legal-case-analysis/) | v0.2.6 | 新增通用法律分析技能：多场景分析支架与法律任务的前置分析引擎，不要求每次都生成报告 |
-| 2026-06-06 | 更新     | [git-workflow](skills/git-workflow/) | v1.4.1 | 精简触发描述，同步公开索引版本，并将文档体检改为项目配置后才执行的可选扩展 |
 
 </details>
 
@@ -243,7 +242,7 @@
 <td>通用·合同</td>
 <td style="word-break:break-word">合同起草与审查助手，基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.5.2</td>
+<td style="text-align:center">v1.5.3</td>
 <td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
 </tr>
 <tr>
