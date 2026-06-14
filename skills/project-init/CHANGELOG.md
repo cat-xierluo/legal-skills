@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.2] - 2026-06-12
+
+### Changed
+- **Skill 开发项目：** 将默认验收工具从 `skill-architect` 更新为 `skill-lint`，同步 skill 项目 profile 与触发边界说明。
+
 ## [v1.1.1] - 2026-06-03
 
 ### Changed

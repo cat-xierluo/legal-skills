@@ -49,7 +49,7 @@ profiles:
       has_skill_md: true
     skills:
       legal-skills:
-        - skill-architect
+        - skill-lint
         - skill-manager
         - git-batch-commit
     claude_md: skill-project

@@ -50,7 +50,7 @@ records:
     publish_id: null
 
   # ===== 效率工具 =====
-  skill-architect:
+  skill-lint:
     version: null
     last_sync: null
     git_hash: null

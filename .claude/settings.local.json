@@ -31,5 +31,12 @@
       "Bash(git clean -fdx*)"
     ]
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "enabledMcpjsonServers": [
+    "MiniMax",
+    "qcc-company",
+    "qcc-risk",
+    "qcc-ipr",
+    "qcc-operation"
+  ]
 }

@@ -121,6 +121,8 @@ Commit Cadence:
 - Do not wait until a very large final diff if smaller reviewable commits are available.
 - Follow the project `git-workflow` / `git-batch-commit` rules for commit format; this prompt does not redefine them.
 - After each commit, refresh `STATUS.json.git.last_commit_sha` and the current phase/action fields.
+- **Commit 是强制的收尾步骤，不是可选**：即使本任务要求"不 push、不开 PR"（由 PM 负责 push/PR），也必须 `git add` + `git commit` 自己的全部产出，让改动进入分支历史。未 commit 的工作区改动 = 任务未完成，PM 无法 review/收口、sentinel 检测到的 `done` 也无 commit 可验收。
+- **rebase / reset / 任何重写历史操作之后，必须确认工作区改动已重新 commit**：否则 `git diff --check main...HEAD` 验证的是空 diff（HEAD 仍在 base），是假通过。正确自检：`git log --oneline main..HEAD` 必须能看到自己的 commit；若为空，先 commit 再验。
 
 Decision ID Rule:
 - If editing project decision logs, first grep existing IDs such as `^## DEC-` or `^### [DEC-`.

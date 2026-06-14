@@ -23,9 +23,13 @@ except ImportError as error:
 from base import BackendResult, ConvertOptions
 from common import (
     PADDLE_LOCAL_SUFFIXES,
+    PaddleOCRRateLimited,
     SourceInfo,
     estimate_base64_mb,
     first_non_empty,
+    is_paddle_rate_limited,
+    is_paddle_rate_limited_response,
+    is_transient_httpx_error,
     parse_bool,
     parse_positive_float,
     parse_positive_int,
@@ -407,7 +411,10 @@ class PaddleOCRBackend:
         }
 
         def _post() -> httpx.Response:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
+            # 2026-06-14 v1.4.3:trust_env=False 绕过 env / 系统代理,避免 cron 沙箱下
+            # *_PROXY 含畸形值(`http://127.0.0.1:` 等)导致 httpx 解析 proxy URL 抛
+            # `InvalidURL: Invalid port: ':1]'`。调的是公网 PaddleOCR API,本不该走本机代理。
+            with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
                 return client.post(self.api_url, json=payload, headers=headers)
 
         try:
@@ -519,8 +526,23 @@ class PaddleOCRBackend:
         files = {"file": (input_path.name, input_path.read_bytes())}
 
         def _post() -> httpx.Response:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                return client.post(self.api_url, data=fields, files=files, headers=headers)
+            # 2026-06-14 v1.4.3:trust_env=False,见 _make_request 同款注释
+            with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
+                response = client.post(self.api_url, data=fields, files=files, headers=headers)
+            # 2026-06-14 v1.4.4:服务端 code:10010 队列满是瞬态限流,这里抛瞬态异常
+            # 让 retry_with_backoff 的 is_paddle_rate_limited 接住退避重试,
+            # 而不是返回 response 让外层直接 raise RuntimeError 把段标 failed
+            if is_paddle_rate_limited_response(response.status_code, response.text):
+                trace_id = None
+                try:
+                    trace_id = response.json().get("traceId")
+                except ValueError:
+                    pass
+                raise PaddleOCRRateLimited(
+                    f"PaddleOCR 服务端限流(HTTP {response.status_code}):{response.text[:300]}",
+                    trace_id=trace_id,
+                )
+            return response
 
         try:
             response = retry_with_backoff(
@@ -528,8 +550,14 @@ class PaddleOCRBackend:
                 max_attempts=self.retry_attempts,
                 base_delay=self.retry_base_delay,
                 max_delay=self.retry_max_delay,
+                is_transient=lambda exc: is_transient_httpx_error(exc) or is_paddle_rate_limited(exc),
                 on_retry=self._log_retry,
             )
+        except PaddleOCRRateLimited as error:
+            # 重试耗尽:服务端持续限流,抛清晰错误(上游 run_ocr.py 可据此决定延后而非标 failed)
+            raise RuntimeError(
+                f"PaddleOCR 服务端持续限流,重试 {self.retry_attempts} 次仍失败:{error}"
+            ) from error
         except httpx.RequestError as error:
             raise RuntimeError(f"PaddleOCR 异步任务提交失败：{error}") from error
 
@@ -550,7 +578,8 @@ class PaddleOCRBackend:
         headers = {"Authorization": f"bearer {self.access_token}"}
         deadline = time.time() + max(1, self.poll_timeout)
         last_payload: dict[str, Any] | None = None
-        with httpx.Client(timeout=self.timeout_seconds) as client:
+        # 2026-06-14 v1.4.3:trust_env=False,见 _make_request 同款注释
+        with httpx.Client(timeout=self.timeout_seconds, trust_env=False) as client:
             while True:
                 def _get_poll() -> httpx.Response:
                     return client.get(poll_url, headers=headers)
@@ -596,6 +625,13 @@ class PaddleOCRBackend:
                             max_delay=self.retry_max_delay,
                             on_retry=self._log_retry,
                         )
+                    except httpx.InvalidURL as error:
+                        # 2026-06-14 诊断性 logging:暴露服务端返回的 jsonUrl 真值,
+                        # 上游 `Invalid port: ':1]'` 短文案无法定位,这里直接带 url 抛
+                        raise RuntimeError(
+                            f"PaddleOCR JSONL 下载 URL 非法:jsonUrl={jsonl_url!r} "
+                            f"(httpx.InvalidURL: {error})"
+                        ) from error
                     except httpx.RequestError as error:
                         raise RuntimeError(f"PaddleOCR JSONL 下载网络失败：{error}") from error
                     if jsonl_response.status_code != 200:

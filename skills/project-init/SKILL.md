@@ -4,7 +4,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 license: MIT License - 详见 LICENSE.txt
 description: |
-  项目初始化工具。读取全局协议 ~/.claude/CLAUDE.md，分析项目实际情况，生成项目特定的 CLAUDE.md 和 docs/ 上下文。本技能应在用户说"初始化项目"、"项目设置"、"配置 Claude Code"、"新建项目配置"时使用，或在进入一个新项目需要快速配置时使用。不要用于：Skill 内容开发（用 skill-architect）、单次 Skill 安装（用 skill-manager）、代码生成。
+  项目初始化工具。读取全局协议 ~/.claude/CLAUDE.md，分析项目实际情况，生成项目特定的 CLAUDE.md 和 docs/ 上下文。本技能应在用户说"初始化项目"、"项目设置"、"配置 Claude Code"、"新建项目配置"时使用，或在进入一个新项目需要快速配置时使用。不要用于：Skill 内容开发或验收（用 skill-lint）、单次 Skill 安装（用 skill-manager）、代码生成。
 ---
 
 # Project Init

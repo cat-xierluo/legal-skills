@@ -219,6 +219,12 @@ class MinerUBackend:
                     url,
                     headers={"Authorization": f"Bearer {self.api_token}"},
                     timeout=20,
+                    # 2026-06-14 v1.4.3:绕过 env / 系统代理,避免 cron 沙箱下
+                    # *_PROXY 含畸形值(如 ~/.zshrc 的 HTTPS_PROXY=http://127.0.0.1:$undef
+                    # 被展开为 `http://127.0.0.1:`)导致 httpx 解析 proxy URL 抛
+                    # `InvalidURL: Invalid port: ':1]'`。调的是公网 MinerU API,
+                    # 本不该走本机代理。
+                    trust_env=False,
                 ),
                 max_attempts=self.retry_attempts,
                 base_delay=self.retry_base_delay,
@@ -235,7 +241,8 @@ class MinerUBackend:
         return f"Token 自检通过：已成功携带 Authorization 访问 {self.api_base}。"
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(timeout=None)
+        # 2026-06-14 v1.4.3:trust_env=False,见 _self_test 注释
+        return httpx.Client(timeout=None, trust_env=False)
 
     def _mode(self) -> str:
         return "token" if self.api_token else "light"
@@ -314,13 +321,21 @@ class MinerUBackend:
         backend_dir.mkdir(parents=True, exist_ok=True)
         zip_path = backend_dir / "result.zip"
         with self._client() as client:
-            response = retry_with_backoff(
-                lambda: client.get(result_url),
-                max_attempts=self.retry_attempts,
-                base_delay=self.retry_base_delay,
-                max_delay=self.retry_max_delay,
-                on_retry=self._log_retry,
-            )
+            try:
+                response = retry_with_backoff(
+                    lambda: client.get(result_url),
+                    max_attempts=self.retry_attempts,
+                    base_delay=self.retry_base_delay,
+                    max_delay=self.retry_max_delay,
+                    on_retry=self._log_retry,
+                )
+            except httpx.InvalidURL as error:
+                # 2026-06-14 诊断性 logging:暴露服务端返回的 full_zip_url 真值,
+                # 上游 `Invalid port: ':1]'` 短文案无法定位
+                raise RuntimeError(
+                    f"MinerU 结果包 URL 非法:full_zip_url={result_url!r} "
+                    f"(httpx.InvalidURL: {error})"
+                ) from error
             if response.status_code != 200:
                 raise RuntimeError(f"下载 MinerU 结果包失败（HTTP {response.status_code}）")
             zip_path.write_bytes(response.content)
@@ -420,13 +435,21 @@ class MinerUBackend:
             headers = _normalize_headers(oss_headers)
 
             with source.path.open("rb") as handle:
-                upload_response = retry_with_backoff(
-                    lambda: client.put(upload_url, content=handle.read(), headers=headers),
-                    max_attempts=self.retry_attempts,
-                    base_delay=self.retry_base_delay,
-                    max_delay=self.retry_max_delay,
-                    on_retry=self._log_retry,
-                )
+                try:
+                    upload_response = retry_with_backoff(
+                        lambda: client.put(upload_url, content=handle.read(), headers=headers),
+                        max_attempts=self.retry_attempts,
+                        base_delay=self.retry_base_delay,
+                        max_delay=self.retry_max_delay,
+                        on_retry=self._log_retry,
+                    )
+                except httpx.InvalidURL as error:
+                    # 2026-06-14 诊断性 logging:暴露 file_urls[0] 真值,
+                    # _normalize_upload_url 不校验 URL,这是最高嫌疑点
+                    raise RuntimeError(
+                        f"MinerU 上传 URL 非法:file_urls[0]={file_urls[0]!r} "
+                        f"normalized={upload_url!r} (httpx.InvalidURL: {error})"
+                    ) from error
             if upload_response.status_code not in {200, 201}:
                 raise RuntimeError(f"MinerU 文件上传失败（HTTP {upload_response.status_code}）")
 

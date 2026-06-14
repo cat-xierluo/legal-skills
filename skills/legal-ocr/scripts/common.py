@@ -296,6 +296,39 @@ def is_transient_http_status(status_code: int) -> bool:
     return False
 
 
+class PaddleOCRRateLimited(Exception):
+    """PaddleOCR 服务端瞬态限流(HTTP 400 + code:10010 任务提交队列已满)。
+
+    与普通 RuntimeError 的区别:这是可安全退避重试的瞬态错误,不应立即把段标 failed。
+    retry_with_backoff 用 is_paddle_rate_limited 接住它。
+    """
+
+    # PaddleOCR 业务码:任务提交队列已满(瞬态,可重试)
+    RATE_LIMITED_CODES = {"10010"}
+
+    def __init__(self, message: str, *, trace_id: str | None = None) -> None:
+        super().__init__(message)
+        self.trace_id = trace_id
+
+
+def is_paddle_rate_limited_response(status_code: int, body: str) -> bool:
+    """判断一个 PaddleOCR 响应是否属于 code:10010 服务端限流。
+
+    响应体形如:{"traceId":"...","code":10010,"msg":"任务提交队列已满,请稍后重试"}
+    """
+    if status_code not in {400, 429, 503}:
+        return False
+    for code in PaddleOCRRateLimited.RATE_LIMITED_CODES:
+        if f'"code":{code}' in body or f'"code": {code}' in body:
+            return True
+    return False
+
+
+def is_paddle_rate_limited(exc: BaseException) -> bool:
+    """retry_with_backoff 的 is_transient 钩子:识别 PaddleOCRRateLimited。"""
+    return isinstance(exc, PaddleOCRRateLimited)
+
+
 T = TypeVar("T")
 
 

@@ -16,6 +16,7 @@ import json
 import shutil
 import sys
 import tempfile
+import traceback
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -481,6 +482,10 @@ def main(argv: list[str] | None = None) -> int:
                 if archive_path:
                     print(f"Archive: {archive_path}")
                 print(f"后端: {backend_result.backend} ({backend_result.mode})")
+                # 输出实际使用的模型名，供上游 run_ocr.py 解析
+                _model = (backend_result.metadata or {}).get("config", {}).get("model")
+                if _model:
+                    print(f"OCR_MODEL: {_model}")
                 return 0
             except Exception as error:  # noqa: BLE001
                 category = classify_backend_error(error)
@@ -505,11 +510,33 @@ def main(argv: list[str] | None = None) -> int:
                 detail += f" - {attempt['error']}"
             print(detail, file=sys.stderr)
         if last_error:
-            print(f"最后错误：{last_error}", file=sys.stderr)
+            # 2026-06-14 加诊断性 logging:
+            # 旧实现 `print(f"最后错误:{last_error}")` 把异常 str() 化掉,丢了 type 和 traceback;
+            # 上游 run_ocr.py:326 只抓 stderr 最后一行,导致 segments.last_error 短得无法定位真因
+            # (例:`Invalid port: ':1]'` 是 httpx.InvalidURL 的 message,但看不出哪个 url 哪个 client 抛的)。
+            # 现在最后一行带 type 名,traceback 在 stderr 全文里供 archive / cron 日志回溯。
+            tb_lines = traceback.format_exception(type(last_error), last_error, last_error.__traceback__)
+            print("最后错误 traceback:", file=sys.stderr)
+            for ln in tb_lines:
+                print(ln, file=sys.stderr, end="")
+            # 末行(保留旧前缀让上游 splitlines()[-1] 兼容,但补上 type 名定位异常类)
+            print(f"最后错误:{type(last_error).__name__}: {last_error}", file=sys.stderr)
         return 1
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # 2026-06-14 入口级 catch:之前 1.4.1 加的 try/except 在 main() 内 backend 循环里,
+    # 但有些异常更早(如 PaddleOCRBackend.__init__ / MinerUBackend.__init__ 调
+    # httpx.URL / httpx.Client 校验,或 route 解析阶段)就抛出,绕过内部 catch。
+    # 在入口层兜底 catch BaseException + 立即 traceback.print_exc 到 stderr,
+    # 保证不管哪行抛错,完整 stack 必进 stderr,上游 run_ocr.py 扩信道后能完整读到。
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as _entry_exc:
+        print(f"convert.py 入口异常:{type(_entry_exc).__name__}: {_entry_exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        raise SystemExit(1)
