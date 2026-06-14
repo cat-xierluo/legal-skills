@@ -27,7 +27,7 @@ funasr-transcribe:
 wechat-article-fetch:
 
 # ===== 效率工具 =====
-skill-architect:
+skill-lint:
 skill-manager:
 git-batch-commit:
 

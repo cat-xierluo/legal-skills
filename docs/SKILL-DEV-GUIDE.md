@@ -78,20 +78,16 @@ SKILL.md 必须以 YAML frontmatter 开头:
 ---
 name: skill-name
 description: 本技能应在用户需要...时使用。不要用于：...
-version: "1.0.0"
-license: MIT
-author: 杨卫薪律师（微信ywxlaw）
-homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
 **字段说明**:
 
 - **必填字段**: `name`、`description`
-- **推荐字段**: `version`、`license`、`author`、`homepage`
-- `version` 是公开发布推荐字段；如存在，必须与 `CHANGELOG.md` 最新版本一致
-- `CHANGELOG.md` 仍是完整版本历史的来源，README 和 marketplace 中的版本应同步到最新版本
-- `source` 可省略；如已提供 `homepage`，不强制填写 `source`
+- **发布字段**: `version`、`license`、`author`、`homepage`、`source` 属于项目或平台发布策略，不是普通 Skill 的通用必填
+- 普通 Skill 缺少发布字段不应判错；若项目规则或发布平台要求，再按对应规则补充
+- `version` 如存在，必须与 `CHANGELOG.md` 最新版本一致
+- 不应在通用模板中硬编码个人作者、个人主页或特定仓库地址
 
 ## 4. description 写作规范
 
@@ -194,7 +190,7 @@ Skills 使用渐进式加载系统管理上下文:
 ### (1) Level 0: Frontmatter (始终加载)
 
 - SKILL.md 的 YAML frontmatter
-- 保持精简，包含 name、description，并可包含 version、license、author、homepage 等发布元数据
+- 保持精简，普通 Skill 只硬性要求 name、description；version、license、author、homepage 等发布元数据按项目规则添加
 - 用于技能发现和匹配,必须极度精简
 
 ### (2) Level 1: 核心文档 (按需加载)
@@ -228,6 +224,7 @@ Skills 使用渐进式加载系统管理上下文:
 - 明确触发场景,使用"本技能应在...时使用"格式
 - 建议补充"不要用于..."说明技能边界
 - `version` 如存在,必须与 `CHANGELOG.md` 最新版本一致
+- 不要把个人默认作者、主页、许可证写进通用 Skill 模板
 - 避免冗余关键词堆砌
 
 ### (2) SKILL.md 内容原则
@@ -447,7 +444,7 @@ find ./output -mindepth 1 -delete
 
 ### (3) 格式合规检查
 
-使用 `skill-architect` 的审查模式验证技能是否符合规范：
+使用 `skill-lint` 验证技能是否符合规范：
 
 - 目录结构合规
 - Frontmatter 格式正确
@@ -489,6 +486,8 @@ AI 代理在修改 SKILL-DEV-GUIDE.md 时,必须:
 
 | 版本   | 日期       | 更新内容                                                                                                                                                    |
 | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.4.3 | 2026-06-12 | 调整 Frontmatter 元数据分层：普通 Skill 只硬性要求 `name` / `description`，发布字段按项目规则处理 |
+| v2.4.2 | 2026-06-12 | 将格式合规检查入口从 `skill-architect` 更新为 `skill-lint`，适配审查工具重新独立定位 |
 | v2.4.1 | 2026-06-07 | 将格式合规检查入口从 `skill-lint` 更新为 `skill-architect` 审查模式，适配两个 Skill 的整合 |
 | v2.4.0 | 2026-05-20 | 更新 Frontmatter 规范：`version` 从禁止字段调整为公开发布推荐字段，新增版本同步要求，统一 ClawHub 推荐字段说明，并修正指南自引用名称                         |
 | v2.3.0 | 2026-03-01 | 整合 mgechev/skills-best-practices：§1 目录层级规则、§4 负向触发条件、§6 行数限制(<500行)、新增 §12 技能验证规范、原 §12 顺延为 §13                        |
