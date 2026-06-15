@@ -325,6 +325,10 @@ bash scripts/spawn-worker.sh \
 - OpenCode：`opencode run --format json --model <provider/model> "$(cat /tmp/task.prompt.md)"`，或交互式 `opencode --model <provider/model>`。
 - 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的命令。
 
+**`<` redirect 必须用 `bash -lc` 包**（FaroPDF Wave 1 实战，见 [DEC-033]）：`spawn-worker.sh:305` 内部 `tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"` 直接 exec command（不通过 shell），`<` / `>` / `|` / `&&` 等 shell metachar 不展开。如果 `--command` 含 `<` 重定向，必须包 `bash -lc 'real-command < /tmp/prompt.md'`，否则 worker 进程拿不到 stdin 立即退出，sentinel 等 `--max-wait` 才 timeout。错误：`--command 'claude -p < /tmp/x.md'`；正确：`--command "bash -lc 'claude -p < /tmp/x.md'"`。
+
+**claude `-p` batch 模式有 autocompact thrash 风险**（FaroPDF Wave 1 实战，见 [DEC-033]）：`-p` 是 print-and-exit 一发跑完模式，PM 无法中途纠偏。大 prompt（> 5KB）+ 大项目 codebase 会触发 claude 内部 `Autocompact is thrashing` 3 次后自动终止，worker 永远不到达终态，sentinel 等到 `--max-wait`。规避：（a）拆小 prompt < 3KB；（b）改用交互式 `claude` + `tmux send-keys` 投递 prompt（可纠偏）；（c）窄 scope worker（避免 claude 加载整个 codebase context）。
+
 **不要设 `--max-turns`**：PM 重点是检测 worker 是否真在推进，而不是限制 turn 数。长任务通过 `STATUS.json.updated_at`、阶段性 commit、`pm-monitor.sh` stale 事件和 PM 纠偏控制。
 
 Claude Code agent view / 官方后台会话可作为 Claude 专用后端：`claude agents`、`claude agents --json`、版本支持时的 `--worktree --tmux`、`--bg` 或 `/bg`。使用前以本机 `claude --help` / `claude agents --help` 为准；只有能证明独立 cwd/worktree、可巡检状态和可接管会话时，才可替代 tmux。
