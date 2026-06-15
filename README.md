@@ -50,7 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
-| 2026-06-15 | 更新     | [yuandian-law-search](skills/yuandian-law-search/) | v1.6.1 | 优化 `consolidate` 法律检索报告模板为 7 节结论先行结构，新增 `templates/legal-research-report.md`，并补充风险与后续行动参数 |
+| 2026-06-15 | 更新     | [yuandian-law-search](skills/yuandian-law-search/) | v1.7.4 | 修复 `--expand` 自动 OR 失效问题，强化案件综合/标杆类案检索的 `case-semantic` 优先、短关键词复检和零命中复检规则，并同步发布版本 |
 | 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
 | 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
 | 2026-06-12 | 更新     | [skill-lint](skills/skill-lint/) | v2.0.8 | 新增安全评估模块：将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入正式质量意见报告 |
@@ -202,7 +202,7 @@
 <td>通用·检索</td>
 <td style="word-break:break-word">元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.1</td>
+<td style="text-align:center">v1.7.4</td>
 <td>需配置 API Key</td>
 </tr>
 <tr>
