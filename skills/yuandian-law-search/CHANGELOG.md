@@ -1,5 +1,19 @@
 # 变更日志
 
+## [1.7.4] - 2026-06-15
+
+### 修复
+
+- 修复 `keyword` / `case` / `regulation` 的 `--expand` 自动 OR 逻辑：参数解析层不再把 `--search-mode` 默认填成 `and`，处理函数可正确识别"用户未显式指定"并在扩展检索时切换为 OR。
+- 修复 `references/03-report-consolidation.md` 与 `references/02-typical-workflows.md` 中重命名后的旧文件链接。
+- 统一版本号：`SKILL.md`、`scripts/yd_search.py`、`scripts/MANIFEST.json`、根 `README.md` 与 marketplace 条目同步到 `1.7.4`。
+
+### 改进
+
+- 强化案件综合分析和标杆类案场景的检索执行约束：第一轮优先 `case-semantic`，关键词检索只保留 4-6 个高信息密度词，零命中时必须改用语义检索或 OR 复检。
+- 补充 marketplace 条目，便于插件市场按当前版本发现和分发 `yuandian-law-search`。
+- 调整 `.gitignore` 例外，使本技能的 `DECISIONS.md` 与 `TASKS.md` 可纳入版本控制。
+
 ## [1.7.3] - 2026-06-15
 
 ### 修正（v1.7.1 反思有误）

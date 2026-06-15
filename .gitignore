@@ -29,6 +29,8 @@ templates/
 !skills/skill-lint/TASKS.md
 !skills/transcription-corrector/DECISIONS.md
 !skills/transcription-corrector/TASKS.md
+!skills/yuandian-law-search/DECISIONS.md
+!skills/yuandian-law-search/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 

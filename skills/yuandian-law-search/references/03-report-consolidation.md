@@ -6,7 +6,7 @@
 
 报告骨架（7 节结构、设计动机、反例、节号逻辑）见：
 
-[`00-report-design-notes.md`](00-report-design-notes.md)
+[`04-report-design-notes.md`](04-report-design-notes.md)
 
 调用 consolidate 时使用该骨架作为输出格式约定。
 
