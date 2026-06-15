@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -16,6 +16,17 @@
     "url": "https://github.com/cat-xierluo/legal-skills/issues"
   },
   "plugins": [
+    {
+      "name": "yuandian-law-search",
+      "description": "元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告",
+      "version": "1.7.4",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/yuandian-law-search",
+      "category": "productivity",
+      "tags": ["通用", "检索", "legal", "search", "yuandian"]
+    },
     {
       "name": "legal-text-format",
       "description": "将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式",

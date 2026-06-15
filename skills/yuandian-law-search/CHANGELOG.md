@@ -1,5 +1,94 @@
 # 变更日志
 
+## [1.7.4] - 2026-06-15
+
+### 修复
+
+- 修复 `keyword` / `case` / `regulation` 的 `--expand` 自动 OR 逻辑：参数解析层不再把 `--search-mode` 默认填成 `and`，处理函数可正确识别"用户未显式指定"并在扩展检索时切换为 OR。
+- 修复 `references/03-report-consolidation.md` 与 `references/02-typical-workflows.md` 中重命名后的旧文件链接。
+- 统一版本号：`SKILL.md`、`scripts/yd_search.py`、`scripts/MANIFEST.json`、根 `README.md` 与 marketplace 条目同步到 `1.7.4`。
+
+### 改进
+
+- 强化案件综合分析和标杆类案场景的检索执行约束：第一轮优先 `case-semantic`，关键词检索只保留 4-6 个高信息密度词，零命中时必须改用语义检索或 OR 复检。
+- 补充 marketplace 条目，便于插件市场按当前版本发现和分发 `yuandian-law-search`。
+- 调整 `.gitignore` 例外，使本技能的 `DECISIONS.md` 与 `TASKS.md` 可纳入版本控制。
+
+## [1.7.3] - 2026-06-15
+
+### 修正（v1.7.1 反思有误）
+
+- v1.7.1 在"争议焦点识别"小节中错误地将二分法归入"用户原始争议焦点"——二分法实际是 AI **检索之后**才提炼出来的分析工具，不是用户最初提问的内容
+- 真实情况：用户最初就已明确给出关键事实要素和法条抓手，**第一轮**应该直接用这些用户原话作为检索词，不需要先等"检索后再提炼二分法"
+- **修正 `references/02-typical-workflows.md`**：
+  - 删除"关键区分点"字段（避免诱导 AI 自己去找二分法）
+  - 新增"用户已明确的论点"字段（强调直接用用户原话作检索词）
+  - 关键提示新增"二分法是结果不是起点"
+- 路径修正：因 v1.7.2 重命名 `00-typical-workflows.md` → `02-typical-workflows.md`，编辑目标相应更新
+
+## [1.7.2] - 2026-06-15
+
+### 整理
+- **`references/` 序号重编**：6 个 `00-*.md` 工作流指南改为 `01-06` 顺序编号（按 SKILL.md Reference 文档索引的引用顺序），便于按序阅读和稳定排序
+  - `01-keyword-expansion.md`（基础：关键词怎么扩）
+  - `02-typical-workflows.md`（应用：典型场景）
+  - `03-report-consolidation.md`（专题：报告整合）
+  - `04-report-design-notes.md`（专题：报告设计原理）
+  - `05-mcp-workflow.md`（专题：MCP 协同）
+  - `06-enterprise-portrait.md`（专题：企业全息画像）
+  - 同步更新 `SKILL.md`、`scripts/MANIFEST.json` 中所有引用
+
+### 简化
+- **"新接口策略矩阵"小节去重话术**：`SKILL.md` 调用策略章节尾部表格本身保留（hall-detect / enterprise-search / enterprise-base+summary / enterprise-list 四个接口在三种策略下的具体行为），仅去掉"新/旧接口"区分话术——所有接口统一视为同一层级，按其分层套用对应策略
+
+## [1.7.1] - 2026-06-15
+
+### 工作流补充（基于近期案件检索偏差复盘）
+
+- **`references/00-typical-workflows.md` 新增 2 节强制工作流**：
+  - **争议焦点识别优先场景**：第一轮检索前必须先填 5 字段识别表（行为主体 / 角色定位 / 行为模式 / 关键区分点 / 抗辩点），避免直接按泛化法律概念展开检索
+  - **标杆案例对标检索场景**：用户第一轮提供标杆案例时，必须提取其"事实结构骨架"作为查询模板，并用"对标度评分"过滤命中案例
+- **核心理念沉淀**：
+  - 行业术语 > 法律术语（用户用什么行业说法就用什么行业说法作检索词，不要预先翻译成法律术语）
+  - 二分法思维：争议焦点背后往往有关键二分，二分点决定结论方向
+  - 主动找反面案例：搜完正面后专门搜一次"被告不担责""被告无过错"等反面表述，反面案例能反向锚定争议焦点的关键区分
+- **典型反例**：错搜泛化法律概念 → 命中与案情不匹配的偏差案型；正搜基于用户原话 + 行业术语描述事实结构（语义检索）→ 命中对位案
+
+## [1.7.0] - 2026-06-15
+
+### 重构
+- **目录结构重构**（按 skill-lint 审查建议解耦）：
+  - 35 个 API 端点文档（`01-law-vector-search.md` ~ `35-enterprise-serious-illegal.md`）从 `references/` 迁入新建的 `endpoints/`
+  - `references/MANIFEST.json` 同步迁入 `endpoints/MANIFEST.json`
+  - `references/` 仅保留工作流指南，新增 6 个 `00-*.md`：
+    - `00-keyword-expansion.md` — 关键词扩展三原则、`--expand` 参数、分阶段检索、策略兼容性
+    - `00-typical-workflows.md` — 五大场景 + AI 向用户反馈的 8 条原则
+    - `00-enterprise-portrait.md` — 企业信息类 4 个接口（`enterprise-search` / `base` / `summary` / `list`）的完整用法与 20 类 `--type` 维度
+    - `00-report-consolidation.md` — consolidate 调用方式、项目子目录组织、目标目录归档规范
+    - `00-report-design-notes.md` — 7 节"结论先行"的设计动机、反例、节号逻辑、质量要求
+    - `00-mcp-workflow.md` — 元典 MCP 接入配置、Agent 三步法、ingest 子命令、模式选型表
+- `templates/legal-research-report.md` 保留并明确为可维护的模板参考（`yd_search.py` 当前仍用代码内 f-string 渲染，模板作为格式约定）
+- SKILL.md 由 809 行压到 494 行（-39%）：4 个大章节（关键词扩展、典型工作流、企业全息、MCP 协同）拆到 references/，7 节报告与目标目录归档保留短引用
+
+### 发布治理
+- `scripts/MANIFEST.json` 同步升到 1.7.0，完整覆盖 endpoints/ + references/ + templates/ 全部文件（之前仅列了 11 个 references，updater 实际未更新 12-35）
+- README.md 中 `references/01~11-*.md` 改为 `endpoints/01~35-*.md`，`MANIFEST.txt` 改为 `MANIFEST.json`
+- "版本演进"表格新增 v1.7.0 行
+
+## [1.6.1] - 2026-06-15
+
+### 改进
+- 优化 `consolidate` 法律检索报告模板：从旧的"检索结果在前、结论在后"调整为 7 节结论先行结构，先呈现一句话定性、核心依据速查、风险与后续行动，再展示分析、方法、检索结果和明细。
+- 新增 `templates/legal-research-report.md`，沉淀可维护的法律检索报告模板，便于后续单独调整报告结构。
+- `consolidate` 报告头新增检索主体、检索平台、项目包等可核查信息；第七节检索明细改用可回溯本地链接。
+- `consolidate` 新增 `--risks` 和 `--next-actions` 参数，用于填充结论区的风险与后续行动；`--conclusion` 未传时保留明确补写提示。
+
+### 修复
+- 修复 `consolidate` 将 per-call JSON 移入项目子目录后，后续分组读取仍指向旧路径，导致法律依据/案例/法规分组可能丢失的问题。
+
+### 文档完善
+- SKILL.md 同步更新 7 节报告结构、质量要求、调用方式和目标目录归档口径。
+
 ## [1.6.0] - 2026-06-11
 
 ### 战略转向

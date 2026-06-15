@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元典法条检索 API 命令行工具（v1.3.2 - 开放平台版）"""
+"""元典法条检索 API 命令行工具（开放平台版）"""
 
 import argparse
 import hashlib
@@ -23,7 +23,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.6.0"
+CURRENT_VERSION = "1.7.4"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -1085,6 +1085,13 @@ def cmd_ingest(args):
 # ── 子命令处理 ──────────────────────────────────────────────
 
 
+def _resolve_keyword_search_mode(args, expanded):
+    """关键词类检索默认 AND；扩展检索在未显式指定时切 OR。"""
+    if args.search_mode:
+        return args.search_mode
+    return "or" if expanded else "and"
+
+
 def _print_footer(cost_label=None, archive_md=None, cwd_md=None):
     """打印调用成本提示 + 报告路径
 
@@ -1148,20 +1155,22 @@ def cmd_keyword(args):
     """法条关键词检索"""
     # 处理 --expand 扩展关键词
     keyword = args.query
+    expanded = False
     if args.expand:
         expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
         if expanded_terms:
             keyword = f"{keyword} {' '.join(expanded_terms)}"
+            expanded = True
             # 有扩展词时自动切换为 OR 模式（如果用户未显式指定 search_mode）
             if not args.search_mode:
-                args.search_mode = "or"
                 print(f"[扩展检索] 已将关键词扩展为: {keyword}（OR 模式）")
             else:
                 print(f"[扩展检索] 已将关键词扩展为: {keyword}")
 
+    search_mode = _resolve_keyword_search_mode(args, expanded)
     body = {"keyword": keyword}
-    if args.search_mode:
-        body["search_mode"] = args.search_mode
+    if search_mode:
+        body["search_mode"] = search_mode
     if args.fgmc:
         body["fgmc"] = args.fgmc
     if args.effect1:
@@ -1207,21 +1216,23 @@ def cmd_case(args):
     body = {}
     # 处理 --expand 扩展关键词
     query = args.query
+    expanded = False
     if args.expand:
         expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
         if expanded_terms:
             query = f"{query} {' '.join(expanded_terms)}" if query else " ".join(expanded_terms)
+            expanded = True
             # 有扩展词时自动切换为 OR 模式（如果用户未显式指定 search_mode）
             if not args.search_mode:
-                args.search_mode = "or"
                 print(f"[扩展检索] 已将关键词扩展为: {query}（OR 模式）")
             else:
                 print(f"[扩展检索] 已将关键词扩展为: {query}")
 
+    search_mode = _resolve_keyword_search_mode(args, expanded)
     if query:
         body["qw"] = query
-    if args.search_mode:
-        body["search_mode"] = args.search_mode
+    if search_mode:
+        body["search_mode"] = search_mode
     for field in ("ah", "title"):
         val = getattr(args, field, None)
         if val:
@@ -1342,20 +1353,22 @@ def cmd_regulation(args):
     body = {}
     # 处理 --expand 扩展关键词
     keyword = args.query
+    expanded = False
     if args.expand:
         expanded_terms = [t.strip() for t in args.expand.split(",") if t.strip()]
         if expanded_terms:
             keyword = f"{keyword} {' '.join(expanded_terms)}"
+            expanded = True
             if not args.search_mode:
-                args.search_mode = "or"
                 print(f"[扩展检索] 已将关键词扩展为: {keyword}（OR 模式）")
             else:
                 print(f"[扩展检索] 已将关键词扩展为: {keyword}")
 
+    search_mode = _resolve_keyword_search_mode(args, expanded)
     if keyword:
         body["keyword"] = keyword
-    if args.search_mode:
-        body["search_mode"] = args.search_mode
+    if search_mode:
+        body["search_mode"] = search_mode
     if args.fgmc:
         body["fgmc"] = args.fgmc
     if args.effect1:
@@ -1712,11 +1725,53 @@ ENDPOINT_CATEGORY = {
 
 CATEGORY_ORDER = ["法律依据", "司法案例", "行政法规"]
 CATEGORY_HEADING = {
-    "法律依据": "### 4.1 法律依据",
-    "司法案例": "### 4.2 司法案例",
-    "行政法规": "### 4.3 行政法规",
+    "法律依据": "### 6.1 法律依据",
+    "司法案例": "### 6.2 司法案例",
+    "行政法规": "### 6.3 行政法规",
 }
 YUANDIAN_MD_PATTERN = re.compile(r"^\d{8}_\d{6}_.+\.md$")
+
+
+def _consolidate_report_link(path):
+    """返回可回溯的本地文件链接；失败时退回文件名。"""
+    if not path:
+        return ""
+    try:
+        return path.resolve().as_uri()
+    except (OSError, ValueError):
+        return path.name
+
+
+def _consolidate_build_support_table(records, limit=12):
+    """生成结论区的核心依据速查表，让读者先看到支撑材料地图。"""
+    role_by_category = {
+        "法律依据": "确认规范依据",
+        "司法案例": "类案裁判观点",
+        "行政法规": "补充监管规则",
+    }
+    rows = []
+    for record in records[:limit]:
+        category = record.get("category") or "其他"
+        role = role_by_category.get(category, "核实或背景材料")
+        md_path = record.get("md_path")
+        md_link = _consolidate_report_link(md_path) if md_path else ""
+        report_link = f"[查看底稿]({md_link})" if md_link else "（无底稿）"
+        rows.append(
+            f"| {category} | {record.get('query_summary', '')} | {role} | {report_link} |"
+        )
+
+    if not rows:
+        return "_（本次报告未纳入可展示的检索底稿）_"
+
+    table = "\n".join([
+        "| 类型 | 检索方向 | 对结论的作用 | 底稿 |",
+        "|------|----------|--------------|------|",
+        *rows,
+    ])
+    extra_count = max(len(records) - limit, 0)
+    if extra_count:
+        table += f"\n\n_另有 {extra_count} 条底稿见第七节检索明细。_"
+    return table
 
 
 def _consolidate_slugify(s):
@@ -1839,7 +1894,8 @@ def cmd_consolidate(args):
     moved_md = 0
     copied_md = 0
     moved_json = 0
-    for md_path, json_path, _ in pairs:
+    project_pairs = []
+    for md_path, json_path, query_summary in pairs:
         project_md = project_dir / md_path.name
         if md_path.resolve() == project_md.resolve():
             pass  # 已经在子目录里（重复运行 consolidate）
@@ -1857,10 +1913,18 @@ def cmd_consolidate(args):
             if json_path.resolve() != project_json.resolve():
                 shutil.move(str(json_path), str(project_json))
                 moved_json += 1
+            json_path = project_json
+        elif (project_dir / md_path.name.replace(".md", ".json")).exists():
+            json_path = project_dir / md_path.name.replace(".md", ".json")
+        else:
+            json_path = None
+        project_pairs.append((project_md, json_path, query_summary))
+    pairs = project_pairs
 
     # 按 endpoint 类别分组
     by_category = {cat: [] for cat in CATEGORY_ORDER}
     other_records = []
+    all_records = []
 
     for md_path, json_path, query_summary in pairs:
         meta = _consolidate_extract_meta(json_path) if json_path else {}
@@ -1875,11 +1939,13 @@ def cmd_consolidate(args):
             "timestamp": meta.get("timestamp", ""),
             "cost": _consolidate_extract_cost_from_md(md_path),
             "body": body,
+            "category": category_key or "其他",
         }
         if category_key in by_category:
             by_category[category_key].append(record)
         else:
             other_records.append(record)
+        all_records.append(record)
 
     # 渲染报告
     timestamp = datetime.now().isoformat(timespec="seconds")
@@ -1896,7 +1962,20 @@ def cmd_consolidate(args):
     if args.conclusion:
         conclusion_section = args.conclusion
     else:
-        conclusion_section = "（详见第五节分析与判断）"
+        conclusion_section = (
+            "（未传入 --conclusion。面向客户、法官或内部复核交付时，"
+            "请在此补写一句话结论：可否主张、主要依据、关键风险。）"
+        )
+
+    risks_section = args.risks or (
+        "（请结合第四节分析补充：不利类案、法律适用分歧、效力时点、"
+        "地域裁判差异、证据缺口或仍需人工复核的问题。）"
+    )
+    next_actions_section = args.next_actions or (
+        "（请补充可执行步骤：补强证据、追加检索、调整诉讼请求、"
+        "准备抗辩或向客户确认事实。）"
+    )
+    support_table = _consolidate_build_support_table(all_records)
 
     # 检索结果（按类别）
     result_sections = []
@@ -1912,7 +1991,7 @@ def cmd_consolidate(args):
     if other_records:
         other_bodies = "\n\n---\n\n".join(r["body"] for r in other_records if r["body"])
         if other_bodies:
-            result_sections.append(f"### 4.4 其他检索\n\n{other_bodies}")
+            result_sections.append(f"### 6.4 其他核实材料\n\n{other_bodies}")
 
     # 检索明细表（链接指向项目子目录里的副本，json 仍用 file://）
     detail_rows = []
@@ -1921,15 +2000,15 @@ def cmd_consolidate(args):
         ts = meta.get("timestamp", "")[:16].replace("T", " ")
         endpoint = meta.get("endpoint", "").replace("/open/", "")
         cost = _consolidate_extract_cost_from_md(md_path)
-        # 链接都指向项目子目录（json 移过去了，md 是副本）
-        project_md_rel = md_path.name
-        project_json_in_subdir = project_dir / md_path.name.replace(".md", ".json")
-        if project_json_in_subdir.exists():
-            json_link = project_json_in_subdir.as_uri()
+        md_link = _consolidate_report_link(md_path) if md_path.exists() else md_path.name
+        if json_path and json_path.exists():
+            json_link = _consolidate_report_link(json_path)
         else:
-            json_link = "（无 .json）"
+            json_link = ""
+        report_links = f"[md]({md_link})"
+        report_links += f" · [json]({json_link})" if json_link else " · （无 .json）"
         detail_rows.append(
-            f"| {i} | {ts} | {query_summary} | `{endpoint}` | {cost} | [md]({project_md_rel}) · [json]({json_link}) |"
+            f"| {i} | {ts} | {query_summary} | `{endpoint}` | {cost} | {report_links} |"
         )
     detail_table = "\n".join(detail_rows)
 
@@ -1938,6 +2017,8 @@ def cmd_consolidate(args):
         f"# 法律检索报告 · {title}\n"
         f"\n"
         f"> 生成时间：{timestamp}\n"
+        f"> 检索主体：AI Agent / yuandian-law-search\n"
+        f"> 检索平台：元典开放平台 open.chineselaw.com\n"
         f"> 引用检索明细：{len(pairs)} 条\n"
         f"> 项目包：`archive/{project_name}/`\n"
         f"\n"
@@ -1949,23 +2030,46 @@ def cmd_consolidate(args):
         f"\n"
         f"{purpose_section}\n"
         f"\n"
-        f"## 三、检索思路与方法\n"
+        f"## 三、检索结论\n"
         f"\n"
-        f"{args.strategy}\n"
-        f"\n"
-        f"## 四、检索结果\n"
-        f"\n"
-        f"{chr(10).join(result_sections) if result_sections else '_（本次检索未匹配到法律/案例/法规类别）_'}\n"
-        f"\n"
-        f"## 五、分析与判断\n"
-        f"\n"
-        f"{args.analysis}\n"
-        f"\n"
-        f"## 六、检索结论\n"
+        f"### 3.1 一句话定性\n"
         f"\n"
         f"{conclusion_section}\n"
         f"\n"
-        f"## 附：本次检索明细\n"
+        f"### 3.2 核心依据速查\n"
+        f"\n"
+        f"{support_table}\n"
+        f"\n"
+        f"### 3.3 风险与不确定性\n"
+        f"\n"
+        f"{risks_section}\n"
+        f"\n"
+        f"### 3.4 后续行动\n"
+        f"\n"
+        f"{next_actions_section}\n"
+        f"\n"
+        f"## 四、分析与判断\n"
+        f"\n"
+        f"{args.analysis}\n"
+        f"\n"
+        f"## 五、检索思路与方法\n"
+        f"\n"
+        f"{args.strategy}\n"
+        f"\n"
+        f"### 5.1 检索范围\n"
+        f"\n"
+        f"| 项目 | 内容 |\n"
+        f"|------|------|\n"
+        f"| 纳入规则 | `{include_str}` |\n"
+        f"| 检索平台 | 元典开放平台 |\n"
+        f"| 生成时间 | {timestamp} |\n"
+        f"| 项目包 | `archive/{project_name}/` |\n"
+        f"\n"
+        f"## 六、检索结果\n"
+        f"\n"
+        f"{chr(10).join(result_sections) if result_sections else '_（本次检索未匹配到法律/案例/法规类别）_'}\n"
+        f"\n"
+        f"## 七、检索明细\n"
         f"\n"
         f"| # | 时间 | 检索词 | 接口 | 积分 | 报告 |\n"
         f"|---|------|--------|------|------|------|\n"
@@ -2062,7 +2166,7 @@ def build_parser():
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     p.add_argument("--sxx", action="append", help="时效性（可多次指定）")
-    p.add_argument("--search-mode", choices=["and", "or"], default="and", help="多关键词逻辑")
+    p.add_argument("--search-mode", choices=["and", "or"], default=None, help="多关键词逻辑；默认 and，带 --expand 且未指定时自动 or")
     p.add_argument("--fbrq-start", help="发布日期起点 yyyy-MM-dd")
     p.add_argument("--fbrq-end", help="发布日期终点")
     p.add_argument("--ssrq-start", help="实施日期起点")
@@ -2081,7 +2185,7 @@ def build_parser():
     p = sub.add_parser("case", help="案例关键词检索")
     p.add_argument("query", nargs="?", default="", help="全文关键词")
     p.add_argument("--expand", help="扩展关键词，逗号分隔（如 '质量纠纷,违约责任'），自动追加到原始查询")
-    p.add_argument("--search-mode", choices=["and", "or"], default="and")
+    p.add_argument("--search-mode", choices=["and", "or"], default=None, help="多关键词逻辑；默认 and，带 --expand 且未指定时自动 or")
     p.add_argument("--authority-only", action="store_true", help="仅检索权威案例")
     p.add_argument("--ah", help="案号")
     p.add_argument("--title", help="标题")
@@ -2125,7 +2229,7 @@ def build_parser():
     p = sub.add_parser("regulation", help="法规关键词检索")
     p.add_argument("query", help="关键词")
     p.add_argument("--expand", help="扩展关键词，逗号分隔，自动追加到原始查询")
-    p.add_argument("--search-mode", choices=["and", "or"], default="and")
+    p.add_argument("--search-mode", choices=["and", "or"], default=None, help="多关键词逻辑；默认 and，带 --expand 且未指定时自动 or")
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     p.add_argument("--sxx", action="append", help="时效性（可多次指定）")
@@ -2201,11 +2305,13 @@ def build_parser():
     p.add_argument("--title", help="报告标题（默认 '法律检索报告'）")
     p.add_argument("--project", help="项目子目录名（默认从 --title slugify；用于 archive/<project>/ 归类）")
     p.add_argument("--case", required=True, help="案情简介（一、案情简介）")
-    p.add_argument("--strategy", required=True, help="检索思路与方法（三、检索思路与方法）")
-    p.add_argument("--analysis", required=True, help="分析与判断（五、分析与判断）")
+    p.add_argument("--strategy", required=True, help="检索思路与方法（五、检索思路与方法）")
+    p.add_argument("--analysis", required=True, help="分析与判断（四、分析与判断）")
     p.add_argument("--include", required=True, help="要包含的 per-call 报告（逗号分隔的查询子串）")
     p.add_argument("--purpose", help="检索目的与问题（二、可选；不传则基于检索词自动推断）")
-    p.add_argument("--conclusion", help="检索结论（六、可选；不传则引用第五节）")
+    p.add_argument("--conclusion", help="检索结论（三、强烈建议传入；不传则保留补写提示）")
+    p.add_argument("--risks", help="风险与不确定性（三、可选；用于 3.3）")
+    p.add_argument("--next-actions", help="后续行动（三、可选；用于 3.4）")
     p.add_argument("--output", help="输出文件路径（默认同时写 CWD 和 archive/<project>/；指定则只写到指定路径）")
     p.set_defaults(func=cmd_consolidate)
 

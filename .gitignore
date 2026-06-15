@@ -29,6 +29,8 @@ templates/
 !skills/skill-lint/TASKS.md
 !skills/transcription-corrector/DECISIONS.md
 !skills/transcription-corrector/TASKS.md
+!skills/yuandian-law-search/DECISIONS.md
+!skills/yuandian-law-search/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 
@@ -149,6 +151,9 @@ custom-skills
 
 # myagents-cli (symlink to ~/.myagents/skills/myagents-cli)
 skills/myagents-cli
+
+# hatch-pet (symlink to ~/.myagents/skills/hatch-pet)
+skills/hatch-pet
 
 # Packed skills（打包输出目录）
 pack-skills/
