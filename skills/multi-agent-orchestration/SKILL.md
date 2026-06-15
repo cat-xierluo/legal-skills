@@ -92,6 +92,27 @@ PM 代理纪律：
 - Codex / OpenAI worker、OpenCode worker 和 custom CLI worker 使用各自 profile；不要把 Anthropic provider 环境变量当作通用 worker 环境。
 - Worker bootstrap 必须把 `which claude/codex/opencode`、版本号、cwd、关键 profile 名和 `node/npm/python/cargo` 等运行信息写入 `STATUS.json`，便于 PM 判断“环境不一样”是否影响任务。
 
+### 2.3 同宿主优先：不默认跨 Agent 工具
+
+默认让 worker 与 PM 跑在**同一个 Agent 工具**里：Claude Code 做 PM 就用 Claude Code worker，Codex 做 PM 就用 Codex worker，OpenCode 同理。**不要为了"分流额度"默认把 worker 路由到另一种 Agent 工具。** 这条优先于 §2.2 的多 backend 路由建议。
+
+为什么默认同宿主：
+- 同宿主 worker 共用一套 auth / settings / 上下文约定，启动和排障成本最低；跨工具会引入不同 profile、不同 env、不同 CLI 行为，编排层不确定性上升。
+- 多 Agent 的核心收益是**并行 + 范围隔离（独立 worktree / session）+ PM 收口**，不是"跨工具"。并行价值来自独立 worktree / session / 额度 lane，与是否换工具无关。
+- 跨工具只在有明确理由时才用（见下），不是默认。
+
+同宿主 worker 的 auth 约定（重要，避免误判环境）：
+- Claude Code PM 启动 Claude Code worker 时，worker `claude` 进程**继承 PM 的 provider env**（第三方 API 的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`，或 OAuth 会话）。即使目标 worktree 的 `.claude/settings.json` 为空或缺省，worker 也能用 PM 的 provider 跑起来，**不需要额外的 `config/*.settings.json`**。
+- 只有当需要把多个 Claude Code worker 分到**不同 provider**（例如一部分走 minimax、一部分走 glm）时，才用不同 settings 文件区分 slot；此时仍全部是 Claude Code worker，没有跨工具。
+- 判断"worker 是否拿到 provider env"的标准：worker bootstrap 把可用 `claude` 版本和 provider 来源写进 `STATUS.json`；PM 看到 provider 来源为空或报 401/403 时，再决定是补 settings 还是降级，而不是默认先跨工具。
+
+何时可以跨工具（例外，不是默认）：
+- 当前宿主 provider 额度 / 限流 / 并发槽位不足以支撑本 Wave，且无法靠"降并发 / 拆下一 Wave"解决。
+- 某个 worker 任务明显更适合另一种工具的模型能力（例如超长上下文研究、特定代码栈）。
+- 用户**明确**要求混合 worker（例如"Claude Code 做 PM，重写 worker 用 Codex"）。
+
+触发跨工具时的硬要求：PM 必须在 Wave 计划里写明为什么跨、每个 worker 的 backend / profile / auth 来源，以及跨工具带来的额外排障点。§3.1 的 provider slot 分配仍适用，但 slot 默认全部落在 PM 宿主工具上；跨工具 slot 是显式例外，需要在 Wave 摘要里标注。
+
 ## 3. 标准流程
 
 1. **读任务源与项目配置**：若项目提供 `.claude/orchestration.config.json` 或等价配置，先读取 trunk、任务源、验证命令、可复制配置和 hook 边界；再用 `cross-agent-coordination` 判断可执行项、依赖和归属。
@@ -492,7 +513,7 @@ worker backend 选择（subagent / tmux / Agent Teams）见 §2.1。
 
 worker 完成后：
 1. 检查 `git status --short`、`git diff --check main...HEAD`、PR diff 范围。
-2. 需要 review 时交叉审阅，分支作者不审自己的 PR。
+2. 需要 review 时交叉审阅，分支作者不审自己的 PR。**review 工具按项目类型选，不要默认 code-review**：代码项目用 code-review subagent；书稿 / 文档 / 写作项目用 `writing-reviewer`（或项目领域审稿 skill）；研究 / 配置类 PR 用对应内容审查。项目应在自己的 `AGENTS.md` 里写明用哪个 review skill；没写时 PM 按项目性质判断，不假定 code-review。
 3. 合并、push、PR 编号写入 commit、Issue 关闭等动作遵循 `git-workflow`。
 4. 若 PM review 发现问题，优先通过 tmux / agent view / inbox 给原 worker 发送 review correction；worker 应追加修复 commit、重新运行验证并更新 PR，不由 PM 默认代写。
 5. PM 复核 correction commit、验证结果和 PR diff 后，再决定是否进入 merge。

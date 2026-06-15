@@ -168,7 +168,7 @@ case "$BACKEND" in
     [ -n "$SETTINGS" ] && parts+=(--settings "$SETTINGS")
     [ -n "$MODEL" ] && parts+=(--model "$MODEL")
     if [ "$MODE" = "batch" ]; then
-      parts+=(-p --output-format stream-json --permission-mode "$PERMISSION_MODE")
+      parts+=(-p --verbose --output-format stream-json --permission-mode "$PERMISSION_MODE")
     else
       parts+=(--permission-mode "$PERMISSION_MODE")
     fi
