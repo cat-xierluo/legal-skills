@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | 更新     | [yuandian-law-search](skills/yuandian-law-search/) | v1.6.1 | 优化 `consolidate` 法律检索报告模板为 7 节结论先行结构，新增 `templates/legal-research-report.md`，并补充风险与后续行动参数 |
 | 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
 | 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
 | 2026-06-12 | 更新     | [skill-lint](skills/skill-lint/) | v2.0.8 | 新增安全评估模块：将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入正式质量意见报告 |
@@ -57,7 +58,6 @@
 | 2026-06-11 | 更新     | [new-case](skills/new-case/) | v1.3.5 | 商标预设拆 2 个业务子模板（注册 7 目录含独立商标注册证 / 异议复审无效 8 目录含独立商标注册证 + 证据材料）；命名规范文档占位符化（去除真实客户 / 案件 / 申请号）；新增 1 客户含 ≥2 独立业务子项目时按「1 根 + N 子项目」拆分的整理规则，每个子项目独立 7/8 目录模板 |
 | 2026-06-11 | 更新     | [md2word](skills/md2word/) | v1.0.1 | 修复图片 src 解析：支持 URL 解码、相对路径（基于 md 文件目录）、markdown title 标签去除；新增表格单元格内 markdown 图片语法支持，图片按 5cm 宽插入 + 居中斜体 alt 文字作图注，路径不存在时降级原样写入不丢内容 |
 | 2026-06-11 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.4.0 | 修复 PaddleOCR/MinerU 每日页数配额超限时的模型回退路径：`_check_daily_limit` 移入 try 块，使配额异常能触发 `_try_model_fallback` 兜底（v1.3.4 引入的「每日页数限额与模型回退」设计正式收口） |
-| 2026-06-08 | 新上传   | [transcription-corrector](skills/transcription-corrector/) | v1.0.7 | 新增转录稿纠错与轻度二次优化：按用户词典纠正同音字与英文专有名称漂移，可选合并同发言人发言和清理标点；与 course-generator 共用词典格式，原始文件保持不动 |
 
 </details>
 
@@ -200,9 +200,9 @@
 <tr>
 <td><a href="skills/yuandian-law-search/"><strong>yuandian-law-search</strong></a></td>
 <td>通用·检索</td>
-<td style="word-break:break-word">元典法条与案例检索，通过元典 API 检索中国法律法规条文和案例。支持法条语义/关键词/详情检索和案例关键词/向量语义检索，共 5 种检索模式</td>
+<td style="word-break:break-word">元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.4</td>
+<td style="text-align:center">v1.6.1</td>
 <td>需配置 API Key</td>
 </tr>
 <tr>
