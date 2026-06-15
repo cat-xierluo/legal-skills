@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.6.0"
+version: "1.6.1"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -142,11 +142,9 @@ scripts/yd-run --network-check
 - **积分报告**：简要说明消耗即可，不强调节约
 - **额外行为**：法条检索后发现相关法规（如司法解释），主动追加 regulation 检索；用户需求模糊时，宁可多查也不漏查
 
-### 新接口策略矩阵
+### 接口策略速查
 
-> 旧接口 `enterprise` 和 `enterprise-detail` 的策略行为不变，沿用上方"附属接口"的通用规则。
-
-新增接口（hall-detect、enterprise-search、enterprise-base、enterprise-summary、enterprise-list）在三种策略下的具体行为：
+部分接口在通用规则之上有特殊行为约束（按积分成本或权限敏感度划分）：
 
 | 接口 | 积分 | balanced | economical | aggressive |
 |------|------|----------|-----------|------------|
@@ -155,172 +153,13 @@ scripts/yd-run --network-check
 | **enterprise-base / enterprise-summary** | 10 | 用户明确要求时使用，告知积分消耗 | 需二次确认 | 直接使用 |
 | **enterprise-list** | 5-10/次 | 用户指定类型时调用，提醒多种类型会累积积分 | 每次只查一种类型，展示全部可用类型让用户选择 | 企业尽调场景可一次性查询多个相关类型（如涉诉+行政处罚+失信） |
 
-## 关键词扩展与分阶段检索
+## 关键词扩展与典型工作流
 
-关键词检索默认是精确匹配，用户搜索"刑事案件管辖权"不会自动命中"知识产权管辖权"等相关概念。本节说明 AI 应如何主动扩展检索范围、分阶段提炼精准结果。
+AI 在执行检索前应主动扩展关键词（上位概念 / 并列概念 / 程序-实体关联），
+并在多场景下遵循典型工作流与积分反馈原则。详见：
 
-### 关键词扩展原则
-
-AI 在执行关键词检索前，应先分析用户查询是否涉及可扩展的法律概念：
-
-1. **上位概念扩展**：将具体概念扩展到上位概念。例如"商标侵权"→ 同时检索"知识产权侵权"
-2. **并列概念扩展**：关联同一层级的平行概念。例如"管辖权异议"→ 同时考虑"管辖权转移""指定管辖"
-3. **程序-实体关联**：从实体法关键词关联到程序法关键词。例如"正当防卫"→ 也关注"防卫过当""紧急避险"
-
-### 扩展关键词工作流
-
-当 AI 判断用户查询涉及可扩展概念时，按以下流程操作：
-
-1. **识别核心关键词**：从用户查询中提取核心法律概念
-2. **生成扩展词列表**：基于上述原则，列出 2-5 个相关关键词
-3. **分阶段检索**：
-   - **第一阶段（广撒网）**：用核心关键词执行一次检索（使用 `--search-mode or` 扩大命中范围）
-   - **第二阶段（精提炼）**：根据第一阶段结果，提炼更精准的关键词组合再检索一次
-4. **结果合并与去重**：将两次检索结果合并，按相关性排序展示
-5. **扩展方向提示**：检索完成后，向用户建议可能相关的扩展检索方向
-
-### 脚本参数支持
-
-关键词检索、案例检索和法规检索新增 `--expand` 参数，用于一次性传入多个扩展关键词：
-
-```bash
-# 法条关键词扩展检索
-scripts/yd-run keyword "刑事案件 管辖权" --expand "知识产权管辖,级别管辖,专门管辖" --search-mode or
-
-# 案例关键词扩展检索
-scripts/yd-run case "买卖合同 瑕疵担保" --expand "质量纠纷,违约责任" --search-mode or
-
-# 法规关键词扩展检索
-scripts/yd-run regulation "民法典 合同" --expand "买卖合同,租赁合同" --search-mode or
-```
-
-`--expand` 参数的行为：
-- 将扩展关键词追加到原始查询中，使用 `--search-mode or` 模式进行检索
-- 等效于将原始关键词与扩展关键词用空格连接后以 OR 模式检索
-- 不带 `--expand` 时保持原有的精确匹配行为
-
-### 分阶段检索示例
-
-用户问："关于刑事案件管辖权有哪些规定？"
-
-**第一阶段（广撒网）**：
-```bash
-scripts/yd-run keyword "刑事案件 管辖权 级别管辖 地域管辖 专门管辖" --search-mode or --sxx 现行有效
-```
-
-**分析第一阶段结果**：发现大量结果涉及"级别管辖"和"地域管辖"两个核心分支
-
-**第二阶段（精提炼）**：
-```bash
-scripts/yd-run keyword "级别管辖 中级法院" --search-mode and --sxx 现行有效
-scripts/yd-run keyword "地域管辖 犯罪地" --search-mode and --sxx 现行有效
-```
-
-### 扩展方向提示
-
-检索完成后，AI 应根据检索结果向用户建议相关的扩展方向。提示格式：
-
-```
-本次检索完成了对"刑事案件管辖权"的查询，消耗 XX 积分。
-
-💡 相关的扩展检索方向：
-1. 级别管辖 —— 中级/高级/最高法院的管辖分工
-2. 地域管辖 —— 犯罪地、被告人居住地的管辖规则
-3. 专门管辖 —— 军事法院、知识产权法院等专门管辖
-如需深入了解某个方向，请告诉我。
-```
-
-### 策略兼容性
-
-关键词扩展行为与三种检索策略的关系：
-
-| 策略 | 扩展行为 | 分阶段检索 | 积分控制 |
-|------|----------|-----------|---------|
-| **balanced** | AI 判断是否需要扩展，主动执行 | 可执行两阶段检索 | 第二阶段前告知用户将额外消耗积分 |
-| **economical** | 不主动扩展，仅用户要求时执行 | 不执行，一次检索完成 | 仅扩展时提示积分消耗 |
-| **aggressive** | 自动扩展所有相关概念，不等待确认 | 自动执行多阶段检索 | 不限制，追求最大覆盖面 |
-
-## 典型工作流与用户引导
-
-AI 在完成检索后，应**主动告知用户检索结果摘要和积分消耗**，并根据场景推荐后续操作。
-
-### 法条研究场景
-
-用户问："正当防卫在什么情况下会超过必要限度？"
-
-1. AI 进行法条语义检索（10 积分）
-2. 向用户展示关键法条内容（如刑法第20条、民法典总则编司法解释第31条等）
-3. 告知用户积分消耗："本次检索消耗 10 积分"
-4. 主动推荐后续操作："如果需要了解相关判例，我可以帮你找案例"
-
-### 案例研究场景
-
-用户问："有没有防卫过当的实际案例？"
-
-1. AI 进行案例语义检索（10 积分）
-2. 案例语义检索返回的摘要已包含争议焦点和裁判要旨，大多数情况下已够用
-3. 向用户展示案例摘要，告知积分消耗
-4. **case-detail 的触发取决于策略**：
-   - **balanced / economical**：等待用户主动触发。如用户对某个案例感兴趣，可说"帮我看看第2个案例的完整判决书"——此时再调 case-detail（每个 10 积分）
-   - **aggressive**：AI 自动获取最相关的 2-3 个案例详情，无需用户指令
-
-### 关键词精确检索场景
-
-用户问："帮我找广西的买卖合同纠纷判决书"
-
-1. AI 进行案例关键词检索（10 积分）
-2. 关键词检索返回的摘要较短，仅含基本信息（案号、法院、简要内容）
-3. 向用户展示结果列表和积分消耗
-4. 等待用户选择：如用户对某个案例感兴趣，再获取完整判决书（每个 10 积分）
-
-> **策略提示**：aggressive 模式下，AI 会自动对结果中最相关的 2-3 个案例调用 case-detail，无需等待用户指令。
-
-### 企业尽调场景
-
-用户问："帮我查一下XX公司的背景信息"
-
-1. enterprise-search 定位目标企业（1 积分）
-2. enterprise-base 获取基本信息（10 积分）
-3. enterprise-summary 聚合总览（10 积分），了解哪些维度有数据
-4. 根据总览结果，用 enterprise-list 深挖具体维度（5 积分/次）
-
-> **策略差异**：economical 下 enterprise-base/enterprise-summary 需二次确认；enterprise-list 每次只查一种类型。aggressive 下可一次性查询多个相关类型（如涉诉+行政处罚+失信）。
-
-### 幻觉检测场景
-
-用户在对话中引用了某法条或案例，AI 希望核验准确性
-
-1. 用户在对话中引用了某法条或案例
-2. AI 建议进行幻觉检测以核验准确性
-3. 确认调用（策略相关）：
-   - balanced：告知"检测需要 50 积分"后等待用户确认
-   - economical：二次确认（第一次展示积分提醒，等用户再次确认才调用）
-   - aggressive：直接使用，无需确认
-4. 展示检测结果：法规存在性、语义比对结论、案例核实情况
-
-### 企业风险排查场景
-
-用户问："这家公司有没有什么风险？"
-
-1. enterprise-summary 快速总览（10 积分），识别风险分布
-2. 针对高风险项用 enterprise-list 深挖（如涉诉文书、失信被执行人、行政处罚）
-3. 汇总风险画像
-
-### AI 向用户反馈的原则
-
-1. **每次检索后主动说明积分消耗**："本次检索消耗 10 积分"
-2. **多步检索时告知累计消耗**："本次检索消耗 10 积分（本次对话累计 30 积分）"
-3. **完整判决书的触发取决于策略**：balanced/economical 由用户主动触发；aggressive 由 AI 自动获取最相关的 2-3 个
-4. **案例语义检索的摘要通常已够用**：只有用户明确要求查看完整判决书时才深入（aggressive 除外）
-5. **法条语义检索已含全文**：不需要额外补充
-6. **用自然语言与用户沟通**：不要向用户暴露命令行语法，AI 后台执行脚本即可
-7. **补充检索取决于策略**：balanced/economical 一次只用一种检索模式；aggressive 对重要问题自动同时运行语义+关键词检索，合并去重
-8. **检索报告 .md 自动落盘**：每次实际检索（cache miss 时）会同时落盘两份结构化 Markdown 报告，可作为内容底稿附卷/分享：
-   - `archive/<ts>_<query>.md`：与 archive JSON 配对，技能内部归档，便于复盘
-   - `<CWD>/<ts>_<query>.md`：用户当前工作目录副本（运行命令时所在的文件夹），便于直接放入案件文件夹
-   - 报告内容包含元信息（时间/接口/关键词/积分/原始数据路径/工作目录副本）+ 检索结果 + 引用来源
-   - footer 会输出报告路径，AI 应在对话中告知用户（特别是用户需要"内容底稿"时）
-   - 默认双副本写入；可用 `--no-report` 完全跳过、`--no-cwd-report` 仅跳过工作目录副本
+- [`references/01-keyword-expansion.md`](references/01-keyword-expansion.md) — 关键词扩展三原则、`--expand` 参数、分阶段检索示例、策略兼容性
+- [`references/02-typical-workflows.md`](references/02-typical-workflows.md) — 法条 / 案例 / 关键词精确 / 企业尽调 / 幻觉检测 / 企业风险排查六大场景 + AI 向用户反馈的 8 条原则（含 per-call 报告落盘与禁止复制到目标目录的硬规则）
 
 ## 检索模式选择
 
@@ -425,69 +264,9 @@ scripts/yd-run hall-detect "根据《中华人民共和国数据保护法》第3
 
 ## 企业全息画像
 
-### 12. 企业检索（轻量候选列表，enterprise-search）
+企业信息类接口（`enterprise-search` / `enterprise-base` / `enterprise-summary` / `enterprise-list`）的完整用法、`--type` 可选维度（涉诉、商标、专利、对外投资、股权冻结等 20 类）与积分消耗表见：
 
-**每次调用消耗 1 积分**。按名称检索企业，返回候选列表（仅含 ID、名称、信用代码），用于定位目标企业后调用其他企业接口。
-
-```bash
-scripts/yd-run enterprise-search "华为" --top-k 5
-```
-
-### 13. 企业基本信息（enterprise-base）
-
-根据企业 ID 或统一社会信用代码获取企业完整信息（含股东、核心成员、分支机构等）。
-
-```bash
-scripts/yd-run enterprise-base --uscc "9144030071526726XG"
-```
-
-### 14. 企业聚合总览（enterprise-summary）
-
-一次调用获取企业各维度数据的统计摘要。
-
-```bash
-scripts/yd-run enterprise-summary --id "企业ID"
-```
-
-### 15. 企业分项列表（enterprise-list）
-
-查询企业各维度详细记录，支持分页。**每次调用消耗 5-10 积分**（涉诉统计和涉诉文书 10 积分，其余 5 积分）。
-
-```bash
-# 查询企业涉诉文书
-scripts/yd-run enterprise-list --type writ-list --uscc "9144030071526726XG"
-
-# 查询企业对外投资
-scripts/yd-run enterprise-list --type invest --uscc "9144030071526726XG" --page 1 --size 10
-
-# 查询企业商标
-scripts/yd-run enterprise-list --type brand --uscc "9144030071526726XG"
-```
-
-#### 可用类型
-
-| TYPE | 名称 | 积分 |
-|------|------|------|
-| invest | 对外投资 | 5 |
-| brand | 商标 | 5 |
-| patent | 专利 | 5 |
-| soft-right | 软件著作权 | 5 |
-| works-right | 作品著作权 | 5 |
-| icp | 网站备案 | 5 |
-| change-info | 变更记录 | 5 |
-| writ-agg | 涉诉信息统计 | 10 |
-| writ-list | 涉诉文书 | 10 |
-| court-session | 开庭公告 | 5 |
-| court-notice | 法院公告 | 5 |
-| execution | 失信被执行人 | 5 |
-| executed-person | 被执行人 | 5 |
-| frozen-equity | 股权冻结 | 5 |
-| punishment | 行政处罚 | 5 |
-| pledge | 股权出质 | 5 |
-| guaranty | 对外担保 | 5 |
-| abnormal | 经营异常 | 5 |
-| tax | 欠税公告 | 5 |
-| serious-illegal | 严重违法 | 5 |
+[`references/06-enterprise-portrait.md`](references/06-enterprise-portrait.md)
 
 ## 通用参数说明
 
@@ -509,49 +288,56 @@ scripts/yd-run enterprise-list --type brand --uscc "9144030071526726XG"
 
 ## Reference 文档索引
 
-### 接口清单
+### 工作流指南
 
-`references/MANIFEST.json` 记录全部已适配接口的元数据（端点、子命令、分层、分类），以及平台接口排查历史。下次排查新增接口时，更新该文件的 `check_history` 即可。
+- [关键词扩展与分阶段检索](references/01-keyword-expansion.md)
+- [典型工作流与用户引导](references/02-typical-workflows.md)
+- [法律检索报告与目标目录归档](references/03-report-consolidation.md)
+- [法律检索报告 7 节设计原理](references/04-report-design-notes.md)
+- [MCP 协同工作流](references/05-mcp-workflow.md)
+- [企业全息画像](references/06-enterprise-portrait.md)
 
-### API 端点文档
+### 接口清单与 API 端点文档
+
+`endpoints/MANIFEST.json` 记录全部已适配接口的元数据（端点、子命令、分层、分类），以及平台接口排查历史。下次排查新增接口时，更新该文件的 `check_history` 即可。
 
 | # | 文件 | 接口 |
 |---|------|------|
-| 01 | [law-vector-search.md](references/01-law-vector-search.md) | 法条语义检索 |
-| 02 | [law-keyword-search.md](references/02-law-keyword-search.md) | 法条关键词检索 |
-| 03 | [law-detail.md](references/03-law-detail.md) | 法条详情 |
-| 04 | [case-semantic-search.md](references/04-case-semantic-search.md) | 案例语义检索 |
-| 05 | [case-keyword-search.md](references/05-case-keyword-search.md) | 普通案例关键词检索 |
-| 06 | [case-keyword-search-authority.md](references/06-case-keyword-search-authority.md) | 权威案例关键词检索 |
-| 07 | [case-detail.md](references/07-case-detail.md) | 案例详情 |
-| 08 | [regulation-search.md](references/08-regulation-search.md) | 法规关键词检索 |
-| 09 | [regulation-detail.md](references/09-regulation-detail.md) | 法规详情 |
-| 10 | [enterprise-search.md](references/10-enterprise-search.md) | 企业名称检索 |
-| 11 | [enterprise-detail.md](references/11-enterprise-detail.md) | 企业详情 |
-| 12 | [hall-detect.md](references/12-hall-detect.md) | 幻觉检测 |
-| 13 | [enterprise-search-lightweight.md](references/13-enterprise-search-lightweight.md) | 企业检索（轻量） |
-| 14 | [enterprise-base-info.md](references/14-enterprise-base-info.md) | 企业基本信息 |
-| 15 | [enterprise-aggregation-summary.md](references/15-enterprise-aggregation-summary.md) | 企业聚合总览 |
-| 16 | [enterprise-out-invest.md](references/16-enterprise-out-invest.md) | 对外投资 |
-| 17 | [enterprise-brand.md](references/17-enterprise-brand.md) | 商标 |
-| 18 | [enterprise-patent.md](references/18-enterprise-patent.md) | 专利 |
-| 19 | [enterprise-soft-right.md](references/19-enterprise-soft-right.md) | 软件著作权 |
-| 20 | [enterprise-works-right.md](references/20-enterprise-works-right.md) | 作品著作权 |
-| 21 | [enterprise-icp.md](references/21-enterprise-icp.md) | 网站备案 |
-| 22 | [enterprise-change-info.md](references/22-enterprise-change-info.md) | 变更记录 |
-| 23 | [enterprise-writ-agg.md](references/23-enterprise-writ-agg.md) | 涉诉信息统计 |
-| 24 | [enterprise-writ-list.md](references/24-enterprise-writ-list.md) | 涉诉文书 |
-| 25 | [enterprise-court-session-notice.md](references/25-enterprise-court-session-notice.md) | 开庭公告 |
-| 26 | [enterprise-court-notice.md](references/26-enterprise-court-notice.md) | 法院公告 |
-| 27 | [enterprise-executions.md](references/27-enterprise-executions.md) | 失信被执行人 |
-| 28 | [enterprise-executed-person.md](references/28-enterprise-executed-person.md) | 被执行人 |
-| 29 | [enterprise-frozen-equity.md](references/29-enterprise-frozen-equity.md) | 股权冻结 |
-| 30 | [enterprise-punishment.md](references/30-enterprise-punishment.md) | 行政处罚 |
-| 31 | [enterprise-pledge.md](references/31-enterprise-pledge.md) | 股权出质 |
-| 32 | [enterprise-guaranty.md](references/32-enterprise-guaranty.md) | 对外担保 |
-| 33 | [enterprise-abnormal-operation.md](references/33-enterprise-abnormal-operation.md) | 经营异常 |
-| 34 | [enterprise-corporate-tax.md](references/34-enterprise-corporate-tax.md) | 欠税公告 |
-| 35 | [enterprise-serious-illegal.md](references/35-enterprise-serious-illegal.md) | 严重违法 |
+| 01 | [law-vector-search.md](endpoints/01-law-vector-search.md) | 法条语义检索 |
+| 02 | [law-keyword-search.md](endpoints/02-law-keyword-search.md) | 法条关键词检索 |
+| 03 | [law-detail.md](endpoints/03-law-detail.md) | 法条详情 |
+| 04 | [case-semantic-search.md](endpoints/04-case-semantic-search.md) | 案例语义检索 |
+| 05 | [case-keyword-search.md](endpoints/05-case-keyword-search.md) | 普通案例关键词检索 |
+| 06 | [case-keyword-search-authority.md](endpoints/06-case-keyword-search-authority.md) | 权威案例关键词检索 |
+| 07 | [case-detail.md](endpoints/07-case-detail.md) | 案例详情 |
+| 08 | [regulation-search.md](endpoints/08-regulation-search.md) | 法规关键词检索 |
+| 09 | [regulation-detail.md](endpoints/09-regulation-detail.md) | 法规详情 |
+| 10 | [enterprise-search.md](endpoints/10-enterprise-search.md) | 企业名称检索 |
+| 11 | [enterprise-detail.md](endpoints/11-enterprise-detail.md) | 企业详情 |
+| 12 | [hall-detect.md](endpoints/12-hall-detect.md) | 幻觉检测 |
+| 13 | [enterprise-search-lightweight.md](endpoints/13-enterprise-search-lightweight.md) | 企业检索（轻量） |
+| 14 | [enterprise-base-info.md](endpoints/14-enterprise-base-info.md) | 企业基本信息 |
+| 15 | [enterprise-aggregation-summary.md](endpoints/15-enterprise-aggregation-summary.md) | 企业聚合总览 |
+| 16 | [enterprise-out-invest.md](endpoints/16-enterprise-out-invest.md) | 对外投资 |
+| 17 | [enterprise-brand.md](endpoints/17-enterprise-brand.md) | 商标 |
+| 18 | [enterprise-patent.md](endpoints/18-enterprise-patent.md) | 专利 |
+| 19 | [enterprise-soft-right.md](endpoints/19-enterprise-soft-right.md) | 软件著作权 |
+| 20 | [enterprise-works-right.md](endpoints/20-enterprise-works-right.md) | 作品著作权 |
+| 21 | [enterprise-icp.md](endpoints/21-enterprise-icp.md) | 网站备案 |
+| 22 | [enterprise-change-info.md](endpoints/22-enterprise-change-info.md) | 变更记录 |
+| 23 | [enterprise-writ-agg.md](endpoints/23-enterprise-writ-agg.md) | 涉诉信息统计 |
+| 24 | [enterprise-writ-list.md](endpoints/24-enterprise-writ-list.md) | 涉诉文书 |
+| 25 | [enterprise-court-session-notice.md](endpoints/25-enterprise-court-session-notice.md) | 开庭公告 |
+| 26 | [enterprise-court-notice.md](endpoints/26-enterprise-court-notice.md) | 法院公告 |
+| 27 | [enterprise-executions.md](endpoints/27-enterprise-executions.md) | 失信被执行人 |
+| 28 | [enterprise-executed-person.md](endpoints/28-enterprise-executed-person.md) | 被执行人 |
+| 29 | [enterprise-frozen-equity.md](endpoints/29-enterprise-frozen-equity.md) | 股权冻结 |
+| 30 | [enterprise-punishment.md](endpoints/30-enterprise-punishment.md) | 行政处罚 |
+| 31 | [enterprise-pledge.md](endpoints/31-enterprise-pledge.md) | 股权出质 |
+| 32 | [enterprise-guaranty.md](endpoints/32-enterprise-guaranty.md) | 对外担保 |
+| 33 | [enterprise-abnormal-operation.md](endpoints/33-enterprise-abnormal-operation.md) | 经营异常 |
+| 34 | [enterprise-corporate-tax.md](endpoints/34-enterprise-corporate-tax.md) | 欠税公告 |
+| 35 | [enterprise-serious-illegal.md](endpoints/35-enterprise-serious-illegal.md) | 严重违法 |
 
 ## 历史检索记录
 
@@ -578,14 +364,39 @@ scripts/yd-run raw /open/law_vector_search "正当防卫" --extra '{"fatiao_filt
 
 多次检索之后，把 per-call 报告汇总成一份完整的法律检索报告。**这是律师/客户看的交付物**，per-call 报告是数据底稿。
 
-### 6 节标准结构
+### 7 节"结论先行"标准结构
 
-1. **案情简介** — 当事人、争议焦点、当前阶段
-2. **检索目的与问题** — 本次检索要回答的法律问题
-3. **检索思路与方法** — 关键词组合、筛选条件、检索顺序
-4. **检索结果** — 按 endpoint 自动分组：4.1 法律依据 / 4.2 司法案例 / 4.3 行政法规 / 4.4 其他
-5. **分析与判断** — 法条对本案的适用、案例的参考价值
-6. **检索结论** — 一句话定性 + 风险点 + 后续建议
+**核心原则**：用户最想知道的是**最终结论**（能不能做、怎么做、风险在哪），法条和案例只是用来核实结论的支撑材料。所以结构应是 **结论先行 → 分析支撑 → 检索底稿垫后**。
+
+模板文件位于 `templates/legal-research-report.md`；`scripts/yd-run consolidate` 会按同一结构自动生成报告。
+
+1. **案情简介** — 当事人、争议焦点、当前阶段（最少必要）
+2. **检索目的与问题** — 本次检索要回答的法律问题（1-3 个核心 Q）
+3. **检索结论** ⭐ — **最先读到的内容**：
+   - 3.1 一句话定性（"能做/不能做" + 法律依据）
+   - 3.2 核心论点的判例支撑速查（用表格/列表，让用户 30 秒内 get 到）
+   - 3.3 风险点（诚实告知，不要只说好的）
+   - 3.4 后续行动（具体可执行的步骤）
+4. **分析与判断** — 抗辩应对、法条适用、诉讼请求结构、赔偿酌定、证据准备
+5. **检索思路与方法** — 关键词组合、筛选条件、检索顺序（备查）
+6. **检索结果** — 按 endpoint 分组：6.1 法律依据 / 6.2 司法案例 / 6.3 行政法规 / 6.4 其他（核实材料）
+7. **检索明细** — 表格，链接到每条 per-call 报告（末尾，使用可回溯本地链接）
+
+### 检索报告质量要求
+
+- **结论区必须能独立阅读**：3.1-3.4 应让律师、客户或法官先得到答案，再决定是否看底稿
+- **核心依据用表格速查**：不要让读者从几十条法条/案例中自行拼结论
+- **方法区保留检索痕迹**：写清关键词、筛选条件、平台、时间、纳入规则
+- **结果区只放支撑材料**：法条、案例、法规按类型分组，不替代第四节分析
+- **风险必须明示**：包括不利类案、法律适用分歧、地域差异、时效或证据缺口
+- **无法确认的信息标注待补充**：不要把检索不到或材料未提及的事实写成确定结论
+
+> **节号从 1 重新编号**（案情=1，结论=3，结果=6，明细=7），不沿用 1-6 顺序编号；体现"结论在第 3 节"的视觉位置。
+
+**反例**（曾出现过的旧版结构）：
+- 案情 → 目的 → 思路 → 检索结果 → 分析 → 结论
+- 用户反馈：检索结果（法条案例）全是"核实材料"，要翻到最后才看到结论 → 太累
+- 新版：结论放到第 3 节，用户看完 3.1-3.4 就能得到 80% 答案
 
 末尾附"本次检索明细"表格，链接到每条 per-call 报告。
 
@@ -598,6 +409,9 @@ scripts/yd-run consolidate \
     --case "案情：..." \
     --strategy "检索思路：..." \
     --analysis "分析与判断：..." \
+    --conclusion "一句话结论：..." \
+    --risks "主要风险：..." \
+    --next-actions "后续行动：..." \
     --include "违约金,高空抛物"
 ```
 
@@ -605,9 +419,10 @@ scripts/yd-run consolidate \
 - `--include` 必填：逗号分隔的查询子串，明确指定"本次任务范围"（不取最近 N 条）
   - 匹配规则：CWD 中所有符合 `<8位时间戳>_<6位时间戳>_<查询>.md` 命名的 .md 文件，文件名包含任一子串即被纳入
 - `--project` 可选：项目子目录名。默认从 `--title` slugify（如 "张某买卖合同违约金调整" → "张某买卖合同违约金调整"）。用于 `archive/<project>/` 归类
-- `--title` / `--purpose` / `--conclusion` / `--output` 可选
+- `--title` / `--purpose` / `--conclusion` / `--risks` / `--next-actions` / `--output` 可选
   - `--purpose` 不传则基于检索词自动生成
-  - `--conclusion` 不传则提示"详见第五节"
+  - `--conclusion` 强烈建议传入；不传会在 3.1 保留补写提示
+  - `--risks` / `--next-actions` 不传会保留补写提示
   - `--output` 默认同时写 CWD 和 `archive/<project>/`；指定则只写到指定路径
 
 ### 项目子目录组织
@@ -644,76 +459,23 @@ CWD 也有法律检索报告副本，per-call .md 仍在 CWD（工作副本）
 
 per-call .md 是数据底稿，可独立查看；session 报告是主交付物，附案情/思路/判断；项目子目录是组织容器。
 
+## 目标目录归档规范（强制）
+
+目标目录（通常是案件文件夹 `02 - 案件分析` / `03 - 法律研究` 等）与 AI 进程的 CWD 是不同的两个位置。
+目标目录只允许出现：整合后的法律检索报告 + 外部素材 + 基于整合报告再生成的下游文件；
+**禁止** per-call 检索记录、检索明细 JSON、AI 进程 CWD 的工作副本。
+
+完整规则（标准工作流 4 步、反例、验证清单 4 条）见：
+
+[`references/03-report-consolidation.md`](references/03-report-consolidation.md#目标目录归档规范强制)
+
 ## MCP 协同工作流（v1.6.0+）
 
-元典已发布官方 MCP（https://open.chineselaw.com/mcp-config），3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。本 skill 的价值现在转向"**归档 + 法律检索报告生成**"——数据接入由 MCP 负责，本 skill 负责沉淀。
+元典官方 MCP（https://open.chineselaw.com/mcp-config）已发布，3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。本 skill 的价值现在转向"**归档 + 法律检索报告生成**"——数据接入由 MCP 负责，本 skill 负责沉淀。
 
-### 接入元典 MCP
+完整工作流（元典 MCP 接入配置、Agent 三步法、ingest 子命令、模式选型表）见：
 
-模板在 `scripts/.mcp.json.example`（与 `scripts/.env.example` 同目录）。把它复制为客户端能识别位置的 `.mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "yuandian-law":    { "url": "https://open.chineselaw.com/mcp/law/stream",    "headers": {"Authorization": "Bearer ${YD_API_KEY}"} },
-    "yuandian-case":   { "url": "https://open.chineselaw.com/mcp/case/stream",   "headers": {"Authorization": "Bearer ${YD_API_KEY}"} },
-    "yuandian-company":{ "url": "https://open.chineselaw.com/mcp/company/stream","headers": {"Authorization": "Bearer ${YD_API_KEY}"} }
-  }
-}
-```
-
-设置环境变量后重启客户端，agent 即可自动获得 `mcp__yuandian_law__*`、`mcp__yuandian_case__*`、`mcp__yuandian_company__*` 工具。
-
-### AI Agent 三步工作流
-
-```
-Step 1: 调 MCP 拿数据（agent 直接调，不经 yd-run）
-  mcp__yuandian_law__yuandian_law_vector_search("违约金", sxx="现行有效")
-  → 拿到 API 响应 JSON
-
-Step 2: 喂给 yd-run ingest 归档 + 生成 .md
-  echo "<上一步的 JSON>" | yd-run ingest \
-      --query "违约金 调整" \
-      --endpoint "/open/law_vector_search"
-  → archive/<ts>_违约金_调整.json + .md（同直接 API 模式）
-  → CWD/<ts>_违约金_调整.md 工作副本
-
-Step 3: 多次 ingest 后，调 yd-run consolidate 生成法律检索报告
-  yd-run consolidate --project "case-2024-xxx" \
-      --case "..." --strategy "..." --analysis "..." \
-      --include "违约金"
-  → archive/case-2024-xxx/ 项目包 + 6 节标准报告
-```
-
-### ingest 子命令详细
-
-```bash
-# 方式 1: 文件输入
-yd-run ingest --query "<Q>" --endpoint "/open/<E>" --input <file.json>
-
-# 方式 2: stdin pipe（agent 友好）
-cat result.json | yd-run ingest --query "<Q>" --endpoint "/open/<E>"
-
-# 必填
-#   --query:     用于生成文件名 + 元信息
-#   --endpoint:  对应 API 路径，用于 routing 到 formatter（见 INGEST_ROUTING）
-# 可选
-#   --cost:        成本标签（默认 "10 积分"）
-#   --no-report:   跳过 .md 报告生成
-#   --no-cwd-report: 跳过 CWD 副本
-```
-
-`--endpoint` 取值见 INGEST_ROUTING 路由表（36 个 endpoint 全部覆盖，包括元典 MCP 暴露的全部 24 个数据 tools）。
-
-### 何时用哪种模式
-
-| 场景 | 推荐模式 |
-|---|---|
-| agent 调 mcp__yuandian__* | 走 MCP + yd-run ingest（v1.6.0 推荐）|
-| 客户端没装 MCP / 单次脚本 | 走 yd-run search/case/... 直接 API（v1.5.x 兼容）|
-| 调试 / 看 raw JSON | 走 yd-run raw |
-
-两种模式产出完全一致（archive/ 格式、.md 元信息、consolidate 路由），可混用。
+[`references/05-mcp-workflow.md`](references/05-mcp-workflow.md)
 
 ## 版本更新
 
