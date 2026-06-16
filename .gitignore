@@ -19,18 +19,6 @@ templates/
 .agents/*.json
 **/DECISIONS.md
 **/TASKS.md
-!skills/article2book/DECISIONS.md
-!skills/article2book/TASKS.md
-!skills/legal-ocr/DECISIONS.md
-!skills/legal-ocr/TASKS.md
-!skills/git-workflow/DECISIONS.md
-!skills/git-workflow/TASKS.md
-!skills/skill-lint/DECISIONS.md
-!skills/skill-lint/TASKS.md
-!skills/transcription-corrector/DECISIONS.md
-!skills/transcription-corrector/TASKS.md
-!skills/yuandian-law-search/DECISIONS.md
-!skills/yuandian-law-search/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 
@@ -157,3 +145,4 @@ skills/hatch-pet
 
 # Packed skills（打包输出目录）
 pack-skills/
+.claude/plans/myagents/
