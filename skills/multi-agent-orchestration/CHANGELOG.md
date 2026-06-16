@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.16.2] - 2026-06-15
+
+### Fixed (文档层)
+- **`SKILL.md §6 启动方式`** 加 2 段醒目警示，来源 FaroPDF v0.2 Wave 1 spawn ISS-071 worker 实战（[DEC-033]）：
+  - **`<` redirect 必须用 `bash -lc` 包**：`spawn-worker.sh:305` `tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"` 直接 exec command 不通过 shell，shell metacharacter 不展开。错误：`--command 'claude -p < /tmp/x.md'`；正确：`--command "bash -lc 'claude -p < /tmp/x.md'"`。
+  - **claude `-p` batch 模式 autocompact thrash 风险**：大 prompt（> 5KB）+ 大 codebase context 会触发 claude 内部 `Autocompact is thrashing` 3 次后自动终止，worker 永远不到达终态。规避：拆小 prompt < 3KB / 用交互式 claude + tmux send-keys / 窄 scope worker。
+
+### Reason
+- 2026-06-15 FaroPDF v0.2 推进期间，PM 按 §3.1 启动 Wave 1（3 worker ISS-071/067/070 并行）。spawn ISS-071 一个验证链路，遇到 2 个 skill 层 bug：
+  1. `--command 'claude -p < /tmp/iss-071-prompt.md'` 启动后 worker 立即退出，sentinel 等 7211s 后 SENTINEL_TIMEOUT。
+  2. 修复 Bug 1 后 worker 真启动 + 写 STATUS.json bootstrap，4 分钟后 claude 进程 autocompact thrash 自动停止，sentinel 持续轮询。
+- PM 决策取消 Wave 1，改单 session 直推 ISS-071。详见项目侧 `FaroPDF/docs/DECISIONS.md` DEC-104 + skill 侧 [DEC-033]。
+- 本次只改文档警示，不动 `spawn-worker.sh` 脚本（自动检测 shell metachar 留 follow-up，避免覆盖用户的非 bash shell 选择）。
+
+### Follow-up (TASKS 已登记)
+- `spawn-worker.sh` opt-in `--shell-wrap` flag 自动包 `bash -lc`（待证据足够时升级）
+- `templates/worker-prompt.md` 加专门小节说明 claude -p 模式限制 + 替代方案
+- memory `project-multi-agent-state` 补 Wave 1 / Bug A&B 经验
+
+---
+
 ## [1.16.1] - 2026-06-05
 
 ### Fixed
