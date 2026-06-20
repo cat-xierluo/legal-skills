@@ -53,9 +53,9 @@
 
 ## 五、业界参考但不照搬
 
-本技能参考了两类业界思路：
+本技能参考了两类业界思路（v0.2.0 依据 DR-5 前沿调研更新表述）：
 
-- **Claude skill creator 的 eval 验证思路**（benchmark case + 黄金答案 + 回归测试）：借鉴"用熟悉材料做基准"的思路，但不要求自动化黄金答案比对——法律输出的人工 taste 判断无法被自动比对替代。
+- **Anthropic eval 方法论 + Claude skill creator 的 eval 验证思路**（test cases / expected behavior / assertion grading / benchmark / blind A / description tuning）：借鉴"用熟悉材料做基准"的思路。但 v0.2.0 起**不再使用"黄金答案"这一术语**——DR-5 明确标注该术语未在 Anthropic 官方公开材料核验到（详见 `references/eval-methodology.md` 第二节）。改用"参考解三档口径"（reference-rich / reference-light / reference-free）：可枚举任务写 reference solution 用 deterministic + LLM rubric 对照；多解任务写 ideal response 加 material omission/incorrectness/hallucination 规则；强主观任务用 LeMAJ 式 reference-free 分解 + pairwise 专家偏好。法律输出的人工 taste 判断无法被自动比对替代。
 - **作者既有六维度评价标准**：降级为合同型场景的参考起点。
 
 两者都不照搬，因为法律场景的多样性决定了任何单一基准都不通用。
