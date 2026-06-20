@@ -5,9 +5,9 @@
 > 所有字号已按印刷可读性校准：节点标签 18px（物理 2.88mm = 8.2pt）。
 > 详见 style-guide.md 的物理尺寸推算。
 
-> **配色说明（v1.5.0）**：以下骨架示例统一用 **P8 中性灰白（旧极简）** 的兼容色值（白底 `#FFFFFF` + 蓝 `#3498DB` + 浅蓝填充 `#EBF5FB`），仅为占位演示。**新生成图默认改用 P1-P7 柔和调色板**——把骨架里的 `fill="#FFFFFF"`（画布底）替换为所选色组的画布浅底、`#3498DB` 替换为强调色、`#EBF5FB` 替换为淡填充。详见 style-guide.md §5.2 调色板与 §5.4 颜色语法约束。
+> **配色说明（v1.5.0）**：以下骨架示例是**透明背景**——**不画任何背景矩形**，直接画模块。模块填充色用 P1-P8 调色板的**内部模块色**（详见 style-guide.md §5.2）。骨架中示例统一用 P1 雾蓝系的几个模块色（`#D6E4F0` `#C5D9E8` `#B8CFE0` 等）占位演示——照搬时把相邻模块换成同组不同色，让一图内部 4-6 种柔和色区分。文字色统一深灰 `#2D3436`/`#636E72`。
 >
-> **字体说明**：骨架中的 `<style>text { font-family... }</style>` 块在新图中**必须删除**——字体由渲染环境继承默认无衬线。这是已验证的 Obsidian 渲染硬约束（memory `feedback_svg_embed_syntax`）。下面骨架保留 `<style>` 仅为历史示例，照搬时请去掉该块。
+> **字体说明**：骨架中**不再出现** `<style>text { font-family... }</style>` 块——字体由渲染环境继承默认无衬线。这是已验证的 Obsidian 渲染硬约束（memory `feedback_svg_embed_syntax`）。若个别环境需强制字体，在每个 `<text>` 上单独写 `font-family`，绝不在 `<svg>` 开标签或 `<style>` 块统一设置。
 
 ---
 
@@ -53,33 +53,32 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <style>text { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }</style>
   <defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker></defs>
-  <rect width="720" height="400" fill="#FFFFFF"/>
+  <!-- 注意：无背景矩形，透明底 -->
 
-  <!-- 节点 1（起始，强调色） -->
-  <rect x="40" y="176" width="140" height="48" rx="6" fill="#EBF5FB" stroke="#3498DB" stroke-width="2"/>
+  <!-- 节点 1（起始，P1 雾蓝系模块色 1） -->
+  <rect x="40" y="176" width="140" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="110" y="205" text-anchor="middle" font-size="18" fill="#2D3436">识别场景</text>
 
   <!-- 箭头 -->
   <line x1="184" y1="200" x2="199" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- 节点 2 -->
-  <rect x="207" y="176" width="140" height="48" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="2"/>
+  <!-- 节点 2（模块色 2，与节点 1 不同色） -->
+  <rect x="207" y="176" width="140" height="48" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
   <text x="277" y="205" text-anchor="middle" font-size="18" fill="#2D3436">梳理流程</text>
 
   <!-- 箭头 -->
   <line x1="351" y1="200" x2="365" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- 节点 3 -->
-  <rect x="373" y="176" width="140" height="48" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="2"/>
+  <!-- 节点 3（模块色 3） -->
+  <rect x="373" y="176" width="140" height="48" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
   <text x="443" y="205" text-anchor="middle" font-size="18" fill="#2D3436">编写</text>
 
   <!-- 箭头 -->
   <line x1="517" y1="200" x2="532" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- 节点 4（终止，深边框） -->
-  <rect x="540" y="176" width="140" height="48" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="3"/>
+  <!-- 节点 4（终止，模块色 4，深边框强调） -->
+  <rect x="540" y="176" width="140" height="48" rx="6" fill="#DCE8F2" stroke="#2D3436" stroke-width="3"/>
   <text x="610" y="205" text-anchor="middle" font-size="18" fill="#2D3436">验证</text>
 </svg>
 ```
@@ -113,18 +112,18 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <rect width="720" height="400" fill="#FFFFFF"/>
+  <!-- 无背景矩形，透明底 -->
 
-  <!-- 层 1（顶层，强调色） -->
-  <rect x="70" y="80" width="580" height="70" rx="6" fill="#EBF5FB" stroke="#3498DB" stroke-width="2"/>
+  <!-- 层 1（顶层，P1 雾蓝系模块色 1） -->
+  <rect x="70" y="80" width="580" height="70" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="122" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">应用层</text>
 
-  <!-- 层 2 -->
-  <rect x="70" y="170" width="580" height="70" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="2"/>
+  <!-- 层 2（模块色 2，相邻层不同色） -->
+  <rect x="70" y="170" width="580" height="70" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="212" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">能力层</text>
 
-  <!-- 层 3（底层） -->
-  <rect x="70" y="260" width="580" height="70" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="2"/>
+  <!-- 层 3（底层，模块色 3） -->
+  <rect x="70" y="260" width="580" height="70" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="302" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">基础层</text>
 </svg>
 ```
@@ -152,18 +151,18 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <rect width="720" height="400" fill="#FFFFFF"/>
+  <!-- 无背景矩形，透明底 -->
 
-  <!-- 左列标题（橙色） -->
-  <rect x="40" y="50" width="300" height="48" rx="6" fill="#FEF5E7" stroke="#F39C12" stroke-width="2"/>
+  <!-- 左列标题（P8 混合系暖米色） -->
+  <rect x="40" y="50" width="300" height="48" rx="6" fill="#E8D8C0" stroke="#2D3436" stroke-width="2"/>
   <text x="190" y="80" text-anchor="middle" font-size="18" font-weight="600" fill="#2D3436">方案 A</text>
 
-  <!-- 右列标题（蓝色） -->
-  <rect x="380" y="50" width="300" height="48" rx="6" fill="#EBF5FB" stroke="#3498DB" stroke-width="2"/>
+  <!-- 右列标题（P8 混合系雾蓝色，与左列不同色相） -->
+  <rect x="380" y="50" width="300" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="530" y="80" text-anchor="middle" font-size="18" font-weight="600" fill="#2D3436">方案 B</text>
 
-  <!-- 行单元 -->
-  <rect x="40" y="118" width="300" height="60" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="1.5"/>
+  <!-- 行单元（同列内浅一档模块色） -->
+  <rect x="40" y="118" width="300" height="60" rx="6" fill="#EDDFC8" stroke="#2D3436" stroke-width="1.5"/>
   <text x="190" y="153" text-anchor="middle" font-size="18" fill="#2D3436">特点 1</text>
   <!-- ... -->
 </svg>
@@ -192,18 +191,18 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <rect width="720" height="400" fill="#FFFFFF"/>
+  <!-- 无背景矩形，透明底 -->
 
   <!-- 连线（底层） -->
   <line x1="360" y1="174" x2="360" y2="87" stroke="#2D3436" stroke-width="1.5"/>
   <!-- ... -->
 
-  <!-- 核心节点 -->
-  <rect x="290" y="174" width="140" height="52" rx="6" fill="#EBF5FB" stroke="#3498DB" stroke-width="2"/>
+  <!-- 核心节点（P1 雾蓝系模块色 1，深边框强调） -->
+  <rect x="290" y="174" width="140" height="52" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2.5"/>
   <text x="360" y="206" text-anchor="middle" font-size="18" font-weight="600" fill="#2D3436">核心概念</text>
 
-  <!-- 外围节点 -->
-  <rect x="300" y="50" width="120" height="44" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="1.5"/>
+  <!-- 外围节点（每个用同组不同模块色，避免色块连片） -->
+  <rect x="300" y="50" width="120" height="44" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="1.5"/>
   <text x="360" y="78" text-anchor="middle" font-size="18" fill="#2D3436">要素 A</text>
   <!-- ... -->
 </svg>
@@ -239,10 +238,10 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <rect width="720" height="400" fill="#FFFFFF"/>
+  <!-- 无背景矩形，透明底 -->
 
-  <!-- 根节点 -->
-  <rect x="280" y="100" width="160" height="48" rx="6" fill="#EBF5FB" stroke="#3498DB" stroke-width="2"/>
+  <!-- 根节点（P1 雾蓝系模块色 1） -->
+  <rect x="280" y="100" width="160" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="130" text-anchor="middle" font-size="18" font-weight="600" fill="#2D3436">根概念</text>
 
   <!-- 连线 -->
@@ -250,8 +249,8 @@ x 居中：260（偏左，右侧可放注释）
   <line x1="360" y1="148" x2="360" y2="260" stroke="#2D3436" stroke-width="1.5"/>
   <line x1="410" y1="148" x2="530" y2="260" stroke="#2D3436" stroke-width="1.5"/>
 
-  <!-- 子节点 -->
-  <rect x="120" y="260" width="140" height="48" rx="6" fill="#FFFFFF" stroke="#2D3436" stroke-width="2"/>
+  <!-- 子节点（每个分支不同模块色） -->
+  <rect x="120" y="260" width="140" height="48" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
   <text x="190" y="289" text-anchor="middle" font-size="18" fill="#2D3436">分支 A</text>
   <!-- ... -->
 </svg>
