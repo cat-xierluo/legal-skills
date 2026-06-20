@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.5.0] - 2026-06-20
+
+### 新增
+- **全彩配色系统（#122，书籍全彩印刷）**：放宽"白底 + 深灰线 + 单一强调色" → 允许浅色柔和背景 + 多色配色。
+  - `references/style-guide.md` §5.2 预定义柔和调色板 8 组（P1 雾蓝 / P2 浅青 / P3 嫩绿 / P4 暖米 / P5 浅紫 / P6 浅粉 / P7 暖白 / P8 中性灰白兼容旧白底），每组含画布浅底 + 强调色 + 淡填充色值。
+  - §5.3 打印友好约束：文字对比度 ≥ 4.5:1（WCAG AA）、画布明度 L*≥88、禁高饱和荧光、红绿不并置、CMYK 转换不偏色、灰度降级强调节点与底色差 ≥15%。
+- `references/review-checklist.md` ③ 视觉目检新增配色对比度检查项 + prompt 模板配色问项。
+
+### 优化
+- 颜色仅用 `fill` / `stroke` 属性内联（**不引入 `<style>` 块 / 不在 `<svg>` 开标签写 font-family / 不用 class·CSS 变量引色**），保持 xmllint well-formed + rsvg 无警告 + Obsidian 渲染三重兼容（沿用 `feedback_svg_embed_syntax` 硬约束）。
+- `references/layout-templates.md` 顶部标注历史骨架的 `<style>` 块新图须删除。
+
+### 边界
+- 仅新生成图采用新配色；main 既有 34 张白底单色 SVG 保持稳定不回改（作者待确认）。P8 兼容旧白底方案作兜底。
+
 ## [v1.4.0] - 2026-06-17
 
 ### 新增
