@@ -575,6 +575,9 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/parallel-lessons.md`：tmux/Agent Teams 实战坑点。
 - `references/agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
 - `references/legal-domain-templates.md`：法律项目拆解样例。
+- `references/qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
+- `references/workbuddy-cli-worker.md`：WorkBuddy / CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
+- `references/agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
 
 官方文档：
 - Claude Code agent view: `https://code.claude.com/docs/en/agent-view`
