@@ -142,7 +142,7 @@ Wave 启动前，PM 必须写清：
 
 Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
 - 一个 slot 表示一条可并发额度 lane：`backend + settings/profile path + provider + model + max_concurrency`。
-- Claude Code 第三方 provider 用具体 settings 文件区分，例如 `config/minimax.settings.json`、`config/glm.settings.json`；真实 settings 文件保持本地 ignored，不提交。
+- Claude Code 第三方 provider 用具体 settings 文件区分，例如 `config/minimax-M3.settings.json`、`config/glm-5.2.settings.json`；真实 settings 文件保持本地 ignored，不提交。
 - Codex 用 Codex profile / model 区分；OpenCode 用 `provider/model` profile 区分；custom worker 写明实际命令来源。
 - 默认同一 provider/settings 文件最多放 3 个 worker；只有低风险任务且上一 Wave 表现稳定时才放到 4 个。需要 5-6 个 worker 时，优先拆到第二 provider 或 Codex/OpenCode/local profile。
 - 高风险任务（共享契约、Tauri/Rust、本机依赖、锁文件）优先给上一 Wave 指令遵循和验证表现最好的 profile，且每个高风险共享域通常只开 1 个 worker。
@@ -152,10 +152,10 @@ Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
 
 | Worker | 任务风险 | Backend | Settings/Profile | Slot |
 |--------|----------|---------|------------------|------|
-| W1 | 高 | Claude Code | `config/minimax.settings.json` | `minimax-1` |
-| W2 | 中 | Claude Code | `config/minimax.settings.json` | `minimax-2` |
-| W3 | 低 | Claude Code | `config/glm.settings.json` | `glm-1` |
-| W4 | 低 | Claude Code | `config/glm.settings.json` | `glm-2` |
+| W1 | 高 | Claude Code | `config/minimax-M3.settings.json` | `minimax-1` |
+| W2 | 中 | Claude Code | `config/minimax-M3.settings.json` | `minimax-2` |
+| W3 | 低 | Claude Code | `config/glm-5.2.settings.json` | `glm-1` |
+| W4 | 低 | Claude Code | `config/glm-5.2.settings.json` | `glm-2` |
 | W5 | 文档/研究 | Codex | `codex:<profile>` | `codex-1` |
 | W6 | 重复性低风险 | OpenCode/custom | `<provider/model or command label>` | `opencode-1` |
 
@@ -300,7 +300,7 @@ eval "$(bash scripts/render-runtime-profile.sh \
   --api-provider minimax \
   --model claude-sonnet-4-5 \
   --provider-slot minimax-1 \
-  --settings config/minimax.settings.json)"
+  --settings config/minimax-M3.settings.json)"
 
 bash scripts/spawn-worker.sh \
   --project /path/to/repo \
@@ -365,7 +365,7 @@ tmux send-keys -t legal-ch01 Enter
 
 纠偏 prompt 应包含四件事：停止什么、回到哪个任务、哪些文件/动作仍然禁止、下一步最小可执行动作。不要只写“你偏题了”。
 
-完整字段见 `references/checkpoint-files.md`，可复制模板见 `templates/checkpoint-status.json`、`templates/checkpoint-result.md` 和 `templates/checkpoint-patch-summary.md`。PM 默认只读这些 checkpoint 和最终 diff，不定时拉完整日志。
+完整字段见 `references/03-checkpoint-files.md`，可复制模板见 `templates/checkpoint-status.json`、`templates/checkpoint-result.md` 和 `templates/checkpoint-patch-summary.md`。PM 默认只读这些 checkpoint 和最终 diff，不定时拉完整日志。
 
 可选自动 PM 监控脚本（保留 Agent Teams inbox、任务状态、Git SHA、PR 状态和 tmux session 多维巡检能力）：
 
@@ -426,7 +426,7 @@ Codex PM：
 
 > 适用：Wave 6 之后，每个 worker 配套启一个 sentinel，PM 由 harness task-notification
 > 事件驱动地唤醒，零 idle token 消耗，保留多轮纠偏能力。设计依据见
-> `references/sentinel-design.md`；DEC-031 supersede DEC-030 的限定条件判断。
+> `references/04-sentinel-design.md`；DEC-031 supersede DEC-030 的限定条件判断。
 
 **模式**：每个 worker 配一个 `scripts/sentinel.sh` 进程。Sentinel 轮询 `STATUS.json`，
 读到 `done | failed | blocked | stopped` 时 capture tmux pane tail、`tmux kill-session`、
@@ -563,21 +563,28 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 `scripts/terminal-split.sh` 只在对应终端场景下需要额外工具：Kitty 需要 `kitty @`，WezTerm 需要 `wezterm cli`，macOS GUI 终端自动化依赖 `osascript`，Warp/Ghostty/Zed/Terminal.app 分屏或新标签能力取决于本机应用和辅助功能授权。
 
-完整依赖矩阵见 `references/runtime-dependencies.md`。依赖检查脚本只报告状态，不安装软件、不启动 worker、不改配置。
+完整依赖矩阵见 `references/02-runtime-dependencies.md`。依赖检查脚本只报告状态，不安装软件、不启动 worker、不改配置。
 
 ## 10. 参考
 
 只在需要细节时读取：
-- `references/model-selection-matrix.md`：模型与执行模式选择。
+
+核心编排参考（机制 / 依赖 / 收口）：
+- `references/01-model-selection-matrix.md`：模型与执行模式选择。
+- `references/02-runtime-dependencies.md`：按模式拆分的本地依赖矩阵和安装建议。
+- `references/03-checkpoint-files.md`：`STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md` 的字段和模板。
+- `references/04-sentinel-design.md`：PM 巡检（sentinel）bash 模式设计与信号。
+- `references/05-legal-domain-patterns.md`：法律项目拆解样例（诉讼/非诉阶段模型、任务字段、Agent 路由）。
 - `config/claude-provider-settings.example.json`：Claude Code 第三方 API provider settings 模板。
-- `references/runtime-dependencies.md`：按模式拆分的本地依赖矩阵和安装建议。
-- `references/checkpoint-files.md`：`STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md` 的字段和模板。
-- `references/parallel-lessons.md`：tmux/Agent Teams 实战坑点。
-- `references/agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
-- `references/legal-domain-templates.md`：法律项目拆解样例。
-- `references/qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
-- `references/workbuddy-cli-worker.md`：WorkBuddy / CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
-- `references/agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
+
+Agent CLI worker backend（先看总览，再查具体工具）：
+- `references/06-agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
+- `references/07-qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
+- `references/08-workbuddy-cli-worker.md`：WorkBuddy / CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
+
+实战经验与排障：
+- `references/09-parallel-lessons.md`：tmux/Agent Teams 实战坑点。
+- `references/10-agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
 
 官方文档：
 - Claude Code agent view: `https://code.claude.com/docs/en/agent-view`
@@ -594,6 +601,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `scripts/worktree-status.sh`：单 worker 只读总览，展示 metadata、checkpoint、tmux 和 git 状态。
 - `scripts/clean-worktree.sh`：worker session/worktree 安全清理，默认 dry-run，清理前展示 metadata 摘要。
 - `scripts/smoke-tmux-worker.sh`：临时 repo 端到端 smoke test；只在修改 Skill 脚本后运行。
+- `scripts/smoke-provider-settings.sh`：逐个验证 `config/*.settings.json` 能启动 Claude Code 并返回响应；新增或改 provider 后运行。
 - `scripts/lint-wait-script.sh`：wait/monitor/custom wait 脚本 lint；只在修改 wait/monitor 脚本后运行。
 - `scripts/terminal-split.sh`：可选可视化辅助，保留 iTerm2、Kitty、WezTerm、Warp、Ghostty、Zed、Terminal.app 支持；默认编排不依赖它。
 

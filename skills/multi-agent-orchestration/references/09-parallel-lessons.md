@@ -232,9 +232,12 @@ opencode acp
 Claude Code worker 默认按第三方 API provider settings 启动。每个 provider 建议一个本地 settings 文件：
 
 ```text
-config/minimax.settings.json
-config/deepseek.settings.json
-config/glm.settings.json
+config/minimax-M3.settings.json
+config/minimax-M2.7.settings.json
+config/deepseek-v4-pro.settings.json
+config/deepseek-v4-flash.settings.json
+config/glm-5.2.settings.json
+config/glm-5.1.settings.json
 ```
 
 settings 内容参考 `config/claude-provider-settings.example.json`。真实 token 文件必须放在本地忽略路径，不提交到仓库。

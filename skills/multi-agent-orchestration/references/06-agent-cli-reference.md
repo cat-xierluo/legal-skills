@@ -581,7 +581,7 @@ gemini --approval-mode yolo -p "重构这个模块"
 
 ## 7. QoderWork CLI（`qoderclicn` / `qodercli`）
 
-> 详细研究见 `references/qoderwork-cli-worker.md`。本节为速查补充。
+> 详细研究见 `references/07-qoderwork-cli-worker.md`。本节为速查补充。
 
 ### 7.1 核心参数速查
 

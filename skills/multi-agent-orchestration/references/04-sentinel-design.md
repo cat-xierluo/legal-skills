@@ -158,7 +158,7 @@ Sentinel 依赖 `STATUS.json` 终态事件，不依赖 commit。但：
 - `scripts/smoke-sentinel.sh`：端到端 smoke test
 - `scripts/lint-wait-script.sh`：把 sentinel.sh 加进默认 lint
 - `templates/pm-sentinel-response.md`：PM 收到 notification 后的响应清单
-- `references/checkpoint-files.md`：STATUS.json 终态定义
+- `references/03-checkpoint-files.md`：STATUS.json 终态定义
 - `DEC-030`：被 supersede 的历史判断
 - `DEC-031`：sentinel 模式 DEC（新增）
 

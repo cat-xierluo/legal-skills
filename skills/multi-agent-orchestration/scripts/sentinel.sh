@@ -7,7 +7,7 @@
 # kill the worker's tmux session, then exit. Harness re-invokes the parent
 # agent via task-notification regardless of exit code.
 #
-# Validated 2026-06-05 by 3-phase spike (see references/sentinel-design.md).
+# Validated 2026-06-05 by 3-phase spike (see references/04-sentinel-design.md).
 
 set -euo pipefail
 
