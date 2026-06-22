@@ -2,6 +2,23 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [1.6.0] - 2026-06-22
+
+### 新增
+
+- 在 `references/algorithm-software-disclosure-format.md` 新增“公式与符号体例”章节，沉淀符号表先行、维度用下标、符号唯一、公式分隔符统一和跨节同形五条规则，并给出评分/调度场景的正反例对照
+- 在 `SKILL.md` 新增“迭代与版本留痕”小节，明确同一 archive 主题下的产物修订按时间戳另存、维护 `08-修订记录.md`、方案级修订不得回到 T0/T1 重新挖掘
+
+### 改进
+
+- `SKILL.md` 核心强规则补入第 16 条（公式与符号体例）和第 17 条（archive 迭代留痕）
+- 交底书模板和初稿模板在“示例跑通过程”处补入公式体例指引，指回 `references/algorithm-software-disclosure-format.md`
+- `references` 路由表为 `algorithm-software-disclosure-format.md` 补入“+ 公式与符号体例”
+
+### 文档完善
+
+- 同步更新 `TASKS.md` 和 `DECISIONS.md`，记录本次公式体例与迭代留痕补强
+
 ## [1.5.3] - 2026-05-28
 
 ### 改进
