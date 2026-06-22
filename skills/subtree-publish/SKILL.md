@@ -190,6 +190,7 @@ bash scripts/create-release.sh <name> [--dry-run]
 - `git subtree push` 在大仓库上可能较慢，这是正常的
 - 独立仓库中的文件位于根目录（不是嵌套的子目录）
 - Git subtree 只推送已 commit 的文件，受 monorepo 根目录 `.gitignore` 控制
+- 若 monorepo 用 symlink 让 `.claude/skills/<name>` 指向 `skills/<name>`（如 legal-skills），手动提交 skill 自身改动时 `git add .claude/skills/<name>/...` 会报“pathspec 位于符号链接中”；改用真实物理路径 `git add skills/<name>/...` 即可。本 skill 的推送和打包脚本内部已统一使用 `skills/` 前缀，不受此 symlink 影响。
 
 ## 配置文件
 
