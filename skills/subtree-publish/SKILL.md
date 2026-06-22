@@ -174,9 +174,11 @@ bash scripts/create-release.sh <name> [--dry-run]
 | `**/*.pyc`、`**/*.log` | Python 编译缓存、日志 |
 | `**/*.tmp`、`**/*.bak` | 临时/备份文件 |
 | `**/.env`、`**/.env.*` | 环境变量文件（含密钥风险） |
+| `DECISIONS.md` | 本地决策记录与工作日志，含内部细节，不对外发布 |
+| `TASKS.md` | 本地任务清单，不属于 skill 运行时文件 |
 | `config/*.json` | 本地个性化配置，仅保留 `*.example.json` |
 
-排除规则的完整性通过比对 `.gitignore` 中 `**/archive/*`、`**/output/*`、`**/__pycache__/` 等规则保证。脚本不主动读 `.gitignore`，而是用显式 `-x` 模式覆盖常见场景。新增排除需求时同步更新此处表格。
+排除规则的完整性通过比对 `.gitignore` 中 `**/archive/*`、`**/output/*`、`**/__pycache__/`、`**/DECISIONS.md`、`**/TASKS.md` 等规则保证。脚本不主动读 `.gitignore`，而是用显式 `-x` 模式覆盖常见场景。新增排除需求时同步更新此处表格。
 
 ### 版本跃迁
 
