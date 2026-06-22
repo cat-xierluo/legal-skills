@@ -107,6 +107,9 @@ skills/*/output/*
 skills/clawhub-sync/config/sync-records.yaml
 skills/clawhub-sync/config/sync-allowlist.yaml
 
+# Transcription corrector runtime config (real credentials, .example kept)
+skills/transcription-corrector/config/config.env
+
 # Case directories created by court-sms skill (contain real case data)
 # Pattern: （YYYY）XXXX号 .../
 （*号/
@@ -142,6 +145,9 @@ skills/myagents-cli
 
 # hatch-pet (symlink to ~/.myagents/skills/hatch-pet)
 skills/hatch-pet
+
+# tool-creator (symlink to ~/.myagents/skills/tool-creator)
+skills/tool-creator
 
 # Packed skills（打包输出目录）
 pack-skills/
