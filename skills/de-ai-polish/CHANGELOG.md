@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.0.1] - 2026-06-23
+
+### 改进
+
+- 补齐 Voice Calibration 的样本使用边界：只使用用户提供或确认可用于本次任务的作者样本，不主动抓取或推测私人样本。
+- 明确 Voice Calibration 只学习表达特征，不冒充作者身份、不复制样本原句或高辨识短语、不引入样本事实。
+- 在 Step 7 与 `reference/quality-scoring.md` 增加 voice profile 附加门禁：profile 明显偏离、反例复现、样本复刻或事实污染均需回炉 Step 4/5。
+
+### 文档完善
+
+- 更新 `reference/personal-style-guide.md`：新增“样本与身份边界”“匹配门禁”，并将提取步骤改为先确认样本边界。
+- 更新独立 README 与发布索引口径，补齐 Voice Calibration 与 v2.0.1 版本同步。
+
+## [2.0.0] - 2026-06-22
+
+### 核心变更：Voice Calibration 改造 Step 5
+
+**问题背景**：v1.x 的 `reference/personal-style-guide.md` 是单一参考样本提炼出的静态特征清单，把"这个作者的习惯"当成了通用规则。Step 5 注入风格只能套抽象正向特征，缺少"从任意目标作者样本提取声音"的可操作流程——当用户想让改写贴近某个具体作者（如自己、某位律师）时，无能为力。
+
+### 新增
+
+- **Voice Calibration 流程**（`reference/personal-style-guide.md`）：
+  - voice profile 七维度：句长分布 / 词选层级 / 段落开头习惯 / 标点习惯 / 口头禅与过渡 / 观点密度 / 语气倾向
+  - 提取步骤（通读 → 逐维填 profile → 标记反例 → 产出声音画像）
+  - author profile 可填模板
+- **Step 5 两条路径**：有作者样本 → 走 Voice Calibration 提取 voice profile 并匹配（样本优先）；无样本 → 用默认正向特征。
+
+### 变更
+
+- `reference/personal-style-guide.md` 原有 8 节特征重新定位为"无样本时的默认 voice"，加版本记录 v2.0；比喻、句式统一标注为示例（来自参考样本，非必须复现的通用规则）。
+
+### 保持不变
+
+- Protected Spans、场景分流、评分门禁（v1.5.0）不动。
+- 7 类污染类型学（v1.4.0）不动；三轴分离仍是观察项。
+
 ## [1.5.0] - 2026-06-22
 
 ### 核心变更：Protected Spans + 场景分流 + 评分门禁接入
