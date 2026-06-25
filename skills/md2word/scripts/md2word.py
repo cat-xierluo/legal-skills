@@ -45,6 +45,37 @@ from table_handler import (
     create_word_table_from_html,
 )
 from chart_handler import create_mermaid_chart
+from svg_handler import render_inline_svg
+from footnote_handler import (
+    FootnoteManager, extract_footnote_defs, NOTE_REF_RE,
+)
+
+
+# ----------------------------------------------------------------------------
+# 脚注/尾注：当前转换的 FootnoteManager（全局，供 parse_text_with_footnotes 使用）
+# ----------------------------------------------------------------------------
+_active_fn_manager = None
+
+
+def parse_text_with_footnotes(paragraph, text, title_level=0, is_quote=False):
+    """解析文本，识别行内 [^id] 脚注引用；其余走 parse_text_formatting。
+
+    无激活的 FootnoteManager 时（脚注未启用），fallback 到 parse_text_formatting。
+    """
+    if _active_fn_manager is None:
+        parse_text_formatting(paragraph, text, title_level=title_level, is_quote=is_quote)
+        return
+    # 遍历 [^id] 引用：引用之间的普通文本走 parse_text_formatting，引用处插入脚注引用 run
+    last = 0
+    for m in NOTE_REF_RE.finditer(text):
+        if m.start() > last:
+            parse_text_formatting(paragraph, text[last:m.start()],
+                                  title_level=title_level, is_quote=is_quote)
+        _active_fn_manager.add_reference(paragraph, m.group(1))
+        last = m.end()
+    if last < len(text):
+        parse_text_formatting(paragraph, text[last:],
+                              title_level=title_level, is_quote=is_quote)
 
 
 # ============================================================================
@@ -203,29 +234,40 @@ def add_quote(doc, text):
     quote_config = config.get('quote', {})
     
     lines = text.split('\n')
-    
-    bg_color = quote_config.get('background_color', '#EAEAEA')
-    left_indent = quote_config.get('left_indent_inches', 0.2)
-    font_size = quote_config.get('font_size', 12)
-    line_spacing = quote_config.get('line_spacing', 1.5)
-    
+
+    # 引用块不施加视觉样式（无底纹/无边框/无缩进），与正文一致
+    bg_color = quote_config.get('background_color')       # None = 不加
+    border_color = quote_config.get('border_color')       # None = 不加
+    border_size = quote_config.get('border_size', 0)
+    left_indent = quote_config.get('left_indent_inches', 0)
+    font_size = quote_config.get('font_size')             # None = 继承正文
+    line_spacing = quote_config.get('line_spacing')       # None = 继承正文
+
     for line_index, line in enumerate(lines):
         if not line.strip():
             p = doc.add_paragraph()
-            set_paragraph_format(p, is_quote=True)
+            if bg_color:
+                pPr = p._p.get_or_add_pPr()
+                shd = OxmlElement('w:shd')
+                shd.set(qn('w:val'), 'clear')
+                shd.set(qn('w:color'), 'auto')
+                shd.set(qn('w:fill'), bg_color.lstrip('#'))
+                pPr.append(shd)
+            p.paragraph_format.line_spacing = 1.0
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
             continue
-        
+
         p = doc.add_paragraph()
-        
         pPr = p._p.get_or_add_pPr()
-        shd = OxmlElement('w:shd')
-        shd.set(qn('w:val'), 'clear')
-        shd.set(qn('w:color'), 'auto')
-        shd.set(qn('w:fill'), bg_color.lstrip('#'))
-        pPr.append(shd)
-        
-        p.paragraph_format.left_indent = Inches(left_indent)
-        p.paragraph_format.line_spacing = line_spacing
+        if bg_color:
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), bg_color.lstrip('#'))
+            pPr.append(shd)
+        if line_spacing:
+            p.paragraph_format.line_spacing = line_spacing
         
         bullet_match = re.match(r'^\s*([-*+])\s+', line)
         number_match = re.match(r'^\s*(\d+\.)\s+', line)
@@ -241,45 +283,99 @@ def add_quote(doc, text):
             list_marker_run = p.add_run(indent_and_number)
             line = line[number_match.end():]
         
-        if list_marker_run:
+        if list_marker_run and font_size:
             list_marker_run.font.size = Pt(font_size)
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
-        
+
         parse_text_formatting(p, line, is_quote=True)
         set_paragraph_format(p, is_quote=True)
-        
-        for run in p.runs:
-            run.font.size = Pt(font_size)
+
+        if font_size:
+            for run in p.runs:
+                run.font.size = Pt(font_size)
 
 
 def add_code_block(doc, code_lines, language):
-    """添加代码块"""
+    """添加代码块（出版级：等宽字体 + 浅灰底纹 + 细边框 + 关拼写检查）
+
+    通过 code_block.content 配置控制：
+    - font / east_asia_font / size / color：等宽字体与字号颜色
+    - background_color：浅灰底纹（留空则不加底纹，向后兼容）
+    - border_color / border_size：段落边框，相邻代码行边框在 Word 中自动连成完整框
+    - no_proofread：关闭拼写检查（代码不应被拼写纠正）
+    - left_indent / line_spacing：缩进与行距
+    未配置 background_color / border 时行为同旧版。
+    """
     config = get_config()
     code_config = config.get('code_block', {})
-    
+
     label_config = code_config.get('label', {})
-    if language:
+    label_enabled = label_config.get('enabled', True)
+    if language and label_enabled:
         lang_p = doc.add_paragraph()
         lang_run = lang_p.add_run(f"[{language}]")
         lang_run.font.name = label_config.get('font', 'Times New Roman')
         lang_run.font.size = Pt(label_config.get('size', 10))
         lang_run.font.color.rgb = hex_to_rgb(label_config.get('color', '#808080'))
-    
+
     content_config = code_config.get('content', {})
     left_indent = content_config.get('left_indent', 24)
     line_spacing = content_config.get('line_spacing', 1.2)
-    font_name = content_config.get('font', 'Times New Roman')
-    font_size = content_config.get('size', 10)
+    font_name = content_config.get('font', 'Consolas')
+    east_asia_font = content_config.get('east_asia_font', '等线')
+    font_size = content_config.get('size', 9)
     color_hex = content_config.get('color', '#333333')
-    
+    bg_color = content_config.get('background_color')    # None → 不加底纹
+    border_color = content_config.get('border_color')    # None → 不加边框
+    border_size = content_config.get('border_size', 4)   # 1/8 pt 单位
+    no_proof = content_config.get('no_proofread', True)
+
     for code_line in code_lines:
         p = doc.add_paragraph()
-        run = p.add_run(code_line or ' ')
+        run = p.add_run(code_line if code_line else ' ')
+        # 等宽字体（ASCII/CS 用 font_name，东亚字符用 east_asia_font）
         run.font.name = font_name
         run.font.size = Pt(font_size)
         run.font.color.rgb = hex_to_rgb(color_hex)
-        p.paragraph_format.left_indent = Pt(left_indent)
-        p.paragraph_format.line_spacing = line_spacing
+        rPr = run._element.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:ascii'), font_name)
+        rFonts.set(qn('w:hAnsi'), font_name)
+        rFonts.set(qn('w:eastAsia'), east_asia_font)
+        rFonts.set(qn('w:cs'), font_name)
+        # 关闭拼写检查（代码不应被 Word 拼写纠正打扰）
+        if no_proof:
+            rPr.append(OxmlElement('w:noProof'))
+
+        # 段落级底纹 + 边框：必须先于 spacing/ind append（CT_PPr 顺序 pBdr→shd→…→spacing→ind）
+        pPr = p._p.get_or_add_pPr()
+        if border_color:
+            pBdr = OxmlElement('w:pBdr')
+            for edge in ('top', 'left', 'bottom', 'right'):
+                b = OxmlElement('w:' + edge)
+                b.set(qn('w:val'), 'single')
+                b.set(qn('w:sz'), str(border_size))
+                b.set(qn('w:space'), '4')
+                b.set(qn('w:color'), border_color.lstrip('#'))
+                pBdr.append(b)
+            pPr.append(pBdr)
+        if bg_color:
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), bg_color.lstrip('#'))
+            pPr.append(shd)
+
+        # 段落格式：左缩进 + 行距 + 无首行缩进 + 无段前段后（python-docx 会插到 pBdr/shd 之后）
+        pf = p.paragraph_format
+        pf.left_indent = Pt(left_indent)
+        pf.line_spacing = line_spacing
+        pf.space_before = Pt(0)
+        pf.space_after = Pt(0)
+        pf.first_line_indent = Pt(0)
 
 
 def add_page_number(doc):
@@ -413,10 +509,79 @@ def debug_quotes_in_file(file_path):
 
 
 # ============================================================================
+# 全书合并工具（--book 模式）
+# ============================================================================
+
+def rename_footnote_ids(content, ch):
+    """全书合并预处理：给脚注 id 加章节前缀，避免跨章 [^id] 冲突。
+    [^1] → [^1-1]（第 1 章的 1）；[^note] → [^2-note]（第 2 章的 note）。
+    """
+    return re.sub(r'\[\^([^\]]+)\]', lambda m: '[^%d-%s]' % (ch, m.group(1)), content)
+
+
+def add_toc(doc):
+    """在文档当前位置插入 Word 目录域（TOC field），打开后在 Word 中按 F9 更新。"""
+    p = doc.add_paragraph()
+    r1 = p.add_run()
+    b = OxmlElement('w:fldChar'); b.set(qn('w:fldCharType'), 'begin'); r1._r.append(b)
+    instr = OxmlElement('w:instrText'); instr.set(qn('xml:space'), 'preserve')
+    instr.text = r'TOC \o "1-3" \h \z \u'; r1._r.append(instr)
+    s = OxmlElement('w:fldChar'); s.set(qn('w:fldCharType'), 'separate'); r1._r.append(s)
+    placeholder = p.add_run('（目录：在 Word 中选中此处按 F9 更新）')
+    e = OxmlElement('w:fldChar'); e.set(qn('w:fldCharType'), 'end'); placeholder._r.append(e)
+
+
+def add_book_header(section, title):
+    """给 section 的页眉加书名（居中，小字）。"""
+    if not title:
+        return
+    header = section.header
+    hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    hp.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    r = hp.add_run(title)
+    r.font.size = Pt(9)
+
+
+def create_book(md_files, output_path, config, notes_mode='footnote'):
+    """全书合并：多章 md → 单 docx。
+    预处理：脚注 id 加章前缀防冲突；章间用 '---' 分隔（book_mode 下每个 --- 触发分页）。
+    """
+    print(f"📚 全书合并 {len(md_files)} 个文件 → {output_path}")
+    merged = []
+    for ch_idx, f in enumerate(md_files, 1):
+        if not os.path.exists(f):
+            print(f"⚠️  跳过不存在的文件: {f}")
+            continue
+        try:
+            with open(f, 'r', encoding='utf-8') as fh:
+                content = fh.read()
+        except UnicodeDecodeError:
+            with open(f, 'r', encoding='gbk') as fh:
+                content = fh.read()
+        content = rename_footnote_ids(content, ch_idx)
+        merged.append(content)
+        print(f"  第 {ch_idx} 章: {os.path.basename(f)}")
+    if not merged:
+        print("❌ 无可合并的章节")
+        return
+    full = '\n\n---\n\n'.join(merged)
+    tmp_md = output_path + '.merged.md'
+    with open(tmp_md, 'w', encoding='utf-8') as fh:
+        fh.write(full)
+    try:
+        create_word_document(tmp_md, output_path, None, config, notes_mode, book_mode=True)
+    finally:
+        try:
+            os.unlink(tmp_md)
+        except OSError:
+            pass
+
+
+# ============================================================================
 # 核心转换流程
 # ============================================================================
 
-def create_word_document(md_file_path, output_path, template_file=None, config: Config = None):
+def create_word_document(md_file_path, output_path, template_file=None, config: Config = None, notes_mode='footnote', book_mode=False):
     """从Markdown文件创建格式化的Word文档"""
     if config is None:
         config = get_config()
@@ -494,6 +659,8 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         section.bottom_margin = Cm(page_config.get('margin_bottom', 2.54))
         section.left_margin = Cm(page_config.get('margin_left', 3.18))
         section.right_margin = Cm(page_config.get('margin_right', 3.18))
+        if book_mode:
+            add_book_header(section, config.get('book.title', ''))
     
     # 读取Markdown文件
     try:
@@ -507,11 +674,23 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
 
     lines = content.split('\n')
+    # 脚注/尾注：提取 [^id]: 定义行（从正文移除），建立 FootnoteManager
+    global _active_fn_manager
+    fn_defs, lines = extract_footnote_defs(lines)
+    fn_manager = FootnoteManager(notes_mode)
+    fn_manager.set_defs(fn_defs)
+    _active_fn_manager = fn_manager
     has_body_before_first_h2 = False
     has_seen_h2 = False
     has_seen_first_hr = False  # 追踪第一个分隔符
     i = 0
-    
+    svg_counter = [0]  # 内联 SVG 计数（用于命名输出文件）
+
+    # 全书合并模式：正文前插入目录域 + 分页
+    if book_mode:
+        add_toc(doc)
+        doc.add_page_break()
+
     while i < len(lines):
         line = lines[i].strip()
         
@@ -545,6 +724,25 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 print(f"✅ 处理Mermaid图表")
             continue
         
+        # 内联 SVG 块（<svg>...</svg>，渲染为 PNG 嵌入；失败降级代码框显示源码）
+        if line.startswith('<svg'):
+            svg_lines = [lines[i]]
+            i += 1
+            while i < len(lines) and '</svg>' not in svg_lines[-1]:
+                svg_lines.append(lines[i])
+                i += 1
+            svg_code = '\n'.join(svg_lines)
+            ok = render_inline_svg(
+                lambda img: insert_image_to_word(doc, img),
+                svg_code, md_file_path, svg_counter[0])
+            svg_counter[0] += 1
+            if not ok:
+                # 降级：把 SVG 源码当代码框显示
+                add_code_block(doc, svg_code.split('\n'), 'svg')
+            if not has_seen_h2:
+                has_body_before_first_h2 = True
+            continue
+
         # 代码块
         if line.startswith('```'):
             code_lines = []
@@ -617,7 +815,10 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
 
         # 分割线（必须在 Markdown 表格检测之前，避免 --- 被误判为表格分隔行）
         if line in ['---', '***', '___']:
-            if not has_seen_first_hr:
+            if book_mode:
+                # 全书合并：每个分隔符 = 章间分页
+                doc.add_page_break()
+            elif not has_seen_first_hr:
                 # 第一个分隔符视为封面与正文的分界，渲染为分页符
                 has_seen_first_hr = True
                 doc.add_page_break()
@@ -750,19 +951,40 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         else:
             if line:
                 p = doc.add_paragraph()
-                parse_text_formatting(p, line)
-                set_paragraph_format(p)
+                parse_text_with_footnotes(p, line)
+                # 图注（**图 X-X：...** / 图 X-X：...）居中、无首行缩进、小一号字
+                if re.match(r'^\*{0,2}图\s*\d+[-－]?\d*\s*[:：]', line):
+                    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                    pf = p.paragraph_format
+                    pf.first_line_indent = Pt(0)
+                    pf.left_indent = Pt(0)
+                    pf.space_before = Pt(3)
+                    pf.space_after = Pt(8)
+                    pf.line_spacing = 1.2
+                    for r in p.runs:
+                        r.font.size = Pt(10)
+                else:
+                    set_paragraph_format(p)
                 if not has_seen_h2:
                     has_body_before_first_h2 = True
         
         i += 1
     
+    # endnote 模式：文档末追加“注释”小节
+    fn_manager.append_endnotes_section(doc)
+
     # 添加页码（仅在没有模板时）
     if not use_template_headers:
         add_page_number(doc)
 
     # 保存文档
     doc.save(output_path)
+
+    # footnote 模式：post-process 注入 footnotes.xml part
+    fn_manager.finalize_footnotes_part(output_path)
+
+    # 清理全局 manager
+    _active_fn_manager = None
 
     print(f"✅ Word文档已生成: {output_path}")
 
@@ -795,6 +1017,12 @@ def main():
     parser.add_argument('--auto-template', action='store_true',
                         help='自动从 assets/templates/ 加载第一个 .docx 模板（默认关闭，避免律所 logo 等视觉元素出现在用户没显式要求的 docx 里）')
     parser.add_argument('--landscape', action='store_true', help='使用横向页面（Landscape）')
+    parser.add_argument('--notes', choices=['footnote', 'endnote'], default='footnote',
+                        help='脚注模式：footnote=页面脚注(默认)；endnote=文档末尾注(上标编号+末尾列表)')
+    parser.add_argument('--book', nargs='+', metavar='MD',
+                        help='全书合并导出：多章 md → 单 docx（目录 + 章间分页 + 页眉书名）。如 --book ch01.md ch02.md ...')
+    parser.add_argument('-o', '--out', dest='out_file',
+                        help='输出路径（与 --book 配合；单文件模式用位置参数 output）')
     
     args = parser.parse_args()
     
@@ -829,7 +1057,12 @@ def main():
         config = get_default_preset()
     
     set_config(config)
-    
+
+    if args.book:
+        output_file = args.out_file or 'book.docx'
+        create_book(args.book, output_file, config, args.notes)
+        return
+
     if not args.input:
         auto_mode(config)
         return
@@ -857,7 +1090,7 @@ def main():
         config._config['page']['orientation'] = 'landscape'
 
     try:
-        create_word_document(md_file, output_file, template_file, config)
+        create_word_document(md_file, output_file, template_file, config, args.notes)
         print_success_info(output_file, config)
     except Exception as e:
         print(f"❌ 错误: {e}")
