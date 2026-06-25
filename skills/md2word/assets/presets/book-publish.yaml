@@ -1,57 +1,65 @@
-name: "法律文书格式"
-description: "标准法律文书格式，仿宋_GB2312，小四号，1.5倍行距"
+name: "书籍出版格式"
+description: "中文书籍出版规范：正文宋体、标题黑体、TOC + 章间分页 + 页眉书名；用于 --book 全书多章合并导出"
+
+# 书籍元信息（页眉显示，按实际书名修改）
+book:
+  title: "法律 AI Skill 实战"
 
 # 页面设置
 page:
-  width: 21.0      # cm (A4)
-  height: 29.7     # cm (A4)
+  width: 21.0       # cm (A4)
+  height: 29.7      # cm (A4)
   margin_top: 2.54
   margin_bottom: 2.54
-  margin_left: 3.18
-  margin_right: 3.18
+  margin_left: 3.0
+  margin_right: 3.0
 
-# 字体设置
+# 字体设置（出版：正文宋体）
 fonts:
   default:
-    name: "仿宋"
-    name_alt: "仿宋_GB2312"
+    name: "宋体"
+    name_alt: "宋体"
     ascii: "Times New Roman"
-    size: 12      # pt (小四)
+    size: 12        # pt (小四)
     color: "#000000"
 
-# 标题设置
+# 标题设置（出版：黑体）
 titles:
   level1:
-    size: 15      # pt (小三)
+    size: 16        # pt (三号，章标题)
     bold: true
     align: "center"
-    space_before: 6
-    space_after: 6
+    space_before: 18
+    space_after: 12
     indent: 0
+    font: "黑体"
   level2:
-    size: 12      # pt (小四)
+    size: 14        # pt (四号，节标题)
     bold: true
-    align: "justify"
-    indent: 24
-    space_before: 9   # 0.5行距 (12pt × 1.5 × 0.5)
-    space_after: 9    # 0.5行距
+    align: "left"
+    indent: 0
+    space_before: 12
+    space_after: 6
+    font: "黑体"
   level3:
-    size: 12      # pt (小四)
+    size: 12        # pt (小四，小节)
     bold: true
-    align: "justify"
-    indent: 24
-    space_before: 9   # 0.5行距
-    space_after: 9    # 0.5行距
+    align: "left"
+    indent: 0
+    space_before: 6
+    space_after: 3
+    font: "黑体"
   level4:
-    size: 12      # pt (小四)
+    size: 12        # pt (小四)
     bold: true
-    align: "justify"
-    indent: 24
+    align: "left"
+    indent: 0
+    font: "黑体"
 
 # 段落设置
 paragraph:
   line_spacing: 1.5
-  first_line_indent: 24  # 2个字符
+  first_line_indent: 24   # 2 字符
   align: "justify"
 
 # 页码设置
@@ -59,7 +67,7 @@ page_number:
   enabled: true
   format: "1/x"
   font: "Times New Roman"
-  size: 10.5    # pt (五号)
+  size: 10.5       # pt (五号)
   position: "center"
 
 # 引号设置
@@ -80,42 +88,35 @@ table:
     left: 60
     right: 60
   vertical_align: "center"
-
-  # 表格标题行（第一行）格式
   header:
     font: "Times New Roman"
     size: 10.5
     bold: true
     color: "#000000"
-
-  # 表格正文格式
   body:
-    font: "仿宋"
-    font_alt: "仿宋_GB2312"
+    font: "宋体"
+    font_alt: "宋体"
     size: 10.5
     color: "#000000"
 
 # 代码块设置（出版级：等宽字体 + 浅灰底纹 + 细边框 + 关拼写检查）
 code_block:
-  # 语言标签格式（代码块开头的 [language] 标签；enabled=false 可隐藏标签）
   label:
     enabled: false
     font: "Times New Roman"
     size: 10
     color: "#808080"
-
-  # 代码内容格式
   content:
-    font: "Consolas"            # 等宽字体（ASCII/CS）
-    east_asia_font: "等线"      # 东亚字符（代码里的中文 prompt 等）
+    font: "Consolas"
+    east_asia_font: "等线"
     size: 9
     color: "#333333"
     left_indent: 0
     line_spacing: 1.2
-    background_color: "#F5F5F5" # 浅灰底纹（留空则不加，向后兼容）
-    border_color: "#D0D0D0"     # 段落边框，相邻行自动连成完整框（留空则不加）
-    border_size: 4              # 边框粗细，1/8 pt 单位
-    no_proofread: true          # 关闭拼写检查
+    background_color: "#F5F5F5"
+    border_color: "#D0D0D0"
+    border_size: 4
+    no_proofread: true
 
 # 行内代码设置（等宽 + 浅灰底，与代码块风格一致）
 inline_code:
@@ -130,7 +131,7 @@ quote:
   background_color: null
   left_indent_inches: 0
   border_color: null
-  font_size: null   # null = 继承正文
+  font_size: null
   line_spacing: null
 
 # 数学公式设置
@@ -140,11 +141,11 @@ math:
   italic: true
   color: "#00008B"
 
-# 图片设置
+# 图片设置（出版印刷 300dpi）
 image:
   display_ratio: 1.0
   max_width_cm: 14.64
-  target_dpi: 400
+  target_dpi: 600
   show_caption: true
 
 # 分割线设置
@@ -161,11 +162,9 @@ lists:
   bullet:
     marker: "•"
     indent: 24
-
   numbered:
     indent: 24
     preserve_format: true
-
   task:
     unchecked: "☐"
     checked: "☑"

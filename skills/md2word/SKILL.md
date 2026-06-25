@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.1"
+version: "1.1.0"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -24,8 +24,13 @@ pip install python-docx Pillow beautifulsoup4 PyYAML
 ### 可选依赖
 
 ```bash
-npm install -g @mermaid-js/mermaid-cli
+npm install -g @mermaid-js/mermaid-cli   # Mermaid 图表渲染
+brew install librsvg                       # SVG→PNG（推荐，rsvg-convert）
+# 或 pip install cairosvg                  # SVG→PNG 备选
+# 或 npm install puppeteer                 # SVG→PNG 备选（scripts/svg2png.js）
 ```
+
+> 正文内联 `<svg>...</svg>` 块会自动渲染为 PNG 嵌入，渲染优先级 rsvg-convert → cairosvg → svg2png.js(puppeteer)，三者任一即可；全部不可用时降级为代码框显示 SVG 源码。
 
 ## 快速开始
 
@@ -40,6 +45,12 @@ python scripts/md2word.py input.md --preset=academic
 
 # 使用自定义配置
 python scripts/md2word.py input.md --config=my-config.yaml
+
+# 脚注/尾注模式（默认 footnote 页面脚注；endnote=文档末注释+上标编号）
+python scripts/md2word.py input.md --notes=endnote
+
+# 全书合并：多章 md → 单 docx（目录+章间分页+页眉，配合 -o 指定输出）
+python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=book-publish
 ```
 
 ## 配置系统
@@ -59,6 +70,7 @@ python scripts/config.py --list
 - **minimal** — 极简格式
 - **academic** — 学术论文格式
 - **report** — 工作报告格式
+- **book-publish** — 中文书籍出版格式（正文宋体、标题黑体、TOC/页眉书名，配合 `--book` 全书合并导出）
 
 > 完整配置见 `assets/presets/*.yaml`，设计说明见 `assets/theme-notes/`
 

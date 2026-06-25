@@ -9,6 +9,7 @@ import re
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
+from docx.oxml.shared import OxmlElement
 
 # 导入配置模块
 from config import Config, get_config
@@ -307,12 +308,28 @@ def set_run_format_with_styles(run, formats, title_level=0, is_quote=False):
     # 应用Markdown格式
     if formats.get('code', False):
         code_config = config.get('inline_code', {})
-        font.name = code_config.get('font', 'Times New Roman')
+        code_font = code_config.get('font', 'Consolas')
+        font.name = code_font
         font.size = Pt(code_config.get('size', 10))
         font.color.rgb = hex_to_rgb(code_config.get('color', '#333333'))
-        run._element.rPr.rFonts.set(qn('w:ascii'), font.name)
-        run._element.rPr.rFonts.set(qn('w:hAnsi'), font.name)
-        run._element.rPr.rFonts.set(qn('w:eastAsia'), font.name)
+        rPr = run._element.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:ascii'), code_font)
+        rFonts.set(qn('w:hAnsi'), code_font)
+        rFonts.set(qn('w:eastAsia'), code_config.get('east_asia_font', '等线'))
+        rFonts.set(qn('w:cs'), code_font)
+        bg = code_config.get('background_color')
+        if bg:
+            shd = rPr.find(qn('w:shd'))
+            if shd is None:
+                shd = OxmlElement('w:shd')
+                rPr.append(shd)
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), bg.lstrip('#'))
     elif formats.get('math', False):
         math_config = config.get('math', {})
         font.name = math_config.get('font', 'Times New Roman')

@@ -525,11 +525,55 @@ def adjust_table_column_width(table):
                 content_len = sum(2.0 if ord(c) > 127 else 1.0 for c in text)
                 cell_lengths[ci].append(content_len)
 
-        widths_cm = _calc_column_widths(cell_lengths, col_count, config)
+        # 最小必要列宽：按"表头真实字符数"算（不是最长单元格）
+        # 原因：表头装得下 → 该列所有短行也装得下（"稳定层"/"业务层"3字与"层级"同列）
+        # 长单元格物理上必换行，不作为保底（不然会把整列压出页面）
+        # Word 12pt 中文字符约 0.32cm, ASCII 约 0.16cm, 单元格左右内边距 0.84cm
+        # 字符数按真实字数算（中文 1 字，英文/数字 0.5 字取整为 1）—— 不再用 P80 的"中文×2"权重（那是相对权重，不是物理字符数）
+        cell_margin_cm = 0.84
+        min_needed_cm = []
+        if table.rows:
+            header_cells = table.rows[0].cells
+            for ci in range(col_count):
+                text = header_cells[ci].text.strip() if ci < len(header_cells) else ''
+                # 真实字符数：中文算 1, ASCII 算 0.5, ceil
+                real_chars = sum(1 if ord(c) > 127 else 0.5 for c in text)
+                real_chars = max(1, int(real_chars + 0.5))
+                content_w = real_chars * 0.32  # 中文为主按 0.32/字
+                min_needed_cm.append(content_w + cell_margin_cm)
+        else:
+            min_needed_cm = [1.5] * col_count
+        widths_cm = _calc_column_widths(cell_lengths, col_count, config, min_needed_cm=min_needed_cm)
+
+        # 关键：禁 autofit + fixed layout + 设 gridCol/cell.width，否则 Word 用 autofit 覆盖成等分
+        table.autofit = False
+        table.allow_autofit = False
+        tblPr = table._tbl.tblPr
+        for old_layout in tblPr.findall(qn('w:tblLayout')):
+            tblPr.remove(old_layout)
+        layout = OxmlElement('w:tblLayout')
+        layout.set(qn('w:type'), 'fixed')
+        tblPr.append(layout)
+
+        # tblGrid 的 gridCol 宽度（cm→twips，1cm≈567twip）
+        tblGrid = table._tbl.find(qn('w:tblGrid'))
+        if tblGrid is not None:
+            gridCols = tblGrid.findall(qn('w:gridCol'))
+            for i, w in enumerate(widths_cm):
+                if i < len(gridCols):
+                    gridCols[i].set(qn('w:w'), str(int(w * 567)))
+
+        # 每个 cell 的 width（双保险，Word 真正按此列宽渲染）
+        for row in table.rows:
+            for ci, cell in enumerate(row.cells):
+                if ci < col_count:
+                    cell.width = Cm(widths_cm[ci])
+
+        # columns.width（兼容）
         for i, w in enumerate(widths_cm):
             table.columns[i].width = Cm(w)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️  列宽调整失败: {e}")
 
 
 def parse_html_table(html_content):
@@ -837,12 +881,13 @@ def _apply_table_cell_margins(table, table_config):
         pass
 
 
-def _calc_column_widths(cell_lengths_per_col, num_cols, config):
-    """基于每列单元格内容长度的百分位数，按比例分配列宽。
+def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=None):
+    """按 P80 百分位给长列宽度 + 短列保底不换行。
 
-    核心思路：用 P80（第 80 百分位）衡量每列"典型单元格有多长"，
-    而非 SUM（被大量短单元格撑大）或 MAX（被单个异常值拉高）。
-    P80 高的列说明"大多数单元格都很长"，应给更多宽度以减少折行。
+    核心策略：
+    1. 每列先按"最长单元格实际需要"给一个最低宽(min_needed_cm,核心:少字列不换行)
+    2. 长列按 P80 比例瓜分"页面剩余宽度"(sum_min 给定后的余量)
+    3. 长列拿到的宽度可能物理上仍不够(必换行) → 用户接受(短列不被压换行是底线)
     """
     page_config = config.get('page', {})
     page_width = page_config.get('width', 21.0)
@@ -850,31 +895,47 @@ def _calc_column_widths(cell_lengths_per_col, num_cols, config):
     margin_right = page_config.get('margin_right', 3.18)
     available_cm = page_width - margin_left - margin_right
 
-    MIN_CM = 0.8
+    if min_needed_cm is None:
+        min_needed_cm = [1.0] * num_cols
 
-    # 计算每列的 P80 内容长度
-    col_weights = []
-    for i in range(num_cols):
-        lengths = cell_lengths_per_col.get(i, [])
-        if not lengths:
-            col_weights.append(0.0)
-        else:
-            lengths_sorted = sorted(lengths)
-            p80_idx = int(len(lengths_sorted) * 0.8)
-            col_weights.append(lengths_sorted[min(p80_idx, len(lengths_sorted) - 1)])
+    # 1) 短列先按 min_needed 给定
+    widths_cm = list(min_needed_cm)
+    sum_min = sum(widths_cm)
 
-    total_weight = sum(col_weights) or 1.0
-    total_min = MIN_CM * num_cols
-    extra_cm = max(0, available_cm - total_min)
+    # 2) 长列按 P80 比例瓜分剩余宽度
+    if sum_min < available_cm:
+        col_weights = []
+        for i in range(num_cols):
+            lengths = cell_lengths_per_col.get(i, [])
+            if not lengths:
+                col_weights.append(0.0)
+            else:
+                lengths_sorted = sorted(lengths)
+                p80_idx = int(len(lengths_sorted) * 0.8)
+                col_weights.append(lengths_sorted[min(p80_idx, len(lengths_sorted) - 1)])
 
-    widths_cm = []
-    for w in col_weights:
-        widths_cm.append(MIN_CM + extra_cm * w / total_weight)
+        total_weight = sum(col_weights) or 1.0
+        extra_cm = available_cm - sum_min
 
-    # 缩放确保不超页面
-    if sum(widths_cm) > available_cm:
-        scale = available_cm / sum(widths_cm)
-        widths_cm = [w * scale for w in widths_cm]
+        for i, w in enumerate(col_weights):
+            widths_cm[i] = widths_cm[i] + extra_cm * w / total_weight
+
+    # 3) sum_min > available 时(内容总长超页面,物理必换行)
+    #    关键:不再整体缩(会把少字列也压扁,这是用户痛点)
+    #    而是只缩那些"实际需要 > 最小合理宽"的长列,少字列保底不变
+    else:
+        # 设一个"合理最大宽"——A4 单栏正文区(14.64cm)的 70% 给单列,让该列内换行可接受
+        MAX_REASONABLE = available_cm * 0.7   # ≈ 10.25cm
+        # 找出需要压缩的列(min_needed > MAX_REASONABLE)
+        excess_total = sum_min - available_cm
+        for i, w in enumerate(widths_cm):
+            if w > MAX_REASONABLE:
+                # 长列:最多压到 MAX_REASONABLE,多余的"还回去"给总宽补足
+                can_reduce = w - MAX_REASONABLE
+                reduce = min(can_reduce, excess_total)
+                widths_cm[i] -= reduce
+                excess_total -= reduce
+            # 短列(w <= MAX_REASONABLE):保底,不动
 
     return widths_cm
 

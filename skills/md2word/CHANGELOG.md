@@ -17,6 +17,34 @@
 - 表格列宽自动分配策略，当前列宽是否合理
 - 列表项的行距和缩进，与正文的协调性
 
+## [1.1.1] - 2026-06-25
+
+### 修复（书稿实测反馈）
+- **行内代码样式**：字体改等宽 Consolas（原 Times New Roman 与正文无区分，看着像没渲染）+ 浅灰底（`inline_code.background_color`），与代码块风格一致。`inline_code` 配置加 `east_asia_font` / `background_color`。
+- **代码框语言标签**：默认不显示 `[python]`/`[markdown]` 等（`code_block.label.enabled` 默认 false）。
+- **SVG 清晰度**：渲染 zoom 3→6；嵌入 target_dpi legal 260→400 / book-publish 300→600（SVG PNG 不再被过度下采样）。
+- **图注居中**：识别 `**图 X-X：...**` / `图 X-X：` 段落，居中、无首行缩进、小一号字（原被当正文首行缩进）。实测 ch11 13 个图注全部居中。
+
+## [1.1.0] - 2026-06-24
+
+### 新增
+- **脚注/尾注双模式**（`--notes=footnote|endnote`，默认 footnote）：支持 markdown `[^id]` 引用 + `[^id]: 定义`。
+  - `footnote`：Word 原生页面脚注（正文 footnoteReference + save 后 post-process 注入 footnotes.xml part，含 separator/continuationSeparator，自包含内联格式不依赖 styles.xml）。
+  - `endnote`：文档末“注释”小节 + 正文上标编号（伪 endnote，因 Word 原生 endnote 只能放文档末、不能“每章末”）。
+  - 全书合并时脚注 id 自动加章前缀（`[^1]`→`[^1-1]`）防跨章冲突。
+- **内联 SVG → PNG 渲染**：识别正文中的 `<svg>...</svg>` 块，渲染为 PNG 嵌入。渲染优先级 `rsvg-convert` → `cairosvg` → `svg2png.js`(puppeteer)，全部失败则降级为代码框显示源码。
+- **全书合并 `--book`**（配合 `book-publish` 预设 + `-o/--out`）：多章 md → 单 docx，含目录域（TOC field，Word 中 F9 更新）、章间分页、页眉书名。
+- **book-publish 预设**：中文书籍出版规范（正文宋体、标题黑体、图片 300dpi、TOC/页眉书名）。
+- 新增脚本：`footnote_handler.py`（脚注/尾注）、`svg_handler.py`（SVG 渲染编排）、`svg2png.js`（复用自 svg-book-illustrator，puppeteer 降级路径）。
+
+### 改进
+- **代码块出版级样式**：等宽字体（Consolas/等线）+ 浅灰底纹（w:shd）+ 细边框（w:pBdr，相邻代码行自动连成完整框）+ 关闭拼写检查（w:noProof）。
+  - `code_block.content` 新增配置项：`east_asia_font`、`background_color`、`border_color`、`border_size`、`no_proofread`（未配置时向后兼容，行为同旧版）。
+  - `code_block.label` 新增 `enabled`（可隐藏语言标签）。
+
+### 依赖
+- SVG 渲染（任一即可）：`rsvg-convert`（brew install librsvg，推荐）/ `cairosvg`（pip）/ `svg2png.js`（需 puppeteer，已内置脚本）。
+
 ## [1.0.3] - 2026-06-09
 
 ### 改进
