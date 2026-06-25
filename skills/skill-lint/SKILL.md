@@ -2,7 +2,7 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.0.8"
+version: "2.1.0"
 license: MIT
 description: Skill 质量验收与格式审查工具，也可称 Skilllint。本技能应在用户需要审查 Claude Code Skill 的目录结构、Frontmatter、引用一致性、发布版本、业务流深度、可评估性和安全风险时使用。不要用于：创建新技能、代码审查、应用功能测试、通用编程任务。
 ---
@@ -136,6 +136,8 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 
 如用户需要最终交付件、发布前意见或正式质量结论，使用 `templates/skill-quality-opinion-report.md` 生成“Skill 质量意见报告”，报告中必须写明问题、影响、修正方式和复查标准。
 
+对承载设计原理的结构性建议（拆解披露、触发边界、上下文聚焦、自由度匹配、可机判验收等），在 finding 的「设计理念」字段一句话讲清背后写作原理，可回查对应 standards 文件的「设计理念」小节，使报告同时具备 skill 写作教学价值；纯事实问题（文件缺失、引用断裂、命名大小写）可省。
+
 生成正式质量意见报告后，按 `references/archive-standards.md` 判断是否归档。需要归档时，在本技能 `archive/YYYYMMDD_HHMMSS_<target-slug>/` 下保存报告、元数据和证据索引；真实归档内容不提交到 Git。
 
 ## 问题分级
@@ -177,6 +179,7 @@ Hard Fail 一律按严重问题处理。
    - 依据: 违反的规则
    - 影响: 为什么阻塞
    - 建议: 具体修复方式
+   - 设计理念: 结构性建议必填，一句话点透背后写作原理；纯事实问题可省
 
 ## ⚠️ 警告问题
 
@@ -184,6 +187,7 @@ Hard Fail 一律按严重问题处理。
    - 位置: `文件路径`
    - 影响: 维护 / 发布 / 可评估性风险
    - 建议: 具体优化方式
+   - 设计理念: 结构性建议必填，一句话点透背后写作原理；纯事实问题可省
 
 ## 安全评估
 

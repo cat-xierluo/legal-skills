@@ -16,7 +16,9 @@
       "mcp__playwright",
       "mcp__MiniMax",
       "mcp__zai-mcp-server",
-      "mcp__pencil"
+      "mcp__pencil",
+      "Bash(mkdir -p .claude/.tmp/decisions-backup-20260616)",
+      "Bash(cp -p skills/article2book/DECISIONS.md skills/article2book/TASKS.md skills/funasr-transcribe/DECISIONS.md skills/funasr-transcribe/TASKS.md skills/git-workflow/DECISIONS.md skills/git-workflow/TASKS.md skills/legal-ocr/DECISIONS.md skills/legal-ocr/TASKS.md skills/skill-lint/DECISIONS.md skills/skill-lint/TASKS.md skills/transcription-corrector/DECISIONS.md skills/transcription-corrector/TASKS.md skills/yuandian-law-search/DECISIONS.md skills/yuandian-law-search/TASKS.md .claude/.tmp/decisions-backup-20260616/)"
     ],
     "deny": [
       "Bash(rm -rf /)",
@@ -31,12 +33,12 @@
       "Bash(git clean -fdx*)"
     ]
   },
-  "alwaysThinkingEnabled": true,
   "enabledMcpjsonServers": [
     "MiniMax",
     "qcc-company",
     "qcc-risk",
     "qcc-ipr",
     "qcc-operation"
-  ]
+  ],
+  "alwaysThinkingEnabled": true
 }

@@ -2,6 +2,17 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.1.0] - 2026-06-19
+
+### 新增
+
+- 报告新增「设计理念」教学层：严重问题和警告问题的 finding 增加「设计理念」字段，对承载设计原理的结构性建议（拆解披露、触发边界、上下文聚焦、自由度匹配、可机判验收等）一句话点透背后 skill 写作原理，使审查报告同时具备教学价值，让手动阅读报告的人能学到 skill 写作理念。
+
+### 改进
+
+- 7 个 standards 文件（structure / trigger-description / frontmatter-metadata-policy / workflow-output / security-assessment / configuration-privacy / business-flow-rubric）各新增「设计理念」小节，整理该维度背后的写作原理和可直接引用的报告话术。
+- 更新 `SKILL.md`、`skill-standards.md`、`reporting-standards.md`、质量意见报告模板，要求结构性建议带理念、纯事实问题可省。
+
 ## [2.0.8] - 2026-06-12
 
 ### 新增

@@ -90,3 +90,10 @@ description: 本技能应在用户需要...时使用。不要用于：...
 - 发布字段：适用 / 不适用 / 需按项目规则补充
 - 个人或项目默认值：未发现 / 疑似误写入 / 明显误写入
 ```
+
+## 设计理念（为什么这样要求）
+
+frontmatter 不只是元数据，它会随 Skill 加载进入系统提示，因此字段标准化不只是整洁要求。元数据类建议在报告里要带一句话理念，可直接引用以下表述。
+
+- **frontmatter 进系统提示，是注入面**：frontmatter 内容会被注入系统提示，XML 尖括号、冒充官方的命名（如 claude-/anthropic- 前缀）或非标字段都可能成为指令注入载体或被平台忽略。所以坚持"最小必需字段"、references 不携带 frontmatter、术语统一、第三人称。对应"通用最小 Frontmatter""references 不携带 frontmatter"。
+  - 报告话术：「frontmatter 含非标字段或 XML 尖括号——这些内容会进系统提示，存在注入或失效风险。收敛为最小必需字段，references 不再带 frontmatter。」

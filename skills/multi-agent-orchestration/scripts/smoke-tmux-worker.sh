@@ -66,7 +66,7 @@ eval "$profile_shell"
 
 claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --backend claude-code \
-  --settings config/minimax.settings.json \
+  --settings config/minimax-M3.settings.json \
   --model claude-sonnet-4-5 \
   --permission-mode auto \
   --output command)

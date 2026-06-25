@@ -40,7 +40,7 @@
 - **Sentinel bash 模式**（Task #9）：每个 worker 配一个 `scripts/sentinel.sh` 进程，PM 用 `run_in_background=true` 启，harness 在 sentinel exit 时通过 task-notification 自动 re-invoke PM，实现事件驱动 PM 唤醒，零 idle token 消耗。
 - **`scripts/sentinel.sh`**：轮询 `STATUS.json` 终态（`done | failed | blocked | stopped`），命中后 capture tmux pane tail、`tmux kill-session`、`exit`。退出码 0/2/64/124 与 `wait-worker.sh` 对齐。复用 `redact_sensitive_stream` 内联（不抽公共库）。
 - **`templates/pm-sentinel-response.md`**：PM 收到 sentinel task-notification 后的标准动作清单，按 exit code 分支（0=done, 2=failed/blocked/stopped, 124=timeout, 64=usage error），含范围检查、graceful 降级到 `pm-monitor.sh` 路径。
-- **`references/sentinel-design.md`**：设计文档，复述 2026-06-05 3 phase spike 结果，解释为什么 Sentinel 模式与 DEC-030 假设不同（数量线性 / 单进程单 STATUS / 进程语义清晰 / graceful 降级）。
+- **`references/04-sentinel-design.md`**：设计文档，复述 2026-06-05 3 phase spike 结果，解释为什么 Sentinel 模式与 DEC-030 假设不同（数量线性 / 单进程单 STATUS / 进程语义清晰 / graceful 降级）。
 - **`scripts/smoke-sentinel.sh`**：端到端 smoke test，覆盖 done 路径（sentinel exit 0 + tmux killed + pane tail captured + redaction 工作）和 timeout 路径（sentinel exit 124 + max-wait 触发）。
 
 ### Changed
@@ -97,7 +97,7 @@
 ## [1.14.0] - 2026-06-05
 
 ### Added
-- **runtime dependency matrix**：新增 `references/runtime-dependencies.md`，按 core、tmux/worktree、PR/GitHub、worker backend、Codex heartbeat、terminal split 和验证工具拆分依赖。
+- **runtime dependency matrix**：新增 `references/02-runtime-dependencies.md`，按 core、tmux/worktree、PR/GitHub、worker backend、Codex heartbeat、terminal split 和验证工具拆分依赖。
 - **dependency checker**：新增 `scripts/check-dependencies.sh`，可检查核心依赖、backend CLI、`gh` 和终端分屏工具；脚本只报告状态，不安装软件、不启动 worker。
 
 ### Changed
@@ -112,7 +112,7 @@
 
 ### Added
 - **runtime profile command helper**：新增 `scripts/render-runtime-profile.sh`，按 `claude-code`、`claude-oauth`、`codex`、`opencode`、`custom` backend 生成 worker command、prompt context 和 spawn metadata，减少 PM 手写 provider/profile 命令。
-- **Agent Teams troubleshooting**：新增 `references/agent-teams-troubleshooting.md`，覆盖 agent/team 不可见、错误 cwd、官方 worktree 状态映射、checkpoint 缺失、PR 收口和必须停止的场景。
+- **Agent Teams troubleshooting**：新增 `references/10-agent-teams-troubleshooting.md`，覆盖 agent/team 不可见、错误 cwd、官方 worktree 状态映射、checkpoint 缺失、PR 收口和必须停止的场景。
 
 ### Changed
 - **spawn flow**：SKILL.md 启动示例改为先用 `render-runtime-profile.sh` 生成 runtime 字段，再传给 `spawn-worker.sh`，保持启动命令生成与 worktree/session gate 分离。
@@ -248,9 +248,9 @@
 ## [1.9.3] - 2026-06-03
 
 ### Changed
-- 将 checkpoint 可复制模板从 `references/checkpoint-files.md` 移到 `templates/`，包括 `checkpoint-status.json`、`checkpoint-result.md` 和 `checkpoint-patch-summary.md`。
+- 将 checkpoint 可复制模板从 `references/03-checkpoint-files.md` 移到 `templates/`，包括 `checkpoint-status.json`、`checkpoint-result.md` 和 `checkpoint-patch-summary.md`。
 - 新增 `templates/worker-prompt.md`，将 worker prompt 拆成 Bootstrap-only 和 Full worker 两段，并按 Context / Background / Mission / Scope / Deliverables / Process / Verification / Autonomy / Out of Scope / PM Correction 组织。
-- 精简 `SKILL.md` 与 `references/checkpoint-files.md`：正文只保留规则、字段经济性和模板路径，避免 Skill 主体继续膨胀。
+- 精简 `SKILL.md` 与 `references/03-checkpoint-files.md`：正文只保留规则、字段经济性和模板路径，避免 Skill 主体继续膨胀。
 
 ## [1.9.2] - 2026-06-03
 

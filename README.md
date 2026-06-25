@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-48-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-49-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-06-22 | 新上传   | [invoice-organizer](skills/invoice-organizer/) | v0.1.1 | 发票/票据 PDF 整理与报销清单：pdftotext 提取文本，按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由/案号/日期/路线，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）；含 Hard Fail 验收标准 |
 | 2026-06-15 | 更新     | [yuandian-law-search](skills/yuandian-law-search/) | v1.7.4 | 修复 `--expand` 自动 OR 失效问题，强化案件综合/标杆类案检索的 `case-semantic` 优先、短关键词复检和零命中复检规则，并同步发布版本 |
 | 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
 | 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
@@ -57,8 +58,6 @@
 | 2026-06-11 | 更新     | [img2pdf](skills/img2pdf/) | v1.2.0 | 新增长截图模式：`--mode {nup, vertical}` 切换、`--split` 长截图自动切割（按 A4 比例自动算段高）、`--split-height` 显式段高控制；vertical 模式不切割、单图成单页、页面高度按图等比自适应；解决微信聊天记录 / 庭审笔录两类典型长截图 → PDF 需求 |
 | 2026-06-11 | 更新     | [new-case](skills/new-case/) | v1.3.5 | 商标预设拆 2 个业务子模板（注册 7 目录含独立商标注册证 / 异议复审无效 8 目录含独立商标注册证 + 证据材料）；命名规范文档占位符化（去除真实客户 / 案件 / 申请号）；新增 1 客户含 ≥2 独立业务子项目时按「1 根 + N 子项目」拆分的整理规则，每个子项目独立 7/8 目录模板 |
 | 2026-06-11 | 更新     | [md2word](skills/md2word/) | v1.0.1 | 修复图片 src 解析：支持 URL 解码、相对路径（基于 md 文件目录）、markdown title 标签去除；新增表格单元格内 markdown 图片语法支持，图片按 5cm 宽插入 + 居中斜体 alt 文字作图注，路径不存在时降级原样写入不丢内容 |
-| 2026-06-11 | 更新     | [legal-ocr](skills/legal-ocr/) | v1.4.0 | 修复 PaddleOCR/MinerU 每日页数配额超限时的模型回退路径：`_check_daily_limit` 移入 try 块，使配额异常能触发 `_try_model_fallback` 兜底（v1.3.4 引入的「每日页数限额与模型回退」设计正式收口） |
-
 </details>
 
 ## 📋 项目概述
@@ -220,6 +219,14 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.5.0</td>
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
+</tr>
+<tr>
+<td><a href="skills/invoice-organizer/"><strong>invoice-organizer</strong></a></td>
+<td>通用·报销整理</td>
+<td style="word-break:break-word">整理一批发票/票据 PDF（增值税普通发票、铁路电子客票、住宿交通餐饮等），按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.1.1</td>
+<td></td>
 </tr>
 <tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
