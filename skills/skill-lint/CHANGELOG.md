@@ -2,6 +2,16 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.2.0] - 2026-06-25
+
+### 新增:Skill 本质审查 + 报告教学化升级(基于 skill-lint 自迭代 golden 测试)
+
+- **business-flow-rubric 新增 §0「Skill 的本质」**:明确 skill = 渐进式披露 + 可执行处理流程 / 工作规范;知识库型(原始文本 / 知识堆砌、无抽象规范、无可执行流程)违反本质,判 Hard Fail。沉淀知识必须抽成抽象规范,不是塞原文。审查**不做"类型分类"**,所有 skill 按本质统一审。
+- **Hard Fail 新增「知识堆砌」**:把原始文本 / 知识 / 语料 / 法条 / 书稿成堆塞进 skill,未抽成可执行抽象规范(知识库型典型问题)——skill 不是知识仓库。
+- **去掉"工具类降低要求"的分类措辞**:改为"按任务脆弱性调严格度,不按 skill 类型分类"(统一本质审)。
+- **报告教学化升级**:finding 的"设计理念"(一句话)升级为「为什么错(原理)」+「最优设计(该怎么设计才对,给范例)」两段——使用者不仅知道改什么,还学到为什么这么设计才对。`reporting-standards.md` + 质量意见报告模板同步。
+- 来源:agent-eval-lab 自迭代 r7 用 5 个 golden mini-skill 样本测试 skill-lint,发现"不分类型判太重 + 报告不够教学"两点,据此 patch;retest sample-03 验证有效。
+
 ## [2.1.0] - 2026-06-19
 
 ### 新增
