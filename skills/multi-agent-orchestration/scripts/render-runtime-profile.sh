@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 BACKEND=""
 MODE="interactive"
 RUNTIME_PROFILE=""
@@ -10,6 +12,7 @@ API_PROVIDER=""
 MODEL=""
 PROVIDER_SLOT=""
 SETTINGS=""
+PROVIDER_REGISTRY=""
 CODEX_PROFILE=""
 PROMPT_FILE=""
 PERMISSION_MODE=""
@@ -17,6 +20,11 @@ SANDBOX="danger-full-access"
 APPROVAL="never"
 CUSTOM_COMMAND=""
 OUTPUT="shell"
+SETTING_SOURCES="project,local"
+NO_PROVIDER_ENV_ISOLATION=0
+NO_MCP=0
+BIN=""
+SKIP_PERMISSIONS=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -28,6 +36,8 @@ Backends:
   claude-oauth    Claude Code subscription/OAuth; clears Anthropic provider env
   codex           Codex CLI
   opencode        OpenCode CLI
+  codebuddy       WorkBuddy / CodeBuddy CLI (platform额度, 继承桌面端登录态)
+  qoderwork-cn    QoderWork CN CLI (qoderclicn; 自动清除 SDK env 变量)
   custom          Use --command as-is
 
 Options:
@@ -37,12 +47,28 @@ Options:
   --model NAME             Model name
   --provider-slot SLOT     Provider concurrency slot label
   --settings PATH          Claude Code settings path
+  --provider-registry PATH Claude Code provider/model registry path
+  --setting-sources LIST   Claude Code setting sources for provider workers.
+                           Default: project,local (excludes user settings)
+  --no-provider-env-isolation
+                           Do not wrap Claude Code provider workers with the
+                           settings-derived env isolation launcher
+  --no-mcp                 Disable all MCP servers for the worker (Claude Code):
+                           injects --strict-mcp-config --mcp-config '{"mcpServers":{}}'.
+                           Skips the "new MCP servers found" approval prompt. Use for
+                           workers that don't need MCP (e.g. pure text revision).
   --codex-profile NAME     Codex profile name
   --prompt-file PATH       Prompt file for batch mode
   --permission-mode MODE   Claude permission mode. Defaults: auto interactive, acceptEdits batch
   --sandbox MODE           Codex sandbox. Default: danger-full-access
   --approval POLICY        Codex approval policy. Default: never
   --command CMD            Custom backend command
+  --bin PATH               Executable path for codebuddy / qoderwork-cn backends.
+                           Defaults to the standard app-bundle binary location.
+  --dangerously-skip-permissions
+                           Add the skip-permissions flag for the worker.
+                           codebuddy: -y. qoderwork-cn: --dangerously-skip-permissions.
+                           codebuddy batch always includes -y regardless (headless 要求).
   --output FORMAT          shell | command | prompt-context. Default: shell
 
 The script only renders metadata and command strings. It does not create
@@ -80,6 +106,18 @@ while [[ $# -gt 0 ]]; do
       SETTINGS="$2"
       shift 2
       ;;
+    --provider-registry)
+      PROVIDER_REGISTRY="$2"
+      shift 2
+      ;;
+    --setting-sources)
+      SETTING_SOURCES="$2"
+      shift 2
+      ;;
+    --no-provider-env-isolation)
+      NO_PROVIDER_ENV_ISOLATION=1
+      shift
+      ;;
     --codex-profile)
       CODEX_PROFILE="$2"
       shift 2
@@ -107,6 +145,18 @@ while [[ $# -gt 0 ]]; do
     --output)
       OUTPUT="$2"
       shift 2
+      ;;
+    --no-mcp)
+      NO_MCP=1
+      shift
+      ;;
+    --bin)
+      BIN="$2"
+      shift 2
+      ;;
+    --dangerously-skip-permissions)
+      SKIP_PERMISSIONS=1
+      shift
       ;;
     -h|--help)
       usage
@@ -137,6 +187,29 @@ if [ "$MODE" = "batch" ] && [ -z "$PROMPT_FILE" ] && [ "$BACKEND" != "custom" ];
   exit 64
 fi
 
+if [ "$BACKEND" = "claude-code" ] && [ -n "$SETTINGS" ] && [ -n "$PROVIDER_REGISTRY" ]; then
+  echo "ERROR: use either --settings or --provider-registry for Claude Code provider workers, not both" >&2
+  exit 64
+fi
+
+if [ "$BACKEND" = "claude-code" ] && { [ -n "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ]; } && [ -z "$MODEL" ]; then
+  echo "ERROR: Claude Code provider settings/registry require --model. Without it, user/global ANTHROPIC_MODEL can override the provider profile." >&2
+  exit 64
+fi
+
+if [ "$BACKEND" = "claude-code" ] && { [ -n "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ]; } && [ -z "$SETTING_SOURCES" ]; then
+  echo "ERROR: --setting-sources cannot be empty for Claude Code provider settings" >&2
+  exit 64
+fi
+
+if [ "$BACKEND" = "claude-code" ] && [ -n "$PROVIDER_REGISTRY" ]; then
+  [ -n "$API_PROVIDER" ] || { echo "ERROR: --api-provider is required with --provider-registry" >&2; exit 64; }
+  [ "$NO_PROVIDER_ENV_ISOLATION" -eq 0 ] || { echo "ERROR: --provider-registry requires provider env isolation; do not combine with --no-provider-env-isolation" >&2; exit 64; }
+  command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required for --provider-registry" >&2; exit 64; }
+  [ -f "$PROVIDER_REGISTRY" ] || { echo "ERROR: provider registry not found: $PROVIDER_REGISTRY" >&2; exit 64; }
+  jq -e --arg provider "$API_PROVIDER" '.providers[$provider] and (.providers[$provider] | type == "object")' "$PROVIDER_REGISTRY" >/dev/null
+fi
+
 quote_words() {
   local out=""
   local word
@@ -157,23 +230,81 @@ append_redirection() {
   printf '%s < %q' "$base" "$file"
 }
 
+shell_wrap() {
+  local command="$1"
+  quote_words bash -lc "$command"
+}
+
 COMMAND=""
+PROVIDER_ENV_ISOLATION="inherited-env"
+COMMAND_MODEL="$MODEL"
+MODEL_DISPLAY="$MODEL"
+PROFILE_LABEL=""
+
+if [ "$BACKEND" = "claude-code" ] && [ -n "$PROVIDER_REGISTRY" ]; then
+  has_models=$(jq -r --arg provider "$API_PROVIDER" 'if (.providers[$provider].models | type) == "object" then "yes" else "no" end' "$PROVIDER_REGISTRY")
+  if [ "$has_models" = "yes" ]; then
+    if ! jq -e --arg provider "$API_PROVIDER" --arg model "$MODEL" '.providers[$provider].models[$model] != null' "$PROVIDER_REGISTRY" >/dev/null; then
+      echo "ERROR: model alias not found in provider registry: provider=$API_PROVIDER model=$MODEL" >&2
+      exit 64
+    fi
+    COMMAND_MODEL=$(jq -er --arg provider "$API_PROVIDER" --arg model "$MODEL" '
+      .providers[$provider].models[$model] as $entry
+      | if ($entry | type) == "object" then ($entry.model // $entry.id // empty) else $entry end
+    ' "$PROVIDER_REGISTRY")
+    MODEL_DISPLAY="$COMMAND_MODEL (alias: $MODEL)"
+  fi
+fi
+
+if [ -n "$SETTINGS" ]; then
+  PROFILE_LABEL="$SETTINGS"
+elif [ -n "$PROVIDER_REGISTRY" ]; then
+  PROFILE_LABEL="registry:$PROVIDER_REGISTRY"
+elif [ -n "$CODEX_PROFILE" ]; then
+  PROFILE_LABEL="codex:$CODEX_PROFILE"
+fi
 
 case "$BACKEND" in
   claude-code|claude-oauth)
     if [ -z "$PERMISSION_MODE" ]; then
       [ "$MODE" = "batch" ] && PERMISSION_MODE="acceptEdits" || PERMISSION_MODE="auto"
     fi
-    parts=(claude)
-    [ -n "$SETTINGS" ] && parts+=(--settings "$SETTINGS")
-    [ -n "$MODEL" ] && parts+=(--model "$MODEL")
+    claude_parts=(claude)
+    [ -n "$SETTINGS" ] && claude_parts+=(--settings "$SETTINGS")
+    [ -n "$COMMAND_MODEL" ] && claude_parts+=(--model "$COMMAND_MODEL")
     if [ "$MODE" = "batch" ]; then
-      parts+=(-p --verbose --output-format stream-json --permission-mode "$PERMISSION_MODE")
+      claude_parts+=(-p --verbose --output-format stream-json --permission-mode "$PERMISSION_MODE")
     else
-      parts+=(--permission-mode "$PERMISSION_MODE")
+      claude_parts+=(--permission-mode "$PERMISSION_MODE")
     fi
+
+    if [ "$NO_MCP" -eq 1 ]; then
+      claude_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    fi
+
+    if [ "$BACKEND" = "claude-code" ] && { [ -n "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ]; }; then
+      if [ "$NO_PROVIDER_ENV_ISOLATION" -eq 0 ]; then
+        wrapper="$SCRIPT_DIR/claude-provider-env.sh"
+        [ -f "$wrapper" ] || { echo "ERROR: missing Claude provider env wrapper: $wrapper" >&2; exit 64; }
+        if [ -n "$PROVIDER_REGISTRY" ]; then
+          parts=(bash "$wrapper" --provider-registry "$PROVIDER_REGISTRY" --api-provider "$API_PROVIDER" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
+          PROVIDER_ENV_ISOLATION="registry-env-wrapper(provider=$API_PROVIDER setting-sources=$SETTING_SOURCES)"
+        else
+          parts=(bash "$wrapper" --settings "$SETTINGS" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
+          PROVIDER_ENV_ISOLATION="settings-env-wrapper(setting-sources=$SETTING_SOURCES)"
+        fi
+      else
+        parts=("${claude_parts[@]}")
+        PROVIDER_ENV_ISOLATION="disabled(inherited-env)"
+      fi
+    else
+      parts=("${claude_parts[@]}")
+      [ "$BACKEND" = "claude-oauth" ] && PROVIDER_ENV_ISOLATION="oauth-clear-anthropic-env"
+    fi
+
     COMMAND=$(quote_words "${parts[@]}")
     [ "$MODE" = "batch" ] && COMMAND=$(append_redirection "$COMMAND" "$PROMPT_FILE")
+    [ "$MODE" = "batch" ] && COMMAND=$(shell_wrap "$COMMAND")
     if [ "$BACKEND" = "claude-oauth" ]; then
       COMMAND="env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL $COMMAND"
     fi
@@ -190,6 +321,7 @@ case "$BACKEND" in
       parts+=(-)
       COMMAND=$(quote_words "${parts[@]}")
       COMMAND=$(append_redirection "$COMMAND" "$PROMPT_FILE")
+      COMMAND=$(shell_wrap "$COMMAND")
     else
       COMMAND=$(quote_words "${parts[@]}")
     fi
@@ -199,11 +331,59 @@ case "$BACKEND" in
       parts=(opencode run --format json)
       [ -n "$MODEL" ] && parts+=(--model "$MODEL")
       COMMAND="$(quote_words "${parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
+      COMMAND=$(shell_wrap "$COMMAND")
     else
       parts=(opencode)
       [ -n "$MODEL" ] && parts+=(--model "$MODEL")
       COMMAND=$(quote_words "${parts[@]}")
     fi
+    ;;
+  codebuddy)
+    # WorkBuddy / CodeBuddy CLI。参数体系与 Claude Code 高度兼容(ref 08)。
+    # headless 批处理必须 -y(ref 08 §6.2)；MCP off 用 inline 空 config(避免 /tmp 依赖)。
+    if [ -z "$PERMISSION_MODE" ]; then
+      [ "$MODE" = "batch" ] && PERMISSION_MODE="acceptEdits" || PERMISSION_MODE="bypassPermissions"
+    fi
+    [ -n "$BIN" ] || BIN="/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
+    cb_parts=("$BIN")
+    [ -n "$COMMAND_MODEL" ] && cb_parts+=(--model "$COMMAND_MODEL")
+    cb_parts+=(--permission-mode "$PERMISSION_MODE")
+    [ "$NO_MCP" -eq 1 ] && cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    # batch 恒加 -y(headless 要求)；交互式仅在显式 --dangerously-skip-permissions 时加。
+    if [ "$SKIP_PERMISSIONS" -eq 1 ] || [ "$MODE" = "batch" ]; then
+      cb_parts+=(-y)
+    fi
+    if [ "$MODE" = "batch" ]; then
+      cb_parts+=(--output-format stream-json -p)
+      COMMAND="$(quote_words "${cb_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
+      COMMAND=$(shell_wrap "$COMMAND")
+    else
+      COMMAND=$(quote_words "${cb_parts[@]}")
+    fi
+    PROVIDER_ENV_ISOLATION="codebuddy-inherited-env"
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-codebuddy}"
+    ;;
+  qoderwork-cn)
+    # QoderWork CN CLI(qoderclicn)。必须先清 SDK env 变量,否则走 SDK 模式报错(ref 07 §5.1)。
+    # 二进制路径含空格,靠 quote_words 的 %q 保护。
+    if [ -z "$PERMISSION_MODE" ]; then
+      PERMISSION_MODE="auto"
+    fi
+    [ -n "$BIN" ] || BIN="/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn"
+    qr_parts=(env -u QODER_AGENT_SDK_ENTRYPOINT -u QODER_AGENT_SDK_VERSION -u QODER_WORK_INTEGRATION_MODE -u QODERWORK_SOURCE_CHAT_ID -u QODERWORK_AWARENESS_SINK -u QODERWORK_AWARENESS_SINK_MEMORY "$BIN")
+    [ -n "$COMMAND_MODEL" ] && qr_parts+=(-m "$COMMAND_MODEL")
+    qr_parts+=(--permission-mode "$PERMISSION_MODE")
+    [ "$NO_MCP" -eq 1 ] && qr_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    [ "$SKIP_PERMISSIONS" -eq 1 ] && qr_parts+=(--dangerously-skip-permissions)
+    if [ "$MODE" = "batch" ]; then
+      qr_parts+=(-p)
+      COMMAND="$(quote_words "${qr_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
+      COMMAND=$(shell_wrap "$COMMAND")
+    else
+      COMMAND=$(quote_words "${qr_parts[@]}")
+    fi
+    PROVIDER_ENV_ISOLATION="qoder-sdk-env-cleared"
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-qoderwork-cn}"
     ;;
   custom)
     [ -n "$CUSTOM_COMMAND" ] || { echo "ERROR: --command is required for custom backend" >&2; exit 64; }
@@ -224,10 +404,11 @@ if [ "$OUTPUT" = "prompt-context" ]; then
   cat <<EOF
 - Worker Backend: $BACKEND
 - Runtime Profile: $RUNTIME_PROFILE
-- Settings/Profile Path: ${SETTINGS:-${CODEX_PROFILE:+codex:$CODEX_PROFILE}}
+- Settings/Profile Path: $PROFILE_LABEL
 - API Provider: $API_PROVIDER
-- Model: $MODEL
+- Model: $MODEL_DISPLAY
 - Provider Slot: $PROVIDER_SLOT
+- Env Isolation: $PROVIDER_ENV_ISOLATION
 - Mode: $MODE
 - Command: $COMMAND
 EOF
@@ -236,9 +417,10 @@ fi
 
 printf 'WORKER_BACKEND=%q\n' "$BACKEND"
 printf 'RUNTIME_PROFILE=%q\n' "$RUNTIME_PROFILE"
-printf 'SETTINGS_PROFILE_PATH=%q\n' "${SETTINGS:-${CODEX_PROFILE:+codex:$CODEX_PROFILE}}"
+printf 'SETTINGS_PROFILE_PATH=%q\n' "$PROFILE_LABEL"
 printf 'API_PROVIDER=%q\n' "$API_PROVIDER"
-printf 'MODEL=%q\n' "$MODEL"
+printf 'MODEL=%q\n' "$COMMAND_MODEL"
 printf 'PROVIDER_SLOT=%q\n' "$PROVIDER_SLOT"
+printf 'PROVIDER_ENV_ISOLATION=%q\n' "$PROVIDER_ENV_ISOLATION"
 printf 'WORKER_MODE=%q\n' "$MODE"
 printf 'WORKER_COMMAND=%q\n' "$COMMAND"

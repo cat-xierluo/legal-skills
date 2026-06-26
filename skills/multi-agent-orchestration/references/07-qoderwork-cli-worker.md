@@ -10,6 +10,8 @@
 
 QoderWork 桌面端内置了 `qoderclicn` CLI 二进制，功能类似 Claude Code / Codex CLI，可以作为 multi-agent orchestration 的 worker backend 使用。核心价值是利用 QoderWork 平台的每日免费模型额度（如 Qwen3 Max）和内置 MCP 工具链（元典法律检索、企查查工商查询等）。
 
+> **⚠️ 2026-06-26 修正（用户澄清）**：QoderWork CLI 接入的 MCP（元典法律检索、企查查等）**不是平台免费连接器，而是用户自己在外部配置的付费 API**（与其它 CLI 共用同一套 key/额度）。"免费"仅指 Qwen 等模型的每日额度；MCP 调用花的是用户付费 API。因此**不需要 MCP 的 worker（如纯正文修订）务必关 MCP**（`--strict-mcp-config` / 不加载 mcp-config），避免误触发付费 API；同 ref 08 §5 / DEC-037。
+
 ## 2. 二进制位置与安装
 
 | 属性 | 值 |
@@ -194,6 +196,13 @@ tmux new-session -d \
    -m qmodel_latest \
    --permission-mode auto'
 ```
+
+> **2026-06-26 复测（writing-reviewer v0.10.7 cross-model eval）**：`qoderclicn -m Qwen3.7-Max` 交互式 tmux worker 已跑通。要点：
+> - **路径必须引用**（§6.2 已示范）：`/Applications/QoderWork CN.app/...` 含空格，在 tmux 命令串里若用未加引号的 `$VAR` 展开，会在空格处被 `env` 截断，报 `env: /Applications/QoderWork: No such file or directory` 并秒退、pane 全空（**易误判为"交互式起不来"**）。必须用字面引号路径 `'/Applications/QoderWork CN.app/...'` 或正确转义。
+> - **清全部 SDK 变量**（§5.1）：`QODER_AGENT_SDK_ENTRYPOINT` / `_VERSION` / `QODER_WORK_INTEGRATION_MODE` / `QODERWORK_SOURCE_CHAT_ID` / `_AWARENESS_SINK` / `_AWARENESS_SINK_MEMORY` 全清，否则走 SDK 模式报 `sdk_invalid_args`。
+> - **eval worker 同样用 snapshot-copy-into-worktree**（DEC-037）：冻结 skill 快照拷进 worktree，worker 用 `./skill-snapshot-v0107` 相对路径读，避免跨目录 / trust 限制 / path 漂移。
+> - **最高权限**：`--dangerously-skip-permissions`（worktree 隔离，安全），配合 trust folder（选 "Trust folder"，勿信父目录）。
+> - **batch -p 也可用**（`qoderclicn -m Qwen3.7-Max -p "<prompt>"`），但长任务优先交互式（可 PM 纠偏）；batch 仅在交互式真不可作时兜底。
 
 ### 6.3 从 QoderWork 内部 session 启动（需清除环境变量）
 

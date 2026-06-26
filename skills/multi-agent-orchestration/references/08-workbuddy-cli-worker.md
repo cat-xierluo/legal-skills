@@ -176,6 +176,11 @@ codebuddy --settings '{"mcpServers":{...}}' -p "任务" -y
 MCP 配置也支持写入 `~/.codebuddy/mcp.json`，CLI 和桌面端共用。
 
 > **注意**：WorkBuddy 桌面端的 MCP 连接器（飞书、腾讯文档、元典法律检索等）需要通过 GUI 授权启用。CLI 模式下，需要在 `mcp.json` 中预先配置和 Trust 这些连接器后才能使用。
+>
+> **⚠️ 2026-06-26 修正（用户澄清）**：WorkBuddy / CodeBuddy CLI 接入的 MCP（华宇元典法律检索、企查查等）**不是平台免费连接器，而是用户自己在外部配置的付费 API**（与其它 CLI 共用同一套 key/额度）。因此：
+> - 这些 MCP 调用**消耗用户付费 API 额度**，不是 WorkBuddy 平台免费额度。
+> - **不需要 MCP 的 worker（如纯正文修订）务必 `--strict-mcp-config --mcp-config <empty>` 关掉 MCP**，避免误触发付费 API（codebuddy-spawn.sh 已默认关；见 §6.7 + DEC-037）。
+> - 只有明确要用法律检索 / 工商查询的 worker 才开 MCP，且要知道在花付费额度。
 
 ### 5.1 MCP 相关环境变量
 
@@ -224,6 +229,13 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 
 多个 CLI 实例共享同一账户额度，需注意并发控制和配额分配。建议通过 SKILL.md 的 Wave-Based Orchestration 管理 provider slot。
 
+**2026-06-26 并发实测（v0.10.7 cross-model eval）：** 5 个 codebuddy worker 同时并发抢 WorkBuddy 共享额度时，**`hy3-preview-agent` 被拖得最狠**（preview 模型对共享额度竞争最敏感，单 run 耗时显著拉长）；其余模型（kimi/deepseek/glm-5.1/glm-5v-turbo）也有不同程度的变慢。
+
+建议：
+- **codebuddy 同账户并发 ≤ 3**；超过 3 个 worker 时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 WorkBuddy 账户上。
+- 额度敏感模型（preview / 高倍率）单独给一个低并发 slot，避免被其它 worker 拖垮。
+- 评测 fan-out 场景尤其要遵守：12 模型同 backend 并发会把共享额度打满，导致批数/耗时失真，污染 cross-model 经济性对比（见 `agent-eval-lab` cross-model 评测方法论的"经济性对比要在额度不竞争时测"）。
+
 ### 6.6 2026-06-21 书稿 worker 实测
 
 在 `writing-reviewer` ch07 多模型评测中，`codebuddy --model kimi-k2.6` 已跑通三轮：
@@ -241,6 +253,32 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 - r2 bootstrap 曾出现内部 shell/write 工具长时间挂起。若 1-2 分钟没有 `STATUS.json`，PM 应先 Esc 中断，确认无业务改动后重启 tmux session，再投递 Full Prompt。
 - r3 曾把 review/result 写到主 worktree 并在根目录写 `STATUS.json`。PM 收口时必须同时检查工作目录、报告路径和 `git status --short`，必要时只把允许文件移回对应 worktree 并记录 `pm_notes`。
 - worker 可能在提交后再次更新 `metadata.json` 的完成态字段，导致未提交尾巴。若只剩本轮报告目录下的 metadata，可补一个 `chore(eval): finalize codebuddy kimi metadata` 提交。
+
+### 6.7 2026-06-26 复测更新（多模型 eval + 关键修复）
+
+在 `writing-reviewer` v0.10.7 cross-model eval 中，codebuddy backend 并发跑了 3 个 worker（`kimi-k2.6` / `deepseek-v4-flash` / `deepseek-v4-pro`，同 ch08 baseline 71 hard FAIL），验证 backend 在多模型 fan-out 场景下端到端可用。kimi-k2.6 pilot 实测：before=71 → pass-1=51（一批 ≤20），无 path 漂移，产物全在 worktree 内。
+
+**关键修复：eval snapshot 拷进 worktree（self-contained pattern）。**
+
+- 根因：eval 的 skill 快照（`research/verification/.../skill-snapshots/<ver>/`）在主仓库是 **untracked**，fresh worktree 只能看到 tracked 文件，**看不到 snapshot**。
+- claude-code worker 可用主仓库绝对路径绕过（能读 cwd 外文件）；**codebuddy 不行**——其 trust-folder 限制只允许读 cwd 内文件，主仓库路径读不到。
+- 修复（backend 无关，推荐作为 eval worker 默认）：spawn 时把冻结 snapshot **拷一份进 worktree**（如 `cp -R <snapshot> <worktree>/skill-snapshot-v0107`），worker 用 worktree-local 相对路径 `./skill-snapshot-v0107` 读。彻底消除跨目录访问 / trust 限制 / path 漂移三类问题。
+- 同理 eval 的 `runs/` 输出目录也写 worktree 内（worker 自建），commit 后由 PM 拷回主仓库归档。
+
+**spawn helper（已沉淀）：** `research/verification/writing-reviewer-skill-version-eval-260622/codebuddy-spawn.sh`
+- 一条命令完成：worktree add + snapshot 拷贝 + session context + tmux（codebuddy 交互 + MCP off）。
+- 用法：`codebuddy-spawn.sh <model> <model_short> <ch_num> <ch_file> <baseline_branch> <run_name> <prompt_file>`
+- 交互部分（trust prompt / bootstrap / full mission）仍由 PM 用 `tmux send-keys` 发（trust 选 option 1 "Trust folder only"，**不要**信任父目录避免跨 worktree 误读）。
+
+**MCP off（正文修订任务）：** `--strict-mcp-config --mcp-config /tmp/empty-mcp.json`（`/tmp/empty-mcp.json` = `{"mcpServers":{}}`）。修订任务不用 MCP，关掉减前言；避免 WorkBuddy MCP 连接器 GUI 授权弹窗。
+
+**render-runtime-profile 已支持 codebuddy / qoderwork-cn（2026-06-26 补齐）：** `scripts/render-runtime-profile.sh` 现支持 `--backend codebuddy` 和 `--backend qoderwork-cn`,与 claude-code/codex/opencode 同走统一 spawn 路径。要点:
+- codebuddy: 默认二进制 `/Applications/WorkBuddy.app/.../codebuddy`,batch 恒加 `-y`(headless 要求),`--no-mcp` 注入 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`,`--dangerously-skip-permissions` 在交互式也加 `-y`。
+- qoderwork-cn: 默认二进制 `/Applications/QoderWork CN.app/.../qoderclicn`(路径含空格,脚本内部 `%q` 保护),**自动前置 `env -u` 清除 6 个 SDK 变量**(`QODER_AGENT_SDK_ENTRYPOINT` 等,见 ref 07 §5.1),`--no-mcp` 同 codebuddy。
+- snapshot-copy-into-worktree(§6.7 上文 + DEC-037)仍由 spawn helper 或 PM 在 spawn 后拷贝;render-runtime-profile 只渲染命令,不拷文件。
+- eval 场景(codebuddy/qoder worktree 隔离)推荐组合:`--backend {codebuddy|qoderwork-cn} --model <m> --no-mcp --dangerously-skip-permissions`(交互式)或 `--mode batch --prompt-file <f>`(批处理),配合 `spawn-worker.sh`。
+
+**收口仍需 PM 检查（沿用 §6.6 r3 教训）：** 即使有 snapshot-copy，PM 收口仍要 `git -C <worktree> status --short` 确认产物全在 worktree 内、主仓库无 worker 误写；commit 后检查 metadata 尾巴。
 
 ## 7. tmux Worker 启动示例
 
