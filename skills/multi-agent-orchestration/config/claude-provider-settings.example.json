@@ -1,10 +1,18 @@
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "PASTE_YOUR_TOKEN_HERE",
+    "ANTHROPIC_API_KEY": "PASTE_YOUR_TOKEN_HERE",
     "ANTHROPIC_BASE_URL": "https://your-provider.example.com/anthropic",
+    "ANTHROPIC_MODEL": "model-name",
+    "ANTHROPIC_MODEL_NAME": "model-name-display",
+    "ANTHROPIC_REASONING_MODEL": "model-name",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "model-name",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "model-name-display",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "model-name",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "model-name-display",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "model-name",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "model-name-display",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "model-name",
-    "ANTHROPIC_REASONING_MODEL": "model-name"
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "model-name-display"
   }
 }

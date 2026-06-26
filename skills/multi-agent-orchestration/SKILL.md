@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.16.5"
+version: "1.16.6"
 ---
 
 # Multi-Agent Orchestration
@@ -632,3 +632,27 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 - `templates/checkpoint-status.json`：`STATUS.json` 模板。
 - `templates/checkpoint-result.md`：完成/失败结果摘要模板。
 - `templates/checkpoint-patch-summary.md`：PR review 用 diff 摘要模板。
+
+## 11. 评估与验收
+
+### 评估范围
+
+本 skill 评估对象 = spawn-worker + sentinel + pm-monitor + render-runtime-profile + clean-worktree 的**协同行为**;不评估具体 worker backend(claude / codex / opencode)本身的能力。
+
+### Hard Fail(出现即不通过)
+
+1. 防逃逸门禁未过(§2.1),PM 直接写业务代码。
+2. spawn-worker.sh 启动后 pane cwd ≠ worktree 或 branch ≠ 目标分支(gate 失败)。
+3. worker 写 STATUS 同义词(completed / finished)而非字面 `done`,sentinel 不退出。
+4. worker 改完文件不 commit,PM 收口验到空 diff。
+5. 真实 settings(config/*.settings.json)进入 git 追踪或打包件。
+
+### Benchmark case
+
+- `smoke-tmux-worker.sh`:临时 repo e2e(spawn 1 worker 跑完,STATUS=done,diff 非空,clean 无残留)。
+- 建议补 `smoke-e2e-wave.sh`:spawn 2 worker 并行改不重叠文件,sentinel 等终态,验证两个 PR diff 范围独立、STATUS 均 done、clean 无残留。
+
+### 静态检查 vs 动态评估
+
+- **静态**:`lint-wait-script.sh`(wait / monitor 脚本 lint)+ `check-dependencies.sh`(preflight 依赖检查)。
+- **动态**:`smoke-tmux-worker.sh`(e2e 端到端)+ `smoke-provider-settings.sh`(provider 验证,需真实 key,optional)。

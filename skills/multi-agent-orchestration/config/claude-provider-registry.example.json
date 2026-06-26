@@ -1,0 +1,46 @@
+{
+  "_comment": "这是 example 模板——base_url 全用 .example.com 占位。真实 endpoint 对照:GLM=open.bigmodel.cn/api/anthropic, DeepSeek=api.deepseek.com/anthropic, MiniMax=api.minimaxi.com/anthropic",
+  "providers": {
+    "glm": {
+      "base_url": "https://your-glm-provider.example.com/anthropic",
+      "auth_token_env": "GLM_API_KEY",
+      "auth_type": "both",
+      "models": {
+        "glm52": {
+          "model": "glm-5.2[1M]",
+          "display_name": "GLM 5.2"
+        },
+        "glm51": {
+          "model": "glm-5.1",
+          "display_name": "GLM 5.1"
+        }
+      }
+    },
+    "deepseek": {
+      "base_url": "https://your-deepseek-provider.example.com/anthropic",
+      "auth_token_env": "DEEPSEEK_API_KEY",
+      "auth_type": "both",
+      "models": {
+        "v4pro": "deepseek-v4-pro[1m]",
+        "v4flash": "deepseek-v4-flash[1m]"
+      }
+    },
+    "minimax": {
+      "base_url": "https://your-minimax-provider.example.com/anthropic",
+      "auth_token_env": "MINIMAX_API_KEY",
+      "auth_type": "both",
+      "models": {
+        "m3": "MiniMax-M3[1M]",
+        "m27": "MiniMax-M2.7"
+      }
+    },
+    "gptsapi": {
+      "base_url": "https://your-gptsapi.example.com/anthropic",
+      "auth_token_env": "GPTSAPI_API_KEY",
+      "auth_type": "both",
+      "models": {
+        "opus48": "claude-opus-4-8[1M]"
+      }
+    }
+  }
+}

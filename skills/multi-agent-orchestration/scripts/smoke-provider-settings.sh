@@ -4,12 +4,13 @@
 #
 # For every settings file (except the .example template), this script:
 #   1. extracts the HAIKU model name from the file
-#   2. runs `claude --settings <file> --model <model>` with a deterministic prompt
+#   2. runs Claude Code through claude-provider-env.sh with a deterministic prompt
 #   3. checks the response contains the expected token
 #
-# Why --model: per testing, Claude Code's --model flag is the only thing that
-# reliably overrides ANTHROPIC_DEFAULT_*_MODEL in the user's global
-# ~/.claude/settings.json. Without --model, the global config wins.
+# Why the wrapper: Claude Code can inherit provider/model values from user-level
+# ~/.claude/settings.json or parent ANTHROPIC_* env vars. The wrapper clears
+# inherited provider-routing env, reloads this settings file, pins --model, and
+# injects --setting-sources project,local.
 #
 # Usage:
 #   bash scripts/smoke-provider-settings.sh
@@ -23,6 +24,7 @@ set -uo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CONFIG_DIR="$SCRIPT_DIR/../config"
+PROVIDER_ENV_WRAPPER="$SCRIPT_DIR/claude-provider-env.sh"
 
 PROMPT_TEMPLATE='Reply with exactly: %s'
 
@@ -54,6 +56,8 @@ else
   exit 2
 fi
 
+[ -x "$PROVIDER_ENV_WRAPPER" ] || { echo "ERROR: missing executable wrapper: $PROVIDER_ENV_WRAPPER" >&2; exit 2; }
+
 PASS=0
 FAIL=0
 FAILED_FILES=()
@@ -76,7 +80,8 @@ for f in "${TEST_FILES[@]}"; do
   prompt=$(printf "$PROMPT_TEMPLATE" "$token")
 
   response=$(printf '%s' "$prompt" \
-    | claude --settings "$f" --model "$model" \
+    | "$PROVIDER_ENV_WRAPPER" --settings "$f" --model "$model" -- \
+        claude --settings "$f" --model "$model" \
         -p --output-format text --permission-mode acceptEdits 2>&1 \
     || true)
 

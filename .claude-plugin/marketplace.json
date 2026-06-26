@@ -206,7 +206,7 @@
     {
       "name": "multi-agent-orchestration",
       "description": "多 Agent 本地执行编排，支持 worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口",
-      "version": "1.8.2",
+      "version": "1.16.6",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -293,8 +293,8 @@
     },
     {
       "name": "de-ai-polish",
-      "description": "检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔",
-      "version": "1.1.0",
+      "description": "检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔，支持 Voice Calibration 与质量评分门禁",
+      "version": "2.0.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

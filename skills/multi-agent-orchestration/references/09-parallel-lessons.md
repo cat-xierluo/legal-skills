@@ -127,6 +127,22 @@ Agent 全自动运行需要预授权。在每个 worktree 的 `.claude/settings.
 
 **结论**：任务定义越明确、文件边界越清晰，Agent 执行效率越高。
 
+### T5. Claude Code provider env 隔离
+
+MyAgents 的 Claude Agent SDK 路径给了一个可移植经验：不要把"当前任务使用哪个 provider/model"留给全局配置合并，而要在启动子进程前构造一次有效 runtime snapshot，并把 provider env 显式写进子进程环境。
+
+迁移到 tmux/CLI worker 时采用以下规则：
+
+| 问题 | 原因 | 解决方案 |
+|------|------|---------|
+| 多个 provider/model 要维护多个 settings 文件 | Claude 原生 settings 的 `ANTHROPIC_BASE_URL` / token / model 都是单值 | 用 provider registry 合并多个 provider：每个 provider 有自己的 base URL、key env 和 models |
+| settings 指向 GLM，但 banner 显示 MiniMax | 用户级 `~/.claude/settings.json` 或父 shell 的 `ANTHROPIC_MODEL` 仍参与合并 | 用 `render-runtime-profile.sh` 默认生成的 `claude-provider-env.sh` wrapper 命令 |
+| settings 有 `ANTHROPIC_AUTH_TOKEN`，Claude 仍回退到旧 keychain/API key | Claude Code 内部可能读取另一套 auth env | wrapper 将 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` 配对补齐 |
+| 用户级 settings 写了 provider env | CLI 默认会读 user/project/local 多层 settings | wrapper 给 `claude` 注入 `--setting-sources project,local`，并设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1` |
+| 后续排查不知道 worker 怎么启动 | 命令字符串不可审计 | `spawn-worker.sh --env-isolation "$PROVIDER_ENV_ISOLATION"` 写入 `METADATA.json` |
+
+标准路径：PM 不手写裸 `claude --settings ...`；优先用 `render-runtime-profile.sh --backend claude-code --provider-registry ... --api-provider ... --model ...` 渲染。旧 settings 路径仍可用：`render-runtime-profile.sh --backend claude-code --settings ... --model ...`。两种路径都要把 `WORKER_COMMAND` 和 `PROVIDER_ENV_ISOLATION` 传给 `spawn-worker.sh`。
+
 ---
 
 ## 通用
@@ -244,11 +260,18 @@ settings 内容参考 `config/claude-provider-settings.example.json`。真实 to
 
 使用规则：
 
-1. 第三方 API：用 `claude --settings /path/to/provider.settings.json ...`，整份 settings 同时配置 token、base URL、默认模型、timeout 和 thinking tokens。
+1. 第三方 API：用 `claude --settings /path/to/provider.settings.json --model <provider-model> ...`，整份 settings 同时配置 token、base URL、`ANTHROPIC_MODEL`、默认模型映射、timeout 和 thinking tokens。
 2. 订阅/OAuth：才用 `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude ...`。
 3. 不要在 provider profile 上套 `env -u ANTHROPIC_AUTH_TOKEN` 或 `env -u ANTHROPIC_BASE_URL`，否则会把第三方 API 配置清掉。
-4. provider profile 下不要额外指定 `--model sonnet`；模型映射由 `ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 和 `ANTHROPIC_DEFAULT_OPUS_MODEL` 提供。
-5. 一个 worker prompt 里写清 `Runtime Profile` 和 settings 文件路径，但不要写 token 值。
+4. provider profile 下不要指定 `--model sonnet` 这类 Anthropic 原生别名；要指定 provider 的真实模型名，例如 `glm-5.2[1M]`、`MiniMax-M3[1M]`、`deepseek-v4-pro[1m]`。
+5. 只传 `--settings` 不足以隔离用户级 `~/.claude/settings.json`。若用户级 settings 中有 `ANTHROPIC_MODEL`，它可能覆盖默认模型选择；PM 必须检查启动 banner 与 `STATUS.json` 中的 model/provider 一致。
+6. 一个 worker prompt 里写清 `Runtime Profile` 和 settings 文件路径，但不要写 token 值。
+
+排障规则：
+- banner 显示的模型不是目标模型：立即停止 worker，补 `--model` 或修 provider settings 的 `ANTHROPIC_MODEL`。
+- 最小请求返回 `401/403`：优先查 token / base URL。
+- 最小请求返回 `429/529` 且错误来源是目标 provider 网关：这通常是限流 / 拥塞，不是用户级 settings 覆盖。
+- 最小请求能跑通但长任务卡启动：禁用无关 MCP（`--strict-mcp-config --mcp-config '{"mcpServers":{}}'`）再测。
 
 ### G10. 一行命令 Agent 的接入条件
 
