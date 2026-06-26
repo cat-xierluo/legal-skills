@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.16.1"
+version: "1.16.5"
 ---
 
 # Multi-Agent Orchestration
@@ -81,13 +81,18 @@ PM 代理纪律：
 - 只有用户明确要走 Claude 订阅/OAuth 时，才使用 `claude-oauth-*` profile，并清理第三方 provider 环境变量。
 - 需要消耗 Codex / OpenAI 额度或使用 Codex 配置时，worker backend 选 Codex。
 - 需要消耗 OpenCode 已配置的 provider/model，或要使用 OpenCode 的 `opencode run` / `opencode acp` 能力时，worker backend 选 OpenCode。
+- 需要消耗 WorkBuddy/CodeBuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
 - 其他 Agent 只要能用一行命令启动，并能在指定 cwd 读写文件，也可作为 custom CLI worker。
 - 需要稳定进程生命周期和人工接管时，优先 `tmux + worktree`；触发 §2.1 时，`tmux + worktree` 是默认执行层，不是可静默跳过的建议。
 - ACP 只在 adapter 已稳定、能输出结构化状态时启用；没有 adapter 时不要为了协议增加不确定性。
 
 环境/profile 纪律：
 - PM 启动 worker 时必须显式写 `Runtime Profile`、settings/profile 路径、模型来源和关键环境变量处理方式，不假定 Claude Code、Codex、OpenCode 共享同一套 shell 环境。
-- Claude Code 第三方 API provider profile 要保留 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / 默认模型映射；不要套用 OAuth 的清理命令。
+- Claude Code 第三方 API provider 推荐使用 provider registry：`config/claude-provider-registry.example.json` 描述多个 provider 的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models`；真实 registry 放 ignored local 文件，真实 key 优先放环境变量。旧的单 provider `--settings <*.settings.json>` 路径保留兼容。
+- Claude Code 第三方 API provider profile 要保留 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / 默认模型映射；不要套用 OAuth 的清理命令。registry 模式由 wrapper 动态生成这些 env，不需要为每个模型维护一个 settings 文件。
+- Claude Code 第三方 API provider **必须显式传 `--model <provider-model>`**，settings 文件也应包含 `ANTHROPIC_MODEL` / `ANTHROPIC_MODEL_NAME`。只传 `--settings` 不足以隔离用户级 `~/.claude/settings.json` 或继承环境中的 `ANTHROPIC_MODEL`；实测会出现 settings 指向 GLM、界面和实际默认模型仍显示 MiniMax 的混合状态。
+- Claude Code 第三方 API provider 默认由 `scripts/render-runtime-profile.sh` 生成 `scripts/claude-provider-env.sh` wrapper 命令。wrapper 会先清理继承的 Claude/Anthropic provider 路由变量，再从目标 settings JSON 导入 env，或从 registry 的 provider/model intent 解析 env；补齐 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`，设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`，并给 `claude` 注入 `--setting-sources project,local`，避免用户级 `~/.claude/settings.json` 的 provider/model 污染本次 worker。
+- 只有排障时才可用 `--no-provider-env-isolation` 绕过 wrapper；PM 必须在 Wave 计划和 `METADATA.json` 的 `runtime.env_isolation` 中记录这个例外，并启动后核对 banner / STATUS provider。
 - Claude Code 订阅/OAuth profile 才清理第三方 provider 环境变量，避免误走外部 API。
 - Codex / OpenAI worker、OpenCode worker 和 custom CLI worker 使用各自 profile；不要把 Anthropic provider 环境变量当作通用 worker 环境。
 - Worker bootstrap 必须把 `which claude/codex/opencode`、版本号、cwd、关键 profile 名和 `node/npm/python/cargo` 等运行信息写入 `STATUS.json`，便于 PM 判断“环境不一样”是否影响任务。
@@ -134,7 +139,7 @@ Wave 是在同一 base ref、同一批冲突假设下启动的一组并行 worke
 Wave 启动前，PM 必须写清：
 - `wave_id`、base ref、目标、worker 清单、每个 worker 的分支/worktree/session。
 - 每个 worker 的类型：`ui-wiring`（低风险 UI 接线）、`contract-extension`（共享契约/依赖变更）、`tauri-command`（Rust/Tauri/本机依赖）、`docs/research`、`custom`。
-- runtime profile / provider / model / settings/profile 路径 / 额度来源 / 并发槽位。超过 3-4 个 worker 时，不要压在单一 API provider 或同一个 settings 文件上；应跨 Claude provider、Codex/OpenAI、OpenCode、local/OSS 等 profile 分流。
+- runtime profile / provider / model / registry 或 settings/profile 路径 / 额度来源 / 并发槽位。超过 3-4 个 worker 时，不要压在单一 API provider 或同一个 provider key 上；应跨 Claude provider、Codex/OpenAI、OpenCode、local/OSS 等 profile 分流。
 - 共享风险：`package.json`、锁文件、`src-tauri/`、`src/shared/`、全局布局、DEC 编号或同一模块入口。
 - 预期 PR 数、收口顺序、下一 Wave 进入条件。
 
@@ -142,7 +147,7 @@ Wave 启动前，PM 必须写清：
 
 Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
 - 一个 slot 表示一条可并发额度 lane：`backend + settings/profile path + provider + model + max_concurrency`。
-- Claude Code 第三方 provider 用具体 settings 文件区分，例如 `config/minimax-M3.settings.json`、`config/glm-5.2.settings.json`；真实 settings 文件保持本地 ignored，不提交。
+- Claude Code 第三方 provider 推荐用 registry + provider id + model alias 区分，例如 `config/claude-providers.local.json` + `glm/glm52`、`deepseek/v4flash`；旧路径也可用具体 settings 文件区分，例如 `config/minimax-M3.settings.json`、`config/glm-5.2.settings.json`。真实 registry/settings 文件保持本地 ignored，不提交。
 - Codex 用 Codex profile / model 区分；OpenCode 用 `provider/model` profile 区分；custom worker 写明实际命令来源。
 - 默认同一 provider/settings 文件最多放 3 个 worker；只有低风险任务且上一 Wave 表现稳定时才放到 4 个。需要 5-6 个 worker 时，优先拆到第二 provider 或 Codex/OpenCode/local profile。
 - 高风险任务（共享契约、Tauri/Rust、本机依赖、锁文件）优先给上一 Wave 指令遵循和验证表现最好的 profile，且每个高风险共享域通常只开 1 个 worker。
@@ -215,6 +220,12 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
 
 ## 4. 命名规则
 
+**一处定义、各处引用一致（硬约束，实测踩坑）。** branch / worktree / session / run-dir / spec 必须从**同一个 source** 派生，在各处（PM Wave 计划、`spawn-worker.sh` 参数、worker prompt 里写的 Branch/Worktree/Session Context、METADATA.json、回归库 `runs/<variant>/`）引用完全一致。实测中 PM 手抖把 `wr-v0107-kimi-k26-ch08` 的 `wr-` 前缀剥掉、或 branch 与 session 名对不上，直接导致 worker 的 Isolation Gate（`pwd` / `git branch --show-current` 自检）拦截、sentinel 找不到 `STATUS.json`、收口 `git diff` 验空 diff。规避：
+
+- PM 在 Wave 计划里**一次写下** `{branch, worktree, session, run-dir}` 四元组，后续所有 `tmux send-keys` / 纠偏 / 收口命令都从该四元组复制，不在中途重新键入或简化。
+- `scripts/spawn-worker.sh` 内部已从单一 source 派生：`BRANCH` → `safe_branch`（worktree-safe）→ 默认 `WORKTREE=.claude/worktrees/tmux-<safe_branch>` → `SESSION_CONTEXT=<worktree>/.claude/agent-sessions/<session>`。PM 只需保证传入的 `--branch` 和 `--session` 本身一致且完整，helper 不会再让 worktree 与 branch 脱钩。
+- cross-model / 评测场景的命名四元组带模型标识（见 `agent-eval-lab` 的 model-aware 命名约定），整条链路用同一个 `variant_slug`，避免 PM 在不同环节用不同简称。
+
 分支名面向远端协作和 PR，必须体现任务语义，不写执行来源。
 
 ```text
@@ -282,6 +293,7 @@ PM 派 worker 时**必须以 `templates/worker-prompt.md` 的 Full Worker Prompt
 
 默认工具面保持收敛：
 - `check-dependencies.sh`：新机器或启动 Wave 前做一次 preflight。
+- `claude-provider-env.sh`：Claude Code 第三方 provider worker 的 registry/settings-derived env 隔离 wrapper。
 - `render-runtime-profile.sh`：为每个 worker 渲染 backend/settings/profile/model/slot 和启动命令。
 - `spawn-worker.sh`：创建 worktree、Session Context 和 tmux session。
 - `sentinel.sh`：每个 worker 一个，PM 用 `run_in_background=true` 启，worker 终态时唤起 PM（见 §7.2）。
@@ -298,9 +310,9 @@ eval "$(bash scripts/render-runtime-profile.sh \
   --backend claude-code \
   --runtime-profile minimax \
   --api-provider minimax \
-  --model claude-sonnet-4-5 \
+  --model m3 \
   --provider-slot minimax-1 \
-  --settings config/minimax-M3.settings.json)"
+  --provider-registry config/claude-providers.local.json)"
 
 bash scripts/spawn-worker.sh \
   --project /path/to/repo \
@@ -311,6 +323,7 @@ bash scripts/spawn-worker.sh \
   --api-provider "$API_PROVIDER" \
   --model "$MODEL" \
   --provider-slot "$PROVIDER_SLOT" \
+  --env-isolation "$PROVIDER_ENV_ISOLATION" \
   --verify-cmd 'npm run typecheck' \
   --command "$WORKER_COMMAND"
 ```
@@ -318,11 +331,14 @@ bash scripts/spawn-worker.sh \
 启动后必须通过最小门禁：`tmux has-session` 存活、pane cwd 指向 worktree、`git branch --show-current` 等于目标分支、`Session Context/METADATA.json` 已记录 base/runtime/verification、`Session Context/STATUS.json` 在 1-2 分钟内出现。失败时停止 session 或发送 bootstrap correction，不要在 PM 主目录继续实现。
 
 常用 worker command：
-- Claude Code 第三方 provider：`claude --settings <local-provider.settings.json> --permission-mode auto`。真实 settings 不提交；模板见 `config/claude-provider-settings.example.json`。
+- Claude Code 第三方 provider（推荐 registry）：用 `render-runtime-profile.sh --backend claude-code --provider-registry <local-registry.json> --api-provider <provider-id> --model <model-alias>` 生成命令；默认会包 `scripts/claude-provider-env.sh`，并把模型别名解析成真实 `claude --model <provider-model>`。真实 registry 不提交；模板见 `config/claude-provider-registry.example.json`。
+- Claude Code 第三方 provider（兼容 settings）：也可用 `render-runtime-profile.sh --backend claude-code --settings <local-provider.settings.json> --model <provider-model>` 生成命令；真实 settings 不提交；模板见 `config/claude-provider-settings.example.json`。启动后必须检查 banner 模型名；若仍显示用户默认 provider，先停 worker 排查 registry/settings / wrapper / 环境继承。
 - Claude Code 订阅/OAuth：`env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude --permission-mode auto`。
-- Claude Code 批处理：`claude --settings <settings> -p --output-format stream-json --permission-mode acceptEdits < /tmp/task.prompt.md`。
+- Claude Code 批处理：用 `render-runtime-profile.sh --backend claude-code --mode batch --settings <settings> --model <provider-model> --prompt-file /tmp/task.prompt.md` 生成；第三方 provider 同样默认包 `claude-provider-env.sh`，batch 输出会自动包 `bash -lc` 处理重定向。
 - Codex：`codex exec -a never -s danger-full-access - < /tmp/task.prompt.md`。
 - OpenCode：`opencode run --format json --model <provider/model> "$(cat /tmp/task.prompt.md)"`，或交互式 `opencode --model <provider/model>`。
+- WorkBuddy / CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型,如 kimi-k2.6> [--no-mcp] [--dangerously-skip-permissions]` 生成；吃 WorkBuddy 桌面端登录态和平台额度，无需 API Key。详见 `references/08-workbuddy-cli-worker.md`。
+- QoderWork CN（`qoderclicn`）：用 `render-runtime-profile.sh --backend qoderwork-cn --model <平台模型,如 qmodel_latest> [--no-mcp] [--dangerously-skip-permissions]` 生成；脚本自动前置 `env -u` 清除 SDK 变量、处理含空格的二进制路径。详见 `references/07-qoderwork-cli-worker.md`。
 - 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的命令。
 
 **`<` redirect 必须用 `bash -lc` 包**（FaroPDF Wave 1 实战，见 [DEC-033]）：`spawn-worker.sh:305` 内部 `tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"` 直接 exec command（不通过 shell），`<` / `>` / `|` / `&&` 等 shell metachar 不展开。如果 `--command` 含 `<` 重定向，必须包 `bash -lc 'real-command < /tmp/prompt.md'`，否则 worker 进程拿不到 stdin 立即退出，sentinel 等 `--max-wait` 才 timeout。错误：`--command 'claude -p < /tmp/x.md'`；正确：`--command "bash -lc 'claude -p < /tmp/x.md'"`。
@@ -575,7 +591,8 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/03-checkpoint-files.md`：`STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md` 的字段和模板。
 - `references/04-sentinel-design.md`：PM 巡检（sentinel）bash 模式设计与信号。
 - `references/05-legal-domain-patterns.md`：法律项目拆解样例（诉讼/非诉阶段模型、任务字段、Agent 路由）。
-- `config/claude-provider-settings.example.json`：Claude Code 第三方 API provider settings 模板。
+- `config/claude-provider-registry.example.json`：Claude Code 第三方 API provider/model registry 模板。
+- `config/claude-provider-settings.example.json`：Claude Code 第三方 API provider settings 兼容模板。
 
 Agent CLI worker backend（先看总览，再查具体工具）：
 - `references/06-agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
@@ -594,6 +611,7 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 
 脚本：
 - `scripts/check-dependencies.sh`：检查核心依赖、backend CLI、GitHub CLI 和终端分屏工具。
+- `scripts/claude-provider-env.sh`：从 Claude provider registry 或 settings JSON 构造本次 worker 的隔离 env，屏蔽用户级 provider/model 污染。
 - `scripts/render-runtime-profile.sh`：按 backend/profile 生成 worker command、prompt context 和 spawn metadata。
 - `scripts/spawn-worker.sh`：创建隔离 worktree、Session Context 和 tmux session，并输出启动 gate。
 - `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session、Wave 和多信号进展监控。

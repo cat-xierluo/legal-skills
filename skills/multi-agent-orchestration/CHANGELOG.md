@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.16.6] - 2026-06-26
+
+### Added
+- **ref 08 §6.7 复测更新（codebuddy 多模型 eval）**：writing-reviewer v0.10.7 cross-model eval 中，codebuddy backend 并发跑 kimi-k2.6 / deepseek-v4-flash / deepseek-v4-pro（同 ch08 baseline 71 hard FAIL），三个 worker pass-1 全部 71→51，backend 在多模型 fan-out 下端到端可用。
+- **snapshot-copy-into-worktree pattern（backend 无关关键修复）**：eval skill 快照在主仓库 untracked → fresh worktree 看不到；codebuddy trust-folder 又禁止跨目录读。修复：spawn 时把冻结 snapshot 拷进 worktree，worker 用 worktree-local 相对路径读，同时消除跨目录访问 / trust 限制 / path 漂移三类问题。详见 DEC-037。
+- **`codebuddy-spawn.sh` helper**：`research/verification/writing-reviewer-skill-version-eval-260622/codebuddy-spawn.sh`，一条命令完成 worktree add + snapshot 拷贝 + session context + tmux（codebuddy 交互 + MCP off）。codebuddy/qoder spawn 暂用此手动 helper。
+- **codebuddy MCP-off 标准flag**：正文修订任务用 `--strict-mcp-config --mcp-config /tmp/empty-mcp.json`（`{"mcpServers":{}}`）关 MCP，减前言 + 避免 WorkBuddy MCP 连接器 GUI 授权弹窗。
+- **`render-runtime-profile.sh --no-mcp` 开关**：Claude Code worker 传 `--no-mcp` 自动注入 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`，跳过 "new MCP servers found" 审批弹窗（实测有效）。
+- **eval worker 权限约定（worktree 隔离 → 最高权限）**：eval/test worker 都在独立 worktree 里跑、安全隔离，统一用最高权限免任何手动点击——Claude Code `--permission-mode bypassPermissions`（或 `--dangerously-skip-permissions`，经 render-runtime-profile 的 `--permission-mode` 传入）、codebuddy `-y`（`--dangerously-skip-permissions`）、qoderclicn `--dangerously-skip-permissions`。配合 `--no-mcp`，spawn 后直达 REPL，零点击。
+
+### Known Limitations
+- **`render-runtime-profile.sh` 仍不支持 codebuddy / qoderclicn backend**：只支持 claude-code（registry/settings）/ codex / opencode。codebuddy/qoder worker 暂走手动 helper 或原生 `--worktree --tmux`。TODO：把这两个 backend 加进 render-runtime-profile，统一 spawn 路径。
+
+## [1.16.5] - 2026-06-23
+
+### Added
+- **Claude provider/model registry 模式**：新增 `config/claude-provider-registry.example.json`，按 MyAgents 的 provider intent 思路，把多个 provider 的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models` 放入一个本地 registry。真实 registry 仍放 ignored local 文件，真实 key 优先用环境变量承载。
+- **`claude-provider-env.sh` 支持 registry**：新增 `--provider-registry PATH --api-provider ID --model MODEL_ALIAS`，启动时解析 provider base URL、auth token 和模型别名，构造本次 worker 的有效 env。
+- **`render-runtime-profile.sh` 支持 registry**：新增 `--provider-registry`，在渲染阶段把 model alias 解析成真实 provider model，并传给 `claude --model`；旧 `--settings` 路径保留兼容。
+
+### Changed
+- **文档改为 registry-first**：`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 改为推荐 registry + provider id + model alias，旧的每模型一个 settings 文件标为兼容路径。
+
+### Reason
+- 来源：用户确认不同模型来源有不同 Base URL、API key 和模型清单，希望参照 MyAgents 运行时动态选择 provider/model 的方式，减少为每个模型维护独立 settings JSON。
+- 决策：保留两种模式。registry 模式作为默认推荐，settings 模式作为已有流程和排障兼容。这样 Agent 后续只需要指定 `api_provider` 与 `model alias`，由 wrapper 动态生成 Claude Code worker 环境。
+
+## [1.16.4] - 2026-06-23
+
+### Added
+- **Claude Code provider env isolation wrapper**：新增 `scripts/claude-provider-env.sh`，借鉴 MyAgents 的 runtime snapshot/env 构造思路，在启动第三方 provider worker 前清理继承的 Claude/Anthropic provider 路由变量，从目标 settings JSON 导入 env，补齐 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`，设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`，并给 `claude` 注入 `--setting-sources project,local`。
+- **runtime metadata env isolation 字段**：`spawn-worker.sh` 新增 `--env-isolation`，写入 `METADATA.json` 的 `runtime.env_isolation`，方便 PM 复盘某个 worker 是否走了 wrapper、OAuth 清理或继承环境。
+
+### Changed
+- **`render-runtime-profile.sh` 默认包 wrapper**：`claude-code + --settings + --model` 现在默认生成 `bash scripts/claude-provider-env.sh ... -- claude ...` 命令；排障时可显式 `--no-provider-env-isolation` 绕过。
+- **batch render 自动 shell-wrap**：`render-runtime-profile.sh --mode batch` 生成的 Claude/Codex/OpenCode 命令会自动包 `bash -lc`，避免 `<` 重定向或 `$(cat prompt)` 在 `spawn-worker.sh` 的 tmux command 中不展开。
+- **Provider smoke 与文档同步**：`smoke-provider-settings.sh` 改为走 wrapper；`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 更新为 settings + `--model` + wrapper 三件套口径。
+- **Provider settings 模板补全**：example settings 增加 `ANTHROPIC_API_KEY` 和 haiku/opus/sonnet `_MODEL_NAME` 字段；真实 settings 仍保持本地 ignored。
+
+### Reason
+- 来源：用户指出另一个项目 MyAgents 在运行时可以动态选择 provider/model，并且可能屏蔽了用户级 Claude settings。对照 MyAgents 发现关键不是 SDK 本身，而是一次会话启动前的有效配置快照、settings-sourced provider env 屏蔽和子进程 env 显式构造。
+- 本次把该模式移植到 Claude Code CLI worker 层，解决用户级 `~/.claude/settings.json` 指向 MiniMax 时，任务指定 GLM/DeepSeek/MiniMax 等 provider 仍可能被全局配置污染的问题。
+
+## [1.16.3] - 2026-06-23
+
+### Fixed
+- **Claude Code 第三方 provider 启动命令强制显式模型**：`render-runtime-profile.sh` 在 `claude-code + --settings` 但缺少 `--model` 时直接报错，避免用户级 `~/.claude/settings.json` 或继承环境中的 `ANTHROPIC_MODEL` 覆盖 provider profile。
+- **Provider settings 模板补全当前模型字段**：`config/claude-provider-settings.example.json` 新增 `ANTHROPIC_MODEL`、`ANTHROPIC_MODEL_NAME`、`ANTHROPIC_DEFAULT_FABLE_MODEL` 和 `ANTHROPIC_DEFAULT_FABLE_MODEL_NAME`，与现有 haiku/opus/sonnet 映射共同描述 provider 模型。
+- **启动文档修正**：`SKILL.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 不再建议只用 `claude --settings <settings>`；第三方 provider worker 标准命令改为 `claude --settings <settings> --model <provider-model> ...`，并要求 PM 核对启动 banner。
+- **Provider settings 排障口径**：补充 401/403、429/529、banner 模型错位、MCP 卡启动的判断规则。
+
+### Reason
+- 来源：法律 AI 书 `writing-reviewer` skill-version eval 中，PM 以 GLM 5.2 settings 启动 worker，交互界面仍显示 `MiniMax-M3[1m]`。诊断发现用户级 `~/.claude/settings.json` 配置了 `ANTHROPIC_MODEL=MiniMax-M3[1m]`，而本地 provider settings 只配置 base URL、token 和默认模型映射，没有配置当前会话模型。
+- 实测结果：只传 `--settings glm-5.2.settings.json` 时 banner 显示 MiniMax；补 `--model glm-5.2[1M]` 后 banner 显示 GLM；在 settings 内补 `ANTHROPIC_MODEL` 后，即使漏传 `--model`，banner 也不再被用户级 MiniMax 默认覆盖。
+- 同轮诊断还确认 GLM 5.1 / 5.2 最小请求均返回 `open.bigmodel.cn` 的 529，MiniMax 最小请求正常。这说明 GLM 当时的失败是目标 provider 网关拥塞 / 限流，不是 Claude Code 本地 settings 解析失败或余额不足。
+
 ## [1.16.2] - 2026-06-15
 
 ### Fixed (文档层)
