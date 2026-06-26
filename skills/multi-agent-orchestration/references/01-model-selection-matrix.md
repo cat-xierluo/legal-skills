@@ -34,7 +34,7 @@
 
 | Profile | 目标 | backend | 典型设置 |
 |---------|------|---------|----------|
-| `claude-provider` | 通过第三方 Anthropic-compatible API 启动 Claude Code | Claude Code | `claude --settings /path/to/provider.settings.json ...` |
+| `claude-provider` | 通过第三方 Anthropic-compatible API 启动 Claude Code | Claude Code | 推荐 `render-runtime-profile.sh --backend claude-code --provider-registry ... --api-provider ... --model ...`；兼容 `--settings ... --model ...` |
 | `claude-oauth` | 用户明确要求时才消耗 Claude Code 订阅/OAuth 额度 | Claude Code | `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude ...` |
 | `codex-l1` | 消耗 Codex/OpenAI 额度做常规功能 | Codex | `codex exec -m <model> -a never -s danger-full-access -` |
 | `opencode-l0` | 消耗 OpenCode 已配置 provider 的轻量额度 | OpenCode | `opencode run --format json --model <provider/model> ...` |
@@ -50,28 +50,35 @@
 | `custom-cli` | 接入其他可一行命令启动的 Agent | custom CLI | `<agent-command> < /tmp/task.prompt.md` |
 | `oss-local` | 不消耗云端额度，适合低风险重复任务 | Codex OSS / shell | `codex exec --oss --local-provider lmstudio ...` 或脚本 |
 
-默认 Claude Code worker 使用 `claude-provider`。每个第三方 provider 使用一个本地 settings JSON，参考 `config/claude-provider-settings.example.json`；真实 token 文件应放在项目或用户目录的忽略路径中。settings 是完整环境变量组，包含 Haiku/Sonnet/Opus 默认模型、timeout、thinking tokens 和行为开关，所以启动命令不要额外指定 `--model sonnet`。只有用户明确要走订阅/OAuth 时，才使用 `claude-oauth` 并清理 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN` 和第三方 `ANTHROPIC_BASE_URL`。
+默认 Claude Code worker 使用 `claude-provider`。推荐把多个第三方 provider 合并到一个本地 registry，参考 `config/claude-provider-registry.example.json`；每个 provider 写自己的 base URL、key 环境变量和模型清单，真实 registry 放 ignored local 文件。旧的每 provider 一个 settings JSON 路径继续兼容，参考 `config/claude-provider-settings.example.json`。标准命令由 `render-runtime-profile.sh` 生成，并默认包 `scripts/claude-provider-env.sh`，排除用户级 `~/.claude/settings.json` 的 provider/model 覆写。只有用户明确要走订阅/OAuth 时，才使用 `claude-oauth` 并清理 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN` 和第三方 `ANTHROPIC_BASE_URL`。
 
 ### 1.4 各执行模式下指定模型
 
-**Claude Code Agent Teams 模式**：如果要走第三方 API，先让该 session 加载 provider settings。模型映射由 settings 里的 `ANTHROPIC_DEFAULT_*_MODEL` 变量提供。
+**Claude Code Agent Teams 模式**：如果要走第三方 API，先让该 session 通过 registry 或 settings 加载 provider env，并显式指定 `--model <provider-model>`。registry 模式可用模型别名，但渲染命令时必须解析成 provider 真实模型名。
 
-**Claude Code tmux worker（默认第三方 API settings）**：tmux 启动的是一个后台独立终端 session，可 attach 或 capture。默认启动交互式 Claude Code，使用 `--settings` 加载整份 provider profile。模板见 `config/claude-provider-settings.example.json`。
+**Claude Code tmux worker（推荐 provider registry）**：tmux 启动的是一个后台独立终端 session，可 attach 或 capture。默认启动交互式 Claude Code，由 wrapper 从 registry 解析 provider env。模板见 `config/claude-provider-registry.example.json`。
 
 ```bash
+eval "$(bash scripts/render-runtime-profile.sh \
+  --backend claude-code \
+  --provider-registry config/claude-providers.local.json \
+  --api-provider glm \
+  --model glm52 \
+  --provider-slot glm-1)"
+
 tmux new-session -d \
   -s worker-claude-provider \
   -c .claude/worktrees/tmux-feature \
-  'claude --settings /path/to/provider.settings.json --permission-mode auto'
+  "$WORKER_COMMAND"
 ```
 
-批处理执行 prompt 时，再使用 Claude Code 的 `-p` 非交互模式：
+**Claude Code tmux worker（兼容 settings）**：旧路径仍可直接指定 provider settings。
 
 ```bash
 tmux new-session -d \
   -s worker-claude-provider \
   -c .claude/worktrees/tmux-feature \
-  'claude --settings /path/to/provider.settings.json -p --permission-mode auto --output-format stream-json < /tmp/task.prompt.md'
+  'bash scripts/claude-provider-env.sh --settings /path/to/provider.settings.json --model provider-model -- claude --settings /path/to/provider.settings.json --model provider-model --permission-mode auto'
 ```
 
 **Claude Code tmux worker（可选订阅/OAuth）**：只在用户明确要求使用 Claude 订阅/OAuth 时启用，启动命令里清掉第三方 provider 环境，避免误走 API key 或代理服务。

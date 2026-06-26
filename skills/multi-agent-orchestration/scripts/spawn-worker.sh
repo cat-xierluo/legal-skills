@@ -17,6 +17,7 @@ RUNTIME_PROFILE=""
 API_PROVIDER=""
 MODEL=""
 PROVIDER_SLOT=""
+ENV_ISOLATION=""
 WAVE_ID=""
 WAVE_WORKER_ID=""
 VERIFY_COMMANDS=()
@@ -43,6 +44,8 @@ Options:
   --model NAME     Model name used by the worker
   --provider-slot SLOT
                    Provider concurrency slot for this worker
+  --env-isolation DESC
+                   Provider/env isolation strategy recorded in METADATA.json
   --wave-id ID     Wave ID for this worker
   --wave-worker-id ID
                    Worker ID within the wave
@@ -108,6 +111,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --provider-slot)
       PROVIDER_SLOT="$2"
+      shift 2
+      ;;
+    --env-isolation)
+      ENV_ISOLATION="$2"
       shift 2
       ;;
     --wave-id)
@@ -257,6 +264,7 @@ write_metadata() {
     --arg api_provider "$API_PROVIDER" \
     --arg model "$MODEL" \
     --arg provider_slot "$PROVIDER_SLOT" \
+    --arg env_isolation "$ENV_ISOLATION" \
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
     --argjson verification_commands "$verify_json" \
@@ -278,6 +286,7 @@ write_metadata() {
         api_provider: $api_provider,
         model: $model,
         provider_slot: $provider_slot,
+        env_isolation: $env_isolation,
         command: $command
       },
       wave: {

@@ -73,6 +73,33 @@ claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
 assert_contains "$claude_command" "claude"
 assert_contains "$claude_command" "--settings"
 
+registry_file="$TMP_ROOT/claude-provider-registry.json"
+cat > "$registry_file" <<'JSON'
+{
+  "providers": {
+    "smoke-provider": {
+      "base_url": "https://smoke.example.com/anthropic",
+      "auth_token_env": "SMOKE_PROVIDER_KEY",
+      "models": {
+        "fast": "smoke-fast-model"
+      }
+    }
+  }
+}
+JSON
+registry_context=$(SMOKE_PROVIDER_KEY=secret "$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend claude-code \
+  --provider-registry "$registry_file" \
+  --api-provider smoke-provider \
+  --model fast \
+  --provider-slot smoke-registry-1 \
+  --output prompt-context)
+assert_contains "$registry_context" "Settings/Profile Path: registry:$registry_file"
+assert_contains "$registry_context" "Model: smoke-fast-model (alias: fast)"
+assert_contains "$registry_context" "Env Isolation: registry-env-wrapper(provider=smoke-provider setting-sources=project,local)"
+assert_contains "$registry_context" "--model smoke-fast-model"
+assert_not_contains "$registry_context" "secret"
+
 codex_context=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --backend codex \
   --runtime-profile codex-default \
@@ -102,6 +129,7 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --api-provider "$API_PROVIDER" \
   --model "$MODEL" \
   --provider-slot "$PROVIDER_SLOT" \
+  --env-isolation "$PROVIDER_ENV_ISOLATION" \
   --wave-id wave-smoke \
   --wave-worker-id W1 \
   --verify-cmd "npm run typecheck" \
@@ -207,7 +235,7 @@ assert_not_contains "$wait_out" "SECRET=should-not-leak"
 status_out=$("$SCRIPT_DIR/worktree-status.sh" --project "$REPO" --branch "$BRANCH" --session "$SESSION")
 assert_contains "$status_out" "WORKTREE_STATUS: branch=$BRANCH"
 assert_contains "$status_out" "WORKTREE_METADATA: base=main"
-assert_contains "$status_out" "WORKTREE_RUNTIME: backend=custom profile=smoke-profile provider=smoke-provider model=smoke-model slot=smoke-slot-1"
+assert_contains "$status_out" "WORKTREE_RUNTIME: backend=custom profile=smoke-profile provider=smoke-provider model=smoke-model slot=smoke-slot-1 env_isolation=inherited-env"
 assert_contains "$status_out" "WORKTREE_WAVE: wave=wave-smoke worker=W1"
 assert_contains "$status_out" "WORKTREE_VERIFY: npm run typecheck | npm test -- --run"
 assert_contains "$status_out" "CHECKPOINT_STATUS: status=done"

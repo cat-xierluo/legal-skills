@@ -13,7 +13,7 @@
 | 多 worker 监控 | `bash` 4+、`git`、`jq`、常见 Unix 工具；`tmux`、`gh`、`claude` 可选 | `pm-monitor.sh` 用关联数组，macOS 系统 `/bin/bash` 3.2 不够 |
 | worktree 总览 / 清理 | `git`；`jq` 推荐；`tmux` 可选 | 没有 `jq` 时只能显示有限 metadata |
 | PR 状态 / mergeability | `gh` 且已登录 | `pm-monitor.sh` 无 `gh` 时仍能看 checkpoint/git/tmux，但 PR 判断变弱 |
-| Claude worker | `claude` | 第三方 provider settings 还需要本地 settings 文件 |
+| Claude worker | `claude`；第三方 provider wrapper 还需要 `jq` | 第三方 provider registry/settings 还需要本地 ignored 配置文件；`claude-provider-env.sh` 用 `jq` 解析 registry 或 settings env |
 | Codex worker | `codex` | batch worker 常用 `codex exec -a never -s danger-full-access` |
 | OpenCode worker | `opencode` | 可做普通 worker 或 ACP 候选 |
 | Codex heartbeat | Codex App automation 能力 | 创建/修改 automation 必须用 `automation_update` 工具 |

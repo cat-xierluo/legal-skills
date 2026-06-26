@@ -71,19 +71,41 @@
 
 ### 1.2 Worker 启动模式
 
-**批处理（一次性任务）**：
+**Provider registry（推荐）**：
 ```bash
-claude -p --output-format stream-json \
+eval "$(bash scripts/render-runtime-profile.sh \
+  --backend claude-code \
+  --provider-registry config/claude-providers.local.json \
+  --api-provider deepseek \
+  --model v4flash \
+  --mode batch \
+  --prompt-file /tmp/task.prompt.md)"
+
+bash -lc "$WORKER_COMMAND"
+```
+
+registry 里每个 provider 有自己的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models`。`render-runtime-profile.sh` 会把模型别名解析成 provider 真实模型名，再交给 `claude --model`。
+
+**Settings 文件（兼容旧路径）**：
+```bash
+bash scripts/claude-provider-env.sh \
   --settings /path/to/provider.settings.json \
-  --permission-mode accept_edits \
+  --model provider-model \
+  -- \
+  claude --settings /path/to/provider.settings.json \
+    --model provider-model \
+    -p --output-format stream-json \
+    --permission-mode acceptEdits \
   < /tmp/task.prompt.md
 ```
 
 **tmux 交互式（可纠偏/可接管）**：
 ```bash
 tmux new-session -d -s worker-claude -c /path/to/worktree \
-  'claude --settings /path/to/provider.settings.json --permission-mode auto'
+  'bash scripts/claude-provider-env.sh --settings /path/to/provider.settings.json --model provider-model -- claude --settings /path/to/provider.settings.json --model provider-model --permission-mode auto'
 ```
+
+第三方 provider 不要裸跑 `claude --settings ...`。标准路径是先用 `render-runtime-profile.sh` 生成命令；该命令默认包 `scripts/claude-provider-env.sh`。wrapper 会清理继承的 `ANTHROPIC_*` provider 路由变量、从 registry 或 settings 导入 env、补齐 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`、设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`，并给 `claude` 注入 `--setting-sources project,local`。这样用户级 `~/.claude/settings.json` 里的 MiniMax/其他 provider 不会覆盖本次 worker。
 
 **Claude 官方 worktree + tmux**：
 ```bash
@@ -699,7 +721,7 @@ gemini --approval-mode yolo -p "重构这个模块"
 
 ```bash
 # === Claude Code ===
-tmux new-session -d -s W -c WT 'claude --settings S --permission-mode auto'
+tmux new-session -d -s W -c WT "$WORKER_COMMAND"  # WORKER_COMMAND from render-runtime-profile.sh
 
 # === Codex ===
 tmux new-session -d -s W -c WT 'codex -m o4-mini -s workspace-write'
@@ -723,7 +745,7 @@ tmux new-session -d -s W -c WT 'qoderclicn -m qmodel_latest --permission-mode au
 tmux new-session -d -s W -c WT 'codebuddy --model kimi-k2.6 --permission-mode bypassPermissions'
 ```
 
-其中 `W` = session name, `WT` = worktree path, `S` = settings file path。
+其中 `W` = session name, `WT` = worktree path。Claude Code 实际派发时优先用 `render-runtime-profile.sh` 生成 `WORKER_COMMAND`，避免漏掉 registry/settings wrapper 参数。
 
 ---
 

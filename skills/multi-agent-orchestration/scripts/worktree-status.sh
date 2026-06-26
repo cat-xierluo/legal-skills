@@ -90,12 +90,13 @@ if [ -f "$METADATA_FILE" ]; then
     metadata_provider=$(jq -r '.runtime.api_provider // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_model=$(jq -r '.runtime.model // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_slot=$(jq -r '.runtime.provider_slot // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+    metadata_env_isolation=$(jq -r '.runtime.env_isolation // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_wave=$(jq -r '.wave.id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_worker=$(jq -r '.wave.worker_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_verify=$(jq -r '(.verification.commands // []) | join(" | ")' "$METADATA_FILE" 2>/dev/null || echo "")
     metadata_pr=$(jq -r '.pr.url // ""' "$METADATA_FILE" 2>/dev/null || echo "")
     echo "WORKTREE_METADATA: base=${metadata_base_ref:-n/a} base_sha=${metadata_base_sha:-n/a} created_at=${metadata_created_at:-n/a}"
-    echo "WORKTREE_RUNTIME: backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} provider=${metadata_provider:-n/a} model=${metadata_model:-n/a} slot=${metadata_slot:-n/a}"
+    echo "WORKTREE_RUNTIME: backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} provider=${metadata_provider:-n/a} model=${metadata_model:-n/a} slot=${metadata_slot:-n/a} env_isolation=${metadata_env_isolation:-n/a}"
     echo "WORKTREE_WAVE: wave=${metadata_wave:-n/a} worker=${metadata_worker:-n/a}"
     echo "WORKTREE_VERIFY: ${metadata_verify:-n/a}"
     echo "WORKTREE_PR: ${metadata_pr:-n/a}"
