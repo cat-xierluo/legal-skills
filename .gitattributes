@@ -1,0 +1,17 @@
+# legal-skills: release zip 排除规则(供 git archive --worktree-attributes 使用)
+.git/            export-ignore
+__pycache__/     export-ignore
+*.pyc            export-ignore
+.env*            export-ignore
+*.log            export-ignore
+.DS_Store        export-ignore
+node_modules/    export-ignore
+**/archive/      export-ignore
+**/downloads/    export-ignore
+**/output/       export-ignore
+**/.claude/      export-ignore
+**/.playwright-data/ export-ignore
+**/*.db          export-ignore
+**/*.sqlite*     export-ignore
+**/DECISIONS.md  export-ignore
+**/TASKS.md      export-ignore

@@ -1,6 +1,6 @@
 ---
 name: release-workflow
-description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
+description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -68,9 +68,9 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 - CHANGELOG 必须有结构化条目，不能空
 - 距离上次 tag 至少 24 小时（防止把单个 hotfix 拆成多个 patch）
 
-### 打 tag 前强制自检
+### 打 tag 前强制自检（AI 不得跳过）
 
-打 tag 之前，**先回答五个问题**：
+打 tag 之前，**必须回答下面 5 个问题**。AI 代理被请求发布新版本时，必须**主动**逐条打印结果让用户确认，禁止直接进入打 tag 流程。
 
 1. 这是给真实用户装的，还是只给自己看 artifact？
 2. CHANGELOG 已经有结构化的本版本条目（不是空、不是单行 typo）？
@@ -79,6 +79,8 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 5. 如果上述任一不满足：能合并到下次发版吗？
 
 **任一答"否"或"不知道"：不要打 tag，改走 preview workflow 或合并到下次。**
+
+**AI 代理实操规则**：用户说「发布新版本」「打 tag」「release」时，AI 必须先在响应中**显式列出 5 问的答案**，等用户确认后再继续。这是硬约束，不允许跳过——v0.4.0 发布时 AI 跳过此步骤导致 3 次重打 tag 才修好，是真实教训。
 
 ### 借口反驳表
 
@@ -105,6 +107,76 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 - macOS 10× 配额当月累计用量已 > 70%
 
 **以上任一出现：删掉 tag（如已打），改走 preview workflow 或合并到下次。**
+
+## 🔥 修复 hotfix 与 CI retry 边界（关键）
+
+patch 版本（X.Y.Z+1）可以是 **新功能累积**，也可以是 **hotfix 单一修复**。区分清楚才能避免「把 release 当测试」反模式。
+
+### 何时属于「hotfix 真实修复」（可以重打 tag）
+
+- 第一次 release 后用户**实际收到 broken build**（自动更新坏 / 安装失败 / 启动崩溃）
+- CI 日志明确指向**代码层 bug**（编译错、依赖配置错、产物链断裂）
+- 每次重打 tag 都**有可验证的 commit 推进**（修一行、改一个配置、新增测试）
+
+判定信号：`gh run view --log-failed` 输出包含具体 error line（不是单纯的 `Timeout` / `Resource exhausted` 这种 transient 错误）。
+
+### 何时属于「把 release 当测试」（禁止重打 tag）
+
+- 单纯想看 CI 跑没跑通、看 artifact 长什么样
+- 上一次 build 失败但**没看失败原因**就直接重打
+- 第三次以上重打同一个版本号（按成本曲线，超过 3 次几乎都在反复折腾 transient）
+
+### transient vs 真实 bug 的快速判定
+
+```
+build job 失败：
+  - 输出含 E0599 / Cargo compile error / 链接错误 → 真实代码 bug，修代码再重打
+  - 输出含 "Timeout" / "Resource exceeded" / "Killed" → transient，可直接重试
+
+publish job 失败：
+  - 输出 "Missing signatures" + 产物清单缺 sig → 检查 includeUpdaterJson + bundle.targets（详见 tauri-release.md 红线 8）
+  - 输出 "Signature not found for the updater JSON. Skipping upload..." → tauri-action 跳过整批 updater，检查 build 产物目录
+  - 输出 "Unable to download" / "rate limit" → transient
+
+最佳实践：先 `gh release view <tag> --json assets` 看产物清单，再决定修代码还是重打 tag。
+```
+
+### 修复 hotfix 的标准动作序列
+
+1. 删旧 tag + draft release（如已创建）：`git push origin :refs/tags/vX.Y.Z` + `gh release delete vX.Y.Z --yes`
+2. 在 main 上 commit 修复（**必须包括版本号同步**——commit history 必须含 4 处版本号文件：package.json / Cargo.toml / tauri.conf.json / pyproject.toml 等）
+3. 重打 tag 指向修复 commit
+4. 推 tag 触发 CI
+5. **重打 tag 总次数上限 3 次**（含初始 publish）。超过说明根因判断有误，应停下来重新调查。
+
+## 模式 B:monorepo 多组件批量发布
+
+适用:一个仓库下有 N 个独立可发布的子项目(skill 集、CLI 工具集、npm 包集等),希望一次 tag 同时发布所有子项目的 zip,但保留各自的版本号。
+
+**前置**:对应项目需在 `config/projects.yaml` 有 `type: monorepo-skills` 条目,并配套 `scripts/build-zips.sh` + `scripts/release-monorepo.sh` 两个脚本(完整 SOP 见 `references/monorepo-release.md`)。
+
+**与模式 A 的关键差异**(相对单仓库单应用):
+
+| 维度 | 模式 A(单应用) | 模式 B(monorepo) |
+|---|---|---|
+| tag 频率 | 每应用 1 tag | 每发布轮次 1 tag(常用 CalVer) |
+| zip 命名 | `<App>-<ver>.<ext>` | `<skill>-<semver>.zip` |
+| Release Notes | 单应用 changelog | N 个 skill changelog 合并 |
+| 验证 | 平台矩阵(win/mac/linux) | 子项目数量清单 + 关键项抽查 |
+| 回写 README | 不适用 | 是(把 latest URL 写进表格) |
+
+**核心流程**(详见 `references/monorepo-release.md`):
+
+1. 读 `projects.yaml` 的 `<project-key>` 条目,获取 `skills_root`、`output_dir`、`exclude_globs`
+2. 跑 `build-zips.sh <tag>` 生成 `<output_dir>/<item>-<semver>.zip`
+3. 打 tag、推 tag
+4. GitHub Actions 自动:上传 zip + 触发 update-readme.yml
+5. update-readme.yml 调 GitHub API 拿 assets 列表,替换 README 里的占位 URL
+6. 验证 release 页 assets 数量 = 期望子项目数
+
+不要用于:单应用桌面/CLI/Web 项目(用模式 A 上文 7 步流程)、跨仓库分发(用 subtree-publish skill)。
+
+---
 
 ## 发布流程
 
@@ -156,6 +228,12 @@ git status
 
 # 打 tag
 git tag "vX.Y.Z"
+
+# ⚠️ 必须校验：tag 指向的 commit 包含版本号同步 commit。
+# 重打 hotfix 时常见坑：只改了 release.yml 没把 4 处版本号文件也升到 X.Y.Z，
+# 导致产物文件名仍带旧版本号（如 Folia_0.4.0_* 但 tag 是 v0.4.1）。
+git show vX.Y.Z --stat | head -20
+# 确认 package.json / Cargo.toml / tauri.conf.json / CHANGELOG.md 都在 commit 里
 
 # 推送 tag 触发 CI
 git push origin "vX.Y.Z"
@@ -210,6 +288,15 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 2. `exclude_assets` 中列出的产物是否意外出现
 3. 产物命名是否符合规范
 4. Release Notes 是否符合 `release_notes.required_sections` 和 `release_notes.always_include` 约束
+5. **产物完整矩阵对照**（带自动更新项目必查）：见下表，对照产物清单逐行打勾
+
+| 平台 | 安装包 | updater binary | .sig | latest.json entry |
+|------|--------|---------------|------|-------------------|
+| darwin-aarch64 | `App_X.Y.Z_aarch64.dmg` | `App_aarch64.app.tar.gz` | `App_aarch64.app.tar.gz.sig` | `darwin-aarch64` |
+| darwin-x86_64 | `App_X.Y.Z_x64.dmg` | `App_x64.app.tar.gz` | `App_x64.app.tar.gz.sig` | `darwin-x86_64` |
+| windows-x86_64 | `App_X.Y.Z_x64-setup.exe` | （NSIS 自带） | `App_X.Y.Z_x64-setup.exe.sig` | `windows-x86_64` |
+
+macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历史约定），Windows .exe.sig 带版本号。任何一项缺失都让该平台用户升不到 vX.Y.Z——**不要 publish draft release**，先修配置 / 代码再重打 tag。
 
 ### 第 7 步：清理
 

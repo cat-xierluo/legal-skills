@@ -1,0 +1,117 @@
+# 项目 Release 配置
+# 发布时读取此文件获取对应项目的构建和产物配置
+
+folia:
+  repo: cat-xierluo/Folia
+  type: tauri
+  auto_update: true
+  # Windows 安装格式：exe 或 msi，不要两者都发布
+  windows_format: exe
+  platforms:
+    - macos-aarch64
+    - macos-x64
+    - windows-x64
+  # 排除的产物（支持 glob 模式）
+  exclude_assets:
+    - "*.msi"
+    - "*.msi.sig"
+  release_notes:
+    profile: desktop-standard
+    language: zh-CN
+    required_sections:
+      - Highlights
+      - 下载
+    optional_sections:
+      - 新增
+      - 变更
+      - 修复
+    always_include:
+      - no_duplicate_title
+      - summary_blockquote
+      - full_changelog_link
+      - auto_update_assets_note
+      - macos_gatekeeper_warning
+    warning:
+      include_when:
+        - macos_unsigned
+        - terminal_command_required
+        - breaking_change
+        - security_notice
+
+funes:
+  repo: cat-xierluo/Funes
+  type: tauri
+  auto_update: true
+  windows_format: exe
+  platforms:
+    - macos-aarch64
+    - macos-x64
+    - windows-x64
+
+faropdf:
+  repo: cat-xierluo/FaroPDF
+  type: tauri
+  auto_update: true
+  # FaroPDF 跟 Folia 保持一致：Windows 单 .exe（不发 .msi）
+  windows_format: exe
+  platforms:
+    - macos-aarch64
+    - macos-x64
+    - windows-x64
+  exclude_assets:
+    - "*.msi"
+    - "*.msi.sig"
+  release_notes:
+    profile: desktop-standard
+    language: zh-CN
+    required_sections:
+      - Highlights
+      - 下载
+    optional_sections:
+      - 新增
+      - 变更
+      - 修复
+    always_include:
+      - no_duplicate_title
+      - summary_blockquote
+      - full_changelog_link
+      - auto_update_assets_note
+      - macos_gatekeeper_warning
+    warning:
+      include_when:
+        - macos_unsigned
+        - terminal_command_required
+        - breaking_change
+        - security_notice
+
+# === legal-skills: monorepo-many-skills 发布模式 ===
+# 一次性给仓库内 N 个独立 skill 各打一个 zip,挂到 GitHub Release。
+# 与 folia/funes/faropdf 的「单应用 build matrix」模式并列,通过 type 字段区分。
+legal-skills:
+  repo: cat-xierluo/legal-skills
+  type: monorepo-skills
+  skills_root: skills
+  output_dir: pack-skills
+  exclude_globs:
+    - "**/archive/**"
+    - "**/downloads/**"
+    - "**/output/**"
+    - "**/DECISIONS.md"
+    - "**/TASKS.md"
+    - "**/.claude/**"
+    - "**/.playwright-data/**"
+    - "**/__pycache__/**"
+    - "**/node_modules/**"
+  readme_download_column: true
+  release_notes:
+    profile: monorepo-skills
+    language: zh-CN
+    required_sections:
+      - 本版包含
+      - 下载
+    optional_sections:
+      - skill 更新明细
+  tag:
+    scheme: calver
+    format: "vYYYY.MM.DD"
+    example: v2026.06.30

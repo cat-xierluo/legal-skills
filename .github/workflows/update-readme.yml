@@ -1,0 +1,75 @@
+name: Update README Download Links
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace placeholders with real asset URLs
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import os, re, json, urllib.request
+          from pathlib import Path
+
+          owner, repo = os.environ["GH_REPO"].split("/")
+          api = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+          req = urllib.request.Request(api, headers={"Authorization": f"token {os.environ['GH_TOKEN']}"})
+          data = json.loads(urllib.request.urlopen(req).read())
+
+          # 真实 URL 映射:<skill>-<semver>.zip → browser_download_url
+          url_map = {}
+          for a in data["assets"]:
+              if not a["name"].endswith(".zip"):
+                  continue
+              base = a["name"][:-4]
+              skill = base.rsplit("-", 1)[0]
+              url_map[skill] = a["browser_download_url"]
+          print(f"latest release assets: {len(url_map)}")
+
+          readme = Path("README.md").read_text()
+          # 匹配 README 里的占位 URL:releases/latest/download/<skill>.zip
+          pattern = re.compile(
+              r'https://github\.com/' + re.escape(f"{owner}/{repo}") +
+              r'/releases/latest/download/([a-z0-9.-]+)\.zip')
+
+          replaced = 0
+          def repl(m):
+              nonlocal replaced
+              skill = m.group(1)
+              if skill in url_map:
+                  replaced += 1
+                  return url_map[skill]
+              return m.group(0)
+
+          new = pattern.sub(repl, readme)
+          if replaced > 0:
+              Path("README.md").write_text(new)
+              print(f"README 已更新 {replaced} 个下载链接")
+          else:
+              print("README 无可替换链接")
+          EOF
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet README.md; then
+              echo "README 无变更"
+          else
+              git add README.md
+              git commit -m "docs: 同步 README 下载链接到最新 release"
+              git push
+          fi

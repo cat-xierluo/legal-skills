@@ -141,3 +141,43 @@ cargo install <package>
 - 安全 checksums（除非面向安全敏感用户或用户明确要求）
 - Cargo audit / 构建日志（框架层细节，应用层不需要）
 - 赞助提示（可选，非必须）
+
+### monorepo-skills profile
+
+适用场景：一个 GitHub Release 包含多个子项目的 zip（skill 集合、CLI 工具集、npm 包集等 monorepo 场景）。每个子项目自身维护 `CHANGELOG.md` 的 semver（如 `v1.3.1`），发布时统一打 tag 一次性出全部 zip。
+
+**结构**：
+
+- 标题：直接写 `## <Tag>` 不再加版本前缀（GitHub Release 页面已显示标题）
+- `## 本版包含`：列出本次涉及的全部子项目与版本（`- item-a v1.2.3:修复 X / 新增 Y`）
+- `## 下载`：说明 `https://github.com/<owner>/<repo>/releases/latest/download/<item>.zip` 是稳定 URL，无需指定版本号
+- 可选 `## 更新明细`：仅在有重大变更时列
+
+**示例**：
+
+````markdown
+## v2026.06.30
+
+本版包含（7 个子项目有更新）：
+
+- item-a v1.5.3:新增"四步流程"风险清单模板
+- item-b v0.9.1:支持 paddle 默认后端
+- item-c v1.3.2:修复长文截断 bug
+- ...
+
+## 下载
+
+任意子项目直接点 https://github.com/<owner>/<repo>/releases/latest/download/<item>.zip
+完整列表见本 release 的 Assets。
+
+完整变更日志：https://github.com/<owner>/<repo>/compare/<上个 tag>...v2026.06.30
+````
+
+**与 desktop-standard 的关键差异**：
+
+| 维度 | desktop-standard | monorepo-skills |
+|---|---|---|
+| 产物矩阵 | 安装包 + updater + sig + latest.json | N 个 `<item>-<semver>.zip` |
+| 用户入口 | 平台下载表格 | latest/download/<item>.zip 直链 |
+| Release Notes 重点 | Highlights + 安装限制（Gatekeeper） | 本版包含的子项目列表 |
+| 不需要 | `> [!WARNING]`（除非跨版本破坏性变更）| 不需要 latest.json 说明 |
