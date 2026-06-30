@@ -43,3 +43,23 @@ echo
 echo "release info:"
 gh release view "$REPO_TAG" --json tagName,assets --jq '"tag: \(.tagName)\nassets: \(.assets | length)"'
 echo "release URL: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/$REPO_TAG"
+
+echo
+echo "[6/6] 自动回写 README 下载链接(release-monorepo 内嵌,不依赖外部 workflow)..."
+# 调 update-readme.py 替换 README 占位为真实 browser_download_url
+if python3 "$(dirname "$0")/update-readme.py"; then
+    # 如果 README 有变更,提交并推送
+    if ! git diff --quiet README.md; then
+        git add README.md
+        git commit -m "docs: 同步 README 下载链接到 ${REPO_TAG} release
+
+内嵌 update-readme.py 自动执行(不依赖 .github/workflows/update-readme.yml 跨 workflow 事件)。"
+        git push origin HEAD
+        echo "✅ README 已自动同步"
+    else
+        echo "README 无需变更"
+    fi
+else
+    echo "⚠️  update-readme.py 失败,需手动处理"
+    exit 1
+fi

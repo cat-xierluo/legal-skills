@@ -6,7 +6,8 @@
 
 - **monorepo-skills 项目类型**：支持一次性发布多个 skill 的 zip（legal-skills 实例）。与现有 tauri / cli / web / library 类型并列，通过 `config/projects.yaml` 的 `type` 字段路由
 - **新增脚本 `scripts/build-zips.sh`**：遍历 `skills/*/`、跳过 symlink 与已归档 skill、从 CHANGELOG 头部读 semver、用 `git archive --worktree-attributes` 干净打包到 `pack-skills/<skill>-<semver>.zip`
-- **新增脚本 `scripts/release-monorepo.sh`**：主发布驱动（build → tag → push → gh run watch → 验证 assets），支持 `--dry-run` 模式（不消耗 Actions 配额）
+- **新增脚本 `scripts/release-monorepo.sh`**：主发布驱动（build → tag → push → gh run watch → 验证 assets → **内嵌 README 回写**），支持 `--dry-run` 模式（不消耗 Actions 配额）
+- **新增脚本 `scripts/update-readme.py`**：从最新 release assets 取真实 `browser_download_url` 替换 README 占位 URL。原本由 `.github/workflows/update-readme.yml` 触发，但首次 release 观察到该 workflow 未自动触发，内嵌到 `release-monorepo.sh` 第 6 步保证 100% 执行
 - **新增 reference `references/monorepo-release.md`**：完整 SOP 文档，含端到端流程、关键设计决策、已知限制
 - **新增 release-notes profile `monorepo-skills`**：与 desktop-standard 并列，适用于 GitHub Release 含 N 个 skill zip 的场景
 - **`config/projects.yaml` 新增 `legal-skills` 条目**：定义 skills_root、output_dir、exclude_globs、CalVer tag 模板
