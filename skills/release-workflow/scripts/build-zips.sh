@@ -68,13 +68,17 @@ for skill_dir in "$SKILLS_ROOT"/*/; do
     zip_name="${skill_name}-${semver}.zip"
     echo "build: $skill_name → $zip_name"
 
-    # 不设 --prefix:pathspec 已经是 skills/<name>/,zip 内就是 skills/<name>/<files>
-    # 用户解压后看到 skills/<name>/ 子目录,直接复制到自己的 skills/ 目录即可
-    git archive --format=zip \
-        -o "$OUTPUT_DIR/$zip_name" \
-        HEAD \
-        --worktree-attributes \
-        -- "$skill_dir"
+    # 三步打包法:
+    #   1. git archive 输出 tar 流(paths 是 skills/<name>/...)
+    #   2. tar -x --strip-components=1 抽出,去掉 skills/ 前缀
+    #   3. 在 staging 目录 zip 打包
+    # 效果:zip 内路径是 <name>/<files>,用户解压后直接得到 <name>/ 文件夹,
+    # 复制到目标 skills/ 目录即可,不需要再剥一层。
+    STAGING=$(mktemp -d)
+    git archive HEAD --worktree-attributes -- "$skill_dir" \
+        | tar -x -C "$STAGING" --strip-components=1
+    (cd "$STAGING" && zip -rq "$OLDPWD/$OUTPUT_DIR/$zip_name" "$skill_name")
+    rm -rf "$STAGING"
     count=$((count + 1))
 done
 
