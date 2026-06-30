@@ -1,6 +1,16 @@
 # 项目 Release 配置模板
 # 复制此文件为 projects.yaml 并填入实际项目信息
+#
+# type 字段可选值：
+#   tauri            桌面应用（Tauri / Electron），使用 references/tauri-release.md 的 build matrix
+#   cli              命令行工具
+#   web              Web 应用
+#   library          库 / SDK
+#   monorepo-skills  monorepo 多子项目批量发布（skill 集合 / CLI 工具集 / npm 包集等）
 
+# ============================================================
+# 示例 1：Tauri 桌面应用
+# ============================================================
 your-app:
   # GitHub 仓库（owner/repo）
   repo: owner/repo
@@ -34,7 +44,7 @@ your-app:
   #   - "*.msi.sig"
 
   # Release Notes 结构配置
-  # profile 可选：desktop-standard | cli-standard | library-standard | web-standard
+  # profile 可选：desktop-standard | cli-standard | library-standard | web-standard | monorepo-skills
   release_notes:
     profile: desktop-standard
     language: zh-CN
@@ -56,3 +66,53 @@ your-app:
         - terminal_command_required
         - breaking_change
         - security_notice
+
+# ============================================================
+# 示例 2：monorepo-skills（多子项目批量发布）
+# ============================================================
+# 适用场景：一个仓库下有 N 个独立可发布的子项目（skill / CLI / npm 包等），
+# 希望一次 tag 同时发布所有子项目的 zip。
+# 前置：仓库根 .github/workflows/release.yml + update-readme.yml 已部署
+#       （参考本 skill 的 references/monorepo-release.md 的 SOP 章节）
+#
+# your-monorepo:
+#   repo: owner/your-monorepo
+#   type: monorepo-skills
+#
+#   # 子项目根目录（如 skills/、packages/、tools/ 等）
+#   skills_root: skills
+#
+#   # zip 输出目录（建议加入 .gitignore）
+#   output_dir: pack-skills
+#
+#   # 打包时排除的 glob 模式（git archive --worktree-attributes 会读 .gitattributes）
+#   exclude_globs:
+#     - "**/archive/**"
+#     - "**/downloads/**"
+#     - "**/output/**"
+#     - "**/DECISIONS.md"
+#     - "**/TASKS.md"
+#
+#   # 是否在 README 表格加「下载」列（update-readme.yml 会自动回写 URL）
+#   readme_download_column: true
+#
+#   # Release Notes 结构
+#   release_notes:
+#     profile: monorepo-skills
+#     language: zh-CN
+#     required_sections:
+#       - 本版包含
+#       - 下载
+#     optional_sections:
+#       - 更新明细
+#
+#   # Tag 方案
+#   tag:
+#     scheme: calver              # calver | semver
+#     format: "vYYYY.MM.DD"       # CalVer 格式
+#     example: v2026.06.30
+#
+# 调用示例：
+#   SKIP_ARCHIVED="deprecated-foo deprecated-bar" \
+#     bash skills/release-workflow/scripts/release-monorepo.sh v2026.06.30
+#

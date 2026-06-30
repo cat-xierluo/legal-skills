@@ -1,0 +1,37 @@
+name: Release Skills (monorepo)
+
+on:
+  push:
+    tags: ['v20[0-9][0-9].[0-9][0-9].[0-9][0-9]']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v2026.06.30)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build zips
+        run: bash skills/release-workflow/scripts/build-zips.sh "${GITHUB_REF_NAME}"
+
+      - name: Create release & upload
+        uses: softprops/action-gh-release@v2.0.2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          name: "Skills Release ${{ github.ref_name || inputs.tag }}"
+          body: |
+            各 skill 的最新 zip 见下方 Assets。
+            下载方式:点击对应 skill 的 zip 即可,无需 git clone。
+            完整 skill 列表与说明:https://github.com/${{ github.repository }}/blob/${{ github.ref_name || inputs.tag }}/README.md
+          fail_on_unmatched_files: false
+          files: |
+            pack-skills/*.zip
