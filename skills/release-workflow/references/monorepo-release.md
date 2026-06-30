@@ -60,7 +60,7 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 |---|---|---|
 | tag 频率 | CalVer,每周/每月一次 | 子项目用户不期望每天有新版本 |
 | zip 命名 | `<item>-<semver>.zip` | 用户能直接看到版本;CHANGELOG 是真理来源 |
-| zip 内路径 | `<skills_root>/<name>/...`(不设 prefix) | 用户解压后看到子目录,直接复制到自己的目标目录 |
+| zip 内路径 | `<name>/...`(用 git archive + tar --strip-components=1 去 `skills/` 前缀) | 用户解压后直接得到 `<name>/` 文件夹,复制到目标 skills 目录 |
 | README 列 | 两列:版本 + 下载(latest) | 保留语义可读性 + 一键下载 |
 | 包排除 | `.gitattributes` export-ignore | git 原生,跨平台一致,不依赖 .gitignore |
 | README 回写 | Actions 触发,占位 URL 模式 | 用户无需 push README;Actions 自动同步 |

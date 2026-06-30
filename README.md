@@ -647,7 +647,9 @@
 ### 单独下载某个 skill（推荐，无需 Git）
 
 进入 [GitHub Releases 最新版](https://github.com/cat-xierluo/legal-skills/releases/latest) 页面，
-下载你需要的 skill 的 zip 文件，解压到 Agent 的 skills 目录即可（解压后看到 `skills/<name>/` 子目录，复制到目标位置）。
+下载你需要的 skill 的 zip 文件，解压后直接得到 `<name>/` 文件夹，把整个文件夹复制到 Agent 的 skills 目录即可。
+
+例如 `contract-copilot-1.5.3.zip` 解压后得到 `contract-copilot/` 文件夹，复制到 `~/.claude/skills/` 即可。
 
 上表「下载」列已提供每个 skill 的最新版本直链（指向 latest），新增版本发布后由 GitHub Actions 自动同步。
 
