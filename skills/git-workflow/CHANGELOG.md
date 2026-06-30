@@ -1,5 +1,10 @@
 # 变更日志
 
+## [1.4.2] - 2026-06-30
+
+### 新增
+- **分支清理加 24h 时间过滤 + 陷阱 2(活跃分支误判)**:`--merged main` 两方向都不可靠(陷阱 1 squash 漏判 + 陷阱 2 活跃分支停在 main commit 误判已合并)。新增"最后提交 < 24h 一律保留"时间过滤(主活跃度信号),`git for-each-ref --sort=committerdate` 取日期。判定规则加时间行 + worktree-未提交行。红线加三条:删<24h 分支 / 盲 `--force` 删 worktree(先查 `git -C <wt> status`)/ 仅凭 `--merged` 删。来自 book repo 误删活跃 deai 分支的实战教训。
+
 ## [1.4.1] - 2026-06-06
 
 ### 改进
