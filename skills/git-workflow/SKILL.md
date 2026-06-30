@@ -100,7 +100,22 @@ git push origin --delete <branch-name>
 
 **核心陷阱**：`git branch --merged` 只识别"提交可达"，对 **squash merge** / **rebase merge** 一律失效——main 上的合并 commit 是新生 SHA，原分支 tip 不在 main 历史里，分支会被误判为未合并。
 
-**权威依据**：PR 在远端的 `state == MERGED`。
+**陷阱 2（活跃分支误判,2026-06-30 实战教训）**：`--merged main` 也会**反向误判**——一个**刚创建、工作还没 commit** 的活跃分支会停在 main commit（没分叉），从而显示"已合并"。只看 `--merged` 会把"刚开展、未提交"的进行中工作当成 stale 删掉。**`--merged main` 两个方向都不可靠**：squash merge 漏判（陷阱 1）+ 活跃分支误判（陷阱 2）。
+
+**权威依据**：PR 在远端的 `state == MERGED` **+ 分支最后提交时间**。时间是最稳的"活跃度"信号——见下方时间过滤。
+
+#### 时间过滤（活跃度判定的主信号,2026-06-30 加）
+
+`--merged` / PR 状态只能判"工作是否进 main",判不了"分支是否还在被用"。**最后提交时间**才是活跃度主信号：
+
+```bash
+# 远程分支 + 最后提交日期(旧→新排序)
+git for-each-ref --sort=committerdate refs/remotes/origin/ \
+  --format='%(committerdate:short) %(refname:short)' | grep -v 'origin/HEAD'
+# 本地分支同理:refs/heads/
+```
+
+**默认阈值:最后提交 < 24h 的分支一律保留(活跃,可能是刚开展/重跑的工作),不得删除。** 只有 > 24h(可配置,如 7 天更稳)的才进删除候选。时间过滤 + PR 状态 + 下面三查,缺一不可。
 
 #### 审计流程
 
@@ -134,6 +149,8 @@ gh pr list --state all --limit 50 \
 | `gh pr list` 显示 `state == CLOSED` 且非 `MERGED` | **询问用户**：工作可能已废弃，但分支不一定该删 |
 | 本地分支无对应远程 PR 且未推送 | **询问用户**：可能是未推送的 WIP |
 | 远程跟踪 ref 在远端已不存在 | `git fetch --prune` 或 `git remote prune origin` 清理本地引用 |
+| **最后提交 < 24h**(任一分支,本地/远程) | **保留——活跃,可能是刚开展或刚重跑的工作**(陷阱 2)。即使 `--merged main` 也别删 |
+| worktree 有未提交改动(`git -C <wt> status` 非空) | **保留 worktree + 分支,绝不 `--force` 删**。`--force` 会丢弃未提交工作 |
 
 辅助指纹：`git rev-list --left-right --count main...origin/<branch>` 返回 "ahead N, behind 1" 是 squash-merged 的典型形态（分支自身的 commits 不在 main，main 的 squash commit 不在分支）。它是**提示**而非证据，仍以 `gh pr list` 为准。
 
@@ -165,6 +182,9 @@ git fetch --prune
 - ❌ **仅凭 ahead/behind 删除**：WIP 分支也会"ahead 多个 commit"。
 - ❌ **把 `CLOSED` 当 `MERGED`**：closed-without-merge 是被废弃，删除前必须问用户。
 - ❌ **跳过用户确认直接 `git push origin --delete`**：远端删除对协作者可见，难撤销。
+- ❌ **删最后提交 < 24h 的分支**(2026-06-30 教训):活跃分支可能停在 main commit、`--merged` 显示已合并,但实际是刚开展/重跑的工作。必须先 `git for-each-ref`(时间)过滤。
+- ❌ **盲用 `git worktree remove --force`**:先 `git -C <worktree> status --short`,有未提交改动就停——`--force` 会丢弃。误删活跃 worktree 的未提交工作只能靠重跑恢复。
+- ❌ **只凭 `--merged main` 删本地分支/worktree**:陷阱 1(squash 漏判)+ 陷阱 2(活跃分支误判)两个方向都不可靠;必须 PR 状态 + 时间 + 未提交三查。
 - ❌ **用 `git branch -D` 强删本地以"对齐远端"**：会丢未推送的 WIP。
 
 ### Worktree（工作树）
