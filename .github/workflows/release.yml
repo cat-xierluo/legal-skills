@@ -2,11 +2,12 @@ name: Release Skills (monorepo)
 
 on:
   push:
-    tags: ['v20[0-9][0-9].[0-9][0-9].[0-9][0-9]']
+    # CalVer + 可选后缀:v2026.06.30 或 v2026.06.30-v2 / v2026.06.30.1 等
+    tags: ['v20[0-9][0-9].[0-9][0-9].[0-9][0-9]*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v2026.06.30)'
+        description: 'Tag to release (e.g. v2026.06.30 or v2026.06.30-v2)'
         required: true
 
 permissions:
