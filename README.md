@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-50-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-49-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -184,8 +184,8 @@
 <td style="word-break:break-word">智能多主题深度研究工具，使用独立 Subagent 进行并行深度检索，生成系统化研究文档</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/multi-search-1.1.0.zip">下载</a></td>
-<td></td>
+<td style="text-align:center"></td>
+<td>已归档(2026-06-30)</td>
 </tr>
 </tbody>
 </table>
@@ -659,6 +659,7 @@
 
 | 技能 | 版本 | 说明 |
 |------|------|------|
+| multi-search | v1.1.0 | 智能多主题深度研究工具，功能被 [multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
 | skill-architect | v1.6.2 | 已重定位为 [skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护 |
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill |
 | minimax-web-search | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill |
