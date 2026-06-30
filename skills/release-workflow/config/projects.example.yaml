@@ -96,7 +96,7 @@ your-app:
 #   # 是否在 README 表格加「下载」列（update-readme.yml 会自动回写 URL）
 #   readme_download_column: true
 #
-#   # Release Notes 结构
+#   # Release Notes 结构(profile 用于 release-notes-guide.md 的人工撰写)
 #   release_notes:
 #     profile: monorepo-skills
 #     language: zh-CN
@@ -105,6 +105,20 @@ your-app:
 #       - 下载
 #     optional_sections:
 #       - 更新明细
+#
+#   # generate-release-notes.py 用的项目级个性化配置
+#   # 用于自动生成 GitHub Release 页面 body
+#   # 留空则全部用脚本默认值
+#   notes:
+#     project_label: "Your Project"  # 标题用名（默认用 repo 最后一段）
+#     intro_template: "本版包含 **{total} 个** 最新 zip。"
+#     recent:
+#       source_marker: "🆕 最近更新"  # README 内表格章节标题
+#       top_n: 5
+#     install:
+#       single_label: "package"      # "skill" / "package" / "tool" 等
+#       full_clone_prompt: "请帮我从 GitHub 安装 {label}:{repo_url}"
+#       single_note: "3. 解压后得到 `<name>/` 文件夹,放到目标位置"
 #
 #   # Tag 方案
 #   tag:

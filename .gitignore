@@ -151,4 +151,8 @@ skills/tool-creator
 
 # Packed skills（打包输出目录）
 pack-skills/
+
+# Generated release notes body（每次 release 临时生成）
+.release-notes.md
+
 .claude/plans/myagents/
