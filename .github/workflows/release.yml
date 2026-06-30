@@ -24,15 +24,25 @@ jobs:
       - name: Build zips
         run: bash skills/release-workflow/scripts/build-zips.sh "${GITHUB_REF_NAME}"
 
+      - name: Generate release notes
+        # 从 README 自动提取"最近更新"表格 + 项目 notes: 配置,生成结构化 body
+        # 优先用 projects.yaml 里的 legal-skills notes: 个性化配置
+        # 失败时回退到默认(脚本会按 repo 名生成)
+        run: |
+          python3 skills/release-workflow/scripts/generate-release-notes.py \
+            "${{ github.repository }}" \
+            "${GITHUB_REF_NAME}" \
+            "legal-skills" || \
+          python3 skills/release-workflow/scripts/generate-release-notes.py \
+            "${{ github.repository }}" \
+            "${GITHUB_REF_NAME}"
+
       - name: Create release & upload
         uses: softprops/action-gh-release@v2.0.2
         with:
           tag_name: ${{ github.ref_name || inputs.tag }}
           name: "Skills Release ${{ github.ref_name || inputs.tag }}"
-          body: |
-            各 skill 的最新 zip 见下方 Assets。
-            下载方式:点击对应 skill 的 zip 即可,无需 git clone。
-            完整 skill 列表与说明:https://github.com/${{ github.repository }}/blob/${{ github.ref_name || inputs.tag }}/README.md
+          body_path: .release-notes.md
           fail_on_unmatched_files: false
           files: |
             pack-skills/*.zip

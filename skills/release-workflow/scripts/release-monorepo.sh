@@ -63,3 +63,16 @@ else
     echo "⚠️  update-readme.py 失败,需手动处理"
     exit 1
 fi
+
+echo
+echo "[7/7] (可选)本地生成 release notes body 供 review..."
+# 调 generate-release-notes.py 预览 release body(实际 release.yml 会在 Actions 内再跑)
+PROJECT_KEY="${PROJECT_KEY:-legal-skills}"
+python3 "$(dirname "$0")/generate-release-notes.py" \
+    "$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
+    "$REPO_TAG" \
+    "$PROJECT_KEY" 2>/dev/null || \
+python3 "$(dirname "$0")/generate-release-notes.py" \
+    "$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
+    "$REPO_TAG"
+echo "完整 body 见 .release-notes.md(可手动 review 后再发布,或 Actions 内自动生成)"

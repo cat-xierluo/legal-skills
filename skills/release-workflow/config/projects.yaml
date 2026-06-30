@@ -111,6 +111,17 @@ legal-skills:
       - 下载
     optional_sections:
       - skill 更新明细
+  # generate-release-notes.py 用的项目级个性化配置
+  notes:
+    project_label: "Legal Skills"
+    intro_template: "本版包含 **{total} 个 skill** 的最新 zip,覆盖法律 AI 协作全流程(内容获取 / 内容处理 / 法律专业应用 / 开发工具)。"
+    recent:
+      source_marker: "🆕 最近更新的 Skill"
+      top_n: 5
+    install:
+      single_label: "skill"
+      full_clone_prompt: "请帮我从 GitHub 安装 legal-skills 技能集合:{repo_url}"
+      single_note: "3. 解压后直接得到 `<skill>/` 文件夹,复制到 Agent 的 skills 目录即可"
   tag:
     scheme: calver
     format: "vYYYY.MM.DD"
