@@ -1,5 +1,82 @@
 # CHANGELOG
 
+## [v1.7.1] - 2026-06-30
+
+### 修复（viewBox 高度按内容裁剪，DEC-013 supersede DEC-001 固定高度部分）
+
+用户 2026-06-30 反馈：SVG 转 PNG 后，图的下边缘离图注间距忽大忽小。排查根因：画布**固定 720×400**（DEC-001），但不同模板内容高度参差（layer 3 层内容底 y=330、flow 水平 4 节点底 y=224、tree 2 层底 y=308），底部留白 70-176px 不一致 → 渲染 PNG 时整个 720×400 都渲染，底部留白被保留 → 图注（在 SVG 下方）与图实际内容底边间距不统一。
+
+### 改动
+
+- **画布规则**：宽度 720px 固定（16开 115mm 通栏），**高度按内容裁剪**——viewBox="0 0 720 H"，H = 内容底边最大 y + 40px。**不再固定 400**。
+- **SKILL.md §设计规范**：画布规则、语法门禁（viewBox="0 0 720 H"）、目检渲染命令（`rsvg-convert -w 720` 不指定 -h）。
+- **style-guide.md §一画布**：viewBox / 安全边距 / 有效绘图区 / 渲染命令同步。
+- **layout-templates.md**：顶部加 v1.7.1 裁剪说明（骨架 `viewBox="0 0 720 400"` 仅为坐标参考系，实际 H 按内容底 + 40；附 layer/flow/tree 示例 H）。骨架内节点坐标不变，只裁底部多余画布。
+- **review-checklist.md**：rsvg 命令去 -h、留白项加 viewBox 裁剪、多模态 prompt 描述改 720×H、背景矩形 grep 泛化 height。
+- **svg2png.js 不改**：已按 viewBox 自动渲染（行 90-96 读 `vb.height`）。
+
+### 边界（老图不动）
+
+- 仅新生成图走 v1.7.1 裁剪规则；main 既有 SVG（含 v1.5.0-v1.7.0 已生成的）**保持稳定不回改**（沿用"老图不动"原则）。
+- 游初定稿 ch01/02/03/09 复用的旧 SVG：Wave 2 配图时按 v1.7.1 回改其 viewBox（用户 2026-06-30 指示"游初那部分先改，其他章后续 review 统一排查"，已记入主项目 TASKS）。
+
+## [v1.7.0] - 2026-06-25
+
+### 重大变更（配色按模板语义分类，DEC-012 supersede DEC-010 部分）
+
+用户 2026-06-25 反馈 ch11 第八节"克制原则 · 五层框架"（图 11-8）颜色太杂——五层用了 5 种完全不同的色相（紫/蓝/绿/米/粉）混搭，破坏层级归属的视觉语义。排查后确认是 v1.5.0 DEC-010 规范的缺陷："内部模块多色"规则**统一应用**到所有 8 种模板，但 layer/tree/金字塔（**层级归属**关系：上层包下层）和 flow/matrix/hub/cycle（**多样性区分**关系：步骤/对比/辐射）的视觉语义**根本不一样**。
+
+### 修复
+
+- **拆分配色规则**（supersede DEC-010 部分）：
+  - **layer / tree / 金字塔**模板 → **新 §5.2b G1-G4 单色灰度梯度**（同色相 5 档明度，顶层档 1 最浅、底层档 5 最深）
+  - **flow / matrix / hub / cycle**模板 → 保持 §5.2 P1-P8 多色调色板
+- **`references/style-guide.md` §5.2b 新增**：4 组灰度梯度
+  - G1 蓝灰梯度：`#F0F4F8 / #D6E4F0 / #B8CFE0 / #9AB8D0 / #7CA0BC`（科技/AI/数据/系统）
+  - G2 法律米梯度：`#F4ECDC / #E8D8C0 / #D8C4A4 / #C4AE88 / #B8A282`（**法律/合规/正式文书，本 skill 主推荐**）
+  - G3 暖灰梯度：`#F0EDE8 / #E8DFD0 / #DCD3C4 / #D0C7B8 / #C4BBAC`（叙事/随笔/文化）
+  - G4 蓝梯度：`#E8F0F8 / #C5D9E8 / #A0BED4 / #7CA0BC / #5A82A4`（系统/技术冷调）
+- **`references/style-guide.md` §5.0 总则改写**：条件化拆分（layer/tree 走 G1-G4 vs flow/matrix/hub/cycle 走 P1-P8）。
+- **`references/layout-templates.md` §2 layer 骨架 + §5 tree 骨架**：改用 G2 法律米梯度（layer 5 档全列；tree 根档 1、子档 2）。
+- **`references/review-checklist.md` §③ 加配色分类门禁**：layer/tree 相邻模块 fill 转 HSL 取 hue 差 <30° 判同色梯度合规（违规拒绝）。
+
+### 新增
+
+- **`manuscript/04-实战篇/ch11-合同起草与审查.md` 图 11-8 五层框架**：按 G2 法律米梯度重画（从紫/蓝/绿/米/粉 → `#F4ECDC → #B8A282` 5 档暖色递进）。
+
+### 边界（沿用 v1.5.0 / v1.6.0 原则）
+
+- 仅新生成的 layer/tree/金字塔 走新规则；main 既有图（含 v1.5.0-v1.6.x 已生成的 layer/tree 类）**保持稳定不回改**，沿用"老图不动"原则。
+
+## [v1.6.0] - 2026-06-25
+
+### 修复（箭头规范三重缺陷，DEC-011）
+
+排查用户报告的"箭头和线条、箭头和框对不上"问题，确认根因是 marker 规范三重缺陷叠加，逐一修复：
+
+1. **`<marker>` 缺 `markerUnits="userSpaceOnUse"`**——SVG 规范中 `markerUnits` 默认是 `strokeWidth`（不是像素），导致原 `markerWidth="8"` 在 `stroke-width="2"` 下渲染为 16px、在 `stroke-width="1.5"` 下为 12px，箭头尺寸随线宽飘忽。修复：补 `markerUnits="userSpaceOnUse"`，箭头尺寸固定像素，与 stroke-width 解耦。
+2. **模板只示范水平向右一个方向，模型被迫为多方向自造 marker**——实测产物 grep `<marker` 出现 `arrV` / `arrF` / `arrG` / `arrT` / `arrR` / `arrL` / `arrK` / `arrJ` / `arrH` / `arrE` / `arrD` 等 10+ 自创 marker，每个方向硬编码不同 `refX`/`refY`/`orient`，单一规范下方向混乱。修复：marker 强制 `orient="auto"` + 单一 `id="arrow"`，一个 marker 通吃水平/垂直/斜向所有方向。
+3. **箭头线终点缺"贴目标框边 − 小间隙"的对齐规则**——hub 骨架 `y2=87` 把箭头扎进上节点（底边 y=94），flow 骨架 `x2=199` 悬空目标框 8px。修复：写明落点规则 `x1 = 源框边 + 4px`，`x2 = 目标框边 − 4px`（y 方向同理）。
+
+### 新增
+
+- `references/style-guide.md` §六「箭头」节改写：补 markerUnits 解释 + orient 解释 + **落点对齐规则表**（含 flow 节点 1→2 坐标计算例）。
+- `references/style-guide.md` §十二「SVG 代码模板 A」marker 同步修复。
+- `references/layout-templates.md` §1 flow 骨架：marker defs 同步 + 3 条箭头 `x2` 从 `(199, 365, 532)` 改为 `(203, 369, 536)` 按"目标框边 − 4px"重算。
+- `references/layout-templates.md` §4 hub 骨架：加 marker defs + 修 `y2=87 → 98`（外围上节点底边 y=94, +4px 间隙）+ 加 `marker-end`。
+- `references/layout-templates.md` §5 tree 骨架：加 marker defs + 修 `y2=260 → 256`（子节点顶边 −4px 间隙）；连线仍**不**带 marker-end（tree 通常纯连线表示层级归属），需要方向箭头时按 style-guide §六 自行加。
+- `references/review-checklist.md` §③ 视觉目检加**箭头硬约束门禁**：grep `<marker` 只允许**单个** `id="arrow" ... markerUnits="userSpaceOnUse" orient="auto"`，禁止 arrV/arrF/arrG 等自创 id、禁止为多方向硬编码 refX/refY/orient。
+- `TASKS.md` 新增 v1.6.0 阶段（已完成·待作者复核）。
+- `DECISIONS.md` 新增 DEC-011，记录三重缺陷诊断 + 修复方案 + 渲染实验坐实证据。
+
+### 边界（沿用 v1.5.0 原则）
+
+- 仅新生成图采用新 marker 规范；main 既有图（含 34 张白底老图 + 新生成的多色图里那些 arrV/arrF 自创 marker）**保持稳定不回改**，沿用"老图不动"原则。
+
+### 验证
+
+- 渲染实验 `/tmp/svg-arrow-test/`：A（缺 markerUnits）+ B（修复后）同数据对比。修复前箭头 ~16px 占短线(20px) 80%，流向对但几乎吞掉线；修复后箭头 ~5px 占短线 25%，比例协调，水平/垂直/斜向单 marker 通吃方向正确。
+
 ## [v1.5.0] - 2026-06-20
 
 ### 新增（全彩印刷配色，方向经作者 2026-06-20 纠正后定稿）

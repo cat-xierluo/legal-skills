@@ -4,8 +4,13 @@
 
 > 所有字号已按印刷可读性校准：节点标签 18px（物理 2.88mm = 8.2pt）。
 > 详见 style-guide.md 的物理尺寸推算。
+>
+> **viewBox 高度裁剪（v1.7.1）**：以下骨架示例里的 `viewBox="0 0 720 400"` 只是**坐标参考系**（便于推算节点位置），**实际生成时 viewBox 高度 H = 内容底边最大 y + 40px**，不固定 400——避免内容少的图底部留白过大、SVG 下边缘离图注间距忽大忽小（详见 style-guide.md §一）。例：layer 3 层内容底 y=330 → `viewBox="0 0 720 370"`；flow 水平 4 节点内容底 y=224 → `viewBox="0 0 720 264"`；tree 2 层内容底 y=308 → `viewBox="0 0 720 348"`。骨架内坐标（节点 x/y）不变，只裁掉底部多余画布。
 
-> **配色说明（v1.5.0）**：以下骨架示例是**透明背景**——**不画任何背景矩形**，直接画模块。模块填充色用 P1-P8 调色板的**内部模块色**（详见 style-guide.md §5.2）。骨架中示例统一用 P1 雾蓝系的几个模块色（`#D6E4F0` `#C5D9E8` `#B8CFE0` 等）占位演示——照搬时把相邻模块换成同组不同色，让一图内部 4-6 种柔和色区分。文字色统一深灰 `#2D3436`/`#636E72`。
+> **配色说明（v1.7.0 条件化拆分）**：以下骨架示例是**透明背景**——**不画任何背景矩形**，直接画模块。
+> - **layer / tree / 金字塔**模板：**同色相灰度梯度**——从顶层到底层用同一色组的 5 档明度渐深，营造层次下沉感。示例用 **G2 法律米梯度**（`#F4ECDC / #E8D8C0 / #D8C4A4 / #C4AE88 / #B8A282`）——本 skill 主推的法律书暖色梯度。
+> - **flow / matrix / hub / cycle**模板：从 **P1-P8 调色板**选 1 组组内不同模块色（相邻不同色、一图 4-6 色柔和区分）。
+> 文字色统一深灰 `#2D3436`/`#636E72`。详见 style-guide.md §5.0 总则 + §5.2 / §5.2b。
 >
 > **字体说明**：骨架中**不再出现** `<style>text { font-family... }</style>` 块——字体由渲染环境继承默认无衬线。这是已验证的 Obsidian 渲染硬约束（memory `feedback_svg_embed_syntax`）。若个别环境需强制字体，在每个 `<text>` 上单独写 `font-family`，绝不在 `<svg>` 开标签或 `<style>` 块统一设置。
 
@@ -53,29 +58,32 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker></defs>
+  <defs>
+    <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
+  </defs>
   <!-- 注意：无背景矩形，透明底 -->
 
   <!-- 节点 1（起始，P1 雾蓝系模块色 1） -->
   <rect x="40" y="176" width="140" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="110" y="205" text-anchor="middle" font-size="18" fill="#2D3436">识别场景</text>
 
-  <!-- 箭头 -->
-  <line x1="184" y1="200" x2="199" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- 箭头：x1 = 源框右边 + 4；x2 = 目标框左边 - 4 -->
+  <line x1="184" y1="200" x2="203" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- 节点 2（模块色 2，与节点 1 不同色） -->
   <rect x="207" y="176" width="140" height="48" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
   <text x="277" y="205" text-anchor="middle" font-size="18" fill="#2D3436">梳理流程</text>
 
   <!-- 箭头 -->
-  <line x1="351" y1="200" x2="365" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="351" y1="200" x2="369" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- 节点 3（模块色 3） -->
   <rect x="373" y="176" width="140" height="48" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
   <text x="443" y="205" text-anchor="middle" font-size="18" fill="#2D3436">编写</text>
 
   <!-- 箭头 -->
-  <line x1="517" y1="200" x2="532" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="517" y1="200" x2="536" y2="200" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- 节点 4（终止，模块色 4，深边框强调） -->
   <rect x="540" y="176" width="140" height="48" rx="6" fill="#DCE8F2" stroke="#2D3436" stroke-width="3"/>
@@ -114,19 +122,21 @@ x 居中：260（偏左，右侧可放注释）
 <svg viewBox="0 0 720 400">
   <!-- 无背景矩形，透明底 -->
 
-  <!-- 层 1（顶层，P1 雾蓝系模块色 1） -->
-  <rect x="70" y="80" width="580" height="70" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
+  <!-- 层 1（顶层，G2 法律米梯度 档 1，最浅） -->
+  <rect x="70" y="80" width="580" height="70" rx="6" fill="#F4ECDC" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="122" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">应用层</text>
 
-  <!-- 层 2（模块色 2，相邻层不同色） -->
-  <rect x="70" y="170" width="580" height="70" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
+  <!-- 层 2（G2 档 2，中间明度） -->
+  <rect x="70" y="170" width="580" height="70" rx="6" fill="#E8D8C0" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="212" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">能力层</text>
 
-  <!-- 层 3（底层，模块色 3） -->
-  <rect x="70" y="260" width="580" height="70" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
+  <!-- 层 3（底层，G2 档 3，最深——3 层时取档 1-3；5 层时取档 1-5 全套） -->
+  <rect x="70" y="260" width="580" height="70" rx="6" fill="#D8C4A4" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="302" text-anchor="middle" font-size="20" font-weight="600" fill="#2D3436">基础层</text>
 </svg>
 ```
+
+> **配色要点**：layer 模板必须用 G1-G4 灰度梯度中任一组，**色相统一**、仅明度变化。**禁止**误用 P1-P8 多色（v1.5.0 旧规范）——把同色系层画成不同色相会破坏层级归属的视觉语义（详见 DEC-012）。5 层变体取档 1-5 全套：`#F4ECDC / #E8D8C0 / #D8C4A4 / #C4AE88 / #B8A282`。
 
 ---
 
@@ -191,10 +201,14 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
+  <defs>
+    <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
+  </defs>
   <!-- 无背景矩形，透明底 -->
 
-  <!-- 连线（底层） -->
-  <line x1="360" y1="174" x2="360" y2="87" stroke="#2D3436" stroke-width="1.5"/>
+  <!-- 连线（底层）：线终点 = 外围节点底边 - 4px 间隙（外围上节点 y=50 高 44 → 底边 94 → y2=98） -->
+  <line x1="360" y1="174" x2="360" y2="98" stroke="#2D3436" stroke-width="1.5" marker-end="url(#arrow)"/>
   <!-- ... -->
 
   <!-- 核心节点（P1 雾蓝系模块色 1，深边框强调） -->
@@ -238,23 +252,29 @@ x 居中：260（偏左，右侧可放注释）
 
 ```svg
 <svg viewBox="0 0 720 400">
+  <defs>
+    <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
+  </defs>
   <!-- 无背景矩形，透明底 -->
 
-  <!-- 根节点（P1 雾蓝系模块色 1） -->
-  <rect x="280" y="100" width="160" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
+  <!-- 根节点（G2 法律米梯度 档 1，最浅——根在上，浅色轻盈） -->
+  <rect x="280" y="100" width="160" height="48" rx="6" fill="#F4ECDC" stroke="#2D3436" stroke-width="2"/>
   <text x="360" y="130" text-anchor="middle" font-size="18" font-weight="600" fill="#2D3436">根概念</text>
 
-  <!-- 连线 -->
-  <line x1="310" y1="148" x2="190" y2="260" stroke="#2D3436" stroke-width="1.5"/>
-  <line x1="360" y1="148" x2="360" y2="260" stroke="#2D3436" stroke-width="1.5"/>
-  <line x1="410" y1="148" x2="530" y2="260" stroke="#2D3436" stroke-width="1.5"/>
+  <!-- 连线：线终点 = 子节点顶边 - 4px 间隙（子节点 y=260 → y2=256） -->
+  <line x1="310" y1="148" x2="190" y2="256" stroke="#2D3436" stroke-width="1.5"/>
+  <line x1="360" y1="148" x2="360" y2="256" stroke="#2D3436" stroke-width="1.5"/>
+  <line x1="410" y1="148" x2="530" y2="256" stroke="#2D3436" stroke-width="1.5"/>
 
-  <!-- 子节点（每个分支不同模块色） -->
-  <rect x="120" y="260" width="140" height="48" rx="6" fill="#C5D9E8" stroke="#2D3436" stroke-width="2"/>
+  <!-- 子节点（G2 档 2，中间明度——同色相比根更深） -->
+  <rect x="120" y="260" width="140" height="48" rx="6" fill="#E8D8C0" stroke="#2D3436" stroke-width="2"/>
   <text x="190" y="289" text-anchor="middle" font-size="18" fill="#2D3436">分支 A</text>
   <!-- ... -->
 </svg>
 ```
+
+> tree 骨架连线**不**带 `marker-end`——tree（组织/分类/金字塔）通常用纯连线表示层级归属，不强调方向。需要方向箭头时按 style-guide §六「箭头」自行加 `marker-end="url(#arrow)"`。
 
 ---
 
