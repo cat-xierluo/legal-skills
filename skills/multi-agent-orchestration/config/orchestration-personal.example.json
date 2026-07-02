@@ -1,53 +1,50 @@
 {
-  "_comment": "个人 backend 路由偏好模板。任何用户可复制为 ~/.claude/orchestration-personal.json 并按自己实际可用的 provider / model / 平台额度修改。PM 派 worker 前会先读这个文件;缺失则回落到 example 默认值(也就是这份文件的字段)。",
+  "_comment": "个人 backend/模型路由偏好【模板】。复制为 config/orchestration-personal.json，按你自己可用的 provider/model/平台额度填。SKILL.md 只定义机制(本 schema)，不写具体模型——模型与框架选型是个人偏好，每人不同。",
   "_schema_version": "1.1",
-  "_read_by": "multi-agent-orchestration skill PM (Claude Code / Codex / OpenCode 等主会话)",
-  "_path_user": "~/.claude/orchestration-personal.json",
+  "_read_by": "multi-agent-orchestration skill PM (任意主会话)",
+  "_path_user": "config/orchestration-personal.json（随 skill 走，在仓库内；每人按自己偏好改）",
 
   "main_force": {
-    "_comment": "PM 当前宿主工具下的默认 worker 路由。host = 当前主会话是哪个 Agent 工具;task_routing = 按任务类型选 model(非轮换)。",
-    "host": "claude-code",
+    "_comment": "PM 主力宿主工具 + 按任务类型选 model（非轮换）。host = 你当前主会话用的 Agent 工具；task_routing = 按任务难度/模态选 model。",
+    "host": "<你的主力 Agent 工具，如 claude-code / codex / opencode>",
     "task_routing": {
-      "high_end": "glm-5.2",
-      "simple_multimodal": "MiniMax-M3",
-      "default": "glm-5.2"
-    },
-    "_routing_rule": "常规/高端任务 → high_end model;简单任务(尤其多模态/图片解读) → simple_multimodal model;类型不明 → default。"
+      "high_end": "<你的常规/高端任务模型>",
+      "simple_multimodal": "<你的简单任务+多模态/图片解读模型>",
+      "default": "<任务类型不明时回落，通常 = high_end>"
+    }
   },
 
   "concurrency": {
     "_comment": "同一 API 来源(provider)的并发上限。超了会挤占额度、甚至限流连累其他任务。",
     "max_per_provider": 3,
     "prefer_lower": true,
-    "reason": "同一 provider(GLM / MiniMax 等)并发 ≤3,尽量更少。",
-    "overflow_strategy": "需要更多并行 worker 时,溢出到 codebuddy / qoderclicn(不同平台/额度,互不抢并发)。"
+    "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",
+    "overflow_strategy": "需要更多并行 worker 时，溢出到 backend_model_routing 里的跨平台 backend（不同平台/额度，互不抢并发）。"
   },
 
   "codex_policy": {
-    "_comment": "Codex 路由硬规则。explicit_only = 仅在用户明确说'用 Codex'时才启用;allowed = 默认可作为 worker backend。",
-    "policy": "explicit_only",
-    "reason": "Codex 智能高但额度贵,默认不用;用户明确要求时才上。"
+    "_comment": "Codex 路由硬规则。explicit_only = 仅用户明确说'用 Codex'时启用；allowed = 默认可作为 worker backend。",
+    "policy": "<explicit_only 或 allowed>",
+    "reason": "<填你的理由>"
   },
 
   "backend_model_routing": {
-    "_comment": "只在 PM 主动跨工具、用户明确指定、或主力 provider 并发打满溢出时生效。host 同宿主 worker 仍按 §2.3 优先。key = backend 名(对应 §2.2 表),value = 该 backend 下的默认 model 列表(首选在前) + use_case。",
-    "qoderclicn": {
-      "_comment": "QoderWork CN(国内桌面端,SDK 变量需清理)",
-      "default_models": ["qoder-3.7MAX", "qoder-3.7PLUS"],
-      "use_case": "用户主动要求 offload,或主力并发打满时溢出;与 codebuddy 是两个不同平台/额度。",
-      "tier_note": "3.7 Max / Plus ≈ DeepSeek V4 Pro / Flash 同档。"
+    "_comment": "跨平台/跨额度 CLI backend 的默认 model + 何时用。key = 你常用的 CLI backend 名（如 qoderclicn / codebuddy / 其他），value = 该 backend 的默认 model 列表 + use_case。仅在用户主动要求或主力 provider 并发打满溢出时调用。下面两条是结构示例，换成你自己的。",
+    "your-platform-cli-a": {
+      "default_models": ["<该平台模型1，首选>", "<该平台模型2，备选>"],
+      "use_case": "用户主动 offload / 主力并发打满溢出；与 your-platform-cli-b 是两个不同平台/额度，并行避并发。",
+      "tier_note": "<可选：与主力 model 的档位对应关系>"
     },
-    "codebuddy": {
-      "_comment": "WorkBuddy / CodeBuddy(桌面端,默认 -y)",
-      "default_models": ["deepseek-v4-pro", "deepseek-v4-flash"],
-      "use_case": "用户主动要求 offload,或主力并发打满时溢出;与 qoderclicn 是两个不同平台/额度。"
+    "your-platform-cli-b": {
+      "default_models": ["<该平台模型1>", "<该平台模型2>"],
+      "use_case": "同上（与 your-platform-cli-a 双平台避并发）。"
     }
   },
 
   "notes": [
-    "改这份文件不需要碰 skill 内部脚本;只要名字按 example 字段,PM 会自动认。",
-    "缺省策略:host 缺失 → claude-code;task_routing 缺失 → default model;codex_policy.policy 缺失 → allowed(向后兼容);concurrency 缺失 → 不设硬上限(交 PM 判断);backend_model_routing 缺失 → 空 dict(交 §2.2 表格默认)。",
-    "跨工具 backend(qoderclicn/codebuddy/codex)只在 §2.3 例外条件满足、用户明确要求、或主力并发打满溢出时才被实际调用;否则 main_force.host 内 task_routing 就够了。",
-    "本文件只声明'偏好',不声明真实 token / key / endpoint;那些仍在 config/claude-provider-registry.*.json 里。"
+    "SKILL.md 只定义机制（本 schema + 路由逻辑）；具体用哪个 host / 哪些 model / 哪些 CLI backend 全在本文件（个人偏好）。",
+    "缺省策略：host 缺失 → claude-code；task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 不设硬上限（交 PM 判断）；backend_model_routing 缺失 → 空 dict。",
+    "本文件只声明'偏好'，不声明真实 token/key/endpoint——那些在 config/claude-provider-registry.*.json（本地 ignored）。",
+    "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。"
   ]
 }
