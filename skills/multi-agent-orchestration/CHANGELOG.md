@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.1] - 2026-07-03
+
+### Fixed
+- **codebuddy / qoderclicn 假阴性检测（PATH-less 已知 .app bundle 多源检测）**：先前 `check-dependencies.sh --backend codebuddy` / `--backend qoderwork-cn` 只跑 `command -v codebuddy` + `command -v qoderclicn`，desktop 端已装但未建 symlink 时（如 `/usr/local/bin/codebuddy`）会假阴性报 MISSING/WARN 但不给出 actionable fix，PM 误判 worker CLI 不可用。新增 `check_app_bundle_binary()` 多源检测：先查 `PATH`，再依次查已知 .app bundle 绝对路径（codebuddy: `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`; qoderclicn: CN 版 `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn` + 国际版 `/Applications/QoderWork.app/Contents/Resources/bin/qodercli`），找到 bundle 时给 `DEPENDENCY_WARN` + actionable fix（`spawn-worker.sh --command` 直接传绝对路径 / `sudo ln -s` 永久 symlink），都找不到时显式提示装桌面端。两条 backend case 同步加进 usage() 帮助文本。
+- **references/07-qoderwork-cli-worker.md §2.1**：新增「PATH-less 检测」一节，指引 PM 在新机器派 worker 前跑 `check-dependencies.sh --backend qoderwork-cn --strict`；附 spawn-worker 传绝对路径 / `sudo ln -s` 两条 fix。
+- **references/08-workbuddy-cli-worker.md §2.2**：同 §2.1 形态，codebuddy 版本。
+- **新 `--backend` 选项启用**：usage 文本加 `codebuddy | qoderwork-cn`。
+
+### Reason
+- 触发：用户 2026-07-03 派 Wave 1 时实测——`which codebuddy` + `which qoderclicn` 都报 `not found`，PM 一度以为 desktop 端没装；后续 ls 发现 `.app bundle` 内二进制其实在，是 symlink 没建。规则：「binary 实际在 app bundle」也算 worker 可用（spawn 传绝对路径即可），不应被漏报。
+- 决策：不自动 `sudo ln -s` 创建 symlink（高风险操作、PM/用户应显式确认），改为报告 + 给两条 fix 让 PM 选；`check_app_bundle_binary()` 设计为静默存在性检查（前置于它的 `check_optional_cmd` 已决定 OK/WARN），避免重复 report。
+
 ## [1.17.0] - 2026-07-03
 
 ### Added

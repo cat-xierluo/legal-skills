@@ -30,6 +30,16 @@ QoderWork 桌面端内置了 `qoderclicn` CLI 二进制，功能类似 Claude Co
 
 CN 版与国际版的登录状态、配置目录和 CLI 名称不同。评估 CN 额度时必须显式使用 `qoderclicn`，不要用 `/usr/local/bin/qoder` 代替。
 
+### 2.1 PATH-less 检测（实测盲区）
+
+`which qoderclicn` 在桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend qoderwork-cn` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径（CN 版 `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn` + 国际版 `/Applications/QoderWork.app/Contents/Resources/bin/qodercli`），检测到时给 `DEPENDENCY_WARN` + actionable fix 提示（spawn-worker.sh --command 传绝对路径 / `sudo ln -s`）。
+
+不只 CI/构建环境依赖这段检测，PM 在新机器派 worker 前也应该跑：
+
+```bash
+bash scripts/check-dependencies.sh --backend qoderwork-cn --strict
+```
+
 ## 3. CLI 关键参数
 
 ```

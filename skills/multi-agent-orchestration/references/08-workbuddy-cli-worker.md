@@ -29,6 +29,16 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 
 二进制随 WorkBuddy 桌面端自动更新，无需手动升级。
 
+### 2.2 PATH-less 检测（实测盲区）
+
+`which codebuddy` 在 WorkBuddy 桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend codebuddy` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径 `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`，检测到时给 `DEPENDENCY_WARN` + actionable fix 提示（spawn-worker.sh --command 传绝对路径 / `sudo ln -s`）。
+
+不只 CI/构建环境依赖这段检测，PM 在新机器派 worker 前也应该跑：
+
+```bash
+bash scripts/check-dependencies.sh --backend codebuddy --strict
+```
+
 ## 3. CLI 关键参数
 
 ```
