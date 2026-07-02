@@ -14,7 +14,8 @@ Usage:
   check-dependencies.sh [options]
 
 Options:
-  --backend NAME             Check backend CLI: claude-code | claude-oauth | codex | opencode | custom
+  --backend NAME             Check backend CLI: claude-code | claude-oauth | codex | opencode |
+                             codebuddy | qoderwork-cn | custom
                              Repeat for multiple backends.
   --check-gh                 Check GitHub CLI for PR/mergeability workflows.
   --check-terminal-split     Check terminal split helper dependencies for current terminal.
@@ -96,6 +97,37 @@ check_optional_cmd() {
   fi
 }
 
+# check_app_bundle_binary — 多源检测: PATH + 已知 .app bundle 绝对路径
+# 用法: check_app_bundle_binary <cmd> <bundle_path_1> [bundle_path_2 ...]
+# 行为:
+#   - cmd 在 PATH 中 → 静默(前置 check_optional_cmd 已 OK, 不重复)
+#   - cmd 不在 PATH 但在某个 bundle 中 → WARN, 列出路径, 建议 spawn 传绝对路径或 sudo ln -s
+#   - cmd 既不在 PATH 也不在 bundle → WARN, 提示安装桌面端
+# 解决 false-negative: 桌面端已装但没建 symlink 时 `which codebuddy` 报 not found
+check_app_bundle_binary() {
+  local cmd="$1"
+  shift
+  local bundle_paths=("$@")
+  local found_in_bundle=""
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    return 0  # 已 PATH 内, 不重复报告
+  fi
+
+  for bundle_path in "${bundle_paths[@]}"; do
+    if [ -x "$bundle_path" ]; then
+      found_in_bundle="$bundle_path"
+      break
+    fi
+  done
+
+  if [ -n "$found_in_bundle" ]; then
+    report_warn "$cmd" "PATH 无 symlink; 但 $found_in_bundle 存在。可 (a) spawn-worker.sh --command 直接传绝对路径, 或 (b) sudo ln -s $found_in_bundle /usr/local/bin/$cmd 永久 symlink"
+  else
+    report_warn "$cmd" "PATH 无 symlink, 已知 .app bundle 路径中也未找到; 需安装 $cmd 对应桌面端(WorkBuddy / QoderWork) 或自定义 CLI"
+  fi
+}
+
 check_bash_version() {
   local major="${BASH_VERSINFO[0]:-0}"
   if [ "$major" -ge 4 ]; then
@@ -142,6 +174,21 @@ for backend in "${CHECK_BACKENDS[@]}"; do
     opencode)
       echo "DEPENDENCY_CHECK: backend=opencode"
       check_optional_cmd opencode "OpenCode worker backend"
+      ;;
+    codebuddy)
+      echo "DEPENDENCY_CHECK: backend=codebuddy"
+      check_optional_cmd codebuddy "WorkBuddy/CodeBuddy worker backend"
+      check_app_bundle_binary codebuddy \
+        "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
+      ;;
+    qoderwork-cn|qoderclicn)
+      echo "DEPENDENCY_CHECK: backend=$backend"
+      check_optional_cmd qoderclicn "QoderWork CN worker backend"
+      # 国际版二进制是 qodercli(不是 qoderclicn), 但用户脚本可能 alias — 同时报
+      # 旧 Qoder 编辑器(已废弃) /usr/local/bin/qoder 不可作为 agent CLI
+      check_app_bundle_binary qoderclicn \
+        "/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn" \
+        "/Applications/QoderWork.app/Contents/Resources/bin/qodercli"
       ;;
     custom)
       echo "DEPENDENCY_CHECK: backend=custom"
