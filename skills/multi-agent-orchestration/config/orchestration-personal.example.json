@@ -1,0 +1,38 @@
+{
+  "_comment": "个人 backend 路由偏好模板。任何用户可复制为 ~/.claude/orchestration-personal.json 并按自己实际可用的 provider / model / 平台额度修改。PM 派 worker 前会先读这个文件；缺失则回落到 example 默认值（也就是这份文件的字段）。",
+  "_schema_version": "1.0",
+  "_read_by": "multi-agent-orchestration skill PM (Claude Code / Codex / OpenCode 等主会话)",
+  "_path_user": "~/.claude/orchestration-personal.json",
+
+  "main_force": {
+    "_comment": "PM 当前宿主工具下的默认 worker 路由。host = 当前主会话是哪个 Agent 工具；models = 在 host 内默认轮换的 model alias。",
+    "host": "claude-code",
+    "models": ["glm-5.2", "MiniMax-M3"],
+    "rotation": "round_robin"
+  },
+
+  "codex_policy": {
+    "_comment": "Codex 路由硬规则。explicit_only = 仅在用户明确说'用 Codex'时才启用;allowed = 默认可作为 worker backend。",
+    "policy": "explicit_only",
+    "reason": "Codex 智能高但额度贵,默认不用;用户明确要求时才上。"
+  },
+
+  "backend_model_routing": {
+    "_comment": "只在 PM 主动跨工具或用户明确指定对应 backend 时生效。host 同宿主 worker 仍按 §2.3 优先。key = backend 名(对应 §2.2 表),value = 该 backend 下的默认 model 列表(首选在前)。",
+    "qoderclicn": {
+      "_comment": "QoderWork CN(国内桌面端,SDK 变量需清理)",
+      "default_models": ["qoder-3.7MAX", "qoder-3.7PLUS"]
+    },
+    "codebuddy": {
+      "_comment": "WorkBuddy / CodeBuddy(桌面端,默认 -y)",
+      "default_models": ["deepseek-v4-pro", "deepseek-v4-flash"]
+    }
+  },
+
+  "notes": [
+    "改这份文件不需要碰 skill 内部脚本;只要名字按 example 字段,PM 会自动认。",
+    "缺省策略:host 缺失 → claude-code;codex_policy.policy 缺失 → allowed(向后兼容);backend_model_routing 缺失 → 空 dict(交给 §2.2 表格默认)。",
+    "跨工具 backend(qoderclicn/codebuddy/codex)只在 §2.3 例外条件满足或用户明确要求时才被实际调用;否则 main_force.host 内轮换就够了。",
+    "本文件只声明'偏好',不声明真实 token / key / endpoint;那些仍在 config/claude-provider-registry.*.json 里。"
+  ]
+}

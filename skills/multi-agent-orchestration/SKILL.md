@@ -86,6 +86,18 @@ PM 代理纪律：
 - 需要稳定进程生命周期和人工接管时，优先 `tmux + worktree`；触发 §2.1 时，`tmux + worktree` 是默认执行层，不是可静默跳过的建议。
 - ACP 只在 adapter 已稳定、能输出结构化状态时启用；没有 adapter 时不要为了协议增加不确定性。
 
+Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以下默认仅在 PM 主动跨工具或用户明确指定该 backend 时生效）：
+
+| Backend | 默认 model（首选 → 备选） | 适用场景 | 备注 |
+|---------|--------------------------|----------|------|
+| Claude Code | `glm-5.2`、`MiniMax-M3`（默认轮换） | 默认主力 host | 详细 provider 映射见 `config/claude-provider-registry.example.json` |
+| Codex | （见 §2.4 codex_policy） | 用户明确要求时 | 智能高额度贵，默认不主动派 |
+| OpenCode | `opencode:<provider>/<model>` | OpenCode 已有额度 | 按 OpenCode profile |
+| `qoderclicn`（QoderWork CN） | `qoder-3.7MAX`、`qoder-3.7PLUS` | 国内桌面端额度分流 | SDK 变量需清理 |
+| `codebuddy`（WorkBuddy/CodeBuddy） | `deepseek-v4-pro`、`deepseek-v4-flash` | 桌面端复用登录态、零 API Key | 默认带 `-y` |
+
+> 上表默认模型来自 `~/.claude/orchestration-personal.json` 的 `backend_model_routing` 字段，缺失时回落到本表；个人偏好可被任何人自定义，详见 §2.4。
+
 环境/profile 纪律：
 - PM 启动 worker 时必须显式写 `Runtime Profile`、settings/profile 路径、模型来源和关键环境变量处理方式，不假定 Claude Code、Codex、OpenCode 共享同一套 shell 环境。
 - Claude Code 第三方 API provider 推荐使用 provider registry：`config/claude-provider-registry.example.json` 描述多个 provider 的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models`；真实 registry 放 ignored local 文件，真实 key 优先放环境变量。旧的单 provider `--settings <*.settings.json>` 路径保留兼容。
@@ -117,6 +129,38 @@ PM 代理纪律：
 - 用户**明确**要求混合 worker（例如"Claude Code 做 PM，重写 worker 用 Codex"）。
 
 触发跨工具时的硬要求：PM 必须在 Wave 计划里写明为什么跨、每个 worker 的 backend / profile / auth 来源，以及跨工具带来的额外排障点。§3.1 的 provider slot 分配仍适用，但 slot 默认全部落在 PM 宿主工具上；跨工具 slot 是显式例外，需要在 Wave 摘要里标注。
+
+### 2.4 个人路由偏好（用户级，可被任何人自定义）
+
+§2.2 / §2.3 给的是 skill 级默认规则，但每个用户的"主力 / 轮换 / 哪个 backend 给哪个模型"是个**个人偏好**，不应该硬编码进 skill。机制：
+
+- **配置路径**：`~/.claude/orchestration-personal.json`（用户级，跟个人 shell / dotfile 走，不入仓库）。
+- **模板路径**：`config/orchestration-personal.example.json`（随 skill 一起发布；字段定义、占位默认值；任何人可以复制为 `~/.claude/orchestration-personal.json` 后按自己实际可用的 provider / model / 平台额度改）。
+- **读取时机**：PM 派 worker 前先读 `~/.claude/orchestration-personal.json`；缺失则用 `config/orchestration-personal.example.json` 的默认（向后兼容）。
+- **作用域**：仅声明"偏好"（host、model 轮换、codex policy、跨工具 backend 的默认 model），不声明真实 token / key / endpoint——那些仍归 `config/claude-provider-registry.*.json` 管。
+
+字段定义（与 example schema 对齐）：
+
+| 字段 | 含义 | 缺省回落 |
+|------|------|----------|
+| `main_force.host` | PM 主力宿主工具（`claude-code` / `codex` / `opencode`） | `claude-code` |
+| `main_force.models` | host 内默认轮换的 model alias 列表 | `["glm-5.2", "MiniMax-M3"]` |
+| `main_force.rotation` | `round_robin` / `fixed_first` | `round_robin` |
+| `codex_policy.policy` | `explicit_only` / `allowed` | `allowed`（向后兼容） |
+| `backend_model_routing.<backend>.default_models` | 跨工具 backend 的默认 model（首选在前） | 留空 → 交 §2.2 表 |
+
+**Codex 硬规则（个人偏好中最重要的一条）**：
+
+- `codex_policy.policy = "explicit_only"` 时，PM **不主动**把任何 worker 路由到 Codex；只有用户当轮明确说"用 Codex"才解封，并写到 Wave 计划里。
+- 这条独立于 §2.3 同宿主优先：即使 §2.3 同宿主工具是 Codex host，PM 仍按此政策判断是否派 worker 到 Codex。
+- 想恢复 Codex 默认可用，改 `policy = "allowed"`。
+
+**与 §2.2 / §2.3 / §3.3 的关系**：
+
+- §2.2 backend 表 → §2.4 个人偏好 → §3.3 项目级 provider slot 默认 → 最终 backend / model 选择。优先级 §2.3（不主动跨工具）压 §2.2（多 backend），§2.4 个人偏好压 §2.2 默认 model 表，§3.3 项目级 provider slot 计划压 §2.4 通用 host。
+- §2.4 字段命名故意跟 §3.3 项目级 provider slot **不冲突**：项目级 slot 写的是"这一 Wave 用哪个 slot 跑哪个 worker"（含 model、max_concurrency）；§2.4 写的是"我个人偏好默认用什么 host / 什么 backend 给什么 model"。前者落地到 Wave 计划，后者落地到 PM 派单决策。
+
+**TODO（后续增强）**：`scripts/render-runtime-profile.sh` 自动读 personal config（解析 `main_force.models` → 默认 `--model`、解析 `codex_policy.policy` → 是否允许 coddex backend、解析 `backend_model_routing.<backend>.default_models` → 跨工具 default）当前**未实现**；本次只做配置 + 文档 + PM 手动遵循，避免无人监督下改脚本引入新不确定性。需要做的时候开新 worker，不要在 PM 任务里顺手改。
 
 ## 3. 标准流程
 
@@ -210,6 +254,18 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
 - provider slot 默认计划，供 Goal/Wave 启动清单引用。
 - 可复制到 worktree 的非敏感配置文件，例如 `.npmrc.example` 或只读模板。
 - post-create / pre-merge hook 命令。
+
+**与 §2.4 个人偏好叠加（用户级 vs 项目级）**：
+
+| 维度 | 用户级（§2.4） | 项目级（§3.3） |
+|------|---------------|---------------|
+| 路径 | `~/.claude/orchestration-personal.json` | `.claude/orchestration.config.json` |
+| 内容 | 个人主力 host、默认 model 轮换、Codex policy、跨工具 backend 默认 model | trunk / 任务源 / 验证命令 / 本项目 provider slot 默认计划 / hook |
+| 谁写 | 用户自己 | 项目维护者 |
+| 谁读 | PM 派 worker 前 | PM 启动 Wave 前 |
+| 优先级 | 低（个人通用偏好） | 高（项目覆盖个人） |
+
+> 例：个人偏好 host=claude-code + model=glm-5.2/MiniMax-M3 轮换；项目级 provider slot 计划写"本 Wave 的 W3/W4 走 deepseek-v4-pro"——则 W3/W4 用 deepseek，其他 worker 仍按个人偏好。两者不冲突，也不应互相复制；项目级不写个人偏好字段（避免把 dotfile 化进仓库）。
 
 配置安全规则：
 - 永远不要默认复制 `.env`、真实 settings、token、key、cookie、证书或账号凭证。

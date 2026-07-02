@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.16.7] - 2026-07-02
+
+### Added
+- **个人 backend 路由偏好配置机制**（用户级，可被任何人自定义）：
+  - 新增 `config/orchestration-personal.example.json` 模板，字段：`main_force`（主力 host + model 轮换）、`codex_policy`（`explicit_only` / `allowed`）、`backend_model_routing`（`qoderclicn` / `codebuddy` 的默认 model 列表）、`notes`。任何用户可复制为 `~/.claude/orchestration-personal.json` 后按个人可用 provider / model / 平台额度修改。
+  - SKILL.md §2.4 新增「个人路由偏好」小节：PM 派 worker 前先读 `~/.claude/orchestration-personal.json`（缺失回落 example）；字段定义 + 缺省回落表；与 §2.2 / §2.3 / §3.3 的优先级关系。
+  - SKILL.md §2.2 加「Backend → 默认模型速查表」：Claude Code 默认 `glm-5.2` / `MiniMax-M3` 轮换；`qoderclicn` 默认 `qoder-3.7MAX` / `qoder-3.7PLUS`；`codebuddy` 默认 `deepseek-v4-pro` / `deepseek-v4-flash`；Codex 默认 `explicit_only`（仅用户明确要求时启用）。
+  - SKILL.md §3.3 增「用户级 vs 项目级」叠加表，明确 `~/.claude/orchestration-personal.json` 与 `.claude/orchestration.config.json` 不冲突，字段命名刻意不重叠。
+  - `references/06-agent-cli-reference.md` §0 总览表加「默认 model（个人偏好）」列。
+
+### Known Limitations
+- **`render-runtime-profile.sh` 暂未自动读 personal config**：本次只做配置 + 文档 + PM 手动遵循。后续增强（解析 `main_force.models` → 默认 `--model`、`codex_policy.policy` → Codex backend gate、`backend_model_routing.<backend>.default_models` → 跨工具 default）需要开新 worker 单独做，避免无人监督下改脚本引入新不确定性。
+
+### Reason
+- 来源：用户确认主力 = Claude Code host + GLM-5.2 / MiniMax-M3 轮换；Codex 智能高但额度贵，仅在用户明确要求时启用；`qoderclicn` / `codebuddy` 跨工具 backend 在主力不够或用户明确指定时才派；每个 backend 的默认 model 也是个人偏好（不是 skill 级硬编码）。
+- 决策：把"个人偏好"做成跟个人 dotfile 一样不进仓库（`~/.claude/orchestration-personal.json`），skill 内只留 example 模板 + 文档；机制可被其他用户复制和修改。Codex `explicit_only` 作为软推荐（个人偏好层面），不强写进 skill 硬规则。
+
 ## [1.16.6] - 2026-06-26
 
 ### Added
