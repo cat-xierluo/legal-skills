@@ -7,17 +7,19 @@
 
 ## 0. 总览
 
-| CLI | 版本 | 二进制路径 | 交互模式 | 批处理模式 | ACP | 额度来源 |
-|-----|------|-----------|----------|-----------|-----|---------|
-| Claude Code | 2.1.175 | `~/.local/bin/claude` | `claude` | `claude -p` | ✗ | Anthropic API / 第三方 provider / OAuth |
-| Codex | 0.142.0-alpha.6 | `~/.local/bin/codex` | `codex` | `codex exec` | ✗ | OpenAI API |
-| OpenCode | 1.17.6 | `~/.opencode/bin/opencode` | `opencode` | `opencode run` | ✓ `opencode acp` | 多 provider（config.toml） |
-| Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） |
-| Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API |
-| Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex |
-| QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 |
-| CodeBuddy / WorkBuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | WorkBuddy 账号额度 / 内置模型 |
-| Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 |
+| CLI | 版本 | 二进制路径 | 交互模式 | 批处理模式 | ACP | 额度来源 | 默认 model（个人偏好） |
+|-----|------|-----------|----------|-----------|-----|---------|------------------------|
+| Claude Code | 2.1.175 | `~/.local/bin/claude` | `claude` | `claude -p` | ✗ | Anthropic API / 第三方 provider / OAuth | `glm-5.2`、`MiniMax-M3`（默认轮换） |
+| Codex | 0.142.0-alpha.6 | `~/.local/bin/codex` | `codex` | `codex exec` | ✗ | OpenAI API | （见 `codex_policy.policy`，默认 `explicit_only` 时不主动派） |
+| OpenCode | 1.17.6 | `~/.opencode/bin/opencode` | `opencode` | `opencode run` | ✓ `opencode acp` | 多 provider（config.toml） | `opencode:<provider>/<model>`（按 OpenCode profile） |
+| Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） | （按 hermes profile） |
+| Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
+| Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex | （按 gemini profile） |
+| QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `qoder-3.7MAX`、`qoder-3.7PLUS` |
+| CodeBuddy / WorkBuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | WorkBuddy 账号额度 / 内置模型 | `deepseek-v4-pro`、`deepseek-v4-flash` |
+| Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
+
+> 默认 model 列来源：`~/.claude/orchestration-personal.json` 的 `main_force.models` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §2.4）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
 
 **未安装 / 不可用**：OpenClaw（symlink 已断）、Reasonix、Aider、Devin。
 
