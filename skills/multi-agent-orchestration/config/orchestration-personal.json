@@ -1,0 +1,46 @@
+{
+  "_comment": "本 skill 的 backend/模型路由配置（随 skill 走，在仓库内）。PM 派 worker 前先读本文件;缺失字段回落到 .example.json 的默认。任何用户可按自己实际可用的 provider / model / 平台额度改本文件。",
+  "_schema_version": "1.1",
+
+  "main_force": {
+    "host": "claude-code",
+    "task_routing": {
+      "high_end": "glm-5.2",
+      "simple_multimodal": "MiniMax-M3",
+      "default": "glm-5.2"
+    },
+    "_routing_rule": "常规/高端任务 → GLM-5.2;简单任务(尤其多模态/图片解读) → MiniMax-M3;类型不明 → default。按任务路由,非轮换。"
+  },
+
+  "concurrency": {
+    "max_per_provider": 3,
+    "prefer_lower": true,
+    "reason": "同一 API 来源(GLM / MiniMax)并发 ≤3,尽量更少——超了会挤占额度,甚至触发限流把其他任务一起终止。",
+    "overflow_strategy": "需要更多并行 worker 时,溢出到 codebuddy / qoderclicn(不同平台/额度,互不抢并发)。"
+  },
+
+  "codex_policy": {
+    "policy": "explicit_only",
+    "reason": "Codex 智能高但额度贵,默认不作为 worker backend;只有用户明确说'用 Codex'时才启用。"
+  },
+
+  "backend_model_routing": {
+    "qoderclicn": {
+      "default_models": ["qoder-3.7MAX", "qoder-3.7PLUS"],
+      "use_case": "用户主动要求 offload,或主力 provider 并发打满时溢出;与 codebuddy 是两个不同平台/额度,并行派可避主力并发上限。",
+      "tier_note": "3.7 Max / Plus ≈ DeepSeek V4 Pro / Flash 同档。"
+    },
+    "codebuddy": {
+      "default_models": ["deepseek-v4-pro", "deepseek-v4-flash"],
+      "use_case": "用户主动要求 offload,或主力 provider 并发打满时溢出;与 qoderclicn 是两个不同平台/额度,并行派可避主力并发上限。"
+    }
+  },
+
+  "notes": [
+    "主力 = Claude Code host;常规/高端→GLM-5.2,简单+多模态→MiniMax-M3(按任务路由,非轮换)。",
+    "并发:同一 provider ≤3 worker(尽量更少);溢出到 codebuddy / qoderclicn。",
+    "Codex 仅在用户明确要求时启用。",
+    "codebuddy / qoderclicn 仅在用户主动要求或主力并发打满时派。",
+    "本文件只声明'偏好',不声明真实 token/key/endpoint;那些在 config/claude-provider-registry.*.json(本地 ignored)。"
+  ]
+}
