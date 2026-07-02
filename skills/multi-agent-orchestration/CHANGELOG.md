@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.0] - 2026-07-03
+
+### Added
+- **cron + sentinel 标准组合监测模式（§7.3）**：sentinel（§7.2）是主监测，但有 3 个盲区——(a) worker 硬卡死不写 STATUS 时 sentinel 轮询到 `--max-wait` 超时（exit 124）；(b) worker 用非标准 STATUS 文件名（如 `issue-XXX-status.json`）时 sentinel 监听 `STATUS.json` 轮询空文件到超时；(c) sentinel 自身被 SIGKILL/SIGTERM 或 harness 未 re-invoke 时静默消失。新增 §7.3 把"sentinel（秒级抓 done）+ cron（兜底：漏合入 + 硬卡死双信号检测 + sentinel 失效）"写成**标准两层组合**，而非二选一。PM 派 worker 后必挂两层。
+- **cron 兜底频次硬推荐**：短任务 ~22min、**长流水线 10-15min**，避开 `:00`/`:30` 整点（API 拥堵 + 速率限制）。给出错峰 cron 表达式（`3,13,23,33,43,53 * * * *` 每 10 分钟 / `7,29,51 * * * *` 每 22 分钟）。不低于 10 分钟（过频抵消 token efficiency）。
+- **双信号卡死检测**：判 worker 卡死必须 STATUS.updated_at + 文件 mtime 都超阈值（长流水线 20min）**且** pane 尾部有死循环证据，缺一不可；避免把正常 long thinking 误判为死循环。只满足时间信号时发 `tmux send-keys` 心跳探针，下一轮再判。
+- **`templates/cron-monitor-prompt.md`**：可复用 cron prompt 模板（worker session + STATUS 路径 + git 分支 + sentinel id + stale 阈值 + 收尾自删 + 无动作一句话汇报），含占位符表 + cron 表达式建议表 + 收尾纪律。
+
+### Reason
+- 来源：用户 2026-07-03 反馈"cron 兜底频次 30 分钟太低，起码 10 分钟"，并提议改进 skill 兜底频次。排查发现 SKILL.md §7 原本没有 cron 兜底频次的硬性数字（30 分钟是 PM 按 cache 经济性自设，偏稀疏），但 skill 内部 TASKS #69/#70 早已登记"把 cron+sentinel 标准组合 + 10-15min 频次写进 §7 + 建 cron 模板"两条待办，本次一并实施。
+- 决策：sentinel 事件驱动零 idle token 是主监测不可废；cron 兜底抓 sentinel 三个盲区 + 卡死双信号检测，是 graceful 降级而非替代。频次按任务粒度（长流水线 10-15min）平衡 catch-up 速度与 re-invoke token 成本。详见 DEC-038。
+
 ## [1.16.7] - 2026-07-02
 
 ### Added
