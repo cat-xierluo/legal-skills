@@ -137,7 +137,7 @@ codebuddy --model minimax-m3 -p "分析这份合同扫描件中的风险条款" 
 codebuddy --model auto -p "分析这个法律问题" -y
 ```
 
-> **推荐策略**：Worker 默认用 `deepseek-v4-flash`（倍率低、能力强），涉及图片/扫描件的任务切 `minimax-m3`，需要深度推理时再升级到 `deepseek-v4-pro`。具体可用模型取决于你的 WorkBuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表。
+> **常用策略**：Worker 常用 `deepseek-v4-flash`（倍率低、能力强），涉及图片/扫描件的任务切多模态模型，需要深度推理时再升级到 `deepseek-v4-pro`。具体可用模型取决于你的 WorkBuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表；默认选哪个见 personal config。
 
 ### 4.2 可选：对接自有 API Key（降本兜底，非主要场景）
 
