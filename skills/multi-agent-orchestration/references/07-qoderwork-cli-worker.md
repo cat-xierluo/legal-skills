@@ -266,3 +266,13 @@ bash scripts/spawn-worker.sh \
 - **checkpoint 兼容**：`qoderclicn` 本身不产生 `STATUS.json`，需要在 worker prompt 中明确要求 worker 自行写入 checkpoint 三件套，或靠 git status + tmux capture-pane 兜底巡检
 - **额度监控**：目前没有 CLI 方式查询剩余额度，需要在 QoderWork 桌面端查看
 - **worktree 隔离**：虽然 CLI 暴露 `--worktree`，多 Agent 编排仍建议由 PM 先用 `spawn-worker.sh` 创建 worktree，再用 `tmux -c <worktree>` 启动 CLI，保证分支名、Session Context 和 sentinel 路径可控
+- **长任务专用 helper**：`scripts/qoderclicn-interactive-spawn.sh`（DEC-042 配套）。`qoderclicn` batch `-p` 走 SDK/bare 模式 → HeadlessSession 1-2s 内 `gemini.exitHeadlessMode` 主动 idle-exit，**不能用 batch 跑长任务**。helper 走 interactive 模式（无 `-p`） + tmux `send-keys` 投递 prompt，实测 5+ tool call 稳定。PM 用法：
+  ```bash
+  bash scripts/qoderclicn-interactive-spawn.sh \
+    --session qc-WORKER-XXX \
+    --workdir <worktree> \
+    --prompt-file <absolute-path> \
+    [--model qmodel_latest|qmodel|dmodel|...] \
+    [--no-trust-auto]   # 默认会自动 accept "1. Trust folder"
+  ```
+  helper 自带 trust-folder 自动接受 + TUI ready 检测 + 12KB / 16KB 分段 send-keys。后续 PM 可用 spawn-worker.sh `--mode interactive --worker-backend qoderwork-cn` 集成（未来增强）。与 batch `-p` 对照见 [DEC-042]。
