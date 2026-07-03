@@ -50,6 +50,9 @@ skills/legal-proposal-generator/config/images/
 !**/reference/user-profile.example.md
 .history/
 
+# Agent session context - PM 巡检状态,含本地绝对路径,不入库
+**/.claude/agent-sessions/
+
 # Node.js dependencies
 **/node_modules/
 

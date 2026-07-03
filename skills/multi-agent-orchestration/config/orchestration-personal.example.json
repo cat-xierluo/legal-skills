@@ -2,7 +2,7 @@
   "_comment": "个人 backend/模型路由偏好【模板】。复制为 config/orchestration-personal.json，按你自己可用的 provider/model/平台额度填。SKILL.md 只定义机制(本 schema)，不写具体模型——模型与框架选型是个人偏好，每人不同。",
   "_schema_version": "1.1",
   "_read_by": "multi-agent-orchestration skill PM (任意主会话)",
-  "_path_user": "config/orchestration-personal.json（随 skill 走，在仓库内；每人按自己偏好改）",
+  "_path_user": "config/orchestration-personal.json（在 skill config/ 目录内，但被 .gitignore 排除、不入库；每人按自己偏好改，不 commit）",
 
   "main_force": {
     "_comment": "PM 主力宿主工具 + 按任务类型选 model（非轮换）。host = 你当前主会话用的 Agent 工具；task_routing = 按任务难度/模态选 model。",
