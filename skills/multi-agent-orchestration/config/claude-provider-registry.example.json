@@ -1,5 +1,5 @@
 {
-  "_comment": "这是 example 模板——base_url 全用 .example.com 占位。真实 endpoint 对照:GLM=open.bigmodel.cn/api/anthropic, DeepSeek=api.deepseek.com/anthropic, MiniMax=api.minimaxi.com/anthropic",
+  "_comment": "这是 example 模板——base_url 全用 .example.com 占位,auth_token 走环境变量(见各 provider 的 auth_token_env)。复制为本地 ignored 的真实 registry 文件后,把 base_url 换成你自己 provider 的真实 endpoint;真实 token 只放环境变量,不写进本文件。",
   "providers": {
     "glm": {
       "base_url": "https://your-glm-provider.example.com/anthropic",
