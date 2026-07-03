@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.2] - 2026-07-03
+
+### Fixed
+- **codebuddy / qoderclicn batch mode 启动参数（CLI flag 误用导致 Wave 1 worker 出货失败）**：派 Wave 1（`doc-curator-iter-2026-07-03`）实测两个 worker 都立即退出 / 卡住，investigator worker 14 行 A/B 测试定位到 render-runtime-profile.sh 生成命令时 2 个 flag 错配 + 个人配置 1 个 model key 错误：
+  - **F1**：codebuddy batch 默认 `--permission-mode acceptEdits` 与 `-y` 冲突，CLI 自己报错要求 `codebuddy -p -y "<prompt>"` 或 `--permission-mode bypassPermissions`。改为 batch 默认 `bypassPermissions`（交互式不动）。
+  - **F3**：qoderclicn batch 模式必须显式 `--dangerously-skip-permissions`（`--permission-mode auto` 在 headless 不 bypass）。自动加在 `MODE=batch` 路径里（`SKIP_PERMISSIONS=1` 已存在的语义不变）。
+  - **F2**：`config/orchestration-personal.json` `backend_model_routing.qoderclicn.default_models` 把 `qoder-3.7MAX` / `qoder-3.7PLUS`（CLI 不接受）换成 `[qmodel_latest, qmodel]`（CLI 1.0.34 实证可用 key 之一）。`tier_note` 同步标注实际对应 `Qwen3.7-Max` / `Qwen3.7-Plus`。
+- **诊断先于修复**（meta 流程）：用 investigator worker 14 行 A/B 测试（A/B 改 1-2 个 flag 看哪个 fix pass）+ `/tmp/cli-diagnostic-report.md` 沉淀证据 + CLI 实测拒绝消息。最小 3 行改 + 单 commit，不直接凭印象 patch。
+
+### Reason
+- 触发：本次 Wave 1 派发失败时 PM 一度怀疑 GUI 登录态 / trust folder / path 转义。Diagnoser 14 行 A/B 实验逐一排除（GUI app 全部运行中、登录态齐备、空目录 trust folder 也通过、ARG_MAX 1MB ≫ 提示词 6KB、shell 转义正确）。定位到 F1+F3 是 render-profile 默认值错，F2 是 personal.json model 名字错。
+- 决策：source 修默认值而非文档「PM 用对 flag」。理由：默认值下 CLI 默认跑通是「先入坑后纠错」的逆向发现，文档「PM 用 -p -y」很多用户不知道；与其让每个 PM 犯错不如让 render-profile 默认发对命令。
+
 ## [1.17.1] - 2026-07-03
 
 ### Fixed
