@@ -194,7 +194,7 @@ Wave 启动前，PM 必须写清：
 
 Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
 - 一个 slot 表示一条可并发额度 lane：`backend + settings/profile path + provider + model + max_concurrency`。
-- Claude Code 第三方 provider 推荐用 registry + provider id + model alias 区分，例如 `config/claude-providers.local.json` + `glm/glm52`、`deepseek/v4flash`；旧路径也可用具体 settings 文件区分，例如 `config/minimax-M3.settings.json`、`config/glm-5.2.settings.json`。真实 registry/settings 文件保持本地 ignored，不提交。
+- Claude Code 第三方 provider 推荐用 registry + provider id + model alias 区分，例如 `config/claude-providers.local.json` + `<provider>/<model-alias>`；旧路径也可用具体 settings 文件区分，例如 `config/<your-provider>.settings.json`。真实 registry/settings 文件保持本地 ignored，不提交；具体用哪个 provider/model 见 personal config。
 - Codex 用 Codex profile / model 区分；OpenCode 用 `provider/model` profile 区分；custom worker 写明实际命令来源。
 - 默认同一 provider/settings 文件最多放 3 个 worker；只有低风险任务且上一 Wave 表现稳定时才放到 4 个。需要 5-6 个 worker 时，优先拆到第二 provider 或 Codex/OpenCode/local profile。
 - 高风险任务（共享契约、Tauri/Rust、本机依赖、锁文件）优先给上一 Wave 指令遵循和验证表现最好的 profile，且每个高风险共享域通常只开 1 个 worker。
@@ -204,10 +204,10 @@ Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
 
 | Worker | 任务风险 | Backend | Settings/Profile | Slot |
 |--------|----------|---------|------------------|------|
-| W1 | 高 | Claude Code | `config/minimax-M3.settings.json` | `minimax-1` |
-| W2 | 中 | Claude Code | `config/minimax-M3.settings.json` | `minimax-2` |
-| W3 | 低 | Claude Code | `config/glm-5.2.settings.json` | `glm-1` |
-| W4 | 低 | Claude Code | `config/glm-5.2.settings.json` | `glm-2` |
+| W1 | 高 | Claude Code | `config/<provider-a>.settings.json` | `<provider-a>-1` |
+| W2 | 中 | Claude Code | `config/<provider-a>.settings.json` | `<provider-a>-2` |
+| W3 | 低 | Claude Code | `config/<provider-b>.settings.json` | `<provider-b>-1` |
+| W4 | 低 | Claude Code | `config/<provider-b>.settings.json` | `<provider-b>-2` |
 | W5 | 文档/研究 | Codex | `codex:<profile>` | `codex-1` |
 | W6 | 重复性低风险 | OpenCode/custom | `<provider/model or command label>` | `opencode-1` |
 

@@ -248,12 +248,10 @@ opencode acp
 Claude Code worker 默认按第三方 API provider settings 启动。每个 provider 建议一个本地 settings 文件：
 
 ```text
-config/minimax-M3.settings.json
-config/minimax-M2.7.settings.json
-config/deepseek-v4-pro.settings.json
-config/deepseek-v4-flash.settings.json
-config/glm-5.2.settings.json
-config/glm-5.1.settings.json
+config/<provider-a>.settings.json
+config/<provider-b>.settings.json
+config/<provider-c>.settings.json
+...（每个 provider 一个本地 settings 文件，按你实际可用的 provider 命名；真实文件 gitignore 不入库）
 ```
 
 settings 内容参考 `config/claude-provider-settings.example.json`。真实 token 文件必须放在本地忽略路径，不提交到仓库。
@@ -263,7 +261,7 @@ settings 内容参考 `config/claude-provider-settings.example.json`。真实 to
 1. 第三方 API：用 `claude --settings /path/to/provider.settings.json --model <provider-model> ...`，整份 settings 同时配置 token、base URL、`ANTHROPIC_MODEL`、默认模型映射、timeout 和 thinking tokens。
 2. 订阅/OAuth：才用 `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude ...`。
 3. 不要在 provider profile 上套 `env -u ANTHROPIC_AUTH_TOKEN` 或 `env -u ANTHROPIC_BASE_URL`，否则会把第三方 API 配置清掉。
-4. provider profile 下不要指定 `--model sonnet` 这类 Anthropic 原生别名；要指定 provider 的真实模型名，例如 `glm-5.2[1M]`、`MiniMax-M3[1M]`、`deepseek-v4-pro[1m]`。
+4. provider profile 下不要指定 `--model sonnet` 这类 Anthropic 原生别名；要指定 provider 的真实模型名，例如 `<provider-model>[1M]`（按你的 provider 实际模型名 + 上下文窗口后缀）。
 5. 只传 `--settings` 不足以隔离用户级 `~/.claude/settings.json`。若用户级 settings 中有 `ANTHROPIC_MODEL`，它可能覆盖默认模型选择；PM 必须检查启动 banner 与 `STATUS.json` 中的 model/provider 一致。
 6. 一个 worker prompt 里写清 `Runtime Profile` 和 settings 文件路径，但不要写 token 值。
 
