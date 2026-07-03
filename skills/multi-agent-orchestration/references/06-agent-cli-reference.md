@@ -15,7 +15,7 @@
 | Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） | （按 hermes profile） |
 | Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
 | Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex | （按 gemini profile） |
-| QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `qoder-3.7MAX`、`qoder-3.7PLUS` |
+| QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `qmodel_latest`、`qmodel`（见下方模型 key 表） |
 | CodeBuddy / WorkBuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | WorkBuddy 账号额度 / 内置模型 | `deepseek-v4-pro`、`deepseek-v4-flash` |
 | Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
 
