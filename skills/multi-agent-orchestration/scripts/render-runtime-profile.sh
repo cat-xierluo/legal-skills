@@ -342,7 +342,10 @@ case "$BACKEND" in
     # WorkBuddy / CodeBuddy CLI。参数体系与 Claude Code 高度兼容(ref 08)。
     # headless 批处理必须 -y(ref 08 §6.2)；MCP off 用 inline 空 config(避免 /tmp 依赖)。
     if [ -z "$PERMISSION_MODE" ]; then
-      [ "$MODE" = "batch" ] && PERMISSION_MODE="acceptEdits" || PERMISSION_MODE="bypassPermissions"
+      # F1 (DEC-040): batch 默认 bypassPermissions 替代 acceptEdits。CLI 文档与实测都显示
+      # batch + acceptEdits 与 -y 冲突，headless 下每个 tool 调用都被 deny。
+      # 实测命令 `codebuddy -p -y "<prompt>"` 或 `--permission-mode bypassPermissions` 工作。
+      [ "$MODE" = "batch" ] && PERMISSION_MODE="bypassPermissions" || PERMISSION_MODE="acceptEdits"
     fi
     [ -n "$BIN" ] || BIN="/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
     cb_parts=("$BIN")
@@ -375,6 +378,10 @@ case "$BACKEND" in
     qr_parts+=(--permission-mode "$PERMISSION_MODE")
     [ "$NO_MCP" -eq 1 ] && qr_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
     [ "$SKIP_PERMISSIONS" -eq 1 ] && qr_parts+=(--dangerously-skip-permissions)
+    # F3 (DEC-040): qoderclicn 在 batch mode 下必须再加 --dangerously-skip-permissions；
+    # `--permission-mode auto` 在 headless 不 bypass，需要这个 flag 强制。
+    # 仅 batch 加，交互式不破坏现有 SKIP_PERMISSIONS 语义。
+    [ "$MODE" = "batch" ] && qr_parts+=(--dangerously-skip-permissions)
     if [ "$MODE" = "batch" ]; then
       qr_parts+=(-p)
       COMMAND="$(quote_words "${qr_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
