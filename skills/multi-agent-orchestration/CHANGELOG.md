@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.17.4] - 2026-07-03
+
+### Added
+- **`scripts/qoderclicn-interactive-spawn.sh`**：长任务（10+ tool call）专用 helper。`qoderclicn` 在 batch `-p` 模式下走 SDK/bare 模式 → GUI 主进程 (pid 65090) 的 HeadlessSession → 1-2s 内 `gemini.exitHeadlessMode` 主动 idle-exit（实测日志 `~/.qoderworkcn/logs/runs/...-p65090/process.exiting ... uptime_ms=1176`）。DEC-042 决策：长任务改走 interactive 模式 + tmux `send-keys` 投递 prompt（**无 `-p`**），实测 5 个 tool call（pwd/date/echo/uname/ls）全跑通 + worker 仍在 `>` ready。Helper 自带：
+  - argv-form tmux `new-session` 触发（路径空格不丢）
+  - trust-folder 自动 `1 + Enter` 接受（可关：`--no-trust-auto`）
+  - TUI ready 检测（看 `Type your message` 或 `>`）
+  - prompt 12KB/16KB 分段（`send-keys` / `paste-buffer`）
+  - thinking/tool_use 出现确认（60s）
+
+- **references/07 §8 新增「长任务专用 helper」指引**：PM 用法 + helper 适用场景 + 与 batch `-p` 对照。
+
+### Reason
+- 来源：2026-07-03 doc-curator-iter Wave 1 W2 中途死的根因诊断。investigator 14 行 A/B 测试定位 F1+F3 (DEC-040) 解决了 batch flag + model key，但 worker 仍 1-2s exit 不进 agent loop；进一步排查确认是 SDK/bare 模式的 HeadlessSession 设计问题，**不是 flag 错**。Reference §6.2 已写明 batch 仅限短任务，但 PM 派 W2 时 10+ tool call 仍走 batch 故踩坑。
+- 决策：保留 batch `-p` 作为「短任务兜底」（≤3 tool call），新增 interactive helper 作「长任务 canonical」。`spawn-worker.sh` 后续加 `--mode interactive` 集成（本次仅 helper + 文档）。
+
+## [1.17.3] - 2026-07-03
+
+### Security
+- **凭证卫生审查（skill-lint 验收触发）**：`config/*.settings.json`（deepseek / glm / minimax）含真实 API key，虽已被 `.gitignore` 的 `**/config/*.json` 拦住不进 git 追踪（Hard Fail #5 未触发），但真实 live key 明文躺在工作区仍是外带风险。**这三把 key 需在各 provider 后台轮换**（DeepSeek / BigModel-GLM / MiniMax），并确认打包与 ClawHub 同步都尊重 `**/config/*.json` 排除。长期方案：真实 token 只放环境变量，settings 文件留占位。
+
+### Fixed
+- **`.gitignore` 补 `**/.claude/agent-sessions/`**：SKILL.md §4.1 要求 agent-sessions 巡检产物不进 commit，但仓库 `.gitignore` 此前无对应规则，`git add -A` 会误提交（含本地绝对路径的 `SENTINEL_OUT.log`）。补规则并删除遗留样例 `.claude/agent-sessions/orch-pref/`。
+- **personal.json「不入库」表述统一**：`config/orchestration-personal.json` 与 `.example.json` 的 `_comment`/`_path_user` 原写「随 skill 走，在仓库内」，与 §2.4「gitignore 不入库」矛盾（实际行为是 gitignored）。统一为「在 skill config/ 目录内，但被 .gitignore 排除、不入库」。
+- **personal.json 路径一致性**：§3.3 用户级 vs 项目级叠加表原写 `~/.claude/orchestration-personal.json`（旧 home 路径），与 §2.4 现行 `config/orchestration-personal.json` 不一致，已统一为 config/ 路径。
+- **§2.4 TODO stale 字段**：`main_force.models` → `main_force.task_routing`（schema 已重命名），`coddex` 拼写 → `codex`。
+- **registry example 反混淆注释**：`claude-provider-registry.example.json` 的 `_comment` 原直接给出真实 endpoint 对照（open.bigmodel.cn / api.deepseek.com / api.minimaxi.com），使别名脱敏形同虚设，已删除改为占位说明。
+- 清理 `.DS_Store`。
+
+### Reason
+- 触发：对本 skill 做 skill-lint 发布前验收，命中 1 个凭证暴露风险 + 4 个文档/元数据一致性问题。凭证按「默认按严重处理」，其余为发布一致性修复。
+
 ## [1.17.2] - 2026-07-03
 
 ### Fixed
