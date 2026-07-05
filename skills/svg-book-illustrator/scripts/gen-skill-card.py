@@ -60,19 +60,19 @@ emit(f'<text x="{CENTER_X}" y="{TITLE_Y}" text-anchor="middle" font-size="22" fo
 # ---- inputs ----
 boxes, iy, ih = row_boxes(len(INPUTS), INPUT_TOP, INPUT_H)
 for (x, w), label in zip(boxes, INPUTS):
-    emit(f'<rect x="{x}" y="{iy}" width="{w}" height="{ih}" rx="6" fill="{C_INPUT}" stroke="{C_BORDER}" stroke-width="1.5"/>')
+    emit(f'<rect x="{x}" y="{iy}" width="{w}" height="{ih}" rx="6" fill="{C_INPUT}" stroke="{C_BORDER}" stroke-width="2"/>')
     emit(f'<text x="{x+w/2}" y="{iy+ih/2+6}" text-anchor="middle" font-size="17" fill="{C_TEXT}">{label}</text>')
 # arrow inputs -> skill
 emit(f'<line x1="{CENTER_X}" y1="{iy+ih+2}" x2="{CENTER_X}" y2="{SKILL_TOP-8}" stroke="{C_ARROW}" stroke-width="2" marker-end="url(#arrow)"/>')
 
 # ---- skill main box ----
-emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{SKILL_H}" rx="10" fill="none" stroke="{C_BORDER}" stroke-width="2.5"/>')
+emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{SKILL_H}" rx="10" fill="none" stroke="{C_BORDER}" stroke-width="2"/>')
 # name band
 BAND_H = 38
 emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{BAND_H}" rx="10" fill="{C_NAME_BAND}"/>')  # 只填色不描边——避免与外框左右竖边/顶圆角重合双描（外框已描顶+侧，底由分隔线描）
 # clip band bottom corners visually: overlay a thin rect to square off bottom of band
 emit(f'<rect x="{LEFT}" y="{SKILL_TOP+BAND_H-10}" width="{RIGHT-LEFT}" height="10" fill="{C_NAME_BAND}"/>')
-emit(f'<line x1="{LEFT}" y1="{SKILL_TOP+BAND_H}" x2="{RIGHT}" y2="{SKILL_TOP+BAND_H}" stroke="{C_BORDER}" stroke-width="2.5"/>')
+emit(f'<line x1="{LEFT}" y1="{SKILL_TOP+BAND_H}" x2="{RIGHT}" y2="{SKILL_TOP+BAND_H}" stroke="{C_BORDER}" stroke-width="2"/>')
 emit(f'<text x="{CENTER_X}" y="{SKILL_TOP+25}" text-anchor="middle" font-size="19" font-weight="700" fill="{C_TEXT}">Skill: {SKILL_NAME}</text>')
 
 # 3 件套 satellites row
@@ -80,7 +80,7 @@ SAT_TOP = SKILL_TOP + BAND_H + 16
 SAT_H = 50
 sats, _, _ = row_boxes(len(SATELLITES), SAT_TOP, SAT_H)
 for (x, w), (name, sub) in zip(sats, SATELLITES):
-    emit(f'<rect x="{x}" y="{SAT_TOP}" width="{w}" height="{SAT_H}" rx="6" fill="{C_SAT}" stroke="{C_BORDER}" stroke-width="1.5"/>')
+    emit(f'<rect x="{x}" y="{SAT_TOP}" width="{w}" height="{SAT_H}" rx="6" fill="{C_SAT}" stroke="{C_BORDER}" stroke-width="2"/>')
     emit(f'<text x="{x+w/2}" y="{SAT_TOP+21}" text-anchor="middle" font-size="16" font-weight="600" fill="{C_TEXT}">{name}</text>')
     emit(f'<text x="{x+w/2}" y="{SAT_TOP+40}" text-anchor="middle" font-size="14" fill="{C_SUB}">{sub}</text>')
 
@@ -102,7 +102,7 @@ emit(f'<line x1="{CENTER_X}" y1="{ARROW2_Y1}" x2="{CENTER_X}" y2="{ARROW2_Y2}" s
 # ---- outputs ----
 boxes, oy, oh = row_boxes(len(OUTPUTS), OUT_TOP, OUT_H)
 for (x, w), label in zip(boxes, OUTPUTS):
-    emit(f'<rect x="{x}" y="{oy}" width="{w}" height="{oh}" rx="6" fill="{C_OUTPUT}" stroke="{C_BORDER}" stroke-width="1.5"/>')
+    emit(f'<rect x="{x}" y="{oy}" width="{w}" height="{oh}" rx="6" fill="{C_OUTPUT}" stroke="{C_BORDER}" stroke-width="2"/>')
     emit(f'<text x="{x+w/2}" y="{oy+oh/2+6}" text-anchor="middle" font-size="17" fill="{C_TEXT}">{label}</text>')
 
 # ---- footnote (dashed) ----
