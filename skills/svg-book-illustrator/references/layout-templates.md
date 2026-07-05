@@ -396,6 +396,86 @@ x 居中：260（偏左，右侧可放注释）
 
 ---
 
+## 9. skill-card（Skill 结构模板图，v1.8.1 新增）
+
+**适用**：介绍一个具体 Skill 时的标准骨架——输入 → Skill（含三件套 `references/` + `scripts/` + `SKILL.md`，以及 SKILL.md 定义的流程步骤）→ 输出，可选底部虚线"联动"脚注。每章介绍具体 Skill 时复用，保证全书 Skill 图风格统一。
+
+### 结构特征
+- 顶/中/底三层数据流，层间用下箭头
+- 中央大矩形 = Skill 主体，顶部深色名称带 `Skill: {name}`
+- 名称带下：三件套横排（`references/` 清单模板 + `scripts/` 脚本 + `SKILL.md` 流程定义）
+- 三件套下：SKILL.md 定义的流程步骤列表（①②③④ 编号 + 步骤名，3-5 步）
+- 底部输出框（1-3 份实文档）
+- 可选脚注：虚线框写"联动：可接入 X / Y"
+
+### 布局参考
+```
+画布：720 × H（H 随输入/输出/脚注数动态，典型 480-560）
+标题：y = 32（22px）
+输入层：y = 56-102（h=46），1-2 框横排居中（自动等分 70-650 宽）
+Skill 主框：x=70 y=150 w=580 h≈240
+  名称带：h=38（深色填充 + 顶圆角 + 底分隔线）
+  三件套：y=204-254（h=50），3 框横排
+  流程标签 + 步骤列表：y=275 起，每步 22px 行高
+输出层：y=425-471（h=46），1-3 框横排
+脚注虚框（可选）：y=485-521（h=36）
+```
+
+### 配色
+- 全图用**单组 P 色**（不像 matrix/radar 多色相），强调"同一个 Skill 的内部结构"
+- 名称带：取该组深一档（如 P1 `#B8CFE0`）—— Skill 身份的视觉锚点
+- 三件套：同组主色（如 P1 `#D6E4F0`）
+- 输入/输出：同组最浅档（如 P1 `#EDF3F8`）
+- 脚注虚框：中灰 `#636E72` 虚线 `stroke-dasharray="6 4"`，无填充
+
+### 生成器脚本
+`scripts/gen-skill-card.py`：参数化（TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/调色板 顶部可改）→ `python3 scripts/gen-skill-card.py out.svg` + rsvg 目检。
+
+### SVG 骨架（示例 = 法律研究 Skill）
+```svg
+<svg viewBox="0 0 720 561" width="720" height="561" xmlns="http://www.w3.org/2000/svg">
+  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+  <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律研究 Skill 结构图</text>
+  <!-- 输入层（2 框） -->
+  <rect x="70" y="56" width="278" height="46" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="209" y="85" text-anchor="middle" font-size="17" fill="#2D3436">案件事实</text>
+  <rect x="372" y="56" width="278" height="46" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="511" y="85" text-anchor="middle" font-size="17" fill="#2D3436">法律问题</text>
+  <line x1="360" y1="104" x2="360" y2="142" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Skill 主框 + 名称带 -->
+  <rect x="70" y="150" width="580" height="240" rx="10" fill="none" stroke="#2D3436" stroke-width="2.5"/>
+  <rect x="70" y="150" width="580" height="38" rx="10" fill="#B8CFE0" stroke="#2D3436" stroke-width="2.5"/>
+  <rect x="70" y="178" width="580" height="10" fill="#B8CFE0"/>
+  <line x1="70" y1="188" x2="650" y2="188" stroke="#2D3436" stroke-width="2.5"/>
+  <text x="360" y="175" text-anchor="middle" font-size="19" font-weight="700" fill="#2D3436">Skill: legal-research</text>
+  <!-- 三件套 -->
+  <rect x="70" y="204" width="177" height="50" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="158.5" y="225" text-anchor="middle" font-size="16" font-weight="600" fill="#2D3436">references/</text>
+  <text x="158.5" y="244" text-anchor="middle" font-size="14" fill="#636E72">清单/模板</text>
+  <!-- ...scripts/ 与 SKILL.md 同结构，x=271 / x=472 ... -->
+  <!-- 流程步骤列表 -->
+  <text x="78" y="282" font-size="16" font-weight="600" fill="#2D3436">SKILL.md 定义的流程：</text>
+  <text x="90" y="306" font-size="16" fill="#2D3436"><tspan font-weight="600">①</tspan>  识别法律问题</text>
+  <!-- ...②③④ 同结构，y=328/350/372 ... -->
+  <line x1="360" y1="392" x2="360" y2="417" stroke="#2D3436" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- 输出层 -->
+  <rect x="70" y="425" width="580" height="46" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="360" y="454" text-anchor="middle" font-size="17" fill="#2D3436">研究备忘录.md</text>
+  <!-- 联动虚框脚注 -->
+  <rect x="70" y="485" width="580" height="36" rx="6" fill="none" stroke="#636E72" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="360" y="508" text-anchor="middle" font-size="15" fill="#636E72">联动：可接入起诉状 Skill / 庭审大纲 Skill</text>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="#2D3436"/></marker></defs>
+</svg>
+```
+
+### 纪律
+- 三件套顺序固定 `references/` → `scripts/` → `SKILL.md`（对应 Skill 目录约定）
+- 步骤数 3-5；超过 5 步拆分子 Skill 或改用 `flow` 模板
+- 名称带必须深于三件套，建立"Skill 身份带"视觉层级
+- 全图单组 P 色（同色系明度差建层级），不用多色相
+
+---
+
 ## 模板选择决策树
 
 ```
@@ -409,6 +489,7 @@ x 居中：260（偏左，右侧可放注释）
 │   └── 下层更宽？ → tree（金字塔变体）
 ├── 闭环/循环 → cycle
 ├── 多维度连续数值对比（6-12 维） → radar（v1.8.0）
+├── 介绍一个 Skill 的结构（输入→Skill→输出） → skill-card（v1.8.1）
 └── 混合关系？
     ├── 递进+数据对比 → flow+matrix
     └── 流程+节点展开 → flow+hub
@@ -431,6 +512,7 @@ x 居中：260（偏左，右侧可放注释）
 | 金字塔层级 | tree（金字塔变体） |
 | 循环/迭代过程 | cycle |
 | 多维度数值对比（6-12 维） | radar（v1.8.0） |
+| 单个 Skill 的结构（输入→Skill→输出） | skill-card（v1.8.1） |
 | 递进效果+数据 | flow+matrix |
 | 流程+关键展开 | flow+hub |
 
