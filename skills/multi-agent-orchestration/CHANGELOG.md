@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.5] - 2026-07-05
+
+### Fixed
+- **codebuddy/qoder 交互式 worker 缺 -y / --dangerously-skip-permissions**（问题 2 运行时部分）：`render-runtime-profile.sh` 的 codebuddy case `-y` 逻辑从「batch 恒加 / 交互式仅显式 --dangerously-skip-permissions」改为「交互式也默认加，仅 --no-skip-permissions opt-out」。qoderwork-cn case 同改为默认加 --dangerously-skip-permissions。理由：spawn-worker.sh 派 tmux session 本质 headless（无人在终端应答 runtime permission prompt），DEC-040 F1/F3 只修了 batch 模式，交互式 gap 还在。
+- **codebuddy 首启 trust folder dialog 无自动处理**（问题 1）：`spawn-worker.sh` 新增 trust-auto：启动 tmux 后轮询 pane 内容，匹配 codebuddy trust dialog 文本（Trust folder / Trust folder and all subdirectories），自动选 option 3（Down×3+Enter），避免子目录二次 prompt。提供 `--no-trust-auto` opt-out。
+- **codebuddy PATH 检测假阴性**（问题 3 补充）：`check-dependencies.sh` 新增 `--print-bundle-path codebuddy|qoderwork-cn`，直接输出 .app bundle 二进制绝对路径。`spawn-worker.sh --help` 加 Troubleshooting 段，提示用 check-dependencies 多源检测或取绝对路径传给 --command/--bin。
+
+### Reason
+- 来源：2026-07-05 PM 用 `spawn-worker.sh --backend codebuddy` 派 worker，连续撞 3 个手动 prompt：首启 trust folder dialog → 子目录访问 dialog → which codebuddy 找不到。CHANGELOG v1.16.6/1.17.1/1.17.2 历史上修过 batch 模式 flag 和 PATH-less 检测，但交互式 headless worker 的自动 -y + trust-auto 两个 gap 一直没补。
+
 ## [1.17.4] - 2026-07-03
 
 ### Added
