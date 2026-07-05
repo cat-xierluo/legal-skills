@@ -632,9 +632,66 @@ bash scripts/spawn-worker.sh \
 | 多个外部目录 | 重复 `--add-dir`（如 `--add-dir /tmp --add-dir ../shared-assets`） |
 | 彻底关闭自动应答 | `--no-trust-auto`（关 trust_auto + permission_auto） |
 
+## 12. 权限与 scope 控制（settings.json，2026-07-05 补充）
+
+> 来源：codebuddy 官方 settings 文档 https://www.codebuddy.cn/docs/cli/settings
+> 用途：scope-guard fix（防 worker 越界改 docs/manuscript 等；2026-07-05 PR#209 density worker 删 manuscript 图7-7 + Wave3 codebuddy worker 改 docs/manuscript 两起越界触发）
+
+### 12.1 关键字段（permissions + hooks）
+
+| 字段 | 作用 | 示例 |
+|---|---|---|
+| `permissions.deny` | 拒绝工具使用，硬拦路径 | `["Edit(docs/**)", "Edit(manuscript/**)", "Edit(figures/**)"]` |
+| `permissions.allow` | 允许工具，白名单 | `["Edit(整洁版/**)", "Read", "Bash(git:*)"]` |
+| `permissions.defaultMode` | 默认权限模式 | `"acceptEdits"` / `"bypassPermissions"` |
+| `permissions.additionalDirectories` | 额外可访问目录（跨目录） | `["../shared/"]` |
+| `disableBypassPermissionsMode` | `"disable"` **禁用 `-y`/`--dangerously-skip-permissions`** | `"disable"` |
+| `trustAll` | `true` 免 trust dialog（**不跳工具权限**） | `true` |
+| `hooks.PreToolUse` | 工具执行前跑命令，返回 allow/deny/ask 短路 | `{matcher: "Edit", hooks: [{type: "command", command: "..."}]}` |
+
+配置层级：`~/.codebuddy/settings.json`(全局) < `.codebuddy/settings.json`(团队) < `.codebuddy/settings.local.json`(本地 gitignore) < CLI 参数。spawn 时在 worktree 写 `settings.local.json`。
+
+### 12.2 `-y` 与 `deny` 的权衡（关键）
+
+文档明确：`disableBypassPermissionsMode: "disable"` 会**禁用 `-y`**。意味着——`-y`（bypassPermissions）模式下 `deny` rules 可能**不生效**（bypass 跳权限检查）。要让 `deny` 硬拦越界，必须禁 `-y`。但禁 `-y` 后 headless worker 对非 allow 的操作弹 prompt（需 permission_auto 兜底，已有 fix）。
+
+→ 这跟 fix1（`-y` 默认加，headless 零 prompt）直接冲突。**不能用 deny rules + 禁 -y 的方案**做 scope-guard。
+
+### 12.3 PreToolUse hook（优先于 -y，scope-guard 最优方案）
+
+`hooks.PreToolUse` 在工具执行前跑脚本，返回 `permissionDecision: deny` 可短路权限管线。
+
+**qoder 文档明确**（见 07 §9）：hook permission decisions have **higher priority** than permission modes — even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will still block execution（**unbypassable**）。codebuddy 作为 Claude Code fork，`hooks.PreToolUse` 语义应一致（**待实测确认 unbypassable**，但大概率一致）。
+
+→ scope-guard fix 的权威方案：**PreToolUse hook 检查路径白名单**，不管 `-y` 与否都拦越界，不用禁 `-y`（保持 headless 零 prompt）。
+
+### 12.4 scope-guard 应用（spawn-worker.sh 待实现）
+
+spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
+```json
+{
+  "trustAll": true,
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "python <skill>/scripts/scope-guard.py"
+      }]
+    }]
+  }
+}
+```
+`scope-guard.py` 读 stdin（`tool_name` + `tool_input`），检查 `tool_input.file_path` 是否匹配 scope 白名单（PM 传入的 `--allow-paths`），越界返回：
+```json
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "out of scope: 仅允许 <allow-paths>"}}
+```
+
+验收：spawn 一个 codebuddy worker（带 `-y`），让它改 `manuscript/**` → 应被 hook 硬拦（permission denied by hook），而非靠 prompt 自觉。
+
 ---
 
 > **版本记录**：
-> - 2026-07-05：新增 §11 `--add-dir` 跨目录访问与 permission_auto 兜底。
+> - 2026-07-05：新增 §12 权限与 scope 控制（基于官方 settings 文档，PreToolUse hook unbypassable）；§11 `--add-dir` 跨目录访问与 permission_auto 兜底。
 > - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。
 > - 2026-06-20：初版，基于 WorkBuddy v2.103.3 CLI 实测编写。
