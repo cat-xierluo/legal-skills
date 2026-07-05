@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.8.2] - 2026-07-05
+
+### 新增（timeline-lane 多泳道时间轴）
+
+新增 timeline-lane 模板：多角色/多主体在时间维度上的事件推进（诉讼多角色时间线、案件流程节点、项目多部门进度）。升级 v1.7.x "时间线只能 flow 变通（无刻度）" 的局限。
+
+### 改动
+- **新模板 `timeline-lane`**（`references/layout-templates.md` §10）：顶部时间刻度轴（4-6 标签）+ N 条横向泳道（3-5，左侧标签）+ 菱形事件标记（落在时间刻度×泳道中心）+ 标签上下交替减少碰撞；泳道交替极浅带 + 浅灰分隔。
+- **生成器 `scripts/gen-timeline-lane.py`**：参数化（TITLE/LANES/TICKS/EVENTS/调色板）。
+- **SKILL.md**：模板表加 timeline-lane 行（"11 种布局模板，9 基础 + 2 组合"）；第一阶段触发词加"多角色时间推进→timeline-lane"；第二阶段模板列表加 timeline-lane；可变通表标注"时间线/多角色并行 v1.8.2 起改用 timeline-lane"；version 1.8.1→1.8.2。
+- **决策 DEC-016**：timeline-lane 设计取舍（菱形标记、标签上下交替、泳道数上限、单色 vs 多色相）。
+
+### 验证
+demo「案件多角色推进时间轴」（4 泳道 13 事件）生成 + rsvg 渲染 + 多模态目检通过：结构清晰、标记对齐泳道中心与刻度、标签上下交替减少碰撞、可读。
+
 ## [v1.8.1] - 2026-07-05
 
 ### 新增（skill-card Skill 结构模板图）
