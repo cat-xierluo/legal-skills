@@ -27,6 +27,7 @@ SENTINEL_MAX_WAIT=7200
 KEEP_TMUX_ON_TERMINAL=0
 TRUST_AUTO=1
 ADD_DIRS=()
+ALLOW_PATHS=()
 
 usage() {
   cat >&2 <<'USAGE'
@@ -66,6 +67,15 @@ Options:
                    (repeatable). Passed through to codebuddy's --add-dir flag.
                    Use when task files/assets are outside the worktree, e.g.:
                    --add-dir /tmp --add-dir ../shared-assets
+  --allow-paths GLOB
+                   Scope guard: only allow file writes matching GLOB patterns.
+                   Repeatable, accumulated into SCOPE_GUARD_ALLOW env var (: separated).
+                   Writes .codebuddy/settings.local.json (or .qoder/settings.local.json)
+                   with PreToolUse hook pointing to scripts/scope-guard.py.
+                   When set, spawned worker cannot write files outside these globs
+                   even with -y/--dangerously-skip-permissions (PreToolUse hook unbypassable).
+                   Use when PM wants to hard-guard against worker scope violations,
+                   e.g. --allow-paths 'skills/my-skill/**' --allow-paths 'skills/another-skill/**'
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -167,6 +177,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --add-dir)
       ADD_DIRS+=("$2")
+      shift 2
+      ;;
+    --allow-paths)
+      ALLOW_PATHS+=("$2")
       shift 2
       ;;
     --dry-run)
@@ -293,6 +307,7 @@ write_metadata() {
     --arg wave_worker_id "$WAVE_WORKER_ID" \
     --argjson verification_commands "$verify_json" \
     --argjson add_dirs "$(printf '%s\n' "${ADD_DIRS[@]}" | jq -R . | jq -s .)" \
+    --argjson allow_paths "$(printf '%s\n' "${ALLOW_PATHS[@]}" | jq -R . | jq -s .)" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -322,6 +337,7 @@ write_metadata() {
         commands: $verification_commands
       },
       add_dirs: $add_dirs,
+      allow_paths: $allow_paths,
       pr: {
         number: null,
         url: "",
@@ -414,6 +430,80 @@ permission_auto() {
   return 0
 }
 
+# Scope guard setup: write settings.local.json with PreToolUse hook + inject
+# SCOPE_GUARD_ALLOW env var into the tmux command so scope-guard.py can enforce
+# write-path whitelist even under -y/--dangerously-skip-permissions.
+# Based on ref 07 §9 (qoder PreToolUse hook unbypassable) and ref 08 §12
+# (codebuddy PreToolUse hook semantic parity expected).
+# Only active when --allow-paths is set; otherwise no-op (backward compatible).
+scope_guard_setup() {
+  if [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
+    return 0  # no scope guard
+  fi
+
+  # Find scope-guard.py absolute path (in skill scripts dir)
+  local scope_guard_py="$SCRIPT_DIR/scope-guard.py"
+  if [ ! -f "$scope_guard_py" ]; then
+    echo "SPAWN_WORKER_SCOPE_GUARD_WARN: scope-guard.py not found at $scope_guard_py, skipping" >&2
+    return 1
+  fi
+
+  # Build SCOPE_GUARD_ALLOW env var (: separated glob list)
+  local scope_env
+  scope_env=$(IFS=:; echo "${ALLOW_PATHS[*]}")
+  export SCOPE_GUARD_ALLOW="$scope_env"
+  echo "SPAWN_WORKER_SCOPE_GUARD_ALLOW: $SCOPE_GUARD_ALLOW"
+
+  # Inject SCOPE_GUARD_ALLOW into the tmux command via wrapper
+  COMMAND="env SCOPE_GUARD_ALLOW='$SCOPE_GUARD_ALLOW' $COMMAND"
+
+  # Write settings.local.json for both codebuddy and qoder backends
+  # codebuddy: .codebuddy/settings.local.json
+  # qoder:     .qoder/settings.local.json
+  local settings_json
+  # Use printf to safely embed the quoted path (handles spaces in path)
+  settings_json=$(printf '{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 '\''%s'\''"
+      }]
+    }]
+  }
+}' "$scope_guard_py")
+
+  # Write to codebuddy settings if backend is codebuddy or unspecified
+  if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
+    local cb_settings_dir="$WORKTREE/.codebuddy"
+    run mkdir -p "$cb_settings_dir"
+    local cb_settings_file="$cb_settings_dir/settings.local.json"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      echo "$settings_json" > "$cb_settings_file"
+      echo "SPAWN_WORKER_SCOPE_GUARD_SETTINGS: $cb_settings_file"
+    else
+      echo "SPAWN_WORKER_SCOPE_GUARD_DRY_RUN: would write $cb_settings_file"
+    fi
+  fi
+
+  # Write to qoder settings if backend is qoderwork-cn
+  if [ "$WORKER_BACKEND" = "qoderwork-cn" ]; then
+    local qw_settings_dir="$WORKTREE/.qoder"
+    run mkdir -p "$qw_settings_dir"
+    local qw_settings_file="$qw_settings_dir/settings.local.json"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      echo "$settings_json" > "$qw_settings_file"
+      echo "SPAWN_WORKER_SCOPE_GUARD_SETTINGS: $qw_settings_file"
+    else
+      echo "SPAWN_WORKER_SCOPE_GUARD_DRY_RUN: would write $qw_settings_file"
+    fi
+  fi
+
+  return 0
+}
+
+scope_guard_setup
 write_metadata
 
 exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude)
