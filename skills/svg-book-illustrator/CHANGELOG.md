@@ -1,5 +1,102 @@
 # CHANGELOG
 
+## [v1.8.5] - 2026-07-05
+
+### 修复（radar 图例与轴标签重叠 + three-col 子卡片溢出）
+
+用户实际预览 demo 发现两处目检漏检的缺陷，改用**字宽/坐标硬算**补检修复：
+- **radar**：底部图例(y≈438) 与底部轴标签"工具/MCP"(y=441) 垂直重叠。修：图例下移到轴标签下方 +50px（gap 24px），H 460→505。`scripts/gen-radar.py`。
+- **three-col**：子卡片单行"标签：内容"在 193px 窄列里 ~240px 溢出框。修：改 2 行（标签 14px 加粗 + 内容 13px），CARD_H 50→62。`scripts/gen-three-col.py`。
+
+### 验证（字宽硬算，非视觉工具）
+- three-col 9 张卡内容宽 91-167px，全 ≤ COL_W 193px ✅
+- radar 图例 rect 顶 465 vs 底部轴标签底 441，间距 24px ✅；图例底 478 vs H 505，余 27px ✅
+
+### 教训（已记入 review-checklist 待办）
+视觉多模态目检对"轻微溢出/贴近"易判 OK；以后生成器产出后**首要跑字宽/坐标硬算自检**（CJK≈Fpx/字、Latin≈0.55Fpx/字），视觉工具仅作辅助。
+
+> 注：layout-templates.md §8/§12 骨架示例坐标同步为后续跟进（生成器为真理之源，骨架仅示意）。
+
+## [v1.8.4] - 2026-07-05
+
+### 新增（three-col 三栏并列对比）
+
+新增 three-col 模板：三分类/三版本/三种打法/三层递进的对仗并列（每栏深色表头 + 3-4 子卡片"标签：内容"）。补 matrix（2 列）与 matrix-grid（N×M 网格）之间"卡片化三栏对比"的空缺。
+
+### 改动
+- **新模板 `three-col`**（`references/layout-templates.md` §12）：3 等宽栏（gap 30）+ P8 三色相表头（雾蓝/嫩绿/暖米）+ 浅一档子卡片 + "标签：内容"格式 + 可选虚框脚注。
+- **生成器 `scripts/gen-three-col.py`**：参数化（TITLE/COLUMNS/FOOTNOTE/调色板）。
+- **SKILL.md**：模板表加 three-col 行（"13 种布局模板，11 基础 + 2 组合"）；第一阶段触发词加"三分类/三版本→three-col"；第二阶段模板列表加 three-col；version 1.8.3→1.8.4。
+- **决策 DEC-018**：three-col 设计取舍（严格 3 栏、P8 三色相、子卡片对等、与 matrix/matrix-grid 边界）。
+
+### 验证
+demo「Skill 的三种典型结构」（3 栏 × 3 卡 + 脚注）生成 + rsvg 渲染 + 多模态目检通过：三栏对仗工整、三色相区分、子卡片清晰、无溢出。
+
+## [v1.8.3] - 2026-07-05
+
+### 新增（matrix-grid N×M 网格矩阵）
+
+新增 matrix-grid 模板：两维交叉对照（风险 × 条款、特征 × 产品、能力 × 模型），单元格用状态符号（√/×/○/—）+ 柔和填充色编码 + 底部图例。补 v1.7.x matrix 仅 2 列对比、不支持 N×M 交叉的局限。
+
+### 改动
+- **新模板 `matrix-grid`**（`references/layout-templates.md` §11）：corner label + 顶部/左侧表头（P1 带）+ N×M 单元格 + 状态符号（√/○/×/—）+ 柔和状态色（P3/P7/P4/中性）+ 底部图例。
+- **生成器 `scripts/gen-matrix-grid.py`**：参数化（TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS）；CELLS 支持 yes/no/partial/na 或自由文本。
+- **SKILL.md**：模板表加 matrix-grid 行（"12 种布局模板，10 基础 + 2 组合"）；第一阶段触发词加"两维交叉对照→matrix-grid"；第二阶段模板列表加 matrix-grid；version 1.8.2→1.8.3。
+- **决策 DEC-017**：matrix-grid 设计取舍（4 档状态符号、柔和状态色禁高饱和红绿、N×M 上限、符号须黑白可辨）。
+
+### 验证
+demo「合同审查：4 类风险 × 5 类条款 对照矩阵」（4×5）生成 + rsvg 渲染 + 多模态目检通过：符号居中、颜色区分清晰、列宽均匀、图例齐全。
+
+## [v1.8.2] - 2026-07-05
+
+### 新增（timeline-lane 多泳道时间轴）
+
+新增 timeline-lane 模板：多角色/多主体在时间维度上的事件推进（诉讼多角色时间线、案件流程节点、项目多部门进度）。升级 v1.7.x "时间线只能 flow 变通（无刻度）" 的局限。
+
+### 改动
+- **新模板 `timeline-lane`**（`references/layout-templates.md` §10）：顶部时间刻度轴（4-6 标签）+ N 条横向泳道（3-5，左侧标签）+ 菱形事件标记（落在时间刻度×泳道中心）+ 标签上下交替减少碰撞；泳道交替极浅带 + 浅灰分隔。
+- **生成器 `scripts/gen-timeline-lane.py`**：参数化（TITLE/LANES/TICKS/EVENTS/调色板）。
+- **SKILL.md**：模板表加 timeline-lane 行（"11 种布局模板，9 基础 + 2 组合"）；第一阶段触发词加"多角色时间推进→timeline-lane"；第二阶段模板列表加 timeline-lane；可变通表标注"时间线/多角色并行 v1.8.2 起改用 timeline-lane"；version 1.8.1→1.8.2。
+- **决策 DEC-016**：timeline-lane 设计取舍（菱形标记、标签上下交替、泳道数上限、单色 vs 多色相）。
+
+### 验证
+demo「案件多角色推进时间轴」（4 泳道 13 事件）生成 + rsvg 渲染 + 多模态目检通过：结构清晰、标记对齐泳道中心与刻度、标签上下交替减少碰撞、可读。
+
+## [v1.8.1] - 2026-07-05
+
+### 新增（skill-card Skill 结构模板图）
+
+新增 skill-card 模板：介绍单个 Skill 时的标准骨架（输入 → Skill 三件套 references/scripts/SKILL.md + 流程步骤 → 输出，可选联动虚框脚注）。填补"Skill 结构介绍"这一高频复用场景的模板空缺。
+
+### 改动
+- **新模板 `skill-card`**（`references/layout-templates.md` §9）：顶/中/底三层数据流；中央 Skill 主框含深色名称带 + 三件套横排 + SKILL.md 定义的流程步骤列表（①②③④ 编号，3-5 步）；可选底部虚线联动脚注。
+- **生成器 `scripts/gen-skill-card.py`**：参数化（TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/调色板顶部可改）。
+- **SKILL.md**：模板表加 skill-card 行（"10 种布局模板，8 基础 + 2 组合"）；第一阶段触发词加"Skill 介绍/结构描述处→skill-card"；第二阶段模板列表加 skill-card；version 1.8.0→1.8.1。
+- **决策 DEC-015**：skill-card 设计取舍（单组 P 色建层级、名称带深一档、三件套顺序固定、步骤 3-5 上限）。
+
+### 验证
+demo「法律研究 Skill 结构图」（2 输入 + 4 步 + 1 输出 + 联动脚注）生成 + rsvg 渲染 + 多模态目检通过：结构清晰、无重叠、名称带/箭头/文字均正常。
+
+## [v1.8.0] - 2026-07-05
+
+### 新增（radar 雷达图模板，填补"数据可视化不在范围"最大缺口）
+
+补齐 v1.7.x 明确"复杂数据可视化（柱状/折线/饼图）不在范围"留下的缺口：本次解禁并新增 radar 雷达图（多维数值对比）；柱/折/饼仍维持禁用。
+
+### 改动
+- **新模板 `radar`**（`references/layout-templates.md` §8）：6-12 维多维度数值对比，1-2 系列；同心多边形网格 + 半透明数据多边形；P1/P4 双色相区分两系列；顶点小圆点增强可读性。布局公式（θ_i = -π/2 + i·2π/N）+ SVG 骨架 + 维度选择纪律（MECE、6-12 维、v_i∈[0,1] 归一化）。
+- **生成器 `scripts/gen-radar.py`**：雷达几何随 N 变化手算易错，参数化生成（TITLE/LABELS/SERIES/CX/CY/R 顶部可改）→ `python3 scripts/gen-radar.py out.svg` + `rsvg-convert -w 720 out.svg -o out.png` 目检。
+- **SKILL.md**：模板表加 radar 行（"9 种布局模板，7 基础 + 2 组合"）；第一阶段触发词加"多维数值对比描述处→radar"；第二阶段模板列表加 radar；version 1.7.1→1.8.0。
+- **决策 DEC-014**：radar 模板设计取舍（几何用生成器、双色相区分系列、网格弱线不抢戏）。
+
+### 验证（眼见为实）
+demo「法律 AI 生态六层：理论能力 vs 实际部署」（6 轴 2 系列）生成 + rsvg 渲染 +多模态目检通过：布局正确、标签无碰撞、雾蓝/暖米两系列清晰可辨、无渲染缺陷。
+
+### 后续（v1.8.x 计划）
+- `timeline-lane`（多泳道时间轴，真时间刻度，flow 变通的升级）
+- `skill-card`（Skill 结构模板图，介绍具体 Skill 时的标准骨架）
+- `matrix-grid` 扩展（N×M 网格矩阵，当前 matrix 仅 2 列对比）
+
 ## [v1.7.1] - 2026-06-30
 
 ### 修复（viewBox 高度按内容裁剪，DEC-013 supersede DEC-001 固定高度部分）
