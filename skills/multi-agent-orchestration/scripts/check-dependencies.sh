@@ -7,6 +7,7 @@ CHECK_BACKENDS=()
 CHECK_GH=0
 CHECK_TERMINAL_SPLIT=0
 STRICT=0
+PRINT_BUNDLE_PATH_BACKEND=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -20,6 +21,10 @@ Options:
   --check-gh                 Check GitHub CLI for PR/mergeability workflows.
   --check-terminal-split     Check terminal split helper dependencies for current terminal.
   --strict                   Exit non-zero on WARN as well as MISSING.
+  --print-bundle-path NAME    Print the .app bundle binary path for the given backend
+                             and exit. Use to get the absolute path when 'which codebuddy'
+                             returns not found. Supports: codebuddy | qoderwork-cn.
+                             Example: --print-bundle-path codebuddy
 
 Default checks core script dependencies only. The script does not install tools,
 start workers, write files, or change configuration.
@@ -44,6 +49,10 @@ while [[ $# -gt 0 ]]; do
       STRICT=1
       shift
       ;;
+    --print-bundle-path)
+      PRINT_BUNDLE_PATH_BACKEND="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -55,6 +64,36 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --print-bundle-path: quick path lookup for headless CLI workers
+if [ -n "$PRINT_BUNDLE_PATH_BACKEND" ]; then
+  case "$PRINT_BUNDLE_PATH_BACKEND" in
+    codebuddy)
+      BIN="/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
+      if [ -x "$BIN" ]; then
+        printf '%s\n' "$BIN"
+        exit 0
+      else
+        echo "ERROR: codebuddy binary not found at $BIN" >&2
+        exit 1
+      fi
+      ;;
+    qoderwork-cn)
+      BIN="/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn"
+      if [ -x "$BIN" ]; then
+        printf '%s\n' "$BIN"
+        exit 0
+      else
+        echo "ERROR: qoderclicn binary not found at $BIN" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "ERROR: --print-bundle-path supports codebuddy or qoderwork-cn, got: $PRINT_BUNDLE_PATH_BACKEND" >&2
+      exit 64
+      ;;
+  esac
+fi
 
 missing=0
 warn=0
