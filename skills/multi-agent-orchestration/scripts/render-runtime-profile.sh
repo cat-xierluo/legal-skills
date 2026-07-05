@@ -26,6 +26,7 @@ NO_MCP=0
 BIN=""
 SKIP_PERMISSIONS=0
 NO_SKIP_PERMISSIONS=0
+ADD_DIRS=()
 
 usage() {
   cat >&2 <<'USAGE'
@@ -74,6 +75,8 @@ Options:
                            罕见场景:人要坐终端跟 codebuddy/qoder 交互调试。
                            codebuddy: remove -y; qoderwork-cn: remove --dangerously-skip-permissions.
                            Defaults: ON (skip permissions).
+  --add-dir DIR            Add extra directories for codebuddy to access (repeatable).
+                           Maps to codebuddy's --add-dir flag. Only used for codebuddy backend.
   --output FORMAT          shell | command | prompt-context. Default: shell
 
 The script only renders metadata and command strings. It does not create
@@ -166,6 +169,10 @@ while [[ $# -gt 0 ]]; do
     --no-skip-permissions)
       NO_SKIP_PERMISSIONS=1
       shift
+      ;;
+    --add-dir)
+      ADD_DIRS+=("$2")
+      shift 2
       ;;
     -h|--help)
       usage
@@ -363,6 +370,9 @@ case "$BACKEND" in
     [ -n "$COMMAND_MODEL" ] && cb_parts+=(--model "$COMMAND_MODEL")
     cb_parts+=(--permission-mode "$PERMISSION_MODE")
     [ "$NO_MCP" -eq 1 ] && cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    for add_dir in "${ADD_DIRS[@]}"; do
+      cb_parts+=(--add-dir "$add_dir")
+    done
     # 默认加 -y：交互式和 batch 均默认加；仅 --no-skip-permissions opt-out。
     if [ "$NO_SKIP_PERMISSIONS" -ne 1 ]; then
       cb_parts+=(-y)

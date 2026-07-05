@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.17.4"
+version: "1.17.6"
 ---
 
 # Multi-Agent Orchestration
@@ -396,7 +396,7 @@ bash scripts/spawn-worker.sh \
 - Claude Code 批处理：用 `render-runtime-profile.sh --backend claude-code --mode batch --settings <settings> --model <provider-model> --prompt-file /tmp/task.prompt.md` 生成；第三方 provider 同样默认包 `claude-provider-env.sh`，batch 输出会自动包 `bash -lc` 处理重定向。
 - Codex：`codex exec -a never -s danger-full-access - < /tmp/task.prompt.md`。
 - OpenCode：`opencode run --format json --model <provider/model> "$(cat /tmp/task.prompt.md)"`，或交互式 `opencode --model <provider/model>`。
-- WorkBuddy / CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--dangerously-skip-permissions]` 生成；吃 WorkBuddy 桌面端登录态和平台额度，无需 API Key。详见 `references/08-workbuddy-cli-worker.md`。
+- WorkBuddy / CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 WorkBuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-workbuddy-cli-worker.md`。
 - QoderWork CN（`qoderclicn`）：用 `render-runtime-profile.sh --backend qoderwork-cn --model <平台模型> [--no-mcp] [--dangerously-skip-permissions]` 生成；脚本自动前置 `env -u` 清除 SDK 变量、处理含空格的二进制路径。详见 `references/07-qoderwork-cli-worker.md`。
 - 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的命令。
 
