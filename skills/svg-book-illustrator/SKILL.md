@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.4"
+version: "1.8.5"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
