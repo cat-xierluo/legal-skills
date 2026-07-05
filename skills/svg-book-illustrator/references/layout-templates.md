@@ -605,6 +605,59 @@ corner：x=40 w=130
 
 ---
 
+## 12. three-col（三栏并列对比，v1.8.4 新增）
+
+**适用**：三分类、三版本、三种打法、三层递进——需要三栏对仗工整、每栏带嵌套子卡片的对比。比 `matrix`（2 列）多一列、比 `matrix-grid`（N×M 网格）更"卡片化"（每栏子卡片承载短句）。
+
+### 结构特征
+- 3 等宽栏并列（gap 30），每栏：深色表头 + 3-4 子卡片（浅一档同色相）
+- 三栏用 P8 混合系不同色相（雾蓝/嫩绿/暖米），天然多色区分
+- 子卡片"标签：内容"格式（特征/适用/示例 等结构化标签）
+- 可选底部虚线脚注（"三种可叠加使用"等）
+
+### 布局参考
+```
+画布：720 × H（3 栏 × 3 卡典型 H≈390）
+标题：y = 32
+栏：x = 40 / 263 / 486（w=193，gap=30），表头 y=60-110（h=50）
+子卡片：y=126 起，每张 h=50，gap=12
+脚注虚框（可选）：底部
+```
+
+### 配色
+- 三栏表头：P8 混合系三色相（P1 雾蓝 `#B8CFE0` / P3 嫩绿 `#C8EBC8` / P4 暖米 `#E8D8C0`）
+- 子卡片：同栏表头的浅一档（`#EDF3F8` / `#EDF7ED` / `#F4ECDC`）
+- 子卡片内"标签："加粗 + 内容同行
+
+### 生成器脚本
+`scripts/gen-three-col.py`：参数化（TITLE/COLUMNS/FOOTNOTE/调色板顶部可改）→ `python3 scripts/gen-three-col.py out.svg` + rsvg 目检。
+
+### SVG 骨架（示例 = Skill 三种典型结构）
+```svg
+<svg viewBox="0 0 720 386" width="720" height="386" xmlns="http://www.w3.org/2000/svg">
+  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+  <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">Skill 的三种典型结构</text>
+  <!-- 第 1 栏 表头（雾蓝） -->
+  <rect x="40" y="60" width="193" height="50" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
+  <text x="136.5" y="91" text-anchor="middle" font-size="18" font-weight="700" fill="#2D3436">纯 SKILL.md 型</text>
+  <!-- 第 1 栏 子卡片 -->
+  <rect x="40" y="126" width="193" height="50" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="136.5" y="149" text-anchor="middle" font-size="15" fill="#2D3436"><tspan font-weight="700">特征：</tspan>流程全写在 SKILL.md</text>
+  <!-- ...其余子卡片 + 第 2/3 栏（嫩绿/暖米）同结构... -->
+  <!-- 脚注虚框 -->
+  <rect x="40" y="330" width="640" height="36" rx="6" fill="none" stroke="#636E72" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="360" y="353" text-anchor="middle" font-size="14" fill="#636E72">三种结构可叠加使用；复杂 Skill 常混合 2-3 种</text>
+</svg>
+```
+
+### 纪律
+- 严格 3 栏（2 栏用 matrix，4+ 栏用 matrix-grid 或拆图）
+- 三栏子卡片数对等（3-4 张），不对等时补占位保持视觉对仗
+- 子卡片文本一行内（≤16 字），超长换行或精简
+- 三色相仅用于"三栏天然并列"场景；非对仗的多分类用 matrix-grid
+
+---
+
 ## 模板选择决策树
 
 ```
@@ -621,6 +674,7 @@ corner：x=40 w=130
 ├── 介绍一个 Skill 的结构（输入→Skill→输出） → skill-card（v1.8.1）
 ├── 多角色/多主体时间推进 → timeline-lane（v1.8.2）
 ├── 两维交叉对照（N×M 网格 + 状态符号） → matrix-grid（v1.8.3）
+├── 三分类/三版本对仗并列（每栏带子卡片） → three-col（v1.8.4）
 └── 混合关系？
     ├── 递进+数据对比 → flow+matrix
     └── 流程+节点展开 → flow+hub
@@ -646,6 +700,7 @@ corner：x=40 w=130
 | 单个 Skill 的结构（输入→Skill→输出） | skill-card（v1.8.1） |
 | 多角色/多主体时间推进 | timeline-lane（v1.8.2） |
 | 两维交叉对照（风险×条款/特征×产品） | matrix-grid（v1.8.3） |
+| 三分类/三版本对仗并列 | three-col（v1.8.4） |
 | 递进效果+数据 | flow+matrix |
 | 流程+关键展开 | flow+hub |
 

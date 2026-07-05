@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.8.4] - 2026-07-05
+
+### 新增（three-col 三栏并列对比）
+
+新增 three-col 模板：三分类/三版本/三种打法/三层递进的对仗并列（每栏深色表头 + 3-4 子卡片"标签：内容"）。补 matrix（2 列）与 matrix-grid（N×M 网格）之间"卡片化三栏对比"的空缺。
+
+### 改动
+- **新模板 `three-col`**（`references/layout-templates.md` §12）：3 等宽栏（gap 30）+ P8 三色相表头（雾蓝/嫩绿/暖米）+ 浅一档子卡片 + "标签：内容"格式 + 可选虚框脚注。
+- **生成器 `scripts/gen-three-col.py`**：参数化（TITLE/COLUMNS/FOOTNOTE/调色板）。
+- **SKILL.md**：模板表加 three-col 行（"13 种布局模板，11 基础 + 2 组合"）；第一阶段触发词加"三分类/三版本→three-col"；第二阶段模板列表加 three-col；version 1.8.3→1.8.4。
+- **决策 DEC-018**：three-col 设计取舍（严格 3 栏、P8 三色相、子卡片对等、与 matrix/matrix-grid 边界）。
+
+### 验证
+demo「Skill 的三种典型结构」（3 栏 × 3 卡 + 脚注）生成 + rsvg 渲染 + 多模态目检通过：三栏对仗工整、三色相区分、子卡片清晰、无溢出。
+
 ## [v1.8.3] - 2026-07-05
 
 ### 新增（matrix-grid N×M 网格矩阵）
