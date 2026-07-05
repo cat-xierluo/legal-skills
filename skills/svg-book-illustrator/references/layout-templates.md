@@ -355,7 +355,7 @@ x 居中：260（偏左，右侧可放注释）
 
 ### SVG 骨架（6 轴 2 系列，示例 = 法律 AI 生态六层）
 ```svg
-<svg viewBox="0 0 720 460" width="720" height="460" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 720 505" width="720" height="505" xmlns="http://www.w3.org/2000/svg">
   <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律 AI 生态六层：理论能力 vs 实际部署</text>
   <!-- 4 层网格（r=37.5/75/112.5/150，中心 360,250） -->
@@ -381,11 +381,11 @@ x 居中：260（偏左，右侧可放注释）
   <text x="360" y="441" text-anchor="middle" font-size="18" fill="#2D3436">工具/MCP</text>
   <text x="206.7" y="343.5" text-anchor="end" font-size="18" fill="#2D3436">安全/合规</text>
   <text x="206.7" y="166.5" text-anchor="end" font-size="18" fill="#2D3436">生态/平台</text>
-  <!-- 图例 -->
-  <rect x="200" y="426" width="18" height="13" fill="#B8CFE0" fill-opacity="0.6" stroke="#7CA0BC" stroke-width="1.5"/>
-  <text x="226" y="437" font-size="16" fill="#2D3436">理论能力</text>
-  <rect x="360" y="426" width="18" height="13" fill="#E8D8C0" fill-opacity="0.6" stroke="#B8A282" stroke-width="1.5"/>
-  <text x="386" y="437" font-size="16" fill="#2D3436">实际部署</text>
+  <!-- 图例（在底部轴标签"工具/MCP"(y=441)下方 ~24px，避免重叠） -->
+  <rect x="200" y="465" width="18" height="13" fill="#B8CFE0" fill-opacity="0.6" stroke="#7CA0BC" stroke-width="1.5"/>
+  <text x="226" y="476" font-size="16" fill="#2D3436">理论能力</text>
+  <rect x="360" y="465" width="18" height="13" fill="#E8D8C0" fill-opacity="0.6" stroke="#B8A282" stroke-width="1.5"/>
+  <text x="386" y="476" font-size="16" fill="#2D3436">实际部署</text>
 </svg>
 ```
 
@@ -620,33 +620,34 @@ corner：x=40 w=130
 画布：720 × H（3 栏 × 3 卡典型 H≈390）
 标题：y = 32
 栏：x = 40 / 263 / 486（w=193，gap=30），表头 y=60-110（h=50）
-子卡片：y=126 起，每张 h=50，gap=12
+子卡片：y=126 起，每张 h=62（2 行：标签+内容），gap=12
 脚注虚框（可选）：底部
 ```
 
 ### 配色
 - 三栏表头：P8 混合系三色相（P1 雾蓝 `#B8CFE0` / P3 嫩绿 `#C8EBC8` / P4 暖米 `#E8D8C0`）
 - 子卡片：同栏表头的浅一档（`#EDF3F8` / `#EDF7ED` / `#F4ECDC`）
-- 子卡片内"标签："加粗 + 内容同行
+- 子卡片 2 行：标签（14px 加粗）+ 内容（13px）——避免单行"标签：内容"在 193px 窄列溢出
 
 ### 生成器脚本
 `scripts/gen-three-col.py`：参数化（TITLE/COLUMNS/FOOTNOTE/调色板顶部可改）→ `python3 scripts/gen-three-col.py out.svg` + rsvg 目检。
 
 ### SVG 骨架（示例 = Skill 三种典型结构）
 ```svg
-<svg viewBox="0 0 720 386" width="720" height="386" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 720 424" width="720" height="424" xmlns="http://www.w3.org/2000/svg">
   <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">Skill 的三种典型结构</text>
   <!-- 第 1 栏 表头（雾蓝） -->
   <rect x="40" y="60" width="193" height="50" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>
   <text x="136.5" y="91" text-anchor="middle" font-size="18" font-weight="700" fill="#2D3436">纯 SKILL.md 型</text>
   <!-- 第 1 栏 子卡片 -->
-  <rect x="40" y="126" width="193" height="50" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
-  <text x="136.5" y="149" text-anchor="middle" font-size="15" fill="#2D3436"><tspan font-weight="700">特征：</tspan>流程全写在 SKILL.md</text>
+  <rect x="40" y="126" width="193" height="62" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="136.5" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#2D3436">特征</text>
+  <text x="136.5" y="173" text-anchor="middle" font-size="13" fill="#636E72">流程全写在 SKILL.md</text>
   <!-- ...其余子卡片 + 第 2/3 栏（嫩绿/暖米）同结构... -->
   <!-- 脚注虚框 -->
-  <rect x="40" y="330" width="640" height="36" rx="6" fill="none" stroke="#636E72" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text x="360" y="353" text-anchor="middle" font-size="14" fill="#636E72">三种结构可叠加使用；复杂 Skill 常混合 2-3 种</text>
+  <rect x="40" y="358" width="640" height="36" rx="6" fill="none" stroke="#636E72" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="360" y="381" text-anchor="middle" font-size="14" fill="#636E72">三种结构可叠加使用；复杂 Skill 常混合 2-3 种</text>
 </svg>
 ```
 
