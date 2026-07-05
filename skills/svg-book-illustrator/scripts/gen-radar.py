@@ -4,7 +4,7 @@
 import math, sys
 
 # ---- parameters ----
-W, H = 720, 460
+W, H = 720, 505
 TITLE = "法律 AI 生态六层：理论能力 vs 实际部署"
 CX, CY, R = 360, 250, 150  # center, radius
 LABELS = ["数据/知识库", "模型能力", "Agent/Skill", "工具/MCP", "安全/合规", "生态/平台"]
@@ -83,7 +83,7 @@ for i, lab in enumerate(LABELS):
 
 # legend
 out.append('<!-- legend -->')
-leg_y = H - 22
+leg_y = int(CY + R*1.18 + 50)  # 底部轴标签(i=N//2, y≈CY+R*1.18+14)下方约 36px，避免与图例重叠
 lx = 200
 for name, vals, fill, stroke in SERIES:
     out.append(f'<rect x="{lx}" y="{leg_y-12}" width="18" height="13" fill="{fill}" fill-opacity="0.6" stroke="{stroke}" stroke-width="1.5"/>')

@@ -31,7 +31,7 @@ TITLE_Y = 32
 HEAD_TOP = 60
 HEAD_H = 50
 CARD_TOP = HEAD_TOP + HEAD_H + 16
-CARD_H = 50
+CARD_H = 62
 CARD_GAP = 12
 N_CARDS = max(len(c[1]) for c in COLUMNS)
 CARDS_BOTTOM = CARD_TOP + N_CARDS * CARD_H + (N_CARDS - 1) * CARD_GAP
@@ -59,12 +59,13 @@ for j, (header, cards) in enumerate(COLUMNS):
     for i, card_text in enumerate(cards):
         cy = CARD_TOP + i * (CARD_H + CARD_GAP)
         emit(f'<rect x="{x}" y="{cy}" width="{COL_W}" height="{CARD_H}" rx="6" fill="{colors["card"]}" stroke="{C_BORDER}" stroke-width="1.5"/>')
-        # split "特征：..." into bold label + rest if there's a colon
+        # 2-line: 标签(加粗)第 1 行 + 内容第 2 行——避免单行"标签：内容"在窄列(193px)溢出
         if "：" in card_text:
             label, rest = card_text.split("：", 1)
-            emit(f'<text x="{x+COL_W/2}" y="{cy+CARD_H/2-2}" text-anchor="middle" font-size="15" fill="{C_TEXT}"><tspan font-weight="700">{label}：</tspan>{rest}</text>')
+            emit(f'<text x="{x+COL_W/2}" y="{cy+24}" text-anchor="middle" font-size="14" font-weight="700" fill="{C_TEXT}">{label}</text>')
+            emit(f'<text x="{x+COL_W/2}" y="{cy+47}" text-anchor="middle" font-size="13" fill="{C_SUB}">{rest}</text>')
         else:
-            emit(f'<text x="{x+COL_W/2}" y="{cy+CARD_H/2+5}" text-anchor="middle" font-size="15" fill="{C_TEXT}">{card_text}</text>')
+            emit(f'<text x="{x+COL_W/2}" y="{cy+CARD_H/2+5}" text-anchor="middle" font-size="14" fill="{C_TEXT}">{card_text}</text>')
 
 # footnote
 if HAS_FOOT:
