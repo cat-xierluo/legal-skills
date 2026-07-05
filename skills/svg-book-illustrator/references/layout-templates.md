@@ -320,6 +320,82 @@ x 居中：260（偏左，右侧可放注释）
 
 ---
 
+## 8. radar（雷达图，v1.8.0 新增）
+
+**适用**：多维度对比——理论 vs 实际、国内外、能力评估、题型 vs 模型适配；需要 6-12 个维度同屏对比的**连续数值**。填补 v1.7.x "数据可视化不在范围" 的最大缺口。
+
+### 结构特征
+- N 条轴线（6-12，典型 6-8）从中心等角辐射（i=0 朝上，顺时针）
+- 4-5 层同心多边形网格（浅灰 `#E8E8E8` 弱线，不抢戏）
+- 1-2 个数据多边形叠加（每个一种 P 色半透明填充 + 同色加深一档描边）
+- 维度标签在外圈（18px `#2D3436`，anchor 按方向：左 end / 右 start / 上中 / 下中）
+- ≥2 系列时加底部图例（16px）
+
+### 布局公式（坐标由 N 与数值决定，建议用生成器脚本）
+```
+画布：720 × H（6 轴典型 H≈460；8 轴 H≈480；标签长时 +20）
+标题：y = 34（22px）
+中心：(360, CY)，CY ≈ 250（6 轴）或 260（8 轴）
+半径：R = 150-170（视标签长度；标签长则 R 取小）
+网格层：GRID_LEVELS=4 层同心多边形（r = R × {0.25,0.5,0.75,1.0}）
+轴线：中心 → (CX + R·cosθ_i, CY + R·sinθ_i)，θ_i = -π/2 + i·2π/N
+维度标签：在 1.18 × R 处
+数据顶点：中心 + R·v_i·(cosθ_i, sinθ_i)，v_i ∈ [0,1]
+图例：底部 y = H-30，每项色块 18×13 + 文字
+```
+
+### 配色
+- 1 系列：P1-P7 任一组主色填充（fill-opacity 0.5）+ 同组深一档描边（如 P1 `#B8CFE0` 填充 + `#7CA0BC` 描边）
+- 2 系列：**两组不同色相**（A=P1 雾蓝 `#B8CFE0`/`#7CA0BC`、B=P4 暖米 `#E8D8C0`/`#B8A282`），fill-opacity 0.5 保证重叠区可辨
+- 网格/轴：`#E8E8E8`（网格）/ `#B2BEC3`（轴），弱线
+- 顶点小圆点（r=3）用描边色，增强可读性
+
+### 生成器脚本（强烈推荐）
+雷达图几何随 N 变化，手算易错。用 `scripts/gen-radar.py` 生成：修改脚本顶部 `TITLE/LABELS/SERIES/CX/CY/R` 参数后 `python3 scripts/gen-radar.py output.svg`，再 `rsvg-convert -w 720 output.svg -o output.png` 目检。
+
+### SVG 骨架（6 轴 2 系列，示例 = 法律 AI 生态六层）
+```svg
+<svg viewBox="0 0 720 460" width="720" height="460" xmlns="http://www.w3.org/2000/svg">
+  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+  <text x="360" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律 AI 生态六层：理论能力 vs 实际部署</text>
+  <!-- 4 层网格（r=37.5/75/112.5/150，中心 360,250） -->
+  <polygon points="360,212.5 392.5,231.2 392.5,268.8 360,287.5 327.5,268.8 327.5,231.3" fill="none" stroke="#E8E8E8" stroke-width="1"/>
+  <polygon points="360,175 425,212.5 425,287.5 360,325 295,287.5 295,212.5" fill="none" stroke="#E8E8E8" stroke-width="1"/>
+  <polygon points="360,137.5 457.4,193.8 457.4,306.2 360,362.5 262.6,306.3 262.6,193.8" fill="none" stroke="#E8E8E8" stroke-width="1"/>
+  <polygon points="360,100 489.9,175 489.9,325 360,400 230.1,325 230.1,175" fill="none" stroke="#E8E8E8" stroke-width="1"/>
+  <!-- 6 条轴 -->
+  <line x1="360" y1="250" x2="360" y2="100" stroke="#B2BEC3" stroke-width="1"/>
+  <line x1="360" y1="250" x2="489.9" y2="175" stroke="#B2BEC3" stroke-width="1"/>
+  <line x1="360" y1="250" x2="489.9" y2="325" stroke="#B2BEC3" stroke-width="1"/>
+  <line x1="360" y1="250" x2="360" y2="400" stroke="#B2BEC3" stroke-width="1"/>
+  <line x1="360" y1="250" x2="230.1" y2="325" stroke="#B2BEC3" stroke-width="1"/>
+  <line x1="360" y1="250" x2="230.1" y2="175" stroke="#B2BEC3" stroke-width="1"/>
+  <!-- 系列 A 理论能力（P1 雾蓝） -->
+  <polygon points="360,112 474.3,184 470.4,313.8 360,385 256.1,310 248.3,185.5" fill="#B8CFE0" fill-opacity="0.5" stroke="#7CA0BC" stroke-width="2"/>
+  <!-- 系列 B 实际部署（P4 暖米） -->
+  <polygon points="360,178 435.3,206.5 431.4,291.2 360,325 279.5,296.5 308,220" fill="#E8D8C0" fill-opacity="0.5" stroke="#B8A282" stroke-width="2"/>
+  <!-- 维度标签 -->
+  <text x="360" y="71" text-anchor="middle" font-size="18" fill="#2D3436">数据/知识库</text>
+  <text x="513.3" y="166.5" text-anchor="start" font-size="18" fill="#2D3436">模型能力</text>
+  <text x="513.3" y="343.5" text-anchor="start" font-size="18" fill="#2D3436">Agent/Skill</text>
+  <text x="360" y="441" text-anchor="middle" font-size="18" fill="#2D3436">工具/MCP</text>
+  <text x="206.7" y="343.5" text-anchor="end" font-size="18" fill="#2D3436">安全/合规</text>
+  <text x="206.7" y="166.5" text-anchor="end" font-size="18" fill="#2D3436">生态/平台</text>
+  <!-- 图例 -->
+  <rect x="200" y="426" width="18" height="13" fill="#B8CFE0" fill-opacity="0.6" stroke="#7CA0BC" stroke-width="1.5"/>
+  <text x="226" y="437" font-size="16" fill="#2D3436">理论能力</text>
+  <rect x="360" y="426" width="18" height="13" fill="#E8D8C0" fill-opacity="0.6" stroke="#B8A282" stroke-width="1.5"/>
+  <text x="386" y="437" font-size="16" fill="#2D3436">实际部署</text>
+</svg>
+```
+
+### 维度选择纪律
+- 维度数严选 6-12 个；>12 易失焦
+- 维度须 MECE（互斥且穷尽），避免两个轴含义重叠
+- 数值 v_i ∈ [0,1] 归一化；同图两系列用同一套维度刻度
+
+---
+
 ## 模板选择决策树
 
 ```
@@ -332,6 +408,7 @@ x 居中：260（偏左，右侧可放注释）
 ├── 层级/分类/金字塔 → tree
 │   └── 下层更宽？ → tree（金字塔变体）
 ├── 闭环/循环 → cycle
+├── 多维度连续数值对比（6-12 维） → radar（v1.8.0）
 └── 混合关系？
     ├── 递进+数据对比 → flow+matrix
     └── 流程+节点展开 → flow+hub
@@ -353,6 +430,7 @@ x 居中：260（偏左，右侧可放注释）
 | 组织/分类体系 | tree |
 | 金字塔层级 | tree（金字塔变体） |
 | 循环/迭代过程 | cycle |
+| 多维度数值对比（6-12 维） | radar（v1.8.0） |
 | 递进效果+数据 | flow+matrix |
 | 流程+关键展开 | flow+hub |
 
@@ -367,6 +445,6 @@ x 居中：260（偏左，右侧可放注释）
 
 ### 不在范围内
 
-- 复杂数据可视化（柱状图、折线图、饼图）
+- 复杂数据可视化（柱状图、折线图、饼图）—— **雷达图 radar 已于 v1.8.0 解禁**；柱/折/饼仍禁
 - 地图/空间布局
 - 交互原型
