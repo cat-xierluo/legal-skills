@@ -276,3 +276,75 @@ bash scripts/spawn-worker.sh \
     [--no-trust-auto]   # 默认会自动 accept "1. Trust folder"
   ```
   helper 自带 trust-folder 自动接受 + TUI ready 检测 + 12KB / 16KB 分段 send-keys。后续 PM 可用 spawn-worker.sh `--mode interactive --worker-backend qoderwork-cn` 集成（未来增强）。与 batch `-p` 对照见 [DEC-042]。
+
+## 9. 权限与 scope 控制（settings.json，2026-07-05 补充）
+
+> 来源：qoder 官方 permissions 文档 https://docs.qoder.com/en/cli/permissions
+> 用途：scope-guard fix（防 worker 越界改 docs/manuscript 等；2026-07-05 两起越界触发）
+
+### 9.1 permission modes
+
+| mode | 行为 | worker 场景 |
+|---|---|---|
+| `default` | 安全读自动 + 敏感操作确认 | 交互 |
+| `accept_edits` | 自动批工作区内文件编辑，shell/敏感路径仍查 | 常规 |
+| `auto` | 零 prompt，安全自动批，风险 deny 或 AI 分类 | Goal 执行 |
+| `bypass_permissions`(yolo) | 跳所有审批，全允许 | 仅可信本地（worker 常用 `-y`） |
+| `dont_ask` | 不 prompt，需确认的一律 deny | headless 必须 |
+
+CLI：`--permission-mode <mode>` / `--yolo`(=bypass) / `--dangerously-skip-permissions`(=bypass)。
+
+### 9.2 8 层配置优先级（低→高）
+
+`userSettings`(~/.qoder/settings.json) < `projectSettings`(<proj>/.qoder/settings.json) < `localSettings`(<proj>/.qoder/settings.local.json, gitignore) < `flagSettings`(--settings) < `cliArg`(--allowed-tools 等) < `command`(/allow,/deny) < `session`(临时)。
+
+→ scope-guard 写 `.qoder/settings.local.json`(layer 3)。
+
+### 9.3 PreToolUse hook（决定性：unbypassable）
+
+**qoder 文档原话**：Hook permission decisions have **higher priority** than permission modes — even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will **still block** execution. This provides an **unbypassable** interception capability.
+
+执行顺序：**① PreToolUse hook（返回 allow/deny 则短路）→ ② permission pipeline（rules+mode+safety）→ ③ 若 ask → PermissionRequest hook（短路）→ ④ runtime 消费 ask**。
+
+→ **scope-guard fix 的权威方案**：PreToolUse hook 检查路径白名单，不管 `-y`/bypass_permissions 与否都拦越界。codebuddy（08 §12）语义应一致（待实测）。
+
+### 9.4 scope-guard 应用（spawn-worker.sh 待实现）
+
+spawn 时在 worktree 写 `.qoder/settings.local.json`：
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "python <skill>/scripts/scope-guard.py"
+      }]
+    }]
+  }
+}
+```
+`scope-guard.py` 读 stdin（`tool_name` + `tool_input`），检查 `tool_input.file_path` 是否匹配 PM 传入的 `--allow-paths` 白名单，越界返回：
+```json
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "out of scope: 仅允许 <allow-paths>"}}
+```
+**不管 worker 带 `-y`/`--yolo` 与否，越界 Edit 都被拦**（unbypassable，官方保证）。
+
+### 9.5 其他相关字段
+
+| 字段 | 作用 |
+|---|---|
+| `permissions.deny` / `allow` / `ask` | rules（bypass_permissions 下可能不生效，故 scope-guard 用 hook 不用 deny） |
+| `security.disableYoloMode: true` | 禁 `-y`/`--yolo`/Ctrl+Y（subagent 声明 bypass 降级 acceptEdits） |
+| `permissions.trustDirectories` | 全局永久信任目录（settings） |
+| `permissions.additionalDirectories` / `--add-dir` | 跨目录访问 |
+| `general.defaultPermissionMode` | 默认权限模式 |
+
+### 9.6 决策顺序（permissions pipeline）
+
+deny rules → 工具安全检查 → ask rules → allow rules + mode 自动 → 若仍 ask 则 runtime 消费（TUI prompt / headless auto-deny / SDK callback / ACP RPC）。
+
+---
+
+> **版本记录**：
+> - 2026-07-05：新增 §9 权限与 scope 控制（基于官方 permissions 文档，PreToolUse hook unbypassable 是 scope-guard 决定性方案）。
