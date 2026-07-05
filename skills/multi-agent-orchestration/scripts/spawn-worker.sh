@@ -68,6 +68,13 @@ the Bootstrap-only or Full worker prompt and confirm STATUS.json appears.
 When --with-sentinel is set, spawn-worker.sh outputs the sentinel command but
 does NOT start the sentinel itself. The PM must run that command with
 run_in_background=true so the harness re-invokes PM on sentinel exit.
+
+Troubleshooting: if 'which codebuddy' returns 'not found', the CLI binary may
+still exist in the .app bundle. Use:
+  bash scripts/check-dependencies.sh --backend codebuddy --strict
+for multi-source detection, or get the absolute path directly:
+  bash scripts/check-dependencies.sh --print-bundle-path codebuddy
+then pass it to spawn-worker via --command or --bin.
 USAGE
 }
 
