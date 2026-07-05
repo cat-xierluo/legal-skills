@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v1.8.0] - 2026-07-05
+
+### 新增（radar 雷达图模板，填补"数据可视化不在范围"最大缺口）
+
+补齐 v1.7.x 明确"复杂数据可视化（柱状/折线/饼图）不在范围"留下的缺口：本次解禁并新增 radar 雷达图（多维数值对比）；柱/折/饼仍维持禁用。
+
+### 改动
+- **新模板 `radar`**（`references/layout-templates.md` §8）：6-12 维多维度数值对比，1-2 系列；同心多边形网格 + 半透明数据多边形；P1/P4 双色相区分两系列；顶点小圆点增强可读性。布局公式（θ_i = -π/2 + i·2π/N）+ SVG 骨架 + 维度选择纪律（MECE、6-12 维、v_i∈[0,1] 归一化）。
+- **生成器 `scripts/gen-radar.py`**：雷达几何随 N 变化手算易错，参数化生成（TITLE/LABELS/SERIES/CX/CY/R 顶部可改）→ `python3 scripts/gen-radar.py out.svg` + `rsvg-convert -w 720 out.svg -o out.png` 目检。
+- **SKILL.md**：模板表加 radar 行（"9 种布局模板，7 基础 + 2 组合"）；第一阶段触发词加"多维数值对比描述处→radar"；第二阶段模板列表加 radar；version 1.7.1→1.8.0。
+- **决策 DEC-014**：radar 模板设计取舍（几何用生成器、双色相区分系列、网格弱线不抢戏）。
+
+### 验证（眼见为实）
+demo「法律 AI 生态六层：理论能力 vs 实际部署」（6 轴 2 系列）生成 + rsvg 渲染 +多模态目检通过：布局正确、标签无碰撞、雾蓝/暖米两系列清晰可辨、无渲染缺陷。
+
+### 后续（v1.8.x 计划）
+- `timeline-lane`（多泳道时间轴，真时间刻度，flow 变通的升级）
+- `skill-card`（Skill 结构模板图，介绍具体 Skill 时的标准骨架）
+- `matrix-grid` 扩展（N×M 网格矩阵，当前 matrix 仅 2 列对比）
+
 ## [v1.7.1] - 2026-06-30
 
 ### 修复（viewBox 高度按内容裁剪，DEC-013 supersede DEC-001 固定高度部分）
