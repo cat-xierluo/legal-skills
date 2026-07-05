@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.7] - 2026-07-06
+
+### Added
+- **scope-guard via PreToolUse hook（防 worker 越界写文件）**：新增 `scripts/scope-guard.py`（PreToolUse hook 脚本），读 stdin JSON 检查 `tool_name` + `tool_input.file_path`，匹配 `SCOPE_GUARD_ALLOW` 环境变量中的 glob 白名单（`:` 分隔）。越界返回 `permissionDecision: deny`，白名单内放行。无 `SCOPE_GUARD_ALLOW` 时不做拦截（向后兼容）。
+- **`spawn-worker.sh --allow-paths <glob>` 参数**：可重复，累积成 glob 列表。spawn codebuddy/qoder worker 时，自动写 `.codebuddy/settings.local.json` / `.qoder/settings.local.json` 中的 `hooks.PreToolUse` 配置，指向 `scripts/scope-guard.py`，并注入 `SCOPE_GUARD_ALLOW` 环境变量（`:` 分隔）到 tmux worker 进程。不传 `--allow-paths` 时不写 hook（向后兼容，现有 spawn 不变）。
+- **`METADATA.json` 新增 `allow_paths` 字段**：记录 PM 传入的 `--allow-paths` 白名单，供审计追溯。
+
+### Security
+- **PreToolUse hook 硬拦（unbypassable）**：基于 qoder 官方文档（ref 07 §9）明确「even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will still block execution」，codebuddy 作为 fork 语义一致（ref 08 §12 实测待确认）。scope-guard 用 PreToolUse hook 而非 `permissions.deny` rules（deny rules 在 `-y`/bypassPermissions 下可能不生效），**不用禁 `-y`**，保持 headless 零 prompt。
+
+### Reason
+- 来源：2026-07-05 PR#209 density worker 删 manuscript 图7-7 + Wave3 codebuddy worker 改 docs/manuscript 两起越界触发。`permissions.deny` rules 在 `bypassPermissions` 模式下不生效（ref 08 §12.2），PreToolUse hook 是唯一 unbypassable 的硬拦方案（ref 07 §9.3）。
+
 ## [1.17.6] - 2026-07-05
 
 ### Added
