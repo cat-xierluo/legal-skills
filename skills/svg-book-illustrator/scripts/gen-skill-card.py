@@ -69,7 +69,7 @@ emit(f'<line x1="{CENTER_X}" y1="{iy+ih+2}" x2="{CENTER_X}" y2="{SKILL_TOP-8}" s
 emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{SKILL_H}" rx="10" fill="none" stroke="{C_BORDER}" stroke-width="2.5"/>')
 # name band
 BAND_H = 38
-emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{BAND_H}" rx="10" fill="{C_NAME_BAND}" stroke="{C_BORDER}" stroke-width="2.5"/>')
+emit(f'<rect x="{LEFT}" y="{SKILL_TOP}" width="{RIGHT-LEFT}" height="{BAND_H}" rx="10" fill="{C_NAME_BAND}"/>')  # 只填色不描边——避免与外框左右竖边/顶圆角重合双描（外框已描顶+侧，底由分隔线描）
 # clip band bottom corners visually: overlay a thin rect to square off bottom of band
 emit(f'<rect x="{LEFT}" y="{SKILL_TOP+BAND_H-10}" width="{RIGHT-LEFT}" height="10" fill="{C_NAME_BAND}"/>')
 emit(f'<line x1="{LEFT}" y1="{SKILL_TOP+BAND_H}" x2="{RIGHT}" y2="{SKILL_TOP+BAND_H}" stroke="{C_BORDER}" stroke-width="2.5"/>')
