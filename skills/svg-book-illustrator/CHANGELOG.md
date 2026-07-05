@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.8.1] - 2026-07-05
+
+### 新增（skill-card Skill 结构模板图）
+
+新增 skill-card 模板：介绍单个 Skill 时的标准骨架（输入 → Skill 三件套 references/scripts/SKILL.md + 流程步骤 → 输出，可选联动虚框脚注）。填补"Skill 结构介绍"这一高频复用场景的模板空缺。
+
+### 改动
+- **新模板 `skill-card`**（`references/layout-templates.md` §9）：顶/中/底三层数据流；中央 Skill 主框含深色名称带 + 三件套横排 + SKILL.md 定义的流程步骤列表（①②③④ 编号，3-5 步）；可选底部虚线联动脚注。
+- **生成器 `scripts/gen-skill-card.py`**：参数化（TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/调色板顶部可改）。
+- **SKILL.md**：模板表加 skill-card 行（"10 种布局模板，8 基础 + 2 组合"）；第一阶段触发词加"Skill 介绍/结构描述处→skill-card"；第二阶段模板列表加 skill-card；version 1.8.0→1.8.1。
+- **决策 DEC-015**：skill-card 设计取舍（单组 P 色建层级、名称带深一档、三件套顺序固定、步骤 3-5 上限）。
+
+### 验证
+demo「法律研究 Skill 结构图」（2 输入 + 4 步 + 1 输出 + 联动脚注）生成 + rsvg 渲染 + 多模态目检通过：结构清晰、无重叠、名称带/箭头/文字均正常。
+
 ## [v1.8.0] - 2026-07-05
 
 ### 新增（radar 雷达图模板，填补"数据可视化不在范围"最大缺口）
