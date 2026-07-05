@@ -25,6 +25,7 @@ WITH_SENTINEL=0
 SENTINEL_POLL_INTERVAL=5
 SENTINEL_MAX_WAIT=7200
 KEEP_TMUX_ON_TERMINAL=0
+TRUST_AUTO=1
 
 usage() {
   cat >&2 <<'USAGE'
@@ -57,6 +58,9 @@ Options:
                    Default 7200; passed to the recommended sentinel command
   --keep-tmux-on-terminal
                    Pass --keep-tmux-on-terminal to the recommended sentinel command
+  --no-trust-auto   Skip trust-folder auto-accept for codebuddy/qoder CLI workers.
+                   Default: auto-select 'Trust folder and all subdirectories' (option 3)
+                   to avoid both the initial trust prompt and subdir trust prompts.
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -143,6 +147,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --keep-tmux-on-terminal)
       KEEP_TMUX_ON_TERMINAL=1
+      shift
+      ;;
+    --no-trust-auto)
+      TRUST_AUTO=0
       shift
       ;;
     --dry-run)
@@ -304,6 +312,50 @@ write_metadata() {
     }' > "$METADATA_FILE"
 }
 
+# Trust folder auto-accept for headless codebuddy/qoder CLI workers.
+# Default: auto-select "Trust folder and all subdirectories" (option 3) to
+# avoid both the initial trust prompt AND subsequent subdir trust prompts.
+# Polls the tmux pane for trust dialog text, then sends Down×3+Enter.
+trust_auto() {
+  local session="$1"
+  local max_wait=30
+  local poll_interval=1
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      return 1  # session died, trust-auto skipped
+    fi
+
+    local content
+    content=$(tmux capture-pane -t "$session" -p -S -50 2>/dev/null || echo "")
+
+    # codebuddy trust dialog:
+    #   Do you want to proceed?
+    #   1. Trust folder only / 2. Trust parent folder / 3. Trust folder and all subdirectories / 4. No, exit
+    if echo "$content" | grep -q "Trust folder and all subdirectories"; then
+      echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected, selecting Trust folder and all subdirectories (option 3)"
+      tmux send-keys -t "$session" Down Down Down Enter
+      sleep 2  # wait for trust to take effect
+      return 0
+    fi
+
+    # Generic fallback: match other trust/Do you trust dialogs
+    if echo "$content" | grep -qE "Trust folder|Do you trust" 2>/dev/null; then
+      echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (generic), selecting last trust option (Down×3+Enter)"
+      tmux send-keys -t "$session" Down Down Down Enter
+      sleep 2
+      return 0
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_TRUST_AUTO: no trust dialog seen within ${max_wait}s, continuing"
+  return 0
+}
+
 write_metadata
 
 exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude)
@@ -312,6 +364,13 @@ if [ "$DRY_RUN" -eq 0 ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file"
 fi
 
 run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
+
+# Trust-auto: headless CLI workers need trust-folder permission auto-accepted.
+# Selects "Trust folder and all subdirectories" (option 3) to avoid both the
+# initial trust prompt and subsequent subdir trust prompts. Use --no-trust-auto to opt out.
+if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
+  trust_auto "$SESSION"
+fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
   pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
