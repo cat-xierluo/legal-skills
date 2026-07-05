@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.8.3] - 2026-07-05
+
+### 新增（matrix-grid N×M 网格矩阵）
+
+新增 matrix-grid 模板：两维交叉对照（风险 × 条款、特征 × 产品、能力 × 模型），单元格用状态符号（√/×/○/—）+ 柔和填充色编码 + 底部图例。补 v1.7.x matrix 仅 2 列对比、不支持 N×M 交叉的局限。
+
+### 改动
+- **新模板 `matrix-grid`**（`references/layout-templates.md` §11）：corner label + 顶部/左侧表头（P1 带）+ N×M 单元格 + 状态符号（√/○/×/—）+ 柔和状态色（P3/P7/P4/中性）+ 底部图例。
+- **生成器 `scripts/gen-matrix-grid.py`**：参数化（TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS）；CELLS 支持 yes/no/partial/na 或自由文本。
+- **SKILL.md**：模板表加 matrix-grid 行（"12 种布局模板，10 基础 + 2 组合"）；第一阶段触发词加"两维交叉对照→matrix-grid"；第二阶段模板列表加 matrix-grid；version 1.8.2→1.8.3。
+- **决策 DEC-017**：matrix-grid 设计取舍（4 档状态符号、柔和状态色禁高饱和红绿、N×M 上限、符号须黑白可辨）。
+
+### 验证
+demo「合同审查：4 类风险 × 5 类条款 对照矩阵」（4×5）生成 + rsvg 渲染 + 多模态目检通过：符号居中、颜色区分清晰、列宽均匀、图例齐全。
+
 ## [v1.8.2] - 2026-07-05
 
 ### 新增（timeline-lane 多泳道时间轴）

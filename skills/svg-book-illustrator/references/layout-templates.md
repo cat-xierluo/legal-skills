@@ -541,6 +541,70 @@ Skill 主框：x=70 y=150 w=580 h≈240
 
 ---
 
+## 11. matrix-grid（N×M 网格矩阵，v1.8.3 新增）
+
+**适用**：两个维度的交叉对照——风险类型 × 审查维度、特征 × 产品、能力 × 模型。单元格用状态符号（√/×/○/—）或短文本标记 + 颜色编码。比 `matrix`（仅 2 列对比）适合更高维交叉。
+
+### 结构特征
+- 左上角 corner label（"维度A \\ 维度B"）
+- 顶部列表头（M 个）+ 左侧行表头（N 个），P1 表头带
+- N×M 单元格，每格状态符号 + 柔和填充色
+- 底部图例（符号 × 含义）
+
+### 布局参考
+```
+画布：720 × H（H = 100 + N×44 + 60，4×5 典型 H≈340）
+标题：y = 32
+表头带：y = 62-112（h=50），P1 #D6E4F0
+corner：x=40 w=130
+网格：x=178-685（宽 507），每格宽 507/M，高 44
+图例：底部，每项色块+符号+说明
+```
+
+### 配色（状态语义，全部柔和色，禁高饱和红绿）
+- √ 重点关注：P3 嫩绿 `#C8EBC8`
+- ○ 部分相关：P7 暖灰 `#E8DFD0`
+- × 基本无关：P4 暖米浅 `#EDDFC8`
+- — 不适用：中性浅灰 `#F0F0F0`
+- 表头带：P1 雾蓝 `#D6E4F0`
+
+### 生成器脚本
+`scripts/gen-matrix-grid.py`：参数化（TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS/调色板顶部可改）。CELLS 支持 `"yes"`/`"no"`/`"partial"`/`"na"` 或自由文本 → `python3 scripts/gen-matrix-grid.py out.svg` + rsvg 目检。
+
+### SVG 骨架（示例 = 4×5 风险×条款对照矩阵）
+```svg
+<svg viewBox="0 0 720 340" width="720" height="340" xmlns="http://www.w3.org/2000/svg">
+  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+  <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">合同审查：4 类风险 × 5 类条款 对照矩阵</text>
+  <!-- corner -->
+  <rect x="40" y="62" width="130" height="50" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="105" y="92" text-anchor="middle" font-size="14" font-weight="600" fill="#2D3436">风险 \ 条款</text>
+  <!-- 列表头（5） -->
+  <rect x="178" y="62" width="101.4" height="50" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="228.7" y="92" text-anchor="middle" font-size="15" font-weight="600" fill="#2D3436">违约责任</text>
+  <!-- ...付款条款/知识产权/保密/终止 同结构... -->
+  <!-- 行表头 + 单元格（第 1 行） -->
+  <rect x="40" y="116" width="130" height="44" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
+  <text x="105" y="143" text-anchor="middle" font-size="15" font-weight="600" fill="#2D3436">商业风险</text>
+  <rect x="178" y="116" width="101.4" height="44" fill="#C8EBC8" stroke="#2D3436" stroke-width="1"/>
+  <text x="228.7" y="145" text-anchor="middle" font-size="20" font-weight="700" fill="#2D3436">√</text>
+  <!-- ...其余单元格按 yes/partial/no 填色 + 符号... -->
+  <!-- 图例 -->
+  <rect x="90" y="315" width="20" height="16" fill="#C8EBC8" stroke="#2D3436" stroke-width="1"/>
+  <text x="100" y="328" text-anchor="middle" font-size="14" font-weight="700" fill="#2D3436">√</text>
+  <text x="116" y="328" font-size="13" fill="#636E72">重点关注</text>
+  <!-- ...○ 部分相关 / × 基本无关 / — 不适用 同结构... -->
+</svg>
+```
+
+### 纪律
+- 维度数 N×M 建议 3-6 × 3-7；超 7 列单元格过窄、文字易溢出
+- 状态用 4 档（√/○/×/—）足够；更多档改用色阶（layer G1-G4 明度梯度）
+- 单元格符号 ≥ 20px 保证可读；避免在格内塞长文本（长文本放图例或脚注）
+- 颜色仅辅助区分，符号本身（√/×/○）须黑白可辨（WCAG + 印刷降级硬约束）
+
+---
+
 ## 模板选择决策树
 
 ```
@@ -556,6 +620,7 @@ Skill 主框：x=70 y=150 w=580 h≈240
 ├── 多维度连续数值对比（6-12 维） → radar（v1.8.0）
 ├── 介绍一个 Skill 的结构（输入→Skill→输出） → skill-card（v1.8.1）
 ├── 多角色/多主体时间推进 → timeline-lane（v1.8.2）
+├── 两维交叉对照（N×M 网格 + 状态符号） → matrix-grid（v1.8.3）
 └── 混合关系？
     ├── 递进+数据对比 → flow+matrix
     └── 流程+节点展开 → flow+hub
@@ -580,6 +645,7 @@ Skill 主框：x=70 y=150 w=580 h≈240
 | 多维度数值对比（6-12 维） | radar（v1.8.0） |
 | 单个 Skill 的结构（输入→Skill→输出） | skill-card（v1.8.1） |
 | 多角色/多主体时间推进 | timeline-lane（v1.8.2） |
+| 两维交叉对照（风险×条款/特征×产品） | matrix-grid（v1.8.3） |
 | 递进效果+数据 | flow+matrix |
 | 流程+关键展开 | flow+hub |
 
