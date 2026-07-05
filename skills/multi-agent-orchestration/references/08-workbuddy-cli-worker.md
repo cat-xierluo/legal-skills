@@ -561,9 +561,80 @@ hint: Updates were rejected because the tip of your current branch is behind
 
 §9.2 关键差异表"权限跳过"行已加警告："⚠️ **但 `--permission-mode acceptEdits` 会覆盖 `-y`，必须用 `--permission-mode bypassPermissions`**"。
 
+## 11. `--add-dir` 跨目录访问与 permission_auto 兜底
+
+### 11.1 问题背景
+
+codebuddy 有**两层安全门**：
+1. **工具权限层**（tool permission）：由 `-y` / `--dangerously-skip-permissions` 控制
+2. **跨目录访问层**（directory access）：独立的 runtime prompt，`-y` **不覆盖**
+
+即使带了 `-y`，codebuddy 读取 worktree 外文件时仍弹：
+```
+Do you want to proceed?
+  1. Yes
+> 2. Yes, and don't ask again for session (shift + tab)
+  3. No, and tell CodeBuddy what to do differently (escape)
+```
+
+headless worker 无人应答，卡住。
+
+### 11.2 推荐策略：任务文件放 worktree 内
+
+**最干净的解**：任务文件/素材放在 worktree 内，worker 用相对路径读，不触发跨目录安全门。
+
+```bash
+# spawn 前把任务文件拷进 worktree
+cp /tmp/task.prompt.md <worktree>/_task.prompt.md
+# spawn 后用 worktree 内路径
+tmux send-keys -t <session> -l "read ./_task.prompt.md"
+```
+
+### 11.3 若必须跨目录：`--add-dir`
+
+当任务文件/素材必须留在 worktree 外时，用 `--add-dir` 声明允许访问的额外目录：
+
+```bash
+# render-runtime-profile 生成含 --add-dir 的命令
+eval "$(bash scripts/render-runtime-profile.sh \
+  --backend codebuddy \
+  --model deepseek-v4-pro \
+  --add-dir /tmp \
+  --add-dir /Users/Shared/project-assets \
+  --output shell)"
+
+# spawn 时也传 --add-dir（写入 METADATA.json 记录）
+bash scripts/spawn-worker.sh \
+  --project /path/to/repo \
+  --branch docs/ch01-agent-intro \
+  --session legal-ch01 \
+  --add-dir /tmp \
+  --add-dir /Users/Shared/project-assets \
+  --command "$WORKER_COMMAND"
+```
+
+`render-runtime-profile.sh` 会将 `--add-dir` 追加到 codebuddy 的 `--add-dir` flag；`spawn-worker.sh` 会将 `--add-dir` 写入 `METADATA.json` 的 `add_dirs` 字段供 PM 审计。
+
+### 11.4 兜底：`permission_auto`
+
+即使配了 `--add-dir`，首次访问这些目录时仍可能弹 "Do you want to proceed" prompt。`spawn-worker.sh` 的 `permission_auto()` 函数会在启动后轮询 tmux pane（最长 60s，2s 间隔），匹配该文本后自动选 option 2（session-allow）。
+
+- 只选 session-allow，**不选 bypass**——session-allow 仍记录权限，且只对当前 session 有效
+- 与 `trust_auto` 共用 `--no-trust-auto` opt-out 开关
+- 超时后静默退出，不阻塞 worker 启动
+
+### 11.5 推荐工作流总结
+
+| 场景 | 做法 |
+|------|------|
+| 任务文件在 worktree 内 | 无额外操作，`permission_auto` 兜底 |
+| 任务文件在 worktree 外（如 `/tmp`） | `render-runtime-profile.sh --add-dir /tmp` + `spawn-worker.sh --add-dir /tmp` |
+| 多个外部目录 | 重复 `--add-dir`（如 `--add-dir /tmp --add-dir ../shared-assets`） |
+| 彻底关闭自动应答 | `--no-trust-auto`（关 trust_auto + permission_auto） |
+
 ---
 
 > **版本记录**：
-> - 2026-07-05：补充 §10 实战坑点（acceptEdits 卡权限 → bypassPermissions / bootstrap 卡输入框 → 重发 Enter / worker 漏 commit → PM 替 commit / PingIslandBridge hook error / push origin 失败）+ §9 集成建议段修订（acceptEdits → bypassPermissions）+ §9.2 表的权限跳过行加警告。
+> - 2026-07-05：新增 §11 `--add-dir` 跨目录访问与 permission_auto 兜底。
 > - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。
 > - 2026-06-20：初版，基于 WorkBuddy v2.103.3 CLI 实测编写。

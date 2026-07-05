@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.6] - 2026-07-05
+
+### Added
+- **`--add-dir` 透传（codebuddy 跨目录访问）**：`render-runtime-profile.sh` 新增 `--add-dir <dir>` 参数（可重复），codebuddy backend 追加到 `cb_parts`。`spawn-worker.sh` 同步新增 `--add-dir <dir>` 参数，写入 `METADATA.json` 的 `add_dirs` 字段。用途：PM 派 worker 时若任务文件/素材在 worktree 外，`spawn-worker.sh --add-dir /tmp --add-dir ../shared-assets`。
+- **`permission_auto()` 兜底 runtime "Do you want to proceed" prompt**：`spawn-worker.sh` 新增 `permission_auto()` 函数，启动 tmux 后轮询 pane 内容（最长 60s，2s 间隔），匹配「Do you want to proceed」文本后自动选 option 2「Yes, and don't ask again for session」（Down+Enter=session-allow）。与 `trust_auto` 共用 `--no-trust-auto` opt-out。只自动选 session-allow，不选 bypass（安全：session-allow 仍记录，且只对当前 session）。
+
+### Fixed
+- **runtime "Do you want to proceed" prompt 无自动处理**：上一轮（v1.17.5）的 `trust_auto` 只处理了首启 trust folder dialog，但 codebuddy 读取 worktree 外文件时的「跨目录安全门」是另一层 prompt。PM 派 headless worker 时若任务文件在 worktree 外（如 `/tmp`），worker 会卡在 "Do you want to proceed?" 弹窗。新增 `permission_auto()` 兜底此场景。
+
+### Reason
+- 来源：2026-07-05 PM 用 codebuddy worker 实战，即使带了 `-y`，读取 `/tmp` 任务文件时仍弹 "Do you want to proceed" 弹窗。`-y`/`--dangerously-skip-permissions` 跳工具权限，但不覆盖 codebuddy 的「跨目录访问」安全门。官方文档的解是 `--add-dir`（settings 或 CLI flag），而 permission_auto 作为兜底自动选 session-allow。
+
 ## [1.17.5] - 2026-07-05
 
 ### Fixed

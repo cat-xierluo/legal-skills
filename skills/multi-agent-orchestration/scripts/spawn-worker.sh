@@ -26,6 +26,7 @@ SENTINEL_POLL_INTERVAL=5
 SENTINEL_MAX_WAIT=7200
 KEEP_TMUX_ON_TERMINAL=0
 TRUST_AUTO=1
+ADD_DIRS=()
 
 usage() {
   cat >&2 <<'USAGE'
@@ -61,6 +62,10 @@ Options:
   --no-trust-auto   Skip trust-folder auto-accept for codebuddy/qoder CLI workers.
                    Default: auto-select 'Trust folder and all subdirectories' (option 3)
                    to avoid both the initial trust prompt and subdir trust prompts.
+  --add-dir DIR     Extra directories for codebuddy to access outside the worktree
+                   (repeatable). Passed through to codebuddy's --add-dir flag.
+                   Use when task files/assets are outside the worktree, e.g.:
+                   --add-dir /tmp --add-dir ../shared-assets
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -159,6 +164,10 @@ while [[ $# -gt 0 ]]; do
     --no-trust-auto)
       TRUST_AUTO=0
       shift
+      ;;
+    --add-dir)
+      ADD_DIRS+=("$2")
+      shift 2
       ;;
     --dry-run)
       DRY_RUN=1
@@ -283,6 +292,7 @@ write_metadata() {
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
     --argjson verification_commands "$verify_json" \
+    --argjson add_dirs "$(printf '%s\n' "${ADD_DIRS[@]}" | jq -R . | jq -s .)" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -311,6 +321,7 @@ write_metadata() {
       verification: {
         commands: $verification_commands
       },
+      add_dirs: $add_dirs,
       pr: {
         number: null,
         url: "",
@@ -363,6 +374,46 @@ trust_auto() {
   return 0
 }
 
+# Permission auto-accept for runtime "Do you want to proceed?" prompts.
+# Polls the tmux pane for the runtime permission prompt (appears when codebuddy
+# tries to access files outside the worktree) and auto-selects option 2
+# "Yes, and don't ask again for session" (Down+Enter = session-allow).
+# Runs with a longer timeout (60s) since runtime prompts appear later.
+# Uses the same --no-trust-auto opt-out (shared switch).
+permission_auto() {
+  local session="$1"
+  local max_wait=60
+  local poll_interval=2
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      return 1  # session died, permission-auto skipped
+    fi
+
+    local content
+    content=$(tmux capture-pane -t "$session" -p -S -50 2>/dev/null || echo "")
+
+    # Match "Do you want to proceed?" dialog with session-allow option:
+    #   Do you want to proceed?
+    #     1. Yes
+    #   > 2. Yes, and don't ask again for session (shift + tab)
+    #     3. No, and tell CodeBuddy what to do differently (escape)
+    if echo "$content" | grep -q "Do you want to proceed"; then
+      echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, Down+Enter)"
+      tmux send-keys -t "$session" Down Enter
+      sleep 2
+      return 0
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_PERMISSION_AUTO: no runtime permission prompt seen within ${max_wait}s, continuing"
+  return 0
+}
+
 write_metadata
 
 exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude)
@@ -372,11 +423,16 @@ fi
 
 run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 
-# Trust-auto: headless CLI workers need trust-folder permission auto-accepted.
-# Selects "Trust folder and all subdirectories" (option 3) to avoid both the
-# initial trust prompt and subsequent subdir trust prompts. Use --no-trust-auto to opt out.
+# Trust-auto + Permission-auto: headless CLI workers need trust-folder permission
+# and runtime permission prompts auto-accepted.
+# trust_auto: Selects "Trust folder and all subdirectories" (option 3) to avoid
+# both the initial trust prompt and subsequent subdir trust prompts.
+# permission_auto: Selects "Yes, and don't ask again for session" (option 2)
+# for "Do you want to proceed?" runtime prompts (cross-directory access).
+# Use --no-trust-auto to opt out of both.
 if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
   trust_auto "$SESSION"
+  permission_auto "$SESSION"
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
