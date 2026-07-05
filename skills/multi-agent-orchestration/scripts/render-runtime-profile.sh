@@ -25,6 +25,7 @@ NO_PROVIDER_ENV_ISOLATION=0
 NO_MCP=0
 BIN=""
 SKIP_PERMISSIONS=0
+NO_SKIP_PERMISSIONS=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -68,7 +69,11 @@ Options:
   --dangerously-skip-permissions
                            Add the skip-permissions flag for the worker.
                            codebuddy: -y. qoderwork-cn: --dangerously-skip-permissions.
-                           codebuddy batch always includes -y regardless (headless 要求).
+                           警告: 已改为默认行为（交互式也加）。该 flag 仅保留兼容。用 --no-skip-permissions 关闭。
+  --no-skip-permissions    Explicitly turn OFF the skip-permissions flag for the worker.
+                           罕见场景:人要坐终端跟 codebuddy/qoder 交互调试。
+                           codebuddy: remove -y; qoderwork-cn: remove --dangerously-skip-permissions.
+                           Defaults: ON (skip permissions).
   --output FORMAT          shell | command | prompt-context. Default: shell
 
 The script only renders metadata and command strings. It does not create
@@ -156,6 +161,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dangerously-skip-permissions)
       SKIP_PERMISSIONS=1
+      shift
+      ;;
+    --no-skip-permissions)
+      NO_SKIP_PERMISSIONS=1
       shift
       ;;
     -h|--help)
@@ -340,7 +349,9 @@ case "$BACKEND" in
     ;;
   codebuddy)
     # WorkBuddy / CodeBuddy CLI。参数体系与 Claude Code 高度兼容(ref 08)。
-    # headless 批处理必须 -y(ref 08 §6.2)；MCP off 用 inline 空 config(避免 /tmp 依赖)。
+    # MCP off 用 inline 空 config(避免 /tmp 依赖)。
+    # -y 默认加：spawn-worker 派 tmux session 本质 headless（无人在终端应答 prompt）。
+    # 仅 --no-skip-permissions opt-out（罕见场景：人坐终端跟 codebuddy 交互调试）。
     if [ -z "$PERMISSION_MODE" ]; then
       # F1 (DEC-040): batch 默认 bypassPermissions 替代 acceptEdits。CLI 文档与实测都显示
       # batch + acceptEdits 与 -y 冲突，headless 下每个 tool 调用都被 deny。
@@ -352,8 +363,8 @@ case "$BACKEND" in
     [ -n "$COMMAND_MODEL" ] && cb_parts+=(--model "$COMMAND_MODEL")
     cb_parts+=(--permission-mode "$PERMISSION_MODE")
     [ "$NO_MCP" -eq 1 ] && cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
-    # batch 恒加 -y(headless 要求)；交互式仅在显式 --dangerously-skip-permissions 时加。
-    if [ "$SKIP_PERMISSIONS" -eq 1 ] || [ "$MODE" = "batch" ]; then
+    # 默认加 -y：交互式和 batch 均默认加；仅 --no-skip-permissions opt-out。
+    if [ "$NO_SKIP_PERMISSIONS" -ne 1 ]; then
       cb_parts+=(-y)
     fi
     if [ "$MODE" = "batch" ]; then
@@ -377,11 +388,11 @@ case "$BACKEND" in
     [ -n "$COMMAND_MODEL" ] && qr_parts+=(-m "$COMMAND_MODEL")
     qr_parts+=(--permission-mode "$PERMISSION_MODE")
     [ "$NO_MCP" -eq 1 ] && qr_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
-    [ "$SKIP_PERMISSIONS" -eq 1 ] && qr_parts+=(--dangerously-skip-permissions)
-    # F3 (DEC-040): qoderclicn 在 batch mode 下必须再加 --dangerously-skip-permissions；
-    # `--permission-mode auto` 在 headless 不 bypass，需要这个 flag 强制。
-    # 仅 batch 加，交互式不破坏现有 SKIP_PERMISSIONS 语义。
-    [ "$MODE" = "batch" ] && qr_parts+=(--dangerously-skip-permissions)
+    # 默认加 --dangerously-skip-permissions（spawn-worker tmux worker 本质 headless）。
+    # 仅 --no-skip-permissions opt-out。
+    if [ "$NO_SKIP_PERMISSIONS" -ne 1 ]; then
+      qr_parts+=(--dangerously-skip-permissions)
+    fi
     if [ "$MODE" = "batch" ]; then
       qr_parts+=(-p)
       COMMAND="$(quote_words "${qr_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
