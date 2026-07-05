@@ -407,7 +407,7 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 
 - **backend 标识**：建议写具体执行面，例如 `codebuddy`；profile 标识可写 `codebuddy-kimi-k26` / `workbuddy-deepseek` / `workbuddy-custom`
 - **spawn 集成**：走 custom CLI worker 路径，但 `--worker-backend` 可以写 `codebuddy` 这类可读标签，便于 STATUS/METADATA 追踪
-- **权限模式**：无头批处理使用 `--permission-mode acceptEdits` 或 `-y`；tmux 交互式按自动化强度使用 `acceptEdits` / `bypassPermissions`
+- **权限模式**：**必须** `--permission-mode bypassPermissions`（`acceptEdits` 仍卡权限，`-y` 被覆盖；参考 §10.1）；tmux 交互式按自动化强度用 `bypassPermissions`
 - **必加参数**：无头模式下 `-y` 是必须的（等同 Claude Code 的 `--dangerously-skip-permissions`）
 - **checkpoint 兼容**：`codebuddy` 本身不产生 `STATUS.json`，需要在 worker prompt 中明确要求 worker 自行写入 checkpoint 三件套，或靠 git status + 文件系统巡检兜底
 - **额度监控**：目前没有 CLI 方式查询剩余额度，需要登录 WorkBuddy 桌面端查看
@@ -451,8 +451,119 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 3. **对接第三方 API 降本**：将高频轻度任务路由到 DeepSeek 等低成本的第三方 API
 4. **控制 max-turns**：通过 `--max-turns` 限制 worker 最大轮次，防止跑飞浪费额度
 
+## 10. codebuddy spawn 实战坑点（2026-07-05 五轮实测总结）
+
+**关键修正**：本节是 §6.6/§6.7 之后的实战补强——基于 2026-07-05 五轮 codebuddy worker 实战踩坑提炼。**所有派 codebuddy worker 的 PM 必读**。
+
+### 10.1 permission-mode 必选 bypassPermissions（acceptEdits 仍卡权限）
+
+`render-runtime-profile.sh --backend codebuddy` 默认生成 `--permission-mode acceptEdits`（参考 §6.7），**实测会反复卡权限 prompt**：
+- 每次 bash 命令（git status / git log / ls 等）问权限
+- 读 worktree 外目录（如 worktree 内嵌套的 `.worktrees/`）问权限
+- 即使加 `-y`（`--dangerously-skip-permissions`）也无效——acceptEdits 覆盖 -y
+
+**修复**：必须用 `--permission-mode bypassPermissions`。`render-runtime-profile` 不直接支持，走 launch.sh 模式（避免 inline JSON 引号被吞）：
+
+```bash
+cat > /tmp/codebuddy-bypass-launch.sh << 'EOF'
+#!/bin/bash
+MODEL="$1"
+exec "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy" \
+  --model "$MODEL" --permission-mode bypassPermissions \
+  --strict-mcp-config --mcp-config '{"mcpServers":{}}' -y
+EOF
+chmod +x /tmp/codebuddy-bypass-launch.sh
+
+# spawn-worker 用 launch.sh
+bash scripts/spawn-worker.sh --project "$PROJECT" --branch "$BRANCH" \
+  --session "$SESSION" --worker-backend codebuddy --model "$MODEL" \
+  --command "bash /tmp/codebuddy-bypass-launch.sh deepseek-v4-pro" --with-sentinel
+```
+
+**验证**：tmux pane 底部应显示 `⏵⏵ bypass permissions on (shift+tab to cycle)`（不是 `accept edits on`）。
+
+### 10.2 bootstrap 输入框卡住（重发 Enter 提交）
+
+`tmux send-keys -t <session> -l "长文本"` + `tmux send-keys -t <session> Enter` 提交 bootstrap prompt 后，**可能卡在输入框**——pane 显示 `>` 后有完整 bootstrap 文本但没执行。
+
+**症状**：STATUS.json 没写 + git status 空 + pane 显示 bootstrap 文本在 `>` 后。
+
+**修复**：重发 Enter 提交：
+
+```bash
+tmux send-keys -t <session> Enter
+sleep 15
+ls /path/to/STATUS.json  # 验证
+```
+
+如果仍卡，codebuddy session 状态混乱——TaskStop + tmux kill-session + 重 spawn。
+
+### 10.3 worker 漏 commit（PM 替 commit + 记录）
+
+实测多次：worker STATUS `done` + pane 回到 `>`，但 `git log main..HEAD` 空、`git diff --stat` 空——**worker 改了文件但没 commit**。
+
+**违反 §5.1 Commit Cadence 硬约束**（"commit 是强制的收尾步骤"）。
+
+**PM 验收补救**：
+
+```bash
+cd <worktree>
+git status --short  # R/RM rename + modify
+git add <skill-dir>/  # stage 改动（不含 .claude/agent-sessions/）
+git commit -m "feat(<skill>): v0.X.Y <任务>" \
+           -m "<worker>(codebuddy) done 但漏 commit, PM 替 commit"
+```
+
+**预防**：worker prompt 必须强调"commit 是强制收尾"+ worker 完成后先 `git diff --check main...HEAD` 自检非空 + commit。
+
+### 10.4 PingIslandBridge hook error（codebuddy 内部）
+
+worker 调用 TaskUpdate / TaskCreate 时报：
+
+```
+⚠ Hook PreToolUse [warning]
+    PingIslandBridge error: The operation couldn't be completed. 
+    (PingIslandBridge.(unknown context at $XXX).BridgeError error 1.)
+```
+
+**非致命**——worker 后续工具调用可能继续（hook warning 不阻塞）。但导致 STATUS 更新不及时（worker 跳过 TaskUpdate 后直接 Write）。
+
+**修复**：worker prompt 提醒"遇到 PingIslandBridge hook warning 时跳过 TaskUpdate，直接 Write/Edit + 用其他方式更新 STATUS"。
+
+### 10.5 push origin 失败（多人并发，origin 领先）
+
+多人 session 并发环境（如本项目 lse-v5 + fiveq-iter + lsa-rename 同期跑），worker commit 后 `git push origin main` 经常失败：
+
+```
+hint: Updates were rejected because the tip of your current branch is behind
+      its remote counterpart.
+```
+
+**PM 收口策略**（不强行 push）：
+1. 本地 `git merge --ff-only` 或 `git rebase main` 合到 main
+2. **不 push origin**（避免与别人 session 冲突）
+3. 本地 main 已生效（symlink），skill 可用
+4. push 待所有人 session 闲下来后协调
+
+### 10.6 实战踩坑速查表
+
+| 现象 | 原因 | 修复 | 详细 |
+|------|------|------|------|
+| worker 反复卡权限 prompt | `--permission-mode acceptEdits` 覆盖 -y | bypassPermissions（launch.sh） | §10.1 |
+| bootstrap 卡输入框 | tmux send-keys -l 后 Enter 被吞 | 重发 Enter 提交 | §10.2 |
+| STATUS done 但 git log 空 | worker 漏 commit（违反 §5.1） | PM 替 commit + 记录 | §10.3 |
+| TaskUpdate 报 PingIslandBridge | codebuddy PreToolUse hook 错 | 跳过 TaskUpdate 直接 Write | §10.4 |
+| push origin 失败 | origin/main 领先（多人并发） | 不强行 push，待协调 | §10.5 |
+
+### 10.7 §9 集成建议段修订
+
+§9 提到"无头批处理使用 `--permission-mode acceptEdits` 或 `-y`"——**已修订为 bypassPermissions**（参考本节 §10.1）。`acceptEdits` 仍卡权限，`-y` 被覆盖。
+
+§9.2 关键差异表"权限跳过"行已加警告："⚠️ **但 `--permission-mode acceptEdits` 会覆盖 `-y`，必须用 `--permission-mode bypassPermissions`**"。
+
 ---
 
 > **版本记录**：
+> - 2026-07-05：补充 §10 实战坑点（acceptEdits 卡权限 → bypassPermissions / bootstrap 卡输入框 → 重发 Enter / worker 漏 commit → PM 替 commit / PingIslandBridge hook error / push origin 失败）+ §9 集成建议段修订（acceptEdits → bypassPermissions）+ §9.2 表的权限跳过行加警告。
 > - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。
 > - 2026-06-20：初版，基于 WorkBuddy v2.103.3 CLI 实测编写。
