@@ -1,17 +1,18 @@
 # Changelog
 
-## [1.17.7] - 2026-07-06
+## [1.17.7] - 2026-07-05
 
 ### Added
-- **scope-guard via PreToolUse hook（防 worker 越界写文件）**：新增 `scripts/scope-guard.py`（PreToolUse hook 脚本），读 stdin JSON 检查 `tool_name` + `tool_input.file_path`，匹配 `SCOPE_GUARD_ALLOW` 环境变量中的 glob 白名单（`:` 分隔）。越界返回 `permissionDecision: deny`，白名单内放行。无 `SCOPE_GUARD_ALLOW` 时不做拦截（向后兼容）。
-- **`spawn-worker.sh --allow-paths <glob>` 参数**：可重复，累积成 glob 列表。spawn codebuddy/qoder worker 时，自动写 `.codebuddy/settings.local.json` / `.qoder/settings.local.json` 中的 `hooks.PreToolUse` 配置，指向 `scripts/scope-guard.py`，并注入 `SCOPE_GUARD_ALLOW` 环境变量（`:` 分隔）到 tmux worker 进程。不传 `--allow-paths` 时不写 hook（向后兼容，现有 spawn 不变）。
-- **`METADATA.json` 新增 `allow_paths` 字段**：记录 PM 传入的 `--allow-paths` 白名单，供审计追溯。
+- **`config/orchestration-personal.json` 个人偏好初始化**：基于 `config/orchestration-personal.example.json` 模板创建本地个人配置。`host=claude-code`，`main_force.task_routing` 走 deepseek-v4-pro（高端）/ deepseek-v4-flash（简单+多模态）；`codex_policy.policy=explicit_only` + `strict_mode=true`（CodeX 默认锁死，仅用户原话命中 `trigger_phrases` 才解封）；`backend_model_routing.codebuddy.default_models = ["deepseek-v4-pro", "deepseek-v4-flash"]`（workbuddy/codebuddy CLI 只启用这两个模型档位，不引入 kimi/minimax/sonnet/opus 等其它模型）；`backend_model_routing.qoderwork-cn.default_models = ["deepseek-v4-pro", "deepseek-v4-flash", "qmodel_latest", "qmodel"]`（QoderWork CN 启用 Deepseek 两档 + Qwen3.7-Max / Qwen3.7-Plus），其中 Qwen 两个档位通过 `discount_window`（22:00-08:00 Asia/Shanghai，含跨午夜）标注为「二折优惠时段优先」。文件受 `.gitignore` 的 `**/config/*.json` 规则保护，不入库。
 
-### Security
-- **PreToolUse hook 硬拦（unbypassable）**：基于 qoder 官方文档（ref 07 §9）明确「even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will still block execution」，codebuddy 作为 fork 语义一致（ref 08 §12 实测待确认）。scope-guard 用 PreToolUse hook 而非 `permissions.deny` rules（deny rules 在 `-y`/bypassPermissions 下可能不生效），**不用禁 `-y`**，保持 headless 零 prompt。
+### Changed
+- **codebuddy backend 模型白名单收敛**：个人偏好中 `backend_model_routing.codebuddy.default_models` 仅保留 `deepseek-v4-pro` 和 `deepseek-v4-flash`。`kimi-k2.6` / `kimi-k2.7` / `minimax-m3` / `sonnet` / `opus` / `auto` 等档位不启用——后续如需扩展，再追加到 `default_models` 数组。
+- **qoderwork-cn backend 模型白名单收敛**：个人偏好中 `backend_model_routing.qoderwork-cn.default_models` 收敛为 `["deepseek-v4-pro", "deepseek-v4-flash", "qmodel_latest", "qmodel"]`，与 codebuddy 共享 Deepseek 两档；Qwen3.7-Max（`qmodel_latest`）和 Qwen3.7-Plus（`qmodel`）在 `discount_window`（22:00-08:00）享受二折优惠，PM 派 qoderwork-cn worker 时若当前时间落在折扣窗口，应优先路由到 `qmodel_latest` / `qmodel`；窗口外则回落 Deepseek 两档。
+- **新增 `discount_window` 字段**：在 `backend_model_routing.qoderwork-cn` 下声明折扣时段 `start=22:00 / end=08:00 / timezone=Asia/Shanghai / cross_midnight=true`，并列出 `models_in_window`（Qwen 两档）与 `models_outside_window`（Deepseek 两档），`rate_note="二折（约 20% 原价）"`。当前 `render-runtime-profile.sh` 尚未解析该字段，PM 需手动判断时段后再选 model。
+- **CodeX 路由硬规则收紧**：在 SKILL.md §2.4 `codex_policy.policy = "explicit_only"` 基础上，新增 `strict_mode=true` + `trigger_phrases` + `fallback_when_blocked` + `pm_must_log_on_unlock` 字段。PM 必须看到用户原话命中 `trigger_phrases`（如「用 Codex / 调用 Codex / 跑 Codex / use codex / run codex / spawn codex」等）才解封；任何弱暗示（「更适合 Codex / Codex 额度还行 / 试试 Codex」）不算解封。CodeX 被 block 时回落 DeepSeek 两档，不替换为其它高额度模型。解封时必须在 Wave 计划 + `STATUS.json.pm_notes` 记录用户原话、wave_id、worker_id 与 codex profile/model，便于审计。
 
 ### Reason
-- 来源：2026-07-05 PR#209 density worker 删 manuscript 图7-7 + Wave3 codebuddy worker 改 docs/manuscript 两起越界触发。`permissions.deny` rules 在 `bypassPermissions` 模式下不生效（ref 08 §12.2），PreToolUse hook 是唯一 unbypassable 的硬拦方案（ref 07 §9.3）。
+- 来源：用户明确「Workbody 这个 Agent 的 CLI 只选用 Deepseek V4 Pro 和 Deepseek V4 Flash 两个模型」，并补充「qoderwork-cn 也只调用 Deepseek V4 Pro / Deepseek V4 Flash / Qwen3.7-Max / Qwen3.7-Plus，其中后两个更推荐在晚上 10 点到早上 8 点之间调用，因为会打二折」，「除非我明确要求，尽量不要调用 CodeX」。落地为个人偏好 `backend_model_routing.codebuddy` + `backend_model_routing.qoderwork-cn` + `codex_policy`，并通过 `discount_window` 把折扣时段、`trigger_phrases` 把 CodeX 解封条件显式标注，让 PM 派 worker 时能直接看到「此时段是否用 Qwen 两档最划算」与「CodeX 默认锁死、必须看到原话才解封」。
 
 ## [1.17.6] - 2026-07-05
 

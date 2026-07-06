@@ -441,10 +441,13 @@ scope_guard_setup() {
     return 0  # no scope guard
   fi
 
-  # Find scope-guard.py absolute path (in skill scripts dir)
+  # Find scope-guard-hook.sh (wrapper) + scope-guard.py (in skill scripts dir)
+  # wrapper 必需:codebuddy/qoder 直接调 `python3 scope-guard.py` 时 stdin 不传
+  # (实测 2026-07-05 stdin 丢失 → scope-guard no-op → 越界不拦);wrapper 用 cat 中转 stdin。
+  local scope_guard_hook="$SCRIPT_DIR/scope-guard-hook.sh"
   local scope_guard_py="$SCRIPT_DIR/scope-guard.py"
-  if [ ! -f "$scope_guard_py" ]; then
-    echo "SPAWN_WORKER_SCOPE_GUARD_WARN: scope-guard.py not found at $scope_guard_py, skipping" >&2
+  if [ ! -f "$scope_guard_hook" ] || [ ! -f "$scope_guard_py" ]; then
+    echo "SPAWN_WORKER_SCOPE_GUARD_WARN: scope-guard-hook.sh or scope-guard.py not found, skipping" >&2
     return 1
   fi
 
@@ -468,11 +471,11 @@ scope_guard_setup() {
       "matcher": "Edit|Write|NotebookEdit",
       "hooks": [{
         "type": "command",
-        "command": "python3 '\''%s'\''"
+        "command": "bash '\''%s'\''"
       }]
     }]
   }
-}' "$scope_guard_py")
+}' "$scope_guard_hook")
 
   # Write to codebuddy settings if backend is codebuddy or unspecified
   if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
