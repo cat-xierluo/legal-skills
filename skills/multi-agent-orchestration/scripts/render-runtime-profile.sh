@@ -408,6 +408,10 @@ case "$BACKEND" in
       COMMAND="$(quote_words "${qr_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
       COMMAND=$(shell_wrap "$COMMAND")
     else
+      # 交互模式(detached tmux)需初始 prompt,否则 qoder 纯 detached REPL 检测
+      # "无初始输入"立即 exit 42(2026-07-05 实测根因)。-i(prompt-interactive)给
+      # 占位 prompt 让 qoder 启动 REPL,PM 后续 tmux send-keys 投递真任务。
+      qr_parts+=(-i "ready")
       COMMAND=$(quote_words "${qr_parts[@]}")
     fi
     PROVIDER_ENV_ISOLATION="qoder-sdk-env-cleared"
