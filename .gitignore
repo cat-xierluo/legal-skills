@@ -93,6 +93,10 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # Claude Code internal
 .claude/scheduled_tasks.lock
 
+# WorkBuddy & QoderWork internal (symlink-only directories)
+.workbuddy/
+.qoderworkcn/
+
 # Private skills - symlinked external repository
 /private-skills
 

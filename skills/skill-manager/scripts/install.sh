@@ -2,7 +2,7 @@
 
 # Skill & Command Manager - Install Script
 # 安装或同步外部 skills/commands 到本地 Agent 配置目录
-# 自动检测所有 Agent 目录 (.codex/.claude/.openclaw) 并批量安装
+# 自动检测所有 Agent 目录 (.codex/.claude/.openclaw/.workbuddy/.qoderworkcn) 并批量安装
 
 set -e
 
@@ -214,7 +214,7 @@ while IFS= read -r dir; do
 done < <(find_all_agent_config_dirs "$ORIGINAL_PWD" "$FALLBACK_AGENT_DIR")
 
 if [ ${#ALL_AGENT_DIRS[@]} -eq 0 ]; then
-    echo "❌ 错误: 未找到任何 Agent 配置目录 (.codex/.claude/.openclaw)"
+    echo "❌ 错误: 未找到任何 Agent 配置目录 (.codex/.claude/.openclaw/.workbuddy/.qoderworkcn)"
     exit 1
 fi
 
@@ -223,7 +223,7 @@ _is_global_config_root() {
     local dir="$1"
     local _home="${HOME:-/Users/${USER}}"
     case "$dir" in
-        "$_home/.codex"| "$_home/.claude"| "$_home/.openclaw"| "$_home/.agents"| "$_home/.agent") return 0 ;;
+        "$_home/.codex"| "$_home/.claude"| "$_home/.openclaw"| "$_home/.agents"| "$_home/.agent"| "$_home/.workbuddy"| "$_home/.qoderworkcn") return 0 ;;
     esac
     return 1
 }
@@ -242,7 +242,7 @@ if [ -z "${SKILL_MANAGER_TARGET_DIR:-}" ] && [ ${#ALL_AGENT_DIRS[@]} -gt 0 ]; th
         _git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
         _rescued=false
         if [ -n "$_git_root" ] && ! _is_global_config_root "$_git_root" && [ "$_git_root" != "$HOME" ]; then
-            for _cfg in .codex .claude .openclaw .agents .agent; do
+            for _cfg in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
                 if [ -d "$_git_root/$_cfg" ]; then
                     echo "🔄 检测到从全局配置目录调用，已通过 git 发现项目: $_git_root"
                     echo ""
