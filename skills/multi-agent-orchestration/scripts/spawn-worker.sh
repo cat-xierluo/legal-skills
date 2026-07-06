@@ -514,6 +514,20 @@ if [ "$DRY_RUN" -eq 0 ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file"
   printf '\n.claude/agent-sessions/\n' >> "$exclude_file"
 fi
 
+# Launch.sh auto-wrap: COMMAND 含空格时(路径拆词风险,如 qoder BIN
+# /Applications/QoderWork CN.app 含空格),tmux new-session 的 command 解析
+# 会吃掉 %q 反斜杠转义 → env 127(command not found)。
+# 修复(2026-07-05 实测):写 launch.sh(launch.sh 内 `exec bash -c %q` 在 bash
+# 下正确解析转义),tmux 只跑 `bash launch.sh`(无空格),绕过 tmux command 解析。
+# 通用:codebuddy(qoderclicn)/ qoder / 任何含空格路径或特殊字符的 COMMAND 都受益。
+if [[ "$COMMAND" == *' '* ]]; then
+  LAUNCH_SH="$WORKTREE/.claude/agent-sessions/$SESSION/launch.sh"
+  mkdir -p "$(dirname "$LAUNCH_SH")"
+  printf '#!/bin/bash\n# spawn-worker 自动生成:绕过 tmux command 解析(路径空格/特殊字符)\n# 原始 COMMAND 在 bash -c 下正确解析 %%q 转义(tmux 的 command parser 会吃反斜杠)\nexec bash -c %q\n' "$COMMAND" > "$LAUNCH_SH"
+  chmod +x "$LAUNCH_SH"
+  COMMAND="bash $(printf '%q' "$LAUNCH_SH")"
+fi
+
 run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 
 # Trust-auto + Permission-auto: headless CLI workers need trust-folder permission
