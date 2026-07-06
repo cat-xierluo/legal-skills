@@ -661,7 +661,7 @@ bash scripts/spawn-worker.sh \
 
 `hooks.PreToolUse` 在工具执行前跑脚本，返回 `permissionDecision: deny` 可短路权限管线。
 
-**qoder 文档明确**（见 07 §9）：hook permission decisions have **higher priority** than permission modes — even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will still block execution（**unbypassable**）。codebuddy 作为 Claude Code fork，`hooks.PreToolUse` 语义应一致（**待实测确认 unbypassable**，但大概率一致）。
+**qoder 文档明确**（见 07 §9）：hook permission decisions have **higher priority** than permission modes — even in `bypass_permissions` mode, a PreToolUse hook returning `deny` will still block execution（**unbypassable**）。codebuddy 作为 Claude Code fork，`hooks.PreToolUse` 语义一致 —— **✅ 2026-07-05 PM 实测确认**：codebuddy（`--permission-mode bypassPermissions`/`-y`）与 qoder（`--yolo`）下 PreToolUse hook 返回 deny 都硬拦越界（unbypassable 实测确认，与 qoder 官方文档一致）。**⚠️ stdin 传递坑**：codebuddy/qoder 调 `python3 scope-guard.py` 时 stdin 不直接传（实测丢失 → scope-guard no-op → 越界不拦），**必须用 `scope-guard-hook.sh` wrapper**（`cat` 中转 stdin → pipe scope-guard.py），spawn-worker 已自动配 wrapper。
 
 → scope-guard fix 的权威方案：**PreToolUse hook 检查路径白名单**，不管 `-y` 与否都拦越界，不用禁 `-y`（保持 headless 零 prompt）。
 
