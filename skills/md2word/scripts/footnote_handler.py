@@ -51,20 +51,30 @@ class FootnoteManager:
         assert mode in ('footnote', 'endnote')
         self.mode = mode
         self.defs = {}        # {id: text}
-        self.refs = []        # [(seq, text), ...] 按出现顺序
+        self.refs = []        # [(seq, text), ...] 按出现顺序（去重后每 note_id 一条）
         self._seq = 0         # 编号 / footnote w:id 计数（从 1 起）
+        self._id_map = {}     # {note_id: seq} 同一 note_id 复用（标准多次引用同一脚注）
 
     def set_defs(self, defs):
         self.defs = defs
 
     def add_reference(self, paragraph, note_id):
-        """在段落插入脚注引用。footnote→footnoteReference；endnote→上标编号。"""
+        """在段落插入脚注引用。footnote→footnoteReference；endnote→上标编号。
+
+        同一 note_id 多次引用时复用同一 seq：footnotes.xml 只登记一条，正文
+        多个 footnoteReference 指向同一 w:id——Word 自动渲染为同号、脚注块
+        只出现一次（标准 markdown 多次引用同一脚注的语义）。
+        """
         text = self.defs.get(note_id, '')
         if not text:
             return  # 无定义的悬空引用跳过
-        self._seq += 1
-        seq = self._seq
-        self.refs.append((seq, text))
+        if note_id in self._id_map:
+            seq = self._id_map[note_id]   # 复用：不重复建 footnotes.xml 条目
+        else:
+            self._seq += 1
+            seq = self._seq
+            self._id_map[note_id] = seq
+            self.refs.append((seq, text))  # 仅首次引用登记
         if self.mode == 'footnote':
             # 正文 run：footnoteReference（w:id 与 footnotes.xml 中 w:footnote 对应）
             run = OxmlElement('w:r')
@@ -107,6 +117,27 @@ class FootnoteManager:
         if self.mode != 'footnote' or not self.refs:
             return
         _inject_footnotes_into_docx(output_path, self.refs)
+
+
+def set_footnote_restart_per_section(doc):
+    """给 doc 每个 section 的 sectPr 注入 footnotePr numRestart=eachSec，
+    实现「每章脚注从 1 重置编号」。
+
+    前提：每章是独立 section（book 模式下 --- 走 doc.add_section 而非 add_page_break）。
+    OOXML CT_SectPr 序列里 footnotePr 是第一个子元素，故 insert(0, ...)；
+    已存在 footnotePr 时仅覆盖/补 numRestart，不重复注入。
+    """
+    for section in doc.sections:
+        sectPr = section._sectPr
+        fnPr = sectPr.find(qn('w:footnotePr'))
+        if fnPr is None:
+            fnPr = OxmlElement('w:footnotePr')
+            sectPr.insert(0, fnPr)
+        restart = fnPr.find(qn('w:numRestart'))
+        if restart is None:
+            restart = OxmlElement('w:numRestart')
+            fnPr.append(restart)
+        restart.set(qn('w:val'), 'eachSec')
 
 
 def _xml_escape(t):

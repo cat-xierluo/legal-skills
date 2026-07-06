@@ -1,5 +1,5 @@
 name: "书籍出版格式"
-description: "中文书籍出版规范：正文宋体、标题黑体、TOC + 章间分页 + 页眉书名；用于 --book 全书多章合并导出"
+description: "中文书籍出版规范：正文仿宋、标题仿宋加粗、英文/数字 Times New Roman、TOC + 章间分页 + 页眉书名；用于 --book 全书多章合并导出"
 
 # 书籍元信息（页眉显示，按实际书名修改）
 book:
@@ -14,16 +14,16 @@ page:
   margin_left: 3.0
   margin_right: 3.0
 
-# 字体设置（出版：正文宋体）
+# 字体设置（出版：正文仿宋；英文/数字 Times New Roman，对齐 legal 配置）
 fonts:
   default:
-    name: "宋体"
-    name_alt: "宋体"
+    name: "仿宋"
+    name_alt: "仿宋_GB2312"
     ascii: "Times New Roman"
     size: 12        # pt (小四)
     color: "#000000"
 
-# 标题设置（出版：黑体）
+# 标题设置（出版：中文仿宋加粗；英文/数字 Times New Roman）
 titles:
   level1:
     size: 16        # pt (三号，章标题)
@@ -32,29 +32,33 @@ titles:
     space_before: 18
     space_after: 12
     indent: 0
-    font: "黑体"
+    font: "仿宋"
+    font_alt: "Times New Roman"   # 标题里的英文/数字
   level2:
     size: 14        # pt (四号，节标题)
     bold: true
-    align: "left"
-    indent: 0
+    align: "justify"
+    indent: 24      # 首行缩进 2 字符（中文节标题样式，对齐样章）
     space_before: 12
     space_after: 6
-    font: "黑体"
+    font: "仿宋"
+    font_alt: "Times New Roman"
   level3:
     size: 12        # pt (小四，小节)
     bold: true
-    align: "left"
-    indent: 0
+    align: "justify"
+    indent: 24      # 首行缩进 2 字符（中文节标题样式，对齐样章）
     space_before: 6
     space_after: 3
-    font: "黑体"
+    font: "仿宋"
+    font_alt: "Times New Roman"
   level4:
     size: 12        # pt (小四)
     bold: true
     align: "left"
     indent: 0
-    font: "黑体"
+    font: "仿宋"
+    font_alt: "Times New Roman"
 
 # 段落设置
 paragraph:
@@ -107,20 +111,20 @@ code_block:
     size: 10
     color: "#808080"
   content:
-    font: "Consolas"
+    font: "JetBrains Mono"
     east_asia_font: "等线"
     size: 9
     color: "#333333"
     left_indent: 0
     line_spacing: 1.2
     background_color: "#F5F5F5"
-    border_color: "#D0D0D0"
+    border_color: null
     border_size: 4
     no_proofread: true
 
 # 行内代码设置（等宽 + 浅灰底，与代码块风格一致）
 inline_code:
-  font: "Consolas"
+  font: "JetBrains Mono"
   east_asia_font: "等线"
   size: 10
   color: "#333333"

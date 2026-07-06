@@ -17,6 +17,21 @@
 - 表格列宽自动分配策略，当前列宽是否合理
 - 列表项的行距和缩进，与正文的协调性
 
+## [1.1.2] - 2026-07-05
+
+### 新增
+- **每章脚注从 1 重置编号**（`--book` 全书合并 + `--notes=footnote` 模式）：中文出版常见诉求。实现路径：① 章间 `---` 由 `doc.add_page_break()` 改为 `doc.add_section(WD_SECTION.NEW_PAGE)`，每章成为独立 section（python-docx 新 section 默认 `header.is_linked_to_previous=True`，页眉书名保持、页码默认 continuous 不重置）；② `save` 前对每个 section 的 `sectPr` 注入 `<w:footnotePr><w:numRestart w:val="eachSec"/></w:footnotePr>`（OOXML CT_SectPr 序列里 footnotePr 是首位子元素，故 `insert(0, ...)`；已存在则仅覆盖 val，不重复注入）。新增 `footnote_handler.set_footnote_restart_per_section(doc)`。ch04（15 脚注）+ ch06（39 脚注）合并实测：ch06 第一个脚注渲染为 `1`（旧版全书连续编号下会延续为 16），符合预期。仅 `footnote` 模式生效；`endnote` 模式与单章模式不受影响（单章只有一个 section，重置无意义）。
+- **同一脚注多次引用去重**：markdown `[^id]` 同一 id 在正文多次引用时，旧版给每次引用都新建一个 footnote（`footnotes.xml` 出现重复条目，如 ch06 的"元典开放平台 MCP 配置页"被引用 3 次就出现 3 条）。改为按 note_id 复用 `w:id`：`FootnoteManager` 加 `_id_map`，同一 note_id 复用 seq、`refs` 仅首次登记——正文多个 `footnoteReference` 指向同一 `w:id`，Word 自动渲染为同号、脚注块只一条（标准 markdown 多次引用同一脚注语义）。ch06 实测：footnotes.xml 条目 39→37，"MCP 配置页"重复 3→1。
+
+### 改进
+- **book-publish 代码字体 Consolas → JetBrains Mono**：`code_block.content.font` 与 `inline_code.font` 同步换为 `JetBrains Mono`（现代编程字体，0/O 与 l/I/1 区分清晰，印刷友好）。`east_asia_font` 仍为「等线」（代码里的中文）。
+- **book-publish 代码框去外边框**：`code_block.content.border_color` `#D0D0D0`→`null`（保留浅灰底纹 `#F5F5F5`，去掉外边框，配图验证反馈）。
+- **book-publish 字体方案对齐 legal（仿宋 + Times New Roman）**：正文 `宋体`→`仿宋`（`name_alt` 仿宋_GB2312）；标题 `黑体`→`仿宋` 并加 `font_alt: "Times New Roman"`（标题里的英文/数字走 Times，不跟随中文标题字体——修正旧版标题 `rFonts ascii="黑体"` 把英文也渲染成黑体的问题）。ch06 实测正文/标题 `rFonts` 均为 `eastAsia="仿宋" ascii="Times New Roman"`，加粗保留。引用块 `quote` 配置本就与 legal 一致（无视觉样式），未动。
+- **book-publish 节标题样式对齐样章**：`level2`/`level3` 由 `indent:0, align:left`（西式顶格左对齐）改为 `indent:24, align:justify`（中文节标题首行缩进 2 字符 + 两端对齐）。ch06 二级标题实测 `firstLine` 0→480、`jc` left→both，与样章一致。
+
+### 修复
+- **图片路径 URL 解析 NameError**：`md2word.py` 处理 markdown 图片 `![](...)` 时调用 `unquote()`，但顶部仅 `import urllib.parse` 未导入 `unquote` 符号，遇任意图片即 `NameError: name 'unquote' is not defined` 中断生成。改为 `urllib.parse.unquote(...)`（复用现有 module import，零新增依赖，与同文件 `urllib.request.Request` / `urllib.request.urlopen` 风格一致）。ch06（含截图 + 39 个 `[^id]` 脚注）实测重新生成通过，footnote 模式端到端 OK。
+
 ## [1.1.1] - 2026-06-25
 
 ### 修复（书稿实测反馈）

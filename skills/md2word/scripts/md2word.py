@@ -19,7 +19,7 @@ import io
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.enum.section import WD_ORIENT
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.oxml.ns import qn
 from docx.oxml import parse_xml
 from docx.oxml.shared import OxmlElement
@@ -48,6 +48,7 @@ from chart_handler import create_mermaid_chart
 from svg_handler import render_inline_svg
 from footnote_handler import (
     FootnoteManager, extract_footnote_defs, NOTE_REF_RE,
+    set_footnote_restart_per_section,
 )
 
 
@@ -816,8 +817,9 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         # 分割线（必须在 Markdown 表格检测之前，避免 --- 被误判为表格分隔行）
         if line in ['---', '***', '___']:
             if book_mode:
-                # 全书合并：每个分隔符 = 章间分页
-                doc.add_page_break()
+                # 全书合并：每个分隔符 = 章间断点（用 section break 而非 page break，
+                # 配合 sectPr footnotePr numRestart=eachSec 实现每章脚注从 1 重置编号）
+                doc.add_section(WD_SECTION.NEW_PAGE)
             elif not has_seen_first_hr:
                 # 第一个分隔符视为封面与正文的分界，渲染为分页符
                 has_seen_first_hr = True
@@ -888,7 +890,7 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             if not img_url.startswith(('http://', 'https://')):
                 # 去掉 markdown 链接中可能附带的 title（"path" title）或锚点
                 img_url = img_url.split()[0] if ' ' in img_url else img_url
-                img_url = unquote(img_url)
+                img_url = urllib.parse.unquote(img_url)
                 # 相对路径：基于 md 文件所在目录解析
                 if not os.path.isabs(img_url):
                     md_dir = os.path.dirname(os.path.abspath(md_file_path))
@@ -976,6 +978,11 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     # 添加页码（仅在没有模板时）
     if not use_template_headers:
         add_page_number(doc)
+
+    # footnote + book 模式：每章脚注从 1 重置编号（per-section numRestart=eachSec）
+    if book_mode and notes_mode == 'footnote' and fn_manager.refs:
+        set_footnote_restart_per_section(doc)
+        print('🔖 已设置每章脚注从 1 重置编号（footnotePr numRestart=eachSec）')
 
     # 保存文档
     doc.save(output_path)
