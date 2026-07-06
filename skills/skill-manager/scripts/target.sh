@@ -5,7 +5,7 @@
 
 is_agent_config_dir_name() {
     case "$1" in
-        .codex|.claude|.openclaw|.agents|.agent)
+        .codex|.claude|.openclaw|.agents|.agent|.workbuddy|.qoderworkcn)
             return 0
             ;;
         *)
@@ -38,8 +38,8 @@ find_agent_config_dir() {
 
     current="$(canonical_dir "$start_dir")"
 
-    # Global config roots: support calls from ~/.codex, ~/.claude and ~/.openclaw.
-    for config_name in .codex .claude .openclaw .agents .agent; do
+    # Global config roots: support calls from ~/.codex, ~/.claude, ~/.openclaw and ~/.qoderworkcn.
+    for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
         case "$current" in
             "$home_dir/$config_name"|"$home_dir/$config_name"/*)
                 printf '%s\n' "$home_dir/$config_name"
@@ -58,7 +58,7 @@ find_agent_config_dir() {
         fi
 
         # Project-local config directories. Prefer Codex when multiple configs coexist.
-        for config_name in .codex .claude .openclaw .agents .agent; do
+        for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
             if [ -d "$current/$config_name" ]; then
                 printf '%s\n' "$current/$config_name"
                 return 0
@@ -97,7 +97,7 @@ find_agent_config_dir() {
 # Returns newline-separated paths (one per line).
 # - SKILL_MANAGER_TARGET_DIR set → returns that single dir
 # - Called from global config root (~/codex etc.) → returns that single dir
-# - Project directory → walks up to project root, returns all .codex/.claude/.openclaw found
+# - Project directory → walks up to project root, returns all .codex/.claude/.openclaw/.workbuddy/.qoderworkcn found
 # - Not found → returns fallback_dir
 find_all_agent_config_dirs() {
     local start_dir="${1:-$PWD}"
@@ -116,7 +116,7 @@ find_all_agent_config_dirs() {
     current="$(canonical_dir "$start_dir")"
 
     # Global config roots → single target (no multi-dir in global scope)
-    for config_name in .codex .claude .openclaw .agents .agent; do
+    for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
         case "$current" in
             "$home_dir/$config_name"|"$home_dir/$config_name"/*)
                 printf '%s\n' "$home_dir/$config_name"
@@ -145,7 +145,7 @@ find_all_agent_config_dirs() {
 
         # Check for agent config dirs at this level
         local found=0
-        for config_name in .codex .claude .openclaw .agents .agent; do
+        for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
             if [ -d "$current/$config_name" ]; then
                 printf '%s\n' "$current/$config_name"
                 found=1

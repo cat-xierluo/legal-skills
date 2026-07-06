@@ -2,19 +2,19 @@
 name: skill-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.0"
-description: 管理 Claude Code、Codex 和 OpenClaw Skills 的安装、版本追踪和更新检查。支持从本地路径或 GitHub 仓库安装，自动识别 .codex/.claude/.openclaw 目标目录，记录每个 Skill 的安装时间、来源 URL 和版本号，并检查 GitHub 更新。
+version: "1.7.0"
+description: 管理 Claude Code、Codex、OpenClaw 和 QoderWork Skills 的安装、版本追踪、更新检查和项目 Agent 初始化。支持从本地路径或 GitHub 仓库安装，自动识别 .codex/.claude/.openclaw/.qoderworkcn 目标目录，记录每个 Skill 的安装时间、来源 URL 和版本号，检查 GitHub 更新，并通过 init 命令创建 Agent skills 符号链接结构使多 Agent 共享同一技能来源。
 license: Complete terms in LICENSE.txt
 ---
 
 # Skill Manager
 
-管理 Claude Code、Codex 和 OpenClaw Skills/Commands 的安装、同步、卸载和列表查看。
+管理 Claude Code、Codex、OpenClaw 和 QoderWork Skills/Commands 的安装、同步、卸载、列表查看和项目 Agent 初始化。
 
 ## 前置条件
 
 - Git 已安装（用于 GitHub 克隆）
-- 有写入目标 Agent 配置目录的权限，例如 `.codex/skills/`、`.claude/skills/`、`.openclaw/skills/`
+- 有写入目标 Agent 配置目录的权限，例如 `.codex/skills/`、`.claude/skills/`、`.openclaw/skills/`、`.qoderworkcn/skills/`
 
 ## 安装行为
 
@@ -28,10 +28,11 @@ license: Complete terms in LICENSE.txt
 执行安装、列表、卸载、更新时，脚本会从调用目录向上查找 Agent 配置目录：
 
 - 在 `/Users/maoking/.codex` 或其子目录调用时，目标为 `/Users/maoking/.codex/skills/`
-- 在项目根目录包含 `.codex/`、`.claude/` 或 `.openclaw/` 时，目标为对应配置目录下的 `skills/` 或 `commands/`
-- 在 `.codex/skills/`、`.claude/skills/`、`.openclaw/skills/` 内调用时，目标为其上级配置目录
+- 在 `~/.qoderworkcn` 或其子目录调用时，目标为 `~/.qoderworkcn/skills/`
+- 在项目根目录包含 `.codex/`、`.claude/`、`.openclaw/`、`.workbuddy/` 或 `.qoderworkcn/` 时，目标为对应配置目录下的 `skills/` 或 `commands/`
+- 在 `.codex/skills/`、`.claude/skills/`、`.openclaw/skills/`、`.qoderworkcn/skills/` 内调用时，目标为其上级配置目录
 - 如需显式指定目标根目录，可使用 `--target` 参数或设置 `SKILL_MANAGER_TARGET_DIR=/path/to/.codex`
-- 从全局配置目录（如 `~/.claude`）调用时，会尝试通过 git 自动发现项目本地目录，并打印告警
+- 从全局配置目录（如 `~/.claude`、`~/.qoderworkcn`）调用时，会尝试通过 git 自动发现项目本地目录，并打印告警
 
 ## 支持的来源类型
 
@@ -152,6 +153,52 @@ python3 scripts/record.py list
 - 当前版本
 - 描述信息
 
+### 项目初始化
+
+```bash
+scripts/init.sh [选项]
+```
+
+为项目根目录创建 Agent 配置目录结构，使不同 Agent（QoderWork、WorkBuddy、Codex、OpenClaw 等）在项目中工作时都能发现 Claude Code Skills。
+
+核心操作：在项目根目录下，为每个 Agent 创建 **相对符号链接** `{agent}/skills -> ../.claude/skills`。`.claude/skills/` 是所有 Agent skills 的符号链接根源——**不复制、不双写，单一来源**。
+
+**默认行为**：初始化 `.codex`、`.openclaw`、`.workbuddy`、`.qoderworkcn` 四个 Agent（不包含 `.claude`，因其 `skills/` 是来源）。
+
+```bash
+# 初始化所有默认 Agent
+scripts/init.sh
+
+# 仅初始化指定 Agent
+scripts/init.sh --qoderwork --workbuddy
+
+# 初始化全部 Agent（含 .claude）
+scripts/init.sh --all
+
+# 预览模式（不实际修改文件）
+scripts/init.sh --dry-run
+
+# 初始化并同步更新 .gitignore
+scripts/init.sh --gitignore
+```
+
+**选项**：
+- `--all`：初始化所有 Agent（含 `.codex` `.claude` `.openclaw` `.workbuddy` `.qoderworkcn`）
+- `--qoderwork`：仅初始化 `.qoderworkcn`
+- `--workbuddy`：仅初始化 `.workbuddy`
+- `--codex`：仅初始化 `.codex`
+- `--openclaw`：仅初始化 `.openclaw`
+- `--claude`：也初始化 `.claude`（通常不需要，其 skills 目录是来源）
+- `--dry-run`：预览模式，仅显示将要执行的操作
+- `--gitignore`：同步更新项目 `.gitignore`，追加 `.{agent}/` 条目
+
+**冲突处理**：
+- 符号链接已正确指向 `.claude/skills` → 跳过
+- 符号链接指向其他地方 → 移除后重建
+- 存在实体目录 → 带时间戳备份后创建符号链接
+
+**项目根目录查找**：优先使用 `git rev-parse --show-toplevel`，其次向上遍历查找含 `.claude/skills/` 的目录。
+
 ## 识别规则
 
 ### Skill 目录规则
@@ -180,6 +227,10 @@ skill-manager install ../other-project/.claude/skills/
 
 # 在 Codex 全局目录中调用时，安装到 ~/.codex/skills/
 cd /Users/maoking/.codex
+skill-manager install ~/dev/my-skills/pdf-tool
+
+# 在 QoderWork 全局目录中调用时，安装到 ~/.qoderworkcn/skills/
+cd ~/.qoderworkcn
 skill-manager install ~/dev/my-skills/pdf-tool
 
 # 从全局目录调用但安装到指定项目（使用 --target 避免装错位置）
@@ -277,6 +328,7 @@ skill-manager/
 │   ├── remove.sh               # 卸载脚本
 │   ├── update.sh               # 更新脚本
 │   ├── check.sh                # 更新检查脚本
+│   ├── init.sh                 # 项目 Agent 初始化脚本
 │   ├── auto-check.sh           # 定期自动检查触发器
 │   ├── target.sh               # Agent 配置目录识别模块
 │   ├── record.py               # 记录管理模块

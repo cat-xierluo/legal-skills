@@ -1,5 +1,31 @@
 # 变更日志
 
+## [1.7.0] - 2026-07-06
+
+### 新增
+- **项目 Agent 初始化**：新增 `scripts/init.sh`，为项目创建 Agent skills 符号链接结构
+  - 默认初始化 `.codex`、`.openclaw`、`.workbuddy`、`.qoderworkcn` 四个 Agent
+  - 核心操作： `{agent}/skills -> ../.claude/skills` 相对符号链接，`.claude/skills/` 为单一技能来源
+  - 支持 `--all`、`--qoderwork`、`--workbuddy`、`--codex`、`--openclaw`、`--claude` 灵活选择 Agent
+  - 支持 `--dry-run` 预览模式和 `--gitignore` 自动更新 `.gitignore`
+  - 智能冲突处理：正确 symlink 跳过，错误指向重建，实体目录带时间戳备份
+
+### 改进
+- SKILL.md 新增「项目初始化」章节，完整文档化 init 命令选项、冲突处理和项目根查找逻辑
+- 目录结构图加入 `init.sh` 条目
+
+## [1.6.0] - 2026-07-06
+
+### 新增
+- **QoderWork 支持**：新增 `.qoderworkcn` 作为受支持的 Agent 配置目录，自动检测 `~/.qoderworkcn/skills/` 作为安装目标
+- **全局根目录识别**：在 `~/.qoderworkcn` 或其子目录调用时，自动将目标设为 `~/.qoderworkcn/skills/`
+- **项目级 QoderWork 配置识别**：项目根目录包含 `.qoderworkcn/` 时，自动选择为目标目录
+
+### 改进
+- `target.sh` 中所有 Agent 配置目录检测循环统一扩展 `.qoderworkcn`
+- `install.sh` 的 `_is_global_config_root()` 新增 `.qoderworkcn` 判定
+- 更新 SKILL.md 文档描述、目标目录识别和使用示例，涵盖 QoderWork 场景
+
 ## [1.5.0] - 2026-05-17
 
 ### 新增
