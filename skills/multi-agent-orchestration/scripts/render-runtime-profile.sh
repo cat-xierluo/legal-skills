@@ -300,6 +300,12 @@ case "$BACKEND" in
 
     if [ "$BACKEND" = "claude-code" ] && { [ -n "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ]; }; then
       if [ "$NO_PROVIDER_ENV_ISOLATION" -eq 0 ]; then
+        # --bare: minimal mode — skip keychain reads / OAuth / plugin sync / CLAUDE.md auto-discovery.
+        # Makes Anthropic auth strictly ANTHROPIC_API_KEY (set by wrapper from provider registry/settings),
+        # fixing the bug where claude read a stale keychain sk-ant + misrouted to Fable 5 / OAuth
+        # instead of the selected 3P provider (deepseek/glm). Also suppresses the MCP trust dialog
+        # (plugin sync skipped). Task#188 worker-spawn env-routing bug, 2026-07-06.
+        claude_parts+=(--bare)
         wrapper="$SCRIPT_DIR/claude-provider-env.sh"
         [ -f "$wrapper" ] || { echo "ERROR: missing Claude provider env wrapper: $wrapper" >&2; exit 64; }
         if [ -n "$PROVIDER_REGISTRY" ]; then
