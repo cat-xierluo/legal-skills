@@ -352,6 +352,101 @@ for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
     if [ "$SOURCE_TYPE" = "local" ]; then
         DETECTED_TYPE=$(detect_source_type "$SOURCE")
 
+        # 处理目录
+        if [ -d "$SOURCE" ]; then
+            # 先检查是否为 skills/commands 集合目录（独立于 DETECTED_TYPE）
+            if is_skills_collection "$SOURCE"; then
+                local_count=0
+                for skill_dir in "$SOURCE"/*; do
+                    if [ -d "$skill_dir" ]; then
+                        skill_name=$(basename "$skill_dir")
+
+                        if [ -f "$skill_dir/SKILL.md" ] || [ -f "$skill_dir/skill.md" ] || [ -d "$skill_dir/.codex" ] || [ -d "$skill_dir/.claude" ] || [ -d "$skill_dir/.openclaw" ]; then
+                            target_path="$SKILLS_DIR/$skill_name"
+                            mkdir -p "$SKILLS_DIR"
+
+                            # 防止自循环：当 source 解析后路径是 target 解析后路径的子路径时跳过
+                            # 典型场景：用户把 skills 集合目录作为来源安装到自身
+                            # (如 `skill-manager install /path/to/skills/`，且 SKILLS_DIR 解析为同一路径)
+                            # 否则会产生 skill/skill -> ../skill 的死循环软链
+                            _src_real="$(cd -P "$skill_dir" && pwd)"
+                            _tgt_real="$(cd -P "$target_path" 2>/dev/null && pwd || true)"
+                            if [ -n "$_tgt_real" ]; then
+                                case "$_src_real/" in
+                                    "${_tgt_real}/"*)
+                                        echo "  ⏭  跳过（自循环）: $skill_name (source 已在 target 内部)"
+                                        continue
+                                        ;;
+                                esac
+                            fi
+
+                            if [ -L "$target_path" ]; then
+                                rm "$target_path"
+                            elif [ -d "$target_path" ]; then
+                                if [ "$target_path" -ef "$skill_dir" ]; then
+                                    continue
+                                fi
+                                rm -rf "${target_path}.backup"
+                                mv "$target_path" "${target_path}.backup"
+                            fi
+
+                            ln -s "$skill_dir" "$target_path"
+                            echo "  ✓ 已链接: $skill_name"
+                            ((local_count++)) || true
+                        fi
+                    fi
+                done
+
+                echo "✓ 已安装 $local_count 个 skills"
+                ((install_count++)) || true
+                success_dirs+=("$agent_name")
+                echo ""
+                continue
+            fi
+
+            if is_commands_collection "$SOURCE"; then
+                local_count=0
+                for cmd_file in "$SOURCE"/*.md; do
+                    if [ -f "$cmd_file" ]; then
+                        cmd_name=$(basename "$cmd_file" .md)
+                        target_path="$COMMANDS_DIR/$cmd_name.md"
+                        mkdir -p "$COMMANDS_DIR"
+
+                        # 防止自循环：当 source 在 target 内部时跳过（参见 skills 集合分支同款注释）
+                        _src_real="$(cd -P "$(dirname "$cmd_file")" && pwd)/$(basename "$cmd_file")"
+                        _tgt_dir_real="$(cd -P "$COMMANDS_DIR" 2>/dev/null && pwd || true)"
+                        if [ -n "$_tgt_dir_real" ]; then
+                            case "$_src_real" in
+                                "${_tgt_dir_real}/"*)
+                                    echo "  ⏭  跳过（自循环）: $cmd_name (source 已在 target 内部)"
+                                    continue
+                                    ;;
+                            esac
+                        fi
+
+                        if [ -L "$target_path" ]; then
+                            rm "$target_path"
+                        elif [ -f "$target_path" ]; then
+                            if [ "$target_path" -ef "$cmd_file" ]; then
+                                continue
+                            fi
+                            mv "$target_path" "${target_path}.backup"
+                        fi
+
+                        ln -s "$cmd_file" "$target_path"
+                        echo "  ✓ 已链接: $cmd_name"
+                        ((local_count++)) || true
+                    fi
+                done
+
+                echo "✓ 已安装 $local_count 个 commands"
+                ((install_count++)) || true
+                success_dirs+=("$agent_name")
+                echo ""
+                continue
+            fi
+        fi
+
         if [ "$DETECTED_TYPE" = "unknown" ]; then
             if [ ! -e "$SOURCE" ]; then
                 echo "❌ 错误: 找不到源: $SOURCE"
@@ -398,72 +493,6 @@ for AGENT_DIR in "${ALL_AGENT_DIRS[@]}"; do
         if [ ! -d "$SOURCE" ]; then
             echo "❌ 错误: 找不到源目录: $SOURCE"
             ((fail_count++)) || true
-            echo ""
-            continue
-        fi
-
-        # 检查是否为 skills 集合目录
-        if is_skills_collection "$SOURCE"; then
-            local_count=0
-            for skill_dir in "$SOURCE"/*; do
-                if [ -d "$skill_dir" ]; then
-                    skill_name=$(basename "$skill_dir")
-
-                    if [ -f "$skill_dir/SKILL.md" ] || [ -f "$skill_dir/skill.md" ] || [ -d "$skill_dir/.codex" ] || [ -d "$skill_dir/.claude" ] || [ -d "$skill_dir/.openclaw" ]; then
-                        target_path="$SKILLS_DIR/$skill_name"
-                        mkdir -p "$SKILLS_DIR"
-
-                        if [ -L "$target_path" ]; then
-                            rm "$target_path"
-                        elif [ -d "$target_path" ]; then
-                            if [ "$target_path" -ef "$skill_dir" ]; then
-                                continue
-                            fi
-                            rm -rf "${target_path}.backup"
-                            mv "$target_path" "${target_path}.backup"
-                        fi
-
-                        ln -s "$skill_dir" "$target_path"
-                        echo "  ✓ 已链接: $skill_name"
-                        ((local_count++)) || true
-                    fi
-                fi
-            done
-
-            echo "✓ 已安装 $local_count 个 skills"
-            ((install_count++)) || true
-            success_dirs+=("$agent_name")
-            echo ""
-            continue
-        fi
-
-        # 检查是否为 commands 集合目录
-        if is_commands_collection "$SOURCE"; then
-            local_count=0
-            for cmd_file in "$SOURCE"/*.md; do
-                if [ -f "$cmd_file" ]; then
-                    cmd_name=$(basename "$cmd_file" .md)
-                    target_path="$COMMANDS_DIR/$cmd_name.md"
-                    mkdir -p "$COMMANDS_DIR"
-
-                    if [ -L "$target_path" ]; then
-                        rm "$target_path"
-                    elif [ -f "$target_path" ]; then
-                        if [ "$target_path" -ef "$cmd_file" ]; then
-                            continue
-                        fi
-                        mv "$target_path" "${target_path}.backup"
-                    fi
-
-                    ln -s "$cmd_file" "$target_path"
-                    echo "  ✓ 已链接: $cmd_name"
-                    ((local_count++)) || true
-                fi
-            done
-
-            echo "✓ 已安装 $local_count 个 commands"
-            ((install_count++)) || true
-            success_dirs+=("$agent_name")
             echo ""
             continue
         fi
