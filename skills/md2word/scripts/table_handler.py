@@ -247,8 +247,9 @@ def create_word_table(doc, table_lines, md_file_path=None):
     except Exception:
         pass
 
-    # 获取表头背景色配置
-    header_bg_color = config.get('table.header', {}).get('background_color')
+    # 获取表头背景色配置（兼容旧字段 background_color 和新字段 fill）
+    header_config = config.get('table.header', {})
+    header_bg_color = header_config.get('fill') or header_config.get('background_color')
 
     # 填充标题行
     header_cells = table.rows[0].cells
@@ -267,9 +268,17 @@ def create_word_table(doc, table_lines, md_file_path=None):
             if header_bg_color:
                 set_cell_background_color(cell, header_bg_color)
 
-    # 获取交替行颜色配置
-    row_even_color = config.get('table.row_even', {}).get('background_color')
-    row_odd_color = config.get('table.row_odd', {}).get('background_color')
+    # 获取交替行颜色配置（兼容旧字段 row_even/row_odd 和新字段 body.zebra_fill）
+    body_config = config.get('table.body', {})
+    zebra_fill = body_config.get('zebra_fill')
+    if zebra_fill:
+        # 新字段：zebra_fill 作为偶数行填充，奇数行用白色
+        row_even_color = zebra_fill
+        row_odd_color = '#FFFFFF'
+    else:
+        # 旧字段兼容
+        row_even_color = config.get('table.row_even', {}).get('background_color')
+        row_odd_color = config.get('table.row_odd', {}).get('background_color')
 
     # 填充数据行
     for i, row_data in enumerate(rows_data):
@@ -295,8 +304,15 @@ def create_word_table(doc, table_lines, md_file_path=None):
     # 调整列宽
     adjust_table_column_width(table)
 
-    # 圆角边框效果
-    if table_config.get('rounded_corners', False) and border_enabled:
+    # 圆角边框效果（兼容旧字段 rounded_corners 和新字段 border.radius）
+    border_config = table_config.get('border', {})
+    if isinstance(border_config, dict):
+        rounded = border_config.get('radius', False)
+    else:
+        rounded = False
+    # 兼容旧字段
+    rounded = rounded or table_config.get('rounded_corners', False)
+    if rounded and border_enabled:
         _apply_rounded_corners(table, border_color.lstrip('#'), border_width)
 
 
@@ -879,7 +895,8 @@ def create_word_table_from_html(doc, html_content, md_file_path=None):
         }
 
         # ── 第五步：填充内容并设置格式 ──
-        header_bg_color = config.get('table.header', {}).get('background_color')
+        header_config = config.get('table.header', {})
+        header_bg_color = header_config.get('fill') or header_config.get('background_color')
 
         for row_cells in row_cells_list:
             for ci in row_cells:
@@ -906,8 +923,14 @@ def create_word_table_from_html(doc, html_content, md_file_path=None):
         # ── 第六步：优化列宽 ──
         _optimize_html_table_widths(table, num_cols, row_cells_list, config)
 
-        # 圆角边框效果
-        if table_config.get('rounded_corners', False) and table_config.get('border_enabled', True):
+        # 圆角边框效果（兼容旧字段 rounded_corners 和新字段 border.radius）
+        border_config = table_config.get('border', {})
+        if isinstance(border_config, dict):
+            rounded = border_config.get('radius', False)
+        else:
+            rounded = False
+        rounded = rounded or table_config.get('rounded_corners', False)
+        if rounded and table_config.get('border_enabled', True):
             border_color = table_config.get('border_color', '#000000').lstrip('#')
             border_width = table_config.get('border_width', 4)
             _apply_rounded_corners(table, border_color, border_width)

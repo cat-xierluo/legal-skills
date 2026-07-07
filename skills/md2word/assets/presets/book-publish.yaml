@@ -78,14 +78,15 @@ page_number:
 quotes:
   convert_to_chinese: true
 
-# 表格设置
+# 表格设置（FIGURES-OUTLINE 配图色系：主蓝 #2C5282 + 灰阶 + 圆角）
 table:
   border_enabled: true
-  border_color: "#000000"
+  border_color: "#CBD5E0"      # 细灰边框（FIGURES-OUTLINE 柔和风格，替代 #000000）
   border_width: 4
   line_spacing: 1.2
   row_height_cm: 0.8
   alignment: "center"
+  rounded_corners: true         # 圆角（Word 四角 tcBorders 模拟）
   cell_margin:
     top: 30
     bottom: 30
@@ -96,12 +97,17 @@ table:
     font: "Times New Roman"
     size: 10.5
     bold: true
-    color: "#000000"
+    color: "#FFFFFF"            # 表头白字（蓝底配白字，text_color 优先）
+    fill: "#2C5282"             # 表头蓝底（FIGURES-OUTLINE 主蓝，点缀用，禁大面积填充）
   body:
     font: "宋体"
     font_alt: "宋体"
     size: 10.5
-    color: "#000000"
+    color: "#1A202C"            # 正文深色文字
+    zebra_fill: "#EDF2F7"       # 隔行浅灰（提高可读，奇偶行交替）
+  accent_color: "#2C5282"       # 主蓝（强调位引用）
+  neutral_grays: ["#CBD5E0", "#A0AEC0", "#718096"]  # 灰阶（备选填充）
+  # 透明底：不强制白底矩形（Word 白底页自然适配）
 
 # 代码块设置（出版级：等宽字体 + 浅灰底纹 + 细边框 + 关拼写检查）
 code_block:

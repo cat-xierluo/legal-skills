@@ -216,18 +216,20 @@ def get_fallback_config() -> Config:
                 'size': 10.5,
                 'bold': True,
                 'color': '#FFFFFF',
-                'background_color': '#2C5282',
+                'fill': '#2C5282',
+                'background_color': '#2C5282',  # 兼容旧字段
             },
             'body': {
                 'font': '仿宋_GB2312',
                 'size': 10.5,
                 'color': '#1A202C',
+                'zebra_fill': '#EDF2F7',  # 新字段：隔行浅灰
             },
             'row_even': {
-                'background_color': '#EDF2F7',
+                'background_color': '#EDF2F7',  # 兼容旧字段
             },
             'row_odd': {
-                'background_color': '#FFFFFF',
+                'background_color': '#FFFFFF',  # 兼容旧字段
             },
         },
         'code_block': {
