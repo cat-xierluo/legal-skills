@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.17.8] - 2026-07-06
+
+### Fixed
+- **第三方 provider worker 串到 Fable 5 / OAuth 的 env 路由 bug（DEC-043）**：`render-runtime-profile.sh` 在 provider-isolation 路径（wrapper）的 `claude_parts` 追加 `--bare`。`--bare`（minimal mode）禁 keychain reads / OAuth / plugin sync / CLAUDE.md auto-discovery，使 Anthropic auth 严格走 wrapper 设的 `ANTHROPIC_API_KEY`（来自 provider registry/settings），不再读 keychain 残留 sk-ant。修前：deepseek/glm worker 启动弹"是否使用此 API key"（sk-ant），选 No 后串 Fable 5 而非目标 provider；MCP 信任框也每次弹。修后实测：claude 直显"deepseek-v4-pro · API Usage Billing"，无 keychain/MCP 框。inherit-style worker（不走 wrapper）不受影响。
+
 ## [1.17.7] - 2026-07-05
 
 ### Added
