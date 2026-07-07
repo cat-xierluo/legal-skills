@@ -198,9 +198,37 @@ def get_fallback_config() -> Config:
         },
         'table': {
             'border_enabled': True,
-            'border_color': '#000000',
+            'border_color': '#CBD5E0',
             'border_width': 4,
             'line_spacing': 1.2,
+            'rounded_corners': True,
+            'row_height_cm': 0.8,
+            'alignment': 'center',
+            'vertical_align': 'center',
+            'cell_margin': {
+                'top': 30,
+                'bottom': 30,
+                'left': 60,
+                'right': 60,
+            },
+            'header': {
+                'font': 'Times New Roman',
+                'size': 10.5,
+                'bold': True,
+                'color': '#FFFFFF',
+                'background_color': '#2C5282',
+            },
+            'body': {
+                'font': '仿宋_GB2312',
+                'size': 10.5,
+                'color': '#1A202C',
+            },
+            'row_even': {
+                'background_color': '#EDF2F7',
+            },
+            'row_odd': {
+                'background_color': '#FFFFFF',
+            },
         },
         'code_block': {
             'label': {

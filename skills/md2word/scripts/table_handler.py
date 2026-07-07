@@ -32,6 +32,80 @@ def set_cell_background_color(cell, color_hex):
     cell._tc.get_or_add_tcPr().append(shading_elm)
 
 
+def _apply_rounded_corners(table, border_color, border_width):
+    """为表格四角单元格应用圆角边框效果。
+
+    Word 原生不支持 CSS 圆角，通过为四角单元格单独设置 tcBorders
+    并使用稍浅/稍细的外边框来模拟圆角视觉。外部边框用细线、内部网格
+    保持原边框粗细，形成层次感。
+
+    Args:
+        table: docx Table 对象
+        border_color: 十六进制颜色（不含#）
+        border_width: 边框粗细（1/8 pt 单位）
+    """
+    if not table.rows or not table.columns:
+        return
+    num_rows = len(table.rows)
+    num_cols = len(table.columns)
+    # 四角单元格坐标
+    corners = [
+        (0, 0),                       # 左上
+        (0, num_cols - 1),           # 右上
+        (num_rows - 1, 0),           # 左下
+        (num_rows - 1, num_cols - 1)  # 右下
+    ]
+    # 圆角视觉：外部边框略细，使用稍浅的颜色
+    outer_width = max(1, int(border_width * 0.6))
+    # 使用稍浅的边框色模拟圆角的柔和过渡
+    light_color = _lighten_color(border_color, 0.35)
+
+    for ri, ci in corners:
+        cell = table.cell(ri, ci)
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        # 移除已有的 tcBorders
+        for old in tcPr.findall(qn('w:tcBorders')):
+            tcPr.remove(old)
+        # 构建 tcBorders：外部边框用浅色细线，内部保持原样
+        borders_xml = (
+            f'<w:tcBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        )
+        # 左上角：top + left 用浅色
+        if ri == 0 and ci == 0:
+            borders_xml += f'<w:top w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+            borders_xml += f'<w:left w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+        # 右上角：top + right 用浅色
+        elif ri == 0 and ci == num_cols - 1:
+            borders_xml += f'<w:top w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+            borders_xml += f'<w:right w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+        # 左下角：bottom + left 用浅色
+        elif ri == num_rows - 1 and ci == 0:
+            borders_xml += f'<w:bottom w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+            borders_xml += f'<w:left w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+        # 右下角：bottom + right 用浅色
+        elif ri == num_rows - 1 and ci == num_cols - 1:
+            borders_xml += f'<w:bottom w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+            borders_xml += f'<w:right w:val="single" w:sz="{outer_width}" w:space="0" w:color="{light_color}"/>'
+        borders_xml += f'</w:tcBorders>'
+        try:
+            tcPr.append(parse_xml(borders_xml))
+        except Exception:
+            pass
+
+
+def _lighten_color(hex_color, factor=0.35):
+    """将十六进制颜色变亮（向白色混合）"""
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    r = min(255, int(r + (255 - r) * factor))
+    g = min(255, int(g + (255 - g) * factor))
+    b = min(255, int(b + (255 - b) * factor))
+    return f'{r:02X}{g:02X}{b:02X}'
+
+
 def is_separator_line(line):
     """判断是否是表格分隔行。分隔行必须包含'-'，且只能包含'|', '-', ':', ' '等符号。"""
     line = line.strip()
@@ -220,6 +294,10 @@ def create_word_table(doc, table_lines, md_file_path=None):
 
     # 调整列宽
     adjust_table_column_width(table)
+
+    # 圆角边框效果
+    if table_config.get('rounded_corners', False) and border_enabled:
+        _apply_rounded_corners(table, border_color.lstrip('#'), border_width)
 
 
 def parse_table_row(line):
@@ -827,6 +905,12 @@ def create_word_table_from_html(doc, html_content, md_file_path=None):
 
         # ── 第六步：优化列宽 ──
         _optimize_html_table_widths(table, num_cols, row_cells_list, config)
+
+        # 圆角边框效果
+        if table_config.get('rounded_corners', False) and table_config.get('border_enabled', True):
+            border_color = table_config.get('border_color', '#000000').lstrip('#')
+            border_width = table_config.get('border_width', 4)
+            _apply_rounded_corners(table, border_color, border_width)
 
         print(f"✅ 处理HTML表格: {num_rows} 行 x {num_cols} 列")
     except Exception as e:
