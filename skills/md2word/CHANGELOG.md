@@ -2,6 +2,15 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.1.3] - 2026-07-07
+
+### 改进
+- **表格渲染套 FIGURES-OUTLINE 配图风格规范配色**：表头主蓝底 `#2C5282` + 白字 `#FFFFFF`，正文深色文字 `#1A202C`，隔行浅灰斑马纹 `#EDF2F7`，边框细线 `#CBD5E0`，四角单元格外边框变浅模拟圆角效果。配置项新增 `table.rounded_corners`、`table.header.background_color`、`table.row_even.background_color`、`table.row_odd.background_color`。legal 预设与 fallback config 同步更新。
+
+### 技术优化
+- 新增 `_apply_rounded_corners()` 函数（`table_handler.py`）：通过 OOXML `w:tcBorders` 为四角单元格单独设置外部边框（细线 + 浅色），模拟 CSS 圆角视觉层次。
+- 新增 `_lighten_color()` 辅助函数：将十六进制颜色向白色混合，用于圆角边框的柔和过渡色。
+
 ## 待优化事项
 
 ### Word 格式微调（持续优化中）
