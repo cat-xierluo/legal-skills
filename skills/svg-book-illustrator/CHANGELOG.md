@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v1.8.6] - 2026-07-07
+
+### 新增（项目级规范优先，防配图风格漂移）
+
+`references/style-guide.md §5.0` 加一条硬约束：生成配图前**先读项目的 `figures/FIGURES-OUTLINE.md`**（或等价配图大纲），从其锁定的 canonical 配色，不得与本 skill 的通用 P1-P8/G1-G4 冲突。
+
+**背景**：《法律 AI Skill 实战》一书因早期未把项目级 canonical 写进项目规范，不同批次补图各走 P1雾蓝 / 自定义 Tailwind / 灰蓝旧版等不同色族，经历 #237 雾蓝统一 → #240 Tailwind → #243 回退原始三轮返工。教训：每本书都应在 `figures/FIGURES-OUTLINE.md`（或等价项目配图规范）里锁定自己的 canonical 配色（该书 canonical = #2C5282 主系 + P1 雾蓝柔和变体，灰阶填充 + 蓝做点缀、禁大面积蓝填充、防漂移不强制单一色）。本 skill 同步：新生成图必须先查项目规范，通用调色板只作兜底。
+
+### 改动文件
+- `references/style-guide.md` §5.0 加"项目级规范优先"注。
+- 本 skill 不硬编码任何单一项目配色；保持通用。
+
 ## [v1.8.5] - 2026-07-05
 
 ### 修复（radar 图例与轴标签重叠 + three-col 子卡片溢出）
