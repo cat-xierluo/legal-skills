@@ -1,5 +1,15 @@
 # 变更日志
 
+## [1.7.1] - 2026-07-07
+
+### 修复
+- **install.sh 自循环软链防护**：批量安装 skills 集合目录时，若 `SKILLS_DIR` 解析到与 source 同一路径（或 source 处于 target 内部），原本会为每个子 skill 产生 `skill/skill -> ../skill` 的自循环死链。修复后改为：
+  - 用 `cd -P` 解析 source 与 target 真实路径
+  - 当 `source` 路径前缀是 `target` 路径时跳过该 skill 并提示 `⏭  跳过（自循环）`
+  - 同时给 commands 集合分支加同款保护
+  - 用 `|| true` 包裹 `cd` 调用，避开 `set -e` 在 target 还不存在时的提前退出
+- **清理 legal-skills/skills 残留 33 个自循环软链**：因 1.7.0 重装 install.sh 之前对自身跑过 install，遗留一批 `skill-name/skill-name` 自循环，已逐个删除
+
 ## [1.7.0] - 2026-07-06
 
 ### 新增
