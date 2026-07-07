@@ -78,10 +78,11 @@ page_number:
 quotes:
   convert_to_chinese: true
 
-# 表格设置
+# 表格设置（FIGURES-OUTLINE 配图风格规范配色）
+# 主蓝 #2C5282 / 浅灰 #EDF2F7 / 边框 #CBD5E0 / 文字深 #1A202C
 table:
   border_enabled: true
-  border_color: "#000000"
+  border_color: "#CBD5E0"          # 边框：浅灰细线
   border_width: 4
   line_spacing: 1.2
   row_height_cm: 0.8
@@ -92,16 +93,28 @@ table:
     left: 60
     right: 60
   vertical_align: "center"
+  rounded_corners: true            # 圆角边框
+
+  # 表格标题行（第一行）格式：主蓝底 + 白字
   header:
     font: "Times New Roman"
     size: 10.5
     bold: true
-    color: "#000000"
+    color: "#FFFFFF"                # 白字
+    background_color: "#2C5282"     # 主蓝底纹（点缀用）
+
+  # 表格正文格式
   body:
-    font: "宋体"
-    font_alt: "宋体"
+    font: "仿宋"
+    font_alt: "仿宋_GB2312"
     size: 10.5
-    color: "#000000"
+    color: "#1A202C"                # 深色文字
+
+  # 隔行底纹（斑马纹）：浅灰交替
+  row_even:
+    background_color: "#EDF2F7"     # 偶数行浅灰底纹
+  row_odd:
+    background_color: "#FFFFFF"     # 奇数行白底
 
 # 代码块设置（出版级：等宽字体 + 浅灰底纹 + 细边框 + 关拼写检查）
 code_block:
