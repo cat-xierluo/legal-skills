@@ -6,6 +6,10 @@
 
 ---
 
+> ⚠️ **v1.18.0 变更（DEC-044，2026-07-07）**：`codebuddy` 的 headless / `-p --output-format stream-json` 模式已从本 skill 移除（`render-runtime-profile.sh --mode batch / --prompt-file` 调用即报错）。**所有 codebuddy worker 一律走交互式 `codebuddy … -y` + `tmux send-keys`**。理由：tmux 的价值是交互式监控可纠偏，headless 一发跑完等于放弃监控；headless 适合的短任务本就该用同宿主 Subagent。下文凡涉及 batch `-p` 的段落（含 DEC-040 的 batch flag 修正、`bypassPermissions` 默认值等）均保留作**历史参考**，交互式默认 `--permission-mode acceptEdits -y`。
+
+---
+
 ## 1. 概述
 
 WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进制，功能对标 Claude Code，可以作为 multi-agent orchestration 的 worker backend 使用。核心价值是利用 WorkBuddy 桌面端的登录态和 token 额度，无需额外配置 API Key，CLI 自动复用 GUI 的认证和额度池。2026-06-21 已用 `--model kimi-k2.6` 跑通 `writing-reviewer` 书稿 worker 三轮评测。
@@ -73,6 +77,7 @@ bash scripts/check-dependencies.sh --backend codebuddy --strict
 | `--disallowedTools <tools>` | 禁止的工具列表 | 工具黑名单 |
 | `--tools <tools...>` | 限制可用内置工具集（白名单） | 收窄 worker 能力 |
 | `--max-turns <n>` | 最大代理轮次 | 控制预算/防跑飞 |
+| `--effort <level>` | 推理努力程度：`minimal`/`low`/`medium`/`high`/`xhigh`/`max` | 调节思考深度（对 HY3 部分生效：升高时输出形式化符号/结构化程度增强，结论可能不变） |
 | `-c` / `--continue` | 继续最近会话 | 断点续跑 |
 | `-r` / `--resume <id>` | 恢复指定会话 | session 管理 |
 | `--session-id <uuid>` | 使用指定 session ID | 可预测 session |
@@ -112,10 +117,12 @@ WorkBuddy 平台内置多种模型，CLI 默认继承桌面端的模型配置和
 | --model 参数 | 模型 | 倍率 | 适用场景 |
 |-------------|------|------|---------|
 | `kimi-k2.6` | Kimi K2.6 | 中 | 2026-06-21 书稿 worker 三轮评测已跑通，适合写作审稿/修订对比实验 |
-| `kimi-k2.7` | Kimi K2.7 | 中 | help 已列出，可按额度和稳定性另行验证 |
-| `deepseek-v4-flash` | DeepSeek V4 Flash | 低 | **推荐默认**，经济实惠、速度快、能力均衡，适合大多数 worker 任务 |
-| `deepseek-v4-pro` | DeepSeek V4 Pro | 中 | 复杂推理、深度法律分析、架构设计 |
+| `kimi-k2.7` | Kimi K2.7 | 中 | 2026-07-08 smoke test 通（`Model: Kimi-K2.7-Code / Provider: Moonshot AI`），深度推理备选主力 |
+| `deepseek-v4-flash` | DeepSeek V4 Flash | 低 | 2026-07-08 smoke test 通（`Model: Deepseek-V4-Flash / Provider: Deepseek`），经济实惠、速度快、能力均衡、多数 worker 任务首选 |
+| `deepseek-v4-pro` | DeepSeek V4 Pro | 中 | 2026-07-08 smoke test 通（`Model: Deepseek-V4-Pro / Provider: DeepSeek`），复杂推理、深度法律分析、架构设计 |
 | `minimax-m3` | MiniMax M3 | 低 | 多模态任务（支持图片输入），合同扫描件分析、证据图片识别等 |
+| `hy3` | 腾讯混元 Hy3（带思考） | 低 | 2026-07-08 smoke test 确认（`Provider: 腾讯/混元 (Tencent Hunyuan)`）；**codebuddy 内部做了路由，含思考能力，对外统一显示 Hy3**；codebuddy 内置腾讯系主力模型，零配置吃平台额度；2026-07-08 用户决策：作为大多数 worker 任务的**带思考主力**；**思考深度可由 `--effort <level>` 调节**（`minimal`/`low`/`medium`/`high`/`xhigh`/`max`，2026-07-08 smoke test 验证：effort 升高时输出形式化符号与结构化程度增强，但**结论可能不变**——effort 调节表达，不强行翻案） |
+| `hy3-preview-agent` | 腾讯混元 Hy3 Agent Preview | 中（消耗平台额度） | ⚠️ **有消耗额度，不列入默认**（2026-07-08 用户桌面端复核确认）。smoke test 已通；用户特定场景可调用，但要走 `default_models` 之外的 ad-hoc 路径；PM 不要默认派发 |
 | `sonnet` | Claude Sonnet 系列 | 高 | 最复杂 coding / 分析（配额充裕时） |
 | `opus` | Claude Opus 系列 | 高 | 顶级推理（配额充裕时） |
 | `auto` | 自动路由 | 动态 | 系统按任务复杂度自动选模型 |
@@ -133,11 +140,28 @@ codebuddy --model deepseek-v4-pro -p "分析判决书争议焦点" -y
 # 多模态任务：MiniMax M3（支持图片输入）
 codebuddy --model minimax-m3 -p "分析这份合同扫描件中的风险条款" -y
 
+# 腾讯混元带思考主力（Hy3，2026-07-08 升级为首选；codebuddy 内部路由含思考能力）
+codebuddy --model hy3 -p "分析这 5 份判决书的争议焦点演化规律" -y
+
+# 腾讯混元 agent preview（⚠️ 实测有消耗额度，不默认派发；用户特定场景才调）
+codebuddy --model hy3-preview-agent -p "按模板生成 N 份合同审查意见" -y
+
 # 自动路由（偷懒用）
 codebuddy --model auto -p "分析这个法律问题" -y
 ```
 
-> **常用策略**：Worker 常用 `deepseek-v4-flash`（倍率低、能力强），涉及图片/扫描件的任务切多模态模型，需要深度推理时再升级到 `deepseek-v4-pro`。具体可用模型取决于你的 WorkBuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表；默认选哪个见 personal config。
+> **腾讯混元（Hunyuan）档位速记（2026-07-08 smoke test + 用户路由推断确认）**：
+>
+> | 档位 | `--model` | 状态 | 适用 |
+> |------|-----------|------|------|
+> | **带思考主力** | `hy3` | ✅ 可用，codebuddy 内部路由 | **2026-07-08 升级为主力**；通用对话 + 文书辅助 + 长逻辑链思考（用户推断 hy3 内部已统一路由到思考能力，对外显示 Hy3）；PM 直接 `--model hy3` 即可 |
+> | Agent 预览 | `hy3-preview-agent` | ⚠️ 有消耗额度（2026-07-08 用户复核） | 不默认派发；用户特定场景可 ad-hoc 调 |
+>
+> `codebuddy --help` 只列出 `hy3`（不列 `hy3-preview-agent`），但 `--model` 实际接受 `hy3` 与 `hy3-preview-agent`。用前可短 smoke test 确认路由。
+>
+> **⚠️ 2026-07-22 复核提醒**：`hy3-preview-agent` 在 2026-07-06 → 2026-07-22 期间曾被误判为"限时免费档"，用户已于 2026-07-08 复核确认实际**有消耗额度**。到期当天仍建议重跑 smoke test 确认新可用模型清单（可能含新档或恢复档）。
+
+> **常用策略**（2026-07-08 校正）：Worker **首选 `hy3`**（codebuddy 内置带思考的主力路由，对外统一显示 Hy3，含思考能力），覆盖通用对话 / 文书辅助 / 长逻辑链推理 / 简单任务。次选：**`deepseek-v4-pro`**（深度推理）/ **`deepseek-v4-flash`**（经济快）/ **`kimi-k2.7`**（深度推理补充）；`kimi-k2.6`（写作审稿已验证）、`minimax-m3`（多模态）作场景专用。`hy3-preview-agent` 实测**有消耗额度**（用户复核），**不默认派发**；用户特定场景才 ad-hoc 调。具体可用模型取决于你的 WorkBuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表；默认选哪个见 personal config。
 
 ### 4.2 可选：对接自有 API Key（降本兜底，非主要场景）
 
@@ -239,11 +263,13 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 
 多个 CLI 实例共享同一账户额度，需注意并发控制和配额分配。建议通过 SKILL.md 的 Wave-Based Orchestration 管理 provider slot。
 
-**2026-06-26 并发实测（v0.10.7 cross-model eval）：** 5 个 codebuddy worker 同时并发抢 WorkBuddy 共享额度时，**`hy3-preview-agent` 被拖得最狠**（preview 模型对共享额度竞争最敏感，单 run 耗时显著拉长）；其余模型（kimi/deepseek/glm-5.1/glm-5v-turbo）也有不同程度的变慢。
+**2026-06-26 并发实测（v0.10.7 cross-model eval，历史观察）：** 5 个 codebuddy worker 同时并发抢 WorkBuddy 共享额度时，`hy3-preview-agent` 单 run 耗时曾显著拉长（preview 模型对共享额度竞争敏感）。其余模型（kimi/deepseek/glm-5.1/glm-5v-turbo）也有不同程度的变慢。
 
-建议：
-- **codebuddy 同账户并发 ≤ 3**；超过 3 个 worker 时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 WorkBuddy 账户上。
-- 额度敏感模型（preview / 高倍率）单独给一个低并发 slot，避免被其它 worker 拖垮。
+> **2026-07-08 校正**：早期把 `hy3-preview-agent` 当"限时免费档"+ "取消 ≤3 并发限制" 是基于错误假设（用户复核确认该档**有消耗额度**）。**已从 default_models 移除**，不再享受特殊待遇；本段硬约束（≤3 并发）按通用建议适用所有 codebuddy 模型。若未来再开放为真免费档，再单独评估并发策略。
+
+通用建议（适用所有 codebuddy 模型与跨 backend）：
+- **codebuddy 同账户并发建议 ≤ 3**（保守基线，跨模型通用）；超过时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 WorkBuddy 账户上。
+- 高倍率模型（`opus` / `sonnet` 等）单独给一个低并发 slot，避免被其它 worker 拖垮。
 - 评测 fan-out 场景尤其要遵守：12 模型同 backend 并发会把共享额度打满，导致批数/耗时失真，污染 cross-model 经济性对比（见 `agent-eval-lab` cross-model 评测方法论的"经济性对比要在额度不竞争时测"）。
 
 ### 6.6 2026-06-21 书稿 worker 实测
@@ -359,6 +385,14 @@ tmux new-session -d -s worker-wb-pro -c /path/to/worktree-B \
 # Worker C：多模态型（MiniMax M3，处理图片/扫描件）
 tmux new-session -d -s worker-mm-img -c /path/to/worktree-C \
   'codebuddy --model minimax-m3 --permission-mode acceptEdits'
+
+# Worker D：腾讯混元带思考主力（Hy3，codebuddy 内部路由含思考能力，对外统一显示 Hy3）
+tmux new-session -d -s worker-wb-hy3 -c /path/to/worktree-D \
+  'codebuddy --model hy3 --permission-mode bypassPermissions'
+
+# Worker E：腾讯混元 Agent 预览档（hy3-preview-agent，⚠️ 有消耗额度，不默认派发；用户特定场景才用）
+tmux new-session -d -s worker-wb-hy3-preview -c /path/to/worktree-E \
+  'codebuddy --model hy3-preview-agent --permission-mode bypassPermissions'
 ```
 
 ### 7.6 与 spawn-worker.sh 集成
@@ -692,6 +726,12 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
 ---
 
 > **版本记录**：
+> - 2026-07-08（第六次更新）：系统校正删除 `hy3-r1` + 移除过时 ⚠️ 标注——① §4.1 表删除 `hy3-r1` 行（含档位速记 + bash 示例 + 常用策略 + §4.1 末尾复核提醒）；② §4.1 表 + 档位速记 + 常用策略 + bash 示例中 `deepseek-v4-pro/flash` 的 ⚠️ 不可用标注**移除**（2026-07-08 第三轮 smoke test 8 个模型全跑通：`Model: Deepseek-V4-Pro / Provider: DeepSeek` + `Model: Deepseek-V4-Flash / Provider: Deepseek` + `Model: Kimi-K2.7-Code / Provider: Moonshot AI` + 4 个 qoderwork-cn 模型）；③ personal config 的 `_comment` / `tier_note` / `notes` 同步校正（删除 hy3-r1 提及 + 删除 deepseek ⚠️ + 加 4 个 smoke test 验证证据）；④ §4.1 表 kimi-k2.7 加 smoke test 标注；⑤ 常用策略段补 deepseek-v4-pro/flash 为次选。
+> - 2026-07-08（第五次更新）：用户决策多 backend 偏好结构落地——personal config 的 `main_force.task_routing` 改 Claude Code 第三方 provider：`high_end=glm-5.2` / `simple_multimodal=minimax-m3` / `default=glm-5.1` / `mid_tier=MiniMax-M2.7`（走 `claude-provider-registry`，anthropic-compatible lowercase 命名）；`backend_model_routing.qoderwork-cn.default_models` 改用 `qoderclicn --list-models` 实际输出的首字母大写名 `Qwen3.7-Max` / `Qwen3.7-Plus` / `DeepSeek-V4-Pro` / `DeepSeek-V4-Flash`（4 档，无 Qwen3.6-Flash），`discount_window.models_in_window` 同步更新；`codex_policy.fallback_when_blocked` 改 `glm-5.2` / `minimax-m3`（不回落 deepseek-v4 因当前账户 400）；notes 段加「多 backend 偏好总览」表 + Claude Code 命名规则说明。**注**：references/07 §4 的 `qmodel_latest` 等短码与本 personal config 的直接真实名不一致——PM 派 qoderwork worker 时以 personal config 为准（直接首字母大写名）；07 §4 的短码可能是历史/抽象层映射，待 07 文档下次迭代校正。
+> - 2026-07-08（第四次更新）：① 用户精简 codebuddy default_models：从 `hy3/kimi-k2.7/glm-5.2/kimi-k2.6/minimax-m3` 5 档缩到 `hy3/deepseek-v4-pro/deepseek-v4-flash/kimi-k2.7` 4 档（kimi-k2.6 / minimax-m3 / glm-5.2 移除；deepseek-v4-pro/flash 保留并标 ⚠️ 当前账户实测不可用）；② smoke test 验证 `--effort <level>` 对 hy3 部分生效（low→max 形式化符号增强，结论不变），§3.1 加 `--effort` 行 + §4.1 hy3 行加 effort 调节说明；③ 多 backend 偏好结构梳理：codebuddy / qoderwork-cn 走 `backend_model_routing`，Claude Code 走 `main_force.task_routing` + provider registry，不应混入 backend_model_routing。
+> - 2026-07-08（第三次更新）：基于用户复核与路由推断调整定位——① `hy3-preview-agent` 实测**有消耗额度**（用户桌面端复核），从 default_models 移除，免费窗口 2026-07-06 → 2026-07-22 仍记录但仅作"曾被误判"提示；② 用户推断 `hy3` 内部做了路由，对外统一显示 Hy3 且**含思考能力**，把 `hy3` 从「基础档」升级为**「带思考主力」**，作为大多数 worker 任务首选；`hy3-r1` 标注调整为「实为 hy3 内部路由目标之一，无需显式指定」；③ §6.5「取消 hy3-preview-agent ≤3 并发」撤回（因该档不再主力），恢复通用 ≤3 保守基线；④ §4.1 表 + 档位速记 + 常用策略 + §7.5 Worker D/E + §4.1 bash 示例全部对齐新定位；⑤ personal config 同步：移除 hy3-preview-agent，加 hy3 内部路由推断注释。
+> - 2026-07-08（第二次更新）：smoke test 三档实际跑通发现关键差异——① `hy3-r1` 当前账户实测 **400 不可用**（server: `service info not found`），从推荐默认移除；② 服务器返回的真实可用列表仅 8 个模型（`auto/hy3/glm-5.2/glm-5.1/glm-5v-turbo/minimax-m3/kimi-k2.7/kimi-k2.6`），**deepseek-v4-flash/pro 当前账户实际不可用**——§4.1 表与「常用策略」段同步校正；③ §6.5 `hy3-preview-agent` 并发硬限制取消（用户决策：当前免费档不限并发，按需派发）；④ §7.5 示例代码移除 `hy3-r1` 命令。
+> - 2026-07-08（首次）：新增腾讯混元（Hunyuan）三档模型支持。§4.1 表加入 `hy3` / `hy3-r1` / `hy3-preview-agent`（smoke test 确认 `Provider: 腾讯/混元 (Tencent Hunyuan)`）；新增档位速记卡（基础档 / 推理档 / Agent 预览档，含限时免费提示）；§7.5 多模型路由示例补 Worker D（Hy3 基础档）和 Worker E（hy3-preview-agent 当前免费档）。
 > - 2026-07-05：新增 §12 权限与 scope 控制（基于官方 settings 文档，PreToolUse hook unbypassable）；§11 `--add-dir` 跨目录访问与 permission_auto 兜底。
 > - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。
 > - 2026-06-20：初版，基于 WorkBuddy v2.103.3 CLI 实测编写。
