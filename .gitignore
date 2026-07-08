@@ -156,6 +156,12 @@ skills/hatch-pet
 # tool-creator (symlink to ~/.myagents/skills/tool-creator)
 skills/tool-creator
 
+# myagents-memory-gardener (symlink to ~/.myagents/skills/myagents-memory-gardener)
+skills/myagents-memory-gardener
+
+# myagents-memory-molt (symlink to ~/.myagents/skills/myagents-memory-molt)
+skills/myagents-memory-molt
+
 # Packed skills（打包输出目录）
 pack-skills/
 
