@@ -316,6 +316,7 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
   git push
   ```
   确认远端 tracked 后再 spawn worker，worktree 才能正确 checkout 到基线文件。
+  一句话记牢：**untracked 文件先 `init commit` 推上远端，worker 才有基线可读**。
 - 路径含空格是常态（如 `Library/Application Support`）：`spawn-worker.sh --project "<path with spaces>"` 必须双引号包裹；脚本内部已用 `"$VAR"` 形式，可正常工作，但 PM 手写命令时勿漏引号（踩坑 4）。
 
 ### 3.5 spawn 后必接 2 / Enter 兜底（踩坑 3 + 踩坑 5）
