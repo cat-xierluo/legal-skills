@@ -793,9 +793,70 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
   ```
 - PM 第一次该做：派 captcha 类 worker 时，在 prompt 里点名 `../captcha-auto/`，并明确"失败 ≤3 次 + 退避 + 降级 JSON"，避免 worker 自写 VL 又撞 429。
 
+## 14. CodeBuddy tmux spawn 实测改进（2026-07-08 三轮 spawn 验证）
+
+> 2026-07-08 在三个不同形态的 spawn 任务（多步文本编辑 / SVG 生成 / CLI 研究调研）上各跑一轮，提炼出本节。**本节是 §10（2026-07-05 五轮实测）的补强**——§10 已经定下 bypassPermissions + 重发 Enter + PM 替 commit 的基调，本节聚焦 spawn 投递阶段的三个具体卡点（权限机制 / Enter 提交 / session 断流）和对应的顺跑配置。**所有派 codebuddy worker 的 PM 必读**。
+
+### 14.1 权限机制坑：acceptEdits 只 accept edits，读类操作仍弹框
+
+§10.1 已说"`--permission-mode acceptEdits` 覆盖 `-y`、必须用 bypassPermissions"。本节补一层更细的观察：**`acceptEdits` 字面上只 accept edits，对读类操作和特殊路径访问的权限对话框不跳**。
+
+- 现象（三轮 spawn 一致）：
+  - `codebuddy --permission-mode acceptEdits -y` 组合下，**读 worktree 外路径**（如 PM 投递的 worker-prompts 目录、外部素材目录）**仍弹权限对话框**。
+  - **`-y`（`--dangerously-skip-permissions`）在 acceptEdits mode 没真正跳过读权限**——仍然问。`acceptEdits` 与 `-y` 不是叠加关系，acceptEdits 把权限策略收紧到"只放行 edit 类操作"，`-y` 的全跳过被覆盖。
+  - **`--add-dir <项目根>` 预授权不足**：即使把项目根加进 `--add-dir`，**读非文件系统路径（如 tmux socket、特殊设备路径、跨 worktree 的符号链接目标）仍问**。`--add-dir` 只预授权文件目录访问，不覆盖工具调用层。
+- 后果：
+  - **多步任务（一次跑里要 Read 多个文件 + Bash 多次）权限循环卡死**——每个新路径 / 每个新工具调用都问一遍，headless worker 无人应答。
+  - **单步文本任务（路径少、只读 1-2 个文件）勉强过**——`acceptEdits` 放行 edit，少量 read 弹框可以靠 `permission_auto`（§11.4）兜底；但路径一多就回到上一条卡死。
+- 顺跑配置：**多步任务一律 `--permission-mode bypassPermissions`**（§10.1 launch.sh 模板），不要寄希望于 `acceptEdits -y` 或 `--add-dir`。`acceptEdits` 只适合单步 / 少路径任务（如"读这一个文件改一处"）。
+
+### 14.2 Enter 提交坑：send-keys 后 Enter 不提交，需单独再发
+
+§10.2 已记录 bootstrap prompt 卡 `>` 输入框、需重发 Enter。本节确认这是 **codebuddy 交互式 TUI 的稳定行为**（三轮 spawn 全中），并给出更稳的投递配方。
+
+- 现象：`tmux send-keys -t <session> "prompt" Enter` 的 `Enter` **没提交 prompt**——pane 显示 prompt 文本完整出现在 `>` 输入框里，但没执行（STATUS.json 没写、git status 空、pane 仍停在输入态）。**和 Claude Code glm worker 同坑**（glm worker spawn 也有"Enter 被吞、需补一发"的已知现象）。
+- 顺跑配置（投递 prompt 的标准配方）：
+  ```bash
+  # 1) 投递 prompt 文本（用 -l 避免特殊字符被 tmux 解释）
+  tmux send-keys -t <session> -l "$(cat /path/to/prompt.md)"
+  # 2) 单独发 Enter 提交（关键：不要指望上一条命令里的 Enter）
+  tmux send-keys -t <session> Enter
+  sleep 12-15  # codebuddy TUI 启动慢，等 agent loop 起来
+  # 3) 兜底：再补一发 Enter（部分环境第一次 Enter 被吞）
+  tmux send-keys -t <session> Enter
+  ```
+  - 用 `C-m`（`tmux send-keys -t <session> C-m`）比 `Enter` 更稳（绕过某些终端的 keymap 差异）。
+  - 验证提交成功：`ls <worktree>/.claude/agent-sessions/<session>/STATUS.json` 出现 + pane 显示 worker 已进 agent loop（thinking / tool_use 文本出现）。
+
+### 14.3 session 断流坑：权限对话框打断后需重发 prompt
+
+- 现象：worker 执行中弹权限确认对话框，PM 选 `don't-ask`（option 2，session-allow）放行后，**prompt 流程被打断**——codebuddy 回到 `>` 空等，**不会自动续跑原 prompt**。这与 §14.2 的"Enter 不提交"叠加：PM 处理完权限框、以为 worker 会接着跑，实际 worker 在空等下一个输入。
+- 顺跑配置：
+  - **权限打断后重发 prompt**（最简单）：处理完权限框（`tmux send-keys -t <session> 2 Enter` 选 session-allow）后，按 §14.2 的投递配方重发一次原 prompt。
+  - **或用 `codebuddy -c` resume**：kill 当前 tmux session 后用 `codebuddy -c` 继续最近会话（codebuddy 会话状态存在 `~/.codebuddy/projects/{projectDir}/{sessionId}/`，不随 tmux session 消失）。但 `-c` resume 后仍需重新投递 prompt（resume 恢复的是上下文，不是中断的执行）。
+  - **最佳策略：绕开权限框**——用 `bypassPermissions`（§14.1）从根上消除权限打断，session 不会断流。
+
+### 14.4 原生替代：`--worktree --tmux` 对比测建议
+
+CodeBuddy CLI 原生支持 `--worktree --tmux`（§7.3），可以替代"spawn-worker.sh tmux + launch.sh"这套手工组合。**建议对比测**：
+
+- 现有路径（spawn-worker.sh + launch.sh + bypassPermissions）：PM 控制力强（worktree 路径 / branch / base ref / METADATA 全自定义），但步骤多（写 launch.sh + spawn + trust-auto + permission_auto + 投递 prompt + 重发 Enter）。
+- 原生路径（`codebuddy --worktree <name> --tmux`）：codebuddy 自己建 worktree + tmux session，理论上省 trust / permission 两道手工框；但 PM 对 worktree 路径 / branch 命名 / session 命名的控制力弱，`METADATA.json` / `STATUS.json` 还得 PM 自己补。
+- **待测项**：(a) 原生 `--worktree --tmux` 是否自动跳过 §14.1 的权限框（bypassPermissions 能否透传）；(b) 原生 session 命名能否被 `pm-monitor.sh` / `wait-worker.sh` 识别；(c) 原生 worktree 的 commit / branch 能否被 PM 直接收口。**未测前不替换 spawn-worker.sh 路径**，仅作 long-term 优化方向记录。
+
+### 14.5 §14 实战速查表
+
+| 现象 | 原因 | 修复 | 详细 |
+|------|------|------|------|
+| 多步任务读 worktree 外 / 特殊路径弹权限框 | acceptEdits 只放行 edit，读类操作不跳；`-y` 被覆盖；`--add-dir` 只覆盖文件目录 | 多步任务用 bypassPermissions（launch.sh） | §14.1 |
+| send-keys + Enter 后 prompt 卡 `>` 输入框 | Enter 被吞（codebuddy TUI 稳定行为，glm worker 同坑） | 单独 send-keys Enter（或 C-m），sleep 12-15s 后补一发 | §14.2 |
+| 权限框处理后 worker 空等不续跑 | 流程被打断，codebuddy 不自动续 prompt | 重发 prompt（§14.2 配方）或 `codebuddy -c` resume；最佳=bypassPermissions 绕开 | §14.3 |
+| 想省 spawn 手工步骤 | spawn-worker.sh + launch.sh 步骤多 | 原生 `--worktree --tmux`（待对比测，未测前不替换） | §14.4 |
+
 ---
 
 > **版本记录**：
+> - 2026-07-08（第七次更新）：新增 §14「CodeBuddy tmux spawn 实测改进」——基于三轮 spawn 任务（多步文本 / SVG / CLI 调研）补强 §10。三个具体卡点：①**权限机制坑**——`acceptEdits -y` 只放行 edit，读 worktree 外 / 特殊路径仍弹框（`-y` 被 acceptEdits 覆盖、`--add-dir` 只覆盖文件目录）；多步任务权限循环卡死，单步少路径勉强过 → 多步任务必须 bypassPermissions（§14.1）；②**Enter 提交坑**——`send-keys "prompt" Enter` 的 Enter 不提交，prompt 卡 `>` 输入框（与 glm worker 同坑）→ 投递配方：`send-keys -l` + 单独 `send-keys Enter`（或 `C-m`）+ sleep 12-15s + 兜底补一发（§14.2）；③**session 断流坑**——权限框处理后 worker 回 `>` 空等不续跑 → 重发 prompt 或 `codebuddy -c` resume，最佳=bypassPermissions 绕开（§14.3）。另记原生 `--worktree --tmux` 作 long-term 替代方向（§14.4，待对比测，未测前不替换 spawn-worker.sh）。
 > - 2026-07-08（第六次更新）：系统校正删除 `hy3-r1` + 移除过时 ⚠️ 标注——① §4.1 表删除 `hy3-r1` 行（含档位速记 + bash 示例 + 常用策略 + §4.1 末尾复核提醒）；② §4.1 表 + 档位速记 + 常用策略 + bash 示例中 `deepseek-v4-pro/flash` 的 ⚠️ 不可用标注**移除**（2026-07-08 第三轮 smoke test 8 个模型全跑通：`Model: Deepseek-V4-Pro / Provider: DeepSeek` + `Model: Deepseek-V4-Flash / Provider: Deepseek` + `Model: Kimi-K2.7-Code / Provider: Moonshot AI` + 4 个 qoderwork-cn 模型）；③ personal config 的 `_comment` / `tier_note` / `notes` 同步校正（删除 hy3-r1 提及 + 删除 deepseek ⚠️ + 加 4 个 smoke test 验证证据）；④ §4.1 表 kimi-k2.7 加 smoke test 标注；⑤ 常用策略段补 deepseek-v4-pro/flash 为次选。
 > - 2026-07-08（第五次更新）：用户决策多 backend 偏好结构落地——personal config 的 `main_force.task_routing` 改 Claude Code 第三方 provider：`high_end=glm-5.2` / `simple_multimodal=minimax-m3` / `default=glm-5.1` / `mid_tier=MiniMax-M2.7`（走 `claude-provider-registry`，anthropic-compatible lowercase 命名）；`backend_model_routing.qoderwork-cn.default_models` 改用 `qoderclicn --list-models` 实际输出的首字母大写名 `Qwen3.7-Max` / `Qwen3.7-Plus` / `DeepSeek-V4-Pro` / `DeepSeek-V4-Flash`（4 档，无 Qwen3.6-Flash），`discount_window.models_in_window` 同步更新；`codex_policy.fallback_when_blocked` 改 `glm-5.2` / `minimax-m3`（不回落 deepseek-v4 因当前账户 400）；notes 段加「多 backend 偏好总览」表 + Claude Code 命名规则说明。**注**：references/07 §4 的 `qmodel_latest` 等短码与本 personal config 的直接真实名不一致——PM 派 qoderwork worker 时以 personal config 为准（直接首字母大写名）；07 §4 的短码可能是历史/抽象层映射，待 07 文档下次迭代校正。
 > - 2026-07-08（第四次更新）：① 用户精简 codebuddy default_models：从 `hy3/kimi-k2.7/glm-5.2/kimi-k2.6/minimax-m3` 5 档缩到 `hy3/deepseek-v4-pro/deepseek-v4-flash/kimi-k2.7` 4 档（kimi-k2.6 / minimax-m3 / glm-5.2 移除；deepseek-v4-pro/flash 保留并标 ⚠️ 当前账户实测不可用）；② smoke test 验证 `--effort <level>` 对 hy3 部分生效（low→max 形式化符号增强，结论不变），§3.1 加 `--effort` 行 + §4.1 hy3 行加 effort 调节说明；③ 多 backend 偏好结构梳理：codebuddy / qoderwork-cn 走 `backend_model_routing`，Claude Code 走 `main_force.task_routing` + provider registry，不应混入 backend_model_routing。
