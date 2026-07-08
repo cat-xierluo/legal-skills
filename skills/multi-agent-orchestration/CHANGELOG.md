@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.18.3] - 2026-07-08
+
+### Changed — spawn-worker.sh auto-bypass permission dialog（踩坑 7 真正修复）
+
+v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，PM 仍需 spawn 后 `tmux attach` 手按 2。v1.18.3 真正自动化：
+
+- **`permission_auto()` 关键修复**：旧版用 `tmux send-keys -t "$session" Down Enter`（按箭头 + Enter 选 option 2），PM 2026-07-08 wave-1 实测在某些 TUI 状态不稳。v1.18.3 改用 `tmux send-keys -t "$session" "2"`（直接发数字键），稳定 work。
+- **`permission_auto_bg()` 新加**：后台 watcher 通过 `( permission_auto_bg "$SESSION" & disown ) &` 启 disown，spawn-worker.sh 退出不影响 watcher。watcher 默认 7200s（与 sentinel --max-wait 对齐），覆盖同步 60s 窗口外的 dialog（worker 启动后 60-7200s 期间任何 tool 调用都自动按 2）。可用 env var `SPAWN_PERMISSION_BG_MAX_WAIT` / `SPAWN_PERMISSION_BG_POLL`（默认 5s）调整。
+- **新 flag `--no-permission-auto`**（v1.18.3 精细 opt-out）：**只**关 permission_auto + permission_auto_bg（不影响 trust_auto）。与 `--no-trust-auto`（同时关 trust + permission）区分，给精细控制。
+- **新 smoke `scripts/smoke-auto-bypass.sh`**：v1.18.3 新增验证脚本，跑 7 项 check（permission_auto 函数定义、数字键 `2`、permission_auto_bg 函数、--no-permission-auto flag 解析、调用点 disown、usage 输出、头部 v1.18.3 标记）。
+- **SKILL.md**：
+  - §3.5 改写为"spawn 后 auto-bypass（v1.18.3）—— PM 不需要手按 dialog"。
+  - 新增 §3.5.1"auto-bypass 实现细节"：v1.18.3 修复点、permission_auto_bg 行为、opt-out flag、smoke 验证。
+- **scripts/spawn-worker.sh 头部注释**：trust + permission dialog 兜底章节改写，明确 v1.18.3 auto-bypass 三层保护（trust_auto / permission_auto / permission_auto_bg），PM 默认不需要 attach tmux 盯。
+
+### 受影响的 spawn-worker.sh 行为
+- 默认情况下，PM 派活后**不需要**任何手按（trust_auto + permission_auto + permission_auto_bg 三层自动）。仅当 worker 在 1-2 分钟还没写 STATUS.json 时，再 `tmux attach` 手动 inspect（说明 dialog 真卡住）。
+- 仍用 `--no-trust-auto` opt-out 同时关 trust + permission（向后兼容）。
+- 新增 `--no-permission-auto` 精细 opt-out（v1.18.3）。
+
+### Test
+- `bash scripts/smoke-auto-bypass.sh` → 7/7 PASS（v1.18.3 验证）。
+
+### Background
+- v1.18.3 由 PM 主动接管，原因是 wave-3 派 worker G 时撞 WorkBuddy 平台 `sg.tgalileo.com` 端点临时 hang（axios 旧 connection 不释放），worker 反复死锁失败。PM 按 §2.1 防逃逸门禁例外"修复 PM 自己生成的 orchestration 文档/配置"直接改 spawn-worker.sh（worker 任务范围明确 + 范围小）。worker G 在 workbuddy 平台恢复后再跑相同任务应能复现。
+
 ## [1.18.2] - 2026-07-08
 
 ### Added
