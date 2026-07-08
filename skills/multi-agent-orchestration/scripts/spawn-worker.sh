@@ -11,12 +11,13 @@
 #   这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。
 #   本脚本只负责隔离与启动，不自动探测/注入 skill 路径；路径收集是 PM 的派发前职责。
 #
-# WorkBuddy / CodeBuddy trust dialog 兜底（踩坑 3 + 踩坑 5）：
-#   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：PM 手动 `tmux send-keys -t <session> Enter`。
+# WorkBuddy / CodeBuddy trust + permission dialog 兜底（踩坑 3 + 踩坑 5 + 踩坑 7 = v1.18.3）：
+#   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：trust_auto() 同步处理 30s。
 #   - 即便 --permission-mode acceptEdits -y，每个工具调用仍弹 "Do you want to proceed?"：
-#     必须按 `2`（Yes, don't ask again for this session），按 1 只放行当前 call 会一直卡。
-#     PM 在 spawn 后务必立即 `tmux send-keys -t <session> 2 Enter` 兜底。
-#   脚本内 auto-accept 不可靠（30s 超时后仍可能漏掉 dialog），需 PM 手动接管。
+#     - permission_auto() 同步处理 60s（v1.18.3 起改用 `2 Enter` 数字键，PM 实测 work；旧版用 Down Enter 在某些 TUI 状态不稳）。
+#     - permission_auto_bg() 后台 watcher 持续 7200s（disown 到后台），覆盖首次 dialog 出现在 60s 之后的情况。
+#     - 两者双保险：spawn 后 PM 不需要手按 2，v1.18.3 起 auto-bypass 真的 work。
+#   - opt-out: --no-trust-auto 同时关 trust+permission；--no-permission-auto 只关 permission（v1.18.3 新加精细 opt-out）。
 
 set -euo pipefail
 
@@ -43,6 +44,7 @@ SENTINEL_POLL_INTERVAL=5
 SENTINEL_MAX_WAIT=7200
 KEEP_TMUX_ON_TERMINAL=0
 TRUST_AUTO=1
+PERMISSION_AUTO=1  # v1.18.3：独立控制 permission_auto（trust dialog opt-out 不再捎带关 permission）
 ADD_DIRS=()
 ALLOW_PATHS=()
 
@@ -80,6 +82,11 @@ Options:
   --no-trust-auto   Skip trust-folder auto-accept for codebuddy/qoder CLI workers.
                    Default: auto-select 'Trust folder and all subdirectories' (option 3)
                    to avoid both the initial trust prompt and subdir trust prompts.
+  --no-permission-auto  (v1.18.3) Skip runtime permission auto-accept (both sync 60s
+                   and background 7200s watcher). Default: auto-select option 2
+                   (Yes, and don't ask again for session) on every "Do you want to
+                   proceed?" dialog. Use only if you intentionally want to handle
+                   permission prompts manually.
   --add-dir DIR     Extra directories for codebuddy to access outside the worktree
                    (repeatable). Passed through to codebuddy's --add-dir flag.
                    Use when task files/assets are outside the worktree, e.g.:
@@ -190,6 +197,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-trust-auto)
       TRUST_AUTO=0
+      shift
+      ;;
+    --no-permission-auto)  # v1.18.3：精细 opt-out，只关 permission_auto 不动 trust_auto
+      PERMISSION_AUTO=0
       shift
       ;;
     --add-dir)
@@ -408,11 +419,13 @@ trust_auto() {
 }
 
 # Permission auto-accept for runtime "Do you want to proceed?" prompts.
+# v1.18.3 关键修复：旧版用 Down Enter（按箭头 + Enter 选 option 2），在某些 TUI 状态
+# 不稳。PM 2026-07-08 wave-1 实测：直接发数字键 `2` 选 option 2 (Yes, and don't ask
+# again for this session) 稳定 work。改用 `2` 数字键（不再 Down Enter）。
 # Polls the tmux pane for the runtime permission prompt (appears when codebuddy
-# tries to access files outside the worktree) and auto-selects option 2
-# "Yes, and don't ask again for session" (Down+Enter = session-allow).
+# tries to access files outside the worktree) and auto-selects option 2.
 # Runs with a longer timeout (60s) since runtime prompts appear later.
-# Uses the same --no-trust-auto opt-out (shared switch).
+# opt-out: --no-permission-auto (v1.18.3 精细 opt-out) 或共享 --no-trust-auto。
 permission_auto() {
   local session="$1"
   local max_wait=60
@@ -433,8 +446,8 @@ permission_auto() {
     #   > 2. Yes, and don't ask again for session (shift + tab)
     #     3. No, and tell CodeBuddy what to do differently (escape)
     if echo "$content" | grep -q "Do you want to proceed"; then
-      echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, Down+Enter)"
-      tmux send-keys -t "$session" Down Enter
+      echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, key '2')"
+      tmux send-keys -t "$session" "2"  # v1.18.3: 改用数字键 2（PM 实测 work）
       sleep 2
       return 0
     fi
@@ -444,6 +457,41 @@ permission_auto() {
   done
 
   echo "SPAWN_WORKER_PERMISSION_AUTO: no runtime permission prompt seen within ${max_wait}s, continuing"
+  return 0
+}
+
+# v1.18.3 新加：后台 watcher 持续监控 + 自动按 2 兜底，覆盖同步 60s 窗口外的 dialog。
+# 由 spawn-worker.sh 主流程 `permission_auto_bg &` 启 disown，7200s 自动退出。
+# 实现：每 SPAWN_PERMISSION_BG_POLL 秒 (默认 5) capture pane 检测 "Do you want to proceed"，
+# 命中发数字键 2；如 spawn-worker.sh 退出，watcher 独立继续到 max_wait。
+permission_auto_bg() {
+  local session="$1"
+  local max_wait="${SPAWN_PERMISSION_BG_MAX_WAIT:-7200}"  # 默认 2h，与 sentinel --max-wait 对齐
+  local poll_interval="${SPAWN_PERMISSION_BG_POLL:-5}"
+  local waited=0
+  local hits=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      echo "SPAWN_WORKER_PERMISSION_BG: session $session ended after ${waited}s, watcher exits (hits=$hits)"
+      return 0
+    fi
+
+    local content
+    content=$(tmux capture-pane -t "$session" -p -S -50 2>/dev/null || echo "")
+
+    if echo "$content" | grep -q "Do you want to proceed"; then
+      hits=$((hits + 1))
+      echo "SPAWN_WORKER_PERMISSION_BG: 'Do you want to proceed' detected (hit $hits at ${waited}s), sending '2'"
+      tmux send-keys -t "$session" "2"
+      sleep 2  # 让 dialog 关闭
+    fi
+
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+
+  echo "SPAWN_WORKER_PERMISSION_BG: max_wait ${max_wait}s reached, watcher exits (hits=$hits)"
   return 0
 }
 
@@ -553,10 +601,16 @@ run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 # both the initial trust prompt and subsequent subdir trust prompts.
 # permission_auto: Selects "Yes, and don't ask again for session" (option 2)
 # for "Do you want to proceed?" runtime prompts (cross-directory access).
-# Use --no-trust-auto to opt out of both.
+# permission_auto_bg (v1.18.3): 后台 watcher 持续 7200s，覆盖同步 60s 窗口外的 dialog。
+# Use --no-trust-auto to opt out of trust_auto + permission_auto (共享).
+# Use --no-permission-auto to opt out of only permission_auto + permission_auto_bg (v1.18.3).
 if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
   trust_auto "$SESSION"
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
   permission_auto "$SESSION"
+  # v1.18.3: 后台 watcher 覆盖 60s 窗口外的 dialog；disown 让 spawn-worker.sh 退出不影响 watcher
+  ( permission_auto_bg "$SESSION" & disown ) &
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then

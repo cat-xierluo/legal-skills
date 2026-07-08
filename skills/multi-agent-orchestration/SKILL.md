@@ -319,20 +319,30 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
   一句话记牢：**untracked 文件先 `init commit` 推上远端，worker 才有基线可读**。
 - 路径含空格是常态（如 `Library/Application Support`）：`spawn-worker.sh --project "<path with spaces>"` 必须双引号包裹；脚本内部已用 `"$VAR"` 形式，可正常工作，但 PM 手写命令时勿漏引号（踩坑 4）。
 
-### 3.5 spawn 后必接 2 / Enter 兜底（踩坑 3 + 踩坑 5）
+### 3.5 spawn 后 auto-bypass（v1.18.3）—— PM 不需要手按 dialog
 
-- codebuddy worker spawn 后**必须立即**接管 dialog，否则卡死：
-  - trust dialog（踩坑 3）：`tmux send-keys -t <session> Enter`（选默认 option 1 = Trust folder only）。
-  - permission dialog（踩坑 5）：`tmux send-keys -t <session> 2 Enter`（选 "Yes, don't ask again for this session"；按 1 只放当前 call 会一直弹）。
-- PM 纪律：spawn 完立刻 `tmux attach -t <session>` 盯 30–60s，先按 `2` 解 permission，再按需 `Enter` 解 trust，不要等脚本 30s 超时。
+v1.18.3 关键修复：spawn-worker.sh **已自动化** trust + permission dialog 兜底，**PM 不需要** `tmux attach` 盯 30-60s 手按。`spawn-worker.sh` 主流程调用三层保护：
+
+1. **`trust_auto()`**（v1.17.5，保留）：同步 30s 监控 trust dialog，命中按 Enter 选 option 3（Trust folder and all subdirectories）。
+2. **`permission_auto()`**（v1.18.3 关键修复）：同步 60s 监控 "Do you want to proceed?" dialog，命中**改用数字键 `2`**（不再用 Down Enter，PM 2026-07-08 wave-1 实测 Down Enter 在某些 TUI 状态不稳）。
+3. **`permission_auto_bg()`**（v1.18.3 新加）：后台 watcher（`disown`），持续 7200s 监控 dialog 兜底。覆盖同步 60s 窗口外的 dialog（worker 启动后 60-7200s 期间任何 tool 调用都自动按 2）。
+
+PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn 后 1-2 分钟还没写 STATUS.json，再看 sentinel/cron 通知（说明 dialog 真的卡了，再用 `tmux attach` 手动 inspect）。
+
+历史踩坑（v1.18.2 之前）：wave-1/2 PM 反复按 1/2 接 dialog（v1.18.2 文档化但未真正修）。v1.18.3 自动化了，按踩坑 7 修复。
+
+#### 3.5.1 auto-bypass 实现细节（v1.18.3）
+
+- **`permission_auto`** 关键修复：旧版用 `Down Enter`（按箭头 + Enter 选 option 2），PM 2026-07-08 wave-1 实测在某些 TUI 状态不稳。v1.18.3 改用 `tmux send-keys -t "$session" "2"`（直接发数字键 2），稳定 work。
+- **`permission_auto_bg`** 后台 watcher：通过 `( permission_auto_bg "$SESSION" & disown ) &` 启 disown，spawn-worker.sh 退出不影响 watcher。watcher 默认 7200s（与 sentinel --max-wait 对齐），可用 env var `SPAWN_PERMISSION_BG_MAX_WAIT` / `SPAWN_PERMISSION_BG_POLL`（默认 5s）调整。
+- **新 flag `--no-permission-auto`**：v1.18.3 精细 opt-out，**只**关 permission_auto + permission_auto_bg（不影响 trust_auto）。与 `--no-trust-auto`（同时关 trust + permission）区分。
+- **smoke 验证**：`bash scripts/smoke-auto-bypass.sh`（v1.18.3 新增）验 7 项：函数定义、数字键、bg 函数、flag 解析、调用点、usage、头部注释。
 
 ### 3.6 captcha 类 worker 必读（踩坑 6）
 
 - gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
 - PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-workbuddy-cli-worker.md` §13。
 - **硬约束（用户强约束「captcha 一定不要我手动输入」）**：worker 必须**自动**调用 `captcha-auto` skill 完成验证码识别——即由 worker 自己用 `buildVisionRequestBody` 构造请求 + 自管 `fetch` 调用，把识别结果回灌任务流程。**严禁**任何形式的「把验证码贴给用户 / 让用户手动输入 / 等用户键入验证码再继续」。这条约束与 §3.7 配套：PM 派发 prompt 必须把 `captcha-auto` 的**绝对路径**写进「Project Skills」段，worker 才能用 Read 按需读取并自动执行，而不是在独立 cwd 里找不到 skill 而退化成向用户要验证码。
-
-### 3.7 派发 SOP 必带 skill 路径清单（task #7）
 
 > 本节即「派发 SOP 必带 skill 路径清单」：wave-1 期间 worker A/B/C 都因「不知道 sibling skill 路径」撞 captcha 429 / 花大量时间找路径。根因：非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，**默认看不到 Claude Code skills 目录**，PM 不显式给路径，worker 就只能瞎找或退化成向用户要验证码。本节能范化未来 PM 派活。
 
