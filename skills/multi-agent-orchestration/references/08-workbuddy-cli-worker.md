@@ -43,6 +43,55 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 bash scripts/check-dependencies.sh --backend codebuddy --strict
 ```
 
+### 2.3 PM 第一次跑 codebuddy worker 必读（踩坑 1 + 踩坑 3）
+
+> 这两个坑在 2026-07-08 PM 派 worker A/B 时各浪费约 5 分钟，已沉淀于此，下次直接照做。
+
+**踩坑 1：codebuddy CLI 不在 PATH（Electron app 内嵌）**
+
+- 现象：`which codebuddy` → `not found`，PM 第一反应会以为没装。
+- 真相：WorkBuddy 是 Electron app，CLI 嵌在 app bundle 里，路径为
+  `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。
+- 已有兜底：`scripts/render-runtime-profile.sh --backend codebuddy` 已默认 fallback 到该绝对路径；`check-dependencies.sh` 也会多源检测出这个路径并给 fix 提示。
+- PM 第一次该做：
+  1. 先跑 `bash scripts/check-dependencies.sh --backend codebuddy --strict`，确认探测到绝对路径而非 `not found`。
+  2. 为避免每次手敲长路径，把 alias 加进 `~/.zshrc`：
+     `alias cbc='"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"'`
+
+**踩坑 3：codebuddy trust dialog 偶尔卡住（auto-accept 不可靠）**
+
+- 现象：worker 启动后 30–60s 弹出 trust dialog：
+  `1. Trust folder only / 2. Trust parent folder / 3. Trust folder and all subdirectories / 4. No, exit`。
+- 现状：`spawn-worker.sh` 标 "trust dialog detected"，但实测 30s 超时后打印
+  `no trust dialog seen within 30s, continuing` —— 实际 dialog 还在，worker 卡死在等待输入。
+- 解决（PM 手动兜底）：
+  ```bash
+  # 选默认 option 1 = Trust folder only
+  tmux send-keys -t <session> Enter
+  ```
+  或在 worker 启动前预设：
+  ```bash
+  echo y | codebuddy -p "..."   # 部分版本可用，优先手动 Enter 兜底
+  ```
+- PM 第一次该做：spawn 后立刻 `tmux attach -t <session>` 盯 30–60s，看到 dialog 直接 `tmux send-keys -t <session> Enter`，不要等脚本的 30s 超时。
+
+### 2.4 Permission Dialog 必按 2（踩坑 5）
+
+> 2026-07-08 PM 派 worker 时实测：`acceptEdits` + `-y` 并不等于完全 bypass，每个工具调用仍弹确认框，不处理 worker 直接卡死。
+
+- 现象：即使 `codebuddy --permission-mode acceptEdits -y`，每个 `Read` / `Edit` / `Bash` 工具调用都会弹
+  `Do you want to proceed?` dialog，选项为 `1. Yes` / `2. Yes, don't ask again for this session (shift+tab)` 等。
+- 关键区别：
+  - 按 `1 (Yes)` 只放行**当前这一次** call，下一个工具调用又弹，worker 永远跑不动。
+  - 按 `2 (Yes, don't ask again for this session)` 一次性放行**整个 session**，后续调用不再询问。
+- 解决（PM spawn 后必做兜底）：
+  ```bash
+  # worker 启动后立刻连发 2，选"本次会话不再询问"
+  tmux send-keys -t <session> 2 Enter
+  ```
+  如果已误按 1 卡住，再补一发 `tmux send-keys -t <session> 2 Enter` 即可解卡。
+- PM 第一次该做：**spawn 完 worker 必须立即 `tmux send-keys -t <session> 2` 兜底**，不要等第一个工具调用卡住再处理。`-y` 不能替你省掉这一步。
+
 ## 3. CLI 关键参数
 
 ```
