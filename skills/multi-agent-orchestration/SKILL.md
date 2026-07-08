@@ -325,6 +325,11 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
   - permission dialog（踩坑 5）：`tmux send-keys -t <session> 2 Enter`（选 "Yes, don't ask again for this session"；按 1 只放当前 call 会一直弹）。
 - PM 纪律：spawn 完立刻 `tmux attach -t <session>` 盯 30–60s，先按 `2` 解 permission，再按需 `Enter` 解 trust，不要等脚本 30s 超时。
 
+### 3.6 captcha 类 worker 必读（踩坑 6）
+
+- gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
+- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-workbuddy-cli-worker.md` §13。
+
 ## 4. 命名规则
 
 **一处定义、各处引用一致（硬约束，实测踩坑）。** branch / worktree / session / run-dir / spec 必须从**同一个 source** 派生，在各处（PM Wave 计划、`spawn-worker.sh` 参数、worker prompt 里写的 Branch/Worktree/Session Context、METADATA.json、回归库 `runs/<variant>/`）引用完全一致。实测中 PM 手抖把 `wr-v0107-<model-id>-ch08` 的 `wr-` 前缀剥掉、或 branch 与 session 名对不上，直接导致 worker 的 Isolation Gate（`pwd` / `git branch --show-current` 自检）拦截、sentinel 找不到 `STATUS.json`、收口 `git diff` 验空 diff。规避：

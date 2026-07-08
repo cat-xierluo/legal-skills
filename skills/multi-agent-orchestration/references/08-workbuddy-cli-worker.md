@@ -772,6 +772,27 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
 
 验收：spawn 一个 codebuddy worker（带 `-y`），让它改 `manuscript/**` → 应被 hook 硬拦（permission denied by hook），而非靠 prompt 自觉。
 
+## 13. Worker 跑 captcha 任务必读：复用 sibling `captcha-auto/` skill（踩坑 6）
+
+> 2026-07-08 PM 实战最大瓶颈：gov-info-query 三站（共用 VL 验证码识别）频繁撞 `429 Too Many Requests`，自写 VL 调用既重复又易踩限流。已沉淀 sibling skill `../captcha-auto/`，future worker 必须复用而非自写。
+
+- 现象：gov-info-query 三站共用同一 VL 验证码识别通道，并发或连续请求时撞 `429 too many requests`，是当前最卡脖子的环节。
+- 已有能力：`HANDOFF.md` §1 列出 sibling skill `../captcha-auto/`，内含 `buildVisionRequestBody` 封装 + 统一的 `retry / backoff` 逻辑。
+- **Worker 纪律（强制）**：
+  1. 用 gov-info-query skill 遇到 captcha，**先看 sibling `captcha-auto/`**，不要自写 VL 调用、不要重复造轮子。
+  2. 脚本应失败 ≤ 3 次 + 指数退避（exponential backoff）后，仍失败则**降级为 JSON 输出**，交 PM 人工重跑，而不是无限重试或静默卡死。
+- 期望的失败处理骨架：
+  ```bash
+  # 伪代码：≤3 次重试 + 指数退避，失败则降级 JSON 让 PM 接手
+  for attempt in 1 2 3; do
+    resp=$(buildVisionRequestBody ... | call_vl)   # 来自 captcha-auto/
+    [ "$resp" != "429" ] && break
+    sleep $((2 ** attempt))   # 2s, 4s, 8s
+  done
+  [ "$resp" = "429" ] && echo '{"status":"captcha_failed","action":"pm_retry"}' > result.json
+  ```
+- PM 第一次该做：派 captcha 类 worker 时，在 prompt 里点名 `../captcha-auto/`，并明确"失败 ≤3 次 + 退避 + 降级 JSON"，避免 worker 自写 VL 又撞 429。
+
 ---
 
 > **版本记录**：
