@@ -476,3 +476,19 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 3-4 个 worker 通常已经接近单一 API provider 的稳定并发上限。超过这个数量时，PM 应把 worker 分散到多个 runtime profile：不同 Claude provider、Codex/OpenAI、OpenCode provider、local/OSS profile 等。
 
 这不只是扩容策略，也是一种模型评测。Wave summary 应记录每个 provider/model 的指令遵循、STATUS 心跳、commit 节奏、范围控制、验证通过率、review 修复次数和失败模式。下一 Wave 根据这个记录调度：高风险任务给表现稳定的 profile，低风险重复任务给便宜或吞吐高的 profile。
+
+### G22. 多维度任务的颗粒度纪律（checklist + wave 复查 + 单维度深查）
+
+**场景**：一个 worker 在同一个 prompt 里要改多个章节 × 多个维度（例如同一段时间要改 Critical 修复 + Important 调整 + 末位维度如"标题删重"）。实测中 worker 的注意力会被高优维度（Critical / Important）占满，**末位维度被静默漏掉**——同一份 prompt，前一个 wave 漏了、后一个 wave 才补全。主因不是模型能力不足，而是**任务粒度 + prompt 结构**。
+
+**三条改进（落地到 prompt 与 wave 设计）**：
+
+1. **多维度任务用 checklist prompt 强制逐维度**：prompt 里把所有维度拆成显式 checklist，每个维度对应独立 commit / 勾选项；worker 必须覆盖完所有维度才算完成（在 RESULT / STATUS 里逐项打勾）。不要把维度淹没在散文式任务描述里——末位维度会被忽略。
+
+2. **大批量改后必跑 wave2 复查抓漏**：wave1 做完多维度批量修改后，PM 不要直接收口；至少派一个独立的 wave2 复查 worker（只读 review，不改稿），按维度清单逐项核对覆盖情况。wave2 抓漏比指望 wave1 worker 自检更可靠——因为 wave2 上下文更窄、注意力更聚焦。
+
+3. **精细深查拆单维度 worker**：箭头落点 / 字体逐核 / 像素级对齐这种需要逐项深查的工作，不要塞进多维度 worker 里；拆成**单维度 worker**（只做一件事），注意力不被其他维度稀释。多维度 worker 处理广度，单维度 worker 处理深度。
+
+**反模式**：把 5 个维度的检查 + 修复全塞进一个 worker 的 prompt，指望它一次跑完——末位维度会漏。这不是 PM 派得不够清楚，是任务结构本身让 worker 没有足够注意力余量。
+
+**与 §3.1 Wave 模式的关系**：这本质是"一个 wave 内的任务颗粒度设计"，不是开新 wave。wave2 复查 worker 可以是同 base ref 下的轻量读 review，也可以是 `writing-reviewer` 这类只读审稿 worker。原则适用于任意多维度批量任务，不限书籍 / 文档类项目。

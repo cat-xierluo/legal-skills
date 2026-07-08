@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.18.1] - 2026-07-08
+
+### Added
+- **G22 多维度任务的颗粒度纪律**（`references/09-parallel-lessons.md`）：单 worker 改多章 × 多维度时注意力被高优维度（Critical / Important）占满、末位维度（如"标题删重"）静默漏掉。沉淀三条通用改进：①多维度任务 prompt 用 **checklist 强制逐维度**（每维度独立 commit / 勾选，worker 必须覆盖完所有维度才算完成）；②大批量改后必派 **wave2 复查 worker**（只读 review）抓漏；③精细深查（箭头落点 / 字体逐核 / 像素对齐）拆**单维度 worker**处理深度。主因非模型能力，是任务粒度 + prompt 结构。原则跨项目通用，不绑定具体项目或章节。
+- SKILL.md §3.1 Wave 模式段加一段交叉引用，指向 G22；frontmatter version 1.18.0→1.18.1。
+
+## [1.18.0] - 2026-07-07
+
+### BREAKING — 删除全部 headless / batch 模式（DEC-044）
+- **`render-runtime-profile.sh` 移除 `--mode` / `--prompt-file`**：删除参数、校验、`append_redirection` / `shell_wrap` 辅助函数。5 个 backend（claude-code / codex / opencode / codebuddy / qoderwork-cn）只保留 interactive 分支，输出删 `WORKER_MODE`。传 `--mode` / `--prompt-file` 现在显式报错并指向 DEC-044 + 迁移指引（短任务用同宿主 Subagent）。
+- **理由（用户原话）**：「我们使用 TMUX 就是要去进行交互式的 worker 监控。如果是 `-p` 模式的话，它更适合那种短程的任务，那种任务其实使用 subagent 也能完成，所以我们要删掉这个模式，避免 agent 错误调用这样一种模式」。headless 一发跑完 = 放弃 tmux 监控可纠偏；而它适合的短任务本就该走 Subagent。分工由此清晰：**短任务 → Subagent；需编排/监控 → tmux 交互 worker**。
+- **SKILL.md**：§2 执行模式表 + §6 启动方式删除 Claude Code 批处理 bullet、`< redirect 必须 bash -lc`、`claude -p autocompact thrash` 两条警示，换成「所有 worker 一律交互式」说明；Codex/OpenCode bullet 改为交互式命令。§2 表加「同宿主 Subagent」替代 headless 的说明。
+- **references/06/07/08**：顶部加「batch 已于 v1.18.0 移除（DEC-044）」横幅，正文 batch 段保留作历史参考。
+- **supersede**：DEC-033（batch 部分）、DEC-040（batch flag 修正）、DEC-042（「保留 batch 兜底」结论）的 batch 相关部分；交互式默认值与 DEC-042 长任务交互 canonical pattern 保留并扩展到短任务。
+- **不变**：`smoke-provider-settings.sh` 仍用 `claude -p` 做一次性 provider 验证（测试工具非派 worker，故意保留）。
+
+### Added — 轻量模式 `--no-worktree`（DEC-045）
+- **`spawn-worker.sh --no-worktree`**：非默认的轻量隔离模式。worker tmux session cwd 直接指向目标文件夹，不建 git worktree / branch / base ref。两种触发：(a) 用户显式 `--no-worktree`；(b) `--project` 检测为非 git work tree 时自动切换（打印 `SPAWN_WORKER_LIGHTWEIGHT_AUTO`，非静默降级）。
+- **`METADATA.json` 加 `isolation_mode` 字段**（`"worktree"` | `"lightweight"`）；轻量模式 `branch / base_ref / base_sha` 留空。
+- **Isolation Gate 分支化**：worktree 模式验 cwd + branch；轻量模式只验 cwd（非 git 不验 branch）。info/exclude 写入加 git 存在性 guard（非 git 跳过）。
+- **worker-prompt.md**：Context 加 `{{isolation_mode}}`；Isolation Gate / Commit Cadence / Git-PR 段加轻量分支（非 git 文件夹跳过 commit/PR，交付物直接落盘 + RESULT.md 清单）。
+- **适用场景**：一个 PM session 派多个 worker 各管一个独立文件夹、目标不是 git 仓、或不需要 git 级隔离。隔离 = 文件夹分离（硬约束：worker 必须占互不重叠的文件夹；越界靠 `--allow-paths` scope-guard 兜底）。SKILL.md 新增 §2.1.1 + §6 轻量 spawn 示例 + §11 轻量 smoke benchmark。
+
+### Changed
+- **版本号 frontmatter**：SKILL.md `version` 从 `1.17.6` 修正为 `1.18.0`（此前 1.17.7/1.17.8 patch 未同步 frontmatter，一并修正）。
+
 ## [1.17.8] - 2026-07-06
 
 ### Fixed
