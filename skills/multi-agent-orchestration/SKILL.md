@@ -330,6 +330,48 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
 
 - gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
 - PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-workbuddy-cli-worker.md` §13。
+- **硬约束（用户强约束「captcha 一定不要我手动输入」）**：worker 必须**自动**调用 `captcha-auto` skill 完成验证码识别——即由 worker 自己用 `buildVisionRequestBody` 构造请求 + 自管 `fetch` 调用，把识别结果回灌任务流程。**严禁**任何形式的「把验证码贴给用户 / 让用户手动输入 / 等用户键入验证码再继续」。这条约束与 §3.7 配套：PM 派发 prompt 必须把 `captcha-auto` 的**绝对路径**写进「Project Skills」段，worker 才能用 Read 按需读取并自动执行，而不是在独立 cwd 里找不到 skill 而退化成向用户要验证码。
+
+### 3.7 派发 SOP 必带 skill 路径清单（task #7）
+
+> 本节即「派发 SOP 必带 skill 路径清单」：wave-1 期间 worker A/B/C 都因「不知道 sibling skill 路径」撞 captcha 429 / 花大量时间找路径。根因：非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，**默认看不到 Claude Code skills 目录**，PM 不显式给路径，worker 就只能瞎找或退化成向用户要验证码。本节能范化未来 PM 派活。
+
+**强制规则（PM 派发前必做）**：
+
+1. PM 派活前，先在本机收集本项目相关的 sibling skill 路径清单。每个可能用到的 skill 跑一次：
+   ```bash
+   ls <project-root>/<sibling-skill>/SKILL.md
+   ```
+   把**绝对路径**（或相对 worktree 的稳定相对路径）记下来，例如：
+   - `captcha-auto`：`/abs/path/to/captcha-auto/SKILL.md`
+   - 其他任务相关 skill：同理逐个确认存在。
+2. PM 把收集到的路径清单写进 worker prompt 的 **「Project Skills」段**（标准字段见下），要求 worker **用 Read 按需读取**，不要靠 worker 自己猜路径。
+3. 任何**涉及验证码**的任务，PM **必须**把 `captcha-auto` 的 SKILL.md 绝对路径写进「Project Skills」段——这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。路径不进 prompt，worker 在独立 cwd 找不到 skill，就会退化成向用户要验证码，违反用户强约束。
+4. 「Project Skills」段是 worker prompt 的**硬约束段**，与 Isolation Gate / Heartbeat / Commit 同级，省略会直接导致收口失败（worker 找不到 skill → 卡死 / 偏题 / 向用户要验证码）。
+
+**「Project Skills」段标准模板**（嵌入 worker prompt，放在 Background 与 Mission 之间）：
+
+```text
+## Project Skills（PM 派发必带，worker 用 Read 按需读取，不要靠猜路径）
+
+PM 已在本机确认以下 sibling skill 路径存在，请在该路径下用 Read 读取 SKILL.md 及所需 references：
+
+| Skill 名称 | SKILL.md 绝对路径 | 何时用 | 关键入口 |
+|-----------|------------------|--------|---------|
+| captcha-auto | /abs/path/to/captcha-auto/SKILL.md | 任何验证码识别（必自动调用，禁止用户手动输入） | HANDOFF.md §1 `buildVisionRequestBody` + 自管 fetch |
+| <其他 skill> | /abs/path/to/<other>/SKILL.md | <触发场景> | <关键文件/函数> |
+
+规则：
+- 路径由 PM 派发前 `ls <project-root>/<skill>/SKILL.md` 校验存在；不校验就写进 prompt 视为 PM 失责。
+- worker 在独立 cwd 下默认看不到这些 skill，必须靠本段路径 Read，禁止假定 skill 在默认搜索路径里。
+- 未列出的 skill 不要自行臆测路径；需要时用 Read 试探并报 PM。
+```
+
+**与 §3.6 的联动**：
+
+- §3.6 是「worker 侧」约束：worker 必须自动调 `captcha-auto`（`buildVisionRequestBody` + 自管 fetch），禁止用户手动输入验证码。
+- §3.7 是「PM 侧」约束：PM 派活必须把 `captcha-auto`（及所有相关 sibling skill）的**路径**写进 prompt 的「Project Skills」段，worker 才有可读的东西。
+- 两者配套：PM 给路径（§3.7）→ worker 读路径自动执行（§3.6）。缺 PM 给路径这步，§3.6 的「自动调」就无米下锅，必然退化成向用户要验证码。wave-2 派 D（shixin 双模式）+ wave-3 派 E（captcha 优化）都依赖本 SOP。
 
 ## 4. 命名规则
 
