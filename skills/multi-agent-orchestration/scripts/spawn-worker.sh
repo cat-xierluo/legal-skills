@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # spawn-worker.sh — create an isolated worktree and tmux session for one worker.
+#
+# WorkBuddy / CodeBuddy trust dialog 兜底（踩坑 3 + 踩坑 5）：
+#   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：PM 手动 `tmux send-keys -t <session> Enter`。
+#   - 即便 --permission-mode acceptEdits -y，每个工具调用仍弹 "Do you want to proceed?"：
+#     必须按 `2`（Yes, don't ask again for this session），按 1 只放行当前 call 会一直卡。
+#     PM 在 spawn 后务必立即 `tmux send-keys -t <session> 2 Enter` 兜底。
+#   脚本内 auto-accept 不可靠（30s 超时后仍可能漏掉 dialog），需 PM 手动接管。
 
 set -euo pipefail
 
