@@ -304,6 +304,27 @@ PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM l
 - `spawn-worker.sh` 不自动读取项目配置、不自动复制配置、不自动执行 hook，避免把可选约定升级成隐式副作用。
 - 若配置缺失或字段不清楚，PM 回到 Skill 默认值：trunk=`main`、不复制配置、不跑 hook、只使用 worker prompt 明确列出的验证命令。
 
+### 3.4 目标目录基线准备：untracked files → init commit（踩坑 2）
+
+> worktree 只复制 tracked tree，不会复制 untracked 文件。PM 派活前若目标目录是新建未提交的，worker 拿不到基线，task 必失败。
+
+- 现象：spawn worker 后 `ls worktree/<target>/` → 不存在（untracked 文件不在 tracked 树里）。
+- 解决（启动 Wave 前必做）：
+  ```bash
+  git add <target-untracked-dir>
+  git commit -m "[init] 基线：<target-untracked-dir>"
+  git push
+  ```
+  确认远端 tracked 后再 spawn worker，worktree 才能正确 checkout 到基线文件。
+- 路径含空格是常态（如 `Library/Application Support`）：`spawn-worker.sh --project "<path with spaces>"` 必须双引号包裹；脚本内部已用 `"$VAR"` 形式，可正常工作，但 PM 手写命令时勿漏引号（踩坑 4）。
+
+### 3.5 spawn 后必接 2 / Enter 兜底（踩坑 3 + 踩坑 5）
+
+- codebuddy worker spawn 后**必须立即**接管 dialog，否则卡死：
+  - trust dialog（踩坑 3）：`tmux send-keys -t <session> Enter`（选默认 option 1 = Trust folder only）。
+  - permission dialog（踩坑 5）：`tmux send-keys -t <session> 2 Enter`（选 "Yes, don't ask again for this session"；按 1 只放当前 call 会一直弹）。
+- PM 纪律：spawn 完立刻 `tmux attach -t <session>` 盯 30–60s，先按 `2` 解 permission，再按需 `Enter` 解 trust，不要等脚本 30s 超时。
+
 ## 4. 命名规则
 
 **一处定义、各处引用一致（硬约束，实测踩坑）。** branch / worktree / session / run-dir / spec 必须从**同一个 source** 派生，在各处（PM Wave 计划、`spawn-worker.sh` 参数、worker prompt 里写的 Branch/Worktree/Session Context、METADATA.json、回归库 `runs/<variant>/`）引用完全一致。实测中 PM 手抖把 `wr-v0107-<model-id>-ch08` 的 `wr-` 前缀剥掉、或 branch 与 session 名对不上，直接导致 worker 的 Isolation Gate（`pwd` / `git branch --show-current` 自检）拦截、sentinel 找不到 `STATUS.json`、收口 `git diff` 验空 diff。规避：
