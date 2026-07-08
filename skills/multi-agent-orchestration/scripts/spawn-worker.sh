@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # spawn-worker.sh — create an isolated worktree and tmux session for one worker.
 #
+# PM 派活前必带 skill 路径清单（task #7 / §3.7）：
+#   非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，
+#   默认看不到 Claude Code skills 目录。PM 在调本脚本 spawn 之前，应先收集本项目
+#   相关 sibling skill 的绝对路径，校验存在后追加到 --command 后的 worker prompt 的
+#   "Project Skills" 段（标准模板见 SKILL.md §3.7）：
+#     ls <project-root>/<sibling-skill>/SKILL.md   # 逐个校验路径存在
+#   任何涉及验证码的任务，PM 必须把 captcha-auto 的 SKILL.md 绝对路径写进该段——
+#   这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。
+#   本脚本只负责隔离与启动，不自动探测/注入 skill 路径；路径收集是 PM 的派发前职责。
+#
 # WorkBuddy / CodeBuddy trust dialog 兜底（踩坑 3 + 踩坑 5）：
 #   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：PM 手动 `tmux send-keys -t <session> Enter`。
 #   - 即便 --permission-mode acceptEdits -y，每个工具调用仍弹 "Do you want to proceed?"：
