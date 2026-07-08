@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.18.2] - 2026-07-08
+
+### Added
+- **CodeBuddy tmux spawn 实测改进**（`references/08-workbuddy-cli-worker.md` §14）：基于三轮不同形态的 spawn 任务（多步文本编辑 / SVG 生成 / CLI 研究调研）补强 §10（2026-07-05 五轮实测）。三个具体卡点 + 顺跑配置：
+  - **权限机制坑（§14.1）**：`acceptEdits -y` 组合下，acceptEdits 只 accept edits，**读 worktree 外路径 / 特殊路径（tmux socket、跨 worktree 符号链接）仍弹权限对话框**；`-y`（`--dangerously-skip-permissions`）被 acceptEdits 覆盖、没真正跳过读权限；`--add-dir <项目根>` 只预授权文件目录、不覆盖工具调用层。后果：**多步任务（Read 多文件 + Bash 多次）权限循环卡死**，单步少路径任务勉强过。顺跑：多步任务一律 `--permission-mode bypassPermissions`（§10.1 launch.sh），`acceptEdits` 只适合单步 / 少路径。
+  - **Enter 提交坑（§14.2）**：`tmux send-keys -t <session> "prompt" Enter` 的 `Enter` **没提交 prompt**（pane 显示 prompt 完整在 `>` 输入框但没执行）——codebuddy TUI 稳定行为，**与 glm worker 同坑**。顺跑投递配方：`send-keys -l` 投文本 + 单独 `send-keys Enter`（或 `C-m` 更稳）+ sleep 12-15s + 兜底补一发 Enter。
+  - **session 断流坑（§14.3）**：权限确认对话框（选 don't-ask / session-allow）后，prompt 流程被打断，codebuddy 回 `>` 空等、**不自动续原 prompt**。顺跑：重发 prompt（§14.2 配方）或 `codebuddy -c` resume；最佳策略=bypassPermissions 从根上绕开权限框。
+  - **原生替代方向（§14.4）**：CodeBuddy 原生支持 `--worktree --tmux`（§7.3），可替代 spawn-worker.sh + launch.sh 手工组合；记为 long-term 优化方向，**待对比测（权限框透传 / pm-monitor 识别 / worktree 收口三项未测），未测前不替换 spawn-worker.sh 路径**。
+  - SKILL.md frontmatter version 1.18.1→1.18.2。
+- 原则跨项目通用（不绑定具体项目 / 章节 / AGENTS / DEC），案例匿名化。
+
 ## [1.18.1] - 2026-07-08
 
 ### Added
