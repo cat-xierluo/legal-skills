@@ -43,6 +43,55 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 bash scripts/check-dependencies.sh --backend codebuddy --strict
 ```
 
+### 2.3 PM 第一次跑 codebuddy worker 必读（踩坑 1 + 踩坑 3）
+
+> 这两个坑在 2026-07-08 PM 派 worker A/B 时各浪费约 5 分钟，已沉淀于此，下次直接照做。
+
+**踩坑 1：codebuddy CLI 不在 PATH（Electron app 内嵌）**
+
+- 现象：`which codebuddy` → `not found`，PM 第一反应会以为没装。
+- 真相：WorkBuddy 是 Electron app，CLI 嵌在 app bundle 里，路径为
+  `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。
+- 已有兜底：`scripts/render-runtime-profile.sh --backend codebuddy` 已默认 fallback 到该绝对路径；`check-dependencies.sh` 也会多源检测出这个路径并给 fix 提示。
+- PM 第一次该做：
+  1. 先跑 `bash scripts/check-dependencies.sh --backend codebuddy --strict`，确认探测到绝对路径而非 `not found`。
+  2. 为避免每次手敲长路径，把 alias 加进 `~/.zshrc`：
+     `alias cbc='"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"'`
+
+**踩坑 3：codebuddy trust dialog 偶尔卡住（auto-accept 不可靠）**
+
+- 现象：worker 启动后 30–60s 弹出 trust dialog：
+  `1. Trust folder only / 2. Trust parent folder / 3. Trust folder and all subdirectories / 4. No, exit`。
+- 现状：`spawn-worker.sh` 标 "trust dialog detected"，但实测 30s 超时后打印
+  `no trust dialog seen within 30s, continuing` —— 实际 dialog 还在，worker 卡死在等待输入。
+- 解决（PM 手动兜底）：
+  ```bash
+  # 选默认 option 1 = Trust folder only
+  tmux send-keys -t <session> Enter
+  ```
+  或在 worker 启动前预设：
+  ```bash
+  echo y | codebuddy -p "..."   # 部分版本可用，优先手动 Enter 兜底
+  ```
+- PM 第一次该做：spawn 后立刻 `tmux attach -t <session>` 盯 30–60s，看到 dialog 直接 `tmux send-keys -t <session> Enter`，不要等脚本的 30s 超时。
+
+### 2.4 Permission Dialog 必按 2（踩坑 5）
+
+> 2026-07-08 PM 派 worker 时实测：`acceptEdits` + `-y` 并不等于完全 bypass，每个工具调用仍弹确认框，不处理 worker 直接卡死。
+
+- 现象：即使 `codebuddy --permission-mode acceptEdits -y`，每个 `Read` / `Edit` / `Bash` 工具调用都会弹
+  `Do you want to proceed?` dialog，选项为 `1. Yes` / `2. Yes, don't ask again for this session (shift+tab)` 等。
+- 关键区别：
+  - 按 `1 (Yes)` 只放行**当前这一次** call，下一个工具调用又弹，worker 永远跑不动。
+  - 按 `2 (Yes, don't ask again for this session)` 一次性放行**整个 session**，后续调用不再询问。
+- 解决（PM spawn 后必做兜底）：
+  ```bash
+  # worker 启动后立刻连发 2，选"本次会话不再询问"
+  tmux send-keys -t <session> 2 Enter
+  ```
+  如果已误按 1 卡住，再补一发 `tmux send-keys -t <session> 2 Enter` 即可解卡。
+- PM 第一次该做：**spawn 完 worker 必须立即 `tmux send-keys -t <session> 2` 兜底**，不要等第一个工具调用卡住再处理。`-y` 不能替你省掉这一步。
+
 ## 3. CLI 关键参数
 
 ```
@@ -722,6 +771,27 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
 ```
 
 验收：spawn 一个 codebuddy worker（带 `-y`），让它改 `manuscript/**` → 应被 hook 硬拦（permission denied by hook），而非靠 prompt 自觉。
+
+## 13. Worker 跑 captcha 任务必读：复用 sibling `captcha-auto/` skill（踩坑 6）
+
+> 2026-07-08 PM 实战最大瓶颈：gov-info-query 三站（共用 VL 验证码识别）频繁撞 `429 Too Many Requests`，自写 VL 调用既重复又易踩限流。已沉淀 sibling skill `../captcha-auto/`，future worker 必须复用而非自写。
+
+- 现象：gov-info-query 三站共用同一 VL 验证码识别通道，并发或连续请求时撞 `429 too many requests`，是当前最卡脖子的环节。
+- 已有能力：`HANDOFF.md` §1 列出 sibling skill `../captcha-auto/`，内含 `buildVisionRequestBody` 封装 + 统一的 `retry / backoff` 逻辑。
+- **Worker 纪律（强制）**：
+  1. 用 gov-info-query skill 遇到 captcha，**先看 sibling `captcha-auto/`**，不要自写 VL 调用、不要重复造轮子。
+  2. 脚本应失败 ≤ 3 次 + 指数退避（exponential backoff）后，仍失败则**降级为 JSON 输出**，交 PM 人工重跑，而不是无限重试或静默卡死。
+- 期望的失败处理骨架：
+  ```bash
+  # 伪代码：≤3 次重试 + 指数退避，失败则降级 JSON 让 PM 接手
+  for attempt in 1 2 3; do
+    resp=$(buildVisionRequestBody ... | call_vl)   # 来自 captcha-auto/
+    [ "$resp" != "429" ] && break
+    sleep $((2 ** attempt))   # 2s, 4s, 8s
+  done
+  [ "$resp" = "429" ] && echo '{"status":"captcha_failed","action":"pm_retry"}' > result.json
+  ```
+- PM 第一次该做：派 captcha 类 worker 时，在 prompt 里点名 `../captcha-auto/`，并明确"失败 ≤3 次 + 退避 + 降级 JSON"，避免 worker 自写 VL 又撞 429。
 
 ---
 
