@@ -221,7 +221,7 @@ def get_fallback_config() -> Config:
             'body': {
                 'font': '仿宋_GB2312',
                 'size': 10.5,
-                'color': '#1A202C',
+                'color': '#2D3436',
             },
             'row_even': {
                 'background_color': '#EDF2F7',
