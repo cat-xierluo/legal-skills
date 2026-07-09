@@ -23,6 +23,7 @@ OUTPUT="shell"
 SETTING_SOURCES="project,local"
 NO_PROVIDER_ENV_ISOLATION=0
 NO_MCP=0
+WITH_MCP=0
 BIN=""
 SKIP_PERMISSIONS=0
 NO_SKIP_PERMISSIONS=0
@@ -390,7 +391,7 @@ case "$BACKEND" in
     # WorkBuddy 桌面端的 connector-proxy MCP 在多 worker 并发时触发重定向，导致 worker
     # 启动即报 ERR_FR_TOO_MANY_REDIRECTS 停 input。绝大多数 worker 任务（纯脚本/文件）不需要 MCP，
     # 默认关；需要 MCP 的 worker 显式 --with-mcp opt-in。
-    if [ "$WITH_MCP" != "1" ]; then
+    if [ "${WITH_MCP:-0}" != "1" ]; then
       cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
     fi
     for add_dir in "${ADD_DIRS[@]}"; do
