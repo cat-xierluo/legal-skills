@@ -79,7 +79,7 @@ quotes:
   convert_to_chinese: true
 
 # 表格设置（FIGURES-OUTLINE 配图风格规范配色）
-# 主蓝 #2C5282 / 浅灰 #EDF2F7 / 边框 #CBD5E0 / 文字深 #1A202C
+# 主蓝 #2C5282 / 浅灰 #EDF2F7 / 边框 #CBD5E0 / 文字深灰 #2D3436（T139 方案 A）
 table:
   border_enabled: true
   border_color: "#CBD5E0"          # 边框：浅灰细线
@@ -108,7 +108,7 @@ table:
     font: "仿宋"
     font_alt: "仿宋_GB2312"
     size: 10.5
-    color: "#1A202C"                # 深色文字
+    color: "#2D3436"                # 深灰主色（T139 方案 A）
 
   # 隔行底纹（斑马纹）：浅灰交替
   row_even:
