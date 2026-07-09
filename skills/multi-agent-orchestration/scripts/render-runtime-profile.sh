@@ -59,6 +59,11 @@ Options:
                            injects --strict-mcp-config --mcp-config '{"mcpServers":{}}'.
                            Skips the "new MCP servers found" approval prompt. Use for
                            workers that don't need MCP (e.g. pure text revision).
+                           Note: codebuddy/qoderwork-cn backends default to --no-mcp already
+                           (avoid ERR_FR_TOO_MANY_REDIRECTS from connector-proxy MCP under
+                           concurrency; DEC-106).
+  --with-mcp               Opt INTO MCP for codebuddy/qoderwork-cn (which default to --no-mcp).
+                           Use only when the worker genuinely needs MCP tools.
   --codex-profile NAME     Codex profile name
   --prompt-file PATH       Prompt file for batch mode
   --permission-mode MODE   Claude permission mode. Defaults: auto interactive, acceptEdits batch
@@ -156,6 +161,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-mcp)
       NO_MCP=1
+      shift
+      ;;
+    --with-mcp)
+      # codebuddy/qoderwork-cn 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）；
+      # 需要 MCP 的 worker 显式 opt-in。
+      WITH_MCP=1
       shift
       ;;
     --bin)
@@ -375,7 +386,13 @@ case "$BACKEND" in
     cb_parts=("$BIN")
     [ -n "$COMMAND_MODEL" ] && cb_parts+=(--model "$COMMAND_MODEL")
     cb_parts+=(--permission-mode "$PERMISSION_MODE")
-    [ "$NO_MCP" -eq 1 ] && cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    # codebuddy 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）：
+    # WorkBuddy 桌面端的 connector-proxy MCP 在多 worker 并发时触发重定向，导致 worker
+    # 启动即报 ERR_FR_TOO_MANY_REDIRECTS 停 input。绝大多数 worker 任务（纯脚本/文件）不需要 MCP，
+    # 默认关；需要 MCP 的 worker 显式 --with-mcp opt-in。
+    if [ "$WITH_MCP" != "1" ]; then
+      cb_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
+    fi
     for add_dir in "${ADD_DIRS[@]}"; do
       cb_parts+=(--add-dir "$add_dir")
     done
