@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.18.2"
+version: "1.18.4"
 ---
 
 # Multi-Agent Orchestration
@@ -329,6 +329,8 @@ v1.18.3 关键修复：spawn-worker.sh **已自动化** trust + permission dialo
 
 PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn 后 1-2 分钟还没写 STATUS.json，再看 sentinel/cron 通知（说明 dialog 真的卡了，再用 `tmux attach` 手动 inspect）。
 
+> v1.18.4 增：claude-code backend 默认全关上述三层监控（实测 `--permission-mode auto --bare` 不弹 dialog，省 90s 空等）；详见 §3.8.4。其他 backend 维持 v1.18.3 行为。
+
 历史踩坑（v1.18.2 之前）：wave-1/2 PM 反复按 1/2 接 dialog（v1.18.2 文档化但未真正修）。v1.18.3 自动化了，按踩坑 7 修复。
 
 #### 3.5.1 auto-bypass 实现细节（v1.18.3）
@@ -382,6 +384,77 @@ PM 已在本机确认以下 sibling skill 路径存在，请在该路径下用 R
 - §3.6 是「worker 侧」约束：worker 必须自动调 `captcha-auto`（`buildVisionRequestBody` + 自管 fetch），禁止用户手动输入验证码。
 - §3.7 是「PM 侧」约束：PM 派活必须把 `captcha-auto`（及所有相关 sibling skill）的**路径**写进 prompt 的「Project Skills」段，worker 才有可读的东西。
 - 两者配套：PM 给路径（§3.7）→ worker 读路径自动执行（§3.6）。缺 PM 给路径这步，§3.6 的「自动调」就无米下锅，必然退化成向用户要验证码。wave-2 派 D（shixin 双模式）+ wave-3 派 E（captcha 优化）都依赖本 SOP。
+
+### 3.8 PM spawn 后异步判断 + 并行投递纪律（v1.18.4 实战增）
+
+> **【红线警示】PM spawn 完一个 worker，绝对不要用 `TaskOutput block=true` /
+> `tmux attach` / 任何 block 等 worker 跑完的调用。** spawn 是 fire-and-forget；
+> 立刻用下面 4 条核验命令 30 秒内确认 worker 就位，然后切回 PM 主循环。
+> 任何「等 spawn-worker.sh 退出才投 prompt」「等 STATUS.json 出现才派下一个 worker」
+> 都把 PM 主回合挂死，让 Wave 并行价值归零。
+
+#### 3.8.1 spawn 后 30 秒内必跑的 4 条核验命令（PM 第一动作清单）
+
+`spawn-worker.sh` 退出后立即跑，**不要 await**：
+
+```bash
+# 1. tmux session 是否真的存活（< 1s）
+tmux has-session -t "$SESSION" 2>/dev/null && echo "SESSION_OK" || echo "SESSION_MISSING"
+
+# 2. pane cwd / prompt 是否已就位（< 1s）
+tmux capture-pane -t "$SESSION" -p | tail -5
+
+# 3. Session Context METADATA.json 是否已落盘
+ls "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+
+# 4. STATUS.json 是否 1-2 分钟内出现（用 timeout 卡死避免 block）
+timeout 120 bash -c 'until [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/STATUS.json" ]; do sleep 5; done'
+# 120s 还没出现 → 触发 §2.1 纠偏流程，不要加长 timeout
+```
+
+PM 跑完 4 条立刻返回主循环。后续 worker 终态由 sentinel（§7.2）+ cron（§7.3）事件驱动接管，**不要 PM 自己 poll 等**。完整操作清单详见 `templates/pm-spawn-postflight.md` cheatsheet。
+
+#### 3.8.2 并行 spawn 投递纪律（spawn 阶段就并行，不要先串行后并行）
+
+§3.1 提到 4-6 worker 并行（默认上行 218）但完全没讲 spawn 投递节奏。Wave 启动前 PM 必须判断：
+
+- **文件域不重叠 + 验证命令独立 + 无共享契约冲突** → **一开始**就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用）
+- **共享依赖 / 锁文件 / Tauri-Rust / DEC race** → 降级到 1-3 个串行
+
+并行 spawn 标准动作链（基于 DEC-038 监测层不变，`spawn-worker.sh` 退出后立刻 `tmux send-keys` 投 prompt）：
+
+```bash
+# 6 worker 一开始就并行（每次 = spawn-worker.sh + sentinel 各一次 Bash 调用）
+# 不要先 spawn W1 后 await 等 W1 STATUS.json 才 spawn W2 —— 等于串行化
+
+for w in w1 w2 w3 w4 w5 w6; do
+  bash scripts/spawn-worker.sh --project ... --branch ... --session "$w" --with-sentinel --command "$W_CMD_$w"
+  # ↑ fg spawn：拿 gate / 拿 sentinel cmd / 不 block 主进程（见 §3.5 v1.18.3 trust/permission 自动化 + §3.8.4 v1.18.4 默认 backend 分支）
+  bash scripts/sentinel.sh ... --tmux-session "$w"  # run_in_background=true 下一回合
+  # ↑ bg sentinel：exit 时 harness re-invoke PM（见 §7.2）
+done
+# 6 个 spawn 完 → 跑 §3.8.1 的 4 条核验 → 立即 `tmux send-keys` 投 prompt + 切回主循环
+```
+
+#### 3.8.3 spawn 后不要做的事（反模式）
+
+- `TaskOutput block=true` 等 spawn-worker.sh 退出 → PM 主回合 hang → 并行价值归零（某多 worker Wave 实测白等 ~90s/次 × 3 worker）
+- `tmux attach -t "$SESSION"` 跟 worker 一起看 → 占 PM 主会话、无纠偏能力
+- `while ! [ -f STATUS.json ]; do sleep 1; done` 不带 timeout → PM 可能永久挂
+- spawn 完 6 worker 立刻 poll 等全部 done → Wave 串行化
+- spawn-worker.sh 内部 fork sentinel / pm-monitor → auto mode 拒多 background（见 CHANGELOG v1.18.1）
+
+#### 3.8.4 spawn-worker.sh 同步 dialog 监控默认行为（v1.18.4 改动）
+
+claude-code backend + `--permission-mode auto --bare` 实测不弹 trust / permission dialog，但 v1.18.3 默认无条件走 trust_auto 30s + permission_auto 60s 同步监控 = **90s 空等**（实测三个 worker 单次 spawn 主进程 2-4 min 才退出）。
+
+v1.18.4 改动（`scripts/spawn-worker.sh` backend 分支化默认值）：
+
+- **claude-code backend 默认** `--no-trust-auto --no-permission-auto --no-permission-auto-bg` → spawn 秒级返回
+- **codebuddy / qoderwork-cn / codex / opencode 仍默认启**（这些 backend 会真弹 dialog）
+- 用户显式 `--trust-auto` / `--permission-auto` 可强制启用（升级后 dialog 行为变化兜底）
+
+6 个 `--*/--no-*` flag 均可 force override 默认值（详见 `scripts/spawn-worker.sh` usage 段与 DEC-112）。
 
 ## 4. 命名规则
 
@@ -520,6 +593,21 @@ bash scripts/spawn-worker.sh \
 ```
 
 启动后必须通过最小门禁：`tmux has-session` 存活、pane cwd 指向 worktree（轻量模式 = 目标文件夹）、worktree 模式下 `git branch --show-current` 等于目标分支、`Session Context/METADATA.json` 已记录 base/runtime/verification/`isolation_mode`、`Session Context/STATUS.json` 在 1-2 分钟内出现。失败时停止 session 或发送 bootstrap correction，不要在 PM 主目录继续实现。
+
+**【spawn 后 30 秒必跑 snippet · 详见 §3.8.1】** 不要用 `TaskOutput block=true` 等 `spawn-worker.sh` 退出，跑完下面 4 条立刻返回主循环：
+
+```bash
+# 1. session 存活
+tmux has-session -t "$SESSION" 2>/dev/null
+# 2. pane 已交出 prompt（capture 尾部 5 行）
+tmux capture-pane -t "$SESSION" -p | tail -5
+# 3. METADATA.json 已落
+ls "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+# 4. STATUS.json 1-2 分钟内出现（带 timeout 异步等，避免 block PM 主回合）
+timeout 120 bash -c 'until [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/STATUS.json" ]; do sleep 5; done'
+```
+
+Wave 内 N 个 worker 跑 N 轮核验，30 秒内完成；中间不 poll 不 attach 不 block。完整 cheatsheet 见 `templates/pm-spawn-postflight.md`。
 
 常用 worker command：
 - Claude Code 第三方 provider（推荐 registry）：用 `render-runtime-profile.sh --backend claude-code --provider-registry <local-registry.json> --api-provider <provider-id> --model <model-alias>` 生成命令；默认会包 `scripts/claude-provider-env.sh`，并把模型别名解析成真实 `claude --model <provider-model>`。真实 registry 不提交；模板见 `config/claude-provider-registry.example.json`。

@@ -492,3 +492,29 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 **反模式**：把 5 个维度的检查 + 修复全塞进一个 worker 的 prompt，指望它一次跑完——末位维度会漏。这不是 PM 派得不够清楚，是任务结构本身让 worker 没有足够注意力余量。
 
 **与 §3.1 Wave 模式的关系**：这本质是"一个 wave 内的任务颗粒度设计"，不是开新 wave。wave2 复查 worker 可以是同 base ref 下的轻量读 review，也可以是 `writing-reviewer` 这类只读审稿 worker。原则适用于任意多维度批量任务，不限书籍 / 文档类项目。
+
+### G23. 派生 spawn 阶段并行投递纪律（spawn 阶段就并行，不要先串行后并行）
+
+**场景**：Wave 启动时 PM 误把"spawn 阶段串行、worker 阶段并行"当作稳妥选项——先派 W1、`await` 等 W1 `STATUS.json` 出现，才派 W2，再派 W3。多花一轮时间，价值零（与单 worker 跑三次无异）。
+
+**实战来源**：2026-07-10 某客户委托项目多 worker Wave 实战（3 个不同 skill backend 的 worker，全 claude-code backend，反馈「着实影响并行推进任务」）。PM 一开始串行 spawn W1→W2→W3 浪费一轮；Wave 后半段并行 spawn 才补回节奏。详见 `SKILL.md §3.8.2`、TASKS L118、DEC-112。
+
+**两条改进**：
+
+1. **spawn 阶段就并行投递**：文件域不重叠 + 验证命令独立 + 无共享契约冲突的 worker，**从一开始**就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用），不先串行验证流程再补并行。spawn 阶段就并行与 `§3.1` 已有的"Wave 内 4-6 worker 并行"硬数字配套。
+2. **spawn 后不 await、不 block、不 attach**：spawn-worker.sh 退出后立即跑 `SKILL.md §3.8.1` 的 4 条核验命令（`tmux has-session` / `capture-pane` / `METADATA.json` / `STATUS.json` with `timeout 120`），不超过 30 秒/worker，立即返回 PM 主循环。后续 worker 终态由 sentinel（§7.2）+ cron（§7.3）事件驱动接管。
+
+**反模式**：
+
+- `TaskOutput block=true` 等 `spawn-worker.sh` 退出 → PM 主回合 hang → 并行价值归零（某多 worker Wave 实测 ~90s/次 × 3 worker）
+- `tmux attach -t "$SESSION"` 跟 worker 一起看 → 占 PM 主会话、无纠偏能力
+- `while ! [ -f STATUS.json ]; do sleep 1; done` 不带 timeout → PM 可能永久挂
+- 先串行 spawn W1，等 `STATUS.json` 才派 W2、W3 → Wave 串行化，多花一轮
+- spawn 完 6 worker 立刻 poll 等全部 done → 把 Wave 设计目的废弃
+
+**与 §3.1 Wave 模式 + G22 的关系**：G22 是 wave **内**任务颗粒度（多维度 worker attention 分散 → checklist + wave2 复查 + 拆单维度），本 G23 是 wave **前**spawn 投递纪律（一开始就并行 vs 串行验证 + spawn 后不 await）。两者是 Wave 调度的两层闭环：
+
+- G23 = spawn 阶段并行投递（Wave **前**）
+- G22 = wave 内任务颗粒度 + wave2 复查抓漏（Wave **内** + Wave **后**）
+
+原则适用于任意多 worker Wave，不限书籍 / 文档 / 代码项目。

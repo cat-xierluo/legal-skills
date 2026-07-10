@@ -11,13 +11,19 @@
 #   这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。
 #   本脚本只负责隔离与启动，不自动探测/注入 skill 路径；路径收集是 PM 的派发前职责。
 #
-# WorkBuddy / CodeBuddy trust + permission dialog 兜底（踩坑 3 + 踩坑 5 + 踩坑 7 = v1.18.3）：
+# Trust + permission dialog 兜底（v1.18.3 + v1.18.4）：
 #   - 启动后可能弹 trust dialog（选 1 = Trust folder only）：trust_auto() 同步处理 30s。
 #   - 即便 --permission-mode acceptEdits -y，每个工具调用仍弹 "Do you want to proceed?"：
-#     - permission_auto() 同步处理 60s（v1.18.3 起改用 `2 Enter` 数字键，PM 实测 work；旧版用 Down Enter 在某些 TUI 状态不稳）。
-#     - permission_auto_bg() 后台 watcher 持续 7200s（disown 到后台），覆盖首次 dialog 出现在 60s 之后的情况。
-#     - 两者双保险：spawn 后 PM 不需要手按 2，v1.18.3 起 auto-bypass 真的 work。
-#   - opt-out: --no-trust-auto 同时关 trust+permission；--no-permission-auto 只关 permission（v1.18.3 新加精细 opt-out）。
+#     - permission_auto() 同步处理 60s（v1.18.3 起改用 `2 Enter` 数字键）。
+#     - permission_auto_bg() 后台 watcher 持续 7200s（disown 到后台），覆盖首次 dialog
+#       出现在 60s 之后的情况。
+#   - v1.18.4：默认行为按 backend 分支化（DEC-112）：
+#     * claude-code 实测 `--permission-mode auto --bare` 不弹 dialog，默认全关
+#       （spawn 秒级返回，避免 trust_auto 30s + permission_auto 60s 共 90s 空等，
+#       见 2026-07-10 某多 worker Wave 实战 follow-up + DEC-112）；
+#     * 其他 backend（codebuddy / qoderwork-cn / codex / opencode）仍默认启
+#       （这些 backend 真弹 dialog）。
+#   - 6 个 --*/--no-* flag 均可 force override 默认值，详见 usage 段与 DEC-112。
 
 set -euo pipefail
 
@@ -43,8 +49,16 @@ WITH_SENTINEL=0
 SENTINEL_POLL_INTERVAL=5
 SENTINEL_MAX_WAIT=7200
 KEEP_TMUX_ON_TERMINAL=0
+# v1.18.4：trust/permission dialog 监控默认值改 backend 分支化（DEC-112）
+# - *_OVERRIDE 标志在 flag 解析时被置 1，由 resolve_backend_defaults() 检查并跳过
+# - claude-code 默认全关：实测 --permission-mode auto + --bare 不弹 dialog，省 90s 空等
+# - 其他 backend 默认全开：codebuddy/qoderwork-cn/codex/opencode 真弹 dialog
+TRUST_AUTO_OVERRIDE=0
 TRUST_AUTO=1
-PERMISSION_AUTO=1  # v1.18.3：独立控制 permission_auto（trust dialog opt-out 不再捎带关 permission）
+PERMISSION_AUTO_OVERRIDE=0
+PERMISSION_AUTO=1
+PERMISSION_AUTO_BG_OVERRIDE=0
+PERMISSION_AUTO_BG=1  # v1.18.4：bg watcher 独立控制；与 sync permission_auto 解耦
 ADD_DIRS=()
 ALLOW_PATHS=()
 
@@ -80,13 +94,28 @@ Options:
   --keep-tmux-on-terminal
                    Pass --keep-tmux-on-terminal to the recommended sentinel command
   --no-trust-auto   Skip trust-folder auto-accept for codebuddy/qoder CLI workers.
-                   Default: auto-select 'Trust folder and all subdirectories' (option 3)
-                   to avoid both the initial trust prompt and subdir trust prompts.
+                   Default (v1.18.4): claude-code backend = ON, other backends = ON.
+                   Use --no-trust-auto to force OFF; --trust-auto to force ON.
+                   Default action: auto-select 'Trust folder and all subdirectories'
+                   (option 3) to avoid both initial and subdir trust prompts.
+  --trust-auto     (v1.18.4 new) Force trust dialog auto-accept ON, overriding
+                   backend default. Use after Claude Code upgrades that
+                   re-introduce the trust dialog in --permission-mode auto.
   --no-permission-auto  (v1.18.3) Skip runtime permission auto-accept (both sync 60s
-                   and background 7200s watcher). Default: auto-select option 2
+                   and background 7200s watcher). Default (v1.18.4): claude-code = OFF,
+                   other backends = ON. Default action when ON: auto-select option 2
                    (Yes, and don't ask again for session) on every "Do you want to
                    proceed?" dialog. Use only if you intentionally want to handle
                    permission prompts manually.
+  --permission-auto     (v1.18.4 new) Force BOTH sync + bg permission auto-accept ON,
+                   overriding backend default. Use after Claude Code upgrades that
+                   re-introduce runtime permission dialog.
+  --no-permission-auto-bg  (v1.18.4 new) Only skip background 7200s watcher; sync
+                   permission_auto unchanged. Use when sync dialogs are wanted but
+                   the bg resource cost (1 shell / 5s poll) is not.
+  --permission-auto-bg     (v1.18.4 new) Force background 7200s watcher ON,
+                   overriding backend default. Useful when sync dialogs are off
+                   but late dialogs (after initial 60s) still expected.
   --add-dir DIR     Extra directories for codebuddy to access outside the worktree
                    (repeatable). Passed through to codebuddy's --add-dir flag.
                    Use when task files/assets are outside the worktree, e.g.:
@@ -197,10 +226,36 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-trust-auto)
       TRUST_AUTO=0
+      TRUST_AUTO_OVERRIDE=1
       shift
       ;;
-    --no-permission-auto)  # v1.18.3：精细 opt-out，只关 permission_auto 不动 trust_auto
+    --trust-auto)  # v1.18.4：显式 opt-in 强制启
+      TRUST_AUTO=1
+      TRUST_AUTO_OVERRIDE=1
+      shift
+      ;;
+    --no-permission-auto)  # v1.18.3：兼容 v1.18.3 行为，同时关 sync + bg
       PERMISSION_AUTO=0
+      PERMISSION_AUTO_BG=0
+      PERMISSION_AUTO_OVERRIDE=1
+      PERMISSION_AUTO_BG_OVERRIDE=1
+      shift
+      ;;
+    --permission-auto)  # v1.18.4：显式 opt-in 强制启 sync + bg
+      PERMISSION_AUTO=1
+      PERMISSION_AUTO_BG=1
+      PERMISSION_AUTO_OVERRIDE=1
+      PERMISSION_AUTO_BG_OVERRIDE=1
+      shift
+      ;;
+    --no-permission-auto-bg)  # v1.18.4：精细 opt-out 只关 bg watcher
+      PERMISSION_AUTO_BG=0
+      PERMISSION_AUTO_BG_OVERRIDE=1
+      shift
+      ;;
+    --permission-auto-bg)  # v1.18.4：精细 opt-in 强制启 bg watcher
+      PERMISSION_AUTO_BG=1
+      PERMISSION_AUTO_BG_OVERRIDE=1
       shift
       ;;
     --add-dir)
@@ -252,6 +307,32 @@ run() {
   printf 'SPAWN_WORKER_RUN: %s\n' "$*"
   [ "$DRY_RUN" -eq 1 ] || "$@"
 }
+
+# v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
+# 仅在 *_OVERRIDE 标志为 0 时（即用户没显式传 flag）才按 backend 默认。
+# claude-code backend 默认全关，省 trust_auto 30s + permission_auto 60s 共 90s 空等；
+# 其他 backend 默认全开。
+resolve_backend_defaults() {
+  if [ "$TRUST_AUTO_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code) TRUST_AUTO=0 ;;
+      *) TRUST_AUTO=1 ;;
+    esac
+  fi
+  if [ "$PERMISSION_AUTO_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code) PERMISSION_AUTO=0 ;;
+      *) PERMISSION_AUTO=1 ;;
+    esac
+  fi
+  if [ "$PERMISSION_AUTO_BG_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code) PERMISSION_AUTO_BG=0 ;;
+      *) PERMISSION_AUTO_BG=1 ;;
+    esac
+  fi
+}
+resolve_backend_defaults
 
 if ! git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "ERROR: --project is not a git work tree: $PROJECT_DIR" >&2
@@ -602,14 +683,17 @@ run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 # permission_auto: Selects "Yes, and don't ask again for session" (option 2)
 # for "Do you want to proceed?" runtime prompts (cross-directory access).
 # permission_auto_bg (v1.18.3): 后台 watcher 持续 7200s，覆盖同步 60s 窗口外的 dialog。
-# Use --no-trust-auto to opt out of trust_auto + permission_auto (共享).
-# Use --no-permission-auto to opt out of only permission_auto + permission_auto_bg (v1.18.3).
+# v1.18.4: 默认值按 backend 分支（resolve_backend_defaults），claude-code 默认全关省 90s 空等；
+# 其他 backend 默认全开。flag --*/--no-* 均可 force override 默认值（详见 usage）。
 if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
   trust_auto "$SESSION"
 fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
   permission_auto "$SESSION"
-  # v1.18.3: 后台 watcher 覆盖 60s 窗口外的 dialog；disown 让 spawn-worker.sh 退出不影响 watcher
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
+  # v1.18.4: bg watcher 独立 gate（与 sync permission_auto 解耦），claude-code 默认不启
+  # disown 让 spawn-worker.sh 退出不影响 watcher
   ( permission_auto_bg "$SESSION" & disown ) &
 fi
 
