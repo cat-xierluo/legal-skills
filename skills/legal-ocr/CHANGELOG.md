@@ -6,8 +6,8 @@
 
 > **背景**：法律场景里法院电子送达的判决书、电子合同、政府公文等相当一部分 PDF
 > 本就带可靠的原生文本层。直读比 OCR 更准（避免识别错误）、更快（无网络往返）、
-> 更省（不耗 PaddleOCR / MinerU 额度）。借鉴 DataInfra-RedactionEverything 调研
-> Part B §一：用文本密度阈值重判 `is_scanned` 决定走文本管线 vs OCR 管线。
+> 更省（不耗 PaddleOCR / MinerU 额度）。参考同类工具用文本密度阈值
+> 重判 `is_scanned` 决定走文本管线 vs OCR 管线。
 
 #### 行为
 
@@ -44,7 +44,7 @@
 - 文本层结果以合成的 `BackendResult(backend='text_layer', mode='native_pdf_text', provider='pypdfium2')`
   形式进入既有 archive 流水线；`metadata.json` 多出 `text_layer` 字段，记录 probe 全量指标，
   方便复盘为什么走了文本层 / 为什么没走。
-- 借鉴 DataInfra 思路（文本密度判定），**未引入任何 DataInfra 代码**（注意 AGPL / 非商用许可隔离）。
+- 借鉴同类工具的文本密度判定思路，**未引入任何第三方代码**。
 
 #### 自造样本烟测
 
@@ -66,7 +66,7 @@
 ### 关联
 
 - 任务源：legal-ocr TASKS.md「PDF 文本层双路径」条目（local-only，不在 PR diff 内）。
-- 调研缘由：260707 DataInfra-RedactionEverything 调研 Part B §一。
+- 调研缘由：参考同类工具的文本密度判定实践。
 - 决策记录：DECISIONS.md「文本层质量阈值（v1.5.0）」段（local-only）。
 
 ## [1.4.3] - 2026-06-14
