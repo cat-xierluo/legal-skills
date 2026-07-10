@@ -93,6 +93,12 @@ Scope:
 
 Expected Deliverables:
 - Code/docs changes: {{deliverables}}
+- **CHANGELOG 段写入前强制**（DEC-108，共享 [X.Y.Z] 段防覆盖）：
+  1. `git fetch origin && git rebase origin/main`（拿最新 main）
+  2. `git log origin/main --oneline | grep "\[X.Y.Z\]"`（检查同 [X.Y.Z] 段是否被 origin main 占用）
+  3. 若占用：改用 `[X.Y.Z+1]` 或 `[X.Y.Z.1]` 补丁号，**不覆盖别人的 [X.Y.Z] 段**
+  4. commit 前 `git diff origin/main -- CHANGELOG.md` 确认 CHANGELOG 段不冲突
+  5. push 前 `git fetch origin` 再确认（防 race）
 - Checkpoint files:
   - `{{session_context_path}}/STATUS.json`
   - `{{session_context_path}}/RESULT.md`
