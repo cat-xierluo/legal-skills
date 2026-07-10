@@ -1,5 +1,74 @@
 # 变更记录
 
+## [1.5.0] - 2026-07-10
+
+### 新增：PDF 原生文本层双路径（先直读，不达标再 OCR）
+
+> **背景**：法律场景里法院电子送达的判决书、电子合同、政府公文等相当一部分 PDF
+> 本就带可靠的原生文本层。直读比 OCR 更准（避免识别错误）、更快（无网络往返）、
+> 更省（不耗 PaddleOCR / MinerU 额度）。借鉴 DataInfra-RedactionEverything 调研
+> Part B §一：用文本密度阈值重判 `is_scanned` 决定走文本管线 vs OCR 管线。
+
+#### 行为
+
+- 进入 OCR 后端之前，新增「文本层直读分支」（仅本地 `.pdf`）：
+  1. 用 `pypdfium2` 逐页 `get_textpage().get_text_range()` 抽取文字；
+  2. 计算质量指标（文本页覆盖率、平均 CJK / 页、乱码比例、总字符数）；
+  3. 全部阈值达标 → 直接转 Markdown，复用既有 post-process（法律术语 → 硬换行整理 → 基础清理）；
+  4. 任一不达标 → 落回原有 OCR 候选（PaddleOCR → MinerU）。
+- 文本层分支排在 **所有 OCR 后端之前**；不可用时透明回退，旧工作流完全兼容。
+
+#### 新参数
+
+- `--text-layer auto|never|always`（CLI）
+- `LEGAL_OCR_TEXT_LAYER`（env，等价）
+- `LEGAL_OCR_TEXT_LAYER_MIN_COVERAGE`（默认 `0.8`，文本页覆盖率下限）
+- `LEGAL_OCR_TEXT_LAYER_MIN_CHARS_PER_PAGE`（默认 `50`，文本页平均 CJK 字符下限）
+- `LEGAL_OCR_TEXT_LAYER_MAX_GARBLE_RATIO`（默认 `0.05`，PUA + 替换字符 + 非常见字符占比上限）
+- `LEGAL_OCR_TEXT_LAYER_MIN_TOTAL_CHARS`（默认 `100`，非空白字符总数下限）
+
+阈值默认值依据见 `DECISIONS.md`「文本层质量阈值（v1.5.0）」段，**待真实卷宗校准**。
+
+#### 与 `--backend` 的优先级
+
+- `--backend auto`（默认）+ `--text-layer auto`（默认）：先文本层、不达标再 OCR，最优路径。
+- `--backend paddle|mineru`：视为用户显式想要 OCR，跳过文本层分支；除非同时设 `--text-layer always` 强制覆盖。
+- `--text-layer never`：完全禁用文本层，回到旧版纯 OCR 行为。
+- `--text-layer always`：强制文本层，PDF 没有可用文本层时直接报错退出（exit=2），便于排障。
+
+#### 实现要点
+
+- 新增 `scripts/text_layer.py`：探测 + 抽取 + 阈值加载，独立可测。
+- `scripts/convert.py` 提取 `run_postprocess_pipeline` / `finalize_conversion` 两个共享函数；
+  OCR 分支与文本层分支共用同一套 post-process + archive，输出风格保持一致。
+- 文本层结果以合成的 `BackendResult(backend='text_layer', mode='native_pdf_text', provider='pypdfium2')`
+  形式进入既有 archive 流水线；`metadata.json` 多出 `text_layer` 字段，记录 probe 全量指标，
+  方便复盘为什么走了文本层 / 为什么没走。
+- 借鉴 DataInfra 思路（文本密度判定），**未引入任何 DataInfra 代码**（注意 AGPL / 非商用许可隔离）。
+
+#### 自造样本烟测
+
+造两份本地样本验证分流正确（详见 PR 描述）：
+
+| 样本 | 期望 | 实际 |
+|------|------|------|
+| `clean_text_layer.pdf`（reportlab + STHeiti，3 页中文判决片段） | `--text-layer auto` 直读，后端=`text_layer` | ✅ coverage=1.0、cjk/page=112、garbled=0、走文本层 |
+| `scanned_no_text_layer.pdf`（PIL 渲染图片转 PDF，1 页） | `--text-layer auto` 回退到 OCR 后端 | ✅ reason=`no_text_layer`、回退 MinerU light |
+| `scanned_no_text_layer.pdf` + `--text-layer always` | 直接失败、exit=2 | ✅ 报错文案清晰、exit=2 |
+| `clean_text_layer.pdf` + `--text-layer never` | 强制走 OCR | ✅ 跳过文本层、回退 MinerU light |
+
+### 文档完善
+
+- `SKILL.md` 新增「PDF 文本层双路径」章节、参数表加 `--text-layer`、版本号 → 1.5.0。
+- 新增 `references/text-layer-detection.md`：探测算法、字符分类、阈值理由、失败模式。
+- `.env.example` 顶部加 `LEGAL_OCR_TEXT_LAYER*` 配置块。
+
+### 关联
+
+- 任务源：legal-ocr TASKS.md「PDF 文本层双路径」条目（local-only，不在 PR diff 内）。
+- 调研缘由：260707 DataInfra-RedactionEverything 调研 Part B §一。
+- 决策记录：DECISIONS.md「文本层质量阈值（v1.5.0）」段（local-only）。
+
 ## [1.4.3] - 2026-06-14
 
 ### 🔥 真修:`httpx.Client(..., trust_env=False)` 全 5 处加固 — cron 死循环 root cause 治本

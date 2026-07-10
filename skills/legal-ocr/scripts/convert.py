@@ -45,6 +45,12 @@ from basic_postprocess import run_basic_postprocess  # noqa: E402
 from legal_terms import detect_legal_context, run_legal_terms_postprocess  # noqa: E402
 from linebreaks import run_linebreak_postprocess  # noqa: E402
 from router import RouteDecision, choose_backend  # noqa: E402
+from text_layer import (  # noqa: E402
+    load_thresholds,
+    probe_and_extract,
+    resolve_page_indices,
+    resolve_text_layer_mode,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -53,6 +59,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("input", help='本地文件、远程 URL，或 "checktoken"')
     parser.add_argument("--backend", choices=["auto", "paddle", "mineru"], default=None)
+    parser.add_argument(
+        "--text-layer",
+        choices=["auto", "never", "always"],
+        default=None,
+        help=(
+            "PDF 原生文本层分支：auto=达标则直读跳过 OCR（默认），"
+            "never=始终走 OCR，always=强制文本层（不可用时直接失败）"
+        ),
+    )
     parser.add_argument("--output", help="输出 Markdown 路径；如果不是 .md，则按目录处理")
     parser.add_argument("--pages", help='页码范围，例如 "1-20" 或 "1-5,8,10-12"')
     parser.add_argument("--archive-name", help="自定义 archive 目录名后缀，默认使用输入文件名")
@@ -335,6 +350,235 @@ def convert_once(
     return backend.convert(source, options, work_dir, assets_dir), assets_dir
 
 
+def run_postprocess_pipeline(
+    raw_markdown: str,
+    *,
+    source: SourceInfo,
+    env: dict[str, str],
+    no_line_merge: bool,
+    postprocess_enabled: bool,
+    configured_legal_terms_mode: str,
+) -> tuple[str, list[dict[str, str]], dict[str, Any]]:
+    """统一的后处理链：法律术语 → 硬换行整理 → 基础 Markdown 清理。
+
+    文本层直读分支与 OCR 分支共享此函数，保证两条路径输出风格一致。
+    返回 (final_markdown, postprocess_log, legal_context)。
+    """
+    if not postprocess_enabled:
+        return raw_markdown, [], {
+            "mode": "disabled",
+            "enabled": False,
+            "detection": None,
+        }
+
+    working_markdown = raw_markdown
+    postprocess_log: list[dict[str, str]] = []
+    mode = configured_legal_terms_mode
+    legal_context: dict[str, Any] = {
+        "mode": mode,
+        "enabled": False,
+        "detection": None,
+    }
+    if mode == "auto":
+        detection = detect_legal_context(working_markdown, source_name=source.file_name)
+        legal_context["detection"] = detection
+        legal_context["enabled"] = bool(detection["is_legal"])
+        if not detection["is_legal"]:
+            postprocess_log.append(
+                {
+                    "action": "legal_terms_skip",
+                    "category": "legal_context_auto",
+                    "description": "未检测到足够法律文书信号，跳过法律术语优化",
+                    "score": str(detection["score"]),
+                }
+            )
+    elif mode == "always":
+        legal_context["enabled"] = True
+
+    if legal_context["enabled"]:
+        legal_terms_result = run_legal_terms_postprocess(
+            working_markdown,
+            custom_terms_path=env.get("LEGAL_OCR_CUSTOM_TERMS_PATH"),
+        )
+        working_markdown = legal_terms_result.text
+        postprocess_log.extend(legal_terms_result.log)
+
+    if should_line_merge(env, no_line_merge):
+        linebreak_result = run_linebreak_postprocess(working_markdown)
+        working_markdown = linebreak_result.text
+        postprocess_log.extend(linebreak_result.log)
+
+    postprocessed = run_basic_postprocess(working_markdown)
+    final_markdown = postprocessed.text
+    postprocess_log.extend(postprocessed.log)
+    return final_markdown, postprocess_log, legal_context
+
+
+def finalize_conversion(
+    *,
+    source: SourceInfo,
+    backend_result: BackendResult,
+    route: RouteDecision,
+    attempts: list[dict[str, str]],
+    attempt_assets_dir: Path | None,
+    output_md_path: Path,
+    output_images_dir: Path,
+    archive_name: str,
+    args: argparse.Namespace,
+    env: dict[str, str],
+    postprocess_enabled: bool,
+    configured_legal_terms_mode: str,
+    no_archive: bool,
+    extra_metadata: dict[str, Any] | None = None,
+) -> int:
+    """共享的转换收尾：后处理 → 写 Markdown → 复制图片 → archive → 打印。
+
+    文本层分支与 OCR 分支共用，避免两份相同的 post-process + archive 拷贝。
+    """
+    raw_markdown = backend_result.markdown.strip()
+    final_markdown, postprocess_log, legal_context = run_postprocess_pipeline(
+        raw_markdown,
+        source=source,
+        env=env,
+        no_line_merge=args.no_line_merge,
+        postprocess_enabled=postprocess_enabled,
+        configured_legal_terms_mode=configured_legal_terms_mode,
+    )
+
+    write_text(output_md_path, final_markdown)
+    if attempt_assets_dir is not None:
+        if copy_attempt_assets(attempt_assets_dir, output_images_dir):
+            update_image_paths(backend_result.images, output_images_dir)
+
+    result_json = build_result_payload(
+        source=source,
+        backend_result=backend_result,
+        route=route,
+        attempts=attempts,
+        raw_markdown=raw_markdown,
+        final_markdown=final_markdown,
+        postprocess_log=postprocess_log,
+        postprocess_enabled=postprocess_enabled,
+        legal_context=legal_context,
+    )
+    metadata: dict[str, Any] = {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "source": source_json(source),
+        "backend": result_json["backend"],
+        "route": result_json["route"],
+        "output_markdown": str(output_md_path),
+        "image_output_dir": str(output_images_dir) if output_images_dir.exists() else None,
+        "postprocess_enabled": postprocess_enabled,
+        "legal_context": result_json["postprocess"]["legal_context"],
+        "postprocess_log": postprocess_log,
+        "backend_metadata": backend_result.metadata,
+    }
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
+    archive_path: Path | None = None
+    if not no_archive:
+        archive_path = build_archive(
+            source=source,
+            archive_name=archive_name,
+            output_md_path=output_md_path,
+            output_images_dir=output_images_dir,
+            raw_markdown=raw_markdown,
+            result_json=result_json,
+            metadata=metadata,
+            backend_result_dir=backend_result.backend_result_dir,
+        )
+
+    print("转换完成")
+    print(f"Markdown: {output_md_path}")
+    if output_images_dir.exists():
+        print(f"图片目录: {output_images_dir}")
+    if archive_path:
+        print(f"Archive: {archive_path}")
+    print(f"后端: {backend_result.backend} ({backend_result.mode})")
+    _model = (backend_result.metadata or {}).get("config", {}).get("model")
+    if _model:
+        print(f"OCR_MODEL: {_model}")
+    return 0
+
+
+def maybe_probe_text_layer(
+    *,
+    source: SourceInfo,
+    env: dict[str, str],
+    args: argparse.Namespace,
+    options: ConvertOptions,
+) -> tuple[BackendResult | None, dict[str, Any]]:
+    """PDF 文本层直读分支。
+
+    返回 (BackendResult | None, decision_log)：
+    - 当且仅当文本层分支应当接管时，返回合成的 BackendResult；
+    - 否则返回 None，调用方继续走 OCR 路径。
+    decision_log 记录为什么启用 / 禁用，便于 archive 与诊断。
+    """
+    # 仅本地 PDF 走文本层；远程 / 图片 / Office 不参与
+    if source.is_url or source.suffix != ".pdf" or source.path is None:
+        return None, {"enabled": False, "reason": "not_local_pdf"}
+
+    try:
+        mode = resolve_text_layer_mode(env, args.text_layer)
+    except ValueError as error:
+        return None, {"enabled": False, "reason": "invalid_mode", "error": str(error)}
+
+    if mode == "never":
+        return None, {"enabled": False, "reason": "mode_never"}
+
+    # 显式指定 --backend paddle|mineru 时，用户想要 OCR；文本层分支让位。
+    configured_backend = (args.backend or env.get("LEGAL_OCR_BACKEND", "auto")).lower()
+    if configured_backend in {"paddle", "mineru"} and mode != "always":
+        return None, {"enabled": False, "reason": "explicit_ocr_backend"}
+
+    thresholds = load_thresholds(env)
+    try:
+        page_indices, total_pages = resolve_page_indices(source.path, options.pages)
+    except ValueError as error:
+        if mode == "always":
+            raise
+        return None, {"enabled": False, "reason": "invalid_pages", "error": str(error)}
+
+    probe = probe_and_extract(
+        source.path,
+        page_indices=page_indices,
+        thresholds=thresholds,
+    )
+
+    decision: dict[str, Any] = {
+        "enabled": probe.usable,
+        "mode": mode,
+        "probe": probe.to_payload(),
+    }
+
+    if not probe.usable:
+        if mode == "always":
+            raise ValueError(
+                f"--text-layer always 但 PDF 文本层不可用：reason={probe.reason}；"
+                f"如需走 OCR 请改用 --text-layer auto 或 --text-layer never"
+            )
+        return None, decision
+
+    metadata_payload = {
+        "processing": {
+            "text_layer": probe.to_payload(),
+        },
+    }
+    backend_result = BackendResult(
+        backend="text_layer",
+        mode="native_pdf_text",
+        provider="pypdfium2",
+        markdown=probe.text,
+        images=[],
+        batches=[],
+        metadata=metadata_payload,
+        backend_result_dir=None,
+    )
+    return backend_result, decision
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     env = load_env()
@@ -372,6 +616,48 @@ def main(argv: list[str] | None = None) -> int:
     temp_root = Path(tempfile.mkdtemp(prefix="legal_ocr_"))
     attempts: list[dict[str, str]] = []
     try:
+        # ----- 文本层直读分支（先于 OCR 后端） -----
+        # 仅本地 PDF：先看 PDF 是否带可用的原生文本层，达标则直接抽文字、跳过 OCR。
+        # 不达标或被关闭时继续走下方 OCR 后端循环。
+        try:
+            text_layer_result, text_layer_decision = maybe_probe_text_layer(
+                source=source,
+                env=env,
+                args=args,
+                options=options,
+            )
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 2
+
+        if text_layer_result is not None:
+            attempts.append({"backend": "text_layer", "status": "success"})
+            # 文本层分支没有 backend_result_dir；用 route 的 notes 留痕便于 archive。
+            text_layer_route = RouteDecision(
+                preferred="text_layer",
+                candidates=["text_layer"],
+                reason="PDF 原生文本层质量达标，直接抽取文字跳过 OCR",
+                fallback_allowed=False,
+                notes=[f"text_layer probe reason={text_layer_decision.get('probe', {}).get('reason')}"],
+            )
+            return finalize_conversion(
+                source=source,
+                backend_result=text_layer_result,
+                route=text_layer_route,
+                attempts=attempts,
+                attempt_assets_dir=None,
+                output_md_path=output_md_path,
+                output_images_dir=output_images_dir,
+                archive_name=archive_name,
+                args=args,
+                env=env,
+                postprocess_enabled=postprocess_enabled,
+                configured_legal_terms_mode=configured_legal_terms_mode,
+                no_archive=args.no_archive,
+                extra_metadata={"text_layer": text_layer_decision},
+            )
+
+        # ----- OCR 后端分支（PaddleOCR / MinerU） -----
         last_error: Exception | None = None
         for attempt_index, backend_name in enumerate(route.candidates):
             try:
@@ -383,110 +669,29 @@ def main(argv: list[str] | None = None) -> int:
                     temp_root=temp_root,
                 )
                 attempts.append({"backend": backend_name, "status": "success"})
-                raw_markdown = backend_result.markdown.strip()
-                if postprocess_enabled:
-                    working_markdown = raw_markdown
-                    postprocess_log: list[dict[str, str]] = []
-                    mode = configured_legal_terms_mode
-                    legal_context = {
-                        "mode": mode,
-                        "enabled": False,
-                        "detection": None,
-                    }
-                    if mode == "auto":
-                        detection = detect_legal_context(working_markdown, source_name=source.file_name)
-                        legal_context["detection"] = detection
-                        legal_context["enabled"] = bool(detection["is_legal"])
-                        if not detection["is_legal"]:
-                            postprocess_log.append(
-                                {
-                                    "action": "legal_terms_skip",
-                                    "category": "legal_context_auto",
-                                    "description": "未检测到足够法律文书信号，跳过法律术语优化",
-                                    "score": str(detection["score"]),
-                                }
-                            )
-                    elif mode == "always":
-                        legal_context["enabled"] = True
 
-                    if legal_context["enabled"]:
-                        legal_terms_result = run_legal_terms_postprocess(
-                            working_markdown,
-                            custom_terms_path=env.get("LEGAL_OCR_CUSTOM_TERMS_PATH"),
-                        )
-                        working_markdown = legal_terms_result.text
-                        postprocess_log.extend(legal_terms_result.log)
+                # 若 PDF 文本层分支被探测但放弃（mode=auto 且质量不达标），
+                # 把诊断写进 metadata，方便后续复盘为什么走了 OCR。
+                text_layer_meta: dict[str, Any] | None = None
+                if source.suffix == ".pdf" and not source.is_url:
+                    text_layer_meta = {"text_layer": text_layer_decision}
 
-                    if should_line_merge(env, args.no_line_merge):
-                        linebreak_result = run_linebreak_postprocess(working_markdown)
-                        working_markdown = linebreak_result.text
-                        postprocess_log.extend(linebreak_result.log)
-
-                    postprocessed = run_basic_postprocess(working_markdown)
-                    final_markdown = postprocessed.text
-                    postprocess_log.extend(postprocessed.log)
-                else:
-                    final_markdown = raw_markdown
-                    postprocess_log = []
-                    legal_context = {
-                        "mode": "disabled",
-                        "enabled": False,
-                        "detection": None,
-                    }
-
-                write_text(output_md_path, final_markdown)
-                if copy_attempt_assets(attempt_assets_dir, output_images_dir):
-                    update_image_paths(backend_result.images, output_images_dir)
-
-                result_json = build_result_payload(
+                return finalize_conversion(
                     source=source,
                     backend_result=backend_result,
                     route=route,
                     attempts=attempts,
-                    raw_markdown=raw_markdown,
-                    final_markdown=final_markdown,
-                    postprocess_log=postprocess_log,
+                    attempt_assets_dir=attempt_assets_dir,
+                    output_md_path=output_md_path,
+                    output_images_dir=output_images_dir,
+                    archive_name=archive_name,
+                    args=args,
+                    env=env,
                     postprocess_enabled=postprocess_enabled,
-                    legal_context=legal_context,
+                    configured_legal_terms_mode=configured_legal_terms_mode,
+                    no_archive=args.no_archive,
+                    extra_metadata=text_layer_meta,
                 )
-                metadata = {
-                    "created_at": datetime.now().isoformat(timespec="seconds"),
-                    "source": source_json(source),
-                    "backend": result_json["backend"],
-                    "route": result_json["route"],
-                    "output_markdown": str(output_md_path),
-                    "image_output_dir": str(output_images_dir) if output_images_dir.exists() else None,
-                    "postprocess_enabled": postprocess_enabled,
-                    "legal_context": result_json["postprocess"]["legal_context"],
-                    "postprocess_log": postprocess_log,
-                    "backend_metadata": backend_result.metadata,
-                }
-
-                archive_path: Path | None = None
-                if not args.no_archive:
-                    archive_path = build_archive(
-                        source=source,
-                        archive_name=archive_name,
-                        output_md_path=output_md_path,
-                        output_images_dir=output_images_dir,
-                        raw_markdown=raw_markdown,
-                        result_json=result_json,
-                        metadata=metadata,
-                        backend_result_dir=backend_result.backend_result_dir,
-                    )
-
-                print("转换完成")
-                print(f"Markdown: {output_md_path}")
-                if output_images_dir.exists():
-                    print(f"图片目录: {output_images_dir}")
-                if archive_path:
-                    print(f"Archive: {archive_path}")
-                print(f"后端: {backend_result.backend} ({backend_result.mode})")
-                # 输出实际使用的模型名，供上游 run_ocr.py 解析
-                _model = (backend_result.metadata or {}).get("config", {}).get("model")
-                if _model:
-                    print(f"OCR_MODEL: {_model}")
-                return 0
             except Exception as error:  # noqa: BLE001
                 category = classify_backend_error(error)
                 has_next_backend = attempt_index < len(route.candidates) - 1

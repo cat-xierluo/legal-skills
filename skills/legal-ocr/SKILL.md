@@ -1,7 +1,7 @@
 ---
 name: legal-ocr
 description: 本技能应在用户需要 OCR、扫描识别、图片文字识别、文档识别，或将 PDF、图片、Office 文档、URL 转换为 Markdown 时使用。检测到法律材料时可进行保守的法律术语与文书结构优化。不要用于法律事实判断、补写缺失内容、语义改写、印章深度识别或图表实体分析。
-version: "1.4.3"
+version: "1.5.0"
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -10,6 +10,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 本技能用于 OCR、扫描识别、图片文字识别、文档识别，以及把 PDF、图片、Office 文档和 URL 转换为可继续编辑、分析和归档的 Markdown。它首先是通用 OCR 入口；当结果被识别为法律材料时，再自动启用保守型法律后处理。默认使用配置优先的自动路由：
 
+- 本地 PDF 默认先探测原生文本层：法院电子送达判决书、电子合同、政府公文等带可靠文本层的 PDF 直读比 OCR 更准、更快、更省额度。质量达标直接抽文字转 Markdown；不达标才落回 OCR。详见「PDF 文本层双路径」。
 - 只配置 PaddleOCR：PaddleOCR 支持的 PDF / 图片优先走 PaddleOCR；超出能力边界时再提示或改走 MinerU 支持链路。
 - 只配置 MinerU Token：所有 MinerU 支持的输入统一走 MinerU，包含 PDF、图片、Office、远程文档 URL 和网页 URL。
 - 同时配置两套 API：本地 PDF / 图片优先 PaddleOCR，Office / 网页 URL 优先 MinerU；首选后端出现额度、频率、鉴权、网络或服务失败时自动尝试候选后端。
@@ -99,6 +100,7 @@ uv run scripts/convert.py checktoken
 | 参数 | 说明 |
 |------|------|
 | `--backend auto|paddle|mineru` | 指定后端；默认读取 `LEGAL_OCR_BACKEND`，未配置时为 `auto` |
+| `--text-layer auto|never|always` | PDF 原生文本层分支；默认 `auto`，达标则直读跳过 OCR；`never` 强制走 OCR；`always` 强制文本层，不可用即失败 |
 | `--output <path>` | 输出 Markdown 路径或目录 |
 | `--pages <spec>` | 页码范围，如 `1-20`、`1-5,8,10-12` |
 | `--archive-name <name>` | 自定义 archive 目录名 |
@@ -113,6 +115,47 @@ uv run scripts/convert.py checktoken
 | `--paddle-api-extra-json <path>` | 合并额外 PaddleOCR optionalPayload |
 
 PaddleOCR 同步接口会校验后端实际返回页数。若返回页数少于本地 PDF 批次页数，转换会失败并提示降低 `PADDLEOCR_BATCH_PAGES` 或使用 `--pages` 重跑，避免缺页结果被误当作成功。
+
+## PDF 文本层双路径
+
+本地 PDF 进入 OCR 后端之前，会先探测是否带可用的原生文本层（v1.5.0+）。这是法律场景里的高频优化：法院电子送达判决书、电子合同、政府公文等 PDF 通常已带可靠文本层，直读比 OCR 更准、更快、不耗 API 额度。
+
+### 工作流
+
+1. 仅本地 `.pdf` 触发；图片、Office、URL 不参与。
+2. 用 `pypdfium2` 逐页抽取文字，计算 4 个指标：文本页覆盖率、平均 CJK / 页、乱码比例（PUA + 替换字符 + 非常见字符）、总字符数。
+3. 全部阈值达标 → 直接转 Markdown，复用既有 post-process（法律术语 → 硬换行整理 → 基础清理）。
+4. 任一不达标 → 落回原有 OCR 候选（PaddleOCR → MinerU），完全兼容旧工作流。
+
+### 模式（CLI `--text-layer` 或 env `LEGAL_OCR_TEXT_LAYER`）
+
+| 模式 | 行为 |
+|------|------|
+| `auto`（默认） | 探测后达标走文本层，不达标回退 OCR |
+| `never` | 完全禁用文本层，回到旧版纯 OCR 行为 |
+| `always` | 强制走文本层；不可用时直接 exit=2 失败，便于排障 |
+
+### 与 `--backend` 的优先级
+
+- `--backend auto` + `--text-layer auto`：最优路径，先文本层、不达标再 OCR。
+- `--backend paddle|mineru`：视为用户显式想要 OCR，跳过文本层分支（除非同时设 `--text-layer always` 强制覆盖）。
+
+### 阈值（保守默认，理想值待真实卷宗校准）
+
+| env | 默认 | 含义 |
+|-----|------|------|
+| `LEGAL_OCR_TEXT_LAYER_MIN_COVERAGE` | `0.8` | 文本页占探测页比例下限 |
+| `LEGAL_OCR_TEXT_LAYER_MIN_CHARS_PER_PAGE` | `50` | 文本页平均 CJK 字符下限 |
+| `LEGAL_OCR_TEXT_LAYER_MAX_GARBLE_RATIO` | `0.05` | PUA + 替换字符 + 非常见字符占比上限 |
+| `LEGAL_OCR_TEXT_LAYER_MIN_TOTAL_CHARS` | `100` | 非空白字符总数下限 |
+
+阈值默认值的理由见 `references/text-layer-detection.md` 与 `DECISIONS.md`。如果你拿到一批真实卷宗发现误判（例如应该走 OCR 的 PDF 走了文本层，或反之），把指标和样本反馈给维护者，再调阈值或加新规则。
+
+### archive 记录
+
+无论是否走文本层，PDF 输入都会在 `metadata.json` 留下 `text_layer` 字段：
+- 走了文本层：`enabled=true` + `probe` 全量指标（页数、coverage、garbled_ratio、阈值快照）。
+- 没走文本层：`enabled=false` + `probe.reason`（如 `no_text_layer` / `high_garbled_ratio`），便于复盘为什么回退到 OCR。
 
 ## 自动分流
 
