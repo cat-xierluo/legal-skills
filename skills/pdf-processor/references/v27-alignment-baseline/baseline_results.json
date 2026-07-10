@@ -1,0 +1,302 @@
+[
+  {
+    "sample": "digital.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results/digital_A_ocrmypdf.pdf",
+    "runner_result": {
+      "runtime_sec": 0.6564741134643555,
+      "stdout_tail": ""
+    },
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "output_size": 1705663,
+    "input_size": 3571727,
+    "size_ratio": 0.47754573627827657
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_legacy_word",
+    "output_pdf": "/tmp/w2_research/results/digital_D_legacy_word.pdf",
+    "runner_result": {
+      "runtime_sec": 1.2600781917572021,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "output_size": 3571727,
+    "input_size": 3571727,
+    "size_ratio": 1.0
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_block_line",
+    "output_pdf": "/tmp/w2_research/results/digital_D_block_line.pdf",
+    "runner_result": {
+      "runtime_sec": 1.2294659614562988,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "output_size": 3571727,
+    "input_size": 3571727,
+    "size_ratio": 1.0
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_block_para",
+    "output_pdf": "/tmp/w2_research/results/digital_D_block_para.pdf",
+    "runner_result": {
+      "runtime_sec": 1.2346980571746826,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "output_size": 3571727,
+    "input_size": 3571727,
+    "size_ratio": 1.0
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results/scanned_A_ocrmypdf.pdf",
+    "runner_result": {
+      "runtime_sec": 3.9402048587799072,
+      "stdout_tail": ""
+    },
+    "status": "ok",
+    "extracted_text_len": 603,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.06720977596741344,
+    "alignment": {
+      "aligned_words": 105,
+      "total_words": 107,
+      "alignment_ratio": 0.9813084112149533,
+      "mean_iou_proxy": 0.5248673841958492,
+      "mean_center_distance_pts": 2.172692938107353
+    },
+    "output_size": 667642,
+    "input_size": 11602685,
+    "size_ratio": 0.0575420258328137
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_legacy_word",
+    "output_pdf": "/tmp/w2_research/results/scanned_D_legacy_word.pdf",
+    "runner_result": {
+      "runtime_sec": 1.9239261150360107,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 642,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.024439918533604887,
+    "alignment": {
+      "aligned_words": 148,
+      "total_words": 151,
+      "alignment_ratio": 0.9801324503311258,
+      "mean_iou_proxy": 0.5446920681765202,
+      "mean_center_distance_pts": 2.554367650178862
+    },
+    "output_size": 265992,
+    "input_size": 11602685,
+    "size_ratio": 0.022925038471698578
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_block_line",
+    "output_pdf": "/tmp/w2_research/results/scanned_D_block_line.pdf",
+    "runner_result": {
+      "runtime_sec": 1.6606669425964355,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 529,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.024439918533604887,
+    "alignment": {
+      "aligned_words": 35,
+      "total_words": 38,
+      "alignment_ratio": 0.9210526315789473,
+      "mean_iou_proxy": 0.44598661581585963,
+      "mean_center_distance_pts": 7.067254985303668
+    },
+    "output_size": 263469,
+    "input_size": 11602685,
+    "size_ratio": 0.02270758880379843
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_block_para",
+    "output_pdf": "/tmp/w2_research/results/scanned_D_block_para.pdf",
+    "runner_result": {
+      "runtime_sec": 1.6651761531829834,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 522,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.024439918533604887,
+    "alignment": {
+      "aligned_words": 8,
+      "total_words": 31,
+      "alignment_ratio": 0.25806451612903225,
+      "mean_iou_proxy": 0.1397099764705117,
+      "mean_center_distance_pts": 58.97153338541002
+    },
+    "output_size": 263442,
+    "input_size": 11602685,
+    "size_ratio": 0.022705261756222804
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results/skewed_A_ocrmypdf.pdf",
+    "runner_result": {
+      "runtime_sec": 2.2955470085144043,
+      "stdout_tail": ""
+    },
+    "status": "ok",
+    "extracted_text_len": 564,
+    "keyword_hits": 7,
+    "keyword_total": 8,
+    "keyword_hit_rate": 0.875,
+    "cer": 0.5132382892057027,
+    "alignment": {
+      "aligned_words": 83,
+      "total_words": 98,
+      "alignment_ratio": 0.8469387755102041,
+      "mean_iou_proxy": 0.4924827582822324,
+      "mean_center_distance_pts": 6.172163881770024
+    },
+    "output_size": 102584,
+    "input_size": 1506536,
+    "size_ratio": 0.06809263104233819
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_legacy_word",
+    "output_pdf": "/tmp/w2_research/results/skewed_D_legacy_word.pdf",
+    "runner_result": {
+      "runtime_sec": 1.134941816329956,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 427,
+    "keyword_hits": 7,
+    "keyword_total": 8,
+    "keyword_hit_rate": 0.875,
+    "cer": 0.5519348268839104,
+    "alignment": {
+      "aligned_words": 100,
+      "total_words": 110,
+      "alignment_ratio": 0.9090909090909091,
+      "mean_iou_proxy": 0.5222209676331111,
+      "mean_center_distance_pts": 3.660472312323219
+    },
+    "output_size": 149190,
+    "input_size": 1506536,
+    "size_ratio": 0.09902849981679827
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_block_line",
+    "output_pdf": "/tmp/w2_research/results/skewed_D_block_line.pdf",
+    "runner_result": {
+      "runtime_sec": 1.0146119594573975,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 356,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.5519348268839104,
+    "alignment": {
+      "aligned_words": 21,
+      "total_words": 39,
+      "alignment_ratio": 0.5384615384615384,
+      "mean_iou_proxy": 0.3151226922292314,
+      "mean_center_distance_pts": 42.836419832277386
+    },
+    "output_size": 147231,
+    "input_size": 1506536,
+    "size_ratio": 0.09772816580553004
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_block_para",
+    "output_pdf": "/tmp/w2_research/results/skewed_D_block_para.pdf",
+    "runner_result": {
+      "runtime_sec": 0.9903039932250977,
+      "ok": true
+    },
+    "status": "ok",
+    "extracted_text_len": 352,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.5519348268839104,
+    "alignment": {
+      "aligned_words": 11,
+      "total_words": 35,
+      "alignment_ratio": 0.3142857142857143,
+      "mean_iou_proxy": 0.17811725554839894,
+      "mean_center_distance_pts": 48.81013718570882
+    },
+    "output_size": 147206,
+    "input_size": 1506536,
+    "size_ratio": 0.09771157144601922
+  }
+]

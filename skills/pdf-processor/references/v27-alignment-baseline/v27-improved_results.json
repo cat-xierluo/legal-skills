@@ -1,0 +1,257 @@
+[
+  {
+    "sample": "digital.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/digital_A_ocrmypdf.pdf",
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "runner_result": {
+      "runtime_sec": 4.266926050186157,
+      "stdout_tail": ""
+    }
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_word",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/digital_D_word.pdf",
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "runner_result": {
+      "runtime_sec": 0.05153679847717285
+    }
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_line",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/digital_D_line.pdf",
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "runner_result": {
+      "runtime_sec": 0.00807809829711914
+    }
+  },
+  {
+    "sample": "digital.pdf",
+    "scheme": "D_para",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/digital_D_para.pdf",
+    "status": "ok",
+    "extracted_text_len": 508,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.0,
+    "alignment": {
+      "aligned_words": 17,
+      "total_words": 17,
+      "alignment_ratio": 1.0,
+      "mean_iou_proxy": 0.6977823848950353,
+      "mean_center_distance_pts": 2.5400044893881377
+    },
+    "runner_result": {
+      "runtime_sec": 0.009448051452636719
+    }
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/scanned_A_ocrmypdf.pdf",
+    "status": "ok",
+    "extracted_text_len": 603,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.06720977596741344,
+    "alignment": {
+      "aligned_words": 105,
+      "total_words": 107,
+      "alignment_ratio": 0.9813084112149533,
+      "mean_iou_proxy": 0.5248673841958492,
+      "mean_center_distance_pts": 2.172692938107353
+    },
+    "runner_result": {
+      "runtime_sec": 6.936085939407349,
+      "stdout_tail": ""
+    }
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_word",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/scanned_D_word.pdf",
+    "status": "ok",
+    "extracted_text_len": 619,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.028513238289205704,
+    "alignment": {
+      "aligned_words": 126,
+      "total_words": 130,
+      "alignment_ratio": 0.9692307692307692,
+      "mean_iou_proxy": 0.4940368120308053,
+      "mean_center_distance_pts": 2.1977675616993055
+    },
+    "runner_result": {
+      "runtime_sec": 1.1718599796295166
+    }
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_line",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/scanned_D_line.pdf",
+    "status": "ok",
+    "extracted_text_len": 529,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.024439918533604887,
+    "alignment": {
+      "aligned_words": 34,
+      "total_words": 38,
+      "alignment_ratio": 0.8947368421052632,
+      "mean_iou_proxy": 0.43376556792593957,
+      "mean_center_distance_pts": 3.998529711487588
+    },
+    "runner_result": {
+      "runtime_sec": 0.7086851596832275
+    }
+  },
+  {
+    "sample": "scanned.pdf",
+    "scheme": "D_para",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/scanned_D_para.pdf",
+    "status": "ok",
+    "extracted_text_len": 525,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.028513238289205704,
+    "alignment": {
+      "aligned_words": 31,
+      "total_words": 37,
+      "alignment_ratio": 0.8378378378378378,
+      "mean_iou_proxy": 0.4413108538357835,
+      "mean_center_distance_pts": 26.958701929883567
+    },
+    "runner_result": {
+      "runtime_sec": 0.6972386837005615
+    }
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "A_ocrmypdf",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/skewed_A_ocrmypdf.pdf",
+    "status": "ok",
+    "extracted_text_len": 564,
+    "keyword_hits": 7,
+    "keyword_total": 8,
+    "keyword_hit_rate": 0.875,
+    "cer": 0.5132382892057027,
+    "alignment": {
+      "aligned_words": 83,
+      "total_words": 98,
+      "alignment_ratio": 0.8469387755102041,
+      "mean_iou_proxy": 0.4924827582822324,
+      "mean_center_distance_pts": 6.172163881770024
+    },
+    "runner_result": {
+      "runtime_sec": 3.7798140048980713,
+      "stdout_tail": ""
+    }
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_word",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/skewed_D_word.pdf",
+    "status": "ok",
+    "extracted_text_len": 424,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.5519348268839104,
+    "alignment": {
+      "aligned_words": 99,
+      "total_words": 107,
+      "alignment_ratio": 0.9252336448598131,
+      "mean_iou_proxy": 0.5233244621425098,
+      "mean_center_distance_pts": 2.935243787565295
+    },
+    "runner_result": {
+      "runtime_sec": 0.47301292419433594
+    }
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_line",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/skewed_D_line.pdf",
+    "status": "ok",
+    "extracted_text_len": 362,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.5519348268839104,
+    "alignment": {
+      "aligned_words": 40,
+      "total_words": 44,
+      "alignment_ratio": 0.9090909090909091,
+      "mean_iou_proxy": 0.590805529894681,
+      "mean_center_distance_pts": 6.865509313408712
+    },
+    "runner_result": {
+      "runtime_sec": 0.3261382579803467
+    }
+  },
+  {
+    "sample": "skewed.pdf",
+    "scheme": "D_para",
+    "output_pdf": "/tmp/w2_research/results_cached_v27/skewed_D_para.pdf",
+    "status": "ok",
+    "extracted_text_len": 360,
+    "keyword_hits": 8,
+    "keyword_total": 8,
+    "keyword_hit_rate": 1.0,
+    "cer": 0.5560081466395111,
+    "alignment": {
+      "aligned_words": 42,
+      "total_words": 44,
+      "alignment_ratio": 0.9545454545454546,
+      "mean_iou_proxy": 0.5990134845548069,
+      "mean_center_distance_pts": 8.136591686588096
+    },
+    "runner_result": {
+      "runtime_sec": 0.27808260917663574
+    }
+  }
+]

@@ -1,0 +1,102 @@
+{
+  "samples": [
+    "digital.pdf",
+    "scanned.pdf",
+    "skewed.pdf"
+  ],
+  "schemes": [
+    "A_ocrmypdf",
+    "D_word",
+    "D_line",
+    "D_para"
+  ],
+  "deterministic_tsv": true,
+  "v27_improvements": [
+    "calculate_font_size rewritten with CJK cap-height ratio (0.78)",
+    "_layout_text_into_bbox multi-line text insertion",
+    "_split_text_to_lines greedy wrap",
+    "assess_ocr_coordinate_health with fit_score / skew_warn / drift_warn",
+    "infer_page_scale median-ratio fallback",
+    "derotation_matrix skipped when page_rotation==0",
+    "layered_health_floor degraded mode (skip text layer when fit<0.5)"
+  ],
+  "comparison_table": [
+    {
+      "sample": "scanned.pdf",
+      "scheme": "D_word",
+      "cer_orig": 0.0244,
+      "cer_v27": 0.0285,
+      "align_orig": 0.98,
+      "align_v27": 0.97,
+      "iou_orig": 0.545,
+      "iou_v27": 0.494,
+      "dist_orig_pt": 2.55,
+      "dist_v27_pt": 2.2
+    },
+    {
+      "sample": "scanned.pdf",
+      "scheme": "D_line",
+      "cer_orig": 0.0244,
+      "cer_v27": 0.0244,
+      "align_orig": 0.92,
+      "align_v27": 0.89,
+      "iou_orig": 0.446,
+      "iou_v27": 0.434,
+      "dist_orig_pt": 7.07,
+      "dist_v27_pt": 4.0
+    },
+    {
+      "sample": "scanned.pdf",
+      "scheme": "D_para",
+      "cer_orig": 0.0244,
+      "cer_v27": 0.0285,
+      "align_orig": 0.26,
+      "align_v27": 0.84,
+      "iou_orig": 0.14,
+      "iou_v27": 0.441,
+      "dist_orig_pt": 58.97,
+      "dist_v27_pt": 26.96
+    },
+    {
+      "sample": "skewed.pdf",
+      "scheme": "D_word",
+      "cer_orig": 0.5519,
+      "cer_v27": 0.5519,
+      "align_orig": 0.91,
+      "align_v27": 0.93,
+      "iou_orig": 0.522,
+      "iou_v27": 0.523,
+      "dist_orig_pt": 3.66,
+      "dist_v27_pt": 2.94
+    },
+    {
+      "sample": "skewed.pdf",
+      "scheme": "D_line",
+      "cer_orig": 0.5519,
+      "cer_v27": 0.5519,
+      "align_orig": 0.54,
+      "align_v27": 0.91,
+      "iou_orig": 0.315,
+      "iou_v27": 0.591,
+      "dist_orig_pt": 42.84,
+      "dist_v27_pt": 6.87
+    },
+    {
+      "sample": "skewed.pdf",
+      "scheme": "D_para",
+      "cer_orig": 0.5519,
+      "cer_v27": 0.556,
+      "align_orig": 0.31,
+      "align_v27": 0.95,
+      "iou_orig": 0.178,
+      "iou_v27": 0.599,
+      "dist_orig_pt": 48.81,
+      "dist_v27_pt": 8.14
+    }
+  ],
+  "key_findings": [
+    "Block/paragraph-level polys (mimicking PaddleOCR API output) used to collapse to ~26-31% alignment; v2.7 multi-line layout recovers to 84-95%.",
+    "Word-level alignment regresses marginally on CER (0.0244 -> 0.0285) but stays well under the 8% verification threshold.",
+    "ocrmypdf (scheme A) remains the most reliable closed-loop for searchable PDFs; v2.7 improvements make the API-path product less embarrassing when ocrmypdf can't be used."
+  ]
+}

@@ -1,5 +1,37 @@
 # 更新日志
 
+## [2.7.0] - 2026-07-10
+
+### 修复（双层 PDF 文字层与图片层对齐根治）
+
+- 🐛 **`pdf_ocr_layered.py` 多行排版根治**：v2.6 及之前 `calculate_font_size` 用「字号=框高」反推字号，CJK 字符 baseline 越界；`insert_text` 单行限制导致 block/line 级长文本溢出 bbox 宽度（PaddleOCR API 返回的正是 line/block 级外接框），文字层落在远离墨迹的位置——这是用户长期反映的「文字层和底下图片没那么对应」根因。v2.7 重写为 cap-height 模型（`_CAP_HEIGHT_RATIO_CJK=0.78`）+ 多行贪婪换行（`_split_text_to_lines`）+ 多行 `insert_text`（`_layout_text_into_bbox`），并在 v2.7.1 修正窄标点在小 bbox 被丢弃的回归。
+
+- 🛡️ **坐标健康度评估 + 降级模式**：新增 `assess_ocr_coordinate_health(rows, page_rect, scale_x, scale_y)` 返回 `fit_score / skew_warn / scale_drift_warn / out_of_page_ratio`；当 `fit_score < 0.5` 时本页跳过文字层铺入（仿 DataInfra「坐标判定可证化，证不出就退化」思路），并在产物报告里给出降级页数与「建议改走 ocrmypdf 兜底」提示。
+
+- 🔍 **`infer_page_scale` 中位数 ratio 回退**：当 OCR 端未提供 source_w/source_h 时，旧版用单个 max_x/max_y 反推 scale，对孤立离群框很敏感；v2.7 改为对所有 row 的 poly 宽高比取中位数做合理性校验，离群时回退到「OCR 坐标 = PDF 坐标」单位 scale。
+
+- 🧮 **`page.rotation==0` 跳过 `derotation_matrix`**：恒等矩阵乘法虽无几何影响，但叠到上千行文本会有浮点累积漂移；v2.7 显式跳过此变换。
+
+### 技术优化
+
+- ✅ 新增 `scripts/test_pdf_ocr_layered_v27.py` 15 个单元测试，覆盖：cap-height 字号、多行二分搜索、贪婪换行、单行/多行排版、窄标点不丢失（v2.7.1 回归）、scale 中位数回退、坐标健康度评估；全部通过
+- ✅ 新增 `references/v27-alignment-baseline/`：含研究 harness、确定性基准 JSON、前后对比 overlay PNG、最终对比摘要 JSON；用合成样本（电子件/扫描件/倾斜页各一）横向比较 scheme A（ocrmypdf 闭环）、D-word / D-line / D-para（pdf_ocr_layered.py 喂 tesseract TSV 的不同粒度）
+- ✅ **确定性 A/B 数据**（同一份 TSV 输入，只切换 `pdf_ocr_layered.py`）：
+
+| sample      | scheme | CER before→after | align% before→after | IoU before→after | dist_pt before→after |
+|-------------|--------|------------------|---------------------|------------------|----------------------|
+| scanned.pdf | D_para | 0.0244 → 0.0285  | 26% → 84%           | 0.140 → 0.441    | 58.97 → 26.96        |
+| skewed.pdf  | D_line | 0.5519 → 0.5519  | 54% → 91%           | 0.315 → 0.591    | 42.84 → 6.87         |
+| skewed.pdf  | D_para | 0.5519 → 0.5560  | 31% → 95%           | 0.178 → 0.599    | 48.81 → 8.14         |
+| scanned.pdf | D_word | 0.0244 → 0.0285  | 98% → 97%           | 0.545 → 0.494    | 2.55 → 2.20          |
+
+D_block（line/para 级 polys，对应 PaddleOCR API 实际输出粒度）对齐度大幅提升；D_word CER 微升 0.0244→0.0285，仍远低于 8% 验收线。
+
+### 关联
+
+- 关闭 v2.5.0 遗留项「双层 PDF 坐标偏移修复」与「MinerU vlm 坐标粒度」本轮范围（MinerU vlm 评估保留为后续 P2 项）
+- 详见 `references/v27-alignment-baseline/v27-improved/v27_final_summary.json` 与工作树 `DECISIONS.md` / `TASKS.md` v2.7 段
+
 ## [2.6.8] - 2026-05-31
 
 ### 改进
