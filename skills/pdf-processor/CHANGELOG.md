@@ -6,7 +6,7 @@
 
 - 🐛 **`pdf_ocr_layered.py` 多行排版根治**：v2.6 及之前 `calculate_font_size` 用「字号=框高」反推字号，CJK 字符 baseline 越界；`insert_text` 单行限制导致 block/line 级长文本溢出 bbox 宽度（PaddleOCR API 返回的正是 line/block 级外接框），文字层落在远离墨迹的位置——这是用户长期反映的「文字层和底下图片没那么对应」根因。v2.7 重写为 cap-height 模型（`_CAP_HEIGHT_RATIO_CJK=0.78`）+ 多行贪婪换行（`_split_text_to_lines`）+ 多行 `insert_text`（`_layout_text_into_bbox`），并在 v2.7.1 修正窄标点在小 bbox 被丢弃的回归。
 
-- 🛡️ **坐标健康度评估 + 降级模式**：新增 `assess_ocr_coordinate_health(rows, page_rect, scale_x, scale_y)` 返回 `fit_score / skew_warn / scale_drift_warn / out_of_page_ratio`；当 `fit_score < 0.5` 时本页跳过文字层铺入（仿 DataInfra「坐标判定可证化，证不出就退化」思路），并在产物报告里给出降级页数与「建议改走 ocrmypdf 兜底」提示。
+- 🛡️ **坐标健康度评估 + 降级模式**：新增 `assess_ocr_coordinate_health(rows, page_rect, scale_x, scale_y)` 返回 `fit_score / skew_warn / scale_drift_warn / out_of_page_ratio`；当 `fit_score < 0.5` 时本页跳过文字层铺入（采用「坐标判定可证化，证不出就退化」思路），并在产物报告里给出降级页数与「建议改走 ocrmypdf 兜底」提示。
 
 - 🔍 **`infer_page_scale` 中位数 ratio 回退**：当 OCR 端未提供 source_w/source_h 时，旧版用单个 max_x/max_y 反推 scale，对孤立离群框很敏感；v2.7 改为对所有 row 的 poly 宽高比取中位数做合理性校验，离群时回退到「OCR 坐标 = PDF 坐标」单位 scale。
 
