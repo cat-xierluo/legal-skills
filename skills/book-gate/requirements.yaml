@@ -1,0 +1,51 @@
+# book-gate requirement 清单（约束机器化）
+# 每条 requirement = 一个可机器验证或需人工的检查项
+# verifier 字段指向 scripts/checkers/<module>.<function>（book-gate.py 按此调度）
+# 无 verifier 的项必须 needs_human_review: true（不能默认通过）
+schema_version: 0.1.0
+
+requirements:
+  # ===== Markdown 阶段 =====
+  - id: MD-001
+    stage: markdown
+    scope: "manuscript/ch*.md"
+    description: "禁 mermaid 代码块（转 Word 降级为文本）"
+    verifier: "checkers.markdown_checker.no_mermaid"
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: MD-002
+    stage: markdown
+    scope: "manuscript/ch*.md"
+    description: "禁 plantuml/dot/graphviz/flowchart 等非 SVG 图表 DSL"
+    verifier: "checkers.markdown_checker.no_other_diagram_dsl"
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: MD-004
+    stage: markdown
+    scope: "manuscript/ch*.md"
+    description: "中文夹 ASCII 撇号应改用中文单引号（md2word isalpha 回归·源稿笔误）"
+    verifier: "checkers.markdown_checker.chinese_quote_correct"
+    threshold: 0
+    blocking: false
+    needs_human_review: false
+
+  # ===== SVG 阶段（v0.2 接入，复用 writing-reviewer figure-style）=====
+  - id: SVG-001
+    stage: svg
+    scope: "figures/ai-generated/ch*/*.svg"
+    description: "透明底（无全画布白底矩形）"
+    verifier: ""  # v0.1 未实现 svg_checker
+    threshold: 0
+    blocking: true
+    needs_human_review: true
+    note: "v0.2 接入 svg_checker.transparent_bg；当前人工复核"
+
+  # ===== PNG 渲染阶段（v0.2+）=====
+  # ===== DOCX 阶段（v0.2+，可选层）=====
+
+# 回归样本目录（inject-regression 注入已知错误验证 gate）
+regression_samples_dir: "references/regression-samples"
