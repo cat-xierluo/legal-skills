@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.18.4] - 2026-07-11
+
+### Changed — spawn 启动期提速 + spawn 后异步纪律（2026-07-10 多 worker Wave 实战三连修）
+
+- **`scripts/spawn-worker.sh` 同步 dialog 监控默认值按 backend 分支化**（T1）：claude-code backend 实测 `--permission-mode auto --bare` 不弹 dialog，默认 `--no-trust-auto --no-permission-auto --no-permission-auto-bg`（省 trust_auto 30s + permission_auto 60s = 90s 空等）；其他 backend（codebuddy / qoderwork-cn / codex / opencode）默认全开。新增 `resolve_backend_defaults()` 函数 + 3 个 `*_OVERRIDE` 标志 + 主流程 PERMISSION_AUTO_BG 独立 gate（与 sync 解耦）。
+- **6 个 `--*/--no-*` flag 精细控制**：`--trust-auto` / `--permission-auto` / `--permission-auto-bg`（显式 opt-in，升级后 dialog 行为变化兜底）；`--no-trust-auto` / `--no-permission-auto`（v1.18.3 兼容，分别同时关 trust+permission / sync+bg）；`--no-permission-auto-bg`（只关 bg watcher）。`--no-permission-auto` 保留 v1.18.3 "both off" 语义。
+- **`SKILL.md` 新增 §3.8**（T2+T3）：`§3.8.1` spawn 后 30 秒内必跑的 4 条核验命令（tmux has-session / capture-pane / METADATA.json / STATUS.json with timeout 120）；`§3.8.2` 并行 spawn 投递纪律（一开始就并行 spawn，不先串行验证流程）；`§3.8.3` 反模式清单（TaskOutput block=true / tmux attach / while sleep 不带 timeout 等）；`§3.8.4` v1.18.4 backend 分支化同步 dialog 监控默认值说明。注：原计划 §3.7 已被 commit a33f057 用作"派发 SOP 必带 skill 路径清单"（当前以 `## Project Skills` 形式存在），故 renumber 到 §3.8。
+- **`SKILL.md §6` 行 593 后补 4 条核验 snippet**：spawn 后立即跑 4 条命令 + 反向引用 §3.8.1。
+- **`SKILL.md §3.5` 末尾加 v1.18.4 注**：claude-code backend 默认全关反向引用 §3.8.4。
+- **`SKILL.md` frontmatter**：version 1.18.2 → 1.18.4（v1.18.3 由 commit 4d168a1 部分入仓但 frontmatter 未更新）。
+- **新增 `templates/pm-spawn-postflight.md`**：4 条核验命令扩展版 cheatsheet（何时用 / 反例 / 多 worker 并行 spawn 提示）。
+- **`references/09-parallel-lessons.md` 加 G23**：spawn 阶段并行投递纪律与已有 G22（wave 内任务颗粒度）形成两层闭环。
+
+### 受影响的 PM 行为
+- 单次 claude-code backend spawn 主进程退出时间从 v1.18.3 实测 2-4 min 降到 v1.18.4 秒级返回。
+- PM 派活后**禁止**用 `TaskOutput block=true` 等 `spawn-worker.sh` 退出，必须跑 §3.8.1 的 4 条核验命令。
+- 多 worker Wave 一开始就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用），不先串行验证流程再补并行。
+
+### Test
+- `bash scripts/smoke-auto-bypass.sh` → 13/13 PASS（v1.18.3 7 项 + v1.18.4 6 项）。
+
+### Background
+- 来源：2026-07-10 某客户委托项目多 worker Wave 实战（3 个不同 skill backend 的 worker，全 claude-code backend），PM 派发阶段（spawn 3 worker + 投 prompt）实测耗 20+ min，用户反馈「着实影响并行推进任务」。TASKS.md L116-118 登记三条 follow-up，合并 v1.18.4。详见 DEC-112（gitignore 本地）。
+
 ## [1.18.3] - 2026-07-08
 
 ### Changed — spawn-worker.sh auto-bypass permission dialog（踩坑 7 真正修复）
