@@ -2,6 +2,16 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.1.5] - 2026-07-11
+
+### 修复
+- **脚注 markdown 星号进 XML（footnote_handler）**：原实现把脚注 text 直接 `_xml_escape` 塞进单个 `<w:t>`，`*需律师现场确认*` 的星号原样进 footnotes.xml，Word 显示字面星号。新增 `_footnote_text_to_runs_xml()`：解析 `**bold**`/`*italic*`/`` `code` `` 转 Word runs（`<w:b/>`/`<w:i/>`/Consolas 等宽），既不显示字面星号、又保留斜体/粗体/代码格式。不处理 `_italic_`（避免下划线变量名误判）、嵌套与 `[link](url)`（留 follow-up）。
+- **中文撇号误判为英文所有格（formatter.py isalpha）**：`convert_quotes_to_chinese` 原用 `prev_c.isalpha() and next_c.isalpha()` 保留英文缩写/所有格撇号（don't/O'Brien），但 `'需'.isalpha()` 在 Python 返回 True（中文属 Unicode Lo），导致「中文'中文」被误判为英文所有格、本该转中文单引号 ‘’ 却保留 ASCII `'`。修：加 `.isascii()` 限定，只 ASCII 字母-撇号-ASCII 字母保留。
+
+### 验证（眼见为实）
+- 单元测试：footnote runs 6 case ALL PASS（`*x*`→`<w:i/>`、`**x**`→`<w:b/>`、无字面星号；code/空/普通文本 OK）；convert_quotes_to_chinese 6 case（中文边界→中文单引号 ‘’；don't/O'Brien/API's→保留 ASCII `'`）。
+- 集成验证：造含中文撇号 + 星号脚注的 md 转 docx（legal preset, footnote 模式）—— document.xml `需律师现场确认`→中文单引号、don't/API's 保留 ASCII；footnotes.xml 无字面 `*`、含 `<w:i/>`/`<w:b/>`、脚注拆 runs。
+
 ## [1.1.4] - 2026-07-09
 
 ### 改进
