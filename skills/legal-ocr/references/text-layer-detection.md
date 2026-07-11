@@ -156,4 +156,4 @@ print(probe.to_payload())
 - 实现：`scripts/text_layer.py`
 - 主入口集成：`scripts/convert.py` 的 `maybe_probe_text_layer` 函数
 - 决策记录：`DECISIONS.md`「文本层质量阈值（v1.5.0）」段
-- 调研缘由：260707 DataInfra-RedactionEverything 调研 Part B §一
+- 调研缘由：260707 内部多领域 schema 技术调研 Part B §一

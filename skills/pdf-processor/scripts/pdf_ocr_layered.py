@@ -579,7 +579,7 @@ def infer_page_scale(page_rect, rows, source_w, source_h) -> tuple[float, float]
 def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float) -> dict:
     """v2.7 新增：评估 OCR 坐标空间与 PDF 页面空间的一致性。
 
-    用于仿 DataInfra「坐标判定可证化」思路：当 OCR 端做了方向矫正 / 去畸变
+    用于坐标判定可证化思路：当 OCR 端做了方向矫正 / 去畸变
     （非线性变换），硬铺文字层会产生系统性偏移。本函数返回一个健康度报告，
     供调用方决定是否「证不出就退化」（不铺文字层、走 ocrmypdf 兜底）。
 
@@ -762,7 +762,7 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
     health_log = []  # v2.7: 每页健康度评估结果（用于诊断）
 
     cjk_normalize = not args.no_paddle_cjk_space_normalize
-    # v2.7: 健康度阈值（仿 DataInfra「坐标判定可证化」）
+    # v2.7: 健康度阈值（坐标判定可证化）
     # fit_score < 此值时，本页文字层不铺（让用户走 ocrmypdf 兜底）
     health_floor = float(getattr(args, "layered_health_floor", 0.5))
 
@@ -786,7 +786,7 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
             entry.get("height"),
         )
 
-        # v2.7: 坐标健康度评估 — 仿 DataInfra「证不出就退化」
+        # v2.7: 坐标健康度评估 — 证不出就退化
         health = assess_ocr_coordinate_health(rows, page.rect, scale_x, scale_y)
         health_log.append({"page": pno, **health})
         if health["fit_score"] < health_floor and not getattr(args, "layered_force", False):
