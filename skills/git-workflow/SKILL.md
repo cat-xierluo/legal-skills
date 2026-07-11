@@ -2,9 +2,9 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.1"
+version: "1.5.0"
 license: MIT
-description: Git 工作流安全助手。本技能应在需要执行分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退，以及 stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 ---
 
 # Git 全流程工作流
@@ -188,6 +188,51 @@ git fetch --prune
 - ❌ **用 `git branch -D` 强删本地以"对齐远端"**：会丢未推送的 WIP。
 
 ### Worktree（工作树）
+
+#### 开 worktree 前的必做 3 查（防止 base 过期导致 PR 报 not mergeable）
+
+**核心陷阱**：本地 `main` 可能落后于 `origin/main`（本地独有未 push 的 commit / fetch 滞后 / 别的 session 在 origin 推了新内容）。基于这种"过期 main"开的新 worktree 提 PR 时，GitHub 会报 `not mergeable: the merge commit cannot be cleanly created`，且 PR 的 base 不包含 origin/main 已合的内容——你不知道原来已经合了什么，DECISIONS 编号可能撞车、TASKS 已勾的项要重做。
+
+**3 查清单**（开 worktree 前必跑，逐项确认）：
+
+```bash
+# 1. fetch 远端最新
+git fetch origin
+
+# 2. 看本地 main 与 origin/main 是否分叉
+echo "本地 main:    $(git rev-parse --short main)"
+echo "origin/main:  $(git rev-parse --short origin/main)"
+echo "merge-base:   $(git merge-base main origin/main | head -c 12)"
+
+# 3. 看本地是否有未推送独有 commit
+git status --short
+git log --oneline origin/main..main   # 本地 main 独有、未 push 的 commits
+```
+
+**判读规则**：
+
+| 情况 | 现象 | 处理 |
+|---|---|---|
+| 本地 main = origin/main（无分叉） | merge-base = main = origin/main | 直接开 worktree，放心 |
+| 本地 main 领先 origin/main | `git log origin/main..main` 有 commit（本地独有未 push） | **先 push 或 merge origin/main**，决定见下方"本地独有 commit 处理" |
+| 本地 main 落后 origin/main | `git log main..origin/main` 有 commit（origin 已合，本地没 fetch） | **先 `git pull --no-rebase`（merge origin/main）再开 worktree** |
+| 本地与 origin/main 双向分叉 | 双方各有独有 commit | **先 rebase 或 merge**，避免 PR 冲突 + 重新编号 |
+
+**禁止** 基于"过期 main"开 worktree 后再补救。会引发：PR 报 not mergeable → 本地 rebase 解决 → 决策编号撞车（如 DECISIONS.md 在 main 与 PR 都有新增）→ 重新编号 + push `--force-with-lease`。一次性 3 查可避免。
+
+#### 本地独有 commit 未 push 的处理（3 查清单的延续）
+
+`git log origin/main..main` 显示本地独有 commit 时，三选一：
+
+| 选项 | 适用场景 | 操作 |
+|---|---|---|
+| **A. Push 到 origin** | 独有 commit 是想让 origin 看的（如 docs 标记、版本号） | `git push origin main`（**禁止**直接 push main，先确认无保护规则；如保护则改 PR 流程） |
+| **B. Merge origin/main 保留**（推荐） | 独有 commit 是本地工作，希望下次 main 上有 | `git merge origin/main --no-ff -m "merge: bring origin/main into local main + preserve <描述>"` |
+| **C. 放弃独有 commit** | 独有 commit 已不需要或重复 | `git reset --hard origin/main`（**破坏性**，必须用户明确指示） |
+
+**禁止** 擅自 `git reset --hard` 丢弃本地独有 commit（Git 安全协议 §1）。
+
+#### 创建 worktree
 
 当需要同时在多个分支上工作时，使用 worktree 避免频繁切换分支：
 
@@ -410,6 +455,25 @@ gh pr merge <number> --rebase
 ```
 
 **重要**：通过 API 执行 squash merge 时，`commit_title` 不会自动追加 `(#N)`，必须手动写入。
+
+### 自 PR 自 review 限制（GitHub 强制）
+
+GitHub **不允许 PR 作者自 approve 自已的 PR**：
+
+```
+gh pr review <N> --approve
+# → failed to create review: GraphQL: Review Can not approve your own pull request (addPullRequestReview)
+```
+
+这是 GitHub 设计，无法绕过。但 **`gh pr merge --squash --delete-branch` 不需要 review approval**（前提：仓库无强制 review 的 branch protection）。常见场景：
+
+| 场景 | 处理 |
+|---|---|
+| 无 branch protection 或不要求 review | `gh pr merge <N> --squash --delete-branch` 直接合 |
+| 要求 ≥ 1 个 review | 找他人 review；或 admin override `gh pr merge <N> --squash --admin`（谨慎，记录原因） |
+| 自 PR 自 review 完全禁止 | 用其他账号 review；或拆 PR 让别人创建 |
+
+**常见坑**：`gh pr merge --delete-branch` 在 cleanup 阶段可能报 `'main' 已经被工作区 '<主仓库路径>' 使用`（多 worktree 场景，见 §10），这是 warning，不影响合并本身——`mergedAt` 时间戳写入 GitHub 即代表合并成功。
 
 ### 本地拉取 PR 到 main 的提交格式
 
@@ -826,6 +890,89 @@ feat(skill-name): 添加批量导出
 ```
 
 一次修改涉及多个独立 Skill 或模块时，应拆成多个 commit。每个 commit 只表达一个目的。
+
+## 10. 多 worktree 并行与 main worktree 占用
+
+### 场景
+
+并行推进多个任务时，主仓库目录（默认 attach 到 `main` 分支）与多个 PR worktree 同时存在。`gh pr merge` 在某些情况下会报 `'main' 已经被工作区 '<主仓库路径>' 使用`，原因是 gh CLI 检测到 `main` 分支被某个本地 worktree 检出（主仓库 attach 到 main）。这条 warning 常见于 cleanup 阶段，**不影响合并本身**（`mergedAt` 时间戳写入即成功）。
+
+判断方法：
+
+```bash
+# 哪个 worktree 占用了 main？
+git worktree list
+# 输出示例：
+# /path/to/main-repo           abc1234 [main]              ← 主仓库 attach 到 main
+# /path/to/pr-45-worktree      def5678 [feat/xxx]         ← PR worktree 没事
+# /path/to/main-worktree       9990000 [main]              ← 另一个 worktree 也 attach 到 main
+```
+
+### 解决方案三选一
+
+#### 方案 A：主仓库不 attach 到 main（推荐）
+
+让主仓库 attach 到一个长期开发分支（如 `develop`）或 detached，避免占用 main：
+
+```bash
+# 主仓库切到 develop
+git checkout develop
+
+# gh pr merge 在任意位置跑都不再受 main 占用影响
+gh pr merge <N> --squash --delete-branch
+```
+
+**适用**：日常开发主仓库不直接在 main 上工作。
+
+#### 方案 B：用 `git worktree add` 给 main 单独一个 worktree
+
+主仓库 detached，专门开一个 `main` worktree：
+
+```bash
+# 主仓库 detached（不 attach 任何分支）
+git checkout --detach HEAD
+
+# main 用专门 worktree
+git worktree add ~/.config/superpowers/worktrees/main main
+
+# gh pr merge 在主仓库跑：main reference 现在属于独立 worktree，不冲突
+gh pr merge <N> --squash --delete-branch
+```
+
+**适用**：希望保留 main 在本地随时可见，但要避免主仓库占用。
+
+#### 方案 C：先释放 main 再合并
+
+临时操作，merge 完恢复：
+
+```bash
+# 主仓库暂时切到其他分支（或 detached）
+git checkout --detach HEAD
+
+# 合并 PR
+gh pr merge <N> --squash --delete-branch
+
+# merge 完成后回到 main（如需要）
+git checkout main
+```
+
+**适用**：一次性操作，不愿长期改动主仓库 attach 状态。
+
+### 推荐
+
+**方案 A 最简单**：让主仓库 attach 到长期分支（`develop` / `main-next` 等），`gh pr merge` 不再受 main 占用影响。`git worktree list` 命令随时可查 worktree 占用情况。
+
+`gh pr merge` cleanup warning 时的快速判断流程：
+
+```
+1. 看 gh pr view <N> --json state,mergedAt,mergeCommit
+   - state == "MERGED" + mergedAt 有值 + mergeCommit 有 oid → 合并成功，warning 可忽略
+   - state != "MERGED" → 合并真失败，需重新执行
+
+2. 看主仓库 git status --short
+   - 干净 → 真合了
+   - 有冲突标记 → 合并中途退出，需手工恢复
+```
 
 ## 参考资源
 

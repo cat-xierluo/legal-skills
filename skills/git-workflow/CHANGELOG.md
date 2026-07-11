@@ -1,5 +1,20 @@
 # 变更日志
 
+## [1.5.0] - 2026-07-11
+
+### 新增
+
+- **§2 Worktree 加"开 worktree 前必做 3 查"块**：本地 `main` 可能落后 `origin/main`（本地独有未 push / fetch 滞后 / 别的 session 在 origin 推了新内容）。基于"过期 main"开 worktree 提 PR 时 GitHub 报 `not mergeable: the merge commit cannot be cleanly created`，且 PR diff 不包含 origin/main 已合内容，DECISIONS 编号可能撞车、TASKS 已勾项要重做。3 查清单 = `git fetch origin` + `git rev-parse main/origin/main/merge-base` + `git log origin/main..main` 看独有 commit。判读规则表覆盖 4 种情况（无分叉 / 本地领先 / 本地落后 / 双向分叉）。**禁止**基于过期 main 开 worktree 后再补救。
+- **§2 加"本地独有 commit 未 push 的处理"**：`git log origin/main..main` 显示本地独有时 3 选 1（push / merge origin/main 保留 / reset 放弃），明确禁止擅自 `git reset --hard` 丢弃独有 commit。
+- **§4 PR 工作流加"自 PR 自 review 限制"子节**：GitHub 不允许 PR 作者自 approve（`gh pr review --approve` 报 `Review Can not approve your own pull request`）。自 PR 用 `gh pr merge --squash --delete-branch` 直接合（无需 review approval），前提是仓库无强制 review 的 branch protection。`gh pr merge --delete-branch` cleanup 阶段报 `'main' 已经被工作区使用` 是 warning，不影响合并本身（`mergedAt` 时间戳写入即成功）。
+- **§10 新增「多 worktree 并行与 main worktree 占用」**：并行推进多个任务时，主仓库 attach 到 `main` 会导致 `gh pr merge` cleanup 报错。3 方案：方案 A（推荐）主仓库不 attach main / 方案 B `git worktree add` 给 main 单独 worktree / 方案 C 临时释放 main。附 `gh pr merge` cleanup warning 时的快速判断流程（state/mergedAt/mergeCommit 三查）。
+
+### 决策依据
+
+- 来源：vision-extract 模型池项目（PR #45）合并实战（2026-07-11）。
+- 主要痛点：本地 main drift（12a97ee docs 未 push，origin 已合 PR #44）+ 多 worktree 并行（主仓库 + PR worktree + v0.9.1 端到端 worktree）时 main 被占用。
+- 解法：文档级 3 查清单 + 3 个 main 占用解决方案，把实战教训沉淀进 git-workflow 主流程规范。
+
 ## [1.4.2] - 2026-06-30
 
 ### 新增

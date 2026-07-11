@@ -27,6 +27,10 @@ templates/
 !skills/project-init/references/CLAUDE.md
 !skills/project-init/references/TASKS.md
 
+# git-workflow 技能级决策与任务记录(参考 DEC-014 + CHANGELOG v1.4.1;全局 **/ 规则会先忽略,需显式加回)
+!skills/git-workflow/DECISIONS.md
+!skills/git-workflow/TASKS.md
+
 # Archive directories - ignore content but keep directory structure
 **/archive/*
 !**/archive/.gitkeep
