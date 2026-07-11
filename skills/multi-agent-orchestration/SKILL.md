@@ -333,6 +333,8 @@ PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn
 
 历史踩坑（v1.18.2 之前）：wave-1/2 PM 反复按 1/2 接 dialog（v1.18.2 文档化但未真正修）。v1.18.3 自动化了，按踩坑 7 修复。
 
+> **MCP 选择 dialog 不被 auto-bypass 覆盖**（2026-07-11 实测）：上述三层只处理 trust + "Do you want to proceed?" dialog；项目若配 MCP server，claude-code worker 启动还会弹「N new MCP servers found」选择 dialog，worker 卡住不写 STATUS。解法：worker 不需 MCP 时 spawn 后 `tmux send-keys -t <session> Escape` 拒绝全部，或 spawn 命令带 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` / 补 `--bare`。详见 `references/09-parallel-lessons.md` T6。
+
 #### 3.5.1 auto-bypass 实现细节（v1.18.3）
 
 - **`permission_auto`** 关键修复：旧版用 `Down Enter`（按箭头 + Enter 选 option 2），PM 2026-07-08 wave-1 实测在某些 TUI 状态不稳。v1.18.3 改用 `tmux send-keys -t "$session" "2"`（直接发数字键 2），稳定 work。
