@@ -144,6 +144,56 @@ def _xml_escape(t):
     return t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+# 脚注 markdown inline 强调 token（**bold** / *italic* / `code`）；
+# 不处理 _italic_（避免下划线变量名误判），不处理嵌套，不处理 [link](url)（留 follow-up）。
+_FN_INLINE_TOKEN_RE = re.compile(r'(\*\*.+?\*\*|\*.+?\*|`.+?`)')
+
+
+def _footnote_text_to_runs_xml(text):
+    """把脚注 text 的 markdown inline 强调（**bold**/*italic*/`code`）转为 Word runs XML 片段。
+
+    每个 segment 一个 <w:r>，base rPr 含 sz=18（脚注小字）；bold 加 <w:b/>，
+    italic 加 <w:i/>，code 加 Consolas 等宽字体。第一个 run 文本前缀一个空格
+    （对齐原 ' %s' 前导空格，与 footnoteRef 拉开间距）。返回 runs XML（不含 <w:p>）。
+
+    bug fix：原实现把 text 直接 _xml_escape 塞进单个 <w:t>，*需律师现场确认* 的
+    星号原样进 XML，Word 显示字面星号。本函数解析强调标记转 run，既不显示字面
+    星号、又保留斜体/粗体/代码格式。
+    """
+    runs = []
+    first = True
+    for part in _FN_INLINE_TOKEN_RE.split(text):
+        if not part:
+            continue
+        bold = italic = code = False
+        seg = part
+        if len(part) >= 4 and part.startswith('**') and part.endswith('**'):
+            bold = True
+            seg = part[2:-2]
+        elif len(part) >= 2 and part.startswith('*') and part.endswith('*'):
+            italic = True
+            seg = part[1:-1]
+        elif len(part) >= 2 and part.startswith('`') and part.endswith('`'):
+            code = True
+            seg = part[1:-1]
+        rpr_parts = ['<w:sz w:val="18"/>']
+        if bold:
+            rpr_parts.append('<w:b/>')
+        if italic:
+            rpr_parts.append('<w:i/>')
+        if code:
+            rpr_parts.append('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>')
+        rpr = '<w:rPr>' + ''.join(rpr_parts) + '</w:rPr>'
+        prefix = ' ' if first else ''
+        first = False
+        runs.append('<w:r>%s<w:t xml:space="preserve">%s%s</w:t></w:r>'
+                    % (rpr, prefix, _xml_escape(seg)))
+    if not runs:
+        runs.append('<w:r><w:rPr><w:sz w:val="18"/></w:rPr>'
+                    '<w:t xml:space="preserve"> </w:t></w:r>')
+    return ''.join(runs)
+
+
 def _inject_footnotes_into_docx(docx_path, refs):
     """post-process：把脚注 part 注入已保存的 docx（纯 zip 操作，不依赖 python-docx part API）。
 
@@ -169,8 +219,8 @@ def _inject_footnotes_into_docx(docx_path, refs):
         fn_items.append(
             '<w:footnote w:id="%d"><w:p>'
             '<w:r><w:rPr><w:vertAlign w:val="superscript"/><w:sz w:val="18"/></w:rPr><w:footnoteRef/></w:r>'
-            '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> %s</w:t></w:r>'
-            '</w:p></w:footnote>' % (seq, _xml_escape(text))
+            '%s'
+            '</w:p></w:footnote>' % (seq, _footnote_text_to_runs_xml(text))
         )
     footnotes_xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'

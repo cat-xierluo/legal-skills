@@ -75,7 +75,10 @@ def convert_quotes_to_chinese(text):
             # 保留英文缩写/所有格中的撇号：字母-撇号-字母
             prev_c = text[i - 1] if i > 0 else ''
             next_c = text[i + 1] if i + 1 < len(text) else ''
-            if prev_c.isalpha() and next_c.isalpha():
+            # 只对 ASCII 字母保留撇号（英文缩写/所有格 don't/it's/O'Brien）。
+            # 中文 isalpha() 也返回 True，必须 isascii() 限定，否则「中文'中文」
+            # 被误判为英文所有格、本该转中文单引号却保留 ASCII 撇号（bug fix）。
+            if prev_c.isascii() and prev_c.isalpha() and next_c.isascii() and next_c.isalpha():
                 result.append("'")
                 i += 1
                 continue
