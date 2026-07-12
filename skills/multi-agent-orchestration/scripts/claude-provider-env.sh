@@ -14,6 +14,10 @@ API_PROVIDER=""
 MODEL=""
 SETTING_SOURCES="project,local"
 PRINT_ENV_SUMMARY=0
+# v2.0：--no-mcp 显式禁用 MCP server 加载，规避项目 .mcp.json 触发的
+# "N new MCP servers found" 选择 dialog（references/09 T6 实战坑）。
+# wrapper 把 --strict-mcp-config --mcp-config '{"mcpServers":{}}' 注入给 claude。
+NO_MCP=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -25,6 +29,12 @@ Options:
   --setting-sources LIST   Sources passed to claude when it does not already
                            provide --setting-sources. Default: project,local
   --print-env-summary      Print a sanitized env summary to stderr before exec
+  --no-mcp                 (v2.0) Disable MCP server loading by injecting
+                           --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+                           into the wrapped claude command. Use when project
+                           has .mcp.json that triggers "N new MCP servers found"
+                           selection dialog (references/09 T6). Skipped silently
+                           if claude already passes --strict-mcp-config.
 
 The wrapper:
   - clears inherited Anthropic/Claude provider-routing env vars;
@@ -61,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --print-env-summary)
       PRINT_ENV_SUMMARY=1
+      shift
+      ;;
+    --no-mcp)  # v2.0：禁用 MCP server 加载（references/09 T6 坑）
+      NO_MCP=1
       shift
       ;;
     --)
@@ -272,14 +286,24 @@ cmd=("$@")
 cmd0=$(basename "${cmd[0]}")
 if [ "$cmd0" = "claude" ]; then
   has_setting_sources=0
+  has_strict_mcp=0
   for arg in "${cmd[@]}"; do
     if [ "$arg" = "--setting-sources" ]; then
       has_setting_sources=1
-      break
+    fi
+    if [ "$arg" = "--strict-mcp-config" ]; then
+      has_strict_mcp=1
     fi
   done
   if [ "$has_setting_sources" -eq 0 ]; then
     cmd=("${cmd[0]}" --setting-sources "$SETTING_SOURCES" "${cmd[@]:1}")
+  fi
+  # v2.0：--no-mcp 注入空 MCP 配置，规避项目 .mcp.json 触发的 dialog
+  # （references/09-parallel-lessons.md T6）。用户已显式传 --strict-mcp-config
+  # 时不再叠加，尊重用户选择。
+  if [ "$NO_MCP" -eq 1 ] && [ "$has_strict_mcp" -eq 0 ]; then
+    cmd=("${cmd[0]}" --strict-mcp-config --mcp-config '{"mcpServers":{}}' "${cmd[@]:1}")
+    echo "CLAUDE_PROVIDER_ENV_NO_MCP: injected --strict-mcp-config --mcp-config empty" >&2
   fi
 fi
 
