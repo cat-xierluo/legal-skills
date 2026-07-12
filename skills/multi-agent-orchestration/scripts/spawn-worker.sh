@@ -29,6 +29,13 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# v2.0：PATH 注入 helper（2026-07-12 实战坑：claude 在 ~/.local/bin，wrapper 后
+# which 不到）。在 flag 解析之前注入，确保后续 tmux 内 wrapper 派 Claude Code
+# 也能复用同一 PATH。
+# shellcheck source=ensure-claude-path.sh
+source "$SCRIPT_DIR/ensure-claude-path.sh"
+ensure_claude_in_path
+
 PROJECT_DIR=""
 BRANCH=""
 WORKTREE=""

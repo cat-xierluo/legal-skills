@@ -8,6 +8,12 @@
 
 set -euo pipefail
 
+# v2.0：PATH 注入 helper（spawn-worker.sh 同源 helper），确保 claude CLI 可解析。
+SCRIPT_DIR_CPE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=ensure-claude-path.sh
+source "$SCRIPT_DIR_CPE/ensure-claude-path.sh"
+ensure_claude_in_path
+
 SETTINGS=""
 PROVIDER_REGISTRY=""
 API_PROVIDER=""
