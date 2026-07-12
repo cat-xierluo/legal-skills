@@ -34,6 +34,8 @@ from following import (
 DB_PATH = SKILL_DIR / "douyin_users.db"
 HTML_PATH = SKILL_DIR / "downloads" / "index.html"
 DOWNLOADS_PATH = SKILL_DIR / "downloads"
+# 视频实际位置(douyin-batch-download 官方目录约定:博主子目录用昵称,平铺 mp4)
+VIDEO_ROOT = Path.home() / "Downloads" / "抖音视频下载"
 
 
 def get_user_info_from_db(uid):
@@ -66,7 +68,7 @@ def generate_html(users):
     import json
 
     html = HTML_PATH.read_text(encoding="utf-8")
-    downloads_dir = str(DOWNLOADS_PATH.resolve())
+    downloads_dir = str(VIDEO_ROOT.resolve())
 
     # 转换为 {users: [...]} 格式
     data = {"users": users}
@@ -80,81 +82,58 @@ def generate_html(users):
 
 
 def main():
-    print("同步 following.json")
+    print("同步 following.json (从 db 全量重建,db 为真值)")
     print("=" * 50)
 
-    if not DOWNLOADS_PATH.exists():
-        print("未找到 downloads 目录")
+    if not DB_PATH.exists():
+        print(f"未找到 db: {DB_PATH}")
         return
 
-    # 加载旧数据（保留 last_fetch_time）
+    # 加载旧数据(按 sec_user_id 保留 last_fetch_time 等扩展字段)
     old_data = load_following()
-    old_users = {u.get("uid"): u for u in old_data.get("users", [])}
+    old_users = {u.get("sec_user_id"): u for u in old_data.get("users", [])}
+
+    # 从 db 全量读博主(db 是真值,含 peer_type)
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT uid, sec_user_id, nickname, avatar_url, signature,
+               follower_count, following_count, peer_type
+        FROM user_info_web
+    """).fetchall()
+    conn.close()
 
     new_users = []
-
-    # 遍历 downloads 目录找用户
-    for folder in DOWNLOADS_PATH.iterdir():
-        if not folder.is_dir():
-            continue
-
-        uid = folder.name
-        if not uid.isdigit():
-            continue
-
-        # 从 F2 数据库获取用户信息
-        user_data = get_user_info_from_db(uid)
-        if not user_data:
-            continue
-
-        video_count = get_video_count(folder)
-
-        # 保留旧数据中的 last_fetch_time
-        old_user = old_users.get(uid, {})
-        last_fetch = old_user.get("last_fetch_time")
-
-        user_info = {
-            "uid": uid,
-            "sec_user_id": user_data[1],
-            "name": user_data[2],
-            "nickname": user_data[2],
-            "avatar_url": user_data[3] or "",
-            "signature": user_data[4] or "",
-            "follower_count": user_data[5] or 0,
-            "following_count": user_data[6] or 0,
+    for r in rows:
+        sec = r["sec_user_id"]
+        old_user = old_users.get(sec, {})
+        # video_count 从视频实际位置统计(~/Downloads/抖音视频下载/<昵称>/)
+        video_count = 0
+        user_dir = VIDEO_ROOT / r["nickname"]
+        if user_dir.exists():
+            try:
+                video_count = sum(1 for _ in user_dir.glob("*.mp4"))
+            except Exception:
+                video_count = 0
+        new_users.append({
+            "uid": r["uid"],
+            "sec_user_id": sec,
+            "name": r["nickname"],
+            "nickname": r["nickname"],
+            "avatar_url": r["avatar_url"] or "",
+            "signature": r["signature"] or "",
+            "follower_count": r["follower_count"] or 0,
+            "following_count": r["following_count"] or 0,
             "video_count": video_count,
             "last_updated": datetime.now().isoformat(),
-            "last_fetch_time": last_fetch,  # 保留上次抓取时间
-        }
-        new_users.append(user_info)
-        print(f"  [OK] {user_data[2]} ({video_count} 视频)")
-
-    # 同时保留 downloads 目录中没有但 following.json 中有的用户
-    for uid, old_user in old_users.items():
-        if not any(u.get("uid") == uid for u in new_users):
-            # 检查是否在数据库中
-            user_data = get_user_info_from_db(uid)
-            if user_data:
-                user_info = {
-                    "uid": uid,
-                    "sec_user_id": user_data[1],
-                    "name": user_data[2],
-                    "nickname": user_data[2],
-                    "avatar_url": user_data[3] or "",
-                    "signature": user_data[4] or "",
-                    "follower_count": user_data[5] or 0,
-                    "following_count": user_data[6] or 0,
-                    "video_count": 0,
-                    "last_updated": datetime.now().isoformat(),
-                    "last_fetch_time": old_user.get("last_fetch_time"),
-                }
-                new_users.append(user_info)
-                print(f"  [保留] {user_data[2]} (无本地视频)")
+            "last_fetch_time": old_user.get("last_fetch_time"),
+            "peer_type": r["peer_type"] or "followed",
+        })
+        print(f"  [OK] {r['nickname']} ({video_count} 视频, {r['peer_type']})")
 
     if new_users:
         # 生成 HTML
         generate_html(new_users)
-
         # 保存 following.json
         save_following({"users": new_users})
 
