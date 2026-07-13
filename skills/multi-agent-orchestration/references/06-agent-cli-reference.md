@@ -64,7 +64,7 @@
 | `--fallback-model <model>` | 主模型不可用时 fallback | 容错 |
 | `--max-turns <n>` | 最大交互轮数 | 控制预算 |
 | `--add-dir <dirs>` | 添加工作目录 | 跨目录访问 |
-| `--bare` | 最小模式：跳过 hooks/LSP/plugins/CLAUDE.md | 减少启动开销 |
+| `--bare` | 最小模式：跳过 hooks/LSP/plugins/CLAUDE.md | 与 Agent 工具调用门禁冲突；spawn 默认 fail-closed |
 | `--safe-mode` | 禁用所有自定义配置 | 排障 |
 | `--agent <agent>` | 指定 agent | 自定义角色 |
 | `--agents <json>` | JSON 定义自定义 agents | 多角色 |
@@ -119,7 +119,7 @@ claude --worktree feature-x --tmux
 - `< redirect` 在 tmux 内必须用 `bash -lc` 包裹
 - `-p` + `--output-format stream-json` + tmux detached 组合可能导致启动即死
 - 大 prompt（> 5KB）+ 大 codebase 会触发 autocompact thrash
-- `--bare` 模式适合 worker 减少启动 token 消耗
+- `--bare`、`--safe-mode`、`CLAUDE_CODE_SIMPLE=1` 会跳过或可能跳过 hooks；`--setting-sources` 排除 `local` 时项目 PreToolUse settings 也不会加载。需要依赖安装门禁的 worker 不得静默使用，spawn 会要求修正命令或显式接受 `prompt_only_no_mechanical_enforcement` 降级
 
 ---
 
@@ -457,7 +457,9 @@ kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
 
 > 2026-06-21 实测：WorkBuddy 桌面端内置 CodeBuddy CLI，可作为 custom CLI worker 使用；它不同于 Moonshot 官方 `kimi` CLI。
 
-### 5A.1 安装与版本
+### 5A.1 二进制位置与版本
+
+本节只记录已有桌面端的二进制位置，不授权 worker 安装软件、写 shell 配置或创建全局 symlink。缺失时按 SKILL.md Execution Authority 报告 BLOCKED；只有用户明确批准精确命令后才能修改环境。
 
 | 属性 | 值 |
 |------|-----|

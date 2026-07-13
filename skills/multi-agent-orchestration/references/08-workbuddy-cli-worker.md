@@ -16,13 +16,15 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 
 与 Claude Code 的关系：WorkBuddy 的 CLI 参数体系与 Claude Code 高度兼容（`-p`、`--print`、`--output-format`、`--settings`、`--permission-mode`、`--worktree`、`--mcp-config` 等），可直接沿用 SKILL.md 中对 Claude Code worker 的大部分模板。
 
-## 2. 二进制位置与安装
+## 2. 二进制位置与安装边界
+
+默认只使用已存在的 app bundle 绝对路径。本节不授权 worker 安装桌面端、写 `~/.zshrc`、创建 symlink 或修改机器环境；这些动作必须由用户明确批准精确命令。
 
 | 属性 | 值 |
 |------|-----|
 | 二进制路径 | `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` |
 | 当前版本 | v2.103.3（随桌面端自动更新） |
-| 建议 alias | `alias cbc='\"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy\"'` 加到 `~/.zshrc` |
+| 可选 alias（须明确授权） | `alias cbc='\"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy\"'` 加到 `~/.zshrc` |
 | 认证/配置目录 | `~/.codebuddy/`、`~/.workbuddy/`（随版本/组件分布，均与 WorkBuddy 桌面端共用） |
 
 ### 2.1 版本验证
@@ -35,7 +37,7 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 
 ### 2.2 PATH-less 检测（实测盲区）
 
-`which codebuddy` 在 WorkBuddy 桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend codebuddy` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径 `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`，检测到时给 `DEPENDENCY_WARN` + actionable fix 提示（spawn-worker.sh --command 传绝对路径 / `sudo ln -s`）。
+`which codebuddy` 在 WorkBuddy 桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend codebuddy` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径 `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。检测到时直接把绝对路径交给 spawn；不得为了消除 PATH WARN 自行写 alias 或创建 symlink。
 
 不只 CI/构建环境依赖这段检测，PM 在新机器派 worker 前也应该跑：
 
@@ -55,7 +57,7 @@ bash scripts/check-dependencies.sh --backend codebuddy --strict
 - 已有兜底：`scripts/render-runtime-profile.sh --backend codebuddy` 已默认 fallback 到该绝对路径；`check-dependencies.sh` 也会多源检测出这个路径并给 fix 提示。
 - PM 第一次该做：
   1. 先跑 `bash scripts/check-dependencies.sh --backend codebuddy --strict`，确认探测到绝对路径而非 `not found`。
-  2. 为避免每次手敲长路径，把 alias 加进 `~/.zshrc`：
+  2. 只有用户明确批准修改 shell 配置时，才可把 alias 加进 `~/.zshrc`：
      `alias cbc='"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"'`
 
 **踩坑 3：codebuddy trust dialog 偶尔卡住（auto-accept 不可靠）**

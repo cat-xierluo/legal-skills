@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.19.0] - 2026-07-13
+
+### 新增 — 验证不授权安装依赖的可执行边界
+
+- 新增 `dependency-install-guard.py` + hook wrapper：PreToolUse 对直接 Shell 工具调用默认 fail-closed，窄生命周期命令或 spawn 的精确 allowlist 才放行；系统/语言包管理器、全局链接、项目本地安装与 `npx`/`npm exec`/`pnpm dlx` 等按需获取命令还须精确安装授权及来源。授权快照缺失/损坏、hook 输入异常均 fail-closed。
+- `spawn-worker.sh` 新增安装与 Shell 精确授权参数；权威快照及 SHA-256 receipt 落到 Git common-dir，worktree 内 JSON 明确只是 mirror。hook 读 spawn 进程快照，并阻断文件工具改写 receipt/settings/mirror。settings 合并只移除旧 guard command，不丢同 entry 的其他 audit hooks。
+- 新增 Git identity 参数，把 author/committer 四个一次性环境变量绑定 worker 进程（不写共享 config），生成并精确放行 `git-workflow/safe-push.sh`；raw push 被 Shell gate 阻断，safe-push 把完整 PR range 身份证据绑定实际推送 OID。
+- 未接入 PreToolUse 的 Codex / OpenCode / custom backend 默认拒绝 spawn；只有 `--allow-prompt-only-install-guard '<来源>'` 显式接受降级并留痕时才放行。
+- Claude Code `--bare` / `--safe-mode` / `CLAUDE_CODE_SIMPLE=1`、排除 local settings 或不可证明的 wrapper 命令默认 fail-closed；CodeBuddy/Qoder backend 也须暴露对应 executable token。初始 METADATA 只记 `settings_wired...runtime_unproven`，首次 hook 调用另写 PM-side attestation；显式降级写 `prompt_only_no_mechanical_enforcement`，不虚报 hook 执行。
+- 新增 49 项故障注入，覆盖命令绕行、按需获取工具、危险 Git/rg/awk 参数、授权快照防篡改、settings 多 hook 保留、PM receipt/runtime attestation、backend executable proof、显式降级、install-like verify 拒绝、worker 进程 Git identity 与 safe-push spawn 集成。
+
+### 改进
+
+- worker prompt、STATUS、RESULT 增加 allowed Shell、PM receipt、enforcement source 与 identity-bound safe-push 证据字段；缺依赖时先找已有二进制，仍缺则 `status=blocked` 并记录 skipped verification，不得把验证要求解释成安装权限。
+- 依赖参考文档与 PATH-less 检查移除自动安装/全局 symlink 暗示；安装命令只作为用户明确批准后的参考。`check-dependencies.sh` 增加 `python3` 只读检查并明确只报告、不授权安装。
+
+### 关联
+
+- 通用化来源：法律 AI 书项目 T159 / DEC-131。本仓只沉淀可执行机制，不复制项目决策正文；`multi-agent-orchestration` 的 ignored 本地 TASKS/DECISIONS 继续不入库。
+
 ## [1.18.4] - 2026-07-11
 
 ### Changed — spawn 启动期提速 + spawn 后异步纪律（2026-07-10 多 worker Wave 实战三连修）

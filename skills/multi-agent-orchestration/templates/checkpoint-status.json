@@ -60,6 +60,20 @@
     "allowed_files": [],
     "forbidden_files": []
   },
+  "execution_authority": {
+    "environment_mutation_policy": "deny_by_default",
+    "install_guard_mode": "{{hook_or_prompt_only_degraded}}",
+    "install_authorization_source": "{{source_or_empty}}",
+    "authorized_install_commands": [],
+    "allowed_shell_commands": [],
+    "authority_receipt_file": "{{pm_receipt_path_or_empty}}",
+    "enforcement_source": "{{pretool_hook_settings_wired_process_snapshot_runtime_unproven_or_prompt_only_no_mechanical_enforcement}}",
+    "runtime_hook_attestation_file": "{{pm_side_attestation_path_or_empty}}",
+    "runtime_hook_attested": false,
+    "safe_push_command": "{{exact_safe_push_command_or_empty}}",
+    "missing_dependencies": [],
+    "environment_changes": []
+  },
   "current_action": "bootstrap checkpoint",
   "next_action": "{{next_action}}",
   "git": {
