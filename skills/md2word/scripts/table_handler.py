@@ -966,19 +966,12 @@ def _apply_table_cell_margins(table, table_config):
 
 
 def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=None, cell_lengths_real_per_col=None):
-    """按"列类型自适应"分配列宽（替代旧版 P80+min_needed，DEC-XXX）。
+    """按 P80 百分位给长列宽度 + 短列保底不换行。
 
     核心策略：
-    1. 先按表头真实字数（中文×1 ASCII×0.5，从 min_needed_cm 反推）把每列分成三类：
-       - short：表头 ≤4 字 且 P75 ≤8 字 → 短文本列，宽 = max(表头, P50)×0.32+0.84，固定不参与瓜分
-       - long：表头 ≥6 字 或 P75 ≥15 字 → 长文本列，宽 = max(表头, P80)×0.32+0.84，参与瓜分
-       - mid：其余中间列，宽 = max(表头, P60)×0.32+0.84，参与瓜分
-    2. 短列固定基准宽；长/中间列按其 P80 权重瓜分"页面剩余宽度"（AVAILABLE - sum_short）。
-    3. 总宽超页面时只压长列（>MAX_REASONABLE），短列保底不变。
-
-    设计动机：旧版 P80 把"短文本列中偶尔出现的超长单元格"作为权重基准，
-    导致左列表头"项目"2 字被拉宽到 ~4cm（受同行 16 字"是否支持 Skill、MCP、插件或连接器"拉高 P80）。
-    自适应分类让短列识别为 short 后取 P50 与表头 max，不被异常长行拉宽。
+    1. 每列先按"最长单元格实际需要"给一个最低宽(min_needed_cm,核心:少字列不换行)
+    2. 长列按 P80 比例瓜分"页面剩余宽度"(sum_min 给定后的余量)
+    3. 长列拿到的宽度可能物理上仍不够(必换行) → 用户接受(短列不被压换行是底线)
     """
     page_config = config.get('page', {})
     page_width = page_config.get('width', 21.0)
@@ -987,83 +980,48 @@ def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=No
     available_cm = page_width - margin_left - margin_right
 
     if min_needed_cm is None:
-        min_needed_cm = [1.5] * num_cols
+        min_needed_cm = [1.0] * num_cols
 
-    # 1) 从 min_needed_cm 反推表头"真实字数"（min_needed = real*0.32 + 0.84 → real = (m-0.84)/0.32）
-    header_real = [max(1, int((m - 0.84) / 0.32 + 0.5)) for m in min_needed_cm]
+    # 1) 短列先按 min_needed 给定
+    widths_cm = list(min_needed_cm)
+    sum_min = sum(widths_cm)
 
-    def _pct(lst, p):
-        if not lst:
-            return 0
-        s = sorted(lst)
-        idx = min(int(len(s) * p), len(s) - 1)
-        return s[idx]
+    # 2) 长列按 P80 比例瓜分剩余宽度
+    if sum_min < available_cm:
+        col_weights = []
+        for i in range(num_cols):
+            lengths = cell_lengths_per_col.get(i, [])
+            if not lengths:
+                col_weights.append(0.0)
+            else:
+                lengths_sorted = sorted(lengths)
+                p80_idx = int(len(lengths_sorted) * 0.8)
+                col_weights.append(lengths_sorted[min(p80_idx, len(lengths_sorted) - 1)])
 
-    # 2) 分类 + 基础宽（用真实字判定列类型，避免权重字把短列错判 long）
-    types, base = [], []
-    real_per_col = cell_lengths_real_per_col or cell_lengths_per_col
-    for i in range(num_cols):
-        L = cell_lengths_per_col.get(i, [])           # 权重字(给 P80 瓜分)
-        Lr = real_per_col.get(i, [])                  # 真实字(给分类)
-        p50 = _pct(L, 0.5)
-        p60 = _pct(L, 0.6)
-        p75_w = _pct(L, 0.75)
-        p80 = _pct(L, 0.8)
-        col_max = max(L) if L else 0
-        # 真实字统计
-        p50_r = _pct(Lr, 0.5) if Lr else 0
-        p75_r = _pct(Lr, 0.75) if Lr else 0
-        p95_r = _pct(Lr, 0.95) if Lr else 0
-        col_max_r = max(Lr) if Lr else 0
-        h = header_real[i]
-        # 列类型判定（用真实字+多重约束）：
-        # - short: 表头≤4字 且 P50真实字≤8 且 (P95真实字≤18 或 max/p50≤3)（典型短，偶有长行可接受）
-        # - long:  表头≥6字 或 P75真实字≥12 或 P95真实字≥20（典型长）
-        # - mid:   其余
-        max_r = col_max_r
-        is_short = h <= 4 and p50_r <= 8 and (p95_r <= 18 or (p50_r > 0 and max_r <= p50_r * 3))
-        if is_short:
-            t = 'short'
-        elif h >= 6 or p75_r >= 12 or p95_r >= 20:
-            t = 'long'
-        else:
-            t = 'mid'
-        types.append(t)
-        # 基础宽（short 用真实字 P50 取小; long/mid 用权重字 P80/P60 给后续瓜分）
-        if t == 'short':
-            ref = max(h, p50_r)  # 真实字 → 更窄
-        elif t == 'long':
-            ref = max(h, p80)     # 权重字 → 物理宽度
-        else:
-            ref = max(h, p60)     # 权重字
-        base.append(max(ref * 0.32 + 0.84, min_needed_cm[i]))
+        total_weight = sum(col_weights) or 1.0
+        extra_cm = available_cm - sum_min
 
-    # 3) 短列固定；余量按 long/mid 的 P80 权重瓜分
-    short_idx = [i for i, t in enumerate(types) if t == 'short']
-    other_idx = [i for i, t in enumerate(types) if t != 'short']
-    sum_short = sum(base[i] for i in short_idx)
-    sum_total = sum(base)
+        for i, w in enumerate(col_weights):
+            widths_cm[i] = widths_cm[i] + extra_cm * w / total_weight
 
-    if sum_total <= available_cm and other_idx:
-        # 余量 = 页面可用 - 短列固定；长/中间列按其 P80 权重瓜分
-        extra = available_cm - sum_short
-        weights = [_pct(cell_lengths_per_col.get(i, []), 0.8) or 1 for i in other_idx]
-        tw = sum(weights) or 1.0
-        for i, w in zip(other_idx, weights):
-            base[i] += extra * w / tw
-    elif sum_total > available_cm:
-        # 超页面：只压长列（>MAX_REASONABLE），短列保底
-        MAX_REASONABLE = available_cm * 0.7   # ≈ 10.25cm（A4 单栏 70%）
-        excess_total = sum_total - available_cm
-        for i, w in enumerate(base):
+    # 3) sum_min > available 时(内容总长超页面,物理必换行)
+    #    关键:不再整体缩(会把少字列也压扁,这是用户痛点)
+    #    而是只缩那些"实际需要 > 最小合理宽"的长列,少字列保底不变
+    else:
+        # 设一个"合理最大宽"——A4 单栏正文区(14.64cm)的 70% 给单列,让该列内换行可接受
+        MAX_REASONABLE = available_cm * 0.7   # ≈ 10.25cm
+        # 找出需要压缩的列(min_needed > MAX_REASONABLE)
+        excess_total = sum_min - available_cm
+        for i, w in enumerate(widths_cm):
             if w > MAX_REASONABLE:
+                # 长列:最多压到 MAX_REASONABLE,多余的"还回去"给总宽补足
                 can_reduce = w - MAX_REASONABLE
                 reduce = min(can_reduce, excess_total)
-                base[i] -= reduce
+                widths_cm[i] -= reduce
                 excess_total -= reduce
             # 短列(w <= MAX_REASONABLE):保底,不动
 
-    return [round(w, 2) for w in base]
+    return widths_cm
 
 
 def _optimize_html_table_widths(table, num_cols, row_cells_list, config):
