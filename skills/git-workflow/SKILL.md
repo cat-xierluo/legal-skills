@@ -2,7 +2,7 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.0"
+version: "1.6.0"
 license: MIT
 description: Git 工作流安全助手。本技能应在需要执行分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 ---
@@ -36,6 +36,36 @@ description: Git 工作流安全助手。本技能应在需要执行分支管理
 - 暂存文件时，优先按文件名 `git add <file>` 而非 `git add .`
 - 检测到 lock 文件时，先调查持有进程而非直接删除
 - 遇到 pre-commit hook 失败时，修复问题后创建新 commit，不跳过 hook
+
+### Git 身份隔离与 push 前门禁
+
+worktree 隔离文件和 HEAD，但同一仓库的 worktree 默认共享仓库级 `.git/config`。因此 worker **禁止**运行 `git config user.name ...`、`git config user.email ...` 或带 `--local` 的同类命令；这些写入会污染其他并发 worktree。只有项目已明确启用 `extensions.worktreeConfig` 且用户授权时，才可讨论 `git config --worktree`。默认用单次环境变量绑定本次提交身份：
+
+```bash
+GIT_AUTHOR_NAME="<name>" GIT_AUTHOR_EMAIL="<email>" \
+GIT_COMMITTER_NAME="<name>" GIT_COMMITTER_EMAIL="<email>" \
+  git commit -m "<title>" -m "<body>"
+```
+
+push 必须走身份绑定的 `safe-push.sh`，核验**完整 PR range**后只 push 已核验的 immutable OID；不得直接 `git push`，也不得只看 `git log -1` 或 HEAD：
+
+```bash
+# integration base 必须显式是远端跟踪 ref；不要用 HEAD~1 缩窄范围
+bash scripts/safe-push.sh \
+  --base origin/main \
+  --remote origin \
+  --branch feat/example \
+  --expected-name "<name>" \
+  --expected-email "<email>"
+
+# 只读诊断可单独运行门禁；不替代 safe-push
+bash scripts/check-outgoing-identities.sh \
+  --base origin/main \
+  --expected-name "<name>" \
+  --expected-email "<email>"
+```
+
+门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新 integration base，核验当前 HEAD，确认核验期间 HEAD 未变化，再把该 OID 精确推到目标分支，使证据绑定实际 push 对象。
 
 ## 2. 分支管理
 
@@ -678,12 +708,7 @@ git commit
 
 `package-lock.json`、`pnpm-lock.yaml` 等锁文件冲突时：
 
-```bash
-# 删除 lock 文件，重新生成
-rm package-lock.json
-npm install   # 或 pnpm install
-git add package-lock.json
-```
+不要默认删除 lock 文件并重装依赖。先理解冲突两侧的依赖变更，优先用包管理器支持的锁文件合并/重算流程；确需重新生成时，`npm install` / `pnpm install` 属于依赖安装与环境写入，必须先取得用户或项目规则对**精确命令**的明确授权，并由编排层记录授权来源。无授权或工具缺失时保持阻塞并报告，不得为完成验证自行安装。
 
 ## 6. 常用 Git 操作速查
 
@@ -978,4 +1003,7 @@ git checkout main
 
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
+- `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
+- `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
+- `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
 - `TASKS.md` — 本 Skill 的维护任务和后续上下文

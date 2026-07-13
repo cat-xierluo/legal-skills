@@ -53,6 +53,7 @@
 | 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0（待发布） | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
 | 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10（待发布） | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
+| 2026-07-13 | 更新     | [git-workflow](skills/git-workflow/) | v1.6.0 | 新增完整 outgoing range 身份门禁：逐 commit 核验 author 与 committer，禁止 worker 写 repo-local `git config user.*`，base/upstream 不明或任一身份异常即 fail-closed |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
 | 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
 | 2026-06-22 | 新上传   | [invoice-organizer](skills/invoice-organizer/) | v0.1.1 | 发票/票据 PDF 整理与报销清单：pdftotext 提取文本，按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由/案号/日期/路线，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）；含 Hard Fail 验收标准 |
@@ -587,10 +588,10 @@
 <tr>
 <td><a href="skills/git-workflow/"><strong>git-workflow</strong></a></td>
 <td>工具·Git</td>
-<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退和已合并分支清理</td>
+<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理和 push 前身份门禁</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/git-workflow-1.5.0.zip">下载</a></td>
+<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/git-workflow-1.6.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>

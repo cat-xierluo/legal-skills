@@ -2,6 +2,30 @@
 
 ## 第一部分：决策记录
 
+### [DEC-016] - 2026-07-13 - 用完整 outgoing range 身份门禁隔离并发 worktree 的 Git 身份
+
+**背景**
+
+worktree 只隔离工作目录与 HEAD，默认仍共享仓库级 `.git/config`。法律 AI 书项目中，一个并发 worker 写入 repo-local `user.name` / `user.email` 后，另一个 worktree 的首次 commit 被错误身份污染；仅检查 HEAD 或依赖 prompt 自律无法证明更早的 outgoing commit 未受污染。
+
+**决策**
+
+1. worker 禁止写 repo-local `git config user.*`；默认用单次 `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 创建 commit。
+2. 只读 `check-outgoing-identities.sh` 仅接受当前 HEAD 与远端跟踪 PR base；同名 feature upstream 视为 ambiguous，拒绝本地 commit-ish 缩窄范围。
+3. 实际 push 必须走 `safe-push.sh`：刷新 integration base、核验完整 range、确认 HEAD 未变化，再 push 已核验 immutable OID。base 不明、bad revision、非祖先、空 range、Git 错误、空身份或任一 commit 不一致均 fail-closed。
+
+**理由**
+
+- HEAD 身份正常不能排除早期 commit 已被污染。
+- 共享 repo config 是 worktree 隔离之外的状态，必须以提交对象的实际身份作为 push authority 证据。
+- 只读诊断脚本不修改共享 Git 状态；safe-push 把核验结果绑定实际远端写入，避免“脚本通过后另推污染 HEAD”。
+
+**影响**
+
+- `git-workflow` 升级为 v1.6.0。
+- 新增身份门禁、identity-bound safe-push 与故障注入测试；feature/PR push 流程绑定完整 range 核验结果与实际 OID。
+- 本决策来源为法律 AI 书项目 T158 / DEC-131，Skill 仅沉淀通用 Git 安全机制。
+
 ### [DEC-001] - 2026-05-15 - 创建独立的 git-workflow skill
 
 **背景**
