@@ -7,12 +7,13 @@
 ## 一、画布
 
 - **viewBox**：**宽 720px 固定，高度按内容裁剪**（v1.7.1）——viewBox="0 0 720 H"，H = 内容底边最大 y + 40px；**不再固定 720×400 / 1.8:1**（固定 400 会让内容少的图底部留白过大、图注间距不一致；用户 2026-06-30 反馈 SVG 转出 PNG 下边缘离图注间距忽大忽小，根因即此）。
+- **稳定图身份**：v1.8.9+ 新生成/新落稿 SVG 的根元素必须有项目内唯一 `data-figure-id="fig-chNN-sN-NN"`。值限 1–128 位字母、数字、点、下划线或连字符；模板 `fig-template-*` 只作示例，落稿前替换。下游 review / render inventory 以此绑定跨轮证据，缺失或重复均失败。
 - **背景**：**透明背景（硬约束）**——新生成图**不画任何背景矩形**、不设 `background`、不在 `<svg>` 根设底色。视觉区分由内部模块填充色承担（详见 §5）。
 - **安全边距**：左右 40px、顶部 40px；底部 = H − 内容底边（即 40px，由 viewBox 裁剪保证）
 - **有效绘图区**：宽 640px（x: 40–680）；高度按内容（y 从 40 到 H−40）
 - **渲染**：源 SVG 不嵌字体样式；正式预览运行 `python3 scripts/render_svg.py in.svg out.png`，由 wrapper 读取 `assets/render-fonts.css` 并固定宽 720（**不指定高度**，按 viewBox 比例）；高 DPI 的 `svg2png.js` 注入同一 CSS。禁止用裸渲染器输出作验收证据。
 
-> **关于老图**：main 上既有 34 张白底单色 SVG 是历史产物（`<rect width="720" height="400" fill="#FFFFFF"/>`），保持稳定不回改（作者 2026-06-20 确认）。**新规则只管新生成图**：透明底 + 内部模块多色柔和区分。透明底与白底是两种不同做法——老图不强制改透明。
+> **关于老图**：main 上既有 34 张白底单色 SVG 是历史产物（`<rect width="720" height="400" fill="#FFFFFF"/>`），保持稳定不回改（作者 2026-06-20 确认）。**新规则只管新生成图**：透明底 + 内部模块多色柔和区分；`data-figure-id` 同样不要求在本次升级中回填历史书稿。透明底与白底是两种不同做法——老图不强制改透明。
 
 ---
 
@@ -270,7 +271,7 @@ convert out.png -colorspace Gray gray.png
 
 ```svg
 <!-- ✅ 正确：透明背景 + 属性内联模块色 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-ch03-s2-01">
   <!-- 注意：没有背景矩形！直接画模块 -->
   <rect x="40" y="176" width="140" height="48" rx="6" fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
   <text x="110" y="205" text-anchor="middle" font-size="18" fill="#2D3436">识别场景</text>
@@ -466,12 +467,12 @@ convert out.png -colorspace Gray gray.png
 
 ## 十二、SVG 代码模板
 
-> **注意**：模板与生成器产物不得包含 `<style>`、`style=` 或任何内嵌字体栈——这是 Obsidian/Markdown 兼容的源文件硬约束（见 §5.4）。预览继承宿主字体；正式导出统一由 `assets/render-fonts.css` 外部注入。不得把字体栈复制到 `<svg>` 或单个 `<text>`。
+> **注意**：模板与生成器产物不得包含 `<style>`、`style=` 或任何内嵌字体栈——这是 Obsidian/Markdown 兼容的源文件硬约束（见 §5.4）。预览继承宿主字体；正式导出统一由 `assets/render-fonts.css` 外部注入。不得把字体栈复制到 `<svg>` 或单个 `<text>`。下面的 `fig-template-*` 只是模板身份，复制进书稿时必须改成项目内唯一 `fig-chNN-sN-NN`。
 
 **模板 A：透明背景 + 内部多色（新生成图默认，示例用 P1 雾蓝系）**
 
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-style-a">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃所有方向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
@@ -500,7 +501,7 @@ convert out.png -colorspace Gray gray.png
 > 历史产物保留：既有 34 张图带 `<rect width="720" height="400" fill="#FFFFFF"/>` 白底，保持稳定不回改。新生成图一律走模板 A（透明底 + 内部多色）。
 
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-legacy-example">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
       markerWidth="8" markerHeight="8" orient="auto">

@@ -10,12 +10,14 @@
 - 清理 `references/layout-templates.md` 5 个新版模板骨架中的同类 `<style>`，并为 5 个旧模板骨架补齐与 `viewBox` 一致的显式 `width`/`height`。
 - 收紧源契约：强制 viewBox 为 `0 0 720 H`、根 `width=720`、根 `height=H`，并禁止所有元素的 `style=` 与内嵌 `font-family`；此前检查器会放过非零/非 720 画布和 inline style。
 - 修复首次移除内嵌字体 CSS 后的渲染退化：新增单一权威源 `assets/render-fonts.css`，由 librsvg wrapper 与 `svg2png.js` 共同加载；不再以裸渲染器输出代替受控字体渲染。
+- 修复 producer 与下游 review inventory 的组合断点：5 个生成器和 10 个模板骨架现在都产出稳定 `data-figure-id`；生成器默认取输出文件 stem，并支持显式 `--figure-id fig-chNN-sN-NN`。新落稿图必须项目内唯一，模板 ID 不得原样进入书稿；不强制回改历史书稿。
 
 ### 技术优化
 
-- 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、规范画布、嵌入样式/font、class/CSS 变量、`currentColor` 和全画布背景矩形；12 类已知坏样本反向自测检查器。
+- 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、规范画布、稳定图身份、嵌入样式/font、class/CSS 变量、`currentColor` 和全画布背景矩形；16 类已知坏样本反向自测检查器，并检查同批生成器/模板 ID 不重复。
+- 新增 `scripts/figure_id.py`：为全部生成器提供统一的 output/`--figure-id` 参数解析与安全值校验；非法显式 ID 或无法安全转换的输出 stem 会在写文件前失败。
 - 新增 `scripts/render_svg.py`：固定读取 `assets/render-fonts.css`，调用 `rsvg-convert --stylesheet ... -w 720`；输出不存在或为空时失败。
-- 新增 `scripts/verify_render_font_equivalence.py`：动态运行全部生成器，以临时内嵌同一 CSS 的旧式产物为基线，对受控外部 CSS 渲染逐像素执行 ImageMagick AE 比较；缺少依赖时明确失败且不自动安装。
+- 新增 `scripts/verify_render_font_equivalence.py`：动态运行全部生成器，同时比较“临时旧内嵌字体 vs 受控外部 CSS”和“临时移除图 ID vs 保留图 ID”两组像素基线；缺少依赖时明确失败且不自动安装。
 - 改造 `scripts/svg2png.js`：读取同一 CSS 注入浏览器渲染页，并等待 `document.fonts.ready`；字体栈不在两个渲染器中复制。
 - 新增 `.github/workflows/svg-book-producer-contract.yml`：对本 Skill / 工作流自身的 PR，以及相关改动推入 `main`，自动执行 source producer contract；只使用 runner 现有 Python，不安装额外依赖。该 CI 不宣称视觉通过。
 - 建立 `TASKS.md` 与 `DECISIONS.md`，记录“生产器不得与自身硬规则冲突，硬规则必须由生成产物回归测试闭环”（DEC-021 / T001）。更早任务与决策继续保留在本文件原历史中，不虚构补录。
@@ -29,8 +31,9 @@
 
 - TDD RED：旧实现触发 15 个子测试失败（5 个生成器含 `<style>`；5 个旧模板缺显式尺寸；5 个新版模板含 `<style>`）。
 - 二轮 TDD RED：新增“非零/非 720 画布”“元素 `style=`”反例后准确暴露 2 个 fail-open；新增元素 `font-family` 反例再次暴露单一字体源缺口。
-- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 4 tests passed，覆盖 5 个生成器、10 个模板代码块、12 类已知坏样本和双渲染器字体源接线。
-- 受控 librsvg：`python3 scripts/verify_render_font_equivalence.py` 动态生成并渲染全部 5 个产物；与临时旧内嵌字体 style 基线逐像素比较，5/5 `pixel AE = 0`。
+- 身份契约 TDD RED：将稳定图身份加入 producer contract 后，旧实现准确暴露 5 个生成器 + 10 个模板共 15 个缺失 `data-figure-id` 的失败。
+- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 4 tests passed，覆盖 5 个生成器、10 个模板代码块、16 类已知坏样本、默认/显式/非法 ID 路径、批内唯一性和双渲染器字体源接线。
+- 受控 librsvg：`python3 scripts/verify_render_font_equivalence.py` 动态生成并渲染全部 5 个产物；旧内嵌字体 vs 外部 CSS、无 ID vs 有 ID 两组逐像素比较均为 5/5 `AE = 0`。
 - 裸 librsvg 并非等价路径：独立审计测得删除 style 后直接裸渲染会出现 serif 回退，像素变化 3.57%–7.26%；本版撤回“裸渲染无漂移”的旧结论。
 - `svg2png.js` 已完成单一 CSS 读取/注入与 Node 语法验证；本机无 Puppeteer，按禁止安装依赖规则未擅自安装，实际浏览器导出标为 `SKIPPED` 而非通过。
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # N×M grid matrix SVG generator for svg-book-illustrator v1.8.3.
 # Edit TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS/PALETTE at top,
-# then: python3 gen-matrix-grid.py out.svg
-import sys
+# then: python3 gen-matrix-grid.py out.svg --figure-id fig-ch03-s2-01
+from figure_id import parse_output_and_figure_id
+
+
+dest, figure_id = parse_output_and_figure_id("/tmp/matrix-grid-demo.svg")
 
 # ---------- parameters ----------
 TITLE = "合同审查：4 类风险 × 5 类条款 对照矩阵"
@@ -50,7 +53,7 @@ H = GRID_BOTTOM + 60       # room for legend
 out = []
 def emit(s): out.append(s)
 
-emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
+emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" data-figure-id="{figure_id}" xmlns="http://www.w3.org/2000/svg">')
 
 # title
 emit(f'<text x="{W/2}" y="{TITLE_Y}" text-anchor="middle" font-size="22" font-weight="600" fill="{C_TEXT}">{TITLE}</text>')
@@ -96,7 +99,6 @@ for key in ["yes", "partial", "no", "na"]:
 
 emit('</svg>')
 
-dest = sys.argv[1] if len(sys.argv) > 1 else "/tmp/matrix-grid-demo.svg"
 with open(dest, "w", encoding="utf-8") as f:
     f.write("\n".join(out))
 print("wrote", dest, f"({len(out)} lines)")

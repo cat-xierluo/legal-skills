@@ -20,9 +20,10 @@
 6. 源 SVG 保持无嵌入样式；正式渲染字体只在 `assets/render-fonts.css` 维护，librsvg wrapper 与 `svg2png.js` 共同读取。裸渲染器输出不构成验收证据；`scripts/verify_render_font_equivalence.py` 以临时旧式基线提供可重复的像素等价证据。
 7. 画布契约固定为 `0 0 720 H` / `width=720` / `height=H`，并禁止所有元素 `style=` 与内嵌 `font-family`，避免检查器再次 fail-open 或外部字体被覆盖。
 8. `VERIFIED`、`MERGEABLE` 与 `COMPLETED` 分离：本地/PR 证据只能进入 VERIFIED/MERGEABLE；只有 PR 已合并、`main` check 绿色且发布资产可访问，T001 才能标完成。
+9. producer 与 review inventory 以 SVG 根 `data-figure-id` 为跨工具主键：新产物必须安全且项目内唯一，生成器默认 output stem、允许显式 ID，模板 ID 落稿前替换。项目级 inventory 负责 canonical scope 全局唯一性；本次不迁移历史书稿。
 
 ### 兼容性
 
-源 SVG 移除内嵌 CSS，并为旧模板骨架补显式画布尺寸；正式导出通过受控外部 CSS 保持旧字体基线，5 个生成器像素对照均为零差。不改变节点、坐标、颜色、文字或图形语义。
+源 SVG 移除内嵌 CSS，并为旧模板骨架补显式画布尺寸；正式导出通过受控外部 CSS 保持旧字体基线，5 个生成器像素对照均为零差。新增 `data-figure-id` 前后 5/5 受控渲染 `AE = 0`；不改变节点、坐标、颜色、文字或图形语义。
 
 > 本文件自 DEC-021 建立。DEC-001 至 DEC-020 的历史摘要仍以 `CHANGELOG.md` 中的原记录为准，不在此虚构补录。

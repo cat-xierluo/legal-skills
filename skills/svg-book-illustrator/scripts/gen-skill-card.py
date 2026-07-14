@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # Skill-structure card SVG generator for svg-book-illustrator v1.8.1.
 # Edit TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/PALETTE at top,
-# then: python3 gen-skill-card.py out.svg
-import sys
+# then: python3 gen-skill-card.py out.svg --figure-id fig-ch03-s2-01
+from figure_id import parse_output_and_figure_id
+
+
+dest, figure_id = parse_output_and_figure_id("/tmp/skill-card-demo.svg")
 
 # ---------- parameters ----------
 TITLE = "法律研究 Skill 结构图"
@@ -51,7 +54,7 @@ HAS_FOOT = bool(FOOTNOTE)
 FOOT_TOP, FOOT_H = (485, 36) if HAS_FOOT else (0, 0)
 H = (FOOT_TOP + FOOT_H + 40) if HAS_FOOT else (OUT_TOP + OUT_H + 40)
 
-emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
+emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" data-figure-id="{figure_id}" xmlns="http://www.w3.org/2000/svg">')
 
 # title
 emit(f'<text x="{CENTER_X}" y="{TITLE_Y}" text-anchor="middle" font-size="22" font-weight="600" fill="{C_TEXT}">{TITLE}</text>')
@@ -116,7 +119,6 @@ emit('</defs>')
 
 emit('</svg>')
 
-dest = sys.argv[1] if len(sys.argv) > 1 else "/tmp/skill-card-demo.svg"
 with open(dest, "w", encoding="utf-8") as f:
     f.write("\n".join(out))
 print("wrote", dest, f"({len(out)} lines)")

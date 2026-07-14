@@ -20,6 +20,7 @@ RENDER_FONT_CSS = SKILL_ROOT / "assets" / "render-fonts.css"
 RSVG_WRAPPER = SCRIPTS_DIR / "render_svg.py"
 RENDER_EQUIVALENCE_CHECK = SCRIPTS_DIR / "verify_render_font_equivalence.py"
 BROWSER_RENDERER = SCRIPTS_DIR / "svg2png.js"
+FIGURE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def local_name(name: str) -> str:
@@ -34,13 +35,21 @@ def parse_number(value: str) -> float:
 
 
 class SvgContractMixin:
-    def assert_svg_contract(self, svg_text: str, source: str) -> None:
+    def assert_svg_contract(self, svg_text: str, source: str) -> str:
         try:
             root = ET.fromstring(svg_text)
         except ET.ParseError as exc:
             self.fail(f"{source}: XML 不可解析：{exc}")
 
         self.assertEqual(local_name(root.tag), "svg", f"{source}: 根元素必须是 <svg>")
+
+        figure_id = root.attrib.get("data-figure-id")
+        self.assertIsNotNone(figure_id, f"{source}: SVG 根缺少 data-figure-id")
+        self.assertRegex(
+            figure_id or "",
+            FIGURE_ID_PATTERN,
+            f"{source}: data-figure-id 必须是非空安全值",
+        )
 
         view_box = root.attrib.get("viewBox")
         self.assertIsNotNone(view_box, f"{source}: SVG 根缺少 viewBox")
@@ -104,11 +113,23 @@ class SvgContractMixin:
                 covers_origin and covers_width and covers_height,
                 f"{source}: 不得用全画布 <rect> 绘制背景",
             )
+        return figure_id
+
+    def assert_unique_figure_ids(self, entries: list[tuple[str, str]]) -> None:
+        seen: dict[str, str] = {}
+        for source, figure_id in entries:
+            self.assertNotIn(
+                figure_id,
+                seen,
+                f"{source}: data-figure-id 与 {seen.get(figure_id)} 重复：{figure_id}",
+            )
+            seen[figure_id] = source
 
 
 class GeneratorContractTests(SvgContractMixin, unittest.TestCase):
     def test_all_generators_emit_contract_compliant_svg(self) -> None:
         self.assertGreaterEqual(len(GENERATORS), 5, "不得静默遗漏或删除现有 SVG 生成器")
+        figure_ids: list[tuple[str, str]] = []
         with tempfile.TemporaryDirectory() as tmpdir:
             for generator_name in GENERATORS:
                 with self.subTest(generator=generator_name):
@@ -126,7 +147,67 @@ class GeneratorContractTests(SvgContractMixin, unittest.TestCase):
                         f"{generator_name}: 生成失败\nstdout: {result.stdout}\nstderr: {result.stderr}",
                     )
                     self.assertTrue(output.is_file(), f"{generator_name}: 未生成输出文件")
-                    self.assert_svg_contract(output.read_text(encoding="utf-8"), generator_name)
+                    figure_id = self.assert_svg_contract(
+                        output.read_text(encoding="utf-8"), generator_name
+                    )
+                    self.assertEqual(figure_id, output.stem, f"{generator_name}: 默认 ID 应来自输出 stem")
+                    figure_ids.append((generator_name, figure_id))
+
+                    explicit_output = Path(tmpdir) / f"explicit-{Path(generator_name).stem}.svg"
+                    explicit_id = f"fig-ch01-s1-{len(figure_ids):02d}"
+                    explicit_result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPTS_DIR / generator_name),
+                            str(explicit_output),
+                            "--figure-id",
+                            explicit_id,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(explicit_result.returncode, 0, explicit_result.stderr)
+                    explicit_root = ET.fromstring(explicit_output.read_text(encoding="utf-8"))
+                    self.assertEqual(explicit_root.attrib.get("data-figure-id"), explicit_id)
+
+                    for invalid_index, invalid_id in enumerate(("", "unsafe figure id"), start=1):
+                        invalid_output = (
+                            Path(tmpdir)
+                            / f"invalid-{invalid_index}-{Path(generator_name).stem}.svg"
+                        )
+                        invalid_result = subprocess.run(
+                            [
+                                sys.executable,
+                                str(SCRIPTS_DIR / generator_name),
+                                str(invalid_output),
+                                "--figure-id",
+                                invalid_id,
+                            ],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                        )
+                        self.assertNotEqual(invalid_result.returncode, 0)
+                        self.assertFalse(invalid_output.exists())
+
+                    unsafe_stem_output = Path(tmpdir) / f"unsafe {Path(generator_name).stem}.svg"
+                    unsafe_stem_result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPTS_DIR / generator_name),
+                            str(unsafe_stem_output),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertNotEqual(unsafe_stem_result.returncode, 0)
+                    self.assertFalse(unsafe_stem_output.exists())
+        self.assert_unique_figure_ids(figure_ids)
 
 
 class TemplateContractTests(SvgContractMixin, unittest.TestCase):
@@ -134,49 +215,73 @@ class TemplateContractTests(SvgContractMixin, unittest.TestCase):
         markdown = LAYOUT_TEMPLATES.read_text(encoding="utf-8")
         blocks = re.findall(r"```svg\s*\n(.*?)\n```", markdown, flags=re.DOTALL)
         self.assertGreaterEqual(len(blocks), 10, "layout-templates.md 应保留全部 SVG 模板示例")
+        figure_ids: list[tuple[str, str]] = []
         for index, svg_text in enumerate(blocks, start=1):
             with self.subTest(svg_block=index):
-                self.assert_svg_contract(svg_text, f"layout-templates.md svg block #{index}")
+                source = f"layout-templates.md svg block #{index}"
+                figure_id = self.assert_svg_contract(svg_text, source)
+                self.assertTrue(figure_id.startswith("fig-template-"), source)
+                figure_ids.append((source, figure_id))
+        self.assert_unique_figure_ids(figure_ids)
 
 
 class ContractRuleTests(SvgContractMixin, unittest.TestCase):
     def test_known_bad_contract_variants_are_rejected(self) -> None:
+        valid_root = (
+            '<svg viewBox="0 0 720 400" width="720" height="400" '
+            'data-figure-id="fig-test">'
+        )
         bad_svgs = {
-            "malformed XML": '<svg viewBox="0 0 720 400" width="720" height="400">',
-            "missing viewBox": '<svg width="720" height="400"></svg>',
-            "missing dimensions": '<svg viewBox="0 0 720 400"></svg>',
+            "malformed XML": valid_root,
+            "missing figure id": '<svg viewBox="0 0 720 400" width="720" height="400"></svg>',
+            "empty figure id": (
+                '<svg viewBox="0 0 720 400" width="720" height="400" '
+                'data-figure-id=""></svg>'
+            ),
+            "unsafe figure id": (
+                '<svg viewBox="0 0 720 400" width="720" height="400" '
+                'data-figure-id="unsafe figure id"></svg>'
+            ),
+            "missing viewBox": (
+                '<svg width="720" height="400" data-figure-id="fig-test"></svg>'
+            ),
+            "missing dimensions": (
+                '<svg viewBox="0 0 720 400" data-figure-id="fig-test"></svg>'
+            ),
             "noncanonical canvas geometry": (
-                '<svg viewBox="10 20 860 400" width="860" height="400"></svg>'
+                '<svg viewBox="10 20 860 400" width="860" height="400" '
+                'data-figure-id="fig-test"></svg>'
             ),
             "style block": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<style>text{fill:#000}</style></svg>'
             ),
             "inline style attribute": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<text x="40" y="40" style="fill:#2D3436">文本</text></svg>'
             ),
             "root font-family": (
-                '<svg viewBox="0 0 720 400" width="720" height="400" font-family="sans-serif"></svg>'
+                '<svg viewBox="0 0 720 400" width="720" height="400" '
+                'data-figure-id="fig-test" font-family="sans-serif"></svg>'
             ),
             "element font-family": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<text x="40" y="40" font-family="sans-serif">文本</text></svg>'
             ),
             "class selector": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<rect class="node" x="40" y="40" width="100" height="40"/></svg>'
             ),
             "CSS variable": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<rect x="40" y="40" width="100" height="40" fill="var(--node-fill)"/></svg>'
             ),
             "currentColor": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<path d="M0 0L10 10" stroke="currentColor"/></svg>'
             ),
             "canvas background rect": (
-                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                valid_root +
                 '<rect width="720" height="400" fill="#FFFFFF"/></svg>'
             ),
         }
@@ -184,6 +289,11 @@ class ContractRuleTests(SvgContractMixin, unittest.TestCase):
             with self.subTest(rule=rule):
                 with self.assertRaises(AssertionError):
                     self.assert_svg_contract(svg_text, rule)
+
+        with self.assertRaisesRegex(AssertionError, "重复"):
+            self.assert_unique_figure_ids(
+                [("first.svg", "fig-duplicate"), ("second.svg", "fig-duplicate")]
+            )
 
 
 class RenderFontSourceTests(unittest.TestCase):
@@ -215,6 +325,7 @@ class RenderFontSourceTests(unittest.TestCase):
 
         self.assertIn("--stylesheet", wrapper)
         self.assertIn('"720"', wrapper)
+        self.assertIn("figure_id_AE", equivalence_check)
         self.assertIn("renderFontCss", browser_renderer)
         self.assertIn("document.fonts.ready", browser_renderer)
 
