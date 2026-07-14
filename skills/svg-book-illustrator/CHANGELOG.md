@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## [v1.8.9] - 2026-07-14
+
+### 修复
+
+- 移除 `gen-radar.py`、`gen-skill-card.py`、`gen-timeline-lane.py`、`gen-matrix-grid.py`、`gen-three-col.py` 输出中的 `<style>` 字体块，使实际生成产物与 Skill 已公开的 Obsidian/Markdown 兼容硬规则一致。
+- 清理 `references/layout-templates.md` 5 个新版模板骨架中的同类 `<style>`，并为 5 个旧模板骨架补齐与 `viewBox` 一致的显式 `width`/`height`。
+
+### 技术优化
+
+- 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、`viewBox`/尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量、`currentColor` 和全画布背景矩形。
+- 建立 `TASKS.md` 与 `DECISIONS.md`，记录“生产器不得与自身硬规则冲突，硬规则必须由生成产物回归测试闭环”（DEC-021 / T001）。更早任务与决策继续保留在本文件原历史中，不虚构补录。
+
+### 兼容性
+
+- 节点、坐标、颜色、文字和图形语义均未改变；字体继续按既有规范继承 Markdown/渲染环境的默认无衬线字体。
+- Marketplace 当前未注册 `svg-book-illustrator` 插件条目，因此不新增或改写无对应发布单元的 Marketplace 配置；根 README 的版本与下载索引同步至 v1.8.9。
+
+### 验证
+
+- TDD RED：旧实现触发 15 个子测试失败（5 个生成器含 `<style>`；5 个旧模板缺显式尺寸；5 个新版模板含 `<style>`）。
+- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 2 tests passed，覆盖 5 个生成器与 10 个模板代码块。
+- 实际渲染：5/5 生成器产物均通过 `xmllint --noout`，并由现有 `rsvg-convert -w 720` 成功生成非空 PNG；拼图目检确认节点、颜色、坐标与文字内容未发生意外漂移。
+- 兼容性对照：逐一对比 `origin/main` 与 v1.8.9 生成产物，归一化移除旧 `<style>` 后 5/5 SVG 其余字节完全一致。
+
 ## [v1.8.8] - 2026-07-09
 
 ### 新增（蓝色焦点 + 文字二档通用规则，DEC-020）

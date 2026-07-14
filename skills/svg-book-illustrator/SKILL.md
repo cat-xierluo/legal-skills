@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.8"
+version: "1.8.9"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
@@ -73,6 +73,14 @@ python scripts/extract_svgs.py path/to/chapter.md --output output/figures/
 **④ 视觉目检（多模态渲染后眼检）**：SVG 渲染为 PNG（`scripts/svg2png.js` 或 `rsvg-convert -w 720`——**不指定 -h，按 viewBox 高度比例渲染**）后，用多模态模型逐张查——文字不溢出容器、框不重叠（间距 ≥24px）、箭头落位方向正确、字号可读（节点≥16px 副≥12px）、黑白可辨、整体美观留白合理。发现问题回改 SVG 坐标，复检直到目检通过。
 
 > **多模态生产提示**：若环境支持图像理解，④ 必须真正"看"渲染图，不能只靠 xmllint / rsvg 无警告间接验证——语法通过 ≠ 布局美观，溢出/重叠/箭头错位只有肉眼（或多模态模型）能发现。但视觉目检对"轻微溢出/贴近"易判 OK，故须先过 ③ 字宽硬算自检。
+
+**生产器契约回归（v1.8.9+）**：修改 `scripts/gen-*.py` 或 `references/layout-templates.md` 后，必须运行：
+
+```bash
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+```
+
+只有退出码为 0 才能发布。该测试实际执行 5 个生成器，并检查模板文档中的全部 SVG 代码块；XML、画布尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量和背景矩形任一不合规都会失败。
 
 ---
 

@@ -52,7 +52,6 @@ FOOT_TOP, FOOT_H = (485, 36) if HAS_FOOT else (0, 0)
 H = (FOOT_TOP + FOOT_H + 40) if HAS_FOOT else (OUT_TOP + OUT_H + 40)
 
 emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
-emit('<style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>')
 
 # title
 emit(f'<text x="{CENTER_X}" y="{TITLE_Y}" text-anchor="middle" font-size="22" font-weight="600" fill="{C_TEXT}">{TITLE}</text>')

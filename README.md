@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-07-14 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.9 | 修复 5 个生成器与 10 个模板代码块违反自身 SVG 硬规则的问题；新增生成产物契约回归测试，自动覆盖全部生成器与模板 SVG 代码块，阻断 `<style>`、缺失尺寸、CSS class/变量和背景矩形回归 |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
 | 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
 | 2026-06-22 | 新上传   | [invoice-organizer](skills/invoice-organizer/) | v0.1.1 | 发票/票据 PDF 整理与报销清单：pdftotext 提取文本，按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由/案号/日期/路线，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）；含 Hard Fail 验收标准 |
@@ -57,7 +58,6 @@
 | 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
 | 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
 | 2026-06-12 | 更新     | [skill-lint](skills/skill-lint/) | v2.0.8 | 新增安全评估模块：将危险执行、敏感文件访问、数据外传、硬编码凭证、提示词安全、依赖风险、安装钩子、MCP 风险和 Git 历史敏感泄露纳入正式质量意见报告 |
-| 2026-06-11 | 更新     | [img2pdf](skills/img2pdf/) | v1.2.0 | 新增长截图模式：`--mode {nup, vertical}` 切换、`--split` 长截图自动切割（按 A4 比例自动算段高）、`--split-height` 显式段高控制；vertical 模式不切割、单图成单页、页面高度按图等比自适应；解决微信聊天记录 / 庭审笔录两类典型长截图 → PDF 需求 |
 </details>
 
 ## 📋 项目概述
@@ -448,8 +448,8 @@
 <td>工具·配图</td>
 <td style="word-break:break-word">书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图，针对印刷出版场景优化，字号间距按物理尺寸反推</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.7.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/svg-book-illustrator-1.7.1.zip">下载</a></td>
+<td style="text-align:center">v1.8.9</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/svg-book-illustrator-1.8.9.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>

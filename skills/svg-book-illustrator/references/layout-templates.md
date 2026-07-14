@@ -57,7 +57,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -119,7 +119,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400">
   <!-- 无背景矩形，透明底 -->
 
   <!-- 层 1（顶层，G2 法律米梯度 档 1，最浅） -->
@@ -160,7 +160,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400">
   <!-- 无背景矩形，透明底 -->
 
   <!-- 左列标题（P8 混合系暖米色） -->
@@ -200,7 +200,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -251,7 +251,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -356,7 +356,6 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架（6 轴 2 系列，示例 = 法律 AI 生态六层）
 ```svg
 <svg viewBox="0 0 720 505" width="720" height="505" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律 AI 生态六层：理论能力 vs 实际部署</text>
   <!-- 4 层网格（r=37.5/75/112.5/150，中心 360,250） -->
   <polygon points="360,212.5 392.5,231.2 392.5,268.8 360,287.5 327.5,268.8 327.5,231.3" fill="none" stroke="#E8E8E8" stroke-width="1"/>
@@ -434,7 +433,6 @@ Skill 主框：x=70 y=150 w=580 h≈240
 ### SVG 骨架（示例 = 法律研究 Skill）
 ```svg
 <svg viewBox="0 0 720 561" width="720" height="561" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律研究 Skill 结构图</text>
   <!-- 输入层（2 框） -->
   <rect x="70" y="56" width="278" height="46" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
@@ -511,7 +509,6 @@ Skill 主框：x=70 y=150 w=580 h≈240
 ### SVG 骨架（示例 = 案件多角色推进时间轴，4 泳道）
 ```svg
 <svg viewBox="0 0 720 320" width="720" height="320" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">案件多角色推进时间轴</text>
   <!-- 顶部时间刻度 -->
   <text x="175" y="58" text-anchor="middle" font-size="14" fill="#636E72">1月</text>
@@ -574,7 +571,6 @@ corner：x=40 w=130
 ### SVG 骨架（示例 = 4×5 风险×条款对照矩阵）
 ```svg
 <svg viewBox="0 0 720 340" width="720" height="340" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">合同审查：4 类风险 × 5 类条款 对照矩阵</text>
   <!-- corner -->
   <rect x="40" y="62" width="130" height="50" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
@@ -635,7 +631,6 @@ corner：x=40 w=130
 ### SVG 骨架（示例 = Skill 三种典型结构）
 ```svg
 <svg viewBox="0 0 720 424" width="720" height="424" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">Skill 的三种典型结构</text>
   <!-- 第 1 栏 表头（雾蓝） -->
   <rect x="40" y="60" width="193" height="50" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>

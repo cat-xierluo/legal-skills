@@ -33,7 +33,6 @@ def fmt(p):
 
 out = []
 out.append(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
-out.append('<style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>')
 out.append(f'<!-- title -->')
 out.append(f'<text x="{CX}" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="{TEXT_DARK}">{TITLE}</text>')
 
