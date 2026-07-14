@@ -2,28 +2,37 @@
 
 ## [v1.8.9] - 2026-07-14
 
+> **发布状态：候选。** PR #51 尚未合并，v1.8.9 release zip 当前不可用；T001 在合并、`main` source check 与发布资产可访问前保持未完成。
+
 ### 修复
 
 - 移除 `gen-radar.py`、`gen-skill-card.py`、`gen-timeline-lane.py`、`gen-matrix-grid.py`、`gen-three-col.py` 输出中的 `<style>` 字体块，使实际生成产物与 Skill 已公开的 Obsidian/Markdown 兼容硬规则一致。
 - 清理 `references/layout-templates.md` 5 个新版模板骨架中的同类 `<style>`，并为 5 个旧模板骨架补齐与 `viewBox` 一致的显式 `width`/`height`。
+- 收紧源契约：强制 viewBox 为 `0 0 720 H`、根 `width=720`、根 `height=H`，并禁止所有元素的 `style=` 与内嵌 `font-family`；此前检查器会放过非零/非 720 画布和 inline style。
+- 修复首次移除内嵌字体 CSS 后的渲染退化：新增单一权威源 `assets/render-fonts.css`，由 librsvg wrapper 与 `svg2png.js` 共同加载；不再以裸渲染器输出代替受控字体渲染。
 
 ### 技术优化
 
-- 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、`viewBox`/尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量、`currentColor` 和全画布背景矩形。
-- 新增 `.github/workflows/svg-book-producer-contract.yml`：对本 Skill / 工作流自身的 PR，以及相关改动推入 `main`，自动执行同一契约测试；只使用 runner 现有 Python，不安装额外依赖。
+- 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、规范画布、嵌入样式/font、class/CSS 变量、`currentColor` 和全画布背景矩形；12 类已知坏样本反向自测检查器。
+- 新增 `scripts/render_svg.py`：固定读取 `assets/render-fonts.css`，调用 `rsvg-convert --stylesheet ... -w 720`；输出不存在或为空时失败。
+- 新增 `scripts/verify_render_font_equivalence.py`：动态运行全部生成器，以临时内嵌同一 CSS 的旧式产物为基线，对受控外部 CSS 渲染逐像素执行 ImageMagick AE 比较；缺少依赖时明确失败且不自动安装。
+- 改造 `scripts/svg2png.js`：读取同一 CSS 注入浏览器渲染页，并等待 `document.fonts.ready`；字体栈不在两个渲染器中复制。
+- 新增 `.github/workflows/svg-book-producer-contract.yml`：对本 Skill / 工作流自身的 PR，以及相关改动推入 `main`，自动执行 source producer contract；只使用 runner 现有 Python，不安装额外依赖。该 CI 不宣称视觉通过。
 - 建立 `TASKS.md` 与 `DECISIONS.md`，记录“生产器不得与自身硬规则冲突，硬规则必须由生成产物回归测试闭环”（DEC-021 / T001）。更早任务与决策继续保留在本文件原历史中，不虚构补录。
 
 ### 兼容性
 
-- 节点、坐标、颜色、文字和图形语义均未改变；字体继续按既有规范继承 Markdown/渲染环境的默认无衬线字体。
-- Marketplace 当前未注册 `svg-book-illustrator` 插件条目，因此不新增或改写无对应发布单元的 Marketplace 配置；根 README 的版本与下载索引同步至 v1.8.9。
+- 节点、坐标、颜色、文字和图形语义均未改变；源 SVG 继续兼容 Markdown/Obsidian，正式导出字体由外部 CSS 稳定控制。
+- Marketplace 当前未注册 `svg-book-illustrator` 插件条目，因此不新增无对应发布单元的 Marketplace 配置；根 README 将 v1.8.9 明确标记为待发布，不提供 404 下载链接。
 
 ### 验证
 
 - TDD RED：旧实现触发 15 个子测试失败（5 个生成器含 `<style>`；5 个旧模板缺显式尺寸；5 个新版模板含 `<style>`）。
-- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 3 tests passed，覆盖 5 个生成器、10 个模板代码块，并确认 9 类已知坏样本会被拒绝。
-- 实际渲染：5/5 生成器产物均通过 `xmllint --noout`，并由现有 `rsvg-convert -w 720` 成功生成非空 PNG；拼图目检确认节点、颜色、坐标与文字内容未发生意外漂移。
-- 兼容性对照：逐一对比 `origin/main` 与 v1.8.9 生成产物，归一化移除旧 `<style>` 后 5/5 SVG 其余字节完全一致。
+- 二轮 TDD RED：新增“非零/非 720 画布”“元素 `style=`”反例后准确暴露 2 个 fail-open；新增元素 `font-family` 反例再次暴露单一字体源缺口。
+- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 4 tests passed，覆盖 5 个生成器、10 个模板代码块、12 类已知坏样本和双渲染器字体源接线。
+- 受控 librsvg：`python3 scripts/verify_render_font_equivalence.py` 动态生成并渲染全部 5 个产物；与临时旧内嵌字体 style 基线逐像素比较，5/5 `pixel AE = 0`。
+- 裸 librsvg 并非等价路径：独立审计测得删除 style 后直接裸渲染会出现 serif 回退，像素变化 3.57%–7.26%；本版撤回“裸渲染无漂移”的旧结论。
+- `svg2png.js` 已完成单一 CSS 读取/注入与 Node 语法验证；本机无 Puppeteer，按禁止安装依赖规则未擅自安装，实际浏览器导出标为 `SKIPPED` 而非通过。
 
 ## [v1.8.8] - 2026-07-09
 
@@ -164,7 +173,7 @@ demo「法律研究 Skill 结构图」（2 输入 + 4 步 + 1 输出 + 联动脚
 
 ### 改动
 - **新模板 `radar`**（`references/layout-templates.md` §8）：6-12 维多维度数值对比，1-2 系列；同心多边形网格 + 半透明数据多边形；P1/P4 双色相区分两系列；顶点小圆点增强可读性。布局公式（θ_i = -π/2 + i·2π/N）+ SVG 骨架 + 维度选择纪律（MECE、6-12 维、v_i∈[0,1] 归一化）。
-- **生成器 `scripts/gen-radar.py`**：雷达几何随 N 变化手算易错，参数化生成（TITLE/LABELS/SERIES/CX/CY/R 顶部可改）→ `python3 scripts/gen-radar.py out.svg` + `rsvg-convert -w 720 out.svg -o out.png` 目检。
+- **生成器 `scripts/gen-radar.py`**：雷达几何随 N 变化手算易错，参数化生成（TITLE/LABELS/SERIES/CX/CY/R 顶部可改）→ `python3 scripts/gen-radar.py out.svg`；v1.8.9 起复检统一运行 `python3 scripts/render_svg.py out.svg out.png`。
 - **SKILL.md**：模板表加 radar 行（"9 种布局模板，7 基础 + 2 组合"）；第一阶段触发词加"多维数值对比描述处→radar"；第二阶段模板列表加 radar；version 1.7.1→1.8.0。
 - **决策 DEC-014**：radar 模板设计取舍（几何用生成器、双色相区分系列、网格弱线不抢戏）。
 
@@ -185,7 +194,7 @@ demo「法律 AI 生态六层：理论能力 vs 实际部署」（6 轴 2 系列
 ### 改动
 
 - **画布规则**：宽度 720px 固定（16开 115mm 通栏），**高度按内容裁剪**——viewBox="0 0 720 H"，H = 内容底边最大 y + 40px。**不再固定 400**。
-- **SKILL.md §设计规范**：画布规则、语法门禁（viewBox="0 0 720 H"）、目检渲染命令（`rsvg-convert -w 720` 不指定 -h）。
+- **SKILL.md §设计规范**：画布规则、语法门禁（viewBox="0 0 720 H"）；v1.8.9 起目检渲染统一走受控 `scripts/render_svg.py`。
 - **style-guide.md §一画布**：viewBox / 安全边距 / 有效绘图区 / 渲染命令同步。
 - **layout-templates.md**：顶部加 v1.7.1 裁剪说明（骨架 `viewBox="0 0 720 400"` 仅为坐标参考系，实际 H 按内容底 + 40；附 layer/flow/tree 示例 H）。骨架内节点坐标不变，只裁底部多余画布。
 - **review-checklist.md**：rsvg 命令去 -h、留白项加 viewBox 裁剪、多模态 prompt 描述改 720×H、背景矩形 grep 泛化 height。

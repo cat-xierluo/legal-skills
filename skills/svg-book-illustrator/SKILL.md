@@ -70,7 +70,7 @@ python scripts/extract_svgs.py path/to/chapter.md --output output/figures/
 
 **③ 字宽/坐标硬算自检（v1.8.5+，先于视觉目检）**：生成器产出后，按 **CJK≈Fpx/字、Latin≈0.55Fpx/字** 估算文字宽度 ≤ 容器宽，相邻元素 y 差 ≥ 20px，viewBox H 足够——**计算闸**，防视觉目检对"轻微溢出/贴近"漏检（v1.8.5 radar 图例重叠、three-col 子卡片溢出两例均靠此抓出）。详见 `review-checklist.md` §③。
 
-**④ 视觉目检（多模态渲染后眼检）**：SVG 渲染为 PNG（`scripts/svg2png.js` 或 `rsvg-convert -w 720`——**不指定 -h，按 viewBox 高度比例渲染**）后，用多模态模型逐张查——文字不溢出容器、框不重叠（间距 ≥24px）、箭头落位方向正确、字号可读（节点≥16px 副≥12px）、黑白可辨、整体美观留白合理。发现问题回改 SVG 坐标，复检直到目检通过。
+**④ 视觉目检（多模态渲染后眼检）**：SVG 用受控字体渲染为 PNG（快速预览运行 `python3 scripts/render_svg.py input.svg output.png`；高 DPI 运行 `node scripts/svg2png.js input.svg output.png 300`）后，用多模态模型逐张查——文字不溢出容器、框不重叠（间距 ≥24px）、箭头落位方向正确、字号可读（节点≥16px 副≥12px）、黑白可辨、整体美观留白合理。发现问题回改 SVG 坐标，复检直到目检通过。
 
 > **多模态生产提示**：若环境支持图像理解，④ 必须真正"看"渲染图，不能只靠 xmllint / rsvg 无警告间接验证——语法通过 ≠ 布局美观，溢出/重叠/箭头错位只有肉眼（或多模态模型）能发现。但视觉目检对"轻微溢出/贴近"易判 OK，故须先过 ③ 字宽硬算自检。
 
@@ -80,9 +80,24 @@ python scripts/extract_svgs.py path/to/chapter.md --output output/figures/
 python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 ```
 
-只有退出码为 0 才能发布。该测试实际执行 5 个生成器，并检查模板文档中的全部 SVG 代码块；XML、画布尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量和背景矩形任一不合规都会失败。
+只有退出码为 0 才能进入合并候选。该测试实际执行全部生成器，并检查模板文档中的全部 SVG 代码块；viewBox 必须严格为 `0 0 720 H`，根 `width` 必须为 720、`height` 必须等于 H；XML、`<style>`、元素 `style=`、任一元素的 `font-family`、class/CSS 变量和背景矩形任一不合规都会失败。
 
-仓库内 `.github/workflows/svg-book-producer-contract.yml` 会在本 Skill 或工作流自身发生 PR 改动，以及相关改动推入 `main` 时自动运行同一命令。没有明确通过的 `Producer contract` check，不应把生产器改动视为可合并。
+仓库内 `.github/workflows/svg-book-producer-contract.yml` 会在本 Skill 或工作流自身发生 PR 改动，以及相关改动推入 `main` 时自动运行同一命令。没有明确通过的 `Source producer contract` check，不应把生产器改动视为可合并。该 CI **只证明源 SVG 生产契约**，不替代受控字体渲染、像素等价验证或多模态视觉目检。
+
+**受控字体渲染（v1.8.9+）**：源 SVG 为保证 Markdown/Obsidian 兼容，不嵌 `<style>` 或字体栈；导出工具统一读取单一权威源 `assets/render-fonts.css`：
+
+```bash
+# 快速预览（librsvg；固定外部 CSS + 宽 720，不指定高度）
+python3 scripts/render_svg.py input.svg output.png
+
+# 高 DPI（Puppeteer/Chrome；注入同一外部 CSS）
+node scripts/svg2png.js input.svg output.png 300
+
+# 修改字体接线或 SVG 生成器后：与旧内嵌字体基线逐像素比对
+python3 scripts/verify_render_font_equivalence.py
+```
+
+禁止用裸 `rsvg-convert` 结果作为验收证据：它会按环境默认字体渲染，已实测产生 serif 退化和像素漂移。浏览器预览可继承宿主字体，但正式导出/验收必须走上述受控入口。像素等价脚本是本地渲染回归证据，需要机器已有 `rsvg-convert` 与 ImageMagick；它不属于只校验源码契约的 GitHub Actions check，也不替代逐图视觉目检。
 
 ---
 
@@ -132,7 +147,7 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
 ## PNG 导出
 
-出版社通常需要位图版本。使用 `scripts/svg2png.js` 将 SVG 转为高分辨率 PNG：
+出版社通常需要位图版本。`scripts/svg2png.js` 会读取 `assets/render-fonts.css`，将 SVG 转为高分辨率 PNG：
 
 ```bash
 # 单张转换（默认 600 DPI）
@@ -145,7 +160,7 @@ node scripts/svg2png.js input.svg output.png 300
 find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
 ```
 
-**依赖**：PNG 导出功能需要 Puppeteer 和 Chrome/Chromium。首次使用前运行：`npm install puppeteer`
+**依赖**：快速预览 wrapper 需要系统已有 `rsvg-convert`；高 DPI 导出需要 Puppeteer 和 Chrome/Chromium。缺失时脚本会明确报错，不会自动安装。首次使用高 DPI 功能前由用户自行运行：`npm install puppeteer`
 
 **印刷 DPI 建议**：
 - 300 DPI：最低印刷要求
@@ -159,7 +174,7 @@ find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
 - 每张图只表达 1-2 个核心概念
 - 架构图层次清晰，流程图逻辑通顺
 - 风格简洁专业，无装饰性元素
-- SVG 在 Markdown 预览中正确渲染（语法门禁：开标签 viewBox="0 0 720 H" 宽720固定/高按内容裁剪、无 font-family、无 `<style>`、颜色只用 `fill`/`stroke` 属性内联、**无背景矩形**、xmllint well-formed、rsvg 无警告）
+- SVG 在 Markdown 预览中正确渲染（源契约：开标签严格为 viewBox="0 0 720 H"、width="720"、height="H"；无嵌入 font-family、无 `<style>`/`style=`、颜色只用 `fill`/`stroke` 属性内联、**无背景矩形**、xmllint well-formed；受控 wrapper 渲染无警告）
 - 图注格式统一：**图 N-X：标题**
 - **配图密度达标**：图/节 ≥ 0.7、图/万字 ≥ 0.8
 - **图-正文一致**：节点/层级/方向/维度与正文论点吻合，替换 mermaid/ASCII 图信息无损
@@ -169,4 +184,4 @@ find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
 - 可视友好化（v1.8.7）：深底（L* ≤ 50）模块内文字走浅色 `#FFFFFF`/`#EDF2F7`（禁深底深字）；文字 vs 所在模块对比 ≥ 4.5:1；箭头落点 `x2 = 目标框边 − 4px`、方向指向目标；每个有标题语义的节点框都有非空 `<text>`、坐标在框内、fill 与模块不同色（详见 style-guide §5.5）
 - 蓝色焦点 + 文字二档（v1.8.8）：文字色仅 `#2D3436`/`#636E72`（+ 深底浅字 `#FFFFFF`/`#EDF2F7`），不再用 `#1A202C`/`#4A5568`；项目 canonical 主色只焦点节点填充/描边、禁作文字 fill；每结构/流程图 ≥1 焦点节点（详见 style-guide §5.0/§5.1）
 
-> 语法门禁（xmllint/rsvg）只是**必要不充分**条件——保证 SVG 合法，不保证图正确美观。密度 + 一致性 + 目检三道审查才是验收依据（`references/review-checklist.md`）。
+> 源生产契约与受控渲染只是**必要不充分**条件——保证 SVG 可解析、画布与样式受控，不保证图正确美观。密度 + 一致性 + 目检三道审查才是验收依据（`references/review-checklist.md`）。

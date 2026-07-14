@@ -12,7 +12,7 @@
 > - **flow / matrix / hub / cycle**模板：从 **P1-P8 调色板**选 1 组组内不同模块色（相邻不同色、一图 4-6 色柔和区分）。
 > 文字色统一深灰 `#2D3436`/`#636E72`。详见 style-guide.md §5.0 总则 + §5.2 / §5.2b。
 >
-> **字体说明**：骨架中**不再出现** `<style>text { font-family... }</style>` 块——字体由渲染环境继承默认无衬线。这是已验证的 Obsidian 渲染硬约束（memory `feedback_svg_embed_syntax`）。若个别环境需强制字体，在每个 `<text>` 上单独写 `font-family`，绝不在 `<svg>` 开标签或 `<style>` 块统一设置。
+> **字体说明**：骨架中不出现 `<style>`、`style=` 或内嵌字体栈。Markdown/Obsidian 预览继承宿主字体；正式导出由 `assets/render-fonts.css` 单点控制，`scripts/render_svg.py` 与 `scripts/svg2png.js` 共同读取。不要在 `<svg>` / `<text>` 复制字体栈。
 
 ---
 
@@ -351,7 +351,7 @@ x 居中：260（偏左，右侧可放注释）
 - 顶点小圆点（r=3）用描边色，增强可读性
 
 ### 生成器脚本（强烈推荐）
-雷达图几何随 N 变化，手算易错。用 `scripts/gen-radar.py` 生成：修改脚本顶部 `TITLE/LABELS/SERIES/CX/CY/R` 参数后 `python3 scripts/gen-radar.py output.svg`，再 `rsvg-convert -w 720 output.svg -o output.png` 目检。
+雷达图几何随 N 变化，手算易错。用 `scripts/gen-radar.py` 生成：修改脚本顶部 `TITLE/LABELS/SERIES/CX/CY/R` 参数后 `python3 scripts/gen-radar.py output.svg`，再 `python3 scripts/render_svg.py output.svg output.png` 目检。
 
 ### SVG 骨架（6 轴 2 系列，示例 = 法律 AI 生态六层）
 ```svg

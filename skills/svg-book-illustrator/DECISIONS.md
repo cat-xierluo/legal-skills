@@ -15,11 +15,14 @@
 1. 生产器不得与自身公开硬规则冲突；生成器和模板示例使用同一份可机判契约。
 2. 硬规则必须检查实际生成产物，而不是只扫描生成器源码。
 3. 回归测试执行全部生成器的最小有效调用，并检查 `layout-templates.md` 的全部 `svg` 代码块；新增模板或生成器会自动进入同类验收范围。
-4. 相关 PR 与 `main` 推送由 path-filtered GitHub Actions 自动运行同一回归测试；check 未明确通过时不可合并。
+4. 相关 PR 与 `main` 推送由 path-filtered GitHub Actions 自动运行 source producer contract；check 未明确通过时不可合并，但绿色 check 不代表视觉通过。
 5. 违反契约时测试失败，不能以人工 review、渲染器容错或“文档已写明”替代。
+6. 源 SVG 保持无嵌入样式；正式渲染字体只在 `assets/render-fonts.css` 维护，librsvg wrapper 与 `svg2png.js` 共同读取。裸渲染器输出不构成验收证据；`scripts/verify_render_font_equivalence.py` 以临时旧式基线提供可重复的像素等价证据。
+7. 画布契约固定为 `0 0 720 H` / `width=720` / `height=H`，并禁止所有元素 `style=` 与内嵌 `font-family`，避免检查器再次 fail-open 或外部字体被覆盖。
+8. `VERIFIED`、`MERGEABLE` 与 `COMPLETED` 分离：本地/PR 证据只能进入 VERIFIED/MERGEABLE；只有 PR 已合并、`main` check 绿色且发布资产可访问，T001 才能标完成。
 
 ### 兼容性
 
-只移除渲染环境本应继承的全局字体 CSS，并为旧模板骨架补显式画布尺寸；不改变节点、坐标、颜色、文字或图形语义。
+源 SVG 移除内嵌 CSS，并为旧模板骨架补显式画布尺寸；正式导出通过受控外部 CSS 保持旧字体基线，5 个生成器像素对照均为零差。不改变节点、坐标、颜色、文字或图形语义。
 
 > 本文件自 DEC-021 建立。DEC-001 至 DEC-020 的历史摘要仍以 `CHANGELOG.md` 中的原记录为准，不在此虚构补录。

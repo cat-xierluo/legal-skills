@@ -16,6 +16,10 @@ SKILL_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
 LAYOUT_TEMPLATES = SKILL_ROOT / "references" / "layout-templates.md"
 GENERATORS = tuple(path.name for path in sorted(SCRIPTS_DIR.glob("gen-*.py")))
+RENDER_FONT_CSS = SKILL_ROOT / "assets" / "render-fonts.css"
+RSVG_WRAPPER = SCRIPTS_DIR / "render_svg.py"
+RENDER_EQUIVALENCE_CHECK = SCRIPTS_DIR / "verify_render_font_equivalence.py"
+BROWSER_RENDERER = SCRIPTS_DIR / "svg2png.js"
 
 
 def local_name(name: str) -> str:
@@ -44,6 +48,9 @@ class SvgContractMixin:
             min_x, min_y, view_width, view_height = map(float, view_box.split())
         except (AttributeError, TypeError, ValueError):
             self.fail(f"{source}: viewBox 必须包含 4 个数值")
+        self.assertEqual(min_x, 0, f"{source}: viewBox min-x 必须为 0")
+        self.assertEqual(min_y, 0, f"{source}: viewBox min-y 必须为 0")
+        self.assertEqual(view_width, 720, f"{source}: viewBox 宽度必须固定为 720")
         self.assertGreater(view_width, 0, f"{source}: viewBox 宽度必须大于 0")
         self.assertGreater(view_height, 0, f"{source}: viewBox 高度必须大于 0")
 
@@ -69,6 +76,8 @@ class SvgContractMixin:
 
             attributes = {local_name(key): value for key, value in element.attrib.items()}
             self.assertNotIn("class", attributes, f"{source}: 不得用 class 引用样式")
+            self.assertNotIn("style", attributes, f"{source}: 不得使用 style 属性")
+            self.assertNotIn("font-family", attributes, f"{source}: 字体只能来自受控外部 CSS")
             serialized_values = list(attributes.values())
             if element.text:
                 serialized_values.append(element.text)
@@ -136,12 +145,23 @@ class ContractRuleTests(SvgContractMixin, unittest.TestCase):
             "malformed XML": '<svg viewBox="0 0 720 400" width="720" height="400">',
             "missing viewBox": '<svg width="720" height="400"></svg>',
             "missing dimensions": '<svg viewBox="0 0 720 400"></svg>',
+            "noncanonical canvas geometry": (
+                '<svg viewBox="10 20 860 400" width="860" height="400"></svg>'
+            ),
             "style block": (
                 '<svg viewBox="0 0 720 400" width="720" height="400">'
                 '<style>text{fill:#000}</style></svg>'
             ),
+            "inline style attribute": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<text x="40" y="40" style="fill:#2D3436">文本</text></svg>'
+            ),
             "root font-family": (
                 '<svg viewBox="0 0 720 400" width="720" height="400" font-family="sans-serif"></svg>'
+            ),
+            "element font-family": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<text x="40" y="40" font-family="sans-serif">文本</text></svg>'
             ),
             "class selector": (
                 '<svg viewBox="0 0 720 400" width="720" height="400">'
@@ -164,6 +184,39 @@ class ContractRuleTests(SvgContractMixin, unittest.TestCase):
             with self.subTest(rule=rule):
                 with self.assertRaises(AssertionError):
                     self.assert_svg_contract(svg_text, rule)
+
+
+class RenderFontSourceTests(unittest.TestCase):
+    def test_all_renderers_share_one_controlled_font_stylesheet(self) -> None:
+        self.assertTrue(RENDER_FONT_CSS.is_file(), "缺少受控字体样式源")
+        self.assertTrue(RSVG_WRAPPER.is_file(), "缺少受控 librsvg wrapper")
+        self.assertTrue(RENDER_EQUIVALENCE_CHECK.is_file(), "缺少字体像素等价验证器")
+
+        css_files = tuple(
+            path
+            for path in SKILL_ROOT.rglob("*.css")
+            if "node_modules" not in path.parts
+        )
+        self.assertEqual(css_files, (RENDER_FONT_CSS,), "字体 CSS 必须保持单一权威源")
+        font_css = RENDER_FONT_CSS.read_text(encoding="utf-8")
+        self.assertIn("font-family", font_css)
+        self.assertIn("text", font_css)
+
+        wrapper = RSVG_WRAPPER.read_text(encoding="utf-8")
+        equivalence_check = RENDER_EQUIVALENCE_CHECK.read_text(encoding="utf-8")
+        browser_renderer = BROWSER_RENDERER.read_text(encoding="utf-8")
+        for source_name, source_text in (
+            ("render_svg.py", wrapper),
+            ("verify_render_font_equivalence.py", equivalence_check),
+            ("svg2png.js", browser_renderer),
+        ):
+            self.assertIn("render-fonts.css", source_text, f"{source_name} 未读取统一字体 CSS")
+            self.assertNotIn("font-family", source_text, f"{source_name} 不得复制字体栈")
+
+        self.assertIn("--stylesheet", wrapper)
+        self.assertIn('"720"', wrapper)
+        self.assertIn("renderFontCss", browser_renderer)
+        self.assertIn("document.fonts.ready", browser_renderer)
 
 
 if __name__ == "__main__":
