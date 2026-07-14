@@ -82,6 +82,8 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
 只有退出码为 0 才能发布。该测试实际执行 5 个生成器，并检查模板文档中的全部 SVG 代码块；XML、画布尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量和背景矩形任一不合规都会失败。
 
+仓库内 `.github/workflows/svg-book-producer-contract.yml` 会在本 Skill 或工作流自身发生 PR 改动，以及相关改动推入 `main` 时自动运行同一命令。没有明确通过的 `Producer contract` check，不应把生产器改动视为可合并。
+
 ---
 
 ## 布局模板

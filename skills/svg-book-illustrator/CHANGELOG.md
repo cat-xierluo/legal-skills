@@ -10,6 +10,7 @@
 ### 技术优化
 
 - 新增 `scripts/tests/test_svg_producer_contract.py`：实际运行全部 5 个生成器，并扫描模板文档全部 10 个 `svg` 代码块；统一校验 XML、`viewBox`/尺寸、`<style>`、SVG 根 `font-family`、class/CSS 变量、`currentColor` 和全画布背景矩形。
+- 新增 `.github/workflows/svg-book-producer-contract.yml`：对本 Skill / 工作流自身的 PR，以及相关改动推入 `main`，自动执行同一契约测试；只使用 runner 现有 Python，不安装额外依赖。
 - 建立 `TASKS.md` 与 `DECISIONS.md`，记录“生产器不得与自身硬规则冲突，硬规则必须由生成产物回归测试闭环”（DEC-021 / T001）。更早任务与决策继续保留在本文件原历史中，不虚构补录。
 
 ### 兼容性
