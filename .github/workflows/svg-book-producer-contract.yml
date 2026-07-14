@@ -1,0 +1,28 @@
+name: SVG Book Source Producer Contract
+
+on:
+  pull_request:
+    paths:
+      - "skills/svg-book-illustrator/**"
+      - ".github/workflows/svg-book-producer-contract.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "skills/svg-book-illustrator/**"
+      - ".github/workflows/svg-book-producer-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  producer-contract:
+    name: Source producer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Run generated SVG contract tests
+        working-directory: skills/svg-book-illustrator
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
