@@ -130,5 +130,41 @@ class TemplateContractTests(SvgContractMixin, unittest.TestCase):
                 self.assert_svg_contract(svg_text, f"layout-templates.md svg block #{index}")
 
 
+class ContractRuleTests(SvgContractMixin, unittest.TestCase):
+    def test_known_bad_contract_variants_are_rejected(self) -> None:
+        bad_svgs = {
+            "malformed XML": '<svg viewBox="0 0 720 400" width="720" height="400">',
+            "missing viewBox": '<svg width="720" height="400"></svg>',
+            "missing dimensions": '<svg viewBox="0 0 720 400"></svg>',
+            "style block": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<style>text{fill:#000}</style></svg>'
+            ),
+            "root font-family": (
+                '<svg viewBox="0 0 720 400" width="720" height="400" font-family="sans-serif"></svg>'
+            ),
+            "class selector": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<rect class="node" x="40" y="40" width="100" height="40"/></svg>'
+            ),
+            "CSS variable": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<rect x="40" y="40" width="100" height="40" fill="var(--node-fill)"/></svg>'
+            ),
+            "currentColor": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<path d="M0 0L10 10" stroke="currentColor"/></svg>'
+            ),
+            "canvas background rect": (
+                '<svg viewBox="0 0 720 400" width="720" height="400">'
+                '<rect width="720" height="400" fill="#FFFFFF"/></svg>'
+            ),
+        }
+        for rule, svg_text in bad_svgs.items():
+            with self.subTest(rule=rule):
+                with self.assertRaises(AssertionError):
+                    self.assert_svg_contract(svg_text, rule)
+
+
 if __name__ == "__main__":
     unittest.main()

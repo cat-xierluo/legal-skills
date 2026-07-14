@@ -20,7 +20,7 @@
 ### 验证
 
 - TDD RED：旧实现触发 15 个子测试失败（5 个生成器含 `<style>`；5 个旧模板缺显式尺寸；5 个新版模板含 `<style>`）。
-- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 2 tests passed，覆盖 5 个生成器与 10 个模板代码块。
+- TDD GREEN：`python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 3 tests passed，覆盖 5 个生成器、10 个模板代码块，并确认 9 类已知坏样本会被拒绝。
 - 实际渲染：5/5 生成器产物均通过 `xmllint --noout`，并由现有 `rsvg-convert -w 720` 成功生成非空 PNG；拼图目检确认节点、颜色、坐标与文字内容未发生意外漂移。
 - 兼容性对照：逐一对比 `origin/main` 与 v1.8.9 生成产物，归一化移除旧 `<style>` 后 5/5 SVG 其余字节完全一致。
 
