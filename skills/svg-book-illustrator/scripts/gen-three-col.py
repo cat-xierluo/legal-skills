@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # Three-column comparison SVG generator for svg-book-illustrator v1.8.4.
-import sys
+from figure_id import parse_output_and_figure_id
+
+
+dest, figure_id = parse_output_and_figure_id("/tmp/three-col-demo.svg")
 
 # ---------- parameters ----------
 TITLE = "Skill 的三种典型结构"
@@ -45,8 +48,7 @@ def col_x(j): return MARGIN + j * (COL_W + GAP)
 out = []
 def emit(s): out.append(s)
 
-emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
-emit('<style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>')
+emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" data-figure-id="{figure_id}" xmlns="http://www.w3.org/2000/svg">')
 emit(f'<text x="{W/2}" y="{TITLE_Y}" text-anchor="middle" font-size="22" font-weight="600" fill="{C_TEXT}">{TITLE}</text>')
 
 for j, (header, cards) in enumerate(COLUMNS):
@@ -74,7 +76,6 @@ if HAS_FOOT:
 
 emit('</svg>')
 
-dest = sys.argv[1] if len(sys.argv) > 1 else "/tmp/three-col-demo.svg"
 with open(dest, "w", encoding="utf-8") as f:
     f.write("\n".join(out))
 print("wrote", dest, f"({len(out)} lines)")

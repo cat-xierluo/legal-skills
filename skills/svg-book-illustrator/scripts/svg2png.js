@@ -16,10 +16,13 @@
 
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const DEFAULT_DPI = 600;
 const MIN_DPI = 72;
 const MAX_DPI = 2400;
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const RENDER_FONT_CSS = path.resolve(SCRIPT_DIR, "../assets/render-fonts.css");
 
 async function loadPuppeteer() {
   try {
@@ -53,11 +56,16 @@ async function svgToPng(inputPath, outputPath, dpi = DEFAULT_DPI) {
 
   const puppeteer = await loadPuppeteer();
   const svgContent = fs.readFileSync(inputPath, "utf8");
+  if (!fs.existsSync(RENDER_FONT_CSS)) {
+    throw new Error(`受控字体样式不存在: ${RENDER_FONT_CSS}`);
+  }
+  const renderFontCss = fs.readFileSync(RENDER_FONT_CSS, "utf8");
   const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
+    ${renderFontCss}
     html, body { margin: 0; padding: 0; background: transparent; }
     svg { display: block; }
   </style>
@@ -83,6 +91,9 @@ async function svgToPng(inputPath, outputPath, dpi = DEFAULT_DPI) {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 10000 });
     await page.waitForSelector("svg", { timeout: 10000 });
+    await page.evaluate(async () => {
+      if (document.fonts) await document.fonts.ready;
+    });
 
     const dimensions = await page.evaluate(() => {
       const svg = document.querySelector("svg");

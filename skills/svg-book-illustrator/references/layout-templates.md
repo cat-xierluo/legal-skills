@@ -12,7 +12,9 @@
 > - **flow / matrix / hub / cycle**模板：从 **P1-P8 调色板**选 1 组组内不同模块色（相邻不同色、一图 4-6 色柔和区分）。
 > 文字色统一深灰 `#2D3436`/`#636E72`。详见 style-guide.md §5.0 总则 + §5.2 / §5.2b。
 >
-> **字体说明**：骨架中**不再出现** `<style>text { font-family... }</style>` 块——字体由渲染环境继承默认无衬线。这是已验证的 Obsidian 渲染硬约束（memory `feedback_svg_embed_syntax`）。若个别环境需强制字体，在每个 `<text>` 上单独写 `font-family`，绝不在 `<svg>` 开标签或 `<style>` 块统一设置。
+> **字体说明**：骨架中不出现 `<style>`、`style=` 或内嵌字体栈。Markdown/Obsidian 预览继承宿主字体；正式导出由 `assets/render-fonts.css` 单点控制，`scripts/render_svg.py` 与 `scripts/svg2png.js` 共同读取。不要在 `<svg>` / `<text>` 复制字体栈。
+>
+> **图身份说明（v1.8.9+）**：每个骨架的 `data-figure-id="fig-template-*"` 只保证模板文件内部唯一。复制或生成到书稿前必须改为当前项目唯一的 `fig-chNN-sN-NN`；5 个生成器可传 `--figure-id fig-chNN-sN-NN`，省略时仅以输出文件 stem 作为便捷默认值。
 
 ---
 
@@ -57,7 +59,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-flow">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -119,7 +121,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-layer">
   <!-- 无背景矩形，透明底 -->
 
   <!-- 层 1（顶层，G2 法律米梯度 档 1，最浅） -->
@@ -160,7 +162,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-matrix">
   <!-- 无背景矩形，透明底 -->
 
   <!-- 左列标题（P8 混合系暖米色） -->
@@ -200,7 +202,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-hub">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -251,7 +253,7 @@ x 居中：260（偏左，右侧可放注释）
 ### SVG 骨架
 
 ```svg
-<svg viewBox="0 0 720 400">
+<svg viewBox="0 0 720 400" width="720" height="400" data-figure-id="fig-template-tree">
   <defs>
     <!-- 箭头 marker：markerUnits=userSpaceOnUse 固定像素；orient=auto 单 marker 通吃水平/垂直/斜向 -->
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2D3436"/></marker>
@@ -351,12 +353,11 @@ x 居中：260（偏左，右侧可放注释）
 - 顶点小圆点（r=3）用描边色，增强可读性
 
 ### 生成器脚本（强烈推荐）
-雷达图几何随 N 变化，手算易错。用 `scripts/gen-radar.py` 生成：修改脚本顶部 `TITLE/LABELS/SERIES/CX/CY/R` 参数后 `python3 scripts/gen-radar.py output.svg`，再 `rsvg-convert -w 720 output.svg -o output.png` 目检。
+雷达图几何随 N 变化，手算易错。用 `scripts/gen-radar.py` 生成：修改脚本顶部 `TITLE/LABELS/SERIES/CX/CY/R` 参数后 `python3 scripts/gen-radar.py output.svg --figure-id fig-chNN-sN-NN`，再 `python3 scripts/render_svg.py output.svg output.png` 目检。
 
 ### SVG 骨架（6 轴 2 系列，示例 = 法律 AI 生态六层）
 ```svg
-<svg viewBox="0 0 720 505" width="720" height="505" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+<svg viewBox="0 0 720 505" width="720" height="505" data-figure-id="fig-template-radar" xmlns="http://www.w3.org/2000/svg">
   <text x="360" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律 AI 生态六层：理论能力 vs 实际部署</text>
   <!-- 4 层网格（r=37.5/75/112.5/150，中心 360,250） -->
   <polygon points="360,212.5 392.5,231.2 392.5,268.8 360,287.5 327.5,268.8 327.5,231.3" fill="none" stroke="#E8E8E8" stroke-width="1"/>
@@ -429,12 +430,11 @@ Skill 主框：x=70 y=150 w=580 h≈240
 - 脚注虚框：中灰 `#636E72` 虚线 `stroke-dasharray="6 4"`，无填充
 
 ### 生成器脚本
-`scripts/gen-skill-card.py`：参数化（TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/调色板 顶部可改）→ `python3 scripts/gen-skill-card.py out.svg` + rsvg 目检。
+`scripts/gen-skill-card.py`：参数化（TITLE/INPUTS/SKILL_NAME/SATELLITES/STEPS/OUTPUTS/FOOTNOTE/调色板 顶部可改）→ `python3 scripts/gen-skill-card.py out.svg --figure-id fig-chNN-sN-NN` + 受控渲染目检。
 
 ### SVG 骨架（示例 = 法律研究 Skill）
 ```svg
-<svg viewBox="0 0 720 561" width="720" height="561" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+<svg viewBox="0 0 720 561" width="720" height="561" data-figure-id="fig-template-skill-card" xmlns="http://www.w3.org/2000/svg">
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">法律研究 Skill 结构图</text>
   <!-- 输入层（2 框） -->
   <rect x="70" y="56" width="278" height="46" rx="6" fill="#EDF3F8" stroke="#2D3436" stroke-width="1.5"/>
@@ -506,12 +506,11 @@ Skill 主框：x=70 y=150 w=580 h≈240
 - 多角色需强区分时，可按泳道分配 P8 混合系不同色相（每泳道一色）——默认单色更克制
 
 ### 生成器脚本
-`scripts/gen-timeline-lane.py`：参数化（TITLE/LANES/TICKS/EVENTS/调色板顶部可改）→ `python3 scripts/gen-timeline-lane.py out.svg` + rsvg 目检。
+`scripts/gen-timeline-lane.py`：参数化（TITLE/LANES/TICKS/EVENTS/调色板顶部可改）→ `python3 scripts/gen-timeline-lane.py out.svg --figure-id fig-chNN-sN-NN` + 受控渲染目检。
 
 ### SVG 骨架（示例 = 案件多角色推进时间轴，4 泳道）
 ```svg
-<svg viewBox="0 0 720 320" width="720" height="320" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+<svg viewBox="0 0 720 320" width="720" height="320" data-figure-id="fig-template-timeline-lane" xmlns="http://www.w3.org/2000/svg">
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">案件多角色推进时间轴</text>
   <!-- 顶部时间刻度 -->
   <text x="175" y="58" text-anchor="middle" font-size="14" fill="#636E72">1月</text>
@@ -569,12 +568,11 @@ corner：x=40 w=130
 - 表头带：P1 雾蓝 `#D6E4F0`
 
 ### 生成器脚本
-`scripts/gen-matrix-grid.py`：参数化（TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS/调色板顶部可改）。CELLS 支持 `"yes"`/`"no"`/`"partial"`/`"na"` 或自由文本 → `python3 scripts/gen-matrix-grid.py out.svg` + rsvg 目检。
+`scripts/gen-matrix-grid.py`：参数化（TITLE/CORNER_LABEL/ROW_LABELS/COL_LABELS/CELLS/调色板顶部可改）。CELLS 支持 `"yes"`/`"no"`/`"partial"`/`"na"` 或自由文本 → `python3 scripts/gen-matrix-grid.py out.svg --figure-id fig-chNN-sN-NN` + 受控渲染目检。
 
 ### SVG 骨架（示例 = 4×5 风险×条款对照矩阵）
 ```svg
-<svg viewBox="0 0 720 340" width="720" height="340" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+<svg viewBox="0 0 720 340" width="720" height="340" data-figure-id="fig-template-matrix-grid" xmlns="http://www.w3.org/2000/svg">
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">合同审查：4 类风险 × 5 类条款 对照矩阵</text>
   <!-- corner -->
   <rect x="40" y="62" width="130" height="50" fill="#D6E4F0" stroke="#2D3436" stroke-width="1.5"/>
@@ -630,12 +628,11 @@ corner：x=40 w=130
 - 子卡片 2 行：标签（14px 加粗）+ 内容（13px）——避免单行"标签：内容"在 193px 窄列溢出
 
 ### 生成器脚本
-`scripts/gen-three-col.py`：参数化（TITLE/COLUMNS/FOOTNOTE/调色板顶部可改）→ `python3 scripts/gen-three-col.py out.svg` + rsvg 目检。
+`scripts/gen-three-col.py`：参数化（TITLE/COLUMNS/FOOTNOTE/调色板顶部可改）→ `python3 scripts/gen-three-col.py out.svg --figure-id fig-chNN-sN-NN` + 受控渲染目检。
 
 ### SVG 骨架（示例 = Skill 三种典型结构）
 ```svg
-<svg viewBox="0 0 720 424" width="720" height="424" xmlns="http://www.w3.org/2000/svg">
-  <style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>
+<svg viewBox="0 0 720 424" width="720" height="424" data-figure-id="fig-template-three-col" xmlns="http://www.w3.org/2000/svg">
   <text x="360" y="32" text-anchor="middle" font-size="22" font-weight="600" fill="#2D3436">Skill 的三种典型结构</text>
   <!-- 第 1 栏 表头（雾蓝） -->
   <rect x="40" y="60" width="193" height="50" rx="6" fill="#B8CFE0" stroke="#2D3436" stroke-width="2"/>

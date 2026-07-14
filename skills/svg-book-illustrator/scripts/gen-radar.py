@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 # Radar chart SVG generator for svg-book-illustrator v1.8.0.
-# Edit TITLE/LABELS/SERIES/CX/CY/R at top, then: python3 gen-radar.py out.svg
-import math, sys
+# Edit TITLE/LABELS/SERIES/CX/CY/R at top, then:
+# python3 gen-radar.py out.svg --figure-id fig-ch03-s2-01
+import math
+
+from figure_id import parse_output_and_figure_id
+
+
+dest, figure_id = parse_output_and_figure_id("/tmp/radar-demo-ch03.svg")
 
 # ---- parameters ----
 W, H = 720, 505
@@ -32,8 +38,7 @@ def fmt(p):
     return f"{p[0]:.1f},{p[1]:.1f}"
 
 out = []
-out.append(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
-out.append('<style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>')
+out.append(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" data-figure-id="{figure_id}" xmlns="http://www.w3.org/2000/svg">')
 out.append(f'<!-- title -->')
 out.append(f'<text x="{CX}" y="34" text-anchor="middle" font-size="22" font-weight="600" fill="{TEXT_DARK}">{TITLE}</text>')
 
@@ -93,7 +98,6 @@ for name, vals, fill, stroke in SERIES:
 out.append('</svg>')
 
 svg = "\n".join(out)
-dest = sys.argv[1] if len(sys.argv) > 1 else "/tmp/radar-demo-ch03.svg"
 with open(dest, "w", encoding="utf-8") as f:
     f.write(svg)
 print("wrote", dest, f"({len(svg)} bytes)")

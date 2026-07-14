@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # Multi-lane timeline SVG generator for svg-book-illustrator v1.8.2.
-# Edit TITLE/LANES/TICKS/EVENTS/PALETTE at top, then: python3 gen-timeline-lane.py out.svg
-import sys
+# Edit TITLE/LANES/TICKS/EVENTS/PALETTE at top, then:
+# python3 gen-timeline-lane.py out.svg --figure-id fig-ch03-s2-01
+from figure_id import parse_output_and_figure_id
+
+
+dest, figure_id = parse_output_and_figure_id("/tmp/timeline-lane-demo.svg")
 
 # ---------- parameters ----------
 TITLE = "案件多角色推进时间轴"
@@ -46,8 +50,7 @@ def x_for_frac(f): return LEFT_AXIS + f * (RIGHT_AXIS - LEFT_AXIS)
 out = []
 def emit(s): out.append(s)
 
-emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg">')
-emit('<style>text{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}</style>')
+emit(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}" data-figure-id="{figure_id}" xmlns="http://www.w3.org/2000/svg">')
 
 # title
 emit(f'<text x="{W/2}" y="{TITLE_Y}" text-anchor="middle" font-size="22" font-weight="600" fill="{C_TEXT}">{TITLE}</text>')
@@ -90,7 +93,6 @@ for idx, (li, f, lab) in enumerate(EVENTS):
 
 emit('</svg>')
 
-dest = sys.argv[1] if len(sys.argv) > 1 else "/tmp/timeline-lane-demo.svg"
 with open(dest, "w", encoding="utf-8") as f:
     f.write("\n".join(out))
 print("wrote", dest, f"({len(out)} lines)")
