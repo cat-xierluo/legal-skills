@@ -50,7 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
-| 2026-07-14 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.9（待发布） | 修复生成器/模板与源契约冲突，新增稳定图身份、单一外部字体 CSS、双渲染器接线及 PR/main source contract；待 PR #51 合并与发布资产可用后完成 |
+| 2026-07-14 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.9（待发布） | 修复生成器/模板与源契约冲突，新增稳定图身份、单一外部字体 CSS、双渲染器接线及 PR/main source contract；PR #51 已合并且 `main` source contract 已通过，待发布资产可用后完成 |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
 | 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
 | 2026-06-22 | 新上传   | [invoice-organizer](skills/invoice-organizer/) | v0.1.1 | 发票/票据 PDF 整理与报销清单：pdftotext 提取文本，按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由/案号/日期/路线，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）；含 Hard Fail 验收标准 |
@@ -449,7 +449,7 @@
 <td style="word-break:break-word">书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图，针对印刷出版场景优化，字号间距按物理尺寸反推</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.8.9（候选）</td>
-<td style="text-align:center">待发布（PR #51）</td>
+<td style="text-align:center">待发布（v1.8.9 zip）</td>
 <td></td>
 </tr>
 <tr>

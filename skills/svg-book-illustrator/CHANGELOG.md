@@ -2,7 +2,7 @@
 
 ## [v1.8.9] - 2026-07-14
 
-> **发布状态：候选。** PR #51 尚未合并，v1.8.9 release zip 当前不可用；T001 在合并、`main` source check 与发布资产可访问前保持未完成。
+> **发布状态：候选。** PR #51 已于 2026-07-14 squash merge，`main` 上 source producer contract 已通过；v1.8.9 release zip 当前仍不可用，因此 T001 保持未完成。
 
 ### 修复
 
@@ -36,6 +36,7 @@
 - 受控 librsvg：`python3 scripts/verify_render_font_equivalence.py` 动态生成并渲染全部 5 个产物；旧内嵌字体 vs 外部 CSS、无 ID vs 有 ID 两组逐像素比较均为 5/5 `AE = 0`。
 - 裸 librsvg 并非等价路径：独立审计测得删除 style 后直接裸渲染会出现 serif 回退，像素变化 3.57%–7.26%；本版撤回“裸渲染无漂移”的旧结论。
 - `svg2png.js` 已完成单一 CSS 读取/注入与 Node 语法验证；本机无 Puppeteer，按禁止安装依赖规则未擅自安装，实际浏览器导出标为 `SKIPPED` 而非通过。
+- 合并后 CI：`main` 上 `SVG Book Source Producer Contract` run `29323054523` 对 squash commit `e32a73a6` 运行完成，结论为 `SUCCESS`。
 
 ## [v1.8.8] - 2026-07-09
 
