@@ -1,0 +1,18 @@
+{
+  "_说明": "默认配置模板（入库）。首次使用复制为 config.json 再改:cp config/config.example.json config/config.json",
+  "_平台": "仅 macOS 运行;经 iCloud 同步到 iPhone/iPad。不支持 Windows/Android/Linux。",
+  "timezone": "Asia/Shanghai",
+  "default_calendar": "个人",
+  "default_reminder_list": "提醒事项",
+  "default_event_duration_minutes": 60,
+  "lead_times": {
+    "_格式": "-3h/-30m=相对事件开始时间偏移;-1d@09:00=前一天9点;@09:00=当天9点。可自由增删类别。",
+    "flight":   ["-1d@09:00", "-3h", "-1h"],
+    "train":    ["-1h", "-30m"],
+    "court":    ["-1d@09:00", "-3h", "-1h"],
+    "meeting":  ["-1d@09:00", "-1h"],
+    "deadline": ["-3d@09:00", "-1d@09:00", "@09:00"],
+    "social":   ["-1d@09:00", "-2h"],
+    "default":  ["-1h"]
+  }
+}

@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-49-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-50-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
 | 2026-07-14 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.9（待发布） | 修复生成器/模板与源契约冲突，新增稳定图身份、单一外部字体 CSS、双渲染器接线及 PR/main source contract；PR #51 已合并且 `main` source contract 已通过，待发布资产可用后完成 |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
 | 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
@@ -487,6 +488,35 @@
 <td style="text-align:center">v1.3.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/video-compressor-1.3.0.zip">下载</a></td>
 <td></td>
+</tr>
+</tbody>
+</table>
+
+#### 🚀 个人效率
+
+日常行程、提醒等通用效率工具：
+
+<table>
+<thead>
+<tr>
+<th style="text-align:left">技能</th>
+<th style="text-align:left">标签</th>
+<th style="text-align:left">说明</th>
+<th style="text-align:center">许可证</th>
+<th style="text-align:center">版本</th>
+<th style="text-align:center">下载</th>
+<th style="text-align:left">备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="skills/apple-smart-schedule/"><strong>apple-smart-schedule</strong></a></td>
+<td>工具·日程</td>
+<td style="word-break:break-word">把自然语言(机票/高铁/开庭/会议/截止/聚会等)或票据截图，自动变成苹果日历事件 + 按事件类型智能提前的提醒事项；仅 macOS，经 iCloud 同步到 iPhone/iPad</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.1.0</td>
+<td style="text-align:center"></td>
+<td>仅 macOS</td>
 </tr>
 </tbody>
 </table>
