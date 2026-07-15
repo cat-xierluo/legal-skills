@@ -42,7 +42,8 @@
 - `workflow.md`：完整工作流。
 - `analysis-engine-boundary.md`：分析引擎定位和跨 Skill 协作边界。
 - `report-depth-control.md`：按案件复杂度控制输出详略。
-- `element-litigation-nine-step.md`：要件式诉讼分析九步法。
+- `element-litigation-nine-step.md`：要件式诉讼分析九步法（民事/民商事请求权口径）。
+- `criminal-case-analysis.md`：刑事案件分析法（四要件为主干，审查起诉骨架 + 辩护对抗检验；违法/责任阻却事由用三阶层在分析内逐层审查）。
 - `fact-evidence-extraction.md`：事实与证据抽取。
 - `civil-commercial-analysis-workflow.md`：复杂民商事案件分析步骤。
 - `issue-spotting.md`：法律问题识别。
