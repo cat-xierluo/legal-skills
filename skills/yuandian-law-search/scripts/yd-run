@@ -33,6 +33,7 @@ ENV_ARGS=(
 
 [[ -n "${YD_API_KEY:-}" ]] && ENV_ARGS+=("YD_API_KEY=$YD_API_KEY")
 [[ -n "${YD_STRATEGY:-}" ]] && ENV_ARGS+=("YD_STRATEGY=$YD_STRATEGY")
+[[ -n "${YD_PROJECT:-}" ]] && ENV_ARGS+=("YD_PROJECT=$YD_PROJECT")
 
 # 捕获用户原始工作目录（cd 之前），透传给 Python 用于报告副本落点
 USER_CWD="$(pwd)"

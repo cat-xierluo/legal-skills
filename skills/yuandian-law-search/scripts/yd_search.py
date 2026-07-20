@@ -23,7 +23,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
 
 # 版本信息
-CURRENT_VERSION = "1.7.4"
+CURRENT_VERSION = "1.7.5"
 
 # 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
 _updater = SkillUpdater.from_skill_md(SKILL_ROOT)
@@ -108,7 +108,7 @@ def _archive_lookup(endpoint, payload):
 
     fingerprint = _query_fingerprint(endpoint, payload)
     # 按时间倒序遍历，优先命中最新归档
-    for path in sorted(ARCHIVE_DIR.glob("*.json"), reverse=True):
+    for path in sorted(ARCHIVE_DIR.rglob("*.json"), reverse=True):
         try:
             record = json.loads(path.read_text("utf-8"))
             if record.get("fingerprint") == fingerprint:
@@ -256,12 +256,29 @@ def _iter_items(response, dotpath):
     return []
 
 
+def _resolve_project():
+    """确定本次检索的归档 project（archive 下的文件夹名）。
+
+    优先 YD_PROJECT 环境变量（会话级，AI/用户在研究任务开始时设定）；
+    缺省时用今日日期 YYYYMMDD 兜底，避免平铺 archive 根。
+    project 仅用于按检索目的归类；缓存查重仍全局跨 project 生效（见 _archive_lookup）。
+    """
+    proj = os.environ.get("YD_PROJECT", "").strip()
+    if proj:
+        proj = re.sub(r'[/\\:*?"<>|\s]', '-', proj).strip('-')[:60]
+        if proj:
+            return proj
+    return datetime.now().strftime("%Y%m%d")
+
+
 def _archive_save(endpoint, payload, response):
-    """将查询和响应归档"""
+    """将查询和响应归档（按 project 子目录归类）"""
     ARCHIVE_DIR.mkdir(exist_ok=True)
     fingerprint = _query_fingerprint(endpoint, payload)
     filename = _make_archive_name(endpoint, payload)
-    path = ARCHIVE_DIR / filename
+    project_dir = ARCHIVE_DIR / _resolve_project()
+    project_dir.mkdir(parents=True, exist_ok=True)
+    path = project_dir / filename
 
     source_urls = _enrich_source_urls(endpoint, response)
 
@@ -369,18 +386,30 @@ def _archive_write_report(archive_path, formatted_text, cost_label,
     # 2) CWD 副本（best-effort，--no-cwd-report 时跳过）
     #    优先用 yd-run 透传的用户原始工作目录（YD_USER_CWD），
     #    退而求其次用 Python 当前工作目录（Path.cwd() 在 yd-run 内部会被 cd 改成 skill 根）
+    #
+    #    保护：若 CWD 解析后等于 skill 根目录，说明调用方站在 skill 自身目录下
+    #    （开发 / 测试 / 未切到案件目录），此时 CWD 副本无意义，且会污染 skill 根
+    #    （历史根目录堆积 22 个冗余 .md 即由此产生）。主归档副本已在 archive/ 落盘，
+    #    跳过 CWD 不会丢数据。
     cwd_md_str = None
     if not no_cwd_report:
         cwd_target = os.environ.get("YD_USER_CWD") or str(Path.cwd())
-        try:
-            cwd_md_path = Path(cwd_target) / archive_md_path.name
-            cwd_md_path.write_text(md_content, "utf-8")
-            cwd_md_str = str(cwd_md_path)
-        except OSError as e:
+        if Path(cwd_target).resolve() == SKILL_ROOT.resolve():
             print(
-                f"警告：报告副本写入工作目录失败 ({e})，仅 archive/ 副本可用",
+                "提示：当前工作目录即 skill 根目录，CWD 副本已跳过"
+                "（主归档副本在 archive/，未丢失）。如需附卷，请在案件目录下调用。",
                 file=sys.stderr,
             )
+        else:
+            try:
+                cwd_md_path = Path(cwd_target) / archive_md_path.name
+                cwd_md_path.write_text(md_content, "utf-8")
+                cwd_md_str = str(cwd_md_path)
+            except OSError as e:
+                print(
+                    f"警告：报告副本写入工作目录失败 ({e})，仅 archive/ 副本可用",
+                    file=sys.stderr,
+                )
 
     return str(archive_md_path), cwd_md_str
 
@@ -455,6 +484,37 @@ def api_get(endpoint, params=None, use_cache=True):
 
 
 # ── 格式化输出 ──────────────────────────────────────────────
+
+
+# 办案无关的效力级别默认剔除（非法律渊源、或与一般民商事/刑事办案无关）。
+# 基于 archive 实测样本定位：
+#   - 行业/团体规范、地方律协规定：律协操作指引等行业自律文件
+#   - 行政机关工作文件：课题立项公告、提案/建议答复函、程序性通知（非行为规范）
+#   - 党内法规：党纪处分规定等（涉党纪案件除外，可用 --keep-industry 保留）
+#   - 军事法规规章：军队信访/兵役/退役军人安置（涉军案件除外）
+_EXCLUDE_EFFECT1 = {
+    "行业/团体规范", "地方律协规定", "行政机关工作文件", "党内法规", "军事法规规章",
+}
+
+
+def _filter_irrelevant(items, keep=False):
+    """剔除办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等），返回 (过滤后列表, 剔除条数)。
+
+    Args:
+        items: 法条/法规结果列表
+        keep: True 时原样返回（对应 --keep-industry）
+    """
+    if keep or not items:
+        return items, 0
+    kept, dropped = [], 0
+    for item in items:
+        if isinstance(item, dict):
+            e1 = item.get("effect1") or item.get("xljb_1") or ""
+            if e1 in _EXCLUDE_EFFECT1:
+                dropped += 1
+                continue
+        kept.append(item)
+    return kept, dropped
 
 
 def format_law_results(data):
@@ -1058,7 +1118,7 @@ def cmd_ingest(args):
     fingerprint = _query_fingerprint(args.endpoint, payload)
     source_urls = _enrich_source_urls(args.endpoint, response)
     filename = _make_archive_name(args.endpoint, payload)
-    json_path = ARCHIVE_DIR / filename
+    json_path = ARCHIVE_DIR / _resolve_project() / filename
     record = {
         "id": filename.replace(".json", ""),
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -1092,17 +1152,20 @@ def _resolve_keyword_search_mode(args, expanded):
     return "or" if expanded else "and"
 
 
-def _print_footer(cost_label=None, archive_md=None, cwd_md=None):
+def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_dropped=0):
     """打印调用成本提示 + 报告路径
 
     Args:
         cost_label: 自定义成本字符串（默认走 COST_PER_CALL）
         archive_md: archive 报告路径
         cwd_md: 工作目录报告路径（写入失败时为 None）
+        industry_dropped: 已剔除的办案无关条数（律协指引/行政机关工作文件/党内法规/军事法规等）
     """
     if cost_label is None:
         cost_label = COST_PER_CALL
     print(f"\n--- {cost_label} ---")
+    if industry_dropped:
+        print(f"已过滤 {industry_dropped} 条办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等；如需保留加 --keep-industry）")
     if archive_md:
         print(f"报告已保存：")
         print(f"  - archive: {archive_md}")
@@ -1142,13 +1205,14 @@ def cmd_search(args):
 
     result, cached, archive_path = api_post("/open/law_vector_search", body)
     data = result.get("extra", {}).get("fatiao", result.get("data", []))
+    data, industry_dropped = _filter_irrelevant(data, getattr(args, "keep_industry", False))
     formatted = format_law_results(data)
     print(formatted)
     archive_md, cwd_md = _archive_write_report(
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
 
 
 def cmd_keyword(args):
@@ -1185,13 +1249,14 @@ def cmd_keyword(args):
         body["top_k"] = args.top_k
     result, cached, archive_path = api_post("/open/rh_ft_search", body)
     data = result.get("data", [])
+    data, industry_dropped = _filter_irrelevant(data, getattr(args, "keep_industry", False))
     formatted = format_law_results(data)
     print(formatted)
     archive_md, cwd_md = _archive_write_report(
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
 
 
 def cmd_detail(args):
@@ -1383,13 +1448,14 @@ def cmd_regulation(args):
         body["top_k"] = args.top_k
     result, cached, archive_path = api_post("/open/rh_fg_search", body)
     data = result.get("data", [])
+    data, industry_dropped = _filter_irrelevant(data, getattr(args, "keep_industry", False))
     formatted = format_regulation_results(data)
     print(formatted)
     archive_md, cwd_md = _archive_write_report(
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
 
 
 def cmd_regulation_detail(args):
@@ -1471,7 +1537,7 @@ def cmd_archive_list(args):
         print("尚无检索记录。")
         return
 
-    files = sorted(ARCHIVE_DIR.glob("*.json"), reverse=True)
+    files = ARCHIVE_DIR.rglob("*.json")
     keyword = args.keyword.lower() if args.keyword else None
     entries = []
 
@@ -1494,7 +1560,7 @@ def cmd_archive_list(args):
                 continue
 
         entries.append({
-            "file": f.name,
+            "rel": str(f.relative_to(ARCHIVE_DIR)),
             "time": ts,
             "endpoint": endpoint,
             "query_summary": query_str[:80],
@@ -1505,8 +1571,9 @@ def cmd_archive_list(args):
         print("没有找到匹配的检索记录。")
         return
 
+    entries.sort(key=lambda e: e["time"], reverse=True)
     for e in entries[:args.limit]:
-        print(f"{e['time']}  {e['endpoint']}")
+        print(f"{e['time']}  {e['endpoint']}  [{e['rel']}]")
         print(f"  {e['query_summary']}")
         print()
 
@@ -1517,7 +1584,7 @@ def cmd_backfill_urls(_args):
         print("archive 目录不存在。")
         return
 
-    files = sorted(ARCHIVE_DIR.glob("*.json"))
+    files = sorted(ARCHIVE_DIR.rglob("*.json"))
     updated = 0
     skipped = 0
 
@@ -2118,6 +2185,8 @@ def _add_law_filters(parser):
     """法条通用筛选参数"""
     parser.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     parser.add_argument("--sxx", action="append", help="时效性（可多次指定）")
+    parser.add_argument("--keep-industry", action="store_true",
+                        help="保留默认剔除的办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等）")
 
 
 def build_parser():
@@ -2166,6 +2235,8 @@ def build_parser():
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     p.add_argument("--sxx", action="append", help="时效性（可多次指定）")
+    p.add_argument("--keep-industry", action="store_true",
+                   help="保留默认剔除的办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等）")
     p.add_argument("--search-mode", choices=["and", "or"], default=None, help="多关键词逻辑；默认 and，带 --expand 且未指定时自动 or")
     p.add_argument("--fbrq-start", help="发布日期起点 yyyy-MM-dd")
     p.add_argument("--fbrq-end", help="发布日期终点")
@@ -2233,6 +2304,8 @@ def build_parser():
     p.add_argument("--fgmc", help="法规名称过滤")
     p.add_argument("--effect1", action="append", help="效力级别（可多次指定）")
     p.add_argument("--sxx", action="append", help="时效性（可多次指定）")
+    p.add_argument("--keep-industry", action="store_true",
+                   help="保留默认剔除的办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等）")
     p.add_argument("--fbrq-start", help="发布日期起点 yyyy-MM-dd")
     p.add_argument("--fbrq-end", help="发布日期终点")
     p.add_argument("--ssrq-start", help="实施日期起点")

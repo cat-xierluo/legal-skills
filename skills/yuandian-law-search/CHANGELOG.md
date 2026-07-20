@@ -1,5 +1,18 @@
 # 变更日志
 
+## [1.7.5] - 2026-07-20
+
+### 新特性
+
+- **归档按检索目的分文件夹**：新增 `YD_PROJECT` 环境变量，AI/用户在研究任务开始时设定（如 `export YD_PROJECT=0713-商标在先使用权`），该任务所有检索自动归到 `archive/<project>/` 一个文件夹，便于追溯；未设时按日期 `archive/YYYYMMDD/` 兜底，不再平铺根目录。**缓存查重全局跨 project 生效**（`_archive_lookup` 改 `rglob`），同一问题在不同任务命中已有归档、不重复消耗积分。`archive-list` 输出带 project 相对路径、按时间倒序。
+- **默认剔除办案无关条目（五类效力级别）**：`search` / `keyword` / `regulation` 默认过滤 `effect1 ∈ {行业/团体规范, 地方律协规定, 行政机关工作文件, 党内法规, 军事法规规章}`（律协指引、课题公告/答复函、党纪规定、军队规定等——非法律渊源或与一般民商事/刑事办案无关）。基于 archive 实测样本定位字段特征；footer 提示剔除数量，涉党纪/涉军等特殊案件加 `--keep-industry` 保留。`archive/` 原始数据完整保留。
+
+### 修复
+
+- 修复 skill 根目录堆积检索副本问题：`_archive_write_report` 写 CWD 副本前判断 `cwd == SKILL_ROOT`，相等则跳过（主归档仍在 `archive/`，不丢数据）。根因是 `yd-run` 捕获的 `YD_USER_CWD` 若等于 skill 根，副本直接堆根目录。
+- 清理 skill 根目录 22 个历史检索副本 `.md`（`archive/` 内均有同名备份，逐个 diff 一致）。
+- 新增 skill 根 `.gitignore`，兜底忽略检索副本文件名模式，防止未来污染 git status。
+
 ## [1.7.4] - 2026-06-15
 
 ### 修复
