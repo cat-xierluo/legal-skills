@@ -92,7 +92,55 @@ bash scripts/check-dependencies.sh --backend codebuddy --strict
   如果已误按 1 卡住，再补一发 `tmux send-keys -t <session> 2 Enter` 即可解卡。
 - PM 第一次该做：**spawn 完 worker 必须立即 `tmux send-keys -t <session> 2` 兜底**，不要等第一个工具调用卡住再处理。`-y` 不能替你省掉这一步。
 
-## 3. CLI 关键参数
+### 2.5 Hooks / ping-island-bridge 冻死（踩坑 6，2026-07-10 排查确认）
+
+> ⚠️ 这是 codebuddy CLI **在所有语境下全局冻死**的直接根因（非 DEC-107 的"云端重定向环"非 DEC-109 的"本地认证握手"）。症状：codebuddy 任何子命令（`--version`、`-p`、`doctor`、交互模式）均无响应、pane 全空白、进程存活但 TUI 永不渲染。
+
+**根因**:`~/.codebuddy/settings.json` 中 hooks 字段全部调用 `ping-island-bridge` → `PingIslandBridge` 二进制 → 连接 Unix socket `/tmp/island.sock`。若 **Ping Island app 未在本机运行**（socket 不存在），bridge 挂死 → codebuddy 启动期 SessionStart hook 触发 → 全局冻。
+
+**诊断命令**:
+```bash
+# 1. 检查 hooks 是否存在
+python3 -c "import json; d=json.load(open('/Users/maoking/.codebuddy/settings.json')); print(list(d.get('hooks',{}).keys()))"
+# 2. 检查 Ping Island 是否运行
+ls -la /tmp/island.sock  # 不存在 → 冻死根因
+ps aux | grep -i "Ping.*Island"
+# 3. 快速验证（去 hooks 后跑 --version）
+# 如果返回版本号且不冻 → 确认是 hooks 问题
+```
+
+**修复（永久,2026-07-10 验证生效）**:
+```bash
+# 1. 切除 hooks（一次性操作）
+python3 -c "
+import json
+with open('$HOME/.codebuddy/settings.json') as f:
+    d = json.load(f)
+d.pop('hooks', None)
+with open('$HOME/.codebuddy/settings.json','w') as f:
+    json.dump(d, f, indent=2, ensure_ascii=False)
+"
+
+# 2. 用干净环境启动 codebuddy（去掉 WorkBuddy 会话的干扰变量）
+#    这是 spawn-worker / -p headless 的关键开关：
+env -i HOME="$HOME" PATH="$PATH" LANG="zh_CN.UTF-8" TERM="$TERM" \
+  codebuddy --model hy3 -p "prompt" -y
+```
+
+**为什么需要 `env -i`**:WorkBuddy 桌面端从子进程启动 codebuddy 时会遗传 `__CFBundleIdentifier`、`ACC_PRODUCT_CONFIG_V3` 等变量,导致 codebuddy 误判自身已在 WorkBuddy 语境、走 IPC 认证路径而挂死。`env -i` 摘掉所有继承变量(仅保留 HOME/PATH/LANG/TERM),让 codebuddy 按独立 CLI 模式走 `cli-external-link` 浏览器认证 → 首次完成浏览器授权后 token 缓存 → 后续直接复用。
+
+**2026-07-10 实测**：
+- hy3 `-p`：`2` ✅
+- deepseek-v4-flash `-p`：`通过` ✅
+- 前提：hooks 已切除 + env -i 隔离 + 用户已通过一次交互认证(token 缓存在 `~/.codebuddy/local_storage/`)
+
+### 2.6 spawn-worker 集成
+
+**注意**:去 hooks 后 `--version` / 交互模式不冻,但 headless `-p` 仍需要一次交互认证缓存 token（因 auth 类型是 `cli-external-link`,需浏览器）。在真正的 Terminal.app 跑一次交互模式完成授权即可。
+
+**跨后端 hooks 对比（2026-07-10，DEC-111）**：qoderwork（国际版，`~/.qoderwork/settings.json`）同样含 ping-island-bridge hooks 会冻；qoderwork-cn（国内版，`~/.qoderworkcn/` 无 settings.json）**不受影响、健康可用**。详见 DEC-111。
+
+### 2.6
 
 ```
 用法: codebuddy [options] [query...]
