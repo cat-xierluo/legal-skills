@@ -26,24 +26,27 @@
 
 ### 开通步骤
 
-1. **访问 ClawEmail 平台**：打开 [claw.163.com](https://claw.163.com)，使用你的 163 邮箱登录
-2. **获取认证 URL**：在平台控制台中获取你的 Agent 认证 URL（格式如 `t1/xxxxxx`）
-3. **运行 claw-setup**：
+本 skill 已内置 `claw_init` 一键配置（纯 mail-cli 模式，不依赖 OpenClaw 插件 / claw-setup）：
+
+1. **访问 ClawEmail 平台**：打开 [claw.163.com](https://claw.163.com)，使用 163 主邮箱登录
+2. **获取认证 URL**：在平台控制台获取 Agent 认证 URL（格式如 `t1/xxxxxx`，有效期 30 分钟）
+3. **配置通信规则**：在 ClawEmail 后台 → Agent 邮箱管理 → 通信规则，开放外部收发权限（**新建子邮箱默认未开放外部通信，必须手动配置**）
+4. **一键配置**：
    ```bash
-   npx "@clawemail/claw-setup@latest" --auth-url "你的认证URL"
+   source skills/agent-email/scripts/mail-ops.sh
+   claw_init "t1/你的认证URL" "你的显示名称"
    ```
-4. **验证连通性**：
+5. **验证连通**：`claw_init` 会自动跑 `folder list` 验证，并写入 `.env`
+6. **（可选）创建子邮箱**：
    ```bash
-   mail-cli mail list
+   mail-cli clawemail create --prefix mybot --type sub --display-name "我的Agent"
    ```
-5. **（可选）创建子邮箱**：
-   ```bash
-   mail-cli clawemail create --prefix mybot --display-name "我的Agent"
-   ```
+
+> 完整配置流程见 `clawemail-setup-guide.md`。腾讯 Agent Mail（QQ 邮箱）的配置见 `agently-setup-guide.md`；两家后端的安装对照见 `backends-install.md`。
 
 ### 认证 URL 说明
 
-认证 URL 是 ClawEmail 平台分配给你的 Agent 的身份凭证。通过 `claw-setup` 命令完成认证后，Agent 即可使用 `mail-cli` 操作邮箱。
+认证 URL 是 ClawEmail 平台分配给 Agent 的身份凭证。`claw_init` 会 curl 解析它拿到邮箱前缀和 `ck_live_xxx` API Key，存入系统钥匙串并创建 mail-cli Profile。
 
 > **安全提示**：认证 URL 是敏感信息，不要提交到 Git 或公开分享。
 
