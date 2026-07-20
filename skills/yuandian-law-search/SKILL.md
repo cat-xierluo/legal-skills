@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.7.4"
+version: "1.7.5"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -277,6 +277,9 @@ scripts/yd-run hall-detect "根据《中华人民共和国数据保护法》第3
 |------|------|--------|
 | `--effect1` | 效力级别（可多次指定） | 宪法、法律、司法解释、行政法规、部门规章、地方性法规 等 |
 | `--sxx` | 时效性（可多次指定） | 现行有效、失效、已被修改、部分失效、尚未生效 |
+| `--keep-industry` | 保留默认剔除的办案无关条目 | 无需取值（flag） |
+
+> **默认剔除办案无关条目**：`search` / `keyword` / `regulation` 默认过滤 `effect1 ∈ {行业/团体规范, 地方律协规定, 行政机关工作文件, 党内法规, 军事法规规章}` 的条目（律协指引、课题公告/答复函、党纪规定、军队规定等——非法律渊源或与一般民商事/刑事办案无关）。footer 提示剔除数量；涉党纪/涉军等特殊案件需要时加 `--keep-industry` 保留。`archive/` 原始数据仍完整，仅过滤显示与 `.md` 报告。
 
 ### 案例检索通用筛选
 
@@ -344,7 +347,9 @@ scripts/yd-run hall-detect "根据《中华人民共和国数据保护法》第3
 
 每次 API 调用的完整结果会自动归档到 `archive/` 目录。当用户提到"之前查过什么"时，AI 可以直接从归档中提取历史结果，无需重新调用 API。
 
-`archive/<ts>_<query>.json` 是机器可读版（response/query/fingerprint/source_urls 全字段），`archive/<ts>_<query>.md` 是同次检索的人类可读版（结构化报告），两者一一对应。同一份报告的副本会同步写入用户运行命令时的工作目录（`<CWD>/<ts>_<query>.md`），便于附卷。
+**按检索目的归类（`YD_PROJECT`）**：每个研究任务开始时，AI/用户设 `YD_PROJECT` 环境变量（如 `export YD_PROJECT=0713-商标在先使用权`，或行内 `YD_PROJECT=0713-商标案 scripts/yd-run search ...`），该任务的所有检索自动归到 `archive/<YD_PROJECT>/` 一个文件夹下，便于追溯。未设时按日期 `archive/YYYYMMDD/` 兜底，不再平铺根目录。**缓存查重全局生效**——同一问题在不同 project 下会命中已有归档，不重复消耗积分。
+
+`archive/<project>/<ts>_<query>.json` 是机器可读版（response/query/fingerprint/source_urls 全字段），同名 `.md` 是人类可读版（结构化报告），两者一一对应。同一份报告的副本会同步写入用户运行命令时的工作目录（`<CWD>/<ts>_<query>.md`），便于附卷；当 CWD 恰为 skill 根目录时自动跳过（避免污染 skill 目录）。
 
 浏览历史记录：
 
