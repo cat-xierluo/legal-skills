@@ -81,10 +81,10 @@ def main() -> int:
     # 解析 zip 文件名 → skill 名映射
     url_map: dict[str, str] = {}
     for a in data.get("assets", []):
-        name = a.get("name", "")
-        if not name.endswith(".zip"):
+        asset_name = a.get("name", "")
+        if not asset_name.endswith(".zip"):
             continue
-        base = name[:-4]
+        base = asset_name[:-4]
         skill = base.rsplit("-", 1)[0]
         url_map[skill] = a["browser_download_url"]
     print(f"latest release assets:{len(url_map)} 个")
