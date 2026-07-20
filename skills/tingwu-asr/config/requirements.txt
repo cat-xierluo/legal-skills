@@ -1,2 +1,4 @@
 requests>=2.28.0
 oss2>=2.18.0
+# yt-dlp 用于"给链接自动下载"(小宇宙/YouTube/B站等);也可用 brew install yt-dlp
+yt-dlp>=2024.0.0
