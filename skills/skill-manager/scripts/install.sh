@@ -267,6 +267,31 @@ for dir in "${ALL_AGENT_DIRS[@]}"; do
     AGENT_NAMES+=($(basename "$dir"))
 done
 echo "🔍 检测到 ${#ALL_AGENT_DIRS[@]} 个 Agent 配置目录: ${AGENT_NAMES[*]}"
+
+# ---- 去重：将 skills/ 解析为真实路径，相同路径只保留一个 ----
+DEDUPED_AGENT_DIRS=()
+for _dir in "${ALL_AGENT_DIRS[@]}"; do
+    _skills_dir="$_dir/skills"
+    [ -d "$_skills_dir" ] && _canonical="$(cd -P "$_skills_dir" 2>/dev/null && pwd)" || _canonical="$_skills_dir"
+    _dname="$(basename "$_dir")"
+
+    _seen=false
+    for _existing in "${DEDUPED_AGENT_DIRS[@]}"; do
+        _existing_skills="$_existing/skills"
+        [ -d "$_existing_skills" ] && _existing_canon="$(cd -P "$_existing_skills" 2>/dev/null && pwd)" || _existing_canon="$_existing_skills"
+        if [ "$_canonical" = "$_existing_canon" ]; then
+            _seen=true
+            break
+        fi
+    done
+
+    if [ "$_seen" = false ]; then
+        DEDUPED_AGENT_DIRS+=("$_dir")
+    else
+        printf "  ⏭  跳过重复: %s（skills/ 已通过其他目录安装）\n" "$_dname"
+    fi
+done
+ALL_AGENT_DIRS=("${DEDUPED_AGENT_DIRS[@]}")
 echo ""
 
 # ---- GitHub 预处理：克隆到临时目录（只克隆一次）----
