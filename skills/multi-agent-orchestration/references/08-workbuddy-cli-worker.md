@@ -101,7 +101,7 @@ bash scripts/check-dependencies.sh --backend codebuddy --strict
 **诊断命令**:
 ```bash
 # 1. 检查 hooks 是否存在
-python3 -c "import json; d=json.load(open('/Users/maoking/.codebuddy/settings.json')); print(list(d.get('hooks',{}).keys()))"
+python3 -c "import json; d=json.load(open('~/.codebuddy/settings.json')); print(list(d.get('hooks',{}).keys()))"
 # 2. 检查 Ping Island 是否运行
 ls -la /tmp/island.sock  # 不存在 → 冻死根因
 ps aux | grep -i "Ping.*Island"
