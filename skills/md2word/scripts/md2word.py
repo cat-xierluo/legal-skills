@@ -521,15 +521,32 @@ def rename_footnote_ids(content, ch):
 
 
 def add_toc(doc):
-    """在文档当前位置插入 Word 目录域（TOC field），打开后在 Word 中按 F9 更新。"""
+    """在文档当前位置插入「目录」标题 + Word 目录域（TOC field）。
+    配合 enable_update_fields()，Word 打开时自动生成条目与页码，无需手动 F9。
+    「目录」二字用居中加粗普通段（非 Heading 样式），避免标题自身被收进目录。"""
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    tr = title_p.add_run('目录')
+    tr.bold = True
+    tr.font.size = Pt(16)
     p = doc.add_paragraph()
     r1 = p.add_run()
     b = OxmlElement('w:fldChar'); b.set(qn('w:fldCharType'), 'begin'); r1._r.append(b)
     instr = OxmlElement('w:instrText'); instr.set(qn('xml:space'), 'preserve')
     instr.text = r'TOC \o "1-3" \h \z \u'; r1._r.append(instr)
     s = OxmlElement('w:fldChar'); s.set(qn('w:fldCharType'), 'separate'); r1._r.append(s)
-    placeholder = p.add_run('（目录：在 Word 中选中此处按 F9 更新）')
+    placeholder = p.add_run('正在生成目录……若未自动显示，请按 Ctrl/Cmd+A 后按 F9 更新。')
     e = OxmlElement('w:fldChar'); e.set(qn('w:fldCharType'), 'end'); placeholder._r.append(e)
+
+
+def enable_update_fields(doc):
+    """在 settings.xml 注入 <w:updateFields w:val="true"/>：让 Word 打开文档时
+    自动更新所有域（含 TOC 目录与页码），用户无需手动按 F9。已存在则跳过。"""
+    settings = doc.settings.element
+    if settings.find(qn('w:updateFields')) is None:
+        uf = OxmlElement('w:updateFields')
+        uf.set(qn('w:val'), 'true')
+        settings.insert(0, uf)
 
 
 def add_book_header(section, title):
@@ -983,6 +1000,11 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     if book_mode and notes_mode == 'footnote' and fn_manager.refs:
         set_footnote_restart_per_section(doc)
         print('🔖 已设置每章脚注从 1 重置编号（footnotePr numRestart=eachSec）')
+
+    # 全书模式：让 Word 打开时自动更新目录域与页码（免手动 F9）
+    if book_mode:
+        enable_update_fields(doc)
+        print('🔄 已设置打开时自动更新域（目录/页码免手动 F9）')
 
     # 保存文档
     doc.save(output_path)
