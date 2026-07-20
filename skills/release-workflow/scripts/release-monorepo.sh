@@ -37,7 +37,21 @@ echo "[4/5] push tag..."
 git push origin "$REPO_TAG"
 
 echo "[5/5] 监控 Actions..."
-gh run watch --exit-status || { echo "CI 失败,排查后重试"; exit 1; }
+# 非交互环境 gh run watch 需要 run-id；按 head_sha 匹配本次 tag push 触发的 release.yml run
+HEAD_SHA=$(git rev-parse HEAD)
+RUN_ID=""
+for _ in $(seq 1 20); do
+    RUN_ID=$(gh run list --workflow=release.yml --limit 10 --json databaseId,headSha --jq ".[] | select(.headSha==\"$HEAD_SHA\") | .databaseId" | head -1)
+    [ -n "$RUN_ID" ] && break
+    echo "  等待 CI run 出现..."
+    sleep 3
+done
+if [ -z "$RUN_ID" ]; then
+    echo "ERROR: 未找到本次 push（$HEAD_SHA）触发的 release.yml run，请手动检查 Actions"
+    exit 1
+fi
+echo "  监控 run $RUN_ID"
+gh run watch "$RUN_ID" --exit-status || { echo "CI 失败,排查后重试"; exit 1; }
 
 echo
 echo "release info:"
