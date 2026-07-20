@@ -179,3 +179,6 @@ pack-skills/
 
 # ClawHub 本地锁文件（本地状态，不入库）
 .clawhub/
+
+# Agent 本地记忆（项目内部，不入库）
+memory/
