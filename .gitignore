@@ -166,6 +166,9 @@ skills/myagents-memory-gardener
 # myagents-memory-molt (symlink to ~/.myagents/skills/myagents-memory-molt)
 skills/myagents-memory-molt
 
+# myagents-memory-update (symlink to ~/.myagents/skills/myagents-memory-update)
+skills/myagents-memory-update
+
 # Packed skills（打包输出目录）
 pack-skills/
 
@@ -173,3 +176,6 @@ pack-skills/
 .release-notes.md
 
 .claude/plans/myagents/
+
+# ClawHub 本地锁文件（本地状态，不入库）
+.clawhub/
