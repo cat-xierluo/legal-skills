@@ -74,8 +74,11 @@ python3 skills/tingwu-asr/scripts/check_auth.py
 ### 2. 执行转录
 
 ```bash
-# 单文件转录
-python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio.mp3 --lang cn --speakers 4
+# 直接给链接(自动 yt-dlp 下载,默认多人分离):小宇宙/YouTube/B站等
+python3 skills/tingwu-asr/scripts/transcribe.py "https://www.xiaoyuzhoufm.com/episode/xxx"
+
+# 单文件转录(默认多人分离)
+python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio.mp3 --lang cn
 
 # 多文件并行转录（自动保存到文件所在目录 + archive 目录）
 python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/audio2.mp3 /path/to/video.mp4
@@ -88,9 +91,9 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 ```
 
 参数说明:
-- `paths` 音频/视频文件路径（支持多个文件并行转录）
+- `paths` 音频/视频文件路径**或链接**（http(s) 开头自动用 yt-dlp 下载到临时目录；支持小宇宙/YouTube/B站等；支持多个混用）
 - `--lang cn` 语言: cn(中文,默认) / en(英文) / ja(日文) / cant(粤语) / cn_en(中英混合)
-- `--speakers 2` 说话人: 0(不区分) / 1(单人) / 2(两人,默认) / 4(多人)
+- `--speakers` 说话人分离: 2=区分发言人(**默认**,实测唯一有效值,分 2 人) / 0=不区分 / 1=单人。**注:3 与 4 实测均无效(不分离),原"4=多人"为误注**
 - `--batch` 批量转录目录下所有文件
 - `--parallel N` 并行转录的最大文件数 (默认: 3)
 - `--force` 强制重新上传，即使该文件已有转录结果（默认会跳过已转录的文件）
@@ -98,6 +101,8 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 - `--no-archive` 不保存归档
 - `--no-lab` 不获取智能分析（关键词/议程/重点等）
 - `--ppt` 下载 PPT 幻灯片图片并嵌入 Markdown（仅视频有效）
+
+**关于「给链接转写」与说话人分离（重要设计取舍）**：传入链接时，skill 走「yt-dlp 下载 → 本地上传」路径，以保证说话人分离生效。听悟网页端的「播客链接转写」(底层 net_source 网络源通道)虽能省本地带宽，但实测其「区分发言人」选项不生效（提交时 roleSplitNum 被强制为 0，不做分离）。此外经实测，听悟 roleSplitNum **仅 `2` 为有效分离值（分 2 人）**，`0/1/3/4` 均不分离（原 skill 注释"4=多人"为误注，已更正）。故 skill 默认 `--speakers 2` 走本地上传通道，换取可靠的 2 人分离，代价是下载+上传的带宽。如只需纯文字稿不在乎分离，可自行调用听悟网页端播客链接转写。
 
 ### 3. 输出说明
 

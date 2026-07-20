@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.3.0] - 2026-07-19
+
+### Added
+- 给链接自动转录:`paths` 支持 http(s) 链接,自动用 yt-dlp 下载(小宇宙 episode、YouTube、B站等),无需手动下载音频
+- SKILL.md 补充「链接转写与说话人分离」设计取舍说明
+
+### Changed
+- `--speakers` 默认值确认为 2:经实测听悟 roleSplitNum **仅 `2` 为有效分离值(分 2 人)**,`3` 与 `4` 均不分离(原注释"4=多人"为误注,已更正)
+- `requirements.txt` 补充 yt-dlp 依赖
+
+### 已知限制(Playwright 实测听悟网页端 API 确认)
+- 听悟网页端「播客链接转写」(底层 net_source 网络源通道)的「区分发言人」选项**不生效**:即使选中"多人讨论",提交的 roleSplitNum 仍被强制为 0,结果不做分离。故 skill 给链接时走"yt-dlp 下载 → 本地上传"路径以保证分离生效
+- roleSplitNum **仅 `2` 有效(分 2 人)**,`0/1/3/4` 实测均不分离
+
 ## [0.2.0] - 2026-04-20
 
 ### Added

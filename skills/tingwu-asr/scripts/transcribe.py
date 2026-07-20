@@ -5,10 +5,14 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
+
+# URL 下载的音频临时存放目录
+URL_DOWNLOAD_DIR = Path(tempfile.gettempdir()) / "tingwu_downloads"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tingwu import TingwuClient, LANG_MAP, VIDEO_EXTS
@@ -48,13 +52,51 @@ def _find_duplicate(file_path, history):
     return None
 
 
+def _is_url(s):
+    return isinstance(s, str) and s.startswith(("http://", "https://"))
+
+
+def _download_url(url, verbose=True):
+    """用 yt-dlp 下载链接背后的音视频到临时目录,返回下载到的本地文件路径列表。
+
+    支持小宇宙 episode、YouTube、B站等 yt-dlp 能解析的源。
+    下载到 URL_DOWNLOAD_DIR,文件保留(用户可手动清理)。
+    """
+    URL_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    if verbose:
+        print(f"下载链接(yt-dlp): {url}")
+    before = set(URL_DOWNLOAD_DIR.iterdir())
+    cmd = [
+        "yt-dlp", "--no-playlist", "-x", "--audio-format", "m4a",
+        "-o", str(URL_DOWNLOAD_DIR / "%(title)s.%(ext)s"),
+        url,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"yt-dlp 下载失败: {result.stderr.strip()[:200] or result.stdout.strip()[:200]}")
+    new_files = [f for f in (set(URL_DOWNLOAD_DIR.iterdir()) - before)
+                 if f.suffix.lower() in AUDIO_EXTS]
+    if not new_files:
+        # 兜底:取目录里最新的音视频文件
+        new_files = sorted(
+            [f for f in URL_DOWNLOAD_DIR.iterdir() if f.suffix.lower() in AUDIO_EXTS],
+            key=lambda f: f.stat().st_mtime, reverse=True,
+        )[:1]
+    if not new_files:
+        raise RuntimeError(f"yt-dlp 未下载到音视频文件: {url}")
+    for f in new_files:
+        if verbose:
+            print(f"  已下载: {f.name} ({f.stat().st_size // 1024 // 1024}MB)")
+    return new_files
+
+
 def main():
     parser = argparse.ArgumentParser(description="通义听悟云端语音转写")
     parser.add_argument("paths", nargs="*", help="音频/视频文件路径（支持多个文件并行转录）")
     parser.add_argument("-o", "--output", help="输出 Markdown 文件路径（单文件模式）")
     parser.add_argument("--lang", default="cn", help="语言: cn/en/ja/cant/cn_en (默认: cn)")
     parser.add_argument("--speakers", type=int, default=2,
-                        help="说话人数: 0=不区分, 1=单人, 2=两人(默认), 4=多人")
+                        help="说话人分离: 2=区分发言人(默认,实测唯一有效值,分2人); 0=不区分; 1=单人。注:3/4 实测无效(不分离)")
     parser.add_argument("--batch", action="store_true", help="批量转录目录下所有音视频文件")
     parser.add_argument("--check-auth", action="store_true", help="检查登录状态")
     parser.add_argument("--cookie", help="Cookie 文件路径 (默认: config/cookies.json)")
@@ -94,9 +136,15 @@ def main():
 
     lang = LANG_MAP.get(args.lang, args.lang)
 
-    # 收集所有文件
+    # 收集所有文件(支持 URL 自动下载:小宇宙/YouTube/B站等)
     all_files = []
     for path_str in args.paths:
+        if _is_url(path_str):
+            try:
+                all_files.extend(_download_url(path_str, verbose=True))
+            except Exception as e:
+                print(f"下载失败,跳过 {path_str}: {e}")
+            continue
         target = Path(path_str)
         if args.batch and target.is_dir():
             files = [f for f in sorted(target.iterdir())
