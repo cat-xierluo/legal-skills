@@ -9,7 +9,7 @@
 兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
 
 [![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-50-2E7D32)](#-技能列表)
+[![Skills](https://img.shields.io/badge/Skills-51-2E7D32)](#-技能列表)
 [![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
 <br/>
 [![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
@@ -50,6 +50,8 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-07-23 | 新上传   | [patent-download](skills/patent-download/) | v2.6.0 | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露 |
+| 2026-07-23 | 新上传   | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0 | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义 |
 | 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0（待发布） | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
 | 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10（待发布） | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
@@ -57,10 +59,7 @@
 | 2026-07-13 | 更新     | [git-workflow](skills/git-workflow/) | v1.6.0 | 新增完整 PR range 身份门禁与 safe-push：逐 commit 核验 author/committer，并只推送已核验 immutable OID；拒绝同名 feature upstream 与本地 ref 缩窄范围 |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
 | 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
-| 2026-06-22 | 新上传   | [invoice-organizer](skills/invoice-organizer/) | v0.1.1 | 发票/票据 PDF 整理与报销清单：pdftotext 提取文本，按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由/案号/日期/路线，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）；含 Hard Fail 验收标准 |
-| 2026-06-15 | 更新     | [yuandian-law-search](skills/yuandian-law-search/) | v1.7.4 | 修复 `--expand` 自动 OR 失效问题，强化案件综合/标杆类案检索的 `case-semantic` 优先、短关键词复检和零命中复检规则，并同步发布版本 |
-| 2026-06-13 | 更新     | [contract-copilot](skills/contract-copilot/) | v1.5.3 | 修复 Word 批注时间线错峰失效：新增批注只消耗一次运行时时间戳，`w:date` 使用本地时区偏移，`w16du:dateUtc` / `w16cex:dateUtc` 写入同一时点的 UTC 格式；同时修复缺失 `commentsExtensible.xml` 时新增批注失败的问题 |
-| 2026-06-12 | 新上传   | [legal-visualization](skills/legal-visualization/) | v0.6.14 | 面向法律业务场景的法律图解与图表生成技能：路由→VizSpec→编排→drawio XML→导出五段流水线；硬约束（缺失事实显式标注、业务条线优先于图型、VizSpec.routing 必填、一图一观点）；18 个业务条线 `.drawio` 模板（诉讼/公司/合规/合同/知产/房地产/服务）+ 13 份方法论 references + 3 个脚本（XML 校验/批量导出/命名规范）；默认交付 `.drawio + .svg + .png` 三件套 |
+
 </details>
 
 ## 📋 项目概述
@@ -180,15 +179,6 @@
 <td style="text-align:center">v1.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/douyin-batch-download-1.8.0.zip">下载</a></td>
 <td></td>
-</tr>
-<tr>
-<td><a href="skills/multi-search/"><strong>multi-search</strong></a></td>
-<td>工具·搜索</td>
-<td style="word-break:break-word">智能多主题深度研究工具，使用独立 Subagent 进行并行深度检索，生成系统化研究文档</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.0</td>
-<td style="text-align:center"></td>
-<td>已归档(2026-06-30)</td>
 </tr>
 </tbody>
 </table>
@@ -328,6 +318,15 @@
 <td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>
 <tr>
+<td><a href="skills/patent-download/"><strong>patent-download</strong></a></td>
+<td>工具·知产</td>
+<td style="word-break:break-word">专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录），支持多平台、自动处理申请号和公告号格式；凭证环境变量化 + 防泄露自检</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v2.6.0</td>
+<td style="text-align:center">—</td>
+<td>本仓库</td>
+</tr>
+<tr>
 <td><a href="skills/code2patent/"><strong>code2patent</strong></a></td>
 <td>专业·知产</td>
 <td style="word-break:break-word">从已开发代码项目中提取技术实现证据，围绕候选专利方案生成算法/软件类说明书式技术交底书，并以"权利要求布局卡 → 发明专利初稿"两步法生成接近可申报版的中国发明专利起草材料；内置《专利审查指南》撰写规则、计算机程序发明保护主题提示和 agent 速查卡</td>
@@ -445,6 +444,15 @@
 <td style="text-align:center">v1.0.5</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/svg-article-illustrator-1.0.5.zip">下载</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/handdrawn-article-illustrator/"><strong>handdrawn-article-illustrator</strong></a></td>
+<td>工具·配图</td>
+<td style="word-break:break-word">手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.1.0</td>
+<td style="text-align:center"></td>
+<td>配色可定制</td>
 </tr>
 <tr>
 <td><a href="skills/svg-book-illustrator/"><strong>svg-book-illustrator</strong></a></td>
