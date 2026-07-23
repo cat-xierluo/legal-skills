@@ -2,6 +2,23 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.3.0] - 2026-07-22
+
+### 新增：从格式审查升级为可验证 Harness 预检
+
+- 新增 `references/harness-reliability-standards.md`，用 Contract / Producer / Verifier / Evidence Binding / Fault Injection / Closure / Composition 七层模型审查 Skill 的真实可靠性。
+- 新增创建预检模式：创建或重大改造 Skill 前先定义结果属性、生产者/验证者、Hard Fail、失败回炉和逃逸反例；实现完成后再进入正式验收。
+- 新增 `scripts/harness_evidence_gate.py`，用完整候选清单、策略读集和 SHA-256 绑定审查证据，并在 `verify` 时亲自重跑候选内 checker；不读取 JSON 自填的退出码、PASS 或日志结论。
+- 新增 14 个故障注入回归测试，覆盖候选漂移、范围漏项、空清单、策略漂移、自报结果、反例未阻断、未知层/runtime/checker、checker 篡改候选、证据覆盖、可信候选确认、敏感环境隔离和不适用理由不足。
+
+### 改进
+
+- 将“执行器自报完成”“只有正常样例”“空范围或检查异常 fail-open”“跨 Skill 无契约”等纳入 Hard Fail。
+- 审查报告新增 Harness 七层、成熟度和证据等级，强制区分 `HARNESS_REVIEW_VERIFIED`、`DOMAIN_VERIFIED` 与 `NOT_VERIFIED`。
+- 更新 review profile、模块路由、业务流与工作流规则，使客观缺陷走硬门禁，语义质量保留人工判断。
+- 更新 `skill-dev-guide.md`，把七层预检前移到创建前，并要求实现后由实时 checker 正式验收。
+- 动态 checker 仅允许用户显式确认的自有/可信候选，默认使用最小环境白名单和临时 HOME；未知第三方候选保持 `NOT_VERIFIED`，门禁不冒充代码沙箱。
+
 ## [2.2.0] - 2026-06-25
 
 ### 新增:Skill 本质审查 + 报告教学化升级(基于 skill-lint 自迭代 golden 测试)
