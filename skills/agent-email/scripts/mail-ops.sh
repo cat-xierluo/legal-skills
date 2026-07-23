@@ -276,13 +276,22 @@ _agently_folders() {
 
 # 腾讯命令多为「名词 +动词」风格（message +list / attachment +download）
 _agently_list()      { _agently_cli message +list "$@"; }
-_agently_read()      { _agently_cli message +read "$@"; }
-_agently_structure() { _agently_cli message +read "$@"; }  # read 已含 body+attachments
+# agently 后端 message +read 需要 --id：兼容「位置参数 <id>」与「--id <id>」两种调用
+_agently_read() {
+  if [[ "${1:-}" != --* && -n "${1:-}" ]]; then
+    _agently_cli message +read --id "$1" "${@:2}"
+  else
+    _agently_cli message +read "$@"
+  fi
+}
+_agently_structure() { _agently_read "$@"; }  # 复用 read（已含 body+attachments），自动处理 --id
 _agently_search()    { _agently_cli message +search "$@"; }
 _agently_send()      { _agently_auto_two_step message +send "$@"; }
 _agently_reply()     { _agently_auto_two_step message +reply "$@"; }
 _agently_forward()   { _agently_auto_two_step message +forward "$@"; }
 _agently_trash()     { _agently_auto_two_step message +trash "$@"; }
+# 注意：agently-cli 的 attachment +download --output 须传【相对路径】（在目标目录内执行），
+#       传绝对路径会静默不落地。调用前先 cd 到目标目录，再 --output .
 _agently_download()  { _agently_cli attachment +download "$@"; }
 _agently_watch()     { _agently_cli message +watch "$@"; }
 
