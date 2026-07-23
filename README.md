@@ -52,8 +52,8 @@
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
 | 2026-07-23 | 新上传   | [patent-download](skills/patent-download/) | v2.6.0 | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露 |
 | 2026-07-23 | 新上传   | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0 | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义 |
-| 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0（待发布） | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
-| 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10（待发布） | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
+| 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0 | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
+| 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10 | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
 | 2026-07-13 | 更新     | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT |
 | 2026-07-13 | 更新     | [git-workflow](skills/git-workflow/) | v1.6.0 | 新增完整 PR range 身份门禁与 safe-push：逐 commit 核验 author/committer，并只推送已核验 immutable OID；拒绝同名 feature upstream 与本地 ref 缩窄范围 |
@@ -451,7 +451,7 @@
 <td style="word-break:break-word">手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center"></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/handdrawn-article-illustrator-1.1.0.zip">下载</a></td>
 <td>配色可定制</td>
 </tr>
 <tr>
@@ -459,8 +459,8 @@
 <td>工具·配图</td>
 <td style="word-break:break-word">书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图，针对印刷出版场景优化，字号间距按物理尺寸反推</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.8.10（候选）</td>
-<td style="text-align:center">待发布（v1.8.10 zip）</td>
+<td style="text-align:center">v1.8.10</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/svg-book-illustrator-1.8.10.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -580,8 +580,8 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持旧版指令失稳识别、硬要求来源发现、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、七层 Harness、候选绑定证据、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.4.0（待发布）</td>
-<td style="text-align:center">待发布</td>
+<td style="text-align:center">v2.4.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/skill-lint-2.4.0.zip">下载</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
 <tr>
