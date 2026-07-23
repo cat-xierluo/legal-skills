@@ -38,7 +38,7 @@ jobs:
             "${GITHUB_REF_NAME}"
 
       - name: Create release & upload
-        uses: softprops/action-gh-release@v2.0.2
+        uses: softprops/action-gh-release@d99959edae48b5ffffd7b00da66dcdb0a33a52ee  # v2.0.2
         with:
           tag_name: ${{ github.ref_name || inputs.tag }}
           name: "Skills Release ${{ github.ref_name || inputs.tag }}"
