@@ -103,6 +103,45 @@ security:
     - destructive_file_operation_without_boundary
     - prompt_instruction_to_bypass_higher_priority_rules
 
+harness_reliability:
+  enabled: true
+  # quick_review 只给质量意见；formal_acceptance 必须生成候选绑定证据。
+  mode: formal_acceptance
+  objective_hard_fail: true
+  semantic_findings_default: warning
+  require_layers:
+    - contract
+    - producer
+    - verifier
+    - evidence_binding
+    - fault_injection
+    - closure
+    - composition
+  allow_not_applicable_with_rationale:
+    - closure
+    - composition
+  require_candidate_manifest: true
+  require_policy_manifest: true
+  require_live_checker_execution: true
+  dynamic_execution_requires_trusted_candidate_confirmation: true
+  third_party_default: NOT_VERIFIED
+  inherit_full_environment: false
+  supported_runtimes:
+    - python3
+    - bash
+    - sh
+    - node
+  require_fault_case: true
+  stale_evidence: error
+  unknown_checker: error
+  empty_scope: error
+  verifier_error: error
+  checker_mutates_candidate: error
+  untrusted_dynamic_execution: error
+  completion_claim_requires:
+    - HARNESS_REVIEW_VERIFIED
+    - domain_specific_verification_when_claimed
+
 severity:
   missing_minimal_frontmatter: error
   invalid_description_boundary: warning
@@ -113,6 +152,10 @@ severity:
   high_security_risk: error
   medium_security_risk: warning
   low_security_risk: info
+  missing_independent_verifier: error
+  stale_or_unbound_harness_evidence: error
+  missing_fault_injection: error
+  broad_semantic_exception: warning
 
 report:
   include_profile_name: true

@@ -24,6 +24,7 @@
 | 发布治理 | `publishing-standards.md` | 检查 LICENSE、CHANGELOG、version、索引 | 是否符合发布目标 |
 | 工作流与输出 | `workflow-output-standards.md` | 检查 SKILL.md 正文、依赖、脚本、输出 | 是否可执行、可维护 |
 | 业务流深度 | `business-flow-rubric.md` | 判断 Skill 是否承载真实业务流程 | Trigger / Intake / Reasoning / Output / Safety |
+| Harness 可靠性 | `harness-reliability-standards.md` | 创建预检、重大改造、正式验收或稳定性声明 | 契约、独立验证、证据绑定、故障注入、闭环和组合边界 |
 | 报告与分级 | `reporting-standards.md` | 生成审查报告 | 问题分级、修正建议和报告结构是否一致 |
 | 归档机制 | `archive-standards.md` | 归档正式质量意见报告 | 归档路径、元数据、证据索引和隐私边界是否清楚 |
 
@@ -37,8 +38,9 @@
 6. 若目标是公开发布、项目内正式 Skill 或用户要求发布审查，再读取 `publishing-standards.md`。
 7. 读取 `workflow-output-standards.md`，判断 SKILL.md 正文是否足以指导执行。
 8. 读取 `business-flow-rubric.md`，判断业务流深度和可评估性。
-9. 读取 `reporting-standards.md`，输出分级清晰的问题报告；需要最终交付件时使用 `templates/skill-quality-opinion-report.md`。
-10. 对正式质量意见报告，读取 `archive-standards.md` 判断是否需要写入 `archive/`。
+9. 创建预检、重大改造或正式验收时，读取 `harness-reliability-standards.md`；正式验收生成并复算候选绑定证据。
+10. 读取 `reporting-standards.md`，输出分级清晰的问题报告；需要最终交付件时使用 `templates/skill-quality-opinion-report.md`。
+11. 对正式质量意见报告，读取 `archive-standards.md` 判断是否需要写入 `archive/`。
 
 ## Hard Fail 汇总
 
@@ -57,6 +59,11 @@
 - GitHub 历史中出现过敏感凭证泄露，且未说明撤销凭证和历史处理状态
 - 已声明公开发布但 LICENSE、CHANGELOG、version 或发布索引明显不一致
 - Skill 声称能完成业务任务，但缺少可执行流程、输入要求和输出验收方式
+- Skill 声称已完成、已验证或可稳定交付，但没有独立可执行验证路径
+- 验证器只采信生产器自写的 PASS、清单或报告，不检查真实产物
+- 候选、规则或证据变化后旧 PASS 仍然有效，或空范围、未知检查器、执行错误会 fail-open
+- 声称存在稳健门禁，却没有正常样例之外的故障注入、历史回归或逃逸反例
+- 管理任务或跨 Skill 编排时，没有证据化关闭条件或版本化交接边界
 
 ## License 定位
 

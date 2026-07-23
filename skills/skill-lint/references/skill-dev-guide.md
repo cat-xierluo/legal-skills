@@ -406,7 +406,9 @@ find ./output -mindepth 1 -delete
 
 ### (1) 创建新 Skill
 
-在 `skills/` 目录下创建 `scripts/` 和 `assets/` 子目录，创建 SKILL.md。如需配置文件则在 `assets/` 下创建 `config.yaml.example`。
+1. 先调用 `skill-lint` 的创建预检，定义 Contract / Producer / Verifier / Evidence Binding / Fault Injection / Closure / Composition 七层设计、Hard Fail 和至少一个逃逸反例。
+2. 再由 Skill 创建工具或实现者在 `skills/` 目录下创建 SKILL.md 和必要的 `references/`、`scripts/`、`assets/`。如需配置文件，使用不含真实值的 example。
+3. 实现完成后回到 `skill-lint` 做正式验收；创建者不能用自报 PASS 代替独立 checker。
 
 ### (2) 开发时优先事项
 
@@ -442,15 +444,19 @@ find ./output -mindepth 1 -delete
 - 核心流程测试：执行技能的主要功能
 - 边缘案例测试：处理异常输入、空值、边界条件
 
-### (3) 格式合规检查
+### (3) Skill Lint 分阶段验收
 
-使用 `skill-lint` 验证技能是否符合规范：
+使用 `skill-lint` 验证技能是否符合规范和 Harness 可靠性：
 
 - 目录结构合规
 - Frontmatter 格式正确
 - description 包含负向触发条件
 - SKILL.md 行数在 500 行以内
 - references/ 目录层级扁平
+- 创建或重大改造前已完成七层 Harness 预检
+- 正式验收由门禁实时重跑候选内 checker 与故障用例
+- 动态运行仅限用户确认的自有/可信候选；未知第三方候选在隔离环境外保持 `NOT_VERIFIED`
+- 报告区分 `HARNESS_REVIEW_VERIFIED`、`DOMAIN_VERIFIED` 和 `NOT_VERIFIED`
 
 ## 13. skill-dev-guide.md 更新规范
 
@@ -486,6 +492,7 @@ AI 代理在修改 skill-dev-guide.md 时,必须:
 
 | 版本   | 日期       | 更新内容                                                                                                                                                    |
 | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.5.0 | 2026-07-22 | 创建流程接入 Skill Lint 七层 Harness 预检与正式验收，要求门禁实时重跑 checker 和故障用例，并区分审查证据与领域功能验证 |
 | v2.4.3 | 2026-06-12 | 调整 Frontmatter 元数据分层：普通 Skill 只硬性要求 `name` / `description`，发布字段按项目规则处理 |
 | v2.4.2 | 2026-06-12 | 将格式合规检查入口从 `skill-architect` 更新为 `skill-lint`，适配审查工具重新独立定位 |
 | v2.4.1 | 2026-06-07 | 将格式合规检查入口从 `skill-lint` 更新为 `skill-architect` 审查模式，适配两个 Skill 的整合 |

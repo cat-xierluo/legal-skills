@@ -24,6 +24,9 @@ Hard Fail 一律按严重问题处理。
 - 对无法确认的能力标注“未提及/待补充”。
 - 使用本地配置审查时，不暴露配置值，除非用户明确要求。
 - 正式质量意见报告生成后，按 `archive-standards.md` 判断是否归档。
+- 正式验收必须区分 `HARNESS_REVIEW_VERIFIED`、`DOMAIN_VERIFIED` 和 `NOT_VERIFIED`，不得用静态审查冒充功能通过。
+- Harness 七层采用短板判断；任一必需层触发 Hard Fail 时，总体不得通过。
+- 动态证据必须写明候选信任来源和执行环境；未知第三方候选在非隔离环境中只能标记 `NOT_VERIFIED`。
 - 对承载设计原理的结构性建议（拆解披露、触发边界、上下文聚焦、自由度匹配、可机判验收、渐进式披露 + 可执行流程等），finding 必须含两段教学:**为什么错(原理)**——这个问题违反了哪条 skill 写作 / 技术原理;**最优设计**——根据原理该怎么设计才对(给具体范例)。这使审查报告同时是 skill 写作教学:使用者不仅知道改什么,还学到"为什么这么设计才对"。纯事实问题(文件缺失、引用断裂、命名)可省。各模块 standards 文件含「设计理念」小节可供引用。
 
 ## 模板选择
@@ -31,6 +34,7 @@ Hard Fail 一律按严重问题处理。
 | 场景 | 使用模板 |
 |------|----------|
 | 快速审查反馈 | 使用本文件内的简版报告结构 |
+| 创建前 Harness 预检 | 使用本文件内的简版报告结构，并单列七层设计与反例计划 |
 | 发布前验收 | 使用 `templates/skill-quality-opinion-report.md` |
 | 第三方 Skill 正式评估 | 使用 `templates/skill-quality-opinion-report.md` |
 | 用户要求“质量意见”“最终报告”“整改建议” | 使用 `templates/skill-quality-opinion-report.md` |
@@ -127,6 +131,25 @@ archive/YYYYMMDD_HHMMSS_<target-slug>/quality-opinion-report.md
 | benchmark / 样例 | ✅/⚠️/❌ | ... |
 | 输出验收标准 | ✅/⚠️/❌ | ... |
 | 静态检查与动态评估区分 | ✅/⚠️/❌ | ... |
+
+## Harness 可靠性
+
+| 层 | 状态 | 证据 |
+|----|------|------|
+| Contract | ✅/⚠️/❌ | ... |
+| Producer | ✅/⚠️/❌ | ... |
+| Verifier | ✅/⚠️/❌ | ... |
+| Evidence Binding | ✅/⚠️/❌ | ... |
+| Fault Injection | ✅/⚠️/❌ | ... |
+| Closure | ✅/⚠️/❌/不适用 | ... |
+| Composition | ✅/⚠️/❌/不适用 | ... |
+
+- 审查证据：`HARNESS_REVIEW_VERIFIED` / `NOT_VERIFIED`
+- 业务验证：`DOMAIN_VERIFIED` / `NOT_VERIFIED` / 不适用
+- 候选聚合哈希：`<sha256 或未生成>`
+- 候选信任与执行环境：`<自有/已审查可信/第三方未知；普通工作区/隔离环境>`
+- 故障注入：`<checker、参数、预期非零退出码与本次实际退出码>`
+- 总体成熟度：L0 / L1 / L2 / L3 / L4
 
 ## 建议操作
 

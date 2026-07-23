@@ -2,16 +2,16 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.2.0"
+version: "2.3.0"
 license: MIT
-description: Skill 质量验收与格式审查工具，也可称 Skilllint。本技能应在用户需要审查 Claude Code Skill 的目录结构、Frontmatter、引用一致性、发布版本、业务流深度、可评估性和安全风险时使用。不要用于：创建新技能、代码审查、应用功能测试、通用编程任务。
+description: Skill 创建预检、可靠性验收与格式审查工具，也可称 Skilllint。本技能应在用户创建、重大改造或审查 Claude Code Skill，需要检查 Harness 契约、独立验证、候选绑定证据、故障注入、目录结构、Frontmatter、业务流深度、可评估性和安全风险时使用。不要用于：代替业务领域验证器、代码审查、应用功能测试、通用编程任务。
 ---
 
 # Skill Lint
 
-本技能是后置验收工具，负责审查一个 Claude Code Skill 是否结构合规、文档一致、可发布、可评估、安全风险可控，并判断它是否真实承载了业务流程。
+本技能负责 Skill 创建前设计预检和创建后质量验收：审查一个 Claude Code Skill 是否结构合规、文档一致、可发布、可评估、安全风险可控，判断它是否真实承载业务流程，并检查“完成”结论是否由候选绑定的证据支撑。
 
-不要用本技能从零创建新 Skill。创建或大改 Skill 时，先完成内容设计，再使用本技能做质量验收。
+本技能不代替主要创建者或领域验证器。创建或大改 Skill 时，用它先审查 Harness 设计，再由创建工具实现，完成后回到本技能做候选绑定验收。
 
 ## 工作原则
 
@@ -19,6 +19,8 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 - 先做静态审查，再判断业务流深度。
 - 先定位审查单元，再审查目标 Skill 目录及明确给出的上下文。
 - 不把格式合规等同于任务效果通过。
+- 不采信生产者自报的 PASS；正式验收必须绑定当前候选、当前规则和实际日志。
+- 客观缺陷 fail-closed；语义质量保留人工判断，不伪装成万能自动化。
 - 对无法确认的能力标注“未提及/待补充”。
 
 ## 输入
@@ -26,7 +28,7 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 审查时至少需要：
 
 - 目标路径或仓库地址：可以是单个 Skill 目录、monorepo 根目录、GitHub 仓库或待改造的提示词集合
-- 审查目的：发布前验收、改造评估、他人 Skill 审查、回归检查等
+- 审查目的：创建前设计预检、发布前验收、改造评估、他人 Skill 审查、回归检查等
 
 可选输入：
 
@@ -37,6 +39,14 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 如需配置个人或项目的发布元数据策略，先复制 `config/review-profile.example.yaml` 为 `config/review-profile.local.yaml`，再填入本地值。个人偏好只作为本地上下文使用，不写入公开文件，不复制到审查报告中，除非用户明确要求公开。
 
 ## 审查流程
+
+### 0. 选择模式
+
+- **创建预检**：目标尚未实现或将重大改造。先读取 `references/harness-reliability-standards.md`，产出七层 Harness 设计、Hard Fail 和至少一个逃逸反例；不要直接扩大提示词。
+- **快速审查**：检查第三方 Skill、草稿或局部问题。可以只做静态与语义审查，但结论必须写 `NOT_VERIFIED`，不得称功能已验收。
+- **正式验收**：发布、交付或声称“稳定完成”前，除全部审查模块外，还必须运行候选绑定证据门禁。动态执行只用于用户已确认的自有/可信候选；未知第三方候选默认停在 `NOT_VERIFIED`，除非用户明确授权并使用隔离环境。
+
+创建预检完成后，由用户指定的创建工具或实现者落地；本技能在实现完成后重新进入正式验收。这样既把可靠性理念前移，又不让审查器与生产器混成同一责任。
 
 ### 1. 确认范围
 
@@ -88,6 +98,7 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 - `publishing-standards.md`：LICENSE、CHANGELOG、version、README / marketplace 同步
 - `workflow-output-standards.md`：SKILL.md 正文、依赖、脚本、输出和可编排性
 - `business-flow-rubric.md`：业务流深度、Hard Fail 和可评估性基础
+- `harness-reliability-standards.md`：七层 Harness、独立验证、候选绑定证据、故障注入和闭环
 - `reporting-standards.md`：问题分级和报告结构
 
 `LICENSE.txt`、`version`、README 和 Marketplace 属于发布治理，不属于普通目录结构硬要求。审查私人或第三方普通 Skill 时，只有在用户给出发布目标或项目规则时才按发布模块判定。
@@ -118,7 +129,13 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 
 默认采用中等严格度：Hard Fail 是硬指标，五层评估对象是软指标。
 
-### 6. 可评估性审查
+### 6. Harness 可靠性审查
+
+创建预检、重大改造和正式验收必须读取 `references/harness-reliability-standards.md`，逐层检查 Contract / Producer / Verifier / Evidence Binding / Fault Injection / Closure / Composition。
+
+客观 Hard Fail 一律阻塞。正式验收应先用 `scripts/harness_evidence_gate.py snapshot` 固化候选与规则读集，填写候选内 checker、参数、超时和故障用例的预期失败码。完成静态安全审查并取得用户对自有/可信候选的确认后，再用 `verify --confirm-trusted-candidate` 亲自重跑。JSON 中不得填写或采信自报退出码、PASS 和日志。只有退出码为 0 且出现 `HARNESS_REVIEW_VERIFIED`，才能说“当前候选的 Harness 审查证据已验证”。该标记不替代目标 Skill 自己的 `DOMAIN_VERIFIED`，门禁也不是第三方代码沙箱。
+
+### 7. 可评估性审查
 
 确认 Skill 是否具备后续 eval 的基础：
 
@@ -130,7 +147,7 @@ description: Skill 质量验收与格式审查工具，也可称 Skilllint。本
 
 缺少这些内容不一定阻塞发布，但应作为质量风险记录。
 
-### 7. 生成审查报告
+### 8. 生成审查报告
 
 审查报告应优先列出问题，再给摘要。严重问题必须具体到文件和位置。
 
@@ -152,7 +169,7 @@ Hard Fail 一律按严重问题处理。
 
 ## 报告模板
 
-正式质量意见报告模板见 `templates/skill-quality-opinion-report.md`（含审查单元发现、严重/警告/信息问题、安全评估、业务流深度、可评估性、建议修正顺序、复查清单、最终处理意见、审查依据、归档说明十大节）。
+正式质量意见报告模板见 `templates/skill-quality-opinion-report.md`。报告除原有结构、安全、业务流和可评估性外，必须单列 Harness 七层结论、证据等级和完成标记。
 
 模板的设计理念要点（结构性建议必填「设计理念」字段，纯事实问题可省）：
 
@@ -173,9 +190,11 @@ Hard Fail 一律按严重问题处理。
 - `references/publishing-standards.md`：LICENSE、CHANGELOG、version 与发布索引
 - `references/workflow-output-standards.md`：正文工作流、依赖、脚本、输出和可编排性
 - `references/business-flow-rubric.md`：业务流深度和可评估性判则
+- `references/harness-reliability-standards.md`：Harness 七层可靠性、Hard Fail、创建预检和候选绑定证据门禁
 - `references/reporting-standards.md`：问题分级和审查报告模板
 - `references/archive-standards.md`：正式审查报告的内部归档机制
 - `references/skill-dev-guide.md`：Skill 开发规范参考
 - `references/skill-orchestration-guide.md`：复杂编排规范参考
 - `config/review-profile.example.yaml`：个人/项目审查配置模板
+- `scripts/harness_evidence_gate.py`：生成和复算候选绑定的 Harness 审查证据
 - `templates/skill-quality-opinion-report.md`：最终 Skill 质量意见报告模板

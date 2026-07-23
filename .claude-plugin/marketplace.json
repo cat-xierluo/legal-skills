@@ -348,14 +348,14 @@
     },
     {
       "name": "skill-lint",
-      "description": "Skill 质量验收与格式审查工具，支持目录结构、Frontmatter、引用一致性、发布版本、业务流深度、可评估性和安全风险审查",
-      "version": "2.0.8",
+      "description": "Skill 创建预检与可靠性验收工具，支持七层 Harness、候选绑定证据、故障注入、目录结构、业务流、可评估性和安全风险审查",
+      "version": "2.3.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
       "source": "skills/skill-lint",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "lint"]
+      "tags": ["工具", "Skill开发", "skill", "lint", "harness", "verification"]
     },
     {
       "name": "repo-research",
