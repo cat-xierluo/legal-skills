@@ -50,7 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
-| 2026-07-22 | 更新     | [skill-lint](skills/skill-lint/) | v2.3.0（待发布） | 新增创建预检与七层 Harness 可靠性审查，以候选/策略哈希绑定正式验收，并对用户确认的可信候选实时重跑 checker 与故障用例，阻断陈旧 PASS、范围漏项和执行器自报完成 |
+| 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0（待发布） | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
 | 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10（待发布） | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
 | 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
@@ -569,11 +569,11 @@
 <tr>
 <td><a href="skills/skill-lint/"><strong>skill-lint</strong></a></td>
 <td>工具·Skill开发</td>
-<td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持七层 Harness、候选绑定证据、故障注入、目录结构、Frontmatter、业务流、可评估性和安全风险审查</td>
+<td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持旧版指令失稳识别、硬要求来源发现、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、七层 Harness、候选绑定证据、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.3.0（待发布）</td>
+<td style="text-align:center">v2.4.0（待发布）</td>
 <td style="text-align:center">待发布</td>
-<td>正式验收需同时区分 Harness 审查证据与领域功能验证</td>
+<td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
 <tr>
 <td><a href="skills/git-batch-commit/"><strong>git-batch-commit</strong></a></td>

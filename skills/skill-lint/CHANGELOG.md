@@ -2,6 +2,28 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.4.0] - 2026-07-23
+
+### 新增：旧版指令失稳与产出漂移门禁
+
+- 新增 `references/instruction-stability-standards.md`，把“规则写了但仍漏项”拆成约束追踪、验证模态、真实产物阶段、历史回归和多轮 observable 五类可审计关系。
+- 新增 `scripts/instruction_stability_gate.py assess`：未知第三方或旧版 Skill 无需执行候选代码，即可识别多维审阅无重复证据、视觉/几何约束无 render/geometry/visual 验证、完成声明无稳定性回执以及“有脚本但无覆盖证明”等结构性风险。
+- 新增正式 `verify`：先复算当前候选的 `HARNESS_REVIEW_VERIFIED`，再对至少三轮真实产物重跑 active checker；checker 必须绑定 artifact SHA-256、逐项报告 constraint measurement，并比较合同声明的 exact / set_equal / numeric_tolerance observables。该步骤只生成 `INSTRUCTION_STABILITY_EVIDENCE_READY` 草稿。
+- 新增合同、evaluator-signed 候选外硬约束基线和 held-out cases 示例：门禁自动发现 `SKILL.md` 与 `references/**/*.md` 的硬要求信号文件，签名基线必须完整枚举 sources/exclusions，并让显式来源锚点、合同 hard constraints、基线 source refs、隐藏正反例和当前候选哈希完全一致。
+- 三轮证据新增 evaluation ID、相同 input/config SHA-256、唯一 execution nonce、独立 run 目录和 evaluator-signed producer log；日志同时绑定当前完整候选、producer ID 与实现清单哈希，阻断跨候选/跨 producer 重放、复用路径、篡改 runner attestation 或把不同输入混作稳定性样本。
+- 正负例和真实 run artifact 都先复制到同类随机临时目录及随机文件名再交给 checker；负向 case 限定为单 constraint / 单 checker，并要求结构化 `failed_constraint_ids`、fixture SHA-256 和 measurement 精确命中目标，减少按公开/隐藏/run 类别路径分支和任意非零退出码冒充覆盖。
+- evaluator 证据从进程内共享 HMAC 改为离线 Ed25519 签名：候选动态验证只持公钥，私钥不进入 producer/checker 进程树。新增 `verify-receipt`，只有离线签名草稿重新绑定当前候选、policy、外部证据、producer logs 与真实产物后才输出 `INSTRUCTION_STABILITY_VERIFIED`。
+- measurement 合同新增值类型、condition 和 expected 阈值；正例/真实 run 必须满足，负例必须实际违反，不再接受任意非空 measurement 字典。
+- 新增 38 个历史失效、漂移与逃逸回归测试，覆盖旧版 writing review、旧版 SVG、整份 requirements 文件漏列、合同漏项、签名基线/held-out/producer log 篡改与重放、样本类别路径泄漏、签名工具不可覆盖、最终回执验签、Harness evidence 陈旧、policy override、measurement 阈值、几何模态和阶段错配、负向误命中、三轮伪复用、集合/数值漂移、产物篡改、路径逃逸、原子回执和可信候选确认。
+- 新增 `.github/workflows/skill-lint-harness.yml`，在 PR 和 main 变更时自动运行原有 14 项证据门禁与新增 38 项稳定性回归（共 52 项），并检查 Python 编译、JSON 与发布版本同步。
+
+### 改进
+
+- 正式完成语义仍分 `HARNESS_REVIEW_VERIFIED`、`INSTRUCTION_STABILITY_VERIFIED`、`DOMAIN_VERIFIED` 三层；中间态 `INSTRUCTION_STABILITY_EVIDENCE_READY` 明确不得冒充完成。“稳定完成”至少需要前两层，业务正确性声明再要求第三层。
+- 候选绑定策略清单纳入指令稳定性标准；策略更新后旧 Harness review snapshot 自动失效。
+- 更新审查索引、业务流、工作流、报告规范、质量意见模板和 review profile，把 verification modality、artifact stage、逐约束覆盖和重复运行证据纳入 Hard Fail。
+- 固化真实历史失效类别：文字自报关闭、空 active scope、陈旧状态、读集不完整、SVG 几何目检漂移、生产器与文档冲突、负向 canary 和组合契约冲突。
+
 ## [2.3.0] - 2026-07-22
 
 ### 新增：从格式审查升级为可验证 Harness 预检

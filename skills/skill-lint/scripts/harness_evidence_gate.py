@@ -29,6 +29,7 @@ OPTIONAL_LAYERS = {"closure", "composition"}
 REQUIRED_POLICY_FILES = (
     "SKILL.md",
     "references/harness-reliability-standards.md",
+    "references/instruction-stability-standards.md",
     "references/workflow-output-standards.md",
     "references/business-flow-rubric.md",
     "references/reporting-standards.md",

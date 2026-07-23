@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "candidate_sha256": "<current-candidate-aggregate-sha256>",
+  "requirement_sources": [
+    "SKILL.md"
+  ],
+  "requirement_exclusions": [],
+  "hard_constraints": [
+    {
+      "id": "REPORT-COVERAGE",
+      "source_refs": [
+        "SKILL.md#REPORT-COVERAGE"
+      ]
+    }
+  ],
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "<trusted-public-key-sha256-prefix>",
+    "value": "<base64-ed25519-signature>"
+  }
+}

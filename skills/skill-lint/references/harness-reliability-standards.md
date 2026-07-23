@@ -2,6 +2,8 @@
 
 本文件是 `skill-lint` 对“Skill 是否能稳定完成任务”的单点真相。它适用于创建前设计预检、重大改造和发布前验收。格式合规、提示词写得详细或 Agent 自报“已完成”，都不能单独证明功能可靠。
 
+本文件定义通用七层模型和候选绑定证据；旧版 Skill 识别、逐约束追踪、验证模态/产物阶段匹配和多轮漂移门禁见 `instruction-stability-standards.md`。两者互补，不复制规则。
+
 ## 一、边界：Skill 不是全部 Harness
 
 稳健 Harness 至少由四类部件组成：
@@ -61,6 +63,9 @@
 - 管理任务或 findings 的 Skill 仅凭文字自报关闭，没有状态转换条件和证据引用。
 - 跨 Skill 编排依靠隐含上下文，没有交接契约、版本边界或责任归属。
 - 已知生产器、模板或验证器曾发生缺陷，修改后没有把该缺陷固化为回归用例。
+- 硬约束没有稳定 ID，无法追踪到 checker、产物阶段和 case，或只因“存在某个 checker”就声称全部要求已覆盖。
+- 几何、视觉、交互或状态约束使用不匹配的验证模态，或 checker 检查的阶段早于约束要求的最终/渲染阶段。
+- 声称多轮稳定、不会漏项或产出不漂移，却没有 evaluator-signed 外部硬约束基线/held-out、当前 Harness evidence，或没有至少三轮同输入/配置、唯一 nonce/签名 producer log 的真实产物逐约束 active checker 证据。
 
 ## 五、警告与人工判断
 
@@ -97,17 +102,20 @@ python3 scripts/harness_evidence_gate.py verify \
 
 只有退出码为 0 且输出 `HARNESS_REVIEW_VERIFIED`，才能说“当前候选的 Harness 审查证据已验证”。该标记证明：候选与规则读集未漂移、七层结论完整、检查器和反例在本次运行中得到预期退出码；它**不等于**业务功能本身已被通用脚本证明正确。
 
+若交付进一步声称“多轮指令遵循稳定”“不会漏掉指定维度”或“关键产出不漂移”，还必须按 `instruction-stability-standards.md` 取得最终签名并通过 `verify-receipt` 复验的 `INSTRUCTION_STABILITY_VERIFIED`。动态 `verify` 的 `EVIDENCE_READY` 和一次 checker 通过都不能推断重复执行的覆盖稳定性。
+
 证据文件必须放在候选 Skill 目录之外，避免自引用清单。动态运行前先完成静态安全审查，向用户披露将执行的 checker；门禁不会运行 shell 字符串，也不会自动安装依赖。**最小环境不是沙箱**：checker 仍可能访问本机文件系统和网络。未知第三方候选不得在普通工作区动态执行；未进入用户明确授权的隔离环境时，只能给 `NOT_VERIFIED`。候选文件或策略文件变化后旧 snapshot 必须失效；复查时必须重新执行 `verify`，不能复用上次的输出标记。
 
 ## 七、完成结论
 
-报告中的完成结论只能使用以下三类措辞：
+报告中的完成结论只能使用以下四类措辞：
 
 - `HARNESS_REVIEW_VERIFIED`：候选绑定的审查证据完整且当前有效。
+- `INSTRUCTION_STABILITY_VERIFIED`：evaluator Ed25519-signed 外部硬约束基线/held-out、候选与 producer 运行记录和最终回执已由受信公钥复验，至少三轮真实产物逐约束通过，measurement 阈值满足且关键 observable 未漂移。
 - `DOMAIN_VERIFIED`：目标 Skill 自己定义的业务验证器通过；必须同时给出验证器和产物证据。
 - `NOT_VERIFIED`：仅完成静态检查、语义评议或证据不完整。
 
-若一个交付需要同时满足审查完整性和业务正确性，应要求前两项同时成立。任何未运行的检查不得写成“通过”。
+若一个交付声称稳定和业务正确，应要求前三项同时成立。任何未运行的检查不得写成“通过”。
 
 ## 八、设计理念
 

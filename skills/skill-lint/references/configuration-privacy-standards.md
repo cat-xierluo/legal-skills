@@ -9,7 +9,12 @@
 | 示例配置使用 `*.example.*` | ✅/⚠️ | 如 `review-profile.example.yaml` |
 | 本地配置使用 `*.local.*` | ✅/⚠️ | 如 `review-profile.local.yaml` |
 | 真实配置被 `.gitignore` 忽略 | ✅/❌ | `config/*.yaml` 可忽略，`*.example.yaml` 例外 |
+| 机器验证合同可版本化 | ✅/⚠️ | 不含凭证、只声明约束/验证关系的合同可提交，如 `instruction-stability-contract.json` |
 | 示例字段与实际规则匹配 | ✅/⚠️ | 避免提供无效模板 |
+
+机器验证合同不是个人/运行时“真实配置”。它必须进入候选清单并随版本审查，才能绑定当前约束；仍不得含 endpoint、凭证、本机绝对路径或真实业务材料。
+
+evaluator Ed25519 私钥属于独立 reviewer/CI 的离线签名凭证，不是合同或示例配置。私钥不得写入候选、baseline、held-out manifest、producer log、报告、环境变量或候选可读工作区；只允许在不执行候选代码的签名步骤通过 `--private-key` 指向权限受限文件。动态 `verify` 与 `verify-receipt` 只读取候选外公钥，不接触私钥，也不向候选 checker 传递签名凭证。
 
 ## 审查配置模板
 

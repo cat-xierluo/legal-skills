@@ -3,7 +3,6 @@
 ## 待办
 
 - [ ] severity 边界(❌ Hard Fail vs ⚠️ 警告)更明确:agent-eval-lab r7 自迭代时,"业务流浅"被判 Hard Fail,判据示例可更稳。
-- [ ] 审查稳定性(LLM 随机):关键 finding 多次确认,减少随机性。
 - [ ] 报告加"给非技术用户的结论摘要"段(像 agent-eval-lab 的"给你的结论"),不只技术指标表。
 - [ ] 静态预筛层:继续把 frontmatter 和目录规范脚本化；候选/规则绑定及动态 checker 重跑已在 v2.3.0 落地。
 - [ ] Hard Fail 完备性:知识堆砌(agent-eval-lab r8 验证 ✓);补"纯 prompt 堆砌 / 纯 few-shot 无流程 / 纯外链无内文"等反 skill 本质形态。
@@ -13,6 +12,12 @@
 - [ ] 为多 Skill 组合契约定义可选的机器可读 schema。
 
 ## 已完成
+
+- [x] Task-014：识别旧版 Skill 的指令遵循不稳定和产出漂移
+  - 来源：用户要求 `skill-lint` 能识别旧版 `writing-reviewer`、`svg-book-illustrator` 及类似 Skill 中“任务反复强调但实际漏做、产出随轮次漂移、修改未真实落地”的问题。
+  - 完成日期：2026-07-23
+  - 结果：新增显式约束锚点 + evaluator-signed 候选外基线 + 约束追踪合同的完整性差异审计；门禁自动发现 `SKILL.md` 与 references 中含硬要求信号的文件，禁止静默漏掉整份规范。正式验证固定用当前受信 `skill-lint` 复算 Harness evidence，再核验至少三轮同输入/配置、唯一 nonce、独立路径和签名 producer log 的真实产物；日志绑定 evaluation、当前候选及 producer 实现清单，公开/隐藏/run artifacts 使用同类随机路径。证据改用候选执行环境之外的 Ed25519 私钥签名，动态门禁只生成 `EVIDENCE_READY` 草稿，最终须由公钥 `verify-receipt` 复验后才输出 `INSTRUCTION_STABILITY_VERIFIED`。新增 38 个专项回归，与原有 14 项证据门禁共 52 项接入 PR/main CI；缺合同、签名基线/held-out、Harness evidence、合格多轮证据或最终签名回执时保持 `NOT_VERIFIED`。
+  - 历史校准：以 writing-reviewer v0.13/v0.14 的文字关闭、空 active scope、陈旧状态和读集缺口，以及 svg-book-illustrator v1.8.4/v1.8.8 的几何目检漂移、生产器/文档冲突为 failure family，不复制真实书稿或敏感材料。
 
 - [x] Task-013：建立可验证 Harness 创建预检与正式验收门禁
   - 来源：用户希望把书籍项目中“规则反复强调但仍遗漏、修改不到位”的治理经验融入 `skill-lint`，用于创建或审查其他 Skill。

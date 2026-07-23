@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "candidate_sha256": "<current-candidate-aggregate-sha256>",
+  "cases": [
+    {
+      "id": "hidden-report-complete",
+      "kind": "positive",
+      "constraint_id": "REPORT-COVERAGE",
+      "checker_id": "report-coverage",
+      "artifacts": [
+        {
+          "artifact_id": "final-report",
+          "path": "hidden-report-complete.json",
+          "sha256": "<fixture-sha256>"
+        }
+      ],
+      "expected_exit_code": 0
+    },
+    {
+      "id": "hidden-report-missing-section",
+      "kind": "mutation",
+      "constraint_id": "REPORT-COVERAGE",
+      "checker_id": "report-coverage",
+      "artifacts": [
+        {
+          "artifact_id": "final-report",
+          "path": "hidden-report-missing-section.json",
+          "sha256": "<fixture-sha256>"
+        }
+      ],
+      "expected_exit_code": 3
+    }
+  ],
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "<trusted-public-key-sha256-prefix>",
+    "value": "<base64-ed25519-signature>"
+  }
+}

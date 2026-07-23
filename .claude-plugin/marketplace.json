@@ -348,14 +348,14 @@
     },
     {
       "name": "skill-lint",
-      "description": "Skill 创建预检与可靠性验收工具，支持七层 Harness、候选绑定证据、故障注入、目录结构、业务流、可评估性和安全风险审查",
-      "version": "2.3.0",
+      "description": "Skill 创建预检与可靠性验收工具，支持旧版指令失稳识别、硬要求来源发现、Ed25519-signed 外部基线与 held-out、逐约束追踪、验证模态与产物阶段匹配、候选/producer 绑定运行证据、最终回执验签、多轮漂移门禁、七层 Harness、业务流和安全风险审查",
+      "version": "2.4.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
       "source": "skills/skill-lint",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "lint", "harness", "verification"]
+      "tags": ["工具", "Skill开发", "skill", "lint", "harness", "verification", "stability", "drift"]
     },
     {
       "name": "repo-research",
