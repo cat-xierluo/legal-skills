@@ -169,6 +169,9 @@ skills/myagents-memory-molt
 # myagents-memory-update (symlink to ~/.myagents/skills/myagents-memory-update)
 skills/myagents-memory-update
 
+# myagents-docs (symlink to ~/.myagents/skills/myagents-docs)
+skills/myagents-docs
+
 # Packed skills（打包输出目录）
 pack-skills/
 
