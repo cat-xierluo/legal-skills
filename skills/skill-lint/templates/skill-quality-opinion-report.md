@@ -32,6 +32,7 @@
 | 业务流深度 | ✅/⚠️/❌ | `<Trigger / Intake / Reasoning / Output / Safety>` |
 | 可评估性 | ✅/⚠️/❌ | `<Hard Fail、样例、验收标准、动态评估基础>` |
 | Harness 可靠性 | ✅/⚠️/❌ | `<独立验证、候选绑定、故障注入、闭环和组合边界>` |
+| 指令稳定性 | ✅/⚠️/❌ | `<evaluator-signed 外部硬约束基线/held-out、当前 Harness evidence、逐约束追踪、验证模态、产物阶段、签名运行记录和漂移结果>` |
 
 ## 二、严重问题
 
@@ -109,11 +110,15 @@
 | Composition | ✅/⚠️/❌/不适用 | `<跨 Skill 契约、版本和薄适配器>` |
 
 - **审查证据状态**：`HARNESS_REVIEW_VERIFIED` / `NOT_VERIFIED`
+- **指令稳定性状态**：`INSTRUCTION_STABILITY_VERIFIED` / `INSTRUCTION_STABILITY_EVIDENCE_READY（不得作完成结论）` / `NOT_VERIFIED`
 - **业务验证状态**：`DOMAIN_VERIFIED` / `NOT_VERIFIED` / 不适用
 - **候选聚合哈希**：`<sha256 或未生成>`
 - **策略聚合哈希**：`<sha256 或未生成>`
+- **稳定性合同 / evaluator Ed25519-signed 外部硬约束基线与 held-out / Harness evidence 哈希**：`<sha256 或未生成>`
+- **运行证据/签名回执/受信公钥 ID**：`<sha256、key id 或未生成>`
 - **候选信任与执行环境**：`<自有/已审查可信/第三方未知；普通工作区/隔离环境>`
 - **故障注入结果**：`<反例名称、checker/参数、预期非零退出码、本次实际退出码与输出哈希>`
+- **多轮覆盖结果**：`<run 数、相同 input/config 哈希、唯一 nonce/签名 producer log、hidden cases、hard constraint ids、checker modality、artifact stage、measurement 类型/阈值与 observable 比较>`
 - **总体成熟度**：L0 / L1 / L2 / L3 / L4
 - **剩余人工判断**：`<不能由机器门禁替代的语义判断>`
 
@@ -138,7 +143,9 @@
 - [ ] 生产器不为自己签发最终 PASS，独立验证器检查真实产物
 - [ ] 正式验收证据绑定当前候选、当前策略和非空日志
 - [ ] 至少一个故障注入或逃逸反例已证明会被阻断
-- [ ] 完成结论明确区分 Harness 审查与业务功能验证
+- [ ] 每条硬约束已映射到 active checker、正确验证模态、产物阶段和正反例
+- [ ] 声称稳定时，evaluator Ed25519-signed 外部硬约束基线/held-out 与当前 Harness evidence 有效，至少三轮同输入/配置、绑定候选与 producer 的唯一签名运行记录逐约束通过，最终签名回执已由 `verify-receipt` 复验
+- [ ] 完成结论明确区分 Harness 审查、指令稳定性与业务功能验证
 
 ## 九、最终处理意见
 
@@ -157,6 +164,7 @@
 - `references/workflow-output-standards.md`
 - `references/business-flow-rubric.md`
 - `references/harness-reliability-standards.md`
+- `references/instruction-stability-standards.md`
 - `references/reporting-standards.md`
 - `references/archive-standards.md`
 

@@ -25,6 +25,7 @@
 | 工作流与输出 | `workflow-output-standards.md` | 检查 SKILL.md 正文、依赖、脚本、输出 | 是否可执行、可维护 |
 | 业务流深度 | `business-flow-rubric.md` | 判断 Skill 是否承载真实业务流程 | Trigger / Intake / Reasoning / Output / Safety |
 | Harness 可靠性 | `harness-reliability-standards.md` | 创建预检、重大改造、正式验收或稳定性声明 | 契约、独立验证、证据绑定、故障注入、闭环和组合边界 |
+| 指令稳定性 | `instruction-stability-standards.md` | 旧版 Skill、反复漏项、多维 review、视觉生产或产出漂移 | 约束追踪、验证模态、产物阶段、多轮覆盖和历史回归 |
 | 报告与分级 | `reporting-standards.md` | 生成审查报告 | 问题分级、修正建议和报告结构是否一致 |
 | 归档机制 | `archive-standards.md` | 归档正式质量意见报告 | 归档路径、元数据、证据索引和隐私边界是否清楚 |
 
@@ -39,8 +40,9 @@
 7. 读取 `workflow-output-standards.md`，判断 SKILL.md 正文是否足以指导执行。
 8. 读取 `business-flow-rubric.md`，判断业务流深度和可评估性。
 9. 创建预检、重大改造或正式验收时，读取 `harness-reliability-standards.md`；正式验收生成并复算候选绑定证据。
-10. 读取 `reporting-standards.md`，输出分级清晰的问题报告；需要最终交付件时使用 `templates/skill-quality-opinion-report.md`。
-11. 对正式质量意见报告，读取 `archive-standards.md` 判断是否需要写入 `archive/`。
+10. 旧版 Skill、反复漏项、多维 review、视觉生产或稳定性声明时，读取 `instruction-stability-standards.md`；先静态识别，正式声明前对齐 evaluator-signed 候选外硬约束基线/held-out 和当前 Harness evidence，并验证至少三轮签名执行记录的真实产物。
+11. 读取 `reporting-standards.md`，输出分级清晰的问题报告；需要最终交付件时使用 `templates/skill-quality-opinion-report.md`。
+12. 对正式质量意见报告，读取 `archive-standards.md` 判断是否需要写入 `archive/`。
 
 ## Hard Fail 汇总
 
@@ -64,6 +66,9 @@
 - 候选、规则或证据变化后旧 PASS 仍然有效，或空范围、未知检查器、执行错误会 fail-open
 - 声称存在稳健门禁，却没有正常样例之外的故障注入、历史回归或逃逸反例
 - 管理任务或跨 Skill 编排时，没有证据化关闭条件或版本化交接边界
+- 硬约束没有追踪到 active checker、合适验证模态、正确产物阶段和正反例
+- 用 text/source 检查替代 geometry/render/visual/final/state 等约束实际要求的验证方式
+- 声称多轮不漏项或产出稳定，却没有 evaluator-signed 候选外硬约束基线/held-out、当前 Harness evidence，或至少三轮同输入/配置且带唯一签名执行记录的真实产物逐约束覆盖证据
 
 ## License 定位
 

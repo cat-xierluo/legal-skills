@@ -1,5 +1,21 @@
 # Decisions
 
+## D-2026-07-23-01 指令稳定性采用“逐约束合同 + 多轮真实产物重检”
+
+- 背景：v2.3.0 已能证明候选/策略清单未漂移并实时重跑已选择的 checker，但仍不能证明“所有要求都被选择”“验证方式适合目标属性”“检查的是最终产物”或“下一轮不会漏掉另一项”。旧版 writing-reviewer 和 svg-book-illustrator 均出现过文字规则存在、局部检查通过、真实修订或渲染结果仍漏项的情况。
+- 决策：
+  1. 新增机器可读约束追踪合同；门禁自动发现 `SKILL.md` 与 references 中含硬要求信号的文件，要求 evaluator-signed 候选外基线完整枚举 sources/exclusions；显式 constraint 锚点、全部纳入的规范行、合同 hard constraints 与基线必须双向一致并绑定当前完整候选，防止合同自身或整份规范文件被漏列。
+  2. 没有合同时，静态 `assess` 只给 `NOT_VERIFIED` 和结构性 finding，不执行未知第三方候选。
+  3. 声称稳定前必须先复算当前候选的 Harness review evidence，再在同一输入/配置基线上保留至少三轮真实产物；每轮绑定 evaluation ID、唯一 nonce、独立路径和 evaluator-signed producer log，日志还绑定当前候选及 producer 实现清单。`verify` 把 run/public/held-out artifacts 复制到同类随机目录和随机文件名后逐轮运行 checker，checker 必须绑定 artifact SHA-256 并精确报告全部 constraint id、合同化 measurement 和 observable。
+  4. 漂移只比较合同声明的关键 observable，不比较整份自然语言输出哈希；支持 exact、set equality 和有界 numeric tolerance。
+  5. 完成语义分三层：Harness 证据完整、指令覆盖稳定、领域业务正确，三者不能互相替代；动态 `verify` 只产生 `EVIDENCE_READY` 草稿，只有离线签名并由 `verify-receipt` 重新绑定全部证据后才能输出稳定性 VERIFIED。
+  6. 原有证据门禁和新增稳定性门禁进入仓库 CI；以后修改策略、checker、合同或发布版本时自动复跑，避免本地一次性通过后静默退化。
+- 独立性边界：evaluator Ed25519 私钥只存在于不执行候选代码的独立 reviewer/CI 离线签名边界；动态验证、producer 和 checker 只接触候选外公钥。签名用于基线、held-out manifest、producer log 和最终 receipt，证明对应私钥持有者签发且证据未被篡改，不证明签发者陈述必然真实；私钥若与候选共享可读主机/工作区则不构成独立性，高风险场景继续要求受控 runner 和外部审计日志。
+- 验证模态：geometry/appearance/interaction/state 等约束只接受相应强度的 checker；text/source 检查不能替代 render/visual/final/state。内容审阅中的主观质量保留人工判断，但“是否覆盖全部审阅维度、是否落到真实 source/final/state”必须尽量转为 schema/coverage/state 不变量。
+- 安全边界：静态 `assess` 不执行候选；动态 `verify` 仅运行用户确认的自有/可信候选，使用 `shell=False`、最小环境和临时 HOME，但明确不冒充沙箱。回执位于候选和运行产物目录之外，以排他方式原子新建，拒绝已有文件和目标/父目录符号链接。
+- 历史校准：writing-reviewer v0.13/v0.14 暴露文字关闭、空 active scope、陈旧 status 和 checker 读集不完整；svg-book-illustrator v1.8.4/v1.8.8 暴露几何目检不可重复、生产器与文档契约冲突。将其抽象为去具体化 failure family 和测试，不把书稿正文写入 Skill。
+- 替代方案：未采用“再加一轮 LLM checklist”，因为它仍会出现同类注意力漂移；未强制输出完全相同，因为开放性写作的正常措辞差异不应被误判；未让 `skill-lint` 自动生成领域 checker，因为审查器不能代替领域生产和验证责任。
+
 ## D-2026-07-22-01 可靠性审查采用“语义评议 + 实时重跑门禁”双层结构
 
 - 背景：仅靠 SKILL.md 中反复强调任务，仍会出现表面执行、遗漏修改、自报完成和旧证据复用。格式审查无法判断这些结果是否真实落地。
