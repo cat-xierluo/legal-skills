@@ -368,6 +368,27 @@ convert out.png -colorspace Gray gray.png
 - 线宽 `2px` 在 16开下物理 0.32mm，印刷可见
 - 相邻模块同色组取不同色，避免色块连成一片
 
+### 容器包含语义（v1.8.10+，与 writing-reviewer v0.16+ 对齐）
+
+shape 完全包含另一 shape 既可能是“面板承载信息卡”的正常构图，也可能是坐标写错造成的遮挡。不要靠几何猜意图：**默认先把包含/重叠当作布局缺陷修坐标**；只有外层 shape 确实承担容器语义时，才使用唯一的 candidate-bound 窄声明。
+
+```svg
+<!-- 合法：外层卡片真实承载内层信息卡，意图与身份均可审计 -->
+<rect id="outer-card" x="40" y="40" width="220" height="160" rx="6"
+  fill="#EDF2F7" stroke="#2D3436" stroke-width="2"
+  data-overlap-role="container"
+  data-overlap-note="外层卡片承载内层信息卡"/>
+<rect x="60" y="70" width="180" height="90" rx="6"
+  fill="#D6E4F0" stroke="#2D3436" stroke-width="2"/>
+```
+
+- `data-overlap-role` **只允许**精确值 `container`；禁止 `decoration`、`background` 或任意自造 role，禁止用 `data-allow-overlap` 给候选 SVG 自发放行。
+- 声明只能放在 writing-reviewer 可测量的外层 area shape：`rect` / `circle` / `ellipse` / `polygon` / `path`；不要标在 `g`、`text`、连线或根 `svg` 上。
+- 外层必须同时有：①单张 SVG 内唯一、无 namespace 的稳定安全 `id`（1–128 位字母、数字、点、下划线或连字符，首位为字母或数字）；②无 namespace、至少六字且含“承载/包含/容纳”等关系词的具体 `data-overlap-note`，说明“外层承载什么”，不能只写“这里允许重叠/覆盖”；③可静态证明非透明的 hex/rgb/hsl `fill`。`none/transparent`、零 alpha、命名色、`inherit/currentColor/var()/url()` 等继承或无法在 producer 侧证明的值均不合格，`opacity/fill-opacity` 必须大于 0。
+- `data-overlap-note` 不能脱离 `container` role 单独存在；`x:id`、`x:data-overlap-note` 等 namespaced 假属性不会被浏览器 `getAttribute("id")` 识别，producer contract 直接拒绝。
+- 这组属性只表达候选源中的设计意图，**不构成几何通过证据**。producer contract 负责静态拒绝缺 id / 缺 note / 非法 role；writing-reviewer v0.16+ render gate 用真实浏览器几何判断是否实际包含，并把命中的 outer / inner / reason 写入 evidence。
+- 装饰底纹若压住信息 shape，仍应改尺寸、层级或坐标；不得把装饰标成容器来消除 finding。容器声明长期未命中也不等于合规，应删除无效声明。
+
 ### 箭头
 
 **单个 marker 通吃所有方向**（水平/垂直/斜向都用同一个 `id="arrow"`，靠 `orient="auto"` 自动旋转，**不要**为每个方向另造 marker 如 `arrV`/`arrF`/`arrG`）：

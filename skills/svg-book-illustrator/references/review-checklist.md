@@ -13,6 +13,10 @@
 - [ ] 当前项目 canonical scope 内 ID 全局唯一；推荐 `fig-chNN-sN-NN`，不能以文件遍历顺序或“第几张图”代替
 - [ ] `fig-template-*` 已在落稿前替换，生成器调用已显式传入 `--figure-id fig-chNN-sN-NN`
 - [ ] review finding、渲染截图/清单与修订复检均以同一 ID 绑定；缺失或重复时 fail-closed，不进入后续四道审查
+- [ ] 默认不存在用属性“解释掉”的 shape 重叠；意外重叠已回改坐标，而不是添加 `data-allow-overlap`、`data-overlap-role="decoration"` 或任意自造 role
+- [ ] 确有“外层 shape 承载内层 shape”语义时，只在外层 area shape 写 `data-overlap-role="container"`，并同时写单图唯一原生 `id`、至少六字且明示承载关系的 `data-overlap-note` 与非透明 hex/rgb/hsl `fill`
+- [ ] producer contract 已静态通过容器声明；这只证明元数据合规，不证明几何合法
+- [ ] writing-reviewer v0.16+ render gate 已以真实浏览器几何复核，并在 evidence 中记录实际命中的 outer / inner / reason；未命中的声明不得拿来替代修图
 
 本门禁只约束新产物；是否为历史书稿补 ID 由项目另行决定，不在本 Skill 升级中强制迁移。
 
@@ -98,7 +102,7 @@ node scripts/svg2png.js in.svg out.png 300
 **多模态模型逐张查**（看渲染 PNG，**不看 SVG 源码**）：
 
 - [ ] **文字不溢出**：所有文字落在所属容器 / 框内，不被边缘截断
-- [ ] **无重叠**：框 / 节点 / 文字互不遮挡，间距 ≥ 24px
+- [ ] **无意外重叠**：框 / 节点 / 文字互不遮挡，间距 ≥ 24px；确有容器包含语义时只走 `container + 单图唯一原生 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill` 窄声明，并核对 writing-reviewer render evidence，不把 decoration / 任意 role 当豁免
 - [ ] **箭头正确**：箭头起止落在节点边缘，方向正确，marker 不偏移
 - [ ] **箭头硬约束（v1.6.0 新增）**：SVG 源码 `grep '<marker'` 只允许**单个** `<marker id="arrow" ... markerUnits="userSpaceOnUse" orient="auto">` 定义；**禁止**多方向自造 marker（`arrV`/`arrF`/`arrG`/`arrT`/`arrR`/`arrL` 等），**禁止**为垂直 / 斜向箭头硬编码不同 `refX`/`refY`/`orient`——一个 marker 配 `orient="auto"` 通吃所有方向。所有 `marker-end` 必须引用规范 `id="arrow"`，禁止 inline `marker-end="url(#arr...)"` 自创 id。详见 style-guide §六 / DEC-011。
 - [ ] **连线清晰**：连线不穿越文字，交叉处可辨
@@ -122,7 +126,7 @@ node scripts/svg2png.js in.svg out.png 300
 ```
 这是一张书籍配图（720×H SVG 的 PNG 渲染，宽 720 固定 / 高 H 按内容裁剪，v1.7.1 透明背景 + 内部模块多色/灰度梯度）。请逐项检查，只报问题：
 1. 是否有文字溢出容器 / 被截断？
-2. 是否有框、节点、文字重叠（间距应 ≥24px）？
+2. 是否有框、节点、文字意外重叠（间距应 ≥24px）？若是容器包含，是否确有承载语义且已由 writing-reviewer render evidence 记录 outer / inner / reason？
 3. 箭头是否落位正确、方向无误？
 4. 字号是否可读（节点≥16px）？
 5. 黑白打印能否分辨层级（颜色不是唯一区分手段）？
@@ -145,4 +149,4 @@ node scripts/svg2png.js in.svg out.png 300
 4. **视觉目检**（多模态逐图）→ 不美则改坐标
 5. 四道全过 → **验收通过**；任一未过 → 回改 + 复检
 
-> 与写作审稿（writing-reviewer）的边界：本清单审**配图本身**（密度 / 一致性 / 视觉）；writing-reviewer 审**正文文字**（口吻 / 去 AI 化 / 术语）。图注若需审贴切性 / 口吻，可补跑 writing-reviewer。
+> 与 writing-reviewer 的边界：本 Skill 负责生成期规则、producer 静态契约与人工/多模态配图审查；writing-reviewer v0.16+ 还负责 canonical Markdown 中 SVG inventory、静态规则与真实浏览器几何/render evidence。`container` 声明由本 Skill 约束写法，是否真的形成合法 shape 包含由 writing-reviewer render gate 最终判定；正文口吻、术语与图注贴切性仍由 writing-reviewer 审稿维度处理。
