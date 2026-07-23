@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 阅读 Skill / 手工规划 | 无 | 只读文档不需要安装工具 |
 | 生成 worker command | `bash` | `render-runtime-profile.sh` 只生成命令，不检查 backend CLI 是否存在 |
-| 创建本地 worker | `git`、`tmux`、`jq`、`bash`、常见 Unix 工具 | `spawn-worker.sh` 需要创建 worktree、写 metadata、启动 tmux |
+| 创建本地 worker | `git`、`tmux`、`jq`、`bash`、`python3`、常见 Unix 工具 | `spawn-worker.sh` 需要创建 worktree、写 metadata、安装依赖权限 hook、启动 tmux |
 | 单 worker 等待 | `jq`、常见 Unix 工具；tmux 仅在读取 pane tail 时需要 | `wait-worker.sh` 主状态源是 `STATUS.json` |
 | 多 worker 监控 | `bash` 4+、`git`、`jq`、常见 Unix 工具；`tmux`、`gh`、`claude` 可选 | `pm-monitor.sh` 用关联数组，macOS 系统 `/bin/bash` 3.2 不够 |
 | worktree 总览 / 清理 | `git`；`jq` 推荐；`tmux` 可选 | 没有 `jq` 时只能显示有限 metadata |
@@ -21,7 +21,9 @@
 
 常见 Unix 工具包括：`awk`、`sed`、`grep`、`find`、`stat`、`date`、`mktemp`、`wc`、`tr`。macOS 和 Linux 默认通常自带，但 `date` 参数不同，脚本已做 macOS/Linux 双路径解析。
 
-## 2. macOS 安装建议
+## 2. macOS 安装参考（仅用户明确授权后）
+
+下列命令会修改机器环境，只能由用户明确批准后执行。依赖检查或验证要求本身不构成授权；worker 缺依赖时应先查已有安装，仍缺则报告 BLOCKED/RESULT。
 
 ```bash
 brew install bash tmux jq gh
@@ -44,7 +46,7 @@ opencode --version
 
 或确保新版 bash 在 `PATH` 前面。
 
-## 3. Linux 安装建议
+## 3. Linux 安装参考（仅用户明确授权后）
 
 Debian / Ubuntu:
 
@@ -66,6 +68,8 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 ## 5. 依赖边界
 
+- `check-dependencies.sh` 只报告，不授予安装权限；不得据其 WARN/MISSING 自动执行本页命令。
+- 项目本地依赖安装也必须有精确命令与可审计授权来源；正常 lockfile 流程不等于机器级安装授权。
 - 不要把 `claude`、`codex`、`opencode` 当作所有模式的硬依赖；只有选用对应 backend 时才需要。
 - 不要默认复制 `.env`、真实 provider settings、token 或 key 到 worktree。
 - `gh` 用于 PR/mergeability 判断；没有 `gh` 时 PM 必须用其他方式确认 PR 状态，不能假定已合并。

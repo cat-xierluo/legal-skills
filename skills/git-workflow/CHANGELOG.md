@@ -1,5 +1,21 @@
 # 变更日志
 
+## [1.6.0] - 2026-07-13
+
+### 新增
+
+- 新增只读 `scripts/check-outgoing-identities.sh`：仅接受当前 HEAD 与远端跟踪 PR base，逐 commit 核验 author 与 committer 的 name/email；同名 feature upstream 判为 ambiguous，拒绝用 `HEAD~1` / 本地 ref 缩窄范围。
+- 新增 `scripts/safe-push.sh`：刷新 integration base 后运行身份门禁，确认 HEAD 未变化，只把已核验 immutable OID 推到目标远端分支，使检查证据绑定实际 push 对象。
+- 新增 11 项故障注入，覆盖早期污染但 HEAD 正常、feature upstream 隐藏已 push 污染、非远端 base、committer 单独污染、空 range，以及 safe-push 远端 ref 与核验 OID 一致。
+
+### 安全
+
+- 固化 worktree 身份隔离边界：worker 禁止写 repo-local `git config user.*`，提交默认使用单次 `GIT_AUTHOR_*` / `GIT_COMMITTER_*`；禁止 raw push，必须通过 identity-bound safe-push 核验完整 PR range。
+
+### 关联
+
+- 来源：法律 AI 书项目 T158 / DEC-131 的并发 worktree 身份污染实战。
+
 ## [1.5.0] - 2026-07-11
 
 ### 新增

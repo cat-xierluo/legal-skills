@@ -74,6 +74,23 @@ ALLOW_PATHS=()
 LIGHTWEIGHT_OVERRIDE=0
 LIGHTWEIGHT_MODE=0
 LIGHTWEIGHT_AUTO=0
+INSTALL_AUTHORIZATION_SOURCE=""
+AUTHORIZED_INSTALL_COMMANDS=()
+ALLOWED_SHELL_COMMANDS=()
+EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
+ALLOW_PROMPT_ONLY_INSTALL_GUARD=0
+INSTALL_GUARD_DEGRADATION_SOURCE=""
+INSTALL_GUARD_MODE="hook"
+INSTALL_AUTH_JSON=""
+AUTHORITY_RECEIPT_FILE=""
+AUTHORITY_RECEIPT_SHA256=""
+INSTALL_GUARD_SETTINGS_FILE=""
+GIT_EXPECTED_NAME=""
+GIT_EXPECTED_EMAIL=""
+GIT_INTEGRATION_BASE=""
+GIT_PUSH_REMOTE="origin"
+SAFE_PUSH_COMMAND=""
+GUARD_ATTESTATION_FILE=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -148,6 +165,31 @@ Options:
                    当 --project 不是 git 仓时本 flag 可省（脚本自动检测并打印
                    `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
                    SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
+  --allow-install-command CMD
+                   Explicitly authorize this exact dependency-install/environment-mutation
+                   command (repeatable). Requires --install-authorization-source.
+                   All detected install commands are denied by default.
+  --install-authorization-source TEXT
+                   Auditable source for allowed install commands, e.g. an exact user approval,
+                   project rule or task ID. A command list without this field fails closed.
+  --allow-shell-command CMD
+                   Allow this exact non-install Shell command (repeatable). Verification commands
+                   passed via --verify-cmd are included automatically. All other Shell commands
+                   are denied by the PreToolUse hook; install-like commands must use the separate
+                   --allow-install-command + authorization-source path.
+  --git-expected-name NAME
+  --git-expected-email EMAIL
+  --git-integration-base REF
+                   Enable the identity-bound safe-push command. All three fields are required;
+                   REF must be the PR base remote-tracking ref (for example origin/main).
+                   Raw git push remains denied by the Shell gate.
+  --git-push-remote REMOTE
+                   Push remote used by safe-push. Default: origin.
+  --allow-prompt-only-install-guard TEXT
+                   Explicitly accept degraded prompt-only enforcement for a backend without
+                   PreToolUse hooks (currently codex/opencode/custom), or a command mode that
+                   disables hooks (for example Claude Code --bare). TEXT records the user or
+                   project authorization source. Without this flag degraded paths fail closed.
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -290,6 +332,39 @@ while [[ $# -gt 0 ]]; do
       LIGHTWEIGHT_MODE=1
       shift
       ;;
+    --allow-install-command)
+      AUTHORIZED_INSTALL_COMMANDS+=("$2")
+      shift 2
+      ;;
+    --install-authorization-source)
+      INSTALL_AUTHORIZATION_SOURCE="$2"
+      shift 2
+      ;;
+    --allow-shell-command)
+      ALLOWED_SHELL_COMMANDS+=("$2")
+      shift 2
+      ;;
+    --git-expected-name)
+      GIT_EXPECTED_NAME="$2"
+      shift 2
+      ;;
+    --git-expected-email)
+      GIT_EXPECTED_EMAIL="$2"
+      shift 2
+      ;;
+    --git-integration-base)
+      GIT_INTEGRATION_BASE="$2"
+      shift 2
+      ;;
+    --git-push-remote)
+      GIT_PUSH_REMOTE="$2"
+      shift 2
+      ;;
+    --allow-prompt-only-install-guard)
+      ALLOW_PROMPT_ONLY_INSTALL_GUARD=1
+      INSTALL_GUARD_DEGRADATION_SOURCE="$2"
+      shift 2
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -311,6 +386,57 @@ done
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v tmux >/dev/null 2>&1 || { echo "ERROR: tmux is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
+command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
+
+if [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -gt 0 ] && [ -z "$INSTALL_AUTHORIZATION_SOURCE" ]; then
+  echo "ERROR: --allow-install-command requires --install-authorization-source (fail-closed)" >&2
+  exit 64
+fi
+if [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -eq 0 ] && [ -n "$INSTALL_AUTHORIZATION_SOURCE" ]; then
+  echo "ERROR: --install-authorization-source requires at least one --allow-install-command" >&2
+  exit 64
+fi
+for install_command in "${AUTHORIZED_INSTALL_COMMANDS[@]}"; do
+  [ -n "$install_command" ] || { echo "ERROR: --allow-install-command cannot be empty" >&2; exit 64; }
+done
+for shell_command in "${ALLOWED_SHELL_COMMANDS[@]}"; do
+  [ -n "$shell_command" ] || { echo "ERROR: --allow-shell-command cannot be empty" >&2; exit 64; }
+done
+for verify_command in "${VERIFY_COMMANDS[@]}"; do
+  if python3 "$SCRIPT_DIR/dependency-install-guard.py" --classify-install "$verify_command"; then
+    echo "ERROR: --verify-cmd may acquire/install dependencies and cannot receive implicit Shell authority: $verify_command; use a separate explicitly authorized install step (fail-closed)" >&2
+    exit 64
+  fi
+done
+if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -eq 1 ] && [ -z "$INSTALL_GUARD_DEGRADATION_SOURCE" ]; then
+  echo "ERROR: --allow-prompt-only-install-guard requires a non-empty authorization source" >&2
+  exit 64
+fi
+git_identity_field_count=0
+[ -n "$GIT_EXPECTED_NAME" ] && git_identity_field_count=$((git_identity_field_count + 1))
+[ -n "$GIT_EXPECTED_EMAIL" ] && git_identity_field_count=$((git_identity_field_count + 1))
+[ -n "$GIT_INTEGRATION_BASE" ] && git_identity_field_count=$((git_identity_field_count + 1))
+if [ "$git_identity_field_count" -ne 0 ] && [ "$git_identity_field_count" -ne 3 ]; then
+  echo "ERROR: --git-expected-name, --git-expected-email and --git-integration-base must be provided together (fail-closed)" >&2
+  exit 64
+fi
+
+case "$WORKER_BACKEND" in
+  claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn)
+    INSTALL_GUARD_MODE="hook"
+    ;;
+  ""|codex|opencode|custom)
+    if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
+      echo "ERROR: backend $WORKER_BACKEND has no configured PreToolUse install guard; explicit --allow-prompt-only-install-guard is required (fail-closed)" >&2
+      exit 64
+    fi
+    INSTALL_GUARD_MODE="prompt_only_degraded"
+    ;;
+  *)
+    echo "ERROR: unknown backend cannot prove dependency-install enforcement: $WORKER_BACKEND" >&2
+    exit 64
+    ;;
+esac
 
 PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
 
@@ -351,11 +477,97 @@ esac
 
 SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
 METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 [ -n "$COMMAND" ] || COMMAND="${SHELL:-/bin/bash} -l"
+
+# Claude Code 的 minimal/safe/config-source 模式可能跳过 local PreToolUse hook。
+# 用 shlex 解析 wrapper 后的完整 command；无法证明含 claude 或 local settings 也 fail-closed。
+claude_hook_disable_reason() {
+  python3 - "$COMMAND" <<'PY'
+import os, shlex, sys
+command = sys.argv[1]
+try:
+    tokens = shlex.split(command, posix=True)
+except ValueError as exc:
+    print(f"unparseable command: {exc}")
+    raise SystemExit(0)
+if not any(os.path.basename(token) == "claude" for token in tokens):
+    print("command does not expose a claude executable token")
+    raise SystemExit(0)
+for flag in ("--bare", "--safe-mode"):
+    if flag in tokens:
+        print(f"{flag} skips or may skip hooks")
+        raise SystemExit(0)
+if "CLAUDE_CODE_SIMPLE=1" in tokens:
+    print("CLAUDE_CODE_SIMPLE=1 skips hooks")
+    raise SystemExit(0)
+sources = None
+for index, token in enumerate(tokens):
+    if token == "--setting-sources":
+        if index + 1 >= len(tokens):
+            print("--setting-sources is missing its value")
+            raise SystemExit(0)
+        sources = tokens[index + 1]
+    elif token.startswith("--setting-sources="):
+        sources = token.split("=", 1)[1]
+if sources is not None and "local" not in {item.strip() for item in sources.split(",")}:
+    print(f"--setting-sources excludes local ({sources})")
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
+   { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
+   hook_disable_reason=$(claude_hook_disable_reason); then
+  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
+    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command or explicitly pass --allow-prompt-only-install-guard (fail-closed)" >&2
+    exit 64
+  fi
+  INSTALL_GUARD_MODE="prompt_only_degraded"
+fi
+
+backend_command_token_missing() {
+  python3 - "$WORKER_BACKEND" "$COMMAND" <<'PY'
+import os, shlex, sys
+backend, command = sys.argv[1:]
+try:
+    basenames = {os.path.basename(token).lower() for token in shlex.split(command, posix=True)}
+except ValueError:
+    print("unparseable command")
+    raise SystemExit(0)
+accepted = {
+    "codebuddy": {"codebuddy"},
+    "qoderwork-cn": {"qoderclicn"},
+    "qoderclicn": {"qoderclicn"},
+}.get(backend, set())
+if accepted and not (basenames & accepted):
+    print(f"command exposes none of the expected executable tokens: {sorted(accepted)}")
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
+   { [ "$WORKER_BACKEND" = "codebuddy" ] || [ "$WORKER_BACKEND" = "qoderwork-cn" ] || [ "$WORKER_BACKEND" = "qoderclicn" ]; } && \
+   backend_reason=$(backend_command_token_missing); then
+  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
+    echo "ERROR: $WORKER_BACKEND command cannot prove the configured backend is launched: $backend_reason (fail-closed)" >&2
+    exit 64
+  fi
+  INSTALL_GUARD_MODE="prompt_only_degraded"
+fi
 
 run() {
   printf 'SPAWN_WORKER_RUN: %s\n' "$*"
   [ "$DRY_RUN" -eq 1 ] || "$@"
+}
+
+array_to_json() {
+  if [ "$#" -eq 0 ]; then
+    printf '[]\n'
+  else
+    printf '%s\n' "$@" | jq -R . | jq -s .
+  fi
 }
 
 # v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
@@ -384,6 +596,21 @@ resolve_backend_defaults() {
 }
 resolve_backend_defaults
 
+# install-guard 的 authority receipt 依赖 git_common_dir，仅在 git 仓（worktree 模式）下计算。
+# 轻量模式（非 git 项目）无 git 可绑：AUTHORITY_RECEIPT_FILE 留空，write_authority_receipt 自动跳过。
+# git 仓判定由下方 worktree-setup 的 else 分支（PROJECT_IS_GIT 检查）兜底，此处不再重复 exit。
+if [ "$PROJECT_IS_GIT" -eq 1 ]; then
+  git_common_dir=$(git -C "$PROJECT_DIR" rev-parse --git-common-dir)
+  case "$git_common_dir" in
+    /*) ;;
+    *) git_common_dir="$PROJECT_DIR/$git_common_dir" ;;
+  esac
+  git_common_dir=$(cd "$git_common_dir" && pwd -P)
+  AUTHORITY_RECEIPT_FILE="$git_common_dir/agent-authority/$SESSION.json"
+  if [ "$INSTALL_GUARD_MODE" = "hook" ]; then
+    GUARD_ATTESTATION_FILE="$git_common_dir/agent-authority/$SESSION.hook-attested.json"
+  fi
+fi
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "ERROR: tmux session already exists: $SESSION" >&2
   exit 1
@@ -435,11 +662,107 @@ if [ "$DRY_RUN" -eq 0 ]; then
   WORKTREE=$(cd "$WORKTREE" && pwd -P)
   SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
   METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+  INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 fi
 
 run mkdir -p "$SESSION_CONTEXT"
 
+if [ "$git_identity_field_count" -eq 3 ]; then
+  safe_push_script="$SCRIPT_DIR/../../git-workflow/scripts/safe-push.sh"
+  [ -x "$safe_push_script" ] || {
+    echo "ERROR: identity-bound safe-push script is missing or not executable: $safe_push_script" >&2
+    exit 64
+  }
+  printf -v SAFE_PUSH_COMMAND 'bash %q --repo %q --base %q --remote %q --branch %q --expected-name %q --expected-email %q' \
+    "$safe_push_script" "$WORKTREE" "$GIT_INTEGRATION_BASE" "$GIT_PUSH_REMOTE" "$BRANCH" \
+    "$GIT_EXPECTED_NAME" "$GIT_EXPECTED_EMAIL"
+fi
+
+write_install_authorization() {
+  local commands_json shell_commands_json
+  commands_json=$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")
+  EFFECTIVE_ALLOWED_SHELL_COMMANDS=(
+    "pwd"
+    "git branch --show-current"
+    "git status --short"
+  )
+  [ -z "$SAFE_PUSH_COMMAND" ] || EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("$SAFE_PUSH_COMMAND")
+  EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("${VERIFY_COMMANDS[@]}" "${ALLOWED_SHELL_COMMANDS[@]}")
+  shell_commands_json=$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')
+  INSTALL_AUTH_JSON=$(jq -cn \
+    --arg schema "multi-agent-orchestration.install-authorization.v1" \
+    --arg policy "deny_by_default" \
+    --arg source "$INSTALL_AUTHORIZATION_SOURCE" \
+    --argjson commands "$commands_json" \
+    --argjson shell_commands "$shell_commands_json" \
+    '{
+      schema: $schema,
+      policy: $policy,
+      authorization_source: $source,
+      authorized_commands: $commands,
+      allowed_shell_commands: $shell_commands
+    }')
+  echo "SPAWN_WORKER_INSTALL_AUTH: $INSTALL_AUTH_FILE mode=$INSTALL_GUARD_MODE"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
+  printf '%s\n' "$INSTALL_AUTH_JSON" > "$INSTALL_AUTH_FILE"
+}
+
+write_install_authorization
+
+write_authority_receipt() {
+  local receipt_dir receipt_tmp created_at
+  AUTHORITY_RECEIPT_SHA256=$(printf '%s' "$INSTALL_AUTH_JSON" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
+  echo "SPAWN_WORKER_AUTHORITY_RECEIPT: $AUTHORITY_RECEIPT_FILE sha256=$AUTHORITY_RECEIPT_SHA256"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    return 0
+  fi
+  receipt_dir=$(dirname "$AUTHORITY_RECEIPT_FILE")
+  mkdir -p "$receipt_dir"
+  [ ! -e "$AUTHORITY_RECEIPT_FILE" ] || {
+    echo "ERROR: PM authority receipt already exists for session $SESSION; choose a unique session id (fail-closed)" >&2
+    return 1
+  }
+  created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+  receipt_tmp="$AUTHORITY_RECEIPT_FILE.tmp.$$"
+  umask 077
+  jq -n \
+    --arg schema "multi-agent-orchestration.authority-receipt.v1" \
+    --arg created_at "$created_at" \
+    --arg session "$SESSION" \
+    --arg worktree "$WORKTREE" \
+    --arg branch "$BRANCH" \
+    --arg mode "$INSTALL_GUARD_MODE" \
+    --arg degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
+    --arg authorization_sha256 "$AUTHORITY_RECEIPT_SHA256" \
+    --argjson authorization "$INSTALL_AUTH_JSON" \
+    '{
+      schema: $schema,
+      created_at: $created_at,
+      session: $session,
+      worktree: $worktree,
+      branch: $branch,
+      install_guard_mode: $mode,
+      degradation_source: $degradation_source,
+      authorization_sha256: $authorization_sha256,
+      authorization_snapshot: $authorization
+    }' > "$receipt_tmp"
+  if ! ln "$receipt_tmp" "$AUTHORITY_RECEIPT_FILE" 2>/dev/null; then
+    rm -f "$receipt_tmp"
+    echo "ERROR: could not atomically create PM authority receipt: $AUTHORITY_RECEIPT_FILE" >&2
+    return 1
+  fi
+  rm -f "$receipt_tmp"
+}
+
+# authority receipt 仅在 git 仓（worktree 模式）下生成；轻量模式 AUTHORITY_RECEIPT_FILE 为空，跳过。
+if [ -n "$AUTHORITY_RECEIPT_FILE" ]; then
+  write_authority_receipt
+fi
+
 write_metadata() {
+  local enforcement_source worker_mirror_authoritative
   created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
   if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
     verify_json=$(printf '%s\n' "${VERIFY_COMMANDS[@]}" | jq -R . | jq -s .)
@@ -457,6 +780,13 @@ write_metadata() {
     isolation_mode_value="lightweight"
   else
     isolation_mode_value="worktree"
+  fi
+  if [ "$INSTALL_GUARD_MODE" = "hook" ]; then
+    enforcement_source="pretool_hook_settings_wired_process_snapshot_runtime_unproven"
+    worker_mirror_authoritative=false
+  else
+    enforcement_source="prompt_only_no_mechanical_enforcement"
+    worker_mirror_authoritative=false
   fi
 
   jq -n \
@@ -481,8 +811,23 @@ write_metadata() {
     --arg isolation_mode "$isolation_mode_value" \
     --argjson lightweight_auto "$LIGHTWEIGHT_AUTO" \
     --argjson verification_commands "$verify_json" \
-    --argjson add_dirs "$(printf '%s\n' "${ADD_DIRS[@]}" | jq -R . | jq -s .)" \
-    --argjson allow_paths "$(printf '%s\n' "${ALLOW_PATHS[@]}" | jq -R . | jq -s .)" \
+    --argjson add_dirs "$(array_to_json "${ADD_DIRS[@]}")" \
+    --argjson allow_paths "$(array_to_json "${ALLOW_PATHS[@]}")" \
+    --arg install_guard_mode "$INSTALL_GUARD_MODE" \
+    --arg install_authorization_file "$INSTALL_AUTH_FILE" \
+    --arg install_authorization_source "$INSTALL_AUTHORIZATION_SOURCE" \
+    --arg install_guard_degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
+    --arg git_expected_name "$GIT_EXPECTED_NAME" \
+    --arg git_expected_email "$GIT_EXPECTED_EMAIL" \
+    --arg git_integration_base "$GIT_INTEGRATION_BASE" \
+    --arg safe_push_command "$SAFE_PUSH_COMMAND" \
+    --arg authority_receipt_file "$AUTHORITY_RECEIPT_FILE" \
+    --arg authority_receipt_sha256 "$AUTHORITY_RECEIPT_SHA256" \
+    --arg guard_attestation_file "$GUARD_ATTESTATION_FILE" \
+    --arg enforcement_source "$enforcement_source" \
+    --argjson worker_mirror_authoritative "$worker_mirror_authoritative" \
+    --argjson authorized_install_commands "$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")" \
+    --argjson allowed_shell_commands "$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -514,6 +859,28 @@ write_metadata() {
       },
       verification: {
         commands: $verification_commands
+      },
+      execution_authority: {
+        environment_mutation_policy: "deny_by_default",
+        install_guard_mode: $install_guard_mode,
+        install_authorization_file: $install_authorization_file,
+        install_authorization_source: $install_authorization_source,
+        authorized_install_commands: $authorized_install_commands,
+        allowed_shell_commands: $allowed_shell_commands,
+        degradation_source: $install_guard_degradation_source,
+        enforcement_source: $enforcement_source,
+        authority_receipt_file: $authority_receipt_file,
+        authority_receipt_sha256: $authority_receipt_sha256,
+        guard_attestation_file: $guard_attestation_file,
+        worker_mirror_authoritative: $worker_mirror_authoritative,
+        git_identity: {
+          expected_name: $git_expected_name,
+          expected_email: $git_expected_email,
+          integration_base: $git_integration_base,
+          safe_push_command: $safe_push_command,
+          raw_git_push_allowed: false,
+          commit_environment_bound: ($git_expected_name != "" and $git_expected_email != "")
+        }
       },
       add_dirs: $add_dirs,
       allow_paths: $allow_paths,
@@ -646,6 +1013,106 @@ permission_auto_bg() {
   return 0
 }
 
+# 将一个 PreToolUse command hook 合并进现有 settings.local.json，不覆盖项目已有 hooks。
+merge_pretool_hook() {
+  local settings_file="$1"
+  local matcher="$2"
+  local hook_command="$3"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "SPAWN_WORKER_HOOK_DRY_RUN: file=$settings_file matcher=$matcher command=$hook_command"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$settings_file")"
+  local input_file="$settings_file"
+  local empty_file=""
+  if [ ! -f "$input_file" ]; then
+    empty_file=$(mktemp "${TMPDIR:-/tmp}/worker-settings.XXXXXX")
+    printf '{}\n' > "$empty_file"
+    input_file="$empty_file"
+  fi
+
+  local tmp_file="${settings_file}.tmp.$$"
+  if ! jq \
+    --arg matcher "$matcher" \
+    --arg command "$hook_command" \
+    '(.hooks.PreToolUse // []) as $existing
+    | .hooks = (.hooks // {})
+    | .hooks.PreToolUse = (
+        ($existing
+          | map(.hooks = ((.hooks // []) | map(select(.command != $command))))
+          | map(select((.hooks | length) > 0)))
+        + [{matcher: $matcher, hooks: [{type: "command", command: $command}]}]
+      )' "$input_file" > "$tmp_file"; then
+    rm -f "$tmp_file"
+    [ -z "$empty_file" ] || rm -f "$empty_file"
+    echo "ERROR: invalid settings JSON; refusing to install worker guard: $settings_file" >&2
+    return 1
+  fi
+  mv "$tmp_file" "$settings_file"
+  [ -z "$empty_file" ] || rm -f "$empty_file"
+  echo "SPAWN_WORKER_HOOK_SETTINGS: $settings_file matcher=$matcher"
+}
+
+# 默认安装依赖安装/环境写入硬门禁。精确命令只有同时带可审计授权来源才放行。
+dependency_install_guard_setup() {
+  if [ "$INSTALL_GUARD_MODE" = "prompt_only_degraded" ]; then
+    echo "SPAWN_WORKER_INSTALL_GUARD_DEGRADED: backend=$WORKER_BACKEND source=$INSTALL_GUARD_DEGRADATION_SOURCE" >&2
+    return 0
+  fi
+
+  local guard_hook="$SCRIPT_DIR/dependency-install-guard-hook.sh"
+  local guard_py="$SCRIPT_DIR/dependency-install-guard.py"
+  if [ ! -f "$guard_hook" ] || [ ! -f "$guard_py" ]; then
+    echo "ERROR: dependency install guard files are missing (fail-closed)" >&2
+    return 1
+  fi
+
+  local auth_q auth_b64 auth_b64_q backend_q receipt_q settings_q attestation_q
+  case "$WORKER_BACKEND" in
+    claude-code|claude_code) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.claude/settings.local.json" ;;
+    codebuddy) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.codebuddy/settings.local.json" ;;
+    qoderwork-cn|qoderclicn) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.qoder/settings.local.json" ;;
+    *)
+      echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
+      return 1
+      ;;
+  esac
+  printf -v auth_q '%q' "$INSTALL_AUTH_FILE"
+  auth_b64=$(printf '%s' "$INSTALL_AUTH_JSON" | base64 | tr -d '\r\n')
+  printf -v auth_b64_q '%q' "$auth_b64"
+  printf -v backend_q '%q' "${WORKER_BACKEND:-claude-code}"
+  printf -v receipt_q '%q' "$AUTHORITY_RECEIPT_FILE"
+  printf -v settings_q '%q' "$INSTALL_GUARD_SETTINGS_FILE"
+  printf -v attestation_q '%q' "$GUARD_ATTESTATION_FILE"
+  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
+  if [ -n "$GIT_EXPECTED_NAME" ]; then
+    local git_name_q git_email_q
+    printf -v git_name_q '%q' "$GIT_EXPECTED_NAME"
+    printf -v git_email_q '%q' "$GIT_EXPECTED_EMAIL"
+    COMMAND="env GIT_AUTHOR_NAME=$git_name_q GIT_AUTHOR_EMAIL=$git_email_q GIT_COMMITTER_NAME=$git_name_q GIT_COMMITTER_EMAIL=$git_email_q $COMMAND"
+  fi
+
+  local hook_command
+  printf -v hook_command "bash '%s'" "$guard_hook"
+  case "$WORKER_BACKEND" in
+    claude-code|claude_code)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      ;;
+    codebuddy)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      ;;
+    qoderwork-cn|qoderclicn)
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      ;;
+    *)
+      echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
+      return 1
+      ;;
+  esac
+  echo "SPAWN_WORKER_INSTALL_GUARD: mode=hook policy=deny_by_default"
+}
+
 # Scope guard setup: write settings.local.json with PreToolUse hook + inject
 # SCOPE_GUARD_ALLOW env var into the tmux command so scope-guard.py can enforce
 # write-path whitelist even under -y/--dangerously-skip-permissions.
@@ -676,52 +1143,25 @@ scope_guard_setup() {
   # Inject SCOPE_GUARD_ALLOW into the tmux command via wrapper
   COMMAND="env SCOPE_GUARD_ALLOW='$SCOPE_GUARD_ALLOW' $COMMAND"
 
-  # Write settings.local.json for both codebuddy and qoder backends
-  # codebuddy: .codebuddy/settings.local.json
-  # qoder:     .qoder/settings.local.json
-  local settings_json
-  # Use printf to safely embed the quoted path (handles spaces in path)
-  settings_json=$(printf '{
-  "hooks": {
-    "PreToolUse": [{
-      "matcher": "Edit|Write|NotebookEdit",
-      "hooks": [{
-        "type": "command",
-        "command": "bash '\''%s'\''"
-      }]
-    }]
-  }
-}' "$scope_guard_hook")
+  local hook_command
+  printf -v hook_command "bash '%s'" "$scope_guard_hook"
 
   # Write to codebuddy settings if backend is codebuddy or unspecified
   if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
-    local cb_settings_dir="$WORKTREE/.codebuddy"
-    run mkdir -p "$cb_settings_dir"
-    local cb_settings_file="$cb_settings_dir/settings.local.json"
-    if [ "$DRY_RUN" -eq 0 ]; then
-      echo "$settings_json" > "$cb_settings_file"
-      echo "SPAWN_WORKER_SCOPE_GUARD_SETTINGS: $cb_settings_file"
-    else
-      echo "SPAWN_WORKER_SCOPE_GUARD_DRY_RUN: would write $cb_settings_file"
-    fi
+    merge_pretool_hook "$WORKTREE/.codebuddy/settings.local.json" \
+      "Edit|Write|NotebookEdit" "$hook_command"
   fi
 
   # Write to qoder settings if backend is qoderwork-cn
-  if [ "$WORKER_BACKEND" = "qoderwork-cn" ]; then
-    local qw_settings_dir="$WORKTREE/.qoder"
-    run mkdir -p "$qw_settings_dir"
-    local qw_settings_file="$qw_settings_dir/settings.local.json"
-    if [ "$DRY_RUN" -eq 0 ]; then
-      echo "$settings_json" > "$qw_settings_file"
-      echo "SPAWN_WORKER_SCOPE_GUARD_SETTINGS: $qw_settings_file"
-    else
-      echo "SPAWN_WORKER_SCOPE_GUARD_DRY_RUN: would write $qw_settings_file"
-    fi
+  if [ "$WORKER_BACKEND" = "qoderwork-cn" ] || [ "$WORKER_BACKEND" = "qoderclicn" ]; then
+    merge_pretool_hook "$WORKTREE/.qoder/settings.local.json" \
+      "Edit|Write|NotebookEdit" "$hook_command"
   fi
 
   return 0
 }
 
+dependency_install_guard_setup
 scope_guard_setup
 write_metadata
 
