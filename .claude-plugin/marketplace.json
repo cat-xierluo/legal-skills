@@ -25,7 +25,13 @@
       },
       "source": "skills/yuandian-law-search",
       "category": "productivity",
-      "tags": ["通用", "检索", "legal", "search", "yuandian"]
+      "tags": [
+        "通用",
+        "检索",
+        "legal",
+        "search",
+        "yuandian"
+      ]
     },
     {
       "name": "legal-text-format",
@@ -36,7 +42,12 @@
       },
       "source": "skills/legal-text-format",
       "category": "productivity",
-      "tags": ["通用", "文书", "legal", "formatting"]
+      "tags": [
+        "通用",
+        "文书",
+        "legal",
+        "formatting"
+      ]
     },
     {
       "name": "legal-qa-extractor",
@@ -47,7 +58,13 @@
       },
       "source": "skills/legal-qa-extractor",
       "category": "productivity",
-      "tags": ["通用", "文书", "legal", "qa", "knowledge"]
+      "tags": [
+        "通用",
+        "文书",
+        "legal",
+        "qa",
+        "knowledge"
+      ]
     },
     {
       "name": "wechat-article-fetch",
@@ -58,7 +75,12 @@
       },
       "source": "skills/wechat-article-fetch",
       "category": "productivity",
-      "tags": ["工具", "搜索", "wechat", "scraper"]
+      "tags": [
+        "工具",
+        "搜索",
+        "wechat",
+        "scraper"
+      ]
     },
     {
       "name": "legal-ocr",
@@ -69,7 +91,13 @@
       },
       "source": "skills/legal-ocr",
       "category": "productivity",
-      "tags": ["工具", "OCR", "pdf", "conversion", "legal"]
+      "tags": [
+        "工具",
+        "OCR",
+        "pdf",
+        "conversion",
+        "legal"
+      ]
     },
     {
       "name": "mineru-ocr",
@@ -80,7 +108,12 @@
       },
       "source": "skills/mineru-ocr",
       "category": "productivity",
-      "tags": ["工具", "OCR", "pdf", "conversion"]
+      "tags": [
+        "工具",
+        "OCR",
+        "pdf",
+        "conversion"
+      ]
     },
     {
       "name": "funasr-transcribe",
@@ -91,7 +124,12 @@
       },
       "source": "skills/funasr-transcribe",
       "category": "productivity",
-      "tags": ["工具", "ASR", "transcription", "audio"]
+      "tags": [
+        "工具",
+        "ASR",
+        "transcription",
+        "audio"
+      ]
     },
     {
       "name": "course-generator",
@@ -102,7 +140,12 @@
       },
       "source": "skills/course-generator",
       "category": "productivity",
-      "tags": ["工具", "课程", "course", "education"]
+      "tags": [
+        "工具",
+        "课程",
+        "course",
+        "education"
+      ]
     },
     {
       "name": "article2book",
@@ -113,7 +156,12 @@
       },
       "source": "skills/article2book",
       "category": "productivity",
-      "tags": ["工具", "课程", "content", "book"]
+      "tags": [
+        "工具",
+        "课程",
+        "content",
+        "book"
+      ]
     },
     {
       "name": "svg-article-illustrator",
@@ -124,7 +172,12 @@
       },
       "source": "skills/svg-article-illustrator",
       "category": "productivity",
-      "tags": ["工具", "配图", "svg", "illustration"]
+      "tags": [
+        "工具",
+        "配图",
+        "svg",
+        "illustration"
+      ]
     },
     {
       "name": "piclist-upload",
@@ -135,7 +188,12 @@
       },
       "source": "skills/piclist-upload",
       "category": "productivity",
-      "tags": ["工具", "图床", "image", "upload"]
+      "tags": [
+        "工具",
+        "图床",
+        "image",
+        "upload"
+      ]
     },
     {
       "name": "md2word",
@@ -146,7 +204,12 @@
       },
       "source": "skills/md2word",
       "category": "productivity",
-      "tags": ["工具", "格式转换", "markdown", "word"]
+      "tags": [
+        "工具",
+        "格式转换",
+        "markdown",
+        "word"
+      ]
     },
     {
       "name": "agent-email",
@@ -157,7 +220,12 @@
       },
       "source": "skills/agent-email",
       "category": "developer-tools",
-      "tags": ["工具", "邮件", "agent", "email"]
+      "tags": [
+        "工具",
+        "邮件",
+        "agent",
+        "email"
+      ]
     },
     {
       "name": "skill-manager",
@@ -168,7 +236,12 @@
       },
       "source": "skills/skill-manager",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "management"]
+      "tags": [
+        "工具",
+        "Skill开发",
+        "skill",
+        "management"
+      ]
     },
     {
       "name": "git-batch-commit",
@@ -179,7 +252,12 @@
       },
       "source": "skills/git-batch-commit",
       "category": "developer-tools",
-      "tags": ["工具", "Git", "commit", "automation"]
+      "tags": [
+        "工具",
+        "Git",
+        "commit",
+        "automation"
+      ]
     },
     {
       "name": "git-workflow",
@@ -190,7 +268,12 @@
       },
       "source": "skills/git-workflow",
       "category": "developer-tools",
-      "tags": ["工具", "Git", "workflow", "pull-request"]
+      "tags": [
+        "工具",
+        "Git",
+        "workflow",
+        "pull-request"
+      ]
     },
     {
       "name": "cross-agent-coordination",
@@ -201,7 +284,12 @@
       },
       "source": "skills/cross-agent-coordination",
       "category": "developer-tools",
-      "tags": ["工具", "Agent协作", "coordination", "handoff"]
+      "tags": [
+        "工具",
+        "Agent协作",
+        "coordination",
+        "handoff"
+      ]
     },
     {
       "name": "multi-agent-orchestration",
@@ -212,7 +300,12 @@
       },
       "source": "skills/multi-agent-orchestration",
       "category": "developer-tools",
-      "tags": ["工具", "Agent协作", "orchestration", "worktree"]
+      "tags": [
+        "工具",
+        "Agent协作",
+        "orchestration",
+        "worktree"
+      ]
     },
     {
       "name": "multi-search",
@@ -223,7 +316,12 @@
       },
       "source": "skills/multi-search",
       "category": "productivity",
-      "tags": ["工具", "搜索", "research", "analysis"]
+      "tags": [
+        "工具",
+        "搜索",
+        "research",
+        "analysis"
+      ]
     },
     {
       "name": "litigation-analysis",
@@ -234,7 +332,12 @@
       },
       "source": "skills/litigation-analysis",
       "category": "productivity",
-      "tags": ["通用", "诉讼", "legal", "litigation"]
+      "tags": [
+        "通用",
+        "诉讼",
+        "legal",
+        "litigation"
+      ]
     },
     {
       "name": "patent-analysis",
@@ -245,7 +348,12 @@
       },
       "source": "skills/patent-analysis",
       "category": "productivity",
-      "tags": ["专业", "知产", "legal", "patent"]
+      "tags": [
+        "专业",
+        "知产",
+        "legal",
+        "patent"
+      ]
     },
     {
       "name": "trademark-assistant",
@@ -256,7 +364,12 @@
       },
       "source": "skills/trademark-assistant",
       "category": "productivity",
-      "tags": ["专业", "知产", "legal", "trademark"]
+      "tags": [
+        "专业",
+        "知产",
+        "legal",
+        "trademark"
+      ]
     },
     {
       "name": "legal-proposal-generator",
@@ -267,7 +380,12 @@
       },
       "source": "skills/legal-proposal-generator",
       "category": "productivity",
-      "tags": ["通用", "文书", "legal", "proposal"]
+      "tags": [
+        "通用",
+        "文书",
+        "legal",
+        "proposal"
+      ]
     },
     {
       "name": "opc-legal-counsel",
@@ -278,7 +396,13 @@
       },
       "source": "skills/opc-legal-counsel",
       "category": "productivity",
-      "tags": ["专业", "顾问", "legal", "opc", "ai-compliance"]
+      "tags": [
+        "专业",
+        "顾问",
+        "legal",
+        "opc",
+        "ai-compliance"
+      ]
     },
     {
       "name": "legal-visualization",
@@ -289,7 +413,13 @@
       },
       "source": "skills/legal-visualization",
       "category": "productivity",
-      "tags": ["专业", "可视化", "legal", "drawio", "diagram"]
+      "tags": [
+        "专业",
+        "可视化",
+        "legal",
+        "drawio",
+        "diagram"
+      ]
     },
     {
       "name": "de-ai-polish",
@@ -300,7 +430,12 @@
       },
       "source": "skills/de-ai-polish",
       "category": "productivity",
-      "tags": ["工具", "写作", "writing", "polish"]
+      "tags": [
+        "工具",
+        "写作",
+        "writing",
+        "polish"
+      ]
     },
     {
       "name": "douyin-batch-download",
@@ -311,7 +446,12 @@
       },
       "source": "skills/douyin-batch-download",
       "category": "productivity",
-      "tags": ["工具", "下载", "douyin", "video"]
+      "tags": [
+        "工具",
+        "下载",
+        "douyin",
+        "video"
+      ]
     },
     {
       "name": "universal-media-downloader",
@@ -322,7 +462,12 @@
       },
       "source": "skills/universal-media-downloader",
       "category": "productivity",
-      "tags": ["工具", "下载", "media", "video"]
+      "tags": [
+        "工具",
+        "下载",
+        "media",
+        "video"
+      ]
     },
     {
       "name": "clawhub-sync",
@@ -333,7 +478,12 @@
       },
       "source": "skills/clawhub-sync",
       "category": "developer-tools",
-      "tags": ["工具", "发布", "clawhub", "sync"]
+      "tags": [
+        "工具",
+        "发布",
+        "clawhub",
+        "sync"
+      ]
     },
     {
       "name": "github-star-manager",
@@ -344,7 +494,12 @@
       },
       "source": "skills/github-star-manager",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "github", "tracker"]
+      "tags": [
+        "工具",
+        "Skill开发",
+        "github",
+        "tracker"
+      ]
     },
     {
       "name": "skill-lint",
@@ -355,7 +510,16 @@
       },
       "source": "skills/skill-lint",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "skill", "lint", "harness", "verification", "stability", "drift"]
+      "tags": [
+        "工具",
+        "Skill开发",
+        "skill",
+        "lint",
+        "harness",
+        "verification",
+        "stability",
+        "drift"
+      ]
     },
     {
       "name": "repo-research",
@@ -366,7 +530,12 @@
       },
       "source": "skills/repo-research",
       "category": "developer-tools",
-      "tags": ["工具", "Skill开发", "github", "research"]
+      "tags": [
+        "工具",
+        "Skill开发",
+        "github",
+        "research"
+      ]
     },
     {
       "name": "minimax-web-search",
@@ -377,7 +546,12 @@
       },
       "source": "skills/minimax-web-search",
       "category": "productivity",
-      "tags": ["工具", "搜索", "minimax", "openclaw"]
+      "tags": [
+        "工具",
+        "搜索",
+        "minimax",
+        "openclaw"
+      ]
     },
     {
       "name": "minimax-image-understand",
@@ -388,7 +562,12 @@
       },
       "source": "skills/minimax-image-understand",
       "category": "productivity",
-      "tags": ["工具", "搜索", "minimax", "image"]
+      "tags": [
+        "工具",
+        "搜索",
+        "minimax",
+        "image"
+      ]
     },
     {
       "name": "transcription-corrector",
@@ -399,7 +578,47 @@
       },
       "source": "skills/transcription-corrector",
       "category": "productivity",
-      "tags": ["工具", "校对", "ASR", "transcription", "correction"]
+      "tags": [
+        "工具",
+        "校对",
+        "ASR",
+        "transcription",
+        "correction"
+      ]
+    },
+    {
+      "name": "handdrawn-article-illustrator",
+      "description": "手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义",
+      "version": "1.1.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/handdrawn-article-illustrator",
+      "category": "productivity",
+      "tags": [
+        "工具",
+        "配图",
+        "handdrawn",
+        "illustration",
+        "wechat"
+      ]
+    },
+    {
+      "name": "patent-download",
+      "description": "专利 PDF 批量下载工具。支持多平台（Google Patents 优先），自动处理申请号和公告号格式",
+      "version": "2.6.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/patent-download",
+      "category": "productivity",
+      "tags": [
+        "专利",
+        "patent",
+        "PDF",
+        "下载",
+        "法律工具"
+      ]
     }
   ]
 }
