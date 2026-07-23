@@ -31,6 +31,10 @@ templates/
 !skills/git-workflow/DECISIONS.md
 !skills/git-workflow/TASKS.md
 
+# patent-download 技能级决策与任务记录(全局 **/ 规则会先忽略,需显式加回)
+!skills/patent-download/DECISIONS.md
+!skills/patent-download/TASKS.md
+
 # Archive directories - ignore content but keep directory structure
 **/archive/*
 !**/archive/.gitkeep
@@ -80,6 +84,7 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 **/*.pyo
 **/venv/
 **/.venv/
+**/.pytest_cache/
 
 # Database files
 **/*.db
@@ -100,6 +105,7 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # WorkBuddy & QoderWork internal (symlink-only directories)
 .workbuddy/
 .qoderworkcn/
+.zcode/
 
 # Private skills - symlinked external repository
 /private-skills
