@@ -323,7 +323,7 @@
 <td style="word-break:break-word">专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录），支持多平台、自动处理申请号和公告号格式；凭证环境变量化 + 防泄露自检</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v2.6.0</td>
-<td style="text-align:center">—</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/patent-download-2.6.0.zip">下载</a></td>
 <td>本仓库</td>
 </tr>
 <tr>
