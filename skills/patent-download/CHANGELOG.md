@@ -2,7 +2,7 @@
 
 本文件记录 patent-download 的用户可见变更。最新在前。
 
-## 2026-07-23 —— 发布前审查修复（v2.6.0）
+## [2.6.0] - 2026-07-23 发布前审查修复
 
 ### 改进
 - **定位拓宽**：description 与标题从「中国专利下载工具」改为「专利下载工具」，反映平台本身支持通用专利（Google Patents 覆盖全球）；中国专利号格式说明作为客观事实保留
@@ -10,7 +10,7 @@
 - **文档结构**：EXAMPLES.md 下沉到 references/examples.md（渐进式披露，根目录只留核心文档）
 - **文档清理**：删除 SKILL.md 目录图中已废弃的 `pss_cookies.txt` 行；删除 accounts-setup.md 中对已废弃 cookies 文件机制的引导
 
-## 2026-07-23 —— 凭证隔离安全加固（v2.5.0）
+## [2.5.0] - 2026-07-23 凭证隔离安全加固
 
 ### 新增
 - **防泄露自检**：`_creds.py` 新增 `check_leak()`，运行 `python scripts/platforms/_creds.py` 时自动检查 `config/.env` 是否被 git 误追踪；若追踪则报警并给出可直接执行的 `git rm --cached` 修复命令，避免真实账号入库
@@ -22,7 +22,7 @@
 ### 修复
 - **`check_leak()` 报警路径修正**：原实现报警命令的 `git -C` 路径指向 skill 目录而非 git 仓库根，用户照做会失败；改用 `git rev-parse --show-toplevel` 取真实仓库根，报警命令可直接复制执行
 
-## 2026-07-23 —— 依赖防护与发布就绪（v2.4.0）
+## [2.4.0] - 2026-07-23 依赖防护与发布就绪
 
 ### 技术优化
 - **依赖缺失优雅降级**：6 个脚本的外部依赖 import 加 try/except 防护，未安装时打印清晰的中文安装提示并退出，不再抛晦涩的 `ImportError`
@@ -33,7 +33,7 @@
 ### 改进
 - **SKILL.md 依赖章节重构**：按 AGENTS.md「SKILL.md 依赖声明要求」区分"开箱即用"（信息查询、凭证自检零依赖）和"需安装依赖"（按通道列出依赖表）两档，就近给出安装说明
 
-## 2026-07-23 —— 技术债务清理与一致性修复（v2.3.0）
+## [2.3.0] - 2026-07-23 技术债务清理与一致性修复
 
 ### 改进
 - **文档/注释对齐凭证来源**：修正 v2.2.0 改造后残留的"账号见 `config/platforms.yaml`"表述（platform-status.md、gpic/pss/uyanip 文件头、cli.py 注释），统一改为"环境变量，见 `config/.env.example`"，与 `_creds.py` 实际行为一致
@@ -49,7 +49,7 @@
 ### 技术优化
 - 确认 `scripts/platforms/__pycache__/` 未被 Git 跟踪（`.gitignore` 的 `__pycache__/` 规则已正确生效），本地 `.pyc` 为运行时产物，无需清理
 
-## 2026-07-12 —— 公开发布改造（v2.2.0）
+## [2.2.0] - 2026-07-12 公开发布改造
 
 - **凭证改环境变量**：账号不再入仓库，通过 `PATENT_<平台>_USERNAME/_PASSWORD` 环境变量配置；新增 `config/.env.example` 模板，用户 `cp` 为 `.env` 填写（.gitignore 不入库）
 - **_creds.py 重写**：读 os.environ，回退手动解析 `.env`（无 python-dotenv 依赖）
@@ -59,7 +59,7 @@
 - **LICENSE.txt**：补 MIT 全文（frontmatter 已声明）
 - **ToS 合规**：账号登录通道（度衍/PatentStar/粤港澳/PSS）在 references 标注，由用户自评风险
 
-## 2026-07-12 —— 目录结构规范化
+## [2.1.0] - 2026-07-12 目录结构规范化
 
 - **凭证集中**：`data/` → `config/`，账号单一来源 `config/platforms.yaml`
 - **代码零硬编码**：`cli.py` 与 5 个平台脚本（pss / patentstar / uyanip / gpic / patentstar_browser）移除明文账号密码，统一改读 `config/platforms.yaml`
@@ -69,14 +69,14 @@
 - SKILL.md 按渐进式披露瘦身，目录图与实际对齐
 - 安全：移除 `patentstar.py` 把 session cookie 打印到 stdout 的逻辑
 
-## 2026-07-11 —— Google Patents 成为首选通道
+## [2.0.0] - 2026-07-11 Google Patents 成为首选通道
 
 - 新增 Google Patents 平台（推荐），实测 `202421964517.8` 成功下载
 - 标记 PatentStar API 失效（Ret=206），调低推荐度
 - 标记润桐 RainPat 服务器维护中（预计 2026-07-17 恢复）
 - 明确申请号 vs 公告号的区别说明
 
-## 2026-02-27 —— 多平台架构
+## [1.0.0] - 2026-02-27 多平台架构
 
 - 添加度衍专利支持
 - 初始版本，解耦为多平台架构
