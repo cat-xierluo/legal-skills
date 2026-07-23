@@ -15,6 +15,7 @@ SCRIPT = Path(__file__).with_name("harness_evidence_gate.py")
 POLICY_FILES = (
     "SKILL.md",
     "references/harness-reliability-standards.md",
+    "references/instruction-stability-standards.md",
     "references/workflow-output-standards.md",
     "references/business-flow-rubric.md",
     "references/reporting-standards.md",
@@ -51,7 +52,7 @@ class HarnessEvidenceGateTest(unittest.TestCase):
             path = self.policy / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             content = (
-                "---\nname: skill-lint\nversion: \"2.3.0\"\n---\n"
+                "---\nname: skill-lint\nversion: \"2.4.0\"\n---\n"
                 if relative == "SKILL.md"
                 else f"policy: {relative}\n"
             )
@@ -172,7 +173,7 @@ class HarnessEvidenceGateTest(unittest.TestCase):
 
     def test_policy_mutation_invalidates_evidence(self) -> None:
         (self.policy / "SKILL.md").write_text(
-            "---\nname: skill-lint\nversion: \"2.3.0\"\n---\nchanged policy\n",
+            "---\nname: skill-lint\nversion: \"2.4.0\"\n---\nchanged policy\n",
             encoding="utf-8",
         )
         result = self.verify()

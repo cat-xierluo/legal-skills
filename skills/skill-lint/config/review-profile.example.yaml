@@ -132,6 +132,43 @@ harness_reliability:
     - sh
     - node
   require_fault_case: true
+  instruction_stability:
+    enabled_for:
+      - legacy_skill_review
+      - repeated_omission
+      - multi_dimension_review
+      - visual_or_rendered_output
+      - stable_completion_claim
+    contract_path: config/instruction-stability-contract.json
+    minimum_runs: 3
+    require_constraint_ids: true
+    require_explicit_source_markers: true
+    require_discovered_requirement_sources_and_signed_exclusions: true
+    require_external_requirements_baseline: true
+    require_evaluator_ed25519_signature: true
+    require_offline_private_key_boundary: true
+    require_current_harness_review_evidence: true
+    require_evaluator_held_out_positive_and_negative_cases: true
+    require_modality_match: true
+    require_artifact_stage_match: true
+    require_positive_and_negative_cases: true
+    negative_case_isolates_one_constraint: true
+    historical_failure_requires_regression_case: true
+    active_checker_reports_all_mapped_constraints: true
+    active_checker_binds_artifact_sha256: true
+    active_checker_reports_constraint_measurements: true
+    measurement_requires_type_condition_and_expected: true
+    each_hard_constraint_requires_observable: true
+    require_same_input_and_config_hashes: true
+    require_unique_execution_nonce_and_run_paths: true
+    require_bound_producer_log: true
+    producer_log_binds_candidate_producer_and_evaluation: true
+    require_uniform_random_staging_paths: true
+    require_signed_final_receipt: true
+    final_marker_requires_verify_receipt: true
+    compare_declared_observables_only: true
+    missing_contract: NOT_VERIFIED
+    missing_run_evidence: NOT_VERIFIED
   stale_evidence: error
   unknown_checker: error
   empty_scope: error
@@ -155,6 +192,12 @@ severity:
   missing_independent_verifier: error
   stale_or_unbound_harness_evidence: error
   missing_fault_injection: error
+  missing_constraint_traceability: error
+  verification_modality_mismatch: error
+  artifact_stage_mismatch: error
+  repeated_run_constraint_omission: error
+  declared_observable_drift: error
+  invalid_or_unsigned_stability_receipt: error
   broad_semantic_exception: warning
 
 report:

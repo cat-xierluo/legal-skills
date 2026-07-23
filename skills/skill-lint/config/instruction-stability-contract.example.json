@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "skill": {
+    "name": "<skill-name>",
+    "version": "<x.y.z>"
+  },
+  "producer": {
+    "id": "<producer-id>",
+    "implementation_paths": [
+      "scripts/produce-final-report.py"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "final-report",
+      "stage": "final",
+      "required": true
+    }
+  ],
+  "checkers": [
+    {
+      "id": "report-coverage",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": [
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check-report-coverage.py",
+      "args": [
+        "--input",
+        "{artifact:final-report}"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "REPORT-COVERAGE",
+      "severity": "hard",
+      "requirement_type": "coverage",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "report-coverage"
+      ],
+      "case_ids": [
+        "report-complete",
+        "report-missing-required-section",
+        "historical-report-omission"
+      ],
+      "historical_failure_known": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "report-complete",
+      "kind": "positive",
+      "constraint_ids": [
+        "REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "report-coverage"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "final-report",
+          "path": "assets/stability-report-complete.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "report-missing-required-section",
+      "kind": "mutation",
+      "constraint_ids": [
+        "REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "report-coverage"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "final-report",
+          "path": "assets/stability-report-missing-required-section.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "historical-report-omission",
+      "kind": "historical",
+      "constraint_ids": [
+        "REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "report-coverage"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "final-report",
+          "path": "assets/stability-historical-report-omission.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "covered-section-count",
+        "checker_id": "report-coverage",
+        "constraint_id": "REPORT-COVERAGE",
+        "value_type": "integer",
+        "condition": "gte",
+        "expected": 3
+      }
+    ],
+    "observables": [
+      {
+        "id": "covered-sections",
+        "checker_id": "report-coverage",
+        "constraint_ids": [
+          "REPORT-COVERAGE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}

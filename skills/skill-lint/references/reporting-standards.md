@@ -24,8 +24,9 @@ Hard Fail 一律按严重问题处理。
 - 对无法确认的能力标注“未提及/待补充”。
 - 使用本地配置审查时，不暴露配置值，除非用户明确要求。
 - 正式质量意见报告生成后，按 `archive-standards.md` 判断是否归档。
-- 正式验收必须区分 `HARNESS_REVIEW_VERIFIED`、`DOMAIN_VERIFIED` 和 `NOT_VERIFIED`，不得用静态审查冒充功能通过。
+- 正式验收必须区分 `HARNESS_REVIEW_VERIFIED`、`INSTRUCTION_STABILITY_EVIDENCE_READY`、`INSTRUCTION_STABILITY_VERIFIED`、`DOMAIN_VERIFIED` 和 `NOT_VERIFIED`；`EVIDENCE_READY` 只是待签草稿，不得用静态审查或未验签草稿冒充功能通过。
 - Harness 七层采用短板判断；任一必需层触发 Hard Fail 时，总体不得通过。
+- 稳定性 finding 必须写明具体 constraint id、checker modality、artifact stage、case 或 run；不得只写“模型遵循不稳定”。
 - 动态证据必须写明候选信任来源和执行环境；未知第三方候选在非隔离环境中只能标记 `NOT_VERIFIED`。
 - 对承载设计原理的结构性建议（拆解披露、触发边界、上下文聚焦、自由度匹配、可机判验收、渐进式披露 + 可执行流程等），finding 必须含两段教学:**为什么错(原理)**——这个问题违反了哪条 skill 写作 / 技术原理;**最优设计**——根据原理该怎么设计才对(给具体范例)。这使审查报告同时是 skill 写作教学:使用者不仅知道改什么,还学到"为什么这么设计才对"。纯事实问题(文件缺失、引用断裂、命名)可省。各模块 standards 文件含「设计理念」小节可供引用。
 
@@ -145,10 +146,13 @@ archive/YYYYMMDD_HHMMSS_<target-slug>/quality-opinion-report.md
 | Composition | ✅/⚠️/❌/不适用 | ... |
 
 - 审查证据：`HARNESS_REVIEW_VERIFIED` / `NOT_VERIFIED`
+- 指令稳定性：`INSTRUCTION_STABILITY_VERIFIED` / `INSTRUCTION_STABILITY_EVIDENCE_READY（不得作完成结论）` / `NOT_VERIFIED`
 - 业务验证：`DOMAIN_VERIFIED` / `NOT_VERIFIED` / 不适用
 - 候选聚合哈希：`<sha256 或未生成>`
+- 稳定性合同/evaluator Ed25519-signed 外部硬约束基线与 held-out/Harness evidence/签名运行证据/签名回执与公钥 ID：`<sha256、key id 或未生成>`
 - 候选信任与执行环境：`<自有/已审查可信/第三方未知；普通工作区/隔离环境>`
 - 故障注入：`<checker、参数、预期非零退出码与本次实际退出码>`
+- 多轮覆盖：`<run 数、相同 input/config 哈希、唯一 nonce/签名 producer log、hidden cases、hard constraint ids、measurement 类型/阈值与 observable 比较结果>`
 - 总体成熟度：L0 / L1 / L2 / L3 / L4
 
 ## 建议操作

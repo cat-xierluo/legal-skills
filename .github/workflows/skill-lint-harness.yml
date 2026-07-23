@@ -1,0 +1,87 @@
+name: Skill Lint Harness
+
+on:
+  pull_request:
+    paths:
+      - "skills/skill-lint/**"
+      - ".claude-plugin/marketplace.json"
+      - "README.md"
+      - ".github/workflows/skill-lint-harness.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "skills/skill-lint/**"
+      - ".claude-plugin/marketplace.json"
+      - "README.md"
+      - ".github/workflows/skill-lint-harness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  harness-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run evidence and instruction-stability regressions
+        run: |
+          python3 -m unittest \
+            skills/skill-lint/scripts/test_harness_evidence_gate.py \
+            skills/skill-lint/scripts/test_instruction_stability_gate.py
+
+      - name: Compile gates
+        run: |
+          python3 -m py_compile \
+            skills/skill-lint/scripts/harness_evidence_gate.py \
+            skills/skill-lint/scripts/instruction_stability_gate.py
+
+      - name: Validate JSON and release metadata
+        run: |
+          python3 -m json.tool .claude-plugin/marketplace.json >/dev/null
+          python3 -m json.tool \
+            skills/skill-lint/config/instruction-stability-contract.example.json \
+            >/dev/null
+          python3 -m json.tool \
+            skills/skill-lint/config/instruction-stability-requirements-baseline.example.json \
+            >/dev/null
+          python3 -m json.tool \
+            skills/skill-lint/config/instruction-stability-held-out-cases.example.json \
+            >/dev/null
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          skill = Path("skills/skill-lint/SKILL.md").read_text(encoding="utf-8")
+          match = re.search(r'^version:\s*"([^"]+)"\s*$', skill, re.MULTILINE)
+          if not match:
+              raise SystemExit("SKILL.md version missing")
+          version = match.group(1)
+
+          changelog = Path("skills/skill-lint/CHANGELOG.md").read_text(encoding="utf-8")
+          if f"## [{version}]" not in changelog:
+              raise SystemExit("CHANGELOG version mismatch")
+
+          marketplace = json.loads(
+              Path(".claude-plugin/marketplace.json").read_text(encoding="utf-8")
+          )
+          entry = next(
+              item for item in marketplace["plugins"] if item["name"] == "skill-lint"
+          )
+          if entry["version"] != version:
+              raise SystemExit("Marketplace version mismatch")
+
+          readme = Path("README.md").read_text(encoding="utf-8")
+          if f"v{version}（待发布）" not in readme:
+              raise SystemExit("README version mismatch")
+          PY
