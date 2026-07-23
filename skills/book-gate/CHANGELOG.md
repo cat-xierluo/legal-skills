@@ -1,25 +1,30 @@
 # 更新日志
 
-本文件记录 book-gate 技能的所有重要变更。
+## [1.0.0] - 2026-07-11
+
+### 新增
+
+- 建立 source → render → independent visual review → DOCX page render → release 的 fail-closed 状态链。
+- 用 `requirements.yaml` 把规则映射到 verifier、scope、阈值和阻断属性；空规则、空 scope、未知 verifier 与未实现阶段一律失败。
+- 候选哈希覆盖 Markdown 与项目声明的所有 SVG/图片表示；证据同时绑定规则文件、PNG、DOCX、PDF 与 reviewer JSON hash。
+- 全量内联 SVG 经 librsvg 渲染，检测 XML、透明底、`style`/`font-family`、marker、端点距离、空白图与可见 bbox 留白。
+- 最终 DOCX 优先绑定 Microsoft Word/WPS 导出的 PDF，再由 Poppler 逐页转 PNG；没有作者引擎 PDF 时仅允许通过中文字符比、bigram 与“文字 bbox 对应栅格墨迹”三重保真校验的 LibreOffice fallback，避免文字层仍在但可见中文全部丢失时假验收。
+- 检查 OOXML 包、脚注 Markdown 残留、中文 ASCII 引号、图片覆盖、页边距、字体与分页边缘裁切。
+- 生成 contact sheets 与逐 artifact review template；支持多个 fresh-context reviewer 分批填写，强制 producer/reviewer 分离、逐图逐维度覆盖和 hash 新鲜度。
+- 新增故障注入回归，覆盖空规则绿灯、空项目、Mermaid、中文 ASCII 引号、相邻图片、旧证据、自审、SVG archive 漂移及 DOCX 脚注星号。
+
+### 修复
+
+- 修复 0.1.0 候选实现把已知 ASCII 引号降为非阻塞 PARTIAL 后仍返回成功的问题。
+- 修复 `--stage png/docx` 在没有任何 requirement 时返回成功的问题。
+- 修复 candidate hash 只覆盖 Markdown、status 不校验陈旧证据、scope/threshold 未执行等 fail-open 路径。
+
+### 文档完善
+
+- 增加独立视觉 reviewer 协议；明确 contact sheet 只定位，必须打开原尺寸 PNG，作者不承担逐图人工兜底。
 
 ## [0.1.0] - 2026-07-11
 
-### 新增（MVP：markdown 阶段 acceptance harness）
-- **五支柱架构**（SKILL.md）：约束机器化（requirements.yaml）+ 分阶段检查正确产物 + 生产者验证者分离 + 证据绑定 candidate SHA + fail-closed 状态机（CONTRACTED→…→CLOSED，worker done=CANDIDATE / PR 合并=MERGED / hash 验证=VERIFIED）。
-- **markdown 阶段验证器**（`scripts/checkers/markdown_checker.py`）：
-  - MD-001 禁 mermaid 代码块（hard，转 Word 降级文本）
-  - MD-002 禁 plantuml/dot/graphviz/flowchart 等非 SVG 图表 DSL（hard）
-  - MD-004 中文夹 ASCII 撇号笔误（soft，md2word isalpha 回归·源稿建议用中文单引号）
-- **主入口**（`scripts/book-gate.py`）：`verify` 跑所有 requirement → 输出证据包 JSON（绑 candidate SHA + 规范版本 + gate 版本 + 逐项 PASS/PARTIAL/FAIL/NEEDS_HUMAN_REVIEW），**blocking 项 FAIL/ERROR/缺证 → 退出码 1（fail-closed）**。无验证器的 requirement 强制 NEEDS_HUMAN_REVIEW（不默认通过）。
-- **requirement schema**（`requirements.yaml`）：id/stage/scope/description/verifier/threshold/blocking/needs_human_review。
+### 技术预研
 
-### 背景
-法律 AI 书 acceptance harness 诊断（ultra-research 研究触发，PM 独立验证层层纠偏）确立核心范式：**不试图保证 Agent 不犯错，而保证错误无法穿过验收门、无法获得"完成"状态**。book-gate 是该范式的可复用出版组件（跨书复用）。诊断过程本身（`<style>` 规则四轮修订、md2word isalpha/footnote 两个真 bug、mermaid 审查盲区）反向印证了 acceptance harness 的必要性。
-
-### 未做（v0.2+）
-- SVG 阶段验证器（viewBox/padding/文字碰撞/箭头端点，复用 writing-reviewer figure-style 逻辑）
-- PNG 渲染验证器（重叠/紧凑度/文字消失）
-- DOCX 结构验证（图片数/脚注XML/字体，可选层）
-- 独立 verifier 强制实现（干净只读环境重生成，与生产者分离）
-- inject-regression 命令 + ch01 正反样本库（references/regression-samples/）
-- 状态机持久化（candidate→SOURCE_VERIFIED→CLOSED 的文件锁定）
+- 建立 acceptance harness 五支柱与 Markdown 阶段概念验证。该版本没有 SVG/PNG/DOCX/独立 reviewer 回归能力，已由 1.0.0 supersede，不具备 release 放行资格。

@@ -1,209 +1,406 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""book-gate：出版 acceptance harness 主入口。
+"""book-gate：把源稿、渲染、独立视觉审查和最终 DOCX 串成 fail-closed gate。"""
 
-用法：
-  python3 book-gate.py verify <manuscript-dir> [--requirements R.yaml] [--stage markdown|all] [--out DIR]
-  python3 book-gate.py status <evidence-dir>
+from __future__ import annotations
 
-核心：fail-closed 验收。每条 requirement 跑 verifier，输出 PASS/PARTIAL/FAIL/
-NEEDS_HUMAN_REVIEW + 证据包（绑 candidate SHA + 规范版本 + gate 版本 + 逐项结果）。
-任一 blocking 项 FAIL/ERROR/缺证 → 退出码 1，candidate 不能升级 SOURCE_VERIFIED。
-"""
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable
 import argparse
-import hashlib
 import json
-import os
 import sys
-from datetime import datetime
 
-GATE_VERSION = '0.1.0'
+try:
+    import yaml
+except ImportError:
+    print("❌ book-gate 缺少 PyYAML。请运行：python3 -m pip install PyYAML", file=sys.stderr)
+    raise SystemExit(2)
 
-# fail-closed 状态机（五支柱之 5）
-STATES = [
-    'CONTRACTED',      # 需求已立
-    'IN_PROGRESS',     # worker 在写
-    'CANDIDATE',       # worker done = 只到这（无权自批）
-    'SOURCE_VERIFIED', # markdown 源经 book-gate 验证通过（本 v0.1 止步于此）
-    'RENDERED',        # SVG/PNG 渲染验证通过（v0.2）
-    'INDEPENDENT_VERIFIED',  # 独立 verifier 干净环境复验（v0.2）
-    'MERGED',          # PR 合并 = 只到这（仍非最终）
-    'RELEASE_VERIFIED',# 最终成品 hash 验证通过
-    'CLOSED',          # 文档同步后
-]
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from gate_models import (  # noqa: E402
+    CheckerOutput,
+    GateContext,
+    canonical_hash,
+    sha256_file,
+)
+import docx_checker  # noqa: E402
+import markdown_checker  # noqa: E402
+import svg_checker  # noqa: E402
+import visual_checker  # noqa: E402
 
 
-def _to_bool(v):
-    return str(v).strip().lower() in ('true', '1', 'yes')
+GATE_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.0.0"
+ALLOWED_REQUIREMENT_STAGES = {"source", "render", "visual", "docx"}
+STAGE_PLAN = {
+    "source": ("source",),
+    "render": ("source", "render"),
+    "visual": ("source", "render", "visual"),
+    "docx": ("source", "docx"),
+    "prepare": ("source", "render", "docx"),
+    # release 先生成 DOCX 分页 PNG，再由 visual 阶段一起核 SVG 与最终页面。
+    "release": ("source", "render", "docx", "visual"),
+    "all": ("source", "render", "docx", "visual"),
+}
+NEXT_STATE = {
+    "source": "SOURCE_VERIFIED",
+    "render": "RENDERED",
+    "visual": "INDEPENDENT_VERIFIED",
+    "docx": "DOCX_VERIFIED",
+    "prepare": "REVIEW_PACKET_READY",
+    "release": "RELEASE_VERIFIED",
+    "all": "RELEASE_VERIFIED",
+}
+
+Verifier = Callable[[GateContext, dict[str, Any]], CheckerOutput]
+VERIFIERS: dict[str, Verifier] = {
+    "markdown.no_diagram_dsl": markdown_checker.no_diagram_dsl,
+    "markdown.no_ascii_cjk_quote": markdown_checker.no_ascii_cjk_quote,
+    "markdown.figure_separation": markdown_checker.figure_separation,
+    "markdown.image_targets_exist": markdown_checker.image_targets_exist,
+    "markdown.footnote_references_resolve": markdown_checker.footnote_references_resolve,
+    "svg.source_policy": svg_checker.source_policy,
+    "svg.marker_integrity": svg_checker.marker_integrity,
+    "svg.render_and_measure": svg_checker.render_and_measure,
+    "visual.attestation_complete": visual_checker.attestation_complete,
+    "docx.package_and_content": docx_checker.package_and_content,
+    "docx.image_coverage": docx_checker.image_coverage,
+    "docx.layout_and_fonts": docx_checker.layout_and_fonts,
+    "docx.render_pages": docx_checker.render_pages,
+}
 
 
-def load_requirements(req_path):
-    """加载 requirement 清单。优先 pyyaml，否则简版手解析。"""
+class SpecError(ValueError):
+    pass
+
+
+def load_spec(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise SpecError(f"requirements 文件不存在：{path}")
     try:
-        import yaml
-        with open(req_path, encoding='utf-8') as f:
-            return yaml.safe_load(f) or {}
-    except ImportError:
-        return _parse_yaml_fallback(req_path)
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise SpecError(f"requirements YAML 无法解析：{exc}") from exc
+    if not isinstance(data, dict):
+        raise SpecError("requirements 根节点必须是 mapping")
+    validate_spec(data)
+    return data
 
 
-def _parse_yaml_fallback(req_path):
-    """无 pyyaml 时的简版解析（支持本 skill requirements.yaml 结构）。"""
-    reqs = []
-    cur = None
-    with open(req_path, encoding='utf-8') as f:
-        for raw in f:
-            s = raw.strip()
-            if s.startswith('- id:'):
-                if cur:
-                    reqs.append(cur)
-                cur = {'id': s.split(':', 1)[1].strip()}
-            elif cur and ':' in s and not s.startswith('-') and not s.startswith('#'):
-                k, v = s.split(':', 1)
-                val = v.strip()
-                if val.startswith('"') and val.endswith('"'):
-                    val = val[1:-1]
-                cur[k.strip()] = val
-    if cur:
-        reqs.append(cur)
-    return {'requirements': reqs, 'schema_version': '0.1.0'}
+def validate_spec(spec: dict[str, Any]) -> None:
+    if str(spec.get("schema_version")) != SCHEMA_VERSION:
+        raise SpecError(f"schema_version 必须是 {SCHEMA_VERSION}")
+    hash_inputs = spec.get("hash_inputs")
+    if not isinstance(hash_inputs, list) or not hash_inputs:
+        raise SpecError("hash_inputs 必须是非空列表")
+    requirements = spec.get("requirements")
+    if not isinstance(requirements, list) or not requirements:
+        raise SpecError("requirements 必须是非空列表；空规则集不得放行")
+    ids: set[str] = set()
+    stages: set[str] = set()
+    for index, requirement in enumerate(requirements, 1):
+        if not isinstance(requirement, dict):
+            raise SpecError(f"第 {index} 条 requirement 不是 mapping")
+        rid = str(requirement.get("id", "")).strip()
+        if not rid or rid in ids:
+            raise SpecError(f"requirement id 缺失或重复：{rid or index}")
+        ids.add(rid)
+        stage = str(requirement.get("stage", ""))
+        if stage not in ALLOWED_REQUIREMENT_STAGES:
+            raise SpecError(f"{rid} 的 stage 非法：{stage}")
+        stages.add(stage)
+        scope = requirement.get("scope")
+        if not isinstance(scope, (str, list)) or not scope:
+            raise SpecError(f"{rid} 缺少 scope")
+        blocking = requirement.get("blocking")
+        if not isinstance(blocking, bool):
+            raise SpecError(f"{rid} 的 blocking 必须是 YAML bool")
+        threshold = requirement.get("threshold", 0)
+        if not isinstance(threshold, int) or threshold < 0:
+            raise SpecError(f"{rid} 的 threshold 必须是非负整数")
+        verifier = str(requirement.get("verifier", "")).strip()
+        needs_human = requirement.get("needs_human_review", False)
+        if not isinstance(needs_human, bool):
+            raise SpecError(f"{rid} 的 needs_human_review 必须是 YAML bool")
+        if not verifier and not needs_human:
+            raise SpecError(f"{rid} 既无 verifier，也未显式 needs_human_review")
+        if verifier and verifier not in VERIFIERS:
+            raise SpecError(f"{rid} 引用了未知 verifier：{verifier}")
+    required_stages = set(spec.get("release", {}).get("required_stages", ALLOWED_REQUIREMENT_STAGES))
+    unknown = required_stages - ALLOWED_REQUIREMENT_STAGES
+    if unknown:
+        raise SpecError(f"release.required_stages 含未知阶段：{sorted(unknown)}")
+    missing = required_stages - stages
+    if missing:
+        raise SpecError(f"release 必需阶段没有任何 requirement：{sorted(missing)}")
 
 
-def candidate_sha(manuscript_dir):
-    """manuscript 目录所有 .md 内容聚合 sha256 = candidate 身份。"""
-    h = hashlib.sha256()
-    files = []
-    for root, _, fns in os.walk(manuscript_dir):
-        for fn in fns:
-            if fn.endswith('.md'):
-                files.append(os.path.join(root, fn))
-    for f in sorted(files):
-        with open(f, 'rb') as fh:
-            h.update(fh.read())
-        h.update(b'\x00')  # 分隔符防拼接歧义
-    return h.hexdigest()
+def build_input_manifest(project_root: Path, spec: dict[str, Any]) -> tuple[list[dict], str]:
+    files: set[Path] = set()
+    unmatched: list[str] = []
+    for pattern in spec["hash_inputs"]:
+        if not isinstance(pattern, str) or Path(pattern).is_absolute() or ".." in Path(pattern).parts:
+            raise SpecError(f"hash_inputs 只能使用项目内相对 glob：{pattern}")
+        matches = [item.resolve() for item in project_root.glob(pattern) if item.is_file()]
+        if not matches:
+            unmatched.append(pattern)
+        files.update(matches)
+    if not files:
+        raise SpecError("hash_inputs 没有匹配任何文件；空项目不得放行")
+    if unmatched and spec.get("require_each_hash_input", True):
+        raise SpecError(f"以下 hash_inputs 没有匹配文件：{unmatched}")
+    manifest = [
+        {
+            "path": path.relative_to(project_root.resolve()).as_posix(),
+            "sha256": sha256_file(path),
+            "size": path.stat().st_size,
+        }
+        for path in sorted(files, key=lambda item: item.relative_to(project_root.resolve()).as_posix())
+    ]
+    return manifest, canonical_hash(manifest)
 
 
-def run_verifier(verifier_name, manuscript_dir):
-    """按 'checkers.markdown_checker.no_mermaid' 调度函数。"""
-    scripts_dir = os.path.dirname(os.path.abspath(__file__))
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
-    module_path, func_name = verifier_name.rsplit('.', 1)
-    mod = __import__(module_path, fromlist=[func_name])
-    func = getattr(mod, func_name)
-    return func(manuscript_dir)
+def run_gate(
+    project_root: Path,
+    requirements_path: Path,
+    stage: str,
+    output_dir: Path,
+    docx_path: Path | None,
+    rendered_pdf_path: Path | None,
+    visual_review_path: Path | None,
+    producer_id: str,
+) -> tuple[int, dict[str, Any]]:
+    spec = load_spec(requirements_path)
+    manifest, candidate_sha = build_input_manifest(project_root, spec)
+    selected = STAGE_PLAN[stage]
+    requirements = [item for item in spec["requirements"] if item["stage"] in selected]
+    requirements.sort(key=lambda item: selected.index(item["stage"]))
+    present_stages = {item["stage"] for item in requirements}
+    missing_selected = set(selected) - present_stages
+    if missing_selected:
+        raise SpecError(f"所选 gate 阶段没有 requirement：{sorted(missing_selected)}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ctx = GateContext(
+        project_root=project_root,
+        requirements_path=requirements_path,
+        output_dir=output_dir,
+        candidate_sha=candidate_sha,
+        input_manifest=manifest,
+        selected_stage=stage,
+        config=spec,
+        docx_path=docx_path,
+        rendered_pdf_path=rendered_pdf_path,
+        visual_review_path=visual_review_path,
+        producer_id=producer_id,
+    )
+    results: list[dict[str, Any]] = []
+    blocked = False
+    stage_metrics: dict[str, Any] = {}
+    artifact_index: dict[str, dict] = {}
 
-
-def verify(manuscript_dir, req_path, stage='all', out_dir=None):
-    """跑 requirement，输出证据包。fail-closed（blocking 缺证/失败 → 退出码 1）。"""
-    spec = load_requirements(req_path)
-    reqs = spec.get('requirements', [])
-    if stage != 'all':
-        reqs = [r for r in reqs if r.get('stage') == stage]
-
-    sha = candidate_sha(manuscript_dir)
-    results = []
-    blocking_fail = False
-
-    for r in reqs:
-        rid = r.get('id', '?')
-        verifier = r.get('verifier', '').strip()
-        blocking = _to_bool(r.get('blocking', 'true'))
-        needs_human = _to_bool(r.get('needs_human_review', 'false'))
-
-        if not verifier or needs_human:
-            # 五支柱之 1：无验证器 → 强制 NEEDS_HUMAN_REVIEW，不能默认通过
-            results.append({'req_id': rid, 'verdict': 'NEEDS_HUMAN_REVIEW',
-                            'stage': r.get('stage'),
-                            'note': r.get('note') or '无自动验证器，需人工复核'})
-            if blocking:
-                blocking_fail = True  # blocking 项缺证也阻断（fail-closed）
+    for requirement in requirements:
+        rid = requirement["id"]
+        blocking = requirement["blocking"]
+        scope_count = len(ctx.scope_files(requirement))
+        if scope_count == 0 and not requirement.get("allow_empty_scope", False):
+            results.append({
+                "req_id": rid,
+                "stage": requirement["stage"],
+                "blocking": blocking,
+                "verdict": "ERROR",
+                "error": "scope 没有匹配任何文件",
+                "scope": requirement["scope"],
+            })
+            blocked = True
             continue
-
+        if requirement.get("needs_human_review", False):
+            results.append({
+                "req_id": rid,
+                "stage": requirement["stage"],
+                "blocking": blocking,
+                "verdict": "NEEDS_HUMAN_REVIEW",
+                "note": requirement.get("note", "无自动 verifier，证据不足"),
+            })
+            blocked = True
+            continue
         try:
-            findings = run_verifier(verifier, manuscript_dir)
-            hard = [f for f in findings if f.severity == 'hard']
-            soft = [f for f in findings if f.severity == 'soft']
-            if hard:
-                verdict = 'FAIL'
+            output = VERIFIERS[requirement["verifier"]](ctx, requirement)
+            if not isinstance(output, CheckerOutput):
+                raise TypeError("verifier 必须返回 CheckerOutput")
+            count = len(output.findings)
+            threshold = requirement.get("threshold", 0)
+            if count > threshold:
+                verdict = "FAIL" if blocking else "PARTIAL"
                 if blocking:
-                    blocking_fail = True
-            elif soft:
-                verdict = 'PARTIAL'
+                    blocked = True
             else:
-                verdict = 'PASS'
-            results.append({'req_id': rid, 'verdict': verdict, 'stage': r.get('stage'),
-                            'blocking': blocking,
-                            'hard_count': len(hard), 'soft_count': len(soft),
-                            'findings': [f.to_dict() for f in findings[:20]]})
-        except Exception as e:
-            results.append({'req_id': rid, 'verdict': 'ERROR', 'stage': r.get('stage'),
-                            'blocking': blocking, 'error': f'{type(e).__name__}: {e}'})
-            if blocking:
-                blocking_fail = True
+                verdict = "PASS"
+            result = {
+                "req_id": rid,
+                "stage": requirement["stage"],
+                "blocking": blocking,
+                "verdict": verdict,
+                "finding_count": count,
+                "threshold": threshold,
+                "scope_count": scope_count,
+                "findings": [finding.to_dict() for finding in output.findings],
+                "metrics": output.metrics,
+            }
+            results.append(result)
+            stage_metrics[rid] = output.metrics
+            for artifact in output.artifacts:
+                if artifact.get("artifact_id"):
+                    artifact_index[artifact["artifact_id"]] = artifact
+        except Exception as exc:
+            results.append({
+                "req_id": rid,
+                "stage": requirement["stage"],
+                "blocking": blocking,
+                "verdict": "ERROR",
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            blocked = True
+
+    if stage == "prepare" and not blocked:
+        packet = visual_checker.prepare_review_template(ctx)
+        packet_blocked = bool(packet.findings)
+        results.append({
+            "req_id": "REVIEW-PACKET",
+            "stage": "prepare",
+            "blocking": True,
+            "verdict": "FAIL" if packet_blocked else "PASS",
+            "finding_count": len(packet.findings),
+            "threshold": 0,
+            "findings": [finding.to_dict() for finding in packet.findings],
+            "metrics": packet.metrics,
+        })
+        stage_metrics["REVIEW-PACKET"] = packet.metrics
+        blocked = blocked or packet_blocked
 
     evidence = {
-        'candidate_sha': sha,
-        'manuscript_dir': os.path.abspath(manuscript_dir),
-        'spec_schema_version': spec.get('schema_version'),
-        'gate_version': GATE_VERSION,
-        'verified_at': datetime.now().isoformat(timespec='seconds'),
-        'stage': stage,
-        'next_state_if_pass': 'SOURCE_VERIFIED' if stage in ('all', 'markdown') else None,
-        'results': results,
-        'overall': 'BLOCKED' if blocking_fail else 'SOURCE_VERIFIED_CANDIDATE',
+        "schema_version": SCHEMA_VERSION,
+        "gate_version": GATE_VERSION,
+        "candidate_sha": candidate_sha,
+        "requirements_sha256": sha256_file(requirements_path),
+        "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "requested_stage": stage,
+        "selected_stages": list(selected),
+        "next_state_if_pass": NEXT_STATE[stage],
+        "overall": "BLOCKED" if blocked else NEXT_STATE[stage],
+        "hash_inputs": spec["hash_inputs"],
+        "input_manifest": manifest,
+        "results": results,
+        "stage_metrics": stage_metrics,
+        "artifact_count": len(artifact_index),
     }
+    evidence_path = output_dir / f"evidence-{candidate_sha[:12]}-{stage}.json"
+    evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    evidence["evidence_file"] = evidence_path.name
+    return (1 if blocked else 0), evidence
 
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
-        path = os.path.join(out_dir, f'evidence-{sha[:12]}.json')
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(evidence, f, ensure_ascii=False, indent=2)
-        print(f'evidence bundle: {path}')
 
-    print(f"candidate_sha: {sha[:12]}…  overall: {evidence['overall']}  stage: {stage}")
-    for r in results:
-        if r['verdict'] != 'PASS':
-            detail = ''
-            if 'hard_count' in r:
-                detail = f"{r['hard_count']} hard / {r['soft_count']} soft"
+def status(evidence_path: Path, project_root: Path, requirements_path: Path | None) -> int:
+    files = [evidence_path] if evidence_path.is_file() else sorted(evidence_path.glob("evidence-*.json"))
+    if not files:
+        print("没有 evidence JSON", file=sys.stderr)
+        return 2
+    stale_any = False
+    for path in files:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        manifest = []
+        for item in data.get("input_manifest", []):
+            candidate = project_root / item["path"]
+            if not candidate.is_file():
+                manifest.append({"path": item["path"], "sha256": "MISSING", "size": 0})
             else:
-                detail = r.get('note') or r.get('error', '')
-            print(f"  [{r['verdict']}] {r['req_id']} ({r.get('stage')}): {detail}")
-
-    return 1 if blocking_fail else 0
-
-
-def main():
-    ap = argparse.ArgumentParser(prog='book-gate', description='出版 acceptance harness（fail-closed）')
-    sub = ap.add_subparsers(dest='cmd', required=True)
-    v = sub.add_parser('verify', help='验证 candidate（blocking FAIL → 退出码 1）')
-    v.add_argument('manuscript_dir')
-    v.add_argument('--requirements', '-r', default=None)
-    v.add_argument('--stage', default='all', choices=['all', 'markdown', 'svg', 'png', 'docx'])
-    v.add_argument('--out', default=None, help='证据包输出目录')
-    s = sub.add_parser('status', help='查看证据包')
-    s.add_argument('evidence_dir')
-    args = ap.parse_args()
-
-    if args.cmd == 'verify':
-        here = os.path.dirname(os.path.abspath(__file__))
-        req_default = os.path.join(here, '..', 'requirements.yaml')
-        req_path = args.requirements or req_default
-        out_dir = args.out or os.path.join(os.path.dirname(args.manuscript_dir.rstrip('/')),
-                                            '.book-gate-evidence')
-        sys.exit(verify(args.manuscript_dir, req_path, args.stage, out_dir))
-    elif args.cmd == 'status':
-        for fn in sorted(os.listdir(args.evidence_dir)):
-            if fn.startswith('evidence-') and fn.endswith('.json'):
-                with open(os.path.join(args.evidence_dir, fn), encoding='utf-8') as f:
-                    ev = json.load(f)
-                print(f"{fn}: {ev['overall']} sha={ev['candidate_sha'][:12]}… "
-                      f"({sum(1 for r in ev['results'] if r['verdict']=='FAIL')} FAIL / "
-                      f"{sum(1 for r in ev['results'] if r['verdict']=='PARTIAL')} PARTIAL / "
-                      f"{sum(1 for r in ev['results'] if r['verdict']=='NEEDS_HUMAN_REVIEW')} HUMAN)")
+                manifest.append({
+                    "path": item["path"],
+                    "sha256": sha256_file(candidate),
+                    "size": candidate.stat().st_size,
+                })
+        current_sha = canonical_hash(manifest)
+        stale = current_sha != data.get("candidate_sha")
+        if requirements_path is not None:
+            stale = stale or sha256_file(requirements_path) != data.get("requirements_sha256")
+        stale_any = stale_any or stale
+        label = "STALE" if stale else data.get("overall", "UNKNOWN")
+        print(
+            f"{path.name}: {label} candidate={data.get('candidate_sha', '')[:12]} "
+            f"stage={data.get('requested_stage')}"
+        )
+    return 1 if stale_any else 0
 
 
-if __name__ == '__main__':
-    main()
+def _resolve_project_root(raw: Path) -> Path:
+    resolved = raw.expanduser().resolve()
+    if resolved.name == "manuscript":
+        return resolved.parent
+    return resolved
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="book-gate", description="书籍最终成品 acceptance gate")
+    sub = parser.add_subparsers(dest="command", required=True)
+    verify_parser = sub.add_parser("verify", help="运行 source/render/visual/docx/release gate")
+    verify_parser.add_argument("project_root", type=Path)
+    verify_parser.add_argument("--requirements", "-r", type=Path)
+    verify_parser.add_argument("--stage", choices=tuple(STAGE_PLAN), default="source")
+    verify_parser.add_argument("--out", type=Path)
+    verify_parser.add_argument("--docx", type=Path)
+    verify_parser.add_argument("--pdf", type=Path, help="由 Microsoft Word/WPS 导出的作者所见 PDF；优先于 LibreOffice fallback")
+    verify_parser.add_argument("--visual-review", type=Path)
+    verify_parser.add_argument("--producer-id", default="")
+    status_parser = sub.add_parser("status", help="重算输入 hash，识别陈旧证据")
+    status_parser.add_argument("evidence", type=Path)
+    status_parser.add_argument("--project-root", required=True, type=Path)
+    status_parser.add_argument("--requirements", type=Path)
+    args = parser.parse_args()
+
+    if args.command == "status":
+        return status(
+            args.evidence.expanduser().resolve(),
+            _resolve_project_root(args.project_root),
+            args.requirements.expanduser().resolve() if args.requirements else None,
+        )
+
+    project_root = _resolve_project_root(args.project_root)
+    requirements_path = (
+        args.requirements.expanduser().resolve()
+        if args.requirements
+        else (SCRIPT_DIR.parent / "requirements.yaml").resolve()
+    )
+    output_dir = (
+        args.out.expanduser().resolve()
+        if args.out
+        else project_root / ".book-gate-evidence"
+    )
+    try:
+        code, evidence = run_gate(
+            project_root,
+            requirements_path,
+            args.stage,
+            output_dir,
+            args.docx.expanduser().resolve() if args.docx else None,
+            args.pdf.expanduser().resolve() if args.pdf else None,
+            args.visual_review.expanduser().resolve() if args.visual_review else None,
+            args.producer_id.strip(),
+        )
+    except SpecError as exc:
+        print(f"❌ requirements/gate 配置错误：{exc}", file=sys.stderr)
+        return 2
+    print(
+        f"candidate={evidence['candidate_sha'][:12]} overall={evidence['overall']} "
+        f"stage={evidence['requested_stage']} evidence={evidence['evidence_file']}"
+    )
+    for result in evidence["results"]:
+        if result["verdict"] != "PASS":
+            detail = result.get("finding_count", result.get("error", result.get("note", "")))
+            print(f"  [{result['verdict']}] {result['req_id']}: {detail}")
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

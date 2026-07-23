@@ -1,51 +1,169 @@
-# book-gate requirement 清单（约束机器化）
-# 每条 requirement = 一个可机器验证或需人工的检查项
-# verifier 字段指向 scripts/checkers/<module>.<function>（book-gate.py 按此调度）
-# 无 verifier 的项必须 needs_human_review: true（不能默认通过）
-schema_version: 0.1.0
+schema_version: 1.0.0
+
+# candidate hash 同时覆盖正文与独立 SVG 表示；项目可在自己的 requirements 中增删。
+hash_inputs:
+  - "manuscript/**/*.md"
+  - "figures/ai-generated/**/*.svg"
+require_each_hash_input: false
+
+release:
+  required_stages: [source, render, visual, docx]
+
+visual_review:
+  dimensions:
+    - id: content_matches_context
+      allow_na: false
+      applies_to: [inline_svg]
+    - id: text_readable
+      allow_na: false
+      applies_to: [inline_svg, docx_page]
+    - id: no_overlap_or_clipping
+      allow_na: false
+      applies_to: [inline_svg, docx_page]
+    - id: arrows_correct
+      allow_na: true
+      applies_to: [inline_svg]
+    - id: spacing_and_density
+      allow_na: false
+      applies_to: [inline_svg, docx_page]
+    - id: caption_assignment
+      allow_na: false
+      applies_to: [inline_svg, docx_page]
+    - id: style_consistent
+      allow_na: false
+      applies_to: [inline_svg, docx_page]
+    - id: page_layout_and_pagination
+      allow_na: false
+      applies_to: [docx_page]
 
 requirements:
-  # ===== Markdown 阶段 =====
   - id: MD-001
-    stage: markdown
-    scope: "manuscript/ch*.md"
-    description: "禁 mermaid 代码块（转 Word 降级为文本）"
-    verifier: "checkers.markdown_checker.no_mermaid"
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "禁止 Mermaid/PlantUML/DOT 等非 SVG 图表 DSL"
+    verifier: markdown.no_diagram_dsl
     threshold: 0
     blocking: true
     needs_human_review: false
 
   - id: MD-002
-    stage: markdown
-    scope: "manuscript/ch*.md"
-    description: "禁 plantuml/dot/graphviz/flowchart 等非 SVG 图表 DSL"
-    verifier: "checkers.markdown_checker.no_other_diagram_dsl"
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "中文语境禁止 ASCII 单引号"
+    verifier: markdown.no_ascii_cjk_quote
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: MD-003
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "相邻图片之间必须有正文承接"
+    verifier: markdown.figure_separation
     threshold: 0
     blocking: true
     needs_human_review: false
 
   - id: MD-004
-    stage: markdown
-    scope: "manuscript/ch*.md"
-    description: "中文夹 ASCII 撇号应改用中文单引号（md2word isalpha 回归·源稿笔误）"
-    verifier: "checkers.markdown_checker.chinese_quote_correct"
-    threshold: 0
-    blocking: false
-    needs_human_review: false
-
-  # ===== SVG 阶段（v0.2 接入，复用 writing-reviewer figure-style）=====
-  - id: SVG-001
-    stage: svg
-    scope: "figures/ai-generated/ch*/*.svg"
-    description: "透明底（无全画布白底矩形）"
-    verifier: ""  # v0.1 未实现 svg_checker
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "本地图片引用必须存在"
+    verifier: markdown.image_targets_exist
     threshold: 0
     blocking: true
-    needs_human_review: true
-    note: "v0.2 接入 svg_checker.transparent_bg；当前人工复核"
+    needs_human_review: false
 
-  # ===== PNG 渲染阶段（v0.2+）=====
-  # ===== DOCX 阶段（v0.2+，可选层）=====
+  - id: MD-005
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "脚注引用必须有且只有一个定义"
+    verifier: markdown.footnote_references_resolve
+    threshold: 0
+    blocking: true
+    needs_human_review: false
 
-# 回归样本目录（inject-regression 注入已知错误验证 gate）
-regression_samples_dir: "references/regression-samples"
+  - id: SVG-001
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "内联 SVG 必须可解析、透明底、无 style/font-family、尺寸显式"
+    verifier: svg.source_policy
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: SVG-002
+    stage: source
+    scope: "manuscript/**/*.md"
+    description: "marker 引用与箭头落点必须可判定"
+    verifier: svg.marker_integrity
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+    options:
+      single_marker_id: true
+      max_endpoint_distance: 18
+
+  - id: RENDER-001
+    stage: render
+    scope: "manuscript/**/*.md"
+    description: "每张内联 SVG 必须真实渲染为非空 PNG，并检查可见 bbox 留白"
+    verifier: svg.render_and_measure
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+    options:
+      render_width: 1440
+      max_padding_ratio: 0.22
+
+  - id: VISUAL-001
+    stage: visual
+    scope: "manuscript/**/*.md"
+    description: "独立 reviewer 必须按 PNG hash 逐图、逐维度覆盖"
+    verifier: visual.attestation_complete
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: DOCX-001
+    stage: docx
+    scope: "manuscript/**/*.md"
+    description: "最终 DOCX 包完整，正文/脚注无转换残留"
+    verifier: docx.package_and_content
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+
+  - id: DOCX-002
+    stage: docx
+    scope: "manuscript/**/*.md"
+    description: "DOCX 图片引用数不得低于源稿图片出现数"
+    verifier: docx.image_coverage
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+    options:
+      min_coverage_ratio: 1.0
+
+  - id: DOCX-003
+    stage: docx
+    scope: "manuscript/**/*.md"
+    description: "DOCX 所有 section 的页边距与字体必须符合项目配置"
+    verifier: docx.layout_and_fonts
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+    options: {}
+
+  - id: DOCX-004
+    stage: docx
+    scope: "manuscript/**/*.md"
+    description: "最终 DOCX 必须经作者使用的排版引擎导出 PDF（或经保真度证明的 fallback），所有页面进入独立视觉 review"
+    verifier: docx.render_pages
+    threshold: 0
+    blocking: true
+    needs_human_review: false
+    options:
+      page_dpi: 120
+      min_cjk_text_ratio: 0.90
+      min_cjk_bigram_coverage: 0.90
+      min_cjk_glyph_coverage: 0.98

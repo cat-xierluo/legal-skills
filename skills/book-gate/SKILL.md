@@ -1,74 +1,148 @@
 ---
 name: book-gate
-description: 书籍/长文出版物的 acceptance harness（验收内核）。针对作者最终看到的成品（Markdown 源 + 内联 SVG + PNG 渲染 + 可选 DOCX）独立验证并控制完成状态。生产者（worker/作者）的 done 只等于 CANDIDATE，PR 合并只等于 MERGED，独立 verifier 验证通过才是 VERIFIED，缺证不准归档。让 Agent 漏项无法穿过验收门、无法获得"完成"状态。触发词：book-gate verify / 出版前验收 / 验收门禁 / 防漏项 / 回归验证 / fail-closed / 成品验证。
-version: 0.1.0
+description: 本技能应在书籍或长文出版物需要出版前验收、逐图防漏、最终 DOCX 分页复核、回归验证或 fail-closed 完成门禁时使用。它把 Markdown、内联 SVG、真实 PNG、独立视觉 reviewer 与最终 DOCX/PDF 页面绑定到同一候选哈希，缺证或失败即阻断完成。不要用于单篇文章润色、只读审稿或生成配图。
+version: "1.0.0"
+license: MIT
+author: 杨卫薪律师（微信ywxlaw）
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
-# book-gate：出版 acceptance harness
+# book-gate
 
-## 为什么存在（核心范式）
+把“worker 说完成”降级为 candidate；只让经过成品证据验证的 candidate 获得 release 状态。不要试图靠更长 prompt 保证 Agent 永不漏项，要让漏项无法穿过验收门。
 
-Agent harness（让 worker 读规则/分工/运行/汇报/合并）**无法消灭漏项**——规则在长上下文不被稳定调用、worker 自评偏乐观、规则/版本/多份表示持续漂移。book-gate 不试图保证 Agent 不犯错，而是 **保证错误无法穿过验收门、无法获得"完成"状态**（fail-closed）。
+## 完成状态
 
-区分两种 harness：
-- **agent harness**：worker 读规则、改文件、commit、PR、汇报——**产出 candidate**。
-- **acceptance harness**（本 skill）：针对**成品**独立验证，控制完成状态——candidate 能否升级为 VERIFIED / CLOSED。
+按以下含义报告状态：
 
-## 五支柱
+- worker `done`：`CANDIDATE`
+- source gate 通过：`SOURCE_VERIFIED`
+- SVG 全量真实渲染通过：`RENDERED`
+- 独立 reviewer 按哈希逐图通过：`INDEPENDENT_VERIFIED`
+- 实际 DOCX 结构与分页渲染通过：`DOCX_VERIFIED`
+- SVG + 最终 DOCX 每页均有独立视觉证据：`RELEASE_VERIFIED`
+- 项目上下文同步完成：项目可再标 `CLOSED`
 
-1. **约束机器化**：每条要求 → 结构化 requirement 记录（`requirement_id` / 适用范围 / 被验证产物阶段 / 验证器 / 阈值 / 证据路径 / 是否阻断 / `needs_human_review`）。**无自动验证器的规则强制进 `needs_human_review`，不能默认通过。**
-2. **分阶段检查正确产物**：不查源码代理指标，查作者最终看到的成品：
-   - **Markdown 源**：mermaid 残留 / 图表顺序 / 引用 / 术语 / 长段 / 脚注源格式
-   - **内联 SVG**：viewBox / 可见 bbox / padding / 文字碰撞 / 箭头端点与目标框距离
-   - **PNG 渲染**：重叠 / 紧凑度 / 箭头方向 / 文字消失
-   - **可选 DOCX**：图片数 / 脚注 XML / 字体 / 页边距
-   - （Word/PDF 仅最终展示，**不进强制 gate**——作者通读兜底；本 skill 验证 Markdown + SVG + PNG，DOCX 可选）
-3. **生产者与验证者分离**：生产 worker 只能提交 `CANDIDATE`，**无权批准自己**。独立 verifier 干净只读环境，自己重生成产物，不先读生产者"已通过"结论；确定性检查优先；视觉项用 fresh-context 或不同模型；主观项用作者标定的正反例校准。
-4. **证据绑定成品哈希**：每项结果记录 `candidate SHA + 规范版本 + 验证器版本 + 产物 hash + requirement_id + 逐项 PASS/PARTIAL/FAIL + 页面/图号/bbox + 截图/日志路径`。正文/SVG/转换器/字体/模板任一变化，旧证据自动失效。
-5. **fail-closed 状态**：`CONTRACTED → IN_PROGRESS → CANDIDATE → SOURCE_VERIFIED → RENDERED → INDEPENDENT_VERIFIED → MERGED → RELEASE_VERIFIED → CLOSED`。worker `done`=CANDIDATE；PR 合并=MERGED；最终成品对应 hash 验证通过=`*_VERIFIED`；文档同步后 CLOSED。**任一 blocking 项缺证/失败，禁止归档。all-of gate——不能用"平均分"抵消一处缺图/箭头重叠/图注错位。**
+任何 blocking requirement 缺失、无 verifier、scope 为空、verifier 报错、证据过期或 verdict 非 PASS，都保持 `BLOCKED`。禁止平均分抵消单项失败。
 
-## 调用
+## 依赖
+
+先安装一次：
 
 ```bash
-# 验证一个 candidate（manuscript 目录）
-book-gate verify <manuscript-dir> [--requirements requirements.yaml] [--stage markdown|all] [--out evidence-dir]
-#   blocking FAIL → 退出码 1（fail-closed），candidate 不能升级 SOURCE_VERIFIED
-
-# 查看证据包
-book-gate status <evidence-dir>
+python3 -m pip install PyYAML Pillow
+# macOS
+brew install librsvg poppler
+# 没有 Microsoft Word/WPS 导出的 PDF 时，fallback 需要 LibreOffice
+brew install --cask libreoffice
 ```
 
-## 回归机制（最重要）
+脚本会检查依赖并明确失败，不会因缺工具而静默跳过。
 
-作者发现的每个真实错误 → 转回归样例：反向/悬空箭头、viewBox 多 80px、文字与序号重叠、两图直接相邻、图注归属错误、mermaid 残留、ASCII 单引号、脚注星号、页边距/字体。
-**先故意注入这些错误到测试样本，验证 gate 能否稳定报错**（mutation testing 思路）——一个连已知错误都抓不住的 auditor，不具备放行资格。回归样本存 `references/regression-samples/`。
+## 工作流
 
-## 指标
-- 硬约束可执行覆盖率：100%
-- 本次改动视觉项成品验证率：100%
-- 已知回归复发：0
-- P0 成品逃逸：0
-- verifier 被作者推翻率：逐步降至 5% 以下（区分假阳性 vs 真漏）
+设定路径：
 
-## 目录结构
-```
-book-gate/
-├── SKILL.md                       # 本文件（架构 + 调用）
-├── requirements.yaml              # 约束机器化：requirement 清单（id/stage/verifier/blocking/needs_human_review）
-├── CHANGELOG.md
-├── scripts/
-│   ├── book-gate.py               # 主入口：verify（跑 requirement + 输出证据包 + fail-closed 退出码）
-│   └── checkers/
-│       └── markdown_checker.py    # markdown 阶段验证器（mermaid/图表DSL/中文撇号）
-└── references/
-    └── regression-samples/        # ch01 正反样本（故意注入已知错误）
+```bash
+GATE=/path/to/book-gate/scripts/book-gate.py
+ROOT=/path/to/book-project
+REQ="$ROOT/book-gate.yaml"
+OUT="$ROOT/.book-gate-evidence"
 ```
 
-## 范围与边界
-- **验证对象**：Markdown 源 + 内联 SVG 源 + PNG 渲染（核心）；DOCX 结构（可选层）；Word/PDF 不进强制 gate（作者通读兜底）。
-- **不替代 agent harness**：worker 仍读规则/分工/commit；book-gate 只在"完成状态"关口独立验证。
-- **通用跨项目**：requirement 清单项目自维护（每本书的 `requirements.yaml` 不同）；本 skill 提供验证器框架 + fail-closed 状态机，跨书复用。
+### 1. 验证源稿
 
-## v0.1 已实现 / v0.2+ 待办
-- ✅ v0.1：markdown 阶段验证器（MD-001/002/004）+ requirement schema + 证据包（candidate SHA 绑定）+ fail-closed 退出码。
-- ⏳ v0.2+：SVG 验证器（复用 writing-reviewer figure-style）/ PNG 渲染验证器 / DOCX 结构验证 / 独立 verifier 强制实现（干净只读环境重生成）/ inject-regression 命令 + ch01 正反样本库 / 状态机持久化（candidate→CLOSED 文件锁定）。
+```bash
+python3 "$GATE" verify "$ROOT" --requirements "$REQ" --stage source --out "$OUT"
+```
+
+同时检查 Markdown、内联 SVG 与项目配置；候选哈希包含 `hash_inputs` 中的所有表示。空规则、空 scope、Mermaid、中文 ASCII 引号、相邻图无承接、断图、悬空脚注、SVG 语法/marker 问题均阻断。
+
+### 2. 生成真正的视觉审查包
+
+使用作者实际查看的最终 DOCX。优先由 Agent 通过 Computer Use 在 Microsoft Word/WPS 中导出同版 PDF；这是排版引擎的机器可读快照，不是让作者逐页检查：
+
+```bash
+python3 "$GATE" verify "$ROOT" \
+  --requirements "$REQ" \
+  --stage prepare \
+  --docx /path/to/final.docx \
+  --pdf /path/to/word-or-wps-export.pdf \
+  --producer-id <worker-or-branch-id> \
+  --out "$OUT"
+```
+
+如果当前环境无法操作 Word/WPS，可暂时不传 `--pdf`，脚本会用 LibreOffice fallback；但只有 PDF 中文文字层与 DOCX 达到配置的字符比、bigram 覆盖阈值，且 PDF 声称存在的中文词框在页面 PNG 中确有可见墨迹时才继续。字体缺失导致“文字层还在、页面上的中文正文实际丢失”会直接阻断，不得拿失真分页包做审查。
+
+该命令必须完成四件事：
+
+1. 全量内联 SVG 经 `rsvg-convert` 生成原尺寸 PNG，并测可见 bbox/留白；
+2. Word/WPS PDF（或通过文字保真校验的 LibreOffice fallback）经 Poppler 逐页转 PNG；
+3. 生成 SVG 与 DOCX 页面 contact sheets（只作索引）；
+4. 生成 `visual-review-<sha>-prepare.template.json`，绑定 candidate、DOCX、PNG 与 manifest hash。
+
+### 3. 派独立视觉 reviewer
+
+读取并严格执行 `references/visual-review-protocol.md`。用 fresh-context Subagent/视觉 Agent 分批审查；不要让作者逐图人工兜底，也不要让生产者自审。writing-reviewer 的文字 finding 可以作为线索，但只有符合 JSON 协议且覆盖全部 artifact 的独立审查才是 gate 证据。
+
+把各 reviewer 的 JSON 放入独立目录，例如：
+
+```text
+.book-gate-evidence/reviews-current/
+├── reviewer-a.json
+├── reviewer-b.json
+└── reviewer-c.json
+```
+
+### 4. 验证最终 release
+
+```bash
+python3 "$GATE" verify "$ROOT" \
+  --requirements "$REQ" \
+  --stage release \
+  --docx /path/to/final.docx \
+  --pdf /path/to/word-or-wps-export.pdf \
+  --producer-id <worker-or-branch-id> \
+  --visual-review "$OUT/reviews-current" \
+  --out "$OUT"
+```
+
+只有退出码 `0` 且 `overall=RELEASE_VERIFIED` 才能把对应候选标为 release 完成。DOCX/正文/SVG/规则/模板任一变动都会改变 hash，旧 review 自动失效。
+
+### 5. 检查证据是否陈旧
+
+```bash
+python3 "$GATE" status "$OUT/evidence-<sha>-release.json" \
+  --project-root "$ROOT" --requirements "$REQ"
+```
+
+输出 `STALE` 时必须重跑，不得继续引用旧的“通过”结论。
+
+## Requirement 配置
+
+复制 `requirements.yaml` 到书籍项目，命名为 `book-gate.yaml`，只在项目文件中维护项目阈值与权威规范指针。不要把同一条写作规则复制进 Skill；配置只记录 rule id、verifier、阈值、scope 与 canonical source。
+
+每条 requirement 必须包含：
+
+- `id`、`stage`、`scope`、`verifier`、`threshold`
+- `blocking`（YAML bool）
+- `needs_human_review`（YAML bool）
+
+无自动 verifier 的规则必须显式 `needs_human_review: true`，这会阻断 gate，直到实现机器检查或由结构化独立审查接管。
+
+## 回归规则
+
+每个作者发现的真实逃逸都先变成故障注入测试，再修 verifier。运行：
+
+```bash
+python3 -m unittest discover -s /path/to/book-gate/scripts -p 'test_*.py' -v
+```
+
+至少保留 Mermaid、空规则绿灯、中文 ASCII 引号、脚注星号、相邻图无承接、SVG 渲染/留白、旧 hash、自审、漏图和 DOCX 图片数不足等样本。一个抓不住已知错误的 verifier 不具备放行资格。
+
+## 边界
+
+- 本技能做最终成品 acceptance，不替代写作、配图生成或 writing-reviewer 的内容审查。
+- 本技能不决定作者主观取舍；主观项由独立视觉 reviewer 按项目已有规范判定并写结构化证据。
+- `prepare` 只生成审查包，不等于通过；`release` 才是最终门禁。
+- evidence 含本地渲染件与上下文片段，应保持在项目忽略目录，不提交含客户信息的证据包。
