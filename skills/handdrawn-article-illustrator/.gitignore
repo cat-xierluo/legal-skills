@@ -1,0 +1,19 @@
+# 运行产物（本地预览、批量出图、prompt 队列、压缩中间件）
+local_preview/
+prompts.json
+composition_guides/
+*outdir*/
+output/
+
+# 敏感配置（API Key 等）——永不提交
+secrets.env
+*.env
+!*.env.example
+!secrets.env.example
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc

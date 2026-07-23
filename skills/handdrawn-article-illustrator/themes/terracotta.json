@@ -1,0 +1,13 @@
+{
+  "name": "terracotta",
+  "display_name": "赭石（暖调示例）",
+  "description": "暖米白底 + 赭石重点色 + 近黑墨线。暖调低饱和，适合人文、文化、生活方式类文章，展示如何用非蓝灰色系保持同样的手绘对象卡片风格。",
+  "colors": {
+    "accent_name": "terracotta",
+    "accent_color": "#A65A3D",
+    "paper_background": "#FAF7F0",
+    "paper_surface": "#F2EDE2",
+    "ink_color": "#1A1410"
+  },
+  "recommended_for": ["人文", "文化", "生活方式", "暖调"]
+}

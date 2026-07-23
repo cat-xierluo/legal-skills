@@ -1,0 +1,87 @@
+{
+  "title": "企业使用 AI Agent 的法律风险与治理边界",
+  "title_en": "Legal risks and governance boundaries for enterprise AI agents",
+  "source_type": "wechat_article",
+  "aspect": "16:9",
+  "hand": "none",
+  "style": {
+    "background_mode_sequence": ["paper", "paper", "paper", "inverted"],
+    "abstraction_strength": "balanced",
+    "accent_ratio": "8-15%"
+  },
+  "illustrations": [
+    {
+      "id": "01",
+      "position": "标题后",
+      "target": "cover",
+      "title": "首图：AI Agent 治理边界",
+      "title_en": "AI agent governance boundary",
+      "metaphor": "network",
+      "concept": "企业需要给 AI Agent 建立清晰的角色、权限和责任边界",
+      "concept_en": "Enterprises need clear roles, permissions, and accountability boundaries for AI agents.",
+      "chapter_claim_en": "Agent governance starts by making roles and responsibility boundaries visible before automation expands.",
+      "visual_thesis_en": "A large central governance block holds several blank role cards in clear lanes, with one blue-gray boundary band acting as the semantic hinge.",
+      "main_relation_en": "boundary setting",
+      "support_structure_en": "three nearby blank role cards and a single connected permission dot cluster",
+      "final_prompt_en": "A wide center-safe article cover showing one large governance block as an object-card, with blank role cards arranged in calm lanes and a thick blue-gray boundary band crossing the middle as the structural hinge.",
+      "keywords": ["agent governance", "roles", "permission", "accountability"],
+      "accent": "central governance node",
+      "abstraction_strength": "reference_card",
+      "background_mode": "paper"
+    },
+    {
+      "id": "02",
+      "position": "一、为什么 Agent 风险不同于普通工具",
+      "target": "inline",
+      "title": "自主行动带来的风险放大",
+      "title_en": "Risk amplification from autonomous action",
+      "metaphor": "radar",
+      "concept": "AI Agent 会持续感知、调用工具并执行动作，风险从单次输出扩展到连续行为",
+      "concept_en": "AI agents continuously perceive, use tools, and act, turning one-off output risk into continuous behavior risk.",
+      "chapter_claim_en": "Continuous action changes risk from a single output problem into an operating loop problem.",
+      "visual_thesis_en": "A repeated sensing-and-action loop grows around one highlighted risk signal instead of a single isolated output card.",
+      "main_relation_en": "risk amplification through repeated action",
+      "support_structure_en": "one loop, one tool block, and one highlighted signal",
+      "final_prompt_en": "A horizontal mechanism illustration with a large continuous loop around a tool block, one highlighted blue-gray risk signal on the loop, and a small output card nearby, showing risk amplification through repeated action.",
+      "keywords": ["continuous action", "tool use", "risk signal"],
+      "accent": "highest risk target",
+      "abstraction_strength": "high_abstract"
+    },
+    {
+      "id": "03",
+      "position": "二、权限、数据与审批",
+      "target": "inline",
+      "title": "准入与权限边界",
+      "title_en": "Access and permission boundaries",
+      "metaphor": "gate",
+      "concept": "关键系统和敏感数据应设置准入、审批和审计机制",
+      "concept_en": "Critical systems and sensitive data need access gates, approval checks, and audit trails.",
+      "keywords": ["access control", "approval", "audit"],
+      "accent": "approved request block"
+    },
+    {
+      "id": "04",
+      "position": "三、证据留存与责任追踪",
+      "target": "inline",
+      "title": "行为日志与证据链",
+      "title_en": "Action logs and evidence chain",
+      "metaphor": "evidence_box",
+      "concept": "Agent 的输入、工具调用、输出和人工确认应形成可追溯证据链",
+      "concept_en": "Agent inputs, tool calls, outputs, and human confirmations should form a traceable evidence chain.",
+      "keywords": ["logs", "evidence chain", "traceability"],
+      "accent": "one evidence card"
+    },
+    {
+      "id": "05",
+      "position": "结论前",
+      "target": "inline",
+      "title": "从试点到制度化治理",
+      "title_en": "From pilot to institutional governance",
+      "metaphor": "building_blocks",
+      "concept": "从试点清单、权限矩阵、复盘机制逐步搭建制度化治理",
+      "concept_en": "A pilot list, permission matrix, and review mechanism can gradually become institutional governance.",
+      "keywords": ["pilot", "policy", "review"],
+      "accent": "top building block"
+    }
+  ]
+}

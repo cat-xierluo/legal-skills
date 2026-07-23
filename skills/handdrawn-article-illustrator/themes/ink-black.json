@@ -1,0 +1,13 @@
+{
+  "name": "ink-black",
+  "display_name": "墨黑（中性通用）",
+  "description": "暖米白底 + 墨黑重点色 + 近黑墨线。完全中性、不携带任何品牌色倾向，适合希望重点色与墨线融为一体的极简编辑风格。",
+  "colors": {
+    "accent_name": "ink-black",
+    "accent_color": "#2A2A28",
+    "paper_background": "#FAF9F5",
+    "paper_surface": "#F0EEE6",
+    "ink_color": "#141413"
+  },
+  "recommended_for": ["中性", "极简", "无品牌色需求"]
+}

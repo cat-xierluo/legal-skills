@@ -1,0 +1,13 @@
+{
+  "name": "blue-gray",
+  "display_name": "蓝灰（默认）",
+  "description": "暖米白底 + 蓝灰重点色 + 近黑墨线。原作者个人定制主题，适合法律、编辑类与公众号长文，视觉沉稳低饱和。",
+  "colors": {
+    "accent_name": "blue-gray",
+    "accent_color": "#435C68",
+    "paper_background": "#FAF9F5",
+    "paper_surface": "#F5F4ED",
+    "ink_color": "#141413"
+  },
+  "recommended_for": ["法律", "公众号", "Newsletter", "编辑类长文"]
+}
