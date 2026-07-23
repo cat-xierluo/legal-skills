@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## [v1.8.10] - 2026-07-16
+
+> **发布状态：候选。** 本地 producer contract 已通过，待 PR / `main` source check 与 release asset；不得据此宣称已发布。
+
+### 新增
+
+- 对齐 writing-reviewer v0.16+ 的 shape containment 语义：只有确属承载内层 shape 的外层 area shape 才能声明 `data-overlap-role="container"`，且必须同时绑定单图唯一的安全原生 `id`、明示承载关系的 `data-overlap-note` 与可静态证明非透明的 hex/rgb/hsl `fill`。
+- 在生成与审查文档中明确职责边界：producer 只静态检查声明是否可审计；实际几何是否形成合法包含，由 writing-reviewer 的真实浏览器 render gate 判定并记录 outer / inner / reason。
+
+### 修复
+
+- 修复 producer contract 对 `data-overlap-role` 完全 fail-open 的问题；旧检查器会放过缺/重复/namespaced id、缺失/空白/加前缀泛化/孤立/namespaced note、透明色/继承色/零 opacity 容器、`decoration`、自造 role，以及把声明写在非 shape 元素上的候选。
+- 禁止用 `data-overlap-role="decoration"`、`data-allow-overlap` 或任意 role 掩盖意外重叠；意外重叠仍须改坐标、尺寸或层级。
+
+### 技术优化
+
+- 扩展 `scripts/tests/test_svg_producer_contract.py` 的统一断言，使 5 个生成器产物、10 个模板 SVG 块和已知坏样本共同受容器元数据契约约束。
+- 新增 1 个容器语义回归测试，覆盖 1 个 canonical 合法声明 + 3 个合法 fill 变体，以及 28 类坏样本：缺/不安全/带首尾空白/重复/namespaced id，缺失/空白/短或加前缀泛化/孤立/namespaced note，decoration/任意 role、用装饰语义 note 伪装 container，通用 overlap 逃生口，非 area shape，以及 `none`/零 alpha/继承/paint server/未知或非法 rgb/hsl fill、零 opacity/fill-opacity。
+
+### 验证
+
+- TDD RED：首轮与四次独立契约复核累计暴露 28 类 fail-open；后续每一类均先落最小坏样本，再收紧统一 producer contract。
+- TDD GREEN：目标测试通过；`python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v` → 5 tests passed，全部现有生成器与模板回归保持绿色。
+- 本版未新增另一个几何计算器，也未把静态通过写成视觉通过；writing-reviewer render gate 仍是 shape 包含的最终几何证据源。
+
 ## [v1.8.9] - 2026-07-14
 
 > **发布状态：候选。** PR #51 已于 2026-07-14 squash merge，`main` 上 source producer contract 已通过；v1.8.9 release zip 当前仍不可用，因此 T001 保持未完成。
