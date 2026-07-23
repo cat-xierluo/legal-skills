@@ -1,0 +1,8 @@
+# Google Patents SDK（推荐通道，免费免登录）
+patent-downloader
+
+# 浏览器自动化（度衍/粤港澳等通道）
+playwright
+
+# HTTP请求（PatentStar等API通道）
+requests
