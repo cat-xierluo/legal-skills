@@ -29,6 +29,13 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# v2.0：PATH 注入 helper（2026-07-12 实战坑：claude 在 ~/.local/bin，wrapper 后
+# which 不到）。在 flag 解析之前注入，确保后续 tmux 内 wrapper 派 Claude Code
+# 也能复用同一 PATH。
+# shellcheck source=ensure-claude-path.sh
+source "$SCRIPT_DIR/ensure-claude-path.sh"
+ensure_claude_in_path
+
 PROJECT_DIR=""
 BRANCH=""
 WORKTREE=""
@@ -61,6 +68,12 @@ PERMISSION_AUTO_BG_OVERRIDE=0
 PERMISSION_AUTO_BG=1  # v1.18.4：bg watcher 独立控制；与 sync permission_auto 解耦
 ADD_DIRS=()
 ALLOW_PATHS=()
+# v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
+# 或自动检测 --project 不是 git 仓时置 1 并打印 SPAWN_WORKER_LIGHTWEIGHT_AUTO。
+# 详见 SKILL.md §2.1.1 + references/09-parallel-lessons.md T6 实战坑。
+LIGHTWEIGHT_OVERRIDE=0
+LIGHTWEIGHT_MODE=0
+LIGHTWEIGHT_AUTO=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -129,6 +142,12 @@ Options:
                    even with -y/--dangerously-skip-permissions (PreToolUse hook unbypassable).
                    Use when PM wants to hard-guard against worker scope violations,
                    e.g. --allow-paths 'skills/my-skill/**' --allow-paths 'skills/another-skill/**'
+  --no-worktree     (v2.0) 显式启用轻量模式：不建 git worktree、不切分支、不算 base ref；
+                   worker tmux cwd 直接指向 --project 目录。METADATA 记
+                   `isolation_mode: "lightweight"`，branch/base_ref/base_sha 留空。
+                   当 --project 不是 git 仓时本 flag 可省（脚本自动检测并打印
+                   `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
+                   SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -266,6 +285,11 @@ while [[ $# -gt 0 ]]; do
       ALLOW_PATHS+=("$2")
       shift 2
       ;;
+    --no-worktree)  # v2.0：显式启用轻量模式（SKILL §2.1.1）
+      LIGHTWEIGHT_OVERRIDE=1
+      LIGHTWEIGHT_MODE=1
+      shift
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -283,13 +307,39 @@ while [[ $# -gt 0 ]]; do
 done
 
 [ -n "$PROJECT_DIR" ] || { usage; exit 64; }
-[ -n "$BRANCH" ] || { usage; exit 64; }
 [ -n "$SESSION" ] || { usage; exit 64; }
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v tmux >/dev/null 2>&1 || { echo "ERROR: tmux is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 
 PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
+
+# v2.0：轻量模式判定（SKILL §2.1.1）。
+# 1. --no-worktree 显式：LIGHTWEIGHT_MODE=1，BRANCH 不必填。
+# 2. --project 不是 git 仓 且用户没显式 --worktree/--branch：自动切轻量并打印
+#    SPAWN_WORKER_LIGHTWEIGHT_AUTO（向后兼容 SKILL 文档承诺，不破老调用）。
+# 3. --project 是 git 仓 且用户没 --no-worktree：保持默认 worktree 模式，BRANCH 必填。
+PROJECT_IS_GIT=0
+if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PROJECT_IS_GIT=1
+fi
+if [ "$LIGHTWEIGHT_OVERRIDE" -eq 0 ] && [ "$PROJECT_IS_GIT" -eq 0 ] && [ -z "$WORKTREE" ] && [ -z "$BRANCH" ]; then
+  LIGHTWEIGHT_MODE=1
+  LIGHTWEIGHT_AUTO=1
+  echo "SPAWN_WORKER_LIGHTWEIGHT_AUTO: $PROJECT_DIR is not a git work tree, switching to lightweight mode"
+fi
+
+if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+  # 轻量模式：清空 branch，把 worker cwd 直接指向 project_dir；--worktree 可显式覆盖子目录
+  BRANCH=""
+  if [ -z "$WORKTREE" ]; then
+    WORKTREE="$PROJECT_DIR"
+  fi
+else
+  # 默认 worktree 模式：--branch 必填
+  [ -n "$BRANCH" ] || { echo "ERROR: --branch is required in worktree mode (or pass --no-worktree for lightweight)" >&2; usage; exit 64; }
+fi
+
 safe_branch=$(printf '%s' "$BRANCH" | tr '/[:space:]' '-' | tr -cd 'A-Za-z0-9._-')
 if [ -z "$WORKTREE" ]; then
   WORKTREE=".claude/worktrees/tmux-$safe_branch"
@@ -334,44 +384,51 @@ resolve_backend_defaults() {
 }
 resolve_backend_defaults
 
-if ! git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "ERROR: --project is not a git work tree: $PROJECT_DIR" >&2
-  exit 64
-fi
-
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "ERROR: tmux session already exists: $SESSION" >&2
   exit 1
 fi
 
-if ! git -C "$PROJECT_DIR" rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null; then
-  echo "ERROR: base ref not found: $BASE_REF" >&2
-  exit 1
-fi
-BASE_SHA=$(git -C "$PROJECT_DIR" rev-parse "$BASE_REF^{commit}")
-
-existing_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v target="refs/heads/$BRANCH" '
-  /^worktree / { wt = substr($0, 10) }
-  /^branch / {
-    if (substr($0, 8) == target) {
-      print wt
-      exit
-    }
-  }
-')
-
-if [ -n "$existing_wt" ]; then
-  WORKTREE="$existing_wt"
-  SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
-  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
-  echo "SPAWN_WORKER_REUSE_WORKTREE: $WORKTREE"
-elif [ -d "$WORKTREE" ]; then
-  echo "ERROR: worktree path exists but is not registered for branch $BRANCH: $WORKTREE" >&2
-  exit 1
-elif git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
-  run git -C "$PROJECT_DIR" worktree add "$WORKTREE" "$BRANCH"
+if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+  # 轻量模式（SKILL §2.1.1）：不建 worktree、不切分支、不验 base ref；
+  # WORKTREE 已指向 PROJECT_DIR（或 --worktree 覆盖的子目录）。
+  BASE_SHA=""
+  echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
 else
-  run git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "$BRANCH" "$BASE_REF"
+  # 默认 worktree 模式：--project 必须是 git 仓，base ref / 分支都参与
+  if [ "$PROJECT_IS_GIT" -eq 0 ]; then
+    echo "ERROR: --project is not a git work tree: $PROJECT_DIR (pass --no-worktree for lightweight mode)" >&2
+    exit 64
+  fi
+  if ! git -C "$PROJECT_DIR" rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null; then
+    echo "ERROR: base ref not found: $BASE_REF" >&2
+    exit 1
+  fi
+  BASE_SHA=$(git -C "$PROJECT_DIR" rev-parse "$BASE_REF^{commit}")
+
+  existing_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v target="refs/heads/$BRANCH" '
+    /^worktree / { wt = substr($0, 10) }
+    /^branch / {
+      if (substr($0, 8) == target) {
+        print wt
+        exit
+      }
+    }
+  ')
+
+  if [ -n "$existing_wt" ]; then
+    WORKTREE="$existing_wt"
+    SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+    METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+    echo "SPAWN_WORKER_REUSE_WORKTREE: $WORKTREE"
+  elif [ -d "$WORKTREE" ]; then
+    echo "ERROR: worktree path exists but is not registered for branch $BRANCH: $WORKTREE" >&2
+    exit 1
+  elif git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    run git -C "$PROJECT_DIR" worktree add "$WORKTREE" "$BRANCH"
+  else
+    run git -C "$PROJECT_DIR" worktree add "$WORKTREE" -b "$BRANCH" "$BASE_REF"
+  fi
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
@@ -395,6 +452,13 @@ write_metadata() {
     return 0
   fi
 
+  # v2.0：写 isolation_mode（worktree 或 lightweight）+ lightweight_auto 标记
+  if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+    isolation_mode_value="lightweight"
+  else
+    isolation_mode_value="worktree"
+  fi
+
   jq -n \
     --arg schema "multi-agent-orchestration.worktree-metadata.v1" \
     --arg created_at "$created_at" \
@@ -414,6 +478,8 @@ write_metadata() {
     --arg env_isolation "$ENV_ISOLATION" \
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
+    --arg isolation_mode "$isolation_mode_value" \
+    --argjson lightweight_auto "$LIGHTWEIGHT_AUTO" \
     --argjson verification_commands "$verify_json" \
     --argjson add_dirs "$(printf '%s\n' "${ADD_DIRS[@]}" | jq -R . | jq -s .)" \
     --argjson allow_paths "$(printf '%s\n' "${ALLOW_PATHS[@]}" | jq -R . | jq -s .)" \
@@ -425,6 +491,10 @@ write_metadata() {
       branch: $branch,
       base_ref: $base_ref,
       base_sha: $base_sha,
+      isolation: {
+        mode: $isolation_mode,
+        lightweight_auto: $lightweight_auto
+      },
       session: {
         id: $session,
         context: $session_context
@@ -655,8 +725,8 @@ scope_guard_setup() {
 scope_guard_setup
 write_metadata
 
-exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude)
-if [ "$DRY_RUN" -eq 0 ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file" 2>/dev/null; then
+exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude 2>/dev/null || echo "")
+if [ "$DRY_RUN" -eq 0 ] && [ -n "$exclude_file" ] && [ -f "$exclude_file" ] && ! grep -qxF ".claude/agent-sessions/" "$exclude_file" 2>/dev/null; then
   printf '\n.claude/agent-sessions/\n' >> "$exclude_file"
 fi
 
@@ -703,12 +773,22 @@ if [ "$DRY_RUN" -eq 0 ]; then
   if [ -n "$pane_cwd" ] && [ -d "$pane_cwd" ]; then
     pane_cwd_physical=$(cd "$pane_cwd" && pwd -P)
   fi
-  current_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
+  if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+    # v2.0：轻量模式隔离门禁只验 cwd == 目标文件夹，不验 branch
+    current_branch=""
+    expected_branch="-"
+    expected_cwd="$WORKTREE"
+  else
+    current_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
+    expected_branch="$BRANCH"
+    expected_cwd="$WORKTREE"
+  fi
   echo "SPAWN_WORKER_SESSION: $SESSION"
   echo "SPAWN_WORKER_WORKTREE: $WORKTREE"
   echo "SPAWN_WORKER_CONTEXT: $SESSION_CONTEXT"
-  echo "SPAWN_WORKER_GATE: cwd=$pane_cwd_physical branch=$current_branch expected_cwd=$WORKTREE expected_branch=$BRANCH"
-  if [ "$pane_cwd_physical" != "$WORKTREE" ] || [ "$current_branch" != "$BRANCH" ]; then
+  echo "SPAWN_WORKER_ISOLATION_MODE: $isolation_mode_value"
+  echo "SPAWN_WORKER_GATE: cwd=$pane_cwd_physical branch=$current_branch expected_cwd=$expected_cwd expected_branch=$expected_branch"
+  if [ "$pane_cwd_physical" != "$expected_cwd" ] || [ "$current_branch" != "$expected_branch" ]; then
     echo "SPAWN_WORKER_GATE_FAILED" >&2
     exit 2
   fi
