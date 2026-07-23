@@ -45,6 +45,7 @@ PM 可用 `scripts/worktree-status.sh` 读取 metadata 摘要；清理前 `scrip
 | `needs_input`、`pm_action_required`、`blocker`、`issues` | 触发 PM 介入 | 是 |
 | `tests`、`git.pr_url`、`git.last_commit_sha`、`git.last_commit_at`、`git.commits_since_base` | 判断是否进入 review/收口，识别长时间无提交的 worker | 是 |
 | `runtime`、`scope`、`files_touched`、`risks`、`model_evaluation`、`last_pm_correction` | PM 手动 review 和 Wave 收口时快速定位风险 | 部分 |
+| `execution_authority` | 记录安装门禁模式、显式授权来源、精确授权命令、缺失依赖与机器环境变更 | 是 |
 
 长任务应在完成一个可验证阶段或每 30-60 分钟生成一次可 review 的阶段性 commit，并同步刷新 `git.last_commit_sha`、`git.last_commit_at` 和 `git.commits_since_base`。提交格式仍由项目 `git-workflow` / `git-batch-commit` 决定。
 
@@ -55,6 +56,8 @@ Wave worker 应在 bootstrap 时写入 `orchestration_goal.id`、`orchestration_
 ## 4. RESULT.md
 
 复制 `templates/checkpoint-result.md`，在完成、失败或主动停止时写入 `Session Context/RESULT.md`。RESULT 负责给 PM 快速理解结果，不要重复完整日志。
+
+依赖缺失时，RESULT 必须写明：缺什么、查过哪些已有路径、跳过了哪条验证、是否存在显式授权。验证命令本身不构成安装授权；没有精确授权命令与授权来源时，worker 应进入 `blocked`，而不是自行修改机器环境。
 
 ## 5. PATCH_SUMMARY.md
 

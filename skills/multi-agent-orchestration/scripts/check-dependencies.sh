@@ -140,8 +140,8 @@ check_optional_cmd() {
 # 用法: check_app_bundle_binary <cmd> <bundle_path_1> [bundle_path_2 ...]
 # 行为:
 #   - cmd 在 PATH 中 → 静默(前置 check_optional_cmd 已 OK, 不重复)
-#   - cmd 不在 PATH 但在某个 bundle 中 → WARN, 列出路径, 建议 spawn 传绝对路径或 sudo ln -s
-#   - cmd 既不在 PATH 也不在 bundle → WARN, 提示安装桌面端
+#   - cmd 不在 PATH 但在某个 bundle 中 → WARN, 列出路径, 建议 spawn 直接传绝对路径
+#   - cmd 既不在 PATH 也不在 bundle → WARN, 报告缺失；不把验证升级成安装授权
 # 解决 false-negative: 桌面端已装但没建 symlink 时 `which codebuddy` 报 not found
 check_app_bundle_binary() {
   local cmd="$1"
@@ -161,9 +161,9 @@ check_app_bundle_binary() {
   done
 
   if [ -n "$found_in_bundle" ]; then
-    report_warn "$cmd" "PATH 无 symlink; 但 $found_in_bundle 存在。可 (a) spawn-worker.sh --command 直接传绝对路径, 或 (b) sudo ln -s $found_in_bundle /usr/local/bin/$cmd 永久 symlink"
+    report_warn "$cmd" "PATH 无 symlink; 但 $found_in_bundle 存在。请用 spawn-worker.sh --command 直接传绝对路径；不要为消除 WARN 自行创建全局 symlink"
   else
-    report_warn "$cmd" "PATH 无 symlink, 已知 .app bundle 路径中也未找到; 需安装 $cmd 对应桌面端(WorkBuddy / QoderWork) 或自定义 CLI"
+    report_warn "$cmd" "PATH 与已知 .app bundle 均未找到；请报告 BLOCKED 或改用已存在 backend，未经用户明确授权不得安装桌面端/CLI"
   fi
 }
 
@@ -181,6 +181,7 @@ check_cmd bash "scripts use bash"
 check_bash_version
 check_cmd git "worktree, branch, commit and diff checks"
 check_cmd jq "STATUS/METADATA JSON parsing and rendering"
+check_cmd python3 "dependency install guard and optional scope guard"
 check_cmd awk "worktree lookup and lint checks"
 check_cmd sed "timestamp cleanup and pane filtering"
 check_cmd find "progress signal checks"

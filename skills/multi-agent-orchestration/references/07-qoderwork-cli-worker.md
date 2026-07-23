@@ -12,13 +12,15 @@ QoderWork 桌面端内置了 `qoderclicn` CLI 二进制，功能类似 Claude Co
 
 > **⚠️ 2026-06-26 修正（用户澄清）**：QoderWork CLI 接入的 MCP（元典法律检索、企查查等）**不是平台免费连接器，而是用户自己在外部配置的付费 API**（与其它 CLI 共用同一套 key/额度）。"免费"仅指 Qwen 等模型的每日额度；MCP 调用花的是用户付费 API。因此**不需要 MCP 的 worker（如纯正文修订）务必关 MCP**（`--strict-mcp-config` / 不加载 mcp-config），避免误触发付费 API；同 ref 08 §5 / DEC-037。
 
-## 2. 二进制位置与安装
+## 2. 二进制位置与安装边界
+
+默认只使用已存在的 app bundle 绝对路径。下表中的 symlink 命令会修改全局环境，**仅用户明确批准该精确命令后**才可执行；依赖检查、PATH 缺失或验证要求都不构成授权。
 
 | 属性 | 值 |
 |------|-----|
 | CN 版二进制路径 | `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn` |
 | 国际版二进制路径 | `/Applications/QoderWork.app/Contents/Resources/bin/qodercli` |
-| 建议 symlink | `sudo ln -s '/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn' /usr/local/bin/qoderclicn` |
+| 可选 symlink（须明确授权） | `sudo ln -s '/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn' /usr/local/bin/qoderclicn` |
 | CN 版认证/配置目录 | `~/.qoderworkcn/` 与 `~/Library/Application Support/QoderWork CN/` |
 | 国际版认证/配置目录 | `~/.qoderwork/` 与 `~/Library/Application Support/QoderWork/` |
 
@@ -32,7 +34,7 @@ CN 版与国际版的登录状态、配置目录和 CLI 名称不同。评估 CN
 
 ### 2.1 PATH-less 检测（实测盲区）
 
-`which qoderclicn` 在桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend qoderwork-cn` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径（CN 版 `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn` + 国际版 `/Applications/QoderWork.app/Contents/Resources/bin/qodercli`），检测到时给 `DEPENDENCY_WARN` + actionable fix 提示（spawn-worker.sh --command 传绝对路径 / `sudo ln -s`）。
+`which qoderclicn` 在桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend qoderwork-cn` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径（CN 版 `/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn` + 国际版 `/Applications/QoderWork.app/Contents/Resources/bin/qodercli`）。检测到 bundle 时直接把绝对路径交给 spawn；不得为了消除 PATH WARN 自行创建 symlink。
 
 不只 CI/构建环境依赖这段检测，PM 在新机器派 worker 前也应该跑：
 

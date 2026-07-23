@@ -125,6 +125,9 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --base-ref main \
   --command "$WORKER_COMMAND" \
   --worker-backend "$WORKER_BACKEND" \
+  --allow-prompt-only-install-guard "smoke custom backend 只运行固定本地测试脚本，无 Agent 工具调用" \
+  --no-trust-auto \
+  --no-permission-auto \
   --runtime-profile "$RUNTIME_PROFILE" \
   --api-provider "$API_PROVIDER" \
   --model "$MODEL" \

@@ -183,8 +183,8 @@
     },
     {
       "name": "git-workflow",
-      "description": "Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退和已合并分支清理",
-      "version": "1.4.1",
+      "description": "Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理和身份绑定 safe-push",
+      "version": "1.6.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -205,8 +205,8 @@
     },
     {
       "name": "multi-agent-orchestration",
-      "description": "多 Agent 本地执行编排，支持 worktree/session 隔离、Agent Teams/tmux 启动、PM 巡检和 PR 收口",
-      "version": "1.16.6",
+      "description": "多 Agent 本地执行编排，支持 worktree/session 隔离、tmux worker、PM 巡检、Shell/安装权限门禁与身份绑定 PR 收口",
+      "version": "1.19.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

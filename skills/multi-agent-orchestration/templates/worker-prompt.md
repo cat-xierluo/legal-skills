@@ -67,6 +67,13 @@ Context:
 - Provider Slot: {{provider_slot}}
 - Worker Type: {{worker_type_ui_wiring_contract_extension_tauri_command_docs_research_custom}}
 - Effort: {{effort_low_medium_high}}
+- Install Guard Mode: {{install_guard_mode_hook_or_prompt_only_degraded}}
+- Install Authorization Source: {{install_authorization_source_or_none}}
+- Authorized Install Commands: {{exact_authorized_install_commands_or_none}}
+- Allowed Shell Commands: {{exact_allowed_shell_commands_from_spawn_metadata}}
+- PM Authority Receipt: {{git_common_dir_authority_receipt_path}}
+- Runtime Hook Attestation: {{git_common_dir_hook_attestation_path_or_none_yet}}
+- Identity-Bound Safe Push Command: {{exact_safe_push_command_or_none}}
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
@@ -91,6 +98,16 @@ Scope:
 - Risk class: {{low_medium_high}}
 - Shared-risk notes: {{shared_risk_notes}}
 
+Execution Authority:
+- Verification is not authorization to install dependencies or mutate the machine environment.
+- Machine/global installs and project-local dependency installs are denied by default, including package-manager, system-package-manager and global-link commands.
+- Only exact commands listed in `Authorized Install Commands` may run, and only when `Install Authorization Source` records an explicit user/project approval. Do not edit the authorization file or widen an authorized command.
+- Shell is also fail-closed: use only the narrow built-in lifecycle commands or the exact `Allowed Shell Commands` emitted by spawn. `--verify-cmd` grants execution authority only after install-like commands such as `npx`/`npm exec`/`pnpm dlx` are rejected.
+- The authorization JSON inside the worktree is a worker-readable mirror, not the authority source. The PM receipt under Git common-dir and the process snapshot are authoritative. Initial metadata proves settings wiring only; after your first Shell/File tool call, PM must see the runtime attestation file before treating the hook as runtime-proven. Do not edit the receipt, attestation or hook settings.
+- Raw `git push` is denied. If an identity-bound safe-push command is listed, copy it exactly: it checks every commit from the remote PR base through current HEAD, then pushes only the verified immutable OID. If none is listed, report push as blocked instead of bypassing the gate.
+- A normal lockfile-based project install is allowed only when its exact command is listed above; this avoids treating an expected project dependency flow as an implicit machine-wide authorization.
+- If a required tool is missing, first locate an existing binary or supported project-local runtime. If still unavailable, set `status=blocked`, record the missing dependency and skipped verification in RESULT, and stop. Do not install it yourself.
+
 Expected Deliverables:
 - Code/docs changes: {{deliverables}}
 - **CHANGELOG 段写入前强制**（DEC-108，共享 [X.Y.Z] 段防覆盖）：
@@ -113,6 +130,8 @@ Process:
 5. Long thinking protocol: when a single decision takes >5 min to reason through, write a brief "considering X because Y" to `current_action` and `next_action` so PM can see *what* you're stuck on without reading your full thinking chain.
 6. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues on phase changes (in addition to the 10-min heartbeat).
 7. Verify: run the commands below and record results.
+   - Before any dependency-install command, confirm it exactly matches `Authorized Install Commands`; otherwise report BLOCKED instead of running it.
+   - Before any Shell command outside the narrow lifecycle set, confirm it exactly matches `Allowed Shell Commands`; otherwise request PM authority instead of rewriting/encoding it to evade the hook.
 8. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
 9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel's status machine matches the literal string `done` (defensively also `completed` / `finished` / `complete`, but **never rely on synonyms**). If you write `completed` or `finished` instead of `done`, the sentinel will not exit and PM will not be re-invoked via harness task-notification — the worker is effectively orphaned until `--max-wait 7200s` timeout. See DEC-060 for the Wave 6 finding.
 
@@ -153,6 +172,7 @@ Autonomy:
 Out of Scope:
 - Do not modify forbidden files.
 - Do not fix unrelated environment, dependency, CI or package issues.
+- Do not run unlisted installation or global environment mutation commands merely to satisfy verification.
 - Do not submit checkpoint files, tokens, settings files, or local runtime state to Git/PR.
 
 PM Correction:

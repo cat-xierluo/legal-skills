@@ -1,9 +1,10 @@
 # 任务清单
 
-> 最后更新：2026-06-06
+> 最后更新：2026-07-13
 
 ## 已完成
 
+- [x] T158：新增完整 PR range 身份门禁与 identity-bound safe-push，逐 commit 核验 author/committer name/email，并把证据绑定实际 push OID；固化 repo-local `git config user.*` 禁令与单次提交身份（来源：法律 AI 书项目 DEC-131）
 - [x] 精简 `SKILL.md` frontmatter `description`，删除具体命令细节和项目特定后置动作；同步 README、Marketplace 和最近更新区到 v1.4.1；将 `doc-curator` 调整为可选项目扩展；为本 Skill 的 `DECISIONS.md` / `TASKS.md` 增加 Git 跟踪例外
 - [x] 新增「批量审计：已合并分支清理」子流程，覆盖 squash/rebase merge 场景；权威依据为 `gh pr list --state merged`，配合 `git branch --merged` 仅作辅助；含判定规则表 + 候选确认表 + 5 条 fail-closed 红线（来源：Folia 2026-06-06）
 - [x] 创建独立 `git-workflow` Skill，保持与提交生成工具的职责边界
