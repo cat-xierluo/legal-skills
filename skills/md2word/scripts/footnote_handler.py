@@ -109,8 +109,7 @@ class FootnoteManager:
             idx = p.add_run('[%d] ' % seq)
             idx.font.size = Pt(9)
             idx.bold = True
-            body = p.add_run(text)
-            body.font.size = Pt(9)
+            _append_note_runs(p, text)
 
     def finalize_footnotes_part(self, output_path):
         """footnote 模式：doc.save 后 post-process，注入 footnotes.xml + rels + Content_Types。"""
@@ -149,6 +148,39 @@ def _xml_escape(t):
 _FN_INLINE_TOKEN_RE = re.compile(r'(\*\*.+?\*\*|\*.+?\*|`.+?`)')
 
 
+def _parse_footnote_inline(text):
+    """返回 (text, bold, italic, code) 片段，供 footnote/endnote 两条路径共用。"""
+    segments = []
+    for part in _FN_INLINE_TOKEN_RE.split(text):
+        if not part:
+            continue
+        bold = italic = code = False
+        segment = part
+        if len(part) >= 4 and part.startswith('**') and part.endswith('**'):
+            bold = True
+            segment = part[2:-2]
+        elif len(part) >= 2 and part.startswith('*') and part.endswith('*'):
+            italic = True
+            segment = part[1:-1]
+        elif len(part) >= 2 and part.startswith('`') and part.endswith('`'):
+            code = True
+            segment = part[1:-1]
+        segments.append((segment, bold, italic, code))
+    return segments
+
+
+def _append_note_runs(paragraph, text):
+    """在 python-docx 段落中写入已解析的 endnote runs，不显示 Markdown 标记。"""
+    for segment, bold, italic, code in _parse_footnote_inline(text):
+        run = paragraph.add_run(segment)
+        run.font.size = Pt(9)
+        run.bold = bold
+        run.italic = italic
+        if code:
+            run.font.name = 'Consolas'
+            run._element.get_or_add_rPr().get_or_add_rFonts().set(qn('w:eastAsia'), '等线')
+
+
 def _footnote_text_to_runs_xml(text):
     """把脚注 text 的 markdown inline 强调（**bold**/*italic*/`code`）转为 Word runs XML 片段。
 
@@ -162,20 +194,7 @@ def _footnote_text_to_runs_xml(text):
     """
     runs = []
     first = True
-    for part in _FN_INLINE_TOKEN_RE.split(text):
-        if not part:
-            continue
-        bold = italic = code = False
-        seg = part
-        if len(part) >= 4 and part.startswith('**') and part.endswith('**'):
-            bold = True
-            seg = part[2:-2]
-        elif len(part) >= 2 and part.startswith('*') and part.endswith('*'):
-            italic = True
-            seg = part[1:-1]
-        elif len(part) >= 2 and part.startswith('`') and part.endswith('`'):
-            code = True
-            seg = part[1:-1]
+    for seg, bold, italic, code in _parse_footnote_inline(text):
         rpr_parts = ['<w:sz w:val="18"/>']
         if bold:
             rpr_parts.append('<w:b/>')
