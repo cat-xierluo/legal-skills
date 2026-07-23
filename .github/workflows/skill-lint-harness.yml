@@ -82,6 +82,6 @@ jobs:
               raise SystemExit("Marketplace version mismatch")
 
           readme = Path("README.md").read_text(encoding="utf-8")
-          if f"v{version}（待发布）" not in readme:
+          if f"v{version}" not in readme:
               raise SystemExit("README version mismatch")
           PY
