@@ -31,10 +31,6 @@ templates/
 !skills/git-workflow/DECISIONS.md
 !skills/git-workflow/TASKS.md
 
-# patent-download 技能级决策与任务记录(全局 **/ 规则会先忽略,需显式加回)
-!skills/patent-download/DECISIONS.md
-!skills/patent-download/TASKS.md
-
 # Archive directories - ignore content but keep directory structure
 **/archive/*
 !**/archive/.gitkeep

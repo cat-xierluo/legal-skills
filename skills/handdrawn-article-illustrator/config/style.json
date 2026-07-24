@@ -1,0 +1,24 @@
+{
+  "active_theme": "blue-gray",
+  "overrides": {},
+  "accent_ratio": "8-15%",
+  "cover_subject_scale": "one large centered symbolic object occupying 60-72% of the canvas width and 55-68% of the canvas height, kept inside the center-safe crop area",
+  "inline_subject_scale": "one dominant main object occupying 55-68% of the canvas width or visual footprint, with up to two close supporting marks",
+  "card_subject_scale": "centered symbolic object occupying about 68-76% of the square canvas",
+  "background_mode_sequence": [
+    "paper",
+    "paper",
+    "paper",
+    "inverted"
+  ],
+  "inverted_usage_rule": "Use paper mode as the majority. For 10-14 inline illustrations, use 2-4 inverted background images (using the active theme accent color) as rhythm accents, preferably on turning points, system boundaries, distribution/amplification, conclusions, or human judgment sections. Do not place two inverted images consecutively unless explicitly requested.",
+  "abstraction_strength": "balanced",
+  "abstraction_strength_options": {
+    "reference_card": "更贴近前序参考图的手绘对象卡片：优先 folder archive、nested frame、workflow book、chain active block、orbit/ring table、map field 等可理解构图家族；cloud funnel 和 left-to-right transform 只在压缩/筛选关系中少量使用。",
+    "balanced": "默认档：在参考图家族内适度抽象，既避免直译文档/UI 图标，也不把意象推到难懂的机制物；必须轮换 central object、radial orbit、stack archive、map field、balance tension、scaffold frame、module grid、rare signal 等版式，避免整组都变成左输入-中收束-右输出。",
+    "high_abstract": "更高抽象档：可使用 nameless abstract mechanism、soft slabs、rounded shells、slots、hinges、vessels、organic plumes、endpoint capsules，但必须保留 reader_takeaway_zh 和清晰关系。"
+  },
+  "layout_diversity_rule": "For 10-14 inline illustrations, left_to_right_transform / funnel / filter / threshold / channel / pipeline layouts should appear at most 2-3 times and never in adjacent images. Every 5 images should include at least 2 non-linear layouts such as radial orbit, stack archive, map field, balance tension, scaffold frame, modular grid, or single rare signal.",
+  "ink_variation": "natural_hand_inked",
+  "line_style": "Natural hand-inked editorial contour style: near-black filled ink paths that feel hand traced in one confident pass, not mechanically vectorized. Keep stable readable silhouettes, but allow subtle human asymmetry: slightly imperfect parallel edges, gently tapered stroke starts and ends, small pressure flattening at corners and overlaps, and a few heavier anchor points. Long edges should stay calm and mostly continuous with organic tapering, not ruler-straight and not randomly wavy. Internal detail lines should be thinner, slightly tapered, and hand-placed. Avoid mechanical vector icon outlines, CAD-straight geometry, perfectly parallel sides, random ink blobs, lumpy noise along every edge, jittery wobble, scribbly sketch lines, and over-rough contours."
+}

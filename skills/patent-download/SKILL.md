@@ -110,8 +110,6 @@ patent-download/
 ├── SKILL.md
 ├── LICENSE.txt                    # MIT
 ├── CHANGELOG.md
-├── DECISIONS.md                   # 技术决策记录
-├── TASKS.md                       # 任务清单
 ├── config/
 │   ├── .env.example               # 账号模板（入库，复制为 .env 填写）
 │   └── platforms.yaml             # 平台元数据（无账号）
@@ -139,6 +137,4 @@ patent-download/
 ## 更多
 
 - 使用示例与故障排除：`references/examples.md`
-- 技术决策记录：`DECISIONS.md`
-- 任务清单：`TASKS.md`
 - 变更历史：`CHANGELOG.md`
