@@ -1006,4 +1006,3 @@ git checkout main
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
 - `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
-- `TASKS.md` — 本 Skill 的维护任务和后续上下文
