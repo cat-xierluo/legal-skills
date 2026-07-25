@@ -37,13 +37,15 @@ jobs:
         run: |
           python3 -m unittest \
             skills/skill-lint/scripts/test_harness_evidence_gate.py \
-            skills/skill-lint/scripts/test_instruction_stability_gate.py
+            skills/skill-lint/scripts/test_instruction_stability_gate.py \
+            skills/skill-lint/scripts/test_harness_failure_audit.py
 
       - name: Compile gates
         run: |
           python3 -m py_compile \
             skills/skill-lint/scripts/harness_evidence_gate.py \
-            skills/skill-lint/scripts/instruction_stability_gate.py
+            skills/skill-lint/scripts/instruction_stability_gate.py \
+            skills/skill-lint/scripts/harness_failure_audit.py
 
       - name: Validate JSON and release metadata
         run: |

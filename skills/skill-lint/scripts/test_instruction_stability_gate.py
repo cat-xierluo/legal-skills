@@ -880,6 +880,31 @@ class InstructionStabilityGateTest(unittest.TestCase):
         self.assertIn("ISG-006", result.stdout)
         self.assertIn("NOT_VERIFIED", result.stdout)
 
+    def test_valid_contract_and_baseline_do_not_hide_concrete_harness_failure(
+        self,
+    ) -> None:
+        (self.candidate / "scripts" / "scan.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            'bash "$PWD/scripts/check_report.py" || true\n',
+            encoding="utf-8",
+        )
+        self.write_requirements_baseline()
+        result = self.run_gate(
+            "assess",
+            "--candidate-root",
+            str(self.candidate),
+            "--requirements-baseline",
+            str(self.baseline),
+            "--evaluator-public-key",
+            str(self.public_key),
+        )
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout.splitlines()[0])
+        self.assertEqual(report["status"], "NOT_VERIFIED")
+        self.assertIn("HFA-001", {item["id"] for item in report["findings"]})
+        self.assertNotIn("ISG-006", {item["id"] for item in report["findings"]})
+        self.assertEqual(report["harness_failure_audit"]["hard"], 1)
+
     def test_existing_but_bypassable_contract_is_reported_not_verified(self) -> None:
         skill = self.candidate / "SKILL.md"
         skill.write_text(

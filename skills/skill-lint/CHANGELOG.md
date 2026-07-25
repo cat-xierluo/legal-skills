@@ -2,6 +2,23 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.5.0] - 2026-07-25
+
+### 新增：具体 Harness 失效模式批量审查
+
+- 新增 `scripts/harness_failure_audit.py`，支持单 Skill `audit` 和 Skill 集合 `batch`；递归发现最小 Skill 单元并输出含文件、行号、证据、影响和修正建议的稳定 JSON，hard finding 非零退出，零 Skill 范围 fail-closed。
+- 新增 HFA/HRA 确定性规则，覆盖 checker 异常吞噬、eval 丢退出码、process substitution、虚假成功声明、双零计数、state 作用域/副作用、baseline 未执行、CLI/config fail-open、raw JSON、Git/PR 副作用、破坏性 trim 及 config 漂移。
+- 新增去具体化 bad/good twin、批量发现、稳定输出、空范围和视觉语义误报回归；与原 52 项门禁一并进入 CI。
+
+### 修复
+
+- `instruction_stability_gate.py assess` 现同时返回 ISG 结构性 finding 与 HFA/HRA 具体 finding。
+- 静态视觉/几何语义只读取 `SKILL.md` 与 `references/**/*.md`，并要求规范性硬约束局部共现；TASKS、DECISIONS、CHANGELOG 的历史 SVG 讨论不再误触发 `ISG-002`。
+
+### 安全边界
+
+- 本版本只新增静态审查，不执行未知候选、不安装依赖、不联网；可信候选动态故障探针继续登记为后续任务。
+
 ## [2.4.0] - 2026-07-23
 
 ### 新增：旧版指令失稳与产出漂移门禁

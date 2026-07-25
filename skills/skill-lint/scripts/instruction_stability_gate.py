@@ -18,6 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from harness_failure_audit import audit_candidate
+
 
 SCHEMA_VERSION = 1
 RECEIPT_VERSION = 1
@@ -958,13 +960,38 @@ def validate_contract(candidate_root: Path, data: Any) -> dict[str, Any]:
     }
 
 
-def static_assessment(candidate_root: Path) -> dict[str, Any]:
+def static_semantic_sources(candidate_root: Path) -> list[str]:
+    """只读取当前规范源，避免历史任务/决策讨论触发能力模态。"""
+    candidates = [candidate_root / "SKILL.md"]
+    references = candidate_root / "references"
+    if references.is_dir():
+        candidates.extend(sorted(references.rglob("*.md")))
     texts: list[str] = []
-    for path in sorted(candidate_root.rglob("*.md")):
+    for path in candidates:
+        if not path.is_file() or path.is_symlink():
+            continue
         relative = path.relative_to(candidate_root)
-        if any(part in SKIP_DIRS for part in relative.parts) or path.is_symlink():
+        if any(part in SKIP_DIRS for part in relative.parts):
             continue
         texts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return texts
+
+
+def has_normative_visual_constraint(texts: list[str]) -> bool:
+    """视觉词必须与规范性硬要求在同一局部上下文共现。"""
+    for text in texts:
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if not VISUAL_WORDS.search(line):
+                continue
+            context = "\n".join(lines[max(0, index - 1) : min(len(lines), index + 2)])
+            if HARD_REQUIREMENT_WORDS.search(context):
+                return True
+    return False
+
+
+def static_assessment(candidate_root: Path) -> dict[str, Any]:
+    texts = static_semantic_sources(candidate_root)
     content = "\n".join(texts)
     findings = [
         {
@@ -973,7 +1000,7 @@ def static_assessment(candidate_root: Path) -> dict[str, Any]:
             "message": "缺少机器可读的约束追踪合同，无法证明每条硬约束都有验证器、产物阶段和回归用例。",
         }
     ]
-    if VISUAL_WORDS.search(content):
+    if has_normative_visual_constraint(texts):
         findings.append(
             {
                 "id": "ISG-002",
@@ -1010,12 +1037,15 @@ def static_assessment(candidate_root: Path) -> dict[str, Any]:
                 "message": "候选包含脚本，但缺少“约束 → checker → 产物阶段 → case”的可审计映射，不能用脚本数量代替覆盖证明。",
             }
         )
+    concrete = audit_candidate(candidate_root)
+    findings.extend(concrete["findings"])
     return {
         "schema_version": 1,
         "status": "NOT_VERIFIED",
         "contract": CONTRACT_PATH,
         "requirement_signal_count": len(REQUIREMENT_WORDS.findall(content)),
         "scripts_found": scripts,
+        "harness_failure_audit": concrete["summary"],
         "findings": findings,
     }
 
@@ -1395,6 +1425,13 @@ def verify_harness_review(
 def assess(args: argparse.Namespace) -> int:
     candidate_root = Path(args.candidate_root).resolve()
     candidate_files = candidate_manifest(candidate_root)
+    static_report = static_assessment(candidate_root)
+    concrete_findings = [
+        finding
+        for finding in static_report["findings"]
+        if finding["id"].startswith(("HFA-", "HRA-"))
+    ]
+    concrete_hard = static_report["harness_failure_audit"]["hard"] > 0
     contract_path = resolve_contract(candidate_root, args.contract)
     if contract_path.is_file():
         try:
@@ -1428,7 +1465,11 @@ def assess(args: argparse.Namespace) -> int:
                 )
             report = {
                 "schema_version": 1,
-                "status": "CONTRACT_READY" if baseline_result else "NOT_VERIFIED",
+                "status": (
+                    "CONTRACT_READY"
+                    if baseline_result and not concrete_hard
+                    else "NOT_VERIFIED"
+                ),
                 "contract": contract_path.relative_to(candidate_root).as_posix(),
                 "contract_sha256": sha256_file(contract_path),
                 "hard_constraint_count": sum(
@@ -1437,31 +1478,41 @@ def assess(args: argparse.Namespace) -> int:
                 ),
                 "checker_count": len(validated["checkers"]),
                 "minimum_runs": validated["minimum_runs"],
-                "requirement_signal_count": static_assessment(candidate_root)[
+                "requirement_signal_count": static_report[
                     "requirement_signal_count"
                 ],
+                "harness_failure_audit": static_report[
+                    "harness_failure_audit"
+                ],
                 "findings": (
-                    []
-                    if baseline_result
-                    else [
-                        {
-                            "id": "ISG-006",
-                            "severity": "hard",
-                            "message": "合同存在，但缺少候选外独立硬约束基线，无法证明合同没有漏列规则。",
-                        }
-                    ]
+                    (
+                        []
+                        if baseline_result
+                        else [
+                            {
+                                "id": "ISG-006",
+                                "severity": "hard",
+                                "message": "合同存在，但缺少候选外独立硬约束基线，无法证明合同没有漏列规则。",
+                            }
+                        ]
+                    )
+                    + concrete_findings
                 ),
                 "requirements_baseline_sha256": (
                     baseline_result["sha256"] if baseline_result else None
                 ),
                 "message": (
-                    "合同与独立硬约束基线已对齐，但尚未验证多轮真实产物。"
-                    if baseline_result
-                    else "合同结构已解析，但完整性尚未由候选外基线确认。"
+                    "合同与独立硬约束基线已对齐，但具体 Harness 失效 finding 仍阻塞稳定性声明。"
+                    if baseline_result and concrete_hard
+                    else (
+                        "合同与独立硬约束基线已对齐，但尚未验证多轮真实产物。"
+                        if baseline_result
+                        else "合同结构已解析，但完整性尚未由候选外基线确认。"
+                    )
                 ),
             }
         except GateError as exc:
-            report = static_assessment(candidate_root)
+            report = static_report
             report["contract"] = contract_path.relative_to(candidate_root).as_posix()
             report["contract_sha256"] = sha256_file(contract_path)
             report["findings"].append(
@@ -1472,7 +1523,7 @@ def assess(args: argparse.Namespace) -> int:
                 }
             )
     else:
-        report = static_assessment(candidate_root)
+        report = static_report
     if args.output:
         output = new_output_path(args.output, "评估报告")
         try:
