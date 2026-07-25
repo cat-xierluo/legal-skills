@@ -15,6 +15,8 @@ import re
 import sys
 import os
 
+from protected_markdown_gate import contains_markdown_image
+
 
 def is_chinese_char(ch):
     """判断是否是中文字符（CJK 统一汉字区间）"""
@@ -139,18 +141,28 @@ def fix_punctuation(text):
     placeholders = []
     counter = [0]
 
-    def replace_match(match):
+    def replace_text(original):
         idx = counter[0]
         counter[0] += 1
-        placeholders.append(match.group(0))
+        placeholders.append(original)
         return f'\x00PH{idx}\x00'
+
+    def replace_match(match):
+        return replace_text(match.group(0))
+
+    # 图片所在整行属于 Protected Spans。先于任何标点处理整体替换，
+    # 避免只保护 ![]() 片段却改写同一行的缩进、alt 或其他内容。
+    body = ''.join(
+        replace_text(line)
+        if contains_markdown_image(line)
+        else line
+        for line in body.splitlines(keepends=True)
+    )
 
     # 提取围栏代码块
     body = re.sub(r'```[\s\S]*?```', replace_match, body)
     # 提取行内代码
     body = re.sub(r'`[^`]+`', replace_match, body)
-    # 提取 Markdown 图片语法 ![alt](url)
-    body = re.sub(r'!\[[^\]]*\]\([^)]+\)', replace_match, body)
     # 提取 Markdown 链接语法 [text](url)
     body = re.sub(r'\[[^\]]+\]\([^)]+\)', replace_match, body)
     # 提取 URL

@@ -21,6 +21,7 @@ AI：我会先扫描 AI 化表述模式，标出问题句，再按“删 / 合�
 - 删、合并、改写三类处理建议
 - 修订后的自然文本
 - 有作者样本时的 voice profile 与匹配检查
+- Markdown 图片整行保护快照与最终门禁证据
 - 质量评分和二次修订建议
 
 ## 当前覆盖范围
@@ -92,7 +93,9 @@ AI 化表达常常换皮出现，不会完全匹配固定词表。skill 会把�
 
 ### 交付门禁
 
-最终文本需通过自然度、节奏感、专业度、个性度、精炼度评分。有作者样本时，还要检查是否匹配 voice profile；若 profile 明显偏离、复现反例、复制样本短语或引入样本事实，需要回炉重写。
+改写前先为 Markdown 图片所在整行生成 manifest，最终交付前由独立 checker 比较原文、顺序、数量和 hash。任何图片行删除、移动或改写都会阻断交付；用户明确授权变更后也必须重新建立基线，不得绕过 checker。
+
+图片门禁通过后，最终文本还需通过自然度、节奏感、专业度、个性度、精炼度评分。有作者样本时，还要检查是否匹配 voice profile；若 profile 明显偏离、复现反例、复制样本短语或引入样本事实，需要回炉重写。
 
 ## 关键文件
 
@@ -101,6 +104,8 @@ AI 化表达常常换皮出现，不会完全匹配固定词表。skill 会把�
 - [references/personal-style-guide.md](./references/personal-style-guide.md)：Voice Calibration 流程和默认 voice 规则
 - [references/quality-scoring.md](./references/quality-scoring.md)：质量评分和 voice profile 门禁
 - [references/sentence-rhythm-guide.md](./references/sentence-rhythm-guide.md)：句子节奏处理
+- [scripts/protected_markdown_gate.py](./scripts/protected_markdown_gate.py)：图片整行快照与最终主动门禁
+- [config/instruction-stability-contract.json](./config/instruction-stability-contract.json)：约束、checker 和回归样本映射
 
 ## 许可证
 

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "skill": {
+    "name": "de-ai-polish",
+    "version": "2.1.0"
+  },
+  "producer": {
+    "id": "de-ai-polish-workflow",
+    "implementation_paths": [
+      "SKILL.md",
+      "scripts/fix_punctuation.py"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "source-markdown",
+      "stage": "source",
+      "required": true
+    },
+    {
+      "id": "final-markdown",
+      "stage": "final",
+      "required": true
+    }
+  ],
+  "checkers": [
+    {
+      "id": "protected-markdown-gate",
+      "kind": "active",
+      "modality": "text",
+      "artifact_stages": [
+        "source",
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/protected_markdown_gate.py",
+      "args": [
+        "check",
+        "--source",
+        "{artifact:source-markdown}",
+        "--final",
+        "{artifact:final-markdown}"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "PRESERVE-MARKDOWN-IMAGE-LINES",
+      "severity": "hard",
+      "requirement_type": "text",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#PRESERVE-MARKDOWN-IMAGE-LINES"
+      ],
+      "checker_ids": [
+        "protected-markdown-gate"
+      ],
+      "case_ids": [
+        "image-lines-preserved",
+        "image-line-deleted",
+        "image-lines-reordered",
+        "image-line-partially-protected"
+      ],
+      "historical_failure_known": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "image-lines-preserved",
+      "kind": "positive",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-IMAGE-LINES"
+      ],
+      "checker_ids": [
+        "protected-markdown-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/image-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/image-lines-final-ok.md"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "image-line-deleted",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-IMAGE-LINES"
+      ],
+      "checker_ids": [
+        "protected-markdown-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/image-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/image-lines-final-missing.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "image-lines-reordered",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-IMAGE-LINES"
+      ],
+      "checker_ids": [
+        "protected-markdown-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/image-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/image-lines-final-reordered.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "image-line-partially-protected",
+      "kind": "historical",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-IMAGE-LINES"
+      ],
+      "checker_ids": [
+        "protected-markdown-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/image-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/image-lines-final-mutated.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "images-preserved",
+        "checker_id": "protected-markdown-gate",
+        "constraint_id": "PRESERVE-MARKDOWN-IMAGE-LINES",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      }
+    ],
+    "observables": [
+      {
+        "id": "protected-image-lines",
+        "checker_id": "protected-markdown-gate",
+        "constraint_ids": [
+          "PRESERVE-MARKDOWN-IMAGE-LINES"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}

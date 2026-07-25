@@ -2,7 +2,7 @@
 name: de-ai-polish
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.0.1"
+version: "2.1.0"
 license: MIT
 description: 检测并去除文章中的AI化表述模式。**必须触发**：当文章经过写作流程（无论是模式1润色优化还是模式2内容创作）完成初稿后，在输出给用户之前，**必须**调用此 skill 进行 AI腔 检测和去除。不可跳过此步骤，不可仅凭感觉省略检测。任何"先输出再说"的做法都是不允许的。**不要用于**与文本润色/去 AI 化无关的任务(代码审查、法律检索、ASR 纠错等,使用对应的专门工具)。
 ---
@@ -454,6 +454,14 @@ AI化表述往往以**变体**出现，不会恰好匹配清单字面形式。�
 
 **必须完整通读全文**，理解核心观点、文章风格和上下文语境。不得仅通过正则/grep 匹配来检测——正则只能覆盖已知模式的精确形式，会遗漏大量语义等价但形式不同的变体。
 
+在任何改写前，先为源 Markdown 生成候选外临时快照；快照路径不得与文章同名覆盖：
+
+```bash
+python3 scripts/protected_markdown_gate.py snapshot \
+  --input <源文件.md> \
+  --output <临时目录>/de-ai-protected-lines.json
+```
+
 **通读时同步划定 Protected Spans（禁改项）**：标记必须原样保留、后续 Step 2-4 不得触碰的范围。默认覆盖：
 
 - 法条、司法解释、规章的编号与引述（如《民法典》第 143 条、（2023）最高法民申 12 号）
@@ -462,6 +470,8 @@ AI化表述往往以**变体**出现，不会恰好匹配清单字面形式。�
 - 直接引语、引证、合同条款编号
 - 数值、日期、比例、金额、期限
 - URL、文书编号、案号
+<!-- skill-lint:constraint PRESERVE-MARKDOWN-IMAGE-LINES -->
+- **整段 markdown 图片语法 `![alt](path)` 及其所在行**——包括 alt 文本、URL、文件名/本地路径、所在行缩进与换行。后续 Step 2-6 不得修改、删除、合并图片语法所在行；图片语法整段永远原样保留。
 
 判定原则：宁可多保留，不可误改。若某 Protected Span 表面像 AI 味（如公司全称带“有限公司”被误判为宣传性），仍保留原样，只在备注里提示用户复核。场景为“法律文书”时，Protected Spans 范围取最宽。
 
@@ -552,13 +562,28 @@ python3 scripts/fix_punctuation.py <文件路径>
 
 脚本会自动跳过以下区域不做转换：
 - YAML front matter（`---` 之间的元数据）
-- Markdown 图片和链接语法（`![]()`、`[]()`）
+- **整段 markdown 图片语法**（`![alt](path)` 整段，包括 alt 文本、括号、URL 全部不动）
+- **整段 markdown 链接语法**（`[text](url)` 整段）
 - 代码块和行内代码（` ``` `、`` ` ``）
 - URL 地址
 
+> **图片门禁（强制）**：标点脚本必须识别并跳过图片所在**整行**，包括 alt 文本内的中文标点、同一行其他内容、缩进和换行都不得被改写。若脚本只跳过 URL 或 `![...](...)` 片段，视为脚本 bug，必须修复实现而非放宽规则。
+
 ### Step 7: 交付前评分门禁
 
-Step 4-6 完成后、交付用户前，按 `references/quality-scoring.md` 的 5 维（自然度 / 节奏感 / 专业度 / 个性度 / 精炼度，总分 10）对最终文本评分：
+Step 4-6 完成后，先对真实最终 Markdown 运行受保护区域门禁：
+
+```bash
+python3 scripts/protected_markdown_gate.py verify \
+  --manifest <临时目录>/de-ai-protected-lines.json \
+  --final <最终文件.md>
+```
+
+仅退出码 0 且最后一行 JSON 包含 `passed_constraint_ids: ["PRESERVE-MARKDOWN-IMAGE-LINES"]` 时，才继续评分。退出码非 0 时必须回到造成变化的步骤修复，不得交付。
+
+**例外规则**：当前门禁没有默认例外。只有用户在本次任务中明确授权移动、删除或改写某一图片行时，才可先完成该项授权变更，再以授权后的 Markdown 重新执行 Step 1 的 `snapshot` 建立新基线；不得跳过 checker、手改 manifest 或用口头说明覆盖失败结果。
+
+门禁通过后，按 `references/quality-scoring.md` 的 5 维（自然度 / 节奏感 / 专业度 / 个性度 / 精炼度，总分 10）对最终文本评分：
 
 - **总分 < 7.0** → 回到 Step 4 重新表述问题句，再评分。
 - **单维度硬伤**：自然度 < 1.5 或个性度 = 0 → 即使总分达标也回炉。
