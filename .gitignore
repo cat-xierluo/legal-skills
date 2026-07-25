@@ -39,6 +39,7 @@ templates/
 !**/config/*.example.yaml
 **/config/*.json
 !**/config/*.example.json
+!skills/de-ai-polish/config/instruction-stability-contract.json
 # Team config - keep example, ignore real data and images
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
