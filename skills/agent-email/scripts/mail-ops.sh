@@ -232,10 +232,18 @@ _agently_login() {
     return 1
   fi
 
-  local log
+  local log agently_bin
   log="$(mktemp -t agently-auth)"
-  # macOS 原生 pty（script）后台跑 auth login，输出落日志
-  script -qfc "agently-cli auth login" /dev/null > "$log" 2>&1 &
+
+  # 解析 agently-cli 的完整路径（macOS BSD script 不继承非标准 PATH）
+  if command -v agently-cli >/dev/null 2>&1; then
+    agently_bin="$(command -v agently-cli)"
+  else
+    agently_bin="$(npm prefix -g 2>/dev/null)/bin/agently-cli"
+  fi
+
+  # macOS BSD script: command 作为尾部参数，无 -c / -f 选项
+  script -q /dev/null "$agently_bin" auth login > "$log" 2>&1 &
   local pid=$!
 
   # 轮询日志直到抓到授权 URL 或命令退出
