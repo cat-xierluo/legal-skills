@@ -12,6 +12,7 @@ templates/
 # Claude Code config - selective sync (keep skills symlink, ignore rest)
 .claude/commands/
 .claude/plans/
+.claude/rules/
 .claude/*.json
 !.claude/settings.local.json
 
