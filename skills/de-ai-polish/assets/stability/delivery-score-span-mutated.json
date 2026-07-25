@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "final_sha256": "56b12d6ed799c996b95e2cbcfc7512ec8c7185ded10714924cc45d74cb86a3b6",
+  "scene": "legal_document",
+  "author_sample_used": false,
+  "dimensions": {
+    "naturalness": 1.6,
+    "rhythm": 1.5,
+    "professionalism": 1.7,
+    "individuality": 1.5,
+    "conciseness": 1.5
+  },
+  "total": 7.8,
+  "voice_profile_checks": null
+}

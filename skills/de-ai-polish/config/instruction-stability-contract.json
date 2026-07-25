@@ -2,13 +2,15 @@
   "schema_version": 1,
   "skill": {
     "name": "de-ai-polish",
-    "version": "2.1.0"
+    "version": "2.2.0"
   },
   "producer": {
     "id": "de-ai-polish-workflow",
     "implementation_paths": [
       "SKILL.md",
-      "scripts/fix_punctuation.py"
+      "scripts/fix_punctuation.py",
+      "scripts/delivery_gate.py",
+      "config/quality-score-rubric.json"
     ]
   },
   "artifacts": [
@@ -21,6 +23,16 @@
       "id": "final-markdown",
       "stage": "final",
       "required": true
+    },
+    {
+      "id": "run-plan",
+      "stage": "source",
+      "required": false
+    },
+    {
+      "id": "score-receipt",
+      "stage": "final",
+      "required": false
     }
   ],
   "checkers": [
@@ -43,6 +55,30 @@
         "{artifact:final-markdown}"
       ],
       "timeout_seconds": 30
+    },
+    {
+      "id": "de-ai-delivery-gate",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": [
+        "source",
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/delivery_gate.py",
+      "args": [
+        "check",
+        "--source",
+        "{artifact:source-markdown}",
+        "--final",
+        "{artifact:final-markdown}",
+        "--run-plan",
+        "{artifact:run-plan}",
+        "--score-receipt",
+        "{artifact:score-receipt}"
+      ],
+      "timeout_seconds": 30
     }
   ],
   "constraints": [
@@ -62,6 +98,60 @@
         "image-line-deleted",
         "image-lines-reordered",
         "image-line-partially-protected"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "SCENE-DECLARED-BEFORE-REWRITE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "source",
+      "source_refs": [
+        "SKILL.md#SCENE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "case_ids": [
+        "delivery-all-pass",
+        "scene-not-declared-mutation",
+        "scene-not-declared"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "PROTECTED-SPANS-PRESERVED",
+      "severity": "hard",
+      "requirement_type": "text",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#PROTECTED-SPANS-PRESERVED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "case_ids": [
+        "delivery-all-pass",
+        "protected-span-mutated-mutation",
+        "protected-span-mutated"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "QUALITY-SCORE-GATE-PASSED",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#QUALITY-SCORE-GATE-PASSED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "case_ids": [
+        "delivery-all-pass",
+        "quality-score-below-threshold-mutation",
+        "quality-score-below-threshold"
       ],
       "historical_failure_known": true
     }
@@ -154,6 +244,218 @@
       ],
       "expected": "blocked",
       "expected_exit_code": 3
+    },
+    {
+      "id": "delivery-all-pass",
+      "kind": "positive",
+      "constraint_ids": [
+        "SCENE-DECLARED-BEFORE-REWRITE",
+        "PROTECTED-SPANS-PRESERVED",
+        "QUALITY-SCORE-GATE-PASSED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "scene-not-declared-mutation",
+      "kind": "mutation",
+      "constraint_ids": [
+        "SCENE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan-invalid-scene.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "scene-not-declared",
+      "kind": "historical",
+      "constraint_ids": [
+        "SCENE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan-invalid-scene.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "protected-span-mutated-mutation",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PROTECTED-SPANS-PRESERVED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-span-mutated.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-span-mutated.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "protected-span-mutated",
+      "kind": "historical",
+      "constraint_ids": [
+        "PROTECTED-SPANS-PRESERVED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-span-mutated.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-span-mutated.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "quality-score-below-threshold-mutation",
+      "kind": "mutation",
+      "constraint_ids": [
+        "QUALITY-SCORE-GATE-PASSED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-bad.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "quality-score-below-threshold",
+      "kind": "historical",
+      "constraint_ids": [
+        "QUALITY-SCORE-GATE-PASSED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-bad.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
     }
   ],
   "stability": {
@@ -166,14 +468,76 @@
         "value_type": "boolean",
         "condition": "equals",
         "expected": true
+      },
+      {
+        "id": "scene-declared",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_id": "SCENE-DECLARED-BEFORE-REWRITE",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "protected-spans-preserved",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_id": "PROTECTED-SPANS-PRESERVED",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "failed-span-count",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_id": "PROTECTED-SPANS-PRESERVED",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "score-gate-passed",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_id": "QUALITY-SCORE-GATE-PASSED",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
       }
     ],
     "observables": [
+      {
+        "id": "scene",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_ids": [
+          "SCENE-DECLARED-BEFORE-REWRITE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
       {
         "id": "protected-image-lines",
         "checker_id": "protected-markdown-gate",
         "constraint_ids": [
           "PRESERVE-MARKDOWN-IMAGE-LINES"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "protected-span-ids",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_ids": [
+          "PROTECTED-SPANS-PRESERVED"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "score-threshold-detail",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_ids": [
+          "QUALITY-SCORE-GATE-PASSED"
         ],
         "comparison": "set_equal",
         "required": true,

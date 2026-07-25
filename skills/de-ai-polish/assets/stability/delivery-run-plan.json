@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "scene": "legal_document",
+  "author_sample_used": false,
+  "protected_spans": [
+    {
+      "id": "statute-001",
+      "category": "statute",
+      "text": "《民法典》第 143 条"
+    },
+    {
+      "id": "entity-001",
+      "category": "entity",
+      "text": "甲公司"
+    },
+    {
+      "id": "date-001",
+      "category": "number_date_amount",
+      "text": "2026 年 7 月 31 日"
+    }
+  ]
+}

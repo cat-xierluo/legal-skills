@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-07-25 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.2.0 | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环 |
 | 2026-07-23 | 新上传   | [patent-download](skills/patent-download/) | v2.6.0 | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露 |
 | 2026-07-23 | 新上传   | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0 | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义 |
 | 2026-07-23 | 更新     | [skill-lint](skills/skill-lint/) | v2.4.0 | 新增旧版指令失稳与产出漂移门禁：自动发现硬要求来源、显式约束锚点、Ed25519-signed 候选外基线/held-out、当前 Harness evidence、验证模态/产物阶段与历史回归形成闭环；至少三轮同输入/配置的真实产物逐约束复算，日志绑定当前候选与 producer，最终签名回执验签后才允许声明稳定 |
@@ -57,8 +58,6 @@
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
 | 2026-07-13 | 更新     | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT |
 | 2026-07-13 | 更新     | [git-workflow](skills/git-workflow/) | v1.6.0 | 新增完整 PR range 身份门禁与 safe-push：逐 commit 核验 author/committer，并只推送已核验 immutable OID；拒绝同名 feature upstream 与本地 ref 缩窄范围 |
-| 2026-07-06 | 更新     | [skill-manager](skills/skill-manager/) | v1.6.0 | 新增 QoderWork 支持：自动识别 `~/.qoderworkcn/skills/` 为安装目标，`~/.qoderworkcn` 及其子目录调用时自动检测；`target.sh` 和 `install.sh` 统一扩展 `.qoderworkcn` |
-| 2026-06-23 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.0.1 | Voice Calibration 补齐样本使用边界与匹配门禁：仅使用用户确认样本，禁止冒充作者身份、复制样本原句或引入样本事实；评分门禁新增 profile 偏离、反例复现、样本复刻、事实污染回炉规则 |
 
 </details>
 
@@ -484,10 +483,10 @@
 <tr>
 <td><a href="skills/de-ai-polish/"><strong>de-ai-polish</strong></a></td>
 <td>工具·写作</td>
-<td style="word-break:break-word">检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。支持作者样本 Voice Calibration、Protected Spans、场景分流和 5 维度质量评分门禁</td>
+<td style="word-break:break-word">检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。支持作者样本 Voice Calibration、Protected Spans、场景分流和候选绑定质量评分门禁</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.0.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/de-ai-polish-2.0.1.zip">下载</a></td>
+<td style="text-align:center">v2.2.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/de-ai-polish-2.0.1.zip">旧版 2.0.1</a></td>
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
 </tr>
 <tr>

@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.2.0] - 2026-07-25
+
+### 新增
+
+- 新增 `scripts/delivery_gate.py`：改写前绑定 scene、作者样本使用状态、Protected Spans 与源稿，交付前复核真实最终稿和评分回执。
+- 为 `SCENE-DECLARED-BEFORE-REWRITE`、`PROTECTED-SPANS-PRESERVED`、`QUALITY-SCORE-GATE-PASSED` 建立稳定 constraint ID、主动 checker、正例、变异例和历史反例。
+- 新增 3 组自动回归，覆盖图片整行、场景声明、Protected Span 改写、评分阈值和快照后计划变化；已完成三轮隔离重复执行。
+
+### 改进
+
+- 场景判定不再只是自然语言步骤：必须在改写前写入 `run-plan.json`，即使没有额外 Protected Span 也要显式记录空数组。
+- 评分回执必须绑定最终稿 SHA-256、scene、五维得分、总分及 voice profile 检查；总分或单维门槛不满足时返回非零退出码。
+- 前向验收发现旧评分文档把精炼度写成 `/1.0`、其余维度按 `/2.0`，且示例总分无法由分项复算；现统一为五维各 0-2 分并直接相加，硬阈值集中到 `config/quality-score-rubric.json`，快照同时绑定 rubric hash。
+- 稳定性合同由 1 个 checker / 1 项硬约束扩展为 2 个 checker / 4 项硬约束，`skill-lint assess` 当前仅剩候选外基线 `ISG-006`。
+
+### 门禁边界
+
+- checker 能证明场景和保护项在改写前声明、Protected Spans 原样保留、评分步骤及既有阈值执行；不能证明 LLM 给出的主观分数绝对准确。
+- 三轮 deterministic 回归不等于正式 agent 质量评测。没有冻结候选 commit、真实写作 golden 和候选外签名基线前，不声明 `INSTRUCTION_STABILITY_VERIFIED`。
+
 ## [2.1.0] - 2026-07-24
 
 ### 新增

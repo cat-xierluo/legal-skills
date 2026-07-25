@@ -2,7 +2,7 @@
 name: de-ai-polish
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.1.0"
+version: "2.2.0"
 license: MIT
 description: 检测并去除文章中的AI化表述模式。**必须触发**：当文章经过写作流程（无论是模式1润色优化还是模式2内容创作）完成初稿后，在输出给用户之前，**必须**调用此 skill 进行 AI腔 检测和去除。不可跳过此步骤，不可仅凭感觉省略检测。任何"先输出再说"的做法都是不允许的。**不要用于**与文本润色/去 AI 化无关的任务(代码审查、法律检索、ASR 纠错等,使用对应的专门工具)。
 ---
@@ -441,6 +441,15 @@ AI化表述往往以**变体**出现，不会恰好匹配清单字面形式。�
 
 去 AI 味的力度、容忍度和保护范围因场景而异。开始通读前，先判定本次属于哪类场景，并据此调整后续 Step 2-5 的力度与重点。若用户未指明，默认按“通用”处理。
 
+<!-- skill-lint:constraint SCENE-DECLARED-BEFORE-REWRITE -->
+在开始改写前创建本次 `run-plan.json`，按 `assets/stability/delivery-run-plan.json` 的结构显式记录：
+
+- `scene`：`legal_document` / `wechat_public_comment` / `chat_reply` / `general`
+- `author_sample_used`：本轮是否使用经用户确认的作者样本
+- `protected_spans`：本轮必须逐字保留的字符串、类别和稳定 ID；即使为空也必须显式写 `[]`
+
+不得在改写完成后倒填场景或 Protected Spans。
+
 | 场景 | 默认力度 | 重点扫描的污染类 | Protected Spans 宽度 |
 |---|---|---|---|
 | **法律文书**（判决/意见/合同/代理词/法律意见书） | 克制 | 姿态污染 / 过程泄漏 / 格式污染 | 最宽 |
@@ -460,10 +469,16 @@ AI化表述往往以**变体**出现，不会恰好匹配清单字面形式。�
 python3 scripts/protected_markdown_gate.py snapshot \
   --input <源文件.md> \
   --output <临时目录>/de-ai-protected-lines.json
+
+python3 scripts/delivery_gate.py snapshot \
+  --input <源文件.md> \
+  --run-plan <临时目录>/run-plan.json \
+  --output <临时目录>/de-ai-delivery-manifest.json
 ```
 
 **通读时同步划定 Protected Spans（禁改项）**：标记必须原样保留、后续 Step 2-4 不得触碰的范围。默认覆盖：
 
+<!-- skill-lint:constraint PROTECTED-SPANS-PRESERVED -->
 - 法条、司法解释、规章的编号与引述（如《民法典》第 143 条、（2023）最高法民申 12 号）
 - 当事人、机构、律所、公司全称
 - 程序术语（管辖、异议、上诉期、举证责任、开庭传票等）
@@ -564,7 +579,7 @@ python3 scripts/fix_punctuation.py <文件路径>
 - YAML front matter（`---` 之间的元数据）
 - **整段 markdown 图片语法**（`![alt](path)` 整段，包括 alt 文本、括号、URL 全部不动）
 - **整段 markdown 链接语法**（`[text](url)` 整段）
-- 代码块和行内代码（` ``` `、`` ` ``）
+- 围栏代码块和行内代码
 - URL 地址
 
 > **图片门禁（强制）**：标点脚本必须识别并跳过图片所在**整行**，包括 alt 文本内的中文标点、同一行其他内容、缩进和换行都不得被改写。若脚本只跳过 URL 或 `![...](...)` 片段，视为脚本 bug，必须修复实现而非放宽规则。
@@ -585,9 +600,21 @@ python3 scripts/protected_markdown_gate.py verify \
 
 门禁通过后，按 `references/quality-scoring.md` 的 5 维（自然度 / 节奏感 / 专业度 / 个性度 / 精炼度，总分 10）对最终文本评分：
 
+<!-- skill-lint:constraint QUALITY-SCORE-GATE-PASSED -->
 - **总分 < 7.0** → 回到 Step 4 重新表述问题句，再评分。
 - **单维度硬伤**：自然度 < 1.5 或个性度 = 0 → 即使总分达标也回炉。
-- **场景调整**：法律文书场景下专业度 < 1.5 即回炉；口语场景下个性度 / 精炼度阈值可放宽。
+- **场景调整**：法律文书场景下专业度 < 1.5 即回炉；其他场景不降低总分、自然度和个性度的全局硬阈值。精炼度当前没有独立硬阈值。
 - **有作者样本时的 voice profile 门禁**：若最终文本明显偏离已提取 profile 的主要稳定维度，或复制样本原句 / 高辨识短语、引入样本事实、复现 profile 标记的反例，必须回到 Step 4/5 重修。
+
+评分后按 `assets/stability/delivery-score-good.json` 的结构生成候选外临时 `score-receipt.json`：写入真实最终文件 SHA-256、scene、五维分数、总分、是否使用作者样本及 voice profile 检查结果。五维范围、求和方式与硬阈值以 `config/quality-score-rubric.json` 为机器可执行单点真相；`snapshot` 会绑定该文件 hash，防止任务中途悄然改尺。随后运行：
+
+```bash
+python3 scripts/delivery_gate.py verify \
+  --manifest <临时目录>/de-ai-delivery-manifest.json \
+  --final <最终文件.md> \
+  --score-receipt <临时目录>/score-receipt.json
+```
+
+只有图片整行门禁和本交付门禁均退出 0，且后者精确报告 `SCENE-DECLARED-BEFORE-REWRITE`、`PROTECTED-SPANS-PRESERVED`、`QUALITY-SCORE-GATE-PASSED` 全部通过，才可交付。评分回执只能证明评分步骤、候选绑定和阈值被执行，不能证明主观评分本身绝对正确。
 
 评分时可用"直接度""信任读者"两个辅助视角定位扣分原因（见 `references/quality-scoring.md`"作为交付门禁使用"节），不单独打分。评分过程与结果默认不写入交付正文，只在交付备注或用户要求时给出。

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "scene": "auto_guess_later",
+  "author_sample_used": false,
+  "protected_spans": [
+    {
+      "id": "statute-001",
+      "category": "statute",
+      "text": "《民法典》第 143 条"
+    }
+  ]
+}

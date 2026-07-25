@@ -279,7 +279,14 @@ def main() -> int:
     args = parser.parse_args()
     try:
         return int(args.handler(args))
-    except (GateError, UnicodeDecodeError, ValueError) as exc:
+    except (
+        GateError,
+        OSError,
+        UnicodeDecodeError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ) as exc:
         print(f"PROTECTED_MARKDOWN_GATE_ERROR: {exc}", file=sys.stderr)
         return 2
 
