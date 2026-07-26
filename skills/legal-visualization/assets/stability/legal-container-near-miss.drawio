@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel><root>
+  <mxCell id="0"/><mxCell id="1" parent="0"/>
+  <mxCell id="lane" value="合法父子泳道" style="swimlane;startSize=30;container=1;fontSize=14;" vertex="1" parent="1"><mxGeometry x="60" y="80" width="300" height="180" as="geometry"/></mxCell>
+  <mxCell id="child" value="容器内节点" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="lane"><mxGeometry x="30" y="60" width="120" height="60" as="geometry"/></mxCell>
+  <mxCell id="frame" value="合法扁平背景框" style="rounded=0;container=1;fontSize=12;" vertex="1" parent="1"><mxGeometry x="400" y="80" width="300" height="180" as="geometry"/></mxCell>
+  <mxCell id="flat-child" value="背景框内节点" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="1"><mxGeometry x="440" y="130" width="120" height="60" as="geometry"/></mxCell>
+  <mxCell id="touching" value="仅边界相接" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="1"><mxGeometry x="560" y="130" width="120" height="60" as="geometry"/></mxCell>
+</root></mxGraphModel>

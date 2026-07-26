@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -406,8 +406,8 @@
     },
     {
       "name": "legal-visualization",
-      "description": "面向法律业务场景的法律图解与图表生成技能：把案件材料、合同、合规、交易、证据链、诉讼流程、时间轴、法律关系、客户汇报和服务方案整理成关系图、流程图、时间轴、证据链、风险图和路线图，默认交付 .drawio + .svg + .png 三件套",
-      "version": "0.6.14",
+      "description": "面向法律业务场景的法律图解与图表生成技能：命中模板时锁定几何，以容器感知重叠、文字容量和长边标签门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套",
+      "version": "0.7.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

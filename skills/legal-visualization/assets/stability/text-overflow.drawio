@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel><root>
+  <mxCell id="0"/><mxCell id="1" parent="0"/>
+  <mxCell id="overflow" value="这是一个明显无法放入当前节点高度的超长中文标签，必须让文本领域门禁阻断交付" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="1"><mxGeometry x="60" y="80" width="90" height="20" as="geometry"/></mxCell>
+</root></mxGraphModel>

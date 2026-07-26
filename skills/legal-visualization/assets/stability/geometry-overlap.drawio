@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel><root>
+  <mxCell id="0"/><mxCell id="1" parent="0"/>
+  <mxCell id="a" value="节点 A" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="1"><mxGeometry x="60" y="80" width="160" height="70" as="geometry"/></mxCell>
+  <mxCell id="b" value="节点 B" style="rounded=1;whiteSpace=wrap;fontSize=14;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="160" height="70" as="geometry"/></mxCell>
+</root></mxGraphModel>

@@ -1,7 +1,7 @@
 ---
 name: legal-visualization
 description: Legal Visualization。面向法律业务场景的法律图解与图表生成技能；当用户要求把案件材料、合同材料、合规事项、交易安排、证据链、诉讼流程、时间轴、法律关系、客户汇报、法律服务方案或律师团队工作整理成关系图、流程图、时间轴、证据链、风险图、路线图、PNG/SVG/PDF/.drawio 时使用；也兼容“法律可视化”“案件事实图”“法律关系图”等说法。先按受众、任务动词和路由规则筛选场景，再生成可交付图片，并保留 draw.io 源文件作为可编辑底稿。本技能不用于事实核验，也不替代法律结论判断。
-version: "0.6.14"
+version: "0.7.0"
 license: CC-BY-NC
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -16,7 +16,9 @@ homepage: https://github.com/cat-xierluo/legal-skills
 1. **缺失事实必须显式标注**：材料中未见的主体、时间、金额、合同、证据，不得出现在图中；必须显式写"待补充/待核/一方主张"，禁止补全或推断。
 2. **业务条线优先于图型**：先识别"诉讼/公司/合规/知产/争议/合同/客户/服务"等业务条线，再选图型。
 3. **VizSpec.routing 必填**：未填 `routing.primary_scene` 与 `routing.selection_reason` 禁止写 drawio。
-4. **一图一观点**：超过 1 个核心观点必须拆主图+附图，禁止堆叠。
+4. **一图一观点**：超过 1 个核心观点必须拆主图+附图；时间、计算、程序等 ≥3 类不同语义区域不得自由堆进同一画布，只能拆图或使用已定义容量的分区模板。
+5. **领域校验必须通过**：`.drawio` 在复制、导出和交付前必须通过 `scripts/validate_drawio.py`；几何重叠、确定性文本溢出、无效容器关系或超长连线标签属于阻断错误。
+6. **命中模板必须锁定几何**：已有适配模板时，使用 `scripts/instantiate_template.py` 只替换 `value` 占位符；不得为了塞入更多材料而移动节点、缩小字号或扩写 edge 标签。容量不足时拆附图。
 
 ## 默认目标
 
@@ -31,7 +33,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 ### 开箱即用
 
-- 生成 `.drawio` XML、读取参考文件、执行 `scripts/validate_drawio.py` 仅需 Python 3 标准库。
+- 生成 `.drawio` XML、锁定模板实例化、读取参考文件、执行领域校验与回归测试仅需 Python 3 标准库。
 - 没有 draw.io CLI 时，仍可交付 `.drawio` 源文件，并在最终说明中标明图片导出未完成。
 
 ### 可选依赖
@@ -48,11 +50,12 @@ homepage: https://github.com/cat-xierluo/legal-skills
 3. **路由场景**：先读 `references/scene-routing-guide.md`，按受众、任务动词、材料阶段和信息形态筛出 1-3 个候选场景；再读 `references/scene-library.md` 中对应章节定主场景。不要直接在完整场景库中凭关键词跳选。scene_id 选定后，从 `references/chart-decision-tree.md` 选图型变体与节点布局；该决策树是路由的下游，不替代路由。
 4. **解决冲突**：如果多个场景都能命中，按“用户指定 > 受众匹配 > 更窄业务领域 > 当前材料阶段 > 通用场景”选择主图；未选场景只作为附图候选。
 5. **确定内容**：按“全面罗列 -> 逻辑整合 -> 精简内容”处理材料。复杂案件先做细节图，再按核心主体、核心时间线或核心法律关系组合。
-6. **生成 VizSpec**：按 `references/vizspec-schema.md` 先写结构化制图规格，明确路由结论、场景 ID、主图观点、节点、连线、分区、注释和待核事实。
+6. **生成 VizSpec**：按 `references/vizspec-schema.md` 先写结构化制图规格，明确路由结论、模板选择、溢出策略、场景 ID、主图观点、节点、连线、分区、注释和待核事实。
 7. **编排图面**：按 `references/visual-composition-rules.md` 和 `references/scene-composition-playbook.md` 控制图表逻辑、配色、线条、注释和重点表达；复杂案件、制度路径、背景趋势、票据回路和工期延误类图表还要读 `references/advanced-case-patterns.md`。颜色、字体、起始坐标、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值，禁止在图中硬编码。节点命名按 `references/naming-conventions.md` 规范。
-8. **生成 draw.io**：按 `references/xml-reference.md` 写 `.drawio` XML；`templates/` 仅作为可打开的 draw.io 模板起点，XML 写法示例见 `references/xml-example-*.md`。
-9. **导出图片**：按 `references/output-workflow.md` 导出 `SVG/PNG/PDF`，并保留 `.drawio`。导出后检查图片非空、文字不截断、主体不拥挤。
-10. **质检交付**：按 `references/quality-checklist.md` 自查后，再向用户说明输出文件、使用场景和未能验证的环节。
+8. **生成 draw.io**：先查 `references/template-guide.md`。命中模板时用 `scripts/instantiate_template.py` 只填值并锁定几何；没有适配模板时才按 `references/xml-reference.md` 写新 XML，并显式声明 `template.id: custom`。
+9. **运行领域门禁**：执行 `python scripts/validate_drawio.py <file.drawio>`。任何 error 都必须修正；不得仅凭 XML 可解析或图片非空声称完成。warning 需结合导出图人工复核。
+10. **导出图片**：按 `references/output-workflow.md` 导出 `SVG/PNG/PDF`，并保留 `.drawio`。`export_drawio.py` 会先重跑领域门禁，失败时禁止复制和导出。
+11. **质检交付**：打开实际导出的 SVG/PNG，按 `references/quality-checklist.md` 检查文字、连线、图例和画布边界，再向用户说明输出文件、使用场景和未能验证的环节。
 
 ## 场景路由速查
 
@@ -80,7 +83,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 - 一张图只表达一个主观点；多个观点拆成多张图或多页图。
 - 颜色必须有含义：同主体同色，同类型关系同线型，争议/风险/违约用强调色，辅助事实用灰色。
-- 避免线条交叉和长距离绕行；连接多的主体放在中心或靠近相关节点。
+- 避免线条交叉和长距离绕行；连接多的主体放在中心或靠近相关节点。长 edge 标签改为独立文本节点、侧栏或图例。
 - 图表主体只放短标签；长事实、证据编号、条文依据放侧栏、底注或附表。
 - 对法官提交的图，不夸张表达，不把争议事实画成既定事实；争议或待证事实用虚线、问号、标注或灰色处理。
 
@@ -113,6 +116,8 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 ## 实现提示
 
-- XML 校验：`python scripts/validate_drawio.py path/to/file.drawio`，与 `quality-checklist.md` 第 32-38 行自检项对位。
+- XML 与领域布局校验：`python scripts/validate_drawio.py path/to/file.drawio`，检查结构、容器、重叠、文字容量与边标签风险。
+- 模板锁定实例化：`python scripts/instantiate_template.py templates/litigation/complex-case-split.drawio values.json output.drawio`；只允许替换 `value`，实例化后自动校验。
 - 批量导出：`python scripts/export_drawio.py path/to/file.drawio` 默认生成 `.drawio + .svg + .png` 三件套，并写入 `archive/<timestamp>/export-report.json`；PNG 默认 2 倍导出，需要更高清可加 `--png-scale 3`，如需旧行为可加 `--in-place`。
 - 命名规范检查：`python scripts/normalize_naming.py path/to/file.drawio path/to/spec.yaml`，对照 `naming-conventions.md` 输出偏差清单。
+- 领域回归：`python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template`，同时覆盖最小违规反例和合法容器近似正例。

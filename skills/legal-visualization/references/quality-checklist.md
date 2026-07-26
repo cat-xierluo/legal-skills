@@ -30,17 +30,20 @@
 - [ ] 连接多的主体位于中心或靠近相关节点。
 - [ ] 图表主体文字短；长说明放脚注、侧栏或附表。
 - [ ] 节点对齐，间距充足，图面不拥挤。
+- [ ] 非容器节点之间没有正面积重叠；泳道、背景框等合法包含已使用真实 parent 或 `container=1` 明确标识。
 - [ ] 有必要的标题、图例、注释和证据来源。
 
 ## draw.io XML
 
 - [ ] XML 包含 `mxGraphModel`、`root`、`id="0"`、`id="1"`。
 - [ ] 每个 edge 都有 `mxGeometry relative="1"` 子元素。
-- [ ] 所有顶层元素 `parent="1"`，容器内元素使用相对坐标。
+- [ ] 顶层元素 `parent="1"`；容器子节点引用有效父节点并使用不越界的相对坐标。
 - [ ] 节点有明确宽高，中文不被截断。
 - [ ] 注释中没有可能破坏 XML 的字符组合。
 
-自动化自检脚本见 `scripts/validate_drawio.py`，可作为质量门禁的预检环节。
+自动化领域门禁见 `scripts/validate_drawio.py`。几何重叠、确定性文本溢出、无效 parent/相对坐标和超长连线标签为阻断错误；文本容量临界和较长 edge 标签为 warning，必须打开实际导出图片复核。
+
+最小违规与合法近似回归见 `assets/stability/`；运行 `python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template`。不得删除合法容器正例来换取碰撞测试通过。
 
 ## 导出文件
 

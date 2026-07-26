@@ -142,6 +142,8 @@ style="ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth
 </mxCell>
 ```
 
+领域校验器会把真实祖先/后代关系视为合法包含，不报告碰撞。若因兼容旧模板必须把背景框和内部节点都保留为 `parent="1"`，应在背景框 style 中显式增加 `container=1`；不要依赖节点 ID 或中文名称猜测容器语义。
+
 ### 泳道容器（Swimlane）
 
 ```xml
@@ -216,3 +218,5 @@ style="ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth
 | 节点文字不换行 | 缺少 `whiteSpace=wrap` | 添加属性 |
 | 连线不显示 | edge 没有 mxGeometry 子元素 | 按规则添加 |
 | XML 解析错误 | 注释中有双破折号 `--` | 改用单破折号 |
+| 合法泳道被报重叠 | 子节点未使用真实 parent，或扁平背景框未声明 `container=1` | 优先改为父子结构；兼容旧模板时显式标注容器 |
+| XML 合法但仍可交付失败 | 结构检查不证明几何和文本正确 | 运行 `scripts/validate_drawio.py` 并打开实际导出图片 |

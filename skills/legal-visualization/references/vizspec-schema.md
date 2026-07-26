@@ -18,6 +18,11 @@ routing:
     - scene_id: ""
       reason_not_selected: ""
   selection_reason: ""
+template:
+  id: "template-id | custom"
+  path: "templates/<domain>/<template>.drawio | null"
+  lock_geometry: true
+  overflow_policy: "split_appendix | reject"
 scene_ids: []
 main_chart_type: "timeline | relation | data | process | spatial | evidence | composite"
 stance: "neutral | claimant | respondent | internal"
@@ -83,6 +88,7 @@ quality_checks:
 | `purpose` | 本图的信息任务，例如“说明合同主体与实际履行主体不一致” |
 | `core_message` | 一句话主观点，必须能放进标题、副标题或结论栏 |
 | `routing` | 场景路由结论，记录主场景、备选场景和排除理由（**必填**，见 `SKILL.md` 硬约束第 3 条） |
+| `template` | 记录模板绑定。命中模板时 `lock_geometry=true`，只替换 value；容量不足按 `overflow_policy` 拆附图或阻断。没有适配模板时填 `id: custom` |
 | `entities[].role` | 节点身份（原告/被告/第三人等），取值规范见 `references/naming-conventions.md` |
 | `scene_ids` | 来自 `scene-library.md` 的场景 ID，可多个 |
 | `confirmed/disputed/missing` | 防止把争议事实画成确定事实 |
@@ -94,12 +100,12 @@ quality_checks:
 ## 生成顺序
 
 1. 先写 `title`、`audience`、`purpose`、`core_message`。
-2. 按 `scene-routing-guide.md` 先填 `routing`，再填 `scene_ids` 和 `main_chart_type`。
+2. 按 `scene-routing-guide.md` 先填 `routing`，再绑定 `template`，最后填 `scene_ids` 和 `main_chart_type`。
 3. 提取实体、事件、金额、关系和证据。
 4. 标出确定事实、争议事实、缺失事实。
 5. 设计分区、泳道、图例和注释。
-6. 将 VizSpec 转成 draw.io XML。
-7. 导出图片并按质量清单检查。
+6. 命中模板时锁定几何实例化；无模板时将 VizSpec 转成新 draw.io XML。
+7. 运行领域校验，错误为零后才能导出图片并按质量清单检查。
 
 ## 关系状态样式
 

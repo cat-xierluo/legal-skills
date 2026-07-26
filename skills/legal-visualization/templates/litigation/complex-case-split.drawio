@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  模板：复杂案件核心事实总览（complex-case-split）
+  适用场景：关系、时间、计算和程序同时出现，但主图只需给出一个总览观点
+  模板锁定：只替换 value 中的占位符，不修改几何；任一栏超出文本容量时拆附图
+-->
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="{{title}}" style="text;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#1a1a2e;" vertex="1" parent="1">
+      <mxGeometry x="60" y="20" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="core" value="{{core_message}}" style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+      <mxGeometry x="60" y="70" width="880" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="timeline-lane" value="关键时间" style="swimlane;container=1;startSize=36;fillColor=#F5F5F5;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="120" width="280" height="260" as="geometry"/>
+    </mxCell>
+    <mxCell id="timeline-content" value="{{timeline_summary}}" style="rounded=1;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#BDBDBD;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="timeline-lane">
+      <mxGeometry x="20" y="50" width="240" height="180" as="geometry"/>
+    </mxCell>
+    <mxCell id="calculation-lane" value="损失计算摘要" style="swimlane;container=1;startSize=36;fillColor=#F5F5F5;strokeColor=#FF8C00;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="360" y="120" width="280" height="260" as="geometry"/>
+    </mxCell>
+    <mxCell id="calculation-content" value="{{calculation_summary}}" style="rounded=1;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="calculation-lane">
+      <mxGeometry x="20" y="50" width="240" height="180" as="geometry"/>
+    </mxCell>
+    <mxCell id="procedure-lane" value="程序状态" style="swimlane;container=1;startSize=36;fillColor=#F5F5F5;strokeColor=#C0392B;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="660" y="120" width="280" height="260" as="geometry"/>
+    </mxCell>
+    <mxCell id="procedure-content" value="{{procedure_summary}}" style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="procedure-lane">
+      <mxGeometry x="20" y="50" width="240" height="180" as="geometry"/>
+    </mxCell>
+    <mxCell id="source-note" value="{{source_note}}" style="rounded=1;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#BDBDBD;fontColor=#757575;fontSize=11;align=left;spacing=8;" vertex="1" parent="1">
+      <mxGeometry x="60" y="400" width="880" height="50" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

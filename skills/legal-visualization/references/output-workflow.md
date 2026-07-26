@@ -51,6 +51,7 @@ python scripts/export_drawio.py path/to/file.drawio --format png --png-scale 3
 
 ## draw.io 生成规则
 
+- 场景命中现有模板时，使用 `scripts/instantiate_template.py` 只替换 `value` 占位符；脚本拒绝修改样式/几何位置中的占位符，并在原子落盘前执行领域校验。
 - 使用完整 `mxGraphModel`，保留 `id="0"` 和 `id="1"`。
 - 所有 edge 必须包含 `<mxGeometry relative="1" as="geometry" />`。
 - 节点坐标、字号、字体、颜色、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值（页面 origin、字体、调色板、线型绑定、节点尺寸参考）。
@@ -58,6 +59,14 @@ python scripts/export_drawio.py path/to/file.drawio --format png --png-scale 3
 - 文字过长时增加节点宽度、换行或使用脚注，不缩到不可读。
 - 图例、注释、证据来源放在右侧或底部。
 - 复杂案件、高阶论证图、制度路径对比和背景趋势叠加图，先按 `references/advanced-case-patterns.md` 选套路，再写 draw.io。
+
+导出前必须执行：
+
+```bash
+python scripts/validate_drawio.py path/to/file.drawio
+```
+
+返回非零时禁止复制、导出和交付。`export_drawio.py` 会再次执行同一门禁，防止绕过。
 
 ## 导出策略
 
@@ -67,7 +76,7 @@ python scripts/export_drawio.py path/to/file.drawio --format png --png-scale 3
 2. draw.io MCP、浏览器或桌面应用：按当前环境能力打开 `.drawio` 后导出，适合需要人工确认的复杂图。
 3. 无导出环境：只生成 `.drawio`，并给出明确说明。
 
-`scripts/export_drawio.py` 的报告会记录 `source_drawio`，并只对图片做轻量文件检查：文件大小、空白风险、SVG viewBox、PNG/PDF 文件头。文字截断、箭头丢失、布局拥挤等图面质量仍按下方图片自检人工确认。
+`scripts/export_drawio.py` 的报告会记录源文件领域校验、`source_drawio` 和图片轻量检查：文件大小、空白风险、SVG viewBox、PNG/PDF 文件头。源文件门禁能阻断可计算的节点重叠和文本容量错误；最终字体渲染、箭头视觉关系和复杂连线路由仍按下方图片自检人工确认。
 
 PNG 导出报告会记录 `png_scale`。默认 `2.0` 适合普通文档和聊天分享；打印、大屏投影或需要裁剪放大的图片可用 `3.0` 或 `4.0`。
 

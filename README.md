@@ -51,13 +51,13 @@
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
 | 2026-07-26 | 更新     | [skill-lint](skills/skill-lint/) | v2.6.0 | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷 |
+| 2026-07-26 | 更新     | [legal-visualization](skills/legal-visualization/) | v0.7.0 | 新增模板几何锁定、容器感知碰撞、中文文本容量和长边标签门禁；8 项领域回归、19 个发布模板全检与 draw.io CLI 全量导出通过 |
 | 2026-07-25 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.2.0 | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环 |
 | 2026-07-23 | 新上传   | [patent-download](skills/patent-download/) | v2.6.0 | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露 |
 | 2026-07-23 | 新上传   | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0 | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义 |
 | 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10 | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
 | 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
 | 2026-07-13 | 更新     | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT |
-| 2026-07-13 | 更新     | [git-workflow](skills/git-workflow/) | v1.6.0 | 新增完整 PR range 身份门禁与 safe-push：逐 commit 核验 author/committer，并只推送已核验 immutable OID；拒绝同名 feature upstream 与本地 ref 缩窄范围 |
 
 </details>
 
@@ -346,10 +346,10 @@
 <tr>
 <td><a href="skills/legal-visualization/"><strong>legal-visualization</strong></a></td>
 <td>专业·可视化</td>
-<td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件材料、合同、合规、交易、证据链、诉讼流程、时间轴、法律关系、客户汇报和服务方案整理成关系图/流程图/时间轴/证据链/风险图/路线图，先按受众和任务路由场景再出图，默认交付 .drawio + .svg + .png 三件套</td>
+<td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件、合同、合规、交易、证据链和诉讼流程整理成关系图/流程图/时间轴/风险图；命中模板时锁定几何，并以容器感知重叠、文字容量和长边标签门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.6.14</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/legal-visualization-0.6.14.zip">下载</a></td>
+<td style="text-align:center">v0.7.0</td>
+<td style="text-align:center">待发布</td>
 <td></td>
 </tr>
 </tbody>

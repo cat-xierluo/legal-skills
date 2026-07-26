@@ -27,6 +27,7 @@ templates/
 | `templates/litigation/issue-evidence-matrix.drawio` | 争点-证据矩阵 |
 | `templates/litigation/system-path-comparison.drawio` | 制度路径对比图 |
 | `templates/litigation/construction-delay-progress.drawio` | 工期延误进度图 |
+| `templates/litigation/complex-case-split.drawio` | 复杂案件核心事实总览；锁定三栏摘要几何，细节拆附图 |
 | `templates/corporate/equity-structure.drawio` | 股权结构图 |
 | `templates/corporate/transaction-architecture.drawio` | 交易架构图 |
 | `templates/corporate/equity-change-before-after.drawio` | 股权变动前后对比图 |
@@ -54,6 +55,7 @@ templates/
 ## 工具入口
 
 - XML 自检：`python scripts/validate_drawio.py templates/litigation/litigation-route.drawio`
+- 模板实例化：`python scripts/instantiate_template.py templates/litigation/complex-case-split.drawio assets/stability/complex-case-values.json output.drawio`
 - 批量导出：`python scripts/export_drawio.py templates/ --recursive`，输出目录会同时包含 `.drawio`、`.svg` 和 `.png`
 - 高清 PNG：`python scripts/export_drawio.py templates/litigation/litigation-route.drawio --format png --png-scale 3`
 - 命名规范检查：`python scripts/normalize_naming.py templates/litigation/litigation-route.drawio`
@@ -67,3 +69,6 @@ templates/
 3. 在 `.drawio` 文件顶部 XML 注释中写明：适用场景 ID、必要输入字段、默认布局、可变参数。
 4. 同步更新 `references/chart-decision-tree.md` 和本文件的模板列表。
 5. 运行 XML 自检、命名规范检查和一次导出抽检。
+6. 可变文本使用 `{{field}}` 且只放在 `mxCell value` 中；坐标、尺寸和 style 禁止放占位符。
+7. 泳道使用原生 parent 子节点；扁平背景框必须在 style 中声明 `container=1`，使碰撞门禁能够区分合法包含与真实重叠。
+8. 明确字段容量和溢出策略；超过容量时拆附图或拒绝实例化，不缩字硬塞。

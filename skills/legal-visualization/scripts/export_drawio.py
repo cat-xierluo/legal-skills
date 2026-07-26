@@ -27,6 +27,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from validate_drawio import validate_file
+
 SUPPORTED_FORMATS = ("svg", "png", "pdf")
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 KNOWN_DRAWIO_PATHS = (
@@ -145,11 +147,24 @@ def export_one(
 
 
 def export_file(src: Path, formats: list, output_dir: Path | None, png_scale: float) -> dict:
+    validation = validate_file(src)
+    if not validation["passed"]:
+        return {
+            "file": str(src),
+            "validation": validation,
+            "source_drawio": None,
+            "drawio_cmd": None,
+            "fallback": None,
+            "all_ok": False,
+            "message": "draw.io 源文件未通过领域校验，已阻止复制和导出",
+            "results": [],
+        }
     source = copy_drawio_source(src, output_dir)
     cmd = detect_drawio()
     if cmd is None:
         return {
             "file": str(src),
+            "validation": validation,
             "source_drawio": source,
             "drawio_cmd": None,
             "fallback": "no_drawio_cli",
@@ -161,6 +176,7 @@ def export_file(src: Path, formats: list, output_dir: Path | None, png_scale: fl
     all_ok = source["ok"] and all(r["ok"] for r in results)
     return {
         "file": str(src),
+        "validation": validation,
         "source_drawio": source,
         "drawio_cmd": cmd,
         "fallback": None,
@@ -287,6 +303,12 @@ def main() -> int:
         for r in reports:
             status = "OK" if r.get("all_ok") else ("FALLBACK" if r.get("fallback") else "FAIL")
             print(f"\n[{status}] {r['file']}")
+            if not r.get("validation", {}).get("passed", False):
+                print(f"  ✗ {r['message']}")
+                for item in r["validation"]["findings"]:
+                    if item["severity"] == "error":
+                        print(f"    - [{item['check']}] {item['message']}")
+                continue
             source = r.get("source_drawio")
             if source and source.get("ok"):
                 action = "复制" if source.get("copied") else "保留"
