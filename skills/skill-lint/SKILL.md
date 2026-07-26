@@ -2,7 +2,7 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.4.0"
+version: "2.5.0"
 license: MIT
 description: Skill 创建预检、可靠性验收与格式审查工具，也可称 Skilllint。本技能应在用户创建、重大改造或审查 Claude Code Skill，需要识别旧版 Skill 的指令遵循不稳定、产出漂移、验证模态错配、约束漏检，或检查 Harness 契约、候选绑定证据、故障注入、目录结构、业务流和安全风险时使用。不要用于：代替业务领域验证器、代码审查、应用功能测试、通用编程任务。
 ---
@@ -137,14 +137,30 @@ description: Skill 创建预检、可靠性验收与格式审查工具，也可�
 
 创建预检、重大改造和正式验收必须读取 `references/harness-reliability-standards.md`，逐层检查 Contract / Producer / Verifier / Evidence Binding / Fault Injection / Closure / Composition。旧版、多维审阅、视觉生产或用户反馈“反复漏项/产出漂移”时还必须读取 `references/instruction-stability-standards.md`。
 
-先静态识别：
+先运行不执行候选代码的具体失效审查。单 Skill：
+
+```bash
+python3 scripts/harness_failure_audit.py audit \
+  --candidate-root /path/to/skill
+```
+
+Skill 集合或 monorepo：
+
+```bash
+python3 scripts/harness_failure_audit.py batch \
+  --root /path/to/skills
+```
+
+该审查器递归发现包含 `SKILL.md` 的最小单元，输出带文件、行号、证据、影响和修正建议的稳定 JSON；hard finding 返回 1，范围错误或集合中零 Skill 返回 2。规则 ID 与边界见 `references/harness-reliability-standards.md`。默认只做静态审查，不执行、安装或联网。
+
+旧版结构性稳定性审查：
 
 ```bash
 python3 scripts/instruction_stability_gate.py assess \
   --candidate-root /path/to/skill
 ```
 
-缺少 `config/instruction-stability-contract.json` 时，`assess` 返回退出码 2 和 `INSTRUCTION_STABILITY_NOT_VERIFIED`，并按实际内容标出视觉模态缺失、多维审阅无重复证据、完成声明未绑定回执等问题。此模式不执行候选代码，适合旧版和未知第三方 Skill。
+缺少 `config/instruction-stability-contract.json` 时，`assess` 返回退出码 2 和 `INSTRUCTION_STABILITY_NOT_VERIFIED`，同时给出 ISG 结构性 finding 与 HFA/HRA 具体实现 finding。视觉/几何语义只从 `SKILL.md` 和 `references/**/*.md` 的规范性上下文识别，TASKS/DECISIONS/CHANGELOG 的历史讨论不触发视觉模态。此模式不执行候选代码，适合旧版和未知第三方 Skill。
 
 声称“指令遵循稳定”“多轮不漏项”前，目标 Skill 必须提供约束追踪合同。每条 hard constraint 在权威来源中使用唯一 `<!-- skill-lint:constraint CONSTRAINT-ID -->` 锚点；候选外 evaluator-signed 基线必须与全部锚点、规范行、合同和当前候选哈希一致。先取得当前候选可复算的 Harness 审查证据，再用相同输入/配置至少独立执行三轮；每轮保留唯一 execution nonce、evaluator-signed producer log 和独立目录内的真实产物。每条硬约束还必须有候选外 evaluator-signed held-out 正反例。完成静态安全审查、披露 checker 且用户确认候选为自有/可信代码后，运行：
 
@@ -245,5 +261,6 @@ Hard Fail 一律按严重问题处理。
 - `config/instruction-stability-requirements-baseline.example.json`：候选外独立硬约束基线格式示例
 - `config/instruction-stability-held-out-cases.example.json`：evaluator-signed 候选外隐藏正反例清单格式
 - `scripts/harness_evidence_gate.py`：生成和复算候选绑定的 Harness 审查证据
+- `scripts/harness_failure_audit.py`：单 Skill / Skill 集合的具体 Harness 失效模式静态审查
 - `scripts/instruction_stability_gate.py`：静态识别旧版结构风险，并验证多轮真实产物的逐约束覆盖稳定性
 - `templates/skill-quality-opinion-report.md`：最终 Skill 质量意见报告模板

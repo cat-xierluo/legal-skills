@@ -2,6 +2,7 @@
 
 ## 待办
 
+- [ ] 为 HFA/HRA finding 生成动态故障探针规格：只允许用户确认的可信候选，复制到临时目录，使用最小环境且禁止自动安装/联网；先生成可审查 probe plan，不直接执行。
 - [ ] severity 边界(❌ Hard Fail vs ⚠️ 警告)更明确:agent-eval-lab r7 自迭代时,"业务流浅"被判 Hard Fail,判据示例可更稳。
 - [ ] 报告加"给非技术用户的结论摘要"段(像 agent-eval-lab 的"给你的结论"),不只技术指标表。
 - [ ] 静态预筛层:继续把 frontmatter 和目录规范脚本化；候选/规则绑定及动态 checker 重跑已在 v2.3.0 落地。
@@ -12,6 +13,11 @@
 - [ ] 为多 Skill 组合契约定义可选的机器可读 schema。
 
 ## 已完成
+
+- [x] Task-015：把具体 Harness 失效模式纳入可批量审查的确定性门禁
+  - 来源：`doc-curator` 实证审查发现，现有稳定性门禁能阻止“证据不足却判稳定”，但不能自动定位 checker 异常被吞、测试丢弃退出码、无条件成功声明、跨项目共享 state、状态副作用未落地、baseline 配置未被执行、配置解析 fail-open、Git 副作用绕过安全门禁、破坏性 trim 缺数据守恒等具体根因。
+  - 完成日期：2026-07-25
+  - 结果：新增单 Skill / Skill 集合静态审查器，HFA/HRA finding 绑定具体文件、行号、证据、影响与修正建议；接入 `instruction_stability_gate.py assess`；用去具体化 bad/good twin、空范围、批量汇总和真实形态配置解析回归锁定误报边界。静态视觉语义改为只读取规范源并要求硬约束局部共现。
 
 - [x] Task-014：识别旧版 Skill 的指令遵循不稳定和产出漂移
   - 来源：用户要求 `skill-lint` 能识别旧版 `writing-reviewer`、`svg-book-illustrator` 及类似 Skill 中“任务反复强调但实际漏做、产出随轮次漂移、修改未真实落地”的问题。
