@@ -960,38 +960,56 @@ def validate_contract(candidate_root: Path, data: Any) -> dict[str, Any]:
     }
 
 
-def static_semantic_sources(candidate_root: Path) -> list[str]:
-    """只读取当前规范源，避免历史任务/决策讨论触发能力模态。"""
+def static_semantic_documents(candidate_root: Path) -> list[dict[str, str]]:
+    """只读取当前规范源，并保留来源路径供 finding 回溯。"""
     candidates = [candidate_root / "SKILL.md"]
     references = candidate_root / "references"
     if references.is_dir():
         candidates.extend(sorted(references.rglob("*.md")))
-    texts: list[str] = []
+    documents: list[dict[str, str]] = []
     for path in candidates:
         if not path.is_file() or path.is_symlink():
             continue
         relative = path.relative_to(candidate_root)
         if any(part in SKIP_DIRS for part in relative.parts):
             continue
-        texts.append(path.read_text(encoding="utf-8", errors="replace"))
-    return texts
+        documents.append(
+            {
+                "path": relative.as_posix(),
+                "text": path.read_text(encoding="utf-8", errors="replace"),
+            }
+        )
+    return documents
 
 
-def has_normative_visual_constraint(texts: list[str]) -> bool:
-    """视觉词必须与规范性硬要求在同一局部上下文共现。"""
-    for text in texts:
+def normative_visual_evidence(
+    documents: list[dict[str, str]], limit: int = 8
+) -> list[dict[str, Any]]:
+    """返回视觉硬约束的规范来源；历史任务与决策文件不在读集内。"""
+    evidence: list[dict[str, Any]] = []
+    for document in documents:
+        text = document["text"]
         lines = text.splitlines()
         for index, line in enumerate(lines):
             if not VISUAL_WORDS.search(line):
                 continue
             context = "\n".join(lines[max(0, index - 1) : min(len(lines), index + 2)])
             if HARD_REQUIREMENT_WORDS.search(context):
-                return True
-    return False
+                evidence.append(
+                    {
+                        "path": document["path"],
+                        "line": index + 1,
+                        "excerpt": line.strip()[:240],
+                    }
+                )
+                if len(evidence) >= limit:
+                    return evidence
+    return evidence
 
 
 def static_assessment(candidate_root: Path) -> dict[str, Any]:
-    texts = static_semantic_sources(candidate_root)
+    documents = static_semantic_documents(candidate_root)
+    texts = [document["text"] for document in documents]
     content = "\n".join(texts)
     findings = [
         {
@@ -1000,12 +1018,15 @@ def static_assessment(candidate_root: Path) -> dict[str, Any]:
             "message": "缺少机器可读的约束追踪合同，无法证明每条硬约束都有验证器、产物阶段和回归用例。",
         }
     ]
-    if has_normative_visual_constraint(texts):
+    visual_evidence = normative_visual_evidence(documents)
+    if visual_evidence:
         findings.append(
             {
                 "id": "ISG-002",
                 "severity": "hard",
-                "message": "检测到视觉/几何约束，但未证明使用 geometry/render/visual 模态检查真实渲染产物。",
+                "message": "检测到视觉/几何硬约束，但未证明候选自己的领域 checker 使用 geometry/render/visual 模态检查真实渲染产物。此 finding 只表示验证闭环缺失，不表示 Skill Lint 已判定具体图面存在业务错误。",
+                "evidence": visual_evidence,
+                "next_action": "由候选 Skill 提供领域 checker，并同时用最小违规反例和合法近似正例证明 checker 不漏报、不误报；Skill Lint 负责复算其映射与证据。",
             }
         )
     if REVIEW_WORDS.search(content):

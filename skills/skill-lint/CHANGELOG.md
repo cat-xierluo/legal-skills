@@ -2,6 +2,19 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.6.0] - 2026-07-26
+
+### 新增：领域 checker 双向充分性边界
+
+- 明确 Skill Lint 只审查领域 checker 的约束映射、验证模态、产物阶段和候选绑定证据，不代替目标 Skill 判断 draw.io 几何、法律引用或其他领域算法正确性。
+- 新增“最小违规反例 + 合法近似正例”双向门禁原则：前者锁定漏报，后者锁定误报；已知边界不得用普通干净正例替代。
+- 新增 `CHECKER-MINIMAL-VIOLATION` 与 `CHECKER-LEGAL-NEAR-MISS` 两类通用历史失效族。
+
+### 改进
+
+- `instruction_stability_gate.py assess` 的 `ISG-002` 现在返回规范来源、行号与摘录，并明确该 finding 只表示视觉验证闭环缺失，不表示已经发现具体图面错误。
+- 补充回归测试，锁定视觉证据来源和领域边界提示，继续排除 TASKS、DECISIONS、CHANGELOG 等历史讨论误触发。
+
 ## [2.5.0] - 2026-07-25
 
 ### 新增：具体 Harness 失效模式批量审查

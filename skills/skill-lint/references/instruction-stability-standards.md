@@ -177,6 +177,25 @@ python3 scripts/instruction_stability_gate.py assess \
 - 至少关联一个合同化 measurement，声明 `value_type`、`condition` 和 `expected`；正例/真实 run 必须满足阈值，负例必须实际违反目标约束阈值。
 - evaluator-signed held-out 清单为每条 hard constraint 提供候选外正例和反例，且 fixture SHA-256 与当前候选绑定。
 
+### 领域 checker 的双向充分性边界
+
+Skill Lint 审查的是“约束是否被合适的 checker 和证据覆盖”，不代替目标 Skill 编写或判断领域算法。几何碰撞、法律引用、排版分页、数据守恒等具体正确性由目标 Skill 的领域 checker 负责；Skill Lint 只在合同、模态、产物阶段、正反例和多轮证据层面阻止虚假完成。
+
+领域 checker 必须同时证明两种能力：
+
+- **最小违规反例**：只引入一个目标约束缺陷，checker 必须精确报告该 constraint 并非零退出。它用于发现漏报和“便宜检查器只看格式”的问题。
+- **合法近似正例**：保留与违规样例外观或结构相近、但按领域规则合法的边界条件，checker 必须通过。它用于发现误报，例如合法容器包含、允许的排版留白、受控例外或满足阈值的边界值。
+
+普通“完全干净”的正例不能替代已知合法近似边界。只要历史上出现过误报，就把最小化后的合法结构作为候选内 positive fixture，并在 evaluator-signed held-out 中准备独立同类样例；只要历史上出现过漏报，就保留最小违规 mutation/historical fixture。Skill Lint 不理解这些领域语义，但会复算 checker 是否在两类样例上按合同作出相反且正确的结果。
+
+报告必须区分三种结论：
+
+- `NOT_VERIFIED`：证据闭环不足，不能推断领域结果正确或错误。
+- 领域 checker 明确失败：已发现被该 checker 覆盖的具体客观缺陷。
+- `DOMAIN_VERIFIED`：目标 Skill 的领域验证器通过；它仍不能替代 Harness 与指令稳定性证据。
+
+禁止把“缺少 geometry/render/visual 证据”写成“Skill Lint 已检测出元素重叠”。前者是验证能力缺口，后者需要领域 checker 对真实产物给出候选绑定证据。
+
 人工审阅仍可评价语义质量，但不能冒充客观硬门禁。对于内容审稿 Skill，可以把“是否逐项输出全部审阅维度、是否引用真实来源位置、是否完成 finding 状态转换”做成 schema/coverage/state checker；具体意见是否专业继续由人工或独立语义评测判断。
 
 ## 四、验证模态必须匹配
@@ -275,6 +294,8 @@ constraint 必须声明它要求检查的阶段：
 ### SVG / 视觉生产类
 
 - `SVG-GEOMETRY-MODALITY`：源码合法，但文本超出卡片或图例与标签 bbox 重叠。
+- `CHECKER-MINIMAL-VIOLATION`：最小违规样例仍被 checker 判为通过，说明存在漏报或验证模态过弱。
+- `CHECKER-LEGAL-NEAR-MISS`：合法近似样例被 checker 阻断，说明例外/容器/边界语义未建模并存在误报。
 - `SVG-PRODUCER-DOC-CONTRADICTION`：SKILL 禁止 `<style>`，自身 generator/template 仍输出 `<style>`。
 - `SVG-NEGATIVE-FIXTURE-CANARY`：故意弱化 checker 后，历史坏样本必须让 checker 测试失败。
 - `COMPOSITION-CONTRACT-CONFLICT`：producer 禁止某特性，reviewer 却声明允许。

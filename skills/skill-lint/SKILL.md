@@ -2,7 +2,7 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.5.0"
+version: "2.6.0"
 license: MIT
 description: Skill 创建预检、可靠性验收与格式审查工具，也可称 Skilllint。本技能应在用户创建、重大改造或审查 Claude Code Skill，需要识别旧版 Skill 的指令遵循不稳定、产出漂移、验证模态错配、约束漏检，或检查 Harness 契约、候选绑定证据、故障注入、目录结构、业务流和安全风险时使用。不要用于：代替业务领域验证器、代码审查、应用功能测试、通用编程任务。
 ---
@@ -23,6 +23,8 @@ description: Skill 创建预检、可靠性验收与格式审查工具，也可�
 - 不把“有 checker”当作“覆盖完整”；每条硬约束必须追踪到合适模态、正确产物阶段和回归用例。
 - 不比较自然语言输出的整文件哈希；只比较合同声明的关键覆盖集合和可观察不变量。
 - 客观缺陷 fail-closed；语义质量保留人工判断，不伪装成万能自动化。
+- 只审查领域 checker 的覆盖、模态和证据，不把证据不足冒充为已经发现具体领域算法错误。
+- 已知漏报必须有最小违规反例，已知误报必须有合法近似正例；两者都由目标 Skill 的领域 checker 定义。
 - 对无法确认的能力标注“未提及/待补充”。
 
 ## 输入
@@ -162,6 +164,8 @@ python3 scripts/instruction_stability_gate.py assess \
 
 缺少 `config/instruction-stability-contract.json` 时，`assess` 返回退出码 2 和 `INSTRUCTION_STABILITY_NOT_VERIFIED`，同时给出 ISG 结构性 finding 与 HFA/HRA 具体实现 finding。视觉/几何语义只从 `SKILL.md` 和 `references/**/*.md` 的规范性上下文识别，TASKS/DECISIONS/CHANGELOG 的历史讨论不触发视觉模态。此模式不执行候选代码，适合旧版和未知第三方 Skill。
 
+`ISG-002` 会列出触发视觉/几何要求的规范来源和行号，但它只证明候选缺少合适模态的领域验证证据。不要据此声称已经检测出重叠、裁切或其他具体业务错误；应让目标 Skill 提供自己的 checker、最小违规反例与合法近似正例，再由正式门禁复算。
+
 声称“指令遵循稳定”“多轮不漏项”前，目标 Skill 必须提供约束追踪合同。每条 hard constraint 在权威来源中使用唯一 `<!-- skill-lint:constraint CONSTRAINT-ID -->` 锚点；候选外 evaluator-signed 基线必须与全部锚点、规范行、合同和当前候选哈希一致。先取得当前候选可复算的 Harness 审查证据，再用相同输入/配置至少独立执行三轮；每轮保留唯一 execution nonce、evaluator-signed producer log 和独立目录内的真实产物。每条硬约束还必须有候选外 evaluator-signed held-out 正反例。完成静态安全审查、披露 checker 且用户确认候选为自有/可信代码后，运行：
 
 ```bash
@@ -204,6 +208,7 @@ python3 scripts/instruction_stability_gate.py verify \
 - 是否区分静态检查与动态评估
 - 是否有逐约束追踪合同、验证模态和产物阶段
 - 是否用至少三轮固定输入检查关键覆盖集合与历史回归
+- 已知漏报是否有最小违规反例，已知误报是否有合法近似正例
 
 缺少这些内容不一定阻塞发布，但应作为质量风险记录。
 

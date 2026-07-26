@@ -800,6 +800,14 @@ class InstructionStabilityGateTest(unittest.TestCase):
         self.assertIn("ISG-002", result.stdout)
         self.assertIn("ISG-004", result.stdout)
 
+        report = json.loads(result.stdout.splitlines()[0])
+        finding = next(item for item in report["findings"] if item["id"] == "ISG-002")
+        self.assertEqual(finding["evidence"][0]["path"], "SKILL.md")
+        self.assertEqual(finding["evidence"][0]["line"], 4)
+        self.assertIn("重叠", finding["evidence"][0]["excerpt"])
+        self.assertIn("只表示验证闭环缺失", finding["message"])
+        self.assertIn("合法近似正例", finding["next_action"])
+
     def test_geometry_constraint_rejects_text_checker(self) -> None:
         data = self.load_contract()
         data["constraints"][0]["requirement_type"] = "geometry"
