@@ -10,7 +10,7 @@
 
 ## 依据读取建议
 
-- 先读 `legal-basis/trademark-examination-and-adjudication-guidelines/trademark-examination-and-adjudication-guidelines-index.md`
+- 先读 `trademark-examination-and-adjudication-guidelines/trademark-examination-and-adjudication-guidelines-index.md`
 - 再按问题类型读取对应 `chapter-XX.md`
 
 ## 审查维度

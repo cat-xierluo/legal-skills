@@ -30,7 +30,7 @@ AI：我会先收集申请主体、商标构成和使用场景，再做尼斯分
 ## 当前覆盖范围
 
 - 主要法域：中国大陆商标注册申请
-- 分类依据：尼斯分类，当前默认使用 NCL13-2026，并保留 NCL12-2025 作为历史回溯
+- 分类依据：尼斯分类，当前默认使用 NCL13-2026
 - 法律依据：《中华人民共和国商标法》《商标法实施条例》《商标审查审理指南》等中国法资料
 - 交付格式：统一输出 Markdown 结构化结论；申请材料阶段可生成 Excel 商品清单
 
@@ -43,10 +43,10 @@ AI：我会先收集申请主体、商标构成和使用场景，再做尼斯分
 3. 解压后将 `trademark-assistant/` 文件夹放入你的 skill 目录。
 4. 在支持 `SKILL.md` 的 Agent / Claude 环境中启用该 skill。
 
-如需生成商品清单 Excel，安装依赖：
+如需生成商品清单 Excel，依赖 openpyxl。推荐用 uv 按需运行，无需全局安装：
 
 ```bash
-pip install openpyxl
+uv run --with openpyxl python script.py
 ```
 
 ## 可以怎么用
@@ -106,7 +106,7 @@ pip install openpyxl
 如需就商标申请、类别规划、可注册性初筛、复杂商标问题、企业内部落地或商用授权进一步沟通，欢迎添加微信（请注明来意）。
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/cat-xierluo/legal-skills/main/wechat-qr.jpg" width="200" alt="微信二维码"/>
+  <img src="https://raw.githubusercontent.com/cat-xierluo/legal-skills/main/docs/wechat-qr.jpg" width="200" alt="微信二维码"/>
   <p><em>微信：ywxlaw</em></p>
 </div>
 

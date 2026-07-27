@@ -2,7 +2,7 @@
 name: trademark-assistant
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.4"
+version: "1.5.5"
 license: CC-BY-NC
 description: 面向中国商标申请的类别规划、可注册性初筛及申请材料准备技能。基于尼斯分类（国际商标分类），引用中国法律法规。本技能应在接到商标咨询、需要结构化输出建议与风险分级、或需要准备申请材料时使用。不要用于：替代正式法律意见、承诺注册成功率、处理复杂商标争议案件。
 ---
@@ -88,8 +88,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 - 商标说明撰写指南：`references/trademark-description-guide.md`
 - 法律与实务依据总索引：`references/legal-basis-index.md`
 - 审查指南索引：`references/trademark-examination-and-adjudication-guidelines/trademark-examination-and-adjudication-guidelines-index.md`
-- 尼斯分类索引（当前）：`references/nice-classification-v13-2026/nice-classification-v13-2026-index.md`
-- 尼斯分类旧版（查漏补缺）：`references/nice-classification-v12-2025/nice-classification-v12-2025-index.md`
+- 尼斯分类索引：`references/nice-classification-v13-2026/nice-classification-v13-2026-index.md`
 - **商品清单导入模板**：`templates/导入商品信息.xlsx`
 
 ## 商品清单输出格式
@@ -158,9 +157,8 @@ wb.save('输出文件.xlsx')
 
 | 工具 | 类型 | 适用场景 |
 |------|------|----------|
-| `mcp__zai-mcp-server__analyze_image` | MCP | 通用图像分析，推荐优先使用 |
-| `mcp__MiniMax__understand_image` | MCP | 备选方案 |
-| `Read` 工具直接读取图片 | 内置 | Claude 原生视觉能力 |
+| `Read` 工具直接读取图片 | 内置 | Claude 原生视觉能力，默认首选，无需额外配置 |
+| `mcp__zai-mcp-server__analyze_image` | MCP | 通用图像分析，作为备选（需运行环境已配置该 MCP） |
 
 #### 分析要点
 
@@ -222,7 +220,7 @@ archive/
 
 | 依赖 | 安装方式 |
 |------|----------|
-| 无 | 本技能为文本推理与结构化输出流程，无额外系统依赖 |
+| 无 | 本技能主体为文本推理与结构化输出流程，无额外系统依赖；生成 Excel 商品清单时需 openpyxl，见下表 |
 
 ### Python 包
 

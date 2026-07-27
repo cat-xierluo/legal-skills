@@ -10,9 +10,8 @@
 
 | 工具 | 类型 | 适用场景 |
 |------|------|----------|
-| `mcp__zai-mcp-server__analyze_image` | MCP | 通用图像分析，推荐优先使用 |
-| `mcp__MiniMax__understand_image` | MCP | 备选方案 |
-| `Read` 工具直接读取图片 | 内置 | Claude 原生视觉能力 |
+| `Read` 工具直接读取图片 | 内置 | Claude 原生视觉能力，默认首选，无需额外配置 |
+| `mcp__zai-mcp-server__analyze_image` | MCP | 通用图像分析，作为备选（需运行环境已配置该 MCP） |
 
 ### 2. 分析提示词模板
 

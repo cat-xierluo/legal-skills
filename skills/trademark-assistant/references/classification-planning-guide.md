@@ -12,7 +12,7 @@
 
 1. 抽取业务关键词
 2. 映射商品/服务形态
-3. 从尼斯分类中确定候选类别（先读 `legal-basis/nice-classification-v13-2026/nice-classification-v13-2026-index.md`，再按需读取对应 `class-XX.md`）
+3. 从尼斯分类中确定候选类别（先读 `nice-classification-v13-2026/nice-classification-v13-2026-index.md`，再按需读取对应 `class-XX.md`）
 4. 结合业务阶段确定优先级
 
 ## 输出分层

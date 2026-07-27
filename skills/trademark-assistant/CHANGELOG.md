@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [1.5.5] - 2026-07-27
+
+### 修复
+
+- **核心流程索引路径断裂**：修正 `references/classification-planning-guide.md` 与 `references/registrability-prescreen-guide.md` 中残留的 `legal-basis/` 路径前缀，恢复对尼斯分类索引与商标审查审理指南索引的可达性
+- **README 微信二维码 URL**：补回 `docs/` 前缀，修正 raw.githubusercontent 链接 404
+
+### 改进
+
+- **商标说明图像分析工具表**：移除环境专属的 `mcp__MiniMax__understand_image`，改为 `Read` 首选 + `mcp__zai-mcp-server__analyze_image` 备选，降低对特定 MCP 的硬依赖
+- **依赖说明统一**：openpyxl 统一为 `uv run --with openpyxl` 按需运行，消除 SKILL.md 与 README.md 之间 pip/uv 不一致；同步修正"系统依赖"表自相矛盾表述
+- **订正历史 license 措辞**：1.5.1 条目由 CC BY-NC-SA 4.0 更正为实际的 CC BY-NC 4.0
+
+### 移除
+
+- 删除过时的尼斯分类 NCL12-2025 旧版目录（约 1.1M）及 SKILL.md / README.md / legal-basis-index.md 中的关联引用，避免双版本并行带来的检索歧义
+
 ## [1.5.4] - 2026-04-10
 
 ### 修复
@@ -36,7 +53,7 @@
 
 ### 修正
 
-- 更新 license 为 CC BY-NC-SA 4.0（非商业用途授权）
+- 更新 license 为 CC BY-NC 4.0（非商业用途授权）
 
 ## [1.5.0] - 2026-03-24
 
