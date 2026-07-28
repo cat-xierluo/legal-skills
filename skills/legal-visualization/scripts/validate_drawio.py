@@ -26,6 +26,7 @@ CHECKS = (
     "edge_geometry",
     "node_size",
     "geometry_overlap",
+    "shape_diversity",
     "text_fit",
     "edge_label_risk",
     "xml_safe_comments",
@@ -264,6 +265,62 @@ def check_geometry_overlap(root: ET.Element, findings: list[dict]) -> None:
         findings.append(finding("geometry_overlap", "ok", "未发现非容器节点正面积重叠"))
 
 
+def base_shape(style: dict[str, str]) -> str:
+    """从解析后的 style 字典提取基础形状 token，用于形状多样性统计。"""
+    shape_attr = style.get("shape")
+    if shape_attr:
+        return shape_attr
+    for key in ("doubleEllipse", "rhombus", "ellipse", "hexagon", "triangle", "actor"):
+        if style.get(key) == "1":
+            return key
+    if style.get("rounded") == "1":
+        return "capsule" if style.get("arcSize") == "50" else "rounded_rect"
+    if style.get("text") == "1":
+        return "text"
+    return "rect"
+
+
+def check_shape_diversity(root: ET.Element, findings: list[dict]) -> None:
+    """统计非容器、非文本节点的基础形状分布，单一形状占比过高时告警（warning，不阻断）。
+
+    直接量化"全方框"问题：若节点数 ≥ 5 且主导形状占比 > 80%，提示按
+    shape-registry.md 用不同几何形状区分法律语义。标题、注释、图例等
+    纯文本节点不计入，与 0.7.0 审查口径（非文本节点）保持一致。
+    """
+    counts: dict[str, int] = {}
+    for cell in root.iter("mxCell"):
+        if cell.get("vertex") != "1" or is_container(cell):
+            continue
+        shape = base_shape(parse_style(cell.get("style")))
+        if shape == "text":
+            continue  # 标题/注释/图例等纯文本节点不计入图形形状统计
+        counts[shape] = counts.get(shape, 0) + 1
+    total = sum(counts.values())
+    if total < 5:
+        findings.append(finding("shape_diversity", "ok", f"非容器节点 {total} 个 < 5，跳过形状多样性检查"))
+        return
+    dominant, dominant_count = max(counts.items(), key=lambda item: item[1])
+    ratio = dominant_count / total
+    detail = {
+        "total": total,
+        "dominant_shape": dominant,
+        "dominant_count": dominant_count,
+        "ratio": round(ratio, 3),
+        "shape_counts": counts,
+    }
+    if ratio > 0.8:
+        findings.append(
+            finding(
+                "shape_diversity",
+                "warning",
+                f"形状过于单一：{dominant} 占 {round(ratio * 100)}%（{dominant_count}/{total}），建议按 references/shape-registry.md 用不同形状区分法律语义",
+                **detail,
+            )
+        )
+    else:
+        findings.append(finding("shape_diversity", "ok", f"形状分布合理，主导形状 {dominant} 占 {round(ratio * 100)}%", **detail))
+
+
 def plain_text(value: str | None) -> str:
     raw = html.unescape(value or "")
     raw = re.sub(r"(?i)<br\s*/?>", "\n", raw)
@@ -408,6 +465,7 @@ def validate_file(path: Path) -> dict:
         check_edge_geometry(root, findings)
         check_node_size(root, findings)
         check_geometry_overlap(root, findings)
+        check_shape_diversity(root, findings)
         check_text_fit(root, findings)
         check_edge_label_risk(root, findings)
         check_xml_safe_comments(text, findings)

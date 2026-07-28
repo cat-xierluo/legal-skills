@@ -74,12 +74,20 @@ palette:
 
 ## 节点样式映射
 
-| 节点类型 | shape | fillColor | strokeColor |
+法律语义 → 形状的权威映射见 `references/shape-registry.md`（视觉角色总表 + 样式串 + 主题与 emoji opt-in）。本表仅作旧版速查，新增节点一律按 shape-registry 的 `visual_role` 取值；palette 色值绑定仍以本文件为准。
+
+| 节点类型 | shape（速查） | fillColor | strokeColor |
 |---|---|---|---|
-| 主体/当事人 | `mxgraph.basic.person` 或 `rounded=1` | `primary_light` | `primary` |
+| 主体/当事人 | `rounded=1`（不再用 `mxgraph.basic.person`，导出不稳） | `primary_light` | `primary` |
+| 公司/法人 | 矩形方角（默认） | `#FFFFFF` | `primary` |
+| 法院/裁判机关 | `hexagon` | `#FFF8E1` | `#F9A825` |
 | 合同/协议 | `shape=document` | `#FFFFFF` | `primary` |
+| 证据 | `shape=parallelogram` | `#E8F5E9` | `#43A047` |
 | 资金/票据/货物 | `shape=cylinder3` | `accent_decision_light` | `accent_decision` |
 | 决策/判断 | `rhombus` | `accent_decision_light` | `accent_decision` |
+| 风险/违约/争议 | `rhombus` | `accent_dispute_light` | `accent_dispute` |
+| 裁判/结论 | `doubleEllipse` | `accent_dispute_light` | `accent_dispute` |
+| 程序节点 | `rounded=1;arcSize=50`（胶囊） | `grey_missing_light` | `grey_missing` |
 | 时间线节点 | `ellipse` | `#E8F5E9` | `#43A047` |
 | 缺失/待补充 | `rounded=1` | `grey_missing_light` | `grey_missing` |
 | 容器/泳道 | `swimlane` | `frame_bg` | `frame` |
@@ -113,5 +121,6 @@ edge 标签超过 8 显示单位进入人工复核，超过 14 显示单位阻�
 
 | 日期 | 变更 | 版本 |
 |---|---|---|
+| 2026-07-28 | 节点样式映射表降级为速查，权威指向 `shape-registry.md`；新增公司/法院/证据/风险/裁判/程序形状；弃用 `mxgraph.basic.person` | 0.8.0 |
 | 2026-07-26 | 增加容器语义、自由布局间距例外、文本容量与 edge 标签门禁常量 | 0.7.0 |
 | 2026-06-07 | 初版沉淀，源自 v0.5.1 `output-workflow.md` 行 37-39 硬编码 | 0.6.0 |

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.0] - 2026-07-28
+
+### 新增
+
+- 新增 `references/shape-registry.md`：法律语义 → 视觉角色（`visual_role`）→ 形状 token → drawio 样式 → 配色的权威映射，覆盖主体 / 文书 / 证据 / 资金 / 风险 / 裁判 / 程序 / 时间 / 容器 9 类语义、17 个视觉角色。形状一律用 drawio 原生几何（六边形 / 菱形 / 文档形 / 圆柱 / 平行四边形 / 椭圆 / 双椭圆 / 胶囊），弃用依赖外部 stencil 的 `mxgraph.basic.person`。
+- 新增 `scripts/check_vizspec.py`：校验 VizSpec 的 `visual_role` / `theme` / `icons` 字段合法性，对照 shape-registry 总表与主题清单。
+- 新增多主体关系图 after 演示样板（`archive/0.8.0-shape-demo/`），与原模板 before 对比，验证形状升级效果。
+
+### 改进
+
+- VizSpec schema 升级到 v2.0：节点新增 `visual_role` / `shape_token` / `emphasis` / `icon`，整图新增 `visual.theme` / `density` / `icons`；旧 `style_key` 保留兜底。节点视觉从自由发挥收敛为声明式语义角色。
+- `validate_drawio.py` 新增 `shape_diversity` 检查（排除文本节点后，主导形状占比 > 80% 且节点 ≥ 5 时告警），量化"全方框"问题；不阻断导出。
+- `legal-visual-constants.md` 节点样式映射表降级为速查，权威指向 `shape-registry.md`；新增公司 / 法院 / 证据 / 风险 / 裁判 / 程序形状。
+- 默认主题 `client_report`：`icon_mode=off`（不渲染 emoji，保持法律图严肃）、`density=detailed`、强调色限蓝 / 橙 / 红三个；分类辅色（法院金 / 监管深蓝 / 证据绿）用于区分语义类别，不计入强调色配额。
+
+### 设计决策
+
+- emoji 默认不渲染：法律图需保持严肃，emoji 仅 opt-in（用户显式声明 `icons: true` 或单节点 `icon` 时才出）。形状区分纯靠几何形状 + 配色 + 描边。
+- 本轮为形状主线 MVP：shape registry + VizSpec 声明式 + 1 套主题 + 1 个场景 before/after。自动布局层、完整美学 lint、法官 / 律师两套主题、其余场景样板留待下一轮。
+- 严格区分强调色（≤3：蓝 / 橙 / 红）与分类辅色，既丰富形状又守"强调色不超 3 个"。
+
+### 技术优化
+
+- 13 项单测通过（含 `shape_diversity` 双例、`check_vizspec` 三例）；before / after 经 draw.io CLI 导出 PNG，目视确认 after 含椭圆 / 圆柱 / 文档形等多种形状，不再是全方框。
+
 ## [0.7.0] - 2026-07-26
 
 ### 新增

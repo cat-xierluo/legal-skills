@@ -5,7 +5,7 @@ VizSpec 是 Legal Visualization 的中间结构。先生成 VizSpec，再转 dra
 ## 必填结构
 
 ```yaml
-vizspec_version: "1.0"
+vizspec_version: "2.0"
 title: ""
 audience: "court | client | team | public"
 purpose: ""
@@ -31,6 +31,10 @@ output:
   source: ".drawio"
   images: ["svg", "png"]
   optional: ["pdf"]
+visual:
+  theme: "client_report | court_submit | lawyer_workpaper"
+  density: "compact | normal | detailed"
+  icons: false
 facts:
   confirmed: []
   disputed: []
@@ -40,6 +44,10 @@ entities:
     label: ""
     role: ""
     group: ""
+    visual_role: ""
+    shape_token: ""
+    emphasis: "high | normal | low"
+    icon: ""
     style_key: ""
 events:
   - id: ""
@@ -96,12 +104,15 @@ quality_checks:
 | `status` | 决定实线、虚线、灰色或待证标注（颜色常量见 `references/legal-visual-constants.md`） |
 | `sections` | 用来划分阵营、阶段、法律关系、制度路径或项目范围 |
 | `layout` | 指定总体布局，避免边生成边想 |
+| `entities[].visual_role` | 法律语义角色（`plaintiff` / `contract` / `amount` / `risk` 等），决定形状、图标与配色，取值见 `references/shape-registry.md`（**0.8.0 起节点视觉的主入口**） |
+| `entities[].shape_token` / `emphasis` / `icon` | 可选：显式形状 token、存在感（`high` / `normal` / `low`）、单节点 emoji（覆盖整图 `icons`） |
+| `visual.theme` / `density` / `icons` | 整图视觉：主题（默认 `client_report`）、留白档位、是否渲染 emoji（默认 `false`，法律图保持严肃） |
 
 ## 生成顺序
 
 1. 先写 `title`、`audience`、`purpose`、`core_message`。
 2. 按 `scene-routing-guide.md` 先填 `routing`，再绑定 `template`，最后填 `scene_ids` 和 `main_chart_type`。
-3. 提取实体、事件、金额、关系和证据。
+3. 提取实体、事件、金额、关系和证据；按 `shape-registry.md` 为每个节点声明 `visual_role`，整图声明 `theme` 与 `icons`（默认 `false`）。
 4. 标出确定事实、争议事实、缺失事实。
 5. 设计分区、泳道、图例和注释。
 6. 命中模板时锁定几何实例化；无模板时将 VizSpec 转成新 draw.io XML。
@@ -126,4 +137,5 @@ quality_checks:
 - 读者不听讲解能否看出主体、关系和结论？
 - 哪些事实是争议或待补充，是否已经视觉区分？
 - 是否需要拆出附图，避免主图拥挤？
+- 节点形状是否按 `shape-registry.md` 区分了语义，而不是全用矩形？
 - `.drawio` 能否继续编辑，SVG/PNG 是否能直接交付？
