@@ -40,7 +40,7 @@ except ImportError:
     )
     sys.exit(2)
 
-SKILL_DIR = Path(__file__).resolve().parent
+SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE = SKILL_DIR / "templates" / "导入商品信息.xlsx"
 EXPECTED_HEADER = ["序号", "商品类别", "类似群", "商品名称"]
 

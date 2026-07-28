@@ -43,7 +43,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 ## 输入收集
 
-优先按 `references/service-intake-checklist.md` 收集信息；缺失关键信息时先提问，不直接下结论。
+优先按 `references/01-service-intake-checklist.md` 收集信息；缺失关键信息时先提问，不直接下结论。
 
 最少输入：
 
@@ -56,9 +56,9 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 ### 阶段一：咨询与规划
 
 1. 识别请求类型：`类别规划` / `可注册性初筛` / `组合服务`
-2. 使用 `references/classification-planning-guide.md` 完成类别规划
-3. 使用 `references/registrability-prescreen-guide.md` 完成可注册性初筛
-4. 按 `references/output-contract.md` 输出标准化结果
+2. 使用 `references/02-classification-planning-guide.md` 完成类别规划
+3. 使用 `references/03-registrability-prescreen-guide.md` 完成可注册性初筛
+4. 按 `references/04-output-contract.md` 输出标准化结果
 5. 强制附加免责声明与升级建议（含律师咨询入口）
 
 ### 阶段二：申请材料准备
@@ -73,7 +73,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 - 先结论，再依据，再风险，再行动
 - 明确区分“高风险/中风险/低风险”；信息不足时标注“待补充（信息不足，暂不评级）”
-- 相对理由（在先商标近似冲突）必须以官方检索证据为前提；未检索时标注“未检索/不可评级”，且总体不得评为低风险（详见 `references/registrability-prescreen-guide.md`）
+- 相对理由（在先商标近似冲突）必须以官方检索证据为前提；未检索时标注“未检索/不可评级”，且总体不得评为低风险（详见 `references/03-registrability-prescreen-guide.md`）
 - 引用依据时注明来源文件（如 `references/trademark-examination-and-adjudication-guidelines/chapter-03.md`）
 - 缺失信息必须标注“未提及/待补充”
 - 统一仅输出一个版本：Markdown 结构化结论，不附加 JSON 代码块
@@ -82,15 +82,17 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 ## 关键参考资料
 
-- 服务输入清单：`references/service-intake-checklist.md`
-- 类别规划规则：`references/classification-planning-guide.md`
-- 初筛判定规则：`references/registrability-prescreen-guide.md`
-- 交付模板：`references/output-contract.md`
-- 商标说明撰写指南：`references/trademark-description-guide.md`
-- 法律与实务依据总索引：`references/legal-basis-index.md`
+- 01 服务输入清单：`references/01-service-intake-checklist.md`
+- 02 类别规划规则：`references/02-classification-planning-guide.md`
+- 03 初筛判定规则：`references/03-registrability-prescreen-guide.md`
+- 04 交付模板：`references/04-output-contract.md`
+- 05 商标说明撰写指南：`references/05-trademark-description-guide.md`
 - 审查指南索引：`references/trademark-examination-and-adjudication-guidelines/trademark-examination-and-adjudication-guidelines-index.md`
 - 尼斯分类索引：`references/nice-classification-v13-2026/nice-classification-v13-2026-index.md`
+- 侵权判断标准：`references/laws-regulations/trademark-infringement-criteria.md`、`references/laws-regulations/trademark-infringement-criteria-interpretation-and-application.md`
 - **商品清单导入模板**：`templates/导入商品信息.xlsx`
+
+> 检索建议：涉及类别规划时，默认先读 `references/nice-classification-v13-2026/nice-classification-v13-2026-index.md`，再按需读取对应 `class-XX.md`；涉及审查规则时，先读 `references/trademark-examination-and-adjudication-guidelines/trademark-examination-and-adjudication-guidelines-index.md`，再按需读取对应 `chapter-XX.md`。35-45 类通常为服务类高频区间，优先按业务场景筛查。
 
 ## 商品清单输出格式
 
@@ -114,7 +116,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 ### 生成方式
 
-使用仓库根目录的 `script.py` 生成 Excel。它已内置模板表头校验、类别/类似群/商品名称校验、openpyxl 缺失提示和禁止静默覆盖规则，可直接运行。
+使用 `scripts/script.py` 生成 Excel。它已内置模板表头校验、类别/类似群/商品名称校验、openpyxl 缺失提示和禁止静默覆盖规则，可直接运行。
 
 输入为 JSON 数组（每项含 `类别`、`类似群`、`商品名称`，序号自动生成）：
 
@@ -128,13 +130,13 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 从文件读取：
 
 ```bash
-uv run --with openpyxl python script.py --input goods.json --output {商标名}-第{X}类-商品清单.xlsx
+uv run --with openpyxl python scripts/script.py --input goods.json --output {商标名}-第{X}类-商品清单.xlsx
 ```
 
 或通过 stdin 传入：
 
 ```bash
-echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录制）"}]' | uv run --with openpyxl python script.py --output out.xlsx
+echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录制）"}]' | uv run --with openpyxl python scripts/script.py --output out.xlsx
 ```
 
 > 输出文件已存在时默认拒绝覆盖，需显式加 `--force`；表头或数据校验不通过时立即报错退出，不会生成残缺文件。
@@ -167,12 +169,13 @@ echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录�
 
 对于**图形商标**或**组合商标**，必须先使用图像理解工具分析商标图片，再撰写说明。
 
-#### 可用的图像理解工具
+#### 工具选择策略
 
-| 工具 | 类型 | 适用场景 |
-|------|------|----------|
-| `Read` 工具直接读取图片 | 内置 | Claude 原生视觉能力，默认首选，无需额外配置 |
-| `mcp__zai-mcp-server__analyze_image` | MCP | 通用图像分析，作为备选（需运行环境已配置该 MCP） |
+不绑定具体工具名，按以下优先级调用当前运行环境具备的图像理解能力：
+
+1. **首选：模型内置视觉能力**。检查当前运行环境所在的大模型是否原生支持图片读取（如 Claude、GPT-4V、Gemini 等多数新一代多模态模型）。如果模型支持，无需任何额外工具，直接把图片交给模型分析即可。
+2. **备选：通用图像理解 MCP/插件**。如果当前模型不具备视觉能力，或用户上传图片无法被模型直接读取，使用当前运行环境配置的通用图像理解 MCP 或插件。**具体工具名称取决于运行环境实际配置**，使用前应先核对当前环境已启用哪些 MCP/插件，再选用其中一个。
+3. **兜底：人工描述**。如果以上均不可用，明确告知用户当前环境无图像理解能力，请其用文字描述商标的设计要素（形状、构图、字体、颜色、风格等），再据此撰写说明。
 
 #### 分析要点
 
@@ -199,14 +202,14 @@ echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录�
 
 #### 撰写流程
 
-1. **用户提供商标图片** → 调用图像理解工具分析
+1. **用户提供商标图片** → 按上述"工具选择策略"调用图像理解能力分析
 2. **获取分析结果** → 提取关键设计特征
 3. **结合用户补充说明** → 完善设计细节和寓意
 4. **按模板撰写商标说明** → 输出符合官方要求的文本
 
 ### 详细指南
 
-撰写指南和示例见 `references/trademark-description-guide.md`
+撰写指南和示例见 `references/05-trademark-description-guide.md`
 
 ## Archive 归档
 
@@ -240,4 +243,4 @@ archive/
 
 | 包名 | 用途 | 安装命令 |
 |------|------|----------|
-| openpyxl | 生成 Excel 商品清单 | `uv run --with openpyxl python script.py --input <清单.json> --output <输出.xlsx>` |
+| openpyxl | 生成 Excel 商品清单 | `uv run --with openpyxl python scripts/script.py --input <清单.json> --output <输出.xlsx>` |

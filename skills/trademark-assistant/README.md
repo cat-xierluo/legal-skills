@@ -90,11 +90,11 @@ uv run --with openpyxl python script.py --input goods.json --output 星火-第9�
 ## 关键文件
 
 - [SKILL.md](./SKILL.md)：执行入口和输出要求
-- [references/service-intake-checklist.md](./references/service-intake-checklist.md)：服务输入清单
-- [references/classification-planning-guide.md](./references/classification-planning-guide.md)：类别规划规则
-- [references/registrability-prescreen-guide.md](./references/registrability-prescreen-guide.md)：可注册性初筛规则
-- [references/output-contract.md](./references/output-contract.md)：交付格式
-- [references/trademark-description-guide.md](./references/trademark-description-guide.md)：商标说明撰写规则
+- [references/01-service-intake-checklist.md](./references/01-service-intake-checklist.md)：01 服务输入清单
+- [references/02-classification-planning-guide.md](./references/02-classification-planning-guide.md)：02 类别规划规则
+- [references/03-registrability-prescreen-guide.md](./references/03-registrability-prescreen-guide.md)：03 可注册性初筛规则
+- [references/04-output-contract.md](./references/04-output-contract.md)：04 交付格式
+- [references/05-trademark-description-guide.md](./references/05-trademark-description-guide.md)：05 商标说明撰写规则
 - [templates/导入商品信息.xlsx](./templates/导入商品信息.xlsx)：商品清单导入模板
 
 ## 许可证

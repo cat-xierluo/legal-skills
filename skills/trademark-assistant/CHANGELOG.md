@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [1.7.1] - 2026-07-28
+
+### 技术优化
+
+- **references/ 顺序编号**：5 份流程文件加 `NN-` 前缀，按执行顺序排列（01 输入 → 02 类别规划 → 03 初筛 → 04 交付 → 05 商标说明），AI 与读者可凭编号判断执行步骤；用 `git mv` 保留历史。
+- **法条/法规独立子目录**：将 `trademark-infringement-criteria.md`（14K）与 `trademark-infringement-criteria-interpretation-and-application.md`（162K）迁入新建的 `references/laws-regulations/`，与流程文件区分；两文件保留原名（不带编号），体现"法律法规合集"性质而非流程节点。
+- **脚本归位**：`script.py` 从技能根目录迁移到 `scripts/` 目录，与 `scripts/check_legal_basis_integrity.py` 保持一致，遵循 AGENTS.md 中"脚本存放于 `scripts/`"的目录约定；脚本内 `SKILL_DIR` 由 `Path(__file__).resolve().parent` 调整为 `.parent.parent`，模板路径 `templates/导入商品信息.xlsx` 保持解析不变；SKILL.md 中"使用仓库根目录的 `script.py`"描述与三处 `python script.py` 用法示例同步更新为 `scripts/script.py`；行为不变，纯结构整理。
+- **同步引用更新**：SKILL.md（6 处：输入收集、阶段一 4 条、输出要求、关键参考资料 5 行、商标说明指引）、README.md（5 条关键文件列表）、`01-service-intake-checklist.md` 与 `03-registrability-prescreen-guide.md` 互相引用的相对路径同步更新。
+- **保留历史引用**：CHANGELOG.md / DECISIONS.md / TASKS.md 中的历史记录**不追溯修改**——文件名变动属于已沉淀事实，追溯改写会破坏 git blame 与决策溯源（遵循 AGENTS.md "保留证据"原则）。
+- **精简冗余索引**：`references/legal-basis-index.md` 仅是 19 行的索引型清单，作用完全可被 SKILL.md "关键参考资料" 章节替代，且与审查指南/尼斯分类两个独立子索引存在"索引的索引"重复。删除该文件，将其涵盖的"侵权判断标准"引用和"检索建议"（默认先读 NCL/审查指南总索引、按需下钻、35-45 类优先）合并到 SKILL.md 关键参考资料列表后的引用块；行为不变，引用入口更直接。
+- **图像理解工具去硬编码**：原"可用的图像理解工具"表格把 `Read` 工具和 `mcp__zai-mcp-server__analyze_image` 两个具体名称写死，导致 skill 跨环境迁移时（模型换为 GPT-4V/Gemini 等多模态模型、MCP 工具集不同）失效。改为"工具选择策略"：(1) 首选模型内置视觉能力（不指明具体模型）；(2) 备选通用图像理解 MCP/插件（按当前运行环境实际配置选用，不写死 MCP 名称）；(3) 兜底人工描述。撰写流程第 1 步同步改为引用此策略。
+
 ## [1.7.0] - 2026-07-28
 
 ### 修复
