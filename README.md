@@ -1,23 +1,5 @@
 <div align="center">
 
-<img src="docs/legal-skills-icon.jpg" width="280" alt="Legal Skills"/>
-
-# Legal Skills
-
-面向法律从业者的 AI Agent Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作。
-
-兼容 Claude Code、OpenClaw、WorkBuddy、QoderWork、CodeX、OpenCode、Hermes 等主流 AI Agent 平台。
-
-[![Legal Skills](https://img.shields.io/badge/Legal%20Skills-AI%20for%20Law-1F4E5F)](https://github.com/cat-xierluo/legal-skills)
-[![Skills](https://img.shields.io/badge/Skills-51-2E7D32)](#-技能列表)
-[![Domain](https://img.shields.io/badge/Domain-LegalTech-0F766E)](#-项目概述)
-<br/>
-[![Language](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87%E4%BC%98%E5%85%88-B91C1C)](#)
-[![GitHub stars](https://img.shields.io/github/stars/cat-xierluo/legal-skills?style=social)](https://github.com/cat-xierluo/legal-skills/stargazers)
-[![Homepage](https://img.shields.io/badge/Homepage-Website-2563EB)](https://cat-xierluo.github.io/legal-skills/)
-
-</div>
-
 ## 👨‍💼 关于作者
 
 **杨卫薪律师** - 专注于技术类纠纷领域（知识产权、数据与 AI），同时热衷于将 AI 技术应用于法律实务。
@@ -48,18 +30,18 @@
 <details>
 <summary>🆕 最近更新的 Skill</summary>
 
-| 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
-| :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
-| 2026-07-28 | 更新     | [trademark-assistant](skills/trademark-assistant/) | v1.7.0 | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油） |
-| 2026-07-28 | 更新     | [trademark-assistant](skills/trademark-assistant/) | v1.6.0 | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁 |
-| 2026-07-26 | 更新     | [skill-lint](skills/skill-lint/) | v2.6.0 | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷 |
-| 2026-07-26 | 更新     | [legal-visualization](skills/legal-visualization/) | v0.7.0 | 新增模板几何锁定、容器感知碰撞、中文文本容量和长边标签门禁；8 项领域回归、19 个发布模板全检与 draw.io CLI 全量导出通过 |
-| 2026-07-25 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.2.0 | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环 |
-| 2026-07-23 | 新上传   | [patent-download](skills/patent-download/) | v2.6.0 | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露 |
-| 2026-07-23 | 新上传   | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0 | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义 |
-| 2026-07-16 | 更新     | [svg-book-illustrator](skills/svg-book-illustrator/) | v1.8.10 | 对齐 writing-reviewer v0.16+ shape containment：容器只允许 `container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
-| 2026-07-15 | 新上传   | [apple-smart-schedule](skills/apple-smart-schedule/) | v0.1.0 | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad |
-| 2026-07-13 | 更新     | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT |
+| 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
+| :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
+| 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
+| 2026-07-26 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.0  | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷                                                                                                        |
+| 2026-07-26 | 更新   | [legal-visualization](skills/legal-visualization/)                     | v0.7.0  | 新增模板几何锁定、容器感知碰撞、中文文本容量和长边标签门禁；8 项领域回归、19 个发布模板全检与 draw.io CLI 全量导出通过                                                                                                                         |
+| 2026-07-25 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v2.2.0  | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环                                                                                                               |
+| 2026-07-23 | 新上传 | [patent-download](skills/patent-download/)                             | v2.6.0  | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露                                                                |
+| 2026-07-23 | 新上传 | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0  | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义                                                                                        |
+| 2026-07-16 | 更新   | [svg-book-illustrator](skills/svg-book-illustrator/)                   | v1.8.10 | 对齐 writing-reviewer v0.16+ shape containment：容器只允许`container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
+| 2026-07-15 | 新上传 | [apple-smart-schedule](skills/apple-smart-schedule/)                   | v0.1.0  | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad                                                                                              |
+| 2026-07-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT                                                                                       |
 
 </details>
 
@@ -209,15 +191,6 @@
 <td style="text-align:center">v1.7.5</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/yuandian-law-search-1.7.5.zip">下载</a></td>
 <td>需配置 API Key</td>
-</tr>
-<tr>
-<td><a href="skills/zhihe-legal-research/"><strong>zhihe-legal-research</strong></a></td>
-<td>通用·检索</td>
-<td style="word-break:break-word">连接智合AI法律大模型平台进行法律研究，提交法律问题后自动进行调研分析，生成文字分析结果和 docx 格式研究报告</td>
-<td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.2.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/zhihe-legal-research-1.2.1.zip">下载</a></td>
-<td>需智合AI平台会员</td>
 </tr>
 <tr>
 <td><a href="skills/court-sms/"><strong>court-sms</strong></a></td>
@@ -698,10 +671,11 @@
 
 以下技能已停止维护、归档或合并到其他技能，不再作为独立 Skill 随仓库发布：
 
-| 技能 | 版本 | 说明 |
-|------|------|------|
-| multi-search | v1.1.0 | 智能多主题深度研究工具，功能被 [multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
-| skill-architect | v1.6.2 | 已重定位为 [skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护 |
-| minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill |
-| minimax-web-search | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill |
-| repo-research | v0.7.0 | 功能较简单，不再维护 |
+| 技能                     | 版本   | 说明                                                                                                                                          |
+| ------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| multi-search             | v1.1.0 | 智能多主题深度研究工具，功能被[multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
+| skill-architect          | v1.6.2 | 已重定位为[skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护                                                          |
+| minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill                                                                                         |
+| minimax-web-search       | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill                                                                                         |
+| repo-research            | v0.7.0 | 功能较简单，不再维护                                                                                                                          |
+| zhihe-legal-research     | v1.2.2 | ⚠️ 智合AI平台接口已下线（返回404），技能暂时不可用。接口可能已迁移至智合自有平台                                                            |
