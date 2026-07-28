@@ -2,7 +2,7 @@
 name: trademark-assistant
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.5.5"
+version: "1.6.0"
 license: CC-BY-NC
 description: 面向中国商标申请的类别规划、可注册性初筛及申请材料准备技能。基于尼斯分类（国际商标分类），引用中国法律法规。本技能应在接到商标咨询、需要结构化输出建议与风险分级、或需要准备申请材料时使用。不要用于：替代正式法律意见、承诺注册成功率、处理复杂商标争议案件。
 ---
@@ -22,7 +22,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 - 但可注册性初筛、审查标准分析等涉及具体法律判断的内容，仅适用于中国商标申请
 - 如需国际商标申请（马德里体系、单一国家注册等），需另行咨询专业律师
 
-**服务主体：** 本技能由中国执业律师提供法律服务支持，仅具备中国大陆法律服务资质。
+**服务主体：** 本技能由杨卫薪律师维护（作者为中国执业律师）。输出适用于中国大陆商标申请场景，为初步研判，不替代律师或备案商标代理机构正式法律意见，也不当然形成律师委托关系；如需正式法律服务需另行委托。
 
 ## 触发条件
 
@@ -73,6 +73,7 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 - 先结论，再依据，再风险，再行动
 - 明确区分“高风险/中风险/低风险”；信息不足时标注“待补充（信息不足，暂不评级）”
+- 相对理由（在先商标近似冲突）必须以官方检索证据为前提；未检索时标注“未检索/不可评级”，且总体不得评为低风险（详见 `references/registrability-prescreen-guide.md`）
 - 引用依据时注明来源文件（如 `references/trademark-examination-and-adjudication-guidelines/chapter-03.md`）
 - 缺失信息必须标注“未提及/待补充”
 - 统一仅输出一个版本：Markdown 结构化结论，不附加 JSON 代码块
@@ -113,28 +114,41 @@ description: 面向中国商标申请的类别规划、可注册性初筛及申�
 
 ### 生成方式
 
-使用 openpyxl 库生成 Excel 文件：
+使用仓库根目录的 `script.py` 生成 Excel。它已内置模板表头校验、类别/类似群/商品名称校验、openpyxl 缺失提示和禁止静默覆盖规则，可直接运行。
 
-```python
-from openpyxl import load_workbook
+输入为 JSON 数组（每项含 `类别`、`类似群`、`商品名称`，序号自动生成）：
 
-# 加载模板
-wb = load_workbook('templates/导入商品信息.xlsx')
-sheet = wb.active
-
-# 填充数据（从第2行开始）
-for idx, item in enumerate(goods_list, start=2):
-    sheet[f'A{idx}'] = idx - 1  # 序号
-    sheet[f'B{idx}'] = item['类别']  # 商品类别
-    sheet[f'C{idx}'] = item['类似群']  # 类似群
-    sheet[f'D{idx}'] = item['商品名称']  # 商品名称
-
-wb.save('输出文件.xlsx')
+```json
+[
+  {"类别": 9, "类似群": "0901", "商品名称": "计算机软件（已录制）"},
+  {"类别": 9, "类似群": "0907", "商品名称": "智能手机"}
+]
 ```
+
+从文件读取：
+
+```bash
+uv run --with openpyxl python script.py --input goods.json --output {商标名}-第{X}类-商品清单.xlsx
+```
+
+或通过 stdin 传入：
+
+```bash
+echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录制）"}]' | uv run --with openpyxl python script.py --output out.xlsx
+```
+
+> 输出文件已存在时默认拒绝覆盖，需显式加 `--force`；表头或数据校验不通过时立即报错退出，不会生成残缺文件。
 
 ## 商标说明撰写
 
-商标说明是商标注册申请的必要材料，用于描述商标特征、构成要素及含义。**所有商标申请均需撰写商标说明**。
+商标说明用于描述商标特征、构成要素及含义。**是否必须填写以及填写深度取决于商标类型**，不要对所有申请一刀切：
+
+- 普通中文文字商标：通常可不填，或仅简述构成与含义；
+- 外文商标：需说明文字含义（如有）及是否为自创词；
+- 三维标志、颜色组合、声音标志等特殊类型：须按官方要求如实填写其构成与特征；
+- 含行业通用词等非显著要素的商标：可声明放弃该部分专用权（属权利声明，需据实）。
+
+> 显著性（是否独创、是否经使用取得）属需举证的法律判断，不在商标说明中认定；如需主张经使用取得显著性，应另行提交使用证据。
 
 ### 适用时机
 
@@ -226,4 +240,4 @@ archive/
 
 | 包名 | 用途 | 安装命令 |
 |------|------|----------|
-| openpyxl | 生成 Excel 商品清单 | `uv run --with openpyxl python script.py` |
+| openpyxl | 生成 Excel 商品清单 | `uv run --with openpyxl python script.py --input <清单.json> --output <输出.xlsx>` |

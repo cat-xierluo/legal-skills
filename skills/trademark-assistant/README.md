@@ -46,8 +46,10 @@ AI：我会先收集申请主体、商标构成和使用场景，再做尼斯分
 如需生成商品清单 Excel，依赖 openpyxl。推荐用 uv 按需运行，无需全局安装：
 
 ```bash
-uv run --with openpyxl python script.py
+uv run --with openpyxl python script.py --input goods.json --output 星火-第9类-商品清单.xlsx
 ```
+
+`goods.json` 为商品清单数据（JSON 数组，每项含类别、类似群、商品名称，序号自动生成）。脚本内置模板表头校验、数据校验和禁止静默覆盖，详见 [SKILL.md](./SKILL.md) 的“商品清单输出格式”。
 
 ## 可以怎么用
 
