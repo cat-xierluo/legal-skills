@@ -1,7 +1,7 @@
 ---
 name: legal-visualization
 description: Legal Visualization。面向法律业务场景的法律图解与图表生成技能；当用户要求把案件材料、合同材料、合规事项、交易安排、证据链、诉讼流程、时间轴、法律关系、客户汇报、法律服务方案或律师团队工作整理成关系图、流程图、时间轴、证据链、风险图、路线图、PNG/SVG/PDF/.drawio 时使用；也兼容“法律可视化”“案件事实图”“法律关系图”等说法。先按受众、任务动词和路由规则筛选场景，再生成可交付图片，并保留 draw.io 源文件作为可编辑底稿。本技能不用于事实核验，也不替代法律结论判断。
-version: "0.8.0"
+version: "0.8.1"
 license: CC-BY-NC
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -51,9 +51,9 @@ homepage: https://github.com/cat-xierluo/legal-skills
 4. **解决冲突**：如果多个场景都能命中，按“用户指定 > 受众匹配 > 更窄业务领域 > 当前材料阶段 > 通用场景”选择主图；未选场景只作为附图候选。
 5. **确定内容**：按“全面罗列 -> 逻辑整合 -> 精简内容”处理材料。复杂案件先做细节图，再按核心主体、核心时间线或核心法律关系组合。
 6. **生成 VizSpec**：按 `references/vizspec-schema.md` 先写结构化制图规格，明确路由结论、模板选择、溢出策略、场景 ID、主图观点、节点、连线、分区、注释和待核事实。
-7. **编排图面**：按 `references/visual-composition-rules.md` 和 `references/scene-composition-playbook.md` 控制图表逻辑、配色、线条、注释和重点表达；复杂案件、制度路径、背景趋势、票据回路和工期延误类图表还要读 `references/advanced-case-patterns.md`。颜色、字体、起始坐标、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值，禁止在图中硬编码。节点命名按 `references/naming-conventions.md` 规范。节点形状按 `references/shape-registry.md` 的 `visual_role` 取值：声明语义角色（原告 / 合同 / 金额 / 风险等），由 registry 映射到几何形状与配色；默认不渲染 emoji（法律图保持严肃），用户显式要求时才加。
+7. **编排图面**：按 `references/visual-composition-rules.md` 和 `references/scene-composition-playbook.md` 控制图表逻辑、配色、线条、注释和重点表达；复杂案件、制度路径、背景趋势、票据回路和工期延误类图表还要读 `references/advanced-case-patterns.md`。颜色、字体、起始坐标、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值，禁止在图中硬编码。节点命名按 `references/naming-conventions.md` 规范。节点视觉按 `references/shape-registry.md` 的 `visual_role` 取值：声明语义角色，由 registry 映射到**配色、线型与强调**（形状统一圆角矩形，菱形仅决策点）；默认不渲染 emoji（法律图保持严肃），用户显式要求时才加。
 8. **生成 draw.io**：先查 `references/template-guide.md`。命中模板时用 `scripts/instantiate_template.py` 只填值并锁定几何；没有适配模板时才按 `references/xml-reference.md` 写新 XML，并显式声明 `template.id: custom`。
-9. **运行领域门禁**：执行 `python scripts/validate_drawio.py <file.drawio>`。任何 error 都必须修正；不得仅凭 XML 可解析或图片非空声称完成。warning 需结合导出图人工复核。若写了 VizSpec，额外运行 `python scripts/check_vizspec.py spec.yaml` 校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_diversity` 会在形状过于单一（主导占比 > 80% 且节点 ≥ 5）时告警，提示按 shape-registry 区分语义。
+9. **运行领域门禁**：执行 `python scripts/validate_drawio.py <file.drawio>`。任何 error 都必须修正；不得仅凭 XML 可解析或图片非空声称完成。warning 需结合导出图人工复核。若写了 VizSpec，额外运行 `python scripts/check_vizspec.py spec.yaml` 校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_policy` 会对非限定形状（椭圆 / 圆柱 / 文档形 / 六边形等）告警，提示改回圆角矩形。
 10. **导出图片**：按 `references/output-workflow.md` 导出 `SVG/PNG/PDF`，并保留 `.drawio`。`export_drawio.py` 会先重跑领域门禁，失败时禁止复制和导出。
 11. **质检交付**：打开实际导出的 SVG/PNG，按 `references/quality-checklist.md` 检查文字、连线、图例和画布边界，再向用户说明输出文件、使用场景和未能验证的环节。
 
@@ -86,7 +86,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 - 避免线条交叉和长距离绕行；连接多的主体放在中心或靠近相关节点。长 edge 标签改为独立文本节点、侧栏或图例。
 - 图表主体只放短标签；长事实、证据编号、条文依据放侧栏、底注或附表。
 - 对法官提交的图，不夸张表达，不把争议事实画成既定事实；争议或待证事实用虚线、问号、标注或灰色处理。
-- 形状区分语义：不同法律语义用不同几何形状（见 `references/shape-registry.md`），避免全图只剩矩形；emoji 默认不加，保持严肃，用户明确要求时才加。
+- 统一圆角矩形：节点统一圆角矩形（菱形仅用于决策判断点），靠**线型（虚线表对抗 / 争议 / 待证）+ 配色 + 描边粗细**区分语义，不用椭圆 / 圆柱 / 文档形等奇怪形状；emoji 默认不加，保持严肃，用户明确要求时才加。
 
 ## 输出格式
 
@@ -122,5 +122,5 @@ homepage: https://github.com/cat-xierluo/legal-skills
 - 模板锁定实例化：`python scripts/instantiate_template.py templates/litigation/complex-case-split.drawio values.json output.drawio`；只允许替换 `value`，实例化后自动校验。
 - 批量导出：`python scripts/export_drawio.py path/to/file.drawio` 默认生成 `.drawio + .svg + .png` 三件套，并写入 `archive/<timestamp>/export-report.json`；PNG 默认 2 倍导出，需要更高清可加 `--png-scale 3`，如需旧行为可加 `--in-place`。
 - 命名规范检查：`python scripts/normalize_naming.py path/to/file.drawio path/to/spec.yaml`，对照 `naming-conventions.md` 输出偏差清单。
-- VizSpec 声明校验：`python scripts/check_vizspec.py spec.yaml`，校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_diversity` 检查在形状过于单一时告警。
+- VizSpec 声明校验：`python scripts/check_vizspec.py spec.yaml`，校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_policy` 检查对非限定形状（椭圆 / 圆柱 / 文档形等）告警。
 - 领域回归：`python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template scripts.test_check_vizspec`，同时覆盖最小违规反例、合法容器近似正例与 VizSpec 声明校验。

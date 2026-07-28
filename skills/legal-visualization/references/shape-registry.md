@@ -1,182 +1,113 @@
-# 形状注册表（Shape Registry）
+# 节点表达规范（Shape Registry）
 
-法律语义 → 视觉角色（`visual_role`）→ 形状 token（`shape_token`）→ drawio 样式 → 配色的权威映射。VizSpec 声明 `visual_role` 后，按本表注入形状样式，再生成或实例化 `.drawio`。
+法律语义 → 视觉角色（`visual_role`）→ **配色 / 线型 / 强调** → drawio 样式的权威映射。VizSpec 声明 `visual_role` 后，按本表注入配色、线型和描边粗细，生成统一、严肃、清晰的矩形图。
 
-本文件是节点视觉的**单一真相源**。`legal-visual-constants.md` 的"节点样式映射"速查表、`xml-reference.md` 的形状示例、模板与新写 XML 的样式注入，都以本表为准。
+本文件是节点视觉的**单一真相源**。`legal-visual-constants.md` 的节点样式速查、`xml-reference.md` 的形状示例、模板与新写 XML 的样式注入，都以本表为准。
 
-## 设计原则
+## 设计原则（0.8.1 方向修正）
 
-1. **形状即语义**：每种几何形状对应一类法律语义，不是装饰。读者不看图例也能猜出"六边形大概是公权力机关"。
-2. **三维度区分**：几何形状 + 配色 + 描边/字号（`emphasis`）。**不依赖 emoji**。
-3. **emoji opt-in**：默认 `icon_mode=off`，不渲染任何 emoji；用户显式声明 `icons: true` 或单节点 `icon` 时才出。法律图保持严肃，emoji 会降低正式感。
-4. **原生形状优先**：只用 drawio 原生几何形状（`rounded`、`ellipse`、`rhombus`、`hexagon`、`shape=document`、`shape=cylinder3`、`shape=parallelogram`、`doubleEllipse`、`swimlane`）。**不用** `mxgraph.basic.person` 等依赖外部 stencil 的形状，避免 SVG/PNG 导出缺图。
-5. **复用 palette，区分两类颜色**：
-   - **强调色**（≤3）：`primary` 蓝、`accent_decision` 橙、`accent_dispute` 红。只给 `emphasis: high` 与争议/风险/决策节点用。
-   - **分类辅色**：法院金、监管深蓝、证据绿等浅底，用于区分语义类别，不计入"强调色不超 3 个"。
-6. **一图一观点仍优先**：registry 是全集，具体一张图只用其中子集；多主体关系图主要落到主体/文书/资金/风险几类，不要把 9 类全堆进一张图。
+> 0.8.0 曾尝试用"九类语义各配不同几何形状"（椭圆 / 圆柱 / 文档形 / 六边形 / 平行四边形等）提升美观度。实测后发现：形状多样性反而显得奇怪，且不规则形状（圆柱顶椭圆 / 文档形波浪底）会让文字压到边线。用户反馈明确要"统一矩形、干净严肃、限定几种形状"。故 0.8.1 收敛为：
 
-## 视觉角色总表
+1. **统一圆角矩形**：绝大多数节点用圆角矩形 `rounded=1`，干净、严肃、文字区规整不压边。
+2. **形状限定极少数**：只允许 圆角矩形（默认）、菱形（仅"决策 / 判断 / 分支"点，流程图惯例，默认不用）、容器 / 泳道（背景框）。**不用**椭圆、圆柱、文档形、六边形、平行四边形、双椭圆等奇怪形状。
+3. **区分靠三维度，不靠形状**：
+   - **线型**：实线 = 已证 / 确定；虚线 = 对抗 / 争议 / 待证 / 推定；点线 = 推定（见 status 映射）
+   - **配色**：语义类别（蓝 = 主体 / 确认，橙 = 第三人 / 决策 / 资金，红 = 风险 / 争议，灰 = 辅助 / 待补，浅黄 = 文书，浅绿 = 证据）
+   - **描边粗细（emphasis）**：粗边粗体 = 核心主体 / 核心观点；常规 = 一般；细边灰 = 辅助
+4. **虚线表对抗 / 争议 / 待证**：被告、争议事实、待补信息一律虚线（用户认可的表达）。
+5. **emoji opt-in**：默认 `icon_mode=off`，不渲染 emoji，法律图保持严肃；用户显式声明才出。
+6. **复用 palette**：强调色 ≤ 3（蓝 / 橙 / 红），分类辅色（浅黄 / 浅绿）不计入配额。
 
-| `visual_role` | 法律语义 | shape_token | drawio 几何 | 默认填充 | 默认描边 | 可选 emoji（opt-in） |
-|---|---|---|---|---|---|---|
-| `plaintiff` | 原告 | `actor_rounded` | 圆角矩形 `rounded=1` | `#E3F2FD` | `#1f77b4` | 👤 |
-| `defendant` | 被告 | `actor_rounded` | 圆角矩形（可叠 `dashed=1`） | `#E3F2FD` | `#1f77b4` | 👤 |
-| `third_party` | 第三人 | `actor_ellipse` | 椭圆 `ellipse` | `#E3F2FD` | `#1f77b4` | 👥 |
-| `witness` | 证人/鉴定人 | `actor_ellipse` | 椭圆 `ellipse` | `#F5F5F5` | `#9E9E9E` | 👥 |
-| `person` | 自然人（泛指） | `actor_rounded` | 圆角矩形 `rounded=1` | `#E3F2FD` | `#1f77b4` | 👤 |
-| `company` | 公司/法人 | `actor_rect` | 矩形方角（默认） | `#FFFFFF` | `#1f77b4` | 🏢 |
-| `court` | 法院/裁判机关 | `org_hexagon` | 六边形 `hexagon` | `#FFF8E1` | `#F9A825` | 🏛 |
-| `authority` | 监管/行政部门 | `org_rect` | 矩形方角 | `#E3F2FD` | `#1565C0` | ⚖️ |
-| `contract` | 合同/协议 | `doc_document` | 文档形 `shape=document` | `#FFFFFF` | `#1f77b4` | 📄 |
-| `legal_doc` | 判决/律师函/法律文书 | `doc_document` | 文档形 `shape=document` | `#FFF3E0` | `#FF8C00` | ✍️ |
-| `evidence` | 证据 | `evidence_parallelogram` | 平行四边形 `shape=parallelogram` | `#E8F5E9` | `#43A047` | 📋 |
-| `amount` | 金额/标的/资金 | `money_cylinder` | 圆柱 `shape=cylinder3` | `#FFF3E0` | `#FF8C00` | 💰 |
-| `risk` | 风险/违约/争议点 | `risk_rhombus` | 菱形 `rhombus` | `#FDECEA` | `#C0392B` | ⚠️ |
-| `judgment` | 裁判/结论 | `judgment_double` | 双椭圆 `doubleEllipse` | `#FDECEA` | `#C0392B` | ⚖️ |
-| `procedure` | 程序节点（立案/开庭/执行） | `procedure_capsule` | 胶囊 `rounded=1;arcSize=50` | `#F5F5F5` | `#9E9E9E` | 🔄 |
-| `event` | 时间事件 | `event_ellipse` | 椭圆（小号）`ellipse` | `#E8F5E9` | `#43A047` | 📅 |
-| `section` | 分区/阵营/阶段背景 | `container_swimlane` | 泳道 `swimlane` 或背景框 `container=1` | `#F5F5F5` | `#BDBDBD` | — |
-| `lane` | 泳道（按角色/阶段分栏） | `container_swimlane` | 泳道 `swimlane` | `#F5F5F5` | `#BDBDBD` | — |
+## 形状策略（限定清单）
 
-> 配色与 `legal-visual-constants.md` palette 对齐：`#E3F2FD/#1f77b4` = primary，`#FFF3E0/#FF8C00` = accent_decision，`#FDECEA/#C0392B` = accent_dispute，`#F5F5F5/#9E9E9E` = grey_missing，`#F5F5F5/#BDBDBD` = frame。法院金 `#FFF8E1/#F9A825`、监管深蓝 `#1565C0`、证据/时间绿 `#E8F5E9/#43A047` 为分类辅色。
+| 形状 | drawio | 用途 | 何时用 |
+|---|---|---|---|
+| 圆角矩形 | `rounded=1` | 所有主体、文书、金额、证据、程序、时间、裁判节点 | **默认**，绝大多数节点 |
+| 菱形 | `rhombus` | 决策 / 判断 / 分支点 | 仅流程图里"需要判断"的节点，默认不用 |
+| 容器 / 泳道 | `swimlane` 或 `container=1` | 分区、阵营、阶段、泳道背景 | 组织分组时 |
 
-## 各 token 的 drawio 样式串
+其他几何形状（椭圆、圆柱、文档形、六边形、平行四边形、双椭圆等）**不再使用**。`validate_drawio.py` 的 `shape_policy` 检查会对非白名单形状告警。
 
-以下样式串可直接写入 `mxCell` 的 `style` 属性。`fontSize` 按 `legal-visual-constants.md` 字体表取值（节点正文 14，小字 12）；`emphasis` 影响见下节。
+## 视觉角色 → 配色 / 线型 / 强调 映射
 
-**主体·自然人**（`plaintiff` / `person`）：
-```
-rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;
-```
+每个 `visual_role` 映射到（配色，线型，emphasis），形状统一圆角矩形：
 
-**被告**（`defendant`，叠加虚线描边表示对抗/待定）：
-```
-rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;dashed=1;fontSize=14;
-```
+| `visual_role` | 法律语义 | 配色（填充 / 描边） | 线型 | 默认 emphasis |
+|---|---|---|---|---|
+| `plaintiff` | 原告 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `high`（核心主体，粗边粗体） |
+| `defendant` | 被告 | 蓝 `#E3F2FD` / `#1f77b4` | **虚线**（对抗 / 待定） | `normal` |
+| `third_party` | 第三人 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal` |
+| `witness` | 证人 / 鉴定人 | 灰 `#F5F5F5` / `#9E9E9E` | 实线 | `low` |
+| `person` | 自然人 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
+| `company` | 公司 / 法人 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
+| `court` | 法院 / 裁判机关 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
+| `authority` | 监管 / 行政部门 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
+| `contract` | 合同 / 协议 | 浅黄 `#FFFDE7` / `#F9A825` | 实线 | `normal` |
+| `legal_doc` | 判决 / 律师函 / 文书 | 浅黄 `#FFFDE7` / `#F9A825` | 实线 | `normal` |
+| `evidence` | 证据 | 浅绿 `#E8F5E9` / `#43A047` | 实线 | `normal` |
+| `amount` | 金额 / 标的 / 资金 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal` |
+| `risk` | 风险 / 违约 / 争议点 | 红 `#FDECEA` / `#C0392B` | **虚线** | `high` |
+| `judgment` | 裁判 / 结论 | 红 `#FDECEA` / `#C0392B` | 实线 | `high` |
+| `procedure` | 程序节点（立案 / 开庭 / 执行） | 灰 `#F5F5F5` / `#9E9E9E` | 实线 | `normal` |
+| `event` | 时间事件 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
+| `decision` | 决策 / 判断 / 分支 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal`（**形状用菱形**） |
 
-**第三人 / 证人**（`third_party` / `witness`，椭圆与原告被告区分）：
-```
-ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;
-```
+> 配色复用 `legal-visual-constants.md` palette。法院 / 公司 / 自然人 / 程序 / 时间等主体与流程类统一蓝色，靠标签文字区分角色——主体类同色是"中立客观"的体现，不靠形状或颜色细分。非主体类（资金橙 / 风险红 / 证据绿 / 文书黄）用分类辅色区分。
 
-**公司 / 法人**（`company`，方角矩形与自然人圆角区分）：
-```
-whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;
-```
+## 线型与 status 绑定
 
-**法院 / 裁判机关**（`court`，六边形 + 金色，权威语义）：
-```
-hexagon;whiteSpace=wrap;fillColor=#FFF8E1;strokeColor=#F9A825;strokeWidth=2;fontSize=14;
-```
+`relations.status` 与线型 / 颜色严格对应（与 `legal-visual-constants.md` 一致）：
 
-**监管 / 行政部门**（`authority`，方角 + 深蓝）：
-```
-whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=2;fontSize=14;
-```
-
-**合同 / 协议**（`contract`，文档形）：
-```
-shape=document;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;
-```
-
-**判决 / 律师函 / 法律文书**（`legal_doc`，文档形 + 决策橙）：
-```
-shape=document;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=14;
-```
-
-**证据**（`evidence`，平行四边形）：
-```
-shape=parallelogram;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=14;
-```
-
-**金额 / 标的 / 资金**（`amount`，圆柱）：
-```
-shape=cylinder3;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;size=12;fontSize=14;
-```
-
-**风险 / 违约 / 争议点**（`risk`，菱形 + 争议红）：
-```
-rhombus;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=14;
-```
-
-**裁判 / 结论**（`judgment`，双椭圆，强结论）：
-```
-doubleEllipse;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=14;
-```
-
-**程序节点**（`procedure`，胶囊/圆头）：
-```
-rounded=1;arcSize=50;whiteSpace=wrap;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;fontSize=14;
-```
-
-**时间事件**（`event`，小椭圆）：
-```
-ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;fontSize=12;
-```
-
-**分区 / 泳道**（`section` / `lane`，背景容器）：
-```
-swimlane;startSize=30;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;
-```
-> 扁平背景框（子节点仍 `parent="1"`）必须加 `container=1`，否则 `validate_drawio.py` 会把内部节点报为重叠。
-
-## `emphasis` 与 `density` 影响
-
-`emphasis` 调节点存在感，`density` 调整图留白，均叠加在 token 样式上：
-
-| 字段 | 取值 | 样式叠加 |
+| status | 线型 | 颜色 |
 |---|---|---|
-| `emphasis` | `high` | `strokeWidth=3;fontStyle=1;`（加粗加边，用于核心主体/核心争议） |
-| `emphasis` | `normal` | token 默认值（不叠加） |
-| `emphasis` | `low` | 改用 grey_missing 色板、`strokeWidth=1;`（辅助事实/背景节点） |
-| `density` | `compact` | 节点尺寸降一档、间距收紧（按 `legal-visual-constants.md` 节点尺寸表 16+ 档） |
-| `density` | `normal` | 默认尺寸 |
-| `density` | `detailed` | 节点尺寸升一档、留白增大（客户汇报默认） |
+| `confirmed` | 实线 | `line_solid #333333` |
+| `disputed` | 虚线 + 强调 | `accent_dispute #C0392B` |
+| `asserted` | 虚线 + 主张方色 | `primary #1f77b4` |
+| `inferred` | 点线 | `line_dotted #9E9E9E` |
+| `missing` | 灰虚线 + 待补充标签 | `grey_missing #9E9E9E` |
 
-## 默认主题：客户汇报（`client_report`）
+节点也可用虚线边框表示该节点本身处于对抗 / 待证状态（如 `defendant` 默认虚线边）。
 
-本轮唯一落地的主题。其余两套（法官提交 `court_submit`、律师工作底稿 `lawyer_workpaper`）留待后续版本。
+## emphasis 三档
 
-```yaml
-theme: client_report
-icon_mode: off          # 默认不渲染 emoji
-density: detailed       # 适度留白，突出策略与风险
-emphasis_palette:        # 强调色只用这三个
-  high_primary: "#1f77b4"
-  high_decision: "#FF8C00"
-  high_dispute: "#C0392B"
-dispute_style: dashed    # 争议/待证事实一律虚线 + 旁注
-```
+| emphasis | 样式叠加 | 用于 |
+|---|---|---|
+| `high` | `strokeWidth=3;fontStyle=1;`（粗边粗体） | 核心主体 / 核心观点 / 风险 / 裁判结论 |
+| `normal` | `strokeWidth=2;`（默认） | 一般节点 |
+| `low` | 改用 grey_missing 色板，`strokeWidth=1;` | 辅助事实 / 背景节点 |
 
-客户汇报主题的取材原则：突出策略、风险和可能结果；争议/待证事实用虚线与旁注区分；可启用较丰富的形状分类（主体/文书/资金/风险），但仍守"一图一观点"。
+## 默认主题：客户汇报（client_report）
+
+本轮唯一落地的主题。`icon_mode=off`（不渲染 emoji）、`density=detailed`、争议 / 待证一律虚线、核心主体 `emphasis=high`。其余两套（法官提交、律师工作底稿）留待后续。
 
 ## emoji opt-in 机制
 
-- **默认不渲染**：`theme.icon_mode=off` 时，总表"可选 emoji"列**不写入**节点 `value`。
-- **整图开启**：VizSpec 声明 `icons: true`（或 `theme: client_report` 之外的主题显式 `icon_mode: on`）时，按总表把 emoji 作为标签**前缀**写入 `value`，如 `value="🏛 一审法院"`。
-- **单节点开启**：节点声明 `icon: "🏛"` 时，仅该节点加前缀，覆盖整图设置。
-- emoji 仅作辅助识别，**不得**替代形状区分；即使用 emoji，几何形状仍按 token 取值。
+- **默认不渲染**：`theme.icon_mode=off` 时，不写入任何 emoji。
+- **整图开启**：VizSpec 声明 `icons: true` 时，按角色把 emoji 作为标签前缀。
+- **单节点开启**：节点声明 `icon: "🏛"` 时仅该节点加前缀。
+- emoji 仅作辅助识别，**不得**替代线型 / 配色区分。
 
 ## VizSpec 声明与校验
 
-- VizSpec 节点声明 `visual_role`（必填，命中本表）和可选 `shape_token`（默认由 `visual_role` 映射）、`emphasis`、`icon`。
+- 节点声明 `visual_role`（必填，命中本表）→ 自动映射（配色，线型，emphasis）。
+- 可选 `emphasis` 覆盖默认、`icon`（opt-in）。
 - 整图声明 `theme`（默认 `client_report`）、`density`、`icons`（默认 `false`）。
-- 合法性校验：`python scripts/check_vizspec.py spec.yaml` 检查 `visual_role` / `theme` 是否在本表与主题清单内、`icon` 是否 opt-in。
-- 形状多样性校验：`python scripts/validate_drawio.py file.drawio` 的 `shape_diversity` 检查会在单一形状占比 > 80% 且节点 ≥ 5 时告警，提示按本表区分语义。
+- 合法性校验：`python scripts/check_vizspec.py spec.yaml` 检查 `visual_role` / `theme` 合法。
+- 形状规范校验：`python scripts/validate_drawio.py file.drawio` 的 `shape_policy` 检查会对非白名单形状（椭圆 / 圆柱 / 文档形 / 六边形等）告警，提示改回圆角矩形。
 
 ## 与其他文件的关系
 
 | 文件 | 关系 |
 |---|---|
-| `legal-visual-constants.md` | 提供 palette、字体、尺寸常量；其"节点样式映射"表指向本表，不再单独维护形状映射 |
-| `vizspec-schema.md` | 定义 `visual_role` / `shape_token` / `emphasis` / `theme` / `density` / `icons` 字段，取值合法性引用本表 |
-| `xml-reference.md` | 形状示例的样式串以本表为准；本表补充 parallelogram、doubleEllipse、capsule 等新增形状写法 |
-| `visual-composition-rules.md` | 编排规则引用本表决定"什么语义用什么形状" |
-| `scripts/validate_drawio.py` | `shape_diversity` 检查量化"全方框"风险 |
+| `legal-visual-constants.md` | 提供 palette / 字体 / 尺寸常量；节点样式速查指向本表 |
+| `vizspec-schema.md` | 定义 `visual_role` / `emphasis` / `theme` / `density` / `icons` 字段，取值合法性引用本表 |
+| `xml-reference.md` | 形状示例以本表的限定清单为准（圆角矩形 / 菱形 / 容器） |
+| `scripts/validate_drawio.py` | `shape_policy` 检查限定形状白名单，防奇怪形状 |
 | `scripts/check_vizspec.py` | 校验 VizSpec 声明的角色与主题合法性 |
 
 ## 修改记录
 
 | 日期 | 变更 | 版本 |
 |---|---|---|
-| 2026-07-28 | 初版：9 类法律语义、17 个视觉角色、形状 token 与样式串、客户汇报主题、emoji opt-in 机制 | 0.8.0 |
+| 2026-07-28 | 方向修正：放弃形状多样性，收敛"统一圆角矩形 + 菱形（决策可选）+ 容器"；区分靠线型 / 配色 / emphasis。基于用户反馈"形状没本质差别、奇怪形状不要、统一矩形、虚线可以" | 0.8.1 |
+| 2026-07-28 | 初版：9 类语义 17 角色各配不同形状（椭圆 / 圆柱 / 文档形 / 六边形 / 平行四边形 / 双椭圆等） | 0.8.0 |

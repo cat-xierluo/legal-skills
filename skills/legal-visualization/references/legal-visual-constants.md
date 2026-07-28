@@ -74,25 +74,23 @@ palette:
 
 ## 节点样式映射
 
-法律语义 → 形状的权威映射见 `references/shape-registry.md`（视觉角色总表 + 样式串 + 主题与 emoji opt-in）。本表仅作旧版速查，新增节点一律按 shape-registry 的 `visual_role` 取值；palette 色值绑定仍以本文件为准。
+节点视觉（配色 / 线型 / 强调 / 形状）的权威映射见 `references/shape-registry.md`。0.8.1 起形状收敛为**统一圆角矩形**（菱形仅决策点，容器为背景框），放弃椭圆 / 圆柱 / 文档形 / 六边形等不规则形状。本表为速查，新增节点一律按 shape-registry 的 `visual_role` 取值；palette 色值绑定仍以本文件为准。
 
-| 节点类型 | shape（速查） | fillColor | strokeColor |
-|---|---|---|---|
-| 主体/当事人 | `rounded=1`（不再用 `mxgraph.basic.person`，导出不稳） | `primary_light` | `primary` |
-| 公司/法人 | 矩形方角（默认） | `#FFFFFF` | `primary` |
-| 法院/裁判机关 | `hexagon` | `#FFF8E1` | `#F9A825` |
-| 合同/协议 | `shape=document` | `#FFFFFF` | `primary` |
-| 证据 | `shape=parallelogram` | `#E8F5E9` | `#43A047` |
-| 资金/票据/货物 | `shape=cylinder3` | `accent_decision_light` | `accent_decision` |
-| 决策/判断 | `rhombus` | `accent_decision_light` | `accent_decision` |
-| 风险/违约/争议 | `rhombus` | `accent_dispute_light` | `accent_dispute` |
-| 裁判/结论 | `doubleEllipse` | `accent_dispute_light` | `accent_dispute` |
-| 程序节点 | `rounded=1;arcSize=50`（胶囊） | `grey_missing_light` | `grey_missing` |
-| 时间线节点 | `ellipse` | `#E8F5E9` | `#43A047` |
-| 缺失/待补充 | `rounded=1` | `grey_missing_light` | `grey_missing` |
-| 容器/泳道 | `swimlane` | `frame_bg` | `frame` |
-| 标题 | `text` | none | none |
-| 注释/小字 | `text` | none | none |
+| 节点类型 | shape | fillColor | strokeColor | 线型 |
+|---|---|---|---|---|
+| 主体/当事人（原告/被告/第三人/法院/公司/自然人） | `rounded=1` | `primary_light` | `primary` | 被告/争议用 `dashed=1` |
+| 合同/文书 | `rounded=1` | `#FFFDE7` | `#F9A825` | 实线 |
+| 证据 | `rounded=1` | `#E8F5E9` | `#43A047` | 实线 |
+| 资金/金额 | `rounded=1` | `accent_decision_light` | `accent_decision` | 实线 |
+| 决策/判断（仅流程判断点） | `rhombus` | `accent_decision_light` | `accent_decision` | 实线 |
+| 风险/违约/争议 | `rounded=1` | `accent_dispute_light` | `accent_dispute` | `dashed=1` |
+| 裁判/结论 | `rounded=1` | `accent_dispute_light` | `accent_dispute` | 实线 |
+| 程序节点 | `rounded=1` | `grey_missing_light` | `grey_missing` | 实线 |
+| 时间线节点 | `rounded=1` | `primary_light` | `primary` | 实线 |
+| 缺失/待补充 | `rounded=1` | `grey_missing_light` | `grey_missing` | `dashed=1` |
+| 容器/泳道 | `swimlane` | `frame_bg` | `frame` | — |
+| 标题 | `text` | none | none | — |
+| 注释/小字 | `text` | none | none | — |
 
 ## 节点尺寸参考
 
@@ -121,6 +119,7 @@ edge 标签超过 8 显示单位进入人工复核，超过 14 显示单位阻�
 
 | 日期 | 变更 | 版本 |
 |---|---|---|
+| 2026-07-28 | 方向修正：节点样式回退统一圆角矩形，放弃椭圆/圆柱/文档形/六边形/平行四边形/双椭圆等多形状；区分改靠配色+线型（虚线表对抗/争议）+描边粗细；菱形仅保留给决策判断点 | 0.8.1 |
 | 2026-07-28 | 节点样式映射表降级为速查，权威指向 `shape-registry.md`；新增公司/法院/证据/风险/裁判/程序形状；弃用 `mxgraph.basic.person` | 0.8.0 |
 | 2026-07-26 | 增加容器语义、自由布局间距例外、文本容量与 edge 标签门禁常量 | 0.7.0 |
 | 2026-06-07 | 初版沉淀，源自 v0.5.1 `output-workflow.md` 行 37-39 硬编码 | 0.6.0 |

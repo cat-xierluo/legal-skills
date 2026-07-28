@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.8.1] - 2026-07-28
+
+### 改进
+
+- 形状策略收敛：放弃 0.8.0 的"九类语义各配不同形状"，回归**统一圆角矩形**（菱形仅决策判断点，容器为背景框）。基于用户反馈"形状没本质差别、椭圆/圆柱/文档形等奇怪形状不要、统一矩形、虚线可以"。
+- 语义区分改为三维度：线型（虚线表对抗 / 争议 / 待证）+ 配色（主体蓝 / 资金橙 / 风险红 / 证据绿 / 文书黄）+ 描边粗细（emphasis）。
+- `references/shape-registry.md` 重写为"节点表达规范"：`visual_role` 映射（配色，线型，emphasis）而非形状。
+
+### 修复
+
+- 解决 0.8.0 不规则形状（圆柱顶椭圆、文档形波浪底）导致文字压到边线的问题——统一矩形后文字区规整。
+
+### 变更
+
+- `validate_drawio.py`：`shape_diversity` 检查替换为 `shape_policy`（限定形状白名单：圆角矩形 / 矩形 / 菱形 / 文本 / 容器；对椭圆 / 圆柱 / 文档形 / 六边形等非限定形状告警）。单测同步更新。
+- `legal-visual-constants.md` 节点样式表回退统一圆角矩形，新增线型列。
+- `vizspec-schema.md`：`visual_role` 映射目标改为配色 / 线型 / 强调；`shape_token` 默认圆角矩形。
+
+### 保留
+
+- VizSpec 声明式（`visual_role`）、`check_vizspec.py`、`client_report` 主题、emoji opt-in、shape-registry 单一真相源机制均保留。
+
 ## [0.8.0] - 2026-07-28
 
 ### 新增

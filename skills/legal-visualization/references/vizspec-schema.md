@@ -104,8 +104,8 @@ quality_checks:
 | `status` | 决定实线、虚线、灰色或待证标注（颜色常量见 `references/legal-visual-constants.md`） |
 | `sections` | 用来划分阵营、阶段、法律关系、制度路径或项目范围 |
 | `layout` | 指定总体布局，避免边生成边想 |
-| `entities[].visual_role` | 法律语义角色（`plaintiff` / `contract` / `amount` / `risk` 等），决定形状、图标与配色，取值见 `references/shape-registry.md`（**0.8.0 起节点视觉的主入口**） |
-| `entities[].shape_token` / `emphasis` / `icon` | 可选：显式形状 token、存在感（`high` / `normal` / `low`）、单节点 emoji（覆盖整图 `icons`） |
+| `entities[].visual_role` | 法律语义角色（`plaintiff` / `contract` / `amount` / `risk` 等），决定**配色、线型与强调**（形状统一圆角矩形），取值见 `references/shape-registry.md` |
+| `entities[].shape_token` / `emphasis` / `icon` | 可选：形状 token（默认圆角矩形，仅决策点用菱形）、强调（`high` 粗边粗体 / `normal` / `low` 灰细）、单节点 emoji（覆盖整图 `icons`） |
 | `visual.theme` / `density` / `icons` | 整图视觉：主题（默认 `client_report`）、留白档位、是否渲染 emoji（默认 `false`，法律图保持严肃） |
 
 ## 生成顺序
@@ -137,5 +137,5 @@ quality_checks:
 - 读者不听讲解能否看出主体、关系和结论？
 - 哪些事实是争议或待补充，是否已经视觉区分？
 - 是否需要拆出附图，避免主图拥挤？
-- 节点形状是否按 `shape-registry.md` 区分了语义，而不是全用矩形？
+- 节点是否统一圆角矩形？非限定形状（椭圆 / 圆柱 / 文档形等）会被 `validate_drawio.py` 的 `shape_policy` 告警。
 - `.drawio` 能否继续编辑，SVG/PNG 是否能直接交付？
