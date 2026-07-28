@@ -13,7 +13,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 ## 何时用 / 何时不用
 
 **用**：下载专利全文 PDF、批量导出专利文件、查询专利基本信息。
-**不用**：专利侵权比对 / 权利要求分析 / 有效性核查 → 用 `patent-analysis`；法条与案例检索 → 用 `yuandian-law-search`。
+**不用**：专利侵权比对 / 权利要求分析 / 有效性核查等，请用专用分析工具。
 
 ## 推荐通道
 
@@ -102,37 +102,6 @@ python platforms/uyanip.py 2024214535561
 | PatentStar/epub API 等 | `requests` | `pip install requests` |
 
 一条命令装全部：`pip install -r scripts/requirements.txt`。
-
-## 目录结构
-
-```
-patent-download/
-├── SKILL.md
-├── LICENSE.txt                    # MIT
-├── CHANGELOG.md
-├── config/
-│   ├── .env.example               # 账号模板（入库，复制为 .env 填写）
-│   └── platforms.yaml             # 平台元数据（无账号）
-├── references/
-│   ├── accounts-setup.md          # 各平台账号获取 + ToS 合规
-│   ├── examples.md                # 使用示例与故障排除
-│   ├── patent-number-formats.md   # 申请号/公告号格式详解
-│   └── platform-status.md         # 各平台实测状态与详情
-└── scripts/
-    ├── cli.py                     # 统一入口 ⭐
-    ├── patent-download.sh         # wrapper（google 走 cli，其他走 download.py）
-    ├── download.py                # 旧入口（epub 兼容）
-    ├── requirements.txt
-    └── platforms/                 # 各平台独立脚本
-        ├── _creds.py              # 共享凭证加载（ENV + .env）
-        ├── google_patents.py      # Google Patents ⭐推荐
-        ├── uyanip.py              # 度衍专利
-        ├── patentstar.py          # 专利之星 API（失效）
-        ├── patentstar_browser.py
-        ├── gpic.py                # 粤粤港澳平台
-        ├── pss.py                 # PSS 系统
-        └── epub.py                # 专利公布公告
-```
 
 ## 更多
 
