@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.2] - 2026-07-28
+
+### 新增
+
+- 新增 `config/visual-role-registry.json` 机器可读注册表，统一维护 VizSpec 版本、角色、形状 token、事实状态、关系状态、强调、密度和三套主题。
+- 新增 `scripts/apply_visual_roles.py` 样式编译器，把 VizSpec 2.1 的视觉语义编译进既有 draw.io；只改样式与视觉元数据，并逐项证明 `mxGeometry` 未改变。
+- 新增 `assets/examples/multi-party-visual-spec.yaml` 完整示例，以及几何守恒、三主题差异、角色/状态分离、缺节点和缺依赖回归。
+
+### 修复
+
+- 修复 `decision` 在文档中合法但被校验器拒绝、`section/lane` 与角色表漂移的问题；角色枚举改从注册表加载。
+- 修复非法 `theme/density/shape_token/emphasis/epistemic_status/icons` 静默通过，以及缺少 PyYAML 时无法可靠阻断的问题。
+- 取消“被告默认虚线、原告默认高强调”等立场预设；角色、事实认知状态和图面强调改为独立字段。
+- 修复 4 个官方模板中的椭圆、圆柱、文档形和未登记决策菱形；19 个发布模板的 `shape_policy` 告警清零。
+- 重做多主体借款关系模板：合同节点进入关系链，增加信息分层和统一图例，缩短边标签并修复底边留白。
+- 新增 edge label 与独立节点/文字块的估算叠压 warning；真实渲染发现的“合同关系”与栏目标题叠压已转为最小反例回归。
+
+### 改进
+
+- 落地 `client_report`、`court_submit`、`lawyer_workpaper` 三套可执行主题；同一 VizSpec 可由同一编译器生成可区分的样式。
+- `shape_policy` 要求菱形节点显式声明 `visualRole=decision`；圆角率变化仍归为圆角矩形，不再误报胶囊形。
+- 对齐 `SKILL.md`、VizSpec 2.1、shape registry、视觉常量、XML 示例、输出流程和质量清单，移除失效的 emoji opt-in 与不规则形状示例。
+
+### 技术优化
+
+- 25 项单元测试通过；19/19 发布模板通过结构、容器、重叠、文字容量、边标签和形状策略全检，并由 draw.io 桌面程序实际导出 19 张非空 PNG。
+
 ## [0.8.1] - 2026-07-28
 
 ### 改进

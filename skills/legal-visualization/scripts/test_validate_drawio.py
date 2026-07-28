@@ -61,9 +61,10 @@ class ValidateDrawioTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile("w", suffix=".drawio", delete=False, encoding="utf-8") as handle:
             handle.write('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>')
             for index, shape in enumerate(shapes):
+                role = ' visualRole="decision"' if "rhombus" in shape else ""
                 handle.write(
                     f'<mxCell id="n{index}" value="节点{index}" style="{shape}" '
-                    f'vertex="1" parent="1"><mxGeometry x="{60 + index * 140}" y="80" width="120" height="70" as="geometry"/></mxCell>'
+                    f'vertex="1" parent="1"{role}><mxGeometry x="{60 + index * 140}" y="80" width="120" height="70" as="geometry"/></mxCell>'
                 )
             handle.write('</root></mxGraphModel>')
             path = Path(handle.name)
@@ -96,6 +97,44 @@ class ValidateDrawioTest(unittest.TestCase):
             report = validate_file(path)
             self.assertTrue(report["passed"], "非限定形状仅为 warning，不应阻断导出")
             self.assertIn("shape_policy", self.finding_ids(report, "warning"))
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_shape_policy_warns_on_unregistered_diamond(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".drawio", delete=False, encoding="utf-8") as handle:
+            handle.write(
+                '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+                '<mxCell id="n1" value="普通主体" style="rhombus;whiteSpace=wrap;" '
+                'vertex="1" parent="1"><mxGeometry x="60" y="80" width="160" height="80" as="geometry"/></mxCell>'
+                '</root></mxGraphModel>'
+            )
+            path = Path(handle.name)
+        try:
+            report = validate_file(path)
+            self.assertTrue(report["passed"], report)
+            self.assertIn("shape_policy", self.finding_ids(report, "warning"))
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_edge_label_overlap_with_text_block_is_warned(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".drawio", delete=False, encoding="utf-8") as handle:
+            handle.write(
+                '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+                '<mxCell id="a" value="上方节点" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">'
+                '<mxGeometry x="200" y="40" width="160" height="60" as="geometry"/></mxCell>'
+                '<mxCell id="b" value="下方节点" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">'
+                '<mxGeometry x="200" y="240" width="160" height="60" as="geometry"/></mxCell>'
+                '<mxCell id="middle-label" value="栏目标题" style="text;fontSize=12;" vertex="1" parent="1">'
+                '<mxGeometry x="220" y="160" width="120" height="22" as="geometry"/></mxCell>'
+                '<mxCell id="e1" value="合同关系" style="endArrow=classic;fontSize=12;" edge="1" source="b" target="a" parent="1">'
+                '<mxGeometry relative="1" as="geometry"/></mxCell>'
+                '</root></mxGraphModel>'
+            )
+            path = Path(handle.name)
+        try:
+            report = validate_file(path)
+            self.assertTrue(report["passed"], report)
+            self.assertIn("edge_label_overlap", self.finding_ids(report, "warning"))
         finally:
             path.unlink(missing_ok=True)
 

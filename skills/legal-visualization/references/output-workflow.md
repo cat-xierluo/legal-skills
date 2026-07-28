@@ -52,6 +52,8 @@ python scripts/export_drawio.py path/to/file.drawio --format png --png-scale 3
 ## draw.io 生成规则
 
 - 场景命中现有模板时，使用 `scripts/instantiate_template.py` 只替换 `value` 占位符；脚本拒绝修改样式/几何位置中的占位符，并在原子落盘前执行领域校验。
+- 先用 VizSpec 2.1 分别声明节点 `visual_role`、`epistemic_status`、`emphasis` 以及关系 `status`；角色不推定事实状态或强调等级。
+- 运行 `scripts/check_vizspec.py` 后，用 `scripts/apply_visual_roles.py` 把三套主题之一编译进 draw.io。编译器只改样式和视觉元数据，全部 `mxGeometry` 必须保持不变。
 - 使用完整 `mxGraphModel`，保留 `id="0"` 和 `id="1"`。
 - 所有 edge 必须包含 `<mxGeometry relative="1" as="geometry" />`。
 - 节点坐标、字号、字体、颜色、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值（页面 origin、字体、调色板、线型绑定、节点尺寸参考）。
@@ -63,10 +65,12 @@ python scripts/export_drawio.py path/to/file.drawio --format png --png-scale 3
 导出前必须执行：
 
 ```bash
-python scripts/validate_drawio.py path/to/file.drawio
+python scripts/check_vizspec.py path/to/spec.yaml
+python scripts/apply_visual_roles.py source.drawio path/to/spec.yaml styled.drawio
+python scripts/validate_drawio.py styled.drawio
 ```
 
-返回非零时禁止复制、导出和交付。`export_drawio.py` 会再次执行同一门禁，防止绕过。
+任何一步返回非零时禁止复制、导出和交付。`export_drawio.py` 会再次执行 draw.io 领域门禁，防止绕过。
 
 ## 导出策略
 

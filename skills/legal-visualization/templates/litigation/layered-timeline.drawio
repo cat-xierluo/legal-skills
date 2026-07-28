@@ -31,27 +31,27 @@
       <mxGeometry x="60" y="320" width="880" height="100" as="geometry"/>
     </mxCell>
     <mxCell id="p1" value="起诉"
-      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="120" y="135" width="100" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="c1" value="立案"
-      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="280" y="245" width="100" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="o1" value="答辩"
-      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="440" y="355" width="100" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="c2" value="开庭"
-      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="600" y="245" width="100" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="c3" value="判决"
-      style="ellipse;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;fontStyle=1;"
       vertex="1" parent="1">
       <mxGeometry x="760" y="245" width="100" height="40" as="geometry"/>
     </mxCell>

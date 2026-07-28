@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "vizspec_version": "2.1",
+  "icon_policy": "disabled",
+  "shape_tokens": {
+    "rounded_rect": {
+      "style": {
+        "rounded": "1",
+        "whiteSpace": "wrap"
+      }
+    },
+    "decision_diamond": {
+      "style": {
+        "rhombus": "1",
+        "whiteSpace": "wrap"
+      }
+    },
+    "container": {
+      "preserve_container_shape": true
+    }
+  },
+  "roles": {
+    "plaintiff": {"label": "原告", "category": "party", "shape_token": "rounded_rect"},
+    "defendant": {"label": "被告", "category": "party", "shape_token": "rounded_rect"},
+    "third_party": {"label": "第三人", "category": "party_secondary", "shape_token": "rounded_rect"},
+    "witness": {"label": "证人/鉴定人", "category": "auxiliary", "shape_token": "rounded_rect"},
+    "person": {"label": "自然人", "category": "party", "shape_token": "rounded_rect"},
+    "company": {"label": "公司/法人", "category": "party", "shape_token": "rounded_rect"},
+    "court": {"label": "法院/裁判机关", "category": "institution", "shape_token": "rounded_rect"},
+    "authority": {"label": "监管/行政部门", "category": "institution", "shape_token": "rounded_rect"},
+    "contract": {"label": "合同/协议", "category": "document", "shape_token": "rounded_rect"},
+    "legal_doc": {"label": "判决/律师函/法律文书", "category": "document", "shape_token": "rounded_rect"},
+    "evidence": {"label": "证据", "category": "evidence", "shape_token": "rounded_rect"},
+    "amount": {"label": "金额/标的/资金", "category": "finance", "shape_token": "rounded_rect"},
+    "risk": {"label": "风险/违约/争议点", "category": "risk", "shape_token": "rounded_rect"},
+    "judgment": {"label": "裁判/结论", "category": "conclusion", "shape_token": "rounded_rect"},
+    "procedure": {"label": "程序节点", "category": "procedure", "shape_token": "rounded_rect"},
+    "event": {"label": "时间事件", "category": "event", "shape_token": "rounded_rect"},
+    "decision": {"label": "决策/判断/分支", "category": "decision", "shape_token": "decision_diamond"},
+    "section": {"label": "分区/阵营/阶段", "category": "container", "shape_token": "container"},
+    "lane": {"label": "泳道", "category": "container", "shape_token": "container"}
+  },
+  "epistemic_statuses": {
+    "confirmed": {},
+    "disputed": {"dashed": "1", "strokeColor": "#C0392B"},
+    "asserted": {"dashed": "1"},
+    "inferred": {"dashed": "1", "dashPattern": "1 4", "strokeColor": "#9E9E9E"},
+    "missing": {"dashed": "1", "strokeColor": "#9E9E9E", "fontColor": "#616161"}
+  },
+  "relation_statuses": {
+    "confirmed": {"dashed": "0", "strokeColor": "#333333"},
+    "disputed": {"dashed": "1", "strokeColor": "#C0392B"},
+    "asserted": {"dashed": "1", "strokeColor": "#1F77B4"},
+    "inferred": {"dashed": "1", "dashPattern": "1 4", "strokeColor": "#9E9E9E"},
+    "missing": {"dashed": "1", "strokeColor": "#9E9E9E"}
+  },
+  "emphasis": {
+    "high": {"strokeWidth": "3", "fontStyle": "1"},
+    "normal": {"strokeWidth": "2", "fontStyle": "0"},
+    "low": {"strokeWidth": "1", "fontStyle": "0", "fontColor": "#64748B"}
+  },
+  "densities": {
+    "compact": {"fontSize": "12", "spacing": "6"},
+    "normal": {"fontSize": "14", "spacing": "8"},
+    "detailed": {"fontSize": "13", "spacing": "10"}
+  },
+  "themes": {
+    "client_report": {
+      "label": "客户汇报",
+      "default_density": "normal",
+      "categories": {
+        "party": {"fillColor": "#E8F2FB", "strokeColor": "#246FA8", "fontColor": "#172033"},
+        "party_secondary": {"fillColor": "#FFF2DE", "strokeColor": "#D97706", "fontColor": "#3F2A0A"},
+        "institution": {"fillColor": "#EEF2F7", "strokeColor": "#52677D", "fontColor": "#172033"},
+        "document": {"fillColor": "#FFF9E8", "strokeColor": "#B88917", "fontColor": "#332A12"},
+        "evidence": {"fillColor": "#EAF5EC", "strokeColor": "#3F8A55", "fontColor": "#17351F"},
+        "finance": {"fillColor": "#FFF1DF", "strokeColor": "#D97706", "fontColor": "#3F2A0A"},
+        "risk": {"fillColor": "#FCEDEC", "strokeColor": "#B73A32", "fontColor": "#4A1714"},
+        "conclusion": {"fillColor": "#E9EEF6", "strokeColor": "#355B83", "fontColor": "#172033"},
+        "procedure": {"fillColor": "#F3F5F7", "strokeColor": "#7A8794", "fontColor": "#26323D"},
+        "event": {"fillColor": "#EEF5FB", "strokeColor": "#3C7FAE", "fontColor": "#172033"},
+        "decision": {"fillColor": "#FFF2DE", "strokeColor": "#D97706", "fontColor": "#3F2A0A"},
+        "auxiliary": {"fillColor": "#F5F6F7", "strokeColor": "#9AA4AE", "fontColor": "#4C5660"},
+        "container": {"fillColor": "#F8FAFC", "strokeColor": "#CBD5E1", "fontColor": "#334155"}
+      }
+    },
+    "court_submit": {
+      "label": "法官提交",
+      "default_density": "normal",
+      "categories": {
+        "party": {"fillColor": "#F2F5F8", "strokeColor": "#44576B", "fontColor": "#172033"},
+        "party_secondary": {"fillColor": "#F7F5F0", "strokeColor": "#786A52", "fontColor": "#2F2B24"},
+        "institution": {"fillColor": "#EDF1F5", "strokeColor": "#364C63", "fontColor": "#172033"},
+        "document": {"fillColor": "#FFFDF6", "strokeColor": "#8A7550", "fontColor": "#332E24"},
+        "evidence": {"fillColor": "#F2F7F2", "strokeColor": "#55745D", "fontColor": "#213126"},
+        "finance": {"fillColor": "#FAF7F0", "strokeColor": "#8A7550", "fontColor": "#332E24"},
+        "risk": {"fillColor": "#FAF1F1", "strokeColor": "#963D38", "fontColor": "#411C1A"},
+        "conclusion": {"fillColor": "#EDF1F5", "strokeColor": "#364C63", "fontColor": "#172033"},
+        "procedure": {"fillColor": "#F4F5F6", "strokeColor": "#737D87", "fontColor": "#26323D"},
+        "event": {"fillColor": "#F2F5F8", "strokeColor": "#52677D", "fontColor": "#172033"},
+        "decision": {"fillColor": "#FAF7F0", "strokeColor": "#8A7550", "fontColor": "#332E24"},
+        "auxiliary": {"fillColor": "#F6F7F8", "strokeColor": "#9AA2AA", "fontColor": "#4C5660"},
+        "container": {"fillColor": "#FAFBFC", "strokeColor": "#D4D9DE", "fontColor": "#334155"}
+      }
+    },
+    "lawyer_workpaper": {
+      "label": "律师工作底稿",
+      "default_density": "compact",
+      "categories": {
+        "party": {"fillColor": "#E5F0FA", "strokeColor": "#1F6FA5", "fontColor": "#122133"},
+        "party_secondary": {"fillColor": "#FFEBCD", "strokeColor": "#C96A05", "fontColor": "#382407"},
+        "institution": {"fillColor": "#E9EEF4", "strokeColor": "#405C76", "fontColor": "#122133"},
+        "document": {"fillColor": "#FFF6D8", "strokeColor": "#A87808", "fontColor": "#302600"},
+        "evidence": {"fillColor": "#E1F1E5", "strokeColor": "#2F7D46", "fontColor": "#12301A"},
+        "finance": {"fillColor": "#FFE8CC", "strokeColor": "#C96A05", "fontColor": "#382407"},
+        "risk": {"fillColor": "#F9E1DF", "strokeColor": "#AA302A", "fontColor": "#41110E"},
+        "conclusion": {"fillColor": "#E3EAF3", "strokeColor": "#294F76", "fontColor": "#122133"},
+        "procedure": {"fillColor": "#ECEFF2", "strokeColor": "#667684", "fontColor": "#24313C"},
+        "event": {"fillColor": "#E5F0FA", "strokeColor": "#2F769F", "fontColor": "#122133"},
+        "decision": {"fillColor": "#FFEBCD", "strokeColor": "#C96A05", "fontColor": "#382407"},
+        "auxiliary": {"fillColor": "#EFF1F3", "strokeColor": "#87939D", "fontColor": "#46515A"},
+        "container": {"fillColor": "#F4F6F8", "strokeColor": "#BEC7D0", "fontColor": "#2D3B49"}
+      }
+    }
+  }
+}

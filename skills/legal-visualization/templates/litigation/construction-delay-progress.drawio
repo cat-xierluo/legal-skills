@@ -25,12 +25,12 @@
       vertex="1" parent="1">
       <mxGeometry x="80" y="260" width="900" height="120" as="geometry"/>
     </mxCell>
-    <mxCell id="p1" value="开工" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="150" width="90" height="42" as="geometry"/></mxCell>
-    <mxCell id="p2" value="关键工序应完成" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="380" y="150" width="130" height="42" as="geometry"/></mxCell>
-    <mxCell id="p3" value="计划竣工" style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="720" y="150" width="110" height="42" as="geometry"/></mxCell>
-    <mxCell id="a1" value="实际开工" style="ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="300" width="90" height="42" as="geometry"/></mxCell>
-    <mxCell id="a2" value="关键工序实际完成" style="ellipse;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="520" y="300" width="150" height="42" as="geometry"/></mxCell>
-    <mxCell id="a3" value="实际竣工" style="ellipse;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="850" y="300" width="100" height="42" as="geometry"/></mxCell>
+    <mxCell id="p1" value="开工" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="150" width="90" height="42" as="geometry"/></mxCell>
+    <mxCell id="p2" value="关键工序应完成" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="380" y="150" width="130" height="42" as="geometry"/></mxCell>
+    <mxCell id="p3" value="计划竣工" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;fontSize=12;" vertex="1" parent="1"><mxGeometry x="720" y="150" width="110" height="42" as="geometry"/></mxCell>
+    <mxCell id="a1" value="实际开工" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;fontSize=12;" vertex="1" parent="1"><mxGeometry x="150" y="300" width="90" height="42" as="geometry"/></mxCell>
+    <mxCell id="a2" value="关键工序实际完成" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="520" y="300" width="150" height="42" as="geometry"/></mxCell>
+    <mxCell id="a3" value="实际竣工" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;" vertex="1" parent="1"><mxGeometry x="850" y="300" width="100" height="42" as="geometry"/></mxCell>
     <mxCell id="bar" value="待补充：延误区间&#10;天数与责任主体"
       style="rounded=1;whiteSpace=wrap;fillColor=#FDECEA;strokeColor=#C0392B;strokeWidth=2;fontSize=12;fontStyle=1;"
       vertex="1" parent="1">

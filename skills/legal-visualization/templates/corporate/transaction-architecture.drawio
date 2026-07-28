@@ -31,12 +31,12 @@
       <mxGeometry x="340" y="380" width="200" height="80" as="geometry"/>
     </mxCell>
     <mxCell id="spa" value="SPA 股权转让协议&#10;（待补充：签约日、价款）"
-      style="shape=document;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1f77b4;strokeWidth=2;fontSize=12;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#FFF9E8;strokeColor=#B88917;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="340" y="200" width="200" height="60" as="geometry"/>
     </mxCell>
     <mxCell id="escrow" value="资金监管账户&#10;（待补充：开户行）"
-      style="shape=cylinder3;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=12;size=10;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#FFF1DF;strokeColor=#D97706;strokeWidth=2;fontSize=12;"
       vertex="1" parent="1">
       <mxGeometry x="340" y="100" width="200" height="60" as="geometry"/>
     </mxCell>
@@ -55,7 +55,7 @@
       edge="1" source="target" target="seller" parent="1">
       <mxGeometry relative="1" as="geometry"/>
     </mxCell>
-    <mxCell id="e4" value="支付价款（待补充：金额）"
+    <mxCell id="e4" value="价款入监管"
       style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;dashed=1;exitX=0.5;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
       edge="1" source="buyer" target="escrow" parent="1">
       <mxGeometry relative="1" as="geometry">
@@ -64,7 +64,7 @@
         </Array>
       </mxGeometry>
     </mxCell>
-    <mxCell id="e5" value="支付至卖方（条件成就后）"
+    <mxCell id="e5" value="条件成就后支付"
       style="endArrow=classic;strokeWidth=2;strokeColor=#C0392B;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;edgeStyle=orthogonalEdgeStyle;curved=1;"
       edge="1" source="escrow" target="seller" parent="1">
       <mxGeometry relative="1" as="geometry">

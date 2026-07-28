@@ -1,141 +1,149 @@
-# VizSpec 制图规格
+# VizSpec 2.1 制图规格
 
-VizSpec 是 Legal Visualization 的中间结构。先生成 VizSpec，再转 draw.io XML。这样可以降低随机发挥，稳定实现一步到位出图。
+VizSpec 是 Legal Visualization 的中间结构：先声明法律语义和场景，再生成 draw.io 几何，最后用样式编译器把主题、角色、事实状态和强调写入图形。合法枚举的机器真相源是 `config/visual-role-registry.json`。
 
-## 必填结构
+## 最小可执行结构
 
 ```yaml
-vizspec_version: "2.0"
-title: ""
-audience: "court | client | team | public"
-purpose: ""
-case_type: ""
+vizspec_version: "2.1"
+
+title: 多主体借款关系图
+audience: client
+purpose: 说明签约主体、实际用款人与收款账户的关系
+core_message: 名义借款与实际用款分离，资金落点待补证
+
 routing:
-  task: "explain | prove | choose | advance | manage | deliver"
-  material_stage: "consultation | service | litigation | evidence | drafting | transaction | compliance | execution | review"
-  primary_scene: ""
-  alternatives_considered:
-    - scene_id: ""
-      reason_not_selected: ""
-  selection_reason: ""
+  primary_scene: multi-party-relation
+  selection_reason: 需要呈现多主体、多关系及不同事实状态
+
 template:
-  id: "template-id | custom"
-  path: "templates/<domain>/<template>.drawio | null"
+  id: multi-party-relation
+  path: templates/litigation/multi-party-relation.drawio
   lock_geometry: true
-  overflow_policy: "split_appendix | reject"
-scene_ids: []
-main_chart_type: "timeline | relation | data | process | spatial | evidence | composite"
-stance: "neutral | claimant | respondent | internal"
-core_message: ""
-output:
-  source: ".drawio"
-  images: ["svg", "png"]
-  optional: ["pdf"]
+  overflow_policy: split_appendix
+
 visual:
-  theme: "client_report | court_submit | lawyer_workpaper"
-  density: "compact | normal | detailed"
-  icons: false
-facts:
-  confirmed: []
-  disputed: []
-  missing: []
+  theme: client_report
+  density: normal
+
 entities:
-  - id: ""
-    label: ""
-    role: ""
-    group: ""
-    visual_role: ""
-    shape_token: ""
-    emphasis: "high | normal | low"
-    icon: ""
-    style_key: ""
-events:
-  - id: ""
-    date: ""
-    label: ""
-    actor: ""
-    legal_effect: ""
-    evidence_ref: ""
+  - id: lender
+    label: 贷款人（原告）
+    visual_role: plaintiff
+    epistemic_status: confirmed
+    emphasis: high
+  - id: nominal
+    label: 名义借款人（被告）
+    visual_role: defendant
+    epistemic_status: confirmed
+    emphasis: normal
+  - id: actual
+    label: 实际用款人（第三人）
+    visual_role: third_party
+    epistemic_status: inferred
+    emphasis: normal
+
 amounts:
-  - id: ""
-    label: ""
-    value: ""
-    unit: ""
-    category: ""
+  - id: account
+    label: 收款账户（待补开户行）
+    visual_role: amount
+    epistemic_status: missing
+    emphasis: low
+
 relations:
-  - id: ""
-    source: ""
-    target: ""
-    label: ""
-    relation_type: "contract | payment | delivery | bill | equity | procedure | evidence | claim"
-    status: "confirmed | disputed | asserted | inferred | missing"
-    style_key: ""
-sections:
-  - id: ""
-    label: ""
-    purpose: ""
-    contains: []
-annotations:
-  - id: ""
-    text: ""
-    anchor: ""
-    type: "note | conclusion | evidence | risk | legend"
-layout:
-  direction: "left-to-right | top-down | center-out | matrix | lanes | map"
-  lanes: []
-  emphasis: []
-  avoid: []
-quality_checks:
-  - ""
+  - id: e1
+    source: actual
+    target: nominal
+    label: 实际用款（推定）
+    relation_type: payment
+    status: inferred
 ```
 
-## 字段说明
+可直接校验的完整示例见 `assets/examples/multi-party-visual-spec.yaml`。
 
-| 字段 | 用途 |
-|------|------|
-| `purpose` | 本图的信息任务，例如“说明合同主体与实际履行主体不一致” |
-| `core_message` | 一句话主观点，必须能放进标题、副标题或结论栏 |
-| `routing` | 场景路由结论，记录主场景、备选场景和排除理由（**必填**，见 `SKILL.md` 硬约束第 3 条） |
-| `template` | 记录模板绑定。命中模板时 `lock_geometry=true`，只替换 value；容量不足按 `overflow_policy` 拆附图或阻断。没有适配模板时填 `id: custom` |
-| `entities[].role` | 节点身份（原告/被告/第三人等），取值规范见 `references/naming-conventions.md` |
-| `scene_ids` | 来自 `scene-library.md` 的场景 ID，可多个 |
-| `confirmed/disputed/missing` | 防止把争议事实画成确定事实 |
-| `relation_type` | 决定线条颜色、箭头和图例 |
-| `status` | 决定实线、虚线、灰色或待证标注（颜色常量见 `references/legal-visual-constants.md`） |
-| `sections` | 用来划分阵营、阶段、法律关系、制度路径或项目范围 |
-| `layout` | 指定总体布局，避免边生成边想 |
-| `entities[].visual_role` | 法律语义角色（`plaintiff` / `contract` / `amount` / `risk` 等），决定**配色、线型与强调**（形状统一圆角矩形），取值见 `references/shape-registry.md` |
-| `entities[].shape_token` / `emphasis` / `icon` | 可选：形状 token（默认圆角矩形，仅决策点用菱形）、强调（`high` 粗边粗体 / `normal` / `low` 灰细）、单节点 emoji（覆盖整图 `icons`） |
-| `visual.theme` / `density` / `icons` | 整图视觉：主题（默认 `client_report`）、留白档位、是否渲染 emoji（默认 `false`，法律图保持严肃） |
+## 必填约束
 
-## 生成顺序
+1. `vizspec_version` 必须为 `"2.1"`。
+2. `routing.primary_scene` 与 `routing.selection_reason` 必须为非空字符串。
+3. `visual.theme` 只能是 `client_report`、`court_submit`、`lawyer_workpaper`；`density` 只能是 `compact`、`normal`、`detailed`。
+4. `entities`、`events`、`amounts`、`sections` 中的每个节点必须有全局唯一 `id` 和合法 `visual_role`。
+5. 每条 `relations` 必须有唯一 `id`、存在的 `source/target` 和合法 `status`。
+6. 正式法律图禁用 emoji/icon；不要写节点 `icon`。兼容旧规格时 `visual.icons` 只能为 `false`。
 
-1. 先写 `title`、`audience`、`purpose`、`core_message`。
-2. 按 `scene-routing-guide.md` 先填 `routing`，再绑定 `template`，最后填 `scene_ids` 和 `main_chart_type`。
-3. 提取实体、事件、金额、关系和证据；按 `shape-registry.md` 为每个节点声明 `visual_role`，整图声明 `theme` 与 `icons`（默认 `false`）。
-4. 标出确定事实、争议事实、缺失事实。
-5. 设计分区、泳道、图例和注释。
-6. 命中模板时锁定几何实例化；无模板时将 VizSpec 转成新 draw.io XML。
-7. 运行领域校验，错误为零后才能导出图片并按质量清单检查。
+## 角色、状态、强调
 
-## 关系状态样式
+三个字段相互独立：
 
-| 状态 | 视觉表达 |
-|------|------|
-| `confirmed` | 实线、常规色 |
-| `disputed` | 虚线或双线，旁注“争议” |
-| `asserted` | 虚线，使用主张方颜色 |
-| `inferred` | 点线或浅色，标注“推定/需结合证据” |
-| `missing` | 灰色、问号或待补充标签 |
+| 字段 | 作用 | 默认值 |
+|---|---|---|
+| `visual_role` | 决定语义类别与基础形状 | 无，必须声明 |
+| `epistemic_status` | 决定节点事实状态线型 | `confirmed` |
+| `emphasis` | 决定描边粗细和字重 | `normal` |
 
-具体颜色常量与线型绑定规则见 `references/legal-visual-constants.md` "线型与状态绑定" 段。
+不得把诉讼地位当事实状态：`visual_role: defendant` 不自动产生虚线，`visual_role: plaintiff` 不自动产生粗边。只有显式 `epistemic_status: disputed` 才表示争议，只有显式 `emphasis: high` 才表示本图重点。
+
+`shape_token` 通常不要手写；它由角色注册表推导。`decision` 自动使用 `decision_diamond`，普通角色自动使用 `rounded_rect`。校验器拒绝用 `shape_token` 覆盖角色规定的形状。
+
+## 其他节点集合
+
+事件、金额和分区也必须进入同一视觉系统：
+
+```yaml
+events:
+  - id: hearing
+    label: 开庭
+    date: 2026-08-10
+    visual_role: event
+    epistemic_status: confirmed
+    emphasis: normal
+
+amounts:
+  - id: principal
+    label: 本金 100 万元
+    visual_role: amount
+    epistemic_status: asserted
+    emphasis: high
+
+sections:
+  - id: claimant-lane
+    label: 原告证据区
+    visual_role: lane
+    epistemic_status: confirmed
+    emphasis: normal
+    contains: [lender, principal]
+```
+
+分区 `section/lane` 会保留模板已有的容器形状；样式编译器不重写其几何。
+
+## 关系状态
+
+| `status` | 含义 | 视觉表达 |
+|---|---|---|
+| `confirmed` | 已有可靠材料支持 | 实线 |
+| `disputed` | 存在明确争议 | 红色虚线 |
+| `asserted` | 仅一方主张 | 主张色虚线 |
+| `inferred` | 根据材料推定 | 灰色点虚线 |
+| `missing` | 关系或关键事实待补 | 灰色虚线 |
+
+文字标签仍应写“争议”“主张”“推定”“待补”等自然语言，不能只依赖颜色或线型传达法律状态。
+
+## 执行顺序
+
+1. 按场景路由填写 `routing`，绑定模板并确定一图一观点。
+2. 声明全部节点、关系、事实状态和强调等级。
+3. 运行 `python scripts/check_vizspec.py spec.yaml`；任何 error 都要先修正。
+4. 实例化模板或生成自定义 draw.io 几何。
+5. 运行 `python scripts/apply_visual_roles.py source.drawio spec.yaml styled.drawio`。
+6. 确认报告中的 `geometry_preserved: true`，再运行 draw.io 领域门禁和图片导出。
+7. 打开实际 SVG/PNG，目视检查主题、文字、连线、边界和信息层级。
+
+样式编译器找不到 VizSpec 声明的节点或连线 ID、发现非法字段、改变几何或生成无效 draw.io 时必须非零退出。
 
 ## 输出前自问
 
-- 这张图是不是只讲一个主观点？
-- 主场景是否比备选场景更贴近受众、任务和材料阶段？
-- 读者不听讲解能否看出主体、关系和结论？
-- 哪些事实是争议或待补充，是否已经视觉区分？
-- 是否需要拆出附图，避免主图拥挤？
-- 节点是否统一圆角矩形？非限定形状（椭圆 / 圆柱 / 文档形等）会被 `validate_drawio.py` 的 `shape_policy` 告警。
-- `.drawio` 能否继续编辑，SVG/PNG 是否能直接交付？
+- 是否只表达一个主观点？
+- `visual_role`、`epistemic_status`、`emphasis` 是否分别基于语义、证据状态和阅读重点填写？
+- 争议与待补是否同时使用文字和线型表达？
+- 模板几何是否保持锁定，容量不足时是否拆附图？
+- 三套主题中是否选了与受众匹配的一套？
+- `.drawio` 是否可编辑，实际 SVG/PNG 是否完整且无裁切？

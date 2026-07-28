@@ -1,6 +1,6 @@
 # 法律视觉常量
 
-本文件沉淀 Legal Visualization 的视觉系统常量。所有 `.drawio` 模板与 `scripts/*.py` 必须按本文件取值；如需变更，先改本文件再传播。
+本文件沉淀 Legal Visualization 的页面、字体、布局和通用线条常量。角色、主题、事实状态、强调、密度与形状 token 的机器可读真相源是 `config/visual-role-registry.json`，不得在本文件或其他脚本重复维护另一套枚举与主题色。
 
 ## 设计原则
 
@@ -62,7 +62,7 @@ palette:
 
 ## 线型与状态绑定
 
-`relations.status` 与线型/颜色必须严格对应（与 `vizspec-schema.md` 行 103-111 一致）：
+`relations.status` 与线型/颜色必须严格对应（具体可执行值以视觉注册表为准）：
 
 | status | 视觉表达 | 颜色 | 标签前缀 |
 |---|---|---|---|
@@ -74,23 +74,22 @@ palette:
 
 ## 节点样式映射
 
-节点视觉（配色 / 线型 / 强调 / 形状）的权威映射见 `references/shape-registry.md`。0.8.1 起形状收敛为**统一圆角矩形**（菱形仅决策点，容器为背景框），放弃椭圆 / 圆柱 / 文档形 / 六边形等不规则形状。本表为速查，新增节点一律按 shape-registry 的 `visual_role` 取值；palette 色值绑定仍以本文件为准。
+节点视觉的权威映射见 `config/visual-role-registry.json`，组合方法见 `references/shape-registry.md`。形状收敛为**统一圆角矩形**（菱形仅决策点，容器保留既有形状）。下表只说明语义类别，不作为主题色或默认状态的第二真相源。
 
 | 节点类型 | shape | fillColor | strokeColor | 线型 |
 |---|---|---|---|---|
-| 主体/当事人（原告/被告/第三人/法院/公司/自然人） | `rounded=1` | `primary_light` | `primary` | 被告/争议用 `dashed=1` |
-| 合同/文书 | `rounded=1` | `#FFFDE7` | `#F9A825` | 实线 |
-| 证据 | `rounded=1` | `#E8F5E9` | `#43A047` | 实线 |
-| 资金/金额 | `rounded=1` | `accent_decision_light` | `accent_decision` | 实线 |
-| 决策/判断（仅流程判断点） | `rhombus` | `accent_decision_light` | `accent_decision` | 实线 |
-| 风险/违约/争议 | `rounded=1` | `accent_dispute_light` | `accent_dispute` | `dashed=1` |
-| 裁判/结论 | `rounded=1` | `accent_dispute_light` | `accent_dispute` | 实线 |
-| 程序节点 | `rounded=1` | `grey_missing_light` | `grey_missing` | 实线 |
-| 时间线节点 | `rounded=1` | `primary_light` | `primary` | 实线 |
-| 缺失/待补充 | `rounded=1` | `grey_missing_light` | `grey_missing` | `dashed=1` |
-| 容器/泳道 | `swimlane` | `frame_bg` | `frame` | — |
-| 标题 | `text` | none | none | — |
-| 注释/小字 | `text` | none | none | — |
+| 主体/当事人/机构 | `rounded=1` | 按主题的主体/机构类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 合同/文书 | `rounded=1` | 按主题的文书类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 证据 | `rounded=1` | 按主题的证据类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 资金/金额 | `rounded=1` | 按主题的财务类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 风险/违约 | `rounded=1` | 按主题的风险类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 裁判/结论 | `rounded=1` | 按主题的结论类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 程序/时间节点 | `rounded=1` | 按主题的程序/事件类别 | 按主题 | 由 `epistemic_status` 决定 |
+| 决策/判断 | `rhombus` | 按主题的决策类别 | 按主题 | 仅 `visual_role=decision` |
+| 容器/泳道 | 保留 `swimlane` / `container=1` | 按主题容器类别 | 按主题 | — |
+| 标题/注释 | `text` | none | none | — |
+
+当事人角色不提供默认线型或默认强调：被告不自动虚线，原告不自动粗边。事实状态用 `epistemic_status`，阅读重点用 `emphasis` 显式声明。
 
 ## 节点尺寸参考
 
@@ -119,6 +118,7 @@ edge 标签超过 8 显示单位进入人工复核，超过 14 显示单位阻�
 
 | 日期 | 变更 | 版本 |
 |---|---|---|
+| 2026-07-28 | 将主题与视觉语义真相源迁到 JSON 注册表；取消当事人角色推定线型/强调；本文件收敛为页面、字体和通用布局常量 | 0.8.2 |
 | 2026-07-28 | 方向修正：节点样式回退统一圆角矩形，放弃椭圆/圆柱/文档形/六边形/平行四边形/双椭圆等多形状；区分改靠配色+线型（虚线表对抗/争议）+描边粗细；菱形仅保留给决策判断点 | 0.8.1 |
 | 2026-07-28 | 节点样式映射表降级为速查，权威指向 `shape-registry.md`；新增公司/法院/证据/风险/裁判/程序形状；弃用 `mxgraph.basic.person` | 0.8.0 |
 | 2026-07-26 | 增加容器语义、自由布局间距例外、文本容量与 edge 标签门禁常量 | 0.7.0 |

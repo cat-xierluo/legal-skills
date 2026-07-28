@@ -46,12 +46,12 @@
 </mxCell>
 
 <!-- 书证 -->
-<mxCell id="ev1" value="合同原件&#xa;（书证）" style="shape=document;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;" vertex="1" parent="evidence_group">
+<mxCell id="ev1" value="合同原件&#xa;（书证）" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;" vertex="1" parent="evidence_group">
   <mxGeometry x="20" y="50" width="100" height="60" as="geometry"/>
 </mxCell>
 
 <!-- 物证 -->
-<mxCell id="ev2" value="侵权产品&#xa;（物证）" style="hexagon;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#EF6C00;strokeWidth=2;" vertex="1" parent="evidence_group">
+<mxCell id="ev2" value="侵权产品&#xa;（物证）" style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;" vertex="1" parent="evidence_group">
   <mxGeometry x="150" y="50" width="100" height="60" as="geometry"/>
 </mxCell>
 

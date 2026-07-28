@@ -406,8 +406,8 @@
     },
     {
       "name": "legal-visualization",
-      "description": "面向法律业务场景的法律图解与图表生成技能：命中模板时锁定几何，以容器感知重叠、文字容量和长边标签门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套",
-      "version": "0.7.0",
+      "description": "面向法律业务场景的法律图解与图表生成技能：以 VizSpec 2.1、几何守恒视觉编译、三套受众主题、容器感知重叠与文字容量门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套",
+      "version": "0.8.2",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

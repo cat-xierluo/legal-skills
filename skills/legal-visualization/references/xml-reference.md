@@ -37,7 +37,9 @@
 | `verticalAlign` | top/middle/bottom | 垂直对齐 |
 | `shadow=0` | 0/1 | 阴影 |
 
-### 常用形状
+### 限定形状
+
+法律图只使用以下节点形状。角色、主题和状态样式优先由 `scripts/apply_visual_roles.py` 从 VizSpec 编译，不要手工复制主题色。
 
 **圆角矩形（默认）**：
 ```xml
@@ -46,33 +48,14 @@ style="rounded=1;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWid
 
 **菱形（判断/决策）**：
 ```xml
-style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#EF6C00;strokeWidth=2;"
+<mxCell id="decision-1" value="条件是否满足？" visualRole="decision"
+  style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#EF6C00;strokeWidth=2;"
+  vertex="1" parent="1">
+  <mxGeometry x="320" y="160" width="160" height="110" as="geometry"/>
+</mxCell>
 ```
 
-**圆柱体（数据库/存储）**：
-```xml
-style="shape=cylinder3;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#EF6C00;strokeWidth=2;size=12;"
-```
-
-**文档形状**：
-```xml
-style="shape=document;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;"
-```
-
-**六边形**：
-```xml
-style="hexagon;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;"
-```
-
-**人形（当事人）**：
-```xml
-style="shape=mxgraph.basic.person;fillColor=#E3F2FD;strokeColor=#1976D2;"
-```
-
-**时间线节点（圆形）**：
-```xml
-style="ellipse;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;"
-```
+`rect` 仅用于表格单元格和细小分隔块；分区使用 `swimlane` 或 `container=1`。椭圆、圆柱、文档形、六边形、人形、双椭圆等不规则形状不属于正式法律图的限定清单，`shape_policy` 会告警。
 
 ## 连线（Edge）规则
 

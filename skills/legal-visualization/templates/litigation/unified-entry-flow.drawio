@@ -16,16 +16,18 @@
       <mxGeometry x="60" y="20" width="980" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="entry" value="统一入口&#10;（待补充：申请/争议/程序）"
-      style="ellipse;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;"
+      style="rounded=1;arcSize=10;whiteSpace=wrap;fillColor=#E3F2FD;strokeColor=#1f77b4;strokeWidth=2;fontSize=14;fontStyle=1;"
       vertex="1" parent="1">
       <mxGeometry x="80" y="180" width="160" height="72" as="geometry"/>
     </mxCell>
     <mxCell id="d1" value="条件一是否满足？"
+      visualRole="decision"
       style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=13;fontStyle=1;"
       vertex="1" parent="1">
       <mxGeometry x="330" y="160" width="150" height="110" as="geometry"/>
     </mxCell>
     <mxCell id="d2" value="是否存在例外/瑕疵？"
+      visualRole="decision"
       style="rhombus;whiteSpace=wrap;fillColor=#FFF3E0;strokeColor=#FF8C00;strokeWidth=2;fontSize=13;fontStyle=1;"
       vertex="1" parent="1">
       <mxGeometry x="570" y="80" width="150" height="110" as="geometry"/>

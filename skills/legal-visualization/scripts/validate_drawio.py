@@ -28,6 +28,7 @@ CHECKS = (
     "geometry_overlap",
     "shape_policy",
     "text_fit",
+    "edge_label_overlap",
     "edge_label_risk",
     "xml_safe_comments",
 )
@@ -274,7 +275,7 @@ def base_shape(style: dict[str, str]) -> str:
         if style.get(key) == "1":
             return key
     if style.get("rounded") == "1":
-        return "capsule" if style.get("arcSize") == "50" else "rounded_rect"
+        return "rounded_rect"
     if style.get("text") == "1":
         return "text"
     return "rect"
@@ -296,18 +297,26 @@ def check_shape_policy(root: ET.Element, findings: list[dict]) -> None:
             continue
         shape = base_shape(parse_style(cell.get("style")))
         if shape not in ALLOWED_SHAPES:
-            violations.append({"id": cell.get("id"), "shape": shape})
+            violations.append({"id": cell.get("id"), "shape": shape, "reason": "非限定形状"})
+        elif shape == "rhombus" and cell.get("visualRole") != "decision":
+            violations.append(
+                {
+                    "id": cell.get("id"),
+                    "shape": shape,
+                    "reason": "菱形必须声明 visualRole=decision",
+                }
+            )
     if violations:
         findings.append(
             finding(
                 "shape_policy",
                 "warning",
-                f"{len(violations)} 个节点用了非限定形状（椭圆/圆柱/文档形/六边形等），应统一圆角矩形（菱形仅决策用）；按 references/shape-registry.md 改回",
+                f"{len(violations)} 个节点违反限定形状策略：普通节点统一圆角矩形，菱形仅限 visualRole=decision；按 references/shape-registry.md 修正",
                 examples=violations[:12],
             )
         )
     else:
-        findings.append(finding("shape_policy", "ok", "节点形状符合限定清单（圆角矩形/矩形/菱形/文本）"))
+        findings.append(finding("shape_policy", "ok", "节点形状符合限定清单（圆角矩形/矩形/决策菱形/文本）"))
 
 
 def plain_text(value: str | None) -> str:
@@ -413,6 +422,110 @@ def check_edge_label_risk(root: ET.Element, findings: list[dict]) -> None:
         findings.append(finding("edge_label_risk", "ok", "未发现长连线标签风险"))
 
 
+def polyline_midpoint(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """返回折线按路径长度计算的中点；只有两点时等同线段中点。"""
+    if not points:
+        return 0.0, 0.0
+    if len(points) == 1:
+        return points[0]
+    segments: list[tuple[tuple[float, float], tuple[float, float], float]] = []
+    total = 0.0
+    for start, end in zip(points, points[1:]):
+        length = math.hypot(end[0] - start[0], end[1] - start[1])
+        segments.append((start, end, length))
+        total += length
+    if total <= 0.01:
+        return points[0]
+    remaining = total / 2
+    for start, end, length in segments:
+        if remaining <= length and length > 0:
+            ratio = remaining / length
+            return (
+                start[0] + (end[0] - start[0]) * ratio,
+                start[1] + (end[1] - start[1]) * ratio,
+            )
+        remaining -= length
+    return points[-1]
+
+
+def check_edge_label_overlap(root: ET.Element, findings: list[dict]) -> None:
+    """估算默认 edge label 的包围盒，发现与独立节点/文字块叠压时告警。
+
+    draw.io 自动正交路由的最终 label 坐标只在渲染阶段确定，本检查是源文件预警，
+    不能替代真实 PNG/SVG 目视检查。
+    """
+    records, cells = vertex_records(root)
+    by_id = {record["id"]: record for record in records}
+    overlaps: list[dict] = []
+    for edge in root.iter("mxCell"):
+        if edge.get("edge") != "1":
+            continue
+        text = plain_text(edge.get("value"))
+        source_id = edge.get("source")
+        target_id = edge.get("target")
+        source = by_id.get(source_id or "")
+        target = by_id.get(target_id or "")
+        if not text or source is None or target is None:
+            continue
+        sx, sy, sw, sh = source["bbox"]
+        tx, ty, tw, th = target["bbox"]
+        points = [(sx + sw / 2, sy + sh / 2)]
+        geometry = edge.find("mxGeometry")
+        if geometry is not None:
+            points.extend(
+                (number(point.get("x")), number(point.get("y")))
+                for point in geometry.findall("./Array[@as='points']/mxPoint")
+            )
+        points.append((tx + tw / 2, ty + th / 2))
+        center_x, center_y = polyline_midpoint(points)
+        if geometry is not None:
+            offset = geometry.find("./mxPoint[@as='offset']")
+            if offset is not None:
+                center_x += number(offset.get("x"))
+                center_y += number(offset.get("y"))
+        style = parse_style(edge.get("style"))
+        font_size = max(number(style.get("fontSize"), 12.0), 1.0)
+        label_width = glyph_units(text) * font_size + 12.0
+        label_height = font_size * 1.2 + 6.0
+        label_bbox = (
+            center_x - label_width / 2,
+            center_y - label_height / 2,
+            label_width,
+            label_height,
+        )
+        lx, ly, lw, lh = label_bbox
+        for record in records:
+            if record["id"] in {source_id, target_id} or record["container"]:
+                continue
+            rx, ry, rw, rh = record["bbox"]
+            intersection_width = min(lx + lw, rx + rw) - max(lx, rx)
+            intersection_height = min(ly + lh, ry + rh) - max(ly, ry)
+            if intersection_width <= 1.0 or intersection_height <= 1.0:
+                continue
+            overlaps.append(
+                {
+                    "edge": edge.get("id"),
+                    "label": text,
+                    "vertex": record["id"],
+                    "estimated_intersection": [
+                        round(intersection_width, 2),
+                        round(intersection_height, 2),
+                    ],
+                }
+            )
+    if overlaps:
+        findings.append(
+            finding(
+                "edge_label_overlap",
+                "warning",
+                f"{len(overlaps)} 处连线标签可能与独立节点或文字块叠压；应移开冗余文字、缩短标签或改用独立标注，并复核实际图片",
+                examples=overlaps[:12],
+            )
+        )
+    else:
+        findings.append(finding("edge_label_overlap", "ok", "未发现连线标签与独立节点/文字块的估算叠压"))
+
+
 def check_xml_safe_comments(text: str, findings: list[dict]) -> None:
     issues: list[tuple[int, str]] = []
     in_comment = False
@@ -456,6 +569,7 @@ def validate_file(path: Path) -> dict:
         check_geometry_overlap(root, findings)
         check_shape_policy(root, findings)
         check_text_fit(root, findings)
+        check_edge_label_overlap(root, findings)
         check_edge_label_risk(root, findings)
         check_xml_safe_comments(text, findings)
     passed = not any(item["severity"] == "error" for item in findings)

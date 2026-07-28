@@ -35,7 +35,7 @@
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
 | 2026-07-26 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.0  | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷                                                                                                        |
-| 2026-07-26 | 更新   | [legal-visualization](skills/legal-visualization/)                     | v0.7.0  | 新增模板几何锁定、容器感知碰撞、中文文本容量和长边标签门禁；8 项领域回归、19 个发布模板全检与 draw.io CLI 全量导出通过                                                                                                                         |
+| 2026-07-28 | 更新   | [legal-visualization](skills/legal-visualization/)                     | v0.8.2  | 视觉角色、事实状态和强调解耦；新增几何守恒样式编译器与三套可执行主题，修复角色校验漂移，19 个模板形状告警清零并重做多主体关系样板                                                                       |
 | 2026-07-25 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v2.2.0  | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环                                                                                                               |
 | 2026-07-23 | 新上传 | [patent-download](skills/patent-download/)                             | v2.6.0  | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露                                                                |
 | 2026-07-23 | 新上传 | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0  | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义                                                                                        |
@@ -321,9 +321,9 @@
 <tr>
 <td><a href="skills/legal-visualization/"><strong>legal-visualization</strong></a></td>
 <td>专业·可视化</td>
-<td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件、合同、合规、交易、证据链和诉讼流程整理成关系图/流程图/时间轴/风险图；命中模板时锁定几何，并以容器感知重叠、文字容量和长边标签门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套</td>
+<td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件、合同、合规、交易、证据链和诉讼流程整理成关系图/流程图/时间轴/风险图；通过 VizSpec 2.1、几何守恒视觉编译、三套受众主题、容器感知重叠与文字容量门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.7.0</td>
+<td style="text-align:center">v0.8.2</td>
 <td style="text-align:center">待发布</td>
 <td></td>
 </tr>

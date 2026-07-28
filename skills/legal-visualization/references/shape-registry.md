@@ -1,113 +1,98 @@
-# 节点表达规范（Shape Registry）
+# 视觉角色与节点表达规范
 
-法律语义 → 视觉角色（`visual_role`）→ **配色 / 线型 / 强调** → drawio 样式的权威映射。VizSpec 声明 `visual_role` 后，按本表注入配色、线型和描边粗细，生成统一、严肃、清晰的矩形图。
+机器可读的单一真相源是 `config/visual-role-registry.json`。本文件只解释组合方法；角色、主题、状态、强调、密度或形状 token 的枚举发生冲突时，以 JSON 注册表和 `scripts/check_vizspec.py` 的结果为准。
 
-本文件是节点视觉的**单一真相源**。`legal-visual-constants.md` 的节点样式速查、`xml-reference.md` 的形状示例、模板与新写 XML 的样式注入，都以本表为准。
+## 三个维度必须分离
 
-## 设计原则（0.8.1 方向修正）
+每个节点分别声明三个维度，禁止根据诉讼地位推定事实状态或强调等级：
 
-> 0.8.0 曾尝试用"九类语义各配不同几何形状"（椭圆 / 圆柱 / 文档形 / 六边形 / 平行四边形等）提升美观度。实测后发现：形状多样性反而显得奇怪，且不规则形状（圆柱顶椭圆 / 文档形波浪底）会让文字压到边线。用户反馈明确要"统一矩形、干净严肃、限定几种形状"。故 0.8.1 收敛为：
-
-1. **统一圆角矩形**：绝大多数节点用圆角矩形 `rounded=1`，干净、严肃、文字区规整不压边。
-2. **形状限定极少数**：只允许 圆角矩形（默认）、菱形（仅"决策 / 判断 / 分支"点，流程图惯例，默认不用）、容器 / 泳道（背景框）。**不用**椭圆、圆柱、文档形、六边形、平行四边形、双椭圆等奇怪形状。
-3. **区分靠三维度，不靠形状**：
-   - **线型**：实线 = 已证 / 确定；虚线 = 对抗 / 争议 / 待证 / 推定；点线 = 推定（见 status 映射）
-   - **配色**：语义类别（蓝 = 主体 / 确认，橙 = 第三人 / 决策 / 资金，红 = 风险 / 争议，灰 = 辅助 / 待补，浅黄 = 文书，浅绿 = 证据）
-   - **描边粗细（emphasis）**：粗边粗体 = 核心主体 / 核心观点；常规 = 一般；细边灰 = 辅助
-4. **虚线表对抗 / 争议 / 待证**：被告、争议事实、待补信息一律虚线（用户认可的表达）。
-5. **emoji opt-in**：默认 `icon_mode=off`，不渲染 emoji，法律图保持严肃；用户显式声明才出。
-6. **复用 palette**：强调色 ≤ 3（蓝 / 橙 / 红），分类辅色（浅黄 / 浅绿）不计入配额。
-
-## 形状策略（限定清单）
-
-| 形状 | drawio | 用途 | 何时用 |
+| 维度 | 字段 | 回答的问题 | 例子 |
 |---|---|---|---|
-| 圆角矩形 | `rounded=1` | 所有主体、文书、金额、证据、程序、时间、裁判节点 | **默认**，绝大多数节点 |
-| 菱形 | `rhombus` | 决策 / 判断 / 分支点 | 仅流程图里"需要判断"的节点，默认不用 |
-| 容器 / 泳道 | `swimlane` 或 `container=1` | 分区、阵营、阶段、泳道背景 | 组织分组时 |
+| 语义角色 | `visual_role` | 这是什么法律对象？ | `defendant`、`contract`、`evidence` |
+| 事实认知状态 | `epistemic_status` | 对它的认知确定到什么程度？ | `confirmed`、`disputed`、`inferred` |
+| 图面强调 | `emphasis` | 它在本图是否是阅读重点？ | `high`、`normal`、`low` |
 
-其他几何形状（椭圆、圆柱、文档形、六边形、平行四边形、双椭圆等）**不再使用**。`validate_drawio.py` 的 `shape_policy` 检查会对非白名单形状告警。
+因此：
 
-## 视觉角色 → 配色 / 线型 / 强调 映射
+- 被告可以是 `confirmed + normal`，此时使用实线常规描边。
+- 原告可以是 `disputed + low`，此时使用争议虚线且弱化。
+- 风险节点不自动等于争议事实；是否虚线由 `epistemic_status` 决定。
+- 裁判结论不自动高强调；是否加粗由 `emphasis` 决定。
 
-每个 `visual_role` 映射到（配色，线型，emphasis），形状统一圆角矩形：
+## 形状限定
 
-| `visual_role` | 法律语义 | 配色（填充 / 描边） | 线型 | 默认 emphasis |
-|---|---|---|---|---|
-| `plaintiff` | 原告 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `high`（核心主体，粗边粗体） |
-| `defendant` | 被告 | 蓝 `#E3F2FD` / `#1f77b4` | **虚线**（对抗 / 待定） | `normal` |
-| `third_party` | 第三人 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal` |
-| `witness` | 证人 / 鉴定人 | 灰 `#F5F5F5` / `#9E9E9E` | 实线 | `low` |
-| `person` | 自然人 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
-| `company` | 公司 / 法人 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
-| `court` | 法院 / 裁判机关 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
-| `authority` | 监管 / 行政部门 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
-| `contract` | 合同 / 协议 | 浅黄 `#FFFDE7` / `#F9A825` | 实线 | `normal` |
-| `legal_doc` | 判决 / 律师函 / 文书 | 浅黄 `#FFFDE7` / `#F9A825` | 实线 | `normal` |
-| `evidence` | 证据 | 浅绿 `#E8F5E9` / `#43A047` | 实线 | `normal` |
-| `amount` | 金额 / 标的 / 资金 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal` |
-| `risk` | 风险 / 违约 / 争议点 | 红 `#FDECEA` / `#C0392B` | **虚线** | `high` |
-| `judgment` | 裁判 / 结论 | 红 `#FDECEA` / `#C0392B` | 实线 | `high` |
-| `procedure` | 程序节点（立案 / 开庭 / 执行） | 灰 `#F5F5F5` / `#9E9E9E` | 实线 | `normal` |
-| `event` | 时间事件 | 蓝 `#E3F2FD` / `#1f77b4` | 实线 | `normal` |
-| `decision` | 决策 / 判断 / 分支 | 橙 `#FFF3E0` / `#FF8C00` | 实线 | `normal`（**形状用菱形**） |
-
-> 配色复用 `legal-visual-constants.md` palette。法院 / 公司 / 自然人 / 程序 / 时间等主体与流程类统一蓝色，靠标签文字区分角色——主体类同色是"中立客观"的体现，不靠形状或颜色细分。非主体类（资金橙 / 风险红 / 证据绿 / 文书黄）用分类辅色区分。
-
-## 线型与 status 绑定
-
-`relations.status` 与线型 / 颜色严格对应（与 `legal-visual-constants.md` 一致）：
-
-| status | 线型 | 颜色 |
+| token | draw.io 表达 | 用途 |
 |---|---|---|
-| `confirmed` | 实线 | `line_solid #333333` |
-| `disputed` | 虚线 + 强调 | `accent_dispute #C0392B` |
-| `asserted` | 虚线 + 主张方色 | `primary #1f77b4` |
-| `inferred` | 点线 | `line_dotted #9E9E9E` |
-| `missing` | 灰虚线 + 待补充标签 | `grey_missing #9E9E9E` |
+| `rounded_rect` | `rounded=1` | 主体、文书、金额、证据、风险、裁判、程序、事件 |
+| `decision_diamond` | `rhombus` + `visualRole="decision"` | 仅用于确有分支判断的问题节点 |
+| `container` | 保留既有 `swimlane` / `container=1` | 分区、阵营、阶段、泳道 |
 
-节点也可用虚线边框表示该节点本身处于对抗 / 待证状态（如 `defendant` 默认虚线边）。
+普通节点不用椭圆、圆柱、文档形、六边形、人形或双椭圆。它们文字可用区不稳定，也会削弱法律图的克制感。`scripts/validate_drawio.py` 的 `shape_policy` 会对非限定形状，以及未声明 `visualRole=decision` 的菱形告警。
 
-## emphasis 三档
+## 视觉角色
 
-| emphasis | 样式叠加 | 用于 |
+角色只决定语义类别和基础形状，不决定事实状态或强调等级。
+
+| 类别 | `visual_role` | 形状 |
 |---|---|---|
-| `high` | `strokeWidth=3;fontStyle=1;`（粗边粗体） | 核心主体 / 核心观点 / 风险 / 裁判结论 |
-| `normal` | `strokeWidth=2;`（默认） | 一般节点 |
-| `low` | 改用 grey_missing 色板，`strokeWidth=1;` | 辅助事实 / 背景节点 |
+| 当事人与主体 | `plaintiff`、`defendant`、`person`、`company` | 圆角矩形 |
+| 次要/辅助主体 | `third_party`、`witness` | 圆角矩形 |
+| 机构 | `court`、`authority` | 圆角矩形 |
+| 文书 | `contract`、`legal_doc` | 圆角矩形 |
+| 证明与财务 | `evidence`、`amount` | 圆角矩形 |
+| 风险与结论 | `risk`、`judgment` | 圆角矩形 |
+| 流程与时间 | `procedure`、`event` | 圆角矩形 |
+| 判断 | `decision` | 菱形 |
+| 容器 | `section`、`lane` | 保留容器形状 |
 
-## 默认主题：客户汇报（client_report）
+不要在文档或脚本中复制一套颜色值；主题配色由 JSON 注册表按类别给出，`scripts/apply_visual_roles.py` 负责生成最终样式。
 
-本轮唯一落地的主题。`icon_mode=off`（不渲染 emoji）、`density=detailed`、争议 / 待证一律虚线、核心主体 `emphasis=high`。其余两套（法官提交、律师工作底稿）留待后续。
+## 状态与线型
 
-## emoji opt-in 机制
+节点用 `epistemic_status`，关系用 `relations[].status`；两者取值一致，但样式表分别维护。
 
-- **默认不渲染**：`theme.icon_mode=off` 时，不写入任何 emoji。
-- **整图开启**：VizSpec 声明 `icons: true` 时，按角色把 emoji 作为标签前缀。
-- **单节点开启**：节点声明 `icon: "🏛"` 时仅该节点加前缀。
-- emoji 仅作辅助识别，**不得**替代线型 / 配色区分。
+| 状态 | 含义 | 典型表达 |
+|---|---|---|
+| `confirmed` | 材料已有可靠支持 | 实线 |
+| `disputed` | 双方对事实或关系存在争议 | 红色虚线 |
+| `asserted` | 仅一方主张，尚未完成证明 | 主张色虚线 |
+| `inferred` | 根据现有材料推定 | 灰色点虚线 |
+| `missing` | 材料未提及或待补 | 灰色虚线并在文字中标“待补” |
 
-## VizSpec 声明与校验
+状态样式只能表达认知确定性，不表达原告/被告身份。
 
-- 节点声明 `visual_role`（必填，命中本表）→ 自动映射（配色，线型，emphasis）。
-- 可选 `emphasis` 覆盖默认、`icon`（opt-in）。
-- 整图声明 `theme`（默认 `client_report`）、`density`、`icons`（默认 `false`）。
-- 合法性校验：`python scripts/check_vizspec.py spec.yaml` 检查 `visual_role` / `theme` 合法。
-- 形状规范校验：`python scripts/validate_drawio.py file.drawio` 的 `shape_policy` 检查会对非白名单形状（椭圆 / 圆柱 / 文档形 / 六边形等）告警，提示改回圆角矩形。
+## 强调与密度
 
-## 与其他文件的关系
+- `emphasis: high`：粗描边和粗体，只给本图核心节点。
+- `emphasis: normal`：常规描边。
+- `emphasis: low`：细描边和弱化文字，用于背景或辅助信息。
+- `density: compact | normal | detailed`：由注册表统一控制字号与 padding，不得在每个节点另写一套字号。
 
-| 文件 | 关系 |
-|---|---|
-| `legal-visual-constants.md` | 提供 palette / 字体 / 尺寸常量；节点样式速查指向本表 |
-| `vizspec-schema.md` | 定义 `visual_role` / `emphasis` / `theme` / `density` / `icons` 字段，取值合法性引用本表 |
-| `xml-reference.md` | 形状示例以本表的限定清单为准（圆角矩形 / 菱形 / 容器） |
-| `scripts/validate_drawio.py` | `shape_policy` 检查限定形状白名单，防奇怪形状 |
-| `scripts/check_vizspec.py` | 校验 VizSpec 声明的角色与主题合法性 |
+## 三套可执行主题
+
+| 主题 | 面向对象 | 特征 |
+|---|---|---|
+| `client_report` | 客户汇报 | 语义色较清楚，层次明显，便于口头讲解 |
+| `court_submit` | 法官/正式提交 | 低饱和、克制、中性色占比更高 |
+| `lawyer_workpaper` | 律师工作底稿 | 对比更强、密度默认更紧凑，便于快速扫描 |
+
+三套主题由同一个编译器真实生成，不是文档占位。用法：
+
+```bash
+python scripts/check_vizspec.py spec.yaml
+python scripts/apply_visual_roles.py source.drawio spec.yaml styled.drawio
+python scripts/validate_drawio.py styled.drawio
+```
+
+样式编译器只允许修改 `style` 和 `visualRole`、`epistemicStatus`、`visualEmphasis`、`visualTheme`、`relationStatus` 等视觉元数据。全部 `mxGeometry` 在编译前后必须逐项相同，否则阻断输出。
+
+## Emoji 与图标
+
+正式法律图禁用 emoji/icon 前缀。`visual.icons: true` 或节点 `icon` 非空均由 VizSpec 校验器报错；如确需品牌图标或证据缩略图，应作为独立人工设计任务处理，不得伪装成当前注册表能力。
 
 ## 修改记录
 
 | 日期 | 变更 | 版本 |
 |---|---|---|
-| 2026-07-28 | 方向修正：放弃形状多样性，收敛"统一圆角矩形 + 菱形（决策可选）+ 容器"；区分靠线型 / 配色 / emphasis。基于用户反馈"形状没本质差别、奇怪形状不要、统一矩形、虚线可以" | 0.8.1 |
-| 2026-07-28 | 初版：9 类语义 17 角色各配不同形状（椭圆 / 圆柱 / 文档形 / 六边形 / 平行四边形 / 双椭圆等） | 0.8.0 |
+| 2026-07-28 | 建立 JSON 单一真相源；分离角色、事实状态和强调；取消原告默认高强调与被告默认虚线；落地三套主题和几何守恒样式编译器 | 0.8.2 |
+| 2026-07-28 | 收敛为圆角矩形、决策菱形与容器 | 0.8.1 |

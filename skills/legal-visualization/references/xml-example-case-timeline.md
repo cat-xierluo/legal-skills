@@ -27,7 +27,7 @@
 </mxCell>
 
 <!-- 时间点1：侵权行为 -->
-<mxCell id="t1_dot" value="" style="ellipse;fillColor=#C62828;strokeColor=#C62828;strokeWidth=2;" vertex="1" parent="1">
+<mxCell id="t1_dot" value="" style="rounded=1;arcSize=20;fillColor=#C62828;strokeColor=#C62828;strokeWidth=2;" vertex="1" parent="1">
   <mxGeometry x="80" y="165" width="30" height="30" as="geometry"/>
 </mxCell>
 <mxCell id="t1_label" value="2023-01-15&#xa;侵权行为发生"
@@ -40,7 +40,7 @@
 </mxCell>
 
 <!-- 时间点2：发现侵权 -->
-<mxCell id="t2_dot" value="" style="ellipse;fillColor=#EF6C00;strokeColor=#EF6C00;strokeWidth=2;" vertex="1" parent="1">
+<mxCell id="t2_dot" value="" style="rounded=1;arcSize=20;fillColor=#EF6C00;strokeColor=#EF6C00;strokeWidth=2;" vertex="1" parent="1">
   <mxGeometry x="220" y="165" width="30" height="30" as="geometry"/>
 </mxCell>
 <mxCell id="t2_label" value="2023-06-20&#xa;权利人发现"
@@ -53,7 +53,7 @@
 </mxCell>
 
 <!-- 时间点3：起诉 -->
-<mxCell id="t3_dot" value="" style="ellipse;fillColor=#1976D2;strokeColor=#1976D2;strokeWidth=2;" vertex="1" parent="1">
+<mxCell id="t3_dot" value="" style="rounded=1;arcSize=20;fillColor=#1976D2;strokeColor=#1976D2;strokeWidth=2;" vertex="1" parent="1">
   <mxGeometry x="400" y="165" width="30" height="30" as="geometry"/>
 </mxCell>
 <mxCell id="t3_label" value="2023-09-01&#xa;起诉立案"
@@ -66,7 +66,7 @@
 </mxCell>
 
 <!-- 时间点4：判决 -->
-<mxCell id="t4_dot" value="" style="ellipse;fillColor=#43A047;strokeColor=#43A047;strokeWidth=2;" vertex="1" parent="1">
+<mxCell id="t4_dot" value="" style="rounded=1;arcSize=20;fillColor=#43A047;strokeColor=#43A047;strokeWidth=2;" vertex="1" parent="1">
   <mxGeometry x="580" y="165" width="30" height="30" as="geometry"/>
 </mxCell>
 <mxCell id="t4_label" value="2024-03-15&#xa;一审判决"
@@ -79,7 +79,7 @@
 </mxCell>
 
 <!-- 时间点5：生效 -->
-<mxCell id="t5_dot" value="" style="ellipse;fillColor=#7B1FA2;strokeColor=#7B1FA2;strokeWidth=2;" vertex="1" parent="1">
+<mxCell id="t5_dot" value="" style="rounded=1;arcSize=20;fillColor=#7B1FA2;strokeColor=#7B1FA2;strokeWidth=2;" vertex="1" parent="1">
   <mxGeometry x="700" y="165" width="30" height="30" as="geometry"/>
 </mxCell>
 <mxCell id="t5_label" value="2024-04-01&#xa;判决生效"

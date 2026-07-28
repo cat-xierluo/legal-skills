@@ -1,0 +1,55 @@
+vizspec_version: "2.1"
+
+routing:
+  primary_scene: multi-party-relation
+  selection_reason: 多主体借款中签约主体、实际用款人与收款账户需要在同一关系图中区分
+
+visual:
+  theme: client_report
+  density: normal
+
+entities:
+  - id: lender
+    visual_role: plaintiff
+    epistemic_status: confirmed
+    emphasis: high
+  - id: nominal
+    visual_role: defendant
+    epistemic_status: confirmed
+    emphasis: normal
+  - id: actual
+    visual_role: third_party
+    epistemic_status: inferred
+    emphasis: normal
+  - id: contract
+    visual_role: contract
+    epistemic_status: confirmed
+    emphasis: normal
+
+amounts:
+  - id: account
+    visual_role: amount
+    epistemic_status: missing
+    emphasis: low
+
+relations:
+  - id: e1
+    source: contract
+    target: lender
+    status: confirmed
+  - id: e2
+    source: actual
+    target: nominal
+    status: inferred
+  - id: e3
+    source: actual
+    target: account
+    status: missing
+  - id: e4
+    source: nominal
+    target: contract
+    status: confirmed
+
+template:
+  id: multi-party-relation
+  lock_geometry: true

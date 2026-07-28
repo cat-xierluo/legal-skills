@@ -1,7 +1,7 @@
 ---
 name: legal-visualization
 description: Legal Visualization。面向法律业务场景的法律图解与图表生成技能；当用户要求把案件材料、合同材料、合规事项、交易安排、证据链、诉讼流程、时间轴、法律关系、客户汇报、法律服务方案或律师团队工作整理成关系图、流程图、时间轴、证据链、风险图、路线图、PNG/SVG/PDF/.drawio 时使用；也兼容“法律可视化”“案件事实图”“法律关系图”等说法。先按受众、任务动词和路由规则筛选场景，再生成可交付图片，并保留 draw.io 源文件作为可编辑底稿。本技能不用于事实核验，也不替代法律结论判断。
-version: "0.8.1"
+version: "0.8.2"
 license: CC-BY-NC
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -17,8 +17,8 @@ homepage: https://github.com/cat-xierluo/legal-skills
 2. **业务条线优先于图型**：先识别"诉讼/公司/合规/知产/争议/合同/客户/服务"等业务条线，再选图型。
 3. **VizSpec.routing 必填**：未填 `routing.primary_scene` 与 `routing.selection_reason` 禁止写 drawio。
 4. **一图一观点**：超过 1 个核心观点必须拆主图+附图；时间、计算、程序等 ≥3 类不同语义区域不得自由堆进同一画布，只能拆图或使用已定义容量的分区模板。
-5. **领域校验必须通过**：`.drawio` 在复制、导出和交付前必须通过 `scripts/validate_drawio.py`；几何重叠、确定性文本溢出、无效容器关系或超长连线标签属于阻断错误。
-6. **命中模板必须锁定几何**：已有适配模板时，使用 `scripts/instantiate_template.py` 只替换 `value` 占位符；不得为了塞入更多材料而移动节点、缩小字号或扩写 edge 标签。容量不足时拆附图。
+5. **领域校验必须通过**：`.drawio` 在复制、导出和交付前必须通过 `scripts/validate_drawio.py`；几何重叠、确定性文本溢出、无效容器关系或超长连线标签属于阻断错误；连线标签与独立节点/文字块的估算叠压属于必须目视复核的 warning。
+6. **命中模板必须锁定几何**：已有适配模板时，使用 `scripts/instantiate_template.py` 只替换 `value` 占位符；随后可用 `scripts/apply_visual_roles.py` 编译样式，但编译前后每个 `mxGeometry` 必须完全一致。不得为了塞入更多材料而移动节点、缩小字号或扩写 edge 标签；容量不足时拆附图。
 
 ## 默认目标
 
@@ -33,15 +33,17 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 ### 开箱即用
 
-- 生成 `.drawio` XML、锁定模板实例化、读取参考文件、执行领域校验与回归测试仅需 Python 3 标准库。
+- 生成 `.drawio` XML、锁定模板实例化、读取参考文件和执行 draw.io 领域校验仅需 Python 3 标准库。
 - 没有 draw.io CLI 时，仍可交付 `.drawio` 源文件，并在最终说明中标明图片导出未完成。
 
-### 可选依赖
+### 核心流程依赖
 
 | 功能 | 依赖 | 安装方式 |
 |------|------|----------|
-| VizSpec YAML 与 drawio 节点编号一致性检查 | `PyYAML` | `pip install pyyaml` |
+| VizSpec 2.1 校验与视觉角色样式编译 | `PyYAML` | `pip install pyyaml` |
 | 自动导出 SVG/PNG/PDF | draw.io / diagrams.net 桌面版 CLI | macOS 可安装 diagrams.net；脚本会检测 `drawio`、`draw.io`、`drawio-desktop` 和常见应用路径 |
+
+首次使用 VizSpec 或样式编译器时，先运行 `pip install pyyaml`。缺少依赖时脚本必须以非零状态退出并显示该安装命令，不得降级为“校验通过”。
 
 ## 工作流
 
@@ -50,12 +52,13 @@ homepage: https://github.com/cat-xierluo/legal-skills
 3. **路由场景**：先读 `references/scene-routing-guide.md`，按受众、任务动词、材料阶段和信息形态筛出 1-3 个候选场景；再读 `references/scene-library.md` 中对应章节定主场景。不要直接在完整场景库中凭关键词跳选。scene_id 选定后，从 `references/chart-decision-tree.md` 选图型变体与节点布局；该决策树是路由的下游，不替代路由。
 4. **解决冲突**：如果多个场景都能命中，按“用户指定 > 受众匹配 > 更窄业务领域 > 当前材料阶段 > 通用场景”选择主图；未选场景只作为附图候选。
 5. **确定内容**：按“全面罗列 -> 逻辑整合 -> 精简内容”处理材料。复杂案件先做细节图，再按核心主体、核心时间线或核心法律关系组合。
-6. **生成 VizSpec**：按 `references/vizspec-schema.md` 先写结构化制图规格，明确路由结论、模板选择、溢出策略、场景 ID、主图观点、节点、连线、分区、注释和待核事实。
-7. **编排图面**：按 `references/visual-composition-rules.md` 和 `references/scene-composition-playbook.md` 控制图表逻辑、配色、线条、注释和重点表达；复杂案件、制度路径、背景趋势、票据回路和工期延误类图表还要读 `references/advanced-case-patterns.md`。颜色、字体、起始坐标、节点尺寸等视觉常量全部按 `references/legal-visual-constants.md` 取值，禁止在图中硬编码。节点命名按 `references/naming-conventions.md` 规范。节点视觉按 `references/shape-registry.md` 的 `visual_role` 取值：声明语义角色，由 registry 映射到**配色、线型与强调**（形状统一圆角矩形，菱形仅决策点）；默认不渲染 emoji（法律图保持严肃），用户显式要求时才加。
-8. **生成 draw.io**：先查 `references/template-guide.md`。命中模板时用 `scripts/instantiate_template.py` 只填值并锁定几何；没有适配模板时才按 `references/xml-reference.md` 写新 XML，并显式声明 `template.id: custom`。
-9. **运行领域门禁**：执行 `python scripts/validate_drawio.py <file.drawio>`。任何 error 都必须修正；不得仅凭 XML 可解析或图片非空声称完成。warning 需结合导出图人工复核。若写了 VizSpec，额外运行 `python scripts/check_vizspec.py spec.yaml` 校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_policy` 会对非限定形状（椭圆 / 圆柱 / 文档形 / 六边形等）告警，提示改回圆角矩形。
-10. **导出图片**：按 `references/output-workflow.md` 导出 `SVG/PNG/PDF`，并保留 `.drawio`。`export_drawio.py` 会先重跑领域门禁，失败时禁止复制和导出。
-11. **质检交付**：打开实际导出的 SVG/PNG，按 `references/quality-checklist.md` 检查文字、连线、图例和画布边界，再向用户说明输出文件、使用场景和未能验证的环节。
+6. **生成 VizSpec**：按 `references/vizspec-schema.md` 写 VizSpec 2.1；每个视觉节点分别声明 `visual_role`（语义类别）、`epistemic_status`（事实认知状态）和 `emphasis`（图面强调），关系声明 `status`。三者不得互相推定，例如“被告”不等于“争议”。
+7. **编排图面**：按 `references/visual-composition-rules.md` 和 `references/scene-composition-playbook.md` 控制图表逻辑、线条、注释和重点表达；复杂场景再读 `references/advanced-case-patterns.md`。节点命名按 `references/naming-conventions.md`。角色、状态、强调、密度和三套主题的机器真相源是 `config/visual-role-registry.json`；`references/shape-registry.md` 只解释用法。正式法律图禁用 emoji/icon 前缀。
+8. **生成 draw.io 几何**：先查 `references/template-guide.md`。命中模板时用 `scripts/instantiate_template.py` 只填值并锁定几何；没有适配模板时才按 `references/xml-reference.md` 写新 XML，并声明 `template.id: custom`。
+9. **编译视觉语义**：先运行 `python scripts/check_vizspec.py spec.yaml`；通过后运行 `python scripts/apply_visual_roles.py source.drawio spec.yaml styled.drawio`。该脚本只改 `style` 与视觉元数据，并在输出前比较全部 `mxGeometry`；几何变化、缺节点、非法字段或输出领域校验失败都会阻断。
+10. **运行领域门禁**：执行 `python scripts/validate_drawio.py styled.drawio`。任何 error 都必须修正；warning 需结合导出图人工复核。`shape_policy` 会对非限定形状及未声明 `visualRole=decision` 的菱形告警。
+11. **导出图片**：按 `references/output-workflow.md` 导出 `SVG/PNG/PDF`，并保留 `.drawio`。`export_drawio.py` 会先重跑领域门禁，失败时禁止复制和导出。
+12. **质检交付**：打开实际导出的 SVG/PNG，按 `references/quality-checklist.md` 检查文字、连线、图例、主题与画布边界，再向用户说明输出文件、使用场景和未能验证的环节。
 
 ## 场景路由速查
 
@@ -86,7 +89,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 - 避免线条交叉和长距离绕行；连接多的主体放在中心或靠近相关节点。长 edge 标签改为独立文本节点、侧栏或图例。
 - 图表主体只放短标签；长事实、证据编号、条文依据放侧栏、底注或附表。
 - 对法官提交的图，不夸张表达，不把争议事实画成既定事实；争议或待证事实用虚线、问号、标注或灰色处理。
-- 统一圆角矩形：节点统一圆角矩形（菱形仅用于决策判断点），靠**线型（虚线表对抗 / 争议 / 待证）+ 配色 + 描边粗细**区分语义，不用椭圆 / 圆柱 / 文档形等奇怪形状；emoji 默认不加，保持严肃，用户明确要求时才加。
+- 统一圆角矩形：节点统一圆角矩形（菱形仅用于决策判断点），靠**角色配色 + 事实状态线型 + emphasis 描边**区分语义，不用椭圆 / 圆柱 / 文档形等不规则形状；正式法律图禁用 emoji/icon 前缀。
 
 ## 输出格式
 
@@ -103,7 +106,8 @@ homepage: https://github.com/cat-xierluo/legal-skills
 - `references/scene-routing-evals.md`：场景路由测试集，用于检查误选和冲突。
 - `references/scene-composition-playbook.md`：场景编排手册，说明各类场景怎么取舍和布局。
 - `references/vizspec-schema.md`：结构化制图规格，用来稳定生成图表。
-- `references/shape-registry.md`：法律语义 → 视觉角色 → 形状 → 配色的权威映射（0.8.0 起节点视觉主入口）。
+- `config/visual-role-registry.json`：角色、主题、状态、强调、密度与形状 token 的机器可读单一真相源。
+- `references/shape-registry.md`：视觉注册表的人类可读说明与组合规则。
 - `references/visual-composition-rules.md`：法律图表编排规则。
 - `references/advanced-case-patterns.md`：复杂案件和高阶论证图的编排套路。
 - `references/output-workflow.md`：一步到位生成 `.drawio` 与图片的操作流程。
@@ -118,9 +122,10 @@ homepage: https://github.com/cat-xierluo/legal-skills
 
 ## 实现提示
 
-- XML 与领域布局校验：`python scripts/validate_drawio.py path/to/file.drawio`，检查结构、容器、重叠、文字容量与边标签风险。
+- XML 与领域布局校验：`python scripts/validate_drawio.py path/to/file.drawio`，检查结构、容器、节点重叠、文字容量、边标签长度及边标签与独立元素的估算叠压。
 - 模板锁定实例化：`python scripts/instantiate_template.py templates/litigation/complex-case-split.drawio values.json output.drawio`；只允许替换 `value`，实例化后自动校验。
 - 批量导出：`python scripts/export_drawio.py path/to/file.drawio` 默认生成 `.drawio + .svg + .png` 三件套，并写入 `archive/<timestamp>/export-report.json`；PNG 默认 2 倍导出，需要更高清可加 `--png-scale 3`，如需旧行为可加 `--in-place`。
 - 命名规范检查：`python scripts/normalize_naming.py path/to/file.drawio path/to/spec.yaml`，对照 `naming-conventions.md` 输出偏差清单。
 - VizSpec 声明校验：`python scripts/check_vizspec.py spec.yaml`，校验 `visual_role` / `theme` 合法；`validate_drawio.py` 的 `shape_policy` 检查对非限定形状（椭圆 / 圆柱 / 文档形等）告警。
-- 领域回归：`python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template scripts.test_check_vizspec`，同时覆盖最小违规反例、合法容器近似正例与 VizSpec 声明校验。
+- 视觉角色编译：`python scripts/apply_visual_roles.py source.drawio spec.yaml styled.drawio`，把主题、角色、事实状态和强调编译进样式，同时证明 `mxGeometry` 未改变。
+- 领域回归：`python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template scripts.test_check_vizspec scripts.test_apply_visual_roles`，覆盖最小违规反例、合法容器正例、VizSpec 声明、三主题差异与几何守恒。

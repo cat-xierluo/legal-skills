@@ -22,6 +22,8 @@
 
 ## 版面与视觉
 
+- [ ] 每个视觉节点分别声明了 `visual_role`、`epistemic_status`、`emphasis`；没有把被告身份直接当成争议状态，也没有把原告身份直接当成高强调。
+- [ ] 主题与受众匹配：客户汇报用 `client_report`，正式提交优先 `court_submit`，内部扫描优先 `lawyer_workpaper`。
 - [ ] 同一主体使用同一颜色。
 - [ ] 同一类型关系使用同一线型。
 - [ ] 强调色有明确含义，不超过 3 个主要强调色。
@@ -32,6 +34,8 @@
 - [ ] 节点对齐，间距充足，图面不拥挤。
 - [ ] 非容器节点之间没有正面积重叠；泳道、背景框等合法包含已使用真实 parent 或 `container=1` 明确标识。
 - [ ] 有必要的标题、图例、注释和证据来源。
+- [ ] 普通节点为圆角矩形；菱形仅用于声明 `visualRole=decision` 的判断点；没有椭圆、圆柱、文档形、人形或六边形。
+- [ ] 正式法律图没有 emoji/icon 前缀。
 
 ## draw.io XML
 
@@ -40,10 +44,11 @@
 - [ ] 顶层元素 `parent="1"`；容器子节点引用有效父节点并使用不越界的相对坐标。
 - [ ] 节点有明确宽高，中文不被截断。
 - [ ] 注释中没有可能破坏 XML 的字符组合。
+- [ ] 样式编译报告为 `geometry_preserved: true`，模板中全部 `mxGeometry` 未改变。
 
-自动化领域门禁见 `scripts/validate_drawio.py`。几何重叠、确定性文本溢出、无效 parent/相对坐标和超长连线标签为阻断错误；文本容量临界和较长 edge 标签为 warning，必须打开实际导出图片复核。
+自动化领域门禁见 `scripts/validate_drawio.py`。几何重叠、确定性文本溢出、无效 parent/相对坐标和超长连线标签为阻断错误；文本容量临界、较长 edge 标签，以及 edge label 与独立节点/文字块的估算叠压为 warning，必须打开实际导出图片复核。
 
-最小违规与合法近似回归见 `assets/stability/`；运行 `python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template`。不得删除合法容器正例来换取碰撞测试通过。
+最小违规与合法近似回归见 `assets/stability/`；运行 `python -m unittest scripts.test_validate_drawio scripts.test_instantiate_template scripts.test_check_vizspec scripts.test_apply_visual_roles`。不得删除合法容器正例来换取碰撞测试通过。
 
 ## 导出文件
 
