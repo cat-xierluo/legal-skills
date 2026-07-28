@@ -50,6 +50,7 @@
 
 | 日期       | 类型     | Skill                                             | 版本   | 更新要点                                                                                           |
 | :--------- | :------- | :------------------------------------------------ | :----- | :------------------------------------------------------------------------------------------------- |
+| 2026-07-28 | 更新     | [trademark-assistant](skills/trademark-assistant/) | v1.6.0 | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁 |
 | 2026-07-26 | 更新     | [skill-lint](skills/skill-lint/) | v2.6.0 | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷 |
 | 2026-07-26 | 更新     | [legal-visualization](skills/legal-visualization/) | v0.7.0 | 新增模板几何锁定、容器感知碰撞、中文文本容量和长边标签门禁；8 项领域回归、19 个发布模板全检与 draw.io CLI 全量导出通过 |
 | 2026-07-25 | 更新     | [de-ai-polish](skills/de-ai-polish/) | v2.2.0 | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环 |
@@ -303,8 +304,8 @@
 <td>专业·知产</td>
 <td style="word-break:break-word">商标服务助手，提供类别规划、可注册性初筛及申请材料准备。支持商品清单生成、商标说明撰写，整合尼斯分类与审查指南</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.5.4</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/trademark-assistant-1.5.4.zip">下载</a></td>
+<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/trademark-assistant.skill">独立仓库</a></td>
 </tr>
 <tr>
