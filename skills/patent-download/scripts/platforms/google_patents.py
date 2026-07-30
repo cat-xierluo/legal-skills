@@ -136,6 +136,67 @@ def _try_fetch(patent_number: str, downloader) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+# ── 友好的失败提示 ────────────────────────────────────────
+
+# 公告号 → 类型代码后缀
+# A = 发明专利, B = 发明授权, U = 实用新型, S = 外观设计
+_TYPE_HINT_BY_SUFFIX = {
+    "A": "发明专利",
+    "B": "发明授权（实质审查后的发明）",
+    "U": "实用新型",
+    "S": "外观设计",
+}
+
+_DESIGN_COVERAGE_NOTE = """
+⚠️  Google Patents 对外观设计专利覆盖率较低（海外平台对中国外观设计收录不全）。
+   如果该专利确实很重要，建议：
+     1. 度衍专利账号：python cli.py uyanip {num} -m browser（需 PATENT_UYANIP_USERNAME/PASSWORD）
+     2. 或浏览器直接访问 http://epub.cnipa.gov.cn/ 检索下载 PDF（无需账号）"""
+
+
+def _type_hint_from_pub(publication_number: str) -> Optional[str]:
+    """从公告号后缀字母推断类型，用于未收录时的针对性提示。"""
+    upper = publication_number.upper().strip()
+    if not upper.startswith("CN"):
+        return None
+    last = upper[-1]
+    return _TYPE_HINT_BY_SUFFIX.get(last)
+
+
+def _invention_coverage_note(patent_number: str) -> str:
+    """对发明/实用新型公告号未收录时的兜底提示。"""
+    return (
+        "\nℹ️  Google Patents 理论上覆盖中国发明/实用新型专利，但仍有少数未收录的特例。"
+        "\n   可能原因：公告号拼写错误、专利处于保密期、或该专利实际已撤回。"
+        "\n   建议核对公告号后重试，或尝试度衍账号通道。"
+    )
+
+
+def _print_not_found_hint(patent_number: str) -> None:
+    """公告号未收录时的差异化提示：根据输入是申请号/公告号、专利类型给出不同的下步建议。"""
+    parsed_app = parse_application_number(patent_number)
+
+    # 情况 A：用户给的是申请号，告知先查公告号
+    if parsed_app is not None:
+        print(f"❌ 未找到该专利（输入是申请号，未自动转换为公告号）")
+        print(f"   解析：{parsed_app['year']}年 {parsed_app['type_name']} 专利")
+        print(f"   💡 下一步：")
+        print(f"     1. 用 PATENTGURU/度衍等查公告号（参考上方 APP_LOOKUP_TIPS）")
+        print(f"     2. 再用 python cli.py google <公告号> 下载")
+        return
+
+    # 情况 B：用户给的是公告号未收录 → 根据类型给出针对性提示
+    type_hint = _type_hint_from_pub(patent_number)
+    print(f"❌ 未找到专利：{patent_number}")
+    if type_hint == "外观设计":
+        print(_DESIGN_COVERAGE_NOTE.format(num=patent_number).rstrip())
+    elif type_hint in ("发明专利", "发明授权（实质审查后的发明）", "实用新型"):
+        print(_invention_coverage_note(patent_number).rstrip())
+    else:
+        # 未知类型（如缺后缀字母或已删除原公告号）给通用兜底
+        print(f"   ℹ️  请核对公告号拼写（正确格式：CN + 7-9 位数字 + 字母后缀，如 CN223081266U）")
+
+
 def download_patent(
     patent_number: str,
     output_dir: str = ".",
@@ -164,15 +225,7 @@ def download_patent(
     success, actual_pub = _try_fetch(formatted, downloader)
 
     if not success:
-        print(f"❌ 未找到该专利")
-        if is_application_number(patent_number):
-            parsed = parse_application_number(patent_number)
-            if parsed:
-                print(f"   申请号解析: {parsed['year']}年 {parsed['type_name']} 专利")
-            print(f"   💡 提示：Google Patents 用公告号索引（如 CN223081266U）")
-            print(f"   申请号无法直接查。建议：")
-            print(f"     1. 尝试用其他平台（度衍/PatentGuru）查公告号")
-            print(f"     2. 或用 python cli.py google <公告号> 下载")
+        _print_not_found_hint(patent_number)
         return None
 
     # 用公告号下载
@@ -231,10 +284,7 @@ def get_info(patent_number: str):
             pass
 
     # 查不到信息时的提示
-    print(f"❌ 未找到专利信息")
-    if is_application_number(patent_number):
-        print(f"   💡 提示：申请号不能直接在 Google Patents 查询。")
-        print(f"   建议先用公告号，如: python cli.py google CN223081266U --info")
+    _print_not_found_hint(patent_number)
 
 
 # ── 命令行入口 ──────────────────────────────────────────────────
