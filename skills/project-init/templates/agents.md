@@ -1,4 +1,4 @@
-# AGENTS.md 生成指南
+# AGENTS.md 生成模板与指南
 
 本文件定义各项目类型 AGENTS.md 应包含的段落和生成方式。
 Claude 应基于全局协议 `~/.claude/CLAUDE.md` 和项目分析结果生成真实内容，不是复制模板。
@@ -79,7 +79,7 @@ Claude 应基于全局协议 `~/.claude/CLAUDE.md` 和项目分析结果生成�
 | ARCHITECTURE.md | docs/ | 系统架构、数据流、模块说明 |
 | ROADMAP.md | docs/ | 路线图、阶段任务、进度日志 |
 | DECISIONS.md | docs/ | 技术决策记录 + 工作日志 |
-| TASKS.md | docs/ | 待办事项、缺陷、技术债 |
+| TASKS.md | docs/ | 当前任务入口、完整任务卡与验收证据 |
 
 ## 开发命令
 
@@ -155,7 +155,7 @@ npm run build        # 构建生产版本
 3. `DESIGN.md` — 前端开发遵循的设计规范（如有前端）
 4. `docs/ROADMAP.md` — 当前阶段任务与完成状态
 5. `docs/DECISIONS.md` — 最近决策和工作日志
-6. 项目自选任务源文件（如适用）— 待办事项追踪
+6. 项目自选任务源文件（如适用）— 当前状态、完整任务卡与验收要求
 ```
 
 #### 架构分层与边界

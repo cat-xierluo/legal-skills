@@ -1,8 +1,6 @@
 # ROADMAP.md 生成指南
 
-Claude 应基于全局协议中定义的 ROADMAP 格式 + 项目分析结果生成。
-
-**范例参考：** 读取 `references/example-funes-AGENTS.md` 中对 ROADMAP 格式的定义，以及真实项目中的 `docs/ROADMAP.md` 内容，理解成熟文档的质量水平。
+基于全局协议中定义的 ROADMAP 格式和项目分析结果生成。
 
 **必须对齐全局协议的文档体系：**
 - 项目愿景（一两句话）

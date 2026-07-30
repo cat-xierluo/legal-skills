@@ -32,6 +32,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.1  | 文件化任务源升级为 Lite / Standard / Strict 可执行任务协议；文档骨架迁入 templates、逐字复制资源迁入 assets，修复模板被忽略、引用断裂和 Unreleased 过期规则                                                        |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
 | 2026-07-26 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.0  | 沉淀领域 checker 的双向充分性边界：最小违规反例防漏报、合法近似正例防误报；静态审查返回规范来源证据，并明确区分 NOT_VERIFIED 与领域缺陷                                                                                                        |
@@ -39,9 +40,6 @@
 | 2026-07-25 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v2.2.0  | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环                                                                                                               |
 | 2026-07-23 | 新上传 | [patent-download](skills/patent-download/)                             | v2.6.0  | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露                                                                |
 | 2026-07-23 | 新上传 | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0  | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义                                                                                        |
-| 2026-07-16 | 更新   | [svg-book-illustrator](skills/svg-book-illustrator/)                   | v1.8.10 | 对齐 writing-reviewer v0.16+ shape containment：容器只允许`container + 单图唯一 id + 明示承载关系的 note + 非透明 hex/rgb/hsl fill`，producer 拒绝 namespace/继承色/paint server/泛化说明/任意 role；实际包含仍由真实浏览器 render gate 留证 |
-| 2026-07-15 | 新上传 | [apple-smart-schedule](skills/apple-smart-schedule/)                   | v0.1.0  | 苹果智能日程提醒：自然语言(机票/高铁/开庭/会议/截止等)或票据截图自动建苹果日历事件 + 按事件类型智能提前提醒；仅 macOS，经 iCloud 同步 iPhone/iPad                                                                                              |
-| 2026-07-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v1.19.0 | 新增 Agent 工具调用权限门禁：spawn 进程快照 + PM receipt + 精确 Shell/安装授权，并把 raw push 收口到 identity-bound safe-push；缺工具转为 BLOCKED/RESULT                                                                                       |
 
 </details>
 
@@ -114,7 +112,7 @@
 <td>工具·OCR</td>
 <td style="word-break:break-word">通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.2.0</td>
+<td style="text-align:center">v1.2.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/mineru-ocr-1.2.0.zip">下载</a></td>
 <td>功能已由 legal-ocr 覆盖；建议新用户使用 legal-ocr</td>
 </tr>
@@ -534,10 +532,10 @@
 <tr>
 <td><a href="skills/project-init/"><strong>project-init</strong></a></td>
 <td>工具·项目管理</td>
-<td style="word-break:break-word">项目初始化工具，读取全局协议，分析项目实际情况，自动检测项目类型并生成项目特定的 CLAUDE.md、docs/ 文档体系、.claude/ 配置，支持 6 种项目类型</td>
+<td style="word-break:break-word">项目初始化工具，读取全局协议，分析项目实际情况，按配置检测项目类型并生成项目特定的 AGENTS.md、CLAUDE.md、docs/ 文档体系与 .claude/ 配置</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.20/project-init-1.1.2.zip">下载</a></td>
+<td style="text-align:center">v1.2.0</td>
+<td style="text-align:center">待发布</td>
 <td></td>
 </tr>
 <tr>

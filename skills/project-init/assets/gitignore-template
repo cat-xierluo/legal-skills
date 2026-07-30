@@ -1,3 +1,5 @@
+# Project .gitignore template
+
 # Dependencies
 node_modules/
 vendor/

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.2.1] - 2026-07-30
+
+### 技术优化
+- 按消费方式重构资源目录：需要读取后适配的文档骨架统一迁入 `templates/`，逐字复制的配置、规则和忽略模板统一迁入 `assets/`。
+- 更新 `SKILL.md` 和 `scripts/init.sh` 的全部生成路径，使 Agent 生成与脚本复制遵循同一目录语义。
+
+### 修复
+- 解决 `DECISIONS.md`、`TASKS.md` 模板因全局忽略规则无法进入发布包的问题。
+- 删除文档模板对不存在示例文件的引用，并修正 CHANGELOG 模板继续使用 `Unreleased` 的过期规则。
+
+### 文档完善
+- 为 ROADMAP、DECISIONS、TASKS、ARCHITECTURE、DESIGN、CHANGELOG 分别声明模板入口，要求生成真实内容且不得保留空壳或占位符。
+
+## [v1.2.0] - 2026-07-30
+
+### 新增
+- 为文件化任务源增加 `Lite`、`Standard`、`Strict` 三档任务配置，按任务风险与复杂度选择，而不是绑定执行主体或调度方式。
+- 增加完整状态机、`READY` 门禁、任务卡骨架、状态回退与取消规则，以及严格任务的风险扩展项。
+
+### 改进
+- 项目初始化计划必须说明任务文件位置、配置选择理由、首批真实任务和已有文件处理策略。
+- 明确 TASKS 只承载活跃任务入口，路线、决策和版本历史分别留在对应文档，避免任务文件持续膨胀。
+
+### 文档完善
+- 将原 9 行任务表格说明升级为可按项目裁剪的生成指南，并禁止把项目特定角色、会话或调度机制写入通用模板。
+- 将原本会被全局忽略规则排除的 `references/TASKS.md` 迁移为可跟踪、可分发的 `references/task-template.md`。
+
 ## [v1.1.2] - 2026-06-12
 
 ### Changed

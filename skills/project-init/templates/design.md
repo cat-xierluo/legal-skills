@@ -1,6 +1,6 @@
 # DESIGN.md 生成指南
 
-仅前端项目生成。采用九段式结构（参考 Funes 的 DESIGN.md）：
+仅前端项目生成。采用九段式结构：
 
 1. Visual Theme & Atmosphere
 2. Color Palette & Roles（CSS Token 表）

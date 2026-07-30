@@ -1,4 +1,4 @@
-# Project-local Codex execution policy.
+# Project-local Codex execution policy copied by project-init.
 #
 # This file is for command permissions, not agent instructions. Codex loads
 # project-local rules from <repo>/.codex/rules/ when the project is trusted.

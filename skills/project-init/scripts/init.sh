@@ -86,7 +86,7 @@ handle_codex() {
 
     # 复制 config.toml
     if [ ! -f "$project_dir/.codex/config.toml" ]; then
-        cp "$script_dir/references/codex-config.toml" "$project_dir/.codex/config.toml"
+        cp "$script_dir/assets/codex-config.toml" "$project_dir/.codex/config.toml"
         echo "OK: 创建 .codex/config.toml"
     else
         echo "OK: .codex/config.toml 已存在，跳过"
@@ -94,7 +94,7 @@ handle_codex() {
 
     # 复制 rules/default.rules
     if [ ! -f "$project_dir/.codex/rules/default.rules" ]; then
-        cp "$script_dir/references/codex-default.rules" "$project_dir/.codex/rules/default.rules"
+        cp "$script_dir/assets/codex-default.rules" "$project_dir/.codex/rules/default.rules"
         echo "OK: 创建 .codex/rules/default.rules"
     else
         echo "OK: .codex/rules/default.rules 已存在，跳过"

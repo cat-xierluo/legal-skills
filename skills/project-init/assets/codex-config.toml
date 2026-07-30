@@ -1,4 +1,4 @@
-# Project-local Codex configuration.
+# Project-local Codex configuration copied by project-init.
 #
 # This is the Codex-side counterpart of `.claude/settings.local.json`.
 # It opens normal local file operations, shell execution, and web search for
