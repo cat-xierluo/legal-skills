@@ -16,7 +16,7 @@
 | 许可证             | 说明                                                         | 示例技能                                                          |
 | :----------------- | :----------------------------------------------------------- | :---------------------------------------------------------------- |
 | **MIT**      | 可自由使用，包括商用，但需保留署名                           | wechat-article-fetch、mineru-ocr、md2word 等                      |
-| **CC-BY-NC** | 可自由使用，但**不可商用**，且需保留署名和相同方式共享 | litigation-analysis、patent-analysis、legal-proposal-generator 等 |
+| **CC-BY-NC** | 可自由使用，但**不可商用**，且需保留署名             | litigation-analysis、patent-analysis、legal-proposal-generator 等 |
 
 > 💡 如需将技能用于商业目的，请添加微信（ywxlaw）联系授权
 
@@ -35,13 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
+| 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.1  | 法源改为无网页链接的多条款组合矩阵；细化保护范围、全面覆盖、等同原则及其特殊限定、限制规则与常见抗辩，并新增对应静态门禁 |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
 | 2026-07-30 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.1  | references 改为受控层级：普通文件继续扁平，大型结构化资料集允许一层集合目录，并要求索引入口和明确的按需下钻路由 |
 | 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.4  | TASKS 改为流动的当前任务入口；移除归档索引并禁止创建 before 快照，历史分别归入 CHANGELOG 与 DECISIONS                                                        |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.1  | references 顺序编号与法规独立子目录：5 份流程文件加 `NN-` 前缀按执行顺序排列、侵权判断标准迁入 `references/laws-regulations/`、脚本归位到 `scripts/`、删除冗余索引并把图像理解工具改为按环境能力分档的选择策略（不再写死具体工具名）                                                                                                       |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
-| 2026-07-28 | 更新   | [legal-visualization](skills/legal-visualization/)                     | v0.8.2  | 视觉角色、事实状态和强调解耦；新增几何守恒样式编译器与三套可执行主题，修复角色校验漂移，19 个模板形状告警清零并重做多主体关系样板                                                                       |
 
 </details>
 
@@ -287,10 +287,10 @@
 <tr>
 <td><a href="skills/patent-analysis/"><strong>patent-analysis</strong></a></td>
 <td>专业·知产</td>
-<td style="word-break:break-word">专利分析工具，支持7种场景：单专利技术要点提取、多专利比对、侵权比对、稳定性/无效分析、FTO分析、规避设计分析、专利价值评估。强调权利要求解读方法论与侵权判断流程</td>
+<td style="word-break:break-word">中国发明与实用新型专利分析工具，支持10种场景；逐项分析选定权利要求，以 A/B/C/D 证据门禁约束侵权、无效、FTO、规避设计、估值和可视化结论</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/patent-analysis-1.2.0.zip">下载</a></td>
+<td style="text-align:center">v2.1.1</td>
+<td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>
 <tr>

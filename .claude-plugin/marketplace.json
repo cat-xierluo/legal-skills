@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -341,8 +341,8 @@
     },
     {
       "name": "patent-analysis",
-      "description": "当需要分析专利文件、进行侵权评估、提取技术特征、或比较多个专利的保护范围时使用",
-      "version": "1.2.0",
+      "description": "面向中国发明和实用新型专利的结构化初步分析，支持选定权利要求拆解、侵权比对、无效风险、FTO、规避设计、估值、等同分析和可视化",
+      "version": "2.1.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
