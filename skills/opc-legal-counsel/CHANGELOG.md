@@ -1,5 +1,20 @@
 # 变更日志
 
+## [1.0.1] - 2026-07-31
+
+### 改进
+
+- 补齐 `business-02-contract-scope`、`business-05-contractor-control`、`business-06-regulatory-inquiry` 三条评测的机器断言，覆盖率由 9/12 提升至 12/12，消除业务判断层的评测盲区
+- 新增断言覆盖合同范围/变更/验收对应、顾问关系实质与成果归属双轨判断、监管询问证据保全与联系性质确认等业务动作，并保留各自的依据状态与禁用表述硬失败
+- 在 `references/file-index.md` 新增"归档"章节，明确 `archive/04-青岛OPC合规指引全文.md` 为低质量 OCR 历史归档，运行时不加载、不作为现行规则依据
+- 更新 `README.md` 评测维护章节，标明机器断言已覆盖全部 12 条样本，并明确真实多轮 Agent 运行验证为后续工作
+
+### 技术优化
+
+- 清理工作区残留的 `.DS_Store` 与 `scripts/__pycache__/`（均未被 git 跟踪，由根 `.gitignore` 覆盖）
+- 同步 `SKILL.md`、`evals/evals.json`、`evals/assertions.json`、`.claude-plugin/marketplace.json` 与根 `README.md` 版本号至 `1.0.1`
+- `scripts/check-evals.py --self-test` 在 12/12 断言覆盖下仍通过正例、禁用表述故障、缺失状态和畸形断言四项自测
+
 ## [1.0.0] - 2026-07-30
 
 ### 新增

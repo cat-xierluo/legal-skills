@@ -90,7 +90,7 @@ python3 scripts/check-evals.py --self-test
 python3 scripts/check-evals.py --outputs-dir /path/to/answers
 ```
 
-机器断言只能验证结构和部分硬边界，不能证明法律结论正确或来源真实。未进行无旧上下文的真实 Agent 运行与人工复核时，行为稳定性状态为 `NOT_VERIFIED`。
+机器断言覆盖全部 12 条评测样本（业务判断、检索编排和故障收口三类），只能验证结构和部分硬边界，不能证明法律结论正确或来源真实。未进行无旧上下文的真实 Agent 运行与人工复核时，行为稳定性状态为 `NOT_VERIFIED`；真实多轮运行验证列为后续工作。
 
 ## 许可证
 

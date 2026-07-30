@@ -1,6 +1,6 @@
 {
   "skill_name": "opc-legal-counsel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "answer_file_convention": "<outputs-dir>/<eval_id>.md",
   "policy": "所有 hard 断言必须通过；soft 断言达到 soft_minimum。任何 hard 失败不得被其他命中项抵消。",
   "cases": [
@@ -12,6 +12,16 @@
         {"id": "retrieval-state", "severity": "hard", "type": "contains_any", "terms": ["NEEDS_RETRIEVAL", "VERIFIED_CURRENT", "VERIFIED_AS_OF_DATE", "CONFLICTING_SOURCES", "RETRIEVAL_UNAVAILABLE"]},
         {"id": "no-direct-ratio", "severity": "hard", "type": "not_contains_any", "terms": ["平均分股最合理", "50:50 最佳", "直接给顾问股即可", "这个比例法律允许所以没问题"]},
         {"id": "ip-source", "severity": "soft", "type": "contains_any_per_group", "groups": [{"label": "代码", "terms": ["代码", "既有成果"]}, {"label": "第三方", "terms": ["第三方", "开源", "前雇主"]}]}
+      ]
+    },
+    {
+      "eval_id": "business-02-contract-scope",
+      "soft_minimum": 1,
+      "assertions": [
+        {"id": "scope-and-change", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "范围", "terms": ["范围", "排除项", "依赖", "基线"]}, {"label": "变更", "terms": ["变更", "变更程序", "变更单"]}, {"label": "对应", "terms": ["验收", "交付", "付款", "权利移转"]}]},
+        {"id": "retrieval-state", "severity": "hard", "type": "contains_any", "terms": ["NEEDS_RETRIEVAL", "VERIFIED_CURRENT", "VERIFIED_AS_OF_DATE", "CONFLICTING_SOURCES", "RETRIEVAL_UNAVAILABLE"]},
+        {"id": "no-vague-payment", "severity": "hard", "type": "not_contains_any", "terms": ["项目完成即可要求付款", "完成即视为付款条件", "法定付款比例为", "法律标准比例"]},
+        {"id": "ip-and-third-party", "severity": "soft", "type": "contains_any_per_group", "groups": [{"label": "知识产权", "terms": ["知识产权", "成果归属", "权利"]}, {"label": "第三方", "terms": ["第三方", "既有", "通用组件", "开源"]}]}
       ]
     },
     {
@@ -63,6 +73,29 @@
         {"id": "required-escalation", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "律师", "terms": ["律师"]}, {"label": "安全", "terms": ["安全团队", "信息安全", "安全负责人"]}]},
         {"id": "no-destruction", "severity": "hard", "type": "not_contains_any", "terms": ["删日志", "删除日志", "不要留记录", "先承认全部责任", "压住消息即可"]},
         {"id": "retrieval-state", "severity": "soft", "type": "contains_any", "terms": ["NEEDS_RETRIEVAL", "VERIFIED_CURRENT", "RETRIEVAL_UNAVAILABLE"]}
+      ]
+    },
+    {
+      "eval_id": "business-05-contractor-control",
+      "soft_minimum": 1,
+      "assertions": [
+        {"id": "dual-track", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "身份", "terms": ["劳动", "劳务", "顾问", "实际管理", "实质"]}, {"label": "成果", "terms": ["成果归属", "代码", "职务", "知识产权", "权利"]}]},
+        {"id": "evidence-preserve", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "证据", "terms": ["证据", "固定", "保全", "留痕"]}, {"label": "权限", "terms": ["权限", "账号", "代码库", "回收", "分级"]}]},
+        {"id": "retrieval-state", "severity": "hard", "type": "contains_any", "terms": ["NEEDS_RETRIEVAL", "VERIFIED_CURRENT", "VERIFIED_AS_OF_DATE", "CONFLICTING_SOURCES", "RETRIEVAL_UNAVAILABLE"]},
+        {"id": "required-escalation", "severity": "hard", "type": "contains_any", "terms": ["律师"]},
+        {"id": "no-title-only", "severity": "hard", "type": "not_contains_any", "terms": ["顾问协议所以代码归他", "签了顾问协议就不存在劳动关系", "付款记录证明代码归公司", "删除对方代码记录"]},
+        {"id": "leave-handling", "severity": "soft", "type": "contains_any", "terms": ["交接", "离职", "离开", "争议"]}
+      ]
+    },
+    {
+      "eval_id": "business-06-regulatory-inquiry",
+      "soft_minimum": 1,
+      "assertions": [
+        {"id": "preserve-evidence", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "修改前后", "terms": ["修改前后", "改前", "改后", "历史页面", "版本"]}, {"label": "投放", "terms": ["投放", "宣传", "广告", "页面"]}]},
+        {"id": "confirm-nature", "severity": "hard", "type": "contains_any_per_group", "groups": [{"label": "联系性质", "terms": ["联系性质", "权限", "主体", "身份", "范围"]}, {"label": "期限", "terms": ["期限", "回复", "明天", "时间"]}]},
+        {"id": "retrieval-state", "severity": "hard", "type": "contains_any", "terms": ["NEEDS_RETRIEVAL", "VERIFIED_CURRENT", "VERIFIED_AS_OF_DATE", "CONFLICTING_SOURCES", "RETRIEVAL_UNAVAILABLE"]},
+        {"id": "no-case-closed", "severity": "hard", "type": "not_contains_any", "terms": ["页面改了就不用管", "改完即无问题", "无需再处理", "直接承认违法"]},
+        {"id": "single-voice", "severity": "soft", "type": "contains_any", "terms": ["对外口径", "统一口径", "单一口径", "指定发言人"]}
       ]
     },
     {
