@@ -1,6 +1,6 @@
 {
   "skill_name": "opc-legal-counsel",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "default_output_sections": [
     "一句话结论",
     "涉及领域与主矛盾",

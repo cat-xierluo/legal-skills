@@ -25,8 +25,8 @@
 ## 高频场景的下一跳
 
 - 商品宣传、直播话术、绝对化用语：`references/regulatory.md`
-- 七天无理由、售后、订单留痕：`references/contracts.md` + `references/disputes.md`
-- 平台结算、发票和三流合一：`references/tax.md`
+- 售后退货规则（如无理由退货的适用商品、期限和例外）、订单留痕：`references/contracts.md` + `references/disputes.md`
+- 平台结算、发票与资金 / 货物 / 票据一致性：`references/tax.md`
 - 图片、品牌、素材被投诉：`references/ip.md`
 
 ## 风险信号

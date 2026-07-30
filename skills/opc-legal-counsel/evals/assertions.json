@@ -1,6 +1,6 @@
 {
   "skill_name": "opc-legal-counsel",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "answer_file_convention": "<outputs-dir>/<eval_id>.md",
   "policy": "所有 hard 断言必须通过；soft 断言达到 soft_minimum。任何 hard 失败不得被其他命中项抵消。",
   "cases": [
