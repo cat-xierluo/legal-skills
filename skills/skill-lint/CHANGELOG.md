@@ -2,6 +2,14 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.6.1] - 2026-07-30
+
+### 修复：结构化资料集目录误报
+
+- 将 `references/` 审查规则从“必须完全扁平”调整为“受控层级”：普通参考文件继续扁平；尼斯分类、审查指南、法规合集、行业标准等大型且内部结构稳定的资料集，允许使用一层集合目录。
+- 要求合法集合目录具备稳定语义、集合索引和从 `SKILL.md` 到索引、再按类别/章节下钻的明确路由；无索引、多层嵌套或普通文件随意分目录仍应提示。
+- 同步 `references/skill-dev-guide.md` 与项目 `docs/SKILL-DEV-GUIDE.md`，避免对合法的渐进式披露结构重复误报。
+
 ## [2.6.0] - 2026-07-26
 
 ### 新增：领域 checker 双向充分性边界

@@ -22,11 +22,14 @@ skill-name/
 
 **目录层级规则**:
 
-- `references/`、`scripts/`、`assets/`、`templates/` 下必须**完全扁平**，文件直接放在目录根，禁止创建任何子目录
-- ❌ `references/docs/api/guide.md` (层级过深)
-- ❌ `assets/presets/litigation.yaml` (禁止子目录)
-- ❌ `scripts/utils/helper.py` (禁止子目录)
-- ✅ `references/api-guide.md` (完全扁平)
+- `scripts/`、`assets/`、`templates/` 默认保持完全扁平，文件直接放在目录根
+- `references/` 默认保持扁平；对于尼斯分类、审查指南、法规合集、行业标准等体量大且内部结构稳定的资料集，可以在 `references/` 下增加**一层集合目录**，通过集合索引按需加载，避免把几十份法源文件全部展开在根目录
+- 集合目录须有稳定语义和索引入口，`SKILL.md` 应先指向集合索引，再说明何时下钻到具体类别、章节或条文；不得为了普通文件分类制造多层嵌套
+- ❌ `references/docs/api/guide.md`（无必要的多层嵌套）
+- ❌ `assets/presets/litigation.yaml`（禁止子目录）
+- ❌ `scripts/utils/helper.py`（禁止子目录）
+- ✅ `references/api-guide.md`（普通参考文件保持扁平）
+- ✅ `references/nice-classification-v13-2026/class-09.md`（大型结构化资料集的一层集合目录）
 - ✅ `assets/litigation.yaml` (完全扁平)
 - ✅ `scripts/helper.py` (完全扁平)
 
@@ -207,7 +210,7 @@ Skills 使用渐进式加载系统管理上下文:
 - references/ 目录中的详细文档
 - 仅在 SKILL.md 中明确引用时由 AI 主动读取
 - 包含详细API文档、完整示例、边缘案例
-- **目录层级**: references/ 下保持**完全扁平**，文件直接放在目录根，禁止子目录
+- **目录层级**: 普通参考文件保持扁平；大型结构化资料集可使用一层集合目录，并通过集合索引实施按需加载
 
 ### (4) Level 3: 可执行资源 (调用不加载,扩展)
 
@@ -452,7 +455,7 @@ find ./output -mindepth 1 -delete
 - Frontmatter 格式正确
 - description 包含负向触发条件
 - SKILL.md 行数在 500 行以内
-- references/ 目录层级扁平
+- references/ 普通文件扁平；大型结构化资料集使用一层集合目录时具备索引入口
 - 创建或重大改造前已完成七层 Harness 预检
 - 正式验收由门禁实时重跑候选内 checker 与故障用例
 - 动态运行仅限用户确认的自有/可信候选；未知第三方候选在隔离环境外保持 `NOT_VERIFIED`
@@ -492,6 +495,7 @@ AI 代理在修改 skill-dev-guide.md 时,必须:
 
 | 版本   | 日期       | 更新内容                                                                                                                                                    |
 | ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v2.6.0 | 2026-07-30 | 调整 references 层级规则：普通参考文件继续扁平；尼斯分类、审查指南、法规合集等大型结构化资料集允许使用一层集合目录，并要求索引入口与按需下钻 |
 | v2.5.0 | 2026-07-22 | 创建流程接入 Skill Lint 七层 Harness 预检与正式验收，要求门禁实时重跑 checker 和故障用例，并区分审查证据与领域功能验证 |
 | v2.4.3 | 2026-06-12 | 调整 Frontmatter 元数据分层：普通 Skill 只硬性要求 `name` / `description`，发布字段按项目规则处理 |
 | v2.4.2 | 2026-06-12 | 将格式合规检查入口从 `skill-architect` 更新为 `skill-lint`，适配审查工具重新独立定位 |
