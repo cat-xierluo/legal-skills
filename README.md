@@ -32,6 +32,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
 | 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.1  | 文件化任务源升级为 Lite / Standard / Strict 可执行任务协议；文档骨架迁入 templates、逐字复制资源迁入 assets，修复模板被忽略、引用断裂和 Unreleased 过期规则                                                        |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
@@ -39,7 +40,6 @@
 | 2026-07-28 | 更新   | [legal-visualization](skills/legal-visualization/)                     | v0.8.2  | 视觉角色、事实状态和强调解耦；新增几何守恒样式编译器与三套可执行主题，修复角色校验漂移，19 个模板形状告警清零并重做多主体关系样板                                                                       |
 | 2026-07-25 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v2.2.0  | 场景、Protected Spans 与评分阈值接入候选绑定主动门禁；图片整行、场景声明、保护项和评分回执形成 2 个 checker / 4 项硬约束回归闭环                                                                                                               |
 | 2026-07-23 | 新上传 | [patent-download](skills/patent-download/)                             | v2.6.0  | 专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录）；凭证环境变量化 + 防泄露自检（check_leak）；依赖防护（缺依赖打印中文提示）；半成品平台显式标注实验性；渐进式披露                                                                |
-| 2026-07-23 | 新上传 | [handdrawn-article-illustrator](skills/handdrawn-article-illustrator/) | v1.1.0  | 手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义                                                                                        |
 
 </details>
 
@@ -276,7 +276,7 @@
 <td>专业·知产</td>
 <td style="word-break:break-word">商标服务助手，提供类别规划、可注册性初筛及申请材料准备。支持商品清单生成、商标说明撰写，整合尼斯分类与审查指南</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.7.0</td>
+<td style="text-align:center">v1.7.2</td>
 <td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/trademark-assistant.skill">独立仓库</a></td>
 </tr>

@@ -3,25 +3,35 @@
 """
 法源数据完整性自检（trademark-assistant 维护工具）
 ==================================================
-检查 skill 自带的尼斯分类 NCL13-2026 与《商标审查审理指南》的**结构**完整性，
-用于发现"材料转换 / 批量迁移"过程中的遗漏（例如 class-09 眼镜残留那类问题）。
+检查 skill 自带的尼斯分类 NCL13-2026 与《商标审查审理指南》的结构完整性，
+并校验已经确认过的关键迁移不变量，用于发现材料转换或批量迁移遗漏。
 
-注意：本脚本只做**结构级**检查（文件齐备、类号/章号一致、迁移记录段是否存在、
-异常小文件、索引引用）。**内容级**的 transfer/delete/change 复核仍需对照官方
-2026 变更文本单独进行——结构完整不代表内容迁移无误。
+注意：关键迁移不变量仅覆盖历史上已发现的回归点，不等于完成 NCL13-2026
+全部 transfer/delete/change 的内容级复核。
 
 用法：
     python3 scripts/check_legal_basis_integrity.py
+    python3 scripts/check_legal_basis_integrity.py --candidate-root /path/to/trademark-assistant
 
 全部只读，不修改任何文件。退出码：0=无严重问题，1=发现严重问题。
 """
 
+import argparse
 import re
 import statistics
 import sys
 from pathlib import Path
 
-SKILL_DIR = Path(__file__).resolve().parent.parent
+parser = argparse.ArgumentParser(description="检查商标助手法源数据的结构和关键迁移不变量")
+parser.add_argument(
+    "--candidate-root",
+    type=Path,
+    default=Path(__file__).resolve().parent.parent,
+    help="待检查的 trademark-assistant 技能根目录",
+)
+args = parser.parse_args()
+
+SKILL_DIR = args.candidate_root.resolve()
 REF = SKILL_DIR / "references"
 NICE = REF / "nice-classification-v13-2026"
 GUIDE = REF / "trademark-examination-and-adjudication-guidelines"
@@ -119,6 +129,67 @@ else:
     flag(SEVERE, "尼斯索引文件缺失")
 
 
+# ==================== 已知迁移回归 ====================
+print("\n" + "=" * 64)
+print("NCL13-2026 已知迁移回归检查")
+print("=" * 64)
+
+
+def section_before_groups(text):
+    """提取类文件第一个 ### 类似群标题之前的类别标题和注释。"""
+    return text.split("\n### ", 1)[0]
+
+
+def split_notes(text):
+    """拆分“尤其包括/尤其不包括”，格式异常时返回空串并报严重问题。"""
+    if "本类尤其包括：" not in text or "本类尤其不包括：" not in text:
+        return None, None
+    included = text.split("本类尤其包括：", 1)[1].split("本类尤其不包括：", 1)[0]
+    excluded = text.split("本类尤其不包括：", 1)[1].split("\n## ", 1)[0]
+    return included, excluded
+
+
+known_checks = 0
+class09 = nice_files.get(9)
+if class09:
+    text09 = class09.read_text(encoding="utf-8")
+    included09, excluded09 = split_notes(section_before_groups(text09))
+    if included09 is None:
+        flag(SEVERE, "class-09 注释缺少“本类尤其包括/不包括”结构")
+    else:
+        known_checks += 3
+        if "消防车" in included09:
+            flag(SEVERE, "class-09“本类尤其包括”仍包含消防车（NCL13 应移入第12类）")
+        if "应急和救援用运载工具" not in excluded09 or "消防车" not in excluded09:
+            flag(SEVERE, "class-09“本类尤其不包括”缺少应急和救援用运载工具/消防车（第12类）")
+        if "眼镜，隐形眼镜" in included09 or "眼镜套" in included09:
+            flag(SEVERE, "class-09“本类尤其包括”仍包含已移入第10类的普通眼镜项目")
+
+class12 = nice_files.get(12)
+if class12:
+    text12 = class12.read_text(encoding="utf-8")
+    _, excluded12 = split_notes(section_before_groups(text12))
+    known_checks += 2
+    if excluded12 is None:
+        flag(SEVERE, "class-12 注释缺少“本类尤其包括/不包括”结构")
+    elif "消防车（第九类）" in excluded12:
+        flag(SEVERE, "class-12“本类尤其不包括”仍错误保留消防车（第九类）")
+    if not re.search(r"消防车\s+120352", text12):
+        flag(SEVERE, "class-12 缺少消防车 120352 项")
+
+class03 = nice_files.get(3)
+if class03:
+    text03 = class03.read_text(encoding="utf-8")
+    heading03 = text03.split("【注释】", 1)[0]
+    known_checks += 2
+    if "；香水；" not in heading03 or "香料，香精油" in heading03:
+        flag(SEVERE, "class-03 类标题内容未同步为包含“香水”且删除旧“香料，香精油”")
+    if "防腐剂，香精油和抗氧化剂" not in section_before_groups(text03):
+        flag(SEVERE, "class-03 注释缺少 NCL13 新增的“香精油”")
+
+print(f"✓ 已执行 {known_checks} 项关键迁移不变量检查")
+
+
 # ==================== 审查审理指南 ====================
 print("\n" + "=" * 64)
 print("商标审查审理指南 完整性检查")
@@ -150,6 +221,23 @@ if guide_idx.exists():
 else:
     flag(SEVERE, "审查指南索引文件缺失")
 
+# 转换后的指南和法规材料可能保留本地图片链接，但压缩包未携带对应资产。
+asset_docs = list(guide_files.values()) + list((REF / "laws-regulations").glob("*.md"))
+missing_images = []
+for doc in asset_docs:
+    text = doc.read_text(encoding="utf-8")
+    for target in re.findall(r"!\[[^]]*\]\(([^)]+)\)", text):
+        if "://" in target or target.startswith("data:"):
+            continue
+        if not (doc.parent / target).exists():
+            missing_images.append((doc.relative_to(REF), target))
+
+if missing_images:
+    affected = sorted({str(doc) for doc, _ in missing_images})
+    print(f"ℹ 原始材料未附本地图片资产: {len(missing_images)} 个引用 / {len(affected)} 份文件（已知来源限制，不计入问题）")
+else:
+    print("✓ 审查指南与法规材料的本地图片引用均可达")
+
 
 # ==================== 总结 ====================
 print("\n" + "=" * 64)
@@ -167,7 +255,7 @@ for m in watch:
     print(f"   {m}")
 
 if not problems:
-    print("\n✅ 结构完整性检查通过：未发现整类/整章缺失、类号错位或索引断裂。")
-    print("   注：结构完整 ≠ 内容迁移正确。内容级 transfer/delete/change 复核仍需对照官方 2026 变更单独做。")
+    print("\n✅ 完整性检查通过：未发现结构缺失或已知迁移回归。")
+    print("   注：已知迁移不变量通过 ≠ 全量内容迁移已经核验。")
 
 sys.exit(1 if severe else 0)

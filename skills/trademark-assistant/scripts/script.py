@@ -15,8 +15,8 @@
 
 用法：
 
-    uv run --with openpyxl python script.py --input goods.json --output 星火-第9类-商品清单.xlsx
-    echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录制）"}]' | uv run --with openpyxl python script.py --output out.xlsx
+    uv run --with openpyxl python scripts/script.py --input goods.json --output 星火-第9类-商品清单.xlsx
+    echo '[{"类别":9,"类似群":"0901","商品名称":"计算机软件（已录制）"}]' | uv run --with openpyxl python scripts/script.py --output out.xlsx
 
 安全规则：
     1. 目标文件已存在时默认拒绝覆盖，需显式 --force。
@@ -26,19 +26,9 @@
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
-
-try:
-    from openpyxl import load_workbook
-except ImportError:
-    print(
-        "[错误] 未安装 openpyxl。请用以下方式运行：\n"
-        "    uv run --with openpyxl python script.py ...\n"
-        "或在本地执行： pip install openpyxl",
-        file=sys.stderr,
-    )
-    sys.exit(2)
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE = SKILL_DIR / "templates" / "导入商品信息.xlsx"
@@ -49,33 +39,70 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def validate_item(idx: int, item):
+def require_openpyxl():
+    """按需加载硬依赖，使纯数据校验可以在无 openpyxl 环境中测试。"""
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        log(
+            "[错误] 未安装 openpyxl。请用以下方式运行：\n"
+            "    uv run --with openpyxl python scripts/script.py ...\n"
+            "或先执行： python3 -m pip install openpyxl"
+        )
+        raise SystemExit(2)
+    return load_workbook
+
+
+def parse_category(idx: int, value):
+    """只接受真正的整数或纯数字字符串，拒绝 9.5、9.0、True 等隐式转换。"""
+    if isinstance(value, bool):
+        return None, f"第 {idx} 项 类别={value!r} 不是 1-45 的整数"
+    if isinstance(value, int):
+        category = value
+    elif isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+        category = int(value.strip())
+    else:
+        return None, f"第 {idx} 项 类别={value!r} 不是 1-45 的整数"
+
+    if not 1 <= category <= 45:
+        return None, f"第 {idx} 项 类别={value!r} 超出 1-45 范围"
+    return category, None
+
+
+def normalize_item(idx: int, item):
     errs = []
     if not isinstance(item, dict):
-        return [f"第 {idx} 项不是 JSON 对象"]
+        return None, [f"第 {idx} 项不是 JSON 对象"]
 
-    cat = item.get("类别")
-    grp = str(item.get("类似群", "")).strip()
-    name = str(item.get("商品名称", "")).strip()
+    cat_int, cat_error = parse_category(idx, item.get("类别"))
+    if cat_error:
+        errs.append(cat_error)
 
-    try:
-        cat_int = int(cat)
-        if not (1 <= cat_int <= 45):
-            errs.append(f"第 {idx} 项 类别={cat} 超出 1-45 范围")
-    except (TypeError, ValueError):
-        errs.append(f"第 {idx} 项 类别={cat!r} 不是 1-45 的整数")
-        cat_int = None
+    group_value = item.get("类似群")
+    if isinstance(group_value, str):
+        grp = group_value.strip()
+    else:
+        grp = ""
+        errs.append(f"第 {idx} 项 类似群必须是 4 位数字字符串，例如 '0901'")
 
     if not (len(grp) == 4 and grp.isdigit()):
-        errs.append(f"第 {idx} 项 类似群={grp!r} 不是 4 位数字")
+        if isinstance(group_value, str):
+            errs.append(f"第 {idx} 项 类似群={grp!r} 不是 4 位数字")
     elif cat_int is not None and int(grp[:2]) != cat_int:
-        # 仅提示：类似群前两位通常对应类别号；存在合法跨类类似群，故不阻断
-        log(f"[提示] 第 {idx} 项 类似群 {grp} 前两位与类别 {cat_int} 不一致（跨类类似群请人工确认）")
+        errs.append(f"第 {idx} 项 类似群 {grp} 与类别 {cat_int} 不一致")
 
-    if not name:
-        errs.append(f"第 {idx} 项 商品名称为空")
+    name_value = item.get("商品名称")
+    if not isinstance(name_value, str):
+        name = ""
+        errs.append(f"第 {idx} 项 商品名称必须是字符串")
+    else:
+        name = name_value.strip()
+        if not name:
+            errs.append(f"第 {idx} 项 商品名称为空")
 
-    return errs
+    if errs:
+        return None, errs
+    return {"类别": cat_int, "类似群": grp, "商品名称": name}, []
 
 
 def load_items(args) -> list:
@@ -95,15 +122,19 @@ def load_items(args) -> list:
         sys.exit(1)
 
     errs = []
+    normalized = []
     for i, it in enumerate(data, start=1):
-        errs.extend(validate_item(i, it))
+        item, item_errs = normalize_item(i, it)
+        errs.extend(item_errs)
+        if item is not None:
+            normalized.append(item)
     if errs:
         log("[错误] 数据校验未通过：")
         for e in errs:
             log("  - " + e)
         sys.exit(1)
 
-    return data
+    return normalized
 
 
 def main() -> None:
@@ -124,6 +155,7 @@ def main() -> None:
 
     items = load_items(args)
 
+    load_workbook = require_openpyxl()
     wb = load_workbook(TEMPLATE)
     ws = wb.active
     header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
@@ -137,9 +169,9 @@ def main() -> None:
 
     for i, it in enumerate(items, start=1):
         ws.cell(row=i + 1, column=1, value=i)
-        ws.cell(row=i + 1, column=2, value=int(it["类别"]))
-        ws.cell(row=i + 1, column=3, value=str(it["类似群"]).strip())
-        ws.cell(row=i + 1, column=4, value=str(it["商品名称"]).strip())
+        ws.cell(row=i + 1, column=2, value=it["类别"])
+        ws.cell(row=i + 1, column=3, value=it["类似群"])
+        ws.cell(row=i + 1, column=4, value=it["商品名称"])
 
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out)
