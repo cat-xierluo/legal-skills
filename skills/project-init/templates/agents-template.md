@@ -5,6 +5,15 @@ Claude 应基于全局协议 `~/.claude/CLAUDE.md` 和项目分析结果生成�
 
 生成后，CLAUDE.md 仅写入 `@include ./AGENTS.md`，不重复内容。两个文件共享同一份项目协议。
 
+## 目录
+
+- [simple](#simple)
+- [development](#development)
+- [frontend](#frontend)
+- [comprehensive-development](#comprehensive-development)
+- [data-analysis](#data-analysis)
+- [skill-project](#skill-project)
+
 ---
 
 ## simple
