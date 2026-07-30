@@ -285,22 +285,57 @@ def load_json(path: Path, label: str) -> Any:
         raise GateError(f"{label}无法读取: {exc}") from exc
 
 
+def frontmatter_scalar(raw: str, label: str) -> str:
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+        value = value[1:-1].strip()
+    if not value:
+        raise GateError(f"SKILL.md frontmatter {label} 不能为空")
+    return value
+
+
 def frontmatter_identity(candidate_root: Path) -> dict[str, str]:
     text = (candidate_root / "SKILL.md").read_text(encoding="utf-8", errors="replace")
     if not text.startswith("---\n") or "\n---\n" not in text[4:]:
         raise GateError("SKILL.md 缺少可识别 frontmatter")
     frontmatter = text[4:].split("\n---\n", 1)[0]
-    identity: dict[str, str] = {}
-    for key in ("name", "version"):
-        match = re.search(
-            rf"^{key}:\s*[\"']?([^\"'\n]+?)[\"']?\s*$",
-            frontmatter,
-            flags=re.MULTILINE,
-        )
+    top_level: dict[str, str] = {}
+    metadata_version: str | None = None
+    in_metadata = False
+
+    for line in frontmatter.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*?)\s*$", line.lstrip(" "))
         if not match:
-            raise GateError(f"SKILL.md frontmatter 缺少 {key}")
-        identity[key] = match.group(1).strip()
-    return identity
+            continue
+        key, raw = match.groups()
+        if indent == 0:
+            in_metadata = key == "metadata" and not raw
+            if key in {"name", "version"}:
+                if key in top_level:
+                    raise GateError(f"SKILL.md frontmatter 重复定义 {key}")
+                top_level[key] = frontmatter_scalar(raw, key)
+            continue
+        if in_metadata and key == "version":
+            if metadata_version is not None:
+                raise GateError("SKILL.md frontmatter 重复定义 metadata.version")
+            metadata_version = frontmatter_scalar(raw, "metadata.version")
+
+    name = top_level.get("name")
+    if not name:
+        raise GateError("SKILL.md frontmatter 缺少 name")
+    top_level_version = top_level.get("version")
+    if top_level_version and metadata_version and top_level_version != metadata_version:
+        raise GateError("SKILL.md frontmatter 的 version 与 metadata.version 冲突")
+    version = top_level_version or metadata_version
+    if not version:
+        raise GateError(
+            "SKILL.md frontmatter 缺少 version（支持顶层 version 或 metadata.version）"
+        )
+    return {"name": name, "version": version}
 
 
 def exact_keys(value: Any, keys: set[str], label: str) -> dict[str, Any]:

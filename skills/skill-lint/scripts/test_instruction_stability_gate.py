@@ -844,6 +844,36 @@ class InstructionStabilityGateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("与 SKILL.md frontmatter 不一致", result.stderr)
 
+    def test_contract_identity_accepts_metadata_version(self) -> None:
+        skill = self.candidate / "SKILL.md"
+        skill.write_text(
+            skill.read_text(encoding="utf-8").replace(
+                'version: "1.0.0"', 'metadata:\n  version: "1.0.0"'
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_gate("assess", "--candidate-root", str(self.candidate))
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout.splitlines()[0])
+        finding_ids = {item["id"] for item in report["findings"]}
+        self.assertIn("ISG-006", finding_ids)
+        self.assertNotIn("ISG-007", finding_ids)
+
+    def test_conflicting_top_level_and_metadata_versions_are_rejected(self) -> None:
+        skill = self.candidate / "SKILL.md"
+        skill.write_text(
+            skill.read_text(encoding="utf-8").replace(
+                'version: "1.0.0"',
+                'version: "1.0.0"\nmetadata:\n  version: "2.0.0"',
+            ),
+            encoding="utf-8",
+        )
+        result = self.run_gate("assess", "--candidate-root", str(self.candidate))
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout.splitlines()[0])
+        finding = next(item for item in report["findings"] if item["id"] == "ISG-007")
+        self.assertIn("version 与 metadata.version 冲突", finding["message"])
+
     def test_contract_cannot_omit_an_explicit_hard_constraint(self) -> None:
         skill = self.candidate / "SKILL.md"
         skill.write_text(

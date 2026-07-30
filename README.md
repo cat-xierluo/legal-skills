@@ -37,7 +37,7 @@
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
 | 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.1  | 法源改为无网页链接的多条款组合矩阵；细化保护范围、全面覆盖、等同原则及其特殊限定、限制规则与常见抗辩，并新增对应静态门禁 |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
-| 2026-07-30 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.1  | references 改为受控层级：普通文件继续扁平，大型结构化资料集允许一层集合目录，并要求索引入口和明确的按需下钻路由 |
+| 2026-07-30 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.2  | 稳定性合同兼容顶层 `version` 与官方 `metadata.version`，并对双位置版本冲突保持 fail-closed，避免合法发布候选被误报为身份缺失 |
 | 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.4  | TASKS 改为流动的当前任务入口；移除归档索引并禁止创建 before 快照，历史分别归入 CHANGELOG 与 DECISIONS                                                        |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.1  | references 顺序编号与法规独立子目录：5 份流程文件加 `NN-` 前缀按执行顺序排列、侵权判断标准迁入 `references/laws-regulations/`、脚本归位到 `scripts/`、删除冗余索引并把图像理解工具改为按环境能力分档的选择策略（不再写死具体工具名）                                                                                                       |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
@@ -556,7 +556,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.6.1</td>
+<td style="text-align:center">v2.6.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/skill-lint-2.4.0.zip">下载 v2.4.0</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>

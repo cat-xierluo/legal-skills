@@ -42,7 +42,7 @@ python3 scripts/instruction_stability_gate.py assess \
 需要声称“指令遵循稳定”“多轮不漏项”或“产出没有关键漂移”时：
 
 1. 为权威来源中的每条 hard constraint 分配稳定 ID，并在要求旁加入唯一锚点，例如 `<!-- skill-lint:constraint REPORT-COVERAGE -->`。
-2. 复制 `config/instruction-stability-contract.example.json` 为目标 Skill 内的 `config/instruction-stability-contract.json`，用 `SKILL.md#REPORT-COVERAGE` 这类 source ref 双向绑定全部锚点、checker、产物阶段、正反例和历史回归。
+2. 复制 `config/instruction-stability-contract.example.json` 为目标 Skill 内的 `config/instruction-stability-contract.json`，用 `SKILL.md#REPORT-COVERAGE` 这类 source ref 双向绑定全部锚点、checker、产物阶段、正反例和历史回归。合同的 `skill.version` 可对应 frontmatter 顶层 `version` 或官方兼容的 `metadata.version`；两处并存时必须一致。
 3. 由候选外 evaluator 按 `config/instruction-stability-requirements-baseline.example.json` 形成硬约束基线；其 candidate SHA-256、`requirement_sources`、`requirement_exclusions`、hard constraint IDs 和 source refs 必须与当前候选、锚点及合同完全相同。门禁自动发现 `SKILL.md` 与 `references/**/*.md` 中含硬要求信号的文件；每一份都必须进入 sources，或由 evaluator 在签名 exclusions 中逐项说明理由，不能静默漏掉整份规范。sources 中任何含“必须 / 不得 / 禁止 / 应当 / 务必 / must / shall / never”的规范行，都必须在同一行或前一个非空行有唯一 marker。基线使用 evaluator 的 Ed25519 私钥在候选执行环境之外签名；正式门禁只取得受信公钥。合同存在但缺有效签名基线时仍是 `NOT_VERIFIED`。
 4. 先按 `harness-reliability-standards.md` 生成并填写候选外 Harness review evidence。正式稳定性门禁只允许当前正在执行的受信 `skill-lint` 作为 policy root，并亲自复算该 evidence；候选不能替换门禁，仅在合同里自填 `independent_from_producer=true` 也不构成独立性证明。
 5. 用相同任务、相同输入和相同配置至少独立运行三次。每轮使用唯一 execution nonce、独立 run 目录和 producer log，保留真实最终产物，不只保留 Agent 总结。不同 run 不得复用同一 artifact 或 producer log 路径。producer log 由 evaluator-controlled runner 在观察到本轮执行后形成，再交给不执行候选代码的离线签名步骤；Ed25519 私钥不得出现在运行 producer/checker 的进程树、工作目录或可读环境中。

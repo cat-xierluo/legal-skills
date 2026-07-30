@@ -2,6 +2,14 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.6.2] - 2026-07-30
+
+### 修复：官方 metadata.version 兼容
+
+- `instruction_stability_gate.py` 的候选身份校验同时接受顶层 `version` 与官方兼容的 `metadata.version`，避免已通过 Codex frontmatter 校验的 Skill 被误报为 `ISG-007`。
+- 当两个位置同时声明且值不一致时保持 fail-closed；新增嵌套版本通过与冲突阻断回归，防止兼容逻辑掩盖身份歧义。
+- 同步 frontmatter 策略、稳定性标准、README 与 Marketplace 版本信息。
+
 ## [2.6.1] - 2026-07-30
 
 ### 修复：结构化资料集目录误报

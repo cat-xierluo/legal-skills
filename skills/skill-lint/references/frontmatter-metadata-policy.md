@@ -73,6 +73,17 @@ description: 本技能应在用户需要...时使用。不要用于：...
 
 但这只是本仓库的发布策略，不应被 `skill-lint` 当成所有 Skill 的通用要求。
 
+不同加载器对扩展字段的位置要求可能不同：项目允许时可使用顶层 `version`；要求官方 Codex 兼容时，将版本写为 `metadata.version`。稳定性合同把两种写法归一为同一个 `skill.version`；若两处同时存在，值必须一致，否则按身份歧义阻断。
+
+```yaml
+---
+name: skill-name
+description: 本技能应在用户需要...时使用。不要用于：...
+metadata:
+  version: "1.0.0"
+---
+```
+
 审查第三方 Skill 时：
 
 - 不因为缺少 `homepage`、`author`、`version`、`license` 直接判错
