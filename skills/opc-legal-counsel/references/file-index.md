@@ -1,70 +1,52 @@
-# 文件清单
+# 文件路由
 
-本文件列出 `opc-legal-counsel` 技能的全部资料文件，供维护时快速查找。运行时无需整体加载。
-
-## OPC 地方资料
-
-| 文件 | 说明 |
-|------|------|
-| `references/local-policies/opc-使用说明.md` | 地方 OPC 资料目录与加载说明 |
-| `references/local-policies/opc-国家政策背景.md` | OPC 政策背景（含省级政策：省-市-区-街道三级体系） |
-| `references/local-policies/opc-公司注册流程.md` | 江苏 / 苏州注册流程参考 |
-| `references/local-policies/opc-青岛OPC合规指引.md` | 青岛指引框架摘要 |
-| `references/local-policies/opc-青岛指引-结构化摘录.md` | 清洗后的可直接引用摘要 |
-| `references/local-policies/opc-姑苏区专项政策.md` | 姑苏区200万奖励、沧浪街道赋能平台、OPC创业人才贷 |
-| `archive/04-青岛OPC合规指引全文.md` | 原始 OCR 归档，默认不直接加载 |
+运行时按问题加载必要文件，不要整体读取。
 
 ## 核心领域
 
-| 文件 | 说明 |
-|------|------|
-| `references/contracts.md` | 合同审查、起草、履约与留痕 |
-| `references/governance.md` | 组织形式、章程、公私分离、治理 |
-| `references/tax.md` | 发票、股东借款、税务红线 |
-| `references/ai-compliance.md` | AI 产品上线、标识、公示、备案 / 登记核验 |
-| `references/ip.md` | AIGC 著作权、算法保护、商标、商业秘密 |
-| `references/data-compliance.md` | 个人信息、隐私政策、SDK、数据出境 |
-| `references/regulatory.md` | 广告、反不正当竞争、许可、监管检查 |
-| `references/employment.md` | 劳动关系、兼职、竞业限制 |
-| `references/disputes.md` | 证据、时效、诉讼 / 仲裁应对 |
-| `references/source-register.md` | 法源、政策、标准、公告和地方材料来源登记表 |
+| 文件 | 业务判断重点 |
+|---|---|
+| `references/governance.md` | 主体选择、控制、公私分离和治理留痕 |
+| `references/contracts.md` | 交易结构、交付、验收、付款、责任和退出 |
+| `references/tax.md` | 业务、资金、票据、申报与专业协同 |
+| `references/ai-compliance.md` | AI 产品角色、开放范围、模型与内容风险 |
+| `references/data-compliance.md` | 数据角色、目的、权限、共享和事故响应 |
+| `references/ip.md` | 权利来源、授权、成果归属、保护和投诉 |
+| `references/employment.md` | 实际用工管理、报酬、成果和离职交接 |
+| `references/regulatory.md` | 准入、宣传、交易公平和监管响应 |
+| `references/disputes.md` | 请求、证据、期限、资产与程序策略 |
 
-## 成长阶段模块
+## 专项叠加
 
-| 文件 | 说明 |
-|------|------|
-| `references/growth-financing.md` | 成长阶段专项模块：融资分诊、股权激励、顾问股 / 干股 / 期权 / 技术入股分析框架 |
+| 文件 | 何时加载 |
+|---|---|
+| `references/growth-financing.md` | 融资、顾问股、期权、技术入股、员工激励 |
+| `references/industry-ai-saas.md` | AI SaaS 行业特性改变风险组合时 |
+| `references/industry-ecommerce.md` | 电商平台、消费者和履约链条改变风险组合时 |
+| `references/industry-agency-outsourcing.md` | 代运营、外包和多方交付链改变风险组合时 |
 
-## 行业 overlay
+## 外部依据接口
 
-| 文件 | 说明 |
-|------|------|
-| `references/industry-ai-saas.md` | AI SaaS 场景包 |
-| `references/industry-ecommerce.md` | 电商场景包 |
-| `references/industry-agency-outsourcing.md` | 代运营 / 外包交付场景包 |
+| 文件 | 用途 |
+|---|---|
+| `references/legal-retrieval-protocol.md` | 生成工具中立的检索任务、验收来源、管理依据状态 |
+
+本技能不内置国家政策背景、地方政策、地方办事流程、现行税率、名录或阶段性监管口径。涉及这些内容时，一律走外部检索协议。
 
 ## 输出资产
 
-| 文件 | 说明 |
-|------|------|
-| `assets/contract-clauses.md` | 合同条款库 |
-| `assets/risk-checklist.md` | 企业法律风险自检清单 |
-| `assets/template-ai-launch-report.md` | AI 产品上线核查模板 |
-| `assets/template-opc-separation-report.md` | 公私分离体检 / 补救模板 |
-| `assets/template-contract-review-report.md` | 合同审查意见模板 |
+| 文件 | 用途 |
+|---|---|
+| `assets/contract-clauses.md` | 合同条款结构和谈判方向 |
+| `assets/risk-checklist.md` | 经营法律风险自检 |
+| `assets/template-ai-launch-report.md` | AI 产品上线核查输出骨架 |
+| `assets/template-opc-separation-report.md` | 公私分离体检与补救输出骨架 |
+| `assets/template-contract-review-report.md` | 合同审查意见输出骨架 |
 
-## 公开示例
+## 示例与评测
 
-| 文件 | 说明 |
-|------|------|
-| `examples/01-联合创始人股权与技术入股.md` | 联合创始人 / 技术入股示例 |
-| `examples/02-公私混同补救.md` | 公私混同补救示例 |
-| `examples/03-AI功能上线检查.md` | AI 功能上线示例 |
-
-## 评测样本
-
-- `evals/evals.json`：24 条回归样本，按 `foundation`（基础盘）和 `reinforcement`（OPC/AI 强化层）分组
-- 当前样本重点验证：多领域路由、固定输出协议、地方覆盖层触发、下一跳协议、样稿映射和升级边界判断
-- `evals/manual-review.md`：10 条重点样本的人工评分说明和硬失败条件
-- `evals/assertions.json`：10 条重点样本的机器可读断言，共 40 条关键词 / 禁用表述检查
-- `scripts/check-evals.py`：纯标准库评测检查脚本，可校验样本结构、路径存在性，并可选检查回答文件
+- `examples/`：展示业务判断、检索任务和收口方式；
+- `evals/evals.json`：代表性场景契约；
+- `evals/assertions.json`：硬失败和软质量断言；
+- `evals/manual-review.md`：人工评审标准；
+- `scripts/check-evals.py`：结构检查、回答断言和故障注入自测。

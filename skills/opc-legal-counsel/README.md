@@ -1,160 +1,108 @@
 # opc-legal-counsel
 
-面向一人公司、单人创业者、AI 创业团队和小微企业的常年法律顾问 skill。它把公司治理、合同、财税、用工、AI 产品上线、数据与知识产权合规等经营问题，整理成可执行的风险提示和行动清单。
+面向一人公司、单人创业者、AI 创业团队和小微企业的法律业务分诊 skill。它帮助用户识别经营主矛盾、联动风险、行动优先级和专业升级边界，并把需要现行规则支撑的命题交给外部法律数据库、MCP 或官方来源核验。
 
-> 它不追求把法律概念讲全，而是帮助创始人判断：今天哪里是红线，缺什么事实，先做哪几件事，什么时候必须升级给律师或会计师。
+> 这个 skill 沉淀的是律师处理经营问题的判断方法，不是法规、政策和地方办事资料的离线副本。
+
+## v1.0 的核心变化
+
+- 从“内置知识 + 地方覆盖层”重构为“业务判断内核 + 工具中立检索协议”；
+- 移除国家政策背景、地方政策、注册流程和静态法源登记表；
+- 现行法条、期限、税率、名录、地方口径和平台规则必须外部核验；
+- 引入五种依据状态和 fail-closed 收口，检索不可用或来源冲突时不输出精确规则结论；
+- 重写九个领域参考文件、模板、示例和评测契约，降低过期知识对回答的污染。
 
 ## 适合谁用
 
-- 一人有限公司、个体创业者和小微企业负责人
-- 技术背景创始人、早期 AI 应用创业团队
-- 还没有稳定法务支持，但需要日常经营法律分诊的人
-- 律师或顾问团队，用于把高频咨询整理成稳定回答框架
+- 一人有限公司、个体创业者和小微企业负责人；
+- 技术背景创始人和早期 AI 应用团队；
+- 还没有完整法务体系，需要日常经营法律分诊的团队；
+- 希望把专业检索能力与稳定业务判断组合使用的律师或顾问团队。
 
-## 典型场景
+## 能解决什么
 
-```text
-用户：我一个人做 AI SaaS，现在先用个人微信收了客户款，后面准备注册一人公司，有什么风险？现在怎么补救？
-AI：我会先判断公司阶段、资金路径和业务类型，再按公私分离、税务、合同、AI 合规等领域拆解。
-    输出包括一句话结论、关键事实缺口、红线风险、24 小时/7 天/30 天行动和升级边界。
-```
+- 主体选择、公私分离、联合创始人和股权安排；
+- 合同结构、履约、验收、付款、责任和退出；
+- 资金票据链、税务风险识别与专业协同；
+- AI 产品、数据、知识产权、用工和监管风险；
+- 投诉、催收、事故与监管联系的第一轮处置；
+- 融资、顾问股、期权、技术入股和行业场景分诊。
 
-## 它能产出什么
+## 工作方式
 
-- 一句话结论和风险等级
-- 关键事实缺口与当前假设
-- 红线风险和可能后果
-- 24 小时、7 天、30 天行动清单
-- 合同、股权、税务、用工、AI 合规等多领域联动判断
-- 必须升级给律师、会计师、税务师或专业机构的边界
-- 可复用的风险清单、条款建议和标准输出样稿
+1. 区分法律主体 OPC 与经营模式 OPC；
+2. 补齐地域、时间、主体、角色、交易链和用户目标；
+3. 识别主领域和联动领域，形成业务风险判断；
+4. 将精确规则命题写成结构化检索请求；
+5. 使用当前环境可用的法律数据库、MCP 或官方来源取得依据；
+6. 用依据状态收口结论，给出止损、补救、证据和升级清单。
 
-## 当前覆盖范围
+检索接口不绑定某个 MCP。更换法律数据库或运行环境时，只要返回字段满足 `references/legal-retrieval-protocol.md`，业务判断层无需重写。
 
-### 小微企业基础盘
+## 依据状态
 
-- 公司设立与主体形态选择
-- 股权结构、联合创始人、代持、技术入股
-- 合同审查、起草、履约和证据留痕
-- 财税规范、收付款路径和发票风险
-- 劳动用工、兼职、外包、保密和竞业
-- 知识产权、数据合规、广告监管和争议应对
+- `VERIFIED_CURRENT`：来源字段完整，且确认当前有效；
+- `VERIFIED_AS_OF_DATE`：只确认在指定日期有效；
+- `NEEDS_RETRIEVAL`：已定义待证命题，来源仍不足；
+- `CONFLICTING_SOURCES`：来源在效力、时间、地域或口径上冲突；
+- `RETRIEVAL_UNAVAILABLE`：当前没有可靠检索能力。
 
-### OPC / AI 强化层
+没有可靠来源时，skill 仍可给出业务判断、临时动作和检索清单，但不会编造法条、期限、税率、政策条件或地方办理结论。
 
-- 一人公司公私分离和股东责任风险
-- 一人公司章程、重大事项决议和内部留痕
-- AI 产品上线、公示、标识、投诉处置
-- AIGC 著作权、算法保护、模型与数据边界
+## 典型用法
 
-### 成长阶段与行业场景
+- “我和联合创始人还没签协议，代码和客户资源怎么换股？”
+- “公司款收到了个人微信，怎样止损和整理材料？”
+- “客户合同没有验收和变更机制，谈判重点是什么？”
+- “AI 客服接入客户工单，上线前要判断和检索哪些问题？”
+- “现在没有法律数据库，能否先给我最新税率和地方材料清单？”
+- “官方文件、地方指南和窗口说法冲突时，怎样收口？”
 
-- 融资分诊、顾问股、干股、期权、技术入股
-- AI SaaS、电商、代运营/外包交付等行业 overlay
-- 地方政策以“全国基线 + 地方覆盖层”方式处理
+## 不适合
 
-## 安装方式
-
-1. 打开本仓库的 GitHub Releases。
-2. 下载最新版本的 skill 压缩包。
-3. 解压后将 `opc-legal-counsel/` 文件夹放入你的 skill 目录。
-4. 在支持 `SKILL.md` 的 Agent / Claude 环境中启用该 skill。
-
-如需运行评测检查脚本，本地需有 Python 3：
-
-```bash
-python3 scripts/check-evals.py
-```
-
-也可以从仓库根目录显式传入技能路径：
-
-```bash
-python3 skills/opc-legal-counsel/scripts/check-evals.py skills/opc-legal-counsel
-```
-
-## 可以怎么用
-
-- “我是一个人做 AI SaaS，注册一人有限公司还是个体户更合适？”
-- “我把公司业务款收到了个人微信，现在怎么补救？”
-- “客户给我的技术开发合同验收条款很模糊，应该怎么改？”
-- “AI 产品上线前至少要做哪些合规动作？”
-- “我准备招第一个人，先按顾问合作处理会不会形成劳动关系？”
-
-## 使用边界
-
-这个 skill 适合：
-
-- 日常经营法律分诊
-- 风险识别和优先级排序
-- 第一轮合同、股权、税务、用工和 AI 合规问题整理
-- 判断何时需要升级给专业人员
-
-这个 skill 不适合：
-
-- 替代正式法律意见书、律师函、诉讼或仲裁代理
-- 处理刑事、跨境、金融、医疗、证券等高监管深度专项问题
-- 在缺少地域、主体、合同、资金流水或产品事实时直接下最终结论
-- 代替会计师、税务师或行政机关完成申报、登记、备案等流程
-- 替代深度合同批注、商标申请、专利分析、纯法规检索等专项技能
-
-## 核心设计
-
-### 双层定位
-
-先保留小微企业基础盘，再叠加 OPC 和 AI 专项层。这样既不会把一人公司问题讲成普通公司百科，也不会忽略普通经营风险。
-
-### 多领域路由
-
-一个问题通常同时涉及治理、合同、税务、用工、知识产权、数据、监管和争议解决。skill 会先识别主矛盾，再调用对应领域文件。
-
-### 下一跳协议
-
-主 skill 负责分诊和综合判断；核心领域文件负责分析方法；成长阶段、行业 overlay、地方覆盖层和输出资产按需加载，避免把地方规则误答成全国统一规则。
-
-## 质量支撑
-
-- 固定输出协议，避免回答只有概念没有动作
-- 法源登记表，统一管理全国法、AI 专项规则、官方公告和地方覆盖层来源
-- 24 条评测样本，覆盖基础盘、OPC/AI 强化层、成长阶段和跨领域场景
-- 重点样本人工评分说明和机器可读断言
-- `scripts/check-evals.py` 可检查评测样本结构、版本一致性和部分回答断言
-- 三套标准输出样稿：AI 上线、公私分离、合同审查
-- 公开 examples，帮助外部访客理解实际回答形态
+- 代替正式法律意见、律师函、诉讼或仲裁代理；
+- 代替会计师、税务师完成计算和申报；
+- 在没有外部检索能力时提供“最新法规答案”；
+- 代替深度合同批注、商标申请、专利分析等专项能力；
+- 直接用于法院、监管、交易文件或其他需正式专业签署的场景。
 
 ## 关键文件
 
-- [SKILL.md](./SKILL.md)：执行入口和输出协议
-- [references/file-index.md](./references/file-index.md)：完整文件索引
-- [references/source-register.md](./references/source-register.md)：法源与政策来源登记表
-- [references/governance.md](./references/governance.md)：公司治理与 OPC 风险
-- [references/ai-compliance.md](./references/ai-compliance.md)：AI 产品上线合规
-- [references/growth-financing.md](./references/growth-financing.md)：成长阶段、融资和股权安排
-- [assets/risk-checklist.md](./assets/risk-checklist.md)：风险清单资产
-- [examples/](./examples/)：公开示例问题
-- [evals/](./evals/)：评测样本与断言
+- [SKILL.md](./SKILL.md)：运行时入口、判断流程和输出协议；
+- [references/legal-retrieval-protocol.md](./references/legal-retrieval-protocol.md)：外部检索请求、结果验收和状态管理；
+- [references/file-index.md](./references/file-index.md)：按问题加载的文件路由；
+- [assets/risk-checklist.md](./assets/risk-checklist.md)：经营风险自检；
+- [examples/](./examples/)：业务判断与检索收口示例；
+- [evals/evals.json](./evals/evals.json)：12 条代表性业务、检索与故障场景；
+- [evals/manual-review.md](./evals/manual-review.md)：人工评审和硬失败标准。
+
+## 评测维护
+
+脚本仅使用 Python 标准库：
+
+```bash
+python3 scripts/check-evals.py --self-test
+```
+
+检查外部生成的回答：
+
+```bash
+python3 scripts/check-evals.py --outputs-dir /path/to/answers
+```
+
+机器断言只能验证结构和部分硬边界，不能证明法律结论正确或来源真实。未进行无旧上下文的真实 Agent 运行与人工复核时，行为稳定性状态为 `NOT_VERIFIED`。
 
 ## 许可证
 
 本作品采用 [CC BY-NC 4.0](./LICENSE.txt) 许可证。商用授权联系方式以 [LICENSE.txt](./LICENSE.txt) 为准。
 
-## 关于作者 / 咨询与交流
+## 作者与交流
 
 杨卫薪律师（微信 ywxlaw）
-
-如需就一人公司、小微企业经营、AI 产品合规、合同治理、复杂法律问题、企业内部落地或商用授权进一步沟通，欢迎添加微信（请注明来意）。
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/cat-xierluo/legal-skills/main/wechat-qr.jpg" width="200" alt="微信二维码"/>
   <p><em>微信：ywxlaw</em></p>
 </div>
 
-## 关联项目
-
-本仓库是 [Legal Skills](https://github.com/cat-xierluo/legal-skills) 的子项目。如果需要合同、商标、专利、OPC、小微企业合规、文档处理等更多法律类开源 Skill，可以关注主仓库。
-
-相关项目：
-
-- [contract-copilot](https://github.com/cat-xierluo/legal-skills/tree/main/skills/contract-copilot)：合同审查、起草和 Word 修订批注
-- [trademark-assistant](https://github.com/cat-xierluo/legal-skills/tree/main/skills/trademark-assistant)：商标类别规划、可注册性初筛和申请材料准备
-- [patent-analysis](https://github.com/cat-xierluo/legal-skills/tree/main/skills/patent-analysis)：专利文件分析、侵权比对、FTO 和规避设计
-- [code2patent](https://github.com/cat-xierluo/legal-skills/tree/main/skills/code2patent)：从代码仓库整理专利交底书和发明专利初稿
+本 skill 属于 [Legal Skills](https://github.com/cat-xierluo/legal-skills) 项目。需要深度合同、商标、专利或法律文档处理时，可组合相应专项 skill。
