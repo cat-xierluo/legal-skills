@@ -1,0 +1,544 @@
+{
+  "skill_name": "patent-analysis",
+  "version": "2.1.2",
+  "answer_file_pattern": "{eval_id:02d}.md",
+  "policy": {
+    "minimum_hard_positive": 2,
+    "minimum_hard_negative": 1,
+    "minimum_soft": 1,
+    "hard_failure_rule": "任一 hard 断言失败即判定该场景失败；soft 断言按 soft_minimum 计分。"
+  },
+  "cases": [
+    {
+      "eval_id": 1,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "required-input-gaps",
+          "description": "同时识别法律状态、现行权利要求版本和分析基准日缺口。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "法律状态", "terms": ["法律状态", "专利登记簿"]},
+            {"label": "权利要求版本", "terms": ["现行权利要求", "授权公告文本", "授权文本"]},
+            {"label": "基准日", "terms": ["分析基准日", "基准日"]}
+          ]
+        },
+        {
+          "id": "summary-stop-boundary",
+          "description": "材料不足时停止侵权或起诉可行性结论。",
+          "severity": "hard",
+          "type": "contains_any",
+          "terms": ["暂不能判断侵权", "不能据此判断侵权", "不作侵权结论", "证据不足，暂不能判断"]
+        },
+        {
+          "id": "forbidden-definitive-conclusion",
+          "description": "不得输出有效、侵权或可直接起诉的肯定结论；法源不得附法院或行政机关网页链接。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["专利有效", "构成侵权", "必然侵权", "可以起诉", "可以直接起诉"],
+          "patterns": [
+            "(?ims)(?:法源|法律依据|核验来源|法院来源|行政机关来源|《中华人民共和国专利法》|《专利法》|司法解释)[^\\n]{0,200}(?:\\n[ \\t>*-]*){0,3}https?://"
+          ]
+        },
+        {
+          "id": "technical-summary",
+          "description": "在保留边界的同时概括采集、处理、显示三模块技术方案。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "采集", "terms": ["采集模块", "采集"]},
+            {"label": "处理", "terms": ["处理模块", "处理"]},
+            {"label": "显示", "terms": ["显示模块", "显示"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 2,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "separate-patent-records",
+          "description": "分别识别 P-A、P-B 及现行独立权利要求和法律状态缺口。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "P-A", "terms": ["P-A"]},
+            {"label": "P-B", "terms": ["P-B"]},
+            {"label": "独立权利要求", "terms": ["现行独立权利要求", "独立权利要求"]},
+            {"label": "法律状态", "terms": ["法律状态", "登记簿"]}
+          ]
+        },
+        {
+          "id": "ranking-stop-boundary",
+          "description": "输入不可比时拒绝保护范围或强弱排序。",
+          "severity": "hard",
+          "type": "contains_any",
+          "terms": ["暂不能比较保护范围", "不能作保护范围排序", "无法进行强弱排名", "不能排序"]
+        },
+        {
+          "id": "forbidden-ranking",
+          "description": "不得直接给出范围或强弱名次，不得默认只比较权利要求 1。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["范围更大", "排名第一", "更强", "只比较权利要求 1"],
+          "patterns": []
+        },
+        {
+          "id": "comparison-dimensions",
+          "description": "提供后续统一比较的技术、权利要求、法律状态或证据维度。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "技术维度", "terms": ["技术方案", "技术特征"]},
+            {"label": "法律维度", "terms": ["权利要求", "法律状态"]},
+            {"label": "证据维度", "terms": ["证据", "材料来源"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 3,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "selected-claims-and-c-state",
+          "description": "分别处理权利要求 2、权利要求 5，并识别 C 状态。",
+          "severity": "hard",
+          "type": "contains_all",
+          "terms": ["权利要求 2", "权利要求 5", "C-不相同/缺失"]
+        },
+        {
+          "id": "literal-and-equivalent-gates",
+          "description": "C 阻断字面全面覆盖，B 不计入覆盖，等同仅逐特征判断。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "字面覆盖阻断", "terms": ["不满足字面全面覆盖", "字面全面覆盖不成立", "不支持字面全面覆盖", "C 阻断"]},
+            {"label": "B 证据门禁", "terms": ["不得计入已覆盖", "不能计入已覆盖"]},
+            {"label": "逐特征等同", "terms": ["逐特征判断", "仅针对 F2-2", "对应技术特征"]}
+          ]
+        },
+        {
+          "id": "equivalence-elements-and-limits",
+          "description": "等同分析同时覆盖四项判断标准和主要限制因素。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "手段", "terms": ["基本相同的手段", "技术手段"]},
+            {"label": "功能", "terms": ["基本相同的功能", "功能"]},
+            {"label": "效果", "terms": ["基本相同的效果", "技术效果"]},
+            {"label": "可联想到性", "terms": ["无需创造性劳动", "本领域普通技术人员"]},
+            {"label": "说明书捐献", "terms": ["说明书捐献", "说明书是否披露但权利要求未记载"]},
+            {"label": "禁止反悔", "terms": ["禁止反悔", "修改或陈述放弃"]},
+            {"label": "特别限定", "terms": ["功能性特征", "数值特征", "特别限定"]}
+          ]
+        },
+        {
+          "id": "multi-provision-basis",
+          "description": "全面覆盖和等同结论列出共同适用的多条款法源。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "保护范围", "terms": ["《专利法》第六十四条", "《中华人民共和国专利法》第六十四条"]},
+            {"label": "全面覆盖", "terms": ["《专利侵权司法解释（一）》第七条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第七条"]},
+            {"label": "等同一般定义", "terms": ["《专利纠纷若干规定》第十三条", "《最高人民法院关于审理专利纠纷案件适用法律问题的若干规定》第十三条"]}
+          ]
+        },
+        {
+          "id": "forbidden-majority-coverage",
+          "description": "不得以多数特征相近认定字面侵权；法源不得附法院或行政机关网页链接。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["字面侵权成立", "构成字面侵权", "3/4 即可认定侵权", "多数特征覆盖即可侵权"],
+          "patterns": [
+            "(?ims)(?:法源|法律依据|核验来源|法院来源|行政机关来源|《中华人民共和国专利法》|《专利法》|司法解释)[^\\n]{0,200}(?:\\n[ \\t>*-]*){0,3}https?://"
+          ]
+        },
+        {
+          "id": "evidence-plan",
+          "description": "提出针对 F2-2、F2-3 和审查档案的补证计划。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "F2-2", "terms": ["F2-2"]},
+            {"label": "F2-3", "terms": ["F2-3"]},
+            {"label": "档案", "terms": ["审查档案", "审查、复审、无效档案", "意见陈述", "审查记录"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 4,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "validity-evidence-gaps",
+          "description": "识别对比文件、权利要求和审查档案缺口。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "R1 全文与公开时间", "terms": ["R1 全文", "公开日", "公开时间"]},
+            {"label": "现行权利要求", "terms": ["现行权利要求", "授权权利要求"]},
+            {"label": "审查档案", "terms": ["审查档案", "审查记录"]}
+          ]
+        },
+        {
+          "id": "probability-stop-boundary",
+          "description": "材料不足时拒绝无效概率或确定性结论。",
+          "severity": "hard",
+          "type": "contains_any",
+          "terms": ["无法给出无效概率", "不能给出无效成功率", "不输出无效概率", "证据不足，不能判断是否无效"]
+        },
+        {
+          "id": "forbidden-validity-score",
+          "description": "不得输出无来源的概率或确定性无效结论。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["无效成功率", "无效概率", "胜诉率", "必然无效", "大概率无效"],
+          "patterns": []
+        },
+        {
+          "id": "validity-framework",
+          "description": "区分新颖性、创造性及说明书类要件并提出逐项检索。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "新颖性", "terms": ["新颖性"]},
+            {"label": "创造性", "terms": ["创造性"]},
+            {"label": "其他要件", "terms": ["公开充分", "说明书支持", "清楚"]},
+            {"label": "检索计划", "terms": ["检索计划", "逐权利要求", "逐对比文件"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 5,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "fto-five-inputs",
+          "description": "完整列出 FTO 风险评级的五项必需输入。",
+          "severity": "hard",
+          "type": "contains_all",
+          "terms": ["目标法域", "产品版本", "实施行为", "检索截止日", "法律状态"]
+        },
+        {
+          "id": "fto-stop-gate",
+          "description": "任一必需输入缺失时停止评级。",
+          "severity": "hard",
+          "type": "contains_any",
+          "terms": ["必须停止风险评级", "停止风险评级", "暂不进行风险评级", "不能进行 FTO 风险评级"]
+        },
+        {
+          "id": "forbidden-fto-clearance",
+          "description": "不得输出低风险、自由实施或未检到即安全的结论。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["低风险", "可以自由实施", "可自由实施", "未检到即安全"],
+          "patterns": []
+        },
+        {
+          "id": "fto-follow-up-plan",
+          "description": "后续清单覆盖专利家族、权利要求、法律状态及实施行为。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "家族", "terms": ["专利家族", "同族"]},
+            {"label": "权利要求", "terms": ["权利要求"]},
+            {"label": "法律状态", "terms": ["法律状态"]},
+            {"label": "行为", "terms": ["制造", "使用", "销售", "进口", "实施行为"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 6,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "design-around-input-gate",
+          "description": "要求现行有效权利要求和产品技术事实。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "现行权利要求", "terms": ["现行有效权利要求", "现行权利要求", "授权文本"]},
+            {"label": "产品事实", "terms": ["产品技术事实", "结构图", "样品", "技术证据"]},
+            {"label": "审查档案", "terms": ["审查档案", "意见陈述"]}
+          ]
+        },
+        {
+          "id": "coverage-and-equivalence-review",
+          "description": "逐项复核全面覆盖，并继续审查等同风险。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "逐项必要特征", "terms": ["逐项", "必要技术特征", "全面覆盖"]},
+            {"label": "等同风险", "terms": ["等同风险", "等同原则", "逐特征等同"]}
+          ]
+        },
+        {
+          "id": "design-around-legal-basis",
+          "description": "列出保护范围与全面覆盖的共同法源。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "保护范围", "terms": ["《专利法》第六十四条", "《中华人民共和国专利法》第六十四条"]},
+            {"label": "全面覆盖", "terms": ["《专利侵权司法解释（一）》第七条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第七条"]}
+          ]
+        },
+        {
+          "id": "forbidden-safe-harbor",
+          "description": "不得把删除任一特征等同于绝对安全；法源不得附法院或行政机关网页链接。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["删除一个特征即可规避", "删除指示灯即可规避", "肯定不侵权", "100%安全"],
+          "patterns": [
+            "(?ims)(?:法源|法律依据|核验来源|法院来源|行政机关来源|《中华人民共和国专利法》|《专利法》|司法解释)[^\\n]{0,200}(?:\\n[ \\t>*-]*){0,3}https?://"
+          ]
+        },
+        {
+          "id": "engineering-evidence-plan",
+          "description": "提出样品、结构图、测试或拆解等工程证据计划。",
+          "severity": "soft",
+          "type": "contains_any",
+          "terms": ["样品", "结构图", "拆解", "测试记录", "工程证据"]
+        }
+      ]
+    },
+    {
+      "eval_id": 7,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "valuation-required-inputs",
+          "description": "识别估值目的、基准日、权利状态及财务市场数据缺口。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "用途", "terms": ["估值用途", "估值目的"]},
+            {"label": "基准日", "terms": ["估值基准日", "基准日"]},
+            {"label": "权利状态", "terms": ["法律状态", "权属", "权利状态"]},
+            {"label": "财务市场数据", "terms": ["财务数据", "收入成本", "市场交易", "市场数据"]}
+          ]
+        },
+        {
+          "id": "valuation-stop-gate",
+          "description": "数据不足时停止金额和指数估值。",
+          "severity": "hard",
+          "type": "contains_any",
+          "terms": ["数据不足，不能估值", "暂不能形成估值结论", "不能给出估值金额", "不能形成价值指数"]
+        },
+        {
+          "id": "forbidden-invented-value",
+          "description": "不得编造金额、指数、费率或建议报价。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["估值为", "价值为", "价值指数为", "综合评分为", "许可费率为", "建议报价为"],
+          "patterns": []
+        },
+        {
+          "id": "conditional-valuation-methods",
+          "description": "仅以条件性方式介绍成本法、收益法和市场法。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "成本法", "terms": ["成本法"]},
+            {"label": "收益法", "terms": ["收益法"]},
+            {"label": "市场法", "terms": ["市场法"]},
+            {"label": "条件", "terms": ["补充后", "数据齐备后", "适用条件"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 8,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "four-part-equivalence-test",
+          "description": "对对应特征核对手段、功能、效果和可联想到性。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "手段", "terms": ["基本相同的手段", "手段"]},
+            {"label": "功能", "terms": ["基本相同的功能", "功能"]},
+            {"label": "效果", "terms": ["基本相同的效果", "效果"]},
+            {"label": "可联想到性", "terms": ["无需创造性劳动", "本领域普通技术人员"]}
+          ]
+        },
+        {
+          "id": "equivalence-limitations",
+          "description": "同时审查功能性特征、说明书捐献、禁止反悔和数值边界。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "功能性特征", "terms": ["功能性特征", "功能性限定"]},
+            {"label": "说明书捐献", "terms": ["说明书捐献"]},
+            {"label": "禁止反悔", "terms": ["禁止反悔"]},
+            {"label": "数值边界", "terms": ["数值特征", "数值范围", "数值边界"]}
+          ]
+        },
+        {
+          "id": "equivalence-multi-provision-basis",
+          "description": "等同及其限制列出多条共同适用法源。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "等同一般定义", "terms": ["《专利纠纷若干规定》第十三条", "《最高人民法院关于审理专利纠纷案件适用法律问题的若干规定》第十三条"]},
+            {"label": "说明书捐献条款", "terms": ["《专利侵权司法解释（一）》第五条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第五条"]},
+            {"label": "禁止反悔一般条款", "terms": ["《专利侵权司法解释（一）》第六条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第六条"]},
+            {"label": "功能性特征解释", "terms": ["《专利侵权司法解释（一）》第四条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第四条"]},
+            {"label": "功能性特征等同", "terms": ["《专利侵权司法解释（二）》第八条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释（二）》第八条"]},
+            {"label": "数值特征条款", "terms": ["《专利侵权司法解释（二）》第十二条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释（二）》第十二条"]},
+            {"label": "禁止反悔例外条款", "terms": ["《专利侵权司法解释（二）》第十三条", "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释（二）》第十三条"]}
+          ]
+        },
+        {
+          "id": "forbidden-overall-equivalence",
+          "description": "不得以整体功能相同直接认定等同侵权；法源不得附法院或行政机关网页链接。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["等同侵权成立", "整体功能相同即可认定等同", "整体等同"],
+          "patterns": [
+            "(?ims)(?:法源|法律依据|核验来源|法院来源|行政机关来源|《中华人民共和国专利法》|《专利法》|司法解释)[^\\n]{0,200}(?:\\n[ \\t>*-]*){0,3}https?://"
+          ]
+        },
+        {
+          "id": "missing-equivalence-evidence",
+          "description": "指出手段、效果及审查档案原文缺失。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "手段证据", "terms": ["手段证据", "实现手段"]},
+            {"label": "效果证据", "terms": ["效果证据", "技术效果"]},
+            {"label": "档案原文", "terms": ["审查档案原文", "限缩性陈述原文", "意见陈述原文"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 9,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "deadline-verification-gate",
+          "description": "送达事实不明时立即人工核验，不预设截止日。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "送达事实", "terms": ["送达日期", "送达事实", "电子送达时间"]},
+            {"label": "立即核验", "terms": ["期限待立即人工核验", "立即人工核验", "不得按模板假定截止日"]},
+            {"label": "通知内容", "terms": ["通知书记载", "载明期限", "通知名称"]}
+          ]
+        },
+        {
+          "id": "amendment-source-boundary",
+          "description": "不得将仅见于说明书的特征直接抽入权利要求。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "不得扩大", "terms": ["不得扩大原保护范围", "不得扩大原专利保护范围", "不得扩大保护范围"]},
+            {"label": "特征来源", "terms": ["不得直接从说明书", "不能从说明书或附图抽取", "应来自其他权利要求"]},
+            {"label": "方式和时机", "terms": ["修改方式和时机", "提交时机", "合议组通知"]}
+          ]
+        },
+        {
+          "id": "invalidation-multi-provision-basis",
+          "description": "列明转送答复、修改范围和修改文本提交的直接法源组合。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "修改不得超范围", "terms": ["《专利法》第三十三条", "《中华人民共和国专利法》第三十三条"]},
+            {"label": "转送与指定期限", "terms": ["《专利法实施细则》第七十二条", "《中华人民共和国专利法实施细则》第七十二条"]},
+            {"label": "无效程序修改范围", "terms": ["《专利法实施细则》第七十三条", "《中华人民共和国专利法实施细则》第七十三条"]},
+            {"label": "修改方式与时机", "terms": ["《专利审查指南》第四部分第三章第4.6.2节", "《专利审查指南》第四部分第三章第4.6.2节至第4.6.4节"]},
+            {"label": "修改文本提交", "terms": ["第4.6.4节", "全文替换页和修改对照表"]}
+          ]
+        },
+        {
+          "id": "amendment-submission-format",
+          "description": "修改权利要求书时明确要求全文替换页和修改对照表。",
+          "severity": "hard",
+          "type": "contains_all",
+          "terms": ["全文替换页", "修改对照表"]
+        },
+        {
+          "id": "forbidden-old-procedure-rules",
+          "description": "送达事实未核验时不得写入任意固定期限，也不得允许从说明书任意抽取特征。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": [
+            "可以从说明书任意抽取",
+            "可以从说明书直接抽取",
+            "可从说明书任意抽取",
+            "可从说明书直接抽取"
+          ],
+          "affirmative_patterns": [
+            "(?:本案|转送通知的?)?(?:答复期限|答复期)\\s*(?:是|为|固定为|确定为|固定)\\s*(?:\\d+|[一二三四五六七八九十两]+)\\s*(?:日|天|个月|月)",
+            "(?:应当|必须|须)在\\s*(?:\\d+|[一二三四五六七八九十两]+)\\s*(?:日|天|个月|月)内答复",
+            "(?:答复)?截止(?:日|日期)\\s*(?:[:：]|为|是|定在|确定为)\\s*(?:20\\d{2}[年/-]\\d{1,2}(?:[月/-]\\d{1,2}日?)?|\\d{1,2}月\\d{1,2}日|[一二三四五六七八九十两]+月底)"
+          ],
+          "patterns": [
+            "(?ims)(?:法源|法律依据|核验来源|法院来源|行政机关来源|《中华人民共和国专利法》|《专利法》|司法解释)[^\\n]{0,200}(?:\\n[ \\t>*-]*){0,3}https?://"
+          ]
+        },
+        {
+          "id": "claim-by-claim-defense",
+          "description": "按被请求无效的权利要求逐项分析创造性和证据。",
+          "severity": "soft",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "逐项", "terms": ["逐项", "每项被请求无效的权利要求"]},
+            {"label": "创造性", "terms": ["创造性"]},
+            {"label": "证据", "terms": ["对比文件", "证据"]}
+          ]
+        }
+      ]
+    },
+    {
+      "eval_id": 10,
+      "soft_minimum": 1,
+      "assertions": [
+        {
+          "id": "visual-evidence-gates",
+          "description": "C 阻断字面覆盖，B/D 不得计入已覆盖。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "C 阻断", "terms": ["C 阻断字面全面覆盖", "存在 C，字面全面覆盖不成立", "C-不相同/缺失"]},
+            {"label": "B 不计入", "terms": ["B 不得计入已覆盖", "B-初步支持不得计入已覆盖"]},
+            {"label": "D 不计入", "terms": ["D 不得计入已覆盖", "D-无法判断不得计入已覆盖"]}
+          ]
+        },
+        {
+          "id": "no-conclusion-visual",
+          "description": "版本和证据门禁未通过时，不生成结论型风险图且不升级证据等级。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "版本缺口", "terms": ["权利要求版本", "来源未核验", "局部截图"]},
+            {"label": "停止结论图", "terms": ["不生成结论型风险图", "不能生成结论型风险图", "只输出证据缺口"]},
+            {"label": "不升级证据", "terms": ["不得提升证据等级", "不得改变证据等级", "可视化不改变证据状态"]}
+          ]
+        },
+        {
+          "id": "forbidden-green-conclusion",
+          "description": "不得用绿色或标题宣称高风险、全面覆盖或侵权成立。",
+          "severity": "hard",
+          "type": "not_affirm_any",
+          "terms": ["侵权风险高", "全部特征覆盖", "已全面覆盖", "构成侵权", "整张图做成绿色", "全部节点标绿"],
+          "patterns": []
+        },
+        {
+          "id": "safe-visual-types",
+          "description": "建议材料缺口图、证据状态矩阵或比对流程图。",
+          "severity": "soft",
+          "type": "contains_any",
+          "terms": ["材料缺口图", "证据状态矩阵", "比对流程图", "待核验材料"]
+        }
+      ]
+    }
+  ]
+}

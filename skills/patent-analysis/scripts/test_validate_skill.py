@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import copy
 import unittest
 
+import check_evals
 import validate_skill
 
 
@@ -98,6 +100,34 @@ class GateTests(unittest.TestCase):
         mutated = equivalents.replace("《专利侵权司法解释（一）》第五条", "说明书捐献规则")
         self.assertTrue(validate_skill.check_legal_basis(legal, mutated))
 
+    def test_missing_current_invalidation_rules_are_blocked(self) -> None:
+        legal = (validate_skill.SKILL_DIR / "references" / "00-legal-basis.md").read_text(
+            encoding="utf-8"
+        )
+        equivalents = (
+            validate_skill.SKILL_DIR / "references" / "08-doctrine-of-equivalents.md"
+        ).read_text(encoding="utf-8")
+        invalidation = (
+            validate_skill.SKILL_DIR / "references" / "09-invalidation-defense.md"
+        ).read_text(encoding="utf-8")
+        for index, phrase in enumerate([
+            "《专利法实施细则》第七十二条",
+            "《专利法实施细则》第七十三条",
+            "全文替换页",
+            "修改对照表",
+        ]):
+            marker = f"〔已移除无效规则-{index}〕"
+            mutated_legal = legal.replace(phrase, marker)
+            mutated_invalidation = invalidation.replace(phrase, marker)
+            with self.subTest(phrase=phrase):
+                self.assertTrue(
+                    validate_skill.check_legal_basis(
+                        mutated_legal,
+                        equivalents,
+                        mutated_invalidation,
+                    )
+                )
+
     def test_protection_scope_requires_articles_one_through_five_in_its_own_section(self) -> None:
         legal = (validate_skill.SKILL_DIR / "references" / "00-legal-basis.md").read_text(encoding="utf-8")
         equivalents = (
@@ -112,12 +142,194 @@ class GateTests(unittest.TestCase):
     def test_root_readme_download_must_match_or_be_pending(self) -> None:
         prefix = '<tr>\n<td><a href="skills/patent-analysis/"><strong>patent-analysis</strong></a></td>\n'
         suffix = "\n</tr>"
-        pending = prefix + "<td>v2.1.1</td><td>待发布</td>" + suffix
-        matching = prefix + '<td>v2.1.1</td><td><a href="patent-analysis-2.1.1.zip">下载</a></td>' + suffix
-        mismatched = prefix + '<td>v2.1.1</td><td><a href="patent-analysis-1.2.0.zip">下载</a></td>' + suffix
+        version = validate_skill.RELEASE_VERSION
+        pending = prefix + f"<td>v{version}</td><td>待发布</td>" + suffix
+        matching = prefix + f'<td>v{version}</td><td><a href="patent-analysis-{version}.zip">下载</a></td>' + suffix
+        mismatched = prefix + f'<td>v{version}</td><td><a href="patent-analysis-1.2.0.zip">下载</a></td>' + suffix
         self.assertEqual([], validate_skill.check_root_readme_release(pending))
         self.assertEqual([], validate_skill.check_root_readme_release(matching))
         self.assertTrue(validate_skill.check_root_readme_release(mismatched))
+
+
+class EvalContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.evals_data, cls.assertions_data = check_evals.load_contract()
+
+    def test_current_ten_scenario_contract_passes(self) -> None:
+        self.assertEqual(
+            [],
+            check_evals.validate_metadata(self.evals_data, self.assertions_data),
+        )
+
+    def test_missing_scenario_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.evals_data)
+        mutated["evals"] = [case for case in mutated["evals"] if case["id"] != 10]
+        errors = check_evals.validate_metadata(mutated, self.assertions_data)
+        self.assertTrue(any("场景 1—10" in error for error in errors))
+
+    def test_weak_hard_assertion_policy_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.assertions_data)
+        first_case = mutated["cases"][0]
+        first_case["assertions"] = [
+            assertion
+            for assertion in first_case["assertions"]
+            if assertion["type"] not in check_evals.NEGATIVE_ASSERTIONS
+        ]
+        errors = check_evals.validate_metadata(self.evals_data, mutated)
+        self.assertTrue(any("hard 禁止性断言" in error for error in errors))
+
+    def test_unknown_assertion_type_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.assertions_data)
+        mutated["cases"][0]["assertions"][0]["type"] = "keyword-score"
+        errors = check_evals.validate_metadata(self.evals_data, mutated)
+        self.assertTrue(any("不支持的 type" in error for error in errors))
+
+    def test_missing_scenario_specific_gate_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.assertions_data)
+        case_three = next(case for case in mutated["cases"] if case["eval_id"] == 3)
+        case_three["assertions"] = [
+            assertion
+            for assertion in case_three["assertions"]
+            if assertion["id"] != "multi-provision-basis"
+        ]
+        errors = check_evals.validate_metadata(self.evals_data, mutated)
+        self.assertTrue(any("场景关键断言" in error for error in errors))
+
+    @staticmethod
+    def _positive_fixture(case: dict) -> str:
+        fragments: list[str] = []
+        for assertion in case["assertions"]:
+            assertion_type = assertion["type"]
+            if assertion_type == "contains_all":
+                fragments.extend(assertion["terms"])
+            elif assertion_type == "contains_any":
+                fragments.append(assertion["terms"][0])
+            elif assertion_type == "contains_any_per_group":
+                fragments.extend(group["terms"][0] for group in assertion["groups"])
+        return "。".join(fragments) + "。"
+
+    def test_affirmative_pollution_fails_but_explicit_refusal_passes(self) -> None:
+        bad_conclusions = {
+            1: "可以直接起诉",
+            2: "P-A 范围更大",
+            3: "字面侵权成立",
+            4: "无效成功率为 70%",
+            5: "低风险，可以自由实施",
+            6: "删除一个特征即可规避",
+            7: "估值为 500 万元",
+            8: "等同侵权成立",
+            9: "答复期固定为两个月",
+            10: "侵权风险高",
+        }
+        for case in self.assertions_data["cases"]:
+            eval_id = case["eval_id"]
+            fixture = self._positive_fixture(case)
+            with self.subTest(eval_id=eval_id, variant="baseline"):
+                self.assertTrue(check_evals.evaluate_case(fixture, case).ok)
+            with self.subTest(eval_id=eval_id, variant="polluted"):
+                self.assertFalse(
+                    check_evals.evaluate_case(
+                        fixture + f"综合判断：{bad_conclusions[eval_id]}。",
+                        case,
+                    ).ok
+                )
+            with self.subTest(eval_id=eval_id, variant="negated"):
+                self.assertTrue(
+                    check_evals.evaluate_case(
+                        fixture + f"不得认定{bad_conclusions[eval_id]}。",
+                        case,
+                    ).ok
+                )
+
+    def test_product_url_is_allowed_but_legal_source_url_is_blocked(self) -> None:
+        case_three = next(case for case in self.assertions_data["cases"] if case["eval_id"] == 3)
+        forbidden = next(
+            assertion
+            for assertion in case_three["assertions"]
+            if assertion["id"] == "forbidden-majority-coverage"
+        )
+        self.assertTrue(
+            check_evals.evaluate_assertion(
+                "产品证据：https://example.com/product-photo",
+                forbidden,
+            ).ok
+        )
+        self.assertFalse(
+            check_evals.evaluate_assertion(
+                "法律依据：《专利法》第六十四条 https://example.com/legal-source",
+                forbidden,
+            ).ok
+        )
+        self.assertFalse(
+            check_evals.evaluate_assertion(
+                "这是用于说明适用边界和当前核验状态的一段较长前言，法律依据：《专利法》第六十四条\n\n"
+                "https://example.com/legal-source",
+                forbidden,
+            ).ok
+        )
+
+    def test_double_negation_is_affirmative_and_long_refusal_is_safe(self) -> None:
+        samples = {
+            1: ("不得不认定专利有效", "不得在材料和法律状态均未核验且缺少现行文本的情况下认定专利有效"),
+            5: ("不能不认为属于低风险", "不能在目标法域、产品版本和实施行为均缺失的情况下作出低风险结论"),
+            8: ("不得不认定等同侵权成立", "不得在手段、效果和审查档案原文均未取得且无法逐特征核验的情况下认定等同侵权成立"),
+        }
+        for eval_id, (double_negative, long_refusal) in samples.items():
+            case = next(case for case in self.assertions_data["cases"] if case["eval_id"] == eval_id)
+            assertion = next(
+                item for item in case["assertions"] if item["type"] == "not_affirm_any"
+            )
+            with self.subTest(eval_id=eval_id, variant="double-negative"):
+                self.assertFalse(check_evals.evaluate_assertion(double_negative, assertion).ok)
+            with self.subTest(eval_id=eval_id, variant="long-refusal"):
+                self.assertTrue(check_evals.evaluate_assertion(long_refusal, assertion).ok)
+
+    def test_unverified_fixed_deadline_variants_are_blocked(self) -> None:
+        case_nine = next(case for case in self.assertions_data["cases"] if case["eval_id"] == 9)
+        assertion = next(
+            item
+            for item in case_nine["assertions"]
+            if item["id"] == "forbidden-old-procedure-rules"
+        )
+        invalid = [
+            "答复期限是两个月",
+            "应当在两个月内答复",
+            "答复截止日：2026-08-31",
+            "转送通知的答复期为两个月",
+            "截止日期定在2026年8月31日",
+        ]
+        for text in invalid:
+            with self.subTest(text=text, variant="affirmative"):
+                self.assertFalse(check_evals.evaluate_assertion(text, assertion).ok)
+            with self.subTest(text=text, variant="refusal"):
+                self.assertTrue(
+                    check_evals.evaluate_assertion(
+                        "不得在送达事实尚未核验、通知原件尚未取得且无法复核的情况下写入" + text,
+                        assertion,
+                    ).ok
+                )
+
+    def test_full_legal_titles_satisfy_source_alias_groups(self) -> None:
+        answers = {
+            3: (
+                "《中华人民共和国专利法》第六十四条；"
+                "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第七条；"
+                "《最高人民法院关于审理专利纠纷案件适用法律问题的若干规定》第十三条。"
+            ),
+            6: (
+                "《中华人民共和国专利法》第六十四条；"
+                "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》第七条。"
+            ),
+        }
+        assertion_ids = {3: "multi-provision-basis", 6: "design-around-legal-basis"}
+        for eval_id, answer in answers.items():
+            case = next(case for case in self.assertions_data["cases"] if case["eval_id"] == eval_id)
+            assertion = next(
+                item for item in case["assertions"] if item["id"] == assertion_ids[eval_id]
+            )
+            with self.subTest(eval_id=eval_id):
+                self.assertTrue(check_evals.evaluate_assertion(answer, assertion).ok)
 
 
 if __name__ == "__main__":

@@ -10,9 +10,11 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote
 
+import check_evals
+
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "2.1.1"
+RELEASE_VERSION = "2.1.2"
 
 FORBIDDEN_PATTERNS = {
     "placeholder_case": re.compile(r"(?:案号\s*[:：]?|最高法知(?:民|行)[^\n]{0,12})(?:[^\n]{0,20})(?:XXX|若干)"),
@@ -135,6 +137,7 @@ def second_level_section(text: str, heading: str) -> str:
 def check_legal_basis(
     legal_text: str | None = None,
     equivalence_text: str | None = None,
+    invalidation_text: str | None = None,
 ) -> list[str]:
     """Require a link-free, multi-provision legal basis for core doctrines."""
     if legal_text is None:
@@ -143,11 +146,16 @@ def check_legal_basis(
         equivalence_text = (SKILL_DIR / "references" / "08-doctrine-of-equivalents.md").read_text(
             encoding="utf-8"
         )
+    if invalidation_text is None:
+        invalidation_text = (SKILL_DIR / "references" / "09-invalidation-defense.md").read_text(
+            encoding="utf-8"
+        )
 
     errors: list[str] = []
     for name, text in [
         ("references/00-legal-basis.md", legal_text),
         ("references/08-doctrine-of-equivalents.md", equivalence_text),
+        ("references/09-invalidation-defense.md", invalidation_text),
     ]:
         if re.search(r"https?://", text, flags=re.IGNORECASE):
             errors.append(f"{name}: public legal basis must not contain web URLs")
@@ -208,6 +216,29 @@ def check_legal_basis(
     missing = [phrase for phrase in equivalence_requirements if phrase not in equivalence_text]
     if missing:
         errors.append(f"references/08-doctrine-of-equivalents.md: missing provisions: {missing}")
+
+    invalidation_requirements = [
+        "《专利法实施细则》第七十二条",
+        "《专利法实施细则》第七十三条",
+        "《专利审查指南》第四部分第三章第4.6.1节至第4.6.4节",
+        "全文替换页",
+        "修改对照表",
+    ]
+    missing = [phrase for phrase in invalidation_requirements if phrase not in invalidation_text]
+    if missing:
+        errors.append(f"references/09-invalidation-defense.md: missing provisions: {missing}")
+
+    common_invalidation_requirements = [
+        "《专利法实施细则》第七十二条",
+        "《专利法实施细则》第七十三条",
+        "《专利审查指南》第四部分第三章第4.6.4节",
+        "自2026年1月1日起施行",
+        "全文替换页",
+        "修改对照表",
+    ]
+    missing = [phrase for phrase in common_invalidation_requirements if phrase not in legal_text]
+    if missing:
+        errors.append(f"references/00-legal-basis.md: 无效程序 missing provisions: {missing}")
     return errors
 
 
@@ -339,6 +370,7 @@ def main() -> int:
         )
     )
     errors.extend(check_legal_basis())
+    errors.extend(f"eval contract: {error}" for error in check_evals.validate_contract())
     if args.repo_root:
         errors.extend(check_repo_sync(args.repo_root.resolve()))
 

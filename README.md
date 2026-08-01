@@ -35,7 +35,7 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
-| 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.1  | 法源改为无网页链接的多条款组合矩阵；细化保护范围、全面覆盖、等同原则及其特殊限定、限制规则与常见抗辩，并新增对应静态门禁 |
+| 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.2  | 新增覆盖十个场景的代表性提示词、hard/soft 机器断言和独立校验器；侵权、规避、等同及无效样本锁定无网页链接的多条款法源与证据停止门禁 |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
 | 2026-07-30 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.2  | 稳定性合同兼容顶层 `version` 与官方 `metadata.version`，并对双位置版本冲突保持 fail-closed，避免合法发布候选被误报为身份缺失 |
 | 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.4  | TASKS 改为流动的当前任务入口；移除归档索引并禁止创建 before 快照，历史分别归入 CHANGELOG 与 DECISIONS                                                        |
@@ -289,7 +289,7 @@
 <td>专业·知产</td>
 <td style="word-break:break-word">中国发明与实用新型专利分析工具，支持10种场景；逐项分析选定权利要求，以 A/B/C/D 证据门禁约束侵权、无效、FTO、规避设计、估值和可视化结论</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v2.1.1</td>
+<td style="text-align:center">v2.1.2</td>
 <td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>
