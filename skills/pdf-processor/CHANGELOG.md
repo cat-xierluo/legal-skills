@@ -1,5 +1,29 @@
 # 更新日志
 
+## [2.10.2] - 2026-08-01
+
+### 新增
+
+- 新增 `--dump-and-pdf`：配合 `--ocr-dump` 使用时，保存 dump 后继续生成双层 PDF，不再需要"先 dump 再 resume"两步走。原有 `--ocr-dump` 单独使用仍保持"仅 dump 不出 PDF"语义（向后兼容 v2.5.0 审查工作流）。
+- 把 `--actualtext` 接入 `pdf-ocr.py` 主流程并默认开启：文字层生成后自动调用 PP-StructureV3 拿版面，融合自然段并以 `/ActualText` marked-content 写入 PDF，让从 PDF 复制的文字按段落连续。`--no-actualtext` 关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。失败时降级为行级 PDF，不阻塞主流程。
+
+### 改进
+
+- 修复双层 PDF `/ActualText` 完整性校验过严的问题：自然段因物理行不连续（如跳过印章碎片）无法包裹时，不再让整页失败回退，而是把该段降级为行级（文字不丢失，仅该段复制按行断行）。校验仍会对"row_indices 指向不存在行或文字拼接不匹配"这类真正的映射错误抛完整性异常。
+
+### 技术优化
+
+- `_apply_semantic_actual_text` 返回值由 `int` 改为 `(applied, invalid_mapping_count)`，精确区分"行不连续降级"与"映射错误失败"。
+- 新增辅助函数 `_actualtext_enabled`、`_entries_already_have_paragraphs`、`_inject_semantic_paragraphs`（paddle_api 后端）；避免对已带 `semantic_paragraphs` 的 dump/resume 重复融合，避免对 VL/Structure 文字模型（本就含版面）二次调用 API。
+- 实测阅读器兼容性：Poppler（`pdftotext -raw`、默认）能拿到整段连续文本；PyMuPDF、pypdf、macOS 预览（PDFKit）仍按物理行断行。结论已写入 SKILL.md 表格。
+- 基于《民事起诉状》真实 2 页扫描件端到端验证：`--dump-and-pdf` 一次调用同时出 dump + 含 ActualText 的双层 PDF；第 1 页 13/13 段全部写入，第 2 页 3/4 段（"此致"段因跨印章碎片降级）；Poppler 提取的"事实与理由"段为整段连续 0 换行。
+- 回归测试由 88 项扩展到 96 项，新增 `_actualtext_enabled` 默认/关闭、VL/Structure 跳过二次调用、`--layout-dump` 复用、失败降级、不连续段不抛异常等用例。
+
+### 范围说明
+
+- 本次外部 API 调用基于用户明确授权的《民事起诉状》文件；OCR 全文、dump 等中间产物只保存临时目录，不写入 Skill 或版本库。
+- macOS 预览（PDFKit）不支持 `/ActualText` 是已知局限，跨阅读器稳定的段落文本仍以独立 Markdown 为准。
+
 ## [2.10.1] - 2026-08-01
 
 ### 修复

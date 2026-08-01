@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.10.1"
+version: "2.10.2"
 description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -112,16 +112,32 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --archive-results
 
 PaddleOCR-VL-1.5/1.6 也可解析，但只提供块级坐标，文字层定位粒度低于 `PP-OCRv5/v6` / `PP-StructureV3`。本技能不接入 Qwen/GLM 等视觉识别链路，也不宣称云端结果含字符级坐标。
 
-### 4. 输出自然段文本并过滤印章噪声
+PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一次 PP-StructureV3 拿版面，融合出自然段并以 `/ActualText` marked-content 写入 PDF，让从 PDF 复制的文字按段落连续而非按物理行断行。`--no-actualtext` 可关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。阅读器兼容性见下文第 4 节。
 
-需要解决复制文本中的段内回车、多余空行和印章文字时，采用两模型分工：`PP-OCRv6` 提供主要行级文字及坐标，`PP-StructureV3` 提供阅读顺序、区域类型和 `seal` 区域。只有 v6 行置信度低于 0.80、Structure 对应行置信度不低于 0.90、双方坐标高度重合且后者至少高 0.10 时，才采用 Structure 的行级文字兜底；始终不读取版面块文字，也不调用大语言模型。双层 PDF 仍按行叠层，自然段写入独立 Markdown。
+### 4. 自然段文本与 PDF 复制换行
+
+双层 PDF 的文字层按行叠层（保护选区坐标精度），直接从 PDF 复制会按物理行断行。解决方式有两条：
+
+**默认：`/ActualText` + 独立 Markdown。** `--actualtext`（默认开启）把自然段写入 PDF 的 `/ActualText` marked-content，同时保留行级字形坐标。实测各阅读器支持：
+
+| 提取方式 | 从 PDF 复制的段落连续性 |
+|---|---|
+| Poppler（`pdftotext -raw`、`pdftotext` 默认） | ✅ 整段连续，无换行 |
+| PyMuPDF、pypdf、macOS 预览（PDFKit） | ❌ 仍按物理行断行 |
+
+因此 Poppler 用户能直接从 PDF 拿到段落级文本；macOS 预览用户复制仍会断行，需用独立 Markdown（`pdf_ocr_paragraphs.py` 输出的 `clean.md`）作为段落文本交付。个别自然段若跳过被排除的行（如印章碎片），因物理行不连续无法包裹，会降级为行级（文字不丢失，仅该段复制按行断行）。
+
+需要解决复制文本中的段内回车、多余空行和印章文字时，采用两模型分工：`PP-OCRv6` 提供主要行级文字及坐标，`PP-StructureV3` 提供阅读顺序、区域类型和 `seal` 区域。只有 v6 行置信度低于 0.80、Structure 对应行置信度不低于 0.90、双方坐标高度重合且后者至少高 0.10 时，才采用 Structure 的行级文字兜底；始终不读取版面块文字，也不调用大语言模型。
 
 Structure 的块边界只作为候选而非强制段界：融合器先合并同一视觉行的碎片，在 `text` 区域内按行距、缩进和右边界恢复物理换行，再依据句末标点和条款编号跨相邻文本块连接正文；`table` 区域按视觉行保留单元格次序并用 ` | ` 分隔。这样可处理 Structure 高覆盖但正文块过度切碎的页面。
 
+需要独立 Markdown、自定义 dump 审查或复用已有版面 dump 时，用以下四步法（主流程已默认自动完成等价工作）：
+
 ```bash
-# 1. 获取文字真值
-python3 scripts/pdf-ocr.py -i input.pdf -o unused.pdf \
-  --backend paddle_api --paddle-model PP-OCRv6 --ocr-dump /tmp/text.json
+# 1. 获取文字真值（--dump-and-pdf 同时出 dump 和双层 PDF）
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend paddle_api --paddle-model PP-OCRv6 \
+  --ocr-dump /tmp/text.json --dump-and-pdf
 
 # 2. 获取版面结构
 python3 scripts/pdf-ocr.py -i input.pdf -o unused.pdf \
@@ -139,8 +155,6 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
 ```
 
 诊断中的 `layout_coverage` 低于 `0.75` 时自动退回纯几何规则；同时查看 `structure_text_fallbacks` 和 `layout_boundary_merges`，确认低置信替换与跨块合并均可审计。只有 Structure 明显漏块、区域类型错误或阅读顺序错误，且纯几何回退仍不能恢复时，才另测 `PaddleOCR-VL-1.5` 作为 `--layout-dump`；VL-1.6 不作为默认兜底。全文、dump 与账号等敏感信息继续只放临时目录，除非用户明确要求归档。
-
-`--actualtext` 可实验性地把自然段写入 PDF `/ActualText`，同时保留行级字形坐标；但不同阅读器支持不一致，必须用目标阅读器实测。当前兼容性基准中 Poppler `-raw` 能按 15 个自然段提取，PyMuPDF 仍按物理行排版，pypdf 与 macOS PDFKit（预览所用框架）忽略该提示，Poppler 默认布局排序还会倒序，因此不作为默认产物；跨阅读器稳定的自然段仍以独立 Markdown 为准。
 
 ## 单项工具
 

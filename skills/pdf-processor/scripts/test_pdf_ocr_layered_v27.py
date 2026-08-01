@@ -436,5 +436,123 @@ class TestPaddleApiModelParsing(unittest.TestCase):
         self.assertNotIn("layoutShapeMode", P._build_default_payload(P.PADDLE_STRUCTURE_MODEL))
 
 
+class TestActualTextHelpers(unittest.TestCase):
+    """v2.10.2: ActualText 主流程接入与 dump-and-pdf 选项的纯逻辑测试。"""
+
+    def test_actualtext_enabled_default_on(self):
+        class Args:
+            actualtext = True
+            no_actualtext = False
+        self.assertTrue(P._actualtext_enabled(Args()))
+
+    def test_actualtext_disabled_by_no_actualtext(self):
+        class Args:
+            actualtext = True
+            no_actualtext = True
+        self.assertFalse(P._actualtext_enabled(Args()))
+
+    def test_actualtext_disabled_when_explicit_false(self):
+        class Args:
+            actualtext = False
+            no_actualtext = False
+        self.assertFalse(P._actualtext_enabled(Args()))
+
+    def test_entries_already_have_paragraphs_detection(self):
+        self.assertFalse(P._entries_already_have_paragraphs([{}]))
+        self.assertFalse(P._entries_already_have_paragraphs([{"rows": []}]))
+        self.assertTrue(
+            P._entries_already_have_paragraphs([{"semantic_paragraphs": [{"text": "x"}]}])
+        )
+
+    def test_inject_skips_vl_and_structure_text_models(self):
+        """VL/Structure 文字模型本就含版面，不应再调二次 API。"""
+
+        class FakeArgs:
+            paddle_api_endpoint = "http://example"
+            paddle_api_timeout = 1
+            input = "x.pdf"
+            layout_dump = None
+
+        for model in (P.PADDLE_VL_15_MODEL, P.PADDLE_VL_16_MODEL, P.PADDLE_STRUCTURE_MODEL):
+            with self.subTest(model=model):
+                entries = [{"rows": []}]
+                P._inject_semantic_paragraphs(entries, FakeArgs(), "key", model, quiet=True)
+                self.assertEqual(entries, [{"rows": []}])
+                self.assertNotIn("semantic_paragraphs", entries[0])
+
+    def test_inject_uses_layout_dump_when_provided(self):
+        """提供 --layout-dump 时复用，不调用 API。"""
+        from pdf_ocr_corrections import dump_page_entries
+        layout = [{
+            "rows": [],
+            "width": 1000, "height": 1000,
+            "layout_blocks": [{"label": "text", "bbox": [0, 0, 900, 200], "index": 1}],
+        }]
+        text_entries = [{
+            "rows": [("你好世界。", 0.99, [[0, 0], [900, 0], [900, 100], [0, 100]])],
+            "width": 1000, "height": 1000,
+        }]
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            dump_page_entries(layout, f.name, model="PP-StructureV3")
+            layout_path = f.name
+
+        class FakeArgs:
+            paddle_api_endpoint = "http://example"
+            paddle_api_timeout = 1
+            input = "x.pdf"
+            layout_dump = layout_path
+
+        try:
+            P._inject_semantic_paragraphs(text_entries, FakeArgs(), "key", "PP-OCRv6", quiet=True)
+            self.assertIn("semantic_paragraphs", text_entries[0])
+            self.assertGreaterEqual(len(text_entries[0]["semantic_paragraphs"]), 1)
+        finally:
+            os.unlink(layout_path)
+
+    def test_inject_degrades_gracefully_on_failure(self):
+        """融合失败时不抛异常，page_entries 保持不变（降级为行级 PDF）。"""
+
+        class FakeArgs:
+            paddle_api_endpoint = None
+            paddle_api_timeout = 1
+            input = "x.pdf"
+            layout_dump = None
+
+        entries = [{"rows": []}]
+        P._inject_semantic_paragraphs(entries, FakeArgs(), "key", "PP-OCRv6", quiet=True)
+        self.assertNotIn("semantic_paragraphs", entries[0])
+
+
+class TestActualTextWriteTolerance(unittest.TestCase):
+    """v2.10.2: ActualText 写入校验放宽——段不连续不应让整页失败。"""
+
+    def test_discontinuous_paragraph_does_not_raise(self):
+        """行 [0,2] 跳过行 1 的段，应跳过该段而非抛 TextLayerIntegrityError。"""
+        from pdf_ocr_layered import TextLayerIntegrityError
+
+        doc = fitz.open()
+        page = doc.new_page(width=600, height=800)
+        font = fitz.Font("china-s")
+        rows = [
+            ("第一行文字", 0.99, [[50, 50], [300, 50], [300, 80], [50, 80]]),
+            ("被跳过的印章碎片", 0.99, [[50, 90], [300, 90], [300, 120], [50, 120]]),
+            ("第三行文字", 0.99, [[50, 130], [300, 130], [300, 160], [50, 160]]),
+        ]
+        semantic = [{"text": "第一行文字第三行文字", "row_indices": [0, 2]}]
+        try:
+            inserted = L._insert_text_blocks(
+                page, font, rows,
+                scale_x=1.0, scale_y=1.0, min_score=0.5,
+                cjk_normalize=False, page_rotation=0,
+                source_name="test", pno=1, total_pages=1,
+                quiet=True, semantic_paragraphs=semantic,
+            )
+            self.assertGreater(inserted, 0)
+        except TextLayerIntegrityError:
+            self.fail("不连续段不应抛 TextLayerIntegrityError")
+        finally:
+            doc.close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

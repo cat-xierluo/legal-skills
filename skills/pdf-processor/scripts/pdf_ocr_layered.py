@@ -648,16 +648,24 @@ def _apply_semantic_actual_text(
     row_content_xrefs: dict[int, list[int]],
     row_texts: dict[int, str],
     semantic_paragraphs: list[dict],
-) -> int:
-    """为连续行流添加 /ActualText；不改变行级字形与选区坐标。"""
+) -> tuple[int, int]:
+    """为连续行流添加 /ActualText；不改变行级字形与选区坐标。
+
+    返回 ``(applied, invalid_mapping_count)``：
+    - ``applied``：成功写入 /ActualText 的段数。
+    - ``invalid_mapping_count``：row_indices 指向不存在行或文字拼接不匹配的段数。
+      这类是真正的映射错误，调用方应据此判定是否抛完整性异常。
+      “行存在但物理上不连续”（如跳过印章碎片）不算映射错误，仅跳过该段。
+    """
     if not semantic_paragraphs:
-        return 0
+        return 0, 0
 
     doc = page.parent
     page_contents = list(page.get_contents())
     content_positions = {xref: index for index, xref in enumerate(page_contents)}
     used_xrefs: set[int] = set()
     applied = 0
+    invalid_mapping = 0
 
     for paragraph in semantic_paragraphs:
         if not isinstance(paragraph, dict):
@@ -670,16 +678,20 @@ def _apply_semantic_actual_text(
             indices = [int(value) for value in row_indices]
         except (TypeError, ValueError):
             continue
+        # 指向不存在的行 = 真正的映射错误
         if any(index not in row_content_xrefs or index not in row_texts for index in indices):
+            invalid_mapping += 1
             continue
         physical_text = "".join(row_texts[index] for index in indices)
         if re.sub(r"\s+", "", physical_text) != re.sub(r"\s+", "", text):
+            invalid_mapping += 1
             continue
 
         xrefs = [xref for index in indices for xref in row_content_xrefs[index]]
         if not xrefs or any(xref in used_xrefs or xref not in content_positions for xref in xrefs):
             continue
         positions = [content_positions[xref] for xref in xrefs]
+        # 行存在但物理上不连续（如跨被排除的印章行）→ 跳过该段，不算错误
         if positions != list(range(min(positions), max(positions) + 1)):
             continue
 
@@ -696,7 +708,7 @@ def _apply_semantic_actual_text(
         used_xrefs.update(xrefs)
         applied += 1
 
-    return applied
+    return applied, invalid_mapping
 
 
 def _insert_text_blocks(
@@ -792,21 +804,31 @@ def _insert_text_blocks(
         row_texts[source_row_index] = content
         page_inserted += n_lines
 
-    actual_text_count = _apply_semantic_actual_text(
+    actual_text_count, invalid_mapping = _apply_semantic_actual_text(
         page,
         row_content_xrefs,
         row_texts,
         semantic_paragraphs or [],
     )
-    if semantic_paragraphs and actual_text_count != len(semantic_paragraphs):
+    # row_indices 指向不存在行或文字拼接不匹配 = 真正的映射错误，必须失败。
+    # “行存在但不连续”（如跳过印章碎片）已在 _apply_semantic_actual_text 内部降级跳过，
+    # 这些段仍以行级字形呈现（文字不丢失，仅复制时退化为按行断行），不视为致命错误。
+    if invalid_mapping:
         raise TextLayerIntegrityError(
-            f"ActualText 自然段写入不完整（{actual_text_count}/{len(semantic_paragraphs)}）"
+            f"ActualText 自然段映射无效（{invalid_mapping} 段指向不存在的行或文字不匹配）"
+        )
+    total_paragraphs = len(semantic_paragraphs or [])
+    skipped_discontinuous = total_paragraphs - actual_text_count
+    if skipped_discontinuous and not quiet:
+        print(
+            f"    ActualText 提示: {actual_text_count}/{total_paragraphs} 段写入，"
+            f"{skipped_discontinuous} 段因行不连续降级为行级（文字完整，复制可能按行断行）"
         )
 
     if not quiet:
         print(f"  第 {pno}/{total_pages} 页({source_name}): 新增 {page_inserted} 文本块")
         if semantic_paragraphs:
-            print(f"    ActualText 自然段: {actual_text_count}/{len(semantic_paragraphs)}")
+            print(f"    ActualText 自然段: {actual_text_count}/{total_paragraphs}")
 
     return page_inserted
 

@@ -457,8 +457,12 @@ def run_ocr(**kwargs):
         "paddle_vl_doc_unwarping": False,
         "paddle_vl_layout_shape_mode": "rect",
         "ocr_dump": None,
+        "dump_and_pdf": False,
         "ocr_resume": None,
         "corrections_file": None,
+        "actualtext": True,
+        "no_actualtext": False,
+        "layout_dump": None,
         "mineru_api_base": None,
         "mineru_api_base_env": DEFAULT_MINERU_API_BASE_ENV,
         "mineru_api_token_env": DEFAULT_MINERU_API_TOKEN_ENV,
@@ -881,6 +885,11 @@ def main():
         help="OCR dump 模式：完成 OCR 后将结果保存到 JSON 文件，不生成 PDF（供 agent 审查）",
     )
     parser.add_argument(
+        "--dump-and-pdf",
+        action="store_true",
+        help="配合 --ocr-dump 使用：保存 dump 后继续生成双层 PDF（默认 --ocr-dump 仅 dump 不出 PDF）",
+    )
+    parser.add_argument(
         "--ocr-resume",
         metavar="FILE",
         help="OCR resume 模式：从 dump 文件加载 OCR 结果，跳过 API 调用（配合 --ocr-dump 使用）",
@@ -889,6 +898,26 @@ def main():
         "--corrections-file",
         metavar="FILE",
         help="Agent 修正文件：JSON 格式 [{from, to}, ...]，在规则纠错后应用",
+    )
+
+    # ActualText / 自然段参数（默认开启，让从 PDF 复制的文字按段落连续）
+    parser.add_argument(
+        "--actualtext",
+        dest="actualtext",
+        action="store_true",
+        default=True,
+        help="（默认开启）把自然段以 /ActualText 写入 PDF 文字层，让复制/搜索得到段落级连续文本",
+    )
+    parser.add_argument(
+        "--no-actualtext",
+        dest="actualtext",
+        action="store_false",
+        help="关闭 ActualText 写入；PDF 复制仍按物理行断行，需用独立 Markdown 取段落文本",
+    )
+    parser.add_argument(
+        "--layout-dump",
+        metavar="FILE",
+        help="已有 PP-StructureV3/VL 版面 dump JSON；ActualText 融合时复用，避免再调一次 API",
     )
 
     # MinerU API 参数

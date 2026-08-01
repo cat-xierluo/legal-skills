@@ -760,6 +760,90 @@ def _split_pdf(input_path: str, max_pages: int) -> list[str]:
     return paths
 
 
+def _actualtext_enabled(args) -> bool:
+    """ActualText 默认开启；--no-actualtext 或 --actualtext False 时关闭。"""
+    if getattr(args, "no_actualtext", False):
+        return False
+    return bool(getattr(args, "actualtext", True))
+
+
+def _entries_already_have_paragraphs(page_entries: list[dict]) -> bool:
+    """dump/resume 路径下 page_entries 可能已带 semantic_paragraphs，避免重复融合。"""
+    for entry in page_entries:
+        if entry.get("semantic_paragraphs"):
+            return True
+    return False
+
+
+def _inject_semantic_paragraphs(
+    page_entries: list[dict],
+    args,
+    api_key: str,
+    text_model: str,
+    *,
+    quiet: bool = True,
+) -> None:
+    """获取版面结构并融合自然段，注入到 page_entries 供 ActualText 写入。
+
+    失败时降级为行级 PDF（不修改 page_entries），不阻塞主流程。
+    优先复用 --layout-dump 指定的已有版面 dump，否则用 PP-StructureV3 再调一次 API。
+    """
+    try:
+        from pdf_ocr_paragraphs import reconstruct_paragraphs
+
+        layout_entries = None
+        layout_dump_path = getattr(args, "layout_dump", None)
+        if layout_dump_path:
+            from pdf_ocr_corrections import load_page_entries
+            layout_entries, _ = load_page_entries(layout_dump_path)
+            if not quiet:
+                print(f"  ActualText: 从版面 dump 加载 {len(layout_entries)} 页 ({layout_dump_path})")
+        else:
+            # 用 PP-StructureV3 再调一次 API 拿版面。VL 文字模型本就带版面，跳过二次调用。
+            if text_model in PADDLE_VL_MODELS or text_model == PADDLE_STRUCTURE_MODEL:
+                if not quiet:
+                    print(f"  ActualText: 文字模型 {text_model} 已含版面，跳过二次调用")
+                return
+            if not args.paddle_api_endpoint:
+                if not quiet:
+                    print("  ActualText: 无 endpoint，跳过（降级为行级 PDF）")
+                return
+            structure_payload = _build_default_payload(PADDLE_STRUCTURE_MODEL)
+            if not quiet:
+                print(f"  ActualText: 调用 PP-StructureV3 获取版面结构...")
+            layout_entries, _ = _submit_and_collect(
+                args.input,
+                args.paddle_api_endpoint,
+                api_key,
+                args.paddle_api_timeout,
+                PADDLE_STRUCTURE_MODEL,
+                structure_payload,
+                PADDLE_POLL_INTERVAL,
+                PADDLE_POLL_TIMEOUT,
+                quiet,
+            )
+
+        paragraphs, diag = reconstruct_paragraphs(page_entries, layout_entries)
+        # 按页分组，把每页的自然段 row_indices 注入对应 page_entry
+        per_page: dict[int, list[dict]] = {}
+        for p in paragraphs:
+            per_page.setdefault(p["page"], []).append(
+                {"text": p["text"], "row_indices": p["row_indices"]}
+            )
+        for idx, entry in enumerate(page_entries):
+            entry["semantic_paragraphs"] = per_page.get(idx + 1, [])
+        if not quiet:
+            print(
+                f"  ActualText: {len(paragraphs)} 个自然段 | "
+                f"layout_coverage {diag.get('layout_coverage', 0):.0%} | "
+                f"跨块合并 {diag.get('layout_boundary_merges', 0)}"
+            )
+    except Exception as exc:
+        # 任何失败都降级为行级 PDF，保证主流程产出可用
+        if not quiet:
+            print(f"  ActualText: 融合失败，降级为行级 PDF ({exc})")
+
+
 def _submit_and_collect(
     input_path: str,
     endpoint: str,
@@ -1007,8 +1091,10 @@ def run_paddle_api_backend(args):
             except Exception:
                 pass  # archive 失败不阻塞主流程
 
-        # --ocr-dump: 保存 OCR 结果，不生成 PDF，等 agent 审查
+        # --ocr-dump: 保存 OCR 结果。
+        # 默认仅 dump（保留 v2.5.0 审查两步走语义）；--dump-and-pdf 时继续生成 PDF。
         dump_path = getattr(args, "ocr_dump", None)
+        dump_and_pdf = bool(getattr(args, "dump_and_pdf", False))
         if dump_path:
             dump_page_entries(page_entries, dump_path,
                               source=args.input, model=model)
@@ -1021,12 +1107,16 @@ def run_paddle_api_backend(args):
                 print(f"    完整数据: {dump_path}")
                 print(f"    可读文本: {readable_path}")
                 print(f"    共 {len(page_entries)} 页")
-                print(f"\n  审查后请运行:")
-                print(f"    pdf-ocr.py -i {args.input} -o {args.output} \\")
-                print(f"      --ocr-resume {dump_path} --backend paddle_api \\")
-                print(f"      --env-file {getattr(args, 'env_file', '')}")
+                if dump_and_pdf:
+                    print(f"    --dump-and-pdf 已启用，继续生成双层 PDF...")
+                else:
+                    print(f"\n  审查后请运行:")
+                    print(f"    pdf-ocr.py -i {args.input} -o {args.output} \\")
+                    print(f"      --ocr-resume {dump_path} --backend paddle_api \\")
+                    print(f"      --env-file {getattr(args, 'env_file', '')}")
             args.backend_used = f"paddle_api({model},dumped)"
-            return
+            if not dump_and_pdf:
+                return
 
         # Agent 修正（from/to）
         corrections_file = getattr(args, "corrections_file", None)
@@ -1036,6 +1126,12 @@ def run_paddle_api_backend(args):
                 page_entries, _ = apply_agent_corrections(
                     page_entries, agent_corrections, quiet=args.quiet,
                 )
+
+        # ActualText：把自然段写入 PDF 文字层（/ActualText marked content），
+        # 让复制/搜索得到段落级连续文本。需要 PP-StructureV3 版面数据。
+        # 默认开启；--no-actualtext 关闭；失败降级为行级 PDF，不阻塞主流程。
+        if _actualtext_enabled(args) and not _entries_already_have_paragraphs(page_entries):
+            _inject_semantic_paragraphs(page_entries, args, api_key, model, quiet=args.quiet)
 
         layered_ok = apply_page_entries_as_layered_pdf(
             page_entries, args, source_name=f"PaddleOCR({model})",
