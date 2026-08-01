@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "skill_name": "patent-analysis",
+  "skill_version": "2.2.0",
+  "jurisdiction": "中国",
+  "baseline_id": "cn-patent-law-2026-08-01",
+  "verified_on": "2026-08-01",
+  "public_url_policy": "forbidden",
+  "official_baseline": {
+    "title": "国家知识产权局关于修改《专利审查指南》的决定",
+    "issuing_authority": "国家知识产权局",
+    "order_no": "国家知识产权局令第八十四号",
+    "issued_on": "2025-11-10",
+    "effective_from": "2026-01-01"
+  },
+  "sources": [
+    {
+      "source_id": "patent-law-2020",
+      "short_title": "《专利法》",
+      "full_title": "《中华人民共和国专利法》（2020年修正）",
+      "issuing_authority": "全国人民代表大会常务委员会",
+      "kind": "law",
+      "status": "current",
+      "effective_from": "2021-06-01"
+    },
+    {
+      "source_id": "patent-regulations-2023",
+      "short_title": "《专利法实施细则》",
+      "full_title": "《中华人民共和国专利法实施细则》（2023年修订）",
+      "issuing_authority": "国务院",
+      "kind": "administrative_regulation",
+      "status": "current",
+      "effective_from": "2024-01-20"
+    },
+    {
+      "source_id": "patent-infringement-interpretation-1",
+      "short_title": "《专利侵权司法解释（一）》",
+      "full_title": "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释》（2020年修正）",
+      "issuing_authority": "最高人民法院",
+      "kind": "judicial_interpretation",
+      "status": "current",
+      "effective_from": "2021-01-01"
+    },
+    {
+      "source_id": "patent-infringement-interpretation-2",
+      "short_title": "《专利侵权司法解释（二）》",
+      "full_title": "《最高人民法院关于审理侵犯专利权纠纷案件应用法律若干问题的解释（二）》（2020年修正）",
+      "issuing_authority": "最高人民法院",
+      "kind": "judicial_interpretation",
+      "status": "current",
+      "effective_from": "2021-01-01"
+    },
+    {
+      "source_id": "patent-dispute-provisions-2020",
+      "short_title": "《专利纠纷若干规定》",
+      "full_title": "《最高人民法院关于审理专利纠纷案件适用法律问题的若干规定》（2020年修正）",
+      "issuing_authority": "最高人民法院",
+      "kind": "judicial_interpretation",
+      "status": "current",
+      "effective_from": "2021-01-01"
+    },
+    {
+      "source_id": "patent-authorization-interpretation-1",
+      "short_title": "《专利授权确权规定（一）》",
+      "full_title": "《最高人民法院关于审理专利授权确权行政案件适用法律若干问题的规定（一）》",
+      "issuing_authority": "最高人民法院",
+      "kind": "judicial_interpretation",
+      "status": "current",
+      "effective_from": "2020-09-12"
+    },
+    {
+      "source_id": "patent-examination-guidelines-2026",
+      "short_title": "《专利审查指南》",
+      "full_title": "《专利审查指南》（根据国家知识产权局令第八十四号修改，自2026年1月1日起施行）",
+      "issuing_authority": "国家知识产权局",
+      "kind": "examination_guideline",
+      "status": "current",
+      "effective_from": "2026-01-01"
+    }
+  ],
+  "doctrine_groups": [
+    {
+      "issue_id": "protection-scope",
+      "title": "保护范围与权利要求解释",
+      "min_provisions": 2,
+      "affected_scenarios": [1, 2, 3, 5, 6, 7, 8, 10],
+      "provisions": [
+        {"source_id": "patent-law-2020", "citation": "第六十四条"},
+        {"source_id": "patent-dispute-provisions-2020", "citation": "第十三条"},
+        {"source_id": "patent-infringement-interpretation-1", "citation": "第一条至第五条"},
+        {"source_id": "patent-infringement-interpretation-2", "citation": "第三条至第五条"}
+      ]
+    },
+    {
+      "issue_id": "literal-coverage",
+      "title": "全面覆盖与字面落入",
+      "min_provisions": 2,
+      "affected_scenarios": [3, 5, 6, 10],
+      "provisions": [
+        {"source_id": "patent-infringement-interpretation-1", "citation": "第七条"},
+        {"source_id": "patent-dispute-provisions-2020", "citation": "第十三条"},
+        {"source_id": "patent-infringement-interpretation-2", "citation": "第五条、第七条至第十二条"}
+      ]
+    },
+    {
+      "issue_id": "equivalence",
+      "title": "等同原则及其限制",
+      "min_provisions": 2,
+      "affected_scenarios": [3, 5, 6, 8, 9, 10],
+      "provisions": [
+        {"source_id": "patent-dispute-provisions-2020", "citation": "第十三条"},
+        {"source_id": "patent-infringement-interpretation-1", "citation": "第四条至第七条、第十四条"},
+        {"source_id": "patent-infringement-interpretation-2", "citation": "第七条至第十三条、第二十二条"},
+        {"source_id": "patent-law-2020", "citation": "第六十七条"}
+      ]
+    },
+    {
+      "issue_id": "validity-2026",
+      "title": "授权确权与2026年审查基准",
+      "min_provisions": 2,
+      "affected_scenarios": [1, 2, 4, 5, 6, 7, 9],
+      "provisions": [
+        {"source_id": "patent-law-2020", "citation": "第五条第一款、第九条第一款、第二十二条、第二十五条第一款、第二十六条第三款和第四款、第三十三条"},
+        {"source_id": "patent-regulations-2023", "citation": "第四十七条、第七十三条"},
+        {"source_id": "patent-authorization-interpretation-1", "citation": "第六条至第九条、第十三条"},
+        {"source_id": "patent-examination-guidelines-2026", "citation": "第二部分第一章第4.4节、第二部分第三章第6.2.2节、第二部分第四章第6.4节、第二部分第九章第6节和第7节、第二部分第十章第9节"}
+      ]
+    },
+    {
+      "issue_id": "invalidation-procedure",
+      "title": "无效宣告程序与权利要求修改",
+      "min_provisions": 2,
+      "affected_scenarios": [4, 5, 6, 7, 8, 9, 10],
+      "provisions": [
+        {"source_id": "patent-law-2020", "citation": "第三十三条、第四十五条、第四十六条"},
+        {"source_id": "patent-regulations-2023", "citation": "第七十二条、第七十三条"},
+        {"source_id": "patent-examination-guidelines-2026", "citation": "第四部分第三章第2.1节、第3.2节、第3.3节、第4.6.1节至第4.6.4节"}
+      ]
+    },
+    {
+      "issue_id": "fto-currentness",
+      "title": "FTO排他行为、保护范围、抗辩与状态更新",
+      "min_provisions": 4,
+      "affected_scenarios": [5, 6],
+      "provisions": [
+        {"source_id": "patent-law-2020", "citation": "第十一条、第六十四条、第六十七条、第七十五条、第七十七条"},
+        {"source_id": "patent-infringement-interpretation-1", "citation": "第七条、第十四条"},
+        {"source_id": "patent-infringement-interpretation-2", "citation": "第二十一条至第二十五条"},
+        {"source_id": "patent-examination-guidelines-2026", "citation": "第二部分第三章第6.2.2节、第四部分第三章第4.6.4节、第五部分第八章第1.3.2.6节和第1.3.2.7节、第五部分第九章第2.2.1节"}
+      ]
+    },
+    {
+      "issue_id": "valuation-currentness",
+      "title": "期限补偿、许可备案与价值基准日",
+      "min_provisions": 2,
+      "affected_scenarios": [7, 10],
+      "provisions": [
+        {"source_id": "patent-law-2020", "citation": "第四十二条"},
+        {"source_id": "patent-examination-guidelines-2026", "citation": "第五部分第八章第1.3.2.6节、第1.3.2.7节、第五部分第九章第2.2.1节"}
+      ]
+    }
+  ],
+  "guide_updates": [
+    {"update_id": "G2026-01", "ordinal": 1, "guide_section": "第一部分第一章第4.1.2节", "title": "发明人身份真实性及自然人要求", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 7], "rationale": "在单件摘要、组合尽调和交易估值涉及发明人身份或权属链时触发。"},
+    {"update_id": "G2026-02", "ordinal": 2, "guide_section": "第一部分第一章第4.1.6节", "title": "代理机构身份信息核实及代理主体限制", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "out_of_scope", "scenario_ids": [], "rationale": "属于代理执业与申请手续要求，不改变本 Skill 十场景的分析输出规则。"},
+    {"update_id": "G2026-03", "ordinal": 3, "guide_section": "第一部分第一章第6.2节", "title": "分案申请优先权声明后果", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "优先权是否保留会影响现有技术基准、同族关系、有效性和交易基准。"},
+    {"update_id": "G2026-04", "ordinal": 4, "guide_section": "第二部分第一章第4.4节", "title": "植物品种定义", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "直接影响植物相关申请的保护客体、稳定性和尽调边界。"},
+    {"update_id": "G2026-05", "ordinal": 5, "guide_section": "第二部分第三章第6.2.2节", "title": "同日双申处理方式", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "影响发明和实用新型并存、放弃、终止及当前权利状态判断。"},
+    {"update_id": "G2026-06", "ordinal": 6, "guide_section": "第二部分第四章第6.4节", "title": "创造性整体评价与技术贡献特征", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 4, 5, 6, 7, 9], "rationale": "直接影响创造性分析、权利要求撰写质量及无效答复。"},
+    {"update_id": "G2026-07", "ordinal": 7, "guide_section": "第二部分第九章第6节", "title": "人工智能和大数据的伦理、创造性与充分公开", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 4, 5, 6, 7, 9], "rationale": "新增伦理审查、创造性示例及模型训练和应用的公开要求。"},
+    {"update_id": "G2026-08", "ordinal": 8, "guide_section": "第二部分第九章第7节", "title": "比特流保护客体及申请文件撰写", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9], "rationale": "新增存储、传输比特流及存储介质权利要求形态，影响权利要求选择、解释和比对。"},
+    {"update_id": "G2026-09", "ordinal": 9, "guide_section": "第二部分第十章第9节", "title": "动物植物定义、野生植物和植物品种判定", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 4, 5, 7, 9], "rationale": "直接影响生物技术领域保护客体和无效理由。"},
+    {"update_id": "G2026-10", "ordinal": 10, "guide_section": "第三部分第一章第5.2.3.2节", "title": "国际申请优先权证明文件", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "在PCT进入中国国家阶段且优先权证明存在争议时影响时间基准。"},
+    {"update_id": "G2026-11", "ordinal": 11, "guide_section": "第三部分第一章第7.3节", "title": "删除第7.3节第（3）项", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "涉及进入国家阶段程序文本的版本核验；具体案件须以现行完整指南确认。"},
+    {"update_id": "G2026-12", "ordinal": 12, "guide_section": "第四部分第一章第6.2节", "title": "复审和无效审查决定的通常构成", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [4, 9], "rationale": "影响无效决定材料整理和争议焦点复核，不改变实体有效性要件。"},
+    {"update_id": "G2026-13", "ordinal": 13, "guide_section": "第四部分第三章第2.1节", "title": "无效程序一事不再理原则", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [4, 9], "rationale": "相同或实质相同理由和证据再次请求的受理边界直接影响无效策略。"},
+    {"update_id": "G2026-14", "ordinal": 14, "guide_section": "第四部分第三章第3.2节", "title": "无效请求非真实意思表示的处理", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [4, 9], "rationale": "新增不予受理情形，需核验请求人真实意思表示。"},
+    {"update_id": "G2026-15", "ordinal": 15, "guide_section": "第四部分第三章第3.3节", "title": "重复无效请求的不予受理及例外", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [4, 9], "rationale": "细化相同理由证据再次提出以及此前未被考虑的例外。"},
+    {"update_id": "G2026-16", "ordinal": 16, "guide_section": "第四部分第三章第4.6.4节", "title": "无效程序修改文本的提交", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [3, 4, 5, 6, 7, 8, 9, 10], "rationale": "全文替换页、修改对照表及最后文本规则直接影响有效权利要求版本和后续分析。"},
+    {"update_id": "G2026-17", "ordinal": 17, "guide_section": "第五部分第二章第1节", "title": "申请附加费中的序列表页数", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "out_of_scope", "scenario_ids": [], "rationale": "属于申请费用计算，不改变本 Skill 的十场景分析规则。"},
+    {"update_id": "G2026-18", "ordinal": 18, "guide_section": "第五部分第二章第4.2.1节", "title": "专利费用退款情形", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "out_of_scope", "scenario_ids": [], "rationale": "属于退款手续，不作为本 Skill 专利价值或法律风险结论的直接依据。"},
+    {"update_id": "G2026-19", "ordinal": 19, "guide_section": "第五部分第七章第8节", "title": "按需审查与快速审查", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 4, 5, 7], "rationale": "可能影响申请处理时间和状态监测，但不改变侵权判定规则。"},
+    {"update_id": "G2026-20", "ordinal": 20, "guide_section": "第五部分第八章第1.3.2.6节", "title": "专利权期限补偿公布项目", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 5, 7, 10], "rationale": "期限补偿后的权利期满日直接影响状态、FTO时间窗口和估值。"},
+    {"update_id": "G2026-21", "ordinal": 21, "guide_section": "第五部分第八章第1.3.2.7节", "title": "专利实施许可合同备案公布项目", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 5, 7, 10], "rationale": "许可种类、许可人、被许可人及备案变更是FTO和交易尽调的重要状态信息。"},
+    {"update_id": "G2026-22", "ordinal": 22, "guide_section": "第五部分第九章第1.2.1节", "title": "国际申请和分案申请的证书记载主体", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "conditional", "scenario_ids": [1, 2, 7], "rationale": "影响证书所载申请日时主体的解释和权属尽调线索。"},
+    {"update_id": "G2026-23", "ordinal": 23, "guide_section": "第五部分第九章第2.2.1节", "title": "专利权期限补偿中的合理延迟", "effective_from": "2026-01-01", "verified_on": "2026-08-01", "impact_status": "direct", "scenario_ids": [1, 2, 5, 7, 10], "rationale": "合理延迟认定会影响期限补偿计算和有效期终点核验。"}
+  ],
+  "scenario_impacts": [
+    {"scenario_id": 1, "title": "单专利技术要点提取", "status": "affected", "guide_update_ids": ["G2026-01", "G2026-03", "G2026-04", "G2026-05", "G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-10", "G2026-11", "G2026-19", "G2026-20", "G2026-21", "G2026-22", "G2026-23"], "doctrine_group_ids": ["protection-scope", "validity-2026"], "rationale": "需按技术领域、优先权、同日双申、期限补偿、许可备案和证书记载更新摘要字段。"},
+    {"scenario_id": 2, "title": "多专利比对", "status": "affected", "guide_update_ids": ["G2026-01", "G2026-03", "G2026-04", "G2026-05", "G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-10", "G2026-11", "G2026-19", "G2026-20", "G2026-21", "G2026-22", "G2026-23"], "doctrine_group_ids": ["protection-scope", "validity-2026"], "rationale": "同族、优先权、权利类型、有效期和许可状态的比较基线发生扩充。"},
+    {"scenario_id": 3, "title": "产品—专利侵权比对", "status": "conditional", "guide_update_ids": ["G2026-08", "G2026-16"], "doctrine_group_ids": ["protection-scope", "literal-coverage", "equivalence"], "rationale": "侵权司法规则未被指南修改，但比特流权利要求形态和无效修改后的有效文本会改变比对对象。"},
+    {"scenario_id": 4, "title": "稳定性与无效风险分析", "status": "affected", "guide_update_ids": ["G2026-03", "G2026-04", "G2026-05", "G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-10", "G2026-11", "G2026-12", "G2026-13", "G2026-14", "G2026-15", "G2026-16", "G2026-19"], "doctrine_group_ids": ["validity-2026", "invalidation-procedure"], "rationale": "实体审查标准和无效程序规则均有直接变化。"},
+    {"scenario_id": 5, "title": "自由实施（FTO）分析", "status": "affected", "guide_update_ids": ["G2026-03", "G2026-04", "G2026-05", "G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-10", "G2026-11", "G2026-16", "G2026-19", "G2026-20", "G2026-21", "G2026-23"], "doctrine_group_ids": ["fto-currentness", "protection-scope", "literal-coverage", "equivalence", "validity-2026"], "rationale": "候选权利要求版本、保护期限、许可备案和稳定性基线均须按新指南刷新。"},
+    {"scenario_id": 6, "title": "规避设计", "status": "conditional", "guide_update_ids": ["G2026-06", "G2026-07", "G2026-08", "G2026-16"], "doctrine_group_ids": ["protection-scope", "literal-coverage", "equivalence", "fto-currentness"], "rationale": "规避法律标准未变，但候选权利要求形态、有效文本和稳定性会改变重新比对范围。"},
+    {"scenario_id": 7, "title": "专利价值评估", "status": "affected", "guide_update_ids": ["G2026-01", "G2026-03", "G2026-04", "G2026-05", "G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-10", "G2026-11", "G2026-16", "G2026-19", "G2026-20", "G2026-21", "G2026-22", "G2026-23"], "doctrine_group_ids": ["valuation-currentness", "protection-scope", "validity-2026"], "rationale": "剩余期限、许可负担、权属线索和稳定性输入均影响估值基准。"},
+    {"scenario_id": 8, "title": "等同原则分析", "status": "conditional", "guide_update_ids": ["G2026-08", "G2026-16"], "doctrine_group_ids": ["equivalence", "protection-scope"], "rationale": "等同司法规则未变；比特流权利要求和无效程序修改记录会影响解释、捐献与禁止反悔核验。"},
+    {"scenario_id": 9, "title": "无效宣告应对", "status": "affected", "guide_update_ids": ["G2026-06", "G2026-07", "G2026-08", "G2026-09", "G2026-12", "G2026-13", "G2026-14", "G2026-15", "G2026-16"], "doctrine_group_ids": ["invalidation-procedure", "validity-2026", "equivalence"], "rationale": "无效实体理由、受理规则、重复请求和修改文本提交均有直接更新。"},
+    {"scenario_id": 10, "title": "可视化输出", "status": "conditional", "guide_update_ids": ["G2026-16", "G2026-20", "G2026-21", "G2026-23"], "doctrine_group_ids": ["literal-coverage", "invalidation-procedure", "valuation-currentness"], "rationale": "图表逻辑未变，但权利要求版本、有效期和许可状态节点必须使用更新后的数据。"}
+  ],
+  "fto_update_policy": {
+    "scenario_id": 5,
+    "required_inputs": ["目标法域", "产品版本", "实施行为", "检索截止日", "法律状态基线"],
+    "baseline_checks": ["法源效力状态", "指南施行版本", "司法解释修订状态", "目标法域有效权利要求版本", "法律状态查询日", "专利权期限补偿", "许可备案状态"],
+    "refresh_triggers": ["分析基准日晚于法源核验日", "指南或司法解释发布修改", "权利要求经授权确权程序修改", "法律状态或权属发生变化", "产品版本、实施行为或目标法域变化", "检索截止日需要前移"],
+    "stale_action": "停止风险评级，只输出补充或核验清单"
+  }
+}

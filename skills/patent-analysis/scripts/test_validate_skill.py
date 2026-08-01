@@ -7,6 +7,7 @@ import copy
 import unittest
 
 import check_evals
+import check_legal_sources
 import validate_skill
 
 
@@ -149,6 +150,75 @@ class GateTests(unittest.TestCase):
         self.assertEqual([], validate_skill.check_root_readme_release(pending))
         self.assertEqual([], validate_skill.check_root_readme_release(matching))
         self.assertTrue(validate_skill.check_root_readme_release(mismatched))
+
+
+class LegalSourceRegisterTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.register = check_legal_sources.load_register()
+
+    def test_current_register_covers_23_updates_and_ten_scenarios(self) -> None:
+        self.assertEqual(
+            [],
+            check_legal_sources.validate_register(
+                self.register,
+                expected_skill_version=validate_skill.RELEASE_VERSION,
+            ),
+        )
+        self.assertEqual(23, len(self.register["guide_updates"]))
+        self.assertEqual(10, len(self.register["scenario_impacts"]))
+
+    def test_public_url_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        mutated["official_baseline"]["title"] += " https://example.invalid/source"
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("禁止 URL" in error for error in errors))
+
+    def test_missing_scenario_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        mutated["scenario_impacts"] = [
+            item for item in mutated["scenario_impacts"] if item["scenario_id"] != 10
+        ]
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("场景1—10" in error for error in errors))
+
+    def test_complex_issue_cannot_degrade_to_one_provision(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        group = next(
+            item for item in mutated["doctrine_groups"] if item["issue_id"] == "equivalence"
+        )
+        group["provisions"] = group["provisions"][:1]
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("条款数" in error for error in errors))
+
+    def test_unknown_status_and_invalid_date_are_blocked(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        mutated["sources"][0]["status"] = "probably-current"
+        mutated["guide_updates"][0]["verified_on"] = "2026-02-30"
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("未知效力状态" in error for error in errors))
+        self.assertTrue(any("有效 ISO 日期" in error for error in errors))
+
+    def test_impacted_update_requires_scenario_mapping(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        update = next(
+            item for item in mutated["guide_updates"] if item["impact_status"] == "direct"
+        )
+        update["scenario_ids"] = []
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("与影响状态不匹配" in error for error in errors))
+
+    def test_fto_policy_fails_closed_when_baseline_input_is_removed(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        mutated["fto_update_policy"]["required_inputs"].remove("法律状态基线")
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("五项FTO输入" in error for error in errors))
+
+    def test_unknown_field_is_blocked(self) -> None:
+        mutated = copy.deepcopy(self.register)
+        mutated["auto_crawl_endpoint"] = "disabled"
+        errors = check_legal_sources.validate_register(mutated)
+        self.assertTrue(any("root: 字段不匹配" in error for error in errors))
 
 
 class EvalContractTests(unittest.TestCase):

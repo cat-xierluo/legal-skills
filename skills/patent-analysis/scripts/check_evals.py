@@ -60,7 +60,7 @@ REQUIRED_ASSERTION_IDS = {
     2: {"separate-patent-records", "ranking-stop-boundary", "forbidden-ranking"},
     3: {"selected-claims-and-c-state", "literal-and-equivalent-gates", "equivalence-elements-and-limits", "multi-provision-basis", "forbidden-majority-coverage"},
     4: {"validity-evidence-gaps", "probability-stop-boundary", "forbidden-validity-score"},
-    5: {"fto-five-inputs", "fto-stop-gate", "forbidden-fto-clearance"},
+    5: {"fto-five-inputs", "fto-stop-gate", "fto-legal-baseline-refresh", "forbidden-fto-clearance"},
     6: {"design-around-input-gate", "coverage-and-equivalence-review", "design-around-legal-basis", "forbidden-safe-harbor"},
     7: {"valuation-required-inputs", "valuation-stop-gate", "forbidden-invented-value"},
     8: {"four-part-equivalence-test", "equivalence-limitations", "equivalence-multi-provision-basis", "forbidden-overall-equivalence"},

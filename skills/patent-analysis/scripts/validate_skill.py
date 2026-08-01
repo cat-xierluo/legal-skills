@@ -11,10 +11,11 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import check_evals
+import check_legal_sources
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "2.1.2"
+RELEASE_VERSION = "2.2.0"
 
 FORBIDDEN_PATTERNS = {
     "placeholder_case": re.compile(r"(?:案号\s*[:：]?|最高法知(?:民|行)[^\n]{0,12})(?:[^\n]{0,20})(?:XXX|若干)"),
@@ -138,6 +139,8 @@ def check_legal_basis(
     legal_text: str | None = None,
     equivalence_text: str | None = None,
     invalidation_text: str | None = None,
+    fto_text: str | None = None,
+    impact_text: str | None = None,
 ) -> list[str]:
     """Require a link-free, multi-provision legal basis for core doctrines."""
     if legal_text is None:
@@ -150,12 +153,20 @@ def check_legal_basis(
         invalidation_text = (SKILL_DIR / "references" / "09-invalidation-defense.md").read_text(
             encoding="utf-8"
         )
+    if fto_text is None:
+        fto_text = (SKILL_DIR / "references" / "05-fto-analysis.md").read_text(encoding="utf-8")
+    if impact_text is None:
+        impact_text = (SKILL_DIR / "references" / "11-2026-guideline-impact.md").read_text(
+            encoding="utf-8"
+        )
 
     errors: list[str] = []
     for name, text in [
         ("references/00-legal-basis.md", legal_text),
+        ("references/05-fto-analysis.md", fto_text),
         ("references/08-doctrine-of-equivalents.md", equivalence_text),
         ("references/09-invalidation-defense.md", invalidation_text),
+        ("references/11-2026-guideline-impact.md", impact_text),
     ]:
         if re.search(r"https?://", text, flags=re.IGNORECASE):
             errors.append(f"{name}: public legal basis must not contain web URLs")
@@ -239,6 +250,34 @@ def check_legal_basis(
     missing = [phrase for phrase in common_invalidation_requirements if phrase not in legal_text]
     if missing:
         errors.append(f"references/00-legal-basis.md: 无效程序 missing provisions: {missing}")
+
+    fto_requirements = [
+        "《专利法》第十一条",
+        "第六十四条",
+        "第六十七条",
+        "第七十五条",
+        "第七十七条",
+        "《专利侵权司法解释（一）》第七条、第十四条",
+        "《专利侵权司法解释（二）》第二十一条至第二十五条",
+        "法源基线ID",
+        "停止风险评级，只输出补充或核验清单",
+    ]
+    missing = [phrase for phrase in fto_requirements if phrase not in fto_text]
+    if missing:
+        errors.append(f"references/05-fto-analysis.md: FTO 法源更新门禁 missing: {missing}")
+
+    impact_requirements = [
+        "国家知识产权局令第八十四号",
+        "自2026年1月1日起施行",
+        "核验日期为2026年8月1日",
+        "第八十四号令23项修改审计",
+        "十场景影响结论",
+        "第四部分第三章第4.6.4节",
+        "停止风险评级，只输出补充或核验清单",
+    ]
+    missing = [phrase for phrase in impact_requirements if phrase not in impact_text]
+    if missing:
+        errors.append(f"references/11-2026-guideline-impact.md: impact audit missing: {missing}")
     return errors
 
 
@@ -294,6 +333,7 @@ def check_local_release() -> list[str]:
         "doctrine-of-equivalents",
         "invalidation-defense",
         "visualization",
+        "2026-guideline-impact",
     ])}
     actual_references = {path.name for path in (SKILL_DIR / "references").glob("*.md")}
     if actual_references != expected_references:
@@ -370,6 +410,18 @@ def main() -> int:
         )
     )
     errors.extend(check_legal_basis())
+    try:
+        legal_source_register = check_legal_sources.load_register()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        errors.append(f"legal source register: {exc}")
+    else:
+        errors.extend(
+            f"legal source register: {error}"
+            for error in check_legal_sources.validate_register(
+                legal_source_register,
+                expected_skill_version=RELEASE_VERSION,
+            )
+        )
     errors.extend(f"eval contract: {error}" for error in check_evals.validate_contract())
     if args.repo_root:
         errors.extend(check_repo_sync(args.repo_root.resolve()))

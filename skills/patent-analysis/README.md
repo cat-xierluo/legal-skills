@@ -2,7 +2,7 @@
 
 面向中国发明和实用新型专利的结构化初步分析 Skill。围绕选定权利要求、证据分级和可回溯法源，支持从技术要点提取到侵权、无效、FTO 和规避设计等工作底稿。
 
-> v2.1.2 的核心原则：不默认只看权利要求 1；`推定/待核实` 不计入全面覆盖；保护范围、全面覆盖和等同原则按多条款组合核验，公开报告不附法院或行政机关网页链接；十个场景均有代表性回归样本和 hard/soft 断言。
+> v2.2.0 的核心原则：不默认只看权利要求 1；`推定/待核实` 不计入全面覆盖；保护范围、全面覆盖、等同、无效和FTO按多条款组合核验；公开报告不附法院或行政机关核验网址；第八十四号令23项修改逐一映射到十个场景，FTO旧基线触发更新后必须停止评级并先行刷新。
 
 ## 适用人群
 
@@ -25,7 +25,7 @@
 | 无效宣告应对 | 期限、理由、证据和修改方案表 | `references/09-invalidation-defense.md` |
 | 可视化输出 | 权利要求关系、证据门禁和时间线图表 | `references/10-visualization.md` |
 
-所有专业判断同时适用 `references/00-legal-basis.md` 中的共用法源与门禁。该文件按“子问题—共同适用条款—适用要点”列出法源组合，不把保护范围、全面覆盖或等同原则压缩为单一条款。
+所有专业判断同时适用 `references/00-legal-basis.md` 中的共用法源与门禁，并按 `references/11-2026-guideline-impact.md` 核对2026年指南影响。`config/legal-source-register.json` 是法源版本、条款组、23项修改、十场景影响和FTO更新触发的机器可读基线；复杂问题不得压缩为单一条款。
 
 ## 使用示例
 
@@ -64,11 +64,12 @@
 维护者可在本目录运行：
 
 ```bash
+python3 scripts/check_legal_sources.py --expected-version 2.2.0
 python3 scripts/validate_skill.py --repo-root ../..
 python3 scripts/check_evals.py --self-test
 ```
 
-`validate_skill.py` 检查元数据、相对引用、关键门禁、危险旧规则、评测契约和发布版本同步；`check_evals.py` 还可通过 `--outputs-dir` 检查按 `01.md` 至 `10.md` 保存的外部回答。两者均不构成法律专业正确性、跨模型一致性或长期指令稳定性证明。
+`check_legal_sources.py` 阻断公开URL、未知效力状态、无效日期、缺失修改/场景、单条款退化和FTO基线缺口；`validate_skill.py` 复用该门禁并检查元数据、相对引用、危险旧规则、评测契约和发布版本同步；`check_evals.py` 还可通过 `--outputs-dir` 检查按 `01.md` 至 `10.md` 保存的外部回答。这些静态与代表性检查均不构成具体案件法律正确性、跨模型一致性或长期指令稳定性证明。
 
 ## 许可证
 

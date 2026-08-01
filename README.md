@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
 | 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.2  | 新增覆盖十个场景的代表性提示词、hard/soft 机器断言和独立校验器；侵权、规避、等同及无效样本锁定无网页链接的多条款法源与证据停止门禁 |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
@@ -41,7 +42,6 @@
 | 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.4  | TASKS 改为流动的当前任务入口；移除归档索引并禁止创建 before 快照，历史分别归入 CHANGELOG 与 DECISIONS                                                        |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.1  | references 顺序编号与法规独立子目录：5 份流程文件加 `NN-` 前缀按执行顺序排列、侵权判断标准迁入 `references/laws-regulations/`、脚本归位到 `scripts/`、删除冗余索引并把图像理解工具改为按环境能力分档的选择策略（不再写死具体工具名）                                                                                                       |
 | 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
-| 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.6.0  | 硬缺陷 + 法律口径修复：落地可运行的商品清单脚本、修复 NCL13 眼镜迁移残留、输入清单补官方检索证据字段；修正商标说明口径与误导模板、服务主体表述加合规边界、可注册性拆绝对/相对理由并加未检索不可评级门禁                                        |
 
 </details>
 
@@ -287,9 +287,9 @@
 <tr>
 <td><a href="skills/patent-analysis/"><strong>patent-analysis</strong></a></td>
 <td>专业·知产</td>
-<td style="word-break:break-word">中国发明与实用新型专利分析工具，支持10种场景；逐项分析选定权利要求，以 A/B/C/D 证据门禁约束侵权、无效、FTO、规避设计、估值和可视化结论</td>
+<td style="word-break:break-word">中国发明与实用新型专利分析工具，支持10种场景；以 A/B/C/D 证据门禁、无网址多条款法源登记和2026年指南影响映射约束侵权、无效、FTO、规避设计、估值和可视化结论</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v2.1.2</td>
+<td style="text-align:center">v2.2.0</td>
 <td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>

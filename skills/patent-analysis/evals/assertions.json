@@ -1,6 +1,6 @@
 {
   "skill_name": "patent-analysis",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "answer_file_pattern": "{eval_id:02d}.md",
   "policy": {
     "minimum_hard_positive": 2,
@@ -222,7 +222,7 @@
           "description": "完整列出 FTO 风险评级的五项必需输入。",
           "severity": "hard",
           "type": "contains_all",
-          "terms": ["目标法域", "产品版本", "实施行为", "检索截止日", "法律状态"]
+          "terms": ["目标法域", "产品版本", "实施行为", "检索截止日", "法律状态基线"]
         },
         {
           "id": "fto-stop-gate",
@@ -230,6 +230,20 @@
           "severity": "hard",
           "type": "contains_any",
           "terms": ["必须停止风险评级", "停止风险评级", "暂不进行风险评级", "不能进行 FTO 风险评级"]
+        },
+        {
+          "id": "fto-legal-baseline-refresh",
+          "description": "FTO列出多条款法源、基线标识和2026年刷新触发条件。",
+          "severity": "hard",
+          "type": "contains_any_per_group",
+          "groups": [
+            {"label": "排他行为", "terms": ["《专利法》第十一条", "《中华人民共和国专利法》第十一条"]},
+            {"label": "保护范围", "terms": ["《专利法》第六十四条", "《中华人民共和国专利法》第六十四条"]},
+            {"label": "基线标识", "terms": ["法源基线ID", "法源基线 ID"]},
+            {"label": "基线日期", "terms": ["核验日期", "法源核验日"]},
+            {"label": "规则更新", "terms": ["2026年指南", "《专利审查指南》", "司法解释"]},
+            {"label": "权利与状态更新", "terms": ["权利要求版本", "期限补偿", "许可备案"]}
+          ]
         },
         {
           "id": "forbidden-fto-clearance",
