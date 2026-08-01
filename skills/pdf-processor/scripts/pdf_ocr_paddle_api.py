@@ -4,7 +4,7 @@
 
 负责：
 - Paddle API 异步任务提交（文件上传 → 轮询 → JSONL 结果下载）
-- 支持 PP-OCRv5（纯 OCR）和 PaddleOCR-VL-1.5（版面分析 + OCR）
+- 支持 PP-OCRv5/v6、PaddleOCR-VL-1.5/1.6 和 PP-StructureV3
 - JSONL 结果解析为分页 OCR 坐标
 - 本地叠层生成双层 PDF
 - 超 100 页自动分片提交
@@ -48,8 +48,21 @@ from pdf_ocr_corrections import (
 
 # ---------- Paddle API 常量 ----------
 
-PADDLE_JOB_MODEL = "PP-OCRv5"
-PADDLE_VL_MODEL = "PaddleOCR-VL-1.5"
+PADDLE_OCR_V5_MODEL = "PP-OCRv5"
+PADDLE_OCR_V6_MODEL = "PP-OCRv6"
+PADDLE_JOB_MODEL = PADDLE_OCR_V6_MODEL
+PADDLE_VL_15_MODEL = "PaddleOCR-VL-1.5"
+PADDLE_VL_16_MODEL = "PaddleOCR-VL-1.6"
+PADDLE_VL_MODEL = PADDLE_VL_15_MODEL  # 兼容旧导入
+PADDLE_STRUCTURE_MODEL = "PP-StructureV3"
+PADDLE_VL_MODELS = frozenset({PADDLE_VL_15_MODEL, PADDLE_VL_16_MODEL})
+SUPPORTED_PADDLE_MODELS = (
+    PADDLE_JOB_MODEL,
+    PADDLE_OCR_V5_MODEL,
+    PADDLE_VL_15_MODEL,
+    PADDLE_VL_16_MODEL,
+    PADDLE_STRUCTURE_MODEL,
+)
 PADDLE_VL_MAX_PAGES = 9999
 PADDLE_POLL_INTERVAL = 5
 PADDLE_POLL_TIMEOUT = 1800
@@ -86,6 +99,55 @@ def _clean_vl_text(text: str) -> str:
     # 清理多余空白
     text = re.sub(r'[ \t]+', ' ', text)
     return text.strip()
+
+
+def _normalize_layout_blocks(blocks: object) -> list[dict]:
+    """保留段落融合需要的最小版面元数据，不用块文本覆盖行级 OCR。"""
+    if not isinstance(blocks, list):
+        return []
+
+    normalized = []
+    for fallback_index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        bbox = block.get("block_bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) < 4:
+            continue
+        try:
+            bbox_values = [float(value) for value in bbox[:4]]
+        except (TypeError, ValueError):
+            continue
+
+        item = {
+            "bbox": bbox_values,
+            "label": str(block.get("block_label") or "text"),
+            "content": _clean_vl_text(str(block.get("block_content") or "")),
+            "index": block.get("index", fallback_index),
+            "sub_index": block.get("sub_index"),
+            "sub_label": str(block.get("sub_label") or ""),
+            "seg_start": block.get("seg_start_flag"),
+            "seg_end": block.get("seg_end_flag"),
+        }
+        score = block.get("score", block.get("block_score"))
+        if score is not None:
+            try:
+                item["score"] = float(score)
+            except (TypeError, ValueError):
+                pass
+        normalized.append(item)
+
+    def sort_key(item: dict) -> tuple[int, int]:
+        try:
+            index = int(item.get("index"))
+        except (TypeError, ValueError):
+            index = 10**9
+        try:
+            sub_index = int(item.get("sub_index"))
+        except (TypeError, ValueError):
+            sub_index = 10**9
+        return index, sub_index
+
+    return sorted(normalized, key=sort_key)
 
 
 # ---------- VL-1.5 块级结果转 rows ----------
@@ -198,9 +260,103 @@ def parse_vl_jsonl_to_page_entries(jsonl_text: str) -> list[dict]:
                     w, h = float(sw), float(sh)
 
             rows = _convert_vl_blocks_to_rows(blocks, w, h)
-            all_entries.append({"rows": rows, "width": w, "height": h})
+            all_entries.append({
+                "rows": rows,
+                "width": w,
+                "height": h,
+                "layout_blocks": _normalize_layout_blocks(blocks),
+            })
 
     return all_entries
+
+
+# ---------- PP-StructureV3 JSONL 解析 ----------
+
+def parse_ppstructure_jsonl_to_page_entries(jsonl_text: str) -> list[dict]:
+    """解析 PP-StructureV3 的行级 OCR 结果。
+
+    StructureV3 的文字行与坐标位于：
+    ``layoutParsingResults[].prunedResult.overall_ocr_res``。
+    这里只采用同一行的 ``rec_texts`` + ``dt_polys/rec_polys/rec_boxes``，
+    不把版面块级长文本覆盖到单行坐标中。
+    """
+    entries: list[dict] = []
+
+    for line in jsonl_text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        result = obj.get("result") if isinstance(obj, dict) else obj
+        if not isinstance(result, dict):
+            continue
+
+        layout_results = result.get("layoutParsingResults")
+        if isinstance(layout_results, dict):
+            layout_results = [layout_results]
+        if not isinstance(layout_results, list):
+            continue
+
+        page_sizes: list[tuple[object, object]] = []
+        data_info = result.get("dataInfo")
+        if isinstance(data_info, dict):
+            pages = data_info.get("pages")
+            if isinstance(pages, list):
+                for page in pages:
+                    if isinstance(page, dict):
+                        page_sizes.append((page.get("width"), page.get("height")))
+
+        for idx, page_result in enumerate(layout_results):
+            if not isinstance(page_result, dict):
+                continue
+
+            pruned = page_result.get("prunedResult")
+            if isinstance(pruned, str) and pruned.strip():
+                try:
+                    pruned = json.loads(pruned)
+                except json.JSONDecodeError:
+                    pruned = None
+            if not isinstance(pruned, dict):
+                pruned = {}
+
+            overall = pruned.get("overall_ocr_res")
+            if isinstance(overall, dict):
+                # StructureV3 以检测四点框为主，依次兼容识别框与四值 bbox。
+                line_result = dict(overall)
+                line_result["rec_polys"] = (
+                    overall.get("dt_polys")
+                    or overall.get("rec_polys")
+                    or overall.get("rec_boxes")
+                    or []
+                )
+                rows = parse_paddle_predict_result(line_result)
+            else:
+                rows = []
+
+            layout_blocks = _normalize_layout_blocks(
+                pruned.get("parsing_res_list", [])
+            )
+
+            width, height = extract_page_image_size(pruned, page_result, result)
+            if (not width or not height) and idx < len(page_sizes):
+                page_width, page_height = page_sizes[idx]
+                if page_width and page_height:
+                    width, height = float(page_width), float(page_height)
+
+            # 即使 rows 为空也保留该页 entry，让事务式叠层门禁识别并回退，
+            # 避免页面索引错位后把下一页文字铺到当前页。
+            entries.append({
+                "rows": rows,
+                "width": width,
+                "height": height,
+                "layout_blocks": layout_blocks,
+            })
+
+    return entries
 
 
 # ---------- 异步任务辅助 ----------
@@ -214,7 +370,7 @@ def _build_headers(api_key: str) -> dict:
 
 def _build_optional_payload(model: str, args) -> dict:
     """根据模型和用户参数构建 optionalPayload。"""
-    if model == PADDLE_VL_MODEL:
+    if model == PADDLE_VL_15_MODEL:
         payload = {
             "useDocOrientationClassify": getattr(args, "paddle_vl_doc_orientation", False),
             "useDocUnwarping": getattr(args, "paddle_vl_doc_unwarping", False),
@@ -222,8 +378,16 @@ def _build_optional_payload(model: str, args) -> dict:
             "useChartRecognition": getattr(args, "paddle_vl_chart_recognition", False),
             "layoutShapeMode": getattr(args, "paddle_vl_layout_shape_mode", "rect"),
         }
+    elif model in {PADDLE_VL_16_MODEL, PADDLE_STRUCTURE_MODEL}:
+        # VL-1.6 / StructureV3 不发送 VL-1.5 专属的 layoutShapeMode 等参数。
+        # 默认关闭服务端几何矫正，确保返回坐标仍对应输入图像。
+        payload = {
+            "useDocOrientationClassify": getattr(args, "paddle_vl_doc_orientation", False),
+            "useDocUnwarping": getattr(args, "paddle_vl_doc_unwarping", False),
+            "useChartRecognition": getattr(args, "paddle_vl_chart_recognition", False),
+        }
     else:
-        # PP-OCRv5 payload: 默认关闭方向矫正和去畸变
+        # PP-OCRv5/v6 payload: 默认关闭方向矫正和去畸变
         # 启用时 API 会在服务端预处理图片（矫正/去畸变），OCR 坐标对应预处理后的图片，
         # 但报告的图片尺寸不变，导致坐标偏移。关闭后坐标与原始图片一致，双层 PDF 对齐准确。
         payload = {
@@ -280,17 +444,23 @@ def submit_paddle_job(
 
 def _build_default_payload(model: str) -> dict:
     """无 args 时根据模型构建默认 payload（供直接调用）。"""
-    if model == PADDLE_VL_MODEL:
+    if model == PADDLE_VL_15_MODEL:
         return {
-            "useDocOrientationClassify": True,
-            "useDocUnwarping": True,
+            "useDocOrientationClassify": False,
+            "useDocUnwarping": False,
             "useLayoutDetection": True,
             "useChartRecognition": False,
             "layoutShapeMode": "rect",
         }
+    if model in {PADDLE_VL_16_MODEL, PADDLE_STRUCTURE_MODEL}:
+        return {
+            "useDocOrientationClassify": False,
+            "useDocUnwarping": False,
+            "useChartRecognition": False,
+        }
     return {
-        "useDocOrientationClassify": True,
-        "useDocUnwarping": True,
+        "useDocOrientationClassify": False,
+        "useDocUnwarping": False,
         "useTextlineOrientation": False,
     }
 
@@ -345,10 +515,10 @@ def poll_paddle_job(
         time.sleep(max(1, poll_interval))
 
 
-# ---------- PP-OCRv5 JSONL 解析（原逻辑） ----------
+# ---------- PP-OCRv5/v6 JSONL 解析（同一行级结构） ----------
 
 def parse_jsonl_to_page_entries(jsonl_text: str) -> list[dict]:
-    """解析 PP-OCRv5 的 JSONL 文本为分页 entries。"""
+    """解析 PP-OCRv5/v6 的 JSONL 文本为分页 entries。"""
     entries = []
     for line in jsonl_text.strip().splitlines():
         line = line.strip()
@@ -445,7 +615,7 @@ def extract_page_correction_info(
 
         pp_images = result.get("preprocessedImages") or []
 
-        # PP-OCRv5: ocrResults 含 doc_preprocessor_res.angle
+        # PP-OCRv5/v6: ocrResults 含 doc_preprocessor_res.angle
         # VL-1.5: layoutParsingResults，无 angle 但有 preprocessedImages
         ocr_results = result.get("ocrResults") or []
         layout_results = result.get("layoutParsingResults") or []
@@ -553,9 +723,11 @@ def _apply_photo_correction(
 # ---------- 智能解析分发 ----------
 
 def _parse_jsonl(jsonl_text: str, model: str) -> list[dict]:
-    """根据模型自动选择 PP-OCRv5 或 VL-1.5 解析器。"""
-    if model == PADDLE_VL_MODEL:
+    """根据模型选择通用 OCR、VL 或 StructureV3 解析器。"""
+    if model in PADDLE_VL_MODELS:
         return parse_vl_jsonl_to_page_entries(jsonl_text)
+    if model == PADDLE_STRUCTURE_MODEL:
+        return parse_ppstructure_jsonl_to_page_entries(jsonl_text)
     return parse_jsonl_to_page_entries(jsonl_text)
 
 
@@ -630,8 +802,8 @@ def run_paddle_api_backend(args):
     """
     执行 PaddleOCR API 后端（异步任务 + JSONL 解析 + 本地叠层）。
 
-    支持 PP-OCRv5 和 PaddleOCR-VL-1.5 两种模型。
-    VL-1.5 模式下自动处理 >100 页的分片提交。
+    支持 PP-OCRv5/v6、PaddleOCR-VL-1.5/1.6 和 PP-StructureV3。
+    VL 模式下自动处理超出单任务上限的分片提交。
     """
     if not args.paddle_api_endpoint:
         raise ValueError("使用 --backend paddle_api 时必须提供 --paddle-api-endpoint")
@@ -641,17 +813,24 @@ def run_paddle_api_backend(args):
     run_local_ocrmypdf_backend = pdf_ocr.run_local_ocrmypdf_backend
 
     model = getattr(args, "paddle_model", PADDLE_JOB_MODEL) or PADDLE_JOB_MODEL
+    if model not in SUPPORTED_PADDLE_MODELS:
+        raise ValueError(
+            f"不支持的 PaddleOCR 模型: {model}；"
+            f"可选值: {', '.join(SUPPORTED_PADDLE_MODELS)}"
+        )
     optional_payload = _build_optional_payload(model, args)
-    is_vl = model == PADDLE_VL_MODEL
+    is_vl = model in PADDLE_VL_MODELS
 
     if not args.quiet:
         print("\nPaddleOCR API 后端参数:")
         print(f"  endpoint: {args.paddle_api_endpoint}")
         print(f"  model: {model}")
-        if is_vl:
+        if model == PADDLE_VL_15_MODEL:
             print(f"  layout_detection: {optional_payload.get('useLayoutDetection')}")
             print(f"  chart_recognition: {optional_payload.get('useChartRecognition')}")
             print(f"  layout_shape_mode: {optional_payload.get('layoutShapeMode')}")
+        elif model in {PADDLE_VL_16_MODEL, PADDLE_STRUCTURE_MODEL}:
+            print(f"  chart_recognition: {optional_payload.get('useChartRecognition')}")
         print(f"  doc_orientation: {optional_payload.get('useDocOrientationClassify')}")
         print(f"  doc_unwarping: {optional_payload.get('useDocUnwarping')}")
         print(f"  timeout: {args.paddle_api_timeout}s")

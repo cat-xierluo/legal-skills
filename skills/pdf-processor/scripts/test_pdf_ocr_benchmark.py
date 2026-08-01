@@ -23,6 +23,13 @@ def load_module(module_name: str, filename: str):
 
 benchmark = load_module("pdf_ocr_benchmark", "pdf-ocr-benchmark.py")
 
+HARNESS_PATH = SCRIPT_DIR.parent / "references" / "v27-alignment-baseline" / "research_harness.py"
+_harness_spec = importlib.util.spec_from_file_location("pdf_alignment_research_harness", HARNESS_PATH)
+if _harness_spec is None or _harness_spec.loader is None:
+    raise RuntimeError("Unable to load alignment research harness")
+alignment_harness = importlib.util.module_from_spec(_harness_spec)
+_harness_spec.loader.exec_module(alignment_harness)
+
 
 def make_text_pdf(path: Path) -> None:
     doc = fitz.open()
@@ -35,6 +42,23 @@ def make_text_pdf(path: Path) -> None:
 
 
 class PdfOcrBenchmarkTest(unittest.TestCase):
+    def test_alignment_harness_aggregates_word_rows_to_line(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tsv_path = Path(tmpdir) / "page.tsv"
+            tsv_path.write_text(
+                "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+                "4\t1\t1\t1\t1\t0\t10\t20\t90\t20\t-1\t\n"
+                "5\t1\t1\t1\t1\t1\t10\t20\t40\t20\t90\t合同\n"
+                "5\t1\t1\t1\t1\t2\t55\t20\t45\t20\t100\t法院\n",
+                encoding="utf-8",
+            )
+            rows = alignment_harness.parse_tsv(tsv_path, level=4)
+            self.assertEqual(len(rows), 1)
+            text, score, poly = rows[0]
+            self.assertEqual(text, "合同 法院")
+            self.assertAlmostEqual(score, 0.95)
+            self.assertEqual(poly, [[10, 20], [100, 20], [100, 40], [10, 40]])
+
     def test_pdf_metrics_collects_text_size_and_keyword_hits(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             pdf_path = Path(tmpdir) / "input.pdf"
@@ -48,6 +72,19 @@ class PdfOcrBenchmarkTest(unittest.TestCase):
             self.assertGreater(metrics["text_chars"], 0)
             self.assertEqual(metrics["keyword_hits"]["Rehab"], 1)
             self.assertEqual(metrics["keyword_hits"]["missing"], 0)
+
+    def test_pdf_metrics_keyword_hits_ignore_ocr_spaces(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "spaced.pdf"
+            doc = fitz.open()
+            page = doc.new_page(width=200, height=300)
+            page.insert_text((20, 40), "R e h a b  H o s p i t a l")
+            doc.save(pdf_path)
+            doc.close()
+
+            metrics = benchmark.pdf_metrics(pdf_path, keywords=["Rehab Hospital"])
+
+            self.assertEqual(metrics["keyword_hits"]["Rehab Hospital"], 1)
 
     def test_create_sample_pdf_keeps_first_n_pages(self):
         with tempfile.TemporaryDirectory() as tmpdir:

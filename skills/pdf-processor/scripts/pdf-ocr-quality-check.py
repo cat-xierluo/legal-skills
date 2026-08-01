@@ -15,6 +15,8 @@ import json
 import re
 from pathlib import Path
 
+from pdf_runtime import normalize_text_for_keyword
+
 try:
     import pypdf
 except Exception as e:
@@ -24,6 +26,12 @@ except Exception as e:
 def normalize_text_for_cer(text: str) -> str:
     """用于 CER 的标准化：移除所有空白。"""
     return re.sub(r"\s+", "", text or "")
+
+
+def keyword_matches_text(keyword: str, text: str) -> bool:
+    """判断关键词是否出现在 OCR 文本中。"""
+    normalized_keyword = normalize_text_for_keyword(keyword)
+    return bool(normalized_keyword) and normalized_keyword in normalize_text_for_keyword(text)
 
 
 def levenshtein_distance(a: str, b: str) -> int:
@@ -57,6 +65,11 @@ def extract_pdf_text(pdf_path: Path) -> tuple[list[str], str]:
         text = page.extract_text() or ""
         pages.append(text)
     return pages, "\n".join(pages)
+
+
+def get_pdf_page_count(pdf_path: Path) -> int:
+    """只读取页数，不对 OCR 前文件做无意义的全文提取。"""
+    return len(pypdf.PdfReader(str(pdf_path)).pages)
 
 
 def load_keywords(args) -> list[str]:
@@ -98,8 +111,8 @@ def parse_runtime_from_log(log_path: Path) -> float | None:
 
 def main():
     parser = argparse.ArgumentParser(description="OCR 双层 PDF 质量验收脚本")
-    parser.add_argument("--input-pdf", required=True, help="输入 PDF（OCR 前）")
-    parser.add_argument("--output-pdf", required=True, help="输出 PDF（OCR 后）")
+    parser.add_argument("--input-pdf", "-i", required=True, help="输入 PDF（OCR 前）")
+    parser.add_argument("--output-pdf", "-o", required=True, help="输出 PDF（OCR 后）")
     parser.add_argument(
         "--searchable-min-chars",
         type=int,
@@ -113,8 +126,14 @@ def main():
     parser.add_argument("--runtime-log", help="包含耗时信息的日志文件路径（可选）")
 
     # 阈值（可选）
-    parser.add_argument("--min-searchable-ratio", type=float, help="最小可检索页占比（0-1）")
-    parser.add_argument("--min-keyword-hit-rate", type=float, help="最小关键词命中率（0-1）")
+    parser.add_argument(
+        "--min-searchable-ratio", type=float, default=1.0,
+        help="最小可检索页占比（0-1），默认 1.0，避免空门禁通过",
+    )
+    parser.add_argument(
+        "--min-keyword-hit-rate", type=float, default=1.0,
+        help="提供关键词时的最小命中率（0-1），默认 1.0",
+    )
     parser.add_argument("--max-cer", type=float, help="最大 CER（0-1）")
     parser.add_argument("--max-size-ratio", type=float, help="最大体积比（output/input）")
     parser.add_argument("--max-runtime-sec", type=float, help="最大耗时（秒）")
@@ -129,15 +148,17 @@ def main():
     if not output_pdf.exists():
         raise SystemExit(f"输出文件不存在: {output_pdf}")
 
+    input_page_count = get_pdf_page_count(input_pdf)
     output_pages, output_full_text = extract_pdf_text(output_pdf)
     total_pages = len(output_pages)
+    page_count_match = input_page_count == total_pages and total_pages > 0
     searchable_pages = sum(1 for t in output_pages if len((t or "").strip()) >= args.searchable_min_chars)
     searchable_ratio = (searchable_pages / total_pages) if total_pages else 0.0
 
     keywords = load_keywords(args)
     keyword_hits = []
     for kw in keywords:
-        hit = kw in output_full_text
+        hit = keyword_matches_text(kw, output_full_text)
         keyword_hits.append({"keyword": kw, "hit": hit})
     keyword_hit_rate = (sum(1 for x in keyword_hits if x["hit"]) / len(keyword_hits)) if keyword_hits else None
 
@@ -176,6 +197,15 @@ def main():
             }
         )
 
+    checks.append(
+        {
+            "name": "page_count_match",
+            "value": int(page_count_match),
+            "threshold": 1,
+            "operator": "==",
+            "passed": page_count_match,
+        }
+    )
     add_check("searchable_ratio", searchable_ratio, args.min_searchable_ratio, ">=")
     add_check("keyword_hit_rate", keyword_hit_rate, args.min_keyword_hit_rate, ">=")
     add_check("cer", cer, args.max_cer, "<=")
@@ -187,12 +217,15 @@ def main():
     report = {
         "input_pdf": str(input_pdf),
         "output_pdf": str(output_pdf),
+        "input_page_count": input_page_count,
         "total_pages": total_pages,
+        "page_count_match": page_count_match,
         "searchable_pages": searchable_pages,
         "searchable_ratio": searchable_ratio,
         "keyword_total": len(keywords),
         "keyword_hit_rate": keyword_hit_rate,
         "keyword_hits": keyword_hits,
+        "keyword_match_normalization": "NFKC + casefold + remove_whitespace",
         "cer": cer,
         "input_size_bytes": input_size,
         "output_size_bytes": output_size,
@@ -205,7 +238,7 @@ def main():
     print("=" * 60)
     print("OCR 质量验收报告")
     print("=" * 60)
-    print(f"页数: {total_pages}")
+    print(f"页数: 输入 {input_page_count} / 输出 {total_pages} ({'一致' if page_count_match else '不一致'})")
     print(f"可检索页: {searchable_pages}/{total_pages} ({searchable_ratio:.2%})")
     if keyword_hit_rate is not None:
         print(f"关键词命中率: {keyword_hit_rate:.2%} ({sum(1 for x in keyword_hits if x['hit'])}/{len(keyword_hits)})")
@@ -220,9 +253,7 @@ def main():
         print("阈值校验:")
         for c in checks:
             state = "PASS" if c["passed"] else "FAIL"
-            print(
-                f"[{state}] {c['name']}: {c['value']:.6f} {c['operator']} {c['threshold']}"
-            )
+            print(f"[{state}] {c['name']}: {c['value']} {c['operator']} {c['threshold']}")
         print("-" * 60)
         print(f"总体结论: {'PASS' if all_passed else 'FAIL'}")
 

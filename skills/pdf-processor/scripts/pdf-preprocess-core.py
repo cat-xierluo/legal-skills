@@ -235,19 +235,30 @@ class PDFPreprocessor:
             # Script: Latin
             # Script confidence: 15.32
 
-            orientation = osd.get('Orientation', 0)
-            rotate = osd.get('Rotate', 0)
-            confidence = osd.get('Orientation confidence', 0)
+            # pytesseract.Output.DICT 使用小写键；兼容少量旧封装返回的展示型键名。
+            orientation = osd.get('orientation', osd.get('Orientation', 0))
+            rotate = osd.get('rotate', osd.get('Rotate', 0))
+            confidence = osd.get(
+                'orientation_conf',
+                osd.get('Orientation confidence', 0),
+            )
+            orientation = float(orientation or 0)
+            rotate = float(rotate or 0)
+            confidence = float(confidence or 0)
 
             # Tesseract 的 confidence 值通常较小，需要转换
             # 经验值：confidence > 3 时较为可靠
             normalized_conf = min(confidence / 5.0, 1.0)
 
-            # 计算实际旋转角度
-            # Orientation 是当前方向，Rotate 是需要的旋转
-            angle = (orientation + rotate) % 360
-            if angle == 360:
-                angle = 0
+            # Tesseract 的 rotate 是“需要顺时针旋转多少度”；PIL.Image.rotate()
+            # 使用逆时针正角，因此这里转换成 PIL 可直接使用的角度。
+            # orientation 仅作为旧输出缺少 rotate 时的兼容回退。
+            correction_clockwise = (
+                rotate
+                if 'rotate' in osd or 'Rotate' in osd
+                else (-orientation) % 360
+            )
+            angle = (360.0 - correction_clockwise) % 360.0
 
             return float(angle), normalized_conf
 

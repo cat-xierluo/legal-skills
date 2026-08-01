@@ -23,11 +23,13 @@ PDF 双层叠层核心模块。
 from __future__ import annotations
 
 import base64
+import math
 import os
 import platform
 import re
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -159,7 +161,7 @@ def _parse_rec_dict(item: dict) -> list[tuple[str, float, list[list[float]]]]:
         texts = item.get("texts")
     if scores is None and "scores" in item:
         scores = item.get("scores")
-    if polys is None:
+    if not isinstance(polys, list) or not polys:
         polys = (
             item.get("dt_polys")
             or item.get("rec_boxes")
@@ -176,7 +178,16 @@ def _parse_rec_dict(item: dict) -> list[tuple[str, float, list[list[float]]]]:
     parsed = []
     for i, text in enumerate(texts):
         poly = polys[i] if i < len(polys) else None
-        poly4 = _poly_to_points(poly)
+        # PP-StructureV3 / PP-OCRv5 有时返回 rec_boxes=[x0,y0,x1,y1]，
+        # 与 dt_polys 的四点数组并存。先识别四值 bbox，再走通用 polygon 解析。
+        if (
+            isinstance(poly, (list, tuple))
+            and len(poly) == 4
+            and not isinstance(poly[0], (list, tuple))
+        ):
+            poly4 = _bbox_to_poly4(poly)
+        else:
+            poly4 = _poly_to_points(poly)
         if len(poly4) < 4:
             continue
         score = _as_float(scores[i], default=1.0) if i < len(scores) else 1.0
@@ -236,75 +247,62 @@ def parse_paddle_predict_result(result) -> list[tuple[str, float, list[list[floa
 
 # ---------- 字号计算 ----------
 
-# 经验系数：CJK 字体的视觉字号（em）与文字行外接框高度的比值。
-# PyMuPDF 默认 "cjk" 字体的实际渲染高度约为字号的 0.72（西文 cap-height）至
-# 1.0（全高），CJK 实测在 0.72-0.85 区间；0.78 是覆盖常见中文字体的稳健中值。
-# 用这一比例由「bbox 高度」反推 fontsize，可避免 v2.6 及之前版本中
-# 「字号=框高」导致文字溢出 bbox（baseline 落到框外）的对齐偏差。
-_CAP_HEIGHT_RATIO_CJK = 0.78
-# 同字号下相邻行之间的行高系数；CJK 实际行高约 1.15-1.25 倍字号。
-_LINE_HEIGHT_RATIO_CJK = 1.20
+_MIN_LAYER_FONT_SIZE = 0.5
+_MIN_SINGLE_LINE_HORIZONTAL_SCALE = 0.5
+_MAX_SINGLE_LINE_HORIZONTAL_SCALE = 2.0
+
+
+class TextLayerIntegrityError(RuntimeError):
+    """文字块无法在给定坐标框内完整排版。"""
+
+
+def _font_vertical_metrics(font) -> tuple[float, float, float]:
+    """返回 ascender、descender 和真实行高（均为相对字号的比例）。"""
+    ascender = float(getattr(font, "ascender", 1.0) or 1.0)
+    descender = float(getattr(font, "descender", -0.25) or -0.25)
+    metric_height = ascender - descender
+    if not math.isfinite(metric_height) or metric_height <= 0:
+        ascender, descender, metric_height = 1.0, -0.25, 1.25
+    return ascender, descender, metric_height
 
 
 def calculate_font_size(font, text: str, w: float, h: float) -> float:
-    """计算贴合文本框的字号，支持单行 / 多行文本。
+    """返回能在 bbox 中完整容纳全部文字的最大字号；无法容纳时返回 0。"""
+    if not text or w <= 0 or h <= 0:
+        return 0.0
 
-    v2.7 重写策略（修复 v2.6 之前「字号=框高」溢出 + 多行估算不可靠的问题）：
-    1. **单行优先**：如果文本在 fontsize = h / _CAP_HEIGHT_RATIO_CJK 下能塞进
-       bbox 宽度，直接用该字号 — baseline 落在 bbox 内，视觉对齐最稳。
-    2. **多行回退**：若单行装不下，按 line_height = fontsize × _LINE_HEIGHT_RATIO_CJK
-       反推可容纳行数，再用「能塞下全部文字」的最大字号二分搜索。
-    3. 字号上限 = h / _CAP_HEIGHT_RATIO_CJK（防溢出），下限 5.0（防过小看不见）。
-    """
-    if not text:
-        # 空文本不渲染，返回任意合理值即可
-        return max(1.0, h)
-    if w <= 0 or h <= 0:
-        return 5.0
+    _, _, metric_height = _font_vertical_metrics(font)
+    max_size = h / metric_height
+    if max_size < _MIN_LAYER_FONT_SIZE:
+        return 0.0
 
-    min_size = 5.0
-    # bbox 高度反推字号：单行情况下 fontsize ≈ h / 0.78
-    # 这是 v2.7 的核心修正（旧版直接 fontsize=h，导致 baseline 越界）
-    size_from_height = h / _CAP_HEIGHT_RATIO_CJK
-    max_size = size_from_height
+    def fits(size: float) -> bool:
+        lines = _split_text_to_lines(font, text, size, w)
+        if not lines or "".join(lines) != text:
+            return False
+        if any(font.text_length(line, fontsize=size) > w + 0.25 for line in lines):
+            return False
+        return len(lines) * metric_height * size <= h + 0.25
 
-    def text_len(size: float) -> float:
-        return font.text_length(text, fontsize=size)
+    if not fits(_MIN_LAYER_FONT_SIZE):
+        return 0.0
 
-    # Case 1：单行装得下，直接用「由框高反推」的字号
-    single_line_width = text_len(size_from_height)
-    if single_line_width <= w:
-        return max(min_size, min(size_from_height, max_size))
-
-    # Case 2：单行装不下，需要换行。按行高系数估算可容纳行数，
-    # 然后二分搜索能塞下全部文本的最大字号。
-    # 容许的最大行数（防止字号被压到过小）
-    max_lines = max(1, int(h / (min_size * _LINE_HEIGHT_RATIO_CJK)))
-    # 二分搜索：寻找最大 fontsize，使得 text 在 width 内分成 n 行（n<=max_lines）能塞下
-    lo, hi = min_size, size_from_height
-    best = min_size
-    for _ in range(20):  # 20 次二分足以收敛到 0.5pt
+    lo, hi = _MIN_LAYER_FONT_SIZE, max_size
+    best = lo
+    for _ in range(28):
         mid = (lo + hi) / 2.0
-        if mid <= min_size:
-            break
-        line_h = mid * _LINE_HEIGHT_RATIO_CJK
-        n_lines = max(1, int(h // line_h))
-        if n_lines > max_lines:
-            n_lines = max_lines
-        # mid 字号下，单行容许的宽度
-        per_line_capacity = w * n_lines
-        if text_len(mid) <= per_line_capacity:
+        if fits(mid):
             best = mid
             lo = mid
         else:
             hi = mid
-    return max(min_size, best)
+    return best
 
 
 def _split_text_to_lines(font, text: str, fontsize: float, max_width: float) -> list[str]:
     """v2.7 新增：按 max_width 把 text 拆成多行（贪婪换行）。
 
-    优先按已有的空白断点换行；CJK 字符间允许任意位置断行。
+    逐字符贪婪换行；CJK 与西文都不会丢失字符。
     """
     if max_width <= 0 or fontsize <= 0:
         return [text]
@@ -361,51 +359,56 @@ def _layout_text_into_bbox(
     """
     import fitz
 
-    line_height = fontsize * _LINE_HEIGHT_RATIO_CJK
-    # 看是否需要多行：text 在 fontsize 下的总宽 vs bbox 宽
-    total_w = font.text_length(text, fontsize=fontsize)
-    if total_w <= w + 0.5:
-        # 单行
-        point = fitz.Point(x0, y1)
-        if apply_derotation:
-            point = point * page.derotation_matrix
-        page.insert_text(
-            point, text,
-            fontsize=fontsize, fontname=fontname,
-            rotate=page_rotation,
-            stroke_opacity=0, fill_opacity=0, render_mode=3,
-        )
-        return 1
+    if not text or fontsize <= 0 or w <= 0 or h <= 0:
+        raise TextLayerIntegrityError("空文字或无效文字框")
 
-    # 多行：拆分
+    ascender, _, metric_height = _font_vertical_metrics(font)
+    line_height = fontsize * metric_height
     lines = _split_text_to_lines(font, text, fontsize, w)
-    # 行数受 bbox 高度限制：最多 h / line_height 行；至少 1 行
-    # （即使 bbox 高度容纳不下完整字号，也要写出第一行，避免标点等窄字
-    #   在小 bbox 里被静默丢弃 — v2.7.1 修正）
-    max_lines_by_height = max(1, int(round(h / line_height)))
-    if len(lines) > max_lines_by_height:
-        lines = lines[:max_lines_by_height]
-    # 第一行 baseline 在 bbox 顶部 + ascender
-    # bbox 顶部 = y1 - h；baseline ≈ top + fontsize
-    first_baseline_y = (y1 - h) + fontsize
+    if not lines or "".join(lines) != text:
+        raise TextLayerIntegrityError("换行后文字不完整")
+    if any(font.text_length(line, fontsize=fontsize) > w + 0.25 for line in lines):
+        raise TextLayerIntegrityError("文字行超出坐标框宽度")
+    if len(lines) * line_height > h + 0.25:
+        raise TextLayerIntegrityError("文字行超出坐标框高度")
+
+    first_baseline_y = (y1 - h) + ascender * fontsize
+    single_line_scale = 1.0
+    if len(lines) == 1 and not apply_derotation and page_rotation == 0:
+        natural_width = font.text_length(lines[0], fontsize=fontsize)
+        if natural_width > 0:
+            candidate_scale = w / natural_width
+            if (
+                math.isfinite(candidate_scale)
+                and _MIN_SINGLE_LINE_HORIZONTAL_SCALE
+                <= candidate_scale
+                <= _MAX_SINGLE_LINE_HORIZONTAL_SCALE
+            ):
+                single_line_scale = candidate_scale
+
     written = 0
     for i, line in enumerate(lines):
         ly = first_baseline_y + i * line_height
-        # 不超出 bbox 底部过多（fontsize × 0.5 的容差）
-        # 但第一行始终写 — 否则窄标点会丢失（v2.7.1 修正）
-        if i > 0 and ly > y1 + fontsize * 0.5:
-            break
         point = fitz.Point(x0, ly)
         if apply_derotation:
             point = point * page.derotation_matrix
+        morph = None
+        if single_line_scale != 1.0:
+            # Paddle 返回的是整行检测框。字体按框高排版后，CJK 字体的自然字宽
+            # 往往只覆盖检测框的 60%-90%，导致选择高亮横向明显偏短。
+            # 单行、未旋转且缩放幅度可信时，以左侧基点做水平缩放贴合检测框。
+            morph = (point, fitz.Matrix(single_line_scale, 1.0))
         page.insert_text(
             point, line,
             fontsize=fontsize, fontname=fontname,
             rotate=page_rotation,
+            morph=morph,
             stroke_opacity=0, fill_opacity=0, render_mode=3,
         )
         written += 1
-    return max(1, written)
+    if written != len(lines):
+        raise TextLayerIntegrityError("文字写入行数不完整")
+    return written
 
 
 # ---------- 页面图像尺寸 ----------
@@ -510,19 +513,14 @@ def extract_page_entries_from_api_payload(payload: dict) -> list[dict]:
 def infer_page_scale(page_rect, rows, source_w, source_h) -> tuple[float, float]:
     """推断 OCR 坐标到 PDF 页面坐标的缩放系数。
 
-    v2.7 改进：
-    - 当 source_w/source_h 缺失时，使用所有 row 的 poly 宽高比 **中位数**
-      （旧版只用单个 max_x/max_y，对孤立离群框很敏感）。
-    - 当 OCR 坐标看起来已经是 PDF 页面坐标（max 值在页面尺寸 1.25x 以内）时，
-      返回 1.0 而不是再算一次比率（避免浮点漂移）。
+    有明确 source_w/source_h 时使用确定性缩放；缺少坐标空间尺寸时，只有
+    坐标本身可验证为 PDF 点单位才返回单位缩放，否则返回 (0, 0) 触发降级。
     """
     if source_w and source_h:
         return page_rect.width / source_w, page_rect.height / source_h
 
     max_x = 0.0
     max_y = 0.0
-    width_ratios_x = []  # poly_x_range / page_width 候选
-    height_ratios_y = []  # poly_y_range / page_height 候选
     for _, _, poly in rows:
         for p in poly:
             try:
@@ -534,46 +532,12 @@ def infer_page_scale(page_rect, rows, source_w, source_h) -> tuple[float, float]
                     max_y = fy
             except Exception:
                 continue
-        # poly 自身宽高
-        try:
-            xs = [float(p[0]) for p in poly]
-            ys = [float(p[1]) for p in poly]
-            if xs and ys:
-                rx = (max(xs) - min(xs)) / page_rect.width if page_rect.width else 0
-                ry = (max(ys) - min(ys)) / page_rect.height if page_rect.height else 0
-                if rx > 0:
-                    width_ratios_x.append(rx)
-                if ry > 0:
-                    height_ratios_y.append(ry)
-        except Exception:
-            continue
 
     # 如果最大坐标已在页面尺寸 1.25x 内，视为「已是 PDF 坐标」
     if max_x <= page_rect.width * 1.25 and max_y <= page_rect.height * 1.25:
         return 1.0, 1.0
 
-    if max_x <= 0 or max_y <= 0:
-        return 1.0, 1.0
-
-    # v2.7：优先用中位数 ratio 反推（抵御离群框噪声）
-    if width_ratios_x and height_ratios_y:
-        width_ratios_x.sort()
-        height_ratios_y.sort()
-        med_rx = width_ratios_x[len(width_ratios_x) // 2]
-        med_ry = height_ratios_y[len(height_ratios_y) // 2]
-        if 0 < med_rx < 1 and 0 < med_ry < 1:
-            # poly 宽占页宽的比例 = med_rx → 整体 poly 宽 = med_rx × page_width
-            # 但我们不知道 OCR 坐标空间的 absolute width，只能用 max 值估
-            # 这里保留 max_x/max_y 估算法，但用 median ratio 做合理性校验
-            scale_by_max_x = page_rect.width / max_x
-            scale_by_max_y = page_rect.height / max_y
-            # 若 max 估算法给出的 scale < 1/median_ratio 的 50%，说明 max 离群
-            # 此时用 max 算会过度缩放，回退到 median 估算（假设 OCR 空间 = PDF 空间）
-            if scale_by_max_x < 0.5 / max(med_rx, 0.01):
-                return 1.0, 1.0
-            return scale_by_max_x, scale_by_max_y
-
-    return page_rect.width / max_x, page_rect.height / max_y
+    return 0.0, 0.0
 
 
 def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float) -> dict:
@@ -593,44 +557,47 @@ def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float
         }
     """
     if not rows:
-        return {"fit_score": 0.0, "skew_warn": False, "scale_drift_warn": False,
-                "out_of_page_ratio": 1.0, "n_rows": 0}
+        return {"fit_score": 0.0, "skew_warn": False, "median_skew_degrees": 0.0,
+                "scale_drift_warn": False, "out_of_page_ratio": 1.0, "n_rows": 0}
 
     n = len(rows)
     # 1) 检查 scale_x/scale_y 是否失衡
-    if scale_x > 0 and scale_y > 0:
+    valid_scale = scale_x > 0 and scale_y > 0
+    if valid_scale:
         ratio = scale_x / scale_y
         scale_drift = not (0.95 <= ratio <= 1.0526)  # ±5%
     else:
         scale_drift = True
 
-    # 2) 检查 poly 主轴方向：取最长 poly 的 4 个顶点，看其 bbox 边长比对角线
-    #    如果 polys 看起来「旋转过」，对角线远长于 bbox 长边
+    # 2) 检查 poly 主轴相对页面水平/垂直轴的夹角。
+    # 旧实现比较“点间最长距离 / bbox 对角线”，该比值数学上不可能 > 1，
+    # 导致 skew_warn 永远无法触发。
     skew_warn = False
     sample_polys = rows[: min(20, n)]
-    diag_ratios = []
+    skew_degrees = []
     for _, _, poly in sample_polys:
         try:
-            xs = [float(p[0]) * scale_x for p in poly]
-            ys = [float(p[1]) * scale_y for p in poly]
-            x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-            bw, bh = x1 - x0, y1 - y0
-            # 用 poly 顶点之间的最长距离 vs bbox 对角线
-            dists = []
-            for i in range(len(xs)):
-                for j in range(i + 1, len(xs)):
-                    dists.append(((xs[i] - xs[j]) ** 2 + (ys[i] - ys[j]) ** 2) ** 0.5)
-            max_d = max(dists) if dists else 0
-            diag = (bw ** 2 + bh ** 2) ** 0.5
-            if diag > 0:
-                diag_ratios.append(max_d / diag)
+            points = [
+                (float(p[0]) * scale_x, float(p[1]) * scale_y)
+                for p in poly
+            ]
+            edges = []
+            for i, point in enumerate(points):
+                nxt = points[(i + 1) % len(points)]
+                dx, dy = nxt[0] - point[0], nxt[1] - point[1]
+                length = math.hypot(dx, dy)
+                if length > 0:
+                    edges.append((length, dx, dy))
+            if edges:
+                _, dx, dy = max(edges, key=lambda item: item[0])
+                angle = abs(math.degrees(math.atan2(dy, dx))) % 90.0
+                skew_degrees.append(min(angle, 90.0 - angle))
         except Exception:
             continue
-    # 若 poly 顶点之间的最长距 > bbox 对角线的 1.05 倍，说明 poly 是斜的（skewed）
-    if diag_ratios:
-        med = sorted(diag_ratios)[len(diag_ratios) // 2]
-        if med > 1.05:
-            skew_warn = True
+    median_skew = 0.0
+    if skew_degrees:
+        median_skew = sorted(skew_degrees)[len(skew_degrees) // 2]
+        skew_warn = median_skew > 1.0
 
     # 3) 检查落在页面外的顶点比例
     total_pts = 0
@@ -649,6 +616,8 @@ def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float
 
     # 综合得分
     score = 1.0
+    if not valid_scale:
+        score = 0.0
     if skew_warn:
         score -= 0.4
     if scale_drift:
@@ -659,6 +628,7 @@ def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float
     return {
         "fit_score": score,
         "skew_warn": skew_warn,
+        "median_skew_degrees": median_skew,
         "scale_drift_warn": scale_drift,
         "out_of_page_ratio": out_ratio,
         "n_rows": n,
@@ -666,6 +636,68 @@ def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float
 
 
 # ---------- 透明文字块插入（去重后的共享函数） ----------
+
+def _actual_text_prefix(text: str) -> bytes:
+    """生成 PDF marked-content 的 UTF-16BE /ActualText 前缀。"""
+    encoded = (b"\xfe\xff" + text.encode("utf-16-be")).hex().upper().encode("ascii")
+    return b"/Span << /ActualText <" + encoded + b">>> BDC\n"
+
+
+def _apply_semantic_actual_text(
+    page,
+    row_content_xrefs: dict[int, list[int]],
+    row_texts: dict[int, str],
+    semantic_paragraphs: list[dict],
+) -> int:
+    """为连续行流添加 /ActualText；不改变行级字形与选区坐标。"""
+    if not semantic_paragraphs:
+        return 0
+
+    doc = page.parent
+    page_contents = list(page.get_contents())
+    content_positions = {xref: index for index, xref in enumerate(page_contents)}
+    used_xrefs: set[int] = set()
+    applied = 0
+
+    for paragraph in semantic_paragraphs:
+        if not isinstance(paragraph, dict):
+            continue
+        text = str(paragraph.get("text") or "").strip()
+        row_indices = paragraph.get("row_indices")
+        if not text or not isinstance(row_indices, list) or not row_indices:
+            continue
+        try:
+            indices = [int(value) for value in row_indices]
+        except (TypeError, ValueError):
+            continue
+        if any(index not in row_content_xrefs or index not in row_texts for index in indices):
+            continue
+        physical_text = "".join(row_texts[index] for index in indices)
+        if re.sub(r"\s+", "", physical_text) != re.sub(r"\s+", "", text):
+            continue
+
+        xrefs = [xref for index in indices for xref in row_content_xrefs[index]]
+        if not xrefs or any(xref in used_xrefs or xref not in content_positions for xref in xrefs):
+            continue
+        positions = [content_positions[xref] for xref in xrefs]
+        if positions != list(range(min(positions), max(positions) + 1)):
+            continue
+
+        first_xref, last_xref = xrefs[0], xrefs[-1]
+        first_stream = doc.xref_stream(first_xref)
+        if first_xref == last_xref:
+            doc.update_stream(
+                first_xref,
+                _actual_text_prefix(text) + first_stream + b"\nEMC",
+            )
+        else:
+            doc.update_stream(first_xref, _actual_text_prefix(text) + first_stream)
+            doc.update_stream(last_xref, doc.xref_stream(last_xref) + b"\nEMC")
+        used_xrefs.update(xrefs)
+        applied += 1
+
+    return applied
+
 
 def _insert_text_blocks(
     page,
@@ -681,6 +713,7 @@ def _insert_text_blocks(
     pno: int,
     total_pages: int,
     quiet: bool,
+    semantic_paragraphs: list[dict] | None = None,
 ) -> int:
     import fitz
     """
@@ -689,16 +722,14 @@ def _insert_text_blocks(
     Returns:
         插入的文本块数量。
     """
-    font_inserted = False
     page_inserted = 0
-
-    page.clean_contents()
+    plans = []
 
     # v2.7：page.rotation == 0 时 derotation_matrix 是恒等矩阵，直接跳过点坐标变换
     # 避免浮点矩阵乘法引入的累积漂移（哪怕只有 1e-6 量级，叠到上千行也会偏）。
     apply_derotation = bool(page_rotation)
 
-    for text, score, poly in rows:
+    for row_index, (text, score, poly) in enumerate(rows, start=1):
         if score < min_score:
             continue
         content = text.strip()
@@ -708,25 +739,46 @@ def _insert_text_blocks(
             content = normalize_cjk_spacing(content)
             if not content:
                 continue
+        # API 的 block 文本可能含换行；坐标框内由本模块重新排版，先将控制换行
+        # 规范为空格，避免 insert_text 把单个计划行再次隐式拆开。
+        content = re.sub(r"[\r\n]+", " ", content).strip()
+        if not content:
+            continue
 
-        xs = [p[0] * scale_x for p in poly]
-        ys = [p[1] * scale_y for p in poly]
+        try:
+            xs = [float(p[0]) * scale_x for p in poly]
+            ys = [float(p[1]) * scale_y for p in poly]
+        except Exception as exc:
+            raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标无效") from exc
+        if len(xs) < 4 or not all(math.isfinite(v) for v in [*xs, *ys]):
+            raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标不完整")
 
         x0 = min(xs)
         x1 = max(xs)
         y0 = min(ys)
         y1 = max(ys)
 
-        w = max(1.0, x1 - x0)
-        h = max(1.0, y1 - y0)
+        w = x1 - x0
+        h = y1 - y0
+        if w <= 0 or h <= 0:
+            raise TextLayerIntegrityError(f"第 {row_index} 个文字块边界无效")
         fontsize = calculate_font_size(font, content, w, h)
+        if fontsize <= 0:
+            raise TextLayerIntegrityError(
+                f"第 {row_index} 个文字块无法完整放入坐标框"
+            )
+        plans.append((row_index - 1, content, x0, y1, w, h, fontsize))
 
-        if not font_inserted:
-            page.insert_font(fontname="cjk", fontbuffer=font.buffer)
-            font_inserted = True
+    if not plans:
+        return 0
 
-        # v2.7：多行排版 — text 在 bbox 宽度内自动换行，避免 insert_text
-        # 单行限制导致文字溢出 bbox（这是「文字层与图片层不对齐」的最大根因）
+    # 所有文字块预检通过后再修改页面，避免出现“前半页写入、后半页失败”。
+    page.insert_font(fontname="cjk", fontbuffer=font.buffer)
+
+    row_content_xrefs: dict[int, list[int]] = {}
+    row_texts: dict[int, str] = {}
+    for source_row_index, content, x0, y1, w, h, fontsize in plans:
+        before_xrefs = set(page.get_contents())
         n_lines = _layout_text_into_bbox(
             page, font, content,
             x0=x0, y1=y1, w=w, h=h, fontsize=fontsize,
@@ -734,10 +786,27 @@ def _insert_text_blocks(
             page_rotation=page_rotation,
             apply_derotation=apply_derotation,
         )
+        row_content_xrefs[source_row_index] = [
+            xref for xref in page.get_contents() if xref not in before_xrefs
+        ]
+        row_texts[source_row_index] = content
         page_inserted += n_lines
+
+    actual_text_count = _apply_semantic_actual_text(
+        page,
+        row_content_xrefs,
+        row_texts,
+        semantic_paragraphs or [],
+    )
+    if semantic_paragraphs and actual_text_count != len(semantic_paragraphs):
+        raise TextLayerIntegrityError(
+            f"ActualText 自然段写入不完整（{actual_text_count}/{len(semantic_paragraphs)}）"
+        )
 
     if not quiet:
         print(f"  第 {pno}/{total_pages} 页({source_name}): 新增 {page_inserted} 文本块")
+        if semantic_paragraphs:
+            print(f"    ActualText 自然段: {actual_text_count}/{len(semantic_paragraphs)}")
 
     return page_inserted
 
@@ -745,7 +814,11 @@ def _insert_text_blocks(
 # ---------- 叠层 PDF（分页 entries） ----------
 
 def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_name: str) -> bool:
-    """将分页 OCR 结果叠层为双层 PDF。"""
+    """将分页 OCR 结果事务式叠层为双层 PDF。
+
+    任一页缺失、坐标不健康、文字被过滤为空或无法完整排版时都返回 False，
+    且不写出部分成功文件；调用方可据此回退到 ocrmypdf。
+    """
     if not page_entries:
         return False
 
@@ -760,16 +833,53 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
     degraded_pages = 0  # v2.7: 健康度低、被降级（不铺文字层）的页数
     total_pages = len(doc)
     health_log = []  # v2.7: 每页健康度评估结果（用于诊断）
+    failure_reason = None
+
+    def finish(success: bool, reason: str | None = None) -> bool:
+        result = {
+            "success": success,
+            "reason": reason,
+            "total_pages": total_pages,
+            "entry_pages": len(page_entries),
+            "inserted_pages": inserted_pages,
+            "inserted_blocks": inserted_blocks,
+            "skipped_pages": skipped_pages,
+            "degraded_pages": degraded_pages,
+            "health_log": health_log,
+        }
+        setattr(args, "layered_result", result)
+        if not success and not args.quiet:
+            print(f"  {source_name} 叠层未写出：{reason}")
+        return success
 
     cjk_normalize = not args.no_paddle_cjk_space_normalize
     # v2.7: 健康度阈值（坐标判定可证化）
     # fit_score < 此值时，本页文字层不铺（让用户走 ocrmypdf 兜底）
     health_floor = float(getattr(args, "layered_health_floor", 0.5))
 
-    for pno, page in enumerate(doc, start=1):
-        if pno - 1 >= len(page_entries):
-            continue
+    if len(page_entries) != total_pages:
+        doc.close()
+        return finish(
+            False,
+            f"OCR 结果页数与 PDF 不一致（{len(page_entries)}/{total_pages}）",
+        )
 
+    if args.mode in {"redo", "force"}:
+        conflict_pages = [
+            pno
+            for pno, page in enumerate(doc, start=1)
+            if page_has_text_layer(page, 1)
+        ]
+        if conflict_pages:
+            doc.close()
+            preview = ",".join(str(x) for x in conflict_pages[:10])
+            suffix = "…" if len(conflict_pages) > 10 else ""
+            return finish(
+                False,
+                f"{args.mode} 模式无法安全移除既有文字层（页 {preview}{suffix}），需回退 ocrmypdf",
+            )
+
+    for pno, page in enumerate(doc, start=1):
         if args.mode == "skip" and page_has_text_layer(page, args.paddle_skip_text_min_chars):
             skipped_pages += 1
             continue
@@ -777,13 +887,30 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
         entry = page_entries[pno - 1]
         rows = entry.get("rows") or []
         if not rows:
-            continue
+            failure_reason = f"第 {pno} 页没有可验证的 OCR 坐标结果"
+            break
+
+        source_w, source_h = entry.get("width"), entry.get("height")
+        if not source_w or not source_h:
+            coords = [
+                (float(point[0]), float(point[1]))
+                for _, _, poly in rows
+                for point in poly
+                if len(point) >= 2
+            ]
+            max_x = max((point[0] for point in coords), default=0.0)
+            max_y = max((point[1] for point in coords), default=0.0)
+            if max_x > page.rect.width * 1.25 or max_y > page.rect.height * 1.25:
+                failure_reason = (
+                    f"第 {pno} 页缺少 OCR 坐标空间宽高，且坐标不是可验证的 PDF 点单位"
+                )
+                break
 
         scale_x, scale_y = infer_page_scale(
             page.rect,
             rows,
-            entry.get("width"),
-            entry.get("height"),
+            source_w,
+            source_h,
         )
 
         # v2.7: 坐标健康度评估 — 证不出就退化
@@ -798,51 +925,77 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
                     f"drift={health['scale_drift_warn']}, oob={health['out_of_page_ratio']:.0%}); "
                     f"已跳过文字层（建议改走 ocrmypdf 兜底）"
                 )
-            continue
+            failure_reason = f"第 {pno} 页坐标健康度不足（fit={health['fit_score']:.2f}）"
+            break
 
         page_rotation = int(page.rotation) if page.rotation else 0
 
-        page_inserted = _insert_text_blocks(
-            page,
-            font,
-            rows,
-            scale_x=scale_x,
-            scale_y=scale_y,
-            min_score=args.paddle_min_score,
-            cjk_normalize=cjk_normalize,
-            page_rotation=page_rotation,
-            source_name=source_name,
-            pno=pno,
-            total_pages=total_pages,
-            quiet=args.quiet,
-        )
+        try:
+            page_inserted = _insert_text_blocks(
+                page,
+                font,
+                rows,
+                scale_x=scale_x,
+                scale_y=scale_y,
+                min_score=args.paddle_min_score,
+                cjk_normalize=cjk_normalize,
+                page_rotation=page_rotation,
+                source_name=source_name,
+                pno=pno,
+                total_pages=total_pages,
+                quiet=args.quiet,
+                semantic_paragraphs=entry.get("semantic_paragraphs") or [],
+            )
+        except TextLayerIntegrityError as exc:
+            failure_reason = f"第 {pno} 页文字层不完整：{exc}"
+            break
 
         if page_inserted > 0:
             inserted_pages += 1
             inserted_blocks += page_inserted
+        else:
+            failure_reason = f"第 {pno} 页 OCR 结果经阈值过滤后为空"
+            break
 
-    if inserted_pages == 0:
+    if failure_reason:
         doc.close()
-        src = Path(args.input).resolve()
-        dst = Path(args.output).resolve()
-        if src != dst:
-            shutil.copy2(src, dst)
-        if not args.quiet:
-            print(f"{source_name} 已返回 OCR 结果，但无可叠层文本块，已原样输出。")
-        return True
+        return finish(False, failure_reason)
+
+    if inserted_pages + skipped_pages != total_pages:
+        doc.close()
+        return finish(False, "并非所有页面都已插入或按 skip 规则验证跳过")
 
     try:
         doc.subset_fonts()
     except Exception:
         pass
 
-    doc.save(
-        args.output,
-        garbage=4,
-        clean=1, deflate=1, deflate_images=1, deflate_fonts=1,
-        use_objstms=1, compression_effort=100,
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=output_path.parent,
+        prefix=f".{output_path.stem}.",
+        suffix=".tmp.pdf",
     )
-    doc.close()
+    temp_output = Path(temp_file.name)
+    temp_file.close()
+    try:
+        doc.save(
+            temp_output,
+            garbage=4,
+            clean=1, deflate=1, deflate_images=1, deflate_fonts=1,
+            use_objstms=1, compression_effort=100,
+        )
+        doc.close()
+        os.replace(temp_output, output_path)
+    except Exception:
+        doc.close()
+        try:
+            temp_output.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
 
     # 保留原文件时间戳（创建时间 + 修改时间）
     try:
@@ -871,7 +1024,7 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
         if degraded_pages:
             print(f"  降级页面（坐标健康度低）: {degraded_pages}")
             print(f"  → 这些页建议改走 ocrmypdf 兜底以保证搜索可用性")
-    return True
+    return finish(True)
 
 
 # ---------- 叠层 PDF（API payload） ----------

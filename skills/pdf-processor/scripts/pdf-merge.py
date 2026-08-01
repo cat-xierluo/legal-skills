@@ -17,7 +17,7 @@ import importlib.util
 
 try:
     import fitz  # PyMuPDF
-    from pypdf import PdfMerger
+    from pypdf import PdfWriter
 except ImportError as e:
     print(f"错误: 缺少必需的依赖 - {e}")
     print("\n请运行以下命令安装:")
@@ -64,12 +64,16 @@ def merge_pdfs_with_numbering(input_files, output_file, add_numbers=True, positi
         valid_files.append(str(path))
 
     if len(valid_files) == 0:
-        print("\n✗ 没有有效的 PDF 文件可合并")
-        sys.exit(1)
+        raise ValueError("没有有效的 PDF 文件可合并")
 
     print(f"\n准备合并 {len(valid_files)} 个文件:")
     for i, file_path in enumerate(valid_files, 1):
         print(f"  {i}. {Path(file_path).name}")
+
+    page_counts = []
+    for file_path in valid_files:
+        with fitz.open(file_path) as doc:
+            page_counts.append(len(doc))
 
     # 如果需要添加页码，先处理每个文件
     if add_numbers:
@@ -78,30 +82,34 @@ def merge_pdfs_with_numbering(input_files, output_file, add_numbers=True, positi
         print(f"{'=' * 60}")
 
         import tempfile
-        import shutil
-        temp_dir = Path(tempfile.mkdtemp())
+        temp_dir_handle = tempfile.TemporaryDirectory(prefix="pdf_merge_")
+        temp_dir = Path(temp_dir_handle.name)
         temp_files = []
+        cumulative_pages = 0
 
-        for i, file_path in enumerate(valid_files, 1):
-            doc = fitz.open(file_path)
-            page_count = len(doc)
-            doc.close()
+        try:
+            for i, file_path in enumerate(valid_files, 1):
+                page_count = page_counts[i - 1]
 
-            temp_file = temp_dir / f"numbered_{i}.pdf"
+                temp_file = temp_dir / f"numbered_{i}.pdf"
 
-            if per_file_numbering:
-                print(f"文件 {i}/{len(valid_files)}: {Path(file_path).name} ({page_count} 页) - 编号 1~{page_count}")
-                add_page_numbers_external(file_path, str(temp_file), position=position,
-                                         font_size=font_size, start_num=1)
-            else:
-                # 全局连续编号
-                start_num = sum(len(fitz.open(f)) for f in valid_files[:i-1]) + 1
-                end_num = start_num + page_count - 1
-                print(f"文件 {i}/{len(valid_files)}: {Path(file_path).name} ({page_count} 页) - 编号 {start_num}~{end_num}")
-                add_page_numbers_external(file_path, str(temp_file), position=position,
-                                         font_size=font_size, start_num=start_num)
+                if per_file_numbering:
+                    print(f"文件 {i}/{len(valid_files)}: {Path(file_path).name} ({page_count} 页) - 编号 1~{page_count}")
+                    add_page_numbers_external(file_path, str(temp_file), position=position,
+                                             font_size=font_size, start_num=1)
+                else:
+                    # 全局连续编号
+                    start_num = cumulative_pages + 1
+                    end_num = start_num + page_count - 1
+                    print(f"文件 {i}/{len(valid_files)}: {Path(file_path).name} ({page_count} 页) - 编号 {start_num}~{end_num}")
+                    add_page_numbers_external(file_path, str(temp_file), position=position,
+                                             font_size=font_size, start_num=start_num)
 
-            temp_files.append(str(temp_file))
+                temp_files.append(str(temp_file))
+                cumulative_pages += page_count
+        except Exception:
+            temp_dir_handle.cleanup()
+            raise
 
         # 使用添加了页码的临时文件进行合并
         files_to_merge = temp_files
@@ -113,21 +121,21 @@ def merge_pdfs_with_numbering(input_files, output_file, add_numbers=True, positi
     print(f"步骤 {'2/2' if add_numbers else '1/1'}: 合并 PDF 文件")
     print(f"{'=' * 60}")
 
-    merger = PdfMerger()
+    writer = PdfWriter()
 
-    for i, file_path in enumerate(files_to_merge, 1):
-        print(f"添加文件 {i}/{len(files_to_merge)}: {Path(valid_files[i-1]).name}")
-        merger.append(file_path)
+    try:
+        for i, file_path in enumerate(files_to_merge, 1):
+            print(f"添加文件 {i}/{len(files_to_merge)}: {Path(valid_files[i-1]).name}")
+            writer.append(file_path)
 
-    # 保存合并后的文件
-    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-    merger.write(output_file)
-    merger.close()
-
-    # 清理临时文件
-    if add_numbers:
-        import shutil
-        shutil.rmtree(temp_dir)
+        # 保存合并后的文件。PdfWriter.append 兼容 pypdf 3-6，替代已移除的 PdfMerger。
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "wb") as output_stream:
+            writer.write(output_stream)
+    finally:
+        writer.close()
+        if add_numbers:
+            temp_dir_handle.cleanup()
 
     # 统计信息
     final_doc = fitz.open(output_file)

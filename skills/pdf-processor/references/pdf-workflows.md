@@ -28,6 +28,10 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 
 # 需要裁剪白边时显式启用
 python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --enable-crop
+
+# 确需处理超大栅格时调高单页像素上限；0 表示关闭保护（高内存风险）
+python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
+  --max-preprocess-megapixels 40
 ```
 
 默认 `medium` 合并输出参数：
@@ -37,6 +41,8 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --en
 | `low` | 300 | 85 | 0 | 打印或高清保留 |
 | `medium` | 200 | 72 | 1 | 默认，兼顾法院上传与放大阅读 |
 | `high` | 130 | 45 | 2 | 文件大小限制严格 |
+
+表中 DPI 是目标值。默认单页像素上限为 25MP；当手机图片 PDF 把 2305×3310 像素直接写成 2305×3310 point 等异常物理页面尺寸时，统一入口会自动降低实际 DPI，避免预处理生成超大位图后又被 OCR 的 `--skip-big` 跳过。普通 A4、Letter 页面通常不会触发。
 
 ## OCR 参数
 
@@ -54,7 +60,14 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --mode force
 python3 scripts/pdf-ocr.py -i preprocessed.pdf -o output.pdf --preprocessed
 
 # 指定 API 顺序
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend auto --api-order paddle,mineru
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend auto --api-order paddle,mineru
+
+# 禁止材料外传，只使用本地 ocrmypdf
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
+
+# 电子/混合 PDF 只有在明确接受矢量、文字和批注层被栅格化的风险时才强制预处理
+python3 scripts/pdf-preprocess-ocr.py -i input.pdf -o output.pdf --force-raster-preprocess
 ```
 
 ## 压缩参数

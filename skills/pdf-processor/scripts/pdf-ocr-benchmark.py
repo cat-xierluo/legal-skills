@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from pdf_runtime import normalize_text_for_keyword
+
 try:
     import fitz
 except ImportError as e:
@@ -58,10 +60,14 @@ def pdf_metrics(
 
     text = "\n".join(page_texts)
     text_stripped = text.strip()
-    keyword_hits = {
-        keyword: text.count(keyword)
-        for keyword in (keywords or [])
-    }
+    normalized_text = normalize_text_for_keyword(text)
+    keyword_hits = {}
+    for keyword in keywords or []:
+        normalized_keyword = normalize_text_for_keyword(keyword)
+        keyword_hits[keyword] = (
+            normalized_text.count(normalized_keyword)
+            if normalized_keyword else 0
+        )
     page_text_chars = [len(page_text.strip()) for page_text in page_texts]
 
     return {

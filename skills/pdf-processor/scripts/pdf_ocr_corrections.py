@@ -17,6 +17,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from pdf_ocr_paragraphs import generate_semantic_text
+
 _SKILL_ROOT = Path(__file__).resolve().parent.parent
 ARCHIVE_DIR = _SKILL_ROOT / "archive"
 
@@ -38,6 +40,8 @@ def _entries_to_serializable(entries: list[dict]) -> list[dict]:
             "rows": rows,
             "width": entry.get("width"),
             "height": entry.get("height"),
+            "layout_blocks": entry.get("layout_blocks", []),
+            "semantic_paragraphs": entry.get("semantic_paragraphs", []),
         })
     return result
 
@@ -56,6 +60,8 @@ def _entries_from_serializable(data: list[dict]) -> list[dict]:
             "rows": rows,
             "width": page.get("width"),
             "height": page.get("height"),
+            "layout_blocks": page.get("layout_blocks", []),
+            "semantic_paragraphs": page.get("semantic_paragraphs", []),
         })
     return entries
 
@@ -106,76 +112,7 @@ def load_page_entries(path: str | Path) -> tuple[list[dict], dict]:
 
 def generate_readable_text(entries: list[dict]) -> str:
     """从 page_entries 生成连续可读文本，同段落行自动拼接，段落间空行分隔。"""
-    paragraphs: list[str] = []
-    current: list[str] = []
-    had_wrap = False
-    prev_y_bot: float | None = None
-    prev_x_left: float = 0.0
-    prev_h: float = 0.0
-
-    for entry in entries:
-        for text, score, poly in entry.get("rows", []):
-            content = text.strip()
-            if not content or score <= 0:
-                continue
-
-            if not poly or len(poly) < 4:
-                if current:
-                    paragraphs.append("".join(current))
-                    current = []
-                paragraphs.append(content)
-                prev_y_bot = None
-                had_wrap = False
-                continue
-
-            ys = [p[1] for p in poly]
-            xs = [p[0] for p in poly]
-            y_top = min(ys)
-            y_bot = max(ys)
-            x_left = min(xs)
-            h = max(y_bot - y_top, 1.0)
-
-            if prev_y_bot is None:
-                current = [content]
-                had_wrap = False
-                prev_y_bot = y_bot
-                prev_x_left = x_left
-                prev_h = h
-                continue
-
-            y_gap = y_top - prev_y_bot
-            min_h = max(min(prev_h, h), 1.0)
-            x_diff = x_left - prev_x_left
-
-            # 段落边界：负间距（同行重叠）、大间距（跨段落）
-            if y_gap <= 0 or y_gap >= min_h:
-                if current:
-                    paragraphs.append("".join(current))
-                current = [content]
-                had_wrap = False
-            else:
-                is_wrap = x_diff < -min_h * 0.3
-                is_same_margin = abs(x_diff) < min_h * 0.15
-
-                if is_wrap:
-                    current.append(content)
-                    had_wrap = True
-                elif is_same_margin and had_wrap:
-                    current.append(content)
-                else:
-                    if current:
-                        paragraphs.append("".join(current))
-                    current = [content]
-                    had_wrap = False
-
-            prev_y_bot = y_bot
-            prev_x_left = x_left
-            prev_h = h
-
-    if current:
-        paragraphs.append("".join(current))
-
-    return "\n\n".join(paragraphs)
+    return generate_semantic_text(entries)
 
 
 # ---------- Agent 修正（from/to 文本替换）----------

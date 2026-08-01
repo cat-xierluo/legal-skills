@@ -7,8 +7,10 @@
 
 ## 1. 推荐模型与使用建议
 
-- **推荐首选（双层 PDF）**：`PP-OCRv5`（默认）— 行级 OCR 坐标，双层 PDF 叠层定位最精确
-- **推荐首选（MD 输出）**：`PaddleOCR-VL-1.5` — 版面分析 + 方向矫正 + 去畸变 + 印章识别 + 异形框定位，94.5% 精度（OmniDocBench v1.5）
+- **推荐首选（双层 PDF）**：`PP-OCRv6`（默认）— 行级 OCR 坐标，双层 PDF 叠层定位最精确
+- **兼容模型**：`PP-OCRv5` — 保留旧流程与对照基准
+- **自然段版面**：`PP-StructureV3` — 只使用版面块、阅读顺序和 `seal` 区域，不覆盖 v6 行文字
+- **结构化输出**：`PaddleOCR-VL-1.6` / `PaddleOCR-VL-1.5` — 提供版面块与阅读结构；坐标为块级，不作为双层 PDF 默认模型
 - 适用场景：合同、诉讼材料、证据扫描件、拍照件等法律文档
 - 说明：外部 API 返回 OCR 结构化结果，本 Skill 基于返回结果自动叠层生成双层 PDF
 
@@ -16,9 +18,13 @@
 
 | 模型 | 特点 | 适用场景 |
 | --- | --- | --- |
-| `PaddleOCR-VL-1.5` | block 级结构、版面分析、方向/去畸变矫正、图表识别、印章识别、异形框定位 | 拍照件、复杂版面、需 MD 输出的文档 |
-| `PP-OCRv5` | 文本行级 OCR、速度更快、支持手写体/竖排文本 | 平扫件、纯文字文档、双层 PDF 首选 |
-| `PP-StructureV3` | 复杂版面/表格/图文混排 | 表格密集型文档 |
+| `PP-OCRv6` | 文本行级 OCR、50 种语言、识别与检测能力更新 | 平扫件、纯文字文档、双层 PDF 首选 |
+| `PP-OCRv5` | 文本行级 OCR、兼容既有产线 | 旧流程复现、模型对照 |
+| `PP-StructureV3` | `overall_ocr_res` 提供行级文字与四点坐标，同时包含版面块 | 干净扫描件、表格密集型文档；带重复水印的拍照件慎用 |
+| `PaddleOCR-VL-1.6` | block 级结构、版面分析，对复杂拍照件通常更稳健 | 复杂版面、需 Markdown/结构化输出的文档 |
+| `PaddleOCR-VL-1.5` | block 级结构、版面检测参数更完整 | 需兼容既有 VL-1.5 流程的文档 |
+
+> 云端 API 当前不提供字符级框。本 Skill 对 `PP-OCRv5/v6` / `PP-StructureV3` 使用行级坐标，对 VL 使用块级坐标；不把 Structure/VL 整段文本覆盖到 OCR 单行框中。
 
 > 当前 PaddleX 版本 3.4.0，PaddlePaddle 版本 3.2.1
 
@@ -26,6 +32,7 @@
 
 - PaddleOCR-VL-1.5：https://ai.baidu.com/ai-doc/AISTUDIO/Cmkz2m0ma
 - PP-OCRv5：https://ai.baidu.com/ai-doc/AISTUDIO/Kmfl2ycs0
+- PP-OCRv6：https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv6/PP-OCRv6.md
 - PP-StructureV3：https://ai.baidu.com/ai-doc/AISTUDIO/Fmfz6oh2e
 - PaddleOCR-VL（旧版）：https://ai.baidu.com/ai-doc/AISTUDIO/2mh4okm66
 
@@ -61,22 +68,43 @@ TOKEN="your_access_token"                          # → PADDLE_OCR_API_KEY
 ### 4.2 运行命令
 
 ```bash
-# 零参数自动流程（默认使用 PP-OCRv5，适用双层 PDF）
+# 零参数自动流程（默认使用 PP-OCRv6，适用双层 PDF）
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf
 
 # 显式指定后端和模型
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PP-OCRv5
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PP-OCRv6
 
-# 使用 VL-1.5 获得 MD 输出（版面分析 + 表格/公式识别）
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PaddleOCR-VL-1.5
+# 使用 StructureV3 的 overall_ocr_res 行级坐标
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PP-StructureV3
+
+# 使用 VL-1.6 获得块级结构
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --paddle-model PaddleOCR-VL-1.6
+
+# 敏感材料禁止上传外部服务
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 ```
+
+### 4.3 自然段融合
+
+对“文字已识别正确，但复制后按物理行断开”的材料，不要把多个行框合成一个 PDF 文本框。分别用 `PP-OCRv6 --ocr-dump` 获取行文字、用 `PP-StructureV3 --ocr-dump` 获取版面，再运行：
+
+```bash
+python3 scripts/pdf_ocr_paragraphs.py \
+  --text-dump /tmp/text.json --layout-dump /tmp/layout.json \
+  --output /tmp/clean.md --diagnostics /tmp/diagnostics.json \
+  --filtered-dump /tmp/text-filtered.json
+```
+
+融合优先采用 API 提供的 `seg_start_flag` / `seg_end_flag`；标志缺失时按块顺序、行距、缩进和正文右边界判断。`seal` 区域只用于排除落在其中的 OCR 行，版面块的 `block_content` 永不覆盖 v6 行文字。`layout_coverage < 0.75` 时自动退回纯几何规则；Structure 失败时可显式把 VL-1.5 dump 用作版面输入，VL-1.6 不进入默认链路。
+
+可加 `--actualtext` 生成带 PDF `/ActualText` 自然段提示的 filtered dump，但它是兼容性实验而非默认：Poppler `-raw` 可按段提取，PyMuPDF 仍按物理行排版，pypdf 与 macOS PDFKit 忽略提示，Poppler 默认布局排序还可能倒序。需要跨阅读器稳定的连续文本时，以 `--output` 生成的 Markdown 为权威产物。
 
 ## 5. API 协议说明
 
 ### 5.1 鉴权
 
 ```http
-Authorization: token {TOKEN}
+Authorization: bearer {TOKEN}
 Content-Type: application/json
 ```
 
@@ -87,7 +115,7 @@ Content-Type: application/json
 | `file` | string | 是 | 文件的 Base64 编码（或服务器可访问的 URL）。默认超过 100 页的 PDF 仅处理前 100 页，可通过产线配置 `Serving.extra.max_num_input_imgs: null` 解除限制 |
 | `fileType` | integer | 否 | `0` = PDF 文件，`1` = 图像文件。若缺失则根据 URL 推断 |
 
-### 5.3 PP-OCRv5 可选参数
+### 5.3 PP-OCRv5/v6 可选参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -104,7 +132,7 @@ Content-Type: application/json
 
 > 本 Skill 通过异步任务接口调用，以上参数通过 `optionalPayload` 传入。
 
-#### PP-OCRv5 响应结构（异步任务 JSONL）
+#### PP-OCRv5/v6 响应结构（异步任务 JSONL）
 
 本 Skill 使用异步任务模式（`/api/v2/ocr/jobs`），每行 JSONL 对应一个子批次结果：
 
@@ -151,7 +179,9 @@ Content-Type: application/json
 | `preprocessedImages` | 每页矫正后图像 URL 列表（若启用了方向/扭曲矫正） |
 | `dataInfo.pages[i]` | 每页原始尺寸（width, height） |
 
-### 5.4 PaddleOCR-VL-1.5 可选参数
+### 5.4 PaddleOCR-VL 可选参数
+
+以下版面形状和检测参数主要适用于 VL-1.5。VL-1.6 默认只发送方向、去畸变和图表识别三个通用开关，避免把未验证参数传给服务端。
 
 #### 图像预处理
 
@@ -201,7 +231,7 @@ Content-Type: application/json
 
 > 本 Skill 通过异步任务接口调用，以上参数通过 `optionalPayload` 传入。
 
-#### PaddleOCR-VL-1.5 响应结构（异步任务 JSONL）
+#### PaddleOCR-VL-1.5/1.6 响应结构（异步任务 JSONL）
 
 本 Skill 使用异步任务模式（`/api/v2/ocr/jobs`），每行 JSONL 对应一个子批次结果：
 
@@ -255,7 +285,37 @@ Content-Type: application/json
 | `inputImage` | 原始输入图像（JPEG 格式，Base64 编码） |
 | `preprocessedImages` | 每页矫正后图像 URL 列表（若启用了方向/扭曲矫正） |
 
-### 5.5 本 Skill 的异步任务模式
+### 5.5 PP-StructureV3 响应结构
+
+PP-StructureV3 的行级 OCR 位于 `layoutParsingResults[].prunedResult.overall_ocr_res`：
+
+```json
+{
+  "result": {
+    "layoutParsingResults": [
+      {
+        "prunedResult": {
+          "overall_ocr_res": {
+            "rec_texts": ["借款合同", "人民法院"],
+            "rec_scores": [0.99, 0.97],
+            "dt_polys": [
+              [[10, 20], [210, 20], [210, 60], [10, 60]],
+              [[10, 80], [210, 80], [210, 120], [10, 120]]
+            ]
+          },
+          "parsing_res_list": [],
+          "width": 1000,
+          "height": 1400
+        }
+      }
+    ]
+  }
+}
+```
+
+坐标按 `dt_polys` → `rec_polys` → `rec_boxes` 顺序读取；`rec_boxes=[x0,y0,x1,y1]` 会转换为四点框。`parsing_res_list` 只表示块级结构，不用于覆盖行级文字层。
+
+### 5.6 本 Skill 的异步任务模式
 
 本 Skill 通过 PaddleOCR 云服务的异步任务接口调用：
 
@@ -264,7 +324,7 @@ Content-Type: application/json
 - 结果格式：JSONL，每行包含一页或一批 OCR 结果（文字 + 坐标 + 矫正图片）
 - 本地叠层：从 JSONL 解析坐标后本地生成双层 PDF
 
-### 5.6 `/restructure-pages` 端点（可选）
+### 5.7 `/restructure-pages` 端点（可选）
 
 用于对多页 PDF 解析结果进行重构，支持跨页表格合并和段落标题级别识别。
 
@@ -296,7 +356,7 @@ Content-Type: application/json
 }
 ```
 
-### 5.7 错误码
+### 5.8 错误码
 
 | errorCode | HTTP 状态码 | errorMsg | 说明 |
 | --- | --- | --- | --- |
@@ -313,7 +373,7 @@ Content-Type: application/json
 { "logId": "uuid", "errorCode": 401, "errorMsg": "Token 无效或已过期" }
 ```
 
-### 5.8 限制与注意事项
+### 5.9 限制与注意事项
 
 1. **PDF 页数限制**：默认超过 100 页的 PDF 仅处理前 100 页。可在产线配置文件添加 `Serving.extra.max_num_input_imgs: null` 解除限制。本 Skill 的异步任务模式实测 300 页+ 无限制。
 2. **可视化开销**：启用 `visualize=true` 会显著增加结果返回时间
@@ -342,3 +402,7 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --ocr-resume /tmp/ocr_dump
 - `TOKEN` 属于敏感凭证，不要提交到 Git 仓库
 - `config/.env` 已被仓库忽略；仅提交 `config/.env.example`
 - 若凭证泄露，请立即在服务端吊销并重新生成
+- `auto` 在 Paddle/MinerU 已配置时会上传完整 PDF；禁止外传的材料必须使用 `--local-only`
+- `--allow-external-upload` 仅为旧命令兼容参数，不再是上传开关
+- 服务端方向/去畸变默认关闭，以保持 OCR 坐标与输入图片一致；显式开启后必须重新核验文字层与底图对齐
+- 本 Skill 不把 OCR 结果发送给 Qwen/GLM 等视觉模型，也不在此流程中执行字段、签章或语义识别

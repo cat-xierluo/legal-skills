@@ -9,12 +9,14 @@ PDF 预处理 + OCR（生产路径）
 4) 默认调用 OCR 后端生成双层可搜索 PDF；显式 --preprocess-only 时在 OCR 前停止
 
 说明：
-- 默认后端：auto（按外部 API 顺序优先；未配置或失败时提示后回退 ocrmypdf）
+- 默认后端：auto（优先使用已配置的 PaddleOCR/MinerU，失败后回退本地）
+- 敏感材料使用 --local-only 强制不调用外部 API
 - 通过直接调用 pdf-ocr.py 的 run_ocr() 函数实现，无 subprocess 开销
 """
 
 import argparse
 import importlib.util
+import math
 import os
 import platform
 import shutil
@@ -34,6 +36,7 @@ from pdf_runtime import (
     exit_for_missing_dependencies,
     load_env_file,
 )
+from pdf_ocr_paddle_api import PADDLE_VL_MODELS, PADDLE_STRUCTURE_MODEL, SUPPORTED_PADDLE_MODELS
 
 try:
     import pypdf
@@ -74,6 +77,8 @@ MERGED_PREPROCESS_OUTPUT_PROFILES = {
         "pdf_jpeg_optimize": True,
     },
 }
+DEFAULT_MAX_PREPROCESS_MEGAPIXELS = 25.0
+DEFAULT_OCR_API_ORDER_ENV = "OCR_API_ORDER"
 
 
 def _copy_file_times(src: str | Path, dst: str | Path) -> None:
@@ -146,6 +151,69 @@ def resolve_preprocess_output_options(
     }
 
 
+def resolve_bounded_preprocess_dpi(
+    pdf_path: str | Path,
+    requested_dpi: int,
+    max_megapixels: float = DEFAULT_MAX_PREPROCESS_MEGAPIXELS,
+) -> dict:
+    """Limit raster preprocessing size for PDFs with abnormal physical page dimensions."""
+    if requested_dpi <= 0:
+        raise ValueError("预处理 DPI 必须大于 0")
+
+    result = {
+        "requested_dpi": requested_dpi,
+        "effective_dpi": requested_dpi,
+        "max_megapixels": max_megapixels,
+        "predicted_megapixels": None,
+        "effective_megapixels": None,
+        "capped": False,
+        "reason": None,
+    }
+    if max_megapixels <= 0:
+        result["reason"] = "disabled"
+        return result
+
+    try:
+        reader = pypdf.PdfReader(str(pdf_path))
+        page_areas = []
+        for page in reader.pages:
+            box = page.cropbox
+            width = abs(float(box.right) - float(box.left))
+            height = abs(float(box.top) - float(box.bottom))
+            if width > 0 and height > 0 and math.isfinite(width) and math.isfinite(height):
+                page_areas.append(width * height)
+    except Exception as exc:
+        result["reason"] = f"inspection_failed:{type(exc).__name__}"
+        return result
+
+    if not page_areas:
+        result["reason"] = "no_valid_page_size"
+        return result
+
+    max_area_points = max(page_areas)
+    predicted = max_area_points * requested_dpi * requested_dpi / (72.0 * 72.0) / 1_000_000.0
+    result["predicted_megapixels"] = round(predicted, 3)
+    if predicted <= max_megapixels:
+        result["effective_megapixels"] = round(predicted, 3)
+        return result
+
+    dpi_cap = max(
+        1,
+        int(math.floor(72.0 * math.sqrt(max_megapixels * 1_000_000.0 / max_area_points))),
+    )
+    effective_dpi = min(requested_dpi, dpi_cap)
+    effective_mp = max_area_points * effective_dpi * effective_dpi / (72.0 * 72.0) / 1_000_000.0
+    result.update(
+        {
+            "effective_dpi": effective_dpi,
+            "effective_megapixels": round(effective_mp, 3),
+            "capped": effective_dpi < requested_dpi,
+            "reason": "page_pixel_guard" if effective_dpi < requested_dpi else None,
+        }
+    )
+    return result
+
+
 def should_run_standalone_compress(
     no_compress: bool,
     preprocessed: bool,
@@ -155,6 +223,128 @@ def should_run_standalone_compress(
     if no_compress:
         return False
     return not (preprocessed and merge_preprocess_compress)
+
+
+def should_use_ocrmypdf_native_preprocess(
+    *,
+    backend: str,
+    local_only: bool,
+    external_backend_configured: bool,
+    skip_preprocess: bool,
+    preprocess_only: bool,
+    enable_crop: bool,
+    force_raster_preprocess: bool,
+) -> bool:
+    """Prefer OCRmyPDF's native cleanup when the effective backend is local.
+
+    Re-rasterizing an already full-resolution scan before Tesseract can discard
+    recognition detail.  Explicit preprocessing requests continue to win.
+    """
+    if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
+        return False
+    local_selected = backend == "local_ocrmypdf" or (
+        backend == "auto" and (local_only or not external_backend_configured)
+    )
+    return local_selected
+
+
+def resolve_configured_external_order(
+    raw_order: str | None,
+    *,
+    paddle_configured: bool,
+    mineru_configured: bool,
+) -> list[str]:
+    """Return configured external providers in the order auto will try them."""
+    order = []
+    for value in (raw_order or "").split(","):
+        provider = value.strip().lower()
+        if provider in {"paddle", "mineru"} and provider not in order:
+            order.append(provider)
+    if not order:
+        order = ["paddle", "mineru"]
+    return [
+        provider
+        for provider in order
+        if (provider == "paddle" and paddle_configured)
+        or (provider == "mineru" and mineru_configured)
+    ]
+
+
+def should_use_paddle_original_input(
+    *,
+    backend: str,
+    local_only: bool,
+    paddle_selected_by_auto: bool,
+    skip_preprocess: bool,
+    preprocess_only: bool,
+    enable_crop: bool,
+    force_raster_preprocess: bool,
+) -> bool:
+    """Keep the original PDF when Paddle is the effective first OCR backend."""
+    if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
+        return False
+    paddle_selected = backend == "paddle_api" or (
+        backend == "auto" and not local_only and paddle_selected_by_auto
+    )
+    return paddle_selected
+
+
+def classify_pdf_layer_content(pdf_path: str | Path) -> dict:
+    """识别 PDF 是否含需保留的文字、矢量或批注层。"""
+    try:
+        import fitz
+    except ImportError as exc:
+        raise RuntimeError("检测 PDF 层结构需要 PyMuPDF：pip install pymupdf") from exc
+
+    total_pages = 0
+    text_pages = 0
+    vector_pages = 0
+    annotation_pages = 0
+    image_pages = 0
+    structured_pages = 0
+    with fitz.open(pdf_path) as doc:
+        total_pages = len(doc)
+        for page in doc:
+            has_text = bool((page.get_text("text") or "").strip())
+            has_vector = False
+            has_annotation = False
+            if has_text:
+                text_pages += 1
+            try:
+                if page.get_drawings():
+                    has_vector = True
+                    vector_pages += 1
+            except Exception:
+                pass
+            try:
+                if page.first_annot is not None:
+                    has_annotation = True
+                    annotation_pages += 1
+            except Exception:
+                pass
+            try:
+                if page.get_images(full=True):
+                    image_pages += 1
+            except Exception:
+                pass
+            if has_text or has_vector or has_annotation:
+                structured_pages += 1
+
+    if text_pages == 0 and vector_pages == 0 and annotation_pages == 0:
+        kind = "scanned"
+    elif image_pages == 0 and text_pages == total_pages:
+        kind = "digital"
+    else:
+        kind = "hybrid"
+    return {
+        "kind": kind,
+        "total_pages": total_pages,
+        "text_pages": text_pages,
+        "vector_pages": vector_pages,
+        "annotation_pages": annotation_pages,
+        "image_pages": image_pages,
+        "structured_pages": structured_pages,
+    }
 
 
 def write_preprocess_only_output(
@@ -240,7 +430,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  # 推荐：先预处理再做双层 PDF（默认 redo）
+  # 推荐：先预处理再做双层 PDF（默认 skip）
   python3 scripts/pdf-preprocess-ocr.py -i input.pdf -o output.pdf
 
   # 仅做 OCR，不做预处理
@@ -280,12 +470,29 @@ def main():
     # 预处理参数
     parser.add_argument("--skip-preprocess", action="store_true", help="跳过预处理阶段")
     parser.add_argument(
+        "--force-raster-preprocess",
+        action="store_true",
+        help=(
+            "强制使用统一栅格化预处理，包括本地 OCR 路径；"
+            "电子/混合 PDF 可能丢失矢量和批注层"
+        ),
+    )
+    parser.add_argument(
         "--dpi",
         type=int,
         default=None,
         help=(
             "预处理 DPI（默认随压缩级别自动选择；合并压缩时 medium=200，"
             "禁用合并压缩时 medium=200；跳过压缩时为 300）"
+        ),
+    )
+    parser.add_argument(
+        "--max-preprocess-megapixels",
+        type=float,
+        default=DEFAULT_MAX_PREPROCESS_MEGAPIXELS,
+        help=(
+            "预处理单页像素上限（MP），默认 25；异常大物理页面会自动降低实际 DPI，"
+            "设为 0 可禁用"
         ),
     )
     parser.add_argument(
@@ -369,17 +576,22 @@ def main():
         "--backend",
         choices=["auto", "local_ocrmypdf", "paddle_api", "mineru_api"],
         default="auto",
-        help="OCR 后端，默认 auto（外部 API 按顺序优先；未配置或失败时回退 ocrmypdf）",
+        help="OCR 后端，默认 auto（已配置时 Paddle/MinerU 优先，失败回退本地）",
     )
     parser.add_argument(
         "--api-order",
         help="auto 模式外部 API 顺序，逗号分隔（例如 paddle,mineru）",
     )
     parser.add_argument(
+        "--local-only",
+        action="store_true",
+        help="强制不调用外部 OCR API，仅使用本地 ocrmypdf",
+    )
+    parser.add_argument(
         "--mode",
         choices=["skip", "redo", "force"],
-        default="redo",
-        help="OCR 模式，默认 redo",
+        default="skip",
+        help="OCR 模式，默认 skip（保留已有文字层）",
     )
     parser.add_argument("--language", default="chi_sim+eng", help="OCR 语言包，默认 chi_sim+eng")
     parser.add_argument(
@@ -404,6 +616,12 @@ def main():
     )
     parser.add_argument("--jobs", type=int, help="OCR 并行任务数")
 
+    parser.add_argument(
+        "--paddle-model",
+        choices=SUPPORTED_PADDLE_MODELS,
+        default="PP-OCRv6",
+        help="PaddleOCR 模型，默认 PP-OCRv6（行级坐标更适合双层 PDF）",
+    )
     parser.add_argument("--paddle-api-endpoint", help="外部 PaddleOCR API 地址")
     parser.add_argument("--paddle-api-key-env", default=DEFAULT_PADDLE_API_KEY_ENV)
     parser.add_argument("--paddle-api-timeout", type=int, default=180)
@@ -420,6 +638,32 @@ def main():
         action="store_true",
         help="Paddle API 失败时不回退到本地 ocrmypdf",
     )
+    parser.add_argument(
+        "--paddle-vl-no-layout-detection",
+        action="store_true",
+        help="VL-1.5：禁用版面区域检测",
+    )
+    parser.add_argument(
+        "--paddle-vl-chart-recognition",
+        action="store_true",
+        help="VL/Structure：启用图表解析",
+    )
+    parser.add_argument(
+        "--paddle-vl-doc-orientation",
+        action="store_true",
+        help="VL/Structure：启用服务端页面方向矫正",
+    )
+    parser.add_argument(
+        "--paddle-vl-doc-unwarping",
+        action="store_true",
+        help="VL/Structure：启用服务端页面去畸变",
+    )
+    parser.add_argument(
+        "--paddle-vl-layout-shape-mode",
+        choices=["rect", "quad", "poly", "auto"],
+        default="rect",
+        help="VL-1.5：版面检测框形状，默认 rect",
+    )
     parser.add_argument("--mineru-api-base", help="MinerU API Base 地址")
     parser.add_argument("--mineru-api-base-env", default=DEFAULT_MINERU_API_BASE_ENV)
     parser.add_argument("--mineru-api-token-env", default=DEFAULT_MINERU_API_TOKEN_ENV)
@@ -432,6 +676,16 @@ def main():
     parser.add_argument("--mineru-enable-formula", action="store_true")
     parser.add_argument("--mineru-enable-table", action="store_true")
     parser.add_argument("--mineru-api-extra-json", help="额外 MinerU create payload JSON 文件路径")
+    parser.add_argument(
+        "--allow-external-upload",
+        action="store_true",
+        help="兼容旧版本；auto 现已默认使用已配置 API，如需禁止外传请用 --local-only",
+    )
+    parser.add_argument(
+        "--archive-results",
+        action="store_true",
+        help="显式归档 OCR 文本或预处理元数据；默认不归档案件材料",
+    )
 
     args = parser.parse_args()
     stage_total = 2 if args.preprocess_only else 3
@@ -484,26 +738,90 @@ def main():
             if not args.quiet:
                 print(f"已生成解密临时文件: {decrypted_temp}")
 
+        layer_profile = classify_pdf_layer_content(working_input)
+        preserve_original_layers = (
+            layer_profile["kind"] in {"digital", "hybrid"}
+            and not args.force_raster_preprocess
+        )
+        if preserve_original_layers and not args.quiet:
+            print(
+                f"\n[层保护] 检测到 {layer_profile['kind']} PDF，"
+                "默认跳过栅格化预处理与重压缩；如确需强制处理请传 --force-raster-preprocess"
+            )
+
+        paddle_endpoint = (
+            args.paddle_api_endpoint
+            or os.getenv(DEFAULT_PADDLE_API_ENDPOINT_ENV, "").strip()
+        )
+        mineru_endpoint = (
+            args.mineru_api_base
+            or os.getenv(args.mineru_api_base_env, "").strip()
+        )
+        external_backend_configured = bool(paddle_endpoint or mineru_endpoint)
+        configured_external_order = resolve_configured_external_order(
+            args.api_order or os.getenv(DEFAULT_OCR_API_ORDER_ENV, ""),
+            paddle_configured=bool(paddle_endpoint),
+            mineru_configured=bool(mineru_endpoint),
+        )
+        paddle_selected_by_auto = (
+            bool(configured_external_order)
+            and configured_external_order[0] == "paddle"
+        )
+        paddle_original_input_shortcut = (
+            not preserve_original_layers
+            and should_use_paddle_original_input(
+                backend=args.backend,
+                local_only=args.local_only,
+                paddle_selected_by_auto=paddle_selected_by_auto,
+                skip_preprocess=args.skip_preprocess,
+                preprocess_only=args.preprocess_only,
+                enable_crop=args.enable_crop,
+                force_raster_preprocess=args.force_raster_preprocess,
+            )
+        )
+        if paddle_original_input_shortcut and not args.quiet:
+            print(
+                "\n[PaddleOCR 原图短路] 跳过统一栅格化与预压缩；"
+                "直接提交原 PDF，以保留扫描分辨率和原有图层"
+            )
+        local_native_preprocess_shortcut = (
+            not preserve_original_layers
+            and should_use_ocrmypdf_native_preprocess(
+                backend=args.backend,
+                local_only=args.local_only,
+                external_backend_configured=external_backend_configured,
+                skip_preprocess=args.skip_preprocess,
+                preprocess_only=args.preprocess_only,
+                enable_crop=args.enable_crop,
+                force_raster_preprocess=args.force_raster_preprocess,
+            )
+        )
+        if local_native_preprocess_shortcut and not args.quiet:
+            print(
+                "\n[本地 OCR 短路] 跳过统一栅格化与预压缩；"
+                "交由 OCRmyPDF 对原始扫描页执行方向检测、纠偏和清理"
+            )
+
         # PaddleOCR API 预处理短路：仅当 API 端确实启用了方向/去畸变时才跳过本地预处理
         # 默认 useDocOrientationClassify=False, useDocUnwarping=False，不走短路
         # 如果用户显式请求了 --enable-crop，API 不做裁剪，必须走本地预处理
         api_preprocessing_shortcut = False
-        if not args.skip_preprocess and not args.enable_crop:
+        if not args.skip_preprocess and not preserve_original_layers and not args.enable_crop:
             using_paddle_api = False
             if args.backend == "paddle_api":
                 using_paddle_api = True
-            elif args.backend == "auto":
-                paddle_ep = args.paddle_api_endpoint
-                if not paddle_ep:
-                    import os as _os
-                    paddle_ep = _os.getenv(DEFAULT_PADDLE_API_ENDPOINT_ENV, "").strip()
-                if paddle_ep:
+            elif args.backend == "auto" and not args.local_only:
+                if paddle_selected_by_auto:
                     using_paddle_api = True
 
             if using_paddle_api:
                 # 检查 --paddle-api-extra-json 是否启用了方向矫正或去畸变
-                api_orientation = False
-                api_unwarping = False
+                supports_vl_preprocess = (
+                    args.paddle_model in PADDLE_VL_MODELS
+                    or args.paddle_model == PADDLE_STRUCTURE_MODEL
+                )
+                api_orientation = supports_vl_preprocess and args.paddle_vl_doc_orientation
+                api_unwarping = supports_vl_preprocess and args.paddle_vl_doc_unwarping
                 extra_path = getattr(args, "paddle_api_extra_json", None)
                 if extra_path:
                     import json as _json
@@ -522,7 +840,27 @@ def main():
 
         # 阶段 1：预处理
         preprocessed = False
-        if not args.skip_preprocess and not api_preprocessing_shortcut:
+        preprocess_resolution_meta = None
+        if (
+            not args.skip_preprocess
+            and not api_preprocessing_shortcut
+            and not paddle_original_input_shortcut
+            and not local_native_preprocess_shortcut
+            and not preserve_original_layers
+        ):
+            preprocess_resolution_meta = resolve_bounded_preprocess_dpi(
+                working_input,
+                requested_dpi=args.dpi,
+                max_megapixels=args.max_preprocess_megapixels,
+            )
+            args.dpi = preprocess_resolution_meta["effective_dpi"]
+            if preprocess_resolution_meta["capped"] and not args.quiet:
+                print(
+                    "\n[像素保护] 页面物理尺寸异常偏大："
+                    f"预处理 DPI {preprocess_resolution_meta['requested_dpi']} → {args.dpi}，"
+                    f"预计单页 {preprocess_resolution_meta['predicted_megapixels']:.1f}MP → "
+                    f"{preprocess_resolution_meta['effective_megapixels']:.1f}MP"
+                )
             skip_pages = parse_skip_pages(args.skip_pages)
             preprocessed_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
             preprocessed_path = preprocessed_temp.name
@@ -572,8 +910,14 @@ def main():
         elif not args.quiet:
             if args.skip_preprocess:
                 print("\n[跳过] 预处理阶段已跳过（--skip-preprocess）")
+            elif paddle_original_input_shortcut:
+                print("\n[跳过] 预处理阶段已跳过（PaddleOCR 原 PDF 直送）")
             elif api_preprocessing_shortcut:
                 print("\n[跳过] 预处理阶段已跳过（PaddleOCR API 服务端预处理）")
+            elif local_native_preprocess_shortcut:
+                print("\n[跳过] 预处理阶段已跳过（OCRmyPDF 本地原生预处理）")
+            elif preserve_original_layers:
+                print("\n[跳过] 预处理阶段已跳过（电子/混合 PDF 层保护）")
 
         # 阶段 2：压缩（预处理后、OCR 前，减小上传体积）
         compress_result = None
@@ -583,7 +927,12 @@ def main():
             and not args.no_compress
         )
         if should_run_standalone_compress(
-            no_compress=args.no_compress,
+            no_compress=(
+                args.no_compress
+                or preserve_original_layers
+                or paddle_original_input_shortcut
+                or local_native_preprocess_shortcut
+            ),
             preprocessed=preprocessed,
             merge_preprocess_compress=args.merge_preprocess_compress,
         ):
@@ -635,7 +984,16 @@ def main():
             if not args.quiet:
                 print("\n[跳过] 压缩阶段已合并到预处理输出")
         elif not args.quiet:
-            print("\n[跳过] 压缩阶段已跳过（--no-compress）")
+            reason = (
+                "电子/混合 PDF 层保护"
+                if preserve_original_layers
+                else "PaddleOCR 原 PDF 直送"
+                if paddle_original_input_shortcut
+                else "OCRmyPDF 本地原生预处理"
+                if local_native_preprocess_shortcut
+                else "--no-compress"
+            )
+            print(f"\n[跳过] 压缩阶段已跳过（{reason}）")
 
         if args.preprocess_only:
             if not args.quiet:
@@ -648,11 +1006,27 @@ def main():
                 "original_file": str(args.input),
                 "decrypted": bool(decrypted_temp),
                 "preprocessed": preprocessed,
-                "preprocess_skipped": args.skip_preprocess or api_preprocessing_shortcut,
-                "preprocess_shortcut_reason": "paddle_api" if api_preprocessing_shortcut else None,
-                "compress_skipped": args.no_compress,
+                "preprocess_skipped": (
+                    args.skip_preprocess
+                    or paddle_original_input_shortcut
+                    or api_preprocessing_shortcut
+                    or local_native_preprocess_shortcut
+                    or preserve_original_layers
+                ),
+                "layer_profile": layer_profile,
+                "preserve_original_layers": preserve_original_layers,
+                "preprocess_shortcut_reason": (
+                    "paddle_original"
+                    if paddle_original_input_shortcut
+                    else "paddle_api"
+                    if api_preprocessing_shortcut
+                    else "ocrmypdf_native"
+                    if local_native_preprocess_shortcut
+                    else None
+                ),
+                "compress_skipped": args.no_compress or preserve_original_layers,
                 "compress_merged_into_preprocess": compress_merged_into_preprocess,
-                "compress_level": args.compress_level if not args.no_compress else None,
+                "compress_level": args.compress_level if not (args.no_compress or preserve_original_layers) else None,
                 "compress_result": compress_result if compress_result else None,
             }
 
@@ -664,7 +1038,7 @@ def main():
             )
 
             # 归档预处理记录
-            if not args.dry_run:
+            if not args.dry_run and args.archive_results:
                 try:
                     from pdf_ocr_corrections import archive_preprocess_result
                     archive_dir = archive_preprocess_result(
@@ -709,10 +1083,32 @@ def main():
             "original_file": str(args.input),
             "decrypted": bool(decrypted_temp),
             "preprocessed": preprocessed,
-            "preprocess_skipped": args.skip_preprocess or api_preprocessing_shortcut,
-            "preprocess_shortcut_reason": "paddle_api" if api_preprocessing_shortcut else None,
+            "preprocess_skipped": (
+                args.skip_preprocess
+                or paddle_original_input_shortcut
+                or api_preprocessing_shortcut
+                or local_native_preprocess_shortcut
+                or preserve_original_layers
+            ),
+            "layer_profile": layer_profile,
+            "preserve_original_layers": preserve_original_layers,
+            "preprocess_shortcut_reason": (
+                "paddle_original"
+                if paddle_original_input_shortcut
+                else "paddle_api"
+                if api_preprocessing_shortcut
+                else "ocrmypdf_native"
+                if local_native_preprocess_shortcut
+                else None
+            ),
             "preprocess_params": {
                 "dpi": args.dpi,
+                "requested_dpi": (
+                    preprocess_resolution_meta["requested_dpi"]
+                    if preprocess_resolution_meta else args.dpi
+                ),
+                "max_preprocess_megapixels": args.max_preprocess_megapixels,
+                "resolution_guard": preprocess_resolution_meta,
                 "skew_threshold": args.skew_threshold,
                 "rotation_confidence": args.rotation_confidence,
                 "enable_coarse_rotation": not args.skip_coarse_rotation,
@@ -725,9 +1121,23 @@ def main():
                 "preprocess_chunk_pages": args.preprocess_chunk_pages,
                 "skip_pages": args.skip_pages or None,
             } if preprocessed else None,
-            "compress_skipped": args.no_compress,
+            "compress_skipped": (
+                args.no_compress
+                or preserve_original_layers
+                or paddle_original_input_shortcut
+                or local_native_preprocess_shortcut
+            ),
             "compress_merged_into_preprocess": compress_merged_into_preprocess,
-            "compress_level": args.compress_level if not args.no_compress else None,
+            "compress_level": (
+                args.compress_level
+                if not (
+                    args.no_compress
+                    or preserve_original_layers
+                    or paddle_original_input_shortcut
+                    or local_native_preprocess_shortcut
+                )
+                else None
+            ),
             "compress_result": compress_result if compress_result else None,
             "ocr_params": {
                 "mode": args.mode,
@@ -760,6 +1170,8 @@ def main():
             env_file=args.env_file,
             no_env_file=args.no_env_file,
             api_order=args.api_order,
+            local_only=args.local_only,
+            paddle_model=args.paddle_model,
             paddle_api_endpoint=args.paddle_api_endpoint,
             paddle_api_endpoint_env=DEFAULT_PADDLE_API_ENDPOINT_ENV,
             paddle_api_key_env=args.paddle_api_key_env,
@@ -768,6 +1180,12 @@ def main():
             paddle_api_extra_json=args.paddle_api_extra_json,
             paddle_api_protocol=args.paddle_api_protocol,
             no_paddle_fallback_local=args.no_paddle_fallback_local,
+            paddle_vl_layout_detection=not args.paddle_vl_no_layout_detection,
+            paddle_vl_no_layout_detection=args.paddle_vl_no_layout_detection,
+            paddle_vl_chart_recognition=args.paddle_vl_chart_recognition,
+            paddle_vl_doc_orientation=args.paddle_vl_doc_orientation,
+            paddle_vl_doc_unwarping=args.paddle_vl_doc_unwarping,
+            paddle_vl_layout_shape_mode=args.paddle_vl_layout_shape_mode,
             mineru_api_base=args.mineru_api_base,
             mineru_api_base_env=args.mineru_api_base_env,
             mineru_api_token_env=args.mineru_api_token_env,
@@ -788,7 +1206,7 @@ def main():
             paddle_det_model_name="",
             paddle_rec_model_name="",
             paddle_min_score=0.5,
-            paddle_skip_text_min_chars=30,
+            paddle_skip_text_min_chars=1,
             paddle_textline_orientation=False,
             paddle_use_gpu=False,
             no_paddle_cjk_space_normalize=False,
@@ -796,6 +1214,8 @@ def main():
             paddle_model_source=None,
             original_input=str(args.input),
             preprocess_meta=preprocess_meta,
+            allow_external_upload=args.allow_external_upload,
+            archive_results=args.archive_results,
         )
 
         # 保留原始文件时间戳（创建时间 + 修改时间）

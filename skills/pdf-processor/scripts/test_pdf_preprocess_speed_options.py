@@ -2,10 +2,15 @@
 """Regression tests for preprocessing speed options."""
 
 import importlib.util
+import io
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import fitz
 from PIL import Image
@@ -24,6 +29,7 @@ def load_module(module_name: str, filename: str):
 
 preprocess_core = load_module("pdf_preprocess_core", "pdf-preprocess-core.py")
 preprocess_ocr = load_module("pdf_preprocess_ocr", "pdf-preprocess-ocr.py")
+quality_check = load_module("pdf_ocr_quality_check", "pdf-ocr-quality-check.py")
 
 
 class PreprocessSpeedOptionsTest(unittest.TestCase):
@@ -62,12 +68,68 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
         self.assertEqual(result.rotation_angle, 0.0)
         self.assertEqual(result.confidence, 0.0)
 
+    def test_tesseract_osd_lowercase_dict_maps_to_pil_rotation(self):
+        preprocessor = preprocess_core.PDFPreprocessor()
+        image = Image.new("RGB", (300, 400), "white")
+        osd = {"orientation": 90, "rotate": 270, "orientation_conf": 12.5}
+        with mock.patch.object(preprocess_core.pytesseract, "image_to_osd", return_value=osd):
+            angle, confidence = preprocessor._tesseract_osd(image)
+        self.assertEqual(angle, 90.0)
+        self.assertEqual(confidence, 1.0)
+
     def test_preprocess_dpi_defaults_to_compression_profile(self):
         self.assertEqual(preprocess_ocr.resolve_preprocess_dpi(None, False, "low"), 300)
         self.assertEqual(preprocess_ocr.resolve_preprocess_dpi(None, False, "medium"), 200)
         self.assertEqual(preprocess_ocr.resolve_preprocess_dpi(None, False, "high"), 150)
         self.assertEqual(preprocess_ocr.resolve_preprocess_dpi(None, True, "medium"), 300)
         self.assertEqual(preprocess_ocr.resolve_preprocess_dpi(240, False, "medium"), 240)
+
+    def test_preprocess_pixel_guard_keeps_normal_page_dpi(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "normal.pdf"
+            doc = fitz.open()
+            doc.new_page(width=595, height=842)
+            doc.save(pdf_path)
+            doc.close()
+
+            result = preprocess_ocr.resolve_bounded_preprocess_dpi(
+                pdf_path,
+                requested_dpi=200,
+                max_megapixels=25,
+            )
+
+            self.assertEqual(result["effective_dpi"], 200)
+            self.assertFalse(result["capped"])
+            self.assertLess(result["predicted_megapixels"], 25)
+
+    def test_preprocess_pixel_guard_caps_abnormal_page_dpi(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "oversized-canvas.pdf"
+            doc = fitz.open()
+            doc.new_page(width=2305, height=3310)
+            doc.save(pdf_path)
+            doc.close()
+
+            result = preprocess_ocr.resolve_bounded_preprocess_dpi(
+                pdf_path,
+                requested_dpi=200,
+                max_megapixels=25,
+            )
+
+            self.assertEqual(result["effective_dpi"], 130)
+            self.assertTrue(result["capped"])
+            self.assertGreater(result["predicted_megapixels"], 50)
+            self.assertLessEqual(result["effective_megapixels"], 25)
+
+    def test_preprocess_pixel_guard_can_be_disabled(self):
+        result = preprocess_ocr.resolve_bounded_preprocess_dpi(
+            "not-opened-when-disabled.pdf",
+            requested_dpi=300,
+            max_megapixels=0,
+        )
+        self.assertEqual(result["effective_dpi"], 300)
+        self.assertFalse(result["capped"])
+        self.assertEqual(result["reason"], "disabled")
 
     def test_merged_preprocess_output_uses_compression_profile(self):
         options = preprocess_ocr.resolve_preprocess_output_options(
@@ -110,6 +172,274 @@ class PreprocessSpeedOptionsTest(unittest.TestCase):
                 merge_preprocess_compress=True,
             )
         )
+
+    def test_local_ocr_prefers_ocrmypdf_native_preprocess(self):
+        base = {
+            "backend": "auto",
+            "local_only": True,
+            "external_backend_configured": True,
+            "skip_preprocess": False,
+            "preprocess_only": False,
+            "enable_crop": False,
+            "force_raster_preprocess": False,
+        }
+        self.assertTrue(preprocess_ocr.should_use_ocrmypdf_native_preprocess(**base))
+        self.assertTrue(
+            preprocess_ocr.should_use_ocrmypdf_native_preprocess(
+                **{**base, "backend": "local_ocrmypdf", "local_only": False}
+            )
+        )
+        self.assertTrue(
+            preprocess_ocr.should_use_ocrmypdf_native_preprocess(
+                **{
+                    **base,
+                    "local_only": False,
+                    "external_backend_configured": False,
+                }
+            )
+        )
+
+    def test_local_native_preprocess_respects_explicit_overrides(self):
+        base = {
+            "backend": "local_ocrmypdf",
+            "local_only": False,
+            "external_backend_configured": False,
+            "skip_preprocess": False,
+            "preprocess_only": False,
+            "enable_crop": False,
+            "force_raster_preprocess": False,
+        }
+        for override in (
+            {"skip_preprocess": True},
+            {"preprocess_only": True},
+            {"enable_crop": True},
+            {"force_raster_preprocess": True},
+        ):
+            with self.subTest(override=override):
+                self.assertFalse(
+                    preprocess_ocr.should_use_ocrmypdf_native_preprocess(
+                        **{**base, **override}
+                    )
+                )
+
+        self.assertFalse(
+            preprocess_ocr.should_use_ocrmypdf_native_preprocess(
+                **{
+                    **base,
+                    "backend": "auto",
+                    "external_backend_configured": True,
+                }
+            )
+        )
+
+    def test_configured_external_order_defaults_to_paddle(self):
+        self.assertEqual(
+            preprocess_ocr.resolve_configured_external_order(
+                None, paddle_configured=True, mineru_configured=True,
+            ),
+            ["paddle", "mineru"],
+        )
+        self.assertEqual(
+            preprocess_ocr.resolve_configured_external_order(
+                "mineru,paddle", paddle_configured=True, mineru_configured=True,
+            ),
+            ["mineru", "paddle"],
+        )
+
+    def test_paddle_prefers_original_pdf_input(self):
+        base = {
+            "backend": "paddle_api",
+            "local_only": False,
+            "paddle_selected_by_auto": True,
+            "skip_preprocess": False,
+            "preprocess_only": False,
+            "enable_crop": False,
+            "force_raster_preprocess": False,
+        }
+        self.assertTrue(preprocess_ocr.should_use_paddle_original_input(**base))
+        self.assertTrue(
+            preprocess_ocr.should_use_paddle_original_input(
+                **{**base, "backend": "auto"}
+            )
+        )
+        self.assertFalse(
+            preprocess_ocr.should_use_paddle_original_input(
+                **{
+                    **base,
+                    "backend": "auto",
+                    "paddle_selected_by_auto": False,
+                }
+            )
+        )
+
+    def test_paddle_original_pdf_respects_explicit_preprocess_requests(self):
+        base = {
+            "backend": "paddle_api",
+            "local_only": False,
+            "paddle_selected_by_auto": True,
+            "skip_preprocess": False,
+            "preprocess_only": False,
+            "enable_crop": False,
+            "force_raster_preprocess": False,
+        }
+        for override in (
+            {"skip_preprocess": True},
+            {"preprocess_only": True},
+            {"enable_crop": True},
+            {"force_raster_preprocess": True},
+        ):
+            with self.subTest(override=override):
+                self.assertFalse(
+                    preprocess_ocr.should_use_paddle_original_input(
+                        **{**base, **override}
+                    )
+                )
+
+    def test_layer_classifier_protects_digital_and_hybrid_pdfs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            digital_path = Path(tmpdir) / "digital.pdf"
+            hybrid_path = Path(tmpdir) / "hybrid.pdf"
+
+            doc = fitz.open()
+            page = doc.new_page(width=200, height=300)
+            page.insert_text((20, 40), "digital text")
+            doc.save(digital_path)
+            doc.close()
+
+            image = Image.new("RGB", (20, 20), "white")
+            image_bytes = io.BytesIO()
+            image.save(image_bytes, format="PNG")
+            doc = fitz.open()
+            page = doc.new_page(width=200, height=300)
+            page.insert_text((20, 40), "hybrid text")
+            page.insert_image(fitz.Rect(20, 60, 80, 120), stream=image_bytes.getvalue())
+            page.add_rect_annot(fitz.Rect(15, 15, 100, 50))
+            doc.save(hybrid_path)
+            doc.close()
+
+            digital = preprocess_ocr.classify_pdf_layer_content(digital_path)
+            hybrid = preprocess_ocr.classify_pdf_layer_content(hybrid_path)
+            self.assertEqual(digital["kind"], "digital")
+            self.assertEqual(hybrid["kind"], "hybrid")
+            self.assertEqual(hybrid["annotation_pages"], 1)
+
+    def test_preprocess_only_preserves_hybrid_pdf_bytes_by_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "hybrid.pdf"
+            output_path = Path(tmpdir) / "output.pdf"
+            image = Image.new("RGB", (20, 20), "white")
+            image_bytes = io.BytesIO()
+            image.save(image_bytes, format="PNG")
+            doc = fitz.open()
+            page = doc.new_page(width=200, height=300)
+            page.insert_text((20, 40), "preserve text")
+            page.insert_image(fitz.Rect(20, 60, 80, 120), stream=image_bytes.getvalue())
+            page.add_rect_annot(fitz.Rect(15, 15, 100, 50))
+            doc.save(input_path)
+            doc.close()
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT_DIR / "pdf-preprocess-ocr.py"),
+                    "-i", str(input_path), "-o", str(output_path),
+                    "--preprocess-only", "--quiet",
+                ],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(output_path.read_bytes(), input_path.read_bytes())
+            with fitz.open(output_path) as output_doc:
+                self.assertIn("preserve text", output_doc[0].get_text("text"))
+                self.assertEqual(len(output_doc[0].get_images(full=True)), 1)
+                self.assertIsNotNone(output_doc[0].first_annot)
+
+    def test_pdf_merge_works_with_current_pypdf(self):
+        pdf_merge = load_module("pdf_merge_current", "pdf-merge.py")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = Path(tmpdir) / "first.pdf"
+            second = Path(tmpdir) / "second.pdf"
+            output = Path(tmpdir) / "merged.pdf"
+            for path, pages in ((first, 1), (second, 2)):
+                doc = fitz.open()
+                for _ in range(pages):
+                    doc.new_page(width=200, height=300)
+                doc.save(path)
+                doc.close()
+            pdf_merge.merge_pdfs_with_numbering(
+                [str(first), str(second)], str(output), add_numbers=False,
+            )
+            with fitz.open(output) as merged:
+                self.assertEqual(len(merged), 3)
+
+    def test_quality_gate_fails_closed_and_accepts_valid_output(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "input.pdf"
+            valid_path = Path(tmpdir) / "valid.pdf"
+            invalid_path = Path(tmpdir) / "invalid.pdf"
+
+            doc = fitz.open()
+            doc.new_page(width=200, height=300)
+            doc.save(input_path)
+            doc.close()
+
+            doc = fitz.open()
+            page = doc.new_page(width=200, height=300)
+            page.insert_text((20, 40), "searchable contract text")
+            doc.save(valid_path)
+            doc.close()
+
+            doc = fitz.open()
+            doc.new_page(width=200, height=300)
+            doc.new_page(width=200, height=300)
+            doc.save(invalid_path)
+            doc.close()
+
+            checker = SCRIPT_DIR / "pdf-ocr-quality-check.py"
+            valid = subprocess.run(
+                [sys.executable, str(checker), "-i", str(input_path), "-o", str(valid_path)],
+                capture_output=True, text=True,
+            )
+            invalid = subprocess.run(
+                [sys.executable, str(checker), "-i", str(input_path), "-o", str(invalid_path)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
+            self.assertEqual(invalid.returncode, 2, invalid.stdout + invalid.stderr)
+
+    def test_quality_keyword_matching_ignores_ocr_whitespace_and_width(self):
+        self.assertTrue(
+            quality_check.keyword_matches_text(
+                "医疗损害缴费通知",
+                "医 疗 损 害\n缴 费 通 知",
+            )
+        )
+        self.assertTrue(quality_check.keyword_matches_text("ABC合同", "ＡＢＣ 合 同"))
+
+    def test_auto_backend_uses_configured_paddle_by_default(self):
+        pdf_ocr = load_module("pdf_ocr_auto_default", "pdf-ocr.py")
+        args = SimpleNamespace(
+            external_api_order=["paddle"], paddle_api_endpoint="https://example.invalid/ocr",
+            mineru_api_base=None, allow_external_upload=False, local_only=False, quiet=True,
+            no_paddle_fallback_local=False,
+        )
+        calls = []
+        with mock.patch.object(pdf_ocr, "run_paddle_api_backend", side_effect=lambda _args: calls.append("api")), \
+             mock.patch.object(pdf_ocr, "run_local_ocrmypdf_backend", side_effect=lambda _args: calls.append("local")):
+            pdf_ocr.run_auto_backend(args)
+        self.assertEqual(calls, ["api"])
+
+    def test_auto_backend_local_only_never_uploads(self):
+        pdf_ocr = load_module("pdf_ocr_auto_local_only", "pdf-ocr.py")
+        args = SimpleNamespace(
+            external_api_order=["paddle"], paddle_api_endpoint="https://example.invalid/ocr",
+            mineru_api_base=None, allow_external_upload=True, local_only=True, quiet=True,
+            no_paddle_fallback_local=False,
+        )
+        calls = []
+        with mock.patch.object(pdf_ocr, "run_paddle_api_backend", side_effect=lambda _args: calls.append("api")), \
+             mock.patch.object(pdf_ocr, "run_local_ocrmypdf_backend", side_effect=lambda _args: calls.append("local")):
+            pdf_ocr.run_auto_backend(args)
+        self.assertEqual(calls, ["local"])
 
     def test_preprocess_only_output_copies_file_and_uses_original_timestamp(self):
         with tempfile.TemporaryDirectory() as tmpdir:

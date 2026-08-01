@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 from urllib import request
 
@@ -52,6 +54,12 @@ def strip_quoted(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
     return value
+
+
+def normalize_text_for_keyword(text: str) -> str:
+    """统一 OCR 关键词口径：兼容字符、大小写与排版空白不影响命中。"""
+    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    return re.sub(r"\s+", "", normalized)
 
 
 def load_env_file(env_file: str, quiet: bool = False) -> bool:

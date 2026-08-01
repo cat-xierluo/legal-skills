@@ -18,7 +18,7 @@ Metrics per sample PDF:
                      high-ink-density region in the underlying page image
 - runtime_sec      : wall-clock of the OCR step
 
-Outputs JSON to /tmp/w2_research/results.json and prints a comparison table.
+样本目录必须显式传入，结果默认写入系统临时目录。
 """
 import argparse
 import json
@@ -27,21 +27,22 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 import fitz
 import numpy as np
 
-RESEARCH_DIR = Path("/tmp/w2_research")
-SAMPLES_DIR = RESEARCH_DIR / "samples"
+RESEARCH_DIR = Path(tempfile.gettempdir()) / "pdf_processor_alignment_research"
+SAMPLES_DIR = Path()
 RESULTS_DIR = RESEARCH_DIR / "results"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-REFERENCE = (SAMPLES_DIR / "reference.txt").read_text(encoding="utf-8")
-KEYWORDS = [k.strip() for k in (SAMPLES_DIR / "keywords.txt").read_text(encoding="utf-8").splitlines() if k.strip()]
+REFERENCE = ""
+KEYWORDS: list[str] = []
 
-# Add worktree scripts to import path
-SCRIPTS_DIR = Path("/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/.claude/worktrees/tmux-feat-pdf-processor-layered-align/skills/pdf-processor/scripts")
+# 始终使用当前 Skill 候选，避免历史 worktree 路径污染基准。
+SKILL_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 # ---------- text-normalization & CER ----------
@@ -176,7 +177,7 @@ def run_scheme_a_ocrmypdf(input_pdf: Path, output_pdf: Path) -> dict:
         "--output-type", "pdf",
         "--optimize", "0",
         "--skip-big", "50",
-        "--mode", "skip",  # don't touch existing text layer on digital.pdf
+        "--skip-text",  # don't touch existing text layer on digital.pdf
         "--pdf-renderer", "hocr",
         "--deskew",
         "--rotate-pages",
@@ -192,7 +193,7 @@ def run_scheme_a_ocrmypdf(input_pdf: Path, output_pdf: Path) -> dict:
         if proc.returncode == 6:
             pass  # this is OK, means prior text layer is good
         else:
-            return {"error": f"ocrmypdf rc={proc.returncode}", "stderr": (proc.stderr or b"")[-500:].decode("utf-8", errors="replace"), "runtime_sec": elapsed}
+            return {"error": f"ocrmypdf rc={proc.returncode}", "stderr": (proc.stderr or "")[-500:], "runtime_sec": elapsed}
     return {"runtime_sec": elapsed, "stdout_tail": proc.stdout[-300:]}
 
 
@@ -314,9 +315,9 @@ def parse_tsv(tsv_path: Path, level: int = 5) -> list:
             conf = float(parts[cols["conf"]])
         except (KeyError, ValueError):
             continue
-        if lvl == 5 and conf < 0:
-            continue
-        if lvl < 5 and (not text or not text.strip()):
+        # Tesseract 的 paragraph/line/block 行通常不携带文字；统一只读取
+        # word(level=5)，再按目标层级聚合，避免 D_block 结果为空或重复计数。
+        if lvl != 5 or conf < 0 or not text.strip():
             continue
         # Build key at the chosen aggregation level
         if level >= 5:
@@ -333,24 +334,12 @@ def parse_tsv(tsv_path: Path, level: int = 5) -> list:
             groups[key] = {"texts": [], "conf": [], "x0": [], "y0": [], "x1": [], "y1": []}
             order.append(key)
         g = groups[key]
-        if lvl == 5:
-            # Word: include only if text non-empty
-            if text.strip():
-                g["texts"].append(text)
-                g["conf"].append(conf)
-                g["x0"].append(left)
-                g["y0"].append(top)
-                g["x1"].append(left + width)
-                g["y1"].append(top + height)
-        else:
-            # Higher-level entry itself carries bbox + text
-            if text.strip():
-                g["texts"].append(text)
-            g["x0"].append(left)
-            g["y0"].append(top)
-            g["x1"].append(left + width)
-            g["y1"].append(top + height)
-            # we don't get per-line conf at level<5; default 1.0
+        g["texts"].append(text)
+        g["conf"].append(conf)
+        g["x0"].append(left)
+        g["y0"].append(top)
+        g["x1"].append(left + width)
+        g["y1"].append(top + height)
     rows = []
     for k in order:
         g = groups[k]
@@ -403,6 +392,35 @@ def measure_sample(sample_path: Path, output_pdf: Path, scheme: str, runner) -> 
     return result
 
 def main():
+    global SAMPLES_DIR, RESULTS_DIR, REFERENCE, KEYWORDS
+    parser = argparse.ArgumentParser(description="PDF 文字层对齐研究 harness")
+    parser.add_argument(
+        "--samples-dir", required=True,
+        help="样本目录，需包含 digital.pdf、scanned.pdf、skewed.pdf、reference.txt、keywords.txt",
+    )
+    parser.add_argument(
+        "--results-dir", default=str(RESULTS_DIR),
+        help="结果目录（默认写入系统临时目录）",
+    )
+    args = parser.parse_args()
+    SAMPLES_DIR = Path(args.samples_dir).expanduser().resolve()
+    RESULTS_DIR = Path(args.results_dir).expanduser().resolve()
+    required = [
+        "digital.pdf", "scanned.pdf", "skewed.pdf", "reference.txt", "keywords.txt",
+    ]
+    missing = [name for name in required if not (SAMPLES_DIR / name).is_file()]
+    if missing:
+        raise SystemExit(f"样本目录缺少文件: {', '.join(missing)}")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    REFERENCE = (SAMPLES_DIR / "reference.txt").read_text(encoding="utf-8")
+    KEYWORDS = [
+        line.strip()
+        for line in (SAMPLES_DIR / "keywords.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not REFERENCE.strip() or not KEYWORDS:
+        raise SystemExit("reference.txt 和 keywords.txt 不得为空")
+
     samples = [SAMPLES_DIR / "digital.pdf", SAMPLES_DIR / "scanned.pdf", SAMPLES_DIR / "skewed.pdf"]
     schemes = {
         "A_ocrmypdf": run_scheme_a_ocrmypdf,
@@ -426,7 +444,7 @@ def main():
                 print(f"    ERROR: {r['runner_result'].get('error')}", flush=True)
             all_results.append(r)
     # Write JSON
-    out_json = RESEARCH_DIR / "results_baseline.json"
+    out_json = RESULTS_DIR / "results_baseline.json"
     out_json.write_text(json.dumps(all_results, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nResults JSON: {out_json}")
     # Print summary table

@@ -6,7 +6,8 @@ PDF OCR 工具（统一入口）
 - 保留稳定本地兜底路径：ocrmypdf
 - 兼容外部 PaddleOCR API 后端（官方协议优先，旧协议兼容）
 - 新增外部 MinerU API 后端（异步任务 + ZIP 结果解析 + 本地叠层）
-- 提供 auto 后端：按外部 API 顺序优先，未配置或失败时回退 ocrmypdf
+- 提供 auto 后端：默认按 Paddle/MinerU 顺序尝试已配置 API，失败后回退本地
+- 提供 --local-only：对不允许外传的材料强制只用本地 ocrmypdf
 - 本地 Paddle 双层实现仅保留为内部历史实现，不再作为公开 CLI 选项
 
 模块拆分：
@@ -41,7 +42,7 @@ from pdf_runtime import (
 
 from pdf_ocr_mineru import run_mineru_api_backend
 
-from pdf_ocr_paddle_api import run_paddle_api_backend
+from pdf_ocr_paddle_api import SUPPORTED_PADDLE_MODELS, run_paddle_api_backend
 
 
 # ---------- 常量 ----------
@@ -270,10 +271,10 @@ def resolve_external_api_order(args) -> list[str]:
 
 def run_auto_backend(args):
     """
-    自动后端策略（零参数友好）：
-    1) 按 API 顺序（paddle/mineru）依次尝试外部服务
-    2) 若外部服务均不可用，回退本地 ocrmypdf（避免触发本地模型下载）
-    3) 未配置外部服务时，提示用户优先配置 API，再回退本地 ocrmypdf
+    自动后端策略：
+    1) 默认按 paddle/mineru 顺序尝试已配置服务
+    2) --local-only 时不调用任何外部 API
+    3) 外部服务不可用时回退本地 ocrmypdf
     """
     api_errs = []
 
@@ -283,6 +284,14 @@ def run_auto_backend(args):
             external_candidates.append("mineru")
         elif provider == "paddle" and args.paddle_api_endpoint:
             external_candidates.append("paddle")
+
+    configured_external = bool(external_candidates)
+    if external_candidates and getattr(args, "local_only", False):
+        if not args.quiet:
+            print(
+                "提示: 已启用 --local-only；跳过已配置的外部 OCR API。"
+            )
+        external_candidates = []
 
     if external_candidates:
         prev_no_fallback = args.no_paddle_fallback_local
@@ -312,11 +321,14 @@ def run_auto_backend(args):
             )
 
     if not args.quiet:
-        print(
-            "提示: 当前未配置外部 OCR API。建议先在 config/.env 中配置 PaddleOCR API 或 MinerU API；"
-            "外部 API 通常在识别速度、识别精度和批量处理稳定性上优于本地 ocrmypdf。"
-        )
-        print("提示: 当前将直接回退到本地 ocrmypdf。")
+        if not configured_external:
+            print(
+                "提示: 当前未配置外部 OCR API，将使用本地 ocrmypdf。"
+            )
+        elif getattr(args, "local_only", False):
+            print("提示: 当前强制使用本地 ocrmypdf。")
+        else:
+            print("提示: 外部 API 均不可用，回退本地 ocrmypdf。")
 
     try:
         run_local_ocrmypdf_backend(args)
@@ -358,6 +370,7 @@ def run_ocr(**kwargs):
         env_file: .env 文件路径
         no_env_file: 禁用 .env
         api_order: 外部 API 顺序
+        local_only: 强制不调用外部 API
         paddle_api_endpoint: Paddle API 地址
         paddle_api_endpoint_env: Paddle endpoint 环境变量名
         paddle_api_key_env: Paddle API Key 环境变量名
@@ -406,7 +419,7 @@ def run_ocr(**kwargs):
     # 设置默认值（与 argparse 保持一致）
     defaults = {
         "backend": "auto",
-        "mode": "redo",
+        "mode": "skip",
         "language": "chi_sim+eng",
         "output_type": "pdf",
         "optimize": 0,
@@ -424,7 +437,10 @@ def run_ocr(**kwargs):
         "env_file": DEFAULT_ENV_FILE_PATH,
         "no_env_file": False,
         "api_order": None,
-        "paddle_model": "PP-OCRv5",
+        "local_only": False,
+        "allow_external_upload": False,
+        "archive_results": False,
+        "paddle_model": "PP-OCRv6",
         "paddle_api_endpoint": None,
         "paddle_api_endpoint_env": DEFAULT_PADDLE_API_ENDPOINT_ENV,
         "paddle_api_key_env": DEFAULT_PADDLE_API_KEY_ENV,
@@ -437,8 +453,8 @@ def run_ocr(**kwargs):
         "paddle_vl_layout_detection": True,
         "paddle_vl_no_layout_detection": False,
         "paddle_vl_chart_recognition": False,
-        "paddle_vl_doc_orientation": True,
-        "paddle_vl_doc_unwarping": True,
+        "paddle_vl_doc_orientation": False,
+        "paddle_vl_doc_unwarping": False,
         "paddle_vl_layout_shape_mode": "rect",
         "ocr_dump": None,
         "ocr_resume": None,
@@ -463,7 +479,7 @@ def run_ocr(**kwargs):
         "paddle_det_model_name": "",
         "paddle_rec_model_name": "",
         "paddle_min_score": 0.5,
-        "paddle_skip_text_min_chars": 30,
+        "paddle_skip_text_min_chars": 1,
         "paddle_textline_orientation": False,
         "paddle_use_gpu": False,
         "no_paddle_cjk_space_normalize": False,
@@ -474,6 +490,12 @@ def run_ocr(**kwargs):
     for key, default in defaults.items():
         if not hasattr(args, key) or getattr(args, key) is None:
             setattr(args, key, default)
+
+    # 案件材料默认不在 Skill 目录或源文件旁生成 OCR 文本副本。
+    if "no_archive" in kwargs:
+        args.no_archive = bool(kwargs["no_archive"])
+    else:
+        args.no_archive = not bool(args.archive_results)
 
     # 加载环境变量
     if not args.no_env_file:
@@ -500,6 +522,9 @@ def run_ocr(**kwargs):
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if args.local_only and args.backend in {"paddle_api", "mineru_api"}:
+        raise ValueError("--local-only 不能与显式外部 API 后端同时使用")
+
     if not args.quiet:
         print("=" * 60)
         print("PDF OCR")
@@ -516,8 +541,10 @@ def run_ocr(**kwargs):
                 "auto策略: "
                 + (
                     f"按顺序优先外部API({','.join(configured_api)})"
-                    if configured_api
-                    else "未配置外部API，建议先配置 API，当前回退本地 ocrmypdf"
+                    if configured_api and not args.local_only
+                    else "已启用 local-only，强制本地 ocrmypdf"
+                    if args.local_only
+                    else "未配置外部API，当前使用本地 ocrmypdf"
                 )
             )
         print(f"OCR 模式: {args.mode}")
@@ -556,8 +583,11 @@ def main():
         epilog="""
 示例:
   # 默认推荐：自动后端
-  # 若配置了外部 API（MinerU/Paddle），按顺序优先；否则提示后回退到本地 ocrmypdf
+  # 已配置 PaddleOCR 时优先 Paddle，其次 MinerU，最后回退本地 ocrmypdf
   python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf
+
+  # 敏感材料强制不外传
+  python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 
   # 强制使用 ocrmypdf
   python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend local_ocrmypdf
@@ -579,15 +609,15 @@ def main():
         choices=["auto", "local_ocrmypdf", "paddle_api", "mineru_api"],
         default="auto",
         help=(
-            "OCR 后端：auto（默认，外部 API 按顺序优先） / "
+            "OCR 后端：auto（已配置时 Paddle/MinerU 优先，失败回退本地） / "
             "local_ocrmypdf / paddle_api / mineru_api"
         ),
     )
     parser.add_argument(
         "--mode",
         choices=["skip", "redo", "force"],
-        default="redo",
-        help="OCR 模式：skip(跳过已有文字) / redo(重做OCR层) / force(强制全页OCR)，默认 redo",
+        default="skip",
+        help="OCR 模式：skip(跳过已有文字) / redo(重做OCR层) / force(强制全页OCR)，默认 skip",
     )
     parser.add_argument(
         "--language",
@@ -693,7 +723,7 @@ def main():
     parser.add_argument(
         "--paddle-skip-text-min-chars",
         type=int,
-        default=30,
+        default=1,
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -737,13 +767,31 @@ def main():
             f"不传则读取 {DEFAULT_OCR_API_ORDER_ENV} 或按 .env 配置顺序推断"
         ),
     )
+    parser.add_argument(
+        "--local-only",
+        action="store_true",
+        help="强制不调用外部 OCR API，仅使用本地 ocrmypdf",
+    )
+    parser.add_argument(
+        "--allow-external-upload",
+        action="store_true",
+        help="兼容旧版本；auto 现已默认使用已配置 API，如需禁止外传请用 --local-only",
+    )
+    parser.add_argument(
+        "--archive-results",
+        action="store_true",
+        help="显式归档 OCR 可读文本和元数据；默认不归档案件材料",
+    )
 
     # PaddleOCR API 预留参数
     parser.add_argument(
         "--paddle-model",
-        choices=["PP-OCRv5", "PaddleOCR-VL-1.5"],
-        default="PP-OCRv5",
-        help="PaddleOCR API 模型（默认 PP-OCRv5；PaddleOCR-VL-1.5 支持版面分析，适合 MD 输出）",
+        choices=SUPPORTED_PADDLE_MODELS,
+        default="PP-OCRv6",
+        help=(
+            "PaddleOCR API 模型（默认 PP-OCRv6，使用行级坐标匹配文字层；"
+            "另支持 PaddleOCR-VL-1.5/1.6 与 PP-StructureV3）"
+        ),
     )
     parser.add_argument(
         "--paddle-api-endpoint",
@@ -792,7 +840,7 @@ def main():
         help="禁用拍照件自动矫正（默认启用：检测到方向偏差时自动下载 API 预处理图替换）",
     )
 
-    # PaddleOCR-VL 专属参数（仅 --paddle-model PaddleOCR-VL-1.5 时生效）
+    # PaddleOCR-VL / PP-Structure 服务端预处理参数；VL-1.5 另支持版面形状参数
     parser.add_argument(
         "--paddle-vl-layout-detection",
         action="store_true",

@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: “2.7.0”
+version: "2.10.1"
 description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -24,7 +24,10 @@ license: MIT
 ## 默认策略
 
 - 不修改原始文件；输出到新文件，重名时加 `_1`、`_2` 等序号。
-- 扫描件、拍照件、证据材料默认执行预处理后继续生成可搜索双层 PDF。
+- 扫描件、拍照件、证据材料默认继续生成可搜索双层 PDF；PaddleOCR 与本地 `ocrmypdf` 默认直接保留原 PDF，只有 MinerU 或显式图像处理请求才走统一栅格预处理。
+- `auto` 在已配置时默认优先 PaddleOCR API，再尝试 MinerU，最后回退本地 `ocrmypdf`；明确禁止外传的材料必须使用 `--local-only`。
+- 输入含姓名、案号、医疗、账号等敏感信息且用户尚未明确授权该文件外传时，先说明将上传完整 PDF 并取得一次确认；已授权当前文件后不重复询问，授权不扩展到同目录或其他材料。
+- 电子 PDF 或混合 PDF 默认保留文字、矢量、图片和批注层，跳过栅格化预处理与重压缩；只有用户明确接受层丢失风险时才使用 `--force-raster-preprocess`。
 - “只预处理”“不要 OCR”“只矫正压缩”才使用 `--preprocess-only`。
 - “合并”“加页码”“解密”“去水印”“压缩”只执行对应工具，不自动进入预处理/OCR。
 - 压缩只有用户明确提出时才单独执行；统一入口中的默认压缩是预处理输出策略的一部分。
@@ -38,10 +41,18 @@ license: MIT
 python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf
 ```
 
-默认 `medium` 合并输出为约 200 DPI、JPEG 质量 72、色度子采样 1，优先兼顾法院上传体积和放大阅读清晰度。文件大小限制很严时使用：
+`auto` 选中已配置的 PaddleOCR 时，默认把原 PDF 直接送给 `PP-OCRv6`，跳过统一栅格化和 OCR 前压缩，以保留扫描分辨率、图像层和 API 坐标空间；实际后端确定为本地 `ocrmypdf` 时同样保留原扫描页，并使用 OCRmyPDF 自带的方向检测、纠偏和清理。MinerU 或显式预处理路径仍以 `medium` 的 200 DPI、JPEG 质量 72、色度子采样 1 为目标，并以 25MP 保护异常大画布。确需裁剪或统一重栅格化时使用 `--enable-crop` 或 `--force-raster-preprocess`。电子/混合 PDF 自动保留原有层。文件大小限制很严时使用：
 
 ```bash
 python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --compress-level high
+```
+
+确需保留超大栅格时可显式调高上限；`--max-preprocess-megapixels 0` 会关闭保护，但可能显著增加内存占用和 OCR 跳页风险。
+
+敏感材料用统一入口但禁止外传：
+
+```bash
+python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf --local-only
 ```
 
 页面方向已正确的大批量扫描件可提速：
@@ -70,20 +81,66 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 python3 scripts/pdf-ocr.py --input input.pdf --output output.pdf
 ```
 
-默认后端为 `auto`：优先按 `--api-order`、`OCR_API_ORDER` 或 `config/.env` 顺序调用 PaddleOCR / MinerU API；外部 API 不可用时回退本地 `ocrmypdf`。
+默认后端为 `auto`：已配置 PaddleOCR 时先用 `PP-OCRv6` 的行级坐标生成文字层，再按 `OCR_API_ORDER` 尝试 MinerU；外部服务失败或未配置时回退本地 `ocrmypdf`。该默认路径会上传完整 PDF，不允许外传时使用：
+
+```bash
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
+```
+
+`--allow-external-upload` 仅为旧命令兼容参数，不再控制后端选择。Paddle 的服务端方向矫正和去畸变默认关闭，避免 OCR 坐标与原图空间不一致。
 
 ```bash
 # 强制本地兜底
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend local_ocrmypdf
 
-# 强制 PaddleOCR API
-python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api
+# 强制 PaddleOCR API；PP-OCRv6 是双层 PDF 默认模型
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend paddle_api --paddle-model PP-OCRv6
+
+# 干净扫描件/表格可试 PP-StructureV3 的 overall_ocr_res 行级坐标
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend paddle_api --paddle-model PP-StructureV3
 
 # 强制 MinerU API
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend mineru_api
+
+# 显式保存 OCR 可读文本和运行元数据；默认不归档案件材料
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --archive-results
 ```
 
 后端选择、API 配置和协议细节见 `references/ocr-backend-guide.md`、`references/paddleocr-api-guide.md`、`references/mineru-api-guide.md`。
+
+PaddleOCR-VL-1.5/1.6 也可解析，但只提供块级坐标，文字层定位粒度低于 `PP-OCRv5/v6` / `PP-StructureV3`。本技能不接入 Qwen/GLM 等视觉识别链路，也不宣称云端结果含字符级坐标。
+
+### 4. 输出自然段文本并过滤印章噪声
+
+需要解决复制文本中的段内回车、多余空行和印章文字时，采用两模型分工：`PP-OCRv6` 提供主要行级文字及坐标，`PP-StructureV3` 提供阅读顺序、区域类型和 `seal` 区域。只有 v6 行置信度低于 0.80、Structure 对应行置信度不低于 0.90、双方坐标高度重合且后者至少高 0.10 时，才采用 Structure 的行级文字兜底；始终不读取版面块文字，也不调用大语言模型。双层 PDF 仍按行叠层，自然段写入独立 Markdown。
+
+Structure 的块边界只作为候选而非强制段界：融合器先合并同一视觉行的碎片，在 `text` 区域内按行距、缩进和右边界恢复物理换行，再依据句末标点和条款编号跨相邻文本块连接正文；`table` 区域按视觉行保留单元格次序并用 ` | ` 分隔。这样可处理 Structure 高覆盖但正文块过度切碎的页面。
+
+```bash
+# 1. 获取文字真值
+python3 scripts/pdf-ocr.py -i input.pdf -o unused.pdf \
+  --backend paddle_api --paddle-model PP-OCRv6 --ocr-dump /tmp/text.json
+
+# 2. 获取版面结构
+python3 scripts/pdf-ocr.py -i input.pdf -o unused.pdf \
+  --backend paddle_api --paddle-model PP-StructureV3 --ocr-dump /tmp/layout.json
+
+# 3. 生成自然段文本，同时输出不含正文的诊断和已过滤文字层 dump
+python3 scripts/pdf_ocr_paragraphs.py \
+  --text-dump /tmp/text.json --layout-dump /tmp/layout.json \
+  --output /tmp/clean.md --diagnostics /tmp/paragraphs.json \
+  --filtered-dump /tmp/text-filtered.json
+
+# 4. 用过滤后的行级坐标生成双层 PDF
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend paddle_api --ocr-resume /tmp/text-filtered.json
+```
+
+诊断中的 `layout_coverage` 低于 `0.75` 时自动退回纯几何规则；同时查看 `structure_text_fallbacks` 和 `layout_boundary_merges`，确认低置信替换与跨块合并均可审计。只有 Structure 明显漏块、区域类型错误或阅读顺序错误，且纯几何回退仍不能恢复时，才另测 `PaddleOCR-VL-1.5` 作为 `--layout-dump`；VL-1.6 不作为默认兜底。全文、dump 与账号等敏感信息继续只放临时目录，除非用户明确要求归档。
+
+`--actualtext` 可实验性地把自然段写入 PDF `/ActualText`，同时保留行级字形坐标；但不同阅读器支持不一致，必须用目标阅读器实测。当前兼容性基准中 Poppler `-raw` 能按 15 个自然段提取，PyMuPDF 仍按物理行排版，pypdf 与 macOS PDFKit（预览所用框架）忽略该提示，Poppler 默认布局排序还会倒序，因此不作为默认产物；跨阅读器稳定的自然段仍以独立 Markdown 为准。
 
 ## 单项工具
 
@@ -154,7 +211,8 @@ sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 ## 质量检查
 
 ```bash
-python3 scripts/pdf-ocr-quality-check.py -i output.pdf --keyword 合同,法院
+python3 scripts/pdf-ocr-quality-check.py \
+  -i input.pdf -o output.pdf --keywords 合同,法院
 
 python3 scripts/pdf-ocr-benchmark.py \
   -i input.pdf \
@@ -164,6 +222,8 @@ python3 scripts/pdf-ocr-benchmark.py \
   --preprocess-jobs 6 \
   --preprocess-chunk-pages 80
 ```
+
+关键词门禁会先做 NFKC、大小写和空白归一化，避免中文 OCR 在汉字间插入空格后被误判为未命中；CER 仍按独立参考文本计算。
 
 常见问题见 `references/troubleshooting.md`。
 
