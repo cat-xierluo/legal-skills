@@ -43,6 +43,7 @@
 | `key_exclusions` | string[] | 否（建议） | `must_exclude_neighbor_types` 的**置顶短摘要**，同上 |
 | `role_comparison_matrix` | object | 否（仅同主题多角色场景） | 多主体角色对比矩阵，见 §3.1 |
 | `prior_report_sources` | object | 否 | 已有法律分析报告（见 §3.2），无则留空 |
+| `platform_coverage_note` | string | 否 | 若案件领域超出平台主要覆盖（如行政诉讼），标注哪些法源覆盖不足，见 §9.2 |
 
 **硬约束**：`dispute_focus`、`decisive_facts`、`must_exclude_neighbor_types` 三项不得为空；任一为空说明案件研判未完成，退回 §6 前置门禁。
 
