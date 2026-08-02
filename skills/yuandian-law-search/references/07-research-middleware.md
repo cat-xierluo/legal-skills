@@ -39,9 +39,28 @@
 | `background_facts` | string[] | 否 | 背景事实（影响裁判尺度但不决定争点定性） |
 | `facts_to_supplement` | object[] | 否 | 待补事实：`fact` + `blocks_path`（是否改变检索路径）+ `action`（补问/标注假设继续） |
 | `must_exclude_neighbor_types` | string[] | 是 | 必须排除的近邻案型（must_not_match），见 §8 |
+| `key_decisive_facts` | string[] | 否（建议） | `decisive_facts` 的**置顶短摘要**（3-5 条精简版），放在 brief 顶部便于人/judge 快速复核，不得与 `decisive_facts` 矛盾 |
+| `key_exclusions` | string[] | 否（建议） | `must_exclude_neighbor_types` 的**置顶短摘要**，同上 |
+| `role_comparison_matrix` | object | 否（仅同主题多角色场景） | 多主体角色对比矩阵，见 §3.1 |
 | `prior_report_sources` | object | 否 | 已有法律分析报告（见 §5），无则留空 |
 
 **硬约束**：`dispute_focus`、`decisive_facts`、`must_exclude_neighbor_types` 三项不得为空；任一为空说明案件研判未完成，退回 §6 前置门禁。
+
+### 3.1 scan-friendly 摘要与多角色对比矩阵
+
+- **置顶摘要**：`key_decisive_facts` 与 `key_exclusions` 是 `decisive_facts` / `must_exclude_neighbor_types` 的精简镜像，放在 brief 顶部，让复核者（人或自动 judge）无需翻查嵌套字段即可定位关键事实与近邻排除。底层详细字段仍是权威来源；摘要不得与之矛盾，也不得只写摘要而省略底层字段。目的：避免 dense 结构化输出被快速浏览时漏看关键排除项。
+- **多角色对比矩阵**：当一个案件含 2+ 主体角色且请求权基础不同（典型：高管竞业禁止 vs 普通员工保密；达人 vs 商家 vs 平台），除为每个角色产出独立的 propositions/queries 外，还应输出 `role_comparison_matrix` 汇总差异：
+
+  ```json
+  {
+    "axes": ["主体角色", "请求权基础/规范", "决定性事实", "必须排除的近邻"],
+    "rows": [
+      {"role": "高管", "claim_basis": "公司法忠实义务/章程竞业禁止", "decisive_facts": ["..."], "exclusions": ["..."]},
+      {"role": "普通员工", "claim_basis": "劳动法保密条款/反不正当竞争", "decisive_facts": ["..."], "exclusions": ["..."]}
+    ]
+  }
+  ```
+  矩阵是汇总视图，**不替代**各角色的独立 query_matrix（一争点一查询仍按角色分别落）。
 
 ## 4. propositions（检索命题）schema
 
