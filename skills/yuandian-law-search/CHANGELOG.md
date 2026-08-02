@@ -1,5 +1,11 @@
 # 变更日志
 
+## [1.8.4] - 2026-08-02
+
+### 新增
+
+- **`scripts/validate-query-filters.py`**：把 `references/07` §9.1「字段归属接口速查表」从软约束（worker 自觉读）升级为硬门禁（脚本校验）。校验 research-plan / 单条 query 的 filter×interface 合法性（如 `--wenshu-type` 挂 `case` 关键词会被拦截，并提示正确归属 `case-semantic`）。退出码 0 合法 / 1 有违规，可接 CI / pre-commit / hook。字段表**动态自省**自 `yd_search.py` 的 `build_parser()`（零漂移，自动覆盖全部子命令含双别名/store_false，自省失败时回退硬编码）；覆盖 21 个子命令。源自 Round 3 worker 执行方差发现（12/67 filter 误挂）的工程闭环。
+
 ## [1.8.3] - 2026-08-02
 
 ### 移除
