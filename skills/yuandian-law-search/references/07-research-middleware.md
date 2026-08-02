@@ -43,6 +43,7 @@
 | `key_exclusions` | string[] | 否（建议） | `must_exclude_neighbor_types` 的**置顶短摘要**，同上 |
 | `role_comparison_matrix` | object | 否（仅同主题多角色场景） | 多主体角色对比矩阵，见 §3.1 |
 | `prior_report_sources` | object | 否 | 已有法律分析报告（见 §3.2），无则留空 |
+| `platform_coverage_note` | string | 否 | 若案件领域超出平台主要覆盖（如行政诉讼），标注哪些法源覆盖不足，见 §9.2 |
 
 **硬约束**：`dispute_focus`、`decisive_facts`、`must_exclude_neighbor_types` 三项不得为空；任一为空说明案件研判未完成，退回 §6 前置门禁。
 
@@ -108,7 +109,7 @@
 | `allow_rewrite` | 是否允许后端改写（向量接口默认 true；关键词接口不适用） |
 | `expected_hit` | 预期命中类型（法源/类案/裁判规则） |
 | `exclusion_criteria` | 排除标准（来自 `must_exclude_neighbor_types`，对应反向命题） |
-| `fallback_path` | 零命中或低对位时的降级路径（换接口 / 缩短关键词 / 切 OR / 换语义） |
+| `fallback_path` | 零命中或低对位时的降级路径（换接口 / 缩短关键词 / 切 OR / 换语义 / 超平台领域 fallback 外部渠道，见 §9.2） |
 
 **一争点多小查询**（[DEC-006] pt 4，硬约束）：
 
@@ -196,6 +197,17 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
 - 法条接口（`search`/`keyword`）的 `--sxx`/`--effect1` 不得挪到案例接口。
 
 **硬校验**：用 `scripts/validate-query-filters.py <research-plan.json>` 自动校验 filter×interface 合法性（退出码 0 合法 / 1 有违规，可接 CI 或 pre-commit hook）。单条 query 可用 `--query '{"interface":"case","filters":{...}}'`。字段表与本节一致，以 `yd_search.py` 各 subparser 为权威。
+
+### 9.2 平台覆盖边界意识
+
+元典开放平台法源以**民商事 / 刑事**为主，案例库含民事 / 刑事 / 行政案件分类（`--wenshu-type`）。但**部分领域的法源覆盖可能有限**：行政诉讼法 / 行政处罚法 / 行政复议法、市场监督管理等部门规章、国家赔偿、部分专项法规等。案件检索时若本案主要落入这些领域，必须**显式标注平台边界**，不得用民商事法源 / 案例强行替代（避免误导）：
+
+- 在 brief 顶层标注 `platform_coverage_note`：说明哪些法源 / 案例元典可能覆盖不足（如"《行政诉讼法》/ 处罚程序规章覆盖可能有限"）。
+- 相关 query 的 `fallback_path` 指明替代渠道：先试 `detail` 接口按法条名查（元典若收录），未命中则提示用户需外部专门检索（如国家法律法规数据库 flk.npc.gov.cn、北大法宝、中国裁判文书网）。
+- 案例侧仍可用 `case-semantic` / `case --wenshu-type 行政案件` 查行政案例（元典案例库有该分类），但**法条层面**的行政法覆盖需单独验证，不要假设与民商法同等完整。
+- 该字段是**对用户透明的边界声明**，不是跳过检索的借口——能查的仍照常查，查不到的如实标注并给替代渠道。
+
+> 该意识由评测 R6 发现并固化：worker 在行政诉讼场景自发产出 `platform_coverage_note` + fallback，被 judge 评为"通用方法的高阶工具边界意识"。
 
 ## 10. 策略与法律检索解耦（[DEC-006] pt 6）
 
