@@ -155,6 +155,28 @@
 - `case` 一轮零命中 ≠ "无类案"：立即切 `case-semantic` 或缩短关键词换 OR 复检（[DEC-002]）。
 - 后端 `score`/`_score` 只在**同一接口同一查询内部**作排序信号，不跨查询、不跨接口、不替代法律对位度。
 
+### 9.1 字段归属接口速查表（防 filter 误挂）
+
+filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错（实测 worker 易把案例语义字段误挂到案例关键词）。下表以 `scripts/yd_search.py` 源码为权威（`case` 子命令定义见源码 `add_parser("case")`，`case-semantic` 见 `add_parser("case-semantic")`）：
+
+| filter | `case` 关键词 | `case-semantic` | `search`/`keyword` 法条 |
+|---|:---:|:---:|:---:|
+| `--ay`/`--fxgc`/`--yyft`/`--jbdw`/`--ah`/`--ajlb`/`--title` | ✓ | ✗ | ✗ |
+| `--wenshu-type`/`--fayuan` | ✗ | ✓ | ✗ |
+| `--wszl` | ✓ | ✓ | ✗ |
+| `--cj`（法院层级） | ✗ | ✓ | ✗ |
+| `--jarq-start`/`--jarq-end`（结案日期） | ✓ | ✓ | ✗ |
+| `--sxx`/`--effect1`/`--fgmc`（法条时效/效力/法规名称） | ✗ | ✗ | ✓ |
+| `--province`/`--xzqh-p` | ✓ | ✓ | ✗ |
+| `--authority-only` | ✓ | ✓ | ✗ |
+
+易错点提醒：
+
+- **`--wenshu-type`（案件类型，如民事案件）属于 `case-semantic`**，不要挂到 `case` 关键词（`case` 用 `--ajlb` 表达案件类别，无 `--wenshu-type`）。
+- **`--ay`/`--fxgc`/`--yyft`（案由/分析过程/援引法条）属于 `case` 关键词**，`case-semantic` 不支持——想用这些结构化字段精确复检就切到 `case`。
+- **`--jarq-start/end` 两个案例接口都支持**（源码确认），可放心用于日期范围。
+- 法条接口（`search`/`keyword`）的 `--sxx`/`--effect1` 不得挪到案例接口。
+
 ## 10. 策略与法律检索解耦（[DEC-006] pt 6）
 
 `economical` / `balanced` / `aggressive` 只控制**调用预算与深度**（试几条 query、是否自动跑语义+关键词双检索、是否自动拉 case-detail），**不得**改变：
