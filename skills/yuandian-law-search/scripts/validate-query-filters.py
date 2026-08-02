@@ -16,29 +16,59 @@ subparser 的 add_argument 为权威；改字段时同步更新 §9.1 与本表�
 import argparse, json, sys
 from pathlib import Path
 
-# 各 interface 支持的 filter 字段 (去掉前导 --)。源自 yd_search.py 各 subparser。
-# search: add_parser("search")  | keyword: add_parser("keyword")
-# case: add_parser("case")      | case-semantic: add_parser("case-semantic")
-# detail / case-detail / regulation / regulation-detail 同。
-VALID_FILTERS = {
-    "search": {"sxx", "effect1", "fgmc", "keep-industry", "return-num",
-               "rewrite-flag", "no-rewrite", "fbrq-start", "fbrq-end",
-               "ssrq-start", "ssrq-end", "law-start", "law-end"},
-    "keyword": {"sxx", "effect1", "fgmc", "keep-industry", "expand",
-                "search-mode", "top-k"},
-    "case": {"ah", "title", "ay", "jbdw", "ajlb", "xzqh-p", "province",
-             "wszl", "jarq-start", "jarq-end", "fxgc", "yyft",
-             "ft-search-mode", "authority-only", "expand", "search-mode", "top-k"},
-    "case-semantic": {"authority-only", "xzqh-p", "province", "fayuan",
-                      "wenshu-type", "wszl", "cj", "rewrite-flag",
-                      "return-num", "jarq-start", "jarq-end"},
+# 硬编码 fallback：仅当动态自省 yd_search.build_parser() 失败时使用。
+# 已按 yd_search.py 源码（含 _add_law_filters helper、双别名、store_false）校准。
+# 维护时以动态自省结果为准（见 VALID_FILTERS_LOAD_SOURCE），勿手改本表。
+_HARDCODED = {
+    "search": {"effect1", "sxx", "keep-industry", "rewrite-flag", "no-rewrite",
+               "return-num", "law-start", "law-end"},
+    "keyword": {"expand", "fgmc", "effect1", "sxx", "keep-industry", "search-mode",
+                "fbrq-start", "fbrq-end", "ssrq-start", "ssrq-end", "top-k"},
+    "case": {"ah", "title", "ay", "jbdw", "ajlb", "xzqh-p", "province", "wszl",
+             "jarq-start", "jarq-end", "fxgc", "yyft", "ft-search-mode",
+             "authority-only", "expand", "search-mode", "top-k"},
+    "case-semantic": {"authority-only", "xzqh-p", "province", "fayuan", "wenshu-type",
+                      "wszl", "cj", "rewrite-flag", "no-rewrite", "return-num",
+                      "jarq-start", "jarq-end"},
     "detail": {"ft-name", "reference-date"},
     "case-detail": {"type", "id", "ah"},
-    "regulation": {"effect1", "sxx", "fgmc", "keep-industry", "expand",
-                   "search-mode", "top-k", "fbrq-start", "fbrq-end",
-                   "ssrq-start", "ssrq-end"},
+    "regulation": {"expand", "search-mode", "fgmc", "effect1", "sxx", "keep-industry",
+                   "fbrq-start", "fbrq-end", "ssrq-start", "ssrq-end", "top-k"},
     "regulation-detail": {"name", "fgid", "reference-date"},
 }
+
+
+def _load_valid_filters():
+    """优先从同目录 yd_search.py 的 build_parser() 动态自省（零漂移）；
+    失败回退 _HARDCODED。返回 (filters_dict, source_str)。"""
+    try:
+        import importlib.util
+        yd = Path(__file__).resolve().parent / "yd_search.py"
+        if not yd.exists():
+            return {k: set(v) for k, v in _HARDCODED.items()}, "fallback(yd_search.py 缺失)"
+        spec = importlib.util.spec_from_file_location("yd_search_for_validator", yd)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        parser = mod.build_parser()
+        valid = {}
+        for act in parser._actions:
+            if isinstance(act, argparse._SubParsersAction):
+                for name, sub in act.choices.items():
+                    fields = set()
+                    for a in sub._actions:
+                        for opt in a.option_strings:
+                            if opt in ("-h", "--help"):
+                                continue
+                            fields.add(opt.lstrip("-"))
+                    valid[name] = fields
+        if not valid:
+            return {k: set(v) for k, v in _HARDCODED.items()}, "fallback(自省为空)"
+        return valid, "dynamic(yd_search.build_parser)"
+    except Exception as e:
+        return {k: set(v) for k, v in _HARDCODED.items()}, f"fallback({type(e).__name__}: {e})"
+
+
+VALID_FILTERS, VALID_FILTERS_LOAD_SOURCE = _load_valid_filters()
 
 # 反查: 某字段通常属于哪些 interface (用于给违规信息提示"它属于谁")
 FIELD_OWNERS = {}
@@ -129,6 +159,8 @@ def main():
 
     if not v:
         print(f"✓ 合法：{n} 条 query 的 filter×interface 全部匹配 §9.1 字段表。")
+        if VALID_FILTERS_LOAD_SOURCE.startswith("fallback"):
+            print(f"⚠ 字段表为 {VALID_FILTERS_LOAD_SOURCE}（非动态自省），结果可能不准，请检查 yd_search.py。")
         return 0
 
     cases_hit = sorted({x["case_id"] for x in v})
@@ -139,6 +171,8 @@ def main():
         else:
             print(f"  [{x['case_id']}] Q{x['query_id']} interface={x['interface']}: {x['msg']}")
     print(f"\n参考: references/07-research-middleware.md §9.1 字段归属接口速查表。")
+    if VALID_FILTERS_LOAD_SOURCE.startswith("fallback"):
+        print(f"⚠ 字段表为 {VALID_FILTERS_LOAD_SOURCE}（非动态自省），结果可能不准，请检查 yd_search.py。")
     return 1
 
 
