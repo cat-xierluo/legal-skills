@@ -1,5 +1,29 @@
 # 变更日志
 
+## [1.8.2] - 2026-08-02
+
+### 新特性 — 检索机制感知型法律研究中间层（DEC-006 / Task-001）
+
+把 Skill 从"元典 API/MCP 包装 + 归档 + 报告"升级为"检索机制感知型法律研究中间层"：案件检索（综合检索 / 类案对标 / 已有报告复盘）默认先完成"理解案件 — 形成命题 — 查询矩阵 — 对位复核"，再调用接口。
+
+- 新增 [`references/07-research-middleware.md`](references/07-research-middleware.md)：
+  - `research_brief` schema：争点 / 要件 / 决定性事实 / 待补事实 / 必须排除的近邻案型 / 已有报告来源，外加 `key_decisive_facts` 与 `key_exclusions` 两个**置顶短摘要**（便于快速复核）。
+  - `propositions` schema：每条单一判断，区分规范 / 事实结构 / 裁判规则 / 反向；每个 decisive 争点至少 1 条正向 + 1 条反向。
+  - `query_matrix` schema：一争点一查询、单一接口；带 `exclusion_criteria` 与零命中 `fallback_path`；`case` 关键词不构造后端无法表达的长 AND。
+  - 多主体角色案件 `role_comparison_matrix`（如高管竞业禁止 vs 普通员工保密义务）。
+  - **已有法律分析报告使用规则**：区分 `report_facts` / `report_conclusions` / `hypotheses_to_verify` 三栏，把报告结论降级为待验证假设，不跳过轻量研判。
+  - 前置门禁（最小必要补问，最多 1 轮）、近邻案型排除清单、HIGH/MEDIUM/LOW/MISMATCH 对位度标签、机器可读导出骨架。
+  - §9 接口路由按真实后端机制选择 + **§9.1 字段归属接口速查表**（防 filter 误挂，以 `scripts/yd_search.py` 源码为权威）。
+- `SKILL.md` 新增精简"检索机制感知主流程（案件检索默认）"6 步段，详细 schema 放入单层 reference（主文档不膨胀）；简单法条 / 案号 / 纯概念检索仍直接走接口速查，**不启动本流程**。
+- `--expand` 全局 OR 行为保留兼容，仅降级为查询矩阵内部的一条改写手段（不再作案件检索默认主路径）。
+
+### 评测（agent-eval-lab，`evals/yuandian-middleware-260802`）
+
+- candidate 97 vs baseline 82.75（6 场景无 API 检索规划盲评）。
+- 跨家族 3 judge（glm-5.2 / DeepSeek-V3.2 / Qwen3.5-35B）：2/3 判 candidate 胜；case-03「已有报告三栏区分」三家一致 candidate pass / baseline fail。
+- worker n=2：关键结构决策 100% 可复现。
+- 接口路由教义经 `yd_search.py` 源码验证一致（含确认 `case-semantic` 支持 `--jarq-start/end`）。
+
 ## [1.7.5] - 2026-07-20
 
 ### 新特性

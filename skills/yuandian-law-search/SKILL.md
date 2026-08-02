@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.7.5"
+version: "1.8.2"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -75,6 +75,23 @@ scripts/yd-run --network-check
 ```
 
 注意：`yd-run` 只能避免 Codex 进程环境变量、代理变量和 PATH 漂移造成的影响；如果 Codex 本身以网络沙箱启动，或系统代理/VPN 接管 DNS，子进程仍会受到系统级网络策略影响。终端 Codex 应使用 `--sandbox danger-full-access --ask-for-approval never` 启动。
+
+## 检索机制感知主流程（案件检索默认）
+
+当用户描述事实结构、争议焦点、诉讼立场，或问"类似案件怎么判""能不能主张 XX""对方抗辩怎么办"时，**先完成案件检索主流程，再调用接口**（DEC-006）。简单法条/案号/纯概念检索（`detail` / `case-detail` / 单条 `search`）不启动本流程，直接看下方接口速查。
+
+1. **轻量案件研判** → 产出检索简报（争点、要件、决定性事实、待补事实、必须排除的近邻案型、已有报告来源）。
+2. **派生检索命题** → 每个命题只验证一项判断，区分规范 / 事实结构 / 裁判规则 / 反向；每个 decisive 争点至少 1 条正向 + 1 条反向。
+3. **派生查询矩阵** → 一争点一查询、单一接口；案例关键词只放 4-6 个高信息密度词，不构造后端无法表达的长 AND。
+4. **小样本试检** → 1-2 条命题先验证接口与表达是否有效。
+5. **对位复核** → 按 HIGH / MEDIUM / LOW / MISMATCH 复核；只有诊断出偏差原因（接口误选 / 表达不适配 / 近邻混入）后才扩展查询或换接口。
+6. **正式检索** → 结论—依据—查询可追溯报告。
+
+信息不足时按"最小必要"补问（最多 1 轮，只问会改变检索路径的最关键问题），不空跑查询；事实不足但不影响查询方向的，标注假设继续。
+
+完整字段定义、接口路由规则、近邻案型排除清单、前置门禁判定与机器可读导出骨架见：[`references/07-research-middleware.md`](references/07-research-middleware.md)。
+
+> 下方「接口速查」是执行第 3 步查询矩阵时"按机制选接口"的依据，不是检索的起点。
 
 ## 接口速查
 
@@ -300,6 +317,7 @@ scripts/yd-run hall-detect "根据《中华人民共和国数据保护法》第3
 - [法律检索报告 7 节设计原理](references/04-report-design-notes.md)
 - [MCP 协同工作流](references/05-mcp-workflow.md)
 - [企业全息画像](references/06-enterprise-portrait.md)
+- [检索机制感知型中间层执行合同](references/07-research-middleware.md)
 
 ### 接口清单与 API 端点文档
 
