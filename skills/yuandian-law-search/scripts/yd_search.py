@@ -14,19 +14,11 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
-from updater import SkillUpdater
-
 BASE_URL = "https://open.chineselaw.com"
 TIMEOUT = 60
 COST_PER_CALL = "本次调用消耗 10 积分"
 SKILL_ROOT = Path(__file__).parent.parent
 ARCHIVE_DIR = SKILL_ROOT / "archive"
-
-# 版本信息
-CURRENT_VERSION = "1.7.5"
-
-# 通用更新模块实例（从 SKILL.md frontmatter 自动推导更新地址）
-_updater = SkillUpdater.from_skill_md(SKILL_ROOT)
 
 
 def load_api_key():
@@ -1171,17 +1163,6 @@ def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_droppe
         print(f"  - archive: {archive_md}")
         if cwd_md:
             print(f"  - 工作目录: {cwd_md}")
-
-
-# ── 版本检测（委托给 updater 模块）──────────────────────
-
-
-def cmd_check_update(args):
-    _updater.cmd_check_update()
-
-
-def cmd_do_update(args):
-    _updater.cmd_do_update()
 
 
 def cmd_search(args):
@@ -2351,14 +2332,6 @@ def build_parser():
     p.add_argument("--no-cwd-report", action="store_true", help="仅跳过工作目录副本")
     p.set_defaults(func=cmd_ingest)
 
-    # ── check-update ──
-    p = sub.add_parser("check-update", help="检查版本更新")
-    p.set_defaults(func=cmd_check_update)
-
-    # ── do-update ──
-    p = sub.add_parser("do-update", help="下载更新本 skill 的文件（不影响其他目录）")
-    p.set_defaults(func=cmd_do_update)
-
     # ── archive-list ──
     p = sub.add_parser("archive-list", help="列出历史检索记录")
     p.add_argument("--keyword", help="按关键词筛选（匹配查询内容或端点）")
@@ -2436,13 +2409,6 @@ def main():
     if not args.command:
         parser.print_help()
         sys.exit(0)
-
-    # 自动版本检测（check-update / do-update 子命令除外）
-    if args.command not in ("check-update", "do-update", "archive-list", "backfill-urls", "strategy"):
-        try:
-            _updater.check_for_update()
-        except Exception:
-            pass
 
     args.func(args)
 

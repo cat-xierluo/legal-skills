@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.2"
+version: "1.8.3"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -500,17 +500,3 @@ per-call .md 是数据底稿，可独立查看；session 报告是主交付物�
 完整工作流（元典 MCP 接入配置、Agent 三步法、ingest 子命令、模式选型表）见：
 
 [`references/05-mcp-workflow.md`](references/05-mcp-workflow.md)
-
-## 版本更新
-
-脚本每 7 天自动检测远程版本。也可手动检查：
-
-```bash
-# 检查是否有新版本（会显示最近提交记录）
-scripts/yd-run check-update
-
-# 执行更新（仅下载本 skill 目录下的文件，不影响其他目录）
-scripts/yd-run do-update
-```
-
-`do-update` 仅更新 `yuandian-law-search/` 目录下的文件，不会修改 `.env`（API Key）和 `archive/`（历史检索记录）。
