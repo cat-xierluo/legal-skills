@@ -33,8 +33,8 @@
 | `party_stance` | object | 是 | 当事人立场：`role`（原告/被告/被申请人/代理人…）+ `claim_or_defense`（核心诉求或抗辩） |
 | `procedure_stage` | string | 否 | 程序阶段（一审/二审/再审/仲裁/执行/诉前） |
 | `dispute_focus` | string[] | 是 | 争议焦点：用户原话里已明确的核心论点（来自 5 字段表的"用户已明确论点"） |
-| `claim_or_defense_path` | string[] | 是 | 请求权/抗辩路径（如"商业秘密侵权"vs"竞业限制违约"；"不正当竞争"vs"名誉权"）——用于区分近邻案型 |
-| `legal_elements` | object[] | 是 | 法律要件：`element`（要件名）+ `source`（法源线索，待检索验证）+ `covered`（brief 是否已覆盖该要件的事实） |
+| `claim_or_defense_path` | string[] | 是 | 请求权/抗辩路径——由本案事实推导，用于区分主题相近但请求权基础不同的近邻案型（不预设特定法律领域） |
+| `legal_elements` | object[] | 是 | 法律要件：`element`（要件名）+ `source`（法源线索，待检索验证）+ `covered`（brief 是否已覆盖该要件的事实）。`covered` **不是装饰字段**：`covered=false` 的要件必须落入 `facts_to_supplement` 并标注是否阻断路径，驱动补问/假设继续——若全员 `covered=true` 却仍要检索，说明要件拆解流于形式 |
 | `decisive_facts` | string[] | 是 | 决定性事实（must_match）：检索简报和查询表达必须覆盖的事实 |
 | `background_facts` | string[] | 否 | 背景事实（影响裁判尺度但不决定争点定性） |
 | `facts_to_supplement` | object[] | 否 | 待补事实：`fact` + `blocks_path`（是否改变检索路径）+ `action`（补问/标注假设继续） |
@@ -42,25 +42,42 @@
 | `key_decisive_facts` | string[] | 否（建议） | `decisive_facts` 的**置顶短摘要**（3-5 条精简版），放在 brief 顶部便于人/judge 快速复核，不得与 `decisive_facts` 矛盾 |
 | `key_exclusions` | string[] | 否（建议） | `must_exclude_neighbor_types` 的**置顶短摘要**，同上 |
 | `role_comparison_matrix` | object | 否（仅同主题多角色场景） | 多主体角色对比矩阵，见 §3.1 |
-| `prior_report_sources` | object | 否 | 已有法律分析报告（见 §5），无则留空 |
+| `prior_report_sources` | object | 否 | 已有法律分析报告（见 §3.2），无则留空 |
 
 **硬约束**：`dispute_focus`、`decisive_facts`、`must_exclude_neighbor_types` 三项不得为空；任一为空说明案件研判未完成，退回 §6 前置门禁。
 
 ### 3.1 scan-friendly 摘要与多角色对比矩阵
 
 - **置顶摘要**：`key_decisive_facts` 与 `key_exclusions` 是 `decisive_facts` / `must_exclude_neighbor_types` 的精简镜像，放在 brief 顶部，让复核者（人或自动 judge）无需翻查嵌套字段即可定位关键事实与近邻排除。底层详细字段仍是权威来源；摘要不得与之矛盾，也不得只写摘要而省略底层字段。目的：避免 dense 结构化输出被快速浏览时漏看关键排除项。
-- **多角色对比矩阵**：当一个案件含 2+ 主体角色且请求权基础不同（典型：高管竞业禁止 vs 普通员工保密；达人 vs 商家 vs 平台），除为每个角色产出独立的 propositions/queries 外，还应输出 `role_comparison_matrix` 汇总差异：
+- **多角色对比矩阵**：当一个案件含 2+ 主体角色且请求权基础不同，除为每个角色产出独立的 propositions/queries 外，还应输出 `role_comparison_matrix` 汇总差异：
 
   ```json
   {
     "axes": ["主体角色", "请求权基础/规范", "决定性事实", "必须排除的近邻"],
     "rows": [
-      {"role": "高管", "claim_basis": "公司法忠实义务/章程竞业禁止", "decisive_facts": ["..."], "exclusions": ["..."]},
-      {"role": "普通员工", "claim_basis": "劳动法保密条款/反不正当竞争", "decisive_facts": ["..."], "exclusions": ["..."]}
+      {"role": "主体角色 A", "claim_basis": "（该角色的请求权基础/规范，由本案推导）", "decisive_facts": ["..."], "exclusions": ["..."]},
+      {"role": "主体角色 B", "claim_basis": "（与 A 不同的请求权基础/规范）", "decisive_facts": ["..."], "exclusions": ["..."]}
     ]
   }
   ```
   矩阵是汇总视图，**不替代**各角色的独立 query_matrix（一争点一查询仍按角色分别落）。
+
+### 3.2 已有法律分析报告（`prior_report_sources`）
+
+输入含既有法律分析报告时，`prior_report_sources` 必须拆成**三栏**，把"事实/结论/假设"分层（反 inflation 关键防线）：
+
+| 子字段 | 含义 | 处置 |
+|---|---|---|
+| `report_facts` | string[] | 报告**援引的、可定位来源的客观事实**（报告中有出处、可回查的事实陈述）。可作检索线索直接使用 |
+| `report_conclusions` | string[] | 报告的**法律结论/定性**（报告作者的主观判断）。**必须降级为待验证假设**，不得当已证事实写入 `decisive_facts` |
+| `hypotheses_to_verify` | object[] | 由结论转化的、必须独立检索验证的判断：`hypothesis` + `verifies_conclusion`（关联 report_conclusions）+ `proposition_id`（对应验证命题） |
+
+**法源 vs 法律判断的区分**（易错点）：
+
+- 报告**援引的法源**（具体法条名称+条号，属客观引用）→ 可直接作 `queries[].filters`（`--yyft`）或法条检索线索，**无需降级**。
+- 报告**作者的法律评价/定性**（对要件是否成立、是否构成某行为的判断）→ 属主观判断，**必须降级为 `hypotheses_to_verify`**，配独立验证命题。
+
+**硬约束**：不得因报告存在而跳过 §2 轻量研判；每条 `report_conclusions` 都应有对应 `hypotheses_to_verify` 条目；报告结论不得直接出现在 `decisive_facts`（那是 must_match 事实位）。
 
 ## 4. propositions（检索命题）schema
 
@@ -107,11 +124,11 @@
 | 情形 | 处理 |
 |---|---|
 | 事实不足但**不影响查询方向**（如赔偿具体数额未定） | 在 brief 标注假设继续，不影响命题与查询生成 |
-| 主体 / 行为链条 / 待解决问题缺失到**会改变检索路径** | 只补问**最关键**的 1 个问题（通常是"合同类型+违约形态"或"当事人角色"），其余标注假设继续 |
+| 主体 / 行为链条 / 待解决问题缺失到**会改变检索路径** | 只补问会改变检索路径的最关键问题（**最多 3 个核心**，通常含"合同/法律关系类型+违约形态"或"当事人角色"），其余标注假设继续 |
 | 完全无法判断争点（用户只说"帮我查相关案例"） | 触发最小补问：合同/法律关系类型 + 诉求方向；不补问不生成 query_matrix |
 | 明确法条名+条号 / 明确案号 / 纯概念问答 | **不启动本流程**，直接走接口速查 |
 
-补问结果回填 brief 后再继续；补问不超过 1 轮，仍不足则按假设推进并标注 `待补充`。
+补问结果回填 brief 后再继续；补问不超过 **1 轮**——**1 轮 = 1 次交互回合**（不限制该回合内问几个，但单回合最多 3 个会改变检索路径的核心问题），**不得套用 5 字段争点识别表的全字段逐一追问**（那是案件研判输入表，不是补问清单）；仍不足则按假设推进并标注 `待补充`。
 
 ## 7. 何时不启动本流程（边界）
 
@@ -125,14 +142,15 @@
 
 ## 8. 近邻案型排除（must_not_match）
 
-近邻陷阱 = 主题、案由或行业相近，但**主体角色、行为链条或决定性事实**不同，混入会污染主要依据。brief 必须在查询前显式写出 `must_exclude_neighbor_types`，并映射到对应 query 的 `exclusion_criteria`。
+近邻陷阱 = 主题、案由或行业相近，但**主体角色、行为链条或决定性事实**不同，混入会污染主要依据。brief 必须在查询前显式写出 `must_exclude_neighbor_types`（由本案事实推导，**不预设特定法律领域的清单**），并映射到对应 query 的 `exclusion_criteria`。
 
-典型近邻（非穷举，按场景识别）：
+识别方向（非穷举，按本案事实判断，不列举具体案型）：
 
-- 商业秘密侵权 ≈ 竞业限制违约（前者看秘密性+使用，后者看竞业约定+违约行为）。
-- 商业诋毁 ≈名誉权侵权 ≈ 不正当竞争（主体身份、客观行为、损害结果要件不同）。
-- 达人/主播侵权 ≈ 商家自行制作 ≈ 平台责任（行为主体不同，责任路径不同）。
-- 高管竞业禁止（公司法）≈ 劳动者保密义务（劳动法/反不正当竞争）。
+- **请求权基础不同**：主题相近但落入不同规范路径（主体身份 / 客体 / 行为要件不同），各路径要件不能互替。
+- **主体角色不同**：同一主题下行为主体身份不同，导致责任路径或注意义务标准不同。
+- **行为链条/决定性事实不同**：主题或行业相近，但关键事实缺失或不同，不能直接类推。
+
+**`must_exclude_neighbor_types` 写法**：每项写**一个独立近邻案型**（不合并多项），并表述具体到"为什么排除"（缺哪个要件 / 主体 / 事实），便于复核；`key_exclusions` 置顶摘要同样逐项独立。
 
 对位复核时，命中近邻案型应标 `LOW` 或 `MISMATCH`，不得纳入主要依据。
 
