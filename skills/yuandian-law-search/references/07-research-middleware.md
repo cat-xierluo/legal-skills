@@ -177,6 +177,8 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
 - **`--jarq-start/end` 两个案例接口都支持**（源码确认），可放心用于日期范围。
 - 法条接口（`search`/`keyword`）的 `--sxx`/`--effect1` 不得挪到案例接口。
 
+**硬校验**：用 `scripts/validate-query-filters.py <research-plan.json>` 自动校验 filter×interface 合法性（退出码 0 合法 / 1 有违规，可接 CI 或 pre-commit hook）。单条 query 可用 `--query '{"interface":"case","filters":{...}}'`。字段表与本节一致，以 `yd_search.py` 各 subparser 为权威。
+
 ## 10. 策略与法律检索解耦（[DEC-006] pt 6）
 
 `economical` / `balanced` / `aggressive` 只控制**调用预算与深度**（试几条 query、是否自动跑语义+关键词双检索、是否自动拉 case-detail），**不得**改变：
