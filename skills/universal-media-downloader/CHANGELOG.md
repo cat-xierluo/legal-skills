@@ -1,5 +1,23 @@
 # 变更日志
 
+## [0.3.0] - 2026-08-02
+
+### 新增
+
+- 抖音视频无登录下载 fallback：新增 `scripts/download_douyin_video_nocookie.py`，基于 `aweme.snssdk.com/aweme/v1/play/` 直连接口（仅需 video_id，不需要 cookie / a_bogus 签名）
+- `download_media.py` 在「抖音域名 + 未传 cookies + 非纯音频」且 yt-dlp 失败时，自动调用上述脚本兜底，对用户无感
+- 归档原理依据到 `references/douyin-nocookie-approach.md`（含反爬演进预判与失效监控信号）
+- 下载支持 aria2c 多线程加速（16 连接 + 断点续传，自动检测；未安装则回退 requests 单线程）
+- `download_media.py` 新增 `--cookies-from-browser` 参数（chrome/firefox/safari/edge），直接读浏览器登录态，免手动导 cookies.txt；与 `--cookies` 互斥
+
+### 修复
+
+- 修正 video_id 提取正则：uri 实际含 g/h/i 等非 hex 字符，照搬文档的 `v0[0-9a-f]+` 会在结尾 `"` 断言处失配，改为锚定 `play_addr` 的精确正则 + 宽字符兜底
+
+### 验证
+
+- 样本 `https://v.douyin.com/aAQgycBvBp0/` 端到端通过：4.97 MB / 94.02s / ffprobe 校验通过；yt-dlp 2026.06.09 撞签名墙（`Fresh cookies are needed`）后自动 fallback 成功
+
 ## [0.2.0] - 2026-02-12
 
 ### 新增

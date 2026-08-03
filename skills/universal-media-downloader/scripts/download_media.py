@@ -60,6 +60,13 @@ def main() -> int:
         help="Path to cookies.txt (Netscape format). Useful when 403/login required.",
     )
     parser.add_argument(
+        "--cookies-from-browser",
+        default="",
+        help="Browser to read cookies from directly (chrome/firefox/safari/edge). "
+             "Avoids manually exporting cookies.txt — useful for Bilibili 412, "
+             "YouTube age-gating, or Douyin with login. Mutually exclusive with --cookies.",
+    )
+    parser.add_argument(
         "--proxy",
         default="",
         help="Proxy URL, e.g. socks5://127.0.0.1:7890 or http://127.0.0.1:7890",
@@ -106,11 +113,17 @@ def main() -> int:
         "after_move:filepath",
     ]
 
+    if args.cookies and args.cookies_from_browser:
+        parser.error("--cookies 与 --cookies-from-browser 互斥，请二选一。")
+
     if args.cookies:
         cookies_path = Path(args.cookies).expanduser().resolve()
         if not cookies_path.exists():
             raise FileNotFoundError(f"cookies file not found: {cookies_path}")
         cmd.extend(["--cookies", str(cookies_path)])
+
+    if args.cookies_from_browser:
+        cmd.extend(["--cookies-from-browser", args.cookies_from_browser])
 
     if args.proxy:
         cmd.extend(["--proxy", args.proxy])
@@ -142,6 +155,40 @@ def main() -> int:
     sys.stdout.write(out)
 
     if rc != 0:
+        # 抖音域名 + 未带 cookies + 非纯音频：yt-dlp 撞签名墙时，自动 fallback 到
+        # 无登录直连（aweme.snssdk.com/v1/play，仅需 video_id，不要 a_bogus 签名）。
+        # 用户主动传 --cookies 时走登录态，不抢戏；--audio-only 时保守不走（接口只保证视频流）。
+        from urllib.parse import urlparse
+
+        host = (urlparse(args.url).hostname or "").lower()
+        is_douyin = any(d in host for d in ("douyin.com", "iesdouyin.com", "snssdk.com"))
+        if is_douyin and not args.cookies and not args.audio_only:
+            sys.stdout.write(
+                "\n[download_media] yt-dlp 在抖音失败，自动尝试无登录直连 fallback "
+                "（aweme.snssdk.com/v1/play）...\n"
+            )
+            nocookie_script = Path(__file__).parent / "download_douyin_video_nocookie.py"
+            fb_cmd = [
+                sys.executable, str(nocookie_script), args.url,
+                "--out-dir", str(out_dir),
+            ]
+            fb_rc, fb_out = run(fb_cmd)
+            sys.stdout.write(fb_out)
+            if fb_rc == 0:
+                for ln in reversed([l.strip() for l in fb_out.splitlines() if l.strip()]):
+                    if ln.startswith("SAVED_FILEPATH="):
+                        sys.stdout.write(f"\nSAVED_FILEPATH={ln.split('=', 1)[1].strip()}\n")
+                        return 0
+                # 兜底：取输出目录最新文件
+                files = sorted(
+                    [p for p in out_dir.glob('*') if p.is_file()],
+                    key=lambda p: p.stat().st_mtime, reverse=True,
+                )
+                if files:
+                    sys.stdout.write(f"\nSAVED_FILEPATH={files[0]}\n")
+                    return 0
+            sys.stdout.write("[download_media] 无登录 fallback 也失败，回到 yt-dlp 报错。\n")
+
         sys.stderr.write("\n[download_media] yt-dlp failed. Command was:\n")
         sys.stderr.write("  " + " ".join(shlex.quote(c) for c in cmd) + "\n")
         return rc

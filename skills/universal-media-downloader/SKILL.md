@@ -3,7 +3,7 @@ name: universal-media-downloader
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "0.2.0"
-description: 输入各类视频网站/播客平台链接后，自动下载对应媒体文件并交付给用户。优先使用 yt-dlp 覆盖抖音(Douyin)、B站(Bilibili)、YouTube 等常见视频网站，也可用于可直接暴露音频地址的播客平台（如小宇宙单集链接）。当遇到 403/登录/年龄或地区限制时，支持使用 cookies.txt 重试；对于可能存在 DRM/加密或条款限制的平台（例如部分 Spotify 内容），应提示用户仅下载其有权保存的内容，并在不可下载时建议改用官方离线/导出渠道或提供原始 RSS/直链。注意：抖音图文笔记暂不支持自动下载，需手动处理。
+description: 输入各类视频网站/播客平台链接后，自动下载对应媒体文件并交付给用户。优先使用 yt-dlp 覆盖抖音(Douyin)、B站(Bilibili)、YouTube 等常见视频网站，也可用于可直接暴露音频地址的播客平台（如小宇宙单集链接）。当遇到 403/登录/年龄或地区限制时，支持使用 cookies.txt 重试；对于可能存在 DRM/加密或条款限制的平台（例如部分 Spotify 内容），应提示用户仅下载其有权保存的内容，并在不可下载时建议改用官方离线/导出渠道或提供原始 RSS/直链。抖音视频在 yt-dlp 撞签名墙（"Fresh cookies needed"）时会自动 fallback 到无登录直连 aweme.snssdk.com/v1/play（仅需 video_id，不需要 cookie/a_bogus 签名）；抖音图文笔记暂不支持自动下载，需手动处理。
 license: MIT
 ---
 
@@ -42,10 +42,18 @@ license: MIT
 
 ### 3）遇到 403 / 需要登录 / 风控拦截：用 cookies 重试
 
-- 让用户提供浏览器导出的 **Netscape 格式** `cookies.txt`
+**更省事（推荐）——直接读浏览器 cookies：**
 
-- 然后重试：
+- 用户已在浏览器（Chrome/Firefox/Safari/Edge）登录过该站点的话，直接指定浏览器，免手动导出：
+  - `python scripts/download_media.py --cookies-from-browser chrome "<URL>"`
+  - 适用：B站 412、YouTube 年龄限制、抖音带登录态等
+
+**或手动导出 cookies.txt（Netscape 格式）：**
+
+- 让用户导出 `cookies.txt`，然后重试：
   - `python scripts/download_media.py --cookies "/path/to/cookies.txt" "<URL>"`
+
+> `--cookies` 与 `--cookies-from-browser` 互斥，二选一。抖音无登录场景无需 cookie——会自动走 `aweme.snssdk.com/v1/play` fallback。
 
 ### 4）需要代理（可选）
 
@@ -63,10 +71,16 @@ license: MIT
 
 ## 平台差异与限制（重要）
 
-- **YouTube/B站/抖音**：
+- **YouTube / B站**：
   - 常见失败原因：年龄限制、地区限制、频繁请求触发风控、需要登录
   - 处理方式：cookies、代理、或降低并发/等待后重试
   - YouTube 额外提示：若出现 *Signature solving failed / JS challenge* 警告，可按 yt-dlp 的 EJS 指引启用挑战求解组件（例如加 `--remote-components ejs:github`），或让用户提供 cookies
+
+- **抖音视频（无登录 fallback，v0.3.0 起）**：
+  - 抖音 `www.douyin.com` 业务 API 已全上 `a_bogus`/msToken 签名墙，yt-dlp 直接下会报 `Fresh cookies are needed`。
+  - 本 skill 在「抖音域名 + 未传 `--cookies` + 非纯音频」时自动切到无登录直连：短链 → SSR share 页提 `video_id` → `aweme.snssdk.com/aweme/v1/play/` 拿 302 CDN 直链 → 带 referer 下载。**无需 cookie / 登录态 / 签名**。
+  - 边界：仅公开视频；私密/仅好友可见、已删除、异地限制、直播/直播回放、图文笔记均不适用（图文走 `download_douyin_note.py`）。
+  - 直链有效期约 1-2 小时，过期重跑即可。这是抖音新旧 API 并存的窗口期，可能随时失效；监控信号与原理见 `references/douyin-nocookie-approach.md`。
 
 - **Spotify**：
   - Spotify 上的内容可能存在 DRM、账号权限/订阅限制，且“下载”可能违反平台条款。
@@ -87,8 +101,20 @@ license: MIT
     - `--subtitles`（可选，自动下载字幕）
     - `--sub-lang`（可选，字幕语言，默认 all）
     - `--cookies`（可选）
+    - `--cookies-from-browser`（可选，chrome/firefox/safari/edge，与 `--cookies` 互斥）
     - `--proxy`（可选）
     - `--out-dir`（可选，自定义输出目录）
+
+- `scripts/download_douyin_note.py`
+  - 抖音**图文笔记**图片下载器（视频流接口对图文只返回首图，故图文单独走图片提取）
+  - 注意：其依赖的旧版 `iteminfo` API 已被抖音加 `encrypt_data_miss` 拦截，当前提取能力有限，必要时手动截图
+
+- `scripts/download_douyin_video_nocookie.py`
+  - 抖音**视频**无登录直连下载器（`aweme.snssdk.com/v1/play`，无需 cookie/签名）
+  - `download_media.py` 在抖音 yt-dlp 失败时会自动调用它；也可独立使用
+  - 输出同样以 `SAVED_FILEPATH=` 结尾，便于下游脚本（cubox/content-manager）解析
+  - 参数：`url`（必填）、`--out-dir`、`--ratio`（540p/720p/1080p，默认 540p）、`--out-name`
+  - 原理与边界见 `references/douyin-nocookie-approach.md`
 
 ## 依赖
 
@@ -98,7 +124,9 @@ license: MIT
 |------|----------|
 | `yt-dlp` | `pip install yt-dlp` |
 | `ffmpeg`（可选，用于字幕提取和音频转换） | macOS: `brew install ffmpeg`<br>Linux: `sudo apt-get install ffmpeg` |
+| `aria2c`（可选，抖音 fallback 大文件多线程加速 + 断点续传；未安装自动回退单线程） | macOS: `brew install aria2` |
 
 ### Python 包
 
 无需额外 Python 依赖，`yt-dlp` 已包含所需库。
+抖音相关脚本（`download_douyin_*.py`）额外依赖 `requests`（`pip install requests`）。
