@@ -19,7 +19,7 @@
     {
       "name": "yuandian-law-search",
       "description": "元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告",
-      "version": "1.7.4",
+      "version": "1.8.6",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

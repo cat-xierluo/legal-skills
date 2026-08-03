@@ -1,5 +1,71 @@
 # 变更日志
 
+## [1.8.6] - 2026-08-02
+
+### 新增（references/07，评测 R6 发现回写）
+
+- **§9.2 平台覆盖边界意识**：元典法源以民商/刑事为主，行政诉讼/部门规章/国家赔偿等覆盖可能有限。案件落入这些领域时，brief 标注 `platform_coverage_note` + 相关 query 的 `fallback_path` 指明外部渠道（flk.npc.gov.cn / 北大法宝 / 裁判文书网），不得用民商法源强行替代。源自评测 R6（worker 自发产出该意识，Claude judge 评为「通用方法的高阶工具边界意识」）。
+- §5 `fallback_path` 字段补充「超平台领域 fallback 外部渠道」选项。
+
+纯文档，不影响脚本/接口。
+
+## [1.8.5] - 2026-08-02
+
+### 改进（references/07 通用化 + 补通用方法）
+
+按「skill 是通用法律检索方法论、不固化特定领域案例」原则（用户反馈），清理具体案型举例 + 补通用方法。纯文档，不影响脚本/接口。
+
+**补通用方法**：
+
+- §3.2 新增「已有法律分析报告」三栏规则：`prior_report_sources` 拆为 `report_facts` / `report_conclusions` / `hypotheses_to_verify`；区分「报告援引的法源」（客观引用，不降级）vs「报告作者的法律判断」（主观，必降级为待验证假设）。
+- §6 明确「1 轮 = 1 次交互回合，单回合最多 3 个会改变检索路径的核心问题」，不得套用 5 字段争点识别表全字段追问。
+- §3 `legal_elements.covered` 用法：`covered=false` 要件必须落 `facts_to_supplement`，非装饰字段。
+- §8 `must_exclude_neighbor_types` 写法：每项一个独立近邻 + 表述排除理由。
+- §3 `prior_report_sources` 指向修正（见 §3.2，原误指 §5 query_matrix）。
+
+**通用化（删特定法律领域举例）**：
+
+- §8 删典型近邻清单（原列商业秘密/竞业、商业诋毁/名誉权、达人/商家、高管/员工等具体案型），改为通用识别方向（请求权基础不同 / 主体角色不同 / 行为链条或决定性事实不同）。
+- §3.1 `role_comparison_matrix` 示例从「高管/普通员工」泛化为「主体角色 A/B」占位。
+- §3 / §3.2 删具体举例（客户名单、特定法条号等），改为通用描述。
+
+## [1.8.4] - 2026-08-02
+
+### 新增
+
+- **`scripts/validate-query-filters.py`**：把 `references/07` §9.1「字段归属接口速查表」从软约束（worker 自觉读）升级为硬门禁（脚本校验）。校验 research-plan / 单条 query 的 filter×interface 合法性（如 `--wenshu-type` 挂 `case` 关键词会被拦截，并提示正确归属 `case-semantic`）。退出码 0 合法 / 1 有违规，可接 CI / pre-commit / hook。字段表**动态自省**自 `yd_search.py` 的 `build_parser()`（零漂移，自动覆盖全部子命令含双别名/store_false，自省失败时回退硬编码）；覆盖 21 个子命令。源自 Round 3 worker 执行方差发现（12/67 filter 误挂）的工程闭环。
+
+## [1.8.3] - 2026-08-02
+
+### 移除
+
+- **移除内置自动更新机制**：删除 `scripts/updater.py`（SkillUpdater，334 行）、`yd_search.py` 中每次检索自动联网检测远程版本的触发逻辑、`check-update` / `do-update` 子命令，以及 `SKILL.md` 的「版本更新」段。原机制每次检索时联网检测新版（≥7 天一次）且 `do-update` 会联网下载覆盖本地文件——移除以消除自动联网与文件覆盖的风险。更新改由 `git pull` / `clawhub-sync` 等外部通道处理。
+- 清理死代码：`yd_search.py` 中无任何引用的 `CURRENT_VERSION = "1.7.5"` 常量。
+
+## [1.8.2] - 2026-08-02
+
+### 新特性 — 检索机制感知型法律研究中间层（DEC-006 / Task-001）
+
+把 Skill 从"元典 API/MCP 包装 + 归档 + 报告"升级为"检索机制感知型法律研究中间层"：案件检索（综合检索 / 类案对标 / 已有报告复盘）默认先完成"理解案件 — 形成命题 — 查询矩阵 — 对位复核"，再调用接口。
+
+- 新增 [`references/07-research-middleware.md`](references/07-research-middleware.md)：
+  - `research_brief` schema：争点 / 要件 / 决定性事实 / 待补事实 / 必须排除的近邻案型 / 已有报告来源，外加 `key_decisive_facts` 与 `key_exclusions` 两个**置顶短摘要**（便于快速复核）。
+  - `propositions` schema：每条单一判断，区分规范 / 事实结构 / 裁判规则 / 反向；每个 decisive 争点至少 1 条正向 + 1 条反向。
+  - `query_matrix` schema：一争点一查询、单一接口；带 `exclusion_criteria` 与零命中 `fallback_path`；`case` 关键词不构造后端无法表达的长 AND。
+  - 多主体角色案件 `role_comparison_matrix`（如高管竞业禁止 vs 普通员工保密义务）。
+  - **已有法律分析报告使用规则**：区分 `report_facts` / `report_conclusions` / `hypotheses_to_verify` 三栏，把报告结论降级为待验证假设，不跳过轻量研判。
+  - 前置门禁（最小必要补问，最多 1 轮）、近邻案型排除清单、HIGH/MEDIUM/LOW/MISMATCH 对位度标签、机器可读导出骨架。
+  - §9 接口路由按真实后端机制选择 + **§9.1 字段归属接口速查表**（防 filter 误挂，以 `scripts/yd_search.py` 源码为权威）。
+- `SKILL.md` 新增精简"检索机制感知主流程（案件检索默认）"6 步段，详细 schema 放入单层 reference（主文档不膨胀）；简单法条 / 案号 / 纯概念检索仍直接走接口速查，**不启动本流程**。
+- `--expand` 全局 OR 行为保留兼容，仅降级为查询矩阵内部的一条改写手段（不再作案件检索默认主路径）。
+
+### 评测（agent-eval-lab，`evals/yuandian-middleware-260802`）
+
+- candidate 97 vs baseline 82.75（6 场景无 API 检索规划盲评）。
+- 跨家族 3 judge（glm-5.2 / DeepSeek-V3.2 / Qwen3.5-35B）：2/3 判 candidate 胜；case-03「已有报告三栏区分」三家一致 candidate pass / baseline fail。
+- worker n=2：关键结构决策 100% 可复现。
+- 接口路由教义经 `yd_search.py` 源码验证一致（含确认 `case-semantic` 支持 `--jarq-start/end`）。
+
 ## [1.7.5] - 2026-07-20
 
 ### 新特性
