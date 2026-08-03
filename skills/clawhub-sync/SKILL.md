@@ -4,7 +4,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.6.0"
 license: MIT
-description: 将本地开发的 Skills 批量同步到 ClawHub 与腾讯 SkillHub 两个平台。支持智能 .gitignore 过滤、白名单控制、增量同步、单个 skill 同步、双平台并行发布。本技能应在用户需要将本地 skills 发布到 ClawHub/SkillHub、批量同步技能、检查发布状态时使用。
+description: 将本地开发的 Skills 批量同步到 ClawHub 与腾讯 SkillHub 两个平台。支持智能 .gitignore 过滤、白名单控制、增量同步、单个 skill 同步、双平台分流发布。本技能应在用户需要将本地 skills 发布到 ClawHub/SkillHub、批量同步技能、检查发布状态时使用。
 ---
 
 # Skill 同步工具（ClawHub + 腾讯 SkillHub）
@@ -69,11 +69,12 @@ skillhub auth whoami
 > - "ClawHub does not support per-skill license overrides." —— **不支持按 skill 覆盖许可证**（frontmatter 写 `license: CC-BY-NC` 平台层面不生效）。
 > - "Do not add conflicting license terms in `SKILL.md`." —— **禁止在 SKILL.md 内加冲突的许可证条款**。
 >
-> 因此：
-> - MIT 许可证的 skill → 可发布到**两个平台**
-> - CC-BY-NC 等限制性许可证的 skill → **只能发布到 SkillHub**（与 ClawHub MIT-0 冲突）
+> 因此（**分流策略：一个 skill 只发一个平台，不重复分发**）：
+> - MIT 许可证的通用工具 skill → **只发 ClawHub**（已发 ClawHub 的不再重复发 SkillHub）
+> - CC-BY-NC 等限制性许可证的法律类 skill → **只发 SkillHub**（与 ClawHub MIT-0 冲突，ClawHub 不收）
+> - ClawHub slug 被占用、发不了的 → 改发 SkillHub
 >
-> 这意味着仓库内被 ClawHub 拒之门外的法律类 skill（legal-qa-extractor、patent-analysis、trademark-assistant 等）可以通过 SkillHub 公开发布。
+> 即 `platforms` 二选一（`[clawhub]` 或 `[skillhub]`），不再写 `[clawhub, skillhub]`。SkillHub 是 ClawHub 收不了的内容（法律类、slug 冲突）的分发渠道，不是 MIT 工具的重复发布地。
 >
 > ClawHub 许可证详见 [ClawHub Skill Format 官方文档](https://docs.openclaw.ai/clawhub/skill-format)
 
@@ -295,30 +296,43 @@ records:
         publish_id: "<从命令输出获取>"
 ```
 
-### 示例：同步 git-batch-commit 到两个平台
+### 示例：同步 skill（按分流策略发到对应平台）
+
+**A. MIT 工具 → ClawHub（以 git-batch-commit 为例）**
 
 ```bash
 # 1. 检查白名单
 grep -A1 "git-batch-commit:" skills/clawhub-sync/config/sync-allowlist.yaml
-# 输出：platforms: [clawhub, skillhub]   # 两平台均可
+# 输出：platforms: [clawhub]   # MIT 工具，只发 ClawHub
 
 # 2. 比较版本
 # SKILL.md: version: "1.2.0"
-# sync-records.yaml: platforms.clawhub.version: "1.1.0"，platforms.skillhub.version: null
-# 结论：两平台都需要同步
+# sync-records.yaml: platforms.clawhub.version: "1.1.0" → 需要同步
 
-# 3a. 准备并发布到 ClawHub
+# 3. 准备并发布到 ClawHub
 bash skills/clawhub-sync/scripts/prepare-publish.sh skills/git-batch-commit
 clawhub publish /tmp/clawhub-publish-git-batch-commit \
   --slug git-batch-commit --name "Git Batch Commit" \
-  --version "1.2.0" --changelog "添加双平台同步工作流"
+  --version "1.2.0" --changelog "本次变更说明"
 
-# 3b. 准备并发布到 SkillHub
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/git-batch-commit
-skillhub publish /tmp/skillhub-publish-git-batch-commit \
-  --version "1.2.0" --changelog "添加双平台同步工作流"
+# 4. 更新 sync-records.yaml 的 platforms.clawhub 字段
+```
 
-# 4. 更新记录（编辑 sync-records.yaml，更新 git-batch-commit 条目的两个平台字段）
+**B. CC-BY-NC 法律类 → SkillHub（以 legal-qa-extractor 为例）**
+
+```bash
+# 1. 检查白名单
+grep -A2 "legal-qa-extractor:" skills/clawhub-sync/config/sync-allowlist.yaml
+# 输出：platforms: [skillhub]  +  display_name: "法律问答知识提取"
+
+# 2. 准备（--platform skillhub 会自动从配置读 display_name/slug 注入临时副本 frontmatter）
+bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/legal-qa-extractor
+
+# 3. 发布到 SkillHub
+skillhub publish /tmp/skillhub-publish-legal-qa-extractor \
+  --version "<新版本号>" --changelog "<变更说明>"
+
+# 4. 更新 sync-records.yaml 的 platforms.skillhub 字段
 ```
 
 ### 失败处理
@@ -406,13 +420,18 @@ skillhub auth whoami     # 确认身份
 **配置格式（结构化 platforms 字段）：**
 
 ```yaml
-# MIT 许可证 → 两平台均可
+# MIT 许可证 → 只发 ClawHub（不重复发 SkillHub）
 md2word:
-  platforms: [clawhub, skillhub]
+  platforms: [clawhub]
 
-# CC-BY-NC 许可证 → 仅 SkillHub（ClawHub 强制 MIT-0，冲突）
+# CC-BY-NC 许可证 → 只发 SkillHub（ClawHub 强制 MIT-0，冲突）
 legal-qa-extractor:
   platforms: [skillhub]
+  display_name: "法律问答知识提取"
+
+# ClawHub slug 被占用 → 改发 SkillHub
+# some-skill:
+#   platforms: [skillhub]
 ```
 
 如需启用/禁用某 skill 的某平台，调整其 `platforms` 数组即可（注释掉整条则该 skill 不发布）。

@@ -7,6 +7,9 @@
 
 ### 改进
 
+- **分发策略改为双平台分流**：一个 skill 只发一个平台，不重复分发。MIT 工具 → `[clawhub]`（已发 ClawHub 的不再发 SkillHub），CC-BY-NC 法律类 → `[skillhub]`，ClawHub slug 冲突 → `[skillhub]`。`platforms` 二选一，不再 `[clawhub, skillhub]`。详见 DECISIONS D-2026-08-03-02。
+- `sync-allowlist.yaml`/`.example.yaml` 按分流重写：11 个 MIT 工具改 `[clawhub]`，6 个 CC-BY-NC 法律类保持 `[skillhub]`（`display_name` 仅留给走 SkillHub 的）。
+- SKILL.md 策略章节、配置格式示例、同步示例、description 全面改为分流表述。
 - 清理 19 个 skill 源 SKILL.md 的 slug/displayName 字段，frontmatter 不再为发布平台膨胀。
 - `sync-allowlist.yaml` 与 `.example.yaml` 新增 `display_name`/`slug` 字段说明与示例（含 slug 冲突覆盖示例）。
 - SKILL.md 文档全面修正误导表述：平台对比表、frontmatter 必需字段、SkillHub 专属说明、配置文件章节、FAQ 统一改为「slug/displayName 下沉配置、发布时注入」。
