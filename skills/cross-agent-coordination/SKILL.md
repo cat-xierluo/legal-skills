@@ -89,7 +89,6 @@ agents:
 ```yaml
 ---
 id: 260517001
-slug: 260517001-研究-法律AI产品生态调查
 title: 法律AI产品生态调查
 type: 研究
 status: todo
