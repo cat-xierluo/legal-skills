@@ -1,44 +1,107 @@
-# ClawHub 同步白名单配置文件
-# 只同步这里列出的 skill，未列出的不会被同步
-# 格式：skill 目录名（与 skills/ 下的目录名一致）
-# 如需启用某个 skill，删除其所在行开头的 #
+# 同步白名单配置文件（双平台：ClawHub + 腾讯 SkillHub）示例模板
+# ─────────────────────────────────────────────────────
+# 这是模板文件（.example.yaml），供其他用户参考。
+# 你的真实配置请复制为 sync-allowlist.yaml（去掉 .example）后按需调整。
+# 真实配置文件已被 .gitignore 排除，不会提交。
+# ─────────────────────────────────────────────────────
+#
+# 字段说明：
+#   platforms    - 目标平台数组，决定该 skill 可发布到哪些平台
+#                  clawhub  → ClawHub 平台（强制 MIT-0 许可证）
+#                  skillhub → 腾讯 SkillHub 平台（无许可证限制）
+#   license      - 该 skill 实际采用的许可证（标注用，不参与逻辑）
+#   display_name - SkillHub 展示名（中文），发布时由 prepare-publish.sh
+#                  注入临时副本 SKILL.md frontmatter。源 SKILL.md 不含此字段，
+#                  平台元数据与 skill 本体解耦。仅 platforms 含 skillhub 时必填。
+#   slug         - 可选。slug 重名/被占用时覆盖（默认 = skill 目录名）。
+#                  ClawHub 与 SkillHub 共用此值。
+#
+# 如需启用/禁用某个 skill 的某个平台，调整其 platforms 数组即可。
 
-# ===== 法律相关 =====
+# ===== 法律相关（示例）=====
 legal-qa-extractor:
+  platforms: [skillhub]             # CC-BY-NC，仅 SkillHub 可发
+  display_name: "法律问答知识提取"
 legal-text-format:
+  platforms: [skillhub]
+  display_name: "法律文本格式化"
 litigation-analysis:
+  platforms: [skillhub]
+  display_name: "判决书诉讼分析"
 legal-proposal-generator:
+  platforms: [skillhub]
+  display_name: "法律服务文档生成"
 patent-analysis:
+  platforms: [skillhub]
+  display_name: "专利结构化分析"
 trademark-assistant:
+  platforms: [skillhub]
+  display_name: "商标申请辅助"
 
-# ===== 文档处理 =====
+# ===== 文档处理（示例）=====
 md2word:
+  platforms: [clawhub, skillhub]    # MIT，两平台均可
+  display_name: "Markdown 转 Word"
 mineru-ocr:
+  platforms: [clawhub, skillhub]
+  display_name: "MinerU 文档解析"
 piclist-upload:
+  platforms: [clawhub, skillhub]
+  display_name: "图床上传"
 de-ai-polish:
+  platforms: [clawhub, skillhub]
+  display_name: "AI 腔检测与去除"
 
 # ===== 搜索与研究 =====
 multi-search:
+  platforms: [clawhub, skillhub]
+  display_name: "多源搜索"
 repo-research:
+  platforms: [clawhub, skillhub]
+  display_name: "仓库研究"
 
 # ===== 媒体处理 =====
 svg-article-illustrator:
+  platforms: [clawhub, skillhub]
+  display_name: "SVG 文章配图生成"
 funasr-transcribe:
+  platforms: [clawhub, skillhub]
+  display_name: "FunASR 语音转文字"
 wechat-article-fetch:
+  platforms: [clawhub, skillhub]
+  display_name: "微信文章抓取"
 
 # ===== 效率工具 =====
 skill-lint:
+  platforms: [clawhub, skillhub]
+  display_name: "Skill 质量验收与审查"
 skill-manager:
+  platforms: [clawhub, skillhub]
+  display_name: "Skill 安装管理"
 git-batch-commit:
+  platforms: [clawhub, skillhub]
+  display_name: "Git 批量提交拆分"
+# slug 冲突示例：当 skill 目录名在平台已被占用时，用 slug 字段覆盖
+# some-skill:
+#   platforms: [skillhub]
+#   display_name: "某技能中文名"
+#   slug: some-skill-v2            # 默认 slug(some-skill)被占用，改用 -v2
 
 # ===== 暂不发布 =====
 # 使用 # 注释掉不想发布的 skill
-
 #  clawhub-sync:
+#    platforms: [clawhub, skillhub]
 #  douyin-batch-download:
+#    platforms: [skillhub]
 #  universal-media-downloader:
+#    platforms: [skillhub]
 #  minimax-web-search:
+#    platforms: [skillhub]
 #  minimax-image-understand:
+#    platforms: [skillhub]
 #  course-generator:
+#    platforms: [skillhub]
 #  agent-reach:
+#    platforms: [skillhub]
 #  github-star-manager:
+#    platforms: [skillhub]

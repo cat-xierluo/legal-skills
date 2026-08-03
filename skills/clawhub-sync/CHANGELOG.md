@@ -1,3 +1,54 @@
+## [1.6.0] - 2026-08-03
+
+### 新增
+
+- **平台元数据与 skill 本体解耦**：`slug`/`displayName` 不再写进源 SKILL.md frontmatter，下沉到本地 `config/sync-allowlist.yaml`（`display_name` 必填、`slug` 可选默认取 name），发布前由 `prepare-publish.sh --platform skillhub` 自动注入临时副本 frontmatter。源 SKILL.md 回归干净，只保留 skill 标准字段。
+- `prepare-publish.sh` 新增 SkillHub frontmatter 注入段：从 `sync-allowlist.yaml` 读取 display_name/slug，幂等注入临时副本 SKILL.md（先删已有再插入）；缺 display_name 时 fail-closed 报错退出。ClawHub 路径不触发（继续用 `--slug`/`--name` 命令行）。
+
+### 改进
+
+- 清理 19 个 skill 源 SKILL.md 的 slug/displayName 字段，frontmatter 不再为发布平台膨胀。
+- `sync-allowlist.yaml` 与 `.example.yaml` 新增 `display_name`/`slug` 字段说明与示例（含 slug 冲突覆盖示例）。
+- SKILL.md 文档全面修正误导表述：平台对比表、frontmatter 必需字段、SkillHub 专属说明、配置文件章节、FAQ 统一改为「slug/displayName 下沉配置、发布时注入」。
+- 明确 `.gitignore` 过滤对 ClawHub/SkillHub 两平台均生效（两平台共用 `prepare-publish.sh` 过滤逻辑）；实测发布 clawhub-sync 自身时真实 `sync-allowlist.yaml`/`sync-records.yaml` 不进入临时目录，仅 `.example.yaml` 上传。
+
+## [1.5.1] - 2026-08-01
+
+### 改进
+
+- 校准 ClawHub 许可证条款表述：根据 [官方 Skill Format 文档](https://docs.openclaw.ai/clawhub/skill-format) 核实，补充 5 条关键原文引用（MIT-0 强制、可商用、免署名、不支持 per-skill 覆盖、禁止 SKILL.md 内加冲突条款），避免后续误以为 frontmatter 写 license 即可覆盖平台策略。
+- 修正官方文档链接：CLI 文档由 `github.com/openclaw/clawhub` 改为权威文档站 `docs.openclaw.ai/clawhub/cli`；许可证文档由 GitHub `docs/skill-format.md` 改为 `docs.openclaw.ai/clawhub/skill-format`。
+
+## [1.5.0] - 2026-08-01
+
+### 新增
+
+- 支持腾讯 SkillHub 平台发布：官方 `skillhub` CLI（须 ≥ 2026.7.29，`skillhub self-upgrade` 升级）、`skillhub login --key skh_xxx`、`skillhub publish <path> [--version] [--changelog] [--dry-run]`
+- SKILL.md 新增「依赖」章节：系统依赖表（rsync/git/Python 3）、CLI 工具表、腾讯 CLI 安装升级方式、首次安装清单
+- SKILL.md 新增「平台对比」表、「SkillHub 专属说明」章节（Token 获取、slug 规则、SKILL.md frontmatter 要求、API host）
+- 新增双平台许可证策略说明：SkillHub 无许可证限制，CC-BY-NC 法律类 skill 可公开发布（ClawHub 仅 MIT-0）
+- 单个 Skill 同步工作流扩展为双平台通用，区分 ClawHub 与 SkillHub 的发布命令
+
+### 改进
+
+- 配置文件重构为多平台字段：
+  - `sync-allowlist.yaml` 采用结构化 `platforms` 数组（如 `platforms: [clawhub, skillhub]`）
+  - `sync-records.yaml` 采用 `records.<skill>.platforms.<platform>.<field>` 嵌套结构，按平台独立记录版本与状态
+- CC-BY-NC 法律类 skill（legal-qa-extractor、legal-text-format、litigation-analysis、legal-proposal-generator、patent-analysis、trademark-assistant）启用并设为 `platforms: [skillhub]`
+- `prepare-publish.sh` 参数化：新增 `--platform <clawhub|skillhub>`，临时目录前缀随平台变化，过滤逻辑零改动，旧调用完全向后兼容
+- SKILL.md 新增「配置文件与隐私」章节，说明 example（公开模板，入库）与本地配置（gitignore 排除）的关系
+
+### 修复
+
+- 纠正 SkillHub 平台认知：早期版本误用讯飞体系（`@astron-team/skillhub` npm 包、`--visibility`、`skill.xfyun.cn`）。实际腾讯 SkillHub 用官方 `skillhub` CLI（Python 脚本，对接 `api.skillhub.cn`），用 `slug`+`displayName`（SKILL.md frontmatter）标识，登录用 `--key`（非 `--token`），查询身份用 `skillhub auth whoami`。
+- namespace 二次纠正：上条曾误判「无 namespace 概念」并清除全部 namespace 字段。经 `skillhub search` 实测，腾讯 SkillHub **有 namespace**（服务端 `@<namespace>/<slug>` 格式，如 `@cat-xierluo/md2word`），但 namespace **绑定在账号上、发布命令不传参**。已将 namespace=cat-xierluo 加回 sync-records.yaml（21 条），文档恢复 namespace 说明。
+- 补齐腾讯发布前置字段：新版 CLI（≥2026.7.29）要求 SKILL.md frontmatter 必含 `slug`+`version`+`displayName`（旧版靠 `name` 字段发布的历史 skill 如 md2word/court-sms/skill-lint 现在更新会预检失败）。已给 18 个待发布 skill 补 `slug`+`displayName` 字段，dry-run 全部通过。
+- 标记 slug 冲突：`video-compressor`（@gaoq1 占用）、`multi-search`（@neverchenx 占用）在 SkillHub 也被占用，sync-records 标 `status: slug_conflict`，暂不发布。
+
+### 技术优化
+
+- 腾讯 SkillHub CLI 已升级至 2026.7.29（支持 publish/login），低于此版本只能搜索安装不能发布
+
 ## [1.4.2] - 2026-06-12
 
 ### 变更
