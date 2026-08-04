@@ -129,6 +129,10 @@ Line |   3 |   --target x86_64-pc-windows-msvc \
       --bundles ${{ matrix.bundles }}
 ```
 
+> ⚠️ **`shell:` 只适用于 `run:` step，不能用在 `uses:` step**。给 `uses: tauri-apps/tauri-action@v0` 这种 action step 加 `shell: bash` 会让整个 workflow file 语法违规，所有 run 0s failure 报 "workflow file issue"。
+>
+> 这条修法只针对**自写 `run: cargo tauri build` step**（v0.1.x 风格）。改用 `tauri-apps/tauri-action@v0` 后这个 step 不存在，tauri-action 内部处理跨平台 shell，不要再补 `shell: bash`。详见 `tauri-release.md` §3。
+
 ## 9. Tauri updater manifest URL 子目录错（`create-updater-manifest.mjs` 之类自写脚本）
 
 **症状**：release assets 都在 release 根目录（如 `FaroPDF_0.1.0_amd64.AppImage`），但 `latest.json` 的 url 指向子目录：
@@ -165,3 +169,31 @@ const url = buildAssetUrl(args.repo, args.tag, basename(file));
 - 等 15 分钟后再用 curl 测公共 URL
 - 客户端（tauri-plugin-updater）第一次检查更新失败时会有 fallback 重试机制，不影响最终升级
 - **不要**因为 curl 404 就立刻删 release 重发——asset 已经在 release 上了，重发反而引入新 asset hash 不一致
+
+## 11. Tauri updater manifest URL 缺 `v` 前缀（tag 写 `0.2.0` 而非 `v0.2.0`）
+
+**症状**：release build 全绿、assets 都在、`latest.json` 已生成，应用内检查更新能"检测到新版本"，但点下载后**静默失败 / 404**。`gh release download` 正常，但 `curl .../releases/download/0.2.0/<asset>` 公共 URL 永久 404（不是 §10 的 CDN 延迟——等再久也 404）。
+
+**原因**：`create-updater-manifest.mjs` 生成 url 时把 tag 的 `v` 前缀去掉了：
+
+```js
+const tagNoV = tag.replace(/^v/, "");
+return `${repo}/releases/download/${tagNoV}/${asset}`;  // → /releases/download/0.2.0/...
+```
+
+GitHub Releases 的 download 路径要求真实 git tag。git tag 是 `v0.2.0`（带 v），`0.2.0` 不是 tag → 404。**注意这跟 §9（basename 子目录）是不同维度的 URL bug**：§9 是路径多了 artifact 子目录，本条是 tag 少了 `v` 前缀，两者都会让 updater 404 但根因不同。
+
+**解决方案**：直接用完整 `tag`，不要去 v：
+
+```js
+return `${repo}/releases/download/${tag}/${asset}`;     // → /releases/download/v0.2.0/...  ✅
+```
+
+**发版后验证**（每次发版必查最后一道）：
+
+```bash
+gh release download vX.Y.Z --pattern latest.json --dir /tmp/check
+grep -o 'releases/download/[^/]*/' /tmp/check/latest.json   # 必须输出 releases/download/vX.Y.Z/
+```
+
+线上已发错的 latest.json **不必重跑整个 build**：本地下 `*.sig` + 重跑 manifest 脚本生成新 `latest.json` + `gh release upload vX.Y.Z latest.json --clobber` 覆盖线上坏的（asset 本身不用动）。详见 `tauri-release.md` §8。

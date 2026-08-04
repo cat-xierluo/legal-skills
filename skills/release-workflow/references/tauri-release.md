@@ -234,6 +234,10 @@ Line |   3 |   --target x86_64-pc-windows-msvc \
       --bundles ${{ matrix.bundles }}
 ```
 
+> ⚠️ **关键区分：`shell:` 只能用在 `run:` step，不能用在 `uses:` step**。给 `uses: tauri-apps/tauri-action@v0` 这种 action step 加 `shell: bash` 会让整个 workflow file 语法违规，所有 run 0s failure 报 "This run likely failed because of a workflow file issue"。
+>
+> 本条修法只适用于**自写的 `run: cargo tauri build` step**（v0.1.x 风格）。一旦改用 `tauri-apps/tauri-action@v0`（封装 action，v0.1.1+ 风格），这个 step 不存在了，tauri-action 内部处理跨平台 shell，**不要**再给它补 `shell: bash`——盲目移植 DEC-070 的修法会引入语法错误。判断标准：step 里有 `run:` 才能加 `shell:`，只有 `uses:` 的 step 不能加。
+
 ### 4. `concurrency.cancel-in-progress: false` 会卡住重试链
 
 `cancel-in-progress: false` 时，移动 tag 触发的第二次 run 排在前一个之后，前一个 cancelled 但 slot 还没释放，新 run 一直 pending 几分钟。
@@ -276,10 +280,53 @@ clap 把 env var 默认值显示在 `--help` 输出里。如果 shell session �
 
 **修法**：在含密钥的 shell session 里**不要**跑 `cargo tauri signer --help` / `sign --help` 之类。需要查用法时新开一个干净 shell（不 source 含密钥的 env），或查源码（`crates/tauri-cli/src/signer.rs`）。
 
+### 8. manifest asset URL 必须用完整 tag（带 `v` 前缀）
+
+`create-updater-manifest.mjs` / latest.json 生成脚本里，asset 的 `url` 必须用**完整 git tag**（带 `v`，如 `v0.2.0`），不是版本号（`0.2.0`）。GitHub Releases 的 `/releases/download/<tag>/<asset>` 路径要求真实存在的 git tag——`0.2.0`（无 v）不是 tag，updater 客户端拉到这种 URL 会 **404**，闭环静默断开。
+
+**错例**（FaroPDF 旧脚本踩过的坑）：
+
+```js
+const tagNoV = tag.replace(/^v/, "");
+return `${repo}/releases/download/${tagNoV}/${asset}`;  // → releases/download/0.2.0/...  404
+```
+
+**修法**：直接用 `tag`：
+
+```js
+return `${repo}/releases/download/${tag}/${asset}`;     // → releases/download/v0.2.0/...  ✅
+```
+
+**发版后验证**：下载 latest.json 检查 url 字段带 v：
+
+```bash
+gh release download vX.Y.Z --pattern latest.json --dir /tmp/check
+grep -o 'releases/download/[^/]*/' /tmp/check/latest.json   # 应输出 releases/download/vX.Y.Z/
+```
+
+如果线上 latest.json 已带错 URL，**不必重跑整个 build**——本地下 sigs + 重跑 manifest 脚本生成新 latest.json + `gh release upload vX.Y.Z latest.json --clobber` 覆盖线上坏的（asset 本身不用动）。
+
+### 9. tauri 2 主 crate 没有 `updater` feature（v2 plugin 拆分）
+
+tauri 2.x 起 updater 拆成独立 crate，**不要**给 `tauri = { version = "2", features = [...] }` 加 `updater`——`cargo check` 会报：
+
+```
+package `faropdf` depends on `tauri` with feature `updater` but `tauri` does not have that feature
+```
+
+这是 tauri 1.x 的旧做法，v2 已废弃。**正确做法**（v2 updater 闭环只需 4 件，主 crate `features = []` 保持空）：
+
+1. `src-tauri/Cargo.toml` deps 加 `tauri-plugin-updater = "2"`（独立 plugin crate）
+2. Rust 端注册（`src-tauri/src/lib.rs`）：`.plugin(tauri_plugin_updater::Builder::new().build())`
+3. `src-tauri/tauri.conf.json`：`bundle.createUpdaterArtifacts: true` + `plugins.updater.active: true` + `plugins.updater.pubkey`
+4. GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+前端再装 `@tauri-apps/plugin-updater` 配合调用。`cargo check` 过 = plugin crate + Rust 注册链路通。
+
 ## 完整 SOP（首次配 + 升级）
 
 1. 一次性：`cargo tauri signer generate -p "<STRONG_PASSWORD>" -w ~/.tauri/<project>.key`
-2. 写 `tauri.conf.json` `pubkey`：`base64 -w0 < (cat ~/.tauri/<project>.key.pub | base64 -d)`
+2. 写 `tauri.conf.json` `pubkey`：`cat ~/.tauri/<project>.key.pub`（`.pub` 文件本身就是 1 行 base64，即 `base64(2 行 minisign 文本)`，直接整个内容粘进去；**不要** `base64 -d | base64 -w0` 绕路——macOS 自带 base64 不支持 `-w0`，且 decode 再 encode 等于原值，多此一举）
 3. `gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/<project>.key`（直接灌文件，**不要** `base64 -w0`）
 4. `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD "<STRONG_PASSWORD>"`
 5. 本地试签验证三件套对：env 灌齐 `cargo tauri signer sign /tmp/test.txt`
