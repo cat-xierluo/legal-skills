@@ -535,3 +535,40 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - G22 = wave 内任务颗粒度 + wave2 复查抓漏（Wave **内** + Wave **后**）
 
 原则适用于任意多 worker Wave，不限书籍 / 文档 / 代码项目。
+
+### G24. 非 CLI 主会话（ZCode 等）不宜扮演 PM orchestrate tmux worker
+
+**场景**：在 ZCode 这类**非 CLI 的 harness 内嵌 agent**会话里，主 agent 尝试扮演 PM，调用本 skill 的 `spawn-worker.sh` + tmux + sentinel 派多个独立 worktree worker 并行做只读审计。结果编排层勉强跑通，三个 worker 全部在 30 分钟 sentinel 超时后被杀，零产出。
+
+**实战来源**：2026-08-01 FaroPDF 仓审计 Wave（3 个只读 worker：任务源审计 / 代码技术债 / 架构边界，GLM `glm-5.2[1M]` provider）。链路逐段打通：worktree 隔离 ✅、`claude-provider-env.sh` wrapper 统一 provider ✅（探针 `GLM_LIVE_OK`）、scope-guard 锁 `docs/audit/**` ✅、worker 收到 prompt 后建 todo 清单开始干活 ✅。但三个 worker 最终全部 `SENTINEL_TIMEOUT` + `TMUX_KILLED`，无任何报告产出。
+
+**根因：CLI 范式错配，不是配置问题**。本 skill 的整个心智模型是「PM（一个 CLI 会话）spawn worker（另一个 CLI 进程），靠 tmux 做进程隔离、靠 PreToolUse hook 做 scope-guard、靠 `claude --setting-sources`/`--permission-mode` 做 provider 路由与权限」。ZCode 这类 harness agent **不是 CLI**：没有等价的 `--permission-mode`、没有独立的 settings 层、不能像 `claude -p` 那样被 spawn 成子进程。能勉强复用 CLI 的 wrapper 跑通编排层，但一到 CLI 专属能力层就处处别扭。
+
+**三个具体卡点（按踩坑顺序）**：
+
+1. **provider env 污染（spawn 时被绕过）**：spawn-worker.sh 创建的 tmux session 继承了主 shell 已被污染的环境（`.claude/-settings.json` 的 GLM token + `~/.claude/settings.json` 的 MiniMax model 名混合），worker 里 `claude` 读到脏 env，用 MiniMax 的 model 名去调 GLM 的 endpoint，必然报 `1211 模型不存在`。
+   - **解法**：worker 启动命令必须走 `claude-provider-env.sh` wrapper（先 `unset` 所有继承的 `ANTHROPIC_*` env，再从单一 settings 重新注入），不能只传 `claude --settings <file>`。这正是 SKILL §131 反复强调 wrapper 的真实理由。
+   - **教训**：只读 settings 文件探针（`claude --setting-sources user -p`）在主终端能跑，不等于 tmux session 里交互模式能跑——前者启动时重新解析 settings 覆盖 env，后者读到的是 spawn 时刻固化的脏 env。验证 worker provider 必须在 tmux session 内交互发探针。
+
+2. **permission dialog 杀死只读 worker（最致命）**：`claude --permission-mode acceptEdits` 只自动批准**文件编辑**，不自动批准 **Shell 命令**。审计任务重度依赖只读 shell（`grep`/`find`/`wc`/`rg`），worker 每跑一条就弹 `Do you want to proceed? Yes/No` dialog 等 PM 批准。PM 不在场（sentinel 只监听 `STATUS.json`，不监听 dialog）→ worker 一直卡 → sentinel 30 分钟超时 → `TMUX_KILLED` → 零产出。
+   - **解法（若非要在非 CLI 会话跑）**：要么改 prompt 让 worker **只用 claude 内置 Read/Grep/Glob 工具**（不走 Shell permission），要么 spawn 时用 `--dangerously-skip-permissions`（配合 `--allow-paths` scope-guard 硬锁写范围兜底）。
+   - **教训**：设计 worker prompt 时先想清楚它要用哪类工具——Shell 命令在 `acceptEdits` 下会逐条弹 dialog，批量只读任务（审计/扫描/统计）要么换内置工具要么换 permission mode。
+
+3. **监测盲区（双层监测只挂了 sentinel）**：AGENTS.md §1 要求「sentinel（事件）+ 定时巡检 pane（兜底）」双层监测，防 silent done。本次只挂了 sentinel，没做定时巡检。W1 在派发后约 1 分钟就卡死在 dialog，但 PM 误读了一次 30 秒巡检的 todo 清单以为在干活，直到 30 分钟后 sentinel 超时才发现。若做了 ~15 分钟一次的 pane 巡检，能早 29 分钟发现并纠偏。
+   - **教训**：sentinel 只听 `STATUS.json`，听不到 dialog 卡死、进程崩溃或 silent exit。双层监测的「定时巡检」不是可选项——worker 指令遵循在不同 provider/负载下会波动，只挂 sentinel 漏掉 silent done 是必然的。
+
+**反模式**：
+
+- 在 ZCode / 非 CLI harness agent 会话里扮演 PM，调 `spawn-worker.sh` 派 tmux worker，期望和 CLI 会话一样顺滑
+- spawn worker 时只传 `claude --settings <file>` 不走 `claude-provider-env.sh` wrapper（env 污染 → provider 混乱 → 模型不存在）
+- 给只读审计 worker 配 `--permission-mode acceptEdits` 却让它跑 `grep`/`find`（Shell 逐条弹 dialog → 卡死 → 超时）
+- 派完 worker 只挂 sentinel 不做定时 pane 巡检（silent 卡死无人发现）
+- 用 `tmux capture-pane` 打印 worker env 诊断 provider 问题时，把 `ANTHROPIC_AUTH_TOKEN` 完整打到会话日志（本次实测 token 二次泄露，需 rotate）——诊断含密钥的 env 应脱敏，不要直接 capture-pane 全量打印
+
+**结论与出路**：
+
+- **多 worktree worker 编排，应在 Claude Code CLI（或 Codex/OpenCode CLI）会话里做 PM**——PM 和 worker 共享同一 CLI 生态，`--permission-mode` / provider 路由 / 进程生命周期都是原生能力。非 CLI 主会话别硬来。
+- **ZCode 类 harness agent 里要做并行，正解是用其自带的 subagent / Agent 工具**（如 ZCode 的 `Agent` 工具），不走 worktree/scope-guard/sentinel 这套。没有物理 worktree 隔离、不满足 §2.1 防逃逸门禁，但对只读 / 分析类任务足够，且无 permission dialog 问题。
+- 这条经验不否定本 skill 在 CLI 环境的价值；它划清了 skill 的适用边界：**PM 必须是能被 spawn、能配 permission、能跑 settings 路由的 CLI 会话**。
+
+**关联**：SKILL §2.1 防逃逸门禁、§3.8.1 spawn 后核验、§6 启动方式（`claude-provider-env.sh` wrapper）、§7 巡检与介入、AGENTS.md「双层监测」与「PR 第一动作」纪律。

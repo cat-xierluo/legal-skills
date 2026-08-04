@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.20.1] - 2026-08-01
+
+### 新增 — 非 CLI 主会话不宜扮演 PM 的适用边界
+
+- **`references/09-parallel-lessons.md` G24（新）**：记录 2026-08-01 FaroPDF 仓审计 Wave 实战教训。在 ZCode 这类**非 CLI 的 harness 内嵌 agent**会话里扮演 PM、调 `spawn-worker.sh` + tmux + sentinel 派只读审计 worker，编排层勉强跑通但三个 worker 全部 `SENTINEL_TIMEOUT` + `TMUX_KILLED`、零产出。根因是 **CLI 范式错配**（非配置问题）：skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层。三个具体卡点：① provider env 污染（tmux session 继承混合 env → 模型不存在，必须走 wrapper）② permission dialog 杀死只读 worker（`acceptEdits` 不自动批准 Shell，审计跑 `grep`/`find` 逐条弹 dialog → 卡死 → 超时）③ 监测盲区（只挂 sentinel 不做定时 pane 巡检 → silent 卡死无人发现）。结论：多 worktree worker 编排应在 Claude Code CLI 会话做 PM；ZCode 类 harness 要并行改用自带 subagent/Agent 工具。
+- **SKILL.md §1 边界**：「不使用本 Skill」新增「PM 是非 CLI 的 harness 内嵌 agent（ZCode 等）」一条，指向 G24。
+
+### 关联
+
+- 来源：FaroPDF 仓审计 Wave 实战（3 个只读 worker：任务源 / 技术债 / 架构，GLM `glm-5.2[1M]` provider）。链路逐段验证通过（worktree 隔离 / wrapper 统一 provider / scope-guard / worker 收 prompt 建清单），但卡在 permission dialog 层全军覆没。本条不否定 skill 在 CLI 环境的价值，只划清适用边界：**PM 必须是能被 spawn、能配 permission、能跑 settings 路由的 CLI 会话**。
+- 关联章节：§2.1 防逃逸门禁、§3.8.1 spawn 后核验、§6 启动方式（wrapper）、§7 巡检与介入。
+- 附带发现（不入 skill，记 FaroPDF 仓内处理）：`.claude/-settings.json` 文件名带横杠且缺 `ANTHROPIC_MODEL` 字段为坏配置；GLM token 在诊断过程中二次泄露到会话日志（需 rotate）。
+
+## [1.20.0] - 2026-07-31
+
+### 新增 — Issue 分组与合并 PR 判断
+
+- **`references/11-issue-grouping.md`（新）**：补齐 SKILL.md §3「先分组」缺失的两个维度。原「先分组」只覆盖依赖链，本文给出三维度骨架：**① 同根因合并**（多 Issue → 一个 worker → 一个 PR）、**② 依赖链顺序**、**③ 独立并行**。每维度给触发信号 / 前置条件，配套软阈值（同根因合并建议合并后 diff < ~300 行、组内 ≤ 3 个）、决策树、反模式清单（默认一对一 / 硬塞不同类型 / 为凑数合并 / 大改动打包 / 跨模块强合等）。
+- **任务源：本地 task 卡 vs 云端 GitHub Issue**：明确区分两类任务源的分组前预处理。本地结构化任务文件字段齐全、依赖显式；云端 Issue 他人提交、自由文本、依赖需从 body 推断，必须先 `gh issue list/view` 读 body + labels + 最近 commits 做相关性分析，并配套分组 SOP 命令。覆盖原 Skill 任务源模型偏本地、未处理云端 Issue 的缺口。
+- **`templates/issue-batch-pr.md`（新）**：维度①「同根因合并」时的多 Issue PR 描述模板。核心是「统一根因」段（让 reviewer 一眼看清为什么这几个 Issue 要一起改）+ 逐 Issue 修复点 + `Closes #xx, #yy` 批量关闭 + 逐个 Issue 手动验证勾选。含与单 Issue PR 的区别速查、使用纪律（每个 Issue 必须单独验证、写不出统一根因说明可能不该合并）。
+
+### 改进
+
+- **SKILL.md §3 标准流程**：把第 2 步「先分组」从一句话扩成三维度判断（指向 `references/11`）；新增第 1.5 步「识别任务源形态」，要求区分本地 task 卡和云端 Issue 并做不同预处理。强调拿不准时默认**分开**。
+- **SKILL.md §10 参考**：references 列表加 `11-issue-grouping.md`，templates 列表加 `issue-batch-pr.md`。
+- **frontmatter**：version 1.19.0 → 1.20.0。
+
+### 关联
+
+- 来源：Folia 项目 issue 分组审查实测。发现 Skill 原「先分组」逻辑只处理依赖链，既没覆盖「多 Issue → 一个 PR」的打包合并场景，任务源模型也偏本地结构化任务，未处理云端他人提的 GitHub Issue。
+- 范例：Folia `#75`（标题输入英文生成多余 `****`）+ `#76`（标题行删除/方向键时光标漂移）判定为维度①同根因合并（均发生在标题行 WYSIWYG、涉及 heading 节点 IR/Selection、改动位置重叠、均为小修），`#78`（内置 Word 模板导出非预期颜色）单独处理（纯导出模块、与编辑器那组正交）。
+
 ## [1.19.0] - 2026-07-13
 
 ### 新增 — 验证不授权安装依赖的可执行边界

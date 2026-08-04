@@ -39,7 +39,7 @@ Backends:
   claude-oauth    Claude Code subscription/OAuth; clears Anthropic provider env
   codex           Codex CLI
   opencode        OpenCode CLI
-  codebuddy       WorkBuddy / CodeBuddy CLI (platform额度, 继承桌面端登录态)
+  codebuddy       qodebuddy CLI (platform额度, 继承桌面端登录态)
   qoderwork-cn    QoderWork CN CLI (qoderclicn; 自动清除 SDK env 变量)
   custom          Use --command as-is
 
@@ -373,7 +373,7 @@ case "$BACKEND" in
     fi
     ;;
   codebuddy)
-    # WorkBuddy / CodeBuddy CLI。参数体系与 Claude Code 高度兼容(ref 08)。
+    # qodebuddy CLI。参数体系与 Claude Code 高度兼容(ref 08)。
     # MCP off 用 inline 空 config(避免 /tmp 依赖)。
     # -y 默认加：spawn-worker 派 tmux session 本质 headless（无人在终端应答 prompt）。
     # 仅 --no-skip-permissions opt-out（罕见场景：人坐终端跟 codebuddy 交互调试）。
@@ -388,7 +388,7 @@ case "$BACKEND" in
     [ -n "$COMMAND_MODEL" ] && cb_parts+=(--model "$COMMAND_MODEL")
     cb_parts+=(--permission-mode "$PERMISSION_MODE")
     # codebuddy 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）：
-    # WorkBuddy 桌面端的 connector-proxy MCP 在多 worker 并发时触发重定向，导致 worker
+    # qodebuddy 桌面端的 connector-proxy MCP 在多 worker 并发时触发重定向，导致 worker
     # 启动即报 ERR_FR_TOO_MANY_REDIRECTS 停 input。绝大多数 worker 任务（纯脚本/文件）不需要 MCP，
     # 默认关；需要 MCP 的 worker 显式 --with-mcp opt-in。
     if [ "${WITH_MCP:-0}" != "1" ]; then

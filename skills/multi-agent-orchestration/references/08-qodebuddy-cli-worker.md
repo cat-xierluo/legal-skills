@@ -1,8 +1,8 @@
-# WorkBuddy / CodeBuddy CLI（`codebuddy`）Worker 可行性研究
+# qodebuddy CLI（`codebuddy`）Worker 可行性研究
 
-> 本文档为 SKILL.md 的补充参考文档，记录 WorkBuddy/CodeBuddy CLI 作为 worker backend 的可行性研究。
+> 本文档为 SKILL.md 的补充参考文档，记录 qodebuddy CLI 作为 worker backend 的可行性研究。
 > 研究日期：2026-06-20
-> 复测日期：2026-06-21（CodeBuddy CLI `--model kimi-k2.6`，书稿 worker 三轮评测场景）
+> 复测日期：2026-06-21（qodebuddy CLI `--model kimi-k2.6`，书稿 worker 三轮评测场景）
 
 ---
 
@@ -12,9 +12,9 @@
 
 ## 1. 概述
 
-WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进制，功能对标 Claude Code，可以作为 multi-agent orchestration 的 worker backend 使用。核心价值是利用 WorkBuddy 桌面端的登录态和 token 额度，无需额外配置 API Key，CLI 自动复用 GUI 的认证和额度池。2026-06-21 已用 `--model kimi-k2.6` 跑通 `writing-reviewer` 书稿 worker 三轮评测。
+qodebuddy 桌面端内置了 `codebuddy` CLI 二进制，功能对标 Claude Code，可以作为 multi-agent orchestration 的 worker backend 使用。核心价值是利用 qodebuddy 桌面端的登录态和 token 额度，无需额外配置 API Key，CLI 自动复用 GUI 的认证和额度池。2026-06-21 已用 `--model kimi-k2.6` 跑通 `writing-reviewer` 书稿 worker 三轮评测。
 
-与 Claude Code 的关系：WorkBuddy 的 CLI 参数体系与 Claude Code 高度兼容（`-p`、`--print`、`--output-format`、`--settings`、`--permission-mode`、`--worktree`、`--mcp-config` 等），可直接沿用 SKILL.md 中对 Claude Code worker 的大部分模板。
+与 Claude Code 的关系：qodebuddy 的 CLI 参数体系与 Claude Code 高度兼容（`-p`、`--print`、`--output-format`、`--settings`、`--permission-mode`、`--worktree`、`--mcp-config` 等），可直接沿用 SKILL.md 中对 Claude Code worker 的大部分模板。
 
 ## 2. 二进制位置与安装边界
 
@@ -25,7 +25,7 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 | 二进制路径 | `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` |
 | 当前版本 | v2.103.3（随桌面端自动更新） |
 | 可选 alias（须明确授权） | `alias cbc='\"/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy\"'` 加到 `~/.zshrc` |
-| 认证/配置目录 | `~/.codebuddy/`、`~/.workbuddy/`（随版本/组件分布，均与 WorkBuddy 桌面端共用） |
+| 认证/配置目录 | `~/.codebuddy/`、`~/.workbuddy/`（随版本/组件分布，均与 qodebuddy 桌面端共用） |
 
 ### 2.1 版本验证
 
@@ -33,11 +33,11 @@ WorkBuddy（底层为 CodeBuddy Code）桌面端内置了 `codebuddy` CLI 二进
 "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy" --version
 ```
 
-二进制随 WorkBuddy 桌面端自动更新，无需手动升级。
+二进制随 qodebuddy 桌面端自动更新，无需手动升级。
 
 ### 2.2 PATH-less 检测（实测盲区）
 
-`which codebuddy` 在 WorkBuddy 桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend codebuddy` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径 `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。检测到时直接把绝对路径交给 spawn；不得为了消除 PATH WARN 自行写 alias 或创建 symlink。
+`which codebuddy` 在 qodebuddy 桌面端已装但未建 symlink 时会报 `not found`，导致 PM 误判 worker CLI 不可用。`scripts/check-dependencies.sh --backend codebuddy` 现有多源检测：先查 `PATH`，再查已知 .app bundle 路径 `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。检测到时直接把绝对路径交给 spawn；不得为了消除 PATH WARN 自行写 alias 或创建 symlink。
 
 不只 CI/构建环境依赖这段检测，PM 在新机器派 worker 前也应该跑：
 
@@ -52,7 +52,7 @@ bash scripts/check-dependencies.sh --backend codebuddy --strict
 **踩坑 1：codebuddy CLI 不在 PATH（Electron app 内嵌）**
 
 - 现象：`which codebuddy` → `not found`，PM 第一反应会以为没装。
-- 真相：WorkBuddy 是 Electron app，CLI 嵌在 app bundle 里，路径为
+- 真相：qodebuddy 是 Electron app，CLI 嵌在 app bundle 里，路径为
   `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy`。
 - 已有兜底：`scripts/render-runtime-profile.sh --backend codebuddy` 已默认 fallback 到该绝对路径；`check-dependencies.sh` 也会多源检测出这个路径并给 fix 提示。
 - PM 第一次该做：
@@ -123,13 +123,13 @@ with open('$HOME/.codebuddy/settings.json','w') as f:
     json.dump(d, f, indent=2, ensure_ascii=False)
 "
 
-# 2. 用干净环境启动 codebuddy（去掉 WorkBuddy 会话的干扰变量）
+# 2. 用干净环境启动 codebuddy（去掉 qodebuddy 会话的干扰变量）
 #    这是 spawn-worker / -p headless 的关键开关：
 env -i HOME="$HOME" PATH="$PATH" LANG="zh_CN.UTF-8" TERM="$TERM" \
   codebuddy --model hy3 -p "prompt" -y
 ```
 
-**为什么需要 `env -i`**:WorkBuddy 桌面端从子进程启动 codebuddy 时会遗传 `__CFBundleIdentifier`、`ACC_PRODUCT_CONFIG_V3` 等变量,导致 codebuddy 误判自身已在 WorkBuddy 语境、走 IPC 认证路径而挂死。`env -i` 摘掉所有继承变量(仅保留 HOME/PATH/LANG/TERM),让 codebuddy 按独立 CLI 模式走 `cli-external-link` 浏览器认证 → 首次完成浏览器授权后 token 缓存 → 后续直接复用。
+**为什么需要 `env -i`**:qodebuddy 桌面端从子进程启动 codebuddy 时会遗传 `__CFBundleIdentifier`、`ACC_PRODUCT_CONFIG_V3` 等变量,导致 codebuddy 误判自身已在 qodebuddy 语境、走 IPC 认证路径而挂死。`env -i` 摘掉所有继承变量(仅保留 HOME/PATH/LANG/TERM),让 codebuddy 按独立 CLI 模式走 `cli-external-link` 浏览器认证 → 首次完成浏览器授权后 token 缓存 → 后续直接复用。
 
 **2026-07-10 实测**：
 - hy3 `-p`：`2` ✅
@@ -207,9 +207,9 @@ env -i HOME="$HOME" PATH="$PATH" LANG="zh_CN.UTF-8" TERM="$TERM" \
 
 ## 4. 模型指定方式
 
-### 4.1 WorkBuddy 平台内置模型（零配置，用平台额度）
+### 4.1 qodebuddy 平台内置模型（零配置，用平台额度）
 
-WorkBuddy 平台内置多种模型，CLI 默认继承桌面端的模型配置和额度。**直接通过 `--model` 指定即可，无需设置任何环境变量**。
+qodebuddy 平台内置多种模型，CLI 默认继承桌面端的模型配置和额度。**直接通过 `--model` 指定即可，无需设置任何环境变量**。
 
 #### 已知可用模型标识
 
@@ -260,11 +260,11 @@ codebuddy --model auto -p "分析这个法律问题" -y
 >
 > **⚠️ 2026-07-22 复核提醒**：`hy3-preview-agent` 在 2026-07-06 → 2026-07-22 期间曾被误判为"限时免费档"，用户已于 2026-07-08 复核确认实际**有消耗额度**。到期当天仍建议重跑 smoke test 确认新可用模型清单（可能含新档或恢复档）。
 
-> **常用策略**（2026-07-08 校正）：Worker **首选 `hy3`**（codebuddy 内置带思考的主力路由，对外统一显示 Hy3，含思考能力），覆盖通用对话 / 文书辅助 / 长逻辑链推理 / 简单任务。次选：**`deepseek-v4-pro`**（深度推理）/ **`deepseek-v4-flash`**（经济快）/ **`kimi-k2.7`**（深度推理补充）；`kimi-k2.6`（写作审稿已验证）、`minimax-m3`（多模态）作场景专用。`hy3-preview-agent` 实测**有消耗额度**（用户复核），**不默认派发**；用户特定场景才 ad-hoc 调。具体可用模型取决于你的 WorkBuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表；默认选哪个见 personal config。
+> **常用策略**（2026-07-08 校正）：Worker **首选 `hy3`**（codebuddy 内置带思考的主力路由，对外统一显示 Hy3，含思考能力），覆盖通用对话 / 文书辅助 / 长逻辑链推理 / 简单任务。次选：**`deepseek-v4-pro`**（深度推理）/ **`deepseek-v4-flash`**（经济快）/ **`kimi-k2.7`**（深度推理补充）；`kimi-k2.6`（写作审稿已验证）、`minimax-m3`（多模态）作场景专用。`hy3-preview-agent` 实测**有消耗额度**（用户复核），**不默认派发**；用户特定场景才 ad-hoc 调。具体可用模型取决于你的 qodebuddy 订阅套餐，可在桌面端底部模型选择器或 `/model` 命令查看完整列表；默认选哪个见 personal config。
 
 ### 4.2 可选：对接自有 API Key（降本兜底，非主要场景）
 
-> **设计原则**：使用 WorkBuddy/QoderWork 这类平台 CLI 的核心价值是**零配置吃平台额度**。如果你有自己的 API Key（如 DeepSeek、Anthropic），直接用 Claude Code + 环境变量更直接，不需要绕 WorkBuddy CLI 这一层。以下仅作为极端降本或平台额度耗尽时的兜底参考。
+> **设计原则**：使用 qodebuddy/QoderWork 这类平台 CLI 的核心价值是**零配置吃平台额度**。如果你有自己的 API Key（如 DeepSeek、Anthropic），直接用 Claude Code + 环境变量更直接，不需要绕 qodebuddy CLI 这一层。以下仅作为极端降本或平台额度耗尽时的兜底参考。
 
 ```bash
 # 如有自有 DeepSeek Key（通常不需要，直接用 Claude Code 即可）
@@ -277,7 +277,7 @@ codebuddy --model deepseek-v4-pro -p "任务" -y
 
 | 环境变量 | 说明 |
 |----------|------|
-| `CODEBUDDY_AUTH_TOKEN` | WorkBuddy 平台认证令牌（平台接口调用，CLI 自动继承桌面端，通常无需手动设） |
+| `CODEBUDDY_AUTH_TOKEN` | qodebuddy 平台认证令牌（平台接口调用，CLI 自动继承桌面端，通常无需手动设） |
 | `CODEBUDDY_INTERNET_ENVIRONMENT` | 网络环境：`internal`（中国版）/ `ioa`（iOA 企业版） |
 | `MAX_THINKING_TOKENS` | 扩展思考 token 预算 |
 | `CODEBUDDY_API_KEY` | API 密钥（仅对接自有第三方服务时使用） |
@@ -296,7 +296,7 @@ codebuddy --text-to-image-model your-image-model -p "任务" -y
 
 ## 5. MCP 工具链集成
 
-WorkBuddy CLI 支持通过 `--mcp-config` 加载 MCP 服务器：
+qodebuddy CLI 支持通过 `--mcp-config` 加载 MCP 服务器：
 
 ```bash
 # 从文件加载
@@ -308,10 +308,10 @@ codebuddy --settings '{"mcpServers":{...}}' -p "任务" -y
 
 MCP 配置也支持写入 `~/.codebuddy/mcp.json`，CLI 和桌面端共用。
 
-> **注意**：WorkBuddy 桌面端的 MCP 连接器（飞书、腾讯文档、元典法律检索等）需要通过 GUI 授权启用。CLI 模式下，需要在 `mcp.json` 中预先配置和 Trust 这些连接器后才能使用。
+> **注意**：qodebuddy 桌面端的 MCP 连接器（飞书、腾讯文档、元典法律检索等）需要通过 GUI 授权启用。CLI 模式下，需要在 `mcp.json` 中预先配置和 Trust 这些连接器后才能使用。
 >
-> **⚠️ 2026-06-26 修正（用户澄清）**：WorkBuddy / CodeBuddy CLI 接入的 MCP（华宇元典法律检索、企查查等）**不是平台免费连接器，而是用户自己在外部配置的付费 API**（与其它 CLI 共用同一套 key/额度）。因此：
-> - 这些 MCP 调用**消耗用户付费 API 额度**，不是 WorkBuddy 平台免费额度。
+> **⚠️ 2026-06-26 修正（用户澄清）**：qodebuddy CLI 接入的 MCP（华宇元典法律检索、企查查等）**不是平台免费连接器，而是用户自己在外部配置的付费 API**（与其它 CLI 共用同一套 key/额度）。因此：
+> - 这些 MCP 调用**消耗用户付费 API 额度**，不是 qodebuddy 平台免费额度。
 > - **不需要 MCP 的 worker（如纯正文修订）务必 `--strict-mcp-config --mcp-config <empty>` 关掉 MCP**，避免误触发付费 API（codebuddy-spawn.sh 已默认关；见 §6.7 + DEC-037）。
 > - 只有明确要用法律检索 / 工商查询的 worker 才开 MCP，且要知道在花付费额度。
 
@@ -329,9 +329,9 @@ MCP 配置也支持写入 `~/.codebuddy/mcp.json`，CLI 和桌面端共用。
 
 ### 6.1 SDK 环境变量冲突（类似 QoderWork）
 
-WorkBuddy 桌面端运行时注入的 hooks 和 permission 环境变量不影响 CLI 独立运行。CLI 直接从命令行启动时不会走 SDK 模式，**无需像 QoderWork 那样清除环境变量**。已验证 CLI 在独立终端中可直接运行。
+qodebuddy 桌面端运行时注入的 hooks 和 permission 环境变量不影响 CLI 独立运行。CLI 直接从命令行启动时不会走 SDK 模式，**无需像 QoderWork 那样清除环境变量**。已验证 CLI 在独立终端中可直接运行。
 
-但如果从 WorkBuddy 桌面端的"内置终端"或 SDK 模式下启动，可能会遇到类似问题。建议始终在干净终端/tmux session 中运行 CLI worker。
+但如果从 qodebuddy 桌面端的"内置终端"或 SDK 模式下启动，可能会遇到类似问题。建议始终在干净终端/tmux session 中运行 CLI worker。
 
 ### 6.2 权限与安全
 
@@ -349,7 +349,7 @@ codebuddy -p -y "写一个文件到 /tmp/test.txt"
 
 ### 6.3 额度共享
 
-CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI 消耗的 token 额度从同一账户扣除，不会独立计费。
+CLI 和 qodebuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI 消耗的 token 额度从同一账户扣除，不会独立计费。
 
 ### 6.4 会话管理
 
@@ -362,12 +362,12 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 
 多个 CLI 实例共享同一账户额度，需注意并发控制和配额分配。建议通过 SKILL.md 的 Wave-Based Orchestration 管理 provider slot。
 
-**2026-06-26 并发实测（v0.10.7 cross-model eval，历史观察）：** 5 个 codebuddy worker 同时并发抢 WorkBuddy 共享额度时，`hy3-preview-agent` 单 run 耗时曾显著拉长（preview 模型对共享额度竞争敏感）。其余模型（kimi/deepseek/glm-5.1/glm-5v-turbo）也有不同程度的变慢。
+**2026-06-26 并发实测（v0.10.7 cross-model eval，历史观察）：** 5 个 codebuddy worker 同时并发抢 qodebuddy 共享额度时，`hy3-preview-agent` 单 run 耗时曾显著拉长（preview 模型对共享额度竞争敏感）。其余模型（kimi/deepseek/glm-5.1/glm-5v-turbo）也有不同程度的变慢。
 
 > **2026-07-08 校正**：早期把 `hy3-preview-agent` 当"限时免费档"+ "取消 ≤3 并发限制" 是基于错误假设（用户复核确认该档**有消耗额度**）。**已从 default_models 移除**，不再享受特殊待遇；本段硬约束（≤3 并发）按通用建议适用所有 codebuddy 模型。若未来再开放为真免费档，再单独评估并发策略。
 
 通用建议（适用所有 codebuddy 模型与跨 backend）：
-- **codebuddy 同账户并发建议 ≤ 3**（保守基线，跨模型通用）；超过时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 WorkBuddy 账户上。
+- **codebuddy 同账户并发建议 ≤ 3**（保守基线，跨模型通用）；超过时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 qodebuddy 账户上。
 - 高倍率模型（`opus` / `sonnet` 等）单独给一个低并发 slot，避免被其它 worker 拖垮。
 - 评测 fan-out 场景尤其要遵守：12 模型同 backend 并发会把共享额度打满，导致批数/耗时失真，污染 cross-model 经济性对比（见 `eval-harness` cross-model 评测方法论的"经济性对比要在额度不竞争时测"）。
 
@@ -383,7 +383,7 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 
 观察到的行为：
 
-- `--model kimi-k2.6` 可正常调用，交互界面显示 `Kimi-K2.6` 和 WorkBuddy internal usage billing。
+- `--model kimi-k2.6` 可正常调用，交互界面显示 `Kimi-K2.6` 和 qodebuddy internal usage billing。
 - 当前 `codebuddy --help` 已列出 `kimi-k2.6` / `kimi-k2.7`；早期版本 help 可能滞后，仍可用短 smoke test 确认模型路由。
 - r2 bootstrap 曾出现内部 shell/write 工具长时间挂起。若 1-2 分钟没有 `STATUS.json`，PM 应先 Esc 中断，确认无业务改动后重启 tmux session，再投递 Full Prompt。
 - r3 曾把 review/result 写到主 worktree 并在根目录写 `STATUS.json`。PM 收口时必须同时检查工作目录、报告路径和 `git status --short`，必要时只把允许文件移回对应 worktree 并记录 `pm_notes`。
@@ -405,7 +405,7 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 - 用法：`codebuddy-spawn.sh <model> <model_short> <ch_num> <ch_file> <baseline_branch> <run_name> <prompt_file>`
 - 交互部分（trust prompt / bootstrap / full mission）仍由 PM 用 `tmux send-keys` 发（trust 选 option 1 "Trust folder only"，**不要**信任父目录避免跨 worktree 误读）。
 
-**MCP off（正文修订任务）：** `--strict-mcp-config --mcp-config /tmp/empty-mcp.json`（`/tmp/empty-mcp.json` = `{"mcpServers":{}}`）。修订任务不用 MCP，关掉减前言；避免 WorkBuddy MCP 连接器 GUI 授权弹窗。
+**MCP off（正文修订任务）：** `--strict-mcp-config --mcp-config /tmp/empty-mcp.json`（`/tmp/empty-mcp.json` = `{"mcpServers":{}}`）。修订任务不用 MCP，关掉减前言；避免 qodebuddy MCP 连接器 GUI 授权弹窗。
 
 **render-runtime-profile 已支持 codebuddy / qoderwork-cn（2026-06-26 补齐）：** `scripts/render-runtime-profile.sh` 现支持 `--backend codebuddy` 和 `--backend qoderwork-cn`,与 claude-code/codex/opencode 同走统一 spawn 路径。要点:
 - codebuddy: 默认二进制 `/Applications/WorkBuddy.app/.../codebuddy`,batch 恒加 `-y`(headless 要求),`--no-mcp` 注入 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`,`--dangerously-skip-permissions` 在交互式也加 `-y`。
@@ -449,7 +449,7 @@ tmux new-session -d \
 ### 7.3 使用 worktree 隔离（原生支持）
 
 ```bash
-# WorkBuddy/CodeBuddy 原生支持 --worktree（自动创建 git worktree + 可选 tmux）
+# qodebuddy 原生支持 --worktree（自动创建 git worktree + 可选 tmux）
 codebuddy --worktree feature/legal-research --tmux -p "任务描述" -y
 ```
 
@@ -513,7 +513,7 @@ bash scripts/spawn-worker.sh \
 
 ### 7.7 HTTP 服务模式（REST API + Web UI）
 
-WorkBuddy CLI 支持启动 HTTP 服务，适合需要 REST API 集成的场景：
+qodebuddy CLI 支持启动 HTTP 服务，适合需要 REST API 集成的场景：
 
 ```bash
 # 启动 HTTP 服务（含 Web UI、REST API、ACP 协议）
@@ -527,12 +527,12 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 
 | 场景 | 推荐度 | 理由 |
 |------|--------|------|
-| 复用 WorkBuddy 额度的 coding worker | 高 | 自动继承 GUI 登录态，零配置 |
-| 法律文书分析/合同审阅 | 高 | 负载 WorkBuddy 法律 Skills |
+| 复用 qodebuddy 额度的 coding worker | 高 | 自动继承 GUI 登录态，零配置 |
+| 法律文书分析/合同审阅 | 高 | 负载 qodebuddy 法律 Skills |
 | 需要 MCP 工具链的任务 | 高 | 支持 --mcp-config 加载飞书/腾讯文档/元典等 |
 | 多 Worker 并行编排 | 高 | 原生 --worktree + --tmux + --bg |
 | 对接第三方模型降成本 | 高 | 通过环境变量/--settings 灵活切换 provider |
-| 长上下文深度推理 | 中 | 取决于你的 WorkBuddy 套餐和模型选择 |
+| 长上下文深度推理 | 中 | 取决于你的 qodebuddy 套餐和模型选择 |
 | 需要 ACP 协议集成的场景 | 中 | `--serve` 模式支持 ACP，但 CLI 无独立 ACP 子命令 |
 | 纯本地/离线推理 | 低 | 无内置本地模型支持，需依赖 API |
 
@@ -543,13 +543,13 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 - **权限模式**：**必须** `--permission-mode bypassPermissions`（`acceptEdits` 仍卡权限，`-y` 被覆盖；参考 §10.1）；tmux 交互式按自动化强度用 `bypassPermissions`
 - **必加参数**：无头模式下 `-y` 是必须的（等同 Claude Code 的 `--dangerously-skip-permissions`）
 - **checkpoint 兼容**：`codebuddy` 本身不产生 `STATUS.json`，需要在 worker prompt 中明确要求 worker 自行写入 checkpoint 三件套，或靠 git status + 文件系统巡检兜底
-- **额度监控**：目前没有 CLI 方式查询剩余额度，需要登录 WorkBuddy 桌面端查看
+- **额度监控**：目前没有 CLI 方式查询剩余额度，需要登录 qodebuddy 桌面端查看
 - **参数相似度**：与 Claude Code 的参数体系高度兼容，SKILL.md 中 Claude Code worker 的大部分模板可直接迁移，仅需将 `claude` 替换为 `codebuddy` 并调整少量参数名（如 `--allowed-tools` → `--allowedTools`、`--disallowed-tools` → `--disallowedTools`）
 
 ### 9.1 Worker Prompt 模板
 
 ```markdown
-你是 WorkBuddy CLI worker，运行在无头批处理模式。
+你是 qodebuddy CLI worker，运行在无头批处理模式。
 你的任务是：[具体任务描述]
 
 ## 工作规范
@@ -566,7 +566,7 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 
 ### 9.2 与 Claude Code Worker 的关键差异
 
-| 差异点 | Claude Code | WorkBuddy CLI |
+| 差异点 | Claude Code | qodebuddy CLI |
 |--------|-------------|---------------|
 | 二进制名 | `claude` | `codebuddy` |
 | 认证方式 | API Key / OAuth | 桌面端登录态自动继承 |
@@ -707,7 +707,7 @@ codebuddy 有**两层安全门**：
 Do you want to proceed?
   1. Yes
 > 2. Yes, and don't ask again for session (shift + tab)
-  3. No, and tell CodeBuddy what to do differently (escape)
+  3. No, and tell qodebuddy what to do differently (escape)
 ```
 
 headless worker 无人应答，卡住。
@@ -843,7 +843,7 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
   ```
 - PM 第一次该做：派 captcha 类 worker 时，在 prompt 里点名 `../captcha-auto/`，并明确"失败 ≤3 次 + 退避 + 降级 JSON"，避免 worker 自写 VL 又撞 429。
 
-## 14. CodeBuddy tmux spawn 实测改进（2026-07-08 三轮 spawn 验证）
+## 14. qodebuddy tmux spawn 实测改进（2026-07-08 三轮 spawn 验证）
 
 > 2026-07-08 在三个不同形态的 spawn 任务（多步文本编辑 / SVG 生成 / CLI 研究调研）上各跑一轮，提炼出本节。**本节是 §10（2026-07-05 五轮实测）的补强**——§10 已经定下 bypassPermissions + 重发 Enter + PM 替 commit 的基调，本节聚焦 spawn 投递阶段的三个具体卡点（权限机制 / Enter 提交 / session 断流）和对应的顺跑配置。**所有派 codebuddy worker 的 PM 必读**。
 
@@ -888,7 +888,7 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
 
 ### 14.4 原生替代：`--worktree --tmux` 对比测建议
 
-CodeBuddy CLI 原生支持 `--worktree --tmux`（§7.3），可以替代"spawn-worker.sh tmux + launch.sh"这套手工组合。**建议对比测**：
+qodebuddy CLI 原生支持 `--worktree --tmux`（§7.3），可以替代"spawn-worker.sh tmux + launch.sh"这套手工组合。**建议对比测**：
 
 - 现有路径（spawn-worker.sh + launch.sh + bypassPermissions）：PM 控制力强（worktree 路径 / branch / base ref / METADATA 全自定义），但步骤多（写 launch.sh + spawn + trust-auto + permission_auto + 投递 prompt + 重发 Enter）。
 - 原生路径（`codebuddy --worktree <name> --tmux`）：codebuddy 自己建 worktree + tmux session，理论上省 trust / permission 两道手工框；但 PM 对 worktree 路径 / branch 命名 / session 命名的控制力弱，`METADATA.json` / `STATUS.json` 还得 PM 自己补。
@@ -906,7 +906,7 @@ CodeBuddy CLI 原生支持 `--worktree --tmux`（§7.3），可以替代"spawn-w
 ---
 
 > **版本记录**：
-> - 2026-07-08（第七次更新）：新增 §14「CodeBuddy tmux spawn 实测改进」——基于三轮 spawn 任务（多步文本 / SVG / CLI 调研）补强 §10。三个具体卡点：①**权限机制坑**——`acceptEdits -y` 只放行 edit，读 worktree 外 / 特殊路径仍弹框（`-y` 被 acceptEdits 覆盖、`--add-dir` 只覆盖文件目录）；多步任务权限循环卡死，单步少路径勉强过 → 多步任务必须 bypassPermissions（§14.1）；②**Enter 提交坑**——`send-keys "prompt" Enter` 的 Enter 不提交，prompt 卡 `>` 输入框（与 glm worker 同坑）→ 投递配方：`send-keys -l` + 单独 `send-keys Enter`（或 `C-m`）+ sleep 12-15s + 兜底补一发（§14.2）；③**session 断流坑**——权限框处理后 worker 回 `>` 空等不续跑 → 重发 prompt 或 `codebuddy -c` resume，最佳=bypassPermissions 绕开（§14.3）。另记原生 `--worktree --tmux` 作 long-term 替代方向（§14.4，待对比测，未测前不替换 spawn-worker.sh）。
+> - 2026-07-08（第七次更新）：新增 §14「qodebuddy tmux spawn 实测改进」——基于三轮 spawn 任务（多步文本 / SVG / CLI 调研）补强 §10。三个具体卡点：①**权限机制坑**——`acceptEdits -y` 只放行 edit，读 worktree 外 / 特殊路径仍弹框（`-y` 被 acceptEdits 覆盖、`--add-dir` 只覆盖文件目录）；多步任务权限循环卡死，单步少路径勉强过 → 多步任务必须 bypassPermissions（§14.1）；②**Enter 提交坑**——`send-keys "prompt" Enter` 的 Enter 不提交，prompt 卡 `>` 输入框（与 glm worker 同坑）→ 投递配方：`send-keys -l` + 单独 `send-keys Enter`（或 `C-m`）+ sleep 12-15s + 兜底补一发（§14.2）；③**session 断流坑**——权限框处理后 worker 回 `>` 空等不续跑 → 重发 prompt 或 `codebuddy -c` resume，最佳=bypassPermissions 绕开（§14.3）。另记原生 `--worktree --tmux` 作 long-term 替代方向（§14.4，待对比测，未测前不替换 spawn-worker.sh）。
 > - 2026-07-08（第六次更新）：系统校正删除 `hy3-r1` + 移除过时 ⚠️ 标注——① §4.1 表删除 `hy3-r1` 行（含档位速记 + bash 示例 + 常用策略 + §4.1 末尾复核提醒）；② §4.1 表 + 档位速记 + 常用策略 + bash 示例中 `deepseek-v4-pro/flash` 的 ⚠️ 不可用标注**移除**（2026-07-08 第三轮 smoke test 8 个模型全跑通：`Model: Deepseek-V4-Pro / Provider: DeepSeek` + `Model: Deepseek-V4-Flash / Provider: Deepseek` + `Model: Kimi-K2.7-Code / Provider: Moonshot AI` + 4 个 qoderwork-cn 模型）；③ personal config 的 `_comment` / `tier_note` / `notes` 同步校正（删除 hy3-r1 提及 + 删除 deepseek ⚠️ + 加 4 个 smoke test 验证证据）；④ §4.1 表 kimi-k2.7 加 smoke test 标注；⑤ 常用策略段补 deepseek-v4-pro/flash 为次选。
 > - 2026-07-08（第五次更新）：用户决策多 backend 偏好结构落地——personal config 的 `main_force.task_routing` 改 Claude Code 第三方 provider：`high_end=glm-5.2` / `simple_multimodal=minimax-m3` / `default=glm-5.1` / `mid_tier=MiniMax-M2.7`（走 `claude-provider-registry`，anthropic-compatible lowercase 命名）；`backend_model_routing.qoderwork-cn.default_models` 改用 `qoderclicn --list-models` 实际输出的首字母大写名 `Qwen3.7-Max` / `Qwen3.7-Plus` / `DeepSeek-V4-Pro` / `DeepSeek-V4-Flash`（4 档，无 Qwen3.6-Flash），`discount_window.models_in_window` 同步更新；`codex_policy.fallback_when_blocked` 改 `glm-5.2` / `minimax-m3`（不回落 deepseek-v4 因当前账户 400）；notes 段加「多 backend 偏好总览」表 + Claude Code 命名规则说明。**注**：references/07 §4 的 `qmodel_latest` 等短码与本 personal config 的直接真实名不一致——PM 派 qoderwork worker 时以 personal config 为准（直接首字母大写名）；07 §4 的短码可能是历史/抽象层映射，待 07 文档下次迭代校正。
 > - 2026-07-08（第四次更新）：① 用户精简 codebuddy default_models：从 `hy3/kimi-k2.7/glm-5.2/kimi-k2.6/minimax-m3` 5 档缩到 `hy3/deepseek-v4-pro/deepseek-v4-flash/kimi-k2.7` 4 档（kimi-k2.6 / minimax-m3 / glm-5.2 移除；deepseek-v4-pro/flash 保留并标 ⚠️ 当前账户实测不可用）；② smoke test 验证 `--effort <level>` 对 hy3 部分生效（low→max 形式化符号增强，结论不变），§3.1 加 `--effort` 行 + §4.1 hy3 行加 effort 调节说明；③ 多 backend 偏好结构梳理：codebuddy / qoderwork-cn 走 `backend_model_routing`，Claude Code 走 `main_force.task_routing` + provider registry，不应混入 backend_model_routing。
@@ -914,5 +914,5 @@ CodeBuddy CLI 原生支持 `--worktree --tmux`（§7.3），可以替代"spawn-w
 > - 2026-07-08（第二次更新）：smoke test 三档实际跑通发现关键差异——① `hy3-r1` 当前账户实测 **400 不可用**（server: `service info not found`），从推荐默认移除；② 服务器返回的真实可用列表仅 8 个模型（`auto/hy3/glm-5.2/glm-5.1/glm-5v-turbo/minimax-m3/kimi-k2.7/kimi-k2.6`），**deepseek-v4-flash/pro 当前账户实际不可用**——§4.1 表与「常用策略」段同步校正；③ §6.5 `hy3-preview-agent` 并发硬限制取消（用户决策：当前免费档不限并发，按需派发）；④ §7.5 示例代码移除 `hy3-r1` 命令。
 > - 2026-07-08（首次）：新增腾讯混元（Hunyuan）三档模型支持。§4.1 表加入 `hy3` / `hy3-r1` / `hy3-preview-agent`（smoke test 确认 `Provider: 腾讯/混元 (Tencent Hunyuan)`）；新增档位速记卡（基础档 / 推理档 / Agent 预览档，含限时免费提示）；§7.5 多模型路由示例补 Worker D（Hy3 基础档）和 Worker E（hy3-preview-agent 当前免费档）。
 > - 2026-07-05：新增 §12 权限与 scope 控制（基于官方 settings 文档，PreToolUse hook unbypassable）；§11 `--add-dir` 跨目录访问与 permission_auto 兜底。
-> - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。
-> - 2026-06-20：初版，基于 WorkBuddy v2.103.3 CLI 实测编写。
+> - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、qodebuddy checkpoint/path 偏差和 metadata finalize 收口规则。
+> - 2026-06-20：初版，基于 qodebuddy v2.103.3 CLI 实测编写。

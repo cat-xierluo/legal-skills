@@ -962,7 +962,7 @@ permission_auto() {
     #   Do you want to proceed?
     #     1. Yes
     #   > 2. Yes, and don't ask again for session (shift + tab)
-    #     3. No, and tell CodeBuddy what to do differently (escape)
+    #     3. No, and tell qodebuddy what to do differently (escape)
     if echo "$content" | grep -q "Do you want to proceed"; then
       echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, key '2')"
       tmux send-keys -t "$session" "2"  # v1.18.3: 改用数字键 2（PM 实测 work）

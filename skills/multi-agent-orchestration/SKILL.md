@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.19.0"
+version: "1.20.1"
 ---
 
 # Multi-Agent Orchestration
@@ -26,6 +26,7 @@ PM 是当前负责拆解、派工、验收和收口的主会话，不绑定具�
 - 任务主状态、负责人、依赖管理：用 `cross-agent-coordination`。
 - 分支命名、提交格式、PR merge、push、冲突解决：用 `git-workflow`。
 - 外部 Agent 邮件触发：用对应外部协作/邮件 Skill。
+- **PM 是非 CLI 的 harness 内嵌 agent（ZCode 等）**：本 skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层，硬派 tmux worker 会在 provider env 污染 / Shell permission dialog / silent 卡死三层接连踩坑。ZCode 类 harness 里要做并行，改用其自带 subagent / Agent 工具（无 worktree 隔离，不满足 §2.1 防逃逸门禁，但对只读 / 分析类任务足够）。详见 `references/09-parallel-lessons.md` G24。
 
 ## 2. 执行模式
 
@@ -106,7 +107,7 @@ PM 代理纪律：
 - 只有用户明确要走 Claude 订阅/OAuth 时，才使用 `claude-oauth-*` profile，并清理第三方 provider 环境变量。
 - 需要消耗 Codex / OpenAI 额度或使用 Codex 配置时，worker backend 选 Codex。
 - 需要消耗 OpenCode 已配置的 provider/model，或要使用 OpenCode 的 `opencode acp` 能力时，worker backend 选 OpenCode（worker 走交互式 `opencode --model`，headless `opencode run` 已于 v1.18.0 移除）。
-- 需要消耗 WorkBuddy/CodeBuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
+- 需要消耗 qodebuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
 - 其他 Agent 只要能用一行命令启动，并能在指定 cwd 读写文件，也可作为 custom CLI worker。
 - 需要稳定进程生命周期和人工接管时，优先 `tmux + worktree`；触发 §2.1 时，`tmux + worktree` 是默认执行层，不是可静默跳过的建议。
 - ACP 只在 adapter 已稳定、能输出结构化状态时启用；没有 adapter 时不要为了协议增加不确定性。
@@ -119,7 +120,7 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 | Codex | （见 §2.4 codex_policy） | 用户明确要求时 | 智能高额度贵，默认不主动派 |
 | OpenCode | `opencode:<provider>/<model>` | OpenCode 已有额度 | 按 OpenCode profile |
 | `qoderclicn`（QoderWork CN） | model 见 personal config `backend_model_routing.qoderclicn` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | SDK 变量需清理 |
-| `codebuddy`（WorkBuddy/CodeBuddy） | model 见 personal config `backend_model_routing.codebuddy` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | 默认带 `-y` |
+| `codebuddy`（qodebuddy） | model 见 personal config `backend_model_routing.codebuddy` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | 默认带 `-y` |
 
 > **本表不列具体模型——模型与框架选型是个人偏好**（每人可用的 provider/平台额度不同）。具体 model 全在 `config/orchestration-personal.json`（你的）+ `.example.json`（通用模板）；本表只列 backend 能力 + 模型配置字段位置，缺失时交 PM 按 §2.4 个人偏好读。
 
@@ -193,7 +194,12 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 ## 3. 标准流程
 
 1. **读任务源与项目配置**：若项目提供 `.claude/orchestration.config.json` 或等价配置，先读取 trunk、任务源、验证命令、可复制配置和 hook 边界；再用 `cross-agent-coordination` 判断可执行项、依赖和归属。
-2. **先分组**：不要默认一个 Issue 一个 worker。文件范围重叠、同一章节/模块、存在依赖链的任务应同组顺序执行。
+1.5. **识别任务源形态**：区分本地结构化任务文件（`.agents/tasks.md`、法律项目任务源，字段齐全、依赖显式）和云端 GitHub Issue（他人提交、自由文本、依赖需从 body 推断）。两者分组前预处理不同，详见 `references/11-issue-grouping.md` §5；云端 Issue 必须先 `gh issue list/view` 读 body + labels + 最近 commits 做相关性分析。
+2. **先分组**：不要默认一个 Issue 一个 worker，也不要默认一个 Issue 一个 PR。按三个维度判定任务关系（详见 `references/11-issue-grouping.md`）：
+   - **① 同根因合并**（多 Issue → 一个 worker → 一个 PR）：根因/模块相近、改动位置重叠、都是小修 → 同组顺序执行，共用一个 worktree，合并到一个 PR（`Closes #xx, #yy`，PR 描述用 `templates/issue-batch-pr.md`）。
+   - **② 依赖链顺序**（A 做完 B 才能做）：同组但分步，一个 worker 顺序推进。
+   - **③ 独立并行**（文件范围正交、验收独立）：各自 worktree + worker + PR，放同一 Wave。
+   - 拿不准时默认**分开**：合并的好处有限，硬合的代价（review 难、回滚牵连）却可能很大。
 3. **判定并行安全**：只有文件范围清晰、无共享迁移/锁文件/schema、验收标准独立时才拆成多个 worktree 并行。
 4. **判定是否触发防逃逸门禁**：只要用户或项目明确要求 tmux / 独立 session / 开 worker，按 §2.1 执行；门禁未通过前不写业务代码。
 5. **选择 worker backend 和 runtime profile**：按任务复杂度、当前额度、模型偏好和是否需要独立进程，选择 Claude Code / Codex / OpenCode / custom CLI / shell / ACP。
@@ -345,7 +351,7 @@ PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn
 ### 3.6 captcha 类 worker 必读（踩坑 6）
 
 - gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
-- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-workbuddy-cli-worker.md` §13。
+- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-qodebuddy-cli-worker.md` §13。
 - **硬约束（用户强约束「captcha 一定不要我手动输入」）**：worker 必须**自动**调用 `captcha-auto` skill 完成验证码识别——即由 worker 自己用 `buildVisionRequestBody` 构造请求 + 自管 `fetch` 调用，把识别结果回灌任务流程。**严禁**任何形式的「把验证码贴给用户 / 让用户手动输入 / 等用户键入验证码再继续」。这条约束与 §3.7 配套：PM 派发 prompt 必须把 `captcha-auto` 的**绝对路径**写进「Project Skills」段，worker 才能用 Read 按需读取并自动执行，而不是在独立 cwd 里找不到 skill 而退化成向用户要验证码。
 
 > 本节即「派发 SOP 必带 skill 路径清单」：wave-1 期间 worker A/B/C 都因「不知道 sibling skill 路径」撞 captcha 429 / 花大量时间找路径。根因：非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，**默认看不到 Claude Code skills 目录**，PM 不显式给路径，worker 就只能瞎找或退化成向用户要验证码。本节能范化未来 PM 派活。
@@ -464,7 +470,7 @@ v1.18.4 改动（`scripts/spawn-worker.sh` backend 分支化默认值）：
 
 - PM 在 Wave 计划里**一次写下** `{branch, worktree, session, run-dir}` 四元组，后续所有 `tmux send-keys` / 纠偏 / 收口命令都从该四元组复制，不在中途重新键入或简化。
 - `scripts/spawn-worker.sh` 内部已从单一 source 派生：`BRANCH` → `safe_branch`（worktree-safe）→ 默认 `WORKTREE=.claude/worktrees/tmux-<safe_branch>` → `SESSION_CONTEXT=<worktree>/.claude/agent-sessions/<session>`。PM 只需保证传入的 `--branch` 和 `--session` 本身一致且完整，helper 不会再让 worktree 与 branch 脱钩。
-- cross-model / 评测场景的命名四元组带模型标识（见 `agent-eval-lab` 的 model-aware 命名约定），整条链路用同一个 `variant_slug`，避免 PM 在不同环节用不同简称。
+- cross-model / 评测场景的命名四元组带模型标识（见 `eval-harness` 的 model-aware 命名约定），整条链路用同一个 `variant_slug`，避免 PM 在不同环节用不同简称。
 
 分支名面向远端协作和 PR，必须体现任务语义，不写执行来源。
 
@@ -586,7 +592,7 @@ bash scripts/spawn-worker.sh \
   --command "$WORKER_COMMAND"
 ```
 
-`spawn-worker.sh` 会把 worker 可读镜像写入 Session Context，并把权威授权快照与 SHA-256 receipt 写到 Git common-dir 的 `agent-authority/`（worktree 外）。Claude Code / CodeBuddy / QoderWork 的 PreToolUse settings 从 spawn 进程环境快照取权威授权，直接 Shell 默认 fail-closed：窄生命周期命令或 spawn 发出的精确 `allowed_shell_commands` 才可运行；安装命令还必须精确命中单独的授权清单并带可审计来源。`npx` / `npm exec` / `pnpm dlx` 等可能按需获取依赖的命令不能借 `--verify-cmd` 隐式获权。spawn 只把初始状态记录为 `settings_wired...runtime_unproven`；hook 第一次真实收到 PreToolUse 后才在 PM receipt 同目录原子创建 `*.hook-attested.json`。PM 应以该文件作为 runtime hook 证据，不能把“settings 已写”当“CLI 已执行 hook”。这里约束的是 Agent 的直接工具调用边界；获准执行的项目脚本/测试及仓库 hooks 属于受信项目代码，不宣称提供 OS 容器级沙箱。
+`spawn-worker.sh` 会把 worker 可读镜像写入 Session Context，并把权威授权快照与 SHA-256 receipt 写到 Git common-dir 的 `agent-authority/`（worktree 外）。Claude Code / qodebuddy / QoderWork 的 PreToolUse settings 从 spawn 进程环境快照取权威授权，直接 Shell 默认 fail-closed：窄生命周期命令或 spawn 发出的精确 `allowed_shell_commands` 才可运行；安装命令还必须精确命中单独的授权清单并带可审计来源。`npx` / `npm exec` / `pnpm dlx` 等可能按需获取依赖的命令不能借 `--verify-cmd` 隐式获权。spawn 只把初始状态记录为 `settings_wired...runtime_unproven`；hook 第一次真实收到 PreToolUse 后才在 PM receipt 同目录原子创建 `*.hook-attested.json`。PM 应以该文件作为 runtime hook 证据，不能把“settings 已写”当“CLI 已执行 hook”。这里约束的是 Agent 的直接工具调用边界；获准执行的项目脚本/测试及仓库 hooks 属于受信项目代码，不宣称提供 OS 容器级沙箱。
 
 raw `git push` 不属于安全生命周期命令。PM 同时传 `--git-expected-name`、`--git-expected-email`、`--git-integration-base` 后，spawn 把四个一次性 `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 变量绑定到 worker 进程（不写共享 repo config），并生成一个精确 safe-push command：它调用 `git-workflow` 的身份门禁核验远端 PR base 到当前 HEAD 的每个 commit，只 push 已核验 OID。三项缺一 fail-closed；未生成 safe-push 时 worker 必须报告 push blocked。
 
@@ -641,7 +647,7 @@ Wave 内 N 个 worker 跑 N 轮核验，30 秒内完成；中间不 poll 不 att
 - Claude Code 订阅/OAuth：`env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude --permission-mode auto`。
 - Codex（交互式 TUI）：`codex -a never -s danger-full-access [-m <model>] [-p <profile>]`，PM 用 `tmux send-keys` 投递 prompt。
 - OpenCode（交互式）：`opencode --model <provider/model>`，PM 用 `tmux send-keys` 投递 prompt。
-- WorkBuddy / CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 WorkBuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-workbuddy-cli-worker.md`。
+- qodebuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 qodebuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-qodebuddy-cli-worker.md`。
 - QoderWork CN（`qoderclicn`）：用 `render-runtime-profile.sh --backend qoderwork-cn --model <平台模型> [--no-mcp] [--dangerously-skip-permissions]` 生成；脚本自动前置 `env -u` 清除 SDK 变量、处理含空格的二进制路径。详见 `references/07-qoderwork-cli-worker.md`。
 - 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的交互式命令。
 
@@ -935,11 +941,12 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 Agent CLI worker backend（先看总览，再查具体工具）：
 - `references/06-agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
 - `references/07-qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
-- `references/08-workbuddy-cli-worker.md`：WorkBuddy / CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
+- `references/08-qodebuddy-cli-worker.md`：qodebuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
 
 实战经验与排障：
 - `references/09-parallel-lessons.md`：tmux/Agent Teams 实战坑点。
 - `references/10-agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
+- `references/11-issue-grouping.md`：Issue 分组与合并 PR 判断（三维度骨架：同根因合并 / 依赖链顺序 / 独立并行；本地 task 卡 vs 云端 GitHub Issue 任务源；软阈值与决策树）。
 
 官方文档：
 - Claude Code agent view: `https://code.claude.com/docs/en/agent-view`
@@ -970,6 +977,7 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 - `templates/checkpoint-status.json`：`STATUS.json` 模板。
 - `templates/checkpoint-result.md`：完成/失败结果摘要模板。
 - `templates/checkpoint-patch-summary.md`：PR review 用 diff 摘要模板。
+- `templates/issue-batch-pr.md`：多 Issue 合并 PR 描述模板（维度① 同根因合并时使用）。
 
 ## 11. 评估与验收
 

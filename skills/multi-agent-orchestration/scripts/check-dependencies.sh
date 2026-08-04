@@ -217,7 +217,7 @@ for backend in "${CHECK_BACKENDS[@]}"; do
       ;;
     codebuddy)
       echo "DEPENDENCY_CHECK: backend=codebuddy"
-      check_optional_cmd codebuddy "WorkBuddy/CodeBuddy worker backend"
+      check_optional_cmd codebuddy "qodebuddy worker backend"
       check_app_bundle_binary codebuddy \
         "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
       ;;
