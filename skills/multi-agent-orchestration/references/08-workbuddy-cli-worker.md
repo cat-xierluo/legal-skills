@@ -369,7 +369,7 @@ CLI 和 WorkBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 通用建议（适用所有 codebuddy 模型与跨 backend）：
 - **codebuddy 同账户并发建议 ≤ 3**（保守基线，跨模型通用）；超过时优先**跨 provider 分流**（一部分走 codebuddy 平台额度，一部分走 claude-code 第三方 provider 或 qoderwork 免费 Qwen 额度），而不是硬压在单一 WorkBuddy 账户上。
 - 高倍率模型（`opus` / `sonnet` 等）单独给一个低并发 slot，避免被其它 worker 拖垮。
-- 评测 fan-out 场景尤其要遵守：12 模型同 backend 并发会把共享额度打满，导致批数/耗时失真，污染 cross-model 经济性对比（见 `agent-eval-lab` cross-model 评测方法论的"经济性对比要在额度不竞争时测"）。
+- 评测 fan-out 场景尤其要遵守：12 模型同 backend 并发会把共享额度打满，导致批数/耗时失真，污染 cross-model 经济性对比（见 `eval-harness` cross-model 评测方法论的"经济性对比要在额度不竞争时测"）。
 
 ### 6.6 2026-06-21 书稿 worker 实测
 
