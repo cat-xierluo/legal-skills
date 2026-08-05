@@ -518,6 +518,7 @@ class SecurityAnalyzer:
         credential_exposure = self._detect_credential_exposure()  # 凭据暴露面检测
         permission_decl = self._detect_permission_declaration()  # 权限声明缺失检测
         context_match = self._detect_context_mismatch()  # 描述-能力上下文匹配
+        self_update_persist = self._detect_self_update_and_persistence()  # 自更新/持久化/外传透明度
 
         # 计算风险汇总
         risk_summary = self._calculate_risk_summary()
@@ -534,6 +535,7 @@ class SecurityAnalyzer:
             'credential_exposure': credential_exposure,
             'permission_declaration': permission_decl,
             'context_mismatch': context_match,
+            'self_update_persistence': self_update_persist,
             'findings': self._serialize_findings(),
         }
 
@@ -1008,6 +1010,128 @@ class SecurityAnalyzer:
         if result['findings']:
             result['warnings'].append(
                 f"发现 {len(result['findings'])} 处凭据暴露面风险"
+            )
+        return result
+
+    def _detect_self_update_and_persistence(self) -> Dict:
+        """检测自更新供应链风险与静默持久化/外传缺用户告知（参考 NVIDIA SkillSpector）
+
+        覆盖 SkillSpector 对 yuandian-law-search 等综合检索类 skill 报的核心问题：
+        1) 自更新/远程代码拉取：文档或脚本描述从 GitHub/远程下载并替换本地文件
+        2) 静默持久化：自动写文件落盘但 SKILL.md 无"会写文件/可关闭"明示
+        3) 外传敏感文本无警示：API 发送用户文本但文档无隐私/脱敏提示
+
+        注意：本方法只报告透明度缺口，不判定功能本身违规——外传检索、归档落盘
+        对检索类 skill 是必要能力，关键在是否向用户说清。
+        """
+        result = {'findings': [], 'warnings': []}
+        skill_md = self.repo_path / 'SKILL.md'
+        if not skill_md.exists():
+            return result
+        try:
+            skill_content = skill_md.read_text(encoding='utf-8', errors='ignore')
+        except Exception:
+            return result
+
+        # --- 1) 自更新 / 远程代码拉取检测（仅扫描 SKILL.md 当前能力声明，排除历史记录文档） ---
+        # 自更新属历史叙述的 CHANGELOG/DECISIONS 不参与判定，避免"已移除"记录被误报。
+        skill_only = skill_content
+        self_update_patterns = [
+            r'do-update', r'check-update', r'自更新', r'自动更新',
+            r'raw\.githubusercontent\.com', r'从 GitHub .*(下载|更新)',
+            r'下载.*MANIFEST.*替换', r'自动检测.*版本.*GitHub',
+        ]
+        for pat in self_update_patterns:
+            m = re.search(pat, skill_only, re.IGNORECASE)
+            if m:
+                # 上下文含"移除/删除/已废弃/不执行/禁止"等否定词则视为已清理或反向声明，不报
+                ctx_start = max(0, m.start() - 40)
+                ctx = skill_only[ctx_start:m.start()]
+                if re.search(r'移除|删除|已废弃|弃用|不再|取消|不执行|不安装|禁止|不提供|不支持', ctx):
+                    continue
+                result['findings'].append({
+                    'file': 'SKILL.md',
+                    'line': 0,
+                    'code': pat,
+                    'severity': 'high',
+                    'message': 'SKILL.md 描述从远程（GitHub 等）自动下载并替换本地代码，'
+                               '构成供应链风险：上游/传输链路被篡改可能导致拉取攻击者控制的代码',
+                })
+                break  # 同一条问题不重复报
+
+        # --- 2) 静默持久化检测：扫描脚本是否自动写文件，且 SKILL.md 未明示"会写文件/可关闭" ---
+        writes_files = False
+        code_exts = {'.py', '.js', '.sh', '.ps1'}
+        for ext in code_exts:
+            for fp in self.repo_path.rglob(f'*{ext}'):
+                if any(exc in fp.parts for exc in self.exclude_dirs):
+                    continue
+                try:
+                    txt = fp.read_text(encoding='utf-8', errors='ignore')
+                    if re.search(r'write_text|open\([^)]*,\s*[\'"]w|Path\([^)]*\)\.write|'
+                                 r'\.dump\(|\.to_csv|os\.mkdir|Path\.mkdir', txt):
+                        writes_files = True
+                        break
+                except Exception:
+                    pass
+            if writes_files:
+                break
+
+        if writes_files:
+            # SKILL.md 是否明示了"会写文件"且提供关闭方式
+            disclosed = re.search(r'归档|落盘|写入|write|报告.*副本|--no-report|--no-cwd-report|'
+                                  r'archive/', skill_content, re.IGNORECASE)
+            has_opt_out = re.search(r'--no-report|--no-cwd-report|可关闭|可跳过|skip',
+                                    skill_content, re.IGNORECASE)
+            if not disclosed:
+                result['findings'].append({
+                    'file': 'SKILL.md',
+                    'line': 0,
+                    'code': 'auto file write without disclosure',
+                    'severity': 'medium',
+                    'message': '脚本会自动写文件（归档/报告），但 SKILL.md 未向用户明示会落盘及其路径，构成静默持久化风险',
+                })
+            elif not has_opt_out:
+                result['findings'].append({
+                    'file': 'SKILL.md',
+                    'line': 0,
+                    'code': 'auto file write without opt-out',
+                    'severity': 'low',
+                    'message': '脚本会自动写文件且 SKILL.md 已明示，但未提供关闭/跳过开关（如 --no-report），用户无法禁用持久化',
+                })
+
+        # --- 3) 外传敏感文本无隐私警示 ---
+        sends_external = False
+        for ext in {'.py', '.js'}:
+            for fp in self.repo_path.rglob(f'*{ext}'):
+                if any(exc in fp.parts for exc in self.exclude_dirs):
+                    continue
+                try:
+                    txt = fp.read_text(encoding='utf-8', errors='ignore')
+                    if re.search(r'requests\.(post|get)|api_post|api_get|fetch\(|'
+                                 r'urllib.*request|httpx\.(post|get)', txt, re.IGNORECASE):
+                        sends_external = True
+                        break
+                except Exception:
+                    pass
+            if sends_external:
+                break
+
+        if sends_external:
+            priv_warn = re.search(r'脱敏|敏感|隐私|请勿.*分享|勿.*提交|保密|最小化|minim',
+                                  skill_content, re.IGNORECASE)
+            if not priv_warn:
+                result['findings'].append({
+                    'file': 'SKILL.md',
+                    'line': 0,
+                    'code': 'external send without privacy warning',
+                    'severity': 'medium',
+                    'message': '脚本向外部平台发送用户查询/文本，但 SKILL.md 未给出隐私与脱敏警示，提交含案卷/客户信息的文本存在外泄风险',
+                })
+
+        if result['findings']:
+            result['warnings'].append(
+                f"发现 {len(result['findings'])} 处自更新/持久化/外传透明度风险"
             )
         return result
 
