@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v0.3.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；新增本地归档与增量同步（scripts/sync.py）；新增部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）|
+| 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v0.7.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）|
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
 | 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
@@ -164,6 +164,15 @@
 <td style="text-align:center">v1.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/douyin-batch-download-1.8.0.zip">下载</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/dingtalk-minutes/"><strong>dingtalk-minutes</strong></a></td>
+<td>工具·会议</td>
+<td style="word-break:break-word">基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频地址；本地归档与增量同步（archive 按 YYMMDD_标题 命名，index.json 记录同步状态）；镜像 transcript/summary/todos 到外部文件夹</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.7.0</td>
+<td style="text-align:center">待发布</td>
+<td>需安装 dws CLI + 组织开启 CLI 访问开关 + 个人扫码授权</td>
 </tr>
 </tbody>
 </table>
