@@ -29,6 +29,7 @@ Context:
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
 - If cwd, branch, or worktree isolation is wrong, write `{{session_context_path}}/STATUS.json` with `status=blocked`, `phase=bootstrap`, the mismatch details, and stop. Do not implement in the PM/main workspace.
+- **STATUS/RESULT path sanity（v1.20.3 Task-030，W2 撞坑：写错位置 = done 信号无效）**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 必须在 `$(pwd)/.claude/agent-sessions/<your-session-id>/` 下，**不能**写到 skill 内部目录（如 `skills/<skill>/STATUS.json`）。Bootstrap Task 第 1 步前先 `mkdir -p "$(pwd)/.claude/agent-sessions/<session-id>"`，写 STATUS 时用 `pwd` 验证路径 = `"$(pwd)/.claude/agent-sessions/<session-id>/STATUS.json"`。如果 STATUS 写错位置（不在 `.claude/agent-sessions/` 下），即便 `status="done"` 也**无效**——sentinel 监测的是 session context 路径，sentinel 不会 exit，PM 不会被唤醒。
 
 Task:
 1. 只创建 `{{session_context_path}}/STATUS.json`。
@@ -132,7 +133,8 @@ Process:
 7. Verify: run the commands below and record results.
    - Before any dependency-install command, confirm it exactly matches `Authorized Install Commands`; otherwise report BLOCKED instead of running it.
    - Before any Shell command outside the narrow lifecycle set, confirm it exactly matches `Allowed Shell Commands`; otherwise request PM authority instead of rewriting/encoding it to evade the hook.
-8. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
+8. **Commit-Verify hard constraint（v1.20.3 Task-029，W2 撞坑：worker LLM 幻觉 "done"）**：commit 前必跑 Verify（step 7）**全部 PASS**；commit 完成后立即跑 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD`，确认改动文件数 / 行数与意图一致（不允许 "commit message 说改了 N 文件但 git diff 显示空" 或 "改动了破坏 smoke 的核心函数但 verify 没检出"）。如果 verify 不全 PASS 或 git diff 与意图不符，**不要**写 `status="done"`——fix 后重跑。LLM 幻觉 "完成" 是真实风险：commit 描述 ≠ 实际改动会破坏 smoke / 错位置写 STATUS，最终 PM 收口时才发现（v1.20.2 W2 实战：`64cd3d7` 改了 4 文件但破坏 `permission_auto` 数字键 `'2'` send-keys + 错位置写 `skills/.../STATUS.json` + pane 说 done 但核心修复未生效）。
+9. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
 9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel's status machine matches the literal string `done` (defensively also `completed` / `finished` / `complete`, but **never rely on synonyms**). If you write `completed` or `finished` instead of `done`, the sentinel will not exit and PM will not be re-invoked via harness task-notification — the worker is effectively orphaned until `--max-wait 7200s` timeout. See DEC-060 for the Wave 6 finding.
 
 Worker Type Rules:

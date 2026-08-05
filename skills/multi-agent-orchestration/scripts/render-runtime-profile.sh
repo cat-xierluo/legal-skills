@@ -198,6 +198,51 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# v1.20.3 Task-027：--settings / --provider-registry 相对路径自动转绝对（防 worktree cwd 错配）。
+# PM 跑 render 时 cwd 不一定是 settings 所在目录；worker 跑在 worktree 根（legal-skills 仓根），
+# 相对路径找不到 + config/*.json 被 gitignore（worktree checkout 不含）。
+# 解析顺序：相对 render cwd → 相对 SCRIPT_DIR → 相对 SKILL_DIR/config/ → 报错。
+SKILL_DIR="$(dirname "$SCRIPT_DIR")"
+resolve_settings_path() {
+  local var_name="$1"
+  local path="${!var_name}"
+  [ -z "$path" ] && return 0
+  # URL 跳过（远程资源）
+  case "$path" in
+    http://*|https://*|file://*) return 0 ;;
+  esac
+  # 绝对路径：验证存在（不存在报错，避免 worker 跑时找不到）
+  case "$path" in
+    /*)
+      if [ ! -f "$path" ]; then
+        echo "ERROR: $var_name=$path absolute path not found" >&2
+        exit 64
+      fi
+      return 0
+      ;;
+  esac
+  # 相对路径：fallback 解析（cwd → SCRIPT_DIR → SKILL_DIR/config/）
+  # 1. 相对 render cwd
+  if [ -f "$path" ]; then
+    printf -v "$var_name" '%s' "$(cd "$(dirname "$path")" 2>/dev/null && pwd || echo "$(dirname "$path")")/$(basename "$path")"
+    return 0
+  fi
+  # 2. 相对 SCRIPT_DIR
+  if [ -f "$SCRIPT_DIR/$path" ]; then
+    printf -v "$var_name" '%s' "$SCRIPT_DIR/$path"
+    return 0
+  fi
+  # 3. 相对 SKILL_DIR/config/（settings 常见位置：<skill>/config/）
+  if [ -f "$SKILL_DIR/config/$path" ]; then
+    printf -v "$var_name" '%s' "$SKILL_DIR/config/$path"
+    return 0
+  fi
+  echo "ERROR: $var_name=$path not found; tried cwd / SCRIPT_DIR / SKILL_DIR/config/, please use absolute path" >&2
+  exit 64
+}
+resolve_settings_path SETTINGS
+resolve_settings_path PROVIDER_REGISTRY
+
 [ -n "$BACKEND" ] || { usage; exit 64; }
 
 case "$MODE" in

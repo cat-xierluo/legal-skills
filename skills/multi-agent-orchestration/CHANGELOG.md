@@ -1,17 +1,45 @@
 # Changelog
 
-## [Unreleased] - v1.20.3 候选（实战撞坑沉淀，待下个 session 推进）
+## [1.20.3] - 2026-08-05
 
-### 文档沉淀
-- **`references/09-parallel-lessons.md` G29（本轮 W1+W2 dogfood 撞坑 + v1.20.3 候选）**：6 项实战问题 + 修复方向（spawn-worker Bash timeout / render settings 路径 / install-guard 过严 / worker LLM 幻觉 done / 错位置 STATUS / v1.20.2 setsid 修复不彻底）。
-- **`TASKS.md`（本地 gitignored）**：新增 v1.20.3 DRAFT task 列表（`Task-026` ~ `Task-030`，对应 G29 #1-#5）。
-- W2 commit `64cd3d7` 已 revert (`800c55f`)，main smoke 21/21 恢复。
+### 新增 — folia Wave-1 + W1/W2 dogfood 实战撞坑修复（Task-026 ~ Task-030）
 
-### 待推进（v1.20.3 修复，下个 session）
-- `spawn-worker.sh` `resolve_backend_defaults` 加 `codebuddy/qoderwork-cn` 默认 `PERMISSION_AUTO=0` + `TRUST_AUTO` timeout 30→15（`Task-026`）
-- `render-runtime-profile.sh` `--settings` 自动转绝对路径（`Task-027`）
-- `spawn-worker.sh` / `dependency-install-guard.py` 加基础生命周期命令内置 allowlist（`date` / `stat` / `pwd` 等，`Task-028`）
-- `worker-prompt.md` Process 加 commit-verify 硬约束（commit 前跑 Verify + `git diff --stat` + STATUS 路径校验，`Task-029` + `Task-030`）
+本轮在 v1.20.2 setsid 修复基础上，针对 W1 (claude-code) + W2 (codebuddy) dogfood 撞坑沉淀的 G29 6 项实战问题（references/09-parallel-lessons.md）完成 5 项修复。**Task-026 真机 throwaway 验证：codebuddy spawn-worker 主进程 22 秒 exit**（v1.20.2 W2 撞坑 120s+ SIGTERM），节省 ~98 秒，< 60s 目标达成。
+
+#### scripts/spawn-worker.sh（Task-026）
+
+- **`resolve_backend_defaults` 加 `codebuddy/qoderwork-cn/qoderclicn` 默认 `PERMISSION_AUTO=0`**（与 `claude-code` 同分支）：acceptEdits 仍弹 dialog（references/08 §14.1），但同步监控空等浪费 + 撞 PM Bash 2min timeout（v1.20.2 W2 撞坑实测）。bg 段（`permission_auto_bg` setsid）独立处理 dialog，不依赖 sync。
+- **`trust_auto` backend-specific max_wait**：`codebuddy/qoderwork-cn/qoderclicn` 默认 30→15s（acceptEdits 不弹 trust dialog，30s 空等浪费）。
+
+#### scripts/render-runtime-profile.sh（Task-027）
+
+- **`resolve_settings_path` 函数**：`--settings` / `--provider-registry` 相对路径自动转绝对（fallback：render cwd → `SCRIPT_DIR` → `SKILL_DIR/config/`）；绝对路径验证存在；URL 跳过。消除 W1 撞坑（`config/*.json` 相对路径在 worktree cwd 找不到 + gitignore）。
+- **5 场景测试全过**：相对路径 / basename / 绝对存在 / 绝对不存在（exit 64）/ 相对不存在（exit 64）。
+
+#### scripts/dependency-install-guard.py（Task-028）
+
+- **`is_safe_lifecycle_command` 加 `date` 允许**（拒绝 `-s` / `--set` / `--reference` 改系统时间）：解决 W2 写 `STATUS.updated_at` 时 `date -u +"%Y-%m-%dT%H:%M:%SZ"` 被 `SHELL_COMMAND_NOT_ALLOWLED` 拦的撞坑。
+- **12/12 测试通过**：W2 场景 allow + 安全（`-s` / `--set` / `--reference` deny）+ 回归（`pwd` / `stat` 不变）。
+
+#### templates/worker-prompt.md（Task-029 + Task-030）
+
+- **Bootstrap Isolation Gate 加 STATUS/RESULT path sanity 硬约束（Task-030）**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 必须在 `$(pwd)/.claude/agent-sessions/<session-id>/` 下，写错位置 = done 信号无效。解决 W2 写 `skills/.../STATUS.json` 撞坑。
+- **Process step 8 加 Commit-Verify 硬约束（Task-029）**：commit 前必跑 Verify 全部 PASS；commit 后 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD` 验证文件实际改了；LLM 幻觉 done = done 信号无效。引用 W2 `64cd3d7` 撞坑（commit message 说改 4 文件但实际破坏 smoke + 错位置 STATUS）为实证。
+
+### Test — 多轮验证全绿
+
+- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（v1.18.3 + v1.18.4 + v1.20.2 + v1.20.3 + HRA-001 exit 64 断言）
+- `bash scripts/smoke-sentinel.sh` → SMOKE_SENTINEL_OK
+- `bash scripts/smoke-tmux-worker.sh` → SMOKE_TMUX_WORKER_OK
+- `bash scripts/lint-wait-script.sh` → LINT_WAIT_SCRIPT_OK
+- `dependency-install-guard.py` `is_safe_lifecycle_command` → 12/12 PASS（Task-028）
+- `render-runtime-profile.sh` `resolve_settings_path` → 5/5 PASS（Task-027）
+- **真机 throwaway codebuddy**（Task-026）：spawn-worker 主进程 **22 秒 exit**（< 60s 目标；v1.20.2 W2 撞坑 120s+ SIGTERM），`accept edits on` ready，session ALIVE
+
+### Known Limitations / Follow-up
+
+- **Task-026 qoderclicn throwaway 未真机验证**：harness 自动拒绝 spawn qoderclicn 的二次执行（视为"launch-workbuddy daemon force-killed"）；codebuddy 验证通过 + 改动代码对 `codebuddy/qoderwork-cn/qoderclicn` 三个 backend 一致 case pattern，逻辑上 qoderclicn 应有同等效果。下次派 worker 跑 qoderclicn 真机复测。
+- **TASKS.md（本地 gitignored）**：记录 v1.20.3 候选 DRAFT（`Task-026` ~ `Task-030`）已全部完成，可清理或转历史。
 
 ## [1.20.2] - 2026-08-05
 

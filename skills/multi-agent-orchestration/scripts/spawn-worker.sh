@@ -650,8 +650,12 @@ resolve_backend_defaults() {
     esac
   fi
   if [ "$PERMISSION_AUTO_OVERRIDE" -eq 0 ]; then
+    # v1.20.3 Task-026：codebuddy/qoderwork-cn/qoderclicn 默认 PERMISSION_AUTO=0（只 bg 不 sync）。
+    # acceptEdits 仍弹 dialog（references/08 §14.1），同步监控空等浪费 + spawn-worker 主进程撞 PM Bash 2min timeout
+    # （v1.20.2 W2 实战：trust_auto 30s + permission_auto 60s + checkout ~30s ≈ 120s 撞 120s，被 SIGTERM 后
+    # bg 段未启 → dialog 卡死）。bg 段（permission_auto_bg setsid）独立处理 dialog，不依赖 sync。
     case "$WORKER_BACKEND" in
-      claude-code|claude_code) PERMISSION_AUTO=0 ;;
+      claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn) PERMISSION_AUTO=0 ;;
       *) PERMISSION_AUTO=1 ;;
     esac
   fi
@@ -975,6 +979,10 @@ write_metadata() {
 trust_auto() {
   local session="$1"
   local max_wait=30
+  # v1.20.3 Task-026：codebuddy/qoderwork-cn/qoderclicn 缩短 trust_auto timeout（acceptEdits 不弹 trust dialog，30s 空等浪费）
+  case "$WORKER_BACKEND" in
+    codebuddy|qoderwork-cn|qoderclicn) max_wait=15 ;;
+  esac
   local poll_interval=1
   local waited=0
 

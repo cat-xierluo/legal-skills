@@ -147,6 +147,15 @@ def is_safe_lifecycle_command(command: str) -> bool:
     read_only = {"pwd", "ls", "grep", "cat", "head", "tail", "wc", "stat", "file", "true", "false"}
     if program in read_only:
         return True
+    if program == "date":
+        # v1.20.3 Task-028：仅允许读取时间（拒绝 -s/--set/--reference 改系统时间）。
+        # 解决 worker 写 STATUS.updated_at 时 `date -u +"%Y-%m-%dT%H:%M:%SZ"` 被拦的撞坑
+        # （v1.20.2 W2 实战：`SHELL_COMMAND_NOT_ALLOWLED` 拦 date，worker fallback 跳 STATUS bootstrap）。
+        return not any(
+            arg in {"-s", "--set", "--reference"}
+            or arg.startswith("--reference=")
+            for arg in args
+        )
     if program == "rg":
         return not any(arg == "--pre" or arg.startswith("--pre=") for arg in args)
     if program == "find":
