@@ -31,7 +31,18 @@ function Find-Electron {
 
 $Electron = Find-Electron
 if (-not $Electron) {
+    # 供应链安全：自动从 npm 下载第三方运行时（约 100MB）默认关闭，需显式开启。
+    if (-not $env:WB_CHECKIN_AUTO_INSTALL_ELECTRON) {
+        Write-Output "⚠️ 未检测到 Electron 运行时。"
+        Write-Output "   为降低供应链风险，自动下载默认关闭。请二选一："
+        Write-Output "   1) 手动指定已校验的 Electron：  setup.ps1 -ElectronPath C:\path\to\electron.exe"
+        Write-Output "   2) 确认要从官方 npm 下载（约 100MB），先执行："
+        Write-Output "        $env:WB_CHECKIN_AUTO_INSTALL_ELECTRON=1"
+        Write-Output "      再运行本脚本。"
+        exit 1
+    }
     Write-Output "⚠️ 未检测到 Electron，尝试通过 npm 下载（约 100MB，需要 Node.js）..."
+    Write-Output "   ⚠️ 供应链提示：将从官方 npm registry 下载 electron@37 并执行，请确认网络可信。"
     $npm = Get-Command npm -ErrorAction SilentlyContinue
     if (-not $npm) {
         Write-Output "❌ 未找到 npm。请先安装 Node.js（https://nodejs.org 下载 LTS 版），"

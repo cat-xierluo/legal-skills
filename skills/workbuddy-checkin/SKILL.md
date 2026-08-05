@@ -165,6 +165,35 @@ Linux 需桌面会话 + 系统 keyring（GNOME Keyring / KWallet）。
 
 ## 安全说明
 
-- 本 skill 只操作本机当前登录用户自己的 WorkBuddy 账户，令牌仅发往腾讯官方接口 `copilot.tencent.com`，不上传任何第三方。
-- 令牌仅在内存中使用，不落盘；`logs/` 仅记录签到结果（积分/连续天数），不含令牌。
+> ⚠️ **凭据即账号密码**：本 skill 解密的 `accessToken` 等同你的 WorkBuddy 账号密码，具有高敏感性。请务必遵守以下红线：
+
+- 令牌仅在内存中使用，通过管道立即被签到请求消费，**不写入任何日志文件、不落盘、不回显到终端、不提交到仓库**。
+- `logs/` 仅记录签到结果（积分 / 连续天数 / 成功失败），**绝不含令牌原文**。切勿将日志或脚本输出粘贴分享。
+- 网络访问仅发往腾讯官方接口 `copilot.tencent.com/billing/meter/*`，不上传任何第三方。
+- 解密成功时脚本会向 stderr 打印一行安全提示（不影响 stdout 的 token 管道），便于你确认凭据正在被使用。
 - 请勿用于他人账户、批量注册刷分或任何违反 WorkBuddy 用户协议的用途；使用者自行承担使用风险。
+
+### 为何需要这些能力（上下文说明）
+
+本 skill 自述为"每日签到"，但完整链路需以下能力，均为本机运行、无后端，且对完成签到必不可少：
+
+- **解密本地令牌**：WorkBuddy 桌面端把登录态用 Electron `safeStorage` 加密存于本地 `state.vscdb`，必须解密才能调用官方签到接口。这是签到功能的核心，无法绕过。
+- **Electron 运行时**：执行 `safeStorage.decryptString()` 解密令牌（macOS 命中钥匙串、Windows/Linux 走系统 DPAPI/keyring）。推荐手动指定已校验的 Electron（设 `WB_CHECKIN_ELECTRON`），不依赖自动下载。
+- **python3 回退（默认关闭）**：仅当 `node:sqlite` 不可用时，设 `WB_CHECKIN_ALLOW_PY_FALLBACK=1` 才会调用外部 `python3` 读取会话库。默认关闭以缩小信任边界。
+- **定时任务（crontab / launchd / 任务计划程序）**：用于多时间点幂等补签，脚本本身不写入系统定时，需你显式配置。
+
+### 供应链提示
+
+安装 Electron 默认**不自动下载**（避免静默引入第三方大二进制）。如需自动安装，须显式设置环境变量 `WB_CHECKIN_AUTO_INSTALL_ELECTRON=1` 确认从官方 npm registry 下载 `electron@37`。
+
+## 所需权限
+
+本 skill 运行需以下本地权限，均限定在最小范围：
+
+| 权限 | 范围 | 说明 |
+|------|------|------|
+| 本地代码执行 | 仅本 skill 的 `checkin.sh/.ps1`、`decrypt-token.js`、`setup.sh/.ps1` | 用户手动或定时触发，非后台常驻 |
+| 本地文件读取 | 仅用户目录下的 WorkBuddy `state.vscdb` 会话库 | 读取加密登录态以解密令牌 |
+| 网络访问 | 仅 `copilot.tencent.com` 官方签到接口 | 不访问任何其他域名 |
+| 环境变量读取 | `WB_CHECKIN_*`（Electron 路径、应用名、错峰、回退开关） | 均为本机用户显式配置 |
+| 定时任务 | 由用户显式配置 crontab / launchd / 任务计划程序 | skill 不自动写入系统定时 |

@@ -32,12 +32,26 @@ detect() {
 MODE="${1:-auto}"
 ELECTRON=""
 
+# 供应链安全：自动从 npm 下载第三方运行时（约 100MB）默认关闭，需显式开启。
+# 推荐手动指定已校验的 Electron：setup.sh --electron /path/to/electron
+if [ -z "${WB_CHECKIN_AUTO_INSTALL_ELECTRON:-}" ] && [ "$MODE" = "auto" ]; then
+  echo "⚠️ 未检测到 Electron 运行时。"
+  echo "   为降低供应链风险，自动下载默认关闭。请二选一："
+  echo "   1) 手动指定已校验的 Electron：  setup.sh --electron /path/to/electron"
+  echo "   2) 确认要从官方 npm 下载（约 100MB），先执行："
+  echo "        export WB_CHECKIN_AUTO_INSTALL_ELECTRON=1"
+  echo "      再运行本脚本。"
+  echo "   （手动放置后也可用环境变量 WB_CHECKIN_ELECTRON=<path> 直接运行 checkin.sh）"
+  exit 1
+fi
+
 case "$MODE" in
   auto)
     if ELECTRON="$(detect)"; then
       echo "✅ 已检测到 Electron：$ELECTRON"
     else
       echo "⚠️ 未检测到 Electron 运行时，尝试通过 npm 下载（约 100MB，需要 node/npm）..."
+      echo "   ⚠️ 供应链提示：将从官方 npm registry 下载 electron@37 并执行，请确认网络可信。"
       command -v npm >/dev/null 2>&1 || { echo "❌ 未找到 npm，请先安装 Node.js，或手动放置 Electron 后重试"; exit 1; }
       mkdir -p "$RUNTIME_DIR"
       cd "$RUNTIME_DIR"

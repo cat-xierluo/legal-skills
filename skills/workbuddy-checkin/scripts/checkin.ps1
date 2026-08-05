@@ -9,6 +9,12 @@
 #   powershell -ExecutionPolicy Bypass -File checkin.ps1
 # 定时（示例，每天 09:00，管理员或普通用户均可）：
 #   schtasks /Create /TN WorkBuddyDailyCheckin /TR "powershell -ExecutionPolicy Bypass -File C:\path\checkin.ps1" /SC DAILY /ST 09:00 /F
+#
+# ⚠️ 凭据安全提示：
+#   - 本地令牌（accessToken）等同 WorkBuddy 账号密码，仅在本脚本内存中使用，
+#     通过管道立即消费，不写入日志、不落地、不回显。
+#   - 日志（logs/checkin.log）只记录签到结果（积分/连续天数），不含令牌。
+#   - 切勿将日志、脚本输出粘贴分享或提交到任何仓库。
 # ============================================================
 $ErrorActionPreference = "Continue"
 

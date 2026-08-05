@@ -5,6 +5,13 @@
  * 从 WorkBuddy 桌面端的本地会话数据库（state.vscdb）读取用 Electron safeStorage
  * 加密的 auth session，解密后输出 accessToken，供签到脚本调用后端 API。
  *
+ * ⚠️ 安全警示（务必阅读）：
+ *   - 本脚本输出的 accessToken 等同 WorkBuddy 账号密码，属于高敏感凭据。
+ *   - token 仅通过 stdout 的 `DECRYPT_RESULT:<token>` 单行输出，由调用方（checkin.sh/ps1）
+ *     经管道立即消费；切勿 `tee`/重定向到文件、切勿粘贴分享、切勿提交到任何仓库。
+ *   - 日志只记录签到结果（积分/连续天数），绝不记录 token 原文。
+ *   - 解密成功时会向 stderr 打印一行安全提示（不进入 stdout，不会污染 token 管道）。
+ *
  * 依赖：Electron 运行时（版本建议 >= 30，脚本内使用 node:sqlite 读取数据库）。
  * 运行方式：
  *   env -u ELECTRON_RUN_AS_NODE <electron二进制> decrypt-token.js
@@ -51,7 +58,9 @@ const SESSION_KEYS = [
   'secret://{"extensionId":"tencent-cloud.coding-copilot","key":"planning-genie.new.accessTokencn"}',
 ];
 
-// ---------- 读取 vscdb（node:sqlite 优先，失败回退 python3） ----------
+// ---------- 读取 vscdb（node:sqlite 优先，失败回退 python3，需显式开启） ----------
+// 安全说明：python3 回退会扩展本地执行信任边界（调用外部解释器读取凭据库）。
+// 默认关闭；仅在确需回退时设置 WB_CHECKIN_ALLOW_PY_FALLBACK=1 启用。
 function readValue(dbPath, key) {
   try {
     const { DatabaseSync } = require("node:sqlite");
@@ -60,6 +69,12 @@ function readValue(dbPath, key) {
     db.close();
     return row ? row.value : null;
   } catch (e) {
+    if (process.env.WB_CHECKIN_ALLOW_PY_FALLBACK !== "1") {
+      throw new Error(
+        "无法用 node:sqlite 读取会话数据库，且未开启 python3 回退。" +
+        "如需回退请设置 WB_CHECKIN_ALLOW_PY_FALLBACK=1（会调用外部 python3 解释器）"
+      );
+    }
     // node:sqlite 不可用时，用 python3 读（macOS/Linux 一般自带）
     try {
       const script =
@@ -118,6 +133,11 @@ app.whenReady().then(() => {
     const session = JSON.parse(decrypted);
     const token = session && session.auth && session.auth.accessToken;
     if (token) {
+      // 安全提示走 stderr，不污染 stdout 的 token 管道
+      process.stderr.write(
+        "[安全提示] 已从本地会话解密 accessToken，仅用于 WorkBuddy 官方签到接口；" +
+        "请勿将其写入日志、分享或提交。\n"
+      );
       process.stdout.write("DECRYPT_RESULT:" + token + "\n");
       app.exit(0);
       return;
