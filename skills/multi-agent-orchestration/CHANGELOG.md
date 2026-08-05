@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.20.5] - 2026-08-05
+
+### 改进 — qoderclicn v1.0.45 + codebuddy v2.115.0 模型清单同步
+
+CLI 升级后模型清单大变化，references/07 §4 + references/06 §0/§7.2/§5A + personal example + SKILL §2.4 全部同步实测（`qoderclicn --list-models` + `codebuddy --help --model` 权威输出）。
+
+#### qoderclicn（1.0.24 → 1.0.45）
+
+- **新旗舰 `Qwen3.8-Max`**：`qmodel_latest` alias 仍解析 3.7-Max（没跟 3.8）→ **推荐用具体名 `-m Qwen3.8-Max`**
+- **新增 `GLM-5.2` / `Kimi-K2.7-Code` / `MiniMax-M2.7`**（旧 alias `gm51model`/`kmodel` 映射过时）
+- 模型表从"alias key"改成"`--list-models` 实际名（推荐）+ 旧 alias（兼容过时）"双列
+- 普通终端用：`~/.local/bin/qoderclicn` symlink（指向 .app bundle）+ `qoderclicn login`，之后 `qoderclicn --list-models` / `-m Qwen3.8-Max`
+
+#### codebuddy（2.103.3 → 2.115.0）
+
+- `--model` 权威列表：`auto, hy3, glm-5.2, glm-5.1, glm-5v-turbo, minimax-m3, kimi-k3-1, kimi-k2.7, kimi-k2.6, deepseek-v4-flash, deepseek-v4-pro, custom-local:*`（references/08 §4.1 主力已覆盖；新增 `kimi-k3-1` / `glm-5v-turbo` / `custom-local` 系列）
+- 用户偏好 `hy3` / `deepseek-v4-flash` 仍在 ✓
+
+#### personal example + SKILL §2.4
+
+- `backend_model_routing.qoderwork-cn.default_models`：`["qmodel_latest",...]` → `["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"]`（具体名优先）
+- SKILL §2.4 qoderwork-cn 偏好同步 + "推荐具体名，旧 alias 过时"提示
+
+### Test
+
+- `qoderclicn --list-models` → 10 模型（Qwen3.8-Max 新旗舰确认）；`qoderclicn --version` → 1.0.45
+- `codebuddy --version` → 2.115.0
+- `~/.local/bin/qoderclicn` symlink 普通终端 PATH 可达（`which qoderclicn` + `--version` 确认）
+- 纯文档/配置同步，smoke 不涉及
+
 ## [1.20.4] - 2026-08-05
 
 ### 改进 — CodeBuddy 拼写校正 + ref 08 结构精简

@@ -15,8 +15,8 @@
 | Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） | （按 hermes profile） |
 | Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
 | Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex | （按 gemini profile） |
-| QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `qmodel_latest`、`qmodel`（见下方模型 key 表） |
-| CodeBuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `deepseek-v4-pro`、`deepseek-v4-flash` |
+| QoderWork CLI | 1.0.45 | QoderWork CN.app 内 bin（或 `~/.local/bin/qoderclicn` symlink） | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `Qwen3.8-Max`、`Qwen3.7-Max`（见下方模型表） |
+| CodeBuddy CLI | 2.115.0 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `hy3`、`deepseek-v4-flash`、`deepseek-v4-pro` |
 | Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
 
 > 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §2.4）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
@@ -464,7 +464,7 @@ kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
 | 属性 | 值 |
 |------|-----|
 | 二进制路径 | `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` |
-| 版本 | `2.103.3` |
+| 版本 | `2.115.0`（2026-08-05 复测） |
 | 配置目录 | `~/.workbuddy/` |
 | 自定义模型配置 | `~/.workbuddy/models.json` |
 
@@ -644,16 +644,20 @@ gemini --approval-mode yolo -p "重构这个模块"
 
 ### 7.2 可用模型
 
-| Key | 模型 |
-|-----|------|
-| `qmodel_latest` | Qwen3.7-Max |
-| `qmodel` | Qwen3.7-Plus |
-| `q36fmodel` | Qwen3.6-Flash |
-| `dmodel` | DeepSeek-V4-Pro |
-| `dfmodel` | DeepSeek-V4-Flash |
-| `gm51model` | GLM-5.1 |
-| `kmodel` | Kimi-K2.6 |
-| `mmodel` | MiniMax-M2.7 |
+> 复测：2026-08-05 CLI 1.0.45 `--list-models`。**推荐用具体名**（`-m Qwen3.8-Max`），旧 alias 兼容但映射可能过时。
+
+| `--model` 实际名（推荐） | 旧 alias | 备注 |
+|-----|------|------|
+| `Qwen3.8-Max` | —（新旗舰） | 2026-08 新旗舰，每日免费额度 |
+| `Qwen3.7-Max` | `qmodel_latest` | 上一代旗舰 |
+| `Qwen3.7-Plus` | `qmodel` | |
+| `Qwen3.6-Flash` | `q36fmodel` | |
+| `DeepSeek-V4-Pro` | `dmodel` | |
+| `DeepSeek-V4-Flash` | `dfmodel` | |
+| `GLM-5.2` | `gm51model`（过时，指 5.1） | 2026-08 新增 |
+| `Kimi-K2.7-Code` | `kmodel`（过时，指 K2.6） | 代码档 |
+| `MiniMax-M2.7` | `mmodel` | |
+| `Auto` | — | 自动路由 |
 
 ### 7.3 关键限制
 

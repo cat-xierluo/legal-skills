@@ -46,10 +46,10 @@
       "tier_note": "hy3 = WorkBuddy 平台自定义模型（首选）；deepseek-v4-flash = 平台批量模型（次选）；deepseek-v4-pro 仅作回退（用户偏好不用作主）。"
     },
     "qoderwork-cn": {
-      "_comment": "QoderWork CN CLI（references/07-qoderwork-cli-worker.md）。Qwen3.7-Max / Qwen3.7-Plus / DeepSeek 系列平台额度。",
-      "default_models": ["qmodel_latest", "qmodel", "dmodel_latest", "dmodel"],
-      "use_case": "QoderWork 桌面端登录态 + Qwen/DeepSeek 平台额度（无需 API key）；references/07 §5.1 推荐 qmodel_latest + --permission-mode auto。",
-      "tier_note": "qmodel_latest = Qwen3.7-Max（首选）；qmodel = Qwen3.7-Plus；dmodel_latest/dmodel = DeepSeek 系列（备选）。"
+      "_comment": "QoderWork CN CLI（references/07-qoderwork-cli-worker.md，v1.0.45）。2026-08-05 --list-models：Qwen3.8-Max 新旗舰 + GLM-5.2 / Kimi-K2.7-Code / MiniMax-M2.7。推荐具体名（-m Qwen3.8-Max），旧 alias（qmodel_latest 等）兼容但映射过时。",
+      "default_models": ["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"],
+      "use_case": "QoderWork 桌面端登录态 + 平台额度（无需 API key）；首选 Qwen3.8-Max，references/07 §4/§5.1 推荐具体名 + --permission-mode auto。",
+      "tier_note": "Qwen3.8-Max = 2026-08 新旗舰（首选）；Qwen3.7-Max/Plus = 上一代；DeepSeek-V4-Pro/GLM-5.2/Kimi-K2.7-Code = 备选。旧 alias qmodel_latest 解析 3.7-Max（没跟 3.8），推荐用具体名。"
     }
   },
 
