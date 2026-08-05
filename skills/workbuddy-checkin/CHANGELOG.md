@@ -1,5 +1,17 @@
 # 变更日志
 
+## [1.0.1] - 2026-08-05
+
+### 改进
+
+- 凭据安全：解密成功时向 stderr 输出安全提示（不污染 token 管道）；python3 回退默认关闭，需 `WB_CHECKIN_ALLOW_PY_FALLBACK=1` 启用
+- 安装安全：`setup.sh`/`setup.ps1` 自动 `npm install electron` 默认关闭，需 `WB_CHECKIN_AUTO_INSTALL_ELECTRON=1` 才下载，默认提示手动指定路径并声明供应链风险
+- 文档：SKILL.md 安全说明补强，新增「所需权限」清单与「为何需要这些能力」上下文说明，回应 SkillSpector 审计 findings
+
+### 技术优化
+
+- `checkin.sh`/`checkin.ps1` 头部注释补充凭据安全说明
+
 ## [1.0.0] - 2026-08-05
 
 ### 新增
