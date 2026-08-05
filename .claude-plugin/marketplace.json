@@ -214,7 +214,7 @@
     {
       "name": "md2word",
       "description": "将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准",
-      "version": "1.0.1",
+      "version": "1.1.9",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -520,7 +520,7 @@
     {
       "name": "skill-lint",
       "description": "Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源发现、Ed25519-signed 外部基线与 held-out、逐约束追踪、验证模态与产物阶段匹配、候选绑定运行证据、多轮漂移门禁、业务流和安全风险审查",
-      "version": "2.6.2",
+      "version": "2.7.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -640,7 +640,7 @@
     {
       "name": "patent-download",
       "description": "专利 PDF 批量下载工具。支持多平台（Google Patents 优先），自动处理申请号和公告号格式",
-      "version": "2.6.0",
+      "version": "2.7.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
@@ -657,7 +657,7 @@
     {
       "name": "dingtalk-minutes",
       "description": "基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频，并支持本地归档与增量同步。",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

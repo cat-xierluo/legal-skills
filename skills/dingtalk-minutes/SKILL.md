@@ -3,7 +3,7 @@ name: dingtalk-minutes
 description: 钉钉 AI 听记（妙记）读取封装。当用户要查询/读取 AI 听记的列表、摘要、语音转写原文（逐字稿）、关键词、待办或音频地址时使用。基于 dws CLI（钉钉官方 Workspace CLI）。写文档走 dingtalk-doc，建待办走 dingtalk-todo，日程走 dingtalk-calendar。
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.0"
+version: "0.7.0"
 homepage: https://github.com/cat-xierluo/legal-skills
 metadata:
   cli_version: ">=1.0.15"
@@ -136,6 +136,72 @@ python scripts/sync.py --archive-dir /path/to/archive   # 指定存档目录
 - 首次运行无 `index.json` → 全量扫描（受 dws 列表分页限制，脚本自动翻页）。
 - 想知道"上次同步到哪、本次新增了什么"→ 看脚本输出的 `last_sync` 与新增标题清单，或直接读 `archive/index.json`。
 - 存档目录按 AGENTS.md 约定加入 `.gitignore`（或纳入私有仓库单独管理），避免把逐字稿误提交到公开仓库。
+
+## 镜像到外部文件夹（mirror）
+
+把 archive 中的听记成品**单向复制**到外部指定文件夹（如 Obsidian / Clawd 知识库），供人工查阅。archive 是权威源，镜像**不回写 archive**、不改动同步状态。
+
+### 用法
+
+```bash
+# 默认按 config/mirror-target.local.json 的 dest 镜像全部听记
+python scripts/mirror_output.py
+
+# 只镜像指定日期（YYMMDD）之后开始的听记
+python scripts/mirror_output.py --since 260801
+
+# 只镜像单条听记（指定 archive 内目录）
+python scripts/mirror_output.py --archive "archive/260805_08-05 图书出版协作优化"
+
+# 覆盖目标目录 / 自定义白名单
+python scripts/mirror_output.py --dest /path/to/output
+python scripts/mirror_output.py --items transcript,summary,todos,keywords
+
+# 预览将复制哪些文件，不写入
+python scripts/mirror_output.py --dry-run
+```
+
+### 配置
+
+复制模板为本地配置并编辑 `dest`：
+
+```bash
+cp config/mirror-target.example.json config/mirror-target.local.json
+# 编辑 .local.json 的 dest 字段（本机实际路径）
+```
+
+`config/mirror-target.local.json` 已被 `.gitignore` 排除（本机特定路径，不入版本库）。配置文件缺失且未传 `--dest` 时退出码 2 并提示。
+
+### 镜像内容（白名单）
+
+| key | 文件 | 说明 |
+|-----|------|------|
+| `transcript` | `transcript.md` | 语音转写逐字稿（含概览） |
+| `summary` | `summary.md` | AI 摘要全文 |
+| `todos` | `todos.md` | 待办事项 |
+| `keywords` | `keywords.md` | 关键词（可选） |
+| `meta` | `meta.json` | 结构化元数据（可选） |
+
+默认只镜像 `transcript,summary,todos`（三个 md）。**不复制** `meta.json`（除非显式加 `--items ... ,meta`），避免结构化内部数据外泄。缺失的文件跳过不报错（有些听记本身无 todos/summary）。
+
+### 镜像目录结构
+
+```text
+<dest>/
+├─ 260805_08-05 图书出版协作优化/
+│   ├─ transcript.md
+│   ├─ summary.md
+│   ├─ todos.md
+│   └─ .mirror-manifest.json     # 源路径 + 文件列表 + sha256，便于核对
+└─ 260729_07-29 医疗损害鉴定听会/
+    └─ ...
+```
+
+### 增量与校验
+
+- 目标文件已存在且 sha256 一致 → 视为已镜像，跳过不覆盖（增量）。
+- 每次镜像在听记子目录下写 `.mirror-manifest.json`（源 archive 路径、镜像时间、文件列表 + sha256），供事后核对。
+- 镜像失败只报告，不影响 archive 与同步状态。
 
 ## 跨产品协作
 
