@@ -1,0 +1,90 @@
+# 实践教训（反哺：跑 skill 时发现的覆盖不足）
+
+> 本 skill 在真实项目跑过后，发现的覆盖不足 + 补充规则。持续反哺（每次跑暴露新不足就加）。
+
+## 教训 1：pre-existing 失败 vs 本次引入（阶段 4）
+
+**场景**：跑阶段 4 单测，`npm test` 超时——但根因是 vitest 4.x + ESM pre-existing 环境冲突（CHANGELOG 早就记过，非本次改动引入）。
+
+**skill 原来没说**：pre-existing 失败怎么算？是 FAIL（阻塞）还是 NOT_RUN（不阻塞）？
+
+**补充规则**：
+- 阶段 4（及任何阶段）失败时，区分**本次改动引入** vs **pre-existing 环境/依赖**：
+  - 本次引入 → FAIL（阻塞，必修）。
+  - pre-existing（CHANGELOG/历史记过、与本次改动文件无关、`git stash` 后 main 也复现）→ **NOT_RUN + 记精确原因 + 引用历史记录**，**不阻塞本次判定**（但报告必须披露）。
+- 判据：`git stash && npm test`（main 干净态跑）——如果 main 也超时/失败 = pre-existing，不是本次。
+
+## 教训 2：e2e 完全缺失（阶段 5）
+
+**场景**：跑阶段 5，发现项目**根本没建 e2e**（无 `test:e2e` script + 无 `e2e/*.spec.ts`）。阶段 5 不是「e2e 跑了 FAIL」，是「无 e2e 可跑」。
+
+**skill 原来没说**：项目没 e2e 基础时阶段 5 怎么判？
+
+**补充规则**：
+- e2e 缺失 = **FAIL（功能验证缺失）**，不是 NOT_RUN。理由：没 e2e = 功能不可验证 = 不能声称 behavior-complete（这正是「编译过 ≠ 功能可用」要防的）。
+- 报告标「❌ e2e MISSING（无 spec）」，**建议**：「建 `<域>-renders.spec.ts`（打开 fixture + 断言功能结果），补阶段 5」。
+- 例外：纯类型/重构/文档改动（无功能变），e2e 缺失可降 NOT_RUN（但这些改动本来就不要求 e2e）。
+
+## 教训 3：Tauri 项目 e2e 难点（Playwright dev server ≠ Tauri webview）
+
+**场景**：FaroPDF 是 Tauri 桌面。Playwright 跑 dev server（vite localhost:1420）= 浏览器（Chromium），**但 Tauri `invoke()` 在浏览器不工作**（没 Tauri runtime）→ reader 依赖 `invoke("read_pdf_file_from_path")` 打开 PDF，在 Playwright dev server 里 invoke 失败 → 打不开 PDF → e2e 断言不到渲染。
+
+**skill 原来没说**：Tauri 项目 Playwright dev server 的 invoke 限制。
+
+**补充规则**（Tauri 桌面项目分支补）：
+- **Playwright dev server 局限**：前端跑，但 `@tauri-apps/api invoke` 失败（无 Tauri runtime）。依赖 invoke 的功能（打开文件 / 读路径 / IPC）**在 Playwright dev server 测不了**。
+- **解法**（按可行性）：
+  1. **mock invoke**：前端 e2e 注入 mock（`window.__TAURI_INTERNALS__.invoke = mockFn`），mock 返回 fixture bytes → 测渲染/UI（但不测真 IPC）。
+  2. **真机 etv**（阶段 6）：`tauri dev`/`tauri build` 真实 WKWebView + inspector → 真 invoke → 测真功能。**Tauri 项目阶段 6 真机比阶段 5 dev e2e 更关键**。
+  3. **Tauri 官方 e2e**（driver）：Tauri 提供 WebDriverIO/tauri-driver（驱动真 webview），但配置复杂。
+- **结论**：Tauri 项目，阶段 5（dev e2e）测 UI/渲染（mock invoke），**阶段 6（真机 etv）测真功能（含 invoke）**——两者互补，不能只靠 dev e2e。
+
+## 教训 4：build 慢可 skip（阶段 1）
+
+**场景**：阶段 1 `npm run build`（vite build 产物）慢（几十秒~分钟）。但 typecheck（阶段 2）+ cargo check（阶段 1b）已覆盖编译。
+
+**补充规则**：
+- 阶段 1 build 慢时，可 **skip vite build**（用 typecheck + cargo check 替代），标 `NOT_RUN（typecheck + cargo check 已覆盖编译；vite build 产物验证留 CI）`。
+- 但 **CI 必须 跑 build**（本地 skip，CI 不 skip——build 产物问题只在 build 暴露，如 worker 资产/分包/路径）。
+
+## 教训 5：快速模式 vs 全量（时间预算）
+
+**场景**：全 8 阶段跑（含 test/build/cargo）可能 >5min（test 超时）。本地迭代要快。
+
+**补充规则**（快速模式）：
+- **快速模式**（本地迭代 / 改一行）：typecheck + lint + diff（3 阶段，秒级）。e2e/真机留「声称完成前」。
+- **标准模式**（PR 前）：8 阶段全跑（或 build skip，CI 补）。
+- **选择**：按时间预算 + 改动域。小改 → 快速；功能改 / PR → 标准。
+
+## 教训 6：真机证据来源（阶段 6）
+
+**场景**：阶段 6 真机，PM（AI）没 GUI 能力，不能自己拖文件/点按钮/看 UI。基于**用户实机反馈**判 FAIL（用户：打开 PDF「文字层未知」）。
+
+**补充规则**（阶段 6 证据来源）：
+- 真机证据来源（优先级）：
+  1. **自跑**（PM/AI 用 etv/截图/computer-use）—— 最可信，但 AI 受限（无 GUI / localhost 截图隔离）。
+  2. **用户实机反馈**（用户跑 dev/build + 描述）—— 次可信，标「基于用户反馈」。
+  3. **历史**（之前 run 的截图/日志）—— 辅助，标「历史证据」。
+- 报告必须标真机证据来源（自跑 / 用户反馈 / 历史 / NOT_RUN）。**不能无证据判 PASS**。
+
+## 教训 7：vitest/jsdom + pdfjs e2e 的具体落地坑（阶段 5）
+
+**场景**：建 pdfjs 渲染 e2e（reader-renders.test.ts），用真 pdfjs + 真 fixture 驱动 `loadPdfFromBytes` 全链路。vitest 默认 jsdom 环境，踩两个 pdfjs 6 + jsdom/node 兼容坑——这些坑 skill 原来没写，e2e 第一次落地才发现。
+
+**坑 1：jsdom 无 `DOMMatrix` → pdfjs 非 legacy build 模块顶层崩**
+- `await import("pdfjs-dist")` 在 jsdom 抛 `ReferenceError: DOMMatrix is not defined`（pdfjs 6 非 legacy build 模块顶层引用 `DOMMatrix`，jsdom 不提供）。
+- pdfjs 警告 `Please use the legacy build in Node.js environments`。
+- **解法**：test adapter 用 `pdfjs-dist/legacy/build/pdf.mjs`（legacy build，node 兼容）。product 代码（真机 WKWebView 有 DOMMatrix）仍用非 legacy，不受影响——此差异本身是教训 3（test 环境 ≠ webview 环境）的实例。
+
+**坑 2：node ESM loader 只认 `file:` / `data:` scheme → workerSrc 不能用 `import.meta.url`**
+- jsdom 无真 Worker，pdfjs 走 fake worker（动态 import worker 脚本到主线程）。
+- `new URL("pdfjs-dist/.../pdf.worker.mjs", import.meta.url).href` 在 vitest 下解析为 `http://...`（vite serve），node ESM loader 拒绝（`Only URLs with a scheme in: file and data are supported... received 'http:'`）→ fake worker setup failed。
+- **解法**：`createRequire(import.meta.url).resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")` 拿 worker 真路径 + `pathToFileURL(path).href` 转 `file:` URL，node ESM loader 支持。
+
+**诊断价值**：这种 e2e（jsdom + legacy + `file:` worker）能**证伪「pdfjs 逻辑 bug」**——测试 PASS = pdfjs API 调用正确，把根因缩到「环境特异性」（webview worker 加载）。但 jsdom ≠ WKWebView，**真机 worker 行为仍需阶段 6**（教训 3）：jsdom / Chromium 的 worker 正常，不代表 WKWebView 的 `tauri://` scheme 下 worker 正常。
+
+**结论**：pdfjs + Tauri 项目，阶段 5 e2e（jsdom）测 pdfjs 逻辑 + UI，阶段 6（真机 / inspector）测 WKWebView worker——两者互补，**jsdom 过 ≠ 真机过**。
+
+## 反哺纪律
+
+每次跑 verification-loop 暴露 skill 不足（覆盖盲区 / 规则不清 / 项目类型难点），加到本文件（教训 N）。skill 在实践中迭代，不一次写死。
