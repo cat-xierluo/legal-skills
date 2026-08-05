@@ -4,19 +4,55 @@
 
 ## 定位
 
-安全评估与配置隐私审查分工如下：
+本文件是安全评估的**规则来源**；执行时应**先运行确定性扫描器** `scripts/security_scan.py`，再用本文件判断误报、定级与修正。
 
-- `configuration-privacy-standards.md` 检查公开文件是否包含真实个人、客户、案件、项目、联系方式或本地配置值。
-- 本文件检查 Skill 是否存在危险执行、敏感文件访问、数据外传、硬编码凭证、提示词诱导、依赖风险、安装钩子或隐藏行为。
+```bash
+python3 scripts/security_scan.py audit --candidate-root /path/to/skill   # 单 Skill
+python3 scripts/security_scan.py batch --root /path/to/skills            # 集合
+```
 
-审查外部 GitHub 仓库、第三方 Skill、带脚本的 Skill、带 MCP/网络/文件操作能力的 Skill 时，必须执行本模块。纯文本、无脚本、无外联、无配置读取的 Skill 也应做轻量安全确认，并在报告中写明“未发现明显安全风险”。
+扫描器输出 JSON 报告（schema_version=1，字段含 status/summary/findings），退出码：0=PASS、1=FAIL（存在 critical/high）、2=范围错误（未发现 SKILL.md）。`--online` 时额外查询 OSV API 已知 CVE（默认离线只做版本 pin 检查）。
 
-## 参考来源
+### 扫描器覆盖模式与 SkillSpector 对应
 
-本模块参考 `skills/skill-manager/scripts/security.py` 的安全检查思路，但不直接复用安装流程：
+| 扫描器 capability | 类别 | 对应 SkillSpector 模式 |
+|---|---|---|
+| `subprocess` / `dynamic_import` / `syntax_error` | Dangerous Code Execution | Behavioral AST: exec/eval |
+| `network` | Data Exfiltration | External Transmission |
+| `install` | Supply Chain | 自动安装 / External Script Fetching |
+| `unpinned` / `cve` | Supply Chain | Unpinned Dependencies / Known Vulnerable Dependency |
+| `secret` | Hardcoded Credential | Credential Access |
+| `credential` | Credential Access | Env Variable Harvesting |
+| `taint` | Taint Tracking | Direct Taint Flow / Variable-Mediated Taint Flow |
+| `enumerate` | File System Enumeration | File System Enumeration |
+| `unicode` | Unicode Deception | Hidden Instructions / Unicode Deception |
+| `mcp_wildcard` | MCP Least Privilege | Wildcard Permission |
+| `scope_creep` | Description-Behavior Mismatch | Context-Inappropriate Capability / Scope Creep |
+| `disclosure` | Missing User Warnings | Missing User Warnings |
+| `permission` | MCP Least Privilege | Underdeclared Capability / Missing Permission Declaration |
+| `context_mismatch` | Context-Inappropriate Capability | 描述与行为不一致 |
+| `prompt_injection` | Prompt Injection | Instruction Override / Hidden Instructions |
 
-- `skill-manager` 用于安装外部 Skill 时做自动提示。
-- `skill-lint` 用于形成质量意见，强调证据、影响、修正方式和复查标准。
+### 文档级 scope creep（Description-Behavior Mismatch）
+
+> 对应 SkillSpector 的 *Scope Creep* / *Context-Inappropriate Capability* 文档类 finding。
+
+扫描器检查 SKILL.md 与 references/*.md 是否引导执行**未在宣称用途中披露**的高风险动作：
+
+| 类别 | 信号示例 | 默认级别 |
+|------|----------|----------|
+| publish | `clawhub publish`、`npm publish`、`发布到/执行发布` | High |
+| repo_mutation | `sync-allowlist`、`force-push`、`filter-repo`、`重写历史` | Medium |
+
+判定逻辑：先从 frontmatter `description` + 标题 + 正文开头提取技能宣称用途；若用途已提到该类别的披露词（发布/同步/白名单等）则不判 mismatch。只匹配"具体指令式动作"，不把依赖安装说明、安全文档中的概念性描述（如"webhook""外传"）当作 scope creep——依赖安装由 `install` 能力检测覆盖，网络外传由 `network` + disclosure 覆盖。
+
+示例：git-batch-commit（宣称用途"Git 批量提交"）的 `references/clawhub-sync-check.md` 引导 `clawhub publish` 与修改 `sync-allowlist.yaml` → 10 个 publish（High）+ 5 个 repo_mutation（Medium）finding，与 SkillSpector 结论一致。
+
+### 已知局限（扫描器不覆盖，需人工审查）
+
+- 跨文件数据流污点（如 env → subprocess 的命令拼接）只做单文件内流不敏感近似，不构建完整调用图；跨模块、动态导入后的调用需人工审查。
+- scope creep 依赖宣称用途文本与动作模式的启发式匹配；技能宣称用途本身含糊时可能漏报，需人工判断。
+- OSV CVE 查询依赖 `--online` 且依赖需 pin 版本；未 pin 时只报 Unpinned Dependencies。
 
 ## 审查范围
 

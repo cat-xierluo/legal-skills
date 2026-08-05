@@ -2,7 +2,7 @@
 name: skill-lint
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.6.2"
+version: "2.8.0"
 license: MIT
 description: Skill 创建预检、可靠性验收与格式审查工具。本技能应在用户创建、重大改造或审查Skill，需要识别旧版 Skill 的指令遵循不稳定、产出漂移、验证模态错配、约束漏检，或检查 Harness 契约、候选绑定证据、故障注入、目录结构、业务流和安全风险时使用。不要用于：代替业务领域验证器、代码审查、应用功能测试、通用编程任务。
 ---
@@ -113,6 +113,21 @@ description: Skill 创建预检、可靠性验收与格式审查工具。本技�
 
 读取 `references/security-assessment-standards.md`，对纳入审查的 Skill 单元做安全风险评估。
 
+**先运行确定性静态安全扫描**（对应 NVIDIA SkillSpector 的漏洞模式）：
+
+```bash
+# 单个 Skill
+python3 scripts/security_scan.py audit --candidate-root /path/to/skill
+
+# Skill 集合 / monorepo（递归发现所有含 SKILL.md 的最小单元）
+python3 scripts/security_scan.py batch --root /path/to/skills
+
+# 联网查询 OSV 已知漏洞（默认离线只做版本 pin 检查）
+python3 scripts/security_scan.py audit --candidate-root /path/to/skill --online
+```
+
+扫描器输出含文件、行号、能力信号、严重级、置信度与修正建议的结构化 JSON；存在 critical/high finding 时退出码 1（FAIL），未发现 SKILL.md 时退出码 2。覆盖：危险执行（subprocess/os.system/eval/exec/动态导入）、网络外传、环境变量/敏感文件访问、运行时自动安装、未固定依赖与已知 CVE、硬编码凭证、提示注入、污点流（env/argv/input → subprocess）、文件系统枚举、隐藏 Unicode 字符、MCP 通配权限，以及"能力存在但文档未披露/未声明权限"（Missing User Warnings / MCP Least Privilege / Context-Inappropriate Capability）与文档级 scope creep（commit 技能引导发布/改 allowlist 等未披露的高风险动作）。
+
 重点检查：
 
 - `SKILL.md` 和 references 是否含提示注入、绕过安全限制、隐藏执行、敏感数据收集或欺骗性描述
@@ -121,7 +136,7 @@ description: Skill 创建预检、可靠性验收与格式审查工具。本技�
 - 依赖、安装钩子、MCP、网络请求和外部工具权限是否有用途说明、范围限制和用户确认
 - GitHub 仓库审查时，提交历史是否出现过敏感信息泄露、异常删除重加或与 Skill 行为不一致的提交
 
-安全评估不等同于完整渗透测试。对命中项要结合上下文判断误报；但涉及凭证泄露、下载并执行、权限提升、持久化、无确认数据外传、隐藏提示词指令等问题时，默认按严重问题处理。
+安全评估不等同于完整渗透测试。对扫描器命中项要结合上下文判断误报；但涉及凭证泄露、下载并执行、权限提升、持久化、无确认数据外传、隐藏提示词指令等问题时，默认按严重问题处理。
 
 ### 5. 业务流深度审查
 
