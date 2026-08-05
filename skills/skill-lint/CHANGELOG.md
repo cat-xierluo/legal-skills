@@ -2,6 +2,51 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.8.0] - 2026-08-05
+
+### 新增：security_scan.py 五类新检测
+
+- **Taint Tracking**：文件内流不敏感污点分析，追踪 `os.environ` / `sys.argv` / `input()` / 网络 / 文件读取来源的值是否流入 `subprocess` 命令/参数（sticky taint + 方法调用/三元/列表传播）。已复现 SkillSpector 的 "cmd from os.environ.get → subprocess.run" finding（md2word `chart_handler.py`、funasr `init_env.py`）。
+- **文档级 scope creep（Description-Behavior Mismatch）**：从 frontmatter description+标题+正文提取宣称用途，检测 SKILL.md/references 引导执行未披露的高风险动作（`clawhub publish`/`npm publish`/发布类 High；`sync-allowlist`/`force-push`/`filter-repo`/重写历史 Medium）。已复现 SkillSpector 对 git-batch-commit 的完整 finding（10 publish + 5 allowlist）。不误判依赖安装说明与安全文档概念性描述。
+- **Unicode Deception**：零宽字符（ZWSP/ZWNJ/ZWJ/BOM）与 RTL/LTR 覆盖符、双向嵌入符检测；emoji ZWJ 序列（如 👨\u200d💼）判定为合法不报。
+- **File System Enumeration**：`os.walk`/`listdir`/`glob` 扫描用户主目录或敏感目录（~/.ssh/.aws/.env 等）。
+- **MCP 通配权限**：MCP 配置文件（`mcp.json`/`.mcp.json`/`mcp-servers.json`）中 `tools`/`permissions` 使用 `*` 通配。
+
+### 改进
+
+- 全量扫描 54 个 skills 结果：0 critical / 15 high（git-batch-commit publish ×10、patent-download 自动安装 ×3、workbuddy-checkin 自动安装 ×2），其余为 WARN。
+- `references/security-assessment-standards.md` 增加新能力映射表、scope creep 判定说明与更新后的局限说明。
+
+### 待办事项
+
+- Taint 分析为单文件近似，跨模块/动态导入调用链暂不覆盖。
+- scope creep 对宣称用途含糊的技能可能漏报，需人工复核。
+
+## [2.7.0] - 2026-08-05
+
+### 新增：确定性安全静态扫描（security_scan.py）
+
+- 新增 `scripts/security_scan.py`，把安全评估从"LLM 读规范自行判断"升级为可复算的静态门禁，覆盖 NVIDIA SkillSpector 主要漏洞模式：
+  - 危险执行：`subprocess` / `os.system` / `eval` / `exec` / 动态导入（AST 级别，带行号）
+  - 数据外传：`urllib` / `requests` / `httpx` / `socket` / `websocket` 网络请求
+  - 凭证访问：`os.environ` 读取、`.env`/SSH/AWS/凭据文件访问
+  - 供应链：运行时自动安装（`pip`/`npm`/`playwright install`，判 High）、`curl|sh` 下载并执行（Critical）、未固定版本依赖、`--online` 时 OSV CVE 查询
+  - 硬编码凭证：真实 API Key/Token/私钥/密码（Critical），跳过占位符与 `.example`
+  - 提示注入：指令式"忽略上层指令/绕过限制/隐藏执行"检测，排除安全文档的描述性上下文
+  - 披露缺口：能力存在但文档未披露（Missing User Warnings）、SKILL.md 无权限声明章节（MCP Least Privilege）、轻量描述+未披露重型能力（Context-Inappropriate Capability）
+- 支持单 Skill `audit` 与集合 `batch`，输出结构化 JSON；critical/high 存在时退出码 1（FAIL），未发现 SKILL.md 退出码 2。
+- 新增 12 项回归测试（`test_security_scan.py`），与既有 64 项门禁测试一并通过。
+
+### 改进
+
+- `references/security-assessment-standards.md` 增加扫描器使用说明、模式对应表与已知局限（文档级 scope creep、跨文件污点、在线 CVE 依赖 pin）。
+- SKILL.md「安全性评估」步骤明确"先跑扫描器，再用规范判断误报"。
+
+### 待办事项
+
+- 将 `--online` OSV CVE 检查接入 CI 前需评估依赖版本 pin 覆盖度。
+- 考虑为 references 级"scope creep"（如 commit 技能引用发布流程）补充文档语义审查清单。
+
 ## [2.6.2] - 2026-07-30
 
 ### 修复：官方 metadata.version 兼容
