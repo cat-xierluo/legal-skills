@@ -1054,7 +1054,7 @@ def main():
                         help='输出路径（与 --book 配合；单文件模式用位置参数 output）')
     
     args = parser.parse_args()
-    
+
     if args.list_presets:
         print("可用的预设配置:")
         presets = list_presets()
