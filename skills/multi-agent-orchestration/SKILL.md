@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.20.3"
+version: "1.20.4"
 ---
 
 # Multi-Agent Orchestration
@@ -107,7 +107,7 @@ PM 代理纪律：
 - 只有用户明确要走 Claude 订阅/OAuth 时，才使用 `claude-oauth-*` profile，并清理第三方 provider 环境变量。
 - 需要消耗 Codex / OpenAI 额度或使用 Codex 配置时，worker backend 选 Codex。
 - 需要消耗 OpenCode 已配置的 provider/model，或要使用 OpenCode 的 `opencode acp` 能力时，worker backend 选 OpenCode（worker 走交互式 `opencode --model`，headless `opencode run` 已于 v1.18.0 移除）。
-- 需要消耗 qodebuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
+- 需要消耗 CodeBuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
 - 其他 Agent 只要能用一行命令启动，并能在指定 cwd 读写文件，也可作为 custom CLI worker。
 - 需要稳定进程生命周期和人工接管时，优先 `tmux + worktree`；触发 §2.1 时，`tmux + worktree` 是默认执行层，不是可静默跳过的建议。
 - ACP 只在 adapter 已稳定、能输出结构化状态时启用；没有 adapter 时不要为了协议增加不确定性。
@@ -120,7 +120,7 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 | Codex | （见 §2.4 codex_policy） | 用户明确要求时 | 智能高额度贵，默认不主动派 |
 | OpenCode | `opencode:<provider>/<model>` | OpenCode 已有额度 | 按 OpenCode profile |
 | `qoderclicn`（QoderWork CN） | model 见 personal config `backend_model_routing.qoderclicn` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | SDK 变量需清理 |
-| `codebuddy`（qodebuddy） | model 见 personal config `backend_model_routing.codebuddy` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | 默认带 `-y` |
+| `codebuddy`（CodeBuddy） | model 见 personal config `backend_model_routing.codebuddy` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | 默认带 `-y` |
 
 > **本表不列具体模型——模型与框架选型是个人偏好**（每人可用的 provider/平台额度不同）。具体 model 全在 `config/orchestration-personal.json`（你的）+ `.example.json`（通用模板）；本表只列 backend 能力 + 模型配置字段位置，缺失时交 PM 按 §2.4 个人偏好读。
 
@@ -194,7 +194,7 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 - **codebuddy backend**（`backend_model_routing.codebuddy.default_models`）：推荐 `["hy3", "deepseek-v4-flash", "deepseek-v4-pro"]` —— hy3 首选（WorkBuddy 平台自定义模型）、deepseek-v4-flash 次选（平台批量模型）、deepseek-v4-pro **仅作回退，**不用作主**。spawn-worker.sh 派 codebuddy worker 时按此顺序选 `--model`。
 - **qoderwork-cn backend**（`backend_model_routing.qoderwork-cn.default_models`）：推荐 `["qmodel_latest", "qmodel", "dmodel_latest", "dmodel"]` —— qmodel_latest = Qwen3.7-Max 首选、qmodel = Qwen3.7-Plus、dmodel 系列备选。references/07 §5.1 推荐 `qmodel_latest` + `--permission-mode auto`。
 
-详见 `config/orchestration-personal.example.json` 的 `backend_model_routing` 段（结构示例 codebuddy / qoderwork-cn）+ `references/08-qodebuddy-cli-worker.md` §1 模型偏好。
+详见 `config/orchestration-personal.example.json` 的 `backend_model_routing` 段（结构示例 codebuddy / qoderwork-cn）+ `references/08-codebuddy-cli-worker.md` §1 模型偏好。
 
 **TODO（后续增强）**：`scripts/render-runtime-profile.sh` 自动读 personal config（解析 `main_force.task_routing` → 默认 `--model`、解析 `codex_policy.policy` → 是否允许 codex backend、解析 `backend_model_routing.<backend>.default_models` → 跨工具 default）当前**未实现**；本次只做配置 + 文档 + PM 手动遵循，避免无人监督下改脚本引入新不确定性。需要做的时候开新 worker，不要在 PM 任务里顺手改。
 
@@ -360,7 +360,7 @@ PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn
 ### 3.6 captcha 类 worker 必读（踩坑 6）
 
 - gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
-- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-qodebuddy-cli-worker.md` §13。
+- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-codebuddy-cli-worker.md` §13。
 - **硬约束（用户强约束「captcha 一定不要我手动输入」）**：worker 必须**自动**调用 `captcha-auto` skill 完成验证码识别——即由 worker 自己用 `buildVisionRequestBody` 构造请求 + 自管 `fetch` 调用，把识别结果回灌任务流程。**严禁**任何形式的「把验证码贴给用户 / 让用户手动输入 / 等用户键入验证码再继续」。这条约束与 §3.7 配套：PM 派发 prompt 必须把 `captcha-auto` 的**绝对路径**写进「Project Skills」段，worker 才能用 Read 按需读取并自动执行，而不是在独立 cwd 里找不到 skill 而退化成向用户要验证码。
 
 > 本节即「派发 SOP 必带 skill 路径清单」：wave-1 期间 worker A/B/C 都因「不知道 sibling skill 路径」撞 captcha 429 / 花大量时间找路径。根因：非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，**默认看不到 Claude Code skills 目录**，PM 不显式给路径，worker 就只能瞎找或退化成向用户要验证码。本节能范化未来 PM 派活。
@@ -615,7 +615,7 @@ bash scripts/spawn-worker.sh \
   --command "$WORKER_COMMAND"
 ```
 
-`spawn-worker.sh` 会把 worker 可读镜像写入 Session Context，并把权威授权快照与 SHA-256 receipt 写到 Git common-dir 的 `agent-authority/`（worktree 外）。Claude Code / qodebuddy / QoderWork 的 PreToolUse settings 从 spawn 进程环境快照取权威授权，直接 Shell 默认 fail-closed：窄生命周期命令或 spawn 发出的精确 `allowed_shell_commands` 才可运行；安装命令还必须精确命中单独的授权清单并带可审计来源。`npx` / `npm exec` / `pnpm dlx` 等可能按需获取依赖的命令不能借 `--verify-cmd` 隐式获权。spawn 只把初始状态记录为 `settings_wired...runtime_unproven`；hook 第一次真实收到 PreToolUse 后才在 PM receipt 同目录原子创建 `*.hook-attested.json`。PM 应以该文件作为 runtime hook 证据，不能把“settings 已写”当“CLI 已执行 hook”。这里约束的是 Agent 的直接工具调用边界；获准执行的项目脚本/测试及仓库 hooks 属于受信项目代码，不宣称提供 OS 容器级沙箱。
+`spawn-worker.sh` 会把 worker 可读镜像写入 Session Context，并把权威授权快照与 SHA-256 receipt 写到 Git common-dir 的 `agent-authority/`（worktree 外）。Claude Code / CodeBuddy / QoderWork 的 PreToolUse settings 从 spawn 进程环境快照取权威授权，直接 Shell 默认 fail-closed：窄生命周期命令或 spawn 发出的精确 `allowed_shell_commands` 才可运行；安装命令还必须精确命中单独的授权清单并带可审计来源。`npx` / `npm exec` / `pnpm dlx` 等可能按需获取依赖的命令不能借 `--verify-cmd` 隐式获权。spawn 只把初始状态记录为 `settings_wired...runtime_unproven`；hook 第一次真实收到 PreToolUse 后才在 PM receipt 同目录原子创建 `*.hook-attested.json`。PM 应以该文件作为 runtime hook 证据，不能把“settings 已写”当“CLI 已执行 hook”。这里约束的是 Agent 的直接工具调用边界；获准执行的项目脚本/测试及仓库 hooks 属于受信项目代码，不宣称提供 OS 容器级沙箱。
 
 raw `git push` 不属于安全生命周期命令。PM 同时传 `--git-expected-name`、`--git-expected-email`、`--git-integration-base` 后，spawn 把四个一次性 `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 变量绑定到 worker 进程（不写共享 repo config），并生成一个精确 safe-push command：它调用 `git-workflow` 的身份门禁核验远端 PR base 到当前 HEAD 的每个 commit，只 push 已核验 OID。三项缺一 fail-closed；未生成 safe-push 时 worker 必须报告 push blocked。
 
@@ -670,7 +670,7 @@ Wave 内 N 个 worker 跑 N 轮核验，30 秒内完成；中间不 poll 不 att
 - Claude Code 订阅/OAuth：`env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude --permission-mode auto`。
 - Codex（交互式 TUI）：`codex -a never -s danger-full-access [-m <model>] [-p <profile>]`，PM 用 `tmux send-keys` 投递 prompt。
 - OpenCode（交互式）：`opencode --model <provider/model>`，PM 用 `tmux send-keys` 投递 prompt。
-- qodebuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 qodebuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-qodebuddy-cli-worker.md`。
+- CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 CodeBuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-codebuddy-cli-worker.md`。
 - QoderWork CN（`qoderclicn`）：用 `render-runtime-profile.sh --backend qoderwork-cn --model <平台模型> [--no-mcp] [--dangerously-skip-permissions]` 生成；脚本自动前置 `env -u` 清除 SDK 变量、处理含空格的二进制路径。详见 `references/07-qoderwork-cli-worker.md`。
 - 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的交互式命令。
 
@@ -964,7 +964,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 Agent CLI worker backend（先看总览，再查具体工具）：
 - `references/06-agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
 - `references/07-qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
-- `references/08-qodebuddy-cli-worker.md`：qodebuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
+- `references/08-codebuddy-cli-worker.md`：CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
 
 实战经验与排障：
 - `references/09-parallel-lessons.md`：tmux/Agent Teams 实战坑点。
