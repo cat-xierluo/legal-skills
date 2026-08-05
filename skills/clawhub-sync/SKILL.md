@@ -2,7 +2,7 @@
 name: clawhub-sync
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.6.0"
+version: "1.6.1"
 license: MIT
 description: 将本地开发的 Skills 批量同步到 ClawHub 与腾讯 SkillHub 两个平台。支持智能 .gitignore 过滤、白名单控制、增量同步、单个 skill 同步、双平台分流发布。本技能应在用户需要将本地 skills 发布到 ClawHub/SkillHub、批量同步技能、检查发布状态时使用。
 ---
@@ -390,6 +390,29 @@ skillhub auth whoami     # 确认身份
 ### CLI 版本注意
 
 腾讯 `skillhub` CLI 是 Python 脚本。**老版本（< 2026.7.29）不支持 `publish`/`login`**，运行 `skillhub self-upgrade` 升级到最新版；不确定时先用 `skillhub self-upgrade --check-only` 检查是否有新版。
+
+### 发布频率限制（避免并发限流）
+
+腾讯 SkillHub API 对发布请求有频率限制。**连续多次 `skillhub publish` 会触发限流**（报错 "请求过于频繁,请稍后再试"），单个 publish 失败需重试，且会拖慢整个批量流程。
+
+**实测安全间隔**：每个 `skillhub publish` 之间 `sleep 12-15` 秒。批量发布 N 个预计总耗时 ≈ N ×（单次发布耗时 + 15s）。
+
+**推荐写法**（**串行 + sleep,不要并行**）:
+
+```bash
+while IFS='|' read -r s v; do
+  bash prepare-publish.sh --platform skillhub "skills/$s" >/dev/null 2>&1
+  echo "$s: $(skillhub publish /tmp/skillhub-publish-$s --version "$v" --changelog '...' 2>&1 | tail -1)"
+  sleep 15
+done <<EOF
+skill-a|1.0.0
+skill-b|1.1.0
+EOF
+```
+
+**失败处理**：遇到限流报错，不要立即重跑整批。`sleep 30-60` 秒后单独重试失败的 skill（从 `sync-records.yaml` 看哪些平台仍是 `pending`）。
+
+**避免**：`for s in ...; do (skillhub publish $s &); done`（并行）—— 100% 触发限流。
 
 ---
 
