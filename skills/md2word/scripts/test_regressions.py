@@ -21,6 +21,8 @@ from footnote_handler import (  # noqa: E402
     _inject_footnotes_into_docx,
 )
 
+import md2word  # noqa: E402
+
 
 class Md2WordRegressionTest(unittest.TestCase):
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
@@ -64,6 +66,11 @@ class Md2WordRegressionTest(unittest.TestCase):
         self.assertIn("模型概览 与 重点，命令 Skill", text)
         self.assertNotIn("*", text)
         self.assertNotIn("`", text)
+
+    def test_external_image_download_function_exists(self):
+        # 外链图片下载保持默认启用（原行为），download_external_image 可被直接调用
+        self.assertTrue(callable(md2word.download_external_image))
+        self.assertFalse(hasattr(md2word, "ALLOW_REMOTE_IMAGES"), "外链图片下载开关已移除，保持默认下载")
 
 
 if __name__ == "__main__":
