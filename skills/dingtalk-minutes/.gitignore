@@ -1,0 +1,12 @@
+# 忽略敏感配置与系统文件
+**/.env
+**/config/secrets.*
+credentials.json
+.DS_Store
+
+# 本地听记存档（含逐字稿，体积大且含敏感会议内容，默认不进版本库）
+archive/
+
+# Python 缓存
+__pycache__/
+*.pyc

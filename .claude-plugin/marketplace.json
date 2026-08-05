@@ -538,13 +538,13 @@
       ]
     },
     {
-      "name": "verification-loop",
-      "description": "代码改完后的验证门禁 skill，跑 8 阶段验证（构建/类型/lint/单测/e2e 功能/真机/安全/diff），其中 e2e 功能 + 真机是 READY 的硬门禁（编译过 ≠ 功能可用）；覆盖 Tauri 桌面/Web/服务/Skill 四类项目分支",
-      "version": "1.0.1",
+      "name": "verification-gate",
+      "description": "代码改完后的验证门禁 skill，跑 8 阶段验证（构建/类型/lint/单测/e2e 功能/真机/安全/diff），其中 e2e 功能 + 真机是 READY 的硬门禁（编译过 ≠ 功能可用）；覆盖 Tauri 桌面/Web/服务/Skill 四类项目分支；本地即可跑完整验证，CI 是可选自动化强化（平台不限 GitHub Actions）",
+      "version": "1.0.2",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
-      "source": "skills/verification-loop",
+      "source": "skills/verification-gate",
       "category": "developer-tools",
       "tags": [
         "工具",
@@ -652,6 +652,23 @@
         "PDF",
         "下载",
         "法律工具"
+      ]
+    },
+    {
+      "name": "dingtalk-minutes",
+      "description": "基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频，并支持本地归档与增量同步。",
+      "version": "0.3.0",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": ".claude/skills/dingtalk-minutes",
+      "category": "productivity",
+      "tags": [
+        "dingtalk",
+        "minutes",
+        "transcription",
+        "meeting",
+        "archive"
       ]
     }
   ]
