@@ -1316,26 +1316,19 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
   permission_auto "$SESSION"
 fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
-  # v1.20.2 Task-021：setsid 让 watcher 脱离 spawn-worker 进程组，spawn-worker 被 SIGTERM 时存活；
-  # macOS 无 setsid（brew install util-linux）时 fallback nohup+disown（部分改进 + PM Bash timeout 180s+ 兜底）。
-  if command -v setsid >/dev/null 2>&1; then
-    setsid permission_auto_bg "$SESSION" >/dev/null 2>&1 < /dev/null &
-    disown 2>/dev/null || true
-    echo "SPAWN_WORKER_PERMISSION_BG: launched via setsid (survives spawn-worker SIGTERM)"
-  else
-    ( nohup permission_auto_bg "$SESSION" >/dev/null 2>&1 < /dev/null & disown ) &
-    echo "SPAWN_WORKER_PERMISSION_BG: launched via nohup+disown (setsid unavailable; PM Bash timeout 建议 180s+, SKILL §6)"
-  fi
+  # v1.20.3.1 hotfix（接 v1.20.2 Task-021）：v1.20.2 用 nohup/setsid（外部 binary）调用
+  # permission_auto_bg（spawn-worker.sh bash 函数）是 bug — nohup/setsid 子进程找不到父 shell 函数，
+  # 报 command not found，bg watcher 从未启（W2 真机撞坑 + v1.20.3 真机 throwaway 复测 ps 都空）。
+  # 修复：v1.18.3 subshell 继承函数模式（subshell fork 继承父 shell 函数定义，能跑）。
+  # 已知限制：spawn-worker SIGTERM 时同进程组 bg 会死（v1.18.3 限制）；mitigation = Task-026 让
+  # spawn-worker 主进程 < 60s exit，bg 有时间跑（dialog 通常 30s 内弹，bg 60s max-wait 足够）。
+  # 未来 Linux 装 util-linux（setsid）时：可用 `setsid bash -c "$(declare -f permission_auto_bg); permission_auto_bg '$SESSION'"` 真正脱离进程组。
+  ( permission_auto_bg "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
+  echo "SPAWN_WORKER_PERMISSION_BG: launched (subshell inherit function v1.18.3 模式；v1.20.2 setsid/nohup bug hotfix)"
 fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$EXTERNAL_IMPORTS_AUTO" -eq 1 ]; then
-  # v1.20.2 Task-020：external imports dialog 后台监控（claude-code 默认开，独立于 trust/permission）。
-  # 后台跑保 spawn-worker 秒级返回；external imports 只在首启弹一次，watcher 命中后退出。
-  if command -v setsid >/dev/null 2>&1; then
-    setsid external_imports_auto "$SESSION" >/dev/null 2>&1 < /dev/null &
-    disown 2>/dev/null || true
-  else
-    ( nohup external_imports_auto "$SESSION" >/dev/null 2>&1 < /dev/null & disown ) &
-  fi
+  # v1.20.3.1 hotfix（接 v1.20.2 Task-020）：同上 v1.20.2 setsid/nohup + 函数 bug 修复。
+  ( external_imports_auto "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then

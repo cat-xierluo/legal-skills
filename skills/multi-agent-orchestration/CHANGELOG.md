@@ -41,6 +41,20 @@
 - **Task-026 qoderclicn throwaway 未真机验证**：harness 自动拒绝 spawn qoderclicn 的二次执行（视为"launch-workbuddy daemon force-killed"）；codebuddy 验证通过 + 改动代码对 `codebuddy/qoderwork-cn/qoderclicn` 三个 backend 一致 case pattern，逻辑上 qoderclicn 应有同等效果。下次派 worker 跑 qoderclicn 真机复测。
 - **TASKS.md（本地 gitignored）**：记录 v1.20.3 候选 DRAFT（`Task-026` ~ `Task-030`）已全部完成，可清理或转历史。
 
+### Hotfix v1.20.3.1 — bg watcher 真机端到端修复（2026-08-05 当日）
+
+**严重 bug**（v1.20.2 引入，v1.20.3 端到端真机验证发现）：`spawn-worker.sh` 的 `permission_auto_bg` / `external_imports_auto` 后台 watcher 用 `nohup` / `setsid`（外部 binary）调用 spawn-worker.sh 的 bash 函数 —— 但 nohup / setsid 子进程找不到父 shell 函数定义，报 `command not found`，**bg watcher 从未启动**。v1.20.2 假设 `setsid / nohup` 能调用 bash 函数是错的（v1.18.3 旧版用 subshell `( ... & disown )` 模式继承函数能跑）。
+
+- **修复**：`scripts/spawn-worker.sh` PERMISSION_AUTO_BG + EXTERNAL_IMPORTS_AUTO 段改回 v1.18.3 subshell inherit function 模式（`( func "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &`）。已知限制：spawn-worker SIGTERM 时同进程组 bg 会死（v1.18.3 限制）；mitigation = Task-026 让 spawn-worker 主进程 < 60s exit（v1.20.3 验证 19 秒），bg 有时间跑完（dialog 通常 30s 内弹）。
+- `scripts/smoke-auto-bypass.sh` 的 v1.20.2 检查 #5（`permission_auto_bg`）/ #17（`external_imports_auto`）—— 原来匹配 `setsid / nohup` 字符串改为匹配 subshell inherit function 模式（v1.20.3.1 hotfix 实现形式）。
+
+#### 真机端到端验证（codebuddy + `--permission-mode acceptEdits`）
+
+- spawn-worker 主进程 **19 秒 exit**（< 60s ✓）
+- worker 跑 `pwd` 命令：bg watcher 真启（PID detached subshell, PPID=1）+ 自动按 `2` 处理 `"Do you want to proceed?"` dialog（session-allow）+ pwd 命令输出（端到端通过）
+- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（hotfix + smoke check 更新）
+- `bash scripts/smoke-sentinel.sh` / `smoke-tmux-worker.sh` / `lint-wait-script.sh` → 全 OK
+
 ## [1.20.2] - 2026-08-05
 
 ### 新增 — folia Wave-1 实战三修 + 本 skill 自身 dogfood 验证

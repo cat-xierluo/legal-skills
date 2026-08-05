@@ -75,11 +75,11 @@ else
   check "--no-permission-auto flag 解析存在（v1.18.3 兼容）" 1
 fi
 
-# 5. 调用点 permission_auto_bg 用 setsid/nohup+disown 启动（v1.20.2 Task-021 watcher 存活）
-if grep -qE "setsid permission_auto_bg|nohup permission_auto_bg" "$SPAWN_WORKER"; then
-  check "调用点 permission_auto_bg 改 setsid/nohup+disown（v1.20.2 Task-021 存活）" 0
+# 5. 调用点 permission_auto_bg 用 subshell inherit function 启动（v1.20.3.1 hotfix：v1.20.2 setsid/nohup + bash 函数是 bug，nohup 找不到父 shell 函数，bg watcher 从未启）
+if grep -qE "\( permission_auto_bg .*& disown \)" "$SPAWN_WORKER"; then
+  check "调用点 permission_auto_bg 改 subshell inherit+disown（v1.20.3.1 hotfix）" 0
 else
-  check "调用点 permission_auto_bg 改 setsid/nohup+disown（v1.20.2 Task-021 存活）" 1
+  check "调用点 permission_auto_bg 改 subshell inherit+disown（v1.20.3.1 hotfix）" 1
 fi
 
 # 6. spawn-worker 无参 exit 64 + --usage 含 --no-permission-auto（v1.20.2 HRA-001：显式断言 exit 64）
@@ -193,11 +193,11 @@ else
   check "claude-code --bare 自动降级 prompt-only 分支（v1.20.2 Task-019）" 1
 fi
 
-# 17. external_imports_auto 主流程后台调用（Task-020）
-if grep -qE "setsid external_imports_auto|nohup external_imports_auto" "$SPAWN_WORKER"; then
-  check "external_imports_auto 主流程后台调用（v1.20.2 Task-020）" 0
+# 17. external_imports_auto 主流程后台调用（v1.20.3.1 hotfix：subshell inherit function，v1.20.2 setsid/nohup + bash 函数 bug 修复）
+if grep -qE "\( external_imports_auto .*& disown \)" "$SPAWN_WORKER"; then
+  check "external_imports_auto 主流程后台调用（v1.20.3.1 hotfix subshell inherit）" 0
 else
-  check "external_imports_auto 主流程后台调用（v1.20.2 Task-020）" 1
+  check "external_imports_auto 主流程后台调用（v1.20.3.1 hotfix subshell inherit）" 1
 fi
 
 # 18. 3 个新 flag 解析存在
