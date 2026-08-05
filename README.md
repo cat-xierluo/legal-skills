@@ -34,16 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
 | 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
+| 2026-08-01 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.10.1 | PP-OCRv6 + Structure 融合改用软段界和低置信行级兜底；4 类通用模板恢复表格视觉行与连续条款，4/4 双层 PDF 可检索且页面渲染不变 |
+| 2026-07-31 | 更新   | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.1  | 补齐合同范围、顾问关系、监管询问三条评测的机器断言，覆盖率由 9/12 提升至 12/12；标注 archive 归档边界，并在 README 标明评测覆盖现状 |
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
 | 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.2  | 新增覆盖十个场景的代表性提示词、hard/soft 机器断言和独立校验器；侵权、规避、等同及无效样本锁定无网页链接的多条款法源与证据停止门禁 |
 | 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.2  | 修复 NCL13 消防车跨类残留、风险等级合成冲突与商标说明错误口径；收紧 Excel 输入校验，新增关键迁移回归检查和单元测试，并改为仅向用户确认目录保存客户材料 |
-| 2026-07-30 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.6.2  | 稳定性合同兼容顶层 `version` 与官方 `metadata.version`，并对双位置版本冲突保持 fail-closed，避免合法发布候选被误报为身份缺失 |
-| 2026-07-30 | 更新   | [project-init](skills/project-init/)                                   | v1.2.4  | TASKS 改为流动的当前任务入口；移除归档索引并禁止创建 before 快照，历史分别归入 CHANGELOG 与 DECISIONS                                                        |
-| 2026-07-30 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.1  | references 顺序编号与法规独立子目录：5 份流程文件加 `NN-` 前缀按执行顺序排列、侵权判断标准迁入 `references/laws-regulations/`、脚本归位到 `scripts/`、删除冗余索引并把图像理解工具改为按环境能力分档的选择策略（不再写死具体工具名）                                                                                                       |
-| 2026-07-28 | 更新   | [trademark-assistant](skills/trademark-assistant/)                     | v1.7.0  | 尼斯分类 NCL13-2026 内容差别补齐：清除 class-09 消防车迁移残留、class-03 标题与注释同步至 NCL13（香水/加香精油）                                                                                                                               |
-
 </details>
 
 ## 📋 项目概述
@@ -299,7 +297,7 @@
 <td>工具·知产</td>
 <td style="word-break:break-word">专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录），支持多平台、自动处理申请号和公告号格式；凭证环境变量化 + 防泄露自检</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.7.0</td>
+<td style="text-align:center">v2.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/patent-download-2.6.0.zip">下载 v2.6.0</a></td>
 <td>本仓库</td>
 </tr>
@@ -317,7 +315,7 @@
 <td>专业·顾问</td>
 <td style="word-break:break-word">面向一人公司、单人创业者与小微企业的法律业务判断技能：识别经营主矛盾、跨领域风险、行动和升级边界；现行法条、税率、名录、地方政策与平台规则通过工具中立协议交由法律数据库、MCP 或官方来源核验</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">v1.0.1</td>
 <td style="text-align:center">待发布</td>
 <td><a href="https://github.com/cat-xierluo/opc-legal-counsel.skill">独立仓库</a></td>
 </tr>
@@ -355,7 +353,7 @@
 <td>工具·PDF处理</td>
 <td style="word-break:break-word">PDF 处理工具，支持扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。统一入口自动选择最短可用流程，配合 pdf-organizer 完成从预处理到文书整理的完整工作流</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.7.0</td>
+<td style="text-align:center">v2.9.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/pdf-processor-2.7.0.zip">下载</a></td>
 <td></td>
 </tr>
