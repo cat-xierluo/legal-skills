@@ -624,4 +624,32 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 | scope-guard `--allow-paths` | 硬拦越界（unbypassable），PM 不必逐文件 review | W1-W5 全程无越界 |
 | prompt 显式禁 subagent（第三方 provider） | 避免 G26 卡死 | W5 撞坑后纠偏（后续 prompt 应预防） |
 
+---
+
+## 2026-08-05 W1 (claude-code) + W2 (codebuddy) dogfood 撞坑 + v1.20.3 候选修正
+
+> 本轮 v1.20.2 后 dogfood 两个 worker backend，撞 6 项实战问题，回溯为 v1.20.3 候选 task。W1 改 pm-sentinel-response.md 真机完成；W2 改 codebuddy 后端 dialog 失败（LLM 幻觉 done + 破坏 smoke + 错位置写 STATUS），commit `64cd3d7` 已 revert (`800c55f`)。
+
+### G29. v1.20.3 候选实战问题汇总（spawn-worker Bash timeout + install-guard 过严 + worker 自验缺失）
+
+撞坑来源：本轮 W1 (claude-code/glm-5.2[1M]) + W2 (codebuddy v2.115.0/deepseek-v4-pro) dogfood 派发 + 真机复测；以及 v1.20.2 setsid 修复对 sync 撞 timeout 的不彻底性。
+
+| # | 实战问题 | 撞坑现场 | 修复方向（v1.20.3） | 优先级 |
+|---|---|---|---|---|
+| **1** | spawn-worker Bash timeout 撞 PM 2min | W2 spawn：trust_auto 30s + permission_auto 60s（codebuddy acceptEdits 不弹 = 同步空等）+ worktree checkout 1138 文件 ~30s ≈ 120s 撞 PM Bash 默认 2min timeout，spawn-worker 主进程被 SIGTERM (exit 143)。tmux session 独立存活（v1.20.2 setsid 修复对这次撞坑无效——bg 段未到启动点）。 | `spawn-worker.sh`: `resolve_backend_defaults` 加 `codebuddy/qoderwork-cn` 默认 `PERMISSION_AUTO=0`（只 bg 不 sync）+ `TRUST_AUTO` timeout 30→15；让 spawn-worker 主进程 < 60s exit，bg 段有时间启。SKILL §6 加 "codebuddy/qoderwork-cn spawn-worker 应 60s 内 exit" 硬建议。 | 高 |
+| **2** | render `--settings` 相对路径 vs worktree cwd 错配 | W1：PM 跑 render 在 skill 目录（`--settings config/glm-5.2.settings.json` 相对），worker 跑在 worktree 根（legal-skills 仓根），相对路径找不到；`config/*.json` 又被 gitignore，worktree checkout 不含。PM 必须传**绝对路径**。 | SKILL §6 spawn 例子强化 "`--settings` 必须用绝对路径（指向主仓 config/）"；`render-runtime-profile.sh` 自动把 `--settings` 转绝对路径（基于 `--project` 根）。 | 高 |
+| **3** | install-guard shell 命令 fail-closed 拦 `date` | W2：worker 写 STATUS.updated_at 跑 `Bash(date -u +"%Y-%m-%dT%H:%M:%SZ")` 被 `SHELL_COMMAND_NOT_ALLOWLED` 拦（PM spawn 时没加 `--allow-shell-command`）。Worker fallback 错误：跳过 STATUS bootstrap 直接改文件。 | `spawn-worker.sh`: 增加 "基础生命周期命令内置 allowlist"（`date -u`、`stat -f "%m"`、`python3 -c "import datetime; print(...)"` 等时间戳 + `pwd`/`wc`/`awk`/`sed` 只读）；或 `dependency-install-guard.py` 加 `--allow-status-timestamp` 自动 allow 时间戳命令。 | 高 |
+| **4** | W2 worker LLM 幻觉 "done"（pane 说 done + commit 改 4 文件，实际核心改动破坏 smoke + 错位置写 STATUS/RESULT） | W2：commit `64cd3d7` 改了 spawn-worker.sh 但 `permission_auto` 数字键 `'2'` send-keys 被破坏（smoke 20/21 FAIL），写 STATUS/RESULT 到 `skills/.../STATUS.json`（错位置，应在 `.claude/agent-sessions/<session>/`），写 commit message 说改了 4 文件但实际核心修复未真生效。Worker pane 显示 "STATUS: done" 但实际未 done。 | `worker-prompt.md` Process 步骤加硬约束: "Commit 前必跑 Verify 全部 PASS；commit 后 `git show --stat` + `git diff --stat` 验证文件实际改了；STATUS.json 路径必须在 `$(pwd)/.claude/agent-sessions/$SESSION/` 写错位置 = done 信号无效"；`spawn-worker.sh` 加 `commit-verify-hook`（PreToolUse on git commit：自动跑 smoke + STATUS 路径校验）。 | 高 |
+| **5** | 错位置 STATUS/RESULT 写 | W2：写到 `skills/multi-agent-orchestration/STATUS.json`（应是 `.claude/agent-sessions/mao-w2-codebuddy/STATUS.json`）。Worker 没正确替换 `{{session_context_path}}` 占位符或直接 hardcode 错路径。 | 与 #4 合并：`worker-prompt.md` 加 `pwd` 验证 + 显式路径 + `spawn-worker.sh` STATUS path sanity check。 | 中 |
+| **6** | v1.20.2 setsid 修复对 sync 撞 timeout 无效 | 本轮撞坑实证：bg 段（`permission_auto_bg` / `external_imports_auto`）在 sync 段（trust_auto + permission_auto）**之后**才启；sync 撞 timeout 时 bg 段未启，dialog 卡死（PM 手动 send-keys `2` 兜底）。 | 与 #1 合并：减小 sync timeout + 默认 codebuddy/qoderwork-cn 只 bg（让 spawn-worker < 60s exit，bg 段有时间启，dialog 处理不被 sync timeout 撞断）。 | 高 |
+
+### 实战教训（跨 task）
+
+- **PM Bash 2min timeout 是 spawn-worker Bash timeout 的硬上限**：v1.20.2 setsid 修复让 bg 段存活，但 sync 段未改 = spawn-worker 主进程仍可能撞 timeout → bg 段启动机会都没了。修复核心 = 让 spawn-worker 主进程 < 60s exit（不是加 setsid）。
+- **`render --settings` 必须用绝对路径**：相对路径在 worktree cwd 找不到；SKILL §6 例子应明示。
+- **install-guard 太严**：基础生命周期命令（`date` / `stat` / `pwd`）应内置 allowlist，install-like + 跨目录才需 PM 显式授权。
+- **Worker "done" 信号不可信**：必须 commit-verify-hook 跑 smoke + STATUS 路径校验 + git diff stat 三道闸。
+
+**关联**：SKILL §6 启动方式、§5.1 worker-prompt 模板纪律、§7.2 sentinel、§2.1 防逃逸门禁；v1.20.2 setsid 修复；references/07 §9.3 PreToolUse hook unbypassable；references/08 §14 codebuddy 坑。
+
 **关联**：SKILL §3.8.1 spawn 后核验、§7.2 sentinel、§7.3 cron 双层、§10/§14 codebuddy 坑、§12 scope-guard；references/08 §10.3 漏 commit / §14.2 Enter 坑。

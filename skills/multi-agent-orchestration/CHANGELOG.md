@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased] - v1.20.3 候选（实战撞坑沉淀，待下个 session 推进）
+
+### 文档沉淀
+- **`references/09-parallel-lessons.md` G29（本轮 W1+W2 dogfood 撞坑 + v1.20.3 候选）**：6 项实战问题 + 修复方向（spawn-worker Bash timeout / render settings 路径 / install-guard 过严 / worker LLM 幻觉 done / 错位置 STATUS / v1.20.2 setsid 修复不彻底）。
+- **`TASKS.md`（本地 gitignored）**：新增 v1.20.3 DRAFT task 列表（`Task-026` ~ `Task-030`，对应 G29 #1-#5）。
+- W2 commit `64cd3d7` 已 revert (`800c55f`)，main smoke 21/21 恢复。
+
+### 待推进（v1.20.3 修复，下个 session）
+- `spawn-worker.sh` `resolve_backend_defaults` 加 `codebuddy/qoderwork-cn` 默认 `PERMISSION_AUTO=0` + `TRUST_AUTO` timeout 30→15（`Task-026`）
+- `render-runtime-profile.sh` `--settings` 自动转绝对路径（`Task-027`）
+- `spawn-worker.sh` / `dependency-install-guard.py` 加基础生命周期命令内置 allowlist（`date` / `stat` / `pwd` 等，`Task-028`）
+- `worker-prompt.md` Process 加 commit-verify 硬约束（commit 前跑 Verify + `git diff --stat` + STATUS 路径校验，`Task-029` + `Task-030`）
+
 ## [1.20.2] - 2026-08-05
 
 ### 新增 — folia Wave-1 实战三修 + 本 skill 自身 dogfood 验证
