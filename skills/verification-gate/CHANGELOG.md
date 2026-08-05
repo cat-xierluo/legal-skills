@@ -1,4 +1,20 @@
-# Verification Loop Skill 变更记录
+# Verification Gate Skill 变更记录
+
+## [1.0.2] - 2026-08-05
+
+### 改进
+- **重命名 verification-loop → verification-gate**：规避 ClawHub 等同名/近似同名 skill，检索更友好；语义更贴合「验证门禁」定位。目录、SKILL.md name、README、marketplace.json 同步更新。
+- **新增「本地 vs CI 门禁」小节**：明确「CI 不是另一种验证，是同一套验证的自动化载体」；本地即可跑完整 8 阶段验证，CI 是可选强化（阻断 PR 合并）；平台不限 GitHub Actions（GitLab CI / Gitea / Jenkins / act / husky·lefthook pre-push 均可）。
+- **8 阶段表加「CI」列**：标注哪些阶段进 CI（1-5 + 7-8 为 PR 阻断项）、哪些通常本地/真机跑（阶段 6）。
+- **验证报告加「CI 门禁」行**：CI job 红 = 验证报告 NOT READY。
+- **e2e-practice.md CI 模板扩写**：从单段 GitHub Actions YAML 扩为「通用结构 + 无 GitHub Actions 也能做」对照表，强调 build 产物上跑 e2e、真机单独跑。
+- **新增「本地开发：哪些验证必要」小节**：按场景给出最低必要清单（日常循环 = 1-2-4-5；提 PR = +6 真机 +7 安全 +8 diff；3 lint/7 安全交给 hook/CI 自动化），明确「最低线不是 1-4，宣称完成前 5（及该场景 6）必须过」。
+- **references 导航与交叉引用补全**：SKILL.md 参考文档列表加「何时读 + 对应章节」；5 篇 reference 开头加引导头并互链（eight-phases-rationale 回链本地开发清单、assertion-depth 补「CI 同样适用」、e2e-practice/test-pyramid/lessons-from-practice 加「何时读」）；lessons-from-practice 教训 5 快速模式与 SKILL 新清单对齐互链。
+
+### 技术优化
+- **重跑 skill-lint 验证改名 + CI 章节后结构合规**：
+  - `harness_failure_audit`：**PASS**（hard 0 / warning 0 / info 0 / total 0，退出码 0）——改名与新增内容未破坏 frontmatter、引用或目录可达性。
+  - `instruction_stability_gate assess`：**NOT_VERIFIED**（ISG-001/002/003/004）——与 1.0.1 状态一致，属流程指引型 skill 正常状态（不自带领域 checker、未声称「稳定完成」、ISG-002 为静态关键词对 e2e 视觉断言的模态误判，已用语境标注缓解）；未引入新增硬失效，不追修以免损害教学价值。
 
 ## [1.0.1] - 2026-08-05
 
