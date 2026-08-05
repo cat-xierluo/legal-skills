@@ -1,0 +1,170 @@
+---
+name: workbuddy-checkin
+description: WorkBuddy 每日积分自动签到。自动解密本地登录令牌，调用官方签到 API 完成每日积分领取（100 积分/天，连续第 7 天 1000 积分），并支持配置定时任务。触发词：WorkBuddy 签到、每日积分、check-in、credits。
+version: "1.0.0"
+license: MIT
+---
+
+# WorkBuddy 每日积分签到
+
+自动领取 WorkBuddy 每日积分（100 积分/天，连续第 7 天 1000 积分）。
+全流程在本机完成：读取本地登录态 → 调用腾讯官方签到接口。无后端服务。
+
+## 原理
+
+1. WorkBuddy 桌面端登录后，将 auth session（含 `accessToken`）用 Electron `safeStorage` 加密存于本地 `state.vscdb`。
+2. 用 Electron 运行时执行 `safeStorage.decryptString()` 解密（macOS 命中钥匙串密钥；Windows/Linux 走系统 DPAPI/keyring）。
+3. 调用腾讯官方签到 API：
+   - 查状态：`POST https://copilot.tencent.com/billing/meter/checkin-status`
+   - 执行签到：`POST https://copilot.tencent.com/billing/meter/daily-checkin`
+   - 认证：`Authorization: Bearer <accessToken>`
+4. 脚本幂等：先查状态，今日已签到则跳过。
+
+兼容旧版应用名 `CodeBuddy`（macOS 需设环境变量 `WB_CHECKIN_APP_NAME=CodeBuddy`）。
+
+## 文件结构
+
+```
+workbuddy-checkin/
+├── SKILL.md
+├── references/
+│   └── dependencies.md         # 依赖清单与平台差异
+└── scripts/
+    ├── decrypt-token.js        # 解密令牌（跨平台）
+    ├── checkin.sh              # macOS / Linux / Git Bash
+    ├── checkin.ps1             # Windows PowerShell
+    ├── setup.sh                # macOS / Linux 一键安装
+    └── setup.ps1               # Windows 一键安装
+```
+
+`logs/` 目录运行后自动创建，存放签到日志。
+
+## 依赖
+
+### 系统依赖
+
+| 依赖 | 用途 | 安装方式 |
+|------|------|----------|
+| WorkBuddy 桌面端（已登录） | 提供本地登录会话 `state.vscdb` | 官网下载，必须登录过至少一次 |
+| Electron 运行时（≥ 30，推荐 37） | 解密令牌 | 运行 `scripts/setup.sh` 或 `setup.ps1` 自动下载，约 100MB |
+| curl（macOS/Linux 自带）/ curl.exe | 调用签到 API | Windows 10 1803+ 自带 |
+
+### 开箱即用 vs 需安装
+
+- **开箱即用**：已装 WorkBuddy 桌面端并登录 + 系统已有 Electron 二进制 → 直接运行签到脚本。
+- **需安装 Electron**：首次运行提示「未找到 Electron 运行时」时，执行：
+
+  ```bash
+  # macOS / Linux
+  bash scripts/setup.sh
+  # Windows（PowerShell）
+  powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+  ```
+
+### 可选 / 回退依赖
+
+| 依赖 | 缺失时行为 |
+|------|------------|
+| Node.js 内置 `node:sqlite`（Electron 37 / Node 22+ 自带） | 自动回退到 `python3` 读取 sqlite |
+| `python3` | sh 版 JSON 解析降级为 `unknown`，签到请求仍会执行 |
+| `npm`（仅 setup 首次安装用） | 手动放置 Electron 后用 `WB_CHECKIN_ELECTRON=<path>`（sh）/ `-ElectronPath <path>`（ps1）指定 |
+
+完整依赖说明见 `references/dependencies.md`。
+
+## 快速开始
+
+macOS / Linux：
+```bash
+bash scripts/setup.sh     # 一键安装（检测/下载 Electron）
+bash scripts/checkin.sh   # 立即签到一次（验证）
+```
+
+Windows（PowerShell）：
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\checkin.ps1
+```
+
+前提：本机已安装并**登录** WorkBuddy 桌面端。
+
+## 设置定时任务
+
+电脑非全天开机时，建议配置多个时间点补签（脚本幂等，重复运行无副作用）。推荐 `09:00 / 12:00 / 15:00 / 18:00 / 21:00` 各尝试一次，只要电脑在任一时间点开机就能签上。
+
+### macOS / Linux（crontab）
+```bash
+crontab -e
+0 9,12,15,18,21 * * * /path/to/scripts/checkin.sh >> /path/to/logs/checkin.log 2>&1
+```
+
+### Windows（任务计划程序）
+```powershell
+schtasks /Create /TN WorkBuddyDailyCheckin /TR "powershell -ExecutionPolicy Bypass -File C:\path\checkin.ps1" /SC DAILY /ST 09:00 /F
+schtasks /Create /TN WorkBuddyDailyCheckin2 /TR "powershell -ExecutionPolicy Bypass -File C:\path\checkin.ps1" /SC DAILY /ST 12:00 /F
+# （schtasks 单任务只支持一个 /ST，多时间点需建多个任务）
+```
+
+### macOS launchd（长期后台）
+
+创建 `~/Library/LaunchAgents/com.user.workbuddy-checkin.plist`，`StartCalendarInterval` 用数组配置多时间点：
+```xml
+<key>StartCalendarInterval</key>
+<array>
+  <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+  <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+  <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+</array>
+```
+然后 `launchctl load ~/Library/LaunchAgents/com.user.workbuddy-checkin.plist`。
+
+### 在 WorkBuddy 内（Agent 自动化）
+
+WorkBuddy 环境下可调用自动化任务工具（`automation_update`，recurring 类型），RRULE 多值 `BYHOUR` 实测生效：
+```jsonc
+{
+  "name": "WorkBuddy 每日积分签到",
+  "scheduleType": "recurring",
+  "rrule": "FREQ=DAILY;BYHOUR=9,12,15,18,21;BYMINUTE=0;BYSECOND=0",
+  "cwds": ["<用户工作目录>"],
+  "status": "ACTIVE",
+  "prompt": "运行 Bash 脚本 scripts/checkin.sh（Windows 用 checkin.ps1）。该脚本幂等：今日已签到会直接跳过。读取输出并汇报：签到成功领取多少积分 / 今日已签到 / 令牌失效需打开 WorkBuddy 刷新。"
+}
+```
+> 注意：`update` 已有任务时必须显式传 `rrule`，否则可能被重置；`cwds` 不能用 Claw 工作区。
+
+## 平台说明
+
+| 平台 | 脚本 | 会话库路径（自动探测） |
+|---|---|---|
+| macOS | `checkin.sh` | `~/Library/Application Support/WorkBuddy/User/globalStorage/state.vscdb` |
+| Windows | `checkin.ps1`（或 Git Bash 跑 `checkin.sh`） | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` |
+| Linux | `checkin.sh` | `~/.config/WorkBuddy/User/globalStorage/state.vscdb` |
+
+Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（Win10 1803+ 自带）。
+Linux 需桌面会话 + 系统 keyring（GNOME Keyring / KWallet）。
+
+## 环境变量
+
+| 变量 | 作用 |
+|------|------|
+| `WB_CHECKIN_ELECTRON=<path>` | 指定 Electron 二进制路径（sh 版） |
+| `-ElectronPath <path>` | 同上（ps1 版参数） |
+| `WB_CHECKIN_APP_NAME=CodeBuddy` | 兼容旧版应用名（macOS 钥匙串密钥） |
+| `WB_CHECKIN_JITTER=<秒>` | 启动前随机等待 0~N 秒，避免整点风暴 |
+
+## 排错
+
+- **解密失败 / 未找到本地会话**：WorkBuddy 桌面端未登录或从未打开过，先登录一次。
+- **401 令牌过期**：打开 WorkBuddy 刷新登录态，脚本每次运行会重新解密获取最新 token，次日自动恢复。
+- **macOS 解密报错但已登录**：旧版迁移应用名仍是 `CodeBuddy`，设 `export WB_CHECKIN_APP_NAME=CodeBuddy` 后重试。
+- **Electron 下载慢/失败**：配置 npm 镜像（见 `references/dependencies.md`）后重跑 setup；或手动放置 Electron 后用环境变量/参数指定。
+- **Windows 提示不是内部或外部命令**：用 `powershell -ExecutionPolicy Bypass -File …` 运行；确认 `curl.exe` 存在。
+- **沙箱里 `require('electron')` 报错**：Agent 沙箱默认设 `ELECTRON_RUN_AS_NODE=1`，脚本已用 `env -u`（sh）/ `Remove-Item Env:`（ps1）处理。
+
+## 安全说明
+
+- 本 skill 只操作本机当前登录用户自己的 WorkBuddy 账户，令牌仅发往腾讯官方接口 `copilot.tencent.com`，不上传任何第三方。
+- 令牌仅在内存中使用，不落盘；`logs/` 仅记录签到结果（积分/连续天数），不含令牌。
+- 请勿用于他人账户、批量注册刷分或任何违反 WorkBuddy 用户协议的用途；使用者自行承担使用风险。

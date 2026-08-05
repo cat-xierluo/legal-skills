@@ -1,0 +1,110 @@
+# ============================================================
+# WorkBuddy 每日积分签到（Windows PowerShell 版，兼容 PS 5.1）
+#
+# 流程：解密本地令牌 → 查询签到状态 → 未签到则领取 → 写日志
+# 用法：
+#   powershell -ExecutionPolicy Bypass -File checkin.ps1
+# 或（如果已配置）：
+#   $env:WB_CHECKIN_ELECTRON="C:\path\to\electron.exe"
+#   powershell -ExecutionPolicy Bypass -File checkin.ps1
+# 定时（示例，每天 09:00，管理员或普通用户均可）：
+#   schtasks /Create /TN WorkBuddyDailyCheckin /TR "powershell -ExecutionPolicy Bypass -File C:\path\checkin.ps1" /SC DAILY /ST 09:00 /F
+# ============================================================
+$ErrorActionPreference = "Continue"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$DecryptJs = Join-Path $ScriptDir "decrypt-token.js"
+$SkillRoot = Split-Path -Parent $ScriptDir
+$LogDir = Join-Path $SkillRoot "logs"
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$LogFile = Join-Path $LogDir "checkin.log"
+
+function Write-Log([string]$msg) {
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $line = "[$ts] $msg"
+    Write-Output $line
+    Add-Content -Path $LogFile -Value $line -Encoding UTF8
+}
+
+# ---------- 可选：随机错峰（避免整点风暴） ----------
+# 设置环境变量 WB_CHECKIN_JITTER=<秒> 时，开始前随机等待 0~N 秒
+if ($env:WB_CHECKIN_JITTER) {
+    try {
+        $max = [int]$env:WB_CHECKIN_JITTER
+        if ($max -gt 0) { Start-Sleep -Seconds (Get-Random -Maximum $max) }
+    } catch {}
+}
+
+# ---------- 探测 Electron 运行时 ----------
+function Find-Electron {
+    if ($env:WB_CHECKIN_ELECTRON -and (Test-Path $env:WB_CHECKIN_ELECTRON)) {
+        return $env:WB_CHECKIN_ELECTRON
+    }
+    $cands = @(
+        (Join-Path $HOME ".workbuddy\tools\electron\electron.exe"),
+        (Join-Path $HOME ".workbuddy\skills\workbuddy-checkin\.runtime\electron\electron.exe"),
+        (Join-Path $SkillRoot ".runtime\electron\electron.exe"),
+        (Join-Path $ScriptDir "..\node_modules\electron\dist\electron.exe")
+    )
+    foreach ($c in $cands) {
+        if ($c -and (Test-Path $c)) { return $c }
+    }
+    return ""
+}
+
+$Electron = Find-Electron
+if (-not $Electron) {
+    Write-Log "❌ 未找到 Electron 运行时。请先运行 setup.ps1，或设置 WB_CHECKIN_ELECTRON 指向 electron.exe。"
+    exit 1
+}
+
+# ---------- 1. 解密令牌 ----------
+# 关键：若环境存在 ELECTRON_RUN_AS_NODE，必须移除，否则 require('electron') 拿不到 safeStorage
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+$Token = ""
+try {
+    $out = & $Electron $DecryptJs 2>$null | Select-String "^DECRYPT_RESULT:"
+    if ($out) { $Token = (($out | Select-Object -First 1).Line -replace "^DECRYPT_RESULT:", "").Trim() }
+} catch {
+    Write-Log "❌ 调用解密脚本出错：$($_.Exception.Message)"
+}
+
+if (-not $Token -or $Token.StartsWith("ERR")) {
+    Write-Log "❌ 获取令牌失败（$Token）。请确认已安装并登录 WorkBuddy 桌面端。"
+    exit 1
+}
+
+$Api = "https://copilot.tencent.com"
+
+# ---------- 2. 查询签到状态 ----------
+$Status = ""
+try {
+    $Status = & curl.exe -s -m 15 -X POST "$Api/billing/meter/checkin-status" `
+        -H "Content-Type: application/json" -H "Accept: application/json" `
+        -H "Authorization: Bearer $Token" -d '{}' 2>$null
+} catch { $Status = "" }
+if (-not $Status) { Write-Log "❌ 查询签到状态失败（网络异常）"; exit 1 }
+if ($Status -match "401|unauthorized") { Write-Log "❌ 令牌已过期（401），请打开 WorkBuddy 桌面端刷新登录态后重试"; exit 1 }
+
+$Checked = $false
+try { $Checked = [bool]($Status | ConvertFrom-Json).data.today_checked_in } catch {}
+if ($Checked) { Write-Log "✅ 今日已签到，无需重复领取"; exit 0 }
+
+# ---------- 3. 执行签到 ----------
+$Result = ""
+try {
+    $Result = & curl.exe -s -m 15 -X POST "$Api/billing/meter/daily-checkin" `
+        -H "Content-Type: application/json" -H "Accept: application/json" `
+        -H "Authorization: Bearer $Token" -d '{}' 2>$null
+} catch { $Result = "" }
+if (-not $Result) { Write-Log "❌ 签到请求失败（网络异常）"; exit 1 }
+
+$Credit = ""
+try {
+    $d = $Result | ConvertFrom-Json
+    if ($d.code -eq 0) { $Credit = "OK credit=$($d.data.credit) streak_days=$($d.data.streak_days)" }
+    else { $Credit = "FAIL code=$($d.code) msg=$($d.msg)" }
+} catch { $Credit = "PARSE_ERR" }
+
+if ($Credit -like "OK*") { Write-Log "🎉 签到成功！领取 $Credit" }
+else { Write-Log "⚠️ 签到未成功：$Credit" }

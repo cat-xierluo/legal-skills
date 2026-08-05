@@ -63,6 +63,9 @@ skills/de-ai-polish-workspace
 # Node.js dependencies
 **/node_modules/
 
+# workbuddy-checkin runtime（setup 脚本下载的 Electron 二进制，约 100MB，不入库）
+skills/workbuddy-checkin/.runtime/
+
 /images/
 /others/
 research/
