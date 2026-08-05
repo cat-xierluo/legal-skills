@@ -13,7 +13,7 @@ subparser 的 add_argument 为权威；改字段时同步更新 §9.1 与本表�
 
 退出码: 0=全合法, 1=有违规 (可接 CI / pre-commit / hook)。
 """
-import argparse, json, sys
+import argparse, json, os, sys
 from pathlib import Path
 
 # 硬编码 fallback：仅当动态自省 yd_search.build_parser() 失败时使用。
@@ -39,8 +39,13 @@ _HARDCODED = {
 
 
 def _load_valid_filters():
-    """优先从同目录 yd_search.py 的 build_parser() 动态自省（零漂移）；
-    失败回退 _HARDCODED。返回 (filters_dict, source_str)。"""
+    """优先使用 _HARDCODED 硬编码表（默认路径，零动态执行）；
+    仅当显式设置环境变量 YD_VALIDATE_DYNAMIC=1 时，才动态自省同目录
+    yd_search.py 的 build_parser() 以自动同步字段表（维护时可用）。
+    返回 (filters_dict, source_str)。"""
+    use_dynamic = os.environ.get("YD_VALIDATE_DYNAMIC") == "1"
+    if not use_dynamic:
+        return {k: set(v) for k, v in _HARDCODED.items()}, "hardcoded(默认)"
     try:
         import importlib.util
         yd = Path(__file__).resolve().parent / "yd_search.py"

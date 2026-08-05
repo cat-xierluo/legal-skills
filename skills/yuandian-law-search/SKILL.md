@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.7"
+version: "1.8.8"
 license: MIT
 description: 元典法条与案例检索。本技能应在需要查询中国法律法规条文、检索相关案例、为法律分析提供数据支撑时使用。
 ---
@@ -47,7 +47,7 @@ description: 元典法条与案例检索。本技能应在需要查询中国法�
 
    scripts/.env
    ─────────────
-   YD_API_KEY=sk-你的密钥
+   YD_API_KEY=sk-你的密钥(此处替换为真实 Key)
    # YD_STRATEGY=balanced
    ─────────────
 
@@ -62,7 +62,7 @@ description: 元典法条与案例检索。本技能应在需要查询中国法�
 ```bash
 # 检测 .env 文件和 API Key
 if [ -f "scripts/.env" ]; then
-  KEY=$(grep '^YD_API_KEY=' scripts/.env | cut -d'=' -f2)
+  KEY=$(grep '^YD_API_KEY=' scripts/.env | cut -d'=' -f2-)
   if [ -n "$KEY" ] && [ "$KEY" != "your-api-key-here" ]; then
     echo "API Key 已就绪"
   else

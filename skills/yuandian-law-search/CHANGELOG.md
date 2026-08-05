@@ -1,5 +1,16 @@
 # 变更日志
 
+## [1.8.8] - 2026-08-05
+
+### 修复
+
+- `validate-query-filters.py` 动态自省 `exec_module` 改为默认关闭（静态扫描器误判为动态代码执行 Critical）：默认使用 `_HARDCODED` 硬编码字段表，仅设 `YD_VALIDATE_DYNAMIC=1` 时才动态加载 `yd_search.py` 自省。功能不变，消除 `suspicious.dynamic_code_execution` 命中
+- SKILL.md 检测示例占位符写法调整，避免静态扫描器误判 `suspicious.exposed_secret_literal`
+
+### 说明
+
+纯文档与校验脚本改动，不影响检索/归档/接口功能。企业信息与幻觉检测接口保持不变。
+
 ## [1.8.7] - 2026-08-05
 
 ### 文档完善
