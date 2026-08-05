@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.6.5",
+  "version": "1.6.8",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -112,6 +112,22 @@
         "工具",
         "OCR",
         "pdf",
+        "conversion"
+      ]
+    },
+    {
+      "name": "pdf-processor",
+      "description": "PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码、合并、解密、水印去除和压缩，并默认保护电子或混合 PDF 的原有图文与批注层",
+      "version": "2.10.1",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/pdf-processor",
+      "category": "productivity",
+      "tags": [
+        "工具",
+        "PDF",
+        "OCR",
         "conversion"
       ]
     },
@@ -390,7 +406,7 @@
     {
       "name": "opc-legal-counsel",
       "description": "面向 OPC、一人公司、单人创业者与小微企业的法律业务判断技能，负责经营风险分诊、跨领域判断、行动和升级边界，并通过工具中立协议将现行法与政策交由外部权威检索能力核验",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
