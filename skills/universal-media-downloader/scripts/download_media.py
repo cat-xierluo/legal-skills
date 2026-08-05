@@ -35,9 +35,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Default output directory: relative to skill root
+# Default output directory: user's Downloads folder (not self-contained — see DEC-004)
 SCRIPT_DIR = Path(__file__).parent.parent
-DEFAULT_OUT_DIR = SCRIPT_DIR / "downloads"
+DEFAULT_OUT_DIR = Path.home() / "Downloads"
 
 
 def run(cmd: list[str]) -> tuple[int, str]:

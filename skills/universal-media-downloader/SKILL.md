@@ -32,7 +32,7 @@ license: MIT
   - `python scripts/download_media.py "<URL>"`
 
 - 默认保存目录：
-  - 技能目录下的 `downloads/` 文件夹（自包含）
+  - 用户主目录下的 `~/Downloads/`（不再自包含，方便日常访问；见 DEC-004）
   - 可通过 `--out-dir` 参数自定义输出路径
 
 ### 2）只下载音频（适合播客 / 只想要 MP3）
