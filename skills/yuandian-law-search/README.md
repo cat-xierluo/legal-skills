@@ -143,30 +143,6 @@ AI 的记忆可能存在幻觉或过时。涉及法律条文的精确引用时�
 
 v1.0.0 是最重要的里程碑：API 从旧平台 `aiapi.ailaw.cn:8319` 整体迁移至开放平台 `open.chineselaw.com`，认证方式从 URL 参数改为 `X-API-Key` 请求头，同时新增了法规、案例详情、企业三大领域的端点。
 
-## 自更新机制
-
-Skill 内置了从 GitHub monorepo 自动检测和下载更新的能力，无需手动替换文件。
-
-### 工作方式
-
-1. **自动检测**：每次执行检索命令时，脚本会检查距上次版本检测是否超过 7 天。若超过，从 GitHub 读取远程 `SKILL.md` 的版本号，与本地对比
-2. **版本比对**：基于语义版本号（semver）比较，远程版本更高时打印更新提示
-3. **手动检查**：可随时执行 `scripts/yd-run check-update`，显示当前版本、远程版本和最近提交记录
-4. **执行更新**：`scripts/yd-run do-update` 从 GitHub 下载 `scripts/MANIFEST.json` 中列出的所有文件
-
-### 安全边界
-
-`do-update` 的设计遵循一个原则：**只更新 skill 自身的代码和文档，绝不触碰用户数据**。
-
-具体来说：
-- 更新范围由 `scripts/MANIFEST.json` 控制，仅包含 SKILL.md、CHANGELOG.md、脚本、`endpoints/`、`references/`、`templates/` 文档
-- **不会覆盖** `.env`（用户的 API Key）和 `archive/`（归档缓存数据）
-- 不依赖 GitHub API Token，仅使用公开的 `raw.githubusercontent.com` 和 Atom feed
-
-### 检测状态记录
-
-版本检测结果保存在 `archive/version_check.json`，记录上次检测时间、本地/远程版本号和状态。脚本据此判断是否需要重新检测。
-
 ## 许可证
 
 MIT License — 详见 [LICENSE.txt](LICENSE.txt)。
