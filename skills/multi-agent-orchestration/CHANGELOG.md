@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.20.4] - 2026-08-05
+
+### 改进 — CodeBuddy 拼写校正 + ref 08 结构精简
+
+#### 拼写校正（qodebuddy → CodeBuddy，腾讯产品名）
+
+修正全 skill 共 59 处 `qodebuddy`（错误拼写）→ `CodeBuddy`（正确产品名，腾讯旗下）。文件系统客观路径不动（`codebuddy` CLI 二进制名、`WorkBuddy.app` app bundle、`~/.codebuddy/` / `~/.workbuddy/` 配置目录、`CODEBUDDY_*` 环境变量）。
+
+- **references/08-codebuddy-cli-worker.md**：40 处（全文 Python 批量替换）
+- **SKILL.md**：7 处 + 4 处文件名引用 `08-qodebuddy-cli-worker.md` → `08-codebuddy-cli-worker.md`
+- **references/06-agent-cli-reference.md**：6 处（表格行、章节标题、注释）
+- **scripts/render-runtime-profile.sh**：3 处注释
+- **scripts/spawn-worker.sh**：1 处注释
+- **scripts/check-dependencies.sh**：1 处提示信息
+- **config/orchestration-personal.example.json**：1 处注释 + 文件名引用
+
+#### ref 08 结构精简（945 → 858 行）
+
+- **合并旧 §10（2026-07-05 五轮）+ 旧 §14（2026-07-08 三轮）→ 新 §10「spawn 实战坑点」**：原两节讲同一批坑（权限/Enter/session 断流）的二次叙述，按"坑点类型"重组，两张速查表合一。新增 §10.6 session 断流、§10.7 原生 `--worktree --tmux` 对比测方向、§10.8 合并速查表。删除旧 §10.7（§9 修订说明，合并后失效）和整个旧 §14。
+- **删除旧 §6.6 / §6.7 历史实测段**：snapshot-copy-into-worktree pattern 已固化为 SKILL.md §2.3 + DEC-037；render-runtime-profile 支持情况见 `--help`。保留 §6.6 精简指针段。
+- **版本记录区压缩**：8 条 2026-07-08 过程性微调（"首次"~"第七次"逐条 smoke test 中间态）合并为 1 条关键节点。
+- **交叉引用校准**：L330 旧 `§6.7` 引用改 `§5`（MCP 关闭规则实际位置）。
+
+### 待办清零 + qoderclicn trust dialog 修复（本次推进）
+
+- **ref 08 §3 主标题补齐 + L159 孤立 §2.6 消除**（上面"待办事项"两条其实是同一问题）：L159 `### 2.6`（孤立重复编号）→ `## 3. 命令行用法`（§3 主标题，§3.1/§3.2 归属正确）。历史遗留待办清零。
+- **Task-031 trust_auto backend-specific 选项处理**（`scripts/spawn-worker.sh`）：qoderclicn 2 选项 trust dialog（1=Trust folder / 2=Don't trust and exit，**默认高亮 option 2 Don't trust**）被旧 generic fallback `Down×3+Enter` 误选 option 2 = Don't trust → qoderclicn 立即 exit 42。修复：generic fallback 加 `WORKER_BACKEND` case，`qoderwork-cn|qoderclicn` 发数字键 `"1"` 选 Trust folder（与 `permission_auto` `"2"` 同数字键模式，不依赖默认高亮）；codebuddy（4 选项）等保留 `Down×3+Enter`。
+- **qoderclicn 真机端到端验证（Task-031）**：spawn-worker **5 秒 exit** + `SPAWN_WORKER_TRUST_AUTO: trust dialog detected (qoder 2-option), selecting option 1 Trust folder (key '1')` + qoderclicn **过 trust 进 REPL ready**（pane: `Thinking ▪ 准备好了，请告诉我需要做什么` + `Qwen3.7-Max Model · ctx 15%`，**无 "The current folder is not trusted. Exiting."**）。qoderclicn backend 端到端可用 ✓。
+
+### Test
+
+- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**
+- `bash scripts/smoke-sentinel.sh` / `smoke-tmux-worker.sh` / `lint-wait-script.sh` → 全 OK
+- `bash -n scripts/spawn-worker.sh scripts/render-runtime-profile.sh` → OK
+- **qoderclicn 真机 throwaway（Task-031）**：5s spawn-worker exit + trust 处理 + REPL ready ✓
+
 ## [1.20.3] - 2026-08-05
 
 ### 新增 — folia Wave-1 + W1/W2 dogfood 实战撞坑修复（Task-026 ~ Task-030）

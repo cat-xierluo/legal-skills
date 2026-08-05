@@ -16,7 +16,7 @@
 | Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
 | Gemini CLI | 0.29.0 | `/opt/homebrew/bin/gemini` | `gemini` | `gemini -p "..."` | ✓ `--experimental-acp` | Google AI / Vertex | （按 gemini profile） |
 | QoderWork CLI | 1.0.24 | QoderWork CN.app 内 bin | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `qmodel_latest`、`qmodel`（见下方模型 key 表） |
-| qodebuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | qodebuddy 账号额度 / 内置模型 | `deepseek-v4-pro`、`deepseek-v4-flash` |
+| CodeBuddy CLI | 2.103.3 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `deepseek-v4-pro`、`deepseek-v4-flash` |
 | Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
 
 > 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §2.4）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
@@ -453,9 +453,9 @@ kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
 
 ---
 
-## 5A. qodebuddy CLI（`codebuddy`）
+## 5A. CodeBuddy CLI（`codebuddy`）
 
-> 2026-06-21 实测：qodebuddy 桌面端内置 codebuddy CLI，可作为 custom CLI worker 使用；它不同于 Moonshot 官方 `kimi` CLI。
+> 2026-06-21 实测：CodeBuddy 桌面端内置 codebuddy CLI，可作为 custom CLI worker 使用；它不同于 Moonshot 官方 `kimi` CLI。
 
 ### 5A.1 二进制位置与版本
 
@@ -496,7 +496,7 @@ kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
 
 ### 5A.3 tmux Worker 启动模式
 
-推荐 PM 先用 `spawn-worker.sh` 创建 worktree，再在该 worktree 内启动交互式 qodebuddy：
+推荐 PM 先用 `spawn-worker.sh` 创建 worktree，再在该 worktree 内启动交互式 CodeBuddy：
 
 ```bash
 tmux new-session -d \
@@ -526,7 +526,7 @@ tmux new-session -d \
 - `--model kimi-k2.6` 虽不一定出现在 help 列表中，但可通过短提示词和交互界面的 `Kimi-K2.6` 标识确认。
 - 书稿评测 r1 已完整跑通：review、正文修订、self-check、result、metadata、commit、sentinel done。
 - worker 可能在提交后更新 `metadata.json` 的 `commit_sha` / `status` 字段，导致一个未提交尾巴。PM 收口时要检查 `git status --short`，若只剩 metadata 完成态字段，可补一个 `chore(eval): finalize codebuddy kimi metadata` 提交。
-- 交互式 r2 bootstrap 曾出现 qodebuddy 内部 shell/write 工具长时间挂起。若 1-2 分钟没有 `STATUS.json`，PM 应先 Esc 中断，检查无业务改动后重启 tmux session；必要时由 PM 仅在 Session Context 中写入“重启中”状态，再投递 Full Prompt。业务正文和报告仍应由 worker 完成。
+- 交互式 r2 bootstrap 曾出现 CodeBuddy 内部 shell/write 工具长时间挂起。若 1-2 分钟没有 `STATUS.json`，PM 应先 Esc 中断，检查无业务改动后重启 tmux session；必要时由 PM 仅在 Session Context 中写入“重启中”状态，再投递 Full Prompt。业务正文和报告仍应由 worker 完成。
 - 对长任务优先交互式 tmux，不建议一发 `--print` 跑完整书稿 worker；交互式模式便于处理信任目录、权限、工具挂起和 prompt 纠偏。
 
 ---
@@ -745,7 +745,7 @@ tmux new-session -d -s W -c WT 'gemini -y --approval-mode auto_edit -m gemini-2.
 # === QoderWork ===
 tmux new-session -d -s W -c WT 'qoderclicn -m qmodel_latest --permission-mode auto'
 
-# === qodebuddy ===
+# === CodeBuddy ===
 tmux new-session -d -s W -c WT 'codebuddy --model kimi-k2.6 --permission-mode bypassPermissions'
 ```
 

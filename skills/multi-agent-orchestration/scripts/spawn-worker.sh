@@ -1004,10 +1004,22 @@ trust_auto() {
       return 0
     fi
 
-    # Generic fallback: match other trust/Do you trust dialogs
+    # Generic fallback: match other trust/Do you trust dialogs（v1.20.4 Task-031：backend-specific 选项处理）
+    # codebuddy 4 选项 dialog 已被上面专门 match（"Trust folder and all subdirectories"）捕获；
+    # 这里捕获 qoderclicn 等 2 选项 dialog（1=Trust folder / 2=Don't trust and exit，默认高亮 option 2 Don't trust）。
     if echo "$content" | grep -qE "Trust folder|Do you trust" 2>/dev/null; then
-      echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (generic), selecting last trust option (Down×3+Enter)"
-      tmux send-keys -t "$session" Down Down Down Enter
+      case "$WORKER_BACKEND" in
+        qoderwork-cn|qoderclicn)
+          # qoderclicn 2 选项 dialog：发数字键 "1" 选 Trust folder（默认高亮 option 2 Don't trust，不能 Enter；与 permission_auto "2" 同数字键模式）
+          echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (qoder 2-option), selecting option 1 Trust folder (key '1')"
+          tmux send-keys -t "$session" "1"
+          ;;
+        *)
+          # 其他 backend 保守沿用 Down×3+Enter（codebuddy 4 选项选 option 3 的旧行为；新 backend 真机验证后按需加 case）
+          echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (generic), selecting last trust option (Down×3+Enter)"
+          tmux send-keys -t "$session" Down Down Down Enter
+          ;;
+      esac
       sleep 2
       return 0
     fi
@@ -1046,7 +1058,7 @@ permission_auto() {
     #   Do you want to proceed?
     #     1. Yes
     #   > 2. Yes, and don't ask again for session (shift + tab)
-    #     3. No, and tell qodebuddy what to do differently (escape)
+    #     3. No, and tell CodeBuddy what to do differently (escape)
     if echo "$content" | grep -q "Do you want to proceed"; then
       echo "SPAWN_WORKER_PERMISSION_AUTO: 'Do you want to proceed' dialog detected, selecting session-allow (option 2, key '2')"
       tmux send-keys -t "$session" "2"  # v1.18.3: 改用数字键 2（PM 实测 work）
