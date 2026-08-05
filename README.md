@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.1.0  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时 |
 | 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v0.7.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）|
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
@@ -41,8 +42,6 @@
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 | 2026-08-01 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.10.1 | PP-OCRv6 + Structure 融合改用软段界和低置信行级兜底；4 类通用模板恢复表格视觉行与连续条款，4/4 双层 PDF 可检索且页面渲染不变 |
 | 2026-07-31 | 更新   | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.1  | 补齐合同范围、顾问关系、监管询问三条评测的机器断言，覆盖率由 9/12 提升至 12/12；标注 archive 归档边界，并在 README 标明评测覆盖现状 |
-| 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
-| 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.2  | 新增覆盖十个场景的代表性提示词、hard/soft 机器断言和独立校验器；侵权、规避、等同及无效样本锁定无网页链接的多条款法源与证据停止门禁 |
 </details>
 
 ## 📋 项目概述
@@ -550,6 +549,15 @@
 <td style="text-align:center">v1.2.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/project-init-1.1.2.zip">下载 v1.1.2</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/multica-skill-update/"><strong>multica-skill-update</strong></a></td>
+<td>工具·Skill同步</td>
+<td style="word-break:break-word">Multica 工作区 Skill 同步工具：维护来源清单（manifest.json），批量导入/更新 Multica skill 数据库；支持 init（初始化导入）/ update（更新刷新）/ plan（预览）三模式，结果结构化报告；可接 Autopilot 每周定时同步</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.1.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/multica-skill-update-0.1.0.zip">下载</a></td>
+<td>需安装 multica CLI</td>
 </tr>
 <tr>
 <td><a href="skills/skill-manager/"><strong>skill-manager</strong></a></td>
