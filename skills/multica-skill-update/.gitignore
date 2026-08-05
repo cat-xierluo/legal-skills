@@ -1,0 +1,7 @@
+# 个人来源清单（含本机绝对路径/个人 skill 来源，不入库）
+# 模板见 references/manifest.example.json；复制后在此文件维护真实来源
+manifest.json
+
+# Python 缓存
+__pycache__/
+*.pyc

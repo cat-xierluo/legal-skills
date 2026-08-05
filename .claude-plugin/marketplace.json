@@ -674,7 +674,7 @@
     {
       "name": "multica-skill-update",
       "description": "Multica 工作区 Skill 同步工具：维护来源清单并批量导入/更新 Multica skill 数据库，支持 init/update/plan 三模式与 Autopilot 定时集成。",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
