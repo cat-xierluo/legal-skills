@@ -9,6 +9,8 @@
 > | 2 | failed/blocked/stopped | 工人写终态但非 done；PM 需要读 STATUS.issues / blocker 决定下一步 |
 > | 124 | timeout | Sentinel 等到 `--max-wait` 还没看到终态；工人可能卡死或 sentinel 启动太晚 |
 > | 64 | usage error | Sentinel 自身参数错（PM 调用错误）|
+> | 137 | sentinel/worker 被 SIGKILL | 进程被强制杀（OOM / `kill -9` / harness 强杀）；STATUS 多半没终态，pane 可能截断 |
+> | 143 | sentinel/worker 被 SIGTERM | 进程被终止信号杀（PM Bash timeout / 用户 Ctrl-C / 父进程退出）；STATUS 可能没终态 |
 
 ## 1. 第一步：解析 task-notification
 
@@ -20,8 +22,12 @@
    # 这段是 PM 自己的 turn 内联的，不调外部脚本
    SENTINEL_LOG={session_context}/SENTINEL_OUT.log
    STATUS_FILE={session_context}/STATUS.json
+   # 先 grep 终态标记（长任务下 PENDING 会刷掉前面的 TERMINAL/TIMEOUT）
+   grep -E "SENTINEL_(TERMINAL|TIMEOUT|UNKNOWN_STATUS|FAILED)" "$SENTINEL_LOG" | tail -5
+   # 再看最近活动上下文（PENDING 节奏 / 时间戳）
    tail -5 "$SENTINEL_LOG"
    ```
+   两行配合：第一行 grep 找终态原因（长任务下 `SENTINEL_PENDING` 默认 5s 一行会刷掉前面的 `SENTINEL_TERMINAL`/`SENTINEL_TIMEOUT`/`SENTINEL_UNKNOWN_STATUS` 终态标记），第二行 `tail` 看最近活动节奏。
 3. 读 `STATUS.json` 当前完整内容（不止 status 字段，也看 phase / current_action / next_action / git.last_commit_sha / git.commits_since_base）。
 
 ## 2. 按 exit code 分支处理
@@ -88,6 +94,33 @@ PM 自己的脚本调用错误。检查：
 
 重写调用并重新启 sentinel。
 
+### 2.5 Exit 137/143（signal kill）
+
+Sentinel 或 worker 被 signal 杀（137=SIGKILL / 143=SIGTERM）。**核心特征：STATUS.json 大概率没写终态**（进程被打断在心跳间隔之间）。
+
+现象：notification 里 exit code 是 137 或 143；`STATUS.json.status` 多半还停在 `running`/`thinking-deep` 等中间态，`updated_at` 距离当前时间可能已超过一个心跳周期。
+
+诊断步骤：
+```bash
+# 1. session 是否还在？（has-session true=还在 / false=已退出）
+tmux has-session -t {session} 2>/dev/null && echo "session alive" || echo "session gone"
+
+# 2. STATUS.json 的 status + updated_at（判断是否长时间无更新）
+jq -r '{status, updated_at, current_action}' {session_context}/STATUS.json
+
+# 3. 看 pane 尾部：死循环证据 or 正常推进被打断 or provider 报错
+tmux capture-pane -t {session} -p -S -50
+```
+
+决策（按"session 状态 × STATUS 终态"组合）：
+- **session 还在 + STATUS 长时间无更新**（> 1 个心跳周期）：worker 可能卡死被 harness kill。按 **§2.3 timeout 的"tmux 还在 + STATUS 长时间没更新"卡死决策**处理 —— 先发心跳探针纠偏，5 分钟无响应则重启/收口。
+- **session 已退出 + STATUS 无终态**：sentinel 覆盖缺失（没赶上终态事件）。PM 用 `pm-monitor.sh --once` 拉一次状态补齐，评估是否重派 worker 或派 reviewer 收口（参考 §2.2 / §2.3 的退出后无终态路径）。
+- **137（SIGKILL）特别留意**：SIGKILL 是不可捕获信号，进程没机会清理。优先怀疑：
+  - **OOM kill**（系统内存压力 / provider 上下文窗口爆掉）→ 查 pane 尾部是否有 OOM / context-length-exceeded 错误。
+  - **harness 强杀**（provider 额度耗尽 / 上游限流 / token 用尽触发 kill）→ 查 provider dashboard 或 pane 报错。
+  - **手动 `kill -9`**（用户或 PM 主动杀）→ 回溯是否有 PM/用户介入记录。
+- **143（SIGTERM）相对温和**：通常是 PM 自己的 Bash timeout、用户 Ctrl-C、或父进程退出时给子进程发的 SIGTERM。SIGTERM 会被脚本 trap 捕获（如果 sentinel/worker 写了 trap），可能留半截日志；按"正常被终止"处理，看 STATUS 是否有终态、无终态则补拉状态。
+
 ## 3. 范围检查（适用于所有非 usage error 情况）
 
 不管 exit code 是什么，收口前都必须做一次范围检查，避免 worker 越权改文件：
@@ -111,7 +144,7 @@ diff <(jq -r '.scope.allowed_files[]' {session_context}/STATUS.json | sort) \
 
 ## 4. Sentinel 缺失 / 失败的降级
 
-如果 sentinel 没启起来（auto mode 拒了 background 调用 / sentinel 进程被 SIGKILL / sentinel sh 写错），PM 回到旧行为：
+如果 sentinel 没启起来（auto mode 拒了 background 调用 / sentinel 进程被 SIGKILL / sentinel sh 写错），PM 回到旧行为（注意：如果 sentinel 是**运行中被 signal 杀**导致 exit 137/143，走 §2.5 的 signal-kill 诊断分支，不是这里的启动失败降级）：
 
 - 单 worker：用 `wait-worker.sh --once` 手动查状态
 - 多 worker：起 `pm-monitor.sh --log-file` 在独立 background process 持续写事件日志，PM 在每个 turn 末尾 `tail -50` 看

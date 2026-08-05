@@ -75,16 +75,22 @@ else
   check "--no-permission-auto flag 解析存在（v1.18.3 兼容）" 1
 fi
 
-# 5. 调用点拆分（trust_auto 独立 if，permission_auto 独立 if + bg）
-if grep -qE "permission_auto_bg \"\\\$SESSION\" & disown" "$SPAWN_WORKER"; then
-  check "调用点含 permission_auto_bg disown（v1.18.3 后台 watcher）" 0
+# 5. 调用点 permission_auto_bg 用 setsid/nohup+disown 启动（v1.20.2 Task-021 watcher 存活）
+if grep -qE "setsid permission_auto_bg|nohup permission_auto_bg" "$SPAWN_WORKER"; then
+  check "调用点 permission_auto_bg 改 setsid/nohup+disown（v1.20.2 Task-021 存活）" 0
 else
-  check "调用点含 permission_auto_bg disown（v1.18.3 后台 watcher）" 1
+  check "调用点 permission_auto_bg 改 setsid/nohup+disown（v1.20.2 Task-021 存活）" 1
 fi
 
-# 6. --usage 含 --no-permission-auto（无参触发 usage，输出到 stderr；用临时文件绕过 macOS ugrep pipe bug；`|| true` 忽略 exit 64）
+# 6. spawn-worker 无参 exit 64 + --usage 含 --no-permission-auto（v1.20.2 HRA-001：显式断言 exit 64）
 USAGE_OUT=$(mktemp)
-bash "$SPAWN_WORKER" > "$USAGE_OUT" 2>&1 || true
+USAGE_EXIT=0
+bash "$SPAWN_WORKER" > "$USAGE_OUT" 2>&1 || USAGE_EXIT=$?
+if [ "$USAGE_EXIT" -eq 64 ]; then
+  check "spawn-worker 无参 exit 64（usage 路径）" 0
+else
+  check "spawn-worker 无参 exit 64（usage 路径）" 1
+fi
 if grep -q "no-permission-auto" "$USAGE_OUT"; then
   check "--usage 输出 --no-permission-auto" 0
 else
@@ -138,9 +144,10 @@ else
   check "主流程 PERMISSION_AUTO_BG 独立 gate（v1.18.4 sync/bg 解耦）" 1
 fi
 
-# 12. --usage 含 4 个新 flag
+# 12. --usage 含 4 个新 flag（v1.20.2 HRA-001：保存 exit code 供诊断，不再 || true）
 USAGE_OUT=$(mktemp)
-bash "$SPAWN_WORKER" > "$USAGE_OUT" 2>&1 || true
+USAGE_EXIT=0
+bash "$SPAWN_WORKER" > "$USAGE_OUT" 2>&1 || USAGE_EXIT=$?
 usage_ok=1
 for flag in --trust-auto --permission-auto --permission-auto-bg --no-permission-auto-bg; do
   # 用 -- 让 BSD grep 把以 - 开头的 pattern 当作字符串
@@ -161,6 +168,66 @@ if grep -q "v1.18.4" "$SPAWN_WORKER"; then
   check "spawn-worker.sh 头部注释含 v1.18.4 标记" 0
 else
   check "spawn-worker.sh 头部注释含 v1.18.4 标记" 1
+fi
+
+# === v1.20.2 new checks (Task-019/020/021，2026-08-05 folia Wave-1 实战) ===
+
+# 14. claude_command_has_bare() 函数定义存在（Task-019 区分 --bare vs --safe-mode/setting-sources）
+if grep -q "^claude_command_has_bare() {" "$SPAWN_WORKER"; then
+  check "claude_command_has_bare() 函数定义存在（v1.20.2 Task-019）" 0
+else
+  check "claude_command_has_bare() 函数定义存在（v1.20.2 Task-019）" 1
+fi
+
+# 15. external_imports_auto() 函数定义存在（Task-020 监控 claude-code external imports dialog）
+if grep -q "^external_imports_auto() {" "$SPAWN_WORKER"; then
+  check "external_imports_auto() 函数定义存在（v1.20.2 Task-020）" 0
+else
+  check "external_imports_auto() 函数定义存在（v1.20.2 Task-020）" 1
+fi
+
+# 16. claude-code --bare 自动降级分支（Task-019）：变量 + 日志标记
+if grep -q "CLAUDE_CODE_BARE_AUTO_DEGRADE" "$SPAWN_WORKER" && grep -q "SPAWN_WORKER_BARE_AUTO_DEGRADE" "$SPAWN_WORKER"; then
+  check "claude-code --bare 自动降级 prompt-only 分支（v1.20.2 Task-019）" 0
+else
+  check "claude-code --bare 自动降级 prompt-only 分支（v1.20.2 Task-019）" 1
+fi
+
+# 17. external_imports_auto 主流程后台调用（Task-020）
+if grep -qE "setsid external_imports_auto|nohup external_imports_auto" "$SPAWN_WORKER"; then
+  check "external_imports_auto 主流程后台调用（v1.20.2 Task-020）" 0
+else
+  check "external_imports_auto 主流程后台调用（v1.20.2 Task-020）" 1
+fi
+
+# 18. 3 个新 flag 解析存在
+flag_ok=0
+for flag in --no-external-imports-auto --external-imports-auto --no-claude-code-bare-auto-degrade; do
+  if grep -q -- "$flag)" "$SPAWN_WORKER"; then
+    flag_ok=1
+  else
+    flag_ok=0
+    break
+  fi
+done
+if [ "$flag_ok" -eq 1 ]; then
+  check "3 个新 flag 解析齐全（v1.20.2 Task-019/020）" 0
+else
+  check "3 个新 flag 解析齐全（v1.20.2 Task-019/020）" 1
+fi
+
+# 19. resolve_backend_defaults 含 EXTERNAL_IMPORTS_AUTO claude-code 默认开分支
+if grep -A 40 "^resolve_backend_defaults() {" "$SPAWN_WORKER" | grep -qE "claude-code\|claude_code\) EXTERNAL_IMPORTS_AUTO=1"; then
+  check "resolve_backend_defaults 含 EXTERNAL_IMPORTS_AUTO claude-code 默认开（v1.20.2 Task-020）" 0
+else
+  check "resolve_backend_defaults 含 EXTERNAL_IMPORTS_AUTO claude-code 默认开（v1.20.2 Task-020）" 1
+fi
+
+# 20. 头部注释含 v1.20.2
+if grep -q "v1.20.2" "$SPAWN_WORKER"; then
+  check "spawn-worker.sh 头部注释含 v1.20.2 标记" 0
+else
+  check "spawn-worker.sh 头部注释含 v1.20.2 标记" 1
 fi
 
 echo

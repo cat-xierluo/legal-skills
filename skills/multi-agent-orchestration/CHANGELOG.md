@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.20.2] - 2026-08-05
+
+### 新增 — folia Wave-1 实战三修 + 本 skill 自身 dogfood 验证
+
+本轮来自 folia Wave-1（2026-08-04/05，claude-code + codebuddy 5-worker）实战沉淀，覆盖 spawn / 监测 / prompt 投递 / 收口四个环节。**Task-016/017 由本 skill 自身 dogfood**（W1 worker 改 `pm-sentinel-response.md`）真机完成，验证 spawn-worker.sh 修复 + sentinel 事件驱动 + 超长 prompt 投递全链路。
+
+#### spawn-worker.sh（Task-019/020/021）
+
+- **Task-019 — claude-code `--bare` 自动降级 prompt-only**：`render-runtime-profile.sh` 对 claude-code provider-isolation 默认加 `--bare`（必需：skip keychain/OAuth/CLAUDE.md auto-discovery），但 `--bare` 触发 spawn-worker install-guard fail-closed（`:520-528` 要 PM 手写 `--allow-prompt-only-install-guard`）。新增 `claude_command_has_bare()` 检测：claude-code + `--bare` 自动降级 prompt-only + 内置来源文本（`CLAUDE_CODE_BARE_AUTO_DEGRADE=1`，`--no-claude-code-bare-auto-degrade` opt-out），PM 不再手写降级。`--safe-mode` / `--setting-sources` 排除 local / 缺 claude token 仍 fail-closed（非 `--bare` 不自动降级）。**真机验证**：dogfood W1 spawn 输出 `SPAWN_WORKER_BARE_AUTO_DEGRADE: claude-code --bare detected, install-guard auto prompt_only_degraded (source recorded)`，worker 正常启动（banner `glm-5.2[1M]`）。
+- **Task-020 — `external_imports_auto()` 监控 claude-code external imports dialog**：CLAUDE.md `@import` 触发 claude 首启弹 "Yes allow external imports" dialog（v1.18.4 默认关 trust/permission 不覆盖此类）。新增 `external_imports_auto()` 后台 watcher（120s，option 1 默认放行），claude-code 默认开（`EXTERNAL_IMPORTS_AUTO=1`，`--no-external-imports-auto` opt-out）。`--bare` 模式下 CLAUDE.md 被 skip、dialog 通常不弹，watcher 作兜底无副作用。
+- **Task-021 — `permission_auto_bg` setsid + codebuddy Bash timeout 文档**：`:1207` `( permission_auto_bg & disown ) &` 改 `setsid`（macOS 无 setsid 时 fallback `nohup + disown`），spawn-worker 被 SIGTERM 时 watcher 尽量存活。SKILL §6 补"codebuddy 同步监控逼近 PM Bash 2min timeout，建议 PM Bash timeout 调到 180s+"。
+
+#### pm-sentinel-response.md（Task-016/017，W1 dogfood 完成）
+
+- **Task-016 — §2 显式归类 exit 137/143（SIGKILL/SIGTERM）**：exit code 表补 137/143 两行；新增 §2.5「Exit 137/143（signal kill）」分支（session 状态 × STATUS 终态组合诊断 + 137 OOM/harness 强杀/手动 kill + 143 温和）；§4 降级段加指向 §2.5 的交叉引用。folia Wave-1 复盘：sentinel 被 signal 杀时 PM 缺明确分支。
+- **Task-017 — §1 step 2 `tail -5` 改 grep 关键标记**：长任务 sentinel 持续写 `SENTINEL_PENDING`（5s/行）刷掉前面的 TERMINAL/TIMEOUT/UNKNOWN_STATUS。改 `grep -E "SENTINEL_(TERMINAL|TIMEOUT|UNKNOWN_STATUS|FAILED)" | tail -5` + 保留 `tail -5` 看上下文。
+
+#### cron-monitor-prompt.md（Task-024）
+
+- **Task-024 — 自删改硬指令第 0 步**：prompt 模板判定段加第 0 步硬指令（最高优先级）：读所有 worker STATUS，全终态（done/failed/blocked/stopped）且无 pending PR/未合入 → 立即 `CronDelete` 本 cron，不做巡检。folia Wave-1：3 worker 全 done 后 cron 仍触发一次兜底巡检，PM 手动 CronDelete。
+
+#### SKILL.md 文档（Task-022/025）
+
+- **Task-022 — §5.2 超长 prompt 投递标准模式**：Full Worker Prompt 填任务后超 2-4 KB + 特殊字符，直接 `send-keys -l` 有转义/截断风险。标准模式：写 `{session_context}/WORKER_PROMPT.md` + `send-keys` 短读取指令（"请 Read WORKER_PROMPT.md 并执行"）。folia 3 worker + 本轮 W1 dogfood 均此模式，100% 投递成功。
+- **Task-025 — §3 第 11 步 webview 项目分流**：Tauri/Electron/WKWebView 的 webview 不暴露 macOS a11y，orca/computer-use 读不了（`role:null`）也写不了（click 不触发 React 事件）。web 交互必须走 Playwright e2e，orca 仅原生控件 + screencapture。folia（Tauri）#92 验证：orca 4 次 click 截图字节零变化。修正 TASKS 里 stale 的 §3.11 引用（实际是 §3 第 11 步）。
+
+### 改进 — smoke HRA-001 修复（skill-lint 验收触发）
+
+skill-lint `harness_failure_audit` 基线报 3 处 hard finding（HRA-001：测试 `|| true` 丢被测命令退出码）。本轮全部修复：
+- **`smoke-sentinel.sh:167/170`**：usage 路径 `|| true` 改显式断言 exit 64（no-arg + --bogus 都 exit 64）+ `assert_contains`。
+- **`smoke-auto-bypass.sh:87/143`**：spawn-worker 无参 `|| true` 改显式保存 exit code + 断言 exit 64（#6 加新 check）；smoke 总数 13 → 21（v1.18.4 + v1.20.2 段 + exit 64 断言）。
+- **`smoke-provider-settings.sh:86`**：provider 调用 `|| true` 改保存 exit code，区分 ERROR（provider exit≠0 + 无 token）vs FAIL（exit 0 + 无 token），PASS 若 exit≠0 附诊断。⚠️ 本项未真机验证（provider 调用非确定，依赖网络/token），逻辑保留 capture-response-诊断语义。
+
+### 入库 — G25-G28 FaroPDF Wave 1+2 实战沉淀（references/09-parallel-lessons.md）
+
+G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此前已写进 `09-parallel-lessons.md` 工作区但未入 CHANGELOG，本轮正式入库：
+- **G25**：spawn-worker backend token 检查（`--command` basename 必须含 backend；bash launch.sh wrapper 会触发 fail-closed，改用 backend 二进制直起 + `/tmp/empty-mcp.json` 文件避 tmux 引号吞）。
+- **G26**：claude-code worker 派 subagent 不可用（glm 第三方 provider API 1211/500）→ 主进程 Grep 替代 + prompt 显式禁 subagent。
+- **G27**：漏 commit 也犯 claude-code（不只 codebuddy）—— 收口必查 `git log main..HEAD` 非空。
+- **G28**：verify 用主仓 node_modules（worktree 向上解析，免 npm ci）+ 提效/降 token 汇总表。
+
+### Test — dogfood 链路全验证（本 skill 自身做 PM）
+
+- Task-016/017 由 W1 worker（claude-code/glm-5.2[1M]）在 worktree 完成：spawn（render + settings 绝对路径 + `--bare` 自动降级）→ 投递（§5.2 WORKER_PROMPT.md + 短指令）→ worker 自主执行（Isolation Gate + STATUS + 改文件 + Verify + commit `755ffe3` + done）→ sentinel exit 0 唤醒 PM → 收口 apply。
+- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（v1.18.3 + v1.18.4 + v1.20.2 段 + HRA-001 exit 64 断言）。
+- `bash scripts/smoke-sentinel.sh` → SMOKE_SENTINEL_OK（含 HRA-001 exit 64 断言）。
+- `bash scripts/smoke-tmux-worker.sh` → SMOKE_TMUX_WORKER_OK。
+- `bash scripts/lint-wait-script.sh` → LINT_WAIT_SCRIPT_OK。
+
+### 关联
+
+- 来源：folia Wave-1（2026-08-04/05，5-worker / 2-backend）+ FaroPDF Wave 1+2（2026-08-04）实战沉淀。
+- 关联章节：§2.1 防逃逸门禁、§3.8 spawn 后核验、§3 第 11 步 webview 分流、§5.2 超长 prompt 投递、§6 启动方式（setsid / Bash timeout）、§7.2/§7.3 sentinel + cron。
+- 已知 follow-up：Task-019/020/021 的 codebuddy 端真机验证（本轮验证 claude-code 端；codebuddy 同步监控提速 + setsid 在 codebuddy spawn 的效果待 codebuddy Wave 验证）。
+
 ## [1.20.1] - 2026-08-01
 
 ### 新增 — 非 CLI 主会话不宜扮演 PM 的适用边界

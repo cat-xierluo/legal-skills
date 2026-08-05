@@ -163,11 +163,21 @@ if [ "$TIMEOUT_EXIT" -ne 124 ]; then
   exit 1
 fi
 
-# Validate usage path
-USAGE_OUT=$(bash "$SCRIPT_DIR/sentinel.sh" 2>&1 || true)
+# Validate usage path (v1.20.2 HRA-001: 显式断言 exit 64，不再 || true 丢退出码)
+USAGE_EXIT=0
+USAGE_OUT=$(bash "$SCRIPT_DIR/sentinel.sh" 2>&1) || USAGE_EXIT=$?
+if [ "$USAGE_EXIT" -ne 64 ]; then
+  printf 'ASSERTION FAILED: sentinel no-arg expected exit 64 (usage), got %d\n' "$USAGE_EXIT" >&2
+  exit 1
+fi
 assert_contains "$USAGE_OUT" "Usage:"
 
-USAGE_OUT2=$(bash "$SCRIPT_DIR/sentinel.sh" --bogus 2>&1 || true)
+BOGUS_EXIT=0
+USAGE_OUT2=$(bash "$SCRIPT_DIR/sentinel.sh" --bogus 2>&1) || BOGUS_EXIT=$?
+if [ "$BOGUS_EXIT" -ne 64 ]; then
+  printf 'ASSERTION FAILED: sentinel --bogus expected exit 64 (unknown arg), got %d\n' "$BOGUS_EXIT" >&2
+  exit 1
+fi
 assert_contains "$USAGE_OUT2" "Unknown argument: --bogus"
 
 echo "SMOKE_SENTINEL_OK"

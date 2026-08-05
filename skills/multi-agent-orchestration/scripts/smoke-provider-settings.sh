@@ -79,15 +79,25 @@ for f in "${TEST_FILES[@]}"; do
   token=$(printf '%s_OK' "$name" | tr '[:lower:]-' '[:upper:]')
   prompt=$(printf "$PROMPT_TEMPLATE" "$token")
 
+  # v1.20.2 HRA-001：保存 provider exit code，区分 ERROR（provider 崩溃）vs FAIL（exit 0 但无 token）
+  provider_exit=0
   response=$(printf '%s' "$prompt" \
     | "$PROVIDER_ENV_WRAPPER" --settings "$f" --model "$model" -- \
         claude --settings "$f" --model "$model" \
-        -p --output-format text --permission-mode acceptEdits 2>&1 \
-    || true)
+        -p --output-format text --permission-mode acceptEdits 2>&1) || provider_exit=$?
 
   if printf '%s' "$response" | grep -qF "$token"; then
-    printf '%-44s %-30s PASS\n' "$name" "$model"
+    printf '%-44s %-30s PASS' "$name" "$model"
+    [ "$provider_exit" -ne 0 ] && printf ' (provider exit=%d, token matched anyway)' "$provider_exit"
+    printf '\n'
     PASS=$((PASS + 1))
+  elif [ "$provider_exit" -ne 0 ]; then
+    printf '%-44s %-30s ERROR(provider exit=%d)\n' "$name" "$model" "$provider_exit"
+    echo "  --- response (first 5 lines) ---"
+    printf '%s\n' "$response" | head -5 | sed 's/^/  /'
+    echo "  -------------------------------"
+    FAIL=$((FAIL + 1))
+    FAILED_FILES+=("$name")
   else
     printf '%-44s %-30s FAIL\n' "$name" "$model"
     echo "  --- response (first 5 lines) ---"

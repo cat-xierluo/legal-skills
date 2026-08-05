@@ -572,3 +572,56 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - 这条经验不否定本 skill 在 CLI 环境的价值；它划清了 skill 的适用边界：**PM 必须是能被 spawn、能配 permission、能跑 settings 路由的 CLI 会话**。
 
 **关联**：SKILL §2.1 防逃逸门禁、§3.8.1 spawn 后核验、§6 启动方式（`claude-provider-env.sh` wrapper）、§7 巡检与介入、AGENTS.md「双层监测」与「PR 第一动作」纪律。
+
+---
+
+## 2026-08-04 FaroPDF Wave 1+2 实战沉淀（5 worker：codebuddy W1 + claude-code W2-W5）
+
+> 基于 FaroPDF v0.2.0 回归缺陷修复（5 worker / 2 backend）实战，补 skill 未覆盖的 4 项。MCP dialog / Enter 被吞 / 漏 commit(codebuddy) / cron 兜底 已在他处记，不重复。
+
+### G25. spawn-worker backend token 检查：`--command` 必须 basename == backend（launch.sh wrapper 会 fail-closed）
+
+- **现象**：codebuddy/qoder worker 用 `bash /tmp/xxx-launch.sh` wrapper（§10.1 推荐的 bypassPermissions launch.sh）spawn，报 `ERROR: codebuddy command cannot prove the configured backend is launched: command exposes none of the expected executable tokens: ['codebuddy'] (fail-closed)`。
+- **根因**：`spawn-worker.sh:530` `backend_command_token_missing()` 对 `--command` 每个 token 取 `os.path.basename().lower()`，要求与 `{"codebuddy"}` 有交集。`bash /tmp/codebuddy-bypass-launch.sh hy3` 的 basename = `{bash, codebuddy-bypass-launch.sh, hy3}`，不含 `codebuddy` → fail。
+- **解法**：`--command` 直接以 backend 二进制起头（不用 bash wrapper），用 **`/tmp/empty-mcp.json` 文件**代替 inline JSON（避 tmux 引号吞）：
+  ```bash
+  --command '/Users/maoking/.local/bin/codebuddy --model hy3 --permission-mode bypassPermissions --strict-mcp-config --mcp-config /tmp/empty-mcp.json -y'
+  ```
+  第一个 token basename = `codebuddy` → 过检查；`/tmp/empty-mcp.json`=`{"mcpServers":{}}` 避 inline JSON 在 tmux 直接 exec 时引号被吞（§10.1 launch.sh 的初衷，但 launch.sh 触发 token fail；用文件两全）。
+- **claude-code 不受影响**：accepted 只含 codebuddy/qoderwork-cn/qoderclicn（`spawn-worker.sh:539-543`），claude-code/codex/opencode accepted 为空集，不检查。
+- **教训**：§10.1 launch.sh 模式与 spawn-worker backend token 检查冲突；派 codebuddy/qoder worker 时直接 backend 二进制 + mcp 文件，不用 bash wrapper。
+
+### G26. claude-code worker 派 subagent 不可用（glm provider API 1211/500）→ 主进程 grep 替代
+
+- **现象**：claude-code/glm-5.2 worker 派 Explore subagent（找测试断言），subagent 卡 `waiting` 15min+，主 worker 阻塞等待，STATUS 不更新（silent 卡死）。cron 兜底抓到（mtime stale + pane `waiting`）。
+- **根因**：glm 第三方 provider（anthropic-compatible）对 subagent 调用返回 API `1211 模型不存在`/`500`（W2 报告已记 subagent 不可用；W5 派 Explore 又撞）。
+- **解法（PM 纠偏）**：`tmux send-keys Escape` 取消 subagent + 投纠偏「subagent 在本 provider 不可用，改用主进程 Grep/Read 直接做」。
+- **预防**：claude-code/glm（或其他第三方 provider）worker 的 prompt **显式禁止派 subagent**，明确「所有探索用主进程 Read/Grep/Glob」。
+- **教训**：第三方 provider worker 的 subagent 能力不可假定；prompt 显式禁 subagent + 主进程工具替代。
+
+### G27. 漏 commit 也犯 claude-code（不只 codebuddy）—— 收口必查 git log 非空
+
+- **现象**：§10.3 记 codebuddy 漏 commit；本轮 W4（claude-code/glm-5.2）同样：STATUS `status=done` + `current_action="实现+验证+commit 完成"`，但 `git log main..HEAD` 空 + `git status` 3 文件未 commit（worker 自以为 commit 了，实际没）。
+- **解法**：PM 收口必跑 `git -C <worktree> log --oneline main..HEAD` + `git status --short`；空 log 但有 M 文件 → PM 替 commit（§10.3），或等 worker session（`--keep-tmux-on-terminal`）finalize 完补 commit（W4 实测：sentinel done 后 session 仍活，几分钟内自己补了 `dee010d`）。
+- **教训**：`status=done` ≠ 已 commit；收口标准步骤必含 git log 非空检查，不分 backend。
+
+### G28. verify 用主仓 node_modules（worktree 无需 npm ci，降 token + 时间）
+
+- **现象**：fresh worktree 不共享主仓 `node_modules`（git worktree 只复制 tracked）。但 worker 跑 `npm run typecheck` / `npm run build` **向上解析**（worktree → `.claude/worktrees/` → 项目根）找到主仓 `node_modules`，无需 `npm ci`。
+- **价值**：免 npm ci（省 1-3 min 安装 + install guard 授权 + 大量 token）；W2/W4/W5 都用此跑 typecheck/build 成功。
+- **注意**：
+  - `npm ci` 被 install guard 阻断时（W2），`npm run build` 仍成功（向上解析主仓 node_modules）——不是失败，是提效。
+  - Rust `cargo check --offline` 同理用 `~/.cargo` registry cache（共享）；worktree target 独立（首次编译慢，offline 不下载）。
+- **教训**：worker Verification 不必强求 worktree 自带 node_modules；typecheck/build 向上解析主仓即可，prompt「缺 node_modules 则 status=blocked」可放宽为「先试向上解析，成功则验证」。
+
+### 提效/降 token 汇总（本轮 5 worker 验证）
+
+| 手段 | 效果 | 证据 |
+|------|------|------|
+| verify 向上解析主仓 node_modules（G28） | 免 npm ci，省安装时间 + token | W2/W4/W5 typecheck/build 全过 |
+| worker 纠正 PM 假设（派 worker 验证 PM 推测） | 比 PM 反复静态查更准 + 省 PM token | W2 推翻 QA-02 假设、W5 纠正「OCR 无 L4」已自愈 |
+| 双层监测（sentinel + cron 15min） | cron 抓 sentinel 盲区（silent/卡死） | cron 抓到 W2 silent heartbeat、W5 Explore 卡死 |
+| scope-guard `--allow-paths` | 硬拦越界（unbypassable），PM 不必逐文件 review | W1-W5 全程无越界 |
+| prompt 显式禁 subagent（第三方 provider） | 避免 G26 卡死 | W5 撞坑后纠偏（后续 prompt 应预防） |
+
+**关联**：SKILL §3.8.1 spawn 后核验、§7.2 sentinel、§7.3 cron 双层、§10/§14 codebuddy 坑、§12 scope-guard；references/08 §10.3 漏 commit / §14.2 Enter 坑。

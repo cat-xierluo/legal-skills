@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.20.1"
+version: "1.20.2"
 ---
 
 # Multi-Agent Orchestration
@@ -209,6 +209,8 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 9. **PM 验收而非代写**：PM 对 worker 结果做范围检查、测试复核和 review；发现问题优先发纠偏指令或派给 reviewer/另一个 worker，不默认自己改业务代码。
 10. **收口**：worker 提交并开 PR 后，PM 做范围检查、触发 review、按 `git-workflow` 合并和清理。
 11. **PM 必做实操验证**：任何软件功能修改（不论 L1/L2/L3）worker 声称"完成"前，PM 必须真正启动 dev server（Vite dev / Tauri dev / 对应入口），用 Playwright MCP 或截图实际打开应用、点击按钮、切换 tab、调整窗口、输入文本，把验证证据（DOM 测量、关键断言、截图）写入 `goal-contract.md` 或对应 `RESULT.md`。仅靠 typecheck / 单测 / lint / build 全部通过就宣称"完成"是不充分的——这些只证明"代码能编译"，不证明"功能真的能用"。
+
+    **webview 项目分流（Task-025，folia 实战）**：Tauri / Electron / WKWebView 的 webview 内容不暴露 macOS accessibility，orca / computer-use 既不能读（`get-app-state` 返回 `role:null / childrenCount:0`）也不能写（click 不触发 React 事件，多次 click 截图字节完全相同）。webview 项目的 **web 交互**（右键 / 双击 / a11y focus / 表单输入 / 路由切换）必须走 **Playwright e2e**（项目已配的 Chromium + vite dev）；orca 仅用于**原生控件**（文件对话框 / Finder / 菜单栏）+ `screencapture` 看视觉。folia（Tauri WKWebView）验证 #92 时 orca 4 次 click 截图字节零变化，PM 靠 `screencapture` + vision + playwright e2e 绕过。遇到 webview 项目，PM 优先 playwright e2e 验 web 交互，不要在 orca 上空耗。
 
 ### 3.1 Wave-Based Orchestration
 
@@ -536,6 +538,20 @@ PM 派 worker 时**必须以 `templates/worker-prompt.md` 的 Full Worker Prompt
 - **Canonical terminal status（`status="done"` 字面值）**：sentinel 状态机按字面 `done` 匹配。省略则 worker 可能写 `completed` / `finished` 同义词，sentinel 不退出、PM 不被 harness 唤醒、worker 孤儿到 `--max-wait` 超时。
 
 业务任务文件（`.task-issueN.md` 等）可作为 Mission / Scope 的附件让 worker 读取，但**编排层骨架（Isolation Gate / Heartbeat / Commit / done 字面值）必须来自模板**，不能靠业务文件或自定义 BOOTSTRAP 兜底。PM 若发现自己在手写 BOOTSTRAP 替代模板，应停下，改为套用 `templates/worker-prompt.md` 再派发。
+
+### 5.2 超长 prompt 投递标准模式（Task-022，folia + v1.20.2 dogfood 实战）
+
+Full Worker Prompt 填入具体任务后常超 2-4 KB，含反引号 / `$` / 表格 / markdown 特殊字符。直接 `tmux send-keys -l "<长文本>"` 投递有转义与截断风险（特殊字符被 tmux / claude TUI 解释、超长被截断）。标准模式：**把 Full Worker Prompt 写到 `{session_context}/WORKER_PROMPT.md`，再 `tmux send-keys` 一条短读取指令让 worker 自己 Read**：
+
+```bash
+# 1. PM 把 Full Worker Prompt 写到文件（worker 启动后 session_context 目录已存在）
+#    <worktree>/.claude/agent-sessions/<session>/WORKER_PROMPT.md
+# 2. 投短指令（send-keys -l 投文本 + 单独 Enter 提交；claude TUI 可能要 sleep 3 + 兜底 Enter）
+tmux send-keys -t <session> -l "请 Read .claude/agent-sessions/<session>/WORKER_PROMPT.md 并严格按其指示执行"
+tmux send-keys -t <session> Enter ; sleep 3 ; tmux send-keys -t <session> Enter
+```
+
+worker 在 worktree cwd，相对路径可读；文件在 session context（与 STATUS/RESULT 同目录），scope-guard 不拦读取。短指令单行中文无特殊字符，TUI 稳定接收。folia Wave-1（2026-08-04/05）3 worker + 本 skill v1.20.2 dogfood（W1 改 pm-sentinel-response，2026-08-05）均用此模式，100% 投递成功。短 prompt（单行 / 无特殊字符）仍可直接 `send-keys -l` + Enter，本模式只针对超长 / 含特殊字符的 Full Worker Prompt。
 
 ## 6. 启动方式
 

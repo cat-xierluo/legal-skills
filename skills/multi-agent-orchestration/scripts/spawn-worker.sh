@@ -24,6 +24,18 @@
 #     * 其他 backend（codebuddy / qoderwork-cn / codex / opencode）仍默认启
 #       （这些 backend 真弹 dialog）。
 #   - 6 个 --*/--no-* flag 均可 force override 默认值，详见 usage 段与 DEC-112。
+#   - v1.20.2（Task-019/020/021，2026-08-05 folia Wave-1 实战）：
+#     * Task-019：claude-code provider-isolation 默认 --bare（render-runtime-profile.sh）
+#       与 install-guard fail-closed 互斥。spawn-worker 检测到 --bare 自动降级 prompt-only
+#       + 内置来源（CLAUDE_CODE_BARE_AUTO_DEGRADE=1），不再要求 PM 手写
+#       --allow-prompt-only-install-guard；--no-claude-code-bare-auto-degrade opt-out。
+#       --safe-mode / --setting-sources 排除 local / 缺 claude token 仍 fail-closed（非 --bare 不自动降级）。
+#     * Task-020：claude-code worker 首启弹 "external imports" dialog（CLAUDE.md @import 触发），
+#       v1.18.4 默认关 trust/permission 不覆盖此类。external_imports_auto() 单独监控（option 1 默认放行），
+#       claude-code 默认开（EXTERNAL_IMPORTS_AUTO=1，--no-external-imports-auto opt-out）。
+#     * Task-021：permission_auto_bg 启动改 setsid（macOS 无 setsid 时 fallback nohup+disown），
+#       spawn-worker 被 SIGTERM 时 watcher 尽量存活；codebuddy 同步监控逼近 PM Bash 2min timeout，
+#       文档建议 PM Bash timeout 调到 180s+（SKILL §6）。
 
 set -euo pipefail
 
@@ -66,6 +78,14 @@ PERMISSION_AUTO_OVERRIDE=0
 PERMISSION_AUTO=1
 PERMISSION_AUTO_BG_OVERRIDE=0
 PERMISSION_AUTO_BG=1  # v1.18.4：bg watcher 独立控制；与 sync permission_auto 解耦
+# v1.20.2 Task-020：external imports dialog 监控（claude-code CLAUDE.md @import 触发的第三类 dialog）。
+# claude-code 默认开（v1.18.4 关掉了 trust/permission，但 external imports 是 claude 特有的另一类）；
+# 其他 backend 无此 dialog，默认关省空等。
+EXTERNAL_IMPORTS_AUTO_OVERRIDE=0
+EXTERNAL_IMPORTS_AUTO=0
+# v1.20.2 Task-019：claude-code --bare 自动降级 prompt-only install-guard（render 默认 --bare 与
+# install-guard fail-closed 互斥）。只对 --bare 自动降级；--safe-mode/setting-sources 仍 fail-closed。
+CLAUDE_CODE_BARE_AUTO_DEGRADE=1
 ADD_DIRS=()
 ALLOW_PATHS=()
 # v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
@@ -146,6 +166,17 @@ Options:
   --permission-auto-bg     (v1.18.4 new) Force background 7200s watcher ON,
                    overriding backend default. Useful when sync dialogs are off
                    but late dialogs (after initial 60s) still expected.
+  --no-external-imports-auto  (v1.20.2 Task-020) Skip "external imports" dialog
+                   auto-accept for claude-code workers. Default: claude-code ON,
+                   other backends OFF. claude-code with CLAUDE.md @import triggers a
+                   "Yes allow external imports" dialog on first start; this watches
+                   and selects option 1 (default) so the worker is not blocked.
+  --external-imports-auto  (v1.20.2) Force external-imports dialog watcher ON for
+                   non-claude-code backends if they surface the same dialog.
+  --no-claude-code-bare-auto-degrade  (v1.20.2 Task-019) Keep install-guard fail-closed
+                   even for claude-code --bare. Default: --bare auto-degrades to
+                   prompt-only (provider-isolation requires --bare, which skips hooks).
+                   Use this to force explicit --allow-prompt-only-install-guard again.
   --add-dir DIR     Extra directories for codebuddy to access outside the worktree
                    (repeatable). Passed through to codebuddy's --add-dir flag.
                    Use when task files/assets are outside the worktree, e.g.:
@@ -317,6 +348,20 @@ while [[ $# -gt 0 ]]; do
     --permission-auto-bg)  # v1.18.4：精细 opt-in 强制启 bg watcher
       PERMISSION_AUTO_BG=1
       PERMISSION_AUTO_BG_OVERRIDE=1
+      shift
+      ;;
+    --no-external-imports-auto)  # v1.20.2 Task-020：opt-out external imports dialog 监控
+      EXTERNAL_IMPORTS_AUTO=0
+      EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
+      shift
+      ;;
+    --external-imports-auto)  # v1.20.2：显式 opt-in（其他 backend 如需监控 external imports）
+      EXTERNAL_IMPORTS_AUTO=1
+      EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
+      shift
+      ;;
+    --no-claude-code-bare-auto-degrade)  # v1.20.2 Task-019：opt-out --bare 自动降级（保持 fail-closed）
+      CLAUDE_CODE_BARE_AUTO_DEGRADE=0
       shift
       ;;
     --add-dir)
@@ -517,14 +562,37 @@ raise SystemExit(1)
 PY
 }
 
+# v1.20.2 Task-019：检测 claude-code command 是否含 --bare token（provider-isolation 必需）。
+# 用于在 install-guard fail-closed 分支里区分 --bare（自动降级）vs --safe-mode/setting-sources（仍 fail-closed）。
+# 在 if 条件里调用；返回 0 = 含 --bare，非 0 = 不含。
+claude_command_has_bare() {
+  python3 - "$COMMAND" <<'PY'
+import shlex, sys
+try:
+    tokens = shlex.split(sys.argv[1], posix=True)
+except ValueError:
+    raise SystemExit(1)
+raise SystemExit(0 if "--bare" in tokens else 1)
+PY
+}
+
 if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
    { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
    hook_disable_reason=$(claude_hook_disable_reason); then
-  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
-    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command or explicitly pass --allow-prompt-only-install-guard (fail-closed)" >&2
+  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -eq 1 ]; then
+    INSTALL_GUARD_MODE="prompt_only_degraded"
+  elif [ "$CLAUDE_CODE_BARE_AUTO_DEGRADE" -eq 1 ] && claude_command_has_bare; then
+    # v1.20.2 Task-019：claude-code + provider-isolation 默认 --bare（render-runtime-profile.sh）
+    # 与 install-guard fail-closed 互斥。检测到 --bare 自动降级 prompt-only + 内置来源，
+    # 不再要求 PM 手写 --allow-prompt-only-install-guard。PM 仍 review diff 兜底（SKILL §6）。
+    ALLOW_PROMPT_ONLY_INSTALL_GUARD=1
+    INSTALL_GUARD_DEGRADATION_SOURCE="claude-code provider-isolation 默认 --bare（render-runtime-profile.sh）跳过 PreToolUse hook；install-guard 自动降级 prompt-only，PM 仍 review diff 兜底（SKILL §6 / Task-019 / DEC-112 follow-up）"
+    INSTALL_GUARD_MODE="prompt_only_degraded"
+    echo "SPAWN_WORKER_BARE_AUTO_DEGRADE: claude-code --bare detected, install-guard auto prompt_only_degraded (source recorded); --safe-mode / setting-sources / no-claude-token 仍 fail-closed"
+  else
+    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command, pass --allow-prompt-only-install-guard, or this non-bare disable (--safe-mode/--setting-sources/missing token) requires explicit --allow-prompt-only-install-guard (fail-closed)" >&2
     exit 64
   fi
-  INSTALL_GUARD_MODE="prompt_only_degraded"
 fi
 
 backend_command_token_missing() {
@@ -591,6 +659,14 @@ resolve_backend_defaults() {
     case "$WORKER_BACKEND" in
       claude-code|claude_code) PERMISSION_AUTO_BG=0 ;;
       *) PERMISSION_AUTO_BG=1 ;;
+    esac
+  fi
+  # v1.20.2 Task-020：external imports dialog 是 claude-code 特有（CLAUDE.md @import 触发），
+  # 其他 backend 无此 dialog。claude-code 默认开（即使 trust/permission 关），其他默认关。
+  if [ "$EXTERNAL_IMPORTS_AUTO_OVERRIDE" -eq 0 ]; then
+    case "$WORKER_BACKEND" in
+      claude-code|claude_code) EXTERNAL_IMPORTS_AUTO=1 ;;
+      *) EXTERNAL_IMPORTS_AUTO=0 ;;
     esac
   fi
 }
@@ -1013,6 +1089,36 @@ permission_auto_bg() {
   return 0
 }
 
+# v1.20.2 Task-020：监控 claude-code worker 首启的 "external imports" dialog。
+# CLAUDE.md 用 @import 引外部文件时，claude 首启弹 "Yes allow external imports" dialog（option 1 默认选中）。
+# v1.18.4 默认关 trust/permission 不覆盖此类；本函数独立监控，option 1 放行
+# （用户已在 CLAUDE.md @import = 已认可的全局规则；不自动 allow 未审视的运行期 import）。
+# 默认只 claude-code 启用（resolve_backend_defaults）；--no-external-imports-auto opt-out。
+external_imports_auto() {
+  local session="$1"
+  local max_wait="${EXTERNAL_IMPORTS_MAX_WAIT:-120}"
+  local poll_interval=2
+  local waited=0
+
+  while [ "$waited" -lt "$max_wait" ]; do
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      return 1  # session died, external-imports-auto skipped
+    fi
+    local content
+    content=$(tmux capture-pane -t "$session" -p -S -50 2>/dev/null || echo "")
+    if echo "$content" | grep -qiE "allow external import|external import"; then
+      echo "SPAWN_WORKER_EXTERNAL_IMPORTS_AUTO: 'external imports' dialog detected, selecting option 1 (Yes allow, default)"
+      tmux send-keys -t "$session" Enter  # option 1 默认选中
+      sleep 2
+      return 0
+    fi
+    sleep "$poll_interval"
+    waited=$((waited + poll_interval))
+  done
+  echo "SPAWN_WORKER_EXTERNAL_IMPORTS_AUTO: no external imports dialog within ${max_wait}s, continuing"
+  return 0
+}
+
 # 将一个 PreToolUse command hook 合并进现有 settings.local.json，不覆盖项目已有 hooks。
 merge_pretool_hook() {
   local settings_file="$1"
@@ -1202,9 +1308,26 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
   permission_auto "$SESSION"
 fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
-  # v1.18.4: bg watcher 独立 gate（与 sync permission_auto 解耦），claude-code 默认不启
-  # disown 让 spawn-worker.sh 退出不影响 watcher
-  ( permission_auto_bg "$SESSION" & disown ) &
+  # v1.20.2 Task-021：setsid 让 watcher 脱离 spawn-worker 进程组，spawn-worker 被 SIGTERM 时存活；
+  # macOS 无 setsid（brew install util-linux）时 fallback nohup+disown（部分改进 + PM Bash timeout 180s+ 兜底）。
+  if command -v setsid >/dev/null 2>&1; then
+    setsid permission_auto_bg "$SESSION" >/dev/null 2>&1 < /dev/null &
+    disown 2>/dev/null || true
+    echo "SPAWN_WORKER_PERMISSION_BG: launched via setsid (survives spawn-worker SIGTERM)"
+  else
+    ( nohup permission_auto_bg "$SESSION" >/dev/null 2>&1 < /dev/null & disown ) &
+    echo "SPAWN_WORKER_PERMISSION_BG: launched via nohup+disown (setsid unavailable; PM Bash timeout 建议 180s+, SKILL §6)"
+  fi
+fi
+if [ "$DRY_RUN" -eq 0 ] && [ "$EXTERNAL_IMPORTS_AUTO" -eq 1 ]; then
+  # v1.20.2 Task-020：external imports dialog 后台监控（claude-code 默认开，独立于 trust/permission）。
+  # 后台跑保 spawn-worker 秒级返回；external imports 只在首启弹一次，watcher 命中后退出。
+  if command -v setsid >/dev/null 2>&1; then
+    setsid external_imports_auto "$SESSION" >/dev/null 2>&1 < /dev/null &
+    disown 2>/dev/null || true
+  else
+    ( nohup external_imports_auto "$SESSION" >/dev/null 2>&1 < /dev/null & disown ) &
+  fi
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
