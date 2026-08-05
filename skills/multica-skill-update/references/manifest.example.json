@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "review-helper",
+      "source": "github",
+      "url": "https://github.com/owner/repo",
+      "on_conflict": "overwrite",
+      "enabled": true
+    },
+    {
+      "name": "doc-gen",
+      "source": "github",
+      "url": "https://github.com/owner/doc-skill",
+      "on_conflict": "skip",
+      "enabled": true
+    },
+    {
+      "name": "temp-disabled",
+      "source": "clawhub",
+      "url": "https://clawhub.com/skills/temp-disabled",
+      "on_conflict": "skip",
+      "enabled": false
+    }
+  ]
+}
