@@ -4,7 +4,7 @@ description: Multica 工作区 Skill 同步工具。当需要把本地来源清�
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
-version: "0.1.0"
+version: "0.2.0"
 ---
 
 # Multica Skill 同步工具
@@ -44,11 +44,23 @@ multica-skill-update/
 
 | 依赖 | 安装方式 |
 |------|----------|
-| `multica` CLI | macOS/Linux: `curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh \| bash` 或 `brew install multica-ai/tap/multica`<br>Windows: `irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 \| iex`<br>验证：`multica version` |
+| `multica` CLI | 独立安装：macOS/Linux: `curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh \| bash` 或 `brew install multica-ai/tap/multica`<br>Windows: `irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 \| iex`<br>验证：`multica version` |
 
-- 前置要求：Multica 桌面 App / daemon 已在运行（CLI 与 daemon 通信）。
-- Python 包：无第三方依赖（脚本使用标准库）。
-- 脚本已做预检：`multica` 不在 PATH 时输出安装提示并退出码 2。
+**CLI 实际可用路径（本机实测）**：Multica 桌面 App 已内置独立 CLI 二进制，无需单独安装：
+
+```bash
+# App 内置 CLI（Go 二进制，v0.4.19+）
+MULTICA_BIN="/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica"
+"$MULTICA_BIN" version        # → multica v0.4.19 ...
+
+# 该 CLI 需要指定 App 使用的 profile 才能连上 daemon/server
+"$MULTICA_BIN" --profile desktop-api.multica.ai workspace list --output json
+```
+
+- 前置要求：Multica 桌面 App / daemon 已在运行（CLI 与 server/daemon 通信）。
+- **profile**：App 自动运行时用的 profile 名通常是 `desktop-api.multica.ai`（对应 `~/.multica/profiles/<name>/config.json`）；CLI 默认用 `default` profile 会报 `No server configured. Run 'multica setup' first.`，此时需显式加 `--profile`。
+- **workspace**：`skill list` 等命令要求 `--workspace-id` 或 `--workspace-slug`；`multica --profile <p> workspace list --output json` 可查。
+- 脚本已做预检：`multica` 不在 PATH 时输出安装提示并退出码 2；真实调用可用 `--multica-bin` 指向 App 内置路径。
 
 ## 清单格式（manifest.json）
 
@@ -113,6 +125,24 @@ python scripts/sync_skills.py --manifest /path/to/manifest.json --mode init
 python scripts/sync_skills.py --dry-run
 ```
 
+**连接参数（本机实测必需）**：使用 Multica 桌面 App 内置 CLI 时，通常需要显式指定 profile 与 workspace：
+
+```bash
+# 先查 workspace（用 App 的 profile）
+MULTICA="/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica"
+"$MULTICA" --profile desktop-api.multica.ai workspace list --output json
+# → [{"id": "...", "name": "xierluo", "slug": "xierluo"}]
+
+# 同步时带上 profile + workspace-id
+python scripts/sync_skills.py --mode update \
+  --profile desktop-api.multica.ai \
+  --workspace-id <workspace-id>
+```
+
+- 脚本会自动探测 multica CLI（PATH → App 内置）；也可用 `--multica-bin /path/to/multica` 显式指定。
+- 不指定 profile 时默认 `default`，可能报 `No server configured`——用 `--profile desktop-api.multica.ai`（对应 App 运行 profile，见 `~/.multica/profiles/`）。
+- 完整示例见下方"真实调用示例"。
+
 ### 3. 查看报告
 
 每次运行输出结构化小结：
@@ -129,6 +159,32 @@ failed: 0
 - `conflict(existed)`：同名已存在，按策略跳过
 - `skipped`：`not creator`（非本人创建的 overwrite/skip 跳过）+ `disabled`（enabled=false）
 - `failed`：真实失败（URL 无效、非法策略等）——**有失败时退出码非零**，便于 Autopilot/CI 感知
+
+## 真实调用示例（本机实测）
+
+以下命令在 Multica 桌面 App + 内置 CLI 环境实测通过：
+
+```bash
+# 0) 定位 CLI 与 workspace
+MULTICA="/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica"
+"$MULTICA" --profile desktop-api.multica.ai workspace list --output json
+# → [{"id": "043a79ce-...", "name": "xierluo", "slug": "xierluo"}]
+
+# 1) 预览（plan）
+python scripts/sync_skills.py --manifest references/manifest.example.json \
+  --mode plan --profile desktop-api.multica.ai \
+  --workspace-id 043a79ce-69f5-464e-891b-3a7bbca344a4
+
+# 2) 初始化导入（update 同理）
+python scripts/sync_skills.py --mode init \
+  --profile desktop-api.multica.ai \
+  --workspace-id 043a79ce-69f5-464e-891b-3a7bbca344a4
+```
+
+实测要点：
+- `workspace list` 成功 → 连接正常；`skill list` 返回 `[]` → 当前工作区无 skill。
+- `skill import --url <clawhub/github 真实 URL>` 命令格式正确（服务端偶发"temporarily unavailable"是 Multica 服务端问题，非命令错误）。
+- `skill import --file` 需要 `.skill`/`.zip` 归档，不能是单个 SKILL.md。
 
 ## 关键澄清（实现时已写入，勿再混淆）
 

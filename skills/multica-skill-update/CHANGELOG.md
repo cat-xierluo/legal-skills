@@ -1,5 +1,26 @@
 # 变更日志
 
+## [0.2.0] - 2026-08-05
+
+### 新增
+- 实测确认 multica CLI（v0.4.19）已随 Multica 桌面 App 内置，路径：
+  `/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica`（无需单独安装）
+- sync_skills.py 新增 `--multica-bin`（显式指定 CLI 路径，默认自动探测 PATH → App 内置）、
+  `--profile`（Multica profile，如 `desktop-api.multica.ai`）、`--workspace-id`
+- 新增连接预检 `_check_connection`：`workspace list` 失败时提示加 `--profile`/`--workspace-id`
+- SKILL.md 补充「真实调用示例」：profile/workspace 查找、plan/init 完整命令、实测要点
+
+### 改进
+- CLI 调用改为 `ctx.base_args()`（bin + profile + workspace-id），所有命令统一携带连接参数
+
+### 验证
+- 本机实测：自动探测 CLI 正确；`workspace list` 返回 `xierluo`；`skill list` 返回空（工作区暂无 skill）
+- plan 模式正确拼接完整命令；`skill import --url` 命令格式与规划稿一致（服务端偶发不可用为 Multica 服务端问题）
+
+### 待办事项
+- 服务端恢复后需实测一次真实 import 成功路径（当前工作区为空，import 应返回 created）
+- manifest.json（真实来源清单）由用户创建后嵌入 skill
+
 ## [0.1.0] - 2026-08-05
 
 ### 新增

@@ -19,6 +19,17 @@ skills.sh / 本地文件 上的 skill 同步到 Multica skill 数据库。
     python sync_skills.py --mode plan                # 预览
     python sync_skills.py --dry-run                  # 打印命令但不执行
 
+连接参数（真实调用时通常需要）:
+    --multica-bin       multica CLI 路径。默认自动探测：
+                        1) PATH 中的 multica
+                        2) Multica 桌面 App 内置 CLI
+                        （/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica）
+    --profile           Multica profile 名（如 desktop-api.multica.ai）。
+                        CLI 默认用 default profile 会报 "No server configured"，
+                        需指向 App 运行时用的 profile。
+    --workspace-id      Workspace ID（skill list 等要求）；可用
+                        `multica --profile <p> workspace list --output json` 查询。
+
 清单字段:
     version      清单格式版本（当前 1）
     skills[]:
@@ -28,7 +39,7 @@ skills.sh / 本地文件 上的 skill 同步到 Multica skill 数据库。
         on_conflict fail(默认) | overwrite | rename | skip
         enabled     false 时跳过该条目
 
-依赖: multica CLI（PATH 中可执行），Python 标准库。
+依赖: multica CLI，Python 标准库。
 """
 
 from __future__ import annotations
@@ -38,11 +49,12 @@ import json
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-# multica CLI 二进制名
-MULTICA_BIN = "multica"
+# App 内置 CLI 路径（darwin）
+APP_MULTICA_BIN = "/Applications/Multica.app/Contents/Resources/app.asar.unpacked/resources/bin/multica"
 
 # 报告统计
 _imported_created = 0
@@ -55,6 +67,22 @@ _failed = 0
 
 class SyncError(RuntimeError):
     pass
+
+
+@dataclass
+class CliContext:
+    """multica CLI 调用上下文。"""
+    bin: str = "multica"
+    profile: Optional[str] = None
+    workspace_id: Optional[str] = None
+
+    def base_args(self) -> list[str]:
+        args = [self.bin]
+        if self.profile:
+            args += ["--profile", self.profile]
+        if self.workspace_id:
+            args += ["--workspace-id", self.workspace_id]
+        return args
 
 
 def _err(msg: str) -> None:
@@ -73,18 +101,27 @@ def _load_manifest(path: Path) -> dict[str, Any]:
     return data
 
 
-def _check_multica() -> bool:
-    """预检 multica CLI 是否可用；返回 False 时调用方应退出。"""
-    if shutil.which(MULTICA_BIN):
-        return True
+def _resolve_cli(args_bin: Optional[str]) -> str:
+    """确定 multica CLI 路径：优先 --multica-bin，其次 PATH，其次 App 内置。"""
+    if args_bin:
+        p = Path(args_bin).expanduser()
+        if p.exists():
+            return str(p)
+        _err(f"--multica-bin 指定的路径不存在：{p}")
+        raise SystemExit(2)
+    if shutil.which("multica"):
+        return "multica"
+    if Path(APP_MULTICA_BIN).exists():
+        return APP_MULTICA_BIN
     print(
         f"❌ 未找到 multica CLI。\n"
         f"   安装：curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash\n"
         f"   或：brew install multica-ai/tap/multica\n"
+        f"   本机也可直接用 App 内置：{APP_MULTICA_BIN}\n"
         f"   验证：multica version",
         file=sys.stderr,
     )
-    return False
+    raise SystemExit(2)
 
 
 def _run(cmd: list[str], dry_run: bool) -> tuple[int, str]:
@@ -101,7 +138,24 @@ def _run(cmd: list[str], dry_run: bool) -> tuple[int, str]:
         return 127, ""
 
 
-def _import_one(item: dict[str, Any], mode: str, dry_run: bool) -> None:
+def _check_connection(ctx: CliContext) -> bool:
+    """验证 CLI 能连上 server（有 server/token 配置）。"""
+    cmd = ctx.base_args() + ["workspace", "list", "--output", "json"]
+    code, out = _run(cmd, dry_run=False)
+    if code != 0 or "No server configured" in out:
+        print(
+            f"❌ multica CLI 未连接 server（{cmd} 失败）。\n"
+            f"   若使用 App 内置 CLI 或默认 profile，需加 --profile 指向 App 使用的 profile"
+            f"（如 desktop-api.multica.ai），并指定 --workspace-id。\n"
+            f"   查看 profile: ls ~/.multica/profiles/\n"
+            f"   查 workspace: multica --profile <p> workspace list --output json",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
+def _import_one(item: dict[str, Any], ctx: CliContext, dry_run: bool) -> None:
     """对单条 enabled 技能执行 import（或 plan/dry-run 预览）。"""
     global _imported_created, _imported_updated, _conflict_existed
     global _skipped_not_creator, _skipped_disabled, _failed
@@ -133,8 +187,8 @@ def _import_one(item: dict[str, Any], mode: str, dry_run: bool) -> None:
         flag = "--url"
         value = url
 
-    cmd = [
-        MULTICA_BIN, "skill", "import", flag, value,
+    cmd = ctx.base_args() + [
+        "skill", "import", flag, value,
         "--on-conflict", strategy, "--output", "json",
     ]
     print(f"  - {name} [{source}] → import --on-conflict {strategy}")
@@ -166,7 +220,7 @@ def _import_one(item: dict[str, Any], mode: str, dry_run: bool) -> None:
     print(f"    ❌ 失败（exit={code}）: {out.strip()[:200]}")
 
 
-def _report(mode: str) -> None:
+def _report() -> None:
     print("\n=== 同步报告 ===")
     print(f"imported: {_imported_created + _imported_updated} "
           f"(created {_imported_created}, updated {_imported_updated})")
@@ -183,6 +237,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", default="update", choices=["init", "update", "plan"],
                         help="init=初始化导入 / update=更新刷新 / plan=无副作用预览")
     parser.add_argument("--dry-run", action="store_true", help="打印命令但不执行")
+    parser.add_argument("--multica-bin", default=None,
+                        help="multica CLI 路径（默认自动探测 PATH 或 App 内置）")
+    parser.add_argument("--profile", default=None,
+                        help="Multica profile 名（如 desktop-api.multica.ai）")
+    parser.add_argument("--workspace-id", default=None,
+                        help="Workspace ID（skill 命令需要）")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
     # 定位 skill 根目录（本脚本位于 <skill根>/scripts/）
@@ -199,21 +259,30 @@ def main(argv: list[str] | None = None) -> int:
     items = manifest.get("skills", [])
     print(f"清单: {manifest_path}（{len(items)} 条）")
     print(f"模式: {args.mode}")
+
+    ctx = CliContext(
+        bin=_resolve_cli(args.multica_bin),
+        profile=args.profile,
+        workspace_id=args.workspace_id,
+    )
+    print(f"multica: {ctx.bin}" + (f" (profile={ctx.profile})" if ctx.profile else ""))
+
     if args.mode == "plan":
         print("plan 模式：仅预览，不调用 import\n")
+        for item in items:
+            _import_one(item, ctx, dry_run=True)
+        print("\n（plan 结束，未执行任何 import）")
+        return 0
 
-    # plan 模式不需要 CLI；init/update 需要
-    if args.mode != "plan" and not args.dry_run:
-        if not _check_multica():
+    # init/update：验证连接
+    if not args.dry_run:
+        if not _check_connection(ctx):
             return 2
 
     for item in items:
-        _import_one(item, args.mode, args.dry_run or args.mode == "plan")
+        _import_one(item, ctx, args.dry_run)
 
-    if args.mode == "plan":
-        print("\n（plan 结束，未执行任何 import）")
-    else:
-        _report(args.mode)
+    _report()
 
     # 有失败时退出码非零，便于调用方（autopilot/CI）感知
     return 1 if _failed else 0
