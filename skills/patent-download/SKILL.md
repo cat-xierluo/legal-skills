@@ -1,7 +1,7 @@
 ---
 name: patent-download
 description: 专利 PDF 批量下载工具。当用户需要下载专利全文 PDF、查询专利信息、批量导出专利文件时使用。支持多平台（Google Patents 优先），自动处理申请号和公告号格式。
-version: "2.6.0"
+version: "2.7.1"
 license: MIT
 author: 杨卫薪律师（微信 ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -102,6 +102,36 @@ python platforms/uyanip.py 2024214535561
 | PatentStar/epub API 等 | `requests` | `pip install requests` |
 
 一条命令装全部：`pip install -r scripts/requirements.txt`。
+
+## 所需权限与安全说明
+
+本技能会执行本地脚本完成专利下载，涉及以下能力边界，请在使用前知悉：
+
+### 运行时自动安装依赖（请留意）
+
+- `scripts/patent-download.sh` 包装脚本在缺少依赖时会**自动执行 `pip install` 与 `playwright install chromium`**：
+  - 首个参数为 `google` 时，若未装 `patent-downloader` 会自动 `pip install patent-downloader`；
+  - 其他参数走老版路径时，若未装 `playwright` 会自动 `pip install -r requirements.txt` 并下载 Chromium 浏览器二进制。
+- 该自动安装**没有固定版本（unpinned）**，会从网络拉取最新包，存在供应链风险。请知悉：自动安装前建议人工审查 `scripts/requirements.txt`，或改为手动安装（`pip install -r scripts/requirements.txt`）。
+- 直接调用 `python cli.py <平台> <专利号>` 不会触发自动安装，缺依赖时只会打印清晰提示并退出。
+
+### 网络访问
+
+- 按用户指定的专利号向外部平台发起网络请求下载专利全文/PDF：Google Patents（API）、度衍、粤港澳、PSS、PatentStar、CNIPA epub 等。请求对象由用户输入的专利号决定，不会上传本地文档内容。
+- 使用 `requests` / `patent-downloader` / `playwright`（浏览器自动化）等依赖完成下载。
+
+### 凭证访问
+
+- 各平台账号通过环境变量（`PATENT_<平台>_USERNAME` / `PATENT_<平台>_PASSWORD`）或本地 `config/.env` 读取（见「凭证」章节）。凭证仅用于登录下载，不硬编码、不打印密码。
+- 凭据等同账号密码，请勿截图、分享或提交到任何仓库。
+
+### 浏览器自动化
+
+- 部分平台（度衍/粤港澳/PSS）使用 Playwright 驱动 Chromium，支持 `--headless` 无头模式。会在本机启动浏览器进程执行登录与下载操作。
+
+### 文件访问
+
+- 在用户指定输出目录（`-o`，默认当前目录）写入下载的 PDF/文件。
 
 ## 更多
 
