@@ -189,6 +189,13 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 - §2.2 backend 表 → §2.4 个人偏好 → §3.3 项目级 provider slot 默认 → 最终 backend / model 选择。优先级 §2.3（不主动跨工具）压 §2.2（多 backend），§2.4 个人偏好压 §2.2 默认 model 表，§3.3 项目级 provider slot 计划压 §2.4 通用 host。
 - §2.4 字段命名故意跟 §3.3 项目级 provider slot **不冲突**：项目级 slot 写的是"这一 Wave 用哪个 slot 跑哪个 worker"（含 model、max_concurrency）；§2.4 写的是"我个人偏好默认用什么 host / 什么 backend 给什么 model"。前者落地到 Wave 计划，后者落地到 PM 派单决策。
 
+**Backend 模型偏好（v1.20.3 实战沉淀，2026-08-05）**：
+
+- **codebuddy backend**（`backend_model_routing.codebuddy.default_models`）：推荐 `["hy3", "deepseek-v4-flash", "deepseek-v4-pro"]` —— hy3 首选（WorkBuddy 平台自定义模型）、deepseek-v4-flash 次选（平台批量模型）、deepseek-v4-pro **仅作回退，**不用作主**。spawn-worker.sh 派 codebuddy worker 时按此顺序选 `--model`。
+- **qoderwork-cn backend**（`backend_model_routing.qoderwork-cn.default_models`）：推荐 `["qmodel_latest", "qmodel", "dmodel_latest", "dmodel"]` —— qmodel_latest = Qwen3.7-Max 首选、qmodel = Qwen3.7-Plus、dmodel 系列备选。references/07 §5.1 推荐 `qmodel_latest` + `--permission-mode auto`。
+
+详见 `config/orchestration-personal.example.json` 的 `backend_model_routing` 段（结构示例 codebuddy / qoderwork-cn）+ `references/08-qodebuddy-cli-worker.md` §1 模型偏好。
+
 **TODO（后续增强）**：`scripts/render-runtime-profile.sh` 自动读 personal config（解析 `main_force.task_routing` → 默认 `--model`、解析 `codex_policy.policy` → 是否允许 codex backend、解析 `backend_model_routing.<backend>.default_models` → 跨工具 default）当前**未实现**；本次只做配置 + 文档 + PM 手动遵循，避免无人监督下改脚本引入新不确定性。需要做的时候开新 worker，不要在 PM 任务里顺手改。
 
 ## 3. 标准流程

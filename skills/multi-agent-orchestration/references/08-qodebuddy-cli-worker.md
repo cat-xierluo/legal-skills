@@ -14,6 +14,14 @@
 
 qodebuddy 桌面端内置了 `codebuddy` CLI 二进制，功能对标 Claude Code，可以作为 multi-agent orchestration 的 worker backend 使用。核心价值是利用 qodebuddy 桌面端的登录态和 token 额度，无需额外配置 API Key，CLI 自动复用 GUI 的认证和额度池。2026-06-21 已用 `--model kimi-k2.6` 跑通 `writing-reviewer` 书稿 worker 三轮评测。
 
+**v1.20.3 模型偏好（2026-08-05 用户实战沉淀）**：
+
+- **首选**：`hy3`（WorkBuddy 平台自定义模型）
+- **次选**：`deepseek-v4-flash`（平台批量模型）
+- **回退**：`deepseek-v4-pro`（**仅作回退，不用作主**）
+
+spawn-worker.sh 派 codebuddy worker 时按 `--model hy3` → `deepseek-v4-flash` → `deepseek-v4-pro` 顺序选 model。详见 `config/orchestration-personal.example.json` 的 `backend_model_routing.codebuddy.default_models` 字段 + SKILL.md §2.4 "Backend 模型偏好" 段。
+
 与 Claude Code 的关系：qodebuddy 的 CLI 参数体系与 Claude Code 高度兼容（`-p`、`--print`、`--output-format`、`--settings`、`--permission-mode`、`--worktree`、`--mcp-config` 等），可直接沿用 SKILL.md 中对 Claude Code worker 的大部分模板。
 
 ## 2. 二进制位置与安装边界
