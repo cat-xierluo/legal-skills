@@ -171,8 +171,8 @@
 <td style="word-break:break-word">基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频地址；本地归档与增量同步（archive 按 YYMMDD_标题 命名，index.json 记录同步状态）；镜像 transcript/summary/todos 到外部文件夹</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.7.0</td>
-<td style="text-align:center">待发布</td>
-<td>需安装 dws CLI + 组织开启 CLI 访问开关 + 个人扫码授权</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/dingtalk-minutes-0.7.0.zip">下载</a></td>
+<td>使用需自行安装 dws CLI、开启组织 CLI 访问开关并扫码授权</td>
 </tr>
 </tbody>
 </table>
