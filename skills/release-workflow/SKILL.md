@@ -24,6 +24,7 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 | 版本号一致 | 所有版本号文件（package.json / Cargo.toml / pyproject.toml 等）与 CHANGELOG.md 最新条目一致 |
 | CHANGELOG 已更新 | 包含目标版本的结构化条目 |
 | CI 工作流存在 | `.github/workflows/` 中有 release 相关工作流且 tag 触发配置正确 |
+| 本地测试门禁 | `npm test`（或项目对应单测命令）整体通过。**单条失败先重跑确认是否偶发**再定性：偶发 flaky（非本次改动引入的回归）修测试或单独跟进，不要因此阻塞发布；但若全量多次复现、指向真实回归，必须先修复再发版 |
 
 任一条件不满足，先修复再继续。
 
@@ -138,8 +139,12 @@ publish job 失败：
   - 输出 "Signature not found for the updater JSON. Skipping upload..." → tauri-action 跳过整批 updater，检查 build 产物目录
   - 输出 "Unable to download" / "rate limit" → transient
 
-最佳实践：先 `gh release view <tag> --json assets` 看产物清单，再决定修代码还是重打 tag。
+本地单测（vitest / jest）失败，发布前门禁：
+  - 单条 "Timed out waiting for condition" 超时失败 → 大概率 flaky（轮询式 waitUntil + 动态 import 的异步链在测试环境下偶发跑不完），先重跑该文件确认；连跑仍偶发则修测试（轮询预算给足），不属于本次改动引入的回归，不阻塞发布
+  - 多条/全量复现、或错误指向具体代码行为 → 真实回归，先修代码再发版
 ```
+
+最佳实践：先 `gh release view <tag> --json assets` 看产物清单，再决定修代码还是重打 tag。
 
 ### 修复 hotfix 的标准动作序列
 
