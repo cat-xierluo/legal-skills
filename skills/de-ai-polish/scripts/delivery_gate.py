@@ -8,25 +8,38 @@ import base64
 import hashlib
 import json
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_RUBRIC_PATH = (
     Path(__file__).resolve().parent.parent / "config" / "quality-score-rubric.json"
 )
 SCENE_CONSTRAINT = "SCENE-DECLARED-BEFORE-REWRITE"
+VOICE_CONSTRAINT = "VOICE-MODE-DECLARED-BEFORE-REWRITE"
 SPANS_CONSTRAINT = "PROTECTED-SPANS-PRESERVED"
 SCORE_CONSTRAINT = "QUALITY-SCORE-GATE-PASSED"
-CONSTRAINT_IDS = (SCENE_CONSTRAINT, SPANS_CONSTRAINT, SCORE_CONSTRAINT)
+CONSTRAINT_IDS = (
+    SCENE_CONSTRAINT,
+    VOICE_CONSTRAINT,
+    SPANS_CONSTRAINT,
+    SCORE_CONSTRAINT,
+)
 SCENES = {
     "legal_document",
     "wechat_public_comment",
     "chat_reply",
     "general",
 }
+VOICE_MODES = {
+    "cleanup_only",
+    "provided_sample",
+    "local_anchor",
+}
+LOCAL_ANCHOR_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
 SPAN_CATEGORIES = {
     "statute",
     "entity",
@@ -49,6 +62,7 @@ VOICE_CHECKS = {
     "no_sample_copy",
     "no_fact_leak",
     "no_counterexample_reuse",
+    "no_repair_artifact",
 }
 
 
@@ -91,13 +105,41 @@ def load_json(path: Path, label: str) -> dict[str, Any]:
 
 
 def validate_run_plan(data: dict[str, Any]) -> dict[str, Any]:
-    required = {"schema_version", "scene", "author_sample_used", "protected_spans"}
+    required = {
+        "schema_version",
+        "scene",
+        "voice_mode",
+        "voice_anchor_id",
+        "protected_spans",
+    }
     if set(data) != required or data.get("schema_version") != SCHEMA_VERSION:
         raise ConstraintViolation(SCENE_CONSTRAINT, "运行计划字段或版本非法")
     if data["scene"] not in SCENES:
         raise ConstraintViolation(SCENE_CONSTRAINT, "运行计划未声明合法 scene")
-    if not isinstance(data["author_sample_used"], bool):
-        raise ConstraintViolation(SCENE_CONSTRAINT, "author_sample_used 必须是布尔值")
+    voice_mode = data["voice_mode"]
+    voice_anchor_id = data["voice_anchor_id"]
+    if voice_mode not in VOICE_MODES:
+        raise ConstraintViolation(VOICE_CONSTRAINT, "运行计划未声明合法 voice_mode")
+    if voice_mode == "cleanup_only" and voice_anchor_id is not None:
+        raise ConstraintViolation(
+            VOICE_CONSTRAINT,
+            "cleanup_only 的 voice_anchor_id 必须为 null",
+        )
+    if voice_mode == "provided_sample" and (
+        not isinstance(voice_anchor_id, str) or not voice_anchor_id.strip()
+    ):
+        raise ConstraintViolation(
+            VOICE_CONSTRAINT,
+            "provided_sample 必须声明稳定样本 ID",
+        )
+    if voice_mode == "local_anchor" and (
+        not isinstance(voice_anchor_id, str)
+        or LOCAL_ANCHOR_ID_PATTERN.fullmatch(voice_anchor_id) is None
+    ):
+        raise ConstraintViolation(
+            VOICE_CONSTRAINT,
+            "local_anchor 必须声明合法且稳定的 voice_anchor_id",
+        )
     if not isinstance(data["protected_spans"], list):
         raise ConstraintViolation(SPANS_CONSTRAINT, "protected_spans 必须是数组")
 
@@ -119,7 +161,8 @@ def validate_run_plan(data: dict[str, Any]) -> dict[str, Any]:
         spans.append(dict(item))
     return {
         "scene": data["scene"],
-        "author_sample_used": data["author_sample_used"],
+        "voice_mode": voice_mode,
+        "voice_anchor_id": voice_anchor_id,
         "protected_spans": spans,
     }
 
@@ -260,14 +303,16 @@ def validate_score_receipt(
     data: dict[str, Any],
     final_path: Path,
     scene: str,
-    author_sample_used: bool,
+    voice_mode: str,
+    voice_anchor_id: str | None,
     rubric: dict[str, Any],
 ) -> tuple[bool, dict[str, Any]]:
     required = {
         "schema_version",
         "final_sha256",
         "scene",
-        "author_sample_used",
+        "voice_mode",
+        "voice_anchor_id",
         "dimensions",
         "total",
         "voice_profile_checks",
@@ -277,7 +322,8 @@ def validate_score_receipt(
     if (
         data["final_sha256"] != sha256_file(final_path)
         or data["scene"] != scene
-        or data["author_sample_used"] is not author_sample_used
+        or data["voice_mode"] != voice_mode
+        or data["voice_anchor_id"] != voice_anchor_id
         or not isinstance(data["dimensions"], dict)
         or set(data["dimensions"]) != DIMENSIONS
     ):
@@ -314,7 +360,7 @@ def validate_score_receipt(
         )
     )
     voice_checks = data["voice_profile_checks"]
-    if author_sample_used:
+    if voice_mode != "cleanup_only":
         thresholds_passed = (
             thresholds_passed
             and isinstance(voice_checks, dict)
@@ -346,12 +392,19 @@ def protocol_output(
     failures: list[str],
     hashes: dict[str, str],
     scene: str | None,
+    voice_mode: str | None,
+    voice_anchor_id: str | None,
     span_ids: list[str],
     failed_span_ids: list[str],
     score_detail: dict[str, Any],
 ) -> dict[str, Any]:
     measurements = {
         SCENE_CONSTRAINT: {"scene-declared": SCENE_CONSTRAINT not in failures},
+        VOICE_CONSTRAINT: {
+            "voice-mode-declared": VOICE_CONSTRAINT not in failures,
+            "voice-mode": voice_mode,
+            "voice-anchor-id": voice_anchor_id,
+        },
         SPANS_CONSTRAINT: {
             "protected-spans-preserved": SPANS_CONSTRAINT not in failures,
             "failed-span-count": len(failed_span_ids),
@@ -373,6 +426,8 @@ def protocol_output(
         "measurements": measurements,
         "observables": {
             "scene": [scene],
+            "voice-mode": [voice_mode],
+            "voice-anchor-id": [voice_anchor_id],
             "protected-span-ids": span_ids,
             "score-threshold-detail": [
                 f"{key}={score_detail[key]}" for key in sorted(score_detail)
@@ -395,13 +450,15 @@ def evaluate(
     failures: list[str] = []
     failed_span_ids: list[str] = []
     scene: str | None = None
-    author_sample_used = False
+    voice_mode: str | None = None
+    voice_anchor_id: str | None = None
     records: list[dict[str, Any]] = []
     rubric = validate_rubric(load_json(rubric_path, "质量评分规则"))
     try:
         plan = validate_run_plan(load_json(run_plan_path, "运行计划"))
         scene = str(plan["scene"])
-        author_sample_used = bool(plan["author_sample_used"])
+        voice_mode = str(plan["voice_mode"])
+        voice_anchor_id = plan["voice_anchor_id"]
         records = (
             build_span_records(source_path, plan["protected_spans"])
             if span_records is None
@@ -416,12 +473,13 @@ def evaluate(
             failures.append(SPANS_CONSTRAINT)
 
     score_detail: dict[str, Any] = {}
-    if scene is not None:
+    if scene is not None and voice_mode is not None:
         score_ok, score_detail = validate_score_receipt(
             load_json(score_receipt_path, "评分回执"),
             final_path,
             scene,
-            author_sample_used,
+            voice_mode,
+            voice_anchor_id,
             rubric,
         )
         if not score_ok:
@@ -436,6 +494,8 @@ def evaluate(
         ordered_failures,
         hashes,
         scene,
+        voice_mode,
+        voice_anchor_id,
         [str(record["id"]) for record in records],
         failed_span_ids,
         score_detail,
@@ -475,7 +535,8 @@ def command_snapshot(args: argparse.Namespace) -> int:
             "sha256": sha256_file(rubric_path),
         },
         "scene": plan["scene"],
-        "author_sample_used": plan["author_sample_used"],
+        "voice_mode": plan["voice_mode"],
+        "voice_anchor_id": plan["voice_anchor_id"],
         "protected_spans": records,
     }
     write_new_json(output_path, payload)
@@ -485,6 +546,8 @@ def command_snapshot(args: argparse.Namespace) -> int:
                 "status": "DE_AI_DELIVERY_SNAPSHOT_READY",
                 "manifest": str(output_path),
                 "scene": plan["scene"],
+                "voice_mode": plan["voice_mode"],
+                "voice_anchor_id": plan["voice_anchor_id"],
                 "protected_span_count": len(records),
             },
             ensure_ascii=False,
@@ -505,7 +568,8 @@ def command_verify(args: argparse.Namespace) -> int:
         "run_plan",
         "quality_rubric",
         "scene",
-        "author_sample_used",
+        "voice_mode",
+        "voice_anchor_id",
         "protected_spans",
     }
     if set(manifest) != required or manifest["schema_version"] != SCHEMA_VERSION:
@@ -523,7 +587,8 @@ def command_verify(args: argparse.Namespace) -> int:
     plan = validate_run_plan(load_json(run_plan_path, "运行计划"))
     if (
         plan["scene"] != manifest["scene"]
-        or plan["author_sample_used"] != manifest["author_sample_used"]
+        or plan["voice_mode"] != manifest["voice_mode"]
+        or plan["voice_anchor_id"] != manifest["voice_anchor_id"]
     ):
         raise GateError("运行计划与交付快照不一致")
     failures, output = evaluate(

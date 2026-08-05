@@ -1,8 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "final_sha256": "4893ccd96c5f5ad96c9984f2ed2be052daac2e0c873a4e9f8d367d663818c518",
   "scene": "legal_document",
-  "author_sample_used": false,
+  "voice_mode": "cleanup_only",
+  "voice_anchor_id": null,
   "dimensions": {
     "naturalness": 1.4,
     "rhythm": 1.4,

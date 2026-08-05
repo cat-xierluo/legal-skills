@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 | 2026-07-30 | 正式发布 | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.0  | 从内置法规与地方政策重构为法律业务判断内核和工具中立检索协议；移除动态政策资料，引入五种依据状态、检索失败收口和硬失败不可抵消的评测门禁 |
 | 2026-07-30 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.1.2  | 新增覆盖十个场景的代表性提示词、hard/soft 机器断言和独立校验器；侵权、规避、等同及无效样本锁定无网页链接的多条款法源与证据停止门禁 |
@@ -460,9 +461,9 @@
 <tr>
 <td><a href="skills/de-ai-polish/"><strong>de-ai-polish</strong></a></td>
 <td>工具·写作</td>
-<td style="word-break:break-word">检测并去除文章中的 AI 化表述模式，用于写作润色、文本优化、去 AI 腔。支持作者样本 Voice Calibration、Protected Spans、场景分流和候选绑定质量评分门禁</td>
+<td style="word-break:break-word">检测并去除文章正文中的 AI 化表述模式。无样本时执行最小清理；支持作者证据卡、十维 Voice Calibration、本机私有 VoiceAnchor、功能性列举保护、标题结构保护、修复伪影复扫和候选绑定门禁</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.2.0</td>
+<td style="text-align:center">v3.2.6</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/de-ai-polish.skill/releases/download/v2.0.1/de-ai-polish-2.0.1.zip">下载 v2.0.1</a></td>
 <td><a href="https://github.com/cat-xierluo/de-ai-polish.skill">独立仓库</a></td>
 </tr>

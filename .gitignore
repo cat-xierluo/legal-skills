@@ -53,6 +53,10 @@ skills/legal-proposal-generator/config/images/
 !**/reference/user-profile.example.md
 .history/
 
+# de-ai-polish local-only personal voice anchors and evaluation artifacts
+skills/de-ai-polish/assets/local-voice-anchors/
+skills/de-ai-polish-workspace
+
 # Agent session context - PM 巡检状态,含本地绝对路径,不入库
 **/.claude/agent-sessions/
 

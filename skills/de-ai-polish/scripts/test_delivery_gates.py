@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE_GATE = ROOT / "scripts" / "protected_markdown_gate.py"
+HEADING_GATE = ROOT / "scripts" / "heading_preservation_gate.py"
 DELIVERY_GATE = ROOT / "scripts" / "delivery_gate.py"
 RUBRIC = ROOT / "config" / "quality-score-rubric.json"
 ASSETS = ROOT / "assets" / "stability"
@@ -75,6 +76,41 @@ class DeliveryGateTests(unittest.TestCase):
                     ["PRESERVE-MARKDOWN-IMAGE-LINES"],
                 )
 
+    def test_heading_line_gate_preserves_existing_structure(self) -> None:
+        source = ASSETS / "heading-lines-source.md"
+        positive = self.run_gate(
+            HEADING_GATE,
+            "check",
+            "--source",
+            str(source),
+            "--final",
+            str(ASSETS / "heading-lines-final-ok.md"),
+            expected=0,
+        )
+        self.assertEqual(
+            self.last_json(positive)["passed_constraint_ids"],
+            ["PRESERVE-MARKDOWN-HEADING-LINES"],
+        )
+        for fixture in (
+            "heading-lines-final-added.md",
+            "heading-lines-final-releveled.md",
+            "heading-lines-final-renamed.md",
+        ):
+            with self.subTest(fixture=fixture):
+                negative = self.run_gate(
+                    HEADING_GATE,
+                    "check",
+                    "--source",
+                    str(source),
+                    "--final",
+                    str(ASSETS / fixture),
+                    expected=3,
+                )
+                self.assertEqual(
+                    self.last_json(negative)["failed_constraint_ids"],
+                    ["PRESERVE-MARKDOWN-HEADING-LINES"],
+                )
+
     def test_delivery_gate_positive_and_precise_faults(self) -> None:
         source = ASSETS / "delivery-source.md"
         positive = self.run_gate(
@@ -94,9 +130,28 @@ class DeliveryGateTests(unittest.TestCase):
             self.last_json(positive)["passed_constraint_ids"],
             [
                 "SCENE-DECLARED-BEFORE-REWRITE",
+                "VOICE-MODE-DECLARED-BEFORE-REWRITE",
                 "PROTECTED-SPANS-PRESERVED",
                 "QUALITY-SCORE-GATE-PASSED",
             ],
+        )
+
+        local_anchor = self.run_gate(
+            DELIVERY_GATE,
+            "check",
+            "--source",
+            str(source),
+            "--final",
+            str(ASSETS / "delivery-final-ok.md"),
+            "--run-plan",
+            str(ASSETS / "delivery-run-plan-local-anchor.json"),
+            "--score-receipt",
+            str(ASSETS / "delivery-score-local-anchor-good.json"),
+            expected=0,
+        )
+        self.assertEqual(
+            self.last_json(local_anchor)["observables"]["voice-anchor-id"],
+            ["sample-anchor-v1"],
         )
 
         faults = (
@@ -105,6 +160,12 @@ class DeliveryGateTests(unittest.TestCase):
                 "delivery-run-plan-invalid-scene.json",
                 "delivery-score-good.json",
                 "SCENE-DECLARED-BEFORE-REWRITE",
+            ),
+            (
+                "delivery-final-ok.md",
+                "delivery-run-plan-invalid-voice.json",
+                "delivery-score-good.json",
+                "VOICE-MODE-DECLARED-BEFORE-REWRITE",
             ),
             (
                 "delivery-final-span-mutated.md",

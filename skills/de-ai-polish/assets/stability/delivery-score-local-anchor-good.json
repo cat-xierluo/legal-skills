@@ -2,8 +2,8 @@
   "schema_version": 2,
   "final_sha256": "4893ccd96c5f5ad96c9984f2ed2be052daac2e0c873a4e9f8d367d663818c518",
   "scene": "legal_document",
-  "voice_mode": "cleanup_only",
-  "voice_anchor_id": null,
+  "voice_mode": "local_anchor",
+  "voice_anchor_id": "sample-anchor-v1",
   "dimensions": {
     "naturalness": 1.6,
     "rhythm": 1.5,
@@ -12,5 +12,11 @@
     "conciseness": 1.5
   },
   "total": 7.8,
-  "voice_profile_checks": null
+  "voice_profile_checks": {
+    "profile_matched": true,
+    "no_sample_copy": true,
+    "no_fact_leak": true,
+    "no_counterexample_reuse": true,
+    "no_repair_artifact": true
+  }
 }

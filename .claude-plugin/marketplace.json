@@ -423,8 +423,8 @@
     },
     {
       "name": "de-ai-polish",
-      "description": "检测并去除文章中的AI化表述模式，用于写作润色、文本优化、去AI腔，支持 Voice Calibration、Protected Spans 与候选绑定交付门禁",
-      "version": "2.2.0",
+      "description": "检测并去除文章正文中的 AI 化表达，支持作者证据、Voice Calibration、本机私有 VoiceAnchor、标题与图片保护及候选绑定交付门禁",
+      "version": "3.2.6",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },

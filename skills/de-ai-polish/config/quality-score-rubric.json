@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "score_method": "sum",
   "dimensions": {
     "naturalness": {
@@ -33,6 +33,7 @@
     "profile_matched",
     "no_sample_copy",
     "no_fact_leak",
-    "no_counterexample_reuse"
+    "no_counterexample_reuse",
+    "no_repair_artifact"
   ]
 }

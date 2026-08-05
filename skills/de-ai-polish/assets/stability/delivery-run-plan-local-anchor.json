@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "scene": "legal_document",
-  "voice_mode": "cleanup_only",
-  "voice_anchor_id": null,
+  "voice_mode": "local_anchor",
+  "voice_anchor_id": "sample-anchor-v1",
   "protected_spans": [
     {
       "id": "statute-001",

@@ -2,13 +2,19 @@
   "schema_version": 1,
   "skill": {
     "name": "de-ai-polish",
-    "version": "2.2.0"
+    "version": "3.2.6"
   },
   "producer": {
     "id": "de-ai-polish-workflow",
     "implementation_paths": [
       "SKILL.md",
+      "references/personal-style-guide.md",
+      "references/expression-transformations.md",
       "scripts/fix_punctuation.py",
+      "scripts/heading_preservation_gate.py",
+      "scripts/style_regression_gate.py",
+      "scripts/semantic_repetition_gate.py",
+      "scripts/voice_anchor_copy_gate.py",
       "scripts/delivery_gate.py",
       "config/quality-score-rubric.json"
     ]
@@ -47,6 +53,26 @@
       "independent_from_producer": true,
       "runtime": "python3",
       "implementation": "scripts/protected_markdown_gate.py",
+      "args": [
+        "check",
+        "--source",
+        "{artifact:source-markdown}",
+        "--final",
+        "{artifact:final-markdown}"
+      ],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "heading-preservation-gate",
+      "kind": "active",
+      "modality": "text",
+      "artifact_stages": [
+        "source",
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/heading_preservation_gate.py",
       "args": [
         "check",
         "--source",
@@ -102,6 +128,25 @@
       "historical_failure_known": true
     },
     {
+      "id": "PRESERVE-MARKDOWN-HEADING-LINES",
+      "severity": "hard",
+      "requirement_type": "text",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#PRESERVE-MARKDOWN-HEADING-LINES"
+      ],
+      "checker_ids": [
+        "heading-preservation-gate"
+      ],
+      "case_ids": [
+        "heading-lines-preserved",
+        "heading-line-added",
+        "heading-line-renamed",
+        "heading-line-releveled"
+      ],
+      "historical_failure_known": true
+    },
+    {
       "id": "SCENE-DECLARED-BEFORE-REWRITE",
       "severity": "hard",
       "requirement_type": "schema",
@@ -132,8 +177,28 @@
       ],
       "case_ids": [
         "delivery-all-pass",
+        "local-anchor-all-pass",
         "protected-span-mutated-mutation",
         "protected-span-mutated"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "VOICE-MODE-DECLARED-BEFORE-REWRITE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "source",
+      "source_refs": [
+        "SKILL.md#VOICE-MODE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "case_ids": [
+        "delivery-all-pass",
+        "voice-mode-invalid",
+        "voice-mode-not-declared",
+        "local-anchor-all-pass"
       ],
       "historical_failure_known": true
     },
@@ -150,6 +215,7 @@
       ],
       "case_ids": [
         "delivery-all-pass",
+        "local-anchor-all-pass",
         "quality-score-below-threshold-mutation",
         "quality-score-below-threshold"
       ],
@@ -246,10 +312,99 @@
       "expected_exit_code": 3
     },
     {
+      "id": "heading-lines-preserved",
+      "kind": "positive",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-HEADING-LINES"
+      ],
+      "checker_ids": [
+        "heading-preservation-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/heading-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/heading-lines-final-ok.md"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "heading-line-added",
+      "kind": "historical",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-HEADING-LINES"
+      ],
+      "checker_ids": [
+        "heading-preservation-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/heading-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/heading-lines-final-added.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "heading-line-renamed",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-HEADING-LINES"
+      ],
+      "checker_ids": [
+        "heading-preservation-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/heading-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/heading-lines-final-renamed.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "heading-line-releveled",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PRESERVE-MARKDOWN-HEADING-LINES"
+      ],
+      "checker_ids": [
+        "heading-preservation-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/heading-lines-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/heading-lines-final-releveled.md"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
       "id": "delivery-all-pass",
       "kind": "positive",
       "constraint_ids": [
         "SCENE-DECLARED-BEFORE-REWRITE",
+        "VOICE-MODE-DECLARED-BEFORE-REWRITE",
         "PROTECTED-SPANS-PRESERVED",
         "QUALITY-SCORE-GATE-PASSED"
       ],
@@ -272,6 +427,98 @@
         {
           "artifact_id": "score-receipt",
           "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "voice-mode-invalid",
+      "kind": "mutation",
+      "constraint_ids": [
+        "VOICE-MODE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan-invalid-voice.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "voice-mode-not-declared",
+      "kind": "historical",
+      "constraint_ids": [
+        "VOICE-MODE-DECLARED-BEFORE-REWRITE"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan-invalid-voice.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-good.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "local-anchor-all-pass",
+      "kind": "positive",
+      "constraint_ids": [
+        "VOICE-MODE-DECLARED-BEFORE-REWRITE",
+        "PROTECTED-SPANS-PRESERVED",
+        "QUALITY-SCORE-GATE-PASSED"
+      ],
+      "checker_ids": [
+        "de-ai-delivery-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "source-markdown",
+          "path": "assets/stability/delivery-source.md"
+        },
+        {
+          "artifact_id": "final-markdown",
+          "path": "assets/stability/delivery-final-ok.md"
+        },
+        {
+          "artifact_id": "run-plan",
+          "path": "assets/stability/delivery-run-plan-local-anchor.json"
+        },
+        {
+          "artifact_id": "score-receipt",
+          "path": "assets/stability/delivery-score-local-anchor-good.json"
         }
       ],
       "expected": "pass",
@@ -470,6 +717,14 @@
         "expected": true
       },
       {
+        "id": "headings-preserved",
+        "checker_id": "heading-preservation-gate",
+        "constraint_id": "PRESERVE-MARKDOWN-HEADING-LINES",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
         "id": "scene-declared",
         "checker_id": "de-ai-delivery-gate",
         "constraint_id": "SCENE-DECLARED-BEFORE-REWRITE",
@@ -481,6 +736,14 @@
         "id": "protected-spans-preserved",
         "checker_id": "de-ai-delivery-gate",
         "constraint_id": "PROTECTED-SPANS-PRESERVED",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "voice-mode-declared",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_id": "VOICE-MODE-DECLARED-BEFORE-REWRITE",
         "value_type": "boolean",
         "condition": "equals",
         "expected": true
@@ -518,6 +781,36 @@
         "checker_id": "protected-markdown-gate",
         "constraint_ids": [
           "PRESERVE-MARKDOWN-IMAGE-LINES"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "protected-heading-lines",
+        "checker_id": "heading-preservation-gate",
+        "constraint_ids": [
+          "PRESERVE-MARKDOWN-HEADING-LINES"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "voice-mode",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_ids": [
+          "VOICE-MODE-DECLARED-BEFORE-REWRITE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "voice-anchor-id",
+        "checker_id": "de-ai-delivery-gate",
+        "constraint_ids": [
+          "VOICE-MODE-DECLARED-BEFORE-REWRITE"
         ],
         "comparison": "set_equal",
         "required": true,
