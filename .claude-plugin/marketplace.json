@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "legal-skills",
-  "version": "1.6.8",
+  "version": "1.6.9",
   "description": "面向法律从业者的 Claude Skills 集合，支持从内容获取、处理到专业写作的全流程 AI 协作",
   "owner": {
     "name": "杨卫薪律师（微信ywxlaw）",
@@ -535,6 +535,24 @@
         "verification",
         "stability",
         "drift"
+      ]
+    },
+    {
+      "name": "verification-loop",
+      "description": "代码改完后的验证门禁 skill，跑 8 阶段验证（构建/类型/lint/单测/e2e 功能/真机/安全/diff），其中 e2e 功能 + 真机是 READY 的硬门禁（编译过 ≠ 功能可用）；覆盖 Tauri 桌面/Web/服务/Skill 四类项目分支",
+      "version": "1.0.1",
+      "author": {
+        "name": "杨卫薪律师（微信ywxlaw）"
+      },
+      "source": "skills/verification-loop",
+      "category": "developer-tools",
+      "tags": [
+        "工具",
+        "Skill开发",
+        "verification",
+        "e2e",
+        "testing",
+        "gate"
       ]
     },
     {
