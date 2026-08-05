@@ -206,6 +206,9 @@ for _DIR in archive output downloads logs; do
     [ -d "$TEMP_DIR/$_DIR" ] && rm -rf "$TEMP_DIR/$_DIR" && echo -e "${YELLOW}强制移除: $_DIR/${NC}"
 done
 
+# 清理 .gitkeep 占位文件（git 用来追踪空目录，非 skill 内容；部分平台如 SkillHub 拒收该文件类型）
+find "$TEMP_DIR" -name '.gitkeep' -delete 2>/dev/null
+
 # ── SkillHub 专用:从本地配置注入 slug/displayName 到临时副本 frontmatter ──
 # 设计:源 SKILL.md 不含 slug/displayName(平台元数据与 skill 本体解耦),
 #       发布前从此脚本同目录的 ../config/sync-allowlist.yaml 读取并注入临时副本。
