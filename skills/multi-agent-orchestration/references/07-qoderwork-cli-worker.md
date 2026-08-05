@@ -75,18 +75,22 @@ Usage: qoderclicn [options] [command] [query...]
 
 ## 4. 可用模型
 
-| 模型 key | 对应模型 | 备注 |
-|----------|---------|------|
-| `qmodel_latest` | Qwen3.7-Max | 每日有免费额度 |
-| `qmodel` | Qwen3.7-Plus | |
-| `q36fmodel` | Qwen3.6-Flash | |
-| `dmodel` | DeepSeek-V4-Pro | |
-| `dfmodel` | DeepSeek-V4-Flash | |
-| `gm51model` | GLM-5.1 | |
-| `kmodel` | Kimi-K2.6 | |
-| `mmodel` | MiniMax-M2.7 | |
+> 复测日期：2026-08-05（CLI `qoderclicn --version` = **1.0.45**，`--list-models` 实际输出）。模型清单随平台策略变化，**以 `qoderclicn --list-models` 实际输出为准**。
 
-注意：具体可用模型和额度随 QoderWork 平台策略变化，以 `--list-models` 实际输出为准。
+| `--model` 实际名（1.0.45，推荐） | 旧 alias（兼容，可能过时） | 备注 |
+|----------|----------|------|
+| `Qwen3.8-Max` | —（新旗舰，`qmodel_latest` 仍解析 3.7-Max 没跟） | **2026-08 新旗舰**，每日免费额度 |
+| `Qwen3.7-Max` | `qmodel_latest` | 上一代旗舰 |
+| `Qwen3.7-Plus` | `qmodel` | |
+| `Qwen3.6-Flash` | `q36fmodel` | Flash 档 |
+| `DeepSeek-V4-Pro` | `dmodel` | |
+| `DeepSeek-V4-Flash` | `dfmodel` | |
+| `GLM-5.2` | `gm51model`（旧 alias 指 GLM-5.1，已过时） | 2026-08 平台新增 GLM |
+| `Kimi-K2.7-Code` | `kmodel`（旧 alias 指 Kimi-K2.6，已过时） | 代码档 |
+| `MiniMax-M2.7` | `mmodel` | |
+| `Auto` | — | 自动路由 |
+
+**推荐用具体名**（`-m Qwen3.8-Max`）；旧 alias（`qmodel_latest` 等）仍兼容但映射可能过时（如 `gm51model` → 实际 GLM-5.2 不是 5.1，`qmodel_latest` → 3.7-Max 没跟 3.8）。普通终端用：先 `ln -s .../qoderclicn ~/.local/bin/qoderclicn` 建 symlink + `qoderclicn login`，之后 `qoderclicn --list-models` / `qoderclicn -m Qwen3.8-Max`。
 
 ## 5. 关键限制与注意事项
 

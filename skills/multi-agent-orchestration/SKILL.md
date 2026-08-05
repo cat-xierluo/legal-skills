@@ -4,7 +4,7 @@ description: 当用户要求你并行推进多个任务、一次性开多个 wor
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.20.4"
+version: "1.20.5"
 ---
 
 # Multi-Agent Orchestration
@@ -192,7 +192,7 @@ Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以�
 **Backend 模型偏好（v1.20.3 实战沉淀，2026-08-05）**：
 
 - **codebuddy backend**（`backend_model_routing.codebuddy.default_models`）：推荐 `["hy3", "deepseek-v4-flash", "deepseek-v4-pro"]` —— hy3 首选（WorkBuddy 平台自定义模型）、deepseek-v4-flash 次选（平台批量模型）、deepseek-v4-pro **仅作回退，**不用作主**。spawn-worker.sh 派 codebuddy worker 时按此顺序选 `--model`。
-- **qoderwork-cn backend**（`backend_model_routing.qoderwork-cn.default_models`）：推荐 `["qmodel_latest", "qmodel", "dmodel_latest", "dmodel"]` —— qmodel_latest = Qwen3.7-Max 首选、qmodel = Qwen3.7-Plus、dmodel 系列备选。references/07 §5.1 推荐 `qmodel_latest` + `--permission-mode auto`。
+- **qoderwork-cn backend**（`backend_model_routing.qoderwork-cn.default_models`）：推荐 `["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"]` —— **Qwen3.8-Max = 2026-08 新旗舰首选**（CLI v1.0.45 `--list-models` 实测），Qwen3.7-Max/Plus 上一代，DeepSeek/GLM/Kimi 备选。**推荐用具体名**（`-m Qwen3.8-Max`），旧 alias（`qmodel_latest` 等）兼容但解析过时（`qmodel_latest` → 3.7-Max 没跟 3.8）。references/07 §4 + §5.1。
 
 详见 `config/orchestration-personal.example.json` 的 `backend_model_routing` 段（结构示例 codebuddy / qoderwork-cn）+ `references/08-codebuddy-cli-worker.md` §1 模型偏好。
 
