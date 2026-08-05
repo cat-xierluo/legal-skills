@@ -1,5 +1,17 @@
 # 变更日志
 
+## [0.3.0] - 2026-08-05
+
+### 新增
+- 个人来源清单机制：skill 根目录 `manifest.json` 为私有同步清单（含本地文件路径/云端地址），
+  已由本 skill 的 `.gitignore` 忽略，**不进公开仓库**；`references/manifest.example.json` 为入库模板
+- `references/manifest.example.json` 补全四类来源示例：file（本地 .skill/.zip）、github、clawhub、skills.sh
+- SKILL.md 更新文件结构与「准备清单」章节：说明本地 file 与云端地址的两种录入方式
+
+### 待办事项
+- 服务端恢复后实测一次真实 import 成功路径
+- manifest.json 由用户填入真实本地/云端来源
+
 ## [0.2.0] - 2026-08-05
 
 ### 新增

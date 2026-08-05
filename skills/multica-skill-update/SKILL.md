@@ -4,7 +4,7 @@ description: Multica 工作区 Skill 同步工具。当需要把本地来源清�
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # Multica Skill 同步工具
@@ -29,14 +29,15 @@ version: "0.2.0"
 ```
 multica-skill-update/
 ├── SKILL.md                      # 本入口文档
-├── manifest.json                 # 真实来源清单（由你创建/维护，嵌入 skill 后安装）
+├── manifest.json                 # 个人来源清单（你维护，含本地文件路径/云端地址；已被 .gitignore 忽略，不入库）
+├── .gitignore                    # 忽略 manifest.json（个人清单含本机路径，不进公开仓库）
 ├── references/
-│   └── manifest.example.json     # 清单模板（复制后填入真实来源）
+│   └── manifest.example.json     # 清单模板（复制后填入真实来源；此模板入库）
 └── scripts/
     └── sync_skills.py            # init/update/plan 三模式执行脚本
 ```
 
-> `references/manifest.example.json` 只是模板；**真实清单**（`manifest.json`）由维护者创建并嵌入 skill 目录内再安装，随 skill 一起版本化。
+> **个人清单机制**：`manifest.json` 是你的私有同步清单——既可以录入**本地 skill 文件**（`source: "file"`，`url` 写本机路径，如 `/path/to/skill.skill` 或 `.zip`），也可以录入**云端 skill 地址**（`source: "github" | "clawhub" | "skills.sh"`，`url` 写对应 URL）。它已被本 skill 的 `.gitignore` 忽略，**不会进入公开仓库**；`references/manifest.example.json` 只是模板（入库），供他人复制填写。
 
 ## 依赖
 
@@ -101,12 +102,15 @@ MULTICA_BIN="/Applications/Multica.app/Contents/Resources/app.asar.unpacked/reso
 
 ### 1. 准备清单
 
-复制模板并填入真实来源：
+`manifest.json` 是个人清单（已被 `.gitignore` 忽略，不进 Git）。首次使用复制模板并填入真实来源：
 
 ```bash
 cp references/manifest.example.json manifest.json
-# 编辑 manifest.json：填入你的来源 URL 与 on_conflict 策略
+# 编辑 manifest.json：本地 skill 用 source=file + 本机路径；云端用 source=github/clawhub/skills.sh + URL
 ```
+
+- 本地 skill 文件：`{"name": "xxx", "source": "file", "url": "/path/to/xxx.skill", "on_conflict": "overwrite", "enabled": true}`
+- 云端 skill：`{"name": "xxx", "source": "github", "url": "https://github.com/owner/xxx", "on_conflict": "skip", "enabled": true}`
 
 ### 2. 执行同步
 

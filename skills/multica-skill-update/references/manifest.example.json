@@ -2,6 +2,13 @@
   "version": 1,
   "skills": [
     {
+      "name": "local-skill-example",
+      "source": "file",
+      "url": "/Users/me/path/to/local-skill.skill",
+      "on_conflict": "overwrite",
+      "enabled": true
+    },
+    {
       "name": "review-helper",
       "source": "github",
       "url": "https://github.com/owner/repo",
@@ -10,15 +17,15 @@
     },
     {
       "name": "doc-gen",
-      "source": "github",
-      "url": "https://github.com/owner/doc-skill",
+      "source": "clawhub",
+      "url": "https://clawhub.ai/owner/doc-skill",
       "on_conflict": "skip",
       "enabled": true
     },
     {
       "name": "temp-disabled",
-      "source": "clawhub",
-      "url": "https://clawhub.com/skills/temp-disabled",
+      "source": "skills.sh",
+      "url": "https://skills.sh/owner/temp-disabled",
       "on_conflict": "skip",
       "enabled": false
     }
