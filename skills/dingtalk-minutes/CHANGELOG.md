@@ -1,3 +1,16 @@
+## [0.6.0] - 2026-08-05
+
+### 改进
+- archive 存档信息拉满（内部留底，文字维度全量提取）：每条听记除 `transcript.md` 逐字稿外，新增独立 `summary.md`（AI 摘要全文）、`keywords.md`（关键词）、`todos.md`（待办含负责人）
+- `transcript.md` 头部新增概览区：关键词 + AI 摘要 + 待办，单文件即可纵览
+- `meta.json` 扩充：补 `audio`（videoUrl/size/duration + 过期提示）、`creator`、`durationMicros` 等字段
+- `get_extra` 适配 keywords 的 NDJSON 返回与 todos 的 `actions`/`dingtalkTodoList` 结构；`run_dws` 对 NDJSON 透传 `_raw` 供逐行解析
+- 新增 `--with-audio` 开关：显式下载原始音频 mp3 到 archive（默认不下载，URL 带过期鉴权、单条约 150MB）
+- 存量 42 条听记已一次性补全上述附属文件
+
+### 待办事项
+- 视需求补充"听记→法律文书"业务封装层（当前为纯能力薄壳）
+
 ## [0.5.0] - 2026-08-05
 
 ### 改进

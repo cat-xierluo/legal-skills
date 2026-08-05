@@ -59,8 +59,8 @@ def run_dws(args: List[str], dry_run: bool = False) -> Optional[Any]:
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
-        print(f"  [json error] raw: {proc.stdout[:200]}", file=sys.stderr)
-        return None
+        # NDJSON（如 keywords 接口逐行返回）→ 透传原始文本，由调用方逐行解析
+        return {"_raw": proc.stdout}
 
 
 def load_index(archive_dir: Path) -> Dict[str, Any]:
@@ -154,10 +154,57 @@ def get_transcription(uuid: str, dry_run: bool) -> List[str]:
 
 
 def get_extra(uuid: str, sub: str, dry_run: bool) -> Optional[Any]:
+    """拉取单条听记的附属内容。keywords 接口返回 NDJSON（多行 JSON），需逐行解析。"""
+    if sub == "keywords":
+        # keywords 是 NDJSON：每行一个 {"keywords":[...]}
+        out = run_dws(
+            ["minutes", "get", sub, "--id", uuid, "--format", "json"], dry_run=dry_run
+        )
+        if out is None:
+            return None
+        text = out.get("_raw") if isinstance(out, dict) and out.get("_raw") else ""
+        if text:
+            kws: List[str] = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    kws.extend(obj.get("keywords", []))
+                except Exception:
+                    pass
+            return {"keywords": kws}
+        # 兜底：尝试标准 JSON
+        return out.get("result") if isinstance(out, dict) else None
     data = run_dws(
         ["minutes", "get", sub, "--id", uuid, "--format", "json"], dry_run=dry_run
     )
     return data.get("result") if data else None
+
+
+def _todos_to_lines(todos: Any) -> List[str]:
+    """把 get todos 的 result 转成可读待办行。"""
+    if isinstance(todos, dict):
+        lines: List[str] = []
+        actions = todos.get("actions") or []
+        for a in actions:
+            if isinstance(a, str):
+                try:
+                    a = json.loads(a)
+                except Exception:
+                    lines.append(f"- {a}")
+                    continue
+            if isinstance(a, dict) and a.get("value"):
+                lines.append(f"- {a['value']}")
+        if not lines and todos.get("dingtalkTodoList"):
+            for t in todos["dingtalkTodoList"]:
+                if isinstance(t, dict):
+                    lines.append(f"- {t.get('title', '')}")
+        return lines
+    if isinstance(todos, list):
+        return [f"- {t}" for t in todos]
+    return [str(todos)]
 
 
 def parse_iso(s: str) -> datetime:
@@ -173,6 +220,7 @@ def main() -> int:
     ap.add_argument("--full", action="store_true", help="忽略 last_sync，全量重扫")
     ap.add_argument("--list-new", action="store_true", help="只列新增标题，不拉逐字稿")
     ap.add_argument("--dry-run", action="store_true", help="预览，不写文件")
+    ap.add_argument("--with-audio", action="store_true", help="同时下载原始音频 mp3 到 archive（默认不下载，单条约 150MB）")
     args = ap.parse_args()
 
     skill_root = _scripts_dir.parent
@@ -246,7 +294,11 @@ def main() -> int:
         rec_dir.mkdir(parents=True, exist_ok=True)
         uuid_to_dir[uuid] = dir_name
 
-        # 1) 元数据
+        # 1) 元数据（结构化，不含大段文本）
+        summary = get_extra(uuid, "summary", args.dry_run)
+        todos = get_extra(uuid, "todos", args.dry_run)
+        keywords = get_extra(uuid, "keywords", args.dry_run)
+        audio = get_extra(uuid, "audio", args.dry_run)
         meta = {
             "uuid": uuid,
             "title": it.get("title"),
@@ -255,25 +307,78 @@ def main() -> int:
             "durationMicros": it.get("durationMicros"),
             "shareUrl": it.get("shareUrl"),
             "creator": (it.get("flashUserInfo") or {}).get("name"),
-            "keywords": (it.get("keywordsInfo") or {}).get("keywords"),
-            "summary": get_extra(uuid, "summary", args.dry_run),
-            "todos": get_extra(uuid, "todos", args.dry_run),
+            "keywords": (keywords or {}).get("keywords") if isinstance(keywords, dict) else keywords,
+            "audio": {
+                "videoUrl": (audio or {}).get("videoUrl"),
+                "audioUrl": (audio or {}).get("audioUrl"),
+                "size": (audio or {}).get("size"),
+                "duration": (audio or {}).get("duration"),
+                "filtered": (audio or {}).get("filtered"),
+                "note": "URL 带过期鉴权，需重新执行 `dws minutes get audio` 获取有效地址；如需本地留底音频请加 --with-audio 下载",
+            },
             "synced_at": datetime.now(timezone.utc).isoformat(),
         }
         (rec_dir / "meta.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
-        # 2) 逐字稿
+        # 2) 逐字稿（含概览头）
         paras = get_transcription(uuid, dry_run=args.dry_run)
         md = f"# {it.get('title', '')}\n\n"
         md += f"> 开始时间: {it.get('startTimeISO')}  \n"
-        md += f"> 分享链接: {it.get('shareUrl')}  \n\n---\n\n"
+        md += f"> 分享链接: {it.get('shareUrl')}  \n"
+        if meta.get("creator"):
+            md += f"> 创建人: {meta['creator']}  \n"
+        md += "\n---\n\n"
+
+        # 概览：关键词 / AI 摘要 / 待办（来自 get 详细接口，比列表版完整）
+        kw_list = meta.get("keywords") or []
+        if kw_list:
+            md += f"## 关键词\n\n{', '.join(kw_list)}\n\n"
+        if isinstance(summary, dict) and summary.get("fullSummary"):
+            md += f"## AI 摘要\n\n{summary['fullSummary']}\n\n"
+        if todos:
+            md += "## 待办事项\n\n"
+            md += "\n".join(_todos_to_lines(todos)) + "\n\n"
+
+        md += "---\n\n## 逐字稿\n\n"
         md += "\n\n".join(paras)
         (rec_dir / "transcript.md").write_text(md, encoding="utf-8")
 
+        # 3) 拆分独立文件（信息越全越好，便于单独检索）
+        if isinstance(summary, dict) and summary.get("fullSummary"):
+            (rec_dir / "summary.md").write_text(
+                f"# {it.get('title', '')} — AI 摘要\n\n{summary['fullSummary']}", encoding="utf-8"
+            )
+        if keywords:
+            kw = meta.get("keywords") or []
+            (rec_dir / "keywords.md").write_text(
+                f"# {it.get('title', '')} — 关键词\n\n"
+                + ("\n".join(f"- {k}" for k in kw) if kw else str(keywords)),
+                encoding="utf-8",
+            )
+        if todos:
+            tlines = "\n".join(_todos_to_lines(todos))
+            (rec_dir / "todos.md").write_text(
+                f"# {it.get('title', '')} — 待办事项\n\n{tlines}", encoding="utf-8"
+            )
+
+        # 4) 可选：下载原始音频（URL 带过期鉴权，下载后才真正留底）
+        if args.with_audio:
+            url = (audio or {}).get("videoUrl") or (audio or {}).get("audioUrl")
+            if url:
+                import urllib.request
+
+                aud_path = rec_dir / "audio.mp3"
+                try:
+                    urllib.request.urlretrieve(url, aud_path)
+                    print(f"   🎵 已下载音频: {aud_path.name}")
+                except Exception as e:
+                    print(f"   [audio error] {e}", file=sys.stderr)
+
         synced.add(uuid)
-        print(f"   ✅ 已存档: {it.get('title')}  ({len(paras)} 段)")
+        extra = " + summary/keywords/todos/audio元数据" if not args.dry_run else ""
+        print(f"   ✅ 已存档: {it.get('title')}  ({len(paras)} 段{extra})")
 
     if not args.dry_run:
         index["last_sync"] = max_time or last_sync
