@@ -1,5 +1,18 @@
 # 变更日志
 
+## [0.4.0] - 2026-08-03
+
+### 改进
+
+- **默认下载目录改为 `~/Downloads/`**（取消自包含）：产物不再存入 skill 内部 `downloads/`，改为用户主目录 `~/Downloads/`，方便日常访问。见 DECISIONS.md DEC-004（取代 DEC-002）
+- `download_media.py`: `DEFAULT_OUT_DIR` 由 `SCRIPT_DIR / "downloads"` 改为 `Path.home() / "Downloads"`
+- SKILL.md「默认保存目录」说明同步更新
+
+### 注意
+
+- 此变更不向后迁移历史文件；skill 内 `downloads/` 目录若存在则保留但不再写入
+- 仍可用 `--out-dir` 自定义任意路径
+
 ## [0.3.0] - 2026-08-02
 
 ### 新增
