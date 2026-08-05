@@ -250,6 +250,47 @@ DANGEROUS_PATTERNS = {
     },
 }
 
+# 凭据暴露面检测（参考 NVIDIA SkillSpector：Missing User Warnings / Credential Access）
+# 聚焦「运行时把敏感凭据暴露到不安全位置」与「扩大本地信任边界」两类问题，
+# 与 hardcoded_secrets（静态硬编码）互补：本集合检查的是动态暴露面。
+CREDENTIAL_EXPOSURE = {
+    'token_to_stdout': {
+        'patterns': [
+            # 仅匹配「成功路径把 token 写出」，排除注释行与 ERR 错误消息
+            r'process\.stdout\.write\s*\(\s*.*token',
+            r'console\.log\s*\([^)]*token',
+            r'echo\s+.*\$?TOKEN',               # shell 把 TOKEN 变量打印出来
+            r'print\s*\([^)]*access[_\-]?token',
+            r'print\s*\([^)]*accessToken',
+            # decrypt-token.js 的成功输出行（DECRYPT_RESULT:<token>，非 ERR）
+            r'DECRYPT_RESULT:\"\s*\+\s*token',
+            r'DECRYPT_RESULT:\s*\+\s*token',
+        ],
+        'severity': 'high',
+        'message': '凭据经 stdout 输出，可能被日志、调用进程、shell 历史或自动化层捕获，导致账号凭据泄露',
+    },
+
+    'auto_install_runtime': {
+        'patterns': [
+            r'npm\s+install\s+electron',         # 自动下载第三方运行时用于解密凭据
+            r'npm\s+init.*npm\s+install',
+            r'pip\s+install\s+.*(decrypt|token|secret)',
+        ],
+        'severity': 'medium',
+        'message': '自动从网络下载并执行第三方运行时/包以处理本地凭据，扩大信任边界并引入供应链风险',
+    },
+
+    'interpreter_fallback': {
+        'patterns': [
+            r'execFileSync\s*\(\s*["\']python3',
+            r'subprocess.*python3',
+            r'child_process.*python3',
+        ],
+        'severity': 'medium',
+        'message': '为读取凭据/会话库回退调用外部解释器（python3），扩大本地执行信任边界',
+    },
+}
+
 # Skill 特有风险检测
 SKILL_RISKS = {
     'hidden_hooks': {
@@ -474,6 +515,9 @@ class SecurityAnalyzer:
         file_ops = self._analyze_file_operations()
         secrets = self._detect_secrets()
         prompt_security = self._analyze_prompt_security()  # 新增：提示词安全检测
+        credential_exposure = self._detect_credential_exposure()  # 凭据暴露面检测
+        permission_decl = self._detect_permission_declaration()  # 权限声明缺失检测
+        context_match = self._detect_context_mismatch()  # 描述-能力上下文匹配
 
         # 计算风险汇总
         risk_summary = self._calculate_risk_summary()
@@ -487,6 +531,9 @@ class SecurityAnalyzer:
             'file_operations': file_ops,
             'secrets': secrets,
             'prompt_security': prompt_security,  # 新增
+            'credential_exposure': credential_exposure,
+            'permission_declaration': permission_decl,
+            'context_mismatch': context_match,
             'findings': self._serialize_findings(),
         }
 
@@ -900,6 +947,182 @@ class SecurityAnalyzer:
             masked = secret[:4] + '*' * (len(secret) - 8) + secret[-4:]
             return line.replace(secret, masked)
         return line
+
+    def _detect_credential_exposure(self) -> Dict:
+        """检测凭据暴露面（参考 NVIDIA SkillSpector）
+
+        覆盖：凭据经 stdout 输出、自动下载第三方运行时处理凭据、回退调用外部解释器。
+        与 hardcoded_secrets（静态硬编码）互补——本方法检查运行时动态暴露面。
+        """
+        result = {'findings': [], 'warnings': []}
+
+        code_extensions = {'.py', '.js', '.jsx', '.ts', '.tsx', '.sh', '.bash', '.ps1'}
+        for category, config in CREDENTIAL_EXPOSURE.items():
+            for file_path in self.repo_path.rglob('*'):
+                if not file_path.is_file() or file_path.suffix not in code_extensions:
+                    continue
+                if any(exc in file_path.parts for exc in self.exclude_dirs):
+                    continue
+                try:
+                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                    lines = content.split('\n')
+                    rel_path = str(file_path.relative_to(self.repo_path))
+                    seen = set()  # 按 (file, line, category) 去重
+                    for pattern in config['patterns']:
+                        try:
+                            regex = re.compile(pattern, re.IGNORECASE)
+                            for i, line in enumerate(lines, 1):
+                                stripped = line.strip()
+                                # 跳过注释行与错误消息/失败回显行，降低误报
+                                if stripped.startswith(('*', '#', '//', '/*', 'REM', '::')):
+                                    continue
+                                if re.search(r'\b(ERR|失败|未知原因|长度)\b', line):
+                                    continue
+                                if regex.search(line):
+                                    dup_key = (rel_path, i, category)
+                                    if dup_key in seen:
+                                        continue
+                                    seen.add(dup_key)
+                                    finding = SecurityFinding(
+                                        category=f'cred_exposure_{category}',
+                                        severity=config['severity'],
+                                        file=rel_path,
+                                        line=i,
+                                        code=line.strip()[:100],
+                                        message=config['message'],
+                                        pattern=pattern,
+                                    )
+                                    self.findings.append(finding)
+                                    result['findings'].append({
+                                        'file': rel_path,
+                                        'line': i,
+                                        'code': line.strip()[:100],
+                                        'severity': config['severity'],
+                                        'message': config['message'],
+                                    })
+                        except re.error:
+                            pass
+                except Exception:
+                    pass
+
+        if result['findings']:
+            result['warnings'].append(
+                f"发现 {len(result['findings'])} 处凭据暴露面风险"
+            )
+        return result
+
+    def _detect_permission_declaration(self) -> Dict:
+        """检测权限/能力声明缺失（参考 SkillSpector: MCP Least Privilege）
+
+        Skill 若要求本地代码执行、定时任务、环境变量读取、访问用户目录会话库等
+        能力，但 SKILL.md 未声明所需权限边界，则视为透明度/同意缺口。
+        """
+        result = {'missing': [], 'warnings': []}
+
+        # 1) 扫描脚本中体现的能力信号
+        capability_signals = {
+            'local_code_execution': [r'\.sh\b', r'\.ps1\b', r'child_process',
+                                     r'subprocess', r'execFileSync', r'os\.system'],
+            'scheduled_task': [r'crontab', r'launchctl\s+load', r'LaunchAgents',
+                               r'ScheduledTask', r'schtasks'],
+            'env_var_read': [r'process\.env\[', r'os\.environ', r'\$\{\w+:', r'WB_CHECKIN_'],
+            'local_session_db': [r'state\.vscdb', r'ItemTable', r'globalStorage'],
+        }
+
+        skill_md = self.repo_path / 'SKILL.md'
+        if not skill_md.exists():
+            return result
+
+        try:
+            skill_content = skill_md.read_text(encoding='utf-8', errors='ignore')
+        except Exception:
+            return result
+
+        # 收集所有脚本文件内容（用于判断 skill 是否真的用到这些能力）
+        script_text = ""
+        for ext in {'.py', '.js', '.sh', '.bash', '.ps1'}:
+            for fp in self.repo_path.rglob(f'*{ext}'):
+                if any(exc in fp.parts for exc in self.exclude_dirs):
+                    continue
+                try:
+                    script_text += fp.read_text(encoding='utf-8', errors='ignore') + "\n"
+                except Exception:
+                    pass
+
+        # 能力是否在文档中声明：搜索权限/能力/所需/声明相关段落
+        decl_keywords = ['权限', '所需权限', '能力声明', '声明', 'permission',
+                         'requires', '需要', '访问', '本地执行', '定时']
+        has_decl_section = any(k in skill_content for k in decl_keywords)
+
+        detected_caps = []
+        for cap, pats in capability_signals.items():
+            if any(re.search(p, script_text, re.IGNORECASE) for p in pats):
+                detected_caps.append(cap)
+
+        if detected_caps and not has_decl_section:
+            result['missing'].append({
+                'capabilities': detected_caps,
+                'message': 'Skill 脚本包含本地代码执行/定时/环境变量/会话库访问等能力，'
+                           '但 SKILL.md 未声明所需权限边界，用户与平台可能低估其实际行为',
+            })
+            result['warnings'].append(
+                "SKILL.md 缺少「所需权限/能力声明」段落，存在透明度与同意缺口"
+            )
+
+        return result
+
+    def _detect_context_mismatch(self) -> Dict:
+        """检测描述-能力上下文匹配（参考 SkillSpector: Context-Inappropriate Capability）
+
+        自述「简单/签到/只读」类 skill，若实际自动安装第三方二进制、调用额外解释器
+        处理凭据，则能力超出描述语境，需声明必要性或默认关闭。
+        """
+        result = {'findings': [], 'warnings': []}
+
+        skill_md = self.repo_path / 'SKILL.md'
+        if not skill_md.exists():
+            return result
+        try:
+            content = skill_md.read_text(encoding='utf-8', errors='ignore')
+        except Exception:
+            return result
+
+        description = self._extract_description(content).lower()
+        # 自述偏「轻量/简单/签到」的语义信号
+        lightweight_signals = ['签到', 'check-in', 'checkin', '简单', 'simple',
+                               '每日', 'daily', '积分', 'credits']
+
+        script_text = ""
+        for ext in {'.py', '.js', '.sh', '.bash', '.ps1'}:
+            for fp in self.repo_path.rglob(f'*{ext}'):
+                if any(exc in fp.parts for exc in self.exclude_dirs):
+                    continue
+                try:
+                    script_text += fp.read_text(encoding='utf-8', errors='ignore') + "\n"
+                except Exception:
+                    pass
+
+        is_lightweight = any(s in description for s in lightweight_signals)
+        auto_install = bool(re.search(r'npm\s+install\s+electron', script_text, re.IGNORECASE))
+        py_fallback = bool(re.search(r'execFileSync\s*\(\s*["\']python3', script_text, re.IGNORECASE))
+
+        if is_lightweight and (auto_install or py_fallback):
+            reasons = []
+            if auto_install:
+                reasons.append('自动下载第三方运行时（electron）用于解密凭据')
+            if py_fallback:
+                reasons.append('回退调用外部解释器（python3）读取会话库')
+            msg = ('Skill 自述为轻量/签到类任务，却包含超出语境的能力：'
+                   + '；'.join(reasons) + '。应在文档声明必要性，或将自动行为改为默认关闭、需显式开启')
+            result['findings'].append({
+                'file': 'SKILL.md',
+                'line': 1,
+                'severity': 'medium',
+                'message': msg,
+            })
+            result['warnings'].append('描述-能力上下文不匹配：轻量描述 vs 重型凭据处理链路')
+
+        return result
 
     def _analyze_prompt_security(self) -> Dict:
         """分析 SKILL.md 和其他 Markdown 文件中的提示词安全
