@@ -101,11 +101,13 @@ grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> 
 
 ```
 archive/
-├── index.json                 # 同步状态：last_sync(上次同步时间) + synced_uuids(已同步集合)
-└── <uuid>/
+├── index.json                 # 同步状态：last_sync(上次同步时间) + synced_uuids + uuid_to_dir(uuid→目录名映射)
+└── <YYMMDD>_<标题>/           # 目录名：日期(两位年，如 260508) + 下划线 + 听记标题
     ├── meta.json              # 列表元数据 + 摘要(summary) + 待办(todos) + 关键词
     └── transcript.md          # 语音转写逐字稿（已翻页拉全，含【发言人 N】前缀）
 ```
+
+> 目录名示例：`260805_08-05 图书出版协作优化/`。同日期同标题冲突时追加短 uuid 后缀（如 `260805_xxx_3af2c1`）。去重与增量判定以 uuid 为准，目录名仅用于可读，通过 `index.json` 的 `uuid_to_dir` 回溯。
 
 ### 同步命令
 
@@ -121,7 +123,7 @@ python scripts/sync.py --archive-dir /path/to/archive   # 指定存档目录
 
 1. 读取 `archive/index.json` 的 `last_sync` 作为 `dws minutes list all --start <last_sync>` 的参数，服务端只返回该时间之后的听记。
 2. 本地 `synced_uuids` 中已有的跳过，避免重复拉取。
-3. 对每条新听记：拉 `get transcription`（翻页拉全）存 `transcript.md`，拉 `get summary`/`get todos`/`get keywords` 存 `meta.json`。
+3. 对每条新听记：目录名按 `YYMMDD_标题` 生成，拉 `get transcription`（翻页拉全）存 `transcript.md`，拉 `get summary`/`get todos`/`get keywords` 存 `meta.json`；uuid 与目录名映射记入 `uuid_to_dir`。
 4. 更新 `index.json`：把最新听记的 `startTimeISO` 写入 `last_sync`，uuid 并入 `synced_uuids`。
 
 ### 使用约定

@@ -4,14 +4,16 @@
 
 将 dws 中的 AI 听记同步到本技能 archive/ 目录，仅拉取新增内容（增量）。
 每条听记存为:
-    archive/<uuid>/meta.json        # 列表元数据 + 摘要/关键词/待办
-    archive/<uuid>/transcript.md    # 语音转写逐字稿（已翻页拉全）
+    archive/<YYMMDD>_<标题>/meta.json     # 列表元数据 + 摘要/关键词/待办
+    archive/<YYMMDD>_<标题>/transcript.md # 语音转写逐字稿（已翻页拉全）
+目录名格式：日期(YYMMDD，如 260508) + 下划线 + 听记标题（文件系统安全化）。
 
 同步状态记录在:
-    archive/index.json              # last_sync(上次同步时间) + synced_uuids(已同步集合)
+    archive/index.json              # last_sync(上次同步时间) + synced_uuids(已同步集合) + uuid_to_dir(uuid→目录名映射)
 
 增量原理: 用 index.json 里的 last_sync 作为 dws `minutes list all --start` 的参数，
           服务端只返回该时间之后的听记；本地已存在的 uuid 跳过，避免重复拉取。
+          目录名虽可读化，但去重与增量判定仍以 uuid 为准，通过 uuid_to_dir 回溯目录。
 
 用法:
     python sync.py                  # 增量同步（默认 archive/ 相对 skill 根）
@@ -68,7 +70,37 @@ def load_index(archive_dir: Path) -> Dict[str, Any]:
             return json.loads(idx_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"last_sync": None, "synced_uuids": [], "updated_at": None}
+    return {"last_sync": None, "synced_uuids": [], "uuid_to_dir": {}, "updated_at": None}
+
+
+def safe_dirname(title: str, date_yymmdd: str, uuid: str, uuid_to_dir: Dict[str, str], archive_dir: Path) -> str:
+    """生成可读目录名：YYMMDD_标题，冲突时追加短 uuid 后缀。"""
+    # 文件名安全化：去斜杠、控制字符，压缩空白
+    clean = "".join(c if c.isalnum() or c in " _-（）()．." else "_" for c in (title or "(无标题)"))
+    clean = clean.strip().strip("_")
+    if not clean:
+        clean = "(无标题)"
+    base = f"{date_yymmdd}_{clean}"
+    # 若 uuid 已有映射目录且仍存在，直接复用（保证增量回溯稳定）
+    if uuid in uuid_to_dir:
+        old = uuid_to_dir[uuid]
+        if (archive_dir / old).exists():
+            return old
+    # 冲突检测：同名不同 uuid 时加短后缀
+    cand = base
+    if (archive_dir / cand).exists():
+        # 检查该目录是否是同一个 uuid（通过 meta.json）
+        meta_path = archive_dir / cand / "meta.json"
+        same = False
+        if meta_path.exists():
+            try:
+                if json.loads(meta_path.read_text(encoding="utf-8")).get("uuid") == uuid:
+                    same = True
+            except Exception:
+                pass
+        if not same:
+            cand = f"{base}_{uuid[:6]}"
+    return cand
 
 
 def save_index(archive_dir: Path, index: Dict[str, Any]) -> None:
@@ -148,6 +180,7 @@ def main() -> int:
 
     index = load_index(archive_dir)
     synced: set = set(index.get("synced_uuids", []))
+    uuid_to_dir: Dict[str, str] = index.get("uuid_to_dir", {})
     last_sync = None if args.full else index.get("last_sync")
 
     print(f"存档目录: {archive_dir}")
@@ -201,8 +234,17 @@ def main() -> int:
         if args.dry_run:
             print(f"  [dry-run] 将写入 archive/{uuid}/")
             continue
-        rec_dir = archive_dir / uuid
+        # 目录名：YYMMDD_标题（可读化）
+        start_iso = it.get("startTimeISO") or ""
+        try:
+            dt = parse_iso(start_iso)
+            date_yymmdd = dt.strftime("%y%m%d")
+        except Exception:
+            date_yymmdd = "000000"
+        dir_name = safe_dirname(it.get("title", "(无标题)"), date_yymmdd, uuid, uuid_to_dir, archive_dir)
+        rec_dir = archive_dir / dir_name
         rec_dir.mkdir(parents=True, exist_ok=True)
+        uuid_to_dir[uuid] = dir_name
 
         # 1) 元数据
         meta = {
@@ -236,6 +278,7 @@ def main() -> int:
     if not args.dry_run:
         index["last_sync"] = max_time or last_sync
         index["synced_uuids"] = sorted(synced)
+        index["uuid_to_dir"] = uuid_to_dir
         index["updated_at"] = datetime.now(timezone.utc).isoformat()
         save_index(archive_dir, index)
         print(f"\n📌 同步完成。last_sync 更新为: {index['last_sync']}")

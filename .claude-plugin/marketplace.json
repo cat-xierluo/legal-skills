@@ -657,7 +657,7 @@
     {
       "name": "dingtalk-minutes",
       "description": "基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频，并支持本地归档与增量同步。",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "author": {
         "name": "杨卫薪律师（微信ywxlaw）"
       },
