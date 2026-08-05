@@ -7,6 +7,9 @@ credentials.json
 # 本地听记存档（含逐字稿，体积大且含敏感会议内容，默认不进版本库）
 archive/
 
+# 本机特定的镜像目标路径（他人克隆后需自行配置）
+config/mirror-target.local.json
+
 # Python 缓存
 __pycache__/
 *.pyc

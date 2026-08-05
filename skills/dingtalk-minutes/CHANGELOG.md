@@ -1,3 +1,18 @@
+## [0.7.0] - 2026-08-05
+
+### 新增
+- 镜像到外部文件夹功能：`scripts/mirror_output.py`，把 archive 听记成品单向复制到外部指定目录（参照 `transformer-content` 的 mirror 模式）
+- `config/mirror-target.example.json` 模板 + `.local.json`（本机路径，`.gitignore` 排除）
+- 支持全量 / `--since YYMMDD` 日期过滤 / `--archive <单条听记>` / `--dest` 覆盖 / `--items` 白名单 / `--dry-run`
+- 默认只镜像 `transcript.md` + `summary.md` + `todos.md`（不含 meta.json 结构化内部数据）
+- 每个听记子目录写 `.mirror-manifest.json`（源路径 + 文件列表 + sha256），增量时目标哈希一致则跳过
+
+### 改进
+- SKILL.md 新增「镜像到外部文件夹」章节，含用法/配置/白名单/目录结构/增量校验说明
+
+### 待办事项
+- 视需求补充"听记→法律文书"业务封装层（当前为纯能力薄壳）
+
 ## [0.6.0] - 2026-08-05
 
 ### 改进
