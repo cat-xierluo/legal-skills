@@ -2,6 +2,12 @@
 
 本文件记录 patent-download 的用户可见变更。最新在前。
 
+## [2.7.1] - 2026-08-05 安全披露完善
+
+### 文档完善
+- **新增「所需权限与安全说明」章节**：披露运行时自动安装依赖（`patent-download.sh` 自动 `pip install` / `playwright install chromium`）、外部网络请求、环境变量凭证读取、Playwright 浏览器自动化、文件输出范围等能力边界，并提醒自动安装未固定版本存在供应链风险。对应外部安全审查（SkillSpector）的 Missing User Warnings / Context-Inappropriate Capability / Unpinned Dependencies 类问题。
+- 同步修复 frontmatter version 与 CHANGELOG 不一致（原 2.6.0，CHANGELOG 已到 2.7.0）。
+
 ## [2.7.0] - 2026-07-28 友好失败提示
 
 ### 改进
