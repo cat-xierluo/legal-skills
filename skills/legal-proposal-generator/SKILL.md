@@ -177,7 +177,7 @@ description: 根据案件材料或沟通记录生成各类法律服务文档（�
 对于**诉讼服务方案、非诉服务方案、法律服务建议书**三类对外方案文档，读取 [config/team-config.md](config/team-config.md) 获取主办律师介绍、律所简介和合作伙伴信息，填入模板的团队相关章节。
 
 - 用户会指定主办律师（如"主办律师是律师 A 和律师 B"），从 team-config 的 HTML 表格中提取对应律师的 `<tr>` 块（含头像 rowspan），直接插入方案的服务团队章节
-- **图片路径必须转为绝对路径**：team-config.md 中的图片引用（如 `images/avatar-xxx.png`）是相对于 skill config 目录的相对路径，在输出文档中无法解析。生成文档时，须将所有 `images/` 开头的图片 src 替换为本 skill 的绝对路径前缀，即 `SKILL_DIR/config/images/`（其中 SKILL_DIR 为本 skill 所在目录的绝对路径）。例如 `images/avatar-yangweixin.png` 应替换为 `/Users/maoking/Library/Application Support/maoscripts/skills/legal-skills/skills/legal-proposal-generator/config/images/avatar-yangweixin.png`
+- **图片路径必须转为绝对路径**：team-config.md 中的图片引用（如 `images/avatar-xxx.png`）是相对于 skill config 目录的相对路径，在输出文档中无法解析。生成文档时，须将所有 `images/` 开头的图片 src 替换为本 skill 的绝对路径前缀，即 `SKILL_DIR/config/images/`（其中 SKILL_DIR 为本 skill 所在目录的绝对路径）。例如 `images/avatar-example.png` 应替换为 `/path/to/your/skills/legal-proposal-generator/config/images/avatar-example.png`
 - 律所简介可直接引用，也可根据项目特点做适当裁剪
 - 其他文档类型（咨询报告、沟通报告、结案汇报、内部沟通报告、案件分析摘要）无需团队章节
 

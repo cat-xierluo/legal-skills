@@ -116,7 +116,7 @@ description: 从律师与客户沟通记录中提取有价值的法律问答对�
 cp config/.env.example config/.env
 
 # 编辑配置
-QA_EXTRACTOR_SCAN_PATHS=~/Desktop/Clawd/10 - ⚖️ 法律工作/工作文档/011 - 潜在项目
+QA_EXTRACTOR_SCAN_PATHS=~/Documents/legal-consultations
 QA_EXTRACTOR_SCAN_DEPTH=3
 QA_EXTRACTOR_FILE_TYPES=md,txt
 ```
@@ -131,7 +131,7 @@ QA_EXTRACTOR_FILE_TYPES=md,txt
   "last_full_scan": "2026-05-10T23:00:00+08:00",
   "watch_paths": [
     {
-      "path": "~/Desktop/Clawd/10 - ⚖️ 法律工作/工作文档/011 - 潜在项目",
+      "path": "~/Documents/legal-consultations",
       "last_scanned": "2026-05-10T23:00:00+08:00",
       "status": "active"
     }

@@ -9,7 +9,7 @@
 ```json
 "watch_paths": [
   {
-    "path": "~/Desktop/Clawd/10 - ⚖️ 法律工作/工作文档/011 - 潜在项目",
+    "path": "~/Documents/legal-consultations",
     "last_scanned": "2026-05-10T23:00:00+08:00",
     "status": "active"
   }
