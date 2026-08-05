@@ -40,7 +40,7 @@
       "use_case": "同上（与 your-platform-cli-a 双平台避并发）。"
     },
     "codebuddy": {
-      "_comment": "WorkBuddy 桌面端 CLI（references/08-qodebuddy-cli-worker.md）。2026-08-05 用户偏好：hy3 首选 / deepseek-v4-flash 次选；不用 deepseek-v4-pro 作主。spawn-worker.sh 派 codebuddy worker 时按此顺序选 --model。",
+      "_comment": "WorkBuddy 桌面端 CLI（references/08-codebuddy-cli-worker.md）。2026-08-05 用户偏好：hy3 首选 / deepseek-v4-flash 次选；不用 deepseek-v4-pro 作主。spawn-worker.sh 派 codebuddy worker 时按此顺序选 --model。",
       "default_models": ["hy3", "deepseek-v4-flash", "deepseek-v4-pro"],
       "use_case": "WorkBuddy 桌面端登录态 + 平台额度（无需 API key）；按首选 → 次选 → 回退 顺序派 worker。",
       "tier_note": "hy3 = WorkBuddy 平台自定义模型（首选）；deepseek-v4-flash = 平台批量模型（次选）；deepseek-v4-pro 仅作回退（用户偏好不用作主）。"
