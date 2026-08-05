@@ -1,5 +1,13 @@
 # 变更日志
 
+## [1.4.2] - 2026-08-05
+
+### 文档完善
+- **披露提交后可能触发的发布/推送能力**：SKILL.md 新增「所需权限与能力边界」章节，明确声明第5/6步（ClawHub 同步发布、Subtree 推送）超出"仅提交"最小职责，仅在满足触发条件且**用户显式确认**后才执行。
+- description 同步披露：触发词后补充"提交完成后，若仓库内存在 clawhub-sync 或 subtree-publish 配置，会提示是否同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——均需用户显式确认"。
+- 新增"仅想纯粹提交"的说明：移除/重命名 `skills/clawhub-sync/` 与 `skills/subtree-publish/config/subtree-skills.json` 即可静默跳过这两个步骤。
+- 对应外部安全审查（SkillSpector Scope Creep / Description-Behavior Mismatch）的修复。
+
 ## [1.4.1] - 2026-05-19
 
 ### 改进

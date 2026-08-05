@@ -2,9 +2,9 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.1"
+version: "1.4.2"
 license: MIT
-description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。'
+description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 clawhub-sync 或 subtree-publish 配置，本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
 ---
 
 # Git 批量提交工具
@@ -137,6 +137,33 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 5. **ClawHub 同步检查** - 仅当 `skills/clawhub-sync/` 存在时执行，详见 `references/clawhub-sync-check.md`。不存在则静默跳过
 6. **Subtree 推送检查** - 仅当 `skills/subtree-publish/config/subtree-skills.json` 存在时执行，详见 `references/subtree-push-check.md`。不存在则静默跳过
 7. **完成** - 获得清晰历史的聚焦提交
+
+## 所需权限与能力边界
+
+本技能核心职责是 Git 提交拆分，但提交完成后可能触发以下**可选的后续动作**。这些动作均**超出"仅提交"的最小职责**，且只有在满足触发条件时才会发生，并**必须经用户显式确认**：
+
+### 发布到外部平台（ClawHub / SkillHub）
+
+- 仅当仓库内存在 `skills/clawhub-sync/`，且本次提交涉及 `skills/<skill-name>/` 下的版本更新/新增技能、且该技能在 `sync-allowlist.yaml` 白名单中时，才会提示用户是否同步。
+- 每个发布动作前都会向用户确认（`是否将其加入白名单并同步？`，选项 `y/n/s`）；未确认不会执行 `clawhub publish` / `skillhub publish`。
+- 发布会把技能内容上传到 ClawHub/SkillHub 平台；发布前检查临时目录不含 `.env`、密钥等敏感文件。
+- 用户选择同步后，会修改 `skills/clawhub-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`（仓库状态变更）。
+
+### 推送 subtree 独立仓库
+
+- 仅当仓库内存在 `skills/subtree-publish/config/subtree-skills.json`、本次提交涉及已注册的 subtree 子目录、且对应 `<name>-standalone` remote 已配置时，才会提示是否推送。
+- 推送动作需用户确认，不会自动执行。
+
+### 本地命令执行
+
+- 本技能通过 `subprocess` 调用 `git`（暂存/提交/查看 diff）与 `clawhub`/`skillhub`（仅用户确认发布后）等外部命令。命令以参数数组拼接，不经过 shell 字符串拼接。
+
+### 文件访问
+
+- 读取 `git diff`/`git status` 输出、`skills/*/SKILL.md` frontmatter、`clawhub-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`。
+- 修改上述 allowlist/records 文件（仅用户确认后）。
+
+> 若你只希望"纯粹提交、绝不触发任何发布/推送提示"，请先移除或重命名仓库中的 `skills/clawhub-sync/` 与 `skills/subtree-publish/config/subtree-skills.json`，这两个步骤会静默跳过。
 
 ## 资源文件
 
