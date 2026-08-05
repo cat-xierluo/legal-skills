@@ -1,5 +1,7 @@
 # e2e 实践（Playwright / CI / fixture / 真机）
 
+> **何时读这篇**：落地 e2e / 真机 / 把验证搬进 CI 时。对应 SKILL.md 的 §阶段 5/6 与 §本地 vs CI 门禁。
+
 > 阶段 5（e2e）+ 阶段 6（真机）的落地做法。按项目类型选。
 
 ## e2e spec 怎么写（Playwright）
@@ -47,22 +49,51 @@ tests/fixtures/
 
 ## CI 门禁（e2e 必须在 CI）
 
+> 先澄清：**CI 不是「另一种验证」，是把 verification-gate 的 8 阶段自动化、在 PR 时强制跑**。本地能过 CI 才能过。平台不限 GitHub Actions——GitLab CI / Gitea / Jenkins 同理，本地还能用 `act`（跑 GitHub Actions）或 `husky`/`lefthook` 的 pre-push hook 在提交前自动跑。
+
+### 通用结构（阶段 1-5 + 7-8 进 CI，阶段 6 真机单独跑）
+
+CI 跑编译层（1-4）+ e2e（5）+ 安全/diff（7-8）。真机（6）CI 一般难模拟，放本地或独立 staging 流水线。
+
 ```yaml
-# .github/workflows/ci.yml
-playwright:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - run: npm ci
-    - run: npx playwright install --with-deps chromium
-    - run: npm run build            # build 产物（不只 dev server）
-    - run: npm run test:e2e         # 跑 e2e
-    - uses: actions/upload-artifact@v4  # failure 上传 test-results（7 天）
-      if: failure()
-      with: { name: test-results, path: test-results/ }
+# .github/workflows/ci.yml（GitHub Actions 示例，其他平台同理）
+name: verification-gate
+on: [push, pull_request]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      # 1-4 编译层
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint -- --max-warnings=0
+      - run: npm test
+      # 5 e2e（跑 build 产物，不只 dev server）
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      # 7 安全（轻量，密钥/console.log 扫描）
+      - run: grep -rniE "api_key|password|token" --include="*.ts" src | grep -viE "test|fixture|env|placeholder" && exit 1 || true
+      # 8 diff 审查交给 PR review + 本 skill 的 diff 步骤
+      - uses: actions/upload-artifact@v4   # failure 上传 test-results（7 天）
+        if: failure()
+        with: { name: test-results, path: test-results/ }
 ```
 
-**关键**：e2e 在 CI 跑（不只本地）；PR 合并前 e2e 必须绿。
+**关键**：
+- e2e 在 CI 跑（不只本地）；**PR 合并前 e2e 必须绿**——CI job 红 = 本 skill 验证报告 NOT READY，不 merge。
+- build 产物上跑 e2e（`vite preview` / `tauri build` 产物），不是 dev server 热重载，才能抓打包后路径/worker/分包问题。
+- 阶段 6 真机（Tauri WKWebView / staging 真实请求）CI 难模拟，单独跑：本地 etv、或 staging 流水线手动/定时触发，缺口在验证报告「6 真机」栏记原因。
+
+### 没有 GitHub Actions 也能做
+
+| 场景 | 做法 |
+|---|---|
+| 本地提交前自动跑 | `husky` / `lefthook` pre-push hook 跑 `npm run build && typecheck && lint && test && test:e2e` |
+| 本地模拟 GitHub Actions | `act` 跑现有 `ci.yml`，不装 CI 也能验证 |
+| GitLab / Gitea / Jenkins | 同样 8 阶段命令，换成对应 YAML / Jenkinsfile，job 失败即阻断合并 |
+| 完全无 CI | 本地老老实实跑完 8 阶段 + 填验证报告，声称「修完」前自查——CI 是强化不是前提 |
 
 ## 真机验证（阶段 6，dev e2e 之外）
 
