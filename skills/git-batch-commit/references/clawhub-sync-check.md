@@ -21,20 +21,22 @@
 
 3. **版本号有更新**
    - 读取 `skills/<skill-name>/SKILL.md` 的 frontmatter 中的 `version` 字段
-   - 比较 `skills/clawhub-sync/config/sync-records.yaml` 中记录的版本
+   - 比较 `skills/clawhub-sync/config/sync-records.yaml` 中 `records.<skill>.platforms.<platform>.version` 记录的版本（按目标平台读取：ClawHub 读 `platforms.clawhub.version`，SkillHub 读 `platforms.skillhub.version`）
    - 如果新版本 > 已记录版本（或记录中无版本），则需要同步
 
 4. **在白名单中**
    - 检查 `skills/clawhub-sync/config/sync-allowlist.yaml`
-   - skill 必须在白名单中（未被 `#` 注释）
+   - skill 必须在白名单中（未被 `#` 注释），且其 `platforms` 数组包含目标平台
 
-### 检测 B：新增 MIT 技能首次同步
+### 检测 B：新增技能首次同步
 
 当提交新增了 `skills/<skill-name>/` 目录时触发：
 
 1. **识别新增技能**：检查提交中是否有 `skills/<skill-name>/SKILL.md` 为新文件（untracked → committed）
 
-2. **许可证为 MIT**：读取新技能 `SKILL.md` frontmatter 中的 `license` 字段，判断是否为 MIT
+2. **读取许可证**：读取新技能 `SKILL.md` frontmatter 中的 `license` 字段
+   - MIT → 可发布到 ClawHub 和 SkillHub 两个平台
+   - CC-BY-NC 等限制性许可证 → 仅可发布到 SkillHub（ClawHub 强制 MIT-0，冲突）
 
 3. **未在白名单中**：`sync-allowlist.yaml` 中无此 skill 的条目（无论是否被注释）
 
@@ -42,8 +44,10 @@
 
 满足全部条件时，向用户提示：
 ```
-🆕 发现新增 MIT 技能：<skill-name>
-该技能尚未加入 ClawHub 同步白名单。是否将其加入白名单并同步到 ClawHub？
+🆕 发现新增技能：<skill-name>（license: <MIT|CC-BY-NC>）
+该技能尚未加入同步白名单。是否将其加入白名单并同步？
+
+可选平台：<clawhub+skillhub（MIT）/ skillhub（CC-BY-NC）>
 
 选项：
   y - 加入白名单并同步
@@ -52,8 +56,8 @@
 ```
 
 用户选择 `y` 时：
-- 在 `sync-allowlist.yaml` 中添加该 skill（添加到对应分类区域）
-- 执行 prepare-publish → publish → 更新 sync-records 流程
+- 在 `sync-allowlist.yaml` 中添加该 skill，按许可证设置 `platforms`（MIT → `[clawhub, skillhub]`；CC-BY-NC → `[skillhub]`）
+- 执行 prepare-publish → publish → 更新 sync-records 流程（按平台分别执行）
 - **注意**：发布前检查临时目录，确保不含 `.env`、密钥等敏感文件
 
 用户选择 `s` 时：
@@ -69,14 +73,21 @@
 
 ## 执行步骤
 
-对于每个需要同步的 skill，按照 `clawhub-sync` 的"单个 Skill 同步工作流"执行：
+对于每个需要同步的 skill，按照 `clawhub-sync` 的"单个 Skill 同步工作流"执行。按目标平台分别处理：
 
 **步骤 1：准备发布目录**
+
 ```bash
+# ClawHub（默认平台，可省略 --platform）
 bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
+
+# 腾讯 SkillHub
+bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/<skill-name>
 ```
 
-**步骤 2：执行发布（使用 publish 命令）**
+**步骤 2：执行发布**
+
+ClawHub（使用 publish 命令）：
 ```bash
 clawhub publish /tmp/clawhub-publish-<skill-name> \
   --slug <skill-name> \
@@ -93,9 +104,18 @@ clawhub publish /tmp/clawhub-publish-<skill-name> \
 > - `clawhub sync` 会扫描所有目录的 skills，可能遇到 slug 冲突
 > - `clawhub publish <path>` 只发布指定路径的单个 skill，更精确
 
+腾讯 SkillHub（使用 publish 命令）：
+```bash
+skillhub publish /tmp/skillhub-publish-<skill-name> \
+  --version "<新版本号>" \
+  --changelog "<变更说明>"
+```
+
+> 腾讯 SkillHub 用 `slug` + `displayName`（SKILL.md frontmatter）标识 skill，namespace 绑定在账号上（发布时无需命令行指定）。建议先 `--dry-run` 预检：`skillhub publish <path> --dry-run`。确认 SKILL.md frontmatter 含 `slug`/`version`/`displayName` 三必填字段，否则预检报错。
+
 **步骤 3：更新同步记录**
 
-更新 `skills/clawhub-sync/config/sync-records.yaml`：
+更新 `skills/clawhub-sync/config/sync-records.yaml`，在对应平台 `platforms.<platform>` 下写入：
 - 更新 `version` 为新版本号
 - 更新 `last_sync` 为当前时间
 - 更新 `git_hash` 为当前 commit hash
@@ -112,22 +132,23 @@ clawhub publish /tmp/clawhub-publish-<skill-name> \
 
 ```
 new_version = SKILL.md frontmatter 中的 version（如 "1.2.0"）
-recorded_version = sync-records.yaml 中记录的版本（如 "1.1.0"）
+recorded_version = sync-records.yaml 中 records.<skill>.platforms.<platform>.version（如 "1.1.0"）
 
 if new_version > recorded_version:
-    执行同步
+    执行同步（针对该平台）
 ```
 
-版本号按语义化版本规则比较（major.minor.patch）。
+版本号按语义化版本规则比较（major.minor.patch）。两个平台独立比较、独立同步。
 
 ## 示例场景
 
-| 场景 | 版本变化 | 白名单 | 同步记录 | 结果 |
-|------|----------|--------|----------|------|
-| 版本升级（检测A） | "1.0.0" → "1.1.0" | 在白名单 | 有记录 | ✅ 执行同步 |
-| 无版本变化（检测A） | "1.1.0" → "1.1.0" | 在白名单 | 有记录 | ❌ 跳过 |
-| 不在白名单（检测A） | 任意 | 被注释 | - | ❌ 跳过 |
-| 白名单内首次发布（检测A/C） | "1.0.0" | 在白名单 | 无记录 | ✅ 执行同步 |
-| 新增 MIT 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择 |
-| 新增 CC 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ❌ 非 MIT 跳过 |
+| 场景 | 版本变化 | 白名单 platforms | 同步记录 | 结果 |
+|------|----------|------------------|----------|------|
+| 版本升级（检测A） | "1.0.0" → "1.1.0" | 含目标平台 | 有记录 | ✅ 执行同步（该平台） |
+| 无版本变化（检测A） | "1.1.0" → "1.1.0" | 含目标平台 | 有记录 | ❌ 跳过 |
+| platforms 不含目标平台（检测A） | 任意 | 不含 | - | ❌ 跳过该平台 |
+| 被注释（检测A） | 任意 | 被注释 | - | ❌ 跳过 |
+| 白名单内首次发布（检测A/C） | "1.0.0" | 含目标平台 | 无记录 | ✅ 执行同步 |
+| 新增 MIT 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择（clawhub+skillhub） |
+| 新增 CC-BY-NC 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择（仅 skillhub） |
 | clawhub-sync 不存在 | - | - | - | ❌ 静默跳过整个工作流 |
