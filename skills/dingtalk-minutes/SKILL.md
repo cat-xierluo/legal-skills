@@ -103,10 +103,15 @@ grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> 
 archive/
 ├── index.json                 # 同步状态：last_sync(上次同步时间) + synced_uuids + uuid_to_dir(uuid→目录名映射)
 └── <YYMMDD>_<标题>/           # 目录名：日期(两位年，如 260508) + 下划线 + 听记标题
-    ├── meta.json              # 列表元数据 + 摘要(summary) + 待办(todos) + 关键词
-    └── transcript.md          # 语音转写逐字稿（已翻页拉全，含【发言人 N】前缀）
+    ├── meta.json              # 结构化元数据：uuid/标题/时间/时长/分享链接/创建人/关键词列表/音频信息
+    ├── transcript.md          # 语音转写逐字稿（已翻页拉全，含【发言人 N】前缀）；文件头部含关键词/AI摘要/待办概览
+    ├── summary.md             # AI 生成的完整摘要（fullSummary 全文）
+    ├── keywords.md            # 关键词列表
+    └── todos.md               # 待办事项（含负责人，来自 get todos 详细接口）
 ```
 
+> 目标：内部 archive 尽量存全。单条听记可提取的全部文字信息都会落盘——逐字稿、AI 摘要、关键词、待办、音频下载地址与元数据。音频文件本身**默认不下载**（URL 带过期鉴权、单条约 150MB）；如需本地音频留底，运行 `python scripts/sync.py --with-audio`。
+>
 > 目录名示例：`260805_08-05 图书出版协作优化/`。同日期同标题冲突时追加短 uuid 后缀（如 `260805_xxx_3af2c1`）。去重与增量判定以 uuid 为准，目录名仅用于可读，通过 `index.json` 的 `uuid_to_dir` 回溯。
 
 ### 同步命令
