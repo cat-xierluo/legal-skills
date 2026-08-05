@@ -1,3 +1,14 @@
+## [0.4.0] - 2026-08-05
+
+### 改进
+- 重构 references 目录，去除冗余：删除 `_common/conventions.md`、`07-minutes.md`、`lite-recipes.md`（均为 dws 官方多视角文档，含写操作与外部 skill 引用，对薄壳越界）
+- 将 `minutes.md`（2517 行，含大量写操作）重写为精简版 `references/01-commands.md`（仅读取类命令：list/+detail/get *，含参数陷阱与翻页）
+- 踩坑文档由 `setup-troubleshooting.md` 重命名为 `references/02-setup.md`，与命令文档统一编号
+- SKILL.md 引用同步更新；version 升至 0.4.0
+
+### 待办事项
+- 视需求补充"听记→法律文书"业务封装层（当前为纯能力薄壳）
+
 ## [0.3.0] - 2026-08-05
 
 ### 新增

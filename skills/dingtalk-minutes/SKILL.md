@@ -3,7 +3,7 @@ name: dingtalk-minutes
 description: 钉钉 AI 听记（妙记）读取封装。当用户要查询/读取 AI 听记的列表、摘要、语音转写原文（逐字稿）、关键词、待办或音频地址时使用。基于 dws CLI（钉钉官方 Workspace CLI）。写文档走 dingtalk-doc，建待办走 dingtalk-todo，日程走 dingtalk-calendar。
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.0"
+version: "0.4.0"
 homepage: https://github.com/cat-xierluo/legal-skills
 metadata:
   cli_version: ">=1.0.15"
@@ -17,8 +17,8 @@ metadata:
 
 本技能是对 `dws`（钉钉官方 Workspace CLI）中 `minutes` 服务的**读取能力封装**，聚焦"查询与读取 AI 听记内容"——不含写入/修改/录音控制等写操作。所有命令均通过 `dws` 执行，不绕开 CLI 直接调 HTTP API。
 
-> 底层命令参考：[references/minutes.md](references/minutes.md)；剧本/实战：[references/07-minutes.md](references/07-minutes.md)；速查：[references/lite-recipes.md](references/lite-recipes.md)；通用规范：[references/_common/conventions.md](references/_common/conventions.md)。
-> **首次部署必读（安装/授权/踩坑）**：[references/setup-troubleshooting.md](references/setup-troubleshooting.md)。
+> 命令参考（仅读取类）：[references/01-commands.md](references/01-commands.md)。
+> **首次部署必读（安装/授权/踩坑）**：[references/02-setup.md](references/02-setup.md)。
 
 ## 依赖
 
@@ -38,7 +38,7 @@ grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> 
 
 ### 授权与组织开关（缺一不可）
 
-本 skill 依赖三项独立前置条件，任一步缺失都无法读取：安装 dws → 开启组织「CLI 访问管理」开关 → 授权登录。详细步骤、开关反直觉语义、授权必须后台运行等坑，见 [references/setup-troubleshooting.md](references/setup-troubleshooting.md)。
+本 skill 依赖三项独立前置条件，任一步缺失都无法读取：安装 dws → 开启组织「CLI 访问管理」开关 → 授权登录。详细步骤、开关反直觉语义、授权必须后台运行等坑，见 [references/02-setup.md](references/02-setup.md)。
 
 ### 开箱即用与需依赖功能
 
@@ -140,7 +140,7 @@ python scripts/sync.py --archive-dir /path/to/archive   # 指定存档目录
 ## 本技能范围边界（薄壳）
 
 - ✅ 仅封装**读取**能力：列表、摘要、转写、关键词、待办、音频地址、近期合并、待办提取脚本。
-- ❌ 不含写操作：修改标题/摘要（`update`）、全文替换（`replace-text`/`+replace-batch`）、上传音频（`upload`）、录音控制（`record`）、权限管理（`permission`）、发言人匹配/校正。如需这些，直接调用 `dws minutes <cmd>` 或参考完整 `minutes.md`。
+- ❌ 不含写操作：修改标题/摘要（`update`）、全文替换（`replace-text`/`+replace-batch`）、上传音频（`upload`）、录音控制（`record`）、权限管理（`permission`）、发言人匹配/校正。如需这些，直接调用 `dws minutes <cmd>` 或参考钉钉官方 dws 内置 `dingtalk-minutes` 完整文档。
 
 ## 依赖
 
@@ -150,4 +150,4 @@ Python 包：无第三方依赖（`scripts/` 下脚本使用标准库）。
 
 ## 参考与致谢
 
-- 命令契约源自钉钉官方 `dingtalk-workspace-cli` 内置 `dingtalk-minutes` skill（references/minutes.md 等），本技能在其基础上精简为只读薄壳。
+- 命令契约源自钉钉官方 `dingtalk-workspace-cli` 内置 `dingtalk-minutes` skill，本技能在其基础上精简为只读薄壳，命令参考见 [references/01-commands.md](references/01-commands.md)。
