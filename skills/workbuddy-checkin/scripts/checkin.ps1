@@ -81,8 +81,8 @@ if ($NodeBin) {
         if ($out) { $Token = (($out | Select-Object -First 1).Line -replace "^DECRYPT_RESULT:", "").Trim() }
     } catch {}
 }
-# Electron 回退
-if (-not $Token) {
+# Electron 回退（Node 未取到有效 token，或 Node 报 ERR —— 如旧版账户无明文文件、纯 Node 无法解密 state.vscdb）
+if (-not $Token -or $Token.StartsWith("ERR")) {
     $Electron = Find-Electron
     if ($Electron) {
         # 关键：若环境存在 ELECTRON_RUN_AS_NODE，必须移除，否则 require('electron') 拿不到 safeStorage

@@ -78,7 +78,9 @@ read_token() {
   if [ -n "$node_bin" ]; then
     out=$("$node_bin" "$DECRYPT_JS" 2>/dev/null | grep "^DECRYPT_RESULT:" | sed 's/^DECRYPT_RESULT://')
   fi
-  if [ -z "$out" ]; then
+  if [ -z "$out" ] || [[ "$out" == ERR* ]]; then
+    # Node 未产出 token（未装 Node / 崩溃），或 Node 报 ERR（如旧版账户无明文文件、
+    # 纯 Node 无法解密 state.vscdb）→ 回退到 Electron 解旧版库
     electron_bin="$(find_electron)"
     if [ -n "$electron_bin" ]; then
       out=$(env -u ELECTRON_RUN_AS_NODE "$electron_bin" "$DECRYPT_JS" 2>/dev/null \
@@ -95,8 +97,9 @@ log() {
 }
 
 # ---------- 可选：随机错峰（避免整点风暴） ----------
-# 设置 WB_CHECKIN_JITTER=<秒> 时，脚本在开始前随机等待 0~N 秒
-if [ -n "${WB_CHECKIN_JITTER:-}" ]; then
+# 设置 WB_CHECKIN_JITTER=<正整数秒> 时，脚本在开始前随机等待 0~N 秒
+# 须 > 0：RANDOM % 0 会触发除零异常；非数字也会被 `[ -gt 0 ]` 拒绝（静默跳过）
+if [ "${WB_CHECKIN_JITTER:-0}" -gt 0 ] 2>/dev/null; then
   jitter=$((RANDOM % WB_CHECKIN_JITTER))
   [ "$jitter" -gt 0 ] && sleep "$jitter"
 fi
@@ -176,6 +179,9 @@ if [[ "$CREDIT" == OK* ]]; then
   log "🎉 签到成功！领取 $CREDIT"
 elif [[ "$CREDIT" == ALREADY* ]]; then
   log "✅ 今日已签到，无需重复领取（接口返回已签到）"
+elif [ -z "$CREDIT" ]; then
+  # 多为缺 python3 导致结果无法解析：服务端可能已成功，不能误报失败
+  log "⚠️ 签到请求已提交，但缺少 python3 无法解析结果（请打开 WorkBuddy 确认；安装 python3 可恢复明细）"
 else
   log "⚠️ 签到未成功：$CREDIT"
 fi

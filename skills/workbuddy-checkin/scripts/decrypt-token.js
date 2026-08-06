@@ -144,7 +144,9 @@ function toBuffer(parsed) {
 // 主流程：新版明文文件优先，旧版 state.vscdb 回退
 // ============================================================
 
-// ---------- 1. 新版明文认证文件（WorkBuddy v5.3.8+，纯 Node 读取）----------
+// ---------- 1. 新版明文认证文件（WorkBuddy v5.3.8+，纯 Node 读取，优先）----------
+// 命中且含 accessToken 即输出；文件缺失 / 无 token / 解析失败均不硬失败，
+// 统一落入下方旧版 state.vscdb 分支兜底（覆盖升级中途、文件写入中等场景）。
 for (const f of desktopAuthFileCandidates()) {
   if (!fs.existsSync(f)) continue;
   try {
@@ -158,12 +160,9 @@ for (const f of desktopAuthFileCandidates()) {
       emitAndExit(0, "DECRYPT_RESULT:" + token);
       return;
     }
-    // 文件存在但无 accessToken：报具体错，不静默回退到旧版（避免掩盖新版存储故障）
-    emitAndExit(5, "DECRYPT_RESULT:ERR 新版认证文件已找到但缺少 auth.accessToken：" + f);
-    return;
+    // 文件存在但无 accessToken：落入旧版分支兜底
   } catch (e) {
-    emitAndExit(5, "DECRYPT_RESULT:ERR 解析新版认证文件失败(" + e.message + ")：" + f);
-    return;
+    // 解析失败（文件损坏 / 写入中）：忽略，落入旧版分支兜底
   }
 }
 
@@ -185,16 +184,23 @@ app.setName(APP_NAME);
 
 let dbPath = null;
 let raw = null;
+let legacyReadErr = null;
 for (const p of legacyVscdbCandidates()) {
   if (!fs.existsSync(p)) continue;
   for (const k of SESSION_KEYS) {
-    const v = readValue(p, k);
-    if (v) { dbPath = p; raw = v; break; }
+    try {
+      const v = readValue(p, k);
+      if (v) { dbPath = p; raw = v; break; }
+    } catch (e) {
+      legacyReadErr = e; // 记录但不中断，继续尝试其他候选 key/库
+    }
   }
   if (raw) break;
 }
 if (!raw) {
-  emitAndExit(2, "DECRYPT_RESULT:ERR 未找到 WorkBuddy 本地登录态（新版明文文件与旧版 state.vscdb 均未命中，请先安装并登录 WorkBuddy 桌面端）");
+  // 读取旧版库本身报错时附带原因，避免「未知原因」式失败（issue #68 投诉点）
+  const hint = legacyReadErr ? "（读取旧版 state.vscdb 失败：" + legacyReadErr.message + "）" : "";
+  emitAndExit(2, "DECRYPT_RESULT:ERR 未找到 WorkBuddy 本地登录态（新版明文文件与旧版 state.vscdb 均未命中" + hint + "，请先安装并登录 WorkBuddy 桌面端）");
   return;
 }
 
