@@ -1,5 +1,73 @@
 # 变更日志
 
+## [0.5.0] - 2026-08-06
+
+### 新增
+- **分类标签（本地清单侧）**：每条清单支持 `category` 字段（复用 project-init 的
+  development / legal-document / content-writing 维度），便于按 agent 类型筛选导入。
+  Multica 服务端不支持 skill 标签（源映射证实无 tags 字段、CLI 无 --tag），故标签**只存本地清单**，
+  不参与导入，仅作 `--category` 过滤维度
+- **`--category` 过滤参数**：`sync_skills.py` 支持只同步指定分类的技能
+  （如 `--category legal-document`），配合"针对性给某个 agent 配一批 skill"
+- **反向溯源工作流文档**：SKILL.md 新增「反向溯源」章节。清单 `url` 即本机源目录，
+  Multica 内的 skill 是本地源的投影；约定"在 Multica 发现问题 → 改本地源文件 →
+  重导（--mode update）"流程，明确不修改服务端投影。溯源依据含服务端 `config.origin`
+
+### 文档完善
+- SKILL.md 字段表新增 `category` / `group` 说明与分类用途注释、`--category` 示例、
+  「反向溯源」章节（含为何不在 Multica 内直接改的理由）
+
+## [0.4.1] - 2026-08-06
+
+### 修复
+- **个人清单路径合规化**：按 SkillLint 审计要求，个人配置文件从 skill 根目录的 `manifest.json`
+  移至 `config/manifest.local.json`（与模板 `references/manifest.example.json` 分离）。
+  根目录的 `manifest.json` 既违反 SkillLint 目录约定，又会因 `.gitignore` 失效而误入库泄露本机路径。
+- 重建 `.gitignore`（此前因切分支丢失），明确忽略 `config/manifest.local.json`、`__pycache__/`、`*.pyc`
+
+### 改进
+- `sync_skills.py` 默认清单路径改为 `config/manifest.local.json`；`--manifest` 未指定时自动回退到此；
+  找不到清单时给出「复制 references/manifest.example.json 为 config/manifest.local.json」的明确提示
+- SKILL.md 全量同步路径表述（目录树、清单格式标题、使用步骤、对照表），与实际布局一致
+
+## [0.4.0] - 2026-08-05
+
+### 新增
+- **本地技能目录直接导入**：`source=file` 的 `url` 现支持技能目录（含符号链接），
+  脚本自动打包成临时 zip 后调用 `import --file`，用完即删。
+  起因：`multica skill import --file` 仅接受 `.skill`/`.zip` 归档，不接受目录
+- **结构化结果解析** `_handle_result()`：按 Multica 导入结果信封的 `status` 字段
+  （`created`/`updated`/`conflict`/`skipped`/`failed`）判定，替代原先的 exit code +
+  字符串匹配；报告中输出 skill id 与 files 数；`existing_skill.can_overwrite=false`
+  时把 `failed` 归类为「非本人创建」而非真实错误。旧版服务端响应回退到字符串判断
+- **服务端限制预检** `_precheck()`：打包后按单文件 1 MiB / 整包 8 MiB / 文件数 256 /
+  上传 16 MiB 四项阈值告警（不阻断），并提示会被静默丢弃的同名 `SKILL.md` 支持文件
+- SKILL.md 新增「与平台内置 `multica-skill-importing` 的分工」章节：
+  说明上下游关系、八条语义对齐点（唯一合法路径、结果信封、overwrite 语义、
+  服务端限制、丢弃规则、保留文件名、zip 布局、agent 绑定用 add 不用 set）
+
+### 改进
+- 打包排除名单扩充：新增 `archive`/`output`/`outputs`/`tmp`/`.cache`/`dist`/`build`/
+  `.mypy_cache`/`.idea`/`.vscode` 目录及 `.pyd`/`.so`/`.dylib` 后缀、`Thumbs.db`；
+  并排除所有 dotfile 目录（服务端本就会丢弃）。
+  实测 `legal-ocr` 的 `archive/` 达 7.6 GB / 11 万文件，剔除后仅 21 文件 / 82 KB
+- `_run()` 超时 120s → 300s（大包上传需要更久）；stdout 为空时回落读 stderr，
+  避免冲突/失败时结构化信封丢失
+
+### 验证
+- 本地目录导入实测通过：`git-batch-commit`、`git-workflow`、`legal-ocr` 均成功落库
+- 重复导入返回 `status: updated` 且 skill ID 不变（`f7d522b6...`），
+  证实 `overwrite` 保留 ID / `created_by` / agent 绑定的语义
+- `on_conflict` 三种策略实测符合内置 skill 文档：`fail`→`conflict`、
+  `skip`→`skipped`、`overwrite`→`updated`
+- 33 条个人清单全量预检：排除工作产物目录后仅 3 个技能存在 >1 MiB 二进制资产
+  （docx 模板、头像图），均属服务端会主动丢弃的类型，不影响技能可用性
+
+### 待办事项
+- 33 条清单全量 `--mode init` 尚未执行（待用户确认后跑）
+- `project-init/config/profiles.yaml` 存在 3 条失效引用（`skill-architect`、
+  `zhihe-legal-research`、`contract-review`），建议清理
+
 ## [0.3.0] - 2026-08-05
 
 ### 新增
