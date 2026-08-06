@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""update-readme.py — 把 README 表格里的占位 URL 替换为最新 release 的真实下载链接
+"""update-readme.py — 把 README 表格里的下载 URL 统一改写为最新 release 的真实链接
 
 用法:
   python3 update-readme.py [<owner>/<repo>] [<readme_path>]
@@ -10,12 +10,15 @@
 
 行为:
   1. 调 GitHub API 拿最新 release 的 assets
-  2. 解析每个 <skill>-<semver>.zip 文件名,提取 skill 名
-  3. 用真实 browser_download_url 替换 README 中形如
-     `https://github.com/<owner>/<repo>/releases/latest/download/<skill>-<semver>.zip`
-     的占位 URL
-  4. 不匹配 skill 名(比如该 skill 没出现在 release 中)的占位保持原样
-  5. 不修改非占位的 URL(release 真实的 release/download/<tag>/<file> 不动)
+  2. 解析每个 <skill>-<semver>.zip 文件名,建立 skill 名 → 真实 browser_download_url 映射
+  3. 扫描 README 中指向本仓库的两种下载链接形式,全部改写为最新 release 的真实链接:
+     - 占位形式:`.../releases/latest/download/<skill>-<semver>.zip`
+     - 显式 tag 形式:`.../releases/download/<任意 tag>/<skill>-<semver>.zip`
+     (本项目 README 实际使用显式 tag 形式,因此必须覆盖,否则只会刷新恰好已是新 tag 的链接)
+  4. 按文件名解析 <skill>,在最新 release 资产中匹配;匹配成功则改写为该资产真实 URL
+     (URL 内含最新 tag,无需后续手动再改)
+  5. 不匹配的链接(如该 skill 已不在最新 release 中、或属于其他仓库)保持原样
+  6. 不修改其他仓库(owner/repo 不一致)的链接,如独立仓库 trademark-assistant.skill
 
 返回码:
   0  替换成功(可能替换 0 个——README 已最新)
@@ -89,11 +92,14 @@ def main() -> int:
         url_map[skill] = a["browser_download_url"]
     print(f"latest release assets:{len(url_map)} 个")
 
-    # 替换 README 占位
+    # 替换 README 中所有指向本仓库的下载链接(占位形式 + 显式 tag 形式)
     readme = readme_path.read_text()
+    # 匹配两类 URL,捕获其中的文件名(<skill>-<semver>.zip):
+    #   releases/latest/download/<file>.zip
+    #   releases/download/<任意 tag>/<file>.zip
     pattern = re.compile(
         r"https://github\.com/" + re.escape(f"{owner}/{name}") +
-        r"/releases/latest/download/([a-z0-9.\-]+)\.zip"
+        r"/releases/(?:latest/|download/[^/\s]+/)([A-Za-z0-9.\-]+\.zip)"
     )
 
     replaced = 0
@@ -101,12 +107,18 @@ def main() -> int:
 
     def repl(m: re.Match) -> str:
         nonlocal replaced
-        full = m.group(1)
-        skill = full.rsplit("-", 1)[0]
+        file_name = m.group(1)
+        if not file_name.endswith(".zip"):
+            return m.group(0)
+        skill = file_name[:-4].rsplit("-", 1)[0]
         if skill in url_map:
-            replaced += 1
-            return url_map[skill]
-        unmatched.append(full)
+            target = url_map[skill]
+            # 仅当 URL 实际变化时才计数 + 改写(保证幂等:已最新则不计)
+            if target != m.group(0):
+                replaced += 1
+                return target
+            return m.group(0)
+        unmatched.append(file_name)
         return m.group(0)
 
     new = pattern.sub(repl, readme)
@@ -115,7 +127,7 @@ def main() -> int:
         readme_path.write_text(new)
         print(f"README 已更新 {replaced} 个下载链接")
     else:
-        print("README 无可替换链接(可能已最新或没占位)")
+        print("README 已是最新(无需更新下载链接)")
 
     if unmatched:
         print(f"未匹配 skill({len(unmatched)}):{unmatched[:5]}", file=sys.stderr)

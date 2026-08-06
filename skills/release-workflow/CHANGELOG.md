@@ -1,5 +1,13 @@
 # 变更日志
 
+## [1.4.1] - 2026-08-06
+
+### 修复
+- **`scripts/update-readme.py` 链接匹配范围扩大**：原正则只识别 `releases/latest/download/<skill>-<semver>.zip` 占位形式，但 legal-skills README 实际使用显式 tag 形式 `releases/download/<tag>/<skill>-<semver>.zip`，导致每次发版只刷新恰好已是新 tag 的少数链接，其余链接滞留旧 tag（指向过期版本快照）。现同时匹配「占位形式」与「显式 tag 形式」，统一改写为最新 release 的真实 `browser_download_url`（含正确 tag + 文件名版本），保证一次发版全量刷新。
+- **按文件名版本对齐**：改写时以最新 release 资产的实际 `<skill>-<semver>.zip` 文件名为准，自动修正链接内滞留的旧版本号（如 `legal-case-analysis-0.3.3` → `1.0.0`）。
+- **幂等性修正**：仅当 URL 实际变化时才计数并写回，已最新的 README 重跑报告「已是最新」而非误报「已更新 N 个」。
+- **跨仓库安全**：仅改写与 `owner/repo` 一致的链接，独立仓库（如 `trademark-assistant.skill`、`de-ai-polish.skill`）链接不受影响。
+
 ## [1.4.0] - 2026-06-30
 
 ### 新增
