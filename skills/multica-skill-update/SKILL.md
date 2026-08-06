@@ -251,6 +251,12 @@ Multica 平台内置了一个 **`multica-skill-importing`** skill（`user-invoca
 
 > **为什么要排除 `archive/` 等工作产物目录**：实测 `legal-ocr` 的 `archive/` 达 7.6 GB / 11 万文件，整包打进去必然触发全部四项限制。剔除后仅 21 个文件 / 82 KB，导入成功。同类目录（`output/`、`tmp/`、`.cache/`、`node_modules/` 等）已一并加入排除名单，见 `scripts/sync_skills.py` 的 `PACK_EXCLUDE_DIRS`。
 
+> **大体积媒体资产自动剔除（体积兜底）**：目录黑名单永远补不全（如 `visual-card` 的 `assets/examples/` 有 154 张示例图 / 21.2 MiB，不在黑名单内，却同时超 8 MiB 与 256 文件双限制，导致该 skill 无法导入）。因此除目录黑名单外，脚本按两层规则剔除媒体资产：
+> 1. **演示目录媒体**：路径落在 `examples`/`sample`/`samples`/`demo`/`demos` 下且后缀命中 `PACK_EXCLUDE_MEDIA_SUFFIXES`（图片/视频）的文件直接剔除——这些目录里的 **.md 等文档仍保留**（如 `legal-case-analysis/examples/*.md` 是运行时会读的范文，误删会破坏技能）。
+> 2. **通用体积兜底**：任意目录下，体积超过 `PACK_MEDIA_MAX_SIZE`（256 KiB）且命中媒体后缀的文件也剔除。
+>
+> 两层都用"媒体后缀 + （目录或体积）"条件，只剃展示性大图，不误伤运行所需的非媒体大文件（模型权重、数据文件）与文档。剔除明细打印到日志（最多 8 条 + 余数），便于回查 `visual-card` 等技能为何体积骤降。
+
 ## 反向溯源：在 Multica 发现问题后改本地源文件
 
 **核心前提**：本清单里 `source=file` 的 `url` 指向**本机仓库里的真实 skill 目录**（不是服务端副本）。

@@ -69,8 +69,26 @@ PACK_EXCLUDE_DIRS = {
     "archive", "output", "outputs", "tmp", ".cache", "dist", "build",
     ".idea", ".vscode",
 }
+
+# 演示/示例素材目录：非运行必需，且常含成百张示例图（如 visual-card 的
+# assets/examples 有 154 文件 / 21.2 MiB，单独就超服务端双限制）。
+# 注意：只剔除这些目录里的媒体资产（图片/视频），保留其中的 .md 等文档——
+# 例如 legal-case-analysis/examples/*.md 是运行时会读的范文，不可整目录删。
+# 实现见 _collect_files 的"演示目录媒体特殊处理"分支。
+PACK_EXCLUDE_MEDIA_DIRS = {"examples", "sample", "samples", "demo", "demos"}
 PACK_EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".pyd", ".so", ".dylib"}
 PACK_EXCLUDE_NAMES = {".DS_Store", "Thumbs.db"}
+
+# 大体积媒体资产自动跳过阈值：超过该体积且后缀命中媒体名单的文件，
+# 打包时直接剔除（同时告警）。用途：assets/examples/ 里成百张示例图（如
+# visual-card 的 180 张 / 41 MiB）既超服务端 8MiB、256 文件双限制，又非运行
+# 必需，剔除后即降到限额内。用"体积 + 媒体后缀"双条件，避免误伤运行所需的
+# 非媒体大文件（如模型权重、数据文件）。
+PACK_MEDIA_MAX_SIZE = 256 * 1024  # 256 KiB：单图超过此值视为可剔除的展示性大图
+PACK_EXCLUDE_MEDIA_SUFFIXES = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".svg",
+    ".mp4", ".mov", ".webm", ".avi", ".mkv",
+}
 
 # 服务端导入限制（见内置 multica-skill-importing 技能的 source map）：
 #   per-file 1 MiB / per-bundle 8 MiB / file-count 256 / upload 16 MiB(compressed)
@@ -149,9 +167,14 @@ def _resolve_cli(args_bin: Optional[str]) -> str:
     raise SystemExit(2)
 
 
-def _collect_files(real: Path) -> list[Path]:
-    """遍历技能目录，剔除噪音/工作产物，返回待打包文件列表。"""
+def _collect_files(real: Path) -> tuple[list[Path], list[str]]:
+    """遍历技能目录，剔除噪音/工作产物/超大媒体资产，返回 (待打包文件列表, 剔除原因列表)。
+
+    剔除原因用于日志可追溯：被主动剔除的大媒体文件会列出，便于回查
+    visual-card 等技能为何体积骤降。
+    """
     files: list[Path] = []
+    skipped: list[str] = []
     for path in real.rglob("*"):
         rel_parts = path.relative_to(real).parts
         # 目录级排除：命中黑名单，或任一层级是 dotfile 目录（服务端亦会丢弃）
@@ -159,17 +182,33 @@ def _collect_files(real: Path) -> list[Path]:
             continue
         if path.name in PACK_EXCLUDE_NAMES or path.suffix in PACK_EXCLUDE_SUFFIXES:
             continue
-        if path.is_file():
-            files.append(path)
-    return sorted(files)
+        if not path.is_file():
+            continue
+        # 演示目录（examples/sample/demo 等）：只剔其中的媒体大素材，保留 .md 等文档
+        in_media_dir = any(p in PACK_EXCLUDE_MEDIA_DIRS for p in rel_parts[:-1])
+        if in_media_dir and path.suffix.lower() in PACK_EXCLUDE_MEDIA_SUFFIXES:
+            rel = path.relative_to(real).as_posix()
+            skipped.append(f"{rel}（演示目录媒体，{path.stat().st_size/1024:.0f}KiB）")
+            continue
+        # 大体积媒体资产自动剔除（非运行必需，且易触发服务端双限制）
+        if path.suffix.lower() in PACK_EXCLUDE_MEDIA_SUFFIXES and path.stat().st_size > PACK_MEDIA_MAX_SIZE:
+            rel = path.relative_to(real).as_posix()
+            skipped.append(f"{rel} ({path.stat().st_size/1024:.0f}KiB)")
+            continue
+        files.append(path)
+    return sorted(files), skipped
 
 
-def _precheck(real: Path, files: list[Path]) -> list[str]:
+def _precheck(real: Path, files: list[Path], skipped: list[str] | None = None) -> list[str]:
     """按服务端限制预检，返回告警列表（不阻断，仅提示）。
 
     服务端会丢弃 dotfiles / __MACOSX / license / 二进制资产，且支持文件
     不得名为 SKILL.md（会被静默丢弃）。这里按"服务端实际会保留的文件"估算。
+    skipped 为已被主动剔除的大媒体文件列表，这些不再重复计入 >1MiB 告警。
     """
+    skipped_set = set() if not skipped else {
+        real / s.split(" (")[0] for s in skipped
+    }
     kept = [
         f for f in files
         if not f.name.startswith(".")
@@ -182,7 +221,7 @@ def _precheck(real: Path, files: list[Path]) -> list[str]:
     total = sum(f.stat().st_size for f in kept)
     if total > SERVER_MAX_TOTAL_SIZE:
         warns.append(f"总体积 {total/1024/1024:.1f}MiB>8MiB")
-    over = [f for f in kept if f.stat().st_size > SERVER_MAX_FILE_SIZE]
+    over = [f for f in kept if f.stat().st_size > SERVER_MAX_FILE_SIZE and f not in skipped_set]
     if over:
         names = ", ".join(f.relative_to(real).as_posix() for f in over[:2])
         warns.append(f"{len(over)} 个文件>1MiB（{names}{'...' if len(over) > 2 else ''}）")
@@ -205,8 +244,14 @@ def _pack_dir(src: Path, tmp_dir: Path) -> tuple[Path, list[str]]:
     返回 (zip 路径, 服务端限制告警列表)。
     """
     real = src.resolve()
-    files = _collect_files(real)
-    warns = _precheck(real, files)
+    files, skipped = _collect_files(real)
+    if skipped:
+        print(f"  ⚠ 已剔除 {len(skipped)} 个大体积媒体文件（非运行必需，避免超服务端限制）：")
+        for item in skipped[:8]:
+            print(f"      - {item}")
+        if len(skipped) > 8:
+            print(f"      - … 其余 {len(skipped) - 8} 个略")
+    warns = _precheck(real, files, skipped)
     zip_path = tmp_dir / f"{real.name}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in files:
