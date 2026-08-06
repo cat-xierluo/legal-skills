@@ -170,7 +170,7 @@
 <td style="word-break:break-word">基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频地址；本地归档与增量同步（archive 按 YYMMDD_标题 命名，index.json 记录同步状态）；镜像 transcript/summary/todos 到外部文件夹</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.7.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/dingtalk-minutes-0.7.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/dingtalk-minutes-1.0.0.zip">下载</a></td>
 <td>使用需自行安装 dws CLI、开启组织 CLI 访问开关并扫码授权</td>
 </tr>
 </tbody>
@@ -556,7 +556,7 @@
 <td style="word-break:break-word">Multica 工作区 Skill 同步工具：维护来源清单（manifest.json），批量导入/更新 Multica skill 数据库；支持 init（初始化导入）/ update（更新刷新）/ plan（预览）三模式，结果结构化报告；可接 Autopilot 每周定时同步</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.1.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/multica-skill-update-0.1.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multica-skill-update-0.5.1.zip">下载</a></td>
 <td>需安装 multica CLI</td>
 </tr>
 <tr>
