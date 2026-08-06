@@ -98,7 +98,7 @@
 <td style="word-break:break-word">使用 Playwright 无头模式抓取微信公众号文章，支持动态加载内容，保存为 Markdown</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.3.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/wechat-article-fetch-1.3.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/wechat-article-fetch-1.3.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -107,7 +107,7 @@
 <td style="word-break:break-word">OCR、扫描识别、图片文字识别和文档识别工具，支持 PDF、图片、Office 文档和 URL 转 Markdown；法律材料可进行保守的术语与文书结构优化</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-ocr-1.5.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-ocr-1.5.0.zip">下载</a></td>
 <td>推荐统一入口</td>
 </tr>
 <tr>
@@ -116,7 +116,7 @@
 <td style="word-break:break-word">通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/mineru-ocr-1.2.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/mineru-ocr-1.2.0.zip">下载</a></td>
 <td>功能已由 legal-ocr 覆盖；建议新用户使用 legal-ocr</td>
 </tr>
 <tr>
@@ -125,7 +125,7 @@
 <td style="word-break:break-word">面向法律 PDF 与扫描件的 PaddleOCR 结构化解析，将 PDF 或图片转换为 Markdown，支持表格识别、公式识别、版面分析，保留 archive 归档</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/paddle-ocr-1.1.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/paddle-ocr-1.1.1.zip">下载</a></td>
 <td>功能已由 legal-ocr 覆盖；保留兼容旧工作流，需配置 API Token</td>
 </tr>
 <tr>
@@ -134,7 +134,7 @@
 <td style="word-break:break-word">本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.9.4</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/funasr-transcribe-1.9.4.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/funasr-transcribe-1.9.4.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -143,7 +143,7 @@
 <td style="word-break:break-word">阿里云通义听悟云端语音转录，适用于长音频、高精度场景，支持说话人分离和 AI 摘要生成</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.3.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/tingwu-asr-0.3.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/tingwu-asr-0.3.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -152,7 +152,7 @@
 <td style="word-break:break-word">输入视频网站/播客平台链接后自动下载，支持抖音/B站/YouTube/小宇宙等平台，可下载字幕和音频</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/universal-media-downloader-0.2.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/universal-media-downloader-0.2.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -161,7 +161,7 @@
 <td style="word-break:break-word">抖音视频批量下载工具，基于 F2 框架，支持单个/批量博主下载，自动 Cookie 管理，差量更新机制</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.8.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/douyin-batch-download-1.8.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/douyin-batch-download-1.8.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -199,7 +199,7 @@
 <td style="word-break:break-word">元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.7.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/yuandian-law-search-1.7.5.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/yuandian-law-search-1.7.5.zip">下载</a></td>
 <td>需配置 API Key</td>
 </tr>
 <tr>
@@ -208,7 +208,7 @@
 <td style="word-break:break-word">法院短信识别与文书下载技能，自动解析法院短信（文书送达、立案通知、开庭提醒等），提取案号、当事人、下载链接，下载文书并归档到对应案件目录</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/court-sms-1.5.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/court-sms-1.5.0.zip">下载</a></td>
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
 </tr>
 <tr>
@@ -217,7 +217,7 @@
 <td style="word-break:break-word">整理一批发票/票据 PDF（增值税普通发票、铁路电子客票、住宿交通餐饮等），按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.1.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/invoice-organizer-0.1.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/invoice-organizer-0.1.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -226,7 +226,7 @@
 <td style="word-break:break-word">将案件/咨询材料整理成标准化目录结构。支持诉讼案件（12目录）和潜在项目/咨询（3目录）两种预设，自动生成案件信息看板、工时记录和期限管理文件</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.3.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/new-case-1.3.5.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/new-case-1.3.5.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -235,7 +235,7 @@
 <td style="word-break:break-word">诉讼分析工具，支持起诉状与证据分析、判决书深度分析、庭审笔录复盘。覆盖诉讼全流程：案件初期评估→判决分析→庭审复盘，生成内部版/研究版/客户版三层输出，支持上诉/再审决策支持</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.4.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/litigation-analysis-1.4.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/litigation-analysis-1.4.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -244,7 +244,7 @@
 <td style="word-break:break-word">合同起草与审查助手，基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.5.3</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/contract-copilot-1.5.3.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/contract-copilot-1.5.3.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -253,7 +253,7 @@
 <td style="word-break:break-word">通用法律分析技能，基于案件材料、咨询材料、合同资料、证据材料或检索结果进行法律分析、案件研判、风险评估与诉讼/非诉策略；前置分析引擎，报告为可选交付形态</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.3.3</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-case-analysis-0.3.3.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-case-analysis-0.3.3.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -262,7 +262,7 @@
 <td style="word-break:break-word">根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报等）。采用模块化架构自动匹配场景，生成接近定稿质量的专业文档</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.3.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-proposal-generator-0.3.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-proposal-generator-0.3.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -271,7 +271,7 @@
 <td style="word-break:break-word">将法律文本（法律条文或法律案例）转换为规范的 Markdown 格式，采用 archive 归档结构存储。推荐与 <a href="skills/wechat-article-fetch/"><strong>wechat-article-fetch</strong></a> 配合使用实现完整工作流</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.2.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-text-format-1.2.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-text-format-1.2.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -280,7 +280,7 @@
 <td style="word-break:break-word">从律师与客户沟通记录中提取有价值的法律问答对，生成结构化知识库内容。支持严格客户信息脱敏处理，适用于整理咨询记录、创建问答知识库、准备内容营销素材</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-qa-extractor-1.1.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-qa-extractor-1.1.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -307,7 +307,7 @@
 <td style="word-break:break-word">专利 PDF 批量下载工具，Google Patents 为首选通道（免费免登录），支持多平台、自动处理申请号和公告号格式；凭证环境变量化 + 防泄露自检</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v2.8.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/patent-download-2.6.0.zip">下载 v2.6.0</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/patent-download-2.6.0.zip">下载 v2.6.0</a></td>
 <td>本仓库</td>
 </tr>
 <tr>
@@ -316,7 +316,7 @@
 <td style="word-break:break-word">从已开发代码项目中提取技术实现证据，围绕候选专利方案生成算法/软件类说明书式技术交底书，并以"权利要求布局卡 → 发明专利初稿"两步法生成接近可申报版的中国发明专利起草材料；内置《专利审查指南》撰写规则、计算机程序发明保护主题提示和 agent 速查卡</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.6.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/code2patent-1.6.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/code2patent-1.6.0.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/code2patent.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -334,7 +334,7 @@
 <td style="word-break:break-word">面向法律业务场景的法律图解与图表生成技能，把案件、合同、合规、交易、证据链和诉讼流程整理成关系图/流程图/时间轴/风险图；通过 VizSpec 2.1、几何守恒视觉编译、三套受众主题、容器感知重叠与文字容量门禁阻断坏图，默认交付 .drawio + .svg + .png 三件套</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.8.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/legal-visualization-0.6.14.zip">下载 v0.6.14</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-visualization-0.6.14.zip">下载 v0.6.14</a></td>
 <td></td>
 </tr>
 </tbody>
@@ -363,7 +363,7 @@
 <td style="word-break:break-word">PDF 处理工具，支持扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。统一入口自动选择最短可用流程，配合 pdf-organizer 完成从预处理到文书整理的完整工作流</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v2.9.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/pdf-processor-2.7.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/pdf-processor-2.7.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -372,7 +372,7 @@
 <td style="word-break:break-word">将图片或 PDF 页面按 N 张/页编排为标准化 A4 PDF，或将长截图渲染为单张自适应高度 PDF；支持 1/2/3/4 张每页布局，自动检测图片横竖方向，适用于法律证据材料整理（手机截图、视频取证截图、现场照片、长截图等）</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/img2pdf-1.2.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/img2pdf-1.2.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -381,7 +381,7 @@
 <td style="word-break:break-word">法律 PDF 文书整理工具：按内容拆分、合并或直接重命名 OCR 后双层扫描件，生成页面索引、manifest 草稿和下游交接文件；支持旋转与倾斜校正，不做 OCR 或压缩</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/pdf-organizer-0.5.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/pdf-organizer-0.5.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -390,7 +390,7 @@
 <td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片资产保真与正文插图克制、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v2.3.3</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/course-generator-2.3.3.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/course-generator-2.3.3.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -399,7 +399,7 @@
 <td style="word-break:break-word">ASR 转录稿纠错与轻度优化工具：按用户词典统一替换同音字与英文专有名称漂移，可选合并同发言人发言、清理标点和切分段落；与 course-generator 共用词典格式，原始文件保持不动并双写归档</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.8</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/transcription-corrector-1.0.8.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/transcription-corrector-1.0.8.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -408,7 +408,7 @@
 <td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.3.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/video-screenshot-0.3.2.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -417,7 +417,7 @@
 <td style="word-break:break-word">现有内容资产再组织技能。基于文章、专栏、课程讲稿、逐字稿、访谈、课件、会议纪要、案例材料、PDF 文本、Word 文档和笔记等素材，判断最适合转化为书、小册子、课程、系列文章、实务手册或知识库，并输出精简策划意见</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/article2book-1.0.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/article2book-1.0.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -426,7 +426,7 @@
 <td style="word-break:break-word">AI 驱动的 SVG 文章配图生成工具，支持动态 SVG、静态 SVG 和 PNG 导出三种模式，专为公众号文章等需要丰富视觉内容的平台设计</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/svg-article-illustrator-1.0.5.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/svg-article-illustrator-1.0.5.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -435,7 +435,7 @@
 <td style="word-break:break-word">手绘风格文章配图：先理解文章写 Image Brief 和 prompt，再用内置生图能力出图；配色通过主题文件（themes/）配置，内置蓝灰/墨黑/赭石三套预设，可切换或自定义</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/handdrawn-article-illustrator-1.1.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/handdrawn-article-illustrator-1.1.0.zip">下载</a></td>
 <td>配色可定制</td>
 </tr>
 <tr>
@@ -444,7 +444,7 @@
 <td style="word-break:break-word">书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图，针对印刷出版场景优化，字号间距按物理尺寸反推</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.8.10</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/svg-book-illustrator-1.8.10.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/svg-book-illustrator-1.8.10.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -453,7 +453,7 @@
 <td style="word-break:break-word">通过 PicList HTTP Server 将 Markdown 中的本地图片上传到图床，自动替换为云端链接，支持批量处理和跨设备访问</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/piclist-upload-1.2.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/piclist-upload-1.2.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -462,7 +462,7 @@
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.1.8</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/md2word-1.1.8.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/md2word-1.1.8.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -480,7 +480,7 @@
 <td style="word-break:break-word">视频压缩与静默片段剪切工具，使用 FFmpeg CRF 模式压缩视频，自动检测硬件选择最优编码方案（Apple Silicon VideoToolbox 硬件加速），支持检测并去除静默静止片段</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.3.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/video-compressor-1.3.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-compressor-1.3.0.zip">下载</a></td>
 <td></td>
 </tr>
 </tbody>
@@ -509,7 +509,7 @@
 <td style="word-break:break-word">把自然语言(机票/高铁/开庭/会议/截止/聚会等)或票据截图，自动变成苹果日历事件 + 按事件类型智能提前的提醒事项；仅 macOS，经 iCloud 同步到 iPhone/iPad</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.1.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/apple-smart-schedule-0.1.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/apple-smart-schedule-0.1.0.zip">下载</a></td>
 <td>仅 macOS</td>
 </tr>
 </tbody>
@@ -538,7 +538,7 @@
 <td style="word-break:break-word">Agent 专用邮箱服务，通过邮件接收指令、发送结果、与其他 Agent 或人类通信。支持邮件收发、搜索、附件处理，目前支持网易 ClawEmail</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.4.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/agent-email-0.4.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/agent-email-0.4.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -547,7 +547,7 @@
 <td style="word-break:break-word">项目初始化工具，读取全局协议，分析项目实际情况，按配置检测项目类型并生成项目特定的 AGENTS.md、CLAUDE.md、docs/ 文档体系与 .claude/ 配置</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.2.4</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/project-init-1.1.2.zip">下载 v1.1.2</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/project-init-1.1.2.zip">下载 v1.1.2</a></td>
 <td></td>
 </tr>
 <tr>
@@ -565,7 +565,7 @@
 <td style="word-break:break-word">管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别 Codex、Claude Code 和 OpenClaw 目标目录并批量处理</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.7.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/skill-manager-1.7.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/skill-manager-1.7.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -574,7 +574,7 @@
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v2.6.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/skill-lint-2.4.0.zip">下载 v2.4.0</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/skill-lint-2.4.0.zip">下载 v2.4.0</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
 <tr>
@@ -592,7 +592,7 @@
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.4.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/git-batch-commit-1.4.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/git-batch-commit-1.4.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -601,7 +601,7 @@
 <td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理和身份绑定 safe-push</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.6.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/git-workflow-1.6.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/git-workflow-1.6.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -610,7 +610,7 @@
 <td style="word-break:break-word">跨平台 Agent 任务协调枢纽，围绕项目任务源分配任务、标记归属、能力路由并保留交接上下文</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/cross-agent-coordination-1.0.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/cross-agent-coordination-1.0.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -619,7 +619,7 @@
 <td style="word-break:break-word">多 Agent 本地执行编排，支持 worktree/session 隔离、tmux worker、PM 巡检、Shell/安装权限门禁与身份绑定 PR 收口</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.19.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/multi-agent-orchestration-1.19.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.19.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -628,7 +628,7 @@
 <td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.4.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/release-workflow-1.4.0.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/release-workflow-1.4.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -637,7 +637,7 @@
 <td style="word-break:break-word">GitHub Star 项目管理工具，从内容自动发现并 Star 项目，同步追踪已 Star 项目更新，生成可视化 Dashboard，支持分类管理和标签系统</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.6.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/github-star-manager-0.6.2.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/github-star-manager-0.6.2.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -646,7 +646,7 @@
 <td style="word-break:break-word">将本地开发的 Skills 批量同步到 ClawHub 平台，支持智能 .gitignore 过滤、白名单控制、增量同步</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.4.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/clawhub-sync-1.4.2.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/clawhub-sync-1.4.2.zip">下载</a></td>
 <td><a href="https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md">ClawHub 要求 MIT-0</a></td>
 </tr>
 <tr>
@@ -655,7 +655,7 @@
 <td style="word-break:break-word">将 monorepo 中的子目录通过 git subtree 推送到独立 GitHub 仓库，支持注册清单、变更自动检测、增量推送</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.7.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.07.23/subtree-publish-1.7.1.zip">下载</a></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/subtree-publish-1.7.1.zip">下载</a></td>
 <td></td>
 </tr>
 </tbody>
