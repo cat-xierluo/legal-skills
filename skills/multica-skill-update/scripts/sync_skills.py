@@ -2,7 +2,7 @@
 """
 Multica Skill 同步工具 —— 维护同步清单并批量导入/更新 Multica 工作区 skill
 
-按 config/manifest.local.json（个人同步清单）逐条执行 `multica skill import`，
+按 scripts/manifest.local.json（个人同步清单）逐条执行 `multica skill import`，
 把 GitHub / ClawHub / skills.sh / 本地文件 上的 skill 同步到 Multica skill 数据库。
 
 三种模式（--mode）：
@@ -14,8 +14,8 @@ Multica Skill 同步工具 —— 维护同步清单并批量导入/更新 Multi
     plan    无副作用预览：只列出将执行的操作，不调用 import。
 
 用法:
-    python sync_skills.py --manifest config/manifest.local.json --mode init
-    python sync_skills.py --mode update              # 默认读 config/manifest.local.json
+    python sync_skills.py --manifest scripts/manifest.local.json --mode init
+    python sync_skills.py --mode update              # 默认读 scripts/manifest.local.json
     python sync_skills.py --mode plan                # 预览
     python sync_skills.py --dry-run                  # 打印命令但不执行
 
@@ -134,8 +134,8 @@ def _load_manifest(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        tmpl = path.parent / ".." / "references" / "manifest.example.json"
-        hint = f"\n    参考模板：{tmpl.resolve()}\n    或从 references/manifest.example.json 复制为 config/manifest.local.json 后填写"
+        tmpl = path.parent / ".." / "scripts" / "manifest.example.json"
+        hint = f"\n    参考模板：{tmpl.resolve()}\n    或从 scripts/manifest.example.json 复制为 scripts/manifest.local.json 后填写"
         raise SyncError(f"manifest 不存在：{path}{hint}")
     except json.JSONDecodeError as exc:
         raise SyncError(f"manifest JSON 无效：{path}:{exc.lineno}:{exc.colno} {exc.msg}")
@@ -464,7 +464,7 @@ def _report() -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sync_skills.py", description="Multica Skill 同步工具")
     parser.add_argument("--manifest", default=None,
-                        help="清单路径（默认 <skill根>/config/manifest.local.json）")
+                        help="清单路径（默认 <skill根>/scripts/manifest.local.json）")
     parser.add_argument("--mode", default="update", choices=["init", "update", "plan"],
                         help="init=初始化导入 / update=更新刷新 / plan=无副作用预览")
     parser.add_argument("--category", default=None,
@@ -482,7 +482,7 @@ def main(argv: list[str] | None = None) -> int:
     # 定位 skill 根目录（本脚本位于 <skill根>/scripts/）
     skill_root = Path(__file__).resolve().parent.parent
     manifest_path = Path(args.manifest).expanduser().resolve() if args.manifest \
-        else skill_root / "config" / "manifest.local.json"
+        else skill_root / "scripts" / "manifest.local.json"
 
     try:
         manifest = _load_manifest(manifest_path)

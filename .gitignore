@@ -148,6 +148,9 @@ skills/litigation-analysis-lite/
 # Skill manager registry (contains local paths and machine-specific state)
 skills/skill-manager/assets/skill-registry.json
 
+# Multica skill 同步清单（个人私有清单，含本机路径与云端地址，不入库）
+skills/multica-skill-update/scripts/manifest.local.json
+
 # 元典 API archive (query results to save credits)
 skills/yuandian-law-search/archive/
 
