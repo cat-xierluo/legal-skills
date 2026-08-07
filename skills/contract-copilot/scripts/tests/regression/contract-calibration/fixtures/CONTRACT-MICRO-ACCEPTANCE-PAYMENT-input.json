@@ -1,0 +1,20 @@
+{
+  "case_id": "CONTRACT-MICRO-ACCEPTANCE-PAYMENT",
+  "kind": "clause-boundary",
+  "assertion_id": "CAP-MICRO-ACCEPTANCE-PAYMENT-LINK",
+  "provided_context": {
+    "request": "请审核这份合同。",
+    "contract_available": true,
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+  "source": "legal-skill-evaluation T-401 executed-fail regression (v0.8.6)",
+  "synthetic_contract": "fixtures/contract-micro-acceptance-payment.docx",
+  "synthetic_contract_sha256": "25953a43e35029ae191463e85e19a10b4935b89264cf590add11b11591bed79f",
+  "baseline_output": "baseline-outputs/CONTRACT-MICRO-ACCEPTANCE-PAYMENT-baseline-output.md"
+}

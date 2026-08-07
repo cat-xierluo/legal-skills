@@ -1,0 +1,18 @@
+{
+  "case_id": "CONTRACT-MICRO-REPORT-FIELD-COLLAPSE",
+  "kind": "report-integrity",
+  "assertion_id": "CAP-MICRO-REPORT-FIELD-NONEMPTY",
+  "provided_context": {
+    "request": "基于旧计划字段渲染最终报告。",
+    "contract_available": true,
+    "party_role": "中立",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+  "source": "legal-skill-evaluation T-401 executed-fail regression (v0.8.6)",
+  "baseline_output": "baseline-outputs/CONTRACT-MICRO-REPORT-FIELD-COLLAPSE-baseline-output.md"
+}
