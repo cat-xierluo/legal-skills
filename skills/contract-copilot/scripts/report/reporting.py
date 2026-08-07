@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,11 @@ except ImportError:
     from report_docx import write_review_report_docx
 
 RISK_ORDER = {"P0": 0, "P1": 1, "P2": 2}
+
+MISSING_PLACEHOLDER = "未提及/待补充"
+EMPTY_LEGAL_BASIS = "/"
+# 超过该阈值即视为报告字段塌缩：占位过多说明计划字段未落地，报告不具备交付条件。
+MAX_MISSING_PLACEHOLDERS = 10
 
 
 def _normalize_risk_level(value: Any) -> str:
@@ -624,6 +630,32 @@ def render_review_report(
     return "\n".join(lines)
 
 
+def check_report_integrity(report: str) -> dict[str, Any]:
+    """独立校验渲染后的报告是否具备交付条件。
+
+    生产器（render_review_report）不得自报成功：即使渲染流程无异常，只要报告
+    字段整体塌缩（占位过多）或存在空法律依据，都应判定未通过，由调用方非零退出。
+    """
+    missing_count = report.count(MISSING_PLACEHOLDER)
+    empty_legal_basis = report.count(f"- 法律依据：{EMPTY_LEGAL_BASIS}")
+
+    problems: list[str] = []
+    if missing_count > MAX_MISSING_PLACEHOLDERS:
+        problems.append(
+            f"报告存在 {missing_count} 处“{MISSING_PLACEHOLDER}”占位，"
+            f"超过阈值 {MAX_MISSING_PLACEHOLDERS}，字段未落地"
+        )
+    if empty_legal_basis:
+        problems.append(f"报告存在 {empty_legal_basis} 处空法律依据（渲染为“{EMPTY_LEGAL_BASIS}”）")
+
+    return {
+        "passed": not problems,
+        "missing_placeholder_count": missing_count,
+        "empty_legal_basis_count": empty_legal_basis,
+        "problems": problems,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="根据结构化审查计划生成 Markdown 审查意见书")
     parser.add_argument("--plan", required=True, help="审查计划 JSON 文件路径")
@@ -632,6 +664,11 @@ def main() -> None:
     parser.add_argument(
         "--execution",
         help="可选，执行日志 JSON 文件路径（用于补充本地审查人配置）",
+    )
+    parser.add_argument(
+        "--skip-integrity-check",
+        action="store_true",
+        help="跳过报告完整性复核（仅用于明确接受占位的草稿场景）",
     )
     args = parser.parse_args()
 
@@ -655,6 +692,21 @@ def main() -> None:
     print(f"审查报告已生成: {output_path}")
     if args.output_docx:
         print(f"审查报告 DOCX 已生成: {output_docx_path}")
+
+    if args.skip_integrity_check:
+        return
+
+    integrity = check_report_integrity(report)
+    if not integrity["passed"]:
+        print("报告未通过完整性复核：", file=sys.stderr)
+        for problem in integrity["problems"]:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "  请补齐审查计划中的对应字段后重新生成；"
+            "确需保留占位时使用 --skip-integrity-check。",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
