@@ -1,5 +1,28 @@
 # 变更日志
 
+## [0.5.3] - 2026-08-07
+
+### 文档完善
+- **清单模板与实例同目录**：`scripts/manifest.local.json`（个人实例）与 `scripts/manifest.example.json`（模板）统一放在 `scripts/` 下，不再设独立的 `config/` 目录；SKILL.md「文件结构」「个人清单机制」「准备清单」等章节同步改指 `scripts/` 路径。
+- **移除技能自带 `.gitignore`**：清单是否入库交由外部仓库统一配置，技能内不再单独维护 `.gitignore`（原仅忽略 `config/manifest.local.json` 与 Python 缓存）。
+- **精简 `description`**：SKILL.md frontmatter 描述缩短为「按来源清单批量导入/更新到 Multica skill 数据库，支持 init / update / plan 三种模式」，保留触发关键词；frontmatter 版本号对齐至 0.5.3。
+
+### 技术优化
+- `sync_skills.py` 默认清单路径由 `<skill根>/config/manifest.local.json` 改为 `<skill根>/scripts/manifest.local.json`；缺失清单时的复制提示同步改为 `cp scripts/manifest.example.json scripts/manifest.local.json`。
+
+## [0.5.2] - 2026-08-07
+
+### 文档完善
+- **结构重构（Progressive Disclosure）**：拆分过长的 SKILL.md（318 行）为三个 references 文件，入口只保留核心流程与链接：
+  - `references/manifest-format.md`：清单字段说明、取值、分类标签用法（原 SKILL.md「清单格式」章节）。
+  - `references/multica-importing-alignment.md`：与平台内置 `multica-skill-importing` 的分工、8 条语义对齐、服务端限制与媒体剔除（原 SKILL.md 同名章节）。
+  - `references/workflow-examples.md`：真实调用示例与反向溯源工作流（原 SKILL.md「真实调用示例」「反向溯源」章节）。
+- **消除第三份冗余 JSON**：SKILL.md 内联的清单示例 JSON 移除，统一引用模板文件与格式文档，避免与清单模板三处重复。
+- **SKILL.md frontmatter 版本号对齐**：`0.4.0` → `0.5.1`，与 CHANGELOG 最新版本一致。
+
+### 技术优化
+- **清单模板位置迁移**：`references/manifest.example.json` 移至 `scripts/manifest.example.json`（模板随脚本归位，不再与 `config/manifest.local.json` 分处两个目录造成"同文件两处"的观感）；同步更新 `sync_skills.py` 缺失清单时的提示路径。
+
 ## [0.5.1] - 2026-08-06
 
 ### 改进

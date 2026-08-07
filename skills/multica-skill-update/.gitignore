@@ -1,6 +1,0 @@
-# 个人同步清单（含本地路径与云端地址，禁止提交）
-config/manifest.local.json
-
-# Python 缓存
-__pycache__/
-*.pyc
