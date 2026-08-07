@@ -1,0 +1,20 @@
+{
+  "case_id": "CONTRACT-MICRO-PENALTY-STACKING",
+  "kind": "clause-boundary",
+  "assertion_id": "CAP-MICRO-PENALTY-STACKING-BOUNDARY",
+  "provided_context": {
+    "request": "请审核这份服务合同。",
+    "contract_available": true,
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+  "source": "legal-skill-evaluation T-401 executed-fail regression (v0.8.6)",
+  "synthetic_contract": "fixtures/contract-micro-penalty-stacking.docx",
+  "synthetic_contract_sha256": "46b30115561c5235350138964c484038bdff0738667962a304b11e34b235a07e",
+  "baseline_output": "baseline-outputs/CONTRACT-MICRO-PENALTY-STACKING-baseline-output.md"
+}
