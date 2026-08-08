@@ -26,6 +26,7 @@
   - `scripts/review/review_runtime.py`：`resolve_review_context` 非交互环境 `party_role` 缺失时不再默认解析为「其他」，保留空值交由调用方请求确认。
   - `scripts/report/reporting.py`：占位串 `MISSING_PLACEHOLDER` 由 `未提及/待补充` 改为 `待补充`（等价语义、仍诚实标记缺失）；`_resolve_legal_basis` 空时返回空串，`render_review_report` 对空法律依据跳过该行（不再渲染裸 `/`）；`check_report_integrity` 同步用 `待补充` 常量继续检测塌缩，护栏不破。
   - 真实重跑结果：ROLE-MISSING / REVIEWER-UNCONFIRMED / REPORT-FIELD-COLLAPSE 三例由 fail 转 pass；PRODUCER-SELF-SUCCESS 仍 fail（probe 对同一残缺 plan 的两 case 要求互斥的 `returncode` 与占位计数，属 harness 侧悖论，非候选缺陷，待上游修正 probe 后重验）。
+  - 补充修复 `render_review_report`：新增「复核状态」字段（取自 plan.meta.review_state，缺省「草稿」），使 PRODUCER 实例的 `CAP-MICRO-FORMAL-REVIEW-STATE` 断言由 fail 转 pass，实例由「双 fail」隔离为「一绿一红」。同步修正 `check_report_integrity` 空依据计数（EMPTY_LEGAL_BASIS 已为空串时误数所有合法依据行，改为「标记非空才匹配」避免护栏误判）。
 
 ### 说明
 
