@@ -474,6 +474,7 @@ def render_review_report(
     signing_date = _safe_line(
         _resolve_meta_text(summary, meta, "signing_date", "review_version", "version")
     )
+    review_state = _safe_line(meta.get("review_state"), fallback="草稿")
     my_party = _resolve_my_party(summary, meta, party_role)
     other_parties = _resolve_other_parties(summary, meta, party_role)
     transaction_content = _resolve_transaction_content(
@@ -625,6 +626,7 @@ def render_review_report(
             f"- 审查人：{reviewer}",
             f"- 所属机构/公司：{reviewer_organization}",
             f"- 所属部门：{reviewer_department}",
+            f"- 复核状态：{review_state}",
             "",
         ]
     )
@@ -639,7 +641,11 @@ def check_report_integrity(report: str) -> dict[str, Any]:
     字段整体塌缩（占位过多）或存在空法律依据，都应判定未通过，由调用方非零退出。
     """
     missing_count = report.count(MISSING_PLACEHOLDER)
-    empty_legal_basis = report.count(f"- 法律依据：{EMPTY_LEGAL_BASIS}")
+    # EMPTY_LEGAL_BASIS 为空串时（v1.6.0 起不再渲染裸 “/”），空依据行已被跳过，
+    # 故空依据计数恒为 0；仅当标记非空时才按字面匹配，避免误伤正常依据行。
+    empty_legal_basis = (
+        report.count(f"- 法律依据：{EMPTY_LEGAL_BASIS}") if EMPTY_LEGAL_BASIS else 0
+    )
 
     problems: list[str] = []
     if missing_count > MAX_MISSING_PLACEHOLDERS:
