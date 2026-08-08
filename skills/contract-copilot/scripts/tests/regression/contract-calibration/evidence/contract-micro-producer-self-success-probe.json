@@ -1,0 +1,22 @@
+{
+  "assertions": [
+    {
+      "evidence": "报告脚本退出码 0；待补占位 0；空法律依据 0；复核状态 True。",
+      "id": "CAP-MICRO-PRODUCER-SELF-SUCCESS-BLOCK",
+      "observed": "fail"
+    },
+    {
+      "evidence": "报告脚本退出码 0；待补占位 0；空法律依据 0；复核状态 True。",
+      "id": "CAP-MICRO-FORMAL-REVIEW-STATE",
+      "observed": "pass"
+    }
+  ],
+  "case_id": "CONTRACT-MICRO-PRODUCER-SELF-SUCCESS",
+  "empty_legal_basis_count": 0,
+  "missing_placeholder_count": 0,
+  "observed": "fail",
+  "review_state_present": true,
+  "runner_exit_code": 0,
+  "stderr": "",
+  "stdout": ""
+}
