@@ -2,10 +2,11 @@
 
 > 本文档是对 `legal-skill-evaluation/evals/contract-calibration-260730/contract_copilot_micro_probe.py`
 > 中 **PRODUCER 与 REPORT-FIELD-COLLAPSE 互斥悖论** 的修复方案。
-> 已在 `/private/tmp/lse-snap-extract/legal-skill-evaluation`（临时非 git 快照）实测验证，四例全绿，
-> 实测证据已同步落盘至 `evidence/contract-micro-report-field-collapse-probe.json` 与
-> `evidence/contract-micro-producer-self-success-probe.json`。待 legal-skill-evaluation 仓库
-> 重新挂载后，按本文档 §4 patch 落回上游 harness 即可（仅改编排，不动候选）。
+> 修复已**落地至 `private-skills` 仓库的 `legal-skill-evaluation`**（真实 git 仓库，非临时快照）：
+> `contract_copilot_micro_probe.py` 已按 §2 改写（plan_for/runner_for 双映射 + 候选当前语义判定），
+> 并新增 `micro-runs/report-complete-plan.json`、`report-collapsed-plan.json`。在 private-skills 仓库内
+> 以 contract-copilot v1.6.0 为候选重跑，四例全部 pass（ROLE/REVIEWER/REPORT rc=0/PRODUCER rc=1）。
+> 本仓库 `evidence/` 下两份探针 JSON 为同次重跑的副本佐证（仅改编排，不动候选代码）。
 
 ## 1. 问题诊断
 
