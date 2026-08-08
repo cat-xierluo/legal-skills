@@ -1,0 +1,17 @@
+{
+  "assertions": [
+    {
+      "evidence": "旧字段报告保持关键字段完整。",
+      "id": "CAP-MICRO-REPORT-FIELD-NONEMPTY",
+      "observed": "pass"
+    }
+  ],
+  "case_id": "CONTRACT-MICRO-REPORT-FIELD-COLLAPSE",
+  "empty_legal_basis_count": 0,
+  "missing_placeholder_count": 0,
+  "observed": "pass",
+  "review_state_present": true,
+  "runner_exit_code": 0,
+  "stderr": "",
+  "stdout": ""
+}

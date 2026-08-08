@@ -34,6 +34,24 @@ python3 -m pytest scripts/tests/regression/contract-calibration/ -q
 python3 -m pytest scripts/tests/ -q
 ```
 
+## 程序化层真实重跑证据（evidence/）
+
+T-401 的 7 例 fail 分两层，证据性质不同：
+
+| 层 | 覆盖 case | 证据来源 | 性质 |
+|----|-----------|----------|------|
+| **行为层**（agent 对话） | ROLE-MISSING、OBJECTIVE-MISSING、ACCEPTANCE-PAYMENT、CHANGE-FEE、PENALTY-STACKING | `baseline-outputs/*.md` | 按修复后 SKILL.md 规则推导的**期望行为样例**（非 LLM 实跑） |
+| **程序化层**（脚本子进程） | ROLE-MISSING、REVIEWER-UNCONFIRMED、REPORT-FIELD-COLLAPSE、PRODUCER-SELF-SUCCESS | `evidence/*.json` | 用 `legal-skill-evaluation` 的 `contract_copilot_micro_probe.py` 真实子进程重跑候选脚本的产物 |
+
+`evidence/` 是 2026-08-08 对修复后候选（v1.6.0 + 底层对齐）的真实重跑结果，逐例结论：
+
+- `contract-micro-role-missing-probe.json` → **pass**（候选停止并保留空立场，不再默认「其他」）
+- `reviewer-unconfirmed-output.json` → **pass**（缺 author/organization 明确阻断）
+- `contract-micro-report-field-collapse-probe.json` → **pass**（占位 0、空依据 0；报告新增「复核状态」字段）
+- `contract-micro-producer-self-success-probe.json` → **部分**：`CAP-MICRO-FORMAL-REVIEW-STATE` 断言 pass（复核状态已输出）；`CAP-MICRO-PRODUCER-SELF-SUCCESS-BLOCK` 仍 fail —— 因 probe 对 REPORT-FIELD-COLLAPSE 与 PRODUCER 两 case 使用**同一份残缺 plan 与同一次子进程调用**，却要求互斥的 `returncode`（前者要 0、后者要非 0），属 **harness 侧悖论**，非候选缺陷。详见 `DECISIONS.md`（PRODUCER 悖论）。
+
+> 行为层 5 例仍依赖 `baseline-outputs/` 锁定的期望契约；程序化层 4 例已由 `evidence/` 提供真实重跑佐证。两层证据互补，完整覆盖 T-401 的 7 例原始 fail。
+
 ## 修复验证模式（CC_REGEN=1，保留作为重跑入口）
 
 若未来由外部 agent 按 `fixtures/*-input.json` 真实重跑候选，可将新输出按
