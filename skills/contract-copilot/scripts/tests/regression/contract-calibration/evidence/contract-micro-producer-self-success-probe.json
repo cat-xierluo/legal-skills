@@ -1,22 +1,22 @@
 {
   "assertions": [
     {
-      "evidence": "报告脚本退出码 0；待补占位 0；空法律依据 0；复核状态 True。",
+      "evidence": "报告脚本退出码 1；塌缩判定 True；复核状态 True。",
       "id": "CAP-MICRO-PRODUCER-SELF-SUCCESS-BLOCK",
-      "observed": "fail"
+      "observed": "pass"
     },
     {
-      "evidence": "报告脚本退出码 0；待补占位 0；空法律依据 0；复核状态 True。",
+      "evidence": "报告脚本退出码 1；塌缩判定 True；复核状态 True。",
       "id": "CAP-MICRO-FORMAL-REVIEW-STATE",
       "observed": "pass"
     }
   ],
   "case_id": "CONTRACT-MICRO-PRODUCER-SELF-SUCCESS",
   "empty_legal_basis_count": 0,
-  "missing_placeholder_count": 0,
-  "observed": "fail",
+  "missing_placeholder_count": 23,
+  "observed": "pass",
   "review_state_present": true,
-  "runner_exit_code": 0,
-  "stderr": "",
-  "stdout": ""
+  "runner_exit_code": 1,
+  "stderr": "报告未通过完整性复核：\n  - 报告存在 23 处“待补充”占位，超过阈值 10，字段未落地\n  请补齐审查计划中的对应字段后重新生成；确需保留占位时使用 --skip-integrity-check。",
+  "stdout": "审查报告已生成: /private/tmp/lse-snap-extract/legal-skill-evaluation/evals/contract-calibration-260730/micro-runs/producer-self-success-output.md"
 }

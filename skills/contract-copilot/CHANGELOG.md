@@ -31,7 +31,7 @@
 ### 说明
 
 - 上述三类缺陷来自 legal-skill-evaluation T-401 受控评测（v0.8.6 固化的 7 例回归基线）。回归集位于 `scripts/tests/regression/contract-calibration/`，已按本次修复口径刷新 baseline 并转必过；亦保留 `CC_REGEN=1` 模式作为真实重跑入口。
-- PRODUCER 悖论（harness 侧）已给出可落地修复方案并实测验证：在临时 harness 快照上将两 case 拆分为「完整 plan + 纯渲染入口」与「残缺 plan + CLI main 入口」，修复后 T-401 程序化四例（ROLE/REVIEWER/REPORT/PRODUCER）全部 pass。方案详见 `scripts/tests/regression/contract-calibration/PRODUCER-PARADOX-FIX.md`，待 harness 仓库挂载后按文档 patch 落地（仅改 harness 编排，不动候选代码）。
+- PRODUCER 悖论（harness 侧）已给出可落地修复方案并在临时快照 `contract_copilot_micro_probe.py` 上实测验证：将两 case 拆分为「完整 plan + 纯渲染入口（rc=0）」与「残缺 plan + CLI main 入口（被 check_report_integrity 拦截 rc≠0）」，修复后 T-401 程序化四例（ROLE/REVIEWER/REPORT/PRODUCER）全部 pass（ROLE pass、REVIEWER pass、REPORT rc=0 pass、PRODUCER rc=1 pass）。实测探针 JSON 已落盘至 `scripts/tests/regression/contract-calibration/evidence/`。方案详见 `PRODUCER-PARADOX-FIX.md`，待 legal-skill-evaluation 仓库挂载后按文档 §4 patch 落回上游（仅改 harness 编排，不动候选代码）。
 
 ## [1.5.3] - 2026-06-13
 
