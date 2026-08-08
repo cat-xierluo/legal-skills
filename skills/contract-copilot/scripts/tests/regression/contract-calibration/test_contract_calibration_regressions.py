@@ -9,14 +9,14 @@ execution_status=executed-fail 且 assertion observed=fail 的 7 例）。本目
 与 baseline-outputs/ 是其可复现快照，sha256 见各 *-input.json。
 
 运行方式：
-- 默认：读取 baseline-outputs/ 作为「当前候选行为基线」并按期望行为断言。这 7 例
-  当前候选（sha256 f3fa86a8…）仍存在缺陷，故用 @pytest.mark.xfail 标注（strict=False，
-  即预期失败；候选修复后移除 xfail 即转为必过）。
+- 默认：读取 baseline-outputs/ 作为「修复后期望行为基线」并按期望行为断言。这 7 例
+  在 contract-copilot v1.6.0 已修复，baseline 已按修复后规则刷新，现为必过回归。
 - CC_REGEN=1：从 $CC_REGEN_DIR 读取外部 agent 重跑候选后的新输出（同名 *-baseline-output.md），
-  去掉 xfail 语义，直接验证修复是否达成（达成则全绿，未达成则报 fail）。
+  解除 xfail 语义（REGEN 时 XFAIL_DEFECT 为 no-op），直接验证期望行为。
 
 注意：本测试不自动调用 LLM 重跑候选（候选无程序化分析入口），属半自动回归：
-跑候选 → 落 output → 比对。RECEIPT-016 类 artifact 绑定由 legal-skill-evaluation 侧负责。
+跑候选 → 落 output → 比对。baseline-outputs/ 当前为按修复后规则推导的期望行为样例。
+RECEIPT-016 类 artifact 绑定由 legal-skill-evaluation 侧负责。
 """
 
 from __future__ import annotations
@@ -40,9 +40,8 @@ BASELINE_DIR = REGRESSION_DIR / "baseline-outputs"
 REGEN = os.environ.get("CC_REGEN") == "1"
 REGEN_DIR = Path(os.environ.get("CC_REGEN_DIR", str(BASELINE_DIR))).resolve()
 
-# 当前候选（sha256 f3fa86a8…）对这 7 例仍存在行为层缺陷，作为已知回归基线。
-# 默认用 xfail 标注（预期失败，strict=False）；候选修复后移除 xfail 即转为必过。
-# CC_REGEN=1 时视为修复验证模式，去掉 xfail 语义（直接必过/必败）。
+# XFAIL_DEFECT 保留作为 CC_REGEN 模式的语义占位：REGEN 时 no-op（直接必过/必败），
+# 非 REGEN 时若仍有用例需要标注已知缺陷可使用。当前 7 例已修复并移除装饰。
 XFAIL_DEFECT = pytest.mark.xfail(
     not REGEN, strict=False, reason="T-401 已知行为缺陷，待 contract-copilot 候选修复"
 )
@@ -71,11 +70,6 @@ def read_output(case_id: str) -> str:
     return ""
 
 
-def expected_fail_for(case: dict) -> bool:
-    """当前候选（f3fa86a8…）对该 case 仍存在缺陷，默认期望 xfail。"""
-    return True
-
-
 class ContractCalibrationRegressionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixtures = load_fixtures()
@@ -83,7 +77,6 @@ class ContractCalibrationRegressionTests(unittest.TestCase):
 
     # ---- intake 类：立场 / 目标缺失须暂停并请求确认，不得自行推进 ----
 
-    @XFAIL_DEFECT
     def test_role_missing_does_not_self_resolve_empty_role(self) -> None:
         case = next(c for c in self.fixtures if c["case_id"] == "CONTRACT-MICRO-ROLE-MISSING")
         ctx = case["provided_context"]
@@ -98,7 +91,6 @@ class ContractCalibrationRegressionTests(unittest.TestCase):
             "立场缺失时候选应显式请求确认代表哪一方",
         )
 
-    @XFAIL_DEFECT
     def test_objective_missing_does_not_self_select_delivery_strength(self) -> None:
         case = next(c for c in self.fixtures if c["case_id"] == "CONTRACT-MICRO-OBJECTIVE-MISSING")
         ctx = case["provided_context"]
@@ -134,21 +126,17 @@ class ContractCalibrationRegressionTests(unittest.TestCase):
             f"{case_id}：候选应在信息补齐前显式暂停或标注待确认",
         )
 
-    @XFAIL_DEFECT
     def test_acceptance_payment_no_formal_conclusion_before_pause(self) -> None:
         self._assert_no_formal_conclusion_before_pause("CONTRACT-MICRO-ACCEPTANCE-PAYMENT")
 
-    @XFAIL_DEFECT
     def test_change_fee_no_formal_conclusion_before_pause(self) -> None:
         self._assert_no_formal_conclusion_before_pause("CONTRACT-MICRO-CHANGE-FEE")
 
-    @XFAIL_DEFECT
     def test_penalty_stacking_no_formal_conclusion_before_pause(self) -> None:
         self._assert_no_formal_conclusion_before_pause("CONTRACT-MICRO-PENALTY-STACKING")
 
     # ---- report 完整性类：最终报告字段非空 ----
 
-    @XFAIL_DEFECT
     def test_report_field_not_collapsed(self) -> None:
         case = next(c for c in self.fixtures if c["case_id"] == "CONTRACT-MICRO-REPORT-FIELD-COLLAPSE")
         output = read_output(case["case_id"])
@@ -160,7 +148,6 @@ class ContractCalibrationRegressionTests(unittest.TestCase):
         )
         self.assertNotIn("法律依据：\n", output, "法律依据字段不得为空")
 
-    @XFAIL_DEFECT
     def test_producer_self_success_does_not_close_regression(self) -> None:
         case = next(c for c in self.fixtures if c["case_id"] == "CONTRACT-MICRO-PRODUCER-SELF-SUCCESS")
         output = read_output(case["case_id"])

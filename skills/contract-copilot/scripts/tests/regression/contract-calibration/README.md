@@ -1,6 +1,10 @@
 # contract-copilot T-401 回归测试集
 
-固化 `legal-skill-evaluation` v0.8.6 在 T-401 收尾时识别出的 **7 例 `executed-fail` 行为层缺陷**（候选 `sha256 f3fa86a8…`）。
+固化 `legal-skill-evaluation` v0.8.6 在 T-401 收尾时识别出的 **7 例 `executed-fail` 行为层缺陷**，并在 contract-copilot v1.6.0 修复后转为**必过回归**。
+
+> 候选快照 `sha256 f3fa86a8…`（修复前）曾对这 7 例存在行为缺陷，已用 `@XFAIL_DEFECT` 标注；
+> v1.6.0 修复后，按修复后 SKILL.md 规则刷新 `baseline-outputs/` 并移除 xfail，7 例现为必过回归。
+> 注意：baseline 为按修复后规则推导的期望行为样例（非真实 LLM 实跑产物），用于锁定「修复后应满足的行为契约」。
 
 ## 来源
 
@@ -23,16 +27,16 @@
 ## 运行
 
 ```bash
-# 默认：以 baseline 为「当前候选行为基线」，7 例均标记 xfail（预期失败，已知缺陷）
+# 默认：7 例均为必过回归（baseline 已刷新为 v1.6.0 修复后期望行为）
 python3 -m pytest scripts/tests/regression/contract-calibration/ -q
 
 # 全量（含既有脚本层回归）
 python3 -m pytest scripts/tests/ -q
 ```
 
-## 修复验证模式（CC_REGEN=1）
+## 修复验证模式（CC_REGEN=1，保留作为重跑入口）
 
-候选修复后，由外部 agent 按 `fixtures/*-input.json` 重跑候选，将新输出按
+若未来由外部 agent 按 `fixtures/*-input.json` 真实重跑候选，可将新输出按
 `<case_id>-baseline-output.md` 命名放入 `$CC_REGEN_DIR`，再：
 
 ```bash
@@ -40,8 +44,7 @@ CC_REGEN=1 CC_REGEN_DIR=/path/to/new-outputs \
   python3 -m pytest scripts/tests/regression/contract-calibration/ -q
 ```
 
-此时 xfail 标记自动解除，测试直接验证「期望行为」是否达成：全绿=缺陷已修复，
-红=仍有缺陷。修复确认后，应移除对应用例的 `@XFAIL_DEFECT` 装饰将其转为必过回归。
+此时 xfail 标记自动解除（`REGEN=True` 时 `XFAIL_DEFECT` 为 no-op），直接验证期望行为。
 
 ## 设计说明（路径 A）
 

@@ -15,9 +15,14 @@
 - `scripts/report/reporting.py` 新增 `--skip-integrity-check` 开关，仅用于用户明确接受占位草稿的场景。
 - 新增 `scripts/tests/test_report_integrity.py`（6 例），覆盖占位阈值、空法律依据、阈值内放行，以及 CLI 层「生产器不得自报成功」与跳过开关行为。
 
+### 文档完善
+
+- 刷新 `scripts/tests/regression/contract-calibration/` 的 7 份 baseline 输出为符合 v1.6.0 修复口径的期望行为样例，并移除对应 `@XFAIL_DEFECT` 装饰，7 例由 xfail 转为必过回归（全量 19 passed 无回归）。README 同步更新运行方式与 CC_REGEN 模式说明。
+- 注：baseline 为按修复后规则推导的期望行为样例（非真实 LLM 实跑产物），用于锁定「修复后应满足的行为契约」。真实重跑需 legal-skill-evaluation 侧 harness 挂载后由外部 agent 落盘新输出覆盖。
+
 ### 说明
 
-- 上述三类缺陷来自 legal-skill-evaluation T-401 受控评测（v0.8.6 固化的 7 例回归基线）。回归集位于 `scripts/tests/regression/contract-calibration/`，默认以 `xfail` 锚定旧候选行为；以符合本次修复口径的输出在 `CC_REGEN=1` 模式下复跑，7 例全部通过。
+- 上述三类缺陷来自 legal-skill-evaluation T-401 受控评测（v0.8.6 固化的 7 例回归基线）。回归集位于 `scripts/tests/regression/contract-calibration/`，已按本次修复口径刷新 baseline 并转必过；亦保留 `CC_REGEN=1` 模式作为真实重跑入口。
 
 ## [1.5.3] - 2026-06-13
 
