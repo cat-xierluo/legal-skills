@@ -17,7 +17,7 @@ except ImportError:
 
 RISK_ORDER = {"P0": 0, "P1": 1, "P2": 2}
 
-MISSING_PLACEHOLDER = "未提及/待补充"
+MISSING_PLACEHOLDER = "待补充"
 EMPTY_LEGAL_BASIS = "/"
 # 超过该阈值即视为报告字段塌缩：占位过多说明计划字段未落地，报告不具备交付条件。
 MAX_MISSING_PLACEHOLDERS = 10
@@ -57,7 +57,7 @@ def collect_findings(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return normalized
 
 
-def _safe_line(value: Any, fallback: str = "未提及/待补充") -> str:
+def _safe_line(value: Any, fallback: str = "待补充") -> str:
     text = str(value).strip() if value is not None else ""
     return text or fallback
 
@@ -160,7 +160,7 @@ def _resolve_parties(summary: dict[str, Any], meta: dict[str, Any]) -> str:
                 parts.append(f"乙方：{party_b}")
             return "；".join(parts)
 
-    return "未提及/待补充"
+    return "待补充"
 
 
 def _resolve_party_entities(summary: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
@@ -203,7 +203,7 @@ def _resolve_my_party(summary: dict[str, Any], meta: dict[str, Any], party_role:
         return party_a
     if role in {"party_b", "乙方", "b"} and party_b:
         return party_b
-    return "未提及/待补充"
+    return "待补充"
 
 
 def _resolve_other_parties(summary: dict[str, Any], meta: dict[str, Any], party_role: str) -> str:
@@ -214,7 +214,7 @@ def _resolve_other_parties(summary: dict[str, Any], meta: dict[str, Any], party_
     if role in {"party_b", "乙方", "b"} and party_a:
         return party_a
     parties = _resolve_parties(summary, meta)
-    return parties if parties != "未提及/待补充" else "未提及/待补充"
+    return parties if parties != "待补充" else "待补充"
 
 
 def _resolve_structured_text(summary: dict[str, Any], meta: dict[str, Any], *keys: str) -> str:
@@ -268,14 +268,14 @@ def _resolve_business_overview(
         return overview
 
     parts: list[str] = []
-    if contract_name != "未提及/待补充":
+    if contract_name != "待补充":
         parts.append(f"本次审查对象为《{contract_name}》")
-    if contract_type != "未提及/待补充":
+    if contract_type != "待补充":
         parts.append(f"合同类型暂识别为{contract_type}")
-    if party_role != "未提及/待补充":
+    if party_role != "待补充":
         parts.append(f"当前按{party_role}立场进行审查")
     if not parts:
-        return "未提及/待补充"
+        return "待补充"
     return "，".join(parts) + "。"
 
 
@@ -313,7 +313,7 @@ def _resolve_price_overview(summary: dict[str, Any], meta: dict[str, Any]) -> st
     )
     parts = [item for item in (amount, payment) if item]
     if not parts:
-        return "未提及/待补充"
+        return "待补充"
     return "；".join(parts)
 
 
@@ -327,15 +327,15 @@ def _resolve_rights_obligations(summary: dict[str, Any], meta: dict[str, Any]) -
         "rights_and_obligations",
         "obligations_overview",
     )
-    return rights or "未提及/待补充"
+    return rights or "待补充"
 
 
 def _resolve_legal_basis(item: dict[str, Any]) -> str:
     basis = item.get("legal_basis")
     if isinstance(basis, (list, tuple, set)):
         text = "；".join(str(part).strip() for part in basis if str(part).strip())
-        return text or "/"
-    return _first_text(basis) or "/"
+        return text or ""
+    return _first_text(basis) or ""
 
 
 def _resolve_key_recommendations(
@@ -383,13 +383,13 @@ def _resolve_overall_opinion(
             break
 
     parts: list[str] = []
-    if overall != "未提及/待补充":
+    if overall != "待补充":
         parts.append(f"当前总体风险等级为{overall}")
-    if conclusion != "未提及/待补充":
+    if conclusion != "待补充":
         parts.append(f"审查结论为{conclusion}")
 
     if not parts and not focus_titles:
-        return "未提及/待补充"
+        return "待补充"
 
     sentence = "，".join(parts)
     if sentence:
@@ -400,9 +400,9 @@ def _resolve_overall_opinion(
 
 
 def _resolve_recipient(my_party: str, other_parties: str) -> str:
-    if my_party != "未提及/待补充":
+    if my_party != "待补充":
         return my_party
-    if other_parties != "未提及/待补充":
+    if other_parties != "待补充":
         return other_parties
     return "委托方"
 
@@ -414,9 +414,9 @@ def _resolve_opening_paragraph(
     contract_type: str,
     party_role: str,
 ) -> str:
-    role_text = party_role if party_role != "未提及/待补充" else "委托方"
-    contract_text = f"《{contract_name}》" if contract_name != "未提及/待补充" else "相关合同文本"
-    type_text = contract_type if contract_type != "未提及/待补充" else "合同"
+    role_text = party_role if party_role != "待补充" else "委托方"
+    contract_text = f"《{contract_name}》" if contract_name != "待补充" else "相关合同文本"
+    type_text = contract_type if contract_type != "待补充" else "合同"
     return (
         f"致：{recipient}\n\n"
         f"就 {recipient} 拟签署的{contract_text}，本次从 {role_text} 立场对该{type_text}进行合同审查。"
@@ -539,7 +539,7 @@ def render_review_report(
         for milestone in key_milestones:
             lines.append(f"  - {_safe_line(milestone)}")
     else:
-        lines.append("- 关键时间节点：未提及/待补充")
+        lines.append("- 关键时间节点：待补充")
 
     lines.extend(
         [
@@ -607,7 +607,9 @@ def render_review_report(
                 lines.append(f"- 原条款：{target_text}")
             if revision_text:
                 lines.append(f"- 建议修改：{revision_text}")
-            lines.append(f"- 法律依据：{_resolve_legal_basis(item)}")
+            legal_basis = _resolve_legal_basis(item)
+            if legal_basis:
+                lines.append(f"- 法律依据：{legal_basis}")
             lines.append("")
 
     lines.extend(

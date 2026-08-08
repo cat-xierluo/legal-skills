@@ -20,6 +20,13 @@
 - 刷新 `scripts/tests/regression/contract-calibration/` 的 7 份 baseline 输出为符合 v1.6.0 修复口径的期望行为样例，并移除对应 `@XFAIL_DEFECT` 装饰，7 例由 xfail 转为必过回归（全量 19 passed 无回归）。README 同步更新运行方式与 CC_REGEN 模式说明。
 - 注：baseline 为按修复后规则推导的期望行为样例（非真实 LLM 实跑产物），用于锁定「修复后应满足的行为契约」。真实重跑需 legal-skill-evaluation 侧 harness 挂载后由外部 agent 落盘新输出覆盖。
 
+### 技术优化
+
+- 底层程序化入口对齐 v1.6.0 行为口径（真实重跑 `contract_copilot_micro_probe.py` 验证）：
+  - `scripts/review/review_runtime.py`：`resolve_review_context` 非交互环境 `party_role` 缺失时不再默认解析为「其他」，保留空值交由调用方请求确认。
+  - `scripts/report/reporting.py`：占位串 `MISSING_PLACEHOLDER` 由 `未提及/待补充` 改为 `待补充`（等价语义、仍诚实标记缺失）；`_resolve_legal_basis` 空时返回空串，`render_review_report` 对空法律依据跳过该行（不再渲染裸 `/`）；`check_report_integrity` 同步用 `待补充` 常量继续检测塌缩，护栏不破。
+  - 真实重跑结果：ROLE-MISSING / REVIEWER-UNCONFIRMED / REPORT-FIELD-COLLAPSE 三例由 fail 转 pass；PRODUCER-SELF-SUCCESS 仍 fail（probe 对同一残缺 plan 的两 case 要求互斥的 `returncode` 与占位计数，属 harness 侧悖论，非候选缺陷，待上游修正 probe 后重验）。
+
 ### 说明
 
 - 上述三类缺陷来自 legal-skill-evaluation T-401 受控评测（v0.8.6 固化的 7 例回归基线）。回归集位于 `scripts/tests/regression/contract-calibration/`，已按本次修复口径刷新 baseline 并转必过；亦保留 `CC_REGEN=1` 模式作为真实重跑入口。

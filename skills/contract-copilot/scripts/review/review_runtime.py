@@ -463,7 +463,8 @@ def resolve_review_context(
                 or "未提及/待补充"
             )
         if not resolved_party_role:
-            resolved_party_role = "其他"
+            # 非交互环境不把空立场默认解析为「其他」：保持空值，交调用方显式请求确认。
+            resolved_party_role = ""
         if not resolved_review_intensity:
             resolved_review_intensity = DEFAULT_NONINTERACTIVE_REVIEW_INTENSITY
 
