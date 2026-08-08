@@ -3,7 +3,7 @@ name: dingtalk-minutes
 description: 钉钉 AI 听记（妙记）读取封装。当用户要查询/读取 AI 听记的列表、摘要、语音转写原文（逐字稿）、关键词、待办或音频地址时使用。基于 dws CLI（钉钉官方 Workspace CLI）。写文档走 dingtalk-doc，建待办走 dingtalk-todo，日程走 dingtalk-calendar。
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.0"
+version: "1.0.1"
 homepage: https://github.com/cat-xierluo/legal-skills
 metadata:
   cli_version: ">=1.0.15"
@@ -15,7 +15,9 @@ metadata:
 
 # 钉钉 AI 听记读取 Skill（薄壳封装）
 
-本技能是对 `dws`（钉钉官方 Workspace CLI）中 `minutes` 服务的**读取能力封装**，聚焦"查询与读取 AI 听记内容"——不含写入/修改/录音控制等写操作。所有命令均通过 `dws` 执行，不绕开 CLI 直接调 HTTP API。
+本技能是对 `dws`（钉钉官方 Workspace CLI）中 `minutes` 服务的**读取能力封装**，聚焦"查询与读取 AI 听记内容"——**对钉钉服务端不含任何写入/修改/录音控制等写操作**（不调用 `update`/`upload`/`record` 等写命令）。所有读取均通过 `dws` 执行，不绕开 CLI 直接调 HTTP API。
+
+> 说明：本技能"只读"指**不改动钉钉云端数据**；但归档（archive）、镜像（mirror）、可选音频下载均为**把已读取内容落到用户本地文件系统**的显式操作，需用户主动运行对应脚本并指定目录，不等同于越权外传。详见下文「本地归档与增量同步」「镜像到外部文件夹」章节。
 
 > 命令参考（仅读取类）：[references/01-commands.md](references/01-commands.md)。
 > **首次部署必读（安装/授权/踩坑）**：[references/02-setup.md](references/02-setup.md)。
@@ -26,11 +28,18 @@ metadata:
 
 | 依赖 | 安装方式 |
 |------|----------|
-| `dws`（钉钉官方 Workspace CLI） | macOS/Linux：`curl -fsSL https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/main/scripts/install.sh \| sh`（注意路径是 `scripts/install.sh`，非根目录 `install.sh`） |
+| `dws`（钉钉官方 Workspace CLI） | macOS/Linux：先下载安装脚本再执行（见下方命令，注意路径是 `scripts/install.sh`，非根目录 `install.sh`） |
 | `python3`（同步脚本用） | macOS 通常自带；如缺失 `brew install python` |
 | `curl`（安装脚本用） | macOS 通常自带；如缺失 `brew install curl` |
 
-**PATH 配置**：dws 默认装到 `~/.local/bin`，需加入 shell PATH：
+**安装 dws**（先落到临时文件再执行，避免 `curl | sh` 直接执行远端脚本）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/main/scripts/install.sh -o /tmp/dws-install.sh
+sh /tmp/dws-install.sh
+```
+
+**PATH 配置**：dws 默认装到 `~/.local/bin`，需加入 shell PATH。下列命令会修改你的 `~/.zshrc`（持久 shell 配置），仅追加一行 PATH 且幂等（已存在则跳过）；如不想自动改配置，可手动把 `export PATH="$HOME/.local/bin:$PATH"` 加到你的 shell 配置：
 
 ```bash
 grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -96,6 +105,8 @@ grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> 
 ## 本地归档与增量同步（archive / sync）
 
 本技能支持把钉钉 AI 听记**同步到技能内的 `archive/` 目录**，形成本地留底，避免遗忘历史内容、并只增量拉取新听记。
+
+> ⚠️ **隐私与合规提示**：听记逐字稿、摘要、待办可能包含客户机密、当事人隐私或内部业务信息。归档/镜像会把上述内容**写到本地文件系统**——请勿将 `archive/` 或镜像目标目录提交到公开仓库、共享目录或第三方同步服务；`archive/` 与本地镜像配置已默认加入 `.gitignore`。运行前请确认目标位置仅你本人可访问。
 
 ### 存档结构
 
