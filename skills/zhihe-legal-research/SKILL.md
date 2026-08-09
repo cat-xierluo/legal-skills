@@ -20,6 +20,8 @@ metadata:
     requires:
       bins:
         - curl
+        - jq
+        - python3
 ---
 
 # 智合法律研究 (Zhihe Legal Research)

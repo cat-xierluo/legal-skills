@@ -64,8 +64,12 @@ add_pending() {
         return 0
     fi
 
-    # 添加新任务
-    local new_entry="{\"task_id\":\"${task_id}\",\"query\":\"${query}\",\"submitted_at\":\"$(date -Iseconds)\",\"status\":\"pending\"}"
+    # 添加新任务（用 jq 构造，避免 query 含双引号时破坏 JSON）
+    local ts
+    ts=$(date -Iseconds)
+    local new_entry
+    new_entry=$(jq -n --arg tid "$task_id" --arg q "$query" --arg t "$ts" \
+        '{task_id:$tid, query:$q, submitted_at:$t, status:"pending"}')
     echo "$pending" | jq --argjson new "$new_entry" '. + [$new]' > "$PENDING_FILE"
 }
 
@@ -86,8 +90,14 @@ move_to_completed() {
     # 添加到 completed
     local completed
     completed=$(cat "$COMPLETED_FILE")
-    local query=$(echo "$task_info" | jq -r '.query // "未知问题"')
-    local new_entry="{\"task_id\":\"${task_id}\",\"query\":\"${query}\",\"completed_at\":\"$(date -Iseconds)\",\"status\":\"completed\",\"result\":${result}}"
+    local query
+    query=$(echo "$task_info" | jq -r '.query // "未知问题"')
+    local ts
+    ts=$(date -Iseconds)
+    # 用 jq 构造：query 走 --arg 转义，result 走 --argjson 校验为合法 JSON
+    local new_entry
+    new_entry=$(jq -n --arg tid "$task_id" --arg q "$query" --arg t "$ts" --argjson res "$result" \
+        '{task_id:$tid, query:$q, completed_at:$t, status:"completed", result:$res}')
     echo "$completed" | jq --argjson new "$new_entry" '. + [$new]' > "$COMPLETED_FILE"
 }
 
@@ -109,7 +119,10 @@ mark_notified() {
         # 添加到 notified
         local notified
         notified=$(cat "$NOTIFIED_FILE")
-        local new_entry=$(echo "$task_info" | jq '. + {"notified_at":"'$(date -Iseconds)'"}')
+        local ts
+        ts=$(date -Iseconds)
+        local new_entry
+        new_entry=$(echo "$task_info" | jq --arg t "$ts" '. + {notified_at:$t}')
         echo "$notified" | jq --argjson new "$new_entry" '. + [$new]' > "$NOTIFIED_FILE"
     fi
 }
