@@ -50,6 +50,25 @@ check_token() {
     fi
 }
 
+# 响应兜底：服务端返回非 JSON（如 500/502 HTML 错误页）时转为友好 JSON，
+# 避免下游 jq 解析崩溃（与 auth.sh check_auth 的 HTML 处理对齐）。
+# 始终 return 0：错误信号走 JSON 里的 code，不触发 set -e 副作用。
+emit_json() {
+    local response="$1"
+    local action="${2:-请求}"
+    if [[ -z "$response" ]]; then
+        echo "{\"code\": 502, \"message\": \"${action}失败：服务端无响应（网络错误或服务不可达）\"}"
+        return 0
+    fi
+    if [[ ! "$response" =~ ^[[:space:]]*\{ ]]; then
+        local snippet
+        snippet=$(printf '%s' "$response" | head -c 120 | tr '\n' ' ' | sed 's/"/\\"/g')
+        echo "{\"code\": 502, \"message\": \"${action}失败：服务端返回非 JSON（可能 500/过载），请稍后重试\", \"snippet\": \"${snippet}\"}"
+        return 0
+    fi
+    printf '%s' "$response"
+}
+
 # 提交研究问题
 submit_query() {
     local query="$1"
@@ -65,10 +84,12 @@ submit_query() {
     local payload
     payload=$(jq -n --arg q "$query" '{"query": $q}')
 
-    curl -s -X POST "${BASE_URL}/api/research/query" \
+    local response
+    response=$(curl -s -X POST "${BASE_URL}/api/research/query" \
         -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" \
         -H "Content-Type: application/json" \
-        -d "$payload"
+        -d "$payload" || true)
+    emit_json "$response" "提交研究问题"
 }
 
 # 查询任务状态
@@ -83,8 +104,10 @@ get_status() {
     load_token
     check_token
 
-    curl -s -X GET "${BASE_URL}/api/research/status/${task_id}" \
-        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}"
+    local response
+    response=$(curl -s -X GET "${BASE_URL}/api/research/status/${task_id}" \
+        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" || true)
+    emit_json "$response" "查询任务状态"
 }
 
 # 获取研究结果
@@ -99,8 +122,10 @@ get_result() {
     load_token
     check_token
 
-    curl -s -X GET "${BASE_URL}/api/research/result/${task_id}" \
-        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}"
+    local response
+    response=$(curl -s -X GET "${BASE_URL}/api/research/result/${task_id}" \
+        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" || true)
+    emit_json "$response" "获取研究结果"
 }
 
 # 获取报告下载链接
@@ -115,8 +140,10 @@ get_report() {
     load_token
     check_token
 
-    curl -s -X GET "${BASE_URL}/api/research/report/${task_id}" \
-        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}"
+    local response
+    response=$(curl -s -X GET "${BASE_URL}/api/research/report/${task_id}" \
+        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" || true)
+    emit_json "$response" "获取报告下载链接"
 }
 
 # 查看历史任务
@@ -127,8 +154,10 @@ get_history() {
     load_token
     check_token
 
-    curl -s -X GET "${BASE_URL}/api/research/history?page=${page}&size=${size}" \
-        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}"
+    local response
+    response=$(curl -s -X GET "${BASE_URL}/api/research/history?page=${page}&size=${size}" \
+        -H "Authorization: Bearer ${LEGAL_RESEARCH_TOKEN}" || true)
+    emit_json "$response" "查看历史任务"
 }
 
 # 轮询等待任务完成
@@ -399,7 +428,14 @@ archive_result() {
             fi
         fi
     else
-        echo "ℹ️ 该任务无 Word 报告（仅文字结果）"
+        local report_msg
+        report_msg=$(echo "$report_response" | jq -r '.message // empty' 2>/dev/null)
+        if [[ "$report_code" == "404" ]]; then
+            echo "⚠️ Word 报告暂不可用（${report_msg:-生成失败或仍在生成}）"
+            echo "   报告通常晚于文字结果生成，可稍后重新归档：./scripts/research.sh archive ${task_id}"
+        else
+            echo "ℹ️ 该任务无 Word 报告（code:${report_code}）${report_msg:+，$report_msg}"
+        fi
     fi
 
     echo ""
