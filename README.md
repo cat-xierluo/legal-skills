@@ -706,4 +706,4 @@
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill                                                                                         |
 | minimax-web-search       | v0.1.1 | 各平台已原生支持 MiniMax MCP 网络搜索，无需独立 skill                                                                                         |
 | repo-research            | v0.7.0 | 功能较简单，不再维护                                                                                                                          |
-| zhihe-legal-research     | v1.2.2 | 已归档（智合AI平台接口已下线，返回 404；接口可能已迁移至智合自有平台）。技能目录已从仓库移除                                                                                                          |
+| zhihe-legal-research     | v1.2.2 | 已归档（2026-08-09 复测：报告接口自 2026-04-08 起 has_report 持续 false，智合法律研究已整体迁移至新平台 zhiexa.com；老 API submit 端点持续 500，无法提交新问题。技能暂不可用，待后续迁移至新平台 zhiexa.com）。技能目录已从仓库移除                                                                                                          |
