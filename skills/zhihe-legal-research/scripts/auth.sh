@@ -114,9 +114,9 @@ verify_code() {
         -H "Content-Type: application/json" \
         -d "$payload")
 
-    # 提取 token 并保存
+    # 提取 token 并保存（jq 兼容紧凑/带空格/嵌套在 data 层等多种返回格式）
     local token
-    token=$(echo "$response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    token=$(echo "$response" | jq -r '.data.token // .token // empty' 2>/dev/null)
 
     if [[ -n "$token" ]]; then
         ensure_config_dir
