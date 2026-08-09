@@ -21,6 +21,7 @@ All notable changes to this skill will be documented in this file.
 - 将法源登记校验接入 `validate_skill.py`，新增公开URL、缺场景、复合问题单条款退化、未知效力状态、无效日期、缺影响映射、FTO基线缺失和未知字段故障注入。
 - 升级场景5评测，要求旧FTO摘要失效时列明多条款法源、基线标识和2026年更新触发条件。
 - 为公开且不含凭证的 `config/legal-source-register.json` 增加精确 `.gitignore` 白名单，不放宽其他运行配置的忽略范围。
+- 仓库停用 Cloud Plugin Marketplace 后，`validate_skill.py --repo-root` 不再读取或强制校验已删除的 Marketplace 清单，继续校验根 README 和协作 Skill；专利分析业务规则不变。
 
 ### 文档完善
 

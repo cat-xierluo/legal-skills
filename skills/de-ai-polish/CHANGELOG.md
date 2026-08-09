@@ -2,6 +2,10 @@
 
 ## [3.2.6] - 2026-08-04
 
+### 文档完善
+
+- 仓库停用 Cloud Plugin Marketplace 后，安装说明改为 legal-skills monorepo 直接使用／复制与 subtree 独立仓库两种渠道；不改变正文修订规则和评测合同。
+
 ### 修复
 
 - 将本机私有 VoiceAnchor 从 `references/` 迁移到被 Git 忽略的 `assets/local-voice-anchors/`；本机 `config.json` 支持命名 anchor 与 `default_voice_anchor_id`，但默认项只在用户明确选择 `local_anchor` 后生效，不改变无样本清理行为。

@@ -8,6 +8,10 @@
 - **幂等性修正**：仅当 URL 实际变化时才计数并写回，已最新的 README 重跑报告「已是最新」而非误报「已更新 N 个」。
 - **跨仓库安全**：仅改写与 `owner/repo` 一致的链接，独立仓库（如 `trademark-assistant.skill`、`de-ai-polish.skill`）链接不受影响。
 
+### 文档完善
+
+- 仓库停用 Cloud Plugin Marketplace 并删除 `.claude-plugin/` 配置后，monorepo 发布前检查改为同步各 Skill 版本、CHANGELOG、根 README 与实际启用渠道；发布脚本行为不变。
+
 ## [1.4.0] - 2026-06-30
 
 ### 新增
