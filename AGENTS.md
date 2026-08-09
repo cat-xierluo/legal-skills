@@ -319,71 +319,6 @@ git commit -m "feat(<skill>): 描述"
 
 若用 GitHub PR 合并，须先 rebase feature 分支到最新 main，确保 base commit 包含所有文件。
 
-## Plugin Marketplace 配置规范
-
-### 目录结构
-
-```text
-legal-skills/
-├── .claude-plugin/
-│   └── marketplace.json          # 插件市场主清单
-├── mineru-ocr/                   # 技能目录
-├── funasr-transcribe/            # 技能目录
-└── ...
-```
-
-### marketplace.json 格式
-
-位于根目录 `.claude-plugin/marketplace.json`，定义插件集合的元数据和技能列表：
-
-```json
-{
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "legal-skills",
-  "version": "1.0.0",
-  "description": "面向法律从业者的 Claude Skills 集合",
-  "owner": {
-    "name": "杨卫薪律师（微信ywxlaw）",
-    "email": "ywxlaw"
-  },
-  "homepage": "https://github.com/cat-xierluo/legal-skills",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cat-xierluo/legal-skills.git"
-  },
-  "bugs": {
-    "url": "https://github.com/cat-xierluo/legal-skills/issues"
-  },
-  "plugins": [
-    {
-      "name": "skill-name",
-      "description": "技能描述",
-      "version": "1.0.0",
-      "author": {
-        "name": "杨卫薪律师（微信ywxlaw）"
-      },
-      "source": ".claude/skills/skill-name",
-      "category": "productivity",
-      "tags": ["tag1", "tag2"]
-    }
-  ]
-}
-```
-
-### 添加新技能到 Marketplace
-
-1. **更新主清单**：在根目录 `.claude-plugin/marketplace.json` 的 `plugins` 数组中添加技能条目
-2. **版本同步**：确保 `plugins` 数组中的 `version` 与技能 `CHANGELOG.md` 中的版本号一致
-3. **更新 README**：在根目录 `README.md` 的技能列表中添加新技能
-
-### 版本管理
-
-- **marketplace.json 版本**：反映插件集合的整体版本，重大变更时递增
-- **plugins 数组中的版本**：必须与对应技能的 `CHANGELOG.md` 版本号一致
-- **版本号规则**：遵循 CHANGELOG.md 规范（测试版 `0.x.x`，正式版 `1.x.x`）
-
-遵循以上约定，确保法律技能在不同 IDE/CLI（含 Claude Code）中可被可靠触发与复用。***
-
 ## ClawHub 发布适配
 
 如需将 Skill 发布到 ClawHub，SKILL.md frontmatter 需包含以下字段：
@@ -459,6 +394,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.9.0 | 2026-08-09 | 停用 Cloud Plugin Marketplace，删除 `.claude-plugin/marketplace.json` 与 `plugin.json` 及对应配置规范；公开 Skill 以 `skills/` 为交付源，发布索引由 README 与实际启用渠道维护 |
 | v1.8.1 | 2026-05-20 | 修正 Skill 开发指南链接，明确后续 Skill 规范以 docs/SKILL-DEV-GUIDE.md 为准 |
 | v1.8.0 | 2026-05-17 | 新增 README 最近更新区维护规范：要求新增、正式发布或更新公开 Skill 时同步维护根 README 动态 |
 | v1.7.4 | 2026-05-15 | 新增通用 Monorepo 合并规范：禁止 git merge 直接合并，改用目录级 checkout |
@@ -492,7 +428,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 ## 私有目录说明（仅本地生效）
 
-私有 Skill（`private-skills/`）与 Customer Skill（`custom-skills/`）均为本地私有符号链接目录，指向独立私有 Git 仓库（不公开），不作为公开发布目录；公开发布的正式技能仍以 `skills/` 和 marketplace 配置为准。
+私有 Skill（`private-skills/`）与 Customer Skill（`custom-skills/`）均为本地私有符号链接目录，指向独立私有 Git 仓库（不公开），不作为公开发布目录；公开发布的正式技能以 `skills/` 为交付源，README 与实际启用的发布渠道维护索引。
 
 - `private-skills/` 指向 `../private-skills`
 - `custom-skills/` 指向 `../custom-skills`，按二级项目文件夹组织，项目相关 Skill 放在该项目文件夹内的 `skills/` 目录

@@ -23,7 +23,7 @@
 1. 确认各子项目 `CHANGELOG.md` 头部 semver 已更新
 2. 确认 README 的「最近更新」表格已记录本次变更
 3. 确认工作区干净(`git status` 无未提交变更)
-4. **不需要**手动改顶层版本号(如 `.claude-plugin/plugin.json` 与本流程无关)
+4. 本仓库没有顶层插件版本号；只需同步各 Skill 的版本、CHANGELOG、根 README 与实际启用的发布渠道
 
 ### 3. 发布(每次)
 

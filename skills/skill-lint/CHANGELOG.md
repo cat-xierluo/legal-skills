@@ -16,6 +16,7 @@ All notable changes to this skill will be documented in this file.
 
 - 全量扫描 54 个 skills 结果：0 critical / 15 high（git-batch-commit publish ×10、patent-download 自动安装 ×3、workbuddy-checkin 自动安装 ×2），其余为 WARN。
 - `references/security-assessment-standards.md` 增加新能力映射表、scope creep 判定说明与更新后的局限说明。
+- 项目停用 Cloud Plugin Marketplace 后，frontmatter 发布字段说明改为同步 ClawHub、README 与其他实际启用渠道，并解除 `skill-lint-harness.yml` 对已删除 Marketplace 清单的触发与版本校验；Marketplace 仍作为其他仓库可选发布治理场景保留。
 
 ### 待办事项
 

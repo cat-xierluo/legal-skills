@@ -45,10 +45,10 @@ AI：我会先扫描 AI 化表述模式，标出问题句，再按“删 / 合�
 
 ## 安装方式
 
-本 skill 通过 monorepo marketplace + subtree 独立仓库两种渠道分发:
+本 skill 通过 legal-skills monorepo + subtree 独立仓库两种渠道分发：
 
-- **marketplace 安装**(推荐):在支持 `marketplace.json` 的 Agent / Claude 环境中,本 skill 已在 `cat-xierluo/legal-skills` 仓库的 `.claude-plugin/marketplace.json` 注册(条目 `source: skills/de-ai-polish`)。按 marketplace 流程启用即可。
-- **subtree 独立仓库**:独立远程仓库 `https://github.com/cat-xierluo/de-ai-polish.skill.git` 含完整 skill 目录,可直接 clone 或作为 subtree 加到你的项目。子仓库与 monorepo 同步发布,子仓库为镜像,权威入口以 monorepo 为准(`homepage` 指向主仓库)。
+- **monorepo**：从 `cat-xierluo/legal-skills` 仓库直接使用或复制 `skills/de-ai-polish/`。
+- **subtree 独立仓库**：独立远程仓库 `https://github.com/cat-xierluo/de-ai-polish.skill.git` 含完整 skill 目录，可直接 clone 或作为 subtree 加到你的项目。子仓库与 monorepo 同步发布，子仓库为镜像，权威入口以 monorepo 为准（`homepage` 指向主仓库）。
 
 不需要手动下载 Releases 压缩包(本 skill 不发布该形式)。
 

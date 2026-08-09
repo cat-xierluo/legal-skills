@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "skills/skill-lint/**"
-      - ".claude-plugin/marketplace.json"
       - "README.md"
       - ".github/workflows/skill-lint-harness.yml"
   push:
@@ -12,7 +11,6 @@ on:
       - main
     paths:
       - "skills/skill-lint/**"
-      - ".claude-plugin/marketplace.json"
       - "README.md"
       - ".github/workflows/skill-lint-harness.yml"
 
@@ -49,7 +47,6 @@ jobs:
 
       - name: Validate JSON and release metadata
         run: |
-          python3 -m json.tool .claude-plugin/marketplace.json >/dev/null
           python3 -m json.tool \
             skills/skill-lint/config/instruction-stability-contract.example.json \
             >/dev/null
@@ -60,7 +57,6 @@ jobs:
             skills/skill-lint/config/instruction-stability-held-out-cases.example.json \
             >/dev/null
           python3 - <<'PY'
-          import json
           import re
           from pathlib import Path
 
@@ -73,15 +69,6 @@ jobs:
           changelog = Path("skills/skill-lint/CHANGELOG.md").read_text(encoding="utf-8")
           if f"## [{version}]" not in changelog:
               raise SystemExit("CHANGELOG version mismatch")
-
-          marketplace = json.loads(
-              Path(".claude-plugin/marketplace.json").read_text(encoding="utf-8")
-          )
-          entry = next(
-              item for item in marketplace["plugins"] if item["name"] == "skill-lint"
-          )
-          if entry["version"] != version:
-              raise SystemExit("Marketplace version mismatch")
 
           readme = Path("README.md").read_text(encoding="utf-8")
           if f"v{version}" not in readme:

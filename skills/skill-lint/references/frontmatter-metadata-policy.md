@@ -69,7 +69,7 @@ description: 本技能应在用户需要...时使用。不要用于：...
 
 ## 5. legal-skills 项目特例
 
-在本仓库中，`version`、`license`、`author`、`homepage` 可以作为发布字段维护，因为项目规范要求公开 Skill 支持 Marketplace / ClawHub / README 索引同步。
+在本仓库中，`version`、`license`、`author`、`homepage` 可以作为发布字段维护，因为项目规范要求公开 Skill 支持 ClawHub、README 与其他实际启用渠道的索引同步。
 
 但这只是本仓库的发布策略，不应被 `skill-lint` 当成所有 Skill 的通用要求。
 

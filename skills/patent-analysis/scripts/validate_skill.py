@@ -347,22 +347,7 @@ def check_local_release() -> list[str]:
 
 def check_repo_sync(repo_root: Path) -> list[str]:
     errors: list[str] = []
-    marketplace = repo_root / ".claude-plugin" / "marketplace.json"
     root_readme = repo_root / "README.md"
-    try:
-        data = json.loads(marketplace.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return [f"marketplace parse failed: {exc}"]
-
-    entries = [item for item in data.get("plugins", []) if item.get("name") == "patent-analysis"]
-    if len(entries) != 1:
-        errors.append(f"marketplace: expected one patent-analysis entry, found {len(entries)}")
-    elif str(entries[0].get("version")) != RELEASE_VERSION:
-        errors.append(
-            f"marketplace: patent-analysis version is {entries[0].get('version')!r}, "
-            f"expected {RELEASE_VERSION!r}"
-        )
-
     try:
         readme_text = root_readme.read_text(encoding="utf-8")
     except OSError as exc:
