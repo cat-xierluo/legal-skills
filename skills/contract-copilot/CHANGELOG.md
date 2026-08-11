@@ -2,6 +2,23 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.6.1] - 2026-08-11
+
+### 修复
+
+- 将报告完整性校验拆分到 `scripts/report/integrity.py`，在结构化 plan 层逐项检查法律依据，并在渲染报告层核对详细审查项与法律依据覆盖，避免空依据被省略后绕过检查。
+- `scripts/review/apply_review_plan.py` 现在在写入修订 DOCX、报告 DOCX、Markdown 报告和执行日志之前执行完整性门禁；未通过时非零退出且不留下正式交付物。
+
+### 新增
+
+- `reporting.py` 的草稿跳过路径要求 `--draft-authorization`，输出显式草稿声明，并禁止生成 DOCX。
+- 完整性回归扩展为 11 项，包含默认 DOCX 交付入口的端到端阻断验证，以及“法律依据：待补充”不得冒充有效依据的反例。
+
+### 技术优化
+
+- 新增固定依赖入口 `scripts/requirements.txt`（`defusedxml==0.7.1`），移除未被实现调用的 `lxml` 安装要求；所有使用 `defusedxml` 的脚本在依赖缺失时输出明确安装提示。
+- 补充 Skill 权限与数据边界说明，明确本地读写、归档与外发授权范围。
+
 ## [1.6.0] - 2026-08-08
 
 ### 修复

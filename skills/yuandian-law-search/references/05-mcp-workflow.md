@@ -1,6 +1,6 @@
 ## MCP 协同工作流（v1.6.0+）
 
-元典已发布官方 MCP（https://open.chineselaw.com/mcp-config），3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。本 skill 的价值现在转向"**归档 + 法律检索报告生成**"——数据接入由 MCP 负责，本 skill 负责沉淀。
+元典已发布官方 MCP（https://open.chineselaw.com/mcp-config），3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。MCP 只替换数据接入层；本 Skill 的中间层价值是先做轻量案件研判、检索命题和查询矩阵，再复核结果对位度，并把结论、命题、查询与依据一起归档为可追溯报告。
 
 ### 接入元典 MCP
 
@@ -19,6 +19,8 @@
 设置环境变量后重启客户端，agent 即可自动获得 `mcp__yuandian_law__*`、`mcp__yuandian_case__*`、`mcp__yuandian_company__*` 工具。
 
 ### AI Agent 三步工作流
+
+开始下列数据调用前，先按 [`07-research-middleware.md`](07-research-middleware.md) 形成 `research_brief`、`propositions` 和 `query_matrix`；机器可读查询计划必须通过 `scripts/validate-query-filters.py`。MCP 工具参数同样受字段归属与一争点一查询规则约束。
 
 ```
 Step 1: 调 MCP 拿数据（agent 直接调，不经 yd-run）

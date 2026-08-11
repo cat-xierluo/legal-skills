@@ -30,10 +30,15 @@ import html
 import random
 import shutil
 import tempfile
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from defusedxml import minidom
+try:
+    from defusedxml import minidom
+except ImportError:
+    print("❌ 缺少依赖: defusedxml\n   请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1)
 from .validation import DOCXSchemaValidator
 
 from .utilities import XMLEditor
