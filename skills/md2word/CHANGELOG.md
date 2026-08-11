@@ -2,6 +2,11 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.2.1] - 2026-08-11
+
+### 回退
+- **book-publish 代码字体 JetBrains Mono → Courier New（作者确认，终选 supersede 同性质 Consolas 候选）**：`code_block.content.font` 与 `inline_code.font` 同步改为 `Courier New`。理由双重：(i) 交付安全——md2word 不做字体嵌入、依赖印刷厂 Windows 字体库，`Courier New` 为 Windows 自带零替换风险，本书代码非主角，交付稳健优先于字形精致；(ii) 内容适配——本书代码以 SKILL 配置 / JSON / CLI / 文件路径等“配置 / 数据引用”为主，Courier New 打字机体在书里更贴正文、更合经典技术书代码惯例（Consolas 偏 IDE 风、对配置型代码略显跳脱）。supersede 早先 Consolas→JetBrains Mono 与本次 Consolas 候选的调整。`config.py` 基底保留 `Consolas` 作为 skill 级回退（不动），book-publish 显式覆盖为 `Courier New`，非“打架”。见本书仓 DEC-173。
+
 ## [1.2.0] - 2026-08-05
 
 ### 回退

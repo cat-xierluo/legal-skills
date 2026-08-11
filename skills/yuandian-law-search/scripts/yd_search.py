@@ -1289,10 +1289,10 @@ def cmd_case(args):
             body[field] = val
     if args.ajlb:
         body["ajlb"] = args.ajlb
-    for date_field in ("jarq_start", "jarq_end"):
-        val = getattr(args, date_field, None)
+    for cli_field, api_field in (("jarq_start", "ja_start"), ("jarq_end", "ja_end")):
+        val = getattr(args, cli_field, None)
         if val:
-            body[date_field] = val
+            body[api_field] = val
     if args.top_k:
         body["top_k"] = args.top_k
 
@@ -1349,10 +1349,10 @@ def cmd_case_semantic(args):
         wenshu_filter["dianxing"] = True
     if args.cj:
         wenshu_filter["cj"] = args.cj
-    for date_field in ("jarq_start", "jarq_end"):
-        val = getattr(args, date_field, None)
+    for cli_field, api_field in (("jarq_start", "ja_start"), ("jarq_end", "ja_end")):
+        val = getattr(args, cli_field, None)
         if val:
-            wenshu_filter[date_field] = val
+            wenshu_filter[api_field] = val
     if wenshu_filter:
         body["wenshu_filter"] = wenshu_filter
 

@@ -31,11 +31,16 @@ Example usage:
 """
 
 import html
+import sys
 from pathlib import Path
 from typing import Optional, Union
 
-import defusedxml.minidom
-import defusedxml.sax
+try:
+    import defusedxml.minidom
+    import defusedxml.sax
+except ImportError:
+    print("❌ 缺少依赖: defusedxml\n   请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1)
 
 
 class XMLEditor:

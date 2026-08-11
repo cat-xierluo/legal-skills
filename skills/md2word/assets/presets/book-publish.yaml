@@ -124,7 +124,7 @@ code_block:
     size: 10
     color: "#808080"
   content:
-    font: "JetBrains Mono"
+    font: "Courier New"
     east_asia_font: "等线"
     size: 9
     color: "#333333"
@@ -137,7 +137,7 @@ code_block:
 
 # 行内代码设置（等宽 + 浅灰底，与代码块风格一致）
 inline_code:
-  font: "JetBrains Mono"
+  font: "Courier New"
   east_asia_font: "等线"
   size: 10
   color: "#333333"
