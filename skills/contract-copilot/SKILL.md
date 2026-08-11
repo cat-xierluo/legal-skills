@@ -1,6 +1,6 @@
 ---
 name: contract-copilot
-version: "1.6.0"
+version: "1.6.1"
 description: 合同起草与审查助手。基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式。用户通过飞书或其他 IM 对话发送合同文件并要求审查或起草时，也应使用本 skill，并优先沿原会话回传修订版和审查报告。
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -205,7 +205,7 @@ author: 杨卫薪律师（微信ywxlaw）
 
 ## 八、文档操作（批注/修订/报告）
 
-直接运行 `scripts/*.py` 或 `scripts/run_apply_review_plan.ps1` 前，先确认 `references/setup-dependencies.md` 中的运行前提已经满足。最小要求是：本机 Python 已安装 `defusedxml` 与 `lxml`。OOXML 打包、解包和校验功能已内嵌在 `scripts/docx/` 中，无需外部依赖。
+直接运行 `scripts/*.py` 或 `scripts/run_apply_review_plan.ps1` 前，先确认 `references/setup-dependencies.md` 中的运行前提已经满足。最小要求是：本机 Python 已按 `scripts/requirements.txt` 安装固定版本的 `defusedxml`。OOXML 打包、解包和校验功能已内嵌在 `scripts/docx/` 中，无需额外 Office 解析包。
 
 ### 8.1 处理流程
 
@@ -346,7 +346,7 @@ python scripts/review/enrich_review_plan.py \
 - 完成口径：
   当本轮存在可访问 DOCX 合同文件时，必须生成并交付上述两个 Word 文件；只输出聊天文字、Markdown 摘要或风险清单，不构成完成。
 - 报告完整性复核：
-  报告生成脚本自身“运行成功”不等于报告合格。`scripts/report/reporting.py` 会独立复核占位数量与空法律依据，未通过时非零退出并列出问题。收到该错误时，必须回到审查计划补齐对应字段后重新生成，不得据此宣称已交付；仅在用户明确接受占位草稿时才使用 `--skip-integrity-check`。
+  报告生成脚本自身“运行成功”不等于报告合格。`scripts/report/integrity.py` 会独立复核占位数量、结构化计划中每项法律依据及渲染后逐项依据覆盖；`apply_review_plan.py` 会在写出任何正式 DOCX 前执行该门禁。未通过时非零退出并不留下正式交付物。仅在用户明确授权保留占位草稿时，才可使用 `--skip-integrity-check --draft-authorization <授权记录>`，且该路径只能输出带草稿声明的 Markdown，不得生成 DOCX。
 - IM 回传口径：
   若任务来自飞书或其他 IM 渠道，默认在原对话框回传上述两个文件；如运行时不具备发附件能力，需明确说明“文件已生成但尚未完成会话回传”。
 - 结论模板：
@@ -399,7 +399,13 @@ python scripts/review/enrich_review_plan.py \
 - 仅保留可公开表达的审查理念、结构和实务规则。
 - 无法确认的信息明确标注“未提及/待补充”。
 
-## 十二、版本
+## 十二、权限与数据边界
 
-- 当前版本：`1.6.0`
-- 更新日期：`2026-08-08`
+- 脚本只读取用户明确提供的合同、审查计划及本 Skill 的本地配置；默认在用户指定输出目录和本 Skill 的 `archive/` 写入修订件、报告与日志。
+- 首次运行可能在 `config/` 写入经确认的审查人资料和审查记忆；不得把这些本地配置、合同内容或产物自动发送到网络、IM、邮箱或第三方服务。
+- `--no-archive` 仅用于本地调试；任何外发、上传或原会话附件回传均须由具备相应能力的上层工具和用户授权单独完成。
+
+## 十三、版本
+
+- 当前版本：`1.6.1`
+- 更新日期：`2026-08-11`

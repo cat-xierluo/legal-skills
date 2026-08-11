@@ -101,7 +101,7 @@
 |---|---|
 | `id` | `Q-NN` |
 | `proposition_id` | 承载的单一命题（`P-NN`） |
-| `interface` | `search` / `keyword` / `detail` / `case` / `case-semantic` / `regulation` / `case-detail` |
+| `interface` | `search` / `keyword` / `detail` / `case` / `case-semantic` / `regulation` / `regulation-detail` / `case-detail` |
 | `routing_rationale` | 为何选此接口（基于接口的真实匹配机制，见 §9） |
 | `query_field` | 主查询字段（自然语言问题 / 关键词组合 / 结构化字段） |
 | `query_expression` | 实际查询表达 |
@@ -193,10 +193,10 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
 
 - **`--wenshu-type`（案件类型，如民事案件）属于 `case-semantic`**，不要挂到 `case` 关键词（`case` 用 `--ajlb` 表达案件类别，无 `--wenshu-type`）。
 - **`--ay`/`--fxgc`/`--yyft`（案由/分析过程/援引法条）属于 `case` 关键词**，`case-semantic` 不支持——想用这些结构化字段精确复检就切到 `case`。
-- **`--jarq-start/end` 两个案例接口都支持**（源码确认），可放心用于日期范围。
+- **`--jarq-start/end` 两个案例接口都支持**。这是 CLI 名；请求层必须映射为元典 payload 的 `ja_start` / `ja_end`，不得原样发送 `jarq_start` / `jarq_end`。
 - 法条接口（`search`/`keyword`）的 `--sxx`/`--effect1` 不得挪到案例接口。
 
-**硬校验**：用 `scripts/validate-query-filters.py <research-plan.json>` 自动校验 filter×interface 合法性（退出码 0 合法 / 1 有违规，可接 CI 或 pre-commit hook）。单条 query 可用 `--query '{"interface":"case","filters":{...}}'`。字段表与本节一致，以 `yd_search.py` 各 subparser 为权威。
+**硬校验**：案件查询计划必须先用 `scripts/validate-query-filters.py <research-plan.json>` 校验。退出码 0 合法、1 为查询违规、2 为输入或工具初始化错误；任一非 0 都停止 API/MCP 调用。未知接口、非对象 `filters`、非法字段归属均失败关闭，不得因未开 `--strict` 而放行。单条 query 可用 `--query '{"interface":"case","filters":{...}}'`。校验器从 `yd_search.py` 的真实 subparser 读取字段集合，覆盖 15 个可规划 API 接口且不维护硬编码字段回退；`scripts/verify-runtime-contracts.py` 另行回归 CLI→payload 的日期字段映射。
 
 ### 9.2 平台覆盖边界意识
 

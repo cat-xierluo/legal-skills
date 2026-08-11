@@ -7,7 +7,7 @@
 `contract-copilot` 是自包含 skill，不依赖外部 skill 目录。运行前提：
 
 1. 本机需要可用的 `python3`（建议 3.9+）。
-2. 需要先安装 Python 包依赖：`defusedxml`、`lxml`。
+2. 需要先安装 Python 包依赖：`defusedxml`（版本由 `scripts/requirements.txt` 固定）。
 
 OOXML 打包、解包和校验功能已内嵌在 `scripts/docx/` 中，无需额外安装。
 
@@ -22,8 +22,9 @@ python3 -m pip install -r scripts/requirements.txt
 
 当前 `scripts/requirements.txt` 固化的依赖为：
 
-- `defusedxml`：XML 安全解析
-- `lxml`：OOXML 节点操作
+- `defusedxml==0.7.1`：XML 安全解析与 OOXML XML 校验
+
+当前实现未使用 `lxml`；不要为本 Skill 额外安装未被调用的依赖。
 
 ### Python 版本
 

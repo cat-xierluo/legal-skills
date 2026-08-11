@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
 | 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v1.0.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）；已发布 ClawHub v1.0.0 |
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
@@ -41,7 +42,6 @@
 | 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 | 2026-08-01 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.10.1 | PP-OCRv6 + Structure 融合改用软段界和低置信行级兜底；4 类通用模板恢复表格视觉行与连续条款，4/4 双层 PDF 可检索且页面渲染不变 |
-| 2026-07-31 | 更新   | [opc-legal-counsel](skills/opc-legal-counsel/)                       | v1.0.1  | 补齐合同范围、顾问关系、监管询问三条评测的机器断言，覆盖率由 9/12 提升至 12/12；标注 archive 归档边界，并在 README 标明评测覆盖现状 |
 </details>
 
 ## 📋 项目概述
@@ -196,11 +196,11 @@
 <tr>
 <td><a href="skills/yuandian-law-search/"><strong>yuandian-law-search</strong></a></td>
 <td>通用·检索</td>
-<td style="word-break:break-word">元典法条与案例检索，通过元典 API 或官方 MCP 获取法条、案例、法规与企业信息，并自动归档；支持将多次检索汇总为 7 节结论先行法律检索报告</td>
+<td style="word-break:break-word">元典检索机制感知型法律研究中间层：先做轻量案件研判、正反命题和查询矩阵，再按向量／关键词／结构化字段调用 API 或 MCP，复核对位度并生成可追溯法律检索报告</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.7.5</td>
+<td style="text-align:center">v1.8.9</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/yuandian-law-search-1.8.8.zip">下载</a></td>
-<td>需配置 API Key</td>
+<td>真实 API 调用需配置 Key；离线检索规划无需</td>
 </tr>
 <tr>
 <td><a href="skills/court-sms/"><strong>court-sms</strong></a></td>
@@ -573,7 +573,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.6.2</td>
+<td style="text-align:center">v2.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/skill-lint-2.8.0.zip">下载 v2.8.0</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
@@ -627,7 +627,7 @@
 <td>工具·发布</td>
 <td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.0</td>
+<td style="text-align:center">v1.4.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/release-workflow-1.4.0.zip">下载</a></td>
 <td></td>
 </tr>

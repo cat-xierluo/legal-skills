@@ -6,7 +6,11 @@ import sys
 import zipfile
 from pathlib import Path
 
-import defusedxml.ElementTree as ET
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    print("❌ 缺少依赖: defusedxml\n   请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1)
 
 
 DOCX_REQUIRED = {
