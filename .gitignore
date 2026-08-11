@@ -183,6 +183,9 @@ skills/myagents-memory-update
 # myagents-docs (symlink to ~/.myagents/skills/myagents-docs)
 skills/myagents-docs
 
+# myagents-task-automation (symlink to ~/.myagents/skills/myagents-task-automation)
+skills/myagents-task-automation
+
 # Packed skills（打包输出目录）
 pack-skills/
 

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Iterable
 
-import defusedxml.ElementTree as ET
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    print("❌ 缺少依赖: defusedxml\n   请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1)
 
 
 class BaseValidator:

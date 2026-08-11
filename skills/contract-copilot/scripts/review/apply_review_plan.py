@@ -12,7 +12,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from defusedxml import minidom
+try:
+    from defusedxml import minidom
+except ImportError:
+    print("❌ 缺少依赖: defusedxml\n   请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1)
 
 if __package__ in (None, ""):
     skill_root = Path(__file__).resolve().parents[2]
@@ -35,6 +39,7 @@ try:
         normalize_edit_policy,
     )
     from ..report.report_docx import write_review_report_docx
+    from ..report.integrity import check_delivery_integrity, format_integrity_failure
     from ..report.reporting import render_review_report
     from .review_runtime import (
         ReviewTimeline,
@@ -55,6 +60,7 @@ except ImportError:
         normalize_edit_policy,
     )
     from scripts.report.report_docx import write_review_report_docx
+    from scripts.report.integrity import check_delivery_integrity, format_integrity_failure
     from scripts.report.reporting import render_review_report
     from review_runtime import (
         ReviewTimeline,
@@ -297,24 +303,28 @@ def main() -> None:
                 review_timeline.complete_finding()
             applied_results.append(result)
 
+        execution_summary = build_execution_summary(
+            applied_results=applied_results,
+            source_docx=input_docx,
+            plan_path=plan_path,
+            plan_meta=plan_meta,
+            reviewer_profile=reviewer_profile,
+            review_context=review_context,
+            output_docx=output_docx,
+            report_path=report_path,
+            report_docx_path=report_docx_path,
+        )
+        report_content = render_review_report(plan=plan, execution=execution_summary)
+        integrity = check_delivery_integrity(plan, report_content)
+        if not integrity["passed"]:
+            print(format_integrity_failure(integrity), file=sys.stderr)
+            raise SystemExit(1)
+
         reviewer.save(validate=not args.no_validate)
         packed = pack_document(unpacked_path, output_docx, validate=not args.no_validate)
         if not packed:
             raise ValueError("DOCX 打包校验失败，请检查计划中的 XML 变更")
 
-    execution_summary = build_execution_summary(
-        applied_results=applied_results,
-        source_docx=input_docx,
-        plan_path=plan_path,
-        plan_meta=plan_meta,
-        reviewer_profile=reviewer_profile,
-        review_context=review_context,
-        output_docx=output_docx,
-        report_path=report_path,
-        report_docx_path=report_docx_path,
-    )
-
-    report_content = render_review_report(plan=plan, execution=execution_summary)
     report_path.write_text(report_content, encoding="utf-8")
     write_review_report_docx(
         markdown_content=report_content,

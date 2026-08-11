@@ -1,2 +1,2 @@
-defusedxml
-lxml
+# 固定运行时依赖；升级前请先在隔离环境完成回归验证。
+defusedxml==0.7.1
