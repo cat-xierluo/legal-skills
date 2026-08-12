@@ -105,11 +105,11 @@ LIGHTWEIGHT_AUTO=0
 #   "lightweight_forces_tmux" --no-worktree 强制走 tmux（ORCA worktree 必须有 git 仓）
 #   "missing_orca"            — TERM_PROGRAM=Orca 但 `orca` 不在 PATH（fail-loud）
 ORCA_MODE=""
-ORCA_WORKTREE_ID=""      # 形如 "<repoId>::<worktreePath>"，仅 auto 时填
+ORCA_WORKTREE_ID="${ORCA_WORKTREE_ID:-}"  # ORCA 桌面端注入（形如 "<repoId>::<path>"），保留 env 值不覆盖
 ORCA_WORKTREE_PATH=""    # 仅 auto 时填（git rev-parse --show-toplevel）
 ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
 ORCA_APP_VERSION=""      # 来自 orca status --json
-ORCA_CAPABILITIES_JSON=""# 来自 orca status --json capabilities 数组
+ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
 ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
 NO_ORCA_MODE=0
 INSTALL_AUTHORIZATION_SOURCE=""
@@ -554,17 +554,6 @@ METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
 INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 [ -n "$COMMAND" ] || COMMAND="${SHELL:-/bin/bash} -l"
 
-# v2.1（DEC-114）：ORCA 终端模式 auto-detect。命中 auto 时：
-#   - ORCA_MODE=auto
-#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
-#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充
-#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充
-#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
-ORCA_MODE=$(detect_orca_mode)
-if [ "$ORCA_MODE" = "missing_orca" ]; then
-  exit 64
-fi
-
 # Claude Code 的 minimal/safe/config-source 模式可能跳过 local PreToolUse hook。
 # 用 shlex 解析 wrapper 后的完整 command；无法证明含 claude 或 local settings 也 fail-closed。
 claude_hook_disable_reason() {
@@ -814,6 +803,19 @@ orca_terminal_create_and_send() {
   }
 }
 
+# v2.1（DEC-114）：ORCA 终端模式 auto-detect。必须在 detect_orca_mode / orca_worktree_create /
+# orca_terminal_create_and_send 三个 helper 定义之后调用（bash 函数先定义后调用）。
+# 命中 auto 时：
+#   - ORCA_MODE=auto
+#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
+#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
+#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
+#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+ORCA_MODE=$(detect_orca_mode)
+if [ "$ORCA_MODE" = "missing_orca" ]; then
+  exit 64
+fi
+
 # v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
 # 仅在 *_OVERRIDE 标志为 0 时（即用户没显式传 flag）才按 backend 默认。
 # claude-code backend 默认全关，省 trust_auto 30s + permission_auto 60s 共 90s 空等；
@@ -878,26 +880,18 @@ if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
   BASE_SHA=""
   echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
 elif [ "$ORCA_MODE" = "auto" ]; then
-  # v2.1（DEC-114）：ORCA 终端模式。orca worktree create --base-branch "$X" 会基于 X
-  # 的 commit 建新 ORCA worktree。要让 worker 在 BRANCH 上工作，用 BRANCH 作为 base
-  # （若 BRANCH 已在 origin 同步或本地存在）；否则回退到 BASE_REF。
+  # v2.1（DEC-114）：ORCA 终端模式。每次都新建独立 ORCA worktree（--no-parent），
+  # 不复用 git worktree（ORCA worktree 是独立概念，由 ORCA 桌面端跟踪）。
+  # orca worktree create --base-branch "$X" 基于 X 的 commit 建新 worktree；
+  # 优先用 BRANCH（若已存在），否则 BASE_REF。
   orca_base="$BASE_REF"
   if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null \
      || git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
     orca_base="$BRANCH"
   fi
-  if [ -n "$existing_wt" ] && [ -z "$(printf '%s' "$existing_wt" | grep -v "$ORCA_WORKTREE_PATH" 2>/dev/null || true)" ]; then
-    # 现有 git worktree 路径跟 ORCA 当前 worktree 同路径，复用。
-    WORKTREE="$existing_wt"
-    SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
-    METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
-    echo "SPAWN_WORKER_ORCA_REUSE_GIT_WORKTREE: $WORKTREE"
-  else
-    ORCA_WORKTREE_ID=$(orca_worktree_create "tmux-$safe_branch" "$orca_base")
-  fi
-  # ORCA_WORKTREE_PATH 已在 detect_orca_mode 里设（=PROJECT_DIR git toplevel），
-  # 但 ORCA worktree create 后实际 path 可能不同（ORCA 用 ~/orca/workspaces/<name>）；
-  # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE。
+  ORCA_WORKTREE_ID=$(orca_worktree_create "tmux-$safe_branch" "$orca_base")
+  # ORCA worktree create 后实际 path 可能不是 PROJECT_DIR（ORCA 默认放 ~/orca/workspaces/<name>）；
+  # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE + ORCA_WORKTREE_PATH。
   if [ -n "$ORCA_WORKTREE_ID" ] && [ "$ORCA_WORKTREE_ID" != "orca_worktree_id_placeholder" ]; then
     orca_actual_path="${ORCA_WORKTREE_ID#*::}"
     if [ -n "$orca_actual_path" ] && [ -d "$orca_actual_path" ]; then
@@ -1544,7 +1538,7 @@ if [ "$ORCA_MODE" = "auto" ]; then
   # PM 后续投 prompt；ORCA 模式下 default 行为是直接 inline 投，PM 可通过
   # `orca terminal send --terminal $HANDLE --text "..." --enter` 追加）。
   orca_terminal_create_and_send "$ORCA_WORKTREE_ID" "$SESSION" "$COMMAND" \
-    "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/$SESSION（详细指令将由 PM 后续 orca terminal send 投递）"
+    "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/${SESSION}（详细指令将由 PM 后续 orca terminal send 投递）"
 else
   run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 fi
