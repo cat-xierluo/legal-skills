@@ -112,6 +112,15 @@ ORCA_APP_VERSION=""      # 来自 orca status --json
 ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
 ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
 NO_ORCA_MODE=0
+# v2.1.1（Task-033）：ORCA supervised 注册（run-create + task-create + worker-start --terminal）。
+# --orca-supervised 启用时，ORCA 模式 spawn 后把 worker terminal 纳入 supervised 体系。
+# worker 出现在 worker-list，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
+ORCA_SUPERVISED=0
+TASK_SPEC=""
+TASK_TITLE=""
+ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
+ORCA_SUPERVISED_TASK_ID=""   # helper 输出
+ORCA_SUPERVISED_DISPATCH_ID=""  # helper 输出（ctx_xxx）
 INSTALL_AUTHORIZATION_SOURCE=""
 AUTHORIZED_INSTALL_COMMANDS=()
 ALLOWED_SHELL_COMMANDS=()
@@ -405,6 +414,18 @@ while [[ $# -gt 0 ]]; do
     --no-orca-mode)  # v2.1（DEC-114）：显式 opt-out ORCA 终端模式，强制走 tmux 路径
       NO_ORCA_MODE=1
       shift
+      ;;
+    --orca-supervised)  # v2.1.1（Task-033）：ORCA 模式 spawn 后纳入 supervised（run-create + task-create + worker-start）
+      ORCA_SUPERVISED=1
+      shift
+      ;;
+    --task-spec)  # v2.1.1（Task-033）：supervised task 的 spec（--orca-supervised 时必填）
+      TASK_SPEC="$2"
+      shift 2
+      ;;
+    --task-title)  # v2.1.1（Task-033）：supervised task 的 title
+      TASK_TITLE="$2"
+      shift 2
       ;;
     --allow-install-command)
       AUTHORIZED_INSTALL_COMMANDS+=("$2")
@@ -1541,6 +1562,42 @@ if [ "$ORCA_MODE" = "auto" ]; then
     tmp_meta=$(mktemp)
     jq --arg handle "$ORCA_TERMINAL_HANDLE" '.session.orca.terminal_handle = $handle' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
   fi
+
+  # v2.1.1（Task-033）：--orca-supervised 时把 worker terminal 纳入 ORCA supervised 体系。
+  # 前提：ORCA 模式 auto + terminal 跑 recognized agent（COMMAND 是 claude/codex 等）。
+  # 调 orca-supervised-register.sh（run-create + task-create + worker-start --terminal），
+  # 拿 run_id/task_id/dispatch_id patch 进 METADATA。失败不阻塞 spawn（降级到 v2.0 底层 terminal 模式）。
+  if [ "$ORCA_SUPERVISED" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] && [ -n "$ORCA_TERMINAL_HANDLE" ]; then
+    if [ -z "$TASK_SPEC" ]; then
+      echo "SPAWN_WORKER_ORCA_SUPERVISED_SKIPPED: --orca-supervised 需配套 --task-spec（task 描述），跳过 supervised 注册" >&2
+    else
+      reg_helper="$SCRIPT_DIR/orca-supervised-register.sh"
+      if [ ! -x "$reg_helper" ]; then
+        echo "SPAWN_WORKER_ORCA_SUPERVISED_SKIPPED: helper 缺失或不可执行: $reg_helper" >&2
+      else
+        echo "SPAWN_WORKER_ORCA_SUPERVISED: registering (worktree=$ORCA_WORKTREE_ID terminal=$ORCA_TERMINAL_HANDLE)" >&2
+        if reg_out=$(bash "$reg_helper" \
+            --worktree-id "$ORCA_WORKTREE_ID" \
+            --terminal-handle "$ORCA_TERMINAL_HANDLE" \
+            --task-spec "$TASK_SPEC" \
+            --task-title "${TASK_TITLE:-spawn-worker $SESSION}" 2>&1); then
+          # 从 stdout KV 提取（stderr 是日志，reg_out 含两者，grep stdout KV）
+          ORCA_SUPERVISED_RUN_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_RUN_ID=//p')
+          ORCA_SUPERVISED_TASK_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_TASK_ID=//p')
+          ORCA_SUPERVISED_DISPATCH_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_ID=//p')
+          if [ -n "$ORCA_SUPERVISED_DISPATCH_ID" ] && [ -f "$METADATA_FILE" ]; then
+            tmp_meta=$(mktemp)
+            jq --arg run "$ORCA_SUPERVISED_RUN_ID" --arg task "$ORCA_SUPERVISED_TASK_ID" --arg disp "$ORCA_SUPERVISED_DISPATCH_ID" \
+              '.session.orca.supervised = {run_id: $run, task_id: $task, dispatch_id: $disp}' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
+            echo "SPAWN_WORKER_ORCA_SUPERVISED_DONE: dispatch=$ORCA_SUPERVISED_DISPATCH_ID run=$ORCA_SUPERVISED_RUN_ID task=$ORCA_SUPERVISED_TASK_ID" >&2
+          fi
+        else
+          echo "SPAWN_WORKER_ORCA_SUPERVISED_FAILED: helper 退出非 0，降级到 v2.0 底层 terminal 模式（worker 仍可用 terminal send/read 控制）" >&2
+          echo "$reg_out" >&2
+        fi
+      fi
+    fi
+  fi
 else
   run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 fi
@@ -1621,6 +1678,10 @@ if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
     # v2.1（DEC-114）：ORCA 模式 sentinel 用 terminal-handle + worktree-id 路径；
     # sentinel.sh 收到后走 orca terminal read / orca terminal close / orca worktree set 路径。
     SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --terminal-handle $ORCA_TERMINAL_HANDLE --worktree-id $ORCA_WORKTREE_ID --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+    # v2.1.1（Task-033）：--orca-supervised 时传 --dispatch-id，sentinel 终态 worker-release/stop
+    if [ -n "$ORCA_SUPERVISED_DISPATCH_ID" ]; then
+      SENTINEL_CMD="$SENTINEL_CMD --dispatch-id $ORCA_SUPERVISED_DISPATCH_ID"
+    fi
     # ORCA 模式下立即给 ORCA UI 设 in-progress（sentinel 终态会覆盖到 completed/failed）。
     if [ "$DRY_RUN" -eq 0 ]; then
       orca worktree set --worktree "id:$ORCA_WORKTREE_ID" \

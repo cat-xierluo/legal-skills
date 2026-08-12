@@ -15,6 +15,7 @@ STATUS_FILE=""
 TMUX_SESSION=""
 TERMINAL_HANDLE=""
 WORKTREE_ID=""
+DISPATCH_ID=""  # v2.1.1（Task-033）：ORCA supervised dispatch id（ctx_xxx），终态时 worker-release/stop
 POLL_INTERVAL=5
 MAX_WAIT=7200
 LOG_FILE=""
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --worktree-id)  # v2.1（DEC-114）：ORCA 模式 worktree id（用于 ORCA UI 同步）
       WORKTREE_ID="$2"
+      shift 2
+      ;;
+    --dispatch-id)  # v2.1.1（Task-033）：ORCA supervised dispatch id（终态时 worker-release/stop）
+      DISPATCH_ID="$2"
       shift 2
       ;;
     --poll-interval)
@@ -222,6 +227,47 @@ sync_orca_worktree_status() {
   log "SENTINEL_ORCA_SYNCED: workspace_status=$status_value"
 }
 
+# v2.1.1（Task-033）：ORCA supervised worker 终态释放。有 dispatch_id 时（--orca-supervised 注册过），
+# done → worker-release（settled 释放 terminal）；failed/timeout → worker-stop（fence stop）。
+# 无 dispatch_id（非 supervised 模式）/ ORCA 不可用 / 调用失败时静默返回（不阻塞 sentinel）。
+sync_orca_supervised_release() {
+  local action="$1"  # release / stop
+  [ "$WORKER_SESSION_TYPE" = "orca_terminal" ] || return 0
+  [ -n "$DISPATCH_ID" ] || return 0
+  command -v orca >/dev/null 2>&1 || { log "SENTINEL_ORCA_SUPERVISED_SKIPPED: orca CLI not found"; return 0; }
+  if [ "$action" = "release" ]; then
+    orca orchestration worker-release --dispatch "$DISPATCH_ID" --json >/dev/null 2>&1 || {
+      log "SENTINEL_ORCA_WORKER_RELEASE_FAILED: dispatch=$DISPATCH_ID（可能 worker 未 settled，忽略）"; return 0; }
+    log "SENTINEL_ORCA_WORKER_RELEASED: dispatch=$DISPATCH_ID"
+  else
+    orca orchestration worker-stop --dispatch "$DISPATCH_ID" --json >/dev/null 2>&1 || {
+      log "SENTINEL_ORCA_WORKER_STOP_FAILED: dispatch=$DISPATCH_ID（忽略）"; return 0; }
+    log "SENTINEL_ORCA_WORKER_STOPPED: dispatch=$DISPATCH_ID"
+  fi
+}
+
+# v2.1.1（Task-032）：查 ORCA worktree ps 里这个 worker 的 agent state。
+# ORCA 检测是进程层客观信号（claude 在调什么工具、idle/working），独立于 STATUS.json
+# （worker 自报告，可能 LLM 幻觉谎报 done）。双信号终态判定用：ORCA state=done/idle 且
+# STATUS.json=done 才认为真终态；ORCA state=working 时即使 STATUS=done 也打 CONFLICT 不 exit。
+#
+# 输出（stdout）：agent state 字符串（working/idle/done/gone/unknown）；查询失败输出 "unknown"。
+# 用 WORKTREE_ID（--worktree-id 传入）匹配 worktree ps 里的 agents。
+orca_agent_state() {
+  [ "$WORKER_SESSION_TYPE" = "orca_terminal" ] || { echo "non_orca"; return 0; }
+  command -v orca >/dev/null 2>&1 || { echo "unknown"; return 0; }
+  local ps_out agent_state
+  ps_out=$(orca worktree ps --json 2>/dev/null) || { echo "unknown"; return 0; }
+  # worktree ps 的字段是 .worktreeId（不是 .id）；agents[0].state 是 ORCA 检测的进程层状态
+  # （working/idle/done/gone）。一个 ORCA worktree 通常一个 worker agent（spawn-worker 建独立 worktree）。
+  agent_state=$(printf '%s' "$ps_out" | jq -r --arg wt "$WORKTREE_ID" '
+    .result.worktrees[]?
+    | select(.worktreeId == $wt)
+    | .agents[0].state // "unknown"
+  ' 2>/dev/null)
+  echo "${agent_state:-unknown}"
+}
+
 if [ "$WORKER_SESSION_TYPE" = "orca_terminal" ]; then
   log "SENTINEL_START: status=$STATUS_FILE orca_terminal=$TERMINAL_HANDLE worktree=$WORKTREE_ID poll=${POLL_INTERVAL}s max_wait=${MAX_WAIT}s log=$LOG_FILE"
 else
@@ -242,11 +288,21 @@ while true; do
       # status="done" exactly per templates/worker-prompt.md, but the sentinel
       # will not get stuck polling if the worker wrote a synonym.
       done|completed|finished|complete)
-        capture_pane_tail
-        log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE"
-        sync_orca_worktree_status "completed" "sentinel observed done at $(date -u +%FT%TZ) (status=$status)"
-        kill_tmux_if_requested
-        exit 0
+        # v2.1.1（Task-032）：ORCA 模式双信号终态判定。STATUS.json=done 但 ORCA agent state
+        # 仍 working 时，可能是 worker LLM 谎报 done——打 CONFLICT 不 exit，等下次 poll 再判。
+        # 非 ORCA 模式 / ORCA 查询失败时 orca_agent_state 返回 non_orca/unknown，跳过双信号直接终态。
+        orca_state=$(orca_agent_state)
+        if [ "$orca_state" = "working" ]; then
+          log "SENTINEL_ORCA_STATUS_CONFLICT: STATUS=$status but ORCA agent_state=working (worker 可能谎报 done，不杀，等下次 poll)"
+          # 不 sync、不 kill、不 exit；继续 poll（受 MAX_WAIT 总上限保护）
+        else
+          capture_pane_tail
+          log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE orca_state=$orca_state"
+          sync_orca_worktree_status "completed" "sentinel observed done at $(date -u +%FT%TZ) (status=$status, orca_state=$orca_state)"
+          sync_orca_supervised_release "release"
+          kill_tmux_if_requested
+          exit 0
+        fi
         ;;
       # Canonical failure terminals: failed | blocked | stopped. Defensive
       # synonyms added for the same reason as above. PM should still use
@@ -256,6 +312,7 @@ while true; do
         capture_pane_tail
         log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE"
         sync_orca_worktree_status "in-review" "sentinel observed non-success at $(date -u +%FT%TZ) (status=$status; PM review)"
+        sync_orca_supervised_release "stop"
         kill_tmux_if_requested
         exit 2
         ;;
@@ -272,6 +329,7 @@ while true; do
   if [ "$elapsed" -ge "$MAX_WAIT" ]; then
     log "SENTINEL_TIMEOUT: ${elapsed}s max_wait=${MAX_WAIT}s file=$STATUS_FILE"
     sync_orca_worktree_status "in-review" "sentinel timeout ${elapsed}s (PM investigate)"
+    sync_orca_supervised_release "stop"
     kill_tmux_if_requested
     exit 124
   fi

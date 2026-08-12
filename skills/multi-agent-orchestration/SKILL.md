@@ -704,6 +704,10 @@ Agent Teams 适合 Claude Code 团队式协作；仍要使用 worktree 隔离并
 
 **METADATA.json 锚点**：`session.orca.{mode, worktree_id, worktree_path, terminal_handle, tui_ready_method, app_version, capabilities}`。sentinel / pm-monitor / clean-worktree 全靠 `session.orca.worktree_id` 定位 ORCA worktree；`mode` 字段让 PM 巡检时一眼判断这个 worker 走的是 ORCA 还是 tmux。
 
+**ORCA supervised 深度对接（v2.1，`--orca-supervised` flag）**：ORCA 模式 spawn 后可选把 worker terminal 纳入 ORCA supervised 体系（run-create + task-create + worker-start --terminal），保留 provider env 隔离。worker 出现在 `worker-list`，绑定 task + worktree resource，可被 `send/reply/inbox` + `gate-create/resolve` 管理。配套 `--task-spec`（task 描述）。sentinel 终态 worker-release/stop、clean-worktree 清理时 worker-stop，全生命周期闭环。详见 `references/12-orca-cli-worker.md` §11。
+
+**ORCA 检测 + STATUS.json 分层互补（v2.1，Task-032）**：sentinel ORCA 模式 done 判定加双信号——`STATUS=done` 时先查 `orca worktree ps` 的 agent state，`working` 拒绝认终态（抗 worker LLM 谎报 done），`done/idle` 才真正 exit。抗幻觉。
+
 ## 7. 巡检与介入
 
 PM 巡检信号：
