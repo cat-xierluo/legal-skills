@@ -11,10 +11,10 @@
 | M1 | **角色身份** | 用户级 | 你的角色、业务方向、执业地域 | [references/07-module-role.md](07-module-role.md) |
 | M2 | **工作流与产出** | 用户级 | 你常做的几类工作、产出文档 | [references/08-module-workflow.md](08-module-workflow.md) |
 | M3 | **协作偏好** | 用户级 | 详尽 vs 简洁、批注 vs 修订、中英文 | [references/09-module-collab-style.md](09-module-collab-style.md) |
-| M4 | **工具链与禁区** | 用户级 | 允许/禁止的工具、红线 | [references/10-module-toolchain-redlines.md](10-module-toolchain-redlines.md) |
-| **M5** | **回溯契约** ⭐ | 用户级 + 项目级细化 | 哪些动作必须留痕、写到哪里 | [references/06-audit-trail-contract.md](06-audit-trail-contract.md) + [references/11-module-audit-trail.md](11-module-audit-trail.md) |
-| M6 | **项目上下文** | 项目级 | 项目类型、编号、委托人、阶段 | [references/12-module-project-context.md](12-module-project-context.md) |
-| M7 | **案件/项目关键事实** | 项目级 | 按所选项目类型动态问 | [references/13-module-case-facts.md](13-module-case-facts.md) |
+| M4 | **法律安全基线** | 用户级 | 权限、保密、溯源、人工裁决 | [references/10-module-toolchain-redlines.md](10-module-toolchain-redlines.md) |
+| **M5** | **回溯契约** ⭐ | 用户级 + 项目级细化 | 决策/证据/期限/交付分别使用哪个既有权威载体 | [references/06-audit-trail-contract.md](06-audit-trail-contract.md) + [references/11-module-audit-trail.md](11-module-audit-trail.md) |
+| M6 | **最小项目上下文** | 项目级 | 项目代号、类型、阶段、关键时点 | [references/12-module-project-context.md](12-module-project-context.md) |
+| M7 | **受控事实入口** | 项目级 | 隐私模式、事实位置、读取与披露条件 | [references/13-module-case-facts.md](13-module-case-facts.md) |
 | M8 | **文件结构约定** | 项目级 | 用什么目录模板、命名约定、gitignore | [references/14-module-file-structure.md](14-module-file-structure.md) |
 
 ## 为什么不预设
@@ -30,28 +30,30 @@
 
 ## 用户级流程（M1-M5）
 
+在默认 `quick` 模式中，把下列维度合并为一轮最多 5 个问题；只有用户选择 `guided` 时才逐模块展开。
+
 ```
 M1 角色身份：你的角色？主要业务方向？执业地域？
 M2 工作流与产出：你最常做的几类工作？产出什么文档？
 M3 协作偏好：详尽还是简洁？批注还是修订？中英文？
-M4 工具链与禁区：允许/禁止的工具？必须人工复核的动作？红线？
-M5 回溯契约：是否开启（默认开）→ 勾选通用触发场景
+M4 法律安全基线：读写/外发权限？保密与溯源？哪些必须人工裁决？
+M5 回溯契约：决策、证据、期限、交付分别以哪个现有载体为准？
 → 直接生成并写入（按检测到的平台写所有位置的 AGENTS.md）
 ```
 
-预计 **5-10 个问答**，由 M1-M5 拼接出用户级 AGENTS.md。
+`quick` 预计一轮最多 5 个问题；`guided` 预计 5—10 个问答。两种模式都由 M1-M5 拼接出用户级 AGENTS.md。
 
 ## 项目级流程（M6-M8 + M5 细化）
 
 ```
-M6 项目上下文：什么类型（诉讼/非诉/知产/法务/研究）？编号？委托人？当前阶段？
-M7 案件/项目关键事实：按所选项目类型动态问
+M6 最小上下文：项目代号、类型、阶段和关键时点？
+M7 受控事实入口：strict/local/team？真实事实在哪里、何时可读？
 M8 文件结构约定：用什么目录模板？命名约定？哪些文件不进版本？
 M5 项目级细化：本项目有没有特殊的回溯要求？
 → 与 project-init 协作 → 写入并展示 diff
 ```
 
-预计 **8-15 个问答**，由 M6-M8 + M5 细化拼接出项目级 AGENTS.md。
+`quick` 只补项目最小字段和必要安全缺口；`guided/team` 再按 M6-M8 + M5 细化展开，通常 8—15 个问答。
 
 ## 模块拼装规则
 
@@ -66,7 +68,7 @@ M5 项目级细化：本项目有没有特殊的回溯要求？
 ## 协作偏好
 {M3 内容}
 
-## 工具链与禁区
+## 法律安全基线
 {M4 内容}
 
 ## 回溯契约
@@ -74,12 +76,12 @@ M5 项目级细化：本项目有没有特殊的回溯要求？
 
 ---
 
-# 项目：{M6 项目类型 + 编号}
+# 项目：{M6 项目代号}
 
 ## 上下文
 {M6 内容}
 
-## 关键事实
+## 受控事实入口
 {M7 内容}
 
 ## 文件结构

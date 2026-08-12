@@ -9,11 +9,11 @@
 | 职责 | `project-init` | 本 skill (`legal-harness-init`) |
 |---|---|---|
 | 用户级 `AGENTS.md`（`~/.claude/CLAUDE.md` 等） | ❌ 不做 | ✅ 做（法律人设 + 回溯契约 + 工作偏好） |
-| 项目级 `AGENTS.md`（`<项目>/AGENTS.md`） | ✅ 做（生成项目协议 + docs 体系） | ✅ 做（叠加法律人设 + 回溯契约 + 法律工作流约束） |
+| 项目级 `AGENTS.md`（`<项目>/AGENTS.md`） | ✅ 做（生成项目协议 + docs 体系） | ✅ 做（用受管区块叠加法律安全、回溯和受控上下文规则） |
 | 项目脚手架（`.claude/.codex/settings/skills/.gitignore`） | ✅ 做 | ❌ 不做 |
 | 检测项目类型 | ✅ | ❌（按用户告知/手动选） |
 | 安装 skills | ✅ | ❌ |
-| 生成 `docs/` 体系（ROADMAP/DECISIONS/CHANGELOG 等） | ✅ | ❌ |
+| 生成项目所需文档体系 | ✅（按项目规则） | ❌ |
 | 生成 `settings.json` / `.gitignore` | ✅ | ❌ |
 | 教学 harness 原理 | ❌ | ✅ |
 | 法律人专属回溯契约 | ❌ | ✅ |
@@ -22,13 +22,13 @@
 
 **已跑过 `project-init` 的项目**：
 
-本 skill 的 detect.sh 检测到 `.claude/skills/` 和 `docs/` 目录存在 → 已跑过 `project-init`。
+本 skill 的 detect.sh 只有同时检测到 `.claude/skills/`、项目指令文件和至少一个脚手架证据（如 `.claude/settings.json`、`.codex/skills` 或 `docs/`）才判定已跑过 `project-init`；仅有通用 `docs/` 不算。
 
-此时本 skill 只**追加**到项目级 `AGENTS.md`：
+此时本 skill 只用稳定 marker **upsert** 项目级法律区块：
 
-- 追加"法律人设 + 回溯契约 + 法律工作流约束"三块
+- upsert 法律安全、回溯契约和受控上下文入口等受管区块
 - 不重写已有部分（项目协议、SOP 等）
-- 用 `@include` 或 append 而非覆盖
+- 不覆盖 marker 之外的项目协议；跨平台共享时可用 `@include`
 
 **未跑过 `project-init` 的项目**：
 
@@ -38,7 +38,7 @@
 检测到当前项目未运行过 `project-init`。建议：
 
 1. 先跑 `project-init`：初始化项目脚手架（skills、settings、docs 体系）
-2. 再跑本 skill：补法律人专属三块
+2. 再跑本 skill：补法律安全、回溯和受控上下文规则
 
 也可以只跑本 skill，但缺少 `project-init` 的脚手架，后续 `docs/`、`settings.json`、`.gitignore` 需要手动维护。
 ```
@@ -60,13 +60,13 @@
 `scripts/detect.sh` 检测项目级 `AGENTS.md` 和 `project-init` 痕迹：
 
 ```bash
-# 检测 project-init 是否跑过
-[ -d ".claude/skills/" ] && [ -d "docs/" ] && project_init_ran=true
+# 示意：实际逻辑见 scripts/detect.sh
+# .claude/skills + (AGENTS.md 或 CLAUDE.md) + (settings/.codex/skills/docs)
 ```
 
 返回结构化 JSON 后，agent 决定：
 
-- 已跑过 → 只 append 法律人三块
+- 已跑过 → 只 upsert 法律安全、回溯和受控上下文入口
 - 未跑过 → 提示用户先跑 `project-init`
 
 ## 写入策略
@@ -79,16 +79,16 @@
 - SOP
 - ...
 
-本 skill 追加（在文末）：
+本 skill 用受管区块增量写入：
 ---
 
-# 法律人设
+# 法律安全基线
 
-（来自用户级 M1 摘要）
+（权限、保密、溯源、人工裁决）
 
-# 工作流约束
+# 受控上下文入口
 
-（M2/M4/M3 摘录）
+（项目代号、阶段、事实载体和读取条件）
 
 # 回溯契约
 
@@ -98,12 +98,12 @@
 **未跑过 `project-init`**（用户选择直接用本 skill）：
 
 ```
-项目级 AGENTS.md（本 skill 生成的完整版）：
-- 法律人设（M1 摘要）
-- 工作流约束（M2/M3/M4）
+项目级 AGENTS.md（本 skill 生成的最小基线）：
+- 法律安全基线（M4）
+- 角色、工作流与协作偏好（M1-M3，按层级放置）
 - 回溯契约（M5 用户级 + 项目级细化）
 - 项目上下文（M6）
-- 项目关键事实（M7）
+- 受控事实入口（M7，不复制真实案件材料）
 - 文件结构（M8）
 - 项目级回溯补充（M5 细化）
 ```

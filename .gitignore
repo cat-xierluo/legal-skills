@@ -44,6 +44,7 @@ templates/
 !skills/de-ai-polish/config/quality-score-rubric.json
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
+!skills/legal-harness-init/config/instruction-stability-contract.json
 # Team config - keep example, ignore real data and images
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
