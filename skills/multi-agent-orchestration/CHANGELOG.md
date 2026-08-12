@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.2.0] - 2026-08-12
+
+### 新增 — PM 控制 worker 统一入口（Task-034）
+
+PM 90% 场景用 `pm-orchestrate.sh` 一个统一入口控制 worker（ORCA / tmux 双模式自动判断），不用手敲 `orca terminal send` 或 `tmux send-keys`。
+
+- `scripts/pm-orchestrate.sh` 新脚本：子命令 `send / read / peek / wait`
+- 读 `<worktree>/.claude/agent-sessions/<session>/METADATA.json` 自动路由：
+  - `session.orca.terminal_handle` 非空 → ORCA（`orca terminal send/read/wait`）
+  - 否则 → tmux（`tmux send-keys/capture-pane`，session 名 = `<session>`）
+- `send` 超长（>500 字符 或含反引号/`$`/`|`/``` ```）自动走 SKILL §5.2 WORKER_PROMPT.md + 短 Read 指令（避免终端注入转义问题）
+- `peek` = `read --lines 15`（PM 快速 peek 常用）
+- `wait` tmux 模式无原生 tui-idle，降级 sleep（建议用 sentinel.sh）
+
+端到端验证（ORCA claude worker）：`send --text "请只回一句：pm-orchestrate send OK"` → `read --lines 100` 显示 `❯ 请只回一句：pm-orchestrate send OK` + `⏺ pm-orchestrate send OK`，PM 一个命令管 worker ✓。
+
+- `references/13-pm-orchestrate.md` 新 reference：双模式自动判断 + 子命令 + 与 sentinel/pm-monitor/CLI 兜底的关系 + 实战范例 + 已知限制
+- SKILL §7.1 ORCA PM 分支加 pm-orchestrate 段落（替代手敲 orca terminal send）
+- SKILL §10 references + scripts 列表加 references/13 和 pm-orchestrate.sh
+
+非 ORCA / tmux 不受影响（向后兼容，PM 不传也用 tmux 默认）。
+
 ## [2.1.0] - 2026-08-12
 
 ### 新增 — ORCA 检测 + STATUS.json 分层互补（Task-032）
