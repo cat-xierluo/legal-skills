@@ -1678,6 +1678,10 @@ if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
     # v2.1（DEC-114）：ORCA 模式 sentinel 用 terminal-handle + worktree-id 路径；
     # sentinel.sh 收到后走 orca terminal read / orca terminal close / orca worktree set 路径。
     SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --terminal-handle $ORCA_TERMINAL_HANDLE --worktree-id $ORCA_WORKTREE_ID --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+    # v2.1.1（Task-033）：--orca-supervised 时传 --dispatch-id，sentinel 终态 worker-release/stop
+    if [ -n "$ORCA_SUPERVISED_DISPATCH_ID" ]; then
+      SENTINEL_CMD="$SENTINEL_CMD --dispatch-id $ORCA_SUPERVISED_DISPATCH_ID"
+    fi
     # ORCA 模式下立即给 ORCA UI 设 in-progress（sentinel 终态会覆盖到 completed/failed）。
     if [ "$DRY_RUN" -eq 0 ]; then
       orca worktree set --worktree "id:$ORCA_WORKTREE_ID" \
