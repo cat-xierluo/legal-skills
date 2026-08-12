@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.21.0] - 2026-08-12
+## [2.0.0] - 2026-08-12
 
 ### 新增 — ORCA CLI worker backend（DEC-114）
 

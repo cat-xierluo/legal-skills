@@ -243,7 +243,7 @@ checkpoint_dir_for_session() {
   fi
 }
 
-# v2.1（DEC-114 v1.21.0）：ORCA UI 同步——读 METADATA.json 拿 session.orca.worktree_id，
+# v2.1（DEC-114 v2.0.0）：ORCA UI 同步——读 METADATA.json 拿 session.orca.worktree_id，
 # 命中时调 orca worktree set --workspace-status ... --comment ...。ORCA 不可用 / 无
 # orca 字段 / 调用失败时静默返回（pm-monitor 不能因 ORCA 故障阻塞主监控）。
 # 复用现有 bucket 防抖：调用方已判定 key 变化才触发，本函数不再额外防抖。

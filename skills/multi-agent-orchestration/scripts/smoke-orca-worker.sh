@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# smoke-orca-worker.sh — ORCA CLI worker backend smoke test（DEC-114 v1.21.0）。
+# smoke-orca-worker.sh — ORCA CLI worker backend smoke test（DEC-114 v2.0.0）。
 #
 # 验证 spawn-worker.sh 在 ORCA 终端模式下的 3 个关键行为：
 #   1. detect_orca_mode 命中 auto（TERM_PROGRAM=Orca + ORCA_WORKTREE_ID path 匹配）

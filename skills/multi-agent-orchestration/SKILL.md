@@ -684,7 +684,7 @@ Claude Code agent view / 官方后台会话可作为 Claude 专用后端：`clau
 
 Agent Teams 适合 Claude Code 团队式协作；仍要使用 worktree 隔离并把 `workdir` 指向带来源前缀的 worktree。ACP 只在 adapter 已稳定、能输出结构化状态时启用。Subagent 仅用于轻量、边界窄、输入少的任务；需要长时间写作、独立提交 PR 或跨大量材料整合时升级为 tmux / agent view / Agent Teams。
 
-### 6.5 ORCA 终端模式（v1.21.0 auto-detect）
+### 6.5 ORCA 终端模式（v2.0.0 auto-detect）
 
 当 PM 在 ORCA 桌面端的内嵌终端里调用 `spawn-worker.sh` 时，自动走 ORCA worktree + ORCA terminal 路径，让 ORCA UI 直接反映 worker 生命周期——spawn 立即出卡片（`in-progress`），sentinel 终态自动切 `completed` / `in-review`，stale 时同步 `in-review` 提示。详见 `references/12-orca-cli-worker.md`。
 
@@ -784,7 +784,7 @@ Claude Code PM：
     --interval 30
   ```
 
-ORCA PM（v1.21.0，§6.5 配套）：
+ORCA PM（v2.0.0，§6.5 配套）：
 - PM 在 ORCA 桌面端内嵌终端里跑 `spawn-worker.sh` 时，auto-detect 命中 ORCA 模式（`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` path 匹配），worker 跑在 ORCA worktree + ORCA terminal，**不需要 tmux**。
 - 完成通知机制不变：仍走 §7.2 Sentinel bash 模式（`run_in_background=true` 启 sentinel），sentinel 终态时 harness task-notification 唤醒 PM。ORCA 模式下 sentinel 收 `--terminal-handle` + `--worktree-id`（spawn-worker 输出的 `SPAWN_WORKER_SENTINEL_CMD` 自动带这两参数），走 `orca terminal read/close` + `orca worktree set` 路径。
 - PM 巡检 ORCA UI 状态：`scripts/worktree-status.sh` 已加 ORCA 只读块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）；或直接 `orca worktree ps --json` 看全部 worker 卡片。
