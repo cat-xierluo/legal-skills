@@ -127,6 +127,8 @@ if [ -n "$WORKTREE" ] && [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADAT
     # v2.1（DEC-114）：读 ORCA worktree_id，用于后续 orca worktree rm 同步清理。
     metadata_orca_worktree_id=$(jq -r '.session.orca.worktree_id // ""' "$metadata_file" 2>/dev/null || echo "")
     metadata_orca_mode=$(jq -r '.session.orca.mode // ""' "$metadata_file" 2>/dev/null || echo "")
+    # v2.1.1（Task-033）：读 ORCA supervised dispatch_id，清理时 worker-stop（释放 supervised worker）。
+    metadata_orca_dispatch_id=$(jq -r '.session.orca.supervised.dispatch_id // ""' "$metadata_file" 2>/dev/null || echo "")
     echo "CLEAN_WORKTREE_METADATA: base=${metadata_base_ref:-n/a} created_at=${metadata_created_at:-n/a} backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} env_isolation=${metadata_env_isolation:-n/a} pr=${metadata_pr:-n/a} orca_mode=${metadata_orca_mode:-n/a}"
   else
     echo "CLEAN_WORKTREE_METADATA: present jq_missing file=$metadata_file"
@@ -143,6 +145,16 @@ if [ "$KEEP_SESSION" -eq 0 ]; then
   fi
 else
   echo "CLEAN_WORKTREE_SESSION: kept session=$SESSION"
+fi
+
+# v2.1.1（Task-033）：ORCA supervised worker 清理。有 dispatch_id 时先 worker-stop（释放 supervised worker），
+# 再 worktree rm。用 run() 包装保持 dry-run 友好；无 dispatch_id（非 supervised）/ ORCA 不可用时跳过。
+if [ -n "${metadata_orca_dispatch_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
+  if command -v orca >/dev/null 2>&1; then
+    run orca orchestration worker-stop --dispatch "$metadata_orca_dispatch_id"
+  else
+    echo "CLEAN_WORKTREE_ORCA_SUPERVISED: orca CLI not found, skip worker-stop (dispatch=$metadata_orca_dispatch_id)"
+  fi
 fi
 
 # v2.1（DEC-114）：ORCA 模式下额外清理 ORCA 跟踪的 worktree（tmux 路径不会自动同步）。
