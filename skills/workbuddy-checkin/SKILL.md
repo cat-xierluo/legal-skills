@@ -1,7 +1,7 @@
 ---
 name: workbuddy-checkin
 description: WorkBuddy 每日积分自动签到。自动解密本地登录令牌，调用官方签到 API 完成每日积分领取（100 积分/天，连续第 7 天 1000 积分），并支持配置定时任务。触发词：WorkBuddy 签到、每日积分、check-in、credits。
-version: "1.0.2"
+version: "1.0.3"
 license: MIT
 ---
 
@@ -18,9 +18,10 @@ license: MIT
 2. **旧版 WorkBuddy/CodeBuddy** 仍把 auth session 用 Electron `safeStorage` 加密存于 `state.vscdb`；新版明文文件缺失时回退到此路径，用 Electron 运行时执行 `safeStorage.decryptString()` 解密（macOS 命中钥匙串；Windows/Linux 走 DPAPI/keyring）。
 3. 运行时策略：**Node 优先**（读新版明文文件，无需 Electron），缺失时回退 Electron（解旧版 `state.vscdb`）。
 4. 调用腾讯官方签到 API：
-   - 查状态：`POST https://copilot.tencent.com/billing/meter/checkin-status`
-   - 执行签到：`POST https://copilot.tencent.com/billing/meter/daily-checkin`
-   - 认证：`Authorization: Bearer <accessToken>`
+   - 查状态：`POST https://copilot.tencent.com/v2/billing/meter/checkin-status`
+   - 执行签到：`POST https://copilot.tencent.com/v2/billing/meter/daily-checkin`
+   - 认证：`Authorization: Bearer <accessToken>`，并按桌面端 `buildHeaders` 附带 `X-User-Id: <account.uid>`；有 `auth.domain` 时加 `X-Domain`，企业账号另加 `X-Enterprise-Id` / `X-Tenant-Id`
+   - 兼容说明：`checkin.ps1` 走上述 `/v2/` 全量签名（对齐桌面端）；`checkin.sh` 仍走不带 `/v2/` 前缀、仅 `Authorization` 的旧写法。**两种写法实测均返回 200**（见 CHANGELOG 1.0.3 的验证矩阵），网关当前未强制 `/v2/` 或 `X-User-Id`；对齐桌面端属前向兼容加固，不是修复 401 的必要条件
 5. 脚本幂等：先查状态（命中即跳过）；`daily-checkin` 返回 `code=10001`（今天已签到）同样视为成功，避免重复请求被误报为失败。
 
 > ⚠️ v5.3.8 实测 `checkin-status` 的 `today_checked_in` 字段不可靠（签到成功后仍可能为 `false`）。因此幂等性主要靠 `daily-checkin` 的 `code=10001` 兜底。
@@ -151,7 +152,7 @@ WorkBuddy 环境下可调用自动化任务工具（`automation_update`，recurr
 | 平台 | 脚本 | 新版明文登录态（v5.3.8+，主路径） | 旧版 state.vscdb（回退） |
 |---|---|---|---|
 | macOS | `checkin.sh` | `~/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` | `~/Library/Application Support/WorkBuddy/User/globalStorage/state.vscdb` |
-| Windows | `checkin.ps1`（或 Git Bash 跑 `checkin.sh`） | `%APPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info` | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` |
+| Windows | `checkin.ps1`（或 Git Bash 跑 `checkin.sh`） | `%LOCALAPPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info`（回退 `%APPDATA%`） | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` |
 | Linux | `checkin.sh` | `~/.config/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` | `~/.config/WorkBuddy/User/globalStorage/state.vscdb` |
 
 Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（Win10 1803+ 自带）。
@@ -173,6 +174,8 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 - **v5.3.8 已登录但仍报令牌失败**：本机 skill 版本过旧（< 1.0.2），不识别新版明文存储；升级到 1.0.2+。
 - **当日重跑提示「签到未成功 / code=10001」**：旧版本（< 1.0.2）未把 `code=10001` 识别为「已签到」；1.0.2+ 会正确报告「今日已签到」。
 - **401 令牌过期**：打开 WorkBuddy 刷新登录态，脚本每次运行会重新读取最新 token，次日自动恢复。
+- **偶发「令牌已过期（401）」但次日又正常（< 1.0.3）**：401 判定原为扫响应体子串，响应体里的随机 `requestId` 恰好含 `401` 时会误判（约 0.57%/次），当日签到被跳过且连续签到中断。1.0.3 起改用真实 HTTP 状态码判定。
+- **Windows 已登录却持续 401（< 1.0.3）**：1.0.2 的 win32 候选只探 `%APPDATA%`，而桌面端实际把明文登录态写在 `%LOCALAPPDATA%`；读不到新文件时会回退旧版 `state.vscdb`，取到**过期的历史会话令牌**，表现为「能拿到 token 但接口 401」。1.0.3 起优先探 `%LOCALAPPDATA%`。**排查 401 请先确认令牌来源，而非怀疑请求路径或请求头**（实测网关不强制 `/v2/` 与 `X-User-Id`，见 CHANGELOG 1.0.3）。
 - **macOS 解密报错但已登录（旧版账户）**：旧版迁移应用名仍是 `CodeBuddy`，设 `export WB_CHECKIN_APP_NAME=CodeBuddy` 后重试（仅走 state.vscdb 分支时生效）。
 - **Electron 下载慢/失败（旧版账户）**：配置 npm 镜像（见 `references/dependencies.md`）后重跑 setup；或手动放置 Electron 后用环境变量/参数指定。v5.3.8+ 新版账户无需 Electron。
 - **Windows 提示不是内部或外部命令**：用 `powershell -ExecutionPolicy Bypass -File …` 运行；确认 `curl.exe` 存在。
@@ -184,7 +187,7 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 
 - 令牌仅在内存中使用，通过管道立即被签到请求消费，**不写入任何日志文件、不落盘、不回显到终端、不提交到仓库**。
 - `logs/` 仅记录签到结果（积分 / 连续天数 / 成功失败），**绝不含令牌原文**。切勿将日志或脚本输出粘贴分享。
-- 网络访问仅发往腾讯官方接口 `copilot.tencent.com/billing/meter/*`，不上传任何第三方。
+- 网络访问仅发往腾讯官方接口 `copilot.tencent.com/billing/meter/*` 与 `copilot.tencent.com/v2/billing/meter/*`，不上传任何第三方。
 - 解密成功时脚本会向 stderr 打印一行安全提示（不影响 stdout 的 token 管道），便于你确认凭据正在被使用。
 - 请勿用于他人账户、批量注册刷分或任何违反 WorkBuddy 用户协议的用途；使用者自行承担使用风险。
 
