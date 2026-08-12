@@ -34,13 +34,13 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.4.0  | 两遍式时间簇择优优先保留稳定终态并减少过密截图；新增受预算限制的多模态联系表审计、`keep/drop/replace` 决策合同、非破坏性精选目录与正反回归门禁 |
 | 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
 | 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v1.0.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）；已发布 ClawHub v1.0.0 |
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
-| 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 </details>
 
@@ -405,9 +405,9 @@
 <tr>
 <td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
 <td>工具·视频处理</td>
-<td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
+<td style="word-break:break-word">从录屏视频中抽取证据截图，按前后帧时间簇选择稳定终态、减少过密和切换中间态；可生成受预算限制的多模态联系表审计和非破坏性精选目录</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.2</td>
+<td style="text-align:center">v0.4.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>
