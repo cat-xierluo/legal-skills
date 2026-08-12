@@ -124,9 +124,9 @@ agent 在合同审查场景下会同时读 M2 和 M3，输出符合你偏好的�
 
 ## 跨项目复用：这是用户级
 
-M2 写在用户级，跨项目稳定。**不要把"这个案件我做的是 XX"写到 M2**——那是 M7 项目级。
+M2 写在用户级，跨项目稳定。**不要把“这个案件我做的是 XX”写到 M2**——项目定位属于 M6，真实事实按 M7 的受控入口管理。
 
 ## 接下来读什么
 
 - M3 协作偏好 → [references/09-module-collab-style.md](09-module-collab-style.md)
-- M7 案件/项目关键事实（项目级 M2 对应）→ [references/13-module-case-facts.md](13-module-case-facts.md)
+- M7 受控事实入口（项目级最小上下文的事实来源）→ [references/13-module-case-facts.md](13-module-case-facts.md)

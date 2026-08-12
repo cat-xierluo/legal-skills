@@ -4,7 +4,7 @@
 
 **Q：我已经有 `~/.claude/CLAUDE.md` 了，会被覆盖吗？**
 
-A：不会。本 skill 检测到文件已存在时，会展示完整 diff 让用户决定覆盖/合并/追加。默认不覆盖。
+A：不会。本 skill 只展示指定受管区块的合并候选 diff；确认后 upsert 该区块，marker 之外的内容不覆盖、不删除、不重排。
 
 **Q：用户级和项目级 AGENTS.md 内容有重叠怎么办？**
 
@@ -26,15 +26,15 @@ A：项目根目录的 `AGENTS.md`（或 `CLAUDE.md` 配合 `@include`）。
 
 **Q：项目已经跑过 `project-init`，AGENTS.md 已存在怎么办？**
 
-A：本 skill 检测到后只追加法律人三块，不重写已有内容。展示 diff 让用户确认。
+A：本 skill 检测到后只用稳定 marker upsert 法律安全、回溯和受控入口等区块，不重写已有内容；先展示 diff 让用户确认。
 
 **Q：项目级 AGENTS.md 没有"回溯契约"段落怎么办？**
 
-A：这是常见情况——很多项目跑过 `project-init` 但没加法律人专属。本 skill 检测后会建议追加。
+A：这是常见情况——很多项目跑过 `project-init` 但没加法律回溯规则。本 skill 检测后会建议 upsert `m5-traceability` 受管区块。
 
 **Q：项目中途修改了关键事实（如对方当事人变更），AGENTS.md 怎么处理？**
 
-A：手动更新 AGENTS.md 的 M7 段，并在 `docs/DECISIONS.md` 写变更记录（这正是回溯契约要求的动作）。
+A：不要把真实变化直接复制到 AGENTS.md。更新受控事实载体；若变化形成策略取舍，再更新既有决策载体；AGENTS.md 只在事实入口、阶段或关键时点规则改变时更新受管区块。
 
 ## Harness 与平台相关
 
@@ -65,7 +65,7 @@ A：不是。只写"关键动作"——会影响后续决策、会承担法律�
 
 **Q：写入 DECISIONS/CHANGELOG/TASKS 的格式是什么？**
 
-A：参考 [references/06-audit-trail-contract.md](06-audit-trail-contract.md) §"三个留痕目的地"段。每个文件有不同的字段要求。
+A：先沿用项目现有权威来源。常见映射是：决策→决策记录、证据→证据索引、期限→任务源/期限台账、交付版本→交付记录。详见 [references/06-audit-trail-contract.md](06-audit-trail-contract.md)。
 
 **Q：M5 关闭了会怎样？**
 
@@ -73,18 +73,20 @@ A：AI 做了关键动作不会自动留痕。**法律工作强烈不建议关�
 
 **Q：写入 DECISIONS 之前，文件不存在怎么办？**
 
-A：agent 会提示用户先创建（或 agent 创建空模板，按项目约定）。
+A：先确认项目是否已有其他决策载体。没有时标记待补充并请求用户决定；不要为了形式完整自动创建空模板。
 
 ## 错误处理
 
 | 错误情况 | 处理 |
 |---|---|
 | 检测不到任何 harness | 提示安装，退出 |
-| 用户级文件已存在且非空 | 展示 diff 让用户决定覆盖/合并/追加，默认不覆盖 |
-| 项目级 AGENTS.md 已存在但不含回溯契约 | 提示"建议只追加法律人三块"，默认 append |
+| 用户级文件已存在且非空 | 展示指定受管区块 diff；确认后只 upsert 该区块，默认不动区块外内容 |
+| 项目级 AGENTS.md 已存在但不含回溯契约 | 用稳定 marker 预览并 upsert `m5-traceability` 区块 |
 | 项目级 AGENTS.md 已存在且含法律人设 | 提示"是否更新模块配置/回溯契约"，进入更新模式 |
 | 用户中途放弃 | 不写任何文件，保留已完成问答供下次接续 |
-| 跨平台同步冲突 | 用户级各平台独立写，写入前展示差异，由用户确认 |
+| 跨平台同步冲突 | 先按实际目标路径去重，再逐一展示候选 diff |
+| marker 残缺或重复 | 拒绝写入，保留原文件，人工修复 marker 后重试 |
+| 无法启动新会话 | 只报告 `CONFIG_WRITTEN` + `NOT_VERIFIED` |
 | 项目目录无写权限 | 提示用户检查权限，退出 |
 | `detect.sh` 执行失败 | 提示错误信息，建议手动检查 harness 安装 |
 
@@ -103,15 +105,15 @@ A：agent 会提示用户先创建（或 agent 创建空模板，按项目约定
 
 **Q：我先跑了 `project-init`，还能用本 skill 吗？**
 
-A：可以，本 skill 检测到后会只补法律人三块。
+A：可以，本 skill 检测到后只 upsert 法律安全、回溯和受控上下文等受管区块。
 
 **Q：我先跑了本 skill，再跑 `project-init`，会不会冲突？**
 
-A：`project-init` 会生成项目协议和 docs 体系，但通常不会覆盖已有的 AGENTS.md 的法律人三块。建议顺序：`project-init` → 本 skill。
+A：`project-init` 负责项目协议和项目所需文档体系，本 skill 的受管区块边界独立。建议顺序：`project-init` → 本 skill，并在每一步确认 diff。
 
 **Q：两个都跑了，发现 AGENTS.md 有重复内容怎么办？**
 
-A：手动整合，或重跑本 skill 让它合并。
+A：使用固定 `block-id` 重跑；脚本只 upsert 对应受管区块，不修改区块外内容。
 
 ## 维护与更新
 

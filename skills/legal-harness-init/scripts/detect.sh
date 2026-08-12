@@ -11,7 +11,9 @@
 #
 # 平台权威表在 scripts/lib_platforms.sh（detect/write 共享单一真值源）。
 #
-# 输出：JSON（schema_version 2）到 stdout
+# 用法：detect.sh [--runtime <platform-key>]
+#   --runtime 由当前 harness 显式声明运行平台，优先级高于 env 推断。
+# 输出：JSON（schema_version 3）到 stdout
 # 退出码：检测到至少一个 harness → 0；否则 1
 
 set -u
@@ -19,6 +21,30 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib_platforms.sh
 . "${SCRIPT_DIR}/lib_platforms.sh"
+
+EXPLICIT_RUNTIME=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --runtime)
+            [ $# -ge 2 ] || { printf 'detect.sh: 错误：--runtime 需要平台 key\n' >&2; exit 2; }
+            EXPLICIT_RUNTIME="$2"
+            shift 2
+            ;;
+        -h|--help)
+            sed -n '3,20p' "$0"
+            exit 0
+            ;;
+        *)
+            printf 'detect.sh: 错误：未知参数 %s\n' "$1" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [ -n "$EXPLICIT_RUNTIME" ] && ! _platform_meta_line "$EXPLICIT_RUNTIME" >/dev/null 2>&1; then
+    printf 'detect.sh: 错误：未知平台 key %s\n' "$EXPLICIT_RUNTIME" >&2
+    exit 2
+fi
 
 # ========== helpers ==========
 
@@ -35,7 +61,7 @@ json_escape() {
 file_lines() {
     local f="${1-}"
     if [ -f "$f" ]; then
-        wc -l < "$f" | tr -d ' '
+        awk 'END { print NR + 0 }' "$f"
     else
         echo "0"
     fi
@@ -81,30 +107,72 @@ for key in "${PLATFORM_KEYS[@]}"; do
     USER_LEVEL_ENTRIES+=("${key}|${exists}|${cfg_path}|${lines}|${cfg_kind}")
 done
 
-# ========== detect: 当前 runtime（env 标志）==========
+# ========== detect: 当前 runtime（显式声明 + env 证据）==========
 
 CURRENT_RUNTIME="null"
 CURRENT_RUNTIME_WRITEABLE=false
-# 优先级：支持写入的平台（claude_md/agents_md）> non-agents-md 容器层
-runtime_hits_writable=()
-runtime_hits_other=()
-for key in "${PLATFORM_KEYS[@]}"; do
-    envname=$(platform_runtime_env "$key")
-    [ -z "$envname" ] && continue
-    if env_var_is_set "$envname"; then
-        if platform_supports_write "$key"; then
-            runtime_hits_writable+=("$key")
-        else
-            runtime_hits_other+=("$key")
+CURRENT_RUNTIME_CONFIDENCE="null"
+CURRENT_RUNTIME_SOURCE="null"
+RUNTIME_CANDIDATES=() # key|confidence|source|writeable
+
+if [ -n "$EXPLICIT_RUNTIME" ]; then
+    explicit_writeable=false
+    platform_supports_write "$EXPLICIT_RUNTIME" && explicit_writeable=true
+    RUNTIME_CANDIDATES+=("${EXPLICIT_RUNTIME}|high|explicit|${explicit_writeable}")
+    CURRENT_RUNTIME="\"$(json_escape "$EXPLICIT_RUNTIME")\""
+    CURRENT_RUNTIME_CONFIDENCE='"high"'
+    CURRENT_RUNTIME_SOURCE='"explicit"'
+    CURRENT_RUNTIME_WRITEABLE=$explicit_writeable
+else
+    for key in "${PLATFORM_KEYS[@]}"; do
+        signals=$(platform_runtime_signals "$key")
+        [ -z "$signals" ] && continue
+        old_ifs="$IFS"
+        IFS=','
+        for signal in $signals; do
+            envname="${signal%%:*}"
+            confidence="${signal#*:}"
+            if env_var_is_set "$envname"; then
+                candidate_writeable=false
+                platform_supports_write "$key" && candidate_writeable=true
+                RUNTIME_CANDIDATES+=("${key}|${confidence}|env:${envname}|${candidate_writeable}")
+            fi
+        done
+        IFS="$old_ifs"
+    done
+
+    # 只在最高置信度下唯一命中平台时才给出 current_runtime。
+    for wanted_confidence in high medium low; do
+        matched_keys=""
+        matched_count=0
+        matched_source=""
+        if [ ${#RUNTIME_CANDIDATES[@]} -gt 0 ]; then
+            for candidate in "${RUNTIME_CANDIDATES[@]}"; do
+                IFS='|' read -r candidate_key candidate_confidence candidate_source candidate_writeable <<EOF
+$candidate
+EOF
+                [ "$candidate_confidence" = "$wanted_confidence" ] || continue
+                case " $matched_keys " in
+                    *" $candidate_key "*) ;;
+                    *)
+                        matched_keys="$matched_keys $candidate_key"
+                        matched_count=$((matched_count + 1))
+                        matched_source="$candidate_source"
+                        ;;
+                esac
+            done
         fi
-    fi
-done
-if [ ${#runtime_hits_writable[@]} -gt 0 ]; then
-    CURRENT_RUNTIME="\"$(json_escape "${runtime_hits_writable[0]}")\""
-    CURRENT_RUNTIME_WRITEABLE=true
-elif [ ${#runtime_hits_other[@]} -gt 0 ]; then
-    CURRENT_RUNTIME="\"$(json_escape "${runtime_hits_other[0]}")\""
-    CURRENT_RUNTIME_WRITEABLE=false
+        if [ "$matched_count" -eq 1 ]; then
+            selected_key=$(printf '%s' "$matched_keys" | sed 's/^ *//;s/ *$//')
+            CURRENT_RUNTIME="\"$(json_escape "$selected_key")\""
+            CURRENT_RUNTIME_CONFIDENCE="\"$wanted_confidence\""
+            CURRENT_RUNTIME_SOURCE="\"$(json_escape "$matched_source")\""
+            platform_supports_write "$selected_key" && CURRENT_RUNTIME_WRITEABLE=true
+            break
+        elif [ "$matched_count" -gt 1 ]; then
+            break
+        fi
+    done
 fi
 
 # ========== detect: 项目级 ==========
@@ -132,7 +200,24 @@ fi
 if dir_exists "docs"; then
     PROJECT_INIT_EVIDENCE+=("docs/")
 fi
-if [ ${#PROJECT_INIT_EVIDENCE[@]} -gt 0 ]; then
+if [ -f ".claude/settings.json" ]; then
+    PROJECT_INIT_EVIDENCE+=(".claude/settings.json")
+fi
+if [ -e ".codex/skills" ]; then
+    PROJECT_INIT_EVIDENCE+=(".codex/skills")
+fi
+
+# docs/ 是通用目录，不能单独证明 project-init 已运行。
+# 要求核心痕迹 .claude/skills + 项目指令文件 + 至少一个脚手架证据。
+project_instruction_exists=false
+if [ "$AGENTS_MD_EXISTS" = true ] || [ "$CLAUDE_MD_EXISTS" = true ]; then
+    project_instruction_exists=true
+fi
+project_scaffold_exists=false
+if [ -f ".claude/settings.json" ] || [ -e ".codex/skills" ] || [ -d "docs" ]; then
+    project_scaffold_exists=true
+fi
+if [ -d ".claude/skills" ] && [ "$project_instruction_exists" = true ] && [ "$project_scaffold_exists" = true ]; then
     PROJECT_INIT_RAN=true
 fi
 
@@ -174,11 +259,28 @@ if [ ${#PROJECT_INIT_EVIDENCE[@]} -gt 0 ]; then
 fi
 evidence_list+="]"
 
+# runtime candidate list（保留证据，不读 env 值）
+runtime_candidate_list="["
+if [ ${#RUNTIME_CANDIDATES[@]} -gt 0 ]; then
+    first=true
+    for candidate in "${RUNTIME_CANDIDATES[@]}"; do
+        if [ "$first" = true ]; then first=false; else runtime_candidate_list+=","; fi
+        IFS='|' read -r candidate_key candidate_confidence candidate_source candidate_writeable <<EOF
+$candidate
+EOF
+        runtime_candidate_list+="{\"platform\":\"$(json_escape "$candidate_key")\",\"confidence\":\"$(json_escape "$candidate_confidence")\",\"source\":\"$(json_escape "$candidate_source")\",\"writeable\":${candidate_writeable}}"
+    done
+fi
+runtime_candidate_list+="]"
+
 cat <<EOF
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "current_runtime": $CURRENT_RUNTIME,
+  "current_runtime_confidence": $CURRENT_RUNTIME_CONFIDENCE,
+  "current_runtime_source": $CURRENT_RUNTIME_SOURCE,
   "current_runtime_writeable": $CURRENT_RUNTIME_WRITEABLE,
+  "runtime_candidates": $runtime_candidate_list,
   "harnesses_detected": $harness_list,
   "user_level_files": $user_level_obj,
   "project_level": {

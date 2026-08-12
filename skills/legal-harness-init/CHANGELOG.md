@@ -5,6 +5,51 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.3.0] - 2026-08-12
+
+### 新增
+
+- 新增 `quick` / `guided` / `team` 三种引导模式；默认 quick 用一轮最多 5 个问题生成最小法律安全基线
+- 新增 `strict` / `local` / `team` 三档隐私模式；M7 改为受控事实入口，默认不把完整当事人、案号、金额、联系方式、统一社会信用代码等写入长期指令
+- 新增 `scripts/validate-content.sh`，在写入前拦截疑似凭证、高敏身份号及不符合隐私模式的案件信息
+- 新增 `scripts/restore.sh`，按首次原始备份元数据恢复原文、权限和哈希
+- 新增 `scripts/verify.sh` 与四类新会话行为探针，区分 `CONFIG_WRITTEN` / `INSTRUCTIONS_LOADED` / `BEHAVIOR_VERIFIED`
+- 新增 `scripts/test.sh` 无网络回归；覆盖 runtime、project-init 误判、同路径去重、零 diff、权限、恢复、敏感内容和残缺 marker
+- 新增 `references/18-privacy-and-context.md`、`19-activation-verification.md`、`20-team-layering.md`
+- 新增指令稳定性合同、交付报告 checker 和 4 类候选内正反例
+
+### 改进
+
+- `write.sh` 改为稳定受管 marker 的区块级 upsert：按实际目标路径去重、候选校验、展示 diff、同目录原子替换；第二次相同写入报告 `unchanged`
+- marker 校验拒绝畸形前缀；新会话证据绑定当前配置 SHA-256，配置变化后旧证据不能继续抬高完成状态
+- 首次备份固定为 `.bak.legal-harness-init`，另存原权限/哈希元数据；每次变化的快照加入进程标识避免同秒碰撞；用户级目标与备份显式 `0600`
+- `detect.sh` 升级 schema v3：runtime 输出候选/证据/置信度，支持 `--runtime` 显式声明；Codex 新增 `CODEX_THREAD_ID`、`CODEX_CI`、`CODEX_SHELL` 信号，`CODEX_HOME` 降为 low
+- `project-init` 改用 `.claude/skills` + 项目指令文件 + 脚手架证据的复合判断；仅有 `docs/` 不再误判
+- M4/M5 升级为权限、保密、溯源、人工裁决四项法律安全基线；回溯载体改为决策/证据/期限/交付分类并优先复用项目现有权威来源
+- `--preset` 更名为 `--project-type`，旧名称仅兼容；项目类型只路由追问
+- 团队治理明确组织、项目、个人三层所有权与冲突优先级
+- 教学定位改为“持久默认基线”：明确 AGENTS.md/CLAUDE.md 的长期价值不等于脱离平台指令层级的绝对最高优先级，避免把当前明确指令与持久配置错误对立
+- 用户级/项目级教学与 M8 示例同步最小披露原则：quick 不再被旧 10—30 分钟流程覆盖，文件命名默认使用内部项目代号，不再暗示研究材料可全部入 Git
+- frontmatter `license` 统一为 `MIT`，LICENSE 版权年份按项目规范统一为 2025；同步 README 最近更新和技能索引
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：26/26 通过
+- ✅ `harness_failure_audit.py audit`：PASS，0 hard / 0 warning / 0 info
+- ✅ `security_scan.py audit`：0 critical / 0 high / 0 medium；4 个 low 均来自已披露的 `$HOME` 路径与 runtime 环境信号探测
+- ✅ 候选内稳定性 checker：正例通过；隐私泄露、重复 marker、无证据完成声明、反向团队优先级 4 个变异样例均退出 3
+- ✅ `bash -n`：detect/write/validate/restore/verify/test 全部通过
+- ⚠️ `INSTRUCTION_STABILITY_NOT_VERIFIED`：已具备合同和候选内正反例，但尚无候选外 Ed25519 签名硬约束基线、held-out、Harness evidence 与三轮签名回执
+- ✅ Codex 新会话前向验证：新启动 `codex exec --ephemeral` 明确报告加载临时项目 `AGENTS.md` 的规范化精确绝对路径，并返回与当前文件一致的 SHA-256；权限、保密、信息缺口、回溯载体四类探针全部通过，`verify.sh` 复算输出 `BEHAVIOR_VERIFIED`
+- ⚠️ Claude Code / OpenClaw / MyAgents 新会话行为探针本次未运行，仍为 `NOT_VERIFIED`，不从 Codex 结果外推
+- ⚠️ Codex 官方 `quick_validate.py` 不接受项目 ClawHub 约定中的顶层 `version` / `author` / `homepage` 字段；当前保留项目格式，跨分发 schema 兼容性待统一
+
+### 待办事项
+
+- 在 Claude Code / OpenClaw / MyAgents 的真实新会话分别完成加载来源检查与四类行为探针
+- 由候选外 evaluator 生成并签名硬约束基线、held-out、三轮运行证据和最终回执
+- 在真实 quick 引导中记录开始/完成时间，验证“5 分钟最小基线”的可用性指标
+
 ## [0.2.0] - 2026-08-12
 
 > 参考 self-evolve `detect_platforms()` 风格，补齐"检测当前 runtime + 自动写入对应位置"能力。端到端真实跑通仍 NOT_VERIFIED。
@@ -120,7 +165,7 @@
 
 > "AGENTS.md 实际上是发给 agent 的 session 的最重要的一句话了。"
 
-——它决定了所有后续会话的默认行为，比单次 prompt 更重要。多数人不会配，所以"用不好"。
+——这是最初的用户观察。v0.3.0 将其校准为“跨会话持续生效的默认协作基线”：价值来自持久、统一、可复核，不代表可以脱离平台指令层级覆盖当前明确指令。
 
 ### 目标
 
@@ -147,7 +192,7 @@
 - DEC-004：教学底座本身就是 skill 的活教材，agent 必须主动引用相关章节
 - DEC-005：M5 回溯契约默认开启（法律工作强烈不建议关闭）
 
-完整 brainstorm 上下文见 `DECISIONS.md` 顶部"起源与动机"section 和 `drafts/2026-08-12-legal-harness-init-design.md` §0。
+完整 brainstorm 核心结论见 `DECISIONS.md` 顶部“起源与动机”；原设计稿在 v0.3.0 从公开交付树移除，历史版本仍可由 Git 追溯。
 
 ### 验证
 

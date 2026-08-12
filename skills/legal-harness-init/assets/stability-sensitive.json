@@ -1,0 +1,9 @@
+{
+  "privacy_mode": "strict",
+  "guide_mode": "team",
+  "config_text": "<!-- legal-harness-init:legal-safety-baseline:start -->\n- 案号：(2026)沪0101民初123号\n<!-- legal-harness-init:legal-safety-baseline:end -->\n",
+  "target_paths": ["/project/AGENTS.md"],
+  "status": "CONFIG_WRITTEN",
+  "session_evidence": {"new_session": false, "loaded": false},
+  "precedence": ["legal_safety", "organization", "project", "individual"]
+}

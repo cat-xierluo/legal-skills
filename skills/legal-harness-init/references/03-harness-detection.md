@@ -21,17 +21,17 @@
 
 **自动写入边界**：只对 `claude_md` / `agents_md` 平台自动写入（CC / Codex / OpenClaw / MyAgents）。其余 4 个平台不是 AGENTS.md/CLAUDE.md 配置模式（GUI 任务型或 worktree 编排型），写入会无效或破坏——detect 报告里标 `non-agents-md`，write.sh 记 `unsupported` 并提示用户手动配置。
 
-## 当前 runtime 检测（env 标志）
+## 当前 runtime 检测（候选 + 证据 + 置信度）
 
 除了"装了哪些"，detect.sh 还报 `current_runtime`——**这次会话正跑在哪个 harness**，通过已知 env 标志变量推断（只看变量是否 set，**不读值**）：
 
-| key | env 标志变量 |
+| key | 信号与置信度 |
 |---|---|
-| `claude-code` | `CLAUDECODE` |
-| `codex` | `CODEX_HOME` |
-| `orca` | `ORCA_AGENT_HOOK_TOKEN` |
+| `claude-code` | `CLAUDECODE`（high）、`CLAUDE_CODE_ENTRYPOINT`（medium） |
+| `codex` | `CODEX_THREAD_ID`（high）、`CODEX_CI` / `CODEX_SHELL`（medium）、`CODEX_HOME`（low） |
+| `orca` | `ORCA_AGENT_HOOK_TOKEN`（high，仅检查存在性） |
 
-优先级：可写平台（claude_md/agents_md）> 容器层（orca 等）。多个命中或都不命中时报 `null`（诚实不强猜）。例如 CC 跑在 Orca 里时，`CLAUDECODE` 与 `ORCA_AGENT_HOOK_TOKEN` 都 set，但 `current_runtime` 报 `claude-code`（agent 层优先于编排层），因为要写入的是 agent 配置（`~/.claude/CLAUDE.md`），不是 Orca。
+调用方明确知道当前平台时应传 `--runtime <key>`；这是 high 置信度的显式证据。否则脚本输出全部 `runtime_candidates`，并只在最高置信度唯一命中平台时设置 `current_runtime`。同置信度多个平台命中或都不命中时报 `null`，不强猜。`CODEX_HOME` 只作为低置信度安装/环境线索，不再单独证明当前会话是 Codex。
 
 ## 本 skill 怎么检测
 
@@ -39,15 +39,21 @@
 
 ```bash
 bash scripts/detect.sh
+bash scripts/detect.sh --runtime codex
 ```
 
-返回结构化 JSON（schema v2）：
+返回结构化 JSON（schema v3）：
 
 ```json
 {
-  "schema_version": "2",
-  "current_runtime": "claude-code",
+  "schema_version": "3",
+  "current_runtime": "codex",
+  "current_runtime_confidence": "high",
+  "current_runtime_source": "explicit",
   "current_runtime_writeable": true,
+  "runtime_candidates": [
+    {"platform": "codex", "confidence": "high", "source": "explicit", "writeable": true}
+  ],
   "harnesses_detected": ["claude-code", "codex", "openclaw", "myagents"],
   "user_level_files": {
     "claude-code": {"exists": true, "path": "~/.claude/CLAUDE.md", "lines": 42, "config_kind": "claude_md"},
@@ -60,15 +66,16 @@ bash scripts/detect.sh
     "claude_md_exists": true,
     "claude_md_lines": 5,
     "project_init_ran": true,
-    "evidence": [".claude/skills/", "docs/"]
+    "evidence": [".claude/skills/", ".claude/settings.json", "docs/"]
   }
 }
 ```
 
 字段说明：
 
-- `schema_version`：`"2"`（v1 不含 `current_runtime` / `config_kind`；老调用方忽略新字段不影响）
-- `current_runtime`：这次会话正跑在哪个 harness（env 标志推断）；`null` = 无法确定
+- `schema_version`：`"3"`；v3 新增 runtime 证据/置信度与更严格的 project-init 判断
+- `current_runtime`：显式声明或最高置信度唯一命中的 harness；`null` = 无法确定
+- `runtime_candidates`：全部候选及 `explicit` / `env:<name>` 证据，不包含环境变量值
 - `current_runtime_writeable`：当前 runtime 是否支持自动写入
 - `harnesses_detected`：本机已装平台 key 列表（通过目录 + 文件痕迹验证）
 - `user_level_files.<key>.config_kind`：`claude_md` / `agents_md` / `non-agents-md`——决定 write.sh 是否自动写入
@@ -76,7 +83,7 @@ bash scripts/detect.sh
 agent 拿到这个 JSON 后决定：
 
 - 写入哪些用户级文件（只写检测到的平台）
-- 项目级是否要 append/覆盖/合并
+- 项目级要预览和 upsert 哪些受管区块
 - 是否提示"建议先跑 `project-init`"
 
 ## 检测不到的常见情况
@@ -86,7 +93,7 @@ agent 拿到这个 JSON 后决定：
 | 平台未安装 | `~/.claude/` 不存在 | 跳过该平台，仅写已安装的 |
 | 平台刚装但无配置文件 | `~/.claude/` 存在但 `CLAUDE.md` 不存在 | 提示"首次使用，将创建 CLAUDE.md" |
 | 项目是新目录 | 当前 cwd 无 `AGENTS.md` / `CLAUDE.md` | 提示"将创建新文件" |
-| 项目已跑过 `project-init` | 检测到 `.claude/skills/` 和 `docs/` | 只补法律人三块，不重写 |
+| 项目已跑过 `project-init` | 同时命中 `.claude/skills/`、项目指令文件和至少一个脚手架证据 | 只 upsert 法律安全、回溯和受控入口等受管区块，不重写 |
 
 ## 多平台的写入策略
 
@@ -105,10 +112,10 @@ agent 拿到这个 JSON 后决定：
 
 - 检查 8 个 harness 目录是否存在（`~/.claude/` / `~/.codex/` / `~/.openclaw/` / `~/.myagents/` / `~/.qoderworkcn/` / `~/.qwenworkcn/` / `~/.workbuddy/` / `~/.orca/`，用 `[ -d ]`）
 - 个别平台加文件痕迹验证（如 `~/.openclaw/cron/jobs.json`、`~/.workbuddy/workbuddy.db`），避免目录存在但平台未真正安装的误报
-- 检查用户级配置文件是否存在并统计行数（`wc -l`）
-- 检查已知 harness 的 **runtime 标志环境变量是否存在**（`CLAUDECODE` / `CODEX_HOME` / `ORCA_AGENT_HOOK_TOKEN`）——**只看变量是否 set，不读其值**（值可能含 token）
+- 检查用户级配置文件是否存在并统计行数（`awk`，包括没有末尾换行的最后一行）
+- 检查已知 harness 的 **runtime 标志环境变量是否存在**——**只看变量是否 set，不读其值**（值可能含 token）
 - 检查当前 cwd 的 `AGENTS.md` / `CLAUDE.md` 是否存在并统计行数
-- 检查 `.claude/skills/` 和 `docs/` 目录是否存在（用于探测 `project-init` 痕迹）
+- 检查 `.claude/skills/`、项目指令文件以及 settings/docs 等复合证据（仅有通用 `docs/` 不判定 `project-init` 已运行）
 
 **不读取任何文件内容**——只读文件元数据（行数）、目录存在性、env 标志存在性。不会触及 CLAUDE.md / AGENTS.md 里的实际配置，**不读** `.env` / 凭证 / token / 用户名 / 密钥的值。
 

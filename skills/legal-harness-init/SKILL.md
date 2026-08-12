@@ -1,276 +1,238 @@
 ---
 name: legal-harness-init
-homepage: https://github.com/cat-xierluo/legal-skills
+description: 面向法律工作者初始化或增量治理 AGENTS.md/CLAUDE.md：识别当前 AI harness，区分用户级、项目级和团队级指令，生成最小法律安全基线，安全合并受管区块，并在新会话中验证权限、保密、信息缺口和回溯行为。用户明确提到法律工作且要配置 harness、AGENTS.md、CLAUDE.md、agent 协作规则或 AI 使用基线时使用。不要用于合同审查、案件分析、文书起草、项目脚手架或 Skill 开发。
+version: "0.3.0"
+license: MIT
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.0"
-license: MIT License - 详见 LICENSE.txt
-description: |
-  法律人专属的 harness 初始化工具：帮法律人理解"AGENTS.md/CLAUDE.md 是发给 agent session 的最重要的一句话"这件事，并直接帮他生成、写入对应的 AGENTS.md 文件（用户级 + 项目级）。本技能应在用户说"配置 AGENTS.md / 配置 CLAUDE.md / 帮我初始化 agent / 怎么配 harness / 我不会用 AI 怎么开始 / 帮我写 AGENTS.md / 给我讲讲怎么跟 AI 协作"时使用。不要用于：业务侧工作（合同审查、案件分析、文书起草）、project-init 的项目脚手架、skill 内容开发。
+homepage: https://github.com/cat-xierluo/legal-skills
 ---
 
 # Legal Harness Init
 
-法律人专属的 AGENTS.md 配置工具：**教学底座 + 生成入口**。
+把法律人的稳定协作要求写成可加载、可增量更新、可验证的 harness 指令。完成不等于“文件已写入”；必须区分：
 
-- **教学底座**：`references/` 16 个章节 + 5 套参考范例，讲清为什么 AGENTS.md 重要、用户级 vs 项目级怎么分、8 模块是什么、法律人专属的"回溯契约"怎么写、按法律工作流怎么落地。
-- **生成入口**：检测**当前 runtime**（你这次会话正跑在哪个 harness）+ **所有已装平台**，按"先用户级、后项目级"顺序引导你产出 AGENTS.md 内容，再用 `scripts/write.sh` **自动写入**对应平台位置（带 `.bak` 备份 + diff 确认）。自动写入覆盖 CC / Codex / OpenClaw / MyAgents；QoderWork / QwenWork / WorkBuddy / Orca 检测到但因非 AGENTS.md 模式仅提示手动。
+1. `CONFIG_WRITTEN`：文件与受管区块存在。
+2. `INSTRUCTIONS_LOADED`：新会话报告了精确加载来源。
+3. `BEHAVIOR_VERIFIED`：新会话通过四类行为探针。
 
-**核心理念**：不给你 5 套"标准答案"让你套，而是教你怎么"想清楚自己的维度"，让你和 agent 一起拼装出真正贴合你的 AGENTS.md。法律工作的多样性远超模板能覆盖的范围。
+<!-- skill-lint:constraint COMPLETION-STATUS-NO-OVERCLAIM -->
+如果无法启动新会话，必须报告 `CONFIG_WRITTEN` + `NOT_VERIFIED`，不得声称配置已经生效。
 
-**与 `project-init` 的关系**：互补不互替。`project-init` 做项目脚手架（skills、settings、docs 体系），本 skill 做法律人专属配置（用户级 AGENTS.md + 项目级 AGENTS.md 中的法律人设/回溯契约/工作流约束）。两者检测互不重复，已跑过 `project-init` 的项目本 skill 只补法律人专属三块。
+## 适用边界
 
-## 适用场景
+在以下条件同时满足时使用：
 
-1. 第一次用 AI 协作的法律人——不知道 AGENTS.md 是什么、写在哪、为什么重要。
-2. 有 AI 使用经验但配置混乱的律师——工作偏好散落在每次 prompt 里，没沉淀。
-3. 新接案件/项目——需要把当前案件/项目的特定上下文（案号/委托人/阶段）沉淀到项目级 AGENTS.md。
-4. 律所技术对接人/团队 lead——想给团队成员配置统一基线。
+- 用户是律师、法务、合规、知识产权或其他法律工作者；
+- 用户要建立或更新 AI 协作规则、AGENTS.md、CLAUDE.md 或 harness 基线。
 
-不适用场景：
+不要用于：
 
-- 业务侧工作（合同审查、案件分析、文书起草、检索）——用对应业务 skill。
-- 项目脚手架、.claude/.codex/settings/skills/docs 体系初始化——用 `project-init`。
-- skill 内容开发、代码生成——用其他 skill。
+- 合同审查、案件研判、检索、文书起草等法律业务；
+- `.claude/`、`.codex/`、skills、docs 等项目脚手架初始化（改用 `project-init`）；
+- Skill 或代码开发。
 
-## 触发方式
+## 输入参数
 
-### 自然语言触发
-
-- "帮我配置 AGENTS.md"
-- "配置 CLAUDE.md"
-- "帮我初始化 agent"
-- "怎么配 harness"
-- "我不会用 AI，怎么开始"
-- "帮我写 AGENTS.md"
-- "给我讲讲怎么跟 AI 协作"
-- "我的项目怎么配 agent"
-
-### 参数化触发
-
-| 参数 | 必需 | 说明 | 示例 |
-|------|------|------|------|
-| `--level` | 否 | 用户级 (`user`) 还是项目级 (`project`) | `user` / `project` |
-| `--platforms` | 否 | 限定写入的 harness 平台（默认 = 当前 runtime + 所有可写已装平台） | `claude-code,codex` |
-| `--preset` | 否 | 项目类型预设（项目级时） | `litigation` / `transactional` / `ip` / `in-house` / `research` |
-| `--mode` | 否 | 写入模式，透传 `scripts/write.sh`（`create` 已存在则等确认 / `update` 备份后覆盖 / `append` 备份后追加） | `create` / `update` / `append` |
-| `--dry-run` | 否 | 只展示 diff 不落盘（透传 write.sh） | — |
-| `--force` | 否 | 已存在时不等确认，直接备份+覆盖（透传 write.sh） | — |
-
-## 工作流程
-
-### 第零步：环境检测
-
-调 `bash scripts/detect.sh` 一次性扫描：
-
-- **当前 runtime**：这次会话正跑在哪个 harness（通过 env 标志变量推断，如 `CLAUDECODE`）
-- **所有已装 harness**（8 平台）：CC / Codex / OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca，每平台报 `config_kind`（`claude_md` / `agents_md` / `non-agents-md`）和配置文件是否存在、行数
-- 当前 cwd 是否有 `AGENTS.md` / `CLAUDE.md`
-- 当前 cwd 是否已经跑过 `project-init`（探测 `.claude/skills/`、`docs/` 是否存在）
-
-**隐私边界**：detect.sh 读取目录存在性 + 文件行数（`[ -d ]` + `wc -l`），以及**已知 harness 的 runtime 标志变量是否存在**（`CLAUDECODE` / `CODEX_HOME` / `ORCA_AGENT_HOOK_TOKEN` 等，只看"是否 set"，**不读变量值**）。**不读** `.env` / 凭证 / token / 用户名 / 密钥的值，不读取配置文件内容。详见 [references/03-harness-detection.md](references/03-harness-detection.md) §"检测脚本的隐私边界"。
-
-返回结构化 JSON（schema v2），让 agent 决定后续怎么走。
-
-### 第一步：问候与定位
-
-告诉用户：
-
-1. 本 skill 是做什么的（教学底座 + 生成入口）
-2. AGENTS.md 为什么重要（引用 [references/01-why-agents-md-matters.md](references/01-why-agents-md-matters.md)）
-3. 检测到了哪些 harness，会写入哪些位置
-4. 默认走"先用户级、后项目级"流程；用户可单独选用户级或项目级
-
-### 第二步：选层级
-
-问用户：
-
-- **用户级**（一次性、跨项目稳定）：包含 5 个模块（M1-M5）—— 角色身份 / 工作流与产出 / 协作偏好 / 工具链与禁区 / **回溯契约**。预计 5-10 个问答。
-- **项目级**（每个案件/项目不同）：包含 4 个模块（M6/M7/M8 + M5 细化）。预计 8-15 个问答，问题按所选项目类型动态调整。
-- **两个都做**（推荐）：先用户级，完成后再项目级。
-
-### 第三步：用户级流程（按 M1→M5 顺序）
-
-按 [references/04-modules.md](references/04-modules.md) 走 5 个模块，每个模块 1-3 个引导问答：
-
-| 模块 | 答什么 | 引用 |
+| 参数 | 默认值 | 说明 |
 |---|---|---|
-| M1 角色身份 | 你的角色？主要业务方向？执业地域？ | [references/07-module-role.md](references/07-module-role.md) |
-| M2 工作流与产出 | 你最常做的几类工作？产出什么文档？ | [references/08-module-workflow.md](references/08-module-workflow.md) |
-| M3 协作偏好 | 详尽 vs 简洁？批注 vs 修订？中英文？ | [references/09-module-collab-style.md](references/09-module-collab-style.md) |
-| M4 工具链与禁区 | 允许/禁止的工具？必须人工复核的动作？红线？ | [references/10-module-toolchain-redlines.md](references/10-module-toolchain-redlines.md) |
-| **M5 回溯契约** ⭐ | 是否开启（默认开）→ 勾选通用触发场景 | [references/06-audit-trail-contract.md](references/06-audit-trail-contract.md) + [references/11-module-audit-trail.md](references/11-module-audit-trail.md) |
+| `--guide-mode` | `quick` | `quick` / `guided` / `team` |
+| `--level` | 自动判断 | `user` / `project`；team 模式按组织→项目→个人处理 |
+| `--platforms` | 当前 runtime + 可写已安装平台 | 平台 key，逗号分隔 |
+| `--runtime` | 自动检测 | 调用方明确知道当前平台时传给 `detect.sh` |
+| `--project-type` | 询问 | `litigation` / `transactional` / `ip` / `in-house` / `research`；只路由问题，不提供标准答案 |
+| `--privacy-mode` | `strict` | `strict` / `local` / `team` |
+| `--mode` | `create` | `create` / `update` / `append`；三者均只 upsert 受管区块 |
+| `--block-id` | 按模块指定 | 稳定 marker id，见“受管区块” |
+| `--dry-run` | 否 | 只展示候选 diff，不写入 |
 
-**引导策略**：每个模块问完后，agent 必须用 1-2 句话讲清这个模块是什么、为什么需要（教学底座作用）。用户在某模块卡壳时，agent 主动调出 [references/17-examples/](references/17-examples/) 对应类型范例作参考，**不直接套用**。
+将旧参数 `--preset` 解释为 `--project-type`，并提示新名称；项目类型只决定追问路线，不能替用户填答案。
 
-### 第四步：项目级流程（按 M6→M7→M8→M5 细化）
+## 第一步：检测环境
 
-| 模块 | 答什么 | 引用 |
-|---|---|---|
-| M6 项目上下文 | 什么类型（诉讼/非诉/知产/法务/研究）？编号？委托人？当前阶段？ | [references/12-module-project-context.md](references/12-module-project-context.md) |
-| M7 案件/项目关键事实 | 按所选项目类型动态问 | [references/13-module-case-facts.md](references/13-module-case-facts.md) + [templates/modules/M7-case-facts.md](templates/modules/M7-case-facts.md) |
-| M8 文件结构约定 | 用什么目录模板？命名约定？哪些文件不进版本？ | [references/14-module-file-structure.md](references/14-module-file-structure.md) |
-| M5 项目级细化 | 本项目有没有特殊的回溯要求（叠加用户级总开关）？ | [references/11-module-audit-trail.md](references/11-module-audit-trail.md) |
-
-**M7 动态问法**：按 [templates/modules/M7-case-facts.md](templates/modules/M7-case-facts.md) 动态展开；该文件含 5 种项目类型（诉讼 / 非诉合同 / 知产 / 企业法务 / 法律研究）的完整问法 + 答案片段 + 脱敏范例，是 agent 的真值源。SKILL.md 不重复。
-
-**与 `project-init` 协作**（关键）：
-
-- 已跑过 `project-init`（detect.sh 检测到 `.claude/skills/` 和 `docs/`）→ 只补"法律人设 + 回溯契约 + 法律工作流约束"三块到现有 `AGENTS.md`，不重写其他部分。
-- 未跑过 → 提示用户"建议先跑 `project-init` 初始化项目脚手架"，但仍可先生成"法律人设 + 回溯契约"的核心三块（项目级其余部分后续由 `project-init` 补齐）。
-
-### 第五步：拼装与预览
-
-按 [references/05-write-an-agents-md.md](references/05-write-an-agents-md.md) 的固定模板拼装：
-
-```
-# {M1 角色摘要}
-
-## 工作流与产出
-{M2 内容}
-
-## 协作偏好
-{M3 内容}
-
-## 工具链与禁区
-{M4 内容}
-
-## 回溯契约
-{M5 内容}
-
----
-
-# 项目：{M6 项目类型 + 编号}
-
-## 上下文
-{M6 内容}
-
-## 关键事实
-{M7 内容}
-
-## 文件结构
-{M8 内容}
-
-## 项目级回溯补充
-{M5 项目级细化内容}
-```
-
-**先展示完整预览**给用户确认，再写入文件。
-
-### 第六步：写入与覆盖处理
-
-把第五步拼装好的内容存成临时文件，调 `bash scripts/write.sh` 自动写入检测到的可写平台：
+运行：
 
 ```bash
-bash scripts/write.sh \
-  --content-file <第五步生成的内容文件> \
-  --level <user|project> \
-  --mode <create|update|append>      # 默认 create
-  # 可选：--platforms <key,key>  --dry-run  --force  --project-dir <path>
+bash scripts/detect.sh
+# 调用方明确知道当前平台时：
+bash scripts/detect.sh --runtime codex
 ```
 
-**写入目标**（权威表见 [scripts/lib_platforms.sh](scripts/lib_platforms.sh)）：
+读取 schema v3 的：
 
-| 平台 | config_kind | 用户级写入 | 项目级写入 | 自动写入? |
-|---|---|---|---|---|
-| Claude Code | claude_md | `~/.claude/CLAUDE.md` | `<cwd>/CLAUDE.md` | ✅ |
-| Codex | agents_md | `~/.codex/AGENTS.md` | `<cwd>/AGENTS.md`（项目真值源） | ✅ |
-| OpenClaw | agents_md | `~/.openclaw/AGENTS.md` | `<cwd>/AGENTS.md` | ✅ |
-| MyAgents | claude_md | `~/.myagents/CLAUDE.md` | `<cwd>/CLAUDE.md` | ✅ |
-| QoderWork / QwenWork / WorkBuddy / Orca | non-agents-md | — | — | ❌ 检测到但提示手动 |
+- `runtime_candidates`：候选平台、信号、置信度、是否可写；
+- `current_runtime`：只在显式声明或最高置信度唯一命中时设置；
+- `harnesses_detected`：已安装平台；
+- `project_level`：AGENTS.md / CLAUDE.md 与 `project-init` 复合证据。
 
-**多平台项目级策略**：项目内 `AGENTS.md`（Codex 真值源）+ `CLAUDE.md`（CC/OpenClaw/MyAgents 读）。CC 的 `CLAUDE.md` 可独立写或用 `@include ./AGENTS.md` 共享——多平台时建议后者，单一维护。
+检测脚本只读取已知目录、文件存在性、行数及 runtime 环境变量是否存在，不读取环境变量值、配置正文、Token 或凭证。详见 [references/03-harness-detection.md](references/03-harness-detection.md)。
 
-**幂等与冲突**（write.sh 自动处理，语义见 [references/16-faq.md](references/16-faq.md)）：
+## 第二步：选择引导模式与隐私模式
 
-- **检测不到任何可写 harness** → write.sh 退出码 1，提示安装 CC / Codex 等之一。
-- **目标已存在 + `--mode create` + 非 `--force`** → 备份 + 展示 diff，记 `needs_confirmation`；用户决定后用 `--force` 覆盖或 `--mode append` 追加。
-- **`--mode update` 或 `--force`** → 备份 `.bak.<ts>` 后覆盖（`cp -p` 保留时间戳）。
-- **`--mode append`** → 备份后追加（含 `---` 分隔）。
-- **目标不存在** → 直接写（用户级 `umask 077` 保护隐私；项目级 `umask 022`）。
-- **非 AGENTS.md 模式平台** → 记 `unsupported`，提示用户手动配置。
-- **用户中途放弃** → 不调 write.sh，内容保留在临时文件供下次接续。
+### quick：5 分钟最小安全基线
 
-### 第七步：报告与下一步
+默认使用。用一轮最多 5 个问题确认：
 
-输出：
+1. 角色和主要工作类型是什么？
+2. 常见交付物及期望格式是什么？
+3. AI 可做、必须先确认、绝对禁止的动作分别是什么？
+4. 采用 `strict`、`local` 还是 `team` 隐私模式？
+5. 哪些决策、证据变化、期限和交付版本需要留痕，项目已有哪个权威载体？
 
-- 已写入的文件清单（按平台）
-- 已生成但未写入的内容备份位置（如有）
-- 下一步建议（用户级完成后可做项目级 / 已跑过 `project-init` 提示补项目级法律块 / 等）
+每组答案只解释一句“为何需要”。不要跳过必要安全问题，也不要强迫用户完成全部教学章节。生成 M1、M2、M3、法律安全基线和 M5；项目级再生成最小 M6—M8。
 
-### 第八步：增量更新模式（已存在 AGENTS.md 时）
+### guided：逐模块共同设计
 
-detect.sh 检测到 AGENTS.md / CLAUDE.md **已存在**，自动进入增量更新模式（**不重写已有内容**）：
+按 M1→M8 逐项引导，参考 [references/04-modules.md](references/04-modules.md) 与 `templates/modules/`。用户卡住时给候选维度，不替用户决定，不直接套用范例。
 
-| 场景 | 默认动作 | 升级路径 |
-|---|---|---|
-| 用户级文件已存在 | 仅展示**新增的 M1-M5 内容**与现有 diff，让用户决定追加/覆盖/合并 | 用户选"完整重写"才走原六步流程 |
-| 项目级 AGENTS.md 已存在、不含"回溯契约" | 提示"建议只追加法律人三块（M5+M6+M7+M8）"，默认 append | 用户可手动选"合并到指定 section" |
-| 项目级 AGENTS.md 已存在且含回溯契约 / 法律人设 | 进入"差异分析"模式：逐模块比对已有与本 skill 引导内容，标红"建议更新 / 可保留 / 冲突" | 用户选择性更新需要的模块 |
-| 检测到 `project-init` 痕迹（`.claude/skills/`、`docs/`） | 同上一行——只 append 三块，不动项目脚手架 | 由 `project-init` 处理通用脚手架 |
+### team：三层治理
 
-**关键原则**：本 skill 绝不主动覆盖用户已有内容。所有"首次生成"路径都必须经过"已存在"分支判断。
+先读取 [references/20-team-layering.md](references/20-team-layering.md)，分别确认：
+
+- 组织层：稳定且不可被项目弱化的安全、保密、审批与工具政策；
+- 项目层：事项范围、阶段、事实入口、时限与项目工作流；
+- 个人层：表达、格式与非强制偏好。
+
+<!-- skill-lint:constraint TEAM-LAYER-PRECEDENCE -->
+在平台允许配置的同一治理范围内，冲突时必须遵循法律安全边界/组织强制政策 > 项目具体规则 > 个人偏好；同层冲突请求负责人确认并留痕。AGENTS.md/CLAUDE.md 是持久默认基线，不得把这条团队层规则解释成对平台指令层级或用户当前明确授权的通用改写。
+
+### 三档隐私模式
+
+按 [references/18-privacy-and-context.md](references/18-privacy-and-context.md) 执行：
+
+- `strict`：AGENTS.md 只写项目代号、类型、阶段、关键时点和规则，不写真实当事人、案号、金额、联系方式或身份号码。
+- `local`：真实事实写入权限为 `0600` 且被 `.gitignore` 排除的 `.legal-context.local.md`；AGENTS.md 只保留入口和按需读取规则。
+- `team`：真实事实只进入组织批准的受控团队载体；AGENTS.md 记录载体路径、访问条件和脱敏/对外规则，不记录凭证或高敏个人身份号。
+
+## 第三步：生成法律安全基线
+
+<!-- skill-lint:constraint PRIVACY-MINIMUM-CONTEXT -->
+M4/M5 必须覆盖四项契约，且项目配置不得直接包含凭证、高敏身份号或与协作无关的可识别案件信息：
+
+- 权限契约：读、写、外发、提交、删除、支付分别需要什么授权；外部或不可逆动作必须逐项确认。
+- 保密契约：默认最小必要上下文；禁止把客户材料、身份号码、凭证或未脱敏事实写入公开配置、日志、提交或外部服务。
+- 溯源契约：区分材料事实、推断与建议；法律结论保留来源、时间和适用范围；信息不足时明确缺口。
+- 人工裁决契约：AI 不作最终法律判断；期限、金额、主体、法条引用和对外交付必须由指定人员复核。
+
+回溯载体按事实性质选择，并优先复用项目已有权威来源：
+
+- 决策/取舍 → 已有 `DECISIONS.md` 或项目指定决策载体；
+- 证据材料新增、来源或证明目的变化 → 证据目录/证据索引/项目指定证据日志；
+- 期限与责任人 → 已有 `TASKS.md`、期限台账或经授权的日历；
+- 交付物版本和用户可见变化 → `CHANGELOG.md` 或项目指定交付记录。
+
+项目未启用某类文件时先询问或标记待补充，不为形式完整创建空文档。详见 [references/06-audit-trail-contract.md](references/06-audit-trail-contract.md)。
+
+## 第四步：生成最小项目上下文
+
+M6—M8 默认只生成：
+
+```markdown
+# 项目：{项目代号}
+
+- 类型：{项目类型}
+- 阶段：{当前阶段}
+- 关键时点：{日期 + 事项；未知则写待补充}
+- 受控事实入口：{不需要则写“无”}
+- 文件结构与权威载体：{沿用项目现有约定}
+```
+
+不要默认询问或写入完整当事人、真实案号、金额、统一社会信用代码。确需使用真实事实时，根据隐私模式写入受控载体。项目类型只用于决定下一条必要问题，参见 [references/12-module-project-context.md](references/12-module-project-context.md) 和 [references/13-module-case-facts.md](references/13-module-case-facts.md)。
+
+若检测到 `project-init` 复合证据，只补法律安全、回溯和受控上下文入口，不改项目脚手架。
+
+## 第五步：用稳定受管区块预览
+
+每个模块使用固定 `block-id`，一次只更新一个逻辑区块：
+
+| 内容 | block-id |
+|---|---|
+| 角色 | `m1-role` |
+| 工作流 | `m2-workflow` |
+| 协作偏好 | `m3-collab-style` |
+| 法律安全基线（含 M4） | `legal-safety-baseline` |
+| 回溯契约 | `m5-traceability` |
+| 项目上下文 | `m6-project-context` |
+| 受控事实入口 | `m7-fact-entry` |
+| 文件结构 | `m8-file-structure` |
+
+<!-- skill-lint:constraint MANAGED-BLOCK-SAFE-UPSERT -->
+`write.sh` 必须自动添加形如 `<!-- legal-harness-init:m1-role:start -->` 的唯一成对 marker，并按实际目标路径去重；内容临时文件不得自行添加外层 marker。先运行内容校验，再用 `--dry-run` 展示合并候选 diff。
+
+## 第六步：校验并安全写入
+
+```bash
+bash scripts/validate-content.sh \
+  --file <模块内容文件> \
+  --privacy-mode <strict|local|team>
+
+bash scripts/write.sh \
+  --content-file <模块内容文件> \
+  --level <user|project> \
+  --platforms <key,key> \
+  --mode <create|update|append> \
+  --block-id <稳定-id> \
+  --privacy-mode <strict|local|team> \
+  --project-dir <项目路径> \
+  --dry-run
+```
+
+确认 diff 后去掉 `--dry-run`。脚本必须：
+
+- 按实际目标路径去重；Codex + OpenClaw 同指向项目 `AGENTS.md` 时只写一次；
+- 校验 marker 与敏感信息后，在目标同目录构造候选并原子替换；
+- 保存首次写入前的 `.bak.legal-harness-init` 及权限/哈希元数据，并为每次变化保存唯一快照；
+- 将用户级配置、原始备份、快照和元数据收紧为 `0600`；
+- 第二次写入相同内容时报告 `unchanged`，不产生新快照。
+
+需要回退时：
+
+```bash
+bash scripts/restore.sh --target <AGENTS.md-or-CLAUDE.md>
+```
+
+平台路径与非 AGENTS.md 模式限制见 [scripts/README.md](scripts/README.md)。
+
+## 第七步：在新会话验证生效
+
+按 [references/19-activation-verification.md](references/19-activation-verification.md) 新启动目标 harness 会话，确认加载来源，并执行四类探针：权限、保密、信息缺口、回溯载体选择。
+
+将证据保存为本地临时 `key=value` 文件后运行：
+
+```bash
+bash scripts/verify.sh \
+  --target <配置文件> \
+  --block-id <稳定-id> \
+  --session-evidence <证据文件>
+```
+
+证据必须包含 `new_session=true`、`loaded=true`、精确 `source_path`、与当前配置一致的 `config_sha256`，以及四项 `probe_*=pass` 才可报告 `BEHAVIOR_VERIFIED`。配置变化后旧证据失效；当前写入会话的自报不算加载证据。
+
+## 验收
+
+运行：
+
+```bash
+bash scripts/test.sh
+```
+
+交付前确认：
+
+- 默认产物没有真实可识别案件信息或凭证；
+- 已有文件的非受管内容完整保留；
+- 多平台同路径只写一次，重复执行零 diff；
+- 原始内容、权限和哈希可恢复；
+- 最终状态没有把 `CONFIG_WRITTEN` 扩大成已加载或行为已验证；
+- 无法新启会话时明确报告 `NOT_VERIFIED`。
 
 ## 依赖
 
-无外部依赖。仅使用 shell 标准工具（`bash`、`grep`、`stat`、`wc`）。
-
-## 参考文档
-
-教学底座在 `references/` 目录，按需读取：
-
-| 章节 | 内容 |
-|------|------|
-| [references/01-why-agents-md-matters.md](references/01-why-agents-md-matters.md) | 为什么 AGENTS.md 是最重要的一句话 |
-| [references/02-user-vs-project-level.md](references/02-user-vs-project-level.md) | 用户级 vs 项目级：为什么分两层 |
-| [references/03-harness-detection.md](references/03-harness-detection.md) | 怎么检测当前环境有哪些 harness |
-| [references/04-modules.md](references/04-modules.md) | 8 模块全览：每个模块答什么、为什么需要 |
-| [references/05-write-an-agents-md.md](references/05-write-an-agents-md.md) | 一份好 AGENTS.md 的结构与原则（顺序、详略、风格） |
-| [references/06-audit-trail-contract.md](references/06-audit-trail-contract.md) | ⭐ 回溯契约机制（核心 section） |
-| [references/07-module-role.md](references/07-module-role.md) | M1 角色身份深度讲解 |
-| [references/08-module-workflow.md](references/08-module-workflow.md) | M2 工作流与产出深度讲解 |
-| [references/09-module-collab-style.md](references/09-module-collab-style.md) | M3 协作偏好深度讲解 |
-| [references/10-module-toolchain-redlines.md](references/10-module-toolchain-redlines.md) | M4 工具链与禁区深度讲解 |
-| [references/11-module-audit-trail.md](references/11-module-audit-trail.md) | M5 回溯契约深度讲解（与 §06 联动） |
-| [references/12-module-project-context.md](references/12-module-project-context.md) | M6 项目上下文深度讲解 |
-| [references/13-module-case-facts.md](references/13-module-case-facts.md) | M7 案件/项目关键事实深度讲解（含 5 种问法） |
-| [references/14-module-file-structure.md](references/14-module-file-structure.md) | M8 文件结构约定深度讲解 |
-| [references/15-sync-with-project-init.md](references/15-sync-with-project-init.md) | 与 `project-init` 的互补边界 |
-| [references/16-faq.md](references/16-faq.md) | 常见问题（含错误处理） |
-| [references/17-examples/](references/17-examples/) | 5 套完整参考范例（教学用，不直接套用） |
-
-## 模块片段库
-
-`templates/modules/` 提供每个模块的"常见答案片段"，agent 在用户卡壳时主动调出参考：
-
-| 文件 | 内容 |
-|------|------|
-| [templates/modules/M1-role.md](templates/modules/M1-role.md) | 角色身份片段（含多种角色答案） |
-| [templates/modules/M2-workflow.md](templates/modules/M2-workflow.md) | 工作流与产出片段 |
-| [templates/modules/M3-collab-style.md](templates/modules/M3-collab-style.md) | 协作偏好片段 |
-| [templates/modules/M4-toolchain-redlines.md](templates/modules/M4-toolchain-redlines.md) | 工具链与禁区片段 |
-| [templates/modules/M5-audit-trail.md](templates/modules/M5-audit-trail.md) | ⭐ 回溯契约片段（核心） |
-| [templates/modules/M6-project-context.md](templates/modules/M6-project-context.md) | 项目上下文片段 |
-| [templates/modules/M7-case-facts.md](templates/modules/M7-case-facts.md) | 案件/项目关键事实片段（含 5 种类型问法） |
-| [templates/modules/M8-file-structure.md](templates/modules/M8-file-structure.md) | 文件结构约定片段 |
-
-## 输出验证
-
-完成引导后，确认：
-
-- [ ] 用户级 5 个模块（M1-M5）全部有内容，无空模块
-- [ ] M5 回溯契约已开启（除非用户明确关闭）
-- [ ] 项目级 4 个模块（M6/M7/M8 + M5 细化）按需填写
-- [ ] 写入前已展示完整预览给用户确认
-- [ ] 已写入的文件按检测到的平台逐个覆盖/合并/追加
-- [ ] 写入后报告已写入文件清单 + 下一步建议
+日常初始化开箱即用，无第三方包。需要 Bash 3.2+ 及常见系统工具：`awk`、`grep`、`sed`、`stat`、`diff`、`mktemp`、`shasum` 或 `sha256sum`。正式指令稳定性 checker 另需系统自带或已安装的 Python 3，不需要额外 Python 包。
 
 ## 禁止事项
 
-- 禁止跳过教学引导直接生成（失去"教学底座"价值）
-- 禁止替用户回答（用户必须自己说出偏好和限制）
-- 禁止直接套用 `references/17-examples/` 范例（只作参考）
-- 禁止替用户做实质性法律判断、案件分析、文书起草（用对应业务 skill）
-- 禁止主动覆盖用户已有的 `AGENTS.md` / `CLAUDE.md`（必须展示 diff 让用户决定）
-- 禁止在 M5 默认开启回溯契约时替用户决定具体触发场景（必须让用户勾选）
-- 禁止第八步自动覆盖用户已有内容；用户明确选"完整重写"才走原首次生成流程
+- 禁止替用户决定权限、保密边界或最终法律结论。
+- 禁止把真实案件详情、客户材料或凭证直接写入用户级配置或公开项目配置。
+- 禁止覆盖、删除或重排受管 marker 之外的用户内容。
+- 禁止在 marker 残缺、内容校验失败或目标不明确时写入。
+- 禁止将旧会话、当前写入进程或静态检查当作新会话加载证据。
+- 禁止为了“留痕完整”擅自创建不适用的 DECISIONS、TASKS 或 CHANGELOG。

@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
 | 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v1.0.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）；已发布 ClawHub v1.0.0 |
@@ -41,7 +42,6 @@
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
 | 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 | 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
-| 2026-08-01 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.10.1 | PP-OCRv6 + Structure 融合改用软段界和低置信行级兜底；4 类通用模板恢复表格视觉行与连续条款，4/4 双层 PDF 可检索且页面渲染不变 |
 </details>
 
 ## 📋 项目概述
@@ -549,6 +549,15 @@
 <td style="text-align:center">v1.2.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/project-init-1.2.4.zip">下载 v1.2.4</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/legal-harness-init/"><strong>legal-harness-init</strong></a></td>
+<td>工具·Agent配置</td>
+<td style="word-break:break-word">面向法律工作者初始化和增量治理 AGENTS.md/CLAUDE.md：三种引导模式、三档隐私治理、法律安全基线、受管区块安全合并及新会话行为验证</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.3.0</td>
+<td style="text-align:center"></td>
+<td>写入成功不等于已加载；无法新建会话时标 NOT_VERIFIED</td>
 </tr>
 <tr>
 <td><a href="skills/multica-skill-update/"><strong>multica-skill-update</strong></a></td>
