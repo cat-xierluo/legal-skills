@@ -124,7 +124,10 @@ if [ -n "$WORKTREE" ] && [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADAT
     metadata_profile=$(jq -r '.runtime.runtime_profile // ""' "$metadata_file" 2>/dev/null || echo "")
     metadata_env_isolation=$(jq -r '.runtime.env_isolation // ""' "$metadata_file" 2>/dev/null || echo "")
     metadata_pr=$(jq -r '.pr.url // ""' "$metadata_file" 2>/dev/null || echo "")
-    echo "CLEAN_WORKTREE_METADATA: base=${metadata_base_ref:-n/a} created_at=${metadata_created_at:-n/a} backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} env_isolation=${metadata_env_isolation:-n/a} pr=${metadata_pr:-n/a}"
+    # v2.1（DEC-114）：读 ORCA worktree_id，用于后续 orca worktree rm 同步清理。
+    metadata_orca_worktree_id=$(jq -r '.session.orca.worktree_id // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_orca_mode=$(jq -r '.session.orca.mode // ""' "$metadata_file" 2>/dev/null || echo "")
+    echo "CLEAN_WORKTREE_METADATA: base=${metadata_base_ref:-n/a} created_at=${metadata_created_at:-n/a} backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} env_isolation=${metadata_env_isolation:-n/a} pr=${metadata_pr:-n/a} orca_mode=${metadata_orca_mode:-n/a}"
   else
     echo "CLEAN_WORKTREE_METADATA: present jq_missing file=$metadata_file"
   fi
@@ -140,6 +143,16 @@ if [ "$KEEP_SESSION" -eq 0 ]; then
   fi
 else
   echo "CLEAN_WORKTREE_SESSION: kept session=$SESSION"
+fi
+
+# v2.1（DEC-114）：ORCA 模式下额外清理 ORCA 跟踪的 worktree（tmux 路径不会自动同步）。
+# 用 run() 包装保持 dry-run 友好；ORCA 不可用 / 无 worktree_id 时跳过（不阻塞 git 清理）。
+if [ -n "${metadata_orca_worktree_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
+  if command -v orca >/dev/null 2>&1; then
+    run orca worktree rm --worktree "id:$metadata_orca_worktree_id" --force
+  else
+    echo "CLEAN_WORKTREE_ORCA: orca CLI not found, skip ORCA worktree rm (worktree_id=$metadata_orca_worktree_id)"
+  fi
 fi
 
 if [ "$KEEP_WORKTREE" -eq 0 ]; then
