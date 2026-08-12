@@ -119,9 +119,10 @@ if [ -f "$METADATA_FILE" ] && command -v jq >/dev/null 2>&1; then
     echo "ORCA_META: mode=${orca_mode} worktree_id=${orca_worktree_id:-n/a} terminal=${orca_terminal_handle:-n/a}"
     if [ -n "$orca_worktree_id" ] && command -v orca >/dev/null 2>&1; then
       orca_status_json=$(orca worktree show --worktree "id:$orca_worktree_id" --json 2>/dev/null || echo "{}")
-      orca_workspace_status=$(printf '%s' "$orca_status_json" | jq -r '.result.workspaceStatus // empty' 2>/dev/null)
-      orca_card_status=$(printf '%s' "$orca_status_json" | jq -r '.result.status // empty' 2>/dev/null)
-      orca_comment=$(printf '%s' "$orca_status_json" | jq -r '.result.comment // empty' 2>/dev/null)
+      # orca worktree show 响应嵌套在 .result.worktree（不是顶层 .result）
+      orca_workspace_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.workspaceStatus // empty' 2>/dev/null)
+      orca_card_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.status // empty' 2>/dev/null)
+      orca_comment=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.comment // empty' 2>/dev/null)
       echo "ORCA_WORKSPACE_STATUS: ${orca_workspace_status:-n/a}"
       echo "ORCA_CARD_STATUS: ${orca_card_status:-n/a}"
       echo "ORCA_COMMENT: ${orca_comment:-n/a}"
