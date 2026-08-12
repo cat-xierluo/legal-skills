@@ -678,27 +678,25 @@ array_to_json() {
 # 命中 auto 时填充 ORCA_WORKTREE_ID / ORCA_WORKTREE_PATH / ORCA_TERMINAL_HANDLE /
 # ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 全局变量，供 ORCA 分支与 METADATA 写入使用。
 detect_orca_mode() {
+  # 直接设全局 ORCA_MODE（不用 echo + $() 捕获），否则 ORCA_APP_VERSION /
+  # ORCA_CAPABILITIES_JSON / ORCA_WORKTREE_PATH 在 $() 子 shell 赋值会丢失。
   if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
     echo "SPAWN_WORKER_ORCA_LIGHTWEIGHT_FORCES_TMUX: --no-worktree 与 ORCA 模式互斥，走原 tmux 路径" >&2
-    echo "force_tmux"
-    return 0
+    ORCA_MODE="force_tmux"; return 0
   fi
 
   if [ "$NO_ORCA_MODE" -eq 1 ]; then
     echo "SPAWN_WORKER_ORCA_FORCED_TMUX: --no-orca-mode 显式 opt-out" >&2
-    echo "force_tmux"
-    return 0
+    ORCA_MODE="force_tmux"; return 0
   fi
 
   if [ "$TERM_PROGRAM" != "Orca" ] || [ -z "$ORCA_WORKTREE_ID" ]; then
-    echo "force_tmux"
-    return 0
+    ORCA_MODE="force_tmux"; return 0
   fi
 
   if ! command -v orca >/dev/null 2>&1; then
     echo "ERROR: TERM_PROGRAM=Orca + ORCA_WORKTREE_ID 非空，但 'orca' CLI 不在 PATH (--no-orca-mode 可强制走 tmux)" >&2
-    echo "missing_orca"
-    return 0
+    ORCA_MODE="missing_orca"; return 0
   fi
 
   local orca_wt_path="${ORCA_WORKTREE_ID#*::}"
@@ -706,15 +704,13 @@ detect_orca_mode() {
   project_toplevel=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")
   if [ -z "$project_toplevel" ] || [ "$orca_wt_path" != "$project_toplevel" ]; then
     echo "SPAWN_WORKER_ORCA_PATH_MISMATCH: ORCA_WORKTREE_ID=$orca_wt_path vs PROJECT_DIR toplevel=$project_toplevel (跨 repo，强制走 tmux)" >&2
-    echo "force_tmux"
-    return 0
+    ORCA_MODE="force_tmux"; return 0
   fi
 
   local status_json
   if ! status_json=$(orca status --json 2>/dev/null); then
     echo "ERROR: orca status --json 失败（ORCA app 未运行？请跑 'orca open' 或传 --no-orca-mode）" >&2
-    echo "missing_orca"
-    return 0
+    ORCA_MODE="missing_orca"; return 0
   fi
 
   local app_version capabilities_json
@@ -722,24 +718,22 @@ detect_orca_mode() {
   capabilities_json=$(printf '%s' "$status_json" | jq -c '.result.runtime.capabilities // []' 2>/dev/null)
   if [ -z "$app_version" ] || [ "$app_version" = "null" ]; then
     echo "ERROR: orca status --json 缺少 appVersion（ORCA CLI 版本不兼容）" >&2
-    echo "missing_orca"
-    return 0
+    ORCA_MODE="missing_orca"; return 0
   fi
-
-  ORCA_APP_VERSION="$app_version"
-  ORCA_CAPABILITIES_JSON="$capabilities_json"
-  ORCA_WORKTREE_PATH="$project_toplevel"
 
   local has_terminal_multiplex
   has_terminal_multiplex=$(printf '%s' "$capabilities_json" | jq -r 'any(. == "terminal.multiplex.v1")' 2>/dev/null)
   if [ "$has_terminal_multiplex" != "true" ]; then
     echo "ERROR: ORCA $app_version 缺少 terminal.multiplex.v1 capability（需要 ≥1.4.x）" >&2
-    echo "missing_orca"
-    return 0
+    ORCA_MODE="missing_orca"; return 0
   fi
 
+  # 全局变量赋值（主 shell，不丢失）
+  ORCA_APP_VERSION="$app_version"
+  ORCA_CAPABILITIES_JSON="$capabilities_json"
+  ORCA_WORKTREE_PATH="$project_toplevel"
   echo "SPAWN_WORKER_ORCA_AUTO: TERM_PROGRAM=Orca + ORCA_WORKTREE_ID 匹配，ORCA $app_version" >&2
-  echo "auto"
+  ORCA_MODE="auto"
 }
 
 # ORCA worktree create helper。返回 ORCA worktreeId (含完整 <repoId>::<path>)。
@@ -756,7 +750,7 @@ orca_worktree_create() {
     echo "ERROR: orca worktree create 失败: $out" >&2
     exit 64
   }
-  worktree_id=$(printf '%s' "$out" | jq -r '.result.worktreeId // empty')
+  worktree_id=$(printf '%s' "$out" | jq -r '.result.worktree.id // empty')
   if [ -z "$worktree_id" ]; then
     echo "ERROR: orca worktree create 响应缺 worktreeId: $out" >&2
     exit 64
@@ -786,7 +780,7 @@ orca_terminal_create_and_send() {
     echo "ERROR: orca terminal create 失败: $out" >&2
     exit 64
   }
-  handle=$(printf '%s' "$out" | jq -r '.result.handle // empty')
+  handle=$(printf '%s' "$out" | jq -r '.result.terminal.handle // empty')
   if [ -z "$handle" ]; then
     echo "ERROR: orca terminal create 响应缺 handle: $out" >&2
     exit 64
@@ -811,7 +805,7 @@ orca_terminal_create_and_send() {
 #   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
 #   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
 #   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
-ORCA_MODE=$(detect_orca_mode)
+detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
 if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
 fi
@@ -882,14 +876,16 @@ if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
 elif [ "$ORCA_MODE" = "auto" ]; then
   # v2.1（DEC-114）：ORCA 终端模式。每次都新建独立 ORCA worktree（--no-parent），
   # 不复用 git worktree（ORCA worktree 是独立概念，由 ORCA 桌面端跟踪）。
-  # orca worktree create --base-branch "$X" 基于 X 的 commit 建新 worktree；
-  # 优先用 BRANCH（若已存在），否则 BASE_REF。
+  # ORCA worktree 的 git branch 名不能含 '/'（ORCA --name 既作显示名又作 branch 名），
+  # 必须用 safe_branch（BRANCH 的 safe 化版本）。把 BRANCH 统一设成 safe_branch，
+  # 让下游 Isolation Gate / METADATA / orca --name 全部一致。
+  BRANCH="$safe_branch"
   orca_base="$BASE_REF"
   if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null \
      || git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
     orca_base="$BRANCH"
   fi
-  ORCA_WORKTREE_ID=$(orca_worktree_create "tmux-$safe_branch" "$orca_base")
+  ORCA_WORKTREE_ID=$(orca_worktree_create "$BRANCH" "$orca_base")
   # ORCA worktree create 后实际 path 可能不是 PROJECT_DIR（ORCA 默认放 ~/orca/workspaces/<name>）；
   # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE + ORCA_WORKTREE_PATH。
   if [ -n "$ORCA_WORKTREE_ID" ] && [ "$ORCA_WORKTREE_ID" != "orca_worktree_id_placeholder" ]; then
@@ -1539,6 +1535,12 @@ if [ "$ORCA_MODE" = "auto" ]; then
   # `orca terminal send --terminal $HANDLE --text "..." --enter` 追加）。
   orca_terminal_create_and_send "$ORCA_WORKTREE_ID" "$SESSION" "$COMMAND" \
     "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/${SESSION}（详细指令将由 PM 后续 orca terminal send 投递）"
+  # v2.1（DEC-114）：orca_terminal_create_and_send 在 write_metadata 之后跑（设 ORCA_TERMINAL_HANDLE），
+  # 补 patch METADATA 的 session.orca.terminal_handle，让 PM 巡检 METADATA 能拿到 handle。
+  if [ "$DRY_RUN" -eq 0 ] && [ -n "$ORCA_TERMINAL_HANDLE" ] && [ -f "$METADATA_FILE" ]; then
+    tmp_meta=$(mktemp)
+    jq --arg handle "$ORCA_TERMINAL_HANDLE" '.session.orca.terminal_handle = $handle' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
+  fi
 else
   run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 fi
