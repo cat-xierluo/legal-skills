@@ -54,11 +54,12 @@ else
   check "permission_auto() 函数定义存在" 1
 fi
 
-# 2. permission_auto 用数字键 '2'（v1.18.3 关键修复）
-if grep -A 25 "^permission_auto() {" "$SPAWN_WORKER" | grep -qF 'send-keys -t "$session" "2"'; then
-  check "permission_auto 用数字键 '2'（v1.18.3）" 0
+# 2. permission_auto 通过统一 worker_session_send_choice 发送数字键 '2'，
+# tmux/Orca 分别由 helper 路由（v2.3）。
+if grep -A 32 "^permission_auto() {" "$SPAWN_WORKER" | grep -qF 'worker_session_send_choice "$session" "2"'; then
+  check "permission_auto 用统一控制面发送数字键 '2'（v2.3）" 0
 else
-  check "permission_auto 用数字键 '2'（v1.18.3）" 1
+  check "permission_auto 用统一控制面发送数字键 '2'（v2.3）" 1
 fi
 
 # 3. permission_auto_bg 函数定义存在

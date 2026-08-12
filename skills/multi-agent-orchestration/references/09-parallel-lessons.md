@@ -147,12 +147,12 @@ MyAgents 的 Claude Agent SDK 路径给了一个可移植经验：不要把"当�
 
 **现象**：spawn-worker.sh inherited-env 模式启动 claude-code worker，项目若配了 MCP server（如本书 5 个：MiniMax + qcc-company/risk/ipr/operation），worker claude 启动弹「N new MCP servers found / Select any you wish to enable」TUI 选择 dialog。worker 卡在 dialog 不写 STATUS.json，PM 误判 silent/hang。
 
-**根因**：auto-bypass 三层（`trust_auto` / `permission_auto` / `permission_auto_bg`，SKILL.md §3.5）只处理 trust folder + "Do you want to proceed?" dialog，**不处理 MCP 启用选择 dialog**。render-runtime-profile 生成的 claude-code 命令 `claude --model X --permission-mode auto` 默认加载项目 MCP 触发选择 dialog；v1.18.4 的 `--bare` 能减少 dialog 但 render-runtime-profile 默认未给 claude-code 命令加 `--bare`。
+**根因**：auto-bypass 三层（`trust_auto` / `permission_auto` / `permission_auto_bg`，见 `spawn-worker.sh`）只处理 trust folder + "Do you want to proceed?" dialog，**不处理 MCP 启用选择 dialog**。render-runtime-profile 生成的 claude-code 命令 `claude --model X --permission-mode auto` 默认加载项目 MCP 触发选择 dialog；v1.18.4 的 `--bare` 能减少 dialog但 render-runtime-profile 默认未给 claude-code 命令加 `--bare`。
 
 **解法**（按优先级）：
 1. **spawn 后 Esc**（worker 不需 MCP，多数文档/代码任务）：`tmux send-keys -t <session> Escape` 拒绝全部 MCP，worker 进输入态。
 2. **spawn 命令带 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`**：worker 以空 MCP 启动不弹 dialog（render-runtime-profile 渲染时加，或 `--command` 显式传）。
-3. **`--command` 补 `--bare`**：v1.18.4 实测 `--permission-mode auto --bare` 减少 dialog（SKILL.md §3.5 v1.18.4 注）。
+3. **`--command` 补 `--bare`**：v1.18.4 实测 `--permission-mode auto --bare` 减少 dialog（见 `spawn-worker.sh` usage）。
 
 **与 T5 的区别**：T5 是 provider env 隔离（model/credentials 合并），本条是 MCP dialog（第三类 dialog）。provider env（T5）+ glm 额度（项目 memory）+ MCP dialog（T6）三者叠加致 2026-07-11 spawn rules-cleanup worker 失败，PM 改走 §2.2 例外直接收口。
 
@@ -514,12 +514,12 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 
 **场景**：Wave 启动时 PM 误把"spawn 阶段串行、worker 阶段并行"当作稳妥选项——先派 W1、`await` 等 W1 `STATUS.json` 出现，才派 W2，再派 W3。多花一轮时间，价值零（与单 worker 跑三次无异）。
 
-**实战来源**：2026-07-10 某客户委托项目多 worker Wave 实战（3 个不同 skill backend 的 worker，全 claude-code backend，反馈「着实影响并行推进任务」）。PM 一开始串行 spawn W1→W2→W3 浪费一轮；Wave 后半段并行 spawn 才补回节奏。详见 `SKILL.md §3.8.2`、TASKS L118、DEC-112。
+**实战来源**：2026-07-10 某客户委托项目多 worker Wave 实战（3 个不同 skill backend 的 worker，全 claude-code backend，反馈「着实影响并行推进任务」）。PM 一开始串行 spawn W1→W2→W3 浪费一轮；Wave 后半段并行 spawn 才补回节奏。详见 `SKILL.md §3`、TASKS 与 DEC-112。
 
 **两条改进**：
 
 1. **spawn 阶段就并行投递**：文件域不重叠 + 验证命令独立 + 无共享契约冲突的 worker，**从一开始**就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用），不先串行验证流程再补并行。spawn 阶段就并行与 `§3.1` 已有的"Wave 内 4-6 worker 并行"硬数字配套。
-2. **spawn 后不 await、不 block、不 attach**：spawn-worker.sh 退出后立即跑 `SKILL.md §3.8.1` 的 4 条核验命令（`tmux has-session` / `capture-pane` / `METADATA.json` / `STATUS.json` with `timeout 120`），不超过 30 秒/worker，立即返回 PM 主循环。后续 worker 终态由 sentinel（§7.2）+ cron（§7.3）事件驱动接管。
+2. **spawn 后不 await、不 block、不 attach**：spawn-worker.sh 退出后立即按 `templates/pm-spawn-postflight.md` 核验 session/cwd/METADATA/STATUS，不超过 30 秒/worker，立即返回 PM 主循环。后续 worker 终态由 Sentinel/PM monitor 接管。
 
 **反模式**：
 
@@ -653,3 +653,11 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 **关联**：SKILL §6 启动方式、§5.1 worker-prompt 模板纪律、§7.2 sentinel、§2.1 防逃逸门禁；v1.20.2 setsid 修复；references/07 §9.3 PreToolUse hook unbypassable；references/08 §14 codebuddy 坑。
 
 **关联**：SKILL §3.8.1 spawn 后核验、§7.2 sentinel、§7.3 cron 双层、§10/§14 codebuddy 坑、§12 scope-guard；references/08 §10.3 漏 commit / §14.2 Enter 坑。
+### G30. Orca 真实多 CLI 前向测试：consumer fencing、external terminal 与 TUI 读取语义
+
+**实战来源**：2026-08-12，Orca 1.4.180。实际启动 Claude Code、Codex、CodeBuddy、QoderWork，并用传统 tmux 分别复验 Claude/Codex。
+
+1. **Run ID 不能替代 coordinator handle**：只传 Run 时，`worker-start` 返回 `consumer_fenced`。必须从 `run-create/run-use` receipt 取得 coordinator handle，并在 `task-create` 与 `worker-start` 都显式传 `--from`。
+2. **预创建 provider terminal 是 external resource**：Claude/Codex 都可完成 `worker_done → Delivery → ack`，但 `worker-release` 对外部终端正确返回 retained。创建者只能在 worker/Dispatch 已结算、ownership/reason 为 `external/external_terminal`、resource handle 与 METADATA 完全一致时关闭精确句柄。
+3. **`tui-idle` 不是完成**：CodeBuddy 仍显示等待模型时可以返回 idle；Qoder 默认 tail 只见 spinner，必须用 cursor history 读取完整历史。terminal-managed 完成仍由 STATUS/RESULT、真实 diff/tests/artifacts 和 PM 验收决定。
+4. **本地 launcher 可能已有安全参数**：Codex launcher 已固定 sandbox/approval，render 再注入相同参数会让 CLI exit 2。只有可读脚本能证明两个值与请求完全相同时才省略重复参数。

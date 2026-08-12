@@ -331,16 +331,18 @@ rm -f /tmp/dependency-install-unsupported.out
 
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/bare --session "$session-bare" \
-  --worker-backend claude-code --command "claude --bare" >/tmp/dependency-install-bare.out 2>&1; then
-  not_ok "Claude --bare cannot silently bypass hook enforcement"
-  tmux kill-session -t "$session-bare" 2>/dev/null || true
-else
-  if grep -qF -- "--bare skips or may skip hooks" /tmp/dependency-install-bare.out; then
-    ok "Claude --bare cannot silently bypass hook enforcement"
+  --worker-backend claude-code --command "claude --bare" --dry-run \
+  >/tmp/dependency-install-bare.out 2>&1; then
+  if grep -qF "SPAWN_WORKER_BARE_AUTO_DEGRADE" /tmp/dependency-install-bare.out \
+    && grep -qF "SPAWN_WORKER_INSTALL_GUARD_DEGRADED" /tmp/dependency-install-bare.out; then
+    ok "Claude --bare explicitly records prompt-only degradation"
   else
     cat /tmp/dependency-install-bare.out >&2 || true
-    not_ok "Claude --bare cannot silently bypass hook enforcement"
+    not_ok "Claude --bare explicitly records prompt-only degradation"
   fi
+else
+  cat /tmp/dependency-install-bare.out >&2 || true
+  not_ok "Claude --bare explicitly records prompt-only degradation"
 fi
 rm -f /tmp/dependency-install-bare.out
 

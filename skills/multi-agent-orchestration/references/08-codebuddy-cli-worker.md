@@ -20,7 +20,7 @@ CodeBuddy 桌面端内置了 `codebuddy` CLI 二进制，功能对标 Claude Cod
 - **次选**：`deepseek-v4-flash`（平台批量模型）
 - **回退**：`deepseek-v4-pro`（**仅作回退，不用作主**）
 
-spawn-worker.sh 派 codebuddy worker 时按 `--model hy3` → `deepseek-v4-flash` → `deepseek-v4-pro` 顺序选 model。详见 `config/orchestration-personal.example.json` 的 `backend_model_routing.codebuddy.default_models` 字段 + SKILL.md §2.4 "Backend 模型偏好" 段。
+spawn-worker.sh 派 codebuddy worker 时按 `--model hy3` → `deepseek-v4-flash` → `deepseek-v4-pro` 顺序选 model。详见 `config/orchestration-personal.example.json` 的 `backend_model_routing.codebuddy.default_models` 字段 + SKILL.md §9。
 
 与 Claude Code 的关系：CodeBuddy 的 CLI 参数体系与 Claude Code 高度兼容（`-p`、`--print`、`--output-format`、`--settings`、`--permission-mode`、`--worktree`、`--mcp-config` 等），可直接沿用 SKILL.md 中对 Claude Code worker 的大部分模板。
 
@@ -391,7 +391,7 @@ CLI 和 CodeBuddy 桌面端共用 `~/.codebuddy/` 下的认证和额度池。CLI
 
 §6.6/6.7 原"2026-06-21 书稿 worker 实测"和"2026-06-26 复测更新"两段（kimi-k2.6 三轮评测、snapshot-copy-into-worktree pattern、render-runtime-profile 支持情况）已精简：
 
-- **snapshot-copy-into-worktree** 已固化为通用规则，见 SKILL.md §2.3 + DEC-037。
+- **snapshot-copy-into-worktree** 已固化为通用规则，见 SKILL.md §9 + DEC-037。
 - **render-runtime-profile 对 codebuddy/qoderwork-cn 的支持** 见 `scripts/render-runtime-profile.sh --help`。
 - **spawn 实战踩坑**（权限/Enter/session 断流等）已合并到 §10。
 
@@ -851,7 +851,7 @@ spawn 时在 worktree 写 `.codebuddy/settings.local.json`：
 
 > **版本记录**：
 >
-> - 2026-08-05：① 全文拼写校正 `qodebuddy` → `CodeBuddy`（产品名，腾讯旗下）；② 结构精简——合并旧 §10（2026-07-05 五轮）与旧 §14（2026-07-08 三轮）为新 §10「spawn 实战坑点」（按坑点类型组织，双速查表合一）；删除旧 §6.6/§6.7 历史实测段（snapshot-copy pattern 已固化为 SKILL.md §2.3 + DEC-037，render-runtime-profile 支持情况见 `--help`），保留 §6.6 指针；版本记录区由 12 条压缩为关键节点。
+> - 2026-08-05：① 全文拼写校正 `qodebuddy` → `CodeBuddy`（产品名，腾讯旗下）；② 结构精简——合并旧 §10（2026-07-05 五轮）与旧 §14（2026-07-08 三轮）为新 §10「spawn 实战坑点」（按坑点类型组织，双速查表合一）；删除旧 §6.6/§6.7 历史实测段（snapshot-copy pattern 已固化为 SKILL.md §9 + DEC-037，render-runtime-profile 支持情况见 `--help`），保留 §6.6 指针；版本记录区由 12 条压缩为关键节点。
 > - 2026-07-08：腾讯混元（Hunyuan）模型支持落地——`hy3` 升为带思考主力首选（内部路由含思考能力，对外统一显示 Hy3），`hy3-preview-agent` 实测有消耗额度移出 default_models，`hy3-r1` 实测 400 不可用移除；default_models 收敛为 `hy3 / deepseek-v4-flash / deepseek-v4-pro`（§4.1）；§3.1 加 `--effort` 行；§7.5 多模型路由示例补 Worker D（Hy3）；spawn 投递配方补强（见新 §10.1/10.2/10.6）。
 > - 2026-07-05：新增 §12 权限与 scope 控制（PreToolUse hook unbypassable）；§11 `--add-dir` 跨目录访问与 permission_auto 兜底；§10 spawn 实战坑点首版。
 > - 2026-06-21：补充 `kimi-k2.6` 三轮书稿 worker 评测实践、CodeBuddy checkpoint/path 偏差和 metadata finalize 收口规则。

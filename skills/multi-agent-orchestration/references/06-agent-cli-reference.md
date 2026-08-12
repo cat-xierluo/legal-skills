@@ -1,7 +1,7 @@
 # Agent CLI 完整参考手册
 
 > 本文档为 SKILL.md 的补充参考文档，汇总本机已安装的所有 Agent CLI 的命令规范。
-> 更新日期：2026-06-21
+> 更新日期：2026-08-12
 
 ---
 
@@ -9,8 +9,8 @@
 
 | CLI | 版本 | 二进制路径 | 交互模式 | 批处理模式 | ACP | 额度来源 | 默认 model（个人偏好） |
 |-----|------|-----------|----------|-----------|-----|---------|------------------------|
-| Claude Code | 2.1.175 | `~/.local/bin/claude` | `claude` | `claude -p` | ✗ | Anthropic API / 第三方 provider / OAuth | （由 `config/orchestration-personal.json` 的 `main_force.task_routing` 决定） |
-| Codex | 0.142.0-alpha.6 | `~/.local/bin/codex` | `codex` | `codex exec` | ✗ | OpenAI API | （见 `codex_policy.policy`，默认 `explicit_only` 时不主动派） |
+| Claude Code | 2.1.208 | `~/.local/bin/claude` | `claude` | `claude -p` | ✗ | Anthropic API / 第三方 provider / OAuth | （由 `config/orchestration-personal.json` 的 `main_force.task_routing` 决定） |
+| Codex | 0.147.0-alpha.6.5 | `~/.local/bin/codex` | `codex` | `codex exec` | ✗ | OpenAI API | （见 `codex_policy.policy`，默认 `explicit_only` 时不主动派） |
 | OpenCode | 1.17.6 | `~/.opencode/bin/opencode` | `opencode` | `opencode run` | ✓ `opencode acp` | 多 provider（config.toml） | `opencode:<provider>/<model>`（按 OpenCode profile） |
 | Hermes Agent | 0.17.0 | `~/.local/bin/hermes` | `hermes` / `hermes chat` | `hermes chat -q "..."` | ✓ `hermes acp` | 多 provider（pooled auth） | （按 hermes profile） |
 | Kimi CLI | 0.39 | `~/.local/bin/kimi` | `kimi` | `kimi --print -c "..."` | ✓ `kimi --acp` | Moonshot API | （按 kimi profile） |
@@ -19,7 +19,7 @@
 | CodeBuddy CLI | 2.115.0 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `hy3`、`deepseek-v4-flash`、`deepseek-v4-pro` |
 | Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
 
-> 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §2.4）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
+> 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §9）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
 
 **未安装 / 不可用**：OpenClaw（symlink 已断）、Reasonix、Aider、Devin。
 
@@ -204,6 +204,7 @@ codex exec -c 'model="o3"' -c 'shell_environment_policy.inherit=all' - < /tmp/ta
 - `-s danger-full-access` 是 worker 自动化的常用选项，但需确保 worktree 隔离
 - Codex 没有内建的 `--system-prompt` 参数，系统提示需在 prompt 文件或 config.toml 中设定
 - `codex apply` 可在 worker 完成后单独应用 diff，作为 PM 收口的替代路径
+- 本机 `codex` 可能是已经固定 `--sandbox` / `--ask-for-approval` 的安全 launcher。`render-runtime-profile.sh` 只有在可读脚本中证明两个值与请求完全一致时才省略重复参数；否则继续显式传参。不要把“参数重复导致 CLI exit 2”误判成 Agent/Orca 启动失败。
 
 ---
 

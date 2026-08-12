@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.4.0  | 新增 Harness 调用层级门禁：Claude/Codex 可派发四个已配置后端，CodeBuddy/QoderWork CN 只能自派；宿主由进程与 Orca 运行时证据识别，未知或伪造身份失败关闭；保留 Orca-first 与 tmux 回退 |
 | 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
@@ -41,7 +42,6 @@
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
 | 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
-| 2026-08-01 | 更新   | [patent-analysis](skills/patent-analysis/)                             | v2.2.0  | 完整审计第八十四号令23项修改并映射十个场景；新增无网址、多条款法源登记表和确定性校验器，FTO在法源、权利要求、期限补偿或许可状态变化后先刷新再评级 |
 </details>
 
 ## 📋 项目概述
@@ -625,9 +625,9 @@
 <tr>
 <td><a href="skills/multi-agent-orchestration/"><strong>multi-agent-orchestration</strong></a></td>
 <td>工具·Agent协作</td>
-<td style="word-break:break-word">多 Agent 本地执行编排，支持 worktree/session 隔离、tmux worker、PM 巡检、Shell/安装权限门禁与身份绑定 PR 收口</td>
+<td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 worktree/terminal UI、Run/Task/Dispatch、worker transcript、Claude Code/Codex/CodeBuddy/QoderWork CN 总控、Harness 层级门禁与 tmux 回退</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.19.0</td>
+<td style="text-align:center">v2.4.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载</a></td>
 <td></td>
 </tr>
