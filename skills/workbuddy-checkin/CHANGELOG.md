@@ -1,5 +1,55 @@
 # 变更日志
 
+## [1.0.3] - 2026-08-12
+
+### 修复
+
+- **Windows 读不到新版明文登录态导致持续 401**（#73 / PR #74）：`decrypt-token.js` 的 win32 候选原本只探 `%APPDATA%\CodeBuddyExtension\...`，而当前桌面端实际把明文登录态写在 **`%LOCALAPPDATA%`**。读不到新文件时会回退旧版 `state.vscdb` 分支，取到**过期的历史会话令牌**，表现为「令牌能读出来、但接口一律 401」。现改为 **优先 `%LOCALAPPDATA%`、回退 `%APPDATA%`**。
+  - **这是本次唯一修复 401 的改动。**
+
+- **假 401 导致当日签到被跳过、连续签到中断**（`checkin.sh` / `checkin.ps1`，合并 PR #74 时发现）：401 判定原本是**扫响应体子串**（`grep -qi "401\|unauthorized"` / `$Status -match "401|unauthorized"`），而响应体带一个**每次随机的 UUID `requestId`**。UUID 里恰好出现 `401` 时，HTTP 200、`code=0` 的正常响应会被判成「令牌已过期」，脚本在调 `daily-checkin` **之前**就 `exit 1`。
+  - **后果**：当日积分未领取；更贵的是**连续签到中断**，第 7 天的 1000 积分奖励作废。
+  - **概率**：蒙特卡洛 20 万次实测 **0.566%/次**（理论 22/4096）。按每天跑一次计，**一年内约 87% 概率至少踩中一次**，期望每 177 天一次。
+  - **修复**：改用 `curl -w '\n%{http_code}'` 取真实 HTTP 状态码，与响应体分离判定；`000`→网络异常、`401/403`→令牌失效、其他非 `200`→带状态码报错。日志从此能区分「网络异常 / 鉴权失败 / 业务失败」，便于事后诊断。
+  - **验证**：4 例离线单测全绿（含「200 + requestId 含 401」这条关键用例，旧实现在此误判、新实现正确放行）；`checkin.sh` 端到端连跑 3 次均 `exit 0` 且幂等正确。
+
+### 改进
+
+- **请求签名对齐桌面端 `buildHeaders`**（`checkin.ps1`）：路径改用 `/v2/billing/meter/*`，并附带 `X-User-Id: <account.uid>`；有 `auth.domain` 时加 `X-Domain`，企业账号另加 `X-Enterprise-Id` / `X-Tenant-Id`。
+  - **定位：前向兼容加固，不是 401 的修复项。** 网关当前并不强制这两项（见下方验证矩阵）。对齐上游的意义在于——官方哪天真收紧鉴权时，跟随桌面端的实现不会跟着挂。
+- `decrypt-token.js` 在两处成功分支追加输出 `ACCOUNT_UID` / `AUTH_DOMAIN` / `ENTERPRISE_ID` 三行（纯 stdout，不落盘、不写日志），供调用方拼装鉴权头。
+  - **调用方契约**：stdout 不再是单行，消费方**必须**按行前缀过滤（`grep '^DECRYPT_RESULT:'` / `Select-String`），不可整段捕获。现有 4 个消费方（`checkin.sh:79,87`、`setup.sh:55,136`、`checkin.ps1`、`setup.ps1:54,124`）均已是前缀过滤写法，无需改动。
+
+### 根因更正（重要）
+
+Issue #73 与 PR #74 原文断言「APISIX 网关只在 `/v2/billing/meter/*` 接受，**缺前缀直接 401**」「网关要求 `X-User-Id`，**缺此项同样 401**」。**这两条经实测证伪，不要据此排查后续 401。**
+
+合并前用真实令牌跑的 2×2 只读验证矩阵（`checkin-status`，个人账号，macOS）：
+
+| 组合 | 结果 |
+|---|---|
+| 旧 `/billing/meter` + 仅 `Authorization` | HTTP 200 `code=0 msg=OK` |
+| 旧 `/billing/meter` + 完整头 | HTTP 200 `code=0` |
+| `/v2/billing/meter` + 仅 `Authorization` | HTTP 200 `code=0` |
+| `/v2/billing/meter` + 完整头 | HTTP 200 `code=0` |
+
+写接口另行验证：`checkin.sh`（旧路径、不带 `X-User-Id`）实跑 `daily-checkin` 返回业务码 `code=10001`（今日已签到），**非 401**。
+
+原实验之所以得出错误结论，是因为一次同时改动了三个变量（路径、请求头、**令牌来源**），而真正起作用的是第三个——手工 curl 用的是从 `%LOCALAPPDATA%` 现取的新鲜令牌。
+
+**已知验证边界**：矩阵在个人账号（无 `enterpriseId`）、单一区域、单一时间点取得；企业账号或后续网关策略调整下的行为未覆盖。
+
+### 文档
+
+- `SKILL.md`：版本升至 1.0.3；原理章节补充 `/v2/` 与 `buildHeaders` 签名及其"非必要条件"的定位；平台表 Windows 行改为 `%LOCALAPPDATA%`（回退 `%APPDATA%`）；安全说明的网络访问范围补 `/v2/` 路径；排错新增「Windows 已登录却持续 401」条目，明确指向令牌来源而非请求构造。
+- `decrypt-token.js`：恢复 PR #74 中被一并删除的维护性注释——跨平台登录态路径清单（并修正 Windows 为 `%LOCALAPPDATA%`）、依赖与运行方式、`emitAndExit` 延迟退出的原因、`app.setName` 必须早于 ready 的警告、python3 回退的信任边界说明。
+- `checkin.ps1`：恢复 `today_checked_in` 字段不可靠的说明（它是 `code=10001` 幂等兜底存在的理由）、`ELECTRON_RUN_AS_NODE` 必须移除的原因、`WB_CHECKIN_JITTER` 用法说明。
+
+### 已知限制
+
+- `checkin.sh`（macOS / Linux）仍使用不带 `/v2/` 前缀、仅 `Authorization` 的旧写法。实测可用，故本版未改动；如需与桌面端完全对齐可后续收敛。
+- Windows 侧（`%LOCALAPPDATA%` 路径修复、`/v2/` 签名、`checkin.ps1` 的 HTTP 状态码判定）**未在 Windows 实机验证**，本版验证均在 macOS 完成；以 PR #74 提交者与后续使用者反馈为准。
+
 ## [1.0.2] - 2026-08-06
 
 ### 修复

@@ -119,16 +119,31 @@ fi
 API="https://copilot.tencent.com"
 
 # ---------- 2. 查询签到状态 ----------
-STATUS=$(curl -s -m 15 -X POST "$API/billing/meter/checkin-status" \
+# 鉴权失败一律以真实 HTTP 状态码判定，不再匹配响应体子串。
+# 旧实现用 `grep -qi "401\|unauthorized"` 扫响应体，而响应体带随机 UUID 的 requestId，
+# 约 0.57%/次 会因 UUID 里恰好出现 "401" 被误判为令牌过期 —— 脚本在调 daily-checkin
+# 之前就退出，导致当日积分未领取、连续签到中断（第 7 天 1000 积分奖励作废）。
+# 每天跑一次时，一年内约 87% 概率至少踩中一次。
+RESP=$(curl -s -m 15 -w '\n%{http_code}' -X POST "$API/billing/meter/checkin-status" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -H "Authorization: Bearer $TOKEN" -d '{}' 2>/dev/null || echo "")
+HTTP_CODE=$(printf '%s' "$RESP" | tail -n 1)
+STATUS=$(printf '%s' "$RESP" | sed '$d')
 
-if [ -z "$STATUS" ]; then
+if [ -z "$RESP" ] || [ "$HTTP_CODE" = "000" ]; then
   log "❌ 查询签到状态失败（网络异常）"
   exit 1
 fi
-if echo "$STATUS" | grep -qi "401\|unauthorized"; then
-  log "❌ 令牌已过期（401），请打开 WorkBuddy 桌面端刷新登录态后重试"
+if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+  log "❌ 令牌已过期或无权限（HTTP $HTTP_CODE），请打开 WorkBuddy 桌面端刷新登录态后重试"
+  exit 1
+fi
+if [ "$HTTP_CODE" != "200" ]; then
+  log "❌ 查询签到状态失败（HTTP $HTTP_CODE）"
+  exit 1
+fi
+if [ -z "$STATUS" ]; then
+  log "❌ 查询签到状态失败（响应为空，HTTP $HTTP_CODE）"
   exit 1
 fi
 
@@ -150,12 +165,22 @@ if [ "$CHECKED" = "True" ]; then
 fi
 
 # ---------- 3. 执行签到 ----------
-RESULT=$(curl -s -m 15 -X POST "$API/billing/meter/daily-checkin" \
+RESP2=$(curl -s -m 15 -w '\n%{http_code}' -X POST "$API/billing/meter/daily-checkin" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -H "Authorization: Bearer $TOKEN" -d '{}' 2>/dev/null || echo "")
+HTTP_CODE2=$(printf '%s' "$RESP2" | tail -n 1)
+RESULT=$(printf '%s' "$RESP2" | sed '$d')
 
-if [ -z "$RESULT" ]; then
+if [ -z "$RESP2" ] || [ "$HTTP_CODE2" = "000" ]; then
   log "❌ 签到请求失败（网络异常）"
+  exit 1
+fi
+if [ "$HTTP_CODE2" = "401" ] || [ "$HTTP_CODE2" = "403" ]; then
+  log "❌ 令牌已过期或无权限（HTTP $HTTP_CODE2），请打开 WorkBuddy 桌面端刷新登录态后重试"
+  exit 1
+fi
+if [ -z "$RESULT" ]; then
+  log "❌ 签到请求失败（响应为空，HTTP $HTTP_CODE2）"
   exit 1
 fi
 
