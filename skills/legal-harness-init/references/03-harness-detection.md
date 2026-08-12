@@ -4,14 +4,34 @@
 
 "harness" 指的是承载 AI agent 工作的客户端平台（如 Claude Code、Codex、OpenClaw、QoderWork）。每个 harness 读取 AGENTS.md 的路径和语法略有差异。本 skill 的策略是**检测到哪个平台就写入哪个平台**——不主动写你没用过的平台。
 
-## 四个常见 harness
+## 八个 harness 平台
 
-| 平台 | 用户级文件 | 项目级文件 | 检测线索 |
-|---|---|---|---|
-| **Claude Code** | `~/.claude/CLAUDE.md` | `<项目>/CLAUDE.md`（含 `@include ./AGENTS.md`） | `~/.claude/` 目录存在 |
-| **Codex** | `~/.codex/AGENTS.md` | `<项目>/AGENTS.md` | `~/.codex/` 目录存在 |
-| **OpenClaw** | `~/.openclaw/AGENTS.md`（或等价） | `<项目>/AGENTS.md` | `~/.openclaw/` 目录存在 |
-| **QoderWork** | `~/.qoderworkcn/AGENTS.md`（或等价） | `<项目>/AGENTS.md` | `~/.qoderworkcn/` 目录存在 |
+权威表在 [scripts/lib_platforms.sh](../scripts/lib_platforms.sh)（detect/write 共享单一真值源）。
+
+| 平台 | key | config_kind | 用户级文件 | 项目级文件 | 自动写入? |
+|---|---|---|---|---|---|
+| **Claude Code** | `claude-code` | claude_md | `~/.claude/CLAUDE.md` | `<项目>/CLAUDE.md`（可 `@include ./AGENTS.md`） | ✅ |
+| **Codex** | `codex` | agents_md | `~/.codex/AGENTS.md` | `<项目>/AGENTS.md` | ✅ |
+| **OpenClaw** | `openclaw` | agents_md | `~/.openclaw/AGENTS.md` | `<项目>/AGENTS.md` | ✅ |
+| **MyAgents** | `myagents` | claude_md | `~/.myagents/CLAUDE.md` | `<项目>/CLAUDE.md` | ✅ |
+| **QoderWork** | `qoderwork` | non-agents-md | —（`~/.qoderworkcn/` 非 AGENTS.md 模式） | — | ❌ 仅检测 |
+| **QwenWork** | `qwenwork` | non-agents-md | —（`~/.qwenworkcn/`） | — | ❌ 仅检测 |
+| **WorkBuddy** | `workbuddy` | non-agents-md | —（GUI 任务型） | — | ❌ 仅检测 |
+| **Orca** | `orca` | non-agents-md | —（worktree 型） | — | ❌ 仅检测 |
+
+**自动写入边界**：只对 `claude_md` / `agents_md` 平台自动写入（CC / Codex / OpenClaw / MyAgents）。其余 4 个平台不是 AGENTS.md/CLAUDE.md 配置模式（GUI 任务型或 worktree 编排型），写入会无效或破坏——detect 报告里标 `non-agents-md`，write.sh 记 `unsupported` 并提示用户手动配置。
+
+## 当前 runtime 检测（env 标志）
+
+除了"装了哪些"，detect.sh 还报 `current_runtime`——**这次会话正跑在哪个 harness**，通过已知 env 标志变量推断（只看变量是否 set，**不读值**）：
+
+| key | env 标志变量 |
+|---|---|
+| `claude-code` | `CLAUDECODE` |
+| `codex` | `CODEX_HOME` |
+| `orca` | `ORCA_AGENT_HOOK_TOKEN` |
+
+优先级：可写平台（claude_md/agents_md）> 容器层（orca 等）。多个命中或都不命中时报 `null`（诚实不强猜）。例如 CC 跑在 Orca 里时，`CLAUDECODE` 与 `ORCA_AGENT_HOOK_TOKEN` 都 set，但 `current_runtime` 报 `claude-code`（agent 层优先于编排层），因为要写入的是 agent 配置（`~/.claude/CLAUDE.md`），不是 Orca。
 
 ## 本 skill 怎么检测
 
@@ -21,14 +41,17 @@
 bash scripts/detect.sh
 ```
 
-返回结构化 JSON：
+返回结构化 JSON（schema v2）：
 
 ```json
 {
-  "harnesses_detected": ["claude-code", "codex"],
+  "schema_version": "2",
+  "current_runtime": "claude-code",
+  "current_runtime_writeable": true,
+  "harnesses_detected": ["claude-code", "codex", "openclaw", "myagents"],
   "user_level_files": {
-    "claude-code": {"exists": true, "path": "~/.claude/CLAUDE.md", "lines": 42},
-    "codex": {"exists": false, "path": "~/.codex/AGENTS.md", "lines": 0}
+    "claude-code": {"exists": true, "path": "~/.claude/CLAUDE.md", "lines": 42, "config_kind": "claude_md"},
+    "codex": {"exists": false, "path": "~/.codex/AGENTS.md", "lines": 0, "config_kind": "agents_md"}
   },
   "project_level": {
     "cwd": "/path/to/project",
@@ -41,6 +64,14 @@ bash scripts/detect.sh
   }
 }
 ```
+
+字段说明：
+
+- `schema_version`：`"2"`（v1 不含 `current_runtime` / `config_kind`；老调用方忽略新字段不影响）
+- `current_runtime`：这次会话正跑在哪个 harness（env 标志推断）；`null` = 无法确定
+- `current_runtime_writeable`：当前 runtime 是否支持自动写入
+- `harnesses_detected`：本机已装平台 key 列表（通过目录 + 文件痕迹验证）
+- `user_level_files.<key>.config_kind`：`claude_md` / `agents_md` / `non-agents-md`——决定 write.sh 是否自动写入
 
 agent 拿到这个 JSON 后决定：
 
@@ -72,12 +103,14 @@ agent 拿到这个 JSON 后决定：
 
 `scripts/detect.sh` 只做以下检查：
 
-- 检查 `~/.claude/`、`~/.codex/`、`~/.openclaw/`、`~/.qoderworkcn/` 目录是否存在（`[ -d ]`）
+- 检查 8 个 harness 目录是否存在（`~/.claude/` / `~/.codex/` / `~/.openclaw/` / `~/.myagents/` / `~/.qoderworkcn/` / `~/.qwenworkcn/` / `~/.workbuddy/` / `~/.orca/`，用 `[ -d ]`）
+- 个别平台加文件痕迹验证（如 `~/.openclaw/cron/jobs.json`、`~/.workbuddy/workbuddy.db`），避免目录存在但平台未真正安装的误报
 - 检查用户级配置文件是否存在并统计行数（`wc -l`）
+- 检查已知 harness 的 **runtime 标志环境变量是否存在**（`CLAUDECODE` / `CODEX_HOME` / `ORCA_AGENT_HOOK_TOKEN`）——**只看变量是否 set，不读其值**（值可能含 token）
 - 检查当前 cwd 的 `AGENTS.md` / `CLAUDE.md` 是否存在并统计行数
 - 检查 `.claude/skills/` 和 `docs/` 目录是否存在（用于探测 `project-init` 痕迹）
 
-**不读取任何文件内容**——只读取文件元数据（行数）和目录存在性。不会触及 CLAUDE.md / AGENTS.md 里的实际配置。
+**不读取任何文件内容**——只读文件元数据（行数）、目录存在性、env 标志存在性。不会触及 CLAUDE.md / AGENTS.md 里的实际配置，**不读** `.env` / 凭证 / token / 用户名 / 密钥的值。
 
 输出结构化 JSON 到 stdout，由 agent 解析后决定下一步动作。
 

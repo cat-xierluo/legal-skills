@@ -2,7 +2,7 @@
 name: legal-harness-init
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.1.2"
+version: "0.2.0"
 license: MIT License - 详见 LICENSE.txt
 description: |
   法律人专属的 harness 初始化工具：帮法律人理解"AGENTS.md/CLAUDE.md 是发给 agent session 的最重要的一句话"这件事，并直接帮他生成、写入对应的 AGENTS.md 文件（用户级 + 项目级）。本技能应在用户说"配置 AGENTS.md / 配置 CLAUDE.md / 帮我初始化 agent / 怎么配 harness / 我不会用 AI 怎么开始 / 帮我写 AGENTS.md / 给我讲讲怎么跟 AI 协作"时使用。不要用于：业务侧工作（合同审查、案件分析、文书起草）、project-init 的项目脚手架、skill 内容开发。
@@ -13,7 +13,7 @@ description: |
 法律人专属的 AGENTS.md 配置工具：**教学底座 + 生成入口**。
 
 - **教学底座**：`references/` 16 个章节 + 5 套参考范例，讲清为什么 AGENTS.md 重要、用户级 vs 项目级怎么分、8 模块是什么、法律人专属的"回溯契约"怎么写、按法律工作流怎么落地。
-- **生成入口**：按"先用户级、后项目级"顺序引导你产出真实的 AGENTS.md 文件，落到你当前环境里检测到的所有 harness 平台（Claude Code / Codex / OpenClaw / QoderWork）。
+- **生成入口**：检测**当前 runtime**（你这次会话正跑在哪个 harness）+ **所有已装平台**，按"先用户级、后项目级"顺序引导你产出 AGENTS.md 内容，再用 `scripts/write.sh` **自动写入**对应平台位置（带 `.bak` 备份 + diff 确认）。自动写入覆盖 CC / Codex / OpenClaw / MyAgents；QoderWork / QwenWork / WorkBuddy / Orca 检测到但因非 AGENTS.md 模式仅提示手动。
 
 **核心理念**：不给你 5 套"标准答案"让你套，而是教你怎么"想清楚自己的维度"，让你和 agent 一起拼装出真正贴合你的 AGENTS.md。法律工作的多样性远超模板能覆盖的范围。
 
@@ -50,8 +50,11 @@ description: |
 | 参数 | 必需 | 说明 | 示例 |
 |------|------|------|------|
 | `--level` | 否 | 用户级 (`user`) 还是项目级 (`project`) | `user` / `project` |
-| `--platforms` | 否 | 限定写入的 harness 平台（默认检测所有） | `claude-code,codex` |
+| `--platforms` | 否 | 限定写入的 harness 平台（默认 = 当前 runtime + 所有可写已装平台） | `claude-code,codex` |
 | `--preset` | 否 | 项目类型预设（项目级时） | `litigation` / `transactional` / `ip` / `in-house` / `research` |
+| `--mode` | 否 | 写入模式，透传 `scripts/write.sh`（`create` 已存在则等确认 / `update` 备份后覆盖 / `append` 备份后追加） | `create` / `update` / `append` |
+| `--dry-run` | 否 | 只展示 diff 不落盘（透传 write.sh） | — |
+| `--force` | 否 | 已存在时不等确认，直接备份+覆盖（透传 write.sh） | — |
 
 ## 工作流程
 
@@ -59,14 +62,14 @@ description: |
 
 调 `bash scripts/detect.sh` 一次性扫描：
 
-- 检测到哪些 harness（`~/.claude/` / `~/.codex/` / `~/.openclaw/` / `~/.qoderworkcn/`）
-- 各平台用户级配置文件是否存在、内容大致行数
+- **当前 runtime**：这次会话正跑在哪个 harness（通过 env 标志变量推断，如 `CLAUDECODE`）
+- **所有已装 harness**（8 平台）：CC / Codex / OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca，每平台报 `config_kind`（`claude_md` / `agents_md` / `non-agents-md`）和配置文件是否存在、行数
 - 当前 cwd 是否有 `AGENTS.md` / `CLAUDE.md`
 - 当前 cwd 是否已经跑过 `project-init`（探测 `.claude/skills/`、`docs/` 是否存在）
 
-**隐私边界**：detect.sh **只读取目录存在性和文件行数**（`[ -d ]` + `wc -l`），不读取任何文件内容，**不访问 `.env` / 环境变量 / 凭证 / 用户名 / 密钥**。详见 [references/03-harness-detection.md](references/03-harness-detection.md) §"检测脚本的隐私边界" 与 [scripts/README.md](scripts/README.md) §"隐私边界"。
+**隐私边界**：detect.sh 读取目录存在性 + 文件行数（`[ -d ]` + `wc -l`），以及**已知 harness 的 runtime 标志变量是否存在**（`CLAUDECODE` / `CODEX_HOME` / `ORCA_AGENT_HOOK_TOKEN` 等，只看"是否 set"，**不读变量值**）。**不读** `.env` / 凭证 / token / 用户名 / 密钥的值，不读取配置文件内容。详见 [references/03-harness-detection.md](references/03-harness-detection.md) §"检测脚本的隐私边界"。
 
-返回结构化 JSON，让 agent 决定后续怎么走。
+返回结构化 JSON（schema v2），让 agent 决定后续怎么走。
 
 ### 第一步：问候与定位
 
@@ -155,24 +158,37 @@ description: |
 
 ### 第六步：写入与覆盖处理
 
-按检测到的平台逐个写入：
+把第五步拼装好的内容存成临时文件，调 `bash scripts/write.sh` 自动写入检测到的可写平台：
 
-| 平台 | 用户级写入 | 项目级写入 |
-|---|---|---|
-| Claude Code | `~/.claude/CLAUDE.md` | `<cwd>/CLAUDE.md`（独立写，或用 `@include ./AGENTS.md` 引入 Codex 共享的 AGENTS.md） |
-| Codex | `~/.codex/AGENTS.md` | `<cwd>/AGENTS.md`（项目内真值源） |
-| OpenClaw | `~/.openclaw/AGENTS.md`（或等价） | 同 Codex |
-| QoderWork | `~/.qoderworkcn/AGENTS.md`（或等价） | 同 Codex |
+```bash
+bash scripts/write.sh \
+  --content-file <第五步生成的内容文件> \
+  --level <user|project> \
+  --mode <create|update|append>      # 默认 create
+  # 可选：--platforms <key,key>  --dry-run  --force  --project-dir <path>
+```
 
-**多平台项目级策略**：项目内维护**一份** `AGENTS.md` 作为真值源，CC 的 `CLAUDE.md` 独立写或用 `@include ./AGENTS.md` 共享。
+**写入目标**（权威表见 [scripts/lib_platforms.sh](scripts/lib_platforms.sh)）：
 
-**幂等与冲突**（按 [references/16-faq.md](references/16-faq.md) § 错误处理）：
+| 平台 | config_kind | 用户级写入 | 项目级写入 | 自动写入? |
+|---|---|---|---|---|
+| Claude Code | claude_md | `~/.claude/CLAUDE.md` | `<cwd>/CLAUDE.md` | ✅ |
+| Codex | agents_md | `~/.codex/AGENTS.md` | `<cwd>/AGENTS.md`（项目真值源） | ✅ |
+| OpenClaw | agents_md | `~/.openclaw/AGENTS.md` | `<cwd>/AGENTS.md` | ✅ |
+| MyAgents | claude_md | `~/.myagents/CLAUDE.md` | `<cwd>/CLAUDE.md` | ✅ |
+| QoderWork / QwenWork / WorkBuddy / Orca | non-agents-md | — | — | ❌ 检测到但提示手动 |
 
-- **检测不到任何 harness** → 提示用户安装 Claude Code / Codex 等之一，退出。
-- **用户级文件已存在且非空** → 展示 diff 让用户决定覆盖/合并/追加，默认不覆盖。
-- **项目级 `AGENTS.md` 已存在但不含回溯契约** → 提示"建议只追加法律人专属三块"，默认 append，不重写。
-- **项目级 `AGENTS.md` 已存在且含法律人设** → 提示"是否更新模块配置/回溯契约"，进入更新模式而非首次写入。
-- **用户中途放弃** → 不写任何文件，保留已完成问答供下次接续。
+**多平台项目级策略**：项目内 `AGENTS.md`（Codex 真值源）+ `CLAUDE.md`（CC/OpenClaw/MyAgents 读）。CC 的 `CLAUDE.md` 可独立写或用 `@include ./AGENTS.md` 共享——多平台时建议后者，单一维护。
+
+**幂等与冲突**（write.sh 自动处理，语义见 [references/16-faq.md](references/16-faq.md)）：
+
+- **检测不到任何可写 harness** → write.sh 退出码 1，提示安装 CC / Codex 等之一。
+- **目标已存在 + `--mode create` + 非 `--force`** → 备份 + 展示 diff，记 `needs_confirmation`；用户决定后用 `--force` 覆盖或 `--mode append` 追加。
+- **`--mode update` 或 `--force`** → 备份 `.bak.<ts>` 后覆盖（`cp -p` 保留时间戳）。
+- **`--mode append`** → 备份后追加（含 `---` 分隔）。
+- **目标不存在** → 直接写（用户级 `umask 077` 保护隐私；项目级 `umask 022`）。
+- **非 AGENTS.md 模式平台** → 记 `unsupported`，提示用户手动配置。
+- **用户中途放弃** → 不调 write.sh，内容保留在临时文件供下次接续。
 
 ### 第七步：报告与下一步
 

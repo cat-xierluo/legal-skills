@@ -5,6 +5,42 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.2.0] - 2026-08-12
+
+> 参考 self-evolve `detect_platforms()` 风格，补齐"检测当前 runtime + 自动写入对应位置"能力。端到端真实跑通仍 NOT_VERIFIED。
+
+### 变更
+
+- **新增 `scripts/lib_platforms.sh`**（DEC-009）：8 平台权威表（key → 配置文件 / config_kind / runtime env 标志），被 detect/write 共享的单一真值源。新增/改平台只改这里
+- **新增 `scripts/write.sh`**：把生成好的 AGENTS.md/CLAUDE.md 内容写入对应 harness 位置。支持 `--content-file` / `--level` / `--platforms` / `--mode create|update|append` / `--dry-run` / `--force`；已存在先 `cp -p` 备份 `.bak.<ts>` + diff；用户级 `umask 077`、项目级 `umask 022`；输出 JSON 报告（written/backed_up/needs_confirmation/unsupported/error）
+- **`detect.sh` 扩到 8 平台**（DEC-010）：CC / Codex / OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca，每平台报 `config_kind`
+- **修正 detect.sh 平台事实错误**：`.qoderworkcn/AGENTS.md` 实测不存在 → 标 `non-agents-md` 仅检测不写入；补漏检的 `.myagents/CLAUDE.md`
+- **新增 `current_runtime` 字段**：通过 env 标志（`CLAUDECODE` / `CODEX_HOME` / `ORCA_AGENT_HOOK_TOKEN`，只看 set 不读值）推断当前会话跑在哪个 harness；可写平台优先于容器层；无法确定报 `null`
+- **schema 1 → 2**：加 `current_runtime` / `current_runtime_writeable` / 每平台 `config_kind`；老字段保留
+- **SKILL.md §第六步重写**：从"agent 手动逐个写"改为"调 `bash scripts/write.sh`"；平台表标自动写入 vs 手动；参数表加 `--mode` / `--dry-run` / `--force`
+- **references/03 重写**：8 平台表 + runtime env 信号段 + 自动写入边界段 + schema v2 JSON 样例；隐私边界补 env 标志读取说明
+- **移除 scripts/README.md**：脚本能力披露并入 SKILL.md §第零步 + references/03 §隐私边界，不再单独维护 README（v0.1.1 为过 skill-lint disclosure 建的载体，SKILL.md 已含同等披露后冗余）
+
+### 决策
+
+- DEC-009：平台权威表抽 `lib_platforms.sh` 单一真值源（避免 detect/write 路径漂移）
+- DEC-010：只对 `claude_md` / `agents_md` 平台自动写入；`non-agents-md` 平台（QoderWork/QwenWork/WorkBuddy/Orca）仅检测提示手动
+
+### 验证
+
+- ✅ `bash scripts/lib_platforms.sh` 自检：8 平台 key/kind/path/env 全部正确解析
+- ✅ detect.sh schema v2 JSON 合法（`python3 -m json.tool`）
+- ✅ 干净环境 `HOME=/tmp/empty bash scripts/detect.sh` 不崩（继承 DEC-008 守卫）
+- ✅ write.sh `--dry-run` 展示 diff 不落盘；`unsupported` 含 4 个 non-agents-md 平台
+- ⚠️ 端到端（引导问答 → write.sh 真实写入用户 ~/.claude/CLAUDE.md）**NOT_VERIFIED**
+- ⚠️ Codex runtime env 确切名（`CODEX_HOME`）待 codex session 内验证
+
+### 待办
+
+- 用户级 + 项目级完整流程端到端跑通（需真实律师测试）— NOT_VERIFIED
+- QoderWork / QwenWork / WorkBuddy / Orca 真实配置机制研究（当前只检测不写）
+- v0.3.0：references/18-walkthrough.md + 指令稳定性合同
+
 ## [0.1.2] - 2026-08-12
 
 > skill-lint 审计修缮：修复 detect.sh 在 macOS bash 3.2 的边界崩溃 + 发布治理小修。端到端流程仍 NOT_VERIFIED。

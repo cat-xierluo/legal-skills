@@ -35,7 +35,7 @@ PLATFORM_KEYS=(
 _PLATFORM_META=(
     'claude-code|.claude|CLAUDE.md|claude_md|CLAUDECODE|'
     'codex|.codex|AGENTS.md|agents_md|CODEX_HOME|'
-    'openclaw|.openclaw|CLAUDE.md|claude_md||cron/jobs.json'
+    'openclaw|.openclaw|AGENTS.md|agents_md||cron/jobs.json'
     'myagents|.myagents|CLAUDE.md|claude_md||'
     'qoderwork|.qoderworkcn||non-agents-md||'
     'qwenwork|.qwenworkcn||non-agents-md||.status.json'
