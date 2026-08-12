@@ -60,6 +60,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=orca-runtime.sh
+source "$SCRIPT_DIR/orca-runtime.sh"
+
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
   echo "ERROR: pm-monitor.sh requires bash 4+ for associative arrays. Install a modern bash and ensure it is first in PATH." >&2
   exit 64
@@ -243,9 +247,9 @@ checkpoint_dir_for_session() {
   fi
 }
 
-# v2.1（DEC-114 v2.0.0）：ORCA UI 同步——读 METADATA.json 拿 session.orca.worktree_id，
-# 命中时调 orca worktree set --workspace-status ... --comment ...。ORCA 不可用 / 无
-# orca 字段 / 调用失败时静默返回（pm-monitor 不能因 ORCA 故障阻塞主监控）。
+# Orca UI 同步——读 METADATA.json 拿 session.orca.worktree_id，并复用与
+# spawn/sentinel 相同的版本匹配 CLI。Orca 不可用、无字段或调用失败时静默返回，
+# pm-monitor 不能因控制平面暂时不可用而阻塞主监控。
 # 复用现有 bucket 防抖：调用方已判定 key 变化才触发，本函数不再额外防抖。
 orca_worktree_set_status() {
   local checkpoint_dir="$1"
@@ -253,11 +257,11 @@ orca_worktree_set_status() {
   local comment="$3"
   local metadata="$checkpoint_dir/METADATA.json"
   [ -f "$metadata" ] || return 0
-  command -v orca >/dev/null 2>&1 || return 0
+  orca_runtime_init >/dev/null 2>&1 || return 0
   local worktree_id
   worktree_id=$(jq -r '.session.orca.worktree_id // empty' "$metadata" 2>/dev/null)
   [ -n "$worktree_id" ] || return 0
-  orca worktree set --worktree "id:$worktree_id" \
+  orca_cli worktree set --worktree "id:$worktree_id" \
     --workspace-status "$workspace_status" --comment "$comment" --json >/dev/null 2>&1 || true
 }
 

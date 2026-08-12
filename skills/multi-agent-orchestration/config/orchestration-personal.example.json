@@ -1,12 +1,12 @@
 {
   "_comment": "个人 backend/模型路由偏好【模板】。复制为 config/orchestration-personal.json，按你自己可用的 provider/model/平台额度填。SKILL.md 只定义机制(本 schema)，不写具体模型——模型与框架选型是个人偏好，每人不同。",
-  "_schema_version": "1.1",
+  "_schema_version": "1.2",
   "_read_by": "multi-agent-orchestration skill PM (任意主会话)",
   "_path_user": "config/orchestration-personal.json（在 skill config/ 目录内，但被 .gitignore 排除、不入库；每人按自己偏好改，不 commit）",
 
   "main_force": {
     "_comment": "PM 主力宿主工具 + 按任务类型选 model（非轮换）。host = 你当前主会话用的 Agent 工具；task_routing = 按任务难度/模态选 model。",
-    "host": "<你的主力 Agent 工具，如 claude-code / codex / opencode>",
+    "host": "<你的主力 Agent 工具：claude-code / codex / codebuddy / qoderwork-cn>",
     "task_routing": {
       "high_end": "<你的常规/高端任务模型>",
       "simple_multimodal": "<你的简单任务+多模态/图片解读模型>",
@@ -28,17 +28,17 @@
     "reason": "<填你的理由>"
   },
 
+  "harness_backend_policy": {
+    "_comment": "只读说明镜像；强制规则以已入库的 config/harness-backend-policy.json 为准。宿主身份由进程祖先/Orca working-agent 证明，不能靠个人配置或 CLI 参数提权。",
+    "policy": "deny_by_default",
+    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "codebuddy": ["codebuddy"],
+    "qoderwork-cn": ["qoderwork-cn"]
+  },
+
   "backend_model_routing": {
-    "_comment": "跨平台/跨额度 CLI backend 的默认 model + 何时用。key = 你常用的 CLI backend 名（如 qoderclicn / codebuddy / 其他），value = 该 backend 的默认 model 列表 + use_case。仅在用户主动要求或主力 provider 并发打满溢出时调用。下面两条是结构示例，换成你自己的。",
-    "your-platform-cli-a": {
-      "default_models": ["<该平台模型1，首选>", "<该平台模型2，备选>"],
-      "use_case": "用户主动 offload / 主力并发打满溢出；与 your-platform-cli-b 是两个不同平台/额度，并行避并发。",
-      "tier_note": "<可选：与主力 model 的档位对应关系>"
-    },
-    "your-platform-cli-b": {
-      "default_models": ["<该平台模型1>", "<该平台模型2>"],
-      "use_case": "同上（与 your-platform-cli-a 双平台避并发）。"
-    },
+    "_comment": "已配置 CLI backend 的默认 model + 何时用。Harness 门禁只接受 claude-code、codex、codebuddy、qoderwork-cn；这里的模型偏好不能增加 backend。",
     "codebuddy": {
       "_comment": "WorkBuddy 桌面端 CLI（references/08-codebuddy-cli-worker.md）。2026-08-05 用户偏好：hy3 首选 / deepseek-v4-flash 次选；不用 deepseek-v4-pro 作主。spawn-worker.sh 派 codebuddy worker 时按此顺序选 --model。",
       "default_models": ["hy3", "deepseek-v4-flash", "deepseek-v4-pro"],
@@ -54,8 +54,8 @@
   },
 
   "notes": [
-    "SKILL.md 只定义机制（本 schema + 路由逻辑）；具体用哪个 host / 哪些 model / 哪些 CLI backend 全在本文件（个人偏好）。",
-    "缺省策略：host 缺失 → claude-code；task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 不设硬上限（交 PM 判断）；backend_model_routing 缺失 → 空 dict。",
+    "SKILL.md 与 harness-backend-policy.json 定义四种可用 Harness 及调用层级；本文件只在该集合内选择 host 和 model。",
+    "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 不设硬上限（交 PM 判断）；backend_model_routing 缺失 → 空 dict。",
     "本文件只声明'偏好'，不声明真实 token/key/endpoint——那些在 config/claude-provider-registry.*.json（本地 ignored）。",
     "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。"
   ]

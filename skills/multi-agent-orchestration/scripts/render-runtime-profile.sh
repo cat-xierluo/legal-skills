@@ -297,6 +297,22 @@ quote_words() {
   printf '%s' "$out"
 }
 
+# Some installations intentionally put a fail-closed shell launcher in front of
+# Codex. Repeating the same clap flags makes current Codex exit 2. Omit them only
+# when the resolved launcher is a readable script that proves both exact values;
+# binaries, aliases and mismatched wrappers keep the explicit arguments.
+codex_launcher_has_exact_safety_flags() {
+  local launcher
+  launcher=$(command -v codex 2>/dev/null || true)
+  [ -n "$launcher" ] && [ -f "$launcher" ] && [ -r "$launcher" ] || return 1
+  case "$(file -b "$launcher" 2>/dev/null || true)" in
+    *script*|*text*) ;;
+    *) return 1 ;;
+  esac
+  grep -Eq -- "--(ask-for-approval|approval-policy)[[:space:]]+${APPROVAL}([[:space:]\"']|$)" "$launcher" || return 1
+  grep -Eq -- "--sandbox[[:space:]]+${SANDBOX}([[:space:]\"']|$)" "$launcher" || return 1
+}
+
 append_redirection() {
   local base="$1"
   local file="$2"
@@ -390,9 +406,14 @@ case "$BACKEND" in
     ;;
   codex)
     if [ "$MODE" = "batch" ]; then
-      parts=(codex exec -a "$APPROVAL" -s "$SANDBOX")
+      parts=(codex exec)
     else
-      parts=(codex -a "$APPROVAL" -s "$SANDBOX")
+      parts=(codex)
+    fi
+    if codex_launcher_has_exact_safety_flags; then
+      echo "RENDER_RUNTIME_PROFILE_CODEX_WRAPPER: launcher already enforces sandbox=$SANDBOX approval=$APPROVAL; duplicate flags omitted" >&2
+    else
+      parts+=(-a "$APPROVAL" -s "$SANDBOX")
     fi
     [ -n "$CODEX_PROFILE" ] && parts+=(-p "$CODEX_PROFILE")
     [ -n "$MODEL" ] && parts+=(-m "$MODEL")

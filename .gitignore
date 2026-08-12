@@ -40,11 +40,14 @@ templates/
 !**/config/*.example.yaml
 **/config/*.json
 !**/config/*.example.json
+# 配置备份常含真实凭证（如 *.json.bak.<timestamp>），一律仅保留在本地
+**/config/*.bak*
 !skills/de-ai-polish/config/instruction-stability-contract.json
 !skills/de-ai-polish/config/quality-score-rubric.json
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
 !skills/legal-harness-init/config/instruction-stability-contract.json
+!skills/multi-agent-orchestration/config/harness-backend-policy.json
 # Team config - keep example, ignore real data and images
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
