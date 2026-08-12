@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.1.0] - 2026-08-12
+
+### 新增 — ORCA 检测 + STATUS.json 分层互补（Task-032）
+
+sentinel ORCA 模式 done 判定加双信号：`STATUS=done` 时先查 `orca worktree ps` 的 agent state，`working` 拒绝认终态（抗 worker LLM 谎报 done），`done/idle` 才 sync + exit。ORCA 检测（进程层客观）+ STATUS.json（任务层自报告）分层互补。实测：claude worker 跑 sleep 30（state=working）+ 谎报 done → sentinel 12s 内 5 次 SENTINEL_ORCA_STATUS_CONFLICT 拒绝误杀。
+
+- `sentinel.sh`：`orca_agent_state()` 函数（查 worktree ps 的 `.worktreeId` 匹配 + `agents[0].state`）；done 分支双信号判定
+
+### 新增 — ORCA supervised 深度对接（Task-033）
+
+spawn-worker `--orca-supervised` flag：ORCA 模式 spawn 后把 worker terminal 纳入 ORCA supervised 体系（run-create + task-create + worker-start --terminal），保留 provider env 隔离。worker 出现在 `worker-list`，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
+
+- `scripts/orca-supervised-register.sh` 新 helper：run-create + task-create + worker-start --terminal --worktree --task；输出 run_id/task_id/dispatch_id（KV）。worker-start 前 sleep 6s（runtime 注册延迟）+ 单次不 retry（retry 致 task_not_startable/failed）+ worker-list 兜底查 dispatch（应对 runtime_unavailable 但 server 端成功）
+- `spawn-worker.sh`：`--orca-supervised` / `--task-spec` / `--task-title` flag；ORCA 模式调 helper；METADATA `session.orca.supervised.{run_id,task_id,dispatch_id}`；SENTINEL_CMD 加 `--dispatch-id`
+- `sentinel.sh`：`--dispatch-id` 参数 + `sync_orca_supervised_release()`；done→worker-release, failed/timeout→worker-stop
+- `clean-worktree.sh`：读 METADATA dispatch_id，清理时 worker-stop（在 orca worktree rm 前）
+- `references/12-orca-cli-worker.md` §11：supervised 体系 / spawn 集成 / 全生命周期闭环 / helper 踩坑 / PM 巡检增益
+
+端到端验证（真实 claude worker）：spawn `--orca-supervised` → worker-list workerState=ready → sentinel done worker-release → clean --execute worker-stop + worktree rm，全链路通。
+
+### 改进 — ORCA 模式 task-032/033 配套
+
+- SKILL §6.5 加 supervised 深度对接 + 分层互补段落
+- 非 ORCA / 不加 `--orca-supervised` 零变化（向后兼容 v2.0）
+
 ## [2.0.0] - 2026-08-12
 
 ### 新增 — ORCA CLI worker backend（DEC-114）

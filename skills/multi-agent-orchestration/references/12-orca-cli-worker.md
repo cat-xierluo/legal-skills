@@ -236,3 +236,67 @@ ORCA 有原生 multi-agent orchestration 体系（比 `terminal create` 更高�
 
 `worker-start` 关键参数：`--task <id> (--agent <id> | --terminal <handle>) --worktree <selector> --model <id> --effort <level>`。`--agent` 接受已知 TUI agent；`--terminal` 接受已有 handle（可能能保留 spawn-worker 的 provider env wrapper command）。需实测 `--terminal` 路径是否支持 custom command + provider env。
 
+## 11. ORCA supervised 深度对接（v2.1，Task-033，2026-08-12）
+
+§9 关键发现 4 落地。spawn-worker 加 `--orca-supervised` flag：ORCA 模式 spawn 后把 worker terminal 纳入 ORCA supervised 体系，保留 provider env 隔离（`--terminal` 路径不重启 agent）。
+
+### 体系
+
+```
+Run (run-create --objective, PM coordinator 绑定)
+  └─ Task (task-create --spec --task-title)
+       └─ Dispatch / supervised Worker (worker-start --terminal --worktree --task --run)
+            ├─ 绑定 worktree resource
+            ├─ 出现在 worker-list（workerState: ready/running/succeeded/failed）
+            └─ 可被 send/reply/inbox + gate-create/resolve 管理
+```
+
+### spawn-worker 集成
+
+```bash
+bash scripts/spawn-worker.sh \
+  --project $P --branch feat/x --session w1 \
+  --command 'claude' \
+  --worker-backend claude-code \
+  --orca-supervised \
+  --task-spec "实现 X 功能" \
+  --task-title "feat-x" \
+  --with-sentinel
+```
+
+`--orca-supervised` 时 spawn 后自动调 `scripts/orca-supervised-register.sh`（run-create + task-create + worker-start --terminal），拿 `run_id`/`task_id`/`dispatch_id` 写入 METADATA `session.orca.supervised`。失败降级到 v2.0 底层 terminal 模式（不阻塞 spawn）。
+
+### 全生命周期闭环
+
+| 阶段 | 触发 | ORCA 命令 | METADATA |
+|---|---|---|---|
+| spawn | `--orca-supervised` | run-create + task-create + worker-start --terminal | `session.orca.supervised.{run_id,task_id,dispatch_id}` |
+| 终态 done | sentinel `STATUS=done` | worker-release（settled 释放） | — |
+| 终态 failed/timeout | sentinel | worker-stop（fence stop） | — |
+| 清理 | clean-worktree --execute | worker-stop + worktree rm | — |
+
+sentinel 加 `--dispatch-id`（spawn-worker SENTINEL_CMD 自动传）；clean-worktree 读 METADATA dispatch_id 清理时 worker-stop。
+
+### helper 关键设计（实测踩坑）
+
+`orca-supervised-register.sh` 的 worker-start 步骤有三个 ORCA runtime 已知行为：
+
+1. **timing**：terminal 刚 create 时 runtime 注册有延迟，立即 worker-start 偶发 `runtime_unavailable`。helper 在 worker-start 前 `sleep 6` 等 runtime 注册。
+2. **不 retry**：retry 会触发 `task_not_startable`（task 已 dispatched）把 worker 标 `failed`。helper 单次 worker-start。
+3. **worker-list 兜底**：worker-start 返回 `runtime_unavailable` 时 server 端可能已成功建 dispatch（连接断在响应前）。helper 不管 worker-start 返回 ok 与否，靠 `worker-list` 查 task_id 的 dispatch 兜底（3 次 lookup）。
+
+### PM 巡检增益
+
+supervised 注册后，PM 多了 ORCA 原生管理面：
+- `orca orchestration worker-list` — 所有 supervised worker 状态（workerState/dispatchStatus/terminalState/resource）
+- `orca orchestration worker-show --dispatch <id>` — 单 worker 详情
+- `orca orchestration send/reply/inbox` — inter-agent 消息（worker 收 task / 报结果）
+- `orca orchestration gate-create/gate-resolve` — decision gate（拦截 worker 关键决策）
+
+### 边界
+
+- `--orca-supervised` 仅 ORCA 模式 auto 生效（非 ORCA / --no-orca-mode 无意义）
+- terminal 必须跑 recognized agent（claude/codex 等）；sleep/shell 被 worker-start 拒（§9 关键发现 1）
+- `--task-spec` 必填（task 实体的 spec）；缺则跳过 supervised 注册打 `SPAWN_WORKER_ORCA_SUPERVISED_SKIPPED`
+- 注册失败降级 v2.0 terminal 模式（worker 仍可用 terminal send/read 控制，只是不在 worker-list）
+
