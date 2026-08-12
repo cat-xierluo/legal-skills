@@ -135,4 +135,4 @@ A：项目归档后项目级 AGENTS.md 通常不再修改，保留作为复盘�
 ## 接下来读什么
 
 - 完整参考范例（5 类律师）→ [references/17-examples/](17-examples/)
-- 模块片段库（用户卡壳时的参考片段）→ [templates/modules/](templates-modules)
+- 模块片段库（用户卡壳时的参考片段）→ [templates/modules/](../templates/modules/)

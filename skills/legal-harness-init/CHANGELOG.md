@@ -5,6 +5,36 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.1.2] - 2026-08-12
+
+> skill-lint 审计修缮：修复 detect.sh 在 macOS bash 3.2 的边界崩溃 + 发布治理小修。端到端流程仍 NOT_VERIFIED。
+
+### 变更
+
+- **修复 detect.sh 空数组崩溃（bash 3.2 + `set -u`）**：无 harness 场景下 `for ... in "${ARR[@]}"` 触发 `unbound variable`、JSON 不输出（目标受众首发场景必崩）。三处 for 循环（HARNESSES / USER_LEVEL / PROJECT_INIT_EVIDENCE）加 `${#ARR[@]} -gt 0` 守卫。详见 DECISIONS §DEC-008
+- **SKILL.md `version` 同步**：`0.1.0` → `0.1.2`（此前滞后于 CHANGELOG）
+- **FAQ 断链修复**：[references/16-faq.md](references/16-faq.md) 末尾 `](templates-modules)` → `](../templates/modules/)`
+- **CHANGELOG 结构整理**：散落在 `[0.1.0]` 段后的顶层 `## 待办` / `## 验证结果（v0.1.0）` 并入本段（信息冗余清理；双场景 detect.sh 验证以本次边界复测为准）
+
+### 决策
+
+- DEC-008：detect.sh 空数组守卫方案选用 `${#ARR[@]} -gt 0`（兼容 bash 3.2 与 5+，优于 `${arr[@]+...}` 的版本歧义）
+
+### 验证
+
+- ✅ `HOME=/tmp/empty /bin/bash scripts/detect.sh` 输出合法 JSON（`harnesses_detected: []`）+ 退出码 1（**此前崩溃不输出 JSON**）
+- ✅ `bash scripts/detect.sh | python3 -m json.tool`（本机 4 平台）仍合法
+- ✅ `security_scan.py audit`：0 critical / 0 high / 0 medium / 8 low（全为 `$HOME` 读取误报）
+- ✅ `harness_failure_audit.py audit`：PASS，0 hard / 0 warning / 0 info
+- ⚠️ 端到端流程（用户级 + 项目级真实跑通、跨平台写入）**NOT_VERIFIED**
+- ⚠️ OpenClaw / QoderWork 真实写入测试 **NOT_VERIFIED**（本机未装）
+
+### 待办
+
+- 用户级 + 项目级完整流程跑通（需真实律师测试）— NOT_VERIFIED
+- OpenClaw / QoderWork 真实写入测试 — NOT_VERIFIED
+- v0.2.0：references/18-walkthrough.md + 指令稳定性合同 v1
+
 ## [0.1.1] - 2026-08-12
 
 > ⚠️ 本版本以小修为主，**端到端用户级 + 项目级跑通仍 NOT_VERIFIED**（v0.1.0 起即未跑通，需真实律师测试）。
@@ -90,27 +120,4 @@
 - 安全扫描：0 critical / 0 high / 1 medium（已补 disclosure）/ 8 low
 - 双场景 detect.sh 验证：干净环境 ✅ + 已跑过 project-init ✅
 
-## 待办
-
-- 用户级 + 项目级完整流程跑通验证（需要真实律师测试）
-- v0.2.0：根据反馈优化流程和模块
-
-## 验证结果（v0.1.0）
-
-### skill-lint 静态审查
-
-- **Harness 失效审查**：`harness_failure_audit.py audit` → PASS（0 hard / 0 warning / 0 info）
-- **安全扫描**：`security_scan.py audit` → 0 critical / 0 high / 1 medium / 8 low
-  - medium：detect.sh 的 `$HOME` 读取被识别为"未在文档中披露"。已在 `references/03-harness-detection.md` §"检测脚本的隐私边界"补全说明：只检查目录存在性和文件行数，不读取文件内容
-  - low：8 处 `$HOME` 路径读取（被误识别为 credential access，实际仅用于目录探测）
-
-### 双场景 detect.sh 验证
-
-- 干净环境（无 AGENTS.md，无 project-init 痕迹）：detect.sh 返回 `project_init_ran: false`
-- 已跑过 project-init 的项目（含 AGENTS.md + .claude/skills/ + docs/）：detect.sh 返回 `project_init_ran: true` + `evidence: [.claude/skills/, docs/]`
-
-### 未做（需要真实律师测试）
-
-- 用户级 + 项目级完整流程的端到端跑通（NOT_VERIFIED）
-- 真实 AGENTS.md 文件的写入测试（NOT_VERIFIED）
-- 跨平台（OpenClaw / QoderWork）写入测试（NOT_VERIFIED，本机未安装）
+<!-- v0.1.0 详细验证矩阵与双场景 detect.sh 测试已于 [0.1.2] 重新整理；历史明细见 git 历史 -->
