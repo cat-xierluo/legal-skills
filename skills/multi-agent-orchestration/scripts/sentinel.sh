@@ -222,6 +222,28 @@ sync_orca_worktree_status() {
   log "SENTINEL_ORCA_SYNCED: workspace_status=$status_value"
 }
 
+# v2.1.1（Task-032）：查 ORCA worktree ps 里这个 worker 的 agent state。
+# ORCA 检测是进程层客观信号（claude 在调什么工具、idle/working），独立于 STATUS.json
+# （worker 自报告，可能 LLM 幻觉谎报 done）。双信号终态判定用：ORCA state=done/idle 且
+# STATUS.json=done 才认为真终态；ORCA state=working 时即使 STATUS=done 也打 CONFLICT 不 exit。
+#
+# 输出（stdout）：agent state 字符串（working/idle/done/gone/unknown）；查询失败输出 "unknown"。
+# 用 WORKTREE_ID（--worktree-id 传入）匹配 worktree ps 里的 agents。
+orca_agent_state() {
+  [ "$WORKER_SESSION_TYPE" = "orca_terminal" ] || { echo "non_orca"; return 0; }
+  command -v orca >/dev/null 2>&1 || { echo "unknown"; return 0; }
+  local ps_out agent_state
+  ps_out=$(orca worktree ps --json 2>/dev/null) || { echo "unknown"; return 0; }
+  # worktree ps 的字段是 .worktreeId（不是 .id）；agents[0].state 是 ORCA 检测的进程层状态
+  # （working/idle/done/gone）。一个 ORCA worktree 通常一个 worker agent（spawn-worker 建独立 worktree）。
+  agent_state=$(printf '%s' "$ps_out" | jq -r --arg wt "$WORKTREE_ID" '
+    .result.worktrees[]?
+    | select(.worktreeId == $wt)
+    | .agents[0].state // "unknown"
+  ' 2>/dev/null)
+  echo "${agent_state:-unknown}"
+}
+
 if [ "$WORKER_SESSION_TYPE" = "orca_terminal" ]; then
   log "SENTINEL_START: status=$STATUS_FILE orca_terminal=$TERMINAL_HANDLE worktree=$WORKTREE_ID poll=${POLL_INTERVAL}s max_wait=${MAX_WAIT}s log=$LOG_FILE"
 else
@@ -242,11 +264,20 @@ while true; do
       # status="done" exactly per templates/worker-prompt.md, but the sentinel
       # will not get stuck polling if the worker wrote a synonym.
       done|completed|finished|complete)
-        capture_pane_tail
-        log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE"
-        sync_orca_worktree_status "completed" "sentinel observed done at $(date -u +%FT%TZ) (status=$status)"
-        kill_tmux_if_requested
-        exit 0
+        # v2.1.1（Task-032）：ORCA 模式双信号终态判定。STATUS.json=done 但 ORCA agent state
+        # 仍 working 时，可能是 worker LLM 谎报 done——打 CONFLICT 不 exit，等下次 poll 再判。
+        # 非 ORCA 模式 / ORCA 查询失败时 orca_agent_state 返回 non_orca/unknown，跳过双信号直接终态。
+        orca_state=$(orca_agent_state)
+        if [ "$orca_state" = "working" ]; then
+          log "SENTINEL_ORCA_STATUS_CONFLICT: STATUS=$status but ORCA agent_state=working (worker 可能谎报 done，不杀，等下次 poll)"
+          # 不 sync、不 kill、不 exit；继续 poll（受 MAX_WAIT 总上限保护）
+        else
+          capture_pane_tail
+          log "SENTINEL_TERMINAL: status=$status file=$STATUS_FILE orca_state=$orca_state"
+          sync_orca_worktree_status "completed" "sentinel observed done at $(date -u +%FT%TZ) (status=$status, orca_state=$orca_state)"
+          kill_tmux_if_requested
+          exit 0
+        fi
         ;;
       # Canonical failure terminals: failed | blocked | stopped. Defensive
       # synonyms added for the same reason as above. PM should still use
