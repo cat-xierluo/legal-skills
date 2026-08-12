@@ -47,6 +47,11 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=ensure-claude-path.sh
 source "$SCRIPT_DIR/ensure-claude-path.sh"
 ensure_claude_in_path
+# v2.1（DEC-114 v1.21.0）：ORCA 模式（auto-detect 命中 ORCA 终端时）需要直接调
+# `orca worktree create` / `orca terminal create` / `orca terminal send`，这些 CLI
+# 默认在 /Applications/Orca.app/Contents/Resources/bin/orca。在 flag 解析前注入
+# PATH，确保 detect_orca_mode 探测 + ORCA 分支命令执行都不依赖用户预先 source。
+ensure_in_path orca
 
 PROJECT_DIR=""
 BRANCH=""
@@ -94,6 +99,19 @@ ALLOW_PATHS=()
 LIGHTWEIGHT_OVERRIDE=0
 LIGHTWEIGHT_MODE=0
 LIGHTWEIGHT_AUTO=0
+# v2.1（DEC-114 v1.21.0）：ORCA 终端模式 auto-detect。detect_orca_mode() 输出：
+#   "auto"                    — 在 ORCA 终端内 + path 匹配，走 orca worktree + terminal 路径
+#   "force_tmux"              — --no-orca-mode 显式 opt-out / 非 ORCA 终端 / 跨 repo
+#   "lightweight_forces_tmux" --no-worktree 强制走 tmux（ORCA worktree 必须有 git 仓）
+#   "missing_orca"            — TERM_PROGRAM=Orca 但 `orca` 不在 PATH（fail-loud）
+ORCA_MODE=""
+ORCA_WORKTREE_ID=""      # 形如 "<repoId>::<worktreePath>"，仅 auto 时填
+ORCA_WORKTREE_PATH=""    # 仅 auto 时填（git rev-parse --show-toplevel）
+ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
+ORCA_APP_VERSION=""      # 来自 orca status --json
+ORCA_CAPABILITIES_JSON=""# 来自 orca status --json capabilities 数组
+ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
+NO_ORCA_MODE=0
 INSTALL_AUTHORIZATION_SOURCE=""
 AUTHORIZED_INSTALL_COMMANDS=()
 ALLOWED_SHELL_COMMANDS=()
@@ -196,6 +214,13 @@ Options:
                    当 --project 不是 git 仓时本 flag 可省（脚本自动检测并打印
                    `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
                    SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
+  --no-orca-mode    (v2.1 / DEC-114) 显式 opt-out ORCA 终端模式：强制走原 tmux + git worktree
+                   路径，不调任何 orca CLI。auto-detect 默认行为：在 ORCA 终端内（TERM_PROGRAM=Orca
+                   + ORCA_WORKTREE_ID 非空 + path 与 PROJECT_DIR 的 git toplevel 匹配）自动走
+                   `orca worktree create` + `orca terminal create --command`，保留 provider env /
+                   runtime profile / wrapper / 超长 prompt 投递等所有现有能力；ORCA UI 直接反映
+                   worker 生命周期（spawn 完 ORCA 列表多一张卡，sentinel 终态自动切 workspace-status）。
+                   --no-worktree 与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。详见 SKILL §6.5。
   --allow-install-command CMD
                    Explicitly authorize this exact dependency-install/environment-mutation
                    command (repeatable). Requires --install-authorization-source.
@@ -377,6 +402,10 @@ while [[ $# -gt 0 ]]; do
       LIGHTWEIGHT_MODE=1
       shift
       ;;
+    --no-orca-mode)  # v2.1（DEC-114）：显式 opt-out ORCA 终端模式，强制走 tmux 路径
+      NO_ORCA_MODE=1
+      shift
+      ;;
     --allow-install-command)
       AUTHORIZED_INSTALL_COMMANDS+=("$2")
       shift 2
@@ -525,6 +554,17 @@ METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
 INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 [ -n "$COMMAND" ] || COMMAND="${SHELL:-/bin/bash} -l"
 
+# v2.1（DEC-114）：ORCA 终端模式 auto-detect。命中 auto 时：
+#   - ORCA_MODE=auto
+#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
+#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充
+#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充
+#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+ORCA_MODE=$(detect_orca_mode)
+if [ "$ORCA_MODE" = "missing_orca" ]; then
+  exit 64
+fi
+
 # Claude Code 的 minimal/safe/config-source 模式可能跳过 local PreToolUse hook。
 # 用 shlex 解析 wrapper 后的完整 command；无法证明含 claude 或 local settings 也 fail-closed。
 claude_hook_disable_reason() {
@@ -638,6 +678,142 @@ array_to_json() {
   fi
 }
 
+# v2.1（DEC-114 v1.21.0）：ORCA 终端模式 auto-detect + ORCA helper。
+#
+# detect_orca_mode 输出 4 选 1：
+#   auto                    — 在 ORCA 终端内 + path 匹配 PROJECT_DIR 的 git toplevel
+#   force_tmux              — --no-orca-mode 显式 opt-out / 非 ORCA 终端 / 跨 repo
+#   lightweight_forces_tmux — --no-worktree 强制走 tmux（ORCA worktree 必须有 git 仓）
+#   missing_orca            — TERM_PROGRAM=Orca 但 `orca` CLI 不在 PATH（fail-loud）
+#
+# 命中 auto 时填充 ORCA_WORKTREE_ID / ORCA_WORKTREE_PATH / ORCA_TERMINAL_HANDLE /
+# ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 全局变量，供 ORCA 分支与 METADATA 写入使用。
+detect_orca_mode() {
+  if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
+    echo "SPAWN_WORKER_ORCA_LIGHTWEIGHT_FORCES_TMUX: --no-worktree 与 ORCA 模式互斥，走原 tmux 路径" >&2
+    echo "force_tmux"
+    return 0
+  fi
+
+  if [ "$NO_ORCA_MODE" -eq 1 ]; then
+    echo "SPAWN_WORKER_ORCA_FORCED_TMUX: --no-orca-mode 显式 opt-out" >&2
+    echo "force_tmux"
+    return 0
+  fi
+
+  if [ "$TERM_PROGRAM" != "Orca" ] || [ -z "$ORCA_WORKTREE_ID" ]; then
+    echo "force_tmux"
+    return 0
+  fi
+
+  if ! command -v orca >/dev/null 2>&1; then
+    echo "ERROR: TERM_PROGRAM=Orca + ORCA_WORKTREE_ID 非空，但 'orca' CLI 不在 PATH (--no-orca-mode 可强制走 tmux)" >&2
+    echo "missing_orca"
+    return 0
+  fi
+
+  local orca_wt_path="${ORCA_WORKTREE_ID#*::}"
+  local project_toplevel
+  project_toplevel=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")
+  if [ -z "$project_toplevel" ] || [ "$orca_wt_path" != "$project_toplevel" ]; then
+    echo "SPAWN_WORKER_ORCA_PATH_MISMATCH: ORCA_WORKTREE_ID=$orca_wt_path vs PROJECT_DIR toplevel=$project_toplevel (跨 repo，强制走 tmux)" >&2
+    echo "force_tmux"
+    return 0
+  fi
+
+  local status_json
+  if ! status_json=$(orca status --json 2>/dev/null); then
+    echo "ERROR: orca status --json 失败（ORCA app 未运行？请跑 'orca open' 或传 --no-orca-mode）" >&2
+    echo "missing_orca"
+    return 0
+  fi
+
+  local app_version capabilities_json
+  app_version=$(printf '%s' "$status_json" | jq -r '.result.runtime.appVersion // empty' 2>/dev/null)
+  capabilities_json=$(printf '%s' "$status_json" | jq -c '.result.runtime.capabilities // []' 2>/dev/null)
+  if [ -z "$app_version" ] || [ "$app_version" = "null" ]; then
+    echo "ERROR: orca status --json 缺少 appVersion（ORCA CLI 版本不兼容）" >&2
+    echo "missing_orca"
+    return 0
+  fi
+
+  ORCA_APP_VERSION="$app_version"
+  ORCA_CAPABILITIES_JSON="$capabilities_json"
+  ORCA_WORKTREE_PATH="$project_toplevel"
+
+  local has_terminal_multiplex
+  has_terminal_multiplex=$(printf '%s' "$capabilities_json" | jq -r 'any(. == "terminal.multiplex.v1")' 2>/dev/null)
+  if [ "$has_terminal_multiplex" != "true" ]; then
+    echo "ERROR: ORCA $app_version 缺少 terminal.multiplex.v1 capability（需要 ≥1.4.x）" >&2
+    echo "missing_orca"
+    return 0
+  fi
+
+  echo "SPAWN_WORKER_ORCA_AUTO: TERM_PROGRAM=Orca + ORCA_WORKTREE_ID 匹配，ORCA $app_version" >&2
+  echo "auto"
+}
+
+# ORCA worktree create helper。返回 ORCA worktreeId (含完整 <repoId>::<path>)。
+# 失败时打印 ERROR 并 exit 64。--dry-run 模式只打印计划不真调。
+orca_worktree_create() {
+  local name="$1" base_branch="$2"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'ORCA_RUN: orca worktree create --name %q --no-parent --base-branch %q --json\n' "$name" "$base_branch"
+    echo "orca_worktree_id_placeholder"
+    return 0
+  fi
+  local out worktree_id
+  out=$(orca worktree create --name "$name" --no-parent --base-branch "$base_branch" --json 2>&1) || {
+    echo "ERROR: orca worktree create 失败: $out" >&2
+    exit 64
+  }
+  worktree_id=$(printf '%s' "$out" | jq -r '.result.worktreeId // empty')
+  if [ -z "$worktree_id" ]; then
+    echo "ERROR: orca worktree create 响应缺 worktreeId: $out" >&2
+    exit 64
+  fi
+  printf '%s\n' "$worktree_id"
+}
+
+# ORCA terminal create + tui-idle wait + send prompt 三合一 helper。
+# 输入：worktree id、title、worker command。
+# 输出：写入 ORCA_TERMINAL_HANDLE 全局变量。
+# --dry-run 模式只打印计划不真调，ORCA_TERMINAL_HANDLE 设占位符。
+orca_terminal_create_and_send() {
+  local worktree_id="$1" title="$2" command="$3"
+  local prompt="${4:-请按你的任务开始工作}"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'ORCA_RUN: orca terminal create --worktree id:%q --title %q --command %q --json\n' \
+      "$worktree_id" "$title" "$command"
+    printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json\n'
+    printf 'ORCA_RUN: orca terminal send --terminal <handle> --text %q --enter --json\n' "$prompt"
+    ORCA_TERMINAL_HANDLE="orca_terminal_handle_placeholder"
+    return 0
+  fi
+
+  local out handle
+  out=$(orca terminal create --worktree "id:$worktree_id" --title "$title" --command "$command" --json 2>&1) || {
+    echo "ERROR: orca terminal create 失败: $out" >&2
+    exit 64
+  }
+  handle=$(printf '%s' "$out" | jq -r '.result.handle // empty')
+  if [ -z "$handle" ]; then
+    echo "ERROR: orca terminal create 响应缺 handle: $out" >&2
+    exit 64
+  fi
+  ORCA_TERMINAL_HANDLE="$handle"
+
+  orca terminal wait --terminal "$handle" --for tui-idle --timeout-ms 60000 --json >/dev/null 2>&1 || {
+    echo "SPAWN_WORKER_ORCA_TUI_WAIT_TIMEOUT: tui-idle 60s 内未就绪，继续投 prompt（不阻塞）" >&2
+  }
+
+  orca terminal send --terminal "$handle" --text "$prompt" --enter --json >/dev/null 2>&1 || {
+    echo "ERROR: orca terminal send 失败（worker 已开但 prompt 没投；PM 需用 orca terminal send --terminal $handle 重投）" >&2
+    exit 64
+  }
+}
+
 # v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
 # 仅在 *_OVERRIDE 标志为 0 时（即用户没显式传 flag）才按 backend 默认。
 # claude-code backend 默认全关，省 trust_auto 30s + permission_auto 60s 共 90s 空等；
@@ -691,7 +867,7 @@ if [ "$PROJECT_IS_GIT" -eq 1 ]; then
     GUARD_ATTESTATION_FILE="$git_common_dir/agent-authority/$SESSION.hook-attested.json"
   fi
 fi
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+if tmux has-session -t "$SESSION" 2>/dev/null && [ "$ORCA_MODE" != "auto" ]; then
   echo "ERROR: tmux session already exists: $SESSION" >&2
   exit 1
 fi
@@ -701,6 +877,39 @@ if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
   # WORKTREE 已指向 PROJECT_DIR（或 --worktree 覆盖的子目录）。
   BASE_SHA=""
   echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
+elif [ "$ORCA_MODE" = "auto" ]; then
+  # v2.1（DEC-114）：ORCA 终端模式。orca worktree create --base-branch "$X" 会基于 X
+  # 的 commit 建新 ORCA worktree。要让 worker 在 BRANCH 上工作，用 BRANCH 作为 base
+  # （若 BRANCH 已在 origin 同步或本地存在）；否则回退到 BASE_REF。
+  orca_base="$BASE_REF"
+  if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null \
+     || git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
+    orca_base="$BRANCH"
+  fi
+  if [ -n "$existing_wt" ] && [ -z "$(printf '%s' "$existing_wt" | grep -v "$ORCA_WORKTREE_PATH" 2>/dev/null || true)" ]; then
+    # 现有 git worktree 路径跟 ORCA 当前 worktree 同路径，复用。
+    WORKTREE="$existing_wt"
+    SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+    METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+    echo "SPAWN_WORKER_ORCA_REUSE_GIT_WORKTREE: $WORKTREE"
+  else
+    ORCA_WORKTREE_ID=$(orca_worktree_create "tmux-$safe_branch" "$orca_base")
+  fi
+  # ORCA_WORKTREE_PATH 已在 detect_orca_mode 里设（=PROJECT_DIR git toplevel），
+  # 但 ORCA worktree create 后实际 path 可能不同（ORCA 用 ~/orca/workspaces/<name>）；
+  # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE。
+  if [ -n "$ORCA_WORKTREE_ID" ] && [ "$ORCA_WORKTREE_ID" != "orca_worktree_id_placeholder" ]; then
+    orca_actual_path="${ORCA_WORKTREE_ID#*::}"
+    if [ -n "$orca_actual_path" ] && [ -d "$orca_actual_path" ]; then
+      WORKTREE="$orca_actual_path"
+      ORCA_WORKTREE_PATH="$orca_actual_path"
+    fi
+  fi
+  SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+  METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
+  INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
+  BASE_SHA=$(git -C "$WORKTREE" rev-parse HEAD 2>/dev/null || echo "")
+  echo "SPAWN_WORKER_ORCA_WORKTREE: id=$ORCA_WORKTREE_ID path=$WORKTREE"
 else
   # 默认 worktree 模式：--project 必须是 git 仓，base ref / 分支都参与
   if [ "$PROJECT_IS_GIT" -eq 0 ]; then
@@ -908,6 +1117,13 @@ write_metadata() {
     --argjson worker_mirror_authoritative "$worker_mirror_authoritative" \
     --argjson authorized_install_commands "$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")" \
     --argjson allowed_shell_commands "$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')" \
+    --arg orca_mode "${ORCA_MODE:-force_tmux}" \
+    --arg orca_worktree_id "${ORCA_WORKTREE_ID:-}" \
+    --arg orca_worktree_path "${ORCA_WORKTREE_PATH:-}" \
+    --arg orca_terminal_handle "${ORCA_TERMINAL_HANDLE:-}" \
+    --arg orca_tui_ready_method "${ORCA_TUI_READY_METHOD:-orca_terminal_wait_tui-idle}" \
+    --arg orca_app_version "${ORCA_APP_VERSION:-}" \
+    --argjson orca_capabilities "${ORCA_CAPABILITIES_JSON:-[]}" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -922,7 +1138,16 @@ write_metadata() {
       },
       session: {
         id: $session,
-        context: $session_context
+        context: $session_context,
+        orca: {
+          mode: $orca_mode,
+          worktree_id: $orca_worktree_id,
+          worktree_path: $orca_worktree_path,
+          terminal_handle: $orca_terminal_handle,
+          tui_ready_method: $orca_tui_ready_method,
+          app_version: $orca_app_version,
+          capabilities: $orca_capabilities
+        }
       },
       runtime: {
         worker_backend: $worker_backend,
@@ -1310,7 +1535,19 @@ if [[ "$COMMAND" == *' '* ]]; then
   COMMAND="bash $(printf '%q' "$LAUNCH_SH")"
 fi
 
-run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
+if [ "$ORCA_MODE" = "auto" ]; then
+  # v2.1（DEC-114）：ORCA 终端模式。orca terminal create 直接调，保留 ORCA_WORKTREE_ID
+  # 之外的 COMMAND / provider env / wrapper / launch.sh 全套不变（COMMAND 已被 launch.sh 包好）。
+  # 等价于原 tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"。
+  # 投 prompt：复用 SKILL §5.2 "超长 prompt 投递标准模式"——把 prompt 写 WORKER_PROMPT.md，
+  # 投一条短 Read 指令；这里简化为 inline prompt（spawn-worker 通常 --with-sentinel 配套
+  # PM 后续投 prompt；ORCA 模式下 default 行为是直接 inline 投，PM 可通过
+  # `orca terminal send --terminal $HANDLE --text "..." --enter` 追加）。
+  orca_terminal_create_and_send "$ORCA_WORKTREE_ID" "$SESSION" "$COMMAND" \
+    "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/$SESSION（详细指令将由 PM 后续 orca terminal send 投递）"
+else
+  run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
+fi
 
 # Trust-auto + Permission-auto: headless CLI workers need trust-folder permission
 # and runtime permission prompts auto-accepted.
@@ -1321,10 +1558,12 @@ run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
 # permission_auto_bg (v1.18.3): 后台 watcher 持续 7200s，覆盖同步 60s 窗口外的 dialog。
 # v1.18.4: 默认值按 backend 分支（resolve_backend_defaults），claude-code 默认全关省 90s 空等；
 # 其他 backend 默认全开。flag --*/--no-* 均可 force override 默认值（详见 usage）。
-if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ]; then
+# v2.1（DEC-114）：ORCA 模式下全部跳过——ORCA 桌面端 agent launcher 自管 trust + permission
+# + external imports dialog，spawn-worker 这层再监控会重复点击 / 撞 TUI 状态。
+if [ "$DRY_RUN" -eq 0 ] && [ "$TRUST_AUTO" -eq 1 ] && [ "$ORCA_MODE" != "auto" ]; then
   trust_auto "$SESSION"
 fi
-if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ]; then
+if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO" -eq 1 ] && [ "$ORCA_MODE" != "auto" ]; then
   permission_auto "$SESSION"
 fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
@@ -1338,16 +1577,24 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$PERMISSION_AUTO_BG" -eq 1 ]; then
   ( permission_auto_bg "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
   echo "SPAWN_WORKER_PERMISSION_BG: launched (subshell inherit function v1.18.3 模式；v1.20.2 setsid/nohup bug hotfix)"
 fi
-if [ "$DRY_RUN" -eq 0 ] && [ "$EXTERNAL_IMPORTS_AUTO" -eq 1 ]; then
+if [ "$DRY_RUN" -eq 0 ] && [ "$EXTERNAL_IMPORTS_AUTO" -eq 1 ] && [ "$ORCA_MODE" != "auto" ]; then
+  # v2.1（DEC-114）：ORCA 模式跳过——ORCA 桌面端自管 external imports dialog。
   # v1.20.3.1 hotfix（接 v1.20.2 Task-020）：同上 v1.20.2 setsid/nohup + 函数 bug 修复。
   ( external_imports_auto "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
-  pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
-  pane_cwd_physical="$pane_cwd"
-  if [ -n "$pane_cwd" ] && [ -d "$pane_cwd" ]; then
-    pane_cwd_physical=$(cd "$pane_cwd" && pwd -P)
+  if [ "$ORCA_MODE" = "auto" ]; then
+    # v2.1（DEC-114）：ORCA 模式。orca terminal create --worktree id:X 默认 cwd = worktree
+    # 根；物理路径也相同（ORCA worktree 本身不解析 symlink）。
+    pane_cwd="$ORCA_WORKTREE_PATH"
+    pane_cwd_physical="$ORCA_WORKTREE_PATH"
+  else
+    pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
+    pane_cwd_physical="$pane_cwd"
+    if [ -n "$pane_cwd" ] && [ -d "$pane_cwd" ]; then
+      pane_cwd_physical=$(cd "$pane_cwd" && pwd -P)
+    fi
   fi
   if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
     # v2.0：轻量模式隔离门禁只验 cwd == 目标文件夹，不验 branch
@@ -1374,7 +1621,20 @@ echo "SPAWN_WORKER_NEXT: send worker prompt, then wait for $SESSION_CONTEXT/STAT
 
 if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
   SENTINEL_SCRIPT="$SCRIPT_DIR/sentinel.sh"
-  SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --tmux-session $SESSION --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+  if [ "$ORCA_MODE" = "auto" ]; then
+    # v2.1（DEC-114）：ORCA 模式 sentinel 用 terminal-handle + worktree-id 路径；
+    # sentinel.sh 收到后走 orca terminal read / orca terminal close / orca worktree set 路径。
+    SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --terminal-handle $ORCA_TERMINAL_HANDLE --worktree-id $ORCA_WORKTREE_ID --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+    # ORCA 模式下立即给 ORCA UI 设 in-progress（sentinel 终态会覆盖到 completed/failed）。
+    if [ "$DRY_RUN" -eq 0 ]; then
+      orca worktree set --worktree "id:$ORCA_WORKTREE_ID" \
+        --workspace-status in-progress \
+        --comment "spawn-worker.sh ORCA mode: worker command launched, waiting STATUS.json" \
+        --json >/dev/null 2>&1 || true
+    fi
+  else
+    SENTINEL_CMD="bash $SENTINEL_SCRIPT --status-file $SESSION_CONTEXT/STATUS.json --tmux-session $SESSION --poll-interval $SENTINEL_POLL_INTERVAL --max-wait $SENTINEL_MAX_WAIT"
+  fi
   if [ "$KEEP_TMUX_ON_TERMINAL" -eq 1 ]; then
     SENTINEL_CMD="$SENTINEL_CMD --keep-tmux-on-terminal"
   fi
