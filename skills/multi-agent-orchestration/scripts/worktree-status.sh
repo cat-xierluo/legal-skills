@@ -107,6 +107,29 @@ else
   echo "WORKTREE_METADATA: missing file=$METADATA_FILE"
 fi
 
+# v2.1（DEC-114 v2.0.0）：ORCA 只读状态块。读 METADATA session.orca.* 字段；
+# 命中 worktree_id 且 orca CLI 可用时，额外查 orca worktree show 拿实时 workspace-status
+# / card status / comment。ORCA 不可用 / 无 orca 字段时静默跳过（与 worktree-status
+# 现有 read-only 容错一致），不阻塞其它输出。
+if [ -f "$METADATA_FILE" ] && command -v jq >/dev/null 2>&1; then
+  orca_mode=$(jq -r '.session.orca.mode // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  orca_worktree_id=$(jq -r '.session.orca.worktree_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  orca_terminal_handle=$(jq -r '.session.orca.terminal_handle // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  if [ -n "$orca_mode" ]; then
+    echo "ORCA_META: mode=${orca_mode} worktree_id=${orca_worktree_id:-n/a} terminal=${orca_terminal_handle:-n/a}"
+    if [ -n "$orca_worktree_id" ] && command -v orca >/dev/null 2>&1; then
+      orca_status_json=$(orca worktree show --worktree "id:$orca_worktree_id" --json 2>/dev/null || echo "{}")
+      # orca worktree show 响应嵌套在 .result.worktree（不是顶层 .result）
+      orca_workspace_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.workspaceStatus // empty' 2>/dev/null)
+      orca_card_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.status // empty' 2>/dev/null)
+      orca_comment=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.comment // empty' 2>/dev/null)
+      echo "ORCA_WORKSPACE_STATUS: ${orca_workspace_status:-n/a}"
+      echo "ORCA_CARD_STATUS: ${orca_card_status:-n/a}"
+      echo "ORCA_COMMENT: ${orca_comment:-n/a}"
+    fi
+  fi
+fi
+
 if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION" 2>/dev/null; then
   pane_cwd=$(tmux display-message -p -t "$SESSION" '#{pane_current_path}' 2>/dev/null || echo "")
   echo "TMUX_STATUS: alive session=$SESSION cwd=$pane_cwd"

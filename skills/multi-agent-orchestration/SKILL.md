@@ -684,6 +684,26 @@ Claude Code agent view / 官方后台会话可作为 Claude 专用后端：`clau
 
 Agent Teams 适合 Claude Code 团队式协作；仍要使用 worktree 隔离并把 `workdir` 指向带来源前缀的 worktree。ACP 只在 adapter 已稳定、能输出结构化状态时启用。Subagent 仅用于轻量、边界窄、输入少的任务；需要长时间写作、独立提交 PR 或跨大量材料整合时升级为 tmux / agent view / Agent Teams。
 
+### 6.5 ORCA 终端模式（v2.0.0 auto-detect）
+
+当 PM 在 ORCA 桌面端的内嵌终端里调用 `spawn-worker.sh` 时，自动走 ORCA worktree + ORCA terminal 路径，让 ORCA UI 直接反映 worker 生命周期——spawn 立即出卡片（`in-progress`），sentinel 终态自动切 `completed` / `in-review`，stale 时同步 `in-review` 提示。详见 `references/12-orca-cli-worker.md`。
+
+**触发条件（auto-detect，零配置）**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` 的 git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中后 `spawn-worker.sh` 走 `orca worktree create --no-parent --base-branch` + `orca terminal create --command "$WORKER_COMMAND"` + `orca terminal wait --for tui-idle` + `orca terminal send` 四步链，保留 provider env / runtime profile / wrapper / launch.sh / 超长 prompt 投递全部现有能力（Step 2 实现）。
+
+**opt-out**：`spawn-worker.sh ... --no-orca-mode` 强制走原 tmux + git worktree 路径，不调任何 `orca` CLI。适用场景：ORCA 桌面端行为异常需要回退、或 PM 想复现非 ORCA 环境。
+
+**互斥**：`--no-worktree` 轻量模式与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。命中轻量模式时自动回落 tmux + 打印 `SPAWN_WORKER_ORCA_LIGHTWEIGHT_FORCES_TMUX`。
+
+**全链路 ORCA UI 同步**：
+- spawn 完立即 `orca worktree set --workspace-status in-progress`（spawn-worker.sh）
+- sentinel 终态 `done` → `completed`；`failed/blocked/stopped` / timeout → `in-review`（sentinel.sh `--terminal-handle --worktree-id` 双路径）
+- pm-monitor 检测 `CHECKPOINT_STALE` / `WORKER_STALE_NO_COMMIT` → `in-review` + comment（pm-monitor.sh）
+- clean-worktree 清理时 `orca worktree rm --force` 同步删 ORCA 跟踪（clean-worktree.sh）
+
+**非 ORCA 环境 / 跨 repo / fail-loud**：`TERM_PROGRAM != Orca` 或 `ORCA_WORKTREE_ID` path 不匹配 `PROJECT_DIR` → 自动回落 tmux（打印 `SPAWN_WORKER_ORCA_PATH_MISMATCH`）；`orca` CLI 不在 PATH 或 `orca status` 失败 → `exit 64`（提示 `orca open` 或 `--no-orca-mode`）。
+
+**METADATA.json 锚点**：`session.orca.{mode, worktree_id, worktree_path, terminal_handle, tui_ready_method, app_version, capabilities}`。sentinel / pm-monitor / clean-worktree 全靠 `session.orca.worktree_id` 定位 ORCA worktree；`mode` 字段让 PM 巡检时一眼判断这个 worker 走的是 ORCA 还是 tmux。
+
 ## 7. 巡检与介入
 
 PM 巡检信号：
@@ -763,6 +783,13 @@ Claude Code PM：
     --tmux-session legal-ch01 \
     --interval 30
   ```
+
+ORCA PM（v2.0.0，§6.5 配套）：
+- PM 在 ORCA 桌面端内嵌终端里跑 `spawn-worker.sh` 时，auto-detect 命中 ORCA 模式（`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` path 匹配），worker 跑在 ORCA worktree + ORCA terminal，**不需要 tmux**。
+- 完成通知机制不变：仍走 §7.2 Sentinel bash 模式（`run_in_background=true` 启 sentinel），sentinel 终态时 harness task-notification 唤醒 PM。ORCA 模式下 sentinel 收 `--terminal-handle` + `--worktree-id`（spawn-worker 输出的 `SPAWN_WORKER_SENTINEL_CMD` 自动带这两参数），走 `orca terminal read/close` + `orca worktree set` 路径。
+- PM 巡检 ORCA UI 状态：`scripts/worktree-status.sh` 已加 ORCA 只读块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）；或直接 `orca worktree ps --json` 看全部 worker 卡片。
+- ORCA 模式下 PM 不应再用 `tmux attach` / `tmux capture-pane`（worker 不在 tmux 里），改用 `orca terminal read --terminal <handle> --json` / `orca terminal send --terminal <handle> --text "..." --enter` 纠偏。
+- 降级：ORCA app 未运行 / `orca` CLI 不在 PATH / 跨 repo → spawn-worker 自动回落 tmux 或 fail-loud（详见 `references/12-orca-cli-worker.md` §2 / §8）。
 
 Codex PM：
 - Codex CLI 的后台 shell 不会自动把完成事件推回当前对话；不要假定它等价于 Claude Code `run_in_background`。
@@ -970,6 +997,7 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 - `references/09-parallel-lessons.md`：tmux/Agent Teams 实战坑点。
 - `references/10-agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
 - `references/11-issue-grouping.md`：Issue 分组与合并 PR 判断（三维度骨架：同根因合并 / 依赖链顺序 / 独立并行；本地 task 卡 vs 云端 GitHub Issue 任务源；软阈值与决策树）。
+- `references/12-orca-cli-worker.md`：ORCA CLI worker backend 完整 reference（§6.5 配套）。auto-detect 触发协议、ORCA API 速查、METADATA 锚点字段、sentinel 双路径、pm-monitor 同步点、clean-worktree ORCA 清理、已知限制与降级。
 
 官方文档：
 - Claude Code agent view: `https://code.claude.com/docs/en/agent-view`

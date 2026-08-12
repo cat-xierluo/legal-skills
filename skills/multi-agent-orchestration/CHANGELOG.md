@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.0.0] - 2026-08-12
+
+### 新增 — ORCA CLI worker backend（DEC-114）
+
+PM 在 ORCA 桌面端内嵌终端里调 `spawn-worker.sh` 时，auto-detect 走 ORCA worktree + ORCA terminal 路径，ORCA UI 直接反映 worker 生命周期（spawn 立即出卡 `in-progress`、sentinel 终态自动切 `completed`/`in-review`、stale 同步 `in-review`、clean-worktree 删 ORCA 跟踪）。
+
+**触发**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中走 ORCA；非 ORCA 终端 / 跨 repo / `--no-orca-mode` 走原 tmux 路径不变。详见 SKILL §6.5 + `references/12-orca-cli-worker.md`。
+
+**改动**：
+
+- `scripts/spawn-worker.sh`：新增 `detect_orca_mode()` / `orca_worktree_create()` / `orca_terminal_create_and_send()` 三个 helper + `--no-orca-mode` flag + METADATA `session.orca` 子块（mode / worktree_id / worktree_path / terminal_handle / tui_ready_method / app_version / capabilities）；ORCA 模式跳过 trust/permission/external-imports dialog 监控（ORCA 桌面端自管）
+- `scripts/sentinel.sh`：新增 `--terminal-handle --worktree-id` 双路径（与 `--tmux-session` 二选一）+ `sync_orca_worktree_status()`（done→completed / failed→in-review / timeout→in-review）
+- `scripts/pm-monitor.sh`：新增 `orca_worktree_set_status()` helper；`CHECKPOINT_STALE` + `WORKER_STALE_NO_COMMIT` 两个 emit 后同步 ORCA `in-review`
+- `scripts/clean-worktree.sh`：tmux kill 后加 `orca worktree rm --force` 同步清理 ORCA 跟踪（dry-run 友好）
+- `scripts/worktree-status.sh`：加 ORCA 只读状态块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）
+- `references/12-orca-cli-worker.md`：新建完整 Level 2 reference（9 节：边界 / 检测协议 / ORCA API 速查 / METADATA 锚点 / sentinel 双路径 / pm-monitor 同步点 / clean-worktree 清理 / 已知限制 / 实战范例）
+- `SKILL.md`：§6.5 ORCA 终端模式新节 + §7.1 加 ORCA PM 分支 + §10 references 加 references/12
+
+### 改进 — `ensure-claude-path.sh` 参数化为 `ensure_in_path <bin>`
+
+候选目录追加 `/Applications/Orca.app/Contents/Resources/bin`，让 spawn-worker.sh ORCA 模式可直接 `ensure_in_path orca` 探测 ORCA CLI。保留 `ensure_claude_in_path` 作为 `ensure_in_path claude` 的别名，所有现有调用方零改动。
+
+### Known Limitations / Follow-up
+
+- ORCA 模式与 `--no-worktree` 轻量模式互斥（ORCA worktree 必须有 git 仓），命中轻量模式自动回落 tmux
+- ORCA app 未运行 / `orca` CLI 不在 PATH / 缺 `terminal.multiplex.v1` capability → fail-loud `exit 64`（提示 `orca open` 或 `--no-orca-mode`）
+- **`--command` 必须是 agent CLI（claude/codex/opencode）ORCA 才自动识别为 agent session**（references/12 §9 关键发现 1）；用 shell 命令测试时 agent session 不显示，但 worktree 卡片 + workspace-status 仍正常
+- **端到端验证（2026-08-12）暴露并修复 4 个 jq 嵌套字段 bug**：`worktree create` / `terminal create` / `terminal read` / `worktree show` 响应都嵌套在 `.result.<resource>`（不是顶层）。共性模式记入 references/12 §9 关键发现 3
+- **下一步探索**：ORCA 有更高层的 `orchestration worker-start` / `task-create` / `dispatch` / `gate-create` / `send` 体系（supervised worker + 任务 + decision gate + inter-agent 消息）。当前 skill 对接底层 `terminal create`，后续评估切到 `orchestration worker-start` 层（references/12 §9 关键发现 4）
+
 ## [1.20.5] - 2026-08-05
 
 ### 改进 — qoderclicn v1.0.45 + codebuddy v2.115.0 模型清单同步
