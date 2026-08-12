@@ -152,7 +152,7 @@ capture_pane_tail() {
     command -v orca >/dev/null 2>&1 || { log "SENTINEL_ORCA_UNAVAILABLE: orca CLI not found, skip pane capture"; return 0; }
     log "SENTINEL_ORCA_TERMINAL_TAIL: handle=$TERMINAL_HANDLE lines=$PANE_TAIL_LINES"
     orca terminal read --terminal "$TERMINAL_HANDLE" --limit "$PANE_TAIL_LINES" --json 2>/dev/null \
-      | jq -r '(.result.lines // []) | .[]? // empty' 2>/dev/null \
+      | jq -r '(.result.terminal.tail // []) | .[]? // empty' 2>/dev/null \
       | redact_sensitive_stream \
       | while IFS= read -r line; do log "$line"; done
     return 0
