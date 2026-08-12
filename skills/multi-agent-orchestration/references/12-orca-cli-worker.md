@@ -7,6 +7,8 @@
 
 **适用**：PM 在 ORCA 桌面端的内嵌终端里调用 `spawn-worker.sh`，希望 ORCA UI 直接反映 worker 生命周期（spawn 立即出卡、终态自动切 workspace-status、stale 时 in-review 提示）。
 
+**前提（重要）**：`--command` 必须是 agent CLI（`claude`/`codex`/`opencode` 等），ORCA 才会自动识别为 agent session 显示在 worktree 页面（见 §9 关键发现 1）。`render-runtime-profile.sh` 生成的 worker command 天然满足；用 shell 命令（`echo`/`bash -c`）测试时 agent session 不显示，但 worktree 卡片 + workspace-status 仍正常工作。
+
 **不适用**：
 - 非 ORCA 终端（iTerm2 / Terminal.app / VS Code terminal / Codex App / 其它）—— `TERM_PROGRAM != Orca`，自动回落 tmux 路径。
 - 跨 repo 调用 —— `ORCA_WORKTREE_ID` 的 path 段与 `PROJECT_DIR` 的 git toplevel 不一致，自动回落 tmux（防误触发）。
@@ -168,6 +170,69 @@ fi
 | 跨 repo（ORCA 终端里跑别的 repo） | `ORCA_WORKTREE_ID` path 不匹配 | 自动回落 tmux + 打印 `SPAWN_WORKER_ORCA_PATH_MISMATCH` |
 | ORCA CLI 命令格式变更（未来版本） | jq 解析 `.result.worktreeId` / `.result.handle` 失败 | helper 函数（`orca_worktree_create` / `orca_terminal_create_and_send`）集中报错，改动只在这两处 |
 
-## 9. 实战范例
+## 9. 实战范例（2026-08-12 端到端验证）
 
-待补：真实 ORCA 终端内 spawn worker → sentinel 等 done → ORCA UI 状态变化的端到端日志（参考 `smoke-orca-worker.sh` 的 3 步验证）。
+真实 ORCA 终端内 `spawn-worker.sh --command 'claude'`（ORCA 模式 auto）的完整链路：
+
+1. `detect_orca_mode` → `auto`（`SPAWN_WORKER_ORCA_AUTO: ... ORCA 1.4.180`）
+2. `orca worktree create --no-parent --base-branch main` → worktree id/path
+3. `orca terminal create --command "claude"` → terminal handle
+4. Isolation Gate 通过（cwd + branch 对齐，BRANCH safe 化后 = ORCA git branch）
+5. METADATA `session.orca` 完整（mode/worktree_id/path/handle/app_version/capabilities）
+6. `orca worktree set --workspace-status in-progress` → ORCA UI 立即出卡片
+7. `orca terminal send` 投 prompt → claude 处理（`toolName=Bash` 可见）
+8. sentinel 检测 `STATUS=done` → `orca worktree set --workspace-status completed` + comment
+9. `clean-worktree --execute` → `orca worktree rm`
+
+### 关键发现 1：ORCA 自动识别 agent session（不需 `--agent`）
+
+**terminal 跑的 command 是 agent CLI（`claude`/`codex`/`opencode` 等）→ ORCA 自动识别为 agent session**，在 worktree 页面的 `agents` 数组显示 `agentType`/`state`/`toolName`/`lastAssistantMessage`。不需要 `worktree create --agent` 或任何显式标记。
+
+实测对照：
+- `--command 'echo ready'`（shell）→ agents 数组为空（ORCA 不识别）
+- `--command 'claude'`（agent CLI）→ `agents[0] = {agentType: "claude", state: "done", toolName: "Bash", ...}`
+
+**对 spawn-worker 的含义**：`COMMAND` 必须是 agent CLI（`render-runtime-profile.sh` 生成的 `claude`/`codex` 命令天然满足），ORCA 才会识别。用 shell 命令测试时 agent session 不显示——这是测试设计问题，不是实现缺陷。
+
+### 关键发现 2：PM agent 完全控制 worktree session
+
+PM 通过两层 API 控制 worker：
+
+| 层 | 命令 | 实测 |
+|---|---|---|
+| terminal 层 | `orca terminal send --terminal <h> --text "..." --enter` | 投 prompt，claude TUI 收到并处理 |
+| | `orca terminal read --terminal <h> --cursor N` | 读 worker 输出（含 claude 响应） |
+| | `orca terminal wait --for tui-idle` | 等 worker 处理完 |
+| | `orca terminal close` | 停 worker |
+| orchestration 层 | `orca orchestration worker-show/read/stop` | supervised worker 生命周期（待探索） |
+| | `orca orchestration send/reply/inbox` | inter-agent 消息（待探索） |
+
+实测：PM send 的 prompt `"用 bash 工具执行 ls -la"` → claude 真实执行（`toolName=Bash`，`lastAssistantMessage` 是 ls 结果）。
+
+### 关键发现 3：ORCA CLI 响应 jq 字段普遍嵌套
+
+ORCA CLI 响应几乎都嵌套在 `.result.<resource>` 对象里（不是顶层 `.result.<field>`）。端到端验证暴露 4 个 jq 字段 bug：
+
+| 命令 | 错误字段 | 正确字段 |
+|---|---|---|
+| `worktree create` | `.result.worktreeId` | `.result.worktree.id` |
+| `terminal create` | `.result.handle` | `.result.terminal.handle` |
+| `terminal read` | `.result.lines` | `.result.terminal.tail` |
+| `worktree show` | `.result.workspaceStatus` | `.result.worktree.workspaceStatus` |
+
+**共性模式**：`orca <resource> <verb>` 的响应通常是 `{result: {<resource>: {...}}}`。新加 ORCA 调用时按这个模式预判 jq 路径，避免逐个试错。
+
+### 关键发现 4：`orchestration worker-start` 是更高层（待探索）
+
+ORCA 有原生 multi-agent orchestration 体系（比 `terminal create` 更高层）：
+
+- `orchestration run-create/run-use/run-current` — orchestration Run（绑定 coordinator）
+- `orchestration worker-start/worker-show/worker-read/worker-stop/worker-list` — supervised worker 全生命周期
+- `orchestration task-create/task-list/task-update/dispatch` — 任务 + 派发
+- `orchestration send/reply/inbox/check/ask` — inter-agent 消息
+- `orchestration gate-create/gate-resolve/gate-list` — decision gate
+
+当前 skill 对接的是底层 `terminal create`（agent session 自动显示 + PM 可控，但没用 supervised worker / task / gate 体系）。后续探索方向：评估是否把 spawn-worker 切到 `orchestration worker-start`，让 worker 成为 ORCA 原生 supervised worker（worker-list 可见、task 绑定、gate 拦截），同时保留 provider env 隔离。
+
+`worker-start` 关键参数：`--task <id> (--agent <id> | --terminal <handle>) --worktree <selector> --model <id> --effort <level>`。`--agent` 接受已知 TUI agent；`--terminal` 接受已有 handle（可能能保留 spawn-worker 的 provider env wrapper command）。需实测 `--terminal` 路径是否支持 custom command + provider env。
+

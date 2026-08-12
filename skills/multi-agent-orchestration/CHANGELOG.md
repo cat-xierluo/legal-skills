@@ -26,7 +26,9 @@ PM 在 ORCA 桌面端内嵌终端里调 `spawn-worker.sh` 时，auto-detect 走 
 
 - ORCA 模式与 `--no-worktree` 轻量模式互斥（ORCA worktree 必须有 git 仓），命中轻量模式自动回落 tmux
 - ORCA app 未运行 / `orca` CLI 不在 PATH / 缺 `terminal.multiplex.v1` capability → fail-loud `exit 64`（提示 `orca open` 或 `--no-orca-mode`）
-- references/12 §9 实战范例待补（smoke-orca-worker.sh 跑通后补端到端日志）
+- **`--command` 必须是 agent CLI（claude/codex/opencode）ORCA 才自动识别为 agent session**（references/12 §9 关键发现 1）；用 shell 命令测试时 agent session 不显示，但 worktree 卡片 + workspace-status 仍正常
+- **端到端验证（2026-08-12）暴露并修复 4 个 jq 嵌套字段 bug**：`worktree create` / `terminal create` / `terminal read` / `worktree show` 响应都嵌套在 `.result.<resource>`（不是顶层）。共性模式记入 references/12 §9 关键发现 3
+- **下一步探索**：ORCA 有更高层的 `orchestration worker-start` / `task-create` / `dispatch` / `gate-create` / `send` 体系（supervised worker + 任务 + decision gate + inter-agent 消息）。当前 skill 对接底层 `terminal create`，后续评估切到 `orchestration worker-start` 层（references/12 §9 关键发现 4）
 
 ## [1.20.5] - 2026-08-05
 
