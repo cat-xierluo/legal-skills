@@ -793,6 +793,7 @@ ORCA PM（v2.0.0，§6.5 配套）：
 - 完成通知机制不变：仍走 §7.2 Sentinel bash 模式（`run_in_background=true` 启 sentinel），sentinel 终态时 harness task-notification 唤醒 PM。ORCA 模式下 sentinel 收 `--terminal-handle` + `--worktree-id`（spawn-worker 输出的 `SPAWN_WORKER_SENTINEL_CMD` 自动带这两参数），走 `orca terminal read/close` + `orca worktree set` 路径。
 - PM 巡检 ORCA UI 状态：`scripts/worktree-status.sh` 已加 ORCA 只读块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）；或直接 `orca worktree ps --json` 看全部 worker 卡片。
 - ORCA 模式下 PM 不应再用 `tmux attach` / `tmux capture-pane`（worker 不在 tmux 里），改用 `orca terminal read --terminal <handle> --json` / `orca terminal send --terminal <handle> --text "..." --enter` 纠偏。
+- **PM 控制统一入口**：`scripts/pm-orchestrate.sh`（v2.2，Task-034）——读 `session_context/METADATA.json` 自动判断 worker 模式（ORCA terminal vs tmux），PM 一个命令管两种 worker 不用关心类型。子命令 `send/read/peek/wait`，`send` 超长自动走 SKILL §5.2 WORKER_PROMPT.md 标准。详见 `references/13-pm-orchestrate.md`。
 - 降级：ORCA app 未运行 / `orca` CLI 不在 PATH / 跨 repo → spawn-worker 自动回落 tmux 或 fail-loud（详见 `references/12-orca-cli-worker.md` §2 / §8）。
 
 Codex PM：
@@ -1002,6 +1003,7 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 - `references/10-agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
 - `references/11-issue-grouping.md`：Issue 分组与合并 PR 判断（三维度骨架：同根因合并 / 依赖链顺序 / 独立并行；本地 task 卡 vs 云端 GitHub Issue 任务源；软阈值与决策树）。
 - `references/12-orca-cli-worker.md`：ORCA CLI worker backend 完整 reference（§6.5 配套）。auto-detect 触发协议、ORCA API 速查、METADATA 锚点字段、sentinel 双路径、pm-monitor 同步点、clean-worktree ORCA 清理、已知限制与降级。
+- `references/13-pm-orchestrate.md`：PM 控制 worker 统一入口（pm-orchestrate.sh）reference。send/read/peek/wait 子命令、双模式（ORCA terminal vs tmux）自动判断、超长 prompt 走 WORKER_PROMPT.md 标准。
 
 官方文档：
 - Claude Code agent view: `https://code.claude.com/docs/en/agent-view`
@@ -1018,6 +1020,7 @@ Agent CLI worker backend（先看总览，再查具体工具）：
 - `scripts/wait-worker.sh`：单 worker 等待器，可接 Claude Code background Bash 或 Codex heartbeat automation。
 - `scripts/worktree-status.sh`：单 worker 只读总览，展示 metadata、checkpoint、tmux 和 git 状态。
 - `scripts/clean-worktree.sh`：worker session/worktree 安全清理，默认 dry-run，清理前展示 metadata 摘要。
+- `scripts/pm-orchestrate.sh`：**PM 控制 worker 统一入口（v2.2，Task-034）**。子命令 `send/read/peek/wait`，读 `session_context/METADATA.json` 自动判断 ORCA 模式（terminal_handle 非空 → `orca terminal send/read/wait`）或 tmux 模式（→ `tmux send-keys/capture-pane`）。`send` 超长（>500 字符 或含反引号/$/|）自动走 SKILL §5.2 WORKER_PROMPT.md + 短 Read 指令。PM 一个命令管两种 worker。
 - `scripts/smoke-tmux-worker.sh`：临时 repo 端到端 smoke test；只在修改 Skill 脚本后运行。
 - `scripts/smoke-provider-settings.sh`：逐个验证 `config/*.settings.json` 能启动 Claude Code 并返回响应；新增或改 provider 后运行。
 - `scripts/lint-wait-script.sh`：wait/monitor/custom wait 脚本 lint；只在修改 wait/monitor 脚本后运行。
