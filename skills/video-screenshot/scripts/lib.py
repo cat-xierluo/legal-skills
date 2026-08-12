@@ -9,17 +9,25 @@ import contextlib
 import io
 import json
 import logging
+import math
 import re
 import select
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, cast
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat
+try:
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat
+except ImportError:
+    print("❌ 缺少依赖: Pillow", file=sys.stderr)
+    print("   请使用 uv 运行: uv run scripts/extract.py --help", file=sys.stderr)
+    print("   或运行: pip install Pillow", file=sys.stderr)
+    raise SystemExit(1)
 
 logger = logging.getLogger("video-screenshot")
 
@@ -568,6 +576,452 @@ def calc_content_quality(image_bytes: bytes) -> dict[str, Any]:
     }
 
 
+def calc_vertical_seam_score(image_bytes: bytes, *, width: int = 96, height: int = 160) -> float:
+    """估计画面内部纵向拼接缝强度；只用于排序，不单独作为删除依据。"""
+    if not image_bytes:
+        return 0.0
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    img = img.resize((width, height), _LANCZOS)
+    # 排除外侧黑边、状态栏与底部导航栏，避免把手机画幅边界当成拼接缝。
+    top = max(0, int(height * 0.10))
+    bottom = max(top + 1, int(height * 0.90))
+    left = max(2, int(width * 0.12))
+    right = min(width - 2, int(width * 0.88))
+    pixels = img.load()
+    edge_scores: list[float] = []
+    darkness_scores: list[float] = []
+    for x in range(left, right):
+        diffs: list[int] = []
+        dark = 0
+        for y in range(top, bottom):
+            value = int(pixels[x, y])
+            diffs.append(abs(value - int(pixels[x - 1, y])))
+            if value < 24:
+                dark += 1
+        edge_scores.append(sum(diffs) / float(len(diffs) or 1))
+        darkness_scores.append(dark / float(max(1, bottom - top)))
+    if not edge_scores:
+        return 0.0
+    ordered = sorted(edge_scores)
+    median = ordered[len(ordered) // 2]
+    edge_peak = max(edge_scores)
+    edge_ratio = edge_peak / max(2.0, median)
+    dark_band = max(darkness_scores) if darkness_scores else 0.0
+    # 0—1 归一化。内部强边缘和贯穿式暗条同时出现时得分最高。
+    return max(0.0, min(1.0, (edge_ratio - 2.0) / 6.0 * 0.65 + dark_band * 0.55))
+
+
+def calc_transition_image(
+    image_bytes: bytes,
+    *,
+    width: int = 72,
+    height: int = 120,
+    crop_top_ratio: float = 0.08,
+    crop_bottom_ratio: float = 0.10,
+    crop_left_ratio: float = 0.03,
+    crop_right_ratio: float = 0.03,
+) -> Image.Image | None:
+    if not image_bytes:
+        return None
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    img = _crop_content(
+        img,
+        top_ratio=crop_top_ratio,
+        bottom_ratio=crop_bottom_ratio,
+        left_ratio=crop_left_ratio,
+        right_ratio=crop_right_ratio,
+    )
+    return img.resize((width, height), _LANCZOS)
+
+
+def _image_mad(a: Image.Image, b: Image.Image) -> float:
+    if a.size != b.size or a.size[0] <= 0 or a.size[1] <= 0:
+        return 999.0
+    return float(ImageStat.Stat(ImageChops.difference(a, b)).mean[0])
+
+
+def horizontal_mixed_transition_score(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    following: Image.Image | None,
+) -> dict[str, Any]:
+    """判断 current 是否可由前后两页横向滑动拼合得到。"""
+    empty = {"score": 0.0, "orientation": "", "cut_ratio": 0.0, "mix_error": 999.0, "neighbor_diff": 0.0}
+    if previous is None or current is None or following is None:
+        return empty
+    if previous.size != current.size or following.size != current.size:
+        return empty
+    width, height = current.size
+    if width < 16 or height < 16:
+        return empty
+    neighbor_diff = _image_mad(previous, following)
+    if neighbor_diff < 10.0:
+        return empty
+
+    best_error = 999.0
+    best_orientation = ""
+    best_cut = 0
+    for cut in range(max(4, width // 4), min(width - 4, width * 3 // 4) + 1, max(2, width // 24)):
+        # 页面向左滑：旧页尾部在左，新页头部在右。
+        left_cur = current.crop((0, 0, cut, height))
+        right_cur = current.crop((cut, 0, width, height))
+        left_old = previous.crop((width - cut, 0, width, height))
+        right_new = following.crop((0, 0, width - cut, height))
+        left_error = _image_mad(left_cur, left_old)
+        right_error = _image_mad(right_cur, right_new)
+        error = (left_error * cut + right_error * (width - cut)) / float(width)
+        if error < best_error:
+            best_error = error
+            best_orientation = "swipe_left"
+            best_cut = cut
+
+        # 页面向右滑：新页尾部在左，旧页头部在右。
+        left_new = following.crop((width - cut, 0, width, height))
+        right_old = previous.crop((0, 0, width - cut, height))
+        left_error = _image_mad(left_cur, left_new)
+        right_error = _image_mad(right_cur, right_old)
+        error = (left_error * cut + right_error * (width - cut)) / float(width)
+        if error < best_error:
+            best_error = error
+            best_orientation = "swipe_right"
+            best_cut = cut
+
+    # 只有拼合误差显著小于前后页差异时才给高分；绝对误差过大时衰减。
+    relative_gain = max(0.0, (neighbor_diff - best_error) / max(neighbor_diff, 1.0))
+    # JPEG/缩略重采样会让真实拼接的 MAD 落在 20—25；40 以上才视为解释力不足。
+    absolute_factor = max(0.0, min(1.0, (40.0 - best_error) / 30.0))
+    score = max(0.0, min(1.0, relative_gain * absolute_factor * 1.35))
+    return {
+        "score": score,
+        "orientation": best_orientation,
+        "cut_ratio": best_cut / float(width),
+        "mix_error": best_error,
+        "neighbor_diff": neighbor_diff,
+    }
+
+
+def temporal_frame_metrics(
+    image_bytes: bytes,
+    *,
+    crop_top_ratio: float = 0.12,
+    crop_bottom_ratio: float = 0.12,
+    crop_left_ratio: float = 0.04,
+    crop_right_ratio: float = 0.04,
+) -> dict[str, Any]:
+    """计算时间簇择优使用的轻量指标。"""
+    quality = calc_content_quality(image_bytes)
+    thumb = calc_thumb_bytes(
+        image_bytes,
+        size=48,
+        crop_top_ratio=crop_top_ratio,
+        crop_bottom_ratio=crop_bottom_ratio,
+        crop_left_ratio=crop_left_ratio,
+        crop_right_ratio=crop_right_ratio,
+    )
+    ssim_thumb = calc_thumb_bytes(
+        image_bytes,
+        size=32,
+        crop_top_ratio=crop_top_ratio,
+        crop_bottom_ratio=crop_bottom_ratio,
+        crop_left_ratio=crop_left_ratio,
+        crop_right_ratio=crop_right_ratio,
+        autocontrast=True,
+    )
+    return {
+        "thumb": thumb,
+        "ssim_thumb": ssim_thumb,
+        "blur_score": calc_blur_score(image_bytes),
+        "quality": quality,
+        "seam_score": calc_vertical_seam_score(image_bytes),
+        "transition_image": calc_transition_image(image_bytes),
+    }
+
+
+def _temporal_pair_is_stable(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    max_gap_seconds: float,
+    pixel_diff_threshold: float,
+    ssim_threshold: float,
+) -> bool:
+    prev_time = previous.get("capture_time_seconds")
+    cur_time = current.get("capture_time_seconds")
+    if prev_time is None or cur_time is None:
+        return False
+    gap = float(cur_time) - float(prev_time)
+    if gap < 0 or gap > max_gap_seconds:
+        return False
+    diff = mean_abs_diff(previous.get("thumb") or b"", current.get("thumb") or b"")
+    sim = ssim_bytes(previous.get("ssim_thumb") or b"", current.get("ssim_thumb") or b"")
+    return bool(
+        (diff is not None and diff <= pixel_diff_threshold)
+        or (sim is not None and sim >= ssim_threshold)
+    )
+
+
+def _temporal_selection_score(
+    item: dict[str, Any],
+    *,
+    dwell_after_seconds: float,
+    prefer_later: float = 0.0,
+) -> float:
+    """给簇内候选打分；清晰、稳定、无拼接缝的后期帧优先。"""
+    blur = max(0.0, float(item.get("blur_score") or 0.0))
+    blur_component = min(2.0, math.log1p(blur) / 3.2)
+    dwell_component = min(1.5, max(0.0, dwell_after_seconds) * 1.5)
+    seam_penalty = min(1.4, max(0.0, float(item.get("seam_score") or 0.0)) * 1.4)
+    mixed_penalty = min(2.5, max(0.0, float(item.get("mixed_transition_score") or 0.0)) * 2.5)
+    label = str((item.get("quality") or {}).get("label") or "")
+    quality_penalty = {
+        "empty": 4.0,
+        "blank": 4.0,
+        "startup": 1.5,
+        "transition": 1.2,
+    }.get(label, 0.0)
+    return blur_component + dwell_component + prefer_later - seam_penalty - mixed_penalty - quality_penalty
+
+
+def select_temporal_representatives(
+    items: list[dict[str, Any]],
+    *,
+    stable_max_gap_seconds: float = 0.80,
+    stable_pixel_diff_threshold: float = 5.0,
+    stable_ssim_threshold: float = 0.965,
+    transition_max_seconds: float = 1.60,
+    motion_chunk_seconds: float = 2.20,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """基于前后帧选择稳定终态，返回 (保留, 丢弃, 统计)。
+
+    输入项必须按时间排序并包含 capture_time_seconds、thumb、ssim_thumb、
+    blur_score、quality 和 seam_score。函数不修改图片文件。
+    """
+    if not items:
+        return [], [], {
+            "stable_run_count": 0,
+            "motion_segment_count": 0,
+            "transition_drop_count": 0,
+            "stable_duplicate_drop_count": 0,
+            "low_confidence_selection_count": 0,
+        }
+
+    # 三帧时序证据：当前帧能由前后两页横向拼合解释，才视为高置信滑页中间态。
+    mixed_transition_indices: set[int] = set()
+    for idx in range(1, len(items) - 1):
+        prev_time = items[idx - 1].get("capture_time_seconds")
+        cur_time = items[idx].get("capture_time_seconds")
+        next_time = items[idx + 1].get("capture_time_seconds")
+        if prev_time is None or cur_time is None or next_time is None:
+            continue
+        if float(cur_time) - float(prev_time) > 1.25 or float(next_time) - float(cur_time) > 1.25:
+            continue
+        mix = horizontal_mixed_transition_score(
+            items[idx - 1].get("transition_image"),
+            items[idx].get("transition_image"),
+            items[idx + 1].get("transition_image"),
+        )
+        items[idx]["mixed_transition_score"] = float(mix["score"])
+        items[idx]["mixed_transition"] = mix
+        if float(mix["score"]) >= 0.58:
+            mixed_transition_indices.add(idx)
+
+    stable_edges = [False] * len(items)
+    for idx in range(1, len(items)):
+        stable_edges[idx] = _temporal_pair_is_stable(
+            items[idx - 1],
+            items[idx],
+            max_gap_seconds=stable_max_gap_seconds,
+            pixel_diff_threshold=stable_pixel_diff_threshold,
+            ssim_threshold=stable_ssim_threshold,
+        )
+
+    # anchor 是至少含两帧、由稳定边连接的区间。
+    anchors: list[tuple[int, int]] = []
+    idx = 1
+    while idx < len(items):
+        if not stable_edges[idx] or idx in mixed_transition_indices or idx - 1 in mixed_transition_indices:
+            idx += 1
+            continue
+        start = idx - 1
+        end = idx
+        while (
+            end + 1 < len(items)
+            and stable_edges[end + 1]
+            and end + 1 not in mixed_transition_indices
+            and end not in mixed_transition_indices
+        ):
+            end += 1
+        anchors.append((start, end))
+        idx = end + 1
+
+    selected: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
+    selected_indices: set[int] = set()
+    dropped_indices: set[int] = set()
+    stable_group_by_index: dict[int, int] = {}
+
+    def dwell_after(pos: int) -> float:
+        cur = items[pos].get("capture_time_seconds")
+        nxt = items[pos + 1].get("capture_time_seconds") if pos + 1 < len(items) else None
+        if cur is None or nxt is None:
+            return 0.0
+        return max(0.0, float(nxt) - float(cur))
+
+    for pos in sorted(mixed_transition_indices):
+        item = dict(items[pos])
+        item.update({
+            "drop_reason": "temporal_mixed_transition",
+            "temporal_group_id": "mixed-transition",
+            "selection_confidence": "high",
+        })
+        dropped.append(item)
+        dropped_indices.add(pos)
+
+    for group_id, (start, end) in enumerate(anchors, 1):
+        for pos in range(start, end + 1):
+            stable_group_by_index[pos] = group_id
+        best = max(
+            range(start, end + 1),
+            key=lambda pos: _temporal_selection_score(
+                items[pos],
+                dwell_after_seconds=dwell_after(pos),
+                prefer_later=(pos - start) * 0.03,
+            ),
+        )
+        chosen = dict(items[best])
+        chosen.update({
+            "temporal_reason": "stable_representative",
+            "temporal_group_id": f"stable-{group_id:03d}",
+            "selection_confidence": "high",
+        })
+        selected.append(chosen)
+        selected_indices.add(best)
+        for pos in range(start, end + 1):
+            if pos == best:
+                continue
+            item = dict(items[pos])
+            item.update({
+                "drop_reason": "temporal_stable_duplicate",
+                "temporal_group_id": f"stable-{group_id:03d}",
+                "selection_confidence": "high",
+            })
+            dropped.append(item)
+            dropped_indices.add(pos)
+
+    # 稳定段之间的非 anchor 项属于运动段。短且前后都有稳定终态时，视为切换中间态；
+    # 较长运动段按固定跨度留代表帧，避免滚动或视频内容被整段吞掉。
+    gaps: list[tuple[int, int, bool, bool]] = []
+    cursor = 0
+    for start, end in anchors:
+        if cursor < start:
+            gaps.append((cursor, start - 1, cursor > 0, True))
+        cursor = end + 1
+    if cursor < len(items):
+        gaps.append((cursor, len(items) - 1, cursor > 0, False))
+    if not anchors:
+        gaps = [(0, len(items) - 1, False, False)]
+
+    motion_group_count = 0
+    transition_drop_count = 0
+    low_confidence_count = 0
+    for start, end, bounded_before, bounded_after in gaps:
+        positions = [pos for pos in range(start, end + 1) if pos not in dropped_indices and pos not in selected_indices]
+        if not positions:
+            continue
+        motion_group_count += 1
+        first_time = items[positions[0]].get("capture_time_seconds")
+        last_time = items[positions[-1]].get("capture_time_seconds")
+        span = (
+            max(0.0, float(last_time) - float(first_time))
+            if first_time is not None and last_time is not None
+            else float("inf")
+        )
+        # 单张运动候选自身的 span 为 0。改用两侧稳定锚点之间的真实时间跨度，
+        # 避免把停留很久、但只采到一张的独立证据页误删为“短切换”。
+        if bounded_before and bounded_after and start > 0 and end + 1 < len(items):
+            before_time = items[start - 1].get("capture_time_seconds")
+            after_time = items[end + 1].get("capture_time_seconds")
+            if before_time is not None and after_time is not None:
+                span = max(0.0, float(after_time) - float(before_time))
+        group_name = f"motion-{motion_group_count:03d}"
+        if bounded_before and bounded_after and span <= transition_max_seconds:
+            for pos in positions:
+                item = dict(items[pos])
+                item.update({
+                    "drop_reason": "temporal_transition",
+                    "temporal_group_id": group_name,
+                    "selection_confidence": "medium",
+                })
+                dropped.append(item)
+                dropped_indices.add(pos)
+                transition_drop_count += 1
+            continue
+
+        chunks: list[list[int]] = []
+        chunk: list[int] = []
+        chunk_start_time: float | None = None
+        for pos in positions:
+            cur_time = items[pos].get("capture_time_seconds")
+            cur_float = float(cur_time) if cur_time is not None else None
+            if (
+                chunk
+                and chunk_start_time is not None
+                and cur_float is not None
+                and cur_float - chunk_start_time > motion_chunk_seconds
+            ):
+                chunks.append(chunk)
+                chunk = []
+                chunk_start_time = None
+            if not chunk:
+                chunk_start_time = cur_float
+            chunk.append(pos)
+        if chunk:
+            chunks.append(chunk)
+
+        for chunk_id, chunk_positions in enumerate(chunks, 1):
+            best = max(
+                chunk_positions,
+                key=lambda pos: _temporal_selection_score(
+                    items[pos],
+                    dwell_after_seconds=dwell_after(pos),
+                    prefer_later=(pos - chunk_positions[0]) * 0.02,
+                ),
+            )
+            chosen = dict(items[best])
+            chosen.update({
+                "temporal_reason": "motion_representative",
+                "temporal_group_id": f"{group_name}-{chunk_id:02d}",
+                "selection_confidence": "low",
+            })
+            selected.append(chosen)
+            selected_indices.add(best)
+            low_confidence_count += 1
+            for pos in chunk_positions:
+                if pos == best:
+                    continue
+                item = dict(items[pos])
+                item.update({
+                    "drop_reason": "temporal_motion_redundant",
+                    "temporal_group_id": f"{group_name}-{chunk_id:02d}",
+                    "selection_confidence": "low",
+                })
+                dropped.append(item)
+                dropped_indices.add(pos)
+
+    selected.sort(key=lambda item: (float(item.get("capture_time_seconds") or 0.0), int(item.get("source_index") or 0)))
+    dropped.sort(key=lambda item: int(item.get("source_index") or 0))
+    return selected, dropped, {
+        "stable_run_count": len(anchors),
+        "motion_segment_count": motion_group_count,
+        "transition_drop_count": transition_drop_count,
+        "mixed_transition_drop_count": len(mixed_transition_indices),
+        "stable_duplicate_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_stable_duplicate"),
+        "motion_redundant_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_motion_redundant"),
+        "low_confidence_selection_count": low_confidence_count,
+        "selected_before_dedup": len(selected),
+    }
+
+
 def crop_for_ocr_bytes_with_range(
     image_bytes: bytes,
     *,
@@ -673,6 +1127,8 @@ class DedupState:
     blur_drops: int = 0
     quality_drops: int = 0
     min_gap_drops: int = 0
+    temporal_drops: int = 0
+    temporal_transition_drops: int = 0
     kept_count: int = 0
     total_count: int = 0
 

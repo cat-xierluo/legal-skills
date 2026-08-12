@@ -3,7 +3,6 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "Pillow>=10.0.0",
-#   "rapidocr-onnxruntime",
 # ]
 # ///
 
@@ -48,7 +47,9 @@ from lib import (
     ocr_extract_text,
     probe_video,
     run_ffmpeg_extract,
+    select_temporal_representatives,
     shingles,
+    temporal_frame_metrics,
 )
 
 logger = logging.getLogger("video-screenshot")
@@ -102,6 +103,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-filter-quality", action="store_false", dest="filter_quality", help="禁用内容质量过滤")
     p.add_argument("--min-gap", type=float, default=0.5, help="保留帧之间的最小时间间隔秒数（默认: 0.5）")
     p.add_argument(
+        "--temporal-select",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="按前后帧时间簇选择稳定终态（默认开启；用 --no-temporal-select 禁用）",
+    )
+    p.add_argument(
+        "--stable-max-gap",
+        type=float,
+        default=2.20,
+        help="相似候选构成同一稳定页的最大间隔秒数（默认: 2.20）",
+    )
+    p.add_argument(
+        "--transition-max-seconds",
+        type=float,
+        default=2.40,
+        help="前后稳定页之间可视为切换过程的最长时长（默认: 2.40）",
+    )
+    p.add_argument(
+        "--motion-chunk-seconds",
+        type=float,
+        default=2.50,
+        help="持续运动段每隔多少秒至少保留一张代表帧（默认: 2.50）",
+    )
+    p.add_argument(
         "--keep-drop-candidates",
         action="store_true",
         help="保存被去重或过滤丢弃的候选帧，供多模态复核",
@@ -152,7 +177,11 @@ def main() -> None:
     output_dir = args.output or str(Path(video_path).parent / f"{video_stem}_frames")
     output_dir = str(Path(output_dir).resolve())
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    cleanup_stats = _clean_output_dir(output_dir)
+    try:
+        cleanup_stats = _clean_output_dir(output_dir)
+    except RuntimeError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)
     if cleanup_stats["stale_deleted_count"]:
         print(f"  已清理旧输出文件: {cleanup_stats['stale_deleted_count']}")
 
@@ -189,8 +218,7 @@ def main() -> None:
             print("警告: RapidOCR 未安装，OCR 去重已禁用。安装: pip install rapidocr-onnxruntime", file=sys.stderr)
             args.ocr_dedup = False
         else:
-            print("  OCR: RapidOCR (本地)（SSIM 去重已自动禁用）")
-            params.ssim_threshold = 0
+            print("  OCR: RapidOCR (本地，与 SSIM 并行复核)")
 
     # 创建临时目录
     started_at = time.monotonic()
@@ -237,20 +265,100 @@ def main() -> None:
             _write_report(
                 output_dir, video_path, info, params, 0, DedupState(), [], cleanup_stats,
                 [], args.keep_drop_candidates, args.drop_candidate_limit,
+                {"enabled": bool(args.temporal_select), "selected_before_dedup": 0}, args,
             )
             return
 
-        # 去重
+        # 两遍式时间簇择优：先观察候选的前后关系，再把代表帧交给传统去重级联。
         state = DedupState()
         window = 20
         pixel_diff_threshold = 8.0
         frames_meta: list[dict] = []
         drop_candidates_meta: list[dict] = []
         last_kept_time: float | None = None
+        temporal_summary: dict[str, object] = {
+            "enabled": bool(args.temporal_select),
+            "selected_before_dedup": total_extracted,
+            "stable_run_count": 0,
+            "motion_segment_count": 0,
+            "transition_drop_count": 0,
+            "stable_duplicate_drop_count": 0,
+            "motion_redundant_drop_count": 0,
+            "low_confidence_selection_count": 0,
+        }
+
+        temporal_items: list[dict] = []
+        if args.temporal_select:
+            print("时间簇分析中...")
+            for idx, frame_path in enumerate(frame_files, 1):
+                with open(frame_path, "rb") as fp:
+                    content = fp.read()
+                metrics = temporal_frame_metrics(
+                    content,
+                    crop_top_ratio=params.content_crop_top,
+                    crop_bottom_ratio=params.content_crop_bottom,
+                    crop_left_ratio=params.content_crop_left,
+                    crop_right_ratio=params.content_crop_right,
+                )
+                metrics.update({
+                    "source_index": idx,
+                    "frame_path": frame_path,
+                    "capture_time_seconds": calc_capture_time(frame_path, idx, params, info),
+                    "sha256": sha256(content).hexdigest(),
+                })
+                temporal_items.append(metrics)
+
+            selected_items, temporal_drops, temporal_stats = select_temporal_representatives(
+                temporal_items,
+                stable_max_gap_seconds=max(0.1, args.stable_max_gap),
+                transition_max_seconds=max(0.0, args.transition_max_seconds),
+                motion_chunk_seconds=max(0.1, args.motion_chunk_seconds),
+            )
+            temporal_summary.update(temporal_stats)
+            for item in temporal_drops:
+                state.temporal_drops += 1
+                if item.get("drop_reason") in ("temporal_transition", "temporal_mixed_transition"):
+                    state.temporal_transition_drops += 1
+                _record_drop_candidate(
+                    output_dir,
+                    str(item["frame_path"]),
+                    int(item["source_index"]),
+                    str(item.get("drop_reason") or "temporal_drop"),
+                    item.get("capture_time_seconds"),
+                    str(item.get("sha256") or ""),
+                    drop_candidates_meta,
+                    enabled=args.keep_drop_candidates,
+                    limit=args.drop_candidate_limit,
+                    extra={
+                        "temporal_group_id": item.get("temporal_group_id"),
+                        "selection_confidence": item.get("selection_confidence"),
+                        "seam_score": round(float(item.get("seam_score") or 0.0), 4),
+                        "mixed_transition_score": round(float(item.get("mixed_transition_score") or 0.0), 4),
+                    },
+                )
+            processing_items = selected_items
+            print(
+                "  时间簇候选: "
+                f"{total_extracted} → {len(processing_items)}，"
+                f"切换中间态: {temporal_summary.get('transition_drop_count', 0)}"
+            )
+        else:
+            processing_items = [
+                {
+                    "source_index": idx,
+                    "frame_path": frame_path,
+                    "capture_time_seconds": calc_capture_time(frame_path, idx, params, info),
+                    "temporal_reason": "disabled",
+                    "selection_confidence": "not_applicable",
+                }
+                for idx, frame_path in enumerate(frame_files, 1)
+            ]
 
         print("去重中...")
-        for idx, frame_path in enumerate(frame_files, 1):
-            state.total_count += 1
+        state.total_count = total_extracted
+        for processing_idx, temporal_item in enumerate(processing_items, 1):
+            idx = int(temporal_item["source_index"])
+            frame_path = str(temporal_item["frame_path"])
 
             with open(frame_path, "rb") as fp:
                 content = fp.read()
@@ -264,7 +372,7 @@ def main() -> None:
                 crop_right_ratio=params.content_crop_right,
             )
 
-            capture_time = calc_capture_time(frame_path, idx, params, info)
+            capture_time = temporal_item.get("capture_time_seconds")
 
             # 图像去重
             is_dup, drop_reason, thumb, ssim_thumb, scroll_image = is_frame_duplicate(
@@ -422,15 +530,22 @@ def main() -> None:
             frames_meta.append({
                 "index": state.kept_count,
                 "filename": out_name,
+                "source_frame_index": idx,
+                "source_temp_filename": Path(frame_path).name,
                 "capture_time_seconds": capture_time,
                 "sha256": digest,
+                "temporal_group_id": temporal_item.get("temporal_group_id"),
+                "temporal_reason": temporal_item.get("temporal_reason"),
+                "selection_confidence": temporal_item.get("selection_confidence"),
+                "seam_score": round(float(temporal_item.get("seam_score") or 0.0), 4),
+                "mixed_transition_score": round(float(temporal_item.get("mixed_transition_score") or 0.0), 4),
             })
 
-            if idx % 50 == 0 or idx == total_extracted:
+            if processing_idx % 50 == 0 or processing_idx == len(processing_items):
                 print(
-                    f"\r  已处理: {idx}/{total_extracted}, "
+                    f"\r  已处理: {processing_idx}/{len(processing_items)}, "
                     f"保留: {state.kept_count}, "
-                    f"去重: {idx - state.kept_count}",
+                    f"去重: {processing_idx - state.kept_count}",
                     end="", flush=True,
                 )
         print()  # 换行
@@ -439,6 +554,7 @@ def main() -> None:
         _write_report(
             output_dir, video_path, info, params, total_extracted, state, frames_meta, cleanup_stats,
             drop_candidates_meta, args.keep_drop_candidates, args.drop_candidate_limit,
+            temporal_summary, args,
         )
 
         # 归档
@@ -460,6 +576,9 @@ def main() -> None:
         print(f"    SSIM 重复:    {state.ssim_dups}")
         print(f"    滚动合并:    {state.scroll_dups}")
         print(f"    OCR 重复:    {state.ocr_dups}")
+        if state.temporal_drops:
+            print(f"    时间簇择优:  {state.temporal_drops}")
+            print(f"    切换中间态:  {state.temporal_transition_drops}")
         if state.blur_drops:
             print(f"    模糊过滤:    {state.blur_drops}")
         if state.quality_drops:
@@ -481,6 +600,22 @@ def main() -> None:
 def _clean_output_dir(output_dir: str) -> dict[str, object]:
     """清理本工具生成的旧输出文件，避免本次结果混入残留帧。"""
     root = Path(output_dir)
+    protected_vision_artifacts = [
+        root / "_vision_audit",
+        root / "_curated",
+        root / "_vision_review.json",
+    ]
+    existing_protected = [
+        path.name for path in protected_vision_artifacts
+        if path.exists() or path.is_symlink()
+    ]
+    if existing_protected:
+        names = "、".join(existing_protected)
+        raise RuntimeError(
+            f"输出目录含已完成或待完成的视觉复核产物（{names}），拒绝自动删除；"
+            "请改用新的 -o 输出目录，或在备份后显式移走这些产物"
+        )
+
     stale_files: list[Path] = []
     stale_files.extend(root.glob("frame_*.jpg"))
     stale_files.extend(root.glob("frame_*.jpeg"))
@@ -491,7 +626,21 @@ def _clean_output_dir(output_dir: str) -> dict[str, object]:
 
     stale_dirs: list[Path] = []
     candidates_dir = root / "_review_candidates"
+    if candidates_dir.is_symlink():
+        raise RuntimeError("旧候选目录是符号链接，拒绝跟随并清理；请改用新的 -o 输出目录")
     if candidates_dir.exists() and candidates_dir.is_dir():
+        unknown_candidates = [
+            path for path in candidates_dir.iterdir()
+            if path.is_symlink()
+            or not path.is_file()
+            or not re.fullmatch(r"candidate_\d{3}_.+\.jpg", path.name)
+        ]
+        if unknown_candidates:
+            names = "、".join(path.name for path in unknown_candidates[:5])
+            raise RuntimeError(
+                f"旧候选目录含非本工具文件（{names}），拒绝自动删除；请改用新的 -o 输出目录"
+            )
+        stale_files.extend(candidates_dir.glob("candidate_*.jpg"))
         stale_dirs.append(candidates_dir)
 
     deleted: list[str] = []
@@ -503,7 +652,10 @@ def _clean_output_dir(output_dir: str) -> dict[str, object]:
         p.unlink()
         deleted.append(p.name)
     for p in stale_dirs:
-        shutil.rmtree(p, ignore_errors=True)
+        try:
+            p.rmdir()
+        except OSError as exc:
+            raise RuntimeError(f"旧输出目录无法安全清理: {p}") from exc
         deleted.append(p.name + "/")
 
     return {
@@ -565,6 +717,8 @@ def _write_report(
     drop_candidates: list[dict],
     keep_drop_candidates: bool,
     drop_candidate_limit: int,
+    temporal_summary: dict[str, object],
+    args: argparse.Namespace,
 ) -> None:
     report = {
         "input": video_path,
@@ -584,6 +738,10 @@ def _write_report(
             "ssim_threshold": params.ssim_threshold,
             "scroll_merge": params.scroll_merge,
             "scroll_diff_threshold": params.scroll_diff_threshold,
+            "temporal_select": bool(args.temporal_select),
+            "stable_max_gap_seconds": args.stable_max_gap,
+            "transition_max_seconds": args.transition_max_seconds,
+            "motion_chunk_seconds": args.motion_chunk_seconds,
         },
         "total_extracted": total_extracted,
         "kept_after_dedup": state.kept_count,
@@ -593,9 +751,10 @@ def _write_report(
             "drop_candidate_limit": drop_candidate_limit,
             "drop_candidate_count": len(drop_candidates),
             "drop_candidates": drop_candidates,
-            "vision_review_status": "not_run",
-            "vision_review_note": "脚本只导出复核候选帧；是否执行多模态复核由当前模型能力决定。",
+            "vision_audit_status": "not_prepared",
+            "vision_audit_note": "基础抽帧不调用模型；运行 prepare_vision_audit.py 后，具备图像能力的 Agent 才执行受预算审计。",
         },
+        "temporal_selection": temporal_summary,
         "dedup_stats": {
             "sha256_duplicates": state.sha256_dups,
             "dhash_duplicates": state.dhash_dups,
@@ -606,6 +765,8 @@ def _write_report(
             "blur_drops": state.blur_drops,
             "quality_drops": state.quality_drops,
             "min_gap_drops": state.min_gap_drops,
+            "temporal_drops": state.temporal_drops,
+            "temporal_transition_drops": state.temporal_transition_drops,
         },
         "frames": frames,
     }
@@ -709,6 +870,10 @@ def _archive_result(
             "filter_blur": args.filter_blur,
             "blur_threshold": args.blur_threshold,
             "filter_quality": args.filter_quality,
+            "temporal_select": args.temporal_select,
+            "stable_max_gap_seconds": args.stable_max_gap,
+            "transition_max_seconds": args.transition_max_seconds,
+            "motion_chunk_seconds": args.motion_chunk_seconds,
             "keep_drop_candidates": args.keep_drop_candidates,
             "drop_candidate_limit": args.drop_candidate_limit,
         },
@@ -721,7 +886,7 @@ def _archive_result(
         "review": {
             "drop_candidate_count": len(drop_candidates),
             "drop_candidates_archived": bool(drop_candidates),
-            "vision_review_status": "not_run",
+            "vision_audit_status": "not_prepared",
         },
         "result": {
             "total_extracted": state.total_count,
@@ -736,6 +901,8 @@ def _archive_result(
                 "blur_drops": state.blur_drops,
                 "quality_drops": state.quality_drops,
                 "min_gap_drops": state.min_gap_drops,
+                "temporal_drops": state.temporal_drops,
+                "temporal_transition_drops": state.temporal_transition_drops,
             },
         },
         "frame_count": state.kept_count,

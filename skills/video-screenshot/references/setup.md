@@ -56,6 +56,8 @@ uv pip install rapidocr-onnxruntime
 
 如果未安装，`--ocr-dedup` 参数会自动降级为跳过 OCR 去重，不影响其他功能。
 
+基础时间簇择优、过渡帧识别和视觉审计联系表只依赖 Pillow，不需要安装 RapidOCR。启用 OCR 后仍保留 SSIM 图像去重，两者并行工作。
+
 ## 首次使用检查清单
 
 ```bash

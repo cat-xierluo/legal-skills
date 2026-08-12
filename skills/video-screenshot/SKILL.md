@@ -1,144 +1,132 @@
 ---
 name: video-screenshot
-description: 视频截图提取工具。从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、固定间隔、智能去重四种策略，配合内容区 dHash、像素差异、SSIM、滚动帧合并、OCR 文本去重和可选复合复核模式；当前模型支持图像输入时可复核被丢弃候选帧，文字模型跳过复核。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频截帧、视频关键帧提取。不要用于：视频压缩、视频剪辑、音频提取。
-version: "0.3.2"
+description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，按前后帧时间簇选择稳定终态，减少过密截图并过滤翻页、滑页和页面切换中间态；可生成受预算限制的联系表，交给支持图像输入的多模态模型审计重复页和可疑帧，纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
+version: "0.4.0"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
 ---
 
-# video-screenshot — 视频截图提取工具
+# video-screenshot — 视频截图提取与精筛
 
-从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为可用作法律证据的图片文件。独立 Python CLI，无 Django 依赖。
+从录屏中提取可追溯的证据截图。默认先在本地执行两遍式时间簇择优；只有当前模型支持图像输入且基础结果仍需精简时，才准备少量多模态审计材料。
 
-## 适用场景
+## 工作流
 
-- 微信聊天录屏需要提取为逐页截图
-- 会议录屏需要提取关键画面作为证据
-- 长时间录屏需要去除重复帧，只保留有信息量的画面
-- 需要将视频内容转换为可打印、可提交的图片证据
+### 1. 确认输入与输出
 
-## 默认工作流
+取得一个本地视频路径。支持 `.mp4`、`.mov`、`.avi`、`.mkv`、`.webm`、`.flv`、`.wmv`、`.ts`。默认输出到视频同级 `<视频名>_frames/`；如该目录可能含其他材料，显式指定新的 `-o` 目录。
 
-### 1. 确认输入
-
-确认用户提供的视频文件路径。支持常见视频格式：`.mp4` `.mov` `.avi` `.mkv` `.webm` `.flv` `.wmv` `.ts`
-
-### 2. 确认参数
-
-默认配置（大多数场景无需调整）：
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| 抽帧策略 | scene | 场景变化检测 |
-| 场景阈值 | 0.10 | 变化幅度阈值（越小越敏感） |
-| 定期采样间隔 | 2.0s | 静态画面保底采样（0=禁用） |
-| 内容区裁剪 | 上 12% / 下 12% / 左右 4% | 排除状态栏、导航栏和边缘黑边后再比较 |
-| dHash 去重阈值 | 4 | 对内容区计算汉明距离（0=禁用） |
-| SSIM 阈值 | 0.93 | 结构相似度补充去重（0=禁用） |
-| 滚动帧合并 | 关闭 | 需显式 `--scroll-merge` 开启 |
-| OCR 去重 | 关闭 | 需显式开启 |
-| 最小时间间隔 | 0.5s | 抑制同一时间段内过密保留帧（0=禁用） |
-| 复核候选帧 | 关闭 | 需显式 `--keep-drop-candidates` 开启 |
-| 最长边像素 | 0 | 保持原始分辨率（可设如 1920 限制尺寸） |
-| JPEG 质量 | 2 | 最高质量（范围 1-31，越小越清晰） |
-
-详细参数说明见 `references/strategy-and-params.md`，安装指南见 `references/setup.md`。
-
-### 3. 执行抽帧
+### 2. 运行基础精筛
 
 ```bash
-# 默认：场景检测 + 图像去重
-uv run scripts/extract.py -i <视频文件路径>
+# 默认：场景候选 + 时间簇择优 + 图像去重
+uv run scripts/extract.py -i <视频路径>
 
-# 场景检测 + OCR 去重（推荐用于聊天录屏）
-uv run scripts/extract.py -i <视频文件路径> --ocr-dedup
+# 聊天记录等文字型录屏：增加本地 OCR 去重
+uv run scripts/extract.py -i <视频路径> --ocr-dedup
 
-# 复合复核模式：保留被算法丢弃的候选帧，供多模态模型回查
-uv run scripts/extract.py -i <视频文件路径> --ocr-dedup --keep-drop-candidates
-
-# 固定间隔，每 0.5 秒一帧
-uv run scripts/extract.py -i <视频文件路径> -s interval --interval 0.5
-
-# 关键帧提取，不去重
-uv run scripts/extract.py -i <视频文件路径> -s keyframe -d 0
-
-# 自定义输出目录
-uv run scripts/extract.py -i <视频文件路径> -o /evidence/case_001/
-
-# 更严格的场景检测（更多帧）
-uv run scripts/extract.py -i <视频文件路径> --scene-threshold 0.15
-
-# 禁用滚动帧合并（需要逐步滚动全过程时）
-uv run scripts/extract.py -i <视频文件路径> --no-scroll-merge
+# 调试漏帧时才保存被丢弃候选；不要作为多模态默认输入
+uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candidate-limit 80
 ```
 
-### 4. 输出说明
+默认流程：
 
-输出目录包含：
+1. 用 ffmpeg 场景变化和 2 秒保底采样生成高召回候选；
+2. 计算候选帧清晰度、内容质量、相似度和拼接风险；
+3. 按前后帧形成稳定段与连续运动段；
+4. 稳定段选择清晰、完整、停留时间更长的代表帧，不机械保留第一张；
+5. 前后均有稳定页的短运动段按切换过程处理；无双侧锚点或持续时间较长的滚动段按时间跨度保留代表帧；
+6. 再执行 SHA256、dHash、像素差异、SSIM、可选滚动合并和 OCR 去重。
+
+需要调参时读取 `references/strategy-and-params.md`。依赖安装见 `references/setup.md`。
+
+### 3. 检查基础结果
+
+检查：
+
+- `_report.json` 中 `frames` 与实际 `frame_*.jpg` 是否一致；
+- `temporal_selection` 的稳定段、运动段和切换丢弃统计；
+- 联系表总览中是否仍有左右两页拼接、上下切换中间态或明显重复页；
+- 视频开头、结尾、长滚动和关键主体/金额/地址页面是否有覆盖。
+
+不要只因帧数减少就判定准确率提高。基础结果不调用大模型，并在报告中保留 `vision_audit_status=not_prepared`。
+
+### 4. 按能力选择多模态分支
+
+如果当前模型或工具不能读取图片，停止在基础结果，明确说明视觉审计未执行。不要根据文件名或算法分数伪造图像判断。
+
+如果支持图片，并且用户希望进一步精简，生成经济型审计包：
+
+```bash
+uv run scripts/prepare_vision_audit.py \
+  -i <基础输出目录> \
+  --max-groups 8 \
+  --max-images 24
+```
+
+脚本只选择低置信、疑似拼接和相邻过密的少量组，生成 `_vision_audit/audit_manifest.json` 与联系表。按照 `references/vision-audit.md` 查看同组前后帧，输出 `_vision_review.json`。默认不得突破 8 组、24 张唯一图片；确需扩大时先向用户说明成本和隐私影响。
+
+### 5. 应用视觉审计
+
+```bash
+python3 scripts/apply_vision_review.py \
+  -i <基础输出目录> \
+  -r <基础输出目录>/_vision_review.json
+```
+
+应用脚本必须复算基础报告、manifest 和图片 SHA256。成功后生成 `_curated/` 与 `_curated/_curated_report.json`；不得删除或覆盖基础 `frame_*.jpg`。非法引用、过期 manifest、缺理由、哈希不符或空精选集必须失败关闭。
+
+## 主要输出
 
 | 文件 | 说明 |
-|------|------|
-| `frame_001_00m00s.jpg` | 保留帧（序号 + 时间戳命名） |
-| `frame_002_00m03s.jpg` | 下一帧 |
-| `_report.json` | 元数据报告（输入信息、去重统计、每帧 SHA256） |
-| `_review_candidates/` | 仅在 `--keep-drop-candidates` 开启时生成，保存被算法丢弃但可复核的候选帧 |
+|---|---|
+| `frame_NNN_MMmSSs.jpg` | 本地算法保留的基础帧 |
+| `_report.json` | 输入、参数、时间簇统计、丢弃统计、帧时间戳和 SHA256 |
+| `_review_candidates/` | 仅显式开启时保存的算法丢弃候选 |
+| `_vision_audit/audit_manifest.json` | 受预算限制的视觉审计清单与决策合同 |
+| `_vision_audit/contact_sheet_NNN.jpg` | 同组前后帧联系表 |
+| `_vision_review.json` | 多模态模型的 `keep/drop/replace` 结构化审计结果 |
+| `_curated/` | 不修改基础结果的视觉精选副本 |
+| `_curated/_curated_report.json` | 精选帧来源、排除清单和全链路哈希 |
 
-`_report.json` 可用于证据链追溯，记录了每帧的 SHA256 哈希、捕获时间戳和去重统计；复合模式下还会记录 `review.drop_candidates`，列明候选帧文件名、丢弃原因和时间戳。
+## 参数选择
 
-归档目录中的 `frames/` 只保留 `_report.json` 清单内的本次有效帧。每次运行前会清理输出目录中旧的 `frame_*.jpg` 和本工具报告文件，避免旧帧混入新结果；不会删除其他用户文件。
-
-### 5. 复合复核模式
-
-当用户担心算法漏掉关键截图，或反馈同一秒内截图过多时，优先使用复合复核模式：
-
-1. 运行 `uv run scripts/extract.py -i <视频文件路径> --ocr-dedup --keep-drop-candidates`。
-2. 如果当前模型或可用工具支持图像输入，检查 `_report.json` 中 `review.drop_candidates` 记录的候选帧，重点看 `min_gap`、`quality_*`、`duplicate_ssim`、`duplicate_scroll`、`ocr_duplicate` 等原因对应的图片。
-3. 视觉复核只做保守补回：候选帧包含新的法律相关内容、金额、身份信息、承诺、关键对话或比已保留帧更清晰时，才建议补回；不要仅因画面略有差异删除已保留帧。
-4. 如果当前模型是纯文字模型，跳过视觉复核，并明确说明 `_review_candidates/` 已生成但未做图像判断。
-
-## 抽帧策略
-
-| 策略 | 说明 | 推荐场景 |
-|------|------|----------|
-| `scene` | 场景变化检测，画面有显著变化时提取 | 聊天录屏、操作录屏（**默认推荐**） |
-| `keyframe` | 仅提取视频关键帧（I 帧） | 压缩视频、快速浏览 |
-| `interval` | 固定时间间隔提取 | 需要均匀时间采样 |
-| `smart` | ffmpeg 智能去重 | 不确定时尝试 |
-
-## 去重与过滤机制
-
-八级级联去重 + 可选过滤，每一级通过后才进入下一级：
-
-1. **SHA256 精确去重** — 完全相同的帧直接跳过
-2. **内容区 dHash 感知哈希** — 排除顶部状态栏、底部导航栏和边缘黑边后比较结构
-3. **内容区像素差异** — 48×48 灰度缩略图的平均绝对差值
-4. **SSIM 结构相似度** — 对内容区缩略图计算结构相似度，补充 dHash 漏检
-5. **滚动帧合并**（需显式开启）— 检测连续帧纵向位移后的重叠区域，只保留代表性画面
-6. **内容质量过滤**（默认开启）— 自动过滤空白页、启动/控制画面、页面切换过渡帧
-7. **模糊帧过滤** — Laplacian 方差低于阈值的帧视为模糊跳过，需 `--filter-blur` 开启
-8. **OCR 文本相似度** — 比较最近 4 帧的 OCR 文本（SequenceMatcher + Jaccard），需 `--ocr-dedup` 开启
-9. **复核候选帧保存** — `--keep-drop-candidates` 保存被前述规则丢弃的候选帧和原因，供多模态复核
+- 默认使用 `scene`，适合手机 App、网页和聊天录屏。
+- 默认启用 `--temporal-select`；只有复现旧版行为或排查算法时才用 `--no-temporal-select`。
+- 持续快速滚动担心漏页时，降低 `--motion-chunk-seconds`；结果仍过密时再提高。
+- OCR 是可选增强，未安装时必须清晰提示并降级；OCR 与 SSIM 并行，不再自动关闭 SSIM。
+- `--keep-drop-candidates` 用于漏帧排查，不等于多模态审计；多模态默认读取预算 manifest。
 
 ## 依赖
 
-| 依赖 | 版本要求 | 安装方式 |
-|------|----------|----------|
-| `ffmpeg` | ≥ 5.0 | `brew install ffmpeg` |
-| `Python` | ≥ 3.10 | 系统自带或 `brew install python` |
-| `uv` | 最新 | `brew install uv` |
-| `Pillow` | ≥ 10.0 | 自动安装（PEP 723 内联依赖） |
-| `rapidocr-onnxruntime` | ≥ 1.0 | `pip install rapidocr-onnxruntime`（仅 OCR 去重需要） |
+### 系统依赖
 
-## 与其他技能配合
+| 依赖 | 安装方式 |
+|---|---|
+| ffmpeg ≥ 5.0 | macOS: `brew install ffmpeg`<br>Linux: `sudo apt-get install ffmpeg` |
+| Python ≥ 3.10 | macOS: `brew install python` |
+| uv | macOS: `brew install uv` |
 
-- `pdf`：输出帧可组装为 PDF 证据包
-- `paddle-ocr`：需要更高质量的 OCR 内容识别时，用输出帧作为输入
-- `legal-text-format`：帧内容 OCR 后格式化
-- `video-compressor`：抽帧前先压缩视频，减小 I/O 时间
+### Python 包
 
-## 硬约束
+| 包名 | 用途 | 安装命令 |
+|---|---|---|
+| `Pillow>=10.0.0` | 图像指标、时间簇分析和联系表 | `uv run scripts/extract.py --help` 自动准备 |
+| `rapidocr-onnxruntime` | 可选 OCR 文本去重 | `pip install rapidocr-onnxruntime` |
 
-- 不修改原视频文件
-- 输出图片使用 JPEG 格式，最长边不超过 `--max-size` 参数
-- `_report.json` 始终生成，确保证据可追溯
+## 验收与安全边界
+
+- 运行 `uv run scripts/check_pipeline.py --case all`，要求输出 `DOMAIN_CHECKS_PASSED`。
+- 行为变化必须用代表视频复测，并通过联系表或逐图查看进行视觉抽查；静态检查或帧数减少不能单独证明准确。
+- 不修改原视频，不把完整录屏默认上传云端。
+- 保留基础帧和全链路 SHA256；视觉层只能生成非破坏性精选副本。
+- 法律证据中的金额、身份、地址、承诺和关键对话不确定是否被覆盖时，选择保留并提示人工复核。
+
+## 所需权限与安全说明
+
+- **本地文件访问**：读取用户明确提供的视频，只向显式输出目录和本 Skill 的 `archive/` 写入图片、JSON 与归档副本；不扫描无关目录。
+- **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
+- **受控清理**：只删除本次临时目录和可由文件名规则确认的旧基础输出；若发现视觉审计、精选结果或未知文件，拒绝自动覆盖并提示改用新目录。
+- **网络与依赖**：抽帧和 OCR 均可离线运行；`uv run` 首次缺少 Pillow 时可能联网下载依赖。多模态审计是否上传联系表取决于当前模型提供方，处理未脱敏证据前先确认其隐私政策。
+- **凭据与环境变量**：本 Skill 不读取 API Key、Token、密码或云端凭据，也不自行调用外部视觉 API。

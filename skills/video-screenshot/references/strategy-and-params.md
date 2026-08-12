@@ -1,5 +1,30 @@
 # 策略与参数详解
 
+## 时间簇择优（默认开启）
+
+`--temporal-select` 把 ffmpeg 候选先作为一条时间序列分析，再把每个稳定段或连续运动片段的代表帧交给传统去重器。它解决 `min-gap` 只能保留“先到帧”、无法等页面切换完成的问题。
+
+### 稳定段
+
+相邻候选在内容区像素差异或 SSIM 上足够接近，且间隔不超过 `--stable-max-gap 2.20` 时，归入同一稳定页。簇内综合比较：
+
+- Laplacian 清晰度；
+- 下一候选到来前的停留时间；
+- 单帧空白、启动页和网格过渡风险；
+- 内部纵向拼接缝风险；
+- 在分数接近时轻微偏好后期终态。
+
+只保留得分最高的代表帧，其余记录为 `temporal_stable_duplicate`。
+
+### 短切换段与持续运动段
+
+- 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段，记录为 `temporal_transition`；
+- 三帧分析能把当前帧解释为“前一页尾部 + 后一页头部”横向拼合时，记录为 `temporal_mixed_transition`；
+- 视频开头、结尾或没有双侧稳定锚点的运动段不得整段删除，默认每 `--motion-chunk-seconds 2.50` 选择一张代表帧；
+- 需要更密地覆盖快速滚动时，把 `--motion-chunk-seconds` 降到 `1.5`；希望进一步精简时可提高到 `3.0`，但必须抽查覆盖。
+
+用 `--no-temporal-select` 可复现旧版逐帧流程，只用于算法排查或兼容，不作为推荐默认值。
+
 ## 抽帧策略
 
 ### scene（场景检测，默认）
@@ -103,7 +128,7 @@ SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32
 
 ### 最小时间间隔 (`--min-gap`)
 
-用于抑制同一时间段内保留过多截图。默认 `--min-gap 0.5`，表示两个保留帧之间至少间隔 0.5 秒。
+用于时间簇择优后的安全限流。默认 `--min-gap 0.5`，表示两个最终保留帧之间至少间隔 0.5 秒；它不再决定簇内保留哪一张。
 
 - `--min-gap 0`：禁用时间间隔过滤
 - `--min-gap 0.5`（默认）：减少同秒多图，同时尽量保留快速变化
@@ -130,16 +155,34 @@ OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ �
 - 丢弃原因（如 `duplicate_ssim`、`duplicate_scroll`、`min_gap`、`quality_transition`、`ocr_duplicate`）
 - SHA256 哈希
 
-该模式只保存复核材料，不自动调用大模型。当前模型或工具支持图像输入时，可由多模态模型检查候选帧是否需要补回；如果当前模型是文字模型，则跳过视觉复核。
+该模式用于漏帧排查，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。多模态默认先运行 `prepare_vision_audit.py`，只审计本地层选择的高风险短名单。
 
 ### 候选帧数量限制 (`--drop-candidate-limit`)
 
-默认 `--drop-candidate-limit 200`。长视频中被丢弃的候选帧可能很多，建议保留默认值；如需完整回查可设为 `0`。
+默认 `--drop-candidate-limit 200`；一般排查建议显式设为 `80`。如需完整回查可设为 `0`，但长视频可能产生大量图片。
 
 ```bash
 uv run scripts/extract.py -i recording.mp4 --ocr-dedup --keep-drop-candidates
 uv run scripts/extract.py -i recording.mp4 --keep-drop-candidates --drop-candidate-limit 0
 ```
+
+## 多模态审计预算
+
+运行：
+
+```bash
+uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --max-images 24
+```
+
+审计包按以下风险选组：
+
+- `selection_confidence=low` 的持续运动代表帧；
+- 纵向内部拼接缝风险较高；
+- 三帧横向混合页风险；
+- 与相邻保留帧间隔过密；
+- 附近存在可替代的丢弃候选。
+
+高度重叠的相邻三帧窗口只保留优先级更高者。`max_groups` 和 `max_images` 是硬预算，生成结果不得超过任一上限。决策合同、JSON 示例和应用方式见 `references/vision-audit.md`。
 
 ## 输出参数
 
@@ -181,7 +224,7 @@ frame_NNN_MMmSSs.jpg
   "review": {
     "drop_candidates_enabled": true,
     "drop_candidate_count": 12,
-    "vision_review_status": "not_run",
+    "vision_audit_status": "not_prepared",
     "drop_candidates": [
       {
         "filename": "_review_candidates/candidate_001_min_gap_00m01s.jpg",
@@ -189,6 +232,13 @@ frame_NNN_MMmSSs.jpg
         "capture_time_seconds": 1.2
       }
     ]
+  },
+  "temporal_selection": {
+    "enabled": true,
+    "selected_before_dedup": 73,
+    "stable_run_count": 21,
+    "transition_drop_count": 57,
+    "low_confidence_selection_count": 52
   },
   "dedup_stats": {
     "sha256_duplicates": 3,
