@@ -1,7 +1,7 @@
 # 12. ORCA CLI Worker Backend
 
 > Level 2 reference。配合 SKILL.md §6.5「ORCA 终端模式」阅读。
-> 版本：v1.21.0（DEC-114，2026-08-12）。
+> 版本：v2.0.0（DEC-114，2026-08-12）。
 
 ## 1. 边界
 

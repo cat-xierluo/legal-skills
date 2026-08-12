@@ -107,7 +107,7 @@ else
   echo "WORKTREE_METADATA: missing file=$METADATA_FILE"
 fi
 
-# v2.1（DEC-114 v1.21.0）：ORCA 只读状态块。读 METADATA session.orca.* 字段；
+# v2.1（DEC-114 v2.0.0）：ORCA 只读状态块。读 METADATA session.orca.* 字段；
 # 命中 worktree_id 且 orca CLI 可用时，额外查 orca worktree show 拿实时 workspace-status
 # / card status / comment。ORCA 不可用 / 无 orca 字段时静默跳过（与 worktree-status
 # 现有 read-only 容错一致），不阻塞其它输出。

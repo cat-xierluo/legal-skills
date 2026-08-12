@@ -47,7 +47,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=ensure-claude-path.sh
 source "$SCRIPT_DIR/ensure-claude-path.sh"
 ensure_claude_in_path
-# v2.1（DEC-114 v1.21.0）：ORCA 模式（auto-detect 命中 ORCA 终端时）需要直接调
+# v2.1（DEC-114 v2.0.0）：ORCA 模式（auto-detect 命中 ORCA 终端时）需要直接调
 # `orca worktree create` / `orca terminal create` / `orca terminal send`，这些 CLI
 # 默认在 /Applications/Orca.app/Contents/Resources/bin/orca。在 flag 解析前注入
 # PATH，确保 detect_orca_mode 探测 + ORCA 分支命令执行都不依赖用户预先 source。
@@ -99,7 +99,7 @@ ALLOW_PATHS=()
 LIGHTWEIGHT_OVERRIDE=0
 LIGHTWEIGHT_MODE=0
 LIGHTWEIGHT_AUTO=0
-# v2.1（DEC-114 v1.21.0）：ORCA 终端模式 auto-detect。detect_orca_mode() 输出：
+# v2.1（DEC-114 v2.0.0）：ORCA 终端模式 auto-detect。detect_orca_mode() 输出：
 #   "auto"                    — 在 ORCA 终端内 + path 匹配，走 orca worktree + terminal 路径
 #   "force_tmux"              — --no-orca-mode 显式 opt-out / 非 ORCA 终端 / 跨 repo
 #   "lightweight_forces_tmux" --no-worktree 强制走 tmux（ORCA worktree 必须有 git 仓）
@@ -678,7 +678,7 @@ array_to_json() {
   fi
 }
 
-# v2.1（DEC-114 v1.21.0）：ORCA 终端模式 auto-detect + ORCA helper。
+# v2.1（DEC-114 v2.0.0）：ORCA 终端模式 auto-detect + ORCA helper。
 #
 # detect_orca_mode 输出 4 选 1：
 #   auto                    — 在 ORCA 终端内 + path 匹配 PROJECT_DIR 的 git toplevel
