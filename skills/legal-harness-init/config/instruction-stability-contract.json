@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "skill": {
+    "name": "legal-harness-init",
+    "version": "0.3.0"
+  },
+  "producer": {
+    "id": "legal-harness-init-workflow",
+    "implementation_paths": [
+      "SKILL.md",
+      "scripts/detect.sh",
+      "scripts/validate-content.sh",
+      "scripts/write.sh",
+      "scripts/verify.sh"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "delivery-report",
+      "stage": "final",
+      "required": true
+    }
+  ],
+  "checkers": [
+    {
+      "id": "legal-baseline-checker",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": [
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check-baseline.py",
+      "args": [
+        "--input",
+        "{artifact:delivery-report}"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "PRIVACY-MINIMUM-CONTEXT",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#PRIVACY-MINIMUM-CONTEXT"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "case_ids": [
+        "baseline-complete",
+        "sensitive-case-leak"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "MANAGED-BLOCK-SAFE-UPSERT",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#MANAGED-BLOCK-SAFE-UPSERT"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "case_ids": [
+        "baseline-complete",
+        "duplicate-managed-marker"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "COMPLETION-STATUS-NO-OVERCLAIM",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#COMPLETION-STATUS-NO-OVERCLAIM"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "case_ids": [
+        "baseline-complete",
+        "behavior-status-without-evidence"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "TEAM-LAYER-PRECEDENCE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#TEAM-LAYER-PRECEDENCE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "case_ids": [
+        "baseline-complete",
+        "team-precedence-reversed"
+      ],
+      "historical_failure_known": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "baseline-complete",
+      "kind": "positive",
+      "constraint_ids": [
+        "PRIVACY-MINIMUM-CONTEXT",
+        "MANAGED-BLOCK-SAFE-UPSERT",
+        "COMPLETION-STATUS-NO-OVERCLAIM",
+        "TEAM-LAYER-PRECEDENCE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-complete.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "sensitive-case-leak",
+      "kind": "mutation",
+      "constraint_ids": [
+        "PRIVACY-MINIMUM-CONTEXT"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-sensitive.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "duplicate-managed-marker",
+      "kind": "mutation",
+      "constraint_ids": [
+        "MANAGED-BLOCK-SAFE-UPSERT"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-duplicate-marker.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "behavior-status-without-evidence",
+      "kind": "mutation",
+      "constraint_ids": [
+        "COMPLETION-STATUS-NO-OVERCLAIM"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-overclaim.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "team-precedence-reversed",
+      "kind": "mutation",
+      "constraint_ids": [
+        "TEAM-LAYER-PRECEDENCE"
+      ],
+      "checker_ids": [
+        "legal-baseline-checker"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "delivery-report",
+          "path": "assets/stability-wrong-precedence.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "privacy-minimum-context-violations",
+        "checker_id": "legal-baseline-checker",
+        "constraint_id": "PRIVACY-MINIMUM-CONTEXT",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "managed-block-safe-upsert-violations",
+        "checker_id": "legal-baseline-checker",
+        "constraint_id": "MANAGED-BLOCK-SAFE-UPSERT",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "completion-status-no-overclaim-violations",
+        "checker_id": "legal-baseline-checker",
+        "constraint_id": "COMPLETION-STATUS-NO-OVERCLAIM",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      },
+      {
+        "id": "team-layer-precedence-violations",
+        "checker_id": "legal-baseline-checker",
+        "constraint_id": "TEAM-LAYER-PRECEDENCE",
+        "value_type": "integer",
+        "condition": "equals",
+        "expected": 0
+      }
+    ],
+    "observables": [
+      {
+        "id": "privacy-violation-types",
+        "checker_id": "legal-baseline-checker",
+        "constraint_ids": [
+          "PRIVACY-MINIMUM-CONTEXT"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "managed-block-ids",
+        "checker_id": "legal-baseline-checker",
+        "constraint_ids": [
+          "MANAGED-BLOCK-SAFE-UPSERT"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "completion-status",
+        "checker_id": "legal-baseline-checker",
+        "constraint_ids": [
+          "COMPLETION-STATUS-NO-OVERCLAIM"
+        ],
+        "comparison": "exact",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "team-precedence",
+        "checker_id": "legal-baseline-checker",
+        "constraint_ids": [
+          "TEAM-LAYER-PRECEDENCE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}

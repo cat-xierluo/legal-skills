@@ -1,0 +1,9 @@
+{
+  "privacy_mode": "strict",
+  "guide_mode": "team",
+  "config_text": "<!-- legal-harness-init:legal-safety-baseline:start -->\n# 项目：LIT-YYYY-001\n<!-- legal-harness-init:legal-safety-baseline:end -->\n",
+  "target_paths": ["/project/AGENTS.md"],
+  "status": "CONFIG_WRITTEN",
+  "session_evidence": {"new_session": false, "loaded": false},
+  "precedence": ["individual", "project", "organization", "legal_safety"]
+}

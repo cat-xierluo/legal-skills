@@ -1,0 +1,4 @@
+interface:
+  display_name: "法律 Harness 初始化"
+  short_description: "为法律工作者安全生成、增量合并并验证 AGENTS.md/CLAUDE.md"
+  default_prompt: "使用 $legal-harness-init 为我的法律工作配置最小安全基线，并在新会话验证生效。"

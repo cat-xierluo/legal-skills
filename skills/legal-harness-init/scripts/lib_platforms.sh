@@ -8,7 +8,7 @@
 # 兼容 macOS 默认 bash 3.2（不使用关联数组，用 `|` 分隔的元数据行 + IFS 解析）。
 #
 # 字段说明（每平台一行，`|` 分隔）：
-#   key | home_subdir | user_config_file | config_kind | runtime_env | extra_probe
+#   key | home_subdir | user_config_file | config_kind | runtime_signals | extra_probe
 #
 #   - key              平台标识（snake 写法，用于 JSON 字段名）
 #   - home_subdir      用户级配置目录（相对于 $HOME，如 .claude）
@@ -16,8 +16,8 @@
 #   - config_kind      claude_md / agents_md / non-agents-md
 #                       claude_md/agents_md → write.sh 自动写入
 #                       non-agents-md       → 仅检测，write.sh 跳过并提示手动
-#   - runtime_env      判断"当前 runtime"的 env 变量名（留空 = 无 env 信号，靠目录）
-#                       只读"变量是否存在"，绝不读其值（值可能含 token）
+#   - runtime_signals  判断当前 runtime 的 env 信号，格式 name:confidence，逗号分隔
+#                       confidence 为 high / medium / low。只读变量是否 set，绝不读值
 #   - extra_probe      目录存在外的额外文件痕迹（相对 home_subdir；留空 = 只看目录）
 
 PLATFORM_KEYS=(
@@ -33,14 +33,14 @@ PLATFORM_KEYS=(
 
 # shellcheck disable=SC2016
 _PLATFORM_META=(
-    'claude-code|.claude|CLAUDE.md|claude_md|CLAUDECODE|'
-    'codex|.codex|AGENTS.md|agents_md|CODEX_HOME|'
+    'claude-code|.claude|CLAUDE.md|claude_md|CLAUDECODE:high,CLAUDE_CODE_ENTRYPOINT:medium|'
+    'codex|.codex|AGENTS.md|agents_md|CODEX_THREAD_ID:high,CODEX_CI:medium,CODEX_SHELL:medium,CODEX_HOME:low|'
     'openclaw|.openclaw|AGENTS.md|agents_md||cron/jobs.json'
     'myagents|.myagents|CLAUDE.md|claude_md||'
     'qoderwork|.qoderworkcn||non-agents-md||'
     'qwenwork|.qwenworkcn||non-agents-md||.status.json'
     'workbuddy|.workbuddy||non-agents-md||workbuddy.db'
-    'orca|.orca||non-agents-md|ORCA_AGENT_HOOK_TOKEN|'
+    'orca|.orca||non-agents-md|ORCA_AGENT_HOOK_TOKEN:high|'
 )
 
 # 按平台 key 取一行元数据（找不到返回空）。内部用。
@@ -99,8 +99,17 @@ platform_config_kind() {
     _platform_field "$1" 4
 }
 
-# 公开函数：runtime env 变量名（可能为空）
+# 兼容函数：返回第一个 runtime env 变量名（可能为空）。
+# 新调用方应使用 platform_runtime_signals。
 platform_runtime_env() {
+    local signals first
+    signals=$(_platform_field "$1" 5) || return 1
+    first="${signals%%,*}"
+    printf '%s' "${first%%:*}"
+}
+
+# 公开函数：runtime 信号清单（name:confidence,name:confidence）。
+platform_runtime_signals() {
     _platform_field "$1" 5
 }
 
