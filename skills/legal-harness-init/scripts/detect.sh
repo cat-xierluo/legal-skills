@@ -121,47 +121,53 @@ fi
 
 # ========== output ==========
 
-# harness list
+# harness list（空数组守卫：bash 3.2 + set -u 下 "${arr[@]}" 对空数组会 unbound）
 harness_list="["
-first=true
-for h in "${HARNESSES[@]}"; do
-    if [ "$first" = true ]; then
-        first=false
-    else
-        harness_list+=","
-    fi
-    harness_list+="\"$h\""
-done
+if [ ${#HARNESSES[@]} -gt 0 ]; then
+    first=true
+    for h in "${HARNESSES[@]}"; do
+        if [ "$first" = true ]; then
+            first=false
+        else
+            harness_list+=","
+        fi
+        harness_list+="\"$h\""
+    done
+fi
 harness_list+="]"
 
-# user_level object
+# user_level object（空数组守卫）
 user_level_obj="{"
-first=true
-for ul in "${USER_LEVEL[@]}"; do
-    if [ "$first" = true ]; then
-        first=false
-    else
-        user_level_obj+=","
-    fi
-    # ul 格式: name|exists|path|lines
-    IFS='|' read -r ul_name ul_exists ul_path ul_lines <<EOF
+if [ ${#USER_LEVEL[@]} -gt 0 ]; then
+    first=true
+    for ul in "${USER_LEVEL[@]}"; do
+        if [ "$first" = true ]; then
+            first=false
+        else
+            user_level_obj+=","
+        fi
+        # ul 格式: name|exists|path|lines
+        IFS='|' read -r ul_name ul_exists ul_path ul_lines <<EOF
 $ul
 EOF
-    user_level_obj+="\"$ul_name\":{\"exists\":$ul_exists,\"path\":\"$(json_escape "$ul_path")\",\"lines\":$ul_lines}"
-done
+        user_level_obj+="\"$ul_name\":{\"exists\":$ul_exists,\"path\":\"$(json_escape "$ul_path")\",\"lines\":$ul_lines}"
+    done
+fi
 user_level_obj+="}"
 
-# project_init evidence list
+# project_init evidence list（空数组守卫）
 evidence_list="["
-first=true
-for ev in "${PROJECT_INIT_EVIDENCE[@]}"; do
-    if [ "$first" = true ]; then
-        first=false
-    else
-        evidence_list+=","
-    fi
-    evidence_list+="\"$ev\""
-done
+if [ ${#PROJECT_INIT_EVIDENCE[@]} -gt 0 ]; then
+    first=true
+    for ev in "${PROJECT_INIT_EVIDENCE[@]}"; do
+        if [ "$first" = true ]; then
+            first=false
+        else
+            evidence_list+=","
+        fi
+        evidence_list+="\"$ev\""
+    done
+fi
 evidence_list+="]"
 
 cat <<EOF

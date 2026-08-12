@@ -2,7 +2,7 @@
 name: legal-harness-init
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.1.0"
+version: "0.1.2"
 license: MIT License - 详见 LICENSE.txt
 description: |
   法律人专属的 harness 初始化工具：帮法律人理解"AGENTS.md/CLAUDE.md 是发给 agent session 的最重要的一句话"这件事，并直接帮他生成、写入对应的 AGENTS.md 文件（用户级 + 项目级）。本技能应在用户说"配置 AGENTS.md / 配置 CLAUDE.md / 帮我初始化 agent / 怎么配 harness / 我不会用 AI 怎么开始 / 帮我写 AGENTS.md / 给我讲讲怎么跟 AI 协作"时使用。不要用于：业务侧工作（合同审查、案件分析、文书起草）、project-init 的项目脚手架、skill 内容开发。
