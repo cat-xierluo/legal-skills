@@ -243,6 +243,24 @@ checkpoint_dir_for_session() {
   fi
 }
 
+# v2.1（DEC-114 v1.21.0）：ORCA UI 同步——读 METADATA.json 拿 session.orca.worktree_id，
+# 命中时调 orca worktree set --workspace-status ... --comment ...。ORCA 不可用 / 无
+# orca 字段 / 调用失败时静默返回（pm-monitor 不能因 ORCA 故障阻塞主监控）。
+# 复用现有 bucket 防抖：调用方已判定 key 变化才触发，本函数不再额外防抖。
+orca_worktree_set_status() {
+  local checkpoint_dir="$1"
+  local workspace_status="$2"
+  local comment="$3"
+  local metadata="$checkpoint_dir/METADATA.json"
+  [ -f "$metadata" ] || return 0
+  command -v orca >/dev/null 2>&1 || return 0
+  local worktree_id
+  worktree_id=$(jq -r '.session.orca.worktree_id // empty' "$metadata" 2>/dev/null)
+  [ -n "$worktree_id" ] || return 0
+  orca worktree set --worktree "id:$worktree_id" \
+    --workspace-status "$workspace_status" --comment "$comment" --json >/dev/null 2>&1 || true
+}
+
 resolve_base_ref() {
   local base="$BASE_REF"
   if git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
@@ -336,6 +354,10 @@ check_commit_staleness() {
 
   if [ "$key" != "${last_commit_stale[$branch]:-}" ]; then
     emit "WORKER_STALE_NO_COMMIT: $session branch=$branch base=$base threshold=${COMMIT_STALE_THRESHOLD}s topic_commits=$topic_count last_topic_commit=$topic_head"
+    # v2.1（DEC-114）：commit stale 也同步 ORCA UI（worker 没死但 PM 应介入）。
+    if [ -n "$checkpoint_dir" ]; then
+      orca_worktree_set_status "$checkpoint_dir" "in-review" "no commit in ${COMMIT_STALE_THRESHOLD}s (pm-monitor)"
+    fi
   fi
   last_commit_stale[$branch]="$key"
   return 0
@@ -612,6 +634,7 @@ check_file_checkpoints() {
             stale_key="$updated_at|$(( stale / threshold ))"
             if [ "$stale_key" != "${last_checkpoint_stale[$session]:-}" ]; then
               emit "CHECKPOINT_STALE: $session ${stale}s $status_file"
+              orca_worktree_set_status "$checkpoint_dir" "in-review" "checkpoint stale ${stale}s (pm-monitor)"
             fi
             last_checkpoint_stale[$session]="$stale_key"
           fi
