@@ -1,0 +1,38 @@
+# 同步白名单（联想开放平台独立列表）— 公开模板
+# ─────────────────────────────────────────────────────
+# 这是模板文件（.example.yaml），供其他用户参考。
+# 你的真实配置请复制为 allowlist-lenovo.yaml（去掉 .example）后按需调整。
+# 真实配置文件已被 .gitignore 排除，不会提交。
+# ─────────────────────────────────────────────────────
+#
+# 【v1.7.1 三份独立列表架构】
+# clawhub-sync 从 v1.7.0「单一嵌套文件 + platforms 字段」反转为
+# 三份独立列表文件：allowlist-clawhub.yaml / allowlist-skillhub.yaml / allowlist-lenovo.yaml
+# 每份文件只列该平台的 skill 名,字段独立维护。同一 skill 可跨多份文件（一对多）,
+# 不再受「三选一」约束。详见 DECISIONS D-2026-08-12-02。
+#
+# 本文件结构:
+#   - 顶层是 skill 名（kebab-case,2-128 字符）
+#   - 子层是平台特定字段（display_name 必填;slug 可选,重名/被占用时覆盖）
+#   - 无 platforms 字段（与单一嵌套结构的关键差异）
+#
+# 字段说明:
+#   display_name - **必填**（联想展示名,中文名,发布前由 prepare-publish.sh 注入
+#                  临时副本 SKILL.md frontmatter;源 SKILL.md 不含此字段,缺则 fail-closed）
+#   slug         - 可选。联想的 slug 字段,重名/被占用时覆盖
+#                  默认 = skill 目录名（即 name）
+#
+# 发布命令（两步,先 package 再 push）:
+#   cd /tmp/lenovo-publish-<skill>
+#   lenovoskill init                                 # 生成 .skill-config.json（项目级）
+#   lenovoskill package                              # 打 zip
+#   lenovoskill push                                 # 上传 zip
+
+# 联想无强制许可证(MIT 与 CC-BY-NC 都可发);初始为空模板,
+# 用户按目标渠道偏好手动添加 skill(同一 skill 出现在 clawhub/skillhub/lenovo
+# 多份文件中是一对多,完全允许——例如 contract-copilot 同时在 skillhub 和 lenovo
+# 维护各自的 display_name)。
+#
+# ===== 示例（注释掉,按需取消注释）=====
+# contract-copilot:
+#   display_name: "合同起草与审查助手"            # 与 skillhub 分区独立维护,可不同

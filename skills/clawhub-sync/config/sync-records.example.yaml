@@ -1,9 +1,21 @@
-# 同步记录（双平台：ClawHub + 腾讯 SkillHub）示例模板
+# 同步记录（三平台独立白名单架构，v1.7.1）示例模板
 # ─────────────────────────────────────────────────────
 # 这是模板文件（.example.yaml），供其他用户参考。
 # 你的真实配置请复制为 sync-records.yaml（去掉 .example）后填入实际数据。
 # 真实配置文件已被 .gitignore 排除，不会提交，可安全写入 publish_id 等内部数据。
 # ─────────────────────────────────────────────────────
+#
+# 【v1.7.1 三份独立白名单架构】
+# clawhub-sync 从 v1.7.0「单一嵌套文件 + platforms 字段」反转为
+# 三份独立列表文件：allowlist-clawhub.yaml / allowlist-skillhub.yaml / allowlist-lenovo.yaml
+# 详见 DECISIONS D-2026-08-12-02。
+#
+# 【records 与 allowlist 的关系】
+# 白名单（allowlist-${PLATFORM}.yaml）决定「哪些 skill 允许发往哪个平台」,
+# 同步记录（sync-records.yaml）记录「每个 skill 在每个平台的实际同步状态」——
+# 两者一一对应,每平台独立允许列表 + 每平台独立同步状态。
+# records.<skill>.platforms.<platform> 嵌套结构本身与一对多语义天然兼容,
+# 同一 skill 可同时有 clawhub/skillhub/lenovo 三个平台的状态字段。
 #
 # 顶层结构：records.<skill>.platforms.<platform>.<field>
 #
@@ -15,10 +27,14 @@
 #   changelog_summary- 变更摘要
 #   url              - 平台发布地址
 #   publish_id       - 平台内部 ID
-#   namespace        - SkillHub 命名空间（账号绑定，发布时无需命令行传参；发布前替换 <your-namespace> 为你的实际空间名）
+#   namespace        - SkillHub 命名空间（账号绑定，发布时无需命令行传参；仅 SkillHub 用，
+#                     ClawHub / 联想无 namespace 概念；发布前替换 <your-namespace> 为你的实际空间名）
 #
 # 注：腾讯 SkillHub 的 namespace 绑定在账号上（服务端 @<namespace>/<slug> 格式），
 #     发布命令本身不传 namespace，但记录中保留便于溯源安装命令（skillhub install <slug> --namespace <xxx>）。
+#
+# 注：联想开放平台使用 OAuth 双 token（Login Token + Biz Token），无 namespace 概念，
+#     记录中不需要 namespace 字段。
 
 records:
   legal-qa-extractor:
@@ -34,6 +50,14 @@ records:
         git_hash: null
         status: pending
         changelog_summary: null
+      lenovo:
+        version: null
+        last_sync: null
+        git_hash: null
+        status: pending
+        changelog_summary: null
+        url: null
+        publish_id: null
   litigation-analysis:
     platforms:
       clawhub:
@@ -47,6 +71,14 @@ records:
         git_hash: null
         status: pending
         changelog_summary: null
+      lenovo:
+        version: null
+        last_sync: null
+        git_hash: null
+        status: pending
+        changelog_summary: null
+        url: null
+        publish_id: null
   trademark-assistant:
     platforms:
       clawhub:
@@ -64,6 +96,14 @@ records:
         git_hash: null
         status: pending
         changelog_summary: null
+      lenovo:
+        version: null
+        last_sync: null
+        git_hash: null
+        status: pending
+        changelog_summary: null
+        url: null
+        publish_id: null
   md2word:
     platforms:
       clawhub:
@@ -81,6 +121,14 @@ records:
         git_hash: null
         status: pending
         changelog_summary: null
+      lenovo:
+        version: null
+        last_sync: null
+        git_hash: null
+        status: pending
+        changelog_summary: null
+        url: null
+        publish_id: null
   skill-lint:
     platforms:
       clawhub:
@@ -98,3 +146,11 @@ records:
         git_hash: null
         status: pending
         changelog_summary: null
+      lenovo:
+        version: null
+        last_sync: null
+        git_hash: null
+        status: pending
+        changelog_summary: null
+        url: null
+        publish_id: null
