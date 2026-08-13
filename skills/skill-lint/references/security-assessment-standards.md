@@ -46,7 +46,7 @@ python3 scripts/security_scan.py batch --root /path/to/skills            # 集�
 
 判定逻辑：先从 frontmatter `description` + 标题 + 正文开头提取技能宣称用途；若用途已提到该类别的披露词（发布/同步/白名单等）则不判 mismatch。只匹配"具体指令式动作"，不把依赖安装说明、安全文档中的概念性描述（如"webhook""外传"）当作 scope creep——依赖安装由 `install` 能力检测覆盖，网络外传由 `network` + disclosure 覆盖。
 
-示例：git-batch-commit（宣称用途"Git 批量提交"）的 `references/clawhub-sync-check.md` 引导 `clawhub publish` 与修改 `sync-allowlist.yaml` → 10 个 publish（High）+ 5 个 repo_mutation（Medium）finding，与 SkillSpector 结论一致。
+示例：git-batch-commit（宣称用途"Git 批量提交"）的 `references/skill-publish-sync-check.md` 引导 `clawhub publish` 与修改 `sync-allowlist.yaml` → 10 个 publish（High）+ 5 个 repo_mutation（Medium）finding，与 SkillSpector 结论一致。
 
 ### 已知局限（扫描器不覆盖，需人工审查）
 
