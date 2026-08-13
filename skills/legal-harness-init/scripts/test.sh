@@ -40,6 +40,43 @@ write_one=$(HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/write.sh" --content-file "$
 assert_contains "$write_one" '"platform":"codex,openclaw"' "同路径平台合并为单一目标"
 schema_count=$(printf '%s' "$write_one" | grep -c '"schema_version"')
 if [ "$schema_count" -eq 1 ]; then pass "write.sh stdout 仅含一个 JSON 文档"; else fail "write.sh stdout 仅含一个 JSON 文档"; fi
+
+# write.sh 真实落盘后自动调 record-init-env.sh（model 显式传）
+mkdir -p "$TEST_ROOT/auto-record"
+env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/write.sh" \
+    --content-file "$TEST_ROOT/content.md" --level project --platforms codex \
+    --project-dir "$TEST_ROOT/auto-record" --mode update --block-id legal-baseline \
+    --privacy-mode strict --model "write-sh-passed" 2>/dev/null >/dev/null
+if grep -Fq '<!-- legal-harness-init:init-environment:start -->' "$TEST_ROOT/auto-record/AGENTS.md" \
+    && grep -Fq 'write-sh-passed' "$TEST_ROOT/auto-record/AGENTS.md"; then
+    pass "write.sh 真实落盘后自动追加 init-environment"
+else
+    fail "write.sh 真实落盘后自动追加 init-environment"
+fi
+
+# --record-init-env=false 时不应自动追加
+mkdir -p "$TEST_ROOT/no-record"
+env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/write.sh" \
+    --content-file "$TEST_ROOT/content.md" --level project --platforms codex \
+    --project-dir "$TEST_ROOT/no-record" --mode update --block-id legal-baseline \
+    --privacy-mode strict --model "should-not-appear" --record-init-env false 2>/dev/null >/dev/null
+if ! grep -Fq 'should-not-appear' "$TEST_ROOT/no-record/AGENTS.md"; then
+    pass "--record-init-env=false 时不调 record-init-env.sh"
+else
+    fail "--record-init-env=false 时不调 record-init-env.sh"
+fi
+
+# dry-run 时不应自动追加
+mkdir -p "$TEST_ROOT/dryrun"
+env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/write.sh" \
+    --content-file "$TEST_ROOT/content.md" --level project --platforms codex \
+    --project-dir "$TEST_ROOT/dryrun" --mode update --block-id legal-baseline \
+    --privacy-mode strict --model "should-not-appear" --dry-run 2>/dev/null >/dev/null
+if [ ! -f "$TEST_ROOT/dryrun/AGENTS.md" ] || ! grep -Fq 'should-not-appear' "$TEST_ROOT/dryrun/AGENTS.md" 2>/dev/null; then
+    pass "dry-run 时不调 record-init-env.sh"
+else
+    fail "dry-run 时不调 record-init-env.sh"
+fi
 marker_count=$(grep -c '^<!-- legal-harness-init:legal-baseline:start -->$' "$TEST_ROOT/project/AGENTS.md")
 if [ "$marker_count" -eq 1 ]; then pass "同路径只写一次"; else fail "同路径只写一次"; fi
 if grep -Fq '# 用户区块' "$TEST_ROOT/project/AGENTS.md"; then pass "保留受管区块外用户内容"; else fail "保留受管区块外用户内容"; fi
