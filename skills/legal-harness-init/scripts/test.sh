@@ -256,6 +256,43 @@ else
     fail "--note 含 | 时表格列分隔未被破坏"
 fi
 
+# === v0.5.0-F probe-session-model.sh 回归 ===
+# 缺 --cwd 应报错
+if env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" 2>/dev/null; then
+    fail "probe-session-model.sh 缺 --cwd 应退出非 0"
+else
+    pass "probe-session-model.sh 缺 --cwd 应退出非 0"
+fi
+
+# --harness unknown 应宽容兜底为 claude-code
+# probe 脚本硬编码找 $HOME/.claude/projects/<encoded-cwd>/*.jsonl
+mkdir -p "$TEST_ROOT/home/.claude/projects/-Users-fake"
+fake_jsonl="$TEST_ROOT/home/.claude/projects/-Users-fake/sess.jsonl"
+printf '{"type":"assistant","message":{"role":"assistant","content":[],"model":"claude-fable-5-test"}}\n' > "$fake_jsonl"
+# 新建的文件 mtime=now,find -mmin 能找到
+probe_out=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness unknown --cwd "/Users/fake" 2>/dev/null)
+if [ "$probe_out" = "claude-fable-5-test" ]; then
+    pass "probe-session-model.sh --harness unknown 宽容兜底为 claude-code"
+else
+    fail "probe-session-model.sh --harness unknown 宽容兜底为 claude-code(实际: '$probe_out')"
+fi
+
+# --json 输出格式校验
+probe_json=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness codex --json 2>/dev/null)
+assert_contains "$probe_json" '"schema_version":"1"' "probe --json 含 schema_version"
+assert_contains "$probe_json" '"status":"not_found"' "probe --json 在 v0.5.0 codex 仍 not_found"
+
+# record-init-env.sh 集成: --probe-from-session + env 全空 + 不存在 jsonl → 仍 die 但 hint 不变
+mkdir -p "$TEST_ROOT/probe-integ"
+printf '# u\n' > "$TEST_ROOT/probe-integ/AGENTS.md"
+probe_rc=0
+probe_stderr=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/probe-integ/AGENTS.md" --action init --probe-from-session 2>&1) || probe_rc=$?
+if [ "$probe_rc" -ne 0 ] && printf '%s' "$probe_stderr" | grep -Fq "自助补 model"; then
+    pass "record-init-env.sh --probe-from-session 探测失败仍走 hint 路径"
+else
+    fail "record-init-env.sh --probe-from-session 探测失败仍走 hint 路径"
+fi
+
 printf '<!-- legal-harness-init:init-environment:start -->\n' > "$TEST_ROOT/init-env/AGENTS.md.broken"
 if env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="x" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md.broken" --action init >/dev/null 2>&1; then
     fail "残缺 marker 拒绝 append"

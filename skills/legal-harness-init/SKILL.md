@@ -212,6 +212,7 @@ bash scripts/record-init-env.sh \
   [--harness-version <v>] \
   [--skill-version <v>] \
   [--note "<额外说明>"] \
+  [--probe-from-session] \
   [--dry-run]
 ```
 
@@ -219,7 +220,7 @@ bash scripts/record-init-env.sh \
 
 - harness(name)：默认 source `detect.sh` 取 `current_runtime`（schema v3）；可用 `--harness` 显式覆盖
 - harness version：探测 `claude --version` / `codex --version`（2s 超时，失败 `unknown`）；非 claude/codex 写 `n/a`
-- model：env 白名单 `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 探测，**全部未命中时拒绝 append 并要求 `--model` 兜底**（不臆造）
+- model：env 白名单 `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 探测，**全部未命中时**：v0.5.0+ 若传 `--probe-from-session` 则从 `~/.claude/projects/<encoded-cwd>/*.jsonl` 最近 10 分钟内最新一条 `role=assistant` 记录的 `message.model` 反查（仅 claude-code 实现；其他 harness 仍 not_found）；仍未命中时拒绝 append 并要求 `--model` 兜底（不臆造）
 - init skill version：从本 skill 根 `SKILL.md` frontmatter `version` 字段读
 
 脚本必须：

@@ -51,9 +51,28 @@
 
 > **关于 model env 信号的局限**：CC / Codex 等多数 harness 当前**不**把 model 名 export 到 env，必须靠用户在调用时显式传 `--model` 或自行 export 自己的 env 变量。脚本的兜底是拒绝 append、要求 `--model`——不臆造 model 名。
 
+## v0.5.0+：session jsonl 事后回填（`--probe-from-session`）
+
+env 白名单全空时，`record-init-env.sh` 传 `--probe-from-session` 可自动调 `scripts/probe-session-model.sh`，从当前 harness 的 session jsonl 反查 model：
+
+```bash
+bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init --probe-from-session
+```
+
+probe-session-model.sh 的探测路径（v0.5.0 仅 claude-code 实现）：
+
+- **claude-code**：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
+- **codex / openclaw / myagents / qoderwork / qwenwork / workbuddy / orca**：v0.5.0 暂未实现，留 v0.5.1+
+
+**为什么默认关闭 `--probe-from-session`**：probe 读 jsonl 是"重"操作（要 find + awk 扫最近 10 分钟 jsonl），不适合每次 init 都跑。只在 env 全空、又不想手填 `--model` 时显式开启。
+
+**harness=unknown 时的宽容兜底**：当 detect.sh 没识别出当前 harness（如纯净环境 env 全空），probe 脚本会把 `unknown` 当 `claude-code` 试一次——因为 CC 是最常见的默认场景。试不到就 not_found。
+
+**隐私边界**：probe 只读 jsonl 元数据（mtime + `message.model` 字段），**不**读 `message.content`（thinking / tool_use 正文）。解析只匹配 `"model":"<name>"` 模式，不回显任何对话内容。
+
 ## 自助补 model：env 探测失败的两条简单路径
 
-当 env 白名单全部未命中时，脚本**不臆造**，但给出明确的两条自助路径让 agent 立即补全：
+当 env 白名单全部未命中、且未开 `--probe-from-session` 或 probe 也 not_found 时，脚本**不臆造**，但给出明确的两条自助路径让 agent 立即补全：
 
 **路径 1：`export MY_MODEL` 后重跑（推荐；agent 自检自填）**
 
