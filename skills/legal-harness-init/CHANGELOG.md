@@ -5,6 +5,44 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.5.0] - 2026-08-13
+
+> session jsonl 事后回填：env 白名单全空时，`--probe-from-session` 从当前 harness 的 session jsonl 反查 model，覆盖之前 init-environment 表里的 unknown。
+
+### 新增
+
+- 新增 `scripts/probe-session-model.sh`：从当前 harness session jsonl 反查 model
+  - claude-code 实现：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
+  - harness=unknown 宽容兜底为 claude-code（CC 是最常见默认场景，试不到再 not_found）
+  - 隐私边界：只读 jsonl 元数据（mtime + `message.model`），**不**读 `message.content`（thinking / tool_use 正文）
+- `record-init-env.sh` 新增 `--probe-from-session` 开关：env 白名单全空时自动调 probe-session-model.sh 反查；仍未命中走 hint 路径
+
+### 改进
+
+- `SKILL.md` 第六步半 model 采集说明补 `--probe-from-session` 路径与仅 claude-code 实现的边界
+- `references/22-initialization-environment.md` 新增 § v0.5.0+ session jsonl 事后回填：讲探测路径、为什么默认关闭、隐私边界
+
+### 决策
+
+- DEC-024（本地不入仓）`--probe-from-session` 默认关闭 + 仅 claude-code 实现：probe 读 jsonl 是"重"操作，不适合每次 init 都跑；codex 嵌套 payload.turn_context.model 解析留 v0.5.1
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：58/58 全过（v0.4.2 53 + v0.5.0 新增 5）
+- ✅ probe-session-model.sh 在 sandbox 真实 CC session 拿到 model（`MiniMax-M3`）
+- ✅ probe `--harness unknown` 宽容兜底为 claude-code 并正确反查
+- ✅ probe `--harness codex` 在 v0.5.0 返回 not_found（待 v0.5.1）
+- ✅ record-init-env.sh `--probe-from-session` + env 全空 + sandbox 真实 CC，自动从 jsonl 取 model 记录成功
+- ✅ record-init-env.sh `--probe-from-session` 探测失败仍走 hint 路径（不臆造）
+- ⚠️ codex / openclaw / myagents 等 7 个 harness 的 probe **NOT_VERIFIED**（留 v0.5.1）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- v0.5.1：codex session jsonl 反查（嵌套 payload.turn_context.model 解析）
+- v0.5.2：openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 session model 探测路径研究
+- 端到端真实 init 全流程跑通
+
 ## [0.4.2] - 2026-08-13
 
 > 把"必须 record"从 SKILL.md 文档约束升级为 write.sh 脚本级保证。同步修 v0.4.0 create 模式 bug。

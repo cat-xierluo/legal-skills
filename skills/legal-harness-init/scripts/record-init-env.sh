@@ -84,6 +84,7 @@ TARGET=""
 MODEL=""
 ACTION="init"
 HARNESS_OVERRIDE=""
+PROBE_FROM_SESSION=false
 HARNESS_VERSION_OVERRIDE=""
 SKILL_VERSION_OVERRIDE=""
 NOTE=""
@@ -98,6 +99,7 @@ while [ $# -gt 0 ]; do
         --harness-version) [ $# -ge 2 ] || { die "--harness-version 需要参数"; }; HARNESS_VERSION_OVERRIDE="$2"; shift 2 ;;
         --skill-version) [ $# -ge 2 ] || { die "--skill-version 需要参数"; }; SKILL_VERSION_OVERRIDE="$2"; shift 2 ;;
         --note) [ $# -ge 2 ] || { die "--note 需要参数"; }; NOTE="$2"; shift 2 ;;
+        --probe-from-session) PROBE_FROM_SESSION=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         -h|--help) sed -n '3,30p' "$0"; exit 0 ;;
         *) die "未知参数：$1" ;;
@@ -153,6 +155,20 @@ if [ -z "$MODEL" ]; then
             break
         fi
     done
+fi
+
+# env 白名单全空时,可选地从 session jsonl 反查 model(v0.5.0 接入)
+# 仅在 --probe-from-session 显式开启时启用——避免默认行为意外变重
+if [ -z "$MODEL" ] && [ "$PROBE_FROM_SESSION" = true ]; then
+    probe_script="${SCRIPT_DIR}/probe-session-model.sh"
+    if [ -x "$probe_script" ]; then
+        # 显式 pwd 一次：env -i 清空 PWD,probe 需要 cwd 找 jsonl
+        cwd_arg="${CWD:-$(pwd)}"
+        probed=$(env -i HOME="$HOME" bash "$probe_script" --harness "${HARNESS_NAME:-claude-code}" --cwd "$cwd_arg" 2>/dev/null || true)
+        if [ -n "$probed" ]; then
+            MODEL="$probed"
+        fi
+    fi
 fi
 if [ -z "$MODEL" ]; then
     cat >&2 <<EOF
