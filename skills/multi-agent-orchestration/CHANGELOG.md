@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.5.0] - 2026-08-13
+
+### 修复
+
+- Harness 权限改为对完整可证明祖先链取白名单交集；弱宿主嵌套 Codex/Claude Code 仍只能保留弱权限，链路读取不完整时失败关闭。
+- 新增 worker backend/启动命令身份绑定，拒绝标签伪装、命令链、不透明 wrapper 与任意命令替换；安装守卫的 prompt-only 降级不再能绕过 backend 身份门禁。
+- Harness 的 Orca 证据统一使用版本匹配的 `orca-runtime.sh`，避免权限检测与 worker 控制选择不同 CLI。
+
+### 新增
+
+- 新增跨 worktree 的 provider 原子并发租约：按个人配置在副作用前占槽，启动后绑定精确 tmux session 或 Orca terminal，并在真实资源结算后释放。
+- 租约存放于 Git common dir 的可信根，使用文件锁与原子写入；释放同时校验可信路径、session、资源句柄和运行时存活状态，未知状态失败关闭。
+- 新增 `test-worker-command-policy.sh` 与 `test-provider-lease.sh`，覆盖四后端 renderer、wrapper、伪装命令、额度竞争、陈旧租约、越界路径和存活资源提前释放。
+
+### 改进
+
+- Orca worktree 创建显式继承项目 setup 策略；继续采用门禁优先的两阶段启动，不直接切换会在权限文件落盘前启动 Agent 的 `worktree create --agent`。
+- 当前运行合同明确收口为 Claude Code、Codex、CodeBuddy、QoderWork CN 四个 backend；OpenCode/custom 等旧内容只保留为历史调研或独立诊断，不构成派发授权。
+- 同步 `SKILL.md`、Orca reference、个人配置模板和根 README 的 v2.5.0 说明，传统 tmux 路径保持可用。
+
+### 验证
+
+- Harness 层级门禁 26/26、命令身份门禁 15/15、provider lease 原子与生命周期回归全部通过。
+- 在 Orca 1.4.180 中使用本地无模型调用的假 Codex 完成真实 worktree/terminal/metadata/lease/close/clean 闭环；终端关闭后为 `connected=false`、`writable=false`，未消耗模型额度。
+
+## [2.4.0] - 2026-08-13
+
+### 新增 — Harness 调用层级门禁
+
+- 新增 `config/harness-backend-policy.json` 和 `scripts/harness-backend-policy.sh`：Claude Code/Codex PM 可派发 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy 与 QoderWork CN PM 只能派发自身。
+- 派发 backend 收口为上述四种；旧版兼容代码中出现的 OpenCode、custom 或未知 backend 均不再获得 spawn 权限，防止个人配置扩张授权面。
+- `spawn-worker.sh` 在创建 worktree/terminal 之前从真实进程祖先识别 PM 宿主，并在 Orca 能唯一定位 working agent 时交叉校验；多 Agent 共用 worktree 时不让模糊 UI 信号覆盖进程证据，未知、真实冲突或不可证明身份仍失败关闭。
+- `--pm-harness` 仅作为预期身份断言，不能覆盖运行时证据或向上提权；授权结果写入 `METADATA.runtime.harness_authority`。
+
+### 测试
+
+- 新增 `test-harness-backend-policy.sh`，覆盖 10 个允许组合、8 个拒绝组合、未知 backend、运行时识别及伪造宿主断言。
+- 既有 Orca/tmux smoke 改用已配置 backend，确保层级门禁进入真实 spawn 回归而非只做静态文档约束。
+
+## [2.3.0] - 2026-08-12
+
+### 修复 — Orca runtime 与 supervised 生命周期
+
+- Orca auto-detect 改用 `worktree current` 的实际项目路径，不再依赖真实会话可能缺失的 `TERM_PROGRAM` / `ORCA_WORKTREE_ID`；新增 `scripts/orca-runtime.sh` 统一版本匹配 CLI。
+- supervised 注册固定为共享 Run 下的 `task-create → worker-start --terminal`，worker-start 成为唯一任务注入器；注册失败返回非零并保留恢复证据，不再静默降级为“看似 supervised”。
+- Sentinel 不再根据 STATUS/timeout 自动 stop、release 或关闭 supervised terminal；`worker_done`、完整 Delivery、reuse/release/retain、ack 成为单一结算顺序。
+- `clean-worktree.sh` 仅在 Dispatch 已 settled 且 terminal accounting 可证明安全时结算，active/unknown/release_pending/release_unknown 均失败关闭。
+- `pm-orchestrate.sh` 扩展为 supervised / terminal-managed / tmux 三模式，支持 Dispatch guidance、worker transcript、show、Delivery wait、reply、release、retain 和显式 ack。
+- supervised 注册保存并显式传递 coordinator handle，修复真实 Run 下的 `consumer_fenced`；external terminal 清理增加 settled 状态、ownership/reason 与精确句柄四重校验。
+- Codex render 识别已固定相同 sandbox/approval 的本地安全 launcher，避免重复参数导致 CLI 启动失败；不匹配或不可证明时仍显式传参。
+
+### 改进 — Orca-first 多 CLI 总控
+
+- CodeBuddy、QoderWork 和 custom CLI 可保留在 Orca terminal-managed 层，由 UI 展示 worktree/branch/terminal，PM 用 terminal read/send/wait 巡检；未被 Orca 识别时不伪造 Task/Dispatch。
+- trust/permission/external-import watcher 支持 Orca terminal read/send，不再因脱离 tmux 而失效。
+- `worktree-status.sh` 和 `pm-monitor.sh` 统一使用实际 Orca CLI；文档重写为双层能力、运行时检测、共享 Run、UI 状态来源和恢复边界。
+- terminal-managed `read` 支持 Orca cursor 增量读取，并明确 `tui-idle` 只是 liveness/readiness，不能冒充任务完成信号。
+
+### 安全与 Git
+
+- 根 `.gitignore` 新增 `**/config/*.bak*`，阻止带真实凭证的 provider 配置备份进入普通 Git 历史。
+- 核查确认既有 Orca 提交已经进入 `origin/main`，因此不重写公开历史，改用本版本前向修复 metadata/version 漂移与契约问题。
+- `SKILL.md` 新增本地命令、worktree/terminal、Orca 状态写入、清理与 provider Token 的权限/副作用声明。
+- `SKILL.md` 从 1000+ 行压缩为核心路由与生命周期入口，backend、checkpoint、Sentinel 和历史踩坑继续按需下沉到既有 references，恢复 Progressive Disclosure。
+
+### 测试
+
+- 新增 `smoke-orca-control-plane.sh`，以本地 fake CLI 验证注册顺序、Dispatch 路由、worker-read、Delivery wait 不自动 ack 及 release/retain/ack 命令。
+- `smoke-orca-worker.sh` 覆盖无宿主环境变量识别、opt-out、轻量模式边界与 supervised 单一注入。
+- 修正 `claude --bare` 安装门禁回归断言，与既有“明确记录 prompt-only 降级”设计一致。
+- 真实前向矩阵：Claude Code 与 Codex 在 Orca supervised 中完成 `worker_done → Delivery → external terminal 结算 → ack`；CodeBuddy 在 Orca terminal 中得到完整响应；QoderWork 验证 cursor history 与批处理响应；传统 tmux 下 Codex 完成响应，Claude 启动/收发链路通过但当次 provider 因 429 额度限制未完成模型响应。
+- 六份 Claude provider settings 探针 5 份通过；MiniMax M2.7 返回 401，需更新本地凭证。
+
 ## [2.2.0] - 2026-08-12
 
 ### 新增 — PM 控制 worker 统一入口（Task-034）

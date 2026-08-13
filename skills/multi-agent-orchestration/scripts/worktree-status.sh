@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=orca-runtime.sh
+source "$SCRIPT_DIR/orca-runtime.sh"
+
 PROJECT_DIR=""
 BRANCH=""
 SESSION=""
@@ -115,10 +119,12 @@ if [ -f "$METADATA_FILE" ] && command -v jq >/dev/null 2>&1; then
   orca_mode=$(jq -r '.session.orca.mode // ""' "$METADATA_FILE" 2>/dev/null || echo "")
   orca_worktree_id=$(jq -r '.session.orca.worktree_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
   orca_terminal_handle=$(jq -r '.session.orca.terminal_handle // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  orca_dispatch_id=$(jq -r '.session.orca.supervised.dispatch_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  orca_run_id=$(jq -r '.session.orca.supervised.run_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
   if [ -n "$orca_mode" ]; then
     echo "ORCA_META: mode=${orca_mode} worktree_id=${orca_worktree_id:-n/a} terminal=${orca_terminal_handle:-n/a}"
-    if [ -n "$orca_worktree_id" ] && command -v orca >/dev/null 2>&1; then
-      orca_status_json=$(orca worktree show --worktree "id:$orca_worktree_id" --json 2>/dev/null || echo "{}")
+    if [ -n "$orca_worktree_id" ] && orca_runtime_init >/dev/null 2>&1; then
+      orca_status_json=$(orca_cli worktree show --worktree "id:$orca_worktree_id" --json 2>/dev/null || echo "{}")
       # orca worktree show 响应嵌套在 .result.worktree（不是顶层 .result）
       orca_workspace_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.workspaceStatus // empty' 2>/dev/null)
       orca_card_status=$(printf '%s' "$orca_status_json" | jq -r '.result.worktree.status // empty' 2>/dev/null)
@@ -126,6 +132,13 @@ if [ -f "$METADATA_FILE" ] && command -v jq >/dev/null 2>&1; then
       echo "ORCA_WORKSPACE_STATUS: ${orca_workspace_status:-n/a}"
       echo "ORCA_CARD_STATUS: ${orca_card_status:-n/a}"
       echo "ORCA_COMMENT: ${orca_comment:-n/a}"
+      if [ -n "$orca_dispatch_id" ]; then
+        worker_json=$(orca_cli orchestration worker-show --dispatch "$orca_dispatch_id" --json 2>/dev/null || echo '{}')
+        worker_state=$(printf '%s' "$worker_json" | jq -r '.result.worker.state // .result.worker.workerState // "unknown"' 2>/dev/null)
+        task_state=$(printf '%s' "$worker_json" | jq -r '.result.worker.task_status // .result.worker.taskStatus // .result.worker.task.status // .result.task.status // "unknown"' 2>/dev/null)
+        dispatch_state=$(printf '%s' "$worker_json" | jq -r '.result.worker.dispatch_status // .result.worker.dispatchStatus // .result.worker.dispatch.status // .result.dispatch.status // "unknown"' 2>/dev/null)
+        echo "ORCA_SUPERVISED: run=${orca_run_id:-n/a} dispatch=$orca_dispatch_id worker=$worker_state task=$task_state dispatch_status=$dispatch_state"
+      fi
     fi
   fi
 fi

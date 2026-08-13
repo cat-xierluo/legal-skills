@@ -75,6 +75,7 @@ Context:
 - PM Authority Receipt: {{git_common_dir_authority_receipt_path}}
 - Runtime Hook Attestation: {{git_common_dir_hook_attestation_path_or_none_yet}}
 - Identity-Bound Safe Push Command: {{exact_safe_push_command_or_none}}
+- Orca Lifecycle: {{supervised_from_live_preamble_or_terminal_only}}
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
@@ -135,7 +136,7 @@ Process:
    - Before any Shell command outside the narrow lifecycle set, confirm it exactly matches `Allowed Shell Commands`; otherwise request PM authority instead of rewriting/encoding it to evade the hook.
 8. **Commit-Verify hard constraint（v1.20.3 Task-029，W2 撞坑：worker LLM 幻觉 "done"）**：commit 前必跑 Verify（step 7）**全部 PASS**；commit 完成后立即跑 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD`，确认改动文件数 / 行数与意图一致（不允许 "commit message 说改了 N 文件但 git diff 显示空" 或 "改动了破坏 smoke 的核心函数但 verify 没检出"）。如果 verify 不全 PASS 或 git diff 与意图不符，**不要**写 `status="done"`——fix 后重跑。LLM 幻觉 "完成" 是真实风险：commit 描述 ≠ 实际改动会破坏 smoke / 错位置写 STATUS，最终 PM 收口时才发现（v1.20.2 W2 实战：`64cd3d7` 改了 4 文件但破坏 `permission_auto` 数字键 `'2'` send-keys + 错位置写 `skills/.../STATUS.json` + pane 说 done 但核心修复未生效）。
 9. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
-9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel's status machine matches the literal string `done` (defensively also `completed` / `finished` / `complete`, but **never rely on synonyms**). If you write `completed` or `finished` instead of `done`, the sentinel will not exit and PM will not be re-invoked via harness task-notification — the worker is effectively orphaned until `--max-wait 7200s` timeout. See DEC-060 for the Wave 6 finding.
+9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel matches only the canonical success value; `completed` / `finished` / `complete` are invalid and remain visible until correction or timeout. For Orca supervised workers this checkpoint only wakes PM; accepted `worker_done` is still required to settle the Task/Dispatch.
 
 Worker Type Rules:
 - `ui-wiring`: no new dependencies; all listed frontend verification commands must pass.
@@ -170,6 +171,13 @@ Autonomy:
 - Continue until verified PR unless `needs_input=true`, `pm_action_required=true`, or the task is genuinely blocked.
 - If blocked, update STATUS with blocker, issues, current_action and next_action.
 - Do not ask PM to implement your assigned scope directly; ask only for missing input, permission, or correction.
+
+Orca Supervised Lifecycle:
+- 仅当当前任务同时带有 Orca 注入的 live preamble、`task_id`、`dispatch_id` 和发送能力时，才执行本段；普通 Orca Terminal / tmux worker 不发送 lifecycle 消息。
+- 进度与纠偏优先读取 Dispatch inbox；阻塞问题用注入协议中的 `orca orchestration ask`，不要让 PM 反复读取整段终端猜测问题。
+- 完成或失败时，先写 STATUS/RESULT/PATCH_SUMMARY 并完成验证，再从你自己的 worker terminal 按 preamble 精确发送一次 `worker_done`，显式写 `--outcome succeeded|failed`、变更文件和剩余工作。
+- `STATUS.json=done` 只唤醒 PM，不会结算 Orca Task。未发送 `worker_done` 就不算 supervised 完成。
+- 发送 `worker_done` 后结束当前 turn 并保持 idle；不要自行 close terminal、release worker、继续领取任务或重复发送。PM 处理 Delivery 后决定 reuse / release / retain / ack。
 
 Out of Scope:
 - Do not modify forbidden files.

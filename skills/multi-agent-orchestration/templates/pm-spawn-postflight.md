@@ -1,6 +1,6 @@
 # PM spawn 后 postflight cheatsheet
 
-> 配套 `SKILL.md §3.8` / §6 / §7.1。**spawn 是 fire-and-forget；不要 block 等 worker 跑完。**
+> 配套 `SKILL.md §3` / §5 / §7。**spawn 是 fire-and-forget；不要 block 等 worker 跑完。**
 
 ## 何时用
 
@@ -51,7 +51,7 @@ timeout 120 bash -c '
 '
 ```
 
-120s 还没出现 → 触发 `SKILL.md §2.1` 纠偏：发 checkpoint-only 纠偏（`tmux send-keys` 推 bootstrap correction），或重启 worker。
+120s 还没出现 → 触发 `SKILL.md §3` 纠偏：发 checkpoint-only correction，或重启 worker。
 
 **绝对不要**把 PM 自己 hang 在这个 timeout 上等所有 worker。
 
@@ -59,7 +59,7 @@ timeout 120 bash -c '
 
 PM **立刻**返回主循环，做下一件事（下一个 worker spawn / 已有 worker review / 用户消息）。
 
-后续 worker 终态由 `sentinel.sh`（`SKILL.md §7.2`）事件驱动唤醒，或 `pm-monitor.sh --log-file`（`§7.1`）后台巡检。**不要 PM 自己 poll 等**。
+后续 worker 终态由 `sentinel.sh`（`SKILL.md §7`）事件驱动唤醒，或 `pm-monitor.sh --log-file` 后台巡检。**不要 PM 自己 poll 等**。
 
 ## 反例（踩坑历史 · 2026-07-10 某多 worker Wave 实战）
 
@@ -74,7 +74,7 @@ PM **立刻**返回主循环，做下一件事（下一个 worker spawn / 已有
 
 ## 多 worker 并行 spawn 提示（与 §3.8.2 配套）
 
-文件域独立时（`SKILL.md §3.1` 上行 218），从一开始就别串行 spawn：
+文件域独立时（`SKILL.md §3`），从一开始就别串行 spawn：
 
 ```bash
 for w in w1 w2 w3 w4 w5 w6; do
@@ -86,4 +86,4 @@ done
 # ↑ 6 个 spawn 完，下面跑 6 轮 4 条核验 → 立即投 prompt + 切回主循环
 ```
 
-详细 cheatsheet + 决策树见 `SKILL.md §3.8`。
+控制模式与决策边界见 `SKILL.md §2`—§5。

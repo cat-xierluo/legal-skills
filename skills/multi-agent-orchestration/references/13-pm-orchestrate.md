@@ -1,109 +1,68 @@
-# 13. PM 控制 worker 统一入口（pm-orchestrate.sh）
+# PM 统一控制入口
 
-> Level 2 reference。配合 SKILL §7.1 ORCA PM 分支 + §10 scripts 列表。
-> 版本：v2.2.0（Task-034，2026-08-12）。
+> `scripts/pm-orchestrate.sh`，版本 v2.3.0。
 
-## 1. 边界
+## 目录
 
-**适用**：PM 在任何环境下用统一命令控制 worker，不用关心 worker 是 ORCA terminal 还是 tmux session。
+1. 模式解析
+2. 命令
+3. Supervised 收口顺序
+4. 安全边界
 
-**不适用**：
-- 控制 ORCA 内未通过 spawn-worker 起的 terminal（METADATA 缺，模式判断失败）
-- 跨 worktree 的批量控制（pm-orchestrate 一次只控一个 worker）
-- 投递路径控制 / task 依赖 / decision gate（用 ORCA orchestration 体系 / pm-monitor）
+## 1. 模式解析
 
-## 2. 双模式自动判断
+脚本读取 `<worktree>/.claude/agent-sessions/<session>/METADATA.json`：
 
-pm-orchestrate.sh 读 `<worktree>/.claude/agent-sessions/<session>/METADATA.json`：
-
-| 判定 | 路径 |
-|---|---|
-| `session.orca.terminal_handle` 非空 | ORCA 模式：`orca terminal send/read/wait` |
-| 上述字段空（或 ORCA app 不可用降级） | tmux 模式：`tmux send-keys/capture-pane`（session 名 = `<session>`） |
-
-PM 一个命令管两种 worker，不用关心类型。失败容忍：ORCA 模式 ORCA 不可用 → exit 64；tmux 模式 tmux 不在 PATH → exit 64。
-
-## 3. 子命令
-
-### `send` —— 投 prompt
-
-```bash
-pm-orchestrate.sh send --worktree $WT --session $S --text "请修复 X bug"
-pm-orchestrate.sh send --worktree $WT --session $S --prompt-file ./full-spec.md
-```
-
-**超长自动 WORKER_PROMPT.md**（SKILL §5.2 标准模式）：文本 >500 字符 或含反引号/`$`/`|`/` ``` ``` 时，**不直接投**（避免 tmux/orca 终端转义问题），写 `<session_context>/WORKER_PROMPT.md` + 投短指令 `请 Read .claude/agent-sessions/<session>/WORKER_PROMPT.md 并严格按其指示执行`。PM 不用自己判断长度。
-
-### `read` —— 读 worker 输出
-
-```bash
-pm-orchestrate.sh read --worktree $WT --session $S --lines 50   # 默认 50
-```
-
-读 worker 尾部 `--lines` 行（ORCA: `orca terminal read --limit`；tmux: `capture-pane -S -N`）。
-
-### `peek` —— 快速尾部（15 行）
-
-```bash
-pm-orchestrate.sh peek --worktree $WT --session $S
-```
-
-等价 `read --lines 15`。PM 快速看 worker 状态时常用。
-
-### `wait` —— 等 worker TUI idle
-
-```bash
-pm-orchestrate.sh wait --worktree $WT --session $S --timeout 60
-```
-
-- ORCA 模式：`orca terminal wait --for tui-idle --timeout-ms $((timeout*1000))`
-- tmux 模式：**无原生 tui-idle 检测**（tmux 不解析 TUI 状态），降级为 `sleep $timeout`。建议 tmux 模式改用 `sentinel.sh` / `pm-monitor.sh` 等真终态机制，不要用 `wait`。
-
-## 4. 与其它控制层的关系
-
-| 层 | 命令 | 何时用 |
+| METADATA | 模式 | 控制面 |
 |---|---|---|
-| pm-orchestrate（首选） | `pm-orchestrate send/read/peek/wait` | PM 一次性交互（投 prompt / 读响应 / 快速 peek） |
-| sentinel（终态监控） | `bash sentinel.sh ... &` | 长时间等 worker done，harness task-notification 唤醒 PM |
-| pm-monitor（多 worker 巡检） | `bash pm-monitor.sh --log-file ... &` | 多 worker Wave 周期巡检 |
-| 直接 ORCA CLI | `orca terminal send ...` | pm-orchestrate 不够用时的低层兜底 |
-| 直接 tmux | `tmux send-keys -t session ...` | 同上 |
+| 有 `supervised.dispatch_id` | `orca_supervised` | Dispatch/Delivery/worker-read |
+| 仅有 `terminal_handle` | `orca_terminal` | terminal send/read/wait |
+| 两者都无 | `tmux` | send-keys/capture-pane |
 
-**核心原则**：PM 90% 场景用 `pm-orchestrate` 一个统一入口；sentinel/pm-monitor 处理后台监控；直接 ORCA/tmux CLI 是兜底。
+不要手工覆盖模式；缺 METADATA 时 fail-loud。
 
-## 5. 实战范例
-
-ORCA 模式 worker（W1 = claude，spawn-worker ORCA 模式自动建）：
+## 2. 命令
 
 ```bash
-# 1. 投任务
-pm-orchestrate send --worktree $WT --session W1 --text "请用 bash 跑 ls -la"
+# 每个 Wave 一次；输出 .result.run.id
+pm-orchestrate.sh run-create --objective "Wave objective"
 
-# 2. 等 TUI idle（claude 处理完当前 prompt）
-pm-orchestrate wait --worktree $WT --session W1 --timeout 60
+# 三种模式通用
+pm-orchestrate.sh send --worktree "$WT" --session "$S" --text "..."
+pm-orchestrate.sh read --worktree "$WT" --session "$S" --lines 50
+pm-orchestrate.sh read --worktree "$WT" --session "$S" --lines 5000 --cursor 0
+pm-orchestrate.sh peek --worktree "$WT" --session "$S"
+pm-orchestrate.sh wait --worktree "$WT" --session "$S" --timeout 900
 
-# 3. 看响应
-pm-orchestrate read --worktree $WT --session W1 --lines 30
-
-# 4. 超长任务规范
-pm-orchestrate send --worktree $WT --session W1 --prompt-file ./long-spec.md
-# → 自动写 WORKER_PROMPT.md，投短 Read 指令
+# supervised 专用
+pm-orchestrate.sh show --worktree "$WT" --session "$S"
+pm-orchestrate.sh reply --worktree "$WT" --session "$S" --message-id "$MID" --text "..."
+pm-orchestrate.sh release --worktree "$WT" --session "$S"
+pm-orchestrate.sh retain --worktree "$WT" --session "$S"
+pm-orchestrate.sh ack --worktree "$WT" --session "$S" --delivery-id "$DID"
 ```
 
-tmux 模式 worker（spawn-worker 默认或 --no-orca-mode 强制）：
+supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。
 
-```bash
-# 完全相同命令，pm-orchestrate 自动走 tmux 路径
-pm-orchestrate send --worktree $WT --session W1 --text "..."
-pm-orchestrate peek --worktree $WT --session W1
-```
+Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首次从 `0` 读取并保存响应里的 `nextCursor`；后续按 cursor 增量读取，避免默认 tail 只剩 spinner。`wait` 的 `tui-idle` 只表示当前可交互/空闲，不是业务终态。
 
-## 6. 已知限制
+terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入 session context 的 `WORKER_PROMPT.md`，再投短 Read 指令。supervised guidance 直接写消息 body，不创建新的 prompt 文件。
 
-| 场景 | 表现 | 降级 |
-|---|---|---|
-| ORCA 模式但 ORCA app 未运行 | `orca CLI not found` exit 64 | 提示 `orca open` |
-| ORCA mode 但 terminal handle stale（ORCA 重启后） | `orca terminal send` 失败 | 提示跑 `orca terminal list` 重新获取 handle |
-| tmux mode + worker 不在 tmux 里（ORCA-only 误判） | `tmux session 不存在` exit 1 | 用 `pm-orchestrate peek` 确认 mode + handle |
-| 超长 + 特殊字符同时存在 | 仍走 WORKER_PROMPT.md（自动检测覆盖两者） | — |
-| tmux `wait` 子命令 | sleep 等时（无 TUI 状态检测） | 改用 `sentinel.sh` 真终态 |
+## 3. Supervised 收口顺序
+
+1. `wait` 获取完整 Delivery；不要立即 ack。
+2. 处理每条 `question/escalation/worker_done`。
+3. 用 `show` 核对 accepted settlement，用 `read` 和真实 diff/tests 验收。
+4. 每个 settled worker 选择立即复用、`release` 或用户明确要求时 `retain`。
+5. 全部处理完后 `ack --delivery-id ...`。
+6. 继续 `wait`，直到所有预期 Dispatch settle。
+
+`wait` timeout 是 checkpoint，不是 failure；不要因此 stop/release worker。
+
+## 4. 安全边界
+
+- 脚本不自动 ack Delivery、不自动 release active worker、不删除 worktree。
+- `release/retain/reply/ack` 仅对有 supervised metadata 的 worker 生效。
+- stale terminal handle 要先按 worktree 重新解析；禁止同时给旧/新 handle 双发。
+- 普通 terminal worker 没有 `worker_done` 义务；不要用 terminal 文本伪造 Dispatch 完成。
+- 对 external supervised terminal，`release` 后 retained 不必然是错误；文件清理仍须由 `clean-worktree.sh` 验证 settled 状态、external ownership、retained reason 和精确句柄后处理。

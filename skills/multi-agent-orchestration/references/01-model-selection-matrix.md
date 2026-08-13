@@ -7,7 +7,7 @@
 
 ## 1. 模型分级（L0 / L1 / L2）
 
-模型路由只服务 worker，不绑定 PM 所在产品。Codex 做 PM 时可以启动 Claude Code 或 OpenCode worker；Claude Code 做 PM 时也可以启动 Codex 或 OpenCode worker。判断顺序是：任务复杂度 → 当前可用额度 → worker backend → 模型/环境变量。
+模型路由只服务 worker，不绑定 PM 所在产品。当前 `spawn-worker.sh` 的机械白名单只有 Claude Code、Codex、CodeBuddy、QoderWork CN；本文中 OpenCode、Hermes、Kimi、Gemini、Rudder、custom 等段落仅保留历史调研价值，不构成派发授权。判断顺序是：任务复杂度 → 当前可用额度 → 白名单 worker backend → 模型/环境变量。
 
 ### 1.1 能力定义
 
@@ -31,6 +31,8 @@
 **经验法则**：任务描述包含"理解/分析/重构/设计"→ L2；包含"添加/补充/翻译/复制"→ L0；其余默认 L1。
 
 ### 1.3 额度 Profile
+
+> 当前可派发 Profile 仅限 backend 为 Claude Code、Codex、CodeBuddy、QoderWork CN 的行。其余行是历史候选，不得传给 `spawn-worker.sh`。
 
 | Profile | 目标 | backend | 典型设置 |
 |---------|------|---------|----------|
@@ -99,7 +101,7 @@ tmux new-session -d \
   'codex exec -m <codex-model> -a never -s danger-full-access - < /tmp/task.prompt.md'
 ```
 
-**OpenCode tmux worker**：模型格式通常是 `provider/model`，先用 `opencode models` 查看可用项。
+**OpenCode 历史候选（不可由当前 Skill 派发）**：以下命令仅供旧实验复盘。
 
 ```bash
 tmux new-session -d \
@@ -117,7 +119,7 @@ tmux new-session -d \
   'opencode acp'
 ```
 
-**自定义 CLI worker**：用于其他一行命令 Agent。把模型、provider、profile、权限参数放进命令；PM 只要求它在指定 worktree 内执行，并产出 checkpoint 三件套，或至少可由 Git 状态巡检。
+**自定义 CLI 历史候选（不可由当前 Skill 派发）**：以下命令不属于当前四后端合同。
 
 ```bash
 tmux new-session -d \
