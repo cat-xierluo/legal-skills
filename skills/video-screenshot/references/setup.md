@@ -42,21 +42,23 @@ brew install uv
 
 图像处理核心库（dHash 计算、缩略图生成、OCR 预处理）。通过 `extract.py` 的 PEP 723 内联依赖声明，`uv run` 时自动安装，无需手动操作。
 
-### rapidocr-onnxruntime（可选，OCR 去重需要）
+### rapidocr-onnxruntime（可选，OCR 内容增量需要）
 
-本地离线 OCR 引擎，用于基于文本相似度的帧去重。
+本地离线 OCR 引擎，用于内容增量判断和文本相似度去重。它只在时间簇择优后的少量候选上运行，不把 OCR 原文写入报告。
 
 ```bash
-# pip 安装
-pip install rapidocr-onnxruntime
+# 推荐：不修改全局环境，按次注入可选依赖
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i <视频文件路径> --ocr-dedup
 
-# 或 uv 安装
-uv pip install rapidocr-onnxruntime
+# 如果直接用 python3 运行，也可先安装
+python3 -m pip install rapidocr-onnxruntime
+python3 scripts/extract.py -i <视频文件路径> --ocr-dedup
 ```
 
-如果未安装，`--ocr-dedup` 参数会自动降级为跳过 OCR 去重，不影响其他功能。
+如果未安装，`--ocr-dedup` 参数会自动降级为跳过 OCR 内容增量与文本去重，不影响其他功能。
 
-基础时间簇择优、过渡帧识别和视觉审计联系表只依赖 Pillow，不需要安装 RapidOCR。启用 OCR 后仍保留 SSIM 图像去重，两者并行工作。
+基础时间簇择优、加载浮层识别、自适应滚动密度和视觉审计联系表只依赖 Pillow，不需要安装 RapidOCR。启用 OCR 后仍保留 SSIM 图像去重；OCR 发现高可信新增金额、长编号或足量正文时可以保护相似帧，因此输出可能略多于纯视觉模式。
 
 ## 首次使用检查清单
 
@@ -73,7 +75,7 @@ uv --version
 # 4. 运行（Pillow 自动安装）
 uv run scripts/extract.py -i <视频文件路径>
 
-# 5. 如需 OCR 去重，安装 RapidOCR
-pip install rapidocr-onnxruntime
-uv run scripts/extract.py -i <视频文件路径> --ocr-dedup
+# 5. 如需 OCR 内容增量，按次注入 RapidOCR
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i <视频文件路径> --ocr-dedup
 ```

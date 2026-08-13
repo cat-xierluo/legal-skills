@@ -77,6 +77,7 @@ def _validate_entry(root: Path, item: dict[str, Any], *, source: str) -> dict[st
     expected_sha = str(item.get("sha256") or "")
     if expected_sha and expected_sha != actual_sha:
         raise ValueError(f"图片哈希与报告不一致: {rel}")
+    transient_ui = item.get("transient_ui") if isinstance(item.get("transient_ui"), dict) else {}
     return {
         "source": source,
         "path": rel,
@@ -88,6 +89,11 @@ def _validate_entry(root: Path, item: dict[str, Any], *, source: str) -> dict[st
         "reason": item.get("reason"),
         "seam_score": float(item.get("seam_score") or 0.0),
         "mixed_transition_score": float(item.get("mixed_transition_score") or 0.0),
+        "loading_overlay_score": float(item.get("loading_overlay_score") or transient_ui.get("score") or 0.0),
+        "loading_overlay_label": item.get("loading_overlay_label") or transient_ui.get("label"),
+        "motion_density_mode": item.get("motion_density_mode"),
+        "scroll_match_ratio": float(item.get("scroll_match_ratio") or 0.0),
+        "content_delta": item.get("content_delta") if isinstance(item.get("content_delta"), dict) else {},
     }
 
 
@@ -105,6 +111,22 @@ def _risk_score(frame: dict[str, Any], prev_gap: float, next_gap: float) -> tupl
     if mixed >= 0.20:
         score += min(3.0, mixed * 4.0)
         reasons.append("mixed_transition_risk")
+    loading = float(frame.get("loading_overlay_score") or 0.0)
+    loading_label = str(frame.get("loading_overlay_label") or "")
+    if loading_label == "loading_overlay":
+        score += min(4.0, loading * 4.0)
+        reasons.append("loading_overlay")
+    elif loading_label == "incomplete_page":
+        score += min(3.0, loading * 3.0)
+        reasons.append("incomplete_page_risk")
+    content_delta = frame.get("content_delta") or {}
+    if bool(content_delta.get("ocr_available")):
+        if not bool(content_delta.get("has_new_content")) and float(content_delta.get("ocr_similarity") or 0.0) >= 0.88:
+            score += 2.5
+            reasons.append("low_content_delta")
+        elif int(content_delta.get("new_numeric_count") or 0) > 0:
+            score += 1.0
+            reasons.append("new_numeric_evidence")
     dense_gap = min(prev_gap, next_gap)
     if dense_gap < 2.0:
         score += max(0.0, 2.0 - dense_gap)
@@ -133,6 +155,7 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "priority": round(score, 4),
             "reason_codes": reasons,
             "target_path": frame["path"],
+            "target_time_seconds": cur,
             "images": members,
         })
 
@@ -147,6 +170,10 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "temporal_mixed_transition",
             "temporal_motion_redundant",
             "quality_transition",
+            "quality_loading_overlay",
+            "quality_incomplete_page",
+            "ocr_duplicate",
+            "duplicate_scroll",
             "min_gap",
         }:
             continue
@@ -175,6 +202,33 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             group["priority"] = round(float(group["priority"]) + 0.5, 4)
             group["reason_codes"] = list(dict.fromkeys([*group["reason_codes"], "nearby_discarded_candidate"]))
 
+    # 高置信加载浮层已由代码自动删除，但仍应获得独立视觉复核入口；
+    # 多模态若判断误删，可以对 discarded_candidate 使用 keep 补回。
+    for item in validated_drops:
+        reason = str(item.get("reason") or "")
+        if reason != "quality_loading_overlay":
+            continue
+        target_time = float(item.get("capture_time_seconds") or 0.0)
+        nearby_kept = sorted(
+            frames,
+            key=lambda frame: abs(float(frame.get("capture_time_seconds") or 0.0) - target_time),
+        )[:2]
+        members: list[dict[str, Any]] = []
+        for frame in sorted(nearby_kept, key=lambda frame: float(frame.get("capture_time_seconds") or 0.0)):
+            member = dict(frame)
+            member["role"] = "context"
+            members.append(member)
+        candidate = dict(item)
+        candidate["role"] = "discarded_candidate"
+        members.append(candidate)
+        groups.append({
+            "priority": 8.5,
+            "reason_codes": ["discarded_loading_overlay"],
+            "target_path": item["path"],
+            "target_time_seconds": target_time,
+            "images": members,
+        })
+
     groups.sort(key=lambda item: (-float(item["priority"]), str(item["target_path"])))
     return groups
 
@@ -184,14 +238,33 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
         raise ValueError("--max-groups 和 --max-images 必须大于 0")
     selected: list[dict[str, Any]] = []
     unique_paths: set[str] = set()
-    for group in groups:
+    remaining = list(groups)
+    while remaining:
+        if selected:
+            selected_times = [float(item.get("target_time_seconds") or 0.0) for item in selected]
+            remaining.sort(
+                key=lambda item: (
+                    -(
+                        float(item["priority"])
+                        + min(
+                            2.0,
+                            min(
+                                abs(float(item.get("target_time_seconds") or 0.0) - selected_time)
+                                for selected_time in selected_times
+                            ) / 30.0,
+                        )
+                    ),
+                    str(item["target_path"]),
+                )
+            )
+        group = remaining.pop(0)
         paths = {str(item["path"]) for item in group["images"]}
-        # 相邻目标可能生成高度重叠的三帧窗口。重叠超过 2/3 时保留优先级更高者，
+        # 相邻目标可能生成高度重叠的三帧窗口。重叠达到一半时保留优先级更高者，
         # 把稀缺的组预算留给其他时间区段。
         if any(
             len(paths & {str(item["path"]) for item in chosen["images"]})
             / float(max(1, min(len(paths), len(chosen["images"]))))
-            >= 2.0 / 3.0
+            >= 0.5
             for chosen in selected
         ):
             continue
@@ -200,7 +273,7 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
             continue
         if not selected and len(paths) > max_images:
             group = dict(group)
-            role_priority = {"target": 0, "previous": 1, "following": 2, "discarded_candidate": 3}
+            role_priority = {"target": 0, "discarded_candidate": 1, "context": 2, "previous": 3, "following": 4}
             group["images"] = sorted(
                 group["images"],
                 key=lambda item: role_priority.get(str(item.get("role") or ""), 9),
@@ -329,6 +402,7 @@ def main() -> int:
                 "priority": group["priority"],
                 "reason_codes": group["reason_codes"],
                 "target_path": group["target_path"],
+                "target_time_seconds": group.get("target_time_seconds"),
                 "contact_sheet": group["contact_sheet"],
                 "images": clean_images,
             })
@@ -345,6 +419,10 @@ def main() -> int:
                 "actual_groups": len(clean_groups),
                 "actual_images": len(unique_images),
                 "candidate_groups_before_budget": len(groups),
+                "covered_time_buckets": sorted({
+                    int(float(group.get("target_time_seconds") or 0.0) // 30.0)
+                    for group in clean_groups
+                }),
             },
             "decision_contract": {
                 "allowed_decisions": ["keep", "drop", "replace"],

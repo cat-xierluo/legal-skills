@@ -11,7 +11,7 @@
 
 ## 定位
 
-只在基础抽帧完成后使用视觉审计。不要把完整视频或全部候选帧提交给模型；先由 `prepare_vision_audit.py` 选出本地算法低置信、疑似拼接过渡或相邻过密的少量组。
+只在基础抽帧完成后使用视觉审计。不要把完整视频或全部候选帧提交给模型；先由 `prepare_vision_audit.py` 按风险与时间覆盖联合选出低置信、疑似拼接过渡、未加载风险或相邻过密的少量组。
 
 纯文字模型必须停止在“审计包已准备但未审计”，不要根据文件名猜测图片内容，也不要生成伪造的 `_vision_review.json`。
 
@@ -30,10 +30,12 @@ uv run scripts/prepare_vision_audit.py \
 - `_vision_audit/contact_sheet_NNN.jpg`：同一风险组的前一张、目标张、后一张和可选丢弃候选；
 - 原始图片仍位于基础输出目录，manifest 用相对路径引用，不复制整段视频。
 
+manifest 的 `budget.covered_time_buckets` 记录已覆盖的 30 秒时间桶。脚本会给远离已选时间段的高风险组有限加分，避免多个近邻组重复消耗预算；风险仍是首要因素，时间多样性不改变基础帧。
+
 ## 视觉审计步骤
 
 1. 读取 `audit_manifest.json`，确认 `status=prepared`，实际组数和图片数没有超过预算。
-2. 按组查看联系表。不要孤立判断目标帧；同时比较 `previous / target / following / discarded_candidate`。
+2. 按组查看联系表。不要孤立判断目标帧；同时比较 `previous / target / following / discarded_candidate`。优先处理 `loading_overlay`、`incomplete_page_risk`、`vertical_seam` 和 `mixed_transition_risk`。
 3. 仅处理 manifest 内的 `audit_id`：
    - `keep`：承载新增信息，或虽相似但需要保持页面/证据连续性；
    - `drop`：明显切换中间态、视觉重复或语义重复，且相邻完整帧已经覆盖内容；

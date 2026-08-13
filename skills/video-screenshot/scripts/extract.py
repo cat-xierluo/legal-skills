@@ -36,20 +36,22 @@ from lib import (
     calc_capture_time,
     calc_content_quality,
     calc_dhash_hex,
+    calc_loading_overlay_score,
     calc_scroll_image,
     calc_thumb_bytes,
-    check_ocr_similarity,
     collect_frame_files,
     create_ocr_engine,
     crop_for_ocr_bytes_with_range,
     find_tool,
     is_frame_duplicate,
     ocr_extract_text,
+    ocr_content_delta,
     probe_video,
     run_ffmpeg_extract,
     select_temporal_representatives,
     shingles,
     temporal_frame_metrics,
+    transient_ui_drop_reason,
 )
 
 logger = logging.getLogger("video-screenshot")
@@ -67,8 +69,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
   # 固定间隔，每 0.5 秒一帧
   uv run scripts/extract.py -i recording.mp4 -s interval --interval 0.5
 
-  # 场景检测 + OCR 去重（适合聊天录屏）
-  uv run scripts/extract.py -i recording.mp4 --ocr-dedup
+  # 场景检测 + OCR 内容增量（适合聊天录屏）
+  uv run --with rapidocr-onnxruntime scripts/extract.py -i recording.mp4 --ocr-dedup
 
   # 关键帧提取，不去重
   uv run scripts/extract.py -i recording.mp4 -s keyframe -d 0
@@ -91,7 +93,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--scroll-merge", action="store_true", default=False, help="滚动帧合并（默认关闭）")
     p.add_argument("--no-scroll-merge", action="store_false", dest="scroll_merge", help="禁用滚动帧合并")
     p.add_argument("--scroll-diff-threshold", type=float, default=32.0, help="滚动重叠平均像素差阈值（默认: 32.0）")
-    p.add_argument("--ocr-dedup", action="store_true", help="启用 OCR 文本去重")
+    p.add_argument("--ocr-dedup", action="store_true", help="启用 OCR 内容增量与文本去重")
     p.add_argument("--ocr-threshold", type=float, default=0.92, help="OCR 相似度阈值（默认: 0.92）")
     p.add_argument("--ocr-min-new", type=int, default=8, help="OCR 最少新字符数（默认: 8）")
     p.add_argument("--max-size", type=int, default=0, help="输出最长边像素限制（0=保持原始分辨率，默认: 0）")
@@ -215,7 +217,11 @@ def main() -> None:
     if args.ocr_dedup:
         ocr_engine = create_ocr_engine()
         if ocr_engine is None:
-            print("警告: RapidOCR 未安装，OCR 去重已禁用。安装: pip install rapidocr-onnxruntime", file=sys.stderr)
+            print(
+                "警告: RapidOCR 未安装，OCR 内容增量已禁用。"
+                "运行: uv run --with rapidocr-onnxruntime scripts/extract.py ... --ocr-dedup",
+                file=sys.stderr,
+            )
             args.ocr_dedup = False
         else:
             print("  OCR: RapidOCR (本地，与 SSIM 并行复核)")
@@ -334,6 +340,7 @@ def main() -> None:
                         "selection_confidence": item.get("selection_confidence"),
                         "seam_score": round(float(item.get("seam_score") or 0.0), 4),
                         "mixed_transition_score": round(float(item.get("mixed_transition_score") or 0.0), 4),
+                        "loading_overlay_score": round(float((item.get("loading_overlay") or {}).get("score") or 0.0), 4),
                     },
                 )
             processing_items = selected_items
@@ -374,23 +381,75 @@ def main() -> None:
 
             capture_time = temporal_item.get("capture_time_seconds")
 
-            # 图像去重
-            is_dup, drop_reason, thumb, ssim_thumb, scroll_image = is_frame_duplicate(
-                content, digest, dhash_hex, state, params, window, pixel_diff_threshold,
-            )
-            if is_dup:
+            transient_ui = temporal_item.get("loading_overlay") or calc_loading_overlay_score(content)
+            transient_label = str(transient_ui.get("label") or "")
+            transient_drop_reason = transient_ui_drop_reason(transient_ui)
+            if args.filter_quality and transient_drop_reason:
+                state.quality_drops += 1
+                state.transient_ui_drops += 1
                 _record_drop_candidate(
                     output_dir,
                     frame_path,
                     idx,
-                    drop_reason,
+                    transient_drop_reason,
                     capture_time,
                     digest,
                     drop_candidates_meta,
                     enabled=args.keep_drop_candidates,
                     limit=args.drop_candidate_limit,
+                    extra={"transient_ui": transient_ui},
                 )
                 continue
+
+            ocr_text = ""
+            ocr_delta = {
+                "available": False,
+                "similarity": 0.0,
+                "new_token_count": 0,
+                "new_numeric_count": 0,
+                "redundant": False,
+                "has_new_content": False,
+                "protect_visual_duplicate": False,
+            }
+            if args.ocr_dedup and ocr_engine is not None:
+                crop_bytes, crop_range = crop_for_ocr_bytes_with_range(content)
+                if crop_bytes and crop_range >= 18:
+                    ocr_text = ocr_extract_text(ocr_engine, crop_bytes)
+                    ocr_text = re.sub(r"\s+", "", ocr_text or "")
+                    ocr_text = re.sub(r"[^\w一-鿿￥¥,.]+", "", ocr_text)
+                ocr_delta = ocr_content_delta(
+                    ocr_text,
+                    state.kept_ocr_texts,
+                    state.kept_ocr_shingles,
+                    params.ocr_similarity_threshold,
+                    params.ocr_min_new_chars,
+                )
+
+            # 图像去重
+            is_dup, drop_reason, thumb, ssim_thumb, scroll_image = is_frame_duplicate(
+                content, digest, dhash_hex, state, params, window, pixel_diff_threshold,
+            )
+            if is_dup:
+                # 视觉近似不等于证据重复。OCR 发现新金额、身份或足量新文本时，
+                # 让内容覆盖优先并保留该帧；SHA256 完全相同不受此例外影响。
+                if drop_reason != "duplicate_sha256" and bool(ocr_delta.get("protect_visual_duplicate")):
+                    is_dup = False
+                    _undo_duplicate_counter(state, drop_reason)
+                    state.ocr_visual_overrides += 1
+                else:
+                    _record_drop_candidate(
+                        output_dir,
+                        frame_path,
+                        idx,
+                        drop_reason,
+                        capture_time,
+                        digest,
+                        drop_candidates_meta,
+                        enabled=args.keep_drop_candidates,
+                        limit=args.drop_candidate_limit,
+                        extra={"ocr_delta": ocr_delta} if ocr_delta.get("available") else None,
+                    )
+                    continue
 
             # 最小时间间隔过滤
             if args.min_gap > 0 and last_kept_time is not None and capture_time is not None:
@@ -406,6 +465,7 @@ def main() -> None:
                         drop_candidates_meta,
                         enabled=args.keep_drop_candidates,
                         limit=args.drop_candidate_limit,
+                        extra={"ocr_delta": ocr_delta} if ocr_delta.get("available") else None,
                     )
                     continue
 
@@ -447,22 +507,9 @@ def main() -> None:
                     )
                     continue
 
-            # OCR 去重
+            # OCR 内容增量去重。报告只保留计数与相似度，不保存识别出的案件正文。
             if args.ocr_dedup and ocr_engine is not None:
-                crop_bytes, crop_range = crop_for_ocr_bytes_with_range(content)
-                ocr_text = ""
-                if crop_bytes and crop_range >= 18:
-                    ocr_text = ocr_extract_text(ocr_engine, crop_bytes)
-                    ocr_text = re.sub(r"\s+", "", ocr_text or "")
-                    ocr_text = re.sub(r"[^\w一-鿿]+", "", ocr_text)
-
-                if ocr_text and check_ocr_similarity(
-                    ocr_text,
-                    state.kept_ocr_texts,
-                    state.kept_ocr_shingles,
-                    params.ocr_similarity_threshold,
-                    params.ocr_min_new_chars,
-                ):
+                if ocr_text and bool(ocr_delta.get("redundant")):
                     state.ocr_dups += 1
                     _record_drop_candidate(
                         output_dir,
@@ -474,10 +521,9 @@ def main() -> None:
                         drop_candidates_meta,
                         enabled=args.keep_drop_candidates,
                         limit=args.drop_candidate_limit,
+                        extra={"ocr_delta": ocr_delta},
                     )
                     continue
-            else:
-                ocr_text = ""
 
             # 保留帧
             state.kept_count += 1
@@ -539,6 +585,19 @@ def main() -> None:
                 "selection_confidence": temporal_item.get("selection_confidence"),
                 "seam_score": round(float(temporal_item.get("seam_score") or 0.0), 4),
                 "mixed_transition_score": round(float(temporal_item.get("mixed_transition_score") or 0.0), 4),
+                "loading_overlay_score": round(float(transient_ui.get("score") or 0.0), 4),
+                "loading_overlay_label": transient_label,
+                "adaptive_chunk_seconds": temporal_item.get("adaptive_chunk_seconds"),
+                "motion_density_mode": temporal_item.get("motion_density_mode"),
+                "scroll_match_ratio": round(float(temporal_item.get("scroll_match_ratio") or 0.0), 4),
+                "content_delta": {
+                    "ocr_available": bool(ocr_delta.get("available")),
+                    "ocr_similarity": round(float(ocr_delta.get("similarity") or 0.0), 4),
+                    "new_token_count": int(ocr_delta.get("new_token_count") or 0),
+                    "new_numeric_count": int(ocr_delta.get("new_numeric_count") or 0),
+                    "has_new_content": bool(ocr_delta.get("has_new_content")),
+                    "protect_visual_duplicate": bool(ocr_delta.get("protect_visual_duplicate")),
+                },
             })
 
             if processing_idx % 50 == 0 or processing_idx == len(processing_items):
@@ -583,6 +642,10 @@ def main() -> None:
             print(f"    模糊过滤:    {state.blur_drops}")
         if state.quality_drops:
             print(f"    质量过滤:    {state.quality_drops}")
+        if state.transient_ui_drops:
+            print(f"    高置信加载浮层: {state.transient_ui_drops}")
+        if state.ocr_visual_overrides:
+            print(f"    OCR 新内容保留: {state.ocr_visual_overrides}")
         if state.min_gap_drops:
             print(f"    时间间隔过滤: {state.min_gap_drops}")
         if args.keep_drop_candidates:
@@ -680,13 +743,31 @@ def _record_drop_candidate(
     """保存被算法丢弃的候选帧，供后续视觉复核。"""
     if not enabled:
         return
+
+    priority_reason = reason in {"quality_loading_overlay", "quality_transition"}
+    replacement_seq: int | None = None
     if limit > 0 and len(candidates) >= limit:
-        return
+        if not priority_reason:
+            return
+        replace_pos = next(
+            (
+                pos for pos, item in enumerate(candidates)
+                if str(item.get("reason") or "") not in {"quality_loading_overlay", "quality_transition"}
+            ),
+            None,
+        )
+        if replace_pos is None:
+            return
+        evicted = candidates.pop(replace_pos)
+        replacement_seq = int(evicted.get("index") or 0) or None
+        evicted_path = Path(output_dir) / str(evicted.get("filename") or "")
+        if evicted_path.is_file() and not evicted_path.is_symlink():
+            evicted_path.unlink()
 
     candidates_dir = Path(output_dir) / "_review_candidates"
     candidates_dir.mkdir(parents=True, exist_ok=True)
     safe_reason = re.sub(r"[^a-z0-9_]+", "_", (reason or "drop").lower()).strip("_") or "drop"
-    seq = len(candidates) + 1
+    seq = replacement_seq or max((int(item.get("index") or 0) for item in candidates), default=0) + 1
     filename = f"candidate_{seq:03d}_{safe_reason}_{format_timestamp(capture_time)}.jpg"
     dst = candidates_dir / filename
     shutil.copy2(frame_path, dst)
@@ -703,6 +784,20 @@ def _record_drop_candidate(
     if extra:
         item.update(extra)
     candidates.append(item)
+
+
+def _undo_duplicate_counter(state: DedupState, drop_reason: str) -> None:
+    """OCR 内容增量覆盖视觉去重时，撤销预先累计的视觉丢弃计数。"""
+    counter_by_reason = {
+        "duplicate_sha256": "sha256_dups",
+        "duplicate_dhash": "dhash_dups",
+        "duplicate_pixel": "pixel_dups",
+        "duplicate_ssim": "ssim_dups",
+        "duplicate_scroll": "scroll_dups",
+    }
+    attr = counter_by_reason.get(drop_reason)
+    if attr:
+        setattr(state, attr, max(0, int(getattr(state, attr)) - 1))
 
 
 def _write_report(
@@ -742,6 +837,7 @@ def _write_report(
             "stable_max_gap_seconds": args.stable_max_gap,
             "transition_max_seconds": args.transition_max_seconds,
             "motion_chunk_seconds": args.motion_chunk_seconds,
+            "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
         },
         "total_extracted": total_extracted,
         "kept_after_dedup": state.kept_count,
@@ -767,6 +863,8 @@ def _write_report(
             "min_gap_drops": state.min_gap_drops,
             "temporal_drops": state.temporal_drops,
             "temporal_transition_drops": state.temporal_transition_drops,
+            "transient_ui_drops": state.transient_ui_drops,
+            "ocr_visual_overrides": state.ocr_visual_overrides,
         },
         "frames": frames,
     }
@@ -874,6 +972,7 @@ def _archive_result(
             "stable_max_gap_seconds": args.stable_max_gap,
             "transition_max_seconds": args.transition_max_seconds,
             "motion_chunk_seconds": args.motion_chunk_seconds,
+            "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
             "keep_drop_candidates": args.keep_drop_candidates,
             "drop_candidate_limit": args.drop_candidate_limit,
         },
@@ -903,6 +1002,8 @@ def _archive_result(
                 "min_gap_drops": state.min_gap_drops,
                 "temporal_drops": state.temporal_drops,
                 "temporal_transition_drops": state.temporal_transition_drops,
+                "transient_ui_drops": state.transient_ui_drops,
+                "ocr_visual_overrides": state.ocr_visual_overrides,
             },
         },
         "frame_count": state.kept_count,
