@@ -31,6 +31,17 @@
 import html
 import difflib
 import re
+import sys
+
+try:
+    from defusedxml import minidom
+except ImportError:
+    print(
+        "❌ 缺少依赖: defusedxml\n"
+        "   请运行: python3 -m pip install -r scripts/requirements.txt",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 from .document import Document, DocxXMLEditor
 
@@ -253,7 +264,58 @@ class ContractReviewer:
             para = reviewer.find_text("第一条")
             new_content = '<w:p><w:r><w:t>新增条款内容</w:t></w:r></w:p>'
             reviewer.suggest_insertion(para, new_content)
+
+        Security:
+            Public XML-insertion API. Validates that xml_content only contains
+            OOXML elements from a strict allow-list before forwarding to the
+            underlying editor. This prevents injection of dangerous elements
+            such as <w:vanish/> (hides text in Word), <w:hyperlink r:id=...>
+            (binds arbitrary external relationships), or unsupported paragraph
+            structures that could break the document.
+
+            Downstream callers passing LLM-extracted or user-supplied content
+            should also html.escape the text payload before wrapping it in XML;
+            this guard is the second layer of defense.
         """
+        # Allow-list of safe OOXML element local names (strip namespace prefix).
+        # Conservative: only run/paragraph/text-level formatting. Hyperlinks,
+        # vanish, framePr, object, etc. are rejected.
+        _SAFE_XML_ELEMENTS = frozenset({
+            "p", "r", "t", "br", "tab", "cr",
+            "rPr", "pPr", "pStyle", "rStyle", "lang",
+            "b", "i", "u", "strike", "color", "sz", "szCs",
+            "rFonts", "jc", "ind", "spacing", "numPr",
+        })
+
+        if not isinstance(xml_content, str) or not xml_content.strip():
+            raise ValueError("suggest_insertion: xml_content must be a non-empty string")
+
+        # Quick scan for element names not in the allow-list.
+        # Match `<name` (start tag) and `</name>` (close tag), with optional
+        # namespace prefix `prefix:name`.
+        try:
+            candidate_root = minidom.parseString(
+                f"<root xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">{xml_content}</root>"
+            )
+        except Exception as e:
+            raise ValueError(f"suggest_insertion: xml_content is not valid XML: {e}") from e
+
+        wordprocessingml_namespace = (
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        )
+        for el in candidate_root.getElementsByTagName("*"):
+            if el is candidate_root.documentElement:
+                continue
+            # localName strips any namespace prefix
+            if (
+                el.namespaceURI != wordprocessingml_namespace
+                or el.localName not in _SAFE_XML_ELEMENTS
+            ):
+                raise ValueError(
+                    f"suggest_insertion: unsafe OOXML element <{el.tagName}> rejected "
+                    f"(allow-list: {sorted(_SAFE_XML_ELEMENTS)})"
+                )
+
         wrapped = DocxXMLEditor.suggest_paragraph(xml_content)
         return self.doc["word/document.xml"].insert_after(node, wrapped)
 

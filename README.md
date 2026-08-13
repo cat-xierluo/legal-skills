@@ -35,13 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
+| 2026-08-13 | 更新   | [contract-copilot](skills/contract-copilot/)                           | v1.6.3  | 增加 DOCX 全量解包预检与 OOXML 命名空间/元素白名单，拒绝越界路径、符号链接、隐藏文本、伪装命名空间和畸形结构；明确审查计划及扩展计划均为每次运行动态生成的产物 |
+| 2026-08-13 | 更新   | [skill-manager](skills/skill-manager/)                                 | v1.7.2  | 项目同时存在多个 Agent 配置目录时优先使用 `.claude/skills` 单一来源；补充 `.codebuddy` 全局根识别，避免从 CodeBuddy 配置目录调用时误装到嵌套目标 |
 | 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.5.0  | 修复嵌套 Harness 恢复高权限与 backend 标签伪装；完整祖先链取权限交集，启动命令与四后端强绑定；新增 provider 原子并发租约，统一 Orca Runtime，并保留门禁优先的 Orca 两阶段启动与 tmux 回退 |
 | 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
+| 2026-08-12 | 更新   | [clawhub-sync](skills/clawhub-sync/)                                   | v1.7.1  | 发布配置改为 ClawHub、SkillHub、联想三份独立白名单，同一 Skill 可按平台独立维护；临时发布副本按目标平台注入字段，真实名单与发布记录继续仅保留本地 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
-| 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v1.0.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）；已发布 ClawHub v1.0.0 |
-| 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
-| 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
 </details>
 
 ## 📋 项目概述
@@ -243,7 +243,7 @@
 <td>通用·合同</td>
 <td style="word-break:break-word">合同起草与审查助手，基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.5.3</td>
+<td style="text-align:center">v1.6.3</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/contract-copilot-1.5.3.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/contract-copilot.skill">独立仓库</a></td>
 </tr>
@@ -573,7 +573,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">管理 AI Agent Skills 的安装、同步、卸载和列表查看，支持本地路径和 GitHub 仓库/子目录，自动识别 Codex、Claude Code 和 OpenClaw 目标目录并批量处理</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.7.1</td>
+<td style="text-align:center">v1.7.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/skill-manager-1.7.1.zip">下载</a></td>
 <td></td>
 </tr>
@@ -652,9 +652,9 @@
 <tr>
 <td><a href="skills/clawhub-sync/"><strong>clawhub-sync</strong></a></td>
 <td>工具·发布</td>
-<td style="word-break:break-word">将本地开发的 Skills 批量同步到 ClawHub 平台，支持智能 .gitignore 过滤、白名单控制、增量同步</td>
+<td style="word-break:break-word">将本地 Skills 同步到 ClawHub、腾讯 SkillHub 与联想开放平台，支持智能忽略过滤、平台独立白名单、增量同步与发布记录</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.2</td>
+<td style="text-align:center">v1.7.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/clawhub-sync-1.6.1.zip">下载</a></td>
 <td><a href="https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md">ClawHub 要求 MIT-0</a></td>
 </tr>

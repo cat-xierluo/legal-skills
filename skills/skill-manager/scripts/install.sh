@@ -223,7 +223,7 @@ _is_global_config_root() {
     local dir="$1"
     local _home="${HOME:-/Users/${USER}}"
     case "$dir" in
-        "$_home/.codex"| "$_home/.claude"| "$_home/.openclaw"| "$_home/.agents"| "$_home/.agent"| "$_home/.workbuddy"| "$_home/.qoderworkcn") return 0 ;;
+        "$_home/.codebuddy"| "$_home/.codex"| "$_home/.claude"| "$_home/.openclaw"| "$_home/.agents"| "$_home/.agent"| "$_home/.workbuddy"| "$_home/.qoderworkcn") return 0 ;;
     esac
     return 1
 }

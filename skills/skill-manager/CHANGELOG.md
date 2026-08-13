@@ -1,5 +1,17 @@
 # 变更日志
 
+## [1.7.2] - 2026-08-13
+
+### 改进
+- **`.claude` 优先安装**：项目根同时存在多个 Agent 配置目录时（如 `.claude` + `.workbuddy`），`find_agent_config_dir` 与 `find_all_agent_config_dirs` 改为**优先返回 `.claude`**，不再批量安装到所有 Agent 目录。契合「`.claude/skills` 为单一技能来源、其他 Agent 通过符号链接指向它」的架构。
+- SKILL 触发描述同步补充 WorkBuddy/CodeBuddy 与 `.codebuddy/.workbuddy` 识别边界。
+
+### 修复
+- **`~/.codebuddy` 误判为目标目录**：此前从 CodeBuddy 配置目录内部（如 `~/.codebuddy/skills/skill-manager`）调用时，向上查找会撞上 `~/.codebuddy/.claude` 并误装。现将 `.codebuddy` 纳入全局配置根名单（`target.sh` 两处 global-config-roots 循环 + `install.sh` 的 `_is_global_config_root()`），使其被识别为全局根并走 git 救援 / 提示 `--target`，不再静默误装。
+
+### 重新应用
+本版本为对上游 skill-manager 的本地定制补丁。若日后通过 `skill-manager update` 更新被覆盖，重新应用步骤与完整 diff 见 `DECISIONS.md` 的 `[DEC-007]`。
+
 ## [1.7.1] - 2026-07-07
 
 ### 修复
