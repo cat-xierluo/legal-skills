@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.5.0  | 新增滚动内容重叠自适应密度、高置信加载浮层过滤和 OCR 内容增量保护；多模态审计改为风险与时间覆盖联合选组，并可复核补回代码删除项，真实样本基础结果由 55 张降至 54 张 |
+| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.6.0  | 新增未完成页时序覆盖与三帧分区切换风险；新增面向较弱多模态模型的单目标大图、预填模板和安全应用门禁，真实样本基础结果由 54 张降至 53 张 |
 | 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
@@ -405,9 +405,9 @@
 <tr>
 <td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
 <td>工具·视频处理</td>
-<td style="word-break:break-word">从录屏视频中抽取证据截图，按时间簇和滚动内容增量自适应控制密度，保守过滤加载浮层与切换中间态；可用本地 OCR 保护新增证据，并生成按风险与时间覆盖选组的多模态审计包</td>
+<td style="word-break:break-word">从录屏视频中抽取证据截图，按时序覆盖和滚动内容增量控制密度，保守过滤加载态与切换中间态；可用本地 OCR 保护新增证据，并为普通或较弱多模态模型生成受预算、单目标和安全门禁约束的审计包</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.5.0</td>
+<td style="text-align:center">v0.6.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>
