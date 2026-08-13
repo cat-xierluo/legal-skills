@@ -1,7 +1,7 @@
 ---
 name: legal-harness-init
 description: 面向法律工作者初始化或增量治理 AGENTS.md/CLAUDE.md：识别当前 AI harness，区分用户级、项目级和团队级指令，生成最小法律安全基线，安全合并受管区块，并在新会话中验证权限、保密、信息缺口和回溯行为。用户明确提到法律工作且要配置 harness、AGENTS.md、CLAUDE.md、agent 协作规则或 AI 使用基线时使用。不要用于合同审查、案件分析、文书起草、项目脚手架或 Skill 开发。
-version: "0.3.0"
+version: "0.4.0"
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -44,6 +44,8 @@ homepage: https://github.com/cat-xierluo/legal-skills
 | `--mode` | `create` | `create` / `update` / `append`；三者均只 upsert 受管区块 |
 | `--block-id` | 按模块指定 | 稳定 marker id，见“受管区块” |
 | `--dry-run` | 否 | 只展示候选 diff，不写入 |
+| `--model` | env 白名单探测 | init-environment 受管区块需要时兜底；`ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 命中即用 |
+| `--action` | `init` | record-init-env.sh 的操作类型：`init` / `update` / `append` |
 
 将旧参数 `--preset` 解释为 `--project-type`，并提示新名称；项目类型只决定追问路线，不能替用户填答案。
 
@@ -154,6 +156,7 @@ M6—M8 默认只生成：
 | 项目上下文 | `m6-project-context` |
 | 受控事实入口 | `m7-fact-entry` |
 | 文件结构 | `m8-file-structure` |
+| 初始化环境（受 `legal-harness-init` 自动 append） | `init-environment` |
 
 <!-- skill-lint:constraint MANAGED-BLOCK-SAFE-UPSERT -->
 `write.sh` 必须自动添加形如 `<!-- legal-harness-init:m1-role:start -->` 的唯一成对 marker，并按实际目标路径去重；内容临时文件不得自行添加外层 marker。先运行内容校验，再用 `--dry-run` 展示合并候选 diff。
@@ -192,6 +195,39 @@ bash scripts/restore.sh --target <AGENTS.md-or-CLAUDE.md>
 
 平台路径与非 AGENTS.md 模式限制见 [scripts/README.md](scripts/README.md)。
 
+## 第六步半：记录初始化环境
+
+`write.sh` 完成后，在被初始化的项目里 append 一条"用了哪个 harness / 哪个 model / 哪个 init skill 版本 / 什么操作"到 AGENTS.md 的 `init-environment` 受管区块，作为将来追溯"问题出在 harness 还是 model 层"的依据。详见 [references/22-initialization-environment.md](references/22-initialization-environment.md) 与 [templates/modules/init-environment.md](templates/modules/init-environment.md)。
+
+```bash
+bash scripts/record-init-env.sh \
+  --target <项目/AGENTS.md|CLAUDE.md> \
+  --action <init|update|append> \
+  [--model <model-name>] \
+  [--harness <key>] \
+  [--harness-version <v>] \
+  [--skill-version <v>] \
+  [--note "<额外说明>"] \
+  [--dry-run]
+```
+
+脚本半自动采集，env 全部命中即可直接调用：
+
+- harness(name)：默认 source `detect.sh` 取 `current_runtime`（schema v3）；可用 `--harness` 显式覆盖
+- harness version：探测 `claude --version` / `codex --version`（2s 超时，失败 `unknown`）；非 claude/codex 写 `n/a`
+- model：env 白名单 `ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 探测，**全部未命中时拒绝 append 并要求 `--model` 兜底**（不臆造）
+- init skill version：从本 skill 根 `SKILL.md` frontmatter `version` 字段读
+
+脚本必须：
+
+- 用受管 marker 包裹，append-only 表格行（不覆盖历史）
+- 区块残缺（只 start 或只 end）拒绝 append，提示人工修复
+- 失败关闭：参数非法、target 不存在、candidate marker 不完整或整体结构异常均拒绝
+- 表格行数 >50 时 stderr 软提示归档（不阻断）
+
+<!-- skill-lint:constraint INIT-ENVIRONMENT-RECORD-ON-WRITE -->
+每次 `write.sh` 真实落盘（不是 dry-run、不是 needs_confirmation）后都必须再调一次 `record-init-env.sh`；缺这条记录等同于"配置改了但没记工具环境"。无法获得 model 时不臆造，必须显式传 `--model` 或回退到 NOT_VERIFIED。
+
 ## 第七步：在新会话验证生效
 
 按 [references/19-activation-verification.md](references/19-activation-verification.md) 新启动目标 harness 会话，确认加载来源，并执行四类探针：权限、保密、信息缺口、回溯载体选择。
@@ -222,7 +258,8 @@ bash scripts/test.sh
 - 多平台同路径只写一次，重复执行零 diff；
 - 原始内容、权限和哈希可恢复；
 - 最终状态没有把 `CONFIG_WRITTEN` 扩大成已加载或行为已验证；
-- 无法新启会话时明确报告 `NOT_VERIFIED`。
+- 无法新启会话时明确报告 `NOT_VERIFIED`；
+- 每次 `write.sh` 真实落盘后都已 `record-init-env.sh` 追加一条 init-environment 行；缺记录时报告 `INIT_ENV_NOT_RECORDED` 而非宣称完成。
 
 ## 依赖
 
@@ -236,3 +273,5 @@ bash scripts/test.sh
 - 禁止在 marker 残缺、内容校验失败或目标不明确时写入。
 - 禁止将旧会话、当前写入进程或静态检查当作新会话加载证据。
 - 禁止为了“留痕完整”擅自创建不适用的 DECISIONS、TASKS 或 CHANGELOG。
+- 禁止在 `record-init-env.sh` 探测不到 model 时臆造 model 名；必须 `--model` 兜底或留 `unknown` 并标 `INIT_ENV_NOT_VERIFIED`。
+- 禁止手改 `init-environment` 受管区块里的表格行；append-only 由脚本负责。
