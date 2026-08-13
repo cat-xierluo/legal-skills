@@ -39,7 +39,7 @@ find_agent_config_dir() {
     current="$(canonical_dir "$start_dir")"
 
     # Global config roots: support calls from ~/.codex, ~/.claude, ~/.openclaw and ~/.qoderworkcn.
-    for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
+    for config_name in .codebuddy .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
         case "$current" in
             "$home_dir/$config_name"|"$home_dir/$config_name"/*)
                 printf '%s\n' "$home_dir/$config_name"
@@ -58,7 +58,12 @@ find_agent_config_dir() {
         fi
 
         # Project-local config directories. Prefer Codex when multiple configs coexist.
-        for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
+        # .claude 优先：单一来源架构下优先安装到 .claude/skills
+        if [ -d "$current/.claude" ]; then
+            printf '%s\n' "$current/.claude"
+            return 0
+        fi
+        for config_name in .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
             if [ -d "$current/$config_name" ]; then
                 printf '%s\n' "$current/$config_name"
                 return 0
@@ -116,7 +121,7 @@ find_all_agent_config_dirs() {
     current="$(canonical_dir "$start_dir")"
 
     # Global config roots → single target (no multi-dir in global scope)
-    for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
+    for config_name in .codebuddy .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
         case "$current" in
             "$home_dir/$config_name"|"$home_dir/$config_name"/*)
                 printf '%s\n' "$home_dir/$config_name"
@@ -144,13 +149,19 @@ find_all_agent_config_dirs() {
         fi
 
         # Check for agent config dirs at this level
+        # .claude 优先：单一来源架构下优先安装到 .claude/skills，有 .claude 就不再装到其他 agent 目录
         local found=0
-        for config_name in .codex .claude .openclaw .agents .agent .workbuddy .qoderworkcn; do
-            if [ -d "$current/$config_name" ]; then
-                printf '%s\n' "$current/$config_name"
-                found=1
-            fi
-        done
+        if [ -d "$current/.claude" ]; then
+            printf '%s\n' "$current/.claude"
+            found=1
+        else
+            for config_name in .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
+                if [ -d "$current/$config_name" ]; then
+                    printf '%s\n' "$current/$config_name"
+                    found=1
+                fi
+            done
+        fi
 
         if [ "$found" -eq 1 ]; then
             return 0
