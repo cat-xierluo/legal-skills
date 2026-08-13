@@ -95,6 +95,15 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 
 `clean-worktree.sh` 删 worktree 前安全 unlink 该软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓 `node_modules`）。install-guard 仍 `deny_by_default` 拦 `npm install/ci/add`，worker 不会误改主仓 `node_modules`。详见 `references/09-parallel-lessons.md` G28/G31。
 
+### 3.3 PM spawn 操作纪律（Task-041~044，Wave-2 实战）
+
+spawn 一个 worker 后，PM 的操作纪律（Wave-2 实战撞坑固化）：
+
+1. **不主动 send 完整 task prompt**（Task-042）：`--orca-supervised` 的 worker 由 `worker-start` 注入 live preamble + TASK（唯一任务注入器，见 §4.4/4.5）。PM spawn 后再 send 完整 prompt 是重复投递，会让 worker 混淆/双重执行。长 prompt 写 `WORKER_PROMPT.md`（Session Context），terminal 只发短 Read 指令触发。
+2. **`run-create` / jq 提取只调一次**（Task-043）：一个 Wave 共用一个 Run，`pm-orchestrate run-create` 调一次拿 `run.id` 即定；**不要重试**——重试生成新 Run + 新 coordinator handle，旧 handle 立即 `consumer_fenced`。从 receipt `jq -r '.result.run.id'` 一次取定，整 Wave 复用。
+3. **supervised worker 不用 pm-monitor/sentinel 判完成**（Task-041）：supervised 完成唯一权威是 `worker_done → Delivery`（`pm-orchestrate show/wait` 读 dispatch + Delivery）。`pm-monitor`（STATUS/commit-stale）和 `sentinel`（tui-idle/timeout）的信号不是 supervised 完成权威——`STATUS=done` ≠ Delivery、tui-idle 只表示可交互不表示完成。supervised 的 PM 只用 `pm-orchestrate show/wait`；pm-monitor/sentinel 是 tmux/terminal-managed 回退路径的辅助观察器，套到 supervised 会误判。
+4. **spawn 前后 Bash 调用尽量并行**（Task-044）：spawn 前的探查（`orca status` / `worktree current` / `render-runtime-profile`）和 spawn 后的核验（METADATA/STATUS/lease）彼此独立的调用，放同一条 message 并行发出，不要串行——Wave-2 整轮 11 次串行 Bash ≈30s 纯 I/O 等待浪费。依赖链（spawn 依赖 render、commit 依赖 verify）才串行。
+
 ## 4. Orca-first 控制平面
 
 ### 4.1 先读取版本匹配指南
