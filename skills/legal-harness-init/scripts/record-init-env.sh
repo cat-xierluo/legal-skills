@@ -58,6 +58,15 @@ json_escape() {
     printf '%s' "$s"
 }
 
+# 转义 markdown 表格列内的破坏性字符。最少必要：| → \|（列分隔）。
+# NOTE 是 user free-text，必须转义；其他列（HARNESS_NAME / MODEL / VERSION
+# 等）是 ASCII 标识符,理论上不含 |,这里不动以减少误转义。
+escape_markdown_cell() {
+    local s="${1-}"
+    s=${s//|/\\|}
+    printf '%s' "$s"
+}
+
 # 探测一个命令，2s 超时，失败返回空（绝不读凭证，绝不循环）
 probe_with_timeout() {
     local cmd="$1"
@@ -187,7 +196,10 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M' 2>/dev/null || printf 'unknown-time')
 
 # === 构造新行（markdown 表格行；字段含 | 时由 --note 自行转义为 \\|）===
 NOTE_CELL=""
-[ -n "$NOTE" ] && NOTE_CELL=" · ${NOTE}"
+if [ -n "$NOTE" ]; then
+    NOTE_ESCAPED=$(escape_markdown_cell "$NOTE")
+    NOTE_CELL=" · ${NOTE_ESCAPED}"
+fi
 NEW_ROW="| ${TIMESTAMP} | ${HARNESS_NAME} | ${HARNESS_VERSION} | ${MODEL} | legal-harness-init | ${SKILL_VERSION} | ${ACTION}${NOTE_CELL} |"
 
 # === 判断 init-environment 区块状态 ===
