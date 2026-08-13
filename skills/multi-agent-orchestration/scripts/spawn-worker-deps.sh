@@ -56,7 +56,7 @@ ensure_worktree_deps() {
         local proj_real wt_real
         proj_real=$(cd "$PROJECT_DIR" && pwd -P)
         wt_real=$(cd "$WORKTREE" && pwd -P)
-        if [ "$wt_real" != "${wt_real#$proj_real/}" ]; then
+        if [ "$wt_real" != "${wt_real#"$proj_real"/}" ]; then
           echo "SPAWN_WORKER_DEPS_IN_TREE: worktree 在主仓父链，npm 向上解析即可，不软链（G28）"
         else
           if ln -s "$proj_real/node_modules" "$wt_real/node_modules" 2>/dev/null; then
