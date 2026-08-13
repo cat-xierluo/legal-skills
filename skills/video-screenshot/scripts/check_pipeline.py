@@ -22,14 +22,19 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import extract as extract_module
 from extract import (
+    _archive_result,
     _build_coverage_requirements,
     _clean_output_dir,
     _record_drop_candidate,
     _rescue_short_motion_with_ocr,
+    parse_args as parse_extract_args,
 )
 from lib import (
+    DedupState,
     ExtractParams,
+    FFProbeInfo,
     calc_content_quality,
     calc_loading_overlay_score,
     content_quality_drop_reason,
@@ -41,6 +46,11 @@ from lib import (
     select_temporal_representatives,
     temporal_completion_metrics,
     transient_ui_drop_reason,
+)
+from prepare_evidence_leads import (
+    _load_taxonomy,
+    classify_evidence_text,
+    visual_content_signals,
 )
 
 
@@ -69,7 +79,13 @@ def parse_args() -> argparse.Namespace:
             "coverage-survival",
             "invalid-review",
             "output-protection",
+            "archive-metadata",
+            "evidence-signals",
+            "evidence-package",
+            "evidence-review",
+            "evidence-review-boundary",
             "fault-invalid-review",
+            "fault-evidence-review-boundary",
         ],
         default="all",
     )
@@ -519,7 +535,19 @@ def _test_vision_diversity() -> None:
 def _test_weak_vision_package() -> None:
     with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
         root = Path(tmp)
-        _report_path, manifest_path = _write_fixture(root)
+        report_path, manifest_path = _write_fixture(root)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        review_dir = root / "_review_candidates"
+        review_dir.mkdir()
+        discarded = review_dir / "candidate_001_quality_loading_overlay_00m01s.jpg"
+        Image.open(root / report["frames"][0]["filename"]).save(discarded)
+        report["review"]["drop_candidates"] = [{
+            "filename": str(Path("_review_candidates") / discarded.name),
+            "reason": "quality_loading_overlay",
+            "capture_time_seconds": 1.1,
+            "sha256": _sha(discarded),
+        }]
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         result = subprocess.run(
             [
                 sys.executable,
@@ -547,7 +575,7 @@ def _test_weak_vision_package() -> None:
                 if item["audit_id"] == group["decision_target_audit_id"]
             ]
             assert len(targets) == 1, group
-            assert group["task_type"] in {"kept_target_review", "discarded_candidate_review"}
+            assert group["task_type"] == "kept_target_review"
             assert group["allowed_outcomes"], group
         template = json.loads((manifest_path.parent / "review_template.json").read_text(encoding="utf-8"))
         assert template["schema_version"] == "1.1"
@@ -555,13 +583,13 @@ def _test_weak_vision_package() -> None:
         assert len(template["answers"]) == manifest["budget"]["actual_groups"]
         assert manifest["decision_contract"]["mode"] == "weak_group_answers"
         assert manifest["decision_contract"]["mutation_gate"]["fallback"] == "safe_noop"
+        assert manifest["budget"]["ineligible_or_restore_groups_skipped"] >= 1
         assert template["answers"][0]["reason_codes_by_outcome"], template["answers"][0]
         assert "allowed_coverage_audit_ids" in template["answers"][0]
         assert (manifest_path.parent / "MODEL_INSTRUCTIONS.md").is_file()
         first_sheet = Image.open(manifest_path.parent / manifest["groups"][0]["contact_sheet"])
         assert first_sheet.width >= 800, first_sheet.size
-        restore_groups = [group for group in manifest["groups"] if group["task_type"] == "discarded_candidate_review"]
-        assert len(restore_groups) <= 2, restore_groups
+        assert all("restore" not in group["allowed_outcomes"] for group in manifest["groups"])
 
 
 def _run_weak_review(*, confidence: float, coverage_mode: str) -> dict:
@@ -834,6 +862,207 @@ def _test_output_protection() -> None:
         assert not (root / "_vision_audit").exists()
 
 
+def _test_archive_metadata_only() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-archive-") as tmp:
+        temp_root = Path(tmp)
+        output_root = temp_root / "output"
+        output_root.mkdir()
+        report_path, _manifest_path = _write_fixture(output_root)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        review_dir = output_root / "_review_candidates"
+        review_dir.mkdir()
+        review_image = review_dir / "candidate_001_min_gap_00m01s.jpg"
+        Image.new("RGB", (32, 32), "white").save(review_image)
+
+        archive_root = temp_root / "archive-result"
+        archive_root.mkdir()
+        original_builder = extract_module._build_archive_subdir
+        extract_module._build_archive_subdir = lambda _video_path: archive_root
+        try:
+            args = parse_extract_args(["-i", str(temp_root / "synthetic.mp4")])
+            state = DedupState(total_count=15, kept_count=len(report["frames"]))
+            result = _archive_result(
+                str(output_root),
+                str(temp_root / "synthetic.mp4"),
+                FFProbeInfo(duration_seconds=12.0, frame_rate_fps=30.0),
+                ExtractParams(),
+                args,
+                state,
+                report["frames"],
+                {},
+                [{"filename": str(Path("_review_candidates") / review_image.name)}],
+                elapsed_seconds=1.25,
+            )
+        finally:
+            extract_module._build_archive_subdir = original_builder
+
+        assert result == archive_root
+        assert sorted(path.name for path in archive_root.iterdir()) == ["_report.json", "extraction_meta.json"]
+        assert not list(archive_root.rglob("*.jpg")), "metadata-only 归档不得复制基础帧或丢弃候选"
+        meta = json.loads((archive_root / "extraction_meta.json").read_text(encoding="utf-8"))
+        assert meta["archive_validation"] == {
+            "mode": "metadata_only",
+            "report_copied": True,
+            "frame_count_in_report": len(report["frames"]),
+        }
+        assert meta["review"]["drop_candidates_archived"] is False
+
+
+def _test_evidence_signals() -> None:
+    taxonomy = _load_taxonomy(ROOT.parent / "config" / "evidence-lead-taxonomy.json")
+    samples = {
+        "identity_qualification": "营业执照 统一社会信用代码 91110101ABCDEFGH12 法定代表人",
+        "product_work_service": "商品详情 立即购买 ￥3680",
+        "transaction_performance": "订单 支付 退款 物流",
+        "communication_commitment": "聊天记录 私信 承诺 确认",
+        "publicity_representation": "广告 宣传 正品 材质",
+        "review_feedback_dispute": "评论 投诉 差评 质量问题",
+        "reach_metric_timeline": "点赞 收藏 分享 粉丝",
+        "document_record": "合同 协议 凭证 编号：ABC-1234",
+    }
+    for category_id, sample in samples.items():
+        findings = classify_evidence_text(sample, taxonomy)
+        assert any(item["category_id"] == category_id for item in findings), (category_id, findings)
+    serialized_identity = json.dumps(classify_evidence_text(samples["identity_qualification"], taxonomy), ensure_ascii=False)
+    assert "91110101ABCDEFGH12" not in serialized_identity, serialized_identity
+    assert classify_evidence_text("商品", taxonomy) == [], "单个宽泛关键词不得触发证据类别"
+    assert classify_evidence_text("", taxonomy) == []
+
+    blank = Image.new("RGB", (180, 320), "white")
+    blank_signal, blank_thumb = visual_content_signals(_image_bytes(blank), None)
+    assert blank_signal["text_independent_content"] is False, blank_signal
+    rich = _pattern(180, 320).convert("RGB")
+    rich_signal, _ = visual_content_signals(_image_bytes(rich), blank_thumb)
+    assert rich_signal["text_independent_content"] is True, rich_signal
+
+
+def _prepare_evidence_fixture(root: Path, *, max_leads: int = 4) -> tuple[Path, dict[str, str]]:
+    _write_fixture(root)
+    frame_hashes = {path.name: _sha(path) for path in root.glob("frame_*.jpg")}
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "prepare_evidence_leads.py"),
+            "-i",
+            str(root),
+            "--no-ocr",
+            "--max-leads",
+            str(max_leads),
+            "--max-sheets",
+            "2",
+            "--columns",
+            "2",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return root / "_evidence_leads", frame_hashes
+
+
+def _test_evidence_package() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-evidence-") as tmp:
+        root = Path(tmp)
+        evidence_dir, frame_hashes = _prepare_evidence_fixture(root)
+        index_path = evidence_dir / "evidence_index.json"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        assert index["purpose"] == "ranking_only_non_destructive_evidence_leads"
+        assert index["privacy"] == {"ocr_text_stored": False, "entity_text_stored": False}
+        assert index["vision_contract"]["may_delete_base_frames"] is False
+        selected = [item for item in index["leads"] if item["selected_for_contact_sheet"]]
+        assert 1 <= len(selected) <= 4, selected
+        assert sorted(item["selection_rank"] for item in selected) == list(range(1, len(selected) + 1))
+        assert len(list(evidence_dir.glob("evidence_sheet_*.jpg"))) == index["budget"]["actual_sheets"]
+        serialized = index_path.read_text(encoding="utf-8")
+        assert "ocr_text\"" not in serialized and "entity_text\"" not in serialized
+        assert all(_sha(root / filename) == digest for filename, digest in frame_hashes.items())
+        template_path = evidence_dir / "vision_template.json"
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+        template["answers"][0]["categories"] = ["uncertain"]
+        template_path.write_text(json.dumps(template, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        rebuild = subprocess.run(
+            [sys.executable, str(ROOT / "prepare_evidence_leads.py"), "-i", str(root), "--no-ocr"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert rebuild.returncode == 2 and "已填写" in rebuild.stderr, rebuild.stdout + rebuild.stderr
+        assert json.loads(template_path.read_text(encoding="utf-8"))["answers"][0]["categories"] == ["uncertain"]
+
+
+def _complete_evidence_template(evidence_dir: Path, *, overclaim: bool = False) -> Path:
+    template_path = evidence_dir / "vision_template.json"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    template["status"] = "completed"
+    for answer in template["answers"]:
+        answer["categories"] = ["uncertain"]
+        answer["visible_fact_summary"] = "画面中存在可见内容，具体对象需人工核对"
+        answer["potential_use"] = "足以证明相关法律事实" if overclaim else "可能用于定位后续人工复核范围"
+        answer["confidence"] = 0.65
+    review_path = evidence_dir.parent / ("bad_evidence_review.json" if overclaim else "evidence_review_input.json")
+    review_path.write_text(json.dumps(template, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return review_path
+
+
+def _write_sensitive_evidence_review(evidence_dir: Path) -> Path:
+    review_path = _complete_evidence_template(evidence_dir)
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    review["answers"][0]["visible_fact_summary"] = "画面显示商品价格￥3680"
+    review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return review_path
+
+
+def _test_evidence_review() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-evidence-") as tmp:
+        root = Path(tmp)
+        evidence_dir, frame_hashes = _prepare_evidence_fixture(root)
+        review_path = _complete_evidence_template(evidence_dir)
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "apply_evidence_review.py"), "-i", str(root), "-r", str(review_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        applied = json.loads((evidence_dir / "evidence_review.json").read_text(encoding="utf-8"))
+        assert applied["operation"] == "classify_and_summarize_only"
+        assert applied["base_frames_modified"] is False
+        assert all(_sha(root / filename) == digest for filename, digest in frame_hashes.items())
+
+
+def _run_evidence_review_boundary_fault() -> tuple[int, str, bool]:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-evidence-") as tmp:
+        root = Path(tmp)
+        evidence_dir, _frame_hashes = _prepare_evidence_fixture(root)
+        review_path = _complete_evidence_template(evidence_dir, overclaim=True)
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "apply_evidence_review.py"), "-i", str(root), "-r", str(review_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode, result.stdout + result.stderr, (evidence_dir / "evidence_review.json").exists()
+
+
+def _test_evidence_review_boundary() -> None:
+    returncode, output, result_exists = _run_evidence_review_boundary_fault()
+    assert returncode == 2, output
+    assert not result_exists, "越过法律判断边界的答案不得生成复核结果"
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-evidence-") as tmp:
+        root = Path(tmp)
+        evidence_dir, _frame_hashes = _prepare_evidence_fixture(root)
+        review_path = _write_sensitive_evidence_review(evidence_dir)
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "apply_evidence_review.py"), "-i", str(root), "-r", str(review_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2 and "泛化概括" in result.stderr, result.stdout + result.stderr
+        assert not (evidence_dir / "evidence_review.json").exists()
+
+
 def main() -> int:
     args = parse_args()
     if args.case == "fault-invalid-review":
@@ -842,6 +1071,14 @@ def main() -> int:
             print(output.strip(), file=sys.stderr if returncode else sys.stdout)
         if curated_exists:
             print("FAULT_CONTRACT_BROKEN: 错误审计产生了精选目录", file=sys.stderr)
+            return 1
+        return returncode
+    if args.case == "fault-evidence-review-boundary":
+        returncode, output, result_exists = _run_evidence_review_boundary_fault()
+        if output.strip():
+            print(output.strip(), file=sys.stderr if returncode else sys.stdout)
+        if result_exists:
+            print("FAULT_CONTRACT_BROKEN: 越界答案产生了证据复核结果", file=sys.stderr)
             return 1
         return returncode
 
@@ -862,6 +1099,11 @@ def main() -> int:
         "coverage-survival": _test_coverage_survival,
         "invalid-review": _test_invalid_review,
         "output-protection": _test_output_protection,
+        "archive-metadata": _test_archive_metadata_only,
+        "evidence-signals": _test_evidence_signals,
+        "evidence-package": _test_evidence_package,
+        "evidence-review": _test_evidence_review,
+        "evidence-review-boundary": _test_evidence_review_boundary,
     }
     selected = tests.items() if args.case == "all" else [(args.case, tests[args.case])]
     try:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""独立复算 video-screenshot 三条关键交付不变量。"""
+"""独立复算 video-screenshot 四条关键交付不变量。"""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ CONSTRAINTS = (
     "BASE-HIGH-RECALL",
     "VISION-SUBTRACT-ONLY",
     "FINAL-COVERAGE-SURVIVAL",
+    "EVIDENCE-LEADS-NON-DESTRUCTIVE",
 )
 
 
@@ -49,6 +50,8 @@ def _evaluate(data: Any) -> tuple[dict[str, bool], dict[str, list[str]]]:
     vision_frames = _string_set(data.get("vision_output_frame_ids"), "vision_output_frame_ids")
     final_frames = _string_set(data.get("final_frame_ids"), "final_frame_ids")
     operation = data.get("vision_operation")
+    evidence_operation = data.get("evidence_lead_operation")
+    evidence_base_frames_modified = data.get("evidence_base_frames_modified")
     mutations = data.get("mutations")
     if not isinstance(mutations, list):
         raise ValueError("mutations 必须是列表")
@@ -90,11 +93,14 @@ def _evaluate(data: Any) -> tuple[dict[str, bool], dict[str, list[str]]]:
         "FINAL-COVERAGE-SURVIVAL": mutation_valid
         and mutation_coverage.issubset(final_frames)
         and mutation_coverage.isdisjoint(mutation_targets),
+        "EVIDENCE-LEADS-NON-DESTRUCTIVE": evidence_operation == "classify_and_summarize_only"
+        and evidence_base_frames_modified is False,
     }
     observables = {
         "preserved-short-motion-groups": sorted(short_preserved),
         "vision-output-frame-set": sorted(vision_frames),
         "final-coverage-frame-set": sorted(mutation_coverage.intersection(final_frames)),
+        "evidence-base-frame-set": sorted(base_frames),
     }
     return results, observables
 

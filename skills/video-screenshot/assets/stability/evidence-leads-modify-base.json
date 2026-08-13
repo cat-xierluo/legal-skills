@@ -6,7 +6,7 @@
   "vision_operation": "subtract_only",
   "vision_output_frame_ids": ["frame-b"],
   "evidence_lead_operation": "classify_and_summarize_only",
-  "evidence_base_frames_modified": false,
+  "evidence_base_frames_modified": true,
   "mutations": [{"target_id": "frame-a", "coverage_id": "frame-b", "confidence": 0.95, "local_risk": true, "local_coverage_eligible": true}],
   "final_frame_ids": ["frame-b"]
 }

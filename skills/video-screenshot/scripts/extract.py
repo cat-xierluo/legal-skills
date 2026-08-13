@@ -132,7 +132,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--keep-drop-candidates",
         action="store_true",
-        help="保存被去重或过滤丢弃的候选帧，供多模态复核",
+        help="保存被去重或过滤丢弃的候选帧，仅供人工排查基础层漏帧",
     )
     p.add_argument(
         "--drop-candidate-limit",
@@ -144,7 +144,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--archive",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="将结果复制到 Skill archive/（默认启用；复测可用 --no-archive）",
+        help="将 _report.json + extraction_meta.json 归档到 Skill archive/（默认启用；不复刻截图与视频；复测可用 --no-archive）",
     )
     p.add_argument("--keep-temp", action="store_true", help="保留临时 ffmpeg 输出文件")
     return p.parse_args(argv)
@@ -1133,42 +1133,20 @@ def _archive_result(
     drop_candidates: list[dict],
     elapsed_seconds: float,
 ) -> Path | None:
-    """将分析结果归档到 archive/ 目录。"""
-    archive_dir = _build_archive_subdir(video_path)
+    """将分析结果归档到 archive/ 目录。
 
-    frames_dir = archive_dir / "frames"
-    frames_dir.mkdir(exist_ok=True)
-    expected_names = [str(frame["filename"]) for frame in frames_meta]
-    for name in expected_names:
-        src = Path(output_dir) / name
-        if not src.exists():
-            raise FileNotFoundError(f"归档失败，报告帧不存在: {src}")
-        shutil.copy2(src, frames_dir / name)
+    默认只保留纯元数据 JSON（`_report.json` + `extraction_meta.json`），
+    不复刻截图与视频，避免在 archive 下重复占用磁盘。
+    截图与原始视频以用户输出目录与原视频路径为准。
+    """
+    archive_dir = _build_archive_subdir(video_path)
 
     report_src = Path(output_dir) / "_report.json"
     if not report_src.exists():
         raise FileNotFoundError(f"归档失败，报告文件不存在: {report_src}")
     shutil.copy2(report_src, archive_dir / "_report.json")
 
-    actual_names = sorted(p.name for p in frames_dir.glob("*.jpg"))
-    expected_sorted = sorted(expected_names)
-    if actual_names != expected_sorted:
-        extra = sorted(set(actual_names) - set(expected_sorted))
-        missing = sorted(set(expected_sorted) - set(actual_names))
-        raise RuntimeError(
-            "归档一致性校验失败: "
-            f"expected={len(expected_sorted)}, actual={len(actual_names)}, "
-            f"extra={extra[:5]}, missing={missing[:5]}"
-        )
-
-    review_dir = archive_dir / "_review_candidates"
-    if drop_candidates:
-        review_dir.mkdir(exist_ok=True)
-        for item in drop_candidates:
-            rel_name = str(item.get("filename") or "")
-            src = Path(output_dir) / rel_name
-            if src.exists() and src.is_file():
-                shutil.copy2(src, review_dir / src.name)
+    expected_frame_count = sum(1 for f in frames_meta if f.get("filename"))
 
     meta = {
         "source_file": video_path,
@@ -1213,13 +1191,13 @@ def _archive_result(
         },
         "cleanup": cleanup_stats,
         "archive_validation": {
-            "frames_match_report": True,
-            "expected_frame_count": len(expected_sorted),
-            "actual_frame_count": len(actual_names),
+            "mode": "metadata_only",
+            "report_copied": True,
+            "frame_count_in_report": expected_frame_count,
         },
         "review": {
             "drop_candidate_count": len(drop_candidates),
-            "drop_candidates_archived": bool(drop_candidates),
+            "drop_candidates_archived": False,
             "vision_audit_status": "not_prepared",
         },
         "result": {

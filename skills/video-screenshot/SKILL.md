@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，以有界高召回保留短时真实页，再按前后帧时间簇和滚动内容增量控制密度；可用本地 OCR 保护新增金额或正文，并为普通或较弱的多模态模型生成只做减法、受预算、单目标和覆盖存活门禁约束的联系表审计包。纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
-version: "0.7.0"
+description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
+version: "0.8.1"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -55,7 +55,36 @@ uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candid
 
 不要只因帧数减少就判定准确率提高。基础结果不调用大模型，并在报告中保留 `vision_audit_status=not_prepared`。
 
-### 4. 按能力选择多模态分支
+### 4. 生成高价值证据线索包
+
+基础结果确认完整后，先用代码生成一个独立的高价值索引；这一步也适用于纯文字模型：
+
+```bash
+# 推荐：本地 RapidOCR 多锚点 + 无文字图像主体 + 时序信号
+uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py \
+  -i <基础输出目录>
+
+# 未安装 OCR 时仍可运行，自动保留图像主体与时序排序
+uv run scripts/prepare_evidence_leads.py \
+  -i <基础输出目录> --no-ocr
+```
+
+脚本生成 `_evidence_leads/evidence_index.json`、最多 24 张线索组成的 4 页大图联系表，以及弱模型可直接填写的 `vision_template.json`。代码只记录主体/资质、商品/作品/服务、交易履行、沟通承诺、公开陈述、评论争议、传播时间线、文书记录等**类别和组合命中计数**；不保存 OCR 原文、企业名、商品名、价格或沟通正文。单个“商品”“消息”等宽泛词不得独立触发类别。
+
+<!-- skill-lint:constraint EVIDENCE-LEADS-NON-DESTRUCTIVE -->
+OCR 不是价值总开关。商品外观、包装/标识、作品画面、缺陷状态、经营场所和人物行为等少文字画面，仍通过连续图像主体面积进入线索排序；具体含义留给多模态或人工判断。证据线索阶段只做排序、分类和概括，绝不删除、替换或覆盖基础 `frame_*.jpg`，也不认定真实性、合法性、关联性或证明力。
+
+如果当前模型可读取图片，逐页查看 `evidence_sheet_NNN.jpg`，按 `_evidence_leads/VISION_INSTRUCTIONS.md` 原位填写模板，再应用：
+
+```bash
+python3 scripts/apply_evidence_review.py \
+  -i <基础输出目录> \
+  -r <填写完成的 vision_template.json>
+```
+
+应用器只接受封闭类别、可见事实和“可能用途”，拒绝“足以证明”等法律结论，并生成 `_evidence_leads/evidence_review.json`。能力较弱的模型使用默认 2 列大图，不扩大图片预算；不能读图时交付代码排序结果，并明确 `evidence_review` 未执行。详细合同见 `references/evidence-leads.md`。
+
+### 5. 按能力选择去重多模态分支
 
 如果当前模型或工具不能读取图片，停止在基础结果，明确说明视觉审计未执行。不要根据文件名或算法分数伪造图像判断。
 
@@ -82,7 +111,7 @@ uv run scripts/prepare_vision_audit.py \
 <!-- skill-lint:constraint FINAL-COVERAGE-SURVIVAL -->
 `weak` 默认最多 6 组、18 张唯一图片；每张联系表只有一个红框判断目标，A/B/C 角色清晰标注，并生成 `review_template.json` 与 `MODEL_INSTRUCTIONS.md`。按组逐张查看，原位填写模板。weak 与 balanced 提出的删除或替换都只有在“置信度至少 0.90 + 本地核准覆盖候选 + 本地风险信号 + 覆盖帧最终存活”同时满足时才会生效；覆盖链、覆盖环或其他不足均安全降级为保留。
 
-### 5. 应用视觉审计
+### 6. 应用去重视觉审计
 
 ```bash
 python3 scripts/apply_vision_review.py \
@@ -99,6 +128,10 @@ python3 scripts/apply_vision_review.py \
 | `frame_NNN_MMmSSs.jpg` | 本地算法保留的基础帧 |
 | `_report.json` | 输入、参数、时间簇统计、丢弃统计、帧时间戳和 SHA256 |
 | `_review_candidates/` | 仅显式开启时保存的算法丢弃候选 |
+| `_evidence_leads/evidence_index.json` | 证据线索排序、类别、信号计数、隐私声明和逐帧哈希；不含 OCR 原文 |
+| `_evidence_leads/evidence_sheet_NNN.jpg` | 默认 2 列大图的高价值联系表；最多 24 张、4 页 |
+| `_evidence_leads/vision_template.json` | 封闭类别、可见事实与可能用途模板 |
+| `_evidence_leads/evidence_review.json` | 经应用器校验的非破坏性视觉分类结果 |
 | `_vision_audit/audit_manifest.json` | 受预算限制的视觉审计清单与决策合同 |
 | `_vision_audit/contact_sheet_NNN.jpg` | 同组前后帧联系表；weak 档位为一组一目标大图 |
 | `_vision_audit/review_template.json` | weak 档位预填的受限答案模板 |
@@ -114,7 +147,7 @@ python3 scripts/apply_vision_review.py \
 - 持续快速滚动担心漏页时，降低 `--motion-chunk-seconds`；结果仍过密时再提高。默认值还会按滚动重叠自动乘以 0.8、1.25 或 1.45。
 - OCR 是可选增强，未安装时必须清晰提示并降级；它可能为保护新增金额或正文而比纯视觉模式多留少量帧，不能把“帧数更少”作为唯一目标。
 - `--keep-drop-candidates` 只用于人工排查基础层漏帧，不等于多模态审计；多模态生产路径不会补回这些图片。
-- 默认复制结果到 Skill `archive/`；批量回归或临时验证使用 `--no-archive`，避免重复占用空间且不改变基础报告。
+- 默认仅将 `_report.json` 与 `extraction_meta.json` 归档到 Skill `archive/`（不复刻截图与视频，避免重复占用磁盘）；批量回归或临时验证使用 `--no-archive`，不改变基础报告与原始输出目录。
 - 模型能力较弱时使用 `--profile weak`；不要通过放大审计组数弥补模型能力，优先保持小任务、高清目标和保守 no-op。
 
 ## 依赖
@@ -134,17 +167,19 @@ python3 scripts/apply_vision_review.py \
 | `Pillow>=10.0.0` | 图像指标、时间簇分析和联系表 | `uv run scripts/extract.py --help` 自动准备 |
 | `rapidocr-onnxruntime` | 可选 OCR 内容增量与文本去重 | `uv run --with rapidocr-onnxruntime scripts/extract.py -i <视频> --ocr-dedup` |
 
+同一可选依赖也用于证据线索多锚点分类：`uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py -i <基础输出目录>`。缺失时清晰降级为视觉主体与时序排序，不影响基础抽帧。
+
 ## 验收与安全边界
 
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
 - 行为变化必须用代表视频复测，并通过联系表或逐图查看进行视觉抽查；静态检查或帧数减少不能单独证明准确。
 - 不修改原视频，不把完整录屏默认上传云端。
-- 保留基础帧和全链路 SHA256；视觉层只能生成非破坏性精选副本。
+- 保留基础帧和全链路 SHA256；证据线索层只能排序、分类和概括，去重视觉层只能生成非破坏性精选副本。
 - 法律证据中的金额、身份、地址、承诺和关键对话不确定是否被覆盖时，选择保留并提示人工复核。
 
 ## 所需权限与安全说明
 
-- **本地文件访问**：读取用户明确提供的视频，只向显式输出目录和本 Skill 的 `archive/` 写入图片、JSON 与归档副本；不扫描无关目录。
+- **本地文件访问**：读取用户明确提供的视频；图片与复核 JSON 只写入显式输出目录，Skill `archive/` 仅写入 `_report.json` 与 `extraction_meta.json` 元数据副本；不扫描无关目录。
 - **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
 - **受控清理**：只删除本次临时目录和可由文件名规则确认的旧基础输出；若发现视觉审计、精选结果或未知文件，拒绝自动覆盖并提示改用新目录。
 - **网络与依赖**：抽帧和 OCR 均可离线运行；`uv run` 首次缺少 Pillow 时可能联网下载依赖。多模态审计是否上传联系表取决于当前模型提供方，处理未脱敏证据前先确认其隐私政策。

@@ -1,12 +1,14 @@
 {
   "schema_version": 1,
-  "skill": {"name": "video-screenshot", "version": "0.7.0"},
+  "skill": {"name": "video-screenshot", "version": "0.8.1"},
   "producer": {
     "id": "video-screenshot-pipeline",
     "implementation_paths": [
       "scripts/extract.py",
       "scripts/prepare_vision_audit.py",
-      "scripts/apply_vision_review.py"
+      "scripts/apply_vision_review.py",
+      "scripts/prepare_evidence_leads.py",
+      "scripts/apply_evidence_review.py"
     ]
   },
   "artifacts": [
@@ -55,6 +57,16 @@
       "checker_ids": ["pipeline-invariants"],
       "case_ids": ["pipeline-valid", "coverage-frame-does-not-survive"],
       "historical_failure_known": false
+    },
+    {
+      "id": "EVIDENCE-LEADS-NON-DESTRUCTIVE",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#EVIDENCE-LEADS-NON-DESTRUCTIVE"],
+      "checker_ids": ["pipeline-invariants"],
+      "case_ids": ["pipeline-valid", "evidence-leads-modify-base"],
+      "historical_failure_known": false
     }
   ],
   "cases": [
@@ -64,7 +76,8 @@
       "constraint_ids": [
         "BASE-HIGH-RECALL",
         "VISION-SUBTRACT-ONLY",
-        "FINAL-COVERAGE-SURVIVAL"
+        "FINAL-COVERAGE-SURVIVAL",
+        "EVIDENCE-LEADS-NON-DESTRUCTIVE"
       ],
       "checker_ids": ["pipeline-invariants"],
       "artifacts": [
@@ -105,6 +118,17 @@
       ],
       "expected": "blocked",
       "expected_exit_code": 3
+    },
+    {
+      "id": "evidence-leads-modify-base",
+      "kind": "mutation",
+      "constraint_ids": ["EVIDENCE-LEADS-NON-DESTRUCTIVE"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/evidence-leads-modify-base.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
     }
   ],
   "stability": {
@@ -133,6 +157,14 @@
         "value_type": "boolean",
         "condition": "equals",
         "expected": true
+      },
+      {
+        "id": "evidence-leads-non-destructive-passed",
+        "checker_id": "pipeline-invariants",
+        "constraint_id": "EVIDENCE-LEADS-NON-DESTRUCTIVE",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
       }
     ],
     "observables": [
@@ -156,6 +188,14 @@
         "id": "final-coverage-frame-set",
         "checker_id": "pipeline-invariants",
         "constraint_ids": ["FINAL-COVERAGE-SURVIVAL"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "evidence-base-frame-set",
+        "checker_id": "pipeline-invariants",
+        "constraint_ids": ["EVIDENCE-LEADS-NON-DESTRUCTIVE"],
         "comparison": "set_equal",
         "required": true,
         "tolerance": null

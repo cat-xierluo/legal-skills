@@ -12,7 +12,7 @@
 
 ## 定位
 
-只在基础抽帧完成后使用视觉审计。视觉层只能对基础帧做减法，不能补回基础层从未保留的内容。不要把完整视频或全部候选帧提交给模型；先由 `prepare_vision_audit.py` 校验同页覆盖资格，再按风险与时间覆盖选出少量可执行组。
+只在基础抽帧完成后使用视觉审计。视觉层只能对基础帧做减法，不能补回基础层从未保留的内容。不要把完整视频或全部候选帧提交给模型；先由 `prepare_vision_audit.py` 校验同页覆盖资格，再按风险与时间覆盖选出少量可执行组。命令中的输入必须是同时含 `_report.json` 与基础 JPG 的实际输出目录；仅含元数据的 Skill `archive/` 不能使用。
 
 纯文字模型必须停止在“审计包已准备但未审计”，不要根据文件名猜测图片内容，也不要生成伪造的 `_vision_review.json`。
 
@@ -28,10 +28,10 @@ uv run scripts/prepare_vision_audit.py \
 输出：
 
 - `_vision_audit/audit_manifest.json`：受预算约束的图片清单、SHA256、时间戳、分组关系和决策合同；
-- `_vision_audit/contact_sheet_NNN.jpg`：同一风险组的前一张、目标张、后一张和可选丢弃候选；
+- `_vision_audit/contact_sheet_NNN.jpg`：同一风险组的目标张、通过本地校验的基础覆盖帧和必要上下文；若出现丢弃候选，也只能作为风险背景；
 - 原始图片仍位于基础输出目录，manifest 用相对路径引用，不复制整段视频。
 
-manifest 的 `budget.covered_time_buckets` 记录已覆盖的 30 秒时间桶，`ineligible_or_restore_groups_skipped` 记录因无可靠覆盖或属于旧恢复题而跳过的组。只有近像素一致或重叠差异极低的滚动关系能进入 `allowed_coverage_audit_ids`；相同 App 外壳、时间相邻和普通布局相似均不够。没有合格题时生成 0 组是正常安全结果。
+manifest 的 `budget.covered_time_buckets` 记录已覆盖的 30 秒时间桶，`ineligible_or_restore_groups_skipped` 作为兼容字段记录因无可靠覆盖或属于旧恢复题而跳过的组。只有近像素一致或重叠差异极低的滚动关系能进入 `allowed_coverage_audit_ids`；相同 App 外壳、时间相邻和普通布局相似均不够。没有合格题时生成 0 组是正常安全结果。
 
 ## 弱模型档位
 
@@ -56,14 +56,14 @@ weak 与 balanced 对改变基础结果使用同一组门禁：`confidence >= 0.
 ## 视觉审计步骤
 
 1. 读取 `audit_manifest.json`，确认 `status=prepared`，实际组数和图片数没有超过预算。
-2. 按组查看联系表。不要孤立判断目标帧；同时比较 `previous / target / following / discarded_candidate`。优先处理 `loading_overlay`、`incomplete_page_risk`、`vertical_seam` 和 `mixed_transition_risk`。
+2. 按组查看联系表。不要孤立判断目标帧；同时比较 `previous / target / following` 和模板列出的本地核准覆盖帧。若联系表出现 `discarded_candidate`，只能帮助理解风险，不得把它选为恢复结果。优先处理 `loading_overlay`、`incomplete_page_risk`、`vertical_seam` 和 `mixed_transition_risk`。
 3. 仅处理 manifest 内的 `audit_id`：
    - `keep`：承载新增信息，或虽相似但需要保持页面/证据连续性；
    - `drop`：明显切换中间态、视觉重复或语义重复，且相邻完整帧已经覆盖内容；
    - `replace`：目标帧应删除，但同组另一帧更完整清晰，用 `replacement_audit_id` 指向替代帧。
 4. 对金额、身份、地址、承诺、关键对话、商品/账号主体和时间信息采取保守策略；不能确认已被相邻帧完整覆盖时使用 `keep`。
 5. 只为需要改变基础结果或明确确认高风险帧的图片输出决策；没有决策的基础保留帧维持原状。
-6. 不对 `discarded_candidate` 输出决定；基础层漏掉的内容需要回到参数或代码层重跑，不能由多模态层补造。
+6. 不对 `discarded_candidate` 输出决定，也不手工添加 `restore` 选项；基础层漏掉的内容需要回到参数或代码层重跑，不能由多模态层补造。
 
 weak 档位不直接编写下述 1.0 合同；填写自动生成的 `review_template.json`，把 `status` 改为 `completed` 后另存为基础输出目录下 `_vision_review.json`。不要改变 `schema_version=1.1` 和 `profile=weak`。
 

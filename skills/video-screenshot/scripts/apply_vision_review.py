@@ -32,8 +32,6 @@ WEAK_REASON_CODES_BY_OUTCOME = {
     "keep": {"new_evidence", "other"},
     "drop": {"transition", "visual_duplicate", "semantic_duplicate", "other"},
     "replace": {"clearer_replacement", "other"},
-    "restore": {"new_evidence", "other"},
-    "leave_discarded": {"transition", "visual_duplicate", "semantic_duplicate", "other"},
 }
 
 
@@ -125,6 +123,8 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
             raise ValueError(f"weak 答案篡改了唯一判断目标: {group_id}")
         if task_type != str(group.get("task_type") or ""):
             raise ValueError(f"weak 答案 task_type 与 manifest 不一致: {group_id}")
+        if task_type != "kept_target_review":
+            raise ValueError(f"减法审计只接受基础保留目标: {group_id}")
         allowed = {str(value) for value in group.get("allowed_outcomes") or []}
         if outcome not in allowed:
             raise ValueError(f"weak 答案 outcome 非法: {group_id}/{outcome}")
@@ -159,20 +159,6 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
         if not reason or reason_code not in WEAK_REASON_CODES_BY_OUTCOME[outcome]:
             raise ValueError(f"weak 答案缺少合法理由: {group_id}")
         coverage = str(raw.get("coverage_audit_id") or "")
-
-        if task_type == "discarded_candidate_review":
-            if outcome == "restore":
-                decisions.append({
-                    "audit_id": target_id,
-                    "decision": "keep",
-                    "reason_code": reason_code,
-                    "reason": reason,
-                    "confidence": float(confidence),
-                    "weak_group_id": group_id,
-                })
-            else:
-                safe_noops.append({"group_id": group_id, "target_audit_id": target_id, "outcome": outcome})
-            continue
 
         if outcome == "keep":
             decisions.append({
@@ -287,7 +273,6 @@ def _validate_review(
         raise ValueError("视觉审计 decisions 必须是数组")
     result: dict[str, dict[str, Any]] = {}
     groups_by_id, image_to_groups = _group_index(manifest)
-    subtract_only = str((manifest.get("decision_contract") or {}).get("operation") or "") == "subtract_only"
     local_risk_allowlist = {
         "low_confidence",
         "vertical_seam",
@@ -335,10 +320,7 @@ def _validate_review(
             ):
                 raise ValueError(f"coverage_audit_id 必须引用同组另一张基础保留帧: {audit_id}")
         if known[audit_id].get("source") == "drop_candidate":
-            if subtract_only:
-                raise ValueError(f"减法审计不得恢复丢弃候选: {audit_id}")
-            if decision != "keep":
-                raise ValueError(f"丢弃候选只允许 keep 补回，其他决策不会产生有效结果: {audit_id}")
+            raise ValueError(f"视觉审计不得对丢弃候选作决定: {audit_id}")
         if known[audit_id].get("source") == "kept" and decision in {"drop", "replace"}:
             shared_groups = image_to_groups.get(audit_id, set()) & image_to_groups.get(coverage, set())
             action_groups = {
@@ -512,24 +494,6 @@ def main() -> int:
                 "decision": source_decision,
             })
 
-        # manifest 内被丢弃候选可被明确 keep，作为新增证据补入精选集。
-        for audit_id, decision in decisions.items():
-            item = audit_images[audit_id]
-            if item.get("source") != "drop_candidate" or decision["decision"] != "keep":
-                continue
-            if item["path"] in included_paths:
-                continue
-            source = _resolve_source(root, item)
-            included_paths.add(str(item["path"]))
-            result_items.append({
-                "source": source,
-                "source_path": item["path"],
-                "capture_time_seconds": item.get("capture_time_seconds"),
-                "sha256": item["sha256"],
-                "provenance": "vision_add",
-                "decision": decision,
-            })
-
         result_items.sort(key=lambda item: float(item.get("capture_time_seconds") or 0.0))
         if not result_items:
             raise ValueError("审计结果会生成空精选集，拒绝应用")
@@ -564,7 +528,7 @@ def main() -> int:
                 "kept": sum(1 for item in decisions.values() if item["decision"] == "keep"),
                 "dropped": sum(1 for item in decisions.values() if item["decision"] == "drop"),
                 "replaced": sum(1 for item in decisions.values() if item["decision"] == "replace"),
-                "added_from_drop_candidates": sum(1 for item in curated_frames if item["provenance"] == "vision_add"),
+                "added_from_drop_candidates": 0,
                 "safe_noop_count": len(safe_noops),
             },
             "safe_noops": safe_noops,
