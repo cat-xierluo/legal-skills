@@ -38,10 +38,13 @@ Backends:
   claude-code     Claude Code with provider/settings profile
   claude-oauth    Claude Code subscription/OAuth; clears Anthropic provider env
   codex           Codex CLI
-  opencode        OpenCode CLI
+  opencode        Historical standalone renderer only; spawn-worker will reject it
   codebuddy       CodeBuddy CLI (platform额度, 继承桌面端登录态)
   qoderwork-cn    QoderWork CN CLI (qoderclicn; 自动清除 SDK env 变量)
-  custom          Use --command as-is
+  custom          Historical standalone renderer only; spawn-worker will reject it
+
+Dispatch authority is limited to claude-code/claude-oauth, codex, codebuddy and
+qoderwork-cn. Rendering a historical backend never expands spawn-worker policy.
 
 Options:
   --mode MODE              interactive | batch. Default: interactive

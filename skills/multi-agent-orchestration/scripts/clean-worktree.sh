@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=provider-lease-root.sh
+source "$SCRIPT_DIR/provider-lease-root.sh"
 
 PROJECT_DIR=""
 BRANCH=""
@@ -122,6 +124,10 @@ echo "CLEAN_WORKTREE_TARGET: branch=$BRANCH session=$SESSION worktree=${WORKTREE
 if [ -n "$WORKTREE" ] && [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json" ]; then
   metadata_file="$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
   if command -v jq >/dev/null 2>&1; then
+    if ! jq -e 'type == "object"' "$metadata_file" >/dev/null 2>&1; then
+      echo "CLEAN_WORKTREE_REFUSED: invalid METADATA.json; retain worktree and provider quota for recovery: $metadata_file" >&2
+      [ "$EXECUTE" -eq 0 ] || exit 2
+    else
     metadata_base_ref=$(jq -r '.base_ref // ""' "$metadata_file" 2>/dev/null || echo "")
     metadata_created_at=$(jq -r '.created_at // ""' "$metadata_file" 2>/dev/null || echo "")
     metadata_backend=$(jq -r '.runtime.worker_backend // ""' "$metadata_file" 2>/dev/null || echo "")
@@ -134,7 +140,10 @@ if [ -n "$WORKTREE" ] && [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADAT
     metadata_orca_terminal_handle=$(jq -r '.session.orca.terminal_handle // ""' "$metadata_file" 2>/dev/null || echo "")
     # Orca supervised Dispatch 必须先按生命周期结算，文件清理不能隐式 stop active worker。
     metadata_orca_dispatch_id=$(jq -r '.session.orca.supervised.dispatch_id // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_provider_lease_file=$(jq -r '.runtime.provider_lease.file // ""' "$metadata_file" 2>/dev/null || echo "")
+    metadata_session_id=$(jq -r '.session.id // ""' "$metadata_file" 2>/dev/null || echo "")
     echo "CLEAN_WORKTREE_METADATA: base=${metadata_base_ref:-n/a} created_at=${metadata_created_at:-n/a} backend=${metadata_backend:-n/a} profile=${metadata_profile:-n/a} env_isolation=${metadata_env_isolation:-n/a} pr=${metadata_pr:-n/a} orca_mode=${metadata_orca_mode:-n/a}"
+    fi
   else
     echo "CLEAN_WORKTREE_METADATA: present jq_missing file=$metadata_file"
   fi
@@ -142,9 +151,53 @@ else
   echo "CLEAN_WORKTREE_METADATA: missing"
 fi
 
+release_provider_lease() {
+  local lease_root orca_path=""
+  [ -n "${metadata_provider_lease_file:-}" ] || return 0
+  [ -n "${metadata_session_id:-}" ] || return 0
+  lease_root=$(provider_lease_root_for_project "$PROJECT_DIR") || {
+    echo "CLEAN_WORKTREE_REFUSED: cannot derive trusted provider lease root" >&2
+    [ "$EXECUTE" -eq 0 ] || exit 2
+    return 0
+  }
+  if [ "$EXECUTE" -eq 0 ]; then
+    echo "CLEAN_WORKTREE_RUN: provider lease release file=$metadata_provider_lease_file session=$metadata_session_id"
+    return 0
+  fi
+  orca_runtime_init >/dev/null 2>&1 && orca_path="$ORCA_CLI_BIN"
+  python3 "$SCRIPT_DIR/provider-lease.py" release \
+    --root "$lease_root" \
+    --lease-file "$metadata_provider_lease_file" --session "$metadata_session_id" \
+    --resource-settled --orca-cli "$orca_path" >/dev/null || {
+    echo "CLEAN_WORKTREE_REFUSED: exact provider lease release failed" >&2
+    exit 2
+  }
+  echo "CLEAN_WORKTREE_PROVIDER_LEASE_RELEASED: session=$metadata_session_id"
+}
+
 if [ "$KEEP_SESSION" -eq 0 ]; then
   if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION" 2>/dev/null; then
     run tmux kill-session -t "$SESSION"
+  elif [ -n "${metadata_orca_terminal_handle:-}" ] && [ -z "${metadata_orca_dispatch_id:-}" ]; then
+    if orca_runtime_init >/dev/null 2>&1; then
+      if [ "$EXECUTE" -eq 0 ]; then
+        echo "CLEAN_WORKTREE_RUN: $ORCA_CLI_BIN terminal close --terminal $metadata_orca_terminal_handle"
+      else
+        close_json=$(orca_cli terminal close --terminal "$metadata_orca_terminal_handle" --json 2>&1) || {
+          show_json=$(orca_cli terminal show --terminal "$metadata_orca_terminal_handle" --json 2>/dev/null || echo '{}')
+          connected=$(printf '%s' "$show_json" | jq -r '.result.terminal.connected // false' 2>/dev/null)
+          writable=$(printf '%s' "$show_json" | jq -r '.result.terminal.writable // false' 2>/dev/null)
+          if [ "$connected" != "false" ] || [ "$writable" != "false" ]; then
+            echo "CLEAN_WORKTREE_REFUSED: terminal-managed Orca handle remains live: $close_json" >&2
+            exit 2
+          fi
+        }
+        echo "CLEAN_WORKTREE_ORCA_TERMINAL_CLOSED: handle=$metadata_orca_terminal_handle"
+      fi
+    else
+      echo "CLEAN_WORKTREE_REFUSED: cannot close Orca terminal because selected CLI is unavailable" >&2
+      [ "$EXECUTE" -eq 0 ] || exit 2
+    fi
   else
     echo "CLEAN_WORKTREE_SESSION: missing session=$SESSION"
   fi
@@ -238,6 +291,13 @@ if [ -n "${metadata_orca_worktree_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
   else
     echo "CLEAN_WORKTREE_ORCA: orca CLI not found, skip ORCA worktree rm (worktree_id=$metadata_orca_worktree_id)"
   fi
+fi
+
+# The worker process/terminal has been closed or the entire Orca worktree has
+# been removed at this point. Release only the exact metadata-bound lease.
+if [ "$KEEP_SESSION" -eq 0 ] || \
+   { [ -n "${metadata_orca_worktree_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; }; then
+  release_provider_lease
 fi
 
 if [ "$KEEP_WORKTREE" -eq 0 ]; then

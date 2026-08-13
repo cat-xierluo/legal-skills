@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -79,7 +79,9 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 | CodeBuddy | CodeBuddy |
 | QoderWork CN | QoderWork CN |
 
-`spawn-worker.sh` 从进程祖先的真实可执行程序识别宿主；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
+`spawn-worker.sh` 从完整进程祖先链的真实可执行程序识别宿主，对每层 Harness 的白名单取交集，使嵌套调用只能降权、不能借强 CLI 恢复权限；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
+
+声明的 worker backend 还必须与实际启动命令一致。只接受直接启动四种 CLI、受信的 Claude provider wrapper，或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
 ## 4. Orca-first 控制平面
 
@@ -93,7 +95,7 @@ orca skills get orchestration   # 仅 supervised / DAG / ask-reply 场景
 orca status --json
 ```
 
-以运行中二进制返回的指南和 `--help` 为准，不从本 Skill 猜未来参数。脚本通过 `scripts/orca-runtime.sh` 统一 CLI：`ORCA_CLI_COMMAND` → dev `orca-dev` → Linux 外部 shell `orca-ide` → `orca`。
+以运行中二进制返回的指南和 `--help` 为准，不从本 Skill 猜未来参数。脚本（包括 Harness 权限检测）通过 `scripts/orca-runtime.sh` 统一 CLI：`ORCA_CLI_COMMAND` → dev `orca-dev` → Linux 外部 shell `orca-ide` → `orca`。
 
 ### 4.2 检测真实运行时
 
@@ -121,6 +123,8 @@ bash scripts/pm-orchestrate.sh wait --worktree "$WT" --session worker-a --timeou
 ```
 
 CodeBuddy/Qoder 的 trust/permission dialog 由 `spawn-worker.sh` 通过 Orca terminal read/send 或 tmux capture/send 处理。CLI 未被 Orca 识别时仍保留 terminal-managed，不伪造 Dispatch。
+
+当前两阶段启动显式使用 `worktree create --setup inherit → 写入 Session Context/权限与 scope hook → terminal create --command`。不要直接改成 `worktree create --agent`：其原子启动会早于本 Skill 写入机械门禁。只有 Orca 提供预置文件或延迟 Agent 启动合同后，才切换 agent-first；自定义 provider/wrapper 始终保留 external terminal 路径。
 
 `terminal wait --for tui-idle` 只表示 TUI 可交互或暂时空闲，不表示任务完成。Qoder 等 alternate-screen TUI 应从 `--cursor 0` 开始保存返回的 `nextCursor` 做增量读取；最终仍以 STATUS/RESULT、真实 diff/tests/artifacts 和 PM 验收为准。
 
@@ -266,6 +270,8 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 
 默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具；跨工具仍不得越过 §3.1 的 Harness 白名单。个人偏好写入 ignored 的 `config/orchestration-personal.json`，模板为 `.example.json`；项目 trunk、任务源、验证命令和 provider slots 可写入 `.claude/orchestration.config.json`。个人配置只能选择白名单以内的 backend，不能扩张宿主权限。
 
+`concurrency.per_backend[backend]` 优先于 `concurrency.max_per_provider`。配置有效正整数时，`spawn-worker.sh` 在任何 branch/worktree 副作用前获取原子 provider 租约，启动后绑定实际 tmux session 或 Orca terminal；Sentinel、`pm-orchestrate release` 和 `clean-worktree` 只在资源已结算或关闭时释放。无配置时输出 advisory，不假装机械限额。
+
 不得复制 `.env`、真实 settings、Token、cookie、证书或账号凭证到 worktree/提交。Claude provider 隔离、CodeBuddy、QoderWork CN、Codex 参数分别读取：
 
 - `references/01-model-selection-matrix.md`
@@ -326,6 +332,8 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh
+bash scripts/test-worker-command-policy.sh
+bash scripts/test-provider-lease.sh
 bash scripts/smoke-sentinel.sh
 bash scripts/smoke-tmux-worker.sh
 bash scripts/smoke-orca-worker.sh

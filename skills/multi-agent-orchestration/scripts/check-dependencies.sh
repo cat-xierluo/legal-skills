@@ -18,6 +18,8 @@ Options:
   --backend NAME             Check backend CLI: claude-code | claude-oauth | codex | opencode |
                              codebuddy | qoderwork-cn | custom
                              Repeat for multiple backends.
+                             opencode/custom are historical diagnostics only and cannot
+                             be dispatched by spawn-worker.sh.
   --check-gh                 Check GitHub CLI for PR/mergeability workflows.
   --check-terminal-split     Check terminal split helper dependencies for current terminal.
   --strict                   Exit non-zero on WARN as well as MISSING.

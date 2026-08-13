@@ -47,9 +47,11 @@ expect_deny codex custom
 
 # Exercise real ancestry detection through executables named as weak harnesses.
 ln -s /bin/bash "$TMP_ROOT/codebuddy"
+ln -s /bin/bash "$TMP_ROOT/codex"
+ln -s /bin/bash "$TMP_ROOT/claude"
 ln -s /bin/bash "$TMP_ROOT/qoderclicn"
 mkdir -p "$TMP_ROOT/non-orca-project"
-if "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; :' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; :' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: codebuddy -> codebuddy\n'
   pass=$((pass + 1))
@@ -58,7 +60,7 @@ else
   fail=$((fail + 1))
 fi
 weak_rc=0
-"$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness claude-code --worker-backend codex; rc=$?; :; exit "$rc"' _ \
+ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness claude-code --worker-backend codex; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1 || weak_rc=$?
 if [ "$weak_rc" -eq 64 ]; then
   printf 'PASS ancestry deny: codebuddy cannot assert claude-code or dispatch codex\n'
@@ -67,12 +69,40 @@ else
   printf 'FAIL ancestry deny: codebuddy escalation exit=%s\n' "$weak_rc" >&2
   fail=$((fail + 1))
 fi
-if "$TMP_ROOT/qoderclicn" -c 'bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; :' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; :' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: qoderwork-cn -> qoderwork-cn\n'
   pass=$((pass + 1))
 else
   printf 'FAIL ancestry allow: qoderwork-cn -> qoderwork-cn\n' >&2
+  fail=$((fail + 1))
+fi
+
+# A weak outer Harness cannot regain stronger authority by starting a nested
+# strong CLI. The effective permission is the intersection of every ancestor.
+nested_rc=0
+ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/codebuddy" -c '
+  codex -c '\''bash "$1" --project "$2" --pm-harness codex --worker-backend claude-code; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
+  rc=$?; :; exit "$rc"
+' _ "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1 || nested_rc=$?
+if [ "$nested_rc" -eq 64 ]; then
+  printf 'PASS ancestry intersection: codebuddy -> codex cannot dispatch claude-code\n'
+  pass=$((pass + 1))
+else
+  printf 'FAIL ancestry intersection: nested escalation exit=%s\n' "$nested_rc" >&2
+  fail=$((fail + 1))
+fi
+
+strong_nested_out=""
+if strong_nested_out=$(ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/claude" -c '
+  codex -c '\''bash "$1" --project "$2" --pm-harness codex --worker-backend codebuddy; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
+  rc=$?; :; exit "$rc"
+' _ "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" 2>&1) \
+  && printf '%s' "$strong_nested_out" | grep -q 'allowed=claude-code codex codebuddy qoderwork-cn'; then
+  printf 'PASS ancestry intersection: strong nested chain keeps the four-backend set\n'
+  pass=$((pass + 1))
+else
+  printf 'FAIL ancestry intersection: strong chain unexpectedly denied: %s\n' "$strong_nested_out" >&2
   fail=$((fail + 1))
 fi
 
@@ -82,7 +112,7 @@ git -C "$blocked_repo" init -q
 git -C "$blocked_repo" -c user.name=Smoke -c user.email=smoke@example.invalid \
   commit --allow-empty -q -m init
 blocked_rc=0
-"$TMP_ROOT/codebuddy" -c '
+ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c '
   bash "$1" --project "$2" --branch feat/blocked-escalation --session blocked-escalation \
     --worker-backend codex --command "sleep 1" \
     --allow-prompt-only-install-guard "policy fault injection" --no-orca-mode
@@ -95,6 +125,24 @@ if [ "$blocked_rc" -eq 64 ] \
   pass=$((pass + 1))
 else
   printf 'FAIL spawn side-effect gate: exit=%s branch/worktree may exist\n' "$blocked_rc" >&2
+  fail=$((fail + 1))
+fi
+
+
+label_mismatch_rc=0
+ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/codebuddy" -c '
+  bash "$1" --project "$2" --branch feat/label-mismatch --session label-mismatch \
+    --worker-backend codebuddy --command codex \
+    --allow-prompt-only-install-guard "identity mismatch must never degrade" \
+    --no-orca-mode --dry-run
+' _ "$SCRIPT_DIR/spawn-worker.sh" "$blocked_repo" >/dev/null 2>&1 || label_mismatch_rc=$?
+if [ "$label_mismatch_rc" -eq 64 ] \
+  && ! git -C "$blocked_repo" show-ref --verify --quiet refs/heads/feat/label-mismatch \
+  && [ ! -e "$blocked_repo/.claude/worktrees/tmux-feat-label-mismatch" ]; then
+  printf 'PASS backend/command binding: codebuddy label cannot launch codex even with degraded install guard\n'
+  pass=$((pass + 1))
+else
+  printf 'FAIL backend/command binding: mismatch exit=%s branch/worktree may exist\n' "$label_mismatch_rc" >&2
   fail=$((fail + 1))
 fi
 

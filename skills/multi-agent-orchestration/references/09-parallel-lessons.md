@@ -1,5 +1,7 @@
 # 并行开发实战经验教训
 
+> 当前 `spawn-worker.sh` 只接受 Claude Code、Codex、CodeBuddy、QoderWork CN。本文较早记录的 OpenCode/custom/Hermes/Kimi/Gemini 方案属于历史探索，不构成现行派发授权。
+
 > 本文档为 SKILL.md 的 Level 2 参考文档，记录实际操作中遇到的问题和解决方案。
 > 读取时机：Agent 卡住、合并冲突、中文输入异常、权限被拒时。
 
