@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §6.5 阅读。版本：v2.3.0（2026-08-12）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.5.0（2026-08-13）。
 
 ## 目录
 
@@ -11,7 +11,7 @@
 5. Supervised 生命周期
 6. PM 实时感知
 7. UI 与状态来源
-8. CodeBuddy/Qoder/custom CLI
+8. 四后端与自定义 argv
 9. 失败与恢复
 10. METADATA 契约
 
@@ -71,7 +71,9 @@ bash scripts/spawn-worker.sh \
   --task-spec "完整任务、范围、验证与完成协议"
 ```
 
-`spawn-worker.sh` 先创建 worktree/terminal并等待 TUI ready，再让 `orca-supervised-register.sh` 执行 `task-create → worker-start --terminal`。supervised 路径不发送普通占位 prompt，避免同一任务被执行两次。
+`spawn-worker.sh` 使用 `worktree create --setup inherit`，先写入 Session Context、安装门禁和 scope hook，再用 `terminal create` 启动 Agent并等待 TUI ready，随后让 `orca-supervised-register.sh` 执行 `task-create → worker-start --terminal`。supervised 路径不发送普通占位 prompt，避免同一任务被执行两次。
+
+当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
 Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。helper 必须把它作为 `--from` 同时传给 `task-create` 和 `worker-start`；缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
 
@@ -147,9 +149,9 @@ terminal-managed 的 `terminal wait --for tui-idle` 只是 liveness/readiness �
 
 supervised 的 STATUS done 只把 workspace 标为 `in-review`；PM 验收并结算后再把 UI 状态改为 completed。
 
-## 8. CodeBuddy/Qoder/custom CLI
+## 8. 四后端与自定义 argv
 
-Orca terminal 对 `--command` 是开放的，因此 CodeBuddy、QoderWork、Claude 第三方 provider wrapper、Codex custom argv 都可由 Orca 启动并出现在 worktree/terminal UI 中。
+Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Claude Code、Codex、CodeBuddy、QoderWork CN 四种 backend。Claude 第三方 provider wrapper 与 Codex 自定义参数属于这四种 backend 的 argv 变体，不构成新的 backend。
 
 原生 orchestration 的 `worker-start --terminal` 只接受 Orca 能证明的 Agent session。若某 CLI 未被识别：
 
@@ -158,7 +160,7 @@ Orca terminal 对 `--command` 是开放的，因此 CodeBuddy、QoderWork、Clau
 3. 不创建虚假的 Dispatch，不要求 worker 发送 `worker_done`。
 4. 若用户必须要原生 Task/Dispatch，改用 Orca 支持的 Agent launcher，或等待 Orca 增加该 Agent 识别。
 
-实测边界：CodeBuddy 可以在 terminal read 中看到完整响应；Qoder 可启动、通过 cursor history 读取，但当前 Orca 1.4.180 未把它识别为 agent；OpenCode 若默认 provider 已禁用会出现 TUI 存活但无有效响应，必须先用 `check-opencode-config.sh --model provider/model` 预检。
+实测边界：CodeBuddy 可以在 terminal read 中看到完整响应；Qoder 可启动、通过 cursor history 读取，但当前 Orca 1.4.180 未把它识别为 agent。OpenCode/custom 等旧实验资料不在当前派发白名单内，不得据此调用 `spawn-worker.sh`。
 
 ## 9. 失败与恢复
 

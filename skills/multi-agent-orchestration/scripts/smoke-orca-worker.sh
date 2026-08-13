@@ -6,8 +6,8 @@
 #   2. opt-out / 非当前 repo 的降级边界
 #   3. supervised dry-run 只允许 worker-start 注入任务
 #
-# 本 smoke 不起真实 worker CLI（避免消耗额度），只用最小 shell command 模拟：
-#   COMMAND = 'echo smoke-orca-done'（写 STATUS.json 由测试脚本直接落地）。
+# 本 smoke 不起真实 worker CLI（避免消耗额度），但命令仍使用 `codex`
+# 令牌通过 backend/command 身份门禁；`--dry-run` 保证不实际启动。
 #
 # 运行前提：当前 cwd 是 Orca-managed worktree，Orca runtime 正在运行。
 #
@@ -83,7 +83,7 @@ spawn_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID bash "$SCRIPT_DIR/spawn-work
   --project "$current_path" \
   --branch "$BRANCH" \
   --session "$SESSION" \
-  --command 'echo smoke-orca-done' \
+  --command 'codex' \
   --worker-backend codex \
   --allow-prompt-only-install-guard 'smoke test: no dependency install' \
   --dry-run 2>&1) || {
@@ -109,7 +109,7 @@ spawn_tmux_out=$(bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$REPO" \
   --branch "$BRANCH" \
   --session "$SESSION" \
-  --command 'echo smoke-orca-done' \
+  --command 'codex' \
   --worker-backend codex \
   --allow-prompt-only-install-guard 'smoke test: no dependency install' \
   --no-orca-mode \
@@ -126,7 +126,7 @@ spawn_lite_out=$(bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$REPO" \
   --branch "$BRANCH" \
   --session "$SESSION" \
-  --command 'echo smoke-orca-done' \
+  --command 'codex' \
   --worker-backend codex \
   --allow-prompt-only-install-guard 'smoke test: no dependency install' \
   --no-worktree \
@@ -143,7 +143,7 @@ supervised_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID bash "$SCRIPT_DIR/spawn
   --project "$current_path" \
   --branch "feat/smoke-orca-supervised" \
   --session "$SESSION-supervised" \
-  --command 'echo smoke-orca-done' \
+  --command 'codex' \
   --worker-backend codex \
   --allow-prompt-only-install-guard 'smoke test: no dependency install' \
   --orca-supervised --task-spec '只验证注入计划，不执行真实 worker' \

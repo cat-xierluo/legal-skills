@@ -53,6 +53,8 @@ ensure_claude_in_path
 source "$SCRIPT_DIR/orca-runtime.sh"
 # shellcheck source=harness-backend-policy.sh
 source "$SCRIPT_DIR/harness-backend-policy.sh"
+# shellcheck source=provider-lease-root.sh
+source "$SCRIPT_DIR/provider-lease-root.sh"
 
 PROJECT_DIR=""
 BRANCH=""
@@ -65,12 +67,20 @@ WORKER_BACKEND=""
 PM_HARNESS_ASSERTION=""
 PM_HARNESS=""
 PM_HARNESS_SOURCE=""
+PM_HARNESS_CHAIN_JSON="[]"
 PM_ALLOWED_WORKER_BACKENDS=""
 WORKER_BACKEND_CANONICAL=""
+WORKER_COMMAND_SHA256=""
 RUNTIME_PROFILE=""
 API_PROVIDER=""
 MODEL=""
 PROVIDER_SLOT=""
+PROVIDER_LEASE_FILE=""
+PROVIDER_LEASE_ROOT=""
+PROVIDER_LEASE_LIMIT=""
+PROVIDER_LEASE_KEY=""
+PROVIDER_LEASE_ACQUIRED=0
+PERSONAL_CONFIG_FILE="${MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG:-$SCRIPT_DIR/../config/orchestration-personal.json}"
 ENV_ISOLATION=""
 WAVE_ID=""
 WAVE_WORKER_ID=""
@@ -155,7 +165,7 @@ Usage:
 Options:
   --worktree PATH   Worktree path. Defaults to .claude/worktrees/tmux-{branch}
   --base-ref REF    Base ref for new branches. Default: main
-  --command CMD     Command to run in tmux. Default: login shell
+  --command CMD     Command to run. Default: the executable for the verified backend
   --worker-backend NAME
                    Worker backend: claude-code, codex, codebuddy or qoderwork-cn.
   --pm-harness NAME
@@ -519,10 +529,12 @@ if [ -n "$PM_HARNESS_ASSERTION" ]; then
     exit 64
   fi
 fi
-enforce_harness_backend_policy "$detected_pm_harness" "$WORKER_BACKEND" || exit $?
+enforce_harness_backend_policy_chain \
+  "$detected_pm_harness" "$PM_HARNESS_CHAIN_JSON" "$WORKER_BACKEND" || exit $?
 PM_HARNESS_SOURCE=${PM_HARNESS_SOURCE:-verified_runtime}
-printf 'SPAWN_WORKER_HARNESS_POLICY: pm=%s worker=%s allowed=%s source=%s\n' \
-  "$PM_HARNESS" "$WORKER_BACKEND_CANONICAL" "$PM_ALLOWED_WORKER_BACKENDS" "$PM_HARNESS_SOURCE"
+printf 'SPAWN_WORKER_HARNESS_POLICY: pm=%s worker=%s allowed=%s chain=%s source=%s\n' \
+  "$PM_HARNESS" "$WORKER_BACKEND_CANONICAL" "$PM_ALLOWED_WORKER_BACKENDS" \
+  "$PM_HARNESS_CHAIN_JSON" "$PM_HARNESS_SOURCE"
 
 if [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -gt 0 ] && [ -z "$INSTALL_AUTHORIZATION_SOURCE" ]; then
   echo "ERROR: --allow-install-command requires --install-authorization-source (fail-closed)" >&2
@@ -614,7 +626,111 @@ esac
 SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
 METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
 INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
-[ -n "$COMMAND" ] || COMMAND="${SHELL:-/bin/bash} -l"
+if [ -z "$COMMAND" ]; then
+  case "$WORKER_BACKEND_CANONICAL" in
+    claude-code) COMMAND="claude" ;;
+    codex) COMMAND="codex" ;;
+    codebuddy) COMMAND="codebuddy" ;;
+    qoderwork-cn) COMMAND="qoderclicn" ;;
+    *) echo "ERROR: no default command for backend=$WORKER_BACKEND_CANONICAL" >&2; exit 64 ;;
+  esac
+  echo "SPAWN_WORKER_COMMAND_DEFAULT: backend=$WORKER_BACKEND_CANONICAL command=$COMMAND"
+fi
+
+# Bind the declared backend to the executable that will actually be launched.
+# This identity gate is independent of the dependency install guard: degrading
+# hooks to prompt-only can never authorize a differently labelled executable.
+validate_worker_command_backend() {
+  python3 "$SCRIPT_DIR/validate-worker-command.py" \
+    --backend "$WORKER_BACKEND_CANONICAL" \
+    --command "$COMMAND" \
+    --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh"
+}
+
+if ! WORKER_COMMAND_SHA256=$(validate_worker_command_backend); then
+  echo "ERROR: worker backend/command identity mismatch: $WORKER_COMMAND_SHA256 (fail-closed)" >&2
+  exit 64
+fi
+printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
+  "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
+
+resolve_provider_lease_limit() {
+  [ -f "$PERSONAL_CONFIG_FILE" ] || return 1
+  PROVIDER_LEASE_LIMIT=$(jq -er --arg backend "$WORKER_BACKEND_CANONICAL" '
+    (.concurrency.per_backend[$backend] // .concurrency.max_per_provider // empty)
+    | select(type == "number" and floor == . and . > 0)
+  ' "$PERSONAL_CONFIG_FILE" 2>/dev/null) || return 1
+  PROVIDER_LEASE_KEY="${API_PROVIDER:-backend:$WORKER_BACKEND_CANONICAL}"
+  return 0
+}
+
+acquire_provider_lease() {
+  resolve_provider_lease_limit || {
+    echo "SPAWN_WORKER_PROVIDER_LEASE: provider=${API_PROVIDER:-backend:$WORKER_BACKEND_CANONICAL} limit=advisory_unconfigured"
+    return 0
+  }
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "SPAWN_WORKER_PROVIDER_LEASE: provider=$PROVIDER_LEASE_KEY max=$PROVIDER_LEASE_LIMIT state=dry-run-no-acquire"
+    return 0
+  fi
+  local lease_out orca_path=""
+  PROVIDER_LEASE_ROOT=$(provider_lease_root_for_project "$PROJECT_DIR") || {
+    echo "ERROR: cannot derive the trusted provider lease root" >&2
+    exit 64
+  }
+  orca_runtime_init >/dev/null 2>&1 && orca_path="$ORCA_CLI_BIN"
+  lease_out=$(python3 "$SCRIPT_DIR/provider-lease.py" acquire \
+    --root "$PROVIDER_LEASE_ROOT" --provider "$PROVIDER_LEASE_KEY" \
+    --backend "$WORKER_BACKEND_CANONICAL" --session "$SESSION" \
+    --project "$PROJECT_DIR" --max "$PROVIDER_LEASE_LIMIT" --owner-pid $$ \
+    --orca-cli "$orca_path") || {
+    echo "ERROR: provider concurrency lease denied before branch/worktree creation (provider=$PROVIDER_LEASE_KEY max=$PROVIDER_LEASE_LIMIT)" >&2
+    exit 75
+  }
+  PROVIDER_LEASE_FILE=$(printf '%s' "$lease_out" | jq -r '.lease_file // empty')
+  [ -n "$PROVIDER_LEASE_FILE" ] || { echo "ERROR: provider lease response missing lease_file" >&2; exit 64; }
+  PROVIDER_LEASE_ACQUIRED=1
+  echo "SPAWN_WORKER_PROVIDER_LEASE: provider=$PROVIDER_LEASE_KEY max=$PROVIDER_LEASE_LIMIT file=$PROVIDER_LEASE_FILE state=provisional"
+}
+
+release_provisional_provider_lease() {
+  local exit_code=$?
+  trap - EXIT
+  if [ "$PROVIDER_LEASE_ACQUIRED" -eq 1 ] && [ -n "$PROVIDER_LEASE_FILE" ]; then
+    python3 "$SCRIPT_DIR/provider-lease.py" release --root "$PROVIDER_LEASE_ROOT" \
+      --lease-file "$PROVIDER_LEASE_FILE" \
+      --session "$SESSION" --resource-settled --owner-pid $$ >/dev/null 2>&1 || true
+  fi
+  exit "$exit_code"
+}
+
+finalize_provider_lease() {
+  [ "$PROVIDER_LEASE_ACQUIRED" -eq 1 ] || return 0
+  local transport resource_handle
+  if [ "$ORCA_MODE" = "auto" ]; then
+    transport="orca_terminal"
+    resource_handle="$ORCA_TERMINAL_HANDLE"
+  else
+    transport="tmux"
+    resource_handle="$SESSION"
+  fi
+  python3 "$SCRIPT_DIR/provider-lease.py" finalize \
+    --root "$PROVIDER_LEASE_ROOT" \
+    --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
+    --transport "$transport" --resource-handle "$resource_handle" >/dev/null || {
+    echo "ERROR: provider lease could not bind the launched worker resource" >&2
+    exit 75
+  }
+  PROVIDER_LEASE_ACQUIRED=0
+  echo "SPAWN_WORKER_PROVIDER_LEASE: provider=$PROVIDER_LEASE_KEY file=$PROVIDER_LEASE_FILE state=active transport=$transport"
+}
+
+# Must happen before any branch/worktree/session side effect. EXIT releases only
+# the provisional lease; a successful launch finalizes it and disables the trap.
+acquire_provider_lease
+if [ "$PROVIDER_LEASE_ACQUIRED" -eq 1 ]; then
+  trap release_provisional_provider_lease EXIT
+fi
 
 # Claude Code 的 minimal/safe/config-source 模式可能跳过 local PreToolUse hook。
 # 用 shlex 解析 wrapper 后的完整 command；无法证明含 claude 或 local settings 也 fail-closed。
@@ -684,36 +800,6 @@ if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
     echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command, pass --allow-prompt-only-install-guard, or this non-bare disable (--safe-mode/--setting-sources/missing token) requires explicit --allow-prompt-only-install-guard (fail-closed)" >&2
     exit 64
   fi
-fi
-
-backend_command_token_missing() {
-  python3 - "$WORKER_BACKEND" "$COMMAND" <<'PY'
-import os, shlex, sys
-backend, command = sys.argv[1:]
-try:
-    basenames = {os.path.basename(token).lower() for token in shlex.split(command, posix=True)}
-except ValueError:
-    print("unparseable command")
-    raise SystemExit(0)
-accepted = {
-    "codebuddy": {"codebuddy"},
-    "qoderwork-cn": {"qoderclicn"},
-    "qoderclicn": {"qoderclicn"},
-}.get(backend, set())
-if accepted and not (basenames & accepted):
-    print(f"command exposes none of the expected executable tokens: {sorted(accepted)}")
-    raise SystemExit(0)
-raise SystemExit(1)
-PY
-}
-if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
-   { [ "$WORKER_BACKEND" = "codebuddy" ] || [ "$WORKER_BACKEND" = "qoderwork-cn" ] || [ "$WORKER_BACKEND" = "qoderclicn" ]; } && \
-   backend_reason=$(backend_command_token_missing); then
-  if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
-    echo "ERROR: $WORKER_BACKEND command cannot prove the configured backend is launched: $backend_reason (fail-closed)" >&2
-    exit 64
-  fi
-  INSTALL_GUARD_MODE="prompt_only_degraded"
 fi
 
 run() {
@@ -803,12 +889,12 @@ detect_orca_mode() {
 orca_worktree_create() {
   local name="$1" base_branch="$2"
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf 'ORCA_RUN: orca worktree create --name %q --no-parent --base-branch %q --json\n' "$name" "$base_branch"
+    printf 'ORCA_RUN: orca worktree create --name %q --no-parent --base-branch %q --setup inherit --json\n' "$name" "$base_branch"
     echo "orca_worktree_id_placeholder"
     return 0
   fi
   local out worktree_id
-  out=$(orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --json 2>&1) || {
+  out=$(orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --setup inherit --json 2>&1) || {
     echo "ERROR: orca worktree create 失败: $out" >&2
     exit 64
   }
@@ -1161,12 +1247,18 @@ write_metadata() {
     --arg worker_backend "$WORKER_BACKEND" \
     --arg pm_harness "$PM_HARNESS" \
     --arg pm_harness_source "$PM_HARNESS_SOURCE" \
+    --argjson pm_harness_chain "$PM_HARNESS_CHAIN_JSON" \
     --argjson pm_allowed_worker_backends "$(printf '%s\n' $PM_ALLOWED_WORKER_BACKENDS | jq -R . | jq -s .)" \
     --arg worker_backend_canonical "$WORKER_BACKEND_CANONICAL" \
+    --arg worker_command_sha256 "$WORKER_COMMAND_SHA256" \
     --arg runtime_profile "$RUNTIME_PROFILE" \
     --arg api_provider "$API_PROVIDER" \
     --arg model "$MODEL" \
     --arg provider_slot "$PROVIDER_SLOT" \
+    --arg provider_lease_file "$PROVIDER_LEASE_FILE" \
+    --arg provider_lease_root "$PROVIDER_LEASE_ROOT" \
+    --arg provider_lease_limit "$PROVIDER_LEASE_LIMIT" \
+    --arg provider_lease_key "$PROVIDER_LEASE_KEY" \
     --arg env_isolation "$ENV_ISOLATION" \
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
@@ -1226,6 +1318,7 @@ write_metadata() {
         harness_authority: {
           pm_harness: $pm_harness,
           evidence_source: $pm_harness_source,
+          ancestry: $pm_harness_chain,
           allowed_worker_backends: $pm_allowed_worker_backends,
           worker_backend: $worker_backend_canonical
         },
@@ -1234,8 +1327,15 @@ write_metadata() {
         api_provider: $api_provider,
         model: $model,
         provider_slot: $provider_slot,
+        provider_lease: {
+          file: $provider_lease_file,
+          root: $provider_lease_root,
+          provider: $provider_lease_key,
+          max_concurrency: ($provider_lease_limit | if . == "" then null else tonumber end)
+        },
         env_isolation: $env_isolation,
-        command: $command
+        command: $command,
+        command_sha256: $worker_command_sha256
       },
       wave: {
         id: $wave_id,
@@ -1707,6 +1807,10 @@ if [ "$ORCA_MODE" = "auto" ]; then
   fi
 else
   run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
+fi
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  finalize_provider_lease
 fi
 
 # Trust-auto + Permission-auto: headless CLI workers need trust-folder permission

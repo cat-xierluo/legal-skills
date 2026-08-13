@@ -476,7 +476,7 @@ tmux new-session -d -s worker-wb-hy3-preview -c /path/to/worktree-E \
 
 ### 7.6 与 spawn-worker.sh 集成
 
-可作为 `custom CLI` worker 通过 `spawn-worker.sh` 启动：
+使用正式 `codebuddy` backend 通过 `spawn-worker.sh` 启动：
 
 ```bash
 bash scripts/spawn-worker.sh \
@@ -519,7 +519,7 @@ env SERVER__HOST=0.0.0.0 SERVER__PORT=8080 codebuddy --serve
 ## 9. 与现有 Skill 框架的集成建议
 
 - **backend 标识**：建议写具体执行面，例如 `codebuddy`；profile 标识可写 `codebuddy-kimi-k26` / `workbuddy-deepseek` / `workbuddy-custom`
-- **spawn 集成**：走 custom CLI worker 路径，但 `--worker-backend` 可以写 `codebuddy` 这类可读标签，便于 STATUS/METADATA 追踪
+- **spawn 集成**：只使用正式 `--worker-backend codebuddy`；backend 与真实 `codebuddy` 可执行命令必须一致，`custom` 不在当前白名单
 - **权限模式**：**必须** `--permission-mode bypassPermissions`（`acceptEdits` 仍卡权限，`-y` 被覆盖；参考 §10.1）；tmux 交互式按自动化强度用 `bypassPermissions`
 - **必加参数**：无头模式下 `-y` 是必须的（等同 Claude Code 的 `--dangerously-skip-permissions`）
 - **checkpoint 兼容**：`codebuddy` 本身不产生 `STATUS.json`，需要在 worker prompt 中明确要求 worker 自行写入 checkpoint 三件套，或靠 git status + 文件系统巡检兜底

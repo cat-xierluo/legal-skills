@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.4.0  | 新增 Harness 调用层级门禁：Claude/Codex 可派发四个已配置后端，CodeBuddy/QoderWork CN 只能自派；宿主由进程与 Orca 运行时证据识别，未知或伪造身份失败关闭；保留 Orca-first 与 tmux 回退 |
+| 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.5.0  | 修复嵌套 Harness 恢复高权限与 backend 标签伪装；完整祖先链取权限交集，启动命令与四后端强绑定；新增 provider 原子并发租约，统一 Orca Runtime，并保留门禁优先的 Orca 两阶段启动与 tmux 回退 |
 | 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
@@ -627,7 +627,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 worktree/terminal UI、Run/Task/Dispatch、worker transcript、Claude Code/Codex/CodeBuddy/QoderWork CN 总控、Harness 层级门禁与 tmux 回退</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.4.0</td>
+<td style="text-align:center">v2.5.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载</a></td>
 <td></td>
 </tr>
