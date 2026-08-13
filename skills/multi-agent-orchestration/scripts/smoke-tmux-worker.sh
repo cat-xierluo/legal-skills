@@ -52,21 +52,27 @@ command -v git >/dev/null 2>&1 || { echo "SKIP: git is required"; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
 
-deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend custom)
+deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend codex)
 assert_contains "$deps_out" "DEPENDENCY_CHECK_OK"
 
 profile_shell=$("$SCRIPT_DIR/render-runtime-profile.sh" \
-  --backend custom \
+  --backend codex \
   --runtime-profile smoke-profile \
-  --api-provider smoke-provider \
-  --model smoke-model \
+  --model gpt-5 \
   --provider-slot smoke-slot-1 \
-  --command "printf '%s\n' 'worker-start' 'TOKEN=abc123' 'worker-end'; sleep 60")
+  --output shell)
 eval "$profile_shell"
+# Exercise the control plane through a fake executable whose basename matches
+# the declared backend. The command/backend identity gate must remain active.
+WORKER_COMMAND="$TMP_ROOT/codex"
+printf '%s\n' '#!/usr/bin/env bash' \
+  "printf '%s\\n' 'worker-start' 'TOKEN=abc123' 'worker-end'" \
+  'sleep 60' > "$WORKER_COMMAND"
+chmod +x "$WORKER_COMMAND"
 
 claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --backend claude-code \
-  --settings config/minimax-M3.settings.json \
+  --settings "$SCRIPT_DIR/../config/claude-provider-settings.example.json" \
   --model claude-sonnet-4-5 \
   --permission-mode auto \
   --output command)
@@ -108,6 +114,28 @@ codex_context=$("$SCRIPT_DIR/render-runtime-profile.sh" \
 assert_contains "$codex_context" "Worker Backend: codex"
 assert_contains "$codex_context" "Model: gpt-5"
 
+echo "=== Codex wrapper flags: omit only exact duplicate safety policy ==="
+fake_bin="$TMP_ROOT/fake-bin"
+mkdir -p "$fake_bin"
+cat > "$fake_bin/codex" <<'FAKE_CODEX'
+#!/usr/bin/env bash
+exec /usr/bin/true --sandbox danger-full-access --ask-for-approval never "$@"
+FAKE_CODEX
+chmod +x "$fake_bin/codex"
+codex_wrapped=$(PATH="$fake_bin:$PATH" "$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend codex --model gpt-5 --output command)
+assert_not_contains "$codex_wrapped" "-a never"
+assert_not_contains "$codex_wrapped" "-s danger-full-access"
+
+cat > "$fake_bin/codex" <<'FAKE_CODEX_MISMATCH'
+#!/usr/bin/env bash
+exec /usr/bin/true --sandbox workspace-write --ask-for-approval never "$@"
+FAKE_CODEX_MISMATCH
+codex_mismatch=$(PATH="$fake_bin:$PATH" "$SCRIPT_DIR/render-runtime-profile.sh" \
+  --backend codex --model gpt-5 --output command)
+assert_contains "$codex_mismatch" "-a never"
+assert_contains "$codex_mismatch" "-s danger-full-access"
+
 mkdir -p "$REPO"
 git -C "$REPO" init -q
 git -C "$REPO" config user.email "smoke@example.invalid"
@@ -125,7 +153,7 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --base-ref main \
   --command "$WORKER_COMMAND" \
   --worker-backend "$WORKER_BACKEND" \
-  --allow-prompt-only-install-guard "smoke custom backend 只运行固定本地测试脚本，无 Agent 工具调用" \
+  --allow-prompt-only-install-guard "smoke codex backend 只运行固定本地测试脚本，无 Agent 工具调用" \
   --no-trust-auto \
   --no-permission-auto \
   --runtime-profile "$RUNTIME_PROFILE" \
@@ -139,6 +167,16 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --verify-cmd "npm test -- --run")
 assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
+assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: pm=codex worker=codex"
+if ! jq -e '
+  .runtime.harness_authority.pm_harness == "codex"
+  and .runtime.harness_authority.worker_backend == "codex"
+  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn"])
+  and (.runtime.harness_authority.evidence_source != "")
+' "$CTX/METADATA.json" >/dev/null; then
+  echo "ASSERTION FAILED: METADATA missing verified Harness authority" >&2
+  exit 1
+fi
 
 now=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
 cat > "$STATUS_FILE" <<JSON
@@ -238,7 +276,7 @@ assert_not_contains "$wait_out" "SECRET=should-not-leak"
 status_out=$("$SCRIPT_DIR/worktree-status.sh" --project "$REPO" --branch "$BRANCH" --session "$SESSION")
 assert_contains "$status_out" "WORKTREE_STATUS: branch=$BRANCH"
 assert_contains "$status_out" "WORKTREE_METADATA: base=main"
-assert_contains "$status_out" "WORKTREE_RUNTIME: backend=custom profile=smoke-profile provider=smoke-provider model=smoke-model slot=smoke-slot-1 env_isolation=inherited-env"
+assert_contains "$status_out" "WORKTREE_RUNTIME: backend=codex profile=smoke-profile provider=n/a model=gpt-5 slot=smoke-slot-1 env_isolation=inherited-env"
 assert_contains "$status_out" "WORKTREE_WAVE: wave=wave-smoke worker=W1"
 assert_contains "$status_out" "WORKTREE_VERIFY: npm run typecheck | npm test -- --run"
 assert_contains "$status_out" "CHECKPOINT_STATUS: status=done"

@@ -1,6 +1,6 @@
 # Cron 兜底监测 prompt 模板
 
-> 使用方式：PM 派 worker 后挂 cron 兜底（sentinel 是主监测，cron 抓 sentinel 盲区，见 SKILL.md §7.3）。复制本模板，替换 `{{...}}`，用 CronCreate 注册。worker 全部合入后 `CronDelete` 自删。
+> 使用方式：PM 派 worker 后挂 cron 兜底（Sentinel 是主监测，cron 抓 Sentinel 盲区，见 SKILL.md §7）。复制本模板，替换 `{{...}}`，用宿主的定时任务能力注册；worker 全部合入后删除该任务。
 >
 > 频次：短任务 ~22min、长流水线 10-15min，避开 `:00`/`:30`。
 
@@ -21,7 +21,7 @@ PM 巡检 {{wave_id}}（{{worker_summary}}）。读各 worker 的 STATUS.json：
 
 判定（按优先级）：
 0. **硬指令自删（最先执行，不做巡检）**：读所有 worker STATUS.json（{{status_paths}}），若全部为终态（done/failed/blocked/stopped）且无 pending PR 或未合入分支 → 立即 `CronDelete` 本 cron job，本 turn 不做任何后续判定/巡检。最高优先级，避免 worker 全终态后 cron 还空跑一轮（folia Wave-1 实战：3 worker 都 done 后 cron 仍触发一次兜底巡检，PM 手动 CronDelete）。
-1. 若某 worker status=done → 按 SKILL.md §8 跑 gh pr view <PR> --json mergeable,mergeStateStatus 检查、review、收口；体系性修改标"已完成·待核实"留 TASKS 活跃区等作者复核。
+1. 若某 worker status=done → 按 SKILL.md §8 检查真实 diff/tests/PR 后收口；体系性修改标“已完成·待核实”留 TASKS 活跃区等作者复核。
 2. 若 failed/blocked → 读 STATUS.issues 决定纠偏/重启，向用户简报。
 3. 若双信号卡死（STATUS.updated_at 和文件 mtime 都 > {{stale_threshold}} 未变 **且** pane 尾部有死循环证据）→ 先发 tmux send-keys 心跳探针；下一轮 cron 仍无变化才重启 worker。
 4. 若 updated_at stale 但 pane 显示正常推进（long thinking）→ 不干预，只回一句话。

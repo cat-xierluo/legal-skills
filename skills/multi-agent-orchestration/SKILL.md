@@ -1,1065 +1,343 @@
 ---
 name: multi-agent-orchestration
-description: 当用户要求你并行推进多个任务、一次性开多个 worker/agent 同时工作、用 tmux 启动多个独立 session、防止 PM 直接实现逃逸、或者你作为 PM 需要拆解并派发任务给多个独立 worker 时使用。触发词包括"并行推进""开多个""同时推进""派 worker""多 agent 并行""开 worker""tmux 启动""独立 session""防逃逸""分派任务""一起做"。不要用于单个短任务、跨平台任务状态管理、或 Git 分支/提交/PR/merge 安全规则。
+description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
-homepage: https://github.com/cat-xierluo/legal-skills
-author: 杨卫薪律师（微信ywxlaw）
-version: "1.20.5"
+metadata:
+  version: "2.5.0"
+  homepage: https://github.com/cat-xierluo/legal-skills
+  author: 杨卫薪律师（微信ywxlaw）
 ---
 
 # Multi-Agent Orchestration
 
-PM 式多 Agent 本地执行编排。它回答一个问题：多个 Agent 如何在同一仓库里用独立 worktree/session 并行干活，并让当前主会话作为 PM 可巡检、可收口、可控制额度消耗。
+以当前主会话作为 PM，拆解、派工、巡检、验收和收口多个本地 Agent。优先使用 Orca 作为控制平面；Orca 不可用或用户明确要求 tmux 时使用 tmux。不要把“开了终端”误写成“建立了受监管任务”。
 
-PM 是当前负责拆解、派工、验收和收口的主会话，不绑定具体产品。Codex 可以做 PM 调 Claude Code 或 OpenCode worker；Claude Code 也可以做 PM 调 Codex 或 OpenCode worker。Skill 只规定角色、隔离、启动、状态和收口协议。
-
-## 1. 边界
+## 1. 边界与权限
 
 使用本 Skill：
-- 需要 2 个以上本地 Agent / Codex / Claude session 并行工作。
-- 任务需要独立 worktree、独立分支、独立 PR。
-- PM 会话需要启动、监控、纠偏和收口多个 worker。
-- 需要把简单任务路由给 Claude Code、Codex、OpenCode 或其他 CLI worker，以控制主会话 token 和不同模型额度消耗。
+
+- 同时推进 2 个以上边界独立的本地任务。
+- 需要独立 worktree、分支、session、额度 lane 或可人工接管的长任务。
+- PM 需要读取 worker 进度、纠偏、等待结构化完成事件并统一收口。
+- 用户明确要求 Orca、tmux、独立 session、多个 worker 或 PM/orchestrator 模式。
 
 不使用本 Skill：
-- 单个短任务、单文件修改、一次性问答。
-- 任务主状态、负责人、依赖管理：用 `cross-agent-coordination`。
-- 分支命名、提交格式、PR merge、push、冲突解决：用 `git-workflow`。
-- 外部 Agent 邮件触发：用对应外部协作/邮件 Skill。
-- **PM 是非 CLI 的 harness 内嵌 agent（ZCode 等）**：本 skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层，硬派 tmux worker 会在 provider env 污染 / Shell permission dialog / silent 卡死三层接连踩坑。ZCode 类 harness 里要做并行，改用其自带 subagent / Agent 工具（无 worktree 隔离，不满足 §2.1 防逃逸门禁，但对只读 / 分析类任务足够）。详见 `references/09-parallel-lessons.md` G24。
-
-## 2. 执行模式
-
-| 模式 | 适用 | 默认隔离 |
-|------|------|----------|
-| PM 直接处理 | 轻量、低风险、无并行价值 | 当前工作区 |
-| 同宿主 Subagent | 窄范围分析、审阅、局部修订、**短任务一发跑完**（替代已删除的 headless `-p`） | 通常不新建 worktree |
-| Claude Code Agent Teams | Claude Code 做 PM 且需要团队式协作 | worktree + branch |
-| tmux 独立 CLI session | 需要跨产品 worker、长上下文、独立额度或独立进程 | worktree + branch |
-| tmux 轻量 session（`--no-worktree`） | 派多个 worker 各自占一个独立文件夹、目标不是 git 仓、或不需要 git 级隔离 | **无 worktree**，隔离 = 文件夹分离（非默认，见 §2.1.1） |
-| Claude Code agent view | 需要使用官方后台会话、peek/reply/attach 和 `claude agents` 总览 | 可用 Claude 官方 `--worktree` / `--tmux`，或手动 worktree |
-| ACP adapter | 项目已提供稳定 adapter，且需要结构化事件流 | adapter 决定，仍建议 worktree + branch |
-
-> **headless / batch 模式（`claude -p` / `codex exec -` / `opencode run` / `codebuddy -p` / `qoder -p`）已于 v1.18.0 移除（DEC-044）**。所有 tmux worker 必须交互式启动，PM 靠 tmux send-keys 投递 prompt 并全程可纠偏。短任务一发跑完的场景改用同宿主 Subagent，不要再派 tmux worker + headless——那既丢监控又白费编排开销。
-
-优先级由项目规则决定。若用户或项目明确要求使用 tmux / 独立 session / 开 worker，进入防逃逸门禁。
-
-### 2.1 防逃逸门禁
-
-强制 session 触发条件：
-- 用户明确说 `tmux`、`独立 session`、`开 worker`、`多 Agent 并行`、`你做 PM / orchestrator`、`不要你直接写`，或项目规则要求 tmux / 独立 session。
-- 任务需要独立额度、长上下文、后台持续运行、人工可接管，或同时推进 2 个以上本地 worker。
-
-触发后，PM 在任何业务实现前必须完成启动门禁：
-1. 创建或确认隔离 worktree、语义分支和 Session Context 路径。
-2. 启动 tmux session；Claude 官方 `--worktree --tmux` 可作为 Claude 专用等价入口。
-3. 用 `tmux has-session` / `tmux list-sessions` / `claude agents --json` 验证 session 存活，并确认 pane cwd 或 agent cwd 指向目标 worktree。
-4. 给 worker 发送 Bootstrap-only prompt 或 Full worker prompt，prompt 必须包含 Branch、Worktree、Session Context、Runtime Profile、Allowed files、Forbidden files、验证命令和 Execution Authority（安装门禁模式、精确授权命令、授权来源）。
-5. 在 1-2 分钟内确认 `STATUS.json` 出现；若未出现，只能发送 checkpoint-only 纠偏或重启 worker，不得直接接管业务实现。
-
-降级规则：
-- 显式要求 tmux 时，Agent Teams、Subagent、PM 直接处理都不是等价替代；除非用户明确同意降级。
-- 显式要求独立 session 但未指定 tmux 时，默认使用 tmux；Claude 官方 `--worktree --tmux` 可用。Agent view / Agent Teams 只有在能证明独立后台会话、独立 cwd/worktree 和可巡检状态时才可替代。
-- 门禁失败时，PM 必须报告阻塞和失败点；允许直接修改的仅限 worker prompt、Skill 文档、监控脚本或本地协作配置等编排层文件。
-- 若 PM 触发例外直接处理业务代码，最终汇报必须写明例外原因、未使用 session 的具体门禁失败点和用户是否批准降级。
-
-### 2.1.1 轻量模式（无 worktree，非默认）
-
-默认仍是 worktree + branch 隔离。轻量模式只在两种情况下启用，**不是默认、不是静默降级**：
-
-1. **用户显式要求**：PM 看到用户明确说「不要 worktree / 直接改 / 单 session 派多个 worker 各管一个文件夹 / 轻量模式」，或直接传 `spawn-worker.sh --no-worktree`。
-2. **目标目录不是 git 仓**：`spawn-worker.sh` 检测到 `--project` 不在 git work tree 内，自动切轻量并打印 `SPAWN_WORKER_LIGHTWEIGHT_AUTO` 通知（仍可被 `--branch` 缺省等线索识别）。用户既没传 `--no-worktree` 也没传 `--branch`/`--worktree` 才触发自动切换；显式 `--branch` 则仍走 worktree 模式，按普通流程处理（目标非 git 仓时报错）。
-
-轻量模式下 worker 的隔离 = **文件夹分离**，不是 git worktree：
-
-- worker 的 tmux session cwd 直接指向目标文件夹（`--project`，或 `--worktree` 覆盖的子目录），不建 worktree、不切分支、不算 base ref。
-- Isolation Gate 只验 `pwd == 目标文件夹`，不验 branch（目标可能根本不是 git 仓）。
-- `METADATA.json` 记 `isolation.mode: "lightweight"` + `isolation.lightweight_auto`（自动切时为 `true`），`branch / base_ref / base_sha` 留空。
-- Session Context 仍建在 `<目标文件夹>/.claude/agent-sessions/<session>/`，sentinel / pm-monitor / scope-guard 照常工作。
-
-PM 派多个轻量 worker 时的硬约束：
-
-- **每个 worker 占一个独立、互不重叠的文件夹**。轻量模式没有 worktree 物理隔离，两个 worker 改同一 git 仓的重叠路径会互相覆盖——这种场景必须回到默认 worktree 模式。
-- 越界防护更依赖 `--allow-paths`（scope-guard settings 硬拦）和 prompt scope 软约束，因为没有「独立 worktree 天然只看得见自己分支」这层兜底。
-- 目标文件夹若是 git 仓，worker 共享主工作树：commit 走该仓当前分支，不要假设有独立分支/PR；目标若不是 git 仓，无 commit/PR，交付物直接落盘 + 写 `RESULT.md` 清单，PM 直接读文件 review。
-
-什么时候**不该**用轻量模式：任务需要独立分支/PR、需要和主干隔离的验证、或多个 worker 可能改到同一仓库的重叠文件——这些都走默认 worktree 模式。
-
-### 2.2 角色与后端
-
-先分清角色，再选择后端：
-
-| 角色 | 职责 | 可由谁担任 |
-|------|------|------------|
-| PM | 读取任务源、分组、启动 worker、巡检、验收、合并收口 | 当前 Codex、Claude Code、OpenCode 或其他主会话 |
-| Worker | 在指定 worktree/branch 内完成限定任务 | Claude Code、Codex、OpenCode、自定义 CLI、shell 脚本、未来 ACP agent |
-| Reviewer | 检查 diff、测试、范围和风险 | PM、另一个 worker、code-review subagent |
 
-PM 代理纪律：
-- 如果用户明确要求当前会话做 PM / orchestrator / 多 Agent 编排，PM 默认不直接写业务代码；若同时触发 §2.1，必须先通过启动门禁。
-- PM 的核心价值是 token efficiency、模型/额度路由、多线程推进、范围控制和验收收口；实现任务优先派给 worktree worker、独立 CLI session、Agent Teams 或 Subagent。
-- PM 可以直接改代码的例外：任务极小且无并行价值、用户明确要求 PM 直接做、worker 连续纠偏失败且只剩窄范围收口、或需要立即修复 PM 自己生成的 orchestration 文档/配置。显式 tmux / 独立 session 要求下，这些例外必须先取得用户确认或记录门禁失败。
-- PM 如果越过例外直接下场改代码，应在最终汇报说明原因；常规实现应通过 worker 产物、PM 纠偏和 PR review 完成。
+- 单个短任务、一次性问答或无并行价值的单文件修改。
+- 任务源、负责人和依赖状态同步：使用 `cross-agent-coordination`。
+- branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
+- 非 CLI harness 内嵌 Agent 无法启动或控制本地 Agent CLI 时，使用宿主自己的 subagent 能力。
 
-后端选择规则：
-- 当前主会话是什么不重要；默认“谁启动编排，谁就是 PM”。
-- 需要通过第三方 Anthropic-compatible API 启动 Claude Code 时，worker backend 选 Claude Code；这是 Claude Code worker 的默认额度模式。
-- 只有用户明确要走 Claude 订阅/OAuth 时，才使用 `claude-oauth-*` profile，并清理第三方 provider 环境变量。
-- 需要消耗 Codex / OpenAI 额度或使用 Codex 配置时，worker backend 选 Codex。
-- 需要消耗 OpenCode 已配置的 provider/model，或要使用 OpenCode 的 `opencode acp` 能力时，worker backend 选 OpenCode（worker 走交互式 `opencode --model`，headless `opencode run` 已于 v1.18.0 移除）。
-- 需要消耗 CodeBuddy 或 QoderWork 平台额度（复用桌面端登录态、零 API Key、含每日免费模型）时，worker backend 选 `codebuddy` / `qoderwork-cn`；这是跨工具例外（§2.3），适合额度分流或评测 fan-out。两者均由 `render-runtime-profile.sh` 统一生成命令（含 qoder 的 SDK 变量清除、codebuddy 的 `-y`）；外部 CLI backend 的 worker spawn 默认用 snapshot-copy-into-worktree（DEC-037）自包含。
-- 其他 Agent 只要能用一行命令启动，并能在指定 cwd 读写文件，也可作为 custom CLI worker。
-- 需要稳定进程生命周期和人工接管时，优先 `tmux + worktree`；触发 §2.1 时，`tmux + worktree` 是默认执行层，不是可静默跳过的建议。
-- ACP 只在 adapter 已稳定、能输出结构化状态时启用；没有 adapter 时不要为了协议增加不确定性。
-
-Backend → 默认模型速查表（同宿主 worker 仍按 §2.3 优先；以下默认仅在 PM 主动跨工具或用户明确指定该 backend 时生效）：
-
-| Backend | 默认 model（首选 → 备选） | 适用场景 | 备注 |
-|---------|--------------------------|----------|------|
-| Claude Code | model 见 personal config `main_force.task_routing`（常规/高端 vs 简单+多模态，**按任务路由非轮换**） | 默认主力 host；同 provider 并发上限见 `concurrency`，溢出到跨平台 backend | 详细 provider 映射见 `config/claude-provider-registry.example.json` |
-| Codex | （见 §2.4 codex_policy） | 用户明确要求时 | 智能高额度贵，默认不主动派 |
-| OpenCode | `opencode:<provider>/<model>` | OpenCode 已有额度 | 按 OpenCode profile |
-| `qoderclicn`（QoderWork CN） | model 见 personal config `backend_model_routing.qoderclicn` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | SDK 变量需清理 |
-| `codebuddy`（CodeBuddy） | model 见 personal config `backend_model_routing.codebuddy` | 用户主动要求 / 主力并发打满溢出（跨平台/跨额度避并发） | 默认带 `-y` |
-
-> **本表不列具体模型——模型与框架选型是个人偏好**（每人可用的 provider/平台额度不同）。具体 model 全在 `config/orchestration-personal.json`（你的）+ `.example.json`（通用模板）；本表只列 backend 能力 + 模型配置字段位置，缺失时交 PM 按 §2.4 个人偏好读。
+本 Skill 会执行以下本地副作用：
 
-环境/profile 纪律：
-- PM 启动 worker 时必须显式写 `Runtime Profile`、settings/profile 路径、模型来源和关键环境变量处理方式，不假定 Claude Code、Codex、OpenCode 共享同一套 shell 环境。
-- Claude Code 第三方 API provider 推荐使用 provider registry：`config/claude-provider-registry.example.json` 描述多个 provider 的 `base_url`、`auth_token_env` / `api_key_env`、`auth_type` 和 `models`；真实 registry 放 ignored local 文件，真实 key 优先放环境变量。旧的单 provider `--settings <*.settings.json>` 路径保留兼容。
-- Claude Code 第三方 API provider profile 要保留 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / 默认模型映射；不要套用 OAuth 的清理命令。registry 模式由 wrapper 动态生成这些 env，不需要为每个模型维护一个 settings 文件。
-- Claude Code 第三方 API provider **必须显式传 `--model <provider-model>`**，settings 文件也应包含 `ANTHROPIC_MODEL` / `ANTHROPIC_MODEL_NAME`。只传 `--settings` 不足以隔离用户级 `~/.claude/settings.json` 或继承环境中的 `ANTHROPIC_MODEL`；实测会出现 settings 指向 GLM、界面和实际默认模型仍显示 MiniMax 的混合状态。
-- Claude Code 第三方 API provider 默认由 `scripts/render-runtime-profile.sh` 生成 `scripts/claude-provider-env.sh` wrapper 命令。wrapper 会先清理继承的 Claude/Anthropic provider 路由变量，再从目标 settings JSON 导入 env，或从 registry 的 provider/model intent 解析 env；补齐 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`，设置 `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`，并给 `claude` 注入 `--setting-sources project,local`，避免用户级 `~/.claude/settings.json` 的 provider/model 污染本次 worker。
-- 只有排障时才可用 `--no-provider-env-isolation` 绕过 wrapper；PM 必须在 Wave 计划和 `METADATA.json` 的 `runtime.env_isolation` 中记录这个例外，并启动后核对 banner / STATUS provider。
-- Claude Code 订阅/OAuth profile 才清理第三方 provider 环境变量，避免误走外部 API。
-- Codex / OpenAI worker、OpenCode worker 和 custom CLI worker 使用各自 profile；不要把 Anthropic provider 环境变量当作通用 worker 环境。
-- Worker bootstrap 必须把 `which claude/codex/opencode`、版本号、cwd、关键 profile 名和 `node/npm/python/cargo` 等运行信息写入 `STATUS.json`，便于 PM 判断“环境不一样”是否影响任务。
+- 在用户指定仓库创建 Git/Orca worktree、分支、Session Context、终端或 tmux session。
+- 启动用户选择的本地 Agent CLI；supervised 模式还会在 Orca runtime 创建 Run/Task/Dispatch、消息和 UI 状态。
+- `clean-worktree.sh` 默认只预览；只有显式 `--execute` 才清理目标会话/worktree，生命周期未知时失败关闭。
+- provider settings/registry 可能含 Token。只读取用户明确指定的配置；真实配置及 `*.bak*` 不得入库、不得写入日志，疑似泄露立即轮换。
+- 不自动安装依赖，不自动 push、合并或发布。安装必须有精确命令和可审计授权来源。
 
-### 2.3 同宿主优先：不默认跨 Agent 工具
-
-默认让 worker 与 PM 跑在**同一个 Agent 工具**里：Claude Code 做 PM 就用 Claude Code worker，Codex 做 PM 就用 Codex worker，OpenCode 同理。**不要为了"分流额度"默认把 worker 路由到另一种 Agent 工具。** 这条优先于 §2.2 的多 backend 路由建议。
-
-为什么默认同宿主：
-- 同宿主 worker 共用一套 auth / settings / 上下文约定，启动和排障成本最低；跨工具会引入不同 profile、不同 env、不同 CLI 行为，编排层不确定性上升。
-- 多 Agent 的核心收益是**并行 + 范围隔离（独立 worktree / session）+ PM 收口**，不是"跨工具"。并行价值来自独立 worktree / session / 额度 lane，与是否换工具无关。
-- 跨工具只在有明确理由时才用（见下），不是默认。
-
-同宿主 worker 的 auth 约定（重要，避免误判环境）：
-- Claude Code PM 启动 Claude Code worker 时，worker `claude` 进程**继承 PM 的 provider env**（第三方 API 的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`，或 OAuth 会话）。即使目标 worktree 的 `.claude/settings.json` 为空或缺省，worker 也能用 PM 的 provider 跑起来，**不需要额外的 `config/*.settings.json`**。
-- 只有当需要把多个 Claude Code worker 分到**不同 provider**（例如一部分走 minimax、一部分走 glm）时，才用不同 settings 文件区分 slot；此时仍全部是 Claude Code worker，没有跨工具。
-- 判断"worker 是否拿到 provider env"的标准：worker bootstrap 把可用 `claude` 版本和 provider 来源写进 `STATUS.json`；PM 看到 provider 来源为空或报 401/403 时，再决定是补 settings 还是降级，而不是默认先跨工具。
-
-何时可以跨工具（例外，不是默认）：
-- 当前宿主 provider 额度 / 限流 / 并发槽位不足以支撑本 Wave，且无法靠"降并发 / 拆下一 Wave"解决。
-- 某个 worker 任务明显更适合另一种工具的模型能力（例如超长上下文研究、特定代码栈）。
-- 用户**明确**要求混合 worker（例如"Claude Code 做 PM，重写 worker 用 Codex"）。
-
-触发跨工具时的硬要求：PM 必须在 Wave 计划里写明为什么跨、每个 worker 的 backend / profile / auth 来源，以及跨工具带来的额外排障点。§3.1 的 provider slot 分配仍适用，但 slot 默认全部落在 PM 宿主工具上；跨工具 slot 是显式例外，需要在 Wave 摘要里标注。
-
-### 2.4 个人路由偏好（用户级，可被任何人自定义）
+## 2. 模式选择
 
-§2.2 / §2.3 给的是 skill 级默认规则，但每个用户的"主力 / 轮换 / 哪个 backend 给哪个模型"是个**个人偏好**，不应该硬编码进 skill。机制：
+| 模式 | 何时选择 | 能力边界 |
+|---|---|---|
+| Orca supervised | 用户要求监督、等待结果、DAG、ask/reply、decision gate；Agent 可被 Orca 识别 | Worktree + Run/Task/Dispatch + worker transcript + `worker_done` |
+| Orca terminal-managed | 已配置的 CodeBuddy/QoderWork CN，或四种白名单 backend 的非 supervised 路径 | Worktree + terminal + UI + terminal read/send/wait |
+| tmux worktree | Orca 不可用、用户指定 tmux、或需复现非 Orca 路径 | Git worktree + tmux + checkpoint/Sentinel |
+| tmux lightweight | 用户明确不要 worktree，或目标不是 Git 仓且 worker 文件夹互不重叠 | 文件夹 + tmux；无 Git 隔离 |
+| 同宿主 subagent | 窄范围、短任务、无需独立进程/分支 | 宿主决定 |
+| Claude Agent Teams/view | Claude Code 做 PM 且项目明确采用其原生团队能力 | 按 Claude 官方会话与 worktree 规则 |
 
-- **配置路径**：`config/orchestration-personal.json`（**在 skill 目录，但 gitignore 不入库**——每人本地放自己的实际偏好；不 commit 进仓库，避免把个人模型/框架固化进通用 skill。`.example.json` 是入库的通用模板）。
-- **模板路径**：`config/orchestration-personal.example.json`（schema 文档 / 给 fork 用户的干净模板）。
-- **读取时机**：PM 派 worker 前先读 `config/orchestration-personal.json`；缺失则回落 `.example.json` 默认。
-- **作用域**：仅声明"偏好"（host、model 轮换、codex policy、跨工具 backend 的默认 model），不声明真实 token / key / endpoint——那些仍归 `config/claude-provider-registry.*.json` 管。
-
-字段定义（与 example schema 对齐）：
+同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live preamble 与 Task/Dispatch，不得用终端文本或 STATUS 冒充完成。
 
-| 字段 | 含义 | 缺省回落 |
-|------|------|----------|
-| `main_force.host` | PM 主力宿主工具（你用的 Agent 工具：`claude-code` / `codex` / `opencode`） | `claude-code` |
-| `main_force.task_routing.high_end` | 常规/高端任务的 model（你自选） | 无（必填） |
-| `main_force.task_routing.simple_multimodal` | 简单任务+多模态/图片解读的 model（你自选） | 无 |
-| `main_force.task_routing.default` | 任务类型不明时回落（通常 = high_end） | 无 |
-| `concurrency.max_per_provider` | 同一 provider 并发上限（尽量更低避限流连累其他任务） | 用户定（示例 3） |
-| `concurrency.overflow_strategy` | 超上限时溢出到哪些 backend（不同平台/额度避并发） | 用户定 |
-| `codex_policy.policy` | `explicit_only` / `allowed` | `allowed`（向后兼容） |
-| `backend_model_routing.<backend>.default_models` | 跨平台 backend 的默认 model（首选在前）；`<backend>` = 你常用的 CLI 名 | 留空 → 不启用跨平台溢出 |
-
-**Codex 硬规则（个人偏好中最重要的一条）**：
-
-- `codex_policy.policy = "explicit_only"` 时，PM **不主动**把任何 worker 路由到 Codex；只有用户当轮明确说"用 Codex"才解封，并写到 Wave 计划里。
-- 这条独立于 §2.3 同宿主优先：即使 §2.3 同宿主工具是 Codex host，PM 仍按此政策判断是否派 worker 到 Codex。
-- 想恢复 Codex 默认可用，改 `policy = "allowed"`。
-
-**与 §2.2 / §2.3 / §3.3 的关系**：
-
-- §2.2 backend 表 → §2.4 个人偏好 → §3.3 项目级 provider slot 默认 → 最终 backend / model 选择。优先级 §2.3（不主动跨工具）压 §2.2（多 backend），§2.4 个人偏好压 §2.2 默认 model 表，§3.3 项目级 provider slot 计划压 §2.4 通用 host。
-- §2.4 字段命名故意跟 §3.3 项目级 provider slot **不冲突**：项目级 slot 写的是"这一 Wave 用哪个 slot 跑哪个 worker"（含 model、max_concurrency）；§2.4 写的是"我个人偏好默认用什么 host / 什么 backend 给什么 model"。前者落地到 Wave 计划，后者落地到 PM 派单决策。
-
-**Backend 模型偏好（v1.20.3 实战沉淀，2026-08-05）**：
-
-- **codebuddy backend**（`backend_model_routing.codebuddy.default_models`）：推荐 `["hy3", "deepseek-v4-flash", "deepseek-v4-pro"]` —— hy3 首选（WorkBuddy 平台自定义模型）、deepseek-v4-flash 次选（平台批量模型）、deepseek-v4-pro **仅作回退，**不用作主**。spawn-worker.sh 派 codebuddy worker 时按此顺序选 `--model`。
-- **qoderwork-cn backend**（`backend_model_routing.qoderwork-cn.default_models`）：推荐 `["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"]` —— **Qwen3.8-Max = 2026-08 新旗舰首选**（CLI v1.0.45 `--list-models` 实测），Qwen3.7-Max/Plus 上一代，DeepSeek/GLM/Kimi 备选。**推荐用具体名**（`-m Qwen3.8-Max`），旧 alias（`qmodel_latest` 等）兼容但解析过时（`qmodel_latest` → 3.7-Max 没跟 3.8）。references/07 §4 + §5.1。
-
-详见 `config/orchestration-personal.example.json` 的 `backend_model_routing` 段（结构示例 codebuddy / qoderwork-cn）+ `references/08-codebuddy-cli-worker.md` §1 模型偏好。
-
-**TODO（后续增强）**：`scripts/render-runtime-profile.sh` 自动读 personal config（解析 `main_force.task_routing` → 默认 `--model`、解析 `codex_policy.policy` → 是否允许 codex backend、解析 `backend_model_routing.<backend>.default_models` → 跨工具 default）当前**未实现**；本次只做配置 + 文档 + PM 手动遵循，避免无人监督下改脚本引入新不确定性。需要做的时候开新 worker，不要在 PM 任务里顺手改。
-
-## 3. 标准流程
-
-1. **读任务源与项目配置**：若项目提供 `.claude/orchestration.config.json` 或等价配置，先读取 trunk、任务源、验证命令、可复制配置和 hook 边界；再用 `cross-agent-coordination` 判断可执行项、依赖和归属。
-1.5. **识别任务源形态**：区分本地结构化任务文件（`.agents/tasks.md`、法律项目任务源，字段齐全、依赖显式）和云端 GitHub Issue（他人提交、自由文本、依赖需从 body 推断）。两者分组前预处理不同，详见 `references/11-issue-grouping.md` §5；云端 Issue 必须先 `gh issue list/view` 读 body + labels + 最近 commits 做相关性分析。
-2. **先分组**：不要默认一个 Issue 一个 worker，也不要默认一个 Issue 一个 PR。按三个维度判定任务关系（详见 `references/11-issue-grouping.md`）：
-   - **① 同根因合并**（多 Issue → 一个 worker → 一个 PR）：根因/模块相近、改动位置重叠、都是小修 → 同组顺序执行，共用一个 worktree，合并到一个 PR（`Closes #xx, #yy`，PR 描述用 `templates/issue-batch-pr.md`）。
-   - **② 依赖链顺序**（A 做完 B 才能做）：同组但分步，一个 worker 顺序推进。
-   - **③ 独立并行**（文件范围正交、验收独立）：各自 worktree + worker + PR，放同一 Wave。
-   - 拿不准时默认**分开**：合并的好处有限，硬合的代价（review 难、回滚牵连）却可能很大。
-3. **判定并行安全**：只有文件范围清晰、无共享迁移/锁文件/schema、验收标准独立时才拆成多个 worktree 并行。
-4. **判定是否触发防逃逸门禁**：只要用户或项目明确要求 tmux / 独立 session / 开 worker，按 §2.1 执行；门禁未通过前不写业务代码。
-5. **选择 worker backend 和 runtime profile**：按任务复杂度、当前额度、模型偏好和是否需要独立进程，选择 Claude Code / Codex / OpenCode / custom CLI / shell / ACP。
-6. **PM 创建隔离环境**：默认由 PM 创建 worktree、分支和 session context 目录，再把路径交给 worker；只有 Claude Code 官方 Agent Teams / agent view 明确使用自身 `--worktree` 能力时，才允许由 Claude Code 创建，但 PM 仍要验收分支、路径和隔离状态。**用户明确要求「不要 worktree」或目标目录不是 git 仓时，改用轻量模式（§2.1.1）**：`spawn-worker.sh --no-worktree`，worker 直接在目标文件夹工作，隔离靠文件夹分离 + scope-guard。
-7. **启动 worker 并验证门禁**：给每个 worker 明确目标文件、允许修改范围、验证命令、session context 目录、提交和 PR 要求；默认启用 Agent 直接工具调用门禁，验证命令不构成安装授权，只有带授权来源的精确命令可以放行；确认 session 存活、cwd/branch 正确、runtime hook attestation 与 `STATUS.json` 出现，或已发送 bootstrap correction。
-8. **PM 巡检**：优先查看 `.claude/agent-sessions/<session-id>/STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md`、git status、commit/PR 状态；Claude 官方 Agent Teams 则优先读取 `~/.claude/teams/<team>/` 和 `~/.claude/tasks/<team>/`，`claude agents --json`、tmux pane 或 agent view 作为兜底观察。发现偏题、阻塞、范围扩大或无阶段性提交时介入。
-9. **PM 验收而非代写**：PM 对 worker 结果做范围检查、测试复核和 review；发现问题优先发纠偏指令或派给 reviewer/另一个 worker，不默认自己改业务代码。
-10. **收口**：worker 提交并开 PR 后，PM 做范围检查、触发 review、按 `git-workflow` 合并和清理。
-11. **PM 必做实操验证**：任何软件功能修改（不论 L1/L2/L3）worker 声称"完成"前，PM 必须真正启动 dev server（Vite dev / Tauri dev / 对应入口），用 Playwright MCP 或截图实际打开应用、点击按钮、切换 tab、调整窗口、输入文本，把验证证据（DOM 测量、关键断言、截图）写入 `goal-contract.md` 或对应 `RESULT.md`。仅靠 typecheck / 单测 / lint / build 全部通过就宣称"完成"是不充分的——这些只证明"代码能编译"，不证明"功能真的能用"。
-
-    **webview 项目分流（Task-025，folia 实战）**：Tauri / Electron / WKWebView 的 webview 内容不暴露 macOS accessibility，orca / computer-use 既不能读（`get-app-state` 返回 `role:null / childrenCount:0`）也不能写（click 不触发 React 事件，多次 click 截图字节完全相同）。webview 项目的 **web 交互**（右键 / 双击 / a11y focus / 表单输入 / 路由切换）必须走 **Playwright e2e**（项目已配的 Chromium + vite dev）；orca 仅用于**原生控件**（文件对话框 / Finder / 菜单栏）+ `screencapture` 看视觉。folia（Tauri WKWebView）验证 #92 时 orca 4 次 click 截图字节零变化，PM 靠 `screencapture` + vision + playwright e2e 绕过。遇到 webview 项目，PM 优先 playwright e2e 验 web 交互，不要在 orca 上空耗。
-
-### 3.1 Wave-Based Orchestration
-
-Wave 是在同一 base ref、同一批冲突假设下启动的一组并行 worker。它用来记录“本项目已经并行推进过几轮”、控制并发风险，并让 PM 在每轮结束后复盘 provider/model 表现。
-
-Wave 启动前，PM 必须写清：
-- `wave_id`、base ref、目标、worker 清单、每个 worker 的分支/worktree/session。
-- 每个 worker 的类型：`ui-wiring`（低风险 UI 接线）、`contract-extension`（共享契约/依赖变更）、`tauri-command`（Rust/Tauri/本机依赖）、`docs/research`、`custom`。
-- runtime profile / provider / model / registry 或 settings/profile 路径 / 额度来源 / 并发槽位。超过 3-4 个 worker 时，不要压在单一 API provider 或同一个 provider key 上；应跨 Claude provider、Codex/OpenAI、OpenCode、local/OSS 等 profile 分流。
-- 共享风险：`package.json`、锁文件、`src-tauri/`、`src/shared/`、全局布局、DEC 编号或同一模块入口。
-- 预期 PR 数、收口顺序、下一 Wave 进入条件。
-
-并发数量不是固定 3 个。文件范围独立、验证命令独立、无共享契约冲突时，默认目标可提高到 4-6 个 worker；纯文档、翻译、i18n、互不重叠 UI 接线可以更多。涉及共享依赖、锁文件、Tauri command、全局布局、DEC race 或同一模块入口时，降到 1-3 个并按依赖顺序推进。
-
-Provider slot 分配是 PM 的显式规划，不是脚本自动猜测：
-- 一个 slot 表示一条可并发额度 lane：`backend + settings/profile path + provider + model + max_concurrency`。
-- Claude Code 第三方 provider 推荐用 registry + provider id + model alias 区分，例如 `config/claude-providers.local.json` + `<provider>/<model-alias>`；旧路径也可用具体 settings 文件区分，例如 `config/<your-provider>.settings.json`。真实 registry/settings 文件保持本地 ignored，不提交；具体用哪个 provider/model 见 personal config。
-- Codex 用 Codex profile / model 区分；OpenCode 用 `provider/model` profile 区分；custom worker 写明实际命令来源。
-- 默认同一 provider/settings 文件最多放 3 个 worker；只有低风险任务且上一 Wave 表现稳定时才放到 4 个。需要 5-6 个 worker 时，优先拆到第二 provider 或 Codex/OpenCode/local profile。
-- 高风险任务（共享契约、Tauri/Rust、本机依赖、锁文件）优先给上一 Wave 指令遵循和验证表现最好的 profile，且每个高风险共享域通常只开 1 个 worker。
-- 如果本机只有一个可用 settings/profile，不要为了凑人数启动 5-6 个 worker；把并发 cap 降到 3-4，剩余任务进入下一 Wave。
-
-6-worker 示例：
-
-| Worker | 任务风险 | Backend | Settings/Profile | Slot |
-|--------|----------|---------|------------------|------|
-| W1 | 高 | Claude Code | `config/<provider-a>.settings.json` | `<provider-a>-1` |
-| W2 | 中 | Claude Code | `config/<provider-a>.settings.json` | `<provider-a>-2` |
-| W3 | 低 | Claude Code | `config/<provider-b>.settings.json` | `<provider-b>-1` |
-| W4 | 低 | Claude Code | `config/<provider-b>.settings.json` | `<provider-b>-2` |
-| W5 | 文档/研究 | Codex | `codex:<profile>` | `codex-1` |
-| W6 | 重复性低风险 | OpenCode/custom | `<provider/model or command label>` | `opencode-1` |
+## 3. 不变量与启动门禁
 
-Wave 收口时，PM 记录每个 worker 的 `merged` / `done-unmerged` / `blocked` / `deferred` / `restarted`，并评估模型/provider 表现：Isolation Gate、STATUS 心跳、commit 节奏、范围遵循、验证通过率、review 修复次数、diff 质量、阻塞/幻觉/环境误判。下一 Wave 根据该评估调整任务分配：高风险任务给指令遵循和工程可靠性更好的 profile，低风险重复任务给成本或吞吐更优的 profile。
+PM 在业务实现前完成：
 
-> **多维度批量任务的颗粒度纪律**：worker 在一个 prompt 里改多维度时，注意力会被高优维度占满、末位维度静默漏掉。多维度任务用 checklist prompt 强制逐维度（每维度独立 commit / 勾选）、大批量改后派 wave2 复查 worker 抓漏、精细深查（箭头 / 字体 / 像素）拆单维度 worker。详见 `references/09-parallel-lessons.md` G22。
+1. 读取项目规则和完整任务卡，确定目标、非目标、allowed/forbidden files、验证命令与完成条件。
+2. 按根因、依赖链和文件范围分组；只有改动范围正交、验收独立、无共享锁文件/schema/迁移时才并行。
+3. 为每个 worker 指定 branch、worktree、session、backend/profile/model、provider slot 和 Session Context。
+4. 启动后验证真实 cwd/worktree/branch/session；门禁失败不得由 PM 静默接管业务实现。
+5. 发送完整 worker prompt，确认 checkpoint 或 Orca Dispatch 出现，再进入巡检。
 
-### 3.2 Goal-Driven Multi-Wave Loop
-
-Orchestration Goal 是 PM 层目标循环，用来让多轮 Wave 在条件满足前持续推进。它不把所有任务交给单个 worker；PM 仍按 Wave 从任务源取下一批安全可并行项，worker 仍只执行自己的窄范围任务。
+硬约束：
 
-启动 Goal Loop 前，PM 必须写清 Goal Contract，模板见 `templates/orchestration-goal.md`：
-- 任务源：如 `docs/TASKS.md`、GitHub Issues、项目配置中的 issue file。
-- 成功条件：例如目标范围内没有可执行 pending task、所有已启动 worker 都进入 `merged` / `done-unmerged` / `blocked` / `deferred`，主干验证通过，文档已同步。
-- 自主级别：`plan-only`（只规划下一 Wave）、`auto-launch`（可自动开下一 Wave）、`auto-review`（可自动复核 worker 结果）、`auto-merge`（在项目规则允许时按 `git-workflow` 合并）。
-- 上限：最大 wave 数、每轮最大 worker、总 worker、预算/时间、provider 并发槽位。
-- 继续条件和停止条件。
+- 先执行 Harness 调用层级门禁。Claude Code/Codex PM 可派发四个已配置 backend；CodeBuddy、QoderWork CN PM 只能派发自身。未知、冲突或无法证明的宿主身份失败关闭。
+- PM 默认只做拆解、派工、纠偏、review 和收口；用户明确授权或编排层本身需要修复时才直接修改。
+- 每个 worker 只修改自己的允许范围。共享文件、锁文件和全局契约按依赖顺序处理。
+- 轻量模式下不同 worker 必须占用互不重叠的文件夹；可能写同一目录时回到 worktree 模式。
+- Worker 验证命令不是安装授权。缺工具时报告阻塞，除非 PM 传入精确 `--allow-install-command` 和 `--install-authorization-source`。
+- Worker 自报、STATUS、UI 卡片、TUI idle、heartbeat 和 timeout 都不能单独证明业务完成。
 
-PM 可在支持的宿主中使用 Claude Code / Codex 的 `/goal` 来包住 PM loop，但 `/goal` 只负责让 PM 持续执行循环，不替代本 Skill 的 worktree、tmux、checkpoint、review 和 merge 门禁。Goal prompt 必须写明“PM 不直接实现业务代码；实现仍由 worker 完成”。
+Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩坑读取 `references/09-parallel-lessons.md`。
 
-每轮 Wave 收口后，PM 按以下顺序决定是否自动继续：
-1. 读取任务源，关闭已完成项，识别可执行 pending task、依赖、文件范围和共享风险。
-2. 确认当前 Wave 没有未处理的 failed/blocked worker、未验收 PR、base drift、冲突、主干验证失败或敏感/破坏性操作。
-3. 根据上一 Wave 的 provider/model 评估调整并发：干净通过可维持或小幅增加，出现冲突、范围越界、验证失败或限流则降并发。
-4. 若仍有可安全并行的任务，创建下一 Wave；若只剩高冲突/高风险任务，降为 1-2 个 worker 或停下请求用户确认。
-5. 若成功条件满足，写 final goal summary 并停止。
+### 3.1 Harness 调用层级
 
-自动继续条件：
-- 上一 Wave 的 worker 均为 `merged`、`done-unmerged`、`deferred` 或明确 `blocked` 且不会影响下一 Wave。
-- 所有合并动作已按 `git-workflow` 处理，base ref、本地主干和远端主干一致或已明确记录差异。
-- 必需验证通过；跳过的验证有清楚原因且不影响下一 Wave。
-- 下一批任务的 allowed/forbidden files 清晰，且没有共享锁文件、schema、全局布局或 DEC 编号 race 未解决。
-- provider 并发槽位足够，且没有连续限流、长延迟或 worker 指令遵循退化。
+| PM 宿主 | 允许派发的 worker backend |
+|---|---|
+| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN |
+| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN |
+| CodeBuddy | CodeBuddy |
+| QoderWork CN | QoderWork CN |
 
-必须停止并汇报的条件：
-- 任一 worker `failed`、`blocked` 且影响下一 Wave，或连续两次纠偏无效。
-- PR 冲突、base drift、主干验证失败、测试不稳定、merge 权限不足或 GitHub/CI 状态不明。
-- 下一批任务需要用户产品判断、破坏性文件操作、联网敏感处理、密钥/隐私处理或项目规则未授权的自动合并。
-- 任务源含糊、依赖未满足、文件范围高度重叠，或只剩共享契约/锁文件/Tauri command 等高风险任务。
-- 达到 Goal Contract 的 wave、worker、时间、预算或 provider 上限。
+`spawn-worker.sh` 从完整进程祖先链的真实可执行程序识别宿主，对每层 Harness 的白名单取交集，使嵌套调用只能降权、不能借强 CLI 恢复权限；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
 
-### 3.3 Optional Project Config
+声明的 worker backend 还必须与实际启动命令一致。只接受直接启动四种 CLI、受信的 Claude provider wrapper，或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
-项目可放置 `.claude/orchestration.config.json`，模板见 `templates/project-config.json`。该配置只声明项目默认值，不替代 PM 判断，也不允许静默执行破坏性动作。
+## 4. Orca-first 控制平面
 
-配置可声明：
-- trunk/base ref、任务源、默认 worktree/session context 路径。
-- 按 worker type 拆分的验证命令。
-- provider slot 默认计划，供 Goal/Wave 启动清单引用。
-- 可复制到 worktree 的非敏感配置文件，例如 `.npmrc.example` 或只读模板。
-- post-create / pre-merge hook 命令。
+### 4.1 先读取版本匹配指南
 
-**与 §2.4 个人偏好叠加（用户级 vs 项目级）**：
-
-| 维度 | 用户级（§2.4） | 项目级（§3.3） |
-|------|---------------|---------------|
-| 路径 | `config/orchestration-personal.json` | `.claude/orchestration.config.json` |
-| 内容 | 个人主力 host、默认 model 轮换、Codex policy、跨工具 backend 默认 model | trunk / 任务源 / 验证命令 / 本项目 provider slot 默认计划 / hook |
-| 谁写 | 用户自己 | 项目维护者 |
-| 谁读 | PM 派 worker 前 | PM 启动 Wave 前 |
-| 优先级 | 低（个人通用偏好） | 高（项目覆盖个人） |
-
-> 例：个人偏好 host=claude-code + model=<你的模型>；项目级 provider slot 计划写"本 Wave 的 W3/W4 走 <某 provider>"——则 W3/W4 用该 provider，其他 worker 仍按个人偏好。两者不冲突，也不应互相复制；项目级不写个人偏好字段（避免把 dotfile 化进仓库）。
-
-配置安全规则：
-- 永远不要默认复制 `.env`、真实 settings、token、key、cookie、证书或账号凭证。
-- `allowed_config_copy` 只允许非敏感文件；`forbidden_config_copy` 命中时必须停止并报告。
-- hook 默认只是声明。PM 只有在项目规则或用户明确授权时才运行；运行前应展示命令，必要时先 dry-run。
-- `spawn-worker.sh` 不自动读取项目配置、不自动复制配置、不自动执行 hook，避免把可选约定升级成隐式副作用。
-- 若配置缺失或字段不清楚，PM 回到 Skill 默认值：trunk=`main`、不复制配置、不跑 hook、只使用 worker prompt 明确列出的验证命令。
-
-### 3.4 目标目录基线准备：untracked files → init commit（踩坑 2）
-
-> worktree 只复制 tracked tree，不会复制 untracked 文件。PM 派活前若目标目录是新建未提交的，worker 拿不到基线，task 必失败。
-
-- 现象：spawn worker 后 `ls worktree/<target>/` → 不存在（untracked 文件不在 tracked 树里）。
-- 解决（启动 Wave 前必做）：
-  ```bash
-  git add <target-untracked-dir>
-  git commit -m "[init] 基线：<target-untracked-dir>"
-  git push
-  ```
-  确认远端 tracked 后再 spawn worker，worktree 才能正确 checkout 到基线文件。
-  一句话记牢：**untracked 文件先 `init commit` 推上远端，worker 才有基线可读**。
-- 路径含空格是常态（如 `Library/Application Support`）：`spawn-worker.sh --project "<path with spaces>"` 必须双引号包裹；脚本内部已用 `"$VAR"` 形式，可正常工作，但 PM 手写命令时勿漏引号（踩坑 4）。
-
-### 3.5 spawn 后 auto-bypass（v1.18.3）—— PM 不需要手按 dialog
-
-v1.18.3 关键修复：spawn-worker.sh **已自动化** trust + permission dialog 兜底，**PM 不需要** `tmux attach` 盯 30-60s 手按。`spawn-worker.sh` 主流程调用三层保护：
-
-1. **`trust_auto()`**（v1.17.5，保留）：同步 30s 监控 trust dialog，命中按 Enter 选 option 3（Trust folder and all subdirectories）。
-2. **`permission_auto()`**（v1.18.3 关键修复）：同步 60s 监控 "Do you want to proceed?" dialog，命中**改用数字键 `2`**（不再用 Down Enter，PM 2026-07-08 wave-1 实测 Down Enter 在某些 TUI 状态不稳）。
-3. **`permission_auto_bg()`**（v1.18.3 新加）：后台 watcher（`disown`），持续 7200s 监控 dialog 兜底。覆盖同步 60s 窗口外的 dialog（worker 启动后 60-7200s 期间任何 tool 调用都自动按 2）。
-
-PM 派活后**不需要** attach tmux 或手按 dialog。如果 worker 在 spawn 后 1-2 分钟还没写 STATUS.json，再看 sentinel/cron 通知（说明 dialog 真的卡了，再用 `tmux attach` 手动 inspect）。
-
-> v1.18.4 增：claude-code backend 默认全关上述三层监控（实测 `--permission-mode auto --bare` 不弹 dialog，省 90s 空等）；详见 §3.8.4。其他 backend 维持 v1.18.3 行为。
-
-历史踩坑（v1.18.2 之前）：wave-1/2 PM 反复按 1/2 接 dialog（v1.18.2 文档化但未真正修）。v1.18.3 自动化了，按踩坑 7 修复。
-
-> **MCP 选择 dialog 不被 auto-bypass 覆盖**（2026-07-11 实测）：上述三层只处理 trust + "Do you want to proceed?" dialog；项目若配 MCP server，claude-code worker 启动还会弹「N new MCP servers found」选择 dialog，worker 卡住不写 STATUS。解法：worker 不需 MCP 时 spawn 后 `tmux send-keys -t <session> Escape` 拒绝全部，或 spawn 命令带 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` / 补 `--bare`。详见 `references/09-parallel-lessons.md` T6。
-
-#### 3.5.1 auto-bypass 实现细节（v1.18.3）
-
-- **`permission_auto`** 关键修复：旧版用 `Down Enter`（按箭头 + Enter 选 option 2），PM 2026-07-08 wave-1 实测在某些 TUI 状态不稳。v1.18.3 改用 `tmux send-keys -t "$session" "2"`（直接发数字键 2），稳定 work。
-- **`permission_auto_bg`** 后台 watcher：通过 `( permission_auto_bg "$SESSION" & disown ) &` 启 disown，spawn-worker.sh 退出不影响 watcher。watcher 默认 7200s（与 sentinel --max-wait 对齐），可用 env var `SPAWN_PERMISSION_BG_MAX_WAIT` / `SPAWN_PERMISSION_BG_POLL`（默认 5s）调整。
-- **新 flag `--no-permission-auto`**：v1.18.3 精细 opt-out，**只**关 permission_auto + permission_auto_bg（不影响 trust_auto）。与 `--no-trust-auto`（同时关 trust + permission）区分。
-- **smoke 验证**：`bash scripts/smoke-auto-bypass.sh`（v1.18.3 新增）验 7 项：函数定义、数字键、bg 函数、flag 解析、调用点、usage、头部注释。
-
-### 3.6 captcha 类 worker 必读（踩坑 6）
-
-- gov-info-query 三站共用 VL 验证码识别，频繁撞 `429 Too Many Requests`，是当前最大瓶颈。
-- PM 派 captcha 类 worker 时，prompt 必须点名 sibling skill `../captcha-auto/`（HANDOFF.md §1 有 `buildVisionRequestBody` + retry/backoff），并要求：失败 ≤ 3 次 + 指数退避，仍失败则降级 JSON 交 PM 人工重跑，**禁止自写 VL 调用**。详见 `references/08-codebuddy-cli-worker.md` §13。
-- **硬约束（用户强约束「captcha 一定不要我手动输入」）**：worker 必须**自动**调用 `captcha-auto` skill 完成验证码识别——即由 worker 自己用 `buildVisionRequestBody` 构造请求 + 自管 `fetch` 调用，把识别结果回灌任务流程。**严禁**任何形式的「把验证码贴给用户 / 让用户手动输入 / 等用户键入验证码再继续」。这条约束与 §3.7 配套：PM 派发 prompt 必须把 `captcha-auto` 的**绝对路径**写进「Project Skills」段，worker 才能用 Read 按需读取并自动执行，而不是在独立 cwd 里找不到 skill 而退化成向用户要验证码。
-
-> 本节即「派发 SOP 必带 skill 路径清单」：wave-1 期间 worker A/B/C 都因「不知道 sibling skill 路径」撞 captcha 429 / 花大量时间找路径。根因：非 Claude Code 的 worker（codebuddy / qoderwork / 跨工具 backend）跑在独立 cwd，**默认看不到 Claude Code skills 目录**，PM 不显式给路径，worker 就只能瞎找或退化成向用户要验证码。本节能范化未来 PM 派活。
-
-**强制规则（PM 派发前必做）**：
-
-1. PM 派活前，先在本机收集本项目相关的 sibling skill 路径清单。每个可能用到的 skill 跑一次：
-   ```bash
-   ls <project-root>/<sibling-skill>/SKILL.md
-   ```
-   把**绝对路径**（或相对 worktree 的稳定相对路径）记下来，例如：
-   - `captcha-auto`：`/abs/path/to/captcha-auto/SKILL.md`
-   - 其他任务相关 skill：同理逐个确认存在。
-2. PM 把收集到的路径清单写进 worker prompt 的 **「Project Skills」段**（标准字段见下），要求 worker **用 Read 按需读取**，不要靠 worker 自己猜路径。
-3. 任何**涉及验证码**的任务，PM **必须**把 `captcha-auto` 的 SKILL.md 绝对路径写进「Project Skills」段——这是 §3.6「worker 必须自动调 captcha-auto、禁止用户手动输入」的前置条件。路径不进 prompt，worker 在独立 cwd 找不到 skill，就会退化成向用户要验证码，违反用户强约束。
-4. 「Project Skills」段是 worker prompt 的**硬约束段**，与 Isolation Gate / Heartbeat / Commit 同级，省略会直接导致收口失败（worker 找不到 skill → 卡死 / 偏题 / 向用户要验证码）。
-
-**「Project Skills」段标准模板**（嵌入 worker prompt，放在 Background 与 Mission 之间）：
-
-```text
-## Project Skills（PM 派发必带，worker 用 Read 按需读取，不要靠猜路径）
-
-PM 已在本机确认以下 sibling skill 路径存在，请在该路径下用 Read 读取 SKILL.md 及所需 references：
-
-| Skill 名称 | SKILL.md 绝对路径 | 何时用 | 关键入口 |
-|-----------|------------------|--------|---------|
-| captcha-auto | /abs/path/to/captcha-auto/SKILL.md | 任何验证码识别（必自动调用，禁止用户手动输入） | HANDOFF.md §1 `buildVisionRequestBody` + 自管 fetch |
-| <其他 skill> | /abs/path/to/<other>/SKILL.md | <触发场景> | <关键文件/函数> |
-
-规则：
-- 路径由 PM 派发前 `ls <project-root>/<skill>/SKILL.md` 校验存在；不校验就写进 prompt 视为 PM 失责。
-- worker 在独立 cwd 下默认看不到这些 skill，必须靠本段路径 Read，禁止假定 skill 在默认搜索路径里。
-- 未列出的 skill 不要自行臆测路径；需要时用 Read 试探并报 PM。
-```
-
-**与 §3.6 的联动**：
-
-- §3.6 是「worker 侧」约束：worker 必须自动调 `captcha-auto`（`buildVisionRequestBody` + 自管 fetch），禁止用户手动输入验证码。
-- §3.7 是「PM 侧」约束：PM 派活必须把 `captcha-auto`（及所有相关 sibling skill）的**路径**写进 prompt 的「Project Skills」段，worker 才有可读的东西。
-- 两者配套：PM 给路径（§3.7）→ worker 读路径自动执行（§3.6）。缺 PM 给路径这步，§3.6 的「自动调」就无米下锅，必然退化成向用户要验证码。wave-2 派 D（shixin 双模式）+ wave-3 派 E（captcha 优化）都依赖本 SOP。
-
-### 3.8 PM spawn 后异步判断 + 并行投递纪律（v1.18.4 实战增）
-
-> **【红线警示】PM spawn 完一个 worker，绝对不要用 `TaskOutput block=true` /
-> `tmux attach` / 任何 block 等 worker 跑完的调用。** spawn 是 fire-and-forget；
-> 立刻用下面 4 条核验命令 30 秒内确认 worker 就位，然后切回 PM 主循环。
-> 任何「等 spawn-worker.sh 退出才投 prompt」「等 STATUS.json 出现才派下一个 worker」
-> 都把 PM 主回合挂死，让 Wave 并行价值归零。
-
-#### 3.8.1 spawn 后 30 秒内必跑的 4 条核验命令（PM 第一动作清单）
-
-`spawn-worker.sh` 退出后立即跑，**不要 await**：
+每个新会话先运行：
 
 ```bash
-# 1. tmux session 是否真的存活（< 1s）
-tmux has-session -t "$SESSION" 2>/dev/null && echo "SESSION_OK" || echo "SESSION_MISSING"
-
-# 2. pane cwd / prompt 是否已就位（< 1s）
-tmux capture-pane -t "$SESSION" -p | tail -5
-
-# 3. Session Context METADATA.json 是否已落盘
-ls "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
-
-# 4. STATUS.json 是否 1-2 分钟内出现（用 timeout 卡死避免 block）
-timeout 120 bash -c 'until [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/STATUS.json" ]; do sleep 5; done'
-# 120s 还没出现 → 触发 §2.1 纠偏流程，不要加长 timeout
+orca skills get orca-cli
+orca skills get orchestration   # 仅 supervised / DAG / ask-reply 场景
+orca status --json
 ```
 
-PM 跑完 4 条立刻返回主循环。后续 worker 终态由 sentinel（§7.2）+ cron（§7.3）事件驱动接管，**不要 PM 自己 poll 等**。完整操作清单详见 `templates/pm-spawn-postflight.md` cheatsheet。
+以运行中二进制返回的指南和 `--help` 为准，不从本 Skill 猜未来参数。脚本（包括 Harness 权限检测）通过 `scripts/orca-runtime.sh` 统一 CLI：`ORCA_CLI_COMMAND` → dev `orca-dev` → Linux 外部 shell `orca-ide` → `orca`。
 
-#### 3.8.2 并行 spawn 投递纪律（spawn 阶段就并行，不要先串行后并行）
+### 4.2 检测真实运行时
 
-§3.1 提到 4-6 worker 并行（默认上行 218）但完全没讲 spawn 投递节奏。Wave 启动前 PM 必须判断：
+`spawn-worker.sh` 在 `PROJECT_DIR` 的 Git toplevel 调用 `orca worktree current --json`，只有返回的 `.result.worktree.path` 与项目一致才进入 Orca。不要依赖 `TERM_PROGRAM` 或 `ORCA_WORKTREE_ID`；它们在真实 Orca session 中可能不存在。
 
-- **文件域不重叠 + 验证命令独立 + 无共享契约冲突** → **一开始**就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用）
-- **共享依赖 / 锁文件 / Tauri-Rust / DEC race** → 降级到 1-3 个串行
+显式 `--no-orca-mode` 使用 tmux。`--no-worktree` 与 Orca worktree 模式互斥。Orca 路径本身不要求 tmux。
 
-并行 spawn 标准动作链（基于 DEC-038 监测层不变，`spawn-worker.sh` 退出后立刻 `tmux send-keys` 投 prompt）：
+### 4.3 Terminal-managed
 
-```bash
-# 6 worker 一开始就并行（每次 = spawn-worker.sh + sentinel 各一次 Bash 调用）
-# 不要先 spawn W1 后 await 等 W1 STATUS.json 才 spawn W2 —— 等于串行化
-
-for w in w1 w2 w3 w4 w5 w6; do
-  bash scripts/spawn-worker.sh --project ... --branch ... --session "$w" --with-sentinel --command "$W_CMD_$w"
-  # ↑ fg spawn：拿 gate / 拿 sentinel cmd / 不 block 主进程（见 §3.5 v1.18.3 trust/permission 自动化 + §3.8.4 v1.18.4 默认 backend 分支）
-  bash scripts/sentinel.sh ... --tmux-session "$w"  # run_in_background=true 下一回合
-  # ↑ bg sentinel：exit 时 harness re-invoke PM（见 §7.2）
-done
-# 6 个 spawn 完 → 跑 §3.8.1 的 4 条核验 → 立即 `tmux send-keys` 投 prompt + 切回主循环
-```
-
-#### 3.8.3 spawn 后不要做的事（反模式）
-
-- `TaskOutput block=true` 等 spawn-worker.sh 退出 → PM 主回合 hang → 并行价值归零（某多 worker Wave 实测白等 ~90s/次 × 3 worker）
-- `tmux attach -t "$SESSION"` 跟 worker 一起看 → 占 PM 主会话、无纠偏能力
-- `while ! [ -f STATUS.json ]; do sleep 1; done` 不带 timeout → PM 可能永久挂
-- spawn 完 6 worker 立刻 poll 等全部 done → Wave 串行化
-- spawn-worker.sh 内部 fork sentinel / pm-monitor → auto mode 拒多 background（见 CHANGELOG v1.18.1）
-
-#### 3.8.4 spawn-worker.sh 同步 dialog 监控默认行为（v1.18.4 改动）
-
-claude-code backend + `--permission-mode auto --bare` 实测不弹 trust / permission dialog，但 v1.18.3 默认无条件走 trust_auto 30s + permission_auto 60s 同步监控 = **90s 空等**（实测三个 worker 单次 spawn 主进程 2-4 min 才退出）。
-
-v1.18.4 改动（`scripts/spawn-worker.sh` backend 分支化默认值）：
-
-- **claude-code backend 默认** `--no-trust-auto --no-permission-auto --no-permission-auto-bg` → spawn 秒级返回
-- **codebuddy / qoderwork-cn / codex / opencode 仍默认启**（这些 backend 会真弹 dialog）
-- 用户显式 `--trust-auto` / `--permission-auto` 可强制启用（升级后 dialog 行为变化兜底）
-
-6 个 `--*/--no-*` flag 均可 force override 默认值（详见 `scripts/spawn-worker.sh` usage 段与 DEC-112）。
-
-## 4. 命名规则
-
-**一处定义、各处引用一致（硬约束，实测踩坑）。** branch / worktree / session / run-dir / spec 必须从**同一个 source** 派生，在各处（PM Wave 计划、`spawn-worker.sh` 参数、worker prompt 里写的 Branch/Worktree/Session Context、METADATA.json、回归库 `runs/<variant>/`）引用完全一致。实测中 PM 手抖把 `wr-v0107-<model-id>-ch08` 的 `wr-` 前缀剥掉、或 branch 与 session 名对不上，直接导致 worker 的 Isolation Gate（`pwd` / `git branch --show-current` 自检）拦截、sentinel 找不到 `STATUS.json`、收口 `git diff` 验空 diff。规避：
-
-- PM 在 Wave 计划里**一次写下** `{branch, worktree, session, run-dir}` 四元组，后续所有 `tmux send-keys` / 纠偏 / 收口命令都从该四元组复制，不在中途重新键入或简化。
-- `scripts/spawn-worker.sh` 内部已从单一 source 派生：`BRANCH` → `safe_branch`（worktree-safe）→ 默认 `WORKTREE=.claude/worktrees/tmux-<safe_branch>` → `SESSION_CONTEXT=<worktree>/.claude/agent-sessions/<session>`。PM 只需保证传入的 `--branch` 和 `--session` 本身一致且完整，helper 不会再让 worktree 与 branch 脱钩。
-- cross-model / 评测场景的命名四元组带模型标识（见 `eval-harness` 的 model-aware 命名约定），整条链路用同一个 `variant_slug`，避免 PM 在不同环节用不同简称。
-
-分支名面向远端协作和 PR，必须体现任务语义，不写执行来源。
-
-```text
-docs/ch01-agent-intro
-research/issue-13-ch08-materials
-fix/agent-session-shell
-```
-
-worktree 路径只用于本地隔离，应加执行来源前缀：
-
-```text
-.claude/worktrees/tmux-ch01-agent-intro
-.claude/worktrees/team-agent-session-shell
-.claude/worktrees/subagent-copyedit-ch02
-```
-
-不要把 `tmux-`、`subagent-`、`team-`、`agentteam-` 写进分支名。分支类型前缀和提交/PR 格式以 `git-workflow` 为准。
-
-创建示例：
-
-```bash
-git worktree add .claude/worktrees/tmux-ch01-agent-intro -b docs/ch01-agent-intro
-git worktree add .claude/worktrees/team-agent-shell -b fix/agent-session-shell
-```
-
-### 4.1 Session Context 目录
-
-Worker 的本地状态统一写到当前 worktree 的 `.claude/agent-sessions/<session-id>/`（下文简称 **Session Context**），复用项目既有 `.claude/` 协作空间，与 Claude Code 官方 Agent Teams 状态源明确区分。
-
-```text
-.claude/agent-sessions/legal-ch01/METADATA.json
-.claude/agent-sessions/legal-ch01/STATUS.json
-.claude/agent-sessions/legal-ch01/RESULT.md
-.claude/agent-sessions/legal-ch01/PATCH_SUMMARY.md
-```
-
-Claude Code 官方 Agent Teams 是另一套机制：团队配置在用户目录 `~/.claude/teams/<team-name>/config.json`，任务状态在 `~/.claude/tasks/<team-name>/`，inbox 在 `~/.claude/teams/<team-name>/inboxes/`。使用官方 Agent Teams 时优先读写这些官方状态源；不要在项目里自造 `.claude/teams/` 来冒充官方 team。
-
-`.claude/agent-sessions/` 是 PM 巡检状态，不属于业务 diff。PM 和 worker 都必须确认它不进入 commit / push / PR；需要时由 PM 在对应 worktree 的本地 exclude 中忽略。
-
-## 5. Worker Prompt 模板
-
-Worker prompt 应像启动 subagent 一样给足上下文：任务来源、验收标准、允许文件、禁止文件、验证命令、checkpoint 协议、隔离自检和 PM 纠偏协议都要写清。不要只给一句“实现某功能”，否则 worker 容易把环境、依赖或相关技术债扩展成自己的任务。
-
-模板放在 `templates/worker-prompt.md`，包含两个可复制段落：
-- Bootstrap-only prompt：只创建 `STATUS.json`，适合高延迟 provider 或 high-effort 模型的第一条消息。
-- Full worker prompt：按 Context / Background / Mission / Scope / Deliverables / Process / Verification / Autonomy / Out of Scope / PM Correction 组织，接近派发 subagent 时的写法。
-
-Full worker prompt 的 Execution Authority 是硬约束段：默认禁止机器级和项目本地依赖安装；`Authorized Install Commands` 只能列完整、精确的命令，并同时记录 `Install Authorization Source`。缺工具时先查机器已有路径，仍缺则写 `STATUS=blocked` 与 RESULT，不得把“需要跑验证”解释成安装权限。项目锁文件驱动的正常本地依赖流程也须由 PM 明确列出精确命令，避免把项目内许可扩大成全局环境写入。
-
-对高延迟 provider 或 high-effort 模型，优先用两段式启动：第一条消息使用 Bootstrap-only prompt 创建 `Session Context/STATUS.json` 并回报 runtime；PM 确认 checkpoint 后，再发送 Full worker prompt。这样能避免 worker 在长思考前没有可观测状态。
-
-### 5.1 模板使用纪律（必读，实测踩坑）
-
-PM 派 worker 时**必须以 `templates/worker-prompt.md` 的 Full Worker Prompt 为骨架**，把业务任务（Issue / 任务卡 / `.task-issueN.md` 内容）填进 Background / Mission / Scope / Deliverables / Verification 字段。**不要用自定义简化 prompt（例如只写一个 BOOTSTRAP.md 指向业务 `.task` 文件）替代模板骨架**——即便业务 `.task` 文件写得很细，没有模板骨架的编排层硬约束，worker 仍会在流程层失守。
-
-模板里这些段落是 worker 可观测性和收口正确性的硬约束，省略会直接导致收口失败（以下后果均有实测对应）：
-
-- **Isolation Gate**：worker 先确认 `pwd` / `git branch`，否则可能在 main 或错误 worktree 误改。
-- **Heartbeat cadence（每 10 分钟强制更 STATUS，即使无进展也写 `phase=thinking-deep`）**：PM 靠 `STATUS.updated_at` 检测 silent worker。省略则 worker 写一次初始 STATUS 后再也不更新，PM 巡检信号失真、无法判断卡点。
-- **Commit Cadence + "commit 是强制收尾步骤"**：即使任务要求"不 push / 不开 PR"，worker 也必须先 `git add` + `git commit` 自己的产出。省略则 worker 改完文件不 commit，PM 收口时 `git diff --check main...HEAD` 验的是空 diff（HEAD 仍在 base，假通过），PM 只能替 worker commit。rebase / reset 后尤其要重新确认改动已 commit。
-- **Canonical terminal status（`status="done"` 字面值）**：sentinel 状态机按字面 `done` 匹配。省略则 worker 可能写 `completed` / `finished` 同义词，sentinel 不退出、PM 不被 harness 唤醒、worker 孤儿到 `--max-wait` 超时。
-
-业务任务文件（`.task-issueN.md` 等）可作为 Mission / Scope 的附件让 worker 读取，但**编排层骨架（Isolation Gate / Heartbeat / Commit / done 字面值）必须来自模板**，不能靠业务文件或自定义 BOOTSTRAP 兜底。PM 若发现自己在手写 BOOTSTRAP 替代模板，应停下，改为套用 `templates/worker-prompt.md` 再派发。
-
-### 5.2 超长 prompt 投递标准模式（Task-022，folia + v1.20.2 dogfood 实战）
-
-Full Worker Prompt 填入具体任务后常超 2-4 KB，含反引号 / `$` / 表格 / markdown 特殊字符。直接 `tmux send-keys -l "<长文本>"` 投递有转义与截断风险（特殊字符被 tmux / claude TUI 解释、超长被截断）。标准模式：**把 Full Worker Prompt 写到 `{session_context}/WORKER_PROMPT.md`，再 `tmux send-keys` 一条短读取指令让 worker 自己 Read**：
-
-```bash
-# 1. PM 把 Full Worker Prompt 写到文件（worker 启动后 session_context 目录已存在）
-#    <worktree>/.claude/agent-sessions/<session>/WORKER_PROMPT.md
-# 2. 投短指令（send-keys -l 投文本 + 单独 Enter 提交；claude TUI 可能要 sleep 3 + 兜底 Enter）
-tmux send-keys -t <session> -l "请 Read .claude/agent-sessions/<session>/WORKER_PROMPT.md 并严格按其指示执行"
-tmux send-keys -t <session> Enter ; sleep 3 ; tmux send-keys -t <session> Enter
-```
-
-worker 在 worktree cwd，相对路径可读；文件在 session context（与 STATUS/RESULT 同目录），scope-guard 不拦读取。短指令单行中文无特殊字符，TUI 稳定接收。folia Wave-1（2026-08-04/05）3 worker + 本 skill v1.20.2 dogfood（W1 改 pm-sentinel-response，2026-08-05）均用此模式，100% 投递成功。短 prompt（单行 / 无特殊字符）仍可直接 `send-keys -l` + Enter，本模式只针对超长 / 含特殊字符的 Full Worker Prompt。
-
-## 6. 启动方式
-
-默认工具面保持收敛：
-- `check-dependencies.sh`：新机器或启动 Wave 前做一次 preflight。
-- `claude-provider-env.sh`：Claude Code 第三方 provider worker 的 registry/settings-derived env 隔离 wrapper。
-- `render-runtime-profile.sh`：为每个 worker 渲染 backend/settings/profile/model/slot 和启动命令。
-- `spawn-worker.sh`：创建 worktree、Session Context 和 tmux session。
-- `sentinel.sh`：每个 worker 一个，PM 用 `run_in_background=true` 启，worker 终态时唤起 PM（见 §7.2）。
-- `pm-monitor.sh`：多 worker/Wave 巡检；单 worker 或宿主唤醒才用 `wait-worker.sh`。
-
-项目配置模板见 `templates/project-config.json`。PM 可以把其中的 trunk、验证命令和 provider slot 复制到本轮 Goal/Wave 计划，但脚本不会自动套用该配置。
-
-其余脚本只在对应场景使用：`worktree-status.sh` 做只读总览，`clean-worktree.sh` 做 dry-run 清理，`smoke-tmux-worker.sh` / `lint-wait-script.sh` 只做 Skill 自测，`terminal-split.sh` 只是可选可视化辅助，不属于默认启动路径。
-
-默认用 `scripts/spawn-worker.sh` 创建 worktree、Session Context 和 tmux session；它只负责隔离和启动，PM 仍必须发送 `templates/worker-prompt.md` 并确认 `STATUS.json`。不同 backend/profile 的启动命令可先用 `scripts/render-runtime-profile.sh` 生成，减少手写环境差异。
-
-```bash
-eval "$(bash scripts/render-runtime-profile.sh \
-  --backend claude-code \
-  --runtime-profile minimax \
-  --api-provider minimax \
-  --model m3 \
-  --provider-slot minimax-1 \
-  --provider-registry config/claude-providers.local.json)"
-
-bash scripts/spawn-worker.sh \
-  --project /path/to/repo \
-  --branch docs/ch01-agent-intro \
-  --session legal-ch01 \
-  --worker-backend "$WORKER_BACKEND" \
-  --runtime-profile "$RUNTIME_PROFILE" \
-  --api-provider "$API_PROVIDER" \
-  --model "$MODEL" \
-  --provider-slot "$PROVIDER_SLOT" \
-  --env-isolation "$PROVIDER_ENV_ISOLATION" \
-  --verify-cmd 'npm run typecheck' \
-  --command "$WORKER_COMMAND"
-```
-
-依赖安装默认 fail-closed。只有用户或项目规则明确批准时，才把**完整精确命令**及授权来源传给 spawn；下面仅展示参数结构，不代表自动授权：
+适用于 CodeBuddy、QoderWork CN，以及四种白名单 backend 中不采用 supervised 的交互式 CLI：
 
 ```bash
 bash scripts/spawn-worker.sh \
-  --project /path/to/repo \
-  --branch feat/example \
-  --session example \
-  --worker-backend claude-code \
-  --allow-install-command 'npm ci' \
-  --install-authorization-source '项目锁文件验证流程已明确批准' \
-  --git-expected-name '<git name>' \
-  --git-expected-email '<git email>' \
-  --git-integration-base origin/main \
-  --command "$WORKER_COMMAND"
+  --project "$PROJECT" --branch feat/worker-a --session worker-a \
+  --pm-harness codex --worker-backend codebuddy --command "$WORKER_COMMAND"
 ```
 
-`spawn-worker.sh` 会把 worker 可读镜像写入 Session Context，并把权威授权快照与 SHA-256 receipt 写到 Git common-dir 的 `agent-authority/`（worktree 外）。Claude Code / CodeBuddy / QoderWork 的 PreToolUse settings 从 spawn 进程环境快照取权威授权，直接 Shell 默认 fail-closed：窄生命周期命令或 spawn 发出的精确 `allowed_shell_commands` 才可运行；安装命令还必须精确命中单独的授权清单并带可审计来源。`npx` / `npm exec` / `pnpm dlx` 等可能按需获取依赖的命令不能借 `--verify-cmd` 隐式获权。spawn 只把初始状态记录为 `settings_wired...runtime_unproven`；hook 第一次真实收到 PreToolUse 后才在 PM receipt 同目录原子创建 `*.hook-attested.json`。PM 应以该文件作为 runtime hook 证据，不能把“settings 已写”当“CLI 已执行 hook”。这里约束的是 Agent 的直接工具调用边界；获准执行的项目脚本/测试及仓库 hooks 属于受信项目代码，不宣称提供 OS 容器级沙箱。
-
-raw `git push` 不属于安全生命周期命令。PM 同时传 `--git-expected-name`、`--git-expected-email`、`--git-integration-base` 后，spawn 把四个一次性 `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 变量绑定到 worker 进程（不写共享 repo config），并生成一个精确 safe-push command：它调用 `git-workflow` 的身份门禁核验远端 PR base 到当前 HEAD 的每个 commit，只 push 已核验 OID。三项缺一 fail-closed；未生成 safe-push 时 worker 必须报告 push blocked。
-
-Claude Code `--bare` / `--safe-mode` / `CLAUDE_CODE_SIMPLE=1` 会跳过或可能跳过 hooks，`--setting-sources` 排除 `local` 也会使项目 hook 不生效；命令未暴露可证明的 `claude` token 同样不能冒充 hook mode。spawn 默认停止。对这些模式以及尚未接入 PreToolUse 的 backend（Codex / OpenCode / custom），只有用户或项目明确接受降级并通过 `--allow-prompt-only-install-guard '<授权来源>'` 留痕时，才进入 `prompt_only_no_mechanical_enforcement`，METADATA 不得声称存在进程快照机械门禁。
-
-轻量模式（无 worktree，§2.1.1）——派多个 worker 各管一个独立文件夹、或目标不是 git 仓时用：
+PM 可在 Orca UI 查看 worktree、branch、terminal，用统一入口控制：
 
 ```bash
-# 同一个 PM session 里，给两个不同文件夹各派一个轻量 worker
-bash scripts/spawn-worker.sh \
-  --project /path/to/folder-a \
-  --session lite-folder-a \
-  --no-worktree \
-  --worker-backend claude-code \
-  --model "$MODEL" \
-  --allow-paths '/path/to/folder-a/**' \
-  --command "$WORKER_COMMAND"
-
-bash scripts/spawn-worker.sh \
-  --project /path/to/folder-b \
-  --session lite-folder-b \
-  --no-worktree \
-  --worker-backend claude-code \
-  --model "$MODEL" \
-  --allow-paths '/path/to/folder-b/**' \
-  --command "$WORKER_COMMAND"
-# ↑ 两个 worker 各自 cwd 直接指向自己的文件夹，互不建 worktree；
-#   隔离靠文件夹分离 + --allow-paths scope-guard，不靠 git worktree。
-#   若 --project 不是 git 仓，--no-worktree 可省（脚本自动检测 + 打印 LIGHTWEIGHT_AUTO）。
+bash scripts/pm-orchestrate.sh peek --worktree "$WT" --session worker-a
+bash scripts/pm-orchestrate.sh read --worktree "$WT" --session worker-a --lines 5000 --cursor 0
+bash scripts/pm-orchestrate.sh send --worktree "$WT" --session worker-a --text "只修测试失败"
+bash scripts/pm-orchestrate.sh wait --worktree "$WT" --session worker-a --timeout 300
 ```
 
-启动后必须通过最小门禁：`tmux has-session` 存活、pane cwd 指向 worktree（轻量模式 = 目标文件夹）、worktree 模式下 `git branch --show-current` 等于目标分支、`Session Context/METADATA.json` 已记录 base/runtime/verification/`isolation_mode`、`Session Context/STATUS.json` 在 1-2 分钟内出现。失败时停止 session 或发送 bootstrap correction，不要在 PM 主目录继续实现。
+CodeBuddy/Qoder 的 trust/permission dialog 由 `spawn-worker.sh` 通过 Orca terminal read/send 或 tmux capture/send 处理。CLI 未被 Orca 识别时仍保留 terminal-managed，不伪造 Dispatch。
 
-**【spawn 后 30 秒必跑 snippet · 详见 §3.8.1】** 不要用 `TaskOutput block=true` 等 `spawn-worker.sh` 退出，跑完下面 4 条立刻返回主循环：
+当前两阶段启动显式使用 `worktree create --setup inherit → 写入 Session Context/权限与 scope hook → terminal create --command`。不要直接改成 `worktree create --agent`：其原子启动会早于本 Skill 写入机械门禁。只有 Orca 提供预置文件或延迟 Agent 启动合同后，才切换 agent-first；自定义 provider/wrapper 始终保留 external terminal 路径。
+
+`terminal wait --for tui-idle` 只表示 TUI 可交互或暂时空闲，不表示任务完成。Qoder 等 alternate-screen TUI 应从 `--cursor 0` 开始保存返回的 `nextCursor` 做增量读取；最终仍以 STATUS/RESULT、真实 diff/tests/artifacts 和 PM 验收为准。
+
+### 4.4 Supervised：一个 Wave 共用一个 Run
+
+当用户明确要求监督、等待结果或协调 DAG 时，先创建一次 Run：
 
 ```bash
-# 1. session 存活
-tmux has-session -t "$SESSION" 2>/dev/null
-# 2. pane 已交出 prompt（capture 尾部 5 行）
-tmux capture-pane -t "$SESSION" -p | tail -5
-# 3. METADATA.json 已落
-ls "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
-# 4. STATUS.json 1-2 分钟内出现（带 timeout 异步等，避免 block PM 主回合）
-timeout 120 bash -c 'until [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/STATUS.json" ]; do sleep 5; done'
+bash scripts/pm-orchestrate.sh run-create --objective "Wave 1 objective"
+# 从 JSON 读取 .result.run.id
 ```
 
-Wave 内 N 个 worker 跑 N 轮核验，30 秒内完成；中间不 poll 不 attach 不 block。完整 cheatsheet 见 `templates/pm-spawn-postflight.md`。
+同一 Wave 的每个 worker 复用该 Run：
 
-常用 worker command：
-- Claude Code 第三方 provider（推荐 registry）：用 `render-runtime-profile.sh --backend claude-code --provider-registry <local-registry.json> --api-provider <provider-id> --model <model-alias>` 生成命令；默认会包 `scripts/claude-provider-env.sh`，并把模型别名解析成真实 `claude --model <provider-model>`。真实 registry 不提交；模板见 `config/claude-provider-registry.example.json`。**worker 不需 MCP 时**在 `--command` 末尾加 `--no-mcp`，`claude-provider-env.sh` 会自动注入 `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`，规避项目 `.mcp.json` 触发的「N new MCP servers found」选择 dialog（`references/09-parallel-lessons.md` T6）。已显式 `--strict-mcp-config` 时 wrapper 不叠加。
-- Claude Code 第三方 provider（兼容 settings）：也可用 `render-runtime-profile.sh --backend claude-code --settings <local-provider.settings.json> --model <provider-model>` 生成命令；真实 settings 不提交；模板见 `config/claude-provider-settings.example.json`。启动后必须检查 banner 模型名；若仍显示用户默认 provider，先停 worker 排查 registry/settings / wrapper / 环境继承。
-- Claude Code 订阅/OAuth：`env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL claude --permission-mode auto`。
-- Codex（交互式 TUI）：`codex -a never -s danger-full-access [-m <model>] [-p <profile>]`，PM 用 `tmux send-keys` 投递 prompt。
-- OpenCode（交互式）：`opencode --model <provider/model>`，PM 用 `tmux send-keys` 投递 prompt。
-- CodeBuddy（`codebuddy`）：用 `render-runtime-profile.sh --backend codebuddy --model <平台模型> [--no-mcp] [--add-dir <dir>]` 生成；吃 CodeBuddy 桌面端登录态和平台额度，无需 API Key。任务文件/素材在 worktree 外时加 `--add-dir` 声明跨目录访问（如 `--add-dir /tmp`）。详见 `references/08-codebuddy-cli-worker.md`。
-- QoderWork CN（`qoderclicn`）：用 `render-runtime-profile.sh --backend qoderwork-cn --model <平台模型> [--no-mcp] [--dangerously-skip-permissions]` 生成；脚本自动前置 `env -u` 清除 SDK 变量、处理含空格的二进制路径。详见 `references/07-qoderwork-cli-worker.md`。
-- 自定义 CLI：任何能在指定 cwd 运行、接收 prompt、落盘 checkpoint 的交互式命令。
+```bash
+bash scripts/spawn-worker.sh \
+  --project "$PROJECT" --branch feat/worker-a --session worker-a \
+  --worker-backend claude-code --command "$AGENT_COMMAND" \
+  --orca-supervised --orca-run-id "$RUN_ID" \
+  --task-title "worker-a" --task-spec "完整任务、范围、验证和完成协议"
+```
 
-**Claude CLI PATH 注入（v2.0）**：`scripts/ensure-claude-path.sh` 提供 `ensure_claude_in_path()` 函数，按 `~/.local/bin` → `/opt/homebrew/bin` → `/usr/local/bin` → `~/.cargo/bin` 顺序探测并 prepend 到 PATH。`spawn-worker.sh` 和 `claude-provider-env.sh` startup 阶段均 source 一次，幂等；其他 launch 脚本也可 `source "$SCRIPT_DIR/ensure-claude-path.sh"; ensure_claude_in_path` 复用。日志前缀 `SPAWN_WORKER_PATH_INJECT` / `SPAWN_WORKER_PATH_WARN`（仅未命中时 warn，不报错）。
+`orca-supervised-register.sh` 从 `run-create/run-use` receipt 取得 coordinator handle，并对 `task-create/worker-start` 都显式传 `--from`，满足 consumer fencing。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通占位 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。
 
-**所有 worker 一律交互式启动，不要用 headless / `-p` / `--mode batch` / `--prompt-file`**（v1.18.0 移除，见 DEC-044）：tmux 的价值就是 PM 能 `tmux send-keys` 投递 prompt 并全程纠偏；headless 一发跑完等于放弃监控，而那种短任务本就该用同宿主 Subagent，不该占 tmux worker 槽。`render-runtime-profile.sh --mode batch` / `--prompt-file` 现在直接报错。如果 `--command` 是自定义命令且含 `<` / `>` / `|` / `&&` 等 shell metachar（`tmux new-session` 直接 exec、不经 shell），仍需手动包 `bash -lc '<cmd>'`。
+### 4.5 Supervised 生命周期
 
-**不要设 `--max-turns`**：PM 重点是检测 worker 是否真在推进，而不是限制 turn 数。长任务通过 `STATUS.json.updated_at`、阶段性 commit、`pm-monitor.sh` stale 事件和 PM 纠偏控制。
+固定顺序：
 
-Claude Code agent view / 官方后台会话可作为 Claude 专用后端：`claude agents`、`claude agents --json`、版本支持时的 `--worktree --tmux`、`--bg` 或 `/bg`。使用前以本机 `claude --help` / `claude agents --help` 为准；只有能证明独立 cwd/worktree、可巡检状态和可接管会话时，才可替代 tmux。
+```text
+PM create/bind Run
+  → task-create
+  → worker-start 注入 live preamble + TASK
+  → worker 工作；必要时 ask/heartbeat
+  → worker 从自己的 terminal 精确发送一次 worker_done
+  → PM check --wait 收到完整 Delivery
+  → PM 处理每条消息并验收真实 diff/tests/artifacts
+  → 每个 settled terminal 选择 reuse / release / retain
+  → PM ack Delivery
+```
 
-Agent Teams 适合 Claude Code 团队式协作；仍要使用 worktree 隔离并把 `workdir` 指向带来源前缀的 worktree。ACP 只在 adapter 已稳定、能输出结构化状态时启用。Subagent 仅用于轻量、边界窄、输入少的任务；需要长时间写作、独立提交 PR 或跨大量材料整合时升级为 tmux / agent view / Agent Teams。
+PM 常用命令：
 
-### 6.5 ORCA 终端模式（v2.0.0 auto-detect）
+```bash
+bash scripts/pm-orchestrate.sh read --worktree "$WT" --session worker-a --lines 80
+bash scripts/pm-orchestrate.sh show --worktree "$WT" --session worker-a
+bash scripts/pm-orchestrate.sh wait --worktree "$WT" --session worker-a --timeout 900
+bash scripts/pm-orchestrate.sh reply --worktree "$WT" --session worker-a --message-id "$MID" --text "按方案 A"
+bash scripts/pm-orchestrate.sh release --worktree "$WT" --session worker-a
+bash scripts/pm-orchestrate.sh ack --worktree "$WT" --session worker-a --delivery-id "$DID"
+```
 
-当 PM 在 ORCA 桌面端的内嵌终端里调用 `spawn-worker.sh` 时，自动走 ORCA worktree + ORCA terminal 路径，让 ORCA UI 直接反映 worker 生命周期——spawn 立即出卡片（`in-progress`），sentinel 终态自动切 `completed` / `in-review`，stale 时同步 `in-review` 提示。详见 `references/12-orca-cli-worker.md`。
+`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
 
-**触发条件（auto-detect，零配置）**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` 的 git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中后 `spawn-worker.sh` 走 `orca worktree create --no-parent --base-branch` + `orca terminal create --command "$WORKER_COMMAND"` + `orca terminal wait --for tui-idle` + `orca terminal send` 四步链，保留 provider env / runtime profile / wrapper / launch.sh / 超长 prompt 投递全部现有能力（Step 2 实现）。
+由 `spawn-worker.sh` 预先创建、再交给 `worker-start --terminal` 的 provider terminal 属于 external resource。settled 后 `worker-release` 可能正确返回 retained；清理脚本只有在 worker/Dispatch 已结算、ownership/reason 明确为 `external/external_terminal` 且 Orca resource handle 与 METADATA 完全一致时，才由创建者关闭这个精确句柄，其他状态一律失败关闭。
 
-**opt-out**：`spawn-worker.sh ... --no-orca-mode` 强制走原 tmux + git worktree 路径，不调任何 `orca` CLI。适用场景：ORCA 桌面端行为异常需要回退、或 PM 想复现非 ORCA 环境。
+## 5. tmux 回退
 
-**互斥**：`--no-worktree` 轻量模式与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。命中轻量模式时自动回落 tmux + 打印 `SPAWN_WORKER_ORCA_LIGHTWEIGHT_FORCES_TMUX`。
+先按 backend 生成命令，再 spawn：
 
-**全链路 ORCA UI 同步**：
-- spawn 完立即 `orca worktree set --workspace-status in-progress`（spawn-worker.sh）
-- sentinel 终态 `done` → `completed`；`failed/blocked/stopped` / timeout → `in-review`（sentinel.sh `--terminal-handle --worktree-id` 双路径）
-- pm-monitor 检测 `CHECKPOINT_STALE` / `WORKER_STALE_NO_COMMIT` → `in-review` + comment（pm-monitor.sh）
-- clean-worktree 清理时 `orca worktree rm --force` 同步删 ORCA 跟踪（clean-worktree.sh）
+```bash
+bash scripts/render-runtime-profile.sh \
+  --backend claude-code --runtime-profile default \
+  --api-provider provider-a --model model-a --output command
 
-**非 ORCA 环境 / 跨 repo / fail-loud**：`TERM_PROGRAM != Orca` 或 `ORCA_WORKTREE_ID` path 不匹配 `PROJECT_DIR` → 自动回落 tmux（打印 `SPAWN_WORKER_ORCA_PATH_MISMATCH`）；`orca` CLI 不在 PATH 或 `orca status` 失败 → `exit 64`（提示 `orca open` 或 `--no-orca-mode`）。
+bash scripts/spawn-worker.sh \
+  --project "$PROJECT" --branch feat/worker-a --session worker-a \
+  --base-ref main --command "$WORKER_COMMAND" \
+  --worker-backend claude-code --with-sentinel --no-orca-mode
+```
 
-**METADATA.json 锚点**：`session.orca.{mode, worktree_id, worktree_path, terminal_handle, tui_ready_method, app_version, capabilities}`。sentinel / pm-monitor / clean-worktree 全靠 `session.orca.worktree_id` 定位 ORCA worktree；`mode` 字段让 PM 巡检时一眼判断这个 worker 走的是 ORCA 还是 tmux。
+spawn 后立即验证：
 
-**ORCA supervised 深度对接（v2.1，`--orca-supervised` flag）**：ORCA 模式 spawn 后可选把 worker terminal 纳入 ORCA supervised 体系（run-create + task-create + worker-start --terminal），保留 provider env 隔离。worker 出现在 `worker-list`，绑定 task + worktree resource，可被 `send/reply/inbox` + `gate-create/resolve` 管理。配套 `--task-spec`（task 描述）。sentinel 终态 worker-release/stop、clean-worktree 清理时 worker-stop，全生命周期闭环。详见 `references/12-orca-cli-worker.md` §11。
+```bash
+tmux has-session -t worker-a
+tmux display-message -p -t worker-a '#{pane_current_path}'
+test -f "$WT/.claude/agent-sessions/worker-a/METADATA.json"
+```
 
-**ORCA 检测 + STATUS.json 分层互补（v2.1，Task-032）**：sentinel ORCA 模式 done 判定加双信号——`STATUS=done` 时先查 `orca worktree ps` 的 agent state，`working` 拒绝认终态（抗 worker LLM 谎报 done），`done/idle` 才真正 exit。抗幻觉。
+不要 `tmux attach` 阻塞 PM 主循环，也不要无 timeout 等 STATUS。长 prompt 写入 Session Context 的 `WORKER_PROMPT.md`，只向 terminal 发送短 Read 指令。详见 `templates/pm-spawn-postflight.md`。
+
+## 6. Worker Prompt 与 Session Context
+
+使用 `templates/worker-prompt.md`。至少填写：
+
+- Background、Mission、Allowed files、Forbidden files、Non-goals。
+- Branch、Worktree、Session Context、Runtime Profile、provider/model。
+- Project Skills 的已验证路径；不要让独立 cwd 中的 worker 猜 sibling Skill 位置。
+- Verification commands、Execution Authority、安装授权来源。
+- STATUS/RESULT/PATCH_SUMMARY 的路径和更新节奏。
+- supervised 时由 live preamble 提供 task/dispatch ID；worker 不得猜 ID，完成后只发一次 `worker_done` 并停止新工作。
+
+Session Context 默认：
+
+```text
+<worktree>/.claude/agent-sessions/<session>/
+├── METADATA.json
+├── STATUS.json
+├── RESULT.md
+├── PATCH_SUMMARY.md
+└── WORKER_PROMPT.md
+```
+
+字段与 checkpoint 语义读取 `references/03-checkpoint-files.md`。`STATUS.status` 使用 `running|done|failed|blocked|stopped`，成功只写字面 `done`。
 
 ## 7. 巡检与介入
 
-PM 巡检信号：
-- worktree 是否有文件落盘、commit、PR。
-- `.claude/agent-sessions/<session-id>/METADATA.json` 是否记录 base ref、runtime profile、provider slot、验证命令和 PR 占位。
-- `.claude/agent-sessions/<session-id>/STATUS.json` 是否更新，是否报告 blocked / needs_input / done。
-- `.claude/agent-sessions/<session-id>/RESULT.md` 和 `PATCH_SUMMARY.md` 是否存在，摘要是否足够 PM 不读完整日志也能验收。
-- tmux pane 是否长时间只读材料、等待确认、偏题联网、反复规划不执行。
-- worker 是否扩大改动范围或触碰共享文件。
-- PR diff 是否只覆盖声明范围。
+按证据优先级巡检：
 
-介入规则：
-- 有持续输出、checkpoint 更新或文件在增长时继续等待。
-- 启动后 1-2 分钟仍没有 `Session Context/STATUS.json` 时，先发送 checkpoint-only 纠偏；仍无响应时中断当前思考并重发 bootstrap 指令，不直接接管实现。
-- 长时间无落盘但仍在规划时，先发送更窄的“先写目标文件”命令。
-- worker 跳过 10-15 分钟 STATUS 心跳或 30-60 分钟阶段性 commit 时，PM 主动发送纠偏，要求立刻更新 STATUS 或提交当前已验证阶段；5 分钟内仍无 STATUS/commit/文件进展变化时，升级为重启 worker、派 reviewer 或 PM 窄范围收口。
-- 发现轻度偏题、范围扩大、开始修环境/依赖、等待确认或验证方式偏离时，优先通过 tmux / agent view / inbox 发送纠偏指令，让 worker 自己回到范围内执行。
-- 只有连续两次纠偏无效、worker 继续触碰禁止范围、准备执行破坏性 Git/文件操作、泄露敏感信息、或已无法在原 session 内恢复时，才停止 session 并由 PM 接管。
-- 失败、重启或停止前先保留 worktree 和 `Session Context`，避免丢失已落盘产物。
+1. supervised：Delivery、`worker-show`、`worker-read`。
+2. terminal-managed：terminal read + STATUS/RESULT。
+3. tmux：STATUS/RESULT、git status/log、bounded capture-pane。
+4. 所有模式最终检查真实 diff、测试、产物和 PR 状态。
 
-tmux 纠偏示例：
+辅助脚本：
 
 ```bash
-tmux send-keys -t legal-ch01 -l -- "PM correction: stop dependency/runtime changes now. Return to ISS-017 only. Do not modify package files or environment config. Update .claude/agent-sessions/legal-ch01/STATUS.json with needs_input=false and continue with the OCR quality report scope."
-sleep 0.1
-tmux send-keys -t legal-ch01 Enter
+bash scripts/worktree-status.sh --project "$PROJECT" --branch feat/worker-a --session worker-a
+bash scripts/pm-monitor.sh --project "$PROJECT" --branch feat/worker-a:worker-a --once
+bash scripts/sentinel.sh --status-file "$CTX/STATUS.json" --tmux-session worker-a
 ```
 
-纠偏 prompt 应包含四件事：停止什么、回到哪个任务、哪些文件/动作仍然禁止、下一步最小可执行动作。不要只写“你偏题了”。
-
-完整字段见 `references/03-checkpoint-files.md`，可复制模板见 `templates/checkpoint-status.json`、`templates/checkpoint-result.md` 和 `templates/checkpoint-patch-summary.md`。PM 默认只读这些 checkpoint 和最终 diff，不定时拉完整日志。
-
-可选自动 PM 监控脚本（保留 Agent Teams inbox、任务状态、Git SHA、PR 状态和 tmux session 多维巡检能力）：
-
-```bash
-bash scripts/pm-monitor.sh \
-  --project /path/to/repo \
-  --team-dir ~/.claude/teams/team-name \
-  --tasks-dir ~/.claude/tasks/tasks-uuid \
-  --claude-agents-cwd /path/to/repo \
-  --wave-id wave-5 \
-  --commit-stale-threshold 1800 \
-  --progress-stale-threshold 1800 \
-  --interval 60 \
-  --log-file .claude/agent-sessions/pm-monitor/events.log \
-  --branch docs/ch01-agent-intro:legal-ch01
-```
-
-经济型巡检规则：
-- 不要让 PM 主会话每隔几分钟手动读取 worker 日志；那会抵消多 Agent 的 token efficiency。
-- 轻量检查用 `pm-monitor.sh --once`，由 PM 在需要判断是否介入时运行一次，只读取事件行。
-- 长任务用独立 shell/tmux/background job 运行 `pm-monitor.sh --log-file ...`，脚本持续写事件日志；PM 只在状态变化、用户询问、PR 收口或日志出现 `AGENT_NEEDS_INPUT` / `CHECKPOINT_STALE` / `CHECKPOINT_TEST_FAILURE` 时读取少量日志。
-- 当前脚本只负责输出事件和写日志；是否自动唤起 PM 取决于宿主环境是否提供 automation / monitor / webhook。没有宿主唤醒能力时，默认用 `--once` 或低频读取 log tail，仍比前台反复巡检节省上下文。
-- `STATUS.json` 只记录 PM 决策必需的结构化信号，详细实现说明继续写 `RESULT.md` 和 `PATCH_SUMMARY.md`。
-- 单个 worker 的只读总览用 `scripts/worktree-status.sh`；清理用 `scripts/clean-worktree.sh`，默认 dry-run，真正删除必须显式 `--execute`。
-
-### 7.1 主动等待与宿主唤醒
-
-`scripts/wait-worker.sh` 是单 worker 等待器，不替代 `pm-monitor.sh`。它主读一个 `STATUS.json`，在 `done`、`failed`、`blocked` 或 `stopped` 时退出并输出 `RESULT.md` / `PATCH_SUMMARY.md` 路径。适合把“worker 完成时通知 PM”接到不同宿主。
-
-状态源分层：
-- `METADATA.json` 是 PM 启动时写入的静态上下文，记录 base/runtime/provider/verification，不作为完成判定。
-- `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 是完成、阻塞、验证和收口的主协议。
-- `tmux capture-pane` 是诊断窗口，只在 checkpoint 缺失、过期、终态或显式要求时读取尾部输出。
-- 不用 tmux pane 文本判断任务完成；完成标准仍是 checkpoint、git diff、验证和 PR 状态。
-
-Claude Code PM：
-- Bash background/run-in-background 只能让等待器在后台运行，不保证触发或唤醒当前 PM / agent session；多 worker 同时等待时尤其可能没有任何完成消息返回。
-- 不要把 background Bash 当作可靠完成通知机制。它最多作为日志写入器或人工可查看的后台 job；PM 仍必须靠 `STATUS.json`、`pm-monitor.sh --log-file`、`wait-worker.sh --once`、tmux/agent view 显式巡检来收口。
-- 单 worker 可临时用 background Bash 跑 `wait-worker.sh`，但启动时必须同时记录 log 文件或保留可查询命令；多 worker / Wave 默认使用 `pm-monitor.sh --log-file`，不要为每个 worker 启一个 background wait 并期待宿主逐个回调。
-- **限定条件例外**：§7.2 描述的 Sentinel 模式是本规则的"限定条件下可工作变体"——单 worker 单 sentinel、`run_in_background=true` 启、harness 100% re-invoke 可工作。Wave 6 启用 sentinel 之前仍按上述保守判断走。
-
-  ```bash
-  bash scripts/wait-worker.sh \
-    --worktree .claude/worktrees/tmux-ch01-agent-intro \
-    --session legal-ch01 \
-    --tmux-session legal-ch01 \
-    --interval 30
-  ```
-
-ORCA PM（v2.0.0，§6.5 配套）：
-- PM 在 ORCA 桌面端内嵌终端里跑 `spawn-worker.sh` 时，auto-detect 命中 ORCA 模式（`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` path 匹配），worker 跑在 ORCA worktree + ORCA terminal，**不需要 tmux**。
-- 完成通知机制不变：仍走 §7.2 Sentinel bash 模式（`run_in_background=true` 启 sentinel），sentinel 终态时 harness task-notification 唤醒 PM。ORCA 模式下 sentinel 收 `--terminal-handle` + `--worktree-id`（spawn-worker 输出的 `SPAWN_WORKER_SENTINEL_CMD` 自动带这两参数），走 `orca terminal read/close` + `orca worktree set` 路径。
-- PM 巡检 ORCA UI 状态：`scripts/worktree-status.sh` 已加 ORCA 只读块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）；或直接 `orca worktree ps --json` 看全部 worker 卡片。
-- ORCA 模式下 PM 不应再用 `tmux attach` / `tmux capture-pane`（worker 不在 tmux 里），改用 `orca terminal read --terminal <handle> --json` / `orca terminal send --terminal <handle> --text "..." --enter` 纠偏。
-- **PM 控制统一入口**：`scripts/pm-orchestrate.sh`（v2.2，Task-034）——读 `session_context/METADATA.json` 自动判断 worker 模式（ORCA terminal vs tmux），PM 一个命令管两种 worker 不用关心类型。子命令 `send/read/peek/wait`，`send` 超长自动走 SKILL §5.2 WORKER_PROMPT.md 标准。详见 `references/13-pm-orchestrate.md`。
-- 降级：ORCA app 未运行 / `orca` CLI 不在 PATH / 跨 repo → spawn-worker 自动回落 tmux 或 fail-loud（详见 `references/12-orca-cli-worker.md` §2 / §8）。
-
-Codex PM：
-- Codex CLI 的后台 shell 不会自动把完成事件推回当前对话；不要假定它等价于 Claude Code `run_in_background`。
-- 在 Codex App 中，优先把 `wait-worker.sh --once` 接到当前 thread 的 heartbeat automation；完整 prompt 见 `templates/codex-heartbeat-wait.md`。创建、修改或删除 automation 时必须先查找并使用 `automation_update` 工具，不手写 raw RRULE。
-- 没有 heartbeat/automation 能力时，Codex PM 使用 `pm-monitor.sh --once` 或 `wait-worker.sh --once` 低频手动巡检；长任务仍用 `pm-monitor.sh --log-file` 持续记录事件。
-
-`wait-worker.sh` 的职责是等一个 worker 到终态；它输出终态，不负责唤醒宿主。多 worker、PR 状态、git SHA、gate 和 stale 事件仍由 `pm-monitor.sh` 负责。
-
-### 7.2 Sentinel bash 模式（事件驱动 PM 唤醒）
-
-> 适用：Wave 6 之后，每个 worker 配套启一个 sentinel，PM 由 harness task-notification
-> 事件驱动地唤醒，零 idle token 消耗，保留多轮纠偏能力。设计依据见
-> `references/04-sentinel-design.md`；DEC-031 supersede DEC-030 的限定条件判断。
-
-**模式**：每个 worker 配一个 `scripts/sentinel.sh` 进程。Sentinel 轮询 `STATUS.json`，
-读到 `done | failed | blocked | stopped` 时 capture tmux pane tail、`tmux kill-session`、
-`exit`。Sentinel 由 PM 用 `run_in_background=true` 启，exit 触发 harness
-task-notification → PM 被 re-invoke。
-
-**PM 端调用模式**：每 worker 两次 Bash 调用：
-
-```bash
-# 1) Foreground: 创建 worktree + 启动 worker + 拿 gate 验证
-bash scripts/spawn-worker.sh \
-  --project /path/to/repo \
-  --branch docs/ch01-agent-intro \
-  --session legal-ch01 \
-  --with-sentinel \  # 仅打印 SPAWN_WORKER_SENTINEL_CMD，不在内部启
-  --command "$WORKER_COMMAND"
-
-# 2) Background: sentinel 事件驱动 wake
-# 从 spawn-worker.sh 输出里复制 SPAWN_WORKER_SENTINEL_CMD 那行
-bash scripts/sentinel.sh \
-  --status-file .claude/worktrees/tmux-docs-ch01-agent-intro/.claude/agent-sessions/legal-ch01/STATUS.json \
-  --tmux-session legal-ch01 \
-  --poll-interval 5 \
-  --max-wait 7200
-# ↑ 用 Bash run_in_background=true 启
-```
-
-**为什么不在 spawn-worker.sh 内部启 sentinel**：
-- `spawn-worker.sh` 是 fg 工具，sentinel 是 bg 工具，职责分离
-- 避免单 Bash 调用内 fork 多个 background（auto mode 拒率更高）
-- PM 显式 opt-in 收 sentinel 通知（`run_in_background=true`）是 harness re-invoke 的前提
-
-**Sentinel 事件命名空间**（独立于 `WAIT_WORKER_*`）：
-
-| 事件 | 触发 |
-|------|------|
-| `SENTINEL_START` | 启动时 |
-| `SENTINEL_PENDING` | STATUS.json 缺失 |
-| `SENTINEL_PANE_TAIL` | capture pane 前（best-effort）|
-| `SENTINEL_TERMINAL` | 检测到 `done` / `failed` / `blocked` / `stopped` |
-| `SENTINEL_TMUX_KILLED` / `SENTINEL_TMUX_GONE` | kill tmux 之后 |
-| `SENTINEL_TIMEOUT` | `--max-wait` 到了还没看到终态 |
-
-**PM 收到 notification 后的标准动作**见 `templates/pm-sentinel-response.md`：
-- Exit 0 = done：读 RESULT/PATCH_SUMMARY，跑 verify，review，merge
-- Exit 2 = failed/blocked/stopped：读 STATUS.issues 决定 restart / block / defer
-- Exit 124 = timeout：检查 worker tmux + STATUS 状态，纠偏或重启
-- Exit 64 = usage error：检查 `--status-file` / `--tmux-session` 与 spawn-worker 一致性
-
-**降级路径**：如果 sentinel 没启起来（auto mode 拒 / SIGKILL / 参数错），PM 回到 §7.1
-行为：单 worker 用 `wait-worker.sh --once`，多 worker 用 `pm-monitor.sh --log-file`。
-降级是 graceful 的，不是失败。
-
-**调优建议**：
-- `--poll-interval`：默认 5s。worker 单次 thinking 短时降到 1s，长时保持 5s
-- `--max-wait`：默认 7200s（2h）。长 worker 拆 sub-task，每个 sub-task 自己的 max-wait
-- `--keep-tmux-on-terminal`：review 阶段不杀 tmux，便于 PM tmux capture-pane 看 worker 收尾
-- `--pane-tail-lines 0`：不需要 pane 快照时关掉，少 1 个 tmux capture-pane 调用
-
-**已知不覆盖**：
-- 多 sentinel 对单 worker 去重：PM 行为层保证 1:1
-- Codex / OpenCode 路径：暂未实测，Codex 走 `templates/codex-heartbeat-wait.md`
-- 高频 polling 风暴：worker 集群大、polling 间隔 < 2s 时单 worker CPU 可能略高，按需调
-
-### 7.3 cron + sentinel 标准组合（兜底监测，必挂两层）
-
-sentinel（§7.2）是**主监测**：事件驱动、秒级抓 worker 终态 `done`、零 idle token。但 sentinel 单独有 3 个盲区，必须再挂一个 **cron 兜底**（周期巡检），两层组合才是标准模式，而非二选一：
-
-| sentinel 盲区 | 表现 | cron 兜底如何抓到 |
-|---|---|---|
-| (a) worker 硬卡死不写 STATUS | sentinel 轮询到 `--max-wait` 超时（exit 124），最长等 2h | cron 周期读 STATUS + pane，发现 stale 主动介入 |
-| (b) worker 用非标准 STATUS 文件名 | sentinel 监听 `STATUS.json`，worker 写 `issue-XXX-status.json`，sentinel 轮询空文件到超时 | cron 直接 `cat`/`grep` 多个候选文件名，命中即识别 |
-| (c) sentinel 自身被 SIGKILL/SIGTERM 或 harness 未 re-invoke | sentinel 静默消失，PM 永不被唤醒 | cron 是独立 job，不依赖 sentinel 存活 |
-
-**频次（硬推荐，按任务粒度）**：
-- **短任务**（单 worker、预计 < 1h）：~22 分钟
-- **长流水线**（多 worker / Wave / 预计 1-4h）：**10-15 分钟**
-- **避免 `:00` / `:30` 整点**：所有用户挤在整点会 API 拥堵 + 触发速率限制；用错峰表达式如 `3,13,23,33,43,53 * * * *`（每 10 分钟错峰）或 `7,29,51 * * * *`（每 22 分钟错峰）。
-- **不要低于 10 分钟**：cron 每次 fire 都 re-invoke PM（读 STATUS + git + pane），过频会抵消多 Agent 的 token efficiency。
-
-**双信号卡死检测（避免误判 long thinking）**：
-判 worker 卡死必须**同时满足两条**，缺一不可：
-1. **STATUS 信号**：`STATUS.json.updated_at` **和** 文件 mtime 都 > 阈值（长流水线 20min、短任务 15min）未变。
-2. **pane 信号**：`tmux capture-pane` 尾部出现死循环证据（连续重复行 / "Levitating… Nmin" 持续上涨但无新工具调用 / 报错堆栈不退出）。
-
-只满足 (1) 不满足 (2)：worker 可能在 long thinking，发一条 `tmux send-keys` 心跳探针（"更新 STATUS heartbeat"），等下一轮 cron 再判，不立即重启。
-
-**cron prompt 用模板**：`templates/cron-monitor-prompt.md`。模板含：worker session + STATUS 路径 + git 分支 + sentinel id + stale 阈值 + 收尾自删（worker 全部合入后 `CronDelete`）+ 无动作时一句话汇报（不膨胀上下文）。
-
-**与 §7.1 / §7.2 的关系**：
-- §7.1 `pm-monitor.sh` / `wait-worker.sh`：PM 主动调用的只读巡检工具（一次性或低频 log）。
-- §7.2 sentinel：worker 终态事件驱动唤醒（秒级抓 done），主监测。
-- §7.3 cron：时间驱动兜底（抓 sentinel 盲区 + 卡死双信号 + sentinel 失效）。
-- 三者**叠加**，不是替代。PM 派 worker 后**必挂两层**（sentinel + cron）；sentinel 是主，cron 是兜底，cron 触发后若发现 worker 仍在推进，只回一句话、不做大动作。
+Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏题、阻塞、越界或验证失败时优先给原 worker 发窄纠偏；需要独立审阅时另派 reviewer。Sentinel 设计读取 `references/04-sentinel-design.md`。
 
 ## 8. 收口
 
-### 8.0 PM 在 Worker 提 PR 后的持续同步
+PM 必须：
 
-worker 提 PR 不是 PM 收口完成的信号。从提 PR 到合并之间，PM 必须做两件事避免外部抢跑：
-
-1. **提 PR 之后立即跑 mergeable 检查**：
-
-   ```bash
-   gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName
-   ```
-
-   - `mergeable=CONFLICTING` / `mergeStateStatus=DIRTY` / `baseRefName` 落后：base 已被 doc-curator 或其他 PR 抢跑。立即按 `git-workflow` 的「base 落后 / 冲突处理」决策表（update branch vs rebase vs close-and-reopen）处理。
-   - `mergeable=MERGEABLE` 且 base 是最新：进入 review 流程。
-
-2. **PM 本地 main 立即 push**：
-   - PM 在主目录 commit docs / DEC 之后**立即** `git push origin main`，避免本地与 origin/main drift。
-   - drift 后 push 报 non-fast-forward，squash merge 引入的"内容相同但 history 不同"会让 git 误判冲突，恢复成本高。
-   - 看到 origin/main 领先本地时，先 `git fetch origin` + `git switch -C main origin/main`（不是 `git pull`，squash commit 不会自动 ff），再继续 PM 工作。
-
-worker backend 选择（subagent / tmux / Agent Teams）见 §2.1。
-
-### 8.1 收口标准步骤
-
-worker 完成后：
-1. 检查 `git status --short`、`git diff --check main...HEAD`、PR diff 范围。
-2. 需要 review 时交叉审阅，分支作者不审自己的 PR。**review 工具按项目类型选，不要默认 code-review**：代码项目用 code-review subagent；书稿 / 文档 / 写作项目用 `writing-reviewer`（或项目领域审稿 skill）；研究 / 配置类 PR 用对应内容审查。项目应在自己的 `AGENTS.md` 里写明用哪个 review skill；没写时 PM 按项目性质判断，不假定 code-review。
-3. 合并、push、PR 编号写入 commit、Issue 关闭等动作遵循 `git-workflow`。
-4. 若 PM review 发现问题，优先通过 tmux / agent view / inbox 给原 worker 发送 review correction；worker 应追加修复 commit、重新运行验证并更新 PR，不由 PM 默认代写。
-5. PM 复核 correction commit、验证结果和 PR diff 后，再决定是否进入 merge。
-6. 合并后清理 worktree/session，先 dry-run 再显式执行：
+1. 读取 worker 交付、完整 Delivery 和实际 diff，不采信单句“完成”。
+2. 运行与产物类型匹配的验证；GUI/Web/桌面行为要启动真实入口做代表性交互。
+3. 核对 allowed files、敏感文件、安装授权、Git identity、commit 和 PR 范围。
+4. supervised worker 先 reuse/release/retain，再 ack；terminal-managed/tmux 按用户意图保留或关闭。
+5. 用 `git-workflow` 完成 rebase/push/PR/merge；本 Skill 不替代 Git 安全规则。
+6. 清理前先 dry-run：
 
 ```bash
-bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-intro --session legal-ch01
-bash scripts/clean-worktree.sh --project /path/to/repo --branch docs/ch01-agent-intro --session legal-ch01 --execute
+bash scripts/clean-worktree.sh --project "$PROJECT" --branch feat/worker-a --session worker-a
+# 确认目标、dirty 状态和 Orca terminal accounting 后才加 --execute
 ```
 
-## 9. 依赖
+active、release_pending、release_unknown 或生命周期不明的 supervised worker 一律拒绝删除 worktree。
 
-依赖按模式分层；只读文档不需要安装任何工具。首次在新机器上启动 worker 前，先运行：
+## 9. Backend 与配置
+
+默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具；跨工具仍不得越过 §3.1 的 Harness 白名单。个人偏好写入 ignored 的 `config/orchestration-personal.json`，模板为 `.example.json`；项目 trunk、任务源、验证命令和 provider slots 可写入 `.claude/orchestration.config.json`。个人配置只能选择白名单以内的 backend，不能扩张宿主权限。
+
+`concurrency.per_backend[backend]` 优先于 `concurrency.max_per_provider`。配置有效正整数时，`spawn-worker.sh` 在任何 branch/worktree 副作用前获取原子 provider 租约，启动后绑定实际 tmux session 或 Orca terminal；Sentinel、`pm-orchestrate release` 和 `clean-worktree` 只在资源已结算或关闭时释放。无配置时输出 advisory，不假装机械限额。
+
+不得复制 `.env`、真实 settings、Token、cookie、证书或账号凭证到 worktree/提交。Claude provider 隔离、CodeBuddy、QoderWork CN、Codex 参数分别读取：
+
+- `references/01-model-selection-matrix.md`
+- `references/06-agent-cli-reference.md`
+- `references/07-qoderwork-cli-worker.md`
+- `references/08-codebuddy-cli-worker.md`
+
+## 10. 依赖
+
+### 系统依赖
+
+| 依赖 | 安装方式 |
+|---|---|
+| `bash` 4+ | macOS: `brew install bash`；Linux: 包管理器安装 |
+| `git` | macOS: `xcode-select --install` 或 `brew install git` |
+| `jq` | macOS: `brew install jq`；Linux: `sudo apt-get install jq` |
+| `tmux` | 仅 tmux 路径需要；macOS: `brew install tmux` |
+| `python3` | 安装门禁和 scope guard 需要 |
+
+Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI，不自动安装。按 backend 还需对应 `claude`、`codex`、`codebuddy` 或 `qoderclicn`。
 
 ```bash
-bash scripts/check-dependencies.sh
 bash scripts/check-dependencies.sh --backend claude-code --backend codex --check-gh
 ```
 
-以下安装命令仅供**用户明确批准环境修改之后**参考。worker 不得因检查结果缺依赖而自行执行；先运行只读检查、查找已有二进制，仍缺则写 BLOCKED/RESULT。
+## 11. 按需 references
 
-### 最小本地执行依赖
+- `references/02-runtime-dependencies.md`：运行时依赖与配置复制边界。
+- `references/03-checkpoint-files.md`：METADATA/STATUS/RESULT/PATCH_SUMMARY。
+- `references/04-sentinel-design.md`：事件驱动唤醒和 timeout 语义。
+- `references/05-legal-domain-patterns.md`：法律任务常见拆分。
+- `references/09-parallel-lessons.md`：并发、dialog、provider 和历史故障。
+- `references/10-agent-teams-troubleshooting.md`：Claude 原生团队/会话排障。
+- `references/11-issue-grouping.md`：Issue 分组、依赖链和 PR 粒度。
+- `references/12-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
+- `references/13-pm-orchestrate.md`：PM 三模式统一控制入口。
 
-| 依赖 | 安装方式 |
-|------|----------|
-| `git` | 通常随开发环境提供 |
-| `bash` | 常规脚本需要 bash；`pm-monitor.sh` 需要 bash 4+ |
-| `jq` | macOS: `brew install jq`<br>Linux: `sudo apt-get install jq` |
-| `tmux` | macOS: `brew install tmux`<br>Linux: `sudo apt-get install tmux` |
-| `python3` | Agent 工具调用门禁和 scope guard 使用；缺失时 spawn fail-closed，不自动安装 |
+不要一次加载全部 references；按当前 backend、控制模式和故障类型读取。
 
-常见 Unix 工具如 `awk`、`sed`、`grep`、`find`、`stat`、`date`、`mktemp` 通常由系统提供；日期解析已兼容 macOS/Linux。
+## 12. 验收门禁
 
-### 按模式启用的依赖
+Hard Fail：
 
-| 模式 | 依赖 |
-|------|------|
-| PR / mergeability 巡检 | `gh`，且需要已登录 |
-| Claude Code worker | `claude`；第三方 provider 需要本地 settings 文件 |
-| Codex worker | `codex` |
-| OpenCode worker | `opencode` |
-| Codex heartbeat | Codex App automation 能力；创建/修改 automation 必须使用 `automation_update` |
-| Claude 官方 agent view / `--worktree --tmux` | `claude`，必要时还需要 `tmux` |
+1. 用户要求 PM/worker 编排，启动门禁未过而 PM 直接写业务代码。
+2. worker cwd/worktree/branch 与目标不一致。
+3. 真实 provider settings 或备份进入 Git/打包件。
+4. 未授权安装、全局环境写入、raw push 或范围外修改。
+5. supervised worker 无 live Task/Dispatch，或用 STATUS/Sentinel 代替 `worker_done`。
+6. PM 未处理完整 Delivery、未结算 settled terminal 就 ack/结束。
+7. 清理 active/unknown/release_pending/release_unknown supervised worker。
+8. 只凭 worker 自报、静态 lint 或单次 UI 状态声称业务完成。
+9. CodeBuddy/QoderWork CN 或未知宿主向上/跨宿主派发，或用 `--pm-harness`、个人配置伪造宿主身份。
 
-### 可选终端依赖
+修改本 Skill 后至少运行：
 
-`scripts/terminal-split.sh` 只在对应终端场景下需要额外工具：Kitty 需要 `kitty @`，WezTerm 需要 `wezterm cli`，macOS GUI 终端自动化依赖 `osascript`，Warp/Ghostty/Zed/Terminal.app 分屏或新标签能力取决于本机应用和辅助功能授权。
+```bash
+find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+bash scripts/lint-wait-script.sh
+bash scripts/test-dependency-install-guard.sh
+bash scripts/test-harness-backend-policy.sh
+bash scripts/test-worker-command-policy.sh
+bash scripts/test-provider-lease.sh
+bash scripts/smoke-sentinel.sh
+bash scripts/smoke-tmux-worker.sh
+bash scripts/smoke-orca-worker.sh
+bash scripts/smoke-orca-control-plane.sh
+```
 
-完整依赖矩阵见 `references/02-runtime-dependencies.md`。依赖检查脚本只报告状态，不安装软件、不启动 worker、不改配置。任何安装或全局 symlink 都必须先有用户明确授权，并作为精确命令写入 worker 的 Execution Authority。
-
-## 10. 参考
-
-只在需要细节时读取：
-
-核心编排参考（机制 / 依赖 / 收口）：
-- `references/01-model-selection-matrix.md`：模型与执行模式选择。
-- `references/02-runtime-dependencies.md`：按模式拆分的本地依赖矩阵和安装建议。
-- `references/03-checkpoint-files.md`：`STATUS.json`、`RESULT.md`、`PATCH_SUMMARY.md` 的字段和模板。
-- `references/04-sentinel-design.md`：PM 巡检（sentinel）bash 模式设计与信号。
-- `references/05-legal-domain-patterns.md`：法律项目拆解样例（诉讼/非诉阶段模型、任务字段、Agent 路由）。
-- `config/claude-provider-registry.example.json`：Claude Code 第三方 API provider/model registry 模板。
-- `config/claude-provider-settings.example.json`：Claude Code 第三方 API provider settings 兼容模板。
-
-Agent CLI worker backend（先看总览，再查具体工具）：
-- `references/06-agent-cli-reference.md`：本机所有 Agent CLI 完整参考手册（Claude Code / Codex / OpenCode / Hermes / Kimi / Gemini / QoderWork），含参数速查、tmux worker 模板、跨 CLI 对比矩阵和选用建议。
-- `references/07-qoderwork-cli-worker.md`：QoderWork CLI（`qoderclicn`）作为 worker backend 的可行性研究，含 CLI 参数、模型列表、SDK 环境冲突、tmux 启动示例和适用场景。
-- `references/08-codebuddy-cli-worker.md`：CodeBuddy CLI（`codebuddy`）作为 worker backend 的可行性研究，含 Kimi K2.6 书稿 worker 实测、权限模式、checkpoint/path 偏差和收口规则。
-
-实战经验与排障：
-- `references/09-parallel-lessons.md`：tmux/Agent Teams 实战坑点。
-- `references/10-agent-teams-troubleshooting.md`：Agent Teams / agent view / Claude 原生 `--worktree --tmux` 后端排障。
-- `references/11-issue-grouping.md`：Issue 分组与合并 PR 判断（三维度骨架：同根因合并 / 依赖链顺序 / 独立并行；本地 task 卡 vs 云端 GitHub Issue 任务源；软阈值与决策树）。
-- `references/12-orca-cli-worker.md`：ORCA CLI worker backend 完整 reference（§6.5 配套）。auto-detect 触发协议、ORCA API 速查、METADATA 锚点字段、sentinel 双路径、pm-monitor 同步点、clean-worktree ORCA 清理、已知限制与降级。
-- `references/13-pm-orchestrate.md`：PM 控制 worker 统一入口（pm-orchestrate.sh）reference。send/read/peek/wait 子命令、双模式（ORCA terminal vs tmux）自动判断、超长 prompt 走 WORKER_PROMPT.md 标准。
-
-官方文档：
-- Claude Code agent view: `https://code.claude.com/docs/en/agent-view`
-- Claude Code worktrees: `https://code.claude.com/docs/en/worktrees`
-- Claude Code CLI usage: `https://code.claude.com/docs/en/cli-usage`
-- Claude Code checkpointing: `https://code.claude.com/docs/en/checkpointing`
-
-脚本：
-- `scripts/check-dependencies.sh`：检查核心依赖、backend CLI、GitHub CLI 和终端分屏工具。
-- `scripts/claude-provider-env.sh`：从 Claude provider registry 或 settings JSON 构造本次 worker 的隔离 env，屏蔽用户级 provider/model 污染。
-- `scripts/render-runtime-profile.sh`：按 backend/profile 生成 worker command、prompt context 和 spawn metadata。
-- `scripts/spawn-worker.sh`：创建隔离 worktree、Session Context 和 tmux session，并输出启动 gate；`--no-worktree` 走轻量模式（worker 直接在目标文件夹工作，见 §2.1.1）。
-- `scripts/pm-monitor.sh`：自动 PM 巡检脚本，保留 checkpoint 文件、Agent Teams inbox、tasks、Git SHA、PR 状态、tmux session、Wave 和多信号进展监控。
-- `scripts/wait-worker.sh`：单 worker 等待器，可接 Claude Code background Bash 或 Codex heartbeat automation。
-- `scripts/worktree-status.sh`：单 worker 只读总览，展示 metadata、checkpoint、tmux 和 git 状态。
-- `scripts/clean-worktree.sh`：worker session/worktree 安全清理，默认 dry-run，清理前展示 metadata 摘要。
-- `scripts/pm-orchestrate.sh`：**PM 控制 worker 统一入口（v2.2，Task-034）**。子命令 `send/read/peek/wait`，读 `session_context/METADATA.json` 自动判断 ORCA 模式（terminal_handle 非空 → `orca terminal send/read/wait`）或 tmux 模式（→ `tmux send-keys/capture-pane`）。`send` 超长（>500 字符 或含反引号/$/|）自动走 SKILL §5.2 WORKER_PROMPT.md + 短 Read 指令。PM 一个命令管两种 worker。
-- `scripts/smoke-tmux-worker.sh`：临时 repo 端到端 smoke test；只在修改 Skill 脚本后运行。
-- `scripts/smoke-provider-settings.sh`：逐个验证 `config/*.settings.json` 能启动 Claude Code 并返回响应；新增或改 provider 后运行。
-- `scripts/lint-wait-script.sh`：wait/monitor/custom wait 脚本 lint；只在修改 wait/monitor 脚本后运行。
-- `scripts/terminal-split.sh`：可选可视化辅助，保留 iTerm2、Kitty、WezTerm、Warp、Ghostty、Zed、Terminal.app 支持；默认编排不依赖它。
-
-模板：
-- `templates/worker-prompt.md`：worker bootstrap 和完整派发 prompt 模板。
-- `templates/orchestration-goal.md`：PM 级连续多 Wave Goal Contract 模板。
-- `templates/project-config.json`：可选项目级编排配置模板，声明 trunk、任务源、验证命令、provider slot、非敏感配置复制和 hook 边界。
-- `templates/codex-heartbeat-wait.md`：Codex App heartbeat 巡检 prompt。
-- `templates/wave-summary.md`：每轮 Wave 收口和 provider/model 评估模板。
-- `templates/checkpoint-status.json`：`STATUS.json` 模板。
-- `templates/checkpoint-result.md`：完成/失败结果摘要模板。
-- `templates/checkpoint-patch-summary.md`：PR review 用 diff 摘要模板。
-- `templates/issue-batch-pr.md`：多 Issue 合并 PR 描述模板（维度① 同根因合并时使用）。
-
-## 11. 评估与验收
-
-### 评估范围
-
-本 skill 评估对象 = spawn-worker + sentinel + pm-monitor + render-runtime-profile + clean-worktree 的**协同行为**;不评估具体 worker backend(claude / codex / opencode)本身的能力。
-
-### Hard Fail(出现即不通过)
-
-1. 防逃逸门禁未过(§2.1),PM 直接写业务代码。
-2. spawn-worker.sh 启动后 pane cwd ≠ worktree 或（worktree 模式下）branch ≠ 目标分支(gate 失败)。轻量模式只验 cwd。
-3. worker 写 STATUS 同义词(completed / finished)而非字面 `done`,sentinel 不退出。
-4. worker 改完文件不 commit,PM 收口验到空 diff。轻量模式落在非 git 文件夹时无 commit，改验「交付物全部落盘 + RESULT.md 列清单」。
-5. 真实 settings(config/*.settings.json)进入 git 追踪或打包件。
-6. worker 因验证缺工具而执行未在授权清单中的安装/全局环境写入命令，或安装授权缺少可审计来源。
-
-### Benchmark case
-
-- `smoke-tmux-worker.sh`:临时 repo e2e(spawn 1 worker 跑完,STATUS=done,diff 非空,clean 无残留)。
-- 轻量模式 smoke：`spawn-worker.sh --no-worktree --project <非 git 文件夹>`，验 pane cwd = 目标文件夹、METADATA `isolation_mode=lightweight`、STATUS=done、交付物落盘。
-- 建议补 `smoke-e2e-wave.sh`:spawn 2 worker 并行改不重叠文件,sentinel 等终态,验证两个 PR diff 范围独立、STATUS 均 done、clean 无残留。
-
-### 静态检查 vs 动态评估
-
-- **静态**:`lint-wait-script.sh`(wait / monitor 脚本 lint)+ `check-dependencies.sh`(preflight 依赖检查)。
-- **动态**:`smoke-tmux-worker.sh`(e2e 端到端)+ `smoke-provider-settings.sh`(provider 验证,需真实 key,optional)。
-- **安装权限故障注入**：`test-dependency-install-guard.sh`（无授权机器安装/项目本地安装阻断、精确授权放行、缺授权来源 fail-closed、spawn hook/metadata 实际接入）。
+`smoke-orca-worker.sh` 验证真实 runtime 检测但不启动 Agent；`smoke-orca-control-plane.sh` 用 fake CLI 验证命令路由、cursor 与 external terminal accounting。只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能把该 backend 的 supervised 路径标记已验证；其他 backend 不得类推。

@@ -1,29 +1,12 @@
 #!/usr/bin/env bash
-# orca-supervised-register.sh — 把已有 ORCA agent terminal 纳入 ORCA supervised 体系（Task-033）。
-#
-# 把 spawn-worker 开的 agent terminal（保留 provider env）注册为 ORCA supervised worker：
-#   run-create（PM coordinator 绑 Run）→ task-create → worker-start --terminal --worktree
-# 注册后 worker 出现在 worker-list，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
-#
-# 前提（实测，references/12 §9 关键发现 4）：
-#   - terminal 必须跑 recognized agent（claude/codex/opencode 等）；sleep/shell 被拒
-#   - --worktree 必须匹配 terminal 所属 worktree
-#
-# 用法：
-#   orca-supervised-register.sh \
-#     --worktree-id "<repoId>::<path>" \
-#     --terminal-handle "term_xxx" \
-#     --task-spec "<任务描述>" \
-#     [--task-title "<标题>"] [--run-id "<run_id>"] [--objective "<目标>"]
-#
-# 输出（stdout，KV 格式，供 spawn-worker eval）：
-#   ORCAREG_RUN_ID=run_xxx
-#   ORCAREG_TASK_ID=task_xxx
-#   ORCAREG_DISPATCH_ID=ctx_xxx
-#
-# 退出码：0 成功；64 参数/前提错误；1 ORCA 调用失败。
+# Register an existing Orca agent terminal into one supervised Run/Task/Dispatch.
+# worker-start is the only prompt injector on this path.
 
 set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=orca-runtime.sh
+source "$SCRIPT_DIR/orca-runtime.sh"
 
 WORKTREE_ID=""
 TERMINAL_HANDLE=""
@@ -31,6 +14,8 @@ TASK_SPEC=""
 TASK_TITLE=""
 RUN_ID=""
 OBJECTIVE=""
+TIMEOUT_MS=60000
+COORDINATOR_HANDLE=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -38,14 +23,17 @@ Usage:
   orca-supervised-register.sh --worktree-id ID --terminal-handle HANDLE --task-spec TEXT [options]
 
 Required:
-  --worktree-id ID         ORCA worktree id (format: <repoId>::<path>)
-  --terminal-handle HANDLE ORCA terminal handle (term_xxx), must run a recognized agent
-  --task-spec TEXT         Task spec / instruction for the supervised task
+  --worktree-id ID         Exact Orca worktree id
+  --terminal-handle HANDLE Existing terminal running an Orca-recognized agent
+  --task-spec TEXT         Complete worker task
 
 Optional:
-  --task-title TEXT        Task title (default: "spawn-worker supervised worker")
-  --run-id ID              Existing Run id (skip run-create; default: create new Run)
-  --objective TEXT         Run objective (default: same as task-spec)
+  --task-title TEXT        Concise task title
+  --run-id ID              Reuse one Run for all workers in a Wave
+  --objective TEXT         Objective for a newly created Run
+  --timeout-ms N           worker-start readiness timeout (default: 60000)
+
+Stdout contains only shell-safe KEY=VALUE receipts.
 USAGE
 }
 
@@ -57,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --task-title) TASK_TITLE="$2"; shift 2 ;;
     --run-id) RUN_ID="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
+    --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
@@ -65,56 +54,74 @@ done
 [ -n "$WORKTREE_ID" ] || { echo "ERROR: --worktree-id is required" >&2; exit 64; }
 [ -n "$TERMINAL_HANDLE" ] || { echo "ERROR: --terminal-handle is required" >&2; exit 64; }
 [ -n "$TASK_SPEC" ] || { echo "ERROR: --task-spec is required" >&2; exit 64; }
-command -v orca >/dev/null 2>&1 || { echo "ERROR: orca CLI not found" >&2; exit 64; }
+[[ "$TIMEOUT_MS" =~ ^[0-9]+$ ]] || { echo "ERROR: --timeout-ms must be an integer" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
+orca_runtime_init
 
 [ -n "$TASK_TITLE" ] || TASK_TITLE="spawn-worker supervised worker"
 [ -n "$OBJECTIVE" ] || OBJECTIVE="$TASK_SPEC"
 
-# 1. run-create（如果没传 --run-id）
 if [ -z "$RUN_ID" ]; then
-  RUN_OUT=$(orca orchestration run-create --objective "$OBJECTIVE" --json 2>&1) || {
-    echo "ERROR: run-create failed: $RUN_OUT" >&2; exit 1; }
-  RUN_ID=$(printf '%s' "$RUN_OUT" | jq -r '.result.run.id // empty')
-  [ -n "$RUN_ID" ] || { echo "ERROR: run-create response missing .result.run.id: $RUN_OUT" >&2; exit 1; }
+  run_out=$(orca_cli orchestration run-create --objective "$OBJECTIVE" --json 2>&1) || {
+    echo "ERROR: run-create failed: $run_out" >&2; exit 1; }
+  RUN_ID=$(printf '%s' "$run_out" | jq -r '.result.run.id // empty')
+  [ -n "$RUN_ID" ] || { echo "ERROR: run-create response missing .result.run.id" >&2; exit 1; }
+  COORDINATOR_HANDLE=$(printf '%s' "$run_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
   echo "ORCAREG_RUN_CREATED: $RUN_ID" >&2
+else
+  # Bind the coordinator terminal before adding another task to this Wave Run.
+  use_out=$(orca_cli orchestration run-use --id "$RUN_ID" --json 2>&1) || {
+    echo "ERROR: run-use failed for $RUN_ID: $use_out" >&2; exit 1; }
+  COORDINATOR_HANDLE=$(printf '%s' "$use_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
 fi
+[ -n "$COORDINATOR_HANDLE" ] || {
+  echo "ERROR: Run receipt missing coordinator handle; cannot satisfy Orca consumer fencing" >&2
+  exit 1
+}
 
-# 2. task-create
-TASK_OUT=$(orca orchestration task-create --spec "$TASK_SPEC" --task-title "$TASK_TITLE" --run "$RUN_ID" --json 2>&1) || {
-  echo "ERROR: task-create failed: $TASK_OUT" >&2; exit 1; }
-TASK_ID=$(printf '%s' "$TASK_OUT" | jq -r '.result.task.id // empty')
-[ -n "$TASK_ID" ] || { echo "ERROR: task-create response missing .result.task.id: $TASK_OUT" >&2; exit 1; }
+task_out=$(orca_cli orchestration task-create --spec "$TASK_SPEC" --task-title "$TASK_TITLE" \
+  --run "$RUN_ID" --from "$COORDINATOR_HANDLE" --json 2>&1) || {
+  echo "ERROR: task-create failed: $task_out" >&2; exit 1; }
+TASK_ID=$(printf '%s' "$task_out" | jq -r '.result.task.id // empty')
+[ -n "$TASK_ID" ] || { echo "ERROR: task-create response missing .result.task.id" >&2; exit 1; }
 echo "ORCAREG_TASK_CREATED: $TASK_ID" >&2
 
-# 3. worker-start --terminal --worktree（把已有 agent terminal 纳入 supervised）
-# ORCA runtime 两个已知行为（实测）：
-#   (a) terminal 刚 create 时 runtime 注册有延迟，立即 worker-start 偶发 runtime_unavailable
-#   (b) worker-start 返回 runtime_unavailable 时，server 端可能已成功建 dispatch（连接断在响应前）
-# 所以：单次 worker-start（不 retry——retry 会触发 task_not_startable 把 worker 标 failed），
-# 然后靠 worker-list 兜底查 task 的 dispatch（不管 worker-start 返回 ok 与否）。
-echo "ORCAREG_WAIT_RUNTIME: sleep 6s 等 ORCA runtime 注册 terminal（worker-start timing）" >&2
-sleep 6
-WS_OUT=$(orca orchestration worker-start --task "$TASK_ID" --terminal "$TERMINAL_HANDLE" --worktree "id:$WORKTREE_ID" --run "$RUN_ID" --json 2>&1) || true
-WS_OK=$(printf '%s' "$WS_OUT" | jq -r '.ok // false' 2>/dev/null)
-echo "ORCAREG_WORKER_START: ok=${WS_OK}（false 不一定真失败，查 worker-list 兜底）" >&2
-# sleep 让 server 端注册 dispatch（应对 runtime_unavailable 但 server 成功）
-sleep 3
-# worker-list 兜底查 task 的 dispatch（worker-start runtime_unavailable 时 server 端可能已建）
-DISPATCH_ID=""
-WORKER_STATE=""
-for lookup in 1 2 3; do
-  LIST_OUT=$(orca orchestration worker-list --json 2>/dev/null || echo '{}')
-  DISPATCH_ID=$(printf '%s' "$LIST_OUT" | jq -r --arg t "$TASK_ID" '.result.workers[]? | select(.taskId==$t) | .dispatchId // empty')
-  WORKER_STATE=$(printf '%s' "$LIST_OUT" | jq -r --arg t "$TASK_ID" '.result.workers[]? | select(.taskId==$t) | .workerState // empty')
-  [ -n "$DISPATCH_ID" ] && break
-  sleep 2
-done
-if [ -z "$DISPATCH_ID" ]; then
-  echo "ERROR: worker-start 失败且 worker-list 无 dispatch: $WS_OUT" >&2; exit 1; fi
-echo "ORCAREG_WORKER_REGISTERED: dispatch=$DISPATCH_ID workerState=$WORKER_STATE (worker-start ok=$WS_OK)" >&2
+start_out=$(orca_cli orchestration worker-start \
+  --task "$TASK_ID" \
+  --terminal "$TERMINAL_HANDLE" \
+  --worktree "id:$WORKTREE_ID" \
+  --run "$RUN_ID" \
+  --from "$COORDINATOR_HANDLE" \
+  --timeout-ms "$TIMEOUT_MS" \
+  --json 2>&1) || {
+    echo "ERROR: worker-start failed; inspect this exact receipt and residualResources before retrying: $start_out" >&2
+    exit 1
+  }
 
-# stdout KV（spawn-worker eval 捕获）
-echo "ORCAREG_RUN_ID=$RUN_ID"
-echo "ORCAREG_TASK_ID=$TASK_ID"
-echo "ORCAREG_DISPATCH_ID=$DISPATCH_ID"
+# Prefer the mutation receipt. dispatch-show is a read-only exact recovery if a
+# runtime version omits the dispatch id from worker-start's response.
+DISPATCH_ID=$(printf '%s' "$start_out" | jq -r '
+  .result.dispatch.id
+  // .result.worker.dispatch.id
+  // .result.dispatchId
+  // .result.worker.dispatchId
+  // empty' 2>/dev/null)
+if [ -z "$DISPATCH_ID" ]; then
+  dispatch_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || {
+    echo "ERROR: worker-start succeeded but dispatch-show failed: $dispatch_out" >&2; exit 1; }
+  DISPATCH_ID=$(printf '%s' "$dispatch_out" | jq -r '
+    .result.dispatch.id
+    // .result.dispatch.dispatchId
+    // .result.dispatchId
+    // empty' 2>/dev/null)
+fi
+[ -n "$DISPATCH_ID" ] || {
+  echo "ERROR: worker-start succeeded but no dispatch id was recoverable; inspect task $TASK_ID" >&2
+  exit 1
+}
+
+echo "ORCAREG_WORKER_REGISTERED: dispatch=$DISPATCH_ID" >&2
+printf 'ORCAREG_RUN_ID=%s\n' "$RUN_ID"
+printf 'ORCAREG_COORDINATOR_HANDLE=%s\n' "$COORDINATOR_HANDLE"
+printf 'ORCAREG_TASK_ID=%s\n' "$TASK_ID"
+printf 'ORCAREG_DISPATCH_ID=%s\n' "$DISPATCH_ID"

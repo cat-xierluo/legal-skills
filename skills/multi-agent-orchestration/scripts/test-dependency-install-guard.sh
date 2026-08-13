@@ -331,16 +331,18 @@ rm -f /tmp/dependency-install-unsupported.out
 
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/bare --session "$session-bare" \
-  --worker-backend claude-code --command "claude --bare" >/tmp/dependency-install-bare.out 2>&1; then
-  not_ok "Claude --bare cannot silently bypass hook enforcement"
-  tmux kill-session -t "$session-bare" 2>/dev/null || true
-else
-  if grep -qF -- "--bare skips or may skip hooks" /tmp/dependency-install-bare.out; then
-    ok "Claude --bare cannot silently bypass hook enforcement"
+  --worker-backend claude-code --command "claude --bare" --dry-run \
+  >/tmp/dependency-install-bare.out 2>&1; then
+  if grep -qF "SPAWN_WORKER_BARE_AUTO_DEGRADE" /tmp/dependency-install-bare.out \
+    && grep -qF "SPAWN_WORKER_INSTALL_GUARD_DEGRADED" /tmp/dependency-install-bare.out; then
+    ok "Claude --bare explicitly records prompt-only degradation"
   else
     cat /tmp/dependency-install-bare.out >&2 || true
-    not_ok "Claude --bare cannot silently bypass hook enforcement"
+    not_ok "Claude --bare explicitly records prompt-only degradation"
   fi
+else
+  cat /tmp/dependency-install-bare.out >&2 || true
+  not_ok "Claude --bare explicitly records prompt-only degradation"
 fi
 rm -f /tmp/dependency-install-bare.out
 
@@ -350,7 +352,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   not_ok "backend label without matching executable token fails closed"
   tmux kill-session -t "$session-fake-codebuddy" 2>/dev/null || true
 else
-  if grep -qF "cannot prove the configured backend is launched" /tmp/dependency-install-fake-backend.out; then
+  if grep -qF "worker backend/command identity mismatch" /tmp/dependency-install-fake-backend.out; then
     ok "backend label without matching executable token fails closed"
   else
     cat /tmp/dependency-install-fake-backend.out >&2 || true
@@ -359,7 +361,7 @@ else
 fi
 rm -f /tmp/dependency-install-fake-backend.out
 
-for disabled_command in "claude '--safe-mode'" "claude --setting-sources project" "bash wrapper.sh"; do
+for disabled_command in "claude '--safe-mode'" "claude --setting-sources project"; do
   slug=$(printf '%s' "$disabled_command" | tr -cd 'a-zA-Z' | cut -c1-18)
   if bash "$SCRIPT_DIR/spawn-worker.sh" \
     --project "$spawn_repo" --branch "feat/$slug" --session "$session-$slug" \
@@ -378,9 +380,11 @@ done
 rm -f /tmp/dependency-install-disabled.out
 
 degraded_session="$session-degraded"
+printf '%s\n' '#!/usr/bin/env bash' 'sleep 30' > "$tmp_root/codex"
+chmod +x "$tmp_root/codex"
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/degraded --session "$degraded_session" \
-  --worker-backend codex --command "sleep 30" \
+  --worker-backend codex --command "$tmp_root/codex" \
   --allow-prompt-only-install-guard "项目 T159 明确接受无 hook 的提示级降级" \
   --no-trust-auto --no-permission-auto \
   >/tmp/dependency-install-degraded.out 2>&1; then
