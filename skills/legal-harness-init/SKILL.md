@@ -46,6 +46,8 @@ homepage: https://github.com/cat-xierluo/legal-skills
 | `--dry-run` | 否 | 只展示候选 diff，不写入 |
 | `--model` | env 白名单探测 | init-environment 受管区块需要时兜底；`ANTHROPIC_MODEL` / `OPENAI_MODEL` / `CLAUDE_MODEL` / `GLM_MODEL` / `MY_MODEL` 命中即用 |
 | `--action` | `init` | record-init-env.sh 的操作类型：`init` / `update` / `append` |
+| `--record-init-env` | `true` | write.sh 真实落盘后是否自动调 record-init-env.sh；`true` / `false`；批量场景可关 |
+| `--init-action` | `init` | write.sh 自动调 record-init-env.sh 时传的操作类型 |
 
 将旧参数 `--preset` 解释为 `--project-type`，并提示新名称；项目类型只决定追问路线，不能替用户填答案。
 
@@ -197,7 +199,9 @@ bash scripts/restore.sh --target <AGENTS.md-or-CLAUDE.md>
 
 ## 第六步半：记录初始化环境
 
-`write.sh` 完成后，在被初始化的项目里 append 一条"用了哪个 harness / 哪个 model / 哪个 init skill 版本 / 什么操作"到 AGENTS.md 的 `init-environment` 受管区块，作为将来追溯"问题出在 harness 还是 model 层"的依据。详见 [references/22-initialization-environment.md](references/22-initialization-environment.md) 与 [templates/modules/init-environment.md](templates/modules/init-environment.md)。
+`write.sh` 真实落盘后（v0.4.2+）**已自动调一次** `record-init-env.sh`，agent 无需手动串联。如需关闭（如批量脚本场景）传 `--record-init-env false` 即可。详见 [references/22-initialization-environment.md](references/22-initialization-environment.md) 与 [templates/modules/init-environment.md](templates/modules/init-environment.md)。
+
+`write.sh` 落盘后会自动调，下面命令仅在 `--record-init-env false` 或需手动补记时使用：
 
 ```bash
 bash scripts/record-init-env.sh \
@@ -226,7 +230,7 @@ bash scripts/record-init-env.sh \
 - 表格行数 >50 时 stderr 软提示归档（不阻断）
 
 <!-- skill-lint:constraint INIT-ENVIRONMENT-RECORD-ON-WRITE -->
-每次 `write.sh` 真实落盘（不是 dry-run、不是 needs_confirmation）后都必须再调一次 `record-init-env.sh`；缺这条记录等同于"配置改了但没记工具环境"。无法获得 model 时不臆造，必须显式传 `--model` 或回退到 NOT_VERIFIED。
+每次 `write.sh` 真实落盘（不是 dry-run、不是 needs_confirmation）后都已由 `write.sh` 自动调一次 `record-init-env.sh`（v0.4.2+，受 `--record-init-env` 开关控制）。缺这条记录等同于"配置改了但没记工具环境"。无法获得 model 时不臆造，必须显式传 `--model` 或回退到 NOT_VERIFIED。
 
 ## 第七步：在新会话验证生效
 

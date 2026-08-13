@@ -5,6 +5,64 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.4.2] - 2026-08-13
+
+> 把"必须 record"从 SKILL.md 文档约束升级为 write.sh 脚本级保证。同步修 v0.4.0 create 模式 bug。
+
+### 改进
+
+- `write.sh` 真实落盘后自动调一次 `record-init-env.sh`，无需 agent 手动串联
+- `write.sh` 新增三个参数：`--record-init-env true|false`（默认 true）/ `--init-action init|update|append`（默认 init）/ `--model <name>`（透传给 record-init-env.sh）
+- record-init-env.sh 探测失败时 `write.sh` **不阻断**：AGENTS.md 已落盘，init-environment 是 metadata；stderr 给出明确的手动补命令
+- dry-run / needs_confirmation / write 失败路径不调 record-init-env.sh
+
+### Bug 修复
+
+- 修 v0.4.0 `record-init-env.sh` create 模式 bug：原 create 模式只写 init-environment 区块、不保留 target 原内容；导致 write.sh 集成后 target 中 legal-baseline 等其他受管区块被吞。fix：create 改为先 `cat target` + 补末尾换行 + 追加 init-environment 区块（v0.4.0 / v0.4.1 单独调用未暴露,因 record-init-env.sh 之前总在空 AGENTS.md 上跑）
+
+### 决策
+
+- DEC-022（待补）write.sh 真实落盘后自动调 record-init-env.sh——从"文档约束"升级为"脚本级保证",agent 漏不掉
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：51/51 全过（v0.4.1 48 + v0.4.2-A 新增 3）
+- ✅ write.sh 真实落盘后自动追加 init-environment（含 model 透传）
+- ✅ `--record-init-env=false` 时不调 record-init-env.sh
+- ✅ dry-run 时不调 record-init-env.sh
+- ✅ write.sh 第二次同输入运行 status=unchanged,AGENTS.md 字节级零 diff
+- ✅ 端到端：write.sh 落盘后 record-init-env.sh 自动追加,legal-baseline + init-environment 两个受管区块共存
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`(需真实律师测试)
+
+### 待办
+
+- --note 含 `|` 等 markdown 元字符转义（v0.4.2-B）
+- 端到端真实 init 全流程跑通
+- 真实 harness `--version` 探测在已装 claude/codex CLI 的机器验证
+
+## [0.4.1] - 2026-08-13
+
+> 扩展 model env 白名单 + 自助补 model hint。
+
+### 改进
+
+- `record-init-env.sh` env 白名单 5 → 9：新增 `CODEX_MODEL` / `OPENAI_MODEL_GLM`（部分 Codex 包装层）、`MYAGENTS_MODEL` / `QWEN_MODEL`（MyAgents / QwenWork）、`MY_MODEL`（用户兜底，agent 自检自填）
+- env 全空 + 缺 `--model` 时不再一行 die，改为输出多行 hint：提示 `export MY_MODEL` 或 `--model` 兜底，引向 `references/22 § 自助补 model`
+- `references/22-initialization-environment.md` 加 § 自助补 model：阐述"为什么不臆造"+ "为什么选 MY_MODEL 而不是 LEGAL_MODEL"（行业通用、不绑定 skill）
+- `test.sh` 加 9 个新断言：env 全空时 hint 三短语 + 三个新 env 候选各自 record + `assert_contains` 加 `--` 终止符防 `--model` 被 grep 当 option
+
+### 决策
+
+- 保留 v0.4.0 DEC-021 "不臆造 model" 原则；v0.4.1 只是把"不知道怎么办"的提示做得更可执行，不动数据完整性
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：48/48 全过（v0.4.0 39 + v0.4.1 新增 9）
+- ✅ env 全空 + 缺 `--model` 仍 die 退出码 1（不臆造）
+- ✅ env 全空时 stderr 出现"自助补 model" / "MY_MODEL" / "--model" 三个 hint 短语
+- ✅ `CODEX_MODEL=codex-opus-1` / `MYAGENTS_MODEL=mya-pro` / `MY_MODEL=agent-self-detected` 三种新候选各自 record 成功 + 字段写入
+- ⚠️ 真实 8 平台端到端 init 流程、session jsonl 事后回填 `NOT_VERIFIED`
+
 ## [0.4.0] - 2026-08-13
 
 > 沉淀每次 init 的工具环境到被初始化的项目，作为将来追溯"问题出在 harness 还是 model 层"的元数据。端到端真实跑通仍 `NOT_VERIFIED`（缺真实律师 init 全流程）。

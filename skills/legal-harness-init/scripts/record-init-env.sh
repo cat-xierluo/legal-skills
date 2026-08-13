@@ -210,8 +210,12 @@ target_dir=$(dirname -- "$TARGET")
 candidate=$(mktemp "${target_dir}/.record-init-env.XXXXXX") || die "无法创建候选文件"
 if [ "$MODE" = "create" ]; then
     {
-        printf '%s\n' "$START_MARKER"
-        printf '\n'
+        cat "$TARGET"
+        # 若 target 不以换行结尾,补一个,避免与新追加区块粘连
+        if [ -s "$TARGET" ] && [ "$(tail -c 1 "$TARGET")" != "" ] && [ "$(tail -c 1 "$TARGET" | wc -l)" -eq 0 ]; then
+            printf '\n'
+        fi
+        printf '\n%s\n' "$START_MARKER"
         printf '| 时间 | Harness | Harness Version | Model | Init Skill | Init Skill Version | 操作 |\n'
         printf '|---|---|---|---|---|---|---|\n'
         printf '%s\n' "$NEW_ROW"
