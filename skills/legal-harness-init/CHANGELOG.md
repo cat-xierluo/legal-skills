@@ -37,6 +37,10 @@
 - openclaw 真实会话 jsonl 路径研究（需在活跃使用 openclaw 的机器）
 - 端到端真实 init 全流程跑通
 
+### 文档完善
+
+- 同步 `SKILL.md` frontmatter 与根 README 的版本及最近更新说明到 v0.5.2，避免代码能力、CHANGELOG 与发布索引漂移
+
 ## [0.5.1] - 2026-08-13
 
 > codex session jsonl 反查：`--probe-from-session` 现支持 codex，从 `turn_context.payload.model` 取 model。
