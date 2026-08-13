@@ -239,7 +239,7 @@ tmux new-session -d \
 
 ### 6.4 与 spawn-worker.sh 集成
 
-理论上可以作为 `custom CLI` worker 通过 `spawn-worker.sh` 启动：
+使用正式 `qoderwork-cn` backend 通过 `spawn-worker.sh` 启动：
 
 ```bash
 bash scripts/spawn-worker.sh \
@@ -268,7 +268,7 @@ bash scripts/spawn-worker.sh \
 ## 8. 与现有 Skill 框架的集成建议
 
 - **backend 标识**：建议按区域区分，例如 `qoderwork-cn`；profile 可写 `qoder-cn-qwen37max`
-- **spawn 集成**：走 `custom CLI` worker 路径，通过 `spawn-worker.sh --worker-backend custom` 启动
+- **spawn 集成**：只使用正式 `spawn-worker.sh --worker-backend qoderwork-cn`；`custom` 已被四后端白名单拒绝
 - **checkpoint 兼容**：`qoderclicn` 本身不产生 `STATUS.json`，需要在 worker prompt 中明确要求 worker 自行写入 checkpoint 三件套，或靠 git status + tmux capture-pane 兜底巡检
 - **额度监控**：目前没有 CLI 方式查询剩余额度，需要在 QoderWork 桌面端查看
 - **worktree 隔离**：虽然 CLI 暴露 `--worktree`，多 Agent 编排仍建议由 PM 先用 `spawn-worker.sh` 创建 worktree，再用 `tmux -c <worktree>` 启动 CLI，保证分支名、Session Context 和 sentinel 路径可控

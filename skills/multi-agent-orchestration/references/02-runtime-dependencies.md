@@ -1,5 +1,7 @@
 # Runtime Dependencies
 
+> 当前可派发 backend 只有 Claude Code、Codex、CodeBuddy、QoderWork CN。OpenCode 等条目仅是历史候选依赖，不属于 `spawn-worker.sh` 的当前运行合同。
+
 > 读取时机：首次使用本 Skill、迁移到新机器、启动 Wave 前、脚本报 command not found 或日期解析异常时。
 
 ## 1. 依赖分层

@@ -15,11 +15,15 @@
   },
 
   "concurrency": {
-    "_comment": "同一 API 来源(provider)的并发上限。超了会挤占额度、甚至限流连累其他任务。",
+    "_comment": "同一 API 来源(provider)的机械并发上限。spawn-worker 在副作用前原子占槽，终端/会话结算后释放。per_backend 优先于 max_per_provider。",
     "max_per_provider": 3,
+    "per_backend": {
+      "codebuddy": 1,
+      "qoderwork-cn": 1
+    },
     "prefer_lower": true,
     "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",
-    "overflow_strategy": "需要更多并行 worker 时，溢出到 backend_model_routing 里的跨平台 backend（不同平台/额度，互不抢并发）。"
+    "overflow_strategy": "配额耗尽时 spawn 退出 75；PM 可等待额度，或在 Harness 白名单内改派另一已配置 backend。"
   },
 
   "codex_policy": {
@@ -55,7 +59,7 @@
 
   "notes": [
     "SKILL.md 与 harness-backend-policy.json 定义四种可用 Harness 及调用层级；本文件只在该集合内选择 host 和 model。",
-    "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 不设硬上限（交 PM 判断）；backend_model_routing 缺失 → 空 dict。",
+    "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 只提示 advisory、不假装硬限额；backend_model_routing 缺失 → 空 dict。",
     "本文件只声明'偏好'，不声明真实 token/key/endpoint——那些在 config/claude-provider-registry.*.json（本地 ignored）。",
     "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。"
   ]

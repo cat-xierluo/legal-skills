@@ -14,10 +14,12 @@ TMP_ROOT=$(mktemp -d)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 SESSION_DONE="smoke-sentinel-done-$$"
 SESSION_TIMEOUT="smoke-sentinel-timeout-$$"
+SESSION_INVALID_METADATA="smoke-sentinel-invalid-metadata-$$"
 
 cleanup() {
   tmux kill-session -t "$SESSION_DONE" 2>/dev/null || true
   tmux kill-session -t "$SESSION_TIMEOUT" 2>/dev/null || true
+  tmux kill-session -t "$SESSION_INVALID_METADATA" 2>/dev/null || true
   rm -rf "$TMP_ROOT"
 }
 trap cleanup EXIT
@@ -162,6 +164,24 @@ if [ "$TIMEOUT_EXIT" -ne 124 ]; then
   printf 'ASSERTION FAILED: sentinel timeout path expected exit 124, got %d\n' "$TIMEOUT_EXIT" >&2
   exit 1
 fi
+
+# ---------- Scenario 3: invalid metadata must retain quota fail-closed ----------
+CTX_INVALID="$TMP_ROOT/invalid/.claude/agent-sessions/$SESSION_INVALID_METADATA"
+STATUS_INVALID="$CTX_INVALID/STATUS.json"
+LOG_INVALID="$CTX_INVALID/SENTINEL_OUT.log"
+mkdir -p "$CTX_INVALID"
+printf '%s\n' '{invalid-json' > "$CTX_INVALID/METADATA.json"
+printf '%s\n' '{"status":"done"}' > "$STATUS_INVALID"
+tmux new-session -d -s "$SESSION_INVALID_METADATA" 'sleep 60'
+INVALID_EXIT=0
+bash "$SCRIPT_DIR/sentinel.sh" --status-file "$STATUS_INVALID" \
+  --tmux-session "$SESSION_INVALID_METADATA" --poll-interval 1 --max-wait 10 \
+  >/dev/null 2>&1 || INVALID_EXIT=$?
+if [ "$INVALID_EXIT" -ne 2 ]; then
+  printf 'ASSERTION FAILED: invalid metadata expected exit 2, got %d\n' "$INVALID_EXIT" >&2
+  exit 1
+fi
+assert_contains "$(cat "$LOG_INVALID")" "SENTINEL_CONFIG_ERROR: invalid METADATA.json"
 
 # Validate usage path (v1.20.2 HRA-001: 显式断言 exit 64，不再 || true 丢退出码)
 USAGE_EXIT=0

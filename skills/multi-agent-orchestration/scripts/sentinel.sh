@@ -14,6 +14,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=provider-lease-root.sh
+source "$SCRIPT_DIR/provider-lease-root.sh"
 
 STATUS_FILE=""
 TMUX_SESSION=""
@@ -30,6 +32,7 @@ PANE_TAIL_LINES=80
 #   "tmux"           — 老路径，零行为变化
 #   "orca_terminal"  — ORCA 终端模式，spawn-worker.sh ORCA 分支配对传 --terminal-handle --worktree-id
 WORKER_SESSION_TYPE=""
+WORKER_RESOURCE_SETTLED=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -202,6 +205,7 @@ kill_tmux_if_requested() {
       log "SENTINEL_ORCA_TERMINAL_CLOSE_FAILED: handle=$TERMINAL_HANDLE"
       return 0
     }
+    WORKER_RESOURCE_SETTLED=1
     log "SENTINEL_ORCA_TERMINAL_CLOSED: handle=$TERMINAL_HANDLE"
     return 0
   fi
@@ -210,6 +214,7 @@ kill_tmux_if_requested() {
     return 0
   fi
   if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    WORKER_RESOURCE_SETTLED=1
     log "SENTINEL_TMUX_GONE: session=$TMUX_SESSION (already killed externally)"
     return 0
   fi
@@ -217,7 +222,41 @@ kill_tmux_if_requested() {
     log "SENTINEL_KILL_FAILED: session=$TMUX_SESSION"
     return 0
   }
+  WORKER_RESOURCE_SETTLED=1
   log "SENTINEL_TMUX_KILLED: session=$TMUX_SESSION"
+}
+
+release_provider_lease_if_settled() {
+  [ "$WORKER_RESOURCE_SETTLED" -eq 1 ] || return 0
+  [ -z "$DISPATCH_ID" ] || return 0
+  local metadata lease_file lease_session worker_project lease_root
+  metadata="$(dirname "$STATUS_FILE")/METADATA.json"
+  [ -f "$metadata" ] || return 0
+  if ! jq -e 'type == "object"' "$metadata" >/dev/null 2>&1; then
+    log "SENTINEL_CONFIG_ERROR: invalid METADATA.json; provider quota retained fail-closed file=$metadata"
+    return 2
+  fi
+  lease_file=$(jq -r '.runtime.provider_lease.file // ""' "$metadata")
+  lease_session=$(jq -r '.session.id // ""' "$metadata")
+  [ -n "$lease_file" ] && [ -n "$lease_session" ] || return 0
+  worker_project=$(cd "$(dirname "$STATUS_FILE")/../../.." 2>/dev/null && pwd -P) || {
+    log "SENTINEL_PROVIDER_LEASE_RELEASE_FAILED: cannot derive worker project"
+    return 2
+  }
+  lease_root=$(provider_lease_root_for_project "$worker_project") || {
+    log "SENTINEL_PROVIDER_LEASE_RELEASE_FAILED: cannot derive trusted lease root"
+    return 2
+  }
+  local orca_path=""
+  orca_runtime_init >/dev/null 2>&1 && orca_path="$ORCA_CLI_BIN"
+  if python3 "$SCRIPT_DIR/provider-lease.py" release --root "$lease_root" \
+      --lease-file "$lease_file" \
+      --session "$lease_session" --resource-settled --orca-cli "$orca_path" >/dev/null 2>&1; then
+    log "SENTINEL_PROVIDER_LEASE_RELEASED: session=$lease_session"
+  else
+    log "SENTINEL_PROVIDER_LEASE_RELEASE_FAILED: session=$lease_session file=$lease_file"
+    return 2
+  fi
 }
 
 # v2.1（DEC-114）：ORCA UI 同步——把 worker 终态写进 ORCA workspace-status + comment。
@@ -307,6 +346,7 @@ while true; do
           fi
           observe_orca_supervised_state
           kill_tmux_if_requested
+          release_provider_lease_if_settled || exit $?
           exit 0
         fi
         ;;
@@ -317,6 +357,7 @@ while true; do
         sync_orca_worktree_status "in-review" "sentinel observed non-success at $(date -u +%FT%TZ) (status=$status; PM review)"
         observe_orca_supervised_state
         kill_tmux_if_requested
+        release_provider_lease_if_settled || exit $?
         exit 2
         ;;
       running|unknown|"")
@@ -334,6 +375,7 @@ while true; do
     sync_orca_worktree_status "in-review" "sentinel timeout ${elapsed}s (PM investigate)"
     observe_orca_supervised_state
     kill_tmux_if_requested
+    release_provider_lease_if_settled || exit $?
     exit 124
   fi
 

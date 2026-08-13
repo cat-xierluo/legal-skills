@@ -52,7 +52,7 @@ command -v git >/dev/null 2>&1 || { echo "SKIP: git is required"; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
 
-deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend custom)
+deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend codex)
 assert_contains "$deps_out" "DEPENDENCY_CHECK_OK"
 
 profile_shell=$("$SCRIPT_DIR/render-runtime-profile.sh" \
@@ -62,9 +62,13 @@ profile_shell=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --provider-slot smoke-slot-1 \
   --output shell)
 eval "$profile_shell"
-# Exercise the control plane with a fixed local command while retaining a real
-# configured backend label so the Harness policy gate is part of this smoke.
-WORKER_COMMAND="printf '%s\n' 'worker-start' 'TOKEN=abc123' 'worker-end'; sleep 60"
+# Exercise the control plane through a fake executable whose basename matches
+# the declared backend. The command/backend identity gate must remain active.
+WORKER_COMMAND="$TMP_ROOT/codex"
+printf '%s\n' '#!/usr/bin/env bash' \
+  "printf '%s\\n' 'worker-start' 'TOKEN=abc123' 'worker-end'" \
+  'sleep 60' > "$WORKER_COMMAND"
+chmod +x "$WORKER_COMMAND"
 
 claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
   --backend claude-code \

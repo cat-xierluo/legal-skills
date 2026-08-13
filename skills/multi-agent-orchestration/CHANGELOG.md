@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.5.0] - 2026-08-13
+
+### 修复
+
+- Harness 权限改为对完整可证明祖先链取白名单交集；弱宿主嵌套 Codex/Claude Code 仍只能保留弱权限，链路读取不完整时失败关闭。
+- 新增 worker backend/启动命令身份绑定，拒绝标签伪装、命令链、不透明 wrapper 与任意命令替换；安装守卫的 prompt-only 降级不再能绕过 backend 身份门禁。
+- Harness 的 Orca 证据统一使用版本匹配的 `orca-runtime.sh`，避免权限检测与 worker 控制选择不同 CLI。
+
+### 新增
+
+- 新增跨 worktree 的 provider 原子并发租约：按个人配置在副作用前占槽，启动后绑定精确 tmux session 或 Orca terminal，并在真实资源结算后释放。
+- 租约存放于 Git common dir 的可信根，使用文件锁与原子写入；释放同时校验可信路径、session、资源句柄和运行时存活状态，未知状态失败关闭。
+- 新增 `test-worker-command-policy.sh` 与 `test-provider-lease.sh`，覆盖四后端 renderer、wrapper、伪装命令、额度竞争、陈旧租约、越界路径和存活资源提前释放。
+
+### 改进
+
+- Orca worktree 创建显式继承项目 setup 策略；继续采用门禁优先的两阶段启动，不直接切换会在权限文件落盘前启动 Agent 的 `worktree create --agent`。
+- 当前运行合同明确收口为 Claude Code、Codex、CodeBuddy、QoderWork CN 四个 backend；OpenCode/custom 等旧内容只保留为历史调研或独立诊断，不构成派发授权。
+- 同步 `SKILL.md`、Orca reference、个人配置模板和根 README 的 v2.5.0 说明，传统 tmux 路径保持可用。
+
+### 验证
+
+- Harness 层级门禁 26/26、命令身份门禁 15/15、provider lease 原子与生命周期回归全部通过。
+- 在 Orca 1.4.180 中使用本地无模型调用的假 Codex 完成真实 worktree/terminal/metadata/lease/close/clean 闭环；终端关闭后为 `connected=false`、`writable=false`，未消耗模型额度。
+
 ## [2.4.0] - 2026-08-13
 
 ### 新增 — Harness 调用层级门禁

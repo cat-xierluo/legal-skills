@@ -1,5 +1,7 @@
 # Agent CLI 完整参考手册
 
+> 当前运行合同只允许 Claude Code、Codex、CodeBuddy、QoderWork CN。OpenCode、Hermes、Kimi、Gemini、Rudder 等章节是历史调研资料，不得据此扩张 `spawn-worker.sh` 白名单。
+
 > 本文档为 SKILL.md 的补充参考文档，汇总本机已安装的所有 Agent CLI 的命令规范。
 > 更新日期：2026-08-12
 
@@ -208,7 +210,7 @@ codex exec -c 'model="o3"' -c 'shell_environment_policy.inherit=all' - < /tmp/ta
 
 ---
 
-## 3. OpenCode（`opencode`）
+## 3. OpenCode（`opencode`，历史候选、不可派发）
 
 ### 3.1 核心参数速查
 
@@ -456,7 +458,7 @@ kimi --print --output-format stream-json -c "$(cat /tmp/task.prompt.md)"
 
 ## 5A. CodeBuddy CLI（`codebuddy`）
 
-> 2026-06-21 实测：CodeBuddy 桌面端内置 codebuddy CLI，可作为 custom CLI worker 使用；它不同于 Moonshot 官方 `kimi` CLI。
+> 2026-06-21 实测：CodeBuddy 桌面端内置 codebuddy CLI。当前应使用正式 `codebuddy` backend，不再称为 custom CLI；它不同于 Moonshot 官方 `kimi` CLI。
 
 ### 5A.1 二进制位置与版本
 

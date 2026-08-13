@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=provider-lease-root.sh
+source "$SCRIPT_DIR/provider-lease-root.sh"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -99,6 +101,7 @@ WORKER_HANDLE=""
 ORCA_RUN_ID=""
 ORCA_TASK_ID=""
 ORCA_DISPATCH_ID=""
+PROVIDER_LEASE_FILE=""
 
 resolve_worker() {
   [ -f "$METADATA" ] || {
@@ -109,6 +112,7 @@ resolve_worker() {
   ORCA_RUN_ID=$(jq -r '.session.orca.supervised.run_id // empty' "$METADATA")
   ORCA_TASK_ID=$(jq -r '.session.orca.supervised.task_id // empty' "$METADATA")
   ORCA_DISPATCH_ID=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$METADATA")
+  PROVIDER_LEASE_FILE=$(jq -r '.runtime.provider_lease.file // empty' "$METADATA")
   if [ -n "$ORCA_DISPATCH_ID" ]; then
     WORKER_MODE="orca_supervised"
   elif [ -n "$WORKER_HANDLE" ]; then
@@ -134,7 +138,7 @@ load_text() {
 needs_prompt_file() {
   local text="$1"
   [ "${#text}" -gt 500 ] && return 0
-  case "$text" in *'`'*|*'$'*|*'|'*|*'```'*) return 0 ;; esac
+  case "$text" in *'```'*|*'`'*|*'$'*|*'|'*) return 0 ;; esac
   return 1
 }
 
@@ -230,7 +234,35 @@ cmd_reply() {
 cmd_account() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: $COMMAND requires an Orca supervised worker" >&2; exit 64; }
   orca_runtime_init
-  orca_cli orchestration "worker-$COMMAND" --dispatch "$ORCA_DISPATCH_ID" --json
+  local result
+  result=$(orca_cli orchestration "worker-$COMMAND" --dispatch "$ORCA_DISPATCH_ID" --json) || return $?
+  printf '%s\n' "$result"
+  if [ "$COMMAND" = "release" ] && [ -n "$PROVIDER_LEASE_FILE" ]; then
+    local workers terminal_state lease_root
+    workers=$(orca_cli orchestration worker-list --json 2>/dev/null || echo '{}')
+    terminal_state=$(printf '%s' "$workers" | jq -r --arg dispatch "$ORCA_DISPATCH_ID" '
+      [(.result.workers // [])[]?
+        | select((.dispatch_id // .dispatchId // .id) == $dispatch)
+        | (.terminal_state // .terminalState // .accounting_state // .accountingState // "unknown")][0]
+      // "unknown"
+    ')
+    if [ "$terminal_state" = "released" ]; then
+      lease_root=$(provider_lease_root_for_project "$WORKTREE") || {
+        echo "ERROR: cannot derive trusted provider lease root" >&2
+        return 2
+      }
+      python3 "$SCRIPT_DIR/provider-lease.py" release \
+        --root "$lease_root" \
+        --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
+        --resource-settled --orca-cli "$ORCA_CLI_BIN" >/dev/null || {
+        echo "ERROR: Orca terminal released but provider lease release failed" >&2
+        return 2
+      }
+      echo "PM_ORCHESTRATE_PROVIDER_LEASE_RELEASED: session=$SESSION" >&2
+    else
+      echo "PM_ORCHESTRATE_PROVIDER_LEASE_RETAINED: terminal_state=$terminal_state; close/account resource before releasing quota" >&2
+    fi
+  fi
 }
 
 resolve_worker
