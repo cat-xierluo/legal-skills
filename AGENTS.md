@@ -350,7 +350,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 ---
 ```
 
-**同步工具**：使用 [clawhub-sync](./skills/clawhub-sync/SKILL.md) 技能批量同步到 ClawHub。
+**同步工具**：使用 [skill-publish-sync](./skills/skill-publish-sync/SKILL.md) 技能批量同步到 ClawHub。
 
 ## AGENTS.md 更新规范
 
