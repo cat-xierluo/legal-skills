@@ -23,6 +23,14 @@ ALLOWED_REASONS = {
     "clearer_replacement",
     "other",
 }
+WEAK_MIN_MUTATION_CONFIDENCE = 0.90
+WEAK_REASON_CODES_BY_OUTCOME = {
+    "keep": {"new_evidence", "other"},
+    "drop": {"transition", "visual_duplicate", "semantic_duplicate", "other"},
+    "replace": {"clearer_replacement", "other"},
+    "restore": {"new_evidence", "other"},
+    "leave_discarded": {"transition", "visual_duplicate", "semantic_duplicate", "other"},
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,9 +78,174 @@ def _resolve_source(root: Path, item: dict[str, Any]) -> Path:
     return source
 
 
-def _validate_review(review: dict[str, Any], manifest_path: Path, manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    if review.get("schema_version") != "1.0":
-        raise ValueError("视觉审计 schema_version 必须为 1.0")
+def _group_index(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, set[str]]]:
+    groups_by_id: dict[str, dict[str, Any]] = {}
+    image_to_groups: dict[str, set[str]] = {}
+    for raw_group in manifest.get("groups") or []:
+        if not isinstance(raw_group, dict):
+            continue
+        group_id = str(raw_group.get("group_id") or "")
+        if not group_id or group_id in groups_by_id:
+            raise ValueError(f"manifest 含缺失或重复 group_id: {group_id!r}")
+        groups_by_id[group_id] = raw_group
+        for item in raw_group.get("images") or []:
+            audit_id = str(item.get("audit_id") or "")
+            if audit_id:
+                image_to_groups.setdefault(audit_id, set()).add(group_id)
+    return groups_by_id, image_to_groups
+
+
+def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    if review.get("profile") != "weak":
+        raise ValueError("schema_version=1.1 的视觉审计 profile 必须为 weak")
+    groups_by_id, image_to_groups = _group_index(manifest)
+    known_images = {str(item.get("audit_id") or ""): item for item in manifest.get("images") or []}
+    answers = review.get("answers")
+    if not isinstance(answers, list):
+        raise ValueError("weak 视觉审计 answers 必须是数组")
+    decisions: list[dict[str, Any]] = []
+    safe_noops: list[dict[str, Any]] = []
+    seen_groups: set[str] = set()
+    for raw in answers:
+        if not isinstance(raw, dict):
+            raise ValueError("weak 视觉审计每条答案必须是对象")
+        group_id = str(raw.get("group_id") or "")
+        target_id = str(raw.get("target_audit_id") or "")
+        task_type = str(raw.get("task_type") or "")
+        outcome = str(raw.get("outcome") or "")
+        if group_id not in groups_by_id or group_id in seen_groups:
+            raise ValueError(f"weak 视觉审计引用未知或重复组: {group_id}")
+        seen_groups.add(group_id)
+        group = groups_by_id[group_id]
+        if target_id != str(group.get("decision_target_audit_id") or ""):
+            raise ValueError(f"weak 答案篡改了唯一判断目标: {group_id}")
+        if task_type != str(group.get("task_type") or ""):
+            raise ValueError(f"weak 答案 task_type 与 manifest 不一致: {group_id}")
+        allowed = {str(value) for value in group.get("allowed_outcomes") or []}
+        if outcome not in allowed:
+            raise ValueError(f"weak 答案 outcome 非法: {group_id}/{outcome}")
+        declared_outcomes = raw.get("allowed_outcomes")
+        if declared_outcomes != group.get("allowed_outcomes"):
+            raise ValueError(f"weak 答案篡改了 allowed_outcomes: {group_id}")
+        declared_coverage = raw.get("allowed_coverage_audit_ids")
+        expected_coverage = [
+            item["audit_id"]
+            for item in group.get("images") or []
+            if item.get("source") == "kept" and item.get("audit_id") != target_id
+        ]
+        if declared_coverage != expected_coverage:
+            raise ValueError(f"weak 答案篡改了 allowed_coverage_audit_ids: {group_id}")
+        declared_reason_map = raw.get("reason_codes_by_outcome")
+        expected_reason_map = {
+            value: sorted(WEAK_REASON_CODES_BY_OUTCOME[value])
+            for value in group.get("allowed_outcomes") or []
+        }
+        normalized_declared_reason_map = (
+            {
+                str(key): sorted(str(value) for value in values)
+                for key, values in declared_reason_map.items()
+            }
+            if isinstance(declared_reason_map, dict)
+            and all(isinstance(values, list) for values in declared_reason_map.values())
+            else {}
+        )
+        if normalized_declared_reason_map != expected_reason_map:
+            raise ValueError(f"weak 答案篡改了 reason_codes_by_outcome: {group_id}")
+        confidence = raw.get("confidence")
+        if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
+            raise ValueError(f"weak 答案 confidence 必须在 0—1: {group_id}")
+        reason = str(raw.get("reason") or "").strip()
+        reason_code = str(raw.get("reason_code") or "")
+        if not reason or reason_code not in WEAK_REASON_CODES_BY_OUTCOME[outcome]:
+            raise ValueError(f"weak 答案缺少合法理由: {group_id}")
+        coverage = str(raw.get("coverage_audit_id") or "")
+
+        if task_type == "discarded_candidate_review":
+            if outcome == "restore":
+                decisions.append({
+                    "audit_id": target_id,
+                    "decision": "keep",
+                    "reason_code": reason_code,
+                    "reason": reason,
+                    "confidence": float(confidence),
+                    "weak_group_id": group_id,
+                })
+            else:
+                safe_noops.append({"group_id": group_id, "target_audit_id": target_id, "outcome": outcome})
+            continue
+
+        if outcome == "keep":
+            decisions.append({
+                "audit_id": target_id,
+                "decision": "keep",
+                "reason_code": reason_code,
+                "reason": reason,
+                "confidence": float(confidence),
+                "weak_group_id": group_id,
+            })
+            continue
+
+        local_risk_codes = {str(value) for value in group.get("reason_codes") or []}
+        has_local_risk = bool(local_risk_codes & {
+            "low_confidence",
+            "vertical_seam",
+            "mixed_transition_risk",
+            "incomplete_page_risk",
+            "low_content_delta",
+            "dense_sequence",
+        })
+        coverage_valid = bool(
+            coverage
+            and coverage != target_id
+            and group_id in image_to_groups.get(coverage, set())
+            and (known_images.get(coverage) or {}).get("source") == "kept"
+        )
+        if (
+            float(confidence) < WEAK_MIN_MUTATION_CONFIDENCE
+            or not coverage_valid
+            or not has_local_risk
+        ):
+            safe_noops.append({
+                "group_id": group_id,
+                "target_audit_id": target_id,
+                "outcome": outcome,
+                "reason": "weak_mutation_gate_not_met",
+            })
+            continue
+        decisions.append({
+            "audit_id": target_id,
+            "decision": outcome,
+            "replacement_audit_id": coverage if outcome == "replace" else "",
+            "coverage_audit_id": coverage,
+            "reason_code": reason_code,
+            "reason": reason,
+            "confidence": float(confidence),
+            "weak_group_id": group_id,
+        })
+
+    if seen_groups != set(groups_by_id):
+        missing = sorted(set(groups_by_id) - seen_groups)
+        raise ValueError(f"weak 完成状态缺少审计组答案: {', '.join(missing)}")
+
+    normalized = dict(review)
+    normalized["schema_version"] = "1.0"
+    normalized["decisions"] = decisions
+    normalized.pop("answers", None)
+    return normalized, safe_noops
+
+
+def _validate_review(
+    review: dict[str, Any],
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    safe_noops: list[dict[str, Any]] = []
+    if review.get("schema_version") == "1.1":
+        if manifest.get("profile") != "weak":
+            raise ValueError("weak 视觉审计只能应用到 weak manifest")
+        review, safe_noops = _normalize_weak_review(review, manifest)
+    elif review.get("schema_version") != "1.0":
+        raise ValueError("视觉审计 schema_version 必须为 1.0 或 1.1")
     if review.get("status") != "completed":
         raise ValueError("视觉审计 status 必须为 completed")
     expected_manifest_sha = sha256_file(manifest_path)
@@ -106,11 +279,21 @@ def _validate_review(review: dict[str, Any], manifest_path: Path, manifest: dict
         if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
             raise ValueError(f"confidence 必须在 0—1: {audit_id}")
         replacement = str(raw.get("replacement_audit_id") or "")
+        coverage = str(raw.get("coverage_audit_id") or "")
         if decision == "replace":
             if replacement not in known or replacement == audit_id:
                 raise ValueError(f"replace 必须引用另一个 manifest 内图片: {audit_id}")
         elif replacement:
             raise ValueError(f"非 replace 决策不得填写 replacement_audit_id: {audit_id}")
+        if coverage:
+            _groups_by_id, image_to_groups = _group_index(manifest)
+            shared_groups = image_to_groups.get(audit_id, set()) & image_to_groups.get(coverage, set())
+            if (
+                not shared_groups
+                or coverage == audit_id
+                or (known.get(coverage) or {}).get("source") != "kept"
+            ):
+                raise ValueError(f"coverage_audit_id 必须引用同组另一张基础保留帧: {audit_id}")
         if known[audit_id].get("source") == "drop_candidate" and decision != "keep":
             raise ValueError(f"丢弃候选只允许 keep 补回，其他决策不会产生有效结果: {audit_id}")
         result[audit_id] = dict(raw)
@@ -121,7 +304,7 @@ def _validate_review(review: dict[str, Any], manifest_path: Path, manifest: dict
         replacement_decision = result.get(replacement)
         if replacement_decision and replacement_decision["decision"] != "keep":
             raise ValueError(f"replace 目标同时被 drop/replace，决策相互冲突: {audit_id}")
-    return result
+    return result, safe_noops
 
 
 def _prepare_output(output: Path) -> None:
@@ -173,7 +356,7 @@ def main() -> int:
             raise ValueError("审计 manifest 的 schema_version/status 无效")
         if manifest.get("source_report_sha256") != sha256_file(report_path):
             raise ValueError("审计 manifest 未绑定当前基础报告")
-        decisions = _validate_review(review, manifest_path, manifest)
+        decisions, safe_noops = _validate_review(review, manifest_path, manifest)
         manifest_images = manifest.get("images") or []
         if not isinstance(manifest_images, list) or not manifest_images:
             raise ValueError("审计 manifest 没有图片清单")
@@ -308,7 +491,9 @@ def main() -> int:
                 "dropped": sum(1 for item in decisions.values() if item["decision"] == "drop"),
                 "replaced": sum(1 for item in decisions.values() if item["decision"] == "replace"),
                 "added_from_drop_candidates": sum(1 for item in curated_frames if item["provenance"] == "vision_add"),
+                "safe_noop_count": len(safe_noops),
             },
+            "safe_noops": safe_noops,
             "excluded_by_vision": excluded_by_vision,
             "frames": curated_frames,
         }

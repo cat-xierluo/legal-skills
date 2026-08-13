@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，按前后帧时间簇和滚动内容增量自适应控制截图密度，保守过滤加载浮层、翻页、滑页和页面切换中间态；可用本地 OCR 保护新增金额或正文，并生成按风险与时间覆盖选组的经济型联系表，交给支持图像输入的多模态模型审计重复页和可疑帧。纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
-version: "0.5.0"
+description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，按前后帧时间簇和滚动内容增量自适应控制截图密度，保守过滤加载浮层、已被完整后帧覆盖的未完成页及页面切换中间态；可用本地 OCR 保护新增金额或正文，并为普通或较弱的多模态模型生成受预算、单目标和安全门禁约束的联系表审计包。纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
+version: "0.6.0"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -37,8 +37,9 @@ uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candid
 3. 按前后帧形成稳定段与连续运动段；
 4. 稳定段选择清晰、完整、停留时间更长的代表帧，不机械保留第一张；
 5. 前后均有稳定页的短运动段按切换过程处理；持续滚动段依据相邻内容重叠自适应放宽或收紧保留跨度；
-6. 只自动丢弃高置信居中加载浮层；疑似未加载页不由代码直接删除，而是提权进入视觉审计；
-7. 再执行 SHA256、dHash、像素差异、SSIM、可选滚动合并和 OCR 内容增量判断。OCR 只在高相似页面出现新增金额、长编号或足量正文时否决视觉去重。
+6. 自动丢弃高置信居中加载浮层；疑似未完成页只有在 1.25 秒内出现同一页面骨架、主内容明显增加且完整后帧最终被基础层保留时才删除；
+7. 用三帧像素拼合与分区覆盖共同估计横向、纵向或缩放切换风险；分区风险只用于提权审计，不单独自动删除；
+8. 再执行 SHA256、dHash、像素差异、SSIM、可选滚动合并和 OCR 内容增量判断。OCR 只在高相似页面出现新增金额、长编号或足量正文时否决视觉去重；启用 OCR 时关闭未完成页的纯视觉自动删除。
 
 需要调参时读取 `references/strategy-and-params.md`。依赖安装见 `references/setup.md`。
 
@@ -68,6 +69,16 @@ uv run scripts/prepare_vision_audit.py \
 
 脚本按风险分数与时间覆盖联合选择低置信、疑似拼接、未加载风险和相邻过密的少量组，生成 `_vision_audit/audit_manifest.json` 与联系表。按照 `references/vision-audit.md` 查看同组前后帧，输出 `_vision_review.json`。默认不得突破 8 组、24 张唯一图片；确需扩大时先向用户说明成本和隐私影响。
 
+模型视觉能力较弱或输出稳定性一般时，优先使用弱模型档位：
+
+```bash
+uv run scripts/prepare_vision_audit.py \
+  -i <基础输出目录> \
+  --profile weak
+```
+
+`weak` 默认最多 6 组、18 张唯一图片；每张联系表只有一个红框判断目标，A/B/C 角色清晰标注，并生成 `review_template.json` 与 `MODEL_INSTRUCTIONS.md`。按组逐张查看，原位填写模板。弱模型提出删除或替换时，只有“置信度至少 0.90 + 同组基础保留帧完整覆盖 + 本地风险信号支持”同时满足才会生效；否则安全降级为保留。
+
 ### 5. 应用视觉审计
 
 ```bash
@@ -86,8 +97,10 @@ python3 scripts/apply_vision_review.py \
 | `_report.json` | 输入、参数、时间簇统计、丢弃统计、帧时间戳和 SHA256 |
 | `_review_candidates/` | 仅显式开启时保存的算法丢弃候选 |
 | `_vision_audit/audit_manifest.json` | 受预算限制的视觉审计清单与决策合同 |
-| `_vision_audit/contact_sheet_NNN.jpg` | 同组前后帧联系表 |
-| `_vision_review.json` | 多模态模型的 `keep/drop/replace` 结构化审计结果 |
+| `_vision_audit/contact_sheet_NNN.jpg` | 同组前后帧联系表；weak 档位为一组一目标大图 |
+| `_vision_audit/review_template.json` | weak 档位预填的受限答案模板 |
+| `_vision_audit/MODEL_INSTRUCTIONS.md` | weak 档位逐组判断说明 |
+| `_vision_review.json` | 多模态模型的结构化审计结果；weak 使用模板 schema 1.1 |
 | `_curated/` | 不修改基础结果的视觉精选副本 |
 | `_curated/_curated_report.json` | 精选帧来源、排除清单和全链路哈希 |
 
@@ -98,6 +111,7 @@ python3 scripts/apply_vision_review.py \
 - 持续快速滚动担心漏页时，降低 `--motion-chunk-seconds`；结果仍过密时再提高。默认值还会按滚动重叠自动乘以 0.8、1.25 或 1.45。
 - OCR 是可选增强，未安装时必须清晰提示并降级；它可能为保护新增金额或正文而比纯视觉模式多留少量帧，不能把“帧数更少”作为唯一目标。
 - `--keep-drop-candidates` 用于漏帧排查，不等于多模态审计；多模态默认读取预算 manifest。
+- 模型能力较弱时使用 `--profile weak`；不要通过放大审计组数弥补模型能力，优先保持小任务、高清目标和保守 no-op。
 
 ## 依赖
 
@@ -118,7 +132,7 @@ python3 scripts/apply_vision_review.py \
 
 ## 验收与安全边界
 
-- 运行 `uv run scripts/check_pipeline.py --case all`，要求输出 `DOMAIN_CHECKS_PASSED`。
+- 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
 - 行为变化必须用代表视频复测，并通过联系表或逐图查看进行视觉抽查；静态检查或帧数减少不能单独证明准确。
 - 不修改原视频，不把完整录屏默认上传云端。
 - 保留基础帧和全链路 SHA256；视觉层只能生成非破坏性精选副本。

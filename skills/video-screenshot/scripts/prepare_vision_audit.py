@@ -27,14 +27,27 @@ except ImportError:
 
 
 SCHEMA_VERSION = "1.0"
+WEAK_REASON_CODES_BY_OUTCOME = {
+    "keep": ["new_evidence", "other"],
+    "drop": ["transition", "visual_duplicate", "semantic_duplicate", "other"],
+    "replace": ["clearer_replacement", "other"],
+    "restore": ["new_evidence", "other"],
+    "leave_discarded": ["transition", "visual_duplicate", "semantic_duplicate", "other"],
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="生成经济型多模态截图审计包")
     parser.add_argument("-i", "--input", required=True, help="基础抽帧输出目录（包含 _report.json）")
     parser.add_argument("-o", "--output", default=None, help="审计包目录（默认: <input>/_vision_audit）")
-    parser.add_argument("--max-groups", type=int, default=8, help="最多审计多少组（默认: 8）")
-    parser.add_argument("--max-images", type=int, default=24, help="最多纳入多少张唯一图片（默认: 24）")
+    parser.add_argument(
+        "--profile",
+        choices=["balanced", "weak"],
+        default="balanced",
+        help="视觉模型能力档位；weak 使用一组一题、大图和预填模板（默认: balanced）",
+    )
+    parser.add_argument("--max-groups", type=int, default=None, help="最多审计多少组（balanced 默认 8，weak 默认 6）")
+    parser.add_argument("--max-images", type=int, default=None, help="最多纳入多少张唯一图片（balanced 默认 24，weak 默认 18）")
     parser.add_argument("--thumb-width", type=int, default=240, help="联系表单图宽度（默认: 240）")
     parser.add_argument("--thumb-height", type=int, default=426, help="联系表单图高度（默认: 426）")
     return parser.parse_args()
@@ -87,6 +100,8 @@ def _validate_entry(root: Path, item: dict[str, Any], *, source: str) -> dict[st
         "selection_confidence": item.get("selection_confidence"),
         "temporal_group_id": item.get("temporal_group_id"),
         "reason": item.get("reason"),
+        "source_frame_index": item.get("source_frame_index"),
+        "following_source_frame_index": item.get("following_source_frame_index"),
         "seam_score": float(item.get("seam_score") or 0.0),
         "mixed_transition_score": float(item.get("mixed_transition_score") or 0.0),
         "loading_overlay_score": float(item.get("loading_overlay_score") or transient_ui.get("score") or 0.0),
@@ -149,6 +164,9 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
         for pos, role in ((idx - 1, "previous"), (idx, "target"), (idx + 1, "following")):
             if 0 <= pos < len(frames):
                 member = dict(frames[pos])
+                member_time = float(member.get("capture_time_seconds") or cur)
+                if role != "target" and abs(member_time - cur) > 6.0:
+                    continue
                 member["role"] = role
                 members.append(member)
         groups.append({
@@ -172,6 +190,7 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "quality_transition",
             "quality_loading_overlay",
             "quality_incomplete_page",
+            "temporal_incomplete_resolved",
             "ocr_duplicate",
             "duplicate_scroll",
             "min_gap",
@@ -202,12 +221,67 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             group["priority"] = round(float(group["priority"]) + 0.5, 4)
             group["reason_codes"] = list(dict.fromkeys([*group["reason_codes"], "nearby_discarded_candidate"]))
 
-    # 高置信加载浮层已由代码自动删除，但仍应获得独立视觉复核入口；
+    # 高置信加载浮层或时序确认的未完成页已由代码自动删除，但仍应获得独立视觉复核入口；
     # 多模态若判断误删，可以对 discarded_candidate 使用 keep 补回。
     for item in validated_drops:
         reason = str(item.get("reason") or "")
-        if reason != "quality_loading_overlay":
+        if reason not in {"quality_loading_overlay", "temporal_incomplete_resolved"}:
             continue
+        target_time = float(item.get("capture_time_seconds") or 0.0)
+        completion_source_index = item.get("following_source_frame_index")
+        completion_context = next(
+            (
+                frame for frame in frames
+                if completion_source_index is not None
+                and frame.get("source_frame_index") is not None
+                and int(frame["source_frame_index"]) == int(completion_source_index)
+            ),
+            None,
+        )
+        if reason == "temporal_incomplete_resolved" and completion_context is None:
+            raise ValueError(
+                "审计包缺少已删除未完成页所绑定的后续完整帧: "
+                f"source_frame_index={completion_source_index}"
+            )
+        nearby_kept = sorted(
+            frames,
+            key=lambda frame: abs(float(frame.get("capture_time_seconds") or 0.0) - target_time),
+        )[:2]
+        if completion_context is not None and all(
+            frame["path"] != completion_context["path"] for frame in nearby_kept
+        ):
+            nearby_kept = [completion_context, *nearby_kept[:1]]
+        members: list[dict[str, Any]] = []
+        for frame in sorted(nearby_kept, key=lambda frame: float(frame.get("capture_time_seconds") or 0.0)):
+            member = dict(frame)
+            member["role"] = "context"
+            members.append(member)
+        candidate = dict(item)
+        candidate["role"] = "discarded_candidate"
+        members.append(candidate)
+        groups.append({
+            "priority": 8.5 if reason == "quality_loading_overlay" else 9.2,
+            "reason_codes": [
+                "discarded_loading_overlay"
+                if reason == "quality_loading_overlay"
+                else "discarded_resolved_incomplete"
+            ],
+            "target_path": item["path"],
+            "target_time_seconds": target_time,
+            "images": members,
+        })
+
+    # 被时间簇阶段丢弃、但三帧分区覆盖风险较高的候选也需要独立恢复题。
+    # 这能把算法已经吸收的切换中间态纳入抽样 QA，而不会把所有丢弃候选交给模型。
+    regional_drops = sorted(
+        (
+            item for item in validated_drops
+            if str(item.get("reason") or "") in {"temporal_motion_redundant", "temporal_transition"}
+            and float(item.get("mixed_transition_score") or 0.0) >= 0.65
+        ),
+        key=lambda item: (-float(item.get("mixed_transition_score") or 0.0), float(item.get("capture_time_seconds") or 0.0)),
+    )[:3]
+    for item in regional_drops:
         target_time = float(item.get("capture_time_seconds") or 0.0)
         nearby_kept = sorted(
             frames,
@@ -222,8 +296,8 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
         candidate["role"] = "discarded_candidate"
         members.append(candidate)
         groups.append({
-            "priority": 8.5,
-            "reason_codes": ["discarded_loading_overlay"],
+            "priority": 9.0,
+            "reason_codes": ["discarded_mixed_transition"],
             "target_path": item["path"],
             "target_time_seconds": target_time,
             "images": members,
@@ -238,6 +312,8 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
         raise ValueError("--max-groups 和 --max-images 必须大于 0")
     selected: list[dict[str, Any]] = []
     unique_paths: set[str] = set()
+    restore_group_count = 0
+    restore_reason_families: set[str] = set()
     remaining = list(groups)
     while remaining:
         if selected:
@@ -258,6 +334,20 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
                 )
             )
         group = remaining.pop(0)
+        is_restore_group = not any(item.get("role") == "target" for item in group["images"])
+        restore_family = next(
+            (
+                str(code) for code in group.get("reason_codes") or []
+                if str(code).startswith("discarded_")
+            ),
+            "discarded_other",
+        )
+        restore_limit = min(2, max(1, max_groups // 3))
+        if is_restore_group and (
+            restore_group_count >= restore_limit
+            or restore_family in restore_reason_families
+        ):
+            continue
         paths = {str(item["path"]) for item in group["images"]}
         # 相邻目标可能生成高度重叠的三帧窗口。重叠达到一半时保留优先级更高者，
         # 把稀缺的组预算留给其他时间区段。
@@ -280,6 +370,9 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
             )[:max_images]
             paths = {str(item["path"]) for item in group["images"]}
         selected.append(group)
+        if is_restore_group:
+            restore_group_count += 1
+            restore_reason_families.add(restore_family)
         unique_paths.update(paths)
         if len(selected) >= max_groups or len(unique_paths) >= max_images:
             break
@@ -296,6 +389,7 @@ def _safe_prepare_output(output_dir: Path) -> None:
             or not path.is_file()
             or (
                 path.name != "audit_manifest.json"
+                and path.name not in {"review_template.json", "MODEL_INSTRUCTIONS.md"}
                 and not re.fullmatch(r"contact_sheet_\d{3}\.jpg", path.name)
             )
         ]
@@ -307,13 +401,18 @@ def _safe_prepare_output(output_dir: Path) -> None:
         manifest = output_dir / "audit_manifest.json"
         if manifest.exists():
             manifest.unlink()
+        for name in ("review_template.json", "MODEL_INSTRUCTIONS.md"):
+            path = output_dir / name
+            if path.exists():
+                path.unlink()
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _font(size: int) -> ImageFont.ImageFont:
     for name in (
-        "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ):
         path = Path(name)
@@ -325,29 +424,124 @@ def _font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _render_contact_sheet(group: dict[str, Any], output_path: Path, width: int, height: int) -> None:
+def _render_contact_sheet(
+    group: dict[str, Any],
+    output_path: Path,
+    width: int,
+    height: int,
+    *,
+    profile: str,
+) -> None:
     padding = 12
     header = 44
-    label_height = 56
+    label_height = 68 if profile == "weak" else 56
     count = len(group["images"])
-    canvas = Image.new("RGB", (padding + count * (width + padding), header + height + label_height + padding), "#ececec")
+    columns = min(count, 2) if profile == "weak" else count
+    rows = (count + columns - 1) // columns
+    cell_height = height + label_height
+    canvas = Image.new(
+        "RGB",
+        (padding + columns * (width + padding), header + rows * cell_height + padding),
+        "#ececec",
+    )
     draw = ImageDraw.Draw(canvas)
-    draw.text((padding, 10), f"{group['group_id']} | {', '.join(group['reason_codes'])}", fill="#111111", font=_font(18))
+    target_label = str(group.get("decision_target_visual_label") or "?")
+    title = f"{group['group_id']} | 只判断 {target_label} | {', '.join(group['reason_codes'])}"
+    draw.text((padding, 10), title, fill="#111111", font=_font(18))
     for idx, item in enumerate(group["images"]):
         image = Image.open(item["absolute_path"]).convert("RGB")
         fitted = ImageOps.contain(image, (width, height))
-        x = padding + idx * (width + padding)
-        y = header + (height - fitted.height) // 2
+        row, col = divmod(idx, columns)
+        x = padding + col * (width + padding)
+        cell_top = header + row * cell_height
+        y = cell_top + (height - fitted.height) // 2
         canvas.paste(fitted, (x + (width - fitted.width) // 2, y))
-        border = "#d32f2f" if item["role"] == "target" else "#444444"
-        draw.rectangle((x, header, x + width, header + height), outline=border, width=4 if item["role"] == "target" else 2)
-        label = f"{item['audit_id']}\n{item['role']} | {float(item.get('capture_time_seconds') or 0.0):.2f}s"
-        draw.multiline_text((x, header + height + 6), label, fill="#111111", font=_font(15), spacing=2)
+        is_decision_target = item["audit_id"] == group.get("decision_target_audit_id")
+        border = "#d32f2f" if is_decision_target else "#355c7d"
+        draw.rectangle(
+            (x, cell_top, x + width, cell_top + height),
+            outline=border,
+            width=7 if is_decision_target else 3,
+        )
+        target_mark = " ← 唯一判断目标" if is_decision_target else ""
+        label = (
+            f"{item['visual_label']} / {item['audit_id']}{target_mark}\n"
+            f"{item['role']} | {float(item.get('capture_time_seconds') or 0.0):.2f}s"
+        )
+        draw.multiline_text((x, cell_top + height + 6), label, fill="#111111", font=_font(17 if profile == "weak" else 15), spacing=2)
     canvas.save(output_path, format="JPEG", quality=88, optimize=True)
+
+
+def _weak_model_instructions(manifest_sha256: str) -> str:
+    return f"""# 弱多模态审计说明
+
+一次只查看一张 `contact_sheet_NNN.jpg`，并只判断标题标出的“唯一判断目标”。不要判断其他图片。
+
+1. 红框图片是目标；蓝框图片只是前后上下文。
+2. 只有上下文完整覆盖目标全部内容时，基础保留帧才能选择 `drop` 或 `replace`。
+3. 看不清文字、不能确认覆盖、涉及金额/身份/地址/承诺时，选择 `keep`。
+4. 已丢弃候选只选择 `restore` 或 `leave_discarded`。
+5. 在 `review_template.json` 原位填写：`outcome`、`coverage_audit_id`、`reason_code`、`reason`、`confidence`。覆盖帧只能从 `allowed_coverage_audit_ids` 选择；理由码按所选结果从 `reason_codes_by_outcome` 选择。不要新增组，不要修改任何 ID、哈希或允许选项。
+6. `drop`/`replace` 必须填写同组蓝框图片的 `coverage_audit_id`；其他结果留空。
+
+manifest SHA256：`{manifest_sha256}`
+"""
+
+
+def _write_weak_review_template(output_dir: Path, manifest: dict[str, Any], manifest_path: Path) -> None:
+    answers = []
+    for group in manifest.get("groups") or []:
+        coverage_ids = [
+            item["audit_id"]
+            for item in group.get("images") or []
+            if item.get("source") == "kept"
+            and item.get("audit_id") != group["decision_target_audit_id"]
+        ]
+        answers.append({
+            "group_id": group["group_id"],
+            "target_audit_id": group["decision_target_audit_id"],
+            "task_type": group["task_type"],
+            "allowed_outcomes": group["allowed_outcomes"],
+            "allowed_coverage_audit_ids": coverage_ids,
+            "reason_codes_by_outcome": {
+                outcome: WEAK_REASON_CODES_BY_OUTCOME[outcome]
+                for outcome in group["allowed_outcomes"]
+            },
+            "outcome": "",
+            "coverage_audit_id": "",
+            "reason_code": "",
+            "reason": "",
+            "confidence": None,
+        })
+    manifest_sha = sha256_file(manifest_path)
+    template = {
+        "schema_version": "1.1",
+        "status": "in_progress",
+        "profile": "weak",
+        "source_manifest_sha256": manifest_sha,
+        "answers": answers,
+    }
+    (output_dir / "review_template.json").write_text(
+        json.dumps(template, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "MODEL_INSTRUCTIONS.md").write_text(
+        _weak_model_instructions(manifest_sha),
+        encoding="utf-8",
+    )
 
 
 def main() -> int:
     args = parse_args()
+    max_groups = args.max_groups if args.max_groups is not None else (6 if args.profile == "weak" else 8)
+    max_images = args.max_images if args.max_images is not None else (18 if args.profile == "weak" else 24)
+    thumb_width = args.thumb_width
+    thumb_height = args.thumb_height
+    if args.profile == "weak":
+        if thumb_width == 240:
+            thumb_width = 420
+        if thumb_height == 426:
+            thumb_height = 746
     raw_root = Path(args.input).expanduser()
     if raw_root.is_symlink():
         print("错误: 基础输出目录是符号链接，拒绝跟随", file=sys.stderr)
@@ -373,7 +567,7 @@ def main() -> int:
                 )
         report_path, report = _load_report(root)
         groups = _candidate_groups(root, report)
-        selected = _select_budgeted_groups(groups, args.max_groups, args.max_images)
+        selected = _select_budgeted_groups(groups, max_groups, max_images)
         _safe_prepare_output(output_dir)
         audit_ids: dict[str, str] = {}
         next_id = 1
@@ -385,9 +579,36 @@ def main() -> int:
                     audit_ids[rel] = f"img-{next_id:03d}"
                     next_id += 1
                 item["audit_id"] = audit_ids[rel]
+            decision_target = next(
+                (item for item in group["images"] if item.get("role") == "target"),
+                None,
+            )
+            if decision_target is None:
+                decision_target = next(
+                    (item for item in group["images"] if item.get("role") == "discarded_candidate"),
+                    None,
+                )
+            if decision_target is None:
+                raise ValueError(f"审计组没有可判断目标: {group['group_id']}")
+            for visual_index, item in enumerate(group["images"]):
+                item["visual_label"] = chr(ord("A") + visual_index)
+            group["decision_target_audit_id"] = decision_target["audit_id"]
+            group["decision_target_visual_label"] = decision_target["visual_label"]
+            if decision_target.get("source") == "drop_candidate":
+                group["task_type"] = "discarded_candidate_review"
+                group["allowed_outcomes"] = ["restore", "leave_discarded"]
+            else:
+                group["task_type"] = "kept_target_review"
+                group["allowed_outcomes"] = ["keep", "drop", "replace"]
             contact_name = f"contact_sheet_{group_index:03d}.jpg"
             group["contact_sheet"] = contact_name
-            _render_contact_sheet(group, output_dir / contact_name, args.thumb_width, args.thumb_height)
+            _render_contact_sheet(
+                group,
+                output_dir / contact_name,
+                thumb_width,
+                thumb_height,
+                profile=args.profile,
+            )
 
         unique_images: dict[str, dict[str, Any]] = {}
         clean_groups: list[dict[str, Any]] = []
@@ -403,6 +624,10 @@ def main() -> int:
                 "reason_codes": group["reason_codes"],
                 "target_path": group["target_path"],
                 "target_time_seconds": group.get("target_time_seconds"),
+                "decision_target_audit_id": group["decision_target_audit_id"],
+                "decision_target_visual_label": group["decision_target_visual_label"],
+                "task_type": group["task_type"],
+                "allowed_outcomes": group["allowed_outcomes"],
                 "contact_sheet": group["contact_sheet"],
                 "images": clean_images,
             })
@@ -410,12 +635,13 @@ def main() -> int:
         manifest: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "status": "prepared",
+            "profile": args.profile,
             "source_root": str(root),
             "source_report": "_report.json",
             "source_report_sha256": sha256_file(report_path),
             "budget": {
-                "max_groups": args.max_groups,
-                "max_images": args.max_images,
+                "max_groups": max_groups,
+                "max_images": max_images,
                 "actual_groups": len(clean_groups),
                 "actual_images": len(unique_images),
                 "candidate_groups_before_budget": len(groups),
@@ -424,27 +650,46 @@ def main() -> int:
                     for group in clean_groups
                 }),
             },
-            "decision_contract": {
-                "allowed_decisions": ["keep", "drop", "replace"],
-                "allowed_reason_codes": [
-                    "transition",
-                    "visual_duplicate",
-                    "semantic_duplicate",
-                    "new_evidence",
-                    "clearer_replacement",
-                    "other",
-                ],
-                "rule": "只判断 manifest 内图片；replace 必须填写同一 manifest 内 replacement_audit_id。",
-            },
+            "decision_contract": (
+                {
+                    "mode": "weak_group_answers",
+                    "schema_version": "1.1",
+                    "rule": "每组只判断 decision_target_audit_id；填写 review_template.json，不修改任何 ID 或允许选项。",
+                    "mutation_gate": {
+                        "minimum_confidence": 0.90,
+                        "coverage_source": "same_group_kept_frame",
+                        "requires_local_risk": True,
+                        "fallback": "safe_noop",
+                    },
+                }
+                if args.profile == "weak"
+                else {
+                    "mode": "image_decisions",
+                    "schema_version": "1.0",
+                    "allowed_decisions": ["keep", "drop", "replace"],
+                    "allowed_reason_codes": [
+                        "transition",
+                        "visual_duplicate",
+                        "semantic_duplicate",
+                        "new_evidence",
+                        "clearer_replacement",
+                        "other",
+                    ],
+                    "rule": "只判断 manifest 内图片；replace 必须填写同一 manifest 内 replacement_audit_id。",
+                }
+            ),
             "groups": clean_groups,
             "images": list(unique_images.values()),
         }
         manifest_path = output_dir / "audit_manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if args.profile == "weak":
+            _write_weak_review_template(output_dir, manifest, manifest_path)
         print(f"完成: {manifest_path}")
         print(f"  候选组: {len(groups)}")
-        print(f"  审计组: {len(clean_groups)}/{args.max_groups}")
-        print(f"  唯一图片: {len(unique_images)}/{args.max_images}")
+        print(f"  模型档位: {args.profile}")
+        print(f"  审计组: {len(clean_groups)}/{max_groups}")
+        print(f"  唯一图片: {len(unique_images)}/{max_images}")
         return 0
     except Exception as exc:
         print(f"错误: {exc}", file=sys.stderr)

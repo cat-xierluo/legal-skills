@@ -823,6 +823,190 @@ def horizontal_mixed_transition_score(
     }
 
 
+def regional_mixed_transition_score(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    following: Image.Image | None,
+) -> dict[str, Any]:
+    """以分区归属估计真实 UI 动画中被前后邻帧共同覆盖的中间态。
+
+    与像素拼接检测不同，本函数允许动画缩放、轻微位移和重采样。它把当前帧切成
+    8 条横带或纵带，并在前后邻帧的同方向位置中寻找最佳匹配；只有两侧邻帧都能
+    解释足够多的分区时才给分。结果用于风险排序，不单独构成自动删除依据。
+    """
+    empty = {
+        "score": 0.0,
+        "orientation": "",
+        "previous_regions": 0,
+        "following_regions": 0,
+        "explained_ratio": 0.0,
+    }
+    if previous is None or current is None or following is None:
+        return empty
+    if previous.size != current.size or following.size != current.size:
+        return empty
+    width, height = current.size
+    if width < 24 or height < 40 or _image_mad(previous, following) < 10.0:
+        return empty
+
+    def evaluate(axis: str) -> dict[str, Any]:
+        regions = 8
+        previous_count = 0
+        following_count = 0
+        best_errors: list[float] = []
+        gains: list[float] = []
+        for index in range(regions):
+            if axis == "vertical":
+                start = index * width // regions
+                end = (index + 1) * width // regions
+                piece = current.crop((start, 0, end, height))
+                size = max(1, end - start)
+                previous_error = min(
+                    _image_mad(piece, previous.crop((offset, 0, offset + size, height)))
+                    for offset in range(0, width - size + 1, max(1, width // 24))
+                )
+                following_error = min(
+                    _image_mad(piece, following.crop((offset, 0, offset + size, height)))
+                    for offset in range(0, width - size + 1, max(1, width // 24))
+                )
+            else:
+                start = index * height // regions
+                end = (index + 1) * height // regions
+                piece = current.crop((0, start, width, end))
+                size = max(1, end - start)
+                previous_error = min(
+                    _image_mad(piece, previous.crop((0, offset, width, offset + size)))
+                    for offset in range(0, height - size + 1, max(1, height // 24))
+                )
+                following_error = min(
+                    _image_mad(piece, following.crop((0, offset, width, offset + size)))
+                    for offset in range(0, height - size + 1, max(1, height // 24))
+                )
+            gain = abs(previous_error - following_error)
+            best_error = min(previous_error, following_error)
+            if gain < 6.0 or best_error > 90.0:
+                continue
+            if previous_error < following_error:
+                previous_count += 1
+            else:
+                following_count += 1
+            best_errors.append(best_error)
+            gains.append(gain)
+
+        explained = previous_count + following_count
+        if previous_count == 0 or following_count == 0 or explained == 0:
+            return dict(empty)
+        explained_ratio = explained / float(regions)
+        balance = 2.0 * min(previous_count, following_count) / float(explained)
+        fit = max(0.0, min(1.0, (95.0 - sum(best_errors) / len(best_errors)) / 65.0))
+        gain_score = max(0.0, min(1.0, ((sum(gains) / len(gains)) - 6.0) / 20.0))
+        score = explained_ratio * (0.45 * balance + 0.35 * fit + 0.20 * gain_score)
+        return {
+            "score": max(0.0, min(1.0, score)),
+            "orientation": axis,
+            "previous_regions": previous_count,
+            "following_regions": following_count,
+            "explained_ratio": explained_ratio,
+        }
+
+    vertical = evaluate("vertical")
+    horizontal = evaluate("horizontal")
+    return vertical if float(vertical["score"]) >= float(horizontal["score"]) else horizontal
+
+
+def _edge_mask(image: Image.Image, *, threshold: int = 35) -> set[int]:
+    """把灰度小图转换为稀疏边缘位置集合，供页面骨架比较使用。"""
+    edges = image.filter(ImageFilter.FIND_EDGES)
+    return {index for index, value in enumerate(edges.getdata()) if int(value) >= threshold}
+
+
+def _edge_ratio(image: Image.Image, *, threshold: int = 35) -> float:
+    if image.size[0] <= 0 or image.size[1] <= 0:
+        return 0.0
+    return len(_edge_mask(image, threshold=threshold)) / float(image.size[0] * image.size[1])
+
+
+def _edge_iou(a: Image.Image, b: Image.Image, *, threshold: int = 35) -> float:
+    if a.size != b.size:
+        return 0.0
+    edges_a = _edge_mask(a, threshold=threshold)
+    edges_b = _edge_mask(b, threshold=threshold)
+    union = edges_a | edges_b
+    return len(edges_a & edges_b) / float(len(union) or 1)
+
+
+def temporal_completion_metrics(
+    current: Image.Image | None,
+    following: Image.Image | None,
+    current_loading: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """判断疑似未完成页是否被紧邻后帧的完整内容覆盖。
+
+    这是保守的两帧规则：当前帧必须先被单帧指标标记为 ``incomplete_page``，
+    后帧不能继续处于同类风险；同时要求页面上部至少存在可辨认的共同骨架，且
+    主内容区的边缘密度有明显增长。结果只作为时间簇阶段的候选删除证据。
+    """
+    empty = {
+        "score": 0.0,
+        "resolved": False,
+        "shell_similarity": 0.0,
+        "content_edge_ratio": 0.0,
+        "following_content_edge_ratio": 0.0,
+        "content_edge_gain": 0.0,
+    }
+    loading = current_loading or {}
+    if (
+        current is None
+        or following is None
+        or current.size != following.size
+        or str(loading.get("label") or "") != "incomplete_page"
+        or float(loading.get("score") or 0.0) < 0.92
+    ):
+        return empty
+    width, height = current.size
+    if width < 24 or height < 40:
+        return empty
+
+    # App 的标题、头像或标签可能位于上部不同高度。扫描多个上部区间，寻找共同页面骨架。
+    shell_similarity = 0.0
+    for top_ratio in (0.04, 0.08, 0.12, 0.16):
+        for bottom_ratio in (0.28, 0.32, 0.36, 0.40, 0.44):
+            if bottom_ratio - top_ratio < 0.12:
+                continue
+            top = int(height * top_ratio)
+            bottom = max(top + 1, int(height * bottom_ratio))
+            shell_similarity = max(
+                shell_similarity,
+                _edge_iou(
+                    current.crop((0, top, width, bottom)),
+                    following.crop((0, top, width, bottom)),
+                ),
+            )
+
+    content_box = (0, int(height * 0.45), width, int(height * 0.92))
+    content_edge_ratio = _edge_ratio(current.crop(content_box))
+    following_content_edge_ratio = _edge_ratio(following.crop(content_box))
+    content_edge_gain = following_content_edge_ratio - content_edge_ratio
+
+    shell_component = max(0.0, min(1.0, (shell_similarity - 0.42) / 0.23))
+    gain_component = max(0.0, min(1.0, (content_edge_gain - 0.07) / 0.12))
+    score = min(1.0, 0.58 * shell_component + 0.42 * gain_component)
+    resolved = bool(
+        shell_similarity >= 0.55
+        and content_edge_gain >= 0.10
+        and following_content_edge_ratio >= 0.14
+        and score >= 0.68
+    )
+    return {
+        "score": score,
+        "resolved": resolved,
+        "shell_similarity": shell_similarity,
+        "content_edge_ratio": content_edge_ratio,
+        "following_content_edge_ratio": following_content_edge_ratio,
+        "content_edge_gain": content_edge_gain,
+    }
+
+
 def temporal_frame_metrics(
     image_bytes: bytes,
     *,
@@ -960,6 +1144,7 @@ def select_temporal_representatives(
     stable_ssim_threshold: float = 0.965,
     transition_max_seconds: float = 1.60,
     motion_chunk_seconds: float = 2.20,
+    allow_incomplete_resolution: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """基于前后帧选择稳定终态，返回 (保留, 丢弃, 统计)。
 
@@ -973,7 +1158,62 @@ def select_temporal_representatives(
             "transition_drop_count": 0,
             "stable_duplicate_drop_count": 0,
             "low_confidence_selection_count": 0,
+            "resolved_incomplete_drop_count": 0,
         }
+
+    baseline_cover_source_indices: set[int] = set()
+    if allow_incomplete_resolution:
+        baseline_selected, _baseline_dropped, _baseline_stats = select_temporal_representatives(
+            items,
+            stable_max_gap_seconds=stable_max_gap_seconds,
+            stable_pixel_diff_threshold=stable_pixel_diff_threshold,
+            stable_ssim_threshold=stable_ssim_threshold,
+            transition_max_seconds=transition_max_seconds,
+            motion_chunk_seconds=motion_chunk_seconds,
+            allow_incomplete_resolution=False,
+        )
+        baseline_cover_source_indices = {
+            int(item.get("source_index") or 0)
+            for item in baseline_selected
+            if int(item.get("source_index") or 0) > 0
+        }
+
+    # 两帧时序证据：疑似未完成页只有在紧邻后帧显示同一页面骨架且内容明显变完整时才删除。
+    resolved_incomplete_indices: set[int] = set()
+    for idx in range(0, len(items) - 1):
+        if not allow_incomplete_resolution:
+            break
+        cur_time = items[idx].get("capture_time_seconds")
+        if cur_time is None:
+            continue
+        best_completion: dict[str, Any] | None = None
+        for next_idx in range(idx + 1, len(items)):
+            next_time = items[next_idx].get("capture_time_seconds")
+            if next_time is None:
+                continue
+            gap = float(next_time) - float(cur_time)
+            if gap > 1.25:
+                break
+            following_loading = items[next_idx].get("loading_overlay") or {}
+            if str(following_loading.get("label") or "") in {"loading_overlay", "incomplete_page"}:
+                continue
+            next_source_index = int(items[next_idx].get("source_index") or 0)
+            if next_source_index not in baseline_cover_source_indices:
+                continue
+            completion = temporal_completion_metrics(
+                items[idx].get("transition_image"),
+                items[next_idx].get("transition_image"),
+                items[idx].get("loading_overlay"),
+            )
+            completion["following_source_index"] = next_source_index
+            completion["following_gap_seconds"] = gap
+            if best_completion is None or float(completion.get("score") or 0.0) > float(best_completion.get("score") or 0.0):
+                best_completion = completion
+        if best_completion is None:
+            continue
+        items[idx]["temporal_completion"] = best_completion
+        if bool(best_completion.get("resolved")):
+            resolved_incomplete_indices.add(idx)
 
     # 三帧时序证据：当前帧能由前后两页横向拼合解释，才视为高置信滑页中间态。
     mixed_transition_indices: set[int] = set()
@@ -990,8 +1230,17 @@ def select_temporal_representatives(
             items[idx].get("transition_image"),
             items[idx + 1].get("transition_image"),
         )
-        items[idx]["mixed_transition_score"] = float(mix["score"])
-        items[idx]["mixed_transition"] = mix
+        regional_mix = regional_mixed_transition_score(
+            items[idx - 1].get("transition_image"),
+            items[idx].get("transition_image"),
+            items[idx + 1].get("transition_image"),
+        )
+        combined_score = max(float(mix["score"]), float(regional_mix["score"]))
+        items[idx]["mixed_transition_score"] = combined_score
+        items[idx]["mixed_transition"] = {
+            "pixel_composite": mix,
+            "regional_coverage": regional_mix,
+        }
         if float(mix["score"]) >= 0.58:
             mixed_transition_indices.add(idx)
 
@@ -1009,7 +1258,13 @@ def select_temporal_representatives(
     anchors: list[tuple[int, int]] = []
     idx = 1
     while idx < len(items):
-        if not stable_edges[idx] or idx in mixed_transition_indices or idx - 1 in mixed_transition_indices:
+        if (
+            not stable_edges[idx]
+            or idx in mixed_transition_indices
+            or idx - 1 in mixed_transition_indices
+            or idx in resolved_incomplete_indices
+            or idx - 1 in resolved_incomplete_indices
+        ):
             idx += 1
             continue
         start = idx - 1
@@ -1019,6 +1274,8 @@ def select_temporal_representatives(
             and stable_edges[end + 1]
             and end + 1 not in mixed_transition_indices
             and end not in mixed_transition_indices
+            and end + 1 not in resolved_incomplete_indices
+            and end not in resolved_incomplete_indices
         ):
             end += 1
         anchors.append((start, end))
@@ -1037,7 +1294,19 @@ def select_temporal_representatives(
             return 0.0
         return max(0.0, float(nxt) - float(cur))
 
+    for pos in sorted(resolved_incomplete_indices):
+        item = dict(items[pos])
+        item.update({
+            "drop_reason": "temporal_incomplete_resolved",
+            "temporal_group_id": "resolved-incomplete",
+            "selection_confidence": "high",
+        })
+        dropped.append(item)
+        dropped_indices.add(pos)
+
     for pos in sorted(mixed_transition_indices):
+        if pos in dropped_indices:
+            continue
         item = dict(items[pos])
         item.update({
             "drop_reason": "temporal_mixed_transition",
@@ -1194,6 +1463,7 @@ def select_temporal_representatives(
         "motion_segment_count": motion_group_count,
         "transition_drop_count": transition_drop_count,
         "mixed_transition_drop_count": len(mixed_transition_indices),
+        "resolved_incomplete_drop_count": len(resolved_incomplete_indices),
         "stable_duplicate_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_stable_duplicate"),
         "motion_redundant_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_motion_redundant"),
         "low_confidence_selection_count": low_confidence_count,

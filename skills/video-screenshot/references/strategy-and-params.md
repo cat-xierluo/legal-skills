@@ -19,7 +19,8 @@
 ### 短切换段与持续运动段
 
 - 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段，记录为 `temporal_transition`；
-- 三帧分析能把当前帧解释为“前一页尾部 + 后一页头部”横向拼合时，记录为 `temporal_mixed_transition`；
+- 三帧像素拼合能把当前帧解释为“前一页尾部 + 后一页头部”时，记录为 `temporal_mixed_transition`；分区覆盖还会估计横向、纵向和缩放动画风险，用于视觉审计提权但不单独自动删除；
+- 疑似未完成页只有在短时间内出现同一页面骨架、主内容明显增加且完整后帧本来就会被时间簇保留时，才记录为 `temporal_incomplete_resolved`；该后帧作为必要覆盖帧绕过后续去重/过滤，最终缺失时失败关闭；启用 OCR 时关闭该纯视觉自动删除；
 - 视频开头、结尾或没有双侧稳定锚点的运动段不得整段删除，默认每 `--motion-chunk-seconds 2.50` 选择一张代表帧；
 - 默认跨度会按运动段的纵向滚动重叠自适应：高重叠连续滚动使用 `1.45×`，中等重叠使用 `1.25×`，内容快速变化使用 `0.8×`；最终值限制在 `1.4—4.5` 秒；
 - 需要更密地覆盖快速滚动时，把 `--motion-chunk-seconds` 降到 `1.5`；希望进一步精简时可提高到 `3.0`，但必须抽查覆盖。
@@ -72,7 +73,7 @@
 - `--filter-quality`：启用内容质量过滤（默认开启）
 - `--no-filter-quality`：禁用内容质量过滤
 
-代码只自动丢弃 `loading_overlay`。仅疑似未加载完整的 `incomplete_page` 不直接删除，而是在报告中保留 `loading_overlay_label/score`，交由前后帧视觉审计。合法白底正文页不能只因白色比例高被删除。
+代码自动丢弃 `loading_overlay`。`incomplete_page` 只有在 1.25 秒内出现页面上部共同骨架、主内容边缘密度显著增加，而且该后帧在未启用本规则时本来就会成为时间簇代表帧，才记录为 `temporal_incomplete_resolved` 并删除；否则保留并交由视觉审计。启用 OCR 时关闭这项纯视觉删除，让文字增量先完整运行。合法白底正文页不能只因白色比例高被删除。
 
 ### 模糊帧过滤 (`--filter-blur`)
 
@@ -177,7 +178,7 @@ SHA256 完全重复和 `--min-gap` 不接受 OCR 覆盖。报告只保存相似�
 
 该模式用于漏帧排查，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。多模态默认先运行 `prepare_vision_audit.py`，只审计本地层选择的高风险短名单。
 
-候选池达到上限后，`quality_loading_overlay` 和 `quality_transition` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去复核机会。视觉审计会为加载浮层建立专属组；它已经不在基础结果中，只有 `keep` 才会补回。
+候选池达到上限后，`quality_loading_overlay`、`quality_transition` 和 `temporal_incomplete_resolved` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去复核机会。视觉审计会为加载浮层、被完整页覆盖的未完成页和高分分区切换候选建立抽样恢复题；它们已不在基础结果中，只有明确恢复才会补回。
 
 ### 候选帧数量限制 (`--drop-candidate-limit`)
 
@@ -208,6 +209,14 @@ uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --
 - 附近存在可替代的丢弃候选。
 
 高度重叠的相邻三帧窗口只保留优先级更高者。选组在风险优先基础上给未覆盖时间段有限加分，`budget.covered_time_buckets` 记录覆盖的 30 秒区段。`max_groups` 和 `max_images` 是硬预算，生成结果不得超过任一上限。决策合同、JSON 示例和应用方式见 `references/vision-audit.md`。
+
+能力较弱的多模态模型使用：
+
+```bash
+uv run scripts/prepare_vision_audit.py -i <基础输出目录> --profile weak
+```
+
+weak 默认 6 组、18 张唯一图片，每组只有一个红框目标，联系表采用 2 列大图并生成预填答案模板。基础保留帧允许 `keep/drop/replace`，已丢弃候选只允许 `restore/leave_discarded`。删除或替换还必须引用同组基础保留帧作为覆盖证据，置信度至少 0.90 且本地风险信号成立；否则应用器记录安全无操作。恢复题最多占 2 组，避免只复核算法删除项而遗漏基础保留帧。
 
 ## 输出参数
 
