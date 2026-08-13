@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.2] - 2026-08-14
+
+### 改进
+
+- SKILL.md §3.3 新增「PM spawn 操作纪律」（Task-041~044，Wave-2 实战撞坑固化）：spawn 后不重复 send 完整 prompt（与 `worker-start` live preamble 重复，Task-042）；`run-create` 只调一次避免 `consumer_fenced`（Task-043）；supervised worker 不用 `pm-monitor`/`sentinel` 判完成（靠 `worker_done → Delivery`，Task-041）；spawn 前后独立 Bash 调用并行（Task-044）。
+
 ## [2.5.1] - 2026-08-14
 
 ### 修复
