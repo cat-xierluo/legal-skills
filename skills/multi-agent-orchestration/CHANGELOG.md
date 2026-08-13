@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.1] - 2026-08-14
+
+### 修复
+
+- Orca supervised worker 无法自验（Task-045/046，G31）：worktree 落在 `~/orca/workspaces/`（独立路径树，不在主仓父链）→ `npm run` 向上解析找不到主仓 `node_modules` → `tsc/vitest/eslint: command not found`；`VERIFY_COMMANDS` 默认空 → `allowed_shell` 仅 3 条 → worker 跑不了验证门/推不了 PR。tmux worktree 靠在主仓子树（`.claude/worktrees/`）的路径巧合白嫖向上解析（G28），Orca 路径打破后塌方。
+
+### 新增
+
+- `scripts/spawn-worker-deps.sh`（独立 source 文件，不加剧 spawn-worker.sh 膨胀）：`ensure_worktree_deps` 项目类型感知依赖补偿（Node 软链 `node_modules` / Rust cargo 共享 / Python venv 路径敏感标 blocked）；`inject_default_verify_commands` 按 `package.json` scripts 注入默认 `npm run typecheck/lint/test/build` 到白名单（PM 显式 `--verify-cmd` 优先不覆盖）。
+- `spawn-worker.sh` source deps + 两处调用（worktree 创建后 `ensure_worktree_deps`、`write_install_authorization` 前 `inject_default_verify_commands`）。
+- `clean-worktree.sh` 删 worktree 前安全 unlink `node_modules` 软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓）。
+
+### 改进
+
+- `SKILL.md` §3.2 + `worker-prompt.md` + G31 lesson（`references/09`）说明依赖补偿 + 默认 verify 机制；G31 含「统一 Orca worktree 路径到主仓」的 A-否决查证（Orca `worktree create` 无 `--path`，软链是唯一实际补偿）。
+
 ## [2.5.0] - 2026-08-13
 
 ### 修复
