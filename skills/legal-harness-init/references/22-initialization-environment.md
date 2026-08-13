@@ -61,9 +61,19 @@ bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init --prob
 
 probe-session-model.sh 的探测路径：
 
-- **claude-code**（v0.5.0）：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
-- **codex**（v0.5.1）：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`（codex 按时间分目录、不分 cwd），取最近 mtime 最大的 rollout，读最后一条 `turn_context` 记录的 `payload.model` 字段
-- **openclaw / myagents / qoderwork / qwenwork / workbuddy / orca**：v0.5.1 暂未实现，留 v0.5.2+（non-agents-md 多数无 jsonl）
+**CC 克隆 jsonl 格式**（`role=assistant` 记录的 `message.model`）：
+- **claude-code**（v0.5.0）：`~/.claude/projects/<encoded-cwd>/*.jsonl`
+- **qwenwork**（v0.5.2）：`~/.qwenworkcn/projects/<encoded-cwd>/*.jsonl`（model 是平台别名如 `qwork-advanced`）
+- **qoderwork**（v0.5.2）：`~/.qoderworkcn/projects/<encoded-cwd>/*.jsonl`（model 是别名如 `auto`）
+- **myagents**（v0.5.2）：`~/.myagents/sessions/*.jsonl`（flat 不分 cwd，model 较真实如 `glm-5.2[1m]`）
+
+**其他格式**：
+- **codex**（v0.5.1）：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`，最后一条 `turn_context` 的 `payload.model`
+- **workbuddy**（v0.5.2）：`~/.workbuddy/traces/<pid>/trace_*.json`，遍历 mtime 降序找第一个含 `chat.completion.model` 的 trace（每个操作一个 trace，只有 generation 类含 model）
+
+**暂不支持**：
+- **openclaw**：本机 logs/ 仅补全/审计无会话 jsonl，CC fork 会话路径待研究
+- **orca**：worktree 编排型，session 在各 worktree 的 `.claude/projects`，`~/.orca` 无统一 session，不可自动反查
 
 **为什么默认关闭 `--probe-from-session`**：probe 读 jsonl 是"重"操作（要 find + awk 扫最近 10 分钟 jsonl），不适合每次 init 都跑。只在 env 全空、又不想手填 `--model` 时显式开启。
 

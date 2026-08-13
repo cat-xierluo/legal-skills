@@ -5,6 +5,38 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.5.2] - 2026-08-13
+
+> 国产平台 probe 全覆盖：用户指出 WorkBuddy/QwenWork 等国产平台才是主力用户群。本轮扩展 probe 支持 qwenwork/qoderwork/myagents（CC 克隆 jsonl）+ workbuddy（trace json），6 个主流 cli harness 全部能自动反查 model。
+
+### 新增
+
+- `probe-session-model.sh` 扩展 4 个国产平台分支：
+  - **qwenwork**：`~/.qwenworkcn/projects/<encoded-cwd>/*.jsonl`，CC 克隆格式（model 是平台别名如 `qwork-advanced`）
+  - **qoderwork**：`~/.qoderworkcn/projects/<encoded-cwd>/*.jsonl`，CC 克隆（别名如 `auto`）
+  - **myagents**：`~/.myagents/sessions/*.jsonl`，CC 克隆 flat 不分 cwd（model 较真实如 `glm-5.2[1m]`）
+  - **workbuddy**：`~/.workbuddy/traces/<pid>/trace_*.json`，遍历 mtime 降序找含 `chat.completion.model` 的 trace（每个操作一个 trace，只有 generation 类含 model；toolOutput 是 JSON 字符串需先去反斜杠再 grep）
+- 重构 probe 抽 `probe_cc_clone_model` / `find_cc_clone_jsonl` / `encode_cwd` / `run_cc_clone_probe` helper，CC/qwenwork/qoderwork 共享 CC 克隆逻辑
+- `openclaw` 分支按 CC 克隆常见路径试（sessions/projects），失败 not_found；`orca` 必定 not_found（worktree 型无统一 session）
+
+### 决策
+
+- DEC-026（本地不入仓）国产平台 probe 全覆盖：CC 克隆格式（qwenwork/qoderwork/myagents）复用同一 helper；workbuddy trace 遍历找 generation 类；openclaw/orca 因机制限制标 not_found 不臆造
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：65/65 全过（v0.5.1 59 + v0.5.2 新增 6：qwenwork/qoderwork/myagents/workbuddy found + workbuddy/orca not_found）
+- ✅ 真实环境 6 平台全部探测成功（放宽窗口到 30 天）：claude-code→glm-5.2、qwenwork→qwork-advanced、qoderwork→auto、myagents→glm-5.2[1m]、codex→gpt-5.6-sol、workbuddy→deepseek-v4-flash
+- ✅ workbuddy 遍历逻辑：跳过工具调用 trace（无 model）取 generation trace
+- ⚠️ openclaw 本机无会话 jsonl，**NOT_VERIFIED**（CC fork 会话路径待研究）
+- ⚠️ orca worktree 型，结构性 not_found（不可自动反查）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- openclaw 真实会话 jsonl 路径研究（需在活跃使用 openclaw 的机器）
+- 端到端真实 init 全流程跑通
+
 ## [0.5.1] - 2026-08-13
 
 > codex session jsonl 反查：`--probe-from-session` 现支持 codex，从 `turn_context.payload.model` 取 model。

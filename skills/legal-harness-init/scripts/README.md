@@ -11,7 +11,7 @@
 | `restore.sh` | 恢复首次写入前的原文、权限和哈希 | 拒绝符号链接、缺失哈希或损坏备份 |
 | `verify.sh` | 区分写入、加载和行为验证 | 配置结构与新会话证据必须同时成立，否则不升级状态 |
 | `record-init-env.sh` | append 一行 harness+model 元数据到 init-environment 受管区块 | 失败关闭；不臆造 model；残缺 marker 拒绝；不读环境变量值 |
-| `probe-session-model.sh` | 从当前 harness session jsonl 反查 model（`--probe-from-session` 调用） | v0.5.1 支持 claude-code + codex；不读 message.content 正文；harness=unknown 宽容兜底 CC |
+| `probe-session-model.sh` | 从当前 harness session 反查 model（`--probe-from-session` 调用） | v0.5.2 支持 claude-code/qwenwork/qoderwork/myagents/codex/workbuddy；openclaw/orca not_found；不读正文 |
 | `test.sh` | 在 `/tmp/legal-harness-init-test.*` 中执行无网络回归 | 退出时只清理自己创建的测试目录 |
 
 ## 典型顺序

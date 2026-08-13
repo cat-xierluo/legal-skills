@@ -294,6 +294,59 @@ fi
 codex_nf=$(env -i HOME="/tmp/definitely-empty-codex-$$" bash "$SCRIPT_DIR/probe-session-model.sh" --harness codex --json 2>/dev/null)
 assert_contains "$codex_nf" '"status":"not_found"' "probe codex sessions_root 不存在时 not_found"
 
+# === v0.5.2 国产平台 probe 回归(CC 克隆: qwenwork/qoderwork/myagents + trace: workbuddy)===
+# qwenwork: ~/.qwenworkcn/projects/<encoded>/*.jsonl (CC 克隆)
+mkdir -p "$TEST_ROOT/home/.qwenworkcn/projects/-Users-fake"
+printf '{"message":{"role":"assistant","model":"qwork-advanced-test"}}\n' > "$TEST_ROOT/home/.qwenworkcn/projects/-Users-fake/sess.jsonl"
+qw_probe=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness qwenwork --cwd "/Users/fake" 2>/dev/null)
+if [ "$qw_probe" = "qwork-advanced-test" ]; then
+    pass "probe qwenwork CC 克隆提取 model"
+else
+    fail "probe qwenwork CC 克隆提取 model(实际: '$qw_probe')"
+fi
+
+# qoderwork: ~/.qoderworkcn/projects/<encoded>/*.jsonl (CC 克隆)
+mkdir -p "$TEST_ROOT/home/.qoderworkcn/projects/-Users-fake2"
+printf '{"message":{"role":"assistant","model":"qoder-auto-test"}}\n' > "$TEST_ROOT/home/.qoderworkcn/projects/-Users-fake2/sess.jsonl"
+qd_probe=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness qoderwork --cwd "/Users/fake2" 2>/dev/null)
+if [ "$qd_probe" = "qoder-auto-test" ]; then
+    pass "probe qoderwork CC 克隆提取 model"
+else
+    fail "probe qoderwork CC 克隆提取 model(实际: '$qd_probe')"
+fi
+
+# myagents: ~/.myagents/sessions/*.jsonl (CC 克隆,flat 不分 cwd)
+mkdir -p "$TEST_ROOT/home/.myagents/sessions"
+printf '{"message":{"role":"assistant","model":"glm-5.2-test"}}\n' > "$TEST_ROOT/home/.myagents/sessions/abc.jsonl"
+ma_probe=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness myagents 2>/dev/null)
+if [ "$ma_probe" = "glm-5.2-test" ]; then
+    pass "probe myagents session 提取 model"
+else
+    fail "probe myagents session 提取 model(实际: '$ma_probe')"
+fi
+
+# workbuddy: ~/.workbuddy/traces/<pid>/trace_*.json (spans toolOutput chat.completion.model)
+# 真实格式: toolOutput 是 JSON 字符串,内含转义引号 \"model\":\"xxx\"
+mkdir -p "$TEST_ROOT/home/.workbuddy/traces/999"
+printf '%s\n' '{"spans":[{"type":"generation","toolOutput":"[{\"model\":\"glm-5.2-wb-test\",\"object\":\"chat.completion\"}]"}]}' > "$TEST_ROOT/home/.workbuddy/traces/999/trace_g1.json"
+# 不含 model 的工具调用 trace(mtime 更新,验证遍历跳过它取含 model 的)
+sleep 1 2>/dev/null || true
+printf '%s\n' '{"spans":[{"type":"agent","name":"toolCall"}]}' > "$TEST_ROOT/home/.workbuddy/traces/999/trace_g2.json"
+wb_probe=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness workbuddy 2>/dev/null)
+if [ "$wb_probe" = "glm-5.2-wb-test" ]; then
+    pass "probe workbuddy 遍历 trace 取含 model 的 generation"
+else
+    fail "probe workbuddy 遍历 trace 取含 model 的 generation(实际: '$wb_probe')"
+fi
+
+# workbuddy traces_root 不存在时 not_found
+wb_nf=$(env -i HOME="/tmp/definitely-empty-wb-$$" bash "$SCRIPT_DIR/probe-session-model.sh" --harness workbuddy --json 2>/dev/null)
+assert_contains "$wb_nf" '"status":"not_found"' "probe workbuddy traces_root 不存在时 not_found"
+
+# orca 必定 not_found(worktree 型,无统一 session)
+orca_out=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness orca --json 2>/dev/null)
+assert_contains "$orca_out" '"status":"not_found"' "probe orca worktree 型必定 not_found"
+
 # record-init-env.sh 集成: --probe-from-session + env 全空 + 不存在 jsonl → 仍 die 但 hint 不变
 mkdir -p "$TEST_ROOT/probe-integ"
 printf '# u\n' > "$TEST_ROOT/probe-integ/AGENTS.md"
