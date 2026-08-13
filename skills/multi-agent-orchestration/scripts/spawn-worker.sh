@@ -55,6 +55,8 @@ source "$SCRIPT_DIR/orca-runtime.sh"
 source "$SCRIPT_DIR/harness-backend-policy.sh"
 # shellcheck source=provider-lease-root.sh
 source "$SCRIPT_DIR/provider-lease-root.sh"
+# shellcheck source=spawn-worker-deps.sh
+source "$SCRIPT_DIR/spawn-worker-deps.sh"
 
 PROJECT_DIR=""
 BRANCH=""
@@ -1109,6 +1111,11 @@ if [ "$DRY_RUN" -eq 0 ]; then
   INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 fi
 
+# Task-045 / G31：worktree 创建并真实化后，按项目类型补偿依赖。
+# Orca worktree 落在 ~/orca/workspaces/（独立路径树，不在主仓父链）→ Node 项目软链
+# 主仓 node_modules，否则 npm/vitest/tsc 向上解析找不到依赖、worker 无法自验。
+ensure_worktree_deps
+
 run mkdir -p "$SESSION_CONTEXT"
 
 if [ "$git_identity_field_count" -eq 3 ]; then
@@ -1124,6 +1131,10 @@ fi
 
 write_install_authorization() {
   local commands_json shell_commands_json
+  # Task-046 / G31：PM 未显式传 --verify-cmd 时，按 package.json scripts 注入
+  # 默认 verify 命令（npm run typecheck/lint/test/build）到 VERIFY_COMMANDS，
+  # 让 worker 默认能跑验证门（否则 allowed_shell 仅 3 条，worker 无法自验）。
+  inject_default_verify_commands
   commands_json=$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS=(
     "pwd"

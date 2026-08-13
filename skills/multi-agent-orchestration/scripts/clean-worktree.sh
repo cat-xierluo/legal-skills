@@ -279,6 +279,17 @@ if [ -n "${metadata_orca_dispatch_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
   fi
 fi
 
+# Task-045 / G31：worktree 删除前安全 unlink node_modules 软链（spawn-worker-deps 注入）。
+# -L 确认是软链、rm -f 不带尾斜杠——绝不跟随软链误删主仓 node_modules。
+if [ -n "$WORKTREE" ] && [ -L "$WORKTREE/node_modules" ]; then
+  if [ "$EXECUTE" -eq 0 ]; then
+    echo "CLEAN_WORKTREE_RUN: rm -f $WORKTREE/node_modules (symlink unlink)"
+  else
+    rm -f "$WORKTREE/node_modules"
+    echo "CLEAN_WORKTREE_DEPS_UNLINKED: node_modules symlink"
+  fi
+fi
+
 # v2.1（DEC-114）：ORCA 模式下额外清理 ORCA 跟踪的 worktree（tmux 路径不会自动同步）。
 # 用 run() 包装保持 dry-run 友好；ORCA 不可用 / 无 worktree_id 时跳过（不阻塞 git 清理）。
 if [ -n "${metadata_orca_worktree_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then

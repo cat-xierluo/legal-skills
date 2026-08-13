@@ -83,6 +83,18 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 
 声明的 worker backend 还必须与实际启动命令一致。只接受直接启动四种 CLI、受信的 Claude provider wrapper，或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
+### 3.2 worktree 依赖补偿 + 默认 verify 命令（Task-045/046，G31）
+
+`spawn-worker.sh` source `scripts/spawn-worker-deps.sh`，在 worktree 创建后自动补偿依赖 + 注入默认 verify 命令，让 worker 不靠路径巧合也能自验：
+
+- **依赖补偿**（`ensure_worktree_deps`，项目类型感知，读全局 `PROJECT_DIR`/`WORKTREE`）：
+  - **Node**：worktree 不在主仓父链（Orca `~/orca/workspaces/` 是独立路径树）且主仓有 `node_modules` → 软链 `worktree/node_modules → 主仓/node_modules`。tmux worktree 本在主仓子树（`.claude/worktrees/`）靠 npm 向上解析（G28），不软链。
+  - **Rust**：`~/.cargo` registry 全局共享、worktree `target/` 独立，不补偿。
+  - **Python**：venv 含绝对路径、软链会挂，不自动补偿（PM 手动建 venv 或 `--allow-install-command` 授权 pip install）。
+- **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。PM 显式 `--verify-cmd` 优先，不覆盖。
+
+`clean-worktree.sh` 删 worktree 前安全 unlink 该软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓 `node_modules`）。install-guard 仍 `deny_by_default` 拦 `npm install/ci/add`，worker 不会误改主仓 `node_modules`。详见 `references/09-parallel-lessons.md` G28/G31。
+
 ## 4. Orca-first 控制平面
 
 ### 4.1 先读取版本匹配指南
