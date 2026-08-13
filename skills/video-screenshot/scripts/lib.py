@@ -9,17 +9,25 @@ import contextlib
 import io
 import json
 import logging
+import math
 import re
 import select
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, cast
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat
+try:
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat
+except ImportError:
+    print("❌ 缺少依赖: Pillow", file=sys.stderr)
+    print("   请使用 uv 运行: uv run scripts/extract.py --help", file=sys.stderr)
+    print("   或运行: pip install Pillow", file=sys.stderr)
+    raise SystemExit(1)
 
 logger = logging.getLogger("video-screenshot")
 
@@ -502,6 +510,98 @@ def scroll_overlap_duplicate(
     return False
 
 
+def scroll_overlap_metrics(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    *,
+    min_shift: int = 4,
+    max_shift_ratio: float = 0.35,
+    min_overlap_ratio: float = 0.70,
+    step: int = 4,
+) -> dict[str, Any]:
+    """返回相邻两帧的最佳纵向滚动重叠指标，不直接作删除决定。"""
+    empty = {"diff": 999.0, "overlap_ratio": 0.0, "shift": 0, "matched": False}
+    if previous is None or current is None or previous.size != current.size:
+        return empty
+    width, height = current.size
+    if width <= 0 or height <= 0:
+        return empty
+    max_shift = max(min_shift, int(round(height * max_shift_ratio)))
+    best = dict(empty)
+    for shift in range(-max_shift, max_shift + 1, max(1, step)):
+        if abs(shift) < min_shift:
+            continue
+        diff, overlap = _shifted_mean_abs_diff(previous, current, shift)
+        if overlap < min_overlap_ratio:
+            continue
+        if diff < float(best["diff"]):
+            best = {
+                "diff": float(diff),
+                "overlap_ratio": float(overlap),
+                "shift": int(shift),
+                "matched": True,
+            }
+    return best
+
+
+def coverage_eligibility_metrics(target_bytes: bytes, coverage_bytes: bytes) -> dict[str, Any]:
+    """保守判断两图是否具备“同页覆盖候选”资格，不替代视觉完整性判断。"""
+    empty = {
+        "eligible": False,
+        "same_page_score": 0.0,
+        "ssim": 0.0,
+        "mean_abs_diff": 999.0,
+        "scroll_diff": 999.0,
+        "scroll_overlap_ratio": 0.0,
+        "scroll_shift": 0,
+        "reason": "unavailable",
+    }
+    if not target_bytes or not coverage_bytes:
+        return empty
+    target_thumb = calc_thumb_bytes(target_bytes, size=48, autocontrast=True)
+    coverage_thumb = calc_thumb_bytes(coverage_bytes, size=48, autocontrast=True)
+    similarity = ssim_bytes(target_thumb, coverage_thumb)
+    mad = mean_abs_diff(target_thumb, coverage_thumb)
+    target_scroll = calc_scroll_image(target_bytes)
+    coverage_scroll = calc_scroll_image(coverage_bytes)
+    scroll = scroll_overlap_metrics(target_scroll, coverage_scroll)
+    similarity_value = max(0.0, min(1.0, float(similarity or 0.0)))
+    mad_value = float(mad if mad is not None else 999.0)
+    scroll_diff = float(scroll.get("diff") or 999.0)
+    scroll_overlap = float(scroll.get("overlap_ratio") or 0.0)
+    # “同一 App 外壳”不能证明证据内容相同。只接受近像素一致，或重叠区域
+    # 差异极低的滚动关系；更宽松的布局相似仅作为诊断分数，不授予删除资格。
+    near_identical = similarity_value >= 0.94 and mad_value <= 18.0
+    scroll_related = bool(
+        scroll.get("matched")
+        and scroll_overlap >= 0.78
+        and scroll_diff <= 12.0
+    )
+    eligible = near_identical or scroll_related
+    same_page_score = max(
+        similarity_value,
+        max(0.0, 1.0 - mad_value / 90.0),
+        (scroll_overlap * max(0.0, 1.0 - scroll_diff / 55.0)) if scroll_related else 0.0,
+    )
+    reason = (
+        "near_identical"
+        if near_identical
+        else "scroll_overlap"
+        if scroll_related
+        else "unrelated_or_unproven"
+    )
+    return {
+        "eligible": eligible,
+        "same_page_score": round(same_page_score, 4),
+        "ssim": round(similarity_value, 4),
+        "mean_abs_diff": round(mad_value, 4),
+        "scroll_diff": round(scroll_diff, 4),
+        "scroll_overlap_ratio": round(scroll_overlap, 4),
+        "scroll_shift": int(scroll.get("shift") or 0),
+        "reason": reason,
+    }
+
+
 # 3x3 Laplacian 卷积核（用于模糊检测）
 _LAPLACIAN = ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0)
 
@@ -565,6 +665,907 @@ def calc_content_quality(image_bytes: bytes) -> dict[str, Any]:
         "grid_flat": grid_flat,
         "grid_high": grid_high,
         "grid_spread": grid_spread,
+    }
+
+
+def content_quality_drop_reason(quality: dict[str, Any]) -> str:
+    """返回可由单帧质量安全触发的删除原因；transition 只保留为风险。"""
+    label = str(quality.get("label") or "")
+    if label in {"empty", "blank", "startup"}:
+        return f"quality_{label}"
+    return ""
+
+
+def calc_loading_overlay_score(image_bytes: bytes) -> dict[str, Any]:
+    """保守估计居中加载遮罩风险；只在高置信时供本地质量过滤使用。"""
+    empty = {
+        "score": 0.0,
+        "label": "",
+        "center_bright_ratio": 0.0,
+        "center_std": 0.0,
+        "surround_darkening": 0.0,
+        "center_border_contrast": 0.0,
+    }
+    if not image_bytes:
+        return empty
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    width, height = img.size
+    if width < 40 or height < 80:
+        return empty
+    # 手机加载框通常位于中部，面积约为画面的 12%—25%。同时要求外围被遮罩压暗，
+    # 避免把普通白色内容卡片、聊天气泡或大面积白底页面误判成加载态。
+    box = (
+        int(width * 0.27),
+        int(height * 0.35),
+        int(width * 0.73),
+        int(height * 0.68),
+    )
+    inner = (
+        int(width * 0.35),
+        int(height * 0.42),
+        int(width * 0.65),
+        int(height * 0.61),
+    )
+    center = img.crop(box)
+    inner_center = img.crop(inner)
+    full_mean = float(ImageStat.Stat(img).mean[0])
+    center_stat = ImageStat.Stat(center)
+    center_mean = float(center_stat.mean[0])
+    center_std = float(center_stat.stddev[0])
+    hist = inner_center.histogram()
+    total = max(1, inner_center.size[0] * inner_center.size[1])
+    bright_ratio = sum(hist[238:]) / float(total)
+    surround_darkening = max(0.0, center_mean - full_mean)
+    # 中央亮块与稍大邻域的亮度落差，用于识别弹出的白色加载卡片边界。
+    side_regions = [
+        img.crop((int(width * 0.23), int(height * 0.42), int(width * 0.34), int(height * 0.61))),
+        img.crop((int(width * 0.66), int(height * 0.42), int(width * 0.77), int(height * 0.61))),
+        img.crop((int(width * 0.27), int(height * 0.35), int(width * 0.73), int(height * 0.42))),
+    ]
+    side_means = [float(ImageStat.Stat(region).mean[0]) for region in side_regions]
+    side_stds = [float(ImageStat.Stat(region).stddev[0]) for region in side_regions]
+    surround_mean = sum(side_means) / float(len(side_means))
+    surround_std = sum(side_stds) / float(len(side_stds))
+    border_contrast = max(0.0, float(ImageStat.Stat(inner_center).mean[0]) - surround_mean)
+    score = 0.0
+    if bright_ratio >= 0.58:
+        score += min(0.42, (bright_ratio - 0.58) * 1.4 + 0.18)
+    if surround_darkening >= 22.0:
+        score += min(0.32, (surround_darkening - 22.0) / 80.0 + 0.12)
+    if border_contrast >= 20.0:
+        score += min(0.26, (border_contrast - 20.0) / 70.0 + 0.08)
+    overlay_shape = surround_std <= 22.0 and border_contrast >= 55.0
+    if overlay_shape:
+        score += 0.28
+    # 纯白空页的中央区域过于平坦且外围并不明显变暗，不应命中。
+    if center_std < 8.0 and surround_darkening < 28.0:
+        score *= 0.25
+    final_score = max(0.0, min(1.0, score))
+    label = ""
+    if final_score >= 0.88:
+        label = "loading_overlay" if overlay_shape else "incomplete_page"
+    return {
+        "score": final_score,
+        "label": label,
+        "center_bright_ratio": bright_ratio,
+        "center_std": center_std,
+        "surround_darkening": surround_darkening,
+        "center_border_contrast": border_contrast,
+    }
+
+
+def transient_ui_drop_reason(metrics: dict[str, Any]) -> str:
+    """仅把高置信加载浮层交给代码自动丢弃；未完成页留给视觉审计。"""
+    if (
+        str(metrics.get("label") or "") == "loading_overlay"
+        and float(metrics.get("score") or 0.0) >= 0.92
+        and float(metrics.get("center_border_contrast") or 0.0) >= 55.0
+    ):
+        return "quality_loading_overlay"
+    return ""
+
+
+def calc_vertical_seam_score(image_bytes: bytes, *, width: int = 96, height: int = 160) -> float:
+    """估计画面内部纵向拼接缝强度；只用于排序，不单独作为删除依据。"""
+    if not image_bytes:
+        return 0.0
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    img = img.resize((width, height), _LANCZOS)
+    # 排除外侧黑边、状态栏与底部导航栏，避免把手机画幅边界当成拼接缝。
+    top = max(0, int(height * 0.10))
+    bottom = max(top + 1, int(height * 0.90))
+    left = max(2, int(width * 0.12))
+    right = min(width - 2, int(width * 0.88))
+    pixels = img.load()
+    edge_scores: list[float] = []
+    darkness_scores: list[float] = []
+    for x in range(left, right):
+        diffs: list[int] = []
+        dark = 0
+        for y in range(top, bottom):
+            value = int(pixels[x, y])
+            diffs.append(abs(value - int(pixels[x - 1, y])))
+            if value < 24:
+                dark += 1
+        edge_scores.append(sum(diffs) / float(len(diffs) or 1))
+        darkness_scores.append(dark / float(max(1, bottom - top)))
+    if not edge_scores:
+        return 0.0
+    ordered = sorted(edge_scores)
+    median = ordered[len(ordered) // 2]
+    edge_peak = max(edge_scores)
+    edge_ratio = edge_peak / max(2.0, median)
+    dark_band = max(darkness_scores) if darkness_scores else 0.0
+    # 0—1 归一化。内部强边缘和贯穿式暗条同时出现时得分最高。
+    return max(0.0, min(1.0, (edge_ratio - 2.0) / 6.0 * 0.65 + dark_band * 0.55))
+
+
+def calc_transition_image(
+    image_bytes: bytes,
+    *,
+    width: int = 72,
+    height: int = 120,
+    crop_top_ratio: float = 0.08,
+    crop_bottom_ratio: float = 0.10,
+    crop_left_ratio: float = 0.03,
+    crop_right_ratio: float = 0.03,
+) -> Image.Image | None:
+    if not image_bytes:
+        return None
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    img = _crop_content(
+        img,
+        top_ratio=crop_top_ratio,
+        bottom_ratio=crop_bottom_ratio,
+        left_ratio=crop_left_ratio,
+        right_ratio=crop_right_ratio,
+    )
+    return img.resize((width, height), _LANCZOS)
+
+
+def _image_mad(a: Image.Image, b: Image.Image) -> float:
+    if a.size != b.size or a.size[0] <= 0 or a.size[1] <= 0:
+        return 999.0
+    return float(ImageStat.Stat(ImageChops.difference(a, b)).mean[0])
+
+
+def horizontal_mixed_transition_score(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    following: Image.Image | None,
+) -> dict[str, Any]:
+    """判断 current 是否可由前后两页横向滑动拼合得到。"""
+    empty = {"score": 0.0, "orientation": "", "cut_ratio": 0.0, "mix_error": 999.0, "neighbor_diff": 0.0}
+    if previous is None or current is None or following is None:
+        return empty
+    if previous.size != current.size or following.size != current.size:
+        return empty
+    width, height = current.size
+    if width < 16 or height < 16:
+        return empty
+    neighbor_diff = _image_mad(previous, following)
+    if neighbor_diff < 10.0:
+        return empty
+
+    best_error = 999.0
+    best_orientation = ""
+    best_cut = 0
+    for cut in range(max(4, width // 4), min(width - 4, width * 3 // 4) + 1, max(2, width // 24)):
+        # 页面向左滑：旧页尾部在左，新页头部在右。
+        left_cur = current.crop((0, 0, cut, height))
+        right_cur = current.crop((cut, 0, width, height))
+        left_old = previous.crop((width - cut, 0, width, height))
+        right_new = following.crop((0, 0, width - cut, height))
+        left_error = _image_mad(left_cur, left_old)
+        right_error = _image_mad(right_cur, right_new)
+        error = (left_error * cut + right_error * (width - cut)) / float(width)
+        if error < best_error:
+            best_error = error
+            best_orientation = "swipe_left"
+            best_cut = cut
+
+        # 页面向右滑：新页尾部在左，旧页头部在右。
+        left_new = following.crop((width - cut, 0, width, height))
+        right_old = previous.crop((0, 0, width - cut, height))
+        left_error = _image_mad(left_cur, left_new)
+        right_error = _image_mad(right_cur, right_old)
+        error = (left_error * cut + right_error * (width - cut)) / float(width)
+        if error < best_error:
+            best_error = error
+            best_orientation = "swipe_right"
+            best_cut = cut
+
+    # 只有拼合误差显著小于前后页差异时才给高分；绝对误差过大时衰减。
+    relative_gain = max(0.0, (neighbor_diff - best_error) / max(neighbor_diff, 1.0))
+    # JPEG/缩略重采样会让真实拼接的 MAD 落在 20—25；40 以上才视为解释力不足。
+    absolute_factor = max(0.0, min(1.0, (40.0 - best_error) / 30.0))
+    score = max(0.0, min(1.0, relative_gain * absolute_factor * 1.35))
+    return {
+        "score": score,
+        "orientation": best_orientation,
+        "cut_ratio": best_cut / float(width),
+        "mix_error": best_error,
+        "neighbor_diff": neighbor_diff,
+    }
+
+
+def regional_mixed_transition_score(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    following: Image.Image | None,
+) -> dict[str, Any]:
+    """以分区归属估计真实 UI 动画中被前后邻帧共同覆盖的中间态。
+
+    与像素拼接检测不同，本函数允许动画缩放、轻微位移和重采样。它把当前帧切成
+    8 条横带或纵带，并在前后邻帧的同方向位置中寻找最佳匹配；只有两侧邻帧都能
+    解释足够多的分区时才给分。结果用于风险排序，不单独构成自动删除依据。
+    """
+    empty = {
+        "score": 0.0,
+        "orientation": "",
+        "previous_regions": 0,
+        "following_regions": 0,
+        "explained_ratio": 0.0,
+    }
+    if previous is None or current is None or following is None:
+        return empty
+    if previous.size != current.size or following.size != current.size:
+        return empty
+    width, height = current.size
+    if width < 24 or height < 40 or _image_mad(previous, following) < 10.0:
+        return empty
+
+    def evaluate(axis: str) -> dict[str, Any]:
+        regions = 8
+        previous_count = 0
+        following_count = 0
+        best_errors: list[float] = []
+        gains: list[float] = []
+        for index in range(regions):
+            if axis == "vertical":
+                start = index * width // regions
+                end = (index + 1) * width // regions
+                piece = current.crop((start, 0, end, height))
+                size = max(1, end - start)
+                previous_error = min(
+                    _image_mad(piece, previous.crop((offset, 0, offset + size, height)))
+                    for offset in range(0, width - size + 1, max(1, width // 24))
+                )
+                following_error = min(
+                    _image_mad(piece, following.crop((offset, 0, offset + size, height)))
+                    for offset in range(0, width - size + 1, max(1, width // 24))
+                )
+            else:
+                start = index * height // regions
+                end = (index + 1) * height // regions
+                piece = current.crop((0, start, width, end))
+                size = max(1, end - start)
+                previous_error = min(
+                    _image_mad(piece, previous.crop((0, offset, width, offset + size)))
+                    for offset in range(0, height - size + 1, max(1, height // 24))
+                )
+                following_error = min(
+                    _image_mad(piece, following.crop((0, offset, width, offset + size)))
+                    for offset in range(0, height - size + 1, max(1, height // 24))
+                )
+            gain = abs(previous_error - following_error)
+            best_error = min(previous_error, following_error)
+            if gain < 6.0 or best_error > 90.0:
+                continue
+            if previous_error < following_error:
+                previous_count += 1
+            else:
+                following_count += 1
+            best_errors.append(best_error)
+            gains.append(gain)
+
+        explained = previous_count + following_count
+        if previous_count == 0 or following_count == 0 or explained == 0:
+            return dict(empty)
+        explained_ratio = explained / float(regions)
+        balance = 2.0 * min(previous_count, following_count) / float(explained)
+        fit = max(0.0, min(1.0, (95.0 - sum(best_errors) / len(best_errors)) / 65.0))
+        gain_score = max(0.0, min(1.0, ((sum(gains) / len(gains)) - 6.0) / 20.0))
+        score = explained_ratio * (0.45 * balance + 0.35 * fit + 0.20 * gain_score)
+        return {
+            "score": max(0.0, min(1.0, score)),
+            "orientation": axis,
+            "previous_regions": previous_count,
+            "following_regions": following_count,
+            "explained_ratio": explained_ratio,
+        }
+
+    vertical = evaluate("vertical")
+    horizontal = evaluate("horizontal")
+    return vertical if float(vertical["score"]) >= float(horizontal["score"]) else horizontal
+
+
+def _edge_mask(image: Image.Image, *, threshold: int = 35) -> set[int]:
+    """把灰度小图转换为稀疏边缘位置集合，供页面骨架比较使用。"""
+    edges = image.filter(ImageFilter.FIND_EDGES)
+    return {index for index, value in enumerate(edges.getdata()) if int(value) >= threshold}
+
+
+def _edge_ratio(image: Image.Image, *, threshold: int = 35) -> float:
+    if image.size[0] <= 0 or image.size[1] <= 0:
+        return 0.0
+    return len(_edge_mask(image, threshold=threshold)) / float(image.size[0] * image.size[1])
+
+
+def _edge_iou(a: Image.Image, b: Image.Image, *, threshold: int = 35) -> float:
+    if a.size != b.size:
+        return 0.0
+    edges_a = _edge_mask(a, threshold=threshold)
+    edges_b = _edge_mask(b, threshold=threshold)
+    union = edges_a | edges_b
+    return len(edges_a & edges_b) / float(len(union) or 1)
+
+
+def temporal_completion_metrics(
+    current: Image.Image | None,
+    following: Image.Image | None,
+    current_loading: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """判断疑似未完成页是否被紧邻后帧的完整内容覆盖。
+
+    这是保守的两帧规则：当前帧必须先被单帧指标标记为 ``incomplete_page``，
+    后帧不能继续处于同类风险；同时要求页面上部至少存在可辨认的共同骨架，且
+    主内容区的边缘密度有明显增长。结果只作为时间簇阶段的候选删除证据。
+    """
+    empty = {
+        "score": 0.0,
+        "resolved": False,
+        "shell_similarity": 0.0,
+        "content_edge_ratio": 0.0,
+        "following_content_edge_ratio": 0.0,
+        "content_edge_gain": 0.0,
+    }
+    loading = current_loading or {}
+    if (
+        current is None
+        or following is None
+        or current.size != following.size
+        or str(loading.get("label") or "") != "incomplete_page"
+        or float(loading.get("score") or 0.0) < 0.92
+    ):
+        return empty
+    width, height = current.size
+    if width < 24 or height < 40:
+        return empty
+
+    # App 的标题、头像或标签可能位于上部不同高度。扫描多个上部区间，寻找共同页面骨架。
+    shell_similarity = 0.0
+    for top_ratio in (0.04, 0.08, 0.12, 0.16):
+        for bottom_ratio in (0.28, 0.32, 0.36, 0.40, 0.44):
+            if bottom_ratio - top_ratio < 0.12:
+                continue
+            top = int(height * top_ratio)
+            bottom = max(top + 1, int(height * bottom_ratio))
+            shell_similarity = max(
+                shell_similarity,
+                _edge_iou(
+                    current.crop((0, top, width, bottom)),
+                    following.crop((0, top, width, bottom)),
+                ),
+            )
+
+    content_box = (0, int(height * 0.45), width, int(height * 0.92))
+    content_edge_ratio = _edge_ratio(current.crop(content_box))
+    following_content_edge_ratio = _edge_ratio(following.crop(content_box))
+    content_edge_gain = following_content_edge_ratio - content_edge_ratio
+
+    shell_component = max(0.0, min(1.0, (shell_similarity - 0.42) / 0.23))
+    gain_component = max(0.0, min(1.0, (content_edge_gain - 0.07) / 0.12))
+    score = min(1.0, 0.58 * shell_component + 0.42 * gain_component)
+    resolved = bool(
+        shell_similarity >= 0.55
+        and content_edge_gain >= 0.10
+        and following_content_edge_ratio >= 0.14
+        and score >= 0.68
+    )
+    return {
+        "score": score,
+        "resolved": resolved,
+        "shell_similarity": shell_similarity,
+        "content_edge_ratio": content_edge_ratio,
+        "following_content_edge_ratio": following_content_edge_ratio,
+        "content_edge_gain": content_edge_gain,
+    }
+
+
+def temporal_frame_metrics(
+    image_bytes: bytes,
+    *,
+    crop_top_ratio: float = 0.12,
+    crop_bottom_ratio: float = 0.12,
+    crop_left_ratio: float = 0.04,
+    crop_right_ratio: float = 0.04,
+) -> dict[str, Any]:
+    """计算时间簇择优使用的轻量指标。"""
+    quality = calc_content_quality(image_bytes)
+    thumb = calc_thumb_bytes(
+        image_bytes,
+        size=48,
+        crop_top_ratio=crop_top_ratio,
+        crop_bottom_ratio=crop_bottom_ratio,
+        crop_left_ratio=crop_left_ratio,
+        crop_right_ratio=crop_right_ratio,
+    )
+    ssim_thumb = calc_thumb_bytes(
+        image_bytes,
+        size=32,
+        crop_top_ratio=crop_top_ratio,
+        crop_bottom_ratio=crop_bottom_ratio,
+        crop_left_ratio=crop_left_ratio,
+        crop_right_ratio=crop_right_ratio,
+        autocontrast=True,
+    )
+    return {
+        "thumb": thumb,
+        "ssim_thumb": ssim_thumb,
+        "blur_score": calc_blur_score(image_bytes),
+        "quality": quality,
+        "loading_overlay": calc_loading_overlay_score(image_bytes),
+        "seam_score": calc_vertical_seam_score(image_bytes),
+        "scroll_image": calc_scroll_image(
+            image_bytes,
+            crop_top_ratio=crop_top_ratio,
+            crop_bottom_ratio=crop_bottom_ratio,
+            crop_left_ratio=crop_left_ratio,
+            crop_right_ratio=crop_right_ratio,
+        ),
+        "transition_image": calc_transition_image(image_bytes),
+    }
+
+
+def _temporal_pair_is_stable(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    max_gap_seconds: float,
+    pixel_diff_threshold: float,
+    ssim_threshold: float,
+) -> bool:
+    prev_time = previous.get("capture_time_seconds")
+    cur_time = current.get("capture_time_seconds")
+    if prev_time is None or cur_time is None:
+        return False
+    gap = float(cur_time) - float(prev_time)
+    if gap < 0 or gap > max_gap_seconds:
+        return False
+    diff = mean_abs_diff(previous.get("thumb") or b"", current.get("thumb") or b"")
+    sim = ssim_bytes(previous.get("ssim_thumb") or b"", current.get("ssim_thumb") or b"")
+    return bool(
+        (diff is not None and diff <= pixel_diff_threshold)
+        or (sim is not None and sim >= ssim_threshold)
+    )
+
+
+def _temporal_selection_score(
+    item: dict[str, Any],
+    *,
+    dwell_after_seconds: float,
+    prefer_later: float = 0.0,
+) -> float:
+    """给簇内候选打分；清晰、稳定、无拼接缝的后期帧优先。"""
+    blur = max(0.0, float(item.get("blur_score") or 0.0))
+    blur_component = min(2.0, math.log1p(blur) / 3.2)
+    dwell_component = min(1.5, max(0.0, dwell_after_seconds) * 1.5)
+    seam_penalty = min(1.4, max(0.0, float(item.get("seam_score") or 0.0)) * 1.4)
+    mixed_penalty = min(2.5, max(0.0, float(item.get("mixed_transition_score") or 0.0)) * 2.5)
+    label = str((item.get("quality") or {}).get("label") or "")
+    quality_penalty = {
+        "empty": 4.0,
+        "blank": 4.0,
+        "startup": 1.5,
+        "transition": 1.2,
+    }.get(label, 0.0)
+    loading_metrics = item.get("loading_overlay") or {}
+    loading_score = max(0.0, float(loading_metrics.get("score") or 0.0))
+    loading_penalty = min(
+        4.0,
+        loading_score * (4.0 if loading_metrics.get("label") == "loading_overlay" else 1.0),
+    )
+    return (
+        blur_component + dwell_component + prefer_later
+        - seam_penalty - mixed_penalty - quality_penalty - loading_penalty
+    )
+
+
+def _adaptive_motion_chunk_seconds(
+    positions: list[int],
+    items: list[dict[str, Any]],
+    base_seconds: float,
+) -> tuple[float, str, float]:
+    """按相邻滚动重叠估计运动段密度；仅在高重叠时放宽保留跨度。"""
+    if len(positions) < 2:
+        return base_seconds, "base", 0.0
+    matches = 0
+    comparable = 0
+    for previous_pos, current_pos in zip(positions, positions[1:]):
+        metric = scroll_overlap_metrics(
+            items[previous_pos].get("scroll_image"),
+            items[current_pos].get("scroll_image"),
+        )
+        if not metric["matched"]:
+            continue
+        comparable += 1
+        if float(metric["diff"]) <= 28.0 and float(metric["overlap_ratio"]) >= 0.70:
+            matches += 1
+    ratio = matches / float(comparable or 1)
+    if comparable >= 2 and ratio >= 0.65:
+        return min(4.5, base_seconds * 1.45), "scroll_redundant", ratio
+    if comparable >= 2 and ratio >= 0.35:
+        return min(4.0, base_seconds * 1.25), "scroll_mixed", ratio
+    if comparable >= 2 and ratio <= 0.20:
+        return max(1.4, base_seconds * 0.80), "content_rich", ratio
+    return base_seconds, "base", ratio
+
+
+def select_temporal_representatives(
+    items: list[dict[str, Any]],
+    *,
+    stable_max_gap_seconds: float = 0.80,
+    stable_pixel_diff_threshold: float = 5.0,
+    stable_ssim_threshold: float = 0.965,
+    transition_max_seconds: float = 1.60,
+    motion_chunk_seconds: float = 2.20,
+    allow_incomplete_resolution: bool = True,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """基于前后帧选择稳定终态，返回 (保留, 丢弃, 统计)。
+
+    输入项必须按时间排序并包含 capture_time_seconds、thumb、ssim_thumb、
+    blur_score、quality 和 seam_score。函数不修改图片文件。
+    """
+    if not items:
+        return [], [], {
+            "stable_run_count": 0,
+            "motion_segment_count": 0,
+            "transition_drop_count": 0,
+            "short_motion_preserved_count": 0,
+            "short_motion_redundant_drop_count": 0,
+            "stable_duplicate_drop_count": 0,
+            "low_confidence_selection_count": 0,
+            "resolved_incomplete_drop_count": 0,
+        }
+
+    baseline_cover_source_indices: set[int] = set()
+    if allow_incomplete_resolution:
+        baseline_selected, _baseline_dropped, _baseline_stats = select_temporal_representatives(
+            items,
+            stable_max_gap_seconds=stable_max_gap_seconds,
+            stable_pixel_diff_threshold=stable_pixel_diff_threshold,
+            stable_ssim_threshold=stable_ssim_threshold,
+            transition_max_seconds=transition_max_seconds,
+            motion_chunk_seconds=motion_chunk_seconds,
+            allow_incomplete_resolution=False,
+        )
+        baseline_cover_source_indices = {
+            int(item.get("source_index") or 0)
+            for item in baseline_selected
+            if int(item.get("source_index") or 0) > 0
+        }
+
+    # 两帧时序证据：疑似未完成页只有在紧邻后帧显示同一页面骨架且内容明显变完整时才删除。
+    resolved_incomplete_indices: set[int] = set()
+    for idx in range(0, len(items) - 1):
+        if not allow_incomplete_resolution:
+            break
+        cur_time = items[idx].get("capture_time_seconds")
+        if cur_time is None:
+            continue
+        best_completion: dict[str, Any] | None = None
+        for next_idx in range(idx + 1, len(items)):
+            next_time = items[next_idx].get("capture_time_seconds")
+            if next_time is None:
+                continue
+            gap = float(next_time) - float(cur_time)
+            if gap > 1.25:
+                break
+            following_loading = items[next_idx].get("loading_overlay") or {}
+            if str(following_loading.get("label") or "") in {"loading_overlay", "incomplete_page"}:
+                continue
+            next_source_index = int(items[next_idx].get("source_index") or 0)
+            if next_source_index not in baseline_cover_source_indices:
+                continue
+            completion = temporal_completion_metrics(
+                items[idx].get("transition_image"),
+                items[next_idx].get("transition_image"),
+                items[idx].get("loading_overlay"),
+            )
+            completion["following_source_index"] = next_source_index
+            completion["following_gap_seconds"] = gap
+            if best_completion is None or float(completion.get("score") or 0.0) > float(best_completion.get("score") or 0.0):
+                best_completion = completion
+        if best_completion is None:
+            continue
+        items[idx]["temporal_completion"] = best_completion
+        if bool(best_completion.get("resolved")):
+            resolved_incomplete_indices.add(idx)
+
+    # 三帧时序证据：当前帧能由前后两页横向拼合解释，才视为高置信滑页中间态。
+    mixed_transition_indices: set[int] = set()
+    for idx in range(1, len(items) - 1):
+        prev_time = items[idx - 1].get("capture_time_seconds")
+        cur_time = items[idx].get("capture_time_seconds")
+        next_time = items[idx + 1].get("capture_time_seconds")
+        if prev_time is None or cur_time is None or next_time is None:
+            continue
+        if float(cur_time) - float(prev_time) > 1.25 or float(next_time) - float(cur_time) > 1.25:
+            continue
+        mix = horizontal_mixed_transition_score(
+            items[idx - 1].get("transition_image"),
+            items[idx].get("transition_image"),
+            items[idx + 1].get("transition_image"),
+        )
+        regional_mix = regional_mixed_transition_score(
+            items[idx - 1].get("transition_image"),
+            items[idx].get("transition_image"),
+            items[idx + 1].get("transition_image"),
+        )
+        combined_score = max(float(mix["score"]), float(regional_mix["score"]))
+        items[idx]["mixed_transition_score"] = combined_score
+        items[idx]["mixed_transition"] = {
+            "pixel_composite": mix,
+            "regional_coverage": regional_mix,
+        }
+        if float(mix["score"]) >= 0.58:
+            mixed_transition_indices.add(idx)
+
+    stable_edges = [False] * len(items)
+    for idx in range(1, len(items)):
+        stable_edges[idx] = _temporal_pair_is_stable(
+            items[idx - 1],
+            items[idx],
+            max_gap_seconds=stable_max_gap_seconds,
+            pixel_diff_threshold=stable_pixel_diff_threshold,
+            ssim_threshold=stable_ssim_threshold,
+        )
+
+    # anchor 是至少含两帧、由稳定边连接的区间。
+    anchors: list[tuple[int, int]] = []
+    idx = 1
+    while idx < len(items):
+        if (
+            not stable_edges[idx]
+            or idx in mixed_transition_indices
+            or idx - 1 in mixed_transition_indices
+            or idx in resolved_incomplete_indices
+            or idx - 1 in resolved_incomplete_indices
+        ):
+            idx += 1
+            continue
+        start = idx - 1
+        end = idx
+        while (
+            end + 1 < len(items)
+            and stable_edges[end + 1]
+            and end + 1 not in mixed_transition_indices
+            and end not in mixed_transition_indices
+            and end + 1 not in resolved_incomplete_indices
+            and end not in resolved_incomplete_indices
+        ):
+            end += 1
+        anchors.append((start, end))
+        idx = end + 1
+
+    selected: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
+    selected_indices: set[int] = set()
+    dropped_indices: set[int] = set()
+    stable_group_by_index: dict[int, int] = {}
+
+    def dwell_after(pos: int) -> float:
+        cur = items[pos].get("capture_time_seconds")
+        nxt = items[pos + 1].get("capture_time_seconds") if pos + 1 < len(items) else None
+        if cur is None or nxt is None:
+            return 0.0
+        return max(0.0, float(nxt) - float(cur))
+
+    for pos in sorted(resolved_incomplete_indices):
+        item = dict(items[pos])
+        item.update({
+            "drop_reason": "temporal_incomplete_resolved",
+            "temporal_group_id": "resolved-incomplete",
+            "selection_confidence": "high",
+        })
+        dropped.append(item)
+        dropped_indices.add(pos)
+
+    for pos in sorted(mixed_transition_indices):
+        if pos in dropped_indices:
+            continue
+        item = dict(items[pos])
+        item.update({
+            "drop_reason": "temporal_mixed_transition",
+            "temporal_group_id": "mixed-transition",
+            "selection_confidence": "high",
+        })
+        dropped.append(item)
+        dropped_indices.add(pos)
+
+    for group_id, (start, end) in enumerate(anchors, 1):
+        for pos in range(start, end + 1):
+            stable_group_by_index[pos] = group_id
+        best = max(
+            range(start, end + 1),
+            key=lambda pos: _temporal_selection_score(
+                items[pos],
+                dwell_after_seconds=dwell_after(pos),
+                prefer_later=(pos - start) * 0.03,
+            ),
+        )
+        chosen = dict(items[best])
+        chosen.update({
+            "temporal_reason": "stable_representative",
+            "temporal_group_id": f"stable-{group_id:03d}",
+            "selection_confidence": "high",
+        })
+        selected.append(chosen)
+        selected_indices.add(best)
+        for pos in range(start, end + 1):
+            if pos == best:
+                continue
+            item = dict(items[pos])
+            item.update({
+                "drop_reason": "temporal_stable_duplicate",
+                "temporal_group_id": f"stable-{group_id:03d}",
+                "selection_confidence": "high",
+            })
+            dropped.append(item)
+            dropped_indices.add(pos)
+
+    # 稳定段之间的非 anchor 项属于运动段。没有直接像素拼接证据的短段也可能是
+    # 停留很短的真实页面，因此至少保留一个代表帧；较长运动段按固定跨度留代表帧。
+    gaps: list[tuple[int, int, bool, bool]] = []
+    cursor = 0
+    for start, end in anchors:
+        if cursor < start:
+            gaps.append((cursor, start - 1, cursor > 0, True))
+        cursor = end + 1
+    if cursor < len(items):
+        gaps.append((cursor, len(items) - 1, cursor > 0, False))
+    if not anchors:
+        gaps = [(0, len(items) - 1, False, False)]
+
+    motion_group_count = 0
+    transition_drop_count = 0
+    short_motion_preserved_count = 0
+    low_confidence_count = 0
+    for start, end, bounded_before, bounded_after in gaps:
+        positions = [pos for pos in range(start, end + 1) if pos not in dropped_indices and pos not in selected_indices]
+        if not positions:
+            continue
+        motion_group_count += 1
+        first_time = items[positions[0]].get("capture_time_seconds")
+        last_time = items[positions[-1]].get("capture_time_seconds")
+        span = (
+            max(0.0, float(last_time) - float(first_time))
+            if first_time is not None and last_time is not None
+            else float("inf")
+        )
+        # 单张运动候选自身的 span 为 0。改用两侧稳定锚点之间的真实时间跨度，
+        # 避免把停留很久、但只采到一张的独立证据页误删为“短切换”。
+        if bounded_before and bounded_after and start > 0 and end + 1 < len(items):
+            before_time = items[start - 1].get("capture_time_seconds")
+            after_time = items[end + 1].get("capture_time_seconds")
+            if before_time is not None and after_time is not None:
+                span = max(0.0, float(after_time) - float(before_time))
+        group_name = f"motion-{motion_group_count:03d}"
+        if bounded_before and bounded_after and span <= transition_max_seconds:
+            best = max(
+                positions,
+                key=lambda pos: _temporal_selection_score(
+                    items[pos],
+                    dwell_after_seconds=dwell_after(pos),
+                    prefer_later=(pos - positions[0]) * 0.02,
+                ),
+            )
+            chosen = dict(items[best])
+            chosen.update({
+                "temporal_reason": "short_motion_representative",
+                "temporal_group_id": group_name,
+                "selection_confidence": "low",
+                "adaptive_chunk_seconds": max(0.0, span),
+                "motion_density_mode": "short_uncertain",
+                "scroll_match_ratio": 0.0,
+            })
+            selected.append(chosen)
+            selected_indices.add(best)
+            short_motion_preserved_count += 1
+            low_confidence_count += 1
+            for pos in positions:
+                if pos == best:
+                    continue
+                item = dict(items[pos])
+                item.update({
+                    "drop_reason": "temporal_short_motion_redundant",
+                    "temporal_group_id": group_name,
+                    "selection_confidence": "low",
+                })
+                dropped.append(item)
+                dropped_indices.add(pos)
+            continue
+
+        adaptive_chunk_seconds, density_mode, scroll_match_ratio = _adaptive_motion_chunk_seconds(
+            positions,
+            items,
+            motion_chunk_seconds,
+        )
+
+        chunks: list[list[int]] = []
+        chunk: list[int] = []
+        chunk_start_time: float | None = None
+        for pos in positions:
+            cur_time = items[pos].get("capture_time_seconds")
+            cur_float = float(cur_time) if cur_time is not None else None
+            if (
+                chunk
+                and chunk_start_time is not None
+                and cur_float is not None
+                and cur_float - chunk_start_time > adaptive_chunk_seconds
+            ):
+                chunks.append(chunk)
+                chunk = []
+                chunk_start_time = None
+            if not chunk:
+                chunk_start_time = cur_float
+            chunk.append(pos)
+        if chunk:
+            chunks.append(chunk)
+
+        for chunk_id, chunk_positions in enumerate(chunks, 1):
+            best = max(
+                chunk_positions,
+                key=lambda pos: _temporal_selection_score(
+                    items[pos],
+                    dwell_after_seconds=dwell_after(pos),
+                    prefer_later=(pos - chunk_positions[0]) * 0.02,
+                ),
+            )
+            chosen = dict(items[best])
+            chosen.update({
+                "temporal_reason": "motion_representative",
+                "temporal_group_id": f"{group_name}-{chunk_id:02d}",
+                "selection_confidence": "low",
+                "adaptive_chunk_seconds": adaptive_chunk_seconds,
+                "motion_density_mode": density_mode,
+                "scroll_match_ratio": scroll_match_ratio,
+            })
+            selected.append(chosen)
+            selected_indices.add(best)
+            low_confidence_count += 1
+            for pos in chunk_positions:
+                if pos == best:
+                    continue
+                item = dict(items[pos])
+                item.update({
+                    "drop_reason": "temporal_motion_redundant",
+                    "temporal_group_id": f"{group_name}-{chunk_id:02d}",
+                    "selection_confidence": "low",
+                })
+                dropped.append(item)
+                dropped_indices.add(pos)
+
+    selected.sort(key=lambda item: (float(item.get("capture_time_seconds") or 0.0), int(item.get("source_index") or 0)))
+    dropped.sort(key=lambda item: int(item.get("source_index") or 0))
+    return selected, dropped, {
+        "stable_run_count": len(anchors),
+        "motion_segment_count": motion_group_count,
+        "transition_drop_count": transition_drop_count,
+        "short_motion_preserved_count": short_motion_preserved_count,
+        "mixed_transition_drop_count": len(mixed_transition_indices),
+        "resolved_incomplete_drop_count": len(resolved_incomplete_indices),
+        "stable_duplicate_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_stable_duplicate"),
+        "short_motion_redundant_drop_count": sum(
+            1 for item in dropped if item.get("drop_reason") == "temporal_short_motion_redundant"
+        ),
+        "motion_redundant_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_motion_redundant"),
+        "low_confidence_selection_count": low_confidence_count,
+        "selected_before_dedup": len(selected),
+        "adaptive_motion_group_count": sum(
+            1 for item in selected if item.get("motion_density_mode") not in (None, "base")
+        ),
     }
 
 
@@ -673,6 +1674,14 @@ class DedupState:
     blur_drops: int = 0
     quality_drops: int = 0
     min_gap_drops: int = 0
+    temporal_drops: int = 0
+    temporal_transition_drops: int = 0
+    transient_ui_drops: int = 0
+    ocr_visual_overrides: int = 0
+    ocr_min_gap_overrides: int = 0
+    short_motion_min_gap_overrides: int = 0
+    short_motion_dedup_overrides: int = 0
+    quality_transition_preserved: int = 0
     kept_count: int = 0
     total_count: int = 0
 
@@ -724,9 +1733,41 @@ def check_ocr_similarity(
     ocr_min_new_chars: int,
 ) -> bool:
     """检查 OCR 文本是否与最近帧重复，返回 True 表示重复应跳过。"""
-    if not ocr_text or not kept_ocr_texts:
-        return False
+    return bool(ocr_content_delta(
+        ocr_text,
+        kept_ocr_texts,
+        kept_ocr_shingles,
+        ocr_similarity_threshold,
+        ocr_min_new_chars,
+    )["redundant"])
+
+
+def ocr_content_delta(
+    ocr_text: str,
+    kept_ocr_texts: list[str],
+    kept_ocr_shingles: list[set[str]],
+    ocr_similarity_threshold: float,
+    ocr_min_new_chars: int,
+) -> dict[str, Any]:
+    """比较最近 OCR 内容，返回可报告的增量指标；不保存原文到报告。"""
     cur_set = shingles(ocr_text)
+    # 排除视频时间码、状态栏时钟等 1—2 位易变数字；金额或至少 3 位的
+    # 连续编号才作为潜在证据数字，避免 OCR 把每秒变化误判为内容增量。
+    evidence_number_pattern = r"(?:￥|¥)\s*\d[\d,.]*|(?<![\d:])\d{3,}(?:[,.]\d+)?(?![\d:])"
+    current_numbers = set(re.findall(evidence_number_pattern, ocr_text or ""))
+    if not ocr_text or not kept_ocr_texts:
+        return {
+            "available": bool(ocr_text),
+            "similarity": 0.0,
+            "new_token_count": len(cur_set),
+            "new_numeric_count": len(current_numbers),
+            "redundant": False,
+            "has_new_content": bool(cur_set or current_numbers),
+            "protect_visual_duplicate": False,
+        }
+    best_similarity = 0.0
+    min_new_tokens = len(cur_set)
+    recent_numbers: set[str] = set()
     for prev_text, prev_set in zip(
         kept_ocr_texts[-4:],
         kept_ocr_shingles[-4:],
@@ -737,9 +1778,28 @@ def check_ocr_similarity(
         jac_sim = jaccard_sets(prev_set, cur_set)
         sim = max(seq_sim, jac_sim)
         new_tokens = len(cur_set - prev_set) if prev_set else len(cur_set)
-        if sim >= ocr_similarity_threshold and new_tokens < ocr_min_new_chars:
-            return True
-    return False
+        best_similarity = max(best_similarity, sim)
+        min_new_tokens = min(min_new_tokens, new_tokens)
+        recent_numbers.update(re.findall(evidence_number_pattern, prev_text or ""))
+    new_numbers = current_numbers - recent_numbers
+    has_new_content = min_new_tokens >= ocr_min_new_chars or bool(new_numbers)
+    redundant = best_similarity >= ocr_similarity_threshold and not has_new_content
+    protect_visual_duplicate = (
+        (bool(new_numbers) and best_similarity >= 0.72)
+        or (
+            best_similarity >= 0.82
+            and min_new_tokens >= max(16, ocr_min_new_chars * 2)
+        )
+    )
+    return {
+        "available": True,
+        "similarity": best_similarity,
+        "new_token_count": min_new_tokens,
+        "new_numeric_count": len(new_numbers),
+        "redundant": redundant,
+        "has_new_content": has_new_content,
+        "protect_visual_duplicate": protect_visual_duplicate,
+    }
 
 
 def is_frame_duplicate(
@@ -860,8 +1920,8 @@ def create_ocr_engine():
         return _ocr_engine
     except ImportError:
         logger.warning(
-            "rapidocr-onnxruntime 未安装，OCR 去重不可用。"
-            "安装方式: pip install rapidocr-onnxruntime"
+            "rapidocr-onnxruntime 未安装，OCR 内容增量不可用。"
+            "运行方式: uv run --with rapidocr-onnxruntime scripts/extract.py ... --ocr-dedup"
         )
         return None
 
@@ -873,7 +1933,15 @@ def ocr_extract_text(ocr_engine: Any, image_bytes: bytes) -> str:
     try:
         result, _ = ocr_engine(image_bytes)
         if result:
-            return "|".join(line[-1] for line in result)
+            texts: list[str] = []
+            for line in result:
+                # RapidOCR 行结构是 [box, text, confidence]；旧实现取 line[-1]
+                # 实际拼接了置信度数字，导致 OCR 去重几乎失效。
+                if isinstance(line, (list, tuple)) and len(line) >= 2:
+                    text = str(line[1] or "").strip()
+                    if text:
+                        texts.append(text)
+            return "|".join(texts)
     except Exception:
         logger.debug("OCR 识别失败", exc_info=True)
     return ""

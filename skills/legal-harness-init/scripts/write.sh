@@ -67,6 +67,9 @@ DRY_RUN=false
 FORCE=false
 BLOCK_ID=""
 PRIVACY_MODE="strict"
+RECORD_INIT_ENV="true"
+INIT_ACTION="init"
+MODEL=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -77,6 +80,9 @@ while [ $# -gt 0 ]; do
         --project-dir) [ $# -ge 2 ] || die "--project-dir 需要参数"; PROJECT_DIR="$2"; shift 2 ;;
         --block-id) [ $# -ge 2 ] || die "--block-id 需要参数"; BLOCK_ID="$2"; shift 2 ;;
         --privacy-mode) [ $# -ge 2 ] || die "--privacy-mode 需要参数"; PRIVACY_MODE="$2"; shift 2 ;;
+        --record-init-env) [ $# -ge 2 ] || die "--record-init-env 需要参数"; RECORD_INIT_ENV="$2"; shift 2 ;;
+        --init-action) [ $# -ge 2 ] || die "--init-action 需要参数"; INIT_ACTION="$2"; shift 2 ;;
+        --model) [ $# -ge 2 ] || die "--model 需要参数"; MODEL="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
         --force) FORCE=true; shift ;;
         -h|--help) sed -n '3,30p' "$0"; exit 0 ;;
@@ -90,6 +96,8 @@ done
 case "$LEVEL" in user|project) ;; *) die "--level 必须是 user 或 project" ;; esac
 case "$MODE" in create|update|append) ;; *) die "--mode 必须是 create / update / append" ;; esac
 case "$PRIVACY_MODE" in strict|local|team) ;; *) die "--privacy-mode 必须是 strict / local / team" ;; esac
+case "$RECORD_INIT_ENV" in true|false) ;; *) die "--record-init-env 必须是 true 或 false" ;; esac
+case "$INIT_ACTION" in init|update|append) ;; *) die "--init-action 必须是 init / update / append" ;; esac
 
 [ -n "$BLOCK_ID" ] || BLOCK_ID="legal-baseline-${LEVEL}"
 case "$BLOCK_ID" in
@@ -416,6 +424,23 @@ EOF
     printf '=== %s 已 upsert 受管区块 %s ===\n' "$target" "$BLOCK_ID" >&2
     if [ -n "$snapshot_backup" ]; then status="updated"; else status="written"; fi
     emit_result "$labels" "$target" "$status" "$snapshot_backup" "$original_backup" "已按实际路径去重并原子写入" "$before_sha" "$after_sha"
+
+    # === 真实落盘后自动调 record-init-env.sh 记录 init-environment ===
+    # 默认 RECORD_INIT_ENV=true；--record-init-env=false 显式关闭（如批量脚本场景）。
+    # 失败不阻断：AGENTS.md 已落盘,init-environment 是 metadata;模型探测失败时
+    # record-init-env.sh 会输出 hint 让 agent 后续手动补,不静默用 unknown。
+    if [ "${RECORD_INIT_ENV:-true}" = "true" ]; then
+        init_args=(--target "$target" --action "${INIT_ACTION:-init}")
+        [ -n "${MODEL:-}" ] && init_args+=(--model "$MODEL")
+        init_output=$(bash "${SCRIPT_DIR}/record-init-env.sh" "${init_args[@]}" 2>&1) && init_rc=0 || init_rc=$?
+        if [ "$init_rc" -eq 0 ]; then
+            printf '=== init-environment 已记录到 %s ===\n' "$target" >&2
+        else
+            printf '⚠️  init-environment 记录失败（exit %s）；AGENTS.md 已落盘,后续可手动补\n' "$init_rc" >&2
+            printf '%s\n' "$init_output" >&2
+            printf '   手动命令：bash scripts/record-init-env.sh --target %s --action %s [--model <name>]\n' "$target" "${INIT_ACTION:-init}" >&2
+        fi
+    fi
 done
 
 cat <<EOF

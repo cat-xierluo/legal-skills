@@ -540,6 +540,40 @@ def infer_page_scale(page_rect, rows, source_w, source_h) -> tuple[float, float]
     return 0.0, 0.0
 
 
+def infer_y_origin(rows, source_h: float) -> str:
+    """判定 PaddleOCR poly y 原点:'bottom' (PDF 习惯, 多数文档) 或 'top'。
+
+    启发:取所有 poly y 中心值的中位数,与 source_h/2 比较。
+    - 中位数 < source_h × 0.4 → 多数文字集中在源图上半 → 假设 FROM BOTTOM
+      (顶部文字的 y 接近 source_h,即底原点下"大",与直觉相反 — 但这是 PaddleOCR
+      返 y FROM BOTTOM 时的常见特征:正文/标题在顶部, poly y 接近 source_h)。
+    - 中位数 > source_h × 0.6 → 多数文字集中在源图下半 → 假设 FROM TOP
+      (顶部文字的 y 接近 0,即顶原点下"小")。
+    - 模糊区间(0.4~0.6) → 保守返回 'bottom',不翻(避免误判放大问题)。
+
+    Returns:
+        'bottom' | 'top'
+    """
+    if not rows or source_h <= 0:
+        return "bottom"
+    centers: list[float] = []
+    for _, _, poly in rows:
+        if not poly or len(poly) < 4:
+            continue
+        try:
+            ys = [float(p[1]) for p in poly]
+        except (TypeError, ValueError):
+            continue
+        centers.append((min(ys) + max(ys)) / 2.0)
+    if not centers:
+        return "bottom"
+    centers.sort()
+    mid = centers[len(centers) // 2]
+    if mid > source_h * 0.6:
+        return "top"
+    return "bottom"
+
+
 def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float) -> dict:
     """v2.7 新增：评估 OCR 坐标空间与 PDF 页面空间的一致性。
 
@@ -726,20 +760,37 @@ def _insert_text_blocks(
     total_pages: int,
     quiet: bool,
     semantic_paragraphs: list[dict] | None = None,
+    y_origin: str = "bottom",
+    page_rect: fitz.Rect | None = None,
+    source_h: float | None = None,
+    skip_decorative: bool = True,
 ) -> int:
     import fitz
     """
     向单个 PDF 页面插入透明文字块。
+
+    Args:
+        y_origin: 'bottom' (PaddleOCR 多数情况,poly y 已是 PDF y) 或
+                  'top' (需要 y 翻转: pdf_y = source_h - poly_y 后再 * scale_y)
+        page_rect: 页面矩形(用于 P1 装饰元素过滤的边距检查)
+        source_h: 源图高度(用于 y 翻转)
+        skip_decorative: True 时过滤 P1 装饰元素(超小字 / 边缘异常)
 
     Returns:
         插入的文本块数量。
     """
     page_inserted = 0
     plans = []
+    filtered_count = 0
 
     # v2.7：page.rotation == 0 时 derotation_matrix 是恒等矩阵，直接跳过点坐标变换
     # 避免浮点矩阵乘法引入的累积漂移（哪怕只有 1e-6 量级，叠到上千行也会偏）。
     apply_derotation = bool(page_rotation)
+
+    # P1: 装饰元素过滤阈值
+    decor_min_h = 6.0          # bbox 高度 < 6pt → 跳过
+    decor_edge_margin = 5.0    # bbox 离页边 < 5pt → 跳过
+    decor_narrow_w = 50.0      # 窄元素宽度阈值
 
     for row_index, (text, score, poly) in enumerate(rows, start=1):
         if score < min_score:
@@ -758,12 +809,19 @@ def _insert_text_blocks(
             continue
 
         try:
-            xs = [float(p[0]) * scale_x for p in poly]
-            ys = [float(p[1]) * scale_y for p in poly]
+            xs_raw = [float(p[0]) for p in poly]
+            ys_raw = [float(p[1]) for p in poly]
         except Exception as exc:
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标无效") from exc
-        if len(xs) < 4 or not all(math.isfinite(v) for v in [*xs, *ys]):
+        if len(xs_raw) < 4 or not all(math.isfinite(v) for v in [*xs_raw, *ys_raw]):
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标不完整")
+
+        # P0: y 翻转 — 若 PaddleOCR 返回的 poly y 是 FROM TOP，翻成 FROM BOTTOM
+        if y_origin == "top" and source_h:
+            ys_raw = [source_h - y for y in ys_raw]
+
+        xs = [x * scale_x for x in xs_raw]
+        ys = [y * scale_y for y in ys_raw]
 
         x0 = min(xs)
         x1 = max(xs)
@@ -774,6 +832,27 @@ def _insert_text_blocks(
         h = y1 - y0
         if w <= 0 or h <= 0:
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块边界无效")
+
+        # P1: 装饰元素过滤(放在边界检查后,放在字号计算前,节省无效规划)
+        if skip_decorative and page_rect is not None:
+            if h < decor_min_h:
+                filtered_count += 1
+                continue
+            # 边缘检测:任一边离页边 < 5pt 且 高度 < 12pt(疑似页眉/页脚小装饰)
+            edge = False
+            if (y1 < page_rect.y0 + decor_edge_margin
+                    or y0 > page_rect.y1 - decor_edge_margin
+                    or x0 < page_rect.x0 + decor_edge_margin
+                    or x1 > page_rect.x1 - decor_edge_margin):
+                if h < 12.0:
+                    edge = True
+            # 窄元素甩到对侧:宽度 < 50pt 但 bbox 中心明显偏离正常文字边距
+            if w < decor_narrow_w and h < 10.0 and (x0 > page_rect.x1 * 0.75 or x1 < page_rect.x0 * 0.25):
+                edge = True
+            if edge:
+                filtered_count += 1
+                continue
+
         fontsize = calculate_font_size(font, content, w, h)
         if fontsize <= 0:
             raise TextLayerIntegrityError(
@@ -782,6 +861,8 @@ def _insert_text_blocks(
         plans.append((row_index - 1, content, x0, y1, w, h, fontsize))
 
     if not plans:
+        if filtered_count and not quiet:
+            print(f"  第 {pno}/{total_pages} 页({source_name}): 过滤 {filtered_count} 个装饰元素")
         return 0
 
     # 所有文字块预检通过后再修改页面，避免出现“前半页写入、后半页失败”。
@@ -935,6 +1016,19 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
             source_h,
         )
 
+        # v2.11: PaddleOCR poly y 原点自动判定(bottom/top)
+        y_origin_arg = getattr(args, "paddle_yflip", "auto")
+        if y_origin_arg == "auto":
+            y_origin = infer_y_origin(rows, source_h or 0)
+        elif y_origin_arg == "none":
+            y_origin = "bottom"
+        else:
+            y_origin = y_origin_arg
+        if y_origin == "top" and not args.quiet:
+            print(
+                f"  第 {pno}/{total_pages} 页({source_name}): 检测到 poly y 原点为 top，启用 y 翻转"
+            )
+
         # v2.7: 坐标健康度评估 — 证不出就退化
         health = assess_ocr_coordinate_health(rows, page.rect, scale_x, scale_y)
         health_log.append({"page": pno, **health})
@@ -967,6 +1061,10 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
                 total_pages=total_pages,
                 quiet=args.quiet,
                 semantic_paragraphs=entry.get("semantic_paragraphs") or [],
+                y_origin=y_origin,
+                page_rect=page.rect,
+                source_h=source_h,
+                skip_decorative=getattr(args, "layered_filter_decorative", True),
             )
         except TextLayerIntegrityError as exc:
             failure_reason = f"第 {pno} 页文字层不完整：{exc}"

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "short_motion_candidate_group_ids": ["short-001"],
+  "short_motion_preserved_group_ids": ["short-001"],
+  "base_frame_ids": ["frame-a", "frame-b"],
+  "vision_operation": "subtract_only",
+  "vision_output_frame_ids": ["frame-b"],
+  "mutations": [{"target_id": "frame-a", "coverage_id": "frame-b", "confidence": 0.95, "local_risk": true, "local_coverage_eligible": true}],
+  "final_frame_ids": ["frame-b"]
+}

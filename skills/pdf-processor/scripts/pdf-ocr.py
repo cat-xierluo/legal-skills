@@ -719,6 +719,27 @@ def main():
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--paddle-yflip",
+        choices=("auto", "bottom", "top", "none"),
+        default="auto",
+        help=(
+            "PaddleOCR poly y 原点处理。auto=按 poly 分布判定(默认,推荐);"
+            "bottom=假设 FROM BOTTOM 不翻;top=强制 FROM TOP 翻转;"
+            "none=同 bottom(兼容旧行为)。"
+            "已知症状:某些文档的页码会跑到页面顶部,就是 PaddleOCR 返回了 FROM TOP。"
+        ),
+    )
+    parser.add_argument(
+        "--layered-filter-decorative",
+        dest="layered_filter_decorative",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "叠层前过滤 PaddleOCR 版面定位错误的装饰元素(超小字/边缘异常/甩到对侧)。"
+            "默认开启,加 --no-layered-filter-decorative 可关闭。"
+        ),
+    )
+    parser.add_argument(
         "--paddle-min-score",
         type=float,
         default=0.5,
