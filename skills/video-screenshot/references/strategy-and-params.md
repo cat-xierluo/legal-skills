@@ -21,7 +21,10 @@
 - 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段，记录为 `temporal_transition`；
 - 三帧分析能把当前帧解释为“前一页尾部 + 后一页头部”横向拼合时，记录为 `temporal_mixed_transition`；
 - 视频开头、结尾或没有双侧稳定锚点的运动段不得整段删除，默认每 `--motion-chunk-seconds 2.50` 选择一张代表帧；
+- 默认跨度会按运动段的纵向滚动重叠自适应：高重叠连续滚动使用 `1.45×`，中等重叠使用 `1.25×`，内容快速变化使用 `0.8×`；最终值限制在 `1.4—4.5` 秒；
 - 需要更密地覆盖快速滚动时，把 `--motion-chunk-seconds` 降到 `1.5`；希望进一步精简时可提高到 `3.0`，但必须抽查覆盖。
+
+`_report.json` 每张运动代表帧记录 `adaptive_chunk_seconds`、`motion_density_mode` 和 `scroll_match_ratio`；汇总记录 `adaptive_motion_group_count`。这些字段解释密度选择，不单独作为删除证据。
 
 用 `--no-temporal-select` 可复现旧版逐帧流程，只用于算法排查或兼容，不作为推荐默认值。
 
@@ -62,11 +65,14 @@
 - **空白页**：内容区域标准差接近 0，或大面积纯白/纯黑
 - **启动/控制画面**：录屏开始/结束时的控制面板、系统界面（低信息密度）
 - **过渡帧**：页面切换时上下半屏内容不一致（部分区域空白，部分有内容）
+- **高置信加载浮层**：中央存在高对比亮卡片、周边一致压暗且综合分数达到保守阈值
 
 基于 3×3 网格分析帧的内容分布：计算每个网格区域的标准差，检测内容分布是否均匀。
 
 - `--filter-quality`：启用内容质量过滤（默认开启）
 - `--no-filter-quality`：禁用内容质量过滤
+
+代码只自动丢弃 `loading_overlay`。仅疑似未加载完整的 `incomplete_page` 不直接删除，而是在报告中保留 `loading_overlay_label/score`，交由前后帧视觉审计。合法白底正文页不能只因白色比例高被删除。
 
 ### 模糊帧过滤 (`--filter-blur`)
 
@@ -134,14 +140,28 @@ SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32
 - `--min-gap 0.5`（默认）：减少同秒多图，同时尽量保留快速变化
 - `--min-gap 1.0`：更严格，每秒最多保留约一张，适合先压缩冗余再人工复核
 
-### OCR 去重参数
+### OCR 内容增量参数
 
 需要 `--ocr-dedup` 标志开启，需要安装 `rapidocr-onnxruntime`。
+
+推荐直接运行：
+
+```bash
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i <视频路径> --ocr-dedup
+```
 
 - `--ocr-threshold 0.92`（默认）：OCR 文本相似度超过 92% 且新字符少于 8 个时视为重复
 - `--ocr-min-new 8`（默认）：最少新字符数，防止因少量文字变化被误判为重复
 
 OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ 灰度 → 自动对比度 → 对比度增强 1.35x → 锐化 1.15x。动态范围 < 18 的帧跳过 OCR（如纯黑/纯白画面）。
+
+OCR 先计算最近 4 张保留帧的文本相似度、新增三字片段和新增证据数字。1—2 位易变数字不参与保护，减少状态栏时钟和视频时间码带来的假增量。只有以下强增量可以否决 dHash、像素差或 SSIM 的近似删除：
+
+- 页面相似度至少 0.72，且出现新的金额或至少 3 位连续编号；
+- 页面相似度至少 0.82，且新增文字片段达到 `max(16, 2×--ocr-min-new)`。
+
+SHA256 完全重复和 `--min-gap` 不接受 OCR 覆盖。报告只保存相似度和增量计数，不保存 OCR 原文；`ocr_visual_overrides` 记录被强内容增量保护的帧数。
 
 ## 复合复核参数
 
@@ -157,12 +177,15 @@ OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ �
 
 该模式用于漏帧排查，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。多模态默认先运行 `prepare_vision_audit.py`，只审计本地层选择的高风险短名单。
 
+候选池达到上限后，`quality_loading_overlay` 和 `quality_transition` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去复核机会。视觉审计会为加载浮层建立专属组；它已经不在基础结果中，只有 `keep` 才会补回。
+
 ### 候选帧数量限制 (`--drop-candidate-limit`)
 
 默认 `--drop-candidate-limit 200`；一般排查建议显式设为 `80`。如需完整回查可设为 `0`，但长视频可能产生大量图片。
 
 ```bash
-uv run scripts/extract.py -i recording.mp4 --ocr-dedup --keep-drop-candidates
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i recording.mp4 --ocr-dedup --keep-drop-candidates
 uv run scripts/extract.py -i recording.mp4 --keep-drop-candidates --drop-candidate-limit 0
 ```
 
@@ -180,9 +203,11 @@ uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --
 - 纵向内部拼接缝风险较高；
 - 三帧横向混合页风险；
 - 与相邻保留帧间隔过密；
+- 疑似未加载完整页面；
+- OCR 高相似低增量或新增证据数字；
 - 附近存在可替代的丢弃候选。
 
-高度重叠的相邻三帧窗口只保留优先级更高者。`max_groups` 和 `max_images` 是硬预算，生成结果不得超过任一上限。决策合同、JSON 示例和应用方式见 `references/vision-audit.md`。
+高度重叠的相邻三帧窗口只保留优先级更高者。选组在风险优先基础上给未覆盖时间段有限加分，`budget.covered_time_buckets` 记录覆盖的 30 秒区段。`max_groups` 和 `max_images` 是硬预算，生成结果不得超过任一上限。决策合同、JSON 示例和应用方式见 `references/vision-audit.md`。
 
 ## 输出参数
 
@@ -238,7 +263,8 @@ frame_NNN_MMmSSs.jpg
     "selected_before_dedup": 73,
     "stable_run_count": 21,
     "transition_drop_count": 57,
-    "low_confidence_selection_count": 52
+    "low_confidence_selection_count": 52,
+    "adaptive_motion_group_count": 11
   },
   "dedup_stats": {
     "sha256_duplicates": 3,
@@ -253,7 +279,16 @@ frame_NNN_MMmSSs.jpg
       "index": 1,
       "filename": "frame_001_00m00s.jpg",
       "capture_time_seconds": 0.0,
-      "sha256": "abc123..."
+      "sha256": "abc123...",
+      "loading_overlay_label": "",
+      "adaptive_chunk_seconds": 3.125,
+      "motion_density_mode": "scroll_mixed",
+      "scroll_match_ratio": 0.48,
+      "content_delta": {
+        "ocr_available": false,
+        "has_new_content": false,
+        "protect_visual_duplicate": false
+      }
     }
   ]
 }

@@ -510,6 +510,40 @@ def scroll_overlap_duplicate(
     return False
 
 
+def scroll_overlap_metrics(
+    previous: Image.Image | None,
+    current: Image.Image | None,
+    *,
+    min_shift: int = 4,
+    max_shift_ratio: float = 0.35,
+    min_overlap_ratio: float = 0.70,
+    step: int = 4,
+) -> dict[str, Any]:
+    """返回相邻两帧的最佳纵向滚动重叠指标，不直接作删除决定。"""
+    empty = {"diff": 999.0, "overlap_ratio": 0.0, "shift": 0, "matched": False}
+    if previous is None or current is None or previous.size != current.size:
+        return empty
+    width, height = current.size
+    if width <= 0 or height <= 0:
+        return empty
+    max_shift = max(min_shift, int(round(height * max_shift_ratio)))
+    best = dict(empty)
+    for shift in range(-max_shift, max_shift + 1, max(1, step)):
+        if abs(shift) < min_shift:
+            continue
+        diff, overlap = _shifted_mean_abs_diff(previous, current, shift)
+        if overlap < min_overlap_ratio:
+            continue
+        if diff < float(best["diff"]):
+            best = {
+                "diff": float(diff),
+                "overlap_ratio": float(overlap),
+                "shift": int(shift),
+                "matched": True,
+            }
+    return best
+
+
 # 3x3 Laplacian 卷积核（用于模糊检测）
 _LAPLACIAN = ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0)
 
@@ -574,6 +608,95 @@ def calc_content_quality(image_bytes: bytes) -> dict[str, Any]:
         "grid_high": grid_high,
         "grid_spread": grid_spread,
     }
+
+
+def calc_loading_overlay_score(image_bytes: bytes) -> dict[str, Any]:
+    """保守估计居中加载遮罩风险；只在高置信时供本地质量过滤使用。"""
+    empty = {
+        "score": 0.0,
+        "label": "",
+        "center_bright_ratio": 0.0,
+        "center_std": 0.0,
+        "surround_darkening": 0.0,
+        "center_border_contrast": 0.0,
+    }
+    if not image_bytes:
+        return empty
+    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    width, height = img.size
+    if width < 40 or height < 80:
+        return empty
+    # 手机加载框通常位于中部，面积约为画面的 12%—25%。同时要求外围被遮罩压暗，
+    # 避免把普通白色内容卡片、聊天气泡或大面积白底页面误判成加载态。
+    box = (
+        int(width * 0.27),
+        int(height * 0.35),
+        int(width * 0.73),
+        int(height * 0.68),
+    )
+    inner = (
+        int(width * 0.35),
+        int(height * 0.42),
+        int(width * 0.65),
+        int(height * 0.61),
+    )
+    center = img.crop(box)
+    inner_center = img.crop(inner)
+    full_mean = float(ImageStat.Stat(img).mean[0])
+    center_stat = ImageStat.Stat(center)
+    center_mean = float(center_stat.mean[0])
+    center_std = float(center_stat.stddev[0])
+    hist = inner_center.histogram()
+    total = max(1, inner_center.size[0] * inner_center.size[1])
+    bright_ratio = sum(hist[238:]) / float(total)
+    surround_darkening = max(0.0, center_mean - full_mean)
+    # 中央亮块与稍大邻域的亮度落差，用于识别弹出的白色加载卡片边界。
+    side_regions = [
+        img.crop((int(width * 0.23), int(height * 0.42), int(width * 0.34), int(height * 0.61))),
+        img.crop((int(width * 0.66), int(height * 0.42), int(width * 0.77), int(height * 0.61))),
+        img.crop((int(width * 0.27), int(height * 0.35), int(width * 0.73), int(height * 0.42))),
+    ]
+    side_means = [float(ImageStat.Stat(region).mean[0]) for region in side_regions]
+    side_stds = [float(ImageStat.Stat(region).stddev[0]) for region in side_regions]
+    surround_mean = sum(side_means) / float(len(side_means))
+    surround_std = sum(side_stds) / float(len(side_stds))
+    border_contrast = max(0.0, float(ImageStat.Stat(inner_center).mean[0]) - surround_mean)
+    score = 0.0
+    if bright_ratio >= 0.58:
+        score += min(0.42, (bright_ratio - 0.58) * 1.4 + 0.18)
+    if surround_darkening >= 22.0:
+        score += min(0.32, (surround_darkening - 22.0) / 80.0 + 0.12)
+    if border_contrast >= 20.0:
+        score += min(0.26, (border_contrast - 20.0) / 70.0 + 0.08)
+    overlay_shape = surround_std <= 22.0 and border_contrast >= 55.0
+    if overlay_shape:
+        score += 0.28
+    # 纯白空页的中央区域过于平坦且外围并不明显变暗，不应命中。
+    if center_std < 8.0 and surround_darkening < 28.0:
+        score *= 0.25
+    final_score = max(0.0, min(1.0, score))
+    label = ""
+    if final_score >= 0.88:
+        label = "loading_overlay" if overlay_shape else "incomplete_page"
+    return {
+        "score": final_score,
+        "label": label,
+        "center_bright_ratio": bright_ratio,
+        "center_std": center_std,
+        "surround_darkening": surround_darkening,
+        "center_border_contrast": border_contrast,
+    }
+
+
+def transient_ui_drop_reason(metrics: dict[str, Any]) -> str:
+    """仅把高置信加载浮层交给代码自动丢弃；未完成页留给视觉审计。"""
+    if (
+        str(metrics.get("label") or "") == "loading_overlay"
+        and float(metrics.get("score") or 0.0) >= 0.92
+        and float(metrics.get("center_border_contrast") or 0.0) >= 55.0
+    ):
+        return "quality_loading_overlay"
+    return ""
 
 
 def calc_vertical_seam_score(image_bytes: bytes, *, width: int = 96, height: int = 160) -> float:
@@ -732,7 +855,15 @@ def temporal_frame_metrics(
         "ssim_thumb": ssim_thumb,
         "blur_score": calc_blur_score(image_bytes),
         "quality": quality,
+        "loading_overlay": calc_loading_overlay_score(image_bytes),
         "seam_score": calc_vertical_seam_score(image_bytes),
+        "scroll_image": calc_scroll_image(
+            image_bytes,
+            crop_top_ratio=crop_top_ratio,
+            crop_bottom_ratio=crop_bottom_ratio,
+            crop_left_ratio=crop_left_ratio,
+            crop_right_ratio=crop_right_ratio,
+        ),
         "transition_image": calc_transition_image(image_bytes),
     }
 
@@ -779,7 +910,46 @@ def _temporal_selection_score(
         "startup": 1.5,
         "transition": 1.2,
     }.get(label, 0.0)
-    return blur_component + dwell_component + prefer_later - seam_penalty - mixed_penalty - quality_penalty
+    loading_metrics = item.get("loading_overlay") or {}
+    loading_score = max(0.0, float(loading_metrics.get("score") or 0.0))
+    loading_penalty = min(
+        4.0,
+        loading_score * (4.0 if loading_metrics.get("label") == "loading_overlay" else 1.0),
+    )
+    return (
+        blur_component + dwell_component + prefer_later
+        - seam_penalty - mixed_penalty - quality_penalty - loading_penalty
+    )
+
+
+def _adaptive_motion_chunk_seconds(
+    positions: list[int],
+    items: list[dict[str, Any]],
+    base_seconds: float,
+) -> tuple[float, str, float]:
+    """按相邻滚动重叠估计运动段密度；仅在高重叠时放宽保留跨度。"""
+    if len(positions) < 2:
+        return base_seconds, "base", 0.0
+    matches = 0
+    comparable = 0
+    for previous_pos, current_pos in zip(positions, positions[1:]):
+        metric = scroll_overlap_metrics(
+            items[previous_pos].get("scroll_image"),
+            items[current_pos].get("scroll_image"),
+        )
+        if not metric["matched"]:
+            continue
+        comparable += 1
+        if float(metric["diff"]) <= 28.0 and float(metric["overlap_ratio"]) >= 0.70:
+            matches += 1
+    ratio = matches / float(comparable or 1)
+    if comparable >= 2 and ratio >= 0.65:
+        return min(4.5, base_seconds * 1.45), "scroll_redundant", ratio
+    if comparable >= 2 and ratio >= 0.35:
+        return min(4.0, base_seconds * 1.25), "scroll_mixed", ratio
+    if comparable >= 2 and ratio <= 0.20:
+        return max(1.4, base_seconds * 0.80), "content_rich", ratio
+    return base_seconds, "base", ratio
 
 
 def select_temporal_representatives(
@@ -957,6 +1127,12 @@ def select_temporal_representatives(
                 transition_drop_count += 1
             continue
 
+        adaptive_chunk_seconds, density_mode, scroll_match_ratio = _adaptive_motion_chunk_seconds(
+            positions,
+            items,
+            motion_chunk_seconds,
+        )
+
         chunks: list[list[int]] = []
         chunk: list[int] = []
         chunk_start_time: float | None = None
@@ -967,7 +1143,7 @@ def select_temporal_representatives(
                 chunk
                 and chunk_start_time is not None
                 and cur_float is not None
-                and cur_float - chunk_start_time > motion_chunk_seconds
+                and cur_float - chunk_start_time > adaptive_chunk_seconds
             ):
                 chunks.append(chunk)
                 chunk = []
@@ -992,6 +1168,9 @@ def select_temporal_representatives(
                 "temporal_reason": "motion_representative",
                 "temporal_group_id": f"{group_name}-{chunk_id:02d}",
                 "selection_confidence": "low",
+                "adaptive_chunk_seconds": adaptive_chunk_seconds,
+                "motion_density_mode": density_mode,
+                "scroll_match_ratio": scroll_match_ratio,
             })
             selected.append(chosen)
             selected_indices.add(best)
@@ -1019,6 +1198,9 @@ def select_temporal_representatives(
         "motion_redundant_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_motion_redundant"),
         "low_confidence_selection_count": low_confidence_count,
         "selected_before_dedup": len(selected),
+        "adaptive_motion_group_count": sum(
+            1 for item in selected if item.get("motion_density_mode") not in (None, "base")
+        ),
     }
 
 
@@ -1129,6 +1311,8 @@ class DedupState:
     min_gap_drops: int = 0
     temporal_drops: int = 0
     temporal_transition_drops: int = 0
+    transient_ui_drops: int = 0
+    ocr_visual_overrides: int = 0
     kept_count: int = 0
     total_count: int = 0
 
@@ -1180,9 +1364,41 @@ def check_ocr_similarity(
     ocr_min_new_chars: int,
 ) -> bool:
     """检查 OCR 文本是否与最近帧重复，返回 True 表示重复应跳过。"""
-    if not ocr_text or not kept_ocr_texts:
-        return False
+    return bool(ocr_content_delta(
+        ocr_text,
+        kept_ocr_texts,
+        kept_ocr_shingles,
+        ocr_similarity_threshold,
+        ocr_min_new_chars,
+    )["redundant"])
+
+
+def ocr_content_delta(
+    ocr_text: str,
+    kept_ocr_texts: list[str],
+    kept_ocr_shingles: list[set[str]],
+    ocr_similarity_threshold: float,
+    ocr_min_new_chars: int,
+) -> dict[str, Any]:
+    """比较最近 OCR 内容，返回可报告的增量指标；不保存原文到报告。"""
     cur_set = shingles(ocr_text)
+    # 排除视频时间码、状态栏时钟等 1—2 位易变数字；金额或至少 3 位的
+    # 连续编号才作为潜在证据数字，避免 OCR 把每秒变化误判为内容增量。
+    evidence_number_pattern = r"(?:￥|¥)\s*\d[\d,.]*|(?<![\d:])\d{3,}(?:[,.]\d+)?(?![\d:])"
+    current_numbers = set(re.findall(evidence_number_pattern, ocr_text or ""))
+    if not ocr_text or not kept_ocr_texts:
+        return {
+            "available": bool(ocr_text),
+            "similarity": 0.0,
+            "new_token_count": len(cur_set),
+            "new_numeric_count": len(current_numbers),
+            "redundant": False,
+            "has_new_content": bool(cur_set or current_numbers),
+            "protect_visual_duplicate": False,
+        }
+    best_similarity = 0.0
+    min_new_tokens = len(cur_set)
+    recent_numbers: set[str] = set()
     for prev_text, prev_set in zip(
         kept_ocr_texts[-4:],
         kept_ocr_shingles[-4:],
@@ -1193,9 +1409,28 @@ def check_ocr_similarity(
         jac_sim = jaccard_sets(prev_set, cur_set)
         sim = max(seq_sim, jac_sim)
         new_tokens = len(cur_set - prev_set) if prev_set else len(cur_set)
-        if sim >= ocr_similarity_threshold and new_tokens < ocr_min_new_chars:
-            return True
-    return False
+        best_similarity = max(best_similarity, sim)
+        min_new_tokens = min(min_new_tokens, new_tokens)
+        recent_numbers.update(re.findall(evidence_number_pattern, prev_text or ""))
+    new_numbers = current_numbers - recent_numbers
+    has_new_content = min_new_tokens >= ocr_min_new_chars or bool(new_numbers)
+    redundant = best_similarity >= ocr_similarity_threshold and not has_new_content
+    protect_visual_duplicate = (
+        (bool(new_numbers) and best_similarity >= 0.72)
+        or (
+            best_similarity >= 0.82
+            and min_new_tokens >= max(16, ocr_min_new_chars * 2)
+        )
+    )
+    return {
+        "available": True,
+        "similarity": best_similarity,
+        "new_token_count": min_new_tokens,
+        "new_numeric_count": len(new_numbers),
+        "redundant": redundant,
+        "has_new_content": has_new_content,
+        "protect_visual_duplicate": protect_visual_duplicate,
+    }
 
 
 def is_frame_duplicate(
@@ -1316,8 +1551,8 @@ def create_ocr_engine():
         return _ocr_engine
     except ImportError:
         logger.warning(
-            "rapidocr-onnxruntime 未安装，OCR 去重不可用。"
-            "安装方式: pip install rapidocr-onnxruntime"
+            "rapidocr-onnxruntime 未安装，OCR 内容增量不可用。"
+            "运行方式: uv run --with rapidocr-onnxruntime scripts/extract.py ... --ocr-dedup"
         )
         return None
 
@@ -1329,7 +1564,15 @@ def ocr_extract_text(ocr_engine: Any, image_bytes: bytes) -> str:
     try:
         result, _ = ocr_engine(image_bytes)
         if result:
-            return "|".join(line[-1] for line in result)
+            texts: list[str] = []
+            for line in result:
+                # RapidOCR 行结构是 [box, text, confidence]；旧实现取 line[-1]
+                # 实际拼接了置信度数字，导致 OCR 去重几乎失效。
+                if isinstance(line, (list, tuple)) and len(line) >= 2:
+                    text = str(line[1] or "").strip()
+                    if text:
+                        texts.append(text)
+            return "|".join(texts)
     except Exception:
         logger.debug("OCR 识别失败", exc_info=True)
     return ""

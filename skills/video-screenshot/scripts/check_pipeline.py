@@ -22,8 +22,15 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from extract import _clean_output_dir
-from lib import horizontal_mixed_transition_score, select_temporal_representatives
+from extract import _clean_output_dir, _record_drop_candidate
+from lib import (
+    calc_loading_overlay_score,
+    horizontal_mixed_transition_score,
+    ocr_content_delta,
+    ocr_extract_text,
+    select_temporal_representatives,
+    transient_ui_drop_reason,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -37,7 +44,11 @@ def parse_args() -> argparse.Namespace:
             "all",
             "temporal",
             "mixed-transition",
+            "content-delta",
+            "transient-ui",
+            "adaptive-density",
             "vision-budget",
+            "vision-diversity",
             "valid-review",
             "replace-review",
             "invalid-review",
@@ -161,6 +172,113 @@ def _test_mixed_transition() -> None:
     assert result["score"] < 0.58, result
 
 
+def _test_content_delta() -> None:
+    previous = "用户张三订单金额￥1200收货地址北京市朝阳区"
+    previous_set = set(previous[idx:idx + 3] for idx in range(len(previous) - 2))
+    redundant = ocr_content_delta(previous, [previous], [previous_set], 0.92, 8)
+    assert redundant["redundant"] is True, redundant
+    assert redundant["has_new_content"] is False, redundant
+
+    # 近似页面新增金额属于关键证据，即使整体文字高度相似也必须保留。
+    changed = previous + "另行支付￥680"
+    changed_delta = ocr_content_delta(changed, [previous], [previous_set], 0.80, 20)
+    assert changed_delta["has_new_content"] is True, changed_delta
+    assert changed_delta["new_numeric_count"] >= 1, changed_delta
+    assert changed_delta["redundant"] is False, changed_delta
+    assert changed_delta["protect_visual_duplicate"] is True, changed_delta
+
+    # 1—2 位时间码变化不是证据数字，不得推翻图像去重。
+    clock_changed = ocr_content_delta(previous + "00:01:13", [previous + "00:01:12"], [previous_set], 0.80, 20)
+    assert clock_changed["new_numeric_count"] == 0, clock_changed
+    assert clock_changed["protect_visual_duplicate"] is False, clock_changed
+
+    def fake_ocr(_image_bytes: bytes) -> tuple[list[list[object]], None]:
+        return [
+            [[[0, 0], [1, 0], [1, 1], [0, 1]], "订单金额1200元", 0.98],
+            [[[0, 2], [1, 2], [1, 3], [0, 3]], "收货地址北京", 0.96],
+        ], None
+
+    parsed = ocr_extract_text(fake_ocr, b"fixture")
+    assert parsed == "订单金额1200元|收货地址北京", parsed
+
+
+def _image_bytes(image: Image.Image) -> bytes:
+    import io
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _test_transient_ui() -> None:
+    width, height = 360, 640
+    loading = Image.new("L", (width, height), 95)
+    draw = ImageDraw.Draw(loading)
+    draw.rectangle((126, 224, 234, 435), fill=245)
+    draw.ellipse((155, 285, 205, 335), outline=150, width=7)
+    draw.text((140, 350), "loading", fill=80)
+    loading_result = calc_loading_overlay_score(_image_bytes(loading))
+    assert loading_result["label"] in {"loading_overlay", "incomplete_page"}, loading_result
+    if loading_result["label"] == "loading_overlay":
+        assert transient_ui_drop_reason(loading_result) == "quality_loading_overlay", loading_result
+
+    # 低信息白页可能值得审计，但代码不得因“疑似未完成”就直接删除。
+    incomplete = dict(loading_result)
+    incomplete["label"] = "incomplete_page"
+    incomplete["score"] = 0.99
+    assert transient_ui_drop_reason(incomplete) == "", incomplete
+
+    # 合法白底长页可包含大量文字/线条，不能只因白色比例高而判加载或未完成页。
+    legal_page = Image.new("L", (width, height), 250)
+    draw = ImageDraw.Draw(legal_page)
+    for row in range(30, 610, 28):
+        draw.line((28, row, 330, row), fill=55, width=3)
+    legal_result = calc_loading_overlay_score(_image_bytes(legal_page))
+    assert not legal_result["label"], legal_result
+
+    # 候选池已满时，高风险加载浮层必须替换普通候选，不能因时间靠后丢失审计证据。
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
+        root = Path(tmp)
+        source = root / "source.jpg"
+        loading.convert("RGB").save(source)
+        candidates: list[dict] = []
+        _record_drop_candidate(str(root), str(source), 1, "min_gap", 1.0, "a" * 64, candidates, enabled=True, limit=1)
+        _record_drop_candidate(
+            str(root), str(source), 2, "quality_loading_overlay", 2.0, "b" * 64,
+            candidates, enabled=True, limit=1, extra={"transient_ui": loading_result},
+        )
+        assert len(candidates) == 1, candidates
+        assert candidates[0]["reason"] == "quality_loading_overlay", candidates
+        assert len(list((root / "_review_candidates").glob("candidate_*.jpg"))) == 1
+
+
+def _temporal_item(index: int, seconds: float, scroll: Image.Image) -> dict:
+    return {
+        "source_index": index,
+        "capture_time_seconds": seconds,
+        "thumb": bytes([(index * 37) % 255] * (48 * 48)),
+        "ssim_thumb": bytes([(index * 37) % 255] * (32 * 32)),
+        "blur_score": 180.0,
+        "quality": {"label": ""},
+        "loading_overlay": {"score": 0.0, "label": ""},
+        "seam_score": 0.0,
+        "scroll_image": scroll,
+    }
+
+
+def _test_adaptive_density() -> None:
+    base = _pattern(96, 240)
+    scrolling: list[dict] = []
+    for idx in range(8):
+        # 同一长页逐步滚动：相邻帧有高重叠，应放宽 motion chunk，减少过密代表帧。
+        canvas = Image.new("L", (96, 160), 255)
+        canvas.paste(base.crop((0, idx * 8, 96, idx * 8 + 160)), (0, 0))
+        scrolling.append(_temporal_item(idx + 1, float(idx), canvas))
+    selected, _dropped, stats = select_temporal_representatives(scrolling, motion_chunk_seconds=2.5)
+    assert stats["adaptive_motion_group_count"] >= 1, stats
+    assert any(item.get("motion_density_mode") == "scroll_redundant" for item in selected), selected
+    assert len(selected) <= 3, selected
+
+
 def _write_fixture(root: Path) -> tuple[Path, Path]:
     frames: list[dict] = []
     for idx in range(1, 13):
@@ -210,6 +328,28 @@ def _test_vision_budget() -> None:
         assert manifest["budget"]["actual_groups"] <= 3
         assert manifest["budget"]["actual_images"] <= 7
         assert len(list(manifest_path.parent.glob("contact_sheet_*.jpg"))) == manifest["budget"]["actual_groups"]
+
+
+def _test_vision_diversity() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
+        root = Path(tmp)
+        report_path, manifest_path = _write_fixture(root)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        # 把 12 张合成帧拉开到 0—330 秒，制造多个风险相近的时间桶。
+        for idx, frame in enumerate(report["frames"]):
+            frame["capture_time_seconds"] = float(idx * 30)
+            frame["selection_confidence"] = "low"
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "prepare_vision_audit.py"), "-i", str(root), "--max-groups", "4", "--max-images", "12"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        buckets = manifest["budget"]["covered_time_buckets"]
+        assert len(buckets) >= 3, buckets
 
 
 def _run_invalid_review_fault() -> tuple[int, str, bool]:
@@ -389,7 +529,11 @@ def main() -> int:
     tests = {
         "temporal": _test_temporal,
         "mixed-transition": _test_mixed_transition,
+        "content-delta": _test_content_delta,
+        "transient-ui": _test_transient_ui,
+        "adaptive-density": _test_adaptive_density,
         "vision-budget": _test_vision_budget,
+        "vision-diversity": _test_vision_diversity,
         "valid-review": _test_valid_review,
         "replace-review": _test_replace_review,
         "invalid-review": _test_invalid_review,

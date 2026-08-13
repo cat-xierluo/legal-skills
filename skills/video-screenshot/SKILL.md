@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，按前后帧时间簇选择稳定终态，减少过密截图并过滤翻页、滑页和页面切换中间态；可生成受预算限制的联系表，交给支持图像输入的多模态模型审计重复页和可疑帧，纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
-version: "0.4.0"
+description: 视频截图提取与精筛工具。从微信、小红书、网页、会议等录屏中自动抽取关键帧，按前后帧时间簇和滚动内容增量自适应控制截图密度，保守过滤加载浮层、翻页、滑页和页面切换中间态；可用本地 OCR 保护新增金额或正文，并生成按风险与时间覆盖选组的经济型联系表，交给支持图像输入的多模态模型审计重复页和可疑帧。纯文字模型自动停在本地基础结果。触发词：视频截图、录屏截图、聊天记录截图、抽帧去重、视频关键帧提取、截图太密、过渡帧、切换页、多模态截图审计。不要用于视频压缩、视频剪辑或音频提取。
+version: "0.5.0"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -9,7 +9,7 @@ license: MIT
 
 # video-screenshot — 视频截图提取与精筛
 
-从录屏中提取可追溯的证据截图。默认先在本地执行两遍式时间簇择优；只有当前模型支持图像输入且基础结果仍需精简时，才准备少量多模态审计材料。
+从录屏中提取可追溯的证据截图。默认先在本地执行时间簇择优、内容增量精筛和高置信加载态过滤；只有当前模型支持图像输入且基础结果仍需精简时，才准备少量多模态审计材料。
 
 ## 工作流
 
@@ -20,11 +20,11 @@ license: MIT
 ### 2. 运行基础精筛
 
 ```bash
-# 默认：场景候选 + 时间簇择优 + 图像去重
+# 默认：场景候选 + 自适应时间簇择优 + 图像去重
 uv run scripts/extract.py -i <视频路径>
 
-# 聊天记录等文字型录屏：增加本地 OCR 去重
-uv run scripts/extract.py -i <视频路径> --ocr-dedup
+# 聊天记录等文字型录屏：增加本地 OCR 内容增量保护与去重
+uv run --with rapidocr-onnxruntime scripts/extract.py -i <视频路径> --ocr-dedup
 
 # 调试漏帧时才保存被丢弃候选；不要作为多模态默认输入
 uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candidate-limit 80
@@ -33,11 +33,12 @@ uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candid
 默认流程：
 
 1. 用 ffmpeg 场景变化和 2 秒保底采样生成高召回候选；
-2. 计算候选帧清晰度、内容质量、相似度和拼接风险；
+2. 计算候选帧清晰度、内容质量、相似度、滚动重叠、加载态和拼接风险；
 3. 按前后帧形成稳定段与连续运动段；
 4. 稳定段选择清晰、完整、停留时间更长的代表帧，不机械保留第一张；
-5. 前后均有稳定页的短运动段按切换过程处理；无双侧锚点或持续时间较长的滚动段按时间跨度保留代表帧；
-6. 再执行 SHA256、dHash、像素差异、SSIM、可选滚动合并和 OCR 去重。
+5. 前后均有稳定页的短运动段按切换过程处理；持续滚动段依据相邻内容重叠自适应放宽或收紧保留跨度；
+6. 只自动丢弃高置信居中加载浮层；疑似未加载页不由代码直接删除，而是提权进入视觉审计；
+7. 再执行 SHA256、dHash、像素差异、SSIM、可选滚动合并和 OCR 内容增量判断。OCR 只在高相似页面出现新增金额、长编号或足量正文时否决视觉去重。
 
 需要调参时读取 `references/strategy-and-params.md`。依赖安装见 `references/setup.md`。
 
@@ -46,7 +47,7 @@ uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candid
 检查：
 
 - `_report.json` 中 `frames` 与实际 `frame_*.jpg` 是否一致；
-- `temporal_selection` 的稳定段、运动段和切换丢弃统计；
+- `temporal_selection` 的稳定段、运动段、自适应密度和切换丢弃统计；
 - 联系表总览中是否仍有左右两页拼接、上下切换中间态或明显重复页；
 - 视频开头、结尾、长滚动和关键主体/金额/地址页面是否有覆盖。
 
@@ -65,7 +66,7 @@ uv run scripts/prepare_vision_audit.py \
   --max-images 24
 ```
 
-脚本只选择低置信、疑似拼接和相邻过密的少量组，生成 `_vision_audit/audit_manifest.json` 与联系表。按照 `references/vision-audit.md` 查看同组前后帧，输出 `_vision_review.json`。默认不得突破 8 组、24 张唯一图片；确需扩大时先向用户说明成本和隐私影响。
+脚本按风险分数与时间覆盖联合选择低置信、疑似拼接、未加载风险和相邻过密的少量组，生成 `_vision_audit/audit_manifest.json` 与联系表。按照 `references/vision-audit.md` 查看同组前后帧，输出 `_vision_review.json`。默认不得突破 8 组、24 张唯一图片；确需扩大时先向用户说明成本和隐私影响。
 
 ### 5. 应用视觉审计
 
@@ -94,8 +95,8 @@ python3 scripts/apply_vision_review.py \
 
 - 默认使用 `scene`，适合手机 App、网页和聊天录屏。
 - 默认启用 `--temporal-select`；只有复现旧版行为或排查算法时才用 `--no-temporal-select`。
-- 持续快速滚动担心漏页时，降低 `--motion-chunk-seconds`；结果仍过密时再提高。
-- OCR 是可选增强，未安装时必须清晰提示并降级；OCR 与 SSIM 并行，不再自动关闭 SSIM。
+- 持续快速滚动担心漏页时，降低 `--motion-chunk-seconds`；结果仍过密时再提高。默认值还会按滚动重叠自动乘以 0.8、1.25 或 1.45。
+- OCR 是可选增强，未安装时必须清晰提示并降级；它可能为保护新增金额或正文而比纯视觉模式多留少量帧，不能把“帧数更少”作为唯一目标。
 - `--keep-drop-candidates` 用于漏帧排查，不等于多模态审计；多模态默认读取预算 manifest。
 
 ## 依赖
@@ -113,7 +114,7 @@ python3 scripts/apply_vision_review.py \
 | 包名 | 用途 | 安装命令 |
 |---|---|---|
 | `Pillow>=10.0.0` | 图像指标、时间簇分析和联系表 | `uv run scripts/extract.py --help` 自动准备 |
-| `rapidocr-onnxruntime` | 可选 OCR 文本去重 | `pip install rapidocr-onnxruntime` |
+| `rapidocr-onnxruntime` | 可选 OCR 内容增量与文本去重 | `uv run --with rapidocr-onnxruntime scripts/extract.py -i <视频> --ocr-dedup` |
 
 ## 验收与安全边界
 
