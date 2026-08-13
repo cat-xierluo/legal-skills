@@ -4,35 +4,35 @@
 #
 # 用途：
 #   legal-harness-init 在 init 那一刻拿不到 model（多数 harness 不 export env）。
-#   init 后几秒到几分钟内,harness 会把 session 写入 jsonl,可从最近的 jsonl
-#   record 反查 message.model 字段，覆盖之前 init-environment 表里的 unknown。
+#   init 后几秒到几分钟内,harness 会把 session 写入 jsonl/trace,可从最近的
+#   record 反查 model 字段，覆盖之前 init-environment 表里的 unknown。
 #
 # 用法：
 #   bash scripts/probe-session-model.sh
 #   bash scripts/probe-session-model.sh --harness <key> [--cwd <path>] [--within <seconds>]
-#   bash scripts/probe-session-model.sh --json    # 输出 JSON 含 evidence 路径
+#   bash scripts/probe-session-model.sh --json
 #
 # 输出（stdout）：
-#   探测成功：仅打印 model 名（如 `claude-fable-5`）
+#   探测成功：仅打印 model 名
 #   探测失败：空（退出码非 0）
-#   --json: 始终输出 JSON { "status": "found"|"not_found", "model": "...", "evidence": "..." }
+#   --json: 始终输出 JSON { status, model, evidence, reason, harness, cwd }
 #
-# 当前支持：
-#   claude-code: ~/.claude/projects/<encoded-cwd>/*.jsonl，最近 <within> 秒内 mtime；
-#                读最新一条 type=assistant 记录的 message.model 字段
+# 当前支持（v0.5.2）：
+#   claude-code: ~/.claude/projects/<encoded-cwd>/*.jsonl → role=assistant.message.model
+#   qwenwork:    ~/.qwenworkcn/projects/<encoded-cwd>/*.jsonl → 同(CC 克隆,model 是平台别名)
+#   qoderwork:   ~/.qoderworkcn/projects/<encoded-cwd>/*.jsonl → 同(CC 克隆,model 是别名)
+#   myagents:    ~/.myagents/sessions/*.jsonl → 同(CC 克隆,flat 不分 cwd,model 较真实)
+#   codex:       ~/.codex/sessions/**/rollout-*.jsonl → turn_context.payload.model
+#   workbuddy:   ~/.workbuddy/traces/<pid>/trace_*.json → spans[].toolOutput chat.completion.model
+#   openclaw:    本机未发现统一会话 jsonl(logs/ 仅补全/审计);按 CC 克隆路径试,失败 not_found
+#   orca:        worktree 编排型,session 在各 worktree 的 .claude/projects,~/.orca 无统一 session → not_found
 #
-#   暂不支持（v0.5.1+ 再扩）：codex / openclaw / myagents / qoderwork /
-#                qwenwork / workbuddy / orca
-#   失败原因在 --json 的 reason 字段标注
-#
-# 隐私边界：只读 jsonl 元数据（mtime / 顶层 record 字段），不读 message.content；
-#           解析只匹配 "model":"<name>" 模式，不回显 thinking / tool_use 正文。
+# 隐私边界：只读 jsonl/trace 元数据(mtime + model 字段)，不读 message.content /
+#           thinking / tool_use 正文;解析只匹配 "model":"<name>" 模式。
 #
 # 退出码：0 = 找到；1 = 找不到；2 = 参数错误。
 
 set -u
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 die() {
     printf 'probe-session-model.sh: 错误：%s\n' "$*" >&2
@@ -51,7 +51,7 @@ json_escape() {
 
 HARNESS_OVERRIDE=""
 CWD_OVERRIDE=""
-WITHIN=600   # 10 分钟内 mtime 的 jsonl 算"当前 session"
+WITHIN=600   # 10 分钟内 mtime 的 jsonl/trace 算"当前 session"
 JSON_OUTPUT=false
 
 while [ $# -gt 0 ]; do
@@ -60,7 +60,7 @@ while [ $# -gt 0 ]; do
         --cwd)     [ $# -ge 2 ] || die "--cwd 需要参数"; CWD_OVERRIDE="$2"; shift 2 ;;
         --within)  [ $# -ge 2 ] || die "--within 需要参数"; WITHIN="$2"; shift 2 ;;
         --json)    JSON_OUTPUT=true; shift ;;
-        -h|--help) sed -n '3,30p' "$0"; exit 0 ;;
+        -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
         *) die "未知参数：$1" ;;
     esac
 done
@@ -79,101 +79,178 @@ EOF
     fi
 }
 
-# === CC: ~/.claude/projects/<encoded-cwd>/*.jsonl ===
-if [ "$HARNESS" = "claude-code" ]; then
-    # CC 编码规则：每个非字母数字字符（/, 空格, . 等）变 -,不去重
-    encoded=$(printf '%s' "$CWD" | sed -E 's/[^a-zA-Z0-9]/-/g')
-    projects_dir="$HOME/.claude/projects/${encoded}"
-    if [ ! -d "$projects_dir" ]; then
-        emit_json "not_found" "" "" "projects_dir 不存在: $projects_dir"
-        exit 1
-    fi
+# ========== 共享 helpers ==========
 
-    # 找 mtime 在 WITHIN 秒内最大的 jsonl
-    jsonl_file=""
-    while IFS= read -r f; do
-        jsonl_file="$f"
-    done < <(find "$projects_dir" -maxdepth 1 -name "*.jsonl" -type f -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null | sort -rn | head -1 | awk '{$1=""; sub(/^ /, ""); print}')
-
-    if [ -z "$jsonl_file" ] || [ ! -f "$jsonl_file" ]; then
-        emit_json "not_found" "" "" "no jsonl mtime in last ${WITHIN}s under $projects_dir"
-        exit 1
-    fi
-
-    # 找最后一条 role=assistant 的 record 提取 message.model
-    # jsonl 每条 record 一行，message 嵌套对象内含 role + model。
-    # awk 逐行处理：保留最后一条 role=assistant 的 model 字段。
-    model=$(tail -2000 "$jsonl_file" 2>/dev/null | awk '
+# CC 克隆 jsonl 提取 model:tail 后找最后一条 role=assistant 的 message.model
+# 用于 claude-code / qwenwork / qoderwork / myagents(格式同 CC)
+probe_cc_clone_model() {
+    local f="$1"
+    tail -2000 "$f" 2>/dev/null | awk '
         /"role":"assistant"/ {
-            # 在本行内匹配 "model":"..."
             if (match($0, /"model":"[^"]+"/)) {
                 current = substr($0, RSTART+9, RLENGTH-10)
                 found = 1
             }
         }
         END { if (found) print current; else print "" }
-    ')
-    if [ -n "$model" ]; then
-        emit_json "found" "$model" "$jsonl_file" "tail role=assistant 提取 message.model"
-        if [ "$JSON_OUTPUT" != true ]; then
-            printf '%s\n' "$model"
-        fi
-        exit 0
-    fi
+    '
+}
 
-    emit_json "not_found" "" "$jsonl_file" "jsonl 存在但无 role=assistant 记录或 message.model 字段"
-    exit 1
-fi
-
-# === Codex: ~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl ===
-# codex sessions 按时间分目录(年/月/日),rollout-*.jsonl;不分 cwd。
-# 结构:每行一个 record,{"type":"turn_context","payload":{"model":"gpt-5.6-sol",...}}
-# v0.5.1 实现:找最近 WITHIN 秒内 mtime 最大的 rollout,提取最后一条 turn_context.payload.model
-if [ "$HARNESS" = "codex" ]; then
-    sessions_root="$HOME/.codex/sessions"
-    if [ ! -d "$sessions_root" ]; then
-        emit_json "not_found" "" "" "sessions_root 不存在: $sessions_root"
-        exit 1
-    fi
-
-    # 递归找 rollout-*.jsonl,按 mtime 降序取最新
-    jsonl_file=""
+# 在 CC 克隆 projects 根下,按 encoded-cwd 找最近 mtime 的 jsonl
+# $1=root $2=encoded-cwd;输出 jsonl 绝对路径(找不到为空)
+find_cc_clone_jsonl() {
+    local root="$1" encoded="$2"
+    [ -d "$root" ] || return 1
+    local found=""
     while IFS= read -r f; do
-        [ -n "$f" ] && jsonl_file="$f"
-    done < <(find "$sessions_root" -name "rollout-*.jsonl" -type f -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
+        [ -n "$f" ] && found="$f"
+    done < <(find "$root" -maxdepth 2 -name "*.jsonl" -type f \
+        -path "*${encoded}*" -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
         | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null \
         | sort -rn | head -1 | awk '{$1=""; sub(/^ /, ""); print}')
+    printf '%s' "$found"
+}
 
-    if [ -z "$jsonl_file" ] || [ ! -f "$jsonl_file" ]; then
-        emit_json "not_found" "" "" "no rollout jsonl mtime in last ${WITHIN}s under $sessions_root"
-        exit 1
+# 编码 cwd 为 CC projects 子目录名(每个非字母数字字符变 -)
+encode_cwd() {
+    printf '%s' "$1" | sed -E 's/[^a-zA-Z0-9]/-/g'
+}
+
+# CC 克隆探测通用流程:$1=root。用全局 CWD 编码。
+run_cc_clone_probe() {
+    local root="$1" encoded jsonl model
+    encoded=$(encode_cwd "$CWD")
+    jsonl=$(find_cc_clone_jsonl "$root" "$encoded")
+    if [ -z "$jsonl" ] || [ ! -f "$jsonl" ]; then
+        emit_json "not_found" "" "" "no jsonl mtime in last ${WITHIN}s under $root (encoded=$encoded)"
+        return 1
     fi
-
-    # 找最后一条 turn_context 的 payload.model
-    # codex session 可能很大,但 turn_context 行数少,grep 很快,不必 tail
-    model=$(grep '"type":"turn_context"' "$jsonl_file" 2>/dev/null | awk '
-        {
-            if (match($0, /"model":"[^"]+"/)) {
-                current = substr($0, RSTART+9, RLENGTH-10)
-                found = 1
-            }
-        }
-        END { if (found) print current; else print "" }
-    ')
+    model=$(probe_cc_clone_model "$jsonl")
     if [ -n "$model" ]; then
-        emit_json "found" "$model" "$jsonl_file" "最后一条 turn_context 提取 payload.model"
-        if [ "$JSON_OUTPUT" != true ]; then
-            printf '%s\n' "$model"
-        fi
-        exit 0
+        emit_json "found" "$model" "$jsonl" "CC 克隆 role=assistant 提取 message.model"
+        [ "$JSON_OUTPUT" != true ] && printf '%s\n' "$model"
+        return 0
     fi
+    emit_json "not_found" "" "$jsonl" "jsonl 存在但无 role=assistant 记录或 message.model"
+    return 1
+}
 
-    emit_json "not_found" "" "$jsonl_file" "rollout 存在但无 turn_context 记录或 payload.model 字段"
-    exit 1
-fi
+# ========== 平台分支 ==========
 
-# === OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca ===
-# v0.5.1 暂不支持;这 6 个平台 session 机制各异(non-agents-md 多数无 jsonl),
-# 留 v0.5.2+ 研究
-emit_json "not_found" "" "" "harness=$HARNESS 在 v0.5.1 暂未实现（openclaw/myagents/qoderwork/qwenwork/workbuddy/orca 留 v0.5.2）"
-exit 1
+case "$HARNESS" in
+    claude-code)
+        run_cc_clone_probe "$HOME/.claude/projects" || exit 1
+        ;;
+    qwenwork)
+        run_cc_clone_probe "$HOME/.qwenworkcn/projects" || exit 1
+        ;;
+    qoderwork)
+        run_cc_clone_probe "$HOME/.qoderworkcn/projects" || exit 1
+        ;;
+    myagents)
+        # myagents sessions flat 不分 cwd,取最近 mtime 最大者
+        root="$HOME/.myagents/sessions"
+        if [ ! -d "$root" ]; then
+            emit_json "not_found" "" "" "sessions_root 不存在: $root"
+            exit 1
+        fi
+        jsonl=""
+        while IFS= read -r f; do
+            [ -n "$f" ] && jsonl="$f"
+        done < <(find "$root" -maxdepth 1 -name "*.jsonl" -type f \
+            -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
+            | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null \
+            | sort -rn | head -1 | awk '{$1=""; sub(/^ /, ""); print}')
+        if [ -z "$jsonl" ] || [ ! -f "$jsonl" ]; then
+            emit_json "not_found" "" "" "no session jsonl mtime in last ${WITHIN}s under $root"
+            exit 1
+        fi
+        model=$(probe_cc_clone_model "$jsonl")
+        if [ -n "$model" ]; then
+            emit_json "found" "$model" "$jsonl" "myagents session role=assistant message.model"
+            [ "$JSON_OUTPUT" != true ] && printf '%s\n' "$model"
+            exit 0
+        fi
+        emit_json "not_found" "" "$jsonl" "session jsonl 存在但无 role=assistant 或 message.model"
+        exit 1
+        ;;
+    codex)
+        sessions_root="$HOME/.codex/sessions"
+        if [ ! -d "$sessions_root" ]; then
+            emit_json "not_found" "" "" "sessions_root 不存在: $sessions_root"
+            exit 1
+        fi
+        jsonl_file=""
+        while IFS= read -r f; do
+            [ -n "$f" ] && jsonl_file="$f"
+        done < <(find "$sessions_root" -name "rollout-*.jsonl" -type f \
+            -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
+            | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null \
+            | sort -rn | head -1 | awk '{$1=""; sub(/^ /, ""); print}')
+        if [ -z "$jsonl_file" ] || [ ! -f "$jsonl_file" ]; then
+            emit_json "not_found" "" "" "no rollout jsonl mtime in last ${WITHIN}s under $sessions_root"
+            exit 1
+        fi
+        # 最后一条 turn_context 的 payload.model
+        model=$(grep '"type":"turn_context"' "$jsonl_file" 2>/dev/null | awk '
+            { if (match($0, /"model":"[^"]+"/)) { current = substr($0, RSTART+9, RLENGTH-10); found = 1 } }
+            END { if (found) print current; else print "" }
+        ')
+        if [ -n "$model" ]; then
+            emit_json "found" "$model" "$jsonl_file" "最后一条 turn_context 提取 payload.model"
+            [ "$JSON_OUTPUT" != true ] && printf '%s\n' "$model"
+            exit 0
+        fi
+        emit_json "not_found" "" "$jsonl_file" "rollout 存在但无 turn_context 记录或 payload.model"
+        exit 1
+        ;;
+    workbuddy)
+        traces_root="$HOME/.workbuddy/traces"
+        if [ ! -d "$traces_root" ]; then
+            emit_json "not_found" "" "" "traces_root 不存在: $traces_root"
+            exit 1
+        fi
+        # traces/<pid>/trace_*.json;每个操作一个 trace,只有 generation 类含 model。
+        # 按 mtime 降序遍历,第一个含 "model":"..." 的就用(最新一次 generation)。
+        trace_file=""
+        model=""
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            # toolOutput 是 JSON 字符串,model 字段的引号被转义为 \",先去反斜杠再 grep
+            m=$(sed 's/\\//g' "$f" 2>/dev/null | grep -oE '"model":"[^"]+"' | tail -1 \
+                | sed -E 's/^"model":"([^"]+)"$/\1/')
+            if [ -n "$m" ]; then
+                trace_file="$f"
+                model="$m"
+                break
+            fi
+        done < <(find "$traces_root" -name "trace_*.json" -type f \
+            -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
+            | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null \
+            | sort -rn | awk '{$1=""; sub(/^ /, ""); print}')
+        if [ -n "$model" ]; then
+            emit_json "found" "$model" "$trace_file" "trace(mtime 最新含 model)spans toolOutput chat.completion.model"
+            [ "$JSON_OUTPUT" != true ] && printf '%s\n' "$model"
+            exit 0
+        fi
+        emit_json "not_found" "" "" "最近 ${WITHIN}s 内无含 chat.completion.model 的 trace(可能都是工具调用类)"
+        exit 1
+        ;;
+    openclaw)
+        # OpenClaw 是 CC fork;本机 logs/ 仅补全/审计无会话 jsonl。
+        # 先按 CC 克隆常见路径试(~/.openclaw/sessions 或 projects),失败标 not_found。
+        run_cc_clone_probe "$HOME/.openclaw/sessions" && exit 0
+        run_cc_clone_probe "$HOME/.openclaw/projects" && exit 0
+        emit_json "not_found" "" "" "openclaw 本机无统一会话 jsonl(logs/ 仅补全/审计);CC fork 会话路径待研究"
+        exit 1
+        ;;
+    orca)
+        # worktree 编排型:session 在各 worktree 的 .claude/projects,~/.orca 无统一 session
+        emit_json "not_found" "" "" "orca 是 worktree 编排型,~/.orca 无统一 session(在各 worktree 内);不可自动反查"
+        exit 1
+        ;;
+    *)
+        emit_json "not_found" "" "" "未知 harness: $HARNESS"
+        exit 1
+        ;;
+esac
