@@ -16,9 +16,9 @@
 
 只保留得分最高的代表帧，其余记录为 `temporal_stable_duplicate`。
 
-### 短切换段与持续运动段
+### 短运动段与持续运动段
 
-- 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段，记录为 `temporal_transition`；
+- 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段至少保留一张 `short_motion_representative`，其余同段候选记录为 `temporal_short_motion_redundant`；不能仅凭持续时间短自动删除整段；
 - 三帧像素拼合能把当前帧解释为“前一页尾部 + 后一页头部”时，记录为 `temporal_mixed_transition`；分区覆盖还会估计横向、纵向和缩放动画风险，用于视觉审计提权但不单独自动删除；
 - 疑似未完成页只有在短时间内出现同一页面骨架、主内容明显增加且完整后帧本来就会被时间簇保留时，才记录为 `temporal_incomplete_resolved`；该后帧作为必要覆盖帧绕过后续去重/过滤，最终缺失时失败关闭；启用 OCR 时关闭该纯视觉自动删除；
 - 视频开头、结尾或没有双侧稳定锚点的运动段不得整段删除，默认每 `--motion-chunk-seconds 2.50` 选择一张代表帧；
@@ -62,10 +62,10 @@
 
 ### 内容质量过滤 (`--filter-quality`)
 
-检测并过滤无信息量的帧，包括：
+检测无信息量或高风险帧，包括：
 - **空白页**：内容区域标准差接近 0，或大面积纯白/纯黑
 - **启动/控制画面**：录屏开始/结束时的控制面板、系统界面（低信息密度）
-- **过渡帧**：页面切换时上下半屏内容不一致（部分区域空白，部分有内容）
+- **过渡风险**：页面切换时上下半屏内容不一致；该单帧标签只提权审计，不直接删除
 - **高置信加载浮层**：中央存在高对比亮卡片、周边一致压暗且综合分数达到保守阈值
 
 基于 3×3 网格分析帧的内容分布：计算每个网格区域的标准差，检测内容分布是否均匀。
@@ -162,7 +162,7 @@ OCR 先计算最近 4 张保留帧的文本相似度、新增三字片段和新�
 - 页面相似度至少 0.72，且出现新的金额或至少 3 位连续编号；
 - 页面相似度至少 0.82，且新增文字片段达到 `max(16, 2×--ocr-min-new)`。
 
-SHA256 完全重复和 `--min-gap` 不接受 OCR 覆盖。报告只保存相似度和增量计数，不保存 OCR 原文；`ocr_visual_overrides` 记录被强内容增量保护的帧数。
+SHA256 完全重复不接受 OCR 覆盖。强新增内容可以否决近似视觉去重和最终 `--min-gap`；短运动段还会在最多 24 张图片预算内检查落选项，每组最多补回一张。报告只保存相似度和增量计数，不保存 OCR 原文；`ocr_visual_overrides`、`ocr_min_gap_overrides` 和 `ocr_short_motion_rescue_count` 记录保护路径。
 
 ## 复合复核参数
 
@@ -176,9 +176,9 @@ SHA256 完全重复和 `--min-gap` 不接受 OCR 覆盖。报告只保存相似�
 - 丢弃原因（如 `duplicate_ssim`、`duplicate_scroll`、`min_gap`、`quality_transition`、`ocr_duplicate`）
 - SHA256 哈希
 
-该模式用于漏帧排查，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。多模态默认先运行 `prepare_vision_audit.py`，只审计本地层选择的高风险短名单。
+该模式只用于人工排查基础层漏帧，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。v0.7.0 多模态生产路径只对基础帧做减法，不再从该目录生成恢复题。
 
-候选池达到上限后，`quality_loading_overlay`、`quality_transition` 和 `temporal_incomplete_resolved` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去复核机会。视觉审计会为加载浮层、被完整页覆盖的未完成页和高分分区切换候选建立抽样恢复题；它们已不在基础结果中，只有明确恢复才会补回。
+候选池达到上限后，`quality_loading_overlay`、`quality_transition` 和 `temporal_incomplete_resolved` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去人工排查机会；这些候选不会进入多模态自动恢复路径。
 
 ### 候选帧数量限制 (`--drop-candidate-limit`)
 
@@ -198,7 +198,7 @@ uv run scripts/extract.py -i recording.mp4 --keep-drop-candidates --drop-candida
 uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --max-images 24
 ```
 
-审计包按以下风险选组：
+审计包只保留同时满足“基础目标有本地风险 + 至少一个同组基础帧通过严格覆盖资格”的组。覆盖资格仅接受近像素一致或重叠区域差异极低的滚动关系；相同 App 外壳、时间相邻或普通结构相似均不足以授予删除资格。随后按以下风险排序：
 
 - `selection_confidence=low` 的持续运动代表帧；
 - 纵向内部拼接缝风险较高；
@@ -216,7 +216,11 @@ uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --
 uv run scripts/prepare_vision_audit.py -i <基础输出目录> --profile weak
 ```
 
-weak 默认 6 组、18 张唯一图片，每组只有一个红框目标，联系表采用 2 列大图并生成预填答案模板。基础保留帧允许 `keep/drop/replace`，已丢弃候选只允许 `restore/leave_discarded`。删除或替换还必须引用同组基础保留帧作为覆盖证据，置信度至少 0.90 且本地风险信号成立；否则应用器记录安全无操作。恢复题最多占 2 组，避免只复核算法删除项而遗漏基础保留帧。
+weak 默认 6 组、18 张唯一图片，每组只有一个红框目标，联系表采用 2 列大图并生成预填答案模板。只允许对基础目标使用 `keep/drop/replace`；删除或替换必须引用模板列出的本地核准覆盖帧、置信度至少 0.90、本地风险信号成立，且覆盖帧最终存活。覆盖链、覆盖环、无关页面或证据内容不完整时记录安全无操作。没有合格覆盖关系时允许生成 0 组，避免让弱模型白看图或冒险删除。
+
+### 归档开关
+
+默认完成抽帧后复制报告和帧清单到 Skill `archive/`。批量回归、临时调参或空间敏感场景使用 `--no-archive`；它只跳过额外归档副本，不影响输出目录中的基础帧与 `_report.json`。
 
 ## 输出参数
 

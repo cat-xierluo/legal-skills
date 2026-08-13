@@ -13,6 +13,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib import coverage_eligibility_metrics
+
 
 ALLOWED_DECISIONS = {"keep", "drop", "replace"}
 ALLOWED_REASONS = {
@@ -128,11 +132,7 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
         if declared_outcomes != group.get("allowed_outcomes"):
             raise ValueError(f"weak 答案篡改了 allowed_outcomes: {group_id}")
         declared_coverage = raw.get("allowed_coverage_audit_ids")
-        expected_coverage = [
-            item["audit_id"]
-            for item in group.get("images") or []
-            if item.get("source") == "kept" and item.get("audit_id") != target_id
-        ]
+        expected_coverage = list(group.get("allowed_coverage_audit_ids") or [])
         if declared_coverage != expected_coverage:
             raise ValueError(f"weak 答案篡改了 allowed_coverage_audit_ids: {group_id}")
         declared_reason_map = raw.get("reason_codes_by_outcome")
@@ -190,6 +190,7 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
             "low_confidence",
             "vertical_seam",
             "mixed_transition_risk",
+            "quality_transition_risk",
             "incomplete_page_risk",
             "low_content_delta",
             "dense_sequence",
@@ -197,6 +198,7 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
         coverage_valid = bool(
             coverage
             and coverage != target_id
+            and coverage in expected_coverage
             and group_id in image_to_groups.get(coverage, set())
             and (known_images.get(coverage) or {}).get("source") == "kept"
         )
@@ -234,10 +236,36 @@ def _normalize_weak_review(review: dict[str, Any], manifest: dict[str, Any]) -> 
     return normalized, safe_noops
 
 
+def _enforce_final_coverage_survival(
+    decisions: dict[str, dict[str, Any]],
+    safe_noops: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """取消覆盖见证同轮被删除/替换的变更，保守截断覆盖链与覆盖环。"""
+    result = dict(decisions)
+    mutating_ids = {
+        audit_id for audit_id, item in result.items()
+        if item.get("decision") in {"drop", "replace"}
+    }
+    invalid_witnesses = [
+        audit_id for audit_id, item in result.items()
+        if item.get("decision") in {"drop", "replace"}
+        and str(item.get("coverage_audit_id") or "") in mutating_ids
+    ]
+    for audit_id in invalid_witnesses:
+        item = result.pop(audit_id)
+        safe_noops.append({
+            "target_audit_id": audit_id,
+            "outcome": item.get("decision"),
+            "reason": "coverage_witness_not_final",
+        })
+    return result, safe_noops
+
+
 def _validate_review(
     review: dict[str, Any],
     manifest_path: Path,
     manifest: dict[str, Any],
+    root: Path,
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     safe_noops: list[dict[str, Any]] = []
     if review.get("schema_version") == "1.1":
@@ -258,6 +286,17 @@ def _validate_review(
     if not isinstance(decisions, list):
         raise ValueError("视觉审计 decisions 必须是数组")
     result: dict[str, dict[str, Any]] = {}
+    groups_by_id, image_to_groups = _group_index(manifest)
+    subtract_only = str((manifest.get("decision_contract") or {}).get("operation") or "") == "subtract_only"
+    local_risk_allowlist = {
+        "low_confidence",
+        "vertical_seam",
+        "mixed_transition_risk",
+        "quality_transition_risk",
+        "incomplete_page_risk",
+        "low_content_delta",
+        "dense_sequence",
+    }
     for raw in decisions:
         if not isinstance(raw, dict):
             raise ValueError("每条视觉审计决策必须是对象")
@@ -283,10 +322,11 @@ def _validate_review(
         if decision == "replace":
             if replacement not in known or replacement == audit_id:
                 raise ValueError(f"replace 必须引用另一个 manifest 内图片: {audit_id}")
+            if replacement != coverage:
+                raise ValueError(f"replace 的 replacement_audit_id 必须等于 coverage_audit_id: {audit_id}")
         elif replacement:
             raise ValueError(f"非 replace 决策不得填写 replacement_audit_id: {audit_id}")
         if coverage:
-            _groups_by_id, image_to_groups = _group_index(manifest)
             shared_groups = image_to_groups.get(audit_id, set()) & image_to_groups.get(coverage, set())
             if (
                 not shared_groups
@@ -294,17 +334,51 @@ def _validate_review(
                 or (known.get(coverage) or {}).get("source") != "kept"
             ):
                 raise ValueError(f"coverage_audit_id 必须引用同组另一张基础保留帧: {audit_id}")
-        if known[audit_id].get("source") == "drop_candidate" and decision != "keep":
-            raise ValueError(f"丢弃候选只允许 keep 补回，其他决策不会产生有效结果: {audit_id}")
+        if known[audit_id].get("source") == "drop_candidate":
+            if subtract_only:
+                raise ValueError(f"减法审计不得恢复丢弃候选: {audit_id}")
+            if decision != "keep":
+                raise ValueError(f"丢弃候选只允许 keep 补回，其他决策不会产生有效结果: {audit_id}")
+        if known[audit_id].get("source") == "kept" and decision in {"drop", "replace"}:
+            shared_groups = image_to_groups.get(audit_id, set()) & image_to_groups.get(coverage, set())
+            action_groups = {
+                group_id for group_id in shared_groups
+                if str(groups_by_id[group_id].get("decision_target_audit_id") or "") == audit_id
+            }
+            has_local_risk = any(
+                set(str(value) for value in (groups_by_id[group_id].get("reason_codes") or []))
+                & local_risk_allowlist
+                for group_id in action_groups
+            )
+            coverage_declared = any(
+                coverage in {
+                    str(value) for value in groups_by_id[group_id].get("allowed_coverage_audit_ids") or []
+                }
+                for group_id in action_groups
+            )
+            coverage_eligible = False
+            if coverage and coverage in known:
+                target_bytes = _resolve_source(root, known[audit_id]).read_bytes()
+                coverage_bytes = _resolve_source(root, known[coverage]).read_bytes()
+                coverage_eligible = bool(
+                    coverage_eligibility_metrics(target_bytes, coverage_bytes).get("eligible")
+                )
+            if (
+                float(confidence) < WEAK_MIN_MUTATION_CONFIDENCE
+                or not coverage
+                or not action_groups
+                or not has_local_risk
+                or not coverage_declared
+                or not coverage_eligible
+            ):
+                safe_noops.append({
+                    "target_audit_id": audit_id,
+                    "outcome": decision,
+                    "reason": "mutation_gate_not_met",
+                })
+                continue
         result[audit_id] = dict(raw)
-    for audit_id, decision in result.items():
-        if decision["decision"] != "replace":
-            continue
-        replacement = str(decision["replacement_audit_id"])
-        replacement_decision = result.get(replacement)
-        if replacement_decision and replacement_decision["decision"] != "keep":
-            raise ValueError(f"replace 目标同时被 drop/replace，决策相互冲突: {audit_id}")
-    return result, safe_noops
+    return _enforce_final_coverage_survival(result, safe_noops)
 
 
 def _prepare_output(output: Path) -> None:
@@ -356,7 +430,7 @@ def main() -> int:
             raise ValueError("审计 manifest 的 schema_version/status 无效")
         if manifest.get("source_report_sha256") != sha256_file(report_path):
             raise ValueError("审计 manifest 未绑定当前基础报告")
-        decisions, safe_noops = _validate_review(review, manifest_path, manifest)
+        decisions, safe_noops = _validate_review(review, manifest_path, manifest, root)
         manifest_images = manifest.get("images") or []
         if not isinstance(manifest_images, list) or not manifest_images:
             raise ValueError("审计 manifest 没有图片清单")

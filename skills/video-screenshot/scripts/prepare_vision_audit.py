@@ -25,6 +25,10 @@ except ImportError:
     print("   请使用 uv 运行本脚本，或执行: pip install Pillow", file=sys.stderr)
     raise SystemExit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib import coverage_eligibility_metrics
+
 
 SCHEMA_VERSION = "1.0"
 WEAK_REASON_CODES_BY_OUTCOME = {
@@ -106,6 +110,8 @@ def _validate_entry(root: Path, item: dict[str, Any], *, source: str) -> dict[st
         "mixed_transition_score": float(item.get("mixed_transition_score") or 0.0),
         "loading_overlay_score": float(item.get("loading_overlay_score") or transient_ui.get("score") or 0.0),
         "loading_overlay_label": item.get("loading_overlay_label") or transient_ui.get("label"),
+        "quality_label": item.get("quality_label"),
+        "quality_transition_risk": bool(item.get("quality_transition_risk")),
         "motion_density_mode": item.get("motion_density_mode"),
         "scroll_match_ratio": float(item.get("scroll_match_ratio") or 0.0),
         "content_delta": item.get("content_delta") if isinstance(item.get("content_delta"), dict) else {},
@@ -134,6 +140,9 @@ def _risk_score(frame: dict[str, Any], prev_gap: float, next_gap: float) -> tupl
     elif loading_label == "incomplete_page":
         score += min(3.0, loading * 3.0)
         reasons.append("incomplete_page_risk")
+    if bool(frame.get("quality_transition_risk")) or frame.get("quality_label") == "transition":
+        score += 2.5
+        reasons.append("quality_transition_risk")
     content_delta = frame.get("content_delta") or {}
     if bool(content_delta.get("ocr_available")):
         if not bool(content_delta.get("has_new_content")) and float(content_delta.get("ocr_similarity") or 0.0) >= 0.88:
@@ -185,6 +194,7 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
         reason = str(item.get("reason") or "")
         if reason not in {
             "temporal_transition",
+            "temporal_short_motion_redundant",
             "temporal_mixed_transition",
             "temporal_motion_redundant",
             "quality_transition",
@@ -276,7 +286,11 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
     regional_drops = sorted(
         (
             item for item in validated_drops
-            if str(item.get("reason") or "") in {"temporal_motion_redundant", "temporal_transition"}
+            if str(item.get("reason") or "") in {
+                "temporal_motion_redundant",
+                "temporal_short_motion_redundant",
+                "temporal_transition",
+            }
             and float(item.get("mixed_transition_score") or 0.0) >= 0.65
         ),
         key=lambda item: (-float(item.get("mixed_transition_score") or 0.0), float(item.get("capture_time_seconds") or 0.0)),
@@ -302,6 +316,27 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "target_time_seconds": target_time,
             "images": members,
         })
+
+    # 多模态层只做减法：只有基础保留目标、且同组至少存在一个本地核准的
+    # 同页覆盖候选时，才值得占用模型预算。丢弃候选可作为上下文，但不再成为恢复题。
+    for group in groups:
+        target = next((item for item in group["images"] if item.get("role") == "target"), None)
+        group["has_eligible_coverage"] = False
+        if target is None or target.get("source") != "kept":
+            continue
+        target_bytes = Path(str(target["absolute_path"])).read_bytes()
+        for item in group["images"]:
+            item["coverage_eligible_for_target"] = False
+            if item.get("source") != "kept" or item["path"] == target["path"]:
+                continue
+            metrics = coverage_eligibility_metrics(
+                target_bytes,
+                Path(str(item["absolute_path"])).read_bytes(),
+            )
+            item["coverage_metrics"] = metrics
+            item["coverage_eligible_for_target"] = bool(metrics.get("eligible"))
+            if metrics.get("eligible"):
+                group["has_eligible_coverage"] = True
 
     groups.sort(key=lambda item: (-float(item["priority"]), str(item["target_path"])))
     return groups
@@ -478,11 +513,10 @@ def _weak_model_instructions(manifest_sha256: str) -> str:
 一次只查看一张 `contact_sheet_NNN.jpg`，并只判断标题标出的“唯一判断目标”。不要判断其他图片。
 
 1. 红框图片是目标；蓝框图片只是前后上下文。
-2. 只有上下文完整覆盖目标全部内容时，基础保留帧才能选择 `drop` 或 `replace`。
+2. 只有列在 `allowed_coverage_audit_ids` 中、且你确认完整覆盖目标全部内容的上下文，才能支持 `drop` 或 `replace`。
 3. 看不清文字、不能确认覆盖、涉及金额/身份/地址/承诺时，选择 `keep`。
-4. 已丢弃候选只选择 `restore` 或 `leave_discarded`。
-5. 在 `review_template.json` 原位填写：`outcome`、`coverage_audit_id`、`reason_code`、`reason`、`confidence`。覆盖帧只能从 `allowed_coverage_audit_ids` 选择；理由码按所选结果从 `reason_codes_by_outcome` 选择。不要新增组，不要修改任何 ID、哈希或允许选项。
-6. `drop`/`replace` 必须填写同组蓝框图片的 `coverage_audit_id`；其他结果留空。
+4. 在 `review_template.json` 原位填写：`outcome`、`coverage_audit_id`、`reason_code`、`reason`、`confidence`。覆盖帧只能从 `allowed_coverage_audit_ids` 选择；理由码按所选结果从 `reason_codes_by_outcome` 选择。不要新增组，不要修改任何 ID、哈希或允许选项。
+5. `drop`/`replace` 必须填写同组蓝框图片的 `coverage_audit_id`；`keep` 留空。视觉层只对基础帧做减法，不恢复基础层未保留的图片。
 
 manifest SHA256：`{manifest_sha256}`
 """
@@ -491,12 +525,7 @@ manifest SHA256：`{manifest_sha256}`
 def _write_weak_review_template(output_dir: Path, manifest: dict[str, Any], manifest_path: Path) -> None:
     answers = []
     for group in manifest.get("groups") or []:
-        coverage_ids = [
-            item["audit_id"]
-            for item in group.get("images") or []
-            if item.get("source") == "kept"
-            and item.get("audit_id") != group["decision_target_audit_id"]
-        ]
+        coverage_ids = list(group.get("allowed_coverage_audit_ids") or [])
         answers.append({
             "group_id": group["group_id"],
             "target_audit_id": group["decision_target_audit_id"],
@@ -566,7 +595,12 @@ def main() -> int:
                     "请改用新的 -o 审计目录，或在备份后显式移走这些产物"
                 )
         report_path, report = _load_report(root)
-        groups = _candidate_groups(root, report)
+        all_groups = _candidate_groups(root, report)
+        groups = [
+            group for group in all_groups
+            if any(item.get("role") == "target" for item in group.get("images") or [])
+            and bool(group.get("has_eligible_coverage"))
+        ]
         selected = _select_budgeted_groups(groups, max_groups, max_images)
         _safe_prepare_output(output_dir)
         audit_ids: dict[str, str] = {}
@@ -597,8 +631,20 @@ def main() -> int:
             if decision_target.get("source") == "drop_candidate":
                 group["task_type"] = "discarded_candidate_review"
                 group["allowed_outcomes"] = ["restore", "leave_discarded"]
+                group["allowed_coverage_audit_ids"] = []
             else:
                 group["task_type"] = "kept_target_review"
+                allowed_coverage: list[str] = []
+                for item in group["images"]:
+                    if (
+                        item.get("source") == "kept"
+                        and item["audit_id"] != decision_target["audit_id"]
+                        and item.get("coverage_eligible_for_target")
+                    ):
+                        allowed_coverage.append(str(item["audit_id"]))
+                group["allowed_coverage_audit_ids"] = allowed_coverage
+                if not allowed_coverage:
+                    raise ValueError(f"减法审计组缺少本地核准覆盖帧: {group['group_id']}")
                 group["allowed_outcomes"] = ["keep", "drop", "replace"]
             contact_name = f"contact_sheet_{group_index:03d}.jpg"
             group["contact_sheet"] = contact_name
@@ -628,6 +674,7 @@ def main() -> int:
                 "decision_target_visual_label": group["decision_target_visual_label"],
                 "task_type": group["task_type"],
                 "allowed_outcomes": group["allowed_outcomes"],
+                "allowed_coverage_audit_ids": group["allowed_coverage_audit_ids"],
                 "contact_sheet": group["contact_sheet"],
                 "images": clean_images,
             })
@@ -645,6 +692,8 @@ def main() -> int:
                 "actual_groups": len(clean_groups),
                 "actual_images": len(unique_images),
                 "candidate_groups_before_budget": len(groups),
+                "candidate_groups_before_coverage_filter": len(all_groups),
+                "ineligible_or_restore_groups_skipped": len(all_groups) - len(groups),
                 "covered_time_buckets": sorted({
                     int(float(group.get("target_time_seconds") or 0.0) // 30.0)
                     for group in clean_groups
@@ -654,11 +703,13 @@ def main() -> int:
                 {
                     "mode": "weak_group_answers",
                     "schema_version": "1.1",
+                    "operation": "subtract_only",
                     "rule": "每组只判断 decision_target_audit_id；填写 review_template.json，不修改任何 ID 或允许选项。",
                     "mutation_gate": {
                         "minimum_confidence": 0.90,
-                        "coverage_source": "same_group_kept_frame",
+                        "coverage_source": "same_group_locally_eligible_kept_frame",
                         "requires_local_risk": True,
+                        "requires_final_survival": True,
                         "fallback": "safe_noop",
                     },
                 }
@@ -666,6 +717,7 @@ def main() -> int:
                 else {
                     "mode": "image_decisions",
                     "schema_version": "1.0",
+                    "operation": "subtract_only",
                     "allowed_decisions": ["keep", "drop", "replace"],
                     "allowed_reason_codes": [
                         "transition",
@@ -675,7 +727,14 @@ def main() -> int:
                         "clearer_replacement",
                         "other",
                     ],
-                    "rule": "只判断 manifest 内图片；replace 必须填写同一 manifest 内 replacement_audit_id。",
+                    "mutation_gate": {
+                        "minimum_confidence": 0.90,
+                        "coverage_source": "same_group_locally_eligible_kept_frame",
+                        "requires_local_risk": True,
+                        "requires_final_survival": True,
+                        "fallback": "safe_noop",
+                    },
+                    "rule": "只判断 manifest 内图片；drop/replace 必须填写代码核准且最终存活的 coverage_audit_id，replace 的 replacement_audit_id 必须与其相同。",
                 }
             ),
             "groups": clean_groups,
