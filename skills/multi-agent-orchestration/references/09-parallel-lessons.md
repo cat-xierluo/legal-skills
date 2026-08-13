@@ -663,3 +663,29 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 2. **预创建 provider terminal 是 external resource**：Claude/Codex 都可完成 `worker_done → Delivery → ack`，但 `worker-release` 对外部终端正确返回 retained。创建者只能在 worker/Dispatch 已结算、ownership/reason 为 `external/external_terminal`、resource handle 与 METADATA 完全一致时关闭精确句柄。
 3. **`tui-idle` 不是完成**：CodeBuddy 仍显示等待模型时可以返回 idle；Qoder 默认 tail 只见 spinner，必须用 cursor history 读取完整历史。terminal-managed 完成仍由 STATUS/RESULT、真实 diff/tests/artifacts 和 PM 验收决定。
 4. **本地 launcher 可能已有安全参数**：Codex launcher 已固定 sandbox/approval，render 再注入相同参数会让 CLI exit 2。只有可读脚本能证明两个值与请求完全相同时才省略重复参数。
+
+### G31. Orca worktree 路径脱离主仓父链 → npm 向上解析失效 → worker 无法自验（G28 的反面）
+
+**实战来源**：2026-08-13，Folia Wave-2 ISS-188+189，Orca supervised worker（claude-code）。
+
+- **现象**：worker 写完 1064 行代码 commit 后，跑 `npm run typecheck` 报 `tsc: command not found`；`vitest`/`eslint` 同。worker 以 `status: blocked` 交 STATUS.json，PM 接管才发现 worktree 根本没装 node_modules。
+- **根因（与 G28 对照）**：
+  - G28（tmux，FaroPDF）：worktree 在 `.claude/worktrees/tmux-xxx`（**主仓子目录**），`npm run` 向上解析逐级找到主仓 `node_modules`，免 `npm ci`。这是 tmux 模式的"免费午餐"。
+  - G31（Orca）：worktree 在 `/Users/maoking/orca/workspaces/folia/xxx`（**独立路径树**，Orca runtime 强制管理），向上解析到 `/` 都没有主仓 `node_modules`。免费午餐失效。
+  - 即：**不是"tmux 没让 worker 自验"，而是 tmux 靠路径巧合白嫖了主仓 node_modules，Orca 换路径树后白嫖失败**。
+- **连锁暴露**（G29 #2/#3/#4 的残留未被根治）：
+  1. `INSTALL_AUTHORIZATION.json.allowed_shell_commands` 默认仅 `git branch --show-current` / `git status --short` / `pwd` 三条 → `npm run test/build`、`git push`、`gh pr create` 全被 `SHELL_COMMAND_NOT_ALLOWLISTED` fail-closed。即便 node_modules 在，worker 也跑不了验证门 / 推不了 PR。
+  2. 无强制 commit-verify-hook → worker 把未验证代码当成品 commit（G29 #4 同类，未根治）。
+- **PM 收尾死锁（Orca supervised 独有）**：worker 卡 allowlist 无法发 `worker_done` → dispatch 永远 `dispatched` → `worker-release` 对未结算 dispatch 不生效 → `clean-worktree` fail-closed 拒删（§8 Hard Fail #7）。最终靠 `orca terminal stop` + `orca worktree rm --force` + 手动释放 lease 强收尾——**绕过了 supervised 正式 lifecycle**。
+- **修复方向**：
+  - **A（首选，复刻 G28 免费午餐）**：`spawn-worker.sh` 检测 worktree 路径不在主仓父链上（`realpath` 比较）且主仓有 `node_modules` 时，**软链** `ln -s <主仓>/node_modules <worktree>/node_modules`（非复制——复制 269M 耗时占盘，软链秒级零占用）。软链防误提交**依赖项目 `.gitignore` 已忽略 `node_modules`**（多数 Node 项目如此；Folia 已忽略）；未忽略的项目软链会出现在 git status，PM 注意别把指向绝对机器路径的软链 commit 进 PR（skill 不改 worktree 的 tracked `.gitignore`，避免污染 worker diff）。worktree 清理时 unlink（不跟随删主仓）。Rust 同理软链 `target` 不行（worktree target 独立编译），但 `~/.cargo` registry cache 已共享。
+  - **A-否决（曾考虑：统一 Orca worktree 路径到主仓子树）**：让所有 worktree（tmux + Orca）都放 `.claude/worktrees/` 下，npm 向上解析对所有模式生效。**查证不可行**：`orca worktree create` 无 `--path` 参数（只有 `--name`，且 name 不能含 `/`——既作显示名又作 branch 名，见 spawn-worker.sh:1044），物理路径 `/Users/<user>/orca/workspaces/<project>/<name>` 由 Orca runtime 内部决定；无公开 CLI 配置 worktree 根目录（`storage local get/set` 是 app 内 localStorage，不暴露 root）。tmux worktree 本就在主仓子树（spawn-worker.sh:166 默认 `.claude/worktrees/tmux-{branch}`），Orca runtime 强制管路径是根本约束。**结论：Orca 路径不可配，软链（方案 A）是唯一实际补偿；长期可向 Orca 提 `--path` / worktree root 配置 feature。**
+  - **B（根治白名单）**：spawn-worker 默认把 Node 项目验证命令（`npm run typecheck` / `npm run lint` / `npm test` / `npm run build`）+ git 生命周期（`git add`/`commit`/`push`/`log`/`diff`/`show`）+ `gh pr create/list/view` 纳入默认 `allowed_shell_commands`（G29 #3 的升级版：不只加 `date`，加整组验证/提交命令）。install 类（`npm install/ci`）仍需显式 `--allow-install-command`。
+  - **C（防未验证 commit）**：PreToolUse `git commit` hook，commit 前自动跑验证门（或至少检查 STATUS/RESULT 声明的 verify 与实际 `git diff` 一致）。
+  - **D（supervised 死锁兜底）**：spawn-worker 给 PM 一个 `--force-settle-dispatch` 兜底命令（worker 进程已死 + workerSession=null 时，PM 显式把 dispatch 标记 settled 走 release/ack），避免只能靠 `worktree rm --force` 硬删。
+- **教训**：
+  - **路径敏感的"免费机制"不可靠**：G28 的向上解析依赖 worktree 在主仓子树这个隐含前提，Orca 路径打破前提后整个自验链路塌方。skill 应在 spawn 时显式保证 worktree 可访问主仓依赖（软链或 PATH 注入），不依赖路径巧合。
+  - **install-guard 的 deny_by_default 对"非 install 的验证命令"也误伤**：`npm run test` 不是 install，但被 allowed_shell 白名单拦。白名单应区分"install 类（需授权）"与"验证/提交类（默认放行）"。
+  - **Orca supervised 比 tmux 多一层 lifecycle 死锁风险**：tmux worker 死了 PM 直接 kill session；Orca supervised worker 死了但没 worker_done，dispatch 卡住拖累整个收尾。需要 PM 侧的 force-settle 兜底。
+
+**关联**：G28（向上解析免费午餐）、G29 #2/#3/#4（install-guard 过严 + worker 自验缺失，未根治）、SKILL §3.1 spawn 协议、§8 supervised lifecycle、references/12 Orca worker。
