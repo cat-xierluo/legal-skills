@@ -4,7 +4,7 @@ homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "1.4.2"
 license: MIT
-description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 clawhub-sync 或 subtree-publish 配置，本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
+description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 skill-publish-sync 或 subtree-publish 配置，本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
 ---
 
 # Git 批量提交工具
@@ -134,7 +134,7 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 2. **运行交互式脚本** - 查看分类结果
 3. **审核** - 检查提议的提交分组
 4. **确认** - 创建提交或取消以调整
-5. **ClawHub 同步检查** - 仅当 `skills/clawhub-sync/` 存在时执行，详见 `references/clawhub-sync-check.md`。不存在则静默跳过
+5. **ClawHub 同步检查** - 仅当 `skills/skill-publish-sync/` 存在时执行，详见 `references/skill-publish-sync-check.md`。不存在则静默跳过
 6. **Subtree 推送检查** - 仅当 `skills/subtree-publish/config/subtree-skills.json` 存在时执行，详见 `references/subtree-push-check.md`。不存在则静默跳过
 7. **完成** - 获得清晰历史的聚焦提交
 
@@ -144,10 +144,10 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 ### 发布到外部平台（ClawHub / SkillHub）
 
-- 仅当仓库内存在 `skills/clawhub-sync/`，且本次提交涉及 `skills/<skill-name>/` 下的版本更新/新增技能、且该技能在 `sync-allowlist.yaml` 白名单中时，才会提示用户是否同步。
+- 仅当仓库内存在 `skills/skill-publish-sync/`，且本次提交涉及 `skills/<skill-name>/` 下的版本更新/新增技能、且该技能在 `sync-allowlist.yaml` 白名单中时，才会提示用户是否同步。
 - 每个发布动作前都会向用户确认（`是否将其加入白名单并同步？`，选项 `y/n/s`）；未确认不会执行 `clawhub publish` / `skillhub publish`。
 - 发布会把技能内容上传到 ClawHub/SkillHub 平台；发布前检查临时目录不含 `.env`、密钥等敏感文件。
-- 用户选择同步后，会修改 `skills/clawhub-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`（仓库状态变更）。
+- 用户选择同步后，会修改 `skills/skill-publish-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`（仓库状态变更）。
 
 ### 推送 subtree 独立仓库
 
@@ -160,10 +160,10 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 ### 文件访问
 
-- 读取 `git diff`/`git status` 输出、`skills/*/SKILL.md` frontmatter、`clawhub-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`。
+- 读取 `git diff`/`git status` 输出、`skills/*/SKILL.md` frontmatter、`skill-publish-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`。
 - 修改上述 allowlist/records 文件（仅用户确认后）。
 
-> 若你只希望"纯粹提交、绝不触发任何发布/推送提示"，请先移除或重命名仓库中的 `skills/clawhub-sync/` 与 `skills/subtree-publish/config/subtree-skills.json`，这两个步骤会静默跳过。
+> 若你只希望"纯粹提交、绝不触发任何发布/推送提示"，请先移除或重命名仓库中的 `skills/skill-publish-sync/` 与 `skills/subtree-publish/config/subtree-skills.json`，这两个步骤会静默跳过。
 
 ## 资源文件
 
@@ -177,5 +177,5 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 - **`commit-types.md`** - 详细的类别定义和检测逻辑
 - **`conventional-commits.md`** - 提交信息规范
-- **`clawhub-sync-check.md`** - ClawHub 同步检查详细流程（工作流第5步）
+- **`skill-publish-sync-check.md`** - ClawHub 同步检查详细流程（工作流第5步）
 - **`subtree-push-check.md`** - Subtree 推送检查详细流程（工作流第6步）

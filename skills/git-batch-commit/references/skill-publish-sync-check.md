@@ -1,6 +1,6 @@
 # ClawHub 同步检查（工作流第5步）
 
-> **核心规则：仅当项目目录下存在 `skills/clawhub-sync/` 时才执行——不存在则静默跳过，不输出任何提示。**
+> **核心规则：仅当项目目录下存在 `skills/skill-publish-sync/` 时才执行——不存在则静默跳过，不输出任何提示。**
 
 > **⚠️ 能力边界披露**：本步骤会把技能**发布到 ClawHub/SkillHub 外部平台**，并可能修改 `sync-allowlist.yaml` 与 `sync-records.yaml`。这些动作超出"仅提交"职责，**每一步都必须获得用户显式确认**（下方 `y/n/s` 选择）；用户未确认时一律不执行发布或文件修改。详细披露见 SKILL.md「所需权限与能力边界」。
 
@@ -14,8 +14,8 @@
 
 全部满足时触发：
 
-1. **本地存在 clawhub-sync 技能**
-   - 检查 `skills/clawhub-sync/` 目录是否存在
+1. **本地存在 skill-publish-sync 技能**
+   - 检查 `skills/skill-publish-sync/` 目录是否存在
    - **不存在则静默跳过，不提示用户**
 
 2. **提交涉及 skills 目录**
@@ -23,11 +23,11 @@
 
 3. **版本号有更新**
    - 读取 `skills/<skill-name>/SKILL.md` 的 frontmatter 中的 `version` 字段
-   - 比较 `skills/clawhub-sync/config/sync-records.yaml` 中 `records.<skill>.platforms.<platform>.version` 记录的版本（按目标平台读取：ClawHub 读 `platforms.clawhub.version`，SkillHub 读 `platforms.skillhub.version`）
+   - 比较 `skills/skill-publish-sync/config/sync-records.yaml` 中 `records.<skill>.platforms.<platform>.version` 记录的版本（按目标平台读取：ClawHub 读 `platforms.clawhub.version`，SkillHub 读 `platforms.skillhub.version`）
    - 如果新版本 > 已记录版本（或记录中无版本），则需要同步
 
 4. **在白名单中**
-   - 检查 `skills/clawhub-sync/config/sync-allowlist.yaml`
+   - 检查 `skills/skill-publish-sync/config/sync-allowlist.yaml`
    - skill 必须在白名单中（未被 `#` 注释），且其 `platforms` 数组包含目标平台
 
 ### 检测 B：新增技能首次同步
@@ -75,16 +75,16 @@
 
 ## 执行步骤
 
-对于每个需要同步的 skill，按照 `clawhub-sync` 的"单个 Skill 同步工作流"执行。按目标平台分别处理：
+对于每个需要同步的 skill，按照 `skill-publish-sync` 的"单个 Skill 同步工作流"执行。按目标平台分别处理：
 
 **步骤 1：准备发布目录**
 
 ```bash
 # ClawHub（默认平台，可省略 --platform）
-bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
+bash skills/skill-publish-sync/scripts/prepare-publish.sh skills/<skill-name>
 
 # 腾讯 SkillHub
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/<skill-name>
+bash skills/skill-publish-sync/scripts/prepare-publish.sh --platform skillhub skills/<skill-name>
 ```
 
 **步骤 2：执行发布**
@@ -117,7 +117,7 @@ skillhub publish /tmp/skillhub-publish-<skill-name> \
 
 **步骤 3：更新同步记录**
 
-更新 `skills/clawhub-sync/config/sync-records.yaml`，在对应平台 `platforms.<platform>` 下写入：
+更新 `skills/skill-publish-sync/config/sync-records.yaml`，在对应平台 `platforms.<platform>` 下写入：
 - 更新 `version` 为新版本号
 - 更新 `last_sync` 为当前时间
 - 更新 `git_hash` 为当前 commit hash
@@ -153,4 +153,4 @@ if new_version > recorded_version:
 | 白名单内首次发布（检测A/C） | "1.0.0" | 含目标平台 | 无记录 | ✅ 执行同步 |
 | 新增 MIT 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择（clawhub+skillhub） |
 | 新增 CC-BY-NC 技能（检测B） | "0.1.0" | 无条目 | 无记录 | ✅ 提示用户选择（仅 skillhub） |
-| clawhub-sync 不存在 | - | - | - | ❌ 静默跳过整个工作流 |
+| skill-publish-sync 不存在 | - | - | - | ❌ 静默跳过整个工作流 |
