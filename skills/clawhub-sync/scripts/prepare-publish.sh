@@ -1,9 +1,9 @@
 #!/bin/bash
 # prepare-publish.sh - 准备技能发布目录
-# 用法: prepare-publish.sh [--platform <clawhub|skillhub>] <skill-path>
+# 用法: prepare-publish.sh [--platform <clawhub|skillhub|lenovo>] <skill-path>
 #
 # 此脚本创建一个临时目录，只包含符合 .gitignore 规则的文件，
-# 用于 ClawHub / 腾讯 SkillHub CLI 发布。
+# 用于 ClawHub / 腾讯 SkillHub / 联想开放平台 CLI 发布。
 #
 # 过滤规则（双重过滤）：
 # 1. 项目根目录的 .gitignore（如果存在）
@@ -13,6 +13,7 @@
 #   --platform <name> - 目标平台，决定临时目录前缀（默认 clawhub）
 #                       clawhub  → /tmp/clawhub-publish-<skill>
 #                       skillhub → /tmp/skillhub-publish-<skill>
+#                       lenovo   → /tmp/lenovo-publish-<skill>
 #   skill-path        - 技能目录路径（相对或绝对路径）
 #
 # 输出:
@@ -29,16 +30,17 @@ NC='\033[0m' # No Color
 
 # 帮助信息
 usage() {
-    echo "用法: prepare-publish.sh [--platform <clawhub|skillhub>] <skill-path>"
+    echo "用法: prepare-publish.sh [--platform <clawhub|skillhub|lenovo>] <skill-path>"
     echo ""
     echo "参数:"
     echo "  --platform <name> - 目标平台（默认 clawhub），决定临时目录前缀"
     echo "                      clawhub  → /tmp/clawhub-publish-<skill>"
     echo "                      skillhub → /tmp/skillhub-publish-<skill>"
+    echo "                      lenovo   → /tmp/lenovo-publish-<skill>"
     echo "  skill-path        - 技能目录路径（相对或绝对路径）"
     echo ""
     echo "功能:"
-    echo "  创建临时目录用于发布（ClawHub / 腾讯 SkillHub），自动应用 .gitignore 过滤规则。"
+    echo "  创建临时目录用于发布（ClawHub / 腾讯 SkillHub / 联想开放平台），自动应用 .gitignore 过滤规则。"
     echo ""
     echo "过滤规则（双重过滤）:"
     echo "  1. 项目根目录的 .gitignore（自动检测）"
@@ -47,6 +49,7 @@ usage() {
     echo "示例:"
     echo "  prepare-publish.sh skills/trademark-assistant"
     echo "  prepare-publish.sh --platform skillhub skills/trademark-assistant"
+    echo "  prepare-publish.sh --platform lenovo skills/trademark-assistant"
     echo "  prepare-publish.sh /path/to/skills/trademark-assistant"
     exit 1
 }
@@ -79,10 +82,10 @@ done
 
 # 校验平台参数
 case "$PLATFORM" in
-    clawhub|skillhub)
+    clawhub|skillhub|lenovo)
         ;;
     *)
-        echo -e "${RED}错误: 不支持的平台 '$PLATFORM'，可选值: clawhub | skillhub${NC}" >&2
+        echo -e "${RED}错误: 不支持的平台 '$PLATFORM'，可选值: clawhub | skillhub | lenovo${NC}" >&2
         exit 1
         ;;
 esac
@@ -209,20 +212,23 @@ done
 # 清理 .gitkeep 占位文件（git 用来追踪空目录，非 skill 内容；部分平台如 SkillHub 拒收该文件类型）
 find "$TEMP_DIR" -name '.gitkeep' -delete 2>/dev/null
 
-# ── SkillHub 专用:从本地配置注入 slug/displayName 到临时副本 frontmatter ──
-# 设计:源 SKILL.md 不含 slug/displayName(平台元数据与 skill 本体解耦),
-#       发布前从此脚本同目录的 ../config/sync-allowlist.yaml 读取并注入临时副本。
+# ── SkillHub + 联想开放平台共用:从平台特定白名单注入 slug/displayName 到临时副本 frontmatter ──
+# 设计(v1.7.1 三份独立列表架构):
+#       源 SKILL.md 不含 slug/displayName(平台元数据与 skill 本体解耦)。
+#       发布前从此脚本同目录的 ../config/allowlist-${PLATFORM}.yaml 读取并注入临时副本。
 #       slug 默认 = skill 目录名;重名/被占用时在配置里用 slug 字段覆盖。
 #       displayName 必填(中文展示名),缺失则 fail-closed 退出。
 # ClawHub 不触发本段(它用 --slug/--name 命令行参数,不依赖 frontmatter)。
-if [ "$PLATFORM" = "skillhub" ]; then
+# 适用平台:skillhub / lenovo —— 两者都从 SKILL.md frontmatter 读 slug + displayName,
+#          且各自独立白名单(skillhub→allowlist-skillhub.yaml, lenovo→allowlist-lenovo.yaml)。
+if [ "$PLATFORM" = "skillhub" ] || [ "$PLATFORM" = "lenovo" ]; then
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    CONFIG_PATH="$SCRIPT_DIR/../config/sync-allowlist.yaml"
+    CONFIG_PATH="$SCRIPT_DIR/../config/allowlist-${PLATFORM}.yaml"
     SKILL_MD="$TEMP_DIR/SKILL.md"
     [ -f "$SKILL_MD" ] || SKILL_MD="$TEMP_DIR/skill.md"
 
     if [ ! -f "$CONFIG_PATH" ]; then
-        echo -e "${RED}错误: 未找到白名单配置 $CONFIG_PATH,无法注入 SkillHub frontmatter${NC}" >&2
+        echo -e "${RED}错误: 未找到白名单配置 $CONFIG_PATH(v1.7.1 三份独立列表架构;该平台白名单文件不存在)${NC}" >&2
         exit 1
     fi
     if [ ! -f "$SKILL_MD" ]; then
@@ -230,7 +236,7 @@ if [ "$PLATFORM" = "skillhub" ]; then
         exit 1
     fi
 
-    echo -e "${BLUE}注入 SkillHub frontmatter(slug/displayName)...${NC}"
+    echo -e "${BLUE}注入 slug/displayName frontmatter(${PLATFORM}, 读 $CONFIG_PATH)...${NC}"
     INJECT_SKILL="$SKILL_NAME" \
     INJECT_CONFIG="$CONFIG_PATH" \
     INJECT_SKILL_MD="$SKILL_MD" \
@@ -241,7 +247,8 @@ skill = os.environ['INJECT_SKILL']
 config = os.environ['INJECT_CONFIG']
 skill_md = os.environ['INJECT_SKILL_MD']
 
-# 1) 从 sync-allowlist.yaml 解析目标 skill 的 display_name / slug
+# 1) 从平台特定白名单(allowlist-{clawhub,skillhub,lenovo}.yaml)解析目标 skill 的 display_name / slug
+# v1.7.1 三份独立列表架构:每份文件只列该平台的 skill,无 platforms 字段
 meta = {}
 in_block = False
 top_re = re.compile(r'^([A-Za-z0-9_.\-]+):\s*(?:#.*)?$')
@@ -262,7 +269,7 @@ with open(config, encoding='utf-8') as f:
             meta[fm.group(1)] = fm.group(2).strip()
 
 if 'display_name' not in meta:
-    print(f'错误: sync-allowlist.yaml 中 {skill} 缺少 display_name(SkillHub 发布必填,中文名)', file=sys.stderr)
+    print(f'错误: {config} 中 {skill} 缺少 display_name(发布必填,中文名)', file=sys.stderr)
     sys.exit(1)
 
 slug = meta.get('slug', skill)
@@ -299,7 +306,7 @@ with open(skill_md, 'w', encoding='utf-8') as f:
 print(f'  slug={slug}')
 print(f'  displayName={display_name}')
 PYEOF
-    echo -e "${GREEN}已注入 SkillHub frontmatter${NC}"
+    echo -e "${GREEN}已注入 ${PLATFORM} frontmatter${NC}"
 fi
 
 # 统计文件数量
