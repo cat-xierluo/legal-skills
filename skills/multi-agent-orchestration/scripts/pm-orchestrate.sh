@@ -281,18 +281,23 @@ cmd_settle() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: settle requires an Orca supervised worker (dispatch deadlock bypass)" >&2; exit 64; }
   orca_runtime_init
 
-  local worktree_id show_json worker_session lease_root
+  local worktree_id show_json worker_session lease_root session_context
   worktree_id=$(jq -r '.session.orca.worktree_id // empty' "$METADATA")
+  session_context="$WORKTREE/.claude/agent-sessions/$SESSION"
 
   # 存活检查（除非 --force）：workerSession 仍存在 → worker 可能还活 → 拒绝。
+  # show 失败（空/解析错）保守拒绝，避免误杀活 worker；用户确认后 --force 跳过。
   if [ "$FORCE" -ne 1 ]; then
     show_json=$(orca_cli orchestration worker-show --dispatch "$ORCA_DISPATCH_ID" --json 2>/dev/null || true)
-    if [ -n "$show_json" ]; then
-      worker_session=$(printf '%s' "$show_json" | jq -r '.result.workerSession | if . == null then "DEAD" else "ALIVE" end' 2>/dev/null || echo "UNKNOWN")
-      if [ "$worker_session" = "ALIVE" ]; then
-        echo "REFUSED: workerSession present (worker may still be active); confirm the worker process is dead and re-run with --force" >&2
-        exit 2
-      fi
+    if [ -z "$show_json" ]; then
+      echo "REFUSED: worker-show returned empty (cannot determine liveness); confirm worker process is dead and re-run with --force" >&2
+      exit 2
+    fi
+    worker_session=$(printf '%s' "$show_json" | jq -r '.result.workerSession | if . == null then "DEAD" else if type == "object" then (. | tostring) else "ALIVE" end end' 2>/dev/null)
+    worker_session=${worker_session:-PARSE_ERROR}
+    if [ "$worker_session" = "ALIVE" ] || [ "$worker_session" = "PARSE_ERROR" ]; then
+      echo "REFUSED: workerSession=$worker_session (worker may still be active or result unparseable); confirm worker process is dead and re-run with --force" >&2
+      exit 2
     fi
   fi
 
@@ -324,6 +329,14 @@ cmd_settle() {
     orca_cli worktree rm --worktree "id:$worktree_id" --force --json >/dev/null 2>&1 \
       && echo "PM_ORCHESTRATE_SETTLE_WORKTREE_REMOVED: $worktree_id" \
       || echo "ERROR: orca worktree rm failed; inspect $worktree_id manually" >&2
+  fi
+
+  # 4. 清 Session Context 残留（STATUS/INSTALL_AUTH/RESULT/METADATA），避免
+  #    settle 后下个同名 session 误读旧 worker 的 STAGED-DATA。
+  if [ -d "$session_context" ]; then
+    rm -rf "$session_context" \
+      && echo "PM_ORCHESTRATE_SETTLE_SESSION_CONTEXT_REMOVED: $session_context" \
+      || echo "WARN: session context cleanup non-zero: $session_context" >&2
   fi
 
   echo "PM_ORCHESTRATE_SETTLED: bypassed worker-release deadlock (Task-047); verify in Orca UI that terminal/worktree are gone"
