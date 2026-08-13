@@ -142,7 +142,7 @@
 <td>工具·ASR</td>
 <td style="word-break:break-word">阿里云通义听悟云端语音转录，适用于长音频、高精度场景，支持说话人分离和 AI 摘要生成</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.5.2</td>
+<td style="text-align:center">v0.3.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/tingwu-asr-0.3.0.zip">下载</a></td>
 <td></td>
 </tr>
@@ -555,7 +555,7 @@
 <td>工具·Agent配置</td>
 <td style="word-break:break-word">面向法律工作者初始化和增量治理 AGENTS.md/CLAUDE.md：三种引导模式、三档隐私治理、法律安全基线、受管区块安全合并及新会话行为验证</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.0</td>
+<td style="text-align:center">v0.5.2</td>
 <td style="text-align:center"></td>
 <td>写入成功不等于已加载；无法新建会话时标 NOT_VERIFIED</td>
 </tr>
