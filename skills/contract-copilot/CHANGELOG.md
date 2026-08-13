@@ -2,6 +2,22 @@
 
 本文档记录 Contract Copilot 的重要变更。
 
+## [1.6.3] - 2026-08-13
+
+### 修复
+
+- DOCX 解包前全量校验 ZIP 成员，拒绝绝对路径、POSIX/Windows 风格越界路径和符号链接，防止不可信合同压缩包覆盖目标临时目录之外的文件或留下部分解包产物。
+- `ContractReviewer.suggest_insertion()` 对公开 OOXML 插入入口启用安全解析、WordprocessingML 命名空间和元素白名单，允许必要的段落、文本与有限格式元素，拒绝 `w:vanish`、外部链接、伪装命名空间等未授权结构及畸形 XML。
+- 文件交付说明明确 `review-plan.json` 与 `review-plan_enriched.json` 均为每次审查动态生成的运行时产物，不应被误解为 Skill 包内固定文件。
+
+### 技术优化
+
+- 新增 Zip Slip 相对/绝对/Windows 路径、符号链接及全量预检反例，以及安全 OOXML 正例、隐藏文本、伪装命名空间和畸形 XML 反例回归。
+
+### 验证
+
+- `python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v`：通过。
+
 ## [1.6.1] - 2026-08-11
 
 ### 修复
