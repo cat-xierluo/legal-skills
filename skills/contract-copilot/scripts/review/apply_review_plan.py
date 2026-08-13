@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import stat
 import sys
 import tempfile
 import zipfile
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 try:
@@ -72,8 +73,50 @@ except ImportError:
 
 
 def unpack_docx(input_docx: Path, output_dir: Path) -> None:
+    """Safely unpack a DOCX (zip) into output_dir, preventing Zip Slip path traversal.
+
+    Validates every zip member before extraction:
+      - Rejects absolute paths (e.g. '/etc/passwd', 'C:\\Windows\\...').
+      - Rejects entries whose resolved path would escape output_dir
+        (e.g. '../../etc/passwd', '../../.bashrc').
+    The contract review use case handles DOCX from untrusted counterparties
+    (email/IM forward); this guard prevents zip-slip attacks that would write
+    outside the intended temp directory and potentially overwrite user files
+    like ~/.bashrc or ~/.ssh/authorized_keys.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
-    zipfile.ZipFile(input_docx).extractall(output_dir)
+    output_resolved = output_dir.resolve()
+    with zipfile.ZipFile(input_docx) as zf:
+        members = zf.infolist()
+        for member in members:
+            # Reject absolute paths (POSIX or Windows-style)
+            member_name = member.filename
+            if member_name.startswith("/") or member_name.startswith("\\") or (
+                len(member_name) >= 2 and member_name[1] == ":"
+            ):
+                raise ValueError(
+                    f"Unsafe zip entry (absolute path): {member_name!r}"
+                )
+            normalized_parts = PurePosixPath(member_name.replace("\\", "/")).parts
+            if ".." in normalized_parts:
+                raise ValueError(
+                    f"Unsafe zip entry (path traversal): {member_name!r}"
+                )
+            # Resolve the candidate destination and ensure it stays inside output_dir
+            candidate = (output_dir / member_name).resolve()
+            try:
+                candidate.relative_to(output_resolved)
+            except ValueError:
+                raise ValueError(
+                    f"Unsafe zip entry (path traversal): {member_name!r}"
+                ) from None
+            unix_mode = member.external_attr >> 16
+            if stat.S_ISLNK(unix_mode):
+                raise ValueError(f"Unsafe zip entry (symbolic link): {member_name!r}")
+
+        # Validate the complete archive before writing any member to disk.
+        for member in members:
+            zf.extract(member, output_dir)
 
     xml_files = list(output_dir.rglob("*.xml")) + list(output_dir.rglob("*.rels"))
     for xml_file in xml_files:
