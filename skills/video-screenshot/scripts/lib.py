@@ -544,6 +544,64 @@ def scroll_overlap_metrics(
     return best
 
 
+def coverage_eligibility_metrics(target_bytes: bytes, coverage_bytes: bytes) -> dict[str, Any]:
+    """保守判断两图是否具备“同页覆盖候选”资格，不替代视觉完整性判断。"""
+    empty = {
+        "eligible": False,
+        "same_page_score": 0.0,
+        "ssim": 0.0,
+        "mean_abs_diff": 999.0,
+        "scroll_diff": 999.0,
+        "scroll_overlap_ratio": 0.0,
+        "scroll_shift": 0,
+        "reason": "unavailable",
+    }
+    if not target_bytes or not coverage_bytes:
+        return empty
+    target_thumb = calc_thumb_bytes(target_bytes, size=48, autocontrast=True)
+    coverage_thumb = calc_thumb_bytes(coverage_bytes, size=48, autocontrast=True)
+    similarity = ssim_bytes(target_thumb, coverage_thumb)
+    mad = mean_abs_diff(target_thumb, coverage_thumb)
+    target_scroll = calc_scroll_image(target_bytes)
+    coverage_scroll = calc_scroll_image(coverage_bytes)
+    scroll = scroll_overlap_metrics(target_scroll, coverage_scroll)
+    similarity_value = max(0.0, min(1.0, float(similarity or 0.0)))
+    mad_value = float(mad if mad is not None else 999.0)
+    scroll_diff = float(scroll.get("diff") or 999.0)
+    scroll_overlap = float(scroll.get("overlap_ratio") or 0.0)
+    # “同一 App 外壳”不能证明证据内容相同。只接受近像素一致，或重叠区域
+    # 差异极低的滚动关系；更宽松的布局相似仅作为诊断分数，不授予删除资格。
+    near_identical = similarity_value >= 0.94 and mad_value <= 18.0
+    scroll_related = bool(
+        scroll.get("matched")
+        and scroll_overlap >= 0.78
+        and scroll_diff <= 12.0
+    )
+    eligible = near_identical or scroll_related
+    same_page_score = max(
+        similarity_value,
+        max(0.0, 1.0 - mad_value / 90.0),
+        (scroll_overlap * max(0.0, 1.0 - scroll_diff / 55.0)) if scroll_related else 0.0,
+    )
+    reason = (
+        "near_identical"
+        if near_identical
+        else "scroll_overlap"
+        if scroll_related
+        else "unrelated_or_unproven"
+    )
+    return {
+        "eligible": eligible,
+        "same_page_score": round(same_page_score, 4),
+        "ssim": round(similarity_value, 4),
+        "mean_abs_diff": round(mad_value, 4),
+        "scroll_diff": round(scroll_diff, 4),
+        "scroll_overlap_ratio": round(scroll_overlap, 4),
+        "scroll_shift": int(scroll.get("shift") or 0),
+        "reason": reason,
+    }
+
+
 # 3x3 Laplacian 卷积核（用于模糊检测）
 _LAPLACIAN = ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0)
 
@@ -608,6 +666,14 @@ def calc_content_quality(image_bytes: bytes) -> dict[str, Any]:
         "grid_high": grid_high,
         "grid_spread": grid_spread,
     }
+
+
+def content_quality_drop_reason(quality: dict[str, Any]) -> str:
+    """返回可由单帧质量安全触发的删除原因；transition 只保留为风险。"""
+    label = str(quality.get("label") or "")
+    if label in {"empty", "blank", "startup"}:
+        return f"quality_{label}"
+    return ""
 
 
 def calc_loading_overlay_score(image_bytes: bytes) -> dict[str, Any]:
@@ -1156,6 +1222,8 @@ def select_temporal_representatives(
             "stable_run_count": 0,
             "motion_segment_count": 0,
             "transition_drop_count": 0,
+            "short_motion_preserved_count": 0,
+            "short_motion_redundant_drop_count": 0,
             "stable_duplicate_drop_count": 0,
             "low_confidence_selection_count": 0,
             "resolved_incomplete_drop_count": 0,
@@ -1347,8 +1415,8 @@ def select_temporal_representatives(
             dropped.append(item)
             dropped_indices.add(pos)
 
-    # 稳定段之间的非 anchor 项属于运动段。短且前后都有稳定终态时，视为切换中间态；
-    # 较长运动段按固定跨度留代表帧，避免滚动或视频内容被整段吞掉。
+    # 稳定段之间的非 anchor 项属于运动段。没有直接像素拼接证据的短段也可能是
+    # 停留很短的真实页面，因此至少保留一个代表帧；较长运动段按固定跨度留代表帧。
     gaps: list[tuple[int, int, bool, bool]] = []
     cursor = 0
     for start, end in anchors:
@@ -1362,6 +1430,7 @@ def select_temporal_representatives(
 
     motion_group_count = 0
     transition_drop_count = 0
+    short_motion_preserved_count = 0
     low_confidence_count = 0
     for start, end, bounded_before, bounded_after in gaps:
         positions = [pos for pos in range(start, end + 1) if pos not in dropped_indices and pos not in selected_indices]
@@ -1384,16 +1453,38 @@ def select_temporal_representatives(
                 span = max(0.0, float(after_time) - float(before_time))
         group_name = f"motion-{motion_group_count:03d}"
         if bounded_before and bounded_after and span <= transition_max_seconds:
+            best = max(
+                positions,
+                key=lambda pos: _temporal_selection_score(
+                    items[pos],
+                    dwell_after_seconds=dwell_after(pos),
+                    prefer_later=(pos - positions[0]) * 0.02,
+                ),
+            )
+            chosen = dict(items[best])
+            chosen.update({
+                "temporal_reason": "short_motion_representative",
+                "temporal_group_id": group_name,
+                "selection_confidence": "low",
+                "adaptive_chunk_seconds": max(0.0, span),
+                "motion_density_mode": "short_uncertain",
+                "scroll_match_ratio": 0.0,
+            })
+            selected.append(chosen)
+            selected_indices.add(best)
+            short_motion_preserved_count += 1
+            low_confidence_count += 1
             for pos in positions:
+                if pos == best:
+                    continue
                 item = dict(items[pos])
                 item.update({
-                    "drop_reason": "temporal_transition",
+                    "drop_reason": "temporal_short_motion_redundant",
                     "temporal_group_id": group_name,
-                    "selection_confidence": "medium",
+                    "selection_confidence": "low",
                 })
                 dropped.append(item)
                 dropped_indices.add(pos)
-                transition_drop_count += 1
             continue
 
         adaptive_chunk_seconds, density_mode, scroll_match_ratio = _adaptive_motion_chunk_seconds(
@@ -1462,9 +1553,13 @@ def select_temporal_representatives(
         "stable_run_count": len(anchors),
         "motion_segment_count": motion_group_count,
         "transition_drop_count": transition_drop_count,
+        "short_motion_preserved_count": short_motion_preserved_count,
         "mixed_transition_drop_count": len(mixed_transition_indices),
         "resolved_incomplete_drop_count": len(resolved_incomplete_indices),
         "stable_duplicate_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_stable_duplicate"),
+        "short_motion_redundant_drop_count": sum(
+            1 for item in dropped if item.get("drop_reason") == "temporal_short_motion_redundant"
+        ),
         "motion_redundant_drop_count": sum(1 for item in dropped if item.get("drop_reason") == "temporal_motion_redundant"),
         "low_confidence_selection_count": low_confidence_count,
         "selected_before_dedup": len(selected),
@@ -1583,6 +1678,10 @@ class DedupState:
     temporal_transition_drops: int = 0
     transient_ui_drops: int = 0
     ocr_visual_overrides: int = 0
+    ocr_min_gap_overrides: int = 0
+    short_motion_min_gap_overrides: int = 0
+    short_motion_dedup_overrides: int = 0
+    quality_transition_preserved: int = 0
     kept_count: int = 0
     total_count: int = 0
 

@@ -40,6 +40,7 @@ from lib import (
     calc_scroll_image,
     calc_thumb_bytes,
     collect_frame_files,
+    content_quality_drop_reason,
     create_ocr_engine,
     crop_for_ocr_bytes_with_range,
     find_tool,
@@ -138,6 +139,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=200,
         help="最多保存多少张丢弃候选帧（默认: 200，0=不限）",
+    )
+    p.add_argument(
+        "--archive",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="将结果复制到 Skill archive/（默认启用；复测可用 --no-archive）",
     )
     p.add_argument("--keep-temp", action="store_true", help="保留临时 ffmpeg 输出文件")
     return p.parse_args(argv)
@@ -324,6 +331,14 @@ def main() -> None:
                 motion_chunk_seconds=max(0.1, args.motion_chunk_seconds),
                 allow_incomplete_resolution=not args.ocr_dedup,
             )
+            if args.ocr_dedup and ocr_engine is not None:
+                selected_items, temporal_drops, ocr_rescue_stats = _rescue_short_motion_with_ocr(
+                    selected_items,
+                    temporal_drops,
+                    ocr_engine,
+                    params,
+                )
+                temporal_stats.update(ocr_rescue_stats)
             temporal_summary.update(temporal_stats)
             coverage_requirements = _build_coverage_requirements(temporal_drops)
             temporal_summary["coverage_required_frame_count"] = len(coverage_requirements)
@@ -390,6 +405,12 @@ def main() -> None:
             )
 
             capture_time = temporal_item.get("capture_time_seconds")
+            is_short_motion_representative = (
+                temporal_item.get("temporal_reason") == "short_motion_representative"
+            )
+            is_ocr_short_motion_rescue = (
+                temporal_item.get("temporal_reason") == "ocr_short_motion_rescue"
+            )
             covered_incomplete_sources = coverage_requirements.get(idx, [])
             is_required_coverage = bool(covered_incomplete_sources)
             coverage_filter_override_applied = False
@@ -428,11 +449,9 @@ def main() -> None:
                 "protect_visual_duplicate": False,
             }
             if args.ocr_dedup and ocr_engine is not None:
-                crop_bytes, crop_range = crop_for_ocr_bytes_with_range(content)
-                if crop_bytes and crop_range >= 18:
-                    ocr_text = ocr_extract_text(ocr_engine, crop_bytes)
-                    ocr_text = re.sub(r"\s+", "", ocr_text or "")
-                    ocr_text = re.sub(r"[^\w一-鿿￥¥,.]+", "", ocr_text)
+                ocr_text = str(temporal_item.get("_prefetched_ocr_text") or "")
+                if not ocr_text:
+                    ocr_text = _extract_normalized_ocr_text(ocr_engine, content)
                 ocr_delta = ocr_content_delta(
                     ocr_text,
                     state.kept_ocr_texts,
@@ -456,6 +475,12 @@ def main() -> None:
                     is_dup = False
                     _undo_duplicate_counter(state, drop_reason)
                     state.ocr_visual_overrides += 1
+                elif drop_reason != "duplicate_sha256" and (
+                    is_short_motion_representative or is_ocr_short_motion_rescue
+                ):
+                    is_dup = False
+                    _undo_duplicate_counter(state, drop_reason)
+                    state.short_motion_dedup_overrides += 1
                 else:
                     _record_drop_candidate(
                         output_dir,
@@ -476,6 +501,12 @@ def main() -> None:
                 if capture_time - last_kept_time < args.min_gap:
                     if is_required_coverage:
                         coverage_filter_override_applied = True
+                    elif is_short_motion_representative:
+                        state.short_motion_min_gap_overrides += 1
+                    elif is_ocr_short_motion_rescue:
+                        state.ocr_min_gap_overrides += 1
+                    elif bool(ocr_delta.get("protect_visual_duplicate")):
+                        state.ocr_min_gap_overrides += 1
                     else:
                         state.min_gap_drops += 1
                         _record_drop_candidate(
@@ -492,10 +523,13 @@ def main() -> None:
                         )
                         continue
 
-            # 内容质量过滤（空白页、启动画面、过渡帧）
+            # 内容质量过滤只自动删除空白/启动态。单帧 transition 很容易把
+            # 非对称正文页误判为切换态，因此仅作为后续视觉审计风险信号。
+            quality = temporal_item.get("quality") or calc_content_quality(content)
+            quality_transition_risk = str(quality.get("label") or "") == "transition"
             if args.filter_quality:
-                quality = calc_content_quality(content)
-                if quality["label"]:
+                quality_drop_reason = content_quality_drop_reason(quality)
+                if quality_drop_reason:
                     if is_required_coverage:
                         coverage_filter_override_applied = True
                     else:
@@ -504,7 +538,7 @@ def main() -> None:
                             output_dir,
                             frame_path,
                             idx,
-                            f"quality_{quality['label']}",
+                            quality_drop_reason,
                             capture_time,
                             digest,
                             drop_candidates_meta,
@@ -601,6 +635,8 @@ def main() -> None:
                 temporal_summary["coverage_filter_override_count"] = (
                     int(temporal_summary.get("coverage_filter_override_count") or 0) + 1
                 )
+            if quality_transition_risk:
+                state.quality_transition_preserved += 1
 
             # 复制到输出目录
             ts = format_timestamp(capture_time)
@@ -623,6 +659,8 @@ def main() -> None:
                 "mixed_transition_score": round(float(temporal_item.get("mixed_transition_score") or 0.0), 4),
                 "loading_overlay_score": round(float(transient_ui.get("score") or 0.0), 4),
                 "loading_overlay_label": transient_label,
+                "quality_label": str(quality.get("label") or ""),
+                "quality_transition_risk": quality_transition_risk,
                 "temporal_completion": temporal_item.get("temporal_completion"),
                 "coverage_protected": is_required_coverage,
                 "covers_incomplete_source_indices": covered_incomplete_sources,
@@ -664,11 +702,13 @@ def main() -> None:
         )
 
         # 归档
-        archive_dir = _archive_result(
-            output_dir, video_path, info, params, args, state, frames_meta, cleanup_stats,
-            drop_candidates_meta,
-            elapsed_seconds=time.monotonic() - started_at,
-        )
+        archive_dir = None
+        if args.archive:
+            archive_dir = _archive_result(
+                output_dir, video_path, info, params, args, state, frames_meta, cleanup_stats,
+                drop_candidates_meta,
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
         # 汇总
         print(f"\n完成!")
@@ -693,6 +733,14 @@ def main() -> None:
             print(f"    高置信加载浮层: {state.transient_ui_drops}")
         if state.ocr_visual_overrides:
             print(f"    OCR 新内容保留: {state.ocr_visual_overrides}")
+        if state.ocr_min_gap_overrides:
+            print(f"    OCR 最小间隔保护: {state.ocr_min_gap_overrides}")
+        if state.short_motion_min_gap_overrides:
+            print(f"    短时页面间隔保护: {state.short_motion_min_gap_overrides}")
+        if state.short_motion_dedup_overrides:
+            print(f"    短时页面近似保护: {state.short_motion_dedup_overrides}")
+        if state.quality_transition_preserved:
+            print(f"    质量切换风险保留: {state.quality_transition_preserved}")
         if state.min_gap_drops:
             print(f"    时间间隔过滤: {state.min_gap_drops}")
         if args.keep_drop_candidates:
@@ -855,6 +903,113 @@ def _undo_duplicate_counter(state: DedupState, drop_reason: str) -> None:
         setattr(state, attr, max(0, int(getattr(state, attr)) - 1))
 
 
+def _extract_normalized_ocr_text(ocr_engine: object, image_bytes: bytes) -> str:
+    """提取用于去重的最小化文本；调用方不得把正文写入报告。"""
+    crop_bytes, crop_range = crop_for_ocr_bytes_with_range(image_bytes)
+    if not crop_bytes or crop_range < 18:
+        return ""
+    text = ocr_extract_text(ocr_engine, crop_bytes)
+    text = re.sub(r"\s+", "", text or "")
+    return re.sub(r"[^\w一-鿿￥¥,.]+", "", text)
+
+
+def _rescue_short_motion_with_ocr(
+    selected_items: list[dict],
+    temporal_drops: list[dict],
+    ocr_engine: object,
+    params: ExtractParams,
+    *,
+    max_ocr_images: int = 24,
+) -> tuple[list[dict], list[dict], dict[str, int]]:
+    """只审查短运动段的少量落选项，最多每组补回一张有强新增内容的帧。"""
+    selected_by_group = {
+        str(item.get("temporal_group_id") or ""): item
+        for item in selected_items
+        if item.get("temporal_reason") == "short_motion_representative"
+    }
+    drops_by_group: dict[str, list[dict]] = {}
+    for item in temporal_drops:
+        if item.get("drop_reason") != "temporal_short_motion_redundant":
+            continue
+        group_id = str(item.get("temporal_group_id") or "")
+        if group_id in selected_by_group:
+            drops_by_group.setdefault(group_id, []).append(item)
+
+    calls = 0
+    rescued_source_indices: set[int] = set()
+    for group_id, candidates in sorted(drops_by_group.items()):
+        if calls >= max_ocr_images:
+            break
+        representative = selected_by_group[group_id]
+        with open(str(representative["frame_path"]), "rb") as fp:
+            reference_text = _extract_normalized_ocr_text(ocr_engine, fp.read())
+        calls += 1
+        representative["_prefetched_ocr_text"] = reference_text
+
+        best: tuple[tuple[int, int, int], dict, str, dict] | None = None
+        ranked_candidates = sorted(
+            candidates,
+            key=lambda item: (
+                float(item.get("blur_score") or 0.0),
+                float((item.get("quality") or {}).get("content_std") or 0.0),
+            ),
+            reverse=True,
+        )[:3]
+        for candidate in ranked_candidates:
+            if calls >= max_ocr_images:
+                break
+            with open(str(candidate["frame_path"]), "rb") as fp:
+                candidate_text = _extract_normalized_ocr_text(ocr_engine, fp.read())
+            calls += 1
+            delta = ocr_content_delta(
+                candidate_text,
+                [reference_text] if reference_text else [],
+                [shingles(reference_text)] if reference_text else [],
+                params.ocr_similarity_threshold,
+                params.ocr_min_new_chars,
+            )
+            new_tokens = int(delta.get("new_token_count") or 0)
+            new_numbers = int(delta.get("new_numeric_count") or 0)
+            strong_new_content = bool(delta.get("protect_visual_duplicate")) or (
+                new_numbers >= 1 and new_tokens >= 3
+            ) or new_tokens >= max(12, params.ocr_min_new_chars * 2)
+            if not candidate_text or not strong_new_content:
+                continue
+            score = (new_numbers, new_tokens, len(candidate_text))
+            if best is None or score > best[0]:
+                best = (score, candidate, candidate_text, delta)
+
+        if best is None:
+            continue
+        _score, candidate, candidate_text, delta = best
+        rescued = dict(candidate)
+        rescued.pop("drop_reason", None)
+        rescued.update({
+            "temporal_reason": "ocr_short_motion_rescue",
+            "selection_confidence": "medium",
+            "_prefetched_ocr_text": candidate_text,
+            "_prefetched_ocr_delta": delta,
+        })
+        selected_items.append(rescued)
+        rescued_source_indices.add(int(candidate.get("source_index") or 0))
+
+    selected_items.sort(
+        key=lambda item: (float(item.get("capture_time_seconds") or 0.0), int(item.get("source_index") or 0))
+    )
+    filtered_drops = [
+        item for item in temporal_drops
+        if int(item.get("source_index") or 0) not in rescued_source_indices
+    ]
+    return selected_items, filtered_drops, {
+        "ocr_short_motion_rescue_count": len(rescued_source_indices),
+        "ocr_short_motion_images_checked": calls,
+        "short_motion_redundant_drop_count": sum(
+            1 for item in filtered_drops if item.get("drop_reason") == "temporal_short_motion_redundant"
+        ),
+        "selected_before_dedup": len(selected_items),
+    }
+
+
 def _build_coverage_requirements(temporal_drops: list[dict]) -> dict[int, list[int]]:
     """建立“后续完整帧 -> 被其覆盖的未完成帧”绑定。"""
     requirements: dict[int, set[int]] = {}
@@ -912,6 +1067,7 @@ def _write_report(
             "motion_chunk_seconds": args.motion_chunk_seconds,
             "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
             "temporal_incomplete_resolution": not args.ocr_dedup,
+            "archive_enabled": bool(args.archive),
         },
         "total_extracted": total_extracted,
         "kept_after_dedup": state.kept_count,
@@ -939,6 +1095,10 @@ def _write_report(
             "temporal_transition_drops": state.temporal_transition_drops,
             "transient_ui_drops": state.transient_ui_drops,
             "ocr_visual_overrides": state.ocr_visual_overrides,
+            "ocr_min_gap_overrides": state.ocr_min_gap_overrides,
+            "short_motion_min_gap_overrides": state.short_motion_min_gap_overrides,
+            "short_motion_dedup_overrides": state.short_motion_dedup_overrides,
+            "quality_transition_preserved": state.quality_transition_preserved,
         },
         "frames": frames,
     }
@@ -1049,6 +1209,7 @@ def _archive_result(
             "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
             "keep_drop_candidates": args.keep_drop_candidates,
             "drop_candidate_limit": args.drop_candidate_limit,
+            "archive_enabled": bool(args.archive),
         },
         "cleanup": cleanup_stats,
         "archive_validation": {
@@ -1078,6 +1239,10 @@ def _archive_result(
                 "temporal_transition_drops": state.temporal_transition_drops,
                 "transient_ui_drops": state.transient_ui_drops,
                 "ocr_visual_overrides": state.ocr_visual_overrides,
+                "ocr_min_gap_overrides": state.ocr_min_gap_overrides,
+                "short_motion_min_gap_overrides": state.short_motion_min_gap_overrides,
+                "short_motion_dedup_overrides": state.short_motion_dedup_overrides,
+                "quality_transition_preserved": state.quality_transition_preserved,
             },
         },
         "frame_count": state.kept_count,

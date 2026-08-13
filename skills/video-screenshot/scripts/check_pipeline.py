@@ -22,9 +22,18 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from extract import _build_coverage_requirements, _clean_output_dir, _record_drop_candidate
+from extract import (
+    _build_coverage_requirements,
+    _clean_output_dir,
+    _record_drop_candidate,
+    _rescue_short_motion_with_ocr,
+)
 from lib import (
+    ExtractParams,
+    calc_content_quality,
     calc_loading_overlay_score,
+    content_quality_drop_reason,
+    coverage_eligibility_metrics,
     horizontal_mixed_transition_score,
     ocr_content_delta,
     ocr_extract_text,
@@ -57,6 +66,7 @@ def parse_args() -> argparse.Namespace:
             "weak-membership",
             "valid-review",
             "replace-review",
+            "coverage-survival",
             "invalid-review",
             "output-protection",
             "fault-invalid-review",
@@ -147,6 +157,30 @@ def _test_temporal() -> None:
         for item in dropped
     )
 
+    # 短暂独立页即使夹在两个稳定页之间，也必须至少保留一张供视觉层做减法。
+    brief = []
+    for idx, (seconds, shade) in enumerate(
+        ((0.0, 30), (0.4, 30), (0.9, 125), (1.4, 220), (1.8, 220)),
+        1,
+    ):
+        brief.append({
+            "source_index": idx,
+            "capture_time_seconds": seconds,
+            "thumb": bytes([shade] * (48 * 48)),
+            "ssim_thumb": bytes([shade] * (32 * 32)),
+            "blur_score": 120.0,
+            "quality": {"label": ""},
+            "seam_score": 0.0,
+        })
+    selected, dropped, stats = select_temporal_representatives(
+        brief,
+        stable_max_gap_seconds=0.8,
+        transition_max_seconds=2.4,
+    )
+    assert any(item["source_index"] == 3 for item in selected), selected
+    assert stats["short_motion_preserved_count"] == 1, stats
+    assert not any(item.get("drop_reason") == "temporal_transition" for item in dropped), dropped
+
 
 def _pattern(width: int, height: int, invert: bool = False) -> Image.Image:
     image = Image.new("L", (width, height), 230 if not invert else 30)
@@ -214,6 +248,68 @@ def _test_content_delta() -> None:
 
     parsed = ocr_extract_text(fake_ocr, b"fixture")
     assert parsed == "订单金额1200元|收货地址北京", parsed
+
+    # 非对称正文页会触发单帧 transition 启发式，但该标签只能提权审计，不能删除。
+    asymmetric = Image.new("RGB", (360, 640), "white")
+    draw = ImageDraw.Draw(asymmetric)
+    draw.rectangle((15, 40, 155, 595), fill=(230, 230, 230))
+    for y in range(55, 590, 18):
+        draw.rectangle((25, y, 145, y + 5), fill=(10, 10, 10))
+    quality = calc_content_quality(_image_bytes(asymmetric))
+    assert quality["label"] == "transition", quality
+    assert content_quality_drop_reason(quality) == "", quality
+
+    # OCR 只检查短运动段的小集合，且每组最多补回一张有强新增编号的落选帧。
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
+        root = Path(tmp)
+        representative_path = root / "representative.png"
+        candidate_path = root / "candidate.png"
+        asymmetric.save(representative_path)
+        asymmetric.save(candidate_path)
+
+        calls = iter(["订单页面", "订单页面编号123456新增证据正文甲乙丙丁"])
+
+        def fake_engine(_image_bytes: bytes) -> tuple[list[list[object]], None]:
+            text = next(calls)
+            return [[[[0, 0], [1, 0], [1, 1], [0, 1]], text, 0.99]], None
+
+        selected, dropped, stats = _rescue_short_motion_with_ocr(
+            [{
+                "source_index": 1,
+                "frame_path": str(representative_path),
+                "capture_time_seconds": 0.0,
+                "temporal_group_id": "motion-001",
+                "temporal_reason": "short_motion_representative",
+            }],
+            [{
+                "source_index": 2,
+                "frame_path": str(candidate_path),
+                "capture_time_seconds": 0.2,
+                "temporal_group_id": "motion-001",
+                "drop_reason": "temporal_short_motion_redundant",
+                "blur_score": 100.0,
+                "quality": {"content_std": 60.0},
+            }],
+            fake_engine,
+            ExtractParams(),
+        )
+        assert stats["ocr_short_motion_rescue_count"] == 1, stats
+        assert any(item.get("temporal_reason") == "ocr_short_motion_rescue" for item in selected), selected
+        assert not dropped, dropped
+
+    related_a = Image.new("RGB", (180, 320), (245, 245, 245))
+    draw = ImageDraw.Draw(related_a)
+    draw.rectangle((11, 20, 160, 280), outline=(17, 50, 80), width=5)
+    related_b = related_a.copy()
+    ImageDraw.Draw(related_b).text((20, 45), "new", fill=(0, 0, 0))
+    unrelated = Image.new("RGB", (180, 320), (0, 0, 0))
+    ImageDraw.Draw(unrelated).ellipse((30, 100, 150, 220), fill=(255, 255, 255))
+    assert coverage_eligibility_metrics(
+        _image_bytes(related_a), _image_bytes(related_b)
+    )["eligible"] is True
+    assert coverage_eligibility_metrics(
+        _image_bytes(related_a), _image_bytes(unrelated)
+    )["eligible"] is False
 
 
 def _image_bytes(image: Image.Image) -> bytes:
@@ -403,9 +499,9 @@ def _test_vision_diversity() -> None:
         root = Path(tmp)
         report_path, manifest_path = _write_fixture(root)
         report = json.loads(report_path.read_text(encoding="utf-8"))
-        # 把 12 张合成帧拉开到 0—330 秒，制造多个风险相近的时间桶。
+        # 拉开为多个时间簇，同时保留簇内相似覆盖帧，验证预算会分散到不同阶段。
         for idx, frame in enumerate(report["frames"]):
-            frame["capture_time_seconds"] = float(idx * 30)
+            frame["capture_time_seconds"] = float((idx // 2) * 30 + (idx % 2))
             frame["selection_confidence"] = "low"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         result = subprocess.run(
@@ -482,7 +578,7 @@ def _run_weak_review(*, confidence: float, coverage_mode: str) -> dict:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         group = next(item for item in manifest["groups"] if item["task_type"] == "kept_target_review")
         target = group["decision_target_audit_id"]
-        same_group = next(item["audit_id"] for item in group["images"] if item["audit_id"] != target)
+        same_group = group["allowed_coverage_audit_ids"][0]
         other_group = next(
             item["audit_id"]
             for candidate_group in manifest["groups"]
@@ -610,7 +706,9 @@ def _test_valid_review() -> None:
         )
         assert prepare.returncode == 0, prepare.stderr
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        target = next(item for item in manifest["images"] if item["source"] == "kept")
+        group = next(item for item in manifest["groups"] if item["allowed_coverage_audit_ids"])
+        target_id = group["decision_target_audit_id"]
+        coverage_id = group["allowed_coverage_audit_ids"][0]
         review_path = root / "_vision_review.json"
         review_path.write_text(
             json.dumps({
@@ -618,8 +716,9 @@ def _test_valid_review() -> None:
                 "status": "completed",
                 "source_manifest_sha256": _sha(manifest_path),
                 "decisions": [{
-                    "audit_id": target["audit_id"],
+                    "audit_id": target_id,
                     "decision": "drop",
+                    "coverage_audit_id": coverage_id,
                     "reason_code": "transition",
                     "reason": "合成正向用例：该目标帧视为切换中间态",
                     "confidence": 0.95,
@@ -653,8 +752,9 @@ def _test_replace_review() -> None:
         )
         assert prepare.returncode == 0, prepare.stderr
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        kept = [item for item in manifest["images"] if item["source"] == "kept"]
-        assert len(kept) >= 2
+        group = next(item for item in manifest["groups"] if item["allowed_coverage_audit_ids"])
+        target_id = group["decision_target_audit_id"]
+        coverage_id = group["allowed_coverage_audit_ids"][0]
         review_path = root / "_vision_review.json"
         review_path.write_text(
             json.dumps({
@@ -662,9 +762,10 @@ def _test_replace_review() -> None:
                 "status": "completed",
                 "source_manifest_sha256": _sha(manifest_path),
                 "decisions": [{
-                    "audit_id": kept[0]["audit_id"],
+                    "audit_id": target_id,
                     "decision": "replace",
-                    "replacement_audit_id": kept[1]["audit_id"],
+                    "replacement_audit_id": coverage_id,
+                    "coverage_audit_id": coverage_id,
                     "reason_code": "clearer_replacement",
                     "reason": "合成正向用例：后一张覆盖同一内容且更清晰",
                     "confidence": 0.96,
@@ -683,6 +784,24 @@ def _test_replace_review() -> None:
         assert curated["curated_frame_count"] == 11
         assert curated["decision_summary"]["replaced"] == 1
         assert len(curated["excluded_by_vision"]) == 1
+
+
+def _test_coverage_survival() -> None:
+    from apply_vision_review import _enforce_final_coverage_survival
+
+    chain, chain_noops = _enforce_final_coverage_survival({
+        "img-a": {"decision": "drop", "coverage_audit_id": "img-b"},
+        "img-b": {"decision": "drop", "coverage_audit_id": "img-c"},
+    }, [])
+    assert set(chain) == {"img-b"}, chain
+    assert len(chain_noops) == 1 and chain_noops[0]["target_audit_id"] == "img-a", chain_noops
+
+    cycle, cycle_noops = _enforce_final_coverage_survival({
+        "img-a": {"decision": "drop", "coverage_audit_id": "img-b"},
+        "img-b": {"decision": "drop", "coverage_audit_id": "img-a"},
+    }, [])
+    assert cycle == {}, cycle
+    assert len(cycle_noops) == 2, cycle_noops
 
 
 def _test_output_protection() -> None:
@@ -740,6 +859,7 @@ def main() -> int:
         "weak-membership": _test_weak_repeated_image_group_membership,
         "valid-review": _test_valid_review,
         "replace-review": _test_replace_review,
+        "coverage-survival": _test_coverage_survival,
         "invalid-review": _test_invalid_review,
         "output-protection": _test_output_protection,
     }
