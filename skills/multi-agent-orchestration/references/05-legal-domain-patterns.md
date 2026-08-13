@@ -59,6 +59,49 @@
 | 文书审核 | Review Agent | 法律准确性 + 逻辑审查 |
 | 庭审预测 | Analysis Agent | 基于类案的推理 |
 
+### 2.1 诉讼 worker 的证据访问约定
+
+诉讼 worker 读证据（PDF/图片/视频/3D 模型/取证件）的机制与代码项目依赖不同：
+
+- **代码 worker 读 `node_modules`** 是隐式解析（npm 内部找路径），必须软链进 worktree 让其自然可达——见 `spawn-worker-deps.sh` 的 G31 补偿。
+- **诉讼 worker 读证据** 是显式访问（agent 自己 `cat` 一个文件）。worker 在自己的 worktree 内**没有证据原件**（证据被 `.gitignore` 排除），但工作树中 md 产出和证据目录结构已存在，路径名可读。worker 只需从案件的 md 产出或目录命名里识别证据路径，再**用绝对路径**读主仓原件。
+
+**PM spawn 诉讼 worker 时**，prompt 必须包含：
+
+1. **主仓项目根**（用 git 命令取，不要硬编码）：
+   ```
+   PROJECT_ROOT=$(git rev-parse --show-toplevel)
+   ```
+2. **案件目录相对路径**（PM 只需告诉 worker 案件在主仓内的相对位置；绝对路径 worker 自己拼）：
+   ```
+   CASE_REL="<主仓内的案件目录相对路径，如 003 - 诉讼仲裁/<案件名>>"
+   ```
+3. **证据访问模板**（worker 按案件目录命名约定自主取证据）：
+   ```bash
+   # 1) 列出案件目录里证据材料类型（grep 已知子目录前缀）
+   ls -la "$PROJECT_ROOT/$CASE_REL" | grep -E '0[1-9] -|1[0-2] -'
+   # 2) 读特定证据文件（用 find 定位，不假设具体文件名）
+   EVIDENCE=$(find "$PROJECT_ROOT/$CASE_REL" -name '*.pdf' -path '*/05*证据材料/*' | head -1)
+   # 3) 读取它
+   cat "$EVIDENCE"    # 文本型
+   # 或用 OCR/Skill 处理扫描件
+   ```
+4. **产出写路径**（worker 在自己的 worktree 里，对应案件目录的子路径）：
+   ```
+   产出: <worktree>$CASE_REL/<约定的子目录，如 02 - 📄 案件分析>/证据目的表.md
+   ```
+5. **md 文档内的证据引用规范**（避免污染机器路径）：
+   - 引证证据用**相对文件名**写进文档（如 `见 05 - 📎 证据材料/<证据文件名>.pdf`），**不要**写绝对路径。
+   - worker run-time 读证据用绝对路径；文档成稿里只用相对名——文档可移植、可分享。
+
+**反模式**（不要做）：
+- 在 worktree 里软链证据目录 → 没必要，文档已成可定位证据相对路径，再走绝对路径读主仓即可。
+- 把"绝对路径"或"具体目录名"硬编码进 prompt 模板 → 绑定到本机环境、泄露隐私、跨用户失效。
+- 把绝对路径写进产出文档 → 污染文档、绑定本机。
+- 让 worker 假定自己知道完整路径 → 必须告诉 worker 项目根和案件相对路径，由它自己拼绝对路径。
+
+> 工程依据：常见做法是项目目录已经 `git init`（monorepo 或单案件），`.gitignore` 排除证据原件。worktree 只 checkout 文本，但通过 `git rev-parse --show-toplevel` + `find` 可动态定位证据原件绝对路径。这与代码 `node_modules` 必须软链的隐式解析场景不同：证据是**显式查找 + 显式访问**，无需软链补偿。
+
 ## 3. 非诉项目模板
 
 非诉项目（以尽职调查和合同审查为例）：
