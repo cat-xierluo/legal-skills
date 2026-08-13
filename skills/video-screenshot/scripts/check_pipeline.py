@@ -22,13 +22,15 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from extract import _clean_output_dir, _record_drop_candidate
+from extract import _build_coverage_requirements, _clean_output_dir, _record_drop_candidate
 from lib import (
     calc_loading_overlay_score,
     horizontal_mixed_transition_score,
     ocr_content_delta,
     ocr_extract_text,
+    regional_mixed_transition_score,
     select_temporal_representatives,
+    temporal_completion_metrics,
     transient_ui_drop_reason,
 )
 
@@ -46,9 +48,13 @@ def parse_args() -> argparse.Namespace:
             "mixed-transition",
             "content-delta",
             "transient-ui",
+            "temporal-completion",
             "adaptive-density",
             "vision-budget",
             "vision-diversity",
+            "weak-vision-package",
+            "weak-review-gate",
+            "weak-membership",
             "valid-review",
             "replace-review",
             "invalid-review",
@@ -171,6 +177,14 @@ def _test_mixed_transition() -> None:
     result = horizontal_mixed_transition_score(previous, ordinary, following)
     assert result["score"] < 0.58, result
 
+    # 真实 UI 动画可能含缩放/位移，无法像素级拼合；分区归属仍应识别由两侧邻帧共同覆盖。
+    regional_current = Image.new("L", (width, height), 128)
+    regional_current.paste(previous.crop((0, 0, width, height // 2)), (0, 0))
+    regional_current.paste(following.crop((0, height // 2, width, height)), (0, height // 2))
+    regional = regional_mixed_transition_score(previous, regional_current, following)
+    assert regional["score"] >= 0.35, regional
+    assert regional["previous_regions"] > 0 and regional["following_regions"] > 0, regional
+
 
 def _test_content_delta() -> None:
     previous = "用户张三订单金额￥1200收货地址北京市朝阳区"
@@ -249,6 +263,60 @@ def _test_transient_ui() -> None:
         assert len(candidates) == 1, candidates
         assert candidates[0]["reason"] == "quality_loading_overlay", candidates
         assert len(list((root / "_review_candidates").glob("candidate_*.jpg"))) == 1
+
+
+def _test_temporal_completion() -> None:
+    width, height = 72, 120
+    incomplete = Image.new("L", (width, height), 245)
+    complete = Image.new("L", (width, height), 245)
+    incomplete_draw = ImageDraw.Draw(incomplete)
+    complete_draw = ImageDraw.Draw(complete)
+    # 共同页面骨架位于上部；完整页的主内容区增加多行信息。
+    for draw in (incomplete_draw, complete_draw):
+        draw.rectangle((4, 15, 67, 42), outline=35, width=2)
+        draw.line((9, 24, 58, 24), fill=80, width=2)
+        draw.line((9, 33, 45, 33), fill=100, width=2)
+    for y in range(58, 108, 8):
+        complete_draw.line((7, y, 65, y), fill=40, width=2)
+    loading = {"label": "incomplete_page", "score": 0.99}
+    completion = temporal_completion_metrics(incomplete, complete, loading)
+    assert completion["resolved"] is True, completion
+
+    complete_items = []
+    for index, (seconds, image, loading_metrics) in enumerate((
+        (0.0, incomplete, loading),
+        (0.5, complete, {"label": "", "score": 0.0}),
+        (1.0, complete, {"label": "", "score": 0.0}),
+    ), 1):
+        complete_items.append({
+            "source_index": index,
+            "capture_time_seconds": seconds,
+            "thumb": bytes([index * 50] * (48 * 48)),
+            "ssim_thumb": bytes([index * 50] * (32 * 32)),
+            "blur_score": 120.0,
+            "quality": {"label": ""},
+            "loading_overlay": loading_metrics,
+            "seam_score": 0.0,
+            "transition_image": image,
+            "scroll_image": image,
+        })
+    _selected, dropped, stats = select_temporal_representatives(complete_items)
+    assert any(item.get("drop_reason") == "temporal_incomplete_resolved" for item in dropped), dropped
+    assert stats["resolved_incomplete_drop_count"] == 1, stats
+    requirements = _build_coverage_requirements(dropped)
+    assert requirements == {2: [1]}, requirements
+
+    # OCR 模式须禁用自动删除，以便后续内容增量保护完整运行。
+    _selected, dropped, stats = select_temporal_representatives(
+        complete_items,
+        allow_incomplete_resolution=False,
+    )
+    assert not any(item.get("drop_reason") == "temporal_incomplete_resolved" for item in dropped), dropped
+    assert stats["resolved_incomplete_drop_count"] == 0, stats
+
+    # 后帧没有新增主内容时不得仅凭 loading 标签删除。
+    unresolved = temporal_completion_metrics(incomplete, incomplete.copy(), loading)
+    assert unresolved["resolved"] is False, unresolved
 
 
 def _temporal_item(index: int, seconds: float, scroll: Image.Image) -> dict:
@@ -350,6 +418,138 @@ def _test_vision_diversity() -> None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         buckets = manifest["budget"]["covered_time_buckets"]
         assert len(buckets) >= 3, buckets
+
+
+def _test_weak_vision_package() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
+        root = Path(tmp)
+        _report_path, manifest_path = _write_fixture(root)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "prepare_vision_audit.py"),
+                "-i",
+                str(root),
+                "--profile",
+                "weak",
+                "--max-groups",
+                "2",
+                "--max-images",
+                "6",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["profile"] == "weak"
+        assert manifest["budget"]["actual_groups"] <= 2
+        for group in manifest["groups"]:
+            targets = [
+                item for item in group["images"]
+                if item["audit_id"] == group["decision_target_audit_id"]
+            ]
+            assert len(targets) == 1, group
+            assert group["task_type"] in {"kept_target_review", "discarded_candidate_review"}
+            assert group["allowed_outcomes"], group
+        template = json.loads((manifest_path.parent / "review_template.json").read_text(encoding="utf-8"))
+        assert template["schema_version"] == "1.1"
+        assert template["profile"] == "weak"
+        assert len(template["answers"]) == manifest["budget"]["actual_groups"]
+        assert manifest["decision_contract"]["mode"] == "weak_group_answers"
+        assert manifest["decision_contract"]["mutation_gate"]["fallback"] == "safe_noop"
+        assert template["answers"][0]["reason_codes_by_outcome"], template["answers"][0]
+        assert "allowed_coverage_audit_ids" in template["answers"][0]
+        assert (manifest_path.parent / "MODEL_INSTRUCTIONS.md").is_file()
+        first_sheet = Image.open(manifest_path.parent / manifest["groups"][0]["contact_sheet"])
+        assert first_sheet.width >= 800, first_sheet.size
+        restore_groups = [group for group in manifest["groups"] if group["task_type"] == "discarded_candidate_review"]
+        assert len(restore_groups) <= 2, restore_groups
+
+
+def _run_weak_review(*, confidence: float, coverage_mode: str) -> dict:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-check-") as tmp:
+        root = Path(tmp)
+        _report_path, manifest_path = _write_fixture(root)
+        prepare = subprocess.run(
+            [sys.executable, str(ROOT / "prepare_vision_audit.py"), "-i", str(root), "--profile", "weak", "--max-groups", "2", "--max-images", "6"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert prepare.returncode == 0, prepare.stderr
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        group = next(item for item in manifest["groups"] if item["task_type"] == "kept_target_review")
+        target = group["decision_target_audit_id"]
+        same_group = next(item["audit_id"] for item in group["images"] if item["audit_id"] != target)
+        other_group = next(
+            item["audit_id"]
+            for candidate_group in manifest["groups"]
+            if candidate_group["group_id"] != group["group_id"]
+            for item in candidate_group["images"]
+            if item["audit_id"] != target
+        )
+        coverage = same_group if coverage_mode == "same" else other_group
+        review_path = root / "_vision_review.json"
+        template = json.loads((manifest_path.parent / "review_template.json").read_text(encoding="utf-8"))
+        for answer in template["answers"]:
+            answer["outcome"] = "keep" if answer["task_type"] == "kept_target_review" else "leave_discarded"
+            answer["coverage_audit_id"] = ""
+            answer["reason_code"] = "other"
+            answer["reason"] = "合成用例：默认维持基础结果"
+            answer["confidence"] = 0.80
+        selected_answer = next(answer for answer in template["answers"] if answer["group_id"] == group["group_id"])
+        selected_answer.update({
+            "outcome": "drop",
+            "coverage_audit_id": coverage,
+            "reason_code": "transition",
+            "reason": "合成用例：相邻完整帧覆盖目标内容",
+            "confidence": confidence,
+        })
+        template["status"] = "completed"
+        review_path.write_text(
+            json.dumps({
+                **template,
+                "source_manifest_sha256": _sha(manifest_path),
+            }, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        apply_result = subprocess.run(
+            [sys.executable, str(ROOT / "apply_vision_review.py"), "-i", str(root), "-r", str(review_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert apply_result.returncode == 0, apply_result.stdout + apply_result.stderr
+        return json.loads((root / "_curated" / "_curated_report.json").read_text(encoding="utf-8"))
+
+
+def _test_weak_review_gate() -> None:
+    low = _run_weak_review(confidence=0.82, coverage_mode="same")
+    assert low["curated_frame_count"] == 12, low["decision_summary"]
+    assert low["decision_summary"]["dropped"] == 0
+    assert low["decision_summary"]["safe_noop_count"] == 1
+
+    cross_group = _run_weak_review(confidence=0.97, coverage_mode="other")
+    assert cross_group["curated_frame_count"] == 12, cross_group["decision_summary"]
+    assert cross_group["decision_summary"]["safe_noop_count"] == 1
+
+    accepted = _run_weak_review(confidence=0.97, coverage_mode="same")
+    assert accepted["curated_frame_count"] == 11, accepted["decision_summary"]
+    assert accepted["decision_summary"]["dropped"] == 1
+
+
+def _test_weak_repeated_image_group_membership() -> None:
+    manifest = {
+        "groups": [
+            {"group_id": "group-001", "images": [{"audit_id": "img-shared"}, {"audit_id": "img-a"}]},
+            {"group_id": "group-002", "images": [{"audit_id": "img-shared"}, {"audit_id": "img-b"}]},
+        ]
+    }
+    from apply_vision_review import _group_index
+    _groups, memberships = _group_index(manifest)
+    assert memberships["img-shared"] == {"group-001", "group-002"}, memberships
 
 
 def _run_invalid_review_fault() -> tuple[int, str, bool]:
@@ -531,9 +731,13 @@ def main() -> int:
         "mixed-transition": _test_mixed_transition,
         "content-delta": _test_content_delta,
         "transient-ui": _test_transient_ui,
+        "temporal-completion": _test_temporal_completion,
         "adaptive-density": _test_adaptive_density,
         "vision-budget": _test_vision_budget,
         "vision-diversity": _test_vision_diversity,
+        "weak-vision-package": _test_weak_vision_package,
+        "weak-review-gate": _test_weak_review_gate,
+        "weak-membership": _test_weak_repeated_image_group_membership,
         "valid-review": _test_valid_review,
         "replace-review": _test_replace_review,
         "invalid-review": _test_invalid_review,
