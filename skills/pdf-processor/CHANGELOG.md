@@ -1,5 +1,23 @@
 # 更新日志
 
+## [2.11.0] - 2026-08-13
+
+### 新增
+
+- **PaddleOCR poly y 原点自动判定 + 翻转**（`infer_y_origin`）：PaddleOCR 不同文档会返回 poly y 原点不一致（FROM BOTTOM 或 FROM TOP），旧版一律按 FROM BOTTOM 直接缩放，导致部分文档的页码、标题整体跑到对面。新增启发按 poly y 中位数与源图高度比判定；FROM TOP 时自动 `pdf_y = source_h - poly_y` 后再缩放。CLI 暴露 `--paddle-yflip {auto,bottom,top,none}`，auto 为默认，启发落在模糊区间时可显式覆盖。已知场景：含顶部 QR 码小字 + 底部页脚的法院文书等密集边界文档若 auto 误判，可改用 `--paddle-yflip top/bottom` 强制。
+- **装饰元素过滤**（`--layered-filter-decorative`，默认开）：叠层前过滤 PaddleOCR 版面定位错误的装饰元素——bbox 高度 < 6pt、距页边 < 5pt 且高度 < 12pt 的页眉/页脚小字、宽度 < 50pt 但甩到对侧的窄元素。被过滤的元素不写文字层（搜索/复制会缺这些字），但避免整页文字层被单点错位污染。`--no-layered-filter-decorative` 关闭。
+
+### 技术说明
+
+- 修复源自 2026-08-13 排查：法院裁定书 QR 标题"扫码关注更多服务"被 PP-OCRv6 版面分析甩到右侧 460pt；synth_test 合成 PDF 则整体 y 翻面。`assess_ocr_coordinate_health` 因 poly y 范围都在 [0, page_h] 内未触发拦截。
+- y 翻转启发对"文字均匀分布在整页"的文档可能落在模糊区间判错，需用户显式 `--paddle-yflip` 覆盖；改进方向见 DECISIONS.md。
+- 真实测试样本：synth_test（FROM TOP）+ 法院裁定书（FROM BOTTOM），翻转后 layer y_top 与原图视觉位置一致。
+
+### 已知局限
+
+- y 翻转启发对模糊区间（中位数 0.4~0.6 source_h）判错——保守默认不翻。文档以 `--paddle-yflip` 显式控制为兜底。
+- 装饰元素过滤可能误伤正常小字注释（如脚注）；阈值在 v2.11.0 偏保守，后续按真实样本调。
+
 ## [2.10.2] - 2026-08-01
 
 ### 新增
