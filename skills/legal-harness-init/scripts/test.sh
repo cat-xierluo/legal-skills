@@ -238,6 +238,24 @@ my_init=$(env -i HOME="$TEST_ROOT/home" MY_MODEL="agent-self-detected" bash "$SC
 assert_contains "$my_init" '"status":"recorded"' "MY_MODEL env 命中后 record"
 if grep -Fq 'agent-self-detected' "$TEST_ROOT/init-env-my/AGENTS.md"; then pass "MY_MODEL 自检自填路径可用"; else fail "MY_MODEL 自检自填路径可用"; fi
 
+# --note 含 | 必须被转义为 \|(不破坏 markdown 表格)
+mkdir -p "$TEST_ROOT/init-env-note"
+printf '# u\n' > "$TEST_ROOT/init-env-note/AGENTS.md"
+env -i HOME="$TEST_ROOT/home" MY_MODEL="m" bash "$SCRIPT_DIR/record-init-env.sh" \
+    --target "$TEST_ROOT/init-env-note/AGENTS.md" --action init \
+    --note "M6 项目级|关键时点" >/dev/null 2>&1
+if grep -Fq 'M6 项目级\|关键时点' "$TEST_ROOT/init-env-note/AGENTS.md"; then
+    pass "--note 含 | 被转义为 \\|"
+else
+    fail "--note 含 | 被转义为 \\|"
+fi
+# 不应出现裸 | 后接非转义内容(破坏表格列分隔)
+if ! awk '/<!-- legal-harness-init:init-environment:start -->/ {f=1; next} /<!-- legal-harness-init:init-environment:end -->/ {f=0} f' "$TEST_ROOT/init-env-note/AGENTS.md" | grep -E '\|' | grep -v '^\|' | grep -qv '^$'; then
+    pass "--note 含 | 时表格列分隔未被破坏"
+else
+    fail "--note 含 | 时表格列分隔未被破坏"
+fi
+
 printf '<!-- legal-harness-init:init-environment:start -->\n' > "$TEST_ROOT/init-env/AGENTS.md.broken"
 if env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="x" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md.broken" --action init >/dev/null 2>&1; then
     fail "残缺 marker 拒绝 append"

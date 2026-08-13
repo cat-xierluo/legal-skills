@@ -19,26 +19,29 @@
 ### Bug 修复
 
 - 修 v0.4.0 `record-init-env.sh` create 模式 bug：原 create 模式只写 init-environment 区块、不保留 target 原内容；导致 write.sh 集成后 target 中 legal-baseline 等其他受管区块被吞。fix：create 改为先 `cat target` + 补末尾换行 + 追加 init-environment 区块（v0.4.0 / v0.4.1 单独调用未暴露,因 record-init-env.sh 之前总在空 AGENTS.md 上跑）
+- v0.4.2-B `--note` 含 markdown 破坏性字符 `|` 时不再破坏表格列分隔：新增 `escape_markdown_cell` 函数,`--note` 写入前 `|` → `\|` 转义；其他列（HARNESS_NAME / MODEL / VERSION 等 ASCII 标识符）不转义以减少误转义
 
 ### 决策
 
-- DEC-022（待补）write.sh 真实落盘后自动调 record-init-env.sh——从"文档约束"升级为"脚本级保证",agent 漏不掉
+- DEC-022 write.sh 真实落盘后自动调 record-init-env.sh——从"文档约束"升级为"脚本级保证",agent 漏不掉
+- DEC-023（待补）`--note` 只转义 `|`（最少必要）;不批量转义其他 markdown 元字符,避免误转义 ASCII 标识符
 
 ### 验证
 
-- ✅ `bash scripts/test.sh`：51/51 全过（v0.4.1 48 + v0.4.2-A 新增 3）
+- ✅ `bash scripts/test.sh`：53/53 全过（v0.4.1 48 + v0.4.2-A 新增 3 + v0.4.2-B 新增 2）
 - ✅ write.sh 真实落盘后自动追加 init-environment（含 model 透传）
 - ✅ `--record-init-env=false` 时不调 record-init-env.sh
 - ✅ dry-run 时不调 record-init-env.sh
 - ✅ write.sh 第二次同输入运行 status=unchanged,AGENTS.md 字节级零 diff
 - ✅ 端到端：write.sh 落盘后 record-init-env.sh 自动追加,legal-baseline + init-environment 两个受管区块共存
+- ✅ `--note "M6 项目级|关键时点"` 写入后 `\|` 被正确转义,表格列分隔未被破坏
 - ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`(需真实律师测试)
 
 ### 待办
 
-- --note 含 `|` 等 markdown 元字符转义（v0.4.2-B）
 - 端到端真实 init 全流程跑通
 - 真实 harness `--version` 探测在已装 claude/codex CLI 的机器验证
+- v0.5.0-F session jsonl 事后回填（远期）
 
 ## [0.4.1] - 2026-08-13
 
