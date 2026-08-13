@@ -689,3 +689,11 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
   - **Orca supervised 比 tmux 多一层 lifecycle 死锁风险**：tmux worker 死了 PM 直接 kill session；Orca supervised worker 死了但没 worker_done，dispatch 卡住拖累整个收尾。需要 PM 侧的 force-settle 兜底。
 
 **关联**：G28（向上解析免费午餐）、G29 #2/#3/#4（install-guard 过严 + worker 自验缺失，未根治）、SKILL §3.1 spawn 协议、§8 supervised lifecycle、references/12 Orca worker。
+
+### G32. run-create 重试 → consumer_fenced（Task-043，Wave-2）
+
+**现象**：folia Wave-2 PM 调 `pm-orchestrate run-create` 两次（第一次拿 receipt 后又调一次"确认"），第二次生成新 Run + 新 coordinator handle。后续 `pm-orchestrate wait` 用第一次的 handle，Orca 返回 `consumer_fenced: This coordinator terminal is no longer bound to Run <id>`。
+
+**根因**：Orca supervised 的 consumer fencing = 最新 coordinator handle 胜出。一个 Wave 共用一个 Run，`run-create` 调一次即定；重试生成新 Run（即便 objective 相同），旧 handle 立即被新 Run 的 handle fence。
+
+**正确协议**：`pm-orchestrate run-create --objective TEXT` 调一次，从 receipt `jq -r '.result.run.id'` 一次取定 run_id，整 Wave 复用（`spawn-worker --orca-supervised --orca-run-id $run_id`）。不要重试 run-create；若需确认 receipt，读已拿到的 JSON，不重发命令。详见 SKILL §3.3 规则 2、§4.4。
