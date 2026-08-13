@@ -5,6 +5,32 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.5.1] - 2026-08-13
+
+> codex session jsonl 反查：`--probe-from-session` 现支持 codex，从 `turn_context.payload.model` 取 model。
+
+### 新增
+
+- `probe-session-model.sh` 新增 codex 分支：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`，取最近 mtime 最大的 rollout，读最后一条 `turn_context` 记录的 `payload.model` 字段
+- codex sessions 按时间分目录、不分 cwd（与 CC 按 encoded-cwd 分目录不同），probe 取最近 mtime 最大者
+
+### 决策
+
+- DEC-025（本地不入仓）codex probe 不按 cwd 过滤：codex 一次通常只跑一个项目，最近 mtime 的 rollout 大概率是当前；model 名跨项目通常一致；turn_context 行含 cwd 字段，若后续发现误取可加二次校验
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：59/59 全过（v0.5.0 58 + v0.5.1 新增 1 codex found 路径；codex not_found 用例改用空 HOME 触发）
+- ✅ probe codex 在 sandbox 真实 session 拿到 model（`gpt-5.6-sol`）
+- ✅ probe codex sessions_root 不存在时 not_found
+- ⚠️ openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 probe **NOT_VERIFIED**（留 v0.5.2）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- v0.5.2：openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 session model 探测路径研究（多数 non-agents-md 无 jsonl）
+- 端到端真实 init 全流程跑通
+
 ## [0.5.0] - 2026-08-13
 
 > session jsonl 事后回填：env 白名单全空时，`--probe-from-session` 从当前 harness 的 session jsonl 反查 model，覆盖之前 init-environment 表里的 unknown。

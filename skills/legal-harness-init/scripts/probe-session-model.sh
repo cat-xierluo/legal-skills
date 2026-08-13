@@ -125,8 +125,55 @@ if [ "$HARNESS" = "claude-code" ]; then
     exit 1
 fi
 
-# === Codex / OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca ===
-# v0.5.0 暂不支持；Codex jsonl 嵌套 payload.turn_context.model 需要更复杂解析
-# 留 v0.5.1+ 实现
-emit_json "not_found" "" "" "harness=$HARNESS 在 v0.5.0 暂未实现（codex 留 v0.5.1）"
+# === Codex: ~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl ===
+# codex sessions 按时间分目录(年/月/日),rollout-*.jsonl;不分 cwd。
+# 结构:每行一个 record,{"type":"turn_context","payload":{"model":"gpt-5.6-sol",...}}
+# v0.5.1 实现:找最近 WITHIN 秒内 mtime 最大的 rollout,提取最后一条 turn_context.payload.model
+if [ "$HARNESS" = "codex" ]; then
+    sessions_root="$HOME/.codex/sessions"
+    if [ ! -d "$sessions_root" ]; then
+        emit_json "not_found" "" "" "sessions_root 不存在: $sessions_root"
+        exit 1
+    fi
+
+    # 递归找 rollout-*.jsonl,按 mtime 降序取最新
+    jsonl_file=""
+    while IFS= read -r f; do
+        [ -n "$f" ] && jsonl_file="$f"
+    done < <(find "$sessions_root" -name "rollout-*.jsonl" -type f -mmin "-$((WITHIN / 60 + 1))" 2>/dev/null \
+        | xargs -I{} stat -f "%m %N" "{}" 2>/dev/null \
+        | sort -rn | head -1 | awk '{$1=""; sub(/^ /, ""); print}')
+
+    if [ -z "$jsonl_file" ] || [ ! -f "$jsonl_file" ]; then
+        emit_json "not_found" "" "" "no rollout jsonl mtime in last ${WITHIN}s under $sessions_root"
+        exit 1
+    fi
+
+    # 找最后一条 turn_context 的 payload.model
+    # codex session 可能很大,但 turn_context 行数少,grep 很快,不必 tail
+    model=$(grep '"type":"turn_context"' "$jsonl_file" 2>/dev/null | awk '
+        {
+            if (match($0, /"model":"[^"]+"/)) {
+                current = substr($0, RSTART+9, RLENGTH-10)
+                found = 1
+            }
+        }
+        END { if (found) print current; else print "" }
+    ')
+    if [ -n "$model" ]; then
+        emit_json "found" "$model" "$jsonl_file" "最后一条 turn_context 提取 payload.model"
+        if [ "$JSON_OUTPUT" != true ]; then
+            printf '%s\n' "$model"
+        fi
+        exit 0
+    fi
+
+    emit_json "not_found" "" "$jsonl_file" "rollout 存在但无 turn_context 记录或 payload.model 字段"
+    exit 1
+fi
+
+# === OpenClaw / MyAgents / QoderWork / QwenWork / WorkBuddy / Orca ===
+# v0.5.1 暂不支持;这 6 个平台 session 机制各异(non-agents-md 多数无 jsonl),
+# 留 v0.5.2+ 研究
+emit_json "not_found" "" "" "harness=$HARNESS 在 v0.5.1 暂未实现（openclaw/myagents/qoderwork/qwenwork/workbuddy/orca 留 v0.5.2）"
 exit 1

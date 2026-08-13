@@ -59,10 +59,11 @@ env 白名单全空时，`record-init-env.sh` 传 `--probe-from-session` 可自�
 bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init --probe-from-session
 ```
 
-probe-session-model.sh 的探测路径（v0.5.0 仅 claude-code 实现）：
+probe-session-model.sh 的探测路径：
 
-- **claude-code**：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
-- **codex / openclaw / myagents / qoderwork / qwenwork / workbuddy / orca**：v0.5.0 暂未实现，留 v0.5.1+
+- **claude-code**（v0.5.0）：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
+- **codex**（v0.5.1）：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`（codex 按时间分目录、不分 cwd），取最近 mtime 最大的 rollout，读最后一条 `turn_context` 记录的 `payload.model` 字段
+- **openclaw / myagents / qoderwork / qwenwork / workbuddy / orca**：v0.5.1 暂未实现，留 v0.5.2+（non-agents-md 多数无 jsonl）
 
 **为什么默认关闭 `--probe-from-session`**：probe 读 jsonl 是"重"操作（要 find + awk 扫最近 10 分钟 jsonl），不适合每次 init 都跑。只在 env 全空、又不想手填 `--model` 时显式开启。
 

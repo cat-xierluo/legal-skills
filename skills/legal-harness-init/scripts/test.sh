@@ -280,7 +280,19 @@ fi
 # --json 输出格式校验
 probe_json=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness codex --json 2>/dev/null)
 assert_contains "$probe_json" '"schema_version":"1"' "probe --json 含 schema_version"
-assert_contains "$probe_json" '"status":"not_found"' "probe --json 在 v0.5.0 codex 仍 not_found"
+# v0.5.1 codex 已实现:伪造 codex rollout jsonl 验证 found 路径
+mkdir -p "$TEST_ROOT/home/.codex/sessions/2026/08/13"
+codex_jsonl="$TEST_ROOT/home/.codex/sessions/2026/08/13/rollout-test.jsonl"
+printf '{"timestamp":"x","type":"turn_context","payload":{"cwd":"/x","model":"gpt-5.6-sol-test"}}\n' > "$codex_jsonl"
+codex_probe=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/probe-session-model.sh" --harness codex 2>/dev/null)
+if [ "$codex_probe" = "gpt-5.6-sol-test" ]; then
+    pass "probe codex 从 turn_context 提取 payload.model"
+else
+    fail "probe codex 从 turn_context 提取 payload.model(实际: '$codex_probe')"
+fi
+# codex sessions_root 不存在时 not_found
+codex_nf=$(env -i HOME="/tmp/definitely-empty-codex-$$" bash "$SCRIPT_DIR/probe-session-model.sh" --harness codex --json 2>/dev/null)
+assert_contains "$codex_nf" '"status":"not_found"' "probe codex sessions_root 不存在时 not_found"
 
 # record-init-env.sh 集成: --probe-from-session + env 全空 + 不存在 jsonl → 仍 die 但 hint 不变
 mkdir -p "$TEST_ROOT/probe-integ"
