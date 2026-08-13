@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "skill": {"name": "video-screenshot", "version": "0.7.0"},
+  "producer": {
+    "id": "video-screenshot-pipeline",
+    "implementation_paths": [
+      "scripts/extract.py",
+      "scripts/prepare_vision_audit.py",
+      "scripts/apply_vision_review.py"
+    ]
+  },
+  "artifacts": [
+    {"id": "pipeline-validation", "stage": "final", "required": true}
+  ],
+  "checkers": [
+    {
+      "id": "pipeline-invariants",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": ["final"],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check_stability_artifact.py",
+      "args": ["--input", "{artifact:pipeline-validation}"],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "BASE-HIGH-RECALL",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#BASE-HIGH-RECALL"],
+      "checker_ids": ["pipeline-invariants"],
+      "case_ids": ["pipeline-valid", "short-motion-group-lost"],
+      "historical_failure_known": false
+    },
+    {
+      "id": "VISION-SUBTRACT-ONLY",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#VISION-SUBTRACT-ONLY"],
+      "checker_ids": ["pipeline-invariants"],
+      "case_ids": ["pipeline-valid", "vision-restores-frame"],
+      "historical_failure_known": false
+    },
+    {
+      "id": "FINAL-COVERAGE-SURVIVAL",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#FINAL-COVERAGE-SURVIVAL"],
+      "checker_ids": ["pipeline-invariants"],
+      "case_ids": ["pipeline-valid", "coverage-frame-does-not-survive"],
+      "historical_failure_known": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "pipeline-valid",
+      "kind": "positive",
+      "constraint_ids": [
+        "BASE-HIGH-RECALL",
+        "VISION-SUBTRACT-ONLY",
+        "FINAL-COVERAGE-SURVIVAL"
+      ],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/pipeline-valid.json"}
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "short-motion-group-lost",
+      "kind": "mutation",
+      "constraint_ids": ["BASE-HIGH-RECALL"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/short-motion-group-lost.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "vision-restores-frame",
+      "kind": "mutation",
+      "constraint_ids": ["VISION-SUBTRACT-ONLY"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/vision-restores-frame.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "coverage-frame-does-not-survive",
+      "kind": "mutation",
+      "constraint_ids": ["FINAL-COVERAGE-SURVIVAL"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/coverage-frame-does-not-survive.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "base-high-recall-passed",
+        "checker_id": "pipeline-invariants",
+        "constraint_id": "BASE-HIGH-RECALL",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "vision-subtract-only-passed",
+        "checker_id": "pipeline-invariants",
+        "constraint_id": "VISION-SUBTRACT-ONLY",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "final-coverage-survival-passed",
+        "checker_id": "pipeline-invariants",
+        "constraint_id": "FINAL-COVERAGE-SURVIVAL",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      }
+    ],
+    "observables": [
+      {
+        "id": "preserved-short-motion-groups",
+        "checker_id": "pipeline-invariants",
+        "constraint_ids": ["BASE-HIGH-RECALL"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "vision-output-frame-set",
+        "checker_id": "pipeline-invariants",
+        "constraint_ids": ["VISION-SUBTRACT-ONLY"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "final-coverage-frame-set",
+        "checker_id": "pipeline-invariants",
+        "constraint_ids": ["FINAL-COVERAGE-SURVIVAL"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}

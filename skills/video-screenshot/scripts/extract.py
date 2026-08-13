@@ -3,7 +3,6 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "Pillow>=10.0.0",
-#   "rapidocr-onnxruntime",
 # ]
 # ///
 
@@ -37,18 +36,23 @@ from lib import (
     calc_capture_time,
     calc_content_quality,
     calc_dhash_hex,
+    calc_loading_overlay_score,
     calc_scroll_image,
     calc_thumb_bytes,
-    check_ocr_similarity,
     collect_frame_files,
+    content_quality_drop_reason,
     create_ocr_engine,
     crop_for_ocr_bytes_with_range,
     find_tool,
     is_frame_duplicate,
     ocr_extract_text,
+    ocr_content_delta,
     probe_video,
     run_ffmpeg_extract,
+    select_temporal_representatives,
     shingles,
+    temporal_frame_metrics,
+    transient_ui_drop_reason,
 )
 
 logger = logging.getLogger("video-screenshot")
@@ -66,8 +70,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
   # 固定间隔，每 0.5 秒一帧
   uv run scripts/extract.py -i recording.mp4 -s interval --interval 0.5
 
-  # 场景检测 + OCR 去重（适合聊天录屏）
-  uv run scripts/extract.py -i recording.mp4 --ocr-dedup
+  # 场景检测 + OCR 内容增量（适合聊天录屏）
+  uv run --with rapidocr-onnxruntime scripts/extract.py -i recording.mp4 --ocr-dedup
 
   # 关键帧提取，不去重
   uv run scripts/extract.py -i recording.mp4 -s keyframe -d 0
@@ -90,7 +94,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--scroll-merge", action="store_true", default=False, help="滚动帧合并（默认关闭）")
     p.add_argument("--no-scroll-merge", action="store_false", dest="scroll_merge", help="禁用滚动帧合并")
     p.add_argument("--scroll-diff-threshold", type=float, default=32.0, help="滚动重叠平均像素差阈值（默认: 32.0）")
-    p.add_argument("--ocr-dedup", action="store_true", help="启用 OCR 文本去重")
+    p.add_argument("--ocr-dedup", action="store_true", help="启用 OCR 内容增量与文本去重")
     p.add_argument("--ocr-threshold", type=float, default=0.92, help="OCR 相似度阈值（默认: 0.92）")
     p.add_argument("--ocr-min-new", type=int, default=8, help="OCR 最少新字符数（默认: 8）")
     p.add_argument("--max-size", type=int, default=0, help="输出最长边像素限制（0=保持原始分辨率，默认: 0）")
@@ -102,6 +106,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-filter-quality", action="store_false", dest="filter_quality", help="禁用内容质量过滤")
     p.add_argument("--min-gap", type=float, default=0.5, help="保留帧之间的最小时间间隔秒数（默认: 0.5）")
     p.add_argument(
+        "--temporal-select",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="按前后帧时间簇选择稳定终态（默认开启；用 --no-temporal-select 禁用）",
+    )
+    p.add_argument(
+        "--stable-max-gap",
+        type=float,
+        default=2.20,
+        help="相似候选构成同一稳定页的最大间隔秒数（默认: 2.20）",
+    )
+    p.add_argument(
+        "--transition-max-seconds",
+        type=float,
+        default=2.40,
+        help="前后稳定页之间可视为切换过程的最长时长（默认: 2.40）",
+    )
+    p.add_argument(
+        "--motion-chunk-seconds",
+        type=float,
+        default=2.50,
+        help="持续运动段每隔多少秒至少保留一张代表帧（默认: 2.50）",
+    )
+    p.add_argument(
         "--keep-drop-candidates",
         action="store_true",
         help="保存被去重或过滤丢弃的候选帧，供多模态复核",
@@ -111,6 +139,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=200,
         help="最多保存多少张丢弃候选帧（默认: 200，0=不限）",
+    )
+    p.add_argument(
+        "--archive",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="将结果复制到 Skill archive/（默认启用；复测可用 --no-archive）",
     )
     p.add_argument("--keep-temp", action="store_true", help="保留临时 ffmpeg 输出文件")
     return p.parse_args(argv)
@@ -152,7 +186,11 @@ def main() -> None:
     output_dir = args.output or str(Path(video_path).parent / f"{video_stem}_frames")
     output_dir = str(Path(output_dir).resolve())
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    cleanup_stats = _clean_output_dir(output_dir)
+    try:
+        cleanup_stats = _clean_output_dir(output_dir)
+    except RuntimeError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)
     if cleanup_stats["stale_deleted_count"]:
         print(f"  已清理旧输出文件: {cleanup_stats['stale_deleted_count']}")
 
@@ -186,11 +224,14 @@ def main() -> None:
     if args.ocr_dedup:
         ocr_engine = create_ocr_engine()
         if ocr_engine is None:
-            print("警告: RapidOCR 未安装，OCR 去重已禁用。安装: pip install rapidocr-onnxruntime", file=sys.stderr)
+            print(
+                "警告: RapidOCR 未安装，OCR 内容增量已禁用。"
+                "运行: uv run --with rapidocr-onnxruntime scripts/extract.py ... --ocr-dedup",
+                file=sys.stderr,
+            )
             args.ocr_dedup = False
         else:
-            print("  OCR: RapidOCR (本地)（SSIM 去重已自动禁用）")
-            params.ssim_threshold = 0
+            print("  OCR: RapidOCR (本地，与 SSIM 并行复核)")
 
     # 创建临时目录
     started_at = time.monotonic()
@@ -237,20 +278,119 @@ def main() -> None:
             _write_report(
                 output_dir, video_path, info, params, 0, DedupState(), [], cleanup_stats,
                 [], args.keep_drop_candidates, args.drop_candidate_limit,
+                {"enabled": bool(args.temporal_select), "selected_before_dedup": 0}, args,
             )
             return
 
-        # 去重
+        # 两遍式时间簇择优：先观察候选的前后关系，再把代表帧交给传统去重级联。
         state = DedupState()
         window = 20
         pixel_diff_threshold = 8.0
         frames_meta: list[dict] = []
         drop_candidates_meta: list[dict] = []
         last_kept_time: float | None = None
+        temporal_summary: dict[str, object] = {
+            "enabled": bool(args.temporal_select),
+            "selected_before_dedup": total_extracted,
+            "stable_run_count": 0,
+            "motion_segment_count": 0,
+            "transition_drop_count": 0,
+            "stable_duplicate_drop_count": 0,
+            "motion_redundant_drop_count": 0,
+            "low_confidence_selection_count": 0,
+            "coverage_required_frame_count": 0,
+            "coverage_filter_override_count": 0,
+        }
+        coverage_requirements: dict[int, list[int]] = {}
+
+        temporal_items: list[dict] = []
+        if args.temporal_select:
+            print("时间簇分析中...")
+            for idx, frame_path in enumerate(frame_files, 1):
+                with open(frame_path, "rb") as fp:
+                    content = fp.read()
+                metrics = temporal_frame_metrics(
+                    content,
+                    crop_top_ratio=params.content_crop_top,
+                    crop_bottom_ratio=params.content_crop_bottom,
+                    crop_left_ratio=params.content_crop_left,
+                    crop_right_ratio=params.content_crop_right,
+                )
+                metrics.update({
+                    "source_index": idx,
+                    "frame_path": frame_path,
+                    "capture_time_seconds": calc_capture_time(frame_path, idx, params, info),
+                    "sha256": sha256(content).hexdigest(),
+                })
+                temporal_items.append(metrics)
+
+            selected_items, temporal_drops, temporal_stats = select_temporal_representatives(
+                temporal_items,
+                stable_max_gap_seconds=max(0.1, args.stable_max_gap),
+                transition_max_seconds=max(0.0, args.transition_max_seconds),
+                motion_chunk_seconds=max(0.1, args.motion_chunk_seconds),
+                allow_incomplete_resolution=not args.ocr_dedup,
+            )
+            if args.ocr_dedup and ocr_engine is not None:
+                selected_items, temporal_drops, ocr_rescue_stats = _rescue_short_motion_with_ocr(
+                    selected_items,
+                    temporal_drops,
+                    ocr_engine,
+                    params,
+                )
+                temporal_stats.update(ocr_rescue_stats)
+            temporal_summary.update(temporal_stats)
+            coverage_requirements = _build_coverage_requirements(temporal_drops)
+            temporal_summary["coverage_required_frame_count"] = len(coverage_requirements)
+            for item in temporal_drops:
+                state.temporal_drops += 1
+                if item.get("drop_reason") in ("temporal_transition", "temporal_mixed_transition"):
+                    state.temporal_transition_drops += 1
+                _record_drop_candidate(
+                    output_dir,
+                    str(item["frame_path"]),
+                    int(item["source_index"]),
+                    str(item.get("drop_reason") or "temporal_drop"),
+                    item.get("capture_time_seconds"),
+                    str(item.get("sha256") or ""),
+                    drop_candidates_meta,
+                    enabled=args.keep_drop_candidates,
+                    limit=args.drop_candidate_limit,
+                    extra={
+                        "temporal_group_id": item.get("temporal_group_id"),
+                        "selection_confidence": item.get("selection_confidence"),
+                        "seam_score": round(float(item.get("seam_score") or 0.0), 4),
+                        "mixed_transition_score": round(float(item.get("mixed_transition_score") or 0.0), 4),
+                        "loading_overlay_score": round(float((item.get("loading_overlay") or {}).get("score") or 0.0), 4),
+                        "temporal_completion": item.get("temporal_completion"),
+                        "following_source_frame_index": (
+                            (item.get("temporal_completion") or {}).get("following_source_index")
+                        ),
+                    },
+                )
+            processing_items = selected_items
+            print(
+                "  时间簇候选: "
+                f"{total_extracted} → {len(processing_items)}，"
+                f"切换中间态: {temporal_summary.get('transition_drop_count', 0)}"
+            )
+        else:
+            processing_items = [
+                {
+                    "source_index": idx,
+                    "frame_path": frame_path,
+                    "capture_time_seconds": calc_capture_time(frame_path, idx, params, info),
+                    "temporal_reason": "disabled",
+                    "selection_confidence": "not_applicable",
+                }
+                for idx, frame_path in enumerate(frame_files, 1)
+            ]
 
         print("去重中...")
-        for idx, frame_path in enumerate(frame_files, 1):
-            state.total_count += 1
+        state.total_count = total_extracted
+        for processing_idx, temporal_item in enumerate(processing_items, 1):
+            idx = int(temporal_item["source_index"])
+            frame_path = str(temporal_item["frame_path"])
 
             with open(frame_path, "rb") as fp:
                 content = fp.read()
@@ -264,112 +404,192 @@ def main() -> None:
                 crop_right_ratio=params.content_crop_right,
             )
 
-            capture_time = calc_capture_time(frame_path, idx, params, info)
+            capture_time = temporal_item.get("capture_time_seconds")
+            is_short_motion_representative = (
+                temporal_item.get("temporal_reason") == "short_motion_representative"
+            )
+            is_ocr_short_motion_rescue = (
+                temporal_item.get("temporal_reason") == "ocr_short_motion_rescue"
+            )
+            covered_incomplete_sources = coverage_requirements.get(idx, [])
+            is_required_coverage = bool(covered_incomplete_sources)
+            coverage_filter_override_applied = False
+
+            transient_ui = temporal_item.get("loading_overlay") or calc_loading_overlay_score(content)
+            transient_label = str(transient_ui.get("label") or "")
+            transient_drop_reason = transient_ui_drop_reason(transient_ui)
+            if args.filter_quality and transient_drop_reason:
+                if is_required_coverage:
+                    coverage_filter_override_applied = True
+                else:
+                    state.quality_drops += 1
+                    state.transient_ui_drops += 1
+                    _record_drop_candidate(
+                        output_dir,
+                        frame_path,
+                        idx,
+                        transient_drop_reason,
+                        capture_time,
+                        digest,
+                        drop_candidates_meta,
+                        enabled=args.keep_drop_candidates,
+                        limit=args.drop_candidate_limit,
+                        extra={"transient_ui": transient_ui},
+                    )
+                    continue
+
+            ocr_text = ""
+            ocr_delta = {
+                "available": False,
+                "similarity": 0.0,
+                "new_token_count": 0,
+                "new_numeric_count": 0,
+                "redundant": False,
+                "has_new_content": False,
+                "protect_visual_duplicate": False,
+            }
+            if args.ocr_dedup and ocr_engine is not None:
+                ocr_text = str(temporal_item.get("_prefetched_ocr_text") or "")
+                if not ocr_text:
+                    ocr_text = _extract_normalized_ocr_text(ocr_engine, content)
+                ocr_delta = ocr_content_delta(
+                    ocr_text,
+                    state.kept_ocr_texts,
+                    state.kept_ocr_shingles,
+                    params.ocr_similarity_threshold,
+                    params.ocr_min_new_chars,
+                )
 
             # 图像去重
             is_dup, drop_reason, thumb, ssim_thumb, scroll_image = is_frame_duplicate(
                 content, digest, dhash_hex, state, params, window, pixel_diff_threshold,
             )
             if is_dup:
-                _record_drop_candidate(
-                    output_dir,
-                    frame_path,
-                    idx,
-                    drop_reason,
-                    capture_time,
-                    digest,
-                    drop_candidates_meta,
-                    enabled=args.keep_drop_candidates,
-                    limit=args.drop_candidate_limit,
-                )
-                continue
+                if is_required_coverage:
+                    is_dup = False
+                    _undo_duplicate_counter(state, drop_reason)
+                    coverage_filter_override_applied = True
+                # 视觉近似不等于证据重复。OCR 发现新金额、身份或足量新文本时，
+                # 让内容覆盖优先并保留该帧；SHA256 完全相同不受此例外影响。
+                elif drop_reason != "duplicate_sha256" and bool(ocr_delta.get("protect_visual_duplicate")):
+                    is_dup = False
+                    _undo_duplicate_counter(state, drop_reason)
+                    state.ocr_visual_overrides += 1
+                elif drop_reason != "duplicate_sha256" and (
+                    is_short_motion_representative or is_ocr_short_motion_rescue
+                ):
+                    is_dup = False
+                    _undo_duplicate_counter(state, drop_reason)
+                    state.short_motion_dedup_overrides += 1
+                else:
+                    _record_drop_candidate(
+                        output_dir,
+                        frame_path,
+                        idx,
+                        drop_reason,
+                        capture_time,
+                        digest,
+                        drop_candidates_meta,
+                        enabled=args.keep_drop_candidates,
+                        limit=args.drop_candidate_limit,
+                        extra={"ocr_delta": ocr_delta} if ocr_delta.get("available") else None,
+                    )
+                    continue
 
             # 最小时间间隔过滤
             if args.min_gap > 0 and last_kept_time is not None and capture_time is not None:
                 if capture_time - last_kept_time < args.min_gap:
-                    state.min_gap_drops += 1
-                    _record_drop_candidate(
-                        output_dir,
-                        frame_path,
-                        idx,
-                        "min_gap",
-                        capture_time,
-                        digest,
-                        drop_candidates_meta,
-                        enabled=args.keep_drop_candidates,
-                        limit=args.drop_candidate_limit,
-                    )
-                    continue
+                    if is_required_coverage:
+                        coverage_filter_override_applied = True
+                    elif is_short_motion_representative:
+                        state.short_motion_min_gap_overrides += 1
+                    elif is_ocr_short_motion_rescue:
+                        state.ocr_min_gap_overrides += 1
+                    elif bool(ocr_delta.get("protect_visual_duplicate")):
+                        state.ocr_min_gap_overrides += 1
+                    else:
+                        state.min_gap_drops += 1
+                        _record_drop_candidate(
+                            output_dir,
+                            frame_path,
+                            idx,
+                            "min_gap",
+                            capture_time,
+                            digest,
+                            drop_candidates_meta,
+                            enabled=args.keep_drop_candidates,
+                            limit=args.drop_candidate_limit,
+                            extra={"ocr_delta": ocr_delta} if ocr_delta.get("available") else None,
+                        )
+                        continue
 
-            # 内容质量过滤（空白页、启动画面、过渡帧）
+            # 内容质量过滤只自动删除空白/启动态。单帧 transition 很容易把
+            # 非对称正文页误判为切换态，因此仅作为后续视觉审计风险信号。
+            quality = temporal_item.get("quality") or calc_content_quality(content)
+            quality_transition_risk = str(quality.get("label") or "") == "transition"
             if args.filter_quality:
-                quality = calc_content_quality(content)
-                if quality["label"]:
-                    state.quality_drops += 1
-                    _record_drop_candidate(
-                        output_dir,
-                        frame_path,
-                        idx,
-                        f"quality_{quality['label']}",
-                        capture_time,
-                        digest,
-                        drop_candidates_meta,
-                        enabled=args.keep_drop_candidates,
-                        limit=args.drop_candidate_limit,
-                        extra={"quality": quality},
-                    )
-                    continue
+                quality_drop_reason = content_quality_drop_reason(quality)
+                if quality_drop_reason:
+                    if is_required_coverage:
+                        coverage_filter_override_applied = True
+                    else:
+                        state.quality_drops += 1
+                        _record_drop_candidate(
+                            output_dir,
+                            frame_path,
+                            idx,
+                            quality_drop_reason,
+                            capture_time,
+                            digest,
+                            drop_candidates_meta,
+                            enabled=args.keep_drop_candidates,
+                            limit=args.drop_candidate_limit,
+                            extra={"quality": quality},
+                        )
+                        continue
 
             # 模糊帧过滤
             if args.filter_blur:
                 blur_score = calc_blur_score(content)
                 if blur_score < args.blur_threshold:
-                    state.blur_drops += 1
-                    _record_drop_candidate(
-                        output_dir,
-                        frame_path,
-                        idx,
-                        "blur",
-                        capture_time,
-                        digest,
-                        drop_candidates_meta,
-                        enabled=args.keep_drop_candidates,
-                        limit=args.drop_candidate_limit,
-                        extra={"blur_score": blur_score},
-                    )
-                    continue
+                    if is_required_coverage:
+                        coverage_filter_override_applied = True
+                    else:
+                        state.blur_drops += 1
+                        _record_drop_candidate(
+                            output_dir,
+                            frame_path,
+                            idx,
+                            "blur",
+                            capture_time,
+                            digest,
+                            drop_candidates_meta,
+                            enabled=args.keep_drop_candidates,
+                            limit=args.drop_candidate_limit,
+                            extra={"blur_score": blur_score},
+                        )
+                        continue
 
-            # OCR 去重
+            # OCR 内容增量去重。报告只保留计数与相似度，不保存识别出的案件正文。
             if args.ocr_dedup and ocr_engine is not None:
-                crop_bytes, crop_range = crop_for_ocr_bytes_with_range(content)
-                ocr_text = ""
-                if crop_bytes and crop_range >= 18:
-                    ocr_text = ocr_extract_text(ocr_engine, crop_bytes)
-                    ocr_text = re.sub(r"\s+", "", ocr_text or "")
-                    ocr_text = re.sub(r"[^\w一-鿿]+", "", ocr_text)
-
-                if ocr_text and check_ocr_similarity(
-                    ocr_text,
-                    state.kept_ocr_texts,
-                    state.kept_ocr_shingles,
-                    params.ocr_similarity_threshold,
-                    params.ocr_min_new_chars,
-                ):
-                    state.ocr_dups += 1
-                    _record_drop_candidate(
-                        output_dir,
-                        frame_path,
-                        idx,
-                        "ocr_duplicate",
-                        capture_time,
-                        digest,
-                        drop_candidates_meta,
-                        enabled=args.keep_drop_candidates,
-                        limit=args.drop_candidate_limit,
-                    )
-                    continue
-            else:
-                ocr_text = ""
+                if ocr_text and bool(ocr_delta.get("redundant")):
+                    if is_required_coverage:
+                        coverage_filter_override_applied = True
+                    else:
+                        state.ocr_dups += 1
+                        _record_drop_candidate(
+                            output_dir,
+                            frame_path,
+                            idx,
+                            "ocr_duplicate",
+                            capture_time,
+                            digest,
+                            drop_candidates_meta,
+                            enabled=args.keep_drop_candidates,
+                            limit=args.drop_candidate_limit,
+                            extra={"ocr_delta": ocr_delta},
+                        )
+                        continue
 
             # 保留帧
             state.kept_count += 1
@@ -411,6 +631,12 @@ def main() -> None:
             if ocr_text:
                 state.kept_ocr_texts.append(ocr_text)
                 state.kept_ocr_shingles.append(shingles(ocr_text))
+            if coverage_filter_override_applied:
+                temporal_summary["coverage_filter_override_count"] = (
+                    int(temporal_summary.get("coverage_filter_override_count") or 0) + 1
+                )
+            if quality_transition_risk:
+                state.quality_transition_preserved += 1
 
             # 复制到输出目录
             ts = format_timestamp(capture_time)
@@ -422,31 +648,67 @@ def main() -> None:
             frames_meta.append({
                 "index": state.kept_count,
                 "filename": out_name,
+                "source_frame_index": idx,
+                "source_temp_filename": Path(frame_path).name,
                 "capture_time_seconds": capture_time,
                 "sha256": digest,
+                "temporal_group_id": temporal_item.get("temporal_group_id"),
+                "temporal_reason": temporal_item.get("temporal_reason"),
+                "selection_confidence": temporal_item.get("selection_confidence"),
+                "seam_score": round(float(temporal_item.get("seam_score") or 0.0), 4),
+                "mixed_transition_score": round(float(temporal_item.get("mixed_transition_score") or 0.0), 4),
+                "loading_overlay_score": round(float(transient_ui.get("score") or 0.0), 4),
+                "loading_overlay_label": transient_label,
+                "quality_label": str(quality.get("label") or ""),
+                "quality_transition_risk": quality_transition_risk,
+                "temporal_completion": temporal_item.get("temporal_completion"),
+                "coverage_protected": is_required_coverage,
+                "covers_incomplete_source_indices": covered_incomplete_sources,
+                "adaptive_chunk_seconds": temporal_item.get("adaptive_chunk_seconds"),
+                "motion_density_mode": temporal_item.get("motion_density_mode"),
+                "scroll_match_ratio": round(float(temporal_item.get("scroll_match_ratio") or 0.0), 4),
+                "content_delta": {
+                    "ocr_available": bool(ocr_delta.get("available")),
+                    "ocr_similarity": round(float(ocr_delta.get("similarity") or 0.0), 4),
+                    "new_token_count": int(ocr_delta.get("new_token_count") or 0),
+                    "new_numeric_count": int(ocr_delta.get("new_numeric_count") or 0),
+                    "has_new_content": bool(ocr_delta.get("has_new_content")),
+                    "protect_visual_duplicate": bool(ocr_delta.get("protect_visual_duplicate")),
+                },
             })
 
-            if idx % 50 == 0 or idx == total_extracted:
+            if processing_idx % 50 == 0 or processing_idx == len(processing_items):
                 print(
-                    f"\r  已处理: {idx}/{total_extracted}, "
+                    f"\r  已处理: {processing_idx}/{len(processing_items)}, "
                     f"保留: {state.kept_count}, "
-                    f"去重: {idx - state.kept_count}",
+                    f"去重: {processing_idx - state.kept_count}",
                     end="", flush=True,
                 )
         print()  # 换行
+
+        kept_source_indices = {int(item["source_frame_index"]) for item in frames_meta}
+        missing_coverage = sorted(set(coverage_requirements) - kept_source_indices)
+        if missing_coverage:
+            raise RuntimeError(
+                "未完成页已删除，但其后续覆盖帧未进入最终结果: "
+                + ", ".join(str(item) for item in missing_coverage)
+            )
 
         # 写入报告
         _write_report(
             output_dir, video_path, info, params, total_extracted, state, frames_meta, cleanup_stats,
             drop_candidates_meta, args.keep_drop_candidates, args.drop_candidate_limit,
+            temporal_summary, args,
         )
 
         # 归档
-        archive_dir = _archive_result(
-            output_dir, video_path, info, params, args, state, frames_meta, cleanup_stats,
-            drop_candidates_meta,
-            elapsed_seconds=time.monotonic() - started_at,
-        )
+        archive_dir = None
+        if args.archive:
+            archive_dir = _archive_result(
+                output_dir, video_path, info, params, args, state, frames_meta, cleanup_stats,
+                drop_candidates_meta,
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
         # 汇总
         print(f"\n完成!")
@@ -460,10 +722,25 @@ def main() -> None:
         print(f"    SSIM 重复:    {state.ssim_dups}")
         print(f"    滚动合并:    {state.scroll_dups}")
         print(f"    OCR 重复:    {state.ocr_dups}")
+        if state.temporal_drops:
+            print(f"    时间簇择优:  {state.temporal_drops}")
+            print(f"    切换中间态:  {state.temporal_transition_drops}")
         if state.blur_drops:
             print(f"    模糊过滤:    {state.blur_drops}")
         if state.quality_drops:
             print(f"    质量过滤:    {state.quality_drops}")
+        if state.transient_ui_drops:
+            print(f"    高置信加载浮层: {state.transient_ui_drops}")
+        if state.ocr_visual_overrides:
+            print(f"    OCR 新内容保留: {state.ocr_visual_overrides}")
+        if state.ocr_min_gap_overrides:
+            print(f"    OCR 最小间隔保护: {state.ocr_min_gap_overrides}")
+        if state.short_motion_min_gap_overrides:
+            print(f"    短时页面间隔保护: {state.short_motion_min_gap_overrides}")
+        if state.short_motion_dedup_overrides:
+            print(f"    短时页面近似保护: {state.short_motion_dedup_overrides}")
+        if state.quality_transition_preserved:
+            print(f"    质量切换风险保留: {state.quality_transition_preserved}")
         if state.min_gap_drops:
             print(f"    时间间隔过滤: {state.min_gap_drops}")
         if args.keep_drop_candidates:
@@ -481,6 +758,22 @@ def main() -> None:
 def _clean_output_dir(output_dir: str) -> dict[str, object]:
     """清理本工具生成的旧输出文件，避免本次结果混入残留帧。"""
     root = Path(output_dir)
+    protected_vision_artifacts = [
+        root / "_vision_audit",
+        root / "_curated",
+        root / "_vision_review.json",
+    ]
+    existing_protected = [
+        path.name for path in protected_vision_artifacts
+        if path.exists() or path.is_symlink()
+    ]
+    if existing_protected:
+        names = "、".join(existing_protected)
+        raise RuntimeError(
+            f"输出目录含已完成或待完成的视觉复核产物（{names}），拒绝自动删除；"
+            "请改用新的 -o 输出目录，或在备份后显式移走这些产物"
+        )
+
     stale_files: list[Path] = []
     stale_files.extend(root.glob("frame_*.jpg"))
     stale_files.extend(root.glob("frame_*.jpeg"))
@@ -491,7 +784,21 @@ def _clean_output_dir(output_dir: str) -> dict[str, object]:
 
     stale_dirs: list[Path] = []
     candidates_dir = root / "_review_candidates"
+    if candidates_dir.is_symlink():
+        raise RuntimeError("旧候选目录是符号链接，拒绝跟随并清理；请改用新的 -o 输出目录")
     if candidates_dir.exists() and candidates_dir.is_dir():
+        unknown_candidates = [
+            path for path in candidates_dir.iterdir()
+            if path.is_symlink()
+            or not path.is_file()
+            or not re.fullmatch(r"candidate_\d{3}_.+\.jpg", path.name)
+        ]
+        if unknown_candidates:
+            names = "、".join(path.name for path in unknown_candidates[:5])
+            raise RuntimeError(
+                f"旧候选目录含非本工具文件（{names}），拒绝自动删除；请改用新的 -o 输出目录"
+            )
+        stale_files.extend(candidates_dir.glob("candidate_*.jpg"))
         stale_dirs.append(candidates_dir)
 
     deleted: list[str] = []
@@ -503,7 +810,10 @@ def _clean_output_dir(output_dir: str) -> dict[str, object]:
         p.unlink()
         deleted.append(p.name)
     for p in stale_dirs:
-        shutil.rmtree(p, ignore_errors=True)
+        try:
+            p.rmdir()
+        except OSError as exc:
+            raise RuntimeError(f"旧输出目录无法安全清理: {p}") from exc
         deleted.append(p.name + "/")
 
     return {
@@ -528,13 +838,39 @@ def _record_drop_candidate(
     """保存被算法丢弃的候选帧，供后续视觉复核。"""
     if not enabled:
         return
+
+    priority_reason = reason in {
+        "quality_loading_overlay",
+        "quality_transition",
+        "temporal_incomplete_resolved",
+    }
+    replacement_seq: int | None = None
     if limit > 0 and len(candidates) >= limit:
-        return
+        if not priority_reason:
+            return
+        replace_pos = next(
+            (
+                pos for pos, item in enumerate(candidates)
+                if str(item.get("reason") or "") not in {
+                    "quality_loading_overlay",
+                    "quality_transition",
+                    "temporal_incomplete_resolved",
+                }
+            ),
+            None,
+        )
+        if replace_pos is None:
+            return
+        evicted = candidates.pop(replace_pos)
+        replacement_seq = int(evicted.get("index") or 0) or None
+        evicted_path = Path(output_dir) / str(evicted.get("filename") or "")
+        if evicted_path.is_file() and not evicted_path.is_symlink():
+            evicted_path.unlink()
 
     candidates_dir = Path(output_dir) / "_review_candidates"
     candidates_dir.mkdir(parents=True, exist_ok=True)
     safe_reason = re.sub(r"[^a-z0-9_]+", "_", (reason or "drop").lower()).strip("_") or "drop"
-    seq = len(candidates) + 1
+    seq = replacement_seq or max((int(item.get("index") or 0) for item in candidates), default=0) + 1
     filename = f"candidate_{seq:03d}_{safe_reason}_{format_timestamp(capture_time)}.jpg"
     dst = candidates_dir / filename
     shutil.copy2(frame_path, dst)
@@ -553,6 +889,145 @@ def _record_drop_candidate(
     candidates.append(item)
 
 
+def _undo_duplicate_counter(state: DedupState, drop_reason: str) -> None:
+    """内容增量或必要覆盖帧否决视觉去重时，撤销预累计数。"""
+    counter_by_reason = {
+        "duplicate_sha256": "sha256_dups",
+        "duplicate_dhash": "dhash_dups",
+        "duplicate_pixel": "pixel_dups",
+        "duplicate_ssim": "ssim_dups",
+        "duplicate_scroll": "scroll_dups",
+    }
+    attr = counter_by_reason.get(drop_reason)
+    if attr:
+        setattr(state, attr, max(0, int(getattr(state, attr)) - 1))
+
+
+def _extract_normalized_ocr_text(ocr_engine: object, image_bytes: bytes) -> str:
+    """提取用于去重的最小化文本；调用方不得把正文写入报告。"""
+    crop_bytes, crop_range = crop_for_ocr_bytes_with_range(image_bytes)
+    if not crop_bytes or crop_range < 18:
+        return ""
+    text = ocr_extract_text(ocr_engine, crop_bytes)
+    text = re.sub(r"\s+", "", text or "")
+    return re.sub(r"[^\w一-鿿￥¥,.]+", "", text)
+
+
+def _rescue_short_motion_with_ocr(
+    selected_items: list[dict],
+    temporal_drops: list[dict],
+    ocr_engine: object,
+    params: ExtractParams,
+    *,
+    max_ocr_images: int = 24,
+) -> tuple[list[dict], list[dict], dict[str, int]]:
+    """只审查短运动段的少量落选项，最多每组补回一张有强新增内容的帧。"""
+    selected_by_group = {
+        str(item.get("temporal_group_id") or ""): item
+        for item in selected_items
+        if item.get("temporal_reason") == "short_motion_representative"
+    }
+    drops_by_group: dict[str, list[dict]] = {}
+    for item in temporal_drops:
+        if item.get("drop_reason") != "temporal_short_motion_redundant":
+            continue
+        group_id = str(item.get("temporal_group_id") or "")
+        if group_id in selected_by_group:
+            drops_by_group.setdefault(group_id, []).append(item)
+
+    calls = 0
+    rescued_source_indices: set[int] = set()
+    for group_id, candidates in sorted(drops_by_group.items()):
+        if calls >= max_ocr_images:
+            break
+        representative = selected_by_group[group_id]
+        with open(str(representative["frame_path"]), "rb") as fp:
+            reference_text = _extract_normalized_ocr_text(ocr_engine, fp.read())
+        calls += 1
+        representative["_prefetched_ocr_text"] = reference_text
+
+        best: tuple[tuple[int, int, int], dict, str, dict] | None = None
+        ranked_candidates = sorted(
+            candidates,
+            key=lambda item: (
+                float(item.get("blur_score") or 0.0),
+                float((item.get("quality") or {}).get("content_std") or 0.0),
+            ),
+            reverse=True,
+        )[:3]
+        for candidate in ranked_candidates:
+            if calls >= max_ocr_images:
+                break
+            with open(str(candidate["frame_path"]), "rb") as fp:
+                candidate_text = _extract_normalized_ocr_text(ocr_engine, fp.read())
+            calls += 1
+            delta = ocr_content_delta(
+                candidate_text,
+                [reference_text] if reference_text else [],
+                [shingles(reference_text)] if reference_text else [],
+                params.ocr_similarity_threshold,
+                params.ocr_min_new_chars,
+            )
+            new_tokens = int(delta.get("new_token_count") or 0)
+            new_numbers = int(delta.get("new_numeric_count") or 0)
+            strong_new_content = bool(delta.get("protect_visual_duplicate")) or (
+                new_numbers >= 1 and new_tokens >= 3
+            ) or new_tokens >= max(12, params.ocr_min_new_chars * 2)
+            if not candidate_text or not strong_new_content:
+                continue
+            score = (new_numbers, new_tokens, len(candidate_text))
+            if best is None or score > best[0]:
+                best = (score, candidate, candidate_text, delta)
+
+        if best is None:
+            continue
+        _score, candidate, candidate_text, delta = best
+        rescued = dict(candidate)
+        rescued.pop("drop_reason", None)
+        rescued.update({
+            "temporal_reason": "ocr_short_motion_rescue",
+            "selection_confidence": "medium",
+            "_prefetched_ocr_text": candidate_text,
+            "_prefetched_ocr_delta": delta,
+        })
+        selected_items.append(rescued)
+        rescued_source_indices.add(int(candidate.get("source_index") or 0))
+
+    selected_items.sort(
+        key=lambda item: (float(item.get("capture_time_seconds") or 0.0), int(item.get("source_index") or 0))
+    )
+    filtered_drops = [
+        item for item in temporal_drops
+        if int(item.get("source_index") or 0) not in rescued_source_indices
+    ]
+    return selected_items, filtered_drops, {
+        "ocr_short_motion_rescue_count": len(rescued_source_indices),
+        "ocr_short_motion_images_checked": calls,
+        "short_motion_redundant_drop_count": sum(
+            1 for item in filtered_drops if item.get("drop_reason") == "temporal_short_motion_redundant"
+        ),
+        "selected_before_dedup": len(selected_items),
+    }
+
+
+def _build_coverage_requirements(temporal_drops: list[dict]) -> dict[int, list[int]]:
+    """建立“后续完整帧 -> 被其覆盖的未完成帧”绑定。"""
+    requirements: dict[int, set[int]] = {}
+    for item in temporal_drops:
+        if item.get("drop_reason") != "temporal_incomplete_resolved":
+            continue
+        completion = item.get("temporal_completion") or {}
+        following_index = int(completion.get("following_source_index") or 0)
+        incomplete_index = int(item.get("source_index") or 0)
+        if following_index <= 0 or incomplete_index <= 0:
+            continue
+        requirements.setdefault(following_index, set()).add(incomplete_index)
+    return {
+        following_index: sorted(incomplete_indices)
+        for following_index, incomplete_indices in sorted(requirements.items())
+    }
+
+
 def _write_report(
     output_dir: str,
     video_path: str,
@@ -565,6 +1040,8 @@ def _write_report(
     drop_candidates: list[dict],
     keep_drop_candidates: bool,
     drop_candidate_limit: int,
+    temporal_summary: dict[str, object],
+    args: argparse.Namespace,
 ) -> None:
     report = {
         "input": video_path,
@@ -584,6 +1061,13 @@ def _write_report(
             "ssim_threshold": params.ssim_threshold,
             "scroll_merge": params.scroll_merge,
             "scroll_diff_threshold": params.scroll_diff_threshold,
+            "temporal_select": bool(args.temporal_select),
+            "stable_max_gap_seconds": args.stable_max_gap,
+            "transition_max_seconds": args.transition_max_seconds,
+            "motion_chunk_seconds": args.motion_chunk_seconds,
+            "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
+            "temporal_incomplete_resolution": not args.ocr_dedup,
+            "archive_enabled": bool(args.archive),
         },
         "total_extracted": total_extracted,
         "kept_after_dedup": state.kept_count,
@@ -593,9 +1077,10 @@ def _write_report(
             "drop_candidate_limit": drop_candidate_limit,
             "drop_candidate_count": len(drop_candidates),
             "drop_candidates": drop_candidates,
-            "vision_review_status": "not_run",
-            "vision_review_note": "脚本只导出复核候选帧；是否执行多模态复核由当前模型能力决定。",
+            "vision_audit_status": "not_prepared",
+            "vision_audit_note": "基础抽帧不调用模型；运行 prepare_vision_audit.py 后，具备图像能力的 Agent 才执行受预算审计。",
         },
+        "temporal_selection": temporal_summary,
         "dedup_stats": {
             "sha256_duplicates": state.sha256_dups,
             "dhash_duplicates": state.dhash_dups,
@@ -606,6 +1091,14 @@ def _write_report(
             "blur_drops": state.blur_drops,
             "quality_drops": state.quality_drops,
             "min_gap_drops": state.min_gap_drops,
+            "temporal_drops": state.temporal_drops,
+            "temporal_transition_drops": state.temporal_transition_drops,
+            "transient_ui_drops": state.transient_ui_drops,
+            "ocr_visual_overrides": state.ocr_visual_overrides,
+            "ocr_min_gap_overrides": state.ocr_min_gap_overrides,
+            "short_motion_min_gap_overrides": state.short_motion_min_gap_overrides,
+            "short_motion_dedup_overrides": state.short_motion_dedup_overrides,
+            "quality_transition_preserved": state.quality_transition_preserved,
         },
         "frames": frames,
     }
@@ -709,8 +1202,14 @@ def _archive_result(
             "filter_blur": args.filter_blur,
             "blur_threshold": args.blur_threshold,
             "filter_quality": args.filter_quality,
+            "temporal_select": args.temporal_select,
+            "stable_max_gap_seconds": args.stable_max_gap,
+            "transition_max_seconds": args.transition_max_seconds,
+            "motion_chunk_seconds": args.motion_chunk_seconds,
+            "content_delta_mode": "ocr+visual" if args.ocr_dedup else "visual_only",
             "keep_drop_candidates": args.keep_drop_candidates,
             "drop_candidate_limit": args.drop_candidate_limit,
+            "archive_enabled": bool(args.archive),
         },
         "cleanup": cleanup_stats,
         "archive_validation": {
@@ -721,7 +1220,7 @@ def _archive_result(
         "review": {
             "drop_candidate_count": len(drop_candidates),
             "drop_candidates_archived": bool(drop_candidates),
-            "vision_review_status": "not_run",
+            "vision_audit_status": "not_prepared",
         },
         "result": {
             "total_extracted": state.total_count,
@@ -736,6 +1235,14 @@ def _archive_result(
                 "blur_drops": state.blur_drops,
                 "quality_drops": state.quality_drops,
                 "min_gap_drops": state.min_gap_drops,
+                "temporal_drops": state.temporal_drops,
+                "temporal_transition_drops": state.temporal_transition_drops,
+                "transient_ui_drops": state.transient_ui_drops,
+                "ocr_visual_overrides": state.ocr_visual_overrides,
+                "ocr_min_gap_overrides": state.ocr_min_gap_overrides,
+                "short_motion_min_gap_overrides": state.short_motion_min_gap_overrides,
+                "short_motion_dedup_overrides": state.short_motion_dedup_overrides,
+                "quality_transition_preserved": state.quality_transition_preserved,
             },
         },
         "frame_count": state.kept_count,

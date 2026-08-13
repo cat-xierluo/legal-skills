@@ -5,6 +5,205 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.5.2] - 2026-08-13
+
+> 国产平台 probe 全覆盖：用户指出 WorkBuddy/QwenWork 等国产平台才是主力用户群。本轮扩展 probe 支持 qwenwork/qoderwork/myagents（CC 克隆 jsonl）+ workbuddy（trace json），6 个主流 cli harness 全部能自动反查 model。
+
+### 新增
+
+- `probe-session-model.sh` 扩展 4 个国产平台分支：
+  - **qwenwork**：`~/.qwenworkcn/projects/<encoded-cwd>/*.jsonl`，CC 克隆格式（model 是平台别名如 `qwork-advanced`）
+  - **qoderwork**：`~/.qoderworkcn/projects/<encoded-cwd>/*.jsonl`，CC 克隆（别名如 `auto`）
+  - **myagents**：`~/.myagents/sessions/*.jsonl`，CC 克隆 flat 不分 cwd（model 较真实如 `glm-5.2[1m]`）
+  - **workbuddy**：`~/.workbuddy/traces/<pid>/trace_*.json`，遍历 mtime 降序找含 `chat.completion.model` 的 trace（每个操作一个 trace，只有 generation 类含 model；toolOutput 是 JSON 字符串需先去反斜杠再 grep）
+- 重构 probe 抽 `probe_cc_clone_model` / `find_cc_clone_jsonl` / `encode_cwd` / `run_cc_clone_probe` helper，CC/qwenwork/qoderwork 共享 CC 克隆逻辑
+- `openclaw` 分支按 CC 克隆常见路径试（sessions/projects），失败 not_found；`orca` 必定 not_found（worktree 型无统一 session）
+
+### 决策
+
+- DEC-026（本地不入仓）国产平台 probe 全覆盖：CC 克隆格式（qwenwork/qoderwork/myagents）复用同一 helper；workbuddy trace 遍历找 generation 类；openclaw/orca 因机制限制标 not_found 不臆造
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：65/65 全过（v0.5.1 59 + v0.5.2 新增 6：qwenwork/qoderwork/myagents/workbuddy found + workbuddy/orca not_found）
+- ✅ 真实环境 6 平台全部探测成功（放宽窗口到 30 天）：claude-code→glm-5.2、qwenwork→qwork-advanced、qoderwork→auto、myagents→glm-5.2[1m]、codex→gpt-5.6-sol、workbuddy→deepseek-v4-flash
+- ✅ workbuddy 遍历逻辑：跳过工具调用 trace（无 model）取 generation trace
+- ⚠️ openclaw 本机无会话 jsonl，**NOT_VERIFIED**（CC fork 会话路径待研究）
+- ⚠️ orca worktree 型，结构性 not_found（不可自动反查）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- openclaw 真实会话 jsonl 路径研究（需在活跃使用 openclaw 的机器）
+- 端到端真实 init 全流程跑通
+
+### 文档完善
+
+- 同步 `SKILL.md` frontmatter 与根 README 的版本及最近更新说明到 v0.5.2，避免代码能力、CHANGELOG 与发布索引漂移
+
+## [0.5.1] - 2026-08-13
+
+> codex session jsonl 反查：`--probe-from-session` 现支持 codex，从 `turn_context.payload.model` 取 model。
+
+### 新增
+
+- `probe-session-model.sh` 新增 codex 分支：`~/.codex/sessions/<年>/<月>/<日>/rollout-*.jsonl`，取最近 mtime 最大的 rollout，读最后一条 `turn_context` 记录的 `payload.model` 字段
+- codex sessions 按时间分目录、不分 cwd（与 CC 按 encoded-cwd 分目录不同），probe 取最近 mtime 最大者
+
+### 决策
+
+- DEC-025（本地不入仓）codex probe 不按 cwd 过滤：codex 一次通常只跑一个项目，最近 mtime 的 rollout 大概率是当前；model 名跨项目通常一致；turn_context 行含 cwd 字段，若后续发现误取可加二次校验
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：59/59 全过（v0.5.0 58 + v0.5.1 新增 1 codex found 路径；codex not_found 用例改用空 HOME 触发）
+- ✅ probe codex 在 sandbox 真实 session 拿到 model（`gpt-5.6-sol`）
+- ✅ probe codex sessions_root 不存在时 not_found
+- ⚠️ openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 probe **NOT_VERIFIED**（留 v0.5.2）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- v0.5.2：openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 session model 探测路径研究（多数 non-agents-md 无 jsonl）
+- 端到端真实 init 全流程跑通
+
+## [0.5.0] - 2026-08-13
+
+> session jsonl 事后回填：env 白名单全空时，`--probe-from-session` 从当前 harness 的 session jsonl 反查 model，覆盖之前 init-environment 表里的 unknown。
+
+### 新增
+
+- 新增 `scripts/probe-session-model.sh`：从当前 harness session jsonl 反查 model
+  - claude-code 实现：`~/.claude/projects/<encoded-cwd>/*.jsonl`，取最近 10 分钟内 mtime 最大的 jsonl，读最后一条 `role=assistant` 记录的 `message.model` 字段
+  - harness=unknown 宽容兜底为 claude-code（CC 是最常见默认场景，试不到再 not_found）
+  - 隐私边界：只读 jsonl 元数据（mtime + `message.model`），**不**读 `message.content`（thinking / tool_use 正文）
+- `record-init-env.sh` 新增 `--probe-from-session` 开关：env 白名单全空时自动调 probe-session-model.sh 反查；仍未命中走 hint 路径
+
+### 改进
+
+- `SKILL.md` 第六步半 model 采集说明补 `--probe-from-session` 路径与仅 claude-code 实现的边界
+- `references/22-initialization-environment.md` 新增 § v0.5.0+ session jsonl 事后回填：讲探测路径、为什么默认关闭、隐私边界
+
+### 决策
+
+- DEC-024（本地不入仓）`--probe-from-session` 默认关闭 + 仅 claude-code 实现：probe 读 jsonl 是"重"操作，不适合每次 init 都跑；codex 嵌套 payload.turn_context.model 解析留 v0.5.1
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：58/58 全过（v0.4.2 53 + v0.5.0 新增 5）
+- ✅ probe-session-model.sh 在 sandbox 真实 CC session 拿到 model（`MiniMax-M3`）
+- ✅ probe `--harness unknown` 宽容兜底为 claude-code 并正确反查
+- ✅ probe `--harness codex` 在 v0.5.0 返回 not_found（待 v0.5.1）
+- ✅ record-init-env.sh `--probe-from-session` + env 全空 + sandbox 真实 CC，自动从 jsonl 取 model 记录成功
+- ✅ record-init-env.sh `--probe-from-session` 探测失败仍走 hint 路径（不臆造）
+- ⚠️ codex / openclaw / myagents 等 7 个 harness 的 probe **NOT_VERIFIED**（留 v0.5.1）
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`
+
+### 待办
+
+- v0.5.1：codex session jsonl 反查（嵌套 payload.turn_context.model 解析）
+- v0.5.2：openclaw / myagents / qoderwork / qwenwork / workbuddy / orca 的 session model 探测路径研究
+- 端到端真实 init 全流程跑通
+
+## [0.4.2] - 2026-08-13
+
+> 把"必须 record"从 SKILL.md 文档约束升级为 write.sh 脚本级保证。同步修 v0.4.0 create 模式 bug。
+
+### 改进
+
+- `write.sh` 真实落盘后自动调一次 `record-init-env.sh`，无需 agent 手动串联
+- `write.sh` 新增三个参数：`--record-init-env true|false`（默认 true）/ `--init-action init|update|append`（默认 init）/ `--model <name>`（透传给 record-init-env.sh）
+- record-init-env.sh 探测失败时 `write.sh` **不阻断**：AGENTS.md 已落盘，init-environment 是 metadata；stderr 给出明确的手动补命令
+- dry-run / needs_confirmation / write 失败路径不调 record-init-env.sh
+
+### Bug 修复
+
+- 修 v0.4.0 `record-init-env.sh` create 模式 bug：原 create 模式只写 init-environment 区块、不保留 target 原内容；导致 write.sh 集成后 target 中 legal-baseline 等其他受管区块被吞。fix：create 改为先 `cat target` + 补末尾换行 + 追加 init-environment 区块（v0.4.0 / v0.4.1 单独调用未暴露,因 record-init-env.sh 之前总在空 AGENTS.md 上跑）
+- v0.4.2-B `--note` 含 markdown 破坏性字符 `|` 时不再破坏表格列分隔：新增 `escape_markdown_cell` 函数,`--note` 写入前 `|` → `\|` 转义；其他列（HARNESS_NAME / MODEL / VERSION 等 ASCII 标识符）不转义以减少误转义
+
+### 决策
+
+- DEC-022 write.sh 真实落盘后自动调 record-init-env.sh——从"文档约束"升级为"脚本级保证",agent 漏不掉
+- DEC-023（待补）`--note` 只转义 `|`（最少必要）;不批量转义其他 markdown 元字符,避免误转义 ASCII 标识符
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：53/53 全过（v0.4.1 48 + v0.4.2-A 新增 3 + v0.4.2-B 新增 2）
+- ✅ write.sh 真实落盘后自动追加 init-environment（含 model 透传）
+- ✅ `--record-init-env=false` 时不调 record-init-env.sh
+- ✅ dry-run 时不调 record-init-env.sh
+- ✅ write.sh 第二次同输入运行 status=unchanged,AGENTS.md 字节级零 diff
+- ✅ 端到端：write.sh 落盘后 record-init-env.sh 自动追加,legal-baseline + init-environment 两个受管区块共存
+- ✅ `--note "M6 项目级|关键时点"` 写入后 `\|` 被正确转义,表格列分隔未被破坏
+- ⚠️ 端到端真实律师 init 全流程 `NOT_VERIFIED`(需真实律师测试)
+
+### 待办
+
+- 端到端真实 init 全流程跑通
+- 真实 harness `--version` 探测在已装 claude/codex CLI 的机器验证
+- v0.5.0-F session jsonl 事后回填（远期）
+
+## [0.4.1] - 2026-08-13
+
+> 扩展 model env 白名单 + 自助补 model hint。
+
+### 改进
+
+- `record-init-env.sh` env 白名单 5 → 9：新增 `CODEX_MODEL` / `OPENAI_MODEL_GLM`（部分 Codex 包装层）、`MYAGENTS_MODEL` / `QWEN_MODEL`（MyAgents / QwenWork）、`MY_MODEL`（用户兜底，agent 自检自填）
+- env 全空 + 缺 `--model` 时不再一行 die，改为输出多行 hint：提示 `export MY_MODEL` 或 `--model` 兜底，引向 `references/22 § 自助补 model`
+- `references/22-initialization-environment.md` 加 § 自助补 model：阐述"为什么不臆造"+ "为什么选 MY_MODEL 而不是 LEGAL_MODEL"（行业通用、不绑定 skill）
+- `test.sh` 加 9 个新断言：env 全空时 hint 三短语 + 三个新 env 候选各自 record + `assert_contains` 加 `--` 终止符防 `--model` 被 grep 当 option
+
+### 决策
+
+- 保留 v0.4.0 DEC-021 "不臆造 model" 原则；v0.4.1 只是把"不知道怎么办"的提示做得更可执行，不动数据完整性
+
+### 验证
+
+- ✅ `bash scripts/test.sh`：48/48 全过（v0.4.0 39 + v0.4.1 新增 9）
+- ✅ env 全空 + 缺 `--model` 仍 die 退出码 1（不臆造）
+- ✅ env 全空时 stderr 出现"自助补 model" / "MY_MODEL" / "--model" 三个 hint 短语
+- ✅ `CODEX_MODEL=codex-opus-1` / `MYAGENTS_MODEL=mya-pro` / `MY_MODEL=agent-self-detected` 三种新候选各自 record 成功 + 字段写入
+- ⚠️ 真实 8 平台端到端 init 流程、session jsonl 事后回填 `NOT_VERIFIED`
+
+## [0.4.0] - 2026-08-13
+
+> 沉淀每次 init 的工具环境到被初始化的项目，作为将来追溯"问题出在 harness 还是 model 层"的元数据。端到端真实跑通仍 `NOT_VERIFIED`（缺真实律师 init 全流程）。
+
+### 新增
+
+- 新增 `scripts/record-init-env.sh`：半自动采集 harness(name+version) + model + init skill version，append 一行到目标 AGENTS.md 的 `init-environment` 受管区块
+- 新增受管区块 `init-environment`（block-id 落 SKILL.md 第五步受管区块表）：与 M1—M8 同 marker 语法，append-only 表格
+- 新增 `templates/modules/init-environment.md` 受管区块模板（首次 init 时的骨架示例）
+- 新增 `references/22-initialization-environment.md`（背景/采集方式/env 局限/隐私边界/归档建议）
+
+### 改进
+
+- `SKILL.md` 第六步后插入"第六步半：记录初始化环境"；第六步 `write.sh` 真实落盘后必须再调一次 `record-init-env.sh`
+- 输入参数表新增 `--model`（env 兜底）与 `--action {init,update,append}`
+- 禁止事项补两条：禁止在 `record-init-env.sh` 探测不到 model 时臆造；禁止手改 `init-environment` 表格行
+- 验收清单补一条：缺 init-environment 记录时报告 `INIT_ENV_NOT_RECORDED` 而非宣称完成
+- 新增 `skill-lint:constraint INIT-ENVIRONMENT-RECORD-ON-WRITE` 约束 marker
+
+### 决策
+
+- DEC-021：项目级 init 环境元数据受管区块（append-only、半自动采集、不进 .legal-context.local.md、不回填 v0.1.0—v0.3.0）
+
+### 验证
+
+- ✅ `bash -n scripts/record-init-env.sh`：语法通过
+- ✅ 9 个冒烟用例（手动）：缺 target → die；env 全空缺 model → die 强制 `--model`；dry-run 不落盘；干净项目 create；重复执行 unchanged；残缺 marker 拒绝；append 后行数 = 2
+- ⚠️ 真实 harness `claude --version` / `codex --version` 探测：在 sandbox 探测到本机 `claude-code` 时 `Harness Version` 应可填真实值；当前 sandbox 缺 claude CLI → 标 `unknown` 兜底
+- ⚠️ 端到端（quick 引导 → write.sh → record-init-env.sh 真实 init 一个新法律项目）`NOT_VERIFIED`，需真实律师测试
+- ✅ 已有 `bash scripts/test.sh` 应继续 26/26 通过（新增 record-init-env.sh 回归待运行确认）
+
+### 待办
+
+- 端到端跑通：quick 引导 → write.sh → record-init-env.sh 三步顺序在真实律师 init 一个新项目时走通
+- 真实 harness 版本探测：在已装 `claude` / `codex` CLI 的机器验证 `Harness Version` 字段能拿到真实值（当前 sandbox 标 `unknown`）
+- 模型 env 探测覆盖：扩展 env 白名单（`OPENAI_MODEL_GLM` / `QWEN_MODEL` 等）
+- 归档自动化：>50 行时自动复制到 `docs/init-environment-history.md`（v0.4.0 不做）
+
 ## [0.3.0] - 2026-08-12
 
 ### 新增

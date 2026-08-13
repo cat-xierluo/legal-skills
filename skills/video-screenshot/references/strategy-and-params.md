@@ -1,5 +1,34 @@
 # 策略与参数详解
 
+## 时间簇择优（默认开启）
+
+`--temporal-select` 把 ffmpeg 候选先作为一条时间序列分析，再把每个稳定段或连续运动片段的代表帧交给传统去重器。它解决 `min-gap` 只能保留“先到帧”、无法等页面切换完成的问题。
+
+### 稳定段
+
+相邻候选在内容区像素差异或 SSIM 上足够接近，且间隔不超过 `--stable-max-gap 2.20` 时，归入同一稳定页。簇内综合比较：
+
+- Laplacian 清晰度；
+- 下一候选到来前的停留时间；
+- 单帧空白、启动页和网格过渡风险；
+- 内部纵向拼接缝风险；
+- 在分数接近时轻微偏好后期终态。
+
+只保留得分最高的代表帧，其余记录为 `temporal_stable_duplicate`。
+
+### 短运动段与持续运动段
+
+- 前后均有稳定页、持续不超过 `--transition-max-seconds 2.40` 的短运动段至少保留一张 `short_motion_representative`，其余同段候选记录为 `temporal_short_motion_redundant`；不能仅凭持续时间短自动删除整段；
+- 三帧像素拼合能把当前帧解释为“前一页尾部 + 后一页头部”时，记录为 `temporal_mixed_transition`；分区覆盖还会估计横向、纵向和缩放动画风险，用于视觉审计提权但不单独自动删除；
+- 疑似未完成页只有在短时间内出现同一页面骨架、主内容明显增加且完整后帧本来就会被时间簇保留时，才记录为 `temporal_incomplete_resolved`；该后帧作为必要覆盖帧绕过后续去重/过滤，最终缺失时失败关闭；启用 OCR 时关闭该纯视觉自动删除；
+- 视频开头、结尾或没有双侧稳定锚点的运动段不得整段删除，默认每 `--motion-chunk-seconds 2.50` 选择一张代表帧；
+- 默认跨度会按运动段的纵向滚动重叠自适应：高重叠连续滚动使用 `1.45×`，中等重叠使用 `1.25×`，内容快速变化使用 `0.8×`；最终值限制在 `1.4—4.5` 秒；
+- 需要更密地覆盖快速滚动时，把 `--motion-chunk-seconds` 降到 `1.5`；希望进一步精简时可提高到 `3.0`，但必须抽查覆盖。
+
+`_report.json` 每张运动代表帧记录 `adaptive_chunk_seconds`、`motion_density_mode` 和 `scroll_match_ratio`；汇总记录 `adaptive_motion_group_count`。这些字段解释密度选择，不单独作为删除证据。
+
+用 `--no-temporal-select` 可复现旧版逐帧流程，只用于算法排查或兼容，不作为推荐默认值。
+
 ## 抽帧策略
 
 ### scene（场景检测，默认）
@@ -33,15 +62,18 @@
 
 ### 内容质量过滤 (`--filter-quality`)
 
-检测并过滤无信息量的帧，包括：
+检测无信息量或高风险帧，包括：
 - **空白页**：内容区域标准差接近 0，或大面积纯白/纯黑
 - **启动/控制画面**：录屏开始/结束时的控制面板、系统界面（低信息密度）
-- **过渡帧**：页面切换时上下半屏内容不一致（部分区域空白，部分有内容）
+- **过渡风险**：页面切换时上下半屏内容不一致；该单帧标签只提权审计，不直接删除
+- **高置信加载浮层**：中央存在高对比亮卡片、周边一致压暗且综合分数达到保守阈值
 
 基于 3×3 网格分析帧的内容分布：计算每个网格区域的标准差，检测内容分布是否均匀。
 
 - `--filter-quality`：启用内容质量过滤（默认开启）
 - `--no-filter-quality`：禁用内容质量过滤
+
+代码自动丢弃 `loading_overlay`。`incomplete_page` 只有在 1.25 秒内出现页面上部共同骨架、主内容边缘密度显著增加，而且该后帧在未启用本规则时本来就会成为时间簇代表帧，才记录为 `temporal_incomplete_resolved` 并删除；否则保留并交由视觉审计。启用 OCR 时关闭这项纯视觉删除，让文字增量先完整运行。合法白底正文页不能只因白色比例高被删除。
 
 ### 模糊帧过滤 (`--filter-blur`)
 
@@ -103,20 +135,34 @@ SSIM（结构相似性指数）用于补充 dHash。它在内容区生成 32×32
 
 ### 最小时间间隔 (`--min-gap`)
 
-用于抑制同一时间段内保留过多截图。默认 `--min-gap 0.5`，表示两个保留帧之间至少间隔 0.5 秒。
+用于时间簇择优后的安全限流。默认 `--min-gap 0.5`，表示两个最终保留帧之间至少间隔 0.5 秒；它不再决定簇内保留哪一张。
 
 - `--min-gap 0`：禁用时间间隔过滤
 - `--min-gap 0.5`（默认）：减少同秒多图，同时尽量保留快速变化
 - `--min-gap 1.0`：更严格，每秒最多保留约一张，适合先压缩冗余再人工复核
 
-### OCR 去重参数
+### OCR 内容增量参数
 
 需要 `--ocr-dedup` 标志开启，需要安装 `rapidocr-onnxruntime`。
+
+推荐直接运行：
+
+```bash
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i <视频路径> --ocr-dedup
+```
 
 - `--ocr-threshold 0.92`（默认）：OCR 文本相似度超过 92% 且新字符少于 8 个时视为重复
 - `--ocr-min-new 8`（默认）：最少新字符数，防止因少量文字变化被误判为重复
 
 OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ 灰度 → 自动对比度 → 对比度增强 1.35x → 锐化 1.15x。动态范围 < 18 的帧跳过 OCR（如纯黑/纯白画面）。
+
+OCR 先计算最近 4 张保留帧的文本相似度、新增三字片段和新增证据数字。1—2 位易变数字不参与保护，减少状态栏时钟和视频时间码带来的假增量。只有以下强增量可以否决 dHash、像素差或 SSIM 的近似删除：
+
+- 页面相似度至少 0.72，且出现新的金额或至少 3 位连续编号；
+- 页面相似度至少 0.82，且新增文字片段达到 `max(16, 2×--ocr-min-new)`。
+
+SHA256 完全重复不接受 OCR 覆盖。强新增内容可以否决近似视觉去重和最终 `--min-gap`；短运动段还会在最多 24 张图片预算内检查落选项，每组最多补回一张。报告只保存相似度和增量计数，不保存 OCR 原文；`ocr_visual_overrides`、`ocr_min_gap_overrides` 和 `ocr_short_motion_rescue_count` 记录保护路径。
 
 ## 复合复核参数
 
@@ -130,16 +176,51 @@ OCR 预处理流程：裁剪边缘（顶部 16%、底部 14%、左右 6%）→ �
 - 丢弃原因（如 `duplicate_ssim`、`duplicate_scroll`、`min_gap`、`quality_transition`、`ocr_duplicate`）
 - SHA256 哈希
 
-该模式只保存复核材料，不自动调用大模型。当前模型或工具支持图像输入时，可由多模态模型检查候选帧是否需要补回；如果当前模型是文字模型，则跳过视觉复核。
+该模式只用于人工排查基础层漏帧，不是多模态审计的默认入口。它可能生成大量文件，并受 `--drop-candidate-limit` 截断。v0.7.0 多模态生产路径只对基础帧做减法，不再从该目录生成恢复题。
+
+候选池达到上限后，`quality_loading_overlay`、`quality_transition` 和 `temporal_incomplete_resolved` 可以替换一个普通低优先级候选，避免视频后段的高风险删除项因先到先得而失去人工排查机会；这些候选不会进入多模态自动恢复路径。
 
 ### 候选帧数量限制 (`--drop-candidate-limit`)
 
-默认 `--drop-candidate-limit 200`。长视频中被丢弃的候选帧可能很多，建议保留默认值；如需完整回查可设为 `0`。
+默认 `--drop-candidate-limit 200`；一般排查建议显式设为 `80`。如需完整回查可设为 `0`，但长视频可能产生大量图片。
 
 ```bash
-uv run scripts/extract.py -i recording.mp4 --ocr-dedup --keep-drop-candidates
+uv run --with rapidocr-onnxruntime scripts/extract.py \
+  -i recording.mp4 --ocr-dedup --keep-drop-candidates
 uv run scripts/extract.py -i recording.mp4 --keep-drop-candidates --drop-candidate-limit 0
 ```
+
+## 多模态审计预算
+
+运行：
+
+```bash
+uv run scripts/prepare_vision_audit.py -i <基础输出目录> --max-groups 8 --max-images 24
+```
+
+审计包只保留同时满足“基础目标有本地风险 + 至少一个同组基础帧通过严格覆盖资格”的组。覆盖资格仅接受近像素一致或重叠区域差异极低的滚动关系；相同 App 外壳、时间相邻或普通结构相似均不足以授予删除资格。随后按以下风险排序：
+
+- `selection_confidence=low` 的持续运动代表帧；
+- 纵向内部拼接缝风险较高；
+- 三帧横向混合页风险；
+- 与相邻保留帧间隔过密；
+- 疑似未加载完整页面；
+- OCR 高相似低增量或新增证据数字；
+- 附近存在可替代的丢弃候选。
+
+高度重叠的相邻三帧窗口只保留优先级更高者。选组在风险优先基础上给未覆盖时间段有限加分，`budget.covered_time_buckets` 记录覆盖的 30 秒区段。`max_groups` 和 `max_images` 是硬预算，生成结果不得超过任一上限。决策合同、JSON 示例和应用方式见 `references/vision-audit.md`。
+
+能力较弱的多模态模型使用：
+
+```bash
+uv run scripts/prepare_vision_audit.py -i <基础输出目录> --profile weak
+```
+
+weak 默认 6 组、18 张唯一图片，每组只有一个红框目标，联系表采用 2 列大图并生成预填答案模板。只允许对基础目标使用 `keep/drop/replace`；删除或替换必须引用模板列出的本地核准覆盖帧、置信度至少 0.90、本地风险信号成立，且覆盖帧最终存活。覆盖链、覆盖环、无关页面或证据内容不完整时记录安全无操作。没有合格覆盖关系时允许生成 0 组，避免让弱模型白看图或冒险删除。
+
+### 归档开关
+
+默认完成抽帧后复制报告和帧清单到 Skill `archive/`。批量回归、临时调参或空间敏感场景使用 `--no-archive`；它只跳过额外归档副本，不影响输出目录中的基础帧与 `_report.json`。
 
 ## 输出参数
 
@@ -181,7 +262,7 @@ frame_NNN_MMmSSs.jpg
   "review": {
     "drop_candidates_enabled": true,
     "drop_candidate_count": 12,
-    "vision_review_status": "not_run",
+    "vision_audit_status": "not_prepared",
     "drop_candidates": [
       {
         "filename": "_review_candidates/candidate_001_min_gap_00m01s.jpg",
@@ -189,6 +270,14 @@ frame_NNN_MMmSSs.jpg
         "capture_time_seconds": 1.2
       }
     ]
+  },
+  "temporal_selection": {
+    "enabled": true,
+    "selected_before_dedup": 73,
+    "stable_run_count": 21,
+    "transition_drop_count": 57,
+    "low_confidence_selection_count": 52,
+    "adaptive_motion_group_count": 11
   },
   "dedup_stats": {
     "sha256_duplicates": 3,
@@ -203,7 +292,16 @@ frame_NNN_MMmSSs.jpg
       "index": 1,
       "filename": "frame_001_00m00s.jpg",
       "capture_time_seconds": 0.0,
-      "sha256": "abc123..."
+      "sha256": "abc123...",
+      "loading_overlay_label": "",
+      "adaptive_chunk_seconds": 3.125,
+      "motion_density_mode": "scroll_mixed",
+      "scroll_match_ratio": 0.48,
+      "content_delta": {
+        "ocr_available": false,
+        "has_new_content": false,
+        "protect_visual_duplicate": false
+      }
     }
   ]
 }

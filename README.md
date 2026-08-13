@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.7.0  | 基础层改为有界高召回，短时独立页至少保留一张且单帧切换标签不再直接删除；多模态统一只做减法，并加入本地覆盖与最终存活门禁，真实样本纯代码保留 54 张 |
 | 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.5.0  | 修复嵌套 Harness 恢复高权限与 backend 标签伪装；完整祖先链取权限交集，启动命令与四后端强绑定；新增 provider 原子并发租约，统一 Orca Runtime，并保留门禁优先的 Orca 两阶段启动与 tmux 回退 |
-| 2026-08-12 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.3.0  | 法律 harness 初始化升级为安全闭环：quick/guided/team 三模式与 strict/local/team 隐私治理；稳定 marker 区块 upsert、同路径去重、可校验原始备份恢复；区分写入/加载/行为验证并加入四类新会话探针与回归测试 |
+| 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 | 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
 | 2026-08-05 | 正式发布 | [dingtalk-minutes](skills/dingtalk-minutes/)                         | v1.0.0  | 基于钉钉官方 dws CLI 封装 AI 听记（妙记）只读能力：列表/摘要/语音转写原文/关键词/待办/音频；本地归档与增量同步（scripts/sync.py，archive 按 YYMMDD_标题 命名）；镜像到外部文件夹（scripts/mirror_output.py，单向复制 transcript/summary/todos 到指定目录，sha256 增量校验）；部署踩坑文档（安装 dws + 组织 CLI 访问开关 + 授权后台运行）；已发布 ClawHub v1.0.0 |
 | 2026-08-05 | 更新   | [verification-gate](skills/verification-gate/)                         | v1.0.2  | 重命名为 verification-gate 规避 ClawHub 重名；新增「本地 vs CI 门禁」说明（本地即可跑完整验证，CI 是可选自动化强化，平台不限 GitHub Actions）；8 阶段表加 CI 列与验证报告 CI 映射；e2e-practice CI 模板扩写 |
 | 2026-08-05 | 新上传 | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.0  | WorkBuddy 每日积分自动签到：解密桌面端本地令牌调用官方签到 API，全本机运行无后端；跨平台脚本（bash/PowerShell）+ 多 Agent 框架适配 + 多时间点幂等补签策略 |
-| 2026-08-04 | 更新   | [de-ai-polish](skills/de-ai-polish/)                                   | v3.2.6  | 新增论证脊柱账本与“关系本身”原文锚点，继续冻结既有标题；同文隔离前向断言 10/10，三稿匿名盲评 91 分，高于此前基线 88 分，同时保留自然度仍可提升的边界 |
 </details>
 
 ## 📋 项目概述
@@ -405,9 +405,9 @@
 <tr>
 <td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
 <td>工具·视频处理</td>
-<td style="word-break:break-word">从录屏视频（微信聊天录屏、会议录屏等）中自动抽取关键帧、去重并保存为图片文件，可用作法律证据。支持场景变化检测、关键帧提取、智能去重四种策略</td>
+<td style="word-break:break-word">从录屏视频中抽取证据截图，以有界高召回保留短时真实页并按时序和滚动增量控制密度；可用本地 OCR 保护新增证据，并为普通或较弱多模态模型生成只做减法、受预算、单目标和覆盖存活门禁约束的审计包</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.2</td>
+<td style="text-align:center">v0.7.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>
@@ -555,7 +555,7 @@
 <td>工具·Agent配置</td>
 <td style="word-break:break-word">面向法律工作者初始化和增量治理 AGENTS.md/CLAUDE.md：三种引导模式、三档隐私治理、法律安全基线、受管区块安全合并及新会话行为验证</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.3.0</td>
+<td style="text-align:center">v0.5.2</td>
 <td style="text-align:center"></td>
 <td>写入成功不等于已加载；无法新建会话时标 NOT_VERIFIED</td>
 </tr>
