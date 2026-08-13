@@ -44,10 +44,40 @@
    - `OPENAI_MODEL`（OpenAI 系）
    - `CLAUDE_MODEL`（部分 CC fork）
    - `GLM_MODEL`（智谱系）
-   - `MY_MODEL`（用户自定义）
+   - `CODEX_MODEL` / `OPENAI_MODEL_GLM`（部分 Codex 包装层）
+   - `MYAGENTS_MODEL` / `QWEN_MODEL`（MyAgents / QwenWork 等）
+   - `MY_MODEL`（用户兜底 export，agent 自检自填）
 4. **init skill version**：从 `$(skill_root)/SKILL.md` frontmatter 读 `version: "X.Y.Z"`
 
 > **关于 model env 信号的局限**：CC / Codex 等多数 harness 当前**不**把 model 名 export 到 env，必须靠用户在调用时显式传 `--model` 或自行 export 自己的 env 变量。脚本的兜底是拒绝 append、要求 `--model`——不臆造 model 名。
+
+## 自助补 model：env 探测失败的两条简单路径
+
+当 env 白名单全部未命中时，脚本**不臆造**，但给出明确的两条自助路径让 agent 立即补全：
+
+**路径 1：`export MY_MODEL` 后重跑（推荐；agent 自检自填）**
+
+agent 在自己的 system prompt 或上下文里通常知道自己用的是什么 model。在调 `record-init-env.sh` 之前：
+
+```bash
+export MY_MODEL="claude-fable-5"   # 或当前实际 model 名
+bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init
+```
+
+`MY_MODEL` 是用户兜底 env，**不**对应任何特定 harness——纯粹是给 agent "知道自己是谁"后一个最稳定的出口。
+
+**路径 2：`--model` 一次性兜底**
+
+不想 export（不想污染 shell 状态）就直接传参数：
+
+```bash
+bash scripts/record-init-env.sh --target /path/to/AGENTS.md --action init \
+  --model "claude-fable-5"
+```
+
+**为什么不臆造**：即使我们能猜到"99% 是 claude 系"，剩下的 1% 错猜会让 init-environment 元数据失真。`unknown` 优于 `claude-something-wrong`。两条自助路径门槛都很低（一个 export 或一个参数），不臆造换来的可信度值得这点人工。
+
+**为什么选 `MY_MODEL` 而不是 `LEGAL_MODEL` / `LHI_MODEL`**：这是行业通用约定，**不**绑定特定 skill——任何 agent 在任何上下文都能 export 它，下次被 `record-init-env.sh` 拾起。
 
 ## 受管区块结构
 

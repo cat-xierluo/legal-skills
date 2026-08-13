@@ -129,15 +129,45 @@ else
 fi
 
 # === 采集 model（env 白名单 + 兜底）===
+# 预设白名单：harness 直接 export 的标准 model env（按经验+用户可 export 顺序）
+# - ANTHROPIC_MODEL: Claude 系直接 export
+# - OPENAI_MODEL: OpenAI 系直接 export
+# - CLAUDE_MODEL: 部分 Claude fork (Claude-in-Slack 等)
+# - GLM_MODEL: 智谱系（GLM-4 / GLM-5.2 / GLM-MiniMax-M3）
+# - CODEX_MODEL / OPENAI_MODEL_GLM: 部分 Codex 包装层 export
+# - MYAGENTS_MODEL / QWEN_MODEL: MyAgents / QwenWork 等"用户友好"名
+# - MY_MODEL: 用户兜底 export（agent 在 self-aware 后自行 export 自己的 model）
 if [ -z "$MODEL" ]; then
-    for envname in ANTHROPIC_MODEL OPENAI_MODEL CLAUDE_MODEL GLM_MODEL MY_MODEL; do
+    for envname in ANTHROPIC_MODEL OPENAI_MODEL CLAUDE_MODEL GLM_MODEL CODEX_MODEL OPENAI_MODEL_GLM MYAGENTS_MODEL QWEN_MODEL MY_MODEL; do
         if [ -n "${!envname+x}" ] && [ -n "${!envname}" ]; then
             MODEL=$(printf '%s' "${!envname}" | head -1)
             break
         fi
     done
 fi
-[ -n "$MODEL" ] || die "model 探测失败：env 白名单 (ANTHROPIC_MODEL/OPENAI_MODEL/CLAUDE_MODEL/GLM_MODEL/MY_MODEL) 均未命中；请用 --model <name> 兜底指定"
+if [ -z "$MODEL" ]; then
+    cat >&2 <<EOF
+record-init-env.sh: 错误：model 探测失败。
+
+env 白名单 (ANTHROPIC_MODEL / OPENAI_MODEL / CLAUDE_MODEL / GLM_MODEL /
+CODEX_MODEL / OPENAI_MODEL_GLM / MYAGENTS_MODEL / QWEN_MODEL / MY_MODEL)
+均未命中。
+
+自助补 model 的两条简单路径：
+
+  1. export 后重跑（推荐，让 agent 自检自填）：
+       export MY_MODEL="<你的 model 名>"
+       bash scripts/record-init-env.sh --target <AGENTS.md> --action <init|update|append>
+
+  2. --model 兜底（一次性）：
+       bash scripts/record-init-env.sh --target <AGENTS.md> --action <init|update|append> \\
+         --model "<你的 model 名>"
+
+为什么不臆造：harness 实际 model 名称在 init 时不可见；env 白名单 + --model
+兜底是当前最稳的"模型自检自填"路径。详见 references/22-initialization-environment.md §自助补 model。
+EOF
+    die "model 未提供"
+fi
 
 # === 采集 init skill version（SKILL.md frontmatter）===
 SKILL_VERSION=""
