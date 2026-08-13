@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import subprocess
+import stat
 import sys
 import unittest
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -231,6 +233,115 @@ class RuntimeRegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--input", result.stdout)
         self.assertIn("--plan", result.stdout)
+
+    def test_unpack_docx_rejects_zip_slip_without_outside_write(self) -> None:
+        from scripts.review.apply_review_plan import unpack_docx
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            malicious_docx = root / "malicious.docx"
+            output_dir = root / "unpacked"
+            escaped_path = root / "escaped.txt"
+            with zipfile.ZipFile(malicious_docx, "w") as archive:
+                archive.writestr("../escaped.txt", "must not escape")
+
+            with self.assertRaisesRegex(ValueError, "path traversal"):
+                unpack_docx(malicious_docx, output_dir)
+
+            self.assertFalse(escaped_path.exists())
+
+    def test_unpack_docx_rejects_absolute_member(self) -> None:
+        from scripts.review.apply_review_plan import unpack_docx
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            malicious_docx = root / "absolute.docx"
+            with zipfile.ZipFile(malicious_docx, "w") as archive:
+                archive.writestr("/absolute.txt", "must not extract")
+
+            with self.assertRaisesRegex(ValueError, "absolute path"):
+                unpack_docx(malicious_docx, root / "unpacked")
+
+    def test_unpack_docx_rejects_windows_style_traversal(self) -> None:
+        from scripts.review.apply_review_plan import unpack_docx
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            malicious_docx = root / "windows-traversal.docx"
+            with zipfile.ZipFile(malicious_docx, "w") as archive:
+                archive.writestr(r"word\..\..\escaped.txt", "must not extract")
+
+            with self.assertRaisesRegex(ValueError, "path traversal"):
+                unpack_docx(malicious_docx, root / "unpacked")
+
+    def test_unpack_docx_validates_all_members_before_extracting(self) -> None:
+        from scripts.review.apply_review_plan import unpack_docx
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            malicious_docx = root / "partially-malicious.docx"
+            output_dir = root / "unpacked"
+            with zipfile.ZipFile(malicious_docx, "w") as archive:
+                archive.writestr("safe-before-malicious.txt", "must not extract")
+                archive.writestr("../escaped.txt", "must not escape")
+
+            with self.assertRaisesRegex(ValueError, "path traversal"):
+                unpack_docx(malicious_docx, output_dir)
+
+            self.assertFalse((output_dir / "safe-before-malicious.txt").exists())
+
+    def test_unpack_docx_rejects_symbolic_link_member(self) -> None:
+        from scripts.review.apply_review_plan import unpack_docx
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            malicious_docx = root / "symlink.docx"
+            link = zipfile.ZipInfo("word/link")
+            link.create_system = 3
+            link.external_attr = (stat.S_IFLNK | 0o777) << 16
+            with zipfile.ZipFile(malicious_docx, "w") as archive:
+                archive.writestr(link, "../../escaped.txt")
+
+            with self.assertRaisesRegex(ValueError, "symbolic link"):
+                unpack_docx(malicious_docx, root / "unpacked")
+
+    def test_suggest_insertion_allows_safe_ooxml_and_rejects_hidden_text(self) -> None:
+        from scripts.docx.reviewer import ContractReviewer
+
+        with TemporaryDirectory() as temp_dir:
+            unpacked = Path(temp_dir) / "unpacked"
+            self._write_minimal_unpacked_docx(unpacked)
+            reviewer = ContractReviewer(unpacked, author="Reviewer", initials="RV")
+            anchor = reviewer.find_text("第一条")
+
+            reviewer.suggest_insertion(
+                anchor,
+                "<w:p><w:r><w:t>安全新增条款</w:t></w:r></w:p>",
+            )
+            with self.assertRaisesRegex(ValueError, "unsafe OOXML element"):
+                reviewer.suggest_insertion(
+                    anchor,
+                    "<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>隐藏文字</w:t></w:r></w:p>",
+                )
+            with self.assertRaisesRegex(ValueError, "unsafe OOXML element"):
+                reviewer.suggest_insertion(
+                    anchor,
+                    '<evil:p xmlns:evil="https://example.invalid/evil">伪装节点</evil:p>',
+                )
+
+    def test_suggest_insertion_rejects_malformed_xml(self) -> None:
+        from scripts.docx.reviewer import ContractReviewer
+
+        with TemporaryDirectory() as temp_dir:
+            unpacked = Path(temp_dir) / "unpacked"
+            self._write_minimal_unpacked_docx(unpacked)
+            reviewer = ContractReviewer(unpacked, author="Reviewer", initials="RV")
+
+            with self.assertRaisesRegex(ValueError, "not valid XML"):
+                reviewer.suggest_insertion(
+                    reviewer.find_text("第一条"),
+                    "<w:p><w:r><w:t>未闭合</w:r></w:p>",
+                )
 
     def test_default_runtime_paths_point_to_skill_root(self) -> None:
         from scripts.review import archive_service, review_runtime

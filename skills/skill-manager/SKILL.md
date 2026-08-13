@@ -2,8 +2,8 @@
 name: skill-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.7.0"
-description: 管理 Claude Code、Codex、OpenClaw 和 QoderWork Skills 的安装、版本追踪、更新检查和项目 Agent 初始化。支持从本地路径或 GitHub 仓库安装，自动识别 .codex/.claude/.openclaw/.qoderworkcn 目标目录，记录每个 Skill 的安装时间、来源 URL 和版本号，检查 GitHub 更新，并通过 init 命令创建 Agent skills 符号链接结构使多 Agent 共享同一技能来源。
+version: "1.7.2"
+description: 管理 Claude Code、Codex、OpenClaw、WorkBuddy/CodeBuddy 和 QoderWork Skills 的安装、版本追踪、更新检查与项目 Agent 初始化。支持从本地路径或 GitHub 仓库安装，优先以项目 `.claude/skills` 为单一来源，并识别 `.codebuddy`、`.workbuddy` 等全局配置根，避免嵌套误装。
 license: Complete terms in LICENSE.txt
 ---
 

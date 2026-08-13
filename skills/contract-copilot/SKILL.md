@@ -1,6 +1,6 @@
 ---
 name: contract-copilot
-version: "1.6.1"
+version: "1.6.3"
 description: 合同起草与审查助手。基于分层分析与四步流程，输出可执行的风险清单、起草骨架、修改建议、推荐措辞和审查意见书，支持批注与修订两种文档处理方式。用户通过飞书或其他 IM 对话发送合同文件并要求审查或起草时，也应使用本 skill，并优先沿原会话回传修订版和审查报告。
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -18,9 +18,10 @@ author: 杨卫薪律师（微信ywxlaw）
 当用户提供或通过会话传入 DOCX 合同文件，并提出“审查、审核、修改、批注、修订、出审查意见、帮我看合同”等合同审查类请求时，默认必须走文件交付链路：
 
 1. 先完成必要澄清与分层审查。
-2. 将审查结论整理为 `review-plan.json`。
-3. 运行 `scripts/review/apply_review_plan.py` 或 `scripts/run_apply_review_plan.ps1`。
-4. 对外交付审核修订版 DOCX 与 Word 审查意见书 DOCX。
+2. 将审查结论整理为 `review-plan.json`（**运行时产物**，由 contract-copilot 在审查过程中生成；不是 skill 包内随附文件，每次审查都会重新生成）。
+3. 运行 `scripts/review/apply_review_plan.py` 或 `scripts/run_apply_review_plan.ps1`，传入上一步生成的 `review-plan.json`。
+4. `apply_review_plan.py` 会在 `archive/<时间戳_合同名>/` 内自动生成 `review-plan_enriched.json`（**运行时产物**，含法律依据补全等扩展信息，不是 skill 包内随附文件）。
+5. 对外交付审核修订版 DOCX 与 Word 审查意见书 DOCX。
 
 不得仅输出文字版风险清单、审查摘要或聊天回复来替代文件交付，除非出现以下情形之一：
 

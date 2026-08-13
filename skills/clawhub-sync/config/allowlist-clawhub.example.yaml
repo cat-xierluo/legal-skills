@@ -1,0 +1,46 @@
+# 同步白名单（ClawHub 平台独立列表）— 公开模板
+# ─────────────────────────────────────────────────────
+# 这是模板文件（.example.yaml），供其他用户参考。
+# 你的真实配置请复制为 allowlist-clawhub.yaml（去掉 .example）后按需调整。
+# 真实配置文件已被 .gitignore 排除，不会提交。
+# ─────────────────────────────────────────────────────
+#
+# 【v1.7.1 三份独立列表架构】
+# clawhub-sync 从 v1.7.0「单一嵌套文件 + platforms 字段」反转为
+# 三份独立列表文件：allowlist-clawhub.yaml / allowlist-skillhub.yaml / allowlist-lenovo.yaml
+# 每份文件只列该平台的 skill 名,字段独立维护。同一 skill 可跨多份文件（一对多）,
+# 不再受「三选一」约束。详见 DECISIONS D-2026-08-12-02。
+#
+# 本文件结构:
+#   - 顶层是 skill 名（kebab-case,2-128 字符）
+#   - 子层是平台特定字段（display_name 可选;slug 可选,重名/被占用时覆盖）
+#   - 无 platforms 字段（与单一嵌套结构的关键差异）
+#
+# 字段说明:
+#   display_name - 可选。ClawHub 的 displayName 命令行参数来源,需与 --name 一致
+#   slug         - 可选。ClawHub 的 --slug 命令行参数来源,重名/被占用时覆盖
+#                  默认 = skill 目录名（即 name）
+#
+# 发布命令:
+#   clawhub publish /tmp/clawhub-publish-<skill> \
+#     --slug <skill 名> --name "<display_name 或中文名>" \
+#     --version "<版本号>" --changelog "<变更说明>"
+
+# ===== 已发 ClawHub 的 MIT 通用工具 =====
+court-sms:
+patent-download:
+md2word:
+paddle-ocr:
+de-ai-polish:
+yuandian-law-search:
+svg-article-illustrator:
+article2book:
+skill-lint:
+git-batch-commit:
+clawhub-sync:
+apple-smart-schedule:
+invoice-organizer:
+workbuddy-checkin:
+verification-gate:
+dingtalk-minutes:
+multi-agent-orchestration:

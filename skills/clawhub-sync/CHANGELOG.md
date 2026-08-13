@@ -1,3 +1,38 @@
+## [1.7.1] - 2026-08-12
+
+### 重构（架构反转）
+
+- **白名单架构从「单一嵌套文件 + platforms 字段」反转回「三份独立列表文件」**：详见 DECISIONS `D-2026-08-12-02`。
+  - 删除 `config/sync-allowlist.example.yaml`（旧嵌套结构模板,gitignore 排除的本地真实 `sync-allowlist.yaml` 由用户按需手动拆分）
+  - 新增三份独立白名单：`config/allowlist-clawhub.example.yaml` / `allowlist-skillhub.example.yaml` / `allowlist-lenovo.example.yaml`（纯 skill 名列表 + 该平台的 `display_name`/`slug`,无 `platforms` 字段）
+  - **不迁移现有 28 个 skill**（16 clawhub + 12 skillhub）—— 仅按平台拆分到三份新文件,字段独立维护
+  - 允许同一 skill 跨多份文件（一对多），不再受「三选一」约束
+- **`prepare-publish.sh` inject 段重写**：读取路径由 `sync-allowlist.yaml` 改为平台特定 `allowlist-${PLATFORM}.yaml`；python 解析逻辑仅扫当前平台（无 `platforms` 字段干扰）；触发条件不变（`skillhub` / `lenovo`）。其他平台扫描逻辑不变
+- **SKILL.md 全面改写**：移除「三选一」「`platforms` 二选一」等表述,改为「三份独立白名单文件」叙述；同步策略章节、配置文件与隐私段、前置检查、FAQ、输入/输出全面更新；系统依赖表保留 Node.js 一行；frontmatter 必需字段段更新为「SkillHub 从 `allowlist-skillhub.yaml` 读,联想从 `allowlist-lenovo.yaml` 读」
+- frontmatter 触发描述同步改为三平台，并让临时副本注入完成提示显示实际目标平台，避免 Lenovo 路径误报为 SkillHub
+- **`sync-records.example.yaml` 仅顶部注释更新**：`platforms.<name>` 嵌套结构本身与新架构天然兼容（一对多语义），**记录结构零改动**
+- **上一轮 v1.7.0「联想三平台分流第三选项」决策被本版推翻**：详见 DECISIONS `D-2026-08-12-01` 标题加「（已被 D-2026-08-12-02 推翻）」标注，正文保留为历史记录
+
+## [1.7.0] - 2026-08-12
+
+### 新增
+
+- **联想开放平台（LenovoSkill CLI）正式纳入三平台分流**：从最初设计为「附加上传渠道」（不进 `platforms` 分流）升级为**三选一分流的独立第三选项**（与 ClawHub / SkillHub 平行）。`platforms` 字段从 `[clawhub]` / `[skillhub]` 二选一扩展为 `[clawhub]` / `[skillhub]` / `[lenovo]` 三选一，仍禁止同 skill 重复发。SKILL.md 顶部分流策略、平台对比表、单 skill 同步工作流、FAQ、输入/输出全面改写为「三选一」表述；专章「联想开放平台（LenovoSkill CLI）上传」从「附加渠道」改写为「三平台分流第三选项」，补充 OAuth 双 token（Login Token + Biz Token）、与 SKILL.md frontmatter 的关系、与 `.skill-config.json` 的互补关系。
+- **`prepare-publish.sh` 放行并复用 SkillHub frontmatter 注入段**：触发条件从 `[ "$PLATFORM" = "skillhub" ]` 扩为 `[ "$PLATFORM" = "skillhub" ] || [ "$PLATFORM" = "lenovo" ]`，**python 逻辑零改动**（已平台无关，只读 `display_name` + `slug`）。ClawHub 路径完全不受影响。临时目录前缀 `/tmp/lenovo-publish-<skill>`。
+- **`sync-allowlist.example.yaml` / `sync-records.example.yaml` 加 lenovo 分区**：白名单新增「`platforms: [lenovo]`」分区（联想无强制许可证，MIT 工具与 CC-BY-NC 法律类都可发）；记录新增 `platforms.lenovo` 嵌套字段（与 `platforms.skillhub` 同构，`namespace` 字段不适用——OAuth 双 token，无 namespace 概念）。
+- **SKILL.md 依赖章节系统依赖表新增 Node.js 一行**：Node.js ≥ 18 + npm 是 `lenovoskill` CLI 的运行时（`npx @lenovo-open/skill-cli` 走 Node.js）。原有 `rsync` / `git` / Python 3 三行不变。
+
+### 改进
+
+- 同步示例图、记录结构图、平台对比表统一加 lenovo 列；`url` 模板扩展为 `https://open.lenovomm.com/skills/<slug>`。
+- 配置文件说明段（顶部注释）的「双平台」表述改为「三平台」；`platforms` 字段说明加 `lenovo` 选项；`display_name` 字段说明改为「`skillhub` 与 `lenovo` 共用」。
+- 配套 DECISIONS `D-2026-08-12-01` 标题加「修订：从附加渠道升级为三平台分流第三选项」并改写正文；D-2026-08-03-02（二选一）适用范围扩展为「三选一」（决策本身不动，由本次修订条目说明）。
+
+### NOT_VERIFIED
+
+- LenovoSkill CLI 的 `package` / `push` 实际行为、`.skill-config.json` 字段完整列表、OAuth 流程细节、平台许可证审核 → 来自用户提供的 README 材料，未实测
+- 联想 CLI 是否**实际**从 SKILL.md frontmatter 读 slug/displayName（README 主写 `.skill-config.json` 作为项目级配置）→ 这是本次「全复用模式」决策的关键假设；若实测发现联想 CLI 不读 frontmatter，本次决策需要再次修订
+
 ## [1.6.1] - 2026-08-05
 
 ### 改进
