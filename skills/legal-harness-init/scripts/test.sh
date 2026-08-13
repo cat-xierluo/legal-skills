@@ -25,7 +25,7 @@ detect_explicit=$(cd "$TEST_ROOT/only-docs" && HOME="$TEST_ROOT/home" bash "$SCR
 assert_contains "$detect_explicit" '"current_runtime": "codex"' "显式 runtime 优先"
 assert_contains "$detect_explicit" '"current_runtime_source": "explicit"' "显式 runtime 保留证据"
 
-detect_env=$(cd "$TEST_ROOT/only-docs" && HOME="$TEST_ROOT/home" CODEX_THREAD_ID=test bash "$SCRIPT_DIR/detect.sh" 2>/dev/null || true)
+detect_env=$(cd "$TEST_ROOT/only-docs" && env -i HOME="$TEST_ROOT/home" CODEX_THREAD_ID=test bash "$SCRIPT_DIR/detect.sh" 2>/dev/null || true)
 assert_contains "$detect_env" '"current_runtime": "codex"' "CODEX_THREAD_ID 可识别 Codex"
 assert_contains "$detect_env" 'env:CODEX_THREAD_ID' "runtime 输出证据信号"
 
@@ -136,6 +136,63 @@ probe_traceability=pass
 EOF
 verified_output=$(bash "$SCRIPT_DIR/verify.sh" --target "$TEST_ROOT/project/AGENTS.md" --block-id legal-baseline --session-evidence "$TEST_ROOT/session-evidence.txt")
 assert_contains "$verified_output" '"status":"BEHAVIOR_VERIFIED"' "配置与四类证据齐备时升级 BEHAVIOR_VERIFIED"
+
+# === record-init-env.sh 回归 ===
+mkdir -p "$TEST_ROOT/init-env"
+printf '# 用户内容\n' > "$TEST_ROOT/init-env/AGENTS.md"
+clean_init=$(env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="claude-fable-5" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action init 2>/dev/null)
+assert_contains "$clean_init" '"status":"recorded"' "干净 AGENTS.md init 创建受管区块"
+assert_contains "$clean_init" '"mode":"create"' "首次 init 走 create 分支"
+if grep -Fq '<!-- legal-harness-init:init-environment:start -->' "$TEST_ROOT/init-env/AGENTS.md" \
+    && grep -Fq '<!-- legal-harness-init:init-environment:end -->' "$TEST_ROOT/init-env/AGENTS.md" \
+    && grep -Fq 'claude-fable-5' "$TEST_ROOT/init-env/AGENTS.md" \
+    && grep -Fq 'legal-harness-init' "$TEST_ROOT/init-env/AGENTS.md"; then
+    pass "init-environment 区块、model 与 skill 名均写入"
+else
+    fail "init-environment 区块、model 与 skill 名均写入"
+fi
+
+append_init=$(env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="MiniMax-M3" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action update --note "M6 项目级" 2>/dev/null)
+assert_contains "$append_init" '"status":"recorded"' "已有 init-environment 时继续 append"
+assert_contains "$append_init" '"mode":"append"' "第二次走 append 分支"
+if grep -Fxc '<!-- legal-harness-init:init-environment:start -->' "$TEST_ROOT/init-env/AGENTS.md" | awk '{exit ($1==1)?0:1}'; then pass "append 后 start marker 仍唯一"; else fail "append 后 start marker 仍唯一"; fi
+if grep -Fxc '<!-- legal-harness-init:init-environment:end -->' "$TEST_ROOT/init-env/AGENTS.md" | awk '{exit ($1==1)?0:1}'; then pass "append 后 end marker 仍唯一"; else fail "append 后 end marker 仍唯一"; fi
+# 数据行 = 在 init-environment 区块内匹配 ^\| 且不是表头(时间) 也不是分隔(---) 的行
+data_rows=$(awk '/<!-- legal-harness-init:init-environment:start -->/ {f=1; next} /<!-- legal-harness-init:init-environment:end -->/ {f=0} f && /^\|/' "$TEST_ROOT/init-env/AGENTS.md" | awk '!/^\| 时间/ && !/^\|---/' | wc -l | tr -d ' ')
+if [ "$data_rows" -eq 2 ]; then pass "append 后数据行为 2"; else fail "append 后数据行为 2 (实际 $data_rows)"; fi
+
+# dry-run 后 sha 不变（不依赖 timestamp 不可控性）
+sha_before_dry=$(shasum -a 256 "$TEST_ROOT/init-env/AGENTS.md" | awk '{print $1}')
+env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="claude-fable-5" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action init --dry-run >/dev/null 2>&1
+sha_after_dry=$(shasum -a 256 "$TEST_ROOT/init-env/AGENTS.md" | awk '{print $1}')
+if [ "$sha_before_dry" = "$sha_after_dry" ]; then pass "dry-run 后未改变文件"; else fail "dry-run 后未改变文件 (before=$sha_before_dry after=$sha_after_dry)"; fi
+
+# env 全空 + 无 --model 必须拒绝
+if env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action init >/dev/null 2>&1; then
+    fail "env 全空缺 --model 时拒绝 append"
+else
+    pass "env 全空缺 --model 时拒绝 append"
+fi
+
+printf '<!-- legal-harness-init:init-environment:start -->\n' > "$TEST_ROOT/init-env/AGENTS.md.broken"
+if env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="x" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md.broken" --action init >/dev/null 2>&1; then
+    fail "残缺 marker 拒绝 append"
+else
+    pass "残缺 marker 拒绝 append"
+fi
+rm -f "$TEST_ROOT/init-env/AGENTS.md.broken"
+
+if env -i bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" 2>/dev/null; then
+    fail "缺 --target 拒绝"
+else
+    pass "缺 --target 拒绝"
+fi
+
+if env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="x" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action invalid_action >/dev/null 2>&1; then
+    fail "非法 --action 拒绝"
+else
+    pass "非法 --action 拒绝"
+fi
 
 printf '结果：%s 通过，%s 失败\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

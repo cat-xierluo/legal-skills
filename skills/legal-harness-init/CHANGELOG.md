@@ -5,6 +5,44 @@
 > **如何阅读**：每个版本段含"变更 / 决策 / 验证 / 待办"四类。  
 > **NOT_VERIFIED 标记**：未真实跑通端到端流程的部分会显式标 `NOT_VERIFIED`，不伪装成已完成。
 
+## [0.4.0] - 2026-08-13
+
+> 沉淀每次 init 的工具环境到被初始化的项目，作为将来追溯"问题出在 harness 还是 model 层"的元数据。端到端真实跑通仍 `NOT_VERIFIED`（缺真实律师 init 全流程）。
+
+### 新增
+
+- 新增 `scripts/record-init-env.sh`：半自动采集 harness(name+version) + model + init skill version，append 一行到目标 AGENTS.md 的 `init-environment` 受管区块
+- 新增受管区块 `init-environment`（block-id 落 SKILL.md 第五步受管区块表）：与 M1—M8 同 marker 语法，append-only 表格
+- 新增 `templates/modules/init-environment.md` 受管区块模板（首次 init 时的骨架示例）
+- 新增 `references/22-initialization-environment.md`（背景/采集方式/env 局限/隐私边界/归档建议）
+
+### 改进
+
+- `SKILL.md` 第六步后插入"第六步半：记录初始化环境"；第六步 `write.sh` 真实落盘后必须再调一次 `record-init-env.sh`
+- 输入参数表新增 `--model`（env 兜底）与 `--action {init,update,append}`
+- 禁止事项补两条：禁止在 `record-init-env.sh` 探测不到 model 时臆造；禁止手改 `init-environment` 表格行
+- 验收清单补一条：缺 init-environment 记录时报告 `INIT_ENV_NOT_RECORDED` 而非宣称完成
+- 新增 `skill-lint:constraint INIT-ENVIRONMENT-RECORD-ON-WRITE` 约束 marker
+
+### 决策
+
+- DEC-021：项目级 init 环境元数据受管区块（append-only、半自动采集、不进 .legal-context.local.md、不回填 v0.1.0—v0.3.0）
+
+### 验证
+
+- ✅ `bash -n scripts/record-init-env.sh`：语法通过
+- ✅ 9 个冒烟用例（手动）：缺 target → die；env 全空缺 model → die 强制 `--model`；dry-run 不落盘；干净项目 create；重复执行 unchanged；残缺 marker 拒绝；append 后行数 = 2
+- ⚠️ 真实 harness `claude --version` / `codex --version` 探测：在 sandbox 探测到本机 `claude-code` 时 `Harness Version` 应可填真实值；当前 sandbox 缺 claude CLI → 标 `unknown` 兜底
+- ⚠️ 端到端（quick 引导 → write.sh → record-init-env.sh 真实 init 一个新法律项目）`NOT_VERIFIED`，需真实律师测试
+- ✅ 已有 `bash scripts/test.sh` 应继续 26/26 通过（新增 record-init-env.sh 回归待运行确认）
+
+### 待办
+
+- 端到端跑通：quick 引导 → write.sh → record-init-env.sh 三步顺序在真实律师 init 一个新项目时走通
+- 真实 harness 版本探测：在已装 `claude` / `codex` CLI 的机器验证 `Harness Version` 字段能拿到真实值（当前 sandbox 标 `unknown`）
+- 模型 env 探测覆盖：扩展 env 白名单（`OPENAI_MODEL_GLM` / `QWEN_MODEL` 等）
+- 归档自动化：>50 行时自动复制到 `docs/init-environment-history.md`（v0.4.0 不做）
+
 ## [0.3.0] - 2026-08-12
 
 ### 新增
