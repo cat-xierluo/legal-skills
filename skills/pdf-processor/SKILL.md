@@ -247,3 +247,22 @@ python3 scripts/pdf-ocr-benchmark.py \
 2. 抽查页面方向、清晰度、裁剪边界和文件体积。
 3. 对双层 PDF 测试文字搜索、复制和关键词命中。
 4. 向用户说明实际使用的后端、输出文件路径和任何回退情况。
+
+## 双层 PDF 文字层 y 翻转与装饰元素过滤（v2.11+）
+
+PaddleOCR API 对不同文档会返回不一致的 poly y 原点（FROM BOTTOM / FROM TOP）。本技能 v2.11+ 自动判定（`infer_y_origin`）并按需 y 翻转，避免页码、标题整体跑到对面。
+
+```bash
+# 默认 auto:按 poly 分布判定,模糊区间保守不翻
+python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api
+
+# 启发误判时显式指定
+python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --paddle-yflip top
+python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --paddle-yflip bottom
+```
+
+装饰元素过滤默认开启，丢弃 PaddleOCR 版面定位错误的超小字 / 边缘元素；关闭：
+
+```bash
+python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --no-layered-filter-decorative
+```
