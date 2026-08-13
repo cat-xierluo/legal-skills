@@ -199,6 +199,8 @@ bash scripts/pm-orchestrate.sh ack --worktree "$WT" --session worker-a --deliver
 
 `wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
 
+**死锁兜底 `settle`（Task-047）**：若 worker 进程已死但未发 `worker_done`（dispatch 卡 `dispatched`，`worker-release` 对未结算 dispatch 失败，`clean-worktree` Hard Fail #7 拒删），PM 用 `pm-orchestrate settle --worktree <WT> --session <S> [--force] --reason "worker process dead"` 强收尾——按序 `orca terminal stop` + `provider-lease release --resource-settled` + `orca worktree rm --force`，绕过 `worker-release` 死锁。存活检查：默认 `worker-show` 看到 `workerSession` 仍存在则拒绝（worker 可能还活）；`--force` 跳过检查（仅确认 worker 死后用）。**这是 supervised 正式 lifecycle（worker_done→Delivery→release→ack）的例外兜底，不是常规收尾**——优先让 worker 正常发 `worker_done`。
+
 由 `spawn-worker.sh` 预先创建、再交给 `worker-start --terminal` 的 provider terminal 属于 external resource。settled 后 `worker-release` 可能正确返回 retained；清理脚本只有在 worker/Dispatch 已结算、ownership/reason 明确为 `external/external_terminal` 且 Orca resource handle 与 METADATA 完全一致时，才由创建者关闭这个精确句柄，其他状态一律失败关闭。
 
 ## 5. tmux 回退

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.3] - 2026-08-14
+
+### 新增
+
+- `pm-orchestrate settle` 子命令（Task-047）：supervised dispatch 死锁兜底——worker 进程死但未发 `worker_done` 时，按序 `orca terminal stop` + `provider-lease release --resource-settled` + `orca worktree rm --force`，绕过 `worker-release` 对未结算 dispatch 的 fail-closed 与 `clean-worktree` Hard Fail #7。默认 `worker-show` 存活检查（`workerSession` 存在则拒绝），`--force` 跳过；`--reason` 记录审计。
+
 ## [2.5.2] - 2026-08-14
 
 ### 改进

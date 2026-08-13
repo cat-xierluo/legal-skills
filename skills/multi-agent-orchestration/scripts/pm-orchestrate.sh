@@ -25,6 +25,9 @@ Commands:
   reply       Reply to a worker question (`--message-id` + `--text`)
   release     Release a settled supervised worker terminal
   retain      Retain a settled supervised worker terminal for debugging
+  settle      Force-settle a deadlocked supervised worker (Task-047): stop terminal +
+               release lease + remove worktree, bypassing worker-release when the worker
+               process is dead but never sent worker_done (clean-worktree Hard Fail #7)
 
 Common:
   --worktree PATH   Worker worktree path
@@ -57,6 +60,8 @@ WAIT_TIMEOUT=60
 DELIVERY_ID=""
 MESSAGE_ID=""
 OBJECTIVE=""
+FORCE=0
+REASON=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -70,13 +75,15 @@ while [[ $# -gt 0 ]]; do
     --delivery-id) DELIVERY_ID="$2"; shift 2 ;;
     --message-id) MESSAGE_ID="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
+    --force) FORCE=1; shift ;;
+    --reason) REASON="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
 done
 
 case "$COMMAND" in
-  run-create|send|read|peek|show|wait|ack|reply|release|retain) ;;
+  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle) ;;
   *) echo "ERROR: unknown command: $COMMAND" >&2; usage; exit 64 ;;
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
@@ -265,6 +272,63 @@ cmd_account() {
   fi
 }
 
+# Task-047：supervised dispatch 死锁兜底。worker 进程已死但未发 worker_done 时，
+# dispatch 卡 dispatched → worker-release 对未结算 dispatch 失败 → clean-worktree
+# Hard Fail #7 拒删。settle 封装 Wave-2 实测的硬收尾序列（terminal stop + lease
+# release + worktree rm），绕过 worker-release，让 PM 在确认 worker 死后能收尾。
+# 仅当 worker 确认死（workerSession null）或 PM 显式 --force 时调用。
+cmd_settle() {
+  [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: settle requires an Orca supervised worker (dispatch deadlock bypass)" >&2; exit 64; }
+  orca_runtime_init
+
+  local worktree_id show_json worker_session lease_root
+  worktree_id=$(jq -r '.session.orca.worktree_id // empty' "$METADATA")
+
+  # 存活检查（除非 --force）：workerSession 仍存在 → worker 可能还活 → 拒绝。
+  if [ "$FORCE" -ne 1 ]; then
+    show_json=$(orca_cli orchestration worker-show --dispatch "$ORCA_DISPATCH_ID" --json 2>/dev/null || true)
+    if [ -n "$show_json" ]; then
+      worker_session=$(printf '%s' "$show_json" | jq -r '.result.workerSession | if . == null then "DEAD" else "ALIVE" end' 2>/dev/null || echo "UNKNOWN")
+      if [ "$worker_session" = "ALIVE" ]; then
+        echo "REFUSED: workerSession present (worker may still be active); confirm the worker process is dead and re-run with --force" >&2
+        exit 2
+      fi
+    fi
+  fi
+
+  echo "PM_ORCHESTRATE_SETTLE_START: dispatch=$ORCA_DISPATCH_ID worktree=$worktree_id force=$FORCE reason=${REASON:-<none>}"
+
+  # 1. 停 external terminal，释放 terminal 句柄。
+  if [ -n "$worktree_id" ]; then
+    orca_cli terminal stop --worktree "id:$worktree_id" --json >/dev/null 2>&1 \
+      && echo "PM_ORCHESTRATE_SETTLE_TERMINAL_STOPPED: $worktree_id" \
+      || echo "WARN: terminal stop non-zero (may already be stopped)" >&2
+  fi
+
+  # 2. 直接释放 provider lease（--resource-settled），绕过 worker-release 对未结算
+  #    dispatch 的 fail-closed。
+  if [ -n "$PROVIDER_LEASE_FILE" ]; then
+    lease_root=$(provider_lease_root_for_project "$WORKTREE" 2>/dev/null) || lease_root=""
+    if [ -n "$lease_root" ]; then
+      python3 "$SCRIPT_DIR/provider-lease.py" release \
+        --root "$lease_root" \
+        --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
+        --resource-settled --orca-cli "$ORCA_CLI_BIN" >/dev/null 2>&1 \
+        && echo "PM_ORCHESTRATE_SETTLE_LEASE_RELEASED: session=$SESSION" \
+        || echo "WARN: provider lease release non-zero (may already be released)" >&2
+    fi
+  fi
+
+  # 3. 删 Orca worktree，绕过 clean-worktree 的 worker-release 死锁。
+  if [ -n "$worktree_id" ]; then
+    orca_cli worktree rm --worktree "id:$worktree_id" --force --json >/dev/null 2>&1 \
+      && echo "PM_ORCHESTRATE_SETTLE_WORKTREE_REMOVED: $worktree_id" \
+      || echo "ERROR: orca worktree rm failed; inspect $worktree_id manually" >&2
+  fi
+
+  echo "PM_ORCHESTRATE_SETTLED: bypassed worker-release deadlock (Task-047); verify in Orca UI that terminal/worktree are gone"
+}
+
 resolve_worker
 case "$COMMAND" in
   send) cmd_send ;;
@@ -275,4 +339,5 @@ case "$COMMAND" in
   ack) cmd_ack ;;
   reply) cmd_reply ;;
   release|retain) cmd_account ;;
+  settle) cmd_settle ;;
 esac
