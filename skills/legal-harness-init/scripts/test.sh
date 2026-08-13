@@ -14,7 +14,7 @@ pass() { passed=$((passed + 1)); printf 'PASS %s\n' "$1"; }
 fail() { failed=$((failed + 1)); printf 'FAIL %s\n' "$1" >&2; }
 assert_contains() {
     local text="$1" pattern="$2" name="$3"
-    if printf '%s' "$text" | grep -Fq "$pattern"; then pass "$name"; else fail "$name"; fi
+    if printf '%s' "$text" | grep -Fq -- "$pattern"; then pass "$name"; else fail "$name"; fi
 }
 
 mkdir -p "$TEST_ROOT/home" "$TEST_ROOT/only-docs/docs"
@@ -173,6 +173,33 @@ if env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/record-init-env.sh" --target 
 else
     pass "env 全空缺 --model 时拒绝 append"
 fi
+
+# env 全空 + 无 --model 时 hint 提示 export MY_MODEL / --model 兜底
+hint_output=$(env -i HOME="$TEST_ROOT/home" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md" --action init 2>&1 || true)
+assert_contains "$hint_output" "自助补 model" "env 全空时 hint 提示'自助补 model'"
+assert_contains "$hint_output" "MY_MODEL" "env 全空时 hint 提示 export MY_MODEL"
+assert_contains "$hint_output" "--model" "env 全空时 hint 提示 --model 兜底"
+
+# 扩展 env 候选：CODEX_MODEL 命中
+mkdir -p "$TEST_ROOT/init-env-cox"
+printf '# u\n' > "$TEST_ROOT/init-env-cox/AGENTS.md"
+cox_init=$(env -i HOME="$TEST_ROOT/home" CODEX_MODEL="codex-opus-1" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env-cox/AGENTS.md" --action init 2>/dev/null)
+assert_contains "$cox_init" '"status":"recorded"' "CODEX_MODEL env 命中后 record"
+if grep -Fq 'codex-opus-1' "$TEST_ROOT/init-env-cox/AGENTS.md"; then pass "CODEX_MODEL 值写入 model 字段"; else fail "CODEX_MODEL 值写入 model 字段"; fi
+
+# 扩展 env 候选：MYAGENTS_MODEL 命中
+mkdir -p "$TEST_ROOT/init-env-mya"
+printf '# u\n' > "$TEST_ROOT/init-env-mya/AGENTS.md"
+mya_init=$(env -i HOME="$TEST_ROOT/home" MYAGENTS_MODEL="mya-pro" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env-mya/AGENTS.md" --action init 2>/dev/null)
+assert_contains "$mya_init" '"status":"recorded"' "MYAGENTS_MODEL env 命中后 record"
+if grep -Fq 'mya-pro' "$TEST_ROOT/init-env-mya/AGENTS.md"; then pass "MYAGENTS_MODEL 值写入 model 字段"; else fail "MYAGENTS_MODEL 值写入 model 字段"; fi
+
+# 自助路径 1：export MY_MODEL 后重跑
+mkdir -p "$TEST_ROOT/init-env-my"
+printf '# u\n' > "$TEST_ROOT/init-env-my/AGENTS.md"
+my_init=$(env -i HOME="$TEST_ROOT/home" MY_MODEL="agent-self-detected" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env-my/AGENTS.md" --action init 2>/dev/null)
+assert_contains "$my_init" '"status":"recorded"' "MY_MODEL env 命中后 record"
+if grep -Fq 'agent-self-detected' "$TEST_ROOT/init-env-my/AGENTS.md"; then pass "MY_MODEL 自检自填路径可用"; else fail "MY_MODEL 自检自填路径可用"; fi
 
 printf '<!-- legal-harness-init:init-environment:start -->\n' > "$TEST_ROOT/init-env/AGENTS.md.broken"
 if env -i HOME="$TEST_ROOT/home" ANTHROPIC_MODEL="x" bash "$SCRIPT_DIR/record-init-env.sh" --target "$TEST_ROOT/init-env/AGENTS.md.broken" --action init >/dev/null 2>&1; then
