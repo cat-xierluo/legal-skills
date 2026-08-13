@@ -1,8 +1,8 @@
 ---
-name: clawhub-sync
+name: skill-publish-sync
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.7.1"
+version: "1.7.2"
 license: MIT
 description: 将本地开发的 Skills 同步到 ClawHub、腾讯 SkillHub 与联想开放平台。支持智能 .gitignore 过滤、平台独立白名单、增量与单个 skill 同步。本技能应在用户需要将本地 skills 发布到上述平台、批量同步技能或检查发布状态时使用。
 ---
@@ -178,7 +178,7 @@ clawhub sync skills/<skill-name>
 clawhub sync --all
 ```
 
-> 注意：`--all` 会受 `skills/clawhub-sync/config/allowlist-clawhub.yaml` 约束。只有在该文件中列出的 skill 才会同步到 ClawHub。SkillHub / 联想同理（各自独立白名单文件）。
+> 注意：`--all` 会受 `skills/skill-publish-sync/config/allowlist-clawhub.yaml` 约束。只有在该文件中列出的 skill 才会同步到 ClawHub。SkillHub / 联想同理（各自独立白名单文件）。
 
 #### 腾讯 SkillHub
 
@@ -214,7 +214,7 @@ skillhub publish ./my-skill --dry-run
    ```
 
 2. **检查白名单**
-   - 读取 `skills/clawhub-sync/config/allowlist-${PLATFORM}.yaml`（平台特定白名单）
+   - 读取 `skills/skill-publish-sync/config/allowlist-${PLATFORM}.yaml`（平台特定白名单）
    - 确认目标 skill 出现在对应平台的 allowlist 文件中（每平台独立文件,无 `platforms` 字段）
    - 三平台独立文件路径：
      - ClawHub → `allowlist-clawhub.yaml`
@@ -233,7 +233,7 @@ skillhub publish ./my-skill --dry-run
 | 来源 | 位置 | 格式 |
 |------|------|------|
 | **新版本** | `skills/<skill-name>/SKILL.md` frontmatter 的 `version` | `"1.2.0"` |
-| **已记录版本** | `skills/clawhub-sync/config/sync-records.yaml` 中 `records.<skill>.platforms.<platform>.version` | `"1.1.0"` |
+| **已记录版本** | `skills/skill-publish-sync/config/sync-records.yaml` 中 `records.<skill>.platforms.<platform>.version` | `"1.1.0"` |
 
 **版本比较逻辑**（语义化版本）：
 ```
@@ -249,10 +249,10 @@ recorded_version 为 null → 需要同步（首次发布）
 
 ```bash
 # ClawHub（默认平台，可省略 --platform）
-bash skills/clawhub-sync/scripts/prepare-publish.sh skills/<skill-name>
+bash skills/skill-publish-sync/scripts/prepare-publish.sh skills/<skill-name>
 
 # 腾讯 SkillHub
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/<skill-name>
+bash skills/skill-publish-sync/scripts/prepare-publish.sh --platform skillhub skills/<skill-name>
 ```
 
 脚本会创建临时目录：
@@ -309,7 +309,7 @@ lenovoskill push
 
 #### 步骤 3：更新同步记录
 
-更新 `skills/clawhub-sync/config/sync-records.yaml`，在对应平台下写入记录：
+更新 `skills/skill-publish-sync/config/sync-records.yaml`，在对应平台下写入记录：
 
 ```yaml
 records:
@@ -336,7 +336,7 @@ records:
 
 ```bash
 # 1. 检查白名单
-grep -A1 "^git-batch-commit:" skills/clawhub-sync/config/allowlist-clawhub.yaml
+grep -A1 "^git-batch-commit:" skills/skill-publish-sync/config/allowlist-clawhub.yaml
 # 输出：platforms: [clawhub]   # MIT 工具，只发 ClawHub
 
 # 2. 比较版本
@@ -344,7 +344,7 @@ grep -A1 "^git-batch-commit:" skills/clawhub-sync/config/allowlist-clawhub.yaml
 # sync-records.yaml: platforms.clawhub.version: "1.1.0" → 需要同步
 
 # 3. 准备并发布到 ClawHub
-bash skills/clawhub-sync/scripts/prepare-publish.sh skills/git-batch-commit
+bash skills/skill-publish-sync/scripts/prepare-publish.sh skills/git-batch-commit
 clawhub publish /tmp/clawhub-publish-git-batch-commit \
   --slug git-batch-commit --name "Git Batch Commit" \
   --version "1.2.0" --changelog "本次变更说明"
@@ -356,11 +356,11 @@ clawhub publish /tmp/clawhub-publish-git-batch-commit \
 
 ```bash
 # 1. 检查白名单
-grep -A2 "^legal-qa-extractor:" skills/clawhub-sync/config/allowlist-skillhub.yaml
+grep -A2 "^legal-qa-extractor:" skills/skill-publish-sync/config/allowlist-skillhub.yaml
 # 输出：platforms: [skillhub]  +  display_name: "法律问答知识提取"
 
 # 2. 准备（--platform skillhub 会自动从配置读 display_name/slug 注入临时副本 frontmatter）
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/legal-qa-extractor
+bash skills/skill-publish-sync/scripts/prepare-publish.sh --platform skillhub skills/legal-qa-extractor
 
 # 3. 发布到 SkillHub
 skillhub publish /tmp/skillhub-publish-legal-qa-extractor \
@@ -499,7 +499,7 @@ lenovoskill logout         # 退出登录
 
 ```bash
 # ① 准备安全过滤目录（复用 prepare-publish.sh，会触发 SkillHub/联想 共用的 frontmatter 注入段）
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform lenovo skills/<skill-name>
+bash skills/skill-publish-sync/scripts/prepare-publish.sh --platform lenovo skills/<skill-name>
 # → 生成 /tmp/lenovo-publish-<skill-name>;临时副本 SKILL.md 已注入 slug + displayName
 
 cd /tmp/lenovo-publish-<skill-name>
@@ -589,9 +589,9 @@ records:
 
 **配置文件：** 三份独立白名单文件（v1.7.1 架构，详见 DECISIONS `D-2026-08-12-02`）：
 
-- `skills/clawhub-sync/config/allowlist-clawhub.yaml`（ClawHub 平台白名单）
-- `skills/clawhub-sync/config/allowlist-skillhub.yaml`（SkillHub 平台白名单）
-- `skills/clawhub-sync/config/allowlist-lenovo.yaml`（联想开放平台白名单）
+- `skills/skill-publish-sync/config/allowlist-clawhub.yaml`（ClawHub 平台白名单）
+- `skills/skill-publish-sync/config/allowlist-skillhub.yaml`（SkillHub 平台白名单）
+- `skills/skill-publish-sync/config/allowlist-lenovo.yaml`（联想开放平台白名单）
 
 **优先级：白名单 > 默认忽略规则**
 
@@ -640,7 +640,7 @@ contract-copilot:
 > **首次使用**：复制对应 `.example.yaml` 去掉 `.example` 后缀，填入你的实际数据。三份白名单文件**独立维护**——同一 skill 可在不同白名单中独立登记（一对多）。
 > SkillHub / 联想的白名单文件中 `display_name` 必填（中文展示名，发布前由 `prepare-publish.sh` 注入临时副本 frontmatter；源 SKILL.md 不含此字段）。`sync-records.yaml` 记录 `publish_id` 等发布结果。
 >
-> 根目录 `.gitignore` 的 `**/config/*.yaml` + `!**/config/*.example.yaml` 规则**对所有平台（ClawHub / SkillHub / 联想）均生效**（共用 `prepare-publish.sh` 过滤逻辑）。实测发布 `clawhub-sync` 自身时，三份真实 `allowlist-*.yaml` 与 `sync-records.yaml` 均不进入临时目录，只有 `.example.yaml` 模板会上传。
+> 根目录 `.gitignore` 的 `**/config/*.yaml` + `!**/config/*.example.yaml` 规则**对所有平台（ClawHub / SkillHub / 联想）均生效**（共用 `prepare-publish.sh` 过滤逻辑）。实测发布 `skill-publish-sync` 自身时，三份真实 `allowlist-*.yaml` 与 `sync-records.yaml` 均不进入临时目录，只有 `.example.yaml` 模板会上传。
 >
 > 根目录 `.gitignore` 已通过 `**/config/*.yaml` + `!**/config/*.example.yaml` 规则，自动排除真实配置、保留模板。
 
@@ -675,11 +675,11 @@ contract-copilot:
 
 ```bash
 # ClawHub（默认）
-bash skills/clawhub-sync/scripts/prepare-publish.sh skills/trademark-assistant
+bash skills/skill-publish-sync/scripts/prepare-publish.sh skills/trademark-assistant
 ls -la /tmp/clawhub-publish-trademark-assistant/
 
 # 腾讯 SkillHub
-bash skills/clawhub-sync/scripts/prepare-publish.sh --platform skillhub skills/trademark-assistant
+bash skills/skill-publish-sync/scripts/prepare-publish.sh --platform skillhub skills/trademark-assistant
 ls -la /tmp/skillhub-publish-trademark-assistant/
 ```
 

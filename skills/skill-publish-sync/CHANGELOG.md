@@ -1,3 +1,13 @@
+## [1.7.2] - 2026-08-14
+
+### 改名
+
+- **skill 更名：`clawhub-sync` → `skill-publish-sync`**（目录名 + frontmatter `name`）。
+  - 原名只反映三平台之一（ClawHub），与已支持 ClawHub / 腾讯 SkillHub / 联想开放平台的多平台定位名实不符；新名同时点明「发布」与「多平台同步」。
+  - **slug 影响**：本 skill 自身未来发布到三平台时，slug 默认取目录名，将由 `clawhub-sync` 变为 `skill-publish-sync`（可在 `allowlist-*.yaml` 用 `slug` 字段覆盖）。其它 skill 的 slug 与已发布记录不受影响。
+  - 同步更新：`push-lenovo-batch.sh` 自指路径；`git-batch-commit` 的目录探测（`skills/skill-publish-sync/`）与 `references/skill-publish-sync-check.md`（原 `clawhub-sync-check.md`，已重命名）；`AGENTS.md` / `README` 活链接；`skill-lint` 安全评估示例引用；`allowlist-clawhub.example.yaml` 中本 skill 的 key。
+  - 历史记录（各 `CHANGELOG.md`、版本流水表历史条目、`.example.yaml` 第 9 行历史注释、release asset `clawhub-sync-1.6.1.zip`）按事实保留，不改。
+
 ## [1.7.1] - 2026-08-12
 
 ### 重构（架构反转）

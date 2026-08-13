@@ -2,7 +2,7 @@
 # push-lenovo-batch.sh — 批量把 SkillHub 已 synced 的 skill 上传到联想开放平台
 #
 # 用法:
-#   bash skills/clawhub-sync/scripts/push-lenovo-batch.sh
+#   bash skills/skill-publish-sync/scripts/push-lenovo-batch.sh
 #
 # 设计:
 #   - 从 config/allowlist-lenovo.yaml 读 skill 列表(每个 skill 至少有 display_name)
@@ -30,14 +30,14 @@ if [ ! -f "$RESULTS_FILE" ] || [ ! -s "$RESULTS_FILE" ]; then
 fi
 
 # 解析 allowlist-lenovo.yaml 拿 skill 列表（按文件顺序）
-mapfile -t SKILLS < <(awk '/^[a-z][a-z0-9_-]*:$/{gsub(":$",""); print}' "$SKILLS_ROOT/skills/clawhub-sync/config/allowlist-lenovo.yaml" | grep -v "^allowlist\|^sync")
+mapfile -t SKILLS < <(awk '/^[a-z][a-z0-9_-]*:$/{gsub(":$",""); print}' "$SKILLS_ROOT/skills/skill-publish-sync/config/allowlist-lenovo.yaml" | grep -v "^allowlist\|^sync")
 
 # 兜底:allowlist-lenovo.yaml 没有 skill 时从 SkillHub records 取
 if [ ${#SKILLS[@]} -eq 0 ]; then
   echo "⚠️  allowlist-lenovo.yaml 未配置,自动从 sync-records.yaml 抽取 SkillHub 已 synced 的 skill"
   mapfile -t SKILLS < <(python3 -c "
 import yaml, sys
-d = yaml.safe_load(open('$SKILLS_ROOT/skills/clawhub-sync/config/sync-records.yaml'))
+d = yaml.safe_load(open('$SKILLS_ROOT/skills/skill-publish-sync/config/sync-records.yaml'))
 for name, rec in d['records'].items():
     p = rec.get('platforms', {})
     if 'skillhub' in p and p['skillhub'].get('status') == 'synced':
@@ -85,11 +85,11 @@ for i in "${!SKILLS[@]}"; do
   # 从 SKILL.md 读 description + version
   DESC=$(awk '/^---$/{c++; next} c==2{exit} c==1 && /^description:/{sub(/^description: */,""); print; exit}' "$SKILLS_ROOT/skills/$SKILL/SKILL.md" | head -1)
   VER=$(awk '/^---$/{c++; next} c==2{exit} c==1 && /^version:/{sub(/^version: */,""); gsub(/"/,""); print; exit}' "$SKILLS_ROOT/skills/$SKILL/SKILL.md" | head -1)
-  DN=$(awk '/^[a-z]/ && /display_name:/{found=1; sub(/.*display_name: */,""); gsub(/["\\]/,""); print; exit}' "$SKILLS_ROOT/skills/clawhub-sync/config/allowlist-lenovo.yaml")
+  DN=$(awk '/^[a-z]/ && /display_name:/{found=1; sub(/.*display_name: */,""); gsub(/["\\]/,""); print; exit}' "$SKILLS_ROOT/skills/skill-publish-sync/config/allowlist-lenovo.yaml")
   # ↑ 这段 awk 不准,改成 python 读 yaml
   DN=$(python3 -c "
 import yaml
-d = yaml.safe_load(open('$SKILLS_ROOT/skills/clawhub-sync/config/allowlist-lenovo.yaml'))
+d = yaml.safe_load(open('$SKILLS_ROOT/skills/skill-publish-sync/config/allowlist-lenovo.yaml'))
 print(d.get('$SKILL', {}).get('display_name', '$SKILL'))
 ")
 
