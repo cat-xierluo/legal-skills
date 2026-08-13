@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.7.0  | 基础层改为有界高召回，短时独立页至少保留一张且单帧切换标签不再直接删除；多模态统一只做减法，并加入本地覆盖与最终存活门禁，真实样本纯代码保留 54 张 |
+| 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
 | 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.5.0  | 修复嵌套 Harness 恢复高权限与 backend 标签伪装；完整祖先链取权限交集，启动命令与四后端强绑定；新增 provider 原子并发租约，统一 Orca Runtime，并保留门禁优先的 Orca 两阶段启动与 tmux 回退 |
 | 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
@@ -405,9 +405,9 @@
 <tr>
 <td><a href="skills/video-screenshot/"><strong>video-screenshot</strong></a></td>
 <td>工具·视频处理</td>
-<td style="word-break:break-word">从录屏视频中抽取证据截图，以有界高召回保留短时真实页并按时序和滚动增量控制密度；可用本地 OCR 保护新增证据，并为普通或较弱多模态模型生成只做减法、受预算、单目标和覆盖存活门禁约束的审计包</td>
+<td style="word-break:break-word">从录屏视频中以有界高召回抽取证据截图并过滤切换中间态；可用本地 OCR 多锚点与无文字图像主体生成不保存原文的证据线索包，再为普通或较弱多模态模型提供封闭分类/概括及只做减法的去重审计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.7.0</td>
+<td style="text-align:center">v0.8.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>

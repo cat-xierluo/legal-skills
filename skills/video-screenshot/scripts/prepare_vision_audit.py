@@ -35,8 +35,6 @@ WEAK_REASON_CODES_BY_OUTCOME = {
     "keep": ["new_evidence", "other"],
     "drop": ["transition", "visual_duplicate", "semantic_duplicate", "other"],
     "replace": ["clearer_replacement", "other"],
-    "restore": ["new_evidence", "other"],
-    "leave_discarded": ["transition", "visual_duplicate", "semantic_duplicate", "other"],
 }
 
 
@@ -186,7 +184,8 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "images": members,
         })
 
-    # 把同一时段被本地算法丢弃的切换候选加入附近高风险组，供 replace/补回判断。
+    # 旧报告中的丢弃候选只可作为风险上下文；后续统一过滤为只审基础保留目标，
+    # 不允许多模态层以这些候选创建恢复题。
     review = report.get("review") or {}
     drop_items = review.get("drop_candidates") or []
     validated_drops: list[dict[str, Any]] = []
@@ -231,8 +230,8 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             group["priority"] = round(float(group["priority"]) + 0.5, 4)
             group["reason_codes"] = list(dict.fromkeys([*group["reason_codes"], "nearby_discarded_candidate"]))
 
-    # 高置信加载浮层或时序确认的未完成页已由代码自动删除，但仍应获得独立视觉复核入口；
-    # 多模态若判断误删，可以对 discarded_candidate 使用 keep 补回。
+    # 保留旧版恢复题的识别逻辑，只用于统计并在减法门禁处明确跳过；
+    # 基础层误删必须调参或改代码后重跑，不能由视觉层补回。
     for item in validated_drops:
         reason = str(item.get("reason") or "")
         if reason not in {"quality_loading_overlay", "temporal_incomplete_resolved"}:
@@ -281,8 +280,8 @@ def _candidate_groups(root: Path, report: dict[str, Any]) -> list[dict[str, Any]
             "images": members,
         })
 
-    # 被时间簇阶段丢弃、但三帧分区覆盖风险较高的候选也需要独立恢复题。
-    # 这能把算法已经吸收的切换中间态纳入抽样 QA，而不会把所有丢弃候选交给模型。
+    # 识别旧版的高风险丢弃候选，以便在 manifest 中统计被跳过的恢复题；
+    # 它们不会进入最终多模态预算。
     regional_drops = sorted(
         (
             item for item in validated_drops
@@ -347,8 +346,6 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
         raise ValueError("--max-groups 和 --max-images 必须大于 0")
     selected: list[dict[str, Any]] = []
     unique_paths: set[str] = set()
-    restore_group_count = 0
-    restore_reason_families: set[str] = set()
     remaining = list(groups)
     while remaining:
         if selected:
@@ -369,20 +366,6 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
                 )
             )
         group = remaining.pop(0)
-        is_restore_group = not any(item.get("role") == "target" for item in group["images"])
-        restore_family = next(
-            (
-                str(code) for code in group.get("reason_codes") or []
-                if str(code).startswith("discarded_")
-            ),
-            "discarded_other",
-        )
-        restore_limit = min(2, max(1, max_groups // 3))
-        if is_restore_group and (
-            restore_group_count >= restore_limit
-            or restore_family in restore_reason_families
-        ):
-            continue
         paths = {str(item["path"]) for item in group["images"]}
         # 相邻目标可能生成高度重叠的三帧窗口。重叠达到一半时保留优先级更高者，
         # 把稀缺的组预算留给其他时间区段。
@@ -405,9 +388,6 @@ def _select_budgeted_groups(groups: list[dict[str, Any]], max_groups: int, max_i
             )[:max_images]
             paths = {str(item["path"]) for item in group["images"]}
         selected.append(group)
-        if is_restore_group:
-            restore_group_count += 1
-            restore_reason_families.add(restore_family)
         unique_paths.update(paths)
         if len(selected) >= max_groups or len(unique_paths) >= max_images:
             break
@@ -618,34 +598,24 @@ def main() -> int:
                 None,
             )
             if decision_target is None:
-                decision_target = next(
-                    (item for item in group["images"] if item.get("role") == "discarded_candidate"),
-                    None,
-                )
-            if decision_target is None:
-                raise ValueError(f"审计组没有可判断目标: {group['group_id']}")
+                raise ValueError(f"减法审计组没有基础保留目标: {group['group_id']}")
             for visual_index, item in enumerate(group["images"]):
                 item["visual_label"] = chr(ord("A") + visual_index)
             group["decision_target_audit_id"] = decision_target["audit_id"]
             group["decision_target_visual_label"] = decision_target["visual_label"]
-            if decision_target.get("source") == "drop_candidate":
-                group["task_type"] = "discarded_candidate_review"
-                group["allowed_outcomes"] = ["restore", "leave_discarded"]
-                group["allowed_coverage_audit_ids"] = []
-            else:
-                group["task_type"] = "kept_target_review"
-                allowed_coverage: list[str] = []
-                for item in group["images"]:
-                    if (
-                        item.get("source") == "kept"
-                        and item["audit_id"] != decision_target["audit_id"]
-                        and item.get("coverage_eligible_for_target")
-                    ):
-                        allowed_coverage.append(str(item["audit_id"]))
-                group["allowed_coverage_audit_ids"] = allowed_coverage
-                if not allowed_coverage:
-                    raise ValueError(f"减法审计组缺少本地核准覆盖帧: {group['group_id']}")
-                group["allowed_outcomes"] = ["keep", "drop", "replace"]
+            group["task_type"] = "kept_target_review"
+            allowed_coverage: list[str] = []
+            for item in group["images"]:
+                if (
+                    item.get("source") == "kept"
+                    and item["audit_id"] != decision_target["audit_id"]
+                    and item.get("coverage_eligible_for_target")
+                ):
+                    allowed_coverage.append(str(item["audit_id"]))
+            group["allowed_coverage_audit_ids"] = allowed_coverage
+            if not allowed_coverage:
+                raise ValueError(f"减法审计组缺少本地核准覆盖帧: {group['group_id']}")
+            group["allowed_outcomes"] = ["keep", "drop", "replace"]
             contact_name = f"contact_sheet_{group_index:03d}.jpg"
             group["contact_sheet"] = contact_name
             _render_contact_sheet(
