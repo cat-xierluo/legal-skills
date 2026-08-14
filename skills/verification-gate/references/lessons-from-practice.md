@@ -156,6 +156,22 @@
 - 修法：harness **镜像生产代码的守卫**（如 `if (store.state.tabs.length === 0)` 再 openTab）。高发路径：生产接线有 `if (!exists)` 查重而测试 harness 漏抄——review 测试时专门检查「effect 里的 dispatch 是否有生产同款守卫」。
 - 不要指望框架兜底：React 的 Maximum update depth 计数在「每轮经 act 队列微任务间隔」时会被重置，不会报错——循环可以安静地转到天荒地老。
 
+## 教训 13：桌面 WebView 应用四层验证盲区（引擎代差 / DPR / 产物嵌入 / dev≠打包）
+
+**场景**：Tauri 应用（WKWebView）功能历经四轮才真机收口，每轮本地「全绿」都换一个真机症状：页面空白 → 文字层未知 → 模糊如图片。四层洋葱：
+1. **worker scheme**：module worker 在自定义 scheme（`tauri://`）下异步加载失败且 error 后未清 workerPort → getDocument 永久挂起（无报错的空白）。修：`?worker&inline` 内联 blob worker + error 时主动清 port 降级。
+2. **blob worker 相对路径**：根相对 URL（`/fonts/`）在 blob: base 下解析失败（http origin 的 chromium 永远复现不了）。修：主线程 `new URL(..., document.baseURI)` 绝对化再传入。
+3. **引擎代差**：pdfjs 6 现代构建用 `Map.prototype.getOrInsertComputed`（Safari 26 才有），macOS 15 WKWebView（Safari 18）直接 TypeError——**chromium（内核 ≥136）与 jsdom legacy fake worker 的测试环境引擎全部新于真机，结构性覆盖不到**。修：全线切 `pdfjs-dist/legacy/build`。
+4. **Retina DPR**：canvas 按 CSS px 1x 渲染被 DPR=2 拉伸。修：backing × devicePixelRatio + render `transform: [dpr,0,0,dpr,0,0]`。
+
+**skill 原来没说**：桌面 WebView 的验证矩阵要加「引擎代差」和「产物形态」两个维度。
+
+**补充规则**：
+- **chromium 全绿 ≠ WKWebView 过**：重度使用新内置的库（pdfjs 等）按**目标引擎**选构建（legacy build 是官方旧引擎路径）；测试环境引擎恰都比真机新时，唯一证据源是**真机 devtools console**（release 开 devtools + 关键路径埋 `[App]` 诊断日志 + 错误别吞）。
+- **Retina 断言**：chromium 默认 DPR=1；用 `browser.newContext({ deviceScaleFactor: 2 })` 场景断言 `canvas.width ≈ cssWidth × 2`。
+- **产物嵌入不可静态验证**：tauri 资产嵌入是压缩的（二进制 grep 无效，实测同时含新旧哈希、四个构建字节数相同）。用**构建戳**（vite `define` 时间戳 + 启动 console 打出）让真机一眼确认版本；**dist 变化不触发 lib 重编译**，验证构建先 `cargo clean -p <crate>`。
+- **真机反馈循环纪律**：每轮真机测试前先确认「跑的是哪版」（构建戳），否则可能在测旧包白费一轮。
+
 ## 反哺纪律
 
 每次跑 verification-gate 暴露 skill 不足（覆盖盲区 / 规则不清 / 项目类型难点），加到本文件（教训 N）。skill 在实践中迭代，不一次写死。
