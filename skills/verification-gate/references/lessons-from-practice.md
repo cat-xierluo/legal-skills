@@ -127,6 +127,35 @@
 - 剪贴板：chromium `test.use({ permissions: ['clipboard-read','clipboard-write'] })` + `navigator.clipboard.readText()` 可断言真实内容，不必留真机。
 - 「移交给用户」前自问：这份清单里有多少其实是我没跑 Playwright，而不是真验不了？
 
+## 教训 11：测试套件「永不完成」比「测试失败」更危险（阶段 4）
+
+**场景**：vitest 全量 240s+ 不退出（2026-07-28 起复现），归因「open handles」搁置数周，期间 CI 用 `test:e2e` 子集绕开。2026-08-14 修复悬挂（见教训 12）后全量第一次真正跑完——**立即暴露 3 条被掩盖数周的真实失败**（工具菜单去重后未更新的过期断言 ×2、无 tab 时必然失败的 DOM 断言 ×1）。
+
+**skill 原来没说**：悬挂的「掩盖效应」——套件永不完成时，「跑不完」和「全绿」被混为一谈，所有真实失败一起被藏住。
+
+**补充规则**：
+- 「套件永不完成」按 **P0 基础设施缺陷**处理，不是「已知怪癖」。用子集绕开只能是**临时态**：必须登记任务 + 写明回归条件，不允许悄悄永久化（子集绕开每多存在一天，被掩盖的失败就多藏一天）。
+- 判定「真的跑完」双条件：summary（`Test Files / Tests` 行）真的打印 **且** 进程真的退出。只看测试条目全 ✓ 不算数（✓ 会照常打印，卡的是收尾）。
+- 顺带规律：CI 首跑常抓「本机路径假设」类 bug——如 spawn 候选硬编码 `/opt/homebrew/bin/node`，ubuntu runner 上 ENOENT。**spawn 子进程优先 `process.execPath`**（当前运行时二进制，必然存在、跨平台），不硬编码本机绝对路径；要留覆盖口用环境变量（如 `NODE_BINARY`）。
+
+## 教训 12：React/Vitest 悬挂 = effect↔dispatch 无限循环（阶段 4 诊断 playbook）
+
+**场景**：`npm test` 全量挂；单独跑某文件也挂；该文件所有测试 ✓ 但 summary 永不打印；worker 进程 CPU ~85% 忙循环数分钟。最终根因：测试 harness 写 `useEffect(() => store.openTab(...), [store])` **无查重守卫**，而 store 的 `OPEN_TAB` 每次生成新 id 追加新 tab（非幂等）→ dispatch 产生新 state → context value 引用变化 → effect 重跑 → 无限循环；React 19 下经 act 队列变成**微任务死循环**，vitest fork worker 永不退出。
+
+**skill 原来没说**：悬挂类问题的系统诊断路径，以及「测试 harness 镜像生产守卫」这条反模式。
+
+**诊断 playbook（按序，每步分钟级）**：
+1. **停滞检测**：verbose reporter 跑全量，45s 输出行数不变 → 记下最后输出位置（区分「某测试没跑完」vs「全跑完后不退出」：所有文件都有 ✓ 但无 summary = 后者）。
+2. **范围二分**：单文件跑（挂则文件内）→ `-t "describe 关键词"` 按 describe/test 二分（regex 可 `|` 连接分组），每轮给 ~70s 悬挂窗，6-8 轮定位到单条测试。
+3. **忙/闲判定**：`ps -o %cpu -p <pid>`——**忙循环**（微任务/同步死循环）与**闲置挂起**（open handle/timer）是两条完全不同的路径，先分流再深入。
+4. **忙循环抓栈**：macOS `sample <pid> 3` 看原生栈（卡在 `MicrotaskQueue::RunMicrotasks` = 微任务死循环）→ `kill -USR1 <pid>` 激活 node inspector + 裸 WebSocket CDP `Debugger.enable` + `Debugger.pause`，`Debugger.paused` 事件的 `callFrames` 就是死循环 JS 栈（本次抓到 `workLoopSync / performUnitOfWork ← flushActQueue ← act` = React act 队列无限 reconcile）。
+5. **闲置挂起抓 handle**：`NODE_OPTIONS=--report-on-signal` + `kill -USR2` 出诊断报告，或 `why-is-node-running` 类工具列 active handles（注：vitest fork worker 下报告文件曾不落盘，inspector 路线更可靠）。
+
+**根因反模式与修法**：
+- 反模式：**在 effect 里 dispatch 到非幂等 store 且不带幂等守卫**。store 动作语义「每次调用产生新状态对象/新实体」（如每次 openTab 生成新 id）+ effect 依赖含 store value → 必然循环。
+- 修法：harness **镜像生产代码的守卫**（如 `if (store.state.tabs.length === 0)` 再 openTab）。高发路径：生产接线有 `if (!exists)` 查重而测试 harness 漏抄——review 测试时专门检查「effect 里的 dispatch 是否有生产同款守卫」。
+- 不要指望框架兜底：React 的 Maximum update depth 计数在「每轮经 act 队列微任务间隔」时会被重置，不会报错——循环可以安静地转到天荒地老。
+
 ## 反哺纪律
 
 每次跑 verification-gate 暴露 skill 不足（覆盖盲区 / 规则不清 / 项目类型难点），加到本文件（教训 N）。skill 在实践中迭代，不一次写死。
