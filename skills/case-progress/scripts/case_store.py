@@ -839,6 +839,26 @@ def _legacy_kind(case_dir):
     return "none", files
 
 
+def cmd_set_fields(root, case_id, args):
+    """通用字段补充：深合并 JSON 进 case.yaml（列表字段整体替换，任务增改请用 add-task/set-status）。"""
+    path = case_yaml_path(root, case_id)
+    payload = getattr(args, "json_").lstrip("@")
+    raw = getattr(args, "json_")
+    src = Path(payload).read_text(encoding="utf-8") if payload != raw else raw
+    patch = json.loads(src)
+    with case_lock(path):
+        data = load_case(path)
+        if data.get("案件基本信息", {}).get("生命周期状态") == CLOSED and args.actor != "user":
+            if "生命周期状态" in json.dumps(patch, ensure_ascii=False):
+                die("生命周期状态=已结案 的变更属律师操作（--actor user）")
+        if data.get("案件基本信息", {}).get("程序阶段锁定") and args.actor != "user":
+            if "程序阶段锁定" in json.dumps(patch, ensure_ascii=False):
+                die("程序阶段已锁定，其变更属律师操作（--actor user）")
+        _deep_merge(data, patch)
+        commit_write(path, data, args.actor, "字段补充", f"set-fields 合并 {len(patch)} 个顶层键")
+    print(f"✅ 已合并 {len(patch)} 个顶层键（source 保护与校验已过）")
+
+
 def cmd_migrate(root, case_id, args):
     targets = [(case_id, case_dirs(root)[case_id])] if case_id else sorted(case_dirs(root).items())
     applied, skipped = [], []
@@ -952,12 +972,15 @@ def main():
     sp.add_argument("--lock", action="store_true")
     sp.add_argument("--unlock", action="store_true")
     sp = sub.add_parser("validate", help="schema 校验"); common(sp)
+    sp = sub.add_parser("set-fields", help="通用字段补充（深合并 JSON；列表整体替换，任务增改用专用命令）")
+    common(sp)
+    sp.add_argument("json_", metavar="JSON", help="补充 JSON（@文件路径 或内联）")
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
     sp.add_argument("--enrich", default=None, help="补充字段 JSON（@文件路径 或内联），深合并进生成结果")
 
-    for name in ("show", "add-task", "set-status", "add-deadline", "set-stage", "validate"):
+    for name in ("show", "add-task", "set-status", "add-deadline", "set-stage", "validate", "set-fields"):
         sub.choices[name].add_argument("--actor", default="ai", choices=["user", "ai"],
                                        help="操作者（source=user 行与锁定阶段仅接受 user）")
 
@@ -965,8 +988,12 @@ def main():
     root = find_root(args.root)
     table = {"show": cmd_show, "list": cmd_list, "add-task": cmd_add_task,
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
-             "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate}
-    table[args.cmd](root, args.case_id, args) if args.cmd != "list" else table["list"](root)
+             "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
+             "set-fields": cmd_set_fields}
+    if args.cmd == "set-fields":
+        cmd_set_fields(root, args.case_id, args)
+    else:
+        table[args.cmd](root, args.case_id, args) if args.cmd != "list" else table["list"](root)
 
 
 if __name__ == "__main__":
