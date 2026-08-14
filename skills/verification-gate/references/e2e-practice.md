@@ -140,3 +140,26 @@ e2e/
 ```
 
 每个 spec 对应一个功能域，断言功能结果（非存在元素）。
+
+## 自起 dev server 的 e2e wrapper（`verify:*-e2e` 脚本模式）
+
+适用：项目已有 dev server（vite/webpack）+ Playwright 库（不走 test runner），想要一条**自包含**的功能门禁命令——本地一条命令跑、CI 直接复用，不依赖「先手动起 dev server」的人为步骤（忘了起 = 假失败，起了不关 = 端口泄漏）。
+
+结构（源自 FaroPDF `scripts/verify-reader-e2e.mjs`，2026-08-14 实战）：
+
+```
+1. 检测目标端口是否已有 dev server（有 → 复用，结束后不杀别人的）
+2. spawn("npm", ["run", "dev"], { detached: !win32 })   ← detached 建进程组
+3. 轮询 fetch(DEV_URL) 直到 2xx（60s 超时）
+4. spawn 实际验证脚本（chromium 打开 fixture → 断言功能结果），stdio: inherit
+5. finally: 非 Windows 用 process.kill(-dev.pid, "SIGTERM") 杀整组（npm→node→vite）
+6. process.exit(childExit)  ← 透传退出码
+```
+
+**踩过的坑（写脚本时逐条对照）**：
+- **try 块内不要 `process.exit`**——它不经过 `finally`，dev server 直接泄漏。统一走「设退出码变量 → finally 清理 → 末尾 exit」。
+- 杀进程要**杀进程组**（`detached + kill(-pid)`）；只杀 npm 直child 会留下 vite 孤儿占端口（strictPort 下次直接起不来）。
+- Node ≥ 21 全局 `fetch` 可直接用；eslint `no-undef` 环境下脚本头补 `/* global fetch */`。
+- 复用已有 server 的判定（步骤 1）让「wrapper 嵌套 wrapper」「开发者自己开着 dev」两种场景都不炸。
+
+CI 侧对应 job：checkout → 装 deps → `npx playwright install --with-deps chromium` → 跑 `verify:*-e2e` → failure 上传 artifact（7 天）。dev server 由脚本自管，workflow 里不需要 `services:` 或后台 step。

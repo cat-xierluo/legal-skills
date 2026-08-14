@@ -2,7 +2,7 @@
 name: verification-gate
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.0"
+version: "1.1.1"
 license: MIT
 description: 代码改完后的验证门禁。完成 feature / 重大变更 / 创建 PR / 重构 / 声称「修完」前使用——跑 8 阶段验证，其中 e2e 功能 + 真机是 READY 硬门禁（编译过 ≠ 功能可用）。覆盖 Tauri 桌面 / Web / 服务 / Skill 四类分支。本地即可跑完整验证，CI 是可选自动化强化（平台不限 GitHub Actions）。不要用于：业务领域验证、Skill 质量审查（用 skill-lint）、纯文档变更、一次性脚本。
 ---
@@ -19,6 +19,7 @@ description: 代码改完后的验证门禁。完成 feature / 重大变更 / �
 - **e2e/真机是硬门禁**：5/6 不过 = NOT READY，无论 1-4 多干净。
 - **断言功能结果，非「存在元素」**：教用户写 e2e 时断言「canvas 像素非空 / textLayerStatus ≠ unknown / 点击后面板真的弹出」，而非「存在 canvas / 存在按钮」（防伪渲染 / 假成功）。
 - **Bug 修复必须新增复现测试**（回归规范）：修完一个 bug，加一条能复现该 bug 的 e2e/单测，防止回归。
+- **套件悬挂 = 未通过**：`npm test` 永不退出（summary 不打印 / 进程不退）按 P0 基础设施缺陷处理，诊断 playbook 见 `references/lessons-from-practice.md` 教训 12；用子集绕开只能是登记过任务的临时态——悬挂会掩盖真实失败（教训 11：修复当日暴露 3 条被藏数周的失败）。
 - **不采信生产者（worker/PM 自己）自报 PASS**：跑实际命令，看实际输出。
 - **按项目类型选验证命令**：Tauri 桌面 / Web / 服务 / Skill，命令不同（见 §项目类型分支）。
 

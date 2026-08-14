@@ -1,5 +1,17 @@
 # Verification Gate Skill 变更记录
 
+## [1.1.1] - 2026-08-14
+
+### 新增
+
+- **lessons-from-practice.md 教训 11（套件「永不完成」比「测试失败」更危险）**：悬挂的掩盖效应（实例：修复悬挂当日暴露 3 条被藏数周的真实失败）；「子集绕开」只能是登记过任务的临时态；「真的跑完」双条件（summary 打印 + 进程退出）；spawn 子进程优先 `process.execPath` 不硬编码本机路径（CI 首跑即暴露 ENOENT）。
+- **教训 12（React/Vitest 悬挂诊断 playbook + effect↔dispatch 无限循环反模式）**：五步诊断（停滞检测 → `-t` 二分 → CPU 忙/闲分流 → macOS `sample` + node inspector `Debugger.pause` 抓 JS 栈 / 闲置走 report-on-signal）；根因反模式「effect 里 dispatch 非幂等 store 且无守卫」（React act 队列微任务死循环，Maximum update depth 不报）；修法 = harness 镜像生产守卫。
+- **e2e-practice.md 新增「自起 dev server 的 e2e wrapper（`verify:*-e2e` 脚本模式）」**：自包含门禁命令配方（端口复用判定 → detached 进程组 → 轮询就绪 → 透传退出码）+ 4 个实战坑（try 内不 process.exit、杀进程组不杀直child、`/* global fetch */`、复用已有 server）。
+
+### 改进
+
+- **SKILL.md 工作原则新增「套件悬挂 = 未通过」**：永不退出按 P0 基础设施缺陷处理，指向教训 11/12（来源：FaroPDF DEC-199，vitest 全量悬挂数周掩盖 3 条真实失败后修复）。
+
 ## [1.1.0] - 2026-08-14
 
 ### 新增
