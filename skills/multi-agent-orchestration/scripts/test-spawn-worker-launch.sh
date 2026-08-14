@@ -89,6 +89,24 @@ case "$COMMAND" in
 esac
 
 reset_launch_case
+SESSION="dry-run-worker-session"
+COMMAND="codebuddy --permission-mode acceptEdits"
+DRY_RUN=1
+dry_run_plan=$(launch_worker_session)
+DRY_SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+LAUNCH_SH="$DRY_SESSION_CONTEXT/launch.sh"
+if [ ! -e "$DRY_SESSION_CONTEXT" ]; then
+  ok "dry-run spaced command does not write Session Context"
+else
+  bad "dry-run spaced command does not write Session Context"
+fi
+if printf '%s\n' "$dry_run_plan" | grep -Fq 'SPAWN_WORKER_DRY_RUN_LAUNCH_SH:'; then
+  ok "dry-run spaced command reports the planned launch wrapper"
+else
+  bad "dry-run spaced command reports the planned launch wrapper"
+fi
+
+reset_launch_case
 ORCA_MODE="auto"
 printf '%s\n' '{"session":{"orca":{"terminal_handle":""}}}' > "$METADATA_FILE"
 launch_worker_session
@@ -153,6 +171,39 @@ set +e
 missing_helper_rc=$?
 set -e
 assert_eq "$missing_helper_rc" "1" "missing supervised helper fails loud after terminal creation"
+
+E2E_PROJECT="$CASE_ROOT/dry-run-project"
+E2E_BIN="$CASE_ROOT/dry-run-bin"
+E2E_SESSION="dry-run-e2e"
+mkdir -p "$E2E_PROJECT" "$E2E_BIN"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'if [ "${1:-}" = "has-session" ]; then exit 1; fi' \
+  'exit 0' \
+  > "$E2E_BIN/tmux"
+chmod +x "$E2E_BIN/tmux"
+set +e
+e2e_output=$(PATH="$E2E_BIN:$PATH" bash "$REAL_SCRIPT_DIR/spawn-worker.sh" \
+  --project "$E2E_PROJECT" \
+  --no-worktree \
+  --no-orca-mode \
+  --session "$E2E_SESSION" \
+  --worker-backend codebuddy \
+  --command 'codebuddy --permission-mode acceptEdits' \
+  --dry-run 2>&1)
+e2e_rc=$?
+set -e
+assert_eq "$e2e_rc" "0" "entrypoint accepts a dry-run spaced command"
+if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/$E2E_SESSION" ]; then
+  ok "entrypoint dry-run leaves Session Context absent"
+else
+  bad "entrypoint dry-run leaves Session Context absent"
+fi
+if printf '%s\n' "$e2e_output" | grep -Fq 'SPAWN_WORKER_DRY_RUN_LAUNCH_SH:'; then
+  ok "entrypoint dry-run exposes the planned wrapper"
+else
+  bad "entrypoint dry-run exposes the planned wrapper"
+fi
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-launch.sh"' "$REAL_SCRIPT_DIR/spawn-worker.sh" \
   && ! grep -q '^launch_worker_session() {' "$REAL_SCRIPT_DIR/spawn-worker.sh"; then
