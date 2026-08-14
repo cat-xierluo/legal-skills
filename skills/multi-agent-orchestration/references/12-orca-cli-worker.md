@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.5.0（2026-08-13）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.6.0（2026-08-14）。
 
 ## 目录
 
@@ -49,14 +49,19 @@ orca status --json
 
 ## 4. 启动与共享 Run
 
-先把同一 Wave 的目标绑定为一个 Run：
+先把同一 Wave 写成 manifest，并在任何 worker 启动前创建/绑定一个 Run、预建全部 Task：
 
 ```bash
-bash scripts/pm-orchestrate.sh run-create --objective "完成 Wave 1 的三个独立任务"
-# 从 JSON 读取 .result.run.id
+cat > /tmp/wave.json <<'JSON'
+{"objective":"完成 Wave 1 的两个独立任务","tasks":[
+  {"key":"a","title":"worker-a","spec":"任务 A 的范围、验证与完成条件"},
+  {"key":"b","title":"worker-b","spec":"任务 B 的范围、验证与完成条件"}
+]}
+JSON
+bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-receipt.json
 ```
 
-再为每个 supervised worker 传同一个 Run ID：
+receipt 成功后才可并行启动；每个 supervised worker 传同一个 Run/coordinator 和自己的 Task：
 
 ```bash
 bash scripts/spawn-worker.sh \
@@ -67,15 +72,15 @@ bash scripts/spawn-worker.sh \
   --worker-backend claude-code \
   --orca-supervised \
   --orca-run-id "$RUN_ID" \
-  --task-title "worker-a" \
-  --task-spec "完整任务、范围、验证与完成协议"
+  --orca-coordinator-handle "$COORDINATOR_HANDLE" \
+  --orca-task-id "$TASK_A_ID"
 ```
 
-`spawn-worker.sh` 使用 `worktree create --setup inherit`，先写入 Session Context、安装门禁和 scope hook，再用 `terminal create` 启动 Agent并等待 TUI ready，随后让 `orca-supervised-register.sh` 执行 `task-create → worker-start --terminal`。supervised 路径不发送普通占位 prompt，避免同一任务被执行两次。
+`orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup inherit`，先写入 Session Context、安装门禁和 scope hook，再用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
 
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
-Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。helper 必须把它作为 `--from` 同时传给 `task-create` 和 `worker-start`；缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
+Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave helper 必须把它作为 `--from` 传给全部 `task-create`；worker helper 必须复用同一 handle 传给 `worker-start`。缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
 
 若不传 `--orca-run-id`，helper 为单 worker 新建 Run，适合独立监督；多 worker Wave 不应各建一个 Run。
 
@@ -85,8 +90,8 @@ Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于
 
 ```text
 PM create/bind Run
-  → task-create
-  → worker-start（注入 live preamble + TASK）
+  → 在任何 worker 启动前创建全部 Task
+  → worker-start（注入 live preamble + TASK；不同 worker 可并行）
   → worker 工作；必要时 ask/heartbeat
   → worker 从自己的 terminal 发送且只发送一次 worker_done
   → PM check --wait 收到完整 Delivery
@@ -97,10 +102,12 @@ PM create/bind Run
 硬边界：
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
+- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
 - `STATUS.json=done` 只唤醒 PM，不结算 Task/Dispatch。
 - Sentinel 不得因 STATUS、timeout、idle、heartbeat、question 或 escalation 执行 `worker-stop` / `worker-release` / `terminal close`。
 - PM 只对 accepted、settled 的 worker 执行 release；要保留排障就显式 retain；有立即后续任务可复用同一 terminal。
 - `check --wait` 返回一个 Delivery；处理全部消息再 ack，并继续等到全部预期 Dispatch settle。
+- PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
 
 ## 6. PM 实时感知
 
@@ -168,15 +175,14 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 - mutation outcome unknown：只按 receipt 的 `--retry-request` 精确恢复，或用 `dispatch-show --task` 做只读核对。
 - terminal handle stale：按 worktree 重新 `terminal list`，后续只用新 handle，禁止双发。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
-- active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；先人工决定 `worker-stop` 或 `worker-abandon`，不要用 worktree rm 代替生命周期处理。
-- **Dispatch 死锁兜底（Task-047 v2，settle）**：若 worker 进程已死但未发 `worker_done`（dispatch 卡 `dispatched`、`clean-worktree` Hard Fail #7 拒删、PM 无法正常收尾），用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..."`：
-  1. **liveness gate**：调 `worker-show` 读 `.result.observation.status`（=`exited/missing`，completed dispatch GC 后是 missing）和 `.result.worker.state`（`succeeded`/`failed`/`stopped`）；任一缺失或仍 `active`/`input_accepted` → REFUSED exit 2（除非 `--force`）。修复了 PR #84 的 BLOCKER 1（`.result.workerSession` 永远不存在 = 无门槛）。
-  2. **fence dispatch**：`worker-abandon --dispatch <D>` fence（保留 METADATA，PM 后续可清理）—— 失败 exit 2。修复 PR #84 的 BLOCKER 2（删 METADATA 导致 unrecoverable leak）。
-  3. **stop terminal**：`worker-stop --dispatch <D>`（已 fence，stop 失败 WARN 不阻塞）。
-  4. **默认安全**：不删 worktree / lease / session_context / symlink。PM 后续跑 `clean-worktree.sh --execute --force-remove-dirty` 完成 git/lease/symlink 清理。
-  5. **可选 `--destroy`**：一站式清理（含 symlink unlink + dirty 检查 + git worktree remove + orca worktree rm + lease release + session_context 清）。**仅当**PM 确认 worker 死了 + 不需保留输出。
-  - `--reason` 强制（审计）。`--force` 仅在 liveness gate 兜底用。
-  - 端到端验证脚本：`scripts/test-settle-liveness.sh`（9 fixture cases 覆盖 exited/active/missing-field/--force/empty）。
+- active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；不要用 worktree rm 代替生命周期处理。只读 `worker-show/dispatch-show` 与 diff/tests 只能用于观察/业务验收，不能结算 Dispatch。
+- **Dispatch 死锁兜底（Task-047R，settle）**：若 worker 进程已死但未发 `worker_done`，用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
+  1. 校验 METADATA.project 与 worker 的 Git common dir 一致，并先把 reason 写入 common-dir NDJSON 审计；不可写则拒绝 mutation。
+  2. 只有 `observation.status=exited|missing` 且 `worker.state=succeeded|failed|stopped` 通过；缺字段、active 与未知未来值默认拒绝。
+  3. 调 `worker-stop --dispatch <D>` 原子 fence+stop。失败时仅尝试一次 `worker-abandon` 作非破坏性 fence 兜底，然后返回 2 并保留 worktree；不得继续 destroy。
+  4. 默认不删文件。显式 `--destroy` 只在 stop 成功后释放 lease、执行 Orca worktree rm，再用完整路径匹配 Git registration 做 fallback；任何失败都 fail-loud。
+  5. 审计在 `<git-common-dir>/orchestration/settle-audit.ndjson`，删除 Session Context 后仍存在。`--force` 只覆盖 liveness 不确定性，不覆盖身份、审计、stop、lease 或删除失败。
+  - 验证脚本：`test-settle-liveness.sh`（字段矩阵）与 `test-settle-command.sh`（真实命令顺序和资源保留）。
 - provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。settled 后 `worker-release` 返回 `retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。任何 active/unknown/mismatch 都拒绝清理。
 
 ## 10. METADATA 契约

@@ -7,11 +7,14 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=orca-supervised-protocol.sh
+source "$SCRIPT_DIR/orca-supervised-protocol.sh"
 
 WORKTREE_ID=""
 TERMINAL_HANDLE=""
 TASK_SPEC=""
 TASK_TITLE=""
+TASK_ID=""
 RUN_ID=""
 OBJECTIVE=""
 TIMEOUT_MS=60000
@@ -25,11 +28,14 @@ Usage:
 Required:
   --worktree-id ID         Exact Orca worktree id
   --terminal-handle HANDLE Existing terminal running an Orca-recognized agent
-  --task-spec TEXT         Complete worker task
+  --task-spec TEXT         Complete worker task (required unless --task-id is supplied)
 
 Optional:
   --task-title TEXT        Concise task title
   --run-id ID              Reuse one Run for all workers in a Wave
+  --task-id ID             Reuse a Task created by orca-wave-prepare.sh
+  --coordinator-handle ID  Reuse the coordinator handle from the Wave receipt;
+                           required with --task-id to avoid concurrent run-use rebinding
   --objective TEXT         Objective for a newly created Run
   --timeout-ms N           worker-start readiness timeout (default: 60000)
 
@@ -43,7 +49,9 @@ while [[ $# -gt 0 ]]; do
     --terminal-handle) TERMINAL_HANDLE="$2"; shift 2 ;;
     --task-spec) TASK_SPEC="$2"; shift 2 ;;
     --task-title) TASK_TITLE="$2"; shift 2 ;;
+    --task-id) TASK_ID="$2"; shift 2 ;;
     --run-id) RUN_ID="$2"; shift 2 ;;
+    --coordinator-handle) COORDINATOR_HANDLE="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -53,7 +61,9 @@ done
 
 [ -n "$WORKTREE_ID" ] || { echo "ERROR: --worktree-id is required" >&2; exit 64; }
 [ -n "$TERMINAL_HANDLE" ] || { echo "ERROR: --terminal-handle is required" >&2; exit 64; }
-[ -n "$TASK_SPEC" ] || { echo "ERROR: --task-spec is required" >&2; exit 64; }
+[ -n "$TASK_SPEC" ] || [ -n "$TASK_ID" ] || { echo "ERROR: --task-spec or --task-id is required" >&2; exit 64; }
+[ -z "$TASK_ID" ] || [ -n "$RUN_ID" ] || { echo "ERROR: --task-id requires --run-id" >&2; exit 64; }
+[ -z "$TASK_ID" ] || [ -n "$COORDINATOR_HANDLE" ] || { echo "ERROR: --task-id requires --coordinator-handle from the Wave receipt" >&2; exit 64; }
 [[ "$TIMEOUT_MS" =~ ^[0-9]+$ ]] || { echo "ERROR: --timeout-ms must be an integer" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 orca_runtime_init
@@ -68,7 +78,7 @@ if [ -z "$RUN_ID" ]; then
   [ -n "$RUN_ID" ] || { echo "ERROR: run-create response missing .result.run.id" >&2; exit 1; }
   COORDINATOR_HANDLE=$(printf '%s' "$run_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
   echo "ORCAREG_RUN_CREATED: $RUN_ID" >&2
-else
+elif [ -z "$COORDINATOR_HANDLE" ]; then
   # Bind the coordinator terminal before adding another task to this Wave Run.
   use_out=$(orca_cli orchestration run-use --id "$RUN_ID" --json 2>&1) || {
     echo "ERROR: run-use failed for $RUN_ID: $use_out" >&2; exit 1; }
@@ -79,12 +89,17 @@ fi
   exit 1
 }
 
-task_out=$(orca_cli orchestration task-create --spec "$TASK_SPEC" --task-title "$TASK_TITLE" \
-  --run "$RUN_ID" --from "$COORDINATOR_HANDLE" --json 2>&1) || {
-  echo "ERROR: task-create failed: $task_out" >&2; exit 1; }
-TASK_ID=$(printf '%s' "$task_out" | jq -r '.result.task.id // empty')
-[ -n "$TASK_ID" ] || { echo "ERROR: task-create response missing .result.task.id" >&2; exit 1; }
-echo "ORCAREG_TASK_CREATED: $TASK_ID" >&2
+if [ -z "$TASK_ID" ]; then
+  EFFECTIVE_TASK_SPEC=$(orca_supervised_task_spec "$TASK_SPEC")
+  task_out=$(orca_cli orchestration task-create --spec "$EFFECTIVE_TASK_SPEC" --task-title "$TASK_TITLE" \
+    --run "$RUN_ID" --from "$COORDINATOR_HANDLE" --json 2>&1) || {
+    echo "ERROR: task-create failed: $task_out" >&2; exit 1; }
+  TASK_ID=$(printf '%s' "$task_out" | jq -r '.result.task.id // empty')
+  [ -n "$TASK_ID" ] || { echo "ERROR: task-create response missing .result.task.id" >&2; exit 1; }
+  echo "ORCAREG_TASK_CREATED: $TASK_ID" >&2
+else
+  echo "ORCAREG_TASK_REUSED: $TASK_ID" >&2
+fi
 
 start_out=$(orca_cli orchestration worker-start \
   --task "$TASK_ID" \

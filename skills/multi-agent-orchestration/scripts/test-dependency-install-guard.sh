@@ -166,6 +166,27 @@ expect_block "raw git push is denied in favor of identity-bound safe-push" "SHEL
 expect_allow "normal git lifecycle command remains available" \
   hook "$deny_auth" "git diff --check"
 
+expect_allow "Dispatch-scoped worker_done is allowed" \
+  hook "$deny_auth" 'orca orchestration send --type worker_done --subject "done" --body "implemented and verified" --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --files-modified "src/a.ts" --json'
+expect_allow "Dispatch-scoped heartbeat is allowed" \
+  hook "$deny_auth" 'orca-dev orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --phase implementing --json'
+expect_allow "bounded worker ask is allowed" \
+  hook "$deny_auth" 'orca orchestration ask --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
+expect_allow "read-only worker check is allowed" \
+  hook "$deny_auth" 'orca-ide orchestration check --peek --types "status,dispatch" --json'
+expect_block "worker protocol cannot target a group" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --to @all --json'
+expect_block "worker_done requires explicit outcome" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration send --type worker_done --subject "done" --body "summary" --task-id task_123 --dispatch-id ctx_456 --json'
+expect_block "worker protocol does not grant task mutation" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration task-update --id task_123 --status completed --json'
+expect_block "worker check cannot acknowledge coordinator Delivery" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration check --ack delivery_123 --json'
+expect_block "worker protocol rejects shell chaining" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration check --peek --json && git status --short'
+expect_block "worker protocol cannot stop another Dispatch" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" 'orca orchestration worker-stop --dispatch ctx_456 --json'
+
 heredoc_command=$(printf 'cat <<EOF\nbrew install jq\nEOF')
 heredoc_auth="$tmp_root/heredoc.json"
 python3 - "$deny_auth" "$heredoc_auth" "$heredoc_command" <<'PY'
