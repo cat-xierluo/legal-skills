@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] - 2026-08-14
+
+- **M2 写入引擎落地** `scripts/case_store.py`（~470 行，stdlib + PyYAML）：
+  - 子命令：show（阶段按 锁定>手填>推断 解析、期限告警三级+抵消过滤）/ list（存量案件标 unmigrated）/ add-task / set-status / add-deadline（类型按名称推断）/ set-stage（--lock/--unlock）/ validate（schema §5 六条规则）
+  - `--actor user|ai` 操作者模型：source=user 行与锁定阶段仅接受 user；"已结案"不提供写命令
+  - 并发安全：**旁车锁** `<case.yaml>.lock` 锁定读-改-写全周期（首版仅锁写入瞬间，并发测试 1/5 暴露丢失更新，修复后 5/5，见 DEC-008）
+  - 每次写入自动追加 更新历史 + 刷新 同步.最后同步时间；写入前 schema 校验拦截
+  - 路径解算：--root > SUITAGENT_ROOT > cwd 向上发现（符合红线，不依赖 `__file__`）
+  - 测试：虚构 fixture 全链路验证（张三/李四民间借贷案，无真实案件数据）
+
 ## [0.2.1] - 2026-08-14
 
 - **schema v4.0 同日增补**（8 案件材料盘点 + CaseBoard 字段对照驱动）：新增 关联案件 / 审级记录 / 开庭与听证 / 其他诉讼参与人 / 扩展信息 五节；meta.业务领域 路由键、刑事程序阶段（侦查/审查起诉）、律师费.计费方式、证据索引.取证方式；§1 总览表加层级列（core / 对抗性 / litigation，16 节）
