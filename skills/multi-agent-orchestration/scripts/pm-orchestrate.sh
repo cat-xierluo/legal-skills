@@ -25,9 +25,9 @@ Commands:
   reply       Reply to a worker question (`--message-id` + `--text`)
   release     Release a settled supervised worker terminal
   retain      Retain a settled supervised worker terminal for debugging
-  settle      Force-settle a deadlocked supervised worker (Task-047 v2): fence dispatch
-               via Orca worker-abandon + stop terminal via worker-stop (default, safe);
-               --destroy additionally removes worktree/files (uses clean-worktree path).
+  settle      Force-settle a deadlocked supervised worker (Task-047R): verify the worker
+               is dead, then use Orca worker-stop to fence + stop the exact Dispatch;
+               --destroy additionally removes the exact Orca/Git worktree and files.
                Use only when worker process is dead but dispatch is stuck in `dispatched`.
 
 Common:
@@ -42,7 +42,8 @@ Common:
   --message-id ID   Question message to answer
   --objective TEXT  Run objective
   --destroy          With `settle`: additionally remove worktree/files (default: fence+stop only)
-  --reason TEXT      Required audit reason for settle (persisted to SETTLE_AUDIT.log)
+  --reason TEXT      Required audit reason for settle (persisted under the Git common dir)
+  --force            With `settle`: override an inconclusive liveness gate after manual verification
 
 Supervised wait prints the complete Delivery JSON and never auto-acks it. Process every
 message and decide release/reuse/retain before running `ack`.
@@ -65,6 +66,7 @@ MESSAGE_ID=""
 OBJECTIVE=""
 REASON=""
 FORCE=0
+DESTROY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -110,9 +112,13 @@ METADATA="$SESSION_CONTEXT/METADATA.json"
 WORKER_MODE=""
 WORKER_HANDLE=""
 ORCA_RUN_ID=""
-ORCA_TASK_ID=""
 ORCA_DISPATCH_ID=""
+ORCA_COORDINATOR_HANDLE=""
+ORCA_WORKTREE_ID=""
 PROVIDER_LEASE_FILE=""
+PROJECT_DIR=""
+GIT_COMMON_DIR=""
+SETTLE_AUDIT_FILE=""
 
 resolve_worker() {
   [ -f "$METADATA" ] || {
@@ -121,9 +127,11 @@ resolve_worker() {
   }
   WORKER_HANDLE=$(jq -r '.session.orca.terminal_handle // empty' "$METADATA")
   ORCA_RUN_ID=$(jq -r '.session.orca.supervised.run_id // empty' "$METADATA")
-  ORCA_TASK_ID=$(jq -r '.session.orca.supervised.task_id // empty' "$METADATA")
   ORCA_DISPATCH_ID=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$METADATA")
+  ORCA_COORDINATOR_HANDLE=$(jq -r '.session.orca.supervised.coordinator_handle // empty' "$METADATA")
+  ORCA_WORKTREE_ID=$(jq -r '.session.orca.worktree_id // empty' "$METADATA")
   PROVIDER_LEASE_FILE=$(jq -r '.runtime.provider_lease.file // empty' "$METADATA")
+  PROJECT_DIR=$(jq -r '.project // empty' "$METADATA")
   if [ -n "$ORCA_DISPATCH_ID" ]; then
     WORKER_MODE="orca_supervised"
   elif [ -n "$WORKER_HANDLE" ]; then
@@ -131,6 +139,105 @@ resolve_worker() {
   else
     WORKER_MODE="tmux"
     WORKER_HANDLE="$SESSION"
+  fi
+}
+
+git_common_dir_for_path() {
+  local path="$1" common
+  common=$(git -C "$path" rev-parse --git-common-dir 2>/dev/null) || return 1
+  case "$common" in
+    /*) ;;
+    *) common="$path/$common" ;;
+  esac
+  (cd "$common" 2>/dev/null && pwd -P)
+}
+
+resolve_project_identity() {
+  [ -n "$PROJECT_DIR" ] || {
+    echo "ERROR: METADATA.project is missing; refusing repository mutation" >&2
+    return 2
+  }
+  [ -d "$PROJECT_DIR" ] || {
+    echo "ERROR: METADATA.project is not a directory: $PROJECT_DIR" >&2
+    return 2
+  }
+
+  local project_top project_common worktree_common
+  project_top=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null) || {
+    echo "ERROR: METADATA.project is not a Git worktree: $PROJECT_DIR" >&2
+    return 2
+  }
+  project_top=$(cd "$project_top" && pwd -P)
+  project_common=$(git_common_dir_for_path "$project_top") || {
+    echo "ERROR: cannot resolve Git common dir for project: $project_top" >&2
+    return 2
+  }
+  worktree_common=$(git_common_dir_for_path "$WORKTREE") || {
+    echo "ERROR: cannot resolve Git common dir for worker worktree: $WORKTREE" >&2
+    return 2
+  }
+  [ "$project_common" = "$worktree_common" ] || {
+    echo "ERROR: METADATA.project and worker worktree belong to different repositories" >&2
+    return 2
+  }
+
+  PROJECT_DIR="$project_top"
+  GIT_COMMON_DIR="$project_common"
+  SETTLE_AUDIT_FILE="$GIT_COMMON_DIR/orchestration/settle-audit.ndjson"
+}
+
+write_settle_audit() {
+  local event="$1" detail="${2:-}" timestamp audit_dir record
+  [ -n "$SETTLE_AUDIT_FILE" ] || return 2
+  audit_dir=$(dirname "$SETTLE_AUDIT_FILE")
+  umask 077
+  mkdir -p "$audit_dir" || return 2
+  timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf '%s' 'unknown-time')
+  record=$(jq -cn \
+    --arg timestamp "$timestamp" \
+    --arg event "$event" \
+    --arg dispatch_id "$ORCA_DISPATCH_ID" \
+    --arg session "$SESSION" \
+    --arg worktree "$WORKTREE" \
+    --arg reason "$REASON" \
+    --arg detail "$detail" \
+    --argjson destroy "${DESTROY:-0}" \
+    --argjson force "${FORCE:-0}" \
+    '{timestamp:$timestamp,event:$event,dispatch_id:$dispatch_id,session:$session,worktree:$worktree,destroy:($destroy == 1),force:($force == 1),reason:$reason,detail:$detail}') || return 2
+  printf '%s\n' "$record" >> "$SETTLE_AUDIT_FILE" || return 2
+  echo "PM_ORCHESTRATE_SETTLE_AUDIT: $SETTLE_AUDIT_FILE event=$event" >&2
+}
+
+ensure_coordinator_binding() {
+  [ "$WORKER_MODE" = "orca_supervised" ] || return 0
+  [ -n "$ORCA_RUN_ID" ] || {
+    echo "ERROR: supervised METADATA is missing run_id" >&2
+    return 2
+  }
+  orca_runtime_init
+  local use_out rebound_handle
+  use_out=$(orca_cli orchestration run-use --id "$ORCA_RUN_ID" --json 2>&1) || {
+    echo "ERROR: cannot bind the invoking PM terminal to Run $ORCA_RUN_ID: $use_out" >&2
+    echo "RECOVERY: use read-only show/dispatch-show for inspection; do not ack or clean an active Dispatch" >&2
+    return 2
+  }
+  rebound_handle=$(printf '%s' "$use_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
+  [ -n "$rebound_handle" ] || {
+    echo "ERROR: run-use succeeded without a coordinator handle" >&2
+    return 2
+  }
+  if [ "$rebound_handle" != "$ORCA_COORDINATOR_HANDLE" ]; then
+    ORCA_COORDINATOR_HANDLE="$rebound_handle"
+    local tmp_meta
+    tmp_meta=$(mktemp)
+    if jq --arg coordinator "$rebound_handle" \
+        '.session.orca.supervised.coordinator_handle = $coordinator' "$METADATA" > "$tmp_meta" \
+        && mv "$tmp_meta" "$METADATA"; then
+      echo "PM_ORCHESTRATE_COORDINATOR_REBOUND: run=$ORCA_RUN_ID handle=$rebound_handle" >&2
+    else
+      rm -f "$tmp_meta"
+      echo "WARN: Run rebound but METADATA coordinator handle could not be refreshed" >&2
+    fi
   fi
 }
 
@@ -171,7 +278,7 @@ cmd_send() {
   local text
   text=$(load_text)
   if [ "$WORKER_MODE" = "orca_supervised" ]; then
-    orca_runtime_init
+    ensure_coordinator_binding || exit 2
     orca_cli orchestration send --to "dispatch:$ORCA_DISPATCH_ID" \
       --type status --subject "PM guidance" --body "$text" --json
     return
@@ -213,9 +320,9 @@ cmd_show() {
 cmd_wait() {
   local timeout_ms=$(( WAIT_TIMEOUT * 1000 ))
   if [ "$WORKER_MODE" = "orca_supervised" ]; then
-    orca_runtime_init
+    ensure_coordinator_binding || exit 2
     # A timeout is a liveness checkpoint, not failure. The JSON remains unacknowledged.
-    orca_cli orchestration check --run "$ORCA_RUN_ID" --wait \
+    orca_cli orchestration check --wait \
       --types worker_done,escalation,question --timeout-ms "$timeout_ms" --json
   elif [ "$WORKER_MODE" = "orca_terminal" ]; then
     orca_runtime_init
@@ -229,8 +336,8 @@ cmd_wait() {
 cmd_ack() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: ack requires an Orca supervised worker" >&2; exit 64; }
   [ -n "$DELIVERY_ID" ] || { echo "ERROR: ack requires --delivery-id" >&2; exit 64; }
-  orca_runtime_init
-  orca_cli orchestration check --run "$ORCA_RUN_ID" --ack "$DELIVERY_ID" --json
+  ensure_coordinator_binding || exit 2
+  orca_cli orchestration check --ack "$DELIVERY_ID" --json
 }
 
 cmd_reply() {
@@ -238,13 +345,13 @@ cmd_reply() {
   [ -n "$MESSAGE_ID" ] || { echo "ERROR: reply requires --message-id" >&2; exit 64; }
   local text
   text=$(load_text)
-  orca_runtime_init
+  ensure_coordinator_binding || exit 2
   orca_cli orchestration reply --id "$MESSAGE_ID" --body "$text" --json
 }
 
 cmd_account() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: $COMMAND requires an Orca supervised worker" >&2; exit 64; }
-  orca_runtime_init
+  ensure_coordinator_binding || exit 2
   local result
   result=$(orca_cli orchestration "worker-$COMMAND" --dispatch "$ORCA_DISPATCH_ID" --json) || return $?
   printf '%s\n' "$result"
@@ -276,18 +383,18 @@ cmd_account() {
   fi
 }
 
-# Task-047 v2：supervised dispatch 死锁兜底。
+# Task-047R：supervised dispatch 死锁兜底。
 #
-# 与 v1 的核心区别：v1 手撸 "terminal stop + lease release + worktree rm + rm -rf"，
-# 没用 Orca 官方 lifecycle 命令（worker-abandon fence / worker-stop stop /
-# worker-release release），且 liveness gate 字段名 `.result.workerSession` 在真 Orca
-# 响应里不存在（永远 DEAD 等于无门槛），reviewer 抓 BLOCKER 1+2。
+# 与旧实现的核心区别：旧实现手撸 "terminal stop + lease release + worktree rm"，
+# 且 liveness gate 字段名 `.result.workerSession` 在真 Orca 响应里不存在，
+# 等同于无门槛。当前实现只使用精确 Dispatch 的官方 lifecycle mutation。
 #
 # v2 设计：
-# - 走 Orca 官方 lifecycle：worker-abandon fence dispatch → worker-stop 停 terminal。
+# - 走 Orca 官方 lifecycle：worker-stop 原子 fence+stop；失败时 worker-abandon 仅作
+#   非破坏性 fence 兜底，随后立即失败并保留 worktree。
 #   默认不动文件（METADATA 保留，PM 后续可跑 clean-worktree 完整清理）。
-# - --destroy 才动文件（symlink unlink + dirty 检查 + git worktree remove + lease
-#   release + orca worktree rm + session_context 清），内联 clean-worktree.sh:282-340。
+# - --destroy 才动文件（symlink unlink + dirty 检查 + lease release + Orca worktree rm
+#   + exact Git fallback）。审计在 Git common dir，不依赖 Session Context 存活。
 # - liveness gate 用真字段 `.result.observation.status`（exited 即 OK）和
 #   `.result.worker.state`（succeeded/failed/stopped 即 OK），任一失败保守拒绝。
 # - 任何资源动作 fail-loud（禁止吞 stderr/stdout）。
@@ -315,36 +422,35 @@ settle_liveness_check() {
   set -e -o pipefail
   obs_status=${obs_status:-PARSE_ERROR}
   worker_state=${worker_state:-PARSE_ERROR}
-  # gate 逻辑：拒绝"活"信号（active/input_accepted），允许"死/退出"信号
-  # （exited/missing/succeeded/failed/stopped），ABSENT（字段缺失/schema 变）保守拒绝。
-  # 注：completed dispatch 的 observation.status 在 GC 后是 "missing"（非 exited），
-  # 死锁 dispatch（worker 死、dispatch dispatched）的 observation 未真测，但非 active
-  # 即视为可 settle——gate 目的是"别误杀活 worker"，活 worker 的 observation 必为 active。
-  if [ "$obs_status" = "active" ] || [ "$obs_status" = "input_accepted" ] \
-     || [ "$worker_state" = "active" ] || [ "$worker_state" = "input_accepted" ]; then
-    if [ "$force" -ne 1 ]; then
-      echo "REFUSED: observation.status=$obs_status worker.state=$worker_state (worker still active); confirm worker process is dead and re-run with --force" >&2
-      exit 2
-    fi
-    echo "WARN: liveness check suggests worker may be active (obs=$obs_status, state=$worker_state); --force overrides" >&2
-    return 0
-  fi
-  if [ "$obs_status" = "ABSENT" ] && [ "$worker_state" = "ABSENT" ]; then
-    if [ "$force" -ne 1 ]; then
-      echo "REFUSED: observation.status and worker.state both ABSENT (schema changed or unparseable); re-run with --force after manual verification" >&2
-      exit 2
-    fi
-    echo "WARN: both fields ABSENT but --force given; assuming DEAD" >&2
-  fi
+  # Fail closed on every combination except a pair of known-dead signals. Unknown future
+  # states must not silently inherit deletion authority.
+  case "$obs_status" in
+    exited|missing) ;;
+    *)
+      if [ "$force" -ne 1 ]; then
+        echo "REFUSED: observation.status=$obs_status is not a known-dead state (expected exited|missing)" >&2
+        exit 2
+      fi
+      echo "WARN: observation.status=$obs_status is inconclusive; --force overrides" >&2
+      ;;
+  esac
+  case "$worker_state" in
+    succeeded|failed|stopped) ;;
+    *)
+      if [ "$force" -ne 1 ]; then
+        echo "REFUSED: worker.state=$worker_state is not a known-dead state (expected succeeded|failed|stopped)" >&2
+        exit 2
+      fi
+      echo "WARN: worker.state=$worker_state is inconclusive; --force overrides" >&2
+      ;;
+  esac
   return 0
 }
 
-# settle_destroy_worktree: 物理清理段。顺序与 clean-worktree.sh:282-340 **故意偏离**——
-# settle 先 git worktree remove（git 拥有文件系统），再 orca worktree rm；clean-worktree
-# 先 orca worktree rm 再 git。两侧因所有权语义不同而顺序不同，非同步关系。MAJOR 5/3 修复。
+# settle_destroy_worktree: 物理清理段。Orca 先删除它拥有的 worktree；若旧 runtime
+# 只删资源未清 Git registration，再对完整路径精确匹配后执行 Git fallback。
 settle_destroy_worktree() {
   local worktree_path="$1" dispatch_id="$2"
-  local session_context="$worktree_path/.claude/agent-sessions/$SESSION"
 
   # 1. symlink unlink（MAJOR 3：spawn-worker-deps 注入的 node_modules 软链）。
   if [ -L "$worktree_path/node_modules" ]; then
@@ -367,31 +473,8 @@ settle_destroy_worktree() {
     fi
   fi
 
-  # 3. git worktree remove（MAJOR 5：spawn-worker 时主仓 git worktree add 注册过）。
-  if git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | grep -qF "^worktree $worktree_path"; then
-    if git -C "$PROJECT_DIR" worktree remove --force "$worktree_path"; then
-      echo "PM_ORCHESTRATE_SETTLE_GIT_WT_REMOVED: $worktree_path"
-    else
-      echo "ERROR: git worktree remove failed: $worktree_path" >&2
-      return 2
-    fi
-  fi
-
-  # 4. orca worktree rm（settle --destroy 完整清理路径）。
-  if [ -n "$dispatch_id" ]; then
-    local wt_id
-    wt_id=$(jq -r '.session.orca.worktree_id // empty' "$METADATA" 2>/dev/null)
-    if [ -z "$wt_id" ]; then
-      echo "WARN: no orca worktree_id in METADATA; skipping orca worktree rm" >&2
-    elif orca_cli worktree rm --worktree "id:$wt_id" --force --json; then
-      echo "PM_ORCHESTRATE_SETTLE_ORCA_WT_REMOVED: $wt_id"
-    else
-      echo "ERROR: orca worktree rm failed: $wt_id" >&2
-      return 2
-    fi
-  fi
-
-  # 5. provider lease release（MAJOR 4：fail-loud，不吞 stderr）。
+  # 3. provider lease release。终端已由 worker-stop 结算；先释放额度，失败时保留
+  # worktree 供人工恢复，不进入破坏性文件删除。
   if [ -n "$PROVIDER_LEASE_FILE" ]; then
     local lease_root
     lease_root=$(provider_lease_root_for_project "$PROJECT_DIR" 2>/dev/null) || lease_root=""
@@ -402,22 +485,46 @@ settle_destroy_worktree() {
           --resource-settled --orca-cli "$ORCA_CLI_BIN"; then
         echo "PM_ORCHESTRATE_SETTLE_LEASE_RELEASED: session=$SESSION"
       else
-        echo "ERROR: provider lease release failed (manual cleanup needed: $PROVIDER_LEASE_FILE)" >&2
+        echo "ERROR: provider lease release failed (worktree retained): $PROVIDER_LEASE_FILE" >&2
         return 2
       fi
     else
-      echo "ERROR: cannot derive trusted provider lease root for $PROJECT_DIR (manual lease cleanup needed)" >&2
+      echo "ERROR: cannot derive trusted provider lease root for $PROJECT_DIR (worktree retained)" >&2
       return 2
     fi
   fi
 
-  # 6. session_context 清理。
-  if [ -d "$session_context" ]; then
-    if rm -rf "$session_context"; then
-      echo "PM_ORCHESTRATE_SETTLE_SESSION_CONTEXT_REMOVED: $session_context"
+  # 4. Orca owns Orca-managed worktree teardown. ORCA_WORKTREE_ID was loaded before
+  # deleting the Session Context, so cleanup never rereads a vanished METADATA file.
+  if [ -n "$dispatch_id" ]; then
+    if [ -z "$ORCA_WORKTREE_ID" ]; then
+      echo "ERROR: no orca worktree_id in METADATA; refusing --destroy" >&2
+      return 2
+    elif orca_cli worktree rm --worktree "id:$ORCA_WORKTREE_ID" --force --json; then
+      echo "PM_ORCHESTRATE_SETTLE_ORCA_WT_REMOVED: $ORCA_WORKTREE_ID"
     else
-      echo "WARN: session context cleanup non-zero (not blocking): $session_context" >&2
+      echo "ERROR: orca worktree rm failed: $ORCA_WORKTREE_ID" >&2
+      return 2
     fi
+  fi
+
+  # 5. Exact Git fallback. Orca normally removes the checkout and registration; a
+  # fake/older runtime may leave the Git worktree registered, so match the full path.
+  if git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | awk -v target="$worktree_path" '
+      /^worktree / { path=$0; sub(/^worktree /, "", path); if (path == target) found=1 }
+      END { exit(found ? 0 : 1) }
+    '; then
+    if git -C "$PROJECT_DIR" worktree remove --force "$worktree_path"; then
+      echo "PM_ORCHESTRATE_SETTLE_GIT_WT_REMOVED: $worktree_path"
+    else
+      echo "ERROR: git worktree remove failed: $worktree_path" >&2
+      return 2
+    fi
+  fi
+
+  if [ -e "$worktree_path" ]; then
+    echo "ERROR: --destroy finished lifecycle cleanup but worktree path still exists: $worktree_path" >&2
+    return 2
   fi
 }
 
@@ -431,15 +538,18 @@ cmd_settle() {
   [ -n "$settle_reason" ] || { echo "ERROR: settle requires --reason (audit)" >&2; exit 64; }
   [ -n "$ORCA_DISPATCH_ID" ] || { echo "ERROR: settle: missing dispatch_id in METADATA" >&2; exit 64; }
 
+  resolve_project_identity || exit 2
   orca_runtime_init
+  ensure_coordinator_binding || exit 2
 
-  local worktree_id show_json session_context
-  worktree_id=$(jq -r '.session.orca.worktree_id // empty' "$METADATA")
+  local show_json session_context
   session_context="$WORKTREE/.claude/agent-sessions/$SESSION"
 
-  echo "PM_ORCHESTRATE_SETTLE_START: dispatch=$ORCA_DISPATCH_ID worktree=$worktree_id destroy=$settle_destroy force=$settle_force reason=$settle_reason"
-  # M2: --reason 持久化到 SETTLE_AUDIT.log（审计可追溯）
-  printf '%s dispatch=%s session=%s destroy=%s force=%s reason=%s\n'     "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo 'unknown-time')"     "$ORCA_DISPATCH_ID" "$SESSION" "$settle_destroy" "$settle_force" "$settle_reason"     >> "$SESSION_CONTEXT/SETTLE_AUDIT.log" 2>/dev/null || echo "WARN: cannot write SETTLE_AUDIT.log (read-only context?)" >&2
+  echo "PM_ORCHESTRATE_SETTLE_START: dispatch=$ORCA_DISPATCH_ID worktree=$ORCA_WORKTREE_ID destroy=$settle_destroy force=$settle_force reason=$settle_reason"
+  write_settle_audit start "liveness check pending" || {
+    echo "ERROR: cannot persist settle audit under Git common dir; refusing mutation" >&2
+    exit 2
+  }
 
   # Step 1: liveness gate (BLOCKER 1: 用真字段)。
   set +e
@@ -456,28 +566,39 @@ cmd_settle() {
   fi
   settle_liveness_check "$show_json" "$settle_force"
 
-  # Step 2: worker-abandon fence dispatch (BLOCKER 2: 保留 METADATA)。
-  if orca_cli orchestration worker-abandon --dispatch "$ORCA_DISPATCH_ID" --json; then
-    echo "PM_ORCHESTRATE_SETTLE_FENCED: dispatch=$ORCA_DISPATCH_ID"
-  else
-    echo "ERROR: worker-abandon failed; dispatch NOT fenced, aborting settle" >&2
-    exit 2
-  fi
-
-  # Step 3: worker-stop 停 terminal（已 fence, stop 失败 WARN 不阻塞）。
-  # set +e 保护：worker-stop 失败不应击穿脚本（已 fence，terminal 自然回收）。
+  # Step 2: worker-stop is the current Orca atomic fence+stop operation. If it
+  # fails, make one non-destructive worker-abandon attempt to fence uncertainty,
+  # but never continue into --destroy.
   set +e
   if orca_cli orchestration worker-stop --dispatch "$ORCA_DISPATCH_ID" --json; then
+    local stop_rc=0
     echo "PM_ORCHESTRATE_SETTLE_STOPPED: dispatch=$ORCA_DISPATCH_ID"
   else
-    echo "WARN: worker-stop failed (already stopped?)" >&2
+    local stop_rc=$?
   fi
   set -e
+  if [ "$stop_rc" -ne 0 ]; then
+    set +e
+    orca_cli orchestration worker-abandon --dispatch "$ORCA_DISPATCH_ID" --json
+    local abandon_rc=$?
+    set -e
+    write_settle_audit stop_failed "worker-stop rc=$stop_rc; worker-abandon rc=$abandon_rc" || true
+    echo "ERROR: worker-stop failed (rc=$stop_rc); dispatch may be fenced by worker-abandon, but worktree is retained" >&2
+    exit 2
+  fi
+  write_settle_audit stopped "worker-stop fenced and stopped the Dispatch" || {
+    echo "ERROR: cannot persist post-stop audit; worktree retained" >&2
+    exit 2
+  }
 
-  # Step 4: --destroy 才动文件。默认只 fence + stop, 提示 PM 后续跑 clean-worktree。
+  # Step 3: --destroy 才动文件。默认只 fence + stop, 提示 PM 后续跑 clean-worktree。
   if [ "$settle_destroy" -eq 1 ]; then
     echo "PM_ORCHESTRATE_SETTLE_DESTROY_START: cleaning worktree/files"
     settle_destroy_worktree "$WORKTREE" "$ORCA_DISPATCH_ID" || exit 2
+    write_settle_audit destroyed "Orca/Git worktree removed" || {
+      echo "ERROR: worktree removed but final audit write failed: $SETTLE_AUDIT_FILE" >&2
+      exit 2
+    }
     echo "PM_ORCHESTRATE_SETTLE_DESTROYED: see PM_ORCHESTRATE_SETTLE_* lines above"
   else
     echo "PM_ORCHESTRATE_SETTLE_FENCED_ONLY: dispatch fenced + terminal stopped. Run \`clean-worktree.sh --execute --force-remove-dirty\` to clean worktree/files. METADATA preserved at $session_context."

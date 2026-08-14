@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.6.0] - 2026-08-14
+
+### 新增
+
+- 新增 `orca-wave-prepare.sh` 与 Wave receipt：在任何 worker 启动前创建/绑定一个 Run、预建全部独立 Task，并固化 coordinator handle；并发 spawn 直接复用 `run_id/coordinator_handle/task_id`，不再并发 rebinding 或重复建 Task。
+- 新增统一 Task-spec 完成协议前缀，要求 worker 使用 live preamble 的真实 IDs 精确发送一次 `worker_done`；明确 commit、tests、STATUS、heartbeat 与 idle 都不能结算 Dispatch。
+- 新增 `test-settle-command.sh`、`test-orca-wave-lifecycle.sh` 与 `test-spawn-worker-deps.sh`，覆盖生命周期 mutation 顺序、失败资源保留、精确 worktree 删除、持久审计、Wave 并发屏障和依赖补偿失败关闭。
+
+### 修复
+
+- 重写 `settle` 为当前 Orca lifecycle：严格 known-dead 双信号门禁后先调 `worker-stop` 原子 fence+stop；stop 失败仅尝试一次 `worker-abandon` 兜底并禁止 destroy，避免旧版 abandon→stop 顺序和“stop 失败仍删除”风险。
+- `--destroy` 在破坏性删除前校验 METADATA.project 与 worker 属于同一 Git common dir，先释放 provider lease，再由 Orca 删除精确 worktree，最后只对完全匹配路径执行 Git fallback；修复前缀匹配失效、Session Context 删除后丢 worktree ID 和审计随 worktree 消失的问题。
+- liveness gate 改为严格 allowlist：只有 `observation.status=exited|missing` 且 `worker.state=succeeded|failed|stopped` 通过；缺字段、active 和未知未来状态默认拒绝。
+- 依赖补偿对断裂 `node_modules` symlink 或创建失败改为 spawn 非零退出，避免 worker 已启动但无法执行验证。
+
+### 改进
+
+- worker Shell 门禁新增 Orca 自报告语义白名单：只允许带真实 task/dispatch、subject/body/outcome 和有界 timeout 的 `worker_done/heartbeat/escalation`、`ask` 与只读 `check`；拒绝 `task-update`、`worker-stop`、群发、缺 outcome 和 shell chaining。
+- PM 的 supervised mutation/wait/accounting 命令先 `run-use` 绑定当前终端并刷新 METADATA coordinator handle；`wait/ack` 消费当前绑定 Run，不再传陈旧 `--run`。
+- `SKILL.md`、Orca/PM references 与 postflight 模板区分业务验收和 lifecycle settlement，并按 supervised、terminal-managed、tmux 三种模式给出独立巡检与收口协议。
+
+### 验证
+
+- 新增回归分别达到 dependency guard 58/58、Wave lifecycle 10/10、settle liveness 10/10、settle command 14/14、worktree dependency 7/7；完整 smoke 与静态门禁结果见本版本任务验收记录。
+
 ## [2.5.4] - 2026-08-14
 
 ### 新增

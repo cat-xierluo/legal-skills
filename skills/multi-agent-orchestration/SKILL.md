@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.5.0"
+  version: "2.6.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -93,6 +93,8 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
   - **Python**：venv 含绝对路径、软链会挂，不自动补偿（PM 手动建 venv 或 `--allow-install-command` 授权 pip install）。
 - **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。PM 显式 `--verify-cmd` 优先，不覆盖。
 
+依赖补偿必须失败关闭：目标处已有真实目录就保留，断裂 symlink 或创建 symlink 失败则 `spawn-worker.sh` 退出非零，不能留下一个看似已启动、实际无法验证的 worker。用 `scripts/test-spawn-worker-deps.sh` 覆盖路径类型、默认/显式 verify 和双 worker 并发。
+
 `clean-worktree.sh` 删 worktree 前安全 unlink 该软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓 `node_modules`）。install-guard 仍 `deny_by_default` 拦 `npm install/ci/add`，worker 不会误改主仓 `node_modules`。详见 `references/09-parallel-lessons.md` G28/G31。
 
 ### 3.3 PM spawn 操作纪律（Task-041~044，Wave-2 实战）
@@ -100,9 +102,9 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 spawn 一个 worker 后，PM 的操作纪律（Wave-2 实战撞坑固化）：
 
 1. **不主动 send 完整 task prompt**（Task-042）：`--orca-supervised` 的 worker 由 `worker-start` 注入 live preamble + TASK（唯一任务注入器，见 §4.4/4.5）。PM spawn 后再 send 完整 prompt 是重复投递，会让 worker 混淆/双重执行。长 prompt 写 `WORKER_PROMPT.md`（Session Context），terminal 只发短 Read 指令触发。
-2. **`run-create` / jq 提取只调一次**（Task-043）：一个 Wave 共用一个 Run，`pm-orchestrate run-create` 调一次拿 `run.id` 即定；**不要重试**——重试生成新 Run + 新 coordinator handle，旧 handle 立即 `consumer_fenced`。从 receipt `jq -r '.result.run.id'` 一次取定，整 Wave 复用。
+2. **Wave 先建完整控制面，再并行启动**（Task-043/050）：用 `orca-wave-prepare.sh` 一次创建/绑定 Run，并在任何 worker 启动前串行创建全部独立 Task；receipt 固化 `run_id`、`coordinator_handle` 和各 `task_id`。不要重试 `run-create`，也不要让并发 spawn 各自 `run-use/task-create`，否则会触发 consumer fencing 或重复 Task。
 3. **supervised worker 不用 pm-monitor/sentinel 判完成**（Task-041）：supervised 完成唯一权威是 `worker_done → Delivery`（`pm-orchestrate show/wait` 读 dispatch + Delivery）。`pm-monitor`（STATUS/commit-stale）和 `sentinel`（tui-idle/timeout）的信号不是 supervised 完成权威——`STATUS=done` ≠ Delivery、tui-idle 只表示可交互不表示完成。supervised 的 PM 只用 `pm-orchestrate show/wait`；pm-monitor/sentinel 是 tmux/terminal-managed 回退路径的辅助观察器，套到 supervised 会误判。
-4. **spawn 前后 Bash 调用尽量并行**（Task-044）：spawn 前的探查（`orca status` / `worktree current` / `render-runtime-profile`）和 spawn 后的核验（METADATA/STATUS/lease）彼此独立的调用，放同一条 message 并行发出，不要串行——Wave-2 整轮 11 次串行 Bash ≈30s 纯 I/O 等待浪费。依赖链（spawn 依赖 render、commit 依赖 verify）才串行。
+4. **只并行无依赖步骤**（Task-044/050）：spawn 前的独立探查和 receipt 完成后的多个 worker 启动/核验可并行；Run 和全部 Task 的创建属于 Wave 准备屏障，必须先串行完成。依赖链（Task 预建→worker-start、spawn→核验、verify→commit）保持串行。
 
 ## 4. Orca-first 控制平面
 
@@ -151,24 +153,30 @@ CodeBuddy/Qoder 的 trust/permission dialog 由 `spawn-worker.sh` 通过 Orca te
 
 ### 4.4 Supervised：一个 Wave 共用一个 Run
 
-当用户明确要求监督、等待结果或协调 DAG 时，先创建一次 Run：
+当用户明确要求监督、等待结果或协调 DAG 时，先写 Wave manifest，并在任何 worker 启动前预建一个 Run 和全部 Task：
 
 ```bash
-bash scripts/pm-orchestrate.sh run-create --objective "Wave 1 objective"
-# 从 JSON 读取 .result.run.id
+cat > /tmp/wave.json <<'JSON'
+{"objective":"Wave 1 objective","tasks":[
+  {"key":"worker-a","title":"worker-a","spec":"完整任务、范围、验证和完成协议"},
+  {"key":"worker-b","title":"worker-b","spec":"完整任务、范围、验证和完成协议"}
+]}
+JSON
+bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-receipt.json
 ```
 
-同一 Wave 的每个 worker 复用该 Run：
+receipt 成功后，才并行启动 worker；每个 worker 复用同一 `run_id/coordinator_handle` 与自己的 `task_id`：
 
 ```bash
 bash scripts/spawn-worker.sh \
   --project "$PROJECT" --branch feat/worker-a --session worker-a \
   --worker-backend claude-code --command "$AGENT_COMMAND" \
   --orca-supervised --orca-run-id "$RUN_ID" \
-  --task-title "worker-a" --task-spec "完整任务、范围、验证和完成协议"
+  --orca-coordinator-handle "$COORDINATOR_HANDLE" \
+  --orca-task-id "$TASK_A_ID"
 ```
 
-`orca-supervised-register.sh` 从 `run-create/run-use` receipt 取得 coordinator handle，并对 `task-create/worker-start` 都显式传 `--from`，满足 consumer fencing。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通占位 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。
+`orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。
 
 ### 4.5 Supervised 生命周期
 
@@ -176,8 +184,8 @@ bash scripts/spawn-worker.sh \
 
 ```text
 PM create/bind Run
-  → task-create
-  → worker-start 注入 live preamble + TASK
+  → 在任何 worker 启动前创建全部 Task
+  → worker-start 注入 live preamble + TASK（各 worker 可并行）
   → worker 工作；必要时 ask/heartbeat
   → worker 从自己的 terminal 精确发送一次 worker_done
   → PM check --wait 收到完整 Delivery
@@ -197,19 +205,19 @@ bash scripts/pm-orchestrate.sh release --worktree "$WT" --session worker-a
 bash scripts/pm-orchestrate.sh ack --worktree "$WT" --session worker-a --delivery-id "$DID"
 ```
 
-`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
+每次 supervised 的 send/wait/reply/release/retain/ack/settle 都先由脚本对当前 PM terminal 执行 `run-use`，并把新 coordinator handle 写回 METADATA；`check` 随后消费已绑定 Run，不携带陈旧 `--run` 路由。`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
 
 由 `spawn-worker.sh` 预先创建、再交给 `worker-start --terminal` 的 provider terminal 属于 external resource。settled 后 `worker-release` 可能正确返回 retained；清理脚本只有在 worker/Dispatch 已结算、ownership/reason 明确为 `external/external_terminal` 且 Orca resource handle 与 METADATA 完全一致时，才由创建者关闭这个精确句柄，其他状态一律失败关闭。
 
-**Dispatch 死锁兜底 `settle`（Task-047 v2）**：若 worker 进程已死但未发 `worker_done`（dispatch 卡 `dispatched`、PM 无法正常 release），用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
-1. **liveness gate**：读 `worker-show` 的 `.result.observation.status`（=`exited/missing`，completed dispatch GC 后是 missing）和 `.result.worker.state`（`succeeded`/`failed`/`stopped`）；任一缺失或仍 `active`/`input_accepted` → REFUSED exit 2（除非 `--force`）。修复了 PR #84 的 BLOCKER 1（`.result.workerSession` 字段不存在 = 永远 DEAD 等于无门槛）。
-2. **fence dispatch**：`worker-abandon` fence（保留 METADATA，PM 后续可清理）—— 失败 exit 2。修复了 PR #84 的 BLOCKER 2（删 METADATA 导致 dispatch unrecoverable leak）。
-3. **stop terminal**：`worker-stop`（已 fence，stop 失败 WARN 不阻塞）。
-4. **默认安全**：不删 worktree / lease / symlink / session_context。PM 后续跑 `clean-worktree.sh --execute --force-remove-dirty` 完成清理。
-5. **可选 `--destroy`**：一站式清理（含 symlink unlink + dirty 检查 + git worktree remove + orca worktree rm + lease release + session_context 清）。**仅当** PM 确认 worker 死了 + 不需保留输出。
-- `--reason` 强制（审计）。`--force` 仅在 liveness gate 兜底。
+**Dispatch 死锁兜底 `settle`（Task-047R）**：若 worker 进程已死但未发 `worker_done`，用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
+1. **身份与审计门禁**：METADATA.project 与 worker 必须属于同一 Git common dir；先在 `<git-common-dir>/orchestration/settle-audit.ndjson` 持久化 reason，审计不可写则不做 mutation。
+2. **严格 liveness gate**：只有 `observation.status=exited|missing` 与 `worker.state=succeeded|failed|stopped` 的已知死亡组合通过；缺字段、active 和未来未知值全部 REFUSED exit 2，除非 PM 明确 `--force`。
+3. **原子结算**：先用当前 Orca 的 `worker-stop` 对精确 Dispatch 原子 fence+stop。失败时只尝试一次非破坏性的 `worker-abandon` 兜底，记录审计并返回 2；无论 abandon 是否成功，都不得进入 `--destroy`。
+4. **默认安全**：成功 stop 后仍不删 worktree/lease/symlink/Session Context。PM 可先保存输出，再跑 `clean-worktree.sh --execute --force-remove-dirty`。
+5. **显式 `--destroy`**：仅在 stop 成功后释放 provider lease、由 Orca 删除精确 worktree、再对完全匹配的 Git worktree 做 fallback；路径仍存在则失败。审计位于 common dir，删除 Session Context 后仍可追溯。
+- `--reason` 强制。`--force` 只覆盖 liveness 不确定性，不覆盖身份、审计、stop、lease 或删除失败。
 - 这是 supervised 正式 lifecycle（worker_done→Delivery→release→ack）的例外兜底，不是常规收尾——优先让 worker 正常发 `worker_done`。
-- 端到端验证：`bash scripts/test-settle-liveness.sh`（9 fixture cases）。
+- 验证：`test-settle-liveness.sh` 覆盖响应字段矩阵；`test-settle-command.sh` 覆盖 mutation 顺序、失败保留、精确删除与持久审计。
 
 ## 5. tmux 回退
 
@@ -283,10 +291,10 @@ Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏
 
 PM 必须：
 
-1. 读取 worker 交付、完整 Delivery 和实际 diff，不采信单句“完成”。
+1. 读取 worker 交付、完整 Delivery 和实际 diff，不采信单句“完成”。`worker-show/dispatch-show` 与 diff/tests 可以证明业务状态，但只读检查不能替代 `worker_done` 或 `settle` 的生命周期结算。
 2. 运行与产物类型匹配的验证；GUI/Web/桌面行为要启动真实入口做代表性交互。
 3. 核对 allowed files、敏感文件、安装授权、Git identity、commit 和 PR 范围。
-4. supervised worker 先 reuse/release/retain，再 ack；terminal-managed/tmux 按用户意图保留或关闭。
+4. supervised worker 先 reuse/release/retain，再 ack；不得因为只读检查“看起来完成”而跳过 settlement。worker 仍存活且漏发 `worker_done` 时先结构化提醒；确认已死才走 `settle`。terminal-managed/tmux 按用户意图保留或关闭。
 5. 用 `git-workflow` 完成 rebase/push/PR/merge；本 Skill 不替代 Git 安全规则。
 6. 清理前先 dry-run：
 
@@ -365,6 +373,10 @@ bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-provider-lease.sh
+bash scripts/test-spawn-worker-deps.sh
+bash scripts/test-orca-wave-lifecycle.sh
+bash scripts/test-settle-liveness.sh
+bash scripts/test-settle-command.sh
 bash scripts/smoke-sentinel.sh
 bash scripts/smoke-tmux-worker.sh
 bash scripts/smoke-orca-worker.sh

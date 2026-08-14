@@ -137,6 +137,8 @@ ORCA_SUPERVISED=0
 TASK_SPEC=""
 TASK_TITLE=""
 ORCA_RUN_ID=""
+ORCA_TASK_ID=""
+ORCA_COORDINATOR_HANDLE=""
 ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
 ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
 ORCA_SUPERVISED_TASK_ID=""   # helper 输出
@@ -253,9 +255,14 @@ Options:
                    runtime profile / wrapper / 超长 prompt 投递等所有现有能力；ORCA UI 直接反映
                    worker 生命周期（spawn 完 ORCA 列表多一张卡，sentinel 终态自动切 workspace-status）。
                    --no-worktree 与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。详见 SKILL §6.5。
-  --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。必须同时传 --task-spec；
+  --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
+                   或同时传 --orca-run-id + --orca-task-id 复用 Wave 预创建 Task；
                    worker-start 是该路径唯一的任务注入器，worker 必须发送一次 worker_done。
   --orca-run-id ID  复用现有 Run；同一 Wave 的所有 supervised worker 应传同一个 Run ID。
+  --orca-task-id ID 复用 `orca-wave-prepare.sh` 预创建的 Task；必须同时传 --orca-run-id
+                   与 --orca-coordinator-handle。
+  --orca-coordinator-handle ID
+                   复用 Wave receipt 的 coordinator_handle，避免并发 worker 重复 run-use。
   --task-spec TEXT  supervised Task 的完整任务说明。
   --task-title TEXT supervised Task 的简短标题。
   --allow-install-command CMD
@@ -461,6 +468,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --orca-run-id)  # 同一 Wave 的 worker 复用一个 Run；未传时 helper 为单 worker 新建 Run
       ORCA_RUN_ID="$2"
+      shift 2
+      ;;
+    --orca-task-id)  # Wave 预创建 Task；避免并发 spawn 同时 run-use/task-create
+      ORCA_TASK_ID="$2"
+      shift 2
+      ;;
+    --orca-coordinator-handle)  # Wave receipt 中已绑定的 coordinator；并发启动时直接复用
+      ORCA_COORDINATOR_HANDLE="$2"
       shift 2
       ;;
     --allow-install-command)
@@ -967,7 +982,9 @@ if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
 fi
 if [ "$ORCA_SUPERVISED" -eq 1 ]; then
-  [ -n "$TASK_SPEC" ] || { echo "ERROR: --orca-supervised requires --task-spec" >&2; exit 64; }
+  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: --orca-supervised requires --task-spec or --orca-task-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_RUN_ID" ] || { echo "ERROR: --orca-task-id requires --orca-run-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_COORDINATOR_HANDLE" ] || { echo "ERROR: --orca-task-id requires --orca-coordinator-handle from the Wave receipt" >&2; exit 64; }
   [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
   has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
   [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
@@ -1777,8 +1794,8 @@ if [ "$ORCA_MODE" = "auto" ]; then
   # 但调用方不能把它误当成已编排 worker。
   if [ "$ORCA_SUPERVISED" -eq 1 ] && [ -n "$ORCA_TERMINAL_HANDLE" ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
-      printf 'ORCA_RUN: reuse/create Run %q; task-create --spec %q; worker-start --terminal <handle> --worktree id:<worktree>\n' \
-        "${ORCA_RUN_ID:-new-wave-run}" "$TASK_SPEC"
+      printf 'ORCA_RUN: reuse/create Run %q; coordinator=%q; task=%q; worker-start --terminal <handle> --worktree id:<worktree>\n' \
+        "${ORCA_RUN_ID:-new-wave-run}" "${ORCA_COORDINATOR_HANDLE:-bind-once}" "${ORCA_TASK_ID:-create-from-spec:$TASK_SPEC}"
     else
       reg_helper="$SCRIPT_DIR/orca-supervised-register.sh"
       if [ ! -f "$reg_helper" ]; then
@@ -1794,6 +1811,12 @@ if [ "$ORCA_MODE" = "auto" ]; then
         )
         if [ -n "$ORCA_RUN_ID" ]; then
           reg_args+=(--run-id "$ORCA_RUN_ID")
+        fi
+        if [ -n "$ORCA_TASK_ID" ]; then
+          reg_args+=(--task-id "$ORCA_TASK_ID")
+        fi
+        if [ -n "$ORCA_COORDINATOR_HANDLE" ]; then
+          reg_args+=(--coordinator-handle "$ORCA_COORDINATOR_HANDLE")
         fi
         if reg_out=$(bash "$reg_helper" "${reg_args[@]}" 2>&1); then
           # 从 stdout KV 提取（stderr 是日志，reg_out 含两者，grep stdout KV）

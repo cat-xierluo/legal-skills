@@ -38,11 +38,10 @@
 | 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
 | 2026-08-13 | 更新   | [contract-copilot](skills/contract-copilot/)                           | v1.6.3  | 增加 DOCX 全量解包预检与 OOXML 命名空间/元素白名单，拒绝越界路径、符号链接、隐藏文本、伪装命名空间和畸形结构；明确审查计划及扩展计划均为每次运行动态生成的产物 |
 | 2026-08-13 | 更新   | [skill-manager](skills/skill-manager/)                                 | v1.7.2  | 项目同时存在多个 Agent 配置目录时优先使用 `.claude/skills` 单一来源；补充 `.codebuddy` 全局根识别，避免从 CodeBuddy 配置目录调用时误装到嵌套目标 |
-| 2026-08-13 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.5.0  | 修复嵌套 Harness 恢复高权限与 backend 标签伪装；完整祖先链取权限交集，启动命令与四后端强绑定；新增 provider 原子并发租约，统一 Orca Runtime，并保留门禁优先的 Orca 两阶段启动与 tmux 回退 |
+| 2026-08-14 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.6.0  | 修复 supervised settle 的错误生命周期顺序与不安全清理；新增 Wave receipt 预建全部 Task、worker 自报告语义白名单、PM coordinator 自动重绑定，以及 settle/Wave/依赖补偿端到端回归 |
 | 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
 | 2026-08-12 | 更新   | [clawhub-sync](skills/skill-publish-sync/)                                   | v1.7.1  | 发布配置改为 ClawHub、SkillHub、联想三份独立白名单，同一 Skill 可按平台独立维护；临时发布副本按目标平台注入字段，真实名单与发布记录继续仅保留本地 |
 | 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
-| 2026-08-05 | 正式发布 | [multica-skill-update](skills/multica-skill-update/)                 | v0.5.1  | 基于 Multica 规划稿落地的 Skill 同步工具：manifest 来源清单批量导入/更新 Multica skill 数据库；init/update/plan 三模式 + 结构化报告；关键澄清（来源刷新用 `import --on-conflict overwrite` 而非 `skill update`）；可接 Autopilot 每周定时；v0.5.1 新增演示目录/体积兜底两层媒体剔除，解决 visual-card 导入超限 |
 </details>
 
 ## 📋 项目概述
@@ -626,10 +625,10 @@
 <tr>
 <td><a href="skills/multi-agent-orchestration/"><strong>multi-agent-orchestration</strong></a></td>
 <td>工具·Agent协作</td>
-<td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 worktree/terminal UI、Run/Task/Dispatch、worker transcript、Claude Code/Codex/CodeBuddy/QoderWork CN 总控、Harness 层级门禁与 tmux 回退</td>
+<td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、四后端总控、Harness 层级门禁与 tmux 回退</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载</a></td>
+<td style="text-align:center">v2.6.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>
 <tr>

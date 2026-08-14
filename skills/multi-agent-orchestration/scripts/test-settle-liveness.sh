@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# test-settle-liveness.sh — settle_liveness_check 单元测试（Task-047 v2，NIT 10）
+# test-settle-liveness.sh — settle_liveness_check 单元测试（Task-047R）
 #
 # 用真实 Orca worker-show **完整包装** response fixture（含 _meta/id/ok/result）
 # 覆盖 completed(active→missing GC)/active/missing-field/--force override/empty 场景。
 # 仅 source 函数定义，不 source 整个 pm-orchestrate.sh（避免 orca-runtime 依赖）。
 #
 # v2 修复（PR #86 review B1）：fixture 是完整包装（非预解包），jq 路径用 .result.*。
-# gate 逻辑：拒绝 active/input_accepted（活），允许 missing/exited/succeeded（死/GC），
-# 双 ABSENT 保守拒绝。
+# gate 逻辑：仅允许 observation=missing|exited 且 worker=succeeded|failed|stopped；
+# 任一未知/缺失状态保守拒绝。
 #
 # 用法：bash scripts/test-settle-liveness.sh  # exit 0 全过，1 有失败
 set -euo pipefail
@@ -64,9 +64,9 @@ check "empty+force" 0 "$(run "" 1)"
 echo "Case 6: empty show_json + no force → expect 2"
 check "empty+no-force" 2 "$(run "" 0)"
 
-echo "Case 7: missing observation only (worker.state=succeeded), no force → expect 0 (state 非活)"
+echo "Case 7: missing observation only (worker.state=succeeded), no force → expect 2 (schema 不完整)"
 PARTIAL=$(jq 'del(.result.observation)' "$FIXDIR/worker-show-exited.json")
-check "missing-observation-only" 0 "$(run "$PARTIAL" 0)"
+check "missing-observation-only" 2 "$(run "$PARTIAL" 0)"
 
 echo "Case 8: 双 ABSENT + --force=1 → expect 0 (override)"
 check "both-absent+force" 0 "$(run "$(cat "$FIXDIR/worker-show-missing.json")" 1)"
@@ -80,6 +80,10 @@ else
   echo "  ✗ fixture 缺 .result 包装（B1 回归！）keys: $TOPKEYS"
   fail=$((fail+1))
 fi
+
+echo "Case 10: 未知 future state 不得因不在 denylist 而放行"
+UNKNOWN=$(jq '.result.observation.status = "idle_unknown" | .result.worker.state = "ready_unknown"' "$FIXDIR/worker-show-exited.json")
+check "unknown-state+no-force" 2 "$(run "$UNKNOWN" 0)"
 
 echo ""
 echo "Result: $pass pass, $fail fail"

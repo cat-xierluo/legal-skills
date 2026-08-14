@@ -46,6 +46,9 @@ ensure_worktree_deps() {
       local proj_nm="$PROJECT_DIR/node_modules"
       if [ ! -d "$proj_nm" ]; then
         echo "SPAWN_WORKER_DEPS_SKIP: 主仓无 node_modules，跳过软链（worker 需自行 npm install，受 install-guard 约束）"
+      elif [ -L "$WORKTREE/node_modules" ] && [ ! -e "$WORKTREE/node_modules" ]; then
+        echo "ERROR: SPAWN_WORKER_DEPS_BROKEN_LINK: worktree node_modules is a broken symlink; refusing to start an unverifiable worker" >&2
+        return 1
       elif [ -e "$WORKTREE/node_modules" ]; then
         # worktree 已有 node_modules（真实目录或软链）—— 不覆盖，避免破坏既有状态。
         echo "SPAWN_WORKER_DEPS_EXISTS: worktree 已有 node_modules，跳过"
@@ -62,7 +65,8 @@ ensure_worktree_deps() {
           if ln -s "$proj_real/node_modules" "$wt_real/node_modules" 2>/dev/null; then
             echo "SPAWN_WORKER_DEPS_LINKED: node_modules -> $proj_real/node_modules（worktree 不在主仓父链，G31 补偿）"
           else
-            echo "SPAWN_WORKER_DEPS_LINK_FAILED: 软链 node_modules 失败（权限/空间？），worker 自验可能受影响"
+            echo "ERROR: SPAWN_WORKER_DEPS_LINK_FAILED: cannot link node_modules; refusing to start an unverifiable worker" >&2
+            return 1
           fi
         fi
       fi

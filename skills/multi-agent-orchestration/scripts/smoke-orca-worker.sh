@@ -153,13 +153,32 @@ supervised_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID bash "$SCRIPT_DIR/spawn
   exit 1
 }
 assert_contains "$supervised_out" "supervised prompt will be injected by orchestration worker-start"
-assert_contains "$supervised_out" "task-create --spec"
+assert_contains "$supervised_out" "task=create-from-spec:"
 if printf '%s' "$supervised_out" | grep -q 'terminal send --terminal'; then
   echo "FAIL: supervised dry-run still contains ordinary terminal send"
   echo "$supervised_out"
   exit 1
 fi
 echo "PASS: supervised 路径只由 worker-start 注入任务"
+
+echo "=== Step 6: Wave receipt 的 Task/Run/coordinator 可直接复用 ==="
+wave_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID bash "$SCRIPT_DIR/spawn-worker.sh" \
+  --project "$current_path" \
+  --branch "feat/smoke-orca-wave" \
+  --session "$SESSION-wave" \
+  --command 'codex' \
+  --worker-backend codex \
+  --allow-prompt-only-install-guard 'smoke test: no dependency install' \
+  --orca-supervised --orca-run-id run-smoke --orca-task-id task-smoke \
+  --orca-coordinator-handle term-smoke-pm \
+  --dry-run 2>&1) || {
+  echo "FAIL: Wave receipt dry-run exited non-zero"
+  echo "$wave_out"
+  exit 1
+}
+assert_contains "$wave_out" "coordinator=term-smoke-pm"
+assert_contains "$wave_out" "task=task-smoke"
+echo "PASS: Wave 预创建 Task 路径无需重复 run-use/task-create"
 
 echo ""
 echo "==============================================="

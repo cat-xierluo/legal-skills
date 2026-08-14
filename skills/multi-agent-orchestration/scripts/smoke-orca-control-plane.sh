@@ -67,7 +67,8 @@ printf '%s\n' "$register_out" | grep -qF 'ORCAREG_COORDINATOR_HANDLE=term_pm'
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_TASK_ID=task_test'
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_DISPATCH_ID=ctx_test'
 assert_log_contains 'orchestration run-create --objective 完成限定任务并验证 --json'
-assert_log_contains 'orchestration task-create --spec 完成限定任务并验证 --task-title worker-a --run run_test --from term_pm --json'
+assert_log_contains 'orchestration task-create --spec SUPERVISED COMPLETION PROTOCOL (MANDATORY):'
+assert_log_contains '完成限定任务并验证 --task-title worker-a --run run_test --from term_pm --json'
 assert_log_contains 'orchestration worker-start --task task_test --terminal term_test --worktree id:repo::/tmp/worker-a --run run_test --from term_pm --timeout-ms 60000 --json'
 
 cat > "$CTX/METADATA.json" <<'JSON'
@@ -102,7 +103,8 @@ echo "=== PM wait/account/ack: Delivery is not auto-acked ==="
 : > "$FAKE_LOG"
 ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" wait --worktree "$WT" --session "$SESSION" --timeout 3 >/dev/null
-assert_log_contains 'orchestration check --run run_test --wait --types worker_done,escalation,question --timeout-ms 3000 --json'
+assert_log_contains 'orchestration run-use --id run_test --json'
+assert_log_contains 'orchestration check --wait --types worker_done,escalation,question --timeout-ms 3000 --json'
 assert_log_not_contains '--ack'
 ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" release --worktree "$WT" --session "$SESSION" >/dev/null
@@ -112,7 +114,7 @@ ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" ack --worktree "$WT" --session "$SESSION" --delivery-id delivery_test >/dev/null
 assert_log_contains 'orchestration worker-release --dispatch ctx_test --json'
 assert_log_contains 'orchestration worker-retain --dispatch ctx_test --json'
-assert_log_contains 'orchestration check --run run_test --ack delivery_test --json'
+assert_log_contains 'orchestration check --ack delivery_test --json'
 
 echo "=== terminal-managed read: cursor is preserved for alternate-screen TUIs ==="
 cat > "$CTX/METADATA.json" <<'JSON'

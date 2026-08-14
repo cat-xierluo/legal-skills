@@ -185,6 +185,123 @@ def is_safe_lifecycle_command(command: str) -> bool:
     return False
 
 
+def _parse_long_options(
+    args: list[str],
+    *,
+    boolean_options: set[str],
+    value_options: set[str],
+) -> dict[str, str | bool] | None:
+    """Parse a deliberately small GNU-style option surface without positionals."""
+    parsed: dict[str, str | bool] = {}
+    index = 0
+    while index < len(args):
+        option = args[index]
+        if option in parsed or not option.startswith("--") or "=" in option:
+            return None
+        if option in boolean_options:
+            parsed[option] = True
+            index += 1
+            continue
+        if option not in value_options or index + 1 >= len(args):
+            return None
+        value = args[index + 1]
+        if not value or value.startswith("--"):
+            return None
+        parsed[option] = value
+        index += 2
+    return parsed
+
+
+def _valid_bounded_timeout(value: object) -> bool:
+    if not isinstance(value, str) or not value.isdigit():
+        return False
+    timeout = int(value)
+    return 1 <= timeout <= 3_600_000
+
+
+def is_safe_orca_worker_protocol_command(command: str) -> bool:
+    """Allow only Dispatch-scoped worker protocol commands; Orca validates live IDs."""
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>()")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    if len(tokens) < 3 or any(
+        token in {";", "&&", "&", "|", "||", "<", ">", "(", ")"}
+        for token in tokens
+    ):
+        return False
+    if any("$(" in token or "`" in token for token in tokens):
+        return False
+    if os.path.basename(tokens[0]) not in {"orca", "orca-ide", "orca-dev"}:
+        return False
+    if tokens[1] != "orchestration":
+        return False
+
+    subcommand = tokens[2]
+    args = tokens[3:]
+    if subcommand == "send":
+        options = _parse_long_options(
+            args,
+            boolean_options={"--json"},
+            value_options={
+                "--type", "--subject", "--body", "--task-id", "--dispatch-id",
+                "--outcome", "--files-modified", "--report-path", "--phase",
+                "--payload", "--from", "--dispatch-capability", "--retry-request",
+            },
+        )
+        if options is None:
+            return False
+        message_type = options.get("--type")
+        if message_type not in {"worker_done", "heartbeat", "escalation"}:
+            return False
+        required = {"--type", "--subject", "--task-id", "--dispatch-id"}
+        if message_type in {"worker_done", "escalation"}:
+            required.add("--body")
+        if not required.issubset(options):
+            return False
+        if message_type == "worker_done":
+            return options.get("--outcome") in {"succeeded", "failed"}
+        return "--outcome" not in options
+
+    if subcommand == "ask":
+        options = _parse_long_options(
+            args,
+            boolean_options={"--json"},
+            value_options={
+                "--question", "--resume", "--options", "--timeout-ms", "--from",
+                "--dispatch-capability", "--retry-request",
+            },
+        )
+        if options is None:
+            return False
+        has_question = "--question" in options
+        has_resume = "--resume" in options
+        if has_question == has_resume:
+            return False
+        return _valid_bounded_timeout(options.get("--timeout-ms"))
+
+    if subcommand == "check":
+        options = _parse_long_options(
+            args,
+            boolean_options={"--json", "--unread", "--peek", "--all", "--format", "--wait"},
+            value_options={"--types", "--timeout-ms", "--retry-request"},
+        )
+        if options is None:
+            return False
+        history_modes = sum(option in options for option in {"--unread", "--peek", "--all"})
+        if history_modes > 1:
+            return False
+        if "--wait" in options:
+            return _valid_bounded_timeout(options.get("--timeout-ms"))
+        if "--timeout-ms" in options:
+            return _valid_bounded_timeout(options.get("--timeout-ms"))
+        return True
+
+    return False
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
@@ -245,7 +362,11 @@ def main() -> int:
         return 0
 
     if not is_install_command(command):
-        if command in allowed_shell or is_safe_lifecycle_command(command):
+        if (
+            command in allowed_shell
+            or is_safe_lifecycle_command(command)
+            or is_safe_orca_worker_protocol_command(command)
+        ):
             return 0
         deny(
             "SHELL_COMMAND_NOT_ALLOWLISTED",
