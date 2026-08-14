@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # smoke-auto-bypass.sh — v1.18.3 + v1.18.4 spawn-worker.sh auto-bypass 验证
 #
-# 验证内容（不真正 spawn worker，只验 spawn-worker.sh 的函数 + flag 定义 + 调用点）：
+# 验证内容（不真正 spawn worker，只验入口函数、独立 flags 模块与调用点）：
 #   v1.18.3（保留）：
 #     1. permission_auto 函数存在（v1.18.3 改用数字键 '2'）
 #     2. permission_auto_bg 函数存在（v1.18.3 新加后台 watcher）
@@ -24,9 +24,10 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SPAWN_WORKER="$SCRIPT_DIR/spawn-worker.sh"
+SPAWN_WORKER_FLAGS="$SCRIPT_DIR/spawn-worker-flags.sh"
 
-if [ ! -f "$SPAWN_WORKER" ]; then
-  echo "✗ FAIL: $SPAWN_WORKER not found" >&2
+if [ ! -f "$SPAWN_WORKER" ] || [ ! -f "$SPAWN_WORKER_FLAGS" ]; then
+  echo "✗ FAIL: spawn-worker entrypoint or flags module not found" >&2
   exit 1
 fi
 
@@ -70,7 +71,7 @@ else
 fi
 
 # 4. --no-permission-auto flag 解析存在
-if grep -q -- "--no-permission-auto)" "$SPAWN_WORKER"; then
+if grep -q -- "--no-permission-auto)" "$SPAWN_WORKER_FLAGS"; then
   check "--no-permission-auto flag 解析存在（v1.18.3 兼容）" 0
 else
   check "--no-permission-auto flag 解析存在（v1.18.3 兼容）" 1
@@ -125,7 +126,7 @@ fi
 # 10. 5 个新 flag 解析存在
 flag_ok=0
 for flag in --trust-auto --permission-auto --permission-auto-bg --no-permission-auto-bg; do
-  if grep -q -- "$flag)" "$SPAWN_WORKER"; then
+  if grep -q -- "$flag)" "$SPAWN_WORKER_FLAGS"; then
     flag_ok=1
   else
     flag_ok=0
@@ -204,7 +205,7 @@ fi
 # 18. 3 个新 flag 解析存在
 flag_ok=0
 for flag in --no-external-imports-auto --external-imports-auto --no-claude-code-bare-auto-degrade; do
-  if grep -q -- "$flag)" "$SPAWN_WORKER"; then
+  if grep -q -- "$flag)" "$SPAWN_WORKER_FLAGS"; then
     flag_ok=1
   else
     flag_ok=0
