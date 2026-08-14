@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-14 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.12.0 | 改善 PDF Expert 复制正文换行：Paddle 正文段落字号只向下统一并保留原坐标与横向框宽；新增显式 clean.md 输出，代表性四页样本换行由 120 降至 62 |
 | 2026-08-14 | 改名   | [skill-publish-sync](skills/skill-publish-sync/)                       | v1.7.2  | `clawhub-sync` 更名为 `skill-publish-sync`；原名仅反映三平台之一（ClawHub），与多平台定位名实不符；目录、frontmatter、slug、`git-batch-commit` 探测路径与 reference 文件一并更新，已发布记录及其它 skill 不受影响 |
 | 2026-08-14 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.6.2  | 修复带空格 worker command 的 `--dry-run` 仍创建 Session Context 并写入 `launch.sh`；预演现在只输出最终 wrapper 计划，不产生文件副作用 |
 | 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
@@ -41,7 +42,6 @@
 | 2026-08-13 | 更新   | [skill-manager](skills/skill-manager/)                                 | v1.7.2  | 项目同时存在多个 Agent 配置目录时优先使用 `.claude/skills` 单一来源；补充 `.codebuddy` 全局根识别，避免从 CodeBuddy 配置目录调用时误装到嵌套目标 |
 | 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
 | 2026-08-12 | 更新   | [clawhub-sync](skills/skill-publish-sync/)                                   | v1.7.1  | 发布配置改为 ClawHub、SkillHub、联想三份独立白名单，同一 Skill 可按平台独立维护；临时发布副本按目标平台注入字段，真实名单与发布记录继续仅保留本地 |
-| 2026-08-09 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                   | v1.8.9  | 修复案例日期 CLI→payload 映射；查询字段门禁改为真实 CLI 自省并失败关闭，新增无网络运行合同回归；关键词扩展改为低对位后的诊断式改写，统一轻量案件研判与 MCP 中间层定位 |
 </details>
 
 ## 📋 项目概述
@@ -362,8 +362,8 @@
 <td>工具·PDF处理</td>
 <td style="word-break:break-word">PDF 处理工具，支持扫描件预处理、OCR 双层 PDF 生成、页码添加、PDF 合并、解密、水印去除和压缩。统一入口自动选择最短可用流程，配合 pdf-organizer 完成从预处理到文书整理的完整工作流</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.9.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/pdf-processor-2.10.2.zip">下载</a></td>
+<td style="text-align:center">v2.12.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/pdf-processor-2.10.2.zip">下载 v2.10.2</a></td>
 <td></td>
 </tr>
 <tr>

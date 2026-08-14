@@ -28,12 +28,17 @@ import os
 import platform
 import re
 import shutil
+import statistics
 import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
 from pdf_runtime import http_get_bytes
+
+
+COORDINATE_SPACE_PAGE = "page"
+COORDINATE_SPACE_UPRIGHT_TOP_LEFT = "upright_top_left"
 
 
 # ---------- 通用 Payload 提取 ----------
@@ -348,7 +353,7 @@ def _layout_text_into_bbox(
         page: fitz.Page
         font: fitz.Font
         text: 待排版文本
-        x0, y1: bbox 左下角（PDF 坐标）
+        x0, y1: bbox 左边界与下边界（PyMuPDF 左上原点页面坐标）
         w, h: bbox 宽高
         fontsize: 计算好的字号
         page_rotation: 页面旋转
@@ -540,40 +545,6 @@ def infer_page_scale(page_rect, rows, source_w, source_h) -> tuple[float, float]
     return 0.0, 0.0
 
 
-def infer_y_origin(rows, source_h: float) -> str:
-    """判定 PaddleOCR poly y 原点:'bottom' (PDF 习惯, 多数文档) 或 'top'。
-
-    启发:取所有 poly y 中心值的中位数,与 source_h/2 比较。
-    - 中位数 < source_h × 0.4 → 多数文字集中在源图上半 → 假设 FROM BOTTOM
-      (顶部文字的 y 接近 source_h,即底原点下"大",与直觉相反 — 但这是 PaddleOCR
-      返 y FROM BOTTOM 时的常见特征:正文/标题在顶部, poly y 接近 source_h)。
-    - 中位数 > source_h × 0.6 → 多数文字集中在源图下半 → 假设 FROM TOP
-      (顶部文字的 y 接近 0,即顶原点下"小")。
-    - 模糊区间(0.4~0.6) → 保守返回 'bottom',不翻(避免误判放大问题)。
-
-    Returns:
-        'bottom' | 'top'
-    """
-    if not rows or source_h <= 0:
-        return "bottom"
-    centers: list[float] = []
-    for _, _, poly in rows:
-        if not poly or len(poly) < 4:
-            continue
-        try:
-            ys = [float(p[1]) for p in poly]
-        except (TypeError, ValueError):
-            continue
-        centers.append((min(ys) + max(ys)) / 2.0)
-    if not centers:
-        return "bottom"
-    centers.sort()
-    mid = centers[len(centers) // 2]
-    if mid > source_h * 0.6:
-        return "top"
-    return "bottom"
-
-
 def assess_ocr_coordinate_health(rows, page_rect, scale_x: float, scale_y: float) -> dict:
     """v2.7 新增：评估 OCR 坐标空间与 PDF 页面空间的一致性。
 
@@ -745,6 +716,68 @@ def _apply_semantic_actual_text(
     return applied, invalid_mapping
 
 
+def _normalize_body_paragraph_font_sizes(
+    plans: list[tuple],
+    copy_paragraphs: list[dict] | None,
+    *,
+    page_width: float,
+    size_tolerance: float = 0.02,
+) -> tuple[list[tuple], int]:
+    """向下统一正文段落字号，帮助阅读器推断物理换行。
+
+    只处理至少三行、行索引连续、且至少一行达到页面正文宽度的段落。
+    标题、案号、页码、二维码和落款通常不满足这些条件。坐标、行宽与
+    水平缩放保持不变；段内统一到现有最小安全字号，绝不抬高字号，以免
+    超出原 OCR 行框高度。若最小值低于中位数 75%，视为异常并跳过该段。
+    """
+    if not plans or not copy_paragraphs or page_width <= 0:
+        return plans, 0
+
+    plan_positions = {plan[0]: position for position, plan in enumerate(plans)}
+    normalized = list(plans)
+    changed = 0
+
+    for paragraph in copy_paragraphs:
+        if not isinstance(paragraph, dict):
+            continue
+        row_indices = paragraph.get("row_indices")
+        if not isinstance(row_indices, list):
+            continue
+        try:
+            indices = [int(value) for value in row_indices]
+        except (TypeError, ValueError):
+            continue
+        if len(indices) < 3 or len(set(indices)) != len(indices):
+            continue
+        ordered_indices = sorted(indices)
+        if ordered_indices != list(range(ordered_indices[0], ordered_indices[-1] + 1)):
+            continue
+        if any(index not in plan_positions for index in ordered_indices):
+            continue
+
+        positions = [plan_positions[index] for index in ordered_indices]
+        group = [normalized[position] for position in positions]
+        if max(plan[4] for plan in group) < page_width * 0.55:
+            continue
+
+        sizes = [plan[6] for plan in group]
+        median_size = statistics.median(sizes)
+        target_size = min(sizes)
+        if not math.isfinite(median_size) or median_size <= 0:
+            continue
+        if not math.isfinite(target_size) or target_size < median_size * 0.75:
+            continue
+        upper = target_size * (1.0 + size_tolerance)
+        for position in positions:
+            plan = normalized[position]
+            if plan[6] <= upper:
+                continue
+            normalized[position] = (*plan[:6], target_size)
+            changed += 1
+
+    return normalized, changed
+
+
 def _insert_text_blocks(
     page,
     font,
@@ -760,37 +793,21 @@ def _insert_text_blocks(
     total_pages: int,
     quiet: bool,
     semantic_paragraphs: list[dict] | None = None,
-    y_origin: str = "bottom",
-    page_rect: fitz.Rect | None = None,
-    source_h: float | None = None,
-    skip_decorative: bool = True,
+    copy_paragraphs: list[dict] | None = None,
 ) -> int:
     import fitz
-    """
-    向单个 PDF 页面插入透明文字块。
-
-    Args:
-        y_origin: 'bottom' (PaddleOCR 多数情况,poly y 已是 PDF y) 或
-                  'top' (需要 y 翻转: pdf_y = source_h - poly_y 后再 * scale_y)
-        page_rect: 页面矩形(用于 P1 装饰元素过滤的边距检查)
-        source_h: 源图高度(用于 y 翻转)
-        skip_decorative: True 时过滤 P1 装饰元素(超小字 / 边缘异常)
+    """向单个 PDF 页面插入透明文字块。
 
     Returns:
         插入的文本块数量。
     """
     page_inserted = 0
     plans = []
-    filtered_count = 0
 
-    # v2.7：page.rotation == 0 时 derotation_matrix 是恒等矩阵，直接跳过点坐标变换
-    # 避免浮点矩阵乘法引入的累积漂移（哪怕只有 1e-6 量级，叠到上千行也会偏）。
+    # page.rotation == 0 时 derotation_matrix 是恒等矩阵，直接跳过点坐标变换
+    # 避免浮点矩阵乘法引入累积漂移。正向 OCR 坐标必须由调用方先把页面
+    # 无损标准化为 rotation=0，不能在这里猜测或翻转坐标。
     apply_derotation = bool(page_rotation)
-
-    # P1: 装饰元素过滤阈值
-    decor_min_h = 6.0          # bbox 高度 < 6pt → 跳过
-    decor_edge_margin = 5.0    # bbox 离页边 < 5pt → 跳过
-    decor_narrow_w = 50.0      # 窄元素宽度阈值
 
     for row_index, (text, score, poly) in enumerate(rows, start=1):
         if score < min_score:
@@ -809,19 +826,12 @@ def _insert_text_blocks(
             continue
 
         try:
-            xs_raw = [float(p[0]) for p in poly]
-            ys_raw = [float(p[1]) for p in poly]
+            xs = [float(p[0]) * scale_x for p in poly]
+            ys = [float(p[1]) * scale_y for p in poly]
         except Exception as exc:
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标无效") from exc
-        if len(xs_raw) < 4 or not all(math.isfinite(v) for v in [*xs_raw, *ys_raw]):
+        if len(xs) < 4 or not all(math.isfinite(v) for v in [*xs, *ys]):
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块坐标不完整")
-
-        # P0: y 翻转 — 若 PaddleOCR 返回的 poly y 是 FROM TOP，翻成 FROM BOTTOM
-        if y_origin == "top" and source_h:
-            ys_raw = [source_h - y for y in ys_raw]
-
-        xs = [x * scale_x for x in xs_raw]
-        ys = [y * scale_y for y in ys_raw]
 
         x0 = min(xs)
         x1 = max(xs)
@@ -833,26 +843,6 @@ def _insert_text_blocks(
         if w <= 0 or h <= 0:
             raise TextLayerIntegrityError(f"第 {row_index} 个文字块边界无效")
 
-        # P1: 装饰元素过滤(放在边界检查后,放在字号计算前,节省无效规划)
-        if skip_decorative and page_rect is not None:
-            if h < decor_min_h:
-                filtered_count += 1
-                continue
-            # 边缘检测:任一边离页边 < 5pt 且 高度 < 12pt(疑似页眉/页脚小装饰)
-            edge = False
-            if (y1 < page_rect.y0 + decor_edge_margin
-                    or y0 > page_rect.y1 - decor_edge_margin
-                    or x0 < page_rect.x0 + decor_edge_margin
-                    or x1 > page_rect.x1 - decor_edge_margin):
-                if h < 12.0:
-                    edge = True
-            # 窄元素甩到对侧:宽度 < 50pt 但 bbox 中心明显偏离正常文字边距
-            if w < decor_narrow_w and h < 10.0 and (x0 > page_rect.x1 * 0.75 or x1 < page_rect.x0 * 0.25):
-                edge = True
-            if edge:
-                filtered_count += 1
-                continue
-
         fontsize = calculate_font_size(font, content, w, h)
         if fontsize <= 0:
             raise TextLayerIntegrityError(
@@ -861,9 +851,13 @@ def _insert_text_blocks(
         plans.append((row_index - 1, content, x0, y1, w, h, fontsize))
 
     if not plans:
-        if filtered_count and not quiet:
-            print(f"  第 {pno}/{total_pages} 页({source_name}): 过滤 {filtered_count} 个装饰元素")
         return 0
+
+    plans, normalized_font_sizes = _normalize_body_paragraph_font_sizes(
+        plans,
+        copy_paragraphs,
+        page_width=float(page.rect.width),
+    )
 
     # 所有文字块预检通过后再修改页面，避免出现“前半页写入、后半页失败”。
     page.insert_font(fontname="cjk", fontbuffer=font.buffer)
@@ -908,6 +902,8 @@ def _insert_text_blocks(
 
     if not quiet:
         print(f"  第 {pno}/{total_pages} 页({source_name}): 新增 {page_inserted} 文本块")
+        if normalized_font_sizes:
+            print(f"    PDF Expert 段落字号归一: {normalized_font_sizes} 行")
         if semantic_paragraphs:
             print(f"    ActualText 自然段: {actual_text_count}/{total_paragraphs}")
 
@@ -916,7 +912,49 @@ def _insert_text_blocks(
 
 # ---------- 叠层 PDF（分页 entries） ----------
 
-def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_name: str) -> bool:
+def _normalize_page_coordinate_space(
+    doc,
+    coordinate_space: str,
+    *,
+    quiet: bool = False,
+) -> int:
+    """按 OCR 来源声明标准化页面，禁止用坐标分布启发式猜测。
+
+    ``upright_top_left`` 表示 OCR 坐标来自阅读器可见的正向渲染图，原点在
+    左上角。PyMuPDF 页面坐标同样使用左上原点；对带 rotation 元数据的页面，
+    先用 ``Page.remove_rotation()`` 把旋转写入内容变换并把 rotation 设为 0，
+    保持页面外观、图片与矢量内容不变，再直接缩放 OCR 坐标。
+
+    ``page`` 保持 v2.10.2 及更早版本行为，供尚未验证坐标契约的后端使用。
+    """
+    if coordinate_space == COORDINATE_SPACE_PAGE:
+        return 0
+    if coordinate_space != COORDINATE_SPACE_UPRIGHT_TOP_LEFT:
+        raise ValueError(f"不支持的 OCR 坐标空间: {coordinate_space}")
+
+    processed = 0
+    for page in doc:
+        if int(page.rotation or 0) == 0:
+            continue
+        if not hasattr(page, "remove_rotation"):
+            raise RuntimeError(
+                "当前 PyMuPDF 缺少 Page.remove_rotation()，"
+                "请升级后重试: pip install -U pymupdf"
+            )
+        page.remove_rotation()
+        processed += 1
+    if processed and not quiet:
+        print(f"  rotation 标准化: {processed} 页无损正存化(rotation→0)")
+    return processed
+
+
+def apply_page_entries_as_layered_pdf(
+    page_entries: list[dict],
+    args,
+    source_name: str,
+    *,
+    coordinate_space: str = COORDINATE_SPACE_PAGE,
+) -> bool:
     """将分页 OCR 结果事务式叠层为双层 PDF。
 
     任一页缺失、坐标不健康、文字被过滤为空或无法完整排版时都返回 False，
@@ -929,6 +967,11 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
 
     doc = fitz.open(args.input)
     font = fitz.Font("cjk")
+    _normalize_page_coordinate_space(
+        doc,
+        coordinate_space,
+        quiet=getattr(args, "quiet", False),
+    )
 
     inserted_pages = 0
     inserted_blocks = 0
@@ -1016,19 +1059,6 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
             source_h,
         )
 
-        # v2.11: PaddleOCR poly y 原点自动判定(bottom/top)
-        y_origin_arg = getattr(args, "paddle_yflip", "auto")
-        if y_origin_arg == "auto":
-            y_origin = infer_y_origin(rows, source_h or 0)
-        elif y_origin_arg == "none":
-            y_origin = "bottom"
-        else:
-            y_origin = y_origin_arg
-        if y_origin == "top" and not args.quiet:
-            print(
-                f"  第 {pno}/{total_pages} 页({source_name}): 检测到 poly y 原点为 top，启用 y 翻转"
-            )
-
         # v2.7: 坐标健康度评估 — 证不出就退化
         health = assess_ocr_coordinate_health(rows, page.rect, scale_x, scale_y)
         health_log.append({"page": pno, **health})
@@ -1061,10 +1091,11 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
                 total_pages=total_pages,
                 quiet=args.quiet,
                 semantic_paragraphs=entry.get("semantic_paragraphs") or [],
-                y_origin=y_origin,
-                page_rect=page.rect,
-                source_h=source_h,
-                skip_decorative=getattr(args, "layered_filter_decorative", True),
+                copy_paragraphs=(
+                    entry.get("copy_paragraphs") or []
+                    if coordinate_space == COORDINATE_SPACE_UPRIGHT_TOP_LEFT
+                    else []
+                ),
             )
         except TextLayerIntegrityError as exc:
             failure_reason = f"第 {pno} 页文字层不完整：{exc}"
@@ -1150,9 +1181,14 @@ def apply_page_entries_as_layered_pdf(page_entries: list[dict], args, source_nam
 # ---------- 叠层 PDF（API payload） ----------
 
 def apply_api_payload_as_layered_pdf(payload: dict, args) -> bool:
-    """将 API 返回的 OCR 结果叠层为双层 PDF。"""
+    """将 Paddle 风格 API 的正向左上坐标结果叠层为双层 PDF。"""
     page_entries = extract_page_entries_from_api_payload(payload)
-    return apply_page_entries_as_layered_pdf(page_entries, args, source_name="API")
+    return apply_page_entries_as_layered_pdf(
+        page_entries,
+        args,
+        source_name="API",
+        coordinate_space=COORDINATE_SPACE_UPRIGHT_TOP_LEFT,
+    )
 
 
 # ---------- 保存 API 输出 PDF ----------

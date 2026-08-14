@@ -32,6 +32,7 @@ from pdf_runtime import (
 )
 
 from pdf_ocr_layered import (
+    COORDINATE_SPACE_PAGE,
     apply_page_entries_as_layered_pdf,
     extract_payload,
     _as_float,
@@ -474,7 +475,12 @@ def run_mineru_api_backend(args):
         if not page_entries:
             raise RuntimeError("MinerU 结果中未解析到可叠层文字坐标")
 
-        layered_ok = apply_page_entries_as_layered_pdf(page_entries, args, source_name="MinerU")
+        layered_ok = apply_page_entries_as_layered_pdf(
+            page_entries,
+            args,
+            source_name="MinerU",
+            coordinate_space=COORDINATE_SPACE_PAGE,
+        )
         if not layered_ok:
             raise RuntimeError("MinerU 叠层失败")
         args.backend_used = "mineru_api(layered)"

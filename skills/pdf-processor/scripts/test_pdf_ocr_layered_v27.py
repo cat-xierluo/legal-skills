@@ -238,6 +238,22 @@ class TestTransactionalLayering(unittest.TestCase):
         doc.save(path)
         doc.close()
 
+    def _make_rotation_180_scan(self, path: Path):
+        """构造内容倒存、rotation=180 后阅读器中正向显示的扫描页。"""
+        doc = fitz.open()
+        page = doc.new_page(width=300, height=400)
+        page.set_rotation(180)
+        visible_rect = fitz.Rect(20, 30, 56, 45)
+        raw_rect = visible_rect * page.derotation_matrix
+        page.draw_rect(raw_rect, color=(0, 0, 0), fill=(0, 0, 0))
+        doc.save(path)
+        doc.close()
+
+    @staticmethod
+    def _render_bytes(path: Path) -> bytes:
+        with fitz.open(path) as doc:
+            return bytes(doc[0].get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).samples)
+
     def test_missing_page_entries_fail_without_output(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "input.pdf"
@@ -281,6 +297,58 @@ class TestTransactionalLayering(unittest.TestCase):
             with fitz.open(output_path) as doc:
                 extracted = "".join(doc[0].get_text("text").split())
             self.assertEqual(extracted, content)
+
+    def test_upright_coordinates_remove_rotation_without_render_change(self):
+        """Paddle 正向坐标：rotation=180 应无损正存化并保持文字框位置。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "input.pdf"
+            output_path = Path(tmpdir) / "output.pdf"
+            self._make_rotation_180_scan(input_path)
+            before_render = self._render_bytes(input_path)
+            entry = {
+                "rows": [("本院", 1.0, [[20, 30], [56, 30], [56, 45], [20, 45]])],
+                "width": 300,
+                "height": 400,
+            }
+
+            ok = L.apply_page_entries_as_layered_pdf(
+                [entry],
+                self._args(input_path, output_path),
+                "PaddleOCR(test)",
+                coordinate_space=L.COORDINATE_SPACE_UPRIGHT_TOP_LEFT,
+            )
+
+            self.assertTrue(ok)
+            self.assertEqual(before_render, self._render_bytes(output_path))
+            with fitz.open(output_path) as doc:
+                page = doc[0]
+                self.assertEqual(page.rotation, 0)
+                word = page.get_text("words")[0]
+                self.assertEqual(word[4], "本院")
+                self.assertAlmostEqual(word[0], 20.0, delta=0.25)
+                self.assertAlmostEqual(word[1], 30.0, delta=0.5)
+                self.assertAlmostEqual(word[2], 56.0, delta=0.35)
+                self.assertAlmostEqual(word[3], 45.0, delta=0.5)
+
+    def test_default_page_coordinates_do_not_remove_rotation(self):
+        """未验证坐标契约的后端保持旧行为，不继承 Paddle 正存化。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "input.pdf"
+            output_path = Path(tmpdir) / "output.pdf"
+            self._make_rotation_180_scan(input_path)
+            entry = {
+                "rows": [("本院", 1.0, [[20, 30], [56, 30], [56, 45], [20, 45]])],
+                "width": 300,
+                "height": 400,
+            }
+
+            ok = L.apply_page_entries_as_layered_pdf(
+                [entry], self._args(input_path, output_path), "MinerU(test)",
+            )
+
+            self.assertTrue(ok)
+            with fitz.open(output_path) as doc:
+                self.assertEqual(doc[0].rotation, 180)
 
     def test_redo_with_existing_text_fails_for_safe_fallback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -463,6 +531,76 @@ class TestActualTextHelpers(unittest.TestCase):
         self.assertTrue(
             P._entries_already_have_paragraphs([{"semantic_paragraphs": [{"text": "x"}]}])
         )
+
+    def test_copy_paragraphs_and_explicit_clean_markdown(self):
+        entries = [{
+            "width": 1000,
+            "height": 1400,
+            "rows": [
+                ("正文第一行", 0.99, [[100, 100], [900, 100], [900, 150], [100, 150]]),
+                ("正文末行。", 0.99, [[100, 160], [350, 160], [350, 210], [100, 210]]),
+            ],
+        }]
+        paragraphs = P._inject_copy_paragraphs(entries, quiet=True)
+        self.assertEqual(len(paragraphs), 1)
+        self.assertEqual(entries[0]["copy_paragraphs"][0]["row_indices"], [0, 1])
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "clean.md"
+            result = P._write_clean_markdown(entries, str(output))
+            self.assertEqual(result, output)
+            self.assertEqual(output.read_text(encoding="utf-8"), "正文第一行正文末行。\n")
+
+    def test_clean_markdown_refuses_pdf_path(self):
+        entries = [{
+            "copy_paragraphs": [{"text": "正文", "row_indices": [0]}],
+        }]
+        with tempfile.TemporaryDirectory() as folder:
+            pdf_path = Path(folder) / "output.pdf"
+            pdf_path.write_bytes(b"%PDF-placeholder")
+            with self.assertRaises(ValueError):
+                P._write_clean_markdown(
+                    entries,
+                    str(pdf_path),
+                    protected_paths=(str(pdf_path),),
+                )
+            self.assertEqual(pdf_path.read_bytes(), b"%PDF-placeholder")
+
+
+class TestPdfExpertTypographyNormalization(unittest.TestCase):
+    def test_only_body_paragraph_font_size_is_normalized(self):
+        plans = [
+            (0, "正文第一行", 50.0, 100.0, 400.0, 20.0, 12.0),
+            (1, "正文第二行", 50.0, 130.0, 390.0, 20.0, 12.2),
+            (2, "末行。", 50.0, 160.0, 80.0, 20.0, 17.0),
+            (3, "标题", 250.0, 220.0, 100.0, 30.0, 20.0),
+            (4, "标题末行", 250.0, 260.0, 100.0, 30.0, 13.0),
+            (5, "标题注", 250.0, 300.0, 100.0, 30.0, 10.0),
+        ]
+        normalized, changed = L._normalize_body_paragraph_font_sizes(
+            plans,
+            [
+                {"row_indices": [0, 1, 2]},
+                {"row_indices": [3, 4, 5]},
+            ],
+            page_width=600.0,
+        )
+        self.assertEqual(changed, 1)
+        self.assertEqual(normalized[2][6], 12.0)
+        self.assertEqual(normalized[3:], plans[3:])
+
+    def test_discontinuous_rows_are_not_normalized(self):
+        plans = [
+            (0, "正文", 50.0, 100.0, 400.0, 20.0, 12.0),
+            (1, "印章", 50.0, 130.0, 50.0, 20.0, 30.0),
+            (2, "落款", 50.0, 160.0, 400.0, 20.0, 18.0),
+        ]
+        normalized, changed = L._normalize_body_paragraph_font_sizes(
+            plans,
+            [{"row_indices": [0, 2, 3]}],
+            page_width=600.0,
+        )
+        self.assertEqual(changed, 0)
+        self.assertEqual(normalized, plans)
 
     def test_inject_skips_vl_and_structure_text_models(self):
         """VL/Structure 文字模型本就含版面，不应再调二次 API。"""
