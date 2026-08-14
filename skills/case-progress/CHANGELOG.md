@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-08-15
+
+- **M3b 轻量写回入口落地（消费项目规则层）**：
+  - `DataRules.md` 会话契约规则（自动加载）：show 加载 / CLI 写回 / 人工覆盖保护 / 工作流收尾 / 文件分工速查
+  - `case-sync` subagent（CaseSync.md，SubagentStandards 规范）：工作流收尾语义判断面，经本引擎写回，永不手改 yaml
+  - `/progress` 命令：明确操作直路由 CLI、语义复杂派发 case-sync、查看类走 show/dashboard
+  - Workflow v2.1 收尾强制原则（七场景 Reporter 后必派 case-sync）；AgentMapping v2.4 属主交接（case.yaml 写入=case_store，Scheduler 只计算）；Scheduler 工作流程同步改造
+
 ## [0.3.0] - 2026-08-14
 
 - **M2 写入引擎落地** `scripts/case_store.py`（~470 行，stdlib + PyYAML）：
