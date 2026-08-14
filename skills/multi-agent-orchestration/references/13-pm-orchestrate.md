@@ -40,6 +40,7 @@ pm-orchestrate.sh reply --worktree "$WT" --session "$S" --message-id "$MID" --te
 pm-orchestrate.sh release --worktree "$WT" --session "$S"
 pm-orchestrate.sh retain --worktree "$WT" --session "$S"
 pm-orchestrate.sh ack --worktree "$WT" --session "$S" --delivery-id "$DID"
+pm-orchestrate.sh settle --worktree "$WT" --session "$S" --reason "..." [--force] [--destroy]
 ```
 
 supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。
@@ -61,8 +62,8 @@ terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入
 
 ## 4. 安全边界
 
-- 脚本不自动 ack Delivery、不自动 release active worker、不删除 worktree。
-- `release/retain/reply/ack` 仅对有 supervised metadata 的 worker 生效。
+- 脚本不自动 ack Delivery、不自动 release active worker、不删除 worktree（`settle` 例外兜底，但需 `--destroy` 显式升级）。
+- `release/retain/reply/ack/settle` 仅对有 supervised metadata 的 worker 生效。`settle` 需 `--reason`（审计），默认 fence+stop 不动文件；`--destroy` 才动 worktree/files（一站式清理，不再跑 clean-worktree）。
 - stale terminal handle 要先按 worktree 重新解析；禁止同时给旧/新 handle 双发。
 - 普通 terminal worker 没有 `worker_done` 义务；不要用 terminal 文本伪造 Dispatch 完成。
 - 对 external supervised terminal，`release` 后 retained 不必然是错误；文件清理仍须由 `clean-worktree.sh` 验证 settled 状态、external ownership、retained reason 和精确句柄后处理。
