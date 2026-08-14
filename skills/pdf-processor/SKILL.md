@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.10.2"
+version: "2.12.0"
 description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -112,7 +112,7 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --archive-results
 
 PaddleOCR-VL-1.5/1.6 也可解析，但只提供块级坐标，文字层定位粒度低于 `PP-OCRv5/v6` / `PP-StructureV3`。本技能不接入 Qwen/GLM 等视觉识别链路，也不宣称云端结果含字符级坐标。
 
-PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一次 PP-StructureV3 拿版面，融合出自然段并以 `/ActualText` marked-content 写入 PDF，让从 PDF 复制的文字按段落连续而非按物理行断行。`--no-actualtext` 可关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。阅读器兼容性见下文第 4 节。
+PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一次 PP-StructureV3 拿版面，融合出自然段并以 `/ActualText` marked-content 写入 PDF。Paddle 文字层还会用本地几何规则识别正文多行段落，把段内字号向下统一到现有最小安全值，同时保留原行坐标和横向框宽，用于改善 PDF Expert 的段落推断。`--no-actualtext` 可关闭；`--layout-dump FILE` 复用已有版面 dump 避免二次 API 调用。阅读器兼容性见下文第 4 节。
 
 ### 4. 自然段文本与 PDF 复制换行
 
@@ -123,9 +123,17 @@ PP-OCRv6 文字模型默认开启 `--actualtext`：文字层生成后再调一�
 | 提取方式 | 从 PDF 复制的段落连续性 |
 |---|---|
 | Poppler（`pdftotext -raw`、`pdftotext` 默认） | ✅ 整段连续，无换行 |
+| PDF Expert | ⚠️ 忽略 `/ActualText`，但会按字号和几何自行推断段落；Paddle 正文段落样式归一可减少换行，不保证完全消除 |
 | PyMuPDF、pypdf、macOS 预览（PDFKit） | ❌ 仍按物理行断行 |
 
-因此 Poppler 用户能直接从 PDF 拿到段落级文本；macOS 预览用户复制仍会断行，需用独立 Markdown（`pdf_ocr_paragraphs.py` 输出的 `clean.md`）作为段落文本交付。个别自然段若跳过被排除的行（如印章碎片），因物理行不连续无法包裹，会降级为行级（文字不丢失，仅该段复制按行断行）。
+因此 Poppler 用户能直接从 PDF 拿到段落级文本；PDF Expert 只能做阅读器启发式改善；macOS 预览用户复制仍会断行。跨阅读器需要稳定段落文本时，显式输出独立 Markdown；默认不在案件材料旁生成正文副本：
+
+```bash
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
+  --backend paddle_api --clean-text-output output-clean.md
+```
+
+独立 Markdown 也可由 `pdf_ocr_paragraphs.py` 生成。个别自然段若跳过被排除的行（如印章碎片），因物理行不连续无法包裹，会降级为行级（文字不丢失，仅该段复制按行断行）。
 
 需要解决复制文本中的段内回车、多余空行和印章文字时，采用两模型分工：`PP-OCRv6` 提供主要行级文字及坐标，`PP-StructureV3` 提供阅读顺序、区域类型和 `seal` 区域。只有 v6 行置信度低于 0.80、Structure 对应行置信度不低于 0.90、双方坐标高度重合且后者至少高 0.10 时，才采用 Structure 的行级文字兜底；始终不读取版面块文字，也不调用大语言模型。
 
@@ -248,21 +256,8 @@ python3 scripts/pdf-ocr-benchmark.py \
 3. 对双层 PDF 测试文字搜索、复制和关键词命中。
 4. 向用户说明实际使用的后端、输出文件路径和任何回退情况。
 
-## 双层 PDF 文字层 y 翻转与装饰元素过滤（v2.11+）
+## PaddleOCR 坐标与旋转页（v2.11.1+）
 
-PaddleOCR API 对不同文档会返回不一致的 poly y 原点（FROM BOTTOM / FROM TOP）。本技能 v2.11+ 自动判定（`infer_y_origin`）并按需 y 翻转，避免页码、标题整体跑到对面。
+PaddleOCR API 的行级 poly 使用正向渲染图的左上原点像素坐标；PyMuPDF 页面坐标同样使用左上原点。不要按文字分布猜测 y 原点，也不要执行 `page_height - y` 翻转。
 
-```bash
-# 默认 auto:按 poly 分布判定,模糊区间保守不翻
-python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api
-
-# 启发误判时显式指定
-python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --paddle-yflip top
-python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --paddle-yflip bottom
-```
-
-装饰元素过滤默认开启，丢弃 PaddleOCR 版面定位错误的超小字 / 边缘元素；关闭：
-
-```bash
-python3 scripts/pdf-ocr.py -i in.pdf -o out.pdf --backend paddle_api --no-layered-filter-decorative
-```
+输入 PDF 若依赖 rotation 元数据装正，Paddle 路径会先用 PyMuPDF 无损移除 rotation，把原页面内容变换为 `rotation=0` 的正存页面，再按原有缩放和文字排版逻辑叠层。该过程不重采样扫描图，不改变可见页面像素。MinerU 等尚未验证坐标契约的后端继续保持原行为，不复用 Paddle 的坐标假设。

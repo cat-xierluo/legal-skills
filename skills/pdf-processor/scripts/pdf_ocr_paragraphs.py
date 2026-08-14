@@ -326,6 +326,23 @@ def _group_rows_by_geometry(
             wraps_to_left = x_diff < -min_height * 0.3
             same_margin = abs(x_diff) < min_height * 0.15
             continues = previous_fills_line and (starts_near_left or wraps_to_left)
+            # OCR 的短行宽度会让“是否写满右边界”失真。若上一行仍是正文宽度、
+            # 没有以强结束标点收尾，且下一行回到正文左边界，则把它视作物理
+            # 换行的延续。窄标题、案号、页码和落款不满足正文宽度门槛。
+            content_width = max(content_right - content_left, 1.0)
+            previous_is_body_width = (
+                previous_bbox[2] - previous_bbox[0]
+            ) >= content_width * 0.55
+            previous_is_open = not re.search(r"[。！？!?；;]$", previous["text"])
+            current_is_boundary = bool(_STRONG_PARAGRAPH_START.match(row["text"]))
+            if (
+                not continues
+                and previous_is_body_width
+                and previous_is_open
+                and starts_near_left
+                and not current_is_boundary
+            ):
+                continues = True
             if same_margin and had_wrap:
                 continues = True
 

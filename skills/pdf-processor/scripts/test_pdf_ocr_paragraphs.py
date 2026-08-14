@@ -57,6 +57,38 @@ class TestGeometryParagraphs(unittest.TestCase):
         ]
         self.assertEqual(generate_semantic_text(entries), "第一页\n\n第二页")
 
+    def test_body_width_open_line_continues_without_reaching_right_edge(self):
+        entries = [{
+            "width": 1000,
+            "height": 1400,
+            "rows": [
+                row("第一行末尾为编号1004", 100, 100, 720, 150),
+                row("第二行继续等待审", 100, 160, 700, 210),
+                row("查。", 100, 220, 180, 270),
+                row("后续独立段落。", 100, 500, 900, 550),
+                row("再一段。", 100, 700, 900, 750),
+                row("末段。", 100, 900, 900, 950),
+            ],
+        }]
+        paragraphs, _ = reconstruct_paragraphs(entries)
+        self.assertEqual(paragraphs[0]["row_indices"], [0, 1, 2])
+        self.assertEqual(paragraphs[0]["text"], "第一行末尾为编号1004第二行继续等待审查。")
+
+    def test_numbered_paragraph_start_is_not_joined_to_open_body_line(self):
+        entries = [{
+            "width": 1000,
+            "height": 1400,
+            "rows": [
+                row("上一段未带句号", 100, 100, 700, 150),
+                row("1. 新的编号段落", 100, 160, 400, 210),
+                row("参考宽行。", 100, 500, 900, 550),
+                row("另一宽行。", 100, 700, 900, 750),
+            ],
+        }]
+        paragraphs, _ = reconstruct_paragraphs(entries)
+        self.assertEqual(paragraphs[0]["row_indices"], [0])
+        self.assertEqual(paragraphs[1]["row_indices"], [1])
+
     def test_output_has_single_blank_line_only(self):
         entries = [{
             "width": 1000,

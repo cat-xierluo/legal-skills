@@ -31,6 +31,7 @@ from pdf_runtime import (
 )
 
 from pdf_ocr_layered import (
+    COORDINATE_SPACE_UPRIGHT_TOP_LEFT,
     apply_page_entries_as_layered_pdf,
     extract_page_image_size,
     parse_paddle_predict_result,
@@ -775,6 +776,84 @@ def _entries_already_have_paragraphs(page_entries: list[dict]) -> bool:
     return False
 
 
+def _inject_copy_paragraphs(page_entries: list[dict], *, quiet: bool = True) -> list[dict]:
+    """用本地行坐标重建段落，供字号归一和显式 clean.md 输出复用。"""
+    from pdf_ocr_paragraphs import reconstruct_paragraphs
+
+    paragraphs, diagnostics = reconstruct_paragraphs(page_entries)
+    per_page: dict[int, list[dict]] = {}
+    for paragraph in paragraphs:
+        per_page.setdefault(paragraph["page"], []).append({
+            "text": paragraph["text"],
+            "row_indices": paragraph["row_indices"],
+        })
+    for index, entry in enumerate(page_entries, start=1):
+        entry["copy_paragraphs"] = per_page.get(index, [])
+    if not quiet:
+        print(
+            f"  复制段落: 本地重建 {len(paragraphs)} 段 | "
+            f"{diagnostics.get('rows', 0)} 行"
+        )
+    return paragraphs
+
+
+def _validate_clean_output_path(
+    output_path: str | None,
+    *,
+    protected_paths: tuple[str, ...] = (),
+) -> Path | None:
+    if not output_path:
+        return None
+    output = Path(output_path).expanduser()
+    resolved_output = output.resolve()
+    for protected_path in protected_paths:
+        if protected_path and Path(protected_path).expanduser().resolve() == resolved_output:
+            raise ValueError("clean.md 输出路径不能与输入或输出 PDF 相同")
+    return output
+
+
+def _write_clean_markdown(
+    page_entries: list[dict],
+    output_path: str | None,
+    *,
+    protected_paths: tuple[str, ...] = (),
+) -> Path | None:
+    """按显式路径写出自然段 Markdown；默认不产生案件正文副本。"""
+    output = _validate_clean_output_path(
+        output_path,
+        protected_paths=protected_paths,
+    )
+    if output is None:
+        return None
+    paragraphs = [
+        paragraph
+        for entry in page_entries
+        for paragraph in (entry.get("copy_paragraphs") or [])
+        if str(paragraph.get("text") or "").strip()
+    ]
+    if not paragraphs:
+        raise RuntimeError("无法生成 clean.md：未重建出有效自然段")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    content = "\n\n".join(str(paragraph["text"]).strip() for paragraph in paragraphs) + "\n"
+    temp_handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        delete=False,
+        dir=output.parent,
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_handle.name)
+    try:
+        with temp_handle:
+            temp_handle.write(content)
+        os.replace(temp_path, output)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    return output
+
+
 def _inject_semantic_paragraphs(
     page_entries: list[dict],
     args,
@@ -891,6 +970,10 @@ def run_paddle_api_backend(args):
     """
     if not args.paddle_api_endpoint:
         raise ValueError("使用 --backend paddle_api 时必须提供 --paddle-api-endpoint")
+    _validate_clean_output_path(
+        getattr(args, "clean_text_output", None),
+        protected_paths=(args.input, args.output),
+    )
 
     import importlib
     pdf_ocr = importlib.import_module("pdf-ocr")
@@ -945,11 +1028,23 @@ def run_paddle_api_backend(args):
                     page_entries, agent_corrections, quiet=args.quiet,
                 )
 
+        _inject_copy_paragraphs(page_entries, quiet=args.quiet)
+
         layered_ok = apply_page_entries_as_layered_pdf(
-            page_entries, args, source_name=f"PaddleOCR({meta.get('model', model)})",
+            page_entries,
+            args,
+            source_name=f"PaddleOCR({meta.get('model', model)})",
+            coordinate_space=COORDINATE_SPACE_UPRIGHT_TOP_LEFT,
         )
         if not layered_ok:
             raise RuntimeError("PaddleOCR 叠层失败")
+        clean_path = _write_clean_markdown(
+            page_entries,
+            getattr(args, "clean_text_output", None),
+            protected_paths=(args.input, args.output),
+        )
+        if clean_path and not args.quiet:
+            print(f"  Clean Markdown: {clean_path}")
         args.backend_used = f"paddle_api({meta.get('model', model)},layered)"
         return
 
@@ -1127,6 +1222,8 @@ def run_paddle_api_backend(args):
                     page_entries, agent_corrections, quiet=args.quiet,
                 )
 
+        _inject_copy_paragraphs(page_entries, quiet=args.quiet)
+
         # ActualText：把自然段写入 PDF 文字层（/ActualText marked content），
         # 让复制/搜索得到段落级连续文本。需要 PP-StructureV3 版面数据。
         # 默认开启；--no-actualtext 关闭；失败降级为行级 PDF，不阻塞主流程。
@@ -1134,10 +1231,20 @@ def run_paddle_api_backend(args):
             _inject_semantic_paragraphs(page_entries, args, api_key, model, quiet=args.quiet)
 
         layered_ok = apply_page_entries_as_layered_pdf(
-            page_entries, args, source_name=f"PaddleOCR({model})",
+            page_entries,
+            args,
+            source_name=f"PaddleOCR({model})",
+            coordinate_space=COORDINATE_SPACE_UPRIGHT_TOP_LEFT,
         )
         if not layered_ok:
             raise RuntimeError("PaddleOCR 叠层失败")
+        clean_path = _write_clean_markdown(
+            page_entries,
+            getattr(args, "clean_text_output", None),
+            protected_paths=(args.input, args.output),
+        )
+        if clean_path and not args.quiet:
+            print(f"  Clean Markdown: {clean_path}")
 
         # 若使用了矫正后临时文件，从原始文件恢复时间戳
         if args.input != original_input:

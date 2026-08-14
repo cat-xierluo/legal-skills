@@ -463,6 +463,7 @@ def run_ocr(**kwargs):
         "actualtext": True,
         "no_actualtext": False,
         "layout_dump": None,
+        "clean_text_output": None,
         "mineru_api_base": None,
         "mineru_api_base_env": DEFAULT_MINERU_API_BASE_ENV,
         "mineru_api_token_env": DEFAULT_MINERU_API_TOKEN_ENV,
@@ -719,27 +720,6 @@ def main():
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
-        "--paddle-yflip",
-        choices=("auto", "bottom", "top", "none"),
-        default="auto",
-        help=(
-            "PaddleOCR poly y 原点处理。auto=按 poly 分布判定(默认,推荐);"
-            "bottom=假设 FROM BOTTOM 不翻;top=强制 FROM TOP 翻转;"
-            "none=同 bottom(兼容旧行为)。"
-            "已知症状:某些文档的页码会跑到页面顶部,就是 PaddleOCR 返回了 FROM TOP。"
-        ),
-    )
-    parser.add_argument(
-        "--layered-filter-decorative",
-        dest="layered_filter_decorative",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help=(
-            "叠层前过滤 PaddleOCR 版面定位错误的装饰元素(超小字/边缘异常/甩到对侧)。"
-            "默认开启,加 --no-layered-filter-decorative 可关闭。"
-        ),
-    )
-    parser.add_argument(
         "--paddle-min-score",
         type=float,
         default=0.5,
@@ -939,6 +919,11 @@ def main():
         "--layout-dump",
         metavar="FILE",
         help="已有 PP-StructureV3/VL 版面 dump JSON；ActualText 融合时复用，避免再调一次 API",
+    )
+    parser.add_argument(
+        "--clean-text-output",
+        metavar="FILE",
+        help="显式输出按自然段整理的本地 Markdown；默认不生成案件正文副本",
     )
 
     # MinerU API 参数
