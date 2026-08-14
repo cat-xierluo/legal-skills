@@ -11,8 +11,8 @@ meta:
   description: "发明/实用新型/外观/无效/复审/检索/PCT/变更/年费等专利业务；单一预设下按业务类型选择 3 个子模板，目录顺序按项目进展"
   case_id_format: "{YYMMDD} {客户简称} {业务子类型}"
   case_name_format: "{客户简称} {专利名} {业务子类型}"
-  example_case_id: "260316 上海生机智联 发明专利申请"
-  example_case_name: "上海生机智联 智能体 发明专利申请案"
+  example_case_id: "260302 丙公司 发明专利申请"
+  example_case_name: "丙公司 智能体 发明专利申请案"
 
 # 业务子类型 → 模板的映射
 business_type_templates:
