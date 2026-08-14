@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.6.0"
+  version: "2.6.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -105,6 +105,18 @@ spawn 一个 worker 后，PM 的操作纪律（Wave-2 实战撞坑固化）：
 2. **Wave 先建完整控制面，再并行启动**（Task-043/050）：用 `orca-wave-prepare.sh` 一次创建/绑定 Run，并在任何 worker 启动前串行创建全部独立 Task；receipt 固化 `run_id`、`coordinator_handle` 和各 `task_id`。不要重试 `run-create`，也不要让并发 spawn 各自 `run-use/task-create`，否则会触发 consumer fencing 或重复 Task。
 3. **supervised worker 不用 pm-monitor/sentinel 判完成**（Task-041）：supervised 完成唯一权威是 `worker_done → Delivery`（`pm-orchestrate show/wait` 读 dispatch + Delivery）。`pm-monitor`（STATUS/commit-stale）和 `sentinel`（tui-idle/timeout）的信号不是 supervised 完成权威——`STATUS=done` ≠ Delivery、tui-idle 只表示可交互不表示完成。supervised 的 PM 只用 `pm-orchestrate show/wait`；pm-monitor/sentinel 是 tmux/terminal-managed 回退路径的辅助观察器，套到 supervised 会误判。
 4. **只并行无依赖步骤**（Task-044/050）：spawn 前的独立探查和 receipt 完成后的多个 worker 启动/核验可并行；Run 和全部 Task 的创建属于 Wave 准备屏障，必须先串行完成。依赖链（Task 预建→worker-start、spawn→核验、verify→commit）保持串行。
+
+### 3.4 `spawn-worker.sh` 模块边界（Task-048）
+
+`spawn-worker.sh` 保留启动顺序、全局默认值和跨模块编排；下列 sourced 模块只承载单一职责，不得绕过入口门禁独立执行生产副作用：
+
+- `spawn-worker-flags.sh`：usage 与参数解析。
+- `spawn-worker-orca.sh`：Orca runtime 检测、worktree 创建和 terminal 注入。
+- `spawn-worker-metadata.sh`：Session Context `METADATA.json` 合同。
+- `spawn-worker-provider-lease.sh`：provider lease acquire/finalize/provisional cleanup。
+- `spawn-worker-launch.sh`：tmux/Orca 共用启动边界与 supervised 注册。
+
+这些模块继续使用入口已初始化的全局变量，以保持现有 CLI 和生命周期语义；行为变更应另立任务，不得借结构重构顺带修改。每个模块都有同名 `test-spawn-worker-*.sh` 直接合同测试，仍需配合完整 smoke 验证真实入口。
 
 ## 4. Orca-first 控制平面
 
@@ -368,6 +380,11 @@ Hard Fail：
 
 ```bash
 find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+bash scripts/test-spawn-worker-flags.sh
+bash scripts/test-spawn-worker-orca.sh
+bash scripts/test-spawn-worker-metadata.sh
+bash scripts/test-spawn-worker-provider-lease.sh
+bash scripts/test-spawn-worker-launch.sh
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh

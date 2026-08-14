@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.6.1] - 2026-08-14
+
+### 改进
+
+- 完成 Task-048 的渐进解耦：把 `spawn-worker.sh` 的 usage/flags、Orca runtime 与 terminal helpers、Session Context metadata、provider lease 和 tmux/Orca 共用启动边界拆成 5 个 sourced 模块；入口脚本由 1,944 行降至 1,131 行，保持既有 CLI、全局输入输出和生命周期顺序。
+- 明确模块只承载单一职责、不得绕过入口门禁独立执行生产副作用；后续行为变化须另立任务，不与结构移动混合。
+
+### 新增
+
+- 新增 5 组直接合同测试，共 86 个断言，覆盖参数重复项与 toggle、Orca 回退/能力门禁、metadata schema、lease 临时失败与精确 transport 绑定、tmux/Orca launch 及 supervised receipt 注册。
+
+### 验证
+
+- 每个切片均运行完整回归；最终通过新增模块测试、dependency guard 58/58、Harness 26/26、worker command 15/15、依赖补偿 7/7、Wave 10/10、settle 10/10 + 14/14，以及 Sentinel、tmux、Orca runtime/control-plane 和 auto-bypass smoke。
+
 ## [2.6.0] - 2026-08-14
 
 ### 新增
