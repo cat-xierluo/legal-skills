@@ -2,7 +2,7 @@
 name: verification-gate
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.2"
+version: "1.1.0"
 license: MIT
 description: 代码改完后的验证门禁。完成 feature / 重大变更 / 创建 PR / 重构 / 声称「修完」前使用——跑 8 阶段验证，其中 e2e 功能 + 真机是 READY 硬门禁（编译过 ≠ 功能可用）。覆盖 Tauri 桌面 / Web / 服务 / Skill 四类分支。本地即可跑完整验证，CI 是可选自动化强化（平台不限 GitHub Actions）。不要用于：业务领域验证、Skill 质量审查（用 skill-lint）、纯文档变更、一次性脚本。
 ---
@@ -62,8 +62,8 @@ npm test 2>&1 | tail -50                # vitest（unit + integration + dom 分�
 **这是「编译过 ≠ 功能可用」的唯一解**。用 Playwright（或等价）驱动应用，断言**功能结果**。
 
 ```bash
-npm run test:e2e -- e2e/reader-renders.spec.ts --workers=1
-# 或项目既有：npm run verify:ui-layout（结构）/ verify:reader-e2e（功能）
+npm run test:e2e -- tests/e2e/reader-renders.test.ts   # FaroPDF 实际路径示例
+# 或项目既有：npm run verify:reader-e2e（chromium 真 Worker 功能门禁）
 ```
 
 **断言深度**——不只「存在元素」，断言功能结果（见 `references/assertion-depth.md`）。
@@ -103,8 +103,9 @@ npm run build && cd src-tauri && cargo check   # 1 构建
 npm run typecheck                                # 2 类型
 npm run lint                                     # 3 lint
 npm test                                         # 4 单测
-npm run test:e2e -- e2e/reader-renders.spec.ts   # 5 e2e（打开 PDF 渲染 + textLayerStatus 断言）
-# 6 真机：npm run tauri build 产物实机 / etv（WKWebView 真机 DOM + 截图）
+npm run test:e2e                                  # 5 e2e（打开 PDF 渲染 + textLayerStatus 断言；jsdom 层）
+npm run verify:reader-e2e                          # 5+ chromium 真 Worker 门禁（dev server 自起自灭）
+# 6 真机：npm run tauri build 产物实机 / etv（npm run etv:dev + etv:run，WKWebView 真机 DOM + 截图）
 ```
 
 真机验证做法见 `references/e2e-practice.md`（Tauri etv 段）。
@@ -137,6 +138,7 @@ npm test                                              # 4 unit + integration
 - 重构之后
 - **声称「修完」「behavior-complete」「done」之前**（e2e/真机不过不声称）
 - Bug 修复后（+ 新增复现测试）
+- **release / 交付收尾、把 NOT_VERIFIED 清单「移交用户」之前**——先分层收口（见 §NOT_VERIFIED 分层收口）
 
 **持续模式**：长会话中每 15 分钟或重大变更后执行（心智检查点：完成函数后 / 完成组件后 / 切换任务前）。
 
@@ -193,6 +195,18 @@ npm test                                              # 4 unit + integration
 - **最低线不是 1-4**：到你宣称「完成」那一步之前，5（及该场景下的 6）必须过。1-4 全过 ≠ 可以声称修完。
 
 > 真实教训：worker 改完 typecheck / build / lint / 单测全过，实机 `textLayerStatus` 卡 unknown 崩——证明 1-4 全过 ≠ 功能可用，5/6 不过就是没修完。
+
+## NOT_VERIFIED 分层收口（release / 交付收尾）
+
+功能挂了 NOT_VERIFIED 后，**收尾时禁止整批移交用户**——先逐项二分：
+
+| 类别 | 判据 | 动作 |
+|------|------|------|
+| **Web 层可验** | 功能面存在于浏览器 DOM：UI 渲染 / 交互 / localStorage 持久化 / 剪贴板（chromium grant 权限可断言真实内容） | Agent **当场写 Playwright spec 验证**，转正为回归 e2e（进 CI），并把 NOT_VERIFIED 口径收窄到实际剩余 |
+| **真需真机** | 依赖 OS / Tauri runtime / webview 特异行为：系统 API 注册、`invoke` 后端链路、WKWebView 观感 | 保留 NOT_VERIFIED，**精确到剩余粒度**（「仅 WKWebView 剪贴板写入」，不是整条 feature） |
+
+- 自检问句：「这份清单里有多少是我没跑 Playwright，而不是真验不了？」
+- 细节与案例见 `references/lessons-from-practice.md` 教训 10；className→CSS 真实渲染断言见 `references/assertion-depth.md`「视觉 / CSS 类」。
 
 ## 最终输出：验证报告
 

@@ -66,6 +66,31 @@ expect(box).not.toBeNull();
 expect(box!.width).toBeGreaterThan(0);
 ```
 
+### 视觉 / CSS 类（className → 真实渲染）
+
+CSS 层无编译期验证：`className="xxx"` 引用不存在的 class，浏览器静默忽略，tsc/eslint/vitest/build **全都不报错**。「写 className 不写 CSS」这类回归唯一抓手是运行时 `getComputedStyle` 断言。
+
+```ts
+// ❌ 弱：元素存在不代表有样式（可能是 UA 裸渲染）
+expect(page.locator('.settings-theme-card')).toBeVisible();
+
+// ✅ 强：锚定 CSS 声明值（最强——同时防「CSS 丢失」与「值改错」）
+const style = await card.evaluate((el) => {
+  const cs = getComputedStyle(el);
+  return { radius: cs.borderRadius, borderWidth: cs.borderTopWidth };
+});
+expect(style.radius).toBe('8px');        // 来自 .settings-theme-card { border-radius: 8px }
+expect(style.borderWidth).toBe('1px');
+
+// ✅ 强：值随主题/状态变时，断言「≠ UA 默认值」（成对，防恒真）
+expect(['rgba(0, 0, 0, 0)', 'rgb(239, 239, 239)']).not.toContain(style.background);
+//   ↑ chromium UA 裸 button 默认背景是 rgb(239,239,239)——只断言非透明会漏掉裸渲染
+```
+
+**负向断言的 UA 默认值陷阱**：`not.toBe('0px')` 对 `border`（UA 默认 2px）、`padding`（1px）、button `background`（灰）**恒真**，删掉 CSS 照样绿。自检法：把 CSS 规则删了重跑，断言必须变红。
+
+**文案断言的前提**：断言 UI 文本（「已复制」「0/2」）依赖应用默认 locale 稳定（硬编码而非 navigator 检测）——spec 顶部注明该依赖，未来默认 locale 改为浏览器检测时需同步调整。
+
 ### API / 服务类
 
 ```ts

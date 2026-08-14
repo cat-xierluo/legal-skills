@@ -1,5 +1,17 @@
 # Verification Gate Skill 变更记录
 
+## [1.1.0] - 2026-08-14
+
+### 新增
+
+- **SKILL.md 新增「NOT_VERIFIED 分层收口」节**：release / 交付收尾时禁止把 NOT_VERIFIED 清单整批移交用户——逐项二分为「Web 层可验」（Agent 当场写 Playwright spec 转正回归 e2e）与「真需真机」（保留但精确到剩余粒度）；触发时机同步加入「何时使用」。配套自检问句：「这份清单里有多少是我没跑 Playwright，而不是真验不了？」
+- **assertion-depth.md 新增「视觉 / CSS 类」**：className → 真实渲染的 `getComputedStyle` 断言规范——锚定 CSS 声明值（最强）或「≠ UA 默认值」成对断言；点破负向断言的 UA 默认值陷阱（`not.toBe('0px')` 对 border/padding/button background 恒真，删 CSS 照样绿；判别法 = 删规则重跑必须变红）。
+- **lessons-from-practice.md 新增教训 8/9/10**：教训 8（负向样式断言 UA 默认值陷阱实例）、教训 9（Playwright config 非根目录必须显式 `--config`，症状链 `ERR_CONNECTION_REFUSED` → 勿手动起 dev server 绕过掩盖 webServer/baseURL 缺失）、教训 10（NOT_VERIFIED 整批移交用户反模式实例）。
+
+### 修复
+
+- Tauri 分支示例路径由不存在的 `e2e/reader-renders.spec.ts` 改为 FaroPDF 实际命令：`npm run test:e2e`（jsdom 层）+ `npm run verify:reader-e2e`（chromium 真 Worker 门禁）+ `npm run etv:dev` / `etv:run`（真机）；移除已删除的 `verify:ui-layout` 示例（FaroPDF 2026-07-31 `02b07aa` 下架）。
+
 ## [1.0.2] - 2026-08-05
 
 ### 改进
