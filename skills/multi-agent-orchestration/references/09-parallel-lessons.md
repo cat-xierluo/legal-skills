@@ -512,7 +512,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 
 **与 §3.1 Wave 模式的关系**：这本质是"一个 wave 内的任务颗粒度设计"，不是开新 wave。wave2 复查 worker 可以是同 base ref 下的轻量读 review，也可以是 `writing-reviewer` 这类只读审稿 worker。原则适用于任意多维度批量任务，不限书籍 / 文档类项目。
 
-### G23. 派生 spawn 阶段并行投递纪律（spawn 阶段就并行，不要先串行后并行）
+### G23. 派生 spawn 阶段并行投递纪律（准备屏障后立即并行）
 
 **场景**：Wave 启动时 PM 误把"spawn 阶段串行、worker 阶段并行"当作稳妥选项——先派 W1、`await` 等 W1 `STATUS.json` 出现，才派 W2，再派 W3。多花一轮时间，价值零（与单 worker 跑三次无异）。
 
@@ -520,7 +520,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 
 **两条改进**：
 
-1. **spawn 阶段就并行投递**：文件域不重叠 + 验证命令独立 + 无共享契约冲突的 worker，**从一开始**就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用），不先串行验证流程再补并行。spawn 阶段就并行与 `§3.1` 已有的"Wave 内 4-6 worker 并行"硬数字配套。
+1. **准备屏障后立即并行投递**：文件域不重叠 + 验证命令独立 + 无共享契约冲突的 worker，先完成共同依赖。Orca supervised 的共同依赖是 `orca-wave-prepare.sh` 预建 Run + 全部 Task；receipt 成功后，各 worker 立即并行 spawn，不等前一个 worker 的 STATUS/结果。tmux/terminal-managed 没有这层 Task 屏障，可直接并行 spawn。
 2. **spawn 后不 await、不 block、不 attach**：spawn-worker.sh 退出后立即按 `templates/pm-spawn-postflight.md` 核验 session/cwd/METADATA/STATUS，不超过 30 秒/worker，立即返回 PM 主循环。后续 worker 终态由 Sentinel/PM monitor 接管。
 
 **反模式**：
@@ -531,9 +531,9 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - 先串行 spawn W1，等 `STATUS.json` 才派 W2、W3 → Wave 串行化，多花一轮
 - spawn 完 6 worker 立刻 poll 等全部 done → 把 Wave 设计目的废弃
 
-**与 §3.1 Wave 模式 + G22 的关系**：G22 是 wave **内**任务颗粒度（多维度 worker attention 分散 → checklist + wave2 复查 + 拆单维度），本 G23 是 wave **前**spawn 投递纪律（一开始就并行 vs 串行验证 + spawn 后不 await）。两者是 Wave 调度的两层闭环：
+**与 §3.1 Wave 模式 + G22 的关系**：G22 是 wave **内**任务颗粒度（多维度 worker attention 分散 → checklist + wave2 复查 + 拆单维度），本 G23 是 wave **前**的准备屏障与 spawn 投递纪律。两者是 Wave 调度的两层闭环：
 
-- G23 = spawn 阶段并行投递（Wave **前**）
+- G23 = Wave 准备屏障后并行投递（Wave **前**）
 - G22 = wave 内任务颗粒度 + wave2 复查抓漏（Wave **内** + Wave **后**）
 
 原则适用于任意多 worker Wave，不限书籍 / 文档 / 代码项目。
@@ -676,13 +676,13 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **连锁暴露**（G29 #2/#3/#4 的残留未被根治）：
   1. `INSTALL_AUTHORIZATION.json.allowed_shell_commands` 默认仅 `git branch --show-current` / `git status --short` / `pwd` 三条 → `npm run test/build`、`git push`、`gh pr create` 全被 `SHELL_COMMAND_NOT_ALLOWLISTED` fail-closed。即便 node_modules 在，worker 也跑不了验证门 / 推不了 PR。
   2. 无强制 commit-verify-hook → worker 把未验证代码当成品 commit（G29 #4 同类，未根治）。
-- **PM 收尾死锁（Orca supervised 独有）**：worker 卡 allowlist 无法发 `worker_done` → dispatch 永远 `dispatched` → `worker-release` 对未结算 dispatch 不生效 → `clean-worktree` fail-closed 拒删（§8 Hard Fail #7）。最终靠 `orca terminal stop` + `orca worktree rm --force` + 手动释放 lease 强收尾——**绕过了 supervised 正式 lifecycle**。
+- **PM 收尾死锁（Orca supervised 独有）**：worker 卡 allowlist 无法发 `worker_done` → dispatch 永远 `dispatched` → `worker-release` 对未结算 dispatch 不生效 → `clean-worktree` fail-closed 拒删（§8 Hard Fail #7）。旧实战最终靠 terminal/worktree 强删，绕过了 lifecycle；v2.6.0 已改为 worker 自报告语义白名单 + `pm-orchestrate settle` 的精确 Dispatch 兜底。
 - **修复方向**：
   - **A（首选，复刻 G28 免费午餐）**：`spawn-worker.sh` 检测 worktree 路径不在主仓父链上（`realpath` 比较）且主仓有 `node_modules` 时，**软链** `ln -s <主仓>/node_modules <worktree>/node_modules`（非复制——复制 269M 耗时占盘，软链秒级零占用）。软链防误提交**依赖项目 `.gitignore` 已忽略 `node_modules`**（多数 Node 项目如此；Folia 已忽略）；未忽略的项目软链会出现在 git status，PM 注意别把指向绝对机器路径的软链 commit 进 PR（skill 不改 worktree 的 tracked `.gitignore`，避免污染 worker diff）。worktree 清理时 unlink（不跟随删主仓）。Rust 同理软链 `target` 不行（worktree target 独立编译），但 `~/.cargo` registry cache 已共享。
   - **A-否决（曾考虑：统一 Orca worktree 路径到主仓子树）**：让所有 worktree（tmux + Orca）都放 `.claude/worktrees/` 下，npm 向上解析对所有模式生效。**查证不可行**：`orca worktree create` 无 `--path` 参数（只有 `--name`，且 name 不能含 `/`——既作显示名又作 branch 名，见 spawn-worker.sh:1044），物理路径 `/Users/<user>/orca/workspaces/<project>/<name>` 由 Orca runtime 内部决定；无公开 CLI 配置 worktree 根目录（`storage local get/set` 是 app 内 localStorage，不暴露 root）。tmux worktree 本就在主仓子树（spawn-worker.sh:166 默认 `.claude/worktrees/tmux-{branch}`），Orca runtime 强制管路径是根本约束。**结论：Orca 路径不可配，软链（方案 A）是唯一实际补偿；长期可向 Orca 提 `--path` / worktree root 配置 feature。**
   - **B（根治白名单）**：spawn-worker 默认把 Node 项目验证命令（`npm run typecheck` / `npm run lint` / `npm test` / `npm run build`）+ git 生命周期（`git add`/`commit`/`push`/`log`/`diff`/`show`）+ `gh pr create/list/view` 纳入默认 `allowed_shell_commands`（G29 #3 的升级版：不只加 `date`，加整组验证/提交命令）。install 类（`npm install/ci`）仍需显式 `--allow-install-command`。
   - **C（防未验证 commit）**：PreToolUse `git commit` hook，commit 前自动跑验证门（或至少检查 STATUS/RESULT 声明的 verify 与实际 `git diff` 一致）。
-  - **D（supervised 死锁兜底）**：spawn-worker 给 PM 一个 `--force-settle-dispatch` 兜底命令（worker 进程已死 + workerSession=null 时，PM 显式把 dispatch 标记 settled 走 release/ack），避免只能靠 `worktree rm --force` 硬删。
+  - **D（supervised 死锁兜底）**：worker 进程已死且已知死亡信号成对成立时，PM 用 `pm-orchestrate settle --reason ...` 调 `worker-stop` 原子 fence+stop；失败只 abandon fence 并保留 worktree，避免只能靠 `worktree rm --force` 硬删。
 - **教训**：
   - **路径敏感的"免费机制"不可靠**：G28 的向上解析依赖 worktree 在主仓子树这个隐含前提，Orca 路径打破前提后整个自验链路塌方。skill 应在 spawn 时显式保证 worktree 可访问主仓依赖（软链或 PATH 注入），不依赖路径巧合。
   - **install-guard 的 deny_by_default 对"非 install 的验证命令"也误伤**：`npm run test` 不是 install，但被 allowed_shell 白名单拦。白名单应区分"install 类（需授权）"与"验证/提交类（默认放行）"。
@@ -696,7 +696,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 
 **根因**：Orca supervised 的 consumer fencing = 最新 coordinator handle 胜出。一个 Wave 共用一个 Run，`run-create` 调一次即定；重试生成新 Run（即便 objective 相同），旧 handle 立即被新 Run 的 handle fence。
 
-**正确协议**：`pm-orchestrate run-create --objective TEXT` 调一次，从 receipt `jq -r '.result.run.id'` 一次取定 run_id，整 Wave 复用（`spawn-worker --orca-supervised --orca-run-id $run_id`）。不要重试 run-create；若需确认 receipt，读已拿到的 JSON，不重发命令。详见 SKILL §3.3 规则 2、§4.4。
+**正确协议**：用 `orca-wave-prepare.sh` 一次创建/绑定 Run 并在任何 worker 启动前创建全部 Task；receipt 固化 run_id、coordinator_handle 和 task_id。并发 spawn 只复用 receipt，不再各自 `run-use/task-create`。不要重试 run-create；若需确认，读取既有 receipt。详见 SKILL §3.3 规则 2、§4.4。
 
 ### G33. settle 3 轮 review：自审漏 BLOCKER 的根因 = 没对真 Orca 完整输出跑 jq（Task-047）
 

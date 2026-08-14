@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`，版本 v2.3.0。
+> `scripts/pm-orchestrate.sh`，版本 v2.6.0。
 
 ## 目录
 
@@ -43,7 +43,7 @@ pm-orchestrate.sh ack --worktree "$WT" --session "$S" --delivery-id "$DID"
 pm-orchestrate.sh settle --worktree "$WT" --session "$S" --reason "..." [--force] [--destroy]
 ```
 
-supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。
+supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。除只读 `read/show` 外，supervised 命令先对当前 PM terminal 执行 `run-use --id`，刷新 METADATA 的 coordinator handle；`wait/ack` 随后消费当前绑定 Run，不传陈旧 `--run`。
 
 Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首次从 `0` 读取并保存响应里的 `nextCursor`；后续按 cursor 增量读取，避免默认 tail 只剩 spinner。`wait` 的 `tui-idle` 只表示当前可交互/空闲，不是业务终态。
 
@@ -53,7 +53,7 @@ terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入
 
 1. `wait` 获取完整 Delivery；不要立即 ack。
 2. 处理每条 `question/escalation/worker_done`。
-3. 用 `show` 核对 accepted settlement，用 `read` 和真实 diff/tests 验收。
+3. 用 `show` 核对 accepted settlement，用 `read` 和真实 diff/tests 验收。只读状态与业务验收不能替代生命周期 settlement。
 4. 每个 settled worker 选择立即复用、`release` 或用户明确要求时 `retain`。
 5. 全部处理完后 `ack --delivery-id ...`。
 6. 继续 `wait`，直到所有预期 Dispatch settle。
@@ -62,8 +62,9 @@ terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入
 
 ## 4. 安全边界
 
-- 脚本不自动 ack Delivery、不自动 release active worker、不删除 worktree（`settle` 例外兜底，但需 `--destroy` 显式升级）。
-- `release/retain/reply/ack/settle` 仅对有 supervised metadata 的 worker 生效。`settle` 需 `--reason`（审计），默认 fence+stop 不动文件；`--destroy` 才动 worktree/files（一站式清理，不再跑 clean-worktree）。
+- 脚本不自动 ack Delivery、不自动 release active worker、不删除 worktree（`settle` 例外兜底，但需 `--destroy` 显式升级）。worker 仍活着却漏发 `worker_done` 时先发结构化提醒；确认已死才 settle。
+- `release/retain/reply/ack/settle` 仅对有 supervised metadata 的 worker 生效。`settle` 需 `--reason` 并先持久审计，默认以 `worker-stop` 原子 fence+stop 后不动文件；stop 失败时 `worker-abandon` 只作 fence 兜底且禁止 destroy。`--destroy` 仅在 stop 成功后释放 lease并删除精确 Orca/Git worktree。
+- `--force` 只覆盖 liveness gate；不会绕过仓库身份、审计落盘、worker-stop、lease 或 worktree 删除失败。
 - stale terminal handle 要先按 worktree 重新解析；禁止同时给旧/新 handle 双发。
 - 普通 terminal worker 没有 `worker_done` 义务；不要用 terminal 文本伪造 Dispatch 完成。
 - 对 external supervised terminal，`release` 后 retained 不必然是错误；文件清理仍须由 `clean-worktree.sh` 验证 settled 状态、external ownership、retained reason 和精确句柄后处理。

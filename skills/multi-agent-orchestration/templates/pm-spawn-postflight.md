@@ -1,89 +1,77 @@
 # PM spawn 后 postflight cheatsheet
 
-> 配套 `SKILL.md §3` / §5 / §7。**spawn 是 fire-and-forget；不要 block 等 worker 跑完。**
+> 配套 `SKILL.md` §2、§3.3、§4 与 §7。先识别控制模式，再选择对应核验；不要把 tmux、terminal-managed 和 supervised 的完成信号混用。
 
-## 何时用
+## Wave 准备屏障
 
-每 spawn 一个 worker 完，**立刻**跑下面 4 条（30 秒内）。Wave 内 N 个 worker 跑 N 轮。
+supervised Wave 必须先完成：
 
-spawn-worker.sh 退出立刻返回这个清单，不要等 `STATUS.json`、不要 attach tmux、不要用 `TaskOutput block=true`。
+1. 写 manifest，确认 Task 相互独立且 key 唯一。
+2. 运行 `orca-wave-prepare.sh --manifest ... --receipt ...`。
+3. 核对 receipt 同时含 `run_id`、`coordinator_handle` 和全部 `task_id`。
+4. receipt 成功后才并行启动 worker，并同时传 `--orca-run-id`、`--orca-coordinator-handle` 与对应 `--orca-task-id`。
 
-## 4 条核验命令（必须按顺序）
+不得并发执行 `run-create/run-use/task-create`。单 worker 可以跳过 manifest，让 helper 自建 Run/Task。
 
-> 把下面命令里 `$SESSION` / `$WORKTREE` 替换成实际值（spawn-worker.sh 输出 `SPAWN_WORKER_SESSION` / `SPAWN_WORKER_WORKTREE`）。
+## 通用即时核验
 
-### 1. tmux session 是否真存活（< 1s）
-
-```bash
-tmux has-session -t "$SESSION" 2>/dev/null && echo "OK: $SESSION" || echo "MISSING: $SESSION"
-```
-
-如果 MISSING → 重跑 `spawn-worker.sh` 或检查 pane 创建日志（`SPAWN_WORKER_RUN: ...` 行）。
-
-### 2. pane cwd / prompt 是否已就位（< 1s）
+每个 `spawn-worker.sh` 返回后立即核验，不等待业务完成：
 
 ```bash
-tmux capture-pane -t "$SESSION" -p | tail -5
+test -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+jq '{worktree,branch,session,runtime}' \
+  "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+git -C "$WORKTREE" status --short --branch
 ```
 
-看最后 5 行：
+确认 cwd/worktree/branch/session、Harness authority、安装门禁、provider lease 与允许文件范围符合任务卡。核验失败就停止派发，不由 PM 静默接管业务实现。
 
-- 看到 worker 初始化 banner / `Welcome` / 提示符 → 就位，可以投 prompt
-- 仍是空白 pane → 等 5 秒再 capture 一次；**不要 attach**
-- 看到 trust / permission dialog → 看 §3.5 / §3.8.4，本 cheatsheet 不处理 dialog 路径
+## Orca supervised
 
-### 3. Session Context METADATA.json 是否已落盘（< 1s）
+即时核验真实 Dispatch，而不是 tmux session：
 
 ```bash
-ls -la "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+bash scripts/pm-orchestrate.sh show --worktree "$WORKTREE" --session "$SESSION"
+bash scripts/pm-orchestrate.sh read --worktree "$WORKTREE" --session "$SESSION" --lines 80
 ```
 
-确认 base / runtime / verification / `isolation_mode` 字段都齐。如果文件不存在或字段缺失 → spawn-worker.sh 内部 metadata 写入流程失败，重跑或查日志。
-
-### 4. STATUS.json 是否在 1-2 分钟内出现（异步等，不阻塞 PM）
+必须看到 METADATA 的 `run_id/coordinator_handle/task_id/dispatch_id` 与 `worker-show` 对应。后续用 bounded wait：
 
 ```bash
-timeout 120 bash -c '
-  until [ -f "$WORKTREE/.claude/agent-sessions/$SESSION/STATUS.json" ]; do
-    sleep 5
-  done
-  echo "STATUS_READY: $SESSION"
-'
+bash scripts/pm-orchestrate.sh wait --worktree "$WORKTREE" --session "$SESSION" --timeout 900
 ```
 
-120s 还没出现 → 触发 `SKILL.md §3` 纠偏：发 checkpoint-only correction，或重启 worker。
+- `worker_done → Delivery` 才是 lifecycle 完成；STATUS、commit、tests、heartbeat、idle 都不是。
+- Delivery 要逐条处理，settled worker 选择 reuse/release/retain，最后才 ack。
+- `worker-show/dispatch-show` 与 diff/tests 可以用于业务验收，但不能替代 lifecycle settlement。
+- worker 仍存活但漏发 `worker_done`：用结构化 `send` 提醒它执行 live preamble 中的精确命令。
+- worker 已死：满足严格 liveness gate 后才用 `pm-orchestrate settle --reason ...`；stop 失败不得 destroy。
 
-**绝对不要**把 PM 自己 hang 在这个 timeout 上等所有 worker。
+不要给 supervised terminal 再发完整 task prompt，也不要用 Sentinel/pm-monitor 判完成。
 
-## 跑完 4 条后
+## Orca terminal-managed
 
-PM **立刻**返回主循环，做下一件事（下一个 worker spawn / 已有 worker review / 用户消息）。
-
-后续 worker 终态由 `sentinel.sh`（`SKILL.md §7`）事件驱动唤醒，或 `pm-monitor.sh --log-file` 后台巡检。**不要 PM 自己 poll 等**。
-
-## 反例（踩坑历史 · 2026-07-10 某多 worker Wave 实战）
-
-| 反模式 | 实测后果 |
-|--------|---------|
-| `TaskOutput block=true` 等 `spawn-worker.sh` 退出 | PM 主回合 hang，单次白等 ~90s × N worker，并行价值归零 |
-| `tmux attach -t "$SESSION"` 跟 worker 一起看 | 占 PM 主会话、无纠偏能力 |
-| `while ! [ -f STATUS.json ]; do sleep 1; done` 不带 timeout | PM 可能永久挂 |
-| spawn 完 6 worker 立刻 poll 等全部 done | Wave 串行化，与 §3.1 设计目的冲突 |
-| `spawn-worker.sh` 内部 fork sentinel / pm-monitor | auto mode 拒多 background（CHANGELOG v1.18.1） |
-| 等 W1 STATUS.json 才派 W2 | 等于把 Wave 串行化，多花一轮 |
-
-## 多 worker 并行 spawn 提示（与 §3.8.2 配套）
-
-文件域独立时（`SKILL.md §3`），从一开始就别串行 spawn：
+没有 `supervised.dispatch_id` 时只使用 terminal 控制面：
 
 ```bash
-for w in w1 w2 w3 w4 w5 w6; do
-  bash scripts/spawn-worker.sh --project "$PROJ" --branch "vN/$w" --session "$w" \
-    --worker-backend claude-code --with-sentinel --command "$W_CMD_$w"
-  bash scripts/sentinel.sh --status-file "$WORKTREE/.claude/agent-sessions/$w/STATUS.json" \
-    --tmux-session "$w" --poll-interval 5 --max-wait 7200  # run_in_background=true
-done
-# ↑ 6 个 spawn 完，下面跑 6 轮 4 条核验 → 立即投 prompt + 切回主循环
+bash scripts/pm-orchestrate.sh read --worktree "$WORKTREE" --session "$SESSION" --lines 5000 --cursor 0
+bash scripts/pm-orchestrate.sh wait --worktree "$WORKTREE" --session "$SESSION" --timeout 30
 ```
 
-控制模式与决策边界见 `SKILL.md §2`—§5。
+保存 `nextCursor` 后增量读取。`tui-idle` 仅表示当前可交互，不证明业务完成；最终以 STATUS/RESULT、真实 diff/tests/artifacts 和 PM 验收为准。terminal-managed 没有 `worker_done` 义务。
+
+## tmux 回退
+
+只有 METADATA 不含 Orca terminal/Dispatch 时才核验 tmux：
+
+```bash
+tmux has-session -t "$SESSION" 2>/dev/null
+tmux display-message -p -t "$SESSION" '#{pane_current_path}'
+tmux capture-pane -t "$SESSION" -p | tail -20
+```
+
+STATUS/RESULT 用于 checkpoint；Sentinel/pm-monitor 可作事件与低频观察器，但仍需真实产物验收。不要 attach，不要无界轮询，不要让 PM 因等待 STATUS 阻塞下一次派发。
+
+## 并发纪律
+
+Wave receipt 是准备屏障；屏障之后，文件域正交的 worker 启动与 postflight 可并行。共享 schema、锁文件、迁移或同一任务源的写入必须按依赖顺序执行。spawn 返回后立即回到 PM 主循环，使用 bounded wait/事件巡检，不做 `while ... sleep` 无界等待。
