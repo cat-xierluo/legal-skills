@@ -169,6 +169,14 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 - terminal handle stale：按 worktree 重新 `terminal list`，后续只用新 handle，禁止双发。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
 - active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；先人工决定 `worker-stop` 或 `worker-abandon`，不要用 worktree rm 代替生命周期处理。
+- **Dispatch 死锁兜底（Task-047 v2，settle）**：若 worker 进程已死但未发 `worker_done`（dispatch 卡 `dispatched`、`clean-worktree` Hard Fail #7 拒删、PM 无法正常收尾），用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..."`：
+  1. **liveness gate**：调 `worker-show` 读 `.result.observation.status`（=`exited/missing`，completed dispatch GC 后是 missing）和 `.result.worker.state`（`succeeded`/`failed`/`stopped`）；任一缺失或仍 `active`/`input_accepted` → REFUSED exit 2（除非 `--force`）。修复了 PR #84 的 BLOCKER 1（`.result.workerSession` 永远不存在 = 无门槛）。
+  2. **fence dispatch**：`worker-abandon --dispatch <D>` fence（保留 METADATA，PM 后续可清理）—— 失败 exit 2。修复 PR #84 的 BLOCKER 2（删 METADATA 导致 unrecoverable leak）。
+  3. **stop terminal**：`worker-stop --dispatch <D>`（已 fence，stop 失败 WARN 不阻塞）。
+  4. **默认安全**：不删 worktree / lease / session_context / symlink。PM 后续跑 `clean-worktree.sh --execute --force-remove-dirty` 完成 git/lease/symlink 清理。
+  5. **可选 `--destroy`**：一站式清理（含 symlink unlink + dirty 检查 + git worktree remove + orca worktree rm + lease release + session_context 清）。**仅当**PM 确认 worker 死了 + 不需保留输出。
+  - `--reason` 强制（审计）。`--force` 仅在 liveness gate 兜底用。
+  - 端到端验证脚本：`scripts/test-settle-liveness.sh`（9 fixture cases 覆盖 exited/active/missing-field/--force/empty）。
 - provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。settled 后 `worker-release` 返回 `retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。任何 active/unknown/mismatch 都拒绝清理。
 
 ## 10. METADATA 契约

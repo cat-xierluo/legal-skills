@@ -1,0 +1,113 @@
+{
+  "id": "19f7d0ca-445a-44d7-9b97-1f61bfab7b2b",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_2a4f1a0679b6",
+      "task_id": "task_6547c4a25580",
+      "assignee_handle": "term_c82829d5-3b15-481d-8510-3985be08db2a",
+      "status": "completed",
+      "failure_count": 0,
+      "last_failure": null,
+      "dispatched_at": "2026-08-12 13:03:48",
+      "completed_at": "2026-08-12 13:04:05",
+      "created_at": "2026-08-12 13:03:48",
+      "last_heartbeat_at": null,
+      "assignee_pane_key": "09438ee8-3ccc-46ee-9075-74baa7d0616b:faf21c63-0275-4413-8035-a5cf57b8a7d6",
+      "run_id": "run_4001be111280",
+      "capability_hash": "1f7170ef59cdbb5aae6bde2e06e6b555fd563733c709a598dad574e85c3daa35",
+      "process_incarnation": "5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812@@df1783b0:b429a45a-f32f-406a-8c62-5a9cbaed868f",
+      "capability_revoked_at": "2026-08-12 13:04:05",
+      "contract_version": 1,
+      "launch_token_hash": null
+    },
+    "worker": {
+      "dispatch_id": "ctx_2a4f1a0679b6",
+      "runtime_epoch": "b64dbd8d-8e4a-44ae-9094-680984f2ed73",
+      "state": "active",
+      "stage": "settled",
+      "worktree_id": "5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812",
+      "agent_terminal_handle": "term_c82829d5-3b15-481d-8510-3985be08db2a",
+      "setup_state": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "reused",
+          "id": "term_c82829d5-3b15-481d-8510-3985be08db2a"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_c82829d5-3b15-481d-8510-3985be08db2a",
+          "state": "accepted"
+        }
+      ],
+      "residual_resources": "[]",
+      "start_options": "{\"worktree\":\"id:5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812\",\"resolvedWorktreeId\":\"5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812\",\"name\":null,\"repo\":null,\"baseBranch\":null,\"terminal\":\"term_c82829d5-3b15-481d-8510-3985be08db2a\",\"agent\":null,\"launch\":{\"requested\":{\"agent\":null,\"model\":null,\"effort\":null},\"effective\":{\"agent\":null,\"model\":null,\"effort\":null}},\"timeoutMs\":60000,\"setup\":\"not_applicable\",\"setupSource\":\"existing_worktree\"}",
+      "last_error": null,
+      "created_at": "2026-08-12 13:03:48",
+      "updated_at": "2026-08-12 13:04:05",
+      "residualResources": [],
+      "startOptions": {
+        "worktree": "id:5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812",
+        "resolvedWorktreeId": "5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": "term_c82829d5-3b15-481d-8510-3985be08db2a",
+        "agent": null,
+        "launch": {
+          "requested": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          },
+          "effective": {
+            "agent": null,
+            "model": null,
+            "effort": null
+          }
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      }
+    },
+    "terminal": null,
+    "observation": {
+      "status": "active",
+      "exactWorker": false
+    },
+    "terminalResource": {
+      "id": "wtr_e7d4a07b55a2",
+      "ownershipState": "external",
+      "releaseState": "not_requested",
+      "retainedReason": "external_terminal",
+      "terminalHandle": "term_c82829d5-3b15-481d-8510-3985be08db2a",
+      "worktreeId": "5eafb624-fb3c-49c7-b870-774d67e52747::/Users/maoking/orca/workspaces/legal-skills/test-orca-e2e-claude-0812",
+      "originDispatchId": "ctx_2a4f1a0679b6",
+      "ownerDispatchId": "ctx_2a4f1a0679b6",
+      "releaseRequestedAt": null,
+      "releaseCompletedAt": null,
+      "releaseError": null,
+      "archive": {
+        "source": null,
+        "status": null
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "2335b4b0-7d0a-4124-a2f9-170963abf562"
+  }
+}
