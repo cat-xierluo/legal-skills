@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.6.2] - 2026-08-14
+
+### 修复
+
+- 修复带空格 worker command 的 `--dry-run` 仍创建 Session Context 并写入 `launch.sh` 的副作用；预演现在只报告最终 wrapper 路径与命令，不创建目录、文件或执行权限。
+- 保持非 dry-run 的 `launch.sh` 内容、tmux/Orca transport 和 supervised 注册路径不变。
+
+### 验证
+
+- `test-spawn-worker-launch.sh` 从 11 个扩展到 16 个断言，新增 helper 与真实入口的 dry-run 零写入检查；完整生命周期、权限、Wave、settle、Sentinel、tmux 和 Orca 回归通过。
+
 ## [2.6.1] - 2026-08-14
 
 ### 改进
