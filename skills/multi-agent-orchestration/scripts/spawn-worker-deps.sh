@@ -93,7 +93,10 @@ ensure_worktree_deps() {
 # 注入默认 verify 命令到全局 VERIFY_COMMANDS。
 # 全局读写：VERIFY_COMMANDS、PROJECT_DIR。
 # PM 已显式传 --verify-cmd（VERIFY_COMMANDS 非空）则不覆盖——PM 显式优先。
-# 否则把 package.json scripts 里存在的 typecheck/lint/test/build 注入 "npm run <s>"。
+# 否则把 package.json scripts 里存在的 typecheck/lint/test/test:e2e/build 注入
+# "npm run <s>"。test:e2e 在 verification-gate 语义里是功能完成线（编译过 ≠
+# 功能可用，FaroPDF 2026-08-05 QA-02 教训），所以只要项目有该 script 就默认
+# 注入；无该 script 的项目自动跳过（grep -qx 守卫）。
 # install-guard 的 install 正则只匹配 npm install/ci/add，不匹配 npm run，故 verify 命令
 # 走 allowed_shell 白名单（本函数注入后由 spawn-worker.sh 的 VERIFY_COMMANDS 进白名单）。
 inject_default_verify_commands() {
@@ -114,7 +117,7 @@ inject_default_verify_commands() {
 
   local added=""
   local s
-  for s in typecheck lint test build; do
+  for s in typecheck lint test test:e2e build; do
     if printf '%s\n' "$scripts" | grep -qx "$s"; then
       VERIFY_COMMANDS+=("npm run $s")
       added="$added $s"

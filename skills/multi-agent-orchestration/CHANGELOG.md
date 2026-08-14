@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.6.3] - 2026-08-14
+
+### 改进
+
+- `inject_default_verify_commands` 默认注入清单由 `typecheck/lint/test/build` 扩展为 `typecheck/lint/test/test:e2e/build`：`test:e2e` 是 verification-gate 的功能完成线（编译过 ≠ 功能可用，FaroPDF 2026-08-05 QA-02 教训），项目 `package.json` 声明该 script 即默认进 worker verify 白名单；未声明的项目由 `grep -qx` 守卫自动跳过，行为不变。SKILL.md §3.2 同步。
+
+### 验证
+
+- `test-spawn-worker-deps.sh` 7/7 PASS（fixture 无 `test:e2e` script，守卫正确跳过，验证不注入劣化路径）。
+
 ## [2.6.2] - 2026-08-14
 
 ### 修复

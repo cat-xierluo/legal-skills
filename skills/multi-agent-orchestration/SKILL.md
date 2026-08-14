@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.6.2"
+  version: "2.6.3"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -91,7 +91,7 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
   - **Node**：worktree 不在主仓父链（Orca `~/orca/workspaces/` 是独立路径树）且主仓有 `node_modules` → 软链 `worktree/node_modules → 主仓/node_modules`。tmux worktree 本在主仓子树（`.claude/worktrees/`）靠 npm 向上解析（G28），不软链。
   - **Rust**：`~/.cargo` registry 全局共享、worktree `target/` 独立，不补偿。
   - **Python**：venv 含绝对路径、软链会挂，不自动补偿（PM 手动建 venv 或 `--allow-install-command` 授权 pip install）。
-- **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。PM 显式 `--verify-cmd` 优先，不覆盖。
+- **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/test:e2e/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。`test:e2e` 是 verification-gate 的功能完成线（编译过 ≠ 功能可用，FaroPDF 2026-08-05 QA-02 教训），项目有该 script 就默认注入；无则自动跳过。PM 显式 `--verify-cmd` 优先，不覆盖。
 
 依赖补偿必须失败关闭：目标处已有真实目录就保留，断裂 symlink 或创建 symlink 失败则 `spawn-worker.sh` 退出非零，不能留下一个看似已启动、实际无法验证的 worker。用 `scripts/test-spawn-worker-deps.sh` 覆盖路径类型、默认/显式 verify 和双 worker 并发。
 
