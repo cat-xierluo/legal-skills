@@ -20,7 +20,20 @@
 - PR #84 review MINOR 7：session_context 删除顺序正确（--destroy 末尾，且 fence+stop 已成功）。
 - PR #84 review MINOR 8：liveness gate 兼容 `set -euo pipefail`（局部 `set +e +o pipefail`），PARSE_ERROR fallback 可达。
 - PR #84 review NIT 9：`--force/--reason` 是 settle-specific（cmd_settle 内部局部变量），不污染其他子命令；`--reason` 用于审计。
-- PR #84 review NIT 10：新增 `scripts/test-settle-liveness.sh`（7 fixture cases）+ `scripts/tests/fixtures/worker-show-*.json`（真 Orca worker-show response）。
+- PR #84 review NIT 10：新增 `scripts/test-settle-liveness.sh`（9 fixture cases）+ `scripts/tests/fixtures/worker-show-*.json`（真 Orca worker-show **完整包装** response）。
+
+### 修复（PR #86 review-v2，对真 Orca CLI 验证后）
+
+- **BLOCKER B1**：`settle_liveness_check` jq 路径缺 `.result` 前缀（fixture 预解包导致测试绿但生产无效——同 v1 BLOCKER 1 形状）。改 `.result.observation.status` / `.result.worker.state`；fixture 改完整包装（含 `_meta/id/ok/result`）。gate 逻辑改：拒绝 `active`/`input_accepted`（活），允许 `missing`/`exited`/`succeeded`（死/GC），双 ABSENT 保守拒绝（completed dispatch 的 observation 在 GC 后是 `missing` 非 `exited`）。
+- **BLOCKER B2**：`--force` 未在全局 args 解析（cmd_settle 内部解析是死代码，$@ 在 dispatch 时空）。全局加 `--force) FORCE=1`，cmd_settle 读 `${FORCE:-0}`。
+- **MAJOR M1**：删无效 symlink `scripts/tests/fixtures/fixtures`（残渣，指错绝对路径）。
+- **MAJOR M2**：`--reason` 持久化到 `SETTLE_AUDIT.log`（之前只 echo）；usage "encouraged" 改 "required"。
+- **MAJOR M3**：`worker-show`/`worker-stop` 调用用 `set +e` 保护（`set -euo pipefail` 下失败击穿脚本，liveness REFUSED 和 WARN 分支不可达）。
+- **MAJOR M4**：`settle_destroy_worktree` 注释改"故意偏离 clean-worktree 顺序"（git 先 vs orca 先，所有权语义不同）。
+- **MINOR m1**：`wt_id` 空时 WARN（不静默跳过 orca worktree rm）。
+- **MINOR m2**：usage "encouraged" 与强制矛盾修正（并入 M2）。
+- **NIT n1**：测试用 env var 传 JSON（避免 eval 单引号脆弱）。
+- **NIT n2**：fixture 加 README 说明（observation GC 语义 + 死锁未真测）。
 
 ## [2.5.3] - 2026-08-14
 

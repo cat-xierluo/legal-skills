@@ -42,7 +42,7 @@ Common:
   --message-id ID   Question message to answer
   --objective TEXT  Run objective
   --destroy          With `settle`: additionally remove worktree/files (default: fence+stop only)
-  --reason TEXT      Audit reason (recorded with settle; encouraged)
+  --reason TEXT      Required audit reason for settle (persisted to SETTLE_AUDIT.log)
 
 Supervised wait prints the complete Delivery JSON and never auto-acks it. Process every
 message and decide release/reuse/retain before running `ack`.
@@ -64,6 +64,7 @@ DELIVERY_ID=""
 MESSAGE_ID=""
 OBJECTIVE=""
 REASON=""
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --destroy) DESTROY=1; shift ;;
     --reason) REASON="$2"; shift 2 ;;
+    --force) FORCE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
@@ -308,24 +310,38 @@ settle_liveness_check() {
   # script runs under `set -euo pipefail`; locally disable to keep PARSE_ERROR fallback
   # reachable and produce the intended diagnostic instead of silent exit.
   set +e +o pipefail
-  obs_status=$(printf '%s' "$show_json" | jq -r '.observation.status // "ABSENT"' 2>/dev/null)
-  worker_state=$(printf '%s' "$show_json" | jq -r '.worker.state // "ABSENT"' 2>/dev/null)
+  obs_status=$(printf '%s' "$show_json" | jq -r '.result.observation.status // "ABSENT"' 2>/dev/null)
+  worker_state=$(printf '%s' "$show_json" | jq -r '.result.worker.state // "ABSENT"' 2>/dev/null)
   set -e -o pipefail
   obs_status=${obs_status:-PARSE_ERROR}
   worker_state=${worker_state:-PARSE_ERROR}
-  if [ "$obs_status" != "exited" ] || [ "$worker_state" = "active" ] || [ "$worker_state" = "input_accepted" ]; then
+  # gate 逻辑：拒绝"活"信号（active/input_accepted），允许"死/退出"信号
+  # （exited/missing/succeeded/failed/stopped），ABSENT（字段缺失/schema 变）保守拒绝。
+  # 注：completed dispatch 的 observation.status 在 GC 后是 "missing"（非 exited），
+  # 死锁 dispatch（worker 死、dispatch dispatched）的 observation 未真测，但非 active
+  # 即视为可 settle——gate 目的是"别误杀活 worker"，活 worker 的 observation 必为 active。
+  if [ "$obs_status" = "active" ] || [ "$obs_status" = "input_accepted" ] \
+     || [ "$worker_state" = "active" ] || [ "$worker_state" = "input_accepted" ]; then
     if [ "$force" -ne 1 ]; then
-      echo "REFUSED: observation.status=$obs_status worker.state=$worker_state (worker may still be active); confirm worker process is dead and re-run with --force" >&2
+      echo "REFUSED: observation.status=$obs_status worker.state=$worker_state (worker still active); confirm worker process is dead and re-run with --force" >&2
       exit 2
     fi
     echo "WARN: liveness check suggests worker may be active (obs=$obs_status, state=$worker_state); --force overrides" >&2
     return 0
   fi
+  if [ "$obs_status" = "ABSENT" ] && [ "$worker_state" = "ABSENT" ]; then
+    if [ "$force" -ne 1 ]; then
+      echo "REFUSED: observation.status and worker.state both ABSENT (schema changed or unparseable); re-run with --force after manual verification" >&2
+      exit 2
+    fi
+    echo "WARN: both fields ABSENT but --force given; assuming DEAD" >&2
+  fi
   return 0
 }
 
-# settle_destroy_worktree: 内联 clean-worktree.sh:282-340 的物理清理段。
-# 与 clean-worktree.sh 同步（任何一侧改要同步另一侧）。MAJOR 5/3 修复。
+# settle_destroy_worktree: 物理清理段。顺序与 clean-worktree.sh:282-340 **故意偏离**——
+# settle 先 git worktree remove（git 拥有文件系统），再 orca worktree rm；clean-worktree
+# 先 orca worktree rm 再 git。两侧因所有权语义不同而顺序不同，非同步关系。MAJOR 5/3 修复。
 settle_destroy_worktree() {
   local worktree_path="$1" dispatch_id="$2"
   local session_context="$worktree_path/.claude/agent-sessions/$SESSION"
@@ -365,13 +381,13 @@ settle_destroy_worktree() {
   if [ -n "$dispatch_id" ]; then
     local wt_id
     wt_id=$(jq -r '.session.orca.worktree_id // empty' "$METADATA" 2>/dev/null)
-    if [ -n "$wt_id" ]; then
-      if orca_cli worktree rm --worktree "id:$wt_id" --force --json; then
-        echo "PM_ORCHESTRATE_SETTLE_ORCA_WT_REMOVED: $wt_id"
-      else
-        echo "ERROR: orca worktree rm failed: $wt_id" >&2
-        return 2
-      fi
+    if [ -z "$wt_id" ]; then
+      echo "WARN: no orca worktree_id in METADATA; skipping orca worktree rm" >&2
+    elif orca_cli worktree rm --worktree "id:$wt_id" --force --json; then
+      echo "PM_ORCHESTRATE_SETTLE_ORCA_WT_REMOVED: $wt_id"
+    else
+      echo "ERROR: orca worktree rm failed: $wt_id" >&2
+      return 2
     fi
   fi
 
@@ -408,17 +424,9 @@ settle_destroy_worktree() {
 cmd_settle() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: settle requires an Orca supervised worker (dispatch deadlock bypass)" >&2; exit 64; }
 
-  # --force/--reason 是 settle-specific（NIT 9），从 args 集合外重新提取，
-  # 避免污染其他子命令。
-  local settle_force=0 settle_destroy="${DESTROY:-0}" settle_reason="${REASON:-}"
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --force) settle_force=1; shift ;;
-      --destroy) settle_destroy=1; shift ;;
-      --reason) settle_reason="$2"; shift 2 ;;
-      *) echo "ERROR: settle: unknown arg: $1" >&2; exit 64 ;;
-    esac
-  done
+  # --force/--destroy/--reason 由全局 args 解析（FORCE/DESTROY/REASON），
+  # cmd_settle 直接读全局变量。$@ 在 dispatch 时为空（全局 while 已消耗）。
+  local settle_force="${FORCE:-0}" settle_destroy="${DESTROY:-0}" settle_reason="${REASON:-}"
 
   [ -n "$settle_reason" ] || { echo "ERROR: settle requires --reason (audit)" >&2; exit 64; }
   [ -n "$ORCA_DISPATCH_ID" ] || { echo "ERROR: settle: missing dispatch_id in METADATA" >&2; exit 64; }
@@ -430,9 +438,22 @@ cmd_settle() {
   session_context="$WORKTREE/.claude/agent-sessions/$SESSION"
 
   echo "PM_ORCHESTRATE_SETTLE_START: dispatch=$ORCA_DISPATCH_ID worktree=$worktree_id destroy=$settle_destroy force=$settle_force reason=$settle_reason"
+  # M2: --reason 持久化到 SETTLE_AUDIT.log（审计可追溯）
+  printf '%s dispatch=%s session=%s destroy=%s force=%s reason=%s\n'     "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo 'unknown-time')"     "$ORCA_DISPATCH_ID" "$SESSION" "$settle_destroy" "$settle_force" "$settle_reason"     >> "$SESSION_CONTEXT/SETTLE_AUDIT.log" 2>/dev/null || echo "WARN: cannot write SETTLE_AUDIT.log (read-only context?)" >&2
 
   # Step 1: liveness gate (BLOCKER 1: 用真字段)。
+  set +e
   show_json=$(orca_cli orchestration worker-show --dispatch "$ORCA_DISPATCH_ID" --json 2>&1)
+  local show_rc=$?
+  set -e
+  if [ "$show_rc" -ne 0 ]; then
+    if [ "$settle_force" -ne 1 ]; then
+      echo "REFUSED: worker-show failed (rc=$show_rc, cannot determine liveness); re-run with --force" >&2
+      exit 2
+    fi
+    echo "WARN: worker-show failed (rc=$show_rc) but --force given; assuming DEAD" >&2
+    show_json=""
+  fi
   settle_liveness_check "$show_json" "$settle_force"
 
   # Step 2: worker-abandon fence dispatch (BLOCKER 2: 保留 METADATA)。
@@ -444,11 +465,14 @@ cmd_settle() {
   fi
 
   # Step 3: worker-stop 停 terminal（已 fence, stop 失败 WARN 不阻塞）。
+  # set +e 保护：worker-stop 失败不应击穿脚本（已 fence，terminal 自然回收）。
+  set +e
   if orca_cli orchestration worker-stop --dispatch "$ORCA_DISPATCH_ID" --json; then
     echo "PM_ORCHESTRATE_SETTLE_STOPPED: dispatch=$ORCA_DISPATCH_ID"
   else
     echo "WARN: worker-stop failed (already stopped?)" >&2
   fi
+  set -e
 
   # Step 4: --destroy 才动文件。默认只 fence + stop, 提示 PM 后续跑 clean-worktree。
   if [ "$settle_destroy" -eq 1 ]; then
