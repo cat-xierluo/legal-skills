@@ -7,7 +7,7 @@ meta:
   description: "已立案或即将立案的诉讼案件"
   case_id_format: "{年}{月}{序号} {原告简称} 与 {被告简称} {案由}"
   case_name_format: "{原告}+等+诉+{被告}+等+{案由}+案"
-  example_case_id: "260221 张家宁 与 pokebone 模型 著作权"
+  example_case_id: "260301 甲公司 与 乙公司 著作权"
 
 directories:
   - id: "00"
@@ -15,9 +15,9 @@ directories:
     name: "日程管理"
     description: "时间线、法定期限、工时统计、进度管理"
     core_files:
-      - "[案件编号].yaml"
-      - "[案件编号]工时记录.md"
-      - "[案件编号]待办事项.md"
+      - "case.yaml"
+      - "工时记录.md"
+      - "待办事项.md"
 
   - id: "01"
     icon: "🤝"
@@ -78,15 +78,15 @@ management_files:
   case_info:
     enabled: true
     template: "templates/case-info.md"
-    output: "[案件编号] 案件信息.md"
+    output: "案件信息.md"      # 案件根目录（DEC-012），无编号前缀（DEC-011）
   timesheet:
     enabled: true
     template: "templates/timesheet.md"
-    output: "[案件编号] 工时记录.md"
+    output: "工时记录.md"      # 00 目录（DEC-012）
   deadline_yaml:
     enabled: true
     template: "templates/deadline-yaml.md"
-    output: "[案件编号].yaml"
+    output: "case.yaml"       # 00 目录，固定文件名（v4.0 唯一状态真值，建档后经 case_store CLI 修改）
   task_list:
     enabled: true
     template: "templates/task-list.md"
