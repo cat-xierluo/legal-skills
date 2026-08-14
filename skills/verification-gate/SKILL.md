@@ -2,7 +2,7 @@
 name: verification-gate
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.1.1"
+version: "1.2.0"
 license: MIT
 description: 代码改完后的验证门禁。完成 feature / 重大变更 / 创建 PR / 重构 / 声称「修完」前使用——跑 8 阶段验证，其中 e2e 功能 + 真机是 READY 硬门禁（编译过 ≠ 功能可用）。覆盖 Tauri 桌面 / Web / 服务 / Skill 四类分支。本地即可跑完整验证，CI 是可选自动化强化（平台不限 GitHub Actions）。不要用于：业务领域验证、Skill 质量审查（用 skill-lint）、纯文档变更、一次性脚本。
 ---
@@ -106,7 +106,10 @@ npm run lint                                     # 3 lint
 npm test                                         # 4 单测
 npm run test:e2e                                  # 5 e2e（打开 PDF 渲染 + textLayerStatus 断言；jsdom 层）
 npm run verify:reader-e2e                          # 5+ chromium 真 Worker 门禁（dev server 自起自灭）
+npm run verify:prod-render                         # 5+ 产物层门禁（vite preview build 产物 + 真实 UI + Retina DPR=2）
 # 6 真机：npm run tauri build 产物实机 / etv（npm run etv:dev + etv:run，WKWebView 真机 DOM + 截图）
+#    ⚠ 桌面 WebView 四层验证盲区（引擎代差/DPR/产物嵌入/dev≠打包）见教训 13：
+#    chromium 全绿 ≠ WKWebView 过；真机 console（构建戳确认版本）是唯一决定性证据
 ```
 
 真机验证做法见 `references/e2e-practice.md`（Tauri etv 段）。

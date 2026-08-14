@@ -1,5 +1,16 @@
 # Verification Gate Skill 变更记录
 
+## [1.2.0] - 2026-08-15
+
+### 新增
+
+- **教训 13（桌面 WebView 应用四层验证盲区）**：Tauri/WKWebView 四轮真机收口实例——① module worker 自定义 scheme 死挂（内联 blob worker + error 清 port）② blob worker 内根相对路径解析失败（主线程绝对化）③ **引擎代差**（pdfjs 6 现代构建用 Safari 26 才有的 Map upsert 方法，测试环境引擎结构性覆盖不到——按目标引擎选 legacy 构建）④ Retina DPR（backing × dpr + transform；`deviceScaleFactor: 2` 场景断言）。
+- **配套规则**：chromium 全绿 ≠ WKWebView 过；产物嵌入不可静态验证（tauri 压缩嵌入，二进制 grep 无效）→ 构建戳（vite define + 启动 console）确认版本；dist 变化不触发 lib 重编译 → `cargo clean -p`；真机反馈循环前先确认「跑的是哪版」。
+
+### 改进
+
+- SKILL.md Tauri 分支命令清单补 `verify:prod-render`（产物层门禁）+ 四层盲区指针（教训 13）。
+
 ## [1.1.1] - 2026-08-14
 
 ### 新增
