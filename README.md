@@ -35,7 +35,7 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-08-14 | 改名   | [skill-publish-sync](skills/skill-publish-sync/)                       | v1.7.2  | `clawhub-sync` 更名为 `skill-publish-sync`；原名仅反映三平台之一（ClawHub），与多平台定位名实不符；目录、frontmatter、slug、`git-batch-commit` 探测路径与 reference 文件一并更新，已发布记录及其它 skill 不受影响 |
-| 2026-08-14 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.6.1  | 将 spawn-worker 的 flags、Orca、metadata、provider lease 与 launch 边界渐进拆成 5 个可直接测试的模块；入口由 1,944 行降至 1,131 行，保持既有 CLI 与生命周期语义 |
+| 2026-08-14 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.6.2  | 修复带空格 worker command 的 `--dry-run` 仍创建 Session Context 并写入 `launch.sh`；预演现在只输出最终 wrapper 计划，不产生文件副作用 |
 | 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
 | 2026-08-13 | 更新   | [contract-copilot](skills/contract-copilot/)                           | v1.6.3  | 增加 DOCX 全量解包预检与 OOXML 命名空间/元素白名单，拒绝越界路径、符号链接、隐藏文本、伪装命名空间和畸形结构；明确审查计划及扩展计划均为每次运行动态生成的产物 |
 | 2026-08-13 | 更新   | [skill-manager](skills/skill-manager/)                                 | v1.7.2  | 项目同时存在多个 Agent 配置目录时优先使用 `.claude/skills` 单一来源；补充 `.codebuddy` 全局根识别，避免从 CodeBuddy 配置目录调用时误装到嵌套目标 |
@@ -627,7 +627,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、四后端总控、Harness 层级门禁与 tmux 回退</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.6.1</td>
+<td style="text-align:center">v2.6.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>

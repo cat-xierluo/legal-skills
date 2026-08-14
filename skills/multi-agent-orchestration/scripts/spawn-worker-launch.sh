@@ -11,9 +11,13 @@ launch_worker_session() {
   # 通用:codebuddy(qoderclicn)/ qoder / 任何含空格路径或特殊字符的 COMMAND 都受益。
   if [[ "$COMMAND" == *' '* ]]; then
     LAUNCH_SH="$WORKTREE/.claude/agent-sessions/$SESSION/launch.sh"
-    mkdir -p "$(dirname "$LAUNCH_SH")"
-    printf '#!/bin/bash\n# spawn-worker 自动生成:绕过 tmux command 解析(路径空格/特殊字符)\n# 原始 COMMAND 在 bash -c 下正确解析 %%q 转义(tmux 的 command parser 会吃反斜杠)\nexec bash -c %q\n' "$COMMAND" > "$LAUNCH_SH"
-    chmod +x "$LAUNCH_SH"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      printf 'SPAWN_WORKER_DRY_RUN_LAUNCH_SH: path=%q command=%q\n' "$LAUNCH_SH" "$COMMAND"
+    else
+      mkdir -p "$(dirname "$LAUNCH_SH")"
+      printf '#!/bin/bash\n# spawn-worker 自动生成:绕过 tmux command 解析(路径空格/特殊字符)\n# 原始 COMMAND 在 bash -c 下正确解析 %%q 转义(tmux 的 command parser 会吃反斜杠)\nexec bash -c %q\n' "$COMMAND" > "$LAUNCH_SH"
+      chmod +x "$LAUNCH_SH"
+    fi
     COMMAND="bash $(printf '%q' "$LAUNCH_SH")"
   fi
 
