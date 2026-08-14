@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-08-15
+
+- **M4 存量迁移完成**：`migrate` 子命令（默认 dry-run / --apply / --enrich JSON 深合并）+ A/B/C/D/none 五种转换器；存量行一律 source=user（AI 不覆写）；生成档案先过 validate 不过即跳过
+- 消费项目 8 案件全量迁移：B 直迁（阶段注释归一）、A 双 yaml 合并、C 富内容映射（证据/索赔/家属参与人）、D checkbox 转换（日期规范化 + 表格任务警告）、none 骨架 + 事实 enrich；原 yaml 归档 .legacy.yaml、叙事文档统一固定名 案件信息.md
+- 修复：B 类带注释阶段值归一（一审（法院已立案）→一审）、时间线空日期/[待定] 行跳转叙事、D 类表格头误读防护
+
 ## [0.4.1] - 2026-08-15
 
 - **决策 #047：skill 间协作为主，去除 subagent 依赖**——状态同步流程内化进 SKILL.md（"工作流收尾状态同步"节，主 Agent 直执行：加载状态 → 盘点产出 → 映射判断 → CLI 写回 → 校验汇报）；消费项目删除 CaseSync subagent，Workflow v2.1 / DataRules / AgentMapping / /progress 引用同步为 skill 协作路径
