@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.4] - 2026-08-14
+
+### 新增
+
+- `pm-orchestrate settle` 子命令（Task-047 v2，PR #84 review 修复版）：supervised dispatch 死锁兜底——worker 进程死但未发 `worker_done` 时，按 Orca 官方 lifecycle fence+stop（`worker-abandon` fence dispatch、`worker-stop` 停 terminal），不破坏 METADATA。默认安全（不删 worktree/files，PM 后续跑 `clean-worktree.sh --execute --force-remove-dirty`）；`--destroy` 一站式清理（含 symlink unlink + dirty 检查 + git worktree remove + orca worktree rm + lease release + session_context 清）。`--reason` 强制审计；liveness gate 用真字段 `.result.observation.status`/`.result.worker.state`，任一缺失或仍 active → REFUSED（除非 `--force`）。
+
+### 修复
+
+- PR #84 review BLOCKER 1：liveness gate 不再用 `.result.workerSession`（该字段在真 Orca 响应里不存在 → 永远 DEAD 等于无门槛，会误杀活 worker）。
+- PR #84 review BLOCKER 2：不再删 METADATA（导致 dispatch/run_id 丢失，`worker-abandon` 变 unrecoverable leak），保留 METADATA 给 PM 后续清理。
+- PR #84 review MAJOR 3：--destroy 路径先 unlink `node_modules` 软链（`[ -L ] && rm -f` 无尾斜杠），不跟随软链误删主仓。
+- PR #84 review MAJOR 4：provider-lease release fail-loud（禁止 `>/dev/null 2>&1` 吞错），失败 exit 非 0。
+- PR #84 review MAJOR 5：--destroy 路径含 dirty 检查 + git worktree remove，与 `clean-worktree.sh` 同步。
+- PR #84 review MAJOR 6：references/12-orca-cli-worker.md §9 + references/13-pm-orchestrate.md 命令清单同步更新（之前文档与 v1 行为矛盾）。
+
+### 改进
+
+- PR #84 review MINOR 7：session_context 删除顺序正确（--destroy 末尾，且 fence+stop 已成功）。
+- PR #84 review MINOR 8：liveness gate 兼容 `set -euo pipefail`（局部 `set +e +o pipefail`），PARSE_ERROR fallback 可达。
+- PR #84 review NIT 9：`--force/--reason` 是 settle-specific（cmd_settle 内部局部变量），不污染其他子命令；`--reason` 用于审计。
+- PR #84 review NIT 10：新增 `scripts/test-settle-liveness.sh`（7 fixture cases）+ `scripts/tests/fixtures/worker-show-*.json`（真 Orca worker-show response）。
+
 ## [2.5.3] - 2026-08-14
 
 ### 改进
