@@ -17,7 +17,7 @@ description: 案件进度与状态台账管理。案件 case.yaml 的唯一写�
 | --- | --- |
 | 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / audit / report / validate / migrate |
 | 会话契约 | `references/contract.md`：Agent 会话开始 `show` 加载状态 + 按 context 指针读叙事文档；结束经 CLI 写回，**禁止手改 yaml** |
-| 项目管理 | `/progress` 命令：自然语言驱动任务/期限/阶段操作，路由到本 CLI 或派发 case-sync subagent |
+| 项目管理 | `/progress` 命令：自然语言驱动任务/期限/阶段操作，明确操作直路由本 CLI，语义复杂转入下方"工作流收尾状态同步"流程 |
 | 数据契约 | `references/schema.md`：case.yaml v4.0 字段字典——**唯一权威版本**，其他 skill 只引用不复制 |
 | 监控对账 | M6（远期）：audit 子命令 + hooks 挂点（PostToolUse 记账 / Stop·SubagentStop 结账 / SessionStart 预警） |
 
@@ -36,11 +36,23 @@ scripts/      case_store.py（CLI + 库 + audit）—— M2 实现
 references/   schema.md（v4.0 字段字典）、contract.md（会话契约）—— M3a 起充实
 ```
 
+## 工作流收尾状态同步（主 Agent 直执行，skill 间协作，不派 subagent）
+
+消费项目复合工作流（被告应诉、证据质证等七场景）在 Reporter 之后、或用户说"同步案件进度/根据新文书更新案件"时，**主 Agent 按以下流程直接执行**：
+
+1. **加载状态**：`show <案件短码>`
+2. **盘点产出**：列出本次工作流涉及的 02–11 目录新文件；读关键文件（判决书/传票/新文书）提取事件要素
+3. **映射判断**：产出 → 语义变更（新任务 / 任务完成 / 新期限 / 阶段推进 / 时间线事件）
+4. **CLI 写回**：add-task / set-status / add-deadline / set-stage（AI 身份，不带 --actor user）
+5. **校验与汇报**：`validate` 通过后输出变更清单与待确认项
+
+**执行纪律**：永不手改 yaml；期限需含起算日与法律依据，不确定列入待确认项不臆造；人工覆盖保护（source=user 行只提示不改写、已结案永不设置、锁定阶段不改写）；输出简短 Markdown 变更清单，不产出文件。
+
 ## 与周边的关系（案件生命周期接力）
 
 - **new-case**：创建案件目录与初始 case.yaml（v4.0 模板），本 skill 的数据生产上游
 - **case-dashboard**：视图层，经本 CLI 读写，只消费不另写
-- **case-sync subagent**（消费项目 `.claude/agents/`）：本 skill 的 LLM 执行面，处理需语义判断的写回
+- **主 Agent（skill 间协作）**：工作流收尾的状态同步由主 Agent 按上述流程直接执行，**不依赖 subagent**（架构决策：skill 协作为主，消费项目后续可能整体淘汰 subagent 派发）
 - **DataRules.md**（消费项目 `.claude/rules/`）：会话契约的规则层，指向本 skill
 
 ## 路线图

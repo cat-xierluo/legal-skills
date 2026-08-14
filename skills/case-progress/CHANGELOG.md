@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2026-08-15
+
+- **决策 #047：skill 间协作为主，去除 subagent 依赖**——状态同步流程内化进 SKILL.md（"工作流收尾状态同步"节，主 Agent 直执行：加载状态 → 盘点产出 → 映射判断 → CLI 写回 → 校验汇报）；消费项目删除 CaseSync subagent，Workflow v2.1 / DataRules / AgentMapping / /progress 引用同步为 skill 协作路径
+
 ## [0.4.0] - 2026-08-15
 
 - **M3b 轻量写回入口落地（消费项目规则层）**：

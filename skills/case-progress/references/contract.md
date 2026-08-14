@@ -1,7 +1,7 @@
 # 会话契约：Agent 如何加载与写回案件状态
 
 > **版本**: 1.0（2026-08-14，随 schema v4.0）
-> **适用对象**：SuitAgent 全部 subagent、case-sync subagent、`/progress` 命令执行者。
+> **适用对象**：SuitAgent 主 Agent 与全部 subagent、`/progress` 命令执行者（工作流收尾的状态同步由主 Agent 直执行，不派 subagent——决策 #047）。
 > **生效条件**：自 case-progress M2（case_store CLI 就绪）起强制生效；M2 之前的过渡期遵守同样纪律，但写回暂以手工编辑 + `validate` 自检替代。
 
 ---
@@ -50,7 +50,7 @@ python3 <case_store 路径>/case_store.py show <案件短码>   # 结构化状�
 
 ## 5. 工作流收尾（M3b 起）
 
-Workflow 七个场景在 Reporter 之后追加"案件状态同步"步：主 Agent 派发 **case-sync subagent**——它读取本次产出文件与 git diff，判断任务/阶段/期限的语义变更，经 case_store CLI 写回。工作流中的专业 Agent 不必各自写状态，统一由收尾步回流。
+Workflow 七个场景在 Reporter 之后追加"案件状态同步"步：**主 Agent 直接执行 case-progress skill 的状态同步流程**（加载状态 → 盘点本次产出文件与 git diff → 判断任务/阶段/期限语义变更 → 经 case_store CLI 写回；不派 subagent，决策 #047）。工作流中的专业 Agent 不必各自写状态，统一由收尾步回流。
 
 ## 6. 异常处理
 
