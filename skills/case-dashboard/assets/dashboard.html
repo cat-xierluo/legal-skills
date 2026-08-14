@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuitAgent 案件看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: rgba(255, 255, 255, 0.03);
+      --bg-card-hover: rgba(255, 255, 255, 0.06);
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-accent: rgba(99, 102, 241, 0.3);
+      --text-primary: #f0f0f5;
+      --text-secondary: #8b8b9e;
+      --text-muted: #5a5a6e;
+      --accent-primary: #6366f1;
+      --accent-secondary: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --status-todo: #f59e0b;
+      --status-progress: #3b82f6;
+      --status-done: #10b981;
+      --warn-red: #ef4444;
+      --warn-yellow: #eab308;
+      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+      --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .main-content {
+      margin-left: 320px;
+      padding: 32px 40px;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .main-content::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 320px; right: 0; bottom: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 70% 60%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* 顶部栏 */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      position: relative;
+      z-index: 1;
+    }
+    .top-bar h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .top-bar .meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .refresh-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-accent);
+      color: var(--accent-secondary);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .refresh-btn:hover { background: var(--accent-glow); transform: translateY(-1px); }
+    .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+
+    /* 期限预警条 */
+    .deadline-bar {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 28px;
+      position: relative;
+      z-index: 1;
+    }
+    .deadline-bar::-webkit-scrollbar { height: 4px; }
+    .deadline-bar::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+    .deadline-item {
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-left: 3px solid var(--text-muted);
+      border-radius: 10px;
+      padding: 12px 16px;
+      min-width: 220px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .deadline-item:hover { background: var(--bg-card-hover); transform: translateY(-2px); }
+    .deadline-item.red { border-left-color: var(--warn-red); }
+    .deadline-item.yellow { border-left-color: var(--warn-yellow); }
+    .deadline-item .dl-name { font-size: 0.85rem; font-weight: 500; margin-bottom: 4px; }
+    .deadline-item .dl-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .deadline-item .dl-days { font-weight: 700; }
+    .deadline-item.red .dl-days { color: var(--warn-red); }
+    .deadline-item.yellow .dl-days { color: var(--warn-yellow); }
+
+    /* 案件卡片网格 */
+    .case-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .case-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+    }
+    .case-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
+    }
+    .case-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .case-card-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .case-cause {
+      font-size: 0.75rem;
+      color: var(--accent-secondary);
+      margin-bottom: 12px;
+    }
+    .status-badge {
+      font-size: 0.65rem;
+      padding: 3px 9px;
+      border-radius: 10px;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+      border: 1px solid var(--border-subtle);
+    }
+    .case-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-subtle);
+    }
+    .case-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-bar {
+      width: 70px;
+      height: 4px;
+      background: var(--bg-primary);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--status-todo), var(--status-done));
+      transition: width 0.4s ease;
+    }
+    .quality-tag {
+      font-size: 0.62rem;
+      padding: 2px 7px;
+      border-radius: 8px;
+    }
+    .quality-tag.full { background: rgba(16, 185, 129, 0.12); color: var(--status-done); }
+    .quality-tag.partial { background: rgba(245, 158, 11, 0.12); color: var(--status-todo); }
+    .quality-tag.minimal { background: rgba(90, 90, 110, 0.2); color: var(--text-muted); }
+
+    /* 案件详情展开 */
+    .case-detail {
+      grid-column: 1 / -1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-accent);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-top: -8px;
+    }
+    .detail-section { margin-bottom: 16px; }
+    .detail-section h4 {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+    .detail-tasks { display: flex; flex-direction: column; gap: 6px; }
+    .detail-task {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .detail-task:hover { border-color: var(--border-accent); }
+    .detail-task.done .detail-task-title { color: var(--text-muted); text-decoration: line-through; }
+    .detail-task .chk {
+      width: 16px; height: 16px;
+      border-radius: 4px;
+      border: 1.5px solid var(--text-muted);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+    }
+    .detail-task.done .chk { background: var(--status-done); border-color: var(--status-done); color: #fff; }
+    .detail-task.readonly { cursor: not-allowed; opacity: 0.75; }
+    .detail-task.readonly:hover { border-color: var(--border-subtle); }
+    .detail-task-title { flex: 1; }
+    .detail-task-src {
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .detail-timeline { display: flex; flex-direction: column; gap: 4px; }
+    .detail-timeline-item {
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      padding-left: 14px;
+      border-left: 2px solid var(--border-subtle);
+      position: relative;
+    }
+    .detail-timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -3px; top: 7px;
+      width: 4px; height: 4px;
+      background: var(--accent-primary);
+      border-radius: 50%;
+    }
+    .detail-timeline-item .tl-date { color: var(--accent-secondary); margin-right: 8px; font-weight: 500; }
+
+    /* ==================== 侧边固定看板 ==================== */
+    .sidebar-kanban {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 300px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      box-shadow: var(--shadow-float);
+    }
+    .kanban-header {
+      padding: 24px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      position: relative;
+      overflow: hidden;
+    }
+    .kanban-header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary), var(--status-done));
+    }
+    .kanban-header h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kanban-header h2::before {
+      content: '';
+      width: 8px; height: 8px;
+      background: var(--accent-primary);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--accent-primary);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.9); }
+    }
+    .kanban-header .subtitle { font-size: 0.75rem; color: var(--text-muted); font-weight: 300; }
+
+    .kanban-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border-subtle);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .stat-item { background: var(--bg-secondary); padding: 12px 8px; text-align: center; }
+    .stat-item .count { font-size: 1.5rem; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .stat-item.todo .count { color: var(--status-todo); }
+    .stat-item.progress .count { color: var(--status-progress); }
+    .stat-item.done .count { color: var(--status-done); }
+    .stat-item .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .kanban-columns {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .kanban-columns::-webkit-scrollbar { width: 4px; }
+    .kanban-columns::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+
+    .kanban-column {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px;
+      animation: slideIn 0.4s ease forwards;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .column-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .column-title .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .column-todo .dot { background: var(--status-todo); box-shadow: 0 0 8px var(--status-todo); }
+    .column-progress .dot { background: var(--status-progress); box-shadow: 0 0 8px var(--status-progress); }
+    .column-done .dot { background: var(--status-done); box-shadow: 0 0 8px var(--status-done); }
+    .column-count { font-size: 0.7rem; color: var(--text-muted); background: var(--bg-primary); padding: 2px 8px; border-radius: 10px; }
+
+    .task-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 11px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      animation: slideIn 0.3s ease forwards;
+    }
+    .task-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .task-card:hover { transform: translateX(4px); border-color: var(--border-accent); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+    .task-card:hover::before { opacity: 1; }
+    .column-todo .task-card::before { background: var(--status-todo); }
+    .column-progress .task-card::before { background: var(--status-progress); }
+    .column-done .task-card::before { background: var(--status-done); }
+    .task-card:last-child { margin-bottom: 0; }
+    .task-card.readonly { opacity: 0.6; cursor: not-allowed; }
+    .task-card.readonly:hover { transform: none; }
+    .task-title {
+      font-size: 0.82rem;
+      font-weight: 400;
+      line-height: 1.4;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+    .task-card.done .task-title { color: var(--text-muted); text-decoration: line-through; }
+    .task-case {
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .task-case::before { content: '@'; opacity: 0.6; }
+    .task-card.readonly .task-case::after { content: ' · 只读'; opacity: 0.6; }
+
+    .empty-hint { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 16px 8px; opacity: 0.6; }
+
+    /* Toast */
+    .toast-wrap {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-accent);
+      border-left: 3px solid var(--accent-primary);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 0.82rem;
+      box-shadow: var(--shadow-float);
+      animation: toastIn 0.3s ease;
+      max-width: 360px;
+    }
+    .toast.warn { border-left-color: var(--warn-yellow); }
+    .toast.error { border-left-color: var(--warn-red); }
+    .toast.ok { border-left-color: var(--status-done); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .loading { text-align: center; color: var(--text-muted); padding: 40px; font-size: 0.85rem; }
+
+    /* 移动端 */
+    @media (max-width: 768px) {
+      .sidebar-kanban { width: 100%; height: auto; max-height: 45vh; top: auto; bottom: 0; border-right: none; border-top: 1px solid var(--border-subtle); border-radius: 20px 20px 0 0; }
+      .main-content { margin-left: 0; padding: 20px; padding-bottom: 50vh; }
+      .kanban-columns { flex-direction: row; overflow-x: auto; }
+      .kanban-column { min-width: 260px; flex-shrink: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 侧边固定看板 -->
+  <aside class="sidebar-kanban">
+    <div class="kanban-header">
+      <h2>案件看板</h2>
+      <span class="subtitle">SuitAgent · 全局任务池</span>
+    </div>
+
+    <div class="kanban-stats">
+      <div class="stat-item todo"><div class="count" id="stat-todo">–</div><div class="label">待办</div></div>
+      <div class="stat-item progress"><div class="count" id="stat-progress">–</div><div class="label">进行中</div></div>
+      <div class="stat-item done"><div class="count" id="stat-done">–</div><div class="label">已完成</div></div>
+    </div>
+
+    <div class="kanban-columns">
+      <div class="kanban-column column-todo">
+        <div class="column-header"><div class="column-title"><span class="dot"></span>待办事项</div><span class="column-count" id="cnt-todo">0</span></div>
+        <div id="col-todo"></div>
+      </div>
+      <div class="kanban-column column-progress">
+        <div class="column-header"><div class="column-title"><span class="dot"></span>进行中</div><span class="column-count" id="cnt-progress">0</span></div>
+        <div id="col-progress"></div>
+      </div>
+      <div class="kanban-column column-done">
+        <div class="column-header"><div class="column-title"><span class="dot"></span>已完成</div><span class="column-count" id="cnt-done">0</span></div>
+        <div id="col-done"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区域 -->
+  <main class="main-content">
+    <div class="top-bar">
+      <h1>案件管理</h1>
+      <div class="meta">
+        <span id="updated-time"></span>
+        <button class="refresh-btn" id="refresh-btn" onclick="refreshAll()">↻ 刷新</button>
+      </div>
+    </div>
+
+    <div class="deadline-bar" id="deadline-bar"></div>
+
+    <div class="case-grid" id="case-grid">
+      <div class="loading">加载案件中…</div>
+    </div>
+  </main>
+
+  <div class="toast-wrap" id="toast-wrap"></div>
+
+  <script>
+    const API = '';
+    let CASES = [];
+    const expandedCase = new Set();
+
+    async function api(path, opts) {
+      const r = await fetch(API + path, opts);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || ('HTTP ' + r.status));
+      }
+      return r.json();
+    }
+
+    function toast(msg, type = '') {
+      const wrap = document.getElementById('toast-wrap');
+      const el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = msg;
+      wrap.appendChild(el);
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function loadOverview() {
+      try {
+        const d = await api('/api/v1/overview');
+        document.getElementById('stat-todo').textContent = d.totals.todo;
+        document.getElementById('stat-progress').textContent = d.totals.in_progress;
+        document.getElementById('stat-done').textContent = d.totals.done;
+        renderColumn('todo', d.kanban.todo);
+        renderColumn('progress', d.kanban.in_progress);
+        renderColumn('done', d.kanban.done);
+        renderDeadlines(d.deadlines);
+        document.getElementById('updated-time').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+      } catch (e) {
+        toast('加载概览失败: ' + e.message, 'error');
+      }
+    }
+
+    function renderColumn(col, tasks) {
+      document.getElementById('cnt-' + col).textContent = tasks.length;
+      const box = document.getElementById('col-' + col);
+      if (tasks.length === 0) {
+        box.innerHTML = '<div class="empty-hint">暂无</div>';
+        return;
+      }
+      box.innerHTML = tasks.map(t => `
+        <div class="task-card ${t.status} ${t.writable ? '' : 'readonly'}"
+             ${t.writable ? `onclick="toggleTask(${JSON.stringify(t).replace(/"/g,'&quot;')})"` : 'onclick="toast(\'此任务来源（'+escapeHtml(t.source_type)+'）不支持状态切换\',\'warn\')"'}
+             title="${escapeHtml(t.case_short)}">
+          <div class="task-title">${escapeHtml(t.title)}</div>
+          <div class="task-case">${escapeHtml(t.case_short)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderDeadlines(deadlines) {
+      const bar = document.getElementById('deadline-bar');
+      if (!deadlines || deadlines.length === 0) {
+        bar.innerHTML = '<div class="empty-hint" style="padding:8px 0">无近期期限预警</div>';
+        return;
+      }
+      bar.innerHTML = deadlines.map(d => {
+        const dl = d.days_left;
+        let txt;
+        if (dl < 0) txt = `逾期 ${-dl} 天`;
+        else if (dl === 0) txt = '今天到期';
+        else txt = `剩 ${dl} 天`;
+        return `<div class="deadline-item ${d.level}" onclick="openCase('${d.case_id}')" title="${escapeHtml(d.case_short)}">
+          <div class="dl-name">${escapeHtml(d.name)} · ${escapeHtml(d.case_short)}</div>
+          <div class="dl-meta"><span>${escapeHtml(d.end_date)}</span><span class="dl-days">${txt}</span></div>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadCases() {
+      try {
+        CASES = await api('/api/v1/cases');
+        renderCases();
+      } catch (e) {
+        document.getElementById('case-grid').innerHTML = '<div class="loading">加载失败: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    function renderCases() {
+      const grid = document.getElementById('case-grid');
+      grid.innerHTML = CASES.map(c => {
+        const tc = c.task_counts;
+        const total = tc.todo + tc.in_progress + tc.done;
+        const pct = total ? Math.round(tc.done / total * 100) : 0;
+        const nd = c.nearest_deadline;
+        const ndTxt = nd ? (nd.days_left < 0 ? `逾期 ${-nd.days_left}天` : `剩${nd.days_left}天`) : '无期限';
+        const qualityTxt = {full:'完整', partial:'部分', minimal:'仅目录'}[c.data_quality] || c.data_quality;
+        const expanded = expandedCase.has(c.id);
+        return `
+          <div class="case-card" onclick="toggleCase('${c.id}')">
+            <div class="case-card-head">
+              <div class="case-card-title">${escapeHtml(c.display_name)}</div>
+              <span class="status-badge">${escapeHtml(c.status || c.stage || '—')}</span>
+            </div>
+            <div class="case-cause">${escapeHtml(c.cause || '案由待补充')}</div>
+            <div class="case-meta">
+              <div class="case-progress">
+                <span>${tc.done}/${total}</span>
+                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <span class="quality-tag ${c.data_quality}">${qualityTxt}</span>
+              </div>
+              <span>${ndTxt}</span>
+            </div>
+          </div>
+          ${expanded ? `<div class="case-detail" id="detail-${c.id}"><div class="loading">加载详情…</div></div>` : ''}
+        `;
+      }).join('');
+      expandedCase.forEach(id => loadCaseDetail(id));
+    }
+
+    async function toggleCase(id) {
+      if (expandedCase.has(id)) {
+        expandedCase.delete(id);
+      } else {
+        expandedCase.add(id);
+      }
+      renderCases();
+    }
+
+    async function loadCaseDetail(id) {
+      const el = document.getElementById('detail-' + id);
+      if (!el) return;
+      try {
+        const c = await api('/api/v1/case/' + id);
+        const tasksHtml = c.tasks.length ? c.tasks.map(t => `
+          <div class="detail-task ${t.status} ${t.writable ? '' : 'readonly'}"
+               ${t.writable ? `onclick="event.stopPropagation();toggleTask(${JSON.stringify(t).replace(/"/g,'&quot;')})"` : 'onclick="event.stopPropagation();toast(\'此任务来源不支持切换\',\'warn\')"'}
+               title="${t.writable ? '点击切换状态' : '只读来源'}">
+            <span class="chk">${t.status === 'done' ? '✓' : ''}</span>
+            <span class="detail-task-title">${escapeHtml(t.title)}</span>
+            <span class="detail-task-src">${escapeHtml(t.priority || t.source_type)}</span>
+          </div>
+        `).join('') : '<div class="empty-hint">无任务数据</div>';
+        const tlHtml = c.timeline.length ? c.timeline.slice(0, 8).map(t => `
+          <div class="detail-timeline-item"><span class="tl-date">${escapeHtml(t.date)}</span>${escapeHtml(t.event)}</div>
+        `).join('') : '<div class="empty-hint">无时间线</div>';
+        el.innerHTML = `
+          <div class="detail-section">
+            <h4>任务（${c.tasks.length}）</h4>
+            <div class="detail-tasks">${tasksHtml}</div>
+          </div>
+          <div class="detail-section">
+            <h4>时间线</h4>
+            <div class="detail-timeline">${tlHtml}</div>
+          </div>
+          <div style="margin-top:14px"><button class="refresh-btn" onclick="event.stopPropagation();openCase('${id}')">📁 打开案件文件夹</button></div>
+        `;
+      } catch (e) {
+        el.innerHTML = '<div class="loading">详情加载失败: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function toggleTask(task) {
+      const newStatus = task.status === 'done' ? 'todo' : 'done';
+      try {
+        const r = await api('/api/v1/task/toggle', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({case_id: task.case_id, source_ref: task.source_ref, target_status: newStatus})
+        });
+        if (r.ok) {
+          toast(`已标记为「${newStatus === 'done' ? '已完成' : '待办'}」`, 'ok');
+          refreshAll();
+        } else {
+          toast('切换失败: ' + r.message, 'warn');
+        }
+      } catch (e) {
+        toast('切换失败: ' + e.message, 'error');
+      }
+    }
+
+    async function openCase(id) {
+      try {
+        await api('/api/v1/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({case_id: id})});
+      } catch (e) {
+        toast('打开失败: ' + e.message, 'error');
+      }
+    }
+
+    async function refreshAll() {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      await Promise.all([loadOverview(), loadCases()]);
+      btn.disabled = false;
+    }
+
+    // 初始化
+    refreshAll();
+    setInterval(loadOverview, 60000);  // 侧边栏每分钟刷新
+  </script>
+
+</body>
+</html>
