@@ -89,6 +89,44 @@
 
 **结论**：pdfjs + Tauri 项目，阶段 5 e2e（jsdom）测 pdfjs 逻辑 + UI，阶段 6（真机 / inspector）测 WKWebView worker——两者互补，**jsdom 过 ≠ 真机过**。
 
+## 教训 8：负向样式断言的 UA 默认值陷阱（阶段 5 / assertion-depth 的实例）
+
+**场景**：断言主题色卡「非裸渲染」（防「写 className 不写 CSS」回归），写了 4 条负向断言：`radius not.toBe('0px')` / `borderWidth not.toBe('0px')` / `background not.toBe('rgba(0,0,0,0)')` / `padding not.toBe('0px')`。独立 review 实测 chromium UA 默认 button：`border: 2px`、`padding: 1px`、背景 `rgb(239,239,239)`——**4 条里 3 条恒真**，CSS 丢了照样绿。
+
+**skill 原来没说**：负向断言（not.toBe 某值）在属性有非零 UA 默认时无鉴别力。
+
+**补充规则**：
+- 「非默认值」断言前先搞清 **UA 默认值**是什么：`border`（2px）、`padding`（1px）、`background`（灰）在 button 上都不是 0/透明。
+- 正确写法二选一：
+  1. **锚定 CSS 声明值**：`expect(radius).toBe('8px')`——最强，同时防「值改错」；
+  2. **「≠ UA 默认值」成对断言**：`expect(['rgba(0,0,0,0)','rgb(239,239,239)']).not.toContain(bg)`——值随主题变、不便锚定精确值时用。
+- 判断标准：把 CSS 规则删掉重跑，断言**必须变红**；删了还绿 = 恒真 = 假防线。
+
+## 教训 9：Playwright config 不在仓库根目录，必须显式 --config（阶段 5）
+
+**场景**：项目 config 在 `config/playwright.config.ts`（非根目录）。直接 `npx playwright test e2e/x.spec.ts` 不报「找不到 config」——Playwright 静默用**默认配置**跑：无 `baseURL`（`page.goto('/')` 报 `Cannot navigate to invalid URL`）、无 `webServer`（`ERR_CONNECTION_REFUSED`）。后者极易被「手动起 dev server」掩盖，测试还能全绿，但 `goto('/')` 类相对导航永远挂。
+
+**skill 原来没说**：config 目录非标准位置时的症状与掩盖链。
+
+**补充规则**：
+- config 不在根目录的项目，**始终** `npx playwright test --config config/playwright.config.ts ...`（对齐 CI 命令）。
+- 症状对照：`ERR_CONNECTION_REFUSED` 或 `Cannot navigate to invalid URL` → 先查是不是默认配置在跑（没走到你的 config），**不要**急着手动起 dev server 绕过——绕过后 webServer/baseURL 缺失问题被掩盖，相对路径断言照挂。
+- 一次性 DOM 探针 spec（goto + evaluate dump `parentElement` 链 / `elementFromPoint` 命中 / class 清单，跑完删）比猜选择器快：一次探测解决了「IR 有三种 pre（编辑面 / 源码 marker / 渲染块）」的定位歧义。
+
+## 教训 10：NOT_VERIFIED 整批移交用户 = 反模式（release 收尾）
+
+**场景**：v0.7.0 发布时 5 个 feature 全挂「真机验证 NOT_VERIFIED，移交用户」。实际盘点：其中大部分（6 套主题切换/CSS 变量注入/重启保留/CSS 导入 sanitize/license 跳转/复制按钮 hover+反馈+剪贴板）是**纯 Web 层**，vite dev + Playwright 当场可验——用户一句话点破：「这些你可以直接推进，不一定要我人去查看」。
+
+**skill 原来没说**：NOT_VERIFIED 的分层判定与收尾动作。
+
+**补充规则**（release / 交付收尾时执行）：
+- 把 NOT_VERIFIED 清单逐项二分：
+  - **Web 层可验**（UI 渲染 / 交互 / DOM 断言 / localStorage 持久化 / 剪贴板（chromium grant 权限））→ Agent **当场写 spec 验证**，转正为回归 e2e，同步把口径从 NOT_VERIFIED 收窄；**不得整批移交用户**。
+  - **真需真机**（系统 API 注册 / Tauri invoke 后端 / webview 特异行为 / 主观观感）→ 保留 NOT_VERIFIED，但**精确写明剩余范围**（不是整条 feature，而是「仅 WKWebView 剪贴板写入」这种粒度）。
+- 判据：该项的功能面在浏览器 DOM 里存在吗？存在 → Playwright 可验。不存在（要 OS / Tauri runtime）→ 真机。
+- 剪贴板：chromium `test.use({ permissions: ['clipboard-read','clipboard-write'] })` + `navigator.clipboard.readText()` 可断言真实内容，不必留真机。
+- 「移交给用户」前自问：这份清单里有多少其实是我没跑 Playwright，而不是真验不了？
+
 ## 反哺纪律
 
 每次跑 verification-gate 暴露 skill 不足（覆盖盲区 / 规则不清 / 项目类型难点），加到本文件（教训 N）。skill 在实践中迭代，不一次写死。
