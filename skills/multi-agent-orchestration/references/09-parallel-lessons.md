@@ -697,3 +697,23 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 **根因**：Orca supervised 的 consumer fencing = 最新 coordinator handle 胜出。一个 Wave 共用一个 Run，`run-create` 调一次即定；重试生成新 Run（即便 objective 相同），旧 handle 立即被新 Run 的 handle fence。
 
 **正确协议**：`pm-orchestrate run-create --objective TEXT` 调一次，从 receipt `jq -r '.result.run.id'` 一次取定 run_id，整 Wave 复用（`spawn-worker --orca-supervised --orca-run-id $run_id`）。不要重试 run-create；若需确认 receipt，读已拿到的 JSON，不重发命令。详见 SKILL §3.3 规则 2、§4.4。
+
+### G33. settle 3 轮 review：自审漏 BLOCKER 的根因 = 没对真 Orca 完整输出跑 jq（Task-047）
+
+**实战来源**：2026-08-14，PR #84（v1）+ PR #86（v2），3 轮独立 review。
+
+**现象**：settle 的 liveness gate 两次自审"通过"但生产无效：
+- v1（PR #84）：gate 查 `.result.workerSession`——该字段在真 Orca 响应里**不存在**（reviewer 跑 `worker-show --json | jq 'keys'` 确认顶层是 `dispatch/observation/terminal/terminalResource/worker`，无 workerSession）。gate 永远返回 DEAD = 无门槛，会误杀活 worker。
+- v2（PR #86 r1）：gate 改查 `.observation.status`——但 cmd_settle 传的是**完整包装输出**（`_meta/id/ok/result`），真路径是 `.result.observation.status`。fixture 预解包了（只有 .result 内部），测试绿但生产无效。和 v1 同形状。
+
+**根因（两次共同）**：
+1. **没对真 Orca 完整输出跑 jq**——自审时用预解包/猜字段名，没拿真 `worker-show --json` 完整响应验证 jq 表达式。
+2. **fixture 预解包掩盖包装层**——测试用 `.result` 内部对象，生产用完整 `{_meta,id,ok,result}`，两者 jq 路径不同。测试绿 ≠ 生产有效。
+3. **自审认知盲区**——写代码者倾向于"逻辑看起来对"（jq 查 observation.status，fixture 有 observation.status，绿），忽略"生产数据的真实结构"（完整包装）。
+
+**教训**：
+- **liveness gate / 任何解析外部 API 响应的逻辑，必须用真完整响应 fixture 测试**（含包装层），不能用预解包数据。test-settle-liveness.sh Case 9（验证 fixture 含 .result 包装）是防回归。
+- **独立 review + 真 CLI 验证是抓 BLOCKER 的唯一可靠手段**——PM 自审两次漏 BLOCKER，独立 reviewer 两次都靠"跑真 `orca orchestration worker-show --dispatch <D> --json | jq`"抓出来。
+- **Orca CLI 的 `--help` + 真请求是 schema 真相来源**——不猜字段名，跑命令看真 keys。
+
+**关联**：DEC-034（settle 决策）、SKILL §4.5、references/12 §9、PR #84（v1 close）+ PR #86（v2 merge）、test-settle-liveness.sh Case 9。
