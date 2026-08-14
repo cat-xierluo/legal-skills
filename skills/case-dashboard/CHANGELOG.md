@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2026-08-15
+
+- **M4 收尾：删除 A–D 遗留适配器**（849 → 553 行）——M4 已完成消费项目全量迁移，仅保留 V（case.yaml v4.0）数据源；toggle 写回唯一路径 = case_store CLI
+- 删除：adapt_yaml_v21/v3/custom、adapt_info_md、adapt_none、find_info_md、patch_yaml_task_status、patch_md_checkbox、atomic_write（遗留 patch 专用）
+- 验证：8 案件全部识别 v4.0；真实案件写回往返（done→todo）通过
+
 ## [0.1.0] - 2026-08-14
 
 - 骨架创建：SKILL.md（职责边界、符号链接路径红线、端口与数据分离约束）、目录结构（scripts / assets / references）
