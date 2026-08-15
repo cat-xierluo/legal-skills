@@ -245,6 +245,7 @@ def commit_write(path, data, actor, action, detail):
         "细节": detail,
     })
     atomic_write(path, data)
+    _refresh_views(path, data, (data.get("meta") or {}).get("案件短码") or "?")
     for w in warns:
         print(f"⚠️ {w}")
 
@@ -839,6 +840,343 @@ def _legacy_kind(case_dir):
     return "none", files
 
 
+# ---------------------------------------------------------------------------
+# 视图渲染：case.yaml → 案件视图.md / .html（派生只读物，勿手改）
+# 规则：commit_write 后自动刷新"已存在"的视图文件（不主动创建）；显式创建用 render 命令
+# ---------------------------------------------------------------------------
+import html as _html
+
+
+def _fmt_amt(v):
+    return "—" if v is None else f"{v:,.2f} 元"
+
+
+def _deadline_level(d):
+    if d.get("抵消标记"):
+        return "off"
+    if d.get("状态") == "done":
+        return "done"
+    dl = days_left(d.get("截止日期"))
+    if dl is None:
+        return "none"
+    if dl < 0 or dl <= 7:
+        return "red"
+    if dl <= 30:
+        return "orange"
+    return "green"
+
+
+_DL_MARK = {"red": "🔴", "orange": "🟠", "green": "🟢", "done": "✅", "off": "⚪", "none": "⚪"}
+
+
+def _party_line(p):
+    bits = [str(p.get("姓名")), str(p.get("角色") or "")]
+    if p.get("类型"):
+        bits.append(f"（{p['类型']}）")
+    ext = p.get("扩展信息") or {}
+    if ext:
+        bits.append("｜" + "；".join(f"{k}:{v}" for k, v in ext.items() if v))
+    return " ".join(b for b in bits if b)
+
+
+def render_md(data, case_id):
+    meta = data.get("meta") or {}
+    info = data.get("案件基本信息") or {}
+    pa = data.get("当事人与代理") or {}
+    tasks = data.get("任务") or []
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    L = []
+    L.append(f"# {info.get('案件名称') or meta.get('目录标识') or case_id}")
+    L.append("")
+    lock = " 🔒" if info.get("程序阶段锁定") else ""
+    L.append(f"> **{info.get('生命周期状态')}** · {info.get('程序阶段')}{lock} · {meta.get('业务领域')}／{info.get('案件类型') or '—'}　"
+             f"案号：{meta.get('法院案号') or '—'}　管辖：{info.get('管辖法院') or '—'}　标的额：{_fmt_amt(info.get('标的额'))}")
+    L.append("")
+    if info.get("标的额备注"):
+        L.append(f"> 标的额口径：{info['标的额备注']}")
+        L.append("")
+    L.append(f"**生成时间**：{now}　**唯一真源**：`case.yaml`（本文件为自动生成的派生视图，请勿手改）")
+    L.append("")
+
+    if pa.get("我方当事人") or pa.get("对方当事人") or pa.get("律师") or pa.get("其他诉讼参与人"):
+        L.append("## 当事人与代理")
+        L.append("")
+        for label, key in (("我方", "我方当事人"), ("对方", "对方当事人")):
+            for p in pa.get(key) or []:
+                L.append(f"- **{label}** {_party_line(p)}")
+        for lw in pa.get("律师") or []:
+            L.append(f"- **律师** {lw.get('姓名')}（{lw.get('角色')}）")
+        for p in pa.get("其他诉讼参与人") or []:
+            L.append(f"- **{p.get('角色')}** {p.get('姓名')}" + (f"——{p['备注']}" if p.get("备注") else ""))
+        L.append("")
+
+    if tasks:
+        cnt = {s: sum(1 for t in tasks if t.get("状态") == s) for s in TRI_STATE}
+        L.append(f"## 任务（待办 {cnt['todo']} / 进行 {cnt['in_progress']} / 完成 {cnt['done']}）")
+        L.append("")
+        box = {"todo": "[ ]", "in_progress": "[~]", "done": "[x]"}
+        pri = {"high": "高", "medium": "中", "low": "低"}
+        for t in tasks:
+            seg = [box.get(t.get("状态"), "[ ]"), f"**{t.get('名称')}**"]
+            meta_bits = [f"优先级{pri.get(t.get('优先级'), '中')}"]
+            if t.get("截止日期"):
+                meta_bits.append(f"截止 {t['截止日期']}")
+            if t.get("负责人"):
+                meta_bits.append(str(t["负责人"]))
+            seg.append("（" + "·".join(meta_bits) + "）")
+            if t.get("描述"):
+                seg.append(f"——{t['描述']}")
+            L.append("- " + " ".join(seg))
+        L.append("")
+
+    dls = data.get("法定期限") or []
+    if dls:
+        L.append("## 法定期限")
+        L.append("")
+        L.append("| 状态 | 名称 | 截止 | 剩余 | 依据 |")
+        L.append("| --- | --- | --- | --- | --- |")
+        for d in dls:
+            lvl = _deadline_level(d)
+            dl = days_left(d.get("截止日期"))
+            left = "已抵消" if lvl == "off" else ("已完成" if lvl == "done" else
+                                                  (f"{dl} 天" if dl is not None else "—"))
+            L.append(f"| {_DL_MARK[lvl]} {d.get('类型')} | {d.get('名称')} | {d.get('截止日期')} | {left} | {d.get('法律依据') or '—'} |")
+        L.append("")
+
+    hearings = data.get("开庭与听证") or []
+    if hearings:
+        L.append("## 开庭与听证")
+        L.append("")
+        L.append("| 日期 | 类型 | 事项 | 地点/法庭 | 状态 |")
+        L.append("| --- | --- | --- | --- | --- |")
+        for h in hearings:
+            loc = " / ".join(str(x) for x in (h.get("地点"), h.get("法庭")) if x) or "—"
+            L.append(f"| {h.get('日期')} | {h.get('类型')} | {h.get('事项')} | {loc} | {'已进行' if h.get('状态') == 'done' else '已排期'} |")
+        L.append("")
+
+    tl = data.get("案件时间线") or []
+    if tl:
+        L.append("## 案件时间线")
+        L.append("")
+        L.append("| 日期 | 事件 | 事项 | 状态 |")
+        L.append("| --- | --- | --- | --- |")
+        for e in sorted(tl, key=lambda x: str(x.get("日期")), reverse=True):
+            L.append(f"| {e.get('日期')} | {e.get('事件类型')} | {e.get('事项')} | {'✅' if e.get('状态') == 'done' else '⏳'} |")
+        L.append("")
+
+    ev = data.get("证据索引") or []
+    if ev:
+        L.append("## 证据索引")
+        L.append("")
+        L.append("| 名称 | 类型 | 证明目的 | 状态 | 取证 |")
+        L.append("| --- | --- | --- | --- | --- |")
+        for e in ev:
+            L.append(f"| {e.get('名称')} | {e.get('类型')} | {e.get('证明目的') or '—'} | {'已收集' if e.get('状态') == 'done' else '待收集'} | {e.get('取证方式') or '—'} |")
+        L.append("")
+
+    fees = data.get("费用信息") or {}
+    pay = fees.get("支出") or {}
+    claims = fees.get("索赔与评估") or []
+    if any((pay.get(k) or {}).get("金额") is not None for k in pay) or claims:
+        L.append("## 费用")
+        L.append("")
+        L.append("| 类别 | 金额 | 状态 |")
+        L.append("| --- | --- | --- |")
+        for k, v in pay.items():
+            if isinstance(v, dict) and (v.get("金额") is not None or v.get("状态") == "已确定"):
+                extra = f"（{v['计费方式']}）" if v.get("计费方式") else ""
+                L.append(f"| {k}{extra} | {_fmt_amt(v.get('金额'))} | {v.get('状态', '待确定')} |")
+        for c in claims:
+            L.append(f"| 索赔：{c.get('项目')} | {_fmt_amt(c.get('金额'))} | {c.get('计算方式') or '—'} |")
+        L.append("")
+
+    for title, key, cols in (("关联案件", "关联案件", ("关系", "案号或目录", "说明")),
+                             ("审级记录", "审级记录", ("审级", "法院案号", "承办法官", "结案"))):
+        rows = info.get(key) if key == "关联案件" else data.get(key)
+        rows = rows or []
+        if rows:
+            L.append(f"## {title}")
+            L.append("")
+            L.append("| " + " | ".join(cols) + " |")
+            L.append("|" + "---|" * len(cols))
+            for r in rows:
+                if key == "审级记录":
+                    end = f"{r.get('结案日期') or '—'}（{r.get('结案方式') or '—'}）" if r.get("结案日期") else "—"
+                    L.append(f"| {r.get('审级')} | {r.get('法院案号') or '—'} | {r.get('承办法官') or '—'} | {end} |")
+                else:
+                    L.append(f"| {r.get('关系')} | {r.get('案号或目录')} | {r.get('说明') or '—'} |")
+            L.append("")
+
+    fr = data.get("争议焦点与法律研究") or {}
+    if fr.get("争议焦点") or fr.get("法律研究"):
+        L.append("## 争议焦点与法律研究")
+        L.append("")
+        st = {"todo": "待识别", "in_progress": "分析中", "done": "已分析"}
+        for f in fr.get("争议焦点") or []:
+            L.append(f"- 争议焦点：**{f.get('名称')}**（{st.get(f.get('状态'), '')}）")
+        for r in fr.get("法律研究") or []:
+            L.append(f"- 法律研究：**{r.get('主题')}**（{st.get(r.get('状态'), '')}）")
+        L.append("")
+
+    L.append("---")
+    L.append(f"*case_store render · {now} · 任务/期限变更请经 /progress 命令或看板操作*")
+    return "\n".join(L) + "\n"
+
+
+def render_html(data, case_id):
+    md_esc = lambda s: _html.escape(str(s if s is not None else "—"))
+    meta = data.get("meta") or {}
+    info = data.get("案件基本信息") or {}
+    pa = data.get("当事人与代理") or {}
+    tasks = data.get("任务") or []
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    def table(headers, rows):
+        if not rows:
+            return ""
+        h = "".join(f"<th>{md_esc(x)}</th>" for x in headers)
+        b = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+        return f"<table><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table>"
+
+    P = []
+    lock = ' <span class="lock">🔒 已锁定</span>' if info.get("程序阶段锁定") else ""
+    P.append(f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>{md_esc(info.get('案件名称') or case_id)} · 案件视图</title>
+<style>
+body{{font-family:-apple-system,"PingFang SC","Microsoft YaHei",serif;max-width:880px;margin:32px auto;padding:0 24px;color:#1f2933;background:#fafaf8}}
+h1{{font-size:1.5em;margin-bottom:4px}} h2{{font-size:1.05em;border-bottom:2px solid #c9a86a;padding-bottom:4px;margin-top:28px;color:#5b4a21}}
+.meta{{color:#52606d;line-height:1.8}} .badge{{display:inline-block;padding:2px 12px;border-radius:12px;background:#c9a86a;color:#fff;font-weight:600}}
+.stage{{color:#5b4a21;font-weight:600}} .lock{{color:#9b2c2c;font-size:.85em}}
+table{{border-collapse:collapse;width:100%;font-size:.92em;margin:8px 0}} th,td{{border:1px solid #d9d2c5;padding:5px 9px;text-align:left}}
+th{{background:#f3eee2}} tr:nth-child(even) td{{background:#fbf9f4}}
+.red{{color:#c53030;font-weight:600}} .orange{{color:#c05621}} .green{{color:#2f855a}} .done{{color:#718096}}
+ul{{padding-left:1.2em}} li{{margin:3px 0}} .foot{{color:#9aa5b1;font-size:.8em;margin-top:32px;border-top:1px solid #e4e0d5;padding-top:8px}}
+</style></head><body>
+<h1>{md_esc(info.get('案件名称') or case_id)}</h1>
+<p class="meta"><span class="badge">{md_esc(info.get('生命周期状态'))}</span> <span class="stage">{md_esc(info.get('程序阶段'))}{lock}</span>
+　{md_esc(meta.get('业务领域'))}／{md_esc(info.get('案件类型'))}　案号：{md_esc(meta.get('法院案号'))}　管辖：{md_esc(info.get('管辖法院'))}　标的额：{md_esc(_fmt_amt(info.get('标的额')))}</p>""")
+
+    people = []
+    for label, key in (("我方", "我方当事人"), ("对方", "对方当事人")):
+        people += [(label, _party_line(p)) for p in (pa.get(key) or [])]
+    people += [("律师", f"{lw.get('姓名')}（{lw.get('角色')}）") for lw in (pa.get("律师") or [])]
+    people += [(p.get("角色"), f"{p.get('姓名')}" + (f"——{p['备注']}" if p.get("备注") else "")) for p in (pa.get("其他诉讼参与人") or [])]
+    if people:
+        P.append("<h2>当事人与代理</h2><ul>" + "".join(f"<li><b>{md_esc(a)}</b> {md_esc(b)}</li>" for a, b in people) + "</ul>")
+
+    if tasks:
+        cnt = {s: sum(1 for t in tasks if t.get("状态") == s) for s in TRI_STATE}
+        mark = {"todo": "☐", "in_progress": "◐", "done": "☑"}
+        cls = {"todo": "", "in_progress": "orange", "done": "done"}
+        items = []
+        for t in tasks:
+            bits = f"{mark[t.get('状态','todo')]} <b>{md_esc(t.get('名称'))}</b>"
+            meta_bits = [f"优先级{ {'high':'高','medium':'中','low':'低'}.get(t.get('优先级'),'中') }"]
+            if t.get("截止日期"):
+                meta_bits.append(f"截止 {md_esc(t['截止日期'])}")
+            if t.get("负责人"):
+                meta_bits.append(md_esc(t["负责人"]))
+            bits += "<span class='done'>（" + "·".join(meta_bits) + "）</span>"
+            if t.get("描述"):
+                bits += f"<span class='done'>——{md_esc(t['描述'])}</span>"
+            items.append(f"<li class='{cls.get(t.get('状态'),'')}'>{bits}</li>")
+        P.append(f"<h2>任务（待办 {cnt['todo']} / 进行 {cnt['in_progress']} / 完成 {cnt['done']}）</h2><ul>" + "".join(items) + "</ul>")
+
+    dls = data.get("法定期限") or []
+    if dls:
+        rows = []
+        for d in dls:
+            lvl = _deadline_level(d)
+            dl = days_left(d.get("截止日期"))
+            left = {"off": "已抵消", "done": "已完成"}.get(lvl) or (f"{dl} 天" if dl is not None else "—")
+            markmap = {"red": "🔴", "orange": "🟠", "green": "🟢", "done": "✅", "off": "⚪", "none": "⚪"}
+            rows.append((f"<span class='{lvl if lvl in ('red','orange','green','done') else ''}'>{markmap[lvl]} {md_esc(d.get('类型'))}</span>",
+                         md_esc(d.get("名称")), md_esc(d.get("截止日期")), md_esc(left), md_esc(d.get("法律依据"))))
+        P.append("<h2>法定期限</h2>" + table(("状态", "名称", "截止", "剩余", "依据"), rows))
+
+    hearings = data.get("开庭与听证") or []
+    if hearings:
+        rows = [(md_esc(h.get("日期")), md_esc(h.get("类型")), md_esc(h.get("事项")),
+                 md_esc(" / ".join(str(x) for x in (h.get("地点"), h.get("法庭")) if x) or "—"),
+                 "已进行" if h.get("状态") == "done" else "<b>已排期</b>") for h in hearings]
+        P.append("<h2>开庭与听证</h2>" + table(("日期", "类型", "事项", "地点/法庭", "状态"), rows))
+
+    tl = sorted(data.get("案件时间线") or [], key=lambda x: str(x.get("日期")), reverse=True)
+    if tl:
+        rows = [(md_esc(e.get("日期")), md_esc(e.get("事件类型")), md_esc(e.get("事项")),
+                 "✅" if e.get("状态") == "done" else "⏳") for e in tl]
+        P.append("<h2>案件时间线</h2>" + table(("日期", "事件", "事项", "状态"), rows))
+
+    ev = data.get("证据索引") or []
+    if ev:
+        rows = [(md_esc(e.get("名称")), md_esc(e.get("类型")), md_esc(e.get("证明目的")),
+                 "已收集" if e.get("状态") == "done" else "待收集", md_esc(e.get("取证方式"))) for e in ev]
+        P.append("<h2>证据索引</h2>" + table(("名称", "类型", "证明目的", "状态", "取证"), rows))
+
+    fees = data.get("费用信息") or {}
+    pay, claims = fees.get("支出") or {}, fees.get("索赔与评估") or []
+    frows = [(f"{md_esc(k)}" + (f"（{md_esc(v.get('计费方式'))}）" if isinstance(v, dict) and v.get("计费方式") else ""),
+              md_esc(_fmt_amt(v.get("金额") if isinstance(v, dict) else None)),
+              md_esc(v.get("状态", "待确定") if isinstance(v, dict) else "—")) for k, v in pay.items()
+             if isinstance(v, dict) and (v.get("金额") is not None or v.get("状态") == "已确定")]
+    frows += [(f"索赔：{md_esc(c.get('项目'))}", md_esc(_fmt_amt(c.get("金额"))), md_esc(c.get("计算方式") or "—")) for c in claims]
+    if frows:
+        P.append("<h2>费用</h2>" + table(("类别", "金额", "状态/口径"), frows))
+
+    for title, rows, cols in (("审级记录", data.get("审级记录") or [], ("审级", "法院案号", "承办法官", "结案")),
+                              ("关联案件", info.get("关联案件") or [], ("关系", "案号或目录", "说明"))):
+        if rows:
+            r2 = []
+            for r in rows:
+                if title == "审级记录":
+                    end = f"{r.get('结案日期') or '—'}（{r.get('结案方式') or '—'}）" if r.get("结案日期") else "—"
+                    r2.append((md_esc(r.get("审级")), md_esc(r.get("法院案号")), md_esc(r.get("承办法官")), md_esc(end)))
+                else:
+                    r2.append((md_esc(r.get("关系")), md_esc(r.get("案号或目录")), md_esc(r.get("说明"))))
+            P.append(f"<h2>{title}</h2>" + table(cols, r2))
+
+    fr = data.get("争议焦点与法律研究") or {}
+    if fr.get("争议焦点") or fr.get("法律研究"):
+        st = {"todo": "待识别", "in_progress": "分析中", "done": "已分析"}
+        lis = [f"<li>争议焦点：<b>{md_esc(f.get('名称'))}</b>（{st.get(f.get('状态'), '')}）</li>" for f in fr.get("争议焦点") or []]
+        lis += [f"<li>法律研究：<b>{md_esc(r.get('主题'))}</b>（{st.get(r.get('状态'), '')}）</li>" for r in fr.get("法律研究") or []]
+        P.append("<h2>争议焦点与法律研究</h2><ul>" + "".join(lis) + "</ul>")
+
+    P.append(f"<p class='foot'>case_store render · {now} · 本页由 case.yaml 自动生成（派生视图，请勿手改）；任务/期限变更请经 /progress 或看板</p></body></html>")
+    return "\n".join(P)
+
+
+def _refresh_views(path, data, case_id):
+    """commit_write 后刷新已存在的视图文件（不主动创建）。"""
+    d00 = path.parent
+    md_p, html_p = d00 / "案件视图.md", d00 / "案件视图.html"
+    try:
+        if md_p.exists():
+            md_p.write_text(render_md(data, case_id), encoding="utf-8")
+        if html_p.exists():
+            html_p.write_text(render_html(data, case_id), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️ 视图刷新失败（不影响写入）：{e}", file=sys.stderr)
+
+
+def cmd_render(root, case_id, args):
+    path = case_yaml_path(root, case_id)
+    data = load_case(path)
+    d00 = path.parent
+    if args.stdout:
+        print(render_md(data, case_id), end="")
+        return
+    fmt = args.format
+    wrote = []
+    if fmt in ("md", "both"):
+        (d00 / "案件视图.md").write_text(render_md(data, case_id), encoding="utf-8")
+        wrote.append("案件视图.md")
+    if fmt in ("html", "both"):
+        (d00 / "案件视图.html").write_text(render_html(data, case_id), encoding="utf-8")
+        wrote.append("案件视图.html")
+    print(f"✅ 已生成 {' 与 '.join(wrote)}（{d00}）；此后每次写入将自动刷新已存在的视图")
+
+
 def cmd_set_fields(root, case_id, args):
     """通用字段补充：深合并 JSON 进 case.yaml（列表字段整体替换，任务增改请用 add-task/set-status）。"""
     path = case_yaml_path(root, case_id)
@@ -975,6 +1313,10 @@ def main():
     sp = sub.add_parser("set-fields", help="通用字段补充（深合并 JSON；列表整体替换，任务增改用专用命令）")
     common(sp)
     sp.add_argument("json_", metavar="JSON", help="补充 JSON（@文件路径 或内联）")
+    sp = sub.add_parser("render", help="生成案件视图（md/html，落 00 目录；写入后自动刷新已存在视图）")
+    common(sp)
+    sp.add_argument("--format", choices=["md", "html", "both"], default="both")
+    sp.add_argument("--stdout", action="store_true", help="打印 md 到终端（不写文件）")
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
@@ -989,7 +1331,7 @@ def main():
     table = {"show": cmd_show, "list": cmd_list, "add-task": cmd_add_task,
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
-             "set-fields": cmd_set_fields}
+             "set-fields": cmd_set_fields, "render": cmd_render}
     if args.cmd == "set-fields":
         cmd_set_fields(root, args.case_id, args)
     else:

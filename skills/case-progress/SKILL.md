@@ -15,7 +15,8 @@ description: 案件进度与状态台账管理。案件 case.yaml 的唯一写�
 
 | 功能 | 形式 |
 | --- | --- |
-| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / audit / report / validate / migrate |
+| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
+| 视图渲染 | `render <短码>`：生成 `案件视图.md` + `案件视图.html`（00 目录，一页纸派生视图，勿手改）；**每次写入自动刷新已存在的视图文件**——无需 hooks 即保持新鲜 |
 | 会话契约 | `references/contract.md`：Agent 会话开始 `show` 加载状态 + 按 context 指针读叙事文档；结束经 CLI 写回，**禁止手改 yaml** |
 | 项目管理 | `/progress` 命令：自然语言驱动任务/期限/阶段操作，明确操作直路由本 CLI，语义复杂转入下方"工作流收尾状态同步"流程 |
 | 数据契约 | `references/schema.md`：case.yaml v4.0 字段字典——**唯一权威版本**，其他 skill 只引用不复制 |
