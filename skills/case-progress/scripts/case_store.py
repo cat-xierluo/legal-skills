@@ -1024,126 +1024,254 @@ def render_md(data, case_id):
 
 
 def render_html(data, case_id):
-    md_esc = lambda s: _html.escape(str(s if s is not None else "—"))
+    e = lambda s: _html.escape(str(s if s is not None else "—"))
     meta = data.get("meta") or {}
     info = data.get("案件基本信息") or {}
     pa = data.get("当事人与代理") or {}
     tasks = data.get("任务") or []
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    name = info.get("案件名称") or case_id
 
-    def table(headers, rows):
-        if not rows:
-            return ""
-        h = "".join(f"<th>{md_esc(x)}</th>" for x in headers)
-        b = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
-        return f"<table><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table>"
+    _CSS = """
+body{font-family:-apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;margin:0;background:#f4f1ea;color:#26211a}
+.topbar{position:sticky;top:0;z-index:9;background:rgba(255,253,248,.96);backdrop-filter:blur(6px);border-bottom:1px solid #e3dcc9;box-shadow:0 1px 10px rgba(90,70,20,.06)}
+.topbar-in{max-width:980px;margin:0 auto;padding:14px 24px 0}
+.tb-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.tb-name{font-size:1.28em;font-weight:700;letter-spacing:.5px}
+.badge{padding:2px 13px;border-radius:999px;font-size:.82em;font-weight:600;color:#fff}
+.b-run{background:#b08d3f}.b-done{background:#718096}.b-talk{background:#4a7c6f}
+.stage{color:#8a6d2f;font-weight:600}.lock{color:#9b2c2c;font-size:.85em;font-weight:400}
+.sub{color:#8b8272;font-size:.85em;margin:3px 0 10px}
+nav{display:flex;gap:2px;overflow-x:auto}
+nav button{border:0;background:none;padding:9px 16px 11px;font-size:.95em;color:#6b6353;cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;font-family:inherit}
+nav button.on{color:#26211a;font-weight:700;border-color:#b08d3f}
+nav button .n{font-size:.78em;background:#e8e2d2;border-radius:8px;padding:0 6px;margin-left:4px;color:#7a7160}
+main{max-width:980px;margin:22px auto 60px;padding:0 24px}
+section{display:none;animation:fade .25s}
+section.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+.card{background:#fffdf8;border:1px solid #e8e1cf;border-radius:12px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(90,70,20,.05)}
+h3{margin:0 0 10px;font-size:1.02em;color:#6d5a26;border-left:3px solid #c9a86a;padding-left:9px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 18px}
+.kv b{display:block;font-size:.78em;color:#9a8f79;font-weight:500;margin-bottom:2px}
+ul.people{list-style:none;margin:0;padding:0}
+ul.people li{padding:5px 0;border-bottom:1px dashed #ece5d4}
+ul.people li:last-child{border:0}
+.tag{display:inline-block;font-size:.75em;background:#f0ead9;border-radius:6px;padding:1px 8px;color:#7a6a3d;margin-right:8px}
+.pbar{height:7px;background:#ece5d4;border-radius:5px;overflow:hidden;margin:6px 0 14px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,#c9a86a,#a3843e)}
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:760px){.kanban{grid-template-columns:1fr}}
+.kcol{background:#f6f2e7;border-radius:10px;padding:10px}
+.kcol h4{margin:2px 4px 10px;font-size:.86em;color:#7a7160;display:flex;justify-content:space-between}
+.t-card{background:#fffdf8;border:1px solid #e8e1cf;border-radius:9px;padding:10px 12px;margin-bottom:9px}
+.t-card .tt{font-weight:600;line-height:1.4}
+.t-card .tm{font-size:.78em;color:#8b8272;margin-top:4px}
+.t-card .td{font-size:.8em;color:#6b6353;margin-top:5px;line-height:1.5}
+.t-card.done .tt{color:#8b8272;text-decoration:line-through;text-decoration-color:#c3b89f}
+.dl-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.dl-card{display:flex;gap:14px;background:#fffdf8;border:1px solid #e8e1cf;border-left-width:5px;border-radius:10px;padding:13px 15px}
+.dl-card.red{border-left-color:#c53030}.dl-card.orange{border-left-color:#dd6b20}.dl-card.green{border-left-color:#2f855a}
+.dl-card.off,.dl-card.done{border-left-color:#a0aec0;opacity:.72}
+.dl-num{min-width:64px;text-align:center;align-self:center}
+.dl-num b{font-size:1.5em;display:block;line-height:1.1}
+.dl-num span{font-size:.72em;color:#8b8272}
+.dl-body .dn{font-weight:700}.dl-body .dm{font-size:.8em;color:#8b8272;margin:3px 0}
+.dl-body .db{font-size:.78em;color:#6b6353}
+table{border-collapse:collapse;width:100%;font-size:.88em;margin-top:6px}
+th,td{border-bottom:1px solid #ece5d4;padding:7px 9px;text-align:left}
+th{color:#7a7160;font-weight:600;font-size:.85em}
+tr:hover td{background:#faf6ea}
+.tl{position:relative;margin:4px 0 0 6px;padding-left:26px}
+.tl:before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:#e3dcc9}
+.tl-i{position:relative;padding:0 0 18px}
+.tl-i:before{content:'';position:absolute;left:-25px;top:5px;width:11px;height:11px;border-radius:50%;background:#b08d3f;box-shadow:0 0 0 3px #f4f1ea}
+.tl-i.todo:before{background:#fff;border:2.5px solid #c9a86a;width:8px;height:8px}
+.tl-d{font-weight:700;font-size:.9em}.tl-e{font-size:.75em;color:#a3843e;margin-right:8px}
+.tl-t{font-size:.88em;color:#4a443a;margin-top:2px}
+.foot{color:#a49b87;font-size:.78em;text-align:center;margin:30px 0 10px}
+@media print{nav{display:none}section{display:block!important;page-break-inside:avoid}.topbar{position:static}}
+"""
 
-    P = []
+    life = info.get("生命周期状态") or "进行中"
+    bcls = "b-done" if life == "已结案" else ("b-talk" if life == "委托洽谈" else "b-run")
     lock = ' <span class="lock">🔒 已锁定</span>' if info.get("程序阶段锁定") else ""
-    P.append(f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
-<title>{md_esc(info.get('案件名称') or case_id)} · 案件视图</title>
-<style>
-body{{font-family:-apple-system,"PingFang SC","Microsoft YaHei",serif;max-width:880px;margin:32px auto;padding:0 24px;color:#1f2933;background:#fafaf8}}
-h1{{font-size:1.5em;margin-bottom:4px}} h2{{font-size:1.05em;border-bottom:2px solid #c9a86a;padding-bottom:4px;margin-top:28px;color:#5b4a21}}
-.meta{{color:#52606d;line-height:1.8}} .badge{{display:inline-block;padding:2px 12px;border-radius:12px;background:#c9a86a;color:#fff;font-weight:600}}
-.stage{{color:#5b4a21;font-weight:600}} .lock{{color:#9b2c2c;font-size:.85em}}
-table{{border-collapse:collapse;width:100%;font-size:.92em;margin:8px 0}} th,td{{border:1px solid #d9d2c5;padding:5px 9px;text-align:left}}
-th{{background:#f3eee2}} tr:nth-child(even) td{{background:#fbf9f4}}
-.red{{color:#c53030;font-weight:600}} .orange{{color:#c05621}} .green{{color:#2f855a}} .done{{color:#718096}}
-ul{{padding-left:1.2em}} li{{margin:3px 0}} .foot{{color:#9aa5b1;font-size:.8em;margin-top:32px;border-top:1px solid #e4e0d5;padding-top:8px}}
-</style></head><body>
-<h1>{md_esc(info.get('案件名称') or case_id)}</h1>
-<p class="meta"><span class="badge">{md_esc(info.get('生命周期状态'))}</span> <span class="stage">{md_esc(info.get('程序阶段'))}{lock}</span>
-　{md_esc(meta.get('业务领域'))}／{md_esc(info.get('案件类型'))}　案号：{md_esc(meta.get('法院案号'))}　管辖：{md_esc(info.get('管辖法院'))}　标的额：{md_esc(_fmt_amt(info.get('标的额')))}</p>""")
+    amt = "—" if info.get("标的额") is None else f"{info['标的额']:,.2f} 元"
 
+    # ---------- 页签1 概览 ----------
+    ov = ['<div class="card"><h3>基本信息</h3><div class="grid">']
+    for k, v in (("案号", meta.get("法院案号")), ("管辖法院", info.get("管辖法院")), ("标的额", amt),
+                 ("律所案号", meta.get("律所案号")), ("律所立案", info.get("律所立案日期")),
+                 ("法院立案", info.get("法院立案日期")), ("预计结案", info.get("预计结案")),
+                 ("建档", meta.get("创建日期"))):
+        ov.append(f'<div class="kv"><b>{k}</b>{e(v)}</div>')
+    ov.append("</div></div>")
     people = []
     for label, key in (("我方", "我方当事人"), ("对方", "对方当事人")):
         people += [(label, _party_line(p)) for p in (pa.get(key) or [])]
     people += [("律师", f"{lw.get('姓名')}（{lw.get('角色')}）") for lw in (pa.get("律师") or [])]
-    people += [(p.get("角色"), f"{p.get('姓名')}" + (f"——{p['备注']}" if p.get("备注") else "")) for p in (pa.get("其他诉讼参与人") or [])]
+    people += [(str(p.get("角色")), str(p.get("姓名")) + (f"——{p['备注']}" if p.get("备注") else ""))
+               for p in (pa.get("其他诉讼参与人") or [])]
     if people:
-        P.append("<h2>当事人与代理</h2><ul>" + "".join(f"<li><b>{md_esc(a)}</b> {md_esc(b)}</li>" for a, b in people) + "</ul>")
+        ov.append('<div class="card"><h3>当事人与代理</h3><ul class="people">' +
+                  "".join(f'<li><span class="tag">{e(a)}</span>{e(b)}</li>' for a, b in people) + "</ul></div>")
+    inst = data.get("审级记录") or []
+    if inst:
+        rows = "".join(f"<tr><td>{e(r.get('审级'))}</td><td>{e(r.get('法院案号'))}</td><td>{e(r.get('承办法官'))}</td>"
+                       f"<td>{e(r.get('立案日期'))}</td><td>{e(r.get('结案日期'))}（{e(r.get('结案方式'))}）</td></tr>"
+                       for r in inst)
+        ov.append('<div class="card"><h3>审级记录</h3><table><tr><th>审级</th><th>案号</th><th>承办法官</th><th>立案</th><th>结案</th></tr>'
+                  + rows + "</table></div>")
+    rel = info.get("关联案件") or []
+    if rel:
+        ov.append('<div class="card"><h3>关联案件</h3><ul class="people">' +
+                  "".join(f'<li><span class="tag">{e(r.get("关系"))}</span>{e(r.get("案号或目录"))}'
+                          f'{"——" + e(r.get("说明")) if r.get("说明") else ""}</li>' for r in rel) + "</ul></div>")
+    fr = data.get("争议焦点与法律研究") or {}
+    st = {"todo": "待识别", "in_progress": "分析中", "done": "已分析"}
+    if fr.get("争议焦点") or fr.get("法律研究"):
+        lis = "".join(f'<li><span class="tag">争议焦点</span>{e(f.get("名称"))}（{st.get(f.get("状态"), "")}）</li>'
+                      for f in fr.get("争议焦点") or [])
+        lis += "".join(f'<li><span class="tag">法律研究</span>{e(r.get("主题"))}（{st.get(r.get("状态"), "")}）</li>'
+                       for r in fr.get("法律研究") or [])
+        ov.append('<div class="card"><h3>争议焦点与法律研究</h3><ul class="people">' + lis + "</ul></div>")
 
+    # ---------- 页签2 任务看板 ----------
+    tk = []
     if tasks:
         cnt = {s: sum(1 for t in tasks if t.get("状态") == s) for s in TRI_STATE}
-        mark = {"todo": "☐", "in_progress": "◐", "done": "☑"}
-        cls = {"todo": "", "in_progress": "orange", "done": "done"}
-        items = []
-        for t in tasks:
-            bits = f"{mark[t.get('状态','todo')]} <b>{md_esc(t.get('名称'))}</b>"
-            meta_bits = [f"优先级{ {'high':'高','medium':'中','low':'低'}.get(t.get('优先级'),'中') }"]
-            if t.get("截止日期"):
-                meta_bits.append(f"截止 {md_esc(t['截止日期'])}")
-            if t.get("负责人"):
-                meta_bits.append(md_esc(t["负责人"]))
-            bits += "<span class='done'>（" + "·".join(meta_bits) + "）</span>"
-            if t.get("描述"):
-                bits += f"<span class='done'>——{md_esc(t['描述'])}</span>"
-            items.append(f"<li class='{cls.get(t.get('状态'),'')}'>{bits}</li>")
-        P.append(f"<h2>任务（待办 {cnt['todo']} / 进行 {cnt['in_progress']} / 完成 {cnt['done']}）</h2><ul>" + "".join(items) + "</ul>")
+        pct = round(100 * cnt["done"] / max(len(tasks), 1))
+        tk.append(f'<div class="card"><h3>进度</h3><div class="pbar"><i style="width:{pct}%"></i></div>'
+                  f'<div style="font-size:.85em;color:#7a7160">完成 {cnt["done"]} / {len(tasks)}（{pct}%）</div></div>')
+        pri = {"high": "高", "medium": "中", "low": "低"}
+        cols = [("待办", "todo", "☐"), ("进行中", "in_progress", "◐"), ("已完成", "done", "☑")]
+        tk.append('<div class="kanban">')
+        for label, key, mark in cols:
+            tk.append(f'<div class="kcol"><h4>{label}<span>{cnt[key]}</span></h4>')
+            for t in tasks:
+                if t.get("状态") != key:
+                    continue
+                m = [f"优先级{pri.get(t.get('优先级'), '中')}"]
+                if t.get("截止日期"):
+                    m.append(f"截止 {t['截止日期']}")
+                if t.get("负责人"):
+                    m.append(str(t["负责人"]))
+                desc = f'<div class="td">{e(t["描述"])}</div>' if t.get("描述") else ""
+                tk.append(f'<div class="t-card {key}"><div class="tt">{mark} {e(t.get("名称"))}</div>'
+                          f'<div class="tm">{" · ".join(e(x) for x in m)}</div>{desc}</div>')
+            tk.append("</div>")
+        tk.append("</div>")
+    else:
+        tk.append('<div class="card">暂无任务</div>')
 
+    # ---------- 页签3 期限与开庭 ----------
+    dl_html = []
     dls = data.get("法定期限") or []
     if dls:
-        rows = []
+        dl_html.append('<div class="card"><h3>法定期限</h3><div class="dl-wrap">')
         for d in dls:
             lvl = _deadline_level(d)
             dl = days_left(d.get("截止日期"))
-            left = {"off": "已抵消", "done": "已完成"}.get(lvl) or (f"{dl} 天" if dl is not None else "—")
-            markmap = {"red": "🔴", "orange": "🟠", "green": "🟢", "done": "✅", "off": "⚪", "none": "⚪"}
-            rows.append((f"<span class='{lvl if lvl in ('red','orange','green','done') else ''}'>{markmap[lvl]} {md_esc(d.get('类型'))}</span>",
-                         md_esc(d.get("名称")), md_esc(d.get("截止日期")), md_esc(left), md_esc(d.get("法律依据"))))
-        P.append("<h2>法定期限</h2>" + table(("状态", "名称", "截止", "剩余", "依据"), rows))
-
+            if lvl == "off":
+                num, unit = "✓", "已抵消"
+            elif lvl == "done":
+                num, unit = "✓", "已完成"
+            elif dl is None:
+                num, unit = "—", ""
+            else:
+                num, unit = str(dl), "天" + ("（逾期）" if dl < 0 else "")
+            basis = f'<div class="db">{e(d.get("法律依据"))}</div>' if d.get("法律依据") else ""
+            dl_html.append(
+                f'<div class="dl-card {lvl}"><div class="dl-num"><b>{e(num)}</b><span>{unit}</span></div>'
+                f'<div class="dl-body"><div class="dn">{e(d.get("名称"))}</div>'
+                f'<div class="dm">{e(d.get("类型"))} · 截止 {e(d.get("截止日期"))}'
+                + (f' · 起算 {e(d.get("起算日期"))}' if d.get("起算日期") else "") + '</div>' + basis + "</div></div>")
+        dl_html.append("</div></div>")
     hearings = data.get("开庭与听证") or []
     if hearings:
-        rows = [(md_esc(h.get("日期")), md_esc(h.get("类型")), md_esc(h.get("事项")),
-                 md_esc(" / ".join(str(x) for x in (h.get("地点"), h.get("法庭")) if x) or "—"),
-                 "已进行" if h.get("状态") == "done" else "<b>已排期</b>") for h in hearings]
-        P.append("<h2>开庭与听证</h2>" + table(("日期", "类型", "事项", "地点/法庭", "状态"), rows))
+        rows = "".join(
+            f"<tr><td><b>{e(h.get('日期'))}</b></td><td>{e(h.get('类型'))}</td><td>{e(h.get('事项'))}</td>"
+            f"<td>{e(' / '.join(str(x) for x in (h.get('地点'), h.get('法庭')) if x) or '—')}</td>"
+            f"<td>{'已进行' if h.get('status') == 'done' or h.get('状态') == 'done' else '<b style=color:#b08d3f>已排期</b>'}</td></tr>"
+            for h in sorted(hearings, key=lambda x: str(x.get("日期")), reverse=True))
+        dl_html.append('<div class="card"><h3>开庭与听证</h3><table><tr><th>日期</th><th>类型</th><th>事项</th>'
+                       '<th>地点/法庭</th><th>状态</th></tr>' + rows + "</table></div>")
+    if not dl_html:
+        dl_html.append('<div class="card">暂无期限与开庭记录</div>')
 
+    # ---------- 页签4 时间线 ----------
     tl = sorted(data.get("案件时间线") or [], key=lambda x: str(x.get("日期")), reverse=True)
+    tl_html = ['<div class="card"><div class="tl">']
+    for ev in tl:
+        done = ev.get("状态") == "done"
+        tl_html.append(f'<div class="tl-i {"done" if done else "todo"}">'
+                       f'<div class="tl-d">{e(ev.get("日期"))}<span class="tl-e">{e(ev.get("事件类型"))}</span></div>'
+                       f'<div class="tl-t">{e(ev.get("事项"))}</div></div>')
     if tl:
-        rows = [(md_esc(e.get("日期")), md_esc(e.get("事件类型")), md_esc(e.get("事项")),
-                 "✅" if e.get("状态") == "done" else "⏳") for e in tl]
-        P.append("<h2>案件时间线</h2>" + table(("日期", "事件", "事项", "状态"), rows))
+        tl_html.append("</div></div>")
+    else:
+        tl_html = ['<div class="card">暂无时间线</div>']
 
-    ev = data.get("证据索引") or []
-    if ev:
-        rows = [(md_esc(e.get("名称")), md_esc(e.get("类型")), md_esc(e.get("证明目的")),
-                 "已收集" if e.get("状态") == "done" else "待收集", md_esc(e.get("取证方式"))) for e in ev]
-        P.append("<h2>证据索引</h2>" + table(("名称", "类型", "证明目的", "状态", "取证"), rows))
-
+    # ---------- 页签5 证据与费用 ----------
+    ef = []
+    evd = data.get("证据索引") or []
+    if evd:
+        rows = "".join(f"<tr><td>{e(x.get('名称'))}</td><td>{e(x.get('类型'))}</td><td>{e(x.get('证明目的'))}</td>"
+                       f"<td>{'已收集' if x.get('状态') == 'done' else '待收集'}</td><td>{e(x.get('取证方式'))}</td></tr>"
+                       for x in evd)
+        ef.append('<div class="card"><h3>证据索引</h3><table><tr><th>名称</th><th>类型</th><th>证明目的</th>'
+                  '<th>状态</th><th>取证</th></tr>' + rows + "</table></div>")
     fees = data.get("费用信息") or {}
     pay, claims = fees.get("支出") or {}, fees.get("索赔与评估") or []
-    frows = [(f"{md_esc(k)}" + (f"（{md_esc(v.get('计费方式'))}）" if isinstance(v, dict) and v.get("计费方式") else ""),
-              md_esc(_fmt_amt(v.get("金额") if isinstance(v, dict) else None)),
-              md_esc(v.get("状态", "待确定") if isinstance(v, dict) else "—")) for k, v in pay.items()
-             if isinstance(v, dict) and (v.get("金额") is not None or v.get("状态") == "已确定")]
-    frows += [(f"索赔：{md_esc(c.get('项目'))}", md_esc(_fmt_amt(c.get("金额"))), md_esc(c.get("计算方式") or "—")) for c in claims]
+    frows = "".join(
+        f"<tr><td>{e(k)}{('（' + e(v.get('计费方式')) + '）') if v.get('计费方式') else ''}</td>"
+        f"<td>{e(_fmt_amt(v.get('金额')))}</td><td>{e(v.get('状态', '待确定'))}</td></tr>"
+        for k, v in pay.items() if isinstance(v, dict) and (v.get("金额") is not None or v.get("状态") == "已确定"))
+    frows += "".join(f"<tr><td>索赔：{e(c.get('项目'))}</td><td>{e(_fmt_amt(c.get('金额')))}</td>"
+                     f"<td>{e(c.get('计算方式') or '—')}</td></tr>" for c in claims)
     if frows:
-        P.append("<h2>费用</h2>" + table(("类别", "金额", "状态/口径"), frows))
+        ef.append('<div class="card"><h3>费用</h3><table><tr><th>类别</th><th>金额</th><th>状态/口径</th></tr>'
+                  + frows + "</table></div>")
+    wh = data.get("工时统计") or {}
+    if wh.get("总工时"):
+        ef.append(f'<div class="card"><h3>工时</h3>累计 {e(wh.get("总工时"))} 小时（明细见工时记录.md）</div>')
+    if not ef:
+        ef.append('<div class="card">暂无证据与费用记录</div>')
 
-    for title, rows, cols in (("审级记录", data.get("审级记录") or [], ("审级", "法院案号", "承办法官", "结案")),
-                              ("关联案件", info.get("关联案件") or [], ("关系", "案号或目录", "说明"))):
-        if rows:
-            r2 = []
-            for r in rows:
-                if title == "审级记录":
-                    end = f"{r.get('结案日期') or '—'}（{r.get('结案方式') or '—'}）" if r.get("结案日期") else "—"
-                    r2.append((md_esc(r.get("审级")), md_esc(r.get("法院案号")), md_esc(r.get("承办法官")), md_esc(end)))
-                else:
-                    r2.append((md_esc(r.get("关系")), md_esc(r.get("案号或目录")), md_esc(r.get("说明"))))
-            P.append(f"<h2>{title}</h2>" + table(cols, r2))
+    tabs = [("ov", "概览", "", "".join(ov)),
+            ("tasks", "任务", str(len(tasks)), "".join(tk)),
+            ("dl", "期限与开庭", str(len(dls) + len(hearings)), "".join(dl_html)),
+            ("tl", "时间线", str(len(tl)), "".join(tl_html)),
+            ("ef", "证据与费用", str(len(evd) + len(claims)), "".join(ef))]
+    nav = "".join(f'<button data-t="{tid}" class="{"on" if i == 0 else ""}">{label}'
+                  + (f'<span class="n">{n}</span>' if n and n != "0" else "") + "</button>"
+                  for i, (tid, label, n, _) in enumerate(tabs))
+    secs = "".join(f'<section id="{tid}" class="{"on" if i == 0 else ""}">{body}</section>'
+                   for i, (tid, _, _, body) in enumerate(tabs))
 
-    fr = data.get("争议焦点与法律研究") or {}
-    if fr.get("争议焦点") or fr.get("法律研究"):
-        st = {"todo": "待识别", "in_progress": "分析中", "done": "已分析"}
-        lis = [f"<li>争议焦点：<b>{md_esc(f.get('名称'))}</b>（{st.get(f.get('状态'), '')}）</li>" for f in fr.get("争议焦点") or []]
-        lis += [f"<li>法律研究：<b>{md_esc(r.get('主题'))}</b>（{st.get(r.get('状态'), '')}）</li>" for r in fr.get("法律研究") or []]
-        P.append("<h2>争议焦点与法律研究</h2><ul>" + "".join(lis) + "</ul>")
-
-    P.append(f"<p class='foot'>case_store render · {now} · 本页由 case.yaml 自动生成（派生视图，请勿手改）；任务/期限变更请经 /progress 或看板</p></body></html>")
-    return "\n".join(P)
+    _HEAD = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{e(name)} · 案件视图</title><style>{_CSS}</style></head><body>
+<div class="topbar"><div class="topbar-in">
+<div class="tb-row"><span class="tb-name">{e(name)}</span>
+<span class="badge {bcls}">{e(life)}</span>
+<span class="stage">{e(info.get("程序阶段"))}{lock}</span></div>
+<div class="sub">{e(meta.get("业务领域"))}／{e(info.get("案件类型"))} · 案件短码 {e(case_id)} · 生成于 {now}</div>
+<nav>{nav}</nav></div></div>
+<main>{secs}</main>"""
+    _TAIL = """
+<p class="foot">由 case.yaml（唯一真源）自动生成 · 请勿手改 · 任务/期限变更请经 /progress 或看板</p>
+<script>
+document.querySelectorAll('nav button').forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll('nav button').forEach(function(x){ x.classList.remove('on'); });
+    document.querySelectorAll('section').forEach(function(s){ s.classList.remove('on'); });
+    b.classList.add('on');
+    document.getElementById(b.dataset.t).classList.add('on');
+  };
+});
+</script></body></html>"""
+    return _HEAD + _TAIL
 
 
 def _refresh_views(path, data, case_id):
