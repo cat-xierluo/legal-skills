@@ -9,25 +9,26 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0a0f;
-      --bg-secondary: #12121a;
-      --bg-card: rgba(255, 255, 255, 0.03);
-      --bg-card-hover: rgba(255, 255, 255, 0.06);
-      --border-subtle: rgba(255, 255, 255, 0.06);
-      --border-accent: rgba(99, 102, 241, 0.3);
-      --text-primary: #f0f0f5;
-      --text-secondary: #8b8b9e;
-      --text-muted: #5a5a6e;
-      --accent-primary: #6366f1;
-      --accent-secondary: #818cf8;
-      --accent-glow: rgba(99, 102, 241, 0.15);
-      --status-todo: #f59e0b;
-      --status-progress: #3b82f6;
-      --status-done: #10b981;
-      --warn-red: #ef4444;
-      --warn-yellow: #eab308;
-      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-      --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.6);
+      --bg-primary: #f4f1ea;
+      --bg-secondary: #ece5d6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f7f1e2;
+      --border-subtle: #e2dac7;
+      --border-accent: rgba(176, 141, 63, 0.45);
+      --text-primary: #26211a;
+      --text-secondary: #6b6353;
+      --text-muted: #9a8f79;
+      --accent-primary: #b08d3f;
+      --accent-secondary: #8a6d2f;
+      --accent-glow: rgba(201, 168, 106, 0.16);
+      --status-todo: #b7791f;
+      --status-progress: #4a7c9f;
+      --status-done: #2f855a;
+      --warn-red: #c53030;
+      --warn-yellow: #c05621;
+      --ok-green: #2f855a;
+      --shadow-card: 0 2px 10px rgba(64, 48, 12, 0.07);
+      --shadow-float: 0 8px 28px rgba(64, 48, 12, 0.14);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -52,8 +53,8 @@
       position: fixed;
       top: 0; left: 320px; right: 0; bottom: 0;
       background:
-        radial-gradient(ellipse 80% 50% at 20% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse 60% 40% at 70% 60%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+        radial-gradient(ellipse 70% 45% at 18% 0%, rgba(201, 168, 106, 0.10) 0%, transparent 55%),
+        radial-gradient(ellipse 55% 40% at 85% 8%, rgba(176, 141, 63, 0.06) 0%, transparent 55%);
       pointer-events: none;
       z-index: 0;
     }
@@ -131,7 +132,7 @@
     .deadline-item.yellow .dl-days { color: var(--warn-yellow); }
 
     /* 页签切换（焦点 / 案件 / 月历） */
-    :root { --ok-green: #10b981; }
+    :root { --ok-green: #2f855a; }
     .view-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
     .view-tabs button {
       border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary);
@@ -184,7 +185,7 @@
     /* 案件卡升级：徽章行 */
     .case-badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
     .cbadge { font-size: 0.7rem; border-radius: 6px; padding: 2px 8px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary); }
-    .cbadge.hearing { border-color: rgba(59,130,246,.5); color: #7fb0fe; }
+    .cbadge.hearing { border-color: rgba(74,124,159,.45); color: #4a7c9f; }
     .cbadge.red { border-color: rgba(239,68,68,.5); color: var(--warn-red); font-weight: 600; }
     .cbadge.stale { border-color: rgba(234,179,8,.5); color: var(--warn-yellow); }
     .closed-group { margin-top: 26px; }
@@ -275,7 +276,7 @@
       display: block; font-size: 0.68rem; line-height: 1.35; border-radius: 5px; padding: 1.5px 6px;
       margin-top: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .cal-ev.hearing { background: rgba(110, 168, 254, .16); color: #6ea8fe; border: 1px solid rgba(110,168,254,.3); font-weight: 600; }
+    .cal-ev.hearing { background: rgba(74, 124, 159, .13); color: #4a7c9f; border: 1px solid rgba(74,124,159,.35); font-weight: 600; }
     .cal-ev.deadline { background: var(--bg-card); border: 1px solid var(--border-subtle); }
     .cal-ev.red { border-left: 3px solid var(--warn-red); }
     .cal-ev.yellow { border-left: 3px solid var(--warn-yellow); }
@@ -463,7 +464,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary), var(--status-done));
+      background: linear-gradient(90deg, #c9a86a, var(--accent-primary) 55%, #8a6d2f);
     }
     .kanban-header h2 {
       font-family: 'DM Serif Display', serif;
@@ -479,7 +480,7 @@
       width: 8px; height: 8px;
       background: var(--accent-primary);
       border-radius: 50%;
-      box-shadow: 0 0 12px var(--accent-primary);
+      box-shadow: 0 0 8px rgba(201, 168, 106, 0.55);
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
@@ -543,9 +544,9 @@
       letter-spacing: 0.05em;
     }
     .column-title .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .column-todo .dot { background: var(--status-todo); box-shadow: 0 0 8px var(--status-todo); }
-    .column-progress .dot { background: var(--status-progress); box-shadow: 0 0 8px var(--status-progress); }
-    .column-done .dot { background: var(--status-done); box-shadow: 0 0 8px var(--status-done); }
+    .column-todo .dot { background: var(--status-todo); }
+    .column-progress .dot { background: var(--status-progress); }
+    .column-done .dot { background: var(--status-done); }
     .column-count { font-size: 0.7rem; color: var(--text-muted); background: var(--bg-primary); padding: 2px 8px; border-radius: 10px; }
 
     .task-card {
@@ -568,7 +569,7 @@
       opacity: 0;
       transition: opacity 0.25s ease;
     }
-    .task-card:hover { transform: translateX(4px); border-color: var(--border-accent); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+    .task-card:hover { transform: translateX(4px); border-color: var(--border-accent); box-shadow: var(--shadow-card); }
     .task-card:hover::before { opacity: 1; }
     .column-todo .task-card::before { background: var(--status-todo); }
     .column-progress .task-card::before { background: var(--status-progress); }
@@ -724,10 +725,10 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-legend">
-          <span><i style="background:rgba(110,168,254,.4)"></i>开庭/听证</span>
+          <span><i style="background:rgba(74,124,159,.4)"></i>开庭/听证</span>
           <span><i style="background:var(--warn-red)"></i>逾期/≤7天</span>
           <span><i style="background:var(--warn-yellow)"></i>≤30天</span>
-          <span><i style="background:#48bb78"></i>&gt;30天</span>
+          <span><i style="background:var(--ok-green)"></i>&gt;30天</span>
           <span>已抵消期限不显示</span>
         </div>
       </div>
