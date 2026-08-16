@@ -131,18 +131,38 @@
     .deadline-item.red .dl-days { color: var(--warn-red); }
     .deadline-item.yellow .dl-days { color: var(--warn-yellow); }
 
-    /* 页签切换（焦点 / 案件 / 月历） */
-    :root { --ok-green: #2f855a; }
-    .view-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
-    .view-tabs button {
-      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary);
-      padding: 7px 22px; border-radius: 9px 9px 0 0; cursor: pointer; font-size: 0.9rem;
-      font-family: inherit; border-bottom: none; transition: all .18s ease;
+    /* ---- 组件设计系统（M6-3）：分段页签 / 按钮 / 焦点 / 空态 ---- */
+    button:focus-visible, input:focus-visible, .case-card:focus-visible {
+      outline: 2px solid var(--accent-primary); outline-offset: 2px;
     }
-    .view-tabs button:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-    .view-tabs button.on { color: var(--accent-secondary); font-weight: 700; background: var(--bg-secondary); border-top: 2px solid var(--accent-primary); }
+    .view-tabs {
+      display: inline-flex; gap: 3px; margin-bottom: 22px;
+      background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+      border-radius: 12px; padding: 3px;
+    }
+    .view-tabs button {
+      border: none; background: transparent; color: var(--text-muted);
+      padding: 7px 22px; border-radius: 9px; cursor: pointer; font-size: 0.9rem;
+      font-family: inherit; transition: all .18s cubic-bezier(.4,0,.2,1); white-space: nowrap;
+    }
+    .view-tabs button:hover { color: var(--text-secondary); }
+    .view-tabs button.on {
+      color: var(--accent-secondary); font-weight: 700; background: var(--bg-card);
+      box-shadow: var(--shadow-card);
+    }
     .view-panel { display: none; }
-    .view-panel.on { display: block; }
+    .view-panel.on { display: block; animation: fadeUp .22s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+
+    .refresh-btn, .d-back, .cal-nav button, .stale-chip {
+      transition: all .16s cubic-bezier(.4,0,.2,1);
+    }
+    .refresh-btn:hover, .d-back:hover { transform: translateY(-1px); box-shadow: var(--shadow-card); }
+    .refresh-btn:active, .cal-nav button:active, .view-tabs button:active { transform: scale(0.97); }
+    .empty-hint {
+      font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 18px 12px;
+      border: 1.5px dashed var(--border-subtle); border-radius: 10px; background: var(--bg-card);
+    }
 
     /* ---------- 今日焦点 ---------- */
     .focus-sec { margin-bottom: 26px; }
@@ -504,16 +524,43 @@
     .stat-item.done .count { color: var(--status-done); }
     .stat-item .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    .kanban-columns {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+    /* ---- 待办流（M6-1：替代三列看板） ---- */
+    .task-flow { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
+    .task-flow::-webkit-scrollbar { width: 4px; }
+    .task-flow::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+    .tf-sec { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted);
+              text-transform: uppercase; margin: 14px 2px 8px; display: flex; justify-content: space-between; }
+    .tf-item {
+      display: flex; align-items: center; gap: 9px; background: var(--bg-card);
+      border: 1px solid var(--border-subtle); border-radius: 9px;
+      padding: 9px 11px; margin-bottom: 7px; cursor: pointer; transition: all .16s ease; position: relative;
     }
-    .kanban-columns::-webkit-scrollbar { width: 4px; }
-    .kanban-columns::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+    .tf-item:hover { border-color: var(--border-accent); transform: translateX(3px); box-shadow: var(--shadow-card); }
+    .tf-item.readonly { opacity: 0.6; cursor: not-allowed; }
+    .tf-item.readonly:hover { transform: none; box-shadow: none; }
+    .tf-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .tf-dot.in_progress { background: var(--status-progress); }
+    .tf-dot.todo { background: var(--status-todo); }
+    .tf-dot.done { background: var(--status-done); }
+    .tf-body { flex: 1; min-width: 0; }
+    .tf-title { font-size: 0.83rem; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-item.done .tf-title { color: var(--text-muted); text-decoration: line-through; }
+    .tf-case { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tf-chip { font-size: 0.64rem; border-radius: 6px; padding: 2px 6px; flex-shrink: 0; border: 1px solid var(--border-subtle); color: var(--text-muted); }
+    .tf-chip.red { border-color: rgba(197,48,48,.4); color: var(--warn-red); font-weight: 600; }
+    .tf-chip.soon { border-color: rgba(192,86,33,.4); color: var(--warn-yellow); }
+    .tf-file {
+      flex-shrink: 0; border: 1px solid var(--border-subtle); background: var(--bg-secondary);
+      border-radius: 7px; width: 26px; height: 26px; font-size: 0.8rem; line-height: 1;
+      cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .tf-file:hover { border-color: var(--border-accent); color: var(--accent-primary); background: var(--accent-glow); }
+    .tf-done-head {
+      font-size: 0.74rem; color: var(--text-muted); text-align: center; padding: 8px;
+      cursor: pointer; border-radius: 8px; border: 1px dashed var(--border-subtle); margin-top: 10px;
+    }
+    .tf-done-head:hover { color: var(--text-secondary); border-color: var(--border-accent); }
 
     .kanban-column {
       background: var(--bg-card);
@@ -643,25 +690,12 @@
     </div>
 
     <div class="kanban-stats">
-      <div class="stat-item todo"><div class="count" id="stat-todo">–</div><div class="label">待办</div></div>
       <div class="stat-item progress"><div class="count" id="stat-progress">–</div><div class="label">进行中</div></div>
+      <div class="stat-item todo"><div class="count" id="stat-todo">–</div><div class="label">待办</div></div>
       <div class="stat-item done"><div class="count" id="stat-done">–</div><div class="label">已完成</div></div>
     </div>
 
-    <div class="kanban-columns">
-      <div class="kanban-column column-todo">
-        <div class="column-header"><div class="column-title"><span class="dot"></span>待办事项</div><span class="column-count" id="cnt-todo">0</span></div>
-        <div id="col-todo"></div>
-      </div>
-      <div class="kanban-column column-progress">
-        <div class="column-header"><div class="column-title"><span class="dot"></span>进行中</div><span class="column-count" id="cnt-progress">0</span></div>
-        <div id="col-progress"></div>
-      </div>
-      <div class="kanban-column column-done">
-        <div class="column-header"><div class="column-title"><span class="dot"></span>已完成</div><span class="column-count" id="cnt-done">0</span></div>
-        <div id="col-done"></div>
-      </div>
-    </div>
+    <div class="task-flow" id="task-flow"></div>
   </aside>
 
   <!-- 主内容区域 -->
@@ -773,30 +807,57 @@
         document.getElementById('stat-todo').textContent = d.totals.todo;
         document.getElementById('stat-progress').textContent = d.totals.in_progress;
         document.getElementById('stat-done').textContent = d.totals.done;
-        renderColumn('todo', d.kanban.todo);
-        renderColumn('progress', d.kanban.in_progress);
-        renderColumn('done', d.kanban.done);
+        renderTaskFlow([...d.kanban.in_progress, ...d.kanban.todo, ...d.kanban.done]);
         document.getElementById('updated-time').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
       } catch (e) {
         toast('加载概览失败: ' + e.message, 'error');
       }
     }
 
-    function renderColumn(col, tasks) {
-      document.getElementById('cnt-' + col).textContent = tasks.length;
-      const box = document.getElementById('col-' + col);
-      if (tasks.length === 0) {
-        box.innerHTML = '<div class="empty-hint">暂无</div>';
-        return;
-      }
-      box.innerHTML = tasks.map(t => `
-        <div class="task-card ${t.status} ${t.writable ? '' : 'readonly'}"
-             ${t.writable ? `onclick="toggleTask(${JSON.stringify(t).replace(/"/g,'&quot;')})"` : 'onclick="toast(\'此任务来源（'+escapeHtml(t.source_type)+'）不支持状态切换\',\'warn\')"'}
-             title="${escapeHtml(t.case_short)}">
-          <div class="task-title">${escapeHtml(t.title)}</div>
-          <div class="task-case">${escapeHtml(t.case_short)}</div>
-        </div>
-      `).join('');
+    async function openFile(caseId, file) {
+      try {
+        const r = await api('/api/v1/open', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({case_id: caseId, file})
+        });
+        if (!r.ok) toast('打开失败: ' + (r.message || ''), 'warn');
+      } catch (e) { toast('打开失败: ' + e.message, 'error'); }
+    }
+
+    const fileBtn = (t) => t.file
+      ? `<span class="tf-file" title="${escapeHtml(t.file)}" onclick="event.stopPropagation();openFile('${t.case_id}', ${JSON.stringify(t.file).replace(/"/g, '&quot;')})">📄</span>` : '';
+
+    let TF_SHOW_DONE = false;
+    function renderTaskFlow(tasks) {
+      const box = document.getElementById('task-flow');
+      const prog = tasks.filter(t => t.status === 'in_progress');
+      const todo = tasks.filter(t => t.status === 'todo')
+        .sort((a, b) => String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
+      const done = tasks.filter(t => t.status === 'done');
+      const item = (t, doneStyle) => {
+        let chip = '';
+        if (t.deadline) {
+          const dl = Math.floor((new Date(t.deadline) - new Date()) / 86400000);
+          chip = `<span class="tf-chip ${dl < 0 ? 'red' : dl <= 7 ? 'soon' : ''}">${dl < 0 ? '逾期' + (-dl) + '天' : dl + '天'}</span>`;
+        } else if (t.priority === 'high') {
+          chip = '<span class="tf-chip red">高</span>';
+        }
+        return `<div class="tf-item ${t.status} ${t.writable ? '' : 'readonly'}"
+          ${t.writable ? `onclick="toggleTask(${JSON.stringify(t).replace(/"/g, '&quot;')})"` : `onclick="toast('此任务不支持切换', 'warn')"`}
+          title="${escapeHtml(t.case_short)} · ${escapeHtml(t.title)}">
+          <span class="tf-dot ${t.status}"></span>
+          <div class="tf-body"><div class="tf-title">${escapeHtml(t.title)}</div>
+            <div class="tf-case">${escapeHtml(t.case_short)}</div></div>
+          ${chip}${fileBtn(t)}
+        </div>`;
+      };
+      let html = '';
+      if (prog.length) html += `<div class="tf-sec">进行中<span>${prog.length}</span></div>` + prog.map(t => item(t)).join('');
+      html += `<div class="tf-sec">待办<span>${todo.length}</span></div>`
+        + (todo.length ? todo.map(t => item(t)).join('') : '<div class="empty-hint" style="padding:10px">暂无待办</div>');
+      html += `<div class="tf-done-head" onclick="TF_SHOW_DONE=!TF_SHOW_DONE;refreshAll()">${TF_SHOW_DONE ? '收起' : '展开'}已完成（${done.length}）</div>`;
+      if (TF_SHOW_DONE && done.length) html += done.map(t => item(t, true)).join('');
+      box.innerHTML = html;
     }
 
     function renderDeadlines(deadlines) {
@@ -853,13 +914,14 @@
         const key = `${calY}-${pad2(calM)}-${pad2(d)}`;
         const evs = CAL.days[key] || [];
         const evHtml = evs.slice(0, 3).map(ev => {
+          const fb = ev.file ? ` <span title="${escapeHtml(ev.file)}" onclick="event.stopPropagation();openFile('${ev.case_id}', ${JSON.stringify(ev.file).replace(/"/g, '&quot;')})" style="cursor:pointer">📄</span>` : '';
           if (ev.kind === 'hearing') {
-            return `<span class="cal-ev hearing" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="openCase('${ev.case_id}')">⚖ ${escapeHtml(ev.name)}</span>`;
+            return `<span class="cal-ev hearing" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="showCase('${ev.case_id}')">⚖ ${escapeHtml(ev.name)}${fb}</span>`;
           }
           const dl = ev.days_left;
           const txt = dl < 0 ? `逾期${-dl}天` : dl === 0 ? '今天' : `${dl}天`;
           const cls = dl < 0 || dl <= 7 ? 'red' : dl <= 30 ? 'yellow' : 'green';
-          return `<span class="cal-ev deadline ${cls}" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)} 截止" onclick="openCase('${ev.case_id}')">⏰ ${escapeHtml(ev.name)} · ${txt}</span>`;
+          return `<span class="cal-ev deadline ${cls}" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)} 截止" onclick="showCase('${ev.case_id}')">⏰ ${escapeHtml(ev.name)} · ${txt}${fb}</span>`;
         }).join('');
         const more = evs.length > 3 ? `<div class="cal-more">+${evs.length - 3} 更多…</div>` : '';
         grid.push(`<div class="cal-cell ${key === todayStr ? 'today' : ''}"><div class="cal-num">${d}</div>${evHtml}${more}</div>`);
@@ -1020,14 +1082,26 @@
           <tr><th>审级</th><th>案号</th><th>承办法官</th><th>立案</th><th>结案</th></tr>
           ${c.instants.map(r => `<tr><td>${escapeHtml(r.审级)}</td><td>${escapeHtml(r.法院案号)}</td><td>${escapeHtml(r.承办法官)}</td>
             <td>${escapeHtml(r.立案日期)}</td><td>${escapeHtml(r.结案日期)}（${escapeHtml(r.结案方式)}）</td></tr>`).join('')}
-        </table></div>` : ''}`;
+        </table></div>` : ''}
+        ${(() => {
+          const f = c.fees || {};
+          const pay = Object.entries(f.支出 || {}).filter(([k, v]) => v && (v.金额 != null || v.状态 === '已确定'));
+          const claims = f.索赔与评估 || [];
+          if (!pay.length && !claims.length) return '';
+          const fmt = v => v == null ? '—' : Number(v).toLocaleString() + ' 元';
+          return `<div class="d-card"><h4>费用</h4><table class="d-table">
+            <tr><th>类别</th><th>金额</th><th>状态/口径</th></tr>
+            ${pay.map(([k, v]) => `<tr><td>${escapeHtml(k)}${v.计费方式 ? '（' + escapeHtml(v.计费方式) + '）' : ''}</td><td>${fmt(v.金额)}</td><td>${escapeHtml(v.状态 || '待确定')}</td></tr>`).join('')}
+            ${claims.map(x => `<tr><td>索赔：${escapeHtml(x.项目)}</td><td>${fmt(x.金额)}</td><td>${escapeHtml(x.计算方式 || '—')}</td></tr>`).join('')}
+          </table></div>`;
+        })()}`;
 
       const tcard = (t, col) => {
         const mark = {todo: '☐', in_progress: '◐', done: '☑'}[t.status];
         return `<div class="d-tcard ${t.status}" ${t.writable
           ? `onclick="toggleTask(${JSON.stringify(t).replace(/"/g, '&quot;')})"` : ''}
           title="${t.writable ? '点击切换状态' : '只读'}">
-          <div class="tt">${mark} ${escapeHtml(t.title)}</div>
+          <div class="tt">${mark} ${escapeHtml(t.title)}${t.file ? ` <span class="tf-file" style="display:inline-flex;vertical-align:-6px" title="${escapeHtml(t.file)}" onclick="event.stopPropagation();openFile('${id}', ${JSON.stringify(t.file).replace(/"/g, '&quot;')})">📄</span>` : ''}</div>
           <div class="tm">${escapeHtml(t.priority || '')}${t.deadline ? ' · 截止 ' + escapeHtml(t.deadline) : ''}${t.owner ? ' · ' + escapeHtml(t.owner) : ''}</div>
         </div>`;
       };
@@ -1048,14 +1122,15 @@
           <div style="font-size:.75rem;color:var(--text-muted);margin-top:3px">截止 ${escapeHtml(d.end_date)}${d.status === 'done' ? ' · 已完成' : ''}</div></div></div>`;
       }).join('')}</div>` : '<div class="empty-hint">无期限记录</div>';
       const hearingTable = hs.length ? `<div class="d-card" style="margin-top:12px"><h4>开庭与听证</h4><table class="d-table">
-        <tr><th>日期</th><th>类型</th><th>事项</th><th>地点</th><th>状态</th></tr>
+        <tr><th>日期</th><th>类型</th><th>事项</th><th>地点</th><th>状态</th><th>文书</th></tr>
         ${hs.map(h => `<tr><td><b>${escapeHtml(h.date)}</b></td><td>${escapeHtml(h.type)}</td><td>${escapeHtml(h.subject)}</td>
-          <td>${escapeHtml(h.place || '—')}</td><td>${h.status === 'done' ? '已进行' : '<b style="color:var(--accent-secondary)">已排期</b>'}</td></tr>`).join('')}
+          <td>${escapeHtml(h.place || '—')}</td><td>${h.status === 'done' ? '已进行' : '<b style="color:var(--accent-secondary)">已排期</b>'}</td>
+          <td>${h.file ? `<span class="tf-file" title="${escapeHtml(h.file)}" onclick="openFile('${id}', ${JSON.stringify(h.file).replace(/"/g, '&quot;')})">📄</span>` : '—'}</td></tr>`).join('')}
       </table></div>` : '';
 
       const tlSorted = [...tl].sort((a, b) => String(b.date).localeCompare(String(a.date)));
       const tlHtml = tlSorted.length ? `<div class="d-tl">${tlSorted.map(e2 => `
-        <div class="d-tl-i"><div class="d-tl-d">${escapeHtml(e2.date)}</div><div class="d-tl-t">${escapeHtml(e2.event)}</div></div>`).join('')}</div>`
+        <div class="d-tl-i"><div class="d-tl-d">${escapeHtml(e2.date)}${e2.file ? ` <span class="tf-file" style="display:inline-flex;vertical-align:-6px" title="${escapeHtml(e2.file)}" onclick="event.stopPropagation();openFile('${id}', ${JSON.stringify(e2.file).replace(/"/g, '&quot;')})">📄</span>` : ''}</div><div class="d-tl-t">${escapeHtml(e2.event)}</div></div>`).join('')}</div>`
         : '<div class="empty-hint">无时间线</div>';
 
       const partyHtml = (c.parties || []).length ? `<div class="d-card"><h4>当事人</h4><ul class="d-people">
