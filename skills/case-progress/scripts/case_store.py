@@ -1448,6 +1448,87 @@ def cmd_log_work(root, case_id, args):
     print(f"✅ 已记录（{date}，{tail}）｜{args.content}｜累计 {ws['总工时']}h")
 
 
+# 工时回补：按已有工作产物（法律文书/取证/研究）倒推录入（用户拍板：每份文件都花了时间）
+BACKFILL_DIRS = {
+    "02": ("研究", 1.0, "案件分析"),
+    "03": ("研究", 1.0, "法律研究"),
+    "05": ("核查", 0.5, "证据整理/取证"),
+    "06": ("文书", 1.0, "法律文书起草/修改"),
+    "08": ("核查", 0.5, "法院文书审阅"),
+    "09": ("整理", 0.5, "庭审记录整理"),
+    "10": ("文书", 1.0, "综合报告"),
+}
+BACKFILL_SKIP = {"案件视图.md", "案件视图.html", "案件信息.md", "工时记录.md", "待办事项.md", "IDLE_HANDOFF.md"}
+BACKFILL_EXTS = {".docx", ".doc", ".pdf", ".md", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".mp4", ".m4a", ".aac"}
+
+
+def _date_from_filename(name):
+    m = re.match(r"^(?:\d{4}\s)?(\d{2})(\d{2})(\d{2})", name)
+    if not m:
+        return None
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if 24 <= y <= 30 and 1 <= mo <= 12 and 1 <= d <= 31:
+        return f"20{y:02d}-{mo:02d}-{d:02d}"
+    return None
+
+
+def cmd_backfill_work(root, case_id, args):
+    """按案件目录中已有工作产物倒推工时：日期×类型分组（文件名日期前缀优先，否则 mtime），
+    同组多件合并为一条（大批量取证翻倍封顶）。默认 dry-run，--apply 落盘。"""
+    targets = [(case_id, case_dirs(root)[case_id])] if case_id else sorted(case_dirs(root).items())
+    for cid, cdir in targets:
+        ypath = cdir / "00 - 📅 日程管理" / "case.yaml"
+        if not ypath.exists():
+            print(f"· [{cid}] 无 case.yaml，跳过")
+            continue
+        data = load_case(ypath)
+        wl = (data.get("工时统计") or {}).get("工作记录") or []
+        mentioned = " ".join(str(r.get("内容", "")) + str(r.get("关联文件", "")) for r in wl)
+        groups = {}
+        for sub in sorted(cdir.iterdir()):
+            m = re.match(r"^(\d{2}) - ", sub.name)
+            if not m or m.group(1) not in BACKFILL_DIRS:
+                continue
+            wtype, floor, label = BACKFILL_DIRS[m.group(1)]
+            for f in sub.rglob("*"):
+                if not f.is_file() or f.suffix.lower() not in BACKFILL_EXTS:
+                    continue
+                if f.name in BACKFILL_SKIP or f.name.startswith(".") or ".legacy" in f.name:
+                    continue
+                if f.name in mentioned:
+                    continue  # 已有工作记录覆盖
+                d = _date_from_filename(f.name) or datetime.date.fromtimestamp(f.stat().st_mtime).isoformat()
+                groups.setdefault((d, m.group(1), label, floor), []).append(f)
+        if not groups:
+            print(f"· [{cid}] 无可回补产物")
+            continue
+        total_add, recs = 0.0, []
+        for (d, code, label, floor), files in sorted(groups.items()):
+            n = len(files)
+            hours = floor if n <= 5 else round(floor * 2, 1)  # 大批量（如批量取证）翻倍封顶
+            total_add += hours
+            names = "、".join(f.stem[:18] for f in files[:3]) + (f" 等{n}件" if n > 3 else "")
+            recs.append({"日期": d, "时长": hours, "内容": f"回补·{label}：{names}",
+                         "律师": None, "关联任务": None,
+                         "关联文件": str(files[0].relative_to(cdir)) if n == 1 else None,
+                         "source": "ai"})
+            print(f"  {d} [{code}{label}] {hours}h ×{n} — {names[:60]}")
+        print(f"· [{cid}] 回补 {len(recs)} 组 / +{round(total_add, 1)}h"
+              + ("" if args.apply else "（dry-run，--apply 落盘）"))
+        if not args.apply:
+            continue
+        with case_lock(ypath):
+            data = load_case(ypath)
+            ws = data.setdefault("工时统计", {})
+            wl = ws.setdefault("工作记录", [])
+            wl.extend(recs)
+            ws["总工时"] = round(sum(float(r["时长"]) for r in wl if r.get("时长") is not None), 2)
+            data.setdefault("更新历史", []).append({
+                "日期": TODAY.isoformat(), "操作者": "case_store", "动作": "工时回补",
+                "细节": f"按目录工作产物倒推 {len(recs)} 组 +{round(total_add, 1)}h（dry-run 复核后落盘）"})
+            commit_write(ypath, data, "ai", "工时回补", f"{len(recs)} 组 +{round(total_add, 1)}h")
+
+
 def cmd_set_fields(root, case_id, args):
     """通用字段补充：深合并 JSON 进 case.yaml（列表字段整体替换，任务增改请用 add-task/set-status）。"""
     path = case_yaml_path(root, case_id)
@@ -1590,15 +1671,18 @@ def main():
     sp.add_argument("--stdout", action="store_true", help="打印 md 到终端（不写文件）")
     sp = sub.add_parser("report", help="期限预警摘要（n 天内临期期限与开庭）")
     sp.add_argument("--days", type=int, default=30)
-    sp = sub.add_parser("log-work", help="工时记录（追加工作记录并重算总工时；auto=按类型下限外扩）")
+    sp = sub.add_parser("log-work", help="工时记录（追加工作记录并重算总工时；auto=按类型参考下限）")
     common(sp)
-    sp.add_argument("hours", metavar="时长小时|auto|?", help="实际值优先；auto 按类型下限；? 待补")
+    sp.add_argument("hours", metavar="时长小时|auto|?", help="实际值优先；auto 按类型参考下限；? 待补")
     sp.add_argument("content", metavar="工作内容")
     sp.add_argument("--date", default=None, help="默认今天")
     sp.add_argument("--lawyer", default=None)
     sp.add_argument("--task", default=None, help="关联任务 task_id")
     sp.add_argument("--file", default=None, help="关联文书相对路径")
     sp.add_argument("--type", default=None, choices=list(WORK_FLOORS), help="auto 时的工作类型（缺省从内容推断）")
+    sp = sub.add_parser("backfill-work", help="按已有工作产物（文书/取证/研究）倒推回补工时")
+    sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
+    sp.add_argument("--apply", action="store_true", help="真正写盘（默认 dry-run）")
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
@@ -1614,11 +1698,13 @@ def main():
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
              "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report,
-             "log-work": cmd_log_work}
+             "log-work": cmd_log_work, "backfill-work": cmd_backfill_work}
     if args.cmd == "list":
         table["list"](root)
     elif args.cmd == "report":
         cmd_report(root, None, args)
+    elif args.cmd == "backfill-work":
+        cmd_backfill_work(root, args.case_id, args)
     else:
         table[args.cmd](root, args.case_id, args)
 
