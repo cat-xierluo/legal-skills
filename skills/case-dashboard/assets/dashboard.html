@@ -307,6 +307,13 @@
     .cal-more { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; }
     .cal-ev.apple { background: rgba(122, 138, 55, .14); color: #7a8a37; border: 1px solid rgba(122,138,55,.35); }
     .cal-legend .lg-apple i { background: rgba(122,138,55,.5); }
+    .cal-status {
+      display: flex; align-items: center; gap: 12px; background: var(--accent-glow);
+      border: 1px solid var(--border-accent); border-radius: 10px;
+      padding: 10px 16px; margin-bottom: 14px; font-size: 0.85rem;
+    }
+    .cal-status.ok { background: rgba(47,133,90,.1); border-color: rgba(47,133,90,.35); }
+    .cal-status .btn-main { padding: 5px 14px; font-size: 0.78rem; }
     /* 当月事项清单 */
     .cal-agenda-title { font-size: 0.95rem; font-weight: 700; margin: 26px 0 12px; }
     .ag-day { margin-bottom: 14px; }
@@ -848,6 +855,7 @@
 
     <!-- 日历（月视图 + 当月清单） -->
     <div class="view-panel" id="panel-cal">
+      <div class="cal-status" id="cal-status" style="display:none"></div>
       <div class="cal-wrap">
         <div class="cal-head">
           <h3 id="cal-title">—</h3>
@@ -1025,6 +1033,17 @@
         if (CAL.apple_pending) {
           setTimeout(() => { if (document.getElementById('panel-cal').classList.contains('on')) loadCalendar(); }, 4000);
         }
+        const st = document.getElementById('cal-status');
+        if (CAL.needs_fda) {
+          st.style.display = 'flex'; st.className = 'cal-status';
+          st.innerHTML = `<span>⚡ 提速：授权「完全磁盘访问」后可 1 秒直读本地日历库（当前走 AppleScript 慢通道）</span>
+            <button class="btn-main" onclick="goGrantFda()">去授权</button>`;
+        } else if (CAL.apple_source === 'sqlite') {
+          st.style.display = 'flex'; st.className = 'cal-status ok';
+          st.innerHTML = '<span>⚡ 苹果日历 · 本地库直读（秒级同步）</span>';
+        } else {
+          st.style.display = 'none';
+        }
         if (!calY) { const t = new Date(CAL.today || Date.now()); calY = t.getFullYear(); calM = t.getMonth() + 1; }
         renderCal();
       } catch (e) { toast('加载月历失败: ' + e.message, 'error'); }
@@ -1187,6 +1206,13 @@
       }
       document.getElementById('ev-mask').style.display = 'flex';
     }
+    async function goGrantFda() {
+      try {
+        const r = await api('/api/v1/grant-fda');
+        toast(r.message || '已打开授权页，添加 ZCode 后回这里刷新', 'ok');
+      } catch (e) { toast('打开失败: ' + e.message, 'error'); }
+    }
+
     function closeEv() { document.getElementById('ev-mask').style.display = 'none'; }
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEv(); });
 
