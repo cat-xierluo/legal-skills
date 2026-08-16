@@ -302,6 +302,8 @@
     .cal-ev.yellow { border-left: 3px solid var(--warn-yellow); }
     .cal-ev.green { border-left: 3px solid var(--ok-green, #48bb78); }
     .cal-more { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; }
+    .cal-ev.apple { background: rgba(122, 138, 55, .14); color: #7a8a37; border: 1px solid rgba(122,138,55,.35); }
+    .cal-legend .lg-apple i { background: rgba(122,138,55,.5); }
     .cal-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 0.75rem; color: var(--text-muted); flex-wrap: wrap; }
     .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 
@@ -833,6 +835,7 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-legend">
+          <span class="lg-apple"><i></i>苹果日历</span>
           <span><i style="background:rgba(74,124,159,.4)"></i>开庭/听证</span>
           <span><i style="background:var(--warn-red)"></i>逾期/≤7天</span>
           <span><i style="background:var(--warn-yellow)"></i>≤30天</span>
@@ -984,6 +987,9 @@
     async function loadCalendar() {
       try {
         CAL = await api('/api/v1/calendar');
+        if (CAL.apple_ok === false) {
+          toast('苹果日历未同步（需授权：系统设置→隐私与安全性→自动化→ZCode→日历）', 'warn');
+        }
         if (!calY) { const t = new Date(CAL.today || Date.now()); calY = t.getFullYear(); calM = t.getMonth() + 1; }
         renderCal();
       } catch (e) { toast('加载月历失败: ' + e.message, 'error'); }
@@ -1011,6 +1017,9 @@
         const key = `${calY}-${pad2(calM)}-${pad2(d)}`;
         const evs = CAL.days[key] || [];
         const evHtml = evs.slice(0, 3).map((ev, i) => {
+          if (ev.kind === 'apple') {
+            return `<span class="cal-ev apple" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="openEv(null,'${key}',${i})">🗓 ${escapeHtml(ev.all_day ? '' : ev.time + ' ')}${escapeHtml(ev.name)}</span>`;
+          }
           const fb = ev.file ? ` <span title="${escapeHtml(ev.file)}" onclick="event.stopPropagation();openFile('${ev.case_id}', ${JSON.stringify(ev.file).replace(/"/g, '&quot;')})" style="cursor:pointer">📄</span>` : '';
           if (ev.kind === 'hearing') {
             return `<span class="cal-ev hearing" title="点击预览" onclick="openEv('${ev.case_id}','${key}',${i})">⚖ ${escapeHtml(ev.name)}${fb}</span>`;
@@ -1046,18 +1055,28 @@
     }
     function showEvModal(caseId, ev) {
       EV = {caseId, ev};
+      const isApple = ev.kind === 'apple';
       document.getElementById('ev-title').textContent =
-        (ev.kind === 'hearing' || ev.type ? '⚖ ' : '⏰ ') + (ev.name || ev.subject || '');
+        (isApple ? '🗓 ' : (ev.kind === 'hearing' || ev.type ? '⚖ ' : '⏰ ')) + (ev.name || ev.subject || '');
       const dl = ev.days_left;
-      const left = ev.kind === 'hearing'
-        ? (dl === 0 ? '今天' : dl + ' 天后')
-        : (dl < 0 ? `逾期 ${-dl} 天` : dl === 0 ? '今天到期' : `剩 ${dl} 天`);
+      let left;
+      if (isApple) left = ev.all_day ? '全天' : ev.time;
+      else if (ev.kind === 'hearing' || ev.type) left = (dl === 0 ? '今天' : dl + ' 天后');
+      else left = (dl < 0 ? `逾期 ${-dl} 天` : dl === 0 ? '今天到期' : `剩 ${dl} 天`);
       document.getElementById('ev-meta').innerHTML =
-        `<span>📅 ${escapeHtml(dateKey)}（${left}）</span><span>📁 ${escapeHtml(ev.case_short)}</span>` +
-        (ev.place ? `<span>📍 ${escapeHtml(ev.place)}</span>` : '') +
-        (ev.status ? `<span>${ev.status === 'done' ? '已完成' : '待进行'}</span>` : '');
+        `<span>📅 ${escapeHtml(ev.date || '')}（${escapeHtml(left)}）</span>` +
+        (isApple ? `<span>📅 ${escapeHtml(ev.case_short || '')}</span>` : `<span>📁 ${escapeHtml(ev.case_short)}</span>`) +
+        (ev.place ? `<span>📍 ${escapeHtml(ev.place)}</span>` : '');
       const pv = document.getElementById('ev-preview');
       const ob = document.getElementById('ev-open');
+      const go = document.getElementById('ev-go');
+      go.style.display = caseId ? '' : 'none';
+      if (caseId) go.onclick = () => { closeEv(); showCase(caseId); };
+      if (isApple) {
+        pv.style.display = 'none';
+        ob.style.display = 'none';
+      } else {
+        pv.style.display = '';
       if (ev.file) {
         const url = `/api/v1/preview?case_id=${encodeURIComponent(caseId)}&file=${encodeURIComponent(ev.file)}`;
         ob.style.display = '';
@@ -1084,7 +1103,7 @@
         pv.innerHTML = '<div class="no-file">未关联文书（可在 case.yaml 的 来源文件/关联文件 字段绑定）</div>';
         ob.style.display = 'none';
       }
-      document.getElementById('ev-go').onclick = () => { closeEv(); showCase(caseId); };
+      }
       document.getElementById('ev-mask').style.display = 'flex';
     }
     function closeEv() { document.getElementById('ev-mask').style.display = 'none'; }
