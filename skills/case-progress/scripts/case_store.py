@@ -1529,6 +1529,192 @@ def cmd_backfill_work(root, case_id, args):
             commit_write(ypath, data, "ai", "工时回补", f"{len(recs)} 组 +{round(total_add, 1)}h")
 
 
+def cmd_scan(root, case_id, args):
+    """M8 状态回扫：扫描案件目录工作产物 + 关键文件 → 推断实际阶段/立案日/案号/任务进度
+    → 输出 yaml 现状 vs 现实 对比报告。--apply 才会写盘（高置信度自动、低置信度进待确认）。
+    干湿分离：仅产出报告与建议，不主动落盘，确保数据安全。
+    """
+    targets = [(case_id, case_dirs(root)[case_id])] if case_id else sorted(case_dirs(root).items())
+    for cid, cdir in targets:
+        ypath = cdir / "00 - 📅 日程管理" / "case.yaml"
+        if not ypath.exists():
+            print(f"· [{cid}] 无 case.yaml（迁移后未生成）")
+            continue
+        data = load_case(ypath)
+        report = scan_one(cid, cdir, data)
+        print(format_report(cid, report))
+        if args.apply and (report.get("auto_updates") or report.get("confirm_updates")):
+            with case_lock(ypath):
+                data = load_case(ypath)
+                applied = []
+                for path, value in report.get("auto_updates", {}).items():
+                    _set_path(data, path, value); applied.append(path + " = " + str(value))
+                for path, value in report.get("confirm_updates", {}).items():
+                    _set_path(data, path, value); applied.append(path + " = " + str(value) + "（需确认）")
+                if applied:
+                    data.setdefault("同步", {})["最后同步时间"] = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                    data.setdefault("更新历史", []).append({
+                        "日期": TODAY.isoformat(), "操作者": "case_store", "动作": "状态回扫",
+                        "细节": f"采纳推断: {'; '.join(applied[:6])}" + (" 等更多" if len(applied) > 6 else "")})
+                    commit_write(ypath, data, "ai", "状态回扫", f"采纳 {len(applied)} 项推断")
+                    print(f"  → 已落盘 {len(applied)} 项")
+
+
+def _set_path(data, dotted, value):
+    """深合并/赋值：'meta.医院案号' → data['meta']['医院案号'] = value"""
+    cur = data
+    parts = dotted.split(".")
+    for p in parts[:-1]:
+        cur = cur.setdefault(p, {})
+    cur[parts[-1]] = value
+
+
+def _has_text(p):
+    return p.suffix.lower() in {".md", ".txt"} and p.exists()
+
+
+def _file_date(name, mtime_path):
+    """文件名日期优先，否则 mtime；返回 YYYY-MM-DD 或 None"""
+    return _date_from_filename(name) or datetime.date.fromtimestamp(mtime_path.stat().st_mtime).isoformat()
+
+
+def scan_one(cid, cdir, data):
+    """单案扫描：枚举目录证据 + 推断 + 干湿分离建议"""
+    warnings, suggestions, facts = [], {}, []
+    info = data.get("案件基本信息", {}) or {}
+    meta = data.get("meta", {}) or {}
+    current = {
+        "程序阶段": info.get("程序阶段") or "诉前准备",
+        "生命周期": info.get("生命周期状态") or "进行中",
+        "医院案号": meta.get("医院案号") or meta.get("法院案号"),
+        "法院立案日期": info.get("法院立案日期"),
+        "工时总时": (data.get("工时统计") or {}).get("总工时", 0),
+        "工时记录条数": len((data.get("工时统计") or {}).get("工作记录", [])),
+        "任务总数": len(data.get("任务", []) or []),
+        "任务已完成": sum(1 for t in (data.get("任务") or []) if t.get("状态") == "done"),
+        "案件时间线条数": len(data.get("案件时间线", []) or []),
+        "开庭条数": len(data.get("开庭与听证", []) or []),
+        "法定期限条数": len(data.get("法定期限", []) or []),
+    }
+    warnings, suggestions, facts = [], {}, []
+
+    # ---- 阶段 1: 枚举目录证据（不读文件）----
+    file_index = {}  # by_dir_code → [(file_path, date, name)]
+    for sub in sorted(cdir.iterdir()):
+        m = re.match(r"^(\d{2}) - ", sub.name)
+        if not m or not sub.is_dir():
+            continue
+        code = m.group(1)
+        for f in sub.rglob("*"):
+            if not f.is_file() or f.suffix.lower() not in {".docx", ".doc", ".pdf", ".md", ".xlsx", ".png", ".jpg", ".jpeg", ".mp4", ".m4a", ".aac"}:
+                continue
+            if f.name in BACKFILL_SKIP or f.name.startswith(".") or ".legacy" in f.name:
+                continue
+            file_index.setdefault(code, []).append({
+                "path": str(f.relative_to(cdir)),
+                "name": f.name,
+                "date": _file_date(f.name, f),
+            })
+
+    counts = {code: len(fs) for code, fs in file_index.items()}
+    # ---- 阶段 2: 推断阶段（基于目录结构）----
+    has_08 = counts.get("08", 0) > 0            # 法院文书
+    has_09 = counts.get("09", 0) > 0            # 庭审记录
+    has_10 = counts.get("10", 0) > 0            # 综合报告
+    has_12 = counts.get("12", 0) > 0            # 鉴定材料
+    has_05 = counts.get("05", 0) > 0            # 证据
+    has_03 = counts.get("03", 0) > 0            # 研究
+    has_06 = counts.get("06", 0) > 0            # 文书
+
+    inferred_stage = None
+    inferred_stage_conf = 0  # 0-100
+    if has_12:
+        # 鉴定材料 = 鉴定阶段
+        if has_09:
+            inferred_stage = "一审"; inferred_stage_conf = 95
+        else:
+            inferred_stage = "一审"; inferred_stage_conf = 85
+    elif has_09:
+        inferred_stage = "一审"; inferred_stage_conf = 90
+    elif has_08:
+        # 法院送达（传票/受理/判决）—至少已立案
+        if has_06:
+            inferred_stage = "一审"; inferred_stage_conf = 80
+        else:
+            inferred_stage = "诉前准备"; inferred_stage_conf = 50
+    elif has_06:
+        inferred_stage = "诉前准备"; inferred_stage_conf = 60
+    elif has_05 or has_03:
+        inferred_stage = "诉前准备"; inferred_stage_conf = 50
+    else:
+        inferred_stage = "诉前准备"; inferred_stage_conf = 30
+
+    if inferred_stage and inferred_stage != info.get("程序阶段"):
+        sev = "🔴 严重" if inferred_stage_conf >= 80 else "🟠 提示"
+        warnings.append(f"{sev} 程序阶段：yaml={info.get('程序阶段')!r} | 推断={inferred_stage!r} (置信 {inferred_stage_conf}%)")
+        if inferred_stage_conf >= 80:
+            suggestions[f"案件基本信息.程序阶段"] = inferred_stage
+        elif "案件基本信息.程序阶段" not in suggestions:
+            suggestions[f"案件基本信息.程序阶段"] = {"_候选": inferred_stage, "_置信": inferred_stage_conf}
+
+    # ---- 阶段 3: 立案日（08 目录最早文件日期，或案件时间线最早立案类型）----
+    inferred_filing = None
+    if has_08:
+        dates = sorted({d["date"] for d in file_index.get("08", []) if d.get("date")})
+        if dates:
+            inferred_filing = dates[0]
+    if inferred_filing and not info.get("法院立案日期"):
+        warnings.append(f"🟠 提示 法院立案日期：yaml=None | 推断={inferred_filing!r}（08 目录最早文件）")
+        suggestions["案件基本信息.法院立案日期"] = inferred_filing
+
+    # ---- 阶段 4: 案件时间线缺失（08/09/10 有内容但时间线空）----
+    if has_08 and current["案件时间线条数"] == 0:
+        warnings.append("🟠 提示 案件时间线为空，但 08 目录有法院文书（建议回填 受理/传票/判决 等关键节点）")
+    if has_09 and current["案件时间线条数"] == 0:
+        warnings.append("🟠 提示 案件时间线为空，但 09 目录有庭审记录（建议回填 开庭日期）")
+    if (has_08 or has_09) and current["开庭条数"] == 0:
+        warnings.append("🟠 提示 开庭与听证为空，但 08/09 目录有文件（建议从传票/笔录提取开庭条目）")
+    if has_08 and current["法定期限条数"] == 0:
+        warnings.append("🟠 提示 法定期限为空，但 08 目录有法院文书（可能存在答辩/举证/上诉期未登记）")
+
+    # ---- 阶段 5: 任务完成度（按现有 yaml 任务状态）----
+    tc = current
+    task_pct = (tc["任务已完成"] / tc["任务总数"] * 100) if tc["任务总数"] else 0
+
+    return {
+        "current": current,
+        "counts": counts,
+        "warnings": warnings,
+        "suggestions": suggestions,
+        "facts": facts,
+        "auto_updates": {k: v for k, v in suggestions.items() if not isinstance(v, dict)},
+        "confirm_updates": {k: v["_候选"] for k, v in suggestions.items() if isinstance(v, dict)},
+    }
+
+
+def format_report(cid, r):
+    cur = r["current"]
+    cnt = r["counts"]
+    lines = [f"\n=== {cid} 状态回扫报告 ==="]
+    lines.append(f"目录产物: " + ", ".join(f"{c}={n}" for c, n in sorted(cnt.items()) if n) or "(空)")
+    lines.append(f"yaml 现状: 阶段={cur['程序阶段']} 生命={cur['生命周期']} 案号={cur['医院案号'] or '—'} "
+                  f"立案={cur['法院立案日期'] or '—'} 任务={cur['任务已完成']}/{cur['任务总数']} 时长={cur['工时总时']}h 记录={cur['工时记录条数']}条")
+    if r["warnings"]:
+        lines.append("警告:")
+        for w in r["warnings"]:
+            lines.append(f"  {w}")
+    if r["suggestions"]:
+        lines.append("建议（--apply 落盘）:")
+        for path, val in r["suggestions"].items():
+            if isinstance(val, dict):
+                lines.append(f"  · {path} = {val['_候选']}（置信 {val['_置信']}%，建议律师确认）")
+            else:
+                lines.append(f"  · {path} = {val}（高置信，自动）")
+    else:
+        lines.append("✅ 无落后项")
+    return "\n".join(lines)
+
+
 def cmd_set_fields(root, case_id, args):
     """通用字段补充：深合并 JSON 进 case.yaml（列表字段整体替换，任务增改请用 add-task/set-status）。"""
     path = case_yaml_path(root, case_id)
@@ -1680,6 +1866,9 @@ def main():
     sp.add_argument("--task", default=None, help="关联任务 task_id")
     sp.add_argument("--file", default=None, help="关联文书相对路径")
     sp.add_argument("--type", default=None, choices=list(WORK_FLOORS), help="auto 时的工作类型（缺省从内容推断）")
+    sp = sub.add_parser("scan", help="状态回扫：扫描案件目录 → 推断阶段/立案日/任务进度 → 对比报告")
+    sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
+    sp.add_argument("--apply", action="store_true", help="采纳报告中的建议落盘（默认只打印报告）")
     sp = sub.add_parser("backfill-work", help="按已有工作产物（文书/取证/研究）倒推回补工时")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认 dry-run）")
@@ -1698,13 +1887,15 @@ def main():
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
              "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report,
-             "log-work": cmd_log_work, "backfill-work": cmd_backfill_work}
+             "log-work": cmd_log_work, "backfill-work": cmd_backfill_work, "scan": cmd_scan}
     if args.cmd == "list":
         table["list"](root)
     elif args.cmd == "report":
         cmd_report(root, None, args)
     elif args.cmd == "backfill-work":
         cmd_backfill_work(root, args.case_id, args)
+    elif args.cmd == "scan":
+        cmd_scan(root, args.case_id, args)
     else:
         table[args.cmd](root, args.case_id, args)
 
