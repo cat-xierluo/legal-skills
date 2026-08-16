@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v1.8.11] - 2026-08-16
+
+> **发布状态：候选。** 已完成本地文档与回归验证，待独立 PR / `main` source check；不得据此宣称已发布。
+
+### 新增
+
+- 新增通用视觉语法：有流程、反馈、复核、状态或条件含义的实线 / 虚线 / 点线不得因“清爽”而误删；同一分叉主干和支线必须视觉连续；相邻层级连接优先 16–32px 可见线身，超过 48px 先压缩布局。
+- 固化标签卡、步骤编号和图例规则：深色标题 + 浅色正文的标题栏只保留上圆角；编号占独立上方带；图例只写读者理解所需的关系含义。
+
+### 改动文件
+
+- `references/style-guide.md`：在连线规范后加入“语义优先 / 分叉连续 / 层级连接紧凑”，并新增标签卡、编号与图例节。
+- `references/review-checklist.md`：视觉目检清单和 prompt 同步新增关系语义、断连、过长层级箭头、标签卡与编号检查。
+- `SKILL.md`：将以上规则纳入视觉目检、核心设计规范和成功标准。
+- `DECISIONS.md`：新增 DEC-023，定义通用规则及其不追溯批量迁移的边界。
+
+### 验证
+
+- `python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v` → 5 tests passed；`git diff --check` → 0。
+
 ## [v1.8.10] - 2026-07-16
 
 > **发布状态：候选。** 本地 producer contract 已通过，待 PR / `main` source check 与 release asset；不得据此宣称已发布。
