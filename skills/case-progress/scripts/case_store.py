@@ -1287,6 +1287,44 @@ def _refresh_views(path, data, case_id):
         print(f"⚠️ 视图刷新失败（不影响写入）：{e}", file=sys.stderr)
 
 
+def cmd_report(root, case_id, args):
+    """期限预警摘要（SessionStart 注入用；单行紧凑输出）。"""
+    rows = []
+    for cid, d in sorted(case_dirs(root).items()):
+        matches = sorted(d.glob(CASE_YAML_GLOB))
+        if not matches:
+            continue
+        try:
+            data = load_case(matches[0])
+        except SystemExit:
+            continue
+        if (data.get("案件基本信息") or {}).get("生命周期状态") == CLOSED:
+            continue
+        for dl_ in data.get("法定期限") or []:
+            if dl_.get("抵消标记") or dl_.get("状态") == "done":
+                continue
+            n = days_left(dl_.get("截止日期"))
+            if n is not None and n <= args.days:
+                rows.append((n, cid, dl_.get("名称")))
+        for h in data.get("开庭与听证") or []:
+            if h.get("状态") == "done":
+                continue
+            n = days_left(h.get("日期"))
+            if n is not None and 0 <= n <= args.days:
+                rows.append((n, cid, f"开庭·{h.get('事项')}"))
+    rows.sort()
+    if not rows:
+        print(f"✅ 未来 {args.days} 天无临期期限与开庭")
+        return
+    red = sum(1 for n, _, _ in rows if n < 0 or n <= 7)
+    print(f"⚠️ 期限预警：{len(rows)} 项临期（红 {red}）")
+    for n, cid, name in rows[:12]:
+        t = f"逾期{-n}天" if n < 0 else ("今天" if n == 0 else f"{n}天")
+        print(f"  · [{cid}] {name} — {t}")
+    if len(rows) > 12:
+        print(f"  … 另有 {len(rows) - 12} 项")
+
+
 def cmd_render(root, case_id, args):
     path = case_yaml_path(root, case_id)
     data = load_case(path)
@@ -1445,6 +1483,8 @@ def main():
     common(sp)
     sp.add_argument("--format", choices=["md", "html", "both"], default="both")
     sp.add_argument("--stdout", action="store_true", help="打印 md 到终端（不写文件）")
+    sp = sub.add_parser("report", help="期限预警摘要（n 天内临期期限与开庭）")
+    sp.add_argument("--days", type=int, default=30)
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
@@ -1459,11 +1499,13 @@ def main():
     table = {"show": cmd_show, "list": cmd_list, "add-task": cmd_add_task,
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
-             "set-fields": cmd_set_fields, "render": cmd_render}
-    if args.cmd == "set-fields":
-        cmd_set_fields(root, args.case_id, args)
+             "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report}
+    if args.cmd == "list":
+        table["list"](root)
+    elif args.cmd == "report":
+        cmd_report(root, None, args)
     else:
-        table[args.cmd](root, args.case_id, args) if args.cmd != "list" else table["list"](root)
+        table[args.cmd](root, args.case_id, args)
 
 
 if __name__ == "__main__":
