@@ -307,6 +307,7 @@ def build_show(data):
         "法定期限": [deadline_display(d) for d in data.get("法定期限") or []],
         "开庭与听证": data.get("开庭与听证") or [],
         "审级记录": data.get("审级记录") or [],
+        "工时统计": data.get("工时统计") or {},
         "上下文": data.get("上下文"),
         "同步": data.get("同步"),
     }
@@ -1018,6 +1019,26 @@ def render_md(data, case_id):
             L.append(f"- 法律研究：**{r.get('主题')}**（{st.get(r.get('状态'), '')}）")
         L.append("")
 
+    wh = data.get("工时统计") or {}
+    wl = wh.get("工作记录") or []
+    if wl:
+        month = TODAY.strftime("%Y-%m")
+        msum = round(sum(float(r.get("时长") or 0) for r in wl if str(r.get("日期", "")).startswith(month)), 2)
+        L.append(f"## 工时（累计 {wh.get('总工时', 0)}h · 本月 {msum}h · {len(wl)} 条记录）")
+        L.append("")
+        L.append("| 日期 | 时长 | 工作内容 | 关联 |")
+        L.append("| --- | --- | --- | --- |")
+        for r in sorted(wl, key=lambda x: str(x.get("日期")), reverse=True):
+            rel = []
+            if r.get("律师"):
+                rel.append(str(r["律师"]))
+            if r.get("关联任务"):
+                rel.append(f"任务{r['关联任务']}")
+            if r.get("关联文件"):
+                rel.append(f"📄{Path(str(r['关联文件'])).name}")
+            L.append(f"| {r.get('日期')} | {r.get('时长')}h | {r.get('内容')} | {'·'.join(rel) or '—'} |")
+        L.append("")
+
     L.append("---")
     L.append(f"*case_store render · {now} · 任务/期限变更请经 /progress 命令或看板操作*")
     return "\n".join(L) + "\n"
@@ -1025,6 +1046,14 @@ def render_md(data, case_id):
 
 def render_html(data, case_id):
     e = lambda s: _html.escape(str(s if s is not None else "—"))
+
+    def table(headers, rows):
+        if not rows:
+            return ""
+        h = "".join(f"<th>{x}</th>" for x in headers)
+        b = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+        return f"<table><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table>"
+
     meta = data.get("meta") or {}
     info = data.get("案件基本信息") or {}
     pa = data.get("当事人与代理") or {}
@@ -1238,10 +1267,23 @@ tr:hover td{background:#faf6ea}
     if not ef:
         ef.append('<div class="card">暂无证据与费用记录</div>')
 
+    wh = data.get("工时统计") or {}
+    wl = wh.get("工作记录") or []
+    wl_html = ""
+    if wl:
+        rows = [(e(r.get("日期")), f"{e(r.get('时长'))}h", e(r.get("内容")),
+                 e("·".join(str(x) for x in (r.get("律师"), r.get("关联任务"),
+                     str(r.get("关联文件")).split("/")[-1] if r.get("关联文件") else None) if x) or "—"))
+                for r in sorted(wl, key=lambda x: str(x.get("日期")), reverse=True)]
+        wl_html = (f'<div class="card"><h3>工时</h3>'
+                   f'<p class="meta" style="margin:0 0 8px">累计 <b>{e(wh.get("总工时"))}</b> 小时 · {len(wl)} 条记录</p>'
+                   + table(("日期", "时长", "工作内容", "关联"), rows) + "</div>")
+
     tabs = [("ov", "概览", "", "".join(ov)),
             ("tasks", "任务", str(len(tasks)), "".join(tk)),
             ("dl", "期限与开庭", str(len(dls) + len(hearings)), "".join(dl_html)),
             ("tl", "时间线", str(len(tl)), "".join(tl_html)),
+            ("wl", "工时", str(len(wl)), wl_html or '<div class="card">暂无工时记录（log-work 命令录入）</div>'),
             ("ef", "证据与费用", str(len(evd) + len(claims)), "".join(ef))]
     nav = "".join(f'<button data-t="{tid}" class="{"on" if i == 0 else ""}">{label}'
                   + (f'<span class="n">{n}</span>' if n and n != "0" else "") + "</button>"
@@ -1341,6 +1383,32 @@ def cmd_render(root, case_id, args):
         (d00 / "案件视图.html").write_text(render_html(data, case_id), encoding="utf-8")
         wrote.append("案件视图.html")
     print(f"✅ 已生成 {' 与 '.join(wrote)}（{d00}）；此后每次写入将自动刷新已存在的视图")
+
+
+def cmd_log_work(root, case_id, args):
+    """工时记录：追加 工作记录 并重算总工时。"""
+    try:
+        hours = float(args.hours)
+    except ValueError:
+        die("时长须为数字（小时），如 1.5")
+    if hours <= 0 or hours > 24:
+        die("时长须在 (0, 24] 小时")
+    date = args.date or TODAY.isoformat()
+    if not DATE_RE.match(date):
+        die("--date 须 YYYY-MM-DD")
+    path = case_yaml_path(root, case_id)
+    with case_lock(path):
+        data = load_case(path)
+        if args.task and not any(t.get("id") == args.task for t in data.get("任务") or []):
+            die(f"关联任务不存在: {args.task}（show 可查 task id）")
+        rec = {"日期": date, "时长": hours, "内容": args.content, "律师": args.lawyer,
+               "关联任务": args.task, "关联文件": args.file, "source": args.actor}
+        ws = data.setdefault("工时统计", {})
+        ws.setdefault("工作记录", []).append(rec)
+        ws["总工时"] = round(sum(float(r.get("时长") or 0) for r in ws["工作记录"]), 2)
+        commit_write(path, data, args.actor, "工时记录",
+                     f"{date} {hours}h {args.content[:30]}")
+    print(f"✅ 已记录 {hours}h（{date}）｜{args.content}｜累计 {ws['总工时']}h")
 
 
 def cmd_set_fields(root, case_id, args):
@@ -1485,12 +1553,20 @@ def main():
     sp.add_argument("--stdout", action="store_true", help="打印 md 到终端（不写文件）")
     sp = sub.add_parser("report", help="期限预警摘要（n 天内临期期限与开庭）")
     sp.add_argument("--days", type=int, default=30)
+    sp = sub.add_parser("log-work", help="工时记录（追加工作记录并重算总工时）")
+    common(sp)
+    sp.add_argument("hours", metavar="时长小时", help="如 1.5")
+    sp.add_argument("content", metavar="工作内容")
+    sp.add_argument("--date", default=None, help="默认今天")
+    sp.add_argument("--lawyer", default=None)
+    sp.add_argument("--task", default=None, help="关联任务 task_id")
+    sp.add_argument("--file", default=None, help="关联文书相对路径")
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
     sp.add_argument("--enrich", default=None, help="补充字段 JSON（@文件路径 或内联），深合并进生成结果")
 
-    for name in ("show", "add-task", "set-status", "add-deadline", "set-stage", "validate", "set-fields"):
+    for name in ("show", "add-task", "set-status", "add-deadline", "set-stage", "validate", "set-fields", "log-work"):
         sub.choices[name].add_argument("--actor", default="ai", choices=["user", "ai"],
                                        help="操作者（source=user 行与锁定阶段仅接受 user）")
 
@@ -1499,7 +1575,8 @@ def main():
     table = {"show": cmd_show, "list": cmd_list, "add-task": cmd_add_task,
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
-             "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report}
+             "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report,
+             "log-work": cmd_log_work}
     if args.cmd == "list":
         table["list"](root)
     elif args.cmd == "report":
