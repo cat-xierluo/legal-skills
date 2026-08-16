@@ -180,7 +180,7 @@
 | 字段 | 类型 | 说明 | 消费者 |
 | --- | --- | --- | --- |
 | 总工时 | number | 全部工作记录时长之和（小时；由 log-work 维护，勿手改） | lawyer、dashboard |
-| 工作记录[] | list | **结构化工时真值**：`{日期: date✅, 时长: number✅（小时）, 内容: str✅, 律师: str\|null, 关联任务: task_id\|null, 关联文件: str\|null, source}`——计费依据与"何时做了什么"的机器可读落点；`工时记录.md` 仅为手工便签/打印件，不承担真值 | lawyer、dashboard |
+| 工作记录[] | list | **结构化工时真值**：`{日期: date✅, 时长: number\|null✅（小时；`null`=待律师补录，AI 不得臆造时长，总工时不计入）, 内容: str✅, 律师: str\|null, 关联任务: task_id\|null, 关联文件: str\|null, source}`——计费依据与"何时做了什么"的机器可读落点；**AI 协作完成的工作在收尾时经 log-work 自动记录**（内容/产出文书/关联任务自动携带）；`工时记录.md` 仅为手工便签/打印件，不承担真值 | lawyer、dashboard |
 
 > 工作记录行键 = `日期|内容`；新增经 `log-work` 命令（自动重算总工时）。
 

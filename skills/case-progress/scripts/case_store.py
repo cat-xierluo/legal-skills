@@ -1036,7 +1036,8 @@ def render_md(data, case_id):
                 rel.append(f"任务{r['关联任务']}")
             if r.get("关联文件"):
                 rel.append(f"📄{Path(str(r['关联文件'])).name}")
-            L.append(f"| {r.get('日期')} | {r.get('时长')}h | {r.get('内容')} | {'·'.join(rel) or '—'} |")
+            h = f"{r['时长']}h" if r.get("时长") is not None else "⏳待补"
+            L.append(f"| {r.get('日期')} | {h} | {r.get('内容')} | {'·'.join(rel) or '—'} |")
         L.append("")
 
     L.append("---")
@@ -1271,7 +1272,7 @@ tr:hover td{background:#faf6ea}
     wl = wh.get("工作记录") or []
     wl_html = ""
     if wl:
-        rows = [(e(r.get("日期")), f"{e(r.get('时长'))}h", e(r.get("内容")),
+        rows = [(e(r.get("日期")), f"{e(r.get('时长') if r.get('时长') is not None else '⏳待补')}{'h' if r.get('时长') is not None else ''}", e(r.get("内容")),
                  e("·".join(str(x) for x in (r.get("律师"), r.get("关联任务"),
                      str(r.get("关联文件")).split("/")[-1] if r.get("关联文件") else None) if x) or "—"))
                 for r in sorted(wl, key=lambda x: str(x.get("日期")), reverse=True)]
@@ -1386,13 +1387,15 @@ def cmd_render(root, case_id, args):
 
 
 def cmd_log_work(root, case_id, args):
-    """工时记录：追加 工作记录 并重算总工时。"""
-    try:
-        hours = float(args.hours)
-    except ValueError:
-        die("时长须为数字（小时），如 1.5")
-    if hours <= 0 or hours > 24:
-        die("时长须在 (0, 24] 小时")
+    """工时记录：追加 工作记录 并重算总工时。时长可传 ? 表示待补（AI 不臆造时长）。"""
+    hours = None
+    if args.hours not in ("?", "？"):
+        try:
+            hours = float(args.hours)
+        except ValueError:
+            die("时长须为数字（小时，如 1.5）或 ?（待律师补录）")
+        if hours <= 0 or hours > 24:
+            die("时长须在 (0, 24] 小时")
     date = args.date or TODAY.isoformat()
     if not DATE_RE.match(date):
         die("--date 须 YYYY-MM-DD")
@@ -1405,10 +1408,11 @@ def cmd_log_work(root, case_id, args):
                "关联任务": args.task, "关联文件": args.file, "source": args.actor}
         ws = data.setdefault("工时统计", {})
         ws.setdefault("工作记录", []).append(rec)
-        ws["总工时"] = round(sum(float(r.get("时长") or 0) for r in ws["工作记录"]), 2)
+        ws["总工时"] = round(sum(float(r["时长"]) for r in ws["工作记录"] if r.get("时长") is not None), 2)
         commit_write(path, data, args.actor, "工时记录",
-                     f"{date} {hours}h {args.content[:30]}")
-    print(f"✅ 已记录 {hours}h（{date}）｜{args.content}｜累计 {ws['总工时']}h")
+                     f"{date} {hours}h {args.content[:30]}" if hours else f"{date} 待补时长 {args.content[:30]}")
+    tail = f"{hours}h" if hours else "时长待补"
+    print(f"✅ 已记录（{date}，{tail}）｜{args.content}｜累计 {ws['总工时']}h")
 
 
 def cmd_set_fields(root, case_id, args):
