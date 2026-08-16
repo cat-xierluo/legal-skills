@@ -434,8 +434,57 @@ _APPLE_TTL = 900
 _APPLE_LOCK = threading.Lock()
 
 
+CAL_DB = Path.home() / "Library" / "Group Containers" / "group.com.apple.calendar" / "Calendar.sqlitedb"
+_CD_EPOCH = 978307200  # Core Data 时间纪元（2001-01-01）
+
+
+def _apple_sqlite_fetch(skip_names):
+    """直读日历本地库（需"完全磁盘访问"）：约 50ms，返回事件列表；失败抛异常。"""
+    import sqlite3
+    if not CAL_DB.exists():
+        raise RuntimeError("Calendar.sqlitedb 不存在")
+    now_cd = time.time() - _CD_EPOCH
+    lo, hi = now_cd - 30 * 86400, now_cd + 150 * 86400
+    con = sqlite3.connect(f"file:{CAL_DB}?mode=ro", uri=True, timeout=5)
+    try:
+        rows = con.execute(
+            """
+            SELECT ci.summary, ci.start_date, ci.end_date, ci.all_day, c.title,
+                   COALESCE(l.title, l.address, '')
+            FROM CalendarItem ci
+            JOIN Calendar c ON ci.calendar_id = c.ROWID
+            LEFT JOIN Location l ON ci.location_id = l.ROWID
+            WHERE ci.hidden = 0 AND ci.start_date BETWEEN ? AND ?
+              AND c.title NOT IN (%s)
+            ORDER BY ci.start_date
+            """ % ",".join("?" * len(skip_names)),
+            (lo, hi, *skip_names)).fetchall()
+    finally:
+        con.close()
+    out = []
+    for summary, sd, ed, all_day, cal, loc in rows:
+        ds = datetime.datetime.fromtimestamp(sd + _CD_EPOCH)
+        de = datetime.datetime.fromtimestamp(ed + _CD_EPOCH)
+        out.append({
+            "cal": cal, "title": summary or "（无标题）",
+            "date": ds.strftime("%Y-%m-%d"),
+            "time": ds.strftime("%H:%M") + "-" + de.strftime("%H:%M"),
+            "allDay": bool(all_day), "loc": loc or ""})
+    return out
+
+
 def _apple_do_fetch():
-    """执行 osascript 并更新缓存（调用方负责持锁/置 fetching）。"""
+    """双通道：sqlite 直读（快，需完全磁盘访问）→ 失败回退 osascript AppleScript。
+    更新缓存含 source/needs_fda（调用方负责持锁/置 fetching）。"""
+    skip_names = [x.strip() for x in os.environ.get(
+        "DASHBOARD_APPLECAL_SKIP", "计划的提醒事项,Siri建议").split(",") if x.strip()]
+    try:
+        events = _apple_sqlite_fetch(skip_names)
+        _APPLE_CACHE.update(ts=time.time(), events=events, error=None,
+                            source="sqlite", needs_fda=False)
+        return
+    except Exception:  # noqa: BLE001 — 无完全磁盘访问或库不可读 → 回退慢通道
+        pass
     try:
         r = subprocess.run(["osascript", "-e", _APPLE_AS], capture_output=True, text=True, timeout=150)
         if r.returncode != 0:
@@ -449,9 +498,11 @@ def _apple_do_fetch():
             events.append({"cal": cal, "date": date, "time": tm,
                            "allDay": all_day == "true", "title": title,
                            "loc": "" if loc in ("missing value", "missing value\n") else loc})
-        _APPLE_CACHE.update(ts=time.time(), events=events, error=None)
+        _APPLE_CACHE.update(ts=time.time(), events=events, error=None,
+                            source="applescript", needs_fda=True)
     except Exception as ex:  # noqa: BLE001
-        _APPLE_CACHE.update(ts=time.time(), events=None, error=str(ex)[:160])
+        _APPLE_CACHE.update(ts=time.time(), events=None, error=str(ex)[:160],
+                            source="applescript", needs_fda=True)
         if _APPLE_CACHE["events"] is None:  # 尚无任何成功数据 → 90s 后自动重试一次
             def _retry():
                 time.sleep(90)
@@ -520,6 +571,8 @@ def build_calendar():
         payload["apple_error"] = apple_err
     if apple_pending:
         payload["apple_pending"] = True
+    payload["apple_source"] = _APPLE_CACHE.get("source")
+    payload["needs_fda"] = bool(_APPLE_CACHE.get("needs_fda"))
     return payload
 
 
@@ -680,6 +733,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/overview":
             self._send(200, build_overview())
+            return
+        if path == "/api/v1/grant-fda":
+            subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"],
+                           check=False)
+            self._send(200, {"ok": True, "message": "已打开 系统设置→隐私与安全性→完全磁盘访问，请添加 ZCode"})
             return
         if path == "/api/v1/calendar":
             self._send(200, build_calendar())
@@ -853,7 +911,7 @@ def main():
             _APPLE_CACHE["fetching"] = False
 
     def _scheduler():
-        interval = max(120, int(os.environ.get("DASHBOARD_APPLECAL_INTERVAL", "600")))
+        interval = max(120, int(os.environ.get("DASHBOARD_APPLECAL_INTERVAL", "180")))
         while True:
             time.sleep(interval)
             _spawn_bg_fetch()
