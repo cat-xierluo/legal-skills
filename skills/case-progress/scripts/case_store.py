@@ -1386,14 +1386,43 @@ def cmd_render(root, case_id, args):
     print(f"✅ 已生成 {' 与 '.join(wrote)}（{d00}）；此后每次写入将自动刷新已存在的视图")
 
 
+WORK_FLOORS = {"文书": 1.0, "研究": 1.0, "核查": 0.5, "沟通": 0.5, "出庭": 2.0, "整理": 0.5, "其他": 0.5}
+WORK_TYPE_HINTS = (
+    ("文书", ("起草", "修改", "文书", "起诉状", "答辩状", "代理词", "上诉状", "函", "合同", "目录", "意见书")),
+    ("研究", ("研究", "检索", "法条", "判例", "分析报告", "方案", "策略")),
+    ("核查", ("核查", "审阅", "质证", "查看", "核对", "校对", "证据")),
+    ("沟通", ("沟通", "电话", "会见", "洽谈", "访谈", "回复")),
+    ("出庭", ("开庭", "听证", "庭审", "旁听")),
+    ("整理", ("整理", "归档", "迁移", "录入", "绑定", "建档")),
+)
+
+
+def infer_work_type(content):
+    for wtype, kws in WORK_TYPE_HINTS:
+        if any(k in content for k in kws):
+            return wtype
+    return "其他"
+
+
 def cmd_log_work(root, case_id, args):
-    """工时记录：追加 工作记录 并重算总工时。时长可传 ? 表示待补（AI 不臆造时长）。"""
+    """工时记录：追加 工作记录 并重算总工时。
+
+    时长三态：数字（实际值，优先）；auto（按工作类型取合理下限外扩——AI 生成快但人工
+    核查/修改成本真实存在，用户拍板的计费合理冗余）；?（明确不想估，待律师补录）。
+    """
+    auto_floor = None
     hours = None
-    if args.hours not in ("?", "？"):
+    if args.hours in ("?", "？"):
+        pass
+    elif args.hours.lower() == "auto":
+        wtype = args.type or infer_work_type(args.content)
+        auto_floor = WORK_FLOORS.get(wtype, 0.5)
+        hours = auto_floor
+    else:
         try:
             hours = float(args.hours)
         except ValueError:
-            die("时长须为数字（小时，如 1.5）或 ?（待律师补录）")
+            die("时长须为数字（如 1.5）、auto（按类型下限）或 ?（待补录）")
         if hours <= 0 or hours > 24:
             die("时长须在 (0, 24] 小时")
     date = args.date or TODAY.isoformat()
@@ -1409,9 +1438,13 @@ def cmd_log_work(root, case_id, args):
         ws = data.setdefault("工时统计", {})
         ws.setdefault("工作记录", []).append(rec)
         ws["总工时"] = round(sum(float(r["时长"]) for r in ws["工作记录"] if r.get("时长") is not None), 2)
-        commit_write(path, data, args.actor, "工时记录",
-                     f"{date} {hours}h {args.content[:30]}" if hours else f"{date} 待补时长 {args.content[:30]}")
-    tail = f"{hours}h" if hours else "时长待补"
+        note = f"{date} {hours}h"
+        if auto_floor is not None:
+            note += f"（auto 下限·{args.type or infer_work_type(args.content)}）"
+        elif hours is None:
+            note = f"{date} 待补时长"
+        commit_write(path, data, args.actor, "工时记录", f"{note} {args.content[:30]}")
+    tail = f"{hours}h（下限外扩）" if auto_floor is not None else (f"{hours}h" if hours else "时长待补")
     print(f"✅ 已记录（{date}，{tail}）｜{args.content}｜累计 {ws['总工时']}h")
 
 
@@ -1557,14 +1590,15 @@ def main():
     sp.add_argument("--stdout", action="store_true", help="打印 md 到终端（不写文件）")
     sp = sub.add_parser("report", help="期限预警摘要（n 天内临期期限与开庭）")
     sp.add_argument("--days", type=int, default=30)
-    sp = sub.add_parser("log-work", help="工时记录（追加工作记录并重算总工时）")
+    sp = sub.add_parser("log-work", help="工时记录（追加工作记录并重算总工时；auto=按类型下限外扩）")
     common(sp)
-    sp.add_argument("hours", metavar="时长小时", help="如 1.5")
+    sp.add_argument("hours", metavar="时长小时|auto|?", help="实际值优先；auto 按类型下限；? 待补")
     sp.add_argument("content", metavar="工作内容")
     sp.add_argument("--date", default=None, help="默认今天")
     sp.add_argument("--lawyer", default=None)
     sp.add_argument("--task", default=None, help="关联任务 task_id")
     sp.add_argument("--file", default=None, help="关联文书相对路径")
+    sp.add_argument("--type", default=None, choices=list(WORK_FLOORS), help="auto 时的工作类型（缺省从内容推断）")
     sp = sub.add_parser("migrate", help="存量迁移（默认 dry-run，--apply 落盘；原文件归档 .legacy）")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
