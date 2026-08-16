@@ -1084,6 +1084,16 @@
             <td>${escapeHtml(r.立案日期)}</td><td>${escapeHtml(r.结案日期)}（${escapeHtml(r.结案方式)}）</td></tr>`).join('')}
         </table></div>` : ''}
         ${(() => {
+          const wl = c.worklog || [];
+          if (!wl.length && !c.worklog_total) return '';
+          const rows = [...wl].sort((a, b) => String(b.日期).localeCompare(String(a.日期))).slice(0, 8)
+            .map(r => `<tr><td>${escapeHtml(r.日期)}</td><td><b>${escapeHtml(String(r.时长))}h</b></td>
+              <td>${escapeHtml(r.内容)}${r.关联文件 ? ` <span class="tf-file" style="display:inline-flex;vertical-align:-6px" title="${escapeHtml(r.关联文件)}" onclick="event.stopPropagation();openFile('${id}', ${JSON.stringify(r.关联文件).replace(/"/g, '&quot;')})">📄</span>` : ''}</td>
+              <td>${escapeHtml([r.律师, r.关联任务].filter(Boolean).join('·') || '—')}</td></tr>`).join('');
+          return `<div class="d-card"><h4>工时（累计 ${escapeHtml(String(c.worklog_total || 0))}h · ${wl.length} 条）</h4>
+            ${rows ? `<table class="d-table"><tr><th>日期</th><th>时长</th><th>工作内容</th><th>关联</th></tr>${rows}</table>` : '<div class="empty-hint">暂无明细</div>'}</div>`;
+        })()}
+        ${(() => {
           const f = c.fees || {};
           const pay = Object.entries(f.支出 || {}).filter(([k, v]) => v && (v.金额 != null || v.状态 === '已确定'));
           const claims = f.索赔与评估 || [];

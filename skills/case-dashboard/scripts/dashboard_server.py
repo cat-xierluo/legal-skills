@@ -238,6 +238,8 @@ def adapt_yaml_v4(data, case):
         })
     fees = data.get("费用信息") or {}
     case["fees"] = {"支出": fees.get("支出") or {}, "索赔与评估": fees.get("索赔与评估") or []}
+    case["worklog"] = (data.get("工时统计") or {}).get("工作记录") or []
+    case["worklog_total"] = (data.get("工时统计") or {}).get("总工时") or 0
     for e in data.get("案件时间线") or []:
         case["timeline"].append({"date": e.get("日期", ""), "event": e.get("事项", ""),
                                  "type": e.get("事件类型", ""), "file": e.get("来源文件") or ""})
