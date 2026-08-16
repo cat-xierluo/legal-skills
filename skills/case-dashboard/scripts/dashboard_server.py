@@ -172,6 +172,13 @@ def base_case(case_id, case_dir, display_name=None):
         "deadlines": [],
         "hearings": [],
         "timeline": [],
+        "parties": [],
+        "instants": [],
+        "evidence": [],
+        "amount": None,
+        "court": "",
+        "lifecycle": "",
+        "stale": False,
         "yaml_path": "",
         "md_path": "",
         "case_dir": str(case_dir),
@@ -188,7 +195,23 @@ def adapt_yaml_v4(data, case):
         (r.get("法院案号") for r in (data.get("审级记录") or []) if r.get("法院案号")), "")
     case["cause"] = info.get("案由", "")
     case["status"] = info.get("生命周期状态", "")
+    case["lifecycle"] = info.get("生命周期状态", "")
     case["stage"] = info.get("程序阶段", "")
+    case["amount"] = info.get("标的额")
+    case["court"] = info.get("管辖法院", "")
+    case["stale"] = bool((data.get("同步") or {}).get("状态过期"))
+    pa = data.get("当事人与代理") or {}
+    for side, key in (("我方", "我方当事人"), ("对方", "对方当事人")):
+        for p in pa.get(key) or []:
+            case["parties"].append({"side": side, "name": p.get("姓名", ""), "role": p.get("角色", ""),
+                                    "type": p.get("类型", ""), "note": (p.get("扩展信息") or {}).get("备注", "")})
+    for p in pa.get("其他诉讼参与人") or []:
+        case["parties"].append({"side": "其他", "name": p.get("姓名", ""), "role": p.get("角色", ""),
+                                "type": "", "note": p.get("备注", "")})
+    for r in data.get("审级记录") or []:
+        case["instants"].append(r)
+    for ev in data.get("证据索引") or []:
+        case["evidence"].append(ev)
     for t in data.get("任务") or []:
         case["tasks"].append({
             "id": f"{case['id']}-{t.get('id', '')}",
@@ -324,6 +347,29 @@ def toggle_task(case_id, source_ref, target_status):
 # ---------------------------------------------------------------------------
 # API 数据组装
 # ---------------------------------------------------------------------------
+def build_focus():
+    """今日焦点：红期限 / 60 天内开庭 / 停滞案件（已结案不参与）。"""
+    red, hearings, stale = [], [], []
+    for c in get_all_cases():
+        if c.get("lifecycle") == "已结案":
+            continue
+        for d in c["deadlines"]:
+            if d.get("level") == "red":
+                red.append({**d, "case_id": c["id"], "case_short": c["display_short"]})
+        for h in c.get("hearings") or []:
+            n = h.get("days_left")
+            if h.get("status") != "done" and n is not None and 0 <= n <= 60:
+                hearings.append({**h, "case_id": c["id"], "case_short": c["display_short"]})
+        todo = sum(1 for t in c["tasks"] if t["status"] == "todo")
+        inprog = sum(1 for t in c["tasks"] if t["status"] == "in_progress")
+        if c.get("stale") or (todo > 0 and inprog == 0):
+            stale.append({"case_id": c["id"], "case_short": c["display_short"], "stage": c["stage"],
+                          "todo": todo, "data_stale": c.get("stale", False)})
+    red.sort(key=lambda x: x.get("days_left") if x.get("days_left") is not None else 0)
+    hearings.sort(key=lambda x: x.get("days_left") or 0)
+    return {"today": TODAY.isoformat(), "red_deadlines": red, "hearings_upcoming": hearings, "stale_cases": stale}
+
+
 def build_calendar():
     """月历数据：期限（不含已抵消/已完成）+ 开庭，按日期分组。"""
     days = {}
@@ -387,17 +433,26 @@ def build_cases():
             if d["days_left"] is not None and d["level"] != "none":
                 if nearest is None or (d["days_left"] < (nearest["days_left"] or 0)):
                     nearest = d
+        next_hearing = None
+        for h in c.get("hearings") or []:
+            n = h.get("days_left")
+            if h.get("status") != "done" and n is not None and n >= 0:
+                if next_hearing is None or n < (next_hearing["days_left"] or 0):
+                    next_hearing = h
         out.append({
             "id": c["id"],
             "display_name": c["display_name"],
             "case_number": c["case_number"],
             "cause": c["cause"],
             "status": c["status"],
+            "lifecycle": c.get("lifecycle") or c["status"],
             "stage": c["stage"],
             "source_type": c["source_type"],
             "data_quality": c["data_quality"],
             "task_counts": counts,
             "nearest_deadline": nearest,
+            "next_hearing": next_hearing,
+            "stale": c.get("stale", False),
         })
     return out
 
@@ -493,6 +548,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/calendar":
             self._send(200, build_calendar())
+            return
+        if path == "/api/v1/focus":
+            self._send(200, build_focus())
             return
         if path == "/api/v1/cases":
             self._send(200, build_cases())

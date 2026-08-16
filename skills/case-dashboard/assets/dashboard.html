@@ -130,17 +130,126 @@
     .deadline-item.red .dl-days { color: var(--warn-red); }
     .deadline-item.yellow .dl-days { color: var(--warn-yellow); }
 
-    /* 页签切换（案件 / 月历） */
+    /* 页签切换（焦点 / 案件 / 月历） */
+    :root { --ok-green: #10b981; }
     .view-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
     .view-tabs button {
-      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted);
+      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary);
       padding: 7px 22px; border-radius: 9px 9px 0 0; cursor: pointer; font-size: 0.9rem;
       font-family: inherit; border-bottom: none; transition: all .18s ease;
     }
     .view-tabs button:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-    .view-tabs button.on { color: var(--accent); font-weight: 700; background: var(--bg-main); border-top: 2px solid var(--accent); }
+    .view-tabs button.on { color: var(--accent-secondary); font-weight: 700; background: var(--bg-secondary); border-top: 2px solid var(--accent-primary); }
     .view-panel { display: none; }
     .view-panel.on { display: block; }
+
+    /* ---------- 今日焦点 ---------- */
+    .focus-sec { margin-bottom: 26px; }
+    .focus-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .focus-title .cnt { font-size: 0.75rem; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 9px; padding: 0 8px; color: var(--text-muted); }
+    .hearing-row {
+      display: flex; align-items: center; gap: 14px; background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-left: 3px solid var(--status-progress); border-radius: 10px; padding: 11px 16px; margin-bottom: 8px;
+      cursor: pointer; transition: all .18s;
+    }
+    .hearing-row:hover { background: var(--bg-card-hover); transform: translateY(-1px); }
+    .hearing-date { min-width: 96px; }
+    .hearing-date b { display: block; font-size: 0.95rem; }
+    .hearing-date span { font-size: 0.72rem; color: var(--text-muted); }
+    .hearing-body { flex: 1; font-size: 0.88rem; }
+    .hearing-body .h-case { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+    .stale-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stale-chip {
+      background: var(--bg-card); border: 1px dashed var(--warn-yellow); border-radius: 999px;
+      padding: 6px 16px; font-size: 0.82rem; cursor: pointer; transition: all .15s;
+    }
+    .stale-chip:hover { background: var(--bg-card-hover); }
+    .stale-chip b { color: var(--warn-yellow); }
+
+    /* ---------- 案件工具栏（过滤 + 搜索） ---------- */
+    .cases-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+    .chip {
+      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary);
+      border-radius: 999px; padding: 4px 14px; font-size: 0.8rem; cursor: pointer; font-family: inherit;
+      transition: all .15s;
+    }
+    .chip:hover { color: var(--text-primary); }
+    .chip.on { border-color: var(--accent-primary); color: var(--accent-secondary); background: var(--accent-glow); font-weight: 600; }
+    .toolbar-search {
+      margin-left: auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 9px;
+      color: var(--text-primary); padding: 5px 13px; font-size: 0.85rem; font-family: inherit; width: 200px;
+    }
+    .toolbar-search:focus { outline: none; border-color: var(--border-accent); }
+
+    /* 案件卡升级：徽章行 */
+    .case-badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
+    .cbadge { font-size: 0.7rem; border-radius: 6px; padding: 2px 8px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary); }
+    .cbadge.hearing { border-color: rgba(59,130,246,.5); color: #7fb0fe; }
+    .cbadge.red { border-color: rgba(239,68,68,.5); color: var(--warn-red); font-weight: 600; }
+    .cbadge.stale { border-color: rgba(234,179,8,.5); color: var(--warn-yellow); }
+    .closed-group { margin-top: 26px; }
+    .closed-head {
+      display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-muted);
+      font-size: 0.85rem; padding: 10px 4px; border-top: 1px dashed var(--border-subtle);
+    }
+    .closed-head:hover { color: var(--text-secondary); }
+    .closed-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
+    .case-card.closed { opacity: 0.62; }
+    .case-card.closed:hover { opacity: 0.9; }
+
+    /* ---------- 案件详情页 ---------- */
+    .d-back {
+      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-secondary);
+      border-radius: 8px; padding: 5px 16px; cursor: pointer; font-size: 0.85rem; font-family: inherit; margin-bottom: 16px;
+    }
+    .d-back:hover { color: var(--text-primary); border-color: var(--border-accent); }
+    .d-head { margin-bottom: 4px; }
+    .d-head h2 { font-size: 1.35rem; margin-bottom: 6px; }
+    .d-sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .d-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 20px; overflow-x: auto; }
+    .d-tabs button {
+      border: 0; background: none; color: var(--text-muted); padding: 8px 16px 10px; cursor: pointer;
+      font-size: 0.9rem; font-family: inherit; border-bottom: 2.5px solid transparent; white-space: nowrap;
+    }
+    .d-tabs button.on { color: var(--accent-secondary); font-weight: 700; border-color: var(--accent-primary); }
+    .d-sec { display: none; }
+    .d-sec.on { display: block; }
+    .d-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+    .d-card h4 { font-size: 0.92rem; color: var(--accent-secondary); margin-bottom: 12px; border-left: 3px solid var(--accent-primary); padding-left: 9px; }
+    .d-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 18px; font-size: 0.88rem; }
+    .d-grid b { display: block; font-size: 0.74rem; color: var(--text-muted); font-weight: 500; margin-bottom: 2px; }
+    .d-tag { display: inline-block; font-size: 0.72rem; background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 1px 8px; color: var(--text-secondary); margin-right: 8px; }
+    .d-people { list-style: none; padding: 0; }
+    .d-people li { padding: 6px 0; border-bottom: 1px dashed var(--border-subtle); font-size: 0.88rem; }
+    .d-people li:last-child { border: 0; }
+    .d-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .d-table th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.78rem; padding: 6px 9px; border-bottom: 1px solid var(--border-subtle); }
+    .d-table td { padding: 7px 9px; border-bottom: 1px solid var(--border-subtle); }
+    .d-kan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 900px) { .d-kan { grid-template-columns: 1fr; } }
+    .d-kcol { background: var(--bg-secondary); border-radius: 10px; padding: 10px; }
+    .d-kcol h5 { margin: 2px 4px 10px; font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .d-tcard { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 9px; padding: 9px 12px; margin-bottom: 8px; cursor: pointer; font-size: 0.85rem; }
+    .d-tcard:hover { border-color: var(--border-accent); }
+    .d-tcard.done .tt { color: var(--text-muted); text-decoration: line-through; }
+    .d-tcard .tm { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+    .d-dlwrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+    .d-dlcard { display: flex; gap: 13px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-left-width: 4px; border-radius: 10px; padding: 12px 14px; }
+    .d-dlcard.red { border-left-color: var(--warn-red); }
+    .d-dlcard.yellow { border-left-color: var(--warn-yellow); }
+    .d-dlcard.green { border-left-color: var(--ok-green); }
+    .d-dlcard.none { opacity: 0.65; }
+    .d-dlnum { min-width: 60px; text-align: center; align-self: center; }
+    .d-dlnum b { font-size: 1.4rem; display: block; }
+    .d-dlnum span { font-size: 0.7rem; color: var(--text-muted); }
+    .d-tl { position: relative; margin-left: 8px; padding-left: 24px; }
+    .d-tl:before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--border-subtle); }
+    .d-tl-i { position: relative; padding-bottom: 16px; }
+    .d-tl-i:before { content: ''; position: absolute; left: -23px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-primary); box-shadow: 0 0 0 3px var(--bg-primary); }
+    .d-tl-i.todo:before { background: var(--bg-primary); border: 2.5px solid var(--accent-primary); width: 7px; height: 7px; }
+    .d-tl-d { font-weight: 600; font-size: 0.88rem; }
+    .d-tl-e { font-size: 0.72rem; color: var(--accent-secondary); margin-right: 8px; }
+    .d-tl-t { font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px; }
 
     /* 月历 */
     .cal-wrap { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 18px 20px; }
@@ -151,17 +260,17 @@
       border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted);
       border-radius: 8px; padding: 4px 14px; cursor: pointer; font-family: inherit; transition: all .15s;
     }
-    .cal-nav button:hover { color: var(--accent); border-color: var(--accent); }
+    .cal-nav button:hover { color: var(--accent-secondary); border-color: var(--border-accent); }
     .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
     .cal-dow { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 4px 0; }
     .cal-cell {
-      min-height: 86px; background: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 9px;
+      min-height: 86px; background: var(--bg-secondary); border:  1px solid var(--border-subtle); border-radius: 9px;
       padding: 6px 7px; position: relative; overflow: hidden; cursor: default;
     }
     .cal-cell.other { opacity: 0.35; }
-    .cal-cell.today { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent-glow); }
+    .cal-cell.today { border-color: var(--accent-primary); box-shadow: 0 0 0 1.5px var(--accent-glow); }
     .cal-num { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
-    .cal-cell.today .cal-num { color: var(--accent); }
+    .cal-cell.today .cal-num { color: var(--accent-secondary); }
     .cal-ev {
       display: block; font-size: 0.68rem; line-height: 1.35; border-radius: 5px; padding: 1.5px 6px;
       margin-top: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -564,19 +673,45 @@
       </div>
     </div>
 
-    <div class="deadline-bar" id="deadline-bar"></div>
-
     <div class="view-tabs">
-      <button id="tab-cases" class="on" onclick="switchView('cases')">案件</button>
+      <button id="tab-focus" class="on" onclick="switchView('focus')">今日焦点</button>
+      <button id="tab-cases" onclick="switchView('cases')">案件</button>
       <button id="tab-cal" onclick="switchView('cal')">月历</button>
     </div>
 
-    <div class="view-panel on" id="panel-cases">
-      <div class="case-grid" id="case-grid">
-        <div class="loading">加载案件中…</div>
+    <!-- 今日焦点（默认页） -->
+    <div class="view-panel on" id="panel-focus">
+      <div class="focus-sec">
+        <div class="focus-title">🔴 紧急期限 <span class="cnt" id="focus-red-cnt">0</span></div>
+        <div class="deadline-bar" id="deadline-bar" style="margin-bottom:0"></div>
+      </div>
+      <div class="focus-sec">
+        <div class="focus-title">⚖ 近期开庭（60 天内） <span class="cnt" id="focus-hearing-cnt">0</span></div>
+        <div id="focus-hearings"></div>
+      </div>
+      <div class="focus-sec">
+        <div class="focus-title">📌 停滞案件（有积压且无进行中任务） <span class="cnt" id="focus-stale-cnt">0</span></div>
+        <div class="stale-chips" id="focus-stale"></div>
       </div>
     </div>
 
+    <!-- 案件列表 -->
+    <div class="view-panel" id="panel-cases">
+      <div class="cases-toolbar" id="cases-toolbar">
+        <input class="toolbar-search" id="case-search" placeholder="搜索 案件名 / 案号 / 案由…" oninput="renderCases()">
+      </div>
+      <div class="case-grid" id="case-grid">
+        <div class="loading">加载案件中…</div>
+      </div>
+      <div class="closed-group" id="closed-group" style="display:none">
+        <div class="closed-head" onclick="toggleClosed()">
+          <span id="closed-arrow">▸</span> 已结案案件 <span id="closed-cnt"></span>
+        </div>
+        <div class="closed-cards" id="closed-cards" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- 月历 -->
     <div class="view-panel" id="panel-cal">
       <div class="cal-wrap">
         <div class="cal-head">
@@ -597,6 +732,9 @@
         </div>
       </div>
     </div>
+
+    <!-- 案件详情（完整页，非页签；由案件卡/焦点/月历进入） -->
+    <div class="view-panel" id="panel-detail"></div>
   </main>
 
   <div class="toast-wrap" id="toast-wrap"></div>
@@ -637,7 +775,6 @@
         renderColumn('todo', d.kanban.todo);
         renderColumn('progress', d.kanban.in_progress);
         renderColumn('done', d.kanban.done);
-        renderDeadlines(d.deadlines);
         document.getElementById('updated-time').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
       } catch (e) {
         toast('加载概览失败: ' + e.message, 'error');
@@ -734,93 +871,243 @@
     function switchView(v) {
       document.querySelectorAll('.view-tabs button').forEach(b => b.classList.remove('on'));
       document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('on'));
-      document.getElementById('tab-' + (v === 'cal' ? 'cal' : 'cases')).classList.add('on');
-      document.getElementById('panel-' + (v === 'cal' ? 'cal' : 'cases')).classList.add('on');
+      const tabMap = {focus: 'focus', cases: 'cases', cal: 'cal'};
+      if (v === 'detail') {
+        document.getElementById('tab-cases').classList.add('on');   /* 详情归属案件页签高亮 */
+      } else {
+        document.getElementById('tab-' + tabMap[v]).classList.add('on');
+      }
+      document.getElementById('panel-' + v).classList.add('on');
       if (v === 'cal') loadCalendar();
     }
+
+    let LAST_VIEW = 'focus';
+    function showCase(id) { LAST_VIEW = document.querySelector('.view-panel.on')?.id?.replace('panel-', '') || 'cases'; renderDetail(id); switchView('detail'); }
+    function backToList() { switchView(LAST_VIEW === 'detail' ? 'cases' : LAST_VIEW); }
+
+    /* ---------- 今日焦点 ---------- */
+    let FOCUS = null;
+    async function loadFocus() {
+      try {
+        FOCUS = await api('/api/v1/focus');
+        renderFocus();
+      } catch (e) { toast('加载焦点失败: ' + e.message, 'error'); }
+    }
+    function renderFocus() {
+      const red = FOCUS.red_deadlines || [];
+      document.getElementById('focus-red-cnt').textContent = red.length + ' 项';
+      renderDeadlines(red.length ? red : (FOCUS.all || []));
+      if (!red.length) document.getElementById('deadline-bar').innerHTML = '<div class="empty-hint" style="padding:8px 0">✅ 无紧急期限</div>';
+      const hs = FOCUS.hearings_upcoming || [];
+      document.getElementById('focus-hearing-cnt').textContent = hs.length + ' 场';
+      document.getElementById('focus-hearings').innerHTML = hs.length ? hs.map(h => `
+        <div class="hearing-row" onclick="showCase('${h.case_id}')">
+          <div class="hearing-date"><b>${escapeHtml(h.date)}</b><span>${h.days_left === 0 ? '今天' : h.days_left + ' 天后'}</span></div>
+          <div class="hearing-body">${escapeHtml(h.subject)}${h.place ? ' · ' + escapeHtml(h.place) : ''}
+            <div class="h-case">${escapeHtml(h.case_short)} · ${escapeHtml(h.type)}</div></div>
+        </div>`).join('') : '<div class="empty-hint">60 天内无开庭安排</div>';
+      const st = FOCUS.stale_cases || [];
+      document.getElementById('focus-stale-cnt').textContent = st.length + ' 件';
+      document.getElementById('focus-stale').innerHTML = st.length ? st.map(s => `
+        <span class="stale-chip" onclick="showCase('${s.case_id}')">${escapeHtml(s.case_short)}
+          <b>${s.todo} 项积压</b>${s.data_stale ? ' · 数据待同步' : ''} · ${escapeHtml(s.stage || '')}</span>`).join('')
+        : '<div class="empty-hint">无停滞案件</div>';
+    }
+
+    let FILTER_STAGE = '全部';
+    let CLOSED_OPEN = false;
+    let DETAIL_ID = null;
 
     async function loadCases() {
       try {
         CASES = await api('/api/v1/cases');
+        buildStageChips();
         renderCases();
       } catch (e) {
         document.getElementById('case-grid').innerHTML = '<div class="loading">加载失败: ' + escapeHtml(e.message) + '</div>';
       }
     }
 
+    function buildStageChips() {
+      const stages = [...new Set(CASES.filter(c => c.lifecycle !== '已结案').map(c => c.stage).filter(Boolean))];
+      const bar = document.getElementById('cases-toolbar');
+      bar.querySelectorAll('.chip').forEach(x => x.remove());
+      ['全部', ...stages].forEach(s => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (s === FILTER_STAGE ? ' on' : '');
+        b.textContent = s;
+        b.onclick = () => { FILTER_STAGE = s; buildStageChips(); renderCases(); };
+        bar.insertBefore(b, document.getElementById('case-search'));
+      });
+    }
+
+    function caseCardHtml(c, closed) {
+      const tc = c.task_counts;
+      const total = tc.todo + tc.in_progress + tc.done;
+      const pct = total ? Math.round(tc.done / total * 100) : 0;
+      const nd = c.nearest_deadline;
+      const nh = c.next_hearing;
+      const badges = [];
+      if (nh) badges.push(`<span class="cbadge hearing">⚖ 开庭 ${escapeHtml(nh.date)}（${nh.days_left}天后）</span>`);
+      if (nd && nd.level === 'red') badges.push(`<span class="cbadge red">⏰ ${escapeHtml(nd.name)} ${nd.days_left < 0 ? '逾期' + (-nd.days_left) + '天' : nd.days_left + '天内'}</span>`);
+      else if (nd) badges.push(`<span class="cbadge">⏰ ${escapeHtml(nd.name)} ${nd.days_left < 0 ? '逾期' + (-nd.days_left) + '天' : '剩' + nd.days_left + '天'}</span>`);
+      if (!closed && c.stale) badges.push('<span class="cbadge stale">📌 停滞</span>');
+      const ndTxt = nd ? '' : '';
+      return `
+        <div class="case-card ${closed ? 'closed' : ''}" onclick="showCase('${c.id}')">
+          <div class="case-card-head">
+            <div class="case-card-title">${escapeHtml(c.display_name)}</div>
+            <span class="status-badge">${escapeHtml(c.stage || c.lifecycle || '—')}</span>
+          </div>
+          <div class="case-cause">${escapeHtml(c.cause || '案由待补充')}${c.case_number ? ' · ' + escapeHtml(c.case_number) : ''}</div>
+          <div class="case-badges">${badges.join('')}</div>
+          <div class="case-meta">
+            <div class="case-progress">
+              <span>${tc.done}/${total}</span>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            </div>
+            <span>${escapeHtml(c.lifecycle || '')}</span>
+          </div>
+        </div>`;
+    }
+
     function renderCases() {
-      const grid = document.getElementById('case-grid');
-      grid.innerHTML = CASES.map(c => {
-        const tc = c.task_counts;
-        const total = tc.todo + tc.in_progress + tc.done;
-        const pct = total ? Math.round(tc.done / total * 100) : 0;
-        const nd = c.nearest_deadline;
-        const ndTxt = nd ? (nd.days_left < 0 ? `逾期 ${-nd.days_left}天` : `剩${nd.days_left}天`) : '无期限';
-        const qualityTxt = {full:'完整', partial:'部分', minimal:'仅目录'}[c.data_quality] || c.data_quality;
-        const expanded = expandedCase.has(c.id);
-        return `
-          <div class="case-card" onclick="toggleCase('${c.id}')">
-            <div class="case-card-head">
-              <div class="case-card-title">${escapeHtml(c.display_name)}</div>
-              <span class="status-badge">${escapeHtml(c.status || c.stage || '—')}</span>
-            </div>
-            <div class="case-cause">${escapeHtml(c.cause || '案由待补充')}</div>
-            <div class="case-meta">
-              <div class="case-progress">
-                <span>${tc.done}/${total}</span>
-                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-                <span class="quality-tag ${c.data_quality}">${qualityTxt}</span>
-              </div>
-              <span>${ndTxt}</span>
-            </div>
-          </div>
-          ${expanded ? `<div class="case-detail" id="detail-${c.id}"><div class="loading">加载详情…</div></div>` : ''}
-        `;
-      }).join('');
-      expandedCase.forEach(id => loadCaseDetail(id));
+      const q = (document.getElementById('case-search').value || '').trim().toLowerCase();
+      const match = c => (FILTER_STAGE === '全部' || c.stage === FILTER_STAGE)
+        && (!q || (c.display_name + c.case_number + c.cause).toLowerCase().includes(q));
+      const active = CASES.filter(c => c.lifecycle !== '已结案' && match(c))
+        .sort((a, b) => {
+          const da = a.nearest_deadline?.days_left ?? 99999, db = b.nearest_deadline?.days_left ?? 99999;
+          return da - db;
+        });
+      const closed = CASES.filter(c => c.lifecycle === '已结案');
+      document.getElementById('case-grid').innerHTML = active.length
+        ? active.map(c => caseCardHtml(c, false)).join('')
+        : '<div class="empty-hint">无匹配案件</div>';
+      const cg = document.getElementById('closed-group');
+      cg.style.display = closed.length ? '' : 'none';
+      document.getElementById('closed-cnt').textContent = `（${closed.length}）`;
+      const cc = document.getElementById('closed-cards');
+      cc.style.display = CLOSED_OPEN ? '' : 'none';
+      document.getElementById('closed-arrow').textContent = CLOSED_OPEN ? '▾' : '▸';
+      cc.innerHTML = CLOSED_OPEN ? closed.map(c => caseCardHtml(c, true)).join('') : '';
     }
 
-    async function toggleCase(id) {
-      if (expandedCase.has(id)) {
-        expandedCase.delete(id);
-      } else {
-        expandedCase.add(id);
+    function toggleClosed() { CLOSED_OPEN = !CLOSED_OPEN; renderCases(); }
+
+    /* ---------- 案件详情页（五页签） ---------- */
+    async function renderDetail(id) {
+      DETAIL_ID = id;
+      const el = document.getElementById('panel-detail');
+      el.innerHTML = '<div class="loading">加载案件详情…</div>';
+      let c;
+      try { c = await api('/api/v1/case/' + id); } catch (e) {
+        el.innerHTML = '<div class="loading">详情加载失败: ' + escapeHtml(e.message) + '</div>'; return;
       }
-      renderCases();
+      const tasks = c.tasks || [], dls = c.deadlines || [], hs = c.hearings || [], tl = c.timeline || [];
+      const cnt = {todo: 0, in_progress: 0, done: 0};
+      tasks.forEach(t => cnt[t.status] = (cnt[t.status] || 0) + 1);
+
+      const ovHtml = `
+        <div class="d-card"><h4>基本信息</h4><div class="d-grid">
+          ${[['案号', c.case_number], ['生命周期', c.lifecycle], ['程序阶段', c.stage], ['案由', c.cause],
+             ['管辖法院', c.court], ['标的额', c.amount != null ? Number(c.amount).toLocaleString() + ' 元' : null],
+             ['任务', `${cnt.done}/${tasks.length} 完成`], ['开庭与听证', hs.length + ' 场']]
+            .map(([k, v]) => `<div><b>${k}</b>${escapeHtml(v || '—')}</div>`).join('')}
+        </div></div>
+        ${(c.instants || []).length ? `<div class="d-card"><h4>审级记录</h4><table class="d-table">
+          <tr><th>审级</th><th>案号</th><th>承办法官</th><th>立案</th><th>结案</th></tr>
+          ${c.instants.map(r => `<tr><td>${escapeHtml(r.审级)}</td><td>${escapeHtml(r.法院案号)}</td><td>${escapeHtml(r.承办法官)}</td>
+            <td>${escapeHtml(r.立案日期)}</td><td>${escapeHtml(r.结案日期)}（${escapeHtml(r.结案方式)}）</td></tr>`).join('')}
+        </table></div>` : ''}`;
+
+      const tcard = (t, col) => {
+        const mark = {todo: '☐', in_progress: '◐', done: '☑'}[t.status];
+        return `<div class="d-tcard ${t.status}" ${t.writable
+          ? `onclick="toggleTask(${JSON.stringify(t).replace(/"/g, '&quot;')})"` : ''}
+          title="${t.writable ? '点击切换状态' : '只读'}">
+          <div class="tt">${mark} ${escapeHtml(t.title)}</div>
+          <div class="tm">${escapeHtml(t.priority || '')}${t.deadline ? ' · 截止 ' + escapeHtml(t.deadline) : ''}${t.owner ? ' · ' + escapeHtml(t.owner) : ''}</div>
+        </div>`;
+      };
+      const taskHtml = tasks.length ? `
+        <div class="d-kan">
+          <div class="d-kcol"><h5>待办 <span>${cnt.todo}</span></h5>${tasks.filter(t => t.status === 'todo').map(t => tcard(t)).join('')}</div>
+          <div class="d-kcol"><h5>进行中 <span>${cnt.in_progress}</span></h5>${tasks.filter(t => t.status === 'in_progress').map(t => tcard(t)).join('') || '<div class="empty-hint">暂无</div>'}</div>
+          <div class="d-kcol"><h5>已完成 <span>${cnt.done}</span></h5>${tasks.filter(t => t.status === 'done').map(t => tcard(t)).join('') || '<div class="empty-hint">暂无</div>'}</div>
+        </div>` : '<div class="empty-hint">无任务</div>';
+
+      const dlHtml = dls.length ? `<div class="d-dlwrap">${dls.map(d => {
+        const lv = d.level || 'none';
+        const dl2 = d.days_left;
+        const num = d.status === 'done' ? '✓' : dl2 == null ? '—' : dl2;
+        const unit = d.status === 'done' ? '已完成' : dl2 == null ? '' : '天' + (dl2 < 0 ? '（逾期）' : '');
+        return `<div class="d-dlcard ${lv}"><div class="d-dlnum"><b>${escapeHtml(String(num))}</b><span>${unit}</span></div>
+          <div><div style="font-weight:600">${escapeHtml(d.name)}</div>
+          <div style="font-size:.75rem;color:var(--text-muted);margin-top:3px">截止 ${escapeHtml(d.end_date)}${d.status === 'done' ? ' · 已完成' : ''}</div></div></div>`;
+      }).join('')}</div>` : '<div class="empty-hint">无期限记录</div>';
+      const hearingTable = hs.length ? `<div class="d-card" style="margin-top:12px"><h4>开庭与听证</h4><table class="d-table">
+        <tr><th>日期</th><th>类型</th><th>事项</th><th>地点</th><th>状态</th></tr>
+        ${hs.map(h => `<tr><td><b>${escapeHtml(h.date)}</b></td><td>${escapeHtml(h.type)}</td><td>${escapeHtml(h.subject)}</td>
+          <td>${escapeHtml(h.place || '—')}</td><td>${h.status === 'done' ? '已进行' : '<b style="color:var(--accent-secondary)">已排期</b>'}</td></tr>`).join('')}
+      </table></div>` : '';
+
+      const tlSorted = [...tl].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      const tlHtml = tlSorted.length ? `<div class="d-tl">${tlSorted.map(e2 => `
+        <div class="d-tl-i"><div class="d-tl-d">${escapeHtml(e2.date)}</div><div class="d-tl-t">${escapeHtml(e2.event)}</div></div>`).join('')}</div>`
+        : '<div class="empty-hint">无时间线</div>';
+
+      const partyHtml = (c.parties || []).length ? `<div class="d-card"><h4>当事人</h4><ul class="d-people">
+        ${c.parties.map(p => `<li><span class="d-tag">${escapeHtml(p.side)}</span><b>${escapeHtml(p.name)}</b>（${escapeHtml(p.role)}${p.type ? ' · ' + escapeHtml(p.type) : ''}）${p.note ? '——' + escapeHtml(p.note) : ''}</li>`).join('')}
+      </ul></div>` : '';
+      const evHtml = (c.evidence || []).length ? `<div class="d-card"><h4>证据索引</h4><table class="d-table">
+        <tr><th>名称</th><th>类型</th><th>证明目的</th><th>状态</th></tr>
+        ${c.evidence.map(e2 => `<tr><td>${escapeHtml(e2.名称)}</td><td>${escapeHtml(e2.类型)}</td><td>${escapeHtml(e2.证明目的 || '—')}</td>
+          <td>${e2.状态 === 'done' ? '已收集' : '待收集'}</td></tr>`).join('')}
+      </table></div>` : '';
+
+      el.innerHTML = `
+        <button class="d-back" onclick="backToList()">‹ 返回</button>
+        <div class="d-head">
+          <h2>${escapeHtml(c.display_name)}</h2>
+          <div class="d-sub">
+            <span>生命周期：<b>${escapeHtml(c.lifecycle || '—')}</b></span>
+            <span>阶段：<b>${escapeHtml(c.stage || '—')}</b></span>
+            <span>${escapeHtml(c.case_number || '案号待立案')}</span>
+            <button class="refresh-btn" onclick="openFolder('${id}')">📁 打开文件夹</button>
+          </div>
+        </div>
+        <div class="d-tabs" id="d-tabs">
+          <button data-d="ov" class="on">概览</button>
+          <button data-d="task">任务 (${tasks.length})</button>
+          <button data-d="dl">期限与开庭 (${dls.length + hs.length})</button>
+          <button data-d="tl">时间线 (${tl.length})</button>
+          <button data-d="pe">当事人与证据 (${(c.parties || []).length + (c.evidence || []).length})</button>
+        </div>
+        <div class="d-sec on" id="d-sec-ov">${ovHtml}</div>
+        <div class="d-sec" id="d-sec-task">${taskHtml}</div>
+        <div class="d-sec" id="d-sec-dl">${dlHtml}${hearingTable}</div>
+        <div class="d-sec" id="d-sec-tl">${tlHtml}</div>
+        <div class="d-sec" id="d-sec-pe">${partyHtml}${evHtml || '<div class="empty-hint">无证据索引</div>'}</div>`;
+      document.querySelectorAll('#d-tabs button').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll('#d-tabs button').forEach(x => x.classList.remove('on'));
+          document.querySelectorAll('.d-sec').forEach(s => s.classList.remove('on'));
+          b.classList.add('on');
+          document.getElementById('d-sec-' + b.dataset.d).classList.add('on');
+        };
+      });
     }
 
-    async function loadCaseDetail(id) {
-      const el = document.getElementById('detail-' + id);
-      if (!el) return;
+    async function openFolder(id) {
       try {
-        const c = await api('/api/v1/case/' + id);
-        const tasksHtml = c.tasks.length ? c.tasks.map(t => `
-          <div class="detail-task ${t.status} ${t.writable ? '' : 'readonly'}"
-               ${t.writable ? `onclick="event.stopPropagation();toggleTask(${JSON.stringify(t).replace(/"/g,'&quot;')})"` : 'onclick="event.stopPropagation();toast(\'此任务来源不支持切换\',\'warn\')"'}
-               title="${t.writable ? '点击切换状态' : '只读来源'}">
-            <span class="chk">${t.status === 'done' ? '✓' : ''}</span>
-            <span class="detail-task-title">${escapeHtml(t.title)}</span>
-            <span class="detail-task-src">${escapeHtml(t.priority || t.source_type)}</span>
-          </div>
-        `).join('') : '<div class="empty-hint">无任务数据</div>';
-        const tlHtml = c.timeline.length ? c.timeline.slice(0, 8).map(t => `
-          <div class="detail-timeline-item"><span class="tl-date">${escapeHtml(t.date)}</span>${escapeHtml(t.event)}</div>
-        `).join('') : '<div class="empty-hint">无时间线</div>';
-        el.innerHTML = `
-          <div class="detail-section">
-            <h4>任务（${c.tasks.length}）</h4>
-            <div class="detail-tasks">${tasksHtml}</div>
-          </div>
-          <div class="detail-section">
-            <h4>时间线</h4>
-            <div class="detail-timeline">${tlHtml}</div>
-          </div>
-          <div style="margin-top:14px"><button class="refresh-btn" onclick="event.stopPropagation();openCase('${id}')">📁 打开案件文件夹</button></div>
-        `;
+        await api('/api/v1/open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({case_id: id})});
       } catch (e) {
-        el.innerHTML = '<div class="loading">详情加载失败: ' + escapeHtml(e.message) + '</div>';
+        toast('打开失败: ' + e.message, 'error');
       }
     }
+    /* 兼容旧调用点：点期限/月历事件 → 进详情页 */
+    function openCase(id) { showCase(id); }
 
     async function toggleTask(task) {
       const newStatus = task.status === 'done' ? 'todo' : 'done';
@@ -852,7 +1139,10 @@
     async function refreshAll() {
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true;
-      await Promise.all([loadOverview(), loadCases()]);
+      await Promise.all([loadOverview(), loadCases(), loadFocus()]);
+      if (DETAIL_ID && document.getElementById('panel-detail').classList.contains('on')) {
+        renderDetail(DETAIL_ID);
+      }
       btn.disabled = false;
     }
 
