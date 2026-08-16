@@ -175,6 +175,7 @@ def base_case(case_id, case_dir, display_name=None):
         "parties": [],
         "instants": [],
         "evidence": [],
+        "fees": {"支出": {}, "索赔与评估": []},
         "amount": None,
         "court": "",
         "lifecycle": "",
@@ -219,6 +220,7 @@ def adapt_yaml_v4(data, case):
             "status": norm_status(t.get("状态")),
             "priority": t.get("优先级", ""),
             "deadline": t.get("截止日期") or "",
+            "file": t.get("关联文件") or "",
             "source_type": "V",
             "source_ref": {"kind": "case_store", "task_id": t.get("id", "")},
             "writable": True,
@@ -232,15 +234,20 @@ def adapt_yaml_v4(data, case):
             "days_left": dl,
             "level": lvl,
             "status": d.get("状态", ""),
+            "file": d.get("来源文件") or "",
         })
+    fees = data.get("费用信息") or {}
+    case["fees"] = {"支出": fees.get("支出") or {}, "索赔与评估": fees.get("索赔与评估") or []}
     for e in data.get("案件时间线") or []:
-        case["timeline"].append({"date": e.get("日期", ""), "event": e.get("事项", "")})
+        case["timeline"].append({"date": e.get("日期", ""), "event": e.get("事项", ""),
+                                 "type": e.get("事件类型", ""), "file": e.get("来源文件") or ""})
     for h in data.get("开庭与听证") or []:
         dl = days_left(h.get("日期"))
         case["hearings"].append({
             "date": h.get("日期", ""), "type": h.get("类型", ""), "subject": h.get("事项", ""),
             "place": " / ".join(str(x) for x in (h.get("地点"), h.get("法庭")) if x),
             "status": h.get("状态", ""), "days_left": dl,
+            "file": h.get("来源文件") or "",
             "level": "none" if h.get("状态") == "done" else deadline_level(dl, h.get("状态")),
         })
     case["data_quality"] = "full"
@@ -379,14 +386,15 @@ def build_calendar():
                 continue
             days.setdefault(d["end_date"], []).append({
                 "kind": "deadline", "case_id": c["id"], "case_short": c["display_short"],
-                "name": d.get("name"), "level": d["level"], "days_left": d.get("days_left")})
+                "name": d.get("name"), "level": d["level"], "days_left": d.get("days_left"),
+                "file": d.get("file", "")})
         for h in c.get("hearings") or []:
             if not h.get("date"):
                 continue
             days.setdefault(h["date"], []).append({
                 "kind": "hearing", "case_id": c["id"], "case_short": c["display_short"],
                 "name": f"{h.get('type')}·{h.get('subject')}", "place": h.get("place"),
-                "status": h.get("status")})
+                "status": h.get("status"), "file": h.get("file", "")})
     return {"today": TODAY.isoformat(), "days": days}
 
 
@@ -587,8 +595,16 @@ class Handler(BaseHTTPRequestHandler):
             if not c:
                 self._send(404, {"ok": False, "message": "案件不存在，拒绝打开"})
                 return
+            target = Path(c["case_dir"])
+            rel = body.get("file") or ""
+            if rel:
+                p = (target / str(rel)).resolve()
+                if target.resolve() not in p.parents or not p.exists():
+                    self._send(400, {"ok": False, "message": f"文件不存在或越界: {rel}"})
+                    return
+                target = p
             try:
-                subprocess.run(["open", c["case_dir"]], check=False)
+                subprocess.run(["open", str(target)], check=False)
                 self._send(200, {"ok": True})
             except Exception as e:  # noqa: BLE001
                 self._send(500, {"ok": False, "message": str(e)})
