@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 import shutil
 import tempfile
@@ -430,12 +431,13 @@ _APPLE_CACHE = {"ts": 0.0, "events": None, "error": None}
 _APPLE_TTL = 900
 
 
-def fetch_apple_events():
-    now = time.time()
-    if now - _APPLE_CACHE["ts"] < _APPLE_TTL and (_APPLE_CACHE["events"] is not None or _APPLE_CACHE["error"]):
-        return _APPLE_CACHE["events"] or [], _APPLE_CACHE["error"]
+_APPLE_LOCK = threading.Lock()
+
+
+def _apple_do_fetch():
+    """执行 osascript 并更新缓存（调用方负责持锁/置 fetching）。"""
     try:
-        r = subprocess.run(["osascript", "-e", _APPLE_AS], capture_output=True, text=True, timeout=90)
+        r = subprocess.run(["osascript", "-e", _APPLE_AS], capture_output=True, text=True, timeout=150)
         if r.returncode != 0:
             raise RuntimeError((r.stderr or "osascript 失败").strip().splitlines()[0][:160])
         events = []
@@ -447,12 +449,45 @@ def fetch_apple_events():
             events.append({"cal": cal, "date": date, "time": tm,
                            "allDay": all_day == "true", "title": title,
                            "loc": "" if loc in ("missing value", "missing value\n") else loc})
-        _APPLE_CACHE.update(ts=now, events=events, error=None)
-        return events, None
+        _APPLE_CACHE.update(ts=time.time(), events=events, error=None)
     except Exception as ex:  # noqa: BLE001
-        msg = str(ex)[:160]
-        _APPLE_CACHE.update(ts=now, events=None, error=msg)
-        return [], msg
+        _APPLE_CACHE.update(ts=time.time(), events=None, error=str(ex)[:160])
+        if _APPLE_CACHE["events"] is None:  # 尚无任何成功数据 → 90s 后自动重试一次
+            def _retry():
+                time.sleep(90)
+                _spawn_bg_fetch()
+            threading.Thread(target=_retry, daemon=True).start()
+
+
+def _spawn_bg_fetch():
+    if _APPLE_CACHE.get("fetching"):
+        return
+    _APPLE_CACHE["fetching"] = True
+
+    def _bg():
+        try:
+            with _APPLE_LOCK:
+                _apple_do_fetch()
+        finally:
+            _APPLE_CACHE["fetching"] = False
+    threading.Thread(target=_bg, daemon=True).start()
+
+
+def fetch_apple_events():
+    """永不阻塞：新鲜/过期旧值直返（过期则后台刷新）；错误 60s 重试窗；
+    冷启动无数据→触发后台拉取并返回 pending 标记（调用方先出案件数据）。"""
+    now = time.time()
+    c = _APPLE_CACHE
+    if c["events"] is not None and now - c["ts"] < _APPLE_TTL:
+        return c["events"], None, False
+    if c["error"] and now - c["ts"] < 180 and c["events"] is None:
+        return [], c["error"], False
+    if c["events"] is not None:  # 过期但可用 → 旧值先回 + 后台刷新
+        _spawn_bg_fetch()
+        return c["events"], None, False
+    # 冷启动：无任何数据 → 后台拉，先标记 pending
+    _spawn_bg_fetch()
+    return [], None, True
 
 
 def build_calendar():
@@ -473,15 +508,18 @@ def build_calendar():
                 "kind": "hearing", "case_id": c["id"], "case_short": c["display_short"],
                 "name": f"{h.get('type')}·{h.get('subject')}", "place": h.get("place"),
                 "status": h.get("status"), "file": h.get("file", "")})
-    apple, apple_err = fetch_apple_events()
+    apple, apple_err, apple_pending = fetch_apple_events()
     for a in apple:
         days.setdefault(a["date"], []).append({
             "kind": "apple", "case_id": None, "case_short": a["cal"],
             "name": a["title"], "place": a["loc"],
             "time": a["time"], "all_day": a["allDay"]})
-    payload = {"today": TODAY.isoformat(), "days": days, "apple_ok": not apple_err}
+    payload = {"today": TODAY.isoformat(), "days": days,
+               "apple_ok": not apple_err and not apple_pending}
     if apple_err:
         payload["apple_error"] = apple_err
+    if apple_pending:
+        payload["apple_pending"] = True
     return payload
 
 
@@ -804,6 +842,15 @@ def main():
         w = "可写" if any(t["writable"] for t in c["tasks"]) else "只读"
         print(f"   · [{c['id']}] {c['display_short']:<14} {flag:<10} {w}")
 
+    # 苹果日历预热（后台，避免首个 /api/v1/calendar 请求阻塞 30s）
+    def _prewarm():
+        _APPLE_CACHE["fetching"] = True
+        try:
+            with _APPLE_LOCK:
+                _apple_do_fetch()
+        finally:
+            _APPLE_CACHE["fetching"] = False
+    threading.Thread(target=_prewarm, daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"
     print(f"\n🌐 打开: {url}")
