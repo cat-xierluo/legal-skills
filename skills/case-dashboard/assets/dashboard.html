@@ -42,7 +42,7 @@
     }
 
     .main-content {
-      margin-left: 320px;
+      margin-left: 232px;
       padding: 32px 40px;
       min-height: 100vh;
       position: relative;
@@ -51,7 +51,7 @@
     .main-content::before {
       content: '';
       position: fixed;
-      top: 0; left: 320px; right: 0; bottom: 0;
+      top: 0; left: 232px; right: 0; bottom: 0;
       background:
         radial-gradient(ellipse 70% 45% at 18% 0%, rgba(201, 168, 106, 0.10) 0%, transparent 55%),
         radial-gradient(ellipse 55% 40% at 85% 8%, rgba(176, 141, 63, 0.06) 0%, transparent 55%);
@@ -524,10 +524,76 @@
     .stat-item.done .count { color: var(--status-done); }
     .stat-item .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* ---- 待办流（M6-1：替代三列看板） ---- */
-    .task-flow { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
-    .task-flow::-webkit-scrollbar { width: 4px; }
-    .task-flow::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+    /* ---- 侧边导航轨（M7：待办移出侧栏，侧栏回归视图切换） ---- */
+    .side-nav-rail { width: 232px; }
+    .nav-brand { padding: 22px 20px 16px; border-bottom: 1px solid var(--border-subtle); position: relative; overflow: hidden; }
+    .nav-brand::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #c9a86a, var(--accent-primary) 55%, #8a6d2f);
+    }
+    .nav-brand h2 { font-family: 'DM Serif Display', serif; font-size: 1.25rem; font-weight: 400; margin-bottom: 3px; }
+    .side-nav { padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; }
+    .side-nav button {
+      display: flex; align-items: center; gap: 10px; text-align: left;
+      border: none; background: transparent; color: var(--text-secondary);
+      padding: 11px 14px; border-radius: 10px; cursor: pointer; font-size: 0.95rem;
+      font-family: inherit; transition: all .16s cubic-bezier(.4,0,.2,1);
+    }
+    .side-nav button:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .side-nav button.on { background: var(--accent-glow); color: var(--accent-secondary); font-weight: 700; }
+    .side-nav button.on::before { content: ''; position: absolute; }
+    .nav-n {
+      margin-left: auto; font-size: 0.7rem; background: var(--warn-red); color: #fff;
+      border-radius: 9px; padding: 1px 7px; min-width: 18px; text-align: center; display: none;
+    }
+    .nav-n.show { display: inline-block; }
+    .side-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+      background: var(--border-subtle); border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle); margin-top: auto;
+    }
+    .side-foot { padding: 12px 16px; font-size: 0.68rem; color: var(--text-muted); }
+
+    /* ---- 待办全宽看板 ---- */
+    .todo-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: start; }
+    @media (max-width: 1200px) { .todo-board { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 760px) { .todo-board { grid-template-columns: 1fr; } }
+    .tb-col { background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 12px; min-height: 120px; }
+    .tb-col h4 { margin: 2px 4px 12px; font-size: 0.82rem; color: var(--text-muted); display: flex; justify-content: space-between; font-weight: 600; }
+    .tb-col.over h4 { color: var(--warn-red); }
+    .tb-col.prog h4 { color: var(--status-progress); }
+    .todo-done-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-top: 12px; }
+
+    /* ---- 事件预览弹窗 ---- */
+    .modal-mask {
+      position: fixed; inset: 0; background: rgba(38, 33, 26, 0.45); backdrop-filter: blur(3px);
+      z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .modal {
+      background: var(--bg-primary); border: 1px solid var(--border-accent); border-radius: 16px;
+      box-shadow: var(--shadow-float); width: min(680px, 94vw); max-height: 88vh;
+      display: flex; flex-direction: column; padding: 22px 24px; position: relative;
+      animation: fadeUp .22s ease;
+    }
+    .modal h3 { margin: 0 40px 10px 0; font-size: 1.1rem; }
+    .modal-x {
+      position: absolute; top: 14px; right: 14px; border: 1px solid var(--border-subtle);
+      background: var(--bg-card); color: var(--text-muted); border-radius: 8px; width: 28px; height: 28px;
+      cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .modal-x:hover { color: var(--text-primary); border-color: var(--border-accent); }
+    .ev-meta { font-size: 0.85rem; color: var(--text-secondary); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+    .ev-preview { flex: 1; min-height: 200px; background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 10px; overflow: hidden; }
+    .ev-preview iframe { width: 100%; height: 100%; min-height: 340px; border: 0; }
+    .ev-preview .no-file { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-muted); font-size: 0.85rem; }
+    .ev-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+    .btn-main {
+      background: var(--accent-primary); color: #fff; border: none; border-radius: 9px;
+      padding: 9px 22px; font-size: 0.88rem; font-family: inherit; cursor: pointer;
+      transition: all .16s cubic-bezier(.4,0,.2,1); font-weight: 600;
+    }
+    .btn-main:hover { background: var(--accent-secondary); transform: translateY(-1px); box-shadow: var(--shadow-card); }
+    .btn-main:active { transform: scale(0.97); }
     .tf-sec { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted);
               text-transform: uppercase; margin: 14px 2px 8px; display: flex; justify-content: space-between; }
     .tf-item {
@@ -682,20 +748,24 @@
 </head>
 <body>
 
-  <!-- 侧边固定看板 -->
-  <aside class="sidebar-kanban">
-    <div class="kanban-header">
-      <h2>案件看板</h2>
-      <span class="subtitle">SuitAgent · 全局任务池</span>
+  <!-- 侧边导航轨：视图层级切换（焦点/案件/待办/月历） -->
+  <aside class="sidebar-kanban side-nav-rail">
+    <div class="nav-brand">
+      <h2>⚖ 案件管理</h2>
+      <span class="subtitle">SuitAgent 工作台</span>
     </div>
-
-    <div class="kanban-stats">
+    <nav class="side-nav" id="side-nav">
+      <button data-v="focus" class="on">🎯 今日焦点</button>
+      <button data-v="cases">📁 案件</button>
+      <button data-v="todo">☑ 待办<span class="nav-n" id="nav-todo-n"></span></button>
+      <button data-v="cal">📅 月历</button>
+    </nav>
+    <div class="side-stats">
       <div class="stat-item progress"><div class="count" id="stat-progress">–</div><div class="label">进行中</div></div>
       <div class="stat-item todo"><div class="count" id="stat-todo">–</div><div class="label">待办</div></div>
       <div class="stat-item done"><div class="count" id="stat-done">–</div><div class="label">已完成</div></div>
     </div>
-
-    <div class="task-flow" id="task-flow"></div>
+    <div class="side-foot" id="updated-time"></div>
   </aside>
 
   <!-- 主内容区域 -->
@@ -708,15 +778,10 @@
       </div>
     </div>
 
-    <div class="view-tabs">
-      <button id="tab-focus" class="on" onclick="switchView('focus')">今日焦点</button>
-      <button id="tab-cases" onclick="switchView('cases')">案件</button>
-      <button id="tab-cal" onclick="switchView('cal')">月历</button>
-    </div>
+    <div class="deadline-bar" id="deadline-bar"></div>
 
     <!-- 今日焦点（默认页） -->
-    <div class="view-panel on" id="panel-focus">
-      <div class="focus-sec">
+    <div class="view-panel on" id="panel-focus">      <div class="focus-sec">
         <div class="focus-title">🔴 紧急期限 <span class="cnt" id="focus-red-cnt">0</span></div>
         <div class="deadline-bar" id="deadline-bar" style="margin-bottom:0"></div>
       </div>
@@ -746,6 +811,13 @@
       </div>
     </div>
 
+    <!-- 待办看板（全宽四列：进行中/逾期/7天内/更远与无日期） -->
+    <div class="view-panel" id="panel-todo">
+      <div class="todo-board" id="todo-board"></div>
+      <div class="tf-done-head" id="todo-done-head" onclick="TF_SHOW_DONE=!TF_SHOW_DONE;refreshAll()">展开已完成（0）</div>
+      <div class="todo-done-grid" id="todo-done-grid" style="display:none"></div>
+    </div>
+
     <!-- 月历 -->
     <div class="view-panel" id="panel-cal">
       <div class="cal-wrap">
@@ -771,6 +843,20 @@
     <!-- 案件详情（完整页，非页签；由案件卡/焦点/月历进入） -->
     <div class="view-panel" id="panel-detail"></div>
   </main>
+
+  <!-- 事件预览弹窗（月历/期限点击） -->
+  <div class="modal-mask" id="ev-mask" style="display:none" onclick="closeEv()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-x" onclick="closeEv()">✕</button>
+      <h3 id="ev-title">—</h3>
+      <div class="ev-meta" id="ev-meta"></div>
+      <div class="ev-preview" id="ev-preview"></div>
+      <div class="ev-actions">
+        <button class="btn-main" id="ev-go" onclick="closeEv()">进入案件</button>
+        <button class="refresh-btn" id="ev-open" style="display:none">📄 打开原件</button>
+      </div>
+    </div>
+  </div>
 
   <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -807,7 +893,7 @@
         document.getElementById('stat-todo').textContent = d.totals.todo;
         document.getElementById('stat-progress').textContent = d.totals.in_progress;
         document.getElementById('stat-done').textContent = d.totals.done;
-        renderTaskFlow([...d.kanban.in_progress, ...d.kanban.todo, ...d.kanban.done]);
+        renderTodoBoard([...d.kanban.in_progress, ...d.kanban.todo, ...d.kanban.done]);
         document.getElementById('updated-time').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
       } catch (e) {
         toast('加载概览失败: ' + e.message, 'error');
@@ -828,13 +914,7 @@
       ? `<span class="tf-file" title="${escapeHtml(t.file)}" onclick="event.stopPropagation();openFile('${t.case_id}', ${JSON.stringify(t.file).replace(/"/g, '&quot;')})">📄</span>` : '';
 
     let TF_SHOW_DONE = false;
-    function renderTaskFlow(tasks) {
-      const box = document.getElementById('task-flow');
-      const prog = tasks.filter(t => t.status === 'in_progress');
-      const todo = tasks.filter(t => t.status === 'todo')
-        .sort((a, b) => String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
-      const done = tasks.filter(t => t.status === 'done');
-      const item = (t, doneStyle) => {
+    function tfItem(t) {
         let chip = '';
         if (t.deadline) {
           const dl = Math.floor((new Date(t.deadline) - new Date()) / 86400000);
@@ -850,14 +930,29 @@
             <div class="tf-case">${escapeHtml(t.case_short)}</div></div>
           ${chip}${fileBtn(t)}
         </div>`;
-      };
-      let html = '';
-      if (prog.length) html += `<div class="tf-sec">进行中<span>${prog.length}</span></div>` + prog.map(t => item(t)).join('');
-      html += `<div class="tf-sec">待办<span>${todo.length}</span></div>`
-        + (todo.length ? todo.map(t => item(t)).join('') : '<div class="empty-hint" style="padding:10px">暂无待办</div>');
-      html += `<div class="tf-done-head" onclick="TF_SHOW_DONE=!TF_SHOW_DONE;refreshAll()">${TF_SHOW_DONE ? '收起' : '展开'}已完成（${done.length}）</div>`;
-      if (TF_SHOW_DONE && done.length) html += done.map(t => item(t, true)).join('');
-      box.innerHTML = html;
+    }
+    function renderTodoBoard(tasks) {
+      const board = document.getElementById('todo-board');
+      const now = new Date();
+      const prog = tasks.filter(t => t.status === 'in_progress');
+      const todo = tasks.filter(t => t.status === 'todo');
+      const over = todo.filter(t => t.deadline && new Date(t.deadline) < now);
+      const week = todo.filter(t => t.deadline && new Date(t.deadline) >= now &&
+        (new Date(t.deadline) - now) / 86400000 <= 7);
+      const later = todo.filter(t => !over.includes(t) && !week.includes(t));
+      const done = tasks.filter(t => t.status === 'done');
+      const col = (cls, label, arr) => `
+        <div class="tb-col ${cls}"><h4>${label}<span>${arr.length}</span></h4>
+        ${arr.map(tfItem).join('') || '<div class="empty-hint" style="padding:10px">暂无</div>'}</div>`;
+      board.innerHTML = col('prog', '◐ 进行中', prog) + col('over', '🔴 逾期', over)
+        + col('week', '🟠 7 天内', week) + col('later', '◻ 更远 / 无日期', later);
+      document.getElementById('todo-done-head').textContent = `${TF_SHOW_DONE ? '收起' : '展开'}已完成（${done.length}）`;
+      const dg = document.getElementById('todo-done-grid');
+      dg.style.display = TF_SHOW_DONE && done.length ? '' : 'none';
+      dg.innerHTML = TF_SHOW_DONE ? done.map(tfItem).join('') : '';
+      const navN = document.getElementById('nav-todo-n');
+      navN.textContent = over.length + week.length;
+      navN.classList.toggle('show', over.length + week.length > 0);
     }
 
     function renderDeadlines(deadlines) {
@@ -913,15 +1008,15 @@
       for (let d = 1; d <= dim; d++) {
         const key = `${calY}-${pad2(calM)}-${pad2(d)}`;
         const evs = CAL.days[key] || [];
-        const evHtml = evs.slice(0, 3).map(ev => {
+        const evHtml = evs.slice(0, 3).map((ev, i) => {
           const fb = ev.file ? ` <span title="${escapeHtml(ev.file)}" onclick="event.stopPropagation();openFile('${ev.case_id}', ${JSON.stringify(ev.file).replace(/"/g, '&quot;')})" style="cursor:pointer">📄</span>` : '';
           if (ev.kind === 'hearing') {
-            return `<span class="cal-ev hearing" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="showCase('${ev.case_id}')">⚖ ${escapeHtml(ev.name)}${fb}</span>`;
+            return `<span class="cal-ev hearing" title="点击预览" onclick="openEv('${ev.case_id}','${key}',${i})">⚖ ${escapeHtml(ev.name)}${fb}</span>`;
           }
           const dl = ev.days_left;
           const txt = dl < 0 ? `逾期${-dl}天` : dl === 0 ? '今天' : `${dl}天`;
           const cls = dl < 0 || dl <= 7 ? 'red' : dl <= 30 ? 'yellow' : 'green';
-          return `<span class="cal-ev deadline ${cls}" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)} 截止" onclick="showCase('${ev.case_id}')">⏰ ${escapeHtml(ev.name)} · ${txt}${fb}</span>`;
+          return `<span class="cal-ev deadline ${cls}" title="点击预览" onclick="openEv('${ev.case_id}','${key}',${i})">⏰ ${escapeHtml(ev.name)} · ${txt}${fb}</span>`;
         }).join('');
         const more = evs.length > 3 ? `<div class="cal-more">+${evs.length - 3} 更多…</div>` : '';
         grid.push(`<div class="cal-cell ${key === todayStr ? 'today' : ''}"><div class="cal-num">${d}</div>${evHtml}${more}</div>`);
@@ -931,22 +1026,50 @@
       document.getElementById('cal-grid').innerHTML = grid.join('');
     }
 
+    const VIEWS = ['focus', 'cases', 'todo', 'cal'];
+    let LAST_VIEW = 'focus';
     function switchView(v) {
-      document.querySelectorAll('.view-tabs button').forEach(b => b.classList.remove('on'));
+      document.querySelectorAll('#side-nav button').forEach(b => b.classList.toggle('on', b.dataset.v === (v === 'detail' ? LAST_VIEW : v)));
       document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('on'));
-      const tabMap = {focus: 'focus', cases: 'cases', cal: 'cal'};
-      if (v === 'detail') {
-        document.getElementById('tab-cases').classList.add('on');   /* 详情归属案件页签高亮 */
-      } else {
-        document.getElementById('tab-' + tabMap[v]).classList.add('on');
-      }
       document.getElementById('panel-' + v).classList.add('on');
+      if (v !== 'detail') LAST_VIEW = v;
       if (v === 'cal') loadCalendar();
     }
 
-    let LAST_VIEW = 'focus';
-    function showCase(id) { LAST_VIEW = document.querySelector('.view-panel.on')?.id?.replace('panel-', '') || 'cases'; renderDetail(id); switchView('detail'); }
-    function backToList() { switchView(LAST_VIEW === 'detail' ? 'cases' : LAST_VIEW); }
+    /* ---------- 事件预览弹窗 ---------- */
+    let EV = null;
+    function openEv(caseId, dateKey, idx) {
+      const ev = (CAL.days[dateKey] || [])[idx];
+      if (!ev) return;
+      EV = {caseId, ev};
+      document.getElementById('ev-title').textContent =
+        (ev.kind === 'hearing' ? '⚖ ' : '⏰ ') + (ev.name || '');
+      const dl = ev.days_left;
+      const left = ev.kind === 'hearing'
+        ? (dl === 0 ? '今天' : dl + ' 天后')
+        : (dl < 0 ? `逾期 ${-dl} 天` : dl === 0 ? '今天到期' : `剩 ${dl} 天`);
+      document.getElementById('ev-meta').innerHTML =
+        `<span>📅 ${escapeHtml(dateKey)}（${left}）</span><span>📁 ${escapeHtml(ev.case_short)}</span>` +
+        (ev.place ? `<span>📍 ${escapeHtml(ev.place)}</span>` : '') +
+        (ev.status ? `<span>${ev.status === 'done' ? '已完成' : '待进行'}</span>` : '');
+      const pv = document.getElementById('ev-preview');
+      if (ev.file) {
+        pv.innerHTML = `<iframe src="/api/v1/preview?case_id=${encodeURIComponent(caseId)}&file=${encodeURIComponent(ev.file)}"></iframe>`;
+        const ob = document.getElementById('ev-open');
+        ob.style.display = '';
+        ob.onclick = () => openFile(caseId, ev.file);
+      } else {
+        pv.innerHTML = '<div class="no-file">未关联文书（传票/判决书可在 case.yaml 的 来源文件 字段绑定）</div>';
+        document.getElementById('ev-open').style.display = 'none';
+      }
+      document.getElementById('ev-go').onclick = () => { closeEv(); showCase(caseId); };
+      document.getElementById('ev-mask').style.display = 'flex';
+    }
+    function closeEv() { document.getElementById('ev-mask').style.display = 'none'; }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEv(); });
+
+    function showCase(id) { renderDetail(id); switchView('detail'); }
+    function backToList() { switchView(LAST_VIEW || 'cases'); }
 
     /* ---------- 今日焦点 ---------- */
     let FOCUS = null;
@@ -1233,8 +1356,9 @@
     }
 
     // 初始化
+    document.querySelectorAll('#side-nav button').forEach(b => b.onclick = () => switchView(b.dataset.v));
     refreshAll();
-    setInterval(loadOverview, 60000);  // 侧边栏每分钟刷新
+    setInterval(loadOverview, 60000);  // 统计与待办每分钟刷新
   </script>
 
 </body>

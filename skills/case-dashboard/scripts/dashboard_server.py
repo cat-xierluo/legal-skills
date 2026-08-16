@@ -31,7 +31,8 @@ import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+import mimetypes
 
 import yaml
 
@@ -201,6 +202,7 @@ def adapt_yaml_v4(data, case):
     case["amount"] = info.get("标的额")
     case["court"] = info.get("管辖法院", "")
     case["stale"] = bool((data.get("同步") or {}).get("状态过期"))
+    case["business"] = (meta.get("业务领域") or "诉讼")
     pa = data.get("当事人与代理") or {}
     for side, key in (("我方", "我方当事人"), ("对方", "对方当事人")):
         for p in pa.get(key) or []:
@@ -463,6 +465,7 @@ def build_cases():
             "nearest_deadline": nearest,
             "next_hearing": next_hearing,
             "stale": c.get("stale", False),
+            "business": c.get("business", "诉讼"),
         })
     return out
 
@@ -532,7 +535,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
 
     def _read_body(self):
         length = int(self.headers.get("Content-Length", 0) or 0)
@@ -572,6 +576,30 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             c = build_case(m.group(1))
             self._send(200 if c else 404, c or {"error": "案件不存在"})
+            return
+        if path == "/api/v1/preview":
+            qs = parse_qs(urlparse(self.path).query)
+            cid = (qs.get("case_id") or [None])[0]
+            rel = (qs.get("file") or [None])[0]
+            if not cid or not rel:
+                self._send(400, {"ok": False, "message": "缺 case_id/file"})
+                return
+            c = find_case_by_id(cid)
+            if not c:
+                self._send(404, {"ok": False, "message": "案件不存在"})
+                return
+            base = Path(c["case_dir"]).resolve()
+            p = (base / rel).resolve()
+            if base not in p.parents or not p.exists() or not p.is_file():
+                self._send(400, {"ok": False, "message": f"文件不存在或越界: {rel}"})
+                return
+            ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+            if p.suffix.lower() == ".md":
+                ctype = "text/plain; charset=utf-8"
+            try:
+                self._send(200, p.read_bytes(), ctype)
+            except Exception as e:  # noqa: BLE001
+                self._send(500, {"ok": False, "message": str(e)})
             return
         self._send(404, {"error": "not found", "path": path})
 
