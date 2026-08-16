@@ -1038,14 +1038,16 @@
       if (v === 'cal') loadCalendar();
     }
 
-    /* ---------- 事件预览弹窗 ---------- */
+    /* ---------- 事件预览弹窗（通用：月历/焦点/详情共用） ---------- */
     let EV = null;
     function openEv(caseId, dateKey, idx) {
       const ev = (CAL.days[dateKey] || [])[idx];
-      if (!ev) return;
+      if (ev) showEvModal(caseId, ev);
+    }
+    function showEvModal(caseId, ev) {
       EV = {caseId, ev};
       document.getElementById('ev-title').textContent =
-        (ev.kind === 'hearing' ? '⚖ ' : '⏰ ') + (ev.name || '');
+        (ev.kind === 'hearing' || ev.type ? '⚖ ' : '⏰ ') + (ev.name || ev.subject || '');
       const dl = ev.days_left;
       const left = ev.kind === 'hearing'
         ? (dl === 0 ? '今天' : dl + ' 天后')
@@ -1106,10 +1108,10 @@
       if (!red.length) document.getElementById('deadline-bar').innerHTML = '<div class="empty-hint" style="padding:8px 0">✅ 无紧急期限</div>';
       const hs = FOCUS.hearings_upcoming || [];
       document.getElementById('focus-hearing-cnt').textContent = hs.length + ' 场';
-      document.getElementById('focus-hearings').innerHTML = hs.length ? hs.map(h => `
-        <div class="hearing-row" onclick="showCase('${h.case_id}')">
+      document.getElementById('focus-hearings').innerHTML = hs.length ? hs.map((h, i) => `
+        <div class="hearing-row" onclick="showEvModal('${h.case_id}', FOCUS.hearings_upcoming[${i}])">
           <div class="hearing-date"><b>${escapeHtml(h.date)}</b><span>${h.days_left === 0 ? '今天' : h.days_left + ' 天后'}</span></div>
-          <div class="hearing-body">${escapeHtml(h.subject)}${h.place ? ' · ' + escapeHtml(h.place) : ''}
+          <div class="hearing-body">${escapeHtml(h.subject)}${h.place ? ' · ' + escapeHtml(h.place) : ''}${h.file ? ' <span title="点击预览传票">📄</span>' : ''}
             <div class="h-case">${escapeHtml(h.case_short)} · ${escapeHtml(h.type)}</div></div>
         </div>`).join('') : '<div class="empty-hint">60 天内无开庭安排</div>';
       const st = FOCUS.stale_cases || [];
