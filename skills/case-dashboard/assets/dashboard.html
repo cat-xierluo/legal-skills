@@ -130,6 +130,51 @@
     .deadline-item.red .dl-days { color: var(--warn-red); }
     .deadline-item.yellow .dl-days { color: var(--warn-yellow); }
 
+    /* 页签切换（案件 / 月历） */
+    .view-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .view-tabs button {
+      border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted);
+      padding: 7px 22px; border-radius: 9px 9px 0 0; cursor: pointer; font-size: 0.9rem;
+      font-family: inherit; border-bottom: none; transition: all .18s ease;
+    }
+    .view-tabs button:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+    .view-tabs button.on { color: var(--accent); font-weight: 700; background: var(--bg-main); border-top: 2px solid var(--accent); }
+    .view-panel { display: none; }
+    .view-panel.on { display: block; }
+
+    /* 月历 */
+    .cal-wrap { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 18px 20px; }
+    .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .cal-head h3 { margin: 0; font-size: 1.05rem; }
+    .cal-nav { display: flex; gap: 8px; }
+    .cal-nav button {
+      border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted);
+      border-radius: 8px; padding: 4px 14px; cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .cal-nav button:hover { color: var(--accent); border-color: var(--accent); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .cal-dow { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 4px 0; }
+    .cal-cell {
+      min-height: 86px; background: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 9px;
+      padding: 6px 7px; position: relative; overflow: hidden; cursor: default;
+    }
+    .cal-cell.other { opacity: 0.35; }
+    .cal-cell.today { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent-glow); }
+    .cal-num { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+    .cal-cell.today .cal-num { color: var(--accent); }
+    .cal-ev {
+      display: block; font-size: 0.68rem; line-height: 1.35; border-radius: 5px; padding: 1.5px 6px;
+      margin-top: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cal-ev.hearing { background: rgba(110, 168, 254, .16); color: #6ea8fe; border: 1px solid rgba(110,168,254,.3); font-weight: 600; }
+    .cal-ev.deadline { background: var(--bg-card); border: 1px solid var(--border-subtle); }
+    .cal-ev.red { border-left: 3px solid var(--warn-red); }
+    .cal-ev.yellow { border-left: 3px solid var(--warn-yellow); }
+    .cal-ev.green { border-left: 3px solid var(--ok-green, #48bb78); }
+    .cal-more { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; }
+    .cal-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 0.75rem; color: var(--text-muted); flex-wrap: wrap; }
+    .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
     /* 案件卡片网格 */
     .case-grid {
       display: grid;
@@ -521,8 +566,36 @@
 
     <div class="deadline-bar" id="deadline-bar"></div>
 
-    <div class="case-grid" id="case-grid">
-      <div class="loading">加载案件中…</div>
+    <div class="view-tabs">
+      <button id="tab-cases" class="on" onclick="switchView('cases')">案件</button>
+      <button id="tab-cal" onclick="switchView('cal')">月历</button>
+    </div>
+
+    <div class="view-panel on" id="panel-cases">
+      <div class="case-grid" id="case-grid">
+        <div class="loading">加载案件中…</div>
+      </div>
+    </div>
+
+    <div class="view-panel" id="panel-cal">
+      <div class="cal-wrap">
+        <div class="cal-head">
+          <h3 id="cal-title">—</h3>
+          <div class="cal-nav">
+            <button onclick="calShift(-1)">‹ 上月</button>
+            <button onclick="calGoToday()">今天</button>
+            <button onclick="calShift(1)">下月 ›</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span><i style="background:rgba(110,168,254,.4)"></i>开庭/听证</span>
+          <span><i style="background:var(--warn-red)"></i>逾期/≤7天</span>
+          <span><i style="background:var(--warn-yellow)"></i>≤30天</span>
+          <span><i style="background:#48bb78"></i>&gt;30天</span>
+          <span>已抵消期限不显示</span>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -599,12 +672,71 @@
         let txt;
         if (dl < 0) txt = `逾期 ${-dl} 天`;
         else if (dl === 0) txt = '今天到期';
+        else if (dl === 1) txt = '明天到期';
         else txt = `剩 ${dl} 天`;
         return `<div class="deadline-item ${d.level}" onclick="openCase('${d.case_id}')" title="${escapeHtml(d.case_short)}">
           <div class="dl-name">${escapeHtml(d.name)} · ${escapeHtml(d.case_short)}</div>
           <div class="dl-meta"><span>${escapeHtml(d.end_date)}</span><span class="dl-days">${txt}</span></div>
         </div>`;
       }).join('');
+    }
+
+    /* ---------- 月历 ---------- */
+    let CAL = { days: {}, today: '' };
+    let calY = 0, calM = 0;
+
+    async function loadCalendar() {
+      try {
+        CAL = await api('/api/v1/calendar');
+        if (!calY) { const t = new Date(CAL.today || Date.now()); calY = t.getFullYear(); calM = t.getMonth() + 1; }
+        renderCal();
+      } catch (e) { toast('加载月历失败: ' + e.message, 'error'); }
+    }
+
+    function calShift(n) { calM += n; if (calM > 12) { calM = 1; calY++; } if (calM < 1) { calM = 12; calY--; } renderCal(); }
+    function calGoToday() { const t = new Date(CAL.today || Date.now()); calY = t.getFullYear(); calM = t.getMonth() + 1; renderCal(); }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function renderCal() {
+      document.getElementById('cal-title').textContent = `${calY} 年 ${calM} 月`;
+      const first = new Date(calY, calM - 1, 1);
+      const startDow = (first.getDay() + 6) % 7;               /* 周一开头 */
+      const dim = new Date(calY, calM, 0).getDate();
+      const prevDim = new Date(calY, calM - 1, 0).getDate();
+      const todayStr = CAL.today || '';
+      const grid = [];
+      ['一','二','三','四','五','六','日'].forEach(d => grid.push(`<div class="cal-dow">${d}</div>`));
+      for (let i = 0; i < startDow; i++) {
+        const d = prevDim - startDow + 1 + i;
+        grid.push(`<div class="cal-cell other"><div class="cal-num">${d}</div></div>`);
+      }
+      for (let d = 1; d <= dim; d++) {
+        const key = `${calY}-${pad2(calM)}-${pad2(d)}`;
+        const evs = CAL.days[key] || [];
+        const evHtml = evs.slice(0, 3).map(ev => {
+          if (ev.kind === 'hearing') {
+            return `<span class="cal-ev hearing" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="openCase('${ev.case_id}')">⚖ ${escapeHtml(ev.name)}</span>`;
+          }
+          const dl = ev.days_left;
+          const txt = dl < 0 ? `逾期${-dl}天` : dl === 0 ? '今天' : `${dl}天`;
+          const cls = dl < 0 || dl <= 7 ? 'red' : dl <= 30 ? 'yellow' : 'green';
+          return `<span class="cal-ev deadline ${cls}" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)} 截止" onclick="openCase('${ev.case_id}')">⏰ ${escapeHtml(ev.name)} · ${txt}</span>`;
+        }).join('');
+        const more = evs.length > 3 ? `<div class="cal-more">+${evs.length - 3} 更多…</div>` : '';
+        grid.push(`<div class="cal-cell ${key === todayStr ? 'today' : ''}"><div class="cal-num">${d}</div>${evHtml}${more}</div>`);
+      }
+      const tail = (7 - (startDow + dim) % 7) % 7;
+      for (let i = 1; i <= tail; i++) grid.push(`<div class="cal-cell other"><div class="cal-num">${i}</div></div>`);
+      document.getElementById('cal-grid').innerHTML = grid.join('');
+    }
+
+    function switchView(v) {
+      document.querySelectorAll('.view-tabs button').forEach(b => b.classList.remove('on'));
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('on'));
+      document.getElementById('tab-' + (v === 'cal' ? 'cal' : 'cases')).classList.add('on');
+      document.getElementById('panel-' + (v === 'cal' ? 'cal' : 'cases')).classList.add('on');
+      if (v === 'cal') loadCalendar();
     }
 
     async function loadCases() {

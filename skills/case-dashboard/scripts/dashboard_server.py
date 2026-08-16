@@ -170,6 +170,7 @@ def base_case(case_id, case_dir, display_name=None):
         "data_quality": "minimal",
         "tasks": [],
         "deadlines": [],
+        "hearings": [],
         "timeline": [],
         "yaml_path": "",
         "md_path": "",
@@ -211,6 +212,14 @@ def adapt_yaml_v4(data, case):
         })
     for e in data.get("案件时间线") or []:
         case["timeline"].append({"date": e.get("日期", ""), "event": e.get("事项", "")})
+    for h in data.get("开庭与听证") or []:
+        dl = days_left(h.get("日期"))
+        case["hearings"].append({
+            "date": h.get("日期", ""), "type": h.get("类型", ""), "subject": h.get("事项", ""),
+            "place": " / ".join(str(x) for x in (h.get("地点"), h.get("法庭")) if x),
+            "status": h.get("状态", ""), "days_left": dl,
+            "level": "none" if h.get("状态") == "done" else deadline_level(dl, h.get("状态")),
+        })
     case["data_quality"] = "full"
     return case
 
@@ -315,6 +324,26 @@ def toggle_task(case_id, source_ref, target_status):
 # ---------------------------------------------------------------------------
 # API 数据组装
 # ---------------------------------------------------------------------------
+def build_calendar():
+    """月历数据：期限（不含已抵消/已完成）+ 开庭，按日期分组。"""
+    days = {}
+    for c in get_all_cases():
+        for d in c["deadlines"]:
+            if not d.get("end_date") or d.get("level") in ("none", None):
+                continue
+            days.setdefault(d["end_date"], []).append({
+                "kind": "deadline", "case_id": c["id"], "case_short": c["display_short"],
+                "name": d.get("name"), "level": d["level"], "days_left": d.get("days_left")})
+        for h in c.get("hearings") or []:
+            if not h.get("date"):
+                continue
+            days.setdefault(h["date"], []).append({
+                "kind": "hearing", "case_id": c["id"], "case_short": c["display_short"],
+                "name": f"{h.get('type')}·{h.get('subject')}", "place": h.get("place"),
+                "status": h.get("status")})
+    return {"today": TODAY.isoformat(), "days": days}
+
+
 def build_overview():
     cases = get_all_cases()
     all_tasks = []
@@ -461,6 +490,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/overview":
             self._send(200, build_overview())
+            return
+        if path == "/api/v1/calendar":
+            self._send(200, build_calendar())
             return
         if path == "/api/v1/cases":
             self._send(200, build_cases())
