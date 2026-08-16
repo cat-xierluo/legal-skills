@@ -1006,15 +1006,24 @@
       }).join('');
     }
 
-    /* ---------- 月历 ---------- */
-    let CAL = { days: {}, today: '' };
+    /* ---------- 日历 ---------- */
+    let CAL = null;
     let calY = 0, calM = 0;
 
     async function loadCalendar() {
+      if (!CAL) {
+        document.getElementById('cal-title').textContent = '同步中…';
+        document.getElementById('cal-grid').innerHTML =
+          '<div class="cal-loading" style="grid-column:1/-1;text-align:center;padding:36px 0;color:var(--text-muted);font-size:.88rem">🗓 案件事项已就绪，苹果日历后台同步中（稍后自动补上）…</div>';
+        document.getElementById('cal-agenda').innerHTML = '';
+      }
       try {
         CAL = await api('/api/v1/calendar');
-        if (CAL.apple_ok === false) {
-          toast('苹果日历未同步（需授权：系统设置→隐私与安全性→自动化→ZCode→日历）', 'warn');
+        if (CAL.apple_ok === false && !CAL.apple_pending && CAL.apple_error) {
+          toast('苹果日历同步失败：' + CAL.apple_error.slice(0, 60), 'warn');
+        }
+        if (CAL.apple_pending) {
+          setTimeout(() => { if (document.getElementById('panel-cal').classList.contains('on')) loadCalendar(); }, 4000);
         }
         if (!calY) { const t = new Date(CAL.today || Date.now()); calY = t.getFullYear(); calM = t.getMonth() + 1; }
         renderCal();
@@ -1027,6 +1036,7 @@
     function pad2(n) { return String(n).padStart(2, '0'); }
 
     function renderCal() {
+      if (!CAL || !CAL.days) return;
       document.getElementById('cal-title').textContent = `${calY} 年 ${calM} 月`;
       const first = new Date(calY, calM - 1, 1);
       const startDow = (first.getDay() + 6) % 7;               /* 周一开头 */
@@ -1068,6 +1078,7 @@
     let LAST_VIEW = 'focus';
     /* ---------- 当月事项清单 ---------- */
     function renderAgenda() {
+      if (!CAL || !CAL.days) return;
       const box = document.getElementById('cal-agenda');
       const monthKey = `${calY}-${pad2(calM)}`;
       const days = Object.entries(CAL.days)
