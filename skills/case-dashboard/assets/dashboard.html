@@ -284,10 +284,13 @@
     .cal-nav button:hover { color: var(--accent-secondary); border-color: var(--border-accent); }
     .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
     .cal-dow { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 4px 0; }
+    .cal-grid .cal-dow:nth-child(7n), .cal-grid .cal-dow:nth-child(7n - 1) { color: #b08d3f; }
     .cal-cell {
-      min-height: 86px; background: var(--bg-secondary); border:  1px solid var(--border-subtle); border-radius: 9px;
+      height: 104px; background: var(--bg-secondary); border:  1px solid var(--border-subtle); border-radius: 9px;
       padding: 6px 7px; position: relative; overflow: hidden; cursor: default;
     }
+    /* 周末两列（周六=7n-1、周日=7n，含表头占位偏移）着暖色 */
+    .cal-grid .cal-cell:nth-child(7n), .cal-grid .cal-cell:nth-child(7n - 1) { background: #f0e8d5; }
     .cal-cell.other { opacity: 0.35; }
     .cal-cell.today { border-color: var(--accent-primary); box-shadow: 0 0 0 1.5px var(--accent-glow); }
     .cal-num { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
@@ -304,6 +307,27 @@
     .cal-more { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; }
     .cal-ev.apple { background: rgba(122, 138, 55, .14); color: #7a8a37; border: 1px solid rgba(122,138,55,.35); }
     .cal-legend .lg-apple i { background: rgba(122,138,55,.5); }
+    /* 当月事项清单 */
+    .cal-agenda-title { font-size: 0.95rem; font-weight: 700; margin: 26px 0 12px; }
+    .ag-day { margin-bottom: 14px; }
+    .ag-date { font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .ag-date .wk { font-size: 0.7rem; color: var(--text-muted); font-weight: 400; }
+    .ag-date .today-mark { font-size: 0.68rem; background: var(--accent-primary); color: #fff; border-radius: 6px; padding: 1px 7px; }
+    .ag-row {
+      display: flex; align-items: center; gap: 12px; background: var(--bg-card);
+      border: 1px solid var(--border-subtle); border-left: 3px solid var(--text-muted);
+      border-radius: 9px; padding: 9px 14px; margin-bottom: 6px; cursor: pointer; transition: all .15s;
+    }
+    .ag-row:hover { border-color: var(--border-accent); background: var(--bg-card-hover); transform: translateX(3px); }
+    .ag-row.hearing { border-left-color: #4a7c9f; }
+    .ag-row.deadline-red { border-left-color: var(--warn-red); }
+    .ag-row.deadline-yellow { border-left-color: var(--warn-yellow); }
+    .ag-row.deadline-green { border-left-color: var(--ok-green); }
+    .ag-row.apple { border-left-color: #7a8a37; }
+    .ag-ico { font-size: 0.95rem; flex-shrink: 0; }
+    .ag-time { min-width: 88px; font-size: 0.78rem; color: var(--text-muted); flex-shrink: 0; }
+    .ag-title { flex: 1; font-size: 0.88rem; }
+    .ag-src { font-size: 0.72rem; color: var(--text-muted); }
     .cal-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 0.75rem; color: var(--text-muted); flex-wrap: wrap; }
     .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 
@@ -752,7 +776,7 @@
 </head>
 <body>
 
-  <!-- 侧边导航轨：视图层级切换（焦点/案件/待办/月历） -->
+  <!-- 侧边导航轨：视图层级切换（焦点/案件/待办/日历） -->
   <aside class="sidebar-kanban side-nav-rail">
     <div class="nav-brand">
       <h2>⚖ 案件管理</h2>
@@ -762,7 +786,7 @@
       <button data-v="focus" class="on">🎯 今日焦点</button>
       <button data-v="cases">📁 案件</button>
       <button data-v="todo">☑ 待办<span class="nav-n" id="nav-todo-n"></span></button>
-      <button data-v="cal">📅 月历</button>
+      <button data-v="cal">📅 日历</button>
     </nav>
     <div class="side-stats">
       <div class="stat-item progress"><div class="count" id="stat-progress">–</div><div class="label">进行中</div></div>
@@ -822,7 +846,7 @@
       <div class="todo-done-grid" id="todo-done-grid" style="display:none"></div>
     </div>
 
-    <!-- 月历 -->
+    <!-- 日历（月视图 + 当月清单） -->
     <div class="view-panel" id="panel-cal">
       <div class="cal-wrap">
         <div class="cal-head">
@@ -834,6 +858,8 @@
           </div>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-agenda-title">📋 当月事项清单</div>
+        <div id="cal-agenda"></div>
         <div class="cal-legend">
           <span class="lg-apple"><i></i>苹果日历</span>
           <span><i style="background:rgba(74,124,159,.4)"></i>开庭/听证</span>
@@ -1016,9 +1042,9 @@
       for (let d = 1; d <= dim; d++) {
         const key = `${calY}-${pad2(calM)}-${pad2(d)}`;
         const evs = CAL.days[key] || [];
-        const evHtml = evs.slice(0, 3).map((ev, i) => {
+        const evHtml = evs.slice(0, 2).map((ev, i) => {
           if (ev.kind === 'apple') {
-            return `<span class="cal-ev apple" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="openEv(null,'${key}',${i})">🗓 ${escapeHtml(ev.all_day ? '' : ev.time + ' ')}${escapeHtml(ev.name)}</span>`;
+            return `<span class="cal-ev apple" title="${escapeHtml(ev.case_short)}：${escapeHtml(ev.name)}" onclick="openEv(null,'${key}',${i})">🗓 ${escapeHtml(ev.all_day ? '' : ev.time.split('-')[0] + ' ')}${escapeHtml(ev.name)}</span>`;
           }
           const fb = ev.file ? ` <span title="${escapeHtml(ev.file)}" onclick="event.stopPropagation();openFile('${ev.case_id}', ${JSON.stringify(ev.file).replace(/"/g, '&quot;')})" style="cursor:pointer">📄</span>` : '';
           if (ev.kind === 'hearing') {
@@ -1029,16 +1055,60 @@
           const cls = dl < 0 || dl <= 7 ? 'red' : dl <= 30 ? 'yellow' : 'green';
           return `<span class="cal-ev deadline ${cls}" title="点击预览" onclick="openEv('${ev.case_id}','${key}',${i})">⏰ ${escapeHtml(ev.name)} · ${txt}${fb}</span>`;
         }).join('');
-        const more = evs.length > 3 ? `<div class="cal-more">+${evs.length - 3} 更多…</div>` : '';
+        const more = evs.length > 2 ? `<div class="cal-more">+${evs.length - 3} 更多…</div>` : '';
         grid.push(`<div class="cal-cell ${key === todayStr ? 'today' : ''}"><div class="cal-num">${d}</div>${evHtml}${more}</div>`);
       }
       const tail = (7 - (startDow + dim) % 7) % 7;
       for (let i = 1; i <= tail; i++) grid.push(`<div class="cal-cell other"><div class="cal-num">${i}</div></div>`);
       document.getElementById('cal-grid').innerHTML = grid.join('');
+      renderAgenda();
     }
 
     const VIEWS = ['focus', 'cases', 'todo', 'cal'];
     let LAST_VIEW = 'focus';
+    /* ---------- 当月事项清单 ---------- */
+    function renderAgenda() {
+      const box = document.getElementById('cal-agenda');
+      const monthKey = `${calY}-${pad2(calM)}`;
+      const days = Object.entries(CAL.days)
+        .filter(([k]) => k.startsWith(monthKey))
+        .sort((a, b) => a[0].localeCompare(b[0]));
+      const todayStr = CAL.today || '';
+      if (!days.length) { box.innerHTML = '<div class="empty-hint">本月无事项</div>'; return; }
+      const WK = ['日', '一', '二', '三', '四', '五', '六'];
+      let html = '';
+      for (const [date, evs] of days) {
+        const d = new Date(date);
+        const past = date < todayStr;
+        html += `<div class="ag-day" style="${past ? 'opacity:0.55' : ''}">`;
+        html += `<div class="ag-date">${date} <span class="wk">周${WK[d.getDay()]}</span>${date === todayStr ? '<span class="today-mark">今天</span>' : ''}</div>`;
+        evs.forEach((ev, i) => {
+          let ico, cls, time, src;
+          if (ev.kind === 'apple') {
+            ico = '🗓'; cls = 'apple';
+            time = ev.all_day ? '全天' : ev.time;
+            src = ev.case_short;
+          } else if (ev.kind === 'hearing') {
+            ico = '⚖'; cls = 'hearing'; time = ev.name.includes('09:30') ? '' : '';
+            src = ev.case_short;
+          } else {
+            const dl = ev.days_left;
+            ico = '⏰'; cls = 'deadline-' + (dl < 0 || dl <= 7 ? 'red' : dl <= 30 ? 'yellow' : 'green');
+            time = dl < 0 ? `逾期${-dl}天` : dl === 0 ? '今天' : `${dl}天`;
+            src = ev.case_short;
+          }
+          html += `<div class="ag-row ${cls}" onclick="openEv(${ev.case_id ? `'${ev.case_id}'` : 'null'},'${date}',${i})">
+            <span class="ag-ico">${ico}</span>
+            <span class="ag-time">${escapeHtml(time || '—')}</span>
+            <span class="ag-title">${escapeHtml(ev.name)}</span>
+            <span class="ag-src">${escapeHtml(src || '')}</span>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      box.innerHTML = html;
+    }
+
     function switchView(v) {
       document.querySelectorAll('#side-nav button').forEach(b => b.classList.toggle('on', b.dataset.v === (v === 'detail' ? LAST_VIEW : v)));
       document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('on'));
