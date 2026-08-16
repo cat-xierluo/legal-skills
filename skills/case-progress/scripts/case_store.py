@@ -1472,6 +1472,131 @@ def _date_from_filename(name):
     return None
 
 
+def _pdf_text(path):
+    """返回 pdftotext 文本（失败抛）。"""
+    import subprocess
+    r = subprocess.run(["pdftotext", str(path), "-"], capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or "pdftotext 失败").strip()[:100])
+    return r.stdout
+
+
+def _extract_one_doc(path, want):
+    """从一份 PDF（08 法院送达/06 文书等）抽取案号/立案日/开庭日/法庭/案由（返回 dict，conf 0-1）。"""
+    try:
+        text = _pdf_text(path)
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"无法解析（{e}）", "_path": str(path)}
+    out = {"_path": str(path), "_length": len(text)}
+    import re
+    # 案号（中/全/行括号 + 数字 + 字 + 数字 + 号；pdftotext 会在字间加空格）
+    cleaned = re.sub(r"\s+", "", text)
+    m = re.search(r"（\d{4}）[\u4e00-\u9fa5]{0,15}(?:民初|民终|行初|执|破|刑初|刑终|民申|行申)\d{3,8}号", cleaned)
+    if m:
+        out["医院案号"] = m.group(0); out["_医院案号_conf"] = 0.95
+    # 立案日（"本院于 2025年2月24日立案" / "于 2025 年 2 月 24 日立案" / "立案审查表"等）
+    m = re.search(r"本院于[\s年]*?(\d{4})[\s年]*(\d{1,2})[\s月]*(\d{1,2})[\s日]*[\u4e00-\u9fa5]*立案", text)
+    if not m:
+        m = re.search(r"立案[\s]*?(?:日期|时间)[\s]*[:：]?\s*(\d{4})[\s年/-]*(\d{1,2})[\s月/-]*(\d{1,2})", text)
+    if m:
+        out["医院立案日期"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"; out["_医院立案日期_conf"] = 0.85
+    # 开庭日（传票"应到" / "开庭时间" / "将于×年×月×日×时 开庭"）
+    m = re.search(r"(?:开庭|应到|开庭时间)[\s]*[:：]?[\s\u4e00-\u9fa5]*?(\d{4})[\s年/-]*(\d{1,2})[\s月/-]*(\d{1,2})[\s日]*[\s]*?(\d{1,2})[:：]?(\d{2})[\s时]*", text)
+    if m:
+        out["开庭日"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:{m.group(5)}"
+        out["_开庭日_conf"] = 0.9
+    elif (m := re.search(r"(\d{4})[\s年/-]*(\d{1,2})[\s月/-]*(\d{1,2})[\s日]*[\s]*?(\d{1,2})[:：]?(\d{2})[\s时]*\s*开庭", text)):
+        out["开庭日"] = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d} {int(m.group(4)):02d}:{m.group(5)}"
+        out["_开庭日_conf"] = 0.85
+    # 法庭（"×法庭"/"×号法庭"）
+    m = re.search(r"(?:应到|开庭|庭审|审判|未到|线上|载定|接送).{0,12}([\u4e00-\u9fa5]{2,6}(?:法庭|审判庭))", text)
+    if m:
+        out["开庭法院"] = m.group(1)
+    return out
+
+
+def cmd_extract(root, case_id, args):
+    """M9-3 文书内容抽取：从 08 法院送达 / 06 法律文书 抓案号/立案日/开庭日/法庭/案由等。
+    --apply 采信高置信（>=0.85）自动落盘；低置信列待确认。
+    """
+    targets = [(case_id, case_dirs(root)[case_id])] if case_id else sorted(case_dirs(root).items())
+    for cid, cdir in targets:
+        ypath = cdir / "00 - 📅 日程管理" / "case.yaml"
+        if not ypath.exists():
+            print(f"· [{cid}] 无 case.yaml（迁移后未生成）")
+            continue
+        data = load_case(ypath)
+        # 优先 08 法院送达（案号/立案日/开庭），其次 06 法律文书（案由）
+        scans = []
+        for sub in sorted(cdir.iterdir()):
+            m = re.match(r"^0[68] - ", sub.name)
+            if m and sub.is_dir():
+                for f in sub.rglob("*.pdf"):
+                    if f.is_file() and f.suffix.lower() == ".pdf" and ".legacy" not in f.name:
+                        scans.append(f)
+        if not scans:
+            print(f"· [{cid}] 08/06 目录无 PDF，跳过")
+            continue
+        # 汇总各 PDF 抽取（按优先级：08 优先 06）
+        findings = {}  # field → {value, conf, sources}
+        for f in scans:
+            r = _extract_one_doc(f, args.field)
+            if "error" in r:
+                continue
+            for k, v in list(r.items()):
+                if k.startswith("_") or not isinstance(v, str) or not v:
+                    continue
+                conf = r.get(f"_{k}_conf", 0.5)
+                cur = findings.get(k)
+                if not cur or conf > cur["conf"]:
+                    findings[k] = {"value": v, "conf": conf, "_path": str(f.relative_to(cdir))}
+        if not findings:
+            print(f"· [{cid}] 抽取失败（PDF 多为扫描件，pdftotext 无文本层；建议 /progress 让主 Agent 视觉读）")
+            continue
+        # 输出报告
+        print(f"\n=== {cid} 文书内容抽取报告（扫了 {len(scans)} 份 PDF）===")
+        auto_updates, confirm_updates = {}, {}
+        for f in ["医院案号", "医院立案日期", "开庭日", "开庭法院"]:
+            if f in findings:
+                v = findings[f]
+                lvl = "🟢 高" if v["conf"] >= 0.85 else "🟡 中" if v["conf"] >= 0.6 else "🟠 低"
+                print(f"  {lvl} {f} = {v['value']!r}（置信 {int(v['conf']*100)}%，来源 {v['_path']}）")
+                if v["conf"] >= 0.85:
+                    if f == "医院案号":
+                        auto_updates["meta.医院案号"] = v["value"]; auto_updates["meta.法院案号"] = v["value"]; auto_updates["案件基本信息.案号"] = v["value"]
+                    elif f == "医院立案日期":
+                        auto_updates["案件基本信息.法院立案日期"] = v["value"]
+                    elif f == "开庭日":
+                        confirm_updates["开庭与听证[]"] = {"日期": v["value"][:10], "类型": "开庭", "事项": "（自动从传票提取）", "来源文件": v["_path"]}
+                else:
+                    confirm_updates[f"（待确认）{f}"] = v["value"]
+        if not args.apply:
+            print("  （dry-run，--apply 落盘）")
+            continue
+        if not (auto_updates or confirm_updates):
+            continue
+        with case_lock(ypath):
+            data = load_case(ypath)
+            applied = []
+            for path, value in auto_updates.items():
+                _set_path(data, path, value); applied.append(f"{path} = {value}")
+            for path, value in confirm_updates.items():
+                if path.endswith("[]"):
+                    arr_path = path[:-2]; cur = data
+                    for p in arr_path.split("."): cur = cur.setdefault(p, [])
+                    cur.append(value)
+                else:
+                    _set_path(data, path.split("（待确认）")[1], value)
+                applied.append(f"{path}（待确认） = {value}")
+            if applied:
+                data.setdefault("同步", {})["最后同步时间"] = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                data.setdefault("更新历史", []).append({
+                    "日期": TODAY.isoformat(), "操作者": "case_store", "动作": "文书抽取",
+                    "细节": f"pdftotext 抽取: {'; '.join(applied[:6])}" + (" 等更多" if len(applied) > 6 else "")})
+                commit_write(ypath, data, "ai", "文书抽取", f"采信 {len(applied)} 项")
+                print(f"  → 已落盘 {len(applied)} 项")
+
+
 def cmd_backfill_work(root, case_id, args):
     """按案件目录中已有工作产物倒推工时：日期×类型分组（文件名日期前缀优先，否则 mtime），
     同组多件合并为一条（大批量取证翻倍封顶）。默认 dry-run，--apply 落盘。"""
@@ -1866,6 +1991,10 @@ def main():
     sp.add_argument("--task", default=None, help="关联任务 task_id")
     sp.add_argument("--file", default=None, help="关联文书相对路径")
     sp.add_argument("--type", default=None, choices=list(WORK_FLOORS), help="auto 时的工作类型（缺省从内容推断）")
+    sp = sub.add_parser("extract", help="M9-3 文书内容抽取：pdftotext 抓案号/立案日/开庭日/法庭/案由（08/06 目录 PDF）")
+    sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
+    sp.add_argument("--field", default=None, help="未来：指定单字段（暂默认全字段）")
+    sp.add_argument("--apply", action="store_true", help="采信高置信字段落盘（默认只打印报告）")
     sp = sub.add_parser("scan", help="状态回扫：扫描案件目录 → 推断阶段/立案日/任务进度 → 对比报告")
     sp.add_argument("case_id", nargs="?", default=None, metavar="案件短码（缺省=全部）")
     sp.add_argument("--apply", action="store_true", help="采纳报告中的建议落盘（默认只打印报告）")
@@ -1887,7 +2016,7 @@ def main():
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
              "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report,
-             "log-work": cmd_log_work, "backfill-work": cmd_backfill_work, "scan": cmd_scan}
+             "log-work": cmd_log_work, "backfill-work": cmd_backfill_work, "scan": cmd_scan, "extract": cmd_extract}
     if args.cmd == "list":
         table["list"](root)
     elif args.cmd == "report":
@@ -1896,6 +2025,8 @@ def main():
         cmd_backfill_work(root, args.case_id, args)
     elif args.cmd == "scan":
         cmd_scan(root, args.case_id, args)
+    elif args.cmd == "extract":
+        cmd_extract(root, args.case_id, args)
     else:
         table[args.cmd](root, args.case_id, args)
 
