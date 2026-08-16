@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.10"
+version: "1.8.11"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
@@ -71,7 +71,7 @@ python scripts/extract_svgs.py path/to/chapter.md --output output/figures/
 
 **③ 字宽/坐标硬算自检（v1.8.5+，先于视觉目检）**：生成器产出后，按 **CJK≈Fpx/字、Latin≈0.55Fpx/字** 估算文字宽度 ≤ 容器宽，相邻元素 y 差 ≥ 20px，viewBox H 足够——**计算闸**，防视觉目检对"轻微溢出/贴近"漏检（v1.8.5 radar 图例重叠、three-col 子卡片溢出两例均靠此抓出）。详见 `references/review-checklist.md` §③。
 
-**④ 视觉目检（多模态渲染后眼检）**：SVG 用受控字体渲染为 PNG（快速预览运行 `python3 scripts/render_svg.py input.svg output.png`；高 DPI 运行 `node scripts/svg2png.js input.svg output.png 300`）后，用多模态模型逐张查——文字不溢出容器、框不重叠（间距 ≥24px）、箭头落位方向正确、字号可读（节点≥16px 副≥12px）、黑白可辨、整体美观留白合理。发现问题回改 SVG 坐标，复检直到目检通过。
+**④ 视觉目检（多模态渲染后眼检）**：SVG 用受控字体渲染为 PNG（快速预览运行 `python3 scripts/render_svg.py input.svg output.png`；高 DPI 运行 `node scripts/svg2png.js input.svg output.png 300`）后，用多模态模型逐张查——文字不溢出容器、框不重叠（间距 ≥24px）、箭头落位方向正确、语义线未被误删、分叉连续、标签卡与编号清楚、字号可读（节点≥16px 副≥12px）、黑白可辨、整体美观留白合理。发现问题回改 SVG 坐标，复检直到目检通过。
 
 > **多模态生产提示**：若环境支持图像理解，④ 必须真正"看"渲染图，不能只靠 xmllint / rsvg 无警告间接验证——语法通过 ≠ 布局美观，溢出/重叠/箭头错位只有肉眼（或多模态模型）能发现。但视觉目检对"轻微溢出/贴近"易判 OK，故须先过 ③ 字宽硬算自检。
 
@@ -144,6 +144,7 @@ python3 scripts/verify_render_font_equivalence.py
 - **颜色语法硬约束**：颜色只用 `fill`/`stroke` 属性内联——**禁 `<style>` 块定义颜色、禁 `<svg>` 开标签写 font-family、禁 CSS 变量/class、禁画背景矩形**（已验证的 Obsidian 渲染 + 透明背景硬约束，详见 `references/style-guide.md` §5.4）。
 - **可视友好化配色与渲染禁忌（v1.8.7 硬约束，详见 `references/style-guide.md` §5.5）**：① **深底浅字**——深色填充（L* ≤ 50，如 `#2C5282`/`#1A202C`/G4 深档/项目 canonical 强调色）的模块内 `<text>` 必须用 `#FFFFFF`/`#EDF2F7`，**禁深底深字**；② **字色对比度**——文字 fill 与所在模块 fill 对比 ≥ 4.5:1（AA，大文本 ≥ 3:1）；③ **箭头落点**——marker 单 `id="arrow"` + `markerUnits=userSpaceOnUse` + `orient=auto`，落点 `x2 = 目标框边 − 4px`、方向指向目标节点；④ **文字完整性**——每个有标题语义的节点框都有非空 `<text>`、文字坐标在框内、fill 与模块不同色。源 T134 review 实测：图 7-6 箭头错位 / 图 11-8 字色不可辨 / 图 11-9 深蓝底深字 / 图 7-13/8-3/6-7 框内文字缺失。
 - **蓝色焦点 + 文字二档（v1.8.8 通用规则，DEC-020，详见 `references/style-guide.md` §5.0/§5.1）**：① **文字色统一深灰二档**——图内所有文字仅允许 `#2D3436`（主）/`#636E72`（次），深底走 `#FFFFFF`/`#EDF2F7`；**不再用 `#1A202C`/`#4A5568`**（收敛二档消除四档混用）。② **项目 canonical 主色（如 `#2C5282`/`#1A365D` 蓝）只用于焦点节点填充/描边，禁作文字 fill**——以色块承载强调，文字强调改用字重/字号；这是通用纪律，非项目指针（任何项目锁定主色为视觉标识时都适用）。③ **每张结构/流程图 ≥1 焦点节点**——layer/tree/flow/hub/cycle/matrix 应至少有 1 个焦点节点（canonical 主色或更深一档填充/描边）承载层次，反对纯灰平铺；纯并列清单无自然焦点时用灰阶递进 + 边框粗细区分。源法律 AI Skill 实战 DEC-114 方案 A 定调（图 1-6 灰阶 + 唯一蓝色焦点 = 层次标杆、零蓝字）。
+- **关系与标签卡语法（v1.8.11，详见 `references/style-guide.md` §六）**：有流程 / 反馈 / 复核 / 状态含义的线不因删繁而删除；同一分叉主干与支线连续；相邻层级箭头优先 16–32px 可见线身、超过 48px 先压缩布局。深色标签 + 浅色正文是一张卡时标题栏只留上圆角；步骤编号占独立上方带；图例只说明读者需要理解的关系。
 - **文字**：继承渲染环境默认无衬线字体（PingFang SC / Microsoft YaHei 落在系统层），节点标签 18px 起（16开 115mm 通栏下物理 2.88mm = 8.2pt）
 - **形状**：圆角矩形（rx="6"）、简洁箭头、最小 24px 间距
 - **形状包含**：默认修复意外重叠；只有真实承载子 shape 的外层 area shape 才声明 `data-overlap-role="container"`，并同时写单图唯一原生 `id`、明示承载关系的 `data-overlap-note` 与非透明 hex/rgb/hsl `fill`。静态契约只审声明，实际几何由 writing-reviewer render gate 审计
@@ -195,5 +196,6 @@ find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
 - 配色合规（v1.5.0）：新生成图**透明背景**（无画布底色矩形）；从调色板 8 组选 1 组，组内模块色用于内部模块多色柔和区分（一图 4-6 色）、相邻模块不同色；文字色统一深灰；颜色只用 `fill`/`stroke` 属性内联；既有 34 张白底单色图保持稳定不回改
 - 可视友好化（v1.8.7）：深底（L* ≤ 50）模块内文字走浅色 `#FFFFFF`/`#EDF2F7`（禁深底深字）；文字 vs 所在模块对比 ≥ 4.5:1；箭头落点 `x2 = 目标框边 − 4px`、方向指向目标；每个有标题语义的节点框都有非空 `<text>`、坐标在框内、fill 与模块不同色（详见 style-guide §5.5）
 - 蓝色焦点 + 文字二档（v1.8.8）：文字色仅 `#2D3436`/`#636E72`（+ 深底浅字 `#FFFFFF`/`#EDF2F7`），不再用 `#1A202C`/`#4A5568`；项目 canonical 主色只焦点节点填充/描边、禁作文字 fill；每结构/流程图 ≥1 焦点节点（详见 style-guide §5.0/§5.1）
+- 关系与标签卡（v1.8.11）：有含义的关系线完整保留且不压文字；分叉连续、相邻层级连接紧凑；标签卡只标题上圆角，步骤编号在独立上方带，图例面向读者（详见 style-guide §六）
 
 > 源生产契约与受控渲染只是**必要不充分**条件——保证 SVG 可解析、画布与样式受控，不保证图正确美观。密度 + 一致性 + 目检三道审查才是验收依据（`references/review-checklist.md`）。
