@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import shutil
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -383,6 +384,77 @@ def build_focus():
     return {"today": TODAY.isoformat(), "red_deadlines": red, "hearings_upcoming": hearings, "stale_cases": stale}
 
 
+# ---------------------------------------------------------------------------
+# 苹果日历（Calendar.app）导入：osascript AppleScript 本地查询（JXA whose 在本机不稳，弃），
+# 窗口 today-30d ~ today+150d，5 分钟缓存。注意 tell 块内 handler 必须以 my 调用。
+# ---------------------------------------------------------------------------
+_APPLE_AS = """
+on twoDig(n)
+  if n < 10 then return "0" & (n as text)
+  return n as text
+end twoDig
+
+set out to ""
+tell application "Calendar"
+  set startD to (current date) - 30 * days
+  set endD to (current date) + 150 * days
+  repeat with c in calendars
+    set calName to (name of c) as text
+    if {"计划的提醒事项", "Siri建议"} contains calName then set calName to "§SKIP§"
+    if calName is not "§SKIP§" then
+    try
+      set evs to (events of c whose (start date > startD) and (start date < endD))
+      repeat with e in evs
+        try
+          set d to start date of e
+          set de to end date of e
+          set evDate to ((year of d) as text) & "-" & my twoDig(month of d as integer) & "-" & my twoDig(day of d)
+          set evTime to my twoDig((time of d) div 3600) & ":" & my twoDig(((time of d) mod 3600) div 60) & "-" & my twoDig((time of de) div 3600) & ":" & my twoDig(((time of de) mod 3600) div 60)
+          set adText to "false"
+          if allday event of e is true then set adText to "true"
+          set evLoc to ""
+          try
+            set evLoc to (location of e) as text
+          end try
+          if evLoc is "missing value" then set evLoc to ""
+          set out to out & calName & tab & evDate & tab & evTime & tab & adText & tab & (summary of e) & tab & evLoc & linefeed
+        end try
+      end repeat
+    end try
+    end if
+  end repeat
+end tell
+return out
+"""
+_APPLE_CACHE = {"ts": 0.0, "events": None, "error": None}
+_APPLE_TTL = 900
+
+
+def fetch_apple_events():
+    now = time.time()
+    if now - _APPLE_CACHE["ts"] < _APPLE_TTL and (_APPLE_CACHE["events"] is not None or _APPLE_CACHE["error"]):
+        return _APPLE_CACHE["events"] or [], _APPLE_CACHE["error"]
+    try:
+        r = subprocess.run(["osascript", "-e", _APPLE_AS], capture_output=True, text=True, timeout=90)
+        if r.returncode != 0:
+            raise RuntimeError((r.stderr or "osascript 失败").strip().splitlines()[0][:160])
+        events = []
+        for ln in (r.stdout or "").splitlines():
+            parts = ln.split("\t")
+            if len(parts) != 6:
+                continue
+            cal, date, tm, all_day, title, loc = parts
+            events.append({"cal": cal, "date": date, "time": tm,
+                           "allDay": all_day == "true", "title": title,
+                           "loc": "" if loc in ("missing value", "missing value\n") else loc})
+        _APPLE_CACHE.update(ts=now, events=events, error=None)
+        return events, None
+    except Exception as ex:  # noqa: BLE001
+        msg = str(ex)[:160]
+        _APPLE_CACHE.update(ts=now, events=None, error=msg)
+        return [], msg
+
+
 def build_calendar():
     """月历数据：期限（不含已抵消/已完成）+ 开庭，按日期分组。"""
     days = {}
@@ -401,7 +473,16 @@ def build_calendar():
                 "kind": "hearing", "case_id": c["id"], "case_short": c["display_short"],
                 "name": f"{h.get('type')}·{h.get('subject')}", "place": h.get("place"),
                 "status": h.get("status"), "file": h.get("file", "")})
-    return {"today": TODAY.isoformat(), "days": days}
+    apple, apple_err = fetch_apple_events()
+    for a in apple:
+        days.setdefault(a["date"], []).append({
+            "kind": "apple", "case_id": None, "case_short": a["cal"],
+            "name": a["title"], "place": a["loc"],
+            "time": a["time"], "all_day": a["allDay"]})
+    payload = {"today": TODAY.isoformat(), "days": days, "apple_ok": not apple_err}
+    if apple_err:
+        payload["apple_error"] = apple_err
+    return payload
 
 
 def build_overview():
