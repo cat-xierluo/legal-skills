@@ -842,7 +842,8 @@ def main():
         w = "可写" if any(t["writable"] for t in c["tasks"]) else "只读"
         print(f"   · [{c['id']}] {c['display_short']:<14} {flag:<10} {w}")
 
-    # 苹果日历预热（后台，避免首个 /api/v1/calendar 请求阻塞 30s）
+    # 苹果日历：启动预热 + 定时刷新（默认 10 分钟，DASHBOARD_APPLECAL_INTERVAL 可调）
+    # 抓取完全独立于页面访问——看板看到的永远是缓存里已就绪的数据
     def _prewarm():
         _APPLE_CACHE["fetching"] = True
         try:
@@ -850,7 +851,15 @@ def main():
                 _apple_do_fetch()
         finally:
             _APPLE_CACHE["fetching"] = False
+
+    def _scheduler():
+        interval = max(120, int(os.environ.get("DASHBOARD_APPLECAL_INTERVAL", "600")))
+        while True:
+            time.sleep(interval)
+            _spawn_bg_fetch()
+
     threading.Thread(target=_prewarm, daemon=True).start()
+    threading.Thread(target=_scheduler, daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}"
     print(f"\n🌐 打开: {url}")
