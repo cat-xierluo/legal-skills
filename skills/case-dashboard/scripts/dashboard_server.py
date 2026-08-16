@@ -29,6 +29,8 @@ import os
 import re
 import subprocess
 import sys
+import shutil
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -593,11 +595,58 @@ class Handler(BaseHTTPRequestHandler):
             if base not in p.parents or not p.exists() or not p.is_file():
                 self._send(400, {"ok": False, "message": f"文件不存在或越界: {rel}"})
                 return
-            ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
-            if p.suffix.lower() == ".md":
-                ctype = "text/plain; charset=utf-8"
+            # 轻量速览（M7-4）：PDF→首页图（pdftoppm）、docx→文本摘录（textutil）、图片/文本直出；
+            # 不内嵌 PDF 阅读器；转换失败回退原始字节由前端提示"打开原件"
+            ext = p.suffix.lower()
             try:
-                self._send(200, p.read_bytes(), ctype)
+                if ext == ".pdf" and shutil.which("pdftoppm"):
+                    fd, tmp = tempfile.mkstemp(suffix=".jpg")
+                    os.close(fd)
+                    try:
+                        subprocess.run(["pdftoppm", "-jpeg", "-l", "1", "-scale-to", "900",
+                                        str(p), tmp[:-4]], check=True, timeout=15,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        out = Path(tmp[:-4] + "-1.jpg")
+                        if not out.exists():
+                            out = Path(tmp[:-4] + "-01.jpg")
+                        if out.exists():
+                            data = out.read_bytes()
+                            out.unlink(missing_ok=True)
+                            Path(tmp).unlink(missing_ok=True)
+                            pages = ""
+                            try:
+                                pi = subprocess.run(["pdfinfo", str(p)], capture_output=True, text=True, timeout=10)
+                                m = re.search(r"Pages:\s+(\d+)", pi.stdout or "")
+                                pages = m.group(1) if m else ""
+                            except Exception:  # noqa: BLE001
+                                pass
+                            self.send_response(200)
+                            self.send_header("Content-Type", "image/jpeg")
+                            self.send_header("Content-Length", str(len(data)))
+                            self.send_header("X-Preview", f"image;pages={pages}")
+                            self.send_header("Cache-Control", "no-store")
+                            self.end_headers()
+                            self.wfile.write(data)
+                            return
+                    finally:
+                        Path(tmp).unlink(missing_ok=True)
+                if ext in (".docx", ".doc") and shutil.which("textutil"):
+                    r = subprocess.run(["textutil", "-convert", "txt", "-stdout", str(p)],
+                                       capture_output=True, text=True, timeout=15)
+                    if r.returncode == 0 and r.stdout.strip():
+                        text = r.stdout.strip()
+                        self._send(200, text[:4000], "text/plain; charset=utf-8")
+                        return
+                ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                if ext == ".md":
+                    ctype = "text/plain; charset=utf-8"
+                data = p.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
             except Exception as e:  # noqa: BLE001
                 self._send(500, {"ok": False, "message": str(e)})
             return
