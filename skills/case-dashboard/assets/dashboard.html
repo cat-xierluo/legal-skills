@@ -571,7 +571,7 @@
     }
     .modal {
       background: var(--bg-primary); border: 1px solid var(--border-accent); border-radius: 16px;
-      box-shadow: var(--shadow-float); width: min(680px, 94vw); max-height: 88vh;
+      box-shadow: var(--shadow-float); width: min(560px, 94vw); max-height: 88vh;
       display: flex; flex-direction: column; padding: 22px 24px; position: relative;
       animation: fadeUp .22s ease;
     }
@@ -583,9 +583,11 @@
     }
     .modal-x:hover { color: var(--text-primary); border-color: var(--border-accent); }
     .ev-meta { font-size: 0.85rem; color: var(--text-secondary); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
-    .ev-preview { flex: 1; min-height: 200px; background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 10px; overflow: hidden; }
-    .ev-preview iframe { width: 100%; height: 100%; min-height: 340px; border: 0; }
-    .ev-preview .no-file { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-muted); font-size: 0.85rem; }
+    .ev-preview { flex: 1; min-height: 120px; background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 10px; overflow: auto; display: flex; flex-direction: column; align-items: center; }
+    .ev-preview img { max-width: 100%; max-height: 56vh; display: block; }
+    .ev-preview .pv-note { font-size: 0.72rem; color: var(--text-muted); padding: 6px 0 8px; }
+    .ev-preview .pv-text { white-space: pre-wrap; font-size: 0.78rem; color: var(--text-secondary); padding: 14px 16px; margin: 0; align-self: stretch; font-family: inherit; line-height: 1.6; }
+    .ev-preview .no-file { display: flex; align-items: center; justify-content: center; min-height: 140px; padding: 20px; color: var(--text-muted); font-size: 0.85rem; text-align: center; }
     .ev-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
     .btn-main {
       background: var(--accent-primary); color: #fff; border: none; border-radius: 9px;
@@ -1053,14 +1055,32 @@
         (ev.place ? `<span>📍 ${escapeHtml(ev.place)}</span>` : '') +
         (ev.status ? `<span>${ev.status === 'done' ? '已完成' : '待进行'}</span>` : '');
       const pv = document.getElementById('ev-preview');
+      const ob = document.getElementById('ev-open');
       if (ev.file) {
-        pv.innerHTML = `<iframe src="/api/v1/preview?case_id=${encodeURIComponent(caseId)}&file=${encodeURIComponent(ev.file)}"></iframe>`;
-        const ob = document.getElementById('ev-open');
+        const url = `/api/v1/preview?case_id=${encodeURIComponent(caseId)}&file=${encodeURIComponent(ev.file)}`;
         ob.style.display = '';
         ob.onclick = () => openFile(caseId, ev.file);
+        pv.innerHTML = '<div class="no-file">加载速览…</div>';
+        fetch(url).then(async r => {
+          const ctype = r.headers.get('Content-Type') || '';
+          const xpv = r.headers.get('X-Preview') || '';
+          const pages = (xpv.match(/pages=(\d+)/) || [])[1];
+          if (ctype.startsWith('image/')) {
+            const blob = await r.blob();
+            pv.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="速览">` +
+              (pages && +pages > 1 ? `<div class="pv-note">共 ${pages} 页 · 此为首页速览，完整请打开原件</div>` : '');
+          } else if (ctype.startsWith('text/')) {
+            const t = await r.text();
+            pv.innerHTML = `<pre class="pv-text">${escapeHtml(t.slice(0, 2200))}${t.length > 2200 ? '\n…（截断，完整请打开原件）' : ''}</pre>`;
+          } else if (ctype.includes('pdf')) {
+            pv.innerHTML = `<div class="no-file">📄 PDF${pages ? '（' + pages + ' 页）' : ''} —— 请打开原件查看</div>`;
+          } else {
+            pv.innerHTML = '<div class="no-file">该格式不支持速览，请打开原件</div>';
+          }
+        }).catch(() => { pv.innerHTML = '<div class="no-file">速览加载失败</div>'; });
       } else {
-        pv.innerHTML = '<div class="no-file">未关联文书（传票/判决书可在 case.yaml 的 来源文件 字段绑定）</div>';
-        document.getElementById('ev-open').style.display = 'none';
+        pv.innerHTML = '<div class="no-file">未关联文书（可在 case.yaml 的 来源文件/关联文件 字段绑定）</div>';
+        ob.style.display = 'none';
       }
       document.getElementById('ev-go').onclick = () => { closeEv(); showCase(caseId); };
       document.getElementById('ev-mask').style.display = 'flex';
