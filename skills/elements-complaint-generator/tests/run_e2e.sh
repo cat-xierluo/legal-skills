@@ -32,7 +32,7 @@ python3 -B scripts/fill_template.py --case-type 09-private-lending \
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
   --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
-for ct in 06-sale 15-labor 21-traffic; do
+for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction; do
   python3 -B scripts/fill_template.py --case-type $ct \
     --elements tests/fixtures/$ct-sample.json \
     --output tests/output/$ct.docx 2>&1 | grep -E "rules"
@@ -80,6 +80,27 @@ CHECKS = {
         "2026年3月1日至2026年5月20日期间在某市第一医院住院（门诊）治疗，累计发生医疗费 45000 元",
         "营养费 3000 元", "住院伙食补助费 4000 元", "交通费 1500 元", "误工费 20000 元",
         "精神损害抚慰金 5000 元", "医疗费发票、医疗费清单、病历资料：有☑ 无□", "交通费凭证：有☑ 无□",
+    ],
+    "tests/output/22-copyright.docx": [
+        "经济损失 300000 元", "计算依据或参考因素：按原告实际损失+法定赔偿综合主张",
+        "侵权链接 / 标题：https://example.com/infringe/12345",
+        "律师费 20000 元 律师费凭证：有☑", "取证费 3000 元 取证费凭证：有☑", "差旅费 2000 元 差旅费凭证：有☑",
+        "原告损失☑", "合作作品☑",
+    ],
+    "tests/output/23-trademark.docx": ["经济损失 300000 元", "律师费 20000 元 律师费凭证：有☑", "法定赔偿☑"],
+    "tests/output/27-tradesecret.docx": ["经济损失 300000 元", "被告获利☑", "律师费 20000 元 律师费凭证：有☑", "公证费 3000 元 公证费凭证：有☑"],
+    "tests/output/24-patent.docx": [
+        "有☑ 内容：立即停止制造、销售侵权产品",
+        "是否包含惩罚性赔偿：包含☑ 计算方法：基数 100000 元 ×（1+ 1 倍数）", "经济损失 300000 元",
+    ],
+    "tests/output/28-tech.docx": [
+        "判令解除合同☑", "确认合同已于 2026年6月30日 解除☑", "有☑ 支付赔偿金 80000 元",
+        "具体情形：被告未按期交付开发成果", "鉴定内容：对技术成果完成度鉴定", "鉴定机构名称：某知识产权鉴定中心",
+    ],
+    "tests/output/13-construction.docx": [
+        "截至2026年8月17日止，迟延支付工程款的利息 56000 元、违约金 20000 元",
+        "实际清偿之日止：是☑", "是☑ 内容：工程款优先受偿权", "是☑ 责任主体姓名或者名称：某建设集团公司",
+        "是☑ 停工损失金额 150000 元", "是☑ 支付赔偿金 60000 元",
     ],
     "tests/output/05-sample.docx": [
         "姓名：王五", "姓名：赵六", "孙律师", "出生日期：1988年2月15日", "出生日期：1990年4月28日",
