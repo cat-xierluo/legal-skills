@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "generated_at": "2026-08-17T09:26:16.822758+00:00",
+  "soffice_path": "/opt/homebrew/Caskroom/libreoffice/25.8.4.upgrading/LibreOffice.app/Contents/MacOS/soffice",
+  "source_dir": "~/Desktop/要素式起诉状模板/67类",
+  "output_dir": "templates",
+  "case_type_hints": {
+    "01-离婚纠纷民事起诉状.docx": "离婚纠纷",
+    "02-民间借贷纠纷民事起诉状.docx": "民间借贷纠纷"
+  },
+  "templates": [
+    {
+      "original_name": "01-离婚纠纷民事起诉状.docx",
+      "original_path": "~/Desktop/要素式起诉状模板/67类/01-离婚纠纷民事起诉状.docx",
+      "original_sha256": "d16e66782473fc64773f12337173a1fcec22d04a7d398becade6c95a5a7860c6",
+      "original_size": 46080,
+      "converted_name": "01-离婚纠纷民事起诉状.docx",
+      "converted_path": "assets/templates-docx/01-离婚纠纷民事起诉状.docx",
+      "converted_sha256": "15d9d2f29dccea0e3e7f27a42caa6fc6ab0b9cf859268d83b615e7de61a64b14",
+      "converted_size": 20715,
+      "converted_at": "2026-08-17T09:26:12.309777+00:00"
+    },
+    {
+      "original_name": "02-民间借贷纠纷民事起诉状.docx",
+      "original_path": "~/Desktop/要素式起诉状模板/67类/02-民间借贷纠纷民事起诉状.docx",
+      "original_sha256": "66a857c5e45ea47b9027000844440527e18fc00f9c0cccafcbf0d44aeff0e686",
+      "original_size": 239616,
+      "converted_name": "02-民间借贷纠纷民事起诉状.docx",
+      "converted_path": "assets/templates-docx/02-民间借贷纠纷民事起诉状.docx",
+      "converted_sha256": "77408b6266f82ac7189893a2c5151a706c4c19e3f03c51f2060e6da6d8614b2b",
+      "converted_size": 24920,
+      "converted_at": "2026-08-17T09:26:16.822710+00:00"
+    }
+  ],
+  "failed": []
+}
