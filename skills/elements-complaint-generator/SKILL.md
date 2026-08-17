@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.0"
+version: "0.2.1"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -27,7 +27,7 @@ version: "0.2.0"
 
 | 维度 | v0.2 范围 |
 |---|---|
-| 案由 | **02 民间借贷纠纷**（01 离婚树已入库、规则待写） |
+| 模板 | **113 棵树全量入库**（法〔2025〕82 号完整版：上册42+中册28+下册43，编号01-68按上中下顺序） |
 | 抽取 | **Agent 会话内抽取为主**；`extract_from_markdown.py` regex 为兜底 |
 | 模板形态 | **解包 OOXML 源码树**（git 可 diff），渲染时复制→编辑→打包 |
 | 替换引擎 | lxml 直接编辑 `<w:t>`（跨 run 精确替换，多 part 覆盖，`--verify-residual` 残留校验） |
@@ -73,13 +73,13 @@ version: "0.2.0"
 
 ```text
 用户给常规起诉状（md/docx）或口述案件事实
-  1. Agent 识别案由 → 02-private-lending
-  2. Agent 读 references/case-types/02-private-lending.md §一 Schema
+  1. Agent 识别案由 → 09-private-lending
+  2. Agent 读 references/case-types/09-private-lending.md §一 Schema
   3. Agent 直接产出 elements.json（存到案件目录）
   4. ⚠️ 请用户复核 elements.json（勾选项/缺失字段）
   5. 渲染：
      python scripts/fill_template.py \
-       --case-type 02-private-lending \
+       --case-type 09-private-lending \
        --elements <案件>/elements.json \
        --output <案件>/要素式起诉状.docx \
        --verify-residual "旧当事人名,旧电话"
@@ -89,7 +89,7 @@ version: "0.2.0"
 
 ```bash
 python scripts/extract_from_markdown.py \
-  --case-type 02-private-lending \
+  --case-type 09-private-lending \
   --input 张三vs李四-起诉状.md \
   --output 张三vs李四-elements.json
 # 之后同样人工复核 + fill_template
@@ -115,14 +115,15 @@ python scripts/extract_from_markdown.py \
 ### 4.2 模板资产
 
 ```
-templates/                     # ★ 模板唯一权威源（git 管理的 OOXML 源码树）
-  02-民间借贷纠纷民事起诉状/
-    [Content_Types].xml
-    word/document.xml                       # git diff 逐行可见模板变更
-    word/styles.xml  word/header*.xml  word/footer*.xml  ...
-  01-离婚纠纷民事起诉状/                     # 预留（规则待写）
+templates/                     # ★ 模板唯一权威源（113 棵 OOXML 源码树，git 可 diff）
+  01-侮辱案刑事附带民事-刑事附带民事自诉状/   # 上册 01-21：刑事自诉4+民事9+商事8
+  05-离婚纠纷-民事起诉状/                     #   （起诉状+答辩状成对）
+  09-民间借贷纠纷-民事起诉状/                 # ← 规则已实现
+  30-垄断纠纷-民事起诉状/                     # 中册 22-36：知产民事9+知产行政6+垄断行政
+  44-行政处罚-行政起诉状/                     # 下册 37-68：海事4+环资3+行政11+行政答辩+国赔4+执行9
+  55-行政答辩状/  60-强制执行申请书/           #   单文书目录（树名=编号-案由）
 
-templates/templates-manifest.json             # OLE2 原件 SHA-256 溯源
+templates/templates-manifest.json             # v2 清单：树↔源文件↔SHA-256 溯源 + 命名规范化记录
 ```
 
 **为什么用解包树而非 docx**：docx 是 zip 二进制（git diff 乱码）；解包后是纯文本 XML，模板迭代、官方版本更新、每次填充差异全部可 diff/可 review/可回滚。**每案由存完整树**（自包含、互不污染，不抽公共 base 防止格式铁律破防）。
@@ -130,21 +131,21 @@ templates/templates-manifest.json             # OLE2 原件 SHA-256 溯源
 ### 4.3 模板入库流程（新案由 / 官方更新时）
 
 ```bash
-# ① OLE2 → docx（soffice headless）
-python scripts/ole2_to_docx.py \
-  --input "~/Desktop/要素式起诉状模板/67类" \
-  --output /tmp/ecg-docx \
-  --manifest templates/templates-manifest.json \
-  --include '03-*'
-# ② docx → OOXML 源码树（git 入库）
+# 完整版为原生 OOXML docx，直接批量解包入库（上中下顺序，编号 01-68）：
+python scripts/ingest_full_templates.py \
+  --source "~/Desktop/要素式起诉状模板/67类完整版(起诉状+答辩状+第三人意见陈述书)" \
+  --templates templates --overwrite
+# 若源是 OLE2 老格式（如 67类/ 平铺目录），先转再入：
+python scripts/ole2_to_docx.py --input ~/Desktop/要素式起诉状模板/67类 --output /tmp/ecg-docx \
+  --manifest templates/templates-manifest.json --include 'NN-*'
 python scripts/unpack_docx.py --input /tmp/ecg-docx --output templates --overwrite
 # ③ 反向打包（校验/出件用）
-python scripts/pack_docx.py --tree templates/03-xxx --output 检查.docx
+python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉状 --output 检查.docx
 ```
 
 ## 五、要素 Schema
 
-详见 `references/case-types/02-private-lending.md`（完整字段定义 + 字段填充规则表）。
+详见 `references/case-types/09-private-lending.md`（完整字段定义 + 字段填充规则表）。
 
 - 顶层：`当事人 / 诉讼请求 / 约定管辖和诉前保全 / 事实与理由 / 对纠纷解决方式的意愿 / 具状人_签字_盖章 / 具状日期`
 - 当事人含 `原告/被告/第三人/委托诉讼代理人`（当前实现第一个原告/被告/委托代理人）
@@ -158,17 +159,17 @@ python scripts/pack_docx.py --tree templates/03-xxx --output 检查.docx
 
 ## 七、案由扩展步骤
 
-以 03 买卖合同为例：
+以 06 买卖合同纠纷为例：
 
 1. **模板入库**：§4.3 流程（ole2_to_docx → unpack_docx）
-2. **写 Schema 文档**：参考 02，写 `references/case-types/03-sale.md`（含 §一 Schema + §二 填充规则表；先对模板树做 occurrence 映射勘察）
-3. **写规则集**：`fill_template.py` 加 `build_rules_03_sale()` + `CASE_TYPE_TO_TREE` 映射
+2. **写 Schema 文档**：参考 09，写 `references/case-types/06-sale.md`（含 §一 Schema + §二 填充规则表；先对模板树做 occurrence 映射勘察）
+3. **写规则集**：`fill_template.py` 加 `build_rules_06_sale()` + `CASE_TYPE_TO_TREE` 映射
 4. **抽取**：Agent 直接按 03 Schema 抽；如需 regex 兜底再在 `extract_from_markdown.py` 的 `CASE_TYPE_TO_EXTRACTOR` 加
 5. **测试**：`tests/fixtures/` 加样例；跑 `tests/run_e2e.sh` 回归
 
 ## 八、限制与已知问题
 
-- 仅 02 民间借贷规则完整；01 离婚树已入库、规则未写
+- 仅 09 民间借贷规则完整；其余 112 棵树已入库、规则待写（05 离婚为下一优先）
 - 仅自然人当事人；法人/非法人组织要素保留空白
 - 多原告/多被告/多代理人（模板"可复制粘贴扩容"条款）尚未实现自动复制行
 - 长文本多段 cell（如"事实与理由"12 段结构）的段落数保持尚未实现（v0.3 计划：XML 重建多段落）
@@ -176,5 +177,5 @@ python scripts/pack_docx.py --tree templates/03-xxx --output 检查.docx
 
 ## 九、版本
 
-- 当前版本：`0.2.0`（2026-08-17）
+- 当前版本：`0.2.1`（2026-08-17）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）

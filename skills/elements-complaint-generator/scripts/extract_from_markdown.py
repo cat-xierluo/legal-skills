@@ -13,7 +13,7 @@
 
 适用场景
 --------
-- v0.1 MVP：02 民间借贷 + 01 离婚
+- 当前：09 民间借贷（编号按 67 类完整版上中下顺序）
 - 输入：起诉状.md（律师手写或 AI 生成的常规版）
 - 输出：elements.json（按 case-types/{案由}.md §一的 Schema）
 
@@ -25,15 +25,15 @@
 示例
 ----
 python scripts/extract_from_markdown.py \\
-    --case-type 02-private-lending \\
-    --input tests/fixtures/02-private-lending-complaint.md \\
-    --output tests/output/02-private-lending-elements.json
+    --case-type 09-private-lending \\
+    --input tests/fixtures/09-private-lending-complaint.md \\
+    --output tests/output/09-private-lending-elements.json
 
 然后人工编辑 elements.json 复核后：
 python scripts/fill_template.py \\
-    --case-type 02-private-lending \\
-    --elements tests/output/02-private-lending-elements.json \\
-    --output tests/output/02-private-lending-filled.docx
+    --case-type 09-private-lending \\
+    --elements tests/output/09-private-lending-elements.json \\
+    --output tests/output/09-private-lending-filled.docx
 """
 from __future__ import annotations
 
@@ -335,7 +335,7 @@ def extract_02_mediation(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 CASE_TYPE_TO_EXTRACTOR = {
-    "02-private-lending": extract_02_private_lending,
+    "09-private-lending": extract_02_private_lending,
 }
 
 
