@@ -20,7 +20,7 @@ v0.2 架构（相对 v0.1 python-docx 版）：
 示例
 ----
 python scripts/fill_template.py \\
-    --case-type 02-private-lending \\
+    --case-type 09-private-lending \\
     --elements elements.json \\
     --output 起诉状.docx \\
     --verify-residual "旧当事人名,旧电话"
@@ -166,6 +166,55 @@ def check_box(p: Para, target_text: str, checked: bool) -> bool:
     return replace_in_paragraph(p, target_text, new)
 
 
+def replace_option_check(p: Para, option: str) -> bool:
+    """勾选段落中独立的 "{option}□"（前一个字符不是"不"），仅第一处。
+
+    解决 "了解□" 是 "不了解□" 子串导致的双勾/误勾问题。
+    option: "了解" / "不了解" / "男" / "女" 等互为包含关系的选项。
+    """
+    old = f"{option}□"
+    new = f"{option}☑"
+    while True:
+        positions = _char_positions(p._p)
+        text = "".join(c for _, _, c in positions)
+        idx = text.find(old)
+        if idx < 0:
+            return False
+        prev_char = text[idx - 1] if idx > 0 else ""
+        if prev_char == "不":
+            # 命中的是 "不了解□" 内部子串，跳过该处找下一个
+            end_scan = idx + 1
+            nxt = text.find(old, end_scan)
+            if nxt < 0:
+                return False
+            idx = nxt
+        end = idx + len(old)
+        # 以下与 replace_in_paragraph 的跨 run 拼接一致，作用于 [idx, end)
+        first_wt = positions[idx][0]
+        last_wt = positions[end - 1][0]
+        first_start = next(k for k, (wt, _, _) in enumerate(positions) if wt == first_wt)
+        last_start = next(k for k, (wt, _, _) in enumerate(positions) if wt == last_wt)
+        first_local = idx - first_start
+        last_local = (end - 1) - last_start
+        ft = first_wt.text or ""
+        if first_wt == last_wt:
+            first_wt.text = ft[:first_local] + new + ft[last_local + 1:]
+        else:
+            first_wt.text = ft[:first_local] + new
+            lt = last_wt.text or ""
+            last_wt.text = lt[last_local + 1:]
+            seen = set()
+            for k in range(idx, end):
+                wt = positions[k][0]
+                if wt == first_wt or wt == last_wt:
+                    continue
+                if wt in seen:
+                    continue
+                seen.add(wt)
+                wt.text = ""
+        return True
+
+
 def fill_blanks(p: Para, prefix: str, suffix: str, value: str) -> bool:
     """在 prefix 和 suffix 之间填入 value（兼容模板里"年/月/日"占位）。
 
@@ -214,8 +263,14 @@ def _get_path(d: dict, path: str):
 def make_text_replace_rule(path: str, match_text: str, value_key: str | None = None,
                             transform: Callable[[str], str] | None = None,
                             constant: str | None = None,
-                            occurrence: int = 0) -> RuleFunc:
-    """text-replace 规则：定位 match_text 所在段（按出现顺序取第 occurrence 个），替换。"""
+                            occurrence: int = 0,
+                            append: bool = True) -> RuleFunc:
+    """text-replace 规则：定位 match_text 所在段（按出现顺序取第 occurrence 个）。
+
+    append=True（默认）：match_text 视为字段标签，替换为 标签+值（如 "姓名："→"姓名：张三"），
+    保留模板原有标签文字；append=False：match_text 整体替换为值（用于含空白的复合占位，
+    如 "第    条"→"第三条"，此时 transform 需输出完整新文本）。
+    """
     def rule(doc: DocParts, elements: dict) -> bool:
         if constant is not None:
             value = constant
@@ -227,6 +282,7 @@ def make_text_replace_rule(path: str, match_text: str, value_key: str | None = N
             return False
         if transform:
             value = transform(value)
+        new_text = f"{match_text}{value}" if append else str(value)
         matches = [p for p in iter_paragraphs(doc) if match_text in p.text]
         if not matches:
             return False
@@ -239,8 +295,9 @@ def make_text_replace_rule(path: str, match_text: str, value_key: str | None = N
         if not targets:
             return False
         for p in targets:
-            replace_in_paragraph(p, match_text, str(value))
+            replace_in_paragraph(p, match_text, new_text)
         return True
+    rule.__name__ = f"replace[{path}]"
     return rule
 
 
@@ -269,6 +326,21 @@ def make_text_fill_rule(path: str, prefix: str, suffix: str,
         for p in targets:
             fill_blanks(p, prefix, suffix, str(value))
         return True
+    return rule
+
+
+def make_gender_rule(path: str, occurrence: int = 0) -> RuleFunc:
+    """性别勾选规则：按值勾 男□/女□（避免只勾第一个 □ 导致女性勾到男）。"""
+    def rule(doc: DocParts, elements: dict) -> bool:
+        v = _get_path(elements, path)
+        if v not in ("男", "女"):
+            return False
+        matches = [p for p in iter_paragraphs(doc)
+                   if "性别：" in p.text and "男□" in p.text and "女□" in p.text]
+        if occurrence >= len(matches):
+            return False
+        return replace_option_check(matches[occurrence], v)
+    rule.__name__ = f"gender[{path}]"
     return rule
 
 
@@ -317,7 +389,7 @@ def fmt_money(s: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 02-民间借贷 规则集（与 references/case-types/02-private-lending.md §二 对应）
+# 09-民间借贷 规则集（与 references/case-types/09-private-lending.md §二 对应）
 # ---------------------------------------------------------------------------
 
 def build_rules_02_private_lending() -> list[RuleFunc]:
@@ -328,7 +400,7 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
     e = "当事人.原告"
     rules += [
         make_text_replace_rule(f"{e}.姓名", "姓名：", occurrence=0),
-        make_checkbox_rule(f"{e}.性别", "性别：男□    女□", occurrence=0),
+        make_gender_rule(f"{e}.性别", occurrence=0),
         make_text_fill_rule(f"{e}.出生日期", "出生日期：", "日", transform=fmt_date, occurrence=0),
         make_text_replace_rule(f"{e}.民族", "民族：", occurrence=0),
         make_text_replace_rule(f"{e}.工作单位", "工作单位：", occurrence=0),
@@ -344,7 +416,7 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
     e = "当事人.被告"
     rules += [
         make_text_replace_rule(f"{e}.姓名", "姓名：", occurrence=1),
-        make_checkbox_rule(f"{e}.性别", "性别：男□    女□", occurrence=1),
+        make_gender_rule(f"{e}.性别", occurrence=1),
         make_text_fill_rule(f"{e}.出生日期", "出生日期：", "日", transform=fmt_date, occurrence=1),
         make_text_replace_rule(f"{e}.民族", "民族：", occurrence=1),
         make_text_replace_rule(f"{e}.工作单位", "工作单位：", occurrence=1),
@@ -409,7 +481,8 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
 
     rules += [
         make_text_replace_rule("诉讼请求.利息.计算方式", "计算方式："),
-        make_checkbox_rule("诉讼请求.利息.请求至实际清偿之日", "是否请求支付至实际清偿之日止：是□    否□"),
+        # 新版原生 docx 中"是□"与"否□"分属不同段落，只锚定"…：是□"
+        make_checkbox_rule("诉讼请求.利息.请求至实际清偿之日", "实际清偿之日止：是□"),
         make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.勾选", "是□    提前还款（加速到期）□ / 解除合同□"),
         make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.提前还款_加速到期", "提前还款（加速到期）□"),
         make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.解除合同", "解除合同□"),
@@ -475,7 +548,9 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
     rules.append(rule_lilv)
 
     rules += [
-        make_text_replace_rule("事实与理由.借款利率.合同条款", "合同条款：第    条"),
+        # "第    条" → "第三条"（复合占位整体替换，保留前缀"合同条款："）
+        make_text_replace_rule("事实与理由.借款利率.合同条款", "第    条",
+                               transform=lambda v: f"第{v}条", append=False),
     ]
 
     def rule_jiekuan_time(doc, elements):
@@ -515,10 +590,14 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
     rules.append(rule_huankuan_fangshi)
 
     rules += [
-        make_text_replace_rule("事实与理由.还款情况.已还本金", "已还本金：          元"),
-        make_text_replace_rule("事实与理由.还款情况.已还利息", "已还利息：          元，还息至        年        月         日"),
+        make_text_replace_rule("事实与理由.还款情况.已还本金", "已还本金：          元",
+                               transform=lambda v: f"已还本金：{v} 元", append=False),
+        make_text_replace_rule("事实与理由.还款情况.已还利息", "已还利息：          元",
+                               transform=lambda v: f"已还利息：{v} 元", append=False),
+        make_text_fill_rule("事实与理由.还款情况.还息至", "还息至", "日", transform=fmt_date),
         make_checkbox_rule("事实与理由.是否存在逾期还款.勾选", "是□    逾期时间：              至今已逾期"),
-        make_text_replace_rule("事实与理由.是否存在逾期还款.逾期时间", "逾期时间：              至今已逾期"),
+        make_text_replace_rule("事实与理由.是否存在逾期还款.逾期时间", "逾期时间：              至今已逾期",
+                               transform=lambda v: f"逾期时间：{v}", append=False),
         make_checkbox_rule("事实与理由.是否签订物的担保_抵押_质押_合同.勾选", "是□    签订时间："),
         make_text_replace_rule("事实与理由.是否签订物的担保_抵押_质押_合同.签订时间", "签订时间："),
         make_text_replace_rule("事实与理由.担保人", "担保人："),
@@ -548,16 +627,14 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
         v = _get_path(elements, "对纠纷解决方式的意愿.是否了解调解")
         if not v:
             return False
-        # 第一处「了解□    不了解□」紧跟"是否了解调解…"标题段
+        # 第一处「了解□ 不了解□」紧跟"是否了解调解…"标题段
         paragraphs = list(iter_paragraphs(doc))
         for i, p in enumerate(paragraphs):
             if "是否了解调解作为非诉" in p.text:
-                # 向后找最近的勾选段
                 for q in paragraphs[i:]:
-                    if "了解□    不了解□" in q.text:
-                        target = "了解□" if v == "了解" else "不了解□"
-                        replace_in_paragraph(q, target, target.replace("□", "☑"))
-                        return True
+                    if "了解□" in q.text or "不了解□" in q.text:
+                        # replace_option_check 处理"了解□"是"不了解□"子串的误勾
+                        return replace_option_check(q, v if v in ("了解", "不了解") else "了解")
                 break
         return False
     rules.append(rule_tiaojie_zongti)
@@ -566,22 +643,25 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
         v = _get_path(elements, "对纠纷解决方式的意愿.是否了解先行调解好处")
         if not v or not isinstance(v, list) or len(v) != 5:
             return False
-        # 5 处「了解□ 不了解□」按文档顺序去重后逐个填
+        # 5 处「了解□ 不了解□」按文档顺序逐个填；
+        # 含 ☑ 的段已被总述规则勾过，跳过；勾选本身用 replace_option_check 防子串误勾
         seen_elements: set = set()
         applied = 0
         for p in iter_paragraphs(doc):
             if p._p in seen_elements:
                 continue
-            if "了解□" in p.text and "不了解□" in p.text:
-                seen_elements.add(p._p)
-                target_value = v[applied] if applied < 5 else None
-                if target_value == "了解":
-                    replace_in_paragraph(p, "了解□", "了解☑")
-                elif target_value == "不了解":
-                    replace_in_paragraph(p, "不了解□", "不了解☑")
-                applied += 1
-                if applied >= 5:
-                    break
+            text = p.text
+            if "☑" in text:
+                continue
+            if "了解" not in text or "□" not in text:
+                continue
+            seen_elements.add(p._p)
+            target_value = v[applied] if applied < 5 else None
+            if target_value in ("了解", "不了解"):
+                replace_option_check(p, target_value)
+            applied += 1
+            if applied >= 5:
+                break
         return applied > 0
     rules.append(rule_likai_jiechu_benefits)
 
@@ -617,7 +697,7 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
 # ---------------------------------------------------------------------------
 
 CASE_TYPE_TO_TREE = {
-    "02-private-lending": "02-民间借贷纠纷民事起诉状",
+    "09-private-lending": "09-民间借贷纠纷-民事起诉状",
 }
 
 
