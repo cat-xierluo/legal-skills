@@ -1,5 +1,27 @@
 # 变更日志 — elements-complaint-generator
 
+## 0.3.1（2026-08-17）— v0.3 六任务全部完成（双案由 + 三层 reference 闭环）
+
+### T4 第二案由：05 离婚（通用层复用验证通过）
+- `build_rules_05_divorce()`：案由特定约 50 条规则；当事人/调解/具状块**全部走通用层**（`build_common_party_rules`/`build_common_mediation_rules` 参数化 occurrence），05 布局差异（代理人插中间→被告姓名=2）仅靠参数吸收
+- `references/case-types/05-divorce.md` 定稿（Schema + occurrence 勘察结论 + 规则要点）
+- `extract_05_divorce` regex 兜底（结婚时间/子女抚养/财产归属/抚养费/探望）
+- 新增规则原语：`make_pick_option_rule`（枚举勾选）/`make_fill_after_rule`（标题后空段落填入）/`make_signature_date_rule`（锚定具状段防"日期："子串污染）
+
+### 渲染缺陷修复（DEC-004 三铁律，09 同步受益）
+- fill_blanks 防双 suffix（"…日日"——09 自 v0.1 带病被子串断言掩盖，本次现形修复）
+- 具状日期锚定具状段（"日期："⊂"出生日期："污染出生段）
+- 勾选上下文去空格（05 三行"无此问题□ 有此问题□"空格不一致致 occurrence 错位）
+- make_gender_rule 匹配条件稳定化（勾选后段落退出匹配集致索引漂移）
+
+### T3/T5/T6
+- T3：`build_case_routing.py` → `case-routing.md`（113 行三态标记索引）
+- T5：`extraction-prompt-template.md`（六步抽取工作流 + 纪律 + 错位提示）
+- T6：SKILL.md §三改三段式（案由匹配→两段抽取→渲染）
+
+### 回归（多案由 e2e 重构）
+- `run_e2e.sh` 双案由 × (extract+sample) 带标签断言 + 哨兵：8/8、14/14、15/15、29/29 全绿
+
 ## 0.3.0（2026-08-17）— 三层 reference 架构起步（T1+T2）
 
 ### T1 通用要素层（证据版）

@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.3.0"
+version: "0.3.1"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -67,40 +67,41 @@ version: "0.3.0"
           └───────────────────────────┘
 ```
 
-## 三、运行流程
+## 三、运行流程（三段式：案由匹配 → 两段抽取 → 渲染）
 
-### 3.1 主路径 — Agent 抽取（推荐）
+### 3.1 ① 案由匹配
 
 ```text
-用户给常规起诉状（md/docx）或口述案件事实
-  1. Agent 识别案由 → 09-private-lending
-  2. Agent 读 references/case-types/09-private-lending.md §一 Schema
-  3. Agent 直接产出 elements.json（存到案件目录）
-  4. ⚠️ 请用户复核 elements.json（勾选项/缺失字段）
-  5. 渲染：
-     python scripts/fill_template.py \
-       --case-type 09-private-lending \
-       --elements <案件>/elements.json \
-       --output <案件>/要素式起诉状.docx \
-       --verify-residual "旧当事人名,旧电话"
+读用户材料（起诉状 md/docx / 口述）→ 对照 references/case-routing.md
+→ 确定案由编号 + case-type key + 模板树 + reference 文档
+→ 拿不准时列 2-3 个候选案由请用户选
 ```
 
-### 3.2 兜底 — regex 抽取（Agent 不可用时）
+### 3.2 ② 要素抽取（通用块 + 案由特定块）
+
+按 `references/extraction-prompt-template.md` 执行：
+- **通用块**（common-elements.md）：当事人 / 代理人 / 调解意愿 / 具状人
+- **案由特定块**（case-types/{{key}}.md §一）：诉讼请求勾选与金额 / 保全 / 事实与理由
+- 纪律：材料没有→留空；枚举用选项原文；日期 ISO；产出 elements.json 后**必须用户复核**
+- 兜底：Agent 不可用时 `extract_from_markdown.py`（09/05 已实现 regex 兜底）
+
+### 3.3 ③ 渲染（纯代码）
 
 ```bash
-python scripts/extract_from_markdown.py \
-  --case-type 09-private-lending \
-  --input 张三vs李四-起诉状.md \
-  --output 张三vs李四-elements.json
-# 之后同样人工复核 + fill_template
+python scripts/fill_template.py \
+  --case-type 09-private-lending \        # 或 05-divorce
+  --elements <案件>/elements.json \
+  --output <案件>/要素式起诉状.docx \
+  --verify-residual "旧当事人名,旧电话"
 ```
 
-### 3.3 渲染细节（fill_template.py）
+- 复制 templates/<树>/ → lxml 编辑 `<w:t>`（跨 run 精确替换，多 part 覆盖）→ 打包
+- 通用规则（当事人/调解/具状）与案由规则分层复用（DEC-001/002 铁律）
+- `--verify-residual` 残留校验防旧案信息泄漏
 
-- 模板源 = `templates/<案由名>/`（解包 OOXML 树，git 可 diff）
-- 渲染 = 复制树到临时目录 → lxml 编辑 word/*.xml（含页眉/页脚全部文本 part）→ 打包 docx
-- 跨 run 精确替换：find 落在单 run 内保留前后字符；跨 run 时首 run 存前缀+新文本、末 run 存后缀、中间 run 清空——**不吞字、不破坏字体/段落/表格/勾选框**
-- `--verify-residual "旧A,旧B"`：替换后扫描全文档残留旧串（防漏填/防旧案信息泄漏）
+### 3.4 回归
+
+`bash tests/run_e2e.sh` — 双案由 × (extract 路径 + sample 全要素) 带标签断言 + 哨兵（双日/双勾/标签吃字）
 
 ## 四、依赖与模板资产
 
@@ -148,10 +149,10 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 | 层 | 文档 | 覆盖 |
 |---|---|---|
 | 通用层 | `references/common-elements.md` | 当事人/代理人/调解意愿/落款等跨案由要素（证据：113 棵树扫描，28 签名组） |
-| 路由层 | `references/case-routing.md`（T3 待建） | 68 案由 → 模板树 + key + reference 映射 |
+| 路由层 | `references/case-routing.md`（脚本生成，勿手改） | 113 棵树索引：案由/册/文书/树/key/支持状态/关键词 |
 | 案由层 | `references/case-types/NN-*.md` | 案由特定要素；**骨架由 `dump_template_fields.py` 从模板树反推生成**，人/Agent 补要素路径与抽取提示 |
 
-已定稿：09-private-lending.md（民间借贷）；骨架：05-divorce-skeleton.md（离婚，T4 补全）。
+已定稿：09-private-lending.md、05-divorce.md；抽取提示词：extraction-prompt-template.md；骨架示例：05-divorce-skeleton.md。其余案由骨架用 `dump_template_fields.py` 生成。
 
 - 顶层：`当事人 / 诉讼请求 / 约定管辖和诉前保全 / 事实与理由 / 对纠纷解决方式的意愿 / 具状人_签字_盖章 / 具状日期`
 - 当事人含 `原告/被告/第三人/委托诉讼代理人`（当前实现第一个原告/被告/委托代理人）
@@ -175,7 +176,7 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 八、限制与已知问题
 
-- 仅 09 民间借贷规则完整；其余 112 棵树已入库、规则待写（05 离婚为下一优先）
+- 09 民间借贷 + 05 离婚规则完整（含 e2e）；其余 111 棵树待接入（答辩状/行政/执行类文书形态差异大，接入时先跑 dump + occurrence 勘察）
 - 仅自然人当事人；法人/非法人组织要素保留空白
 - 多原告/多被告/多代理人（模板"可复制粘贴扩容"条款）尚未实现自动复制行
 - 长文本多段 cell（如"事实与理由"12 段结构）的段落数保持尚未实现（v0.3 计划：XML 重建多段落）
@@ -183,5 +184,5 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 九、版本
 
-- 当前版本：`0.3.0`（2026-08-17）
+- 当前版本：`0.3.1`（2026-08-17）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）

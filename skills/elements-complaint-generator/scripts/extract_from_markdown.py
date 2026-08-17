@@ -330,12 +330,90 @@ def extract_02_mediation(text: str) -> dict:
     return res
 
 
+
+
+# ---------------------------------------------------------------------------
+# 05 离婚专属抽取（兜底；主路径为 Agent 按 05-divorce.md Schema 抽取）
+# ---------------------------------------------------------------------------
+
+def extract_05_divorce(sections: dict[str, str]) -> dict:
+    elements: dict = {"当事人": {}, "诉讼请求": {}, "诉前保全": {}, "事实与理由": {}, "对纠纷解决方式的意愿": {}}
+    elements["当事人"]["原告"] = extract_party(sections.get("原告", ""), "原告")
+    elements["当事人"]["被告"] = extract_party(sections.get("被告", ""), "被告")
+    if sections.get("委托诉讼代理人"):
+        agent = extract_party(sections["委托诉讼代理人"], "委托诉讼代理人")
+        m = re.search(r"委托诉讼代理人[：:]\s*([^\s，,。；;、]+?)，", sections["委托诉讼代理人"])
+        if m:
+            agent["姓名"] = m.group(1)
+        elements["当事人"]["委托诉讼代理人"] = [agent]
+    else:
+        elements["当事人"]["委托诉讼代理人"] = []
+
+    sr = sections.get("诉讼请求", "")
+    fr = sections.get("事实与理由", "")
+
+    # 财产归属（"房屋归原告所有"）
+    def attribution(kw_pattern):
+        m = re.search(r"(?:%s)[^，,。]*?归(原告|被告)" % kw_pattern, sr + fr)
+        return m.group(1) if m else ""
+    prop = {"勾选": "有财产" if re.search(r"分割|共同财产", sr) else "无财产"}
+    for key, kw in (("房屋", r"房屋|房产"), ("汽车", r"汽车|车辆"), ("存款", r"存款")):
+        prop[key] = {"归属": attribution(kw)}
+    elements["诉讼请求"]["夫妻共同财产"] = prop
+    elements["诉讼请求"]["夫妻共同债务"] = {"勾选": "无债务" if "无共同债务" in sr + fr or "无夫妻共同债务" in sr + fr else ""}
+
+    # 子女抚养（"婚生子王小一由原告直接抚养"）
+    m = re.search(r"婚生[子女儿]+\s*([^\s，,。]{2,4})[^。]*?由(原告|被告)[^。]*?抚养", sr + fr)
+    if m:
+        elements["诉讼请求"]["子女直接抚养"] = {
+            "勾选": "有此问题",
+            "子女1": {"姓名": m.group(1), "归属": m.group(2)},
+            "子女2": {"姓名": "", "归属": ""},
+        }
+    else:
+        elements["诉讼请求"]["子女直接抚养"] = {"勾选": "无此问题"}
+
+    # 抚养费（"每月支付抚养费 2000 元"）
+    m = re.search(r"(原告|被告)[^，,。\d]{0,8}(?:每月|按月)?支付抚养费[^\d]*?([\d,，\.]+)\s*元", sr + fr)
+    if m:
+        elements["诉讼请求"]["子女抚养费"] = {
+            "勾选": "有此问题", "承担主体": m.group(1),
+            "金额及明细": f"每月 {m.group(2)} 元", "支付方式": "",
+        }
+    else:
+        elements["诉讼请求"]["子女抚养费"] = {"勾选": "无此问题"}
+
+    # 探望权（"被告每月探望"）
+    m = re.search(r"(原告|被告)[^\n。]*?每月[^\n。]*?探望", sr + fr)
+    elements["诉讼请求"]["探望权"] = {
+        "勾选": "有此问题" if m else "无此问题",
+        "行使主体": m.group(1) if m else "",
+        "行使方式": "",
+    }
+    elements["诉讼请求"]["是否主张诉讼费用"] = ("诉讼费" in sr)
+
+    # 结婚时间（"于 2012年5月20日 登记结婚"）
+    m = re.search(r"(\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}[\-\.]\d{1,2}[\-\.]\d{1,2})\s*(?:登记)?结婚", fr)
+    elements["事实与理由"]["结婚时间"] = _normalize_date(m.group(1)) if m else ""
+    m = re.search(r"婚生[子女儿]+([^\s，,。\n]{1,20})", fr)
+    if m:
+        elements["事实与理由"]["生育子女情况"] = "婚生" + m.group(1)
+
+    elements["对纠纷解决方式的意愿"] = {
+        "是否了解调解": "了解",
+        "是否了解先行调解好处": ["了解"] * 5,
+        "是否考虑先行调解": "是",
+    }
+    return elements
+
+
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 
 CASE_TYPE_TO_EXTRACTOR = {
     "09-private-lending": extract_02_private_lending,
+    "05-divorce": extract_05_divorce,
 }
 
 

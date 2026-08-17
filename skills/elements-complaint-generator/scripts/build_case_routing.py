@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""案由路由表生成器（T3）：从 templates-manifest.json 生成 references/case-routing.md。
+
+输出 68 案由 ×（树 / 文书类型 / 册 / 规则支持 / reference / 识别关键词提示）。
+关键词列仅作 Agent 案由匹配的提示锚点（Agent 语义匹配为主），高频案由附别名。
+
+用法
+----
+python scripts/build_case_routing.py [--manifest templates/templates-manifest.json] \
+    [--output references/case-routing.md]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+# 已支持案由：起诉状树全名 → (case-type key, reference 文档)
+SUPPORTED_TREES = {
+    "05-离婚纠纷-民事起诉状": ("05-divorce", "case-types/05-divorce.md"),
+    "09-民间借贷纠纷-民事起诉状": ("09-private-lending", "case-types/09-private-lending.md"),
+}
+
+# 高频案由识别关键词（别名；其余案由以案由名本身为关键词）
+ALIASES = {
+    "离婚纠纷": "解除婚姻、感情破裂、抚养权、探望、离婚",
+    "民间借贷纠纷": "借款、欠款、借条、欠条、出借、利息",
+    "买卖合同纠纷": "货款、购销、交付货物、付款",
+    "金融借款合同纠纷": "贷款、银行借款、借款合同金融",
+    "劳动争议纠纷": "劳动仲裁、工资、加班费、经济补偿、违法解除",
+    "机动车交通事故责任纠纷": "交通事故、交强险、赔偿金、伤残",
+    "物业服务合同纠纷": "物业费、物业服务",
+    "信用卡纠纷": "信用卡透支、信用卡欠款",
+    "房屋租赁合同纠纷": "租金、租赁房屋、退租",
+    "房屋买卖合同纠纷": "购房、商品房、房屋买卖合同",
+    "建设工程施工合同纠纷": "工程款、施工、竣工、结算",
+    "融资租赁合同纠纷": "融资租赁、租金逾期",
+    "侵害商标权纠纷": "商标侵权、近似商标",
+    "侵害著作权及邻接权纠纷": "著作权侵权、盗版、信息网络传播",
+    "行政处罚": "行政处罚决定、罚款",
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--manifest", type=Path, default=Path(__file__).resolve().parent.parent / "templates" / "templates-manifest.json")
+    parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parent.parent / "references" / "case-routing.md")
+    args = parser.parse_args()
+
+    data = json.loads(args.manifest.read_text(encoding="utf-8"))
+    trees = data["trees"]
+
+    lines = [
+        "# 案由路由表（case-routing）",
+        "",
+        "> 由 `scripts/build_case_routing.py` 从 `templates/templates-manifest.json` 生成；勿手改，重新生成。",
+        "> Agent 案由匹配以**语义理解为主**，本表是锚点索引：识别关键词仅提示，未列别名时以案由名匹配。",
+        "> 文书类型对（起诉状/答辩状/第三人意见陈述书）成对的树，生成起诉状优先路由到起诉状树。",
+        "",
+        "| 编号 | 案由 | 册 | 文书 | 模板树 | 规则支持 | case-type key | reference | 识别关键词提示 |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    vol_order = {"上册": 1, "中册": 2, "下册": 3}
+    trees = sorted(trees, key=lambda e: (e["tree"][:2]))
+    for e in trees:
+        tree = e["tree"]
+        nn = tree[:2]
+        parts = tree.split("-")
+        if len(parts) >= 3:
+            cause, doc_type = parts[1], parts[-1]
+        else:  # 单文书目录（如 55-行政答辩状、60-强制执行申请书）
+            cause = doc_type = parts[1]
+        if tree in SUPPORTED_TREES:
+            key, ref = SUPPORTED_TREES[tree]
+            status = "✅ 完整（extract+fill+e2e）"
+        elif doc_type != cause and f"{nn}-{cause}-民事起诉状" in SUPPORTED_TREES:
+            key, ref = SUPPORTED_TREES[f"{nn}-{cause}-民事起诉状"]
+            status = "⬜ 同案由起诉状已支持，本文书待接入"
+        else:
+            key, ref = "—", "骨架：`dump_template_fields.py` 生成"
+            status = "⬜ 待接入"
+        kw = ALIASES.get(cause, cause)
+        lines.append(f"| {nn} | {cause} | {e['volume'][0]} | {doc_type} | `{tree}` | {status} | {key} | {ref} | {kw} |")
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[routing] {len(trees)} 行 → {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
