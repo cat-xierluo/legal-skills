@@ -32,6 +32,11 @@ python3 -B scripts/fill_template.py --case-type 09-private-lending \
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
   --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
+for ct in 06-sale 15-labor 21-traffic; do
+  python3 -B scripts/fill_template.py --case-type $ct \
+    --elements tests/fixtures/$ct-sample.json \
+    --output tests/output/$ct.docx 2>&1 | grep -E "rules"
+done
 
 echo "[e2e] ========== 断言（带标签形态，防标签吃字/勾选错位回归）=========="
 python3 - <<'PYEOF'
@@ -62,6 +67,20 @@ CHECKS = {
         "探望权行使主体：原告□ / 被告☑", "房屋明细：归属：原告☑",
         "汽车明细：归属：原告□ / 被告☑", "存款明细：归属：原告☑", "是☑ 否□", "了解☑    不了解□",
     ],
+    "tests/output/06-sale.docx": [
+        "给付价款（元）500000 元", "迟延给付价款的利息 12000 元、违约金 5000 元", "迟延履行☑",
+        "退货☑", "判令解除合同☑", "费用明细：律师费 20000 元", "出卖人（卖方）：某科技有限公司",
+        "买受人（买方）：王五", "名称：某置业有限公司",
+    ],
+    "tests/output/15-labor.docx": [
+        "拖欠 2026 年 5 月至 7 月工资 35000 元", "加班费 8000 元", "经济补偿金 21000 元",
+        "名称：某科技有限公司",
+    ],
+    "tests/output/21-traffic.docx": [
+        "2026年3月1日至2026年5月20日期间在某市第一医院住院（门诊）治疗，累计发生医疗费 45000 元",
+        "营养费 3000 元", "住院伙食补助费 4000 元", "交通费 1500 元", "误工费 20000 元",
+        "精神损害抚慰金 5000 元", "医疗费发票、医疗费清单、病历资料：有☑ 无□", "交通费凭证：有☑ 无□",
+    ],
     "tests/output/05-sample.docx": [
         "姓名：王五", "姓名：赵六", "孙律师", "出生日期：1988年2月15日", "出生日期：1990年4月28日",
         "民族：汉", "证件号码：110105880215002", "证件号码：110105900428003",
@@ -77,8 +96,9 @@ CHECKS = {
 
 failed = False
 for path, checks in CHECKS.items():
-    full = full_of(path)
-    miss = [k for k in checks if k not in full]
+    import re as _re
+    full = _re.sub(r"\s+", " ", full_of(path))
+    miss = [k for k in checks if _re.sub(r"\s+", " ", k) not in full]
     # 全局回归哨兵：双日 / 调解双勾 / 标签吃字
     sentinels = [("双日", "日日" in full), ("调解双勾", "了解☑    不了解☑" in full)]
     bad = [n for n, hit in sentinels if hit]
