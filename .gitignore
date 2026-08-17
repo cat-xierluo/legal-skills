@@ -124,6 +124,7 @@ skills/md2word/assets/templates/剑桥颐华律所模板.docx
 # Skill downloads/output directories
 skills/*/downloads/
 skills/*/output/*
+skills/*/tests/output/
 
 # Search history (user-specific usage data)
 **/search_history.json
