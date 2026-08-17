@@ -30,6 +30,8 @@ SUPPORTED_TREES = {
     "24-侵害发明专利权纠纷-民事起诉状": ("24-patent", "case-types/24-patent.md"),
     "28-技术合同纠纷-民事起诉状": ("28-tech", "case-types/28-tech.md"),
     "13-建设工程施工合同纠纷-民事起诉状": ("13-construction", "case-types/13-construction.md"),
+    "08-金融借款合同纠纷-民事起诉状": ("08-loan", "case-types/08-loan.md"),
+    "10-信用卡纠纷-民事起诉状": ("10-creditcard", "case-types/10-creditcard.md"),
 }
 
 import sys as _sys
