@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.5.0"
+version: "0.6.0"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -176,7 +176,7 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 八、限制与已知问题
 
-- 68 个主文书编号全部可渲染；勾选/金额精调覆盖 5 高频案由（05/09/06/15/21），其余 63 个编号的勾选项需人工补打或申请精调
+- 68 个主文书编号全部可渲染；勾选/金额精调覆盖 11 案由；其余 57 个编号可经 elements["勾选"]={锚:选项} 通用勾选机制勾选任意模板选项
 - 答辩状/第三人意见陈述书 45 棵树**不接入**（用户裁示：skill 定位聚焦起诉状生成）
 - 通用级当事人为顺序语义（自然人1/自然人2）——法人原告案由（物业/公益诉讼/执行类）中自然人1 可能是对方当事人，Agent 抽取按骨架指引
 - 答辩状/第三人意见陈述书 45 棵树未接入（形态差异大：角色为答辩人、无调解块）
@@ -187,5 +187,5 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 九、版本
 
-- 当前版本：`0.5.0`（2026-08-17）
+- 当前版本：`0.6.0`（2026-08-17）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）

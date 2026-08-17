@@ -24,6 +24,12 @@ SUPPORTED_TREES = {
     "06-买卖合同纠纷-民事起诉状": ("06-sale", "skeletons/06-买卖合同纠纷-民事起诉状.md（精调规则在 fill_template）"),
     "15-劳动争议纠纷-民事起诉状": ("15-labor", "skeletons/15-劳动争议纠纷-民事起诉状.md（精调规则在 fill_template）"),
     "21-机动车交通事故责任纠纷-民事起诉状": ("21-traffic", "skeletons/21-机动车交通事故责任纠纷-民事起诉状.md（精调规则在 fill_template）"),
+    "22-侵害著作权及邻接权纠纷-民事起诉状": ("22-copyright", "case-types/22-copyright.md"),
+    "23-侵害商标权纠纷-民事起诉状": ("23-trademark", "case-types/23-trademark.md"),
+    "27-侵害商业秘密纠纷-民事起诉状": ("27-tradesecret", "case-types/27-tradesecret.md"),
+    "24-侵害发明专利权纠纷-民事起诉状": ("24-patent", "case-types/24-patent.md"),
+    "28-技术合同纠纷-民事起诉状": ("28-tech", "case-types/28-tech.md"),
+    "13-建设工程施工合同纠纷-民事起诉状": ("13-construction", "case-types/13-construction.md"),
 }
 
 import sys as _sys

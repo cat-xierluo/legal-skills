@@ -48,12 +48,33 @@ def render_case(nn: str, elements: dict, out: Path) -> list[str]:
     from generic_rules import _find_party_anchor, _paras
     probe_paras = _paras(DocParts(load_text_parts(tree_src)))
     has_natural_party = len(_find_party_anchor(probe_paras)) >= 1
+    # 自动勾选样本：取首个"普通勾选段"（非 性别/调解/当事人窗口），注入通用勾选并断言
+    import re as _re
+    probe_opts = None
+    for i, pp in enumerate(probe_paras):
+        t = pp.text.strip()
+        if i < 12 or "□" not in t or len(t) > 90:
+            continue
+        if any(k in t for k in ("性别", "了解", "民族", "出生", "名称", "姓名")):
+            continue
+        if any(a <= i < a + 7 for a in _find_party_anchor(probe_paras)):
+            continue
+        m = _re.search(r"([^\s□：:，,、/（）()]{1,10})□", t)
+        if m:
+            anchor = t[:6]
+            probe_opts = {anchor: m.group(1)}
+            break
 
     tmp = Path(tempfile.mkdtemp(prefix="smoke-"))
     tw = tmp / "tree"
     shutil.copytree(tree_src, tw)
     parts = load_text_parts(tw)
-    apply_rules(DocParts(parts), builder(), elements)
+    el = dict(elements)
+    if probe_opts:
+        import copy
+        el = copy.deepcopy(elements)
+        el.setdefault("勾选", {}).update(probe_opts)
+    apply_rules(DocParts(parts), builder(), el)
     save_text_parts(tw, parts)
     out.parent.mkdir(parents=True, exist_ok=True)
     pack_tree(tw, out)
@@ -82,6 +103,10 @@ def render_case(nn: str, elements: dict, out: Path) -> list[str]:
         fails.append("具状日期缺失")
     if "日日" in full:
         fails.append("双日哨兵")
+    if probe_opts:
+        opt = list(probe_opts.values())[0]
+        if opt not in ("是", "否", "有", "无") and f"{opt}☑" not in full:
+            fails.append(f"通用勾选未生效:{opt}")
     return fails
 
 

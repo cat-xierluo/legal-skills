@@ -887,6 +887,102 @@ def build_rules_05_divorce(tree_dir=None) -> list[RuleFunc]:
 
 
 
+
+# ---------------------------------------------------------------------------
+# 精调原语（v0.6 提炼，多案由复用）
+# ---------------------------------------------------------------------------
+
+def make_amount_sentence(path: str, ctx: str, prefix: str | None = None) -> RuleFunc:
+    """金额句（两种形态）：
+    A. 纯句段（无□）："营养费    元" → "{prefix或ctx} {值} 元"
+    B. 勾选句段："是□ 支付赔偿金    元" → "是☑ 支付赔偿金 {值} 元"（保留勾选态）
+    """
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if not v:
+            return False
+        # 形态 A
+        for p in iter_paragraphs(doc):
+            if ctx in p.text and "□" not in p.text:
+                p.text = f"{prefix or ctx} {v} 元"
+                return True
+        # 形态 B：含□ 的"是/有 + 句子 + 元"段
+        for p in iter_paragraphs(doc):
+            t = p.text
+            if ctx in t and "□" in t and t.strip().endswith("元"):
+                lead = "是☑" if t.strip().startswith("是□") else ("有☑" if t.strip().startswith("有□") else None)
+                if lead:
+                    p.text = f"{lead} {prefix or ctx} {v} 元"
+                    return True
+        return False
+    rule.__name__ = f"amt[{path}]"
+    return rule
+
+
+def make_date_interest_sentence(path: str, ctx: str) -> RuleFunc:
+    """日期利息句（09/13 同款）："截至{date}止，{ctx短语}{利息} 元、违约金{违约金} 元"。
+    elements[path] = {截至日期, 利息, 违约金}；模板段含 ctx（如"迟延支付工程款的利息"）。"""
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if not isinstance(v, dict):
+            return False
+        d = fmt_date(v.get("截至日期", ""))
+        for p in iter_paragraphs(doc):
+            if ctx in p.text:
+                p.text = f"截至{d}止，{ctx} {v.get('利息','')} 元、违约金 {v.get('违约金','')} 元"
+                return True
+        return False
+    rule.__name__ = f"dint[{path}]"
+    return rule
+
+
+def make_yes_no_pair(path: str, yes_ctx: str, no_ctx: str, detail_label: str | None = None) -> RuleFunc:
+    """两段式有/无（或 是/否）：勾选段含 yes_ctx、独立"否□/无□"段含 no_ctx。
+    elements[path] = {勾选: bool, 明细|内容: str}；detail_label 为 yes 段内的明细标签。"""
+    _yc = re.sub(r"\s+", "", yes_ctx)
+    _nc = re.sub(r"\s+", "", no_ctx)
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if not isinstance(v, dict):
+            return False
+        hit = False
+        for p in iter_paragraphs(doc):
+            if _yc in re.sub(r"\s+", "", p.text) and "□" in p.text:
+                if v.get("勾选"):
+                    hit = replace_option_check(p, "有") or replace_option_check(p, "是") or hit
+                    val = v.get("内容") or v.get("明细")
+                    if val and detail_label and detail_label in p.text:
+                        hit = replace_in_paragraph(p, detail_label, f"{detail_label}{val}") or hit
+                break
+        if not v.get("勾选"):
+            for p in iter_paragraphs(doc):
+                t = p.text.strip()
+                if _nc in re.sub(r"\s+", "", t) and (t.endswith("否□") or t.endswith("无□")):
+                    hit = replace_option_check(p, "否") or replace_option_check(p, "无") or hit
+                    break
+        return hit
+    rule.__name__ = f"yn[{path}]"
+    return rule
+
+
+def make_fee_row(path: str, fee_name: str) -> RuleFunc:
+    """知产合理费用行：模板段 "{空白}元 {费名}凭证：有□" → 重写为 "{费名} {值} 元 {费名}凭证：有☑/有□"。
+    elements[path] = {金额: str, 凭证: bool}。"""
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if not isinstance(v, dict):
+            return False
+        ctx = f"{fee_name}凭证"
+        for p in iter_paragraphs(doc):
+            if ctx in p.text:
+                mark = "有☑" if v.get("凭证", True) else "无☑"
+                p.text = f"{fee_name} {v.get('金额','')} 元 {ctx}：{mark}"
+                return True
+        return False
+    rule.__name__ = f"fee[{fee_name}]"
+    return rule
+
+
 # ---------------------------------------------------------------------------
 # 06-买卖 / 15-劳动 / 21-交通 规则集（v0.5：通用层叠加 + 案由特定）
 # 模式：build_rules_NN = generic_rules.build_generic_rules(tree) + 案由特定规则
@@ -894,8 +990,13 @@ def build_rules_05_divorce(tree_dir=None) -> list[RuleFunc]:
 # ---------------------------------------------------------------------------
 
 def _generic_plus(tree_dir, specifics):
+    """叠加模式：**案由特定规则在前**，通用层在后。
+
+    顺序原因：特定规则含"找未勾选□整段重写"（如 24 惩罚性赔偿），
+    若通用勾选先跑会把 □ 变 ☑ 导致特定规则锚失效（24 实测踩坑）。
+    """
     import generic_rules
-    return generic_rules.build_generic_rules(tree_dir) + specifics
+    return specifics + generic_rules.build_generic_rules(tree_dir)
 
 
 
@@ -1148,6 +1249,112 @@ def build_rules_21_traffic(tree_dir=None) -> list[RuleFunc]:
     return _generic_plus(tree_dir, sp)
 
 
+
+# ---------------------------------------------------------------------------
+# 档1 知产/技术商事六案由（v0.6）：22 著作权 / 23 商标 / 27 商秘 / 24 专利 / 28 技术合同 / 13 建工
+# 大勾选群（赔偿计算/权属/侵权方式等）走通用勾选机制 elements["勾选"]；
+# 精调补充：金额句、合理费用行、日期利息句、两段式有/无、特征标签。
+# ---------------------------------------------------------------------------
+
+def _ip_specifics(economic_ctx: str, fees: tuple = ("律师费", "取证费", "差旅费")) -> list:
+    """知产案由共用诉讼请求规则；fees 按模板费用名（27 商秘为公证费）。"""
+    sp = [make_amount_sentence("诉讼请求.经济损失", economic_ctx),
+          make_text_replace_rule("诉讼请求.计算依据或参考因素", "计算依据或参考因素："),
+          make_text_replace_rule("诉讼请求.侵权链接", "侵权链接 / 标题：")]
+    for f in fees:
+        sp.append(make_fee_row(f"诉讼请求.{f}", f))
+    sp.append(make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0))
+    return sp
+
+
+def build_rules_22_copyright(tree_dir=None) -> list[RuleFunc]:
+    return _generic_plus(tree_dir, _ip_specifics("经济损失"))
+
+
+def build_rules_23_trademark(tree_dir=None) -> list[RuleFunc]:
+    return _generic_plus(tree_dir, _ip_specifics("经济损失"))
+
+
+def build_rules_27_tradesecret(tree_dir=None) -> list[RuleFunc]:
+    # 商秘模板费用名为 公证费（非取证费），凭证段为"公证费凭证：有□ 无□"两选形态
+    return _generic_plus(tree_dir, _ip_specifics("经济损失", fees=("律师费", "公证费", "差旅费")))
+
+
+def build_rules_24_patent(tree_dir=None) -> list[RuleFunc]:
+    # 专利模板费用行为"费名独立段 + 凭证：有□"形态，fee_row 不适用，凭证走通用勾选
+    sp = _ip_specifics("经济损失", fees=())
+    sp.append(make_yes_no_pair("诉讼请求.停止侵权", "有□ 内容：", "无□", "内容："))
+
+    # 惩罚性赔偿整段："包含□ 计算方法：基数 元 ×（1+ 倍数）" → 重写
+    def rule_24_punitive(doc, elements):
+        v = _get_path(elements, "诉讼请求.惩罚性赔偿")
+        if not isinstance(v, dict):
+            return False
+        for p in iter_paragraphs(doc):
+            if "包含□" in p.text and "基数" in p.text:
+                p.text = (f"是否包含惩罚性赔偿：{'包含☑' if v.get('勾选') else '不包含☑'} "
+                          f"计算方法：基数 {v.get('基数','')} 元 ×（1+ {v.get('倍数','')} 倍数）")
+                return True
+        return False
+    sp.append(rule_24_punitive)
+    return _generic_plus(tree_dir, sp)
+
+
+def build_rules_28_tech(tree_dir=None) -> list[RuleFunc]:
+    sp = [
+        make_pick_option_rule("诉讼请求.履行或解除", "继续履行□", ("继续履行", "判令解除合同")),
+        make_text_replace_rule("诉讼请求.计算方式", "计算方式："),
+        make_amount_sentence("诉讼请求.赔偿金", "支付赔偿金", prefix="支付赔偿金"),
+        make_text_replace_rule("诉讼请求.具体情形", "具体情形："),
+        make_text_replace_rule("诉讼请求.损失计算依据", "损失计算依据："),
+        make_yes_no_pair("诉讼请求.鉴定申请", "鉴定内容：", "否□", "鉴定内容："),
+        make_text_replace_rule("诉讼请求.鉴定机构名称", "鉴定机构名称："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ]
+
+    def rule_28_jiexuan(doc, elements):
+        v = _get_path(elements, "诉讼请求.解除确认日期")
+        if not v:
+            return False
+        for p in iter_paragraphs(doc):
+            if "确认合同已于" in p.text:
+                p.text = f"确认合同已于 {fmt_date(v)} 解除☑"
+                return True
+        return False
+    sp.append(rule_28_jiexuan)
+    return _generic_plus(tree_dir, sp)
+
+
+def build_rules_13_construction(tree_dir=None) -> list[RuleFunc]:
+    sp = [
+        make_date_interest_sentence("诉讼请求.工程款利息违约金", "迟延支付工程款的利息"),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□", occurrence=0),
+        make_yes_no_pair("诉讼请求.担保权利", "是□ 内容：", "否□", "内容："),
+        make_yes_no_pair("诉讼请求.连带责任", "责任主体姓名或者名称：", "否□", "责任主体姓名或者名称："),
+        make_amount_sentence("诉讼请求.停工损失", "金额", prefix="停工损失金额"),
+        make_amount_sentence("诉讼请求.赔偿金", "支付赔偿金", prefix="支付赔偿金"),
+        make_text_replace_rule("诉讼请求.计算方式", "计算方式："),
+        make_checkbox_rule("诉讼请求.超付利息至清偿", "实际清偿之日止：是□", occurrence=1),
+    ]
+
+    def rule_13_chaofu(doc, elements):
+        v = _get_path(elements, "诉讼请求.超付利息")
+        if not isinstance(v, dict):
+            return False
+        d = fmt_date(v.get("截至日期", ""))
+        for p in iter_paragraphs(doc):
+            if "返还超付工程款的利息" in p.text:
+                p.text = f"是☑ 截至{d}止，返还超付工程款的利息 {v.get('利息','')} 元"
+                return True
+        return False
+    sp.append(rule_13_chaofu)
+    return _generic_plus(tree_dir, sp)
+
+
+
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
@@ -1163,6 +1370,12 @@ RULE_BUILDERS = {
     "06-sale": build_rules_06_sale,
     "15-labor": build_rules_15_labor,
     "21-traffic": build_rules_21_traffic,
+    "22-copyright": build_rules_22_copyright,
+    "23-trademark": build_rules_23_trademark,
+    "27-tradesecret": build_rules_27_tradesecret,
+    "24-patent": build_rules_24_patent,
+    "28-tech": build_rules_28_tech,
+    "13-construction": build_rules_13_construction,
 }
 
 # ---------------------------------------------------------------------------

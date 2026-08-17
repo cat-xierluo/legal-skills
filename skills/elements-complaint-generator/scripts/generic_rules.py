@@ -290,6 +290,27 @@ def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
         if cnt == 1 and len(lab) >= 2:
             rules.append(make_text_replace_rule(f"标签.{lab}", f"{lab}："))
 
+    # ---------------- 通用勾选（elements["勾选"] = {锚文本: 选项 | [选项...]}）----------------
+    # 锚文本 = 含该勾选行的段落中任一稳定子串（骨架"段落原文"列取短语）；
+    # 选项 = 模板选项原文（骨架"选项/标签"列）。单选用字符串，多选用列表。
+    def rule_generic_checks(doc, elements):
+        checks = _get_path(elements, "勾选")
+        if not isinstance(checks, dict) or not checks:
+            return False
+        plist = _paras(doc)
+        hit_any = False
+        for anchor, option in checks.items():
+            opts = option if isinstance(option, list) else [option]
+            for q in plist:
+                if anchor in q.text:
+                    for opt in opts:
+                        if f"{opt}□" in q.text:
+                            hit_any = replace_option_check(q, opt) or hit_any
+                    break  # 每个锚只作用于首个命中段
+        return hit_any
+    rule_generic_checks.__name__ = "gen[勾选*]"
+    rules.append(rule_generic_checks)
+
     # ---------------- 调解意愿 / 具状 ----------------
     if has_mediation:
         from fill_template import build_common_mediation_rules
