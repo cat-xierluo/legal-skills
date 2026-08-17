@@ -899,6 +899,31 @@ RULE_BUILDERS = {
     "05-divorce": build_rules_05_divorce,
 }
 
+# ---------------------------------------------------------------------------
+# 通用级接入（v0.4）：精调案由之外的编号（"01"…"68"）自动路由到 generic_rules
+# ---------------------------------------------------------------------------
+
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+
+
+def _generic_ns() -> list[str]:
+    import generic_rules
+    return [n for n in generic_rules.generic_case_numbers(_TEMPLATES_DIR)
+            if n not in ("05", "09")]
+
+
+def resolve_case(case_type: str, templates_dir: Path | None = None) -> tuple[Path, "Callable[[], list[RuleFunc]]"]:
+    """case-type → (模板树路径, 规则构建器)。精调 key 优先，两位编号走通用级。"""
+    base = templates_dir or _TEMPLATES_DIR
+    if case_type in RULE_BUILDERS:
+        return base / CASE_TYPE_TO_TREE[case_type], RULE_BUILDERS[case_type]
+    import generic_rules
+    tree = generic_rules.primary_tree_for(case_type, base)
+    if tree is None:
+        raise SystemExit(f"[fill_template] 错误：编号 {case_type} 无主文书模板树")
+    tree_dir = base / tree
+    return tree_dir, (lambda: generic_rules.build_generic_rules(tree_dir))
+
 
 def apply_rules(doc: DocParts, rules: list[RuleFunc], elements: dict) -> dict:
     """应用规则。返回 {'applied': N, 'skipped': M, 'details': [...]}。"""
@@ -950,7 +975,9 @@ def all_text_of_parts(parts: dict[str, etree._ElementTree]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--case-type", required=True, choices=list(RULE_BUILDERS.keys()))
+    parser.add_argument("--case-type", required=True,
+                        choices=sorted(set(list(RULE_BUILDERS.keys()) + _generic_ns())),
+                        help="精调案由 key（09-private-lending/05-divorce）或两位编号（06/15/21…通用级）")
     parser.add_argument("--elements", required=True, type=Path, help="elements.json 路径")
     parser.add_argument("--output", required=True, type=Path, help="输出 docx 路径")
     parser.add_argument(
@@ -974,7 +1001,7 @@ def main() -> int:
     else:
         elements = elements_raw
 
-    tree_src = args.templates_dir / CASE_TYPE_TO_TREE[args.case_type]
+    tree_src, rules_builder = resolve_case(args.case_type, args.templates_dir)
     if not tree_src.is_dir():
         print(f"[fill_template] 错误：模板树不存在 {tree_src}", file=sys.stderr)
         return 2
@@ -987,7 +1014,7 @@ def main() -> int:
     # 加载 → 应用规则 → 写回 → 打包
     parts = load_text_parts(tree_work)
     doc = DocParts(parts)
-    rules = RULE_BUILDERS[args.case_type]()
+    rules = rules_builder()
     result = apply_rules(doc, rules, elements)
     save_text_parts(tree_work, parts)
     args.output.parent.mkdir(parents=True, exist_ok=True)
