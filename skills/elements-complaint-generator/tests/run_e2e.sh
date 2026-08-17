@@ -32,7 +32,7 @@ python3 -B scripts/fill_template.py --case-type 09-private-lending \
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
   --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
-for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction; do
+for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard; do
   python3 -B scripts/fill_template.py --case-type $ct \
     --elements tests/fixtures/$ct-sample.json \
     --output tests/output/$ct.docx 2>&1 | grep -E "rules"
@@ -101,6 +101,20 @@ CHECKS = {
         "截至2026年8月17日止，迟延支付工程款的利息 56000 元、违约金 20000 元",
         "实际清偿之日止：是☑", "是☑ 内容：工程款优先受偿权", "是☑ 责任主体姓名或者名称：某建设集团公司",
         "是☑ 停工损失金额 150000 元", "是☑ 支付赔偿金 60000 元",
+    ],
+    "tests/output/08-loan.docx": [
+        "截至2026年8月17日止，尚欠本金 2000000 元（人民币",
+        "截至2026年8月17日止，欠利息 180000 元、期内利息 120000 元、复利 30000 元、罚息（违约金） 50000 元",
+        "实际清偿之日止：是☑", "提前还款（加速到期）☑", "明细：律师费 50000 元",
+        "名称：某银行股份有限公司某支行", "股份有限公司☑",
+        "贷款人：某银行股份有限公司某支行", "借款人：王五", "等额本息☑",
+        "合同条款及内容：《借款合同》第 12 条约定由贷款人住所地法院管辖",
+    ],
+    "tests/output/10-creditcard.docx": [
+        "截至2026年8月17日止，尚欠本金 80000 元（人民币",
+        "截至2026年8月17日止，欠利息、罚息、复利、滞纳金、违约金、手续费等合计 15600 元",
+        "自 2026年8月18日 之后的利息、罚息", "费用明细：律师费 8000 元",
+        "透支金额：本金 80000 元", "违约责任：按最低还款额未还部分 5% 收取违约金",
     ],
     "tests/output/05-sample.docx": [
         "姓名：王五", "姓名：赵六", "孙律师", "出生日期：1988年2月15日", "出生日期：1990年4月28日",

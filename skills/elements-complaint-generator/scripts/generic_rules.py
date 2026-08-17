@@ -73,8 +73,47 @@ def _party_window(paras: list[Para], anchor: int) -> list[Para]:
     return paras[anchor: anchor + 7]
 
 
-def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
-    """对指定模板树生成通用级规则集。"""
+def _clone_party_block(parts, paras, anchor_idx: int) -> int:
+    """复制自然人锚所在块（<w:tr> 表格行优先，否则锚起 5 个 <w:p>），返回新增段落数。
+
+    直接修改 parts 内的 XML 树；调用方随后重新枚举段落。
+    """
+    import copy as _copy
+    target_p = paras[anchor_idx]._p
+    # 向上找 <w:tr>（表格行）
+    node = target_p
+    tr = None
+    while node is not None:
+        if node.tag.endswith("}tr"):
+            tr = node
+            break
+        node = node.getparent()
+    if tr is not None:
+        new_tr = _copy.deepcopy(tr)
+        tr.addnext(new_tr)
+        # 新行段落数 ≈ 原行（估算 +6 已含原块窗口 5+1 头）
+        return 6
+    # 非表格：复制锚起 5 个连续 <w:p>
+    cur = target_p
+    group = []
+    for _ in range(5):
+        group.append(cur)
+        nxt = cur.getnext()
+        while nxt is not None and not nxt.tag.endswith("}p"):
+            nxt = nxt.getnext()
+        if nxt is None:
+            break
+        cur = nxt
+    prev_tail = group[-1]
+    for g in group:
+        new_p = _copy.deepcopy(g)
+        prev_tail.addnext(new_p)
+        prev_tail = new_p
+    return len(group)
+
+
+def build_generic_rules(tree_dir: Path, elements: dict | None = None) -> list[RuleFunc]:
+    """对指定模板树生成通用级规则集。elements 用于多当事人侦测（自然人N/法人N N≥3 时复制块）。"""
     # 先加载一次做布局侦测
     probe_parts = load_text_parts(tree_dir)
     probe = DocParts(probe_parts)
@@ -82,6 +121,21 @@ def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
     texts = [p.text for p in paras]
 
     anchors = _find_party_anchor(paras)   # 已过滤为自然人行
+
+    # ---- 多自然人扩容：elements 声明 自然人3/4 而块不足时，复制末块（模板"可复制粘贴"条款）----
+    if elements:
+        want = 0
+        for n in (3, 4):
+            if _get_path(elements, f"当事人.自然人{n}.姓名"):
+                want = n
+        for _ in range(want - min(want, len(anchors))):
+            if not anchors:
+                break
+            added = _clone_party_block(probe_parts, paras, anchors[-1])
+            paras = _paras(probe)
+            anchors = _find_party_anchor(paras)
+            if added == 0:
+                break
     has_mediation = any("是否了解调解作为非诉" in t for t in texts)
     has_signature = any("具状人" in t for t in texts)
 
@@ -90,7 +144,7 @@ def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
     # ---------------- 当事人（窗口定位；自然人1/2 = 模板中第一/第二个自然人块）----------------
     # 角色语义：部分案由第一当事人为法人（物业/公益诉讼/执行类），
     # 其自然人块可能是被告/被申请人——通用级按"自然人N"顺序填，避免角色错位。
-    party_anchors = anchors[:2]
+    party_anchors = anchors[:4]
 
     def party_lookup(elements: dict, n: int, field: str):
         v = _get_path(elements, f"当事人.自然人{n}.{field}")
@@ -167,7 +221,7 @@ def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
             continue
         if any("统一社会信用代码：" in paras[j].text for j in range(i + 1, min(i + 12, len(paras)))):
             legal_anchors.append(i)
-    for n_legal, anchor in enumerate(legal_anchors[:2], start=1):
+    for n_legal, anchor in enumerate(legal_anchors[:4], start=1):
         n = n_legal
         for field, label in LEGAL_LABELS:
             def make_legal(label=label, field=field, anchor=anchor, n=n_legal):
