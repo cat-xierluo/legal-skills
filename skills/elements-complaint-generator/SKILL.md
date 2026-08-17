@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.1"
+version: "0.3.0"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -23,9 +23,9 @@ version: "0.2.1"
 - **Agent 负责"抽取"**：读常规起诉状 → 按案由 Schema 产出 elements.json（人可复核）。语义理解是 LLM 强项，regex 只做兜底（`extract_from_markdown.py`）。
 - **代码负责"填充"**：`fill_template.py` 在模板 XML 上做 `<w:t>` 跨 run 精确替换。格式保真是确定性任务，LLM 不碰。
 
-### 1.2 v0.2 范围
+### 1.2 v0.3 范围
 
-| 维度 | v0.2 范围 |
+| 维度 | v0.3 范围 |
 |---|---|
 | 模板 | **113 棵树全量入库**（法〔2025〕82 号完整版：上册42+中册28+下册43，编号01-68按上中下顺序） |
 | 抽取 | **Agent 会话内抽取为主**；`extract_from_markdown.py` regex 为兜底 |
@@ -143,9 +143,15 @@ python scripts/unpack_docx.py --input /tmp/ecg-docx --output templates --overwri
 python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉状 --output 检查.docx
 ```
 
-## 五、要素 Schema
+## 五、要素 Schema（三层 reference）
 
-详见 `references/case-types/09-private-lending.md`（完整字段定义 + 字段填充规则表）。
+| 层 | 文档 | 覆盖 |
+|---|---|---|
+| 通用层 | `references/common-elements.md` | 当事人/代理人/调解意愿/落款等跨案由要素（证据：113 棵树扫描，28 签名组） |
+| 路由层 | `references/case-routing.md`（T3 待建） | 68 案由 → 模板树 + key + reference 映射 |
+| 案由层 | `references/case-types/NN-*.md` | 案由特定要素；**骨架由 `dump_template_fields.py` 从模板树反推生成**，人/Agent 补要素路径与抽取提示 |
+
+已定稿：09-private-lending.md（民间借贷）；骨架：05-divorce-skeleton.md（离婚，T4 补全）。
 
 - 顶层：`当事人 / 诉讼请求 / 约定管辖和诉前保全 / 事实与理由 / 对纠纷解决方式的意愿 / 具状人_签字_盖章 / 具状日期`
 - 当事人含 `原告/被告/第三人/委托诉讼代理人`（当前实现第一个原告/被告/委托代理人）
@@ -162,9 +168,9 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 以 06 买卖合同纠纷为例：
 
 1. **模板入库**：§4.3 流程（ole2_to_docx → unpack_docx）
-2. **写 Schema 文档**：参考 09，写 `references/case-types/06-sale.md`（含 §一 Schema + §二 填充规则表；先对模板树做 occurrence 映射勘察）
+2. **写 Schema 文档**：`python scripts/dump_template_fields.py --tree templates/06-买卖合同纠纷-民事起诉状 --output references/case-types/06-sale-skeleton.md` 生成骨架 → 补要素路径/occurrence 映射/抽取提示（通用块直接引用 common-elements.md，不重复定义）
 3. **写规则集**：`fill_template.py` 加 `build_rules_06_sale()` + `CASE_TYPE_TO_TREE` 映射
-4. **抽取**：Agent 直接按 03 Schema 抽；如需 regex 兜底再在 `extract_from_markdown.py` 的 `CASE_TYPE_TO_EXTRACTOR` 加
+4. **抽取**：Agent 直接按 06 Schema 抽；如需 regex 兜底再在 `extract_from_markdown.py` 的 `CASE_TYPE_TO_EXTRACTOR` 加
 5. **测试**：`tests/fixtures/` 加样例；跑 `tests/run_e2e.sh` 回归
 
 ## 八、限制与已知问题
@@ -177,5 +183,5 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 九、版本
 
-- 当前版本：`0.2.1`（2026-08-17）
+- 当前版本：`0.3.0`（2026-08-17）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）
