@@ -597,7 +597,7 @@ def build_common_mediation_rules() -> list[RuleFunc]:
 # 09-民间借贷 规则集（与 references/case-types/09-private-lending.md §二 对应）
 # ---------------------------------------------------------------------------
 
-def build_rules_02_private_lending() -> list[RuleFunc]:
+def build_rules_02_private_lending(tree_dir=None) -> list[RuleFunc]:
     rules: list[RuleFunc] = []
 
     # --- 通用层：当事人块（09 布局：代理人表独立，被告 姓名=1 单位/职务/电话=1）---
@@ -791,7 +791,7 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
 # 05-离婚 规则集（与 references/case-types/05-divorce.md 对应；模板树 occurrence 勘察 2026-08-17）
 # ---------------------------------------------------------------------------
 
-def build_rules_05_divorce() -> list[RuleFunc]:
+def build_rules_05_divorce(tree_dir=None) -> list[RuleFunc]:
     rules: list[RuleFunc] = []
 
     # --- 通用层：当事人块（05 布局：代理人插在原被告之间 → 被告 姓名=2 单位/职务/电话=2）---
@@ -885,6 +885,269 @@ def build_rules_05_divorce() -> list[RuleFunc]:
     return rules
 
 
+
+
+# ---------------------------------------------------------------------------
+# 06-买卖 / 15-劳动 / 21-交通 规则集（v0.5：通用层叠加 + 案由特定）
+# 模式：build_rules_NN = generic_rules.build_generic_rules(tree) + 案由特定规则
+# 当事人键沿用通用语义（自然人N/法人N，顺序=模板块顺序）
+# ---------------------------------------------------------------------------
+
+def _generic_plus(tree_dir, specifics):
+    import generic_rules
+    return generic_rules.build_generic_rules(tree_dir) + specifics
+
+
+
+
+def _pick_in_window(rules: list, path: str, anchor_ctx: str, options: tuple):
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if v not in options:
+            return False
+        plist = list(iter_paragraphs(doc))
+        for i, p in enumerate(plist):
+            if anchor_ctx in p.text:
+                for q in plist[i: i + 4]:
+                    if f"{v}□" in q.text:
+                        return replace_option_check(q, v)
+                return False
+        return False
+    rule.__name__ = f"pickwin[{path}]"
+    rules.append(rule)
+
+
+def build_rules_06_sale(tree_dir=None) -> list[RuleFunc]:
+    sp: list[RuleFunc] = []
+    sq = "诉讼请求"
+    # 1. 给付价款 / 2. 利息违约金（整段重写式）
+    def rule_jiakuan(doc, elements):
+        v = _get_path(elements, "诉讼请求.给付价款")
+        if not v:
+            return False
+        for p in iter_paragraphs(doc):
+            if "给付价款" in p.text and "元" not in p.text:
+                p.text = f"1. 给付价款（元）{v} 元"
+                return True
+        return False
+    sp.append(rule_jiakuan)
+
+    def rule_lixijin(doc, elements):
+        v = _get_path(elements, "诉讼请求.迟延利息")
+        if not v:
+            return False
+        d = fmt_date(v.get("截至日期", ""))
+        lixi, weiyue = v.get("利息", ""), v.get("违约金", "")
+        for p in iter_paragraphs(doc):
+            if "迟延给付价款的利息" in p.text:
+                p.text = f"截至{d}止，迟延给付价款的利息 {lixi} 元、违约金 {weiyue} 元"
+                return True
+        return False
+    sp.append(rule_lixijin)
+
+    sp += [
+        make_text_replace_rule("诉讼请求.计算方式", "计算方式："),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□"),
+        # 3. 违约类型 / 损失
+        make_pick_option_rule("诉讼请求.违约类型", "违约类型：", ("迟延履行", "不履行", "其他")),
+        make_text_replace_rule("诉讼请求.具体情形", "具体情形："),
+        make_text_replace_rule("诉讼请求.损失计算依据", "损失计算依据："),
+        # 5. 继续履行 / 解除
+        _pick_in_window(sp, "诉讼请求.履行或解除", "继续履行□", ("继续履行", "判令解除合同", "确认买卖合同已于")),
+        # 8. 诉讼费用
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+    ]
+
+    # 4. 瑕疵责任（多选：修理/重作/更换/退货/减少价款或者报酬）
+    def rule_xiaci(doc, elements):
+        vs = _get_path(elements, "诉讼请求.瑕疵责任方式")
+        if not isinstance(vs, list) or not vs:
+            return False
+        ok = False
+        for p in iter_paragraphs(doc):
+            if "修理□" in p.text:
+                for opt in vs:
+                    if f"{opt}□" in p.text:
+                        ok = replace_option_check(p, opt) or ok
+                return ok
+        return ok
+    sp.append(rule_xiaci)
+
+    # 6/7. 担保权利 / 实现债权费用（是□ 内容：/否□ 两段式）
+    def yes_no_pair(path, yes_ctx, no_ctx):
+        def rule(doc, elements):
+            v = _get_path(elements, path)
+            if not isinstance(v, dict):
+                return False
+            hit = False
+            for p in iter_paragraphs(doc):
+                if yes_ctx in p.text and "是□" in p.text:
+                    if v.get("勾选"):
+                        replace_option_check(p, "是")
+                        if v.get("内容") or v.get("明细"):
+                            val = v.get("内容") or v.get("明细")
+                            lab = "内容：" if "内容：" in yes_ctx else "费用明细："
+                            if lab in p.text:
+                                replace_in_paragraph(p, lab, f"{lab}{val}")
+                        hit = True
+                    break
+            if not v.get("勾选"):
+                for p in iter_paragraphs(doc):
+                    if no_ctx in p.text and p.text.strip().endswith("否□"):
+                        hit = replace_option_check(p, "否") or hit
+                        break
+            return hit
+        rule.__name__ = f"yesno[{path}]"
+        return rule
+    sp.append(yes_no_pair("诉讼请求.担保权利", "内容：", "无□"))
+    sp.append(yes_no_pair("诉讼请求.实现债权费用", "费用明细：", "无□"))
+
+    sp += [
+        # 约定管辖（有/无）
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        # 诉前保全
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+        # 事实与理由标签
+        make_text_replace_rule("事实与理由.出卖人", "出卖人（卖方）："),
+        make_text_replace_rule("事实与理由.买受人", "买受人（买方）："),
+        make_text_replace_rule("事实与理由.单价", "单价"),
+        make_text_replace_rule("事实与理由.分期方式", "分期方式："),
+        make_pick_option_rule("事实与理由.支付方式", "以现金□", ("现金", "转账", "票据", "其他")),
+        make_pick_option_rule("事实与理由.支付节奏", "一次性□ 分期□", ("一次性", "分期")),
+        make_pick_option_rule("事实与理由.违约金勾选", "违约金□", ("违约金",)),
+        make_pick_option_rule("事实与理由.定金勾选", "定金□", ("定金",)),
+    ]
+    return _generic_plus(tree_dir, sp)
+
+
+def build_rules_15_labor(tree_dir=None) -> list[RuleFunc]:
+    """劳动争议：7×「是□ 否□ 明细：」+ 诉讼费（occurrence=7 纯是/否）。"""
+    sp: list[RuleFunc] = []
+    # item → (标题锚关键词, elements 键)；用标题锚定位对应"是□ 否□ 明细："段，
+    # 避免 occurrence 与段落非 1:1 时错位
+    labor_items = [
+        ("工资支付", "工资支付"), ("双倍工资", "书面 劳动合同双倍工资"),
+        ("加班费", "加班费"), ("未休年休假工资", "年休假 工资"),
+        ("社保经济损失", "社会保险费"), ("解除经济补偿", "经济补偿"),
+        ("违法解除赔偿金", "赔偿金"),
+    ]
+    for key, title_kw in labor_items:
+        def make_labor_item(key=key, title_kw=title_kw):
+            def rule(doc, elements):
+                v = _get_path(elements, f"诉讼请求.{key}")
+                if not isinstance(v, dict):
+                    return False
+                plist = list(iter_paragraphs(doc))
+                for i, p in enumerate(plist):
+                    if "是否主张" in p.text and title_kw in p.text.replace(" ", ""):
+                        for q in plist[i + 1: i + 3]:
+                            if "是□" in q.text and "否□" in q.text and "明细：" in q.text:
+                                hit = replace_option_check(q, "是" if v.get("勾选") else "否")
+                                if v.get("明细"):
+                                    hit = replace_in_paragraph(q, "明细：", f"明细：{v['明细']}") or hit
+                                return hit
+                        return False
+                return False
+            rule.__name__ = f"labor[{key}]"
+            return rule
+        sp.append(make_labor_item())
+    # 8 诉讼费用：纯"是□ 否□"（不含明细）第一处
+    def rule_feiyong(doc, elements):
+        v = _get_path(elements, "诉讼请求.是否主张诉讼费用")
+        if not isinstance(v, bool):
+            return False
+        for p in iter_paragraphs(doc):
+            t = p.text.strip()
+            if t.startswith("是□ 否□"):
+                return replace_option_check(p, "是" if v else "否")
+        return False
+    sp.append(rule_feiyong)
+    return _generic_plus(tree_dir, sp)
+
+
+def build_rules_21_traffic(tree_dir=None) -> list[RuleFunc]:
+    """交通事故：金额整段重写 + 证据有无勾选 + 医疗/误工日期段。"""
+    sp: list[RuleFunc] = []
+
+    def amount_rewrite(key, ctx):
+        def rule(doc, elements):
+            v = _get_path(elements, key)
+            if not v:
+                return False
+            for p in iter_paragraphs(doc):
+                if ctx in p.text and "□" not in p.text:
+                    p.text = f"{ctx} {v} 元"
+                    return True
+            return False
+        rule.__name__ = f"traffic[{key}]"
+        return rule
+
+    for key, ctx in [("营养费", "营养费"), ("住院伙食补助费", "住院伙食补助费"),
+                     ("交通费", "交通费"), ("残疾赔偿金", "残疾赔偿金"),
+                     ("精神损害抚慰金", "精神损害抚慰金")]:
+        sp.append(amount_rewrite(f"诉讼请求.{key}", ctx))
+
+    def rule_yiliao(doc, elements):
+        v = _get_path(elements, "诉讼请求.医疗费")
+        if not isinstance(v, dict):
+            return False
+        d1, d2 = fmt_date(v.get("起", "")), fmt_date(v.get("止", ""))
+        for p in iter_paragraphs(doc):
+            if "医院住院" in p.text or ("医疗费" in p.text and "期间" in p.text):
+                p.text = f"{d1}至{d2}期间在{v.get('医院','')}医院住院（门诊）治疗，累计发生医疗费 {v.get('金额','')} 元"
+                return True
+        return False
+    sp.append(rule_yiliao)
+
+    def rule_wugong(doc, elements):
+        v = _get_path(elements, "诉讼请求.误工费")
+        if not isinstance(v, dict):
+            return False
+        d1, d2 = fmt_date(v.get("起", "")), fmt_date(v.get("止", ""))
+        for p in iter_paragraphs(doc):
+            if "误工费" in p.text and "□" not in p.text:
+                p.text = f"{d1}至{d2}误工费 {v.get('金额','')} 元"
+                return True
+        return False
+    sp.append(rule_wugong)
+
+    # 证据有无（票据类）：bool true→勾"有"
+    for key, ctx in [("医疗票据", "医疗费发票"), ("交通凭证", "交通费凭证")]:
+        def make_evid(key=key, ctx=ctx):
+            def rule(doc, elements):
+                v = _get_path(elements, f"诉讼请求.{key}")
+                if not isinstance(v, bool):
+                    return False
+                for p in iter_paragraphs(doc):
+                    if ctx in p.text and "有□" in p.text:
+                        return replace_option_check(p, "有" if v else "无")
+                return False
+            rule.__name__ = f"traffic[{key}]"
+            return rule
+        sp.append(make_evid())
+
+    def rule_feiyong(doc, elements):
+        v = _get_path(elements, "诉讼请求.是否主张诉讼费用")
+        if not isinstance(v, bool):
+            return False
+        cnt = 0
+        hit = False
+        for p in iter_paragraphs(doc):
+            t = p.text.strip()
+            if t.startswith("是□ 否□"):
+                cnt += 1
+                if cnt == 2:  # 第 12 项 其他费用（诉讼费鉴定费）后那处
+                    hit = replace_option_check(p, "是" if v else "否")
+                    break
+        return hit
+    sp.append(rule_feiyong)
+    return _generic_plus(tree_dir, sp)
+
+
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
@@ -897,6 +1160,9 @@ CASE_TYPE_TO_TREE = {
 RULE_BUILDERS = {
     "09-private-lending": build_rules_02_private_lending,
     "05-divorce": build_rules_05_divorce,
+    "06-sale": build_rules_06_sale,
+    "15-labor": build_rules_15_labor,
+    "21-traffic": build_rules_21_traffic,
 }
 
 # ---------------------------------------------------------------------------
@@ -912,11 +1178,23 @@ def _generic_ns() -> list[str]:
             if n not in ("05", "09")]
 
 
+def _lookup_tree_by_slug(case_type: str) -> str:
+    """精调 slug（06-sale 等）→ 编号前缀的首个主文书树。"""
+    nn = case_type.split("-")[0]
+    cands = sorted(d.name for d in _TEMPLATES_DIR.iterdir() if d.is_dir() and d.name.startswith(nn + "-"))
+    for marker in ("民事起诉状", "行政起诉状"):
+        for c in cands:
+            if c.endswith(marker):
+                return c
+    return cands[0]
+
+
 def resolve_case(case_type: str, templates_dir: Path | None = None) -> tuple[Path, "Callable[[], list[RuleFunc]]"]:
     """case-type → (模板树路径, 规则构建器)。精调 key 优先，两位编号走通用级。"""
     base = templates_dir or _TEMPLATES_DIR
     if case_type in RULE_BUILDERS:
-        return base / CASE_TYPE_TO_TREE[case_type], RULE_BUILDERS[case_type]
+        tree = CASE_TYPE_TO_TREE.get(case_type) or _lookup_tree_by_slug(case_type)
+        return base / tree, (lambda: RULE_BUILDERS[case_type](base / tree))
     import generic_rules
     tree = generic_rules.primary_tree_for(case_type, base)
     if tree is None:

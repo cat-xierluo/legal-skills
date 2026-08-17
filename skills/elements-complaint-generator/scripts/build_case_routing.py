@@ -21,6 +21,9 @@ from pathlib import Path
 SUPPORTED_TREES = {
     "05-离婚纠纷-民事起诉状": ("05-divorce", "case-types/05-divorce.md"),
     "09-民间借贷纠纷-民事起诉状": ("09-private-lending", "case-types/09-private-lending.md"),
+    "06-买卖合同纠纷-民事起诉状": ("06-sale", "skeletons/06-买卖合同纠纷-民事起诉状.md（精调规则在 fill_template）"),
+    "15-劳动争议纠纷-民事起诉状": ("15-labor", "skeletons/15-劳动争议纠纷-民事起诉状.md（精调规则在 fill_template）"),
+    "21-机动车交通事故责任纠纷-民事起诉状": ("21-traffic", "skeletons/21-机动车交通事故责任纠纷-民事起诉状.md（精调规则在 fill_template）"),
 }
 
 import sys as _sys

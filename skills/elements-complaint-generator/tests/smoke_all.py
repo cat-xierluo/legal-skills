@@ -42,6 +42,8 @@ def render_case(nn: str, elements: dict, out: Path) -> list[str]:
     has_mediation = "是否了解调解作为非诉" in probe_text
     has_signature = "具状人（签字、盖章）" in probe_text
     has_sex_row = "性别：男" in probe_text
+    has_legal_row = "统一社会信用代码：" in probe_text
+    has_ltd_option = "有限责任公司□" in probe_text
     # 是否存在自然人当事人块（法人-only 文书如 55 行政答辩状无）
     from generic_rules import _find_party_anchor, _paras
     probe_paras = _paras(DocParts(load_text_parts(tree_src)))
@@ -67,6 +69,10 @@ def render_case(nn: str, elements: dict, out: Path) -> list[str]:
         fails.append("姓名：王五缺失")
     if has_sex_row and "性别：男☑" not in full:
         fails.append("性别勾选缺失")
+    if has_legal_row and "名称：某科技有限公司" not in full:
+        fails.append("法人名称缺失")
+    if has_ltd_option and "有限责任公司☑" not in full:
+        fails.append("法人类型勾选缺失")
     if has_mediation:
         if "了解☑    不了解□" not in full:
             fails.append("调解勾选缺失")

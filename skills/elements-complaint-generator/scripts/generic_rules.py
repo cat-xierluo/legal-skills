@@ -43,6 +43,14 @@ PERSON_LABELS = [
     "住所地（户籍所在地）：", "经常居住地：", "证件类型：", "证件号码：",
 ]
 
+# 法人块标签（窗口内定向追加）
+LEGAL_LABELS = [
+    ("名称", "名称："),
+    ("住所地", "住所地（主要办事机构所在地）："),
+    ("注册地", "注册地 / 登记地："),
+    ("统一社会信用代码", "统一社会信用代码："),
+]
+
 
 def _paras(doc: DocParts) -> list[Para]:
     return list(iter_paragraphs(doc))
@@ -150,6 +158,80 @@ def build_generic_rules(tree_dir: Path) -> list[RuleFunc]:
                 rule.__name__ = f"gen[自然人{n}.{short}]"
                 return rule
             rules.append(make_label())
+
+    # ---------------- 法人当事人块（锚=裸"名称："，窗口含统一社会信用代码验证）----------------
+    legal_anchors = []
+    for i, p in enumerate(paras):
+        t = p.text.strip()
+        if not t.endswith("名称："):
+            continue
+        if any("统一社会信用代码：" in paras[j].text for j in range(i + 1, min(i + 12, len(paras)))):
+            legal_anchors.append(i)
+    for n_legal, anchor in enumerate(legal_anchors[:2], start=1):
+        n = n_legal
+        for field, label in LEGAL_LABELS:
+            def make_legal(label=label, field=field, anchor=anchor, n=n_legal):
+                def rule(doc, elements):
+                    v = _get_path(elements, f"当事人.法人{n}.{field}")
+                    if not v:
+                        return False
+                    plist = _paras(doc)
+                    for q in plist[anchor: anchor + 12]:
+                        if label in q.text:
+                            return replace_in_paragraph(q, label, f"{label}{v}")
+                    return False
+                rule.__name__ = f"gen[法人{n}.{field}]"
+                return rule
+            rules.append(make_legal())
+
+        # 法定代表人（含同段 职务/联系电话）
+        for field, label in (("法定代表人", "法定代表人 / 负责人："), ("职务", "职务："), ("联系电话", "联系电话：")):
+            def make_repr(field=field, label=label, anchor=anchor, n=n_legal):
+                def rule(doc, elements):
+                    v = _get_path(elements, f"当事人.法人{n}.{field}")
+                    if not v:
+                        return False
+                    plist = _paras(doc)
+                    for q in plist[anchor: anchor + 12]:
+                        if label in q.text:
+                            return replace_in_paragraph(q, label, f"{label}{v}")
+                    return False
+                rule.__name__ = f"gen[法人{n}.{field}]"
+                return rule
+            rules.append(make_repr())
+
+        # 类型勾选（选项可能跨多段，窗口内扫描）
+        def make_type_check(anchor=anchor, n=n_legal):
+            def rule(doc, elements):
+                v = _get_path(elements, f"当事人.法人{n}.类型")
+                if not v:
+                    return False
+                plist = _paras(doc)
+                for q in plist[anchor: anchor + 16]:
+                    if f"{v}□" in q.text:
+                        return replace_option_check(q, v)
+                return False
+            rule.__name__ = f"gen[法人{n}.类型]"
+            return rule
+        rules.append(make_type_check())
+
+        # 所有制性质勾选（国有[控股/参股]/民营/其他）
+        for field in ("所有制性质", "所有制_控股", "所有制_参股"):
+            def make_ownership(field=field, anchor=anchor, n=n_legal):
+                option_map = {"所有制_控股": "控股", "所有制_参股": "参股"}
+                def rule(doc, elements):
+                    v = _get_path(elements, f"当事人.法人{n}.{field}")
+                    if not v:
+                        return False
+                    option = option_map.get(field, str(v))
+                    plist = _paras(doc)
+                    for q in plist[anchor: anchor + 16]:
+                        if "所有制" in q.text and f"{option}□" in q.text:
+                            return replace_option_check(q, option)
+                    return False
+                rule.__name__ = f"gen[法人{n}.{field}]"
+                return rule
+            rules.append(make_ownership())
 
     # ---------------- 委托诉讼代理人（"有□"段后姓名 + 独立"单位："行）----------------
     def rule_agent(doc, elements):
