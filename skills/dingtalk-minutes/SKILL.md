@@ -3,7 +3,7 @@ name: dingtalk-minutes
 description: 钉钉 AI 听记（妙记）读取封装。当用户要查询/读取 AI 听记的列表、摘要、语音转写原文（逐字稿）、关键词、待办或音频地址时使用。基于 dws CLI（钉钉官方 Workspace CLI）。写文档走 dingtalk-doc，建待办走 dingtalk-todo，日程走 dingtalk-calendar。
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.0.1"
+version: "1.1.0"
 homepage: https://github.com/cat-xierluo/legal-skills
 metadata:
   cli_version: ">=1.0.15"
@@ -133,7 +133,10 @@ python scripts/sync.py --full           # 全量重扫（已存在 uuid 跳过�
 python scripts/sync.py --list-new       # 只列出本次新增标题，不拉逐字稿
 python scripts/sync.py --dry-run        # 预览将执行的 dws 命令，不写文件
 python scripts/sync.py --archive-dir /path/to/archive   # 指定存档目录
+python scripts/sync.py --no-mirror      # 本次只存档，不自动镜像到外部文件夹
 ```
+
+> **自动镜像（默认开启）**：本次有新增存档且 `config/mirror-target.local.json` 存在时，同步完成后自动调用 `mirror_output.py` 增量镜像（sha256 校验，顺带补齐之前未镜像成功的文件）；未配置镜像目标时提示跳过，不影响存档。镜像失败也只报告——archive 是权威源。
 
 ### 增量原理
 
@@ -151,6 +154,8 @@ python scripts/sync.py --archive-dir /path/to/archive   # 指定存档目录
 ## 镜像到外部文件夹（mirror）
 
 把 archive 中的听记成品**单向复制**到外部指定文件夹（如 Obsidian / Clawd 知识库），供人工查阅。archive 是权威源，镜像**不回写 archive**、不改动同步状态。
+
+**`sync.py` 有新增时默认自动镜像**（v1.1.0 起）——同步完成即自动执行下述镜像流程，无需手动跑本节命令；本节命令用于手动补漏、改目标、按日期/单条筛选等场景。
 
 ### 用法
 

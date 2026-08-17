@@ -21,6 +21,11 @@
     python sync.py --full          # 忽略 last_sync，全量重扫（仍跳过已存在的 uuid）
     python sync.py --dry-run       # 预览将同步哪些，不写文件
     python sync.py --list-new      # 只输出本次新增的标题清单，不拉逐字稿
+    python sync.py --no-mirror     # 本次只存档，不自动镜像到外部文件夹
+
+自动镜像: 本次有新增存档且 config/mirror-target.local.json 存在时，
+同步完成后自动调用同目录 mirror_output.py（增量 sha256，顺带补齐之前
+未镜像成功的文件）；未配置镜像目标时跳过并提示，不影响存档结果。
 
 依赖: dws CLI (PATH 中可执行)，Python 标准库。
 """
@@ -108,6 +113,26 @@ def save_index(archive_dir: Path, index: Dict[str, Any]) -> None:
     (archive_dir / "index.json").write_text(
         json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+
+def auto_mirror(archive_dir: Path) -> None:
+    """同步后自动镜像到外部文件夹（调用同目录 mirror_output.py，增量 sha256）。
+
+    - 镜像是副本操作，失败/未配置只提示，不影响已完成的存档（archive 是权威源）。
+    - mirror_output.py 退出码 2 = 未配置镜像目标 → 静默降级为提示跳过。
+    """
+    mirror_script = _scripts_dir / "mirror_output.py"
+    if not mirror_script.exists():
+        print("⚠️ 未找到 mirror_output.py，跳过自动镜像。", file=sys.stderr)
+        return
+    print("\n🪞 自动镜像到外部文件夹 …", flush=True)
+    proc = subprocess.run(
+        [sys.executable, str(mirror_script), "--archive-dir", str(archive_dir)]
+    )
+    if proc.returncode == 2:
+        print("ℹ️ 未配置镜像目标（config/mirror-target.local.json 缺失），跳过自动镜像；存档不受影响。")
+    elif proc.returncode != 0:
+        print(f"⚠️ 自动镜像失败（退出码 {proc.returncode}），存档已完成；可稍后单独运行 mirror_output.py 重试。", file=sys.stderr)
 
 
 def list_minutes_since(start_iso: Optional[str], dry_run: bool) -> List[Dict[str, Any]]:
@@ -221,6 +246,7 @@ def main() -> int:
     ap.add_argument("--list-new", action="store_true", help="只列新增标题，不拉逐字稿")
     ap.add_argument("--dry-run", action="store_true", help="预览，不写文件")
     ap.add_argument("--with-audio", action="store_true", help="同时下载原始音频 mp3 到 archive（默认不下载，单条约 150MB）")
+    ap.add_argument("--no-mirror", action="store_true", help="本次只存档，不自动镜像到外部文件夹（默认有新增时自动镜像）")
     args = ap.parse_args()
 
     skill_root = _scripts_dir.parent
@@ -388,6 +414,10 @@ def main() -> int:
         save_index(archive_dir, index)
         print(f"\n📌 同步完成。last_sync 更新为: {index['last_sync']}")
         print(f"📁 已存档 {len(synced)} 条听记于: {archive_dir}")
+        if not args.no_mirror:
+            auto_mirror(archive_dir)
+        else:
+            print("ℹ️ --no-mirror：本次跳过自动镜像。")
 
     return 0
 
