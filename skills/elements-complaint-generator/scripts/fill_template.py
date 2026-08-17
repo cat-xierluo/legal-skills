@@ -233,7 +233,8 @@ def fill_blanks(p: Para, prefix: str, suffix: str, value: str) -> bool:
     if not re.fullmatch(r"[\s一-鿿]*", between):
         return False
     old_segment = p.text[idx_p:idx_s + len(suffix)]
-    new_segment = prefix + value + suffix
+    # 防双 suffix：值本身以 suffix 结尾（如 "…8月17日"）时不再追加
+    new_segment = prefix + value + ("" if value.endswith(suffix) else suffix)
     return replace_in_paragraph(p, old_segment, new_segment)
 
 
@@ -330,17 +331,62 @@ def make_text_fill_rule(path: str, prefix: str, suffix: str,
 
 
 def make_gender_rule(path: str, occurrence: int = 0) -> RuleFunc:
-    """性别勾选规则：按值勾 男□/女□（避免只勾第一个 □ 导致女性勾到男）。"""
+    """性别勾选规则：按值勾 男□/女□（避免只勾第一个 □ 导致女性勾到男）。
+
+    匹配条件用稳定的 "性别："+"男"+"女"（不含 □）——若以 未勾选□ 为条件，
+    前一个当事人勾完后段落会退出匹配集，导致后续 occurrence 索引漂移。
+    """
     def rule(doc: DocParts, elements: dict) -> bool:
         v = _get_path(elements, path)
         if v not in ("男", "女"):
             return False
         matches = [p for p in iter_paragraphs(doc)
-                   if "性别：" in p.text and "男□" in p.text and "女□" in p.text]
+                   if "性别：" in p.text and "男" in p.text and "女" in p.text]
         if occurrence >= len(matches):
             return False
         return replace_option_check(matches[occurrence], v)
     rule.__name__ = f"gender[{path}]"
+    return rule
+
+
+def make_pick_option_rule(path: str, context: str, options: tuple[str, ...],
+                           occurrence: int = 0) -> RuleFunc:
+    """枚举勾选规则：elements[path] 的值即选项名（如 原告/被告/其他），
+    在含 context 的第 occurrence 个段落里勾选该独立选项。"""
+    def rule(doc: DocParts, elements: dict) -> bool:
+        v = _get_path(elements, path)
+        if v not in options:
+            return False
+        matches = [p for p in iter_paragraphs(doc) if context in p.text]
+        if occurrence >= len(matches):
+            return False
+        return replace_option_check(matches[occurrence], str(v))
+    rule.__name__ = f"pick[{path}]"
+    return rule
+
+
+def make_fill_after_rule(path: str, title_text: str) -> RuleFunc:
+    """在含 title_text 的段落之后，把第一个空段落的文本设为 elements[path]。
+
+    用于"标题 + 空填写区"结构（如 事实与理由 各小节、其他请求、证据清单）。
+    若标题后紧跟的是非空段落则放弃（防误写正文）。
+    """
+    def rule(doc: DocParts, elements: dict) -> bool:
+        v = _get_path(elements, path)
+        if not v:
+            return False
+        paras = list(iter_paragraphs(doc))
+        for i, p in enumerate(paras):
+            if title_text in p.text:
+                for q in paras[i + 1: i + 4]:
+                    if q.text.strip() == "":
+                        q.text = str(v)
+                        return True
+                    if q.text.strip():
+                        break
+                return False
+        return False
+    rule.__name__ = f"fill_after[{path}]"
     return rule
 
 
@@ -389,14 +435,24 @@ def fmt_money(s: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 09-民间借贷 规则集（与 references/case-types/09-private-lending.md §二 对应）
+# 通用层规则（L1 当事人 + L3 代理人 + L5 调解意愿，跨案由复用；见 references/common-elements.md）
 # ---------------------------------------------------------------------------
 
-def build_rules_02_private_lending() -> list[RuleFunc]:
-    rules: list[RuleFunc] = []
+def build_common_party_rules(occ: dict | None = None) -> list[RuleFunc]:
+    """当事人块通用规则（原告+被告+代理人）。
 
-    # --- 原告（自然人，第一个）---
-    # occurrence 0=原告 1=被告 2=第三人自然人 3=第三人法人（按段落出现顺序）
+    occ 覆盖各字段的目标 occurrence（因不同模板的当事人块顺序不同）：
+    09 布局（代理人表独立在后）：被告 姓名=1，单位/职务/电话=1
+    05 布局（代理人插在原被告之间）：被告 姓名=2，单位/职务/电话=2
+    其余字段（性别/出生/民族/工作单位/住所/证件）两布局一致（原告=0 被告=1）。
+    """
+    o = {
+        "姓名_被告": 1, "单位_被告": 1, "职务_被告": 1, "电话_被告": 1,
+        "代理_单位": 1, "代理_职务": 1, "代理_电话": 1,
+    }
+    o.update(occ or {})
+
+    rules: list[RuleFunc] = []
     e = "当事人.原告"
     rules += [
         make_text_replace_rule(f"{e}.姓名", "姓名：", occurrence=0),
@@ -411,27 +467,22 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
         make_text_replace_rule(f"{e}.证件类型", "证件类型：", occurrence=0),
         make_text_replace_rule(f"{e}.证件号码", "证件号码：", occurrence=0),
     ]
-
-    # --- 被告（自然人，第一个）---
-    e = "当事人.被告"
+    d = "当事人.被告"
     rules += [
-        make_text_replace_rule(f"{e}.姓名", "姓名：", occurrence=1),
-        make_gender_rule(f"{e}.性别", occurrence=1),
-        make_text_fill_rule(f"{e}.出生日期", "出生日期：", "日", transform=fmt_date, occurrence=1),
-        make_text_replace_rule(f"{e}.民族", "民族：", occurrence=1),
-        make_text_replace_rule(f"{e}.工作单位", "工作单位：", occurrence=1),
-        make_text_replace_rule(f"{e}.职务", "职务：", occurrence=1),
-        make_text_replace_rule(f"{e}.联系电话", "联系电话：", occurrence=1),
-        make_text_replace_rule(f"{e}.住所地", "住所地（户籍所在地）：", occurrence=1),
-        make_text_replace_rule(f"{e}.经常居住地", "经常居住地：", occurrence=1),
-        make_text_replace_rule(f"{e}.证件类型", "证件类型：", occurrence=1),
-        make_text_replace_rule(f"{e}.证件号码", "证件号码：", occurrence=1),
+        make_text_replace_rule(f"{d}.姓名", "姓名：", occurrence=o["姓名_被告"]),
+        make_gender_rule(f"{d}.性别", occurrence=1),
+        make_text_fill_rule(f"{d}.出生日期", "出生日期：", "日", transform=fmt_date, occurrence=1),
+        make_text_replace_rule(f"{d}.民族", "民族：", occurrence=1),
+        make_text_replace_rule(f"{d}.工作单位", "工作单位：", occurrence=1),
+        make_text_replace_rule(f"{d}.职务", "职务：", occurrence=o["职务_被告"]),
+        make_text_replace_rule(f"{d}.联系电话", "联系电话：", occurrence=o["电话_被告"]),
+        make_text_replace_rule(f"{d}.住所地", "住所地（户籍所在地）：", occurrence=1),
+        make_text_replace_rule(f"{d}.经常居住地", "经常居住地：", occurrence=1),
+        make_text_replace_rule(f"{d}.证件类型", "证件类型：", occurrence=1),
+        make_text_replace_rule(f"{d}.证件号码", "证件号码：", occurrence=1),
     ]
 
-    # --- 委托诉讼代理人 ---
-    # 「姓名：」occurrence=0/1/2/3 已被 原告/被告/第三人占用；代理人姓名走专用规则
-    e = "当事人.委托诉讼代理人.0"
-
+    # 委托诉讼代理人：姓名定位在"有□"段之后的第一个"姓名："；单位/职务/电话按 occurrence
     def rule_agent_name(doc, elements):
         v = _get_path(elements, "当事人.委托诉讼代理人.0.姓名")
         if not v:
@@ -442,13 +493,115 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
                 replace_in_paragraph(paragraphs[i + 1], "姓名：", f"姓名：{v}")
                 return True
         return False
-
+    rule_agent_name.__name__ = "agent[name]"
     rules.append(rule_agent_name)
+    a = "当事人.委托诉讼代理人.0"
     rules += [
-        make_text_replace_rule(f"{e}.单位", "单位：", occurrence=1),
-        make_text_replace_rule(f"{e}.职务", "职务：", occurrence=1),
-        make_text_replace_rule(f"{e}.联系电话", "联系电话：", occurrence=1),
+        make_text_replace_rule(f"{a}.单位", "单位：", occurrence=o["代理_单位"]),
+        make_text_replace_rule(f"{a}.职务", "职务：", occurrence=o["代理_职务"]),
+        make_text_replace_rule(f"{a}.联系电话", "联系电话：", occurrence=o["代理_电话"]),
     ]
+    return rules
+
+
+def make_signature_date_rule() -> RuleFunc:
+    """具状日期规则：在"具状人（签字、盖章）"段（或其后紧邻的 "日期：" 段）内填日期。
+
+    不能全局匹配 "日期："——它是 "出生日期：" 的子串，会污染当事人出生日期段。
+    兼容两种布局：同段落（05）/"日期："独立成段（09 完整版树）。
+    """
+    def rule(doc: DocParts, elements: dict) -> bool:
+        v = _get_path(elements, "具状日期")
+        if not v:
+            return False
+        paras = list(iter_paragraphs(doc))
+        for i, p in enumerate(paras):
+            if "具状人（签字、盖章）" not in p.text:
+                continue
+            if "日期：" in p.text:
+                return replace_in_paragraph(p, "日期：", f"日期：{fmt_date(v)}")
+            # 布局二：紧随其后的独立 "日期：" 段
+            for q in paras[i + 1: i + 4]:
+                if q.text.strip().startswith("日期："):
+                    return replace_in_paragraph(q, "日期：", f"日期：{fmt_date(v)}")
+                if q.text.strip():
+                    break
+            return False
+        return False
+    rule.__name__ = "signature[日期]"
+    return rule
+
+
+def build_common_mediation_rules() -> list[RuleFunc]:
+    """调解意愿块通用规则（仅民事起诉状/答辩状模板，L5）。"""
+
+    def rule_tiaojie_zongti(doc, elements):
+        v = _get_path(elements, "对纠纷解决方式的意愿.是否了解调解")
+        if not v:
+            return False
+        paragraphs = list(iter_paragraphs(doc))
+        for i, p in enumerate(paragraphs):
+            if "是否了解调解作为非诉" in p.text:
+                for q in paragraphs[i:]:
+                    if "了解□" in q.text or "不了解□" in q.text:
+                        return replace_option_check(q, v if v in ("了解", "不了解") else "了解")
+                break
+        return False
+    rule_tiaojie_zongti.__name__ = "mediation[总述]"
+
+    def rule_likai_jiechu_benefits(doc, elements):
+        v = _get_path(elements, "对纠纷解决方式的意愿.是否了解先行调解好处")
+        if not v or not isinstance(v, list) or len(v) != 5:
+            return False
+        seen_elements: set = set()
+        applied = 0
+        for p in iter_paragraphs(doc):
+            if p._p in seen_elements:
+                continue
+            text = p.text
+            if "☑" in text:
+                continue
+            if "了解" not in text or "□" not in text:
+                continue
+            seen_elements.add(p._p)
+            target_value = v[applied] if applied < 5 else None
+            if target_value in ("了解", "不了解"):
+                replace_option_check(p, target_value)
+            applied += 1
+            if applied >= 5:
+                break
+        return applied > 0
+    rule_likai_jiechu_benefits.__name__ = "mediation[好处×5]"
+
+    def rule_kaolv_tiaojie(doc, elements):
+        v = _get_path(elements, "对纠纷解决方式的意愿.是否考虑先行调解")
+        if not v:
+            return False
+        mapping = {"是": "是□ 否□", "否": "是□ 否□", "暂不确定": "暂不确定，想要了解更多内容□"}
+        target = mapping.get(v)
+        if not target:
+            return False
+        paragraphs = [p for p in iter_paragraphs(doc) if target in p.text]
+        for p in reversed(paragraphs):
+            if p.text.count("☑") == 0:
+                option = ("是" if v == "是" else "否") if v != "暂不确定" else "暂不确定，想要了解更多内容"
+                replace_option_check(p, option)
+                return True
+        return False
+    rule_kaolv_tiaojie.__name__ = "mediation[考虑调解]"
+
+    return [rule_tiaojie_zongti, rule_likai_jiechu_benefits, rule_kaolv_tiaojie]
+
+
+# ---------------------------------------------------------------------------
+# 09-民间借贷 规则集（与 references/case-types/09-private-lending.md §二 对应）
+# ---------------------------------------------------------------------------
+
+def build_rules_02_private_lending() -> list[RuleFunc]:
+    rules: list[RuleFunc] = []
+
+    # --- 通用层：当事人块（09 布局：代理人表独立，被告 姓名=1 单位/职务/电话=1）---
+    rules += build_common_party_rules()
 
     # --- 诉讼请求 ---
     def rule_benjin(doc, elements):
@@ -622,73 +775,113 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
         make_text_replace_rule("事实与理由.证据清单", "18. 证据清单（可另附 页）"),
     ]
 
-    # --- 对纠纷解决方式的意愿 ---
-    def rule_tiaojie_zongti(doc, elements):
-        v = _get_path(elements, "对纠纷解决方式的意愿.是否了解调解")
-        if not v:
-            return False
-        # 第一处「了解□ 不了解□」紧跟"是否了解调解…"标题段
-        paragraphs = list(iter_paragraphs(doc))
-        for i, p in enumerate(paragraphs):
-            if "是否了解调解作为非诉" in p.text:
-                for q in paragraphs[i:]:
-                    if "了解□" in q.text or "不了解□" in q.text:
-                        # replace_option_check 处理"了解□"是"不了解□"子串的误勾
-                        return replace_option_check(q, v if v in ("了解", "不了解") else "了解")
-                break
-        return False
-    rules.append(rule_tiaojie_zongti)
-
-    def rule_likai_jiechu_benefits(doc, elements):
-        v = _get_path(elements, "对纠纷解决方式的意愿.是否了解先行调解好处")
-        if not v or not isinstance(v, list) or len(v) != 5:
-            return False
-        # 5 处「了解□ 不了解□」按文档顺序逐个填；
-        # 含 ☑ 的段已被总述规则勾过，跳过；勾选本身用 replace_option_check 防子串误勾
-        seen_elements: set = set()
-        applied = 0
-        for p in iter_paragraphs(doc):
-            if p._p in seen_elements:
-                continue
-            text = p.text
-            if "☑" in text:
-                continue
-            if "了解" not in text or "□" not in text:
-                continue
-            seen_elements.add(p._p)
-            target_value = v[applied] if applied < 5 else None
-            if target_value in ("了解", "不了解"):
-                replace_option_check(p, target_value)
-            applied += 1
-            if applied >= 5:
-                break
-        return applied > 0
-    rules.append(rule_likai_jiechu_benefits)
-
-    def rule_kaolv_tiaojie(doc, elements):
-        v = _get_path(elements, "对纠纷解决方式的意愿.是否考虑先行调解")
-        if not v:
-            return False
-        mapping = {"是": "是□ 否□", "否": "是□ 否□", "暂不确定": "暂不确定，想要了解更多内容□"}
-        target = mapping.get(v)
-        if not target:
-            return False
-        # 最后一处「是□ 否□」（前面已被诉讼费用等规则勾过的跳过）
-        paragraphs = [p for p in iter_paragraphs(doc) if target in p.text]
-        for p in reversed(paragraphs):
-            if "☑" not in p.text or p.text.count("☑") == 0:
-                replace_in_paragraph(p, ("是□" if v == "是" else "否□") if v != "暂不确定" else target,
-                                     (("是☑" if v == "是" else "否☑") if v != "暂不确定" else target.replace("□", "☑")))
-                return True
-        return False
-    rules.append(rule_kaolv_tiaojie)
+    # --- 通用层：调解意愿块 ---
+    rules += build_common_mediation_rules()
 
     # --- 具状人/日期 ---
     rules += [
         make_text_replace_rule("具状人_签字_盖章", "具状人（签字、盖章）："),
-        make_text_fill_rule("具状日期", "日期：", "日", transform=fmt_date),
+        make_signature_date_rule(),
     ]
 
+    return rules
+
+
+# ---------------------------------------------------------------------------
+# 05-离婚 规则集（与 references/case-types/05-divorce.md 对应；模板树 occurrence 勘察 2026-08-17）
+# ---------------------------------------------------------------------------
+
+def build_rules_05_divorce() -> list[RuleFunc]:
+    rules: list[RuleFunc] = []
+
+    # --- 通用层：当事人块（05 布局：代理人插在原被告之间 → 被告 姓名=2 单位/职务/电话=2）---
+    rules += build_common_party_rules({
+        "姓名_被告": 2, "单位_被告": 2, "职务_被告": 2, "电话_被告": 2,
+    })
+
+    # --- 诉讼请求（05 特定）---
+    sq = "诉讼请求"
+    rules += [
+        # 1. 解除婚姻关系（具体主张占位替换）
+        make_text_replace_rule(f"{sq}.解除婚姻关系.具体主张", "（具体主张）", append=False),
+        # 2. 夫妻共同财产
+        make_pick_option_rule(f"{sq}.夫妻共同财产.勾选", "有财产", ("无财产", "有财产")),
+        make_pick_option_rule(f"{sq}.夫妻共同财产.房屋.归属", "房屋明细", ("原告", "被告", "其他")),
+        make_text_fill_rule(f"{sq}.夫妻共同财产.房屋.其他说明", "其他□(", ")"),
+        make_pick_option_rule(f"{sq}.夫妻共同财产.汽车.归属", "汽车明细", ("原告", "被告", "其他")),
+        make_text_fill_rule(f"{sq}.夫妻共同财产.汽车.其他说明", "其他□(", ")", occurrence=1),
+        make_pick_option_rule(f"{sq}.夫妻共同财产.存款.归属", "存款明细", ("原告", "被告", "其他")),
+        make_text_fill_rule(f"{sq}.夫妻共同财产.存款.其他说明", "其他□(", ")", occurrence=2),
+        make_text_replace_rule(f"{sq}.夫妻共同财产.其他", "（4）其他（按照上述样式列明）："),
+        # 3. 夫妻共同债务
+        make_pick_option_rule(f"{sq}.夫妻共同债务.勾选", "有债务", ("无债务", "有债务")),
+        make_text_fill_rule(f"{sq}.夫妻共同债务.债务1.内容", "债务 1：", "承担主体"),
+        make_pick_option_rule(f"{sq}.夫妻共同债务.债务1.承担主体", "债务 1：", ("原告", "被告", "其他")),
+        make_text_fill_rule(f"{sq}.夫妻共同债务.债务1.其他说明", "其他□(", ")", occurrence=3),
+        make_text_fill_rule(f"{sq}.夫妻共同债务.债务2.内容", "债务 2：", "承担主体"),
+        make_pick_option_rule(f"{sq}.夫妻共同债务.债务2.承担主体", "债务 2：", ("原告", "被告", "其他")),
+        make_text_fill_rule(f"{sq}.夫妻共同债务.债务2.其他说明", "其他□(", ")", occurrence=4),
+        # 4. 子女直接抚养
+        make_pick_option_rule(f"{sq}.子女直接抚养.勾选", "有此问题", ("无此问题", "有此问题"), occurrence=0),
+        make_text_fill_rule(f"{sq}.子女直接抚养.子女1.姓名", "子女 1：", "归属"),
+        make_pick_option_rule(f"{sq}.子女直接抚养.子女1.归属", "子女 1：", ("原告", "被告")),
+        make_text_fill_rule(f"{sq}.子女直接抚养.子女2.姓名", "子女 2：", "归属"),
+        make_pick_option_rule(f"{sq}.子女直接抚养.子女2.归属", "子女 2：", ("原告", "被告")),
+        # 5. 子女抚养费
+        make_pick_option_rule(f"{sq}.子女抚养费.勾选", "有此问题", ("无此问题", "有此问题"), occurrence=1),
+        make_pick_option_rule(f"{sq}.子女抚养费.承担主体", "抚养费承担主体", ("原告", "被告")),
+        make_text_replace_rule(f"{sq}.子女抚养费.金额及明细", "金额及明细："),
+        make_text_replace_rule(f"{sq}.子女抚养费.支付方式", "支付方式："),
+        # 6. 探望权
+        make_pick_option_rule(f"{sq}.探望权.勾选", "有此问题", ("无此问题", "有此问题"), occurrence=2),
+        make_pick_option_rule(f"{sq}.探望权.行使主体", "探望权行使主体", ("原告", "被告")),
+        make_text_replace_rule(f"{sq}.探望权.行使方式", "行使方式："),
+        # 7. 离婚损害赔偿／经济补偿／经济帮助
+        make_pick_option_rule(f"{sq}.离婚损害赔偿.勾选", "离婚损害赔偿□", ("离婚损害赔偿",)),
+        make_text_replace_rule(f"{sq}.离婚损害赔偿.金额", "金额：", occurrence=0),
+        make_pick_option_rule(f"{sq}.离婚经济补偿.勾选", "离婚经济补偿□", ("离婚经济补偿",)),
+        make_text_replace_rule(f"{sq}.离婚经济补偿.金额", "金额：", occurrence=1),
+        make_pick_option_rule(f"{sq}.离婚经济帮助.勾选", "离婚经济帮助□", ("离婚经济帮助",)),
+        make_text_replace_rule(f"{sq}.离婚经济帮助.金额", "金额：", occurrence=2),
+        # 8. 诉讼费用（第一处"是□ 否□"）
+        make_checkbox_rule(f"{sq}.是否主张诉讼费用", "是□ 否□", occurrence=0),
+        # 9. 其他请求（标题后空段）
+        make_fill_after_rule(f"{sq}.其他请求", "9. 其他请求"),
+    ]
+
+    # --- 诉前保全（05 无约定管辖）---
+    rules += [
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院：              保全时间："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ]
+
+    # --- 事实与理由（05 特定）---
+    fr = "事实与理由"
+    rules += [
+        make_text_replace_rule(f"{fr}.结婚时间", "结婚时间：", transform=fmt_date),
+        make_text_replace_rule(f"{fr}.生育子女情况", "生育子女情况："),
+        make_text_replace_rule(f"{fr}.双方生活情况", "双方生活情况："),
+        make_text_replace_rule(f"{fr}.离婚事由", "离婚事由："),
+        make_text_replace_rule(f"{fr}.之前有无提起过离婚诉讼", "之前有无提起过离婚诉讼："),
+        make_fill_after_rule(f"{fr}.夫妻共同财产情况", "夫妻共同财产情况"),
+        make_fill_after_rule(f"{fr}.夫妻共同债务情况", "夫妻共同债务情况"),
+        make_fill_after_rule(f"{fr}.子女直接抚养情况", "子女直接抚养情况"),
+        make_fill_after_rule(f"{fr}.子女抚养费情况", "子女抚养费情况"),
+        make_fill_after_rule(f"{fr}.子女探望权情况", "子女探望权情况"),
+        make_fill_after_rule(f"{fr}.赔偿补偿帮助相关情况", "赔 偿 / 补 偿 / 经 济 帮 助"),
+        make_fill_after_rule(f"{fr}.其他", "8. 其他"),
+        make_text_replace_rule(f"{fr}.请求依据", "（法律及司法解释的规定，要写明具体条文）", append=False),
+        make_fill_after_rule(f"{fr}.证据清单", "10. 证据清单"),
+    ]
+
+    # --- 通用层：调解意愿 + 具状人 ---
+    rules += build_common_mediation_rules()
+    rules += [
+        make_text_replace_rule("具状人_签字_盖章", "具状人（签字、盖章）："),
+        make_signature_date_rule(),
+    ]
     return rules
 
 
@@ -698,6 +891,12 @@ def build_rules_02_private_lending() -> list[RuleFunc]:
 
 CASE_TYPE_TO_TREE = {
     "09-private-lending": "09-民间借贷纠纷-民事起诉状",
+    "05-divorce": "05-离婚纠纷-民事起诉状",
+}
+
+RULE_BUILDERS = {
+    "09-private-lending": build_rules_02_private_lending,
+    "05-divorce": build_rules_05_divorce,
 }
 
 
@@ -751,7 +950,7 @@ def all_text_of_parts(parts: dict[str, etree._ElementTree]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--case-type", required=True, choices=list(CASE_TYPE_TO_TREE.keys()))
+    parser.add_argument("--case-type", required=True, choices=list(RULE_BUILDERS.keys()))
     parser.add_argument("--elements", required=True, type=Path, help="elements.json 路径")
     parser.add_argument("--output", required=True, type=Path, help="输出 docx 路径")
     parser.add_argument(
@@ -788,7 +987,7 @@ def main() -> int:
     # 加载 → 应用规则 → 写回 → 打包
     parts = load_text_parts(tree_work)
     doc = DocParts(parts)
-    rules = build_rules_02_private_lending()
+    rules = RULE_BUILDERS[args.case_type]()
     result = apply_rules(doc, rules, elements)
     save_text_parts(tree_work, parts)
     args.output.parent.mkdir(parents=True, exist_ok=True)
