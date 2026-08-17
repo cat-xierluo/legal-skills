@@ -93,3 +93,5 @@ if failed:
     sys.exit(1)
 print("[e2e] ✅ 全部案由回归通过")
 PYEOF
+echo "[e2e] ========== 全案由冒烟（68 编号通用级渲染）=========="
+python3 -B tests/smoke_all.py 2>&1 | tail -2

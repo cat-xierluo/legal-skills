@@ -17,11 +17,24 @@ import re
 import sys
 from pathlib import Path
 
-# 已支持案由：起诉状树全名 → (case-type key, reference 文档)
+# 精调案由：起诉状树全名 → (case-type key, reference 文档)
 SUPPORTED_TREES = {
     "05-离婚纠纷-民事起诉状": ("05-divorce", "case-types/05-divorce.md"),
     "09-民间借贷纠纷-民事起诉状": ("09-private-lending", "case-types/09-private-lending.md"),
 }
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+import generic_rules as _g
+
+_TEMPLATES = _Path(__file__).resolve().parent.parent / "templates"
+# 主文书树 → 两位编号（通用级 key）
+_PRIMARY = {}
+for _nn in _g.generic_case_numbers(_TEMPLATES):
+    _t = _g.primary_tree_for(_nn, _TEMPLATES)
+    if _t:
+        _PRIMARY[_t] = _nn
 
 # 高频案由识别关键词（别名；其余案由以案由名本身为关键词）
 ALIASES = {
@@ -74,13 +87,17 @@ def main() -> int:
             cause = doc_type = parts[1]
         if tree in SUPPORTED_TREES:
             key, ref = SUPPORTED_TREES[tree]
-            status = "✅ 完整（extract+fill+e2e）"
-        elif doc_type != cause and f"{nn}-{cause}-民事起诉状" in SUPPORTED_TREES:
-            key, ref = SUPPORTED_TREES[f"{nn}-{cause}-民事起诉状"]
-            status = "⬜ 同案由起诉状已支持，本文书待接入"
-        else:
-            key, ref = "—", "骨架：`dump_template_fields.py` 生成"
-            status = "⬜ 待接入"
+            status = "✅ 精调（extract+fill+e2e）"
+        elif tree in _PRIMARY:
+            key = _PRIMARY[tree]
+            ref = f"skeletons/{tree}.md"
+            status = "✅ 通用级（当事人/填空/调解/落款；勾选与金额待精调）"
+        elif any(tree == _g.primary_tree_for(x, _TEMPLATES) for x in [nn] if x) or True:
+            # 同编号主文书已支持的其余文书（答辩状/第三人意见陈述书）
+            primary = _g.primary_tree_for(nn, _TEMPLATES)
+            key = _PRIMARY.get(primary, nn)
+            ref = f"skeletons 可由 dump 生成"
+            status = "⬜ 同编号主文书已接入，本文书待接入"
         kw = ALIASES.get(cause, cause)
         lines.append(f"| {nn} | {cause} | {e['volume'][0]} | {doc_type} | `{tree}` | {status} | {key} | {ref} | {kw} |")
 
