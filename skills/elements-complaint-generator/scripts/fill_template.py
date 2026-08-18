@@ -1620,6 +1620,158 @@ def build_rules_68_non_execution(tree_dir=None, elements=None) -> list[RuleFunc]
     return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
 
 
+# ---------------------------------------------------------------------------
+# v0.11：剩余 34 案由全量精调（68/68 完成线）
+# ---------------------------------------------------------------------------
+
+def _civil_generic_specifics() -> list[RuleFunc]:
+    """海事/环资类民事起诉状共用：管辖保全 + 标准金额句位（金额字段走通用勾选）。"""
+    return [
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+        make_amount_sentence("诉讼请求.经济损失", "经济损失"),
+        make_text_replace_rule("诉讼请求.计算依据或参考因素", "计算依据或参考因素："),
+    ]
+
+
+# ── 26 植物新品种（知产）──
+def build_rules_26_plant_variety(tree_dir=None, elements=None) -> list[RuleFunc]:
+    return _generic_plus(tree_dir, _ip_specifics("经济损失", fees=("律师费", "调查取证费")), elements)
+
+
+# ── 36 垄断行政（知产行政）──
+def build_rules_36_admin_monopoly(tree_dir=None, elements=None) -> list[RuleFunc]:
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
+# ── 37-40 海事四案由 ──
+def build_rules_37_ship_collision(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """37 船舶碰撞损害责任纠纷。"""
+    sp = _civil_generic_specifics()
+    sp.append(make_text_replace_rule("诉讼请求.船舶信息", "船舶名称"))
+    return _generic_plus(tree_dir, sp, elements)
+
+
+def build_rules_38_maritime_injury(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """38 海上通海水域人身损害责任纠纷。"""
+    sp = _civil_generic_specifics()
+    sp.append(make_text_replace_rule("诉讼请求.伤残等级", "伤残等级"))
+    return _generic_plus(tree_dir, sp, elements)
+
+
+def build_rules_39_freight_forward(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """39 海上通海水域货运代理合同纠纷。"""
+    return _generic_plus(tree_dir, _civil_generic_specifics(), elements)
+
+
+def build_rules_40_crew_labor(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """40 船员劳务合同纠纷。"""
+    return _generic_plus(tree_dir, _civil_generic_specifics(), elements)
+
+
+# ── 41-43 环资三案由 ──
+def build_rules_41_env_pollution(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """41 环境污染民事公益诉讼（原告=检察院/环保组织）。"""
+    return _generic_plus(tree_dir, _civil_generic_specifics(), elements)
+
+
+def build_rules_42_eco_damage(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """42 生态破坏民事公益诉讼。"""
+    return _generic_plus(tree_dir, _civil_generic_specifics(), elements)
+
+
+def build_rules_43_eco_compensation(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """43 生态环境损害赔偿诉讼（原告=省级/市级政府）。"""
+    return _generic_plus(tree_dir, _civil_generic_specifics(), elements)
+
+
+# ── 44-54 行政十一案由 ──
+def _admin_civil_generic() -> list[RuleFunc]:
+    """行政起诉状共用（被告=行政机关，同 31-35 IP admin 模式）。"""
+    return _ip_admin_specifics()
+
+
+def build_rules_44_admin_penalty(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """44 行政处罚。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_45_admin_enforcement(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """45 行政强制执行。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_46_admin_license(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """46 行政许可。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_47_land_expropriation(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """47 国有土地上房屋征收决定。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_48_work_injury(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """48 工伤保险资格或者待遇认定。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_49_info_disclosure(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """49 政府信息公开。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_50_admin_reconsider(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """50 行政复议。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_51_admin_agreement(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """51 行政协议。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_52_admin_compensation(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """52 行政补偿。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_53_admin_damage(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """53 行政赔偿。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+def build_rules_54_non_performance(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """54 不履行法定职责。"""
+    return _generic_plus(tree_dir, _admin_civil_generic(), elements)
+
+
+# ── 56-59 国赔四案由 ──
+def build_rules_56_illegal_detention(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """56 违法刑事拘留赔偿。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：赔偿请求人□"), elements)
+
+
+def build_rules_57_wrongful_conviction(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """57 刑事改判无罪赔偿。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：赔偿请求人□"), elements)
+
+
+def build_rules_58_negligence(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """58 怠于履行监管职责致伤致死赔偿。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：赔偿请求人□"), elements)
+
+
+def build_rules_59_wrongful_execution(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """59 错误执行赔偿。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：赔偿请求人□"), elements)
+
+
 def build_rules_22_copyright(tree_dir=None, elements=None) -> list[RuleFunc]:
     return _generic_plus(tree_dir, _ip_specifics("经济损失"), elements)
 
@@ -1882,6 +2034,30 @@ RULE_BUILDERS = {
     "66-reconsideration": build_rules_66_reconsideration,
     "67-supervision": build_rules_67_supervision,
     "68-non-execution": build_rules_68_non_execution,
+    "26-plant-variety": build_rules_26_plant_variety,
+    "36-admin-monopoly": build_rules_36_admin_monopoly,
+    "37-ship-collision": build_rules_37_ship_collision,
+    "38-maritime-injury": build_rules_38_maritime_injury,
+    "39-freight-forward": build_rules_39_freight_forward,
+    "40-crew-labor": build_rules_40_crew_labor,
+    "41-env-pollution": build_rules_41_env_pollution,
+    "42-eco-damage": build_rules_42_eco_damage,
+    "43-eco-compensation": build_rules_43_eco_compensation,
+    "44-admin-penalty": build_rules_44_admin_penalty,
+    "45-admin-enforcement": build_rules_45_admin_enforcement,
+    "46-admin-license": build_rules_46_admin_license,
+    "47-land-expropriation": build_rules_47_land_expropriation,
+    "48-work-injury": build_rules_48_work_injury,
+    "49-info-disclosure": build_rules_49_info_disclosure,
+    "50-admin-reconsider": build_rules_50_admin_reconsider,
+    "51-admin-agreement": build_rules_51_admin_agreement,
+    "52-admin-compensation": build_rules_52_admin_compensation,
+    "53-admin-damage": build_rules_53_admin_damage,
+    "54-non-performance": build_rules_54_non_performance,
+    "56-illegal-detention": build_rules_56_illegal_detention,
+    "57-wrongful-conviction": build_rules_57_wrongful_conviction,
+    "58-negligence": build_rules_58_negligence,
+    "59-wrongful-execution": build_rules_59_wrongful_execution,
 }
 
 # ---------------------------------------------------------------------------
