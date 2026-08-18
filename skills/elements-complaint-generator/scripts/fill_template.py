@@ -2183,6 +2183,30 @@ def merge_sections_and_normalize(parts: dict) -> int:
             if sect is not None:
                 sect.getparent().remove(sect)
                 removed += 1
+
+        # 边距归一：所有 sectPr 的 pgMar 改为标准值（top/bottom=1440=25mm, left/right=1800=31mm）
+        for sect in body.iter(f"{W}sectPr"):
+            pg = sect.find(f"{W}pgMar")
+            if pg is not None:
+                pg.set(f"{W}top", "1440")
+                pg.set(f"{W}bottom", "1440")
+                pg.set(f"{W}left", "1800")
+                pg.set(f"{W}right", "1800")
+
+        # 附件新起一页：在"附件"段落前插入分页符
+        for i, child in enumerate(body):
+            if child.tag == f"{W}p":
+                text = ''.join(t.text or '' for t in child.iter(Wt)).strip()
+                if text == '附件':
+                    # 前一个段落插入分页符
+                    if i > 0 and body[i-1].tag == f"{W}p":
+                        prev_p = body[i-1]
+                        # 在前段末尾加 <w:r><w:br type="page"/></w:r>
+                        r = etree.SubElement(prev_p, f"{W}r")
+                        br = etree.SubElement(r, f"{W}br")
+                        br.set(f"{W}type", "page")
+                        removed += 1  # 用 removed 计数
+                    break
     return removed
 
 
