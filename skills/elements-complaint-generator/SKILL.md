@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.8.0"
+version: "0.9.0"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -187,5 +187,5 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 九、版本
 
-- 当前版本：`0.8.0`（2026-08-18）
+- 当前版本：`0.9.0`（2026-08-18）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）
