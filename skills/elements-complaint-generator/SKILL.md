@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: CC-BY-NC
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.11.0"
+version: "0.12.0"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -152,7 +152,7 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 | 路由层 | `references/case-routing.md`（脚本生成，勿手改） | 113 棵树索引：案由/册/文书/树/key/支持状态/关键词 |
 | 案由层 | `references/case-types/NN-*.md` | 案由特定要素；**骨架由 `dump_template_fields.py` 从模板树反推生成**，人/Agent 补要素路径与抽取提示 |
 
-已定稿：09-private-lending.md、05-divorce.md；抽取提示词：extraction-prompt-template.md；骨架示例：05-divorce-skeleton.md。其余案由骨架用 `dump_template_fields.py` 生成。
+**68/68 全部定稿**：case-types/ 目录覆盖全部编号（14 份手写详版 + 54 份程序化生成精简版）；骨架 `skeletons/` 66 份全字段清单。
 
 - 顶层：`当事人 / 诉讼请求 / 约定管辖和诉前保全 / 事实与理由 / 对纠纷解决方式的意愿 / 具状人_签字_盖章 / 具状日期`
 - 当事人含 `原告/被告/第三人/委托诉讼代理人`（当前实现第一个原告/被告/委托代理人）
@@ -187,5 +187,5 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 九、版本
 
-- 当前版本：`0.11.0`（2026-08-18）
+- 当前版本：`0.12.0`（2026-08-18）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）
