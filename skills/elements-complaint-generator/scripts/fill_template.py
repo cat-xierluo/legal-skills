@@ -2146,19 +2146,36 @@ def load_text_parts(tree_dir: Path) -> dict[str, etree._ElementTree]:
 
 
 def merge_sections_and_normalize(parts: dict) -> int:
-    """后处理：删除段落级 sectPr（节分隔），让表格连续排版 + 使用末尾标准页边距。
+    """后处理：合并主体部分（4 个表→1 段），保留调解意愿/证据清单前两个独立节。
 
-    官方模板用 4 个段落级 sectPr 把表单分成 5 节，每节窄边距强制新页——
-    导致表格视觉断裂。删除中间 sectPr 后，全文档用 body 末尾的 sectPr
-    （标准边距 top=1440 bottom=1440 left=1800 right=1800）。
+    官方模板用 4 个段落级 sectPr 把表单分成 5 节：
+        [5]  表 2 前（表 1 末尾双面分页）
+        [12] 表 3 前（表 2 末尾双面分页）
+        [19] 表 4 前（表 3 末尾双面分页）
+        [24] 调解意愿前（保留！）
+        [47] 文档末尾（保留！）
+    合并策略：删除 [5][12][19] 三个表内分隔，保留 [24] 调解意愿节和 [47] 末尾节。
+    页边距：末尾节为标准 1800twips（25mm），其他节保持原版镜像边距。
     """
     W = "{%s}" % W_NS
     removed = 0
+
+    def _paragraph_sect_indices(body):
+        """返回 body 下含段落级 sectPr 的段落在 body 内的索引（从 0 开始）。"""
+        return [i for i, child in enumerate(body) if child.tag == f"{W}p"
+                and child.find(f".//{W}sectPr") is not None]
+
     for tree in parts.values():
         body = tree.getroot().find(f"{W}body")
         if body is None:
             continue
-        for p in body.findall(f"{W}p"):
+        # 模板固定是 4 个段落级 sectPr（5 节），保留最后 2 个
+        sect_indices = _paragraph_sect_indices(body)
+        keep = set(sect_indices[-1:]) if len(sect_indices) >= 1 else set()
+        for i in sect_indices:
+            if i in keep:
+                continue
+            p = body[i]
             sect = p.find(f".//{W}sectPr")
             if sect is not None:
                 sect.getparent().remove(sect)
