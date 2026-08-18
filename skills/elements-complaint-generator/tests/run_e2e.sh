@@ -32,7 +32,7 @@ python3 -B scripts/fill_template.py --case-type 09-private-lending \
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
   --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
-for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard; do
+for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard 07-house-sale 11-lease 14-property 12-lease-finance 16-securities-fraud 17-property-loss 18-liability 19-guarantee 20-personal 25-design-patent 29-unfair-competition 30-civil-monopoly; do
   python3 -B scripts/fill_template.py --case-type $ct \
     --elements tests/fixtures/$ct-sample.json \
     --output tests/output/$ct.docx 2>&1 | grep -E "rules"
@@ -102,6 +102,17 @@ CHECKS = {
         "实际清偿之日止：是☑", "是☑ 内容：工程款优先受偿权", "是☑ 责任主体姓名或者名称：某建设集团公司",
         "是☑ 停工损失金额 150000 元", "是☑ 支付赔偿金 60000 元",
     ],
+    "tests/output/11-lease.docx": ["截至2026年8月17日止，迟延支付租金的利息 8000 元", "是☑ 否□"],
+    "tests/output/14-property.docx": ["截至2026年8月31日止，尚欠物业费 24000 元", "截至2026年8月31日止，欠逾期物业费的违约金 3600 元"],
+    "tests/output/12-lease-finance.docx": ["违约金 32000 元", "滞纳金 15000 元", "判令解除融资租赁合同☑"],
+    "tests/output/16-securities-fraud.docx": ["投资差额损失 500000 元", "费用明细：律师费 30000 元"],
+    "tests/output/17-property-loss.docx": ["保险金 120000 元"],
+    "tests/output/18-liability.docx": ["保险金 80000 元"],
+    "tests/output/19-guarantee.docx": ["截至2026年8月17日止，保险费、违约金等共计 12000 元"],
+    "tests/output/20-personal.docx": ["保险金 200000 元"],
+    "tests/output/25-design-patent.docx": ["经济损失 150000 元", "律师费 15000 元 律师费凭证：有☑"],
+    "tests/output/29-unfair-competition.docx": ["经济损失 200000 元", "律师费 20000 元 律师费凭证：有☑"],
+    "tests/output/30-civil-monopoly.docx": ["经济损失 300000 元", "律师费☑"],
     "tests/output/08-loan.docx": [
         "截至2026年8月17日止，尚欠本金 2000000 元（人民币",
         "截至2026年8月17日止，欠利息 180000 元、期内利息 120000 元、复利 30000 元、罚息（违约金） 50000 元",

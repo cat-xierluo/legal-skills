@@ -32,6 +32,18 @@ SUPPORTED_TREES = {
     "13-建设工程施工合同纠纷-民事起诉状": ("13-construction", "case-types/13-construction.md"),
     "08-金融借款合同纠纷-民事起诉状": ("08-loan", "case-types/08-loan.md"),
     "10-信用卡纠纷-民事起诉状": ("10-creditcard", "case-types/10-creditcard.md"),
+    "07-房屋买卖合同纠纷-民事起诉状": ("07-house-sale", "skeletons/07-房屋买卖合同纠纷-民事起诉状.md"),
+    "11-房屋租赁合同纠纷-民事起诉状": ("11-lease", "skeletons/11-房屋租赁合同纠纷-民事起诉状.md"),
+    "14-物业服务合同纠纷-民事起诉状": ("14-property", "skeletons/14-物业服务合同纠纷-民事起诉状.md"),
+    "12-融资租赁合同纠纷-民事起诉状": ("12-lease-finance", "skeletons/12-融资租赁合同纠纷-民事起诉状.md"),
+    "16-证券虚假陈述责任纠纷-民事起诉状": ("16-securities-fraud", "skeletons/16-证券虚假陈述责任纠纷-民事起诉状.md"),
+    "17-财产损失保险合同纠纷-民事起诉状": ("17-property-loss", "skeletons/17-财产损失保险合同纠纷-民事起诉状.md"),
+    "18-责任保险合同纠纷-民事起诉状": ("18-liability", "skeletons/18-责任保险合同纠纷-民事起诉状.md"),
+    "19-保证保险合同纠纷-民事起诉状": ("19-guarantee", "skeletons/19-保证保险合同纠纷-民事起诉状.md"),
+    "20-人身保险合同纠纷-民事起诉状": ("20-personal", "skeletons/20-人身保险合同纠纷-民事起诉状.md"),
+    "25-侵害外观设计专利权纠纷-民事起诉状": ("25-design-patent", "skeletons/25-侵害外观设计专利权纠纷-民事起诉状.md"),
+    "29-不正当竞争纠纷-民事起诉状": ("29-unfair-competition", "skeletons/29-不正当竞争纠纷-民事起诉状.md"),
+    "30-垄断纠纷-民事起诉状": ("30-civil-monopoly", "skeletons/30-垄断纠纷-民事起诉状.md"),
 }
 
 import sys as _sys

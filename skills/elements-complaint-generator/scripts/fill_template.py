@@ -1267,6 +1267,208 @@ def _ip_specifics(economic_ctx: str, fees: tuple = ("律师费", "取证费", "�
     return sp
 
 
+def _pick_in_window_rules(path: str, anchor_ctx: str, options: tuple) -> RuleFunc:
+    """锚段后 4 段窗口内勾选项（继续履行/判令解除…选项可能在后续段）。"""
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if v not in options:
+            return False
+        plist = list(iter_paragraphs(doc))
+        for i, p in enumerate(plist):
+            if anchor_ctx in p.text:
+                for q in plist[i: i + 4]:
+                    if f"{v}□" in q.text:
+                        return replace_option_check(q, v)
+                return False
+        return False
+    rule.__name__ = f"pickw[{path}]"
+    return rule
+
+
+# ---------------------------------------------------------------------------
+# v0.8：上册余案由 + 中册补充（12 案由）。策略：复用原语（金额句/两段式/勾选）
+# + 通用勾选机制 elements["勾选"] 兜底；复杂定制场景由用户按骨架补 elements。
+# ---------------------------------------------------------------------------
+
+def build_rules_07_house_sale(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """07 房屋买卖：合同效力/具体主张走通用勾选 + 管辖/保全。"""
+    return _generic_plus(tree_dir, [
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def build_rules_11_lease(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """11 房屋租赁：迟延租金利息句 + 解除合同 + 管辖/保全。"""
+    return _generic_plus(tree_dir, [
+        make_date_interest_sentence("诉讼请求.迟延租金利息", "迟延支付租金的利息"),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□"),
+        make_yes_no_pair("诉讼请求.解除合同", "是□ 确认合同于", "否□", "确认合同于"),
+        make_yes_no_pair("诉讼请求.担保权利", "是□ 内容：", "否□", "内容："),
+        make_yes_no_pair("诉讼请求.实现债权费用", "是□ 内容：", "否□", "内容："),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def _date_amount_inplace(path: str, ctx: str) -> RuleFunc:
+    """保留模板段前缀的带日期金额句：'截至 年 月 日止，尚欠物业费 元' → 原地填日期+金额。"""
+    def rule(doc, elements):
+        v = _get_path(elements, path)
+        if not isinstance(v, dict):
+            return False
+        d = fmt_date(v.get("截至日期", ""))
+        for p in iter_paragraphs(doc):
+            if ctx in p.text and "□" not in p.text and f"{ctx}" in p.text and re.search(rf"{re.escape(ctx)}\s*元", p.text):
+                if d:
+                    p.text = re.sub(r"截至\s*年\s*月\s*日", f"截至{d}", p.text, count=1)
+                p.text = re.sub(rf"{re.escape(ctx)}\s*元", f"{ctx} {v.get('金额','')} 元", p.text, count=1)
+                return True
+        return False
+    rule.__name__ = f"damt[{path}]"
+    return rule
+
+
+def build_rules_14_property(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """14 物业：带日期金额句（原地保留"截至…止"前缀）。"""
+    return _generic_plus(tree_dir, [
+        _date_amount_inplace("诉讼请求.尚欠物业费", "尚欠物业费"),
+        _date_amount_inplace("诉讼请求.违约金", "欠逾期物业费的违约金"),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□"),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def build_rules_12_lease_finance(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """12 融资租赁：违约金滞纳金句 + 履行或解除窗口勾选。"""
+    return _generic_plus(tree_dir, [
+        _date_amount_inplace("诉讼请求.违约金滞纳金.违约金", "违约金"),
+        _date_amount_inplace("诉讼请求.违约金滞纳金.滞纳金", "滞纳金"),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□"),
+        _pick_in_window_rules("诉讼请求.履行或解除", "继续履行□",
+                              ("继续履行", "判令解除融资租赁合同", "确认融资租赁合同已于")),
+        make_yes_no_pair("诉讼请求.担保权利", "是□ 内容：", "否□", "内容："),
+        make_yes_no_pair("诉讼请求.实现债权费用", "是□ 费用明细：", "否□", "费用明细："),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def build_rules_16_securities_fraud(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """16 证券虚假陈述：投资差额损失 + 责任主体两段式。"""
+    return _generic_plus(tree_dir, [
+        make_amount_sentence("诉讼请求.投资差额损失", "投资差额损失"),
+        make_yes_no_pair("诉讼请求.责任主体", "是□ 责任主体及责任范围：", "否□", "责任主体及责任范围"),
+        make_yes_no_pair("诉讼请求.实现债权费用", "是□ 费用明细：", "否□", "费用明细："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def _insurance_common() -> list[RuleFunc]:
+    """保险类案由（17/18/20）共用：保险金句 + 费用两段式 + 管辖/保全。"""
+    return [
+        make_amount_sentence("诉讼请求.保险金", "保险金"),
+        make_checkbox_rule("诉讼请求.请求至实际清偿之日", "实际清偿之日止：是□"),
+        make_yes_no_pair("诉讼请求.实现债权费用", "是□ 费用明细：", "否□", "费用明细："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ]
+
+
+def build_rules_17_property_loss(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """17 财产损失保险。"""
+    return _generic_plus(tree_dir, _insurance_common(), elements)
+
+
+def build_rules_18_liability(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """18 责任保险。"""
+    return _generic_plus(tree_dir, _insurance_common(), elements)
+
+
+def build_rules_20_personal(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """20 人身保险。"""
+    return _generic_plus(tree_dir, _insurance_common(), elements)
+
+
+def build_rules_19_guarantee(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """19 保证保险：保险费违约金句 + 后续起算日 + 履行/解除。"""
+    return _generic_plus(tree_dir, [
+        make_date_interest_sentence("诉讼请求.保险费违约金", "保险费、违约金等共计"),
+        make_text_replace_rule("诉讼请求.后续起算日", "自 年 月 日之后的保险费、违约金等各项费用按照保证保险合同"),
+        make_yes_no_pair("诉讼请求.实现债权费用", "是□ 费用明细：", "否□", "费用明细："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
+        make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
+        make_text_replace_rule("诉前保全.保全法院", "保全法院："),
+        make_text_fill_rule("诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
+        make_text_replace_rule("诉前保全.保全案号", "保全案号："),
+    ], elements)
+
+
+def build_rules_25_design_patent(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """25 外观设计专利：停止侵权 + 经济损失 + 合理费用。"""
+    return _generic_plus(tree_dir, [
+        make_amount_sentence("诉讼请求.经济损失", "经济损失"),
+        make_text_replace_rule("诉讼请求.计算依据或参考因素", "计算依据或参考因素："),
+        make_fee_row("诉讼请求.律师费", "律师费"),
+        make_yes_no_pair("诉讼请求.停止侵权", "有□ 内容：", "无□", "内容："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+    ], elements)
+
+
+def build_rules_29_unfair_competition(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """29 不正当竞争：停止侵权 + 经济损失 + 调查取证费。"""
+    return _generic_plus(tree_dir, [
+        make_amount_sentence("诉讼请求.经济损失", "经济损失"),
+        make_text_replace_rule("诉讼请求.计算依据或参考因素", "计算依据或参考因素："),
+        make_fee_row("诉讼请求.律师费", "律师费"),
+        make_fee_row("诉讼请求.调查取证费", "调查取证费"),
+        make_yes_no_pair("诉讼请求.停止侵权", "有□ 内容：", "无□", "内容："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+    ], elements)
+
+
+def build_rules_30_civil_monopoly(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """30 民事垄断：停止侵权 + 经济损失 + 律师费/调查费。树名"30-垄断纠纷-民事起诉状"。"""
+    return _generic_plus(tree_dir, [
+        make_amount_sentence("诉讼请求.经济损失", "经济损失"),
+        make_text_replace_rule("诉讼请求.计算依据或参考因素", "计算依据或参考因素："),
+        make_pick_option_rule("诉讼请求.律师费勾选", "律师费□", ("律师费",)),
+        make_pick_option_rule("诉讼请求.调查费勾选", "调查费□", ("调查费",)),
+        make_yes_no_pair("诉讼请求.停止侵权", "有□ 内容：", "无□", "内容："),
+        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
+    ], elements)
+
+
 def build_rules_22_copyright(tree_dir=None, elements=None) -> list[RuleFunc]:
     return _generic_plus(tree_dir, _ip_specifics("经济损失"), elements)
 
@@ -1503,6 +1705,18 @@ RULE_BUILDERS = {
     "13-construction": build_rules_13_construction,
     "08-loan": build_rules_08_loan,
     "10-creditcard": build_rules_10_creditcard,
+    "07-house-sale": build_rules_07_house_sale,
+    "11-lease": build_rules_11_lease,
+    "14-property": build_rules_14_property,
+    "12-lease-finance": build_rules_12_lease_finance,
+    "16-securities-fraud": build_rules_16_securities_fraud,
+    "17-property-loss": build_rules_17_property_loss,
+    "18-liability": build_rules_18_liability,
+    "19-guarantee": build_rules_19_guarantee,
+    "20-personal": build_rules_20_personal,
+    "25-design-patent": build_rules_25_design_patent,
+    "29-unfair-competition": build_rules_29_unfair_competition,
+    "30-civil-monopoly": build_rules_30_civil_monopoly,
 }
 
 # ---------------------------------------------------------------------------
