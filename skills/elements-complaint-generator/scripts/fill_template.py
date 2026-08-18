@@ -2153,15 +2153,14 @@ def merge_sections_and_normalize(parts: dict) -> int:
         [12] 表 3 前（表 2 末尾双面分页）
         [19] 表 4 前（表 3 末尾双面分页）
         [24] 调解意愿前（保留！）
-        [47] 文档末尾（保留！）
+        [47] 末尾（保留！）
     合并策略：删除 [5][12][19] 三个表内分隔，保留 [24] 调解意愿节和 [47] 末尾节。
-    页边距：末尾节为标准 1800twips（25mm），其他节保持原版镜像边距。
+    同时：清理表内硬分页符（不让单表跨页）。
     """
     W = "{%s}" % W_NS
     removed = 0
 
     def _paragraph_sect_indices(body):
-        """返回 body 下含段落级 sectPr 的段落在 body 内的索引（从 0 开始）。"""
         return [i for i, child in enumerate(body) if child.tag == f"{W}p"
                 and child.find(f".//{W}sectPr") is not None]
 
@@ -2169,7 +2168,11 @@ def merge_sections_and_normalize(parts: dict) -> int:
         body = tree.getroot().find(f"{W}body")
         if body is None:
             continue
-        # 模板固定是 4 个段落级 sectPr（5 节），保留最后 2 个
+        # 表内残留硬分页符清理
+        for tbl in body.findall(f".//{W}tbl"):
+            for br in tbl.findall(f".//{W}br[@{W}type='page']"):
+                br.getparent().remove(br)
+        # 删除段落级 sectPr：保留最后 1 个（调解意愿前）+ 末尾
         sect_indices = _paragraph_sect_indices(body)
         keep = set(sect_indices[-1:]) if len(sect_indices) >= 1 else set()
         for i in sect_indices:
@@ -2181,6 +2184,51 @@ def merge_sections_and_normalize(parts: dict) -> int:
                 sect.getparent().remove(sect)
                 removed += 1
     return removed
+
+
+def fix_footers_and_pagination(tree_dir: Path) -> int:
+    """修复页脚：每个 footer*.xml 的硬编码数字改为 PAGE 域（自动计算页码）。
+
+    模板原版页脚是 '<w:t>351</w:t>' 形式，渲染后永远是 351 而不是实际页码。
+    替换为 Word 域 '<w:fldChar begin/> PAGE 字段 <end/>'，打开 Word 时自动计算。
+    """
+    W = "{%s}" % W_NS
+    fixed = 0
+    for footer_path in tree_dir.glob("word/footer*.xml"):
+        if not footer_path.exists():
+            continue
+        try:
+            ftr = etree.parse(str(footer_path))
+        except Exception:
+            continue
+        changed = False
+        for p in ftr.iter(f"{W}p"):
+            ts = p.findall(f".//{W}t")
+            digits = [t for t in ts if (t.text or "").strip().isdigit()]
+            if not digits:
+                continue
+            # 段落中只要含有纯数字 <w:t>，就替换为 PAGE 域
+            for t in list(digits):
+                t.getparent().remove(t)
+            # 在段落里首 run 位置插入 PAGE 域（无 run 则创建）
+            run = p.find(f"{W}r")
+            if run is None:
+                run = etree.SubElement(p, f"{W}r")
+            fc1 = etree.SubElement(run, f"{W}fldChar")
+            fc1.set(f"{W}fldCharType", "begin")
+            instr = etree.SubElement(run, f"{W}instrText")
+            instr.text = "PAGE"
+            fc2 = etree.SubElement(run, f"{W}fldChar")
+            fc2.set(f"{W}fldCharType", "separate")
+            t_show = etree.SubElement(run, f"{W}t")
+            t_show.text = "1"
+            fc3 = etree.SubElement(run, f"{W}fldChar")
+            fc3.set(f"{W}fldCharType", "end")
+            changed = True
+        if changed:
+            ftr.write(str(footer_path), xml_declaration=True, encoding="UTF-8", standalone=True)
+            fixed += 1
+    return fixed
 
 
 def save_text_parts(tree_dir: Path, parts: dict[str, etree._ElementTree]) -> None:
@@ -2289,6 +2337,10 @@ def main() -> int:
     if removed:
         print(f"[fill_template] 节合并：删除 {removed} 个段落级 sectPr（表格连续排版）")
     save_text_parts(tree_work, parts)
+    # 后处理：修页脚硬编码页码 → PAGE 域（页面数自动计算）
+    footer_fixed = fix_footers_and_pagination(tree_work)
+    if footer_fixed:
+        print(f"[fill_template] 页脚 PAGE 域：修复 {footer_fixed} 个 footer")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     pack_tree(tree_work, args.output)
 

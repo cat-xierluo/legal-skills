@@ -1,4 +1,18 @@
 # 变更日志 — elements-complaint-generator
+## 0.13.3（2026-08-18）— 页脚 PAGE 域修复 + 主体内硬分页清理
+
+### 用户反馈（真实案件 22 著作权）
+- 模板 footer 用 <w:t>351</w:t> 等硬编码页码，渲染后永远显示 351
+- fix_footers_and_pagination：每个 footer*.xml 含纯数字 <w:t> 时替换为 PAGE 域
+  （<w:fldChar begin/><w:instrText>PAGE</w:fldChar separate/><t>1</t><end/>）
+- 4 个 footer 验证全部生效（PAGE instr 存在，<w:t>1 为占位）
+
+### 保留句段清理
+- merge_sections_and_normalize 增强：清理表内残留硬分页符（<w:br type="page">）
+- 验证：22 树源 0→渲染后 0（本来就无硬分页）
+
+### 回归
+- e2e 28 产物全绿 + 冒烟 68/68
 ## 0.13.2（2026-08-18）— 节结构修复：主体连续+调解意愿/证据清单独立分页
 
 ### 用户反馈（真实案件 22 著作权）
