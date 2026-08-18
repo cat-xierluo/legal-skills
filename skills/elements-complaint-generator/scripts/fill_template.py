@@ -1557,6 +1557,69 @@ def build_rules_35_patent_invalidity(tree_dir=None, elements=None) -> list[RuleF
     return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
 
 
+# ---------------------------------------------------------------------------
+# v0.10：执行类 61-68 八案由（共用工厂：身份勾选 + 执行依据 + 异议/复议事项）
+# ---------------------------------------------------------------------------
+
+def _enforcement_doc_specifics(role_ctx: str) -> list[RuleFunc]:
+    """执行类申请书共用规则。role_ctx = 身份勾选段锚（如"身份：申请执行人□"或"身份：被执行人□"）。"""
+    return [
+        # 申请人/异议人身份勾选（申请执行人/被执行人/利害关系人/案外人/其他）
+        make_pick_option_rule("身份.类型", role_ctx,
+                              ("申请执行人", "被执行人", "利害关系人", "案外人", "其他",
+                               "单位被执行人的法定代表人", "单位被执行人的负责人",
+                               "单位被执行人的影响债务履行的直接责任人", "单位被执行人的实际控制人")),
+        # 执行依据（机构/案号/生效日期）
+        make_fill_after_rule("执行依据.作出机构", "执行依据作出机构"),
+        make_fill_after_rule("执行依据.文书号", "文书号"),
+        make_fill_after_rule("执行依据.判项主文", "判项主文"),
+        # 银行账户
+        make_text_replace_rule("当事人.自然人1.银行账号", "银行账号："),
+        make_text_replace_rule("当事人.自然人1.开户名", "开户名："),
+        make_text_replace_rule("当事人.自然人1.开户行", "开户行："),
+    ]
+
+
+def build_rules_61_limit_lift(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """61 暂时解除乘坐飞机高铁限制措施。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：被执行人□"), elements)
+
+
+def build_rules_62_distribution(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """62 参与分配申请书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
+def build_rules_63_guarantee(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """63 执行担保申请书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：被执行人□"), elements)
+
+
+def build_rules_64_preemption(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """64 确认优先购买权。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
+def build_rules_65_objection(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """65 执行异议申请书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
+def build_rules_66_reconsideration(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """66 执行复议申请书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
+def build_rules_67_supervision(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """67 执行监督申请书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
+def build_rules_68_non_execution(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """68 申请不予执行仲裁裁决、调解书或公证债权文书。"""
+    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+
+
 def build_rules_22_copyright(tree_dir=None, elements=None) -> list[RuleFunc]:
     return _generic_plus(tree_dir, _ip_specifics("经济损失"), elements)
 
@@ -1811,6 +1874,14 @@ RULE_BUILDERS = {
     "33-tm-invalidity": build_rules_33_tm_invalidity,
     "34-patent-rejection": build_rules_34_patent_rejection,
     "35-patent-invalidity": build_rules_35_patent_invalidity,
+    "61-limit-lift": build_rules_61_limit_lift,
+    "62-distribution": build_rules_62_distribution,
+    "63-guarantee": build_rules_63_guarantee,
+    "64-preemption": build_rules_64_preemption,
+    "65-objection": build_rules_65_objection,
+    "66-reconsideration": build_rules_66_reconsideration,
+    "67-supervision": build_rules_67_supervision,
+    "68-non-execution": build_rules_68_non_execution,
 }
 
 # ---------------------------------------------------------------------------

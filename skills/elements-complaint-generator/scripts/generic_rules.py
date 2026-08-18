@@ -219,7 +219,10 @@ def build_generic_rules(tree_dir: Path, elements: dict | None = None) -> list[Ru
         t = p.text.strip()
         if not t.endswith("名称："):
             continue
-        if any("统一社会信用代码：" in paras[j].text for j in range(i + 1, min(i + 12, len(paras)))):
+        window_texts = [paras[j].text for j in range(i + 1, min(i + 12, len(paras)))]
+        has_code = any("统一社会信用代码：" in t for t in window_texts)
+        has_repr = any("法定代表人" in t for t in window_texts)
+        if has_code or has_repr:
             legal_anchors.append(i)
     for n_legal, anchor in enumerate(legal_anchors[:4], start=1):
         n = n_legal

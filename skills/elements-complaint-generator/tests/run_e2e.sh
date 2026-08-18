@@ -32,7 +32,7 @@ python3 -B scripts/fill_template.py --case-type 09-private-lending \
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
   --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
-for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard 07-house-sale 11-lease 14-property 12-lease-finance 16-securities-fraud 17-property-loss 18-liability 19-guarantee 20-personal 25-design-patent 29-unfair-competition 30-civil-monopoly 60-enforcement; do
+for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard 07-house-sale 11-lease 14-property 12-lease-finance 16-securities-fraud 17-property-loss 18-liability 19-guarantee 20-personal 25-design-patent 29-unfair-competition 30-civil-monopoly 60-enforcement 65-objection; do
   python3 -B scripts/fill_template.py --case-type $ct \
     --elements tests/fixtures/$ct-sample.json \
     --output tests/output/$ct.docx 2>&1 | grep -E "rules"
@@ -113,6 +113,7 @@ CHECKS = {
     "tests/output/25-design-patent.docx": ["经济损失 150000 元", "律师费 15000 元 律师费凭证：有☑"],
     "tests/output/29-unfair-competition.docx": ["经济损失 200000 元", "律师费 20000 元 律师费凭证：有☑"],
     "tests/output/30-civil-monopoly.docx": ["经济损失 300000 元", "律师费☑"],
+    "tests/output/65-objection.docx": ["姓名：王五", "申请执行人☑"],
     "tests/output/60-enforcement.docx": [
         "判决书☑", "金钱给付☑", "本金☑", "迟延履行利息☑",
         "杭州市中级人民法院", "(2026)浙XXXX民终XXXX号", "2026年5月20日",
