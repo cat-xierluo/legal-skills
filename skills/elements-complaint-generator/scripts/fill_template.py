@@ -2145,6 +2145,27 @@ def load_text_parts(tree_dir: Path) -> dict[str, etree._ElementTree]:
     return parts
 
 
+def merge_sections_and_normalize(parts: dict) -> int:
+    """后处理：删除段落级 sectPr（节分隔），让表格连续排版 + 使用末尾标准页边距。
+
+    官方模板用 4 个段落级 sectPr 把表单分成 5 节，每节窄边距强制新页——
+    导致表格视觉断裂。删除中间 sectPr 后，全文档用 body 末尾的 sectPr
+    （标准边距 top=1440 bottom=1440 left=1800 right=1800）。
+    """
+    W = "{%s}" % W_NS
+    removed = 0
+    for tree in parts.values():
+        body = tree.getroot().find(f"{W}body")
+        if body is None:
+            continue
+        for p in body.findall(f"{W}p"):
+            sect = p.find(f".//{W}sectPr")
+            if sect is not None:
+                sect.getparent().remove(sect)
+                removed += 1
+    return removed
+
+
 def save_text_parts(tree_dir: Path, parts: dict[str, etree._ElementTree]) -> None:
     for rel, tree in parts.items():
         f = tree_dir / rel
@@ -2246,6 +2267,10 @@ def main() -> int:
     doc = DocParts(parts)
     rules = rules_builder(elements)
     result = apply_rules(doc, rules, elements)
+    # 后处理：删段落级 sectPr（合并节，表格连续排版）
+    removed = merge_sections_and_normalize(parts)
+    if removed:
+        print(f"[fill_template] 节合并：删除 {removed} 个段落级 sectPr（表格连续排版）")
     save_text_parts(tree_work, parts)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     pack_tree(tree_work, args.output)
