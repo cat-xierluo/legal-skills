@@ -44,6 +44,12 @@ SUPPORTED_TREES = {
     "25-侵害外观设计专利权纠纷-民事起诉状": ("25-design-patent", "skeletons/25-侵害外观设计专利权纠纷-民事起诉状.md"),
     "29-不正当竞争纠纷-民事起诉状": ("29-unfair-competition", "skeletons/29-不正当竞争纠纷-民事起诉状.md"),
     "30-垄断纠纷-民事起诉状": ("30-civil-monopoly", "skeletons/30-垄断纠纷-民事起诉状.md"),
+    "60-强制执行申请书": ("60-enforcement", "skeletons/60-强制执行申请书.md"),
+    "31-商标申请驳回复审纠纷-行政起诉状": ("31-tm-rejection", "skeletons/31-商标申请驳回复审纠纷-行政起诉状.md"),
+    "32-商标撤销复审行政纠纷-行政起诉状": ("32-tm-cancellation", "skeletons/32-商标撤销复审行政纠纷-行政起诉状.md"),
+    "33-商标无效行政纠纷-行政起诉状": ("33-tm-invalidity", "skeletons/33-商标无效行政纠纷-行政起诉状.md"),
+    "34-专利申请驳回复审行政纠纷-行政起诉状": ("34-patent-rejection", "skeletons/34-专利申请驳回复审行政纠纷-行政起诉状.md"),
+    "35-专利无效行政纠纷-行政起诉状": ("35-patent-invalidity", "skeletons/35-专利无效行政纠纷-行政起诉状.md"),
 }
 
 import sys as _sys

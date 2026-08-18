@@ -1469,6 +1469,94 @@ def build_rules_30_civil_monopoly(tree_dir=None, elements=None) -> list[RuleFunc
     ], elements)
 
 
+# ---------------------------------------------------------------------------
+# v0.9：60 强制执行（诉讼案件必备）+ 31-35 知产行政五案由
+# ---------------------------------------------------------------------------
+
+def build_rules_60_enforcement(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """60 强制执行申请书：执行依据（文书类型勾选+机构/案号/生效日期/判项）+ 申请执行事项。"""
+    sp = []
+    # 执行依据文书类型勾选（判决书/裁定书/调解书…）
+    sp.append(make_pick_option_rule("执行依据.文书类型", "民事类：",
+                                    ("判决书", "裁定书", "调解书", "支付令", "裁决书")))
+    # 执行依据作出机构 / 案由 / 文书号 / 生效日期 / 判项主文：标题后空段填入
+    sp += [
+        make_fill_after_rule("执行依据.作出机构", "执行依据作出机构"),
+        make_fill_after_rule("执行依据.案由", "案 由"),
+        make_fill_after_rule("执行依据.文书号", "文书号"),
+        make_fill_after_rule("执行依据.判项主文", "执行依据判项主文"),
+    ]
+    # 生效日期：标题后紧跟"年 月 日"段
+    def rule_60_date(doc, elements_):
+        v = _get_path(elements_, "执行依据.生效日期")
+        if not v:
+            return False
+        plist = list(iter_paragraphs(doc))
+        for i, p in enumerate(plist):
+            if "生效日期" in p.text:
+                for q in plist[i + 1: i + 3]:
+                    if "年" in q.text and "月" in q.text and "日" in q.text and "□" not in q.text:
+                        q.text = fmt_date(v)
+                        return True
+                break
+        return False
+    sp.append(rule_60_date)
+    # 申请执行事项勾选（金钱给付/本金/利息/行为执行…）
+    sp.append(make_pick_option_rule("申请执行事项.类型", "金钱给付□",
+                                    ("金钱给付", "本金", "一般债务利息", "迟延履行利息",
+                                     "其他费用", "行为执行", "交付特定物", "其他")))
+    # 申请执行事项金额
+    sp.append(make_text_replace_rule("申请执行事项.金额", "本金□:"))
+    # 保全
+    sp += [
+        make_pick_option_rule("保全.有无", "保全案号：", ("有", "无")),
+        make_text_replace_rule("保全.保全案号", "保全案号："),
+    ]
+    # 银行账户（申请执行人收款信息）
+    sp += [
+        make_text_replace_rule("当事人.自然人1.银行账号", "银行账号："),
+        make_text_replace_rule("当事人.自然人1.开户名", "开户名："),
+        make_text_replace_rule("当事人.自然人1.开户行", "开户行："),
+    ]
+    return _generic_plus(tree_dir, sp, elements)
+
+
+def _ip_admin_specifics() -> list[RuleFunc]:
+    """知产行政五案由（31-35）共用：被告=国家知识产权局/商标局等行政机关，法人块渲染。"""
+    return [
+        # 诉讼请求通常简单（撤销被诉决定+重新作出），走通用勾选
+        make_fill_after_rule("诉讼请求.具体请求", "诉讼请求"),
+        # 事实与理由：被诉决定文号 + 裁定理由 标题后空段
+        make_fill_after_rule("事实与理由.被诉决定", "被诉决定"),
+        make_fill_after_rule("事实与理由.事实理由", "事实与理由"),
+    ]
+
+
+def build_rules_31_tm_rejection(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """31 商标申请驳回复审。"""
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
+def build_rules_32_tm_cancellation(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """32 商标撤销复审行政纠纷。"""
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
+def build_rules_33_tm_invalidity(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """33 商标无效行政纠纷。"""
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
+def build_rules_34_patent_rejection(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """34 专利申请驳回复审行政纠纷。"""
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
+def build_rules_35_patent_invalidity(tree_dir=None, elements=None) -> list[RuleFunc]:
+    """35 专利无效行政纠纷。"""
+    return _generic_plus(tree_dir, _ip_admin_specifics(), elements)
+
+
 def build_rules_22_copyright(tree_dir=None, elements=None) -> list[RuleFunc]:
     return _generic_plus(tree_dir, _ip_specifics("经济损失"), elements)
 
@@ -1717,6 +1805,12 @@ RULE_BUILDERS = {
     "25-design-patent": build_rules_25_design_patent,
     "29-unfair-competition": build_rules_29_unfair_competition,
     "30-civil-monopoly": build_rules_30_civil_monopoly,
+    "60-enforcement": build_rules_60_enforcement,
+    "31-tm-rejection": build_rules_31_tm_rejection,
+    "32-tm-cancellation": build_rules_32_tm_cancellation,
+    "33-tm-invalidity": build_rules_33_tm_invalidity,
+    "34-patent-rejection": build_rules_34_patent_rejection,
+    "35-patent-invalidity": build_rules_35_patent_invalidity,
 }
 
 # ---------------------------------------------------------------------------
