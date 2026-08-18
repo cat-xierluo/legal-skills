@@ -1,5 +1,17 @@
 # 变更日志 — elements-complaint-generator
 
+## 0.13.0（2026-08-18）— 答辩状 45 棵树全量接入（113/113 全覆盖）
+
+### 答辩状/第三人意见陈述书 45 棵树
+- `answer_tree_for(nn)` / `all_secondary_trees()` 路由函数
+- case-type key 格式：`NN-answer`（如 `06-answer`、`44-answer`）
+- 通用层直接兼容（当事人块/勾选/落款条件装配）——无需专用构建器
+- tests/smoke_answers.py：**45/45 冒烟通过**（当事人/性别勾选/双日哨兵）
+
+### 113/113 全覆盖完成线
+- 68 主文书（精调 key + 数字 key）+ 45 答辩状（NN-answer key）= **113 棵模板树全部可渲染**
+
+
 ## 0.12.0（2026-08-18）— case-types 68/68 定稿补全 + 端到端真实演示
 
 ### case-types 定稿 68 份全量
