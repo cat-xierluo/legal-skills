@@ -400,6 +400,24 @@ def primary_tree_for(nn: str, templates_dir: Path) -> str | None:
     return (non_answer or cands)[0]
 
 
+
+
+def answer_tree_for(nn: str, templates_dir: Path) -> str | None:
+    """给定编号，返回答辩状/第三人意见陈述书树名（非主文书）。"""
+    cands = sorted(d.name for d in templates_dir.iterdir()
+                   if d.is_dir() and d.name.startswith(nn + "-") and "答辩" in d.name)
+    return cands[0] if cands else None
+
+
+def all_secondary_trees(templates_dir: Path) -> list[str]:
+    """全部非主文书树（答辩状 + 第三人意见陈述书）。"""
+    from generic_rules import generic_case_numbers, primary_tree_for
+    primaries = {primary_tree_for(n, templates_dir) for n in generic_case_numbers(templates_dir)}
+    primaries.discard(None)
+    return sorted(d.name for d in templates_dir.iterdir()
+                  if d.is_dir() and d.name not in primaries)
+
+
 def generic_case_numbers(templates_dir: Path) -> list[str]:
     """全部可通用接入的编号（01-68 中有主文书的）。"""
     out = []

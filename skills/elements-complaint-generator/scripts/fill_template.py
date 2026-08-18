@@ -2069,8 +2069,12 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 def _generic_ns() -> list[str]:
     import generic_rules
-    return [n for n in generic_rules.generic_case_numbers(_TEMPLATES_DIR)
-            if n not in ("05", "09")]
+    mains = [n for n in generic_rules.generic_case_numbers(_TEMPLATES_DIR)
+             if n not in ("05", "09")]
+    answers = [f"{n}-answer" for n in generic_rules.generic_case_numbers(_TEMPLATES_DIR)
+               if generic_rules.answer_tree_for(n, _TEMPLATES_DIR) is not None
+               and f"{n}-answer" not in mains]
+    return mains + answers
 
 
 def _lookup_tree_by_slug(case_type: str) -> str:
@@ -2091,6 +2095,14 @@ def resolve_case(case_type: str, templates_dir: Path | None = None) -> tuple[Pat
         tree = CASE_TYPE_TO_TREE.get(case_type) or _lookup_tree_by_slug(case_type)
         return base / tree, (lambda elements=None: RULE_BUILDERS[case_type](base / tree, elements))
     import generic_rules
+    # 答辩状路由：NN-answer → 答辩状树
+    if case_type.endswith("-answer"):
+        nn = case_type[:-7]
+        tree = generic_rules.answer_tree_for(nn, base)
+        if tree is None:
+            raise SystemExit(f"[fill_template] 错误：编号 {nn} 无答辩状模板树")
+        tree_dir = base / tree
+        return tree_dir, (lambda elements=None: generic_rules.build_generic_rules(tree_dir, elements))
     tree = generic_rules.primary_tree_for(case_type, base)
     if tree is None:
         raise SystemExit(f"[fill_template] 错误：编号 {case_type} 无主文书模板树")
