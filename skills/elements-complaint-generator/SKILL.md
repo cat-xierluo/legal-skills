@@ -1,7 +1,7 @@
 ---
 name: elements-complaint-generator
 description: Use when converting 律师已写好的常规起诉状(md/docx)或对话描述为符合最高法 67 类官方要素式起诉状示范文本格式的 Word 文档(法〔2025〕82 号,2025-07-14 全国推广)。适用于民间借贷/离婚纠纷/机动车事故/劳动争议等所有 67 类民事/商事/行政/知产案由的要素式起诉状/答辩状生成。
-license: CC-BY-NC
+license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
 version: "0.13.0"
@@ -184,6 +184,12 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 - 多原告/多被告/多代理人（模板"可复制粘贴扩容"条款）尚未实现自动复制行
 - 长文本多段 cell（如"事实与理由"12 段结构）的段落数保持尚未实现（v0.3 计划：XML 重建多段落）
 - lxml 重序列化后建议用 Word/WPS 打开核对一次（个别扩展命名空间模板可能报"需修复"）
+
+## 九、权限与数据边界
+
+- 脚本只在 `tempfile.mkdtemp()` 临时目录内复制模板树并渲染，渲染后自动 `shutil.rmtree()` 清理临时目录（不触碰用户数据）。
+- `ingest_full_templates.py --overwrite` 可覆盖 `templates/` 下指定模板树（显式参数，非默认行为）。
+- 不向网络发送任何案件内容；`--verify-residual` 只做本地扫描。
 
 ## 九、版本
 
