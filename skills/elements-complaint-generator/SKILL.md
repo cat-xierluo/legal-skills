@@ -191,7 +191,7 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 - `ingest_full_templates.py --overwrite` 可覆盖 `templates/` 下指定模板树（显式参数，非默认行为）。
 - 不向网络发送任何案件内容；`--verify-residual` 只做本地扫描。
 
-## 九、版本
+## 十、版本
 
 - 当前版本：`0.13.0`（2026-08-18）
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）
