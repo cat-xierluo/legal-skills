@@ -74,6 +74,8 @@ harness 仓库路径与完整索引见开发规范 §参考文件索引。
 4. client half（若有）：`__DSH_BOOT__` 含本包 → `/plugins/<id>/client.js` 可下 → **浏览器渲染截图**（slot 组件真实出现）
 5. 证据（commit + 命令输出 + 截图）写进验收报告；缺任一 → `NOT_VERIFIED`
 
+**浏览器取证标准工具：ego-browser**（agent 浏览器，任务空间隔离、复用本机登录态）。验收用 `ego-browser nodejs <<'EOF' ... EOF` 驱动：`gotoAndWait` 打开本地 web UI → `snapshotText`/`js` 做 DOM 断言（slot 组件存在、关键内容渲染）→ `captureScreenshot` 留证。localhost 测试无需公网与额外登录；比人工点选快且证据可复核。无 ego-browser 环境时人工验收并标注证据来源。
+
 ## 输出格式
 
 ```
