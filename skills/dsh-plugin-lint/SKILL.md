@@ -15,6 +15,10 @@ description: DeepSeek Harness（DSH）插件的设计预检、质量审查与发
 
 本技能不代替实现者。创建插件时先做设计预检，实现后回来做正式验收——审查器与生产者不混同责任。
 
+配套文件：
+- `config/harness-path.example.yaml` → 复制为 `config/harness-path.local.yaml` 填本地 harness 仓库路径与基线版本（§2 溯源用）
+- `templates/plugin-quality-report.md` → 正式审查的报告模板（结论带 NOT_VERIFIED 语义）
+
 ## 工作原则
 
 - 先机械后语义：脚本能查的（声明/工件）不浪费人工。
