@@ -347,7 +347,7 @@ python scripts/review/enrich_review_plan.py \
 - 完成口径：
   当本轮存在可访问 DOCX 合同文件时，必须生成并交付上述两个 Word 文件；只输出聊天文字、Markdown 摘要或风险清单，不构成完成。
 - 报告完整性复核：
-  报告生成脚本自身“运行成功”不等于报告合格。`scripts/report/integrity.py` 会独立复核占位数量、结构化计划中每项法律依据及渲染后逐项依据覆盖；`apply_review_plan.py` 会在写出任何正式 DOCX 前执行该门禁。未通过时非零退出并不留下正式交付物。仅在用户明确授权保留占位草稿时，才可使用 `--skip-integrity-check --draft-authorization <授权记录>`，且该路径只能输出带草稿声明的 Markdown，不得生成 DOCX。
+  报告生成脚本自身“运行成功”不等于报告合格。`scripts/report/integrity.py` 会独立复核占位数量、结构化计划中每项法律依据及渲染后逐项依据覆盖；`apply_review_plan.py` 会在写出任何正式 DOCX 前执行该门禁。未通过时非零退出并不留下正式交付物；如需保留草稿只能由上层调用方在授权后自行留存过程文件。
 - IM 回传口径：
   若任务来自飞书或其他 IM 渠道，默认在原对话框回传上述两个文件；如运行时不具备发附件能力，需明确说明“文件已生成但尚未完成会话回传”。
 - 结论模板：
@@ -408,5 +408,5 @@ python scripts/review/enrich_review_plan.py \
 
 ## 十三、版本
 
-- 当前版本：`1.6.1`
-- 更新日期：`2026-08-11`
+- 当前版本：`1.6.3`
+- 更新日期：`2026-08-13`
