@@ -84,7 +84,7 @@ harness 的共享预设 `packages/client/tsdown.client.ts` 不对外发布，自
 
 - 从源码跑：harness 仓库内 `pnpm dsh --profile <name> [task]`（headless 单任务）或 `pnpm dsh web --port <n>`
 - LLM provider：`DEEPSEEK_BASE_URL` / `DEEPSEEK_API_KEY` 指向任何 OpenAI 协议兼容网关（实测 127.0.0.1:8787 网关 + deepseek-v4-flash）
-- **HMR 边界**：out-of-tree 插件更新（node 或 client half）后**必须重启 dsh**——`ClientModuleRegistry` 的 rev 只在启动/内部事件时重扫，`rebuilt()` 只被 harness 仓库 `dev:web` watcher 触发
+- **HMR 边界（2026-08-19 双向实测）**：out-of-tree 插件**两个 half 都不热加载**——node half 改 `lib/` 后长驻进程不重载 apply（base 的 hmr `root` 不覆盖 link 目录，且 web/headless surface 禁用模块级 hmr row）；client half 的 `__DSH_BOOT__` rev 只在启动时重扫（`rebuilt()` 只被 harness 仓库 `dev:web` watcher 触发）。**更新后必须重启 dsh**。唯一热的是 profile `cordis.patch.yml` 配置层（launcher 兜底的 watch-only hmr）
 
 ## 6. 实测坑清单（契约层审查项的出处）
 
