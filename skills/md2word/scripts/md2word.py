@@ -57,6 +57,12 @@ from footnote_handler import (
 # ----------------------------------------------------------------------------
 _active_fn_manager = None
 
+# 仅供 create_book() 与 book_mode parser 通信的内部章间边界。
+# 使用带固定高熵后缀的独立整行 token，避免与合法 Markdown（尤其 ---/***/___）碰撞。
+BOOK_CHAPTER_BREAK_MARKER = (
+    "<<<MD2WORD_INTERNAL_CHAPTER_BREAK_3F6E6E3B-EEBB-4BB4-A2E2-5C4BF0CB5F70>>>"
+)
+
 
 def parse_text_with_footnotes(paragraph, text, title_level=0, is_quote=False):
     """解析文本，识别行内 [^id] 脚注引用；其余走 parse_text_formatting。
@@ -562,7 +568,7 @@ def add_book_header(section, title):
 
 def create_book(md_files, output_path, config, notes_mode='footnote'):
     """全书合并：多章 md → 单 docx。
-    预处理：脚注 id 加章前缀防冲突；章间用 '---' 分隔（book_mode 下每个 --- 触发分页）。
+    预处理：脚注 id 加章前缀防冲突；章间使用内部 marker 分隔。
     """
     print(f"📚 全书合并 {len(md_files)} 个文件 → {output_path}")
     merged = []
@@ -582,7 +588,7 @@ def create_book(md_files, output_path, config, notes_mode='footnote'):
     if not merged:
         print("❌ 无可合并的章节")
         return
-    full = '\n\n---\n\n'.join(merged)
+    full = f'\n\n{BOOK_CHAPTER_BREAK_MARKER}\n\n'.join(merged)
     tmp_md = output_path + '.merged.md'
     with open(tmp_md, 'w', encoding='utf-8') as fh:
         fh.write(full)
@@ -700,7 +706,6 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
     _active_fn_manager = fn_manager
     has_body_before_first_h2 = False
     has_seen_h2 = False
-    has_seen_first_hr = False  # 追踪第一个分隔符
     i = 0
     svg_counter = [0]  # 内联 SVG 计数（用于命名输出文件）
 
@@ -831,19 +836,17 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             i += 1
             continue
 
-        # 分割线（必须在 Markdown 表格检测之前，避免 --- 被误判为表格分隔行）
+        # 全书内部章间边界：只有 create_book() 注入的 marker 才创建新 section。
+        if book_mode and line == BOOK_CHAPTER_BREAK_MARKER:
+            # 使用 section break 而非 page break，配合 sectPr footnotePr
+            # numRestart=eachSec 实现每章脚注从 1 重置编号。
+            doc.add_section(WD_SECTION.NEW_PAGE)
+            i += 1
+            continue
+
+        # Markdown 分割线（必须在表格检测之前，避免 --- 被误判为表格分隔行）
         if line in ['---', '***', '___']:
-            if book_mode:
-                # 全书合并：每个分隔符 = 章间断点（用 section break 而非 page break，
-                # 配合 sectPr footnotePr numRestart=eachSec 实现每章脚注从 1 重置编号）
-                doc.add_section(WD_SECTION.NEW_PAGE)
-            elif not has_seen_first_hr:
-                # 第一个分隔符视为封面与正文的分界，渲染为分页符
-                has_seen_first_hr = True
-                doc.add_page_break()
-                print("✅ 封面分隔符 → 分页符")
-            else:
-                add_horizontal_line(doc)
+            add_horizontal_line(doc)
             i += 1
             continue
 

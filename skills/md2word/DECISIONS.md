@@ -2,6 +2,34 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-009] - 2026-08-24 - 用内部 marker 区分章间边界与 Markdown 水平线
+
+### 背景
+`create_book()` 原先用 `\n\n---\n\n` 拼接章节，`create_word_document(..., book_mode=True)` 又把任何 `---`、`***`、`___` 都转换为 `WD_SECTION.NEW_PAGE`。因此章节内合法水平线会被误当成章间断点；单章模式另有“首条水平线等于封面分页”的无来源启发式，也会吞掉第一条 Markdown 水平线。真实书稿中 ch12 有 1 条、ch13 有 8 条水平线，旧实现会产生多余 section 和硬分页。
+
+### 决策
+1. 定义带固定高熵后缀、独占整行的 `BOOK_CHAPTER_BREAK_MARKER`，只供 `create_book()` 与 book parser 内部通信；`create_book()` 仅用该 marker 拼接相邻输入文件。
+2. book parser 只在 `book_mode=True` 且整行严格等于内部 marker 时调用 `doc.add_section(WD_SECTION.NEW_PAGE)`；不用用户可输入的 Markdown 语法承担内部控制语义。
+3. `---`、`***`、`___` 在单章和全书模式下统一调用 `add_horizontal_line()`；删除“首条水平线作为封面分页”的状态与分支。
+4. 不改每章脚注 `numRestart=eachSec`、目录自动更新与页眉继承。内部 marker 仍产生每章独立 section，因此既有分节能力保持不变。
+
+### 方案取舍
+- 采用独立 marker：改动集中在既有“先合并 Markdown、再统一解析”的架构内，且不会与合法 Markdown 水平线碰撞。
+- 不改为逐章直接操作同一个 `Document`：这会扩大解析、脚注命名与资源路径处理的重构面，超出本次缺陷修复。
+- 不使用 HTML comment marker：当前预处理会先删除 HTML 注释，无法稳定传递章间边界。
+
+### 验证
+- RED：旧实现的两章 fixture 产生 3 sections（预期 2）；单章 `---` / `***` / `___` 只留下 2 条水平线（预期 3）。
+- GREEN：两项端到端回归与既有测试共 7 项全部通过；同时断言每章脚注 `numRestart=eachSec`、TOC、`updateFields` 和页眉继承保持不变。
+- 真实 15 章书稿只读前向验证：15 sections、9 条水平线（ch12=1、ch13=8）、118 表、180 图、0 图片占位符；临时 DOCX 与缓存仅保留在 `/tmp`，不进入仓库。
+- 源稿共有 128 个脚注引用标记：121 个生成 `<w:footnoteReference>`，另 7 个位于章节导读引用块内并保留为字面标记。该引用块解析缺口来自既有实现，相关解析路径未被本次改动触及，单独披露但不扩大本次章间边界修复范围。
+
+### 影响与回退
+- 影响范围仅限 `scripts/md2word.py` 的章间拼接与水平线分派；普通段落、表格、图片、脚注内容和样式配置不变。
+- 如需回退，应整体撤销内部 marker 与分派修改；不得只恢复 `---` 章间拼接，否则会重新引入章内硬分页逃逸。
+
+---
+
 ## [DEC-008] - 2026-07-14 - v1.1.7 回退列宽智能化到旧版 P80 算法
 
 ### 背景
