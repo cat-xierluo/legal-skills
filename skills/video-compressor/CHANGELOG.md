@@ -2,6 +2,42 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [1.4.0] - 2026-08-24
+
+### 新增
+
+- **`ffmpeg_smoke_test()`**（`scripts/hw_detect.py`）：脚本启动前验证 ffmpeg 二进制能否正常运行
+  - 检测 dyld Library not loaded 等 brew 依赖冲突，崩溃时立即输出诊断信息和 `brew upgrade ffmpeg` 修复命令
+  - 不再让 `ffmpeg -encoders` 静默 fallback 到会同样崩的软件编码
+  - 完整诊断日志写入 `/tmp/ffmpeg_smoke_test_*.log`
+- **`--detach` 模式**（`compress.py` 和 `trim_silences.py`）：脚本启动 ffmpeg 后立即返回，进程脱离会话组（`start_new_session`）
+  - 兜底机制，父进程被杀不影响编码
+  - 输出 `PID=<pid> 日志=<path>`，可用 `tail -f` 跟进
+  - 默认行为不变，保留 agent 介入诊断能力
+
+### 变更
+
+- **完整 stderr 日志**（`compress.py` / `trim_silences.py`）：失败时保存完整 stderr 到 `/tmp/ffmpeg_<视频名>_<时间戳>.log`，不再截断 500 字符丢失关键诊断信息
+- **VideoToolbox 并发数调优**：`_profile_hevc_vt()` 和 `_profile_h264_vt()` 的 `optimal_workers` 从 3 改为 1
+  - Apple Silicon 的 VideoToolbox 是共享硬件编码器，多 ffmpeg 进程并行争抢会让单任务速度从 2-3x 降到 1-1.5x
+- **SKILL.md 文档诚实标注**：1080p60 实测约 2-5x 实时（非原宣传 5-15x），3 小时视频约需 50 分钟
+- **新增故障排查章节**：覆盖 dyld Library not loaded 等环境崩溃场景的诊断与修复
+
+### 踩坑复盘
+
+本次修复源于一次 6.1GB 视频压缩任务：
+
+1. ffmpeg 8.1 二进制因 x265 升级未重新链接，启动即崩，脚本却 fallback 到 x264 继续报错
+2. 升级 ffmpeg 后用 Python 包装进程同步等结果，Claude Code 会话超时停止包装进程，孤儿 ffmpeg 被 SIGHUP 杀死，输出文件无 moov atom 不完整
+3. agent 反复 `ps`/`ls`/`tail` 轮询进度浪费上下文
+
+修复后的正确流程：
+- 长视频主动加 `--detach`：脚本输出 PID + 日志，agent 可立即返回
+- ffmpeg 崩溃：smoke test 5 秒内给出 dyld 符号 + brew 修复命令
+- 失败诊断：完整 stderr 日志，不再被截断丢信息
+
+---
+
 ## [1.3.0] - 2026-05-01
 
 ### 新增
