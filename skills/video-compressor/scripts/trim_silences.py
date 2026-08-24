@@ -231,11 +231,17 @@ def cut_segments(
     segments: list[Segment],
     output_path: Path,
     encode_args: list[str],
+    detach: bool = False,
 ) -> tuple[bool, str]:
-    """根据片段列表剪切视频，保留所有非静态区间。"""
+    """根据片段列表剪切视频，保留所有非静态区间。
+
+    detach=True 时启动 ffmpeg 后立即返回 "PID=<pid> 日志=<path>"，
+    父进程被杀不影响编码。"""
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     if not segments:
         cmd = [ffmpeg, "-y", "-i", str(video_path)] + encode_args + [str(output_path)]
+        if detach:
+            return _detach_popen(cmd, video_path), ""
         subprocess.run(cmd, capture_output=True)
         return True, "无片段需剪切，直接复制"
 
@@ -271,10 +277,41 @@ def cut_segments(
         "-filter_complex", filter_complex,
         "-map", "[outv]", "-map", "[outa]",
     ] + encode_args + [str(output_path)]
+    if detach:
+        return _detach_popen(cmd, video_path), ""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        return False, result.stderr[:500]
+        log_path = _save_failure_log(video_path, result.stderr)
+        return False, f"日志={log_path}"
     return True, "成功"
+
+
+def _detach_popen(cmd: list[str], video_path: Path) -> str:
+    """启动 ffmpeg 并脱离父进程会话组，返回 "PID=<pid> 日志=<path>" 信息。"""
+    from datetime import datetime
+    log_path = Path(f"/tmp/ffmpeg_{video_path.stem}_{datetime.now():%Y%m%d_%H%M%S}.log")
+    log_fh = open(log_path, "w")
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except Exception as e:
+        log_fh.close()
+        log_path.write_text(f"Popen failed: {e}\n")
+        return f"Popen 失败，日志={log_path}"
+    return f"PID={proc.pid} 日志={log_path}"
+
+
+def _save_failure_log(video_path: Path, stderr: str) -> Path:
+    """保存完整 stderr 到 /tmp，避免截断 500 字符丢失关键诊断。"""
+    from datetime import datetime
+    log_path = Path(f"/tmp/ffmpeg_{video_path.stem}_{datetime.now():%Y%m%d_%H%M%S}.log")
+    log_path.write_text(stderr)
+    return log_path
 
 
 def save_removed_clips(
@@ -329,6 +366,9 @@ def main():
     parser.add_argument("--codec", default=None,
                         choices=["hevc_vt", "h264_vt", "x264", "x265", "x264_fast"],
                         help="编码器选择 (默认自动检测最优方案)")
+    parser.add_argument("--detach", action="store_true",
+                        help="剪切步骤启动 ffmpeg 后立即返回（脱离会话组），"
+                             "父进程被杀也不影响编码，适合长视频")
     args = parser.parse_args()
 
     video_path = Path(args.input).resolve()
@@ -403,12 +443,16 @@ def main():
 
     print(f"\n正在生成精剪版...")
     ok, msg = cut_segments(
-        video_path, target_segs, output_path, encode_args,
+        video_path, target_segs, output_path, encode_args, detach=args.detach,
     )
 
     if not ok:
         print(f"剪切失败: {msg}")
         sys.exit(1)
+
+    if args.detach and msg.startswith("PID="):
+        print(f"  已启动后台 ffmpeg: {msg}")
+        print(f"  跟进方式: tail -f /tmp/ffmpeg_{video_path.stem}_*.log")
 
     original_size = video_path.stat().st_size
     trimmed_size = output_path.stat().st_size
