@@ -4,7 +4,7 @@ description: Use when converting 律师已写好的常规起诉状(md/docx)或�
 license: MIT
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.13.0"
+version: "0.13.4"
 ---
 
 # 要素式起诉状生成 Skill（elements-complaint-generator）
@@ -23,9 +23,9 @@ version: "0.13.0"
 - **Agent 负责"抽取"**：读常规起诉状 → 按案由 Schema 产出 elements.json（人可复核）。语义理解是 LLM 强项，regex 只做兜底（`extract_from_markdown.py`）。
 - **代码负责"填充"**：`fill_template.py` 在模板 XML 上做 `<w:t>` 跨 run 精确替换。格式保真是确定性任务，LLM 不碰。
 
-### 1.2 v0.3 范围
+### 1.2 当前范围（v0.13）
 
-| 维度 | v0.3 范围 |
+| 维度 | 范围 |
 |---|---|
 | 模板 | **113 棵树全量入库**（法〔2025〕82 号完整版：上册42+中册28+下册43，编号01-68按上中下顺序） |
 | 抽取 | **Agent 会话内抽取为主**；`extract_from_markdown.py` regex 为兜底 |
@@ -89,7 +89,7 @@ version: "0.13.0"
 
 ```bash
 python scripts/fill_template.py \
-  --case-type 06 \   # 两位编号=通用级；精调级：05-divorce / 09-private-lending / 06-sale / 15-labor / 21-traffic
+  --case-type 09-private-lending \   # 精调 key（如 22-copyright / 60-enforcement / 65-objection）或两位编号（06）走通用级
   --elements <案件>/elements.json \
   --output <案件>/要素式起诉状.docx \
   --verify-residual "旧当事人名,旧电话"
@@ -101,7 +101,7 @@ python scripts/fill_template.py \
 
 ### 3.4 回归
 
-`bash tests/run_e2e.sh` — 双案由精调回归（带标签断言+哨兵）+ **全 68 编号通用级冒烟**（tests/smoke_all.py）
+`bash tests/run_e2e.sh` — 28 产物精调回归（带标签断言+哨兵）+ 68 树冒烟 + 45 答辩冒烟（tests/smoke_answers.py）
 
 ## 四、依赖与模板资产
 
@@ -193,5 +193,7 @@ python scripts/pack_docx.py --tree templates/06-买卖合同纠纷-民事起诉�
 
 ## 十、版本
 
-- 当前版本：`0.13.0`（2026-08-18）
+- 当前版本：`0.13.4`（2026-08-22）
+- 覆盖：113/113 模板树（68 主文书精调 + 45 答辩状）
+- 格式修复：节合并（主体连续+调解/证据独立分页）、页边距归一（25mm）、页脚 PAGE 域
 - 设计稿：`docs/plans/2026-08-17-elements-complaint-generator-design.md`（不入仓）
