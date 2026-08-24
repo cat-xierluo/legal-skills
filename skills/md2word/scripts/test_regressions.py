@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import sys
 import unittest
 import zipfile
+import xml.etree.ElementTree as ET
 
 from docx import Document
 from docx.oxml.ns import qn
@@ -67,6 +68,62 @@ class Md2WordRegressionTest(unittest.TestCase):
         self.assertIn("模型概览 与 重点，命令 Skill", text)
         self.assertNotIn("*", text)
         self.assertNotIn("`", text)
+
+    def test_repeated_footnote_label_creates_distinct_word_footnotes(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "repeated-footnote.md"
+            output = temp_dir / "repeated-footnote.docx"
+            markdown.write_text(
+                "# 重复脚注\n\n第一次[^same]，第二次[^same]。\n\n[^same]: 相同脚注文本\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            with zipfile.ZipFile(output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+                footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
+            reference_ids = [
+                node.get(qn("w:id"))
+                for node in document_root.iter(qn("w:footnoteReference"))
+            ]
+            footnotes = [
+                node
+                for node in footnotes_root.iter(qn("w:footnote"))
+                if int(node.get(qn("w:id"))) > 0
+            ]
+            footnote_texts = [
+                "".join(node.text or "" for node in footnote.iter(qn("w:t"))).strip()
+                for footnote in footnotes
+            ]
+            self.assertEqual(len(reference_ids), 2)
+            self.assertEqual(len(set(reference_ids)), 2, "每次原生脚注引用必须使用独立 w:id")
+            self.assertEqual(len(footnotes), 2)
+            self.assertEqual(footnote_texts, ["相同脚注文本", "相同脚注文本"])
+
+    def test_repeated_endnote_label_reuses_one_number_and_definition(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "repeated-endnote.md"
+            output = temp_dir / "repeated-endnote.docx"
+            markdown.write_text(
+                "# 重复尾注\n\n第一次[^same]，第二次[^same]。\n\n[^same]: 相同尾注文本\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(
+                str(markdown), str(output), config=config, notes_mode="endnote"
+            )
+
+            document = Document(output)
+            paragraph_texts = [paragraph.text for paragraph in document.paragraphs]
+            self.assertIn("第一次1，第二次1。", paragraph_texts)
+            self.assertEqual(paragraph_texts.count("[1] 相同尾注文本"), 1)
 
     def test_external_image_download_function_exists(self):
         # 外链图片下载保持默认启用（原行为），download_external_image 可被直接调用

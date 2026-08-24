@@ -51,9 +51,9 @@ class FootnoteManager:
         assert mode in ('footnote', 'endnote')
         self.mode = mode
         self.defs = {}        # {id: text}
-        self.refs = []        # [(seq, text), ...] 按出现顺序（去重后每 note_id 一条）
+        self.refs = []        # [(seq, text), ...]；footnote 按出现，endnote 按 label 去重
         self._seq = 0         # 编号 / footnote w:id 计数（从 1 起）
-        self._id_map = {}     # {note_id: seq} 同一 note_id 复用（标准多次引用同一脚注）
+        self._id_map = {}     # {note_id: seq}，仅 endnote 同一 label 复用编号
 
     def set_defs(self, defs):
         self.defs = defs
@@ -61,20 +61,24 @@ class FootnoteManager:
     def add_reference(self, paragraph, note_id):
         """在段落插入脚注引用。footnote→footnoteReference；endnote→上标编号。
 
-        同一 note_id 多次引用时复用同一 seq：footnotes.xml 只登记一条，正文
-        多个 footnoteReference 指向同一 w:id——Word 自动渲染为同号、脚注块
-        只出现一次（标准 markdown 多次引用同一脚注的语义）。
+        原生 footnote 的每次出现都分配独立 w:id 并登记一条定义，避免 Word
+        对重复 footnoteReference ID 的兼容问题；endnote 保持同一 Markdown label
+        复用同一编号与一条尾注定义。
         """
         text = self.defs.get(note_id, '')
         if not text:
             return  # 无定义的悬空引用跳过
-        if note_id in self._id_map:
-            seq = self._id_map[note_id]   # 复用：不重复建 footnotes.xml 条目
+        if self.mode == 'footnote':
+            self._seq += 1
+            seq = self._seq
+            self.refs.append((seq, text))
+        elif note_id in self._id_map:
+            seq = self._id_map[note_id]
         else:
             self._seq += 1
             seq = self._seq
             self._id_map[note_id] = seq
-            self.refs.append((seq, text))  # 仅首次引用登记
+            self.refs.append((seq, text))
         if self.mode == 'footnote':
             # 正文 run：footnoteReference（w:id 与 footnotes.xml 中 w:footnote 对应）
             run = OxmlElement('w:r')
