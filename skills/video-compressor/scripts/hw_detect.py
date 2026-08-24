@@ -9,8 +9,72 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path
 
 _hw_cache: dict | None = None
+
+
+def ffmpeg_smoke_test(ffmpeg_path: str) -> None:
+    """ffmpeg 二进制健全性测试。
+
+    检测 ffmpeg 能否正常启动（处理 dyld 库缺失、版本不匹配等环境问题）。
+    若失败，立即输出诊断信息和 brew 修复命令并退出脚本，
+    而不是让后续编码器探测静默失败、误导用户。
+
+    触发此函数的典型场景:
+    - brew upgrade x265 后 ffmpeg 仍链接旧 libx265.215.dylib
+    - brew reinstall ffmpeg 后未完成链接
+    - 系统 Python/库路径冲突
+    """
+    try:
+        result = subprocess.run(
+            [ffmpeg_path, "-version"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except FileNotFoundError:
+        print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("错误：ffmpeg -version 调用超时（5 秒）")
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误：ffmpeg 调用失败: {e}")
+        sys.exit(1)
+
+    # ffmpeg 启动崩溃通常非 0 返回码 + stderr 含 dyld / Library not loaded
+    if result.returncode == 0 and "ffmpeg version" in result.stdout:
+        return  # 通过
+
+    # 保存完整诊断到临时文件，便于用户上报
+    log_path = Path(tempfile.gettempdir()) / f"ffmpeg_smoke_test_{datetime.now():%Y%m%d_%H%M%S}.log"
+    log_path.write_text(
+        f"=== stdout ===\n{result.stdout}\n\n=== stderr ===\n{result.stderr}\n"
+    )
+
+    stderr = result.stderr
+    symbol_match = re.search(r"_x265_api_get_\d+|_x264_api_get_\d+|Symbol not found: (\S+)", stderr)
+    library_match = re.search(r"Library not loaded: (\S+)", stderr)
+    version_match = re.search(r"tried: '([^']+)' \(no such file\)", stderr)
+
+    print("错误：ffmpeg 二进制无法正常运行")
+    print(f"返回码: {result.returncode}")
+    if library_match:
+        print(f"诊断: 缺失动态库 {library_match.group(1)}")
+    if version_match:
+        print(f"原因: 路径 {version_match.group(1)} 不存在")
+    if symbol_match:
+        print(f"符号: {symbol_match.group(0)}")
+    if "dyld" in stderr or "Library not loaded" in stderr:
+        print()
+        print("常见原因: brew upgrade 升级某个依赖库后，ffmpeg 未重新链接。")
+        print("修复命令:")
+        print("  brew upgrade ffmpeg")
+        print("  或: brew reinstall ffmpeg")
+    print()
+    print(f"完整诊断日志: {log_path}")
+    sys.exit(1)
 
 
 def detect_hardware() -> dict:
@@ -18,6 +82,12 @@ def detect_hardware() -> dict:
     global _hw_cache
     if _hw_cache is not None:
         return _hw_cache
+
+    ffmpeg_path = shutil.which("ffmpeg")
+    if not ffmpeg_path:
+        print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
+        sys.exit(1)
+    ffmpeg_smoke_test(ffmpeg_path)
 
     hw = {
         "platform": "unknown",
@@ -62,30 +132,28 @@ def detect_hardware() -> dict:
     elif sys.platform.startswith("linux"):
         hw["platform"] = "linux"
 
-    # FFmpeg 编码器检测
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg:
-        try:
-            result = subprocess.run(
-                [ffmpeg, "-encoders"],
-                capture_output=True, text=True, timeout=10,
-            )
-            encoders = result.stdout
-            hw["has_h264_vt"] = "h264_videotoolbox" in encoders
-            hw["has_hevc_vt"] = "hevc_videotoolbox" in encoders
-        except Exception:
-            pass
+    # FFmpeg 编码器检测（smoke test 已确保 ffmpeg 能跑）
+    try:
+        result = subprocess.run(
+            [ffmpeg_path, "-encoders"],
+            capture_output=True, text=True, timeout=10,
+        )
+        encoders = result.stdout
+        hw["has_h264_vt"] = "h264_videotoolbox" in encoders
+        hw["has_hevc_vt"] = "hevc_videotoolbox" in encoders
+    except Exception:
+        pass
 
-        try:
-            result = subprocess.run(
-                [ffmpeg, "-version"],
-                capture_output=True, text=True, timeout=5,
-            )
-            m = re.search(r"ffmpeg version (\d+\.\d+)", result.stdout)
-            if m:
-                hw["ffmpeg_version"] = m.group(1)
-        except Exception:
-            pass
+    try:
+        result = subprocess.run(
+            [ffmpeg_path, "-version"],
+            capture_output=True, text=True, timeout=5,
+        )
+        m = re.search(r"ffmpeg version (\d+\.\d+)", result.stdout)
+        if m:
+            hw["ffmpeg_version"] = m.group(1)
+    except Exception:
+        pass
 
     _hw_cache = hw
     return hw
@@ -113,24 +181,27 @@ def select_profile(hw: dict, user_codec: str | None = None) -> dict:
 
 
 def _profile_hevc_vt() -> dict:
+    # Apple Silicon VideoToolbox 是共享硬件编码器，多 ffmpeg 进程并行争抢
+    # 会让单任务速度从 2-3x 降到 1-1.5x，串行处理多个文件效率更高。
     return {
         "name": "hevc_videotoolbox",
         "display_name": "HEVC VideoToolbox (硬件加速)",
         "tier": 1,
         "video_codec": "hevc_videotoolbox",
         "is_hardware": True,
-        "optimal_workers": 3,
+        "optimal_workers": 1,
     }
 
 
 def _profile_h264_vt() -> dict:
+    # 同 _profile_hevc_vt 注释：VideoToolbox 共享硬件编码器，最佳并发为 1
     return {
         "name": "h264_videotoolbox",
         "display_name": "H.264 VideoToolbox (硬件加速)",
         "tier": 1,
         "video_codec": "h264_videotoolbox",
         "is_hardware": True,
-        "optimal_workers": 3,
+        "optimal_workers": 1,
     }
 
 

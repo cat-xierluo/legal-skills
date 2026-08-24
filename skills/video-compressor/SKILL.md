@@ -1,6 +1,6 @@
 ---
 name: video-compressor
-description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件并选择最优编码方案（Apple Silicon 默认使用 VideoToolbox 硬件加速，速度提升 5-15x）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
+description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件并选择最优编码方案（Apple Silicon 默认使用 VideoToolbox 硬件加速，实际 1080p60 约 2-5x 实时速度）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -52,7 +52,7 @@ license: MIT
 | 音频比特率 | 96k | AAC 语音音质 |
 | 编码预设 | veryfast | 速度与压缩比平衡（仅软件编码） |
 | 编码器 | 自动检测 | Apple Silicon 默认 HEVC VT，其他 x264 |
-| 并发线程 | 3 | 同时压缩的视频数 |
+| 并发线程 | 自动 | VideoToolbox 默认 1（共享硬件编码器，多并发反而慢），软件编码默认 ≤8 |
 | 输出后缀 | `_compressed` | 输出文件名后缀 |
 
 详细配置说明见 `references/config.md`。
@@ -160,17 +160,19 @@ python3 scripts/trim_silences.py -i <路径> --noise-db -40 --min-duration 5
 
 本工具自动检测系统硬件并选择最优编码方案：
 
-| 平台 | 编码器 | 速度提升 | 输出格式 | 说明 |
-|------|--------|----------|----------|------|
-| Apple Silicon (M1/M2/M3/M4) | hevc_videotoolbox | 5-15x | HEVC/H.265 | 自动使用硬件编码 |
-| Apple Silicon (备用) | h264_videotoolbox | 3-8x | H.264 | HEVC 不可用时的回退 |
-| 其他平台 | libx264 | 1x | H.264 | 标准软件编码 |
+| 平台 | 编码器 | 速度提升（实测） | 输出格式 | 说明 |
+|------|--------|------------------|----------|------|
+| Apple Silicon (M1/M2/M3/M4) | hevc_videotoolbox | 2-5x（1080p60） / 5-15x（720p30） | HEVC/H.265 | 自动使用硬件编码 |
+| Apple Silicon (备用) | h264_videotoolbox | 2-4x（1080p60） / 4-10x（720p30） | H.264 | HEVC 不可用时的回退 |
+| 其他平台 | libx264 | 1x 实时 | H.264 | 标准软件编码 |
+
+> 速度提示：上述数值为实际测试参考范围，实际速度受分辨率、帧率、画质参数、系统负载影响。1080p60 高帧率场景下 VideoToolbox 实际约 2-5x 实时（而非 5-15x），3 小时视频约需 50 分钟。
 
 启动时自动打印检测结果，如：
 ```
 硬件检测: Apple Silicon (10 核 / 64 GB)
-编码器: HEVC VideoToolbox (硬件加速) — 预计速度提升 5-15x
-FFmpeg: 8.1 (VideoToolbox 支持: H.264 + HEVC)
+编码器: HEVC VideoToolbox (硬件加速) — 实际 1080p60 约 2-5x 实时
+FFmpeg: 9.0 (VideoToolbox 支持: H.264 + HEVC)
 ```
 
 手动指定编码器：
@@ -182,6 +184,40 @@ python3 scripts/compress.py -i <路径> --codec x265      # 软件 HEVC 编码�
 ```
 
 可选编码器：`hevc_vt` `h264_vt` `x264` `x265` `x264_fast`
+
+## 长视频与 detach 模式
+
+对超过 30 分钟的视频，建议加 `--detach` 启动：
+
+```bash
+python3 scripts/compress.py -i <长视频.mp4> --codec hevc_vt --detach
+```
+
+`--detach` 行为：
+- 脚本启动 ffmpeg 后立即返回 PID，不等待完成
+- ffmpeg 进程脱离脚本会话组（`start_new_session`），脚本被杀不影响编码
+- 日志写入 `/tmp/ffmpeg_<视频名>_<时间戳>.log`，可用 `tail -f` 跟踪
+
+## 故障排查
+
+### ffmpeg 二进制启动崩溃（dyld Library not loaded）
+
+**症状**：脚本启动后立即报"dyld Symbol not found"或"Library not loaded"。
+
+**原因**：典型场景是 `brew upgrade` 升级某个依赖库（如 x265）后，ffmpeg 未重新链接；ffmpeg 二进制仍在引用旧版本符号。
+
+**修复**：
+```bash
+brew upgrade ffmpeg        # 让 ffmpeg 重新链接到新依赖
+# 或
+brew reinstall ffmpeg      # 完全重装
+```
+
+新版脚本会在启动时主动检测 ffmpeg 健全性，崩溃时立即输出诊断和修复命令，不再静默 fallback。
+
+### 完整 stderr 日志
+
+失败时完整 ffmpeg 日志保存在 `/tmp/ffmpeg_<视频名>_<时间戳>.log`，不再被截断丢失关键诊断信息。
 
 ## 硬约束
 
