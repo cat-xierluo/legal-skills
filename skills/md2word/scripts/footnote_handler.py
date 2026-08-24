@@ -99,6 +99,28 @@ class FootnoteManager:
             r.font.superscript = True
             r.font.size = Pt(9)
 
+    def add_adjacent_reference_separator(self, paragraph):
+        """为源码直接相邻的原生脚注引用插入一个 9pt 上标 NBSP。"""
+        if self.mode != 'footnote':
+            return
+        run = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        rFonts = OxmlElement('w:rFonts')
+        rFonts.set(qn('w:ascii'), 'Times New Roman')
+        rFonts.set(qn('w:hAnsi'), 'Times New Roman')
+        rPr.append(rFonts)
+        vert = OxmlElement('w:vertAlign')
+        vert.set(qn('w:val'), 'superscript')
+        rPr.append(vert)
+        sz = OxmlElement('w:sz')
+        sz.set(qn('w:val'), '18')
+        rPr.append(sz)
+        run.append(rPr)
+        text = OxmlElement('w:t')
+        text.text = '\u00a0'
+        run.append(text)
+        paragraph._p.append(run)
+
     def append_endnotes_section(self, doc):
         """endnote 模式：文档末追加“注释”小节 + 编号列表。footnote 模式无操作。"""
         if self.mode != 'endnote' or not self.refs:
@@ -241,6 +263,7 @@ def _inject_footnotes_into_docx(docx_path, refs):
     for seq, text in refs:
         fn_items.append(
             '<w:footnote w:id="%d"><w:p>'
+            '<w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
             '<w:r><w:rPr><w:vertAlign w:val="superscript"/><w:sz w:val="18"/></w:rPr><w:footnoteRef/></w:r>'
             '%s'
             '</w:p></w:footnote>' % (seq, _footnote_text_to_runs_xml(text))

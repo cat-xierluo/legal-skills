@@ -74,11 +74,18 @@ def parse_text_with_footnotes(paragraph, text, title_level=0, is_quote=False):
         return
     # 遍历 [^id] 引用：引用之间的普通文本走 parse_text_formatting，引用处插入脚注引用 run
     last = 0
+    previous_reference_rendered = False
     for m in NOTE_REF_RE.finditer(text):
         if m.start() > last:
             parse_text_formatting(paragraph, text[last:m.start()],
                                   title_level=title_level, is_quote=is_quote)
-        _active_fn_manager.add_reference(paragraph, m.group(1))
+        note_id = m.group(1)
+        current_reference_rendered = bool(_active_fn_manager.defs.get(note_id, ''))
+        if (previous_reference_rendered and current_reference_rendered
+                and m.start() == last and _active_fn_manager.mode == 'footnote'):
+            _active_fn_manager.add_adjacent_reference_separator(paragraph)
+        _active_fn_manager.add_reference(paragraph, note_id)
+        previous_reference_rendered = current_reference_rendered
         last = m.end()
     if last < len(text):
         parse_text_formatting(paragraph, text[last:],

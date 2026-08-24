@@ -104,6 +104,83 @@ class Md2WordRegressionTest(unittest.TestCase):
             self.assertEqual(len(footnotes), 2)
             self.assertEqual(footnote_texts, ["相同脚注文本", "相同脚注文本"])
 
+    def test_adjacent_footnote_references_get_one_superscript_nbsp_separator(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "adjacent-footnotes.md"
+            output = temp_dir / "adjacent-footnotes.docx"
+            markdown.write_text(
+                "# 相邻脚注\n\n"
+                "相邻[^a][^b]；空格[^a] [^b]；逗号[^a]，[^b]；顿号[^a]、[^b]。\n\n"
+                "[^a]: 脚注甲\n[^b]: 脚注乙\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            with zipfile.ZipFile(output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+            nbsp_runs = []
+            reference_paragraph_tokens = None
+            for paragraph in document_root.iter(qn("w:p")):
+                tokens = []
+                reference_count = 0
+                for run in paragraph.findall(qn("w:r")):
+                    reference = run.find(qn("w:footnoteReference"))
+                    if reference is not None:
+                        tokens.append(("reference", reference.get(qn("w:id")), run))
+                        reference_count += 1
+                        continue
+                    text = "".join(node.text or "" for node in run.iter(qn("w:t")))
+                    if text:
+                        tokens.append(("text", text, run))
+                    if text == "\u00a0":
+                        nbsp_runs.append(run)
+                if reference_count == 8:
+                    reference_paragraph_tokens = tokens
+
+            self.assertEqual(len(nbsp_runs), 1, "只有源码直接相邻的脚注引用需要 NBSP")
+            self.assertIsNotNone(reference_paragraph_tokens)
+            nbsp_index = next(
+                index
+                for index, token in enumerate(reference_paragraph_tokens)
+                if token[0] == "text" and token[1] == "\u00a0"
+            )
+            self.assertEqual(reference_paragraph_tokens[nbsp_index - 1][0], "reference")
+            self.assertEqual(reference_paragraph_tokens[nbsp_index + 1][0], "reference")
+            run_properties = nbsp_runs[0].find(qn("w:rPr"))
+            self.assertEqual(
+                run_properties.find(qn("w:vertAlign")).get(qn("w:val")), "superscript"
+            )
+            self.assertEqual(run_properties.find(qn("w:sz")).get(qn("w:val")), "18")
+
+    def test_positive_footnote_paragraphs_have_compact_explicit_spacing(self):
+        with TemporaryDirectory() as temp:
+            docx_path = Path(temp) / "footnote-spacing.docx"
+            Document().save(docx_path)
+            _inject_footnotes_into_docx(
+                str(docx_path), [(1, "第一条脚注"), (2, "第二条脚注")]
+            )
+
+            with zipfile.ZipFile(docx_path) as archive:
+                footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
+            positive_footnotes = [
+                node
+                for node in footnotes_root.iter(qn("w:footnote"))
+                if int(node.get(qn("w:id"))) > 0
+            ]
+            self.assertEqual(len(positive_footnotes), 2)
+            for footnote in positive_footnotes:
+                paragraph = footnote.find(qn("w:p"))
+                spacing = paragraph.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+                self.assertIsNotNone(spacing)
+                self.assertEqual(spacing.get(qn("w:before")), "0")
+                self.assertEqual(spacing.get(qn("w:after")), "0")
+                self.assertEqual(spacing.get(qn("w:line")), "240")
+                self.assertEqual(spacing.get(qn("w:lineRule")), "auto")
+
     def test_repeated_endnote_label_reuses_one_number_and_definition(self):
         with TemporaryDirectory() as temp:
             temp_dir = Path(temp)
