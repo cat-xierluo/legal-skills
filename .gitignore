@@ -47,9 +47,9 @@ templates/
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
 !skills/legal-harness-init/config/instruction-stability-contract.json
-!skills/multi-agent-orchestration/config/harness-backend-policy.json
 !skills/video-screenshot/config/instruction-stability-contract.json
 !skills/video-screenshot/config/evidence-lead-taxonomy.json
+!skills/multi-agent-orchestration/config/harness-backend-policy.json
 # Team config - keep example, ignore real data and images
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
@@ -135,6 +135,9 @@ skills/clawhub-sync/config/sync-allowlist.yaml
 
 # Transcription corrector runtime config (real credentials, .example kept)
 skills/transcription-corrector/config/config.env
+
+# lecture-review 讲师档案（个人数据：真实姓名、场次、表现分析，仅存本地）
+skills/lecture-review/profiles/
 
 # Case directories created by court-sms skill (contain real case data)
 # Pattern: （YYYY）XXXX号 .../
