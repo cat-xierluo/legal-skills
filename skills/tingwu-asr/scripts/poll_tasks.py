@@ -2,6 +2,8 @@
 """tingwu-asr 异步任务轮询 — 检查 pending 任务状态，完成后自动生成 Markdown"""
 
 import argparse
+import contextlib
+import fcntl
 import json
 import subprocess
 import sys
@@ -17,8 +19,50 @@ from format_output import result_to_markdown, lab_to_markdown, save_archive
 
 PENDING_PATH = SKILL_ROOT / "config" / "pending_tasks.json"
 COMPLETED_PATH = SKILL_ROOT / "config" / "completed_tasks.json"
+LOCK_PATH = SKILL_ROOT / "config" / ".pending_tasks.lock"
 
 STATUS_NAMES = {0: "已完成", 1: "排队中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
+
+
+@contextlib.contextmanager
+def pending_lock(timeout=0):
+    """对 pending_tasks 加排他文件锁。
+
+    - timeout=0（默认）：非阻塞抢锁；抢不到立即退出，由 monitor 下一轮重试
+    - timeout>0：阻塞抢锁，最多等 N 秒（适用于强制串行场景）
+
+    锁文件 .pending_tasks.lock 紧邻 pending_tasks.json，
+    利用 fcntl.flock(LOCK_EX | LOCK_NB) 实现跨进程互斥。
+    """
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fd = open(LOCK_PATH, "w")
+    try:
+        if timeout <= 0:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                fd.close()
+                yield False
+                return
+        else:
+            deadline = time.time() + timeout
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() >= deadline:
+                        fd.close()
+                        yield False
+                        return
+                    time.sleep(0.2)
+        yield True
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except Exception:
+            pass
+        fd.close()
 
 
 def load_tasks(path):
@@ -118,68 +162,80 @@ def finish_task(client, task):
 
 
 def check_once(client):
-    """检查所有 pending 任务的状态，完成的自动处理"""
-    tasks = load_tasks(PENDING_PATH)
-    if not tasks:
-        print("无待处理任务")
-        return []
+    """检查所有 pending 任务的状态，完成的自动处理。
 
-    completed = []
-    remaining = []
+    加锁语义：抢不到锁直接返回 []，由 monitor_loop 下一轮重试。
+    抢到锁后才读 pending_tasks.json，确保拿到最新列表，
+    避免在 pending → completed 的写窗口里被另一个进程重复处理。
+    """
+    with pending_lock(timeout=0) as got:
+        if not got:
+            print("[锁定] 另一个 poll_tasks 正在处理，跳过本轮")
+            return []
 
-    for task in tasks:
-        trans_id = task["trans_id"]
-        try:
-            info = client.get_trans_list(trans_id)
-        except Exception as e:
-            print(f"[{trans_id}] 查询失败: {e}")
-            remaining.append(task)
-            continue
+        # 锁内重新读取，避免读到过期快照
+        tasks = load_tasks(PENDING_PATH)
+        if not tasks:
+            print("无待处理任务")
+            return []
 
-        if info is None:
-            print(f"[{trans_id}] 任务未出现在列表中")
-            remaining.append(task)
-            continue
+        completed = []
+        remaining = []
 
-        status = info.get("status", -1)
-        name = STATUS_NAMES.get(status, f"未知({status})")
-
-        if status in (0, 3):
-            print(f"[{trans_id}] {name} — 正在生成输出...")
+        for task in tasks:
+            trans_id = task["trans_id"]
             try:
-                result_info = finish_task(client, task)
-                task["status"] = "completed"
-                task["completed_at"] = datetime.now().isoformat()
-                task["result"] = result_info
-                completed.append(task)
+                info = client.get_trans_list(trans_id)
             except Exception as e:
-                print(f"[{trans_id}] 生成输出失败: {e}")
-                task["status"] = "error"
-                task["error"] = str(e)
+                print(f"[{trans_id}] 查询失败: {e}")
+                remaining.append(task)
+                continue
+
+            if info is None:
+                print(f"[{trans_id}] 任务未出现在列表中")
+                remaining.append(task)
+                continue
+
+            status = info.get("status", -1)
+            name = STATUS_NAMES.get(status, f"未知({status})")
+
+            if status in (0, 3):
+                print(f"[{trans_id}] {name} — 正在生成输出...")
+                try:
+                    result_info = finish_task(client, task)
+                    task["status"] = "completed"
+                    task["completed_at"] = datetime.now().isoformat()
+                    task["result"] = result_info
+                    completed.append(task)
+                except Exception as e:
+                    print(f"[{trans_id}] 生成输出失败: {e}")
+                    task["status"] = "error"
+                    task["error"] = str(e)
+                    completed.append(task)
+            elif status == 4:
+                print(f"[{trans_id}] 失败: {info.get('statusMsg', '未知原因')}")
+                task["status"] = "failed"
+                task["error"] = info.get("statusMsg", "未知原因")
                 completed.append(task)
-        elif status == 4:
-            print(f"[{trans_id}] 失败: {info.get('statusMsg', '未知原因')}")
-            task["status"] = "failed"
-            task["error"] = info.get("statusMsg", "未知原因")
-            completed.append(task)
-        else:
-            extra = ""
-            forecast = info.get("forecastTransDoneTime")
-            now = info.get("serverCurrentTime")
-            if forecast and now and status in (1, 2):
-                remain_s = max(0, (forecast - now) / 1000)
-                extra = f" | 预计剩余: {remain_s / 60:.1f} 分钟"
-            print(f"[{trans_id}] {name}{extra}")
-            remaining.append(task)
+            else:
+                extra = ""
+                forecast = info.get("forecastTransDoneTime")
+                now = info.get("serverCurrentTime")
+                if forecast and now and status in (1, 2):
+                    remain_s = max(0, (forecast - now) / 1000)
+                    extra = f" | 预计剩余: {remain_s / 60:.1f} 分钟"
+                print(f"[{trans_id}] {name}{extra}")
+                remaining.append(task)
 
-    save_tasks(PENDING_PATH, remaining)
+        # 锁内一次性写回，避免和另一个进程交叉写
+        save_tasks(PENDING_PATH, remaining)
 
-    if completed:
-        existing = load_tasks(COMPLETED_PATH)
-        existing.extend(completed)
-        save_tasks(COMPLETED_PATH, existing)
+        if completed:
+            existing = load_tasks(COMPLETED_PATH)
+            existing.extend(completed)
+            save_tasks(COMPLETED_PATH, existing)
 
-    return completed
+        return completed
 
 
 def monitor_loop(client, timeout=3600, interval=120):
