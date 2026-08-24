@@ -2,6 +2,7 @@ config/cookies.json
 config/quota_history.jsonl
 config/pending_tasks.json
 config/completed_tasks.json
+config/.pending_tasks.lock
 .playwright-data/
 config/.env
 __pycache__/

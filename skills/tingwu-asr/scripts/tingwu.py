@@ -273,7 +273,7 @@ class TingwuClient:
         print("[1/5] 获取上传凭证...")
         put_link = self.generate_put_link(file_path, lang=lang, role_split_num=role_split_num)
         trans_id = put_link["transId"]
-        print(f"  任务ID: {trans_id}")
+        print(f"  听悟转录任务 ID: {trans_id}")
 
         print("[2/5] 上传文件到 OSS...")
         self.upload_to_oss(file_path, put_link)
@@ -300,7 +300,7 @@ class TingwuClient:
         print("[1/3] 获取上传凭证...")
         put_link = self.generate_put_link(file_path, lang=lang, role_split_num=role_split_num)
         trans_id = put_link["transId"]
-        print(f"  任务ID: {trans_id}")
+        print(f"  听悟转录任务 ID: {trans_id}")
 
         print("[2/3] 上传文件到 OSS...")
         self.upload_to_oss(file_path, put_link)
