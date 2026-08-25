@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-24 | 更新   | [md2word](skills/md2word/)                                             | v1.2.4  | **页面脚注可读性修复**：源码直接相邻的原生脚注编号用 9pt 上标 NBSP 分隔，已有空格或标点不重复添加；正数脚注段前段后归零并使用单倍自动行距，同时保留 v1.2.3 的重复脚注独立 ID 语义 |
 | 2026-08-24 | 新增   | [lecture-review](skills/lecture-review/)                               | v1.0.0 | **讲课表现复盘**：通读 raw 转录稿动态发现主讲口癖/节奏/句式与结构信号（时间分配/承诺回收/互动密度），预设词表仅作对比锚点；脚本统一口径出数字（讲师隔离+归属污染核验、最长优先去重叠、双格式时间戳、剔幻灯片 URL）；讲师档案跨场次闭环（watchlist 下场复查）；ASR 吞语气音盲区显式声明；经双盲基线测试（RED→GREEN）验证 |
 | 2026-08-22 | 新增   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.13.4 | **要素式起诉状生成器**：基于最高法法〔2025〕82 号 67 类官方模板，从律师已写好的常规起诉状自动生成要素式 Word 文书。113 棵 OOXML 模板树全量入库（git 可 diff），68/68 案由精调（含知产行政/执行全家族/海事/环资/行政/国赔），通用勾选机制+多当事人扩容+法人块渲染+批量模式，格式像素级保真（lxml 跨 run 精确替换），e2e 28 产物+68 树冒烟+45 答辩冒烟全绿 |
 | 2026-08-14 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.12.0 | 改善 PDF Expert 复制正文换行：Paddle 正文段落字号只向下统一并保留原坐标与横向框宽；新增显式 clean.md 输出，代表性四页样本换行由 120 降至 62 |
@@ -41,9 +42,6 @@
 | 2026-08-14 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.6.2  | 修复带空格 worker command 的 `--dry-run` 仍创建 Session Context 并写入 `launch.sh`；预演现在只输出最终 wrapper 计划，不产生文件副作用 |
 | 2026-08-13 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.1  | 新增非破坏性证据线索包：OCR 多锚点与无文字图像主体共同排序，不保存 OCR/实体原文；默认 24 张、4 页弱模型联系表只作封闭分类和泛化概括；归档仅保存元数据，reference 统一实际输出目录与视觉只减不增边界 |
 | 2026-08-13 | 更新   | [contract-copilot](skills/contract-copilot/)                           | v1.6.3  | 增加 DOCX 全量解包预检与 OOXML 命名空间/元素白名单，拒绝越界路径、符号链接、隐藏文本、伪装命名空间和畸形结构；明确审查计划及扩展计划均为每次运行动态生成的产物 |
-| 2026-08-13 | 更新   | [skill-manager](skills/skill-manager/)                                 | v1.7.2  | 项目同时存在多个 Agent 配置目录时优先使用 `.claude/skills` 单一来源；补充 `.codebuddy` 全局根识别，避免从 CodeBuddy 配置目录调用时误装到嵌套目标 |
-| 2026-08-13 | 更新   | [legal-harness-init](skills/legal-harness-init/)                       | v0.5.2  | 初始化环境记录升级为脚本级保证；支持从 Claude Code、Codex、QwenWork、QoderWork、MyAgents 与 WorkBuddy 会话元数据反查模型，探测失败保持 unknown，不读取会话正文 |
-| 2026-08-12 | 更新   | [clawhub-sync](skills/skill-publish-sync/)                                   | v1.7.1  | 发布配置改为 ClawHub、SkillHub、联想三份独立白名单，同一 Skill 可按平台独立维护；临时发布副本按目标平台注入字段，真实名单与发布记录继续仅保留本地 |
 </details>
 
 ## 📋 项目概述
@@ -463,7 +461,7 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.8</td>
+<td style="text-align:center">v1.2.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/md2word-1.2.0.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
