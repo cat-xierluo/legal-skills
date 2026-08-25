@@ -10,9 +10,9 @@
 set -e
 
 # 支持的 Agent 配置目录（与 target.sh 保持一致，含 .claude 自身但 init 时跳过）
-ALL_AGENTS=(".codex" ".claude" ".openclaw" ".workbuddy" ".qoderworkcn")
+ALL_AGENTS=(".codebuddy" ".codex" ".claude" ".openclaw" ".workbuddy" ".qoderworkcn")
 # init 默认不处理 .claude（其 skills 是来源，不需要再链接到自己）
-DEFAULT_AGENTS=(".codex" ".openclaw" ".workbuddy" ".qoderworkcn")
+DEFAULT_AGENTS=(".codebuddy" ".codex" ".openclaw" ".workbuddy" ".qoderworkcn")
 
 usage() {
     cat <<'EOF'
@@ -22,7 +22,8 @@ usage() {
 使不同 Agent 在项目中工作时都能发现 Claude Code Skills。
 
 选项:
-  --all              初始化所有 Agent（含 .codex .openclaw .workbuddy .qoderworkcn .claude）
+  --all              初始化所有 Agent（含 .codebuddy .codex .openclaw .workbuddy .qoderworkcn .claude）
+  --codebuddy        仅初始化 .codebuddy
   --qoderwork        仅初始化 .qoderworkcn
   --workbuddy        仅初始化 .workbuddy
   --codex            仅初始化 .codex
@@ -63,6 +64,11 @@ while [ $# -gt 0 ]; do
         --all)
             SELECTED_AGENTS=("${ALL_AGENTS[@]}")
             SKIP_CLAUDE=false
+            SPECIFIC_SELECTED=true
+            shift
+            ;;
+        --codebuddy)
+            SELECTED_AGENTS+=(".codebuddy")
             SPECIFIC_SELECTED=true
             shift
             ;;

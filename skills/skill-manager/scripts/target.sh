@@ -5,7 +5,7 @@
 
 is_agent_config_dir_name() {
     case "$1" in
-        .codex|.claude|.openclaw|.agents|.agent|.workbuddy|.qoderworkcn)
+        .codebuddy|.codex|.claude|.openclaw|.agents|.agent|.workbuddy|.qoderworkcn)
             return 0
             ;;
         *)
@@ -63,7 +63,7 @@ find_agent_config_dir() {
             printf '%s\n' "$current/.claude"
             return 0
         fi
-        for config_name in .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
+        for config_name in .codebuddy .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
             if [ -d "$current/$config_name" ]; then
                 printf '%s\n' "$current/$config_name"
                 return 0
@@ -155,7 +155,7 @@ find_all_agent_config_dirs() {
             printf '%s\n' "$current/.claude"
             found=1
         else
-            for config_name in .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
+            for config_name in .codebuddy .codex .openclaw .agents .agent .workbuddy .qoderworkcn; do
                 if [ -d "$current/$config_name" ]; then
                     printf '%s\n' "$current/$config_name"
                     found=1
