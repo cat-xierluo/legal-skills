@@ -45,7 +45,7 @@ import yaml
 # ---------------------------------------------------------------------------
 # 常量与契约枚举（与 schema.md v4.0 对齐）
 # ---------------------------------------------------------------------------
-CASE_DIR_RE = re.compile(r"^(\d{6})\s")
+CASE_DIR_RE = re.compile(r"^(\d{6}(?:-[A-Za-z0-9]+)?)\s")  # 6 位日期短码 + 可选 -后缀（同日多案/一案拆分）
 CASE_YAML_GLOB = "0* - 📅 日程管理/case.yaml"
 
 TRI_STATE = ("todo", "in_progress", "done")
@@ -1532,7 +1532,10 @@ def cmd_extract(root, case_id, args):
             m = re.match(r"^0[68] - ", sub.name)
             if m and sub.is_dir():
                 for f in sub.rglob("*.pdf"):
-                    if f.is_file() and f.suffix.lower() == ".pdf" and ".legacy" not in f.name:
+                    if (f.is_file() and f.suffix.lower() == ".pdf"
+                            and ".legacy" not in f.name
+                            and ".archive-" not in f.name
+                            and not any(p.startswith(".") for p in f.relative_to(sub).parts[:-1])):
                         scans.append(f)
         if not scans:
             print(f"· [{cid}] 08/06 目录无 PDF，跳过")
