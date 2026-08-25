@@ -1,5 +1,27 @@
 # CHANGELOG — lecture-review
 
+## v1.2.1 - 2026-08-24 - 产物落点约定（review.md 双写 + stats_deck 区分）
+
+- `落点` SKILL.md 增"产物落点约定"表：七段报告（skill archive）/ review.md（项目目录主 + skill archive 副本）/ stats.json（skill archive，带 deck 标 `stats_deck.json`）/ profiles（skill 内部）；原始转录稿永不动
+- `明确边界` skill 内不做跨项目资产沉淀：可复用的教学心法/经验属 wiki 职能（培训知识沉淀），skill 只沉淀复盘方法论本身（口径/模板/watchlist 体系）
+- `无锡场 v6 复跑` archive 增 review.md + stats_deck.json + stats_deck_adhoc.json（首跑 RED/GREEN 数据保留不动）
+
+## v1.2.0 - 2026-08-24 - 高级模式：课程结构复盘（评人/评课分离，D7）
+
+- `新增` **高级模式「课程结构复盘」**（Phase 6，用户显式触发）：课件自动体检 + 课件×实讲双向比对 → 智合复盘式结构诊断报告（含 deck/讲法/例子三层修改建议 + 方法论回流出口）。产出按 [references/structural-review-template.md](references/structural-review-template.md)（骨架提炼自 260823 智合首份复盘，九节+附录，页码+时间戳+原话证据纪律写死在模板）写入**项目目录**，archive 存副本；课程评价不进讲师档案（评人/评课分离）
+- `脚本` `--deck` 输出新增 `self_check` 三项（全部为候选生成器，定性归 agent）：`module_distribution`（label 前缀分组页数，agent 归并大模块）；`near_dup_pages`（char-bigram Jaccard ≥0.25 近重复/同主题双视图页对，实测命中检索双页/短信双页/套件相邻页，含目录↔hero 良性误报需 agent 过滤）；`title_term_index`（标题/label 词→页索引，查归属重叠须配合全文检索 pages[].text）
+- `边界` D7：高级模式受控突破 D2——评课须经显式触发（常规复盘发现结构迹象只能建议升级）；常规功能（口癖/节奏/承诺回收/课件对照事实层）照旧，D2 边界不变
+- `双向比对三方向`（Phase 6 第 2 步）：设计了没讲（挪位/丢失）/ 讲了没设计（即兴大块：加页或丢弃）/ 涌现位置错配（教学顺序 ≠ 工作顺序）
+
+## v1.1.0 - 2026-08-24 - 课件对照（deck 逐页 vs 实讲）
+
+- `新增` **deck 对照模式**（可选增强）：转录稿 + 定稿课件 → 报告新增「课件对照」段（六段 → 七段）。起源：智合 260823 课复盘实测——只读转录稿漏掉 deck 层结构问题（手写路线残留页被讲者主动宣判跳过、知识涌现位置与页序倒挂、页数超载致讲者翻页找位置），用户提供 deck 逐页对照后新增六项发现（DECISIONS D6）
+- `脚本` `analyze_stats.py` 新增 `--deck <课件.html>`：解析 `section.slide` 输出 `deck`（页数 + 每页 label/title/**text 正文摘录**，每页截 600 字、剔 canvas/style/script/标签——兑现分类靠正文覆盖度判，只看标题会漏"半讲"）；解析失败输出 `parse: failed` 供降级。实测：智合 v4.6（64 页正确提取，0 空标题/0 空正文）+ 失败路径（非 slide HTML / 文件不存在）均通过
+- `口径`（references/metrics.md 新增「课件对照」节）：帧锚点 ≠ 页码（重复拍/漏拍/无页号，映射靠口述内容 ↔ 页标题匹配）；兑现分类五枚举（实讲/半讲/跳过/挪位回收/主动宣判，不扣分如实报）；**min/页双口径**（粗=模块时长、净=扣实演等待；只报粗口径会掩盖超载——实测 73min/28 页粗看 2.6、净口径实为 1.4）；超载预警 = 净口径 <1.5 min/页 且 跳过+主动宣判 ≥2 页；找位置摩擦 ≥2 次即报
+- `边界` 原则 5 细化（不推翻 D2）：课件对照只评「设计与交付的结构落差」，**不评方法论对错**——方法论层面的诊断归项目复盘与讲者
+- `降级` 三条新增：无 deck（跳段声明）/ parse failed（agent 手工页表）/ 无帧锚点（退化为口述匹配，min/页不可算）
+- `档案` session 新增 `deck:` 字段组（pages/taught/skipped/半讲/moved/declared_skip/min_per_page/flip_hunts），跨场次跟踪课件设计习惯
+
 ## v1.0.0 - 2026-08-24
 
 初始版本：讲课表现复盘 skill。
