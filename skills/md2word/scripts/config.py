@@ -201,6 +201,7 @@ def get_fallback_config() -> Config:
             'border_color': '#CBD5E0',
             'border_width': 4,
             'line_spacing': 1.2,
+            'space_after': 6,
             'rounded_corners': True,
             'row_height_cm': 0.8,
             'alignment': 'center',
@@ -259,14 +260,11 @@ def get_fallback_config() -> Config:
         },
         'quote': {
             'background_color': '#F5F5F5',
-            'width_percent': 100,
-            'border_color': None,
-            'border_size': 0,
-            'cell_margin': {
-                'top': 100,
-                'bottom': 100,
-                'left': 120,
-                'right': 120,
+            'padding': {
+                'top': 5,
+                'bottom': 5,
+                'left': 6,
+                'right': 6,
             },
             'space_before': 6,
             'space_after': 6,

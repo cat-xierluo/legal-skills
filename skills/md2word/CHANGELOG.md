@@ -2,6 +2,21 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.1] - 2026-08-26
+
+### 修复
+- **引用框不再显示 Word 表格虚线（DEC-018）**：所有 Markdown `>` 导读/案例继续共用同一视觉语义，但由单单元格表格改为正文流中的段落灰底，输出不再为引用内容创建 `w:tbl`。Word 即使开启“查看网格线”也不会出现引用框虚线轮廓。
+- **多段灰底只在整块首尾留垂直 padding**：每段保留左右 6pt；首段独占上 5pt、末段独占下 5pt，中间段不重复累计上下留白。空引用行才折算为 6pt `paragraph_spacing`；脚注、粗体、列表 marker、正文 12pt/1.5 倍行距继续保留。
+- **数据表自行承载表后留白**：Markdown 与 HTML 表格统一读取 `table.space_after`，默认在表后追加一个 6pt exact 空段。随后正文仍为普通正文的段前/段后 0、1.5 倍自动行距；图片和图注不受影响。
+
+### 文档完善
+- 全部内置预设、fallback config、配置模板与模板提取基底改用 `quote.padding` 并加入 `table.space_after`；v1.3.0 自定义 `quote.cell_margin` 按 `20 twips = 1pt` 兼容迁移。配置参考与样式映射明确表格时代字段不再控制引用框。
+
+### 验证
+- 新增/更新端到端回归，精确断言引用内容不产生 Word 表格、浅灰底连续语义、同色 `single` 边界无可见轮廓、首/中/尾 padding、脚注/粗体/列表保持，并覆盖 v1.3.0 `cell_margin` 迁移；Markdown/HTML 数据表后各恰好一个 6pt exact spacer，下一正文样式不变，图片/图注链路未插入该 spacer。完整 `unittest` 22/22 通过。
+- 真实 ch12 临时转换得到 10 张数据表及 10 个 exact 6pt spacer、4 个 paragraph callout 段（导读 1 + 案例 3）、0 个引用表格、11 组图片/图注和 1 个导读脚注；首/中/尾 padding、`pBdr → shd → spacing → ind` OOXML 顺序和图注既有 `3pt/8pt + 1.2` 节奏均通过结构断言。临时 DOCX SHA-256 为 `ded0d635396796918f1c3f08c816a7f81addf2f059b9fde77414cb917801630e`。用户明确由其自行核实桌面示例视觉，本轮不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 因本仓规范要求的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除这些仓库要求字段。
+
 ## [1.3.0] - 2026-08-26
 
 ### 改进

@@ -83,6 +83,7 @@ table:
   border_color: "#000000"     # 边框颜色
   border_width: 4            # 边框宽度 (1/8 pt)
   line_spacing: 1.2          # 表格内行距
+  space_after: 6             # 表格组件后的固定留白（pt，exact 空段）
   row_height_cm: 0.8          # 行高 (cm)
   alignment: "center"         # 表格对齐方式 (left/center/right)
   cell_margin:
@@ -129,15 +130,12 @@ inline_code:
 
 # ==================== 引用块设置 ====================
 quote:
-  background_color: "#F5F5F5" # 单元格背景填充色
-  width_percent: 100           # 相对正文可用宽度；100 = 左右边界与正文齐平
-  border_color: null           # null = 无边框
-  border_size: 0               # 边框宽度（1/8 pt，仅 border_color 非空时生效）
-  cell_margin:                 # 灰底内部边距（twips；20 twips = 1 pt）
-    top: 100
-    bottom: 100
-    left: 120
-    right: 120
+  background_color: "#F5F5F5" # 段落背景填充色；段落天然与正文同宽
+  padding:                     # 文字到灰底边缘的留白（pt）
+    top: 5
+    bottom: 5
+    left: 6
+    right: 6
   space_before: 6              # 灰底块外部段前间距（pt）
   space_after: 6               # 灰底块外部段后间距（pt）
   paragraph_spacing: 6         # `> ` 空行折算的块内段距（pt）

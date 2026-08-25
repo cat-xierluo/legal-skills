@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.3.1"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -61,7 +61,7 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 
 > 页面脚注在普通正文与 Markdown 引用块（`>`）中都可使用；引用块内的 `[^label]` 会生成原生 Word 脚注引用，不会作为字面标记留在正文，同时保留引用段落和加粗等行内格式。
 
-> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。默认 `legal` / `book-publish` 样式为正文全宽、无边框浅灰底，文字通过真实单元格边距保留左右和上下内边距；空引用行折算为块内段距，不生成过高空白段。
+> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。默认 `legal` / `book-publish` 样式为正文全宽、无可见边框的浅灰段落底纹；不使用表格容器，因此 Word 的“查看网格线”不会出现虚线外框。文字通过 `padding` 保留左右和首尾内边距；空引用行折算为块内段距，不生成过高空白段。
 
 > 行内代码优先保护反引号范围：其中的 `_`、`*` 等 Markdown 标记按字面量保留，不会与相邻代码段拼成斜体或粗体；例如 `` `law_keyword` `` 会完整输出为一个代码 run。
 
@@ -70,6 +70,8 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 > 所有 fenced code block（包括 `text`、`markdown` 与无语言围栏）均沿用既有等宽、紧凑的代码内容样式；可通过 `code_block.content.space_before` 与 `space_after` 仅调整整个框与前后正文的垂直间距。
 
 > Markdown 表格固定在页面正文可用宽度内；多列长表头会自动换行，转换器会统一表格总宽、网格列宽和单元格宽度，避免表格越过左右页边距。
+
+> Markdown 与 HTML 数据表都由表格组件自身追加 `table.space_after` 固定高度留白（默认 6pt exact）；后续正文保持普通正文的 1.5 倍行距与 0 段前距。图片和图注不使用这项表格留白。
 
 > 普通 Markdown 表题（如 `**表 10-5：标题**`）会自动水平居中并取消首行缩进；显式 `<div align="center">...</div>` 仍可继续使用。表题原有字号和粗体不受自动对齐影响。
 
