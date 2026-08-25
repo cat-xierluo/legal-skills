@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
+version: "1.2.4"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -49,9 +49,15 @@ python scripts/md2word.py input.md --config=my-config.yaml
 # 脚注/尾注模式（默认 footnote 页面脚注；endnote=文档末注释+上标编号）
 python scripts/md2word.py input.md --notes=endnote
 
-# 全书合并：多章 md → 单 docx（目录+章间分页+页眉，配合 -o 指定输出）
+# 全书合并：多章 md → 单 docx（目录+按输入文件分章+页眉，配合 -o 指定输出）
 python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=book-publish
 ```
+
+> `--book` 只把相邻输入文件的边界转换为新 section。章节正文里的 Markdown 水平线 `---`、`***`、`___` 在单章和全书模式下都会保留为水平线，不承担分页或分章语义。
+
+> 同一 `[^label]` 在正文重复出现时，原生 `footnote` 模式会为每次出现生成独立的 Word 脚注，并重复相同定义文本，确保每个引用位置都能看到脚注；`endnote` 模式仍复用同一编号与一条尾注定义。
+
+> 原生 `footnote` 模式下，两个脚注标记在源码中直接相邻时，输出会在两个上标之间加入一个同为 9pt 上标的 NBSP；源码已有空格或标点时不额外添加。页面脚注段落固定为段前段后 0、单倍自动行距；`endnote` 不应用这两项规则。
 
 ## 配置系统
 
