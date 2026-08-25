@@ -130,6 +130,8 @@ code_block:
     color: "#333333"
     left_indent: 0
     line_spacing: 1.2
+    space_before: 6
+    space_after: 6
     background_color: "#F5F5F5"
     border_color: null
     border_size: 4

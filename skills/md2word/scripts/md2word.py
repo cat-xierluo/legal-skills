@@ -326,6 +326,7 @@ def add_code_block(doc, code_lines, language):
     - border_color / border_size：段落边框，相邻代码行边框在 Word 中自动连成完整框
     - no_proofread：关闭拼写检查（代码不应被拼写纠正）
     - left_indent / line_spacing：缩进与行距
+    - space_before / space_after：代码框与相邻正文的外部间距（仅首/末行）
     未配置 background_color / border 时行为同旧版。
     """
     config = get_config()
@@ -351,8 +352,10 @@ def add_code_block(doc, code_lines, language):
     border_color = content_config.get('border_color')    # None → 不加边框
     border_size = content_config.get('border_size', 4)   # 1/8 pt 单位
     no_proof = content_config.get('no_proofread', True)
+    space_before = content_config.get('space_before', 0)
+    space_after = content_config.get('space_after', 0)
 
-    for code_line in code_lines:
+    for index, code_line in enumerate(code_lines):
         p = doc.add_paragraph()
         run = p.add_run(code_line if code_line else ' ')
         # 等宽字体（ASCII/CS 用 font_name，东亚字符用 east_asia_font）
@@ -395,8 +398,8 @@ def add_code_block(doc, code_lines, language):
         pf = p.paragraph_format
         pf.left_indent = Pt(left_indent)
         pf.line_spacing = line_spacing
-        pf.space_before = Pt(0)
-        pf.space_after = Pt(0)
+        pf.space_before = Pt(space_before if index == 0 else 0)
+        pf.space_after = Pt(space_after if index == len(code_lines) - 1 else 0)
         pf.first_line_indent = Pt(0)
 
 
@@ -792,9 +795,9 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             if i < len(lines):
                 i += 1
             add_code_block(doc, code_lines, language)
+            print("✅ 处理代码块")
             if not has_seen_h2:
                 has_body_before_first_h2 = True
-            print("✅ 处理代码块")
             continue
         
         # HTML 表格
