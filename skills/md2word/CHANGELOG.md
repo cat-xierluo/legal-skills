@@ -11,7 +11,7 @@
 
 ### 验证
 - RED：新增正文与 Markdown 表格两项回归后，v1.2.8 分别复现“下划线被吞并”和“表格格式预判误报”两类失败；GREEN：修复后 `python3 -m unittest discover -s skills/md2word/scripts -p 'test_*.py' -v` 为 19/19 通过。
-- 真实书稿转换：ch14 的四个表格字段均完整保留，其中正文与表格的 `manual_review_required` 共命中 2 个完整 run；ch12 的 `main_chart_type` 与 ch04 的 `API_SERVER_KEY` 各命中 1 个完整 run。所有目标 run 的 `run.italic` 均为 `None`，OOXML 均无 `w:i`。
+- 真实书稿转换：ch14 的四个表格字段均各自构成 exact run，另有正文中的 `manual_review_required` 完整存在于一个可能包含相邻正文的普通 run；ch12 的 `main_chart_type` 与 ch04 的 `API_SERVER_KEY` 也分别完整存在于一个可能包含相邻正文的普通 run。所有匹配 run 的 `run.italic` 均为 `None`，OOXML 均无 `w:i`。
 - `/tmp/md2word-v1.2.9-intraword-fixture.docx` 已生成，QuickLook 首屏缩略图 `/tmp/md2word-v1.2.9-quicklook/md2word-v1.2.9-intraword-fixture.docx.png` 经目检确认表格字段下划线完整，明确的斜体、粗体与粗斜体仍可见。
 
 ## [1.2.8] - 2026-08-25

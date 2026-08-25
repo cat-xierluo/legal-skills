@@ -20,7 +20,7 @@
 ### 验证
 - RED：正文回归把 `payment_instance_id` 等转换为 `paymentinstanceid`，表格预判对同一字段返回 `True`；两项测试均失败。
 - GREEN：正文与 Markdown 表格中的 10 类标识（含 ASCII 数字和中文词边界样例）完整保留下划线且无意外斜体/粗体；三种明确 underscore 强调语义保持，19/19 回归通过。
-- 真实 ch04 / ch12 / ch14 DOCX 中，目标字段全部存在于完整 run，且 `run.italic` 为 `None`、OOXML 无 `w:i`。QuickLook 最小首屏 fixture 目检也显示字段完整。
+- 真实 ch14 DOCX 的四个表格字段均各自构成 exact run；正文中的 `manual_review_required`、ch12 的 `main_chart_type` 与 ch04 的 `API_SERVER_KEY` 则完整存在于可能包含相邻正文的普通 run。所有匹配 run 的 `run.italic` 均为 `None`、OOXML 无 `w:i`。QuickLook 最小首屏 fixture 目检也显示字段完整。
 
 ### 影响与回退
 - 影响正文与普通 Markdown 表格中的 underscore 强调识别；单词内下划线现在固定按字面量输出。
