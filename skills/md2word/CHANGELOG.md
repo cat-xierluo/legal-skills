@@ -2,6 +2,20 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.0] - 2026-08-26
+
+### 改进
+- **统一 Markdown 引用框（DEC-017）**：所有连续 `>` 引用块不再按“本章导读”“案例”等文字标签分流，统一渲染为单单元格 callout 表格。`legal` 与 `book-publish` 默认采用正文全宽、无边框 `#F5F5F5` 浅灰底；`tblW`、`tblGrid` 与 `tcW` 共用正文可用宽度，`tblInd=0`。
+- **真实内边距与紧凑垂直节奏**：新增 `cell_margin`、`space_before`、`space_after`、`paragraph_spacing`、`first_line_indent`、`align` 等明确配置。左右/上下留白由真实 cell margins 承载；块外间距用 6pt exact spacer，引用空行折算为 6pt 段距，避免默认空段放大留白。
+- **长案例可跨页**：引用表格不写 `w:cantSplit`，保留 Word 对单行长内容的跨页拆分能力；脚注、Markdown 粗体及正文 12pt / 1.5 倍行距继续保留。
+
+### 文档完善
+- `book-publish`、`legal`、其余内置预设、fallback config、配置模板和模板提取基底统一迁移到新的 `quote` 配置语义；配置参考明确旧 `left_indent_inches` 不再用于缩窄灰底块。
+
+### 验证
+- 新增同一 fixture 覆盖单段导读 + 页面脚注、多段案例 + 空引用行及普通正文；端到端断言两个 callout 的容器/样式一致、全宽、灰底、无边框、四边内边距、块外 exact 间距、块内段距、0 首行缩进、粗体和脚注保留，普通正文仍为 24pt 首行缩进、12pt / 1.5 倍行距；另保留最小引用列表回归，核对 bullet marker 与脚注均留在 callout 内。与 v1.2.9 回归合并后的完整 `unittest` 20/20 通过。
+- 真实 ch12 临时转换得到 2 个 `md2word-quote` callout（导读 1 段、案例 3 段）和 10 张数据表；两个 callout 均为 `tblW/gridW/tcW=8504 twips`、`tblInd=0`、四边框 `nil`、灰底 `F5F5F5`、cell margins `100/120/100/120`，且 row 未写 `cantSplit`。导读脚注 1 个、两类标题粗体均保留。
+
 ## [1.2.9] - 2026-08-26
 
 ### 修复

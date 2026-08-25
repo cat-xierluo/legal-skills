@@ -248,73 +248,164 @@ def add_numbered_list(doc, line):
     set_paragraph_format(p)
 
 
+def _set_width(element, width_twips):
+    """Set an OOXML width element to an exact dxa value."""
+    element.set(qn('w:type'), 'dxa')
+    element.set(qn('w:w'), str(width_twips))
+
+
+def _add_quote_outer_spacer(doc, height_pt):
+    """Add a deterministic, compact gap outside a quote table."""
+    if not height_pt or height_pt <= 0:
+        return None
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    paragraph.paragraph_format.line_spacing = Pt(height_pt)
+    return paragraph
+
+
+def _configure_quote_table(table, quote_config, page_config):
+    """Apply the shared full-width, borderless callout container."""
+    available_cm = (
+        page_config.get('width', 21.0)
+        - page_config.get('margin_left', 3.18)
+        - page_config.get('margin_right', 3.18)
+    )
+    width_percent = float(quote_config.get('width_percent') or 100)
+    width_percent = min(100.0, max(1.0, width_percent))
+    width_twips = round(available_cm * width_percent / 100.0 * 1440 / 2.54)
+
+    table.autofit = False
+    table.allow_autofit = False
+    tbl_pr = table._tbl.tblPr
+
+    tbl_width = tbl_pr.find(qn('w:tblW'))
+    if tbl_width is None:
+        tbl_width = OxmlElement('w:tblW')
+        tbl_pr.insert(0, tbl_width)
+    _set_width(tbl_width, width_twips)
+
+    table_look = tbl_pr.find(qn('w:tblLook'))
+    if table_look is not None:
+        tbl_pr.remove(table_look)
+    for child_name in ('w:tblLayout', 'w:tblInd', 'w:jc', 'w:tblBorders', 'w:tblCellMar'):
+        for old_child in tbl_pr.findall(qn(child_name)):
+            tbl_pr.remove(old_child)
+
+    alignment = OxmlElement('w:jc')
+    alignment.set(qn('w:val'), 'left')
+    tbl_pr.append(alignment)
+
+    indent = OxmlElement('w:tblInd')
+    _set_width(indent, 0)
+    tbl_pr.append(indent)
+
+    borders = OxmlElement('w:tblBorders')
+    border_color = quote_config.get('border_color')
+    border_size = int(quote_config.get('border_size') or 0)
+    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        border = OxmlElement(f'w:{edge}')
+        if border_color and border_size > 0:
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), str(border_size))
+            border.set(qn('w:color'), border_color.lstrip('#'))
+        else:
+            border.set(qn('w:val'), 'nil')
+            border.set(qn('w:sz'), '0')
+            border.set(qn('w:color'), 'auto')
+        border.set(qn('w:space'), '0')
+        borders.append(border)
+    tbl_pr.append(borders)
+
+    layout = OxmlElement('w:tblLayout')
+    layout.set(qn('w:type'), 'fixed')
+    tbl_pr.append(layout)
+
+    margins_config = quote_config.get('cell_margin') or {}
+    cell_margins = OxmlElement('w:tblCellMar')
+    for edge, default in (('top', 100), ('left', 120), ('bottom', 100), ('right', 120)):
+        margin = OxmlElement(f'w:{edge}')
+        margin.set(qn('w:w'), str(int(margins_config.get(edge, default))))
+        margin.set(qn('w:type'), 'dxa')
+        cell_margins.append(margin)
+    tbl_pr.append(cell_margins)
+
+    if table_look is not None:
+        tbl_pr.append(table_look)
+
+    caption = OxmlElement('w:tblCaption')
+    caption.set(qn('w:val'), 'md2word-quote')
+    tbl_pr.append(caption)
+
+    grid_columns = table._tbl.tblGrid.findall(qn('w:gridCol'))
+    if grid_columns:
+        grid_columns[0].set(qn('w:w'), str(width_twips))
+
+    cell = table.cell(0, 0)
+    cell_width = cell._tc.get_or_add_tcPr().find(qn('w:tcW'))
+    if cell_width is None:
+        cell_width = OxmlElement('w:tcW')
+        cell._tc.get_or_add_tcPr().append(cell_width)
+    _set_width(cell_width, width_twips)
+
+    background = quote_config.get('background_color')
+    if background:
+        shading = OxmlElement('w:shd')
+        shading.set(qn('w:val'), 'clear')
+        shading.set(qn('w:color'), 'auto')
+        shading.set(qn('w:fill'), background.lstrip('#'))
+        cell._tc.get_or_add_tcPr().append(shading)
+
+    return cell
+
+
 def add_quote(doc, text):
-    """添加引用块"""
+    """将所有 Markdown 引用块渲染为同一套全宽 callout 样式。"""
     config = get_config()
     quote_config = config.get('quote', {})
-    
     lines = text.split('\n')
 
-    # 引用块不施加视觉样式（无底纹/无边框/无缩进），与正文一致
-    bg_color = quote_config.get('background_color')       # None = 不加
-    border_color = quote_config.get('border_color')       # None = 不加
-    border_size = quote_config.get('border_size', 0)
-    left_indent = quote_config.get('left_indent_inches', 0)
-    font_size = quote_config.get('font_size')             # None = 继承正文
-    line_spacing = quote_config.get('line_spacing')       # None = 继承正文
+    _add_quote_outer_spacer(doc, quote_config.get('space_before', 6))
+    table = doc.add_table(rows=1, cols=1)
+    cell = _configure_quote_table(table, quote_config, config.get('page', {}))
+    paragraphs = []
+    pending_gap = False
 
-    for line_index, line in enumerate(lines):
+    for line in lines:
         if not line.strip():
-            p = doc.add_paragraph()
-            if bg_color:
-                pPr = p._p.get_or_add_pPr()
-                shd = OxmlElement('w:shd')
-                shd.set(qn('w:val'), 'clear')
-                shd.set(qn('w:color'), 'auto')
-                shd.set(qn('w:fill'), bg_color.lstrip('#'))
-                pPr.append(shd)
-            p.paragraph_format.line_spacing = 1.0
-            p.paragraph_format.space_before = Pt(0)
-            p.paragraph_format.space_after = Pt(0)
+            pending_gap = bool(paragraphs)
             continue
 
-        p = doc.add_paragraph()
-        pPr = p._p.get_or_add_pPr()
-        if bg_color:
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), bg_color.lstrip('#'))
-            pPr.append(shd)
-        if line_spacing:
-            p.paragraph_format.line_spacing = line_spacing
-        
+        p = cell.paragraphs[0] if not paragraphs else cell.add_paragraph()
+        if pending_gap and paragraphs:
+            paragraphs[-1].paragraph_format.space_after = Pt(
+                quote_config.get('paragraph_spacing', 6)
+            )
+        pending_gap = False
+
         bullet_match = re.match(r'^\s*([-*+])\s+', line)
         number_match = re.match(r'^\s*(\d+\.)\s+', line)
-        
         list_marker_run = None
-        
+
         if bullet_match:
-            indent_and_bullet = '    •  '
-            list_marker_run = p.add_run(indent_and_bullet)
+            list_marker_run = p.add_run('    •  ')
             line = line[bullet_match.end():]
         elif number_match:
-            indent_and_number = f'    {number_match.group(1)} '
-            list_marker_run = p.add_run(indent_and_number)
+            list_marker_run = p.add_run(f'    {number_match.group(1)} ')
             line = line[number_match.end():]
-        
-        if list_marker_run and font_size:
-            list_marker_run.font.size = Pt(font_size)
+
+        if list_marker_run:
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
 
-        # 引用块与普通正文共用脚注解析入口，避免有效 [^label]
-        # 作为字面文本进入 document.xml；列表 marker 已在上方单独写入。
         parse_text_with_footnotes(p, line, is_quote=True)
         set_paragraph_format(p, is_quote=True)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        paragraphs.append(p)
 
-        if font_size:
-            for run in p.runs:
-                run.font.size = Pt(font_size)
+    _add_quote_outer_spacer(doc, quote_config.get('space_after', 6))
+    return table
 
 
 def add_code_block(doc, code_lines, language):
