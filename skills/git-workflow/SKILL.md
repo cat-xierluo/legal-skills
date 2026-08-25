@@ -383,8 +383,10 @@ git push origin main
 # 推送分支
 git push -u origin <branch-name>
 
-# 创建 PR
+# 创建 PR（cwd 不在目标分支的 worktree 时必须显式 --head，否则 gh 以当前
+# 分支为 head——在 main 仓库根目录执行会报 "No commits between main and main"）
 gh pr create \
+  --head <branch-name> \
   --title "feat(module): 简短描述" \
   --body "$(cat <<'EOF'
 ## 摘要
