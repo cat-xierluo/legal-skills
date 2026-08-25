@@ -2,7 +2,7 @@
 name: weekly-legal-briefing
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: 0.3.1
+version: 0.6.0
 license: CC-BY-NC
 description: 配置一次，定期自动生成行业/法律研报草稿（如科技型制造企业法律周报），人工复核后发布。设计风格同 industry-research-report（蓝皮书体例 + 抬头/配色/署名由 report-profile.md 配置），支持白名单信源过滤与案号回查，输出文件带 _DRAFT 标记，发布动作永远留给人工。建议在用户说"配一个周报 / 每周给客户发一份法律研报 / 客户要法律周报了怎么落地 / 顾问客户要定期触达"时使用；不要用于：单次行业情报底稿（用 industry-research-report）、自动邮件/群发（硬约束禁止）、客户名下的具体法律意见（用 opc-legal-counsel）。
 ---

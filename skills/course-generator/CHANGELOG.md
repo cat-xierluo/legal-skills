@@ -1,5 +1,11 @@
 # 变更日志
 
+## [2.8.1] - 2026-08-25
+
+### 修正
+
+- ClawHub 发布元数据：v2.8.0 首次发布漏传 `--name`，display name 退化为临时目录名 `Clawhub Publish Course Generator`。bump 版本带 `--name "课程生成器"` 重新发布，修正为正确显示名。本地 skill 本身无功能改动。
+
 ## [2.8.0] - 2026-08-24
 
 ### 新增
