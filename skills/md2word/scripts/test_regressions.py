@@ -29,6 +29,45 @@ import md2word  # noqa: E402
 
 
 class Md2WordRegressionTest(unittest.TestCase):
+    def test_code_block_keeps_internal_rhythm_and_adds_configured_outer_spacing(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "code-spacing.md"
+            output = temp_dir / "code-spacing.docx"
+            markdown.write_text(
+                "```text\n"
+                "first_line\n"
+                "middle_line\n"
+                "last_line\n"
+                "```\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            self.assertEqual(len(document.tables), 0)
+            paragraphs = {
+                paragraph.text: paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text in {"first_line", "middle_line", "last_line"}
+            }
+            self.assertEqual(set(paragraphs), {"first_line", "middle_line", "last_line"})
+            first, middle, last = (paragraphs[name] for name in ("first_line", "middle_line", "last_line"))
+            self.assertEqual(first.paragraph_format.space_before.pt, 6)
+            self.assertEqual(first.paragraph_format.space_after.pt, 0)
+            self.assertEqual(middle.paragraph_format.space_before.pt, 0)
+            self.assertEqual(middle.paragraph_format.space_after.pt, 0)
+            self.assertEqual(last.paragraph_format.space_before.pt, 0)
+            self.assertEqual(last.paragraph_format.space_after.pt, 6)
+            self.assertEqual(first.paragraph_format.line_spacing, 1.2)
+            self.assertEqual(first.runs[0].font.size.pt, 9)
+            code_fonts = first.runs[0]._element.rPr.rFonts
+            self.assertEqual(code_fonts.get(qn("w:ascii")), "Courier New")
+            shading = first._p.pPr.find(qn("w:shd"))
+            self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
+
     def test_six_long_header_columns_fit_usable_page_width(self):
         config = md2word.get_preset("book-publish")
         min_needed_cm = [2.76, 2.76, 2.76, 2.76, 3.40, 3.40]
