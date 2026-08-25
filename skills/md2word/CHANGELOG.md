@@ -2,6 +2,18 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.2.9] - 2026-08-26
+
+### 修复
+- **普通技术标识内部下划线不再误解析为强调（DEC-016）**：underscore 斜体、粗体和粗斜体分隔符必须位于单词边界。正文与 Markdown 表格中的 `payment_instance_id`、`dispute_amount_band`、`manual_review_required`、`audit_log_summary`、`API_SERVER_KEY`、`main_chart_type`、`matter_id` 及 `foo__bar__baz` 均按字面量保留下划线，不产生意外斜体或粗体。
+- **正文与表格规则统一**：把生产行内格式规则集中到 `formatter.py`，正文解析、Markdown 表格解析与表格格式预判共用同一规则源，避免表格继续以宽泛的 `_.*?_` / `__.*?__` 预判技术标识。星号强调、数学、HTML、脚注和图片路径不变，未引入第三方 Markdown 依赖。
+- **明确的下划线强调保持兼容**：`_正常斜体_`、`__正常粗体__` 与 `___正常粗斜体___` 仍分别生成斜体、粗体与粗斜体；单词内部的 `foo__bar__baz` 不触发粗体。
+
+### 验证
+- RED：新增正文与 Markdown 表格两项回归后，v1.2.8 分别复现“下划线被吞并”和“表格格式预判误报”两类失败；GREEN：修复后 `python3 -m unittest discover -s skills/md2word/scripts -p 'test_*.py' -v` 为 19/19 通过。
+- 真实书稿转换：ch14 的四个表格字段均各自构成 exact run，另有正文中的 `manual_review_required` 完整存在于一个可能包含相邻正文的普通 run；ch12 的 `main_chart_type` 与 ch04 的 `API_SERVER_KEY` 也分别完整存在于一个可能包含相邻正文的普通 run。所有匹配 run 的 `run.italic` 均为 `None`，OOXML 均无 `w:i`。
+- `/tmp/md2word-v1.2.9-intraword-fixture.docx` 已生成，QuickLook 首屏缩略图 `/tmp/md2word-v1.2.9-quicklook/md2word-v1.2.9-intraword-fixture.docx.png` 经目检确认表格字段下划线完整，明确的斜体、粗体与粗斜体仍可见。
+
 ## [1.2.8] - 2026-08-25
 
 ### 改进

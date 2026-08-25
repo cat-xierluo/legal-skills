@@ -15,6 +15,35 @@ from docx.oxml.shared import OxmlElement
 from config import Config, get_config
 
 
+# 正文与 Markdown 表格共用同一组行内格式规则。下划线强调要求分隔符
+# 位于单词边界；Python 的 ``\w`` 同时覆盖 ASCII 字母数字、中文与下划线，
+# 因此技术标识内部的 ``_`` / ``__`` 不会被误当作强调标记。
+INLINE_FORMAT_PATTERNS = (
+    (r'\*\*\*(.*?)\*\*\*', {'bold': True, 'italic': True}),
+    (r'(?<!\w)___(.*?)___(?!\w)', {'bold': True, 'italic': True}),
+    (r'\*\*(.*?)\*\*', {'bold': True}),
+    (r'(?<!\w)__(.*?)__(?!\w)', {'bold': True}),
+    (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
+    (r'(?<!\w)_([^_\n]+?)_(?!\w)', {'italic': True}),
+    (r'<strong>(.*?)</strong>', {'bold': True}),
+    (r'<b>(.*?)</b>', {'bold': True}),
+    (r'<em>(.*?)</em>', {'italic': True}),
+    (r'<i>(.*?)</i>', {'italic': True}),
+    (r'<u>(.*?)</u>', {'underline': True}),
+    (r'~~(.*?)~~', {'strikethrough': True}),
+    (r'<s>(.*?)</s>', {'strikethrough': True}),
+    (r'<del>(.*?)</del>', {'strikethrough': True}),
+    (r'<strike>(.*?)</strike>', {'strikethrough': True}),
+    (r'`([^`\n]+)`', {'code': True}),
+    (r'\$([^$\n]+?)\$', {'math': True}),
+)
+
+
+def contains_inline_formatting(text):
+    """返回文本是否包含生产解析器支持的行内格式。"""
+    return any(re.search(pattern, text) for pattern, _ in INLINE_FORMAT_PATTERNS)
+
+
 def convert_quotes_to_chinese(text):
     """将英文引号转换为中文引号（交替状态机版）
     规则：
@@ -114,29 +143,8 @@ def parse_text_formatting(paragraph, text, title_level=0, is_quote=False):
     # 先处理<br>标签为段内换行
     segments = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
 
-    # 使用正则表达式解析所有格式标记
-    format_patterns = [
-        (r'\*\*\*(.*?)\*\*\*', {'bold': True, 'italic': True}),
-        (r'___(.*?)___', {'bold': True, 'italic': True}),
-        (r'\*\*(.*?)\*\*', {'bold': True}),
-        (r'__(.*?)__', {'bold': True}),
-        (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
-        (r'(?<!_)_([^_\n]+?)_(?!_)', {'italic': True}),
-        (r'<strong>(.*?)</strong>', {'bold': True}),
-        (r'<b>(.*?)</b>', {'bold': True}),
-        (r'<em>(.*?)</em>', {'italic': True}),
-        (r'<i>(.*?)</i>', {'italic': True}),
-        (r'<u>(.*?)</u>', {'underline': True}),
-        (r'~~(.*?)~~', {'strikethrough': True}),
-        (r'<s>(.*?)</s>', {'strikethrough': True}),
-        (r'<del>(.*?)</del>', {'strikethrough': True}),
-        (r'<strike>(.*?)</strike>', {'strikethrough': True}),
-        (r'`([^`\n]+)`', {'code': True}),
-        (r'\$([^$\n]+?)\$', {'math': True}),  # LaTeX数学公式支持
-    ]
-
     for idx, segment in enumerate(segments):
-        text_parts = parse_formatted_text(segment, format_patterns)
+        text_parts = parse_formatted_text(segment, INLINE_FORMAT_PATTERNS)
         for part_text, formats in text_parts:
             if part_text:  # 只有非空文本才创建run
                 run = paragraph.add_run(part_text)
