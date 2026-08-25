@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="light">
+<title>{{ profile.law_firm }} · {{ profile.series_name }} · {{ report_title }}</title>
+<style>
+/* ============================================================
+   industry-research-report 主模板(蓝皮书体例)
+   - 深蓝主色 #1B3C59 + 金色强调 #D4AF37 + 白色页面
+   - 大号衬线大标题 + 顶部品牌带 + 章前空白页 + 双栏目录
+   - 设计强度默认 lite,文字版手册,克制图形化
+   ============================================================ */
+:root {
+  /* 配色（jinja2 渲染时由 render.py 从 report-profile.md 注入;改 profile 即可整本换肤） */
+  --primary-deep: {{ palette.primary_deep }};
+  --primary: {{ palette.primary }};
+  --primary-soft: {{ palette.primary_soft }};
+  --accent: {{ palette.accent }};
+  --text: {{ palette.text }};
+  --text-soft: {{ palette.text_soft }};
+  --text-muted: {{ palette.text_muted }};
+  --bg-page: {{ palette.bg_page }};
+  --bg-card: {{ palette.bg_card }};
+  --bg-soft: {{ palette.bg_soft }};
+  --rule: {{ palette.rule }};
+
+  /* 页面边距（与 pdf.py BODY_MARGIN 同步;封面/后部全幅,正文带 padding） */
+  --page-margin: 22mm;
+}
+
+/* === 基础 === */
+@page { size: A4; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body {
+  font-family: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", "宋体", serif;
+  color: var(--text); background: var(--bg-page); font-size: 11pt; line-height: 1.85;
+}
+
+/* === 页面基础 === */
+.page {
+  width: 210mm; height: 297mm; overflow: hidden;
+  page-break-after: always; page-break-inside: avoid;
+  position: relative; background: var(--bg-page);
+}
+.page:last-child { page-break-after: auto; }
+.page.section-page {
+  height: auto; min-height: 297mm; overflow: visible; page-break-inside: auto;
+  padding: 22mm 22mm 25mm;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* === 封面页变体（由 render.py 按 --cover-style 注入 cover-X.html 的 innerHTML）=== */
+.cover-page { background: var(--primary); color: #FFFFFF; padding: 0; position: relative; overflow: hidden; }
+.cover-page * { color: inherit; }
+
+/* === 目录页 === */
+.toc-page { padding: 22mm 22mm 25mm; background: var(--bg-page); }
+.toc-page .toc-header { border-bottom: 2px solid var(--primary); padding-bottom: 4mm; margin-bottom: 7mm; }
+.toc-page .toc-label { font-size: 10pt; color: var(--text-muted); letter-spacing: 4px; }
+.toc-page .toc-title { font-size: 22pt; font-weight: 800; color: var(--primary); letter-spacing: 4px; margin-top: 2mm; }
+.toc-page .toc-code { font-size: 9pt; color: var(--text-muted); margin-top: 2mm; letter-spacing: 1px; }
+.toc-list { list-style: none; columns: 2; column-gap: 10mm; column-fill: balance; }
+.toc-list li {
+  font-size: 10.5pt; line-height: 1.7; color: var(--text-soft);
+  page-break-inside: avoid; break-inside: avoid;
+  border-bottom: 1px dotted var(--rule);
+  padding: 2mm 0; display: flex; justify-content: space-between; align-items: baseline;
+}
+.toc-list li.level-2 { padding-left: 4mm; font-size: 10pt; color: var(--text-muted); }
+.toc-list .toc-num { color: var(--primary); font-weight: 700; margin-right: 3mm; flex-shrink: 0; }
+.toc-list .toc-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.toc-list .toc-page-num { color: var(--primary); font-weight: 700; margin-left: 3mm; flex-shrink: 0; }
+
+/* === 章节前空白页(PREFACE / CHAPTER)=== */
+.chapter-opener {
+  padding: 28mm 22mm 0;
+  page-break-before: always;
+}
+.chapter-opener .opener-label {
+  font-size: 10pt; color: var(--text-muted); letter-spacing: 4px; margin-bottom: 4mm;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.chapter-opener .opener-title {
+  font-size: 24pt; font-weight: 800; color: var(--primary);
+  border-bottom: 2px solid var(--primary); padding-bottom: 6mm;
+  letter-spacing: 2px; line-height: 1.4;
+}
+.chapter-opener .opener-lead {
+  font-size: 11pt; line-height: 2; color: var(--text-soft); margin-top: 6mm;
+  text-indent: 2em; text-align: justify;
+}
+
+/* === 正文 === */
+.prose h1 { /* 章标题,在 section-page 顶部 */
+  font-size: 17pt; font-weight: 800; color: var(--primary);
+  margin: 0 0 4mm; padding-bottom: 4mm; border-bottom: 2px solid var(--primary);
+  letter-spacing: 2px; page-break-after: avoid;
+}
+.prose h2 {
+  font-size: 14pt; font-weight: 700; color: var(--primary);
+  margin: 8mm 0 4mm; padding-bottom: 2mm;
+  border-bottom: 1px solid var(--accent); /* 金色下划线 */
+  page-break-after: avoid;
+}
+.prose h3 {
+  font-size: 11pt; font-weight: 700; color: var(--text);
+  margin: 5mm 0 3mm; padding-left: 11px;
+  border-left: 5px solid var(--accent); /* 金色左边框 */
+  page-break-after: avoid;
+}
+.prose h4 {
+  font-size: 10.5pt; font-weight: 700; color: var(--primary-soft);
+  margin: 3mm 0 2mm; page-break-after: avoid;
+}
+.prose p {
+  font-size: 11pt; line-height: 1.85; color: var(--text);
+  text-indent: 2em; margin-bottom: 2.5mm; text-align: justify;
+}
+.prose ul, .prose ol { margin: 2mm 0 3mm 2.2em; font-size: 11pt; line-height: 1.75; }
+.prose li { margin-bottom: 1mm; }
+.prose strong { color: var(--primary); font-weight: 700; }
+.prose em { color: var(--primary-soft); font-style: normal; }
+.prose blockquote {
+  margin: 4mm 0; padding: 4mm 6mm; background: var(--bg-soft);
+  border-left: 3px solid var(--accent); color: var(--text-soft); font-size: 10.5pt;
+  page-break-inside: avoid;
+}
+.prose a { color: var(--primary-soft); text-decoration: none; border-bottom: 1px solid var(--accent); }
+
+/* === 表格（蓝皮书体例:金色表头 + 交替行底）=== */
+.prose table {
+  width: 100%; border-collapse: collapse; margin: 4mm 0;
+  font-size: 10pt; page-break-inside: auto;
+}
+.prose table thead { display: table-header-group; }  /* thead 跨页时自动重复 */
+.prose table tr { page-break-inside: avoid; }
+.prose table th {
+  background: var(--primary); color: #fff; padding: 6px 10px;
+  text-align: left; font-weight: 600; font-size: 10pt; letter-spacing: 0.5px;
+}
+.prose table td {
+  padding: 5px 10px; border-bottom: 1px solid var(--rule);
+  vertical-align: top; color: var(--text);
+}
+.prose table tbody tr:nth-child(odd) td { background: var(--bg-card); }
+.prose table tbody tr:nth-child(even) td { background: var(--bg-page); }
+
+/* === Mermaid / SVG 图 === */
+.prose .diagram { margin: 4mm 0; text-align: center; page-break-inside: avoid; }
+.prose .diagram svg { max-width: 100%; height: auto; }
+.prose p > svg { display: block; margin: 4mm auto; max-width: 100%; height: auto; }
+.prose p:has(> svg) { text-indent: 0; }
+
+/* === 免责声明卡片(强视觉,置顶)=== */
+.disclaimer-card {
+  background: var(--bg-card); border-left: 5px solid var(--primary);
+  padding: 5mm 7mm; margin-top: auto; page-break-inside: avoid;
+}
+.disclaimer-card .disclaimer-title {
+  font-size: 10pt; color: var(--primary); font-weight: 800;
+  letter-spacing: 3px; margin-bottom: 2mm;
+  font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+}
+.disclaimer-card p { font-size: 9.5pt; line-height: 1.7; color: var(--text-soft); text-indent: 0; margin-bottom: 1.5mm; }
+
+/* === 章节页页眉（chapter-opener 顶部,section-page 顶部）=== */
+.section-header {
+  margin-bottom: 9mm; padding-bottom: 4mm;
+  border-bottom: 1.5px solid var(--accent);
+}
+.section-header .header-meta {
+  font-size: 9pt; color: var(--text-muted); letter-spacing: 3px; margin-bottom: 2mm;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.section-header .header-title {
+  font-size: 14pt; font-weight: 800; color: var(--primary); letter-spacing: 2px;
+}
+
+/* === 风险/机会徽章(lite 强度下的轻量组件)=== */
+.prose .risk-badge {
+  display: inline-block; padding: 1mm 3mm; margin-right: 1.5mm;
+  font-size: 9pt; font-weight: 700; letter-spacing: 1px;
+  border-radius: 2px; vertical-align: middle;
+}
+.prose .risk-badge.risk { background: #C53030; color: #fff; }
+.prose .risk-badge.opportunity { background: #2F855A; color: #fff; }
+.prose .risk-badge.neutral { background: var(--text-muted); color: #fff; }
+
+/* === 引用块(信源摘要)=== */
+.prose .source-note {
+  margin: 2mm 0 3mm; padding: 2mm 5mm; background: var(--bg-soft);
+  border-left: 3px solid var(--accent); font-size: 9.5pt; color: var(--text-muted);
+}
+.prose .source-note .source-tier { font-weight: 700; color: var(--primary); margin-right: 2mm; }
+
+/* === 元数据脚注(报告编号 + 生成时间)=== */
+.report-meta {
+  font-size: 9pt; color: var(--text-muted); margin-top: 6mm;
+  border-top: 1px solid var(--rule); padding-top: 3mm;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.report-meta dt { color: var(--primary); font-weight: 700; display: inline; }
+.report-meta dd { display: inline; margin-right: 5mm; }
+.report-meta dd:after { content: "　"; }
+</style>
+</head>
+<body>
+
+<!-- ==================== 封面页（由 render.py 注入 cover-{C/D/E/F}.html 片段）==================== -->
+<div class="page cover-page">
+  {{ cover_html | safe }}
+</div>
+
+<!-- ==================== 目录页（仅当 include_toc=true 时渲染）==================== -->
+{% if include_toc %}
+<div class="page toc-page">
+  <div class="toc-header">
+    <div class="toc-label">CONTENTS · {{ profile.report_code }}</div>
+    <div class="toc-title">目录</div>
+  </div>
+  <ul class="toc-list">
+  {% for entry in toc_entries %}
+    <li class="level-{{ entry.level }}">
+      <span class="toc-num">{{ entry.num }}</span>
+      <span class="toc-text">{{ entry.text }}</span>
+      <span class="toc-page-num">{{ entry.page }}</span>
+    </li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- ==================== 正文（按 section 列表逐章渲染，每章自带 opener + 内容）==================== -->
+{% for section in sections %}
+<div class="page section-page">
+  <div class="section-header">
+    <div class="header-meta">{{ section.kicker }} · {{ profile.report_code }}</div>
+    <div class="header-title">{{ section.title }}</div>
+  </div>
+  <div class="prose">
+    {{ section.html | safe }}
+  </div>
+</div>
+{% endfor %}
+
+<!-- ==================== 元数据脚注页（最末页）==================== -->
+<div class="page section-page">
+  <div class="section-header">
+    <div class="header-meta">REPORT METADATA · {{ profile.report_code }}</div>
+    <div class="header-title">报告元数据</div>
+  </div>
+  <dl class="report-meta">
+    <dt>律所：</dt><dd>{{ profile.law_firm }}</dd>
+    <dt>系列：</dt><dd>{{ profile.series_name }}（{{ profile.series_subtitle }}）</dd>
+    <dt>报告编号：</dt><dd>{{ profile.report_code }}</dd>
+    <dt>报告人：</dt><dd>{{ profile.lead_lawyer }}（{{ profile.lead_lawyer_title }}）</dd>
+    <dt>联系方式：</dt><dd>微信 {{ profile.contact_wechat }}　电话 {{ profile.contact_phone }}</dd>
+    <dt>生成时间：</dt><dd>{{ generated_at }}</dd>
+    <dt>Skill 版本：</dt><dd>industry-research-report v{{ skill_version }}</dd>
+  </dl>
+  <p style="margin-top: 12mm; font-size: 9.5pt; color: var(--text-muted); text-indent: 0; line-height: 1.7;">
+    本报告由 industry-research-report skill v{{ skill_version }} 自动生成,版权与解释权归 {{ profile.law_firm }} 所有。
+    报告内容基于公开数据自动整理,不构成法律意见或法律服务承诺。
+  </p>
+</div>
+
+</body>
+</html>

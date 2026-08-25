@@ -1,0 +1,90 @@
+<!-- 封面变体 D:对角线斜切 —— v0.4.0 三层斜线叠加 + 引言章 -->
+<style>
+.cover-D {
+  height: 100%; display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+/* 第一层:宽斜条（最远景,弱色） */
+.cover-D::before {
+  content: ""; position: absolute; top: 30mm; right: -50mm;
+  width: 200mm; height: 60mm;
+  background: var(--accent); opacity: 0.18;
+  transform: rotate(-18deg); transform-origin: top right;
+}
+/* 第二层:窄斜条（中景,深主色） */
+.cover-D::after {
+  content: ""; position: absolute; bottom: 50mm; left: -30mm;
+  width: 160mm; height: 40mm;
+  background: var(--primary-deep);
+  transform: rotate(-12deg); transform-origin: bottom left;
+}
+/* 第三层:细金色装饰线（前景） */
+.cover-D .layer-3 {
+  position: absolute; top: 60mm; right: 35mm;
+  width: 80mm; height: 1.5mm;
+  background: var(--accent); opacity: 0.7;
+  transform: rotate(-18deg); transform-origin: left center;
+}
+.cover-D .layer-3::before {
+  content: ""; position: absolute; top: -3mm; left: -8mm;
+  width: 4mm; height: 4mm; border-radius: 50%;
+  background: var(--accent); opacity: 0.95;
+}
+
+.cover-D .series-mark {
+  position: absolute; top: 22mm; left: 22mm;
+  color: var(--accent); font-size: 11px; letter-spacing: 4px; z-index: 2;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.cover-D .series-name {
+  position: absolute; top: 22mm; right: 22mm;
+  color: var(--accent); font-size: 11px; letter-spacing: 4px; z-index: 2;
+  font-family: "Noto Sans SC", sans-serif;
+}
+/* 引言章 */
+.cover-D .motto {
+  position: absolute; top: 72mm; left: 22mm;
+  padding-left: 6mm; border-left: 1.5mm solid var(--accent);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 11pt; color: rgba(255, 255, 255, 0.85); letter-spacing: 3px;
+  font-style: italic; z-index: 3;
+  max-width: 100mm;
+}
+
+.cover-D .body-zone { padding: 100mm 22mm 0; position: relative; z-index: 2; flex: 1; }
+.cover-D .cover-kicker { font-size: 10pt; color: var(--accent); letter-spacing: 5px; margin-bottom: 6mm; }
+.cover-D .cover-title { font-size: 34pt; font-weight: 900; color: var(--accent); letter-spacing: 3px; line-height: 1.35; margin-bottom: 6mm; }
+.cover-D .cover-subtitle { font-size: 13pt; color: rgba(255,255,255,0.85); letter-spacing: 2px; margin-bottom: 4mm; font-weight: 400; }
+.cover-D .cover-lead { font-size: 11pt; color: rgba(255,255,255,0.7); line-height: 1.8; letter-spacing: 1px; max-width: 130mm; margin-top: 4mm; }
+.cover-D .cover-meta {
+  padding: 5mm 22mm; display: flex; justify-content: space-between;
+  color: rgba(255,255,255,0.85); font-size: 10pt; letter-spacing: 1px;
+  border-top: 1px solid rgba(212,175,55,0.4); margin-top: 12mm;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.cover-D .cover-footer {
+  padding: 0 22mm 14mm; font-size: 9pt; color: rgba(212,175,55,0.85);
+  letter-spacing: 1.5px; display: flex; justify-content: space-between;
+  font-family: "Noto Sans SC", sans-serif;
+}
+</style>
+<div class="cover-D">
+  <div class="layer-3"></div>
+  <div class="series-mark">{{ series_subtitle }}</div>
+  <div class="series-name">{{ series_name }}</div>
+  {% if false %}<div class="motto">{{ motto }}</div>{% endif %}
+  <div class="body-zone">
+    <div class="cover-kicker">{{ kicker }}</div>
+    <div class="cover-title">{{ report_title }}</div>
+    <div class="cover-subtitle">{{ report_subtitle }}</div>
+    <div class="cover-lead">{{ report_lead }}</div>
+  </div>
+  <div class="cover-meta">
+    <span>{{ report_code }}</span>
+    <span>{{ lead_lawyer }} · {{ generated_date }}</span>
+  </div>
+  <div class="cover-footer">
+    <span>{{ law_firm }}</span>
+    <span>{{ footer_brand }}</span>
+  </div>
+</div>

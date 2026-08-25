@@ -1,0 +1,1 @@
+../../industry-research-report/references/design-spec.md

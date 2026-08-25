@@ -1,0 +1,40 @@
+# 用户本地行业信源覆盖（example）
+#
+# 复制本文件为 `industry_sources.local.yaml`(已 gitignore,不入库),
+# 在此添加 / 覆盖 industry-research-report 内置的 `references/industry_sources.yaml`。
+#
+# 合并规则:
+#   - 同 industry 关键词命中:本文件的 priority_sources 追加到内置之后(本文件优先)
+#   - 新 industry 关键词:整体加入,作为新条目
+#   - 删除 / 替换某个内置条目:本文件加 `_overwrite: true` 字段
+#
+# 适用场景:
+#   - 你长期跟踪某细分行业(如"减速机"或"汽车零部件"),想固化一组信源
+#   - 你所在区域有特定的产业园 / 政府数据源(如"XX 区域工信局")
+#   - 你对某些内置信源不信任,想剔除
+
+industries:
+
+  # === 示例:某区域的本地数据源 ===
+  - industry: [零部件制造, 区域制造]
+    priority_sources:
+      - xxx.gov.cn             # 当地政府(本地政策)
+      - xxxtjj.gov.cn          # 当地经信局
+    supplementary_sources:
+      - xxxgxq.gov.cn          # 当地高新区
+
+  # === 示例:你长期跟踪的细分行业 ===
+  - industry: [减速机, 伺服电机]
+    priority_sources:
+      - cmia.com.cn            # 中国机械工业联合会
+      - 中电协(中国电器工业协会)
+    notes: |
+      减速机产业目前没有专门的全国性行业协会,数据主要靠中电协 + 头部企业(绿的谐波/中大力德)招股书。
+
+  # === 示例:覆盖内置条目 ===
+  # - industry: [半导体]
+  #   _overwrite: true
+  #   priority_sources:
+  #     - semi.org
+  #     - csia.net.cn
+  #     # 你自己加的:剔除 IC Insights(收费过高)
