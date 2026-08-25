@@ -41,6 +41,8 @@ pm-orchestrate.sh release --worktree "$WT" --session "$S"
 pm-orchestrate.sh retain --worktree "$WT" --session "$S"
 pm-orchestrate.sh ack --worktree "$WT" --session "$S" --delivery-id "$DID"
 pm-orchestrate.sh settle --worktree "$WT" --session "$S" --reason "..." [--force] [--destroy]
+pm-orchestrate.sh reauthorize --worktree "$WT" --session "$S" \
+  --allow-cmd "make test" --resume-text "断点续接说明" [--task-id ID]
 ```
 
 supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。除只读 `read/show` 外，supervised 命令先对当前 PM terminal 执行 `run-use --id`，刷新 METADATA 的 coordinator handle；`wait/ack` 随后消费当前绑定 Run，不传陈旧 `--run`。
@@ -48,6 +50,8 @@ supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`
 Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首次从 `0` 读取并保存响应里的 `nextCursor`；后续按 cursor 增量读取，避免默认 tail 只剩 spinner。`wait` 的 `tui-idle` 只表示当前可交互/空闲，不是业务终态。
 
 terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入 session context 的 `WORKER_PROMPT.md`，再投短 Read 指令。supervised guidance 直接写消息 body，不创建新的 prompt 文件。
+
+`reauthorize`（Task-058）用于 worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦验证且根因是 spawn 授权快照缺命令时：guard 读 `launch.sh` 内联的 `WORKER_INSTALL_AUTH_B64`（进程环境，运行中改授权文件无效），本命令合并 `--allow-cmd` 进授权文件后重写 B64（回验解码一致）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 的 terminal_handle/dispatch_id、可选发送 `--resume-text`、最后关闭旧终端句柄。未提交的工作区改动全部保留；provider lease 的 transport 记账留给 release/clean-worktree 阶段。
 
 ## 3. Supervised 收口顺序
 

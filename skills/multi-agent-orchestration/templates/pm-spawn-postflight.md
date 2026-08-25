@@ -26,6 +26,8 @@ git -C "$WORKTREE" status --short --branch
 
 确认 cwd/worktree/branch/session、Harness authority、安装门禁、provider lease 与允许文件范围符合任务卡。核验失败就停止派发，不由 PM 静默接管业务实现。
 
+同时回看 spawn 输出中的 `SPAWN_WORKER_VERIFY_INJECTED*` 行：没有它且 PM 未显式传 `--verify-cmd`，说明该项目的验证命令未进白名单（Make/其他构建体系均无匹配），worker 会在第一步验证就 `SHELL_COMMAND_NOT_ALLOWLISTED`——补 `--verify-cmd` 重新 spawn，或等 worker 上报后用 `pm-orchestrate reauthorize --allow-cmd ...` 刷新（Task-057/058，badminton-lab Wave 2 教训）。
+
 ## Orca supervised
 
 即时核验真实 Dispatch，而不是 tmux session：

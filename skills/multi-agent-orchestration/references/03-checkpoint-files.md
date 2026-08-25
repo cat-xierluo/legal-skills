@@ -33,6 +33,8 @@ PM 可用 `scripts/worktree-status.sh` 读取 metadata 摘要；清理前 `scrip
 | `failed` | 失败，RESULT 中说明原因 |
 | `stopped` | PM 或用户要求停止 |
 
+supervised 模式下 STATUS 是**辅助观察信号**（阶段/心跳可缺席）：完成权威是 `worker_done → Delivery`，PM 的 wave spec 不应把周期性 STATUS 更新当完成判据或巡检依据（badminton-lab Wave 2 三个 supervised worker 均未写 STATUS，Delivery 流转完全正常）。STATUS 轮询只适用于 tmux/terminal-managed 回退路径。
+
 字段经济性规则：
 
 | 字段组 | 必要性 | PM 自动监控 |

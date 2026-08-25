@@ -717,3 +717,35 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **Orca CLI 的 `--help` + 真请求是 schema 真相来源**——不猜字段名，跑命令看真 keys。
 
 **关联**：DEC-034（settle 决策）、SKILL §4.5、references/12 §9、PR #84（v1 close）+ PR #86（v2 merge）、test-settle-liveness.sh Case 9。
+
+### G34. Make 驱动项目默认 verify 零注入 → worker 全门禁被拦（Task-057，badminton-lab Wave 2）
+
+- **现象**：Python+Makefile 项目（无 package.json）spawn 三个 supervised worker，`make test` / `make test-*-browser` / `node --check` 全部 `SHELL_COMMAND_NOT_ALLOWLISTED`；worker TDD 卡死在 RED 阶段，以 question 上报，PM 抢救约 30 分钟。
+- **根因**：`inject_default_verify_commands` 只读 `package.json` scripts（`[ -f pkg ] || return 0`），其他构建体系零兜底；PM 也不知道要传 `--verify-cmd`。
+- **修复**：npm 零注入时兜底扫 Makefile `^target:` 目标，白名单动词 `test / test-* / check / ci / lint` 注入 `make <target>`（`.PHONY`/变量赋值/文件目标字符类天然排除）；npm-first 双清单项目不双注入。
+- **教训**：默认注入按"项目构建体系"枚举，每支持一种新体系就要问"没有它时 worker 会卡在哪"；白名单动词而非任意目标是 fail-closed 的边界。
+
+### G35. 授权快照 B64 内联且不可运行时刷新 → 改授权文件无效（Task-058，badminton-lab Wave 2）
+
+- **现象**：PM 直接编辑 worker 的 `INSTALL_AUTHORIZATION.json` 加命令，worker 仍被拦；worker 自己定位根因：`launch.sh` 同时设 `WORKER_INSTALL_AUTH_FILE` 与 `WORKER_INSTALL_AUTH_B64`，guard 的 `load_authorization()` 在 B64 非空时优先用内联快照（spawn 时刻的旧 3 条），B64 属进程环境运行中不可刷新，且授权文件受 `INSTALL_AUTHORIZATION_IMMUTABLE` 保护（worker 不能改）。
+- **修复**：`pm-orchestrate reauthorize` 把 7 步手工链路一条命令化（合并 allow-cmd → 重写 launch.sh B64 并回验 → Task failed 复位 → 同 worktree 新终端 → 复用 Task 重注册 worker-start 重注入 → METADATA 改路由 → 可选 resume-text → 关旧终端）。未提交工作区改动全保留。
+- **教训**：**授权真相在哪（进程环境快照 vs 文件）必须与文档一致**；"改文件生效"的直觉在 B64 优先设计下是陷阱。运行时不可变的授权要有等价的一等恢复命令，而不是让 PM 凭记忆拼 7 步。
+
+### G36. worker 提问/中止把 Task 翻 failed → 重注册被 task_not_startable 拦（Task-060，badminton-lab Wave 2）
+
+- **现象**：worker 以 question 上报阻塞后 Task 状态变 `failed`；PM 换新终端重注册时报 `task_not_startable: only a ready Task can start`，需手动 `orca orchestration task-update --id ... --status ready` 才能续。
+- **修复**：`orca-supervised-register.sh --reset-failed` 在该错误时复位 ready 重试一次；`reauthorize` 内建同型逻辑。默认不带旗标仍 fail-closed。
+- **教训**：Task 生命周期把"worker 侧阻塞表达"记成 failed 是合理的终态语义，但**恢复路径必须有一条显式命令**，否则 PM 每次都要现查 task-update 语法。
+
+### G37. worker_done 时分支基线落后 → `git diff origin/main..HEAD` 假删除（badminton-lab Wave 2，PM 侧）
+
+- **现象**：PM 串行合并其他 PR 后验收新 worker，`git diff origin/main..HEAD --stat` 显示 `-271 docs/plans/xxx.md` 等"删除"，疑似 worker 误删他人文件。
+- **根因**：diff 方向对着**当前** origin/main，分支却基于旧 base——"main 有而分支没有"被渲染为删除，纯基线落后的假象。
+- **正确做法**：先 `git diff <fork-point>..HEAD` 看分支自身改动确认所有权，再 `git merge origin/main` sync-merge（冲突按 CHANGELOG 顶部插条目/DEC 降序共存/TASKS 异段自动合并三模式解），在合并后最终树上复跑门禁。
+- **教训**：验收多 worker 串行合并时，diff 永远先对 fork point，再对最新 main。
+
+### G38. wave manifest spec 写斜杠 branch 名 → 隔离门禁集体误判（Task-059，badminton-lab Wave 1）
+
+- **现象**：manifest spec 写 `branch: feat/bl-018-...`，spawn 侧 `safe_branch` 规范化成连字符后实际分支与 spec 文本不一致，三个 worker 的隔离门禁同时按 spec 比对误判 blocked，PM 紧急向三个终端广播纠偏。
+- **修复**：`orca-wave-prepare.sh` fail-closed 拒绝 spec 内 `branch[:=] x/y` 形态并列出 key；路径引用（如 `docs/plans`）不误报。spawn 侧 `safe_branch` 早已存在，缺口只在 PM 手写 spec 环节。
+- **教训**：**同一标识符（分支名）跨 PM 手写文本与工具规范化两处出现时，入口处必须校验一致性**，不能依赖 PM 记得"Orca 会规范化"。
