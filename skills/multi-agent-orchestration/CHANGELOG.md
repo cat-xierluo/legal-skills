@@ -13,6 +13,7 @@
 - `inject_default_verify_commands` 增加 Makefile 兜底（Task-057）：npm scripts 零注入时解析 Makefile `^target:` 目标，白名单动词 `test / test-* / check / ci / lint` 注入 `make <target>`；`.PHONY`/变量赋值/文件目标不匹配，npm-first 双清单项目不双注入。根因：Make 驱动的 Python 项目（无 package.json）此前零注入，worker 全部 make 门禁被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截。
 - `orca-wave-prepare.sh` fail-closed 拒绝 spec 内含斜杠的 branch 名（Task-059）：Orca worktree `--name` 与 `safe_branch` 会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked（Wave 1 三 worker 同时跑偏）；路径引用（如 `docs/plans`）不误报。
 - `pm-orchestrate read` 接受 `--limit` 作为 `--lines` 别名（与 `orca terminal read` 参数名对齐）。
+- 内部上下文同步：`references/09-parallel-lessons.md` 新增 G34—G38（Make 零注入、B64 快照陷阱、Task failed 翻转、基线落后假删除、spec 斜杠分支名）；`references/13-pm-orchestrate.md` 增补 reauthorize 契约；`references/03-checkpoint-files.md` 明确 supervised 下 STATUS 为辅助信号；`templates/pm-spawn-postflight.md` 增补 `SPAWN_WORKER_VERIFY_INJECTED*` 回看；`DECISIONS.md` 新增 DEC-124（刷新放命令层、不动 guard B64 优先级）。
 - SKILL.md：§3.2 记录 Makefile 兜底与 python-runtime-symlink；§4.4 增加『spec 分支名一律连字符』『共享文档编号预分配（DEC/CHANGELOG 槽位）』与 `--reset-failed`；§4.5 增加 reauthorize 用法块；§6 明确 supervised 模式 STATUS 是辅助观察信号（完成权威是 Delivery，spec 不应要求周期性 STATUS 更新）。
 
 ### 验证
