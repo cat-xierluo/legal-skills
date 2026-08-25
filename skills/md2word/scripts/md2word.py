@@ -307,7 +307,9 @@ def add_quote(doc, text):
             list_marker_run.font.size = Pt(font_size)
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
 
-        parse_text_formatting(p, line, is_quote=True)
+        # 引用块与普通正文共用脚注解析入口，避免有效 [^label]
+        # 作为字面文本进入 document.xml；列表 marker 已在上方单独写入。
+        parse_text_with_footnotes(p, line, is_quote=True)
         set_paragraph_format(p, is_quote=True)
 
         if font_size:

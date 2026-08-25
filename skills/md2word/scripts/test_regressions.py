@@ -158,6 +158,54 @@ class Md2WordRegressionTest(unittest.TestCase):
                 generic_centered.paragraph_format.first_line_indent.pt, 24
             )
 
+    def test_quote_block_footnote_becomes_reference_without_losing_quote_format(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "quote-footnote.md"
+            output = temp_dir / "quote-footnote.docx"
+            markdown.write_text(
+                "# 引用块脚注回归\n\n"
+                "> **本章导读**：三个开源项目。[^chapter-skills]\n"
+                "> - 重点条目\n\n"
+                "[^chapter-skills]: 项目甲、项目乙与项目丙。\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            with zipfile.ZipFile(output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+                document_xml = archive.read("word/document.xml").decode("utf-8")
+                footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
+
+            self.assertNotIn("[^chapter-skills]", document_xml)
+            references = list(document_root.iter(qn("w:footnoteReference")))
+            self.assertEqual(len(references), 1)
+            positive_footnote_texts = [
+                "".join(node.text or "" for node in footnote.iter(qn("w:t"))).strip()
+                for footnote in footnotes_root.iter(qn("w:footnote"))
+                if int(footnote.get(qn("w:id"))) > 0
+            ]
+            self.assertEqual(positive_footnote_texts, ["项目甲、项目乙与项目丙。"])
+
+            document = Document(output)
+            guide = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("本章导读")
+            )
+            self.assertEqual(guide.paragraph_format.first_line_indent.pt, 0)
+            self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
+            list_item = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if "重点条目" in paragraph.text
+            )
+            self.assertIn("•", list_item.text)
+            self.assertEqual(list_item.paragraph_format.first_line_indent.pt, 0)
+
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
         converted = convert_quotes_to_chinese("标注'需律师现场确认'，don't、O'Brien 与 API's 保留。")
         self.assertIn("‘需律师现场确认’", converted)

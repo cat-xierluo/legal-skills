@@ -2,6 +2,33 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-014] - 2026-08-25 - 引用块正文复用统一脚注解析入口
+
+### 背景
+页面脚注管理器会在解析前提取所有 `[^label]: 定义`，但 Markdown 引用块由 `add_quote()` 单独处理，其正文仍直接调用 `parse_text_formatting()`，没有经过 `parse_text_with_footnotes()`。因此定义虽然存在，引用块内的 `[^chNN-skills]` 仍作为普通文本写入 `document.xml`，也不会登记到 `FootnoteManager.refs`。全书第二轮 DOCX 扫描发现 ch07、ch10—ch15 共 7 个章首导读 marker 均沿此路径逃逸。
+
+### 决策
+1. 仅把 `add_quote()` 中引用正文的解析调用改为 `parse_text_with_footnotes(..., is_quote=True)`，与普通正文共享脚注分派；不调整列表、标题、HTML 块或其他解析路径。
+2. 保留引用块既有执行顺序：先单独写入 bullet / number marker，再解析剩余正文，最后应用 `set_paragraph_format(..., is_quote=True)`。因此列表 marker、引用段落格式与字体配置不变。
+3. 继续把 `is_quote=True` 传入行内格式解析，使 `**本章导读**` 等加粗、斜体和引用字号沿用原语义；脚注引用 run 由现有 FootnoteManager 创建，不另写引用块专用 OOXML。
+
+### 方案取舍
+- 不在 `add_quote()` 内另写脚注正则或 OOXML：统一入口已经处理重复 label、相邻引用、footnote/endnote 分流和格式，复制逻辑会造成新的行为分叉。
+- 不扩大到所有 block helper：本轮真实失败只来自引用块；其他路径没有测试证据时不顺带重构。
+- 不改 Markdown 源稿或删除脚注：marker 逃逸是转换器遗漏，不应要求作者把章首导读移出引用块。
+
+### 验证
+- RED：最小引用块 fixture 的 `[^chapter-skills]` 原样进入 `document.xml`，转换包中没有 `word/footnotes.xml`。
+- GREEN：新增端到端回归确认 marker 消失、生成 1 个 `w:footnoteReference` 与对应定义；`本章导读` 仍加粗，引用段落首行缩进仍为 0，引用块列表仍包含 bullet marker。全量 16 项测试通过。
+- 真实 canonical ch10：`[^ch10-skills]` 字面量为 0，导读段含引用 ID 1，全文引用与正数定义为 `21/21`。
+- 真实 15 章合并：`document.xml` 任意 `[^...]` 字面 marker 为 0，引用/定义/唯一引用 ID 为 `131/131/131` 且集合一致；15 sections、118 张表保持。临时全书输出位于 `/tmp`，相对截图路径因此降级为占位符，只用于脚注与结构验证。
+
+### 影响与回退
+- 影响限于 Markdown 引用块中的 `[^label]`；没有定义的悬空引用继续沿用 FootnoteManager 的既有行为（不创建脚注）。
+- 如需回退，撤销 `add_quote()` 的统一入口调用及对应回归；不应改动普通正文脚注或脚注 OOXML 注入器。
+
+---
+
 ## [DEC-013] - 2026-08-25 - 以正文区硬预算收敛表格宽度并统一 OOXML 宽度源
 
 ### 背景
