@@ -63,12 +63,12 @@ on run
   set seconds of endDate to $ES
 
   tell application "Calendar"
-    if exists calendar calName then
-      set targetCal to calendar calName
-    else
+    try
+      set targetCal to (first calendar whose name is calName)
+    on error
       set targetCal to calendar 1
       log "警告: 找不到日历「" & calName & "」，已落到第一个日历"
-    end if
+    end try
     tell targetCal
       set newEvent to make new event at end of events with properties {summary:eventTitle, start date:startDate, end date:endDate}
       if locStr is not "" then set location of newEvent to locStr

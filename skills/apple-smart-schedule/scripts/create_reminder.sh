@@ -61,10 +61,14 @@ on run
   set minutes of d to $RMI
   set seconds of d to $RS
   tell application "Reminders"
-    if lName is "" or not (exists list lName) then
+    if lName is "" then
       set targetList to default list
     else
-      set targetList to list lName
+      try
+        set targetList to (first list whose name is lName)
+      on error
+        set targetList to default list
+      end try
     end if
     set r to make new reminder in targetList with properties {name:t, due date:d, remind me date:d}
     return id of r
