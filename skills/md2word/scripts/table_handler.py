@@ -322,32 +322,13 @@ def parse_table_row(line):
 
 def contains_markdown_formatting(text):
     """检查文本是否包含Markdown格式标记"""
-    format_patterns = [
-        r'!\[.*?\]\([^)]+\)',  # 图片语法
-        r'\*\*\*.*?\*\*\*',  # 加粗斜体
-        r'\*\*.*?\*\*',      # 加粗
-        r'\*.*?\*',          # 斜体
-        r'___.*?___',        # 加粗斜体
-        r'__.*?__',          # 加粗
-        r'_.*?_',            # 斜体
-        r'<u>.*?</u>',       # 下划线
-        r'<strong>.*?</strong>',  # HTML 加粗
-        r'<b>.*?</b>',       # HTML 加粗
-        r'<em>.*?</em>',     # HTML 斜体
-        r'<i>.*?</i>',       # HTML 斜体
-        r'<s>.*?</s>',       # HTML 删除线
-        r'<del>.*?</del>',   # HTML 删除线
-        r'<strike>.*?</strike>',  # HTML 删除线
-        r'~~.*?~~',          # 删除线
-        r'`.*?`',            # 行内代码
-        r'<br\s*/?>',       # 换行标签
-        r'\$.*?\$',         # LaTeX数学公式
-    ]
+    from formatter import contains_inline_formatting
 
-    for pattern in format_patterns:
-        if re.search(pattern, text):
-            return True
-    return False
+    return bool(
+        re.search(r'!\[.*?\]\([^)]+\)', text)
+        or re.search(r'<br\s*/?>', text, flags=re.IGNORECASE)
+        or contains_inline_formatting(text)
+    )
 
 
 def parse_table_cell_formatting(cell, text, is_header=False, md_file_path=None):
@@ -438,7 +419,11 @@ def parse_table_cell_formatting(cell, text, is_header=False, md_file_path=None):
 
 def _render_text_into_cell(cell, text, is_header):
     """将格式化文本（不含图片 markdown 语法）写入表格 cell"""
-    from formatter import convert_quotes_to_chinese, parse_formatted_text
+    from formatter import (
+        INLINE_FORMAT_PATTERNS,
+        convert_quotes_to_chinese,
+        parse_formatted_text,
+    )
 
     # 转换引号
     text = convert_quotes_to_chinese(text)
@@ -446,31 +431,10 @@ def _render_text_into_cell(cell, text, is_header):
     # 支持<br>换行：拆分后逐段处理
     parts_by_br = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
 
-    # 解析格式
-    format_patterns = [
-        (r'\*\*\*(.*?)\*\*\*', {'bold': True, 'italic': True}),
-        (r'___(.*?)___', {'bold': True, 'italic': True}),
-        (r'\*\*(.*?)\*\*', {'bold': True}),
-        (r'__(.*?)__', {'bold': True}),
-        (r'(?<!\*)\*([^*\n]+?)\*(?!\*)', {'italic': True}),
-        (r'(?<!_)_([^_\n]+?)_(?!_)', {'italic': True}),
-        (r'<strong>(.*?)</strong>', {'bold': True}),
-        (r'<b>(.*?)</b>', {'bold': True}),
-        (r'<em>(.*?)</em>', {'italic': True}),
-        (r'<i>(.*?)</i>', {'italic': True}),
-        (r'<u>(.*?)</u>', {'underline': True}),
-        (r'~~(.*?)~~', {'strikethrough': True}),
-        (r'<s>(.*?)</s>', {'strikethrough': True}),
-        (r'<del>(.*?)</del>', {'strikethrough': True}),
-        (r'<strike>(.*?)</strike>', {'strikethrough': True}),
-        (r'`([^`\n]+)`', {'code': True}),
-        (r'\$([^$\n]+?)\$', {'math': True}),  # LaTeX数学公式支持
-    ]
-
     for idx, segment in enumerate(parts_by_br):
         if idx > 0:
             cell.paragraphs[0].add_run().add_break()
-        text_parts = parse_formatted_text(segment, format_patterns)
+        text_parts = parse_formatted_text(segment, INLINE_FORMAT_PATTERNS)
         for part_text, formats in text_parts:
             if part_text:  # 只有非空文本才创建run
                 run = cell.paragraphs[0].add_run(part_text)

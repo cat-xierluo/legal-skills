@@ -23,12 +23,130 @@ from footnote_handler import (  # noqa: E402
     _footnote_text_to_runs_xml,
     _inject_footnotes_into_docx,
 )
-from table_handler import _calc_column_widths  # noqa: E402
+from table_handler import _calc_column_widths, contains_markdown_formatting  # noqa: E402
 
 import md2word  # noqa: E402
 
 
 class Md2WordRegressionTest(unittest.TestCase):
+    def test_plain_identifiers_keep_intraword_underscores_without_emphasis(self):
+        config = md2word.get_preset("book-publish")
+        md2word.set_config(config)
+        paragraph = Document().add_paragraph()
+        identifiers = [
+            "payment_instance_id",
+            "dispute_amount_band",
+            "manual_review_required",
+            "audit_log_summary",
+            "API_SERVER_KEY",
+            "main_chart_type",
+            "matter_id",
+            "foo__bar__baz",
+            "rule_2026_version",
+            "合规_风险_等级",
+        ]
+        parse_text_formatting(
+            paragraph,
+            "、".join(identifiers)
+            + "；_正常斜体_、__正常粗体__、___正常粗斜体___。",
+        )
+
+        for identifier in identifiers:
+            self.assertIn(identifier, paragraph.text)
+            identifier_runs = [run for run in paragraph.runs if identifier in run.text]
+            self.assertEqual(
+                len(identifier_runs),
+                1,
+                f"技术标识 {identifier} 应作为一个普通文本 run 原样保留",
+            )
+            self.assertFalse(bool(identifier_runs[0].italic))
+            self.assertFalse(bool(identifier_runs[0].bold))
+            self.assertIsNone(identifier_runs[0]._r.rPr.find(qn("w:i")))
+
+        formatted_runs = {
+            run.text: run
+            for run in paragraph.runs
+            if run.text in {"正常斜体", "正常粗体", "正常粗斜体"}
+        }
+        self.assertEqual(set(formatted_runs), {"正常斜体", "正常粗体", "正常粗斜体"})
+        self.assertTrue(formatted_runs["正常斜体"].italic)
+        self.assertFalse(bool(formatted_runs["正常斜体"].bold))
+        self.assertTrue(formatted_runs["正常粗体"].bold)
+        self.assertFalse(bool(formatted_runs["正常粗体"].italic))
+        self.assertTrue(formatted_runs["正常粗斜体"].bold)
+        self.assertTrue(formatted_runs["正常粗斜体"].italic)
+
+    def test_markdown_table_keeps_intraword_underscores_without_emphasis(self):
+        identifiers = [
+            "payment_instance_id",
+            "dispute_amount_band",
+            "manual_review_required",
+            "audit_log_summary",
+            "API_SERVER_KEY",
+            "main_chart_type",
+            "matter_id",
+            "foo__bar__baz",
+            "rule_2026_version",
+            "合规_风险_等级",
+        ]
+        for identifier in identifiers:
+            self.assertFalse(
+                contains_markdown_formatting(identifier),
+                f"技术标识 {identifier} 不应触发表格 Markdown 格式分派",
+            )
+        for formatted in ("_正常斜体_", "__正常粗体__", "___正常粗斜体___"):
+            self.assertTrue(contains_markdown_formatting(formatted))
+
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "intraword-underscore-table.md"
+            output = temp_dir / "intraword-underscore-table.docx"
+            markdown.write_text(
+                "# 表格下划线回归\n\n"
+                "| 字段 | 格式样例 |\n"
+                "| --- | --- |\n"
+                + "".join(
+                    f"| {identifier} | _正常斜体_ / __正常粗体__ / ___正常粗斜体___ |\n"
+                    for identifier in identifiers
+                ),
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            table = Document(output).tables[0]
+            self.assertEqual(
+                [row.cells[0].text for row in table.rows[1:]],
+                identifiers,
+            )
+            for row in table.rows[1:]:
+                identifier = row.cells[0].text
+                identifier_runs = [
+                    run
+                    for paragraph in row.cells[0].paragraphs
+                    for run in paragraph.runs
+                    if identifier in run.text
+                ]
+                self.assertEqual(len(identifier_runs), 1)
+                self.assertFalse(bool(identifier_runs[0].italic))
+                self.assertFalse(bool(identifier_runs[0].bold))
+                self.assertIsNone(identifier_runs[0]._r.rPr.find(qn("w:i")))
+
+                formatted_runs = {
+                    run.text: run
+                    for paragraph in row.cells[1].paragraphs
+                    for run in paragraph.runs
+                    if run.text in {"正常斜体", "正常粗体", "正常粗斜体"}
+                }
+                self.assertEqual(
+                    set(formatted_runs), {"正常斜体", "正常粗体", "正常粗斜体"}
+                )
+                self.assertTrue(formatted_runs["正常斜体"].italic)
+                self.assertTrue(formatted_runs["正常粗体"].bold)
+                self.assertTrue(formatted_runs["正常粗斜体"].bold)
+                self.assertTrue(formatted_runs["正常粗斜体"].italic)
+
     def test_code_block_keeps_internal_rhythm_and_adds_configured_outer_spacing(self):
         with TemporaryDirectory() as temp:
             temp_dir = Path(temp)
