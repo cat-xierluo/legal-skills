@@ -82,48 +82,100 @@ ensure_worktree_deps() {
 
   case "$kinds" in
     *python*)
-      # venv 含绝对路径 shebang/激活脚本，软链到 worktree 会破坏；不自动补偿。
-      # PM 需手动在 worktree 建 venv 或传 --allow-install-command 授权 pip install。
-      echo "SPAWN_WORKER_DEPS_PYTHON_BLOCKED: venv 路径敏感不自动补偿，PM 决定是否手动建 venv"
+      # venv 含绝对路径 shebang/激活脚本，自动软链有风险（venv 内绝对路径在多数
+      # 布局下仍可用，但路径敏感场景会坏）。默认不补偿；PM 显式传
+      # --python-runtime-symlink <主仓 .runtime 路径> 时按 opt-in 补偿（Task-061，
+      # badminton-lab Wave 1/2 两轮验证的符号链接模式），且 fail-closed：
+      #   - worktree 已有 .runtime（真实目录或有效软链）→ 保留不动
+      #   - 源解释器 $src/venv/bin/python 不存在或为 0 字节占位（Wave 1 实际出现）
+      #     → 拒绝启动，宁可报错也不留一个看似启动实际无法验证的 worker
+      local rt_src="${PYTHON_RUNTIME_SYMLINK:-}"
+      if [ -z "$rt_src" ]; then
+        echo "SPAWN_WORKER_DEPS_PYTHON_BLOCKED: venv 路径敏感不自动补偿；PM 可传 --python-runtime-symlink <主仓 .runtime> 显式补偿，或 --allow-install-command 授权安装"
+      elif [ -e "$WORKTREE/.runtime" ] || [ -L "$WORKTREE/.runtime" ]; then
+        echo "SPAWN_WORKER_DEPS_PYTHON_RT_EXISTS: worktree .runtime 已存在，保留不动"
+      elif [ ! -d "$rt_src" ]; then
+        echo "ERROR: SPAWN_WORKER_DEPS_PYTHON_RT_INVALID: --python-runtime-symlink 源不是目录: $rt_src" >&2
+        return 1
+      elif [ ! -s "$rt_src/venv/bin/python" ]; then
+        echo "ERROR: SPAWN_WORKER_DEPS_PYTHON_RT_INVALID: 源解释器缺失或为 0 字节占位: $rt_src/venv/bin/python" >&2
+        return 1
+      elif ln -s "$rt_src" "$WORKTREE/.runtime" 2>/dev/null; then
+        echo "SPAWN_WORKER_DEPS_PYTHON_RT_LINKED: .runtime -> ${rt_src}（PM 显式授权的运行时共享）"
+      else
+        echo "ERROR: SPAWN_WORKER_DEPS_PYTHON_RT_LINK_FAILED: cannot link .runtime; refusing to start an unverifiable worker" >&2
+        return 1
+      fi
       ;;
   esac
 }
 
 # write_install_authorization 前（spawn-worker.sh 内）调用：按 package.json scripts
-# 注入默认 verify 命令到全局 VERIFY_COMMANDS。
+# 或 Makefile 目标注入默认 verify 命令到全局 VERIFY_COMMANDS。
 # 全局读写：VERIFY_COMMANDS、PROJECT_DIR。
 # PM 已显式传 --verify-cmd（VERIFY_COMMANDS 非空）则不覆盖——PM 显式优先。
-# 否则把 package.json scripts 里存在的 typecheck/lint/test/test:e2e/build 注入
+# package.json 路径：把 scripts 里存在的 typecheck/lint/test/test:e2e/build 注入
 # "npm run <s>"。test:e2e 在 verification-gate 语义里是功能完成线（编译过 ≠
 # 功能可用，FaroPDF 2026-08-05 QA-02 教训），所以只要项目有该 script 就默认
 # 注入；无该 script 的项目自动跳过（grep -qx 守卫）。
-# install-guard 的 install 正则只匹配 npm install/ci/add，不匹配 npm run，故 verify 命令
-# 走 allowed_shell 白名单（本函数注入后由 spawn-worker.sh 的 VERIFY_COMMANDS 进白名单）。
+# Makefile 路径（npm 未注入任何命令时兜底，Python/Cargo 等 Make 驱动项目）：
+# 解析 "^target:" 形式的目标名，只注入白名单动词 test / test-* / check / ci / lint
+# 为 "make <target>"；.PHONY、变量赋值、带路径的文件目标不匹配（字符类排除 / 与空白）。
+# 只注入白名单动词是 fail-closed：PM 需要其他门禁目标（如 security-scan）时显式传
+# --verify-cmd。
+# install-guard 的 install 正则只匹配 npm install/ci/add，不匹配 npm run / make，故
+# verify 命令走 allowed_shell 白名单（本函数注入后由 spawn-worker.sh 的 VERIFY_COMMANDS
+# 进白名单）。
+# Task-057。根因：badminton-lab 2026-08-25 Wave 2，Make 驱动的 Python 项目零注入，worker 的
+# 全部 make 门禁被 SHELL_COMMAND_NOT_ALLOWLISTED 拦截，TDD 卡死在 RED 阶段。
 inject_default_verify_commands() {
   if [ -z "$PROJECT_DIR" ]; then
     return 0
   fi
-  local pkg="$PROJECT_DIR/package.json"
-  [ -f "$pkg" ] || return 0
 
   # PM 已显式传 verify 命令 → 不覆盖。
   if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
     return 0
   fi
 
-  local scripts
-  scripts=$(jq -r '.scripts // {} | keys[]' "$pkg" 2>/dev/null) || return 0
-  [ -z "$scripts" ] && return 0
-
-  local added=""
-  local s
-  for s in typecheck lint test test:e2e build; do
-    if printf '%s\n' "$scripts" | grep -qx "$s"; then
-      VERIFY_COMMANDS+=("npm run $s")
-      added="$added $s"
+  local npm_added=""
+  local pkg="$PROJECT_DIR/package.json"
+  if [ -f "$pkg" ]; then
+    local scripts
+    scripts=$(jq -r '.scripts // {} | keys[]' "$pkg" 2>/dev/null) || scripts=""
+    if [ -n "$scripts" ]; then
+      local s
+      for s in typecheck lint test test:e2e build; do
+        if printf '%s\n' "$scripts" | grep -qx "$s"; then
+          VERIFY_COMMANDS+=("npm run $s")
+          npm_added="$npm_added $s"
+        fi
+      done
     fi
+  fi
+  if [ -n "$npm_added" ]; then
+    echo "SPAWN_WORKER_VERIFY_INJECTED: 默认 verify 命令已注入白名单 -$npm_added"
+    # npm 是主项目类型，已注入即不再扫 Makefile，避免混合项目双份注入。
+    return 0
+  fi
+
+  local mk="$PROJECT_DIR/Makefile"
+  [ -f "$mk" ] || return 0
+  local targets
+  targets=$(grep -E '^[a-zA-Z0-9_.-]+:' "$mk" 2>/dev/null | sed 's/:.*$//' | sort -u) || targets=""
+  [ -n "$targets" ] || return 0
+
+  local make_added=""
+  local t
+  for t in $targets; do
+    case "$t" in
+      test|test-*|check|ci|lint)
+        VERIFY_COMMANDS+=("make $t")
+        make_added="$make_added $t"
+        ;;
+    esac
   done
-  if [ -n "$added" ]; then
-    echo "SPAWN_WORKER_VERIFY_INJECTED: 默认 verify 命令已注入白名单 -$added"
+  if [ -n "$make_added" ]; then
+    echo "SPAWN_WORKER_VERIFY_INJECTED_MAKEFILE: 默认 verify 命令已注入白名单 (make) -$make_added"
   fi
 }

@@ -29,13 +29,19 @@ Commands:
                is dead, then use Orca worker-stop to fence + stop the exact Dispatch;
                --destroy additionally removes the exact Orca/Git worktree and files.
                Use only when worker process is dead but dispatch is stuck in `dispatched`.
+  reauthorize Refresh a live supervised worker's spawn authorization snapshot
+               (Task-058): guard 的 WORKER_INSTALL_AUTH_B64 内联在 launch.sh 且随进程
+               环境固化，运行中改授权文件不生效。本命令合并 --allow-cmd 进授权文件、
+               重写 launch.sh B64、把 failed/blocked Task 复位 ready、在同一 worktree
+               创建新终端并复用 Task 重注册（worker-start 重注入）、改写 METADATA 路由、
+               可选发 --resume-text、最后关闭旧终端句柄。未提交的工作区改动全部保留。
 
 Common:
   --worktree PATH   Worker worktree path
   --session NAME    spawn-worker session id
   --text TEXT       Prompt, guidance or reply body
   --prompt-file P   Read prompt/guidance from a file
-  --lines N         Read limit (default: 50)
+  --lines N         Read limit (default: 50); --limit accepted as an alias (orca terminal read spelling)
   --cursor VALUE    Opaque worker-read cursor
   --timeout SEC     Wait timeout (default: 60)
   --delivery-id ID  Delivery to acknowledge
@@ -44,6 +50,11 @@ Common:
   --destroy          With `settle`: additionally remove worktree/files (default: fence+stop only)
   --reason TEXT      Required audit reason for settle (persisted under the Git common dir)
   --force            With `settle`: override an inconclusive liveness gate after manual verification
+  --allow-cmd CMD    With `reauthorize`: append one exact shell command to the allowlist
+                     (repeatable; merged into INSTALL_AUTHORIZATION.json before B64 refresh)
+  --resume-text TEXT With `reauthorize`: short continuation note sent to the new terminal
+                     after worker-start re-injection (e.g. progress preserved, continue from X)
+  --task-id ID       With `reauthorize`: task override when METADATA lacks task_id
 
 Supervised wait prints the complete Delivery JSON and never auto-acks it. Process every
 message and decide release/reuse/retain before running `ack`.
@@ -67,6 +78,9 @@ OBJECTIVE=""
 REASON=""
 FORCE=0
 DESTROY=0
+ALLOW_CMDS=()
+REAUTH_RESUME_TEXT=""
+REAUTH_TASK_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -74,7 +88,7 @@ while [[ $# -gt 0 ]]; do
     --session) SESSION="$2"; shift 2 ;;
     --text) SEND_TEXT="$2"; shift 2 ;;
     --prompt-file) PROMPT_FILE="$2"; shift 2 ;;
-    --lines) LINES="$2"; shift 2 ;;
+    --lines|--limit) LINES="$2"; shift 2 ;;  # --limit 是 orca terminal read 的参数名，此处接受两者
     --cursor) CURSOR="$2"; shift 2 ;;
     --timeout) WAIT_TIMEOUT="$2"; shift 2 ;;
     --delivery-id) DELIVERY_ID="$2"; shift 2 ;;
@@ -83,13 +97,16 @@ while [[ $# -gt 0 ]]; do
     --destroy) DESTROY=1; shift ;;
     --reason) REASON="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
+    --allow-cmd) ALLOW_CMDS+=("$2"); shift 2 ;;
+    --resume-text) REAUTH_RESUME_TEXT="$2"; shift 2 ;;
+    --task-id) REAUTH_TASK_ID="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
 done
 
 case "$COMMAND" in
-  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle) ;;
+  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize) ;;
   *) echo "ERROR: unknown command: $COMMAND" >&2; usage; exit 64 ;;
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
@@ -605,6 +622,157 @@ cmd_settle() {
   fi
 }
 
+cmd_reauthorize() {
+  # Task-058: spawn 授权快照的运行时刷新。guard 的 load_authorization() 中
+  # WORKER_INSTALL_AUTH_B64（launch.sh 内联、进程环境）绝对优先于授权文件且
+  # 运行中不可刷新——PM 直接编辑 INSTALL_AUTHORIZATION.json 对已启动 worker
+  # 无效（badminton-lab 2026-08-25 Wave 2 事故：worker 全部门禁被
+  # SHELL_COMMAND_NOT_ALLOWLISTED 拦截，TDD 卡死）。
+  # 本命令封装当次验证过的恢复链路，全部步骤 fail-closed：
+  #   1) 合并 --allow-cmd 进 INSTALL_AUTHORIZATION.json（去重、保留原条目）
+  #   2) 从授权文件重新编码 B64 并重写 launch.sh（恰好一处赋值，改写后回验）
+  #   3) 同 worktree 创建新终端（复用重写后的 launch.sh，未提交改动全保留）
+  #   4) 复用 Task 重注册（worker-start 重注入）；若 Task 因 worker 提问/中止
+  #      翻成 failed 被 task_not_startable 拦截，先复位 ready 再重试一次
+  #   5) METADATA 的 terminal_handle/dispatch_id 改路由到新句柄
+  #   6) 可选 --resume-text 作为续接说明发新终端
+  #   7) 关闭旧终端句柄（register 成功之后；provider lease 的 transport 记账
+  #      留给 release/clean-worktree 阶段处理）
+  [ "$WORKER_MODE" = "orca_supervised" ] || {
+    echo "ERROR: reauthorize requires an Orca supervised worker" >&2
+    exit 64
+  }
+  local task_id="$REAUTH_TASK_ID"
+  [ -n "$task_id" ] || task_id=$(jq -r '.session.orca.supervised.task_id // empty' "$METADATA")
+  [ -n "$task_id" ] || { echo "ERROR: METADATA is missing supervised.task_id; pass --task-id" >&2; exit 64; }
+  [ -n "$ORCA_WORKTREE_ID" ] || { echo "ERROR: METADATA is missing orca.worktree_id" >&2; exit 64; }
+  [ -n "$ORCA_COORDINATOR_HANDLE" ] || { echo "ERROR: METADATA is missing coordinator handle" >&2; exit 64; }
+
+  local auth_file="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
+  local launch_sh="$SESSION_CONTEXT/launch.sh"
+  [ -f "$auth_file" ] || { echo "ERROR: authorization file not found: $auth_file" >&2; exit 64; }
+  [ -f "$launch_sh" ] || { echo "ERROR: launch.sh not found: $launch_sh" >&2; exit 64; }
+  ensure_coordinator_binding || exit 2
+
+  # Step 1: merge --allow-cmd（无 --allow-cmd 时仅刷新快照，仍支持 PM 手改文件后的场景）
+  if [ "${#ALLOW_CMDS[@]}" -gt 0 ]; then
+    local extra_json tmp_auth
+    extra_json=$(printf '%s\n' "${ALLOW_CMDS[@]}" | jq -R . | jq -s .)
+    tmp_auth=$(mktemp)
+    jq --argjson extra "$extra_json" \
+      '.allowed_shell_commands = ((.allowed_shell_commands // []) + $extra | unique)' \
+      "$auth_file" > "$tmp_auth" || {
+      rm -f "$tmp_auth"
+      echo "ERROR: failed to merge --allow-cmd into $auth_file" >&2
+      exit 2
+    }
+    mv "$tmp_auth" "$auth_file"
+    echo "PM_REAUTHORIZE_AUTH_MERGED: ${#ALLOW_CMDS[@]} command(s) merged into authorization file"
+  fi
+
+  # Step 2: re-encode B64 and rewrite launch.sh（恰好一处赋值；回验解码一致）
+  local rewrite_err
+  if ! rewrite_err=$(python3 - "$auth_file" "$launch_sh" <<'PY'
+import base64, json, re, sys
+auth_path, launch_path = sys.argv[1], sys.argv[2]
+snapshot = json.load(open(auth_path))
+new_b64 = base64.b64encode(json.dumps(snapshot, ensure_ascii=False).encode()).decode()
+s = open(launch_path).read()
+new_s, n = re.subn(r"(WORKER_INSTALL_AUTH_B64=)[A-Za-z0-9+/=]+",
+                   lambda m: m.group(1) + new_b64, s)
+if n != 1:
+    sys.exit(f"expected exactly one WORKER_INSTALL_AUTH_B64 assignment, found {n}")
+m = re.search(r"WORKER_INSTALL_AUTH_B64=([A-Za-z0-9+/=]+)", new_s)
+if json.loads(base64.b64decode(m.group(1))) != snapshot:
+    sys.exit("roundtrip verification failed")
+open(launch_path, "w").write(new_s)
+PY
+  ); then
+    echo "ERROR: launch.sh B64 rewrite failed: $rewrite_err" >&2
+    exit 2
+  fi
+  echo "PM_REAUTHORIZE_LAUNCH_REFRESHED: B64 snapshot rewritten and verified"
+
+  # Step 3: new terminal in the same worktree
+  local create_json new_handle
+  create_json=$(orca_cli terminal create --worktree "path:$WORKTREE" --title "$SESSION" \
+    --command "bash $(printf '%q' "$launch_sh")" --json 2>&1) || {
+    echo "ERROR: terminal create failed: $create_json" >&2
+    exit 2
+  }
+  new_handle=$(printf '%s' "$create_json" | jq -r '.result.terminal.handle // empty')
+  [ -n "$new_handle" ] || { echo "ERROR: terminal create returned no handle: $create_json" >&2; exit 2; }
+  echo "PM_REAUTHORIZE_TERMINAL_CREATED: $new_handle"
+
+  # Step 4: re-register（Task 若被翻成 failed 先复位 ready 再重试一次）
+  local register_cmd="$SCRIPT_DIR/orca-supervised-register.sh"
+  [ -f "$register_cmd" ] || { echo "ERROR: orca-supervised-register.sh not found: $register_cmd" >&2; exit 64; }
+  local register_out
+  if ! register_out=$(bash "$register_cmd" \
+      --worktree-id "$ORCA_WORKTREE_ID" \
+      --terminal-handle "$new_handle" \
+      --run-id "$ORCA_RUN_ID" \
+      --task-id "$task_id" \
+      --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1); then
+    if printf '%s' "$register_out" | grep -q "task_not_startable"; then
+      echo "PM_REAUTHORIZE_TASK_RESET: task $task_id not startable; resetting to ready"
+      orca_cli orchestration task-update --id "$task_id" --status ready \
+        --run "$ORCA_RUN_ID" --from "$ORCA_COORDINATOR_HANDLE" >/dev/null || {
+        echo "ERROR: failed to reset task $task_id to ready" >&2
+        exit 2
+      }
+      register_out=$(bash "$register_cmd" \
+        --worktree-id "$ORCA_WORKTREE_ID" \
+        --terminal-handle "$new_handle" \
+        --run-id "$ORCA_RUN_ID" \
+        --task-id "$task_id" \
+        --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1) || {
+        echo "ERROR: re-registration failed after task reset: $register_out" >&2
+        exit 2
+      }
+    else
+      echo "ERROR: re-registration failed: $register_out" >&2
+      exit 2
+    fi
+  fi
+  local new_dispatch
+  new_dispatch=$(printf '%s' "$register_out" | grep 'ORCAREG_DISPATCH_ID=' | tail -1 | cut -d= -f2)
+  [ -n "$new_dispatch" ] || { echo "ERROR: register output missing dispatch id: $register_out" >&2; exit 2; }
+  echo "PM_REAUTHORIZE_REGISTERED: dispatch=$new_dispatch task=$task_id"
+
+  # Step 5: METADATA reroute
+  local tmp_meta
+  tmp_meta=$(mktemp)
+  jq --arg th "$new_handle" --arg di "$new_dispatch" \
+    '.session.orca.terminal_handle = $th | .session.orca.supervised.dispatch_id = $di' \
+    "$METADATA" > "$tmp_meta" && mv "$tmp_meta" "$METADATA" || {
+    rm -f "$tmp_meta"
+    echo "ERROR: METADATA reroute failed" >&2
+    exit 2
+  }
+  echo "PM_REAUTHORIZE_METADATA_REROUTED: terminal=$new_handle dispatch=$new_dispatch"
+
+  # Step 6: optional resume note（worker-start 注入完成后再发，避免与 preamble 竞争）
+  if [ -n "$REAUTH_RESUME_TEXT" ]; then
+    sleep 3
+    if orca_cli terminal send --terminal "$new_handle" --text "$REAUTH_RESUME_TEXT" --enter --json >/dev/null 2>&1; then
+      echo "PM_REAUTHORIZE_RESUME_SENT"
+    else
+      echo "WARN: resume text could not be sent to $new_handle; send manually via pm-orchestrate send"
+    fi
+  fi
+
+  # Step 7: close the old terminal by exact handle（最后做；失败只警告，PM 可手动关）
+  if [ -n "$WORKER_HANDLE" ] && [ "$WORKER_HANDLE" != "$new_handle" ]; then
+    if orca_cli terminal close --terminal "$WORKER_HANDLE" --json >/dev/null 2>&1; then
+      echo "PM_REAUTHORIZE_OLD_TERMINAL_CLOSED: $WORKER_HANDLE"
+    else
+      echo "WARN: old terminal $WORKER_HANDLE could not be closed; close it manually"
+    fi
+  fi
+  echo "PM_REAUTHORIZE_DONE: worker $SESSION now on $new_handle (uncommitted worktree changes preserved)"
+}
+
 resolve_worker
 case "$COMMAND" in
   send) cmd_send ;;
@@ -616,4 +784,5 @@ case "$COMMAND" in
   reply) cmd_reply ;;
   release|retain) cmd_account ;;
   settle) cmd_settle "$@" ;;
+  reauthorize) cmd_reauthorize ;;
 esac

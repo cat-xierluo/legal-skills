@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.6.3"
+  version: "2.7.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -90,8 +90,8 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 - **依赖补偿**（`ensure_worktree_deps`，项目类型感知，读全局 `PROJECT_DIR`/`WORKTREE`）：
   - **Node**：worktree 不在主仓父链（Orca `~/orca/workspaces/` 是独立路径树）且主仓有 `node_modules` → 软链 `worktree/node_modules → 主仓/node_modules`。tmux worktree 本在主仓子树（`.claude/worktrees/`）靠 npm 向上解析（G28），不软链。
   - **Rust**：`~/.cargo` registry 全局共享、worktree `target/` 独立，不补偿。
-  - **Python**：venv 含绝对路径、软链会挂，不自动补偿（PM 手动建 venv 或 `--allow-install-command` 授权 pip install）。
-- **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/test:e2e/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。`test:e2e` 是 verification-gate 的功能完成线（编译过 ≠ 功能可用，FaroPDF 2026-08-05 QA-02 教训），项目有该 script 就默认注入；无则自动跳过。PM 显式 `--verify-cmd` 优先，不覆盖。
+  - **Python**：venv 含绝对路径、软链会挂，默认不自动补偿；PM 可显式传 `--python-runtime-symlink <主仓 .runtime>`（v2.7 Task-061，badminton-lab Wave 1/2 两轮验证的模式）共享主仓运行时——fail-closed：worktree 已有 `.runtime` 则保留、源解释器缺失或为 0 字节占位（Wave 1 实际出现）拒绝启动、软链失败退出非零；`clean-worktree.sh` 删除前安全 unlink 该软链。
+- **默认 verify 命令**（`inject_default_verify_commands`，`write_install_authorization` 前调用）：PM 未传 `--verify-cmd` 时，按 `package.json` scripts 注入 `npm run typecheck/lint/test/test:e2e/build` 到 `VERIFY_COMMANDS` → 进 `allowed_shell` 白名单。`test:e2e` 是 verification-gate 的功能完成线（编译过 ≠ 功能可用，FaroPDF 2026-08-05 QA-02 教训），项目有该 script 就默认注入；无则自动跳过。npm 未注入任何命令时**兜底扫 Makefile**（v2.7 Task-057，badminton-lab Wave 2 事故根因：Make 驱动的 Python 项目零注入，worker 全部 `make` 门禁被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截）：解析 `^target:` 目标名，只注入白名单动词 `test / test-* / check / ci / lint` 为 `make <target>`，`.PHONY`/变量赋值/文件目标不匹配；其他门禁目标（如 `security-scan`）PM 显式传 `--verify-cmd`。PM 显式 `--verify-cmd` 优先，不覆盖。
 
 依赖补偿必须失败关闭：目标处已有真实目录就保留，断裂 symlink 或创建 symlink 失败则 `spawn-worker.sh` 退出非零，不能留下一个看似已启动、实际无法验证的 worker。用 `scripts/test-spawn-worker-deps.sh` 覆盖路径类型、默认/显式 verify 和双 worker 并发。
 
@@ -188,7 +188,7 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-`orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。
+`orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；spec 内的 branch 名一律用**连字符形式**（Orca worktree `--name` 与 spawn 的 `safe_branch` 都会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked——Wave 1 教训，manifest 含 `branch: x/y` 会被 `orca-wave-prepare.sh` fail-closed 拒绝）。`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding；被 `task_not_startable` 拒绝时带 `--reset-failed` 可把前任 worker 提问/中止翻成 failed 的 Task 复位 ready 重试一次（Task-060）。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。**并行 worker 会同时写共享文档时（CHANGELOG/DECISIONS/TASKS），PM 在各 spec 中预分配互不冲突的编号与槽位**（如 DEC-044/045 分派到不同 worker），合并冲突留给 PM 收口按既定模式解。
 
 ### 4.5 Supervised 生命周期
 
@@ -216,6 +216,16 @@ bash scripts/pm-orchestrate.sh reply --worktree "$WT" --session worker-a --messa
 bash scripts/pm-orchestrate.sh release --worktree "$WT" --session worker-a
 bash scripts/pm-orchestrate.sh ack --worktree "$WT" --session worker-a --delivery-id "$DID"
 ```
+
+授权快照运行时刷新（Task-058，Wave 2 事故链路固化）——worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦住验证命令且根因是 spawn 授权不含它时：
+
+```bash
+bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
+  --allow-cmd "make test" --allow-cmd "make ci" \
+  --resume-text "终端已重启，授权已刷新；你的未提交进度保留在 worktree，从断点继续"
+```
+
+一条命令完成：授权文件合并 → launch.sh B64 重写（guard 读内联快照，改文件对运行中进程无效）→ Task 复位 → 同 worktree 新终端 + Task 重注册（worker-start 重注入）→ METADATA 改路由 → 关旧终端。未提交工作区改动全部保留。
 
 每次 supervised 的 send/wait/reply/release/retain/ack/settle 都先由脚本对当前 PM terminal 执行 `run-use`，并把新 coordinator handle 写回 METADATA；`check` 随后消费已绑定 Run，不携带陈旧 `--run` 路由。`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
 
@@ -279,6 +289,8 @@ Session Context 默认：
 ```
 
 字段与 checkpoint 语义读取 `references/03-checkpoint-files.md`。`STATUS.status` 使用 `running|done|failed|blocked|stopped`，成功只写字面 `done`。
+
+supervised 模式下 STATUS 是**辅助观察信号**（阶段/心跳），完成权威是 `worker_done → Delivery`；PM 的 wave spec 不要把『周期性 STATUS 更新』当作完成判据或巡检依据（Wave 2 实测三个 supervised worker 均未写 STATUS，Delivery 流转完全正常）——supervised 巡检用 `check --wait`/`pm-orchestrate wait`，STATUS 轮询只适用于 tmux/terminal-managed 回退路径。
 
 ## 7. 巡检与介入
 

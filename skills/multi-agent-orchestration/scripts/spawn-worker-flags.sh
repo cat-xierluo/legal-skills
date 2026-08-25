@@ -113,6 +113,11 @@ Options:
   --install-authorization-source TEXT
                    Auditable source for allowed install commands, e.g. an exact user approval,
                    project rule or task ID. A command list without this field fails closed.
+  --python-runtime-symlink PATH
+                   (v2.7, Task-061) Explicitly share the main repo's .runtime (venv/models)
+                   into the worktree via symlink for Python projects. Opt-in because venv
+                   paths are layout-sensitive; fail-closed when the source interpreter is
+                   missing or a 0-byte placeholder, or the worktree already has .runtime.
   --allow-shell-command CMD
                    Allow this exact non-install Shell command (repeatable). Verification commands
                    passed via --verify-cmd are included automatically. All other Shell commands
@@ -329,6 +334,10 @@ parse_spawn_worker_args() {
         ;;
       --allow-shell-command)
         ALLOWED_SHELL_COMMANDS+=("$2")
+        shift 2
+        ;;
+      --python-runtime-symlink)
+        PYTHON_RUNTIME_SYMLINK="$2"
         shift 2
         ;;
       --git-expected-name)

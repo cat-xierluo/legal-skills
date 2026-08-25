@@ -290,6 +290,18 @@ if [ -n "$WORKTREE" ] && [ -L "$WORKTREE/node_modules" ]; then
   fi
 fi
 
+# Task-061：同模式安全 unlink .runtime 软链（--python-runtime-symlink 注入）。
+# git worktree remove 视 untracked 内容为脏；不先 unlink 会让 tmux 路径的清理
+# 被拒或需要 --force。绝不跟随软链触碰主仓 .runtime（venv/models 所在）。
+if [ -n "$WORKTREE" ] && [ -L "$WORKTREE/.runtime" ]; then
+  if [ "$EXECUTE" -eq 0 ]; then
+    echo "CLEAN_WORKTREE_RUN: rm -f $WORKTREE/.runtime (symlink unlink)"
+  else
+    rm -f "$WORKTREE/.runtime"
+    echo "CLEAN_WORKTREE_DEPS_UNLINKED: .runtime symlink"
+  fi
+fi
+
 # v2.1（DEC-114）：ORCA 模式下额外清理 ORCA 跟踪的 worktree（tmux 路径不会自动同步）。
 # 用 run() 包装保持 dry-run 友好；ORCA 不可用 / 无 worktree_id 时跳过（不阻塞 git 清理）。
 if [ -n "${metadata_orca_worktree_id:-}" ] && [ "$KEEP_WORKTREE" -eq 0 ]; then
