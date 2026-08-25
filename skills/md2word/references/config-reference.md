@@ -95,6 +95,7 @@ table:
   border_color: "#000000"  # 边框颜色
   border_width: 4          # 边框宽度
   line_spacing: 1.2        # 行距
+  space_after: 6           # 表格组件后的固定高度留白，单位 pt（exact 空段）
   row_height_cm: 0.8       # 行高 (cm)
   alignment: "center"      # 表格对齐
   cell_margin:             # 单元格边距
@@ -141,19 +142,16 @@ inline_code:
 
 ### 引用块格式 (quote)
 
-所有连续的 Markdown `>` 行统一渲染为单单元格 callout 表格，不根据“本章导读”“案例”等文字标签切换样式。默认容器与正文左右边界齐平，单元格边距提供灰底内部留白；引用中的空行折算为 `paragraph_spacing`，不生成额外空段。
+所有连续的 Markdown `>` 行统一渲染为段落型 callout，不根据“本章导读”“案例”等文字标签切换样式。段落底纹天然与正文左右边界齐平，不创建 `w:tbl`，因此 Word 的“查看网格线”不会显示虚线外框。与底纹同色的实线段落边界只用于承载文字内边距：首段承担上内边距、末段承担下内边距，每段承担左右内边距；线条与灰底同色，不形成可见轮廓。引用中的空行折算为 `paragraph_spacing`，不生成额外空段。
 
 ```yaml
 quote:
-  background_color: "#F5F5F5" # 单元格背景色；null = 无底纹
-  width_percent: 100           # 相对正文可用宽度；100 = 与正文边界齐平
-  border_color: null           # null = 无边框
-  border_size: 0               # 边框宽度，单位 1/8 pt
-  cell_margin:                 # 单元格内部边距，单位 twips（20 twips = 1 pt）
-    top: 100
-    bottom: 100
-    left: 120
-    right: 120
+  background_color: "#F5F5F5" # 段落背景色
+  padding:                     # 文字到灰底边缘的留白，单位 pt
+    top: 5
+    bottom: 5
+    left: 6
+    right: 6
   space_before: 6              # callout 外部段前间距，单位 pt
   space_after: 6               # callout 外部段后间距，单位 pt
   paragraph_spacing: 6         # `> ` 空行折算的块内段距，单位 pt
@@ -163,7 +161,9 @@ quote:
   align: justify               # left/center/right/justify
 ```
 
-`left_indent_inches` 是 v1.2.x 及更早版本的旧字段，v1.3.0 起不再用于缩窄引用块；如需内部左右留白，请改用 `cell_margin.left` / `right`。
+兼容迁移：若自定义配置仍只有 v1.3.0 的 `quote.cell_margin`，转换器会按 `20 twips = 1 pt` 映射到 `padding`，保持原物理留白。`width_percent`、`border_color`、`border_size` 与 v1.2.x 的 `left_indent_inches` 不再参与段落型引用框渲染；引用框固定为正文宽、无可见轮廓。新配置应直接使用 `padding`。
+
+`table.space_after` 归属于数据表组件本身：每个成功生成的 Markdown 或 HTML 表格后恰好追加一个段前/段后均为 0、行高为配置值的 exact 空段。后续正文继续使用普通正文格式；无数据表时不生成该间隔，图片与图注链路也不应用。
 
 ### 数学公式格式 (math)
 

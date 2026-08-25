@@ -248,128 +248,87 @@ def add_numbered_list(doc, line):
     set_paragraph_format(p)
 
 
-def _set_width(element, width_twips):
-    """Set an OOXML width element to an exact dxa value."""
-    element.set(qn('w:type'), 'dxa')
-    element.set(qn('w:w'), str(width_twips))
+def _quote_padding_pt(quote_config):
+    """Return paragraph-callout padding in points, with v1.3.0 migration.
+
+    v1.3.0 exposed ``cell_margin`` in twips because quote blocks were tables.
+    A custom config that has not migrated yet keeps the same physical padding;
+    new configs use the paragraph-native ``padding`` mapping in points.
+    """
+    padding = quote_config.get('padding')
+    if isinstance(padding, dict):
+        return {
+            edge: float(padding.get(edge, default))
+            for edge, default in (
+                ('top', 5), ('bottom', 5), ('left', 6), ('right', 6)
+            )
+        }
+
+    legacy_margin = quote_config.get('cell_margin') or {}
+    return {
+        edge: float(legacy_margin.get(edge, default_twips)) / 20.0
+        for edge, default_twips in (
+            ('top', 100), ('bottom', 100), ('left', 120), ('right', 120)
+        )
+    }
 
 
-def _add_quote_outer_spacer(doc, height_pt):
-    """Add a deterministic, compact gap outside a quote table."""
-    if not height_pt or height_pt <= 0:
-        return None
-    paragraph = doc.add_paragraph()
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    paragraph.paragraph_format.line_spacing = Pt(height_pt)
-    return paragraph
+def _apply_quote_paragraph_container(
+        paragraph, quote_config, *, is_first=False, is_last=False):
+    """Apply a full-width grey paragraph callout without creating a table.
 
+    Word paragraph borders provide true text-to-edge padding. Their solid line
+    uses exactly the same colour as the shading, so it is visually absorbed by
+    the fill. Unlike a borderless one-cell table, this representation cannot
+    expose dotted table gridlines when Word's ``View Gridlines`` is enabled.
+    """
+    background = (quote_config.get('background_color') or '#F5F5F5').lstrip('#')
+    padding = _quote_padding_pt(quote_config)
+    p_pr = paragraph._p.get_or_add_pPr()
 
-def _configure_quote_table(table, quote_config, page_config):
-    """Apply the shared full-width, borderless callout container."""
-    available_cm = (
-        page_config.get('width', 21.0)
-        - page_config.get('margin_left', 3.18)
-        - page_config.get('margin_right', 3.18)
-    )
-    width_percent = float(quote_config.get('width_percent') or 100)
-    width_percent = min(100.0, max(1.0, width_percent))
-    width_twips = round(available_cm * width_percent / 100.0 * 1440 / 2.54)
+    for tag in ('w:pBdr', 'w:shd'):
+        for old in p_pr.findall(qn(tag)):
+            p_pr.remove(old)
 
-    table.autofit = False
-    table.allow_autofit = False
-    tbl_pr = table._tbl.tblPr
-
-    tbl_width = tbl_pr.find(qn('w:tblW'))
-    if tbl_width is None:
-        tbl_width = OxmlElement('w:tblW')
-        tbl_pr.insert(0, tbl_width)
-    _set_width(tbl_width, width_twips)
-
-    table_look = tbl_pr.find(qn('w:tblLook'))
-    if table_look is not None:
-        tbl_pr.remove(table_look)
-    for child_name in ('w:tblLayout', 'w:tblInd', 'w:jc', 'w:tblBorders', 'w:tblCellMar'):
-        for old_child in tbl_pr.findall(qn(child_name)):
-            tbl_pr.remove(old_child)
-
-    alignment = OxmlElement('w:jc')
-    alignment.set(qn('w:val'), 'left')
-    tbl_pr.append(alignment)
-
-    indent = OxmlElement('w:tblInd')
-    _set_width(indent, 0)
-    tbl_pr.append(indent)
-
-    borders = OxmlElement('w:tblBorders')
-    border_color = quote_config.get('border_color')
-    border_size = int(quote_config.get('border_size') or 0)
-    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+    borders = OxmlElement('w:pBdr')
+    edge_spaces = {'left': padding['left'], 'right': padding['right']}
+    if is_first:
+        edge_spaces['top'] = padding['top']
+    if is_last:
+        edge_spaces['bottom'] = padding['bottom']
+    for edge in ('top', 'left', 'bottom', 'right'):
+        if edge not in edge_spaces:
+            continue
+        space = edge_spaces[edge]
         border = OxmlElement(f'w:{edge}')
-        if border_color and border_size > 0:
-            border.set(qn('w:val'), 'single')
-            border.set(qn('w:sz'), str(border_size))
-            border.set(qn('w:color'), border_color.lstrip('#'))
-        else:
-            border.set(qn('w:val'), 'nil')
-            border.set(qn('w:sz'), '0')
-            border.set(qn('w:color'), 'auto')
-        border.set(qn('w:space'), '0')
+        border.set(qn('w:val'), 'single')
+        border.set(qn('w:sz'), '2')
+        border.set(qn('w:color'), background)
+        border.set(qn('w:space'), str(round(space)))
         borders.append(border)
-    tbl_pr.append(borders)
+    p_pr.insert_element_before(
+        borders, 'w:shd', 'w:tabs', 'w:spacing', 'w:ind', 'w:jc',
+        'w:rPr', 'w:sectPr', 'w:pPrChange'
+    )
 
-    layout = OxmlElement('w:tblLayout')
-    layout.set(qn('w:type'), 'fixed')
-    tbl_pr.append(layout)
-
-    margins_config = quote_config.get('cell_margin') or {}
-    cell_margins = OxmlElement('w:tblCellMar')
-    for edge, default in (('top', 100), ('left', 120), ('bottom', 100), ('right', 120)):
-        margin = OxmlElement(f'w:{edge}')
-        margin.set(qn('w:w'), str(int(margins_config.get(edge, default))))
-        margin.set(qn('w:type'), 'dxa')
-        cell_margins.append(margin)
-    tbl_pr.append(cell_margins)
-
-    if table_look is not None:
-        tbl_pr.append(table_look)
-
-    caption = OxmlElement('w:tblCaption')
-    caption.set(qn('w:val'), 'md2word-quote')
-    tbl_pr.append(caption)
-
-    grid_columns = table._tbl.tblGrid.findall(qn('w:gridCol'))
-    if grid_columns:
-        grid_columns[0].set(qn('w:w'), str(width_twips))
-
-    cell = table.cell(0, 0)
-    cell_width = cell._tc.get_or_add_tcPr().find(qn('w:tcW'))
-    if cell_width is None:
-        cell_width = OxmlElement('w:tcW')
-        cell._tc.get_or_add_tcPr().append(cell_width)
-    _set_width(cell_width, width_twips)
-
-    background = quote_config.get('background_color')
-    if background:
-        shading = OxmlElement('w:shd')
-        shading.set(qn('w:val'), 'clear')
-        shading.set(qn('w:color'), 'auto')
-        shading.set(qn('w:fill'), background.lstrip('#'))
-        cell._tc.get_or_add_tcPr().append(shading)
-
-    return cell
+    shading = OxmlElement('w:shd')
+    shading.set(qn('w:val'), 'clear')
+    shading.set(qn('w:color'), 'auto')
+    shading.set(qn('w:fill'), background)
+    p_pr.insert_element_before(
+        shading, 'w:tabs', 'w:spacing', 'w:ind', 'w:jc',
+        'w:rPr', 'w:sectPr', 'w:pPrChange'
+    )
 
 
 def add_quote(doc, text):
-    """将所有 Markdown 引用块渲染为同一套全宽 callout 样式。"""
+    """将所有 Markdown 引用块渲染为同一套全宽段落 callout 样式。"""
     config = get_config()
     quote_config = config.get('quote', {})
     lines = text.split('\n')
 
-    _add_quote_outer_spacer(doc, quote_config.get('space_before', 6))
-    table = doc.add_table(rows=1, cols=1)
-    cell = _configure_quote_table(table, quote_config, config.get('page', {}))
     paragraphs = []
+    paragraph_gap_after = set()
     pending_gap = False
 
     for line in lines:
@@ -377,11 +336,9 @@ def add_quote(doc, text):
             pending_gap = bool(paragraphs)
             continue
 
-        p = cell.paragraphs[0] if not paragraphs else cell.add_paragraph()
+        p = doc.add_paragraph()
         if pending_gap and paragraphs:
-            paragraphs[-1].paragraph_format.space_after = Pt(
-                quote_config.get('paragraph_spacing', 6)
-            )
+            paragraph_gap_after.add(len(paragraphs) - 1)
         pending_gap = False
 
         bullet_match = re.match(r'^\s*([-*+])\s+', line)
@@ -399,13 +356,30 @@ def add_quote(doc, text):
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
 
         parse_text_with_footnotes(p, line, is_quote=True)
-        set_paragraph_format(p, is_quote=True)
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(0)
         paragraphs.append(p)
 
-    _add_quote_outer_spacer(doc, quote_config.get('space_after', 6))
-    return table
+    if paragraphs:
+        for index, paragraph in enumerate(paragraphs):
+            set_paragraph_format(paragraph, is_quote=True)
+            _apply_quote_paragraph_container(
+                paragraph,
+                quote_config,
+                is_first=index == 0,
+                is_last=index == len(paragraphs) - 1,
+            )
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
+            if index in paragraph_gap_after:
+                paragraph.paragraph_format.space_after = Pt(
+                    quote_config.get('paragraph_spacing', 6)
+                )
+        paragraphs[0].paragraph_format.space_before = Pt(
+            quote_config.get('space_before', 6)
+        )
+        paragraphs[-1].paragraph_format.space_after = Pt(
+            quote_config.get('space_after', 6)
+        )
+    return paragraphs
 
 
 def add_code_block(doc, code_lines, language):
