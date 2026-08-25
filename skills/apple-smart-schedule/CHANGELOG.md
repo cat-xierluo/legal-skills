@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.1.1] - 2026-08-25
+
+### 修复
+
+- `scripts/create_event.sh` / `scripts/create_reminder.sh`：日历/清单查找由 `if exists ... else` 改为 `try/on error` 容错（`first calendar whose name is ...` / `first list whose name is ...`）。修复部分 macOS 状态（系统首次提示未授权、名称含特殊字符）下偶发的 -1728 误报「找不到」——命中失败直接回退 default list / 第一个日历，保留「找不到时落到默认」行为并打印 warning。
+
 ## [0.1.0] - 2026-07-15
 
 ### 新增
