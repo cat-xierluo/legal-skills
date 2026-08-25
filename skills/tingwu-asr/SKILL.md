@@ -23,25 +23,36 @@ description: 使用阿里云通义听悟进行云端音频/视频转录。本技
 - Python 3.8+
 - `requests` (必须) — HTTP 请求
 - `oss2` (必须) — 阿里云 OSS SDK（STS 直传）
+- `playwright` (登录时) — 内置登录脚本 `login_pw.py` 使用（`pip3 install playwright && playwright install chromium`）
 
 安装:
 ```bash
 pip3 install -r skills/tingwu-asr/config/requirements.txt
 ```
 
-## 首次使用：登录（通过 MCP Playwright）
+## 首次使用：登录（首选：内置 Playwright 脚本）
 
-登录需要 Agent 使用 MCP Playwright 浏览器工具完成：
+**方式一（推荐）**：skill 内置 `login_pw.py`，一条命令完成"开浏览器 → 自动填凭证 → 等
+登录 → cookie 落盘"：
+
+```bash
+python3 skills/tingwu-asr/scripts/login_pw.py
+```
+
+- 凭证从 `config/.env` 读取（从 `config/.env.example` 复制填写）
+- 浏览器以可见窗口打开；若出现滑块/验证码，人工在窗口内完成即可，脚本自动轮询等待
+- 脚本通过 `context.cookies()` 取 cookie（含 HttpOnly 的 `login_aliyunid_ticket`），
+  **直接写入** `config/cookies.json`，cookie 值不经过 stdout/对话记录
+- 完成后可用 `check_auth.py` 验证登录态
+
+**方式二（备用）**：Agent 用 MCP Playwright 浏览器工具手工流程：
 
 1. 用 MCP Playwright 打开 `https://tingwu.aliyun.com/home`
 2. 如果跳转到登录页，用账号密码或扫码登录
-3. 登录成功后，用 `browser_evaluate` 提取 cookie：
-   ```javascript
-   () => document.cookie
-   ```
-4. 将提取的 cookie 保存到文件：
+3. 登录成功后，将提取的 cookie 保存到文件（注意 `document.cookie` 拿不到 HttpOnly
+   cookie，仅作兜底）：
    ```bash
-   python3 skills/tingwu-asr/scripts/login.py --save-cookies '{"cna":"xxx","login_aliyunid_ticket":"xxx",...}'
+   python3 skills/tingwu-asr/scripts/login.py --save-cookies '{"cna":"xxx",...}'
    ```
 
 账号密码可预配置在 `config/.env` 文件中（从 `config/.env.example` 复制）。
@@ -50,9 +61,11 @@ pip3 install -r skills/tingwu-asr/config/requirements.txt
 
 每天登录听悟网页可领取 2 小时免费转录额度。Agent 签到流程：
 
-1. 用 MCP Playwright 打开 `https://tingwu.aliyun.com/home`（触发每日额度）
-2. 提取并保存 Cookie（同登录步骤 3-4）
-3. 运行检查脚本确认状态：
+1. 运行内置登录脚本（会打开 `https://tingwu.aliyun.com/home` 触发每日额度并保存 Cookie）：
+   ```bash
+   python3 skills/tingwu-asr/scripts/login_pw.py
+   ```
+2. 运行检查脚本确认状态：
    ```bash
    python3 skills/tingwu-asr/scripts/daily_checkin.py
    ```
