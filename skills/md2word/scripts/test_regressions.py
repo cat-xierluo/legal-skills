@@ -110,7 +110,8 @@ class Md2WordRegressionTest(unittest.TestCase):
                 "# 表题回归\n\n"
                 "**表 10-5：鉴定式案例分析步骤**\n\n"
                 "| 步骤 | 说明 |\n| --- | --- |\n| 一 | 识别请求权基础 |\n\n"
-                '<div align="center">**表 10-6：显式居中兼容**</div>\n',
+                '<div align="center">**表10-6：显式居中兼容**</div>\n\n'
+                '<div align="center">普通居中文字</div>\n',
                 encoding="utf-8",
             )
             config = md2word.get_preset("book-publish")
@@ -133,12 +134,29 @@ class Md2WordRegressionTest(unittest.TestCase):
             explicit_caption = next(
                 paragraph
                 for paragraph in document.paragraphs
-                if paragraph.text.startswith("表 10-6：")
+                if paragraph.text.startswith("表10-6：")
             )
             self.assertEqual(
                 explicit_caption.alignment, WD_PARAGRAPH_ALIGNMENT.CENTER
             )
+            self.assertEqual(
+                explicit_caption.paragraph_format.first_line_indent.pt, 0
+            )
+            self.assertEqual(explicit_caption.paragraph_format.left_indent.pt, 0)
             self.assertTrue(any(run.bold for run in explicit_caption.runs))
+            self.assertEqual(explicit_caption.runs[0].font.size.pt, 12)
+
+            generic_centered = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text == "普通居中文字"
+            )
+            self.assertEqual(
+                generic_centered.alignment, WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
+            self.assertEqual(
+                generic_centered.paragraph_format.first_line_indent.pt, 24
+            )
 
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
         converted = convert_quotes_to_chinese("标注'需律师现场确认'，don't、O'Brien 与 API's 保留。")
