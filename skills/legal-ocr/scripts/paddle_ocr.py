@@ -966,7 +966,29 @@ class PaddleOCRBackend:
 
         self._write_backend_files(backend_dir, batch_outputs)
         saved_images = self._save_images(batch_outputs, assets_dir)
-        merged_text = "\n\n".join(batch["text"].strip() for batch in batch_outputs).strip()
+
+        def _rewrite_image_refs(text: str) -> str:
+            """用保存映射改写 md 内联引用:``imgs/{source}`` → ``{assets_dir.name}/{filename}``。
+
+            修复系统性断链:_save_images 下载时会重命名为 {batch_label}_{index}.jpg,
+            但 md 里的 <img src="imgs/img_in_image_box_*.jpg"> 原始引用从未同步改写,
+            导致正文引用与落盘文件交集为 0(book-ocr 1886 本大面积死链的根因)。
+            找不到映射的引用原样保留(不强行替换)。
+            """
+            for img in saved_images:
+                src = img.get("source")
+                filename = img.get("filename")
+                if not src or not filename:
+                    continue
+                old_ref = f"imgs/{src}"
+                new_ref = f"{assets_dir.name}/{filename}"
+                if old_ref in text:
+                    text = text.replace(old_ref, new_ref)
+            return text
+
+        merged_text = _rewrite_image_refs(
+            "\n\n".join(batch["text"].strip() for batch in batch_outputs).strip()
+        )
         batches = [
             {
                 "index": index,
