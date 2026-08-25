@@ -154,10 +154,27 @@ def parse_formatted_text(text, format_patterns):
     parts = []
     current_pos = 0
 
+    # 反引号代码段内的 Markdown 标记必须按字面量保留。这里只保护
+    # 非代码匹配的起止标记，避免 `_` / `*` 等从一个代码段跨到
+    # 另一个代码段；完整包围代码段的外层格式维持既有行为。
+    code_ranges = []
+    for pattern, format_dict in format_patterns:
+        if format_dict.get('code', False):
+            code_ranges.extend(
+                (match.start(), match.end())
+                for match in re.finditer(pattern, text)
+            )
+
     # 查找所有格式标记的位置
     all_matches = []
     for pattern, format_dict in format_patterns:
         for match in re.finditer(pattern, text):
+            if not format_dict.get('code', False) and any(
+                code_start <= match.start() < code_end
+                or code_start <= match.end() - 1 < code_end
+                for code_start, code_end in code_ranges
+            ):
+                continue
             all_matches.append({
                 'start': match.start(),
                 'end': match.end(),
