@@ -4,7 +4,7 @@
 
 ### Task-011：引用框移除 Word 网格线，并收紧数据表组件后的间距
 
-- **状态**：✅ 已完成（待 PR 合并）
+- **状态**：✅ 已完成（已合并 PR #99；merge `9d52b124132cf850d8726aa179d03abde46d8cb0`）
 - **目标**：让导读/案例引用框在 Word 编辑界面只显示浅灰背景、绝不出现表格虚线轮廓；让 Markdown/HTML 数据表自行提供稳定、可配置的表后留白。
 - **范围**：paragraph-based `add_quote()`、`quote.padding` 与 v1.3.0 `cell_margin` 兼容映射、`table.space_after`、全部预设/fallback/config-template/模板提取基底、配置与样式文档、端到端测试、真实 ch12 结构验收。
 - **非目标**：不修改后续正文的行距或段前距；不改变图片/图注间距；不按“导读/案例”标签分叉；不打开 Word 或安装依赖。
