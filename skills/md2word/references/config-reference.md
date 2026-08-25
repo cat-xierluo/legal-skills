@@ -16,7 +16,6 @@ md2word 使用 YAML 格式的配置文件来控制 Word 文档的格式化输出
 | `quotes` | 引号转换 |
 | `table` | 表格格式 |
 | `code_block` | 代码块格式 |
-| `example_block` | 自然语言输出示例框格式（由 `example` 围栏触发） |
 | `inline_code` | 行内代码格式 |
 | `quote` | 引用块格式 |
 | `math` | 数学公式格式 |
@@ -27,23 +26,6 @@ md2word 使用 YAML 格式的配置文件来控制 Word 文档的格式化输出
 ---
 
 ## 配置分组
-
-### 自然语言输出示例框 (example_block)
-
-面向 AI 原始输出、自然语言范例或待评议的示例，使用 ` ```example ` 围栏。它与 ` ```text ` 的语义不同：前者保持正文阅读节奏，只用浅灰背景区隔；后者仍按紧凑等宽代码块处理。
-
-```yaml
-example_block:
-  background_color: "#F2F2F2"
-  line_spacing: 1.5
-  cell_margin:
-    top: 100
-    bottom: 100
-    left: 140
-    right: 140
-```
-
-`cell_margin` 单位为 twips（100=5pt，140=7pt）。转换器以单单元格 Word 表格应用底纹和内边距；内容沿用 `fonts.default` 和 `paragraph` 的正文映射，首行缩进及段前/段后均清零，避免在灰色框内产生额外空白。
 
 ### 页面设置 (page)
 

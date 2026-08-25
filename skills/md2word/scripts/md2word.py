@@ -326,6 +326,7 @@ def add_code_block(doc, code_lines, language):
     - border_color / border_size：段落边框，相邻代码行边框在 Word 中自动连成完整框
     - no_proofread：关闭拼写检查（代码不应被拼写纠正）
     - left_indent / line_spacing：缩进与行距
+    - space_before / space_after：代码框与相邻正文的外部间距（仅首/末行）
     未配置 background_color / border 时行为同旧版。
     """
     config = get_config()
@@ -351,8 +352,10 @@ def add_code_block(doc, code_lines, language):
     border_color = content_config.get('border_color')    # None → 不加边框
     border_size = content_config.get('border_size', 4)   # 1/8 pt 单位
     no_proof = content_config.get('no_proofread', True)
+    space_before = content_config.get('space_before', 0)
+    space_after = content_config.get('space_after', 0)
 
-    for code_line in code_lines:
+    for index, code_line in enumerate(code_lines):
         p = doc.add_paragraph()
         run = p.add_run(code_line if code_line else ' ')
         # 等宽字体（ASCII/CS 用 font_name，东亚字符用 east_asia_font）
@@ -395,115 +398,9 @@ def add_code_block(doc, code_lines, language):
         pf = p.paragraph_format
         pf.left_indent = Pt(left_indent)
         pf.line_spacing = line_spacing
-        pf.space_before = Pt(0)
-        pf.space_after = Pt(0)
+        pf.space_before = Pt(space_before if index == 0 else 0)
+        pf.space_after = Pt(space_after if index == len(code_lines) - 1 else 0)
         pf.first_line_indent = Pt(0)
-
-
-def _set_example_table_geometry(table, width_twips):
-    """将示例框固定为正文宽度，并显式移除表格线。"""
-    table.autofit = False
-    table.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-    tbl_pr = table._tbl.tblPr
-
-    tbl_width = tbl_pr.find(qn('w:tblW'))
-    if tbl_width is None:
-        tbl_width = OxmlElement('w:tblW')
-        tbl_pr.append(tbl_width)
-    tbl_width.set(qn('w:w'), str(width_twips))
-    tbl_width.set(qn('w:type'), 'dxa')
-
-    tbl_layout = tbl_pr.find(qn('w:tblLayout'))
-    if tbl_layout is None:
-        tbl_layout = OxmlElement('w:tblLayout')
-        tbl_pr.append(tbl_layout)
-    tbl_layout.set(qn('w:type'), 'fixed')
-
-    borders = tbl_pr.find(qn('w:tblBorders'))
-    if borders is None:
-        borders = OxmlElement('w:tblBorders')
-        tbl_pr.append(borders)
-    for edge_name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
-        edge = borders.find(qn(f'w:{edge_name}'))
-        if edge is None:
-            edge = OxmlElement(f'w:{edge_name}')
-            borders.append(edge)
-        edge.set(qn('w:val'), 'nil')
-
-    grid_col = table._tbl.tblGrid.findall(qn('w:gridCol'))[0]
-    grid_col.set(qn('w:w'), str(width_twips))
-    tc_width = table.cell(0, 0)._tc.get_or_add_tcPr().find(qn('w:tcW'))
-    tc_width.set(qn('w:w'), str(width_twips))
-    tc_width.set(qn('w:type'), 'dxa')
-
-
-def _set_example_cell_format(cell, background_color, margins):
-    """写入可验证的单元格底纹和内边距，而非用空行伪造留白。"""
-    tc_pr = cell._tc.get_or_add_tcPr()
-
-    shading = tc_pr.find(qn('w:shd'))
-    if shading is None:
-        shading = OxmlElement('w:shd')
-        tc_pr.append(shading)
-    shading.set(qn('w:val'), 'clear')
-    shading.set(qn('w:color'), 'auto')
-    shading.set(qn('w:fill'), background_color.lstrip('#'))
-
-    tc_margins = tc_pr.find(qn('w:tcMar'))
-    if tc_margins is None:
-        tc_margins = OxmlElement('w:tcMar')
-        tc_pr.append(tc_margins)
-    for edge_name in ('top', 'bottom', 'left', 'right'):
-        edge = tc_margins.find(qn(f'w:{edge_name}'))
-        if edge is None:
-            edge = OxmlElement(f'w:{edge_name}')
-            tc_margins.append(edge)
-        edge.set(qn('w:w'), str(margins.get(edge_name, 0)))
-        edge.set(qn('w:type'), 'dxa')
-
-
-def add_example_block(doc, example_lines):
-    """添加自然语言输出示例框（```example），保留正文节奏，只加浅灰底。"""
-    config = get_config()
-    example_config = config.get('example_block', {})
-    page_config = config.get('page', {})
-    paragraph_config = config.get('paragraph', {})
-
-    available_width_cm = (
-        page_config.get('width', 21.0)
-        - page_config.get('margin_left', 3.18)
-        - page_config.get('margin_right', 3.18)
-    )
-    width_twips = int(round(available_width_cm * 1440 / 2.54))
-    table = doc.add_table(rows=1, cols=1)
-    _set_example_table_geometry(table, width_twips)
-
-    cell = table.cell(0, 0)
-    _set_example_cell_format(
-        cell,
-        example_config.get('background_color', '#F2F2F2'),
-        example_config.get(
-            'cell_margin',
-            {'top': 100, 'bottom': 100, 'left': 140, 'right': 140},
-        ),
-    )
-
-    line_spacing = example_config.get(
-        'line_spacing', paragraph_config.get('line_spacing', 1.5)
-    )
-    for index, example_line in enumerate(example_lines or ['']):
-        paragraph = cell.paragraphs[0] if index == 0 else cell.add_paragraph()
-        if example_line:
-            parse_text_with_footnotes(paragraph, example_line)
-        else:
-            paragraph.add_run('\u00A0')
-        set_paragraph_format(paragraph)
-        paragraph.paragraph_format.first_line_indent = Pt(0)
-        paragraph.paragraph_format.left_indent = Pt(0)
-        paragraph.paragraph_format.right_indent = Pt(0)
-        paragraph.paragraph_format.space_before = Pt(0)
-        paragraph.paragraph_format.space_after = Pt(0)
-        paragraph.paragraph_format.line_spacing = line_spacing
 
 
 def add_page_number(doc):
@@ -897,12 +794,8 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                 i += 1
             if i < len(lines):
                 i += 1
-            if language.lower() == 'example':
-                add_example_block(doc, code_lines)
-                print("✅ 处理自然语言示例框")
-            else:
-                add_code_block(doc, code_lines, language)
-                print("✅ 处理代码块")
+            add_code_block(doc, code_lines, language)
+            print("✅ 处理代码块")
             if not has_seen_h2:
                 has_body_before_first_h2 = True
             continue

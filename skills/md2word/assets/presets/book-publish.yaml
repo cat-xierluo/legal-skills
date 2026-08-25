@@ -130,21 +130,12 @@ code_block:
     color: "#333333"
     left_indent: 0
     line_spacing: 1.2
+    space_before: 6
+    space_after: 6
     background_color: "#F5F5F5"
     border_color: null
     border_size: 4
     no_proofread: true
-
-# 自然语言输出示例（```example）：沿用正文的字体与 1.5 倍行距，只以浅灰底区隔。
-# 单位为 twips；100=5pt，140=7pt。由单单元格表格提供真实内边距。
-example_block:
-  background_color: "#F2F2F2"
-  line_spacing: 1.5
-  cell_margin:
-    top: 100
-    bottom: 100
-    left: 140
-    right: 140
 
 # 行内代码设置（等宽 + 浅灰底，与代码块风格一致）
 inline_code:
