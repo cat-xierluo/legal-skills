@@ -981,8 +981,10 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             if line:
                 p = doc.add_paragraph()
                 parse_text_with_footnotes(p, line)
-                # 图注（**图 X-X：...** / 图 X-X：...）居中、无首行缩进、小一号字
-                if re.match(r'^\*{0,2}图\s*\d+[-－]?\d*\s*[:：]', line):
+                # 图注与表题都居中、无首行缩进；图注另沿用既有小一号样式。
+                is_figure_caption = re.match(r'^\*{0,2}图\s*\d+[-－]?\d*\s*[:：]', line)
+                is_table_caption = re.match(r'^\*{0,2}表\s*\d+[-－]?\d*\s*[:：]', line)
+                if is_figure_caption:
                     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                     pf = p.paragraph_format
                     pf.first_line_indent = Pt(0)
@@ -992,6 +994,13 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                     pf.line_spacing = 1.2
                     for r in p.runs:
                         r.font.size = Pt(10)
+                elif is_table_caption:
+                    # 先保持普通正文的字号、粗体和间距，再只覆盖表题对齐/缩进。
+                    set_paragraph_format(p)
+                    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                    pf = p.paragraph_format
+                    pf.first_line_indent = Pt(0)
+                    pf.left_indent = Pt(0)
                 else:
                     set_paragraph_format(p)
                 if not has_seen_h2:

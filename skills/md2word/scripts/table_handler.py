@@ -633,23 +633,17 @@ def adjust_table_column_width(table):
         layout.set(qn('w:type'), 'fixed')
         tblPr.append(layout)
 
-        # tblGrid 的 gridCol 宽度（cm→twips，1cm≈567twip）
-        tblGrid = table._tbl.find(qn('w:tblGrid'))
-        if tblGrid is not None:
-            gridCols = tblGrid.findall(qn('w:gridCol'))
-            for i, w in enumerate(widths_cm):
-                if i < len(gridCols):
-                    gridCols[i].set(qn('w:w'), str(int(w * 567)))
-
-        # 每个 cell 的 width（双保险，Word 真正按此列宽渲染）
-        for row in table.rows:
-            for ci, cell in enumerate(row.cells):
-                if ci < col_count:
-                    cell.width = Cm(widths_cm[ci])
-
-        # columns.width（兼容）
+        # columns.width（兼容 python-docx 的对象模型）；精确 OOXML 在最后统一覆盖。
         for i, w in enumerate(widths_cm):
             table.columns[i].width = Cm(w)
+
+        page_config = config.get('page', {})
+        available_cm = (
+            page_config.get('width', 21.0)
+            - page_config.get('margin_left', 3.18)
+            - page_config.get('margin_right', 3.18)
+        )
+        _apply_fixed_table_widths(table, widths_cm, available_cm)
     except Exception as e:
         print(f"⚠️  列宽调整失败: {e}")
 
@@ -966,12 +960,15 @@ def _apply_table_cell_margins(table, table_config):
 
 
 def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=None, cell_lengths_real_per_col=None):
-    """按 P80 百分位给长列宽度 + 短列保底不换行。
+    """按 P80 权重分配列宽，并将总宽严格约束在正文可用区。
 
     核心策略：
-    1. 每列先按"最长单元格实际需要"给一个最低宽(min_needed_cm,核心:少字列不换行)
-    2. 长列按 P80 比例瓜分"页面剩余宽度"(sum_min 给定后的余量)
-    3. 长列拿到的宽度可能物理上仍不够(必换行) → 用户接受(短列不被压换行是底线)
+    1. 每列先按表头内容计算期望最低宽 ``min_needed_cm``。
+    2. 期望宽合计未超页时，按 P80 内容权重瓜分剩余空间。
+    3. 期望宽合计超页时，允许长表头换行；每列保留动态可读下限，
+       剩余预算按期望宽的相对需求分配。
+    4. 返回值总和严格等于页面宽减左右页边距，最终整数舍入由
+       ``_widths_to_twips`` 统一处理。
     """
     page_config = config.get('page', {})
     page_width = page_config.get('width', 21.0)
@@ -979,8 +976,20 @@ def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=No
     margin_right = page_config.get('margin_right', 3.18)
     available_cm = page_width - margin_left - margin_right
 
+    if num_cols <= 0 or available_cm <= 0:
+        return []
+
     if min_needed_cm is None:
         min_needed_cm = [1.0] * num_cols
+
+    min_needed_cm = list(min_needed_cm[:num_cols])
+    if len(min_needed_cm) < num_cols:
+        min_needed_cm.extend([1.0] * (num_cols - len(min_needed_cm)))
+
+    # 正常 A4 表格以 1.2cm 为可读下限；列数过多时按页面预算动态降低，
+    # 但仍为每列保留相同的基础空间，避免某列被压成 0。
+    readable_floor_cm = min(1.2, available_cm / num_cols * 0.8)
+    min_needed_cm = [max(readable_floor_cm, float(w)) for w in min_needed_cm]
 
     # 1) 短列先按 min_needed 给定
     widths_cm = list(min_needed_cm)
@@ -1004,24 +1013,94 @@ def _calc_column_widths(cell_lengths_per_col, num_cols, config, min_needed_cm=No
         for i, w in enumerate(col_weights):
             widths_cm[i] = widths_cm[i] + extra_cm * w / total_weight
 
-    # 3) sum_min > available 时(内容总长超页面,物理必换行)
-    #    关键:不再整体缩(会把少字列也压扁,这是用户痛点)
-    #    而是只缩那些"实际需要 > 最小合理宽"的长列,少字列保底不变
+    # 3) 总需求超过正文区时，允许表头换行：每列先保留可读下限，
+    #    剩余预算按各列表头需求超出下限的相对权重分配。
+    #    这层是硬预算，不能再沿用“仅压单列 > 页面 70%”的旧启发式，
+    #    因为多列各自不宽但合计超宽时它不会生效。
     else:
-        # 设一个"合理最大宽"——A4 单栏正文区(14.64cm)的 70% 给单列,让该列内换行可接受
-        MAX_REASONABLE = available_cm * 0.7   # ≈ 10.25cm
-        # 找出需要压缩的列(min_needed > MAX_REASONABLE)
-        excess_total = sum_min - available_cm
-        for i, w in enumerate(widths_cm):
-            if w > MAX_REASONABLE:
-                # 长列:最多压到 MAX_REASONABLE,多余的"还回去"给总宽补足
-                can_reduce = w - MAX_REASONABLE
-                reduce = min(can_reduce, excess_total)
-                widths_cm[i] -= reduce
-                excess_total -= reduce
-            # 短列(w <= MAX_REASONABLE):保底,不动
+        base_total = readable_floor_cm * num_cols
+        distributable = max(0.0, available_cm - base_total)
+        demands = [max(0.0, w - readable_floor_cm) for w in widths_cm]
+        total_demand = sum(demands)
+        if total_demand:
+            widths_cm = [
+                readable_floor_cm + distributable * demand / total_demand
+                for demand in demands
+            ]
+        else:
+            widths_cm = [available_cm / num_cols] * num_cols
+
+    # 浮点误差只归入最后一列，使任何返回值都严格受正文区预算约束，
+    # 同时让正常表格尽量（实际为误差范围内）铺满正文可用宽度。
+    width_total = sum(widths_cm)
+    if width_total > 0:
+        widths_cm[-1] += available_cm - width_total
 
     return widths_cm
+
+
+def _widths_to_twips(widths_cm, available_cm):
+    """把相对列宽量化为总和精确等于正文区的整数 twips。"""
+    if not widths_cm:
+        return []
+    # 向下取整而非四舍五入：1 twip 虽小，向上舍入仍会在物理单位上
+    # 越过正文宽度；硬预算要求舍入后也不得超界。
+    target_twips = max(1, int(available_cm * 1440 / 2.54))
+    safe_widths = [max(0.0, float(width)) for width in widths_cm]
+    total = sum(safe_widths)
+    if total <= 0:
+        safe_widths = [1.0] * len(widths_cm)
+        total = len(widths_cm)
+
+    raw_twips = [width / total * target_twips for width in safe_widths]
+    twips = [int(value) for value in raw_twips]
+    remainder = target_twips - sum(twips)
+    order = sorted(
+        range(len(raw_twips)),
+        key=lambda index: raw_twips[index] - twips[index],
+        reverse=True,
+    )
+    for index in order[:remainder]:
+        twips[index] += 1
+    return twips
+
+
+def _apply_fixed_table_widths(table, widths_cm, available_cm):
+    """用同一组 twips 同步 tblW、tblGrid 与每行 tcW。"""
+    widths_twips = _widths_to_twips(widths_cm, available_cm)
+    if not widths_twips:
+        return
+
+    tbl_grid = table._tbl.find(qn('w:tblGrid'))
+    if tbl_grid is None:
+        raise ValueError('Markdown 表格缺少 tblGrid，无法同步固定列宽')
+    grid_cols = tbl_grid.findall(qn('w:gridCol'))
+    if len(grid_cols) != len(widths_twips):
+        raise ValueError(
+            f'tblGrid 列数 {len(grid_cols)} 与计算列数 {len(widths_twips)} 不一致'
+        )
+    for row in table.rows:
+        if len(row.cells) != len(widths_twips):
+            raise ValueError(
+                f'表格行列数 {len(row.cells)} 与计算列数 {len(widths_twips)} 不一致'
+            )
+
+    tbl_pr = table._tbl.tblPr
+    tbl_width = tbl_pr.find(qn('w:tblW'))
+    if tbl_width is None:
+        tbl_width = OxmlElement('w:tblW')
+        tbl_pr.insert(0, tbl_width)
+    tbl_width.set(qn('w:type'), 'dxa')
+    tbl_width.set(qn('w:w'), str(sum(widths_twips)))
+
+    for index, width in enumerate(widths_twips):
+        grid_cols[index].set(qn('w:w'), str(width))
+
+    for row in table.rows:
+        for index, cell in enumerate(row.cells):
+            tc_width = cell._tc.get_or_add_tcPr().get_or_add_tcW()
+            tc_width.set(qn('w:type'), 'dxa')
+            tc_width.set(qn('w:w'), str(widths_twips[index]))
 
 
 def _optimize_html_table_widths(table, num_cols, row_cells_list, config):
