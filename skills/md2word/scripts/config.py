@@ -259,7 +259,7 @@ def get_fallback_config() -> Config:
             'background_color': '#F0F0F0',
         },
         'quote': {
-            'background_color': '#F5F5F5',
+            'background_color': '#EDF2F7',
             'padding': {
                 'top': 5,
                 'bottom': 5,

@@ -142,11 +142,11 @@ inline_code:
 
 ### 引用块格式 (quote)
 
-所有连续的 Markdown `>` 行统一渲染为段落型 callout，不根据“本章导读”“案例”等文字标签切换样式。段落底纹天然与正文左右边界齐平，不创建 `w:tbl`，因此 Word 的“查看网格线”不会显示虚线外框。与底纹同色的实线段落边界只用于承载文字内边距：首段承担上内边距、末段承担下内边距，每段承担左右内边距；线条与灰底同色，不形成可见轮廓。引用中的空行折算为 `paragraph_spacing`，不生成额外空段。
+所有连续的 Markdown `>` 行统一渲染为段落型 callout，不根据“本章导读”“案例”等文字标签切换样式。段落底纹天然与正文左右边界齐平，不创建 `w:tbl`，因此 Word 的“查看网格线”不会显示虚线外框。与底纹同色的实线段落边界只用于承载文字内边距：首段承担上内边距、末段承担下内边距，每段承担左右内边距；线条与灰底同色，不形成可见轮廓。内部空引用行生成一个同底色、段前段后为 0 的 `paragraph_spacing` exact 空段，避免 Word 不给内容段段后距着色而产生白缝。连续多个内部空引用行确定性折叠为一个；首尾空引用行忽略，由 `padding` 承担块边缘留白。
 
 ```yaml
 quote:
-  background_color: "#F5F5F5" # 段落背景色
+  background_color: "#EDF2F7" # 段落背景色；与 confirmed 状态灰统一
   padding:                     # 文字到灰底边缘的留白，单位 pt
     top: 5
     bottom: 5
@@ -154,7 +154,7 @@ quote:
     right: 6
   space_before: 6              # callout 外部段前间距，单位 pt
   space_after: 6               # callout 外部段后间距，单位 pt
-  paragraph_spacing: 6         # `> ` 空行折算的块内段距，单位 pt
+  paragraph_spacing: 6         # 同底色内部 exact 空段高度，单位 pt
   font_size: null              # null = 继承正文
   line_spacing: null           # null = 继承正文
   first_line_indent: 0         # 引用段首行缩进，单位 pt

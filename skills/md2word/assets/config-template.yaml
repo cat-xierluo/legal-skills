@@ -130,7 +130,7 @@ inline_code:
 
 # ==================== 引用块设置 ====================
 quote:
-  background_color: "#F5F5F5" # 段落背景填充色；段落天然与正文同宽
+  background_color: "#EDF2F7" # 段落背景填充色；与 confirmed 状态灰统一
   padding:                     # 文字到灰底边缘的留白（pt）
     top: 5
     bottom: 5
@@ -138,7 +138,7 @@ quote:
     right: 6
   space_before: 6              # 灰底块外部段前间距（pt）
   space_after: 6               # 灰底块外部段后间距（pt）
-  paragraph_spacing: 6         # `> ` 空行折算的块内段距（pt）
+  paragraph_spacing: 6         # 内部空引用行生成的同底色 exact 空段高度（pt）
   font_size: null              # null = 继承正文
   line_spacing: null           # null = 继承正文
   first_line_indent: 0         # 引用段首行缩进（pt）

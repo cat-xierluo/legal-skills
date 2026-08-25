@@ -123,7 +123,7 @@ BASE_CONFIG: Dict[str, Any] = {
         "color": "#333333",
     },
     "quote": {
-        "background_color": "#EAEAEA",
+        "background_color": "#EDF2F7",
         "padding": {"top": 5, "bottom": 5, "left": 6, "right": 6},
         "space_before": 6,
         "space_after": 6,
