@@ -141,13 +141,29 @@ inline_code:
 
 ### 引用块格式 (quote)
 
+所有连续的 Markdown `>` 行统一渲染为单单元格 callout 表格，不根据“本章导读”“案例”等文字标签切换样式。默认容器与正文左右边界齐平，单元格边距提供灰底内部留白；引用中的空行折算为 `paragraph_spacing`，不生成额外空段。
+
 ```yaml
 quote:
-  background_color: "#EAEAEA"
-  left_indent_inches: 0.2
-  font_size: 9
-  line_spacing: 1.5
+  background_color: "#F5F5F5" # 单元格背景色；null = 无底纹
+  width_percent: 100           # 相对正文可用宽度；100 = 与正文边界齐平
+  border_color: null           # null = 无边框
+  border_size: 0               # 边框宽度，单位 1/8 pt
+  cell_margin:                 # 单元格内部边距，单位 twips（20 twips = 1 pt）
+    top: 100
+    bottom: 100
+    left: 120
+    right: 120
+  space_before: 6              # callout 外部段前间距，单位 pt
+  space_after: 6               # callout 外部段后间距，单位 pt
+  paragraph_spacing: 6         # `> ` 空行折算的块内段距，单位 pt
+  font_size: null              # null = 继承正文
+  line_spacing: null           # null = 继承正文
+  first_line_indent: 0         # 引用段首行缩进，单位 pt
+  align: justify               # left/center/right/justify
 ```
+
+`left_indent_inches` 是 v1.2.x 及更早版本的旧字段，v1.3.0 起不再用于缩窄引用块；如需内部左右留白，请改用 `cell_margin.left` / `right`。
 
 ### 数学公式格式 (math)
 

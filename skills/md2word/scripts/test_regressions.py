@@ -315,13 +315,140 @@ class Md2WordRegressionTest(unittest.TestCase):
                 generic_centered.paragraph_format.first_line_indent.pt, 24
             )
 
-    def test_quote_block_footnote_becomes_reference_without_losing_quote_format(self):
+    def test_quote_callouts_share_one_full_width_borderless_style(self):
         with TemporaryDirectory() as temp:
             temp_dir = Path(temp)
-            markdown = temp_dir / "quote-footnote.md"
-            output = temp_dir / "quote-footnote.docx"
+            markdown = HERE / "fixtures" / "quote-callout.md"
+            output = temp_dir / "quote-callout.docx"
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            with zipfile.ZipFile(output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+                document_xml = archive.read("word/document.xml").decode("utf-8")
+                footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
+
+            self.assertNotIn("[^guide]", document_xml)
+            references = list(document_root.iter(qn("w:footnoteReference")))
+            self.assertEqual(len(references), 1)
+            positive_footnote_texts = [
+                "".join(node.text or "" for node in footnote.iter(qn("w:t"))).strip()
+                for footnote in footnotes_root.iter(qn("w:footnote"))
+                if int(footnote.get(qn("w:id"))) > 0
+            ]
+            self.assertEqual(positive_footnote_texts, ["导读脚注定义。"])
+
+            document = Document(output)
+            self.assertEqual(len(document.tables), 2)
+            quote_tables = document.tables
+            quote_cells = [table.cell(0, 0) for table in quote_tables]
+            self.assertTrue(quote_cells[0].paragraphs[0].text.startswith("本章导读"))
+            self.assertTrue(quote_cells[1].paragraphs[0].text.startswith("案例："))
+
+            available_twips = round(
+                (
+                    config.get("page.width")
+                    - config.get("page.margin_left")
+                    - config.get("page.margin_right")
+                )
+                * 1440
+                / 2.54
+            )
+            style_snapshots = []
+            for table, cell in zip(quote_tables, quote_cells):
+                tbl_pr = table._tbl.tblPr
+                self.assertEqual(tbl_pr.find(qn("w:tblCaption")).get(qn("w:val")), "md2word-quote")
+                self.assertEqual(tbl_pr.find(qn("w:tblW")).get(qn("w:type")), "dxa")
+                self.assertEqual(int(tbl_pr.find(qn("w:tblW")).get(qn("w:w"))), available_twips)
+                self.assertEqual(tbl_pr.find(qn("w:tblInd")).get(qn("w:w")), "0")
+                self.assertEqual(tbl_pr.find(qn("w:jc")).get(qn("w:val")), "left")
+                self.assertEqual(tbl_pr.find(qn("w:tblLayout")).get(qn("w:type")), "fixed")
+                self.assertEqual(
+                    [child.tag.rsplit("}", 1)[-1] for child in tbl_pr],
+                    [
+                        "tblW", "jc", "tblInd", "tblBorders", "tblLayout",
+                        "tblCellMar", "tblLook", "tblCaption",
+                    ],
+                )
+
+                borders = tbl_pr.find(qn("w:tblBorders"))
+                border_values = [child.get(qn("w:val")) for child in borders]
+                self.assertEqual(border_values, ["nil"] * 6)
+                margins = tbl_pr.find(qn("w:tblCellMar"))
+                margin_values = {
+                    child.tag.rsplit("}", 1)[-1]: int(child.get(qn("w:w")))
+                    for child in margins
+                }
+                self.assertEqual(
+                    margin_values,
+                    {"top": 100, "left": 120, "bottom": 100, "right": 120},
+                )
+                shading = cell._tc.tcPr.find(qn("w:shd"))
+                self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
+                self.assertEqual(
+                    int(table._tbl.tblGrid.find(qn("w:gridCol")).get(qn("w:w"))),
+                    available_twips,
+                )
+                self.assertEqual(int(cell._tc.tcPr.find(qn("w:tcW")).get(qn("w:w"))), available_twips)
+                row_properties = table.rows[0]._tr.find(qn("w:trPr"))
+                self.assertTrue(
+                    row_properties is None
+                    or row_properties.find(qn("w:cantSplit")) is None,
+                    "单行长案例必须允许跨页",
+                )
+
+                for sibling in (table._tbl.getprevious(), table._tbl.getnext()):
+                    self.assertEqual(sibling.tag, qn("w:p"))
+                    self.assertEqual("".join(node.text or "" for node in sibling.iter(qn("w:t"))), "")
+                    spacing = sibling.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+                    self.assertEqual(spacing.get(qn("w:line")), "120")
+                    self.assertEqual(spacing.get(qn("w:lineRule")), "exact")
+
+                for paragraph in cell.paragraphs:
+                    self.assertEqual(paragraph.paragraph_format.first_line_indent.pt, 0)
+                    self.assertEqual(paragraph.paragraph_format.line_spacing, 1.5)
+                    self.assertEqual(paragraph.alignment, WD_PARAGRAPH_ALIGNMENT.JUSTIFY)
+                    for run in paragraph.runs:
+                        if run.text:
+                            self.assertEqual(run.font.size.pt, 12)
+
+                style_snapshots.append(
+                    (
+                        tbl_pr.find(qn("w:tblW")).get(qn("w:w")),
+                        tuple(border_values),
+                        tuple(margin_values.items()),
+                        shading.get(qn("w:fill")),
+                    )
+                )
+
+            self.assertEqual(style_snapshots[0], style_snapshots[1])
+            guide = quote_cells[0].paragraphs[0]
+            case_paragraphs = quote_cells[1].paragraphs
+            self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
+            self.assertTrue(any(run.text == "案例：统一引用框" and run.bold for run in case_paragraphs[0].runs))
+            self.assertTrue(any(run.text == "关键判断" and run.bold for run in case_paragraphs[1].runs))
+            self.assertEqual(len(case_paragraphs), 3, "引用空行应折算为段距，不生成空段")
+            self.assertEqual(case_paragraphs[0].paragraph_format.space_after.pt, 6)
+            self.assertEqual(case_paragraphs[1].paragraph_format.space_after.pt, 6)
+            self.assertEqual(case_paragraphs[2].paragraph_format.space_after.pt, 0)
+
+            ordinary = next(
+                paragraph for paragraph in document.paragraphs
+                if paragraph.text == "案例后的普通正文。"
+            )
+            self.assertEqual(ordinary.paragraph_format.first_line_indent.pt, 24)
+            self.assertEqual(ordinary.paragraph_format.line_spacing, 1.5)
+            self.assertEqual(ordinary.runs[0].font.size.pt, 12)
+
+    def test_quote_list_keeps_marker_and_footnote_inside_callout(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "quote-footnote-list.md"
+            output = temp_dir / "quote-footnote-list.docx"
             markdown.write_text(
-                "# 引用块脚注回归\n\n"
+                "# 引用块脚注与列表回归\n\n"
                 "> **本章导读**：三个开源项目。[^chapter-skills]\n"
                 "> - 重点条目\n\n"
                 "[^chapter-skills]: 项目甲、项目乙与项目丙。\n",
@@ -333,13 +460,9 @@ class Md2WordRegressionTest(unittest.TestCase):
             md2word.create_word_document(str(markdown), str(output), config=config)
 
             with zipfile.ZipFile(output) as archive:
-                document_root = ET.fromstring(archive.read("word/document.xml"))
                 document_xml = archive.read("word/document.xml").decode("utf-8")
                 footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
-
             self.assertNotIn("[^chapter-skills]", document_xml)
-            references = list(document_root.iter(qn("w:footnoteReference")))
-            self.assertEqual(len(references), 1)
             positive_footnote_texts = [
                 "".join(node.text or "" for node in footnote.iter(qn("w:t"))).strip()
                 for footnote in footnotes_root.iter(qn("w:footnote"))
@@ -348,20 +471,14 @@ class Md2WordRegressionTest(unittest.TestCase):
             self.assertEqual(positive_footnote_texts, ["项目甲、项目乙与项目丙。"])
 
             document = Document(output)
-            guide = next(
-                paragraph
-                for paragraph in document.paragraphs
-                if paragraph.text.startswith("本章导读")
+            self.assertEqual(len(document.tables), 1)
+            paragraphs = document.tables[0].cell(0, 0).paragraphs
+            self.assertEqual(len(paragraphs), 2)
+            self.assertTrue(
+                any(run.text == "本章导读" and run.bold for run in paragraphs[0].runs)
             )
-            self.assertEqual(guide.paragraph_format.first_line_indent.pt, 0)
-            self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
-            list_item = next(
-                paragraph
-                for paragraph in document.paragraphs
-                if "重点条目" in paragraph.text
-            )
-            self.assertIn("•", list_item.text)
-            self.assertEqual(list_item.paragraph_format.first_line_indent.pt, 0)
+            self.assertIn("•", paragraphs[1].text)
+            self.assertEqual(paragraphs[1].paragraph_format.first_line_indent.pt, 0)
 
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
         converted = convert_quotes_to_chinese("标注'需律师现场确认'，don't、O'Brien 与 API's 保留。")

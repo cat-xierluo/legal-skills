@@ -326,8 +326,8 @@ def set_run_format_with_styles(run, formats, title_level=0, is_quote=False):
         font.size = Pt(title_config.get('size', 15))
         font.bold = title_config.get('bold', True)
     elif is_quote:
-        # 引用使用较小字号
-        font.size = Pt(12)
+        quote_config = config.get('quote', {})
+        font.size = Pt(quote_config.get('font_size') or font_config.get('size', 12))
         font.bold = False
     else:
         font.size = Pt(font_config.get('size', 12))
@@ -420,11 +420,19 @@ def set_paragraph_format(paragraph, title_level=0, is_quote=False):
         paragraph_format.space_after = Pt(title_config.get('space_after', 0))
         paragraph_format.first_line_indent = Pt(title_config.get('indent', 24))
     elif is_quote:
-        # 引用：两端对齐，无首行缩进
-        paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+        quote_config = config.get('quote', {})
+        paragraph_format.line_spacing = (
+            quote_config.get('line_spacing')
+            or paragraph_config.get('line_spacing', 1.5)
+        )
+        paragraph_format.alignment = parse_alignment(
+            quote_config.get('align', paragraph_config.get('align', 'justify'))
+        )
         paragraph_format.space_before = Pt(0)
         paragraph_format.space_after = Pt(0)
-        paragraph_format.first_line_indent = Pt(0)
+        paragraph_format.first_line_indent = Pt(
+            quote_config.get('first_line_indent', 0)
+        )
     else:
         # 正文段落配置
         align_str = paragraph_config.get('align', 'justify')

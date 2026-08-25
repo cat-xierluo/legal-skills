@@ -116,9 +116,17 @@ inline_code:
 # 引用块设置
 quote:
   background_color: "#EAEAEA"
-  left_indent_inches: 0.2
+  width_percent: 100
+  border_color: null
+  border_size: 0
+  cell_margin: {top: 100, bottom: 100, left: 120, right: 120}
+  space_before: 6
+  space_after: 6
+  paragraph_spacing: 6
   font_size: 9
   line_spacing: 1.5
+  first_line_indent: 0
+  align: justify
 
 # 数学公式设置
 math:

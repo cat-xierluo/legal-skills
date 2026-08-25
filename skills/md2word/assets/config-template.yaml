@@ -129,10 +129,22 @@ inline_code:
 
 # ==================== 引用块设置 ====================
 quote:
-  background_color: "#EAEAEA"  # 背景填充色 (浅灰色)
-  left_indent_inches: 0.2      # 左侧缩进 (英寸)
-  font_size: 9                 # 字号 (pt) - 小五号
-  line_spacing: 1.5            # 行距
+  background_color: "#F5F5F5" # 单元格背景填充色
+  width_percent: 100           # 相对正文可用宽度；100 = 左右边界与正文齐平
+  border_color: null           # null = 无边框
+  border_size: 0               # 边框宽度（1/8 pt，仅 border_color 非空时生效）
+  cell_margin:                 # 灰底内部边距（twips；20 twips = 1 pt）
+    top: 100
+    bottom: 100
+    left: 120
+    right: 120
+  space_before: 6              # 灰底块外部段前间距（pt）
+  space_after: 6               # 灰底块外部段后间距（pt）
+  paragraph_spacing: 6         # `> ` 空行折算的块内段距（pt）
+  font_size: null              # null = 继承正文
+  line_spacing: null           # null = 继承正文
+  first_line_indent: 0         # 引用段首行缩进（pt）
+  align: justify
 
 # ==================== 数学公式设置 ====================
 math:
