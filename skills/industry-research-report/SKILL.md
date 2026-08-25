@@ -2,7 +2,7 @@
 name: industry-research-report
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: 0.4.1
+version: 0.7.0
 license: CC-BY-NC
 description: 输入一个行业（可选区域与业务方向），输出一份可交付的精排 A4 PDF 行业法律调研报告。设计风格采用律所蓝皮书体例（深蓝主色 + 白色页面 + 衬线大标题 + 顶部品牌带），内置 report-profile.md 个性化配置（律所抬头 / 配色 / 主办律师 / 封面变体 / 联系方式），数据源来自企查查 MCP（企业名录 + 司法/经营风险标签）+ 网络检索（政策文件、产业园名录、产业链结构）。建议在用户说"做一份行业调研报告 / 见客户前先了解下 XX 行业 / 这周要去 XX 行业跑客户帮我准备背景资料 / 开拓新行业之前知己知彼"时使用；不要用于：客户名下的具体法律意见、对单一企业的尽调（用 opc-legal-counsel）、按周推送的对外研报（用 weekly-legal-briefing）。
 ---
