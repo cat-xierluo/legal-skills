@@ -4,7 +4,7 @@
 
 ### Task-012：消除多段引用白缝并统一 confirmed 灰
 
-- **状态**：✅ 已完成（待 PR 合并）
+- **状态**：✅ 已完成（PR #101）
 - **目标**：让导读/案例的多段 callout 在 Word 中成为视觉连续的一整块 `#EDF2F7` 灰底，内部空行保留稳定呼吸区但不露白。
 - **范围**：空引用行的 shaded exact spacer、连续空行折叠规则、全部 quote 颜色 SSoT、预设/fallback/config-template/模板提取基底、配置和样式文档、fixture 与真实 ch12 结构验收。
 - **非目标**：不恢复表格引用容器；不改变数据表的 `space_after`；不调整图片/图注、正文全局行距或书稿源文件；不打开 Word。
