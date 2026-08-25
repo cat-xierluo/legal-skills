@@ -2,6 +2,30 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-016] - 2026-08-26 - 下划线强调采用单词边界并统一正文与表格规则
+
+### 背景
+法律 AI Skill 书第十四章表格中的 `payment_instance_id`、`dispute_amount_band`、`manual_review_required` 和 `audit_log_summary` 在 Word 中丢失下划线并出现斜体。根因不是预设配置，而是正文与表格各自使用的宽泛 underscore 正则：它会把技术标识中间的 `_instance_` 一类片段当作 Markdown 斜体；表格的格式预判还另有 `_.*?_`，即使解析语义修正也可能继续误分派。
+
+### 决策
+1. underscore 斜体、粗体和粗斜体的起止分隔符必须位于单词边界。边界按 Python Unicode `\w` 判断，同时覆盖 ASCII 字母数字、中文与下划线；因此这些字符内部的 `_` / `__` 不作为强调分隔符。
+2. 在 `formatter.py` 维护唯一的生产行内格式规则，正文与 Markdown 表格解析共同使用；表格的 `contains_markdown_formatting()` 调用同一判定帮助函数，只另外识别图片与 `<br>`。
+3. 保留 `_正常斜体_`、`__正常粗体__`、`___正常粗斜体___`，不改变星号强调、数学、HTML、脚注、图片或已有行内代码保护，不引入第三方 Markdown 解析依赖。
+
+### 方案取舍
+- 不要求作者给所有字段补反引号：反引号可以临时绕过，但普通技术标识本就不应被转换器破坏，且全书既有字段数量多。
+- 不全局禁用 underscore 强调：这会破坏已支持的 Markdown 语义；单词边界能在保留明确强调的同时排除技术标识。
+- 不只修改表格预判：正文解析与表格解析原本各自复制正则，只修一处会留下继续漂移的根因。
+
+### 验证
+- RED：正文回归把 `payment_instance_id` 等转换为 `paymentinstanceid`，表格预判对同一字段返回 `True`；两项测试均失败。
+- GREEN：正文与 Markdown 表格中的 10 类标识（含 ASCII 数字和中文词边界样例）完整保留下划线且无意外斜体/粗体；三种明确 underscore 强调语义保持，19/19 回归通过。
+- 真实 ch14 DOCX 的四个表格字段均各自构成 exact run；正文中的 `manual_review_required`、ch12 的 `main_chart_type` 与 ch04 的 `API_SERVER_KEY` 则完整存在于可能包含相邻正文的普通 run。所有匹配 run 的 `run.italic` 均为 `None`、OOXML 无 `w:i`。QuickLook 最小首屏 fixture 目检也显示字段完整。
+
+### 影响与回退
+- 影响正文与普通 Markdown 表格中的 underscore 强调识别；单词内下划线现在固定按字面量输出。
+- 如需回退，应整体撤销共享规则与边界约束，不应只恢复表格或正文中的一份重复正则。
+
 ## [DEC-015] - 2026-08-25 - 统一增加代码框与正文的外部垂直间距
 
 ### 背景
