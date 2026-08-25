@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from formatter import convert_quotes_to_chinese  # noqa: E402
+from formatter import convert_quotes_to_chinese, parse_text_formatting  # noqa: E402
 from footnote_handler import (  # noqa: E402
     FootnoteManager,
     _footnote_text_to_runs_xml,
@@ -68,6 +68,43 @@ class Md2WordRegressionTest(unittest.TestCase):
         self.assertIn("模型概览 与 重点，命令 Skill", text)
         self.assertNotIn("*", text)
         self.assertNotIn("`", text)
+
+    def test_inline_code_markers_are_not_reinterpreted_as_emphasis(self):
+        config = md2word.get_preset("book-publish")
+        md2word.set_config(config)
+        paragraph = Document().add_paragraph()
+        parse_text_formatting(
+            paragraph,
+            "关键词检索（如 `law_keyword`）、语义 / 向量检索（如 `case_vector`）、"
+            "精确详情（如 `law_detail`、`case_detail`），运算标识 `op*one` 与 `op*two`，"
+            "另有 _下划线斜体_ 和 *星号斜体*。",
+        )
+
+        self.assertNotIn("`", paragraph.text)
+        self.assertIn("law_keyword", paragraph.text)
+        self.assertIn("case_vector", paragraph.text)
+        self.assertIn("law_detail", paragraph.text)
+        self.assertIn("case_detail", paragraph.text)
+
+        code_names = {
+            "law_keyword",
+            "case_vector",
+            "law_detail",
+            "case_detail",
+            "op*one",
+            "op*two",
+        }
+        code_runs = [run for run in paragraph.runs if run.text in code_names]
+        self.assertEqual({run.text for run in code_runs}, code_names)
+        for run in code_runs:
+            self.assertFalse(bool(run.italic))
+            self.assertEqual(run.font.name, "Courier New")
+
+        italic_runs = {
+            run.text: run for run in paragraph.runs if run.text in {"下划线斜体", "星号斜体"}
+        }
+        self.assertEqual(set(italic_runs), {"下划线斜体", "星号斜体"})
+        self.assertTrue(all(run.italic for run in italic_runs.values()))
 
     def test_repeated_footnote_label_creates_distinct_word_footnotes(self):
         with TemporaryDirectory() as temp:
