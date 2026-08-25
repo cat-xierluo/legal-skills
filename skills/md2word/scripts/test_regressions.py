@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
+from PIL import Image
 
 
 HERE = Path(__file__).resolve().parent
@@ -315,7 +316,7 @@ class Md2WordRegressionTest(unittest.TestCase):
                 generic_centered.paragraph_format.first_line_indent.pt, 24
             )
 
-    def test_quote_callouts_share_one_full_width_borderless_style(self):
+    def test_quote_callouts_share_one_full_width_paragraph_style_without_tables(self):
         with TemporaryDirectory() as temp:
             temp_dir = Path(temp)
             markdown = HERE / "fixtures" / "quote-callout.md"
@@ -341,98 +342,92 @@ class Md2WordRegressionTest(unittest.TestCase):
             self.assertEqual(positive_footnote_texts, ["导读脚注定义。"])
 
             document = Document(output)
-            self.assertEqual(len(document.tables), 2)
-            quote_tables = document.tables
-            quote_cells = [table.cell(0, 0) for table in quote_tables]
-            self.assertTrue(quote_cells[0].paragraphs[0].text.startswith("本章导读"))
-            self.assertTrue(quote_cells[1].paragraphs[0].text.startswith("案例："))
-
-            available_twips = round(
-                (
-                    config.get("page.width")
-                    - config.get("page.margin_left")
-                    - config.get("page.margin_right")
-                )
-                * 1440
-                / 2.54
+            self.assertEqual(len(document.tables), 0, "引用块不得再产生 Word 表格或网格线")
+            self.assertEqual(len(list(document_root.iter(qn("w:tbl")))), 0)
+            exact_six_point_blank_paragraphs = []
+            for paragraph in document.paragraphs:
+                spacing = paragraph._p.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+                if (
+                    not paragraph.text
+                    and spacing is not None
+                    and spacing.get(qn("w:line")) == "120"
+                    and spacing.get(qn("w:lineRule")) == "exact"
+                ):
+                    exact_six_point_blank_paragraphs.append(paragraph)
+            self.assertEqual(
+                exact_six_point_blank_paragraphs,
+                [],
+                "无数据表时不得生成 table.space_after 空段",
             )
+            guide = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("本章导读")
+            )
+            case_paragraphs = [
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith(("案例：", "第一段说明", "第二段说明"))
+            ]
+            self.assertEqual(len(case_paragraphs), 3)
+
             style_snapshots = []
-            for table, cell in zip(quote_tables, quote_cells):
-                tbl_pr = table._tbl.tblPr
-                self.assertEqual(tbl_pr.find(qn("w:tblCaption")).get(qn("w:val")), "md2word-quote")
-                self.assertEqual(tbl_pr.find(qn("w:tblW")).get(qn("w:type")), "dxa")
-                self.assertEqual(int(tbl_pr.find(qn("w:tblW")).get(qn("w:w"))), available_twips)
-                self.assertEqual(tbl_pr.find(qn("w:tblInd")).get(qn("w:w")), "0")
-                self.assertEqual(tbl_pr.find(qn("w:jc")).get(qn("w:val")), "left")
-                self.assertEqual(tbl_pr.find(qn("w:tblLayout")).get(qn("w:type")), "fixed")
-                self.assertEqual(
-                    [child.tag.rsplit("}", 1)[-1] for child in tbl_pr],
-                    [
-                        "tblW", "jc", "tblInd", "tblBorders", "tblLayout",
-                        "tblCellMar", "tblLook", "tblCaption",
-                    ],
-                )
-
-                borders = tbl_pr.find(qn("w:tblBorders"))
-                border_values = [child.get(qn("w:val")) for child in borders]
-                self.assertEqual(border_values, ["nil"] * 6)
-                margins = tbl_pr.find(qn("w:tblCellMar"))
-                margin_values = {
-                    child.tag.rsplit("}", 1)[-1]: int(child.get(qn("w:w")))
-                    for child in margins
-                }
-                self.assertEqual(
-                    margin_values,
-                    {"top": 100, "left": 120, "bottom": 100, "right": 120},
-                )
-                shading = cell._tc.tcPr.find(qn("w:shd"))
-                self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
-                self.assertEqual(
-                    int(table._tbl.tblGrid.find(qn("w:gridCol")).get(qn("w:w"))),
-                    available_twips,
-                )
-                self.assertEqual(int(cell._tc.tcPr.find(qn("w:tcW")).get(qn("w:w"))), available_twips)
-                row_properties = table.rows[0]._tr.find(qn("w:trPr"))
-                self.assertTrue(
-                    row_properties is None
-                    or row_properties.find(qn("w:cantSplit")) is None,
-                    "单行长案例必须允许跨页",
-                )
-
-                for sibling in (table._tbl.getprevious(), table._tbl.getnext()):
-                    self.assertEqual(sibling.tag, qn("w:p"))
-                    self.assertEqual("".join(node.text or "" for node in sibling.iter(qn("w:t"))), "")
-                    spacing = sibling.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
-                    self.assertEqual(spacing.get(qn("w:line")), "120")
-                    self.assertEqual(spacing.get(qn("w:lineRule")), "exact")
-
-                for paragraph in cell.paragraphs:
+            quote_groups = [[guide], case_paragraphs]
+            for group in quote_groups:
+                for index, paragraph in enumerate(group):
+                    p_pr = paragraph._p.pPr
+                    p_pr_tags = [child.tag.rsplit("}", 1)[-1] for child in p_pr]
+                    self.assertLess(p_pr_tags.index("pBdr"), p_pr_tags.index("shd"))
+                    self.assertLess(p_pr_tags.index("shd"), p_pr_tags.index("spacing"))
+                    self.assertLess(p_pr_tags.index("spacing"), p_pr_tags.index("ind"))
+                    shading = p_pr.find(qn("w:shd"))
+                    self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
+                    borders = p_pr.find(qn("w:pBdr"))
+                    self.assertIsNotNone(borders)
+                    border_snapshot = {
+                        child.tag.rsplit("}", 1)[-1]: (
+                            child.get(qn("w:val")),
+                            child.get(qn("w:sz")),
+                            child.get(qn("w:space")),
+                            child.get(qn("w:color")),
+                        )
+                        for child in borders
+                    }
+                    expected_edges = {
+                        "left": ("single", "2", "6", "F5F5F5"),
+                        "right": ("single", "2", "6", "F5F5F5"),
+                    }
+                    if index == 0:
+                        expected_edges["top"] = ("single", "2", "5", "F5F5F5")
+                    if index == len(group) - 1:
+                        expected_edges["bottom"] = ("single", "2", "5", "F5F5F5")
+                    self.assertEqual(
+                        border_snapshot,
+                        expected_edges,
+                        "首段独占 top、末段独占 bottom，中段不得重复累计垂直 padding",
+                    )
+                    indent = p_pr.find(qn("w:ind"))
+                    self.assertIsNone(indent.get(qn("w:left")))
+                    self.assertIsNone(indent.get(qn("w:right")))
                     self.assertEqual(paragraph.paragraph_format.first_line_indent.pt, 0)
                     self.assertEqual(paragraph.paragraph_format.line_spacing, 1.5)
                     self.assertEqual(paragraph.alignment, WD_PARAGRAPH_ALIGNMENT.JUSTIFY)
                     for run in paragraph.runs:
                         if run.text:
                             self.assertEqual(run.font.size.pt, 12)
+                    style_snapshots.append(shading.get(qn("w:fill")))
 
-                style_snapshots.append(
-                    (
-                        tbl_pr.find(qn("w:tblW")).get(qn("w:w")),
-                        tuple(border_values),
-                        tuple(margin_values.items()),
-                        shading.get(qn("w:fill")),
-                    )
-                )
-
-            self.assertEqual(style_snapshots[0], style_snapshots[1])
-            guide = quote_cells[0].paragraphs[0]
-            case_paragraphs = quote_cells[1].paragraphs
+            self.assertEqual(set(style_snapshots), {"F5F5F5"})
             self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
             self.assertTrue(any(run.text == "案例：统一引用框" and run.bold for run in case_paragraphs[0].runs))
             self.assertTrue(any(run.text == "关键判断" and run.bold for run in case_paragraphs[1].runs))
             self.assertEqual(len(case_paragraphs), 3, "引用空行应折算为段距，不生成空段")
+            self.assertEqual(guide.paragraph_format.space_before.pt, 6)
+            self.assertEqual(guide.paragraph_format.space_after.pt, 6)
+            self.assertEqual(case_paragraphs[0].paragraph_format.space_before.pt, 6)
             self.assertEqual(case_paragraphs[0].paragraph_format.space_after.pt, 6)
             self.assertEqual(case_paragraphs[1].paragraph_format.space_after.pt, 6)
-            self.assertEqual(case_paragraphs[2].paragraph_format.space_after.pt, 0)
+            self.assertEqual(case_paragraphs[2].paragraph_format.space_after.pt, 6)
 
             ordinary = next(
                 paragraph for paragraph in document.paragraphs
@@ -471,14 +466,102 @@ class Md2WordRegressionTest(unittest.TestCase):
             self.assertEqual(positive_footnote_texts, ["项目甲、项目乙与项目丙。"])
 
             document = Document(output)
-            self.assertEqual(len(document.tables), 1)
-            paragraphs = document.tables[0].cell(0, 0).paragraphs
+            self.assertEqual(len(document.tables), 0)
+            paragraphs = [
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith(("本章导读", "    •"))
+            ]
             self.assertEqual(len(paragraphs), 2)
             self.assertTrue(
                 any(run.text == "本章导读" and run.bold for run in paragraphs[0].runs)
             )
             self.assertIn("•", paragraphs[1].text)
             self.assertEqual(paragraphs[1].paragraph_format.first_line_indent.pt, 0)
+
+    def test_legacy_quote_cell_margin_maps_to_paragraph_padding(self):
+        self.assertEqual(
+            md2word._quote_padding_pt(
+                {"cell_margin": {"top": 80, "bottom": 120, "left": 140, "right": 160}}
+            ),
+            {"top": 4.0, "bottom": 6.0, "left": 7.0, "right": 8.0},
+        )
+        self.assertEqual(
+            md2word._quote_padding_pt(
+                {
+                    "padding": {"top": 3, "bottom": 4, "left": 5, "right": 6},
+                    "cell_margin": {"top": 200, "bottom": 200, "left": 200, "right": 200},
+                }
+            ),
+            {"top": 3.0, "bottom": 4.0, "left": 5.0, "right": 6.0},
+            "新 padding 必须优先于 v1.3.0 cell_margin 兼容映射",
+        )
+
+    def test_data_tables_own_exact_space_after_and_leave_following_content_unchanged(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "table-space-after.md"
+            output = temp_dir / "table-space-after.docx"
+            image_path = temp_dir / "pixel.png"
+            Image.new("RGB", (2, 2), "white").save(image_path)
+            markdown.write_text(
+                "# 表后留白回归\n\n"
+                "| 项目 | 内容 |\n| --- | --- |\n| A | Markdown 表 |\n\n"
+                "Markdown 表后的正文。\n\n"
+                "<table><tr><th>项目</th><th>内容</th></tr>"
+                "<tr><td>B</td><td>HTML 表</td></tr></table>\n\n"
+                "HTML 表后的正文。\n\n"
+                "![示例图](pixel.png)\n\n"
+                "**图 1-1：图注链路保持原样**\n\n"
+                "图后的正文。\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            self.assertEqual(len(document.tables), 2)
+            body_children = list(document._element.body)
+            table_indexes = [
+                index for index, child in enumerate(body_children) if child.tag == qn("w:tbl")
+            ]
+            self.assertEqual(len(table_indexes), 2)
+            for table_index in table_indexes:
+                spacer = body_children[table_index + 1]
+                self.assertEqual(spacer.tag, qn("w:p"))
+                self.assertEqual("".join(node.text or "" for node in spacer.iter(qn("w:t"))), "")
+                spacing = spacer.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+                self.assertEqual(spacing.get(qn("w:before")), "0")
+                self.assertEqual(spacing.get(qn("w:after")), "0")
+                self.assertEqual(spacing.get(qn("w:line")), "120")
+                self.assertEqual(spacing.get(qn("w:lineRule")), "exact")
+
+                following = body_children[table_index + 2]
+                following_text = "".join(
+                    node.text or "" for node in following.iter(qn("w:t"))
+                )
+                self.assertIn("表后的正文", following_text)
+                following_spacing = following.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+                self.assertEqual(following_spacing.get(qn("w:before")), "0")
+                self.assertEqual(following_spacing.get(qn("w:after")), "0")
+                self.assertEqual(following_spacing.get(qn("w:line")), "360")
+                self.assertEqual(following_spacing.get(qn("w:lineRule")), "auto")
+
+            caption = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("图 1-1：")
+            )
+            self.assertEqual(caption.paragraph_format.space_before.pt, 3)
+            self.assertEqual(caption.paragraph_format.space_after.pt, 8)
+            self.assertEqual(caption.paragraph_format.line_spacing, 1.2)
+            caption_index = body_children.index(caption._p)
+            previous = body_children[caption_index - 1]
+            self.assertTrue(
+                any(node.tag == qn("w:drawing") for node in previous.iter()),
+                "图片与图注之间不得插入数据表专用 exact spacer",
+            )
 
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
         converted = convert_quotes_to_chinese("标注'需律师现场确认'，don't、O'Brien 与 API's 保留。")

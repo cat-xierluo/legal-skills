@@ -2,6 +2,15 @@
 
 ## 已完成
 
+### Task-011：引用框移除 Word 网格线，并收紧数据表组件后的间距
+
+- **状态**：✅ 已完成（待 PR 合并）
+- **目标**：让导读/案例引用框在 Word 编辑界面只显示浅灰背景、绝不出现表格虚线轮廓；让 Markdown/HTML 数据表自行提供稳定、可配置的表后留白。
+- **范围**：paragraph-based `add_quote()`、`quote.padding` 与 v1.3.0 `cell_margin` 兼容映射、`table.space_after`、全部预设/fallback/config-template/模板提取基底、配置与样式文档、端到端测试、真实 ch12 结构验收。
+- **非目标**：不修改后续正文的行距或段前距；不改变图片/图注间距；不按“导读/案例”标签分叉；不打开 Word 或安装依赖。
+- **验收证据**：完整回归 22/22 通过；引用 fixture 为 0 表且保留灰底/首尾与左右 padding/脚注/粗体/列表，并覆盖旧 `cell_margin` 迁移；Markdown/HTML 表后各恰好 1 个 exact 6pt spacer，下一正文保持 1.5 倍自动行距，图片图注链路无 spacer。真实 ch12 临时转换得到 10 张数据表及 10 个 exact spacer、4 个 paragraph callout 段（导读 1 + 案例 3）、0 个引用表格、11 组图片/图注和 1 个导读脚注；首/中/尾 padding 与 OOXML 属性顺序均通过结构断言。官方 `quick_validate.py` 因本仓强制保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`（与 Task-010 已记录的仓库/验证器规则冲突相同）。
+- **关联**：DEC-018；用户 2026-08-26 Word 示例反馈。
+
 ### Task-010：普通技术标识内部下划线按字面量保留
 
 - **状态**：✅ 已完成（待 PR 合并）

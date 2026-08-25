@@ -20,6 +20,21 @@ from bs4 import BeautifulSoup, NavigableString
 from config import Config, get_config
 
 
+def add_table_space_after(doc, table_config=None):
+    """Add the configured exact-height gap owned by a data table component."""
+    if table_config is None:
+        table_config = get_config().get('table', {})
+    height_pt = float(table_config.get('space_after', 6) or 0)
+    if height_pt <= 0:
+        return None
+
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    paragraph.paragraph_format.line_spacing = Pt(height_pt)
+    return paragraph
+
+
 def set_cell_background_color(cell, color_hex):
     """设置单元格背景色"""
     if not color_hex:
@@ -298,6 +313,9 @@ def create_word_table(doc, table_lines, md_file_path=None):
     # 圆角边框效果
     if table_config.get('rounded_corners', False) and border_enabled:
         _apply_rounded_corners(table, border_color.lstrip('#'), border_width)
+
+    add_table_space_after(doc, table_config)
+    return table
 
 
 def parse_table_row(line):
@@ -870,7 +888,9 @@ def create_word_table_from_html(doc, html_content, md_file_path=None):
             border_width = table_config.get('border_width', 4)
             _apply_rounded_corners(table, border_color, border_width)
 
+        add_table_space_after(doc, table_config)
         print(f"✅ 处理HTML表格: {num_rows} 行 x {num_cols} 列")
+        return table
     except Exception as e:
         print(f"⚠️  HTML表格处理失败: {e}")
         import traceback
