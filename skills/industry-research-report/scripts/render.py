@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""行业法律调研报告渲染器:md → A4 HTML
+"""行业法律调研报告 / 定时法律周报 渲染器:md → A4 HTML
 
-- 模板占位符 + 数据填充（jinja2）
-- frontmatter（YAML）→ 封面字段
-- markdown body → 按 # / ## 拆 section,每章一个 .section-page
-- ```mermaid 块 → mmdc 预渲染 SVG 内联（依赖 mmdc,可降级）
-- report-profile.md → 抬头 / 配色 / 主办律师 / 封面变体
+- 模板占位符 + 数据填充(jinja2)
+- frontmatter(YAML)→ 封面字段
+- markdown body → 按 ## 二级标题拆 section,每章一个 .section-page
+- ```mermaid 块 → mmdc 预渲染 SVG 内联(依赖 mmdc,可降级)
+- report-profile.md → 抬头 / 配色 / 主办律师 / 封面变体 / report_kind
+- 封面 CSS 内容注入(去 <style> 包装后)到主模板 style 末尾
 """
 
 from __future__ import annotations
@@ -29,36 +30,45 @@ TEMPLATE_DIR = SKILL_DIR / "references"
 COVERS_DIR = TEMPLATE_DIR / "covers"
 TEMPLATE_NAME = "report-template.html"
 
-VALID_COVERS = {"C-geo", "D-diagonal", "E-flip", "F-grid"}
+# IR 用重型封面(多层几何 / 徽章 / 金色装饰带)
+IR_COVERS = {"C-geo", "D-diagonal", "E-flip", "F-grid"}
+# WB 用轻量封面(极简 / 期数条 / 单一金线)
+WB_COVERS = {"W1-minimal", "W2-tag-bar"}
+VALID_COVERS = IR_COVERS | WB_COVERS
 VALID_PALETTES = {"bluebook", "service-plan", "burgundy", "forest", "tech"}
 VALID_INTENSITY = {"lite", "balanced", "visual"}
+VALID_REPORT_KIND = {"ir", "wb"}
+DEFAULT_COVER_BY_KIND = {"ir": "C-geo", "wb": "W1-minimal"}
 
 
 # ── report-profile 读取 ────────────────────────────────────────
 def load_profile(profile_path: Path) -> dict:
-    """读取 report-profile.md 的 YAML frontmatter 与列表字段。"""
     if not profile_path.exists():
         print(f"[warn] {profile_path} 不存在,使用默认配置", file=sys.stderr)
         return default_profile()
     text = profile_path.read_text(encoding="utf-8")
     fm, body = split_frontmatter(text)
     profile = {**default_profile(), **(fm or {})}
-    # 列表字段(联系方式 / 名单类)从正文中以 `- key: val  # 注释` 形式提取
-    # 注意:YAML 行尾 `# 注释` 必须剔除
     for line in body.splitlines():
         stripped = line.strip()
         m = re.match(r"^-\s+([a-zA-Z_]+)\s*:\s*(.+?)(?:\s+#.*)?$", stripped)
         if m:
             profile[m.group(1)] = m.group(2).strip()
-    # 字段校验
-    if profile["cover_style"] not in VALID_COVERS:
-        print(f"[warn] cover_style={profile['cover_style']} 不合法,回退 C-geo", file=sys.stderr)
-        profile["cover_style"] = "C-geo"
+    # report_kind 校验
+    report_kind = str(profile.get("report_kind", "ir")).lower()
+    if report_kind not in VALID_REPORT_KIND:
+        report_kind = "ir"
+    profile["report_kind"] = report_kind
+    # cover_style 按 kind 校验
+    allowed = IR_COVERS if report_kind == "ir" else WB_COVERS
+    if profile["cover_style"] not in allowed:
+        fallback = DEFAULT_COVER_BY_KIND[report_kind]
+        print(f"[warn] cover_style={profile['cover_style']} 不适用于 report_kind={report_kind},回退 {fallback}", file=sys.stderr)
+        profile["cover_style"] = fallback
     if profile["color_palette"] not in VALID_PALETTES:
         profile["color_palette"] = "bluebook"
     if profile["design_intensity"] not in VALID_INTENSITY:
         profile["design_intensity"] = "lite"
-    # YAML frontmatter 的布尔字段是 True/False,list 是 [...]
     for bool_key in ("include_toc", "include_methodology"):
         if isinstance(profile.get(bool_key), str):
             profile[bool_key] = profile[bool_key].strip().lower() in ("true", "1", "yes", "on")
@@ -67,6 +77,7 @@ def load_profile(profile_path: Path) -> dict:
 
 def default_profile() -> dict:
     return {
+        "report_kind": "ir",
         "law_firm": "XX 律所",
         "series_name": "XX 律所实务手册",
         "series_subtitle": "PROFESSIONAL EDITION",
@@ -85,93 +96,85 @@ def default_profile() -> dict:
         "include_toc": True,
         "include_methodology": True,
         "footer_brand": "行业法律调研报告",
+        "audience_label": "科技型制造企业",
+        "period_number": "01",
+        "period_year": str(datetime.now().year),
     }
 
 
-# ── 5 个律师常见调色板（与 references/palette-presets.md 对齐）────
+# ── 5 个律师常见调色板 ──
 PALETTE_PRESETS = {
     "bluebook": {
-        # 法律经典蓝皮书：深蓝主色 + 金色强调
-        "primary_deep": "#143049",
-        "primary":      "#1B3C59",
-        "primary_soft": "#2C5F8A",
-        "accent":       "#D4AF37",
-        "text":         "#1A1A1A",
-        "text_soft":    "#2C3E50",
-        "text_muted":   "#666666",
-        "bg_page":      "#FFFFFF",
-        "bg_card":      "#F4F1EA",
-        "bg_soft":      "#FAFAFA",
-        "rule":         "#DDDDDD",
+        "primary_deep": "#143049", "primary": "#1B3C59", "primary_soft": "#2C5F8A",
+        "accent": "#D4AF37", "text": "#1A1A1A", "text_soft": "#2C3E50",
+        "text_muted": "#666666", "bg_page": "#FFFFFF", "bg_card": "#F4F1EA",
+        "bg_soft": "#FAFAFA", "rule": "#DDDDDD",
     },
     "service-plan": {
-        # 传统律所深棕：温暖稳重
-        "primary_deep": "#3D342F",
-        "primary":      "#5A4E48",
-        "primary_soft": "#6E5F56",
-        "accent":       "#927F76",
-        "text":         "#1A1A1A",
-        "text_soft":    "#333333",
-        "text_muted":   "#666666",
-        "bg_page":      "#FFFFFF",
-        "bg_card":      "#F5F0ED",
-        "bg_soft":      "#FAFAFA",
-        "rule":         "#CCCCCC",
+        "primary_deep": "#3D342F", "primary": "#5A4E48", "primary_soft": "#6E5F56",
+        "accent": "#927F76", "text": "#1A1A1A", "text_soft": "#333333",
+        "text_muted": "#666666", "bg_page": "#FFFFFF", "bg_card": "#F5F0ED",
+        "bg_soft": "#FAFAFA", "rule": "#CCCCCC",
     },
     "burgundy": {
-        # 酒红：高端典雅，涉外仲裁
-        "primary_deep": "#4F1F25",
-        "primary":      "#722F37",
-        "primary_soft": "#945661",
-        "accent":       "#B08D5C",
-        "text":         "#1A1A1A",
-        "text_soft":    "#2C3E50",
-        "text_muted":   "#666666",
-        "bg_page":      "#FFFFFF",
-        "bg_card":      "#F8F1ED",
-        "bg_soft":      "#FAFAFA",
-        "rule":         "#DDDDDD",
+        "primary_deep": "#4F1F25", "primary": "#722F37", "primary_soft": "#945661",
+        "accent": "#B08D5C", "text": "#1A1A1A", "text_soft": "#2C3E50",
+        "text_muted": "#666666", "bg_page": "#FFFFFF", "bg_card": "#F8F1ED",
+        "bg_soft": "#FAFAFA", "rule": "#DDDDDD",
     },
     "forest": {
-        # 森林绿：环境法 / ESG / 合规
-        "primary_deep": "#143024",
-        "primary":      "#1F4E3D",
-        "primary_soft": "#3D6E5A",
-        "accent":       "#A8853A",
-        "text":         "#1A1A1A",
-        "text_soft":    "#2C3E50",
-        "text_muted":   "#666666",
-        "bg_page":      "#FFFFFF",
-        "bg_card":      "#F2F4ED",
-        "bg_soft":      "#FAFAFA",
-        "rule":         "#DDDDDD",
+        "primary_deep": "#143024", "primary": "#1F4E3D", "primary_soft": "#3D6E5A",
+        "accent": "#A8853A", "text": "#1A1A1A", "text_soft": "#2C3E50",
+        "text_muted": "#666666", "bg_page": "#FFFFFF", "bg_card": "#F2F4ED",
+        "bg_soft": "#FAFAFA", "rule": "#DDDDDD",
     },
     "tech": {
-        # 科技蓝：互联网 / 数据合规 / AI
-        "primary_deep": "#102449",
-        "primary":      "#1A3A6E",
-        "primary_soft": "#385E94",
-        "accent":       "#00A6B6",
-        "text":         "#1A1A1A",
-        "text_soft":    "#2C3E50",
-        "text_muted":   "#666666",
-        "bg_page":      "#FFFFFF",
-        "bg_card":      "#F0F4F8",
-        "bg_soft":      "#FAFAFA",
-        "rule":         "#DDDDDD",
+        "primary_deep": "#102449", "primary": "#1A3A6E", "primary_soft": "#385E94",
+        "accent": "#00A6B6", "text": "#1A1A1A", "text_soft": "#2C3E50",
+        "text_muted": "#666666", "bg_page": "#FFFFFF", "bg_card": "#F0F4F8",
+        "bg_soft": "#FAFAFA", "rule": "#DDDDDD",
     },
 }
 
 
 def resolve_palette(profile: dict) -> dict:
-    """根据 profile.color_palette 解析 5 个预设之一;accent_color 允许覆盖。"""
     key = profile.get("color_palette", "bluebook")
     palette = dict(PALETTE_PRESETS.get(key, PALETTE_PRESETS["bluebook"]))
-    # accent_color 覆盖
     accent_override = profile.get("accent_color", "").strip()
     if accent_override and accent_override.startswith("#"):
         palette["accent"] = accent_override
     return palette
+
+
+# ── IR / WB 设计变量差异(杂志Studio book-style + 加大字号)──
+# IR:大字 / 宽留白 / 衬线 / 金色细线
+DESIGN_IR = {
+    "body_size": "12pt", "body_leading": "2.0",
+    "h1_size": "22pt", "h2_size": "18pt", "h3_size": "13pt",
+    "toc_columns": "2",
+    "rule_color": "{{ palette.accent }}",
+    "rule_width": "2px",
+    "header_rule_color": "{{ palette.accent }}",
+    "header_rule_width": "1.5px",
+    "table_header_bg": "{{ palette.primary }}",
+}
+# WB:加大但克制(杂志Studio 书籍感)
+DESIGN_WB = {
+    "body_size": "11pt", "body_leading": "1.85",
+    "h1_size": "16pt", "h2_size": "14pt", "h3_size": "12pt",
+    "toc_columns": "1",
+    "rule_color": "{{ palette.primary_soft }}",
+    "rule_width": "0.8px",
+    "header_rule_color": "{{ palette.primary_soft }}",
+    "header_rule_width": "0.5px",
+    "table_header_bg": "{{ palette.bg_card }}",
+}
+
+
+def resolve_design(report_kind: str, palette: dict) -> dict:
+    base = DESIGN_IR if report_kind == "ir" else DESIGN_WB
+    env = Environment()
+    return {k: env.from_string(v).render(palette=palette) for k, v in base.items()}
 
 
 def split_frontmatter(text: str):
@@ -183,12 +186,11 @@ def split_frontmatter(text: str):
             except yaml.YAMLError:
                 fm = {}
             if isinstance(fm, dict):
-                return fm, text[end + 5 :]
+                return fm, text[end + 5:]
     return {}, text
 
 
-# ── mermaid 预渲染（mmdc,可降级）─────────────────────────────
-MERMAID_RE = re.compile(r"```mermaid\n(.*?)\n```", re.DOTALL)
+MERMA_RE = re.compile(r"```mermaid\n(.*?)\n```", re.DOTALL)
 
 
 def _find_chrome() -> str | None:
@@ -224,11 +226,10 @@ def render_mermaid_blocks(body: str) -> str:
             if r.returncode == 0 and svg_path.exists():
                 svg = svg_path.read_text(encoding="utf-8")
                 return f'<div class="diagram">\n{svg}\n</div>'
-            print(f"[warn] mermaid mmdc 返回 {r.returncode},fallback 代码块", file=sys.stderr)
         except FileNotFoundError:
             print("[warn] mmdc 未安装,fallback 代码块", file=sys.stderr)
         except Exception as e:
-            print(f"[warn] mermaid 渲染失败:{e},fallback 代码块", file=sys.stderr)
+            print(f"[warn] mermaid 渲染失败:{e}", file=sys.stderr)
         finally:
             if mmd_path:
                 mmd_path.unlink(missing_ok=True)
@@ -236,72 +237,83 @@ def render_mermaid_blocks(body: str) -> str:
                 svg_path.unlink(missing_ok=True)
         return f"<pre><code>{code}</code></pre>"
 
-    return MERMAID_RE.sub(repl, body)
+    return MERMA_RE.sub(repl, body)
 
 
-# ── markdown → html ────────────────────────────────────────────
 def md_to_html(body: str) -> str:
     return markdown.markdown(body, extensions=["tables", "fenced_code", "sane_lists", "toc"])
 
 
-# ── section 拆分（按 # 一级标题）──────────────────────────────
 def split_sections(html: str) -> list[dict]:
-    """将渲染后的 html 按 # 一级标题拆为 sections 列表,每个 section 含 kicker/title/html。"""
+    """按 H2 二级标题拆章。H1 报告名跳过;H1 之后到第一个 H2 之前的前言块并入首个 section。"""
     soup = BeautifulSoup(html, "html.parser")
     sections = []
-    current = {"kicker": "", "title": "", "html": ""}
-    for el in soup.find_all(["h1", "h2", "h3", "p", "ul", "ol", "blockquote", "table", "div"]):
+    current = {"kicker": "CHAPTER", "title": "", "html": ""}
+    preamble_parts = []
+    h1_seen = False
+    for el in soup.find_all(["h1", "h2", "h3", "h4", "p", "ul", "ol", "blockquote", "table", "div"]):
         if el.name == "h1":
+            h1_seen = True
+            continue
+        if el.name == "h2":
             if current["title"] or current["html"]:
                 sections.append(current)
-            current = {"kicker": "CHAPTER", "title": el.get_text(strip=True), "html": ""}
-        elif el.name == "h2" and not current["title"]:
-            # 没有 h1,首个 h2 作为章节标题
-            current["kicker"] = "CHAPTER"
-            current["title"] = el.get_text(strip=True)
+            current = {"kicker": "CHAPTER", "title": el.get_text(strip=True), "html": "".join(preamble_parts)}
+            preamble_parts = []
+            continue
+        if el.name == "h3" and not current["title"]:
+            current = {"kicker": "CHAPTER", "title": el.get_text(strip=True), "html": "".join(preamble_parts)}
+            preamble_parts = []
+            continue
+        if not h1_seen:
+            current["html"] += str(el)
+        elif not current["title"]:
+            preamble_parts.append(str(el))
         else:
             current["html"] += str(el)
     if current["title"] or current["html"]:
         sections.append(current)
-    # 若无任何 section（罕见,如只有一段免责声明）,包成单 section
+    if not sections and preamble_parts:
+        sections = [{"kicker": "PREAMBLE", "title": "前言", "html": "".join(preamble_parts)}]
     if not sections and html.strip():
         sections = [{"kicker": "CONTENT", "title": "正文", "html": html}]
     return sections
 
 
-# ── 目录生成 ──────────────────────────────────────────────────
 def build_toc(sections: list[dict], start_page: int) -> list[dict]:
-    """基于 sections 与起始页码,构造 toc_entries。"""
     entries = []
     page = start_page
     for i, s in enumerate(sections, 1):
         entries.append({"level": 1, "num": f"第 {i} 章", "text": s["title"], "page": page})
-        page += 1  # 粗估:每章一页,真实页码由 pdf.py 二次校正（v2）
+        page += 1
     return entries
 
 
-# ── 封面注入 ──────────────────────────────────────────────────
-def render_cover(profile: dict, report_meta: dict, jinja_env: Environment) -> str:
+def render_cover(profile: dict, report_meta: dict, jinja_env: Environment):
+    """返回 (css_body, div_str)。css_body 是 <style> 去掉包装的纯 CSS 内容(并入主模板 style 末尾)。
+    Playwright 打印时 querySelector("style") 只取第一个元素,故必须合并到主模板的 style 内。"""
     cover_file = COVERS_DIR / f"cover-{profile['cover_style']}.html"
     if not cover_file.exists():
         cover_file = COVERS_DIR / "cover-C-geo.html"
     cover_tpl_text = cover_file.read_text(encoding="utf-8")
-    # cover 文件本身是 <style> + <div>...</div> 两段;jinja2 直接渲染 <div> 部分
-    # 提取 <div>...</div> 部分（最后一个 div 是根）
     soup = BeautifulSoup(cover_tpl_text, "html.parser")
+    style_tag = soup.find("style")
     div = soup.find("div")
+    css_body = (style_tag.string or "") if style_tag else ""
     if not div:
-        return cover_tpl_text
+        return css_body, cover_tpl_text
     cover_inner_tpl = jinja_env.from_string(str(div))
-    return cover_inner_tpl.render(**report_meta)
+    div_str = cover_inner_tpl.render(**report_meta)
+    return css_body, div_str
 
 
-# ── 主流程 ────────────────────────────────────────────────────
 def main():
-    ap = argparse.ArgumentParser(description="行业调研报告 md → A4 HTML")
+    ap = argparse.ArgumentParser(description="行业调研报告 / 定时法律周报 md → A4 HTML")
     ap.add_argument("--input", "-i", required=True, help="报告 markdown 路径")
     ap.add_argument("--profile", "-p", default=str(SKILL_DIR / "config" / "report-profile.md"))
     ap.add_argument("--output", "-o", required=True, help="输出 HTML 路径")
+    ap.add_argument("--report-kind", choices=["ir", "wb"], default=None, help="覆盖 profile 字段")
+    ap.add_argument("--cover-style", default=None, help="封面变体")
     args = ap.parse_args()
 
     in_path = Path(args.input).resolve()
@@ -309,6 +321,17 @@ def main():
     profile_path = Path(args.profile).resolve()
 
     profile = load_profile(profile_path)
+
+    if args.report_kind:
+        profile["report_kind"] = args.report_kind
+    if args.cover_style:
+        if args.cover_style in VALID_COVERS:
+            profile["cover_style"] = args.cover_style
+        else:
+            print(f"[warn] --cover-style={args.cover_style} 不合法,忽略", file=sys.stderr)
+
+    report_kind = profile["report_kind"]
+    is_wb = report_kind == "wb"
 
     md_text = in_path.read_text(encoding="utf-8")
     md_text = render_mermaid_blocks(md_text)
@@ -319,32 +342,50 @@ def main():
     template = jinja_env.get_template(TEMPLATE_NAME)
 
     now = datetime.now()
+    if is_wb:
+        default_subtitle = "行业 · 法律 · 本期要点"
+        default_lead = "本期周报基于白名单信源整理,案例均已附案号与公开检索渠道;仅作内部提示,正式意见需个案复核。"
+        default_kicker = "WEEKLY · LEGAL · BRIEFING"
+        default_footer = f"法律周报 · 第 {profile.get('period_number', '01')} 期"
+    else:
+        default_subtitle = "行业 · 区域 · 法律风险全景"
+        default_lead = "基于公开数据自动整理的内部情报底稿,不构成法律意见或法律服务承诺。"
+        default_kicker = "INDUSTRY · LEGAL · INTELLIGENCE"
+        default_footer = "行业法律调研报告"
+
     report_meta = {
         **profile,
         "report_title": in_path.stem,
-        "report_subtitle": "行业 · 区域 · 法律风险全景",
-        "report_lead": "基于企查查企业数据库与公开政策、产业资料自动整理的内部情报底稿,不构成法律意见。",
-        "kicker": "INDUSTRY · LEGAL · INTELLIGENCE",
+        "report_subtitle": default_subtitle,
+        "report_lead": default_lead,
+        "kicker": default_kicker,
+        "footer_brand": default_footer,
         "industry": extract_industry_from_md(md_text),
         "generated_date": now.strftime("%Y-%m-%d"),
         "generated_at": now.strftime("%Y-%m-%d %H:%M"),
-        "skill_version": "0.1.0",
+        "skill_version": "0.6.0",
     }
 
-    cover_html = render_cover(profile, report_meta, jinja_env)
+    cover_style, cover_html = render_cover(profile, report_meta, jinja_env)
 
-    # 目录页（cover 占 1 页,toc 占 1 页;v2 真实页码由 pdf.py 校正）
     start_page = 3 if profile.get("include_toc", True) else 2
     toc_entries = build_toc(sections, start_page) if profile.get("include_toc", True) else []
 
+    palette = resolve_palette(profile)
+    design = resolve_design(report_kind, palette)
+
     rendered = template.render(
         profile=profile,
-        palette=resolve_palette(profile),
+        palette=palette,
+        design=design,
         sections=sections,
+        cover_style=cover_style,
         cover_html=cover_html,
         include_toc=bool(profile.get("include_toc", True)),
         toc_entries=toc_entries,
-        **{k: v for k, v in report_meta.items() if k not in ("include_toc", "include_methodology")},
+        toc_page_label="第 2 页" if profile.get("include_toc", True) else "第 1 页",
+        skill_name="weekly-legal-briefing" if is_wb else "industry-research-report",
+        **{k: v for k, v in report_meta.items() if k not in ("include_toc", "include_methodology", "cover_style", "cover_html")},
     )
 
     out_path.write_text(rendered, encoding="utf-8")
@@ -352,7 +393,6 @@ def main():
 
 
 def extract_industry_from_md(md_text: str) -> str:
-    """从报告 md 的 H1 标题中提取行业词（如 '行业调研报告 · XXX · ...'）。"""
     m = re.search(r"^#\s+行业调研报告\s*·\s*([^·\s]+)", md_text, re.M)
     return m.group(1).strip() if m else "—"
 
