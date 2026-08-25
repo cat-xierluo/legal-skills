@@ -355,9 +355,9 @@ class Md2WordRegressionTest(unittest.TestCase):
                 ):
                     exact_six_point_blank_paragraphs.append(paragraph)
             self.assertEqual(
-                exact_six_point_blank_paragraphs,
-                [],
-                "无数据表时不得生成 table.space_after 空段",
+                len(exact_six_point_blank_paragraphs),
+                2,
+                "案例的两处内部空行各生成一个 exact 6pt 灰底 spacer；连续空行折叠",
             )
             guide = next(
                 paragraph
@@ -371,8 +371,48 @@ class Md2WordRegressionTest(unittest.TestCase):
             ]
             self.assertEqual(len(case_paragraphs), 3)
 
+            quote_paragraphs = []
+            for paragraph in document.paragraphs:
+                p_pr = paragraph._p.pPr
+                if p_pr is None:
+                    continue
+                shading = p_pr.find(qn("w:shd"))
+                borders = p_pr.find(qn("w:pBdr"))
+                if (
+                    shading is not None
+                    and shading.get(qn("w:fill")) == "EDF2F7"
+                    and borders is not None
+                    and all(
+                        border.get(qn("w:color")) == "EDF2F7"
+                        for border in borders
+                    )
+                ):
+                    quote_paragraphs.append(paragraph)
+            self.assertEqual(len(quote_paragraphs), 6)
+            case_group = quote_paragraphs[1:]
+            self.assertEqual(
+                [paragraph.text for paragraph in case_group],
+                [
+                    "案例：统一引用框",
+                    "",
+                    "第一段说明案例背景，并保留关键判断。",
+                    "",
+                    "第二段说明处理结果。",
+                ],
+            )
+            for current, following in zip(case_group, case_group[1:]):
+                self.assertIs(
+                    current._p.getnext(),
+                    following._p,
+                    "案例从首段到末段必须由连续的 shaded paragraphs 构成",
+                )
+            self.assertEqual(
+                [paragraph._p for paragraph in case_group if not paragraph.text],
+                [paragraph._p for paragraph in exact_six_point_blank_paragraphs],
+            )
+
             style_snapshots = []
-            quote_groups = [[guide], case_paragraphs]
+            quote_groups = [[guide], case_group]
             for group in quote_groups:
                 for index, paragraph in enumerate(group):
                     p_pr = paragraph._p.pPr
@@ -381,7 +421,7 @@ class Md2WordRegressionTest(unittest.TestCase):
                     self.assertLess(p_pr_tags.index("shd"), p_pr_tags.index("spacing"))
                     self.assertLess(p_pr_tags.index("spacing"), p_pr_tags.index("ind"))
                     shading = p_pr.find(qn("w:shd"))
-                    self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
+                    self.assertEqual(shading.get(qn("w:fill")), "EDF2F7")
                     borders = p_pr.find(qn("w:pBdr"))
                     self.assertIsNotNone(borders)
                     border_snapshot = {
@@ -394,13 +434,13 @@ class Md2WordRegressionTest(unittest.TestCase):
                         for child in borders
                     }
                     expected_edges = {
-                        "left": ("single", "2", "6", "F5F5F5"),
-                        "right": ("single", "2", "6", "F5F5F5"),
+                        "left": ("single", "2", "6", "EDF2F7"),
+                        "right": ("single", "2", "6", "EDF2F7"),
                     }
                     if index == 0:
-                        expected_edges["top"] = ("single", "2", "5", "F5F5F5")
+                        expected_edges["top"] = ("single", "2", "5", "EDF2F7")
                     if index == len(group) - 1:
-                        expected_edges["bottom"] = ("single", "2", "5", "F5F5F5")
+                        expected_edges["bottom"] = ("single", "2", "5", "EDF2F7")
                     self.assertEqual(
                         border_snapshot,
                         expected_edges,
@@ -410,24 +450,38 @@ class Md2WordRegressionTest(unittest.TestCase):
                     self.assertIsNone(indent.get(qn("w:left")))
                     self.assertIsNone(indent.get(qn("w:right")))
                     self.assertEqual(paragraph.paragraph_format.first_line_indent.pt, 0)
-                    self.assertEqual(paragraph.paragraph_format.line_spacing, 1.5)
-                    self.assertEqual(paragraph.alignment, WD_PARAGRAPH_ALIGNMENT.JUSTIFY)
+                    spacing = p_pr.find(qn("w:spacing"))
+                    if paragraph.text:
+                        self.assertEqual(spacing.get(qn("w:line")), "360")
+                        self.assertEqual(spacing.get(qn("w:lineRule")), "auto")
+                        self.assertEqual(paragraph.paragraph_format.line_spacing, 1.5)
+                        self.assertEqual(paragraph.alignment, WD_PARAGRAPH_ALIGNMENT.JUSTIFY)
+                    else:
+                        self.assertEqual(spacing.get(qn("w:before")), "0")
+                        self.assertEqual(spacing.get(qn("w:after")), "0")
+                        self.assertEqual(spacing.get(qn("w:line")), "120")
+                        self.assertEqual(spacing.get(qn("w:lineRule")), "exact")
+                        self.assertNotIn("top", border_snapshot)
+                        self.assertNotIn("bottom", border_snapshot)
                     for run in paragraph.runs:
                         if run.text:
                             self.assertEqual(run.font.size.pt, 12)
                     style_snapshots.append(shading.get(qn("w:fill")))
 
-            self.assertEqual(set(style_snapshots), {"F5F5F5"})
+            self.assertEqual(set(style_snapshots), {"EDF2F7"})
             self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
             self.assertTrue(any(run.text == "案例：统一引用框" and run.bold for run in case_paragraphs[0].runs))
             self.assertTrue(any(run.text == "关键判断" and run.bold for run in case_paragraphs[1].runs))
-            self.assertEqual(len(case_paragraphs), 3, "引用空行应折算为段距，不生成空段")
+            self.assertEqual(len(case_paragraphs), 3)
             self.assertEqual(guide.paragraph_format.space_before.pt, 6)
             self.assertEqual(guide.paragraph_format.space_after.pt, 6)
-            self.assertEqual(case_paragraphs[0].paragraph_format.space_before.pt, 6)
-            self.assertEqual(case_paragraphs[0].paragraph_format.space_after.pt, 6)
-            self.assertEqual(case_paragraphs[1].paragraph_format.space_after.pt, 6)
-            self.assertEqual(case_paragraphs[2].paragraph_format.space_after.pt, 6)
+            self.assertEqual(case_group[0].paragraph_format.space_before.pt, 6)
+            self.assertEqual(case_group[-1].paragraph_format.space_after.pt, 6)
+            for paragraph in case_group[1:-1]:
+                self.assertEqual(paragraph.paragraph_format.space_before.pt, 0)
+                self.assertEqual(paragraph.paragraph_format.space_after.pt, 0)
+            self.assertEqual(case_group[0].paragraph_format.space_after.pt, 0)
+            self.assertEqual(case_group[-1].paragraph_format.space_before.pt, 0)
 
             ordinary = next(
                 paragraph for paragraph in document.paragraphs

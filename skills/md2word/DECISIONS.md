@@ -2,6 +2,31 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-019] - 2026-08-26 - 引用内空行使用同底色 exact spacer，并统一 confirmed 灰
+
+### 背景
+DEC-018 已把引用框从表格改为段落灰底，但仍把 Markdown 空引用行折算为上一内容段的 `space_after=6pt`。Word 不给段后距区域应用段落底纹，因此多段案例的标题、案情和判断之间出现白缝，看起来像数个分离灰块。第十二章权威 inline SVG 又把 `confirmed` 背景定义为 `#EDF2F7`，而引用框仍用 `#F5F5F5`，形成不必要的两级浅灰。
+
+### 决策
+1. 内部空引用行生成真正的空白 callout paragraph：与内容段相同的 `w:shd` 和左右同色 `single` padding border，段前/段后为 0，行高读取 `quote.paragraph_spacing`（默认 6pt）并写为 exact。
+2. 空白 spacer 不承担 top/bottom border 或 padding；整个 callout 仍只有首段承担上 5pt、末段承担下 5pt，普通相邻内容段的段前/段后均为 0。块外仅首段 `space_before=6pt`、末段 `space_after=6pt`。
+3. 连续多个内部空引用行确定性折叠为一个 spacer，避免源稿多写 `>` 时把呼吸区倍增；首尾空引用行忽略，由既有 top/bottom padding 承担留白。
+4. 所有内置预设、fallback、配置模板和模板提取基底的 `quote.background_color` 统一为 `#EDF2F7`；同色 paragraph borders 同步取该值。代码块与数据表等组件的既有颜色不随本决策改变。
+
+### 方案取舍
+- 不继续使用内容段 `space_after`：该区域在 Word 中不继承 shading，是白缝根因。
+- 不以空格字符撑高：字符会污染复制、检索和可访问性；空段配 exact 行高是可审计的 OOXML 结构。
+- 不把多个空引用行逐个保留：引用框内部空行只表达分段呼吸，不需要按数量倍增高度；折叠规则更稳定。
+- 不新增第二种灰：引用框直接复用本书 `confirmed` 的 `#EDF2F7`，保持视觉 token 单一。
+
+### 验证
+- fixture 覆盖连续空引用行折叠、多段案例两处灰底 spacer、单段导读、脚注、粗体和列表；端到端断言引用不产生表格，整个 callout 从首到尾每个段落均为 `EDF2F7`，内容段内部间距为 0，spacer 为 6pt exact 且只有左右同色 border。
+- 真实 ch12 结构验收、数据表 spacer 与图注不回归证据在 Task-012 / v1.3.2 CHANGELOG 中记录。
+
+### 影响与回退
+- 本决策 supersede DEC-018 中“空引用行折算为前一内容段 `space_after`”的实现；paragraph callout、无表格网格线、首尾 padding 和数据表组件留白决策继续有效。
+- 回退必须同步恢复空行表示、颜色 token、预设/模板基底和结构测试，不能只改视觉配置。
+
 ## [DEC-018] - 2026-08-26 - 引用框改为段落灰底，数据表自行承载表后留白
 
 ### 背景
