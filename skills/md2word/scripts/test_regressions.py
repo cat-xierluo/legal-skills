@@ -9,6 +9,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 from docx import Document
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
 
 
@@ -22,11 +23,189 @@ from footnote_handler import (  # noqa: E402
     _footnote_text_to_runs_xml,
     _inject_footnotes_into_docx,
 )
+from table_handler import _calc_column_widths  # noqa: E402
 
 import md2word  # noqa: E402
 
 
 class Md2WordRegressionTest(unittest.TestCase):
+    def test_six_long_header_columns_fit_usable_page_width(self):
+        config = md2word.get_preset("book-publish")
+        min_needed_cm = [2.76, 2.76, 2.76, 2.76, 3.40, 3.40]
+        cell_lengths = {
+            0: [12, 18, 20],
+            1: [12, 16, 22],
+            2: [12, 20, 24],
+            3: [12, 18, 26],
+            4: [16, 24, 30],
+            5: [16, 22, 28],
+        }
+
+        widths = _calc_column_widths(
+            cell_lengths,
+            6,
+            config,
+            min_needed_cm=min_needed_cm,
+        )
+        usable_cm = (
+            config.get("page.width")
+            - config.get("page.margin_left")
+            - config.get("page.margin_right")
+        )
+
+        self.assertLessEqual(sum(widths), usable_cm + 1e-9)
+        self.assertAlmostEqual(sum(widths), usable_cm, places=6)
+        self.assertTrue(all(width >= 1.2 for width in widths))
+
+    def test_markdown_table_ooxml_widths_share_one_fixed_budget(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "wide-table.md"
+            output = temp_dir / "wide-table.docx"
+            markdown.write_text(
+                "# 宽表回归\n\n"
+                "| 适用业务类型 | 输入材料要求 | 事实提取方法 | 法律检索策略 | 风险分级与处置 | 输出成果与复核 |\n"
+                "| --- | --- | --- | --- | --- | --- |\n"
+                "| 合同审查 | 合同及附件 | 逐项抽取事实 | 法规案例并行 | 高中低三级风险 | 修订稿与审查意见 |\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            table = document.tables[0]
+            tbl_width = int(table._tbl.tblPr.find(qn("w:tblW")).get(qn("w:w")))
+            grid_widths = [
+                int(grid_col.get(qn("w:w")))
+                for grid_col in table._tbl.tblGrid.findall(qn("w:gridCol"))
+            ]
+            usable_twips = int(
+                (
+                    config.get("page.width")
+                    - config.get("page.margin_left")
+                    - config.get("page.margin_right")
+                )
+                * 1440
+                / 2.54
+            )
+
+            self.assertEqual(table._tbl.tblPr.find(qn("w:tblLayout")).get(qn("w:type")), "fixed")
+            self.assertLessEqual(sum(grid_widths), usable_twips)
+            self.assertEqual(tbl_width, sum(grid_widths))
+            for row in table.rows:
+                cell_widths = [
+                    int(cell._tc.tcPr.find(qn("w:tcW")).get(qn("w:w")))
+                    for cell in row.cells
+                ]
+                self.assertEqual(cell_widths, grid_widths)
+
+    def test_plain_markdown_table_caption_is_centered_without_indent(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "table-caption.md"
+            output = temp_dir / "table-caption.docx"
+            markdown.write_text(
+                "# 表题回归\n\n"
+                "**表 10-5：鉴定式案例分析步骤**\n\n"
+                "| 步骤 | 说明 |\n| --- | --- |\n| 一 | 识别请求权基础 |\n\n"
+                '<div align="center">**表10-6：显式居中兼容**</div>\n\n'
+                '<div align="center">普通居中文字</div>\n',
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            caption = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("表 10-5：")
+            )
+            self.assertEqual(caption.alignment, WD_PARAGRAPH_ALIGNMENT.CENTER)
+            self.assertEqual(caption.paragraph_format.first_line_indent.pt, 0)
+            self.assertEqual(caption.paragraph_format.left_indent.pt, 0)
+            self.assertTrue(any(run.bold for run in caption.runs))
+            self.assertEqual(caption.runs[0].font.size.pt, 12)
+
+            explicit_caption = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("表10-6：")
+            )
+            self.assertEqual(
+                explicit_caption.alignment, WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
+            self.assertEqual(
+                explicit_caption.paragraph_format.first_line_indent.pt, 0
+            )
+            self.assertEqual(explicit_caption.paragraph_format.left_indent.pt, 0)
+            self.assertTrue(any(run.bold for run in explicit_caption.runs))
+            self.assertEqual(explicit_caption.runs[0].font.size.pt, 12)
+
+            generic_centered = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text == "普通居中文字"
+            )
+            self.assertEqual(
+                generic_centered.alignment, WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
+            self.assertEqual(
+                generic_centered.paragraph_format.first_line_indent.pt, 24
+            )
+
+    def test_quote_block_footnote_becomes_reference_without_losing_quote_format(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "quote-footnote.md"
+            output = temp_dir / "quote-footnote.docx"
+            markdown.write_text(
+                "# 引用块脚注回归\n\n"
+                "> **本章导读**：三个开源项目。[^chapter-skills]\n"
+                "> - 重点条目\n\n"
+                "[^chapter-skills]: 项目甲、项目乙与项目丙。\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            with zipfile.ZipFile(output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+                document_xml = archive.read("word/document.xml").decode("utf-8")
+                footnotes_root = ET.fromstring(archive.read("word/footnotes.xml"))
+
+            self.assertNotIn("[^chapter-skills]", document_xml)
+            references = list(document_root.iter(qn("w:footnoteReference")))
+            self.assertEqual(len(references), 1)
+            positive_footnote_texts = [
+                "".join(node.text or "" for node in footnote.iter(qn("w:t"))).strip()
+                for footnote in footnotes_root.iter(qn("w:footnote"))
+                if int(footnote.get(qn("w:id"))) > 0
+            ]
+            self.assertEqual(positive_footnote_texts, ["项目甲、项目乙与项目丙。"])
+
+            document = Document(output)
+            guide = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text.startswith("本章导读")
+            )
+            self.assertEqual(guide.paragraph_format.first_line_indent.pt, 0)
+            self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
+            list_item = next(
+                paragraph
+                for paragraph in document.paragraphs
+                if "重点条目" in paragraph.text
+            )
+            self.assertIn("•", list_item.text)
+            self.assertEqual(list_item.paragraph_format.first_line_indent.pt, 0)
+
     def test_cjk_ascii_quotes_convert_but_english_apostrophes_survive(self):
         converted = convert_quotes_to_chinese("标注'需律师现场确认'，don't、O'Brien 与 API's 保留。")
         self.assertIn("‘需律师现场确认’", converted)

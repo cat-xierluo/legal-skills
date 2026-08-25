@@ -62,6 +62,12 @@ _active_fn_manager = None
 BOOK_CHAPTER_BREAK_MARKER = (
     "<<<MD2WORD_INTERNAL_CHAPTER_BREAK_3F6E6E3B-EEBB-4BB4-A2E2-5C4BF0CB5F70>>>"
 )
+TABLE_CAPTION_RE = re.compile(r'^\*{0,2}表\s*\d+[-－]?\d*\s*[:：]')
+
+
+def is_table_caption_line(text):
+    """识别 Markdown 或 HTML 块内的表题行（兼容“表10-5”与“表 10-5”）。"""
+    return bool(TABLE_CAPTION_RE.match(text))
 
 
 def parse_text_with_footnotes(paragraph, text, title_level=0, is_quote=False):
@@ -301,7 +307,9 @@ def add_quote(doc, text):
             list_marker_run.font.size = Pt(font_size)
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
 
-        parse_text_formatting(p, line, is_quote=True)
+        # 引用块与普通正文共用脚注解析入口，避免有效 [^label]
+        # 作为字面文本进入 document.xml；列表 marker 已在上方单独写入。
+        parse_text_with_footnotes(p, line, is_quote=True)
         set_paragraph_format(p, is_quote=True)
 
         if font_size:
@@ -838,6 +846,11 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                     set_paragraph_format(p)
                     if alignment is not None:
                         p.paragraph_format.alignment = alignment
+                        # 只清理显式居中的表题缩进；普通居中 div 仍沿用正文设置。
+                        if (alignment == WD_PARAGRAPH_ALIGNMENT.CENTER
+                                and is_table_caption_line(text_line)):
+                            p.paragraph_format.first_line_indent = Pt(0)
+                            p.paragraph_format.left_indent = Pt(0)
                     if not has_seen_h2:
                         has_body_before_first_h2 = True
             i += 1
@@ -981,8 +994,10 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             if line:
                 p = doc.add_paragraph()
                 parse_text_with_footnotes(p, line)
-                # 图注（**图 X-X：...** / 图 X-X：...）居中、无首行缩进、小一号字
-                if re.match(r'^\*{0,2}图\s*\d+[-－]?\d*\s*[:：]', line):
+                # 图注与表题都居中、无首行缩进；图注另沿用既有小一号样式。
+                is_figure_caption = re.match(r'^\*{0,2}图\s*\d+[-－]?\d*\s*[:：]', line)
+                is_table_caption = is_table_caption_line(line)
+                if is_figure_caption:
                     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                     pf = p.paragraph_format
                     pf.first_line_indent = Pt(0)
@@ -992,6 +1007,13 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
                     pf.line_spacing = 1.2
                     for r in p.runs:
                         r.font.size = Pt(10)
+                elif is_table_caption:
+                    # 先保持普通正文的字号、粗体和间距，再只覆盖表题对齐/缩进。
+                    set_paragraph_format(p)
+                    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                    pf = p.paragraph_format
+                    pf.first_line_indent = Pt(0)
+                    pf.left_indent = Pt(0)
                 else:
                     set_paragraph_format(p)
                 if not has_seen_h2:
