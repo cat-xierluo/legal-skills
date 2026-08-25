@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.1.2] - 2026-08-25
+
+### 修正
+
+- ClawHub 发布元数据：v0.1.1 首次发布漏传 `--name`，display name 退化为临时目录名 `Clawhub Publish Apple Smart Schedule`。bump 版本带 `--name "苹果智能日程提醒"` 重新发布，修正为正确显示名。本地 skill 本身无功能改动。
+
 ## [0.1.1] - 2026-08-25
 
 ### 修复
