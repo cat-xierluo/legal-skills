@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.1] - 2026-08-26
+
+### 改进
+
+- 内部上下文同步：`references/09-parallel-lessons.md` 新增 G39（badminton-lab Wave 4）——同账号多 claude-code worker 的 5 小时限流同时触发；429 打断 turn 后 TUI 停在 idle，`pm-orchestrate send` 投递 Dispatch inbox 叫不醒（`ok:true` ≠ 被消费），须用 `orca terminal send --text ... --enter` 键盘注入唤醒；判活看 `peek` transcript 时间戳与当前的差值而非 tail 文本。SKILL.md §7 增补对应唤醒指引一句。纯文档变更，无脚本改动，全部脚本 `bash -n` 通过。
+
 ## [2.7.0] - 2026-08-25
 
 ### 新增

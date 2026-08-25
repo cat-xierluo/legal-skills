@@ -311,6 +311,8 @@ bash scripts/sentinel.sh --status-file "$CTX/STATUS.json" --tmux-session worker-
 
 Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏题、阻塞、越界或验证失败时优先给原 worker 发窄纠偏；需要独立审阅时另派 reviewer。Sentinel 设计读取 `references/04-sentinel-design.md`。
 
+worker TUI 被限流或中断后停在 idle 时，`pm-orchestrate send`（supervised 走 Dispatch inbox）叫不醒它——用 `orca terminal send --terminal <handle> --text "..." --enter` 直接键盘注入；判活看 `peek` transcript 时间戳距当前的差值（G39）。
+
 ## 8. 收口
 
 PM 必须：
