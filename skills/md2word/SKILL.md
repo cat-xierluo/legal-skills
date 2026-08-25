@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.5"
+version: "1.2.6"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -59,7 +59,13 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 
 > 原生 `footnote` 模式下，两个脚注标记在源码中直接相邻时，输出会在两个上标之间加入一个同为 9pt 上标的 NBSP；源码已有空格或标点时不额外添加。页面脚注段落固定为段前段后 0、单倍自动行距；`endnote` 不应用这两项规则。
 
+> 页面脚注在普通正文与 Markdown 引用块（`>`）中都可使用；引用块内的 `[^label]` 会生成原生 Word 脚注引用，不会作为字面标记留在正文，同时保留引用段落和加粗等行内格式。
+
 > 行内代码优先保护反引号范围：其中的 `_`、`*` 等 Markdown 标记按字面量保留，不会与相邻代码段拼成斜体或粗体；例如 `` `law_keyword` `` 会完整输出为一个代码 run。
+
+> Markdown 表格固定在页面正文可用宽度内；多列长表头会自动换行，转换器会统一表格总宽、网格列宽和单元格宽度，避免表格越过左右页边距。
+
+> 普通 Markdown 表题（如 `**表 10-5：标题**`）会自动水平居中并取消首行缩进；显式 `<div align="center">...</div>` 仍可继续使用。表题原有字号和粗体不受自动对齐影响。
 
 ## 配置系统
 
