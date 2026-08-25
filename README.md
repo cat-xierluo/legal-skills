@@ -34,7 +34,10 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-25 | 新增   | [industry-research-report](skills/industry-research-report/)           | v0.4.1 | **行业法律调研报告（获客端）**：输入 industry/region/focus/depth，输出精排 A4 PDF 行业法律调研报告；蓝皮书体例（深蓝 #1B3C59 + 金色 #D4AF37 + 白色页面）+ 4 个封面变体（三层叠加装饰）+ 5 个律师常见调色板；内置 report-profile.md 个性化配置（律所抬头/配色/主办律师/联系方式一次配置全报告共享）+ 首启向导；行业特定信源映射内置 20 个律师高频服务行业；数据源走企查查 MCP（企业名录 + 司法/经营风险）+ 网络检索 5 级信源优先级；md 基底 → jinja2 → Playwright + Chrome headless 分部分渲染合并，一键出精排 A4 PDF |
+| 2026-08-25 | 新增   | [weekly-legal-briefing](skills/weekly-legal-briefing/)                 | v0.3.1 | **定时法律研报（留存端）**：配置一次，定期自动生成行业/法律研报草稿（如"科技型制造企业 周报"）；白名单信源制（白名单外默认丢弃）+ 案例必带案号 + 案号裁判文书网回查；输出文件一律带 `_DRAFT` 标记，**永不自动外发**（硬约束，发布动作物理上留给人工）；渲染管线 symlink 复用 industry-research-report，避免双份维护；附 WorkBuddy / OpenClaw cron / GitHub Actions 三平台部署说明 |
 | 2026-08-24 | 更新   | [md2word](skills/md2word/)                                             | v1.2.4  | **页面脚注可读性修复**：源码直接相邻的原生脚注编号用 9pt 上标 NBSP 分隔，已有空格或标点不重复添加；正数脚注段前段后归零并使用单倍自动行距，同时保留 v1.2.3 的重复脚注独立 ID 语义 |
+| 2026-08-24 | 更新   | [course-generator](skills/course-generator/)                           | v2.8.0 | **课程产物契约化**：新增 `course-manifest.json`，以稳定 SRC/MAT/IMG 关系绑定来源、素材、章节和图片；标准库验证器精确检查文件、素材映射与图片集合/目标/顺序，13 类正反例覆盖旧版漏报；长材料改用索引化两遍流程，生成不再自动归档，并收窄与转录纠错、讲课复盘、成书 Skill 的触发边界 |
 | 2026-08-24 | 新增   | [lecture-review](skills/lecture-review/)                               | v1.0.0 | **讲课表现复盘**：通读 raw 转录稿动态发现主讲口癖/节奏/句式与结构信号（时间分配/承诺回收/互动密度），预设词表仅作对比锚点；脚本统一口径出数字（讲师隔离+归属污染核验、最长优先去重叠、双格式时间戳、剔幻灯片 URL）；讲师档案跨场次闭环（watchlist 下场复查）；ASR 吞语气音盲区显式声明；经双盲基线测试（RED→GREEN）验证 |
 | 2026-08-22 | 新增   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.13.4 | **要素式起诉状生成器**：基于最高法法〔2025〕82 号 67 类官方模板，从律师已写好的常规起诉状自动生成要素式 Word 文书。113 棵 OOXML 模板树全量入库（git 可 diff），68/68 案由精调（含知产行政/执行全家族/海事/环资/行政/国赔），通用勾选机制+多当事人扩容+法人块渲染+批量模式，格式像素级保真（lxml 跨 run 精确替换），e2e 28 产物+68 树冒烟+45 答辩冒烟全绿 |
 | 2026-08-14 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.12.0 | 改善 PDF Expert 复制正文换行：Paddle 正文段落字号只向下统一并保留原坐标与横向框宽；新增显式 clean.md 输出，代表性四页样本换行由 120 降至 62 |
@@ -387,11 +390,11 @@
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
 <td>工具·课程</td>
-<td style="word-break:break-word">课程内容管理平台。支持三种工作模式：从转录稿/文献生成结构化课程、将课程归档到知识库、根据客户需求从现有素材中提取并重组定制化培训方案；支持绝对路径配置、用户词典术语纠错、英文专有名称保真、图片资产保真与正文插图克制、结构适配、问答融入、高保真正文增强、独立正文去来源痕迹、总览/章节生成和旧命名兼容</td>
-<td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v2.3.3</td>
+<td style="word-break:break-word">将长转录稿或文献整理为可独立阅读、可溯源验收的课程：支持索引化长材料处理、用户词典、专名保真、素材守恒、图片克制插入，以及基于 `course-manifest.json` 的文件/素材/图片精确验证；归档和定制方案提取仅在用户明确要求时执行</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v2.8.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/course-generator-2.3.3.zip">下载</a></td>
-<td></td>
+<td>下载版 v2.3.3</td>
 </tr>
 <tr>
 <td><a href="skills/transcription-corrector/"><strong>transcription-corrector</strong></a></td>

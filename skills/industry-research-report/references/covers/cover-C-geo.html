@@ -1,0 +1,86 @@
+<!-- 封面变体 C:几何顶部(默认) —— 三层圆叠加 + 引言章
+     风格:深蓝主色 + 金色装饰
+     上下文已在主模板 .cover-page 内(深蓝底 + 白字) -->
+<style>
+.cover-C .top-band { height: 110mm; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 0 22mm 14mm; }
+/* 第一层:大金色描边圆（最远景） */
+.cover-C .top-band::before {
+  content: ""; position: absolute; top: -70mm; right: -50mm; width: 160mm; height: 160mm;
+  border-radius: 50%; border: 2.5mm solid var(--accent); opacity: 0.55;
+}
+/* 第二层:中号填充圆（中景） */
+.cover-C .top-band::after {
+  content: ""; position: absolute; top: -35mm; right: -25mm; width: 100mm; height: 100mm;
+  border-radius: 50%; background: var(--primary-deep);
+}
+/* 第三层:小描边圆 + 小金点（前景,增加层次） */
+.cover-C .top-band .layer-3 {
+  position: absolute; top: 20mm; right: 35mm; width: 40mm; height: 40mm;
+  border-radius: 50%; border: 1.5mm solid var(--accent); opacity: 0.45;
+}
+.cover-C .top-band .layer-3::before {
+  content: ""; position: absolute; top: 30mm; left: -20mm; width: 12mm; height: 12mm;
+  border-radius: 50%; background: var(--accent); opacity: 0.9;
+}
+/* 引言章（位于 brand 带下方,motto 字段填入时显示） */
+.cover-C .motto {
+  position: relative; z-index: 3; margin-top: 6mm;
+  padding-left: 6mm; border-left: 1.5mm solid var(--accent);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 11pt; color: rgba(255, 255, 255, 0.85); letter-spacing: 3px;
+  font-style: italic;
+}
+
+.cover-C .series-name { position: relative; z-index: 2; color: var(--accent); font-size: 13px; letter-spacing: 6px; font-weight: 600; }
+.cover-C .series-mark { position: absolute; top: 18mm; left: 22mm; color: var(--accent); font-size: 11px; letter-spacing: 4px; z-index: 2; font-family: "Noto Sans SC", sans-serif; }
+.cover-C .cover-body { padding: 22mm 22mm 0; flex: 1; display: flex; flex-direction: column; }
+.cover-C .cover-kicker { font-size: 10pt; color: var(--accent); letter-spacing: 5px; margin-bottom: 12mm; }
+.cover-C .cover-title { font-size: 36pt; font-weight: 900; color: #FFFFFF; letter-spacing: 4px; line-height: 1.4; margin-bottom: 5mm; }
+.cover-C .cover-subtitle { font-size: 13pt; color: rgba(255,255,255,0.85); letter-spacing: 2px; margin-bottom: auto; font-weight: 400; }
+.cover-C .cover-lead { font-size: 11pt; color: rgba(255,255,255,0.7); letter-spacing: 1px; line-height: 1.8; margin: 6mm 0; max-width: 130mm; }
+.cover-C .cover-meta-wrap { padding: 0 22mm; border-top: 1px solid rgba(212,175,55,0.4); padding-top: 7mm; }
+.cover-C .cover-meta-row { display: grid; grid-template-columns: repeat(3, 1fr); }
+.cover-C .meta-cell { padding: 0 4mm; border-right: 1px solid rgba(255,255,255,0.2); }
+.cover-C .meta-cell:last-child { border-right: none; }
+.cover-C .meta-label { font-size: 9pt; color: var(--accent); letter-spacing: 2px; margin-bottom: 2mm; font-family: "Noto Sans SC", sans-serif; }
+.cover-C .meta-val { font-size: 12pt; color: #FFFFFF; font-weight: 700; letter-spacing: 1px; }
+.cover-C .cover-footer {
+  padding: 6mm 22mm 14mm; font-size: 9pt; color: rgba(212,175,55,0.85);
+  letter-spacing: 1.5px; display: flex; justify-content: space-between; border-top: 1px solid rgba(212,175,55,0.4);
+  font-family: "Noto Sans SC", sans-serif;
+}
+</style>
+<div class="cover-C" style="height: 100%; display: flex; flex-direction: column;">
+  <div class="top-band">
+    <div class="series-mark">{{ series_subtitle }}</div>
+    <div class="series-name">{{ series_name }}</div>
+    <div class="layer-3"></div>
+    {% if false %}<div class="motto">{{ motto }}</div>{% endif %}
+  </div>
+  <div class="cover-body">
+    <div class="cover-kicker">{{ kicker }}</div>
+    <div class="cover-title">{{ report_title }}</div>
+    <div class="cover-subtitle">{{ report_subtitle }}</div>
+    <div class="cover-lead">{{ report_lead }}</div>
+  </div>
+  <div class="cover-meta-wrap">
+    <div class="cover-meta-row">
+      <div class="meta-cell">
+        <div class="meta-label">REPORT CODE</div>
+        <div class="meta-val">{{ report_code }}</div>
+      </div>
+      <div class="meta-cell">
+        <div class="meta-label">EDITOR</div>
+        <div class="meta-val">{{ lead_lawyer }}</div>
+      </div>
+      <div class="meta-cell">
+        <div class="meta-label">DATE</div>
+        <div class="meta-val">{{ generated_date }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>{{ law_firm }}</span>
+    <span>{{ footer_brand }} · {{ report_code }}</span>
+  </div>
+</div>

@@ -1,0 +1,320 @@
+# 行业 × 优先信源映射（skill 内置默认清单）
+#
+# 用途:用户跑 industry-research-report 时,如果 industry 命中本表中的
+# `industry` 字段(关键词匹配,不区分大小写),AI 在跳第一轮检索前应优先
+# 引导用户使用表中 `priority_sources` 列出的信源。
+#
+# 用户可在 config/industry_sources.local.yaml(已 gitignore)中覆盖 / 追加。
+# 命中规则:industry 关键词出现在本表 `industry` 字段任一关键词中即命中;
+#         多个表项命中时,合并 priority_sources 去重。
+#
+# 信源分类约定:
+#   priority_sources  -> P1-P2 高置信信源(优先用)
+#   supplementary_sources -> P3-P4 辅助信源(交叉验证用)
+
+industries:
+
+  # === 通用兜底:所有未命中行业都走这套 ===
+  - industry: [通用]
+    priority_sources:
+      - gov.cn
+      - court.gov.cn
+      - 国家企业信用信息公示系统
+      - 巨潮资讯网(招股说明书)
+      - xinhuanet.com
+      - yicai.com
+    supplementary_sources:
+      - 各行业协会白皮书
+      - 各部委政策文件
+    notes: |
+      未命中特定行业时走通用信源。所有行业最终都至少用一遍通用 P1 一手文本(招股说明书 + 部委文件)。
+
+  # === 半导体 / 集成电路 ===
+  - industry: [半导体, 集成电路, IC, chip, 芯片, 晶圆, 封测]
+    priority_sources:
+      - csia.net.cn            # 中国半导体行业协会
+      - semi.org               # SEMI 全球半导体产业协会
+      - cscc.com.cn            # 中国半导体行业协会封装分会
+      - icinsights.com         # IC Insights(全球 IC 市场报告)
+      - trendforce.com         # 集邦咨询
+      - 工信部电子信息司
+      - 巨潮资讯网(招股书·半导体板块)
+    supplementary_sources:
+      - caixin.com / 财新(产业报道)
+      - 21jingji.com
+    notes: |
+      半导体是高敏感行业,优先看一手政策(工信部 / 海关出口管制清单)与协会数据;
+      招股说明书(中芯/华虹/长存等)是产业链结构最权威来源。
+
+  # === 低空经济 / eVTOL / 无人机 ===
+  - industry: [低空经济, eVTOL, 无人机, 通用航空, UAV]
+    priority_sources:
+      - caac.gov.cn            # 中国民航局
+      - miit.gov.cn            # 工信部(低空经济产业政策)
+      - ndrc.gov.cn            # 国家发改委(低空经济专项规划)
+      - mot.gov.cn             # 交通运输部
+      - 民航局无人机管理办公室
+      - 中国航空工业集团
+    supplementary_sources:
+      - caixin.com(低空经济专题)
+      - yicai.com(亿航/小鹏汇天等专题)
+    notes: |
+      低空经济政策窗口期,民航局与工信部联合发文密集;区域试点(深圳/合肥/成都)产业园名录要单独检索。
+
+  # === 具身智能 / 人形机器人 ===
+  - industry: [具身智能, 人形机器人, robotics, 机器人, 仿生机器人]
+    priority_sources:
+      - miit.gov.cn            # 工信部(人形机器人创新发展指导意见)
+      - most.gov.cn            # 科技部(国家重点研发计划)
+      - nsfc.gov.cn            # 国家自然科学基金委
+      - ieee.org               # IEEE 顶会(IROS / ICRA)
+      - arxiv.org              # arxiv(最新论文)
+      - 巨潮资讯网(招股书·优必选/宇树/智元等)
+    supplementary_sources:
+      - 36kr.com(36 氪产业报道)
+      - jiqizhixin.com(机器之心)
+    notes: |
+      学术 + 政策 + 头部企业招股书三条线;产业图谱主要看工信部《人形机器人创新发展指导意见》。
+
+  # === 新能源汽车 / 锂电池 ===
+  - industry: [新能源汽车, 电动汽车, 锂电池, 动力电池, EV, NEV]
+    priority_sources:
+      - miit.gov.cn            # 工信部(新能源汽车准入/公告)
+      - caam.org.cn            # 中国汽车工业协会
+      - miit.gov.cn/zwgk/zcwj  # 工信部产业政策
+      - cabia.org.cn           # 中国电池工业协会
+      - 巨潮资讯网(招股书·宁德/比亚迪等)
+      - cabr.cn                # 中国汽车技术研究中心
+    supplementary_sources:
+      - d1ev.com(第一电动)
+      - 电池中国网
+    notes: |
+      补贴政策 + 工信部公告(车型目录)是核心;锂电池产业链上游(锂矿/正负极/隔膜)数据 GGII / 鑫椤资讯较全。
+
+  # === 生物医药 / 创新药 ===
+  - industry: [生物医药, 创新药, 生物制药, 制药, 医药]
+    priority_sources:
+      - nmpa.gov.cn            # 国家药监局(药品审评 / 临床默示许可)
+      - cde.org.cn             # 药品审评中心
+      - nhc.gov.cn             # 国家卫健委
+      - sph.com.cn             # 上海医药/中国医药企业管理协会
+      - 巨潮资讯网(招股书·创新药企)
+      - clinicaltrials.gov     # 全球临床试验登记
+    supplementary_sources:
+      - pharmcube.com(药融云)
+      - yvzihao.com(医药魔方)
+    notes: |
+      NMPA / CDE 公告是药品/器械合规信息最权威源;招股书披露的临床管线与适应症可信度高。
+
+  # === 数据要素 / 数据交易所 ===
+  - industry: [数据要素, 数据交易, 数据资产, 数据流通]
+    priority_sources:
+      - cac.gov.cn             # 国家网信办
+      - tc260.org.cn           # 全国信安标委
+      - mpra.mpac.gov.cn       # 国家数据局(2023 新设)
+      - mec.gov.cn              # 各省级数据交易所(上海/深圳/贵阳/北京等)
+      - gov.cn                 # "数据二十条"
+    supplementary_sources:
+      - 中国电子信息产业集团报告
+      - 赛迪研究院
+    notes: |
+      数据要素是 2023 年后新领域,核心政策在国家数据局;地方实践看四大数据交易所披露。
+
+  # === AI / 大模型 ===
+  - industry: [AI, 人工智能, 大模型, LLM, AIGC, 生成式AI]
+    priority_sources:
+      - cac.gov.cn             # 网信办(生成式 AI 管理办法)
+      - miit.gov.cn            # 工信部(算力 / 模型备案)
+      - most.gov.cn            # 科技部(AI 重大科技专项)
+      - tc260.org.cn           # 全国信安标委(AI 安全标准)
+      - 巨潮资讯网(招股书·AI 板块)
+    supplementary_sources:
+      - qbitai.com(量子位)
+      - jiqizhixin.com(机器之心)
+    notes: |
+      中国 AI 监管是"算法备案 + 大模型上线备案 + 内容审核"三层;网信办公告是核心。
+
+  # === 房地产 / 物业 ===
+  - industry: [房地产, 物业, 写字楼, 商业地产, 长租公寓, 房地产开发]
+    priority_sources:
+      - mohurd.gov.cn          # 住房和城乡建设部
+      - mnr.gov.cn             # 自然资源部(土地出让 / 招拍挂)
+      - stats.gov.cn           # 国家统计局(房地产开发投资 / 销售数据)
+      - circ.gov.cn            # 银保监会(房地产融资 / 信贷政策)
+      - cspengyuan.com         # 中证鹏元 / 中诚信(地产信用评级)
+      - 巨潮资讯网(招股书·地产板块)
+    supplementary_sources:
+      - fang.com(房天下)
+      - 21jingji.com(地产专题)
+    notes: |
+      房地产行业近年政策密集(三道红线、保交楼、城中村改造);自然资源部土地出让公告是核心;
+      各地住建局公示(预售许可 / 处罚)按 region 收窄。
+
+  # === 建设工程 / 建筑施工 / 工程机械 ===
+  - industry: [建设工程, 建筑施工, 工程机械, 基础设施, 工程总承包, EPC]
+    priority_sources:
+      - mohurd.gov.cn          # 住建部
+      - ndrc.gov.cn            # 发改委(基建专项规划)
+      - mot.gov.cn             # 交通运输部
+      - mwr.gov.cn             # 水利部
+      - 巨潮资讯网(招股书·建工/中字头企业)
+      - cabr.cn                # 中国建筑科学研究院
+    supplementary_sources:
+      - 中国建筑业协会
+      - 中国施工企业管理协会
+    notes: |
+      工程领域核心是招投标(各地公共资源交易中心)、资质(住建部四库一平台)、合同范本(住建部建设工程施工合同示范文本)。
+
+  # === 餐饮 / 食品制造 / 预制菜 ===
+  - industry: [餐饮, 食品制造, 预制菜, 食品, 连锁餐饮, 食品饮料]
+    priority_sources:
+      - samr.gov.cn            # 市场监管总局(食品生产许可 SC / 行政处罚)
+      - nhc.gov.cn             # 国家卫健委(食品安全标准)
+      - cfda.gov.cn            # 国家食药监总局(食品安全抽检)
+      - customs.gov.cn         # 海关总署(进出口食品)
+      - 巨潮资讯网(招股书·餐饮食品)
+      - 中国食品工业协会
+    supplementary_sources:
+      - 红餐网(餐饮垂直媒体)
+      - 第一财经(餐饮消费专题)
+    notes: |
+      食品行业核心是 SC 生产许可 + 食品安全抽检(国家市场监督管理总局);舆情风险(食安事件)对商誉影响大,舆情源要单列。
+
+  # === 养老 / 银发经济 ===
+  - industry: [养老, 银发经济, 养老服务, 养老机构, 老年用品]
+    priority_sources:
+      - mca.gov.cn             # 民政部(养老机构备案 / 等级评定)
+      - nhc.gov.cn             # 国家卫健委(医养结合 / 长期护理险)
+      - nhsa.gov.cn            # 国家医保局(长护险试点)
+      - stats.gov.cn           # 国家统计局(人口老龄化数据)
+      - 中国老龄协会
+      - 各省民政厅(养老机构许可名录)
+    supplementary_sources:
+      - 老龄科学研究(中国老龄科学研究中心)
+      - 21jingji.com(养老产业专题)
+    notes: |
+      养老是政策驱动型行业;民政部养老机构等级评定(5A-1A)是准入核心;长护险试点城市清单每年更新。
+      区域差异大,几乎必须按 region 收窄(省级民政厅 / 市级医保局)。
+
+  # === 教培 / 教育 ===
+  - industry: [教培, 教育, K12, 高等教育, 职业培训, 培训, 双减]
+    priority_sources:
+      - moe.gov.cn             # 教育部
+      - gov.cn                 # "双减"政策原文
+      - 各省教育厅(办学许可 / 学科类 / 校外培训白名单)
+      - 巨潮资讯网(招股书·教培板块)
+      - 中国民办教育协会
+    supplementary_sources:
+      - 多知网(教培垂直媒体)
+      - 21jingji.com
+    notes: |
+      "双减"后行业剧烈洗牌,政策风险高于商业风险;学科类校外培训许可名单按 region 收窄;
+      教育部年度教育事业统计数据是基础。
+
+  # === 文旅 / 酒店 / 旅游 ===
+  - industry: [文旅, 酒店, 旅游, 民宿, 景区, 旅行社]
+    priority_sources:
+      - mct.gov.cn             # 文化和旅游部
+      - stats.gov.cn           # 国家统计局(旅游消费数据)
+      - 各省文旅厅
+      - 中国旅游协会
+      - 巨潮资讯网(招股书·酒店文旅)
+    supplementary_sources:
+      - 环球旅讯(TravelDaily)
+      - 执惠(文旅垂直媒体)
+    notes: |
+      文旅行业政策密度中等,但节假日舆情风险高;OTA 平台数据(携程/美团)反映客流但合规参考有限。
+
+  # === 跨境电商 / 出海 ===
+  - industry: [跨境电商, 出海, 跨境贸易, 跨境物流, 跨境支付, 出海企业]
+    priority_sources:
+      - customs.gov.cn         # 海关总署(跨境电商监管代码 / 9610/9710/9810)
+      - mofcom.gov.cn          # 商务部(跨境电商综试区 / 海外仓)
+      - safe.gov.cn            # 国家外汇管理局(跨境收支)
+      - 中国跨境电商综合试验区(各综试区政策)
+      - 各综试区商务局
+      - 巨潮资讯网(招股书·跨境物流支付)
+    supplementary_sources:
+      - 亿邦动力(电商垂直)
+      - 雨果跨境(出海垂直)
+    notes: |
+      跨境是政策强相关行业,海关监管代码(9610 跨境电商 B2C / 9710 B2B 直接出口 / 9810 海外仓)是核心分类;
+      各综试区政策差异大,几乎必须按 region 收窄。
+
+  # === 直播电商 / 内容电商 ===
+  - industry: [直播电商, 内容电商, MCN, 短视频, 直播, 带货]
+    priority_sources:
+      - cac.gov.cn             # 网信办(网络主播行为规范)
+      - samr.gov.cn            # 市场监管总局(反不正当竞争 / 价格法)
+      - cycs.cn                # 中央网信办违法和不良信息举报中心
+      - 各直播平台社区规则(抖音/快手/小红书)
+      - 中国广告协会
+    supplementary_sources:
+      - 直播电商行业研究(艾瑞 / 易观)
+      - 网经社(电商行业垂直)
+    notes: |
+      直播电商监管近 2 年密集出台;平台规则(MCN 入驻 / 直播带货合规)是日常运营层面;
+      头部主播翻车舆情风险高,建议列舆情源(每日舆情周报类公众号)。
+
+  # === 物流 / 快递 / 仓储 ===
+  - industry: [物流, 快递, 仓储, 货运, 智慧物流, 供应链]
+    priority_sources:
+      - mot.gov.cn             # 交通运输部(道路运输许可)
+      - samr.gov.cn            # 市场监管总局(快递业务经营许可)
+      - ndrc.gov.cn            # 发改委(物流降本增效)
+      - caac.gov.cn            # 民航局(航空货运)
+      - 中国物流与采购联合会
+      - 巨潮资讯网(招股书·物流板块)
+    supplementary_sources:
+      - 罗戈网(物流垂直媒体)
+      - 物流指闻
+    notes: |
+      物流行业准入是道路运输许可 + 快递业务许可;物流降本增效政策(发改委)驱动行业;
+      头部企业(顺丰/京东物流/中通/极兔)招股书含详细成本结构。
+
+  # === 农业 / 食品(养殖 / 种植 / 农资)===
+  - industry: [农业, 种植, 养殖, 农资, 乡村振兴, 农业合作社]
+    priority_sources:
+      - moa.gov.cn             # 农业农村部
+      - mwr.gov.cn             # 水利部
+      - stats.gov.cn           # 国家统计局(农产品价格 / 产量)
+      - 各省农业农村厅
+      - 中国农业产业化龙头企业协会
+      - 中国种子协会 / 中国畜牧业协会
+    supplementary_sources:
+      - 一亩田 / 惠农网(行业垂直)
+      - 农民日报
+    notes: |
+      农业区域差异极大,几乎必须按 region 收窄到省级农业农村厅;
+      涉农补贴 / 土地确权 / 集体经营性建设用地入市是合规热点。
+
+  # === 金融科技 / 互联网金融 ===
+  - industry: [金融科技, 互联网金融, 支付, 小贷, 消费金融, FinTech]
+    priority_sources:
+      - pbc.gov.cn             # 中国人民银行(支付牌照 / 征信)
+      - cbirc.gov.cn           # 国家金融监督管理总局
+      - csrc.gov.cn            # 证监会(私募 / 资管)
+      - cac.gov.cn             # 网信办(数据合规)
+      - 中国互联网金融协会
+      - 巨潮资讯网(招股书·金融科技)
+    supplementary_sources:
+      - 零壹财经(FinTech 垂直)
+      - 支付圈
+    notes: |
+      金融监管"一行三会"格局,近年人民银行 + 国家金融监督管理总局为主;
+      支付牌照 / 小贷牌照 / 征信牌照是准入核心;数据合规与金融合规交叉。
+
+  # === 知识产权服务 / 知产代理 ===
+  - industry: [知识产权服务, 专利代理, 知产代理, 商标代理]
+    priority_sources:
+      - cnipa.gov.cn           # 国家知识产权局(专利 / 商标 / 地理标志)
+      - cnipa.gov.cn/col/col1907  # 专利代理师资格考试 / 机构名单
+      - 中华全国专利代理师协会
+      - 巨潮资讯网(知产板块)
+      - 知产宝 / 知产力(行业垂直)
+    supplementary_sources:
+      - IPR Daily
+      - iprhouse.cn
+    notes: |
+      知产服务行业核心准入是专利代理机构注册证 + 专利代理师资格证;近年政策变化(开放代理资质);
+      行业体量小,但客户(科技企业)是高频对接对象。
