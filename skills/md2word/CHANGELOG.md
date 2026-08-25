@@ -2,6 +2,21 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.2] - 2026-08-26
+
+### 修复
+- **多段引用灰底不再出现白缝（DEC-019）**：内部空引用行不再写成上一内容段的 `space_after`，改为同底色空白 callout paragraph。该 spacer 段前/段后为 0、行高读取 `quote.paragraph_spacing`（默认 6pt exact），只带左右同色 padding border，不重复 top/bottom padding；普通内容段内部间距保持 0，整个框只在首/末段保留块外 6pt。
+- **连续空行确定性归一**：连续多个内部 `>` 空行折叠为一个 shaded spacer；首尾空引用行忽略，由首尾 padding 提供留白。脚注、粗体、列表 marker 和引用不生成 `w:tbl` 的规则保持。
+- **引用灰统一为 confirmed token**：全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 统一为 `#EDF2F7`，同色不可见 paragraph border 同步，避免引用框与本书 confirmed 状态出现两级浅灰。
+
+### 文档完善
+- 更新 `SKILL.md`、配置参考、样式映射和使用说明，明确 shaded exact spacer 的 OOXML 语义与连续空行折叠规则；Task-010 补记已合并 PR #97 / merge `2c3ff091`。
+
+### 验证
+- 完整回归 22/22、`py_compile` 与 7/7 YAML 解析通过。fixture 端到端断言连续空引用行折叠为 1 个 shaded spacer，多段案例为 3 个内容段 + 2 个 `EDF2F7` exact spacer；整个 quote body 每段均有同色 shading/border，内容段内部间距为 0，spacer 只有左右 border，脚注/粗体/列表保持且不产生引用表格。
+- 真实 ch12 得到 10 张数据表 + 10 个既有表后 spacer、6 个 quote 段（导读内容 1 + 案例内容 3 + 案例灰底 spacer 2）、11 组图片/图注和 1 个导读脚注；全部 quote shading/border 为 `EDF2F7`，图注既有 `3pt/8pt + 1.2` 节奏不变。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `80216357de8e5c4b4b6f7f5c0cb908aad658fa71afa40b5566ed9a4c51aa8527`。用户明确自行核实桌面示例视觉，本轮不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
 ## [1.3.1] - 2026-08-26
 
 ### 修复

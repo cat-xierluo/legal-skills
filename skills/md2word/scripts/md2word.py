@@ -282,7 +282,7 @@ def _apply_quote_paragraph_container(
     the fill. Unlike a borderless one-cell table, this representation cannot
     expose dotted table gridlines when Word's ``View Gridlines`` is enabled.
     """
-    background = (quote_config.get('background_color') or '#F5F5F5').lstrip('#')
+    background = (quote_config.get('background_color') or '#EDF2F7').lstrip('#')
     padding = _quote_padding_pt(quote_config)
     p_pr = paragraph._p.get_or_add_pPr()
 
@@ -328,18 +328,23 @@ def add_quote(doc, text):
     lines = text.split('\n')
 
     paragraphs = []
-    paragraph_gap_after = set()
-    pending_gap = False
+    spacer_indexes = set()
+    pending_spacer = False
 
     for line in lines:
         if not line.strip():
-            pending_gap = bool(paragraphs)
+            # 连续内部空引用行确定性折叠为一个灰底 spacer；首尾空行忽略，
+            # 因为整个 callout 已由 padding 提供上下留白。
+            pending_spacer = bool(paragraphs)
             continue
 
+        if pending_spacer and paragraphs:
+            spacer = doc.add_paragraph()
+            spacer_indexes.add(len(paragraphs))
+            paragraphs.append(spacer)
+        pending_spacer = False
+
         p = doc.add_paragraph()
-        if pending_gap and paragraphs:
-            paragraph_gap_after.add(len(paragraphs) - 1)
-        pending_gap = False
 
         bullet_match = re.match(r'^\s*([-*+])\s+', line)
         number_match = re.match(r'^\s*(\d+\.)\s+', line)
@@ -369,8 +374,8 @@ def add_quote(doc, text):
             )
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
-            if index in paragraph_gap_after:
-                paragraph.paragraph_format.space_after = Pt(
+            if index in spacer_indexes:
+                paragraph.paragraph_format.line_spacing = Pt(
                     quote_config.get('paragraph_spacing', 6)
                 )
         paragraphs[0].paragraph_format.space_before = Pt(

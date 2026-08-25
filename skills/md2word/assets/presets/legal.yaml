@@ -137,7 +137,7 @@ inline_code:
 
 # 引用块设置（正文全宽的段落灰底，导读/案例共用；不使用表格容器）
 quote:
-  background_color: "#F5F5F5"
+  background_color: "#EDF2F7"
   padding:                         # 文字到灰底边缘的留白（pt）
     top: 5
     bottom: 5
