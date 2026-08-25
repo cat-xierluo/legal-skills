@@ -250,6 +250,16 @@ def get_fallback_config() -> Config:
                 'no_proofread': True,
             },
         },
+        'example_block': {
+            'background_color': '#F2F2F2',
+            'line_spacing': 1.5,
+            'cell_margin': {
+                'top': 100,
+                'bottom': 100,
+                'left': 140,
+                'right': 140,
+            },
+        },
         'inline_code': {
             'font': 'Consolas',
             'east_asia_font': '等线',

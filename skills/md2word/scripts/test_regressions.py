@@ -29,6 +29,59 @@ import md2word  # noqa: E402
 
 
 class Md2WordRegressionTest(unittest.TestCase):
+    def test_example_fence_uses_body_rhythm_and_real_cell_padding_without_changing_text_code(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "example-fence.md"
+            output = temp_dir / "example-fence.docx"
+            markdown.write_text(
+                "# 示例框回归\n\n"
+                "```example\n"
+                "这是一段自然语言输出，其中 **重点判断** 仍保留行内格式。\n"
+                "```\n\n"
+                "```text\n"
+                "plain_text\n"
+                "```\n",
+                encoding="utf-8",
+            )
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            self.assertEqual(len(document.tables), 1)
+            example_cell = document.tables[0].cell(0, 0)
+            example_paragraph = example_cell.paragraphs[0]
+            self.assertEqual(
+                example_paragraph.text,
+                "这是一段自然语言输出，其中 重点判断 仍保留行内格式。",
+            )
+            self.assertEqual(example_paragraph.paragraph_format.first_line_indent.pt, 0)
+            self.assertEqual(example_paragraph.paragraph_format.left_indent.pt, 0)
+            self.assertEqual(example_paragraph.paragraph_format.line_spacing, 1.5)
+            self.assertEqual(example_paragraph.runs[0].font.size.pt, 12)
+            self.assertTrue(any(run.bold for run in example_paragraph.runs))
+
+            tc_pr = example_cell._tc.tcPr
+            shading = tc_pr.find(qn("w:shd"))
+            self.assertIsNotNone(shading)
+            self.assertEqual(shading.get(qn("w:fill")), "F2F2F2")
+            margins = tc_pr.find(qn("w:tcMar"))
+            self.assertIsNotNone(margins)
+            self.assertEqual(margins.find(qn("w:top")).get(qn("w:w")), "100")
+            self.assertEqual(margins.find(qn("w:bottom")).get(qn("w:w")), "100")
+            self.assertEqual(margins.find(qn("w:left")).get(qn("w:w")), "140")
+            self.assertEqual(margins.find(qn("w:right")).get(qn("w:w")), "140")
+
+            code_paragraph = next(
+                paragraph for paragraph in document.paragraphs
+                if paragraph.text == "plain_text"
+            )
+            self.assertEqual(code_paragraph.paragraph_format.line_spacing, 1.2)
+            self.assertEqual(code_paragraph.runs[0].font.size.pt, 9)
+            code_fonts = code_paragraph.runs[0]._element.rPr.rFonts
+            self.assertEqual(code_fonts.get(qn("w:ascii")), "Courier New")
+
     def test_six_long_header_columns_fit_usable_page_width(self):
         config = md2word.get_preset("book-publish")
         min_needed_cm = [2.76, 2.76, 2.76, 2.76, 3.40, 3.40]
