@@ -47,7 +47,7 @@ SKILL_DIR = Path(__file__).parent.parent  # 字符串级路径（不 resolve）�
 DASHBOARD_HTML = SKILL_DIR / "assets" / "dashboard.html"
 DEFAULT_PORT = 7879
 DEFAULT_HOST = "127.0.0.1"
-CASE_DIR_RE = re.compile(r"^(\d{6})\s")  # 案件目录：以 6 位数字开头
+CASE_DIR_RE = re.compile(r"^(\d{6}(?:-[A-Za-z0-9]+)?)\s")  # 案件目录：6 位日期短码 + 可选 -后缀（同日多案/一案拆分）
 ROOT = None        # 项目根：main() 经 find_root 解析（--root > SUITAGENT_ROOT > cwd 向上发现）
 CASE_STORE = None  # case-progress 写入引擎：main() 经 find_case_store 解析
 
@@ -299,7 +299,7 @@ def load_case(case_dir):
         adapt_yaml_v4(data, case)
         case["yaml_path"] = str(yaml_path)
     if case["display_name"] == case["dir_name"]:
-        case["display_name"] = re.sub(r"^\d{6}\s*", "", case["dir_name"])
+        case["display_name"] = re.sub(r"^\d{6}(?:-[A-Za-z0-9]+)?\s*", "", case["dir_name"])
     case["display_short"] = short_name(case["display_name"])
     return case
 
