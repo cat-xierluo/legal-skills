@@ -216,3 +216,13 @@ pack-skills/
 
 # Agent 本地记忆（项目内部，不入库）
 memory/
+
+# 本地设计稿（不入仓；遵循全局约定 docs/plans 不入仓）
+docs/plans/
+
+# myagents-anydoc / officecli (symlink to ~/.myagents/skills/...)
+skills/myagents-anydoc
+skills/officecli
+
+# legal-visualization export 报告（runtime 输出，含绝对路径，本地缓存）
+skills/legal-visualization/export-report.json
