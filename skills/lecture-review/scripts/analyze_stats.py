@@ -30,6 +30,9 @@ SPEAKER_RE = re.compile(
 SLIDE_RE = re.compile(r"^!\[.*?\]\(.*?\)\s*$")
 SLIDE_TS_RE = re.compile(r"^>\s*\*?(\d{1,3}:\d{2}(?::\d{2})?)\*?\s*$")
 
+# deck 页正文摘录长度上限（够 agent 判内容覆盖度；完整正文让 agent 直接 Read HTML）
+DECK_TEXT_CAP = 600
+
 
 def ts_to_sec(t):
     parts = [int(p) for p in t.split(":")]
@@ -120,12 +123,81 @@ def split_sentences(text):
     return [s for s in re.split(r"[。！？；!?;\n]+", text) if s.strip()]
 
 
+def parse_deck(path):
+    """解析定稿课件 HTML 的 section.slide 页表（机械提取，不做语义判断）。
+
+    返回 {"count": N, "pages": [{idx, label, title, text}]}——text 为页面可见正文的
+    压缩摘录（每页截断 DECK_TEXT_CAP 字符），供 agent 做"讲到哪一页、讲到什么程度"
+    的内容匹配与覆盖度判断；需要完整正文时 agent 直接 Read 对应 HTML section。
+    识别不到 section.slide 时返回 {"count": 0, "parse": "failed"}——降级见 metrics.md。
+    """
+    try:
+        html_src = open(path, encoding="utf-8").read()
+    except OSError as e:
+        return {"count": 0, "parse": "failed", "error": str(e)}
+    secs = re.split(r"<section[^>]*class=\"slide", html_src)[1:]
+    pages = []
+    for i, s in enumerate(secs, 1):
+        s = re.sub(r"^[^>]*>", "", s, count=1)  # 去掉 section 开标签属性尾巴
+        label_m = re.search(r"<div class=\"chrome\"><span>([^<]*)</span>", s)
+        h = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r"<h2[^>]*>(.*?)</h2>", s, re.S)
+        title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", h.group(1))).strip() if h else ""
+        body = re.sub(r"<canvas[^>]*>.*?</canvas>|<style.*?</style>|<!--.*?-->|<script.*?</script>", " ", s, flags=re.S)
+        body = re.sub(r"<[^>]+>", " ", body)
+        body = re.sub(r"\s+", " ", body).strip()
+        pages.append({"idx": i, "label": label_m.group(1) if label_m else "",
+                      "title": title, "text": body[:DECK_TEXT_CAP]})
+    return {"count": len(pages), "pages": pages} if pages else {"count": 0, "parse": "failed"}
+
+
+def bigrams(s):
+    return {s[i:i + 2] for i in range(len(s) - 1)} if len(s) > 1 else {s}
+
+
+def deck_self_check(pages):
+    """课件自检（机械启发式，只出候选不做定性——验证归 agent 通读）：
+
+    - module_distribution：按 chrome label 前缀（首个「·」前）分组的页数分布
+    - near_dup_pages：页正文 char-bigram Jaccard ≥ 0.25 的页对（近重复/同主题双视图页候选，
+      按 Jaccard 降序；目录页与各模块 hero 的天然重叠属良性误报，agent 过滤）
+    - title_term_index：标题与 label 里的词 → 页号索引（供 agent 查"同一概念挂在几页"）
+    """
+    dist = Counter()
+    for p in pages:
+        key = p["label"].split("·")[0].strip() or "(无label)"
+        dist[key] += 1
+    near_dups = []
+    for i in range(len(pages)):
+        for j in range(i + 1, len(pages)):
+            a, b = bigrams(pages[i]["text"]), bigrams(pages[j]["text"])
+            if not a or not b:
+                continue
+            jac = len(a & b) / len(a | b)
+            if jac >= 0.25:
+                near_dups.append({"pages": [pages[i]["idx"], pages[j]["idx"]], "jaccard": round(jac, 2)})
+    near_dups.sort(key=lambda x: -x["jaccard"])
+    term_idx = {}
+    for p in pages:
+        for t in re.split(r"[，,。.·|｜/：:！!？?\s、（）()—\-—]+", f"{p['label']} {p['title']}"):
+            t = t.strip()
+            if len(t) >= 2 and not t.isdigit():
+                term_idx.setdefault(t, [])
+                if p["idx"] not in term_idx[t]:
+                    term_idx[t].append(p["idx"])
+    return {
+        "module_distribution": dict(dist),
+        "near_dup_pages": near_dups,
+        "title_term_index": {k: v for k, v in term_idx.items() if len(v) > 1 or len(k) >= 4},
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("file")
     ap.add_argument("--speaker", help="指定主讲（发言人编号或姓名）；缺省取字数最多者")
     ap.add_argument("--markers", help="marker_words.yaml 路径")
     ap.add_argument("--count", help="临时词按需计数（逗号分隔）——agent 通读发现新模式后拿来量化验证")
+    ap.add_argument("--deck", help="定稿课件 HTML 路径——提取 section.slide 页表（页数与标题），供课件对照")
     ap.add_argument("--out", help="JSON 输出路径；缺省打印 stdout")
     args = ap.parse_args()
 
@@ -243,6 +315,10 @@ def main():
             if re.search(r"(一会儿|待会儿|等一下|稍后|后面|待会儿|接下来).{0,12}(会|再|给大家|给大伙)", s) and re.search(r"(讲|演示|展示|说|看|发|分享|介绍)", s):
                 promises.append({"head": s.strip()[:60], "ts": b["ts"]})
 
+    deck_result = parse_deck(args.deck) if args.deck else None
+    if deck_result and deck_result.get("count"):
+        deck_result["self_check"] = deck_self_check(deck_result["pages"])
+
     result = {
         "file": args.file, "selected_speaker": target, "has_timestamps": has_ts,
         "duration_sec": total_sec, "my_chars": my_chars, "my_blocks": len(mine),
@@ -255,6 +331,7 @@ def main():
         "confirm_markers_total": confirm_total,
         "audience_address": dict(aud), "promise_candidates": promises[:30],
         "slides_ts": slides,
+        "deck": deck_result,
     }
     out = json.dumps(result, ensure_ascii=False, indent=1)
     if args.out:
