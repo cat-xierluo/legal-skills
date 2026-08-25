@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.7.0] - 2026-08-25
+
+### 新增
+
+- `pm-orchestrate reauthorize` 子命令（Task-058）：spawn 授权快照的运行时刷新一条命令化——合并 `--allow-cmd` 进授权文件、重写 `launch.sh` 内联 B64（guard 读进程环境快照，直接改授权文件对运行中 worker 无效）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 终端/Dispatch 路由、可选发送 `--resume-text` 续接说明、关闭旧终端。未提交的工作区改动全部保留。badminton-lab Wave 2 事故的 7 步手工抢救链路固化。
+- `spawn-worker.sh --python-runtime-symlink PATH`（Task-061）：Python 项目 PM 显式授权共享主仓 `.runtime`（venv/models）。fail-closed：worktree 已有 `.runtime` 保留、源解释器缺失或为 0 字节占位拒绝启动、软链失败退出非零。`clean-worktree.sh` 删除 worktree 前安全 unlink 该软链（防 untracked 软链让 `git worktree remove` 视为脏）。
+- `orca-supervised-register.sh --reset-failed`（Task-060）：`worker-start` 被 `task_not_startable` 拒绝时复位 Task 到 ready 重试一次；不带旗标保持 fail-closed。
+
+### 改进
+
+- `inject_default_verify_commands` 增加 Makefile 兜底（Task-057）：npm scripts 零注入时解析 Makefile `^target:` 目标，白名单动词 `test / test-* / check / ci / lint` 注入 `make <target>`；`.PHONY`/变量赋值/文件目标不匹配，npm-first 双清单项目不双注入。根因：Make 驱动的 Python 项目（无 package.json）此前零注入，worker 全部 make 门禁被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截。
+- `orca-wave-prepare.sh` fail-closed 拒绝 spec 内含斜杠的 branch 名（Task-059）：Orca worktree `--name` 与 `safe_branch` 会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked（Wave 1 三 worker 同时跑偏）；路径引用（如 `docs/plans`）不误报。
+- `pm-orchestrate read` 接受 `--limit` 作为 `--lines` 别名（与 `orca terminal read` 参数名对齐）。
+- SKILL.md：§3.2 记录 Makefile 兜底与 python-runtime-symlink；§4.4 增加『spec 分支名一律连字符』『共享文档编号预分配（DEC/CHANGELOG 槽位）』与 `--reset-failed`；§4.5 增加 reauthorize 用法块；§6 明确 supervised 模式 STATUS 是辅助观察信号（完成权威是 Delivery，spec 不应要求周期性 STATUS 更新）。
+
+### 验证
+
+- `test-spawn-worker-deps.sh` 13/13 PASS（新增 Case 8-13：Makefile-only/混合/npm-first 三态 + 运行时软链有效/假解释器拒绝/已有保留）。
+- 全部改动脚本 `bash -n` 通过；`lint-wait-script.sh` 通过；斜杠 spec 拒绝三态实测（拒绝/放行/路径不误报）。
+
+
 ## [2.6.3] - 2026-08-14
 
 ### 改进

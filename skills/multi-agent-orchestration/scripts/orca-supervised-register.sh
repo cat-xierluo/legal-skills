@@ -18,6 +18,7 @@ TASK_ID=""
 RUN_ID=""
 OBJECTIVE=""
 TIMEOUT_MS=60000
+RESET_FAILED=0
 COORDINATOR_HANDLE=""
 
 usage() {
@@ -38,6 +39,10 @@ Optional:
                            required with --task-id to avoid concurrent run-use rebinding
   --objective TEXT         Objective for a newly created Run
   --timeout-ms N           worker-start readiness timeout (default: 60000)
+  --reset-failed           When worker-start is rejected with task_not_startable
+                           (Task flipped to failed/blocked by a prior worker's ask
+                           or abort), reset that Task to ready once and retry
+                           registration (Task-060; badminton-lab Wave 2 lesson)
 
 Stdout contains only shell-safe KEY=VALUE receipts.
 USAGE
@@ -54,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --coordinator-handle) COORDINATOR_HANDLE="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
+    --reset-failed) RESET_FAILED=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
@@ -101,17 +107,37 @@ else
   echo "ORCAREG_TASK_REUSED: $TASK_ID" >&2
 fi
 
-start_out=$(orca_cli orchestration worker-start \
-  --task "$TASK_ID" \
-  --terminal "$TERMINAL_HANDLE" \
-  --worktree "id:$WORKTREE_ID" \
-  --run "$RUN_ID" \
-  --from "$COORDINATOR_HANDLE" \
-  --timeout-ms "$TIMEOUT_MS" \
-  --json 2>&1) || {
+worker_start_once() {
+  orca_cli orchestration worker-start \
+    --task "$TASK_ID" \
+    --terminal "$TERMINAL_HANDLE" \
+    --worktree "id:$WORKTREE_ID" \
+    --run "$RUN_ID" \
+    --from "$COORDINATOR_HANDLE" \
+    --timeout-ms "$TIMEOUT_MS" \
+    --json 2>&1
+}
+
+if ! start_out=$(worker_start_once); then
+  # Task-060：前任 worker 的 ask/中止会把 Task 翻成 failed，重注册被
+  # task_not_startable 拦截（badminton-lab Wave 2 实测）。--reset-failed 时
+  # 复位 ready 重试一次；未带旗标保持 fail-closed。
+  if [ "$RESET_FAILED" -eq 1 ] && printf '%s' "$start_out" | grep -q "task_not_startable"; then
+    echo "ORCAREG_TASK_RESET: task $TASK_ID not startable; resetting to ready and retrying once" >&2
+    orca_cli orchestration task-update --id "$TASK_ID" --status ready \
+      --run "$RUN_ID" --from "$COORDINATOR_HANDLE" >/dev/null || {
+        echo "ERROR: --reset-failed task-update failed for $TASK_ID" >&2
+        exit 1
+      }
+    start_out=$(worker_start_once) || {
+      echo "ERROR: worker-start failed after --reset-failed retry: $start_out" >&2
+      exit 1
+    }
+  else
     echo "ERROR: worker-start failed; inspect this exact receipt and residualResources before retrying: $start_out" >&2
     exit 1
-  }
+  fi
+fi
 
 # Prefer the mutation receipt. dispatch-show is a read-only exact recovery if a
 # runtime version omits the dispatch id from worker-start's response.

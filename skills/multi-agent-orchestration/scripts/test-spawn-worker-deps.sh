@@ -92,6 +92,104 @@ else
   bad "concurrent dependency compensation was incomplete"
 fi
 
+echo "Case 8: Makefile-only project gets whitelisted make targets (Wave 2 regression)"
+PROJECT_DIR="$TMP_ROOT/make-project"
+mkdir -p "$PROJECT_DIR"
+cat > "$PROJECT_DIR/Makefile" <<'MK'
+PROJECT_DIR := .
+RUNTIME_DIR := .runtime
+.PHONY: start bootstrap test test-compat test-fixture-browser security-scan validate-skill ci
+start:
+	python -m badminton_lab serve
+test: test-compat
+test-compat:
+	python tests/run.py
+test-fixture-browser:
+	bash tests/ci/run_fixture.sh
+build/app.js:
+	echo fake
+security-scan:
+	python tests/ci/security_scan.py
+ci: test validate-skill security-scan
+MK
+VERIFY_COMMANDS=()
+inject_default_verify_commands >/dev/null
+expected_make=("make ci" "make test" "make test-compat" "make test-fixture-browser")
+if [ "${VERIFY_COMMANDS[*]}" = "${expected_make[*]}" ]; then
+  ok "Makefile targets injected in sorted order, non-whitelisted excluded"
+else
+  bad "unexpected Makefile defaults: ${VERIFY_COMMANDS[*]}"
+fi
+
+echo "Case 9: Makefile fallback kicks in when package.json declares no verify scripts"
+PROJECT_DIR="$TMP_ROOT/mixed-project"
+mkdir -p "$PROJECT_DIR"
+printf '{"scripts": {"dev": "vite"}}\n' > "$PROJECT_DIR/package.json"
+printf '.PHONY: test lint\ntest:\n\ttrue\nlint:\n\ttrue\n' > "$PROJECT_DIR/Makefile"
+VERIFY_COMMANDS=()
+inject_default_verify_commands >/dev/null
+expected_mixed=("make lint" "make test")
+if [ "${VERIFY_COMMANDS[*]}" = "${expected_mixed[*]}" ]; then
+  ok "Makefile fallback used when npm scripts yield nothing"
+else
+  bad "unexpected mixed defaults: ${VERIFY_COMMANDS[*]}"
+fi
+
+echo "Case 10: npm-first project with Makefile present does not double-inject"
+PROJECT_DIR="$TMP_ROOT/npm-project"
+mkdir -p "$PROJECT_DIR"
+printf '{"scripts": {"test": "vitest run", "lint": "eslint ."}}\n' > "$PROJECT_DIR/package.json"
+printf '.PHONY: test ci\ntest:\n\tnpm test\nci:\n\tnpm test\n' > "$PROJECT_DIR/Makefile"
+VERIFY_COMMANDS=()
+inject_default_verify_commands >/dev/null
+expected_npm=("npm run lint" "npm run test")
+if [ "${VERIFY_COMMANDS[*]}" = "${expected_npm[*]}" ]; then
+  ok "npm scripts stay primary when both manifests exist"
+else
+  bad "unexpected npm-first defaults: ${VERIFY_COMMANDS[*]}"
+fi
+
+echo "Case 11: --python-runtime-symlink links a validated runtime (Task-061)"
+PROJECT_DIR="$TMP_ROOT/py-project"
+mkdir -p "$PROJECT_DIR"
+printf 'print("ok")\n' > "$PROJECT_DIR/app.py"
+printf 'requests>=2.0\n' > "$PROJECT_DIR/requirements.txt"
+mkdir -p "$TMP_ROOT/shared-runtime/venv/bin"
+printf '#!/bin/sh\n' > "$TMP_ROOT/shared-runtime/venv/bin/python"
+chmod +x "$TMP_ROOT/shared-runtime/venv/bin/python"
+WORKTREE="$TMP_ROOT/py-worktree"
+mkdir -p "$WORKTREE"
+PYTHON_RUNTIME_SYMLINK="$TMP_ROOT/shared-runtime"
+ensure_worktree_deps >/dev/null
+if [ -L "$WORKTREE/.runtime" ] && [ "$(readlink "$WORKTREE/.runtime")" = "$TMP_ROOT/shared-runtime" ]; then
+  ok "runtime symlink created after interpreter validation"
+else
+  bad "runtime symlink missing or mispointed"
+fi
+
+echo "Case 12: 0-byte placeholder interpreter refuses spawn (Wave 1 fake-venv lesson)"
+WORKTREE="$TMP_ROOT/py-worktree-bad"
+mkdir -p "$WORKTREE"
+mkdir -p "$TMP_ROOT/bad-runtime/venv/bin"
+: > "$TMP_ROOT/bad-runtime/venv/bin/python"
+PYTHON_RUNTIME_SYMLINK="$TMP_ROOT/bad-runtime"
+if ensure_worktree_deps >/dev/null 2>&1; then
+  bad "0-byte placeholder interpreter was accepted"
+else
+  ok "0-byte placeholder interpreter blocks spawn"
+fi
+
+echo "Case 13: existing worktree .runtime is never touched"
+WORKTREE="$TMP_ROOT/py-worktree-exists"
+mkdir -p "$WORKTREE/.runtime/models"
+PYTHON_RUNTIME_SYMLINK="$TMP_ROOT/shared-runtime"
+ensure_worktree_deps >/dev/null
+if [ -d "$WORKTREE/.runtime" ] && [ ! -L "$WORKTREE/.runtime" ]; then
+  ok "existing .runtime directory preserved"
+else
+  bad "existing .runtime was replaced"
+fi
+
 echo ""
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]
