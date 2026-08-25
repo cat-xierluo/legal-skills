@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cat-xierluo/legal-skills/course-generator/course-manifest.schema.json",
+  "title": "Course Generator Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generator_version",
+    "course",
+    "sources",
+    "overview",
+    "chapters",
+    "materials",
+    "images"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generator_version": {"type": "string", "minLength": 1},
+    "course": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "training_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "organizer": {"type": "string", "minLength": 1}
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"},
+          "path": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "image_ids"],
+      "properties": {
+        "file": {"type": "string", "pattern": "^00[ _-].+\\.md$"},
+        "image_ids": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^IMG-[0-9]{3,}$"}
+        }
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "file", "title", "source_refs", "material_ids", "image_ids"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
+          "file": {"type": "string", "pattern": "^[0-9]{2}[ _-].+\\.md$"},
+          "title": {"type": "string", "minLength": 1},
+          "source_refs": {"$ref": "#/$defs/source_refs"},
+          "material_ids": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^MAT-[0-9]{3,}$"}
+          },
+          "image_ids": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^IMG-[0-9]{3,}$"}
+          }
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "summary", "source_refs", "disposition", "target_chapter_id"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^MAT-[0-9]{3,}$"},
+          "type": {
+            "enum": ["案例", "操作", "观点", "金句", "踩坑", "取舍", "疑问", "其他"]
+          },
+          "summary": {"type": "string", "minLength": 1},
+          "source_refs": {"$ref": "#/$defs/source_refs"},
+          "disposition": {"enum": ["include", "skip"]},
+          "target_chapter_id": {
+            "oneOf": [
+              {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
+              {"type": "null"}
+            ]
+          },
+          "skip_reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "source_ref",
+          "original_markdown",
+          "body_action",
+          "target_document_id"
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "^IMG-[0-9]{3,}$"},
+          "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}(#.+)?$"},
+          "original_markdown": {"type": "string", "minLength": 4},
+          "body_action": {"enum": ["insert", "asset_only", "skip"]},
+          "target_document_id": {
+            "oneOf": [
+              {"const": "OVERVIEW"},
+              {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
+              {"type": "null"}
+            ]
+          },
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "audit_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outline": {"type": "string", "minLength": 1},
+        "image_assets": {"type": "string", "minLength": 1},
+        "material_index": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^SRC-[0-9]{3,}(#.+)?$"}
+    }
+  }
+}
