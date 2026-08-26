@@ -11,6 +11,7 @@ md2word 使用 YAML 格式的配置文件来控制 Word 文档的格式化输出
 | `page` | 页面尺寸和页边距 |
 | `fonts` | 默认字体设置 |
 | `titles` | 标题格式（4 级） |
+| `pagination` | 标题分页规则 |
 | `paragraph` | 段落格式 |
 | `page_number` | 页码设置 |
 | `quotes` | 引号转换 |
@@ -66,6 +67,19 @@ titles:
   level3:                  # 三级标题配置
   level4:                  # 四级标题配置
 ```
+
+### 标题分页 (pagination)
+
+```yaml
+pagination:
+  page_break_before_headings:
+    - "本章小结"
+    - "动手练习"
+```
+
+列表项与 Markdown 标题去除首尾空白后的完整文字精确匹配，支持 `#` 至 `####` 标题层级；普通正文、HTML 表题、代码块和“本章小结与展望”等包含或近似文字不会触发。命中时只在标题段自身写入 Word 原生 `w:pageBreakBefore`，不插入空段、`w:br type="page"` 或新 section，因此标题本就在页首时不会多造空白页，原有字号、粗体、缩进和段前段后保持不变。
+
+`book-publish` 默认配置上述两个标题，单章与 `--book` 模式均生效；其他内置预设、fallback、配置模板和模板提取基底默认空列表。自定义配置设为空列表即可完全关闭。
 
 ### 段落格式 (paragraph)
 

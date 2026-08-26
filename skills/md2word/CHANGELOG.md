@@ -2,6 +2,20 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.4] - 2026-08-26
+
+### 新增
+- **书籍尾部模块原生分页（DEC-021）**：新增 `pagination.page_break_before_headings` 精确标题列表。`book-publish` 默认配置“本章小结”“动手练习”，单章和 `--book` 均在命中标题段自身写入 `w:pageBreakBefore`；其他预设、硬编码 fallback、配置模板和模板提取基底默认空列表。
+- **精确且隔离的匹配**：只对 Markdown `#` 至 `####` 标题去除首尾空白后完整匹配。正文、HTML 表题、代码块和“本章小结与展望”等包含或近似文字不触发；命中不插入空段、分页 run 或新 section，标题既有字号、粗体、缩进与段间距保持。
+
+### 文档完善
+- 更新 `SKILL.md`、README、配置参考和样式映射，新增 DEC-021 / Task-014，并把根 README 的 md2word 版本与最近更新摘要同步为 v1.3.4。
+
+### 验证
+- 完整回归 23/23、`py_compile`、7/7 YAML 解析与 `git diff --check` 通过。端到端 fixture 覆盖 H2“本章小结”、H2/H3“动手练习”以及正文/HTML 表题/代码块/近似标题负例；book-publish 恰好 3 个 `w:pageBreakBefore`、0 个分页 `w:br`、1 个 section、0 个额外空段，legal 与自定义空列表均为 0，H2/H3 原格式不变。
+- 全书 15 章静态扫描得到 15 个 H2“本章小结”与 12 个“动手练习”（H2 11、ch14 H3 1），共 27 个精确目标标题。真实 ch12 得到 2 个原生标题分页、0 个分页 `w:br`、1 个 section；同时保留 10 张表 + 10 个表后 spacer、6 个 quote 段（含 2 个同底色 spacer）、11 组图片/图注和 1 个脚注。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `e1121d10d206b4466d86264f5c57a679f6b8401f081f447cef0ff21f74d57be5`。按用户要求不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
 ## [1.3.3] - 2026-08-26
 
 ### 修复

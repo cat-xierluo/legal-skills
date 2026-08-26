@@ -45,6 +45,9 @@ titles:
     align: "left"
     indent: 0
 
+pagination:
+  page_break_before_headings: []
+
 # 段落设置
 paragraph:
   line_spacing: 1.5

@@ -248,6 +248,21 @@ def add_numbered_list(doc, line):
     set_paragraph_format(p)
 
 
+def _apply_heading_pagination(paragraph, heading_text, config):
+    """Apply native Word pagination to an exact Markdown heading match."""
+    configured = config.get('pagination.page_break_before_headings', [])
+    if not isinstance(configured, list):
+        return
+
+    targets = {
+        value.strip()
+        for value in configured
+        if isinstance(value, str) and value.strip()
+    }
+    if heading_text.strip() in targets:
+        paragraph.paragraph_format.page_break_before = True
+
+
 def _quote_padding_pt(quote_config):
     """Return paragraph-callout padding in points, with v1.3.0 migration.
 
@@ -1047,22 +1062,26 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=1)
             set_paragraph_format(p, title_level=1)
+            _apply_heading_pagination(p, title, config)
         elif line.startswith('## '):
             title = convert_quotes_to_chinese(line[3:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=2)
             set_paragraph_format(p, title_level=2)
+            _apply_heading_pagination(p, title, config)
             has_seen_h2 = True
         elif line.startswith('### '):
             title = convert_quotes_to_chinese(line[4:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=3)
             set_paragraph_format(p, title_level=3)
+            _apply_heading_pagination(p, title, config)
         elif line.startswith('#### '):
             title = convert_quotes_to_chinese(line[5:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=4)
             set_paragraph_format(p, title_level=4)
+            _apply_heading_pagination(p, title, config)
         else:
             if line:
                 p = doc.add_paragraph()

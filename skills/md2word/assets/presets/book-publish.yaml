@@ -60,6 +60,12 @@ titles:
     font: "仿宋"
     font_alt: "Times New Roman"
 
+# 书籍展示分页：精确匹配标题文字，在标题自身写入 Word 原生 pageBreakBefore
+pagination:
+  page_break_before_headings:
+    - "本章小结"
+    - "动手练习"
+
 # 段落设置
 paragraph:
   line_spacing: 1.5
