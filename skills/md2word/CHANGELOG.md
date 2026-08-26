@@ -2,6 +2,20 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.3] - 2026-08-26
+
+### 修复
+- **引用框与代码框背景完全同色（DEC-020）**：根据用户视觉确认后的颜色纠偏，全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 从 `#EDF2F7` 统一为 fenced code block 同款中性浅灰 `#F5F5F5`；承载 padding 的不可见同色 paragraph border 与缺省 fallback 同步。
+- **连续 callout 结构保持**：v1.3.2 的 paragraph callout、同底色 6pt exact 内部 spacer、连续空行折叠、无引用 `w:tbl`、首尾 padding/块外间距全部不变；数据表 6pt exact spacer 与图片/图注链路不变。
+
+### 文档完善
+- 更新 `SKILL.md`、README、配置参考和样式映射，明确引用框复用 `code_block.content.background_color` 的视觉 token；两项仍分别显式配置，允许高级用户独立覆盖。新增 Task-013 / DEC-020，DEC-020 仅 supersede DEC-019 的颜色选择，不回退其连续 shaded spacer 决策。
+
+### 验证
+- 完整回归 22/22、`py_compile`、7/7 YAML 解析与 `git diff --check` 通过；测试额外断言 `book-publish` / `legal` 的 quote 背景均等于各自 `code_block.content.background_color`，且值为 `#F5F5F5`。多段引用、灰底 exact spacer、脚注/粗体/列表与无引用表格断言继续通过。
+- 真实 ch12 得到 10 张数据表 + 10 个表后 spacer、6 个 quote 段（4 个内容段 + 2 个同底色 exact spacer）、11 组图片/图注和 1 个脚注；全部 quote shading/border 为 `F5F5F5`，无引用表格，图注既有 `3pt/8pt + 1.2` 节奏不变。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `75dc5691c7676602e837a6e7b7b2f87289190918184238429b8c50724b590baa`。按用户要求不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
 ## [1.3.2] - 2026-08-26
 
 ### 修复
