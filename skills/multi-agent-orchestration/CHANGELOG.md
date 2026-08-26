@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.0] - 2026-08-26
+
+### 新增
+
+- Wave Autopilot 模式（Task-062，`DEC-125`）：`references/14-wave-autopilot.md` + SKILL.md §4.6。用户显式授权后，PM 按项目任务源固定策略自动链式推进波次直到泊车。核心机制：监控**三通道并用**（Orca 推送 + recurring cron 看门狗 + Dispatch 状态轮询；完成权威是 `worker-show` 的 dispatch/worker 状态而非队列消息——实测 worker_done 推送可延迟 6.6h 不唤醒 PM）；授权与组波/泊车策略权威留在项目上下文，skill 只定义机制与不变量；验收路径不因自动化放宽（最终树门禁复跑 + safe-push + PR squash）；泊车 fail-closed、每波摘要不阻断。含验收期确定性缺陷的 fix-worker 派发模式（新分支名 + `--base-ref origin/<原分支>` 避 worktree 撞车）与 8 条实测反模式清单。来源：badminton-lab Wave 4/5（PR #21—#25）完整生命周期实战。
+
 ## [2.7.1] - 2026-08-26
 
 ### 改进
