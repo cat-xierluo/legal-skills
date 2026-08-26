@@ -1,6 +1,6 @@
 # Wave Autopilot：用户授权的波次自动推进
 
-适用：用户显式授权后，PM 在固定策略内自动执行「组波 → 派单 → 监控 → 验收 → 合并 → 写回 → 组下一波」，链式推进直到泊车条件。badminton-lab Wave 4—5（2026-08-26，PR #21—#25）为首次完整落地的两波 + 泊车实战，本参考全部内容与该实战一一对应。
+适用：用户显式授权后，PM 在固定策略内自动执行「组波 → 派单 → 监控 → 验收 → 合并 → 写回 → 组下一波」，链式推进直到泊车条件。badminton-lab Wave 4—5（2026-08-26，PR #21—#25）为首次完整落地的两波 + 泊车实战，§1—§7 与该实战一一对应；§8 是后续 Wave 6—7 持久化审计补充的能力边界。
 
 ## 1. 授权合同（先决条件）
 
@@ -29,7 +29,7 @@
 单一推送通道会丢。Autopilot 活跃期间必须同时具备三条通道：
 
 1. **Orca 推送唤醒**（主通道）：快，但**不可靠**——实测 worker_done 消息在队列里存在、对应系统唤醒从未送达，PM 停摆 6.6 小时直到用户人工戳。
-2. **recurring cron 看门狗**（强制）：session 级 recurring cron（建议 `4-59/20 * * * *` 这类避开整点/半点的间隔），每跳执行 §4 清单；泊车时 CronDelete 自删；7 天自动过期是天然兜底。session-only 即可（Autopilot 本就活在 PM 会话里，任务源是持久状态）。
+2. **recurring cron 看门狗**（强制）：session 级 recurring cron（建议 `4-59/20 * * * *` 这类避开整点/半点的间隔），每跳执行 §4 清单；泊车时删除自身。它是 live PM session 的低延迟 fast path，**不是跨会话持久性证明**；任务源保存策略/意图，不保存当前 Wave 的完整运行态。跨会话接管或无人值守要求读取 `references/15-autopilot-durability.md`。
 3. **Dispatch 状态轮询是完成权威**：`worker_done` 的 Delivery 可能不进 PM 待查队列（消息路由与 Dispatch 结算是两条路径）；`pm-orchestrate show` 的 `dispatch.status=completed` + `worker.state=succeeded/settled` 是可查证的完成事实。**队列无消息 ≠ 未完成；状态停滞 ≠ 完成**——两边都要主动查。
 
 ## 4. 看门狗每跳清单
@@ -45,7 +45,7 @@
 
 ## 5. 组波查表规则（模板；具体值落项目策略节）
 
-只派 `READY`；`DRAFT` 先派「晋级合同」任务（docs-only：合同文档 + 决策记录 + 任务源晋级写回），晋级后进后续波次实现。泳道互斥、同泳道串行（上一任务合并进 origin/main 后才派下一个）。每波 ≤N worker（默认 3），文件所有权必须正交。并行任务共写共享文档（决策记录/任务源/CHANGELOG）时**编号预分配**防撞号。review/收口发现的缺口先登记新卡再入波。实现本身被用户输入卡住的任务（需真实样本/环境/授权）不烧晋级合同，直接泊车。
+只派 `READY`；`DRAFT` 先派「晋级合同」任务：worker 只产出任务专属合同文档和结构化 writeback proposal，PM/维护者验收后串行写入决策记录和任务源，再进入后续波次实现。泳道互斥、同泳道串行（上一任务合并进 origin/main 后才派下一个）。每波 ≤N worker（默认 3），文件所有权必须正交。`TASKS/DECISIONS/AGENTS/ROADMAP` 等 shared context 默认只有一个 PM writer；DEC/Task 编号预分配只分配标识，不授权并发写共享文档。review/收口发现的缺口由 PM 登记新卡再入波。实现本身被用户输入卡住的任务（需真实样本/环境/授权）不烧晋级合同，直接泊车。
 
 ## 6. 验收期确定性缺陷的处置（实战模式）
 
@@ -66,3 +66,15 @@ PM 复跑门禁**确定性失败**（≥2 次同点，先排除 flake）→ 不�
 - 验收 diff 对着当前 origin/main 而非 fork point → stale-base 假删除（G37）。
 - 收口清理遇 "external terminal close failed" 直接跳过 → 重试 clean-worktree（terminal 状态常在首次尝试后收敛）。
 - 把 Autopilot 策略写进 skill 或 PM 记忆而非项目任务源 → 授权与策略不可审计、换会话即漂移。
+
+## 8. 当前能力边界与升级路径
+
+本文覆盖 `L1 / LIVE_SESSION_AUTOPILOT`：活跃 PM 会话内自动链式推进，session cron 补偿推送丢失。以下任一要求出现时，本文清单不够，必须进入持久控制面：
+
+- PM 会话退出/迁移后由新 PM 确定性接管；
+- 两个 PM 并发启动时防重复组波与 mutation；
+- 没有活跃聊天会话时仍由外部 scheduler 唤醒；
+- 429/额度重置后按 `retry_at` 自动 soft park/resume；
+- PR、Dispatch、worktree 与任务源漂移后自动对账写回。
+
+目标 runtime schema、PM lease/fencing、幂等 reconcile、shared-context 单写者和故障注入门禁见 `references/15-autopilot-durability.md`。Task-066 完成前必须标记 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`；Task-067 完成前必须标记 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`。不得把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。

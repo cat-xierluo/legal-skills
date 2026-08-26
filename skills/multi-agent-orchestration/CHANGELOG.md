@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.8.1] - 2026-08-26
+
+### 修复
+
+- 修正 v2.8.0 将 session recurring cron 暗示为足够持久状态的边界：cron 只属于 live PM session 的 fast path；项目任务源保存策略/意图，不保存当前 Wave owner、attempt、Dispatch/PR、retry 与 next action。没有 runtime ledger、PM lease/fencing、幂等 reconcile 和外部 scheduler 时，只能声明 `L1 / LIVE_SESSION_AUTOPILOT`。
+
+### 新增
+
+- 新增 `references/15-autopilot-durability.md`：定义 L0—L3 能力等级、Git common dir runtime schema、PM lease/fencing、幂等状态机与 reconcile、durable scheduler/soft park、shared-context 单写者、故障分类与八项恢复演练；登记 `Task-066`—`Task-068` 实施切片，并与同时登记的 live-session `Task-063`—`Task-065` 明确互补边界。
+- `SKILL.md` §4.6 与 `references/14-wave-autopilot.md` 分别增加 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`、`AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED` 边界和升级路由，防止 Agent 把单会话运行手册扩大为跨会话无人值守能力，或在 L2 已交付后继续错误声明 controller 未实现。
+
 ## [2.8.0] - 2026-08-26
 
 ### 新增
