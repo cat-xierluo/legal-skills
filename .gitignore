@@ -41,6 +41,7 @@ templates/
 **/config/*.json
 !**/config/*.example.json
 !skills/course-generator/config/course-manifest.schema.json
+!skills/course-generator/config/source-index.schema.json
 # 配置备份常含真实凭证（如 *.json.bak.<timestamp>），一律仅保留在本地
 **/config/*.bak*
 !skills/de-ai-polish/config/instruction-stability-contract.json
