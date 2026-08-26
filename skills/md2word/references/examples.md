@@ -259,6 +259,15 @@ def example():
 
 ## 高级功能
 
+### 全书合并与章节本地图片
+
+```bash
+python scripts/md2word.py --book chapters/ch01.md chapters/ch02.md \
+  -o output/book.docx --preset=book-publish
+```
+
+`--book` 会在串联各章前，以每个 Markdown 源文件自己的父目录为基准解析本地相对图片。因此，各章可继续使用 `![图](../../figures/example.png)`、含空格或 URL 编码的 Markdown 图片路径，以及 HTML `<img src="images/example.png">`，不受 `output/book.docx` 所在目录影响。HTTP/HTTPS、data URI、锚点和绝对路径不改写；单章转换仍沿用原有解析流程。
+
 ### Mermaid 图表
 
 输入：

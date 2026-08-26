@@ -2,6 +2,112 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-022] - 2026-08-26 - 全书合并前按各章源目录重定位本地图片
+
+### 背景
+`create_book()` 原先把多个章节 Markdown 原文串联到 `output.docx.merged.md`，再调用单文档转换器。原本相对章节文件有效的 `../../figures/...` 因此改为相对 DOCX 输出目录解析，整书导出出现“本地图片不存在”占位；分章转换不受影响。各章可能位于不同子目录，也可能混用 Markdown 图片和 HTML `<img src>`，不能用一个全局工作目录解决。
+
+### 决策
+1. `create_book()` 读取每个源文件后、`rename_footnote_ids()` 与串联合并前，扫描围栏代码之外的 Markdown 图片目标和 HTML `img src`；仅将本地相对路径按当前源文件父目录解析为稳定绝对目标。
+2. Markdown 目标序列化为 URL 编码的绝对路径，继续交给既有 Markdown 图片解析器；HTML `src` 序列化为 `file://` URI，继续交给既有 HTML 表格图片解析器。含空格、URL 编码、尖括号与 Markdown 可选 title 的写法均保留。
+3. 具有 URI scheme 的 HTTP/HTTPS/data/file 目标、协议相对 URL、`#` 锚点和绝对路径不改写；fenced code 内图片语法按字面量保留。该预处理只由 `--book` 调用，单章转换器不变。
+
+### 方案取舍
+- 不临时 `chdir`：不同章节拥有不同路径基准，一个进程级当前目录无法同时表达，且会引入并发与异常恢复风险。
+- 不把图片复制到输出目录：复制会制造资源生命周期、同名冲突和清理问题；预处理目标字符串足以复用现有加载器。
+- 不重写单章通用解析器：缺陷只发生在合并稿丢失源文件上下文时，收窄到 `create_book()` 避免改变既有单章行为。
+
+### 影响与回退
+- `--book` 合并稿中的本地图片目标会成为临时绝对引用，临时稿仍在转换后删除；原始 Markdown 和资源文件不修改。
+- 回退可移除 `create_book()` 的预处理调用及辅助函数；脚注重命名、章间 section、分页、图片渲染与单章路径无需改动。
+
+## [DEC-021] - 2026-08-26 - 书籍尾部模块使用标题原生分页属性
+
+### 背景
+全书 15 章均有精确标题“本章小结”，其中 12 章还有“动手练习”；这些尾部模块若承接在前一页剩余空间，书籍展示不够稳定。正文、表题和代码块也可能包含“动手练习”短语，不能按 substring 粗略分页；通用法律文书与报告也不应继承书籍专属节奏。
+
+### 决策
+1. 新增顶层 `pagination.page_break_before_headings` 字符串列表。只对 Markdown `#` 至 `####` 标题去除首尾空白后做完整文字精确匹配；不匹配普通正文、HTML 表题、代码块或近似标题。
+2. 命中时在既有标题段落自身设置 `paragraph_format.page_break_before=True`，输出 `w:pageBreakBefore`；不插入独立空段、`w:br type="page"` 或新 section，标题原有字号、粗体、缩进与段间距不变。
+3. `book-publish` 默认列表为 `["本章小结", "动手练习"]`，单章和 `--book` 均生效；其他内置预设、硬编码 fallback、配置模板与模板提取基底默认空列表。自定义空列表完全关闭。
+
+### 方案取舍
+- 不插入独立分页段或分页 run：标题已在页首时可能制造空白页，也会破坏标题与后文的关系。
+- 不新增 section：本需求只改变段落分页，不应影响页眉页脚、页码或脚注重置。
+- 不按标题层级或短语猜测：精确列表可审计，同时覆盖第十四章三级“动手练习”。
+
+### 影响与回退
+- 仅 `book-publish` 默认改变两个精确标题的分页行为；其他预设输出不变。
+- 回退可把列表置空；不需要删除段落、分页 run 或 section。
+
+## [DEC-020] - 2026-08-26 - 引用框复用代码框的中性浅灰 token
+
+### 背景
+v1.3.2 已用真实 shaded spacer 消除多段引用内部的白缝，连续整块的段落型 callout 经用户视觉确认正确；但 DEC-019 把引用框颜色绑定到第十二章图示的 `confirmed` 状态灰 `#EDF2F7`，误解了目标参照。用户要求引用框与 fenced code block（包括 `text` 围栏）使用完全相同的中性浅灰 `#F5F5F5`。
+
+### 决策
+1. 全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 统一为 `#F5F5F5`，与 `code_block.content.background_color` 的默认值完全一致；两项仍分别显式配置，保留独立覆盖能力。
+2. paragraph callout 的 `w:shd` 与承担 padding 的不可见同色 paragraph border 均读取 `quote.background_color`；缺省 fallback 同步为 `#F5F5F5`。
+3. v1.3.2 的连续 shaded exact spacer、连续内部空行折叠、首尾 padding/块外间距、无 `w:tbl` 和 v1.3.1 的数据表 6pt exact spacer 全部保持，不修改图片/图注链路。
+
+### 方案取舍
+- 不动态引用另一配置路径：显式写同值更容易审计，也允许高级用户将引用框与代码框分别定制；测试负责锁定 `book-publish` 与 `legal` 两个书籍相关预设的默认 token 一致。
+- 不修改第十二章 `confirmed` SVG：图示状态色与文档组件背景色属于不同语义，本次只纠正 md2word 引用组件。
+
+### 影响与回退
+- 本决策 supersede DEC-019 的 `#EDF2F7` 颜色选择；DEC-019 的真实 shaded spacer 与连续灰底结构继续有效。
+- 回退颜色必须同步 fallback、全部预设、模板基底、参考文档与 OOXML 断言，不能只改某一个 preset。
+
+## [DEC-019] - 2026-08-26 - 引用内空行使用同底色 exact spacer，并统一 confirmed 灰
+
+### 背景
+DEC-018 已把引用框从表格改为段落灰底，但仍把 Markdown 空引用行折算为上一内容段的 `space_after=6pt`。Word 不给段后距区域应用段落底纹，因此多段案例的标题、案情和判断之间出现白缝，看起来像数个分离灰块。第十二章权威 inline SVG 又把 `confirmed` 背景定义为 `#EDF2F7`，而引用框仍用 `#F5F5F5`，形成不必要的两级浅灰。
+
+### 决策
+1. 内部空引用行生成真正的空白 callout paragraph：与内容段相同的 `w:shd` 和左右同色 `single` padding border，段前/段后为 0，行高读取 `quote.paragraph_spacing`（默认 6pt）并写为 exact。
+2. 空白 spacer 不承担 top/bottom border 或 padding；整个 callout 仍只有首段承担上 5pt、末段承担下 5pt，普通相邻内容段的段前/段后均为 0。块外仅首段 `space_before=6pt`、末段 `space_after=6pt`。
+3. 连续多个内部空引用行确定性折叠为一个 spacer，避免源稿多写 `>` 时把呼吸区倍增；首尾空引用行忽略，由既有 top/bottom padding 承担留白。
+4. 所有内置预设、fallback、配置模板和模板提取基底的 `quote.background_color` 统一为 `#EDF2F7`；同色 paragraph borders 同步取该值。代码块与数据表等组件的既有颜色不随本决策改变。
+
+### 方案取舍
+- 不继续使用内容段 `space_after`：该区域在 Word 中不继承 shading，是白缝根因。
+- 不以空格字符撑高：字符会污染复制、检索和可访问性；空段配 exact 行高是可审计的 OOXML 结构。
+- 不把多个空引用行逐个保留：引用框内部空行只表达分段呼吸，不需要按数量倍增高度；折叠规则更稳定。
+- 不新增第二种灰：引用框直接复用本书 `confirmed` 的 `#EDF2F7`，保持视觉 token 单一。
+
+### 验证
+- fixture 覆盖连续空引用行折叠、多段案例两处灰底 spacer、单段导读、脚注、粗体和列表；端到端断言引用不产生表格，整个 callout 从首到尾每个段落均为 `EDF2F7`，内容段内部间距为 0，spacer 为 6pt exact 且只有左右同色 border。
+- 真实 ch12 结构验收、数据表 spacer 与图注不回归证据在 Task-012 / v1.3.2 CHANGELOG 中记录。
+
+### 影响与回退
+- 本决策 supersede DEC-018 中“空引用行折算为前一内容段 `space_after`”的实现；paragraph callout、无表格网格线、首尾 padding 和数据表组件留白决策继续有效。
+- 回退必须同步恢复空行表示、颜色 token、预设/模板基底和结构测试，不能只改视觉配置。
+
+## [DEC-018] - 2026-08-26 - 引用框改为段落灰底，数据表自行承载表后留白
+
+### 背景
+DEC-017 用无边框单单元格表格统一“本章导读”和“案例”引用框。打印结果没有实线边框，但 Word 开启“查看网格线”时仍会显示不可打印的虚线表格轮廓，不符合“只要浅灰背景”的编辑体验。第十二章数据表后的正文视觉间距也偏松；该间距属于表格组件收尾，而不是下一正文段的特殊排版。
+
+### 决策
+1. 连续 Markdown `>` 仍共用一个 `quote` 渲染器，但容器改为直接位于正文流中的段落，不再创建 `w:tbl`。每段写同色 `w:shd`；与底纹同色的 `single` 段落边界只承载内边距，不形成可见轮廓，也不会被 Word 的表格网格线开关显露。
+2. `quote.padding` 使用 pt：每段保留左右 6pt；仅首段承担上 5pt、仅末段承担下 5pt，避免多段案例重复累积垂直 padding。`space_before/after=6pt` 作为块外间距，Markdown 空引用行才折算为 `paragraph_spacing=6pt`。
+3. v1.3.0 自定义配置的 `quote.cell_margin` 继续按 `20 twips = 1pt` 映射到 `padding`。表格时代的 `width_percent`、`border_color`、`border_size` 与更早的 `left_indent_inches` 不再影响引用框；引用框固定为正文宽、无可见轮廓。
+4. 数据表的收尾间距由 `table.space_after` 控制，默认 6pt。每个成功生成的 Markdown/HTML 表后追加且只追加一个段前段后 0、exact 6pt 的空段；随后正文完全保持普通正文格式。引用框不再是表格，不触发该规则；图片与图注链路也不触发。
+
+### 方案取舍
+- 不保留单单元格表格：`tblBorders=nil` 只能隐藏打印边框，不能阻止 Word 编辑界面显示网格线。
+- 不用浮动文本框：浮动对象会增加分页、锚点、脚注和可访问性风险。
+- 不给“表后的第一段正文”另设行距：这会让同一正文样式因前置组件不同而漂移；固定留白应由表格自己结束。
+- 不给每个引用段重复上下 padding：多段案例会累计不必要的内部空隙；首/中/尾位置感知能把垂直 padding 限定在整个灰底块外缘。
+
+### 验证
+- 端到端 fixture 断言引用块生成 0 张表，导读/案例各段均为同色灰底；同色边界只用 `single`，首/尾分别承担 top/bottom，所有段保留左右 padding，脚注、粗体和列表 marker 不回归。
+- Markdown 与 HTML 表格回归分别核对紧邻表后的 exact 6pt 空段；下一正文仍为段前/段后 0、1.5 倍自动行距。图片与图注之间没有表格专用 spacer，图注既有 3pt/8pt 和 1.2 倍行距不变。
+
+### 影响与回退
+- 本决策 supersede DEC-017 的“引用采用单单元格表格、cell margin 和块外 exact 空段”实现选择；“所有 `>` 共用同一视觉语义”的原则继续有效。
+- 回退需同时恢复表格容器、旧配置字段与对象模型断言；不得只恢复 `w:tbl` 而留下段落 `padding` 文档。
+
 ## [DEC-017] - 2026-08-26 - 所有 Markdown 引用块共用全宽无框灰底 callout
 
 ### 背景

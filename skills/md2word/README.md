@@ -14,7 +14,9 @@ AI：我会调用 md2word，选择 service-plan 预设，生成排版后的 .doc
 ## 它能产出什么
 
 - `.docx` Word 文档
-- 按预设应用的标题、正文、页边距、表格、代码块和统一引用框样式
+- 按预设应用的标题、正文、页边距、表格、代码块和连续 `#F5F5F5` 段落灰底引用框样式；引用框与代码框背景色完全一致
+- `book-publish` 默认让“本章小结”“动手练习”精确标题以 Word 原生标题分页从新页开始，不插入空段或额外 section
+- `--book` 在合并前按每个章节自己的目录解析 Markdown/HTML 本地相对图片，避免输出目录改变后生成图片占位符
 - 自动嵌入本地图片和外部 URL 图片
 - Mermaid 失败时的降级文本占位
 - 可复用的自定义 YAML 配置
@@ -63,6 +65,9 @@ python scripts/md2word.py input.md output.docx --preset legal
 
 # 使用自定义配置
 python scripts/md2word.py input.md output.docx --config my-config.yaml
+
+# 合并多章；每章的本地相对图片仍按该章文件所在目录解析
+python scripts/md2word.py --book ch01.md ch02.md -o book.docx --preset book-publish
 ```
 
 也可以直接让 Agent 帮你选择预设：

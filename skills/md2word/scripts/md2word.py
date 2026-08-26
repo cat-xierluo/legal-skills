@@ -15,6 +15,7 @@ import tempfile
 import urllib.request
 import urllib.parse
 import io
+import html
 
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
@@ -248,141 +249,118 @@ def add_numbered_list(doc, line):
     set_paragraph_format(p)
 
 
-def _set_width(element, width_twips):
-    """Set an OOXML width element to an exact dxa value."""
-    element.set(qn('w:type'), 'dxa')
-    element.set(qn('w:w'), str(width_twips))
+def _apply_heading_pagination(paragraph, heading_text, config):
+    """Apply native Word pagination to an exact Markdown heading match."""
+    configured = config.get('pagination.page_break_before_headings', [])
+    if not isinstance(configured, list):
+        return
+
+    targets = {
+        value.strip()
+        for value in configured
+        if isinstance(value, str) and value.strip()
+    }
+    if heading_text.strip() in targets:
+        paragraph.paragraph_format.page_break_before = True
 
 
-def _add_quote_outer_spacer(doc, height_pt):
-    """Add a deterministic, compact gap outside a quote table."""
-    if not height_pt or height_pt <= 0:
-        return None
-    paragraph = doc.add_paragraph()
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    paragraph.paragraph_format.line_spacing = Pt(height_pt)
-    return paragraph
+def _quote_padding_pt(quote_config):
+    """Return paragraph-callout padding in points, with v1.3.0 migration.
+
+    v1.3.0 exposed ``cell_margin`` in twips because quote blocks were tables.
+    A custom config that has not migrated yet keeps the same physical padding;
+    new configs use the paragraph-native ``padding`` mapping in points.
+    """
+    padding = quote_config.get('padding')
+    if isinstance(padding, dict):
+        return {
+            edge: float(padding.get(edge, default))
+            for edge, default in (
+                ('top', 5), ('bottom', 5), ('left', 6), ('right', 6)
+            )
+        }
+
+    legacy_margin = quote_config.get('cell_margin') or {}
+    return {
+        edge: float(legacy_margin.get(edge, default_twips)) / 20.0
+        for edge, default_twips in (
+            ('top', 100), ('bottom', 100), ('left', 120), ('right', 120)
+        )
+    }
 
 
-def _configure_quote_table(table, quote_config, page_config):
-    """Apply the shared full-width, borderless callout container."""
-    available_cm = (
-        page_config.get('width', 21.0)
-        - page_config.get('margin_left', 3.18)
-        - page_config.get('margin_right', 3.18)
-    )
-    width_percent = float(quote_config.get('width_percent') or 100)
-    width_percent = min(100.0, max(1.0, width_percent))
-    width_twips = round(available_cm * width_percent / 100.0 * 1440 / 2.54)
+def _apply_quote_paragraph_container(
+        paragraph, quote_config, *, is_first=False, is_last=False):
+    """Apply a full-width grey paragraph callout without creating a table.
 
-    table.autofit = False
-    table.allow_autofit = False
-    tbl_pr = table._tbl.tblPr
+    Word paragraph borders provide true text-to-edge padding. Their solid line
+    uses exactly the same colour as the shading, so it is visually absorbed by
+    the fill. Unlike a borderless one-cell table, this representation cannot
+    expose dotted table gridlines when Word's ``View Gridlines`` is enabled.
+    """
+    background = (quote_config.get('background_color') or '#F5F5F5').lstrip('#')
+    padding = _quote_padding_pt(quote_config)
+    p_pr = paragraph._p.get_or_add_pPr()
 
-    tbl_width = tbl_pr.find(qn('w:tblW'))
-    if tbl_width is None:
-        tbl_width = OxmlElement('w:tblW')
-        tbl_pr.insert(0, tbl_width)
-    _set_width(tbl_width, width_twips)
+    for tag in ('w:pBdr', 'w:shd'):
+        for old in p_pr.findall(qn(tag)):
+            p_pr.remove(old)
 
-    table_look = tbl_pr.find(qn('w:tblLook'))
-    if table_look is not None:
-        tbl_pr.remove(table_look)
-    for child_name in ('w:tblLayout', 'w:tblInd', 'w:jc', 'w:tblBorders', 'w:tblCellMar'):
-        for old_child in tbl_pr.findall(qn(child_name)):
-            tbl_pr.remove(old_child)
-
-    alignment = OxmlElement('w:jc')
-    alignment.set(qn('w:val'), 'left')
-    tbl_pr.append(alignment)
-
-    indent = OxmlElement('w:tblInd')
-    _set_width(indent, 0)
-    tbl_pr.append(indent)
-
-    borders = OxmlElement('w:tblBorders')
-    border_color = quote_config.get('border_color')
-    border_size = int(quote_config.get('border_size') or 0)
-    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+    borders = OxmlElement('w:pBdr')
+    edge_spaces = {'left': padding['left'], 'right': padding['right']}
+    if is_first:
+        edge_spaces['top'] = padding['top']
+    if is_last:
+        edge_spaces['bottom'] = padding['bottom']
+    for edge in ('top', 'left', 'bottom', 'right'):
+        if edge not in edge_spaces:
+            continue
+        space = edge_spaces[edge]
         border = OxmlElement(f'w:{edge}')
-        if border_color and border_size > 0:
-            border.set(qn('w:val'), 'single')
-            border.set(qn('w:sz'), str(border_size))
-            border.set(qn('w:color'), border_color.lstrip('#'))
-        else:
-            border.set(qn('w:val'), 'nil')
-            border.set(qn('w:sz'), '0')
-            border.set(qn('w:color'), 'auto')
-        border.set(qn('w:space'), '0')
+        border.set(qn('w:val'), 'single')
+        border.set(qn('w:sz'), '2')
+        border.set(qn('w:color'), background)
+        border.set(qn('w:space'), str(round(space)))
         borders.append(border)
-    tbl_pr.append(borders)
+    p_pr.insert_element_before(
+        borders, 'w:shd', 'w:tabs', 'w:spacing', 'w:ind', 'w:jc',
+        'w:rPr', 'w:sectPr', 'w:pPrChange'
+    )
 
-    layout = OxmlElement('w:tblLayout')
-    layout.set(qn('w:type'), 'fixed')
-    tbl_pr.append(layout)
-
-    margins_config = quote_config.get('cell_margin') or {}
-    cell_margins = OxmlElement('w:tblCellMar')
-    for edge, default in (('top', 100), ('left', 120), ('bottom', 100), ('right', 120)):
-        margin = OxmlElement(f'w:{edge}')
-        margin.set(qn('w:w'), str(int(margins_config.get(edge, default))))
-        margin.set(qn('w:type'), 'dxa')
-        cell_margins.append(margin)
-    tbl_pr.append(cell_margins)
-
-    if table_look is not None:
-        tbl_pr.append(table_look)
-
-    caption = OxmlElement('w:tblCaption')
-    caption.set(qn('w:val'), 'md2word-quote')
-    tbl_pr.append(caption)
-
-    grid_columns = table._tbl.tblGrid.findall(qn('w:gridCol'))
-    if grid_columns:
-        grid_columns[0].set(qn('w:w'), str(width_twips))
-
-    cell = table.cell(0, 0)
-    cell_width = cell._tc.get_or_add_tcPr().find(qn('w:tcW'))
-    if cell_width is None:
-        cell_width = OxmlElement('w:tcW')
-        cell._tc.get_or_add_tcPr().append(cell_width)
-    _set_width(cell_width, width_twips)
-
-    background = quote_config.get('background_color')
-    if background:
-        shading = OxmlElement('w:shd')
-        shading.set(qn('w:val'), 'clear')
-        shading.set(qn('w:color'), 'auto')
-        shading.set(qn('w:fill'), background.lstrip('#'))
-        cell._tc.get_or_add_tcPr().append(shading)
-
-    return cell
+    shading = OxmlElement('w:shd')
+    shading.set(qn('w:val'), 'clear')
+    shading.set(qn('w:color'), 'auto')
+    shading.set(qn('w:fill'), background)
+    p_pr.insert_element_before(
+        shading, 'w:tabs', 'w:spacing', 'w:ind', 'w:jc',
+        'w:rPr', 'w:sectPr', 'w:pPrChange'
+    )
 
 
 def add_quote(doc, text):
-    """将所有 Markdown 引用块渲染为同一套全宽 callout 样式。"""
+    """将所有 Markdown 引用块渲染为同一套全宽段落 callout 样式。"""
     config = get_config()
     quote_config = config.get('quote', {})
     lines = text.split('\n')
 
-    _add_quote_outer_spacer(doc, quote_config.get('space_before', 6))
-    table = doc.add_table(rows=1, cols=1)
-    cell = _configure_quote_table(table, quote_config, config.get('page', {}))
     paragraphs = []
-    pending_gap = False
+    spacer_indexes = set()
+    pending_spacer = False
 
     for line in lines:
         if not line.strip():
-            pending_gap = bool(paragraphs)
+            # 连续内部空引用行确定性折叠为一个灰底 spacer；首尾空行忽略，
+            # 因为整个 callout 已由 padding 提供上下留白。
+            pending_spacer = bool(paragraphs)
             continue
 
-        p = cell.paragraphs[0] if not paragraphs else cell.add_paragraph()
-        if pending_gap and paragraphs:
-            paragraphs[-1].paragraph_format.space_after = Pt(
-                quote_config.get('paragraph_spacing', 6)
-            )
-        pending_gap = False
+        if pending_spacer and paragraphs:
+            spacer = doc.add_paragraph()
+            spacer_indexes.add(len(paragraphs))
+            paragraphs.append(spacer)
+        pending_spacer = False
+
+        p = doc.add_paragraph()
 
         bullet_match = re.match(r'^\s*([-*+])\s+', line)
         number_match = re.match(r'^\s*(\d+\.)\s+', line)
@@ -399,13 +377,30 @@ def add_quote(doc, text):
             set_run_format_with_styles(list_marker_run, {}, is_quote=True)
 
         parse_text_with_footnotes(p, line, is_quote=True)
-        set_paragraph_format(p, is_quote=True)
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(0)
         paragraphs.append(p)
 
-    _add_quote_outer_spacer(doc, quote_config.get('space_after', 6))
-    return table
+    if paragraphs:
+        for index, paragraph in enumerate(paragraphs):
+            set_paragraph_format(paragraph, is_quote=True)
+            _apply_quote_paragraph_container(
+                paragraph,
+                quote_config,
+                is_first=index == 0,
+                is_last=index == len(paragraphs) - 1,
+            )
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
+            if index in spacer_indexes:
+                paragraph.paragraph_format.line_spacing = Pt(
+                    quote_config.get('paragraph_spacing', 6)
+                )
+        paragraphs[0].paragraph_format.space_before = Pt(
+            quote_config.get('space_before', 6)
+        )
+        paragraphs[-1].paragraph_format.space_after = Pt(
+            quote_config.get('space_after', 6)
+        )
+    return paragraphs
 
 
 def add_code_block(doc, code_lines, language):
@@ -628,6 +623,108 @@ def debug_quotes_in_file(file_path):
 # 全书合并工具（--book 模式）
 # ============================================================================
 
+_MARKDOWN_IMAGE_RE = re.compile(
+    r'(?P<prefix>!\[[^\]\n]*\]\()'
+    r'(?P<leading>[ \t]*)'
+    r'(?P<destination><[^>\n]+>|(?:\\.|[^()\s]|\([^()\n]*\))+?)'
+    r'(?P<title>[ \t]+(?:"[^"\n]*"|\'[^\'\n]*\'|\([^\)\n]*\)))?'
+    r'(?P<trailing>[ \t]*)\)'
+)
+_HTML_IMG_QUOTED_SRC_RE = re.compile(
+    r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)'
+    r'(?P<quote>["\'])(?P<src>.*?)(?P=quote)',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_IMG_UNQUOTED_SRC_RE = re.compile(
+    r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)'
+    r'(?P<src>(?!["\'])[^\s>]+)',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+def _book_local_image_target(raw_path, source_dir, *, html_src=False):
+    """Return a merged-book-safe target for one local relative image path."""
+    raw_path = raw_path.strip()
+    if not raw_path or raw_path.startswith('#'):
+        return None
+
+    decoded = urllib.parse.unquote(html.unescape(raw_path) if html_src else raw_path)
+    decoded = re.sub(r'\\([\\ ()])', r'\1', decoded)
+    parsed = urllib.parse.urlsplit(decoded)
+    if parsed.scheme or decoded.startswith('//') or os.path.isabs(decoded):
+        return None
+
+    absolute = os.path.abspath(os.path.normpath(os.path.join(source_dir, decoded)))
+    encoded = urllib.parse.quote(absolute, safe="/:@-._~!$&'()*+,;=")
+    return f'file://{encoded}' if html_src else encoded
+
+
+def _rewrite_book_local_image_paths(content, source_path):
+    """Relocate local relative image references before --book concatenation.
+
+    Each chapter's paths are resolved against that chapter, then serialized in
+    a form the existing single-document image loaders can consume from the
+    temporary merged Markdown file. Fenced code is deliberately left literal.
+    """
+    source_dir = os.path.dirname(os.path.abspath(source_path))
+
+    def rewrite_outside_fence(text):
+        def markdown_replacement(match):
+            token = match.group('destination')
+            raw_path = token[1:-1] if token.startswith('<') and token.endswith('>') else token
+            relocated = _book_local_image_target(raw_path, source_dir)
+            if relocated is None:
+                return match.group(0)
+            return ''.join((
+                match.group('prefix'), match.group('leading'), relocated,
+                match.group('title') or '', match.group('trailing'), ')',
+            ))
+
+        def quoted_html_replacement(match):
+            relocated = _book_local_image_target(
+                match.group('src'), source_dir, html_src=True
+            )
+            if relocated is None:
+                return match.group(0)
+            quote = match.group('quote')
+            return f"{match.group('prefix')}{quote}{relocated}{quote}"
+
+        def unquoted_html_replacement(match):
+            relocated = _book_local_image_target(
+                match.group('src'), source_dir, html_src=True
+            )
+            if relocated is None:
+                return match.group(0)
+            return f"{match.group('prefix')}{relocated}"
+
+        text = _MARKDOWN_IMAGE_RE.sub(markdown_replacement, text)
+        text = _HTML_IMG_QUOTED_SRC_RE.sub(quoted_html_replacement, text)
+        return _HTML_IMG_UNQUOTED_SRC_RE.sub(unquoted_html_replacement, text)
+
+    output = []
+    outside = []
+    fence = None
+    for line in content.splitlines(keepends=True):
+        fence_match = re.match(r'^[ \t]{0,3}(`{3,}|~{3,})', line)
+        if fence_match:
+            if outside:
+                output.append(rewrite_outside_fence(''.join(outside)))
+                outside = []
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = (marker[0], len(marker))
+            elif marker[0] == fence[0] and len(marker) >= fence[1]:
+                fence = None
+            output.append(line)
+        elif fence is None:
+            outside.append(line)
+        else:
+            output.append(line)
+    if outside:
+        output.append(rewrite_outside_fence(''.join(outside)))
+    return ''.join(output)
+
+
 def rename_footnote_ids(content, ch):
     """全书合并预处理：给脚注 id 加章节前缀，避免跨章 [^id] 冲突。
     [^1] → [^1-1]（第 1 章的 1）；[^note] → [^2-note]（第 2 章的 note）。
@@ -691,6 +788,7 @@ def create_book(md_files, output_path, config, notes_mode='footnote'):
         except UnicodeDecodeError:
             with open(f, 'r', encoding='gbk') as fh:
                 content = fh.read()
+        content = _rewrite_book_local_image_paths(content, f)
         content = rename_footnote_ids(content, ch_idx)
         merged.append(content)
         print(f"  第 {ch_idx} 章: {os.path.basename(f)}")
@@ -1068,22 +1166,26 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=1)
             set_paragraph_format(p, title_level=1)
+            _apply_heading_pagination(p, title, config)
         elif line.startswith('## '):
             title = convert_quotes_to_chinese(line[3:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=2)
             set_paragraph_format(p, title_level=2)
+            _apply_heading_pagination(p, title, config)
             has_seen_h2 = True
         elif line.startswith('### '):
             title = convert_quotes_to_chinese(line[4:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=3)
             set_paragraph_format(p, title_level=3)
+            _apply_heading_pagination(p, title, config)
         elif line.startswith('#### '):
             title = convert_quotes_to_chinese(line[5:].strip())
             p = doc.add_paragraph()
             parse_text_formatting(p, title, title_level=4)
             set_paragraph_format(p, title_level=4)
+            _apply_heading_pagination(p, title, config)
         else:
             if line:
                 p = doc.add_paragraph()

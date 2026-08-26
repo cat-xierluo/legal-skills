@@ -61,6 +61,9 @@ BASE_CONFIG: Dict[str, Any] = {
             "indent": 24,
         },
     },
+    "pagination": {
+        "page_break_before_headings": [],
+    },
     "paragraph": {
         "line_spacing": 1.5,
         "first_line_indent": 24,
@@ -81,6 +84,7 @@ BASE_CONFIG: Dict[str, Any] = {
         "border_color": "#000000",
         "border_width": 4,
         "line_spacing": 1.2,
+        "space_after": 6,
         "row_height_cm": 0.8,
         "alignment": "center",
         "cell_margin": {
@@ -122,11 +126,8 @@ BASE_CONFIG: Dict[str, Any] = {
         "color": "#333333",
     },
     "quote": {
-        "background_color": "#EAEAEA",
-        "width_percent": 100,
-        "border_color": None,
-        "border_size": 0,
-        "cell_margin": {"top": 100, "bottom": 100, "left": 120, "right": 120},
+        "background_color": "#F5F5F5",
+        "padding": {"top": 5, "bottom": 5, "left": 6, "right": 6},
         "space_before": 6,
         "space_after": 6,
         "paragraph_spacing": 6,
