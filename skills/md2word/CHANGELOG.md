@@ -2,6 +2,20 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.5] - 2026-08-26
+
+### 修复
+- **全书模式保留各章本地图片基准（DEC-022）**：`create_book()` 在读取每个章节后、重命名脚注与串联合并前，将 Markdown 图片目标和 HTML `<img src>` 的本地相对路径按该源文件父目录重定位。合并稿不再错误地按 DOCX 输出目录查找 `../../figures/...`，避免整书导出出现“图片未能加载”占位。
+- **路径语法与作用域保持**：含空格、URL 编码、尖括号路径和 Markdown 可选 title 均保留可读语义；HTTP/HTTPS、data URI、锚点、绝对路径与 fenced code 原样保留。改写只在 `--book` 合并预处理调用，单章转换路径不变。
+
+### 文档完善
+- 更新 `SKILL.md`、md2word README、使用示例和根 README，新增 DEC-022 / Task-015，并把 md2word 版本同步为 v1.3.5。
+
+### 验证
+- 完整回归 24/24 通过。新增端到端 fixture 覆盖两个不同章节目录共享 `../../figures` 图片、同目录图片、子目录含空格/中文图片、URL 编码与 Markdown 可选 title、HTML `<img src>`；整书 DOCX 得到 5 个 `w:drawing` 且无本地图片警告或占位。HTTP/HTTPS、data URI、锚点、绝对路径和 fenced code 负例保持，单章 fixture 仍按源文件目录嵌入 1 图且输入不变。
+- 真实 ch12 + ch13 `--book` 转换得到 31 个 `w:drawing` / 31 个 media parts、37 张数据表、2 个 section 和 0 个图片占位；16 个 XML 全部 well-formed，DOCX ZIP 完整，临时 merged Markdown 已删除，SHA-256 为 `708c5cd4c3a396968645a81ed57e8e3e67d1b0ddf4d944841522333f8599b7bc`。`py_compile`、7/7 YAML 解析与 `git diff --check` 通过；未打开 Word、不做 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
 ## [1.3.4] - 2026-08-26
 
 ### 新增
