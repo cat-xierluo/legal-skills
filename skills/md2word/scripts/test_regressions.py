@@ -908,6 +908,123 @@ class Md2WordRegressionTest(unittest.TestCase):
                 document_xml = archive.read("word/document.xml").decode("utf-8")
             self.assertNotIn('<w:br w:type="page"', document_xml)
 
+    def test_book_publish_exact_headings_use_native_page_break_before(self):
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "heading-pagination.md"
+            markdown.write_text(
+                "# 分页回归\n\n"
+                "普通正文提到动手练习，但不是标题。\n\n"
+                "<div align=\"center\">**表1-1：动手练习安排**</div>\n\n"
+                "## 本章小结\n\n"
+                "小结正文。\n\n"
+                "## 本章小结与展望\n\n"
+                "近似标题正文。\n\n"
+                "## 动手练习\n\n"
+                "二级练习正文。\n\n"
+                "### 动手练习\n\n"
+                "三级练习正文。\n\n"
+                "```text\n"
+                "## 动手练习\n"
+                "```\n",
+                encoding="utf-8",
+            )
+
+            book_output = temp_dir / "book.docx"
+            book_config = md2word.get_preset("book-publish")
+            md2word.set_config(book_config)
+            md2word.create_word_document(
+                str(markdown), str(book_output), config=book_config
+            )
+
+            document = Document(book_output)
+            target_paragraphs = [
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text in {"本章小结", "动手练习"}
+            ]
+            self.assertEqual(
+                [paragraph.text for paragraph in target_paragraphs],
+                ["本章小结", "动手练习", "动手练习"],
+            )
+            self.assertTrue(
+                all(
+                    paragraph.paragraph_format.page_break_before is True
+                    for paragraph in target_paragraphs
+                )
+            )
+
+            non_targets = [
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text
+                in {
+                    "普通正文提到动手练习，但不是标题。",
+                    "表1-1：动手练习安排",
+                    "本章小结与展望",
+                    "## 动手练习",
+                }
+            ]
+            self.assertEqual(len(non_targets), 4)
+            self.assertTrue(
+                all(
+                    not paragraph.paragraph_format.page_break_before
+                    for paragraph in non_targets
+                )
+            )
+
+            summary, h2_practice, h3_practice = target_paragraphs
+            for paragraph in (summary, h2_practice):
+                self.assertEqual(paragraph.runs[0].font.size.pt, 14)
+                self.assertTrue(paragraph.runs[0].bold)
+                self.assertEqual(paragraph.paragraph_format.first_line_indent.pt, 24)
+                self.assertEqual(paragraph.paragraph_format.space_before.pt, 12)
+                self.assertEqual(paragraph.paragraph_format.space_after.pt, 6)
+            self.assertEqual(h3_practice.runs[0].font.size.pt, 12)
+            self.assertTrue(h3_practice.runs[0].bold)
+            self.assertEqual(h3_practice.paragraph_format.first_line_indent.pt, 24)
+            self.assertEqual(h3_practice.paragraph_format.space_before.pt, 6)
+            self.assertEqual(h3_practice.paragraph_format.space_after.pt, 3)
+
+            with zipfile.ZipFile(book_output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+            self.assertEqual(
+                len(list(document_root.iter(qn("w:pageBreakBefore")))), 3
+            )
+            self.assertEqual(len(list(document_root.iter(qn("w:sectPr")))), 1)
+            self.assertEqual(len(list(document_root.iter(qn("w:br")))), 0)
+            self.assertEqual(len(document.sections), 1)
+            self.assertEqual(
+                [paragraph.text for paragraph in document.paragraphs if not paragraph.text],
+                [],
+                "标题原生 pageBreakBefore 不得插入额外空段",
+            )
+
+            for name, config in (
+                ("legal", md2word.get_preset("legal")),
+                (
+                    "custom-empty",
+                    md2word.Config(
+                        {
+                            **book_config.to_dict(),
+                            "pagination": {"page_break_before_headings": []},
+                        }
+                    ),
+                ),
+            ):
+                output = temp_dir / f"{name}.docx"
+                md2word.set_config(config)
+                md2word.create_word_document(
+                    str(markdown), str(output), config=config
+                )
+                with zipfile.ZipFile(output) as archive:
+                    root = ET.fromstring(archive.read("word/document.xml"))
+                self.assertEqual(
+                    len(list(root.iter(qn("w:pageBreakBefore")))),
+                    0,
+                    f"{name} 空列表不得触发标题分页",
+                )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

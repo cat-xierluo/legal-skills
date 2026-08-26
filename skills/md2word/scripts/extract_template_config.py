@@ -61,6 +61,9 @@ BASE_CONFIG: Dict[str, Any] = {
             "indent": 24,
         },
     },
+    "pagination": {
+        "page_break_before_headings": [],
+    },
     "paragraph": {
         "line_spacing": 1.5,
         "first_line_indent": 24,
