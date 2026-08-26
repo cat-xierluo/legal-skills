@@ -2,6 +2,78 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.5] - 2026-08-26
+
+### 修复
+- **全书模式保留各章本地图片基准（DEC-022）**：`create_book()` 在读取每个章节后、重命名脚注与串联合并前，将 Markdown 图片目标和 HTML `<img src>` 的本地相对路径按该源文件父目录重定位。合并稿不再错误地按 DOCX 输出目录查找 `../../figures/...`，避免整书导出出现“图片未能加载”占位。
+- **路径语法与作用域保持**：含空格、URL 编码、尖括号路径和 Markdown 可选 title 均保留可读语义；HTTP/HTTPS、data URI、锚点、绝对路径与 fenced code 原样保留。改写只在 `--book` 合并预处理调用，单章转换路径不变。
+
+### 文档完善
+- 更新 `SKILL.md`、md2word README、使用示例和根 README，新增 DEC-022 / Task-015，并把 md2word 版本同步为 v1.3.5。
+
+### 验证
+- 完整回归 24/24 通过。新增端到端 fixture 覆盖两个不同章节目录共享 `../../figures` 图片、同目录图片、子目录含空格/中文图片、URL 编码与 Markdown 可选 title、HTML `<img src>`；整书 DOCX 得到 5 个 `w:drawing` 且无本地图片警告或占位。HTTP/HTTPS、data URI、锚点、绝对路径和 fenced code 负例保持，单章 fixture 仍按源文件目录嵌入 1 图且输入不变。
+- 真实 ch12 + ch13 `--book` 转换得到 31 个 `w:drawing` / 31 个 media parts、37 张数据表、2 个 section 和 0 个图片占位；16 个 XML 全部 well-formed，DOCX ZIP 完整，临时 merged Markdown 已删除，SHA-256 为 `708c5cd4c3a396968645a81ed57e8e3e67d1b0ddf4d944841522333f8599b7bc`。`py_compile`、7/7 YAML 解析与 `git diff --check` 通过；未打开 Word、不做 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
+## [1.3.4] - 2026-08-26
+
+### 新增
+- **书籍尾部模块原生分页（DEC-021）**：新增 `pagination.page_break_before_headings` 精确标题列表。`book-publish` 默认配置“本章小结”“动手练习”，单章和 `--book` 均在命中标题段自身写入 `w:pageBreakBefore`；其他预设、硬编码 fallback、配置模板和模板提取基底默认空列表。
+- **精确且隔离的匹配**：只对 Markdown `#` 至 `####` 标题去除首尾空白后完整匹配。正文、HTML 表题、代码块和“本章小结与展望”等包含或近似文字不触发；命中不插入空段、分页 run 或新 section，标题既有字号、粗体、缩进与段间距保持。
+
+### 文档完善
+- 更新 `SKILL.md`、README、配置参考和样式映射，新增 DEC-021 / Task-014，并把根 README 的 md2word 版本与最近更新摘要同步为 v1.3.4。
+
+### 验证
+- 完整回归 23/23、`py_compile`、7/7 YAML 解析与 `git diff --check` 通过。端到端 fixture 覆盖 H2“本章小结”、H2/H3“动手练习”以及正文/HTML 表题/代码块/近似标题负例；book-publish 恰好 3 个 `w:pageBreakBefore`、0 个分页 `w:br`、1 个 section、0 个额外空段，legal 与自定义空列表均为 0，H2/H3 原格式不变。
+- 全书 15 章静态扫描得到 15 个 H2“本章小结”与 12 个“动手练习”（H2 11、ch14 H3 1），共 27 个精确目标标题。真实 ch12 得到 2 个原生标题分页、0 个分页 `w:br`、1 个 section；同时保留 10 张表 + 10 个表后 spacer、6 个 quote 段（含 2 个同底色 spacer）、11 组图片/图注和 1 个脚注。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `e1121d10d206b4466d86264f5c57a679f6b8401f081f447cef0ff21f74d57be5`。按用户要求不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
+## [1.3.3] - 2026-08-26
+
+### 修复
+- **引用框与代码框背景完全同色（DEC-020）**：根据用户视觉确认后的颜色纠偏，全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 从 `#EDF2F7` 统一为 fenced code block 同款中性浅灰 `#F5F5F5`；承载 padding 的不可见同色 paragraph border 与缺省 fallback 同步。
+- **连续 callout 结构保持**：v1.3.2 的 paragraph callout、同底色 6pt exact 内部 spacer、连续空行折叠、无引用 `w:tbl`、首尾 padding/块外间距全部不变；数据表 6pt exact spacer 与图片/图注链路不变。
+
+### 文档完善
+- 更新 `SKILL.md`、README、配置参考和样式映射，明确引用框复用 `code_block.content.background_color` 的视觉 token；两项仍分别显式配置，允许高级用户独立覆盖。新增 Task-013 / DEC-020，DEC-020 仅 supersede DEC-019 的颜色选择，不回退其连续 shaded spacer 决策。
+
+### 验证
+- 完整回归 22/22、`py_compile`、7/7 YAML 解析与 `git diff --check` 通过；测试额外断言 `book-publish` / `legal` 的 quote 背景均等于各自 `code_block.content.background_color`，且值为 `#F5F5F5`。多段引用、灰底 exact spacer、脚注/粗体/列表与无引用表格断言继续通过。
+- 真实 ch12 得到 10 张数据表 + 10 个表后 spacer、6 个 quote 段（4 个内容段 + 2 个同底色 exact spacer）、11 组图片/图注和 1 个脚注；全部 quote shading/border 为 `F5F5F5`，无引用表格，图注既有 `3pt/8pt + 1.2` 节奏不变。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `75dc5691c7676602e837a6e7b7b2f87289190918184238429b8c50724b590baa`。按用户要求不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
+## [1.3.2] - 2026-08-26
+
+### 修复
+- **多段引用灰底不再出现白缝（DEC-019）**：内部空引用行不再写成上一内容段的 `space_after`，改为同底色空白 callout paragraph。该 spacer 段前/段后为 0、行高读取 `quote.paragraph_spacing`（默认 6pt exact），只带左右同色 padding border，不重复 top/bottom padding；普通内容段内部间距保持 0，整个框只在首/末段保留块外 6pt。
+- **连续空行确定性归一**：连续多个内部 `>` 空行折叠为一个 shaded spacer；首尾空引用行忽略，由首尾 padding 提供留白。脚注、粗体、列表 marker 和引用不生成 `w:tbl` 的规则保持。
+- **引用灰统一为 confirmed token**：全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 统一为 `#EDF2F7`，同色不可见 paragraph border 同步，避免引用框与本书 confirmed 状态出现两级浅灰。
+
+### 文档完善
+- 更新 `SKILL.md`、配置参考、样式映射和使用说明，明确 shaded exact spacer 的 OOXML 语义与连续空行折叠规则；Task-010 补记已合并 PR #97 / merge `2c3ff091`。
+
+### 验证
+- 完整回归 22/22、`py_compile` 与 7/7 YAML 解析通过。fixture 端到端断言连续空引用行折叠为 1 个 shaded spacer，多段案例为 3 个内容段 + 2 个 `EDF2F7` exact spacer；整个 quote body 每段均有同色 shading/border，内容段内部间距为 0，spacer 只有左右 border，脚注/粗体/列表保持且不产生引用表格。
+- 真实 ch12 得到 10 张数据表 + 10 个既有表后 spacer、6 个 quote 段（导读内容 1 + 案例内容 3 + 案例灰底 spacer 2）、11 组图片/图注和 1 个导读脚注；全部 quote shading/border 为 `EDF2F7`，图注既有 `3pt/8pt + 1.2` 节奏不变。DOCX 包完整、15 个 XML well-formed，SHA-256 为 `80216357de8e5c4b4b6f7f5c0cb908aad658fa71afa40b5566ed9a4c51aa8527`。用户明确自行核实桌面示例视觉，本轮不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 仍因本仓要求保留的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除仓库要求字段。
+
+## [1.3.1] - 2026-08-26
+
+### 修复
+- **引用框不再显示 Word 表格虚线（DEC-018）**：所有 Markdown `>` 导读/案例继续共用同一视觉语义，但由单单元格表格改为正文流中的段落灰底，输出不再为引用内容创建 `w:tbl`。Word 即使开启“查看网格线”也不会出现引用框虚线轮廓。
+- **多段灰底只在整块首尾留垂直 padding**：每段保留左右 6pt；首段独占上 5pt、末段独占下 5pt，中间段不重复累计上下留白。空引用行才折算为 6pt `paragraph_spacing`；脚注、粗体、列表 marker、正文 12pt/1.5 倍行距继续保留。
+- **数据表自行承载表后留白**：Markdown 与 HTML 表格统一读取 `table.space_after`，默认在表后追加一个 6pt exact 空段。随后正文仍为普通正文的段前/段后 0、1.5 倍自动行距；图片和图注不受影响。
+
+### 文档完善
+- 全部内置预设、fallback config、配置模板与模板提取基底改用 `quote.padding` 并加入 `table.space_after`；v1.3.0 自定义 `quote.cell_margin` 按 `20 twips = 1pt` 兼容迁移。配置参考与样式映射明确表格时代字段不再控制引用框。
+
+### 验证
+- 新增/更新端到端回归，精确断言引用内容不产生 Word 表格、浅灰底连续语义、同色 `single` 边界无可见轮廓、首/中/尾 padding、脚注/粗体/列表保持，并覆盖 v1.3.0 `cell_margin` 迁移；Markdown/HTML 数据表后各恰好一个 6pt exact spacer，下一正文样式不变，图片/图注链路未插入该 spacer。完整 `unittest` 22/22 通过。
+- 真实 ch12 临时转换得到 10 张数据表及 10 个 exact 6pt spacer、4 个 paragraph callout 段（导读 1 + 案例 3）、0 个引用表格、11 组图片/图注和 1 个导读脚注；首/中/尾 padding、`pBdr → shd → spacing → ind` OOXML 顺序和图注既有 `3pt/8pt + 1.2` 节奏均通过结构断言。临时 DOCX SHA-256 为 `ded0d635396796918f1c3f08c816a7f81addf2f059b9fde77414cb917801630e`。用户明确由其自行核实桌面示例视觉，本轮不打开 Word、不做逐页 GUI 验收。
+- 官方 `quick_validate.py` 因本仓规范要求的 `author`、`homepage`、`version` frontmatter 键退出 1，记为 `NOT_VERIFIED`；未删除这些仓库要求字段。
+
 ## [1.3.0] - 2026-08-26
 
 ### 改进

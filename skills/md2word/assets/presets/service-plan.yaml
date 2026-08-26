@@ -83,6 +83,9 @@ titles:
     space_after: 4
     indent: 24
 
+pagination:
+  page_break_before_headings: []
+
 # 段落设置
 paragraph:
   line_spacing: 1.5
@@ -107,6 +110,7 @@ table:
   border_color: "#CCCCCC"
   border_width: 4
   line_spacing: 1.5
+  space_after: 6
   row_height_cm: 0.8
   alignment: "center"
   cell_margin:
@@ -167,11 +171,8 @@ inline_code:
 
 # 引用块
 quote:
-  background_color: "#F5F0ED"
-  width_percent: 100
-  border_color: null
-  border_size: 0
-  cell_margin: {top: 100, bottom: 100, left: 120, right: 120}
+  background_color: "#F5F5F5"
+  padding: {top: 5, bottom: 5, left: 6, right: 6}
   space_before: 6
   space_after: 6
   paragraph_spacing: 6

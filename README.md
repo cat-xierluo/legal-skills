@@ -37,6 +37,8 @@
 | 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.2.9  | **技术标识下划线修复**：正文与 Markdown 表格共用单词边界强调规则，`payment_instance_id`、`API_SERVER_KEY` 等普通字段按字面量保留下划线且不再误触发斜体；明确的 `_斜体_`、`__粗体__` 与 `___粗斜体___` 语义保持不变 |
 | 2026-08-25 | 新增   | [industry-research-report](skills/industry-research-report/)           | v0.7.0 | **行业法律调研报告（获客端）**：**v0.7.0 全面精简版式（Less is more：页眉只留报告编号、页脚只留页码，砍掉横线/kicker/多列冗余装饰）**；输入 industry/region/focus/depth，输出精排 A4 PDF 行业法律调研报告；蓝皮书体例（深蓝 #1B3C59 + 金色 #D4AF37 + 白色页面）+ 4 个封面变体（顶金带+底金边+REPORT NO. 徽章工艺感）+ 5 个律师常见调色板；**v0.6.2 书籍连续流改造**（DEC-IR-019）：放弃杂志固定画布裁切，改 @page margin box 跨页 header/footer + 章节自然流动不截断 + 大边距（天头80px/地脚60px/左右56px≈21/16/15mm）；**v0.6.1 杂志Studio book-style 排版优化**（加大字号 IR 22/12pt + 行高 2.0）；**v0.6.0 三连环视觉修复**（封面 CSS 注入 / px 单位 / 按 H2 拆章）；**v0.5.0 report_kind 字段 + 正文设计系统差异化路由**（IR 蓝皮书感 vs WB 通讯感，12 维度全表）；内置 report-profile.md 个性化配置 + 首启向导；行业特定信源映射内置 20 个高频行业；数据源走企查查 MCP + 网络检索 5 级信源优先级；md 基底 → jinja2 → Playwright + Chrome headless，一键出精排 A4 PDF |
 | 2026-08-25 | 新增   | [weekly-legal-briefing](skills/weekly-legal-briefing/)                 | v0.6.0 | **定时法律研报（留存端）**：**v0.6.0 继承 v0.7.0 精简版式（页眉页脚只留编号/页码）**；配置一次，定期自动生成行业/法律研报草稿（如"科技型制造企业 周报"）；**v0.5.2 书籍连续流继承**（Skill 1 v0.6.2：@page margin box 跨页 header/footer + 章节自然流动不裁切 + 大边距）；**v0.5.0 三连环视觉修复同步**；**v0.4.0 新增 2 个专属轻量封面 (W1-minimal / W2-tag-bar) + 正文设计系统强烈差异化**（字号小 + 灰色细线 + 单栏目录，与 IR 蓝皮书感拉开）；白名单信源制（白名单外默认丢弃）+ 案例必带案号 + 案号裁判文书网回查；输出文件一律带 `_DRAFT` 标记，**永不自动外发**（硬约束，发布动作物理上留给人工）；渲染管线 symlink 复用 industry-research-report，避免双份维护；附 WorkBuddy / OpenClaw cron / GitHub Actions 三平台部署说明 |
+| 2026-08-25 | 更新   | [md2word](skills/md2word/)                                             | v1.2.6  | **Word 出版逃逸修复**：多列长表头受正文区硬预算约束，`tblW`、grid 与单元格宽度统一；普通及显式居中表题取消缩进且保留文字样式；引用块 `[^label]` 正确生成原生 Word 脚注，不再显示字面 marker |
+| 2026-08-25 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.0 | **长转录稿细粒度守恒**：新增确定性 `source-index.json`，每个内容块必须 include 或受控 skip；素材在大纲阶段预承诺具体覆盖词，生成后以真实正文摘录兑现，防止弱模型用完整提纲遮蔽精华漏失；26 类故障注入 + 5 类索引回归通过，并用 18.7 万字节、135 张图的真实课程完成双轮前向测试 |
 | 2026-08-24 | 更新   | [course-generator](skills/course-generator/)                           | v2.8.1 | **课程产物契约化**：新增 `course-manifest.json`，以稳定 SRC/MAT/IMG 关系绑定来源、素材、章节和图片；标准库验证器精确检查文件、素材映射与图片集合/目标/顺序，13 类正反例覆盖旧版漏报；长材料改用索引化两遍流程，生成不再自动归档，并收窄与转录纠错、讲课复盘、成书 Skill 的触发边界 |
 | 2026-08-24 | 更新   | [lecture-review](skills/lecture-review/)                               | v1.2.1 | **讲课复盘三轮迭代**：v1.1.0 新增 deck 课件对照（六段 → 七段：实讲/半讲/跳过/挪位回收/主动宣判五枚举 + min/页双口径）；v1.2.0 高级模式课程结构复盘（评人/评课分离 + 双向比对三方向）；v1.2.1 产物落点约定（七段报告/review.md/stats.json/profile 落点表 + 评课不进讲师档案）；脚本 `analyze_stats.py` 新增 `--deck` 课件解析与 `self_check` 三个候选生成器（module_distribution / near_dup_pages / title_term_index），references/metrics.md 同步补「课件对照」节；`references/structural-review-template.md` 沉淀九节+附录的高级模式复盘骨架 |
 | 2026-08-24 | 新增   | [lecture-review v1.0.0](skills/lecture-review/)                        | v1.0.0 | **讲课表现复盘**：通读 raw 转录稿动态发现主讲口癖/节奏/句式与结构信号（时间分配/承诺回收/互动密度），预设词表仅作对比锚点；脚本统一口径出数字（讲师隔离+归属污染核验、最长优先去重叠、双格式时间戳、剔幻灯片 URL）；讲师档案跨场次闭环（watchlist 下场复查）；ASR 吞语气音盲区显式声明；经双盲基线测试（RED→GREEN）验证 |
@@ -387,9 +389,9 @@
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
 <td>工具·课程</td>
-<td style="word-break:break-word">将长转录稿或文献整理为可独立阅读、可溯源验收的课程：支持索引化长材料处理、用户词典、专名保真、素材守恒、图片克制插入，以及基于 `course-manifest.json` 的文件/素材/图片精确验证；归档和定制方案提取仅在用户明确要求时执行</td>
+<td style="word-break:break-word">将长转录稿或文献整理为可独立阅读、可溯源验收的课程：以确定性来源块、细粒度素材去向、预承诺覆盖词和真实正文证据守住长材料精华，同时保留章节结构与叙事写法的自由；支持用户词典、专名保真、图片克制插入和确定性验收，归档/定制方案提取仅在明确要求时执行</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.8.0</td>
+<td style="text-align:center">v2.9.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/course-generator-2.3.3.zip">下载</a></td>
 <td>下载版 v2.3.3</td>
 </tr>

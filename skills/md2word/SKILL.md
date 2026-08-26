@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.0"
+version: "1.3.5"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -55,13 +55,17 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 
 > `--book` 只把相邻输入文件的边界转换为新 section。章节正文里的 Markdown 水平线 `---`、`***`、`___` 在单章和全书模式下都会保留为水平线，不承担分页或分章语义。
 
+> `--book` 会在合并前按每个章节 Markdown 自己所在的目录解析本地相对图片路径，再写入临时合并稿。Markdown 图片与 HTML `<img src>` 均支持；HTTP/HTTPS、data URI、锚点和绝对路径保持原样。单章转换的图片解析流程不变。
+
+> `book-publish` 默认让标题文字精确等于“本章小结”或“动手练习”的 Markdown 标题从新页开始；转换器在标题段自身写入 Word 原生 `pageBreakBefore`，不插入空段、分页 run 或新 section。该规则同样适用于单章转换，其他预设默认关闭；可通过 `pagination.page_break_before_headings` 覆盖。
+
 > 同一 `[^label]` 在正文重复出现时，原生 `footnote` 模式会为每次出现生成独立的 Word 脚注，并重复相同定义文本，确保每个引用位置都能看到脚注；`endnote` 模式仍复用同一编号与一条尾注定义。
 
 > 原生 `footnote` 模式下，两个脚注标记在源码中直接相邻时，输出会在两个上标之间加入一个同为 9pt 上标的 NBSP；源码已有空格或标点时不额外添加。页面脚注段落固定为段前段后 0、单倍自动行距；`endnote` 不应用这两项规则。
 
 > 页面脚注在普通正文与 Markdown 引用块（`>`）中都可使用；引用块内的 `[^label]` 会生成原生 Word 脚注引用，不会作为字面标记留在正文，同时保留引用段落和加粗等行内格式。
 
-> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。默认 `legal` / `book-publish` 样式为正文全宽、无边框浅灰底，文字通过真实单元格边距保留左右和上下内边距；空引用行折算为块内段距，不生成过高空白段。
+> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。内置预设的引用框与 fenced code block 共用中性浅灰视觉 token `#F5F5F5`，样式为正文全宽、无可见边框的段落底纹；不使用表格容器，因此 Word 的“查看网格线”不会出现虚线外框。文字通过 `padding` 保留左右和首尾内边距；内部空引用行会生成同底色的 `paragraph_spacing` exact 空段，使多段 callout 保持一整块连续灰底。连续多个内部空引用行确定性折叠为一个，首尾空引用行忽略。
 
 > 行内代码优先保护反引号范围：其中的 `_`、`*` 等 Markdown 标记按字面量保留，不会与相邻代码段拼成斜体或粗体；例如 `` `law_keyword` `` 会完整输出为一个代码 run。
 
@@ -70,6 +74,8 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 > 所有 fenced code block（包括 `text`、`markdown` 与无语言围栏）均沿用既有等宽、紧凑的代码内容样式；可通过 `code_block.content.space_before` 与 `space_after` 仅调整整个框与前后正文的垂直间距。
 
 > Markdown 表格固定在页面正文可用宽度内；多列长表头会自动换行，转换器会统一表格总宽、网格列宽和单元格宽度，避免表格越过左右页边距。
+
+> Markdown 与 HTML 数据表都由表格组件自身追加 `table.space_after` 固定高度留白（默认 6pt exact）；后续正文保持普通正文的 1.5 倍行距与 0 段前距。图片和图注不使用这项表格留白。
 
 > 普通 Markdown 表题（如 `**表 10-5：标题**`）会自动水平居中并取消首行缩进；显式 `<div align="center">...</div>` 仍可继续使用。表题原有字号和粗体不受自动对齐影响。
 
@@ -139,7 +145,7 @@ cp assets/config-template.yaml my-config.yaml
 ### 文件访问
 
 - 读取用户指定的 Markdown 输入文件、`assets/templates/` 下的 Word 模板与 `assets/presets/` 下的 YAML 配置。
-- 在输出目录生成 Word 文档（`--book` 模式会生成临时合并 Markdown，转换结束后自动删除）。
+- 在输出目录生成 Word 文档（`--book` 模式会生成临时合并 Markdown，转换结束后自动删除；章节本地相对图片会先按各自源文件目录重定位）。
 
 ## 错误处理
 
