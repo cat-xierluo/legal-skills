@@ -130,7 +130,7 @@ inline_code:
 
 # ==================== 引用块设置 ====================
 quote:
-  background_color: "#EDF2F7" # 段落背景填充色；与 confirmed 状态灰统一
+  background_color: "#F5F5F5" # 段落背景填充色；与 code_block.content 背景一致
   padding:                     # 文字到灰底边缘的留白（pt）
     top: 5
     bottom: 5

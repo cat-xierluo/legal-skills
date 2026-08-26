@@ -2,6 +2,15 @@
 
 ## 已完成
 
+### Task-013：引用框与代码框统一为中性浅灰
+
+- **状态**：✅ 已完成（PR #102）
+- **目标**：保留已确认的连续段落型 callout 结构，只把导读/案例背景及其同色 padding border 统一为代码框同款 `#F5F5F5`。
+- **范围**：quote fallback、全部内置预设、config-template、模板提取基底、配置与样式文档、版本和回归/真实 ch12 结构验收。
+- **非目标**：不改变 shaded exact spacer、引用段落结构、表后 6pt 留白、图片/图注、书稿源文件或第十二章 `confirmed` SVG；不打开 Word。
+- **验收证据**：完整回归 22/22、`py_compile`、7/7 YAML 解析和 `git diff --check` 通过；`book-publish` / `legal` 的 quote 与 code block 背景均为 `#F5F5F5`。真实 ch12 得到 10 张数据表 + 10 个表后 spacer、6 个 quote 段（4 内容 + 2 同底色 exact spacer）、11 组图片/图注和 1 个脚注；全部 quote shading/border 为 `F5F5F5`、无引用表格，DOCX 包完整、15 个 XML well-formed，SHA-256 `75dc5691c7676602e837a6e7b7b2f87289190918184238429b8c50724b590baa`。官方 `quick_validate.py` 因本仓强制 frontmatter 键退出 1，记为 `NOT_VERIFIED`。
+- **关联**：DEC-020；用户 2026-08-26 视觉确认后的颜色纠偏。
+
 ### Task-012：消除多段引用白缝并统一 confirmed 灰
 
 - **状态**：✅ 已完成（PR #101）

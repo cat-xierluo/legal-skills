@@ -146,7 +146,7 @@ inline_code:
 
 ```yaml
 quote:
-  background_color: "#EDF2F7" # 段落背景色；与 confirmed 状态灰统一
+  background_color: "#F5F5F5" # 段落背景色；与 code_block.content 背景完全一致
   padding:                     # 文字到灰底边缘的留白，单位 pt
     top: 5
     bottom: 5
@@ -160,6 +160,8 @@ quote:
   first_line_indent: 0         # 引用段首行缩进，单位 pt
   align: justify               # left/center/right/justify
 ```
+
+内置预设把 `quote.background_color` 与 `code_block.content.background_color` 分别显式写为同一个中性浅灰 `#F5F5F5`，便于独立覆盖配置，同时确保引用框与 `text` 等 fenced code block 的背景颜色完全一致。
 
 兼容迁移：若自定义配置仍只有 v1.3.0 的 `quote.cell_margin`，转换器会按 `20 twips = 1 pt` 映射到 `padding`，保持原物理留白。`width_percent`、`border_color`、`border_size` 与 v1.2.x 的 `left_indent_inches` 不再参与段落型引用框渲染；引用框固定为正文宽、无可见轮廓。新配置应直接使用 `padding`。
 
