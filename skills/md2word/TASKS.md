@@ -2,6 +2,15 @@
 
 ## 已完成
 
+### Task-015：修复全书合并的章节本地图片路径
+
+- **状态**：✅ 已完成（PR #104）
+- **目标**：让 `--book` 串联合并多个 Markdown 后，仍以每个章节源文件自己的目录解析本地图片，消除因输出目录改变产生的图片加载占位符。
+- **范围**：Markdown 图片目标与 HTML `<img src>` 的合并前重定位、含空格/URL 编码/尖括号/可选 title 路径、双目录整书 DOCX 回归、单章隔离、版本与文档。
+- **非目标**：不改变单章转换；不下载或改写 HTTP/HTTPS、data URI、锚点、绝对路径；不复制资源文件、不改变输出目录、不修改图片渲染器或安装依赖。
+- **验收证据**：完整回归 24/24、`py_compile`、7/7 YAML 解析与 `git diff --check` 通过。双目录端到端 fixture 覆盖共享 `../../figures`、同目录、子目录含空格/中文、URL 编码、可选 title 与 HTML 图片，整书 DOCX 得到 5 个 `w:drawing`，无本地图片警告或占位；远程/data/锚点/绝对路径/fenced code 保持，单章仍按源文件目录嵌入 1 图且输入不变。真实 ch12 + ch13 得到 31 个 drawing/media、37 表、2 section、0 占位，16 XML well-formed，ZIP 完整且 merged 临时稿已删除，SHA-256 `708c5cd4c3a396968645a81ed57e8e3e67d1b0ddf4d944841522333f8599b7bc`。官方 `quick_validate.py` 因本仓强制 frontmatter 键退出 1，记为 `NOT_VERIFIED`。
+- **关联**：DEC-022；用户 2026-08-26 全书导出反馈。
+
 ### Task-014：本章小结与动手练习从新页开始
 
 - **状态**：✅ 已完成（PR #103）
