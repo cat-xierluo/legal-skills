@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.3"
+version: "1.3.4"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -54,6 +54,8 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 ```
 
 > `--book` 只把相邻输入文件的边界转换为新 section。章节正文里的 Markdown 水平线 `---`、`***`、`___` 在单章和全书模式下都会保留为水平线，不承担分页或分章语义。
+
+> `book-publish` 默认让标题文字精确等于“本章小结”或“动手练习”的 Markdown 标题从新页开始；转换器在标题段自身写入 Word 原生 `pageBreakBefore`，不插入空段、分页 run 或新 section。该规则同样适用于单章转换，其他预设默认关闭；可通过 `pagination.page_break_before_headings` 覆盖。
 
 > 同一 `[^label]` 在正文重复出现时，原生 `footnote` 模式会为每次出现生成独立的 Word 脚注，并重复相同定义文本，确保每个引用位置都能看到脚注；`endnote` 模式仍复用同一编号与一条尾注定义。
 
