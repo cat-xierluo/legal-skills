@@ -4,7 +4,7 @@
 
 ### Task-013：引用框与代码框统一为中性浅灰
 
-- **状态**：✅ 已完成（待 PR 创建）
+- **状态**：✅ 已完成（PR #102）
 - **目标**：保留已确认的连续段落型 callout 结构，只把导读/案例背景及其同色 padding border 统一为代码框同款 `#F5F5F5`。
 - **范围**：quote fallback、全部内置预设、config-template、模板提取基底、配置与样式文档、版本和回归/真实 ch12 结构验收。
 - **非目标**：不改变 shaded exact spacer、引用段落结构、表后 6pt 留白、图片/图注、书稿源文件或第十二章 `confirmed` SVG；不打开 Word。
