@@ -241,6 +241,12 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 - 这是 supervised 正式 lifecycle（worker_done→Delivery→release→ack）的例外兜底，不是常规收尾——优先让 worker 正常发 `worker_done`。
 - 验证：`test-settle-liveness.sh` 覆盖响应字段矩阵；`test-settle-command.sh` 覆盖 mutation 顺序、失败保留、精确删除与持久审计。
 
+### 4.6 Wave Autopilot（用户授权的常设自动推进）
+
+用户显式授权后，PM 按项目任务源中固定的组波/泊车策略自动链式推进波次：收口后自动写回任务源、查表组下一波并派发，直到泊车条件。**授权与策略权威都在项目上下文**（本 skill 不承载项目授权）；查表查不到合法组合即泊车，这是 Autopilot fail-closed 的根本。验收路径不因自动化放宽（门禁在最终树复跑 + safe-push + PR squash 强制），每波收口发摘要但不等确认，泊车必须完整报告后停止。
+
+Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/14-wave-autopilot.md`。
+
 ## 5. tmux 回退
 
 先按 backend 生成命令，再 spawn：
@@ -373,6 +379,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/11-issue-grouping.md`：Issue 分组、依赖链和 PR 粒度。
 - `references/12-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
 - `references/13-pm-orchestrate.md`：PM 三模式统一控制入口。
+- `references/14-wave-autopilot.md`：Wave Autopilot 自动推进、三通道监控、看门狗清单与泊车语义。
 
 不要一次加载全部 references；按当前 backend、控制模式和故障类型读取。
 
