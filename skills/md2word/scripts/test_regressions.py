@@ -3,6 +3,8 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from contextlib import redirect_stdout
+import io
 import sys
 import unittest
 import zipfile
@@ -881,6 +883,118 @@ class Md2WordRegressionTest(unittest.TestCase):
                 settings_xml = archive.read("word/settings.xml").decode("utf-8")
             self.assertIn('TOC \\o "1-3" \\h \\z \\u', document_xml)
             self.assertIn("<w:updateFields", settings_xml)
+
+    def test_book_mode_resolves_each_chapters_local_image_paths_before_merge(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            chapter_a_dir = root / "chapters" / "a"
+            chapter_b_dir = root / "chapters" / "b"
+            figures_dir = root / "figures"
+            assets_dir = chapter_b_dir / "assets"
+            for directory in (chapter_a_dir, chapter_b_dir, figures_dir, assets_dir):
+                directory.mkdir(parents=True, exist_ok=True)
+
+            image_paths = {
+                "shared": figures_dir / "shared image.png",
+                "same_dir": chapter_a_dir / "local.png",
+                "subdir": assets_dir / "子 图.png",
+                "html": chapter_b_dir / "html local.png",
+            }
+            for index, image_path in enumerate(image_paths.values(), start=1):
+                Image.new("RGB", (12, 12), (index * 40, 80, 120)).save(image_path)
+
+            chapter_one = chapter_a_dir / "ch01.md"
+            chapter_two = chapter_b_dir / "ch02.md"
+            chapter_one.write_text(
+                "# 第一章\n\n"
+                "![共享一](<../../figures/shared image.png> \"共享标题\")\n\n"
+                "![同目录](local.png)\n",
+                encoding="utf-8",
+            )
+            chapter_two.write_text(
+                "# 第二章\n\n"
+                "![共享二](../../figures/shared%20image.png '共享标题二')\n\n"
+                "![子目录](<assets/子 图.png>)\n\n"
+                "<table>\n"
+                "<tr><td><img src=\"html local.png\" width=\"10\"></td></tr>\n"
+                "</table>\n",
+                encoding="utf-8",
+            )
+
+            untouched = (
+                "![远程](https://example.com/a%20b.png)\n"
+                "![数据](data:image/png;base64,AAAA)\n"
+                "![锚点](#figure-one)\n"
+                f"![绝对]({image_paths['same_dir']})\n"
+                '<img src="https://example.com/remote.png">\n'
+                '```markdown\n![代码](local.png)\n<img src="local.png">\n```\n'
+            )
+            self.assertEqual(
+                md2word._rewrite_book_local_image_paths(untouched, chapter_one),
+                untouched,
+                "远程、data、锚点、绝对路径和围栏代码不得被 --book 重写",
+            )
+
+            rewritten_one = md2word._rewrite_book_local_image_paths(
+                chapter_one.read_text(encoding="utf-8"), chapter_one
+            )
+            rewritten_two = md2word._rewrite_book_local_image_paths(
+                chapter_two.read_text(encoding="utf-8"), chapter_two
+            )
+            self.assertIn("shared%20image.png \"共享标题\"", rewritten_one)
+            self.assertIn("local.png)", rewritten_one)
+            self.assertIn("shared%20image.png '共享标题二'", rewritten_two)
+            self.assertIn("%E5%AD%90%20%E5%9B%BE.png", rewritten_two)
+            self.assertIn("file://", rewritten_two)
+            self.assertIn("html%20local.png", rewritten_two)
+
+            config = md2word.get_preset("book-publish")
+            md2word.set_config(config)
+            book_output = root / "book.docx"
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                md2word.create_book(
+                    [str(chapter_one), str(chapter_two)], str(book_output), config
+                )
+            conversion_output = stdout.getvalue()
+            for warning in (
+                "本地图片不存在",
+                "图片未能加载",
+                "表格图片路径不存在",
+            ):
+                self.assertNotIn(warning, conversion_output)
+
+            with zipfile.ZipFile(book_output) as archive:
+                document_root = ET.fromstring(archive.read("word/document.xml"))
+            self.assertEqual(
+                len(list(document_root.iter(qn("w:drawing")))),
+                5,
+                "两个章节的 Markdown/HTML 本地图片都应嵌入整书 DOCX",
+            )
+            all_text = "".join(
+                node.text or "" for node in document_root.iter(qn("w:t"))
+            )
+            self.assertNotIn("[图片:", all_text)
+            self.assertNotIn("图片未能加载", all_text)
+            self.assertFalse(Path(f"{book_output}.merged.md").exists())
+
+            single_output = root / "single.docx"
+            single_markdown = chapter_a_dir / "single.md"
+            single_markdown.write_text(
+                "# 单章\n\n![同目录](local.png)\n", encoding="utf-8"
+            )
+            with redirect_stdout(io.StringIO()):
+                md2word.create_word_document(
+                    str(single_markdown), str(single_output), config=config
+                )
+            with zipfile.ZipFile(single_output) as archive:
+                single_root = ET.fromstring(archive.read("word/document.xml"))
+            self.assertEqual(len(list(single_root.iter(qn("w:drawing")))), 1)
+            self.assertEqual(
+                single_markdown.read_text(encoding="utf-8"),
+                "# 单章\n\n![同目录](local.png)\n",
+                "单章转换仍直接按源文件目录解析，不改写输入",
+            )
 
     def test_single_document_first_hr_is_rendered_without_page_break(self):
         with TemporaryDirectory() as temp:

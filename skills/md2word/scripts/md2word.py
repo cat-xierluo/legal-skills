@@ -15,6 +15,7 @@ import tempfile
 import urllib.request
 import urllib.parse
 import io
+import html
 
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
@@ -622,6 +623,108 @@ def debug_quotes_in_file(file_path):
 # 全书合并工具（--book 模式）
 # ============================================================================
 
+_MARKDOWN_IMAGE_RE = re.compile(
+    r'(?P<prefix>!\[[^\]\n]*\]\()'
+    r'(?P<leading>[ \t]*)'
+    r'(?P<destination><[^>\n]+>|(?:\\.|[^()\s]|\([^()\n]*\))+?)'
+    r'(?P<title>[ \t]+(?:"[^"\n]*"|\'[^\'\n]*\'|\([^\)\n]*\)))?'
+    r'(?P<trailing>[ \t]*)\)'
+)
+_HTML_IMG_QUOTED_SRC_RE = re.compile(
+    r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)'
+    r'(?P<quote>["\'])(?P<src>.*?)(?P=quote)',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_IMG_UNQUOTED_SRC_RE = re.compile(
+    r'(?P<prefix><img\b[^>]*?\bsrc\s*=\s*)'
+    r'(?P<src>(?!["\'])[^\s>]+)',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+def _book_local_image_target(raw_path, source_dir, *, html_src=False):
+    """Return a merged-book-safe target for one local relative image path."""
+    raw_path = raw_path.strip()
+    if not raw_path or raw_path.startswith('#'):
+        return None
+
+    decoded = urllib.parse.unquote(html.unescape(raw_path) if html_src else raw_path)
+    decoded = re.sub(r'\\([\\ ()])', r'\1', decoded)
+    parsed = urllib.parse.urlsplit(decoded)
+    if parsed.scheme or decoded.startswith('//') or os.path.isabs(decoded):
+        return None
+
+    absolute = os.path.abspath(os.path.normpath(os.path.join(source_dir, decoded)))
+    encoded = urllib.parse.quote(absolute, safe="/:@-._~!$&'()*+,;=")
+    return f'file://{encoded}' if html_src else encoded
+
+
+def _rewrite_book_local_image_paths(content, source_path):
+    """Relocate local relative image references before --book concatenation.
+
+    Each chapter's paths are resolved against that chapter, then serialized in
+    a form the existing single-document image loaders can consume from the
+    temporary merged Markdown file. Fenced code is deliberately left literal.
+    """
+    source_dir = os.path.dirname(os.path.abspath(source_path))
+
+    def rewrite_outside_fence(text):
+        def markdown_replacement(match):
+            token = match.group('destination')
+            raw_path = token[1:-1] if token.startswith('<') and token.endswith('>') else token
+            relocated = _book_local_image_target(raw_path, source_dir)
+            if relocated is None:
+                return match.group(0)
+            return ''.join((
+                match.group('prefix'), match.group('leading'), relocated,
+                match.group('title') or '', match.group('trailing'), ')',
+            ))
+
+        def quoted_html_replacement(match):
+            relocated = _book_local_image_target(
+                match.group('src'), source_dir, html_src=True
+            )
+            if relocated is None:
+                return match.group(0)
+            quote = match.group('quote')
+            return f"{match.group('prefix')}{quote}{relocated}{quote}"
+
+        def unquoted_html_replacement(match):
+            relocated = _book_local_image_target(
+                match.group('src'), source_dir, html_src=True
+            )
+            if relocated is None:
+                return match.group(0)
+            return f"{match.group('prefix')}{relocated}"
+
+        text = _MARKDOWN_IMAGE_RE.sub(markdown_replacement, text)
+        text = _HTML_IMG_QUOTED_SRC_RE.sub(quoted_html_replacement, text)
+        return _HTML_IMG_UNQUOTED_SRC_RE.sub(unquoted_html_replacement, text)
+
+    output = []
+    outside = []
+    fence = None
+    for line in content.splitlines(keepends=True):
+        fence_match = re.match(r'^[ \t]{0,3}(`{3,}|~{3,})', line)
+        if fence_match:
+            if outside:
+                output.append(rewrite_outside_fence(''.join(outside)))
+                outside = []
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = (marker[0], len(marker))
+            elif marker[0] == fence[0] and len(marker) >= fence[1]:
+                fence = None
+            output.append(line)
+        elif fence is None:
+            outside.append(line)
+        else:
+            output.append(line)
+    if outside:
+        output.append(rewrite_outside_fence(''.join(outside)))
+    return ''.join(output)
+
+
 def rename_footnote_ids(content, ch):
     """全书合并预处理：给脚注 id 加章节前缀，避免跨章 [^id] 冲突。
     [^1] → [^1-1]（第 1 章的 1）；[^note] → [^2-note]（第 2 章的 note）。
@@ -685,6 +788,7 @@ def create_book(md_files, output_path, config, notes_mode='footnote'):
         except UnicodeDecodeError:
             with open(f, 'r', encoding='gbk') as fh:
                 content = fh.read()
+        content = _rewrite_book_local_image_paths(content, f)
         content = rename_footnote_ids(content, ch_idx)
         merged.append(content)
         print(f"  第 {ch_idx} 章: {os.path.basename(f)}")
