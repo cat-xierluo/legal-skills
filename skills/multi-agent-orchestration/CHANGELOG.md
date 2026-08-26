@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.8.1] - 2026-08-26
+
+### 修复
+
+- 修正 v2.8.0 将 session recurring cron 暗示为足够持久状态的边界：cron 只属于 live PM session 的 fast path；项目任务源保存策略/意图，不保存当前 Wave owner、attempt、Dispatch/PR、retry 与 next action。没有 runtime ledger、PM lease/fencing、幂等 reconcile 和外部 scheduler 时，只能声明 `L1 / LIVE_SESSION_AUTOPILOT`。
+
+### 新增
+
+- 新增 `references/15-autopilot-durability.md`：定义 L0—L3 能力等级、Git common dir runtime schema、PM lease/fencing、幂等状态机与 reconcile、durable scheduler/soft park、shared-context 单写者、故障分类与八项恢复演练；登记 `Task-066`—`Task-068` 实施切片，并与同时登记的 live-session `Task-063`—`Task-065` 明确互补边界。
+- `SKILL.md` §4.6 与 `references/14-wave-autopilot.md` 分别增加 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`、`AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED` 边界和升级路由，防止 Agent 把单会话运行手册扩大为跨会话无人值守能力，或在 L2 已交付后继续错误声明 controller 未实现。
+
+## [2.8.0] - 2026-08-26
+
+### 新增
+
+- Wave Autopilot 模式（Task-062，`DEC-125`）：`references/14-wave-autopilot.md` + SKILL.md §4.6。用户显式授权后，PM 按项目任务源固定策略自动链式推进波次直到泊车。核心机制：监控**三通道并用**（Orca 推送 + recurring cron 看门狗 + Dispatch 状态轮询；完成权威是 `worker-show` 的 dispatch/worker 状态而非队列消息——实测 worker_done 推送可延迟 6.6h 不唤醒 PM）；授权与组波/泊车策略权威留在项目上下文，skill 只定义机制与不变量；验收路径不因自动化放宽（最终树门禁复跑 + safe-push + PR squash）；泊车 fail-closed、每波摘要不阻断。含验收期确定性缺陷的 fix-worker 派发模式（新分支名 + `--base-ref origin/<原分支>` 避 worktree 撞车）与 8 条实测反模式清单。来源：badminton-lab Wave 4/5（PR #21—#25）完整生命周期实战。
+
+## [2.7.1] - 2026-08-26
+
+### 改进
+
+- 内部上下文同步：`references/09-parallel-lessons.md` 新增 G39（badminton-lab Wave 4）——同账号多 claude-code worker 的 5 小时限流同时触发；429 打断 turn 后 TUI 停在 idle，`pm-orchestrate send` 投递 Dispatch inbox 叫不醒（`ok:true` ≠ 被消费），须用 `orca terminal send --text ... --enter` 键盘注入唤醒；判活看 `peek` transcript 时间戳与当前的差值而非 tail 文本。SKILL.md §7 增补对应唤醒指引一句。纯文档变更，无脚本改动，全部脚本 `bash -n` 通过。
+
 ## [2.7.0] - 2026-08-25
 
 ### 新增

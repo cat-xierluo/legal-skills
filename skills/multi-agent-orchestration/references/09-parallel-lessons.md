@@ -749,3 +749,11 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **现象**：manifest spec 写 `branch: feat/bl-018-...`，spawn 侧 `safe_branch` 规范化成连字符后实际分支与 spec 文本不一致，三个 worker 的隔离门禁同时按 spec 比对误判 blocked，PM 紧急向三个终端广播纠偏。
 - **修复**：`orca-wave-prepare.sh` fail-closed 拒绝 spec 内 `branch[:=] x/y` 形态并列出 key；路径引用（如 `docs/plans`）不误报。spawn 侧 `safe_branch` 早已存在，缺口只在 PM 手写 spec 环节。
 - **教训**：**同一标识符（分支名）跨 PM 手写文本与工具规范化两处出现时，入口处必须校验一致性**，不能依赖 PM 记得"Orca 会规范化"。
+
+### G39. 同账号多 worker 同时撞 429 限额 + idle TUI：inbox send 叫不醒，要键盘注入（badminton-lab Wave 4，PM 侧）
+
+- **现象**：同一 Claude 账号的 3 个 claude-code supervised worker 同时撞 429「已达到 5 小时的使用上限」，CLI 重试循环能扛过重置点；但 429 风暴把 turn 打断后 TUI 停在 `ready`（idle）。PM 用 `pm-orchestrate send` 发「继续」返回 `ok:true`，三个终端均毫无反应（用户在 UI 里肉眼确认消息没到）。
+- **根因**：supervised 模式下 `pm-orchestrate send` 投递到 **Dispatch inbox**，不是终端 stdin；idle worker 不会主动拉 inbox，消息安静躺箱。CLI 返回的 ok 只证明投递成功，不证明被消费。
+- **修复**：`orca terminal send --terminal <handle> --text "..." --enter` 直接键盘注入，三个 worker 立即恢复工作（transcript 时间戳恢复跳动，数分钟内出现读文档/跑命令活动）。
+- **诊断要点**：terminal tail 停在 429 行 + `peek` 返回的 transcript `timestamp`（epoch ms）距 `date +%s000` 超过几分钟 = 需要注入；判活看时间戳差值，别信 tail 文本（缓冲可能是陈旧快照，恢复思考时 spinner 只原地刷新不产生新行）。
+- **教训**：send 的「成功」语义 = 投递成功 ≠ 唤醒成功；对 idle TUI 的唤醒必须走输入通道本身。另：同账号多 worker 的 5 小时限流是**同时**触发的——波次排期要把账号配额当共享资源，多 worker 长任务尽量错峰或分账号（provider lease 按 backend 计数，拦不住同账号配额）。
