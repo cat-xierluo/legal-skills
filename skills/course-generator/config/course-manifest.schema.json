@@ -12,10 +12,11 @@
     "overview",
     "chapters",
     "materials",
-    "images"
+    "images",
+    "source_index"
   ],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "1.2"},
     "generator_version": {"type": "string", "minLength": 1},
     "course": {
       "type": "object",
@@ -38,6 +39,15 @@
           "id": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"},
           "path": {"type": "string", "minLength": 1}
         }
+      }
+    },
+    "source_index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
     "overview": {
@@ -81,7 +91,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "summary", "source_refs", "disposition", "target_chapter_id"],
+        "required": ["id", "type", "summary", "source_refs", "source_block_ids", "coverage_terms", "disposition", "target_chapter_id", "reader_evidence"],
         "properties": {
           "id": {"type": "string", "pattern": "^MAT-[0-9]{3,}$"},
           "type": {
@@ -89,6 +99,16 @@
           },
           "summary": {"type": "string", "minLength": 1},
           "source_refs": {"$ref": "#/$defs/source_refs"},
+          "source_block_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"}
+          },
+          "coverage_terms": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {"type": "string", "minLength": 2}
+          },
           "disposition": {"enum": ["include", "skip"]},
           "target_chapter_id": {
             "oneOf": [
@@ -96,8 +116,51 @@
               {"type": "null"}
             ]
           },
-          "skip_reason": {"type": "string", "minLength": 1}
-        }
+          "skip_reason": {"type": "string", "minLength": 1},
+          "skip_code": {
+            "enum": ["derived_duplicate", "meeting", "device", "chatter", "pure_repeat", "no_course_value"]
+          },
+          "reader_evidence": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["quotes"],
+                "properties": {
+                  "quotes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "items": {"type": "string", "minLength": 20}
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"disposition": {"const": "include"}}},
+            "then": {
+              "properties": {
+                "source_block_ids": {"maxItems": 6},
+                "coverage_terms": {"minItems": 2},
+                "reader_evidence": {"type": "object"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"disposition": {"const": "skip"}}},
+            "then": {
+              "required": ["skip_reason", "skip_code"],
+              "properties": {
+                "coverage_terms": {"maxItems": 0},
+                "reader_evidence": {"type": "null"}
+              }
+            }
+          }
+        ]
       }
     },
     "images": {
