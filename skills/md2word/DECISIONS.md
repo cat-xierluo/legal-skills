@@ -2,6 +2,24 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-020] - 2026-08-26 - 引用框复用代码框的中性浅灰 token
+
+### 背景
+v1.3.2 已用真实 shaded spacer 消除多段引用内部的白缝，连续整块的段落型 callout 经用户视觉确认正确；但 DEC-019 把引用框颜色绑定到第十二章图示的 `confirmed` 状态灰 `#EDF2F7`，误解了目标参照。用户要求引用框与 fenced code block（包括 `text` 围栏）使用完全相同的中性浅灰 `#F5F5F5`。
+
+### 决策
+1. 全部内置预设、fallback config、配置模板和模板提取基底把 `quote.background_color` 统一为 `#F5F5F5`，与 `code_block.content.background_color` 的默认值完全一致；两项仍分别显式配置，保留独立覆盖能力。
+2. paragraph callout 的 `w:shd` 与承担 padding 的不可见同色 paragraph border 均读取 `quote.background_color`；缺省 fallback 同步为 `#F5F5F5`。
+3. v1.3.2 的连续 shaded exact spacer、连续内部空行折叠、首尾 padding/块外间距、无 `w:tbl` 和 v1.3.1 的数据表 6pt exact spacer 全部保持，不修改图片/图注链路。
+
+### 方案取舍
+- 不动态引用另一配置路径：显式写同值更容易审计，也允许高级用户将引用框与代码框分别定制；测试负责锁定 `book-publish` 与 `legal` 两个书籍相关预设的默认 token 一致。
+- 不修改第十二章 `confirmed` SVG：图示状态色与文档组件背景色属于不同语义，本次只纠正 md2word 引用组件。
+
+### 影响与回退
+- 本决策 supersede DEC-019 的 `#EDF2F7` 颜色选择；DEC-019 的真实 shaded spacer 与连续灰底结构继续有效。
+- 回退颜色必须同步 fallback、全部预设、模板基底、参考文档与 OOXML 断言，不能只改某一个 preset。
+
 ## [DEC-019] - 2026-08-26 - 引用内空行使用同底色 exact spacer，并统一 confirmed 灰
 
 ### 背景

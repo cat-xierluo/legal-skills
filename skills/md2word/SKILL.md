@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.2"
+version: "1.3.3"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -61,7 +61,7 @@ python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=b
 
 > 页面脚注在普通正文与 Markdown 引用块（`>`）中都可使用；引用块内的 `[^label]` 会生成原生 Word 脚注引用，不会作为字面标记留在正文，同时保留引用段落和加粗等行内格式。
 
-> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。内置预设统一使用与 `confirmed` 状态一致的 `#EDF2F7`，样式为正文全宽、无可见边框的浅灰段落底纹；不使用表格容器，因此 Word 的“查看网格线”不会出现虚线外框。文字通过 `padding` 保留左右和首尾内边距；内部空引用行会生成同底色的 `paragraph_spacing` exact 空段，使多段 callout 保持一整块连续灰底。连续多个内部空引用行确定性折叠为一个，首尾空引用行忽略。
+> 所有 Markdown 引用块统一读取一套 `quote` 配置，不按“本章导读”“案例”等文字标签分流。内置预设的引用框与 fenced code block 共用中性浅灰视觉 token `#F5F5F5`，样式为正文全宽、无可见边框的段落底纹；不使用表格容器，因此 Word 的“查看网格线”不会出现虚线外框。文字通过 `padding` 保留左右和首尾内边距；内部空引用行会生成同底色的 `paragraph_spacing` exact 空段，使多段 callout 保持一整块连续灰底。连续多个内部空引用行确定性折叠为一个，首尾空引用行忽略。
 
 > 行内代码优先保护反引号范围：其中的 `_`、`*` 等 Markdown 标记按字面量保留，不会与相邻代码段拼成斜体或粗体；例如 `` `law_keyword` `` 会完整输出为一个代码 run。
 

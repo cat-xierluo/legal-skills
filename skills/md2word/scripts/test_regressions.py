@@ -322,6 +322,14 @@ class Md2WordRegressionTest(unittest.TestCase):
             markdown = HERE / "fixtures" / "quote-callout.md"
             output = temp_dir / "quote-callout.docx"
             config = md2word.get_preset("book-publish")
+            for preset_name in ("book-publish", "legal"):
+                preset = md2word.get_preset(preset_name)
+                self.assertEqual(
+                    preset.get("quote.background_color"),
+                    preset.get("code_block.content.background_color"),
+                    f"{preset_name} 的引用框与代码框必须使用完全相同的背景色 token",
+                )
+                self.assertEqual(preset.get("quote.background_color"), "#F5F5F5")
             md2word.set_config(config)
 
             md2word.create_word_document(str(markdown), str(output), config=config)
@@ -380,10 +388,10 @@ class Md2WordRegressionTest(unittest.TestCase):
                 borders = p_pr.find(qn("w:pBdr"))
                 if (
                     shading is not None
-                    and shading.get(qn("w:fill")) == "EDF2F7"
+                    and shading.get(qn("w:fill")) == "F5F5F5"
                     and borders is not None
                     and all(
-                        border.get(qn("w:color")) == "EDF2F7"
+                        border.get(qn("w:color")) == "F5F5F5"
                         for border in borders
                     )
                 ):
@@ -421,7 +429,7 @@ class Md2WordRegressionTest(unittest.TestCase):
                     self.assertLess(p_pr_tags.index("shd"), p_pr_tags.index("spacing"))
                     self.assertLess(p_pr_tags.index("spacing"), p_pr_tags.index("ind"))
                     shading = p_pr.find(qn("w:shd"))
-                    self.assertEqual(shading.get(qn("w:fill")), "EDF2F7")
+                    self.assertEqual(shading.get(qn("w:fill")), "F5F5F5")
                     borders = p_pr.find(qn("w:pBdr"))
                     self.assertIsNotNone(borders)
                     border_snapshot = {
@@ -434,13 +442,13 @@ class Md2WordRegressionTest(unittest.TestCase):
                         for child in borders
                     }
                     expected_edges = {
-                        "left": ("single", "2", "6", "EDF2F7"),
-                        "right": ("single", "2", "6", "EDF2F7"),
+                        "left": ("single", "2", "6", "F5F5F5"),
+                        "right": ("single", "2", "6", "F5F5F5"),
                     }
                     if index == 0:
-                        expected_edges["top"] = ("single", "2", "5", "EDF2F7")
+                        expected_edges["top"] = ("single", "2", "5", "F5F5F5")
                     if index == len(group) - 1:
-                        expected_edges["bottom"] = ("single", "2", "5", "EDF2F7")
+                        expected_edges["bottom"] = ("single", "2", "5", "F5F5F5")
                     self.assertEqual(
                         border_snapshot,
                         expected_edges,
@@ -468,7 +476,7 @@ class Md2WordRegressionTest(unittest.TestCase):
                             self.assertEqual(run.font.size.pt, 12)
                     style_snapshots.append(shading.get(qn("w:fill")))
 
-            self.assertEqual(set(style_snapshots), {"EDF2F7"})
+            self.assertEqual(set(style_snapshots), {"F5F5F5"})
             self.assertTrue(any(run.text == "本章导读" and run.bold for run in guide.runs))
             self.assertTrue(any(run.text == "案例：统一引用框" and run.bold for run in case_paragraphs[0].runs))
             self.assertTrue(any(run.text == "关键判断" and run.bold for run in case_paragraphs[1].runs))

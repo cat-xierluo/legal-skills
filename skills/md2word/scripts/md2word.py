@@ -282,7 +282,7 @@ def _apply_quote_paragraph_container(
     the fill. Unlike a borderless one-cell table, this representation cannot
     expose dotted table gridlines when Word's ``View Gridlines`` is enabled.
     """
-    background = (quote_config.get('background_color') or '#EDF2F7').lstrip('#')
+    background = (quote_config.get('background_color') or '#F5F5F5').lstrip('#')
     padding = _quote_padding_pt(quote_config)
     p_pr = paragraph._p.get_or_add_pPr()
 
