@@ -130,7 +130,7 @@ out=$(run_driver $'ping\n/quit' "$TMP_ROOT/good-config.json" \
 
 if [ "$rc" -eq 0 ]; then ok "driver exits 0 with --model"; else bad "driver rc=$rc"; fi
 
-if grep -q '"method": "session/setModel", "params": {"sessionId": "sess_stub_001", "model": {"providerId": "builtin:bigmodel-coding-plan", "modelId": "GLM-5.3-Flash"}}' "$STUB_LOG"; then
+if grep -q '"method": "session/setModel", "params": {"sessionId": "sess_stub_001", "model": {"providerId": "builtin:bigmodel-coding-plan", "modelId": "GLM-5.3-Flash"}, "persistAsWorkspaceLastUsed": false}' "$STUB_LOG"; then
   ok "setModel dispatched with exact modelRef"
 else
   bad "setModel params wrong; log: $(cat "$STUB_LOG")"
@@ -145,7 +145,7 @@ fi
 # ---- Case 4: bare --model (no provider) — providerId falls back to config ----
 : > "$STUB_LOG"
 out=$(run_driver $'ping\n/quit' "$TMP_ROOT/good-config.json" --model 'GLM-5.3-Flash') && rc=0 || rc=$?
-if grep -q '"model": {"providerId": "x", "modelId": "GLM-5.3-Flash"}' "$STUB_LOG"; then
+if grep -q '"model": {"providerId": "x", "modelId": "GLM-5.3-Flash"}, "persistAsWorkspaceLastUsed": false' "$STUB_LOG"; then
   ok "bare --model falls back to config provider prefix"
 else
   bad "provider fallback wrong; log: $(cat "$STUB_LOG")"

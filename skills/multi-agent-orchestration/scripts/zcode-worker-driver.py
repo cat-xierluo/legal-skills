@@ -86,7 +86,7 @@ def resolve_zcode_bin(explicit: str) -> str:
     raise AssertionError("unreachable")
 
 
-def check_model_config() -> None:
+def check_model_config() -> str:
     """Fail fast instead of launching a worker that cannot talk to a model."""
     if not os.path.exists(CLI_CONFIG):
         fail_config(
@@ -105,6 +105,29 @@ def check_model_config() -> None:
             "cannot reach any model provider without them (see "
             "references/09-zcode-cli-worker.md §2)."
         )
+    return config["model"]
+
+
+def restore_global_model(startup_model: str) -> None:
+    """session/setModel persistently rewrites the GLOBAL config `model`
+    field (no protocol opt-out — persistAsWorkspaceLastUsed:false does not
+    prevent it; PM live probe 2026-08-27). Snapshot at startup, restore at
+    exit, so one worker's --model never repoints other workers' default.
+    Known race: concurrently-spawned drivers each restore their own startup
+    snapshot; last-exiter wins (references/09 §4)."""
+    try:
+        with open(CLI_CONFIG, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+        if config.get("model") == startup_model:
+            return
+        config["model"] = startup_model
+        tmp = CLI_CONFIG + ".driver-restore.tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(config, handle, ensure_ascii=False, indent=2)
+        os.replace(tmp, CLI_CONFIG)
+        print(f"[driver] restored global model to {startup_model}", flush=True)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[driver] WARNING: could not restore global model: {exc}", flush=True)
 
 
 def resolve_model_ref(spec: str) -> dict:
@@ -193,6 +216,11 @@ class Driver:
                             {
                                 "sessionId": self.session_id,
                                 "model": self.model_ref,
+                                # Server default rewrites the GLOBAL config
+                                # model — one worker's --model would repoint
+                                # every other worker's default. Opt out.
+                                # (PM dual-worker live check, 2026-08-27)
+                                "persistAsWorkspaceLastUsed": False,
                             },
                             "setModel",
                         )
@@ -294,7 +322,7 @@ def main() -> int:
     worktree = os.path.abspath(args.cwd or os.getcwd())
     if not os.path.isdir(worktree):
         fail_config(f"--cwd {worktree} is not a directory")
-    check_model_config()
+    startup_model = check_model_config()
     model_ref = resolve_model_ref(args.model) if args.model else None
     if model_ref:
         print(
@@ -353,6 +381,7 @@ def main() -> int:
             if driver.session_id:
                 driver.request("session/close", {"sessionId": driver.session_id}, "close")
             print("[driver] bye", flush=True)
+            restore_global_model(startup_model)
             return 0
         if not driver.session_id:
             with driver.queue_lock:
@@ -378,6 +407,7 @@ def main() -> int:
     if driver.session_id:
         driver.request("session/close", {"sessionId": driver.session_id}, "close")
     proc.terminate()
+    restore_global_model(startup_model)
     return 0
 
 

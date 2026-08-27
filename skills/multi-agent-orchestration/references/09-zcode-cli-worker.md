@@ -130,7 +130,9 @@ zcode doctor / version / plugins list / skills list
 
 strict 对象；`model` 必填 `{providerId, modelId, variant?}`，另有可选
 `runtimeModel` / `expectedRevision` / `persistAsWorkspaceLastUsed`（默认
-true——会把选择持久化为 workspace 上次使用模型）。成功响应空 result，随后
+true——**会改写全局 config 的 model 字段**，一个 worker 的 --model 会
+污染所有其他 worker 的默认模型；driver 显式传 false 关闭，PM 双
+worker 实测踩坑 2026-08-27）。成功响应空 result，随后
 收到 `state.updated (model_changed)` 事件。真机验证：`/status` 的
 `session/read` 结果在 `result.session.model` 回显
 `{providerId, modelId}`（注意不在顶层，`projection` 里也没有 model）。
