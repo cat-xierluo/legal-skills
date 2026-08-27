@@ -41,6 +41,18 @@ detect_orca_mode() {
   local project_toplevel
   project_toplevel="$ORCA_CURRENT_WORKTREE_PATH"
   ORCA_WORKTREE_ID="$ORCA_CURRENT_WORKTREE_ID"
+  case "$ORCA_CURRENT_WORKTREE_ID" in
+    *::*) ORCA_EXPECTED_REPO_ID="${ORCA_CURRENT_WORKTREE_ID%%::*}" ;;
+    *)
+      echo "ERROR: orca worktree current 返回的 worktree id 无法解析 repoId: $ORCA_CURRENT_WORKTREE_ID" >&2
+      ORCA_MODE="missing_orca"; return 0
+      ;;
+  esac
+  if [ -z "$ORCA_EXPECTED_REPO_ID" ]; then
+    echo "ERROR: orca worktree current 返回空 repoId: $ORCA_CURRENT_WORKTREE_ID" >&2
+    ORCA_MODE="missing_orca"; return 0
+  fi
+  ORCA_PROJECT_TOPLEVEL="$project_toplevel"
 
   local status_json
   if ! status_json=$(orca_cli status --json 2>/dev/null); then
@@ -71,24 +83,139 @@ detect_orca_mode() {
   ORCA_MODE="auto"
 }
 
+# 返回 Git common-dir 的物理路径；无法证明目标属于 Git 仓时返回非零。
+orca_git_common_dir() {
+  local worktree_path="$1" common_dir
+  common_dir=$(git -C "$worktree_path" rev-parse --git-common-dir 2>/dev/null) || return 1
+  case "$common_dir" in
+    /*) ;;
+    *) common_dir="$worktree_path/$common_dir" ;;
+  esac
+  common_dir=$(cd "$common_dir" 2>/dev/null && pwd -P) || return 1
+  printf '%s\n' "$common_dir"
+}
+
+# create 已产生副作用但 repo identity 校验失败时，只回滚能够精确证明归属的资源。
+# worktree 始终按 runtime 返回的精确 id/path 删除；branch 仅在以下条件同时成立时删除：
+#   1. created worktree 与 PROJECT_DIR 属于同一 Git common-dir；
+#   2. create 前该 branch 不存在；
+#   3. 删除时 branch 仍指向 create 后立即记录的同一 oid。
+# 这样既能清掉本次新建 branch，也不会误删错仓中碰巧同名的预存 branch。
+orca_rollback_created_worktree() {
+  local worktree_id="$1" worktree_path="$2" name="$3"
+  local branch_preexisting="$4" expected_common_dir="$5"
+  local selector actual_common_dir="" created_branch_oid="" cleanup_ok=1
+
+  if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
+    actual_common_dir=$(orca_git_common_dir "$worktree_path" 2>/dev/null || true)
+    if [ -n "$actual_common_dir" ]; then
+      created_branch_oid=$(git --git-dir="$actual_common_dir" show-ref --hash --verify "refs/heads/$name" 2>/dev/null || true)
+    fi
+  fi
+  if [ "$actual_common_dir" != "$expected_common_dir" ]; then
+    # 错仓的同名 branch 在 create 前不可观察，不能证明归本次 spawn 所有。
+    # worktree 仍精确回滚，但把整体 cleanup 标为 partial 并保留 branch。
+    cleanup_ok=0
+    echo "SPAWN_WORKER_ORCA_ROLLBACK_BRANCH_UNPROVEN: branch=$name oid=${created_branch_oid:-unknown} actual_common_dir=${actual_common_dir:-unknown}（拒绝误删）" >&2
+  fi
+
+  case "$worktree_id" in
+    *::*) selector="id:$worktree_id" ;;
+    *)
+      if [ -n "$worktree_path" ]; then
+        selector="path:$worktree_path"
+      else
+        echo "ERROR: repoId 校验失败且 runtime 未返回可精确清理的 worktree id/path；保留现场" >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  if ! orca_cli worktree rm --worktree "$selector" --force --json >&2; then
+    echo "ERROR: repoId 校验失败后的 Orca worktree 回滚失败，资源保留: selector=$selector" >&2
+    return 1
+  fi
+
+  if [ "$branch_preexisting" -eq 0 ] \
+     && [ -n "$expected_common_dir" ] \
+     && [ "$actual_common_dir" = "$expected_common_dir" ] \
+     && [ -n "$created_branch_oid" ]; then
+    # update-ref 携带旧 oid：ref 已由 Orca 一并清掉时是幂等成功；当前 oid 不同时拒绝删除。
+    # Git ref 只按 oid 做 CAS，无法区分“删除后以相同 oid 重建”的 ABA；调用方仍须使用唯一 worker name。
+    if ! git --git-dir="$actual_common_dir" update-ref -d "refs/heads/$name" "$created_branch_oid"; then
+      echo "ERROR: worktree 已回滚，但本次新建 branch 未能按原 oid 安全删除: branch=$name oid=$created_branch_oid" >&2
+      cleanup_ok=0
+    fi
+  fi
+
+  if [ "$cleanup_ok" -eq 1 ]; then
+    return 0
+  fi
+  return 1
+}
+
 # ORCA worktree create helper。返回 ORCA worktreeId (含完整 <repoId>::<path>)。
-# 失败时打印 ERROR 并 exit 64。--dry-run 模式只打印计划不真调。
+# 失败时打印 ERROR 并 return 64。--dry-run 模式只打印计划不真调。
 orca_worktree_create() {
   local name="$1" base_branch="$2"
+  local project_toplevel="${ORCA_PROJECT_TOPLEVEL:-}"
+  local expected_repo_id="${ORCA_EXPECTED_REPO_ID:-}"
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf 'ORCA_RUN: orca worktree create --name %q --no-parent --base-branch %q --setup inherit --json\n' "$name" "$base_branch"
+    printf 'ORCA_RUN: (cd %q && orca worktree create --name %q --no-parent --base-branch %q --setup inherit --json)\n' \
+      "$project_toplevel" "$name" "$base_branch"
     echo "orca_worktree_id_placeholder"
     return 0
   fi
-  local out worktree_id
-  out=$(orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --setup inherit --json 2>&1) || {
-    echo "ERROR: orca worktree create 失败: $out" >&2
-    exit 64
+  if [ -z "$project_toplevel" ] || [ -z "$expected_repo_id" ]; then
+    echo "ERROR: Orca create 缺少已验证的 PROJECT_DIR top/repoId（fail-closed）" >&2
+    return 64
+  fi
+
+  local out worktree_id worktree_path actual_repo_id
+  local expected_common_dir="" branch_preexisting=0
+  expected_common_dir=$(orca_git_common_dir "$project_toplevel" 2>/dev/null || true)
+  [ -n "$expected_common_dir" ] || {
+    echo "ERROR: 已验证的 Orca PROJECT_DIR 不再是 Git worktree: $project_toplevel" >&2
+    return 64
   }
+  if git --git-dir="$expected_common_dir" show-ref --verify --quiet "refs/heads/$name"; then
+    branch_preexisting=1
+  fi
+
+  # worktree create 的 repo inference 是 cwd-scoped。把这一条有副作用的调用局部绑定到
+  # 已由 `orca worktree current` 验证的 PROJECT_DIR git top，避免符号链接技能目录把
+  # create 路由到其物理目标仓库；不全局 cd，保持 lightweight/相对参数语义不变。
+  out=$(cd "$project_toplevel" && \
+    orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --setup inherit --json 2>&1) || {
+    echo "ERROR: orca worktree create 失败: $out" >&2
+    return 64
+  }
+  if ! printf '%s' "$out" | jq -e '.result.worktree | type == "object"' >/dev/null 2>&1; then
+    echo "ERROR: orca worktree create 返回非法 JSON/合同；无法从响应证明资源身份，保留现场: $out" >&2
+    return 64
+  fi
   worktree_id=$(printf '%s' "$out" | jq -r '.result.worktree.id // empty')
-  if [ -z "$worktree_id" ]; then
-    echo "ERROR: orca worktree create 响应缺 worktreeId: $out" >&2
-    exit 64
+  worktree_path=$(printf '%s' "$out" | jq -r '.result.worktree.path // empty')
+  if [ -z "$worktree_id" ] && [ -z "$worktree_path" ]; then
+    echo "ERROR: orca worktree create 响应缺可精确回滚的 worktree id/path: $out" >&2
+    return 64
+  fi
+  case "$worktree_id" in
+    *::*)
+      actual_repo_id="${worktree_id%%::*}"
+      [ -n "$worktree_path" ] || worktree_path="${worktree_id#*::}"
+      ;;
+    *) actual_repo_id="" ;;
+  esac
+
+  if [ -z "$actual_repo_id" ] || [ "$actual_repo_id" != "$expected_repo_id" ]; then
+    local rollback_status="completed"
+    if ! orca_rollback_created_worktree \
+        "$worktree_id" "$worktree_path" "$name" "$branch_preexisting" "$expected_common_dir"; then
+      rollback_status="failed_or_partial_resources_retained"
+    fi
+    echo "ERROR: Orca worktree repoId mismatch (fail-closed): expected_repoId=$expected_repo_id actual_repoId=${actual_repo_id:-malformed} project=$project_toplevel created_id=$worktree_id created_path=${worktree_path:-unknown} rollback=$rollback_status" >&2
+    return 64
   fi
   printf '%s\n' "$worktree_id"
 }
