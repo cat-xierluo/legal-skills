@@ -16,7 +16,7 @@ Usage:
 
 Options:
   --backend NAME             Check backend CLI: claude-code | claude-oauth | codex | opencode |
-                             codebuddy | qoderwork-cn | custom
+                             codebuddy | qoderwork-cn | zcode | custom
                              Repeat for multiple backends.
                              opencode/custom are historical diagnostics only and cannot
                              be dispatched by spawn-worker.sh.
@@ -25,7 +25,9 @@ Options:
   --strict                   Exit non-zero on WARN as well as MISSING.
   --print-bundle-path NAME    Print the .app bundle binary path for the given backend
                              and exit. Use to get the absolute path when 'which codebuddy'
-                             returns not found. Supports: codebuddy | qoderwork-cn.
+                             returns not found. Supports: codebuddy | qoderwork-cn | zcode
+                             (zcode prints the node script path; run it via PATH symlink
+                             or the zcode-worker-driver.py wrapper).
                              Example: --print-bundle-path codebuddy
 
 Default checks core script dependencies only. The script does not install tools,
@@ -90,8 +92,18 @@ if [ -n "$PRINT_BUNDLE_PATH_BACKEND" ]; then
         exit 1
       fi
       ;;
+    zcode)
+      BIN="/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs"
+      if [ -f "$BIN" ]; then
+        printf '%s\n' "$BIN"
+        exit 0
+      else
+        echo "ERROR: zcode.cjs not found at $BIN (install the ZCode desktop app first)" >&2
+        exit 1
+      fi
+      ;;
     *)
-      echo "ERROR: --print-bundle-path supports codebuddy or qoderwork-cn, got: $PRINT_BUNDLE_PATH_BACKEND" >&2
+      echo "ERROR: --print-bundle-path supports codebuddy, qoderwork-cn or zcode, got: $PRINT_BUNDLE_PATH_BACKEND" >&2
       exit 64
       ;;
   esac
@@ -231,6 +243,38 @@ for backend in "${CHECK_BACKENDS[@]}"; do
       check_app_bundle_binary qoderclicn \
         "/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn" \
         "/Applications/QoderWork.app/Contents/Resources/bin/qodercli"
+      ;;
+    zcode)
+      echo "DEPENDENCY_CHECK: backend=zcode"
+      check_optional_cmd zcode "ZCode worker backend (PATH symlink to the app bundle)"
+      # zcode.cjs 是 node 脚本(非原生二进制)，不能假设 +x；-f 判定即可。
+      zcode_bundle="/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs"
+      if [ ! -x "$(command -v zcode 2>/dev/null || true)" ] && [ ! -f "$zcode_bundle" ]; then
+        report_missing "zcode-bundle" \
+          "$zcode_bundle not found; install the ZCode desktop app, then symlink: ln -s '$zcode_bundle' ~/.local/bin/zcode"
+      elif [ -f "$zcode_bundle" ] && ! command -v zcode >/dev/null 2>&1; then
+        report_warn "zcode-bundle" \
+          "bundle present but not on PATH; symlink recommended: ln -s '$zcode_bundle' ~/.local/bin/zcode"
+      fi
+      # zcode 特有：headless 会话需要 ~/.zcode/cli/config.json 带 model+provider。
+      # 缺失时给出修复指引而不是让 worker 起来就 prompt_failed。
+      zcode_cli_config="$HOME/.zcode/cli/config.json"
+      if [ -f "$zcode_cli_config" ]; then
+        if python3 - "$zcode_cli_config" <<'PYEOF' 2>/dev/null
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+sys.exit(0 if (cfg.get("model") and cfg.get("provider")) else 1)
+PYEOF
+        then
+          report_ok "zcode-model-config" "$zcode_cli_config has model+provider"
+        else
+          report_warn "zcode-model-config" \
+            "$zcode_cli_config lacks model/provider keys; see references/09-zcode-cli-worker.md §2 (GUI login then mirror provider entry)"
+        fi
+      else
+        report_warn "zcode-model-config" \
+          "$zcode_cli_config missing; log in via ZCode desktop app then mirror provider entry (references/09-zcode-cli-worker.md §2)"
+      fi
       ;;
     custom)
       echo "DEPENDENCY_CHECK: backend=custom"

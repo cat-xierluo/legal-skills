@@ -12,7 +12,8 @@ Options:
   --base-ref REF    Base ref for new branches. Default: main
   --command CMD     Command to run. Default: the executable for the verified backend
   --worker-backend NAME
-                   Worker backend: claude-code, codex, codebuddy or qoderwork-cn.
+                   Worker backend: claude-code, codex, codebuddy, qoderwork-cn or zcode
+                   (zcode has no TUI — spawn runs the zcode-worker-driver.py wrapper).
   --pm-harness NAME
                    Optional assertion for the current PM harness. Runtime evidence remains
                    authoritative: a conflicting assertion fails and can never elevate access.

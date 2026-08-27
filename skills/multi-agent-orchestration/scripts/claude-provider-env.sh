@@ -305,7 +305,7 @@ if [ "$cmd0" = "claude" ]; then
     cmd=("${cmd[0]}" --setting-sources "$SETTING_SOURCES" "${cmd[@]:1}")
   fi
   # v2.0：--no-mcp 注入空 MCP 配置，规避项目 .mcp.json 触发的 dialog
-  # （references/09-parallel-lessons.md T6）。用户已显式传 --strict-mcp-config
+  # （references/10-parallel-lessons.md T6）。用户已显式传 --strict-mcp-config
   # 时不再叠加，尊重用户选择。
   if [ "$NO_MCP" -eq 1 ] && [ "$has_strict_mcp" -eq 0 ]; then
     cmd=("${cmd[0]}" --strict-mcp-config --mcp-config '{"mcpServers":{}}' "${cmd[@]:1}")

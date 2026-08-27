@@ -20,6 +20,7 @@
 | QoderWork CLI | 1.0.45 | QoderWork CN.app 内 bin（或 `~/.local/bin/qoderclicn` symlink） | `qoderclicn` | `qoderclicn -p "..."` | ✗ | QoderWork 平台额度 | `Qwen3.8-Max`、`Qwen3.7-Max`（见下方模型表） |
 | CodeBuddy CLI | 2.115.0 | WorkBuddy.app 内 bin | `codebuddy` | `codebuddy --print` | ✓ `--acp` | CodeBuddy 平台额度 / 内置模型 | `hy3`、`deepseek-v4-flash`、`deepseek-v4-pro` |
 | Rudder | 0.2.9 | `~/.local/bin/rudder` | `rudder run` | 通过 `agent` 子命令 | ✗ | 自托管 | （按 rudder profile） |
+| ZCode | 0.16.5 | `~/.local/bin/zcode` → ZCode.app 内 zcode.cjs | `zcode` | `zcode app-server`（经 zcode-worker-driver.py） | ✗（TUI 缺件） | BigModel Coding Plan（GUI 同凭证） | `GLM-5.3`、`GLM-5.3-Flash`（见 ref 09） |
 
 > 默认 model 列来源：`config/orchestration-personal.json` 的 `main_force.task_routing` 与 `backend_model_routing.<backend>.default_models`（详见 SKILL.md §9）；缺省回落本表。Codex 默认行为按 `codex_policy.policy` 决定；个人偏好通常 `explicit_only`——只在用户明确要求时解封。
 
@@ -715,18 +716,18 @@ gemini --approval-mode yolo -p "重构这个模块"
 
 ### 9.1 Worker 能力对比
 
-| 能力 | Claude Code | Codex | OpenCode | Hermes | Kimi | Gemini | QoderWork |
-|------|-------------|-------|----------|--------|------|--------|-----------|
-| 批处理模式 | `claude -p` | `codex exec` | `opencode run` | `hermes chat -q` | `kimi --print -c` | `gemini -p` | `qoderclicn -p` |
-| stream-json | ✓ | ✗ | `--format json` | ✗ | ✓ | ✓ | ✓ |
-| ACP 服务器 | ✗ | ✗ | ✓ `acp` | ✓ `acp` | ✓ `--acp` | ✓ `--experimental-acp` | ✗ |
-| 原生 worktree | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` |
-| 自定义系统提示 | ✓ | ✗（需 config） | ✗（需 config） | ✗（需 config） | ✓ `--agent-file` | ✗ | ✓ |
-| MCP 工具注入 | ✓ `--mcp-config` | ✓ `mcp` | ✓ `mcp` | ✓ `mcp` | ✓ `--mcp-config` | ✓ `mcp` | ✓ `--mcp-config` |
-| 工具白/黑名单 | ✓ | ✗ | ✗ | ✓ `--toolsets` | ✗ | ✓ `--allowed-tools` | ✓ |
-| 权限分级 | 5 级 | 3 级 sandbox | ✗ | `--yolo` | `--yolo` | 4 级 approval | 5 级 |
-| 会话管理 | ✓ | ✓ `resume` | ✓ `session` | ✓ `sessions` | ✓ `--continue` | ✓ `--resume` | ✓ |
-| 多 provider | settings 文件 | config.toml + profile | config.toml | pooled auth | 单 provider | 单 provider | 平台统一 |
+| 能力 | Claude Code | Codex | OpenCode | Hermes | Kimi | Gemini | QoderWork | ZCode |
+|------|-------------|-------|----------|--------|------|--------|-----------|-------|
+| 批处理模式 | `claude -p` | `codex exec` | `opencode run` | `hermes chat -q` | `kimi --print -c` | `gemini -p` | `qoderclicn -p` | `zcode --mode yolo -p` |
+| stream-json | ✓ | ✗ | `--format json` | ✗ | ✓ | ✓ | ✓ | `--json` 收尾汇总 |
+| ACP 服务器 | ✗ | ✗ | ✓ `acp` | ✓ `acp` | ✓ `--acp` | ✓ `--experimental-acp` | ✗ | ✗（私有 ZCode Protocol） |
+| 原生 worktree | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` | ✗ | ✗ | ✓ `--worktree` | ✗ |
+| 自定义系统提示 | ✓ | ✗（需 config） | ✗（需 config） | ✗（需 config） | ✓ `--agent-file` | ✗ | ✓ | ✗ |
+| MCP 工具注入 | ✓ `--mcp-config` | ✓ `mcp` | ✓ `mcp` | ✓ `mcp` | ✓ `--mcp-config` | ✓ `mcp` | ✓ `--mcp-config` | ✗（0.16.5 无 CLI 参数） |
+| 工具白/黑名单 | ✓ | ✗ | ✗ | ✓ `--toolsets` | ✗ | ✓ `--allowed-tools` | ✓ | ✗（未实现） |
+| 权限分级 | 5 级 | 3 级 sandbox | ✗ | `--yolo` | `--yolo` | 4 级 approval | 5 级 | `--mode yolo` 必须 |
+| 会话管理 | ✓ | ✓ `resume` | ✓ `session` | ✓ `sessions` | ✓ `--continue` | ✓ `--resume` | ✓ | ✓ `--resume`（sqlite） |
+| 多 provider | settings 文件 | config.toml + profile | config.toml | pooled auth | 单 provider | 单 provider | 平台统一 | config.json provider 表 |
 
 ### 9.2 tmux Worker 启动模板对比
 
@@ -754,6 +755,9 @@ tmux new-session -d -s W -c WT 'qoderclicn -m qmodel_latest --permission-mode au
 
 # === CodeBuddy ===
 tmux new-session -d -s W -c WT 'codebuddy --model kimi-k2.6 --permission-mode bypassPermissions'
+
+# === ZCode（无 TUI，走 skill driver：长驻 app-server + 事件渲染 + stdin→session/send）===
+tmux new-session -d -s W -c WT 'python3 <skill>/scripts/zcode-worker-driver.py'
 ```
 
 其中 `W` = session name, `WT` = worktree path。Claude Code 实际派发时优先用 `render-runtime-profile.sh` 生成 `WORKER_COMMAND`，避免漏掉 registry/settings wrapper 参数。

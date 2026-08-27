@@ -15,6 +15,7 @@ canonical_harness_backend() {
     codex) printf '%s\n' "codex" ;;
     codebuddy|workbuddy) printf '%s\n' "codebuddy" ;;
     qoder|qoderwork|qoderwork-cn|qoderclicn) printf '%s\n' "qoderwork-cn" ;;
+    zcode) printf '%s\n' "zcode" ;;
     *) return 1 ;;
   esac
 }

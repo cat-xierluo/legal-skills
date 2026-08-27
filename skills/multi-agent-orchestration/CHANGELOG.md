@@ -1,16 +1,55 @@
 # Changelog
 
+## [2.9.0] - 2026-08-27
+
+### 新增
+
+- **zcode 成为第五个 worker backend（Task-077 转正，DEC-129）**：ZCode 桌面端内嵌的官方 CLI（GLM 官方 Harness）可作为 worker 派发，消耗 BigModel Coding Plan 额度（与 GUI 同端点同凭证，官方活动期内享渠道加成）。因 zcode 无独立 TUI（`@zcode/tui` 未随桌面端打包），采用 **driver 模式**：新脚本 `scripts/zcode-worker-driver.py` 长驻 `zcode app-server` 子进程（stdio 私有协议，自动应答每 turn 的 `session/requestRuntimePreferences`——15s 窗口超时即 `prompt_failed`），PM `send` 的文本经 `session/send` 进程内注入（零重启纠偏），事件流渲染为可读行供 tmux/Orca 巡检；本地命令 `/status /stop /compact /quit`。
+- **身份门禁扩展**：`canonical_harness_backend` 加 `zcode`；`validate-worker-command.py` 新增 trusted-driver 通道（`--trusted-zcode-driver`，唯一放行的 python 形态，realpath 锁定 skill 内脚本）；`harness-backend-policy.json` 的 claude-code/codex 派发集加 zcode（zcode 不做 PM host）。install-guard 走 prompt-only（同 codex，需 `--allow-prompt-only-install-guard`）。
+- **render/check-dependencies 支持**：`render-runtime-profile.sh --backend zcode`（interactive=driver、batch=headless `--mode yolo`）；`check-dependencies.sh --backend zcode` 三层检测（PATH/bundle/`~/.zcode/cli/config.json` model+provider，缺失给修复指引）+ `--print-bundle-path zcode`。
+- **新测试 `test-zcode-driver.sh`**（8 用例，stub app-server，CI 无需 ZCode.app）：config fail-fast ×2、偏好自动应答、create 派发、stdin→session/send 转发、sessionId 捕获（真实嵌套结构 `result.session.sessionId`）、事件渲染；策略矩阵补 zcode allow/deny（含 codebuddy/qoder PM 派 zcode 拒绝、evil-driver 拒绝）。
+- 新文档 `references/09-zcode-cli-worker.md`（协议/凭证链路/限制/实战坑，真机验证记录）；`references/06` 速查表/对比矩阵/tmux 模板补 zcode；SKILL.md 四→五 backend 同步。
+
+### 修复
+
+- driver 时序缺陷（真机端到端暴露）：create 完成前到达的 PM 消息由 queue+drain 缓冲不丢弃；`/quit` 等待 backlog flush（上限 10s）。
+
+### 边界澄清
+
+- **G24 辨析**：G24 及 SKILL §1「ZCode 类非 CLI harness 不做 PM」约束的是 **ZCode GUI 会话扮演 PM**；zcode **CLI 作为 worker backend** 是正交能力，两者并存不矛盾（DEC-129 记录）。
+
+
+## [2.8.1] - 2026-08-27
+
+### 新增
+
+- 新增 `pm-quota-stall.sh` 与加固后的 `night-watch.sh`（Task-064）：用可移植的有界探针区分 quota、配置、认证、网络、timeout 与未知错误；只有同一 watcher 明确观察到 `quota → available` 才向调用方提供且 show 回执为同一可写 handle 的 terminal 注入一次唤醒。模型与 provider/account settings 权威文件必须显式提供，settings 内容指纹冻结且自动唤醒拒绝可变 setting-sources；首次即 available、所有非额度失败和 terminal show/send 失败均 fail-closed。
+- 新增两组确定性回归，覆盖武装状态机、混合错误文本优先级、精确且可写 terminal 身份、settings 内容指纹、探针副作用约束、原子锁、时限与输入门禁。
+
+### 修复
+
+- 修复从符号链接 Skill 目录调用 spawn 时，`orca worktree create` 可能按脚本物理 cwd 绑定到错误仓库的问题（Task-073）：create 现在 scoped 到已验证的 `PROJECT_DIR` Git top，并在任何 Session Context/terminal 副作用前核对 repoId；畸形或错配只精确回滚可证明归属的 worktree/branch，无法证明时保留现场并明确报错。
+- 修正 Autopilot 判活合同：运行时活性与业务进展分维度观察；cursor/CPU/时间戳静止不再单独等同假死，探测默认只读且不自动 interrupt/stop/release。
+
+### 技术优化
+
+- Wave manifest、quota JSON 和 Orca create 响应解析全部改为显式 fail-closed，Skill Harness failure audit 降至 0 finding；Harness 回归在“进程身份与同 worktree 另一 working agent 冲突”时验证正确失败关闭，不再把合法冲突环境误报成测试失败；公开参考与 Orca fixture 中的本机绝对用户路径替换为可移植示例路径。
+
+### 验证
+
+- `test-pm-quota-stall.sh` 39/39、`test-night-watch.sh` 31/31、`test-spawn-worker-orca.sh` 41/41 通过；Skill Harness failure audit 0 finding。真实 provider 429、真实 PM terminal 端到端唤醒，以及真实 Orca 中故意制造的破坏性跨仓 create 均未执行并标记 `NOT_VERIFIED`。
+
 ## [2.8.0] - 2026-08-26
 
 ### 新增
 
-- Wave Autopilot 模式（Task-062，`DEC-125`）：`references/14-wave-autopilot.md` + SKILL.md §4.6。用户显式授权后，PM 按项目任务源固定策略自动链式推进波次直到泊车。核心机制：监控**三通道并用**（Orca 推送 + recurring cron 看门狗 + Dispatch 状态轮询；完成权威是 `worker-show` 的 dispatch/worker 状态而非队列消息——实测 worker_done 推送可延迟 6.6h 不唤醒 PM）；授权与组波/泊车策略权威留在项目上下文，skill 只定义机制与不变量；验收路径不因自动化放宽（最终树门禁复跑 + safe-push + PR squash）；泊车 fail-closed、每波摘要不阻断。含验收期确定性缺陷的 fix-worker 派发模式（新分支名 + `--base-ref origin/<原分支>` 避 worktree 撞车）与 8 条实测反模式清单。来源：badminton-lab Wave 4/5（PR #21—#25）完整生命周期实战。
+- Wave Autopilot 模式（Task-062，`DEC-125`）：`references/15-wave-autopilot.md` + SKILL.md §4.6。用户显式授权后，PM 按项目任务源固定策略自动链式推进波次直到泊车。核心机制：监控**三通道并用**（Orca 推送 + recurring cron 看门狗 + Dispatch 状态轮询；完成权威是 `worker-show` 的 dispatch/worker 状态而非队列消息——实测 worker_done 推送可延迟 6.6h 不唤醒 PM）；授权与组波/泊车策略权威留在项目上下文，skill 只定义机制与不变量；验收路径不因自动化放宽（最终树门禁复跑 + safe-push + PR squash）；泊车 fail-closed、每波摘要不阻断。含验收期确定性缺陷的 fix-worker 派发模式（新分支名 + `--base-ref origin/<原分支>` 避 worktree 撞车）与 8 条实测反模式清单。来源：badminton-lab Wave 4/5（PR #21—#25）完整生命周期实战。
 
 ## [2.7.1] - 2026-08-26
 
 ### 改进
 
-- 内部上下文同步：`references/09-parallel-lessons.md` 新增 G39（badminton-lab Wave 4）——同账号多 claude-code worker 的 5 小时限流同时触发；429 打断 turn 后 TUI 停在 idle，`pm-orchestrate send` 投递 Dispatch inbox 叫不醒（`ok:true` ≠ 被消费），须用 `orca terminal send --text ... --enter` 键盘注入唤醒；判活看 `peek` transcript 时间戳与当前的差值而非 tail 文本。SKILL.md §7 增补对应唤醒指引一句。纯文档变更，无脚本改动，全部脚本 `bash -n` 通过。
+- 内部上下文同步：`references/10-parallel-lessons.md` 新增 G39（badminton-lab Wave 4）——同账号多 claude-code worker 的 5 小时限流同时触发；429 打断 turn 后 TUI 停在 idle，`pm-orchestrate send` 投递 Dispatch inbox 叫不醒（`ok:true` ≠ 被消费），须用 `orca terminal send --text ... --enter` 键盘注入唤醒；判活看 `peek` transcript 时间戳与当前的差值而非 tail 文本。SKILL.md §7 增补对应唤醒指引一句。纯文档变更，无脚本改动，全部脚本 `bash -n` 通过。
 
 ## [2.7.0] - 2026-08-25
 
@@ -25,7 +64,7 @@
 - `inject_default_verify_commands` 增加 Makefile 兜底（Task-057）：npm scripts 零注入时解析 Makefile `^target:` 目标，白名单动词 `test / test-* / check / ci / lint` 注入 `make <target>`；`.PHONY`/变量赋值/文件目标不匹配，npm-first 双清单项目不双注入。根因：Make 驱动的 Python 项目（无 package.json）此前零注入，worker 全部 make 门禁被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截。
 - `orca-wave-prepare.sh` fail-closed 拒绝 spec 内含斜杠的 branch 名（Task-059）：Orca worktree `--name` 与 `safe_branch` 会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked（Wave 1 三 worker 同时跑偏）；路径引用（如 `docs/plans`）不误报。
 - `pm-orchestrate read` 接受 `--limit` 作为 `--lines` 别名（与 `orca terminal read` 参数名对齐）。
-- 内部上下文同步：`references/09-parallel-lessons.md` 新增 G34—G38（Make 零注入、B64 快照陷阱、Task failed 翻转、基线落后假删除、spec 斜杠分支名）；`references/13-pm-orchestrate.md` 增补 reauthorize 契约；`references/03-checkpoint-files.md` 明确 supervised 下 STATUS 为辅助信号；`templates/pm-spawn-postflight.md` 增补 `SPAWN_WORKER_VERIFY_INJECTED*` 回看；`DECISIONS.md` 新增 DEC-124（刷新放命令层、不动 guard B64 优先级）。
+- 内部上下文同步：`references/10-parallel-lessons.md` 新增 G34—G38（Make 零注入、B64 快照陷阱、Task failed 翻转、基线落后假删除、spec 斜杠分支名）；`references/14-pm-orchestrate.md` 增补 reauthorize 契约；`references/03-checkpoint-files.md` 明确 supervised 下 STATUS 为辅助信号；`templates/pm-spawn-postflight.md` 增补 `SPAWN_WORKER_VERIFY_INJECTED*` 回看；`DECISIONS.md` 新增 DEC-124（刷新放命令层、不动 guard B64 优先级）。
 - SKILL.md：§3.2 记录 Makefile 兜底与 python-runtime-symlink；§4.4 增加『spec 分支名一律连字符』『共享文档编号预分配（DEC/CHANGELOG 槽位）』与 `--reset-failed`；§4.5 增加 reauthorize 用法块；§6 明确 supervised 模式 STATUS 是辅助观察信号（完成权威是 Delivery，spec 不应要求周期性 STATUS 更新）。
 
 ### 验证
@@ -108,7 +147,7 @@
 - PR #84 review MAJOR 3：--destroy 路径先 unlink `node_modules` 软链（`[ -L ] && rm -f` 无尾斜杠），不跟随软链误删主仓。
 - PR #84 review MAJOR 4：provider-lease release fail-loud（禁止 `>/dev/null 2>&1` 吞错），失败 exit 非 0。
 - PR #84 review MAJOR 5：--destroy 路径含 dirty 检查 + git worktree remove，与 `clean-worktree.sh` 同步。
-- PR #84 review MAJOR 6：references/12-orca-cli-worker.md §9 + references/13-pm-orchestrate.md 命令清单同步更新（之前文档与 v1 行为矛盾）。
+- PR #84 review MAJOR 6：references/13-orca-cli-worker.md §9 + references/14-pm-orchestrate.md 命令清单同步更新（之前文档与 v1 行为矛盾）。
 
 ### 改进
 
@@ -247,7 +286,7 @@ PM 90% 场景用 `pm-orchestrate.sh` 一个统一入口控制 worker（ORCA / tm
 
 端到端验证（ORCA claude worker）：`send --text "请只回一句：pm-orchestrate send OK"` → `read --lines 100` 显示 `❯ 请只回一句：pm-orchestrate send OK` + `⏺ pm-orchestrate send OK`，PM 一个命令管 worker ✓。
 
-- `references/13-pm-orchestrate.md` 新 reference：双模式自动判断 + 子命令 + 与 sentinel/pm-monitor/CLI 兜底的关系 + 实战范例 + 已知限制
+- `references/14-pm-orchestrate.md` 新 reference：双模式自动判断 + 子命令 + 与 sentinel/pm-monitor/CLI 兜底的关系 + 实战范例 + 已知限制
 - SKILL §7.1 ORCA PM 分支加 pm-orchestrate 段落（替代手敲 orca terminal send）
 - SKILL §10 references + scripts 列表加 references/13 和 pm-orchestrate.sh
 
@@ -269,7 +308,7 @@ spawn-worker `--orca-supervised` flag：ORCA 模式 spawn 后把 worker terminal
 - `spawn-worker.sh`：`--orca-supervised` / `--task-spec` / `--task-title` flag；ORCA 模式调 helper；METADATA `session.orca.supervised.{run_id,task_id,dispatch_id}`；SENTINEL_CMD 加 `--dispatch-id`
 - `sentinel.sh`：`--dispatch-id` 参数 + `sync_orca_supervised_release()`；done→worker-release, failed/timeout→worker-stop
 - `clean-worktree.sh`：读 METADATA dispatch_id，清理时 worker-stop（在 orca worktree rm 前）
-- `references/12-orca-cli-worker.md` §11：supervised 体系 / spawn 集成 / 全生命周期闭环 / helper 踩坑 / PM 巡检增益
+- `references/13-orca-cli-worker.md` §11：supervised 体系 / spawn 集成 / 全生命周期闭环 / helper 踩坑 / PM 巡检增益
 
 端到端验证（真实 claude worker）：spawn `--orca-supervised` → worker-list workerState=ready → sentinel done worker-release → clean --execute worker-stop + worktree rm，全链路通。
 
@@ -284,7 +323,7 @@ spawn-worker `--orca-supervised` flag：ORCA 模式 spawn 后把 worker terminal
 
 PM 在 ORCA 桌面端内嵌终端里调 `spawn-worker.sh` 时，auto-detect 走 ORCA worktree + ORCA terminal 路径，ORCA UI 直接反映 worker 生命周期（spawn 立即出卡 `in-progress`、sentinel 终态自动切 `completed`/`in-review`、stale 同步 `in-review`、clean-worktree 删 ORCA 跟踪）。
 
-**触发**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中走 ORCA；非 ORCA 终端 / 跨 repo / `--no-orca-mode` 走原 tmux 路径不变。详见 SKILL §6.5 + `references/12-orca-cli-worker.md`。
+**触发**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中走 ORCA；非 ORCA 终端 / 跨 repo / `--no-orca-mode` 走原 tmux 路径不变。详见 SKILL §6.5 + `references/13-orca-cli-worker.md`。
 
 **改动**：
 
@@ -293,7 +332,7 @@ PM 在 ORCA 桌面端内嵌终端里调 `spawn-worker.sh` 时，auto-detect 走 
 - `scripts/pm-monitor.sh`：新增 `orca_worktree_set_status()` helper；`CHECKPOINT_STALE` + `WORKER_STALE_NO_COMMIT` 两个 emit 后同步 ORCA `in-review`
 - `scripts/clean-worktree.sh`：tmux kill 后加 `orca worktree rm --force` 同步清理 ORCA 跟踪（dry-run 友好）
 - `scripts/worktree-status.sh`：加 ORCA 只读状态块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）
-- `references/12-orca-cli-worker.md`：新建完整 Level 2 reference（9 节：边界 / 检测协议 / ORCA API 速查 / METADATA 锚点 / sentinel 双路径 / pm-monitor 同步点 / clean-worktree 清理 / 已知限制 / 实战范例）
+- `references/13-orca-cli-worker.md`：新建完整 Level 2 reference（9 节：边界 / 检测协议 / ORCA API 速查 / METADATA 锚点 / sentinel 双路径 / pm-monitor 同步点 / clean-worktree 清理 / 已知限制 / 实战范例）
 - `SKILL.md`：§6.5 ORCA 终端模式新节 + §7.1 加 ORCA PM 分支 + §10 references 加 references/12
 
 ### 改进 — `ensure-claude-path.sh` 参数化为 `ensure_in_path <bin>`
@@ -378,7 +417,7 @@ CLI 升级后模型清单大变化，references/07 §4 + references/06 §0/§7.2
 
 ### 新增 — folia Wave-1 + W1/W2 dogfood 实战撞坑修复（Task-026 ~ Task-030）
 
-本轮在 v1.20.2 setsid 修复基础上，针对 W1 (claude-code) + W2 (codebuddy) dogfood 撞坑沉淀的 G29 6 项实战问题（references/09-parallel-lessons.md）完成 5 项修复。**Task-026 真机 throwaway 验证：codebuddy spawn-worker 主进程 22 秒 exit**（v1.20.2 W2 撞坑 120s+ SIGTERM），节省 ~98 秒，< 60s 目标达成。
+本轮在 v1.20.2 setsid 修复基础上，针对 W1 (claude-code) + W2 (codebuddy) dogfood 撞坑沉淀的 G29 6 项实战问题（references/10-parallel-lessons.md）完成 5 项修复。**Task-026 真机 throwaway 验证：codebuddy spawn-worker 主进程 22 秒 exit**（v1.20.2 W2 撞坑 120s+ SIGTERM），节省 ~98 秒，< 60s 目标达成。
 
 #### scripts/spawn-worker.sh（Task-026）
 
@@ -462,7 +501,7 @@ skill-lint `harness_failure_audit` 基线报 3 处 hard finding（HRA-001：测�
 - **`smoke-auto-bypass.sh:87/143`**：spawn-worker 无参 `|| true` 改显式保存 exit code + 断言 exit 64（#6 加新 check）；smoke 总数 13 → 21（v1.18.4 + v1.20.2 段 + exit 64 断言）。
 - **`smoke-provider-settings.sh:86`**：provider 调用 `|| true` 改保存 exit code，区分 ERROR（provider exit≠0 + 无 token）vs FAIL（exit 0 + 无 token），PASS 若 exit≠0 附诊断。⚠️ 本项未真机验证（provider 调用非确定，依赖网络/token），逻辑保留 capture-response-诊断语义。
 
-### 入库 — G25-G28 FaroPDF Wave 1+2 实战沉淀（references/09-parallel-lessons.md）
+### 入库 — G25-G28 FaroPDF Wave 1+2 实战沉淀（references/10-parallel-lessons.md）
 
 G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此前已写进 `09-parallel-lessons.md` 工作区但未入 CHANGELOG，本轮正式入库：
 - **G25**：spawn-worker backend token 检查（`--command` basename 必须含 backend；bash launch.sh wrapper 会触发 fail-closed，改用 backend 二进制直起 + `/tmp/empty-mcp.json` 文件避 tmux 引号吞）。
@@ -488,7 +527,7 @@ G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此�
 
 ### 新增 — 非 CLI 主会话不宜扮演 PM 的适用边界
 
-- **`references/09-parallel-lessons.md` G24（新）**：记录 2026-08-01 FaroPDF 仓审计 Wave 实战教训。在 ZCode 这类**非 CLI 的 harness 内嵌 agent**会话里扮演 PM、调 `spawn-worker.sh` + tmux + sentinel 派只读审计 worker，编排层勉强跑通但三个 worker 全部 `SENTINEL_TIMEOUT` + `TMUX_KILLED`、零产出。根因是 **CLI 范式错配**（非配置问题）：skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层。三个具体卡点：① provider env 污染（tmux session 继承混合 env → 模型不存在，必须走 wrapper）② permission dialog 杀死只读 worker（`acceptEdits` 不自动批准 Shell，审计跑 `grep`/`find` 逐条弹 dialog → 卡死 → 超时）③ 监测盲区（只挂 sentinel 不做定时 pane 巡检 → silent 卡死无人发现）。结论：多 worktree worker 编排应在 Claude Code CLI 会话做 PM；ZCode 类 harness 要并行改用自带 subagent/Agent 工具。
+- **`references/10-parallel-lessons.md` G24（新）**：记录 2026-08-01 FaroPDF 仓审计 Wave 实战教训。在 ZCode 这类**非 CLI 的 harness 内嵌 agent**会话里扮演 PM、调 `spawn-worker.sh` + tmux + sentinel 派只读审计 worker，编排层勉强跑通但三个 worker 全部 `SENTINEL_TIMEOUT` + `TMUX_KILLED`、零产出。根因是 **CLI 范式错配**（非配置问题）：skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层。三个具体卡点：① provider env 污染（tmux session 继承混合 env → 模型不存在，必须走 wrapper）② permission dialog 杀死只读 worker（`acceptEdits` 不自动批准 Shell，审计跑 `grep`/`find` 逐条弹 dialog → 卡死 → 超时）③ 监测盲区（只挂 sentinel 不做定时 pane 巡检 → silent 卡死无人发现）。结论：多 worktree worker 编排应在 Claude Code CLI 会话做 PM；ZCode 类 harness 要并行改用自带 subagent/Agent 工具。
 - **SKILL.md §1 边界**：「不使用本 Skill」新增「PM 是非 CLI 的 harness 内嵌 agent（ZCode 等）」一条，指向 G24。
 
 ### 关联
@@ -501,7 +540,7 @@ G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此�
 
 ### 新增 — Issue 分组与合并 PR 判断
 
-- **`references/11-issue-grouping.md`（新）**：补齐 SKILL.md §3「先分组」缺失的两个维度。原「先分组」只覆盖依赖链，本文给出三维度骨架：**① 同根因合并**（多 Issue → 一个 worker → 一个 PR）、**② 依赖链顺序**、**③ 独立并行**。每维度给触发信号 / 前置条件，配套软阈值（同根因合并建议合并后 diff < ~300 行、组内 ≤ 3 个）、决策树、反模式清单（默认一对一 / 硬塞不同类型 / 为凑数合并 / 大改动打包 / 跨模块强合等）。
+- **`references/12-issue-grouping.md`（新）**：补齐 SKILL.md §3「先分组」缺失的两个维度。原「先分组」只覆盖依赖链，本文给出三维度骨架：**① 同根因合并**（多 Issue → 一个 worker → 一个 PR）、**② 依赖链顺序**、**③ 独立并行**。每维度给触发信号 / 前置条件，配套软阈值（同根因合并建议合并后 diff < ~300 行、组内 ≤ 3 个）、决策树、反模式清单（默认一对一 / 硬塞不同类型 / 为凑数合并 / 大改动打包 / 跨模块强合等）。
 - **任务源：本地 task 卡 vs 云端 GitHub Issue**：明确区分两类任务源的分组前预处理。本地结构化任务文件字段齐全、依赖显式；云端 Issue 他人提交、自由文本、依赖需从 body 推断，必须先 `gh issue list/view` 读 body + labels + 最近 commits 做相关性分析，并配套分组 SOP 命令。覆盖原 Skill 任务源模型偏本地、未处理云端 Issue 的缺口。
 - **`templates/issue-batch-pr.md`（新）**：维度①「同根因合并」时的多 Issue PR 描述模板。核心是「统一根因」段（让 reviewer 一眼看清为什么这几个 Issue 要一起改）+ 逐 Issue 修复点 + `Closes #xx, #yy` 批量关闭 + 逐个 Issue 手动验证勾选。含与单 Issue PR 的区别速查、使用纪律（每个 Issue 必须单独验证、写不出统一根因说明可能不该合并）。
 
@@ -547,7 +586,7 @@ G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此�
 - **`SKILL.md §3.5` 末尾加 v1.18.4 注**：claude-code backend 默认全关反向引用 §3.8.4。
 - **`SKILL.md` frontmatter**：version 1.18.2 → 1.18.4（v1.18.3 由 commit 4d168a1 部分入仓但 frontmatter 未更新）。
 - **新增 `templates/pm-spawn-postflight.md`**：4 条核验命令扩展版 cheatsheet（何时用 / 反例 / 多 worker 并行 spawn 提示）。
-- **`references/09-parallel-lessons.md` 加 G23**：spawn 阶段并行投递纪律与已有 G22（wave 内任务颗粒度）形成两层闭环。
+- **`references/10-parallel-lessons.md` 加 G23**：spawn 阶段并行投递纪律与已有 G22（wave 内任务颗粒度）形成两层闭环。
 
 ### 受影响的 PM 行为
 - 单次 claude-code backend spawn 主进程退出时间从 v1.18.3 实测 2-4 min 降到 v1.18.4 秒级返回。
@@ -600,7 +639,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 ## [1.18.1] - 2026-07-08
 
 ### Added
-- **G22 多维度任务的颗粒度纪律**（`references/09-parallel-lessons.md`）：单 worker 改多章 × 多维度时注意力被高优维度（Critical / Important）占满、末位维度（如"标题删重"）静默漏掉。沉淀三条通用改进：①多维度任务 prompt 用 **checklist 强制逐维度**（每维度独立 commit / 勾选，worker 必须覆盖完所有维度才算完成）；②大批量改后必派 **wave2 复查 worker**（只读 review）抓漏；③精细深查（箭头落点 / 字体逐核 / 像素对齐）拆**单维度 worker**处理深度。主因非模型能力，是任务粒度 + prompt 结构。原则跨项目通用，不绑定具体项目或章节。
+- **G22 多维度任务的颗粒度纪律**（`references/10-parallel-lessons.md`）：单 worker 改多章 × 多维度时注意力被高优维度（Critical / Important）占满、末位维度（如"标题删重"）静默漏掉。沉淀三条通用改进：①多维度任务 prompt 用 **checklist 强制逐维度**（每维度独立 commit / 勾选，worker 必须覆盖完所有维度才算完成）；②大批量改后必派 **wave2 复查 worker**（只读 review）抓漏；③精细深查（箭头落点 / 字体逐核 / 像素对齐）拆**单维度 worker**处理深度。主因非模型能力，是任务粒度 + prompt 结构。原则跨项目通用，不绑定具体项目或章节。
 - SKILL.md §3.1 Wave 模式段加一段交叉引用，指向 G22；frontmatter version 1.18.0→1.18.1。
 
 ## [1.18.0] - 2026-07-07
@@ -771,7 +810,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 - **`render-runtime-profile.sh` 支持 registry**：新增 `--provider-registry`，在渲染阶段把 model alias 解析成真实 provider model，并传给 `claude --model`；旧 `--settings` 路径保留兼容。
 
 ### Changed
-- **文档改为 registry-first**：`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 改为推荐 registry + provider id + model alias，旧的每模型一个 settings 文件标为兼容路径。
+- **文档改为 registry-first**：`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/10-parallel-lessons.md` 改为推荐 registry + provider id + model alias，旧的每模型一个 settings 文件标为兼容路径。
 
 ### Reason
 - 来源：用户确认不同模型来源有不同 Base URL、API key 和模型清单，希望参照 MyAgents 运行时动态选择 provider/model 的方式，减少为每个模型维护独立 settings JSON。
@@ -786,7 +825,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 ### Changed
 - **`render-runtime-profile.sh` 默认包 wrapper**：`claude-code + --settings + --model` 现在默认生成 `bash scripts/claude-provider-env.sh ... -- claude ...` 命令；排障时可显式 `--no-provider-env-isolation` 绕过。
 - **batch render 自动 shell-wrap**：`render-runtime-profile.sh --mode batch` 生成的 Claude/Codex/OpenCode 命令会自动包 `bash -lc`，避免 `<` 重定向或 `$(cat prompt)` 在 `spawn-worker.sh` 的 tmux command 中不展开。
-- **Provider smoke 与文档同步**：`smoke-provider-settings.sh` 改为走 wrapper；`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 更新为 settings + `--model` + wrapper 三件套口径。
+- **Provider smoke 与文档同步**：`smoke-provider-settings.sh` 改为走 wrapper；`SKILL.md`、`references/01-model-selection-matrix.md`、`references/06-agent-cli-reference.md`、`references/10-parallel-lessons.md` 更新为 settings + `--model` + wrapper 三件套口径。
 - **Provider settings 模板补全**：example settings 增加 `ANTHROPIC_API_KEY` 和 haiku/opus/sonnet `_MODEL_NAME` 字段；真实 settings 仍保持本地 ignored。
 
 ### Reason
@@ -798,7 +837,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 ### Fixed
 - **Claude Code 第三方 provider 启动命令强制显式模型**：`render-runtime-profile.sh` 在 `claude-code + --settings` 但缺少 `--model` 时直接报错，避免用户级 `~/.claude/settings.json` 或继承环境中的 `ANTHROPIC_MODEL` 覆盖 provider profile。
 - **Provider settings 模板补全当前模型字段**：`config/claude-provider-settings.example.json` 新增 `ANTHROPIC_MODEL`、`ANTHROPIC_MODEL_NAME`、`ANTHROPIC_DEFAULT_FABLE_MODEL` 和 `ANTHROPIC_DEFAULT_FABLE_MODEL_NAME`，与现有 haiku/opus/sonnet 映射共同描述 provider 模型。
-- **启动文档修正**：`SKILL.md`、`references/06-agent-cli-reference.md`、`references/09-parallel-lessons.md` 不再建议只用 `claude --settings <settings>`；第三方 provider worker 标准命令改为 `claude --settings <settings> --model <provider-model> ...`，并要求 PM 核对启动 banner。
+- **启动文档修正**：`SKILL.md`、`references/06-agent-cli-reference.md`、`references/10-parallel-lessons.md` 不再建议只用 `claude --settings <settings>`；第三方 provider worker 标准命令改为 `claude --settings <settings> --model <provider-model> ...`，并要求 PM 核对启动 banner。
 - **Provider settings 排障口径**：补充 401/403、429/529、banner 模型错位、MCP 卡启动的判断规则。
 
 ### Reason
@@ -918,7 +957,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 
 ### Added
 - **runtime profile command helper**：新增 `scripts/render-runtime-profile.sh`，按 `claude-code`、`claude-oauth`、`codex`、`opencode`、`custom` backend 生成 worker command、prompt context 和 spawn metadata，减少 PM 手写 provider/profile 命令。
-- **Agent Teams troubleshooting**：新增 `references/10-agent-teams-troubleshooting.md`，覆盖 agent/team 不可见、错误 cwd、官方 worktree 状态映射、checkpoint 缺失、PR 收口和必须停止的场景。
+- **Agent Teams troubleshooting**：新增 `references/11-agent-teams-troubleshooting.md`，覆盖 agent/team 不可见、错误 cwd、官方 worktree 状态映射、checkpoint 缺失、PR 收口和必须停止的场景。
 
 ### Changed
 - **spawn flow**：SKILL.md 启动示例改为先用 `render-runtime-profile.sh` 生成 runtime 字段，再传给 `spawn-worker.sh`，保持启动命令生成与 worktree/session gate 分离。

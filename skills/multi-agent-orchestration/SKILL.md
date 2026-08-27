@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.8.0"
+  version: "2.8.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -41,7 +41,7 @@ metadata:
 | 模式 | 何时选择 | 能力边界 |
 |---|---|---|
 | Orca supervised | 用户要求监督、等待结果、DAG、ask/reply、decision gate；Agent 可被 Orca 识别 | Worktree + Run/Task/Dispatch + worker transcript + `worker_done` |
-| Orca terminal-managed | 已配置的 CodeBuddy/QoderWork CN，或四种白名单 backend 的非 supervised 路径 | Worktree + terminal + UI + terminal read/send/wait |
+| Orca terminal-managed | 已配置的 CodeBuddy/QoderWork CN、zcode driver，或五种白名单 backend 的非 supervised 路径 | Worktree + terminal + UI + terminal read/send/wait |
 | tmux worktree | Orca 不可用、用户指定 tmux、或需复现非 Orca 路径 | Git worktree + tmux + checkpoint/Sentinel |
 | tmux lightweight | 用户明确不要 worktree，或目标不是 Git 仓且 worker 文件夹互不重叠 | 文件夹 + tmux；无 Git 隔离 |
 | 同宿主 subagent | 窄范围、短任务、无需独立进程/分支 | 宿主决定 |
@@ -56,32 +56,32 @@ PM 在业务实现前完成：
 1. 读取项目规则和完整任务卡，确定目标、非目标、allowed/forbidden files、验证命令与完成条件。
 2. 按根因、依赖链和文件范围分组；只有改动范围正交、验收独立、无共享锁文件/schema/迁移时才并行。
 3. 为每个 worker 指定 branch、worktree、session、backend/profile/model、provider slot 和 Session Context。
-4. 启动后验证真实 cwd/worktree/branch/session；门禁失败不得由 PM 静默接管业务实现。
+4. 启动后验证真实 cwd/worktree/branch/session。Orca create 必须局部绑定到已验证的 `PROJECT_DIR` Git top，返回的 repoId 必须与 current worktree repoId 一致；缺失、畸形或错配在 Session Context/terminal 副作用前失败关闭，并只清理可精确证明归属的资源。门禁失败不得由 PM 静默接管业务实现。
 5. 发送完整 worker prompt，确认 checkpoint 或 Orca Dispatch 出现，再进入巡检。
 
 硬约束：
 
-- 先执行 Harness 调用层级门禁。Claude Code/Codex PM 可派发四个已配置 backend；CodeBuddy、QoderWork CN PM 只能派发自身。未知、冲突或无法证明的宿主身份失败关闭。
+- 先执行 Harness 调用层级门禁。Claude Code/Codex PM 可派发五个已配置 backend；CodeBuddy、QoderWork CN PM 只能派发自身。未知、冲突或无法证明的宿主身份失败关闭。
 - PM 默认只做拆解、派工、纠偏、review 和收口；用户明确授权或编排层本身需要修复时才直接修改。
 - 每个 worker 只修改自己的允许范围。共享文件、锁文件和全局契约按依赖顺序处理。
 - 轻量模式下不同 worker 必须占用互不重叠的文件夹；可能写同一目录时回到 worktree 模式。
 - Worker 验证命令不是安装授权。缺工具时报告阻塞，除非 PM 传入精确 `--allow-install-command` 和 `--install-authorization-source`。
 - Worker 自报、STATUS、UI 卡片、TUI idle、heartbeat 和 timeout 都不能单独证明业务完成。
 
-Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩坑读取 `references/09-parallel-lessons.md`。
+Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩坑读取 `references/10-parallel-lessons.md`。
 
 ### 3.1 Harness 调用层级
 
 | PM 宿主 | 允许派发的 worker backend |
 |---|---|
-| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN |
-| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN |
+| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
+| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
 | CodeBuddy | CodeBuddy |
 | QoderWork CN | QoderWork CN |
 
 `spawn-worker.sh` 从完整进程祖先链的真实可执行程序识别宿主，对每层 Harness 的白名单取交集，使嵌套调用只能降权、不能借强 CLI 恢复权限；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
 
-声明的 worker backend 还必须与实际启动命令一致。只接受直接启动四种 CLI、受信的 Claude provider wrapper，或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
+声明的 worker backend 还必须与实际启动命令一致。只接受直接启动五种 CLI、受信的 Claude provider wrapper、受信的 zcode worker driver（`zcode-worker-driver.py`，唯一放行的 python 形态），或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
 ### 3.2 worktree 依赖补偿 + 默认 verify 命令（Task-045/046，G31）
 
@@ -95,7 +95,7 @@ Issue 分组细则读取 `references/11-issue-grouping.md`；并发与真实踩�
 
 依赖补偿必须失败关闭：目标处已有真实目录就保留，断裂 symlink 或创建 symlink 失败则 `spawn-worker.sh` 退出非零，不能留下一个看似已启动、实际无法验证的 worker。用 `scripts/test-spawn-worker-deps.sh` 覆盖路径类型、默认/显式 verify 和双 worker 并发。
 
-`clean-worktree.sh` 删 worktree 前安全 unlink 该软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓 `node_modules`）。install-guard 仍 `deny_by_default` 拦 `npm install/ci/add`，worker 不会误改主仓 `node_modules`。详见 `references/09-parallel-lessons.md` G28/G31。
+`clean-worktree.sh` 删 worktree 前安全 unlink 该软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓 `node_modules`）。install-guard 仍 `deny_by_default` 拦 `npm install/ci/add`，worker 不会误改主仓 `node_modules`。详见 `references/10-parallel-lessons.md` G28/G31。
 
 ### 3.3 PM spawn 操作纪律（Task-041~044，Wave-2 实战）
 
@@ -140,7 +140,7 @@ orca status --json
 
 ### 4.3 Terminal-managed
 
-适用于 CodeBuddy、QoderWork CN，以及四种白名单 backend 中不采用 supervised 的交互式 CLI：
+适用于 CodeBuddy、QoderWork CN、zcode（经 driver 渲染），以及五种白名单 backend 中不采用 supervised 的路径：
 
 ```bash
 bash scripts/spawn-worker.sh \
@@ -227,7 +227,7 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 
 一条命令完成：授权文件合并 → launch.sh B64 重写（guard 读内联快照，改文件对运行中进程无效）→ Task 复位 → 同 worktree 新终端 + Task 重注册（worker-start 重注入）→ METADATA 改路由 → 关旧终端。未提交工作区改动全部保留。
 
-每次 supervised 的 send/wait/reply/release/retain/ack/settle 都先由脚本对当前 PM terminal 执行 `run-use`，并把新 coordinator handle 写回 METADATA；`check` 随后消费已绑定 Run，不携带陈旧 `--run` 路由。`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/12-orca-cli-worker.md` 和 `references/13-pm-orchestrate.md`。
+每次 supervised 的 send/wait/reply/release/retain/ack/settle 都先由脚本对当前 PM terminal 执行 `run-use`，并把新 coordinator handle 写回 METADATA；`check` 随后消费已绑定 Run，不携带陈旧 `--run` 路由。`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/13-orca-cli-worker.md` 和 `references/14-pm-orchestrate.md`。
 
 由 `spawn-worker.sh` 预先创建、再交给 `worker-start --terminal` 的 provider terminal 属于 external resource。settled 后 `worker-release` 可能正确返回 retained；清理脚本只有在 worker/Dispatch 已结算、ownership/reason 明确为 `external/external_terminal` 且 Orca resource handle 与 METADATA 完全一致时，才由创建者关闭这个精确句柄，其他状态一律失败关闭。
 
@@ -245,7 +245,7 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 
 用户显式授权后，PM 按项目任务源中固定的组波/泊车策略自动链式推进波次：收口后自动写回任务源、查表组下一波并派发，直到泊车条件。**授权与策略权威都在项目上下文**（本 skill 不承载项目授权）；查表查不到合法组合即泊车，这是 Autopilot fail-closed 的根本。验收路径不因自动化放宽（门禁在最终树复跑 + safe-push + PR squash 强制），每波收口发摘要但不等确认，泊车必须完整报告后停止。
 
-Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/14-wave-autopilot.md`。
+Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/15-wave-autopilot.md`。已由同一 watcher 明确观察到额度受限时，才可用 `scripts/night-watch.sh --terminal <PM终端handle> --model <当前模型> --settings <provider/account 配置权威文件>` 守夜；自动唤醒拒绝可变 setting-sources，并冻结 settings 内容指纹。首次探测即成功、配置/认证/网络/未知错误、超时或 terminal 失败都不会唤醒。真实 PM 终端的 `quota → available → send → PM 被唤醒` 仍标记 `NOT_VERIFIED`，流程见 `references/15-wave-autopilot.md` §8。
 
 ## 5. tmux 回退
 
@@ -317,7 +317,7 @@ bash scripts/sentinel.sh --status-file "$CTX/STATUS.json" --tmux-session worker-
 
 Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏题、阻塞、越界或验证失败时优先给原 worker 发窄纠偏；需要独立审阅时另派 reviewer。Sentinel 设计读取 `references/04-sentinel-design.md`。
 
-worker TUI 被限流或中断后停在 idle 时，`pm-orchestrate send`（supervised 走 Dispatch inbox）叫不醒它——用 `orca terminal send --terminal <handle> --text "..." --enter` 直接键盘注入；判活看 `peek` transcript 时间戳距当前的差值（G39）。
+把运行时活性与业务进展分开判断：`worker-read --source auto`/terminal cursor 前进只证明有输出，文件、提交和测试证据才证明业务进展；cursor、CPU 或时间戳静止都不能单独证明假死。来源改变、截断、PID 身份不可证明、quiet 测试、网络等待和 ask/dialog 时降级为 `unknown`。探测默认只读，不自动 Esc/Ctrl+C/stop/release；确认终端停在 idle 且工作未完时，PM 才可显式用 `orca terminal send --terminal <handle> --text "..." --enter` 注入一次短唤醒，并复读 screen/Dispatch 状态。
 
 ## 8. 收口
 
@@ -343,12 +343,13 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 
 `concurrency.per_backend[backend]` 优先于 `concurrency.max_per_provider`。配置有效正整数时，`spawn-worker.sh` 在任何 branch/worktree 副作用前获取原子 provider 租约，启动后绑定实际 tmux session 或 Orca terminal；Sentinel、`pm-orchestrate release` 和 `clean-worktree` 只在资源已结算或关闭时释放。无配置时输出 advisory，不假装机械限额。
 
-不得复制 `.env`、真实 settings、Token、cookie、证书或账号凭证到 worktree/提交。Claude provider 隔离、CodeBuddy、QoderWork CN、Codex 参数分别读取：
+不得复制 `.env`、真实 settings、Token、cookie、证书或账号凭证到 worktree/提交。Claude provider 隔离、CodeBuddy、QoderWork CN、zcode、Codex 参数分别读取：
 
 - `references/01-model-selection-matrix.md`
 - `references/06-agent-cli-reference.md`
 - `references/07-qoderwork-cli-worker.md`
 - `references/08-codebuddy-cli-worker.md`
+- `references/09-zcode-cli-worker.md`：zcode CLI worker 接入（无 TUI，driver 模式；协议/凭证/额度）
 
 ## 10. 依赖
 
@@ -362,7 +363,7 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 | `tmux` | 仅 tmux 路径需要；macOS: `brew install tmux` |
 | `python3` | 安装门禁和 scope guard 需要 |
 
-Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI，不自动安装。按 backend 还需对应 `claude`、`codex`、`codebuddy` 或 `qoderclicn`。
+Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI，不自动安装。按 backend 还需对应 `claude`、`codex`、`codebuddy`、`qoderclicn` 或 `zcode`（含 `~/.zcode/cli/config.json` 凭证，见 ref 09 §2）。
 
 ```bash
 bash scripts/check-dependencies.sh --backend claude-code --backend codex --check-gh
@@ -374,12 +375,12 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/03-checkpoint-files.md`：METADATA/STATUS/RESULT/PATCH_SUMMARY。
 - `references/04-sentinel-design.md`：事件驱动唤醒和 timeout 语义。
 - `references/05-legal-domain-patterns.md`：法律任务常见拆分。
-- `references/09-parallel-lessons.md`：并发、dialog、provider 和历史故障。
-- `references/10-agent-teams-troubleshooting.md`：Claude 原生团队/会话排障。
-- `references/11-issue-grouping.md`：Issue 分组、依赖链和 PR 粒度。
-- `references/12-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
-- `references/13-pm-orchestrate.md`：PM 三模式统一控制入口。
-- `references/14-wave-autopilot.md`：Wave Autopilot 自动推进、三通道监控、看门狗清单与泊车语义。
+- `references/10-parallel-lessons.md`：并发、dialog、provider 和历史故障。
+- `references/11-agent-teams-troubleshooting.md`：Claude 原生团队/会话排障。
+- `references/12-issue-grouping.md`：Issue 分组、依赖链和 PR 粒度。
+- `references/13-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
+- `references/14-pm-orchestrate.md`：PM 三模式统一控制入口。
+- `references/15-wave-autopilot.md`：Wave Autopilot 自动推进、三通道监控、看门狗清单与泊车语义。
 
 不要一次加载全部 references；按当前 backend、控制模式和故障类型读取。
 
@@ -403,6 +404,8 @@ Hard Fail：
 find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
+bash scripts/test-pm-quota-stall.sh
+bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
@@ -410,6 +413,7 @@ bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh
 bash scripts/test-worker-command-policy.sh
+bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
 bash scripts/test-spawn-worker-deps.sh
 bash scripts/test-orca-wave-lifecycle.sh

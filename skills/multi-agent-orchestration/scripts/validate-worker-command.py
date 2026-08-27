@@ -17,7 +17,9 @@ BACKENDS = {
     "codebuddy": "codebuddy",
     "workbuddy": "codebuddy",
     "qoderclicn": "qoderwork-cn",
+    "zcode": "zcode",
 }
+PYTHON_EXECUTABLES = {"python", "python3"}
 SHELLS = {"bash", "sh", "zsh"}
 SHELL_FLAGS = {"-c", "-lc", "-cl"}
 CHAIN_TOKENS = {";", "&&", "||", "|", "&"}
@@ -84,6 +86,7 @@ def command_backend(
     *,
     expected: str,
     trusted_claude_wrapper: str,
+    trusted_zcode_driver: str = "",
     depth: int = 0,
     shell_body: bool = False,
 ) -> str:
@@ -109,12 +112,20 @@ def command_backend(
     if actual is not None:
         return actual
 
+    # zcode driver channel: `python3 <trusted-zcode-driver> --cwd ...` wraps the
+    # long-lived `zcode app-server` child. Only the exact skill-shipped driver
+    # script may play this role — arbitrary python is still rejected below.
+    if expected == "zcode" and basename in PYTHON_EXECUTABLES and len(words) >= 2:
+        if trusted_zcode_driver and os.path.realpath(words[1]) == os.path.realpath(trusted_zcode_driver):
+            return "zcode"
+
     if basename in SHELLS:
         if len(words) >= 3 and words[1] in SHELL_FLAGS:
             return command_backend(
                 split_words(words[2], shell_body=True),
                 expected=expected,
                 trusted_claude_wrapper=trusted_claude_wrapper,
+                trusted_zcode_driver=trusted_zcode_driver,
                 depth=depth + 1,
                 shell_body=True,
             )
@@ -126,6 +137,7 @@ def command_backend(
                     words[marker + 1 :],
                     expected=expected,
                     trusted_claude_wrapper=trusted_claude_wrapper,
+                    trusted_zcode_driver=trusted_zcode_driver,
                     depth=depth + 1,
                 )
         raise ValidationError(f"untrusted or opaque shell wrapper cannot prove backend identity: {executable}")
@@ -138,6 +150,7 @@ def main() -> int:
     parser.add_argument("--backend", required=True, choices=sorted(set(BACKENDS.values())))
     parser.add_argument("--command", required=True)
     parser.add_argument("--trusted-claude-wrapper", required=True)
+    parser.add_argument("--trusted-zcode-driver", default="")
     args = parser.parse_args()
 
     try:
@@ -146,6 +159,7 @@ def main() -> int:
             split_words(args.command, shell_body=True),
             expected=args.backend,
             trusted_claude_wrapper=args.trusted_claude_wrapper,
+            trusted_zcode_driver=args.trusted_zcode_driver,
             shell_body=True,
         )
         if actual != args.backend:
