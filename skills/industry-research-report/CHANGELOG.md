@@ -16,42 +16,6 @@
 - PDF 端到端通过(10 页 512KB,封面文字抽取确认无 motto)
 - SKILL.md 加"v0.4.1 暂不启用"标注
 
-## [0.5.0] - 2026-08-25
-
-### 新增(工艺感升级 + IR/WB 设计强烈差异化)
-
-- **4 个 IR 封面工艺感升级**(DEC-IR-012):顶金带(4mm + 切口) + 底金边 + REPORT NO. 徽章(1.5mm 金色描边 + 主色半透底) + 几何内嵌金环 + kicker 金线分隔 + 字号升级(标题 36pt → 40-42pt)
-- **2 个 WB 轻量版专属封面**(DEC-IR-013):`W1-minimal`(居中布局 + 期数胶囊 + 受众标签 + 大留白) / `W2-tag-bar`(顶部金色期数条 + 标题左对齐)
-- **`report-profile.md` 新增 `report_kind` 字段**(`ir` | `wb`):决定封面 / 目录 / 章节页眉 / 表格 / 页脚全套视觉系统
-- **`report-profile.md` 新增 WB 字段**:`audience_label` / `period_number` / `period_year`
-- **`report-template.html` 设计变量化**(DEC-IR-014):12 个 CSS 变量由 render.py 按 report_kind 注入
-  - body-size / leading / h1-size / h2-size / h3-size
-  - toc-columns(IR 2 / WB 1)
-  - 装饰线颜色(IR 金 / WB 灰蓝)
-  - 装饰线粗细(IR 2px / WB 0.8px)
-  - 表头底色(IR 深蓝 / WB 浅灰)
-  - 章节页眉线粗细
-- **`pdf.py` 页脚差异化**(DEC-IR-015):
-  - `FOOTER_TEMPLATE_IR`:主色字 + 金色横线(蓝皮书页脚)
-  - `FOOTER_TEMPLATE_WB`:字号 8px + 灰色 + 0.5px 浅灰线(克制轻量)
-
-### 改进(渲染脚本)
-
-- `scripts/render.py` 增加 `--report-kind` / `--cover-style` 命令行参数
-- `scripts/render.py` 增加 `IR_COVERS` / `WB_COVERS` / `DEFAULT_COVER_BY_KIND` 分类
-- `scripts/render.py` 新增 `resolve_design(report_kind, palette)` 函数
-- `scripts/render.py` 根据 `report_kind` 切换默认 subtitle / lead / kicker / footer_brand
-- 元数据脚注页加 `skill_name` 字段
-
-### DECISIONS.md 增量
-
-- DEC-IR-012 / 013 / 014 / 015(工艺感 / 差异化 / 系统化 / 页脚)
-
-### 验证
-
-- 端到端 IR / WB PDF 端到端通过,5 调色板切换验证
-- 桌面对照:`~/Desktop/skill-demo-20260825/行业调研报告-零部件制造-XX区域.pdf` + `法律周报-科技型制造企业-2026第01期-DRAFT.pdf`
-
 ## [0.4.0] - 2026-08-25
 
 ### 新增
