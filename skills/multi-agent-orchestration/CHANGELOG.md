@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.9.1] - 2026-08-27
+
+### 修复
+
+- **spawn 后 Dispatch 绑定静默缺失的自动检测与补绑（Task-076）**：2026-08-27 三波实战（badminton-lab Wave17 bl-011-resume / Wave18 bl-012-contract / Wave19 双 worker）中，`orca-supervised-register.sh` 的 worker-start 成功拉起 TUI 并注入任务，但 Orca 不识别终端内 agent（`agent_unconfigured` / no recognized agent 家族）导致 Dispatch 未绑——Task 停 [ready]、`dispatch-show --task` 为空、worker_done 无通道，此前只能靠 PM 人肉发现并按 runbook #18 三步补绑。现在 worker-start 后主动 `dispatch-show --task` 核对；receipt 与 dispatch-show 均为空时自动执行补绑三步（无 `--inject` 的 dispatch 建绑定 → 从响应/preamble 提取真实 ctx id，多 id 歧义宁拒不猜 → 单行 terminal send 注入 worker_done/ask 精确命令形式，多行文本会在 TUI 提前回车），并以 `ORCAREG_DISPATCH_BIND=ok|manual-required` 汇报；`manual-required` 不再以 exit 1 阻断 spawn（terminal/任务注入已生效），改为显式告警 + WARN 打印手动三步。
+- `spawn-worker-launch.sh` 消费绑定结果：SPAWN 输出新增 `SPAWN_WORKER_DISPATCH_BIND: ok|manual-required` 行；METADATA `session.orca.supervised` 新增 `dispatch_bind` 字段，`manual-required` 时仍写入 run/task/coordinator（PM 手动补绑的输入），空 `dispatch_id` 下 pm-orchestrate 自动按 terminal-managed 路由。
+
+### 同步
+
+- SKILL.md §3 硬约束与 §4.6 看门狗各补一行（DISPATCH_BIND 行纳入 spawn receipt/每跳巡检）；`references/13` §10 METADATA 契约示例补 `dispatch_bind` 字段。
+- `test-spawn-worker-orca.sh` 新增 4 个 Task-076 用例（`ORCA_CLI_COMMAND` fake CLI 子进程跑 register）：健康路径不触发补绑、dispatch-show 空自动补绑 ok（含无 `--inject` 与单行注入断言）、补绑失败 manual-required 不阻断、绑定成功但注入失败仍 manual-required；`test-spawn-worker-launch.sh` 断言 METADATA 新契约并新增 manual-required 不阻断 + run/task 保留用例。
+
 ## [2.9.0] - 2026-08-27
 
 ### 新增

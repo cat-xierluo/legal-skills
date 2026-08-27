@@ -372,5 +372,171 @@ else
   bad "entrypoint delegates Orca helpers without retaining definitions"
 fi
 
+# --- Task-076：supervised dispatch 绑定自检与自动补绑 ---
+# 以 ORCA_CLI_COMMAND 指向 fake CLI，子进程运行 orca-supervised-register.sh，
+# mock「worker-start 成功但 dispatch-show 为空」的实战事故形态。
+FAKE_ORCA_BIN="$CASE_ROOT/fake-orca"
+FAKE_ORCA_STATE="$CASE_ROOT/fake-orca-state"
+FAKE_ORCA_LOG="$CASE_ROOT/fake-orca-calls.log"
+FAKE_ORCA_SENDS="$CASE_ROOT/fake-orca-sends.log"
+# fake CLI 作为 register 子进程的孙进程运行，状态/日志路径必须导出
+export FAKE_ORCA_STATE FAKE_ORCA_LOG FAKE_ORCA_SENDS
+cat > "$FAKE_ORCA_BIN" <<'SH'
+#!/usr/bin/env bash
+# fake orca CLI：由 $FAKE_ORCA_STATE 状态文件驱动 canned 响应
+state="${FAKE_ORCA_STATE:?}"
+printf '%s\n' "$*" >> "${FAKE_ORCA_LOG:?}"
+case "$1 $2" in
+  "orchestration run-create")
+    printf '%s\n' '{"result":{"run":{"id":"run-1","coordinator_handle":"term-pm"}}}' ;;
+  "orchestration task-create")
+    printf '%s\n' '{"result":{"task":{"id":"task-1"}}}' ;;
+  "orchestration worker-start")
+    if [ -f "$state/worker-start-has-dispatch" ]; then
+      printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-healthy"}}}}'
+    else
+      # 实战事故形态：worker-start 成功（TUI 拉起、任务注入）但响应无 dispatch id
+      printf '%s\n' '{"result":{"worker":{"started":true}}}'
+    fi ;;
+  "orchestration dispatch-show")
+    if [ -f "$state/worker-start-has-dispatch" ]; then
+      printf '%s\n' '{"result":{"dispatch":{"id":"ctx-healthy"}}}'
+    elif [ -f "$state/rebound" ]; then
+      printf '%s\n' "{\"result\":{\"dispatch\":{\"id\":\"$(cat "$state/dispatch-id" 2>/dev/null || echo ctx-auto)\"}}}"
+    else
+      printf '%s\n' '{"result":{}}'
+    fi ;;
+  "orchestration dispatch")
+    if [ -f "$state/dispatch-fails" ]; then
+      echo "ERROR: dispatch mutation failed" >&2
+      exit 1
+    fi
+    printf '%s\n' "ctx-auto" > "$state/dispatch-id"
+    touch "$state/rebound"
+    # 混合形态：JSON + preamble 文本（真实 --return-preamble 可能非纯 JSON）
+    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-auto"},"preamble":"live preamble dispatch_id=ctx-auto task=task-1"}}' ;;
+  "terminal send")
+    if [ -f "$state/inject-fails" ]; then
+      echo "ERROR: terminal send failed" >&2
+      exit 1
+    fi
+    printf '%s\n' "$*" >> "$FAKE_ORCA_SENDS"
+    printf '%s\n' '{"result":{"ok":true}}' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$FAKE_ORCA_BIN"
+
+reset_dispatch_case() {
+  rm -rf "$FAKE_ORCA_STATE"
+  mkdir -p "$FAKE_ORCA_STATE"
+  : > "$FAKE_ORCA_LOG"
+  : > "$FAKE_ORCA_SENDS"
+}
+
+run_register_helper() {
+  ORCA_CLI_COMMAND="$FAKE_ORCA_BIN" \
+    bash "$SCRIPT_DIR/orca-supervised-register.sh" \
+    --worktree-id "repo-1::worker" \
+    --terminal-handle "term-worker" \
+    --task-spec "do the thing" "$@"
+}
+
+# 用例 1（健康路径）：worker-start receipt 即含 dispatch id → 自检直接 ok，不触发补绑
+reset_dispatch_case
+touch "$FAKE_ORCA_STATE/worker-start-has-dispatch"
+set +e
+run_register_helper > "$CASE_ROOT/t76-healthy.out" 2> "$CASE_ROOT/t76-healthy.err"
+healthy_rc=$?
+set -e
+assert_eq "$healthy_rc" "0" "Task-076 healthy registration exits 0"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_ID=//p' "$CASE_ROOT/t76-healthy.out")" "ctx-healthy" \
+  "Task-076 healthy path keeps canonical dispatch id"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_BIND=//p' "$CASE_ROOT/t76-healthy.out")" "ok" \
+  "Task-076 healthy path reports bind ok"
+if grep -Eq 'dispatch .*--return-preamble' "$FAKE_ORCA_LOG"; then
+  bad "Task-076 healthy path must not trigger rebind mutation"
+else
+  ok "Task-076 healthy path must not trigger rebind mutation"
+fi
+if grep -Fq 'dispatch-show' "$FAKE_ORCA_LOG"; then
+  ok "Task-076 self-check actively calls dispatch-show after worker-start"
+else
+  bad "Task-076 self-check actively calls dispatch-show after worker-start"
+fi
+
+# 用例 2（实战事故形态）：receipt 与 dispatch-show 均空 → 三步自动补绑成功
+reset_dispatch_case
+set +e
+run_register_helper > "$CASE_ROOT/t76-rebind.out" 2> "$CASE_ROOT/t76-rebind.err"
+rebind_rc=$?
+set -e
+assert_eq "$rebind_rc" "0" "Task-076 auto rebind registration exits 0"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_ID=//p' "$CASE_ROOT/t76-rebind.out")" "ctx-auto" \
+  "Task-076 auto rebind recovers real ctx id"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_BIND=//p' "$CASE_ROOT/t76-rebind.out")" "ok" \
+  "Task-076 auto rebind reports bind ok"
+rebind_call=$(grep -E 'dispatch .*--return-preamble' "$FAKE_ORCA_LOG" | head -1)
+if [ -n "$rebind_call" ]; then
+  ok "Task-076 rebind dispatch mutation is invoked"
+else
+  bad "Task-076 rebind dispatch mutation is invoked"
+fi
+if printf '%s' "$rebind_call" | grep -Fq -- '--inject'; then
+  bad "Task-076 rebind must not pass --inject (agent-unrecognized runbook rule)"
+else
+  ok "Task-076 rebind must not pass --inject (agent-unrecognized runbook rule)"
+fi
+if grep -Fq 'ORCAREG_DISPATCH_MISSING' "$CASE_ROOT/t76-rebind.err"; then
+  ok "Task-076 missing binding is reported loudly, never silent"
+else
+  bad "Task-076 missing binding is reported loudly, never silent"
+fi
+send_lines=$(wc -l < "$FAKE_ORCA_SENDS" | tr -d ' ')
+assert_eq "$send_lines" "1" "Task-076 rebind injects exactly one single-line send"
+if grep -Fq 'ctx-auto' "$FAKE_ORCA_SENDS" && grep -Fq -- '--type worker_done' "$FAKE_ORCA_SENDS" \
+  && grep -Fq -- '--task-id task-1' "$FAKE_ORCA_SENDS" && grep -Fq -- '--from term-worker' "$FAKE_ORCA_SENDS" \
+  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS"; then
+  ok "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+else
+  bad "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+fi
+
+# 用例 3（补绑 mutation 失败）：manual-required + 显式告警 + 不阻断（exit 0）
+reset_dispatch_case
+touch "$FAKE_ORCA_STATE/dispatch-fails"
+set +e
+run_register_helper > "$CASE_ROOT/t76-manual.out" 2> "$CASE_ROOT/t76-manual.err"
+manual_rc=$?
+set -e
+assert_eq "$manual_rc" "0" "Task-076 failed rebind does not block spawn (exit 0)"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_BIND=//p' "$CASE_ROOT/t76-manual.out")" "manual-required" \
+  "Task-076 failed rebind reports manual-required"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_ID=//p' "$CASE_ROOT/t76-manual.out")" "" \
+  "Task-076 failed rebind leaves dispatch id empty"
+if grep -Fq 'return-preamble' "$CASE_ROOT/t76-manual.err"; then
+  ok "Task-076 manual-required warning prints the three-step recipe"
+else
+  bad "Task-076 manual-required warning prints the three-step recipe"
+fi
+if [ -s "$FAKE_ORCA_SENDS" ]; then
+  bad "Task-076 failed rebind must not inject protocol line"
+else
+  ok "Task-076 failed rebind must not inject protocol line"
+fi
+
+# 用例 4（绑定成功但注入失败）：dispatch id 已知，bind 仍判 manual-required
+reset_dispatch_case
+touch "$FAKE_ORCA_STATE/inject-fails"
+set +e
+run_register_helper > "$CASE_ROOT/t76-inject.out" 2> "$CASE_ROOT/t76-inject.err"
+inject_rc=$?
+set -e
+assert_eq "$inject_rc" "0" "Task-076 injection failure does not block spawn (exit 0)"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_ID=//p' "$CASE_ROOT/t76-inject.out")" "ctx-auto" \
+  "Task-076 injection failure still exports recovered dispatch id"
+assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_BIND=//p' "$CASE_ROOT/t76-inject.out")" "manual-required" \
+  "Task-076 injection failure reports manual-required"
+
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
