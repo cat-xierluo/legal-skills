@@ -202,6 +202,7 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
         "coordinator_handle": "term_pm_xxx",
         "task_id": "task_xxx",
         "dispatch_id": "ctx_xxx",
+        "dispatch_bind": "ok",
         "contract": "orca.orchestration.contract.v1",
         "completion_authority": "worker_done",
         "terminal_ownership": "external"
@@ -211,4 +212,4 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 }
 ```
 
-无 `supervised` 子块就只能按 terminal-managed 处理。Handle 是 runtime-scoped；Run/Task/Dispatch 是结构化协调身份，不要互相替代。
+无 `supervised` 子块就只能按 terminal-managed 处理。`dispatch_bind`（Task-076）记录 spawn 收尾自检结果：`ok` 或 `manual-required`（自动补绑未完成，dispatch_id 可为空——空时 pm-orchestrate 按 terminal-managed 路由，run/task id 是 PM 手动三步补绑的输入）。Handle 是 runtime-scoped；Run/Task/Dispatch 是结构化协调身份，不要互相替代。

@@ -43,7 +43,7 @@ launch_worker_session() {
     # 但调用方不能把它误当成已编排 worker。
     if [ "$ORCA_SUPERVISED" -eq 1 ] && [ -n "$ORCA_TERMINAL_HANDLE" ]; then
       if [ "$DRY_RUN" -eq 1 ]; then
-        printf 'ORCA_RUN: reuse/create Run %q; coordinator=%q; task=%q; worker-start --terminal <handle> --worktree id:<worktree>\n' \
+        printf 'ORCA_RUN: reuse/create Run %q; coordinator=%q; task=%q; worker-start --terminal <handle> --worktree id:<worktree>; dispatch-bind self-check (Task-076: dispatch-show 核对, 为空时 runbook #18 三步自动补绑)\n' \
           "${ORCA_RUN_ID:-new-wave-run}" "${ORCA_COORDINATOR_HANDLE:-bind-once}" "${ORCA_TASK_ID:-create-from-spec:$TASK_SPEC}"
       else
         reg_helper="$SCRIPT_DIR/orca-supervised-register.sh"
@@ -73,12 +73,23 @@ launch_worker_session() {
             ORCA_SUPERVISED_COORDINATOR_HANDLE=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_COORDINATOR_HANDLE=//p')
             ORCA_SUPERVISED_TASK_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_TASK_ID=//p')
             ORCA_SUPERVISED_DISPATCH_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_ID=//p')
-            if [ -n "$ORCA_SUPERVISED_DISPATCH_ID" ] && [ -f "$METADATA_FILE" ]; then
+            # Task-076：dispatch 绑定自检结果（旧版 helper 无此 KV 时回退 ok，向后兼容）。
+            ORCA_SUPERVISED_DISPATCH_BIND=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_BIND=//p')
+            [ -n "$ORCA_SUPERVISED_DISPATCH_BIND" ] || ORCA_SUPERVISED_DISPATCH_BIND="ok"
+            printf 'SPAWN_WORKER_DISPATCH_BIND: %s\n' "$ORCA_SUPERVISED_DISPATCH_BIND" >&2
+            if [ "$ORCA_SUPERVISED_DISPATCH_BIND" != "ok" ]; then
+              # 不阻断 spawn（terminal/任务注入已生效），但显式告警代替静默缺失。
+              echo "WARN: dispatch 绑定自动补绑未完成(manual-required)：worker 已启动且任务已注入，但 worker_done 无通道。PM 按 runbook #18 三步手动补绑：① orca orchestration dispatch --task $ORCA_SUPERVISED_TASK_ID --to $ORCA_TERMINAL_HANDLE --run $ORCA_SUPERVISED_RUN_ID --return-preamble（不带 --inject）② 从 preamble 提取真实 ctx id ③ 单行 terminal send 注入 worker_done/ask 命令形式（必须单行）" >&2
+            fi
+            # dispatch_id 在 manual-required 时可为空：仍写入 supervised 块（run/task/coordinator
+            # 是 PM 手动补绑的输入），pm-orchestrate 对空 dispatch_id 自动按 terminal-managed 路由。
+            if [ -f "$METADATA_FILE" ]; then
               tmp_meta=$(mktemp)
               jq --arg run "$ORCA_SUPERVISED_RUN_ID" --arg coordinator "$ORCA_SUPERVISED_COORDINATOR_HANDLE" \
                 --arg task "$ORCA_SUPERVISED_TASK_ID" --arg disp "$ORCA_SUPERVISED_DISPATCH_ID" \
-                '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
-              echo "SPAWN_WORKER_ORCA_SUPERVISED_DONE: dispatch=$ORCA_SUPERVISED_DISPATCH_ID run=$ORCA_SUPERVISED_RUN_ID task=$ORCA_SUPERVISED_TASK_ID" >&2
+                --arg bind "$ORCA_SUPERVISED_DISPATCH_BIND" \
+                '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
+              echo "SPAWN_WORKER_ORCA_SUPERVISED_DONE: dispatch=${ORCA_SUPERVISED_DISPATCH_ID:-none} run=$ORCA_SUPERVISED_RUN_ID task=$ORCA_SUPERVISED_TASK_ID bind=$ORCA_SUPERVISED_DISPATCH_BIND" >&2
             fi
           else
             echo "SPAWN_WORKER_ORCA_SUPERVISED_FAILED: helper 退出非 0；保留 terminal 供 PM 检查，但不冒充 supervised worker" >&2

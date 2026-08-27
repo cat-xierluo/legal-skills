@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Register an existing Orca agent terminal into one supervised Run/Task/Dispatch.
 # worker-start is the only prompt injector on this path.
+#
+# Task-076：worker-start 成功后的 Dispatch 绑定自检与自动补绑。
+# Run/Task/worker-start 阶段失败仍然 exit 1 fail-loud；仅「dispatch 绑定缺失」
+# （worker-start 成功、receipt 与 dispatch-show 均无 id）改为自动补绑三步，
+# 并以 ORCAREG_DISPATCH_BIND=ok|manual-required 显式汇报，manual-required
+# 不再以 exit 1 阻断 spawn（terminal/任务注入已生效，阻断只会制造半活 worker）。
 
 set -euo pipefail
 
@@ -139,30 +145,96 @@ if ! start_out=$(worker_start_once); then
   fi
 fi
 
-# Prefer the mutation receipt. dispatch-show is a read-only exact recovery if a
-# runtime version omits the dispatch id from worker-start's response.
-DISPATCH_ID=$(printf '%s' "$start_out" | jq -r '
+# Task-076：worker-start 成功后的 Dispatch 绑定自检。
+# 2026-08-27 三波实战（badminton-lab Wave17/18/19）中，worker-start 拉起 TUI 并注入
+# 任务，但 Orca 不识别终端内 agent（agent_unconfigured / no recognized agent 家族）
+# 导致 Dispatch 未绑——Task 停 [ready]、dispatch-show --task 为空、worker_done 无通道。
+# 该缺口此前只能靠 PM 人肉发现并按 runbook #18 三步补绑；现在 spawn 收尾主动核对，
+# 为空时自动补绑，并把结果以 ORCAREG_DISPATCH_BIND=ok|manual-required 汇报给调用方。
+DISPATCH_BIND="ok"
+receipt_id=$(printf '%s' "$start_out" | jq -r '
   .result.dispatch.id
   // .result.worker.dispatch.id
   // .result.dispatchId
   // .result.worker.dispatchId
-  // empty' 2>/dev/null)
-if [ -z "$DISPATCH_ID" ]; then
-  dispatch_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || {
-    echo "ERROR: worker-start succeeded but dispatch-show failed: $dispatch_out" >&2; exit 1; }
-  DISPATCH_ID=$(printf '%s' "$dispatch_out" | jq -r '
+  // empty' 2>/dev/null || true)
+# 主动只读核对（旧 runtime 缺 dispatch-show 子命令时容错为空，不阻断）。
+show_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || show_out=""
+show_id=$(printf '%s' "$show_out" | jq -r '
+  .result.dispatch.id
+  // .result.dispatch.dispatchId
+  // .result.dispatchId
+  // empty' 2>/dev/null || true)
+if [ -n "$show_id" ]; then
+  DISPATCH_ID="$show_id"
+  if [ -n "$receipt_id" ] && [ "$receipt_id" != "$show_id" ]; then
+    echo "WARN: worker-start receipt dispatch ($receipt_id) differs from dispatch-show ($show_id); using dispatch-show as canonical" >&2
+  fi
+elif [ -n "$receipt_id" ]; then
+  DISPATCH_ID="$receipt_id"
+  echo "ORCAREG_DISPATCH_SHOW_EMPTY: dispatch-show 未回显 id，按 worker-start mutation receipt 采信: $receipt_id" >&2
+else
+  # 绑定缺失：按 runbook #18 自动补绑三步。
+  # ① dispatch 无 --inject 建绑定并返回 preamble（agent 不被识别时 --inject 会直接报错）
+  # ② 从响应/preamble 提取真实 ctx id ③ 单行 terminal send 注入 worker_done/ask 命令形式
+  echo "ORCAREG_DISPATCH_MISSING: worker-start 成功但 dispatch 绑定缺失（receipt 与 dispatch-show 均为空）；执行 runbook #18 三步自动补绑" >&2
+  rebind_out=""
+  rebind_out=$(orca_cli orchestration dispatch --task "$TASK_ID" --to "$TERMINAL_HANDLE" \
+    --run "$RUN_ID" --return-preamble 2>&1) || rebind_out=""
+  if [ -n "$rebind_out" ]; then
+    printf 'ORCAREG_DISPATCH_REBIND_RECEIPT: %s\n' "$rebind_out" >&2
+  fi
+  rebind_id=$(printf '%s' "$rebind_out" | jq -r '
     .result.dispatch.id
     // .result.dispatch.dispatchId
     // .result.dispatchId
-    // empty' 2>/dev/null)
+    // .result.worker.dispatch.id
+    // empty' 2>/dev/null || true)
+  if [ -z "$rebind_id" ]; then
+    # 响应可能不是 JSON（--return-preamble 文本形态）：从 preamble 提取 ctx id；
+    # 出现多个不同 ctx id 时视为歧义，宁拒不猜（PM 手动裁定）。
+    rebind_id=$(printf '%s' "$rebind_out" | grep -oE 'ctx_[A-Za-z0-9_-]+' | sort -u | sed -n '1p' || true)
+    rebind_unique=$(printf '%s' "$rebind_out" | grep -oE 'ctx_[A-Za-z0-9_-]+' | sort -u | wc -l | tr -d ' ' || true)
+    if [ "${rebind_unique:-0}" -gt 1 ]; then
+      echo "WARN: 补绑响应含 ${rebind_unique} 个不同 ctx id，拒绝猜测" >&2
+      rebind_id=""
+    fi
+  fi
+  verify_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || verify_out=""
+  verify_id=$(printf '%s' "$verify_out" | jq -r '
+    .result.dispatch.id
+    // .result.dispatch.dispatchId
+    // .result.dispatchId
+    // empty' 2>/dev/null || true)
+  if [ -n "$verify_id" ]; then
+    DISPATCH_ID="$verify_id"
+  elif [ -n "$rebind_id" ]; then
+    DISPATCH_ID="$rebind_id"
+    echo "ORCAREG_DISPATCH_BIND_BY_RECEIPT: dispatch-show 二次核对仍未回显，按补绑响应采信: $rebind_id" >&2
+  else
+    DISPATCH_ID=""
+  fi
+  if [ -n "$DISPATCH_ID" ]; then
+    # 第三步：单行注入 worker_done/ask 精确命令形式。
+    # 必须单行：多行文本会在 TUI 里被提前回车逐行提交。
+    printf -v inject_text \
+      '[dispatch-bind 自动补绑] task_id=%s dispatch_id=%s。完成时精确执行一次: orca orchestration send --from %s --type worker_done --subject "worker 完成" --body "三句内摘要" --task-id %s --dispatch-id %s --outcome succeeded --files-modified "改动文件路径列表"。阻塞时: orca orchestration ask --from %s --question "阻塞问题" --timeout-ms 600000。其余仍按已注入任务执行。' \
+      "$TASK_ID" "$DISPATCH_ID" "$TERMINAL_HANDLE" "$TASK_ID" "$DISPATCH_ID" "$TERMINAL_HANDLE"
+    if orca_cli terminal send --terminal "$TERMINAL_HANDLE" --text "$inject_text" --enter --json >/dev/null 2>&1; then
+      echo "ORCAREG_DISPATCH_INJECTED: 已向 $TERMINAL_HANDLE 单行注入 worker_done/ask 命令形式" >&2
+    else
+      DISPATCH_BIND="manual-required"
+      echo "WARN: dispatch 已补绑($DISPATCH_ID)但命令形式注入失败；PM 需手动单行 terminal send 注入 worker_done 命令形式" >&2
+    fi
+  else
+    DISPATCH_BIND="manual-required"
+    echo "WARN: 自动补绑失败（dispatch mutation 无 id 且 dispatch-show 复核为空）。spawn 不阻断，但 worker_done 无通道。PM 手动三步补绑: ① orca orchestration dispatch --task $TASK_ID --to $TERMINAL_HANDLE --run $RUN_ID --return-preamble（不带 --inject，agent 不被识别时 --inject 会直接报错） ② 从返回 preamble 提取真实 ctx id ③ orca terminal send --terminal $TERMINAL_HANDLE --text \"<单行 worker_done/ask 命令形式>\" --enter（必须单行）。" >&2
+  fi
 fi
-[ -n "$DISPATCH_ID" ] || {
-  echo "ERROR: worker-start succeeded but no dispatch id was recoverable; inspect task $TASK_ID" >&2
-  exit 1
-}
 
-echo "ORCAREG_WORKER_REGISTERED: dispatch=$DISPATCH_ID" >&2
+echo "ORCAREG_WORKER_REGISTERED: dispatch=${DISPATCH_ID:-none} bind=$DISPATCH_BIND" >&2
 printf 'ORCAREG_RUN_ID=%s\n' "$RUN_ID"
 printf 'ORCAREG_COORDINATOR_HANDLE=%s\n' "$COORDINATOR_HANDLE"
 printf 'ORCAREG_TASK_ID=%s\n' "$TASK_ID"
 printf 'ORCAREG_DISPATCH_ID=%s\n' "$DISPATCH_ID"
+printf 'ORCAREG_DISPATCH_BIND=%s\n' "$DISPATCH_BIND"
