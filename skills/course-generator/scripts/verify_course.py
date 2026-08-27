@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a Course Generator v2.9.3 course directory against its source index and manifest."""
+"""Verify a Course Generator v2.9.4 course directory against its source index and manifest."""
 
 from __future__ import annotations
 
@@ -575,7 +575,8 @@ def verify_course(
     block_dispositions: dict[str, set[str]] = defaultdict(set)
     included_blocks_by_chapter: dict[str, set[str]] = defaultdict(set)
     evidence_records: list[dict[str, Any]] = []
-    for index, item in enumerate(require_list(top.get("materials"), "materials", audit, nonempty=True), 1):
+    raw_materials = require_list(top.get("materials"), "materials", audit, nonempty=True)
+    for index, item in enumerate(raw_materials, 1):
         label = f"materials[{index}]"
         material = check_allowed_keys(
             item,
@@ -721,6 +722,19 @@ def verify_course(
                 audit.fail("CG-MATERIAL-TRACE", f"skip 素材 {material_id} 不得出现在章节 material_ids")
         else:
             audit.fail("CG-CONTRACT-MANIFEST", f"{label}.disposition 必须为 include 或 skip")
+    expected_material_ids = {f"MAT-{index:03d}" for index in range(1, len(raw_materials) + 1)}
+    if material_ids != expected_material_ids:
+        missing = sorted(expected_material_ids - material_ids)
+        unexpected = sorted(material_ids - expected_material_ids)
+        details: list[str] = []
+        if missing:
+            details.append(f"缺少 {len(missing)} 个（示例: {', '.join(missing[:5])}）")
+        if unexpected:
+            details.append(f"越界 {len(unexpected)} 个（示例: {', '.join(unexpected[:5])}）")
+        audit.fail(
+            "CG-CONTRACT-MANIFEST",
+            "materials.id 必须按数组长度从 MAT-001 连续分配；" + "；".join(details),
+        )
     for chapter_id, values in chapter_material_membership.items():
         for material_id in values:
             if material_id not in material_ids:
@@ -1033,7 +1047,7 @@ def verify_course(
 
 
 def emit_result(audit: Audit, root: Path) -> int:
-    print("========== course-generator v2.9.3 验收 ==========")
+    print("========== course-generator v2.9.4 验收 ==========")
     print(f"目录: {root}")
     for constraint_id in ALL_CONSTRAINTS:
         messages = audit.failures.get(constraint_id)
@@ -1060,7 +1074,7 @@ def emit_result(audit: Audit, root: Path) -> int:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.9.3 课程目录")
+    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.9.4 课程目录")
     parser.add_argument("course_dir", help="课程输出目录")
     parser.add_argument("--manifest", default="course-manifest.json", help="相对课程目录的 manifest 路径（默认: course-manifest.json）")
     parser.add_argument("--source-root", help="可选：索引时使用的单个来源文件或来源根目录；提供时重新枚举并校验完整输入范围")
