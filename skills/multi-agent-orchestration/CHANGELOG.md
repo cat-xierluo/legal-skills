@@ -38,19 +38,16 @@
 ### 验证
 
 - `test-pm-quota-stall.sh` 39/39、`test-night-watch.sh` 31/31、`test-spawn-worker-orca.sh` 41/41 通过；Skill Harness failure audit 0 finding。真实 provider 429、真实 PM terminal 端到端唤醒，以及真实 Orca 中故意制造的破坏性跨仓 create 均未执行并标记 `NOT_VERIFIED`。
-
 ## [2.8.0] - 2026-08-26
 
 ### 新增
 
 - Wave Autopilot 模式（Task-062，`DEC-125`）：`references/15-wave-autopilot.md` + SKILL.md §4.6。用户显式授权后，PM 按项目任务源固定策略自动链式推进波次直到泊车。核心机制：监控**三通道并用**（Orca 推送 + recurring cron 看门狗 + Dispatch 状态轮询；完成权威是 `worker-show` 的 dispatch/worker 状态而非队列消息——实测 worker_done 推送可延迟 6.6h 不唤醒 PM）；授权与组波/泊车策略权威留在项目上下文，skill 只定义机制与不变量；验收路径不因自动化放宽（最终树门禁复跑 + safe-push + PR squash）；泊车 fail-closed、每波摘要不阻断。含验收期确定性缺陷的 fix-worker 派发模式（新分支名 + `--base-ref origin/<原分支>` 避 worktree 撞车）与 8 条实测反模式清单。来源：badminton-lab Wave 4/5（PR #21—#25）完整生命周期实战。
-
 ## [2.7.1] - 2026-08-26
 
 ### 改进
 
 - 内部上下文同步：`references/10-parallel-lessons.md` 新增 G39（badminton-lab Wave 4）——同账号多 claude-code worker 的 5 小时限流同时触发；429 打断 turn 后 TUI 停在 idle，`pm-orchestrate send` 投递 Dispatch inbox 叫不醒（`ok:true` ≠ 被消费），须用 `orca terminal send --text ... --enter` 键盘注入唤醒；判活看 `peek` transcript 时间戳与当前的差值而非 tail 文本。SKILL.md §7 增补对应唤醒指引一句。纯文档变更，无脚本改动，全部脚本 `bash -n` 通过。
-
 ## [2.7.0] - 2026-08-25
 
 ### 新增

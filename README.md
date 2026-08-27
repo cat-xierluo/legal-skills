@@ -34,7 +34,8 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.2.9  | **技术标识下划线修复**：正文与 Markdown 表格共用单词边界强调规则，`payment_instance_id`、`API_SERVER_KEY` 等普通字段按字面量保留下划线且不再误触发斜体；明确的 `_斜体_`、`__粗体__` 与 `___粗斜体___` 语义保持不变 |
+| 2026-08-26 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.8.1  | **Wave Autopilot 持久性边界与整改基线**：明确 session recurring cron 只提供 L1 live-session fast path；新增跨会话 runtime ledger、PM lease/fencing、幂等 reconcile、durable scheduler/soft park、shared-context 单写者和八项故障注入设计，并分别标记 L2 controller 与 L3 scheduler 未实现状态 |
+| 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.3.5  | **全书本地图片路径修复**：`--book` 在合并前按各章 Markdown 自己的目录重定位 Markdown/HTML 本地相对图片，含空格、URL 编码和可选标题的路径均可嵌入；单章与远程图片行为不变 |
 | 2026-08-25 | 新增   | [industry-research-report](skills/industry-research-report/)           | v0.7.0 | **行业法律调研报告（获客端）**：**v0.7.0 全面精简版式（Less is more：页眉只留报告编号、页脚只留页码，砍掉横线/kicker/多列冗余装饰）**；输入 industry/region/focus/depth，输出精排 A4 PDF 行业法律调研报告；蓝皮书体例（深蓝 #1B3C59 + 金色 #D4AF37 + 白色页面）+ 4 个封面变体（顶金带+底金边+REPORT NO. 徽章工艺感）+ 5 个律师常见调色板；**v0.6.2 书籍连续流改造**（DEC-IR-019）：放弃杂志固定画布裁切，改 @page margin box 跨页 header/footer + 章节自然流动不截断 + 大边距（天头80px/地脚60px/左右56px≈21/16/15mm）；**v0.6.1 杂志Studio book-style 排版优化**（加大字号 IR 22/12pt + 行高 2.0）；**v0.6.0 三连环视觉修复**（封面 CSS 注入 / px 单位 / 按 H2 拆章）；**v0.5.0 report_kind 字段 + 正文设计系统差异化路由**（IR 蓝皮书感 vs WB 通讯感，12 维度全表）；内置 report-profile.md 个性化配置 + 首启向导；行业特定信源映射内置 20 个高频行业；数据源走企查查 MCP + 网络检索 5 级信源优先级；md 基底 → jinja2 → Playwright + Chrome headless，一键出精排 A4 PDF |
 | 2026-08-25 | 新增   | [weekly-legal-briefing](skills/weekly-legal-briefing/)                 | v0.6.0 | **定时法律研报（留存端）**：**v0.6.0 继承 v0.7.0 精简版式（页眉页脚只留编号/页码）**；配置一次，定期自动生成行业/法律研报草稿（如"科技型制造企业 周报"）；**v0.5.2 书籍连续流继承**（Skill 1 v0.6.2：@page margin box 跨页 header/footer + 章节自然流动不裁切 + 大边距）；**v0.5.0 三连环视觉修复同步**；**v0.4.0 新增 2 个专属轻量封面 (W1-minimal / W2-tag-bar) + 正文设计系统强烈差异化**（字号小 + 灰色细线 + 单栏目录，与 IR 蓝皮书感拉开）；白名单信源制（白名单外默认丢弃）+ 案例必带案号 + 案号裁判文书网回查；输出文件一律带 `_DRAFT` 标记，**永不自动外发**（硬约束，发布动作物理上留给人工）；渲染管线 symlink 复用 industry-research-report，避免双份维护；附 WorkBuddy / OpenClaw cron / GitHub Actions 三平台部署说明 |
 | 2026-08-25 | 更新   | [md2word](skills/md2word/)                                             | v1.2.6  | **Word 出版逃逸修复**：多列长表头受正文区硬预算约束，`tblW`、grid 与单元格宽度统一；普通及显式居中表题取消缩进且保留文字样式；引用块 `[^label]` 正确生成原生 Word 脚注，不再显示字面 marker |
@@ -43,7 +44,6 @@
 | 2026-08-24 | 更新   | [lecture-review](skills/lecture-review/)                               | v1.2.1 | **讲课复盘三轮迭代**：v1.1.0 新增 deck 课件对照（六段 → 七段：实讲/半讲/跳过/挪位回收/主动宣判五枚举 + min/页双口径）；v1.2.0 高级模式课程结构复盘（评人/评课分离 + 双向比对三方向）；v1.2.1 产物落点约定（七段报告/review.md/stats.json/profile 落点表 + 评课不进讲师档案）；脚本 `analyze_stats.py` 新增 `--deck` 课件解析与 `self_check` 三个候选生成器（module_distribution / near_dup_pages / title_term_index），references/metrics.md 同步补「课件对照」节；`references/structural-review-template.md` 沉淀九节+附录的高级模式复盘骨架 |
 | 2026-08-24 | 新增   | [lecture-review v1.0.0](skills/lecture-review/)                        | v1.0.0 | **讲课表现复盘**：通读 raw 转录稿动态发现主讲口癖/节奏/句式与结构信号（时间分配/承诺回收/互动密度），预设词表仅作对比锚点；脚本统一口径出数字（讲师隔离+归属污染核验、最长优先去重叠、双格式时间戳、剔幻灯片 URL）；讲师档案跨场次闭环（watchlist 下场复查）；ASR 吞语气音盲区显式声明；经双盲基线测试（RED→GREEN）验证 |
 | 2026-08-22 | 新增   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.13.4 | **要素式起诉状生成器**：基于最高法法〔2025〕82 号 67 类官方模板，从律师已写好的常规起诉状自动生成要素式 Word 文书。113 棵 OOXML 模板树全量入库（git 可 diff），68/68 案由精调（含知产行政/执行全家族/海事/环资/行政/国赔），通用勾选机制+多当事人扩容+法人块渲染+批量模式，格式像素级保真（lxml 跨 run 精确替换），e2e 28 产物+68 树冒烟+45 答辩冒烟全绿 |
-| 2026-08-14 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.12.0 | 改善 PDF Expert 复制正文换行：Paddle 正文段落字号只向下统一并保留原坐标与横向框宽；新增显式 clean.md 输出，代表性四页样本换行由 120 降至 62 |
 </details>
 
 ## 📋 项目概述
@@ -463,7 +463,7 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.2.9</td>
+<td style="text-align:center">v1.3.5</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/md2word-1.2.0.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
@@ -627,9 +627,9 @@
 <tr>
 <td><a href="skills/multi-agent-orchestration/"><strong>multi-agent-orchestration</strong></a></td>
 <td>工具·Agent协作</td>
-<td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、四后端总控、Harness 层级门禁与 tmux 回退</td>
+<td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、四后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与跨会话持久化设计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.6.2</td>
+<td style="text-align:center">v2.8.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>

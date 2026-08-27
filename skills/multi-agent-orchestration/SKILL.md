@@ -188,7 +188,7 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-`orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；spec 内的 branch 名一律用**连字符形式**（Orca worktree `--name` 与 spawn 的 `safe_branch` 都会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked——Wave 1 教训，manifest 含 `branch: x/y` 会被 `orca-wave-prepare.sh` fail-closed 拒绝）。`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding；被 `task_not_startable` 拒绝时带 `--reset-failed` 可把前任 worker 提问/中止翻成 failed 的 Task 复位 ready 重试一次（Task-060）。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。**并行 worker 会同时写共享文档时（CHANGELOG/DECISIONS/TASKS），PM 在各 spec 中预分配互不冲突的编号与槽位**（如 DEC-044/045 分派到不同 worker），合并冲突留给 PM 收口按既定模式解。
+`orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；spec 内的 branch 名一律用**连字符形式**（Orca worktree `--name` 与 spawn 的 `safe_branch` 都会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked——Wave 1 教训，manifest 含 `branch: x/y` 会被 `orca-wave-prepare.sh` fail-closed 拒绝）。`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding；被 `task_not_startable` 拒绝时带 `--reset-failed` 可把前任 worker 提问/中止翻成 failed 的 Task 复位 ready 重试一次（Task-060）。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。`CHANGELOG/DECISIONS/TASKS/AGENTS/ROADMAP` 等 shared context 默认由 PM/维护者单写：worker 只提交任务专属产物与结构化 writeback proposal，PM 验收后串行写回。DEC/Task 编号预分配只分配标识，不授权并行修改共享文档；历史冲突按 `references/16-autopilot-durability.md` 的 fail-closed 恢复边界处理。
 
 ### 4.5 Supervised 生命周期
 
@@ -247,6 +247,9 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 
 Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/15-wave-autopilot.md`。已由同一 watcher 明确观察到额度受限时，才可用 `scripts/night-watch.sh --terminal <PM终端handle> --model <当前模型> --settings <provider/account 配置权威文件>` 守夜；自动唤醒拒绝可变 setting-sources，并冻结 settings 内容指纹。首次探测即成功、配置/认证/网络/未知错误、超时或 terminal 失败都不会唤醒。真实 PM 终端的 `quota → available → send → PM 被唤醒` 仍标记 `NOT_VERIFIED`，流程见 `references/15-wave-autopilot.md` §8。
 
+Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/14-wave-autopilot.md`。
+
+**持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path；项目任务源保存策略与意图，不保存当前 Wave 的完整运行态。没有 runtime ledger、PM lease/fencing 与幂等 reconcile 时，只能声明 `L1 / LIVE_SESSION_AUTOPILOT`，并报告 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`；没有外部 durable scheduler 时报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`。用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时，读取 `references/16-autopilot-durability.md`；不得用一个笼统状态混淆 L2 controller 与 L3 scheduler。
 ## 5. tmux 回退
 
 先按 backend 生成命令，再 spawn：
@@ -318,7 +321,6 @@ bash scripts/sentinel.sh --status-file "$CTX/STATUS.json" --tmux-session worker-
 Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏题、阻塞、越界或验证失败时优先给原 worker 发窄纠偏；需要独立审阅时另派 reviewer。Sentinel 设计读取 `references/04-sentinel-design.md`。
 
 把运行时活性与业务进展分开判断：`worker-read --source auto`/terminal cursor 前进只证明有输出，文件、提交和测试证据才证明业务进展；cursor、CPU 或时间戳静止都不能单独证明假死。来源改变、截断、PID 身份不可证明、quiet 测试、网络等待和 ask/dialog 时降级为 `unknown`。探测默认只读，不自动 Esc/Ctrl+C/stop/release；确认终端停在 idle 且工作未完时，PM 才可显式用 `orca terminal send --terminal <handle> --text "..." --enter` 注入一次短唤醒，并复读 screen/Dispatch 状态。
-
 ## 8. 收口
 
 PM 必须：
@@ -381,7 +383,6 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/13-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
 - `references/14-pm-orchestrate.md`：PM 三模式统一控制入口。
 - `references/15-wave-autopilot.md`：Wave Autopilot 自动推进、三通道监控、看门狗清单与泊车语义。
-
 不要一次加载全部 references；按当前 backend、控制模式和故障类型读取。
 
 ## 12. 验收门禁
