@@ -503,7 +503,7 @@ skill-lint `harness_failure_audit` 基线报 3 处 hard finding（HRA-001：测�
 
 ### 入库 — G25-G28 FaroPDF Wave 1+2 实战沉淀（references/10-parallel-lessons.md）
 
-G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此前已写进 `09-parallel-lessons.md` 工作区但未入 CHANGELOG，本轮正式入库：
+G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此前已写进 `10-parallel-lessons.md` 工作区但未入 CHANGELOG，本轮正式入库：
 - **G25**：spawn-worker backend token 检查（`--command` basename 必须含 backend；bash launch.sh wrapper 会触发 fail-closed，改用 backend 二进制直起 + `/tmp/empty-mcp.json` 文件避 tmux 引号吞）。
 - **G26**：claude-code worker 派 subagent 不可用（glm 第三方 provider API 1211/500）→ 主进程 Grep 替代 + prompt 显式禁 subagent。
 - **G27**：漏 commit 也犯 claude-code（不只 codebuddy）—— 收口必查 `git log main..HEAD` 非空。
@@ -547,7 +547,7 @@ G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此�
 ### 改进
 
 - **SKILL.md §3 标准流程**：把第 2 步「先分组」从一句话扩成三维度判断（指向 `references/11`）；新增第 1.5 步「识别任务源形态」，要求区分本地 task 卡和云端 Issue 并做不同预处理。强调拿不准时默认**分开**。
-- **SKILL.md §10 参考**：references 列表加 `11-issue-grouping.md`，templates 列表加 `issue-batch-pr.md`。
+- **SKILL.md §10 参考**：references 列表加 `12-issue-grouping.md`，templates 列表加 `issue-batch-pr.md`。
 - **frontmatter**：version 1.19.0 → 1.20.0。
 
 ### 关联
