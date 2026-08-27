@@ -2,12 +2,12 @@
 name: course-generator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.9.4"
+version: "2.9.3"
 license: MIT
 description: 从转录稿或文献生成可独立阅读、可溯源验收的结构化课程，也可在用户明确要求时归档既有课程或从已验证素材提取培训方案。本技能应在用户要“把长转录稿整理成课程”“生成总览和章节”“归档课程”“按受众定制课程方案”时使用。不要用于：仅做 ASR 纠错（用 transcription-corrector）、复盘讲课表现（用 lecture-review）、把多篇文章扩写成书（用 article2book）。
 ---
 
-# Course Generator v2.9.4
+# Course Generator v2.9.3
 
 ## 选择模式
 
@@ -41,7 +41,7 @@ description: 从转录稿或文献生成可独立阅读、可溯源验收的结�
 
 ## 生成模式
 
-流程：`确定性来源索引 → 逐块素材/图片登记 → 素材账本预检 → 全局大纲 → 总览与章节 → 正文证据回填 → manifest 定稿 → 确定性验收 → 人工复核 → 可选归档`
+流程：`确定性来源索引 → 逐块素材/图片登记 → 全局大纲 → 总览与章节 → 正文证据回填 → manifest 定稿 → 确定性验收 → 人工复核 → 可选归档`
 
 ### 1. 建立确定性来源索引
 
@@ -61,17 +61,9 @@ python3 scripts/index_sources.py \
 
 ### 2. 建立素材账本与图片账本
 
-逐块扫描全部 `content block`。每个 `BLK-xxxxx` 必须被一个或多个 `MAT-xxx` 覆盖；每个素材记录类型、摘要、source ref、`source_block_ids`、目标章节或受控 `skip_code`。include/skip 共用一个从 `MAT-001` 连续分配的 ID 命名空间；`skip` 只是 `disposition`，不得另造 `SKIP-*` 编号。`MAT-xxx` 的单位是一项可以单独讲清的观点、案例、操作阶段、踩坑、取舍或疑问，不是一个标题下的整节摘要。一个 include 素材最多合并 6 个相邻来源块；出现新的步骤、结果、数字、限制、工具、修正或问答转折时拆成新素材。include 素材在写正文前预先填写 2—5 个 `coverage_terms`，数量至少为 `ceil(source_block_ids 数量 / 2)`（最低 2、最高 5）。每个词必须原样存在于该素材绑定的原始来源块，优先选择步骤、结果、数字、限制或专名；不得发明“范式阶梯”等抽象词再写回摘要与正文，也不得全用 `AI` / `Agent` / `Skill` 类通用词。`source-index.json` 中每个 `kind=image` 的块都必须按原顺序进入 manifest 的 `images`，跨文件连续分配 `IMG-xxx`，原样记录图片 Markdown、source ref、正文动作和目标文档；同一行有多张 Markdown 图片时逐张登记，不得只登记准备插入正文的图片。
+逐块扫描全部 `content block`。每个 `BLK-xxxxx` 必须被一个或多个 `MAT-xxx` 覆盖；每个素材记录类型、摘要、source ref、`source_block_ids`、目标章节或受控 `skip_code`。`MAT-xxx` 的单位是一项可以单独讲清的观点、案例、操作阶段、踩坑、取舍或疑问，不是一个标题下的整节摘要。一个 include 素材最多合并 6 个相邻来源块；出现新的步骤、结果、数字、限制、工具、修正或问答转折时拆成新素材。include 素材在写正文前预先填写 2—5 个 `coverage_terms`，数量至少为 `ceil(source_block_ids 数量 / 2)`（最低 2、最高 5）。每个词必须原样存在于该素材绑定的原始来源块，优先选择步骤、结果、数字、限制或专名；不得发明“范式阶梯”等抽象词再写回摘要与正文，也不得全用 `AI` / `Agent` / `Skill` 类通用词。`source-index.json` 中每个 `kind=image` 的块都必须按原顺序进入 manifest 的 `images`，跨文件连续分配 `IMG-xxx`，原样记录图片 Markdown、source ref、正文动作和目标文档；同一行有多张 Markdown 图片时逐张登记，不得只登记准备插入正文的图片。
 
 素材分类、词典校正、图片价值判断和章节边界细则见 [outline_prompt.md](references/outline_prompt.md)。机器字段必须同步进入 [course-manifest.md](references/course-manifest.md) 定义的 manifest；`98 图片资产表.md`、`99 课程大纲.md` 只作为可选的人类审计视图，不是验证器的数据源。
-
-素材和图片账本初步完成后，先把进行中的 `course-manifest.json` 落盘，并在生成长篇正文前运行一次低成本预检：
-
-```bash
-python3 scripts/preflight_ledger.py <课程目录>/course-manifest.json
-```
-
-预检退出码 `0` 才进入大纲和正文。退出码 `1` 时只修复报告的账本字段，不重新抽取原文、不改弱 coverage terms；退出码 `2` 表示文件或 JSON 无法读取。配额、网络或平台异常时保留当前目录并报告失败，不从头重跑整门课程。
 
 ### 3. 生成全局大纲
 
@@ -118,7 +110,7 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 退出码 `0` 才表示客观门禁通过；`1` 表示产物不符合契约，按失败项修改后重跑；`2` 表示目录、运行环境或验证器异常，同样不得交付。脚本最后一行输出机器可读 JSON，并绑定 manifest 与读者文件 SHA-256。
 
-验证器检查：manifest 与来源索引哈希、原始来源 SHA-256、每个 `content block` 的 include/skip 去向、覆盖词是否真实存在于绑定来源块、来源外缩写释义、1—3 段正文证据、include 素材颗粒度、章节文字相对纳入来源的最低深度、默认八章上限、占位符、总览/章节完整性、素材双向映射、源图片全登记、图片精确集合/目标/顺序、图片密集来源的最低代表图与正文图片上限、明显讲者转播口吻、来源框架词和可见审计元数据。v2.9.4 使用 manifest schema `1.2` 与 source-index schema `1.1`；生成验收必须提供 `--source-root`，旧课程需要重建索引并升级 manifest 后再验收。
+验证器检查：manifest 与来源索引哈希、原始来源 SHA-256、每个 `content block` 的 include/skip 去向、覆盖词是否真实存在于绑定来源块、来源外缩写释义、1—3 段正文证据、include 素材颗粒度、章节文字相对纳入来源的最低深度、默认八章上限、占位符、总览/章节完整性、素材双向映射、源图片全登记、图片精确集合/目标/顺序、图片密集来源的最低代表图与正文图片上限、明显讲者转播口吻、来源框架词和可见审计元数据。v2.9.3 使用 manifest schema `1.2` 与 source-index schema `1.1`；生成验收必须提供 `--source-root`，旧课程需要重建索引并升级 manifest 后再验收。
 
 ### 8. 完成人工语义复核
 
@@ -136,7 +128,7 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 仅在用户明确要求归档时执行：
 
-1. 读取课程 manifest；旧课程无 manifest 时按旧命名盘点，并标注为 legacy/未通过 v2.9.4 细粒度验证。
+1. 读取课程 manifest；旧课程无 manifest 时按旧命名盘点，并标注为 legacy/未通过 v2.9.3 细粒度验证。
 2. 从用户材料确认培训实际日期、正式课名、归档根目录和主办方写法；不要用生成日期替代培训日期。
 3. 默认复制，不默认移动；只有用户明确说“移动”时才移走源文件。
 4. 目标已存在时不覆盖，先使用新版本目录或请求用户决定。
@@ -179,8 +171,6 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 - [source-index.schema.json](config/source-index.schema.json)：来源索引 Schema。
 - [index_sources.py](scripts/index_sources.py)：确定性来源分块与哈希索引器。
 - [index_sources_selftest.py](scripts/index_sources_selftest.py)：索引器回归套件。
-- [preflight_ledger.py](scripts/preflight_ledger.py)：长篇生成前的素材账本 fail-fast 预检。
-- [preflight_ledger_selftest.py](scripts/preflight_ledger_selftest.py)：素材账本预检回归套件。
 - [verify.sh](scripts/verify.sh)：验收入口。
 - [verify_course.py](scripts/verify_course.py)：标准库领域验证器。
 - [verify_selftest.py](scripts/verify_selftest.py)：故障注入回归套件。

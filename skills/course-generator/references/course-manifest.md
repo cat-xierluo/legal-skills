@@ -19,17 +19,16 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 1. 用 `index_sources.py` 生成来源索引。
 2. 逐个读取 `kind=content` 的块并建立素材；每个 content block 必须 include 或使用受控理由 skip。`kind=derived` 的平台附录只作定位线索，不建立素材。include 素材同时从摘要中预承诺 2—5 个 `coverage_terms`，每个词必须逐字存在于绑定的原始来源块。
-3. include 与 skip 条目统一从 `MAT-001` 连续编号；`skip` 是 `disposition`，不是 `SKIP-*` 命名空间。账本落盘后先运行 `python3 scripts/preflight_ledger.py <课程目录>/course-manifest.json`。
-4. 生成章节后，从真实正文回填每个 include 素材的 `reader_evidence.quotes`（1—3 段）；不回头改弱预承诺词。
-5. 计算 `source-index.json` SHA-256，写入 manifest 的 `source_index.sha256`。
-6. 运行验证器；修改正文、manifest 或来源索引后重新验收。
+3. 生成章节后，从真实正文回填每个 include 素材的 `reader_evidence.quotes`（1—3 段）；不回头改弱预承诺词。
+4. 计算 `source-index.json` SHA-256，写入 manifest 的 `source_index.sha256`。
+5. 运行验证器；修改正文、manifest 或来源索引后重新验收。
 
 ## 最小示例
 
 ```json
 {
   "schema_version": "1.2",
-  "generator_version": "2.9.4",
+  "generator_version": "2.9.3",
   "course": {"title": "示例课程"},
   "sources": [
     {"id": "SRC-001", "path": "转录稿-01.md"}
@@ -118,7 +117,6 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 - 每个 `kind=content` 的 `BLK-xxxxx` 至少出现在一个素材的 `source_block_ids` 中；未知块、非 content 块、完全未覆盖的块都验收失败。
 - `MAT-xxx` 表示一个读者可复用的信息单元，而不是一个标题或整节的汇总。一个长块可以拆成多个素材；相邻同义块可以合并，但 include 素材最多绑定 6 个来源块，出现新的步骤、结果、数字、限制、工具、修正或问答转折时应拆分。同一块不得同时 include 与 skip。
-- 全部素材共用 `MAT-xxx` 命名空间并从 `MAT-001` 连续分配，skip 项也不例外。禁止 `SKIP-001`、`OMIT-001` 等平行编号；去向只由 `disposition` 表达。
 - `include` 素材必须指定目标章节，并出现在该章 `material_ids` 中。
 - `skip` 素材使用受控 `skip_code`：`derived_duplicate`、`meeting`、`device`、`chatter`、`pure_repeat`、`no_course_value`，同时写具体 `skip_reason`。受控编码便于人工抽查跳过是否被滥用，它不自动证明理由正确。
 

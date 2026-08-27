@@ -59,7 +59,7 @@ def write_fixture(root: Path) -> None:
     ]
     manifest = {
         "schema_version": "1.2",
-        "generator_version": "2.9.4",
+        "generator_version": "2.9.3",
         "course": {"title": "示例课程"},
         "sources": [{"id": "SRC-001", "path": "转录稿.md"}],
         "source_index": {"file": "source-index.json", "sha256": sha256_file(source_index_path)},
@@ -344,14 +344,6 @@ def mutate_material_link(root: Path) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def mutate_non_contiguous_material_id(root: Path) -> None:
-    path = root / "course-manifest.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["materials"][0]["id"] = "MAT-002"
-    data["chapters"][0]["material_ids"] = ["MAT-002"]
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def mutate_speaker_actor(root: Path) -> None:
     with (root / "01 第一 章（文件名含空格）.md").open("a", encoding="utf-8") as handle:
         handle.write("\n讲师强调这一步最重要。\n")
@@ -500,7 +492,6 @@ CASES: dict[str, tuple[str, Callable[[Path], None] | None, int, str | None]] = {
     "wrong-order": ("图片集合相同但顺序错误", mutate_wrong_order, 1, "CG-IMAGE-ORDER"),
     "undeclared-image": ("正文含未声明图片", mutate_undeclared_image, 1, "CG-IMAGE-SET"),
     "material-link": ("素材双向映射断裂", mutate_material_link, 1, "CG-MATERIAL-TRACE"),
-    "non-contiguous-material-id": ("素材 ID 未从 MAT-001 连续分配", mutate_non_contiguous_material_id, 1, "CG-CONTRACT-MANIFEST"),
     "speaker-actor": ("讲师作为动作发出者", mutate_speaker_actor, 1, "CG-BOOKLIKE-TONE"),
     "visible-trace": ("正文暴露来源审计元数据", mutate_visible_trace, 1, "CG-AUDIT-SEPARATION"),
     "asset-only-inserted": ("仅资产表图片进入正文", mutate_asset_only_inserted, 1, "CG-IMAGE-SET"),
