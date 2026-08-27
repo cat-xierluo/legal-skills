@@ -522,6 +522,11 @@ case "$BACKEND" in
     # stdin→session/send + 事件渲染(ref 09 §6)。batch 模式才直接用 CLI。
     if [ "$MODE" = "batch" ]; then
       # zcode -p/--prompt 无 --model 参数（模型由 ~/.zcode/cli/config.json 决定）。
+      # fail-closed：显式给了 --model 时报错退出，不静默降级到全局模型。
+      if [ -n "$MODEL" ]; then
+        echo "ERROR: zcode batch mode has no --model flag (model comes from ~/.zcode/cli/config.json); per-worker model requires interactive driver mode" >&2
+        exit 64
+      fi
       [ -n "$BIN" ] || BIN="zcode"
       zc_parts=("$BIN" --mode yolo --prompt)
       COMMAND="$(quote_words "${zc_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
@@ -531,6 +536,8 @@ case "$BACKEND" in
       [ -x "$DRIVER" ] || { echo "ERROR: zcode driver missing: $DRIVER" >&2; exit 64; }
       zc_parts=(python3 "$DRIVER")
       [ -n "$BIN" ] && zc_parts+=(--bin "$BIN")
+      # per-worker 模型：driver 在 session/create 后发一次 session/setModel
+      [ -n "$COMMAND_MODEL" ] && zc_parts+=(--model "$COMMAND_MODEL")
       COMMAND=$(quote_words "${zc_parts[@]}")
     fi
     [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-zcode}"

@@ -20,6 +20,12 @@ Local commands on stdin (typed like plain text, `/` prefix):
   /compact  compact the session context (session/compact)
   /quit     close the session and exit the driver
 
+Per-worker model: pass `--model MODEL` (e.g. `--model GLM-5.3-Flash`, or
+`--model providerId/modelId` to pin a non-default provider). After the session
+is created the driver issues one `session/setModel`; on failure it prints an
+error line and keeps the global config model (warned, never crashes). Without
+`--model` the session uses whatever `~/.zcode/cli/config.json` selects.
+
 Exit codes: 64 = misconfiguration (missing zcode executable / model config),
 1 = app-server child died, 0 = clean /quit.
 """
@@ -80,7 +86,7 @@ def resolve_zcode_bin(explicit: str) -> str:
     raise AssertionError("unreachable")
 
 
-def check_model_config() -> None:
+def check_model_config() -> str:
     """Fail fast instead of launching a worker that cannot talk to a model."""
     if not os.path.exists(CLI_CONFIG):
         fail_config(
@@ -99,12 +105,60 @@ def check_model_config() -> None:
             "cannot reach any model provider without them (see "
             "references/09-zcode-cli-worker.md §2)."
         )
+    return config["model"]
+
+
+def restore_global_model(startup_model: str) -> None:
+    """session/setModel persistently rewrites the GLOBAL config `model`
+    field (no protocol opt-out — persistAsWorkspaceLastUsed:false does not
+    prevent it; PM live probe 2026-08-27). Snapshot at startup, restore at
+    exit, so one worker's --model never repoints other workers' default.
+    Known race: concurrently-spawned drivers each restore their own startup
+    snapshot; last-exiter wins (references/09 §4)."""
+    try:
+        with open(CLI_CONFIG, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+        if config.get("model") == startup_model:
+            return
+        config["model"] = startup_model
+        tmp = CLI_CONFIG + ".driver-restore.tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(config, handle, ensure_ascii=False, indent=2)
+        os.replace(tmp, CLI_CONFIG)
+        print(f"[driver] restored global model to {startup_model}", flush=True)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[driver] WARNING: could not restore global model: {exc}", flush=True)
+
+
+def resolve_model_ref(spec: str) -> dict:
+    """`MODEL`, `providerId/modelId` -> setModel modelRef.
+
+    Default providerId comes from the config's global `model` string
+    (`provider/model`), so `--model GLM-5.3-Flash` reuses the logged-in
+    BigModel Coding Plan provider without extra flags.
+    """
+    with open(CLI_CONFIG, "r", encoding="utf-8") as handle:
+        config = json.load(handle)
+    default_provider = str(config.get("model", "")).split("/", 1)[0]
+    if "/" in spec:
+        provider_id, model_id = spec.split("/", 1)
+    else:
+        provider_id, model_id = default_provider, spec
+    if not provider_id:
+        fail_config(
+            f"cannot infer providerId for --model {spec}: config `model` has "
+            "no provider prefix. Use the providerId/modelId form instead."
+        )
+    return {"providerId": provider_id, "modelId": model_id}
 
 
 class Driver:
-    def __init__(self, proc: subprocess.Popen, session_id: str) -> None:
+    def __init__(self, proc: subprocess.Popen, session_id: str, model_ref: dict | None) -> None:
         self.proc = proc
         self.session_id = session_id
+        # {providerId, modelId} applied once via session/setModel after create;
+        # None = keep the global config model.
+        self.model_ref = model_ref
         self.write_lock = threading.Lock()
         self.pending: dict[int, str] = {}  # request id -> short label
         # PM text that arrived before session/create finished; flushed in
@@ -134,6 +188,12 @@ class Driver:
             if "error" in frame:
                 err = frame["error"]
                 print(f"[driver] {label} ✗ {err.get('code')}: {err.get('message')}", flush=True)
+                if label == "setModel":
+                    print(
+                        "[driver] WARNING: per-worker model not applied; "
+                        "continuing with the global config model",
+                        flush=True,
+                    )
             else:
                 result = frame.get("result", {})
                 if label == "create":
@@ -147,6 +207,22 @@ class Driver:
                         print(
                             f"[driver] session ready: {self.session_id}",
                             flush=True,
+                        )
+                    if self.model_ref and self.session_id:
+                        # Per-worker model (zod schema verified against the
+                        # app-server bundle: strict object, modelRef required).
+                        self.request(
+                            "session/setModel",
+                            {
+                                "sessionId": self.session_id,
+                                "model": self.model_ref,
+                                # Server default rewrites the GLOBAL config
+                                # model — one worker's --model would repoint
+                                # every other worker's default. Opt out.
+                                # (PM dual-worker live check, 2026-08-27)
+                                "persistAsWorkspaceLastUsed": False,
+                            },
+                            "setModel",
                         )
                     with self.queue_lock:
                         backlog, self.queued_inputs = self.queued_inputs, []
@@ -194,12 +270,19 @@ class Driver:
     def summarize_result(label: str, result: dict) -> str:
         if label == "send":
             return f"accepted={result.get('accepted')}"
+        if label == "setModel":
+            return "per-worker model applied"
         if label == "read":
-            state = result.get("state") or result
+            # Real protocol: status/model live in result.session (verified
+            # 2026-08-27 against live app-server; projection.status is a
+            # coarser mirror without the model ref).
+            state = result.get("session") or result.get("state") or result
             status = state.get("status", "?")
             model = state.get("model") or {}
             if isinstance(model, dict):
-                model = model.get("current") or model.get("modelId", "")
+                model = (
+                    f"{model.get('providerId', '?')}/{model.get('modelId', '?')}"
+                )
             return f"status={status} model={model}"
         return json.dumps(result, ensure_ascii=False)[:120]
 
@@ -228,12 +311,24 @@ def main() -> int:
         "--cwd", default="", help="session workspace (default: current directory)"
     )
     parser.add_argument("--bin", default="", help="zcode executable override")
+    parser.add_argument(
+        "--model",
+        default="",
+        help="per-worker model, e.g. GLM-5.3-Flash or providerId/modelId "
+        "(default: global model from ~/.zcode/cli/config.json)",
+    )
     args = parser.parse_args()
 
     worktree = os.path.abspath(args.cwd or os.getcwd())
     if not os.path.isdir(worktree):
         fail_config(f"--cwd {worktree} is not a directory")
-    check_model_config()
+    startup_model = check_model_config()
+    model_ref = resolve_model_ref(args.model) if args.model else None
+    if model_ref:
+        print(
+            f"[driver] per-worker model: {model_ref['providerId']}/{model_ref['modelId']}",
+            flush=True,
+        )
 
     zcode = resolve_zcode_bin(args.bin)
     argv = (
@@ -256,7 +351,7 @@ def main() -> int:
         fail_config(f"cannot spawn zcode app-server: {exc}")
 
     assert proc.stdin is not None and proc.stdout is not None
-    driver = Driver(proc, "")
+    driver = Driver(proc, "", model_ref)
 
     # Bootstrap: create the session, then keep it fed from stdin.
     driver.request(
@@ -286,6 +381,7 @@ def main() -> int:
             if driver.session_id:
                 driver.request("session/close", {"sessionId": driver.session_id}, "close")
             print("[driver] bye", flush=True)
+            restore_global_model(startup_model)
             return 0
         if not driver.session_id:
             with driver.queue_lock:
@@ -311,6 +407,7 @@ def main() -> int:
     if driver.session_id:
         driver.request("session/close", {"sessionId": driver.session_id}, "close")
     proc.terminate()
+    restore_global_model(startup_model)
     return 0
 
 
