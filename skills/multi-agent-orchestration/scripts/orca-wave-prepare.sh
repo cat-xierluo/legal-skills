@@ -65,10 +65,15 @@ fi
 # spawn-worker.sh 也用 safe_branch 把斜杠换成连字符；若 manifest spec 写了斜杠名，
 # worker 的隔离门禁按 spec 文本比对实际分支时会误判 blocked（badminton-lab Wave 1
 # 三个 worker 同时跑偏的根因）。这里 fail-closed 拒绝，逼 PM 在 spec 里写连字符名。
-slash_specs=$(jq -r '.tasks[] | select(.spec | test("branch[:=][[:space:]]*[^[:space:]]+/")) | .key' "$MANIFEST" 2>/dev/null || true)
+if ! slash_specs=$(jq -r '.tasks[] | select(.spec | test("branch[:=][[:space:]]*[^[:space:]]+/")) | .key' "$MANIFEST" 2>/dev/null); then
+  echo "ERROR: Wave manifest changed or became unreadable during branch validation" >&2
+  exit 64
+fi
 if [ -n "$slash_specs" ]; then
   echo "ERROR: spec mentions branch names containing slash; Orca normalizes slash to hyphen (worktree --name + safe_branch), so the worker isolation gate compares against the hyphen form and would misjudge blocked. Rewrite branch names in these specs with hyphens (feat/bl-x -> feat-bl-x):" >&2
-  printf '  - %s\n' $slash_specs >&2
+  while IFS= read -r task_key; do
+    printf '  - %s\n' "$task_key" >&2
+  done <<< "$slash_specs"
   exit 64
 fi
 
