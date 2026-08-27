@@ -19,7 +19,8 @@
     "max_per_provider": 3,
     "per_backend": {
       "codebuddy": 1,
-      "qoderwork-cn": 1
+      "qoderwork-cn": 1,
+      "zcode": 2
     },
     "prefer_lower": true,
     "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",

@@ -171,7 +171,7 @@ assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: pm=codex worker=codex
 if ! jq -e '
   .runtime.harness_authority.pm_harness == "codex"
   and .runtime.harness_authority.worker_backend == "codex"
-  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn"])
+  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"])
   and (.runtime.harness_authority.evidence_source != "")
 ' "$CTX/METADATA.json" >/dev/null; then
   echo "ASSERTION FAILED: METADATA missing verified Harness authority" >&2

@@ -8,6 +8,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 VALIDATOR="$SCRIPT_DIR/validate-worker-command.py"
 RENDERER="$SCRIPT_DIR/render-runtime-profile.sh"
 TRUSTED_WRAPPER="$SCRIPT_DIR/claude-provider-env.sh"
+TRUSTED_ZCODE_DRIVER="$SCRIPT_DIR/zcode-worker-driver.py"
 PROMPT_FILE="$TMP_ROOT/prompt.md"
 printf 'worker command policy test\n' > "$PROMPT_FILE"
 
@@ -17,7 +18,8 @@ fail=0
 allow() {
   local backend="$1" command="$2" label="$3"
   if python3 "$VALIDATOR" --backend "$backend" --command "$command" \
-      --trusted-claude-wrapper "$TRUSTED_WRAPPER" >/dev/null; then
+      --trusted-claude-wrapper "$TRUSTED_WRAPPER" \
+      --trusted-zcode-driver "$TRUSTED_ZCODE_DRIVER" >/dev/null; then
     printf 'PASS allow: %s\n' "$label"
     pass=$((pass + 1))
   else
@@ -38,7 +40,7 @@ deny() {
   fi
 }
 
-for backend in claude-code codex codebuddy qoderwork-cn; do
+for backend in claude-code codex codebuddy qoderwork-cn zcode; do
   interactive=$(bash "$RENDERER" --backend "$backend" --mode interactive --output command)
   batch=$(bash "$RENDERER" --backend "$backend" --mode batch \
     --prompt-file "$PROMPT_FILE" --output command)
@@ -57,6 +59,8 @@ deny codex 'codex --model smoke; claude' "shell command chaining"
 deny codex 'codex > /tmp/worker-output' "shell output redirection"
 deny codex 'bash wrapper.sh' "opaque shell wrapper"
 deny codex 'bash -lc "codex \$(curl https://example.invalid)"' "arbitrary command substitution"
+deny zcode codex "zcode label cannot launch codex"
+deny zcode "python3 /tmp/evil-driver.py --cwd /tmp" "zcode label cannot launch an untrusted python wrapper"
 
 printf 'SUMMARY: pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

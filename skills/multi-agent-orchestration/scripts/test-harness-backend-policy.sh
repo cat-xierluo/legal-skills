@@ -33,15 +33,15 @@ expect_deny() {
 }
 
 for pm in claude-code codex; do
-  for worker in claude-code codex codebuddy qoderwork-cn; do
+  for worker in claude-code codex codebuddy qoderwork-cn zcode; do
     expect_allow "$pm" "$worker"
   done
 done
 expect_allow codebuddy codebuddy
 expect_allow qoderwork-cn qoderwork-cn
 
-for worker in claude-code codex qoderwork-cn; do expect_deny codebuddy "$worker"; done
-for worker in claude-code codex codebuddy; do expect_deny qoderwork-cn "$worker"; done
+for worker in claude-code codex qoderwork-cn zcode; do expect_deny codebuddy "$worker"; done
+for worker in claude-code codex codebuddy zcode; do expect_deny qoderwork-cn "$worker"; done
 expect_deny unknown codebuddy
 expect_deny codex custom
 
@@ -148,10 +148,22 @@ fi
 
 DETECTED_PM_HARNESS=""
 runtime_rc=0
+process_probe_rc=0
+orca_probe_rc=0
+process_probe=$(pm_harness_from_process "$PPID" 2>/dev/null) || process_probe_rc=$?
+process_probe_host=$(printf '%s\n' "$process_probe" | sed -n '1p')
+orca_probe_host=$(pm_harness_from_orca "" 2>/dev/null) || orca_probe_rc=$?
 detect_pm_harness "" 2>/dev/null || runtime_rc=$?
 detected="$DETECTED_PM_HARNESS"
 if [ "$runtime_rc" -eq 0 ] && [ -n "$detected" ]; then
   printf 'PASS runtime detection: %s\n' "$detected"
+  pass=$((pass + 1))
+elif [ "$runtime_rc" -eq 64 ] \
+  && [ "$process_probe_rc" -eq 0 ] && [ -n "$process_probe_host" ] \
+  && [ "$orca_probe_rc" -eq 0 ] && [ -n "$orca_probe_host" ] \
+  && [ "$process_probe_host" != "$orca_probe_host" ]; then
+  printf 'PASS runtime detection conflict fails closed: process=%s orca=%s\n' \
+    "$process_probe_host" "$orca_probe_host"
   pass=$((pass + 1))
 else
   printf 'FAIL runtime detection in active Agent session: exit=%s value=%s\n' "$runtime_rc" "$detected" >&2

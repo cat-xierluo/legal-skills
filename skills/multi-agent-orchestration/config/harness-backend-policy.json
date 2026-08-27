@@ -2,8 +2,8 @@
   "schema": "multi-agent-orchestration.harness-backend-policy.v1",
   "policy": "deny_by_default",
   "hosts": {
-    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"],
+    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"],
     "codebuddy": ["codebuddy"],
     "qoderwork-cn": ["qoderwork-cn"]
   }

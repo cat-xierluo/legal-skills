@@ -10,7 +10,7 @@
 # 打破后失效。本文件在 worktree 创建后软链主仓 node_modules（Node 项目）、并按
 # package.json scripts 注入默认 verify 命令到白名单，让 worker 不靠路径巧合也能自验。
 #
-# 详见 references/09-parallel-lessons.md G28/G31、TASKS.md Task-045/046。
+# 详见 references/10-parallel-lessons.md G28/G31、TASKS.md Task-045/046。
 
 # 检测目录的项目类型。输出空格分隔的 kind（node rust python），可能多个（mixed）。
 # 用文件存在性，简单可靠；不解析文件内容（避免误判）。

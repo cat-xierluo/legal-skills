@@ -41,10 +41,12 @@ Backends:
   opencode        Historical standalone renderer only; spawn-worker will reject it
   codebuddy       CodeBuddy CLI (platform额度, 继承桌面端登录态)
   qoderwork-cn    QoderWork CN CLI (qoderclicn; 自动清除 SDK env 变量)
+  zcode           ZCode CLI worker driver (long-lived app-server; no TUI shipped)
   custom          Historical standalone renderer only; spawn-worker will reject it
 
-Dispatch authority is limited to claude-code/claude-oauth, codex, codebuddy and
-qoderwork-cn. Rendering a historical backend never expands spawn-worker policy.
+Dispatch authority is limited to claude-code/claude-oauth, codex, codebuddy,
+qoderwork-cn and zcode. Rendering a historical backend never expands
+spawn-worker policy.
 
 Options:
   --mode MODE              interactive | batch. Default: interactive
@@ -513,6 +515,25 @@ case "$BACKEND" in
   custom)
     [ -n "$CUSTOM_COMMAND" ] || { echo "ERROR: --command is required for custom backend" >&2; exit 64; }
     COMMAND="$CUSTOM_COMMAND"
+    ;;
+  zcode)
+    # ZCode CLI 无独立 TUI(@zcode/tui 未随桌面端打包)——interactive 模式跑
+    # skill 自带 driver:长驻 zcode app-server + 自动应答 runtimePreferences +
+    # stdin→session/send + 事件渲染(ref 09 §6)。batch 模式才直接用 CLI。
+    if [ "$MODE" = "batch" ]; then
+      # zcode -p/--prompt 无 --model 参数（模型由 ~/.zcode/cli/config.json 决定）。
+      [ -n "$BIN" ] || BIN="zcode"
+      zc_parts=("$BIN" --mode yolo --prompt)
+      COMMAND="$(quote_words "${zc_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
+      COMMAND=$(shell_wrap "$COMMAND")
+    else
+      DRIVER="$SCRIPT_DIR/zcode-worker-driver.py"
+      [ -x "$DRIVER" ] || { echo "ERROR: zcode driver missing: $DRIVER" >&2; exit 64; }
+      zc_parts=(python3 "$DRIVER")
+      [ -n "$BIN" ] && zc_parts+=(--bin "$BIN")
+      COMMAND=$(quote_words "${zc_parts[@]}")
+    fi
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-zcode}"
     ;;
   *)
     echo "ERROR: unsupported backend: $BACKEND" >&2

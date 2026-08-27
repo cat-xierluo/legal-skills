@@ -113,7 +113,7 @@ ADD_DIRS=()
 ALLOW_PATHS=()
 # v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
 # 或自动检测 --project 不是 git 仓时置 1 并打印 SPAWN_WORKER_LIGHTWEIGHT_AUTO。
-# 详见 SKILL.md §2.1.1 + references/09-parallel-lessons.md T6 实战坑。
+# 详见 SKILL.md §2.1.1 + references/10-parallel-lessons.md T6 实战坑。
 LIGHTWEIGHT_OVERRIDE=0
 LIGHTWEIGHT_MODE=0
 LIGHTWEIGHT_AUTO=0
@@ -125,6 +125,8 @@ LIGHTWEIGHT_AUTO=0
 ORCA_MODE=""
 ORCA_WORKTREE_ID="${ORCA_WORKTREE_ID:-}"  # 兼容旧调用方；命中 auto 后以 worktree current 为准
 ORCA_WORKTREE_PATH=""    # 仅 auto 时填（git rev-parse --show-toplevel）
+ORCA_PROJECT_TOPLEVEL="" # `orca worktree current` 已验证的 PROJECT_DIR git top
+ORCA_EXPECTED_REPO_ID="" # 从 current worktree id 冻结，create 后必须一致
 ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
 ORCA_APP_VERSION=""      # 来自 orca status --json
 ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
@@ -229,7 +231,7 @@ case "$WORKER_BACKEND" in
   claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn)
     INSTALL_GUARD_MODE="hook"
     ;;
-  codex)
+  codex|zcode)
     if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
       echo "ERROR: backend $WORKER_BACKEND has no configured PreToolUse install guard; explicit --allow-prompt-only-install-guard is required (fail-closed)" >&2
       exit 64
@@ -288,6 +290,7 @@ if [ -z "$COMMAND" ]; then
     codex) COMMAND="codex" ;;
     codebuddy) COMMAND="codebuddy" ;;
     qoderwork-cn) COMMAND="qoderclicn" ;;
+    zcode) COMMAND="python3 '$SCRIPT_DIR/zcode-worker-driver.py'" ;;
     *) echo "ERROR: no default command for backend=$WORKER_BACKEND_CANONICAL" >&2; exit 64 ;;
   esac
   echo "SPAWN_WORKER_COMMAND_DEFAULT: backend=$WORKER_BACKEND_CANONICAL command=$COMMAND"
@@ -300,7 +303,8 @@ validate_worker_command_backend() {
   python3 "$SCRIPT_DIR/validate-worker-command.py" \
     --backend "$WORKER_BACKEND_CANONICAL" \
     --command "$COMMAND" \
-    --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh"
+    --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh" \
+    --trusted-zcode-driver "$SCRIPT_DIR/zcode-worker-driver.py"
 }
 
 if ! WORKER_COMMAND_SHA256=$(validate_worker_command_backend); then
@@ -438,7 +442,7 @@ fi
 resolve_backend_defaults() {
   if [ "$TRUST_AUTO_OVERRIDE" -eq 0 ]; then
     case "$WORKER_BACKEND" in
-      claude-code|claude_code) TRUST_AUTO=0 ;;
+      claude-code|claude_code|zcode) TRUST_AUTO=0 ;;
       *) TRUST_AUTO=1 ;;
     esac
   fi
@@ -447,14 +451,15 @@ resolve_backend_defaults() {
     # acceptEdits 仍弹 dialog（references/08 §14.1），同步监控空等浪费 + spawn-worker 主进程撞 PM Bash 2min timeout
     # （v1.20.2 W2 实战：trust_auto 30s + permission_auto 60s + checkout ~30s ≈ 120s 撞 120s，被 SIGTERM 后
     # bg 段未启 → dialog 卡死）。bg 段（permission_auto_bg setsid）独立处理 dialog，不依赖 sync。
+    # zcode：无 TUI 无任何 dialog（driver 渲染纯文本），同步监控必然空等 → 一律关。
     case "$WORKER_BACKEND" in
-      claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn) PERMISSION_AUTO=0 ;;
+      claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn|zcode) PERMISSION_AUTO=0 ;;
       *) PERMISSION_AUTO=1 ;;
     esac
   fi
   if [ "$PERMISSION_AUTO_BG_OVERRIDE" -eq 0 ]; then
     case "$WORKER_BACKEND" in
-      claude-code|claude_code) PERMISSION_AUTO_BG=0 ;;
+      claude-code|claude_code|zcode) PERMISSION_AUTO_BG=0 ;;
       *) PERMISSION_AUTO_BG=1 ;;
     esac
   fi

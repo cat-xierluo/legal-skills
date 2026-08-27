@@ -587,7 +587,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **根因**：`spawn-worker.sh:530` `backend_command_token_missing()` 对 `--command` 每个 token 取 `os.path.basename().lower()`，要求与 `{"codebuddy"}` 有交集。`bash /tmp/codebuddy-bypass-launch.sh hy3` 的 basename = `{bash, codebuddy-bypass-launch.sh, hy3}`，不含 `codebuddy` → fail。
 - **解法**：`--command` 直接以 backend 二进制起头（不用 bash wrapper），用 **`/tmp/empty-mcp.json` 文件**代替 inline JSON（避 tmux 引号吞）：
   ```bash
-  --command '/Users/maoking/.local/bin/codebuddy --model hy3 --permission-mode bypassPermissions --strict-mcp-config --mcp-config /tmp/empty-mcp.json -y'
+  --command "$HOME/.local/bin/codebuddy --model hy3 --permission-mode bypassPermissions --strict-mcp-config --mcp-config /tmp/empty-mcp.json -y"
   ```
   第一个 token basename = `codebuddy` → 过检查；`/tmp/empty-mcp.json`=`{"mcpServers":{}}` 避 inline JSON 在 tmux 直接 exec 时引号被吞（§10.1 launch.sh 的初衷，但 launch.sh 触发 token fail；用文件两全）。
 - **claude-code 不受影响**：accepted 只含 codebuddy/qoderwork-cn/qoderclicn（`spawn-worker.sh:539-543`），claude-code/codex/opencode accepted 为空集，不检查。
@@ -671,7 +671,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **现象**：worker 写完 1064 行代码 commit 后，跑 `npm run typecheck` 报 `tsc: command not found`；`vitest`/`eslint` 同。worker 以 `status: blocked` 交 STATUS.json，PM 接管才发现 worktree 根本没装 node_modules。
 - **根因（与 G28 对照）**：
   - G28（tmux，FaroPDF）：worktree 在 `.claude/worktrees/tmux-xxx`（**主仓子目录**），`npm run` 向上解析逐级找到主仓 `node_modules`，免 `npm ci`。这是 tmux 模式的"免费午餐"。
-  - G31（Orca）：worktree 在 `/Users/maoking/orca/workspaces/folia/xxx`（**独立路径树**，Orca runtime 强制管理），向上解析到 `/` 都没有主仓 `node_modules`。免费午餐失效。
+  - G31（Orca）：worktree 在 `/Users/example/orca/workspaces/folia/xxx`（**独立路径树**，Orca runtime 强制管理），向上解析到 `/` 都没有主仓 `node_modules`。免费午餐失效。
   - 即：**不是"tmux 没让 worker 自验"，而是 tmux 靠路径巧合白嫖了主仓 node_modules，Orca 换路径树后白嫖失败**。
 - **连锁暴露**（G29 #2/#3/#4 的残留未被根治）：
   1. `INSTALL_AUTHORIZATION.json.allowed_shell_commands` 默认仅 `git branch --show-current` / `git status --short` / `pwd` 三条 → `npm run test/build`、`git push`、`gh pr create` 全被 `SHELL_COMMAND_NOT_ALLOWLISTED` fail-closed。即便 node_modules 在，worker 也跑不了验证门 / 推不了 PR。
