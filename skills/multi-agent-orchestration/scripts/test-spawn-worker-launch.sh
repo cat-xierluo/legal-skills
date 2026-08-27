@@ -150,15 +150,55 @@ printf '%s\n' \
   'printf "ORCAREG_COORDINATOR_HANDLE=term-pm\n"' \
   'printf "ORCAREG_TASK_ID=task-worker\n"' \
   'printf "ORCAREG_DISPATCH_ID=ctx-worker\n"' \
+  'printf "ORCAREG_DISPATCH_BIND=ok\n"' \
   > "$SCRIPT_DIR/orca-supervised-register.sh"
 printf '%s\n' '{"session":{"orca":{"terminal_handle":""}}}' > "$METADATA_FILE"
 launch_worker_session
 assert_eq "$ORCA_SUPERVISED_RUN_ID:$ORCA_SUPERVISED_COORDINATOR_HANDLE:$ORCA_SUPERVISED_TASK_ID:$ORCA_SUPERVISED_DISPATCH_ID" \
   "run-wave:term-pm:task-worker:ctx-worker" "supervised registration exports exact lifecycle ids"
-if jq -e '.session.orca.supervised == {run_id:"run-wave",coordinator_handle:"term-pm",task_id:"task-worker",dispatch_id:"ctx-worker",contract:"orca.orchestration.contract.v1",completion_authority:"worker_done",terminal_ownership:"external"}' "$METADATA_FILE" >/dev/null; then
+if jq -e '.session.orca.supervised == {run_id:"run-wave",coordinator_handle:"term-pm",task_id:"task-worker",dispatch_id:"ctx-worker",dispatch_bind:"ok",contract:"orca.orchestration.contract.v1",completion_authority:"worker_done",terminal_ownership:"external"}' "$METADATA_FILE" >/dev/null; then
   ok "supervised lifecycle contract is patched into metadata"
 else
   bad "supervised lifecycle contract is patched into metadata"
+fi
+
+# Task-076：dispatch 绑定 manual-required 不阻断 spawn，METADATA 保留 run/task 供 PM 手动补绑。
+reset_launch_case
+ORCA_MODE="auto"
+ORCA_SUPERVISED=1
+ORCA_RUN_ID="run-wave"
+ORCA_COORDINATOR_HANDLE="term-pm"
+ORCA_TASK_ID="task-worker"
+SCRIPT_DIR="$CASE_ROOT/register-manual"
+mkdir -p "$SCRIPT_DIR"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'printf "ORCAREG_RUN_ID=run-wave\n"' \
+  'printf "ORCAREG_COORDINATOR_HANDLE=term-pm\n"' \
+  'printf "ORCAREG_TASK_ID=task-worker\n"' \
+  'printf "ORCAREG_DISPATCH_ID=\n"' \
+  'printf "ORCAREG_DISPATCH_BIND=manual-required\n"' \
+  > "$SCRIPT_DIR/orca-supervised-register.sh"
+printf '%s\n' '{"session":{"orca":{"terminal_handle":""}}}' > "$METADATA_FILE"
+set +e
+manual_out=$(launch_worker_session 2>&1)
+manual_rc=$?
+set -e
+assert_eq "$manual_rc" "0" "manual-required dispatch bind does not block spawn"
+if printf '%s\n' "$manual_out" | grep -Fq 'SPAWN_WORKER_DISPATCH_BIND: manual-required'; then
+  ok "manual-required prints explicit SPAWN_WORKER_DISPATCH_BIND line"
+else
+  bad "manual-required prints explicit SPAWN_WORKER_DISPATCH_BIND line"
+fi
+if printf '%s\n' "$manual_out" | grep -Fq 'return-preamble'; then
+  ok "manual-required warning carries the runbook rebind recipe"
+else
+  bad "manual-required warning carries the runbook rebind recipe"
+fi
+if jq -e '.session.orca.supervised.dispatch_id == "" and .session.orca.supervised.dispatch_bind == "manual-required" and .session.orca.supervised.task_id == "task-worker"' "$METADATA_FILE" >/dev/null; then
+  ok "manual-required metadata keeps run/task ids with empty dispatch"
+else
+  bad "manual-required metadata keeps run/task ids with empty dispatch"
 fi
 
 reset_launch_case
