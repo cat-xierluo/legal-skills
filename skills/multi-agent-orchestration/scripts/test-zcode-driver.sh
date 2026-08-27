@@ -47,6 +47,8 @@ for line in sys.stdin:
     if frame.get("method") == "session/create":
         # Real protocol shape: sessionId nested under result.session.
         emit({"id": frame["id"], "result": {"session": {"sessionId": "sess_stub_001"}}})
+    elif frame.get("method") == "session/setModel":
+        emit({"id": frame["id"], "result": {}})
     elif frame.get("method") == "session/send":
         emit({"id": frame["id"], "result": {"accepted": True}})
         emit({"method": "state.updated",
@@ -60,10 +62,11 @@ chmod +x "$STUB"
 # ---- helper: run driver against the stub -------------------------------------
 run_driver() {
   local input="$1" cfg="$2"
+  shift 2
   printf '%s\n' "$input" | \
     STUB_LOG="$STUB_LOG" \
     ZCODE_CLI_CONFIG="$cfg" \
-    python3 "$DRIVER" --bin "$STUB" --cwd "$TMP_ROOT" 2>&1
+    python3 "$DRIVER" --bin "$STUB" --cwd "$TMP_ROOT" "$@" 2>&1
 }
 
 # ---- Case 1: missing/invalid model config fails fast (exit 64) ---------------
@@ -112,6 +115,40 @@ if printf '%s\n' "$out" | grep -q '\[session\] running (prompt_started)'; then
   ok "state.updated rendered as readable line"
 else
   bad "rendered state line missing; output: $out"
+fi
+
+if grep -q '"method": "session/setModel"' "$STUB_LOG"; then
+  bad "setModel dispatched without --model (must keep global model)"
+else
+  ok "no setModel without --model"
+fi
+
+# ---- Case 3: --model providerId/modelId — setModel dispatched with exact ref ----
+: > "$STUB_LOG"
+out=$(run_driver $'ping\n/quit' "$TMP_ROOT/good-config.json" \
+  --model 'builtin:bigmodel-coding-plan/GLM-5.3-Flash') && rc=0 || rc=$?
+
+if [ "$rc" -eq 0 ]; then ok "driver exits 0 with --model"; else bad "driver rc=$rc"; fi
+
+if grep -q '"method": "session/setModel", "params": {"sessionId": "sess_stub_001", "model": {"providerId": "builtin:bigmodel-coding-plan", "modelId": "GLM-5.3-Flash"}}' "$STUB_LOG"; then
+  ok "setModel dispatched with exact modelRef"
+else
+  bad "setModel params wrong; log: $(cat "$STUB_LOG")"
+fi
+
+if printf '%s\n' "$out" | grep -q '\[driver\] setModel ✓ per-worker model applied'; then
+  ok "setModel success rendered"
+else
+  bad "setModel success line missing; output: $out"
+fi
+
+# ---- Case 4: bare --model (no provider) — providerId falls back to config ----
+: > "$STUB_LOG"
+out=$(run_driver $'ping\n/quit' "$TMP_ROOT/good-config.json" --model 'GLM-5.3-Flash') && rc=0 || rc=$?
+if grep -q '"model": {"providerId": "x", "modelId": "GLM-5.3-Flash"}' "$STUB_LOG"; then
+  ok "bare --model falls back to config provider prefix"
+else
+  bad "provider fallback wrong; log: $(cat "$STUB_LOG")"
 fi
 
 # ---- summary ------------------------------------------------------------------

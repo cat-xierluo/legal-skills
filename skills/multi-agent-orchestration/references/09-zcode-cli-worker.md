@@ -96,8 +96,44 @@ zcode doctor / version / plugins list / skills list
 ## 4. 可用模型
 
 由 `~/.zcode/cli/config.json` 的 provider 决定；BigModel Coding Plan 常见：
-`GLM-5.3`（1M 上下文）、`GLM-5.3-Flash`。切换模型 = 改 config 的 `model`
-引用（worker prompt 内 `/model` 仅作用 TUI，headless 不可用）。
+`GLM-5.3`（1M 上下文）、`GLM-5.3-Flash`。
+
+### 全局 vs per-worker 语义
+
+- **全局（默认）**：不给 `--model` 时，所有 worker 共用 config `model` 字段
+  指定的模型（如 `builtin:bigmodel-coding-plan/GLM-5.3`）。
+- **per-worker**：driver 加 `--model`，在 `session/create` 拿到 sessionId 后、
+  flush 队列消息前发一次 `session/setModel`，仅作用于该 worker 自己的会话，
+  不影响 config 全局值与其他 worker。用法：
+
+  ```bash
+  python3 scripts/zcode-worker-driver.py --model GLM-5.3-Flash        # 裸 modelId
+  python3 scripts/zcode-worker-driver.py --model providerId/modelId    # 显式 provider
+  ```
+
+  裸 modelId 的 providerId 取 config `model` 字段的 provider 前缀（即当前
+  登录的 BigModel Coding Plan）。setModel 失败（如 modelId 拼错）driver 打印
+  错误行并 WARNING，继续用全局模型，不 crash。
+
+- **batch 模式不支持模型指定**：`zcode --prompt` 无模型参数，
+  render-runtime-profile.sh 对 `--backend zcode --mode batch --model ...`
+  直接报错退出（fail-closed，不静默降级到全局模型）。
+
+### session/setModel 真实 schema（2026-08-27 bundle + 真机实测）
+
+```json
+{"id": N, "method": "session/setModel", "params": {
+  "sessionId": "sess_...",
+  "model": {"providerId": "builtin:bigmodel-coding-plan", "modelId": "GLM-5.3-Flash"}
+}}
+```
+
+strict 对象；`model` 必填 `{providerId, modelId, variant?}`，另有可选
+`runtimeModel` / `expectedRevision` / `persistAsWorkspaceLastUsed`（默认
+true——会把选择持久化为 workspace 上次使用模型）。成功响应空 result，随后
+收到 `state.updated (model_changed)` 事件。真机验证：`/status` 的
+`session/read` 结果在 `result.session.model` 回显
+`{providerId, modelId}`（注意不在顶层，`projection` 里也没有 model）。
 
 ## 5. 关键限制
 
