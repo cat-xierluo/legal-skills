@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.9.2] - 2026-08-28
+
+### 修复
+
+- **Task-076 自动补绑覆盖正常 spawn 派单路径（Task-077）**：2.9.1 的 dispatch-show 自检+三步自动补绑实现在 `orca-supervised-register.sh`，但 `orca-wave-prepare` receipt 的 launch_contract 只要求传 `--orca-run-id/--orca-task-id/--orca-coordinator-handle` 三件套、未提主旗标 `--orca-supervised`——PM 按此派单时三件套被 spawn 侧静默忽略（仅 `ORCA_SUPERVISED=1` 时消费），worker 走 terminal-managed 启动，Task 停 [ready]、dispatch-show 为空、`SPAWN_WORKER_DISPATCH_BIND` 行不打印，PM 只能手动三步补绑（2026-08-28 Wave 20 双 worker 实测形态）。现在 launch 路径在 terminal 启动完成后，对已传入的 `--orca-task-id` 执行与 register 路径完全相同的自检+补绑并输出同款 DISPATCH_BIND 行；缺 `--orca-run-id` 的残缺组合在任何 terminal 副作用前失败关闭（exit 64）；纯 terminal-managed（无 task）保持零变化。
+
+### 同步
+
+- 自检+三步补绑实现抽为公共函数 `orchestration_dispatch_bind_selfcheck`（`orca-supervised-protocol.sh`），register 路径（`orca-supervised-register.sh`）与 launch 路径（`spawn-worker-launch.sh`）共用同一份，输出合同（ORCAREG_ 前缀 stderr 日志 + KV）不变，杜绝双份漂移。
+- launch 补绑成功后向 METADATA 写入与 supervised 分支同款的 `session.orca.supervised` 块（run/task/coordinator/dispatch/bind），并输出 `SPAWN_WORKER_ORCA_PRECREATED_TASK_BOUND` 行；空 dispatch_id 下 pm-orchestrate 仍自动按 terminal-managed 路由，`--with-sentinel` 的 dispatch-id 传递复用 `ORCA_SUPERVISED_DISPATCH_ID`。
+- `test-spawn-worker-launch.sh` 新增 5 个 Task-077 用例：健康路径不触发 mutation、dispatch-show 为空自动补绑 ok（含无 `--inject` 与单行注入与 METADATA 契约断言）、补绑失败 manual-required 不阻断、残缺组合副作用前 exit 64、纯 terminal-managed 零 dispatch 调用回归保护。
+- SKILL.md §3 硬约束补 launch 路径自检同权一行；frontmatter version 修正为 2.9.2（2.9.0/2.9.1 时漏更）。
+
 ## [2.9.1] - 2026-08-27
 
 ### 修复
