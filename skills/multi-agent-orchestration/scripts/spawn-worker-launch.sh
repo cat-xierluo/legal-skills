@@ -22,6 +22,14 @@ launch_worker_session() {
   fi
 
   if [ "$ORCA_MODE" = "auto" ]; then
+    # Task-077 前置校验（terminal 副作用前 fail-closed）：PM 按 Wave receipt 传了
+    # --orca-task-id 但漏 --orca-supervised 时，下方 self-check 分支会接手 dispatch 绑定，
+    # 它需要 --orca-run-id（dispatch mutation 的 --run 参数）。残缺组合在创建 terminal
+    # 之前报错，避免留下无 dispatch 通道的半活 worker。
+    if [ "$ORCA_SUPERVISED" -ne 1 ] && [ -n "$ORCA_TASK_ID" ] && [ -z "$ORCA_RUN_ID" ]; then
+      echo "ERROR: --orca-task-id without --orca-supervised requires --orca-run-id (dispatch bind self-check needs the Run; see Task-077 launch-path self-check)" >&2
+      exit 64
+    fi
     # v2.1（DEC-114）：ORCA 终端模式。orca terminal create 直接调，保留 ORCA_WORKTREE_ID
     # 之外的 COMMAND / provider env / wrapper / launch.sh 全套不变（COMMAND 已被 launch.sh 包好）。
     # 等价于原 tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"。
@@ -96,6 +104,48 @@ launch_worker_session() {
             echo "$reg_out" >&2
             exit 1
           fi
+        fi
+      fi
+    fi
+
+    # Task-077：Wave receipt 派单漏 --orca-supervised 的 dispatch 绑定自检。
+    # 2026-08-28 Wave 20 双 worker 实测：orca-wave-prepare 预建 Run/Task 后，PM 按 receipt
+    # 传 --orca-run-id/--orca-task-id 但漏 --orca-supervised 时，这些旗标被静默忽略，
+    # spawn 走 terminal-managed——Task 停 [ready]、dispatch-show 为空、DISPATCH_BIND 行
+    # 不打印，PM 只能手动三步补绑。本分支在 terminal 启动完成后，对已传入的
+    # --orca-task-id 执行与 register 路径完全相同的 dispatch-show 自检 + 三步自动补绑
+    # （共用 orchestration_dispatch_bind_selfcheck，勿双份漂移），输出同款
+    # SPAWN_WORKER_DISPATCH_BIND: ok|manual-required。纯 terminal-managed（无 --orca-task-id）
+    # 不涉及 dispatch，保持零变化。
+    if [ "$ORCA_SUPERVISED" -ne 1 ] && [ -n "$ORCA_TERMINAL_HANDLE" ] && [ -n "$ORCA_TASK_ID" ]; then
+      if [ "$DRY_RUN" -eq 1 ]; then
+        printf 'ORCA_RUN: dispatch-bind self-check for pre-created task %q (Task-077: dispatch-show 核对, 为空时 runbook #18 三步自动补绑)\n' \
+          "$ORCA_TASK_ID"
+      else
+        # 函数库按调用时点 source（真链路由 spawn-worker.sh 提供 SCRIPT_DIR；测试直接
+        # source 本文件时 SCRIPT_DIR 由用例设置）。纯函数定义，幂等无副作用。
+        # shellcheck source=orca-supervised-protocol.sh
+        source "$SCRIPT_DIR/orca-supervised-protocol.sh"
+        orchestration_dispatch_bind_selfcheck "$ORCA_TASK_ID" "$ORCA_TERMINAL_HANDLE" "$ORCA_RUN_ID" ""
+        ORCA_SUPERVISED_RUN_ID="$ORCA_RUN_ID"
+        ORCA_SUPERVISED_COORDINATOR_HANDLE="${ORCA_COORDINATOR_HANDLE:-}"
+        ORCA_SUPERVISED_TASK_ID="$ORCA_TASK_ID"
+        ORCA_SUPERVISED_DISPATCH_ID="$ORCAREG_BIND_DISPATCH_ID"
+        ORCA_SUPERVISED_DISPATCH_BIND="$ORCAREG_BIND_STATUS"
+        printf 'SPAWN_WORKER_DISPATCH_BIND: %s\n' "$ORCA_SUPERVISED_DISPATCH_BIND" >&2
+        if [ "$ORCA_SUPERVISED_DISPATCH_BIND" != "ok" ]; then
+          # 与 supervised 分支同款告警：不阻断 spawn（terminal 已启动），显式告警代替静默缺失。
+          echo "WARN: dispatch 绑定自动补绑未完成(manual-required)：worker 已启动，但 worker_done 无通道。PM 按 runbook #18 三步手动补绑：① orca orchestration dispatch --task $ORCA_SUPERVISED_TASK_ID --to $ORCA_TERMINAL_HANDLE --run $ORCA_SUPERVISED_RUN_ID --return-preamble（不带 --inject）② 从 preamble 提取真实 ctx id ③ 单行 terminal send 注入 worker_done/ask 命令形式（必须单行）" >&2
+        fi
+        # METADATA 补 supervised 块（run/task/coordinator/dispatch/bind）：与 supervised
+        # 分支同款合同；空 dispatch_id 下 pm-orchestrate 自动按 terminal-managed 路由。
+        if [ -f "$METADATA_FILE" ]; then
+          tmp_meta=$(mktemp)
+          jq --arg run "$ORCA_SUPERVISED_RUN_ID" --arg coordinator "$ORCA_SUPERVISED_COORDINATOR_HANDLE" \
+            --arg task "$ORCA_SUPERVISED_TASK_ID" --arg disp "$ORCA_SUPERVISED_DISPATCH_ID" \
+            --arg bind "$ORCA_SUPERVISED_DISPATCH_BIND" \
+            '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
+          echo "SPAWN_WORKER_ORCA_PRECREATED_TASK_BOUND: dispatch=${ORCA_SUPERVISED_DISPATCH_ID:-none} run=$ORCA_SUPERVISED_RUN_ID task=$ORCA_SUPERVISED_TASK_ID bind=$ORCA_SUPERVISED_DISPATCH_BIND" >&2
         fi
       fi
     fi

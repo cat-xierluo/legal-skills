@@ -538,5 +538,17 @@ assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_ID=//p' "$CASE_ROOT/t76-inject.out")" "
 assert_eq "$(sed -n 's/^ORCAREG_DISPATCH_BIND=//p' "$CASE_ROOT/t76-inject.out")" "manual-required" \
   "Task-076 injection failure reports manual-required"
 
+# Task-077：register 与 launch 两路径必须共用同一补绑实现（防双份漂移结构断言）：
+# 公共函数只定义在 orca-supervised-protocol.sh，两个调用方各自调用且不再内联补绑标记。
+if grep -Fq 'orchestration_dispatch_bind_selfcheck()' "$SCRIPT_DIR/orca-supervised-protocol.sh" \
+  && grep -Fq 'orchestration_dispatch_bind_selfcheck "$TASK_ID"' "$SCRIPT_DIR/orca-supervised-register.sh" \
+  && grep -Fq 'orchestration_dispatch_bind_selfcheck "$ORCA_TASK_ID"' "$SCRIPT_DIR/spawn-worker-launch.sh" \
+  && ! grep -Fq 'ORCAREG_DISPATCH_MISSING' "$SCRIPT_DIR/orca-supervised-register.sh" \
+  && ! grep -Fq 'ORCAREG_DISPATCH_MISSING' "$SCRIPT_DIR/spawn-worker-launch.sh"; then
+  ok "Task-077 register and launch share one self-check implementation"
+else
+  bad "Task-077 register and launch share one self-check implementation"
+fi
+
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
