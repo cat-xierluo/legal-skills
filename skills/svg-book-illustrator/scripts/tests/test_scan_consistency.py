@@ -121,11 +121,19 @@ class ScanFileSidecarTest(unittest.TestCase):
     def test_matching_sidecar_no_findings(self) -> None:
         self.sidecar_dir.mkdir()
         (self.sidecar_dir / 'ch99-测试图-svg-0.svg').write_text(
-            COMPLIANT_SVG + '\n', encoding='utf-8')
+            COMPLIANT_SVG, encoding='utf-8')
         fs = self._scan()
         self.assertEqual(fs.sidecar_findings, [])
         self.assertEqual(fs.svg_count, 1)
         self.assertEqual(fs.results[0].findings, [])
+
+    def test_trailing_whitespace_sidecar_reported(self) -> None:
+        # T261 口径:sidecar 与 canonical 逐字节相同;仅尾随空白差异也须报 SIDECAR-01
+        self.sidecar_dir.mkdir()
+        (self.sidecar_dir / 'ch99-测试图-svg-0.svg').write_text(
+            COMPLIANT_SVG + '\n', encoding='utf-8')
+        fs = self._scan()
+        self.assertEqual([f.rule_id for f in fs.sidecar_findings], ['SIDECAR-01'])
 
     def test_mismatched_sidecar_reported(self) -> None:
         self.sidecar_dir.mkdir()
