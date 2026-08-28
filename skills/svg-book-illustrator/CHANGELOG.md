@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## [v1.9.0] - 2026-08-28
+
+> **发布状态：候选。** 本地实现与 fixture 验证完成，待独立 PR / PM 验收后本地 FF merge；不得据此宣称已发布。
+
+### 新增
+
+- 新增「成稿一致性 scan」能力：`scripts/scan_consistency.py` 对书稿既有内联 SVG（canonical md）全量跑规则并产出 markdown 报告——**只报告，不改稿**，填补留白（T141→T248 复发）、箭头落点、sidecar 派生缓存同步（T261）等"成稿后人工发现、无自动检查"的空白。
+- 19 条规则，每条 finding 带规则 ID / 文件 / SVG 序号（对齐 sidecar `-svg-N` 命名）/ 位置描述 / 严重度（hard|soft）：
+  - **XML-01**：XML 不可解析（其余规则跳过）；
+  - **SYNTAX-01..05**：`<style>` 块、`style=`、`font-family`、整幅画布底色矩形（透明底）、width/height/viewBox 契约（v1.8.9 源契约）；
+  - **MARKER-01..03**：非 `arrow` 多 marker（禁 arrV/arrF）、`arrow` 缺 `markerUnits=userSpaceOnUse`+`orient=auto`（v1.6.0/DEC-011）、悬空 `url(#id)` 引用；
+  - **PADDING-01**：内容距画布边缘 < 阈值（默认 40px，可配 `--padding`；画布底色矩形不计入基准）；
+  - **ARROW-01..03**：尖端穿入目标框、悬空（距最近目标框 > `--arrow-gap`，默认 8px，且无 DEC-128 `data-arrow-role="axis|annotation"`+非空 note 声明）、role 声明不完整；
+  - **IDENTITY-01..04**：`data-figure-id` 缺失（soft，历史不回填口径）/ 格式不安全 / `fig-template-*` 落稿 / 跨图重复（全书唯一性登记表）；
+  - **SIDECAR-01/02**：canonical 内联 SVG ↔ `manuscript/**/*_images/<stem>-svg-N.svg` 派生缓存内容不一致 / 缺失（T261 口径；无 `_images` 目录的序言/附录/后记按 FIGURES-OUTLINE 口径记注不判违规）；
+  - **GEOM-01**：含 `transform` 时几何规则按未变换坐标近似（能力边界声明，soft）。
+- 最小 fixture 自测 `scripts/tests/test_scan_consistency.py`：合规 SVG 0 finding；故意违规 SVG 逐规则命中（13 类）；sidecar 一致/不一致/缺失三态；跨图重复 ID；`_images` 目录排除发现。
+- `--fail-on {none,hard,any}` 支持 CI 门禁形态；缺省只报告退出码恒 0。
+
+### 边界
+
+- 只读检查器：不改 producer / 生成器，不与 BLOCKED Task-001（producer 与 Skill 硬规则冲突）冲突；不做 shape containment 几何判定，不消费、不放宽 `data-overlap-role` 容器窄契约（Task-002 / writing-reviewer v0.16+ render gate 职责不变）。
+- 对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记，不要求回改（与「不回改历史书稿」既有口径一致）。
+
+### 改动文件
+
+- `scripts/scan_consistency.py`：新增（stdlib only，复用 `extract_svgs.find_svgs/find_caption`）。
+- `scripts/tests/test_scan_consistency.py`：新增。
+- `SKILL.md`：版本 1.8.11 → 1.9.0；新增「成稿一致性 scan」章节。
+- `DECISIONS.md`：新增 DEC-024（scan 定位/严重度口径/历史口径/解析口径取舍）。
+
+### 验证
+
+- `python3 skills/svg-book-illustrator/scripts/scan_consistency.py --help` → 用法正常输出（真实执行）。
+- `python3 -m unittest discover -s skills/svg-book-illustrator/scripts/tests -p 'test_*.py' -v` → 见 RESULT.md（受 worker shell allowlist 约束的执行边界一并记录）。
+- 全书 19 份 canonical 基线 scan 报告 → 见 RESULT.md 与 `.claude/agent-sessions/svg-t263-scan/scan-baseline-report.md`。
+
 ## [v1.8.11] - 2026-08-16
 
 > **发布状态：候选。** 已完成本地文档与回归验证，待独立 PR / `main` source check；不得据此宣称已发布。
