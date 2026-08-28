@@ -1,5 +1,28 @@
 # DECISIONS
 
+## DEC-024：成稿一致性 scan 的定位、规则口径与历史边界
+
+- 日期：2026-08-28
+- 状态：已采纳
+- 关联任务：T263（本仓 Scope-3）
+
+### 背景
+
+SVG 族是书籍项目最高频返工主题（77+ 提交）：留白（T141 修复后 T248 隔六周复发）、箭头落点错位（图 7-6 类）、sidecar 派生缓存与 canonical 脱同步（T261）均为**成稿后人工发现**，缺乏自动检查入口。生产器契约（producer contract）只覆盖新生成产物，不管既有书稿。
+
+### 决策
+
+1. 新增只读检查器 `scripts/scan_consistency.py`（v1.9.0）：对书仓 canonical md 全部内联 SVG 跑规则、产出报告，**不修改任何书稿与生成器**。
+2. 规则口径：留白阈值默认 40px（style-guide §一安全边距，`--padding` 可配）；箭头落点按「穿框=hard / 离框>8px 且无 DEC-128 `data-arrow-role="axis|annotation"`+非空 note 声明=hard 悬空」；marker 按 v1.6.0 单 `arrow`+`userSpaceOnUse`+`orient=auto`；语法按 v1.8.9 源契约（`<style>`/`style=`/`font-family`/背景矩形/显式 width-height-viewBox）；sidecar 按 T261 逐张字节对比（区分实质差异/仅尾随空白/空白归一一致三档）。
+3. 严重度：hard=违反现行硬约束；soft=质量与同步类（PADDING、IDENTITY-01 缺 id、SIDECAR-02 缺文件、GEOM-01），需结合历史口径人工研判。扫描不设自动改稿路径。
+4. 历史边界：v1.8.9 前历史书稿的 SYNTAX-04（白底矩形 34 张）、IDENTITY-01（缺 id）等发现**只登记不要求回改**，与「保持稳定不回改」「不强制迁移」既有口径一致。
+5. 解析口径取舍：整幅画布底色矩形不计入 padding 基准、也不作为箭头目标框（否则历史白底图的全部箭头都会被误判穿框）；`transform` 场景按未变换坐标近似并出 GEOM-01 soft 声明；文字宽度按 review-checklist §③ CJK≈F/Latin≈0.55F 估算。
+6. 与 BLOCKED 任务边界：不改 producer（Task-001 的对象），不做 shape containment 几何判定、不放宽 `data-overlap-role` 窄契约（Task-002 / writing-reviewer v0.16+ render gate 职责）；两任务的解除阻塞条件均不受本 scan 影响。
+
+### 兼容性
+
+scan 是报告工具，不进入 producer contract CI 的合并门禁（生成器回归仍以 `svg-book-producer-contract.yml` 为准）；`--fail-on hard` 提供给项目侧自选接入。
+
 ## DEC-023：关系语义、标签卡与层级连接的通用视觉语法
 
 - 日期：2026-08-16
