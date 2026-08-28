@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.11"
+version: "1.9.0"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
@@ -179,6 +179,29 @@ find figures/ -name "*.svg" -exec node scripts/svg2png.js {} \;
 - 300 DPI：最低印刷要求
 - 600 DPI：推荐，清晰锐利
 - 1200 DPI：线条图最高质量
+
+---
+
+## 成稿一致性 scan（v1.9.0，对既有书稿）
+
+生成流程之外，对**已成稿书稿**的全部内联 SVG 跑规则巡检（只报告，不改稿；不替代 writing-reviewer render gate 的几何/视觉审计）：
+
+```bash
+python3 scripts/scan_consistency.py --book-root <书仓根目录> --report <报告输出.md>
+# 阈值可调：--padding 40（安全边距 px）、--arrow-gap 8（箭头悬空 px）
+# CI 门禁形态：--fail-on hard（存在 hard finding 时退出码 1）
+```
+
+规则覆盖（19 条，每条 finding 带规则 ID / 文件 / SVG 序号 / 位置 / 严重度 hard|soft）：
+
+- **留白**：内容距画布边缘 < 阈值（默认 40px，style-guide §一）
+- **箭头落点**：尖端穿入目标框（禁穿框）、离最近目标框 > 阈值且无 `data-arrow-role="axis|annotation"` + 非空 note 声明的悬空箭头（style-guide §5.5.3 / FIGURES-OUTLINE DEC-128）
+- **marker 硬约束**：非 `arrow` 的多 marker / 缺 `markerUnits="userSpaceOnUse"`+`orient="auto"` / 悬空 `url(#id)` 引用（v1.6.0）
+- **语法**：`<style>` 块、`style=`、`font-family`、整幅画布底色矩形、width/height/viewBox 契约（v1.8.9）
+- **身份**：`data-figure-id` 缺失（soft，历史不回填口径）/ 格式不安全 / `fig-template-*` 落稿 / 跨图重复
+- **sidecar 同步**：canonical 内联 SVG ↔ `manuscript/**/*_images/<stem>-svg-N.svg` 派生缓存内容一致（T261 口径）
+
+历史口径：对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记不要求回改（与本 skill「不回改历史书稿」既有口径一致）。与 BLOCKED Task-001（producer 冲突）/ Task-002（shape containment）互不侵入：本 scan 不改 producer、不做包含几何判定。
 
 ---
 
