@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.8.1"
+  version: "2.9.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -68,6 +68,7 @@ PM 在业务实现前完成：
 - Worker 验证命令不是安装授权。缺工具时报告阻塞，除非 PM 传入精确 `--allow-install-command` 和 `--install-authorization-source`。
 - Worker 自报、STATUS、UI 卡片、TUI idle、heartbeat 和 timeout 都不能单独证明业务完成。
 - supervised spawn 收尾自检 dispatch 绑定（Task-076）：worker-start 后主动 `dispatch-show --task` 核对；为空时按 runbook #18 自动三步补绑（无 `--inject` 的 dispatch 建绑定 → 从 preamble 提取真实 ctx id → 单行 terminal send 注入 worker_done/ask 命令形式），SPAWN 输出必须含 `SPAWN_WORKER_DISPATCH_BIND: ok|manual-required`；`manual-required` 不阻断 spawn 但属显式告警，PM 须按同三步手动补绑。
+- launch 路径 dispatch 绑定自检同权（Task-077）：Wave receipt 派单漏 `--orca-supervised` 但传了 `--orca-task-id` 时，terminal 启动后由 launch 分支对预建 Task 执行同一自检+补绑并输出同款 `SPAWN_WORKER_DISPATCH_BIND` 行（实现共用 `orchestration_dispatch_bind_selfcheck`，register/launch 两条路径勿各留一份）；缺 `--orca-run-id` 的残缺组合在任何 terminal 副作用前失败关闭；纯 terminal-managed（无 task）不涉及 dispatch，保持零变化。
 
 Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩坑读取 `references/10-parallel-lessons.md`。
 
