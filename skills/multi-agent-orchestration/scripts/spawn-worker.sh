@@ -293,6 +293,10 @@ if [ -z "$COMMAND" ]; then
     zcode) COMMAND="python3 '$SCRIPT_DIR/zcode-worker-driver.py'" ;;
     *) echo "ERROR: no default command for backend=$WORKER_BACKEND_CANONICAL" >&2; exit 64 ;;
   esac
+  # v2.9.4：标记命令来自 backend 默认值（用户未显式 --command）——route_suggest
+  # 自动补选 provider 后据此决定是否安全地包装 provider env（见
+  # spawn-worker-route-suggest.sh route_suggest_wrap_command）。
+  COMMAND_WAS_DEFAULT=1
   echo "SPAWN_WORKER_COMMAND_DEFAULT: backend=$WORKER_BACKEND_CANONICAL command=$COMMAND"
 fi
 
@@ -321,6 +325,9 @@ source "$SCRIPT_DIR/spawn-worker-route-suggest.sh"
 # lease 消费 API_PROVIDER 之前自动补选（fail-open：route_suggest 任何失败不
 # 改道、不阻断 spawn；显式 --api-provider 永远优先）。
 route_suggest_autofill_provider
+# v2.9.4：补选出的 provider 注入运行 env（仅默认命令时包装，显式 --command
+# 的 env 由 PM 的 runtime profile 负责，不重复注入）。
+route_suggest_wrap_command
 
 # shellcheck source=spawn-worker-provider-lease.sh
 source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"
