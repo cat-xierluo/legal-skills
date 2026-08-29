@@ -160,3 +160,27 @@ class TestScoring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReservoirOpenTiers(unittest.TestCase):
+    """open_tiers：reservoir lane 对显式开放的 tier 无条件入链（能力首选场景）。"""
+
+    def _config(self):
+        import copy
+        cfg = copy.deepcopy(BASE_CONFIG)
+        cfg["quota_aware_routing"]["lanes"]["lane-r"]["open_tiers"] = ["multimodal"]
+        return cfg
+
+    def test_open_tier_reservoir_wins_without_scene(self):
+        # multimodal 链中 reservoir 被显式开放 → 无 scene 也应胜过 fuel（能力首选吃积分）
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        out = rs.build_route_decision(self._config(), summary, "multimodal", now=NOW)
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["lane"], "lane-r")
+        self.assertEqual(out["provider"], "prov-r1")
+
+    def test_non_open_tier_still_scene_gated(self):
+        # L0 未开放 → 无 scene 仍不入链（不抢主链流量，定稿语义不变）
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        out = rs.build_route_decision(self._config(), summary, "L0", now=NOW)
+        self.assertNotEqual(out["lane"], "lane-r")

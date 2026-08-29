@@ -23,7 +23,8 @@
     "urgency_window_minutes": 120,
     "lanes": {
       "<lane-1>": {"type": "fuel", "providers": ["<provider 名，须有 config/<provider>.settings.json 或 registry 条目>"]},
-      "<lane-2>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1}
+      "<lane-2>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1},
+      "<lane-3>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1, "open_tiers": ["multimodal"]}
     },
     "tier_policy": {
       "L2": ["<lane-1>"],

@@ -150,15 +150,19 @@ def _score_and_pick(qar, summary, tier, scene, current, stale):
         candidates = [default_lane] if default_lane in qar["lanes"] else []
 
     scene_match = bool(scene) and scene in (qar.get("reservoir_scenes") or [])
+    open_tiers = {lane: (cfg.get("open_tiers") or []) for lane, cfg in qar["lanes"].items()}
     scored: list[tuple[float, int, str]] = []
     for order, lane in enumerate(candidates):
         sig = signals.get(lane)
         if not sig or not sig["available"]:
             continue
         if sig["type"] == "reservoir":
-            if not scene_match:
+            # 入链两条件：scene 匹配（场景驱动的条件兜底），或 tier 被 lane 的
+            # open_tiers 显式开放（能力首选：该 tier 的活本就该这条免费 lane 干，
+            # 如 multimodal 链首选积分制视觉模型）。两者语义同为"能薅就薅"。
+            if not scene_match and tier not in open_tiers.get(lane, []):
                 continue
-            score = 1000.0  # scene 匹配时薅免费 lane 优先于一切燃料（省已付/主窗口额度）
+            score = 1000.0  # 免费额度优先于一切燃料（省已付/主窗口额度）
         elif sig["pending_refresh"]:
             score = -1.0   # 数据属上个窗口，评分不可信 → 排最后，靠静态序兜底
         else:
