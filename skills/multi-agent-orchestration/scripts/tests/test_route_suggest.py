@@ -77,5 +77,34 @@ class TestBasePaths(unittest.TestCase):
         self.assertEqual(out["provider"], "prov-manual")
 
 
+class TestLaneSignals(unittest.TestCase):
+    def test_lane_signals_basic(self):
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        lanes_cfg = BASE_CONFIG["quota_aware_routing"]["lanes"]
+        signals = rs.lane_signals(summary, lanes_cfg, NOW)
+        # lane-a: fuel 80% 余量、4h 后重置 → available，无 urgency，无 pending_refresh
+        self.assertTrue(signals["lane-a"]["available"])
+        self.assertNotEqual(signals["lane-a"]["urgency"], "high")
+        self.assertFalse(signals["lane-a"]["pending_refresh"])
+        # lane-b: fuel 10% < 判停线 15% → 不可用
+        self.assertFalse(signals["lane-b"]["available"])
+        # lane-r: reservoir health ok → available
+        self.assertTrue(signals["lane-r"]["available"])
+
+    def test_urgency_when_reset_imminent_and_quota_left(self):
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW, resets_in_minutes=74)
+        lanes_cfg = BASE_CONFIG["quota_aware_routing"]["lanes"]
+        signals = rs.lane_signals(summary, lanes_cfg, NOW)
+        self.assertEqual(signals["lane-a"]["urgency"], "high")   # 74min < 120min 窗口
+        self.assertEqual(signals["lane-b"]["urgency"], "none")   # 余量低于判停线，不冲
+
+    def test_pending_refresh_when_reset_already_passed(self):
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW, resets_in_minutes=-5)
+        lanes_cfg = BASE_CONFIG["quota_aware_routing"]["lanes"]
+        signals = rs.lane_signals(summary, lanes_cfg, NOW)
+        self.assertTrue(signals["lane-a"]["pending_refresh"])    # resets_at 已过 → 数据是上个窗口的
+        self.assertTrue(signals["lane-a"]["available"])          # 保守视为可用（可能已满血）
+
+
 if __name__ == "__main__":
     unittest.main()
