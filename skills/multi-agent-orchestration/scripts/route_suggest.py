@@ -137,7 +137,55 @@ def lane_signals(summary: dict[str, Any], lanes_cfg: dict[str, Any],
 
 
 def _score_and_pick(qar, summary, tier, scene, current, stale):
-    return {"status": "internal_error", "reason": "scoring not implemented"}
+    signals = lane_signals(summary, qar["lanes"], current,
+                           stop_line=qar["stop_line_percent"],
+                           urgency_window_minutes=qar["urgency_window_minutes"])
+
+    policy = qar["tier_policy"]
+    default_lane = policy.get("default") if isinstance(policy.get("default"), str) else None
+    if tier in policy and isinstance(policy[tier], list):
+        candidates = [lane for lane in policy[tier] if lane in qar["lanes"]]
+    else:
+        candidates = [default_lane] if default_lane in qar["lanes"] else []
+
+    scene_match = bool(scene) and scene in (qar.get("reservoir_scenes") or [])
+    scored: list[tuple[float, int, str]] = []
+    for order, lane in enumerate(candidates):
+        sig = signals.get(lane)
+        if not sig or not sig["available"]:
+            continue
+        if sig["type"] == "reservoir":
+            if not scene_match:
+                continue
+            score = 1000.0  # scene 匹配时薅免费 lane 优先于一切燃料（省已付/主窗口额度）
+        elif sig["pending_refresh"]:
+            score = -1.0   # 数据属上个窗口，评分不可信 → 排最后，靠静态序兜底
+        else:
+            score = sig["remaining_percent"] or 0.0
+            if sig["urgency"] == "high" and sig["resets_in_minutes"] is not None:
+                score += 50.0 * (1.0 - sig["resets_in_minutes"] / qar["urgency_window_minutes"])
+        scored.append((score, order, lane))
+
+    evidence = {name: {k: v for k, v in sig.items() if v is not None}
+                for name, sig in signals.items()}
+
+    if not scored:
+        fallback = default_lane or (candidates[0] if candidates else None)
+        return {"status": "all_lanes_stopped",
+                "fallback_lane": fallback,
+                "reason": "候选 lane 全部不可用，建议回落 default 或任务卡显式 provider",
+                "evidence": evidence}
+
+    score, order, lane = max(scored, key=lambda item: (item[0], -item[1]))
+    sig = signals[lane]
+    providers = qar["lanes"][lane].get("providers") or []
+    return {"status": "ok", "tier": tier, "lane": lane,
+            "provider": providers[0] if providers else "",
+            "urgency": sig["urgency"], "stale": stale, "scene": scene,
+            "reason": (f"lane={lane} score={score:.1f} type={sig['type']}"
+                       + ("（scene 匹配，薅免费额度）" if sig["type"] == "reservoir" else
+                          "（余量/临期加权胜出）")),
+            "evidence": evidence}
 
 
 def main(argv: list[str] | None = None) -> int:

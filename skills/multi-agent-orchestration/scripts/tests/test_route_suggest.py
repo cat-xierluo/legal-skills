@@ -106,5 +106,57 @@ class TestLaneSignals(unittest.TestCase):
         self.assertTrue(signals["lane-a"]["available"])          # 保守视为可用（可能已满血）
 
 
+class TestScoring(unittest.TestCase):
+    def normal(self, **kw):
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW,
+                           resets_in_minutes=kw.pop("resets_in_minutes", 240))
+        return rs.build_route_decision(BASE_CONFIG, summary, kw.pop("tier", "L0"), now=NOW, **kw)
+
+    def test_high_quota_lane_wins_L0(self):
+        # 额度经济化核心场景：余量 80% 的 lane-b... 注意 fixture 中 lane-a=80/lane-b=10，
+        # tier_policy L0=[lane-b, lane-a, lane-r] 静态序 lane-b 在前，但评分按余量应选 lane-a
+        out = self.normal()
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["lane"], "lane-a")
+        self.assertEqual(out["provider"], "prov-a1")
+        self.assertIn("evidence", out)
+
+    def test_stopped_lane_yields_to_next(self):
+        # lane-a 判停（10%）→ L0 让位：修改 fixture 使 lane-a=8%，lane-b=80%
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        summary["lanes"]["lane-a"]["remaining_percent"] = 8.0
+        summary["lanes"]["lane-b"]["remaining_percent"] = 80.0
+        out = rs.build_route_decision(BASE_CONFIG, summary, "L0", now=NOW)
+        self.assertEqual(out["lane"], "lane-b")
+
+    def test_urgency_boost_prefers_imminent_lane(self):
+        # lane-a 80%/4h、lane-b 80%/74min → 临期加权让 lane-b 胜出（尽管静态序 lane-b 靠后）
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        summary["lanes"]["lane-b"]["remaining_percent"] = 80.0
+        summary["lanes"]["lane-a"]["resets_at"] = (NOW + dt.timedelta(minutes=240)).isoformat()
+        summary["lanes"]["lane-b"]["resets_at"] = (NOW + dt.timedelta(minutes=74)).isoformat()
+        out = rs.build_route_decision(BASE_CONFIG, summary, "L0", now=NOW)
+        self.assertEqual(out["lane"], "lane-b")
+        self.assertEqual(out["urgency"], "high")
+
+    def test_reservoir_only_when_scene_matches(self):
+        # scene 不匹配 → reservoir lane 不入链（L0 静态序里 lane-r 存在但不选它）
+        out = self.normal()  # 无 scene
+        self.assertNotEqual(out["lane"], "lane-r")
+        # scene 匹配 overnight_batch → reservoir 优先（省燃料）
+        out2 = self.normal(scene="overnight_batch")
+        self.assertEqual(out2["lane"], "lane-r")
+        self.assertEqual(out2["provider"], "prov-r1")
+
+    def test_all_fuel_stopped_falls_to_default(self):
+        summary = freshify(load_fixture("quota-summary-normal.json"), NOW)
+        summary["lanes"]["lane-a"]["remaining_percent"] = 5.0
+        summary["lanes"]["lane-b"]["remaining_percent"] = 5.0
+        summary["lanes"]["lane-r"]["health"] = "down"
+        out = rs.build_route_decision(BASE_CONFIG, summary, "L0", now=NOW)
+        self.assertEqual(out["status"], "all_lanes_stopped")
+        self.assertEqual(out["fallback_lane"], "lane-a")  # tier_policy.default
+
+
 if __name__ == "__main__":
     unittest.main()
