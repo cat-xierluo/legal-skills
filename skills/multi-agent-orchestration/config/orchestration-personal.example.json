@@ -14,6 +14,28 @@
     }
   },
 
+  "quota_aware_routing": {
+    "_comment": "额度感知路由【模板】。enabled=true 时 PM 派单前跑 scripts/route_suggest.py 按各 lane 余量/倒计时/健康评分选 provider。summary_path 指向一个 quota-aware-routing.summary.v1 schema 的 JSON 文件（产出方不限：定时探针/网关/手写均可；留空或读不到即整体退化走任务卡显式 provider 或 main_force.task_routing）。lanes/tier_policy 全部是个人模型池快照，改模型只改这里不动 skill。",
+    "enabled": false,
+    "summary_path": "<你的余量 summary JSON 绝对路径，schema 见 scripts/route_suggest.py docstring>",
+    "freshness_minutes": 30,
+    "stop_line_percent": 15,
+    "urgency_window_minutes": 120,
+    "lanes": {
+      "<lane-1>": {"type": "fuel", "providers": ["<provider 名，须有 config/<provider>.settings.json 或 registry 条目>"]},
+      "<lane-2>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1},
+      "<lane-3>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1, "open_tiers": ["multimodal"]}
+    },
+    "tier_policy": {
+      "L2": ["<lane-1>"],
+      "L1": ["<lane-1>"],
+      "L0": ["<lane-1>", "<lane-2>"],
+      "multimodal": ["<lane-1>"],
+      "default": "<lane-1>"
+    },
+    "reservoir_scenes": ["overnight_batch", "archive_review", "long_tail_cleanup"]
+  },
+
   "concurrency": {
     "_comment": "同一 API 来源(provider)的机械并发上限。spawn-worker 在副作用前原子占槽，终端/会话结算后释放。per_backend 优先于 max_per_provider。",
     "max_per_provider": 3,

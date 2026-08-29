@@ -314,6 +314,14 @@ fi
 printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
   "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
 
+# shellcheck source=spawn-worker-route-suggest.sh
+source "$SCRIPT_DIR/spawn-worker-route-suggest.sh"
+
+# v2.x：--api-provider 缺省且个人配置启用 quota_aware_routing 时，在 provider
+# lease 消费 API_PROVIDER 之前自动补选（fail-open：route_suggest 任何失败不
+# 改道、不阻断 spawn；显式 --api-provider 永远优先）。
+route_suggest_autofill_provider
+
 # shellcheck source=spawn-worker-provider-lease.sh
 source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"
 
