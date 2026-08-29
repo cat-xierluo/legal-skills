@@ -1,0 +1,11 @@
+# workers-file 示例(每行 handle<TAB>label)
+# 空行与以 # 开头的注释行会被脚本忽略;其它非 handle\tlabel 形态会 fail-closed。
+# handle 必须匹配 [A-Za-z0-9._:-]+;label 用作日志 tag,可省略(省略则用 handle 作 tag)。
+#
+# 实战样本(2026-08-28 守夜 v2,六 worker):
+term_3e72505b-3771-43f3-aeaa-9061567c3746	bl-017-impl
+term_0effde67-0240-46d4-9d34-5c9d34952c06	bl-040-impl
+term_b5c394cc-1307-4156-862c-71d5d02a016d	bl-050-fix
+term_93667626-22e8-49f7-8fe8-6d98123a5f22	bl-051-contract
+term_6326dfd8-98e4-4ac8-948d-bd37107e3b80	bl-046-contract
+term_a214f608-6921-4435-8356-7724d2bc69f7	bl-053-ia-contract
