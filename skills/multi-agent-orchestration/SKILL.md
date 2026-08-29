@@ -364,6 +364,24 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 - `references/08-codebuddy-cli-worker.md`
 - `references/09-zcode-cli-worker.md`：zcode CLI worker 接入（无 TUI，driver 模式；协议/凭证/额度）
 
+### 9.1 额度感知路由（可选，个人配置启用）
+
+个人配置 `quota_aware_routing.enabled=true` 时，PM 组卡/派单前必跑：
+
+```bash
+python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--task-card-path ...]
+```
+
+- 输出 JSON 的 `provider` 填入任务卡 / `--api-provider`；`urgency=high` 表示
+  某 lane 窗口临期且余量充足，PM 可扩大该 tier 本波任务量（多组卡消耗）。
+- 任务卡显式 `provider` 字段永远优先（人工锁定 > 动态路由）。
+- `spawn-worker.sh` 在 `--api-provider` 缺省且配置启用时自动兜底调用
+  （`ROUTE_SUGGEST_TIER` 传入 tier，缺省 L1）。
+- 未配置 / summary 读不到 → `not_configured` / `degraded`，走静态
+  `main_force.task_routing`，不 fail、不静默改道。
+- 模型能力 × 任务匹配的判断方法见 `references/16-model-capability-profile.md`；
+  lanes/tier_policy 在个人配置维护，本 skill 不承载任何具体模型选择。
+
 ## 10. 依赖
 
 ### 系统依赖
