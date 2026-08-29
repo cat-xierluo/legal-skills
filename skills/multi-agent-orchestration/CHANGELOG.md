@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.9.2.1] - 2026-08-29
+
+- **守夜 v2 实战协议固化**(Task-080):新模板 `scripts/night-revive-timer.sh`(7 参数 fail-closed+`--repeat/--until` 打摆复活+`nohup caffeinate -dis` 脱链)与 `templates/workers.tsv.example`;SKILL.md §4.6 增四铁律(通道自测/双读核活法含游标推进法/硬死vs拥塞诊断树/task-list 完成权威)。
+- **§3.3 增第 5 条**:DEC 编号预分配纪律(wave manifest 必须显式预分配号或禁止新增;2026-08-28 三波撞号教训)。
+
 ## [2.9.2] - 2026-08-28
 
 ### 修复

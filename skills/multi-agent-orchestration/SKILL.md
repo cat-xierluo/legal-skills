@@ -107,6 +107,7 @@ spawn 一个 worker 后，PM 的操作纪律（Wave-2 实战撞坑固化）：
 2. **Wave 先建完整控制面，再并行启动**（Task-043/050）：用 `orca-wave-prepare.sh` 一次创建/绑定 Run，并在任何 worker 启动前串行创建全部独立 Task；receipt 固化 `run_id`、`coordinator_handle` 和各 `task_id`。不要重试 `run-create`，也不要让并发 spawn 各自 `run-use/task-create`，否则会触发 consumer fencing 或重复 Task。
 3. **supervised worker 不用 pm-monitor/sentinel 判完成**（Task-041）：supervised 完成唯一权威是 `worker_done → Delivery`（`pm-orchestrate show/wait` 读 dispatch + Delivery）。`pm-monitor`（STATUS/commit-stale）和 `sentinel`（tui-idle/timeout）的信号不是 supervised 完成权威——`STATUS=done` ≠ Delivery、tui-idle 只表示可交互不表示完成。supervised 的 PM 只用 `pm-orchestrate show/wait`；pm-monitor/sentinel 是 tmux/terminal-managed 回退路径的辅助观察器，套到 supervised 会误判。
 4. **只并行无依赖步骤**（Task-044/050）：spawn 前的独立探查和 receipt 完成后的多个 worker 启动/核验可并行；Run 和全部 Task 的创建属于 Wave 准备屏障，必须先串行完成。依赖链（Task 预建→worker-start、spawn→核验、verify→commit）保持串行。
+5. **DEC 编号预分配纪律（2026-08-29 三波撞号教训）**：wave manifest 的每个任务 spec 必须显式其一——「新增 DEC 用预分配号 DEC-XXX」或「禁止新增 DEC（实现类默认，只引用既有合同号）」。合同类按 wave 顺序预分配；实现类漏写会导致 worker 自选号撞车（2026-08-28 三 worker 同选 DEC-066，收口重编号三次+一次误伤）。
 
 ### 3.4 `spawn-worker.sh` 模块边界（Task-048）
 
@@ -248,6 +249,13 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 用户显式授权后，PM 按项目任务源中固定的组波/泊车策略自动链式推进波次：收口后自动写回任务源、查表组下一波并派发，直到泊车条件。**授权与策略权威都在项目上下文**（本 skill 不承载项目授权）；查表查不到合法组合即泊车，这是 Autopilot fail-closed 的根本。验收路径不因自动化放宽（门禁在最终树复跑 + safe-push + PR squash 强制），每波收口发摘要但不等确认，泊车必须完整报告后停止。
 
 Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/15-wave-autopilot.md`。已由同一 watcher 明确观察到额度受限时，才可用 `scripts/night-watch.sh --terminal <PM终端handle> --model <当前模型> --settings <provider/account 配置权威文件>` 守夜；自动唤醒拒绝可变 setting-sources，并冻结 settings 内容指纹。首次探测即成功、配置/认证/网络/未知错误、超时或 terminal 失败都不会唤醒。真实 PM 终端的 `quota → available → send → PM 被唤醒` 仍标记 `NOT_VERIFIED`，流程见 `references/15-wave-autopilot.md` §8。**守夜/夜间模式（用户触发词："守夜模式/首页模式/过夜模式/晚上继续/N 小时后启动"，2026-08-28 固化）**：用户说出任一触发词时，PM 按双通道方案布防——①**定时形态（用户已知恢复时间，如"3 小时后启动"）**：`nohup caffeinate -dis` 包裹一次性定时器（sleep N 后 `orca terminal send` 注入唤醒文本）脱离 PM/Orca 进程树直接运行；会话侧可选挂一次性 cron 兜底。**零探测零死窗消耗，最经济**。②**探测形态（恢复时间未知）**：保留 session recurring cron 看门狗不删（每跳 turn 活动兼防冻心跳+兜底唤醒，死窗积压跳 token=保险费）+ `nohup caffeinate -dis` 脱离进程树的 night-watch 武装探测。铁律：任何守夜装置不得只活在 Orca/Electron 进程树内（App Nap 屏灭冻结整树，与合盖无关，2026-08-28 实证）；night-watch 在额度仍可用时启动会 exit 11（要求从耗尽态武装），需 exit-11 重试监督循环或确认耗尽后再启动。完整复盘见 references 对应节与 Task-078。
+
+**守夜 v2 实战协议(2026-08-29 晨收口固化,工具 `scripts/night-revive-timer.sh`)**:
+- **布防模板**:已知恢复时间用定时形态模板脚本(`--pm-terminal/--workers-file/--revive-at/--wake-at/--revive-text/--wake-text/--log` fail-closed;`--repeat <秒> --until <时刻>` 打摆 lane 周期性复活;wall-clock 用 `date -j -f`;`nohup caffeinate -dis` 脱链)。恢复时间变更时改参数重启,不手写新脚本。
+- **铁律一(通道自测)**:布防后立即向 PM 自身终端注入一行自测文本+向任一 worker 终端注入探针,两条都确认送达才算布防完成(2026-08-28 双验;PM 终端注入为历史 NOT_VERIFIED 项就此闭环)。
+- **铁律二(核活只用双读法)**:任何单次快照/worker=ready/空 transcript 都不可信(冻结 TUI 保留旧 todo+旧计时器,曾骗过 PM 两次)。可靠法:①双读计时器(间隔 30-40s 两次读 ⏱ 行,值不变=冻死)——过 1h 后分钟粒度失效,降级用②**游标推进法**(两次读 `latest cursor`,25s 不动=冻死;在流=活)为最终权威。
+- **铁律三(先诊断再复活)**:硬额度死 vs 瞬发拥塞两态策略不同——诊断证据=PM 自身会话可用+任一 worker 能维持长 turn+复活探针被消费。边际可用(打摆)lane 下注入必被消费且有增量进展,检测到冻死立即错峰复活(≤3 个/批,间隔 8s)周期重试;只有硬死(单请求也 429)才推迟到刷新点统一复活。
+- **铁律四(完成权威是 task-list)**:巡检第一动作 `orca orchestration task-list --run <run> --json` 查终态,不是盯队列消息——worker_done 可能早已送达被消费,队列空≠没人完成(2026-08-29 实证 7/8 早已 completed 而 PM 误判"没人发 done"又发补发指令)。
 每跳巡检同时核对各 worker spawn receipt 的 `SPAWN_WORKER_DISPATCH_BIND` 行：`manual-required`（Task-076 自动补绑未完成）须立即按 runbook #18 三步手动补绑，不要等 worker_done 缺失才暴露。
 
 Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/14-wave-autopilot.md`。
