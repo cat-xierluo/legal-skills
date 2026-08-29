@@ -197,5 +197,65 @@ else
   bad "autofill runs before provider lease consumes API_PROVIDER (autofill=$autofill_line lease=$lease_line)"
 fi
 
+# ── route_suggest_wrap_command（v2.9.4：补选 provider 注入运行 env）────────
+# fixture：假 scripts/ 目录（含假 wrapper）+ config/prov-a1.settings.json。
+FAKE_SCRIPTS="$CASE_ROOT/fake-scripts"
+mkdir -p "$FAKE_SCRIPTS" "$CASE_ROOT/config"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_SCRIPTS/claude-provider-env.sh"
+cat > "$CASE_ROOT/config/prov-a1.settings.json" <<'JSON'
+{"env": {"ANTHROPIC_MODEL": "mod-a1"}}
+JSON
+
+reset_wrap_case() {
+  SCRIPT_DIR="$FAKE_SCRIPTS"
+  API_PROVIDER="${1:-prov-a1}"
+  COMMAND_WAS_DEFAULT="${2:-1}"
+  WORKER_BACKEND_CANONICAL="${3:-claude-code}"
+  COMMAND="claude"
+}
+
+# 场景 W1：默认命令 + 补选 provider → COMMAND 被包装（settings+model 注入）。
+reset_wrap_case
+route_suggest_wrap_command 2>"$CASE_ROOT/w1.err"
+if [[ "$COMMAND" == *"config/prov-a1.settings.json"* ]] \
+   && [[ "$COMMAND" == *"model 'mod-a1'"* ]] \
+   && [[ "$COMMAND" == *"-- claude --permission-mode auto"* ]]; then
+  ok "wrap injects settings and model into default command"
+else
+  bad "wrap injects settings and model into default command (COMMAND=$COMMAND)"
+fi
+grep -Fq 'ROUTE_SUGGEST_ENV: provider=prov-a1' "$CASE_ROOT/w1.err" \
+  && ok "wrap emits ROUTE_SUGGEST_ENV marker" \
+  || bad "wrap emits ROUTE_SUGGEST_ENV marker"
+
+# 场景 W2：显式 --command（COMMAND_WAS_DEFAULT=0）→ 不包装。
+reset_wrap_case prov-a1 0
+route_suggest_wrap_command 2>/dev/null
+assert_eq "$COMMAND" "claude" "explicit command is never wrapped"
+
+# 场景 W3：settings 缺失 → 保持裸命令（fail-open）。
+reset_wrap_case prov-missing
+route_suggest_wrap_command 2>/dev/null
+assert_eq "$COMMAND" "claude" "missing settings keeps bare command"
+
+# 场景 W4：非 claude-code backend → 不包装。
+reset_wrap_case prov-a1 1 codex
+route_suggest_wrap_command 2>/dev/null
+assert_eq "$COMMAND" "claude" "non-claude-code backend skips wrap"
+
+# 静态接线断言：主脚本必须调用 wrap（在 autofill 之后）。
+if grep -Eq '^route_suggest_wrap_command$' "$SPAWN_WORKER"; then
+  ok "entrypoint invokes route_suggest_wrap_command"
+else
+  bad "entrypoint invokes route_suggest_wrap_command"
+fi
+wrap_line=$(grep -En '^route_suggest_wrap_command$' "$SPAWN_WORKER" | head -1 | cut -d: -f1)
+if [ -n "$wrap_line" ] && [ -n "$autofill_line" ] && [ "$wrap_line" -gt "$autofill_line" ]; then
+  ok "wrap runs after autofill"
+else
+  bad "wrap runs after autofill (wrap=$wrap_line autofill=$autofill_line)"
+fi
+
+
 printf 'spawn-worker route-suggest tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
