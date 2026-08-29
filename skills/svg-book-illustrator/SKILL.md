@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.0"
+version: "1.9.1"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
@@ -201,7 +201,7 @@ python3 scripts/scan_consistency.py --book-root <书仓根目录> --report <报�
 - **身份**：`data-figure-id` 缺失（soft，历史不回填口径）/ 格式不安全 / `fig-template-*` 落稿 / 跨图重复
 - **sidecar 同步**：canonical 内联 SVG ↔ `manuscript/**/*_images/<stem>-svg-N.svg` 派生缓存内容一致（T261 口径）
 
-历史口径：对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记不要求回改（与本 skill「不回改历史书稿」既有口径一致）。与 BLOCKED Task-001（producer 冲突）/ Task-002（shape containment）互不侵入：本 scan 不改 producer、不做包含几何判定。
+历史口径：对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记不要求回改（与本 skill「不回改历史书稿」既有口径一致）。v1.9.1 新增 `--exemptions <台账.json>`:逐项豁免已裁决历史项(键=file/svg_index/rule_id),命中不计 findings、未命中报警防台账漂移、坏台账 fail-closed;整规则豁免被有意排除——新图违规永远照报。与 BLOCKED Task-001（producer 冲突）/ Task-002（shape containment）互不侵入：本 scan 不改 producer、不做包含几何判定。
 
 ---
 
