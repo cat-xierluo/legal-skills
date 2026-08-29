@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.9.4] - 2026-08-29
+
+### 修复
+
+- **route_suggest 自动补选不注入 provider env（实测抓出）**：补选只填 API_PROVIDER（lease 计数 + METADATA），worker 仍是裸 `claude` 继承用户全局默认 provider——与 lease 计数的 lane 不一致，且实测 MiniMax 后端对继承配置报 400 modelCode 不存在。现在补选成功且命令为 backend 默认值（用户未显式 `--command`）时，`route_suggest_wrap_command` 用 `claude-provider-env.sh` 自动包装：注入 `config/<provider>.settings.json` 的 env + `--model`（取 settings 的 `env.ANTHROPIC_MODEL`）+ `--permission-mode auto`；settings 缺失/model 解析失败保持裸命令（fail-open 不阻断 spawn）。新增 stderr 标记行 `ROUTE_SUGGEST_ENV`。端到端实测：L0 补选 minimax-M3 → worker 以 MiniMax-M3[1M] 真实完成文件创建任务。
+- 测试 16→23 断言（wrap 四场景：注入/显式命令不包装/settings 缺失保持裸命令/非 claude-code 跳过 + 接线顺序断言）；修复 helper 内 `$model（`全角标点在 set -u 下 unbound 的经典坑（memory 已有先例）。
+
+
 ## [2.9.3] - 2026-08-29
 
 ### 新增
