@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [v1.9.1] - 2026-08-29
+
+### 新增
+
+- `scan_consistency.py --exemptions <台账.json>`(schema_version 1):**逐项豁免已裁决历史 findings**——键=(file, svg_index, rule_id),命中项不计入 findings/退出码/报告,汇总区单列「命中 N/M」;**未命中条目 stderr 报警**(对应 finding 已消失,台账漂移应清理);坏 JSON/缺字段/未登记 rule_id 一律 exit 2 fail-closed。整规则豁免被有意排除:新图违规永远照报。落地背景:书仓作者 2026-08-29 对 W1 两组历史余项(SYNTAX-05×58 / PADDING-01×85)裁决「接受登记」,本能力是该裁决的机械化载体。
+- 测试 +3(命中移除并上报 used / 未命中保留 finding 且 used 为空 / 坏 schema 与未知 rule_id fail-closed),套件 13/13 通过;全书端到端:348 findings → 205(hard 149→91),台账命中 143/143 无漂移。
+
 ## [v1.9.0] - 2026-08-28
 
 > **发布状态：候选。** 本地实现与 fixture 验证完成，待独立 PR / PM 验收后本地 FF merge；不得据此宣称已发布。

@@ -171,3 +171,63 @@ class ScanFileSidecarTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ExemptionLedgerTest(unittest.TestCase):
+    """--exemptions 逐项豁免台账（v1.9.1）：命中不计 findings，未命中报警，坏台账 fail-closed。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.ms = self.root / 'manuscript'
+        self.ms.mkdir()
+        self.md = self.ms / 'ch99-测试图.md'
+        # sidecar 不一致场景：canonical 无尾换行、sidecar 有 → SIDECAR-01
+        self.md.write_text(COMPLIANT_SVG + '\n\n**图 99-1：测试图**\n', encoding='utf-8')
+        self.sidecar_dir = self.ms / 'ch99-测试图_images'
+        self.sidecar_dir.mkdir()
+        (self.sidecar_dir / 'ch99-测试图-svg-0.svg').write_text(
+            COMPLIANT_SVG.replace('识别场景', '已被改动'), encoding='utf-8')
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _ledger(self, root: Path, items: list) -> Path:
+        import json
+        p = root / 'exemptions.json'
+        p.write_text(json.dumps({'schema_version': 1, 'items': items}, ensure_ascii=False), encoding='utf-8')
+        return p
+
+    def test_exempted_finding_removed_and_used_key_reported(self) -> None:
+        from scan_consistency import apply_exemptions, load_exemptions
+        ledger = self._ledger(self.root, [
+            {'file': 'manuscript/ch99-测试图.md', 'svg_index': 0, 'rule_id': 'SIDECAR-01',
+             'reason': '作者裁决接受(2026-08-29)', 'adjudicated': '2026-08-29'}])
+        table = load_exemptions(ledger)
+        self.assertEqual(len(table), 1)
+        fs = [scan_file(self.md, self.root, padding=40, arrow_gap=8, id_registry={})]
+        self.assertEqual([f.rule_id for f in fs[0].sidecar_findings], ['SIDECAR-01'])
+        used = apply_exemptions(fs, table)
+        self.assertEqual(used, {('manuscript/ch99-测试图.md', 0, 'SIDECAR-01')})
+        self.assertEqual(fs[0].sidecar_findings, [])
+
+    def test_non_matching_entry_keeps_finding_and_marks_unused(self) -> None:
+        from scan_consistency import apply_exemptions, load_exemptions
+        ledger = self._ledger(self.root, [
+            {'file': 'manuscript/ch99-测试图.md', 'svg_index': 3, 'rule_id': 'SIDECAR-01'}])
+        table = load_exemptions(ledger)
+        fs = [scan_file(self.md, self.root, padding=40, arrow_gap=8, id_registry={})]
+        used = apply_exemptions(fs, table)
+        self.assertEqual(used, set())                     # 未命中 → 台账漂移信号
+        self.assertEqual([f.rule_id for f in fs[0].sidecar_findings], ['SIDECAR-01'])
+
+    def test_bad_schema_or_unknown_rule_fail_closed(self) -> None:
+        from scan_consistency import load_exemptions
+        bad = self.root / 'bad.json'
+        bad.write_text('{"schema_version": 2, "items": []}', encoding='utf-8')
+        with self.assertRaises(SystemExit):
+            load_exemptions(bad)
+        unknown = self._ledger(self.root, [
+            {'file': 'x.md', 'svg_index': 0, 'rule_id': 'NOPE-99'}])
+        with self.assertRaises(SystemExit):
+            load_exemptions(unknown)

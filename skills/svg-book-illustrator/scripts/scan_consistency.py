@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 import sys
@@ -717,6 +718,59 @@ def build_report(files: list[FileScan], args_ns) -> str:
     return '\n'.join(lines)
 
 
+def load_exemptions(path: Path) -> dict[tuple[str, int, str], dict]:
+    """加载逐项豁免台账（JSON）。
+
+    schema_version 1：items: [{file, svg_index, rule_id, reason?, adjudicated?}]
+    键 = (file, svg_index, rule_id)；file 为 md 相对 book-root 路径，svg_index 0 基。
+    逐项豁免而非整规则豁免：新图违规永远照报，豁免只覆盖已裁决的历史项。
+    """
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f'豁免台账不可读（fail-closed）：{path}：{e}', file=sys.stderr)
+        raise SystemExit(2)
+    if data.get('schema_version') != 1 or not isinstance(data.get('items'), list):
+        print(f'豁免台账结构不符 schema_version 1：{path}', file=sys.stderr)
+        raise SystemExit(2)
+    table: dict[tuple[str, int, str], dict] = {}
+    for it in data['items']:
+        try:
+            key = (str(it['file']), int(it['svg_index']), str(it['rule_id']))
+        except (KeyError, TypeError, ValueError):
+            print(f'豁免条目缺字段/类型错误：{it!r}', file=sys.stderr)
+            raise SystemExit(2)
+        if it['rule_id'] not in RULES:
+            print(f'豁免条目 rule_id 未登记：{it["rule_id"]}', file=sys.stderr)
+            raise SystemExit(2)
+        table[key] = it
+    return table
+
+
+def apply_exemptions(files: list, table: dict[tuple[str, int, str], dict]) -> set[tuple[str, int, str]]:
+    """把命中的豁免项从各文件 findings 中移除，返回实际命中的键集合。"""
+    used: set[tuple[str, int, str]] = set()
+    for fs in files:
+        for r in fs.results:
+            kept = []
+            for f in r.findings:
+                k = (f.file, f.svg_index, f.rule_id)
+                if k in table:
+                    used.add(k)
+                else:
+                    kept.append(f)
+            r.findings = kept
+        kept_side = []
+        for f in fs.sidecar_findings:
+            k = (f.file, f.svg_index, f.rule_id)
+            if k in table:
+                used.add(k)
+            else:
+                kept_side.append(f)
+        fs.sidecar_findings = kept_side
+    return used
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog='scan_consistency.py',
@@ -728,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--arrow-gap', type=float, default=8.0, help='箭头悬空判定阈值 px（默认 8，style-guide §5.5.3）')
     parser.add_argument('--fail-on', choices=('none', 'hard', 'any'), default='none',
                         help='按 findings 置非零退出码：none=总为0（只报告），hard=存在 hard，any=存在任意')
+    parser.add_argument('--exemptions', help='逐项豁免台账 JSON 路径（schema_version 1；命中项不计 findings，未命中条目报警防台账漂移）')
     args = parser.parse_args(argv)
 
     if not args.book_root:
@@ -738,9 +793,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f'书仓根目录不存在：{book_root}', file=sys.stderr)
         return 2
 
+    exemption_table: dict[tuple[str, int, str], dict] = {}
+    if args.exemptions:
+        exemption_table = load_exemptions(Path(args.exemptions).expanduser())
+
     md_files = discover_canonical(book_root)
     id_registry: dict[str, str] = {}
     files = [scan_file(p, book_root, args.padding, args.arrow_gap, id_registry) for p in md_files]
+
+    used_keys: set[tuple[str, int, str]] = set()
+    if exemption_table:
+        used_keys = apply_exemptions(files, exemption_table)
 
     all_findings: list[Finding] = []
     for fs in files:
@@ -758,6 +821,17 @@ def main(argv: list[str] | None = None) -> int:
         for rid in sorted(by_rule, key=lambda r: (-by_rule[r], r)):
             name, sev, _ = RULES[rid]
             print(f'  {rid}({sev}) {name}: {by_rule[rid]}')
+
+    if exemption_table:
+        unused = set(exemption_table) - used_keys
+        print(f'豁免台账：命中 {len(used_keys)}/{len(exemption_table)} 项'
+              f'（已裁决历史项,不计 findings;裁决日分布见台账）')
+        if unused:
+            print(f'⚠️ 未命中豁免条目 {len(unused)} 项（对应 finding 已消失或图已改,台账漂移,应清理）：',
+                  file=sys.stderr)
+            for k in sorted(unused):
+                it = exemption_table[k]
+                print(f'  - {k[2]} {k[0]} svg#{k[1]}（{it.get("adjudicated", "?")} 裁决）', file=sys.stderr)
 
     if args.report:
         report_path = Path(args.report)
