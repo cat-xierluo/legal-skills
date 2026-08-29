@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.9.3] - 2026-08-29
+
+### 新增
+
+- **额度感知路由（quota-aware routing）**：PM 派单前按各模型 lane 的余量/窗口倒计时/健康常态评分推荐 provider，替代"任务卡写死 provider"的静态路由。`scripts/route_suggest.py`（python3 零依赖纯决策器）：中立契约 schema `quota-aware-routing.summary.v1`（产出方不限：定时探针/网关/手写均可）、`--tier/--scene/--task-card-path/--config` 参数、退出码约定（ok/locked_by_card/not_configured=0，degraded/all_lanes_stopped=1 供调用方降级）。评分语义：fuel 型 lane 按余量为主分 + 临期（resets_at 倒计时 < urgency_window 且余量高于判停线）加 0-50 分临期权重（urgency=high 提示 PM 扩大该 tier 本波任务量）；reservoir 型（免费/积分、并发敏感）仅 `--scene` 匹配 reservoir_scenes 时入链且并发 cap=1；`resets_at` 早于当前时刻标 pending_refresh 退静态序兜底；燃料 lane 全判停落 tier_policy.default。12 个单测覆盖降级/信号/评分全路径。
+- **spawn-worker 集成兜底**：新增 sourced helper `scripts/spawn-worker-route-suggest.sh`（函数 route_suggest_autofill_provider，接线锚点在 provider lease 消费 API_PROVIDER 之前）；`--api-provider` 缺省 + 个人配置 `quota_aware_routing.enabled` 且 backend 为 claude-code 时按 `ROUTE_SUGGEST_TIER`（缺省 L1）自动补选，stderr 输出 `ROUTE_SUGGEST_AUTO` 行；route_suggest 任何失败（not_configured/degraded/崩溃）不改道不 fail，走既有默认链路；显式 `--api-provider` 永远优先（人工锁定 > 动态路由）。16 断言集成测试 + 现有 spawn-worker 系列 6/6 回归通过。
+- **个人配置模板 `quota_aware_routing` 段**（`config/orchestration-personal.example.json`）：enabled 默认 false（不配即无感）、summary_path 指向中立 schema v1 余量 JSON、lanes（fuel/reservoir + providers + concurrency_cap）、tier_policy（各 tier 候选链 + default 保底）、reservoir_scenes。模型池快照全在 gitignored 个人配置，skill 代码与文档零具体模型名。
+- **`references/16-model-capability-profile.md` 模型能力×任务匹配档案**（公开知识层）：六大家族（GLM/MiniMax/DeepSeek/Kimi/Qwen/豆包）画像（档位/强项/弱项/典型任务正反例/部署形态中性描述/当期版本快照+"以你实际可用版本为准"）；fuel/reservoir 两类 lane 派单哲学；填 tier_policy 的五步指引；程序永不读取（纯知识文档，改它对运行时零风险）。
+- **SKILL.md §9.1 额度感知路由小节**：派单清单固化 route_suggest 必跑步骤、urgency=high 扩量语义、人工锁定优先、降级路径、能力档案指引。
+
 ## [2.9.2.1] - 2026-08-29
 
 - **守夜 v2 实战协议固化**(Task-080):新模板 `scripts/night-revive-timer.sh`(7 参数 fail-closed+`--repeat/--until` 打摆复活+`nohup caffeinate -dis` 脱链)与 `templates/workers.tsv.example`;SKILL.md §4.6 增四铁律(通道自测/双读核活法含游标推进法/硬死vs拥塞诊断树/task-list 完成权威)。
