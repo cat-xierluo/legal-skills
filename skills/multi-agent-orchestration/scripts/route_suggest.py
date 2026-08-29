@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import sys
 from typing import Any
 
@@ -188,8 +189,48 @@ def _score_and_pick(qar, summary, tier, scene, current, stale):
             "evidence": evidence}
 
 
+def _read_json(path: str) -> dict[str, Any] | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _card_provider(task_card_path: str) -> str | None:
+    card = _read_json(task_card_path)
+    if not card:
+        return None
+    value = card.get("provider")
+    return str(value).strip() if isinstance(value, str) and value.strip() else None
+
+
 def main(argv: list[str] | None = None) -> int:
-    raise NotImplementedError("Task 4 实现")
+    parser = argparse.ArgumentParser(description="额度感知路由建议器（输出 JSON）")
+    parser.add_argument("--tier", required=True,
+                        help="任务档位：L0/L1/L2/multimodal（或自定义，缺省走 default）")
+    parser.add_argument("--scene", default=None, help="场景标签（reservoir lane 仅 scene 匹配时入链）")
+    parser.add_argument("--task-card-path", default=None, help="任务卡 JSON 路径（显式 provider 直通）")
+    parser.add_argument("--config", default=None, help="个人配置 JSON（默认环境变量或 skill config）")
+    args = parser.parse_args(argv)
+
+    config_path = (args.config
+                   or os.environ.get("MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG")
+                   or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "..", "config", "orchestration-personal.json"))
+    config = _read_json(config_path) or {}
+
+    qar = _merged(config)
+    summary = _read_json(qar.get("summary_path", "")) if qar else None
+
+    card_provider = _card_provider(args.task_card_path) if args.task_card_path else None
+    decision = build_route_decision(config, summary, args.tier,
+                                    scene=args.scene, card_provider=card_provider)
+    json.dump(decision, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")
+    # 退出码：ok/locked_by_card/not_configured=0；degraded/all_lanes_stopped=1（调用方自行降级）
+    return 0 if decision.get("status") in ("ok", "locked_by_card", "not_configured") else 1
 
 
 if __name__ == "__main__":
