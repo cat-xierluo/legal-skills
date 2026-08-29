@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.9.2"
+  version: "2.9.3"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -363,6 +363,24 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 - `references/07-qoderwork-cli-worker.md`
 - `references/08-codebuddy-cli-worker.md`
 - `references/09-zcode-cli-worker.md`：zcode CLI worker 接入（无 TUI，driver 模式；协议/凭证/额度）
+
+### 9.1 额度感知路由（可选，个人配置启用）
+
+个人配置 `quota_aware_routing.enabled=true` 时，PM 组卡/派单前必跑：
+
+```bash
+python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--task-card-path ...]
+```
+
+- 输出 JSON 的 `provider` 填入任务卡 / `--api-provider`；`urgency=high` 表示
+  某 lane 窗口临期且余量充足，PM 可扩大该 tier 本波任务量（多组卡消耗）。
+- 任务卡显式 `provider` 字段永远优先（人工锁定 > 动态路由）。
+- `spawn-worker.sh` 在 `--api-provider` 缺省且配置启用时自动兜底调用
+  （`ROUTE_SUGGEST_TIER` 传入 tier，缺省 L1）。
+- 未配置 / summary 读不到 → `not_configured` / `degraded`，走静态
+  `main_force.task_routing`，不 fail、不静默改道。
+- 模型能力 × 任务匹配的判断方法见 `references/16-model-capability-profile.md`；
+  lanes/tier_policy 在个人配置维护，本 skill 不承载任何具体模型选择。
 
 ## 10. 依赖
 
