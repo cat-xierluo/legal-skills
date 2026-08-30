@@ -190,6 +190,69 @@ else
   bad "existing .runtime was replaced"
 fi
 
+echo "Case 14: --deps-mode local skips the symlink and prints the local-install hint"
+PROJECT_DIR="$TMP_ROOT/project"
+DEPS_MODE="local"
+AUTHORIZED_INSTALL_COMMANDS=()
+WORKTREE="$TMP_ROOT/deps-local"
+mkdir -p "$WORKTREE"
+local_mode_output=$(ensure_worktree_deps)
+if [ ! -e "$WORKTREE/node_modules" ] && [ ! -L "$WORKTREE/node_modules" ] \
+  && printf '%s\n' "$local_mode_output" | grep -q "SPAWN_WORKER_DEPS_LOCAL"; then
+  ok "local mode leaves node_modules absent and prints SPAWN_WORKER_DEPS_LOCAL"
+else
+  bad "local mode created a symlink or missed the SPAWN_WORKER_DEPS_LOCAL hint"
+fi
+
+echo "Case 15: broken symlink still fails closed under --deps-mode local"
+WORKTREE="$TMP_ROOT/deps-local-broken"
+mkdir -p "$WORKTREE"
+ln -s "$TMP_ROOT/missing-node-modules" "$WORKTREE/node_modules"
+if ensure_worktree_deps >/dev/null 2>&1; then
+  bad "local mode accepted a broken node_modules symlink"
+else
+  ok "broken symlink blocks spawn under local mode"
+fi
+
+echo "Case 16: auto upgrades to local when --allow-install-command is authorized"
+DEPS_MODE="auto"
+AUTHORIZED_INSTALL_COMMANDS=("pnpm add left-pad")
+WORKTREE="$TMP_ROOT/auto-local"
+mkdir -p "$WORKTREE"
+auto_local_output=$(ensure_worktree_deps)
+if [ ! -e "$WORKTREE/node_modules" ] \
+  && printf '%s\n' "$auto_local_output" | grep -q "SPAWN_WORKER_DEPS_MODE_AUTO_LOCAL"; then
+  ok "auto selects local when install commands are authorized"
+else
+  bad "auto did not upgrade to local (symlink created or inference line missing)"
+fi
+
+echo "Case 17: auto without install commands keeps the legacy symlink"
+DEPS_MODE="auto"
+AUTHORIZED_INSTALL_COMMANDS=()
+WORKTREE="$TMP_ROOT/auto-symlink"
+mkdir -p "$WORKTREE"
+ensure_worktree_deps >/dev/null
+if [ -L "$WORKTREE/node_modules" ] \
+  && [ "$(cd "$WORKTREE/node_modules" && pwd -P)" = "$(cd "$PROJECT_DIR/node_modules" && pwd -P)" ]; then
+  ok "auto without install commands keeps legacy symlink behavior"
+else
+  bad "auto changed legacy symlink behavior"
+fi
+
+echo "Case 18: explicit --deps-mode symlink overrides authorized install commands"
+DEPS_MODE="symlink"
+AUTHORIZED_INSTALL_COMMANDS=("pnpm add left-pad")
+WORKTREE="$TMP_ROOT/explicit-symlink"
+mkdir -p "$WORKTREE"
+ensure_worktree_deps >/dev/null
+if [ -L "$WORKTREE/node_modules" ] \
+  && [ "$(cd "$WORKTREE/node_modules" && pwd -P)" = "$(cd "$PROJECT_DIR/node_modules" && pwd -P)" ]; then
+  ok "explicit symlink wins over authorized install commands"
+else
+  bad "explicit symlink did not force the symlink"
+fi
+
 echo ""
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]
