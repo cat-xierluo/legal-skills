@@ -40,8 +40,8 @@
 | 2026-08-26 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.4 | **弱模型前向实测与账本 fail-fast**：GLM 三门真实课程首轮均通过 14/14 领域门禁、主模型语义评分 90—93；第二轮配额失败严格记为 0/3，并据完整失败样本新增生成前素材账本预检，统一 include/skip 的连续 `MAT-*` 编号、阻断 `SKIP-*` 平行命名；同步保留个人判断、事故转述和产品效果的认识论边界，稳定性继续标记 `NOT_VERIFIED` |
 | 2026-08-26 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.8.1  | **Wave Autopilot 持久性边界与整改基线**：明确 session recurring cron 只提供 L1 live-session fast path；新增跨会话 runtime ledger、PM lease/fencing、幂等 reconcile、durable scheduler/soft park、shared-context 单写者和八项故障注入设计，并分别标记 L2 controller 与 L3 scheduler 未实现状态 |
 | 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.3.5  | **全书本地图片路径修复**：`--book` 在合并前按各章 Markdown 自己的目录重定位 Markdown/HTML 本地相对图片，含空格、URL 编码和可选标题的路径均可嵌入；单章与远程图片行为不变 |
-| 2026-08-25 | 新增   | [industry-research-report](skills/industry-research-report/)           | v0.7.0 | **行业法律调研报告（获客端）**：**v0.7.0 全面精简版式（Less is more：页眉只留报告编号、页脚只留页码，砍掉横线/kicker/多列冗余装饰）**；输入 industry/region/focus/depth，输出精排 A4 PDF 行业法律调研报告；蓝皮书体例（深蓝 #1B3C59 + 金色 #D4AF37 + 白色页面）+ 4 个封面变体（顶金带+底金边+REPORT NO. 徽章工艺感）+ 5 个律师常见调色板；**v0.6.2 书籍连续流改造**（DEC-IR-019）：放弃杂志固定画布裁切，改 @page margin box 跨页 header/footer + 章节自然流动不截断 + 大边距（天头80px/地脚60px/左右56px≈21/16/15mm）；**v0.6.1 杂志Studio book-style 排版优化**（加大字号 IR 22/12pt + 行高 2.0）；**v0.6.0 三连环视觉修复**（封面 CSS 注入 / px 单位 / 按 H2 拆章）；**v0.5.0 report_kind 字段 + 正文设计系统差异化路由**（IR 蓝皮书感 vs WB 通讯感，12 维度全表）；内置 report-profile.md 个性化配置 + 首启向导；行业特定信源映射内置 20 个高频行业；数据源走企查查 MCP + 网络检索 5 级信源优先级；md 基底 → jinja2 → Playwright + Chrome headless，一键出精排 A4 PDF |
-| 2026-08-25 | 新增   | [weekly-legal-briefing](skills/weekly-legal-briefing/)                 | v0.6.0 | **定时法律研报（留存端）**：**v0.6.0 继承 v0.7.0 精简版式（页眉页脚只留编号/页码）**；配置一次，定期自动生成行业/法律研报草稿（如"科技型制造企业 周报"）；**v0.5.2 书籍连续流继承**（Skill 1 v0.6.2：@page margin box 跨页 header/footer + 章节自然流动不裁切 + 大边距）；**v0.5.0 三连环视觉修复同步**；**v0.4.0 新增 2 个专属轻量封面 (W1-minimal / W2-tag-bar) + 正文设计系统强烈差异化**（字号小 + 灰色细线 + 单栏目录，与 IR 蓝皮书感拉开）；白名单信源制（白名单外默认丢弃）+ 案例必带案号 + 案号裁判文书网回查；输出文件一律带 `_DRAFT` 标记，**永不自动外发**（硬约束，发布动作物理上留给人工）；渲染管线 symlink 复用 industry-research-report，避免双份维护；附 WorkBuddy / OpenClaw cron / GitHub Actions 三平台部署说明 |
+| 2026-08-30 | 更新   | [legal-industry-report](skills/legal-industry-report/)               | v1.1.0 | **法律专业正式行业报告（月度/季度）**：增加 `legal-` 领域前缀，统一法律研报产品命名；继续面向公开展示与广泛分发，保留行业全景、规则包、证据账本和机构出版物式 PDF。 |
+| 2026-08-30 | 更新   | [legal-client-brief](skills/legal-client-brief/)                     | v1.1.0 | **法律专业客户日常简报（每日/每周/事件）**：增加 `legal-` 领域前缀，继续服务既有客户日常触达；保留完整简报、朋友圈和公众号三件套及 DRAFT 人工发布门禁。 |
 | 2026-08-25 | 更新   | [md2word](skills/md2word/)                                             | v1.2.6  | **Word 出版逃逸修复**：多列长表头受正文区硬预算约束，`tblW`、grid 与单元格宽度统一；普通及显式居中表题取消缩进且保留文字样式；引用块 `[^label]` 正确生成原生 Word 脚注，不再显示字面 marker |
 | 2026-08-25 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.0 | **长转录稿细粒度守恒**：新增确定性 `source-index.json`，每个内容块必须 include 或受控 skip；素材在大纲阶段预承诺具体覆盖词，生成后以真实正文摘录兑现，防止弱模型用完整提纲遮蔽精华漏失；26 类故障注入 + 5 类索引回归通过，并用 18.7 万字节、135 张图的真实课程完成双轮前向测试 |
 | 2026-08-24 | 更新   | [course-generator](skills/course-generator/)                           | v2.8.1 | **课程产物契约化**：新增 `course-manifest.json`，以稳定 SRC/MAT/IMG 关系绑定来源、素材、章节和图片；标准库验证器精确检查文件、素材映射与图片集合/目标/顺序，13 类正反例覆盖旧版漏报；长材料改用索引化两遍流程，生成不再自动归档，并收窄与转录纠错、讲课复盘、成书 Skill 的触发边界 |
@@ -269,6 +269,24 @@
 <td style="text-align:center">v0.3.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-proposal-generator-0.3.1.zip">下载</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/legal-industry-report/"><strong>legal-industry-report</strong></a></td>
+<td>专业·行业研究</td>
+<td style="word-break:break-word">面向公开展示与广泛分发的月度/季度行业报告：通过行业规则包组织市场、产业链、政策监管、企业、法律风险与服务机会，并生成可追溯的正式报告包</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v1.1.0</td>
+<td style="text-align:center">待发布</td>
+<td>律师复核前为 PUBLIC_REVIEW</td>
+</tr>
+<tr>
+<td><a href="skills/legal-client-brief/"><strong>legal-client-brief</strong></a></td>
+<td>专业·行业追踪</td>
+<td style="word-break:break-word">面向既有客户的每日、每周或事件增量追踪：在白名单内生成完整简报、朋友圈和公众号三件套，校验窗口、案例、跨渠道事实与 A4 PDF</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v1.1.0</td>
+<td style="text-align:center">待发布</td>
+<td>不自动改名或外发</td>
 </tr>
 <tr>
 <td><a href="skills/legal-text-format/"><strong>legal-text-format</strong></a></td>
