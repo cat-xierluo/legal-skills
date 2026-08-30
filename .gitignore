@@ -56,11 +56,14 @@ templates/
 skills/legal-proposal-generator/config/team-config.md
 skills/legal-proposal-generator/config/images/
 
-# industry-research-report / weekly-legal-briefing 个性化配置（含真实律所抬头/联系方式/客户画像/信源白名单）
-skills/industry-research-report/config/report-profile.md
-skills/weekly-legal-briefing/config/report-profile.md
-skills/weekly-legal-briefing/config/audience-profile.md
-skills/weekly-legal-briefing/config/sources-whitelist.txt
+# legal-industry-report / legal-client-brief 个性化配置（含真实律所抬头/联系方式/客户画像/信源白名单）
+skills/legal-industry-report/config/report-profile.md
+skills/legal-industry-report/config/industry-rules.local.yaml
+skills/legal-industry-report/config/source-blacklist.local.txt
+skills/legal-client-brief/config/report-profile.md
+skills/legal-client-brief/config/audience-profile.md
+skills/legal-client-brief/config/sources-whitelist.txt
+skills/legal-client-brief/config/industry-rules.local.yaml
 
 # User profile - ignore personal data but keep example
 **/reference/user-profile.md
