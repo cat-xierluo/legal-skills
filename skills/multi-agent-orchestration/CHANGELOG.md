@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.10.1] - 2026-08-30
+
+### 改进
+
+- **Orca 高频主路径纠偏（Task-110 / DEC-135）**：明确日常 worktree 与 terminal/session 统一优先由 Orca Orchestration 管理；纯终端 tmux 降为 Orca 不可用、用户明确要求或兼容性回归时的回退，不再作为当前优先 spike。
+- **PR 先行、本地集成分流**：PM 收口先创建或接管唯一匹配 PR，冻结精确 base/head SHA、diff、checks 与 review，再在最新 main 上建立本地候选并复跑门禁；无保护且获授权时本地集成推入 main，有 branch protection/required checks 时本地只验收、最终仍走 GitHub merge。PR-first 只改变顺序，不扩张 push/merge/close 权限；现有 `pm-closeout.sh` 行为未改，Task-097 完成前选择本地集成必须走手工分段流程。
+
+### 文档完善
+
+- `references/14-pm-orchestrate.md` 新增重复 PR 审计、`LOCAL_INTEGRATE / REMOTE_PR_MERGE / VALIDATE_ONLY` 三态和 Monorepo 禁止直接 feature merge 的边界；明确 Task-097 自动门禁落地前仍需手工审计，不把文档合同误报成脚本能力。
+- `references/15-wave-autopilot.md` 同步 PR-first 本地/远端分流并承接守夜 v2 细节；`references/10-parallel-lessons.md` 将早期 tmux 默认结论标为历史阶段，避免旧 reference 反向覆盖 Orca-first 当前规则。`SKILL.md` 入口由 515 行收敛至 490 行。
+- Task-097 由 `DRAFT` 升为 `READY` 并补齐范围、非目标、确定性/真实验收；Task-003 降为按需 `DRAFT`，Task-064 保留环境实证轨道。
+
+### 技术优化
+
+- 清除发布目录中的忽略态 `scripts/.DS_Store`；`test-pm-reauthorize.sh` 不再用 `|| true` 吞掉 fake terminal 清单过滤的真实错误，只把 `grep=1`（过滤后为空）作为合法结果，其他退出码保持失败。
+
+## [2.10.0] - 2026-08-30
+
+### 新增
+
+- **Wave Autopilot L2 持久 runtime core（Task-066）**：新增零第三方依赖的 `autopilot-controller.py` / `autopilot_runtime.py`，在 Git common dir 保存版本化 state、write-ahead event、PM lease 与递增 fencing token；提供 `init/acquire/renew/status/reconcile/tick`，每次 tick 最多执行一个通过精确 target、digest、token 和 receipt 绑定的外部 mutation。`status` 保持只读，event→state 与 lease→state 单步崩溃间隙可审计恢复，未来 schema、身份漂移、脏/重复/unknown 事实均失败关闭。
+- **可信 facts collector**：新增 `autopilot-facts.py`，将 immutable manifest 与 runtime request 分离；固定可执行文件/配置/证据 digest，只读采集 Orca、Git、GitHub、project 与 provider 事实。Dispatch/PR 动态 ID 只能由 ledger 提供或按 task、branch/base/head 唯一发现，歧义、陈旧 verification/writeback、check/review/head 漂移不得进入 mutation。
+
+### 修复
+
+- **Task-093 正式收口**：PM closeout 冻结 worker base/tip，把 worker 多提交的 Makefile 净补丁精确重放到每一轮最新 `origin/main` 整文件；拒绝 mode/stage/fuzz/三方或语义冲突。main 在验证期间前移会重新合并并重跑同一 argv 门禁，三轮仍移动或验证改变 Git 状态时停止，不进入 push/PR。
+- **Autopilot 幂等与接管加固**：已记录 receipt/started intent 在外部事实精确收敛前不会被暂态 observe/hard-park 覆盖；planned intent 接管后重新 fencing/revalidate，facts deadline 过期时先持久化 `ready=false` 并以零 adapter 调用拒绝 tick，必须 fresh reconcile。merge 强制绑定当前 head 的 verification、gate/evidence digest、required checks/approvals，幂等键不包含会波动的实际审批数；mutation adapter 在首个可执行 intent 才按 canonical path + digest 永久封印。
+- **恢复探针非法 JSON 失败关闭（Task-109）**：`recover-unconfigured-worker.sh` 不再把 `dispatch-show` / `terminal read` 的命令失败、损坏 JSON 或非法结构折叠成空事实；现在会在 terminal send/worker-start 前输出稳定 `RECOVER_REASON` 与 manual-required。合法无 Dispatch 和空 tail 保持原语义，恢复矩阵 56/56。
+
+### 技术优化
+
+- `test-autopilot-controller.py` 24/24 覆盖双 PM、接管、WAL/lease 崩溃间隙、进程锁、过期计划零调用、七类 mutation 收敛、lost receipt/timeout、adapter 封印、敏感字段拒绝和损坏/漂移失败关闭；`test-autopilot-facts.py` 21/21 覆盖动态 Dispatch/PR 生命周期、多任务子集、只读命令、digest、freshness、歧义与进程组超时；`test-pm-closeout.sh` 36/36 覆盖真实 throwaway Git 冲突与 main 移动。
+- 能力边界仍为 `L2 / CROSS_SESSION_RECOVERABLE` controller core。真实 Orca/GitHub mutation adapter 端到端、真实断电后的 fsync/rename 行为继续标记 `NOT_VERIFIED`；Task-067 外部 scheduler 未实现，继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`。
+
+## [2.9.7] - 2026-08-30
+
+### 修复
+
+- **reauthorize 支持 dispatched 等待态 worker（Wave 10 T3，Task-081）**：原实现只适用 task 已 failed/blocked 的 worker——escalation 等待中（task 仍 dispatched）执行 reauthorize 被 `TASK_REUSED` 拒绝且泄漏 2 个 terminal（2026-08-30 实测）。现新增 Step 0 预检：dispatched 且有未消费 escalation/question 消息时先 reply 消费等待（resume 文本即 reply body）再走既有重授权链；terminal 生命周期防泄漏——新终端建立后任何中间失败（复位/重注册/METADATA 改路由失败）先关新终端保留旧终端，幂等重复调用零累积；TASK_REUSED 硬限制场景输出 runbook #18 manual-recovery 指引 + settle 后重跑选项而非裸拒绝。新增 `test-pm-reauthorize.sh` 55 用例矩阵（dispatched±消息/failed/blocked/completed/幂等/新终端失败回滚），lifecycle 回归 10 用例全绿。
+
+- **route_suggest stale fail-closed（Wave 10 T1）**：额度快照超过 freshness 窗口或缺失 `generated_at` 时不再基于过期 fuel 余量推荐 lane——输出降级 `stale_degraded/degraded` 且 `lane/provider` 为空，新增 `refresh_hint` 指示先刷新 `summary_path` 快照再派单；reservoir lane 保留推荐但 evidence 注明快照过期。spawn-worker route 兜底消费点同步适配非 ok 状态。测试矩阵覆盖 fresh/stale/missing generated_at/no-lanes 四态（22 单测 + 27 shell 测试，PM 合并树复跑通过）。触发事故：2026-08-29 FaroPDF 派单读到 3 小时陈旧快照，报 83% 实际 9%。
+
+### 新增
+
+- **spawn-worker `--deps-mode` 依赖模式选择（Wave 10 T4，G31）**：新增 `auto|symlink|local` 三态（默认 auto 与既有行为完全兼容）。`local`：不软链主仓 node_modules，打印 `SPAWN_WORKER_DEPS_LOCAL` 提示（worker 首验前本地 install，授权走既有 install-guard 通道）；`auto` 智能升级：本次 spawn 显式传 `--allow-install-command`（任务会改依赖）时自动选 local 并打印推断理由。断链 fail-closed 与 Python runtime-symlink 语义零变化。测试 18+27 全绿（PM 合并树复跑，含「显式 symlink 优先于 install 授权推断」用例）。触发事故：2026-08-30 FaroPDF 三连坑——软链拒 pnpm add / vite server.fs.allow 拒软链路径 / vitest 全挂，PM 每次 spawn 后被迫手工重建。
+- **`recover-unconfigured-worker.sh` 自动恢复（Wave 10b T5）**：spawn 后 terminal 里 agent 未起（`agent_unconfigured` / no recognized agent 家族，实测约 20% 概率）时，一条命令完成原 PM 手工三步——读 Session Context `METADATA.runtime.command` 重注入启动命令 → TUI 就绪 → 按 Task-092 基建 `register --reset-failed` 重绑 task；全程幂等（重复调用零新 terminal、零重复 register），不可恢复场景（terminal 已死/状态不明）显式 `manual-required` 指引而非静默重试。测试 30 用例四态矩阵（正常/幂等/terminal 死/manual-required）+ lifecycle 回归 10 用例全绿。触发事故：2026-08-30 五个 worker 中两度手工恢复，每次约 10 分钟。
+
+## [2.9.6] - 2026-08-30
+
+### 改进
+
+- **额度转可消费资产（Task-102/108，DEC-133）**：新增派发消费者合同（消费者、改变的决策/门禁、消费期、过期条件、可观察验收、资源 owner）；`DRAFT` 不再自动派 docs-only，额度只在已成立任务之间路由，`urgency=high` 不再允许扩张任务源或制造 quota-burn 工作。
+- **验收背压与合理并发**：默认全局/每波 worker ≤3、research/docs ≤1；PM 验收积压时停止扩波，探索窗口必须显式且限期。Autopilot 复盘改报消费者兑现、状态迁移、验收债务和进程净增量，不再用 PR 数或 value/filler 自评分证明价值。
+- **外部进程生命周期**：worker prompt 与收口 Hard Fail 增加服务/PID/进程组/端口 owner、端口关闭和零净增量证据；身份不明时失败关闭，禁止按进程名批量 kill 或误清用户既有服务。
+- **派发价值机器门禁**：新增零依赖 `dispatch-value-gate.py`、示例 spec 与确定性测试；机械拒绝非 READY、消费者六字段缺失、无状态迁移 docs/research、收敛并发/验收背压超限，以及启动外部资源却无 owner 的派单。worker prompt 将 `consume_by`、`expiry` 和 `observable_acceptance` 拆为独立字段。
+
+## [2.9.5] - 2026-08-30
+
+### 修复
+
+- **手工 register 自动恢复 supervised 路由（Task-092）**：`orca-supervised-register.sh` 在 worker/Dispatch 建立后，按精确 worktree id/path、terminal handle 与唯一 Session Context 自动补写完整 `.session.orca.supervised` 合同；无法唯一证明目标时输出 `ORCAREG_METADATA_BIND=manual-required`，保留活跃 worker 且不重试启动。`smoke-orca-control-plane.sh` 新增完整字段断言，reference 14 固化人工恢复和临时 terminal 活性证据边界。
+- **Autopilot 与引用单一权威**：删除互相矛盾的旧 Wave Autopilot 副本，固定 reference 15 为 L1、reference 16 为 L2/L3 durability、reference 17 为模型能力档案；同步修复模板 `references/12-issue-grouping.md` 断链和 SKILL frontmatter 版本漂移。
+- **任务/决策编号纠偏**：当前 Task-076/077 分别保留多层并行与 zcode，历史 Dispatch 自动补绑规范号改为 Task-106/107并保留可追溯别名；重复的 settle `DEC-034` 改为唯一 `DEC-130`，新增 DEC-131 固定控制面权威。
+
+### 技术优化
+
+- **Task-093 阶段性交付**：`pm-closeout.sh` 移除 `eval`，门禁改为 argv 执行；safe-push 路径和 Git identity 显式化；PR create/merge/view 错误不再吞掉，临时 body 只创建/传递一次。冲突 resolver 只处理 Git 确认 unmerged 的声明文档并主动 stage，字面冲突标记不再误报；Makefile 行级并集被明确拒绝。`test-pm-closeout.sh` 在 throwaway Git 仓覆盖 20 项错误、成功与真实冲突路径，并纳入 SKILL 验收清单。Makefile 专用「基线整文件 + worker patch 重放」仍未实现，任务保持 `IN_PROGRESS`。
+
+### 文档完善
+
+- 将文末 29 个非规范 `TODO` 状态分诊为 `DRAFT/IN_PROGRESS/DONE`，Task-066 在 durability schema、fencing/mutation 边界和故障注入合同齐备后晋级 `READY`；移除 TASKS 尾部孤立残段。
+
 ## [2.9.4] - 2026-08-29
 
 ### 修复
@@ -15,7 +88,7 @@
 - **额度感知路由（quota-aware routing）**：PM 派单前按各模型 lane 的余量/窗口倒计时/健康常态评分推荐 provider，替代"任务卡写死 provider"的静态路由。`scripts/route_suggest.py`（python3 零依赖纯决策器）：中立契约 schema `quota-aware-routing.summary.v1`（产出方不限：定时探针/网关/手写均可）、`--tier/--scene/--task-card-path/--config` 参数、退出码约定（ok/locked_by_card/not_configured=0，degraded/all_lanes_stopped=1 供调用方降级）。评分语义：fuel 型 lane 按余量为主分 + 临期（resets_at 倒计时 < urgency_window 且余量高于判停线）加 0-50 分临期权重（urgency=high 提示 PM 扩大该 tier 本波任务量）；reservoir 型（免费/积分、并发敏感）仅 `--scene` 匹配 reservoir_scenes 时入链且并发 cap=1；`resets_at` 早于当前时刻标 pending_refresh 退静态序兜底；燃料 lane 全判停落 tier_policy.default。12 个单测覆盖降级/信号/评分全路径。
 - **spawn-worker 集成兜底**：新增 sourced helper `scripts/spawn-worker-route-suggest.sh`（函数 route_suggest_autofill_provider，接线锚点在 provider lease 消费 API_PROVIDER 之前）；`--api-provider` 缺省 + 个人配置 `quota_aware_routing.enabled` 且 backend 为 claude-code 时按 `ROUTE_SUGGEST_TIER`（缺省 L1）自动补选，stderr 输出 `ROUTE_SUGGEST_AUTO` 行；route_suggest 任何失败（not_configured/degraded/崩溃）不改道不 fail，走既有默认链路；显式 `--api-provider` 永远优先（人工锁定 > 动态路由）。16 断言集成测试 + 现有 spawn-worker 系列 6/6 回归通过。
 - **个人配置模板 `quota_aware_routing` 段**（`config/orchestration-personal.example.json`）：enabled 默认 false（不配即无感）、summary_path 指向中立 schema v1 余量 JSON、lanes（fuel/reservoir + providers + concurrency_cap）、tier_policy（各 tier 候选链 + default 保底）、reservoir_scenes。模型池快照全在 gitignored 个人配置，skill 代码与文档零具体模型名。
-- **`references/16-model-capability-profile.md` 模型能力×任务匹配档案**（公开知识层）：六大家族（GLM/MiniMax/DeepSeek/Kimi/Qwen/豆包）画像（档位/强项/弱项/典型任务正反例/部署形态中性描述/当期版本快照+"以你实际可用版本为准"）；fuel/reservoir 两类 lane 派单哲学；填 tier_policy 的五步指引；程序永不读取（纯知识文档，改它对运行时零风险）。
+- **`references/17-model-capability-profile.md` 模型能力×任务匹配档案**（2.9.5 统一编号；公开知识层）：六大家族（GLM/MiniMax/DeepSeek/Kimi/Qwen/豆包）画像（档位/强项/弱项/典型任务正反例/部署形态中性描述/当期版本快照+"以你实际可用版本为准"）；fuel/reservoir 两类 lane 派单哲学；填 tier_policy 的五步指引；程序永不读取（纯知识文档，改它对运行时零风险）。
 - **SKILL.md §9.1 额度感知路由小节**：派单清单固化 route_suggest 必跑步骤、urgency=high 扩量语义、人工锁定优先、降级路径、能力档案指引。
 
 ## [2.9.2.1] - 2026-08-29

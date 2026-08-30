@@ -17,7 +17,10 @@
 降级链（fail-closed，不静默换 lane）：
   未配置段 → not_configured → 调用方走任务卡显式 provider / 静态 task_routing
   summary 读不到 → degraded → 同上
-  数据过期 → 仍推荐但标 stale
+  数据过期（缺 generated_at 或超 freshness_minutes）→ fail-closed：fuel lane
+    不参与推荐；仅 reservoir 可入链 → stale_degraded（evidence 逐 lane 注明
+    snapshot_stale，附 refresh_hint）；reservoir 也不可入链 → degraded +
+    fallback_lane 提示。两者都不标 ok，先刷新快照再派单
   resets_at 已过 → 该 lane 标 pending_refresh，评分降为静态序
   燃料 lane 全判停 → all_lanes_stopped → 落 tier_policy.default 保底
 """
@@ -97,7 +100,11 @@ def build_route_decision(
     generated = _parse_iso(summary.get("generated_at"))
     stale = generated is None or (current - generated).total_seconds() > qar["freshness_minutes"] * 60
 
-    return _score_and_pick(qar, summary, tier, scene, current, stale)
+    if stale:
+        # 2026-08-29 FaroPDF 派单事故回归：过期快照的 fuel 余量不可采信
+        # （报 83% 实际 9%），fail-closed 不再基于它推荐 lane。
+        return _stale_fail_closed(qar, summary, tier, scene, current)
+    return _score_and_pick(qar, summary, tier, scene, current, stale=False)
 
 
 def lane_signals(summary: dict[str, Any], lanes_cfg: dict[str, Any],
@@ -135,6 +142,75 @@ def lane_signals(summary: dict[str, Any], lanes_cfg: dict[str, Any],
                      "remaining_percent": (float(pct) if pct_ok else None),
                      "resets_in_minutes": countdown_min}
     return out
+
+
+def _refresh_hint(qar: dict[str, Any], summary: dict[str, Any],
+                  current: dt.datetime) -> str:
+    """stale 场景的人类可读提示：先刷新快照，再派单。"""
+    generated = _parse_iso(summary.get("generated_at"))
+    if generated is None:
+        return ("quota 快照缺 generated_at，视为过期：先刷新 summary_path 指向的余量快照再派单；"
+                "本次不基于过期 fuel 余量推荐 lane")
+    age_min = max((current - generated).total_seconds() / 60, 0.0)
+    return (f"quota 快照已过期（generated_at 距今 {age_min:.0f} 分钟，"
+            f"超过 freshness_minutes={qar['freshness_minutes']}）："
+            "先刷新余量快照再派单；本次不基于过期 fuel 余量推荐 lane")
+
+
+def _stale_fail_closed(qar, summary, tier, scene, current):
+    """快照过期（缺 generated_at / 解析失败 / 超 freshness_minutes）→ fail-closed。
+
+    fuel lane 的 remaining_percent 来自过期快照，一律不参与推荐（宁可无建议，
+    不给错误建议）。仅 reservoir lane 可入链（其 health 同样来自过期快照，
+    evidence 逐 lane 注明 snapshot_stale）；reservoir 也不可入链（含 fuel 唯一
+    候选场景）→ degraded + fallback_lane 提示。两条路径都不标 ok。
+    """
+    signals = lane_signals(summary, qar["lanes"], current,
+                           stop_line=qar["stop_line_percent"],
+                           urgency_window_minutes=qar["urgency_window_minutes"])
+    policy = qar["tier_policy"]
+    default_lane = policy.get("default") if isinstance(policy.get("default"), str) else None
+    if tier in policy and isinstance(policy[tier], list):
+        candidates = [lane for lane in policy[tier] if lane in qar["lanes"]]
+    else:
+        candidates = [default_lane] if default_lane in qar["lanes"] else []
+
+    scene_match = bool(scene) and scene in (qar.get("reservoir_scenes") or [])
+    open_tiers = {lane: (cfg.get("open_tiers") or []) for lane, cfg in qar["lanes"].items()}
+
+    picked_lane = None
+    for order, lane in enumerate(candidates):
+        sig = signals.get(lane)
+        if not sig or sig["type"] != "reservoir" or not sig["available"]:
+            continue
+        if not scene_match and tier not in open_tiers.get(lane, []):
+            continue
+        picked_lane = lane
+        break  # 评分基于过期数据无意义 → 退化静态序，取首个可入链 reservoir
+
+    evidence = {name: {**{k: v for k, v in sig.items() if v is not None},
+                       "snapshot_stale": True}
+                for name, sig in signals.items()}
+    hint = _refresh_hint(qar, summary, current)
+
+    if picked_lane is None:
+        fallback = default_lane or (candidates[0] if candidates else None)
+        return {"status": "degraded",
+                "fallback_lane": fallback,
+                "reason": ("快照过期 fail-closed：无可入链 reservoir lane，"
+                           "不基于过期 fuel 余量推荐；走任务卡显式 provider 或静态 task_routing"),
+                "evidence": evidence,
+                "refresh_hint": hint}
+
+    providers = qar["lanes"][picked_lane].get("providers") or []
+    return {"status": "stale_degraded", "tier": tier, "lane": picked_lane,
+            "provider": providers[0] if providers else "",
+            "urgency": "none", "stale": True, "scene": scene,
+            "reason": (f"快照过期 fail-closed：fuel lane 不参与推荐，"
+                       f"仅 reservoir lane={picked_lane} 可入链"
+                       "（health 亦来自过期快照，见 evidence.snapshot_stale）"),
+            "evidence": evidence,
+            "refresh_hint": hint}
 
 
 def _score_and_pick(qar, summary, tier, scene, current, stale):
