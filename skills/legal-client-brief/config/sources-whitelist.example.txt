@@ -1,0 +1,52 @@
+# 客户简报信源白名单（example）
+#
+# 复制为 sources-whitelist.txt（已 gitignore）。每行仅写域名；注释不会进入白名单。
+# 先保留与客户画像直接相关的 5—12 个来源，不要把候选库全部开启。
+
+# 通用法律与政策原文
+gov.cn
+court.gov.cn
+
+# 企业与法定披露（按需取消注释）
+# gsxt.gov.cn
+# cninfo.com.cn
+# sse.com.cn
+# szse.cn
+
+# 宏观、产业与标准（按需取消注释）
+# stats.gov.cn
+# samr.gov.cn
+# std.samr.gov.cn
+# miit.gov.cn
+# nda.gov.cn
+# cac.gov.cn
+# online.customs.gov.cn
+
+# 医药健康（按需取消注释）
+# nmpa.gov.cn
+# cde.org.cn
+# nhsa.gov.cn
+
+# 能源、汽车与低空（按需取消注释）
+# nea.gov.cn
+# caam.org.cn
+# caac.gov.cn
+
+# 建筑、消费与跨境（按需取消注释）
+# mohurd.gov.cn
+# mnr.gov.cn
+# mofcom.gov.cn
+# chinatax.gov.cn
+# safe.gov.cn
+
+# 金融（按需取消注释）
+# pbc.gov.cn
+# nfra.gov.cn
+# csrc.gov.cn
+
+# 维护规则：
+# 1. 仅由律师或被授权管理员增删，Agent 不自动扩列。
+# 2. 规则包中的候选来源不自动进入白名单。
+# 3. 域名合格不代表每篇内容合格，仍需核对发布者、日期、原文和适用范围。
+# 4. 媒体、律所文章、商业数据库和公众号默认不启用；确需使用时逐个授权并说明证据角色。
+# 5. 删除来源时在本地文件保留原因，避免下次无意恢复。

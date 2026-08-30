@@ -1,1 +1,0 @@
-../../industry-research-report/scripts/pdf.py

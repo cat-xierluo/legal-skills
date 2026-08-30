@@ -1,0 +1,24 @@
+schema_version: 1
+
+# 复制为 industry-rules.local.yaml（已 gitignore）。
+# 同 id 会替换内置行业包；新 id 会追加。不要放 API Key、客户名或内部材料。
+packs:
+  - id: precision-components
+    aliases: [精密零部件, 精密制造]
+    report:
+      required_dimensions: [下游客户结构, 认证周期, 良率与产能, 核心材料, 模具与工艺]
+      research_questions:
+        - 汽车、医疗和消费电子客户的认证与责任分配有何不同？
+      indicators: [产能利用率, 良率, 客户集中度, 研发投入, 出口额]
+    brief:
+      watch_events: [客户认证, 产品标准, 质量召回, 出口管制, 原材料价格]
+      relevance_questions: [是否影响认证或交付, 是否要求质量协议或知识产权条款调整]
+    legal_risk_lenses: [供应链履约, 产品质量, 模具与技术秘密, 客户集中度, 出口管制]
+    sources:
+      - id: local-industry-bureau
+        name: XX 市工业和信息化局
+        url: https://example.invalid/
+        authority: official
+        use_for: [地方产业政策, 项目公示]
+        cadence: event
+        access_notes: 示例域名不可直接用于正式研究，复制后替换为真实官方入口

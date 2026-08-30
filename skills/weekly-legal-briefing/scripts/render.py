@@ -1,1 +1,0 @@
-../../industry-research-report/scripts/render.py
