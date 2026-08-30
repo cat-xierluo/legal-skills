@@ -233,18 +233,18 @@ Runtime Profile: claude-provider / claude-oauth
 
 这样可以把角色、额度来源和具体 CLI 解耦。PM 只负责验收和收口；worker 只负责限定范围内的执行。主控切换后，分支命名、worktree 隔离、checkpoint、health_report 和 Git 收口规则都保持不变。
 
-### G7. ACP 与 tmux 的稳定性边界
+### G7. Orca/ACP 与 tmux 的稳定性边界
 
-ACP 的协议层更干净，能提供结构化 session 事件；但实际稳定性取决于 adapter。没有成熟 adapter 时，`tmux + worktree + checkpoint 文件 + git 状态` 更适合作为默认执行层，因为它可观察、可人工接管，也不依赖特定 Agent 产品支持协议。
+早期版本在没有成熟结构化控制面时，以 `tmux + worktree + checkpoint 文件 + git 状态` 作为跨产品默认执行层。当前 Orca 已能统一管理 worktree、terminal、Run/Task/Dispatch 与 transcript，按 DEC-135 升为日常主路径；纯 tmux 保留可观察、可人工接管的兼容回退价值，不再与 Orca 并列为高频默认。
 
 稳定性排序按实际落地判断：
 
 | 场景 | 推荐 |
 |------|------|
-| 现在就要跑 Claude/Codex worker | tmux + worktree |
-| 需要结构化状态且已有 adapter | ACP adapter |
+| 现在就要跑 Claude/Codex worker | Orca supervised 或 terminal-managed |
+| 需要结构化状态、DAG、ask/reply | Orca Run/Task/Dispatch |
 | worker TUI 输出变化频繁 | 依赖 checkpoint 文件和 git 状态，不依赖屏幕文本 |
-| 需要人工临时接管 | tmux session |
+| Orca 不可用、用户明确要求或复现兼容路径 | tmux + worktree |
 
 ### G8. OpenCode 普通 worker 与 ACP server 分开使用
 
@@ -329,18 +329,19 @@ PM 巡检优先读 checkpoint 和 `git diff --stat`。只有以下情况才读�
 
 `pm-monitor.sh` 会根据 branch 自动查找 worktree，并监听上述 checkpoint 文件变化，输出 `CHECKPOINT_STATUS`、`CHECKPOINT_RESULT` 和 `CHECKPOINT_PATCH` 事件。
 
-### G12. Claude 官方 agent view 与 tmux 的分工
+### G12. Claude 官方 agent view、Orca 与 tmux 的分工
 
-Claude Code 官方 agent view 适合 Claude Code 自己管理后台会话；tmux 适合统一管理 Claude、Codex、OpenCode 和 custom CLI worker。两者不冲突：
+Claude Code 官方 agent view 适合 Claude Code 自己管理后台会话；Orca 负责高频跨 backend worktree/terminal 与监督控制；tmux 只做兼容回退。三者不冲突：
 
 | 场景 | 推荐 |
 |------|------|
-| 只调度 Claude Code worker | `claude agents` / `claude --worktree --tmux` / 版本支持时 `claude --bg` 或 `/bg` |
-| 混合 Claude、Codex、OpenCode | tmux + worktree |
-| 需要统一脚本监控 checkpoint/Git/PR | tmux + `pm-monitor.sh` |
+| 只调度 Claude Code 且采用其原生团队能力 | `claude agents` / 版本支持时 `claude --bg` 或 `/bg` |
+| 混合 Claude、Codex、CodeBuddy、QoderWork、zcode | Orca supervised 或 terminal-managed |
+| 需要统一脚本监控 lifecycle/Git/PR | Orca + `pm-orchestrate.sh` |
 | 需要 Claude 官方 peek/reply/attach | agent view |
+| Orca 不可用或显式兼容性复现 | `tmux + worktree + pm-monitor.sh` |
 
-如果当前安装版本没有 `--bg`，不要硬写后台参数；用 `claude agents --help` 和 `claude --help` 检查后再决定。本机 Claude Code 2.1.149 已确认 `claude agents --json`、`--worktree` 和 `--tmux` 可用，tmux 仍是跨产品稳定 fallback。
+如果当前安装版本没有 `--bg`，不要硬写后台参数；用 `claude agents --help` 和 `claude --help` 检查后再决定。Claude 原生 `--worktree --tmux` 仅在 Task-003 的按需兼容性触发条件成立时评估，不替换 Orca 默认路径。
 
 ### G13. 偏题先纠偏，不要直接接管
 
@@ -716,7 +717,7 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **独立 review + 真 CLI 验证是抓 BLOCKER 的唯一可靠手段**——PM 自审两次漏 BLOCKER，独立 reviewer 两次都靠"跑真 `orca orchestration worker-show --dispatch <D> --json | jq`"抓出来。
 - **Orca CLI 的 `--help` + 真请求是 schema 真相来源**——不猜字段名，跑命令看真 keys。
 
-**关联**：DEC-034（settle 决策）、SKILL §4.5、references/12 §9、PR #84（v1 close）+ PR #86（v2 merge）、test-settle-liveness.sh Case 9。
+**关联**：DEC-130（settle 决策；原误编号 DEC-034）、SKILL §4.5、references/12 §9、PR #84（v1 close）+ PR #86（v2 merge）、test-settle-liveness.sh Case 9。
 
 ### G34. Make 驱动项目默认 verify 零注入 → worker 全门禁被拦（Task-057，badminton-lab Wave 2）
 

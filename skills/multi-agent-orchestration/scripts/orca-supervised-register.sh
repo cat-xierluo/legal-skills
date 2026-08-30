@@ -2,11 +2,15 @@
 # Register an existing Orca agent terminal into one supervised Run/Task/Dispatch.
 # worker-start is the only prompt injector on this path.
 #
-# Task-076：worker-start 成功后的 Dispatch 绑定自检与自动补绑。
+# Task-106（旧发布别名 Task-076-Dispatch）：worker-start 成功后的 Dispatch 绑定自检与自动补绑。
 # Run/Task/worker-start 阶段失败仍然 exit 1 fail-loud；仅「dispatch 绑定缺失」
 # （worker-start 成功、receipt 与 dispatch-show 均无 id）改为自动补绑三步，
 # 并以 ORCAREG_DISPATCH_BIND=ok|manual-required 显式汇报，manual-required
 # 不再以 exit 1 阻断 spawn（terminal/任务注入已生效，阻断只会制造半活 worker）。
+#
+# Task-092：手动 register 也要把 supervised 路由写回 Session Context。
+# 脚本用 Orca 返回的精确 worktree path + terminal_handle 自动定位唯一
+# METADATA.json；找不到或出现歧义时不重试 worker-start，只显式要求手工补写。
 
 set -euo pipefail
 
@@ -80,6 +84,71 @@ done
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 orca_runtime_init
 
+patch_supervised_metadata() {
+  local show_out resolved_identity resolved_id resolved_path metadata_root candidate
+  local tmp_meta
+  local -a matches=()
+
+  ORCAREG_METADATA_BIND="manual-required"
+
+  if ! show_out=$(orca_cli worktree show --worktree "id:$WORKTREE_ID" --json 2>&1); then
+    echo "ORCAREG_METADATA_LOOKUP_FAILED: worktree show 失败；worker 已注册，请按 runbook 手工补写 METADATA: $show_out" >&2
+    return 0
+  fi
+  if ! resolved_identity=$(printf '%s' "$show_out" | jq -er '
+    .result.worktree
+    | select(type == "object")
+    | [.id, .path]
+    | select(all(.[]; type == "string" and length > 0))
+    | @tsv
+  ' 2>/dev/null); then
+    echo "ORCAREG_METADATA_LOOKUP_FAILED: Orca worktree JSON 非法或缺少 id/path；worker 已注册，请按 runbook 手工补写 METADATA" >&2
+    return 0
+  fi
+  IFS=$'\t' read -r resolved_id resolved_path <<< "$resolved_identity"
+  if [ "$resolved_id" != "$WORKTREE_ID" ] || [ ! -d "$resolved_path" ]; then
+    echo "ORCAREG_METADATA_LOOKUP_FAILED: Orca worktree identity/path 缺失或错配；worker 已注册，请按 runbook 手工补写 METADATA" >&2
+    return 0
+  fi
+
+  metadata_root="$resolved_path/.claude/agent-sessions"
+  if [ ! -d "$metadata_root" ] || [ -L "$metadata_root" ]; then
+    echo "ORCAREG_METADATA_NOT_FOUND: $metadata_root 不存在或是符号链接；worker 已注册，请按 runbook 手工补写 METADATA" >&2
+    return 0
+  fi
+
+  while IFS= read -r -d '' candidate; do
+    [ -f "$candidate" ] && [ ! -L "$candidate" ] || continue
+    if jq -e --arg terminal "$TERMINAL_HANDLE" --arg worktree "$WORKTREE_ID" \
+      '.session.orca.terminal_handle == $terminal
+       and (.session.orca.worktree_id // $worktree) == $worktree' \
+      "$candidate" >/dev/null 2>&1; then
+      matches+=("$candidate")
+    fi
+  done < <(find "$metadata_root" -mindepth 2 -maxdepth 2 -type f -name METADATA.json -print0 2>/dev/null)
+
+  if [ "${#matches[@]}" -ne 1 ]; then
+    echo "ORCAREG_METADATA_AMBIGUOUS: terminal=$TERMINAL_HANDLE 匹配 ${#matches[@]} 个 METADATA.json；worker 已注册，请按 runbook 手工补写" >&2
+    return 0
+  fi
+
+  candidate="${matches[0]}"
+  tmp_meta=$(mktemp "${candidate}.tmp.XXXXXX") || {
+    echo "ORCAREG_METADATA_WRITE_FAILED: 无法创建同目录临时文件；worker 已注册，请按 runbook 手工补写" >&2
+    return 0
+  }
+  if jq --arg run "$RUN_ID" --arg task "$TASK_ID" --arg disp "$DISPATCH_ID" \
+    --arg coordinator "$COORDINATOR_HANDLE" --arg bind "$DISPATCH_BIND" \
+    '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' \
+    "$candidate" > "$tmp_meta" && mv "$tmp_meta" "$candidate"; then
+    ORCAREG_METADATA_BIND="ok"
+    echo "ORCAREG_METADATA_UPDATED: $candidate" >&2
+  else
+    rm -f "$tmp_meta"
+    echo "ORCAREG_METADATA_WRITE_FAILED: worker 已注册但 METADATA 原子写回失败，请按 runbook 手工补写" >&2
+  fi
+}
+
 [ -n "$TASK_TITLE" ] || TASK_TITLE="spawn-worker supervised worker"
 [ -n "$OBJECTIVE" ] || OBJECTIVE="$TASK_SPEC"
 
@@ -145,12 +214,13 @@ if ! start_out=$(worker_start_once); then
   fi
 fi
 
-# Task-076/Task-077：worker-start 成功后的 Dispatch 绑定自检。
+# Task-106/Task-107：worker-start 成功后的 Dispatch 绑定自检。
 # 实现已抽公共函数 orchestration_dispatch_bind_selfcheck（orca-supervised-protocol.sh），
 # 与 spawn-worker-launch.sh 的 launch 路径共用同一份；此处只做调用与 KV 导出。
 orchestration_dispatch_bind_selfcheck "$TASK_ID" "$TERMINAL_HANDLE" "$RUN_ID" "$start_out"
 DISPATCH_ID="$ORCAREG_BIND_DISPATCH_ID"
 DISPATCH_BIND="$ORCAREG_BIND_STATUS"
+patch_supervised_metadata
 
 echo "ORCAREG_WORKER_REGISTERED: dispatch=${DISPATCH_ID:-none} bind=$DISPATCH_BIND" >&2
 printf 'ORCAREG_RUN_ID=%s\n' "$RUN_ID"
@@ -158,3 +228,4 @@ printf 'ORCAREG_COORDINATOR_HANDLE=%s\n' "$COORDINATOR_HANDLE"
 printf 'ORCAREG_TASK_ID=%s\n' "$TASK_ID"
 printf 'ORCAREG_DISPATCH_ID=%s\n' "$DISPATCH_ID"
 printf 'ORCAREG_DISPATCH_BIND=%s\n' "$DISPATCH_BIND"
+printf 'ORCAREG_METADATA_BIND=%s\n' "$ORCAREG_METADATA_BIND"

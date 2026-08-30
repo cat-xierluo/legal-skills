@@ -1,6 +1,6 @@
 # 模型能力 × 任务匹配档案（公开知识层）
 
-> 本文档为 SKILL.md 的 Level 2 参考文档，为个人配置 `quota_aware_routing.lanes / tier_policy` 的填写提供判断方法。读取时机：初次搭建额度感知路由、评估某模型家族适合什么任务、决定某条 lane 的类型与 tier 定位时。**本文档是纯知识文档：任何脚本（route_suggest.py / spawn-worker.sh）永不读取它，改动它对运行时零风险。**
+> 本文档是 SKILL.md 的按需参考，为个人配置 `quota_aware_routing.lanes / tier_policy` 的填写提供判断方法。读取时机：初次搭建额度感知路由、评估某模型家族适合什么任务、决定某条 lane 的类型与 tier 定位时。**本文档是纯知识文档：任何脚本（route_suggest.py / spawn-worker.sh）永不读取它，改动它对运行时零风险。**
 
 ---
 
