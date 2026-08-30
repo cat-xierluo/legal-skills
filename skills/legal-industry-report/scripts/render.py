@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""行业法律调研报告 / 定时法律周报 渲染器:md → A4 HTML
+"""行业报告 / 客户简报渲染器：Markdown → A4 HTML。
 
 - 模板占位符 + 数据填充(jinja2)
 - frontmatter(YAML)→ 封面字段
@@ -20,25 +20,30 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-import markdown
-import yaml
-from bs4 import BeautifulSoup
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+try:
+    import markdown
+    import yaml
+    from bs4 import BeautifulSoup
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+except ImportError as exc:
+    package = getattr(exc, "name", "未知包")
+    print(f"[error] 缺少 Python 依赖: {package}", file=sys.stderr)
+    print("请运行: python3 -m pip install -r scripts/requirements.txt", file=sys.stderr)
+    raise SystemExit(1) from exc
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = SKILL_DIR / "references"
 COVERS_DIR = TEMPLATE_DIR / "covers"
 TEMPLATE_NAME = "report-template.html"
 
-# IR 用重型封面(多层几何 / 徽章 / 金色装饰带)
-IR_COVERS = {"C-geo", "D-diagonal", "E-flip", "F-grid"}
-# WB 用轻量封面(极简 / 期数条 / 单一金线)
-WB_COVERS = {"W1-minimal", "W2-tag-bar"}
-VALID_COVERS = IR_COVERS | WB_COVERS
+# report 使用机构出版物封面，brief 使用轻量信息简报封面。
+REPORT_COVERS = {"C-geo", "D-diagonal", "E-flip", "F-grid"}
+BRIEF_COVERS = {"W1-minimal", "W2-tag-bar"}
+VALID_COVERS = REPORT_COVERS | BRIEF_COVERS
 VALID_PALETTES = {"bluebook", "service-plan", "burgundy", "forest", "tech"}
 VALID_INTENSITY = {"lite", "balanced", "visual"}
-VALID_REPORT_KIND = {"ir", "wb"}
-DEFAULT_COVER_BY_KIND = {"ir": "C-geo", "wb": "W1-minimal"}
+VALID_REPORT_KIND = {"report", "brief"}
+DEFAULT_COVER_BY_KIND = {"report": "C-geo", "brief": "W1-minimal"}
 
 
 # ── report-profile 读取 ────────────────────────────────────────
@@ -53,14 +58,23 @@ def load_profile(profile_path: Path) -> dict:
         stripped = line.strip()
         m = re.match(r"^-\s+([a-zA-Z_]+)\s*:\s*(.+?)(?:\s+#.*)?$", stripped)
         if m:
-            profile[m.group(1)] = m.group(2).strip()
-    # report_kind 校验
-    report_kind = str(profile.get("report_kind", "ir")).lower()
+            raw_value = m.group(2).strip()
+            try:
+                value = yaml.safe_load(raw_value)
+            except yaml.YAMLError:
+                value = raw_value
+            profile[m.group(1)] = "" if value is None else value
+    return normalize_profile(profile)
+
+
+def normalize_profile(profile: dict) -> dict:
+    """在配置与 CLI 覆盖合并后统一校验，避免 kind 改了但封面仍沿用旧类型。"""
+    report_kind = str(profile.get("report_kind", "report")).lower()
     if report_kind not in VALID_REPORT_KIND:
-        report_kind = "ir"
+        report_kind = "report"
     profile["report_kind"] = report_kind
     # cover_style 按 kind 校验
-    allowed = IR_COVERS if report_kind == "ir" else WB_COVERS
+    allowed = REPORT_COVERS if report_kind == "report" else BRIEF_COVERS
     if profile["cover_style"] not in allowed:
         fallback = DEFAULT_COVER_BY_KIND[report_kind]
         print(f"[warn] cover_style={profile['cover_style']} 不适用于 report_kind={report_kind},回退 {fallback}", file=sys.stderr)
@@ -77,11 +91,11 @@ def load_profile(profile_path: Path) -> dict:
 
 def default_profile() -> dict:
     return {
-        "report_kind": "ir",
+        "report_kind": "report",
         "law_firm": "XX 律所",
         "series_name": "XX 律所实务手册",
         "series_subtitle": "PROFESSIONAL EDITION",
-        "report_code": f"YWX-IR-{datetime.now().year}-01",
+        "report_code": f"YWX-REPORT-{datetime.now().year}-01",
         "lead_lawyer": "XX 律师",
         "lead_lawyer_title": "律师",
         "lead_lawyer_avatar": "",
@@ -95,10 +109,11 @@ def default_profile() -> dict:
         "design_intensity": "lite",
         "include_toc": True,
         "include_methodology": True,
-        "footer_brand": "行业法律调研报告",
+        "footer_brand": "行业报告",
         "audience_label": "科技型制造企业",
-        "period_number": "01",
-        "period_year": str(datetime.now().year),
+        "period_start": "",
+        "period_end": datetime.now().strftime("%Y-%m-%d"),
+        "cadence": "weekly",
     }
 
 
@@ -140,17 +155,16 @@ PALETTE_PRESETS = {
 def resolve_palette(profile: dict) -> dict:
     key = profile.get("color_palette", "bluebook")
     palette = dict(PALETTE_PRESETS.get(key, PALETTE_PRESETS["bluebook"]))
-    accent_override = profile.get("accent_color", "").strip()
+    accent_override = str(profile.get("accent_color") or "").strip()
     if accent_override and accent_override.startswith("#"):
         palette["accent"] = accent_override
     return palette
 
 
-# ── IR / WB 设计变量差异(杂志Studio book-style + 加大字号)──
-# IR:大字 / 宽留白 / 衬线 / 金色细线
-DESIGN_IR = {
-    "body_size": "12pt", "body_leading": "2.0",
-    "h1_size": "22pt", "h2_size": "18pt", "h3_size": "13pt",
+# ── 正式报告 / 高频简报使用不同的阅读节奏 ──
+DESIGN_REPORT = {
+    "body_size": "11pt", "body_leading": "1.95",
+    "h1_size": "21pt", "h2_size": "16pt", "h3_size": "12.5pt",
     "toc_columns": "2",
     "rule_color": "{{ palette.accent }}",
     "rule_width": "2px",
@@ -158,10 +172,9 @@ DESIGN_IR = {
     "header_rule_width": "1.5px",
     "table_header_bg": "{{ palette.primary }}",
 }
-# WB:加大但克制(杂志Studio 书籍感)
-DESIGN_WB = {
-    "body_size": "11pt", "body_leading": "1.85",
-    "h1_size": "16pt", "h2_size": "14pt", "h3_size": "12pt",
+DESIGN_BRIEF = {
+    "body_size": "10.5pt", "body_leading": "1.72",
+    "h1_size": "16pt", "h2_size": "13.5pt", "h3_size": "11.5pt",
     "toc_columns": "1",
     "rule_color": "{{ palette.primary_soft }}",
     "rule_width": "0.8px",
@@ -172,7 +185,7 @@ DESIGN_WB = {
 
 
 def resolve_design(report_kind: str, palette: dict) -> dict:
-    base = DESIGN_IR if report_kind == "ir" else DESIGN_WB
+    base = DESIGN_REPORT if report_kind == "report" else DESIGN_BRIEF
     env = Environment()
     return {k: env.from_string(v).render(palette=palette) for k, v in base.items()}
 
@@ -277,15 +290,16 @@ def split_sections(html: str) -> list[dict]:
         sections = [{"kicker": "PREAMBLE", "title": "前言", "html": "".join(preamble_parts)}]
     if not sections and html.strip():
         sections = [{"kicker": "CONTENT", "title": "正文", "html": html}]
+    for index, section in enumerate(sections, 1):
+        section["number"] = f"{index:02d}"
     return sections
 
 
-def build_toc(sections: list[dict], start_page: int) -> list[dict]:
+def build_toc(sections: list[dict]) -> list[dict]:
+    """生成可靠的章节索引；HTML 阶段无法得知浏览器最终分页，不伪造页码。"""
     entries = []
-    page = start_page
     for i, s in enumerate(sections, 1):
-        entries.append({"level": 1, "num": f"第 {i} 章", "text": s["title"], "page": page})
-        page += 1
+        entries.append({"level": 1, "num": f"第 {i} 章", "text": s["title"]})
     return entries
 
 
@@ -308,12 +322,15 @@ def render_cover(profile: dict, report_meta: dict, jinja_env: Environment):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="行业调研报告 / 定时法律周报 md → A4 HTML")
+    ap = argparse.ArgumentParser(description="行业报告 / 客户简报 Markdown → A4 HTML")
     ap.add_argument("--input", "-i", required=True, help="报告 markdown 路径")
     ap.add_argument("--profile", "-p", default=str(SKILL_DIR / "config" / "report-profile.md"))
     ap.add_argument("--output", "-o", required=True, help="输出 HTML 路径")
-    ap.add_argument("--report-kind", choices=["ir", "wb"], default=None, help="覆盖 profile 字段")
+    ap.add_argument("--report-kind", choices=["report", "brief"], default=None, help="覆盖 profile 字段")
     ap.add_argument("--cover-style", default=None, help="封面变体")
+    ap.add_argument("--period-start", default=None, help="简报窗口起始日")
+    ap.add_argument("--period-end", default=None, help="简报窗口结束日")
+    ap.add_argument("--cadence", choices=["daily", "weekly", "event"], default=None)
     args = ap.parse_args()
 
     in_path = Path(args.input).resolve()
@@ -325,13 +342,33 @@ def main():
     if args.report_kind:
         profile["report_kind"] = args.report_kind
     if args.cover_style:
-        if args.cover_style in VALID_COVERS:
-            profile["cover_style"] = args.cover_style
-        else:
+        if args.cover_style not in VALID_COVERS:
             print(f"[warn] --cover-style={args.cover_style} 不合法,忽略", file=sys.stderr)
+        else:
+            profile["cover_style"] = args.cover_style
+    if args.period_start:
+        profile["period_start"] = args.period_start
+    if args.period_end:
+        profile["period_end"] = args.period_end
+    if args.cadence:
+        profile["cadence"] = args.cadence
+    profile = normalize_profile(profile)
 
     report_kind = profile["report_kind"]
-    is_wb = report_kind == "wb"
+    is_brief = report_kind == "brief"
+    if is_brief:
+        period_end = str(profile.get("period_end") or now_date())
+        cadence = str(profile.get("cadence") or "weekly")
+        report_code = str(profile.get("report_code", "YWX-BRIEF"))
+        report_code = re.sub(r"-(?:DAILY|WEEKLY|EVENT)-\d{8}$", "", report_code)
+        profile["report_code"] = f"{report_code}-{cadence.upper()}-{period_end.replace('-', '')}"
+        profile["cadence_label"] = {"daily": "每日", "weekly": "每周", "event": "事件"}[cadence]
+
+    if not in_path.is_file():
+        print(f"[error] 输入 Markdown 不存在: {in_path}", file=sys.stderr)
+        raise SystemExit(2)
+    if not profile_path.is_file():
+        print(f"[warn] 未找到 profile，已使用去具体化默认值: {profile_path}", file=sys.stderr)
 
     md_text = in_path.read_text(encoding="utf-8")
     md_text = render_mermaid_blocks(md_text)
@@ -342,34 +379,39 @@ def main():
     template = jinja_env.get_template(TEMPLATE_NAME)
 
     now = datetime.now()
-    if is_wb:
-        default_subtitle = "行业 · 法律 · 本期要点"
-        default_lead = "本期周报基于白名单信源整理,案例均已附案号与公开检索渠道;仅作内部提示,正式意见需个案复核。"
-        default_kicker = "WEEKLY · LEGAL · BRIEFING"
-        default_footer = f"法律周报 · 第 {profile.get('period_number', '01')} 期"
+    if is_brief:
+        default_subtitle = "客户相关 · 增量变化 · 可执行提示"
+        default_lead = "只保留本窗口内与既有客户相关的变化；三渠道草稿均须经律师复核后人工发布。"
+        default_kicker = "CLIENT · SIGNAL · BRIEF"
+        default_footer = f"客户简报 · {profile.get('cadence_label', '每周')}"
     else:
-        default_subtitle = "行业 · 区域 · 法律风险全景"
-        default_lead = "基于公开数据自动整理的内部情报底稿,不构成法律意见或法律服务承诺。"
-        default_kicker = "INDUSTRY · LEGAL · INTELLIGENCE"
-        default_footer = "行业法律调研报告"
+        default_subtitle = "产业结构 · 监管趋势 · 法律机会"
+        default_lead = "面向公开展示与长期留存的行业研究作品；所有事实、判断和表达均需在发布前完成专业复核。"
+        default_kicker = "INDUSTRY · LEGAL · REPORT"
+        default_footer = "行业报告"
+
+    skill_name, skill_version = read_skill_identity(is_brief)
+    configured_footer = str(profile.get("footer_brand") or default_footer)
+    document_title = extract_report_title(md_text) or in_path.stem
+    cover_title = document_title.split("·", 1)[0].strip() if is_brief else document_title
 
     report_meta = {
         **profile,
-        "report_title": in_path.stem,
+        "report_title": cover_title,
+        "document_title": document_title,
         "report_subtitle": default_subtitle,
         "report_lead": default_lead,
         "kicker": default_kicker,
-        "footer_brand": default_footer,
+        "footer_brand": configured_footer,
         "industry": extract_industry_from_md(md_text),
         "generated_date": now.strftime("%Y-%m-%d"),
         "generated_at": now.strftime("%Y-%m-%d %H:%M"),
-        "skill_version": "0.6.0",
+        "skill_version": skill_version,
     }
 
     cover_style, cover_html = render_cover(profile, report_meta, jinja_env)
 
-    start_page = 3 if profile.get("include_toc", True) else 2
-    toc_entries = build_toc(sections, start_page) if profile.get("include_toc", True) else []
+    toc_entries = build_toc(sections) if profile.get("include_toc", True) else []
 
     palette = resolve_palette(profile)
     design = resolve_design(report_kind, palette)
@@ -384,17 +426,42 @@ def main():
         include_toc=bool(profile.get("include_toc", True)),
         toc_entries=toc_entries,
         toc_page_label="第 2 页" if profile.get("include_toc", True) else "第 1 页",
-        skill_name="weekly-legal-briefing" if is_wb else "industry-research-report",
+        skill_name=skill_name,
         **{k: v for k, v in report_meta.items() if k not in ("include_toc", "include_methodology", "cover_style", "cover_html")},
     )
 
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")
     print(f"已生成 HTML:{out_path}")
 
 
 def extract_industry_from_md(md_text: str) -> str:
-    m = re.search(r"^#\s+行业调研报告\s*·\s*([^·\s]+)", md_text, re.M)
+    m = re.search(r"^#\s+行业(?:法律)?(?:研究|调研)?报告\s*·\s*([^·\s]+)", md_text, re.M)
     return m.group(1).strip() if m else "—"
+
+
+def extract_report_title(md_text: str) -> str:
+    m = re.search(r"^#\s+(.+?)\s*$", md_text, re.M)
+    return m.group(1).strip() if m else ""
+
+
+def now_date() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def read_skill_identity(is_brief: bool) -> tuple[str, str]:
+    skill_dir = SKILL_DIR
+    if is_brief:
+        sibling = SKILL_DIR.parent / "legal-client-brief"
+        if (sibling / "SKILL.md").is_file():
+            skill_dir = sibling
+    skill_file = skill_dir / "SKILL.md"
+    try:
+        fm, _ = split_frontmatter(skill_file.read_text(encoding="utf-8"))
+    except OSError:
+        fm = {}
+    fallback_name = "legal-client-brief" if is_brief else "legal-industry-report"
+    return str(fm.get("name", fallback_name)), str(fm.get("version", "unknown"))
 
 
 if __name__ == "__main__":

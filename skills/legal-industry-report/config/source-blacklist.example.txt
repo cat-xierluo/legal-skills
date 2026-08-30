@@ -1,0 +1,6 @@
+# 可选信源黑名单（example）
+#
+# 复制为 source-blacklist.local.txt 后维护；每行一个域名。
+# 不要把真实内部域名、账号或客户信息写入本文件。
+
+# example-content-farm.invalid

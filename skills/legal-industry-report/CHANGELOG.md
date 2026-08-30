@@ -1,5 +1,81 @@
 # 更新日志
 
+## [1.1.0] - 2026-08-30
+
+### 改进
+
+- 将 Skill 从 `industry-report` 迁移为 `legal-industry-report`，通过统一的 `legal-` 前缀明确其法律专业领域，同时保留月度/季度正式行业报告的产品定位。
+- 同步目录、frontmatter、交叉路由、模板署名、构建元数据、测试样例、README 与本地配置忽略规则；不改变研究流程、状态门禁或视觉系统。
+
+### 验证
+
+- 运行目录/名称一致性、引用可达、Python 编译、行业规则与报告正反例回归、独立目录构建及最终 PDF 身份核验。
+- 指令稳定性仍无 evaluator-signed 三轮证据，保持 `NOT_VERIFIED`；本次只证明命名迁移与既有确定性流程未断链。
+
+## [1.0.0] - 2026-08-30
+
+### 正式发布
+
+- 将 Skill 从 `industry-research-report` 迁移为 `industry-report`，产品定位改为按月或季度制作、面向公开展示与广泛分发的正式行业报告。
+- 与 `client-brief` 保持统一的短名称体系，但在触发条件、研究深度、状态和视觉节奏上明确分离。
+
+### 新增
+
+- 新增 `references/industry-rules.yaml`：8 个行业规则包、103 个行业别名，以及研究问题、指标、法律风险视角、官方信源角色和时效规则。
+- 新增 `resolve_industry_rules.py`、`validate_industry_rules.py` 与正反例自测；未知行业显式回退为 `common` 并标记 `needs_custom_pack`。
+- 报告骨架扩展为执行摘要、方法、市场、竞争、监管、法律风险、服务机会与证据账本八个主章。
+- 新增可重复的正式报告端到端测试样例。
+
+### 改进
+
+- 信源层级改为按证据功能定义，纠正将媒体、协会、上市公司披露与政府原文混为同类“权威来源”的问题。
+- 视觉系统升级为机构研究出版物：正式封面、可靠章节目录、`RESEARCH NOTE` 章节标识、表格长链接安全换行和 A4 章节节奏。
+- 报告状态从内部底稿调整为 `PUBLIC_REVIEW`；发布仍须由律师完成事实、法律和表达复核。
+
+### 验证
+
+- 行业规则注册表校验通过：8 个规则包、103 个不重复别名、7 个通用一手信源。
+- Python 编译、规则解析、未知行业回退、错误 URL、报告结构和窗口逃逸自测通过。
+- 代表性人工智能报告生成 11 页 A4 PDF（595.92 × 841.92pt）；全页联系表与重点长 URL 表格复核未见裁切、重叠或乱码。
+- Harness 失效审查为 `PASS`；安全扫描无 critical/high，两个参数数组式 `subprocess.run(shell=False)` 保留为 medium 提示。
+- 官方 `quick_validate.py` 不接受本项目规范要求的顶层 `author/homepage/version`，因此该项为已知校验器策略不兼容，不删除项目必需元数据。
+- 动态语义稳定性尚无三轮独立签名证据，保持 `NOT_VERIFIED`。
+
+## [0.8.0] - 2026-08-30
+
+### 改进
+
+- 将产品展示名收敛为“行业法律报告系列 · 单次基线研究”，保留 `industry-research-report` 稳定 ID，避免仅为统一命名破坏既有调用。
+- 明确报告是律师内部研究底稿，修复 description 中“可交付 PDF”与正文“不得直接对外”的定位冲突。
+- 企业数据库连接器不可用时改走官方公开渠道或标记“未采集/待复核”，不再把单一 MCP 写成必备前提。
+- 信源交叉验证改为按结论类型执行：官方原文可证明自身发布内容，趋势与归纳性结论要求独立复核或 `[单一信源]` 披露。
+
+### 新增
+
+- 新增统一构建入口 `scripts/build_report.py`，串联 Markdown 校验、HTML、A4 PDF、页尺寸复核和哈希元数据。
+- 新增 `scripts/validate_report.py` 与正反例自检，阻断缺章节、残留占位符、免责声明错位和信源缺失。
+- 新增固定依赖清单、可选信源黑名单样例、`archive/.gitkeep` 与完整 CC BY-NC 许可证文本。
+
+### 修复
+
+- 修复 `--report-kind` 在 profile 校验后才覆盖，导致报告类型变化但封面未重新校验的问题。
+- 修复封面标题直接使用文件名而出现 `sample-`、扩展名等技术痕迹的问题。
+- 修复脚本硬编码 Skill 版本、输出目录不存在时报错和仅支持系统 Chrome 的问题。
+- 修复连续流长章节导致目录推算页码错误的问题；目录改为可靠的章节索引，不再展示伪精确页码。
+- 更新长期滞后的设计规范，使其与 v0.7.0 精简版式、连续流和当前页眉页脚一致。
+
+### 安全与文档
+
+- 新增网络、文件写入、本地进程和外部数据库的权限边界与隐私提示。
+- 修复本地行业信源覆盖和黑名单“声称已 gitignore、实际未忽略”的配置风险。
+
+### 验证
+
+- Python 编译与 IR/WB 正反例自检通过；Harness 失效审查为 `PASS`。
+- 端到端生成 9 页最小报告与 11 页含长章节/表格样例，全部页面为 A4（595.92 × 841.92pt）；全页联系表复核未见裁切、重叠或乱码。
+- 安全扫描无 critical/high；两处 `subprocess.run` 因固定参数数组且 `shell=False` 保留为 medium 提示。
+- 尚无三轮独立语义稳定性证据，Instruction Stability 保持 `NOT_VERIFIED`；律师复核边界不变。
+
 ## [0.4.1] - 2026-08-25
 
 ### 回退
@@ -15,6 +91,42 @@
 - 4 个 cover 渲染产物 `motto 块 = 0` / `motto 文本 = 0`
 - PDF 端到端通过(10 页 512KB,封面文字抽取确认无 motto)
 - SKILL.md 加"v0.4.1 暂不启用"标注
+
+## [0.5.0] - 2026-08-25
+
+### 新增(工艺感升级 + IR/WB 设计强烈差异化)
+
+- **4 个 IR 封面工艺感升级**(DEC-IR-012):顶金带(4mm + 切口) + 底金边 + REPORT NO. 徽章(1.5mm 金色描边 + 主色半透底) + 几何内嵌金环 + kicker 金线分隔 + 字号升级(标题 36pt → 40-42pt)
+- **2 个 WB 轻量版专属封面**(DEC-IR-013):`W1-minimal`(居中布局 + 期数胶囊 + 受众标签 + 大留白) / `W2-tag-bar`(顶部金色期数条 + 标题左对齐)
+- **`report-profile.md` 新增 `report_kind` 字段**(`ir` | `wb`):决定封面 / 目录 / 章节页眉 / 表格 / 页脚全套视觉系统
+- **`report-profile.md` 新增 WB 字段**:`audience_label` / `period_number` / `period_year`
+- **`report-template.html` 设计变量化**(DEC-IR-014):12 个 CSS 变量由 render.py 按 report_kind 注入
+  - body-size / leading / h1-size / h2-size / h3-size
+  - toc-columns(IR 2 / WB 1)
+  - 装饰线颜色(IR 金 / WB 灰蓝)
+  - 装饰线粗细(IR 2px / WB 0.8px)
+  - 表头底色(IR 深蓝 / WB 浅灰)
+  - 章节页眉线粗细
+- **`pdf.py` 页脚差异化**(DEC-IR-015):
+  - `FOOTER_TEMPLATE_IR`:主色字 + 金色横线(蓝皮书页脚)
+  - `FOOTER_TEMPLATE_WB`:字号 8px + 灰色 + 0.5px 浅灰线(克制轻量)
+
+### 改进(渲染脚本)
+
+- `scripts/render.py` 增加 `--report-kind` / `--cover-style` 命令行参数
+- `scripts/render.py` 增加 `IR_COVERS` / `WB_COVERS` / `DEFAULT_COVER_BY_KIND` 分类
+- `scripts/render.py` 新增 `resolve_design(report_kind, palette)` 函数
+- `scripts/render.py` 根据 `report_kind` 切换默认 subtitle / lead / kicker / footer_brand
+- 元数据脚注页加 `skill_name` 字段
+
+### DECISIONS.md 增量
+
+- DEC-IR-012 / 013 / 014 / 015(工艺感 / 差异化 / 系统化 / 页脚)
+
+### 验证
+
+- 端到端 IR / WB PDF 端到端通过,5 调色板切换验证
+- 桌面对照:`~/Desktop/skill-demo-20260825/行业调研报告-零部件制造-XX区域.pdf` + `法律周报-科技型制造企业-2026第01期-DRAFT.pdf`
 
 ## [0.4.0] - 2026-08-25
 
