@@ -78,6 +78,7 @@ reset_defaults() {
   GIT_PUSH_REMOTE="origin"
   ALLOW_PROMPT_ONLY_INSTALL_GUARD=0
   INSTALL_GUARD_DEGRADATION_SOURCE=""
+  DEPS_MODE="auto"
 }
 
 # shellcheck source=spawn-worker-flags.sh
@@ -104,6 +105,7 @@ parse_spawn_worker_args \
   --allow-install-command "pip install demo" \
   --install-authorization-source "user approval" \
   --allow-shell-command "git status" \
+  --deps-mode local \
   --git-expected-name "Expected User" --git-expected-email expected@example.com \
   --git-integration-base origin/main --git-push-remote upstream \
   --allow-prompt-only-install-guard "accepted degradation" --dry-run
@@ -132,6 +134,7 @@ assert_eq "${#AUTHORIZED_INSTALL_COMMANDS[@]}:${AUTHORIZED_INSTALL_COMMANDS[0]}"
   "1:pip install demo" "install authorization command parsed"
 assert_eq "${#ALLOWED_SHELL_COMMANDS[@]}:${ALLOWED_SHELL_COMMANDS[0]}" \
   "1:git status" "allowed shell command parsed"
+assert_eq "$DEPS_MODE" "local" "deps-mode parsed"
 
 set +e
 help_output=$( (parse_spawn_worker_args --help) 2>&1 )
@@ -146,11 +149,27 @@ if printf '%s' "$help_output" | grep -Fq 'spawn-worker.sh --project PATH'; then
 else
   bad "help text remains available from helper"
 fi
+if printf '%s' "$help_output" | grep -Fq -- '--deps-mode'; then
+  ok "usage documents --deps-mode"
+else
+  bad "usage documents --deps-mode"
+fi
 assert_eq "$unknown_rc" "64" "unknown flag keeps exit 64"
 if printf '%s' "$unknown_output" | grep -Fq 'Unknown argument: --unknown-flag'; then
   ok "unknown flag keeps diagnostic"
 else
   bad "unknown flag keeps diagnostic"
+fi
+
+set +e
+invalid_deps_output=$( (parse_spawn_worker_args --deps-mode nonsense) 2>&1 )
+invalid_deps_rc=$?
+set -e
+assert_eq "$invalid_deps_rc" "64" "invalid --deps-mode keeps exit 64"
+if printf '%s' "$invalid_deps_output" | grep -Fq 'only accepts auto|symlink|local'; then
+  ok "invalid --deps-mode keeps diagnostic"
+else
+  bad "invalid --deps-mode keeps diagnostic"
 fi
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-flags.sh"' "$SPAWN_WORKER" \
