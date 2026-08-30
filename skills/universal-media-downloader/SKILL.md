@@ -2,7 +2,7 @@
 name: universal-media-downloader
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.5.0"
+version: "0.5.1"
 description: 输入各类视频网站/播客平台链接后，自动下载对应媒体文件并交付给用户。优先使用 yt-dlp 覆盖抖音(Douyin)、B站(Bilibili)、YouTube 等常见视频网站，也可用于可直接暴露音频地址的播客平台（如小宇宙单集链接）。当遇到 403/登录/年龄或地区限制时，支持使用 cookies.txt 重试；对于可能存在 DRM/加密或条款限制的平台（例如部分 Spotify 内容），应提示用户仅下载其有权保存的内容，并在不可下载时建议改用官方离线/导出渠道或提供原始 RSS/直链。抖音视频在 yt-dlp 撞签名墙（"Fresh cookies needed"）时自动三级 fallback：无登录直连 aweme.snssdk.com/v1/play → 本机浏览器游客 cookie（无需登录抖音）重跑 yt-dlp，全程无感；抖音图文笔记暂不支持自动下载，需手动处理。
 license: MIT
 ---

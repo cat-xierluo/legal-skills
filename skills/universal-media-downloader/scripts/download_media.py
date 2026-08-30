@@ -33,6 +33,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Default output directory: user's Downloads folder (not self-contained — see DEC-004)
@@ -209,19 +210,25 @@ def main() -> int:
                             return 0
                 sys.stdout.write("[download_media] 无登录直连 fallback 失败。\n")
 
-            # 环节二：浏览器游客 cookie 重试（chrome 优先，safari 兜底；读取失败自动换下一个）
-            for browser in ("chrome", "safari"):
-                sys.stdout.write(
-                    f"[download_media] 尝试带 {browser} 游客 cookie 重试 yt-dlp（无需登录抖音）...\n"
-                )
-                retry_cmd = (
-                    cmd[:-1] + ["--cookies-from-browser", browser] + cmd[-1:]
-                )
-                retry_rc, retry_out = run(retry_cmd)
-                sys.stdout.write(retry_out)
-                if retry_rc == 0:
-                    emit_saved_path(retry_out, out_dir)
-                    return 0
+            # 环节二：浏览器游客 cookie 重试（chrome 优先，safari 兜底；读取失败自动换下一个）。
+            # 两轮重试：抖音 web detail 对游客 cookie 存在概率性风控拒绝（同 cookie 同视频
+            # 一次 403/空 JSON、一次过，2026-08-30 实测），单遍撞上即整体失败。
+            for attempt in (1, 2):
+                for browser in ("chrome", "safari"):
+                    sys.stdout.write(
+                        f"[download_media] 尝试带 {browser} 游客 cookie 重试 yt-dlp"
+                        f"（第 {attempt} 轮，无需登录抖音）...\n"
+                    )
+                    retry_cmd = (
+                        cmd[:-1] + ["--cookies-from-browser", browser] + cmd[-1:]
+                    )
+                    retry_rc, retry_out = run(retry_cmd)
+                    sys.stdout.write(retry_out)
+                    if retry_rc == 0:
+                        emit_saved_path(retry_out, out_dir)
+                        return 0
+                if attempt == 1:
+                    time.sleep(3)
             sys.stdout.write("[download_media] 浏览器游客 cookie 重试均失败，回到 yt-dlp 原始报错。\n")
 
         sys.stderr.write("\n[download_media] yt-dlp failed. Command was:\n")

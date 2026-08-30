@@ -1,5 +1,13 @@
 # 变更日志
 
+## [0.5.1] - 2026-08-30
+
+### 改进
+
+- **游客 cookie fallback 加两轮重试**：抖音 web detail 接口对游客 cookie 存在概率性风控拒绝（同 cookie 同视频一次 403/空 JSON、一次过，真实 Cubox 收藏卡实测），单遍 chrome→safari 撞上即整体失败。改为两轮（间隔 3s），大幅提高成功率
+- `resolve_numeric_id` 落点检测（源自 cubox 侧同日修复回流）：博主主页（`share/user/`）与非抖音落点给出准确提示，不再误导为"已删除/异地限制"
+- SKILL.md version 同步 0.5.1
+
 ## [0.5.0] - 2026-08-30
 
 ### 新增
