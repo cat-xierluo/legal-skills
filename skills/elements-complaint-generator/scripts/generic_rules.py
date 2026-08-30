@@ -199,7 +199,9 @@ def build_generic_rules(tree_dir: Path, elements: dict | None = None) -> list[Ru
 
         for label in PERSON_LABELS:
             def make_label(label=label, anchor=anchor, n=n):
-                short = label.rstrip("：")
+                # 标签≠字段名映射（250612 复盘：住所地标签带"（户籍所在地）"后缀导致永不匹配）
+                _FIELD = {"住所地（户籍所在地）": "住所地"}
+                short = _FIELD.get(label.rstrip("："), label.rstrip("："))
                 def rule(doc, elements):
                     v = party_lookup(elements, n, short)
                     if not v:
@@ -290,33 +292,37 @@ def build_generic_rules(tree_dir: Path, elements: dict | None = None) -> list[Ru
                 return rule
             rules.append(make_ownership())
 
-    # ---------------- 委托诉讼代理人（"有□"段后姓名 + 独立"单位："行）----------------
-    def rule_agent(doc, elements):
-        v = _get_path(elements, "当事人.委托诉讼代理人.0.姓名")
-        if not v:
+    # ---------------- 委托诉讼代理人（"有□"段后窗口：姓名/单位/职务/电话 + 有☑/特别授权☑）----------------
+    # 2026-08-28 重构：旧版 职务/电话 要求与"单位："同段（法院件模板电话为独立段，填不上）；
+    # 且无 有☑/特别授权☑ 勾选规则（250612 案五轮返工复盘项）。改为有□段后 10 段窗口定向替换。
+    def rule_agent_block(doc, elements):
+        ag = _get_path(elements, "当事人.委托诉讼代理人.0")
+        if not isinstance(ag, dict):
+            return False
+        if not any(ag.get(k) for k in ("姓名", "单位", "职务", "联系电话")):
             return False
         plist = _paras(doc)
         for i, p in enumerate(plist):
             if "有□" in p.text and i + 1 < len(plist) and plist[i + 1].text.strip() == "姓名：":
-                return replace_in_paragraph(plist[i + 1], "姓名：", f"姓名：{v}")
+                win = plist[i: i + 10]
+                hit = replace_in_paragraph(p, "有□", "有☑")  # 列了代理人即勾"有"
+                for q in win:
+                    t = q.text
+                    if q is not p and t.strip() == "姓名：" and ag.get("姓名"):
+                        hit = replace_in_paragraph(q, "姓名：", f"姓名：{ag['姓名']}") or hit
+                    for f, label in (("单位", "单位："), ("职务", "职务："), ("联系电话", "联系电话：")):
+                        v = ag.get(f)
+                        if v and label in q.text:
+                            hit = replace_in_paragraph(q, label, f"{label}{v}") or hit
+                    if "代理权限" in t and ag.get("特别授权"):
+                        hit = replace_in_paragraph(q, "特别授权□", "特别授权☑") or hit
+                    if "无□" in t and q is not p:
+                        break
+                if hit:
+                    return True
         return False
-    rule_agent.__name__ = "gen[代理人.姓名]"
-    rules.append(rule_agent)
-
-    for field, label in (("单位", "单位："), ("职务", "职务："), ("联系电话", "联系电话：")):
-        def make_agent(field=field, label=label):
-            def rule(doc, elements):
-                v = _get_path(elements, f"当事人.委托诉讼代理人.0.{field}")
-                if not v:
-                    return False
-                plist = _paras(doc)
-                for q in plist:
-                    if q.text.strip().startswith("单位：") and label in q.text:
-                        return replace_in_paragraph(q, label, f"{label}{v}")
-                return False
-            rule.__name__ = f"gen[代理人.{field}]"
-            return rule
-        rules.append(make_agent())
+    rule_agent_block.__name__ = "gen[代理人块]"
+    rules.append(rule_agent_block)
 
     # ---------------- 编号标题填空（"N. xxx" 标题后紧跟空段）----------------
     title_pat = re.compile(r"^\d{1,2}[\.、]")
@@ -359,11 +365,13 @@ def build_generic_rules(tree_dir: Path, elements: dict | None = None) -> list[Ru
         for anchor, option in checks.items():
             opts = option if isinstance(option, list) else [option]
             for q in plist:
-                if anchor in q.text:
+                if anchor in q.text and "□" in q.text:
+                    # 只认含 □ 的段落：锚文本若先出现在无框正文（如完整表述段落
+                    # 提及"署名权、复制权"），跳过继续找勾选行，不再一击即断
                     for opt in opts:
                         if f"{opt}□" in q.text:
                             hit_any = replace_option_check(q, opt) or hit_any
-                    break  # 每个锚只作用于首个命中段
+                    break  # 每个锚只作用于首个含框命中段
         return hit_any
     rule_generic_checks.__name__ = "gen[勾选*]"
     rules.append(rule_generic_checks)
