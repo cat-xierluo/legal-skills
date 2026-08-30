@@ -1,0 +1,22 @@
+# 测试品牌配置
+
+- report_kind: brief
+- law_firm: 示例律师事务所
+- series_name: 客户信号观察
+- series_subtitle: CLIENT SIGNAL BRIEF
+- report_code: DEMO-BRIEF
+- lead_lawyer: 示例律师
+- lead_lawyer_title: 编辑
+- lead_lawyer_avatar:
+- motto: ""
+- contact_wechat:
+- contact_phone:
+- contact_email:
+- cover_style: W1-minimal
+- color_palette: tech
+- accent_color: "#E0A23A"
+- design_intensity: lite
+- include_toc: false
+- include_methodology: false
+- audience_label: 人工智能应用企业
+- footer_brand: 客户简报

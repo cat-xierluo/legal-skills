@@ -1,0 +1,100 @@
+<!-- 封面变体 E:左右镜像对称 —— 三层圆盘叠加 + 引言章 -->
+<style>
+.cover-E {
+  height: 100%; display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+/* 第一层:大深色圆盘 */
+.cover-E .circle-deco {
+  position: absolute; top: 50%; left: -40mm;
+  width: 240mm; height: 240mm; border-radius: 50%;
+  background: var(--primary-deep); opacity: 0.6;
+  transform: translateY(-50%);
+}
+/* 第二层:中号金色描边圆 */
+.cover-E .circle-deco::before {
+  content: ""; position: absolute; top: 18%; left: 58%;
+  width: 100mm; height: 100mm; border-radius: 50%;
+  border: 2.5mm solid var(--accent); opacity: 0.7;
+}
+/* 第三层:小填充圆 + 金点 */
+.cover-E .circle-deco::after {
+  content: ""; position: absolute; top: 32%; left: 78%;
+  width: 28mm; height: 28mm; border-radius: 50%;
+  background: var(--accent); opacity: 0.9;
+  box-shadow: -10mm -8mm 0 0 rgba(212, 175, 55, 0.4); /* 同心环 */
+}
+
+.cover-E .series-mark {
+  position: absolute; top: 22mm; right: 22mm;
+  color: var(--accent); font-size: 11px; letter-spacing: 4px; z-index: 2;
+  font-family: "Noto Sans SC", sans-serif; text-align: right;
+}
+.cover-E .body-zone {
+  padding: 60mm 22mm 0; position: relative; z-index: 2;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10mm;
+}
+.cover-E .body-left { color: rgba(255,255,255,0.85); }
+.cover-E .series-name { color: var(--accent); font-size: 13px; letter-spacing: 6px; font-weight: 600; margin-bottom: 6mm; }
+.cover-E .cover-kicker { font-size: 9pt; color: var(--accent); letter-spacing: 5px; margin-bottom: 6mm; }
+/* 引言章（左侧底部） */
+.cover-E .motto {
+  margin-top: 10mm;
+  padding-left: 6mm; border-left: 1.5mm solid var(--accent);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 10.5pt; color: rgba(255, 255, 255, 0.85); letter-spacing: 3px;
+  font-style: italic; max-width: 70mm;
+}
+
+.cover-E .body-right { color: rgba(255,255,255,0.95); }
+.cover-E .cover-title { font-size: 30pt; font-weight: 900; color: #FFFFFF; letter-spacing: 3px; line-height: 1.35; margin-bottom: 5mm; }
+.cover-E .cover-subtitle { font-size: 12pt; color: var(--accent); letter-spacing: 2px; margin-bottom: 6mm; font-weight: 400; }
+.cover-E .cover-lead { font-size: 10.5pt; color: rgba(255,255,255,0.85); line-height: 1.8; letter-spacing: 1px; }
+.cover-E .cover-meta {
+  margin-top: 16mm; padding: 5mm 0; display: grid; grid-template-columns: repeat(3, 1fr);
+  color: #FFFFFF; border-top: 1px solid rgba(212,175,55,0.4);
+}
+.cover-E .meta-cell { padding: 0 5mm; border-right: 1px solid rgba(255,255,255,0.15); }
+.cover-E .meta-cell:last-child { border-right: none; }
+.cover-E .meta-label { font-size: 9pt; color: var(--accent); letter-spacing: 2px; margin-bottom: 2mm; font-family: "Noto Sans SC", sans-serif; }
+.cover-E .meta-val { font-size: 11pt; font-weight: 700; letter-spacing: 1px; }
+.cover-E .cover-footer {
+  margin-top: auto; padding: 5mm 22mm 14mm; font-size: 9pt; color: rgba(212,175,55,0.85);
+  letter-spacing: 1.5px; display: flex; justify-content: space-between;
+  font-family: "Noto Sans SC", sans-serif;
+}
+</style>
+<div class="cover-E">
+  <div class="circle-deco"></div>
+  <div class="series-mark">{{ series_subtitle }}</div>
+  <div class="body-zone">
+    <div class="body-left">
+      <div class="series-name">{{ series_name }}</div>
+      <div class="cover-kicker">{{ kicker }}</div>
+      {% if false %}<div class="motto">{{ motto }}</div>{% endif %}
+    </div>
+    <div class="body-right">
+      <div class="cover-title">{{ report_title }}</div>
+      <div class="cover-subtitle">{{ report_subtitle }}</div>
+      <div class="cover-lead">{{ report_lead }}</div>
+    </div>
+  </div>
+  <div class="cover-meta" style="position: relative; z-index: 2; margin-left: 22mm; margin-right: 22mm;">
+    <div class="meta-cell">
+      <div class="meta-label">REPORT CODE</div>
+      <div class="meta-val">{{ report_code }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">EDITOR</div>
+      <div class="meta-val">{{ lead_lawyer }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">DATE</div>
+      <div class="meta-val">{{ generated_date }}</div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>{{ law_firm }}</span>
+    <span>{{ footer_brand }} · {{ report_code }}</span>
+  </div>
+</div>

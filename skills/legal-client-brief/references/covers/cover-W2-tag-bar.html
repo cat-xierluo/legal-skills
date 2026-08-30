@@ -1,0 +1,128 @@
+<!-- 封面变体 W2：信息条版 —— legal-client-brief 专属
+     定位：高频客户触达，克制、专业、易识别
+     风格:深蓝主色 + 顶部金色期数条 + 简洁标题 + 极简底部
+     与 IR 差异:无几何叠层、无徽章、期数条单独占顶、字号略小 -->
+<style>
+.cover-W2 {
+  height: 100%; display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+/* === 顶部金色期数条(独立横幅, 比 IR 顶部金带窄但带期数文字) === */
+.cover-W2 .issue-bar {
+  margin: 0; padding: 5mm 22mm;
+  background: var(--accent); color: var(--primary-deep);
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 10pt; font-weight: 700; letter-spacing: 3px;
+}
+.cover-W2 .issue-bar .issue-no {
+  font-weight: 800;
+}
+.cover-W2 .issue-bar .issue-audience {
+  color: var(--primary-deep); opacity: 0.85;
+  font-size: 9pt; letter-spacing: 2px;
+}
+/* === 顶部 meta 行(系列名, 条下) === */
+.cover-W2 .series-mark {
+  position: absolute; top: 30mm; left: 22mm;
+  color: rgba(255,255,255,0.7); font-size: 10px; letter-spacing: 4px; z-index: 2;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.cover-W2 .series-name {
+  position: absolute; top: 30mm; right: 22mm;
+  color: var(--accent); font-size: 11px; letter-spacing: 4px; z-index: 2;
+  font-family: "Noto Sans SC", sans-serif;
+}
+/* === 顶部几何条(2mm 单线, 比 IR 的圆盘简化) === */
+.cover-W2::before {
+  content: ""; position: absolute; top: 46mm; left: 22mm; right: 22mm;
+  height: 1.5mm; background: var(--accent); opacity: 0.5;
+}
+
+/* === 主体(左对齐, 不用居中) === */
+.cover-W2 .body-zone { padding: 70mm 22mm 0; flex: 1; position: relative; z-index: 2; }
+.cover-W2 .cover-kicker {
+  font-size: 9pt; color: var(--accent); letter-spacing: 6px;
+  margin-bottom: 8mm; font-weight: 600;
+}
+.cover-W2 .cover-kicker::after {
+  content: ""; display: inline-block; width: 18mm; height: 0.8mm;
+  background: var(--accent); margin-left: 6mm; vertical-align: middle;
+}
+.cover-W2 .cover-title {
+  font-size: 36pt; font-weight: 800; color: #FFFFFF; letter-spacing: 4px;
+  line-height: 1.35; text-wrap: balance; margin-bottom: 8mm; max-width: 155mm;
+}
+.cover-W2 .cover-subtitle {
+  font-size: 13pt; color: var(--accent); letter-spacing: 3px;
+  margin-bottom: 8mm; font-weight: 500; max-width: 155mm;
+}
+.cover-W2 .cover-lead {
+  font-size: 11pt; color: rgba(255,255,255,0.78); line-height: 2;
+  letter-spacing: 1px; max-width: 150mm; text-indent: 2em;
+}
+/* === meta 行(底部四列) === */
+.cover-W2 .cover-meta {
+  margin-top: 10mm; padding: 6mm 0; display: grid; grid-template-columns: repeat(4, 1fr);
+  color: #FFFFFF; border-top: 1px solid rgba(212,175,55,0.5);
+}
+.cover-W2 .meta-cell { padding: 0 4mm; border-right: 1px solid rgba(255,255,255,0.15); }
+.cover-W2 .meta-cell:last-child { border-right: none; }
+.cover-W2 .meta-label { font-size: 8.5pt; color: var(--accent); letter-spacing: 2px; margin-bottom: 2mm; font-family: "Noto Sans SC", sans-serif; }
+.cover-W2 .meta-val { font-size: 10.5pt; font-weight: 700; letter-spacing: 1px; }
+.cover-W2 .cover-footer {
+  padding: 5mm 22mm 8mm; font-size: 8.5pt; color: rgba(212,175,55,0.75);
+  letter-spacing: 2px; display: flex; justify-content: space-between;
+  font-family: "Noto Sans SC", sans-serif;
+}
+/* === 底部细金线 === */
+.cover-W2 .gold-line-bottom {
+  margin-top: auto; height: 1mm; background: var(--accent);
+}
+/* 引言章占位(隐藏) */
+.cover-W2 .motto {
+  position: absolute; top: 80mm; left: 22mm;
+  padding-left: 6mm; border-left: 1.5mm solid var(--accent);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 10.5pt; color: rgba(255, 255, 255, 0.85); letter-spacing: 3px;
+  font-style: italic; z-index: 3; max-width: 100mm;
+}
+</style>
+<div class="cover-W2">
+  <div class="issue-bar">
+    <span class="issue-no">{{ cadence_label }}简报　|　{{ period_end }}</span>
+    <span class="issue-audience">FOR　{{ audience_label }}</span>
+  </div>
+  <div class="series-mark">{{ series_subtitle }}</div>
+  <div class="series-name">{{ series_name }}</div>
+  {% if false %}<div class="motto">{{ motto }}</div>{% endif %}
+  <div class="body-zone">
+    <div class="cover-kicker">{{ kicker }}</div>
+    <div class="cover-title">{{ report_title }}</div>
+    <div class="cover-subtitle">{{ report_subtitle }}</div>
+    <div class="cover-lead">{{ report_lead }}</div>
+  </div>
+  <div class="cover-meta">
+    <div class="meta-cell">
+      <div class="meta-label">REPORT CODE</div>
+      <div class="meta-val">{{ report_code }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">EDITOR</div>
+      <div class="meta-val">{{ lead_lawyer }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">AUDIENCE</div>
+      <div class="meta-val" style="font-size: 9.5pt;">{{ audience_label }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">WINDOW</div>
+      <div class="meta-val" style="font-size: 9pt;">{{ period_start }} — {{ period_end }}</div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>{{ law_firm }}</span>
+    <span>{{ footer_brand }} · {{ report_code }}</span>
+  </div>
+  <div class="gold-line-bottom"></div>
+</div>
