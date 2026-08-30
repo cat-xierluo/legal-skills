@@ -45,6 +45,29 @@ def run(cmd: list[str]) -> tuple[int, str]:
     return p.returncode, p.stdout
 
 
+def emit_saved_path(out: str, out_dir: Path) -> None:
+    """从 yt-dlp 输出解析最终文件路径并打印 SAVED_FILEPATH=（末行约定，供 AI/下游脚本解析）。
+
+    yt-dlp 通过 --print after_move:filepath 输出落盘路径；取不到时兜底取输出目录最新文件。
+    """
+    lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+    saved = ""
+    if lines:
+        cand = lines[-1]
+        if os.path.exists(cand):
+            saved = cand
+
+    if not saved:
+        files = sorted(
+            [p for p in out_dir.glob('*') if p.is_file()],
+            key=lambda p: p.stat().st_mtime, reverse=True,
+        )
+        if files:
+            saved = str(files[0])
+
+    sys.stdout.write(f"\nSAVED_FILEPATH={saved}\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download video/audio by URL using yt-dlp")
     parser.add_argument("url", help="Video or podcast episode URL")
@@ -155,63 +178,58 @@ def main() -> int:
     sys.stdout.write(out)
 
     if rc != 0:
-        # 抖音域名 + 未带 cookies + 非纯音频：yt-dlp 撞签名墙时，自动 fallback 到
-        # 无登录直连（aweme.snssdk.com/v1/play，仅需 video_id，不要 a_bogus 签名）。
-        # 用户主动传 --cookies 时走登录态，不抢戏；--audio-only 时保守不走（接口只保证视频流）。
+        # 抖音域名 + 用户未显式指定 cookie 策略时，自动按序补救：
+        #   环节一（仅视频）：无登录直连 fallback——aweme.snssdk.com/v1/play，
+        #     仅需 video_id 不要 a_bogus 签名；--audio-only 保守不走（接口只保证视频流）。
+        #   环节二（音视频均可）：从本机浏览器带一份「游客 cookie」重跑 yt-dlp——
+        #     抖音 web API 只要有访问 cookie（s_v_web_id 等）即可过
+        #     "Fresh cookies are needed" 校验，无需登录抖音（2026-08-30 实测）。
+        # 用户主动传 --cookies / --cookies-from-browser 时走用户选择，不抢戏。
         from urllib.parse import urlparse
 
         host = (urlparse(args.url).hostname or "").lower()
         is_douyin = any(d in host for d in ("douyin.com", "iesdouyin.com", "snssdk.com"))
-        if is_douyin and not args.cookies and not args.audio_only:
-            sys.stdout.write(
-                "\n[download_media] yt-dlp 在抖音失败，自动尝试无登录直连 fallback "
-                "（aweme.snssdk.com/v1/play）...\n"
-            )
-            nocookie_script = Path(__file__).parent / "download_douyin_video_nocookie.py"
-            fb_cmd = [
-                sys.executable, str(nocookie_script), args.url,
-                "--out-dir", str(out_dir),
-            ]
-            fb_rc, fb_out = run(fb_cmd)
-            sys.stdout.write(fb_out)
-            if fb_rc == 0:
-                for ln in reversed([l.strip() for l in fb_out.splitlines() if l.strip()]):
-                    if ln.startswith("SAVED_FILEPATH="):
-                        sys.stdout.write(f"\nSAVED_FILEPATH={ln.split('=', 1)[1].strip()}\n")
-                        return 0
-                # 兜底：取输出目录最新文件
-                files = sorted(
-                    [p for p in out_dir.glob('*') if p.is_file()],
-                    key=lambda p: p.stat().st_mtime, reverse=True,
+        if is_douyin and not args.cookies and not args.cookies_from_browser:
+            if not args.audio_only:
+                sys.stdout.write(
+                    "\n[download_media] yt-dlp 在抖音失败，自动尝试无登录直连 fallback "
+                    "（aweme.snssdk.com/v1/play）...\n"
                 )
-                if files:
-                    sys.stdout.write(f"\nSAVED_FILEPATH={files[0]}\n")
+                nocookie_script = Path(__file__).parent / "download_douyin_video_nocookie.py"
+                fb_cmd = [
+                    sys.executable, str(nocookie_script), args.url,
+                    "--out-dir", str(out_dir),
+                ]
+                fb_rc, fb_out = run(fb_cmd)
+                sys.stdout.write(fb_out)
+                if fb_rc == 0:
+                    for ln in reversed([l.strip() for l in fb_out.splitlines() if l.strip()]):
+                        if ln.startswith("SAVED_FILEPATH="):
+                            sys.stdout.write(f"\nSAVED_FILEPATH={ln.split('=', 1)[1].strip()}\n")
+                            return 0
+                sys.stdout.write("[download_media] 无登录直连 fallback 失败。\n")
+
+            # 环节二：浏览器游客 cookie 重试（chrome 优先，safari 兜底；读取失败自动换下一个）
+            for browser in ("chrome", "safari"):
+                sys.stdout.write(
+                    f"[download_media] 尝试带 {browser} 游客 cookie 重试 yt-dlp（无需登录抖音）...\n"
+                )
+                retry_cmd = (
+                    cmd[:-1] + ["--cookies-from-browser", browser] + cmd[-1:]
+                )
+                retry_rc, retry_out = run(retry_cmd)
+                sys.stdout.write(retry_out)
+                if retry_rc == 0:
+                    emit_saved_path(retry_out, out_dir)
                     return 0
-            sys.stdout.write("[download_media] 无登录 fallback 也失败，回到 yt-dlp 报错。\n")
+            sys.stdout.write("[download_media] 浏览器游客 cookie 重试均失败，回到 yt-dlp 原始报错。\n")
 
         sys.stderr.write("\n[download_media] yt-dlp failed. Command was:\n")
         sys.stderr.write("  " + " ".join(shlex.quote(c) for c in cmd) + "\n")
         return rc
 
     # yt-dlp prints the moved file path via --print after_move:filepath.
-    # Usually the last non-empty line.
-    lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
-    saved = ""
-    if lines:
-        cand = lines[-1]
-        if os.path.exists(cand):
-            saved = cand
-
-    if saved:
-        sys.stdout.write(f"\nSAVED_FILEPATH={saved}\n")
-    else:
-        # Fallback: pick newest file in out_dir
-        files = sorted([p for p in out_dir.glob('*') if p.is_file()], key=lambda p: p.stat().st_mtime, reverse=True)
-        if files:
-            saved = str(files[0])
-            sys.stdout.write(f"\nSAVED_FILEPATH={saved}\n")
-        else:
-            sys.stdout.write("\nSAVED_FILEPATH=\n")
+    emit_saved_path(out, out_dir)
 
     return 0
 
