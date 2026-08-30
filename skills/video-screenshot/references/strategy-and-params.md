@@ -247,6 +247,18 @@ weak 默认 6 组、18 张唯一图片，每组只有一个红框目标，联系
 
 归档目录是溯源元数据副本，不是可恢复的截图备份，也不是证据线索或视觉去重脚本的输入目录。需要生成 `_evidence_leads/`、`_vision_audit/` 或 `_curated/` 时，始终使用控制台显示的“输出目录”；若该目录中的基础帧已被移走，应回到原视频重新抽取，不能仅凭归档报告重建图片。
 
+### 输出事务与安全重跑
+
+`extract.py` 在读取旧输出前先验证全部 CLI 参数并用 ffprobe 确认视频有效。新帧、候选、`_report.json` 和 `_video_screenshot_output.json` 都先生成在目标目录同级的隐藏 staging 中；可选归档也成功后，才提交新目录。损坏视频、ffmpeg 超时、报告写入失败或提交失败不会先删除上一轮结果。
+
+已有输出只有满足以下条件才允许原地重跑：
+
+- 新版结果的 `_video_screenshot_output.json` 与 `_report.json` 哈希、目录内容哈希和根目录清单一致；或旧版结果的 `_report.json` 逐帧 SHA256 与实际 `frame_*.jpg` 完全一致；
+- 输出根及候选目录不是符号链接；
+- 没有未知文件，也没有 `_evidence_leads`、`_vision_audit`、`_curated` 或 `_vision_review.json` 等下游产物。
+
+任一条件不满足时，保留原目录并改用新的 `-o`。不要手工伪造所有权标记；需要保留旧结果时，最稳妥的做法始终是指定新目录。
+
 ## 输出参数
 
 ### `--max-size`（默认 0，保持原始分辨率）
@@ -331,3 +343,7 @@ frame_NNN_MMmSSs.jpg
   ]
 }
 ```
+
+### `_video_screenshot_output.json` 所有权标记
+
+该文件只记录 schema、工具名、`_report.json` 的 SHA256、目录内容聚合 SHA256 与输出根目录项，不保存视频路径、源视频文件名、OCR 原文或实体信息。它用于证明目录仍是同一轮工具结果且可以安全替换，不是证据真实性或完整性的法律结论，也不能代替 `_report.json` 的逐帧哈希。

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": {"name": "video-screenshot", "version": "0.8.1"},
+  "skill": {"name": "video-screenshot", "version": "0.8.2"},
   "producer": {
     "id": "video-screenshot-pipeline",
     "implementation_paths": [
@@ -67,6 +67,20 @@
       "checker_ids": ["pipeline-invariants"],
       "case_ids": ["pipeline-valid", "evidence-leads-modify-base"],
       "historical_failure_known": false
+    },
+    {
+      "id": "TRANSACTIONAL-OUTPUT-SAFETY",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#TRANSACTIONAL-OUTPUT-SAFETY"],
+      "checker_ids": ["pipeline-invariants"],
+      "case_ids": [
+        "pipeline-valid",
+        "transaction-modifies-old-on-failure",
+        "transaction-cleanup-before-probe-historical"
+      ],
+      "historical_failure_known": true
     }
   ],
   "cases": [
@@ -77,7 +91,8 @@
         "BASE-HIGH-RECALL",
         "VISION-SUBTRACT-ONLY",
         "FINAL-COVERAGE-SURVIVAL",
-        "EVIDENCE-LEADS-NON-DESTRUCTIVE"
+        "EVIDENCE-LEADS-NON-DESTRUCTIVE",
+        "TRANSACTIONAL-OUTPUT-SAFETY"
       ],
       "checker_ids": ["pipeline-invariants"],
       "artifacts": [
@@ -129,6 +144,28 @@
       ],
       "expected": "blocked",
       "expected_exit_code": 3
+    },
+    {
+      "id": "transaction-modifies-old-on-failure",
+      "kind": "mutation",
+      "constraint_ids": ["TRANSACTIONAL-OUTPUT-SAFETY"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/transaction-modifies-old-on-failure.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "transaction-cleanup-before-probe-historical",
+      "kind": "historical",
+      "constraint_ids": ["TRANSACTIONAL-OUTPUT-SAFETY"],
+      "checker_ids": ["pipeline-invariants"],
+      "artifacts": [
+        {"artifact_id": "pipeline-validation", "path": "assets/stability/transaction-cleanup-before-probe-historical.json"}
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
     }
   ],
   "stability": {
@@ -165,6 +202,14 @@
         "value_type": "boolean",
         "condition": "equals",
         "expected": true
+      },
+      {
+        "id": "transactional-output-safety-passed",
+        "checker_id": "pipeline-invariants",
+        "constraint_id": "TRANSACTIONAL-OUTPUT-SAFETY",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
       }
     ],
     "observables": [
@@ -196,6 +241,14 @@
         "id": "evidence-base-frame-set",
         "checker_id": "pipeline-invariants",
         "constraint_ids": ["EVIDENCE-LEADS-NON-DESTRUCTIVE"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "output-transaction-mode",
+        "checker_id": "pipeline-invariants",
+        "constraint_ids": ["TRANSACTIONAL-OUTPUT-SAFETY"],
         "comparison": "set_equal",
         "required": true,
         "tolerance": null

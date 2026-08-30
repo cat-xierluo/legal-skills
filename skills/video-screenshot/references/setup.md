@@ -68,6 +68,12 @@ uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py \
 
 后续 `prepare_evidence_leads.py`、`prepare_vision_audit.py` 和两个应用器的 `-i` 必须指向 `extract.py` 的实际基础输出目录：其中应同时存在 `_report.json` 及报告列出的 `frame_*.jpg`。Skill `archive/` 从 v0.8.1 起只保存 `_report.json` 和 `extraction_meta.json`，不含图片，不能作为后续复核输入。
 
+## 输出目录边界
+
+`extract.py` 会先验证参数和视频，再在目标目录同级 staging 中生成完整结果；成功前不会清理旧输出。若目标目录含未知文件、符号链接、证据线索包、视觉审计或精选结果，脚本会失败关闭。此时不要把这些文件临时删除后强行重跑，直接使用新的 `-o <新目录>`，保留原目录用于复核。
+
+新版基础输出包含 `_video_screenshot_output.json`，它只绑定报告哈希、目录内容哈希和根目录清单，不含源视频路径。旧版没有该标记时，脚本仅在 `_report.json` 的逐帧 SHA256 与实际基础帧完全一致的情况下兼容替换。
+
 ## 首次使用检查清单
 
 ```bash

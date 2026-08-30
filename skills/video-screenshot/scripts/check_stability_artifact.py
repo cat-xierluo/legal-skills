@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""独立复算 video-screenshot 四条关键交付不变量。"""
+"""独立复算 video-screenshot 五条关键交付不变量。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ CONSTRAINTS = (
     "VISION-SUBTRACT-ONLY",
     "FINAL-COVERAGE-SURVIVAL",
     "EVIDENCE-LEADS-NON-DESTRUCTIVE",
+    "TRANSACTIONAL-OUTPUT-SAFETY",
 )
 
 
@@ -52,6 +53,9 @@ def _evaluate(data: Any) -> tuple[dict[str, bool], dict[str, list[str]]]:
     operation = data.get("vision_operation")
     evidence_operation = data.get("evidence_lead_operation")
     evidence_base_frames_modified = data.get("evidence_base_frames_modified")
+    output_transaction = data.get("output_transaction")
+    failed_run_modified_previous_output = data.get("failed_run_modified_previous_output")
+    output_marker_valid = data.get("output_marker_valid")
     mutations = data.get("mutations")
     if not isinstance(mutations, list):
         raise ValueError("mutations 必须是列表")
@@ -95,12 +99,16 @@ def _evaluate(data: Any) -> tuple[dict[str, bool], dict[str, list[str]]]:
         and mutation_coverage.isdisjoint(mutation_targets),
         "EVIDENCE-LEADS-NON-DESTRUCTIVE": evidence_operation == "classify_and_summarize_only"
         and evidence_base_frames_modified is False,
+        "TRANSACTIONAL-OUTPUT-SAFETY": output_transaction == "staged_replace"
+        and failed_run_modified_previous_output is False
+        and output_marker_valid is True,
     }
     observables = {
         "preserved-short-motion-groups": sorted(short_preserved),
         "vision-output-frame-set": sorted(vision_frames),
         "final-coverage-frame-set": sorted(mutation_coverage.intersection(final_frames)),
         "evidence-base-frame-set": sorted(base_frames),
+        "output-transaction-mode": [str(output_transaction or "")],
     }
     return results, observables
 
