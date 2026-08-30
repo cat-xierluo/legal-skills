@@ -119,6 +119,14 @@ Options:
                    into the worktree via symlink for Python projects. Opt-in because venv
                    paths are layout-sensitive; fail-closed when the source interpreter is
                    missing or a 0-byte placeholder, or the worktree already has .runtime.
+  --deps-mode MODE  node_modules dependency mode for the worktree. auto (default):
+                   symlink, except it auto-selects local when --allow-install-command
+                   is passed (a task authorized to install will mutate dependencies;
+                   a symlinked node_modules breaks pnpm add and vite server.fs.allow).
+                   symlink = force the main-repo node_modules symlink (legacy behavior).
+                   local = never symlink; the worker installs locally inside the worktree
+                   before first verification (install authorization still goes through
+                   the --allow-install-command + --install-authorization-source channel).
   --allow-shell-command CMD
                    Allow this exact non-install Shell command (repeatable). Verification commands
                    passed via --verify-cmd are included automatically. All other Shell commands
@@ -339,6 +347,19 @@ parse_spawn_worker_args() {
         ;;
       --python-runtime-symlink)
         PYTHON_RUNTIME_SYMLINK="$2"
+        shift 2
+        ;;
+      --deps-mode)  # node_modules 依赖补偿模式；auto=默认（有 --allow-install-command 时自动 local，否则软链）
+        case "$2" in
+          auto|symlink|local)
+            DEPS_MODE="$2"
+            ;;
+          *)
+            echo "ERROR: --deps-mode only accepts auto|symlink|local (got: $2)" >&2
+            usage
+            exit 64
+            ;;
+        esac
         shift 2
         ;;
       --git-expected-name)
