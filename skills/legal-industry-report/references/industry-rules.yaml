@@ -1,0 +1,358 @@
+schema_version: 1
+last_verified: 2026-08-30
+
+# 本文件只定义研究路线和候选一手信源，不预设研究结论。
+# legal-client-brief 使用时，候选域名仍须进入用户维护的 sources-whitelist.txt。
+common:
+  required_dimensions:
+    - 行业定义与统计口径
+    - 规模、增速与周期位置
+    - 产业链与价值分配
+    - 竞争格局与代表企业
+    - 区域集群与政策差异
+    - 准入、监管与标准
+    - 争议类型与法律服务机会
+  research_questions:
+    - 这个行业的边界如何定义，哪些相邻业态不应混入？
+    - 规模与增速采用什么指标、统计期、区域和名义/实际口径？
+    - 价值链中谁掌握定价权、关键资源、渠道和数据？
+    - 主要监管者分别管什么，近期规则变化影响哪个业务环节？
+    - 哪些公开企业可以代表不同商业模式，而不是只代表头部公司？
+    - 哪些法律风险高频、影响大且能够转化为可执行服务？
+  sources:
+    - id: gov-policy
+      name: 国务院政策文件库
+      url: https://sousuo.www.gov.cn/zcwjk/
+      authority: official
+      use_for: [行政法规, 规章, 行政规范性文件, 政策沿革]
+      cadence: event
+      access_notes: 核对发文机关、文号、发布日期、施行日期和现行状态
+    - id: national-statistics
+      name: 国家统计局
+      url: https://www.stats.gov.cn/sj/
+      authority: official
+      use_for: [宏观数据, 行业增加值, 统计年鉴, 指标解释]
+      cadence: monthly
+      access_notes: 必须记录统计口径、基期和是否为规模以上企业
+    - id: enterprise-credit
+      name: 国家企业信用信息公示系统
+      url: https://www.gsxt.gov.cn/
+      authority: official
+      use_for: [经营主体登记, 年报, 行政处罚, 异常名录]
+      cadence: event
+      access_notes: 主体多候选时不得自动选择第一项
+    - id: national-standards
+      name: 全国标准信息公共服务平台
+      url: https://std.samr.gov.cn/
+      authority: official
+      use_for: [国家标准, 行业标准题录, 标准状态]
+      cadence: event
+      access_notes: 同时核对标准号、发布日期、实施日期与废止状态
+    - id: cninfo
+      name: 巨潮资讯网
+      url: https://www.cninfo.com.cn/
+      authority: statutory-disclosure
+      use_for: [上市公司公告, 招股说明书, 年报, 问询回复]
+      cadence: event
+      access_notes: 仅证明披露主体及文件所述事项，不直接外推全行业
+    - id: sse
+      name: 上海证券交易所信息披露
+      url: https://www.sse.com.cn/disclosure/
+      authority: statutory-disclosure
+      use_for: [沪市公告, 科创板审核披露, 监管问询]
+      cadence: event
+      access_notes: 记录公告版本和披露日期
+    - id: szse
+      name: 深圳证券交易所信息披露
+      url: https://www.szse.cn/disclosure/
+      authority: statutory-disclosure
+      use_for: [深市公告, 创业板审核披露, 监管问询]
+      cadence: event
+      access_notes: 记录公告版本和披露日期
+  freshness_rules:
+    policy: 每次交付前复核现行状态；出现修订、废止或替代文件时更新
+    statistics: 优先使用最新完整统计期，同时保留同比基期
+    enterprise: 公开分发前重新核验主体状态和最新披露
+    web_page: 记录检索时间；页面无发布日期时不得用于证明近期变化
+
+packs:
+  - id: advanced-manufacturing
+    aliases: [制造业, 装备制造, 工业自动化, 半导体, 集成电路, 芯片, 晶圆, 封测, 机器人, 具身智能, 人形机器人, 工程机械]
+    report:
+      required_dimensions: [产能与产量, 关键设备与材料, 国产替代, 供应链集中度, 技术标准, 产业集群]
+      research_questions:
+        - 关键设备、材料和软件环节的国产化率如何定义，证据来自何处？
+        - 产能、产量、出货量和销售额是否被混用？
+        - 核心零部件、代工和系统集成环节由谁承担质量与交付风险？
+      indicators: [工业增加值, 产量或出货量, 固定资产投资, 研发强度, 进出口额, 产能利用率]
+    brief:
+      watch_events: [产业政策, 产品准入, 技术标准, 出口管制, 重大扩产, 供应链中断, 重大质量事件]
+      relevance_questions: [是否改变客户准入或认证成本, 是否影响核心供应链或交付, 是否形成知识产权或产品责任动作]
+    legal_risk_lenses: [技术合同, 知识产权与商业秘密, 产品质量, 供应链履约, 出口管制, 数据与工业安全, 劳动用工]
+    sources:
+      - id: miit
+        name: 工业和信息化部
+        url: https://www.miit.gov.cn/
+        authority: official
+        use_for: [工业运行, 产业政策, 产品公告, 行业准入]
+        cadence: monthly
+        access_notes: 区分统计运行数据、政策文件和公示稿
+      - id: customs
+        name: 海关总署统计与政务服务
+        url: https://online.customs.gov.cn/
+        authority: official
+        use_for: [进出口统计, 税则, 通关监管]
+        cadence: monthly
+        access_notes: 记录商品编码、贸易方式和币种口径
+
+  - id: ai-data
+    aliases: [人工智能, AI, 大模型, LLM, AIGC, 生成式AI, 软件, 数据要素, 数据交易, 数据资产, 数据流通, 云计算]
+    report:
+      required_dimensions: [算力模型数据链条, 商业化路径, 数据来源, 算法与模型备案, 高质量数据集, 安全治理]
+      research_questions:
+        - 收入来自模型、算力、数据、应用还是集成服务，是否被合并计算？
+        - 训练、微调和应用数据的来源与权利链是否可解释？
+        - 备案、测评、内容治理和跨境要求分别落在哪个产品阶段？
+      indicators: [算力规模, 模型或服务备案数量, 数据产业规模, 研发投入, 客户结构, 商业化收入]
+    brief:
+      watch_events: [算法或模型备案, 数据流通制度, 安全事件, 知识产权判例, 平台规则, 算力与数据政策]
+      relevance_questions: [是否改变产品上线条件, 是否影响训练数据合法性, 是否要求合同或治理流程调整]
+    legal_risk_lenses: [个人信息, 数据安全, 数据跨境, 算法治理, 内容安全, 开源许可, 著作权, 商业秘密]
+    sources:
+      - id: cac
+        name: 国家互联网信息办公室
+        url: https://www.cac.gov.cn/
+        authority: official
+        use_for: [算法治理, 生成式人工智能, 数据出境, 网络与内容安全]
+        cadence: event
+        access_notes: 区分法规、部门规章、备案公告和执法通报
+      - id: nda
+        name: 国家数据局
+        url: https://www.nda.gov.cn/
+        authority: official
+        use_for: [数据基础制度, 数据产业, 公共数据, 数据基础设施]
+        cadence: event
+        access_notes: 同时追踪政策原文、解读和行业数据报告
+      - id: miit
+        name: 工业和信息化部
+        url: https://www.miit.gov.cn/
+        authority: official
+        use_for: [软件与信息服务业运行, 电信与互联网监管, 技术标准]
+        cadence: monthly
+        access_notes: 记录统计覆盖范围
+
+  - id: healthcare-life-sciences
+    aliases: [生物医药, 创新药, 制药, 医药, 医疗器械, 医疗服务, 医院, 数字医疗, 养老, 银发经济, 养老服务]
+    report:
+      required_dimensions: [研发管线, 注册审评, 医保支付, 集采与价格, 医疗服务准入, 产品全生命周期]
+      research_questions:
+        - 受理、临床、获批、上市和商业化数据是否被混用？
+        - 产品属于药品、器械、组合产品还是医疗服务，监管路径有何不同？
+        - 医保、集采与医院准入如何影响收入确认和回款？
+      indicators: [受理与获批数量, 临床阶段分布, 集采价格, 医保覆盖, 研发投入, 商业化收入]
+    brief:
+      watch_events: [注册审评, 集采与医保, 药械监管, 医疗服务政策, 安全性通报, 技术指导原则]
+      relevance_questions: [是否改变注册或临床路径, 是否影响价格与渠道, 是否触发药物警戒或产品责任动作]
+    legal_risk_lenses: [注册合规, 临床试验, 推广宣传, 反商业贿赂, 医保与集采, 产品责任, 数据与人类遗传资源]
+    sources:
+      - id: nmpa
+        name: 国家药品监督管理局
+        url: https://www.nmpa.gov.cn/
+        authority: official
+        use_for: [药品器械监管, 数据查询, 公告通告, 监督检查]
+        cadence: event
+        access_notes: 核对产品类别、批准或备案状态
+      - id: cde
+        name: 国家药监局药品审评中心
+        url: https://www.cde.org.cn/
+        authority: official
+        use_for: [药品受理, 审评任务, 技术指导原则, 上市药品信息]
+        cadence: event
+        access_notes: 受理或公示不等于获批上市
+      - id: nhsa
+        name: 国家医疗保障局
+        url: https://www.nhsa.gov.cn/
+        authority: official
+        use_for: [医保目录, 集中采购, 医疗服务价格, 支付方式]
+        cadence: event
+        access_notes: 区分国家规则与地方执行口径
+
+  - id: energy-mobility
+    aliases: [新能源, 电力, 光伏, 风电, 储能, 氢能, 新能源汽车, 电动汽车, 锂电池, 动力电池, EV, NEV, 低空经济, eVTOL, 无人机, 通用航空]
+    report:
+      required_dimensions: [装机或产销量, 资源与关键材料, 基础设施, 补贴与价格机制, 产品准入, 回收与环境责任]
+      research_questions:
+        - 装机、并网、产能、产量和销量分别代表什么？
+        - 关键原材料、核心部件和基础设施约束在哪里？
+        - 补贴、市场化交易、产品公告和地方准入如何影响商业模式？
+      indicators: [装机与发电量, 产销量, 出口量, 充换电或基础设施数量, 原材料价格, 产能利用率]
+    brief:
+      watch_events: [能源政策, 电力市场规则, 产品公告, 召回与事故, 补贴税收, 电池回收, 低空准入]
+      relevance_questions: [是否影响项目收益或并网, 是否改变产品准入, 是否增加安全和回收责任]
+    legal_risk_lenses: [项目开发, 并网与交易, 产品准入, 质量与召回, 环境责任, 供应链, 土地与建设, 数据安全]
+    sources:
+      - id: nea
+        name: 国家能源局
+        url: https://www.nea.gov.cn/
+        authority: official
+        use_for: [能源统计, 电力市场, 新能源政策, 监管通报]
+        cadence: monthly
+        access_notes: 区分累计装机、新增装机和发电量
+      - id: miit
+        name: 工业和信息化部
+        url: https://www.miit.gov.cn/
+        authority: official
+        use_for: [新能源汽车产品公告, 动力电池, 工业运行]
+        cadence: event
+        access_notes: 产品公告和推荐目录需核对批次
+      - id: caam
+        name: 中国汽车工业协会
+        url: https://www.caam.org.cn/tjsj
+        authority: industry-association
+        use_for: [汽车产销, 新能源汽车月度数据, 出口]
+        cadence: monthly
+        access_notes: 协会口径需与国家统计和海关口径区分
+      - id: caac
+        name: 中国民用航空局
+        url: https://www.caac.gov.cn/
+        authority: official
+        use_for: [民航规章, 适航, 通用航空, 无人驾驶航空]
+        cadence: event
+        access_notes: 低空项目同时核对地方空域与运营要求
+
+  - id: construction-real-estate
+    aliases: [房地产, 物业, 写字楼, 商业地产, 长租公寓, 建设工程, 建筑施工, 基础设施, 工程总承包, EPC]
+    report:
+      required_dimensions: [开发投资, 销售与库存, 土地与融资, 建筑业产值, 项目类型, 资质与招投标]
+      research_questions:
+        - 销售面积、销售额、投资额、竣工和库存采用什么区域与样本口径？
+        - 开发、施工、设计、监理和运营主体的风险如何分配？
+        - 地方政策、土地规则和项目资金监管有何差异？
+      indicators: [开发投资, 销售面积与金额, 待售面积, 建筑业总产值, 新签合同额, 土地成交]
+    brief:
+      watch_events: [房地产政策, 工程计价, 资质与招投标, 城市更新, 保交付, 司法解释, 典型工程争议]
+      relevance_questions: [是否影响项目获取或融资, 是否改变结算与索赔, 是否触发交付或担保安排调整]
+    legal_risk_lenses: [土地与规划, 建设工程合同, 招投标, 价款结算, 工期索赔, 商品房交付, 物业运营, 项目融资]
+    sources:
+      - id: mohurd
+        name: 住房和城乡建设部
+        url: https://www.mohurd.gov.cn/
+        authority: official
+        use_for: [房地产政策, 建筑业监管, 资质, 工程标准]
+        cadence: event
+        access_notes: 地方执行须补省市住建部门原文
+      - id: mnr
+        name: 自然资源部
+        url: https://www.mnr.gov.cn/
+        authority: official
+        use_for: [土地政策, 国土空间规划, 自然资源统计]
+        cadence: event
+        access_notes: 土地成交明细优先使用地方自然资源交易平台
+
+  - id: consumer-food-services
+    aliases: [消费, 零售, 餐饮, 食品, 食品制造, 预制菜, 连锁餐饮, 食品饮料, 文旅, 酒店, 旅游, 民宿, 景区, 直播电商, 内容电商, MCN, 短视频, 直播, 带货, 教育, 教培, 职业培训]
+    report:
+      required_dimensions: [社会消费与客流, 渠道结构, 连锁与加盟, 平台依赖, 质量安全, 广告与价格]
+      research_questions:
+        - 销售额、GMV、订单量、客流和门店数是否被混用？
+        - 品牌方、平台、主播、加盟商和供应商如何分配责任？
+        - 许可、食品安全、广告、价格和消费者保护规则落在哪个环节？
+      indicators: [社会消费品零售额, 线上零售额, 门店或用户规模, 客单价, 客流, 投诉与抽检]
+    brief:
+      watch_events: [消费政策, 抽检召回, 广告执法, 平台规则, 价格监管, 加盟与消费者争议]
+      relevance_questions: [是否影响营销话术或价格机制, 是否要求供应链追溯, 是否需要调整平台或加盟合同]
+    legal_risk_lenses: [食品与产品安全, 广告合规, 消费者权益, 价格与反不正当竞争, 平台责任, 加盟, 用工, 知识产权]
+    sources:
+      - id: samr
+        name: 国家市场监督管理总局
+        url: https://www.samr.gov.cn/
+        authority: official
+        use_for: [抽检召回, 广告与价格执法, 反不正当竞争, 消费者保护]
+        cadence: event
+        access_notes: 执法案例需区分个案事实与一般规则
+      - id: mofcom
+        name: 商务部
+        url: https://www.mofcom.gov.cn/
+        authority: official
+        use_for: [消费市场, 零售餐饮, 服务贸易, 电子商务]
+        cadence: monthly
+        access_notes: 记录数据覆盖范围和是否为监测样本
+
+  - id: cross-border-trade-logistics
+    aliases: [跨境电商, 出海, 跨境贸易, 跨境物流, 国际物流, 物流, 快递, 仓储, 货运, 智慧物流, 供应链]
+    report:
+      required_dimensions: [贸易规模, 商品与市场结构, 通关与税则, 跨境收付, 物流网络, 出口管制与制裁]
+      research_questions:
+        - 贸易额采用一般贸易、跨境电商还是特定商品编码口径？
+        - 卖方、平台、货代、承运人和海外仓如何分配履约与数据责任？
+        - 目标市场的准入、制裁、产品责任和税务规则如何进入合同？
+      indicators: [进出口额, 商品编码结构, 目的地结构, 运价或时效, 跨境电商规模, 海外仓布局]
+    brief:
+      watch_events: [关税与税则, 出口管制, 制裁, 海关监管, 跨境收付, 平台规则, 物流中断]
+      relevance_questions: [是否影响目标市场或商品编码, 是否触发合同价格与交付条款, 是否需要制裁与交易方筛查]
+    legal_risk_lenses: [国际贸易合同, 海关与税务, 出口管制与制裁, 产品责任, 跨境数据, 支付结算, 运输与保险]
+    sources:
+      - id: customs
+        name: 海关总署统计与政务服务
+        url: https://online.customs.gov.cn/
+        authority: official
+        use_for: [进出口统计, 税则, 原产地, 通关监管]
+        cadence: monthly
+        access_notes: 记录商品编码、贸易方式、币种和目的地口径
+      - id: mofcom
+        name: 商务部
+        url: https://www.mofcom.gov.cn/
+        authority: official
+        use_for: [外贸政策, 出口管制, 对外投资, 国别指南]
+        cadence: event
+        access_notes: 国别风险需结合目标市场官方原文
+      - id: safe
+        name: 国家外汇管理局
+        url: https://www.safe.gov.cn/
+        authority: official
+        use_for: [跨境收付, 外汇政策, 国际收支]
+        cadence: event
+        access_notes: 区分经常项目、资本项目和银行执行口径
+      - id: tax
+        name: 国家税务总局
+        url: https://www.chinatax.gov.cn/
+        authority: official
+        use_for: [出口退税, 跨境税收, 税收协定]
+        cadence: event
+        access_notes: 地方操作问题补充主管税务机关口径
+
+  - id: finance-fintech
+    aliases: [金融科技, FinTech, 支付, 小贷, 消费金融, 银行, 保险, 证券, 基金]
+    report:
+      required_dimensions: [牌照与业务边界, 资产与负债结构, 客群与渠道, 风险指标, 数据与模型, 消费者保护]
+      research_questions:
+        - 业务收入与风险分别落在哪个持牌主体？
+        - 规模指标是余额、发生额、管理规模还是交易额？
+        - 合作机构、助贷平台、增信方和资金方如何分配责任？
+      indicators: [资产或管理规模, 不良率, 资本充足, 保费或交易额, 客户投诉, 科技投入]
+    brief:
+      watch_events: [监管规则, 处罚通报, 利率与收费, 数据治理, 消费者保护, 牌照与业务调整]
+      relevance_questions: [是否改变持牌边界, 是否影响产品合同与披露, 是否要求模型或数据治理调整]
+    legal_risk_lenses: [牌照与监管, 消费者保护, 数据与算法, 反洗钱, 关联交易, 公司治理, 信息披露]
+    sources:
+      - id: pbc
+        name: 中国人民银行
+        url: https://www.pbc.gov.cn/
+        authority: official
+        use_for: [货币金融统计, 支付结算, 反洗钱, 金融基础规则]
+        cadence: monthly
+        access_notes: 区分政策公告、统计数据和解读
+      - id: nfra
+        name: 国家金融监督管理总局
+        url: https://www.nfra.gov.cn/
+        authority: official
+        use_for: [银行保险监管, 监管规则, 行政处罚, 风险提示]
+        cadence: event
+        access_notes: 同时核对地方监管局公开信息
+      - id: csrc
+        name: 中国证券监督管理委员会
+        url: https://www.csrc.gov.cn/
+        authority: official
+        use_for: [证券基金监管, 规则, 处罚, 市场统计]
+        cadence: event
+        access_notes: 证券披露事实仍回到法定披露平台原文

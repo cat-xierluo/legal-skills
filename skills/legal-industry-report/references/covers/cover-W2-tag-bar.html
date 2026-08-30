@@ -1,5 +1,5 @@
-<!-- 封面变体 W2:期数条版 —— weekly-legal-briefing 专属
-     定位:周报客户触达,克制、专业、不浮夸
+<!-- 封面变体 W2：信息条版 —— legal-client-brief 专属
+     定位：高频客户触达，克制、专业、易识别
      风格:深蓝主色 + 顶部金色期数条 + 简洁标题 + 极简底部
      与 IR 差异:无几何叠层、无徽章、期数条单独占顶、字号略小 -->
 <style>
@@ -51,7 +51,7 @@
 }
 .cover-W2 .cover-title {
   font-size: 36pt; font-weight: 800; color: #FFFFFF; letter-spacing: 4px;
-  line-height: 1.35; margin-bottom: 8mm; max-width: 155mm;
+  line-height: 1.35; text-wrap: balance; margin-bottom: 8mm; max-width: 155mm;
 }
 .cover-W2 .cover-subtitle {
   font-size: 13pt; color: var(--accent); letter-spacing: 3px;
@@ -90,7 +90,7 @@
 </style>
 <div class="cover-W2">
   <div class="issue-bar">
-    <span class="issue-no">第 {{ period_number }} 期　|　{{ generated_date }}</span>
+    <span class="issue-no">{{ cadence_label }}简报　|　{{ period_end }}</span>
     <span class="issue-audience">FOR　{{ audience_label }}</span>
   </div>
   <div class="series-mark">{{ series_subtitle }}</div>
@@ -116,8 +116,8 @@
       <div class="meta-val" style="font-size: 9.5pt;">{{ audience_label }}</div>
     </div>
     <div class="meta-cell">
-      <div class="meta-label">PERIOD</div>
-      <div class="meta-val">第 {{ period_number }} 期</div>
+      <div class="meta-label">WINDOW</div>
+      <div class="meta-val" style="font-size: 9pt;">{{ period_start }} — {{ period_end }}</div>
     </div>
   </div>
   <div class="cover-footer">

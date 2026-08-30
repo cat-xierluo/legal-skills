@@ -1,0 +1,21 @@
+# 测试品牌配置
+
+- report_kind: report
+- law_firm: 示例律师事务所
+- series_name: 产业与规则观察
+- series_subtitle: INDUSTRY LEGAL REPORT
+- report_code: DEMO-REPORT-2026-Q3
+- lead_lawyer: 示例律师
+- lead_lawyer_title: 主办律师
+- lead_lawyer_avatar:
+- motto: ""
+- contact_wechat:
+- contact_phone:
+- contact_email:
+- cover_style: C-geo
+- color_palette: bluebook
+- accent_color: "#C9A35B"
+- design_intensity: balanced
+- include_toc: true
+- include_methodology: true
+- footer_brand: 行业报告
