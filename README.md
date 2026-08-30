@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-30 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.2 | **事务性输出与失败安全**：参数和视频先预检，新结果在同级 staging 完整生成后才替换旧结果；新增所有权标记、旧版报告兼容校验、符号链接/未知文件/下游产物保护，以及损坏视频和提交回滚真实 CLI 回归 |
 | 2026-08-27 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.8.1 | **并行总控可靠性修复**：守夜探针精确区分额度、配置、认证、网络和超时，只有同一 watcher 观察到 `quota → available` 才唤醒 PM；Orca worktree create 固定到已验证的项目仓并核对 repoId，阻断符号链接 Skill cwd 导致的错仓；判活拆分运行时活性与业务进展，静止信号不再直接等同假死 |
 | 2026-08-26 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.4 | **弱模型前向实测与账本 fail-fast**：GLM 三门真实课程首轮均通过 14/14 领域门禁、主模型语义评分 90—93；第二轮配额失败严格记为 0/3，并据完整失败样本新增生成前素材账本预检，统一 include/skip 的连续 `MAT-*` 编号、阻断 `SKIP-*` 平行命名；同步保留个人判断、事故转述和产品效果的认识论边界，稳定性继续标记 `NOT_VERIFIED` |
 | 2026-08-26 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.8.1  | **Wave Autopilot 持久性边界与整改基线**：明确 session recurring cron 只提供 L1 live-session fast path；新增跨会话 runtime ledger、PM lease/fencing、幂等 reconcile、durable scheduler/soft park、shared-context 单写者和八项故障注入设计，并分别标记 L2 controller 与 L3 scheduler 未实现状态 |
@@ -411,7 +412,7 @@
 <td>工具·视频处理</td>
 <td style="word-break:break-word">从录屏视频中以有界高召回抽取证据截图并过滤切换中间态；可用本地 OCR 多锚点与无文字图像主体生成不保存原文的证据线索包，再为普通或较弱多模态模型提供封闭分类/概括及只做减法的去重审计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.8.1</td>
+<td style="text-align:center">v0.8.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/video-screenshot-0.3.2.zip">下载</a></td>
 <td></td>
 </tr>

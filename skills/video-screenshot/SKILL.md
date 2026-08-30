@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
 description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "0.8.1"
+version: "0.8.2"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -16,6 +16,9 @@ license: MIT
 ### 1. 确认输入与输出
 
 取得一个本地视频路径。支持 `.mp4`、`.mov`、`.avi`、`.mkv`、`.webm`、`.flv`、`.wmv`、`.ts`。默认输出到视频同级 `<视频名>_frames/`；如该目录可能含其他材料，显式指定新的 `-o` 目录。
+
+<!-- skill-lint:constraint TRANSACTIONAL-OUTPUT-SAFETY -->
+脚本必须先完成参数检查和视频探测，再在目标目录同级的隐藏 staging 中生成完整结果。只有帧、报告、所有权标记和可选归档全部成功后，才一次性替换旧的本工具输出；任一步失败都保留旧结果。输出根目录或其中任一文件是符号链接、目录含未知文件，或已经生成 `_evidence_leads`、`_vision_audit`、`_curated`、`_vision_review.json` 时，拒绝原地覆盖并要求使用新的 `-o`。旧版无所有权标记的结果只有在 `_report.json` 与实际基础帧清单完全一致时才允许兼容替换。
 
 ### 2. 运行基础精筛
 
@@ -127,6 +130,7 @@ python3 scripts/apply_vision_review.py \
 |---|---|
 | `frame_NNN_MMmSSs.jpg` | 本地算法保留的基础帧 |
 | `_report.json` | 输入、参数、时间簇统计、丢弃统计、帧时间戳和 SHA256 |
+| `_video_screenshot_output.json` | 不含源路径的输出所有权标记，绑定报告与目录内容哈希及根目录清单，供安全重跑校验 |
 | `_review_candidates/` | 仅显式开启时保存的算法丢弃候选 |
 | `_evidence_leads/evidence_index.json` | 证据线索排序、类别、信号计数、隐私声明和逐帧哈希；不含 OCR 原文 |
 | `_evidence_leads/evidence_sheet_NNN.jpg` | 默认 2 列大图的高价值联系表；最多 24 张、4 页 |
@@ -172,6 +176,7 @@ python3 scripts/apply_vision_review.py \
 ## 验收与安全边界
 
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
+- 输出事务可单独运行 `uv run scripts/check_pipeline.py --case transactional-output`，必须覆盖坏视频、非法参数、符号链接、未知文件、下游产物保护、成功替换和提交回滚。
 - 行为变化必须用代表视频复测，并通过联系表或逐图查看进行视觉抽查；静态检查或帧数减少不能单独证明准确。
 - 不修改原视频，不把完整录屏默认上传云端。
 - 保留基础帧和全链路 SHA256；证据线索层只能排序、分类和概括，去重视觉层只能生成非破坏性精选副本。
@@ -181,6 +186,6 @@ python3 scripts/apply_vision_review.py \
 
 - **本地文件访问**：读取用户明确提供的视频；图片与复核 JSON 只写入显式输出目录，Skill `archive/` 仅写入 `_report.json` 与 `extraction_meta.json` 元数据副本；不扫描无关目录。
 - **本地进程执行**：以参数数组调用本机 `ffmpeg`、`ffprobe` 和 Python 脚本，不使用 shell 拼接执行用户输入。
-- **受控清理**：只删除本次临时目录和可由文件名规则确认的旧基础输出；若发现视觉审计、精选结果或未知文件，拒绝自动覆盖并提示改用新目录。
+- **事务性替换**：新结果只写入目标同级 staging；成功提交前不改动旧目录。旧目录必须通过所有权标记，或通过旧版报告与实际帧清单一致性校验；若发现证据线索、视觉复核、精选结果、符号链接或未知文件，拒绝覆盖并提示改用新目录。
 - **网络与依赖**：抽帧和 OCR 均可离线运行；`uv run` 首次缺少 Pillow 时可能联网下载依赖。多模态审计是否上传联系表取决于当前模型提供方，处理未脱敏证据前先确认其隐私政策。
 - **凭据与环境变量**：本 Skill 不读取 API Key、Token、密码或云端凭据，也不自行调用外部视觉 API。

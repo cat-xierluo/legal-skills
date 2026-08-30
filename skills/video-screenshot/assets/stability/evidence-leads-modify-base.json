@@ -7,6 +7,9 @@
   "vision_output_frame_ids": ["frame-b"],
   "evidence_lead_operation": "classify_and_summarize_only",
   "evidence_base_frames_modified": true,
+  "output_transaction": "staged_replace",
+  "failed_run_modified_previous_output": false,
+  "output_marker_valid": true,
   "mutations": [{"target_id": "frame-a", "coverage_id": "frame-b", "confidence": 0.95, "local_risk": true, "local_coverage_eligible": true}],
   "final_frame_ids": ["frame-b"]
 }

@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
@@ -26,9 +27,12 @@ import extract as extract_module
 from extract import (
     _archive_result,
     _build_coverage_requirements,
-    _clean_output_dir,
+    _directory_tree_sha256,
+    _inspect_existing_output,
+    _promote_staged_output,
     _record_drop_candidate,
     _rescue_short_motion_with_ocr,
+    _write_output_marker,
     parse_args as parse_extract_args,
 )
 from lib import (
@@ -46,6 +50,7 @@ from lib import (
     select_temporal_representatives,
     temporal_completion_metrics,
     transient_ui_drop_reason,
+    find_tool,
 )
 from prepare_evidence_leads import (
     _load_taxonomy,
@@ -79,6 +84,7 @@ def parse_args() -> argparse.Namespace:
             "coverage-survival",
             "invalid-review",
             "output-protection",
+            "transactional-output",
             "archive-metadata",
             "evidence-signals",
             "evidence-package",
@@ -838,9 +844,9 @@ def _test_output_protection() -> None:
         review = root / "_vision_review.json"
         review.write_text("{}\n", encoding="utf-8")
         try:
-            _clean_output_dir(str(root))
+            _inspect_existing_output(root)
         except RuntimeError as exc:
-            assert "拒绝自动删除" in str(exc)
+            assert "拒绝覆盖" in str(exc)
         else:
             raise AssertionError("既有视觉审计不得被基础抽帧自动删除")
         assert review.is_file()
@@ -860,6 +866,166 @@ def _test_output_protection() -> None:
         assert "拒绝重建" in result.stderr
         assert review.is_file()
         assert not (root / "_vision_audit").exists()
+
+
+def _make_tiny_video(path: Path) -> None:
+    ffmpeg = find_tool("ffmpeg")
+    assert ffmpeg, "事务性 CLI 回归需要 ffmpeg"
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=160x96:rate=5:duration=2",
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "3",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0 and path.is_file(), result.stderr
+
+
+def _run_extract(input_path: Path, output_path: Path, *extra: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "extract.py"),
+            "-i",
+            str(input_path),
+            "-o",
+            str(output_path),
+            "--no-archive",
+            *extra,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=90,
+    )
+
+
+def _test_transactional_output() -> None:
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-transaction-") as tmp:
+        root = Path(tmp)
+        valid_video = root / "valid.mp4"
+        broken_video = root / "broken.mp4"
+        broken_video.write_bytes(b"not a video\n")
+        _make_tiny_video(valid_video)
+
+        # 损坏输入必须在读取旧输出之前失败，旧结果逐字节不变。
+        old_output = root / "old-output"
+        old_output.mkdir()
+        _write_fixture(old_output)
+        before_broken = _directory_tree_sha256(old_output)
+        broken_result = _run_extract(broken_video, old_output)
+        assert broken_result.returncode != 0, broken_result.stdout
+        assert _directory_tree_sha256(old_output) == before_broken
+
+        # 参数错误也不得触碰旧输出。
+        invalid_result = _run_extract(valid_video, old_output, "--quality", "99")
+        assert invalid_result.returncode != 0, invalid_result.stdout
+        assert _directory_tree_sha256(old_output) == before_broken
+
+        # 非空未知目录失败关闭，不删除用户文件。
+        unknown_output = root / "unknown-output"
+        unknown_output.mkdir()
+        sentinel = unknown_output / "user-note.txt"
+        sentinel.write_text("keep me\n", encoding="utf-8")
+        unknown_before = _directory_tree_sha256(unknown_output)
+        unknown_result = _run_extract(valid_video, unknown_output)
+        assert unknown_result.returncode != 0, unknown_result.stdout
+        assert _directory_tree_sha256(unknown_output) == unknown_before
+
+        # 下游证据线索产物存在时不得原地重跑基础抽帧。
+        evidence_output = root / "evidence-output"
+        evidence_output.mkdir()
+        _write_fixture(evidence_output)
+        evidence_dir = evidence_output / "_evidence_leads"
+        evidence_dir.mkdir()
+        (evidence_dir / "evidence_index.json").write_text("{}\n", encoding="utf-8")
+        evidence_before = _directory_tree_sha256(evidence_output)
+        evidence_result = _run_extract(valid_video, evidence_output)
+        assert evidence_result.returncode != 0, evidence_result.stdout
+        assert _directory_tree_sha256(evidence_output) == evidence_before
+
+        # 输出根符号链接不得被跟随。
+        real_output = root / "real-output"
+        real_output.mkdir()
+        real_sentinel = real_output / "sentinel.txt"
+        real_sentinel.write_text("untouched\n", encoding="utf-8")
+        linked_output = root / "linked-output"
+        linked_output.symlink_to(real_output, target_is_directory=True)
+        linked_result = _run_extract(valid_video, linked_output)
+        assert linked_result.returncode != 0, linked_result.stdout
+        assert real_sentinel.read_text(encoding="utf-8") == "untouched\n"
+
+        # 合法旧版结果可在完整生成后一次性替换，并写入所有权标记。
+        success_result = _run_extract(
+            valid_video,
+            old_output,
+            "--strategy",
+            "interval",
+            "--interval",
+            "0.5",
+            "--no-temporal-select",
+            "--no-filter-quality",
+            "--dedup-threshold",
+            "0",
+            "--ssim-threshold",
+            "0",
+            "--min-gap",
+            "0",
+        )
+        assert success_result.returncode == 0, success_result.stderr
+        assert (old_output / "_video_screenshot_output.json").is_file()
+        committed_state = _inspect_existing_output(old_output)
+        assert committed_state["ownership_mode"] == "marker", committed_state
+
+        # 所有权标记还要绑定真实内容；手工改过的旧帧不能被当作纯工具输出删除。
+        tampered_frame = next(old_output.glob("frame_*.jpg"))
+        tampered_frame.write_bytes(tampered_frame.read_bytes() + b"manual-edit")
+        tampered_before = _directory_tree_sha256(old_output)
+        tampered_result = _run_extract(valid_video, old_output)
+        assert tampered_result.returncode != 0, tampered_result.stdout
+        assert _directory_tree_sha256(old_output) == tampered_before
+
+        # 提交动作自身失败时，已经移到备份位的旧目录必须自动恢复。
+        rollback_target = root / "rollback-output"
+        rollback_target.mkdir()
+        _write_fixture(rollback_target)
+        _write_output_marker(rollback_target)
+        expected_state = _inspect_existing_output(rollback_target)
+        rollback_before = _directory_tree_sha256(rollback_target)
+        rollback_stage = root / ".rollback-output.staging-test"
+        rollback_stage.mkdir()
+        _write_fixture(rollback_stage)
+        _write_output_marker(rollback_stage)
+        original_rename = Path.rename
+
+        def fail_staging_rename(self: Path, target: Path) -> Path:
+            if self == rollback_stage:
+                raise OSError("injected promotion failure")
+            return original_rename(self, target)
+
+        with patch.object(Path, "rename", fail_staging_rename):
+            try:
+                _promote_staged_output(rollback_stage, rollback_target, expected_state)
+            except RuntimeError as exc:
+                assert "旧输出已保留" in str(exc), exc
+            else:
+                raise AssertionError("注入提交失败后必须返回失败")
+        assert _directory_tree_sha256(rollback_target) == rollback_before
+        assert rollback_stage.is_dir(), "失败的新结果应留给调用方 finally 清理"
 
 
 def _test_archive_metadata_only() -> None:
@@ -1099,6 +1265,7 @@ def main() -> int:
         "coverage-survival": _test_coverage_survival,
         "invalid-review": _test_invalid_review,
         "output-protection": _test_output_protection,
+        "transactional-output": _test_transactional_output,
         "archive-metadata": _test_archive_metadata_only,
         "evidence-signals": _test_evidence_signals,
         "evidence-package": _test_evidence_package,

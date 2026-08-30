@@ -24,6 +24,7 @@ import time
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 # 将 scripts/ 同级目录加入搜索路径以便导入 lib
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -56,6 +57,9 @@ from lib import (
 )
 
 logger = logging.getLogger("video-screenshot")
+
+OUTPUT_MARKER_NAME = "_video_screenshot_output.json"
+OUTPUT_MARKER_SCHEMA_VERSION = 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -170,31 +174,38 @@ def main() -> None:
 
     args = parse_args()
 
-    # 验证输入
-    video_path = str(Path(args.input).resolve())
-    if not Path(video_path).exists():
-        print(f"错误: 视频文件不存在: {video_path}", file=sys.stderr)
+    try:
+        _validate_extract_args(args)
+    except ValueError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    # 验证输入。任何输出目录写入都必须发生在参数和视频探测成功之后。
+    input_path = Path(args.input).expanduser()
+    if not input_path.exists():
+        print(f"错误: 视频文件不存在: {input_path}", file=sys.stderr)
+        sys.exit(1)
+    if not input_path.is_file():
+        print(f"错误: 输入不是普通视频文件: {input_path}", file=sys.stderr)
+        sys.exit(1)
+    video_path = str(input_path.resolve())
 
     # 验证 ffmpeg
     if not find_tool("ffmpeg"):
         print("错误: 未检测到 ffmpeg，请先安装: brew install ffmpeg", file=sys.stderr)
         sys.exit(1)
 
-    # 确定输出目录（默认在视频文件同级目录下）
+    # 只解析目标位置，不创建或清理目录。
     video_stem = Path(video_path).stem
-    output_dir = args.output or str(Path(video_path).parent / f"{video_stem}_frames")
-    output_dir = str(Path(output_dir).resolve())
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
     try:
-        cleanup_stats = _clean_output_dir(output_dir)
+        output_target = _resolve_output_target(
+            args.output or str(Path(video_path).parent / f"{video_stem}_frames")
+        )
     except RuntimeError as exc:
         print(f"错误: {exc}", file=sys.stderr)
         sys.exit(1)
-    if cleanup_stats["stale_deleted_count"]:
-        print(f"  已清理旧输出文件: {cleanup_stats['stale_deleted_count']}")
 
-    # 探测视频
+    # 先探测视频；损坏输入不得触碰既有输出。
     print(f"探测视频: {video_path}")
     try:
         info = probe_video(video_path)
@@ -219,6 +230,16 @@ def main() -> None:
         scroll_diff_threshold=args.scroll_diff_threshold,
     )
 
+    # 探测成功后才检查旧输出所有权并建立同级 staging。检查仍是只读的，
+    # 直到完整结果准备好之前都不会删除或改写旧目录。
+    try:
+        cleanup_stats = _inspect_existing_output(output_target)
+    except RuntimeError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if cleanup_stats["stale_deleted_count"]:
+        print(f"  已识别可安全替换的旧输出: {cleanup_stats['stale_deleted_count']} 项")
+
     # OCR 引擎
     ocr_engine = None
     if args.ocr_dedup:
@@ -233,10 +254,22 @@ def main() -> None:
         else:
             print("  OCR: RapidOCR (本地，与 SSIM 并行复核)")
 
-    # 创建临时目录
+    # 创建临时目录。两个临时根都纳入同一个 finally，初始化或处理中途失败
+    # 也不会在输出位置留下半成品。
     started_at = time.monotonic()
-    tmpdir = tempfile.mkdtemp(prefix="video-screenshot-")
+    output_stage: Path | None = None
+    tmpdir: str | None = None
+    output_committed = False
+    archive_dir: Path | None = None
     try:
+        output_target.parent.mkdir(parents=True, exist_ok=True)
+        output_stage = Path(tempfile.mkdtemp(
+            prefix=f".{output_target.name}.staging-",
+            dir=str(output_target.parent),
+        ))
+        output_dir = str(output_stage)
+        tmpdir = tempfile.mkdtemp(prefix="video-screenshot-")
+
         # FFmpeg 抽帧
         interval_based = params.strategy == "interval"
         output_pattern = str(
@@ -275,11 +308,32 @@ def main() -> None:
 
         if not frame_files:
             print("警告: 未提取到任何帧", file=sys.stderr)
+            empty_state = DedupState()
             _write_report(
-                output_dir, video_path, info, params, 0, DedupState(), [], cleanup_stats,
+                output_dir, video_path, info, params, 0, empty_state, [], cleanup_stats,
                 [], args.keep_drop_candidates, args.drop_candidate_limit,
                 {"enabled": bool(args.temporal_select), "selected_before_dedup": 0}, args,
             )
+            _write_output_marker(output_stage)
+            if args.archive:
+                archive_dir = _archive_result(
+                    output_dir, video_path, info, params, args, empty_state, [], cleanup_stats,
+                    [], elapsed_seconds=time.monotonic() - started_at,
+                )
+            try:
+                leftover_backup = _promote_staged_output(
+                    output_stage, output_target, cleanup_stats
+                )
+            except Exception:
+                if archive_dir is not None:
+                    shutil.rmtree(archive_dir, ignore_errors=True)
+                raise
+            output_committed = True
+            if leftover_backup:
+                print(f"警告: 新结果已提交，但旧结果备份未能清理: {leftover_backup}", file=sys.stderr)
+            print(f"  输出目录: {output_target}")
+            if archive_dir:
+                print(f"  归档: {archive_dir}")
             return
 
         # 两遍式时间簇择优：先观察候选的前后关系，再把代表帧交给传统去重级联。
@@ -701,14 +755,27 @@ def main() -> None:
             temporal_summary, args,
         )
 
-        # 归档
-        archive_dir = None
+        # 报告、帧和所有权标记齐备后才允许提交。归档也是提交前门禁；若其失败，
+        # staging 会被清理，旧输出仍保持原样。
+        _write_output_marker(output_stage)
         if args.archive:
             archive_dir = _archive_result(
                 output_dir, video_path, info, params, args, state, frames_meta, cleanup_stats,
                 drop_candidates_meta,
                 elapsed_seconds=time.monotonic() - started_at,
             )
+        try:
+            leftover_backup = _promote_staged_output(
+                output_stage, output_target, cleanup_stats
+            )
+        except Exception:
+            if archive_dir is not None:
+                shutil.rmtree(archive_dir, ignore_errors=True)
+            raise
+        output_committed = True
+        output_dir = str(output_target)
+        if leftover_backup:
+            print(f"警告: 新结果已提交，但旧结果备份未能清理: {leftover_backup}", file=sys.stderr)
 
         # 汇总
         print(f"\n完成!")
@@ -749,77 +816,312 @@ def main() -> None:
             print(f"  归档: {archive_dir}")
 
     finally:
-        if not args.keep_temp:
+        if tmpdir is not None and not args.keep_temp:
             shutil.rmtree(tmpdir, ignore_errors=True)
-        else:
+        elif tmpdir is not None:
             print(f"  临时文件: {tmpdir}")
+        if not output_committed and output_stage is not None and output_stage.exists():
+            shutil.rmtree(output_stage, ignore_errors=True)
 
 
-def _clean_output_dir(output_dir: str) -> dict[str, object]:
-    """清理本工具生成的旧输出文件，避免本次结果混入残留帧。"""
-    root = Path(output_dir)
-    protected_vision_artifacts = [
-        root / "_vision_audit",
-        root / "_curated",
-        root / "_vision_review.json",
-    ]
-    existing_protected = [
-        path.name for path in protected_vision_artifacts
-        if path.exists() or path.is_symlink()
-    ]
-    if existing_protected:
-        names = "、".join(existing_protected)
-        raise RuntimeError(
-            f"输出目录含已完成或待完成的视觉复核产物（{names}），拒绝自动删除；"
-            "请改用新的 -o 输出目录，或在备份后显式移走这些产物"
-        )
+def _validate_extract_args(args: argparse.Namespace) -> None:
+    """在启动 ffmpeg 前拒绝会产生含糊或危险行为的参数。"""
+    errors: list[str] = []
 
-    stale_files: list[Path] = []
-    stale_files.extend(root.glob("frame_*.jpg"))
-    stale_files.extend(root.glob("frame_*.jpeg"))
-    for name in ("_report.json", "extraction_meta.json"):
-        p = root / name
-        if p.exists() and p.is_file():
-            stale_files.append(p)
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            errors.append(message)
 
-    stale_dirs: list[Path] = []
-    candidates_dir = root / "_review_candidates"
-    if candidates_dir.is_symlink():
-        raise RuntimeError("旧候选目录是符号链接，拒绝跟随并清理；请改用新的 -o 输出目录")
-    if candidates_dir.exists() and candidates_dir.is_dir():
-        unknown_candidates = [
-            path for path in candidates_dir.iterdir()
-            if path.is_symlink()
-            or not path.is_file()
-            or not re.fullmatch(r"candidate_\d{3}_.+\.jpg", path.name)
-        ]
-        if unknown_candidates:
-            names = "、".join(path.name for path in unknown_candidates[:5])
-            raise RuntimeError(
-                f"旧候选目录含非本工具文件（{names}），拒绝自动删除；请改用新的 -o 输出目录"
-            )
-        stale_files.extend(candidates_dir.glob("candidate_*.jpg"))
-        stale_dirs.append(candidates_dir)
-
-    deleted: list[str] = []
-    seen: set[Path] = set()
-    for p in stale_files:
-        if p in seen or not p.is_file():
-            continue
-        seen.add(p)
-        p.unlink()
-        deleted.append(p.name)
-    for p in stale_dirs:
-        try:
-            p.rmdir()
-        except OSError as exc:
-            raise RuntimeError(f"旧输出目录无法安全清理: {p}") from exc
-        deleted.append(p.name + "/")
-
-    return {
-        "stale_deleted_count": len(deleted),
-        "stale_deleted_files": deleted,
+    require(args.interval > 0, "--interval 必须大于 0")
+    require(0 <= args.scene_threshold <= 1, "--scene-threshold 必须在 0 到 1 之间")
+    require(args.sample_interval >= 0, "--sample-interval 不能小于 0")
+    require(0 <= args.dedup_threshold <= 64, "--dedup-threshold 必须在 0 到 64 之间")
+    crop_values = {
+        "--content-crop-top": args.content_crop_top,
+        "--content-crop-bottom": args.content_crop_bottom,
+        "--content-crop-left": args.content_crop_left,
+        "--content-crop-right": args.content_crop_right,
     }
+    for name, value in crop_values.items():
+        require(0 <= value < 1, f"{name} 必须在 0（含）到 1（不含）之间")
+    require(
+        args.content_crop_top + args.content_crop_bottom < 1,
+        "顶部与底部裁剪比例之和必须小于 1",
+    )
+    require(
+        args.content_crop_left + args.content_crop_right < 1,
+        "左侧与右侧裁剪比例之和必须小于 1",
+    )
+    require(0 <= args.ssim_threshold <= 1, "--ssim-threshold 必须在 0 到 1 之间")
+    require(args.scroll_diff_threshold >= 0, "--scroll-diff-threshold 不能小于 0")
+    require(0 <= args.ocr_threshold <= 1, "--ocr-threshold 必须在 0 到 1 之间")
+    require(args.ocr_min_new >= 0, "--ocr-min-new 不能小于 0")
+    require(args.max_size == 0 or args.max_size >= 16, "--max-size 必须为 0 或至少 16")
+    require(1 <= args.quality <= 31, "--quality 必须在 1 到 31 之间")
+    require(args.timeout > 5, "--timeout 必须大于 5 秒")
+    require(args.blur_threshold >= 0, "--blur-threshold 不能小于 0")
+    require(args.min_gap >= 0, "--min-gap 不能小于 0")
+    require(args.stable_max_gap > 0, "--stable-max-gap 必须大于 0")
+    require(args.transition_max_seconds >= 0, "--transition-max-seconds 不能小于 0")
+    require(args.motion_chunk_seconds > 0, "--motion-chunk-seconds 必须大于 0")
+    require(args.drop_candidate_limit >= 0, "--drop-candidate-limit 不能小于 0")
+    if errors:
+        raise ValueError("参数无效：" + "；".join(errors))
+
+
+def _resolve_output_target(raw_output: str) -> Path:
+    """解析输出根目录，但拒绝直接跟随该根目录本身的符号链接。"""
+    raw_path = Path(raw_output).expanduser()
+    if raw_path.is_symlink():
+        raise RuntimeError("输出根目录是符号链接，拒绝跟随；请指定真实的新目录")
+    resolved = raw_path.resolve(strict=False)
+    if resolved.exists() and not resolved.is_dir():
+        raise RuntimeError(f"输出路径不是目录: {resolved}")
+    return resolved
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, object]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"{label} 不是有效 JSON: {path}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{label} 必须是 JSON 对象: {path}")
+    return data
+
+
+def _validate_review_candidates(candidates_dir: Path) -> None:
+    if candidates_dir.is_symlink() or not candidates_dir.is_dir():
+        raise RuntimeError("旧候选目录不是本工具可验证的普通目录，拒绝覆盖")
+    invalid = [
+        path for path in candidates_dir.iterdir()
+        if path.is_symlink()
+        or not path.is_file()
+        or not re.fullmatch(r"candidate_\d{3}_.+\.jpg", path.name)
+    ]
+    if invalid:
+        names = "、".join(path.name for path in invalid[:5])
+        raise RuntimeError(f"旧候选目录含未知文件（{names}），拒绝覆盖")
+
+
+def _validate_reported_frames(root: Path, report: dict[str, object]) -> list[str]:
+    frame_items = report.get("frames")
+    if not isinstance(frame_items, list):
+        raise RuntimeError("旧输出报告缺少可验证的 frames 清单，拒绝覆盖")
+    reported: list[str] = []
+    for item in frame_items:
+        if not isinstance(item, dict):
+            raise RuntimeError("旧输出报告的 frames 条目无效，拒绝覆盖")
+        filename = str(item.get("filename") or "")
+        if (
+            not filename
+            or Path(filename).name != filename
+            or not re.fullmatch(r"frame_\d{3,}_.+\.jpe?g", filename, re.IGNORECASE)
+        ):
+            raise RuntimeError("旧输出报告含越界或非标准帧名，拒绝覆盖")
+        expected_sha = str(item.get("sha256") or "")
+        frame_path = root / filename
+        if (
+            not re.fullmatch(r"[0-9a-f]{64}", expected_sha)
+            or not frame_path.is_file()
+            or sha256(frame_path.read_bytes()).hexdigest() != expected_sha
+        ):
+            raise RuntimeError(f"旧输出帧与报告 SHA256 不一致（{filename}），拒绝覆盖")
+        reported.append(filename)
+    actual = sorted(
+        path.name for path in root.iterdir()
+        if path.is_file() and re.fullmatch(r"frame_.+\.jpe?g", path.name, re.IGNORECASE)
+    )
+    if sorted(reported) != actual or len(reported) != len(set(reported)):
+        raise RuntimeError("旧输出报告与实际基础帧清单不一致，拒绝覆盖")
+    return actual
+
+
+def _directory_tree_sha256(
+    root: Path,
+    *,
+    exclude_root_names: set[str] | None = None,
+) -> str:
+    digest = sha256()
+    excluded = exclude_root_names or set()
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        if path.parent == root and path.name in excluded:
+            continue
+        if path.is_symlink():
+            raise RuntimeError(f"输出目录含符号链接，拒绝覆盖: {path.name}")
+        relative = path.relative_to(root).as_posix()
+        digest.update(("D\0" if path.is_dir() else "F\0").encode("utf-8"))
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        if path.is_file():
+            with path.open("rb") as fp:
+                for chunk in iter(lambda: fp.read(1024 * 1024), b""):
+                    digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _inspect_existing_output(root: Path) -> dict[str, object]:
+    """只读验证旧输出所有权；绝不在预检阶段清理文件。"""
+    if root.is_symlink():
+        raise RuntimeError("输出根目录是符号链接，拒绝覆盖")
+    if not root.exists():
+        return {
+            "stale_deleted_count": 0,
+            "stale_deleted_files": [],
+            "ownership_mode": "new",
+            "preexisting": False,
+            "tree_sha256": None,
+        }
+    if not root.is_dir():
+        raise RuntimeError(f"输出路径不是目录: {root}")
+
+    entries = sorted(root.iterdir(), key=lambda path: path.name)
+    if not entries:
+        return {
+            "stale_deleted_count": 0,
+            "stale_deleted_files": [],
+            "ownership_mode": "empty",
+            "preexisting": True,
+            "tree_sha256": _directory_tree_sha256(root),
+        }
+
+    protected_names = {
+        "_evidence_leads",
+        "_vision_audit",
+        "_curated",
+        "_vision_review.json",
+    }
+    protected = [path.name for path in entries if path.name in protected_names]
+    if protected:
+        raise RuntimeError(
+            "输出目录含证据线索、视觉复核或精选产物（"
+            + "、".join(protected)
+            + "），拒绝覆盖；请改用新的 -o 输出目录"
+        )
+    symlinks = [path.name for path in entries if path.is_symlink()]
+    if symlinks:
+        raise RuntimeError(f"输出目录含符号链接（{'、'.join(symlinks[:5])}），拒绝覆盖")
+
+    candidates_dir = root / "_review_candidates"
+    if candidates_dir.exists():
+        _validate_review_candidates(candidates_dir)
+
+    marker_path = root / OUTPUT_MARKER_NAME
+    report_path = root / "_report.json"
+    if not report_path.is_file():
+        raise RuntimeError("非空输出目录缺少 _report.json，无法证明归本工具所有，拒绝覆盖")
+    report = _read_json_object(report_path, "旧输出报告")
+    actual_frames = _validate_reported_frames(root, report)
+
+    allowed_legacy_entries = set(actual_frames) | {
+        "_report.json",
+        "extraction_meta.json",
+        "_review_candidates",
+    }
+    actual_root_entries = {path.name for path in entries}
+    ownership_mode = "legacy_report"
+    if marker_path.exists():
+        marker = _read_json_object(marker_path, "输出所有权标记")
+        expected_entries = marker.get("root_entries")
+        if (
+            marker.get("tool") != "video-screenshot"
+            or marker.get("schema_version") != OUTPUT_MARKER_SCHEMA_VERSION
+            or not isinstance(expected_entries, list)
+            or any(not isinstance(name, str) or Path(name).name != name for name in expected_entries)
+        ):
+            raise RuntimeError("输出所有权标记格式无效，拒绝覆盖")
+        expected_report_sha = str(marker.get("report_sha256") or "")
+        if expected_report_sha != sha256(report_path.read_bytes()).hexdigest():
+            raise RuntimeError("输出所有权标记与 _report.json 哈希不一致，拒绝覆盖")
+        if set(expected_entries) != actual_root_entries - {OUTPUT_MARKER_NAME}:
+            raise RuntimeError("输出目录已出现标记外文件或缺失项，拒绝覆盖")
+        expected_payload_sha = str(marker.get("payload_tree_sha256") or "")
+        actual_payload_sha = _directory_tree_sha256(
+            root,
+            exclude_root_names={OUTPUT_MARKER_NAME},
+        )
+        if expected_payload_sha != actual_payload_sha:
+            raise RuntimeError("输出所有权标记与目录内容哈希不一致，拒绝覆盖")
+        ownership_mode = "marker"
+    else:
+        unknown = sorted(actual_root_entries - allowed_legacy_entries)
+        if unknown:
+            raise RuntimeError(f"旧输出目录含未知文件（{'、'.join(unknown[:5])}），拒绝覆盖")
+
+    replaced_entries = sorted(actual_root_entries)
+    return {
+        "stale_deleted_count": len(replaced_entries),
+        "stale_deleted_files": replaced_entries,
+        "ownership_mode": ownership_mode,
+        "preexisting": True,
+        "tree_sha256": _directory_tree_sha256(root),
+    }
+
+
+def _write_output_marker(root: Path) -> None:
+    report_path = root / "_report.json"
+    if not report_path.is_file():
+        raise RuntimeError("结果缺少 _report.json，不能写入所有权标记")
+    root_entries = sorted(
+        path.name for path in root.iterdir() if path.name != OUTPUT_MARKER_NAME
+    )
+    marker = {
+        "schema_version": OUTPUT_MARKER_SCHEMA_VERSION,
+        "tool": "video-screenshot",
+        "report_sha256": sha256(report_path.read_bytes()).hexdigest(),
+        "root_entries": root_entries,
+        "payload_tree_sha256": _directory_tree_sha256(
+            root,
+            exclude_root_names={OUTPUT_MARKER_NAME},
+        ),
+    }
+    marker_path = root / OUTPUT_MARKER_NAME
+    marker_path.write_text(
+        json.dumps(marker, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _promote_staged_output(
+    staging: Path,
+    target: Path,
+    expected_state: dict[str, object],
+) -> Path | None:
+    """提交完整 staging；失败时尽力把已验证的旧目录恢复到原位。"""
+    if staging.is_symlink() or not staging.is_dir() or staging.parent != target.parent:
+        raise RuntimeError("内部 staging 目录边界无效，拒绝提交")
+    _inspect_existing_output(staging)
+
+    expected_preexisting = bool(expected_state.get("preexisting"))
+    if target.exists() != expected_preexisting:
+        raise RuntimeError("输出目录在处理期间发生变化，拒绝提交")
+    if expected_preexisting:
+        current_state = _inspect_existing_output(target)
+        if current_state.get("tree_sha256") != expected_state.get("tree_sha256"):
+            raise RuntimeError("输出目录在处理期间被修改，拒绝提交")
+
+    backup: Path | None = None
+    if expected_preexisting:
+        backup = target.parent / f".{target.name}.backup-{uuid4().hex}"
+        target.rename(backup)
+    try:
+        staging.rename(target)
+    except Exception as exc:
+        if backup is not None and backup.exists() and not target.exists():
+            try:
+                backup.rename(target)
+            except Exception as restore_exc:
+                raise RuntimeError(
+                    f"提交失败且旧输出自动恢复失败；旧结果仍位于: {backup}"
+                ) from restore_exc
+        raise RuntimeError("新结果提交失败，旧输出已保留") from exc
+
+    if backup is not None:
+        try:
+            shutil.rmtree(backup)
+        except Exception:
+            return backup
+    return None
 
 
 def _record_drop_candidate(
@@ -1115,9 +1417,9 @@ def _build_archive_subdir(video_path: str) -> Path:
     # 截断过长的文件名
     if len(video_stem) > 60:
         video_stem = video_stem[:60]
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     archive_dir = archive_root / f"{ts}_{video_stem}"
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=False)
     return archive_dir
 
 
