@@ -106,6 +106,7 @@ METADATA="$SESSION_CONTEXT/METADATA.json"
 emit_receipt() {
   # $1=status $2=dispatch(可空) ；TERMINAL/TASK 全局已知
   printf 'RECOVER_STATUS=%s\n' "$1"
+  printf 'RECOVER_REASON=%s\n' "${RECOVER_REASON:-none}"
   printf 'RECOVER_TERMINAL=%s\n' "${TERMINAL_HANDLE:-}"
   printf 'RECOVER_DISPATCH=%s\n' "${2:-}"
   printf 'RECOVER_TASK=%s\n' "${TASK_ID:-}"
@@ -113,8 +114,10 @@ emit_receipt() {
 }
 
 manual_required() {
-  # $1=exit_code $2=reason $3=manual steps（多行文本） $4=dispatch（可空）
+  # $1=exit_code $2=reason $3=manual steps（多行文本）
+  # $4=dispatch（可空） $5=稳定 receipt reason code（可空）
   local code="$1" reason="$2" steps="$3" disp="${4:-}"
+  RECOVER_REASON="${5:-manual-required}"
   echo "RECOVER manual-required: $reason" >&2
   printf 'RECOVER_MANUAL_STEPS:\n%s\n' "$steps" >&2
   emit_receipt manual-required "$disp"
@@ -151,12 +154,27 @@ orca_runtime_init
 
 dispatch_bound_id() {
   local show_out show_id
-  show_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || show_out=""
-  show_id=$(printf '%s' "$show_out" | jq -r '
-    .result.dispatch.id
-    // .result.dispatch.dispatchId
-    // .result.dispatchId
-    // empty' 2>/dev/null || true)
+  show_out=$(orca_cli orchestration dispatch-show --task "$TASK_ID" --json 2>&1) || return 10
+  show_id=$(printf '%s' "$show_out" | jq -er '
+    if type != "object" or .ok != true or (.result | type) != "object" then
+      error("invalid dispatch-show envelope")
+    elif (.result.dispatch != null and (.result.dispatch | type) != "object") then
+      error("invalid dispatch object")
+    elif (.result.dispatchId != null and (.result.dispatchId | type) != "string") then
+      error("invalid top-level dispatch id")
+    else
+      ([.result.dispatch.id?, .result.dispatch.dispatchId?, .result.dispatchId?]
+       | map(select(. != null))) as $ids
+      | if ($ids | any(.[]; type != "string" or length == 0)) then
+          error("invalid dispatch id")
+        elif (.result.dispatch != null and ($ids | length) == 0) then
+          error("dispatch object omitted its id")
+        elif ($ids | unique | length) > 1 then
+          error("conflicting dispatch ids")
+        elif ($ids | length) == 0 then ""
+        else $ids[0]
+        end
+    end' 2>/dev/null) || return 11
   printf '%s' "$show_id"
 }
 
@@ -164,11 +182,29 @@ dispatch_bound_id() {
 
 read_terminal_tail() {
   # 成功输出 tail 文本（多行）；terminal read 本身失败（rc!=0）返回非零。
-  # 命令成功但 JSON 不可解析时输出空文本（→ unknown 态），不算 terminal 死亡。
-  local out
-  out=$(orca_cli terminal read --terminal "$TERMINAL_HANDLE" --limit "$TAIL_LINES" --json 2>&1) || return 1
-  printf '%s' "$out" | jq -r '(.result.terminal.tail // .result.tail // []) | .[]? // empty' 2>/dev/null || true
-  return 0
+  # 合法空 tail 输出空文本；非法 JSON/结构返回 11，绝不折叠成 unknown 继续。
+  local out tail_text
+  out=$(orca_cli terminal read --terminal "$TERMINAL_HANDLE" --limit "$TAIL_LINES" --json 2>&1) || return 10
+  tail_text=$(printf '%s' "$out" | jq -er '
+    if type != "object" or .ok != true or (.result | type) != "object" then
+      error("invalid terminal-read envelope")
+    elif (.result.terminal != null and (.result.terminal | type) != "object") then
+      error("invalid terminal object")
+    else
+      (if ((.result.terminal | type) == "object" and (.result.terminal | has("tail"))) then
+         .result.terminal.tail
+       elif (.result | has("tail")) then .result.tail
+       else null
+       end) as $candidate
+      | if $candidate == null then []
+        elif ($candidate | type) != "array" then error("terminal tail is not an array")
+        else $candidate
+        end as $tail
+      | if ($tail | any(.[]; type != "string")) then error("terminal tail contains non-string values")
+        else ($tail | join("\n"))
+        end
+    end' 2>/dev/null) || return 11
+  printf '%s' "$tail_text"
 }
 
 detect_tui_state() {
@@ -188,13 +224,34 @@ detect_tui_state() {
   echo unknown
 }
 
-BOUND_DISPATCH=$(dispatch_bound_id)
+if BOUND_DISPATCH=$(dispatch_bound_id); then
+  :
+else
+  dispatch_probe_rc=$?
+  if [ "$dispatch_probe_rc" -eq 11 ]; then
+    manual_required 2 "dispatch-show 返回非法 JSON/结构，无法证明 Task ${TASK_ID} 是否已绑定；禁止继续读取后注入或 register" \
+      "人工步骤：① orca orchestration dispatch-show --task $TASK_ID --json 检查原始响应；② 修复 Orca runtime/版本契约后重跑。本次未执行 terminal send 或 worker-start。" \
+      "" "dispatch-probe-invalid"
+  fi
+  manual_required 2 "dispatch-show 命令失败，无法证明 Task ${TASK_ID} 是否已绑定；禁止把失败折叠成未绑定继续恢复" \
+    "人工步骤：① orca orchestration dispatch-show --task $TASK_ID --json 核对 runtime、Task 和权限；② 命令恢复成功后重跑。本次未执行 terminal send 或 worker-start。" \
+    "" "dispatch-read-failed"
+fi
 
 TAIL_TEXT=""
-if ! TAIL_TEXT=$(read_terminal_tail); then
+if TAIL_TEXT=$(read_terminal_tail); then
+  :
+else
+  terminal_probe_rc=$?
+  if [ "$terminal_probe_rc" -eq 11 ]; then
+    manual_required 2 "terminal read 返回非法 JSON/结构：无法安全判定 terminal ${TERMINAL_HANDLE} 的 TUI 状态" \
+      "人工步骤：① orca terminal read --terminal $TERMINAL_HANDLE --limit $TAIL_LINES --json 检查原始响应；② 修复 Orca runtime/版本契约后重跑。本次未执行 terminal send 或 worker-start。" \
+      "" "terminal-probe-invalid"
+  fi
   # 不可恢复场景之一：terminal 已死/不可读。不重试、不重建，显式交还 PM。
   manual_required 2 "terminal read 失败：terminal $TERMINAL_HANDLE 已死或不可读（Orca runtime 未识别该句柄）" \
-    "人工步骤：① orca terminal list --json 核对该句柄是否仍存在；② 已消失则该 terminal 无法复活，改走 spawn-worker.sh 重派或 pm-orchestrate.sh settle 清尾；③ 本脚本绝不自动创建第二个 terminal。"
+    "人工步骤：① orca terminal list --json 核对该句柄是否仍存在；② 已消失则该 terminal 无法复活，改走 spawn-worker.sh 重派或 pm-orchestrate.sh settle 清尾；③ 本脚本绝不自动创建第二个 terminal。" \
+    "" "terminal-read-failed"
 fi
 TUI_STATE=$(printf '%s' "$TAIL_TEXT" | detect_tui_state)
 echo "RECOVER: 终端 ${TERMINAL_HANDLE} 读取成功，TUI 判定=${TUI_STATE}（方法=${TUI_DETECT_METHOD}，强标记或裸 shell 提示符特征）" >&2
@@ -234,9 +291,18 @@ if [ "$TUI_STATE" = "shell" ]; then
   deadline=$(( SECONDS + TIMEOUT_SEC ))
   while :; do
     sleep "$POLL_INTERVAL"
-    if ! TAIL_TEXT=$(read_terminal_tail); then
+    if TAIL_TEXT=$(read_terminal_tail); then
+      :
+    else
+      terminal_probe_rc=$?
+      if [ "$terminal_probe_rc" -eq 11 ]; then
+        manual_required 2 "等待 TUI 期间 terminal read 返回非法 JSON/结构：停止恢复，不执行 worker-start" \
+        "人工步骤：① orca terminal read --terminal $TERMINAL_HANDLE --limit $TAIL_LINES --json 检查原始响应；② 修复响应契约后人工核对已注入进程，再决定重跑或收尾。" \
+        "" "terminal-probe-invalid"
+      fi
       manual_required 2 "等待 TUI 期间 terminal read 失败：terminal $TERMINAL_HANDLE 在注入后死亡" \
-      "人工步骤：① 注入命令可能立即崩溃，orca terminal read 看退出信息；② 核对 $LAUNCH_SH 与 runtime.command 可执行性后人工重试。"
+      "人工步骤：① 注入命令可能立即崩溃，orca terminal read 看退出信息；② 核对 $LAUNCH_SH 与 runtime.command 可执行性后人工重试。" \
+      "" "terminal-read-failed"
     fi
     TUI_STATE=$(printf '%s' "$TAIL_TEXT" | detect_tui_state)
     if [ "$TUI_STATE" = "tui" ]; then
