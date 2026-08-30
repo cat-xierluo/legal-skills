@@ -3,14 +3,14 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.9.3"
+  version: "2.10.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
 
 # Multi-Agent Orchestration
 
-以当前主会话作为 PM，拆解、派工、巡检、验收和收口多个本地 Agent。优先使用 Orca 作为控制平面；Orca 不可用或用户明确要求 tmux 时使用 tmux。不要把“开了终端”误写成“建立了受监管任务”。
+以当前主会话作为 PM，拆解、派工、巡检、验收和收口多个本地 Agent。日常 worktree 与 terminal/session 都优先由 Orca Orchestration 管理；Orca 不可用、用户明确要求或需要复现兼容性路径时才使用纯终端 tmux。不要把“开了终端”误写成“建立了受监管任务”。
 
 ## 1. 边界与权限
 
@@ -42,8 +42,8 @@ metadata:
 |---|---|---|
 | Orca supervised | 用户要求监督、等待结果、DAG、ask/reply、decision gate；Agent 可被 Orca 识别 | Worktree + Run/Task/Dispatch + worker transcript + `worker_done` |
 | Orca terminal-managed | 已配置的 CodeBuddy/QoderWork CN、zcode driver，或五种白名单 backend 的非 supervised 路径 | Worktree + terminal + UI + terminal read/send/wait |
-| tmux worktree | Orca 不可用、用户指定 tmux、或需复现非 Orca 路径 | Git worktree + tmux + checkpoint/Sentinel |
-| tmux lightweight | 用户明确不要 worktree，或目标不是 Git 仓且 worker 文件夹互不重叠 | 文件夹 + tmux；无 Git 隔离 |
+| tmux worktree（兼容回退） | Orca 不可用、用户指定 tmux、或需复现非 Orca 路径 | Git worktree + tmux + checkpoint/Sentinel；不作为高频默认路径 |
+| tmux lightweight（兼容回退） | 用户明确不要 worktree，或目标不是 Git 仓且 worker 文件夹互不重叠 | 文件夹 + tmux；无 Git 隔离；不作为高频默认路径 |
 | 同宿主 subagent | 窄范围、短任务、无需独立进程/分支 | 宿主决定 |
 | Claude Agent Teams/view | Claude Code 做 PM 且项目明确采用其原生团队能力 | 按 Claude 官方会话与 worktree 规则 |
 
@@ -67,10 +67,27 @@ PM 在业务实现前完成：
 - 轻量模式下不同 worker 必须占用互不重叠的文件夹；可能写同一目录时回到 worktree 模式。
 - Worker 验证命令不是安装授权。缺工具时报告阻塞，除非 PM 传入精确 `--allow-install-command` 和 `--install-authorization-source`。
 - Worker 自报、STATUS、UI 卡片、TUI idle、heartbeat 和 timeout 都不能单独证明业务完成。
-- supervised spawn 收尾自检 dispatch 绑定（Task-076）：worker-start 后主动 `dispatch-show --task` 核对；为空时按 runbook #18 自动三步补绑（无 `--inject` 的 dispatch 建绑定 → 从 preamble 提取真实 ctx id → 单行 terminal send 注入 worker_done/ask 命令形式），SPAWN 输出必须含 `SPAWN_WORKER_DISPATCH_BIND: ok|manual-required`；`manual-required` 不阻断 spawn 但属显式告警，PM 须按同三步手动补绑。
-- launch 路径 dispatch 绑定自检同权（Task-077）：Wave receipt 派单漏 `--orca-supervised` 但传了 `--orca-task-id` 时，terminal 启动后由 launch 分支对预建 Task 执行同一自检+补绑并输出同款 `SPAWN_WORKER_DISPATCH_BIND` 行（实现共用 `orchestration_dispatch_bind_selfcheck`，register/launch 两条路径勿各留一份）；缺 `--orca-run-id` 的残缺组合在任何 terminal 副作用前失败关闭；纯 terminal-managed（无 task）不涉及 dispatch，保持零变化。
+- supervised spawn 收尾自检 dispatch 绑定（Task-106；旧发布文案曾误用 Task-076）：worker-start 后主动 `dispatch-show --task` 核对；为空时按 runbook #18 自动三步补绑（无 `--inject` 的 dispatch 建绑定 → 从 preamble 提取真实 ctx id → 单行 terminal send 注入 worker_done/ask 命令形式），SPAWN 输出必须含 `SPAWN_WORKER_DISPATCH_BIND: ok|manual-required`；`manual-required` 不阻断 spawn 但属显式告警，PM 须按同三步手动补绑。
+- launch 路径 dispatch 绑定自检同权（Task-107；旧发布文案曾误用 Task-077）：Wave receipt 派单漏 `--orca-supervised` 但传了 `--orca-task-id` 时，terminal 启动后由 launch 分支对预建 Task 执行同一自检+补绑并输出同款 `SPAWN_WORKER_DISPATCH_BIND` 行（实现共用 `orchestration_dispatch_bind_selfcheck`，register/launch 两条路径勿各留一份）；缺 `--orca-run-id` 的残缺组合在任何 terminal 副作用前失败关闭；纯 terminal-managed（无 task）不涉及 dispatch，保持零变化。
+- 裸调 worker-start 的冷启动心跳窗口（2026-08-30 实测）：绕过 `spawn-worker.sh` 直接 `worker-start --worktree current --agent claude` 一步起终端时，dispatch 有约 60 秒启动确认窗口，Claude Code 冷启动可能超窗 → `last_failure: "timeout"`、Task 被标 failed，并遗留 title=None 的孤儿终端；该窗口为 Orca runtime 内部行为，本机不可调。对策：优先走 `spawn-worker.sh` 预建 terminal（等 TUI ready）再 `worker-start --terminal` 的两步路径；已裸调失败时复位 Task（`task-update --status ready` 或 register 的 `--reset-failed`）+ 改 `--terminal <现存 agent 终端>` 重试，`terminal close` 清理孤儿；worker-start 返回体的 ready/terminal 字段可能为 None（部分生效），以 `dispatch-show --task` 实际状态为准。
 
 Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩坑读取 `references/10-parallel-lessons.md`。
+
+### 派发价值、验收背压与资源责任
+
+额度和并发只用于路由已经成立的任务，不能生成任务。Autopilot 或普通多 worker 派发前，每个任务都必须有：
+
+- `consumer`：命名的后续实现、用户决策、发布门禁或验收流程；
+- `decision_or_gate_changed`：产出会改变什么，而不是只描述“形成文档”；
+- `consume_by` 与 `expiry`：预计何时消费、到期未消费如何归档；
+- `observable_acceptance`：真实 diff、测试、fixture、基准、交互或决策状态迁移；
+- `resource_owner`：任务会启动的服务、端口、子进程和清理责任；没有外部进程时写 `none`。
+
+`DRAFT` 默认不可派，也不自动转成 docs-only。只有命名实现已具备全部非文档输入、且缺少的合同是唯一阻塞时，才创建一次晋级任务；docs-only 交付必须带来 `DRAFT → READY`、关闭阻塞决策或新增被消费者实际调用的门禁。PM 待验收超过自身可处理能力时停止扩波；默认每波/全局活跃 worker ≤3、research/docs ≤1，项目可以收紧，只有用户显式、限期的探索窗口才可放宽。
+
+额度充足时优先增加确定性测试、fixture、基准、故障注入、真实交互/样本验收工具、生成器和独立前向评测。禁止以 quota-burn、PR 数、文档行数或 worker 忙碌度作为目标。详细查表与反模式读取 `references/15-wave-autopilot.md` §5。
+
+派发前把候选波次写成 `templates/dispatch-value-gate.example.json` 同构 JSON，并运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；非零退出不得启动 worker。该门禁机械拒绝非 `READY`、六字段缺失、无状态迁移的 docs/research、收敛模式并发超限、待验收 PR >2，以及启动外部资源却没有 owner 的任务。
 
 ### 3.1 Harness 调用层级
 
@@ -193,6 +210,8 @@ bash scripts/spawn-worker.sh \
 
 `orca-wave-prepare.sh` 给每个 Task spec 前置不可省略的 `worker_done` 协议提醒；spec 内的 branch 名一律用**连字符形式**（Orca worktree `--name` 与 spawn 的 `safe_branch` 都会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked——Wave 1 教训，manifest 含 `branch: x/y` 会被 `orca-wave-prepare.sh` fail-closed 拒绝）。`orca-supervised-register.sh` 直接复用 receipt，对 `worker-start` 显式传 `--from`，避免并发 rebinding；被 `task_not_startable` 拒绝时带 `--reset-failed` 可把前任 worker 提问/中止翻成 failed 的 Task 复位 ready 重试一次（Task-060）。单 worker 可不传 receipt，由 helper 创建 Run/Task。`worker-start` 是唯一任务注入器；supervised 路径不得再发送普通 prompt。注册失败保留 receipt 与 terminal 供精确恢复，但整个 spawn 返回非零。`CHANGELOG/DECISIONS/TASKS/AGENTS/ROADMAP` 等 shared context 默认由 PM/维护者单写：worker 只提交任务专属产物与结构化 writeback proposal，PM 验收后串行写回。DEC/Task 编号预分配只分配标识，不授权并行修改共享文档；历史冲突按 `references/16-autopilot-durability.md` 的 fail-closed 恢复边界处理。
 
+手动恢复/重注册时，`orca-supervised-register.sh` 会按精确 worktree/terminal/session 身份自动补写完整 `session.orca.supervised` 路由合同，并输出 `ORCAREG_METADATA_BIND=ok|manual-required`。`manual-required` 表示 worker 已启动但脚本不能唯一证明 METADATA 目标；PM 不得重试启动或把消息误发到 terminal，应按 `references/14-pm-orchestrate.md` 的恢复步骤核对身份并补写。
+
 ### 4.5 Supervised 生命周期
 
 固定顺序：
@@ -246,45 +265,18 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 
 ### 4.6 Wave Autopilot（用户授权的常设自动推进）
 
-用户显式授权后，PM 按项目任务源中固定的组波/泊车策略自动链式推进波次：收口后自动写回任务源、查表组下一波并派发，直到泊车条件。**授权与策略权威都在项目上下文**（本 skill 不承载项目授权）；查表查不到合法组合即泊车，这是 Autopilot fail-closed 的根本。验收路径不因自动化放宽（门禁在最终树复跑 + safe-push + PR squash 强制），每波收口发摘要但不等确认，泊车必须完整报告后停止。
+用户显式授权后，PM 按项目任务源中固定的组波/泊车策略自动链式推进波次：收口后自动写回任务源、查表组下一波并派发，直到泊车条件。**授权与策略权威都在项目上下文**（本 skill 不承载项目授权）；查表查不到合法组合即泊车，这是 Autopilot fail-closed 的根本。验收路径不因自动化放宽：最终树复跑门禁、safe-push、唯一 PR，再按 main 保护规则分流为本地集成或 GitHub merge。每波收口发摘要但不等确认，泊车必须完整报告后停止。
 
 Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/15-wave-autopilot.md`。已由同一 watcher 明确观察到额度受限时，才可用 `scripts/night-watch.sh --terminal <PM终端handle> --model <当前模型> --settings <provider/account 配置权威文件>` 守夜；自动唤醒拒绝可变 setting-sources，并冻结 settings 内容指纹。首次探测即成功、配置/认证/网络/未知错误、超时或 terminal 失败都不会唤醒。真实 PM 终端的 `quota → available → send → PM 被唤醒` 仍标记 `NOT_VERIFIED`，流程见 `references/15-wave-autopilot.md` §8。**守夜/夜间模式（用户触发词："守夜模式/首页模式/过夜模式/晚上继续/N 小时后启动"，2026-08-28 固化）**：用户说出任一触发词时，PM 按双通道方案布防——①**定时形态（用户已知恢复时间，如"3 小时后启动"）**：`nohup caffeinate -dis` 包裹一次性定时器（sleep N 后 `orca terminal send` 注入唤醒文本）脱离 PM/Orca 进程树直接运行；会话侧可选挂一次性 cron 兜底。**零探测零死窗消耗，最经济**。②**探测形态（恢复时间未知）**：保留 session recurring cron 看门狗不删（每跳 turn 活动兼防冻心跳+兜底唤醒，死窗积压跳 token=保险费）+ `nohup caffeinate -dis` 脱离进程树的 night-watch 武装探测。铁律：任何守夜装置不得只活在 Orca/Electron 进程树内（App Nap 屏灭冻结整树，与合盖无关，2026-08-28 实证）；night-watch 在额度仍可用时启动会 exit 11（要求从耗尽态武装），需 exit-11 重试监督循环或确认耗尽后再启动。完整复盘见 references 对应节与 Task-078。
 
-**守夜 v2 实战协议(2026-08-29 晨收口固化,工具 `scripts/night-revive-timer.sh`)**:
-- **布防模板**:已知恢复时间用定时形态模板脚本(`--pm-terminal/--workers-file/--revive-at/--wake-at/--revive-text/--wake-text/--log` fail-closed;`--repeat <秒> --until <时刻>` 打摆 lane 周期性复活;wall-clock 用 `date -j -f`;`nohup caffeinate -dis` 脱链)。恢复时间变更时改参数重启,不手写新脚本。
-- **铁律一(通道自测)**:布防后立即向 PM 自身终端注入一行自测文本+向任一 worker 终端注入探针,两条都确认送达才算布防完成(2026-08-28 双验;PM 终端注入为历史 NOT_VERIFIED 项就此闭环)。
-- **铁律二(核活只用双读法)**:任何单次快照/worker=ready/空 transcript 都不可信(冻结 TUI 保留旧 todo+旧计时器,曾骗过 PM 两次)。可靠法:①双读计时器(间隔 30-40s 两次读 ⏱ 行,值不变=冻死)——过 1h 后分钟粒度失效,降级用②**游标推进法**(两次读 `latest cursor`,25s 不动=冻死;在流=活)为最终权威。
-- **铁律三(先诊断再复活)**:硬额度死 vs 瞬发拥塞两态策略不同——诊断证据=PM 自身会话可用+任一 worker 能维持长 turn+复活探针被消费。边际可用(打摆)lane 下注入必被消费且有增量进展,检测到冻死立即错峰复活(≤3 个/批,间隔 8s)周期重试;只有硬死(单请求也 429)才推迟到刷新点统一复活。
-- **铁律四(完成权威是 task-list)**:巡检第一动作 `orca orchestration task-list --run <run> --json` 查终态,不是盯队列消息——worker_done 可能早已送达被消费,队列空≠没人完成(2026-08-29 实证 7/8 早已 completed 而 PM 误判"没人发 done"又发补发指令)。
-每跳巡检同时核对各 worker spawn receipt 的 `SPAWN_WORKER_DISPATCH_BIND` 行：`manual-required`（Task-076 自动补绑未完成）须立即按 runbook #18 三步手动补绑，不要等 worker_done 缺失才暴露。
+守夜 v2 使用 `scripts/night-revive-timer.sh`；布防参数、双通道自测、双读/游标核活、硬额度与瞬发拥塞分流、`task-list` 完成权威及 `SPAWN_WORKER_DISPATCH_BIND` 巡检全部读取 `references/15-wave-autopilot.md` §4.1，不在入口重复维护。
 
-Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推送、Dispatch 状态轮询三通道并用——推送唤醒实测会丢（worker_done 可延迟数小时不唤醒 PM）；完成判定的权威是 `worker-show` 的 dispatch/worker 状态，不是队列里有没有消息。看门狗每跳清单、验收期确定性缺陷的 fix-worker 派发模式与实测反模式读取 `references/14-wave-autopilot.md`。
+**持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path。v2.10.0 起，`scripts/autopilot-controller.py` + `scripts/autopilot-facts.py` 提供 `L2 / CROSS_SESSION_RECOVERABLE` controller core：版本化 ledger/WAL、PM lease/fencing、可信只读 facts、幂等 reconcile 与单 mutation tick；项目必须提供固定 manifest 和受信 mutation adapter。真实 Orca/GitHub mutation 端到端与真实断电仍为 `NOT_VERIFIED`。没有外部 durable scheduler 时继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`；用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时读取 `references/16-autopilot-durability.md`，不得把 L2 controller 包装成 L3。
+## 5. tmux 兼容回退
 
-**持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path；项目任务源保存策略与意图，不保存当前 Wave 的完整运行态。没有 runtime ledger、PM lease/fencing 与幂等 reconcile 时，只能声明 `L1 / LIVE_SESSION_AUTOPILOT`，并报告 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`；没有外部 durable scheduler 时报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`。用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时，读取 `references/16-autopilot-durability.md`；不得用一个笼统状态混淆 L2 controller 与 L3 scheduler。
-## 5. tmux 回退
+先用 `render-runtime-profile.sh` 生成 backend 命令，再由 `spawn-worker.sh` 加 `--no-orca-mode` 启动。spawn 后立即核对 `tmux has-session`、pane cwd 与 Session Context 的 `METADATA.json`；任一不一致都停止派单。
 
-先按 backend 生成命令，再 spawn：
-
-```bash
-bash scripts/render-runtime-profile.sh \
-  --backend claude-code --runtime-profile default \
-  --api-provider provider-a --model model-a --output command
-
-bash scripts/spawn-worker.sh \
-  --project "$PROJECT" --branch feat/worker-a --session worker-a \
-  --base-ref main --command "$WORKER_COMMAND" \
-  --worker-backend claude-code --with-sentinel --no-orca-mode
-```
-
-spawn 后立即验证：
-
-```bash
-tmux has-session -t worker-a
-tmux display-message -p -t worker-a '#{pane_current_path}'
-test -f "$WT/.claude/agent-sessions/worker-a/METADATA.json"
-```
-
-不要 `tmux attach` 阻塞 PM 主循环，也不要无 timeout 等 STATUS。长 prompt 写入 Session Context 的 `WORKER_PROMPT.md`，只向 terminal 发送短 Read 指令。详见 `templates/pm-spawn-postflight.md`。
+不要 `tmux attach` 阻塞 PM 主循环，也不要无 timeout 等 STATUS。长 prompt 写入 Session Context 的 `WORKER_PROMPT.md`，只向 terminal 发送短 Read 指令。完整后检清单见 `templates/pm-spawn-postflight.md`，已知 tmux 陷阱见 `references/10-parallel-lessons.md`“tmux worker / 扩展模式”。
 
 ## 6. Worker Prompt 与 Session Context
 
@@ -296,6 +288,15 @@ test -f "$WT/.claude/agent-sessions/worker-a/METADATA.json"
 - Verification commands、Execution Authority、安装授权来源。
 - STATUS/RESULT/PATCH_SUMMARY 的路径和更新节奏。
 - supervised 时由 live preamble 提供 task/dispatch ID；worker 不得猜 ID，完成后只发一次 `worker_done` 并停止新工作。
+
+Worker prompt 必须携带两条共享上下文硬条款（2026-08-30 Wave 1-6 实战：两次合并
+覆盖 + 一次误删弹药后固化；`templates/worker-prompt.md` 已同步）：
+
+- 禁止修改共享上下文文档（`docs/TASKS.md`/README/CHANGELOG/DECISIONS 等项目
+  共享真值）——交付状态由 PM 验收后统一写回；worker 在分支里写，合并时会覆盖
+  PM 真值。需要写回的内容写 Session Context 的 `WRITEBACK_PROPOSAL.md`。
+- 禁止删除任何既有 fixture/他人交付物——即使看似与你的任务重叠；疑似重叠时在
+  RESULT 里提出，由 PM 裁决。
 
 Session Context 默认：
 
@@ -340,8 +341,16 @@ PM 必须：
 2. 运行与产物类型匹配的验证；GUI/Web/桌面行为要启动真实入口做代表性交互。
 3. 核对 allowed files、敏感文件、安装授权、Git identity、commit 和 PR 范围。
 4. supervised worker 先 reuse/release/retain，再 ack；不得因为只读检查“看起来完成”而跳过 settlement。worker 仍存活且漏发 `worker_done` 时先结构化提醒；确认已死才走 `settle`。terminal-managed/tmux 按用户意图保留或关闭。
-5. 用 `git-workflow` 完成 rebase/push/PR/merge；本 Skill 不替代 Git 安全规则。
-6. 清理前先 dry-run：
+5. 用户或项目已授权 Git 外部写入时，默认按 **PR 先行** 收口：先 safe-push 并创建或接管唯一匹配的 PR，冻结其 base/head/diff/checks 作为审阅边界；PM 验收后再在最新 main 上建立本地集成候选并复跑门禁。Monorepo 不得直接 `git merge` feature 分支，按 `git-workflow` 使用目录级或 squash 集成；main 有保护规则时，本地候选只用于验收，最终仍由 GitHub PR merge。该顺序不自动授予 push/merge/close 权限；Task-097 完成前，现有 `pm-closeout.sh` 仍会在 create 后直接 GitHub merge，选择本地集成时不得调用该一体化路径。详细分流见 `references/14-pm-orchestrate.md` §4。
+6. 合并 worker 分支后必须 diff 校验共享文档真值：worker 违规写入 `docs/TASKS.md`
+   等共享文档的改动会随合并带回，`git diff <base>...HEAD -- docs/TASKS.md`（及
+   CHANGELOG/DECISIONS）逐处核对；发现 worker 版本覆盖 PM 真值时以 main 版本
+   为准重写（2026-08-30 Wave 1-6 两次合并覆盖教训）。
+7. 在 main/trunk 复跑验证前先刷新依赖与构建（Node 项目 `pnpm install` +
+   `pnpm build` 或项目等价命令）：旧 `dist/`/`node_modules` 滞后新 lockfile 会
+   造成假失败，把 worker 交付误判为回归。
+8. 核对任务声明的 `resource_owner`：对本任务启动的服务/监听端口/子进程验证已退出，项目提供 PID/端口基线时必须证明零净增量。身份不明或仍在监听时停止收口，不得按进程名批量 kill；用户原有服务不属于 worker 清理范围。
+9. 清理前先 dry-run：
 
 ```bash
 bash scripts/clean-worktree.sh --project "$PROJECT" --branch feat/worker-a --session worker-a
@@ -372,15 +381,29 @@ active、release_pending、release_unknown 或生命周期不明的 supervised w
 python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--task-card-path ...]
 ```
 
-- 输出 JSON 的 `provider` 填入任务卡 / `--api-provider`；`urgency=high` 表示
-  某 lane 窗口临期且余量充足，PM 可扩大该 tier 本波任务量（多组卡消耗）。
+- 输出 JSON 的 `provider` 填入任务卡 / `--api-provider`；`urgency=high` 只表示
+  某 lane 窗口临期且余量充足，PM 可从已经通过消费者合同与验收背压的任务中调整路由，不能据此扩张任务源或现场生成 quota-burn 工作。
 - 任务卡显式 `provider` 字段永远优先（人工锁定 > 动态路由）。
 - `spawn-worker.sh` 在 `--api-provider` 缺省且配置启用时自动兜底调用
   （`ROUTE_SUGGEST_TIER` 传入 tier，缺省 L1）。
 - 未配置 / summary 读不到 → `not_configured` / `degraded`，走静态
   `main_force.task_routing`，不 fail、不静默改道。
-- 模型能力 × 任务匹配的判断方法见 `references/16-model-capability-profile.md`；
+- 模型能力 × 任务匹配的判断方法见 `references/17-model-capability-profile.md`；
   lanes/tier_policy 在个人配置维护，本 skill 不承载任何具体模型选择。
+
+**额度数据时效规范（派单前硬校验，2026-08-30 实战固化）**：route_suggest 只读
+`summary_path` 指向的落盘快照（quota-aware-routing.summary.v1），不会自动刷新；
+拿陈旧快照组卡/派单，余量读数会严重失真。PM 操作规程：
+
+1. 派单前必读 route-summary.json 的 `generated_at`：距今超过 `freshness_minutes`
+   （默认 30）必须先手动跑 `dump_quota_summary.py`（私有侧产出方脚本）刷新快照，
+   再采信 route_suggest 输出；不确定时就先刷一次。
+2. route_suggest 输出的 `stale=true` 是硬信号不是装饰：stale 期间禁止据其输出
+   组卡/派单，先刷新快照再重新路由。
+3. 任一 lane 余量低于 `stop_line_percent`（默认 15）即视为停用：禁止向该 lane
+   派新 worker（脚本层该 lane 已判 `available=false`，PM 也不得手工指定 provider
+   绕过）。（实战：83% 报 9%，险些向 9% lane 派 2 worker——陈旧快照的余量读数
+   不可直接采信）
 
 ## 10. 依赖
 
@@ -391,6 +414,7 @@ python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--tas
 | `bash` 4+ | macOS: `brew install bash`；Linux: 包管理器安装 |
 | `git` | macOS: `xcode-select --install` 或 `brew install git` |
 | `jq` | macOS: `brew install jq`；Linux: `sudo apt-get install jq` |
+| `gh` | 仅 `pm-closeout.sh` 的 PR 创建/合并需要；macOS: `brew install gh`；Linux: 按 GitHub CLI 官方包安装 |
 | `tmux` | 仅 tmux 路径需要；macOS: `brew install tmux` |
 | `python3` | 安装门禁和 scope guard 需要 |
 
@@ -412,6 +436,8 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - `references/13-orca-cli-worker.md`：Orca 双层模型、runtime、Run/Task/Dispatch 和恢复。
 - `references/14-pm-orchestrate.md`：PM 三模式统一控制入口。
 - `references/15-wave-autopilot.md`：Wave Autopilot 自动推进、三通道监控、看门狗清单与泊车语义。
+- `references/16-autopilot-durability.md`：跨会话 L2/L3 控制面、租约/fencing、幂等对账与故障注入合同。
+- `references/17-model-capability-profile.md`：额度 lane 的模型能力与任务匹配档案。
 不要一次加载全部 references；按当前 backend、控制模式和故障类型读取。
 
 ## 12. 验收门禁
@@ -427,6 +453,8 @@ Hard Fail：
 7. 清理 active/unknown/release_pending/release_unknown supervised worker。
 8. 只凭 worker 自报、静态 lint 或单次 UI 状态声称业务完成。
 9. CodeBuddy/QoderWork CN 或未知宿主向上/跨宿主派发，或用 `--pm-harness`、个人配置伪造宿主身份。
+10. 以额度余额、PR 数或 worker 忙碌度为理由派发没有命名消费者/消费时限/验收状态迁移的任务。
+11. worker/测试启动了服务或监听器，却没有资源 owner、清理证据和 PID/端口零净增量核对；或为清理而按进程名批量 kill。
 
 修改本 Skill 后至少运行：
 
@@ -446,9 +474,14 @@ bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
 bash scripts/test-spawn-worker-deps.sh
+bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
+bash scripts/test-recover-unconfigured.sh
+bash scripts/test-pm-closeout.sh
+python3 scripts/test-autopilot-controller.py
+python3 scripts/test-autopilot-facts.py
 bash scripts/smoke-sentinel.sh
 bash scripts/smoke-tmux-worker.sh
 bash scripts/smoke-orca-worker.sh

@@ -57,8 +57,8 @@ print(d.get("refresh_hint", "")) if d.get("status") in ("stale_degraded", "degra
 # v2.9.4：自动补选的 provider 必须同时注入运行 env。spawn-worker 的设计里
 # provider env 注入本是 PM 职责（eval render-runtime-profile 生成 --command），
 # 自动补选路径没有这层——补选后裸 claude 继承用户全局默认 provider，与 lease
-# 计数的 lane 不一致（2026-08-29 实测：补选 minimax-M3 但裸 claude 走全局
-# 配置，MiniMax 后端报 400 modelCode 不存在）。修复：命令为 backend 默认值
+# 计数的 lane 不一致（2026-08-29 实测：补选某 fuel lane 后裸 claude 走全局
+# 配置，目标后端报 400 modelCode 不存在）。修复：命令为 backend 默认值
 # （用户未显式 --command）时，用 claude-provider-env.sh 包装注入
 # config/$API_PROVIDER.settings.json 的 env + --model。settings 缺失或 model
 # 解析失败保持裸命令（fail-open，行为回到修复前，不阻断 spawn）。

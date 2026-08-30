@@ -7,6 +7,9 @@
 #   态3 terminal 已死   terminal read 失败 → manual-required，零注入零 register
 #   态4 METADATA 缺路由段  supervised 段缺失 → manual-required(exit 3)，零 orca 调用
 #   态5 TUI 在但未绑    跳过注入只 register（agent_unconfigured 另一半形态）
+#   态6 dispatch 探针坏  命令失败/畸形 JSON → manual-required，零 send/worker-start
+#   态7 terminal JSON 坏  terminal read 畸形 JSON → manual-required，零 send/worker-start
+#   态8 合法空 tail       保持原 unknown → manual-required 语义，零 send/worker-start
 # 全程断言：任何路径都不得 terminal create（恢复不产生第二个 terminal）。
 set -euo pipefail
 
@@ -48,6 +51,12 @@ case "$1 $2" in
       tui)
         echo '{"ok":true,"result":{"terminal":{"handle":"term-worker","tail":["✻ Welcome to Claude Code!","╭──────────────────────────────────╮","│ > _                               │","  1.2M tokens left"]}}}'
         ;;
+      malformed)
+        printf '{broken-json\n'
+        ;;
+      invalid-shape)
+        echo '{"ok":true,"result":{"terminal":{"tail":"not-an-array"}}}'
+        ;;
       *)
         echo '{"ok":true,"result":{"terminal":{"tail":[]}}}'
         ;;
@@ -66,8 +75,18 @@ case "$1 $2" in
     echo '{"ok":true,"result":{"terminal":{"handle":"term-worker"}}}'
     ;;
   "orchestration dispatch-show")
-    d=$(cat "$STATE_DIR/dispatch" 2>/dev/null || true)
-    if [ -n "$d" ]; then
+    d=""
+    if [ -f "$STATE_DIR/dispatch" ]; then
+      d=$(cat "$STATE_DIR/dispatch")
+    fi
+    if [ "$d" = "__command_fail__" ]; then
+      echo '{"ok":false,"error":{"code":"runtime_unavailable"}}' >&2
+      exit 1
+    elif [ "$d" = "__malformed__" ]; then
+      printf '{broken-json\n'
+    elif [ "$d" = "__invalid_shape__" ]; then
+      echo '{"ok":true,"result":{"dispatch":[]}}'
+    elif [ -n "$d" ]; then
       printf '{"ok":true,"result":{"dispatch":{"id":"%s"}}}\n' "$d"
     else
       echo '{"ok":true,"result":{}}'
@@ -125,9 +144,10 @@ run_recover() {
   RECOVER_OUT="$out"
 }
 
-sends_with_launch() { grep -c '^terminal send .*launch\.sh' "$FAKE_ORCA_LOG" || true; }
-worker_start_count() { grep -c '^orchestration worker-start ' "$FAKE_ORCA_LOG" || true; }
-create_count() { grep -c '^terminal create' "$FAKE_ORCA_LOG" || true; }
+sends_with_launch() { awk '/^terminal send .*launch\.sh/{count++} END{print count+0}' "$FAKE_ORCA_LOG"; }
+terminal_send_count() { awk '/^terminal send/{count++} END{print count+0}' "$FAKE_ORCA_LOG"; }
+worker_start_count() { awk '/^orchestration worker-start /{count++} END{print count+0}' "$FAKE_ORCA_LOG"; }
+create_count() { awk '/^terminal create/{count++} END{print count+0}' "$FAKE_ORCA_LOG"; }
 
 echo "态0: usage 错误 fail-closed"
 run_recover --session only-session
@@ -169,7 +189,7 @@ run_recover --worktree "$WT3" --session recover-test --poll-interval 0.05 --time
 [ "$RECOVER_RC" -eq 2 ] && ok "退出 2（manual-required）" || bad "态3 应退出 2，实得 $RECOVER_RC"
 printf '%s\n' "$RECOVER_OUT" | grep -q 'RECOVER manual-required' && ok "显式输出 manual-required" || bad "态3 缺 manual-required 输出"
 printf '%s\n' "$RECOVER_OUT" | grep -q 'terminal list' && ok "manual 步骤含人工指引" || bad "态3 缺人工指引"
-[ "$(grep -c '^terminal send' "$FAKE_ORCA_LOG" || true)" -eq 0 ] && ok "零 terminal send" || bad "态3 不应注入"
+[ "$(terminal_send_count)" -eq 0 ] && ok "零 terminal send" || bad "态3 不应注入"
 [ "$(worker_start_count)" -eq 0 ] && ok "零 register" || bad "态3 不应 register"
 [ "$(create_count)" -eq 0 ] && ok "绝不 terminal create" || bad "态3 出现 terminal create"
 [ "$(jq -r '.session.orca.supervised.dispatch_id' "$WT3/.claude/agent-sessions/recover-test/METADATA.json")" = "" ] \
@@ -195,6 +215,49 @@ printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_STATUS=recovered$' && ok "recei
 [ "$(sends_with_launch)" -eq 0 ] && ok "零注入（TUI 已在）" || bad "态5 不应注入，实注入 $(sends_with_launch) 次"
 [ "$(worker_start_count)" -eq 1 ] && ok "恰好一次 worker-start 重绑" || bad "态5 worker-start 次数=$(worker_start_count)，应为 1"
 [ "$(create_count)" -eq 0 ] && ok "全程零 terminal create" || bad "态5 出现 terminal create"
+
+echo ""
+echo "态6: dispatch-show 失败/畸形 JSON（manual-required，零 send 零 worker-start）"
+WT6=$(make_fixture case6 full)
+for dispatch_fault in __command_fail__ __malformed__ __invalid_shape__; do
+  reset_state shell "$dispatch_fault"
+  run_recover --worktree "$WT6" --session recover-test --poll-interval 0.05 --timeout 5
+  [ "$RECOVER_RC" -eq 2 ] && ok "dispatch fault=${dispatch_fault} 退出 2" || bad "dispatch fault=${dispatch_fault} 应退出 2，实得 $RECOVER_RC"
+  if [ "$dispatch_fault" = "__command_fail__" ]; then
+    expected_reason="dispatch-read-failed"
+  else
+    expected_reason="dispatch-probe-invalid"
+  fi
+  printf '%s\n' "$RECOVER_OUT" | grep -q "^RECOVER_REASON=${expected_reason}$" \
+    && ok "receipt 明确 ${expected_reason}" || bad "dispatch fault=${dispatch_fault} receipt reason 错误"
+  [ "$(terminal_send_count)" -eq 0 ] && ok "dispatch fault=${dispatch_fault} 零 terminal send" || bad "dispatch fault=${dispatch_fault} 不应 send"
+  [ "$(worker_start_count)" -eq 0 ] && ok "dispatch fault=${dispatch_fault} 零 worker-start" || bad "dispatch fault=${dispatch_fault} 不应 worker-start"
+done
+
+echo ""
+echo "态7: terminal read 畸形 JSON/结构（manual-required，零 send 零 worker-start）"
+WT7=$(make_fixture case7 full)
+for terminal_fault in malformed invalid-shape; do
+  reset_state "$terminal_fault" ""
+  run_recover --worktree "$WT7" --session recover-test --poll-interval 0.05 --timeout 5
+  [ "$RECOVER_RC" -eq 2 ] && ok "terminal fault=${terminal_fault} 退出 2" || bad "terminal fault=${terminal_fault} 应退出 2，实得 $RECOVER_RC"
+  printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=terminal-probe-invalid$' \
+    && ok "terminal fault=${terminal_fault} receipt 明确非法探针" || bad "terminal fault=${terminal_fault} receipt reason 错误"
+  [ "$(terminal_send_count)" -eq 0 ] && ok "terminal fault=${terminal_fault} 零 terminal send" || bad "terminal fault=${terminal_fault} 不应 send"
+  [ "$(worker_start_count)" -eq 0 ] && ok "terminal fault=${terminal_fault} 零 worker-start" || bad "terminal fault=${terminal_fault} 不应 worker-start"
+  [ "$(create_count)" -eq 0 ] && ok "terminal fault=${terminal_fault} 零 terminal create" || bad "terminal fault=${terminal_fault} 不应 create"
+done
+
+echo ""
+echo "态8: 合法空 tail 保持 unknown/manual-required 原语义"
+WT8=$(make_fixture case8 full)
+reset_state empty ""
+run_recover --worktree "$WT8" --session recover-test --poll-interval 0.05 --timeout 5
+[ "$RECOVER_RC" -eq 2 ] && ok "合法空 tail 退出 2" || bad "态8 应退出 2，实得 $RECOVER_RC"
+printf '%s\n' "$RECOVER_OUT" | grep -q 'TUI_STATE=unknown\|无法安全判定' \
+  && ok "合法空 tail 仍归类 unknown" || bad "态8 未保持 unknown 语义"
+[ "$(terminal_send_count)" -eq 0 ] && ok "合法空 tail 零 terminal send" || bad "态8 不应 send"
+[ "$(worker_start_count)" -eq 0 ] && ok "合法空 tail 零 worker-start" || bad "态8 不应 worker-start"
 
 echo ""
 echo "Result: $pass pass, $fail fail"

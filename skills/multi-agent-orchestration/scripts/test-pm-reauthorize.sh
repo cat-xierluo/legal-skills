@@ -141,7 +141,14 @@ case "$1 $2" in
     done
     printf '%s\n' "$handle" >> "$S/terminals.closed"
     if [ -f "$S/terminals.live" ]; then
-      grep -v -x "$handle" "$S/terminals.live" > "$S/terminals.live.next" || true
+      if grep -v -x "$handle" "$S/terminals.live" > "$S/terminals.live.next"; then
+        :
+      else
+        grep_status=$?
+        # grep=1 只表示删除后结果为空；I/O/参数等真实错误不得被测试桩吞掉。
+        [ "$grep_status" -eq 1 ] || exit "$grep_status"
+        : > "$S/terminals.live.next"
+      fi
       mv "$S/terminals.live.next" "$S/terminals.live"
     fi
     echo '{"ok":true,"result":{}}'

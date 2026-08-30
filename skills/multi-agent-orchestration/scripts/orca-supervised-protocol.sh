@@ -8,14 +8,14 @@ orca_supervised_task_spec() {
     "$task_spec"
 }
 
-# Task-076/Task-077：worker 启动后的 Dispatch 绑定自检与三步自动补绑（register/launch 共用实现）。
+# Task-106/Task-107（旧发布别名 Task-076/077-Dispatch）：worker 启动后的 Dispatch 绑定自检与三步自动补绑（register/launch 共用实现）。
 #
 # 2026-08-27 三波实战（badminton-lab Wave17/18/19）：worker-start 成功拉起 TUI 并注入
 # 任务，但 Orca 不识别终端内 agent（agent_unconfigured / no recognized agent 家族）导致
 # Dispatch 未绑——Task 停 [ready]、dispatch-show --task 为空、worker_done 无通道。
 # 2026-08-28 Wave 20 又暴露第二形态：orca-wave-prepare 预建 Run/Task 后 PM 按 receipt 传
 # 三件套但漏 --orca-supervised 时，spawn 走 terminal-managed，worker-start 根本不发生，
-# dispatch 同样不绑（Task-077 根因）。两条路径都必须经本函数收尾自检，禁止各自复制
+# dispatch 同样不绑（Task-107 根因）。两条路径都必须经本函数收尾自检，禁止各自复制
 # 一份实现（漂移即回归）。
 #
 # 输入参数：

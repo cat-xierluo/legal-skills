@@ -172,6 +172,7 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 ## 9. 失败与恢复
 
 - `worker-start` 非零：保留其完整 receipt，检查 `stage/effects/residualResources/recovery`；不要固定 sleep 后盲目 retry。
+- **裸调 worker-start 的 60 秒冷启动窗口（2026-08-30 实测）**：不经 `spawn-worker.sh` 预建、直接 `worker-start --worktree current --agent claude` 时，新起 Claude Code 终端未能在约 60 秒启动确认窗口内发心跳 → dispatch `last_failure: "timeout"`、Task 标 failed、遗留孤儿终端（`terminal list` 中 title=None、无 worktree）。窗口为 Orca runtime 内部行为，本机不可调（orca 无 settings 命令），疑似对慢冷启动 agent 的兼容问题，可上游反馈。恢复序列：①`terminal list` 找孤儿 handle 并 `terminal close` 清理；②`task-update --id <task> --status ready` 复活（或 register 路径 `--reset-failed`）；③改用 `worker-start --task <id> --terminal <现存 agent 终端句柄>` 复用活终端重试（实测一次成功）。另注：worker-start 返回体 ready/terminal 字段可能为 None（部分生效），判读以 `dispatch-show --task` 实际 assignee/status 为准；dispatch-show 只显示当前 dispatch，重试后历史失败记录被覆盖。教训：裸调 orca 原生命令前先确认 helper（spawn-worker.sh）是否已有对应两步路径——它预建 terminal 等 TUI ready 再注册，正是为规避此窗口。
 - mutation outcome unknown：只按 receipt 的 `--retry-request` 精确恢复，或用 `dispatch-show --task` 做只读核对。
 - terminal handle stale：按 worktree 重新 `terminal list`，后续只用新 handle，禁止双发。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
