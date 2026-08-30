@@ -1,6 +1,6 @@
 # 多 Issue 合并 PR 描述模板
 
-> 当一组 Issue 经 `references/11-issue-grouping.md` 判定为「维度① 同根因合并」时，用本模板撰写 PR 描述。
+> 当一组 Issue 经 `references/12-issue-grouping.md` 判定为「维度① 同根因合并」时，用本模板撰写 PR 描述。
 > 一个 worker 顺序修完组内所有 Issue，提交到一个 PR，合并时用 `Closes` 批量关闭。
 > 与单 Issue PR 的区别：必须有一个**统一根因说明**，让 reviewer 一眼看清「为什么这几个要一起改」。
 

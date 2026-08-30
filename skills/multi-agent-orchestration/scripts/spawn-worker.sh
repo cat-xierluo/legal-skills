@@ -149,6 +149,10 @@ INSTALL_AUTHORIZATION_SOURCE=""
 AUTHORIZED_INSTALL_COMMANDS=()
 ALLOWED_SHELL_COMMANDS=()
 PYTHON_RUNTIME_SYMLINK=""
+# --deps-mode（FaroPDF 2026-08-30 连环坑）：node_modules 依赖补偿模式。
+# 默认 auto=现行为完全不变（无 --allow-install-command 时软链）；auto 推断 local、
+# 显式 symlink/local 的解析都在 spawn-worker-deps.sh 的 resolve_deps_mode 内完成。
+DEPS_MODE="auto"
 EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
 ALLOW_PROMPT_ONLY_INSTALL_GUARD=0
 INSTALL_GUARD_DEGRADATION_SOURCE=""

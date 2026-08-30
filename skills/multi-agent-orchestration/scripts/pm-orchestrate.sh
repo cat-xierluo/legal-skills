@@ -35,6 +35,11 @@ Commands:
                重写 launch.sh B64、把 failed/blocked Task 复位 ready、在同一 worktree
                创建新终端并复用 Task 重注册（worker-start 重注入）、改写 METADATA 路由、
                可选发 --resume-text、最后关闭旧终端句柄。未提交的工作区改动全部保留。
+               (Task-081) task 仍 dispatched（如 worker 卡 escalation/question 等待）时
+               不再被 TASK_REUSED 拒绝：先把 --resume-text 作为 reply 消费等待，再走
+               同一链路；若注册仍被单活 fencing 拒绝，回滚新终端（不双活）并输出
+               runbook #18 manual-recovery 指引。新终端建立后任何中间失败都会先关新
+               终端、保留旧终端（重复调用不累积终端）。
 
 Common:
   --worktree PATH   Worker worktree path
@@ -622,6 +627,69 @@ cmd_settle() {
   fi
 }
 
+# Task-081：reauthorize 对 dispatched(等待中) worker 的原地重授权支撑函数。
+# 背景：2026-08-30 FaroPDF 编排实测——worker 卡 escalation 等待（task 仍 dispatched）
+# 时跑 reauthorize，worker-start 被 TASK_REUSED 拒绝后直接 exit 2，而新 terminal 已
+# 创建、旧 terminal 未关闭 → 双活终端泄漏。以下三个辅助函数分别负责：
+#   ① 状态预检（task-list 尽力而为；旧 runtime 缺子命令降级 unknown，既有路径零变化）
+#   ② 等待消费（dispatched 且有未消费 escalation/question 时，把 --resume-text 或
+#      缺省续接说明作为 reply 发给该 dispatch，worker 解锁继续；task 保持 dispatched）
+#   ③ 终端回滚（新 terminal 建立后任何中间失败先关新终端、保留旧终端——任何时刻
+#      至多一个活终端，重复调用 reauthorize 不累积终端）
+reauthorize_task_state() {
+  local task_id="$1" state="unknown" list_out
+  if list_out=$(orca_cli orchestration task-list --run "$ORCA_RUN_ID" --json 2>/dev/null); then
+    set +e +o pipefail
+    state=$(printf '%s' "$list_out" | jq -r --arg task "$task_id" '
+      [(.result.tasks // .result // [])[]?
+        | select(((.id // .taskId // "") == $task))
+        | (.status // .state // "unknown")][0] // "unknown"' 2>/dev/null)
+    set -e -o pipefail
+    [ -n "$state" ] || state="unknown"
+  fi
+  printf '%s' "$state"
+}
+
+reauthorize_consume_pending_wait() {
+  local resume_text="$1" dispatch_id="$2" check_out msg_id body
+  check_out=$(orca_cli orchestration check --json 2>/dev/null) || check_out=""
+  msg_id=""
+  if [ -n "$check_out" ]; then
+    set +e +o pipefail
+    msg_id=$(printf '%s' "$check_out" | jq -r --arg dispatch "$dispatch_id" '
+      [(.result.messages // .result.deliveries // .messages // .deliveries // [])[]?
+        | select((((.type // .message_type // "") | ascii_downcase) == "escalation")
+              or (((.type // .message_type // "") | ascii_downcase) == "question"))
+        | select(((.dispatch_id // .dispatchId // .to // "") | tostring) as $d
+            | ($d == $dispatch or $d == ("dispatch:" + $dispatch)))
+        | (.id // .message_id // .messageId // .delivery_id // .deliveryId // empty)][0]
+      // empty' 2>/dev/null)
+    set -e -o pipefail
+  fi
+  if [ -z "$msg_id" ]; then
+    echo "PM_REAUTHORIZE_WAIT_NONE: 无未消费 escalation/question（check 为空、不可用或无匹配消息）；跳过等待消费"
+    return 0
+  fi
+  body="$resume_text"
+  [ -n "$body" ] || body="PM reauthorize: 授权快照已刷新，请继续执行当前任务"
+  if orca_cli orchestration reply --id "$msg_id" --body "$body" --json >/dev/null 2>&1; then
+    echo "PM_REAUTHORIZE_WAIT_CONSUMED: message=${msg_id}（worker 等待已解锁；task 保持 dispatched）"
+  else
+    echo "WARN: reply $msg_id 失败；worker 等待未被消费，后续重注册预计仍被 TASK_REUSED 拒绝" >&2
+  fi
+}
+
+reauthorize_rollback_new_terminal() {
+  local new_handle="$1" why="$2"
+  [ -n "$new_handle" ] || return 0
+  [ "$new_handle" != "$WORKER_HANDLE" ] || return 0
+  if orca_cli terminal close --terminal "$new_handle" --json >/dev/null 2>&1; then
+    echo "PM_REAUTHORIZE_NEW_TERMINAL_ROLLED_BACK: ${new_handle}（${why}）；旧终端 $WORKER_HANDLE 保留"
+  else
+    echo "WARN: 新终端 $new_handle 回滚关闭失败（${why}）；请手动关闭: orca terminal close --terminal $new_handle" >&2
+  fi
+}
+
 cmd_reauthorize() {
   # Task-058: spawn 授权快照的运行时刷新。guard 的 load_authorization() 中
   # WORKER_INSTALL_AUTH_B64（launch.sh 内联、进程环境）绝对优先于授权文件且
@@ -653,6 +721,15 @@ cmd_reauthorize() {
   [ -f "$auth_file" ] || { echo "ERROR: authorization file not found: $auth_file" >&2; exit 64; }
   [ -f "$launch_sh" ] || { echo "ERROR: launch.sh not found: $launch_sh" >&2; exit 64; }
   ensure_coordinator_binding || exit 2
+
+  # Step 0 (Task-081)：dispatched 等待态探测与消费。仅 dispatched 分支有额外动作；
+  # ready/failed/blocked/completed/unknown 走原有链路零变化。
+  local reauth_task_state
+  reauth_task_state=$(reauthorize_task_state "$task_id")
+  echo "PM_REAUTHORIZE_TASK_STATE: $reauth_task_state"
+  if [ "$reauth_task_state" = "dispatched" ]; then
+    reauthorize_consume_pending_wait "$REAUTH_RESUME_TEXT" "$ORCA_DISPATCH_ID"
+  fi
 
   # Step 1: merge --allow-cmd（无 --allow-cmd 时仅刷新快照，仍支持 PM 手改文件后的场景）
   if [ "${#ALLOW_CMDS[@]}" -gt 0 ]; then
@@ -718,6 +795,7 @@ PY
       echo "PM_REAUTHORIZE_TASK_RESET: task $task_id not startable; resetting to ready"
       orca_cli orchestration task-update --id "$task_id" --status ready \
         --run "$ORCA_RUN_ID" --from "$ORCA_COORDINATOR_HANDLE" >/dev/null || {
+        reauthorize_rollback_new_terminal "$new_handle" "task-update 复位失败"
         echo "ERROR: failed to reset task $task_id to ready" >&2
         exit 2
       }
@@ -727,10 +805,26 @@ PY
         --run-id "$ORCA_RUN_ID" \
         --task-id "$task_id" \
         --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1) || {
+        reauthorize_rollback_new_terminal "$new_handle" "复位后重注册仍失败"
         echo "ERROR: re-registration failed after task reset: $register_out" >&2
         exit 2
       }
+    elif printf '%s' "$register_out" | grep -qi "task_reused"; then
+      # Task-081 ③：dispatched task 的注册通道硬限制（单活 fencing：活 Dispatch 未
+      # 结算前 worker-start 必被拒）。不裸抛 TASK_REUSED——先回滚新终端防双活，再给
+      # manual-recovery 指引（等待已在 Step 0 消费，worker 可继续用旧终端跑）。
+      reauthorize_rollback_new_terminal "$new_handle" "task 仍 dispatched，重注册被单活 fencing 拒绝"
+      {
+        echo "PM_REAUTHORIZE_REGISTER_TASK_REUSED: task $task_id 仍处于 dispatched（活 Dispatch 未结算），Orca 拒绝重复注册"
+        echo "PM_REAUTHORIZE_MANUAL_RECOVERY: 已完成：授权文件合并 + launch.sh B64 刷新（下次启动生效）+ 等待消费。后续三选一："
+        echo "  1) worker 仍在跑：等它发 worker_done 自然结算（task 翻转）后重跑本命令，届时走既有换终端链"
+        echo "  2) worker 进程已死：先 settle 再重跑本命令——pm-orchestrate settle --worktree <WT> --session $SESSION --reason \"...\"（fence+stop 翻转 task 后 reauthorize 即可正常换终端）"
+        echo "  3) 按 runbook #18 三步补绑手工重建通道：① orca orchestration dispatch --task $task_id --to $WORKER_HANDLE --run $ORCA_RUN_ID --return-preamble（不带 --inject） ② 从返回 preamble 提取真实 ctx id ③ orca terminal send --terminal $WORKER_HANDLE --text \"<单行 worker_done/ask 命令形式>\" --enter（必须单行）"
+      } >&2
+      exit 2
     else
+      # Task-081 ②：中间失败不得留双活终端——先回滚新终端再报错
+      reauthorize_rollback_new_terminal "$new_handle" "重注册失败"
       echo "ERROR: re-registration failed: $register_out" >&2
       exit 2
     fi
@@ -747,6 +841,7 @@ PY
     '.session.orca.terminal_handle = $th | .session.orca.supervised.dispatch_id = $di' \
     "$METADATA" > "$tmp_meta" && mv "$tmp_meta" "$METADATA" || {
     rm -f "$tmp_meta"
+    reauthorize_rollback_new_terminal "$new_handle" "METADATA 改路由失败"
     echo "ERROR: METADATA reroute failed" >&2
     exit 2
   }

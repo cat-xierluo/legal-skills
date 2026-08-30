@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # spawn-worker-deps.sh — worktree 依赖补偿 + 默认 verify 命令注入（Task-045/046，G31）
 #
-# 被 spawn-worker.sh source；依赖其全局变量：PROJECT_DIR / WORKTREE / VERIFY_COMMANDS。
+# 被 spawn-worker.sh source；依赖其全局变量：PROJECT_DIR / WORKTREE / VERIFY_COMMANDS、
+# DEPS_MODE / AUTHORIZED_INSTALL_COMMANDS（--deps-mode 解析见 resolve_deps_mode）。
 # 不自己 set -e（继承 spawn-worker.sh 的错误处理）。
 #
 # 背景（G31）：Orca worktree 落在 ~/orca/workspaces/<project>/<name>（独立路径树），
@@ -24,12 +25,88 @@ detect_project_type() {
   printf '%s' "$kinds"
 }
 
+# --deps-mode auto|symlink|local 解析（FaroPDF 2026-08-30 连环坑：Orca worktree 软链
+# 主仓 node_modules 导致 pnpm add 拒写软链、vite dev server server.fs.allow 拒软链路径
+# → vitest 全挂，PM 被迫每次 spawn 后手工 rm 软链 + pnpm install 重建本地）。
+#   - auto（默认）：本次 spawn 显式传了 --allow-install-command（PM 授权安装 = 任务会改
+#     依赖）时自动选 local 并打印推断理由；否则保持 symlink，既有软链行为完全不变。
+#   - symlink：强制软链（legacy 行为）。
+#   - local：不建软链，worker 在 worktree 内本地安装（授权走既有 --allow-install-command
+#     + --install-authorization-source 通道）。
+# 非法值 fail-closed（spawn-worker-flags.sh 解析层已挡一次，此处兜底直接 source 本模块
+# 的调用方）。向后兼容：DEPS_MODE 未设按 auto；AUTHORIZED_INSTALL_COMMANDS 未设按空。
+resolve_deps_mode() {
+  case "${DEPS_MODE:-auto}" in
+    symlink|local)
+      echo "SPAWN_WORKER_DEPS_MODE: $DEPS_MODE (explicit)"
+      ;;
+    auto)
+      if [ -n "${AUTHORIZED_INSTALL_COMMANDS[*]-}" ]; then
+        DEPS_MODE=local
+        echo "SPAWN_WORKER_DEPS_MODE_AUTO_LOCAL: 检测到 --allow-install-command（任务会改依赖），auto 自动选 local：不建 node_modules 软链，worker 在 worktree 内本地安装"
+      else
+        DEPS_MODE=symlink
+      fi
+      ;;
+    *)
+      echo "ERROR: SPAWN_WORKER_DEPS_MODE_INVALID: $DEPS_MODE（只接受 auto|symlink|local）" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Node 项目 symlink 补偿（G31 原逻辑原样提取，行为零变化）。
+ensure_node_deps_symlink() {
+  local proj_nm="$PROJECT_DIR/node_modules"
+  if [ ! -d "$proj_nm" ]; then
+    echo "SPAWN_WORKER_DEPS_SKIP: 主仓无 node_modules，跳过软链（worker 需自行 npm install，受 install-guard 约束）"
+  elif [ -L "$WORKTREE/node_modules" ] && [ ! -e "$WORKTREE/node_modules" ]; then
+    echo "ERROR: SPAWN_WORKER_DEPS_BROKEN_LINK: worktree node_modules is a broken symlink; refusing to start an unverifiable worker" >&2
+    return 1
+  elif [ -e "$WORKTREE/node_modules" ]; then
+    # worktree 已有 node_modules（真实目录或软链）—— 不覆盖，避免破坏既有状态。
+    echo "SPAWN_WORKER_DEPS_EXISTS: worktree 已有 node_modules，跳过"
+  else
+    # 父链判断：worktree 物理路径是否以主仓物理路径为前缀。
+    # tmux worktree 默认在 .claude/worktrees/（主仓子树）→ 在父链 → 向上解析够，不软链。
+    # Orca worktree 在 ~/orca/workspaces/（独立路径树）→ 不在父链 → 软链补偿。
+    local proj_real wt_real
+    proj_real=$(cd "$PROJECT_DIR" && pwd -P)
+    wt_real=$(cd "$WORKTREE" && pwd -P)
+    if [ "$wt_real" != "${wt_real#"$proj_real"/}" ]; then
+      echo "SPAWN_WORKER_DEPS_IN_TREE: worktree 在主仓父链，npm 向上解析即可，不软链（G28）"
+    else
+      if ln -s "$proj_real/node_modules" "$wt_real/node_modules" 2>/dev/null; then
+        echo "SPAWN_WORKER_DEPS_LINKED: node_modules -> $proj_real/node_modules（worktree 不在主仓父链，G31 补偿）"
+      else
+        echo "ERROR: SPAWN_WORKER_DEPS_LINK_FAILED: cannot link node_modules; refusing to start an unverifiable worker" >&2
+        return 1
+      fi
+    fi
+  fi
+}
+
+# Node 项目 local 模式（--deps-mode local，显式或 auto+--allow-install-command 推断）：
+# 不建软链，worker 在 worktree 内本地安装；断链 fail-closed 语义保留——断软链会让
+# install 写穿主仓依赖或让验证静默失败，local 模式同样拒绝启动这种"看似可用"的 worker。
+ensure_node_deps_local() {
+  if [ -L "$WORKTREE/node_modules" ] && [ ! -e "$WORKTREE/node_modules" ]; then
+    echo "ERROR: SPAWN_WORKER_DEPS_BROKEN_LINK: worktree node_modules is a broken symlink; refusing to start an unverifiable worker" >&2
+    return 1
+  elif [ -e "$WORKTREE/node_modules" ]; then
+    echo "SPAWN_WORKER_DEPS_EXISTS: worktree 已有 node_modules，跳过"
+  else
+    echo "SPAWN_WORKER_DEPS_LOCAL: 未建 node_modules 软链（deps-mode=local）；worker 首次验证前需在 worktree 内本地 install（如 pnpm install），安装授权走既有 --allow-install-command + --install-authorization-source 通道"
+  fi
+}
+
 # worktree 创建后调用：按项目类型补偿依赖。
-# 全局读：PROJECT_DIR、WORKTREE。
-# Node：worktree 不在主仓父链 + 主仓有 node_modules + worktree 无 node_modules → 软链。
+# 全局读：PROJECT_DIR、WORKTREE、DEPS_MODE、AUTHORIZED_INSTALL_COMMANDS。
+# Node：先 resolve_deps_mode 解析模式，再按模式软链（symlink）或不补偿只打提示（local）。
 # Rust：~/.cargo registry 共享、worktree target 独立，不补偿（仅打印 info）。
 # Python：venv 含绝对路径、软链会挂，不自动补偿（打印 blocked，PM 决定是否手动建 venv）。
 ensure_worktree_deps() {
+  resolve_deps_mode || return 1
   if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "SPAWN_WORKER_DEPS_DRYRUN: dry-run 不软链"
     return 0
@@ -43,32 +120,10 @@ ensure_worktree_deps() {
 
   case "$kinds" in
     *node*)
-      local proj_nm="$PROJECT_DIR/node_modules"
-      if [ ! -d "$proj_nm" ]; then
-        echo "SPAWN_WORKER_DEPS_SKIP: 主仓无 node_modules，跳过软链（worker 需自行 npm install，受 install-guard 约束）"
-      elif [ -L "$WORKTREE/node_modules" ] && [ ! -e "$WORKTREE/node_modules" ]; then
-        echo "ERROR: SPAWN_WORKER_DEPS_BROKEN_LINK: worktree node_modules is a broken symlink; refusing to start an unverifiable worker" >&2
-        return 1
-      elif [ -e "$WORKTREE/node_modules" ]; then
-        # worktree 已有 node_modules（真实目录或软链）—— 不覆盖，避免破坏既有状态。
-        echo "SPAWN_WORKER_DEPS_EXISTS: worktree 已有 node_modules，跳过"
+      if [ "$DEPS_MODE" = "local" ]; then
+        ensure_node_deps_local || return 1
       else
-        # 父链判断：worktree 物理路径是否以主仓物理路径为前缀。
-        # tmux worktree 默认在 .claude/worktrees/（主仓子树）→ 在父链 → 向上解析够，不软链。
-        # Orca worktree 在 ~/orca/workspaces/（独立路径树）→ 不在父链 → 软链补偿。
-        local proj_real wt_real
-        proj_real=$(cd "$PROJECT_DIR" && pwd -P)
-        wt_real=$(cd "$WORKTREE" && pwd -P)
-        if [ "$wt_real" != "${wt_real#"$proj_real"/}" ]; then
-          echo "SPAWN_WORKER_DEPS_IN_TREE: worktree 在主仓父链，npm 向上解析即可，不软链（G28）"
-        else
-          if ln -s "$proj_real/node_modules" "$wt_real/node_modules" 2>/dev/null; then
-            echo "SPAWN_WORKER_DEPS_LINKED: node_modules -> $proj_real/node_modules（worktree 不在主仓父链，G31 补偿）"
-          else
-            echo "ERROR: SPAWN_WORKER_DEPS_LINK_FAILED: cannot link node_modules; refusing to start an unverifiable worker" >&2
-            return 1
-          fi
-        fi
+        ensure_node_deps_symlink || return 1
       fi
       ;;
   esac

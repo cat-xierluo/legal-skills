@@ -99,6 +99,12 @@ Scope:
 - Shared dependencies / lockfiles / runtime config are forbidden unless the task explicitly allows them.
 - Risk class: {{low_medium_high}}
 - Shared-risk notes: {{shared_risk_notes}}
+- Consumer: {{named_consumer}}
+- Decision or gate changed: {{decision_or_gate_changed}}
+- Consume by: {{consume_by}}
+- Expiry: {{expiry}}
+- Observable acceptance: {{observable_acceptance}}
+- Resource owner: {{services_ports_child_processes_and_cleanup_or_none}}
 
 Execution Authority:
 - Verification is not authorization to install dependencies or mutate the machine environment.
@@ -135,6 +141,7 @@ Process:
 7. Verify: run the commands below and record results.
    - Before any dependency-install command, confirm it exactly matches `Authorized Install Commands`; otherwise report BLOCKED instead of running it.
    - Before any Shell command outside the narrow lifecycle set, confirm it exactly matches `Allowed Shell Commands`; otherwise request PM authority instead of rewriting/encoding it to evade the hook.
+   - If this task started a service, listener or child process, record its PID/process group/port, stop only that owned resource, wait boundedly for exit, verify the port is closed, and compare the project process set with the pre-task baseline. Do not kill by process name and do not stop a user-owned pre-existing service.
 8. **Commit-Verify hard constraint（v1.20.3 Task-029，W2 撞坑：worker LLM 幻觉 "done"）**：commit 前必跑 Verify（step 7）**全部 PASS**；commit 完成后立即跑 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD`，确认改动文件数 / 行数与意图一致（不允许 "commit message 说改了 N 文件但 git diff 显示空" 或 "改动了破坏 smoke 的核心函数但 verify 没检出"）。如果 verify 不全 PASS 或 git diff 与意图不符，**不要**写 `status="done"`——fix 后重跑。LLM 幻觉 "完成" 是真实风险：commit 描述 ≠ 实际改动会破坏 smoke / 错位置写 STATUS，最终 PM 收口时才发现（v1.20.2 W2 实战：`64cd3d7` 改了 4 文件但破坏 `permission_auto` 数字键 `'2'` send-keys + 错位置写 `skills/.../STATUS.json` + pane 说 done 但核心修复未生效）。
 9. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
 9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel matches only the canonical success value; `completed` / `finished` / `complete` are invalid and remain visible until correction or timeout. For Orca supervised workers this checkpoint only wakes PM; accepted `worker_done` is still required to settle the Task/Dispatch.
@@ -182,6 +189,8 @@ Orca Supervised Lifecycle:
 
 Out of Scope:
 - Do not modify forbidden files.
+- **禁止修改共享上下文文档**（`docs/TASKS.md`/README/CHANGELOG/DECISIONS 等项目共享真值文件）：交付状态由 PM 验收后统一写回；你在分支里写，合并时会覆盖 PM 真值（2026-08-30 两次合并覆盖教训）。需要写回的内容写 `{{session_context_path}}/WRITEBACK_PROPOSAL.md`。
+- **禁止删除任何既有 fixture / 他人交付物**——即使看似与你的任务重叠（2026-08-30 一次误删弹药教训）；疑似重叠时在 `RESULT.md` 提出，由 PM 裁决。
 - Do not fix unrelated environment, dependency, CI or package issues.
 - Do not run unlisted installation or global environment mutation commands merely to satisfy verification.
 - Do not submit checkpoint files, tokens, settings files, or local runtime state to Git/PR.

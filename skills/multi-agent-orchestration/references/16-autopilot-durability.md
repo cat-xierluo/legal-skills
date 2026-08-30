@@ -1,12 +1,12 @@
 # Autopilot 持久化控制面：跨会话状态、租约、对账与恢复
 
-适用：项目已经按 `references/14-wave-autopilot.md` 跑通 live PM session 内的 Wave Autopilot，且用户要求“PM 会话退出、机器重启或换 Agent 后仍可恢复”“尽量少人工介入”时。本文定义目标控制面和验收，不表示对应 controller/scheduler 已经实现。
+适用：项目已经按 `references/15-wave-autopilot.md` 跑通 live PM session 内的 Wave Autopilot，且用户要求“PM 会话退出、机器重启或换 Agent 后仍可恢复”“尽量少人工介入”时。本文定义并说明 L2 controller core；L3 scheduler 仍是后续任务。
 
-当前发布边界：v2.8.1 只提供设计与任务合同。Task-066 完成并通过故障注入前报告 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`；Task-067 完成并通过故障注入前报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`。Task-066 交付 L2 后应停止报告前一个标记，但仍保留 L3 标记，直到外部 scheduler 真正交付。
+当前发布边界：v2.10.0 已交付 Task-066 的 `L2 / CROSS_SESSION_RECOVERABLE` controller core，停止报告 `AUTOPILOT_L2_CONTROLLER_NOT_IMPLEMENTED`。真实 Orca/GitHub mutation adapter 端到端与真实断电仍为 `NOT_VERIFIED`。Task-067 完成并通过故障注入前继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`；L2 不等于无会话无人值守。
 
-## 1. 为什么 reference 14 不等于持久控制器
+## 1. 为什么 reference 15 不等于持久控制器
 
-reference 14 已解决 live-session 的核心纪律：项目侧授权/策略、三通道监控、Dispatch 完成权威、最终树验收、safe-push/PR/squash、fix-worker 和 fail-closed 泊车。它仍依赖一个活着的 PM 会话理解策略、维护 recurring cron、记住当前 Wave 并执行下一步。
+reference 15 已解决 live-session 的核心纪律：项目侧授权/策略、三通道监控、Dispatch 完成权威、最终树验收、safe-push/PR/squash、fix-worker 和 fail-closed 泊车。它仍依赖一个活着的 PM 会话理解策略、维护 recurring cron、记住当前 Wave 并执行下一步。
 
 以下机制都不能单独提供跨会话持久性：
 
@@ -24,7 +24,7 @@ reference 14 已解决 live-session 的核心纪律：项目侧授权/策略、�
 | 等级 | 能力 | 最低证据 |
 |---|---|---|
 | `L0 / MANUAL_WAVE` | 每波由用户/PM 手动发车 | 项目任务源与单波验收 |
-| `L1 / LIVE_SESSION_AUTOPILOT` | 活跃 PM 会话内自动链式推进；session cron 补偿推送丢失 | reference 14 三通道 + 完整 Wave |
+| `L1 / LIVE_SESSION_AUTOPILOT` | 活跃 PM 会话内自动链式推进；session cron 补偿推送丢失 | reference 15 三通道 + 完整 Wave |
 | `L2 / CROSS_SESSION_RECOVERABLE` | 新 PM 能接管旧 Wave，不重复 mutation | runtime ledger + PM lease/fencing + reconcile 故障注入 |
 | `L3 / UNATTENDED_DURABLE` | 无活跃聊天会话时，外部 scheduler 可定时唤醒、恢复和 soft park/resume | L2 + durable scheduler + provider/reset/重启演练 |
 
@@ -237,7 +237,38 @@ Task-066/067 不能只以 unit test 或一次 happy path 关闭，至少运行�
 
 验收记录必须包含 runtime before/after、fencing token、外部事实快照、执行 action 与无重复副作用证明。
 
-## 13. 实施任务
+## 13. 已实现入口与使用边界
+
+入口：
+
+- `scripts/autopilot-controller.py`：`init/acquire/renew/status/reconcile/tick`；运行态固定在 Git common dir 的 `orchestration/autopilot/`。
+- `scripts/autopilot-facts.py`：controller 在 `reconcile` 内调用的第一方只读 collector；collector 文件、manifest、探针/CLI、配置与证据均按 canonical path + SHA-256 固定。
+- `scripts/test-autopilot-controller.py` 与 `scripts/test-autopilot-facts.py`：离线故障注入、throwaway Git 与 fake Orca/GitHub 合同验证入口。
+
+最小顺序：先用当前精确 policy commit、Wave/Run、item 列表和 facts bindings `init`，再由稳定 PM owner `acquire`；每轮先 `reconcile`，只有结果为可执行的单一 pending intent 时才 `tick --adapter <受信适配器>`，随后再次 `reconcile` 直到外部事实收敛。`status` 只读；接管必须显式 `acquire --takeover --reason ...`，旧 token 不得 mutation。
+
+Manifest 只保存 immutable binding：repo/project/run、task/orca task、branch/worktree/provider、PR base/check/review policy，以及只读工具/探针/证据的路径与 digest。`attempt/dispatch_id/pr_number/pr_head_oid` 属于 runtime ledger，请求可为空并由 collector 按精确 task 或 branch/base/current head 唯一发现；不得写死进 manifest。project/provider probe 必须接受固定 JSON 请求并只返回最小结构化事实，不得输出 Token、环境、transcript 或正文。
+
+`tick` 的 mutation adapter 是项目提供的受信边界：首次存在 ready intent 时按 canonical path + digest 永久封印；固定 JSON request 必须按 exact target 和 fencing token 执行或失败关闭，并返回同 request/key/target/token 的 receipt。planned intent 固定原 facts deadline，过期后 tick 会先持久化 `ready=false`、零调用拒绝并要求 fresh reconcile，续租不能延长事实有效期。receipt 只证明 adapter 接受，不证明外部事实已收敛；controller 会保留 pending，直到新的独立 facts request 观察到 action-specific after-state。Skill 不附带通用 push/merge/writeback adapter，不因此扩大项目授权。
+
+部署时还必须满足以下受信配置边界：
+
+- probe 的 `read_only=true`、argv 禁词与有界进程组只能约束合同形态，不是 OS 沙箱；只允许使用已审计、固定 digest 的只读可执行文件。
+- push target 已绑定 remote；open PR、merge、writeback 的 target 当前不直接携带 GitHub `owner/repo`、remote URL 或任务源路径。mutation request 也不传 repo root，因此 adapter 必须是项目专属、digest-sealed，并把 `repo_identity/project_id` 唯一映射到精确 GitHub 仓库和任务源；不得把一个依赖可变 cwd/全局默认仓库的通用 adapter 当作 exact-resource 实现。
+- required checks/approvals 来自固定 manifest，不会自动发现 GitHub branch protection/ruleset。manifest 必须与真实保护规则同步，adapter 不得使用 admin bypass；两者漂移时停止 mutation 并重新初始化/评审绑定。
+- `events.jsonl` 当前逐事件嵌入完整 state，未实现轮转或大小上限；长期运行需监控 Git common dir 空间，轮转能力另立任务，不得手工截断活跃账本。
+- path/digest 在校验到执行之间仍存在同用户权限下的 TOCTOU 信任边界；运行目录、adapter、manifest、probe 与配置须限制为同一受信维护者可写。
+
+发布验收：
+
+```bash
+python3 scripts/test-autopilot-controller.py
+python3 scripts/test-autopilot-facts.py
+```
+
+两套测试只证明本地状态机、第一方 collector 与 fake 外部合同；真实 Orca/GitHub mutation adapter、真实 provider、真实断电和 L3 scheduler 必须分别保留 `NOT_VERIFIED`。上述受信配置条件未满足时只能把 controller 当作实验入口，不得声明项目已具备 L2。
+
+## 14. 实施任务
 
 本次审计落盘期间，另一轮 badminton-lab Wave 7 复盘已先登记三个 live-session DRAFT；为避免编号覆盖，本持久化整改从 Task-066 起排号。三个既有方向与本文的关系如下，公开记录其边界，避免它们只存在于 ignored-only 本地任务源：
 
@@ -247,9 +278,9 @@ Task-066/067 不能只以 unit test 或一次 happy path 关闭，至少运行�
 | `Task-064` | 额度窗口 playbook、idle 注入与当前会话 one-shot 再唤醒 | 提供 429 当前会话处置；Task-067 把 `retry_at`/resume 提升为跨会话持久状态 |
 | `Task-065` | shared-doc 冲突的程序化提取/拼装与断言 | 仅作为历史并发写回的恢复工具候选；本文默认仍是 PM 单写者，工具不得反向授权并发写 shared context |
 
-### Task-066 — 持久 runtime core（READY）
+### Task-066 — 持久 runtime core（DONE）
 
-实现 runtime schema、原子 ledger/event log、PM lease/fencing、只读 `status`、幂等 `reconcile/tick` 与故障测试。范围只到 `L2`；不创建外部 scheduler，不自由解释项目 Roadmap，不自动删除资源。
+已实现 runtime schema、原子 ledger/event log、PM lease/fencing、只读 `status`、幂等 `reconcile/tick`、第一方 facts collector 与故障测试。范围只到 `L2`；不创建外部 scheduler，不自由解释项目 Roadmap，不自动删除资源。真实外部 mutation 与断电边界见上一节。
 
 ### Task-067 — durable scheduler 与 soft park（DRAFT）
 
