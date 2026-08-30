@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "page_numbers": "required",
+    "page_number_start": 1,
+    "require_a4": true,
+    "require_table_center": true,
+    "require_fixed_table_layout": true,
+    "require_row_cant_split": true,
+    "forbid_blank_pages": true,
+    "center_tolerance_twips": 40,
+    "render_center_tolerance_points": 2.5,
+    "render_page_number_center_tolerance_points": 18.0,
+    "render_a4_tolerance_points": 2.0
+  },
+  "templates": {
+    "22-侵害著作权及邻接权纠纷-民事起诉状": {
+      "page_numbers": "forbidden",
+      "reason": "2026-08-28 法院实际发放基准件不带页码；禁止由全局规则自行添加。"
+    }
+  }
+}

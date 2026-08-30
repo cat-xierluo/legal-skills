@@ -13,7 +13,7 @@ python3 -B scripts/extract_from_markdown.py \
 python3 -B scripts/fill_template.py \
   --case-type 09-private-lending \
   --elements tests/output/09-e2e-elements.json \
-  --output tests/output/09-e2e.docx 2>&1 | grep -E "rules|完整性"
+  --output tests/output/09-e2e.docx --layout-check docx 2>&1 | grep -E "rules|完整性|版式门禁"
 
 echo "[e2e] ========== 案由 05 离婚 =========="
 python3 -B scripts/extract_from_markdown.py \
@@ -23,19 +23,19 @@ python3 -B scripts/extract_from_markdown.py \
 python3 -B scripts/fill_template.py \
   --case-type 05-divorce \
   --elements tests/output/05-e2e-elements.json \
-  --output tests/output/05-e2e.docx 2>&1 | grep -E "rules|完整性"
+  --output tests/output/05-e2e.docx --layout-check docx 2>&1 | grep -E "rules|完整性|版式门禁"
 
 echo "[e2e] ========== sample 全要素填充（两案由）=========="
 python3 -B scripts/fill_template.py --case-type 09-private-lending \
   --elements tests/fixtures/09-private-lending-sample.json \
-  --output tests/output/09-sample.docx 2>&1 | grep -E "rules|完整性"
+  --output tests/output/09-sample.docx --layout-check docx 2>&1 | grep -E "rules|完整性|版式门禁"
 python3 -B scripts/fill_template.py --case-type 05-divorce \
   --elements tests/fixtures/05-divorce-sample.json \
-  --output tests/output/05-sample.docx 2>&1 | grep -E "rules|完整性"
+  --output tests/output/05-sample.docx --layout-check docx 2>&1 | grep -E "rules|完整性|版式门禁"
 for ct in 06-sale 15-labor 21-traffic 22-copyright 23-trademark 27-tradesecret 24-patent 28-tech 13-construction 08-loan 10-creditcard 07-house-sale 11-lease 14-property 12-lease-finance 16-securities-fraud 17-property-loss 18-liability 19-guarantee 20-personal 25-design-patent 29-unfair-competition 30-civil-monopoly 60-enforcement 65-objection; do
   python3 -B scripts/fill_template.py --case-type $ct \
     --elements tests/fixtures/$ct-sample.json \
-    --output tests/output/$ct.docx 2>&1 | grep -E "rules"
+    --output tests/output/$ct.docx --layout-check docx 2>&1 | grep -E "rules|版式门禁"
 done
 
 echo "[e2e] ========== 断言（带标签形态，防标签吃字/勾选错位回归）=========="
@@ -150,7 +150,8 @@ failed = False
 for path, checks in CHECKS.items():
     import re as _re
     full = _re.sub(r"\s+", " ", full_of(path))
-    miss = [k for k in checks if _re.sub(r"\s+", " ", k) not in full]
+    _norm = _re.sub(r"\s+", " ", full)
+    miss = [k for k in checks if _re.sub(r"\s+", " ", k) not in _norm]
     # 全局回归哨兵：双日 / 调解双勾 / 标签吃字
     sentinels = [("双日", "日日" in full), ("调解双勾", "了解☑    不了解☑" in full)]
     bad = [n for n, hit in sentinels if hit]
@@ -167,3 +168,26 @@ print("[e2e] ✅ 全部案由回归通过")
 PYEOF
 echo "[e2e] ========== 全案由冒烟（68 编号通用级渲染）=========="
 python3 -B tests/smoke_all.py 2>&1 | tail -2
+
+echo "[e2e] ========== 113 棵模板树版式静态门禁 =========="
+python3 -B tests/smoke_layout_all.py --json-output tests/output/layout-all-report.json
+
+echo "[e2e] ========== 版式门禁最小正反例 =========="
+python3 -B tests/test_layout_gate.py
+
+echo "[e2e] ========== 候选件失败关闭 =========="
+python3 -B tests/test_fail_closed.py
+
+echo "[e2e] ========== 代表家族真实 PDF 渲染 =========="
+python3 -B scripts/layout_gate.py --docx tests/output/09-sample.docx \
+  --template-name "09-民间借贷纠纷-民事起诉状" --mode rendered
+python3 -B scripts/layout_gate.py --docx tests/output/22-copyright.docx \
+  --template-name "22-侵害著作权及邻接权纠纷-民事起诉状" --mode rendered
+python3 -B scripts/layout_gate.py --docx tests/output/24-patent.docx \
+  --template-name "24-侵害发明专利权纠纷-民事起诉状" --mode rendered
+python3 -B scripts/layout_gate.py --docx tests/output/25-design-patent.docx \
+  --template-name "25-侵害外观设计专利权纠纷-民事起诉状" --mode rendered
+
+echo "[e2e] ========== 21 类文书家族真实 PDF 渲染矩阵 =========="
+python3 -B tests/smoke_render_families.py \
+  --json-output tests/output/render-families-report.json

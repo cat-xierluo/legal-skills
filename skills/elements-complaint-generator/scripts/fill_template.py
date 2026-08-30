@@ -416,6 +416,69 @@ def make_checkbox_rule(path: str, match_text: str,
     return rule
 
 
+def make_swap_rule(path: str, anchor: str, old: str, new: str) -> RuleFunc:
+    """条件换字规则：elements[path] 为真时，在含 anchor 的段落把 old → new。
+
+    覆盖 replace_option_check 处理不了的勾选形态：
+    - 前置框（框在选项文字前）：「□立即停止…」「□ 12. 其他」「□否，时间及内容」
+    - 尾随框（选项后隔了括注才出现）：「…发出侵权通知：□是 □否…）□」
+    anchor 取目标段内稳定子串，old 带足上下文防误伤邻项。"""
+    def rule(doc: DocParts, elements: dict) -> bool:
+        if not _get_path(elements, path):
+            return False
+        for p in iter_paragraphs(doc):
+            t = p.text
+            if anchor in t and old in t:
+                return replace_in_paragraph(p, old, new)
+        return False
+    rule.__name__ = f"swap[{path}]"
+    return rule
+
+
+def make_insert_paragraphs_rule(path: str, anchor: str) -> RuleFunc:
+    """整段插入规则：在含 anchor 的说明段之后，插入 elements[path]（list[str]）各段。
+
+    用于"完整表述框"（法院件模板该处为空白）：
+    anchor=框内说明行（如"（可完整表述诉讼请求…"），逐项复制说明段的段落结构、
+    清除其字体/字号覆盖（说明行是楷体小字，正文用文档默认字体），写入值。
+    """
+    import copy as _copy
+
+    def rule(doc: DocParts, elements: dict) -> bool:
+        v = _get_path(elements, path)
+        if not (isinstance(v, list) and v):
+            return False
+        for tree in doc.parts.values():
+            for p in tree.iter(Wp):
+                txt = "".join(t.text or "" for t in p.iter(Wt))
+                if anchor not in txt:
+                    continue
+                prev = p
+                for line in v:
+                    np_ = _copy.deepcopy(p)
+                    # 清字体/字号覆盖（说明行楷体小字 → 正文默认字体），保留颜色/段落格式
+                    for rpr in np_.iter(f"{{{W_NS}}}rPr"):
+                        for tag in ("rFonts", "sz", "szCs"):
+                            el = rpr.find(f"{{{W_NS}}}{tag}")
+                            if el is not None:
+                                rpr.remove(el)
+                    ts = list(np_.iter(Wt))
+                    if ts:
+                        ts[0].text = str(line)
+                        for t in ts[1:]:
+                            t.text = ""
+                    else:
+                        r = etree.SubElement(np_, Wr)
+                        t = etree.SubElement(r, Wt)
+                        t.text = str(line)
+                    prev.addnext(np_)
+                    prev = np_
+                return True
+        return False
+    rule.__name__ = f"insparas[{path}]"
+    return rule
+
+
 # ---------------------------------------------------------------------------
 # 格式化工具
 # ---------------------------------------------------------------------------
@@ -867,10 +930,14 @@ def build_rules_05_divorce(tree_dir=None, elements=None) -> list[RuleFunc]:
         make_text_replace_rule(f"{fr}.之前有无提起过离婚诉讼", "之前有无提起过离婚诉讼："),
         make_fill_after_rule(f"{fr}.夫妻共同财产情况", "夫妻共同财产情况"),
         make_fill_after_rule(f"{fr}.夫妻共同债务情况", "夫妻共同债务情况"),
-        make_fill_after_rule(f"{fr}.子女直接抚养情况", "子女直接抚养情况"),
-        make_fill_after_rule(f"{fr}.子女抚养费情况", "子女抚养费情况"),
-        make_fill_after_rule(f"{fr}.子女探望权情况", "子女探望权情况"),
-        make_fill_after_rule(f"{fr}.赔偿补偿帮助相关情况", "赔 偿 / 补 偿 / 经 济 帮 助"),
+        make_text_replace_rule(
+            f"{fr}.子女直接抚养情况", "（子女应归原告或者被告直接抚养的事由）", append=False),
+        make_text_replace_rule(
+            f"{fr}.子女抚养费情况", "（原告或者被告应支付抚养费及相应金额、支付方式的事由）", append=False),
+        make_text_replace_rule(
+            f"{fr}.子女探望权情况", "（不直接抚养子女一方应否享有探望权以及具体行使方式的事由）", append=False),
+        make_text_replace_rule(
+            f"{fr}.赔偿补偿帮助相关情况", "（符合离婚损害赔偿、离婚经济补偿或离婚经济帮助的相关事实等）", append=False),
         make_fill_after_rule(f"{fr}.其他", "8. 其他"),
         make_text_replace_rule(f"{fr}.请求依据", "（法律及司法解释的规定，要写明具体条文）", append=False),
         make_fill_after_rule(f"{fr}.证据清单", "10. 证据清单"),
@@ -966,19 +1033,45 @@ def make_yes_no_pair(path: str, yes_ctx: str, no_ctx: str, detail_label: str | N
 
 
 def make_fee_row(path: str, fee_name: str) -> RuleFunc:
-    """知产合理费用行：模板段 "{空白}元 {费名}凭证：有□" → 重写为 "{费名} {值} 元 {费名}凭证：有☑/有□"。
+    """知产合理费用行（结构保持·布局无关版）。
+
+    两种模板布局都支持：
+    - 单段式（22 法院件）：「有□ 律师费<空白>元 … 律师费凭证：有□ 无□」
+    - 分段式（官方源模板）：金额段「律师费<空白>元」+ 独立凭证段「律师费凭证：有□」
+    金额经 fill_blanks 填入空白；凭证=True 勾"有□"，显式 False 勾"无□"。
+    不整段重写——250612 案实测整段重写会吞掉行首"有□"等模板结构。
     elements[path] = {金额: str, 凭证: bool}。"""
     def rule(doc, elements):
         v = _get_path(elements, path)
         if not isinstance(v, dict):
             return False
+        hit = False
+        if v.get("金额"):
+            for p in iter_paragraphs(doc):
+                if fill_blanks(p, fee_name, "元", f" {v['金额']} "):
+                    hit = True
+                    break
+        if v.get("金额") and not hit:
+            # 分段式布局（官方源模板）：费名段 + 裸"元"段分离 → 金额写进"元"段
+            plist = list(iter_paragraphs(doc))
+            for i, p in enumerate(plist):
+                if fee_name in p.text and f"{fee_name}凭证" not in p.text:
+                    for q in plist[i + 1: i + 3]:
+                        if q.text.strip().startswith("元"):
+                            replace_in_paragraph(q, "元", f"{v['金额']} 元")
+                            hit = True
+                            break
+                    if hit:
+                        break
         ctx = f"{fee_name}凭证"
         for p in iter_paragraphs(doc):
             if ctx in p.text:
-                mark = "有☑" if v.get("凭证", True) else "无☑"
-                p.text = f"{fee_name} {v.get('金额','')} 元 {ctx}：{mark}"
-                return True
-        return False
+                if v.get("凭证") is True:
+                    hit = replace_in_paragraph(p, f"{ctx}：有□", f"{ctx}：有☑") or hit
+                elif v.get("凭证") is False:
+                    hit = replace_in_paragraph(p, f"{ctx}：有□ 无□", f"{ctx}：有□ 无☑") or hit
+                break
+        return hit
     rule.__name__ = f"fee[{fee_name}]"
     return rule
 
@@ -1001,7 +1094,7 @@ def _generic_plus(tree_dir, specifics, elements=None):
 
 
 
-def _pick_in_window(rules: list, path: str, anchor_ctx: str, options: tuple):
+def _pick_in_window(path: str, anchor_ctx: str, options: tuple) -> RuleFunc:
     def rule(doc, elements):
         v = _get_path(elements, path)
         if v not in options:
@@ -1015,7 +1108,7 @@ def _pick_in_window(rules: list, path: str, anchor_ctx: str, options: tuple):
                 return False
         return False
     rule.__name__ = f"pickwin[{path}]"
-    rules.append(rule)
+    return rule
 
 
 def build_rules_06_sale(tree_dir=None, elements=None) -> list[RuleFunc]:
@@ -1054,7 +1147,7 @@ def build_rules_06_sale(tree_dir=None, elements=None) -> list[RuleFunc]:
         make_text_replace_rule("诉讼请求.具体情形", "具体情形："),
         make_text_replace_rule("诉讼请求.损失计算依据", "损失计算依据："),
         # 5. 继续履行 / 解除
-        _pick_in_window(sp, "诉讼请求.履行或解除", "继续履行□", ("继续履行", "判令解除合同", "确认买卖合同已于")),
+        _pick_in_window("诉讼请求.履行或解除", "继续履行□", ("继续履行", "判令解除合同", "确认买卖合同已于")),
         # 8. 诉讼费用
         make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□", occurrence=0),
     ]
@@ -1105,7 +1198,7 @@ def build_rules_06_sale(tree_dir=None, elements=None) -> list[RuleFunc]:
 
     sp += [
         # 约定管辖（有/无）
-        make_pick_option_rule("约定管辖.有无", "合同条款及内容：", ("有", "无")),
+        _pick_in_window("约定管辖.有无", "合同条款及内容：", ("有", "无")),
         make_text_replace_rule("约定管辖.合同条款及内容", "合同条款及内容："),
         # 诉前保全
         make_checkbox_rule("诉前保全.是否已经诉前保全", "保全法院："),
@@ -1483,6 +1576,7 @@ def build_rules_60_enforcement(tree_dir=None, elements=None) -> list[RuleFunc]:
     sp += [
         make_fill_after_rule("执行依据.作出机构", "执行依据作出机构"),
         make_fill_after_rule("执行依据.案由", "案 由"),
+        make_fill_after_rule("执行依据.案由", "案    由"),
         make_fill_after_rule("执行依据.文书号", "文书号"),
         make_fill_after_rule("执行依据.判项主文", "执行依据判项主文"),
     ]
@@ -1509,7 +1603,7 @@ def build_rules_60_enforcement(tree_dir=None, elements=None) -> list[RuleFunc]:
     sp.append(make_text_replace_rule("申请执行事项.金额", "本金□:"))
     # 保全
     sp += [
-        make_pick_option_rule("保全.有无", "保全案号：", ("有", "无")),
+        _pick_in_window("保全.有无", "保全案号：", ("有", "无")),
         make_text_replace_rule("保全.保全案号", "保全案号："),
     ]
     # 银行账户（申请执行人收款信息）
@@ -1773,7 +1867,89 @@ def build_rules_59_wrongful_execution(tree_dir=None, elements=None) -> list[Rule
 
 
 def build_rules_22_copyright(tree_dir=None, elements=None) -> list[RuleFunc]:
-    return _generic_plus(tree_dir, _ip_specifics("经济损失"), elements)
+    """22 侵害著作权及邻接权（法院件基准模板：2 表、前置框形态）。
+
+    2026-08-28 补齐 QA 待修项：客体五要素/停止侵权/其他请求/时间地点/
+    前置框与尾随框勾选（信息网络传播权、侵权通知否、行为方式 12.其他）。"""
+    F = "事实与理由."
+    sp: list[RuleFunc] = _ip_specifics("经济损失", fees=("律师费", "取证费", "差旅费"))
+
+    # 1. 停止侵权：前置框 ☑ + 作品名称/登记证号 填入模板占位括号
+    def rule_stop(doc, elements):
+        v = _get_path(elements, "诉讼请求.停止侵权")
+        if not isinstance(v, dict):
+            return False
+        hit = False
+        for p in iter_paragraphs(doc):
+            if "立即停止使用与原告作品" in p.text:
+                if v.get("勾选", True):
+                    hit = replace_in_paragraph(p, "□立即停止", "☑立即停止") or hit
+                name, reg = v.get("作品名称", ""), v.get("登记证号", "")
+                if name and reg:
+                    seg = f"（作品名称：{name}，登记证号：{reg}）"
+                elif name:
+                    seg = f"（作品名称：{name}）"
+                elif reg:
+                    seg = f"（登记证号：{reg}）"
+                else:
+                    seg = ""
+                if seg:
+                    hit = replace_in_paragraph(p, "（作品名称 / 登记证号）", seg) or hit
+                break
+        return hit
+    rule_stop.__name__ = "22[停止侵权]"
+    sp.append(rule_stop)
+
+    # 2. 客体五要素（标签追加；发表标签跨行写作"…时 间、地方及方式："，锚"地方及方式："）
+    sp += [
+        make_text_replace_rule(f"{F}著作权客体.作品名称", "作品名称为："),
+        make_text_replace_rule(f"{F}著作权客体.作品完成时间", "作品完成时间：", transform=fmt_date),
+        make_text_replace_rule(f"{F}著作权客体.首次发表", "地方及方式："),
+        make_text_replace_rule(f"{F}著作权客体.登记时间", "登记时间：", transform=fmt_date),
+    ]
+
+    # 3. 其他请求（官方指引文本后追加）/ 侵权时间地点（标签后空段）
+    sp.append(make_text_replace_rule(
+        "诉讼请求.其他请求", "如是否主张连带赔偿责任、赔礼道歉、消除影响等其他请求",
+        transform=lambda s: f"：{s}"))
+    sp.append(make_fill_after_rule(f"{F}侵权时间地点", "被诉侵权行为发生的"))
+
+    # 4. 前置/尾随框勾选（replace_option_check 覆盖不了的形态）
+    def rule_fees_you(doc, elements):
+        sq = _get_path(elements, "诉讼请求") or {}
+        if not any(sq.get(k) for k in ("律师费", "取证费", "差旅费", "合理费用")):
+            return False
+        for p in iter_paragraphs(doc):
+            if "律师费凭证" in p.text and "有□" in p.text:
+                return replace_in_paragraph(p, "有□", "有☑")
+        return False
+    rule_fees_you.__name__ = "22[合理费用.有]"
+
+    # 5. 关联案件"无☑"：□在"内容："段的前一段（通用勾选锚"无□"会先中合理费用行）
+    def rule_related_none(doc, elements):
+        rv = _get_path(elements, "关联案件")
+        if rv != "无" and not (isinstance(rv, dict) and rv.get("勾选") == "无"):
+            return False
+        plist = list(iter_paragraphs(doc))
+        for i, p in enumerate(plist):
+            if "内容：" in p.text and "件（已结、未结）" in p.text:
+                if i > 0 and "无□" in plist[i - 1].text:
+                    return replace_in_paragraph(plist[i - 1], "无□", "无☑")
+        return False
+    rule_related_none.__name__ = "22[关联案件.无]"
+    sp += [
+        rule_fees_you,
+        rule_related_none,
+        make_swap_rule(f"{F}权项.信息网络传播权", "时间及内容", "）□", "）☑"),
+        make_swap_rule(f"{F}权项.侵权通知", "时间及内容", "□否", "☑否"),
+        make_swap_rule(f"{F}行为方式.其他", "12. 其他", "□ 12.", "☑ 12."),
+        # 6. 完整表述框（法院件模板此处空白；2026-08-28 二轮审计补）
+        make_insert_paragraphs_rule(
+            "诉讼请求.完整表述", "（可完整表述诉讼请求"),
+        make_insert_paragraphs_rule(
+            f"{F}完整表述", "（可完整表述纠纷涉及的事实与理由"),
+    ]
+    return _generic_plus(tree_dir, sp, elements)
 
 
 def build_rules_23_trademark(tree_dir=None, elements=None) -> list[RuleFunc]:
@@ -1788,6 +1964,10 @@ def build_rules_27_tradesecret(tree_dir=None, elements=None) -> list[RuleFunc]:
 def build_rules_24_patent(tree_dir=None, elements=None) -> list[RuleFunc]:
     # 专利模板费用行为"费名独立段 + 凭证：有□"形态，fee_row 不适用，凭证走通用勾选
     sp = _ip_specifics("经济损失", fees=())
+    # 24 模板原文为“计算依据或者参考因素”，与其他知产模板的“或”不同。
+    sp.append(make_text_replace_rule(
+        "诉讼请求.计算依据或参考因素", "计算依据或者参考因素："
+    ))
     sp.append(make_yes_no_pair("诉讼请求.停止侵权", "有□ 内容：", "无□", "内容："))
 
     # 惩罚性赔偿整段："包含□ 计算方法：基数 元 ×（1+ 倍数）" → 重写
@@ -2111,24 +2291,56 @@ def resolve_case(case_type: str, templates_dir: Path | None = None) -> tuple[Pat
 
 
 def apply_rules(doc: DocParts, rules: list[RuleFunc], elements: dict) -> dict:
-    """应用规则。返回 {'applied': N, 'skipped': M, 'details': [...]}。"""
+    """应用规则，并识别“有输入却全部跳过”的路径。
+
+    多个规则可针对同一字段的不同模板布局；因此以 path 分组，只要其中
+    一条成功就不误报。当 elements[path] 有实际值且该组无一命中时，
+    返回 unresolved_inputs，由主流程 fail-closed。
+    """
     details = []
     applied_count = 0
     skipped_count = 0
+    path_outcomes: dict[str, list[str]] = {}
+    path_pattern = re.compile(
+        # 只对“直接写文本”规则做 path 级硬判定。勾选规则常与通用
+        # gen[勾选*] 重叠，尚未建立 Schema 时仅凭单条 pick 跳过会误报。
+        r"^(?:replace|fill_after|swap|insparas|amt|dint|damt)\[(.+)\]$"
+    )
     for rule in rules:
         name = getattr(rule, "__name__", "rule")
+        match = path_pattern.match(name)
+        path = match.group(1) if match else None
         try:
             if rule(doc, elements):
                 applied_count += 1
                 details.append(("applied", name))
+                if path:
+                    path_outcomes.setdefault(path, []).append("applied")
             else:
                 skipped_count += 1
                 details.append(("skipped", name))
+                if path:
+                    path_outcomes.setdefault(path, []).append("skipped")
         except Exception as e:
             skipped_count += 1
             details.append(("error", f"{name}: {e}"))
+            if path:
+                path_outcomes.setdefault(path, []).append("error")
             print(f"[fill_template] 规则错误: {name}: {e}", file=sys.stderr)
-    return {"applied": applied_count, "skipped": skipped_count, "details": details}
+    unresolved = []
+    for path, outcomes in path_outcomes.items():
+        value = _get_path(elements, path)
+        # False 在旧版字段中既可表示“不勾选”，也可表示“勾否”。
+        # Schema 尚未区分两种语义，此门禁先对有实际承载内容的 truthy 值阻断。
+        has_value = bool(value)
+        if has_value and "applied" not in outcomes:
+            unresolved.append(path)
+    return {
+        "applied": applied_count,
+        "skipped": skipped_count,
+        "details": details,
+        "unresolved_inputs": sorted(unresolved),
+    }
 
 
 def load_text_parts(tree_dir: Path) -> dict[str, etree._ElementTree]:
@@ -2145,72 +2357,224 @@ def load_text_parts(tree_dir: Path) -> dict[str, etree._ElementTree]:
     return parts
 
 
-def merge_sections_and_normalize(parts: dict) -> int:
-    """后处理：合并主体部分（4 个表→1 段），保留调解意愿/证据清单前两个独立节。
+def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
+    """后处理页面和表格，但不破坏横竖版切换。
 
-    官方模板用 4 个段落级 sectPr 把表单分成 5 节：
-        [5]  表 2 前（表 1 末尾双面分页）
-        [12] 表 3 前（表 2 末尾双面分页）
-        [19] 表 4 前（表 3 末尾双面分页）
-        [24] 调解意愿前（保留！）
-        [47] 末尾（保留！）
-    合并策略：删除 [5][12][19] 三个表内分隔，保留 [24] 调解意愿节和 [47] 末尾节。
-    同时：清理表内硬分页符（不让单表跨页）。
+    官方模板用大量 next-page 节和左/右交替边距模拟书籍排版。
+    先前的“只保留最后一个段落级 sectPr”会把 24/25 专利模板中的
+    纵向正文误并入横向附件节，并使宽表回落纵向页。现在只合并同方向的
+    主表节，永久保留横竖版边界；附件标题以显式分页符起页。
+
+    表格统一使用 fixed + 显式居中 + 零缩进，左右页边距按当前节最宽表
+    对称计算；保留原模板上/下边距。每行加 cantSplit，阻止可避免的跨页拆行；
+    对高于整页的合法长行，排版器仍可按自身规则自然换页。
     """
     W = "{%s}" % W_NS
-    removed = 0
+    stats = {"sections_removed": 0, "page_breaks_added": 0,
+             "tables_centered": 0, "rows_protected": 0, "orientation_fixed": 0}
 
-    def _paragraph_sect_indices(body):
-        return [i for i, child in enumerate(body) if child.tag == f"{W}p"
-                and child.find(f".//{W}sectPr") is not None]
+    def section_ranges(body):
+        ranges = []
+        start = 0
+        children = list(body)
+        for i, child in enumerate(children):
+            if child.tag != f"{W}p":
+                continue
+            sect = child.find(f"./{W}pPr/{W}sectPr")
+            if sect is not None:
+                ranges.append((start, i + 1, sect, i))
+                start = i + 1
+        final = body.find(f"./{W}sectPr")
+        if final is not None:
+            ranges.append((start, len(children), final, len(children) - 1))
+        return ranges
+
+    def max_table_width(children, start, end):
+        widest = 0
+        for child in children[start:end]:
+            tables = ([child] if child.tag == f"{W}tbl" else []) + child.findall(f".//{W}tbl")
+            for table in tables:
+                width = sum(int(col.get(f"{W}w") or 0)
+                            for col in table.findall(f"./{W}tblGrid/{W}gridCol"))
+                widest = max(widest, width)
+        return widest
+
+    def normalize_section(sect, need):
+        size = sect.find(f"./{W}pgSz")
+        margin = sect.find(f"./{W}pgMar")
+        if size is None or margin is None:
+            return
+        try:
+            width = int(size.get(f"{W}w") or 11906)
+            height = int(size.get(f"{W}h") or 16838)
+        except ValueError:
+            width, height = 11906, 16838
+        # 当宽表在纵向页无法容纳、但旋转后可容纳时，修正为横向。
+        if need and need > width - 800 and height > width and need <= height - 800:
+            width, height = height, width
+            size.set(f"{W}w", str(width))
+            size.set(f"{W}h", str(height))
+            size.set(f"{W}orient", "landscape")
+            stats["orientation_fixed"] += 1
+        elif width > height:
+            size.set(f"{W}orient", "landscape")
+        if need:
+            side = max(0, (width - need) // 2)
+        else:
+            try:
+                side = min(int(margin.get(f"{W}left") or 0), int(margin.get(f"{W}right") or 0))
+            except ValueError:
+                side = 0
+        margin.set(f"{W}left", str(side))
+        margin.set(f"{W}right", str(side))
+
+    def orientation(sect):
+        size = sect.find(f"./{W}pgSz")
+        if size is None:
+            return (0, 0)
+        return (int(size.get(f"{W}w") or 0), int(size.get(f"{W}h") or 0))
+
+    def has_substantive_content(children):
+        for child in children:
+            if child.tag == f"{W}tbl":
+                return True
+            if child.tag == f"{W}p":
+                text = "".join(t.text or "" for t in child.iter(Wt)).strip()
+                if text:
+                    return True
+        return False
+
+    def insert_before_first(parent, element, local_names):
+        target_tags = {f"{W}{name}" for name in local_names}
+        for position, child in enumerate(parent):
+            if child.tag in target_tags:
+                parent.insert(position, element)
+                return element
+        parent.append(element)
+        return element
 
     for tree in parts.values():
         body = tree.getroot().find(f"{W}body")
         if body is None:
             continue
-        # 表内残留硬分页符清理
-        for tbl in body.findall(f".//{W}tbl"):
-            for br in tbl.findall(f".//{W}br[@{W}type='page']"):
+
+        # 表内人工硬分页符会造成同一行的非确定性拆页，统一清除。
+        for table in body.findall(f".//{W}tbl"):
+            for br in table.findall(f".//{W}br[@{W}type='page']"):
                 br.getparent().remove(br)
-        # 删除段落级 sectPr：保留最后 1 个（调解意愿前）+ 末尾
-        sect_indices = _paragraph_sect_indices(body)
-        keep = set(sect_indices[-1:]) if len(sect_indices) >= 1 else set()
-        for i in sect_indices:
-            if i in keep:
+
+        # 先按原始节的内容宽度修正显然错误的页面方向。
+        ranges = section_ranges(body)
+        children = list(body)
+        for start, end, sect, _ in ranges:
+            normalize_section(sect, max_table_width(children, start, end))
+
+        # 保留所有横竖版切换边界；若最后一个段落节后仍有内容，也保留作为
+        # 调解/附件/末尾独立节边界。节后只剩空段落则删除，避免空白尾页。
+        keep_indices = set()
+        paragraph_ranges = ranges[:-1] if ranges else []
+        for i, current in enumerate(paragraph_ranges):
+            next_range = ranges[i + 1]
+            if orientation(current[2]) != orientation(next_range[2]):
+                keep_indices.add(current[3])
+        if paragraph_ranges:
+            last = paragraph_ranges[-1]
+            after = children[last[3] + 1:-1]
+            if has_substantive_content(after):
+                keep_indices.add(last[3])
+        for _start, _end, sect, index in paragraph_ranges:
+            if index in keep_indices:
                 continue
-            p = body[i]
-            sect = p.find(f".//{W}sectPr")
-            if sect is not None:
-                sect.getparent().remove(sect)
-                removed += 1
+            parent = sect.getparent()
+            if parent is not None:
+                parent.remove(sect)
+                stats["sections_removed"] += 1
 
-        # 边距归一：所有 sectPr 的 pgMar 改为标准值（top/bottom=1440=25mm, left/right=1800=31mm）
-        for sect in body.iter(f"{W}sectPr"):
-            pg = sect.find(f"{W}pgMar")
-            if pg is not None:
-                pg.set(f"{W}top", "1440")
-                pg.set(f"{W}bottom", "1440")
-                pg.set(f"{W}left", "1800")
-                pg.set(f"{W}right", "1800")
+        # 合并后再按新节范围对称计算边距，并统一表格居中/拆行策略。
+        ranges = section_ranges(body)
+        children = list(body)
+        for start, end, sect, _ in ranges:
+            normalize_section(sect, max_table_width(children, start, end))
+        for table in body.findall(f".//{W}tbl"):
+            properties = table.find(f"./{W}tblPr")
+            if properties is None:
+                properties = etree.Element(f"{W}tblPr")
+                table.insert(0, properties)
+            jc = properties.find(f"./{W}jc")
+            if jc is None:
+                jc = insert_before_first(
+                    properties,
+                    etree.Element(f"{W}jc"),
+                    ("tblCellSpacing", "tblInd", "tblBorders", "shd", "tblLayout",
+                     "tblCellMar", "tblLook", "tblCaption", "tblDescription", "tblPrChange"),
+                )
+            jc.set(f"{W}val", "center")
+            indent = properties.find(f"./{W}tblInd")
+            if indent is None:
+                indent = insert_before_first(
+                    properties,
+                    etree.Element(f"{W}tblInd"),
+                    ("tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook",
+                     "tblCaption", "tblDescription", "tblPrChange"),
+                )
+            indent.set(f"{W}w", "0")
+            indent.set(f"{W}type", "dxa")
+            layout = properties.find(f"./{W}tblLayout")
+            if layout is None:
+                layout = insert_before_first(
+                    properties,
+                    etree.Element(f"{W}tblLayout"),
+                    ("tblCellMar", "tblLook", "tblCaption", "tblDescription", "tblPrChange"),
+                )
+            layout.set(f"{W}type", "fixed")
+            stats["tables_centered"] += 1
+            for row in table.findall(f"./{W}tr"):
+                row_properties = row.find(f"./{W}trPr")
+                if row_properties is None:
+                    row_properties = etree.Element(f"{W}trPr")
+                    row.insert(0, row_properties)
+                if row_properties.find(f"./{W}cantSplit") is None:
+                    insert_before_first(
+                        row_properties,
+                        etree.Element(f"{W}cantSplit"),
+                        ("trHeight", "tblHeader", "tblCellSpacing", "jc", "hidden",
+                         "cantSplit", "tblPrEx", "trPrChange"),
+                    )
+                    stats["rows_protected"] += 1
 
-        # 附件新起一页：在"附件"段落前插入分页符
-        for i, child in enumerate(body):
-            if child.tag == f"{W}p":
-                text = ''.join(t.text or '' for t in child.iter(Wt)).strip()
-                if text == '附件':
-                    # 前一个段落插入分页符
-                    if i > 0 and body[i-1].tag == f"{W}p":
-                        prev_p = body[i-1]
-                        # 在前段末尾加 <w:r><w:br type="page"/></w:r>
-                        r = etree.SubElement(prev_p, f"{W}r")
-                        br = etree.SubElement(r, f"{W}br")
-                        br.set(f"{W}type", "page")
-                        removed += 1  # 用 removed 计数
+        # 附件标题必须起页。若前一段已保留 sectPr（如横竖版切换），不再叠加分页符。
+        children = list(body)
+        for i, child in enumerate(children):
+            if child.tag != f"{W}p":
+                continue
+            text = "".join(t.text or "" for t in child.iter(Wt)).strip()
+            if not re.fullmatch(r"附件(?:\s*[0-9一二三四五六七八九十]+)?", text):
+                continue
+            # 标题前常有 1—3 个空段落；向前跨过空段落查找 sectPr，
+            # 避免“已 next-page 分节 + 再加 page break”生成空白页。
+            previous_has_section = False
+            for previous in reversed(children[:i]):
+                if previous.find(f".//{W}sectPr") is not None:
+                    previous_has_section = True
                     break
-    return removed
+                if previous.tag == f"{W}tbl":
+                    break
+                previous_text = "".join(t.text or "" for t in previous.iter(Wt)).strip()
+                if previous_text:
+                    break
+            already_breaks = child.find(f".//{W}br[@{W}type='page']") is not None
+            if previous_has_section or already_breaks:
+                continue
+            run = etree.Element(f"{W}r")
+            br = etree.SubElement(run, f"{W}br")
+            br.set(f"{W}type", "page")
+            ppr = child.find(f"./{W}pPr")
+            child.insert(1 if ppr is not None else 0, run)
+            stats["page_breaks_added"] += 1
+    return stats
 
 
-def fix_footers_and_pagination(tree_dir: Path) -> int:
+def fix_footers_and_pagination(tree_dir: Path, page_mode: str = "required") -> int:
     """修复页脚：每个 footer*.xml 的硬编码数字改为 PAGE 域（自动计算页码）。
 
     模板原版页脚是 '<w:t>351</w:t>' 形式，渲染后永远是 351 而不是实际页码。
@@ -2218,6 +2582,46 @@ def fix_footers_and_pagination(tree_dir: Path) -> int:
     """
     W = "{%s}" % W_NS
     fixed = 0
+
+    def set_page_field(paragraph) -> None:
+        ppr = paragraph.find(f"./{W}pPr")
+        if ppr is None:
+            ppr = etree.Element(f"{W}pPr")
+            paragraph.insert(0, ppr)
+        jc = ppr.find(f"./{W}jc")
+        if jc is None:
+            jc = etree.Element(f"{W}jc")
+            for position, child in enumerate(ppr):
+                if child.tag in {
+                    f"{W}textDirection", f"{W}textAlignment", f"{W}textboxTightWrap",
+                    f"{W}outlineLvl", f"{W}divId", f"{W}cnfStyle", f"{W}rPr",
+                    f"{W}sectPr", f"{W}pPrChange",
+                }:
+                    ppr.insert(position, jc)
+                    break
+            else:
+                ppr.append(jc)
+        jc.set(f"{W}val", "center")
+        old_run = paragraph.find(f"./{W}r")
+        old_rpr = old_run.find(f"./{W}rPr") if old_run is not None else None
+        for child in list(paragraph):
+            if child is not ppr:
+                paragraph.remove(child)
+        run = etree.SubElement(paragraph, f"{W}r")
+        if old_rpr is not None:
+            import copy as _copy
+            run.append(_copy.deepcopy(old_rpr))
+        fc1 = etree.SubElement(run, f"{W}fldChar")
+        fc1.set(f"{W}fldCharType", "begin")
+        instr = etree.SubElement(run, f"{W}instrText")
+        instr.text = "PAGE"
+        fc2 = etree.SubElement(run, f"{W}fldChar")
+        fc2.set(f"{W}fldCharType", "separate")
+        t_show = etree.SubElement(run, f"{W}t")
+        t_show.text = "1"
+        fc3 = etree.SubElement(run, f"{W}fldChar")
+        fc3.set(f"{W}fldCharType", "end")
+
     for footer_path in tree_dir.glob("word/footer*.xml"):
         if not footer_path.exists():
             continue
@@ -2226,32 +2630,108 @@ def fix_footers_and_pagination(tree_dir: Path) -> int:
         except Exception:
             continue
         changed = False
+        has_page_field = any(
+            re.search(r"\bPAGE\b", node.text or "", flags=re.IGNORECASE)
+            for node in ftr.iter(f"{W}instrText")
+        )
         for p in ftr.iter(f"{W}p"):
-            ts = p.findall(f".//{W}t")
-            digits = [t for t in ts if (t.text or "").strip().isdigit()]
-            if not digits:
+            text = "".join(t.text or "" for t in p.iter(f"{W}t")).strip()
+            if not text.isdigit():
                 continue
-            # 段落中只要含有纯数字 <w:t>，就替换为 PAGE 域
-            for t in list(digits):
-                t.getparent().remove(t)
-            # 在段落里首 run 位置插入 PAGE 域（无 run 则创建）
-            run = p.find(f"{W}r")
-            if run is None:
-                run = etree.SubElement(p, f"{W}r")
-            fc1 = etree.SubElement(run, f"{W}fldChar")
-            fc1.set(f"{W}fldCharType", "begin")
-            instr = etree.SubElement(run, f"{W}instrText")
-            instr.text = "PAGE"
-            fc2 = etree.SubElement(run, f"{W}fldChar")
-            fc2.set(f"{W}fldCharType", "separate")
-            t_show = etree.SubElement(run, f"{W}t")
-            t_show.text = "1"
-            fc3 = etree.SubElement(run, f"{W}fldChar")
-            fc3.set(f"{W}fldCharType", "end")
+            # 只替换“整段就是数字”的页码，避免伤及页脚中的案号/日期。
+            if page_mode == "required":
+                set_page_field(p)
+                has_page_field = True
+            else:
+                ppr = p.find(f"./{W}pPr")
+                for child in list(p):
+                    if child is not ppr:
+                        p.remove(child)
+            changed = True
+        if page_mode == "required" and not has_page_field:
+            paragraph = ftr.find(f"./{W}p")
+            if paragraph is None:
+                paragraph = etree.SubElement(ftr.getroot(), f"{W}p")
+            set_page_field(paragraph)
             changed = True
         if changed:
             ftr.write(str(footer_path), xml_declaration=True, encoding="UTF-8", standalone=True)
             fixed += 1
+    if page_mode == "required":
+        settings_path = tree_dir / "word/settings.xml"
+        if settings_path.exists():
+            settings = etree.parse(str(settings_path))
+            root = settings.getroot()
+            update = root.find(f"./{W}updateFields")
+            if update is None:
+                update = etree.SubElement(root, f"{W}updateFields")
+            update.set(f"{W}val", "true")
+            settings.write(str(settings_path), xml_declaration=True, encoding="UTF-8", standalone=True)
+        # 节合并后，最终保留下来的 sectPr 可能恰好是原模板中没有页脚引用的
+        # body-level sectPr。此时 footer*.xml 虽含 PAGE 域，Word/LibreOffice 仍不会
+        # 显示它。将一个已存在的默认页脚显式关联到每一节，避免第一页因“继承自
+        # 不存在的前一节”而整篇无页码。
+        rels_path = tree_dir / "word/_rels/document.xml.rels"
+        canonical_footer_rid = None
+        if rels_path.exists():
+            rels = etree.parse(str(rels_path))
+            footer_rels = [
+                rel for rel in rels.getroot()
+                if (rel.get("Type") or "").endswith("/footer")
+            ]
+            if footer_rels:
+                footer_rels.sort(key=lambda rel: rel.get("Target") or "")
+                canonical_footer_rid = footer_rels[0].get("Id")
+
+        # 横向附件节的原页脚距离常为 0，PAGE 域会落到页外。
+        # 所有要求页码的节统一为 0.5 英寸（720 twips），并确保页码只在
+        # 第一节从 1 开始，后续节连续编号而不重置。
+        document_path = tree_dir / "word/document.xml"
+        if document_path.exists():
+            document = etree.parse(str(document_path))
+            sections = list(document.iter(f"{W}sectPr"))
+            for index, sect in enumerate(sections):
+                default_footer = next(
+                    (
+                        ref for ref in sect.findall(f"./{W}footerReference")
+                        if ref.get(f"{W}type") == "default"
+                    ),
+                    None,
+                )
+                if default_footer is None and canonical_footer_rid:
+                    default_footer = etree.Element(f"{W}footerReference")
+                    default_footer.set(f"{W}type", "default")
+                    default_footer.set(
+                        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id",
+                        canonical_footer_rid,
+                    )
+                    sect.insert(0, default_footer)
+                margin = sect.find(f"./{W}pgMar")
+                if margin is not None:
+                    margin.set(f"{W}footer", "720")
+                numbering = sect.find(f"./{W}pgNumType")
+                if index == 0:
+                    if numbering is None:
+                        numbering = etree.Element(f"{W}pgNumType")
+                        columns = sect.find(f"./{W}cols")
+                        if columns is not None:
+                            sect.insert(sect.index(columns), numbering)
+                        else:
+                            for position, child in enumerate(sect):
+                                if child.tag in {
+                                    f"{W}formProt", f"{W}vAlign", f"{W}noEndnote",
+                                    f"{W}titlePg", f"{W}textDirection", f"{W}bidi",
+                                    f"{W}rtlGutter", f"{W}docGrid", f"{W}printerSettings",
+                                    f"{W}sectPrChange",
+                                }:
+                                    sect.insert(position, numbering)
+                                    break
+                            else:
+                                sect.append(numbering)
+                    numbering.set(f"{W}start", "1")
+                elif numbering is not None:
+                    numbering.attrib.pop(f"{W}start", None)
+            document.write(str(document_path), xml_declaration=True, encoding="UTF-8", standalone=True)
     return fixed
 
 
@@ -2288,7 +2768,8 @@ def run_batch(args) -> int:
             # 复用单件渲染（子进程避免规则状态串扰）
             import subprocess
             r = subprocess.run([sys.executable, "-B", str(Path(__file__).resolve()),
-                                "--case-type", ct, "--elements", str(f), "--output", str(out)],
+                                "--case-type", ct, "--elements", str(f), "--output", str(out),
+                                "--layout-check", args.layout_check],
                                capture_output=True, text=True, timeout=120)
             if r.returncode == 0:
                 ok += 1
@@ -2323,6 +2804,11 @@ def main() -> int:
         "--batch", type=Path, default=None,
         help="批量模式：目录下每个 *-elements.json 渲染为同名 .docx（按文件内 case_type 字段路由案由）",
     )
+    parser.add_argument(
+        "--layout-check", choices=("rendered", "docx", "off"), default="rendered",
+        help="版式门禁：rendered=默认，检查 DOCX 并用 LibreOffice 真实渲染 PDF；"
+             "docx=只做 OOXML 几何检查；off=调试用，不得作为可交付结论",
+    )
     args = parser.parse_args()
 
     if args.batch:
@@ -2346,64 +2832,110 @@ def main() -> int:
         print(f"[fill_template] 错误：模板树不存在 {tree_src}", file=sys.stderr)
         return 2
 
-    # 复制模板树到临时目录（绝不污染源码树）
+    # 复制模板树到临时目录（绝不污染源码树）。只有全部门禁通过后才发布到 --output。
     tmp_root = Path(tempfile.mkdtemp(prefix="ecg-render-"))
     tree_work = tmp_root / "tree"
-    shutil.copytree(tree_src, tree_work)
-
-    # 加载 → 应用规则 → 写回 → 打包
-    parts = load_text_parts(tree_work)
-    doc = DocParts(parts)
-    rules = rules_builder(elements)
-    result = apply_rules(doc, rules, elements)
-    # 后处理：删段落级 sectPr（合并节，表格连续排版）
-    removed = merge_sections_and_normalize(parts)
-    if removed:
-        print(f"[fill_template] 节合并：删除 {removed} 个段落级 sectPr（表格连续排版）")
-    save_text_parts(tree_work, parts)
-    # 后处理：修页脚硬编码页码 → PAGE 域（页面数自动计算）
-    footer_fixed = fix_footers_and_pagination(tree_work)
-    if footer_fixed:
-        print(f"[fill_template] 页脚 PAGE 域：修复 {footer_fixed} 个 footer")
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    pack_tree(tree_work, args.output)
-
-    print(f"[fill_template] case_type = {args.case_type}")
-    print(f"[fill_template] template  = {tree_src}")
-    print(f"[fill_template] output    = {args.output}")
-    print(f"[fill_template] rules applied={result['applied']}  skipped={result['skipped']}")
-
-    # 残留校验
-    if args.verify_residual:
-        residual = [s.strip() for s in args.verify_residual.split(",") if s.strip()]
-        blob = all_text_of_parts(parts)
-        still = [r for r in residual if r in blob]
-        if still:
-            print(f"[fill_template] ⚠️ 残留校验：以下旧串仍存在，请检查：")
-            for s in still:
-                print(f"  - {s!r}")
-        else:
-            print(f"[fill_template] 残留校验：未发现残留旧串 ✓")
-
-    # 完整性校验：输出 docx 可解包、勾选计数正常
     try:
-        import zipfile as _zip
-        with _zip.ZipFile(args.output) as z:
-            square = checked = 0
-            for name in z.namelist():
-                if name.startswith("word/") and name.endswith(".xml") and not name.endswith(".rels"):
-                    xml = etree.fromstring(z.read(name))
-                    t = "".join(x.text or "" for x in xml.iter(Wt))
-                    square += t.count("□")
-                    checked += t.count("☑")
-        print(f"[fill_template] 完整性：□={square} ☑={checked}")
-    except Exception as e:
-        print(f"[fill_template] 警告：输出 docx 二次校验失败：{e}", file=sys.stderr)
-        return 3
+        shutil.copytree(tree_src, tree_work)
 
-    # 清理临时目录
-    shutil.rmtree(tmp_root, ignore_errors=True)
-    return 0
+        # 加载 → 应用规则 → 写回 → 临时打包
+        parts = load_text_parts(tree_work)
+        doc = DocParts(parts)
+        rules = rules_builder(elements)
+        result = apply_rules(doc, rules, elements)
+        errors = [name for status, name in result["details"] if status == "error"]
+        if errors:
+            print(f"[fill_template] 阻断：{len(errors)} 条规则执行失败，未发布输出", file=sys.stderr)
+            return 3
+        if result["unresolved_inputs"]:
+            print(
+                f"[fill_template] 阻断：{len(result['unresolved_inputs'])} 个有值字段的规则全部跳过，未发布输出",
+                file=sys.stderr,
+            )
+            for path in result["unresolved_inputs"]:
+                print(f"  - {path}", file=sys.stderr)
+            return 3
+
+        layout_stats = merge_sections_and_normalize(parts)
+        print(
+            "[fill_template] 版式归一："
+            f"删节={layout_stats['sections_removed']} "
+            f"保护行={layout_stats['rows_protected']} "
+            f"居中表={layout_stats['tables_centered']} "
+            f"方向修复={layout_stats['orientation_fixed']} "
+            f"附件分页={layout_stats['page_breaks_added']}"
+        )
+        save_text_parts(tree_work, parts)
+        from layout_gate import check as check_layout, load_policy
+        policy_path = Path(__file__).resolve().parent.parent / "config/layout-policy.json"
+        layout_policy = load_policy(policy_path, tree_src.name)
+        footer_fixed = fix_footers_and_pagination(
+            tree_work, page_mode=layout_policy.get("page_numbers", "required")
+        )
+        if footer_fixed:
+            print(f"[fill_template] 页脚 PAGE 域：修复并居中 {footer_fixed} 个 footer")
+
+        print(f"[fill_template] case_type = {args.case_type}")
+        print(f"[fill_template] template  = {tree_src}")
+        print(f"[fill_template] rules applied={result['applied']}  skipped={result['skipped']}")
+        if result["skipped"]:
+            for status, name in result["details"]:
+                if status == "skipped":
+                    print(f"  [skipped] {name}")
+
+        # 旧案信息残留是硬失败，不再只打警告。
+        if args.verify_residual:
+            residual = [s.strip() for s in args.verify_residual.split(",") if s.strip()]
+            blob = all_text_of_parts(parts)
+            still = [value for value in residual if value in blob]
+            if still:
+                print("[fill_template] 阻断：以下旧串仍存在，未发布输出：", file=sys.stderr)
+                for value in still:
+                    print(f"  - {value!r}", file=sys.stderr)
+                return 4
+            print("[fill_template] 残留校验：未发现残留旧串 ✓")
+
+        candidate = tmp_root / "candidate.docx"
+        pack_tree(tree_work, candidate)
+
+        # 完整性校验：候选 docx 可解包、XML 可解析。
+        try:
+            import zipfile as _zip
+            with _zip.ZipFile(candidate) as archive:
+                square = checked = 0
+                for name in archive.namelist():
+                    if name.startswith("word/") and name.endswith(".xml") and not name.endswith(".rels"):
+                        xml = etree.fromstring(archive.read(name))
+                        text = "".join(node.text or "" for node in xml.iter(Wt))
+                        square += text.count("□")
+                        checked += text.count("☑")
+            print(f"[fill_template] 完整性：□={square} ☑={checked}")
+        except Exception as exc:
+            print(f"[fill_template] 阻断：候选 docx 二次校验失败：{exc}", file=sys.stderr)
+            return 3
+
+        if args.layout_check != "off":
+            report = check_layout(candidate, layout_policy, rendered=args.layout_check == "rendered")
+            if not report["ok"]:
+                print(
+                    f"[fill_template] 阻断：版式门禁失败（{report['mode']}），未发布输出",
+                    file=sys.stderr,
+                )
+                for item in report["issues"][:30]:
+                    print(f"  - {item['code']}: {item['message']}", file=sys.stderr)
+                if len(report["issues"]) > 30:
+                    print(f"  - 其余 {len(report['issues']) - 30} 项已省略", file=sys.stderr)
+                return 5
+            print(f"[fill_template] 版式门禁：{report['status']} ✓")
+        else:
+            print("[fill_template] 警告：已关闭版式门禁，不得将本次产物标记为可交付", file=sys.stderr)
+
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(candidate, args.output)
+        print(f"[fill_template] output    = {args.output}")
+        return 0
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":
