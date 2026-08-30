@@ -1,5 +1,22 @@
 # 变更日志
 
+## [0.5.0] - 2026-08-30
+
+### 新增
+
+- **抖音三级自动 fallback（游客 cookie 环）**：`download_media.py` 在抖音域名 + 用户未显式传 cookie 且 yt-dlp 失败时，继「无登录直连」后新增最后一环——自动依次从本机 `chrome`、`safari` 读一份**游客 cookie**（访问 cookie，无需登录抖音）重跑 yt-dlp，即可过 `Fresh cookies are needed` 校验。浏览器读取失败自动换下一个，全失败回显原始报错；`--audio-only` 同样适用此环
+- 用户显式传 `--cookies` / `--cookies-from-browser` 时均不触发自动 fallback（尊重用户选择）
+
+### 背景（实测记录）
+
+- 2026-08-30 实测：SSR share 页已对无 cookie 请求停止渲染 `play_addr.uri`（返回 `video_layout:null` 壳页 + 风控标记），v0.3.0 无登录直连路径卡在上游提不到 video_id（监控信号 #2 命中）；游客 cookie 通道实测成功（6.2MB / 140s / ffprobe 通过）
+
+### 改进
+
+- `download_media.py`：`SAVED_FILEPATH` 解析逻辑提取为 `emit_saved_path()`（主路径与 fallback 重试路径复用，消除重复）
+- SKILL.md frontmatter `version` 由滞留的 0.2.0 同步至 0.5.0；抖音小节改写为三级 fallback 说明
+- `references/douyin-nocookie-approach.md` 追加 2026-08-30 补记：失效现场、游客 cookie 原理与边界
+
 ## [0.4.0] - 2026-08-03
 
 ### 改进

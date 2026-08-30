@@ -2,6 +2,12 @@
 
 > 2026-08-02 实测可用 · 麻辣小龙侠 🦭
 > 视频样本: `https://v.douyin.com/aAQgycBvBp0/`（鱼亦乐作品，94s，5MB）
+>
+> ⚠️ **2026-08-30 状态更新：监控信号 #2 已命中**——SSR share 页对无 cookie 请求不再渲染
+> `play_addr.uri`（返回 `video_layout:null` 壳页 + captcha/slardar 风控标记），本文路径 ③ 的
+> Step 1 提取不到 video_id。**当前主力通道已切到「浏览器游客 cookie + yt-dlp」**（见文末
+> 2026-08-30 补记）。`aweme.snssdk.com/v1/play` 接口本身是否仍开放未复测（卡在上游拿不到
+> video_id，接口大概率仍在窗口期内）。
 
 ---
 
@@ -214,9 +220,46 @@ MEMORY 2026-07-14 那条"无登录下载抖音不成立"**结论方向对、但�
 **预判**：抖音迟早会把旧 API 也纳入签名墙（或强制走新域名）。届时本方法失效，需要找下一个未覆盖的接口。监控信号：
 
 1. `aweme.snssdk.com/v1/play` 开始返回 412 / 空 body / `status_code > 0`
-2. SSR share 页不再渲染 `play_addr.uri` 字段
+2. SSR share 页不再渲染 `play_addr.uri` 字段 ← **2026-08-30 已命中**
 3. yt-dlp 更新 Douyin extractor 后突然能跑（说明找到新绕过路径）
 
 ---
 
-*文档结束 · 麻辣小龙侠 🦭 · 2026-08-02*
+## 2026-08-30 补记：监控信号 #2 命中，游客 cookie 成为新主力通道
+
+### 实测现场
+
+样本 `https://v.douyin.com/EtWhjie2ASs/`（羽辉同行作品，140s，6.2MB）：
+
+- yt-dlp 直跑：同样报 `Fresh cookies (not necessarily logged in) are needed`
+- nocookie 脚本：短链 302 解析正常（numeric_id=7672301492804317873），但 SSR share 页
+  返回 200 + 32KB **壳页**——`_ROUTER_DATA` 里 `video_layout:null`、无 `play_addr`/`uri`
+  字段，页面源码带 `captcha`/`verify`/`slardar` 风控标记。带短链完整参数（region/mid/did
+  等）重试同样不渲染。
+- 旧版 `iteminfo` API、`aweme.snssdk.com/aweme/v1/aweme/detail/` 均空 body 返回。
+
+### 解法：本机浏览器游客 cookie（无需登录抖音）
+
+```bash
+yt-dlp --cookies-from-browser chrome "<douyin-url>"
+```
+
+**原理**：yt-dlp 报的 "Fresh cookies are needed" 要的从来不是登录态，而是一份**访问
+cookie**（`s_v_web_id` 等设备标识）。任何浏览器只要打开过 douyin.com（哪怕是游客），
+cookie 存储里就有这份标识，yt-dlp 拿到后即可过校验、由它自己的签名逻辑（`--js-runtimes
+node`）完成后续请求。实测 Chrome 未登录抖音账号，直接成功。
+
+### 已沉淀到 skill 行为（v0.5.0）
+
+`download_media.py` 的抖音 fallback 链升级为三级，对用户全程无感：
+
+1. yt-dlp 直跑
+2. 无登录直连（本文路径 ③，SSR 页风控后大概率失败，保留——几秒即失败，SSR 恢复时自动重新生效）
+3. **自动依次从本机 `chrome`、`safari` 读游客 cookie 重跑 yt-dlp**（读取失败自动换下一个浏览器）
+
+边界：Chrome 运行中占用 cookie 库 / 未装该浏览器时该环失败属预期；用户显式传
+`--cookies`/`--cookies-from-browser` 时不抢戏。
+
+---
+
+*文档结束 · 麻辣小龙侠 🦭 · 2026-08-02 初稿 / 2026-08-30 补记失效与新通道*
