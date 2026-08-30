@@ -62,6 +62,7 @@ def resolve_numeric_id(url: str) -> str | None:
     """从任意抖音链接解析 numeric_id。
 
     优先从原 URL 直接提取；若是短链（v.douyin.com），跟随 302 后从最终落点提取。
+    落点是博主主页（/user/）时给出准确提示——主页不是单视频，本就无法下载。
     """
     m = NUMERIC_RE.search(url)
     if m:
@@ -71,6 +72,10 @@ def resolve_numeric_id(url: str) -> str | None:
         m = NUMERIC_RE.search(resp.url)
         if m:
             return m.group(1)
+        if re.search(r"/(?:share/)?user/", resp.url):
+            print("[warning] 落点是博主主页链接（share/user/），不是单视频，无法下载")
+        elif "douyin.com" not in resp.url:
+            print(f"[warning] 短链 302 落到非抖音页面: {resp.url}")
     except Exception as e:
         print(f"[warning] 解析短链失败: {e}")
     return None
@@ -189,7 +194,7 @@ def main() -> int:
     print(f"[1/4] 解析链接: {args.url}")
     numeric = resolve_numeric_id(args.url)
     if not numeric:
-        print("[error] 无法解析 numeric_id（链接可能已删除或受异地限制）")
+        print("[error] 无法解析 numeric_id（链接已删除/受异地限制，或为主页、聚合页等非单视频链接）")
         return 1
     print(f"      numeric_id = {numeric}")
 
