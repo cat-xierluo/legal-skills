@@ -1,0 +1,31 @@
+# Codex Spark worker profile 样例
+#
+# 作用：把 GPT-5.3-Codex-Spark（ChatGPT 订阅单独额度池）固化为 codex CLI
+#       的一键 profile，供 spawn-worker.sh --worker-backend codex 派发。
+#
+# 安装：复制为 ~/.codex/spark.config.toml（codex 0.147+ 的 profile 是
+#       $CODEX_HOME/<name>.config.toml 独立文件；config.toml 内嵌
+#       [profiles.X] 已成 legacy，会被 --strict-config 拒绝）。
+#
+# 用法：codex -p spark / codex exec -p spark ...
+#       派发链路：render-runtime-profile.sh --backend codex --codex-profile spark
+#
+# 能力画像（2026-08-30 实测）：
+#   - 强：批量机械活——要素提取、文档格式化/整理、代码定位扫描、初筛清单；
+#         代码定位引用行号真实不幻觉。
+#   - 弱：深度法律分析（漏时效中断等推理点）、复杂架构改动。
+#   - 适合任务：简单开发、文档整理；与 minimax/glm-5.3-flash 的分工是
+#     "更简单一档"的批量卸载位。
+#
+# 额度：ChatGPT 订阅 OAuth（~/.codex/auth.json），与 gpt-5.6-sol/gpt-5.5
+#       主额度分开计算。网络注意：本机 WebSocket 到 chatgpt.com 被拒时
+#       codex 自动 fallback HTTPS，正常工作。
+#
+# 权限说明：workspace-write = 只能写工作区+临时目录、无网络，最小权限
+#           匹配简单任务画像；需要网络/全盘权限的任务由 PM 派发时
+#           用 -c 单点覆盖（如 -c sandbox_mode="danger-full-access"），
+#           不在本 profile 默认放开。
+
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+model = "gpt-5.3-codex-spark"

@@ -201,6 +201,8 @@ codex exec -p legal-worker -m o4-mini -s danger-full-access - < /tmp/task.prompt
 codex exec -c 'model="o3"' -c 'shell_environment_policy.inherit=all' - < /tmp/task.prompt.md
 ```
 
+> **0.147 实测（2026-08-30）**：profile 是 `$CODEX_HOME/<name>.config.toml` 独立文件（顶层键，无 `[profiles.X]` 包裹）。把 `[profiles.X]` 内嵌进 config.toml 是 legacy 写法，`-p X` 会直接报错拒绝加载（`cannot be used while config.toml contains legacy [profiles.X]`）。本机已装 `~/.codex/spark.config.toml`（GPT-5.3-Codex-Spark 档，见 §2.5）。
+
 ### 2.5 与 Skill 集成要点
 
 - Codex 的 `exec` 是 worker 的标准入口，不支持 `< redirect` 时同样需要 `bash -lc` 包裹
@@ -208,6 +210,20 @@ codex exec -c 'model="o3"' -c 'shell_environment_policy.inherit=all' - < /tmp/ta
 - Codex 没有内建的 `--system-prompt` 参数，系统提示需在 prompt 文件或 config.toml 中设定
 - `codex apply` 可在 worker 完成后单独应用 diff，作为 PM 收口的替代路径
 - 本机 `codex` 可能是已经固定 `--sandbox` / `--ask-for-approval` 的安全 launcher。`render-runtime-profile.sh` 只有在可读脚本中证明两个值与请求完全一致时才省略重复参数；否则继续显式传参。不要把“参数重复导致 CLI exit 2”误判成 Agent/Orca 启动失败。
+- **launcher 重复 flag 实测（2026-08-30，spark-lane 首派撞坑）**：本机 `~/.local/bin/codex` launcher 固定 `--sandbox danger-full-access --ask-for-approval never`。给 `--command` 显式带 `-a never -s workspace-write` 会与 launcher 注入值重复，codex 以 `cannot be used multiple times` exit 2，终端退化成死 zsh（后续 send 的中文 prompt 会被 zsh 当命令执行）。正确姿势：`render-runtime-profile.sh --sandbox danger-full-access --approval never`（与 launcher 一致）→ 输出省略 flag 的 `codex -p <profile>`。经该 launcher 启动的 codex 沙箱实际恒为 danger-full-access，隔离靠 Orca worktree 兜底；profile 文件里的 sandbox_mode 会被 launcher 的 CLI flag 覆盖，不起收紧作用。
+
+### 2.6 GPT-5.3-Codex-Spark 额度 lane（2026-08-30 实测接入）
+
+| 项 | 值 |
+|---|---|
+| 模型 slug | `gpt-5.3-codex-spark`（`-m` 直配或 profile `-p spark` 均实测通过） |
+| 额度池 | ChatGPT 订阅 OAuth（`~/.codex/auth.json`），与 gpt-5.6-sol/gpt-5.5 主额度**分开计算** |
+| 解锁策略 | `codex_policy.spark_lane`（orchestration-personal.json）：简单开发/文档整理/批量机械活 PM 可自主派；深度分析禁止。其他 codex 模型仍 explicit_only |
+| 能力画像 | 机械活强：要素提取/格式化/代码定位（行号引用真实不幻觉）；法律推理弱（漏时效中断、利率上限提示）——比 minimax-M3 低一档的批量卸载位 |
+| profile | `~/.codex/spark.config.toml`（样例 `config/codex-spark.profile.toml.example`） |
+| 派发链 | `render-runtime-profile.sh --backend codex --codex-profile spark --sandbox danger-full-access --approval never` → `spawn-worker.sh --worker-backend codex --command "codex -p spark"`（见上条：flag 必须与 launcher 一致才省略） |
+| 网络 | 本机 WebSocket 连 chatgpt.com 被拒时 codex 自动 fallback HTTPS，正常工作，无需处理 |
+| 不接入 route_suggest | ChatGPT 订阅额度无 API 可查，dump_quota_summary.py 产不出数据；PM 按任务类型直接路由，不进 quota_aware_routing lanes |
 
 ---
 

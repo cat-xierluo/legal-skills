@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.2] - 2026-08-31
+
+### 改进
+
+- **裸调 worker-start 冷启动窗口坑沉淀（实测 2026-08-30）**：绕过 `spawn-worker.sh` 直接 `worker-start --worktree current --agent claude` 存在约 60 秒启动确认窗口，Claude Code 冷启动超窗 → dispatch timeout、Task failed 并遗留孤儿终端（本机不可调，疑 Orca 对慢冷启动 agent 的兼容问题，可上游反馈）。SKILL.md supervised 经验清单与 `references/13-orca-cli-worker.md` 失败与恢复节新增完整恢复序列（清孤儿 → 复位 Task → `--terminal` 复用重试 → 以 dispatch-show 判读部分生效的返回体），并明确两步路径（spawn-worker.sh 预建 terminal 等 TUI ready 再注册）是该场景的正确入口。
+
 ## [2.10.1] - 2026-08-30
 
 ### 改进
