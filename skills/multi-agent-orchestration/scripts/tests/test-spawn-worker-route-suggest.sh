@@ -77,8 +77,16 @@ def qar_config(summary_path):
 
 with open(f"{root}/summary-ok.json", "w", encoding="utf-8") as f:
     json.dump(summary, f)
+# stale 快照：generated_at 回拨 90 分钟（> freshness_minutes=30）→ route_suggest
+# 输出 stale_degraded/degraded（fail-closed，不基于过期 fuel 余量推荐）。
+stale_summary = dict(summary)
+stale_summary["generated_at"] = (now - dt.timedelta(minutes=90)).isoformat()
+with open(f"{root}/summary-stale.json", "w", encoding="utf-8") as f:
+    json.dump(stale_summary, f)
 with open(f"{root}/personal-enabled.json", "w", encoding="utf-8") as f:
     json.dump(qar_config(f"{root}/summary-ok.json"), f)
+with open(f"{root}/personal-stale.json", "w", encoding="utf-8") as f:
+    json.dump(qar_config(f"{root}/summary-stale.json"), f)
 with open(f"{root}/personal-degraded.json", "w", encoding="utf-8") as f:
     json.dump(qar_config("/nonexistent/qar-summary.json"), f)
 disabled = qar_config(f"{root}/summary-ok.json")
@@ -156,6 +164,28 @@ if grep -Fq 'ROUTE_SUGGEST_AUTO' "$CASE_ROOT/degraded.err"; then
   bad "degraded route_suggest emits no marker"
 else
   ok "degraded route_suggest emits no marker"
+fi
+
+# 场景 3b：summary 过期（stale fail-closed，2026-08-29 FaroPDF 派单事故回归）→
+# route_suggest 输出 degraded（退出码 1，不基于过期 fuel 余量推荐）→ 不补选、
+# 不出 ROUTE_SUGGEST_AUTO；透出 ROUTE_SUGGEST_STALE 提示先刷新快照（fail-open）。
+reset_autofill_case
+PERSONAL_CONFIG_FILE="$CASE_ROOT/personal-stale.json"
+set +e
+route_suggest_autofill_provider 2>"$CASE_ROOT/stale.err"
+stale_rc=$?
+set -e
+assert_eq "$stale_rc" "0" "stale route_suggest stays fail-open"
+assert_eq "$API_PROVIDER" "" "stale snapshot keeps provider empty"
+if grep -Fq 'ROUTE_SUGGEST_AUTO' "$CASE_ROOT/stale.err"; then
+  bad "stale snapshot emits no ROUTE_SUGGEST_AUTO marker"
+else
+  ok "stale snapshot emits no ROUTE_SUGGEST_AUTO marker"
+fi
+if grep -Fq 'ROUTE_SUGGEST_STALE' "$CASE_ROOT/stale.err"; then
+  ok "stale snapshot surfaces ROUTE_SUGGEST_STALE refresh hint"
+else
+  bad "stale snapshot surfaces ROUTE_SUGGEST_STALE refresh hint ($(cat "$CASE_ROOT/stale.err"))"
 fi
 
 # 场景 4：显式 --api-provider（API_PROVIDER 已非空）→ 跳过 route_suggest，

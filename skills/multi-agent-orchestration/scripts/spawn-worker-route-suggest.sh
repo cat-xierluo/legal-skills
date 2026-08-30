@@ -5,10 +5,11 @@
 
 # --api-provider 未显式给出且个人配置启用 quota_aware_routing 时，调
 # route_suggest.py 按 tier 评分补选 provider。route_suggest 输出
-# not_configured/degraded → 保持空（走既有默认链路），不 fail、不静默改道；
-# 显式 --api-provider 永远优先（人工锁定 > 动态路由）。tier 由调用方经
-# ROUTE_SUGGEST_TIER 环境变量传入（缺省 L1）。全程 fail-open：本函数任何
-# 分支都不允许阻断 spawn。
+# not_configured/degraded/stale_degraded → 保持空（走既有默认链路），不 fail、
+# 不静默改道；快照过期（stale_degraded/degraded 带 refresh_hint）时向 stderr
+# 透出 ROUTE_SUGGEST_STALE 提示先刷新快照再派单；显式 --api-provider 永远
+# 优先（人工锁定 > 动态路由）。tier 由调用方经 ROUTE_SUGGEST_TIER 环境变量
+# 传入（缺省 L1）。全程 fail-open：本函数任何分支都不允许阻断 spawn。
 route_suggest_autofill_provider() {
   [ -z "${API_PROVIDER:-}" ] || return 0
   [ "${WORKER_BACKEND_CANONICAL:-}" = "claude-code" ] || return 0
@@ -24,13 +25,30 @@ PY
   then
     local tier="${ROUTE_SUGGEST_TIER:-L1}"
     local route_suggest_out suggested
+    # 退出码非 0（stale/degraded 等非 ok 状态）时保留输出：hint 分支要读
+    # refresh_hint；是否补选只认 status=="ok"，不看退出码。
     route_suggest_out=$(python3 "$SCRIPT_DIR/route_suggest.py" --tier "$tier" \
-      --config "$PERSONAL_CONFIG_FILE" 2>/dev/null) || route_suggest_out=""
+      --config "$PERSONAL_CONFIG_FILE" 2>/dev/null) || true
     suggested=$(printf '%s' "$route_suggest_out" | python3 -c \
       'import json,sys; d=json.load(sys.stdin); print(d.get("provider","")) if d.get("status")=="ok" else None' 2>/dev/null || true)
     if [ -n "$suggested" ]; then
       API_PROVIDER="$suggested"
       echo "ROUTE_SUGGEST_AUTO provider=$API_PROVIDER tier=$tier" >&2
+      return 0
+    fi
+    # v2.9.5 stale fail-closed：status!=ok 永不补选（stale_degraded/degraded/
+    # all_lanes_stopped 均视为无建议，不改道）。快照过期时透出 refresh_hint，
+    # 提示先刷新快照再派单（fail-open：仅 stderr 提示，不阻断 spawn）。
+    local hint=""
+    hint=$(printf '%s' "$route_suggest_out" | python3 -c \
+      'import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+print(d.get("refresh_hint", "")) if d.get("status") in ("stale_degraded", "degraded") else None' 2>/dev/null) || hint=""
+    if [ -n "$hint" ]; then
+      echo "ROUTE_SUGGEST_STALE: $hint" >&2
     fi
   fi
   return 0
