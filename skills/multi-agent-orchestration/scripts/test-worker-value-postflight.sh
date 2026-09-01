@@ -195,6 +195,44 @@ check(
     extra=["--diff", str(docs_only), "--delivery-head", HEAD],
 )
 
+readme_only = patch_file(
+    "readme-only.diff",
+    ("skills/foo/README.md", "skills/foo/README.md"),
+)
+mixed_docs = patch_file(
+    "mixed-docs.diff",
+    ("skills/foo/scripts/retry.py", "skills/foo/scripts/retry.py"),
+    ("skills/foo/README.md", "skills/foo/README.md"),
+)
+broad = copy.deepcopy(impl_task)
+broad["engineering_assets"] = ["skills/foo"]
+broad["value_identity"] = "broad-dir-fix"
+
+check(
+    "broad engineering dir cannot rescue docs-only diff",
+    spec({**copy.deepcopy(broad), "doc_assets": ["skills/foo/README.md"]}), "TASK-IMPL", ok_evidence, False,
+    "engineering asset",
+    extra=["--diff", str(readme_only), "--delivery-head", HEAD],
+)
+
+payload = check(
+    "broad engineering dir + real source + declared accompanying README passes",
+    spec({**copy.deepcopy(broad), "doc_assets": ["skills/foo/README.md"]}), "TASK-IMPL", ok_evidence, True,
+    extra=["--diff", str(mixed_docs), "--delivery-head", HEAD],
+)
+if payload and payload["report"]["matched_engineering_assets"] != ["skills/foo"]:
+    failed += 1
+    print(f"FAIL broad dir engineering match: {payload['report']}")
+else:
+    passed += 1
+
+check(
+    "undeclared actual document path stays outside-contract",
+    spec({**copy.deepcopy(broad), "doc_assets": ["skills/foo/CHANGELOG.md"]}), "TASK-IMPL", ok_evidence, False,
+    "outside declared",
+    extra=["--diff", str(readme_only), "--delivery-head", HEAD],
+)
+
 outside = patch_file(
     "outside.diff",
     ("undeclared/src.py", "undeclared/src.py"),

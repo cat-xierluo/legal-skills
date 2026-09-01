@@ -49,7 +49,9 @@ def _missing(value: Any, *, allow_none: bool = False) -> bool:
     return stripped.casefold() in PLACEHOLDERS or stripped.casefold() == "none"
 
 
-def _is_document_path(path: str) -> bool:
+def is_document_path(path: str) -> bool:
+    """Shared document-path semantics: preflight asset rules and postflight
+    classification must use this single table to avoid drift."""
     normalized = path.strip().replace("\\", "/")
     lowered = normalized.casefold()
     if lowered.endswith(tuple(DOC_EXTENSIONS)):
@@ -148,7 +150,7 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
                     f"{prefix}.integration_target must name the integration PR/branch "
                     "when worker_pr_policy is integration_pr"
                 )
-            non_doc_assets = [path for path in engineering_assets if not _is_document_path(path)]
+            non_doc_assets = [path for path in engineering_assets if not is_document_path(path)]
             if not non_doc_assets:
                 errors.append(
                     f"{prefix}.{value_kind} requires at least one non-document engineering_assets entry; "

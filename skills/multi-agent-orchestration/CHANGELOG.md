@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.12.2] - 2026-09-01
+
+### 修复（验收纠偏 r3：堵住 docs-only 目录误报）
+
+- **postflight 先分类文档路径再匹配资产**：2.12.1 及之前，`_postflight` 先按声明资产匹配实际变更路径，宽声明（如 `engineering_assets: ["skills/foo"]`）会把其下 docs-only diff（`skills/foo/README.md`）算作工程资产命中而放行，违反"文档不得是唯一变更"的核心规则。现实际文档路径永远无法满足 `matched_engineering_assets`——即使位于声明的工程目录之下，也只能经 `doc_assets` 声明作为随行文档；未在 `doc_assets` 声明的实际文档路径保持 outside-contract。
+- **文档路径语义单一来源**：preflight 的 `_is_document_path` 升为公共 `is_document_path`（扩展名 + `docs/` 目录同一张表），postflight 通过加载 gate 模块复用同一 helper，不再各自维护扩展名清单，防止两门禁语义漂移。
+- 新增 3 条确定性回归（宽工程目录 + README-only diff 拒绝；宽目录 + 真实源码 + 已声明随行 README 通过且命中工程目录；未声明的实际文档路径保持 outside-contract），postflight 矩阵 23→27，preflight 31 用例不变，全绿。
+
 ## [2.12.1] - 2026-09-01
 
 ### 修复（验收纠偏 r2）

@@ -141,7 +141,11 @@ def _evidence_errors(
             errors.append(f"verification command failed (exit_code={match.get('exit_code')}): {wanted}")
 
 
-def _postflight(task: dict[str, Any], changed: list[str]) -> tuple[list[str], dict[str, Any]]:
+def _postflight(
+    task: dict[str, Any],
+    changed: list[str],
+    is_document_path,
+) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     value_kind = task["value_kind"]
     engineering = [str(item).strip() for item in (task.get("engineering_assets") or [])]
@@ -172,7 +176,13 @@ def _postflight(task: dict[str, Any], changed: list[str]) -> tuple[list[str], di
         return errors, report
 
     for path in changed:
-        engineering_hit = next((asset for asset in engineering if _matches(asset, path)), None)
+        # A documentation path can never satisfy matched_engineering_assets,
+        # even when it sits below a declared engineering directory; it may
+        # only count as accompanying documentation via doc_assets.
+        if is_document_path(path):
+            engineering_hit = None
+        else:
+            engineering_hit = next((asset for asset in engineering if _matches(asset, path)), None)
         doc_hit = next((asset for asset in doc_assets if _matches(asset, path)), None)
         if engineering_hit is not None:
             if engineering_hit not in report["matched_engineering_assets"]:
@@ -225,9 +235,9 @@ def main() -> int:
 
     spec_data = _load_json(args.spec, "spec", errors)
     evidence_data = _load_json(args.evidence, "evidence", errors)
+    gate = _load_gate()
     task: dict[str, Any] | None = None
     if isinstance(spec_data, dict):
-        gate = _load_gate()
         errors.extend(gate.validate(spec_data, datetime.now(timezone.utc)))
         tasks = spec_data.get("tasks")
         if isinstance(tasks, list):
@@ -262,7 +272,7 @@ def main() -> int:
         "changed_paths": changed,
     }
     if task is not None and task.get("value_kind") in {"implementation", "reusable_verification", "merge_gate"}:
-        gate_errors, gate_report = _postflight(task, changed)
+        gate_errors, gate_report = _postflight(task, changed, gate.is_document_path)
         errors.extend(gate_errors)
         report.update(gate_report)
         if isinstance(evidence_data, dict):
