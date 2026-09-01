@@ -1,0 +1,28 @@
+{
+  "schema_version": "review-acceptance-gate.v1",
+  "delivery_head": "11ce3e04b6348327d3447a367f4decb6ad2e80f9",
+  "implementation": {
+    "dispatch_id": "ctx_impl_example",
+    "session_id": "term_impl_example"
+  },
+  "reviewer": {
+    "dispatch_id": "ctx_review_example",
+    "session_id": "term_review_example"
+  },
+  "verdict": "ACCEPT",
+  "reviewed_head": "11ce3e04b6348327d3447a367f4decb6ad2e80f9",
+  "review_consumer": "PM 对本 wave 的合并/收口决策",
+  "review_expiry": "交付合并后随契约归档；重开深度审查必须签发新契约",
+  "blocking_findings": [],
+  "verification_evidence": [
+    {
+      "command": "bash skills/multi-agent-orchestration/scripts/test-review-acceptance-gate.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 skills/multi-agent-orchestration/scripts/review-acceptance-gate.py skills/multi-agent-orchestration/templates/review-acceptance.example.json",
+      "exit_code": 0
+    }
+  ],
+  "role_exception": null
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.13.0] - 2026-09-02
+
+### 新增
+
+- **角色分离验收门禁（`review-acceptance-gate.v1`，fail-closed）**：新增 `scripts/review-acceptance-gate.py`，把 MAO-PM-ROLE-SEPARATION 的角色分工从文字约定变成可执行验收契约——实现 worker 负责非平凡实现，独立 reviewer worker 负责深度 diff 审查与行为验证，PM 只拥有方向、价值合同、粗粒度巡检、冲突/风险升级、immutable-head 记账与最终收口。机械接受仅当：实现者与审查者具备互不相同、非占位的 `dispatch_id`/`session_id` 身份；`delivery_head` 与 `reviewed_head` 为同一不可变 40-hex commit；审查结论为字面 `ACCEPT`；`verification_evidence` 为非空 `{command, exit_code}` 记录且全部 exit 0（纯文字叙述证据拒绝）；`review_consumer`/`review_expiry` 已具名；`blocking_findings` 为空。自审、身份缺失/占位、head 漂移/非 40-hex、纯文字证据、缺验证/验证失败、占位消费者/到期处置一律拒绝。PM 实现/深度审查例外仅在 `worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery` 四种枚举 `reason_code` 下允许，必须附非空 `reason` 与 `authorized_by`；带例外通过的收口输出 `ordinary_delivery: false`，永远不得计为常规交付。配确定性契约测试 `scripts/test-review-acceptance-gate.sh`（27 用例：正例、例外标记非常规交付、自审/同 dispatch/同 session、head 漂移、verdict 大小写、纯文字证据、失败验证、占位消费/到期、blocking findings、例外文书四反例、schema fail-closed、示例模板自洽断言，成败退出码与机器可读输出均断言）与示例 `templates/review-acceptance.example.json`（过自身门禁）。`SKILL.md` §3 新增「角色分离验收门禁」节（强制默认 + 不声称能 policing 所有行为的边界声明）、§12 Hard Fail #12 与验收命令清单同步。既有 `dispatch-value-gate.py`/`worker-value-postflight.py` 未改动。
+
 ## [2.12.2] - 2026-09-01
 
 ### 修复（验收纠偏 r3：堵住 docs-only 目录误报）

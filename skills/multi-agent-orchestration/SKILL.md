@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.12.2"
+  version: "2.13.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -93,6 +93,18 @@ Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩�
 派发前把候选波次写成 `templates/dispatch-value-gate.example.json` 同构 JSON（`schema_version: dispatch-value-gate.v2`），并运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；非零退出不得启动 worker。该门禁机械拒绝非 `READY`、合同字段缺失或占位、docs/research kind、无 `value_kind` 的通用调查、纯文档交付计划、占位资产、重复/被包含的价值身份、收敛模式并发超限、待验收 PR >2，以及启动外部资源却没有 owner 的任务；PR 数、行数、token 与 commit 数都不是价值信号。
 
 派发的 worker 交付在验收/合并前必须再过交付后门禁：用同一 spec 运行 `python3 scripts/worker-value-postflight.py --spec <spec.json> --task-id <ID> (--repo <repo> --base <sha> --head <sha> | --diff <patch> --delivery-head <40-hex>) --evidence <evidence.json>`，非零退出不得接 PR。该门禁用 diff 实证：至少一个声明的非文档工程资产真的变更（实际文档路径即使位于声明的工程目录之下也不算工程命中，只能经 `doc_assets` 作为随行文档）、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence 中有 exit 0 执行记录。head 绑定是硬条件：evidence 必须含 40-hex `verified_head`，且等于 Git 模式解析 `--head` 所得的真实 commit（patch 模式等于显式 `--delivery-head`）；`merge_gate` 还要求该 head 等于 `gate_target.head_sha`，零 diff 仅对声明 `merge_gate`（`no_worker_pr` + 具名 PR + 40-hex head）放行，报告必须给出 accept/reject 决策与决策消费者。大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。
+
+### 角色分离验收门禁（非平凡实现波的强制默认）
+
+非平凡实现波（`implementation`/`reusable_verification` 交付）默认实行角色分离收口：实现 worker 与深度 diff 审查 + 行为验证 worker 必须是两个不同 dispatch/session；PM 拥有方向、价值合同、粗粒度巡检、冲突/风险升级、immutable-head 记账与最终收口，在独立证据一致时不重复逐行审查或补丁实现。接受交付/合并前运行：
+
+```bash
+python3 scripts/review-acceptance-gate.py <review-acceptance.json>
+```
+
+契约见 `templates/review-acceptance.example.json`（`schema_version: review-acceptance-gate.v1`）。机械接受仅当：实现者与审查者的 `dispatch_id`/`session_id` 均非占位且互不相同；`delivery_head` 与 `reviewed_head` 为同一不可变 40-hex commit；审查结论为字面 `ACCEPT`；`verification_evidence` 为非空的 `{command, exit_code}` 记录且全部 exit 0（纯文字叙述证据无效）；`review_consumer` 与 `review_expiry` 已具名；`blocking_findings` 为空。机械拒绝：自审、身份缺失/占位、head 漂移/非 40-hex、纯文字证据、缺验证或验证失败、占位消费者/到期处置、以及 PM 实现/深度审查例外缺少非空枚举理由 + 授权来源。
+
+PM 例外仅在四种枚举情形（`role_exception.reason_code`）允许：`worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery`，且必须声明 `kind`（`pm_implementation`/`pm_deep_review`）、非空 `reason` 与 `authorized_by`；带例外通过的收口在输出中标记 `ordinary_delivery: false`，永远不得计为常规交付。边界：本门禁验证契约的内部一致性（身份、head、结论、证据、例外文书），让角色分离可执行、可审计，但不声称能 policing 所有行为——身份与例外申报是否真实发生，仍依赖角色纪律与事后审计。
 
 ### 3.1 Harness 调用层级
 
@@ -493,6 +505,7 @@ Hard Fail：
 9. CodeBuddy/QoderWork CN 或未知宿主向上/跨宿主派发，或用 `--pm-harness`、个人配置伪造宿主身份。
 10. 以额度余额、PR 数或 worker 忙碌度为理由派发没有 `value_kind`、命名消费者/消费时限/可观察验收的任务；或未过 `dispatch-value-gate.py` 派发、未过 `worker-value-postflight.py` 就接受交付/PR。
 11. worker/测试启动了服务或监听器，却没有资源 owner、清理证据和 PID/端口零净增量核对；或为清理而按进程名批量 kill。
+12. 非平凡实现波未过 `review-acceptance-gate.py` 就接受交付/合并；或 PM 实现/深度审查例外缺枚举 `reason_code`、非空 `reason` 或 `authorized_by`，或把 `ordinary_delivery: false` 的收口计为常规交付。
 
 修改本 Skill 后至少运行：
 
@@ -514,6 +527,7 @@ bash scripts/test-provider-lease.sh
 bash scripts/test-spawn-worker-deps.sh
 bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-worker-value-postflight.sh
+bash scripts/test-review-acceptance-gate.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
