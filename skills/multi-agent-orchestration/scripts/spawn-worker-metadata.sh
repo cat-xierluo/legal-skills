@@ -56,6 +56,10 @@ write_metadata() {
     --arg provider_lease_root "$PROVIDER_LEASE_ROOT" \
     --arg provider_lease_limit "$PROVIDER_LEASE_LIMIT" \
     --arg provider_lease_key "$PROVIDER_LEASE_KEY" \
+    --arg quota_preflight_status "$QUOTA_PREFLIGHT_STATUS" \
+    --arg quota_preflight_lane "$QUOTA_PREFLIGHT_LANE" \
+    --argjson quota_preflight_override "$QUOTA_PREFLIGHT_OVERRIDE" \
+    --arg quota_preflight_override_source "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" \
     --arg env_isolation "$ENV_ISOLATION" \
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
@@ -129,6 +133,12 @@ write_metadata() {
           root: $provider_lease_root,
           provider: $provider_lease_key,
           max_concurrency: ($provider_lease_limit | if . == "" then null else tonumber end)
+        },
+        quota_preflight: {
+          status: $quota_preflight_status,
+          lane: $quota_preflight_lane,
+          override_used: $quota_preflight_override,
+          override_authorization_source: $quota_preflight_override_source
         },
         env_isolation: $env_isolation,
         command: $command,
