@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "contract": "multi-agent-orchestration.codex-heartbeat-cycle-request.v1",
+  "controller": {
+    "path": "/absolute/path/to/skills/multi-agent-orchestration/scripts/autopilot-controller.py",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "mutation_adapter": {
+    "path": "/absolute/path/to/mutation-adapter.py",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "repo": "/absolute/path/inside/target/repo",
+  "project_id": "example-project",
+  "policy_commit": "0123456789abcdef0123456789abcdef01234567",
+  "owner": "pm-codex-heartbeat",
+  "fencing_token": 1,
+  "timeouts": {
+    "status_seconds": 30,
+    "reconcile_seconds": 60,
+    "tick_seconds": 120
+  },
+  "gates": {
+    "quota_denied": false,
+    "acceptance_backpressure": false
+  }
+}
