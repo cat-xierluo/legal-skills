@@ -291,6 +291,8 @@ Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推�
 守夜 v2 使用 `scripts/night-revive-timer.sh`；布防参数、双通道自测、双读/游标核活、硬额度与瞬发拥塞分流、`task-list` 完成权威及 `SPAWN_WORKER_DISPATCH_BIND` 巡检全部读取 `references/15-wave-autopilot.md` §4.1，不在入口重复维护。
 
 **持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path。v2.10.0 起，`scripts/autopilot-controller.py` + `scripts/autopilot-facts.py` 提供 `L2 / CROSS_SESSION_RECOVERABLE` controller core：版本化 ledger/WAL、PM lease/fencing、可信只读 facts、幂等 reconcile 与单 mutation tick；项目必须提供固定 manifest 和受信 mutation adapter。真实 Orca/GitHub mutation 端到端与真实断电仍为 `NOT_VERIFIED`。没有外部 durable scheduler 时继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`；用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时读取 `references/16-autopilot-durability.md`，不得把 L2 controller 包装成 L3。
+
+**外部调度器适配器 `codex-heartbeat-cycle`（v2.13.0）**：Codex App heartbeat 可充当上述外部 durable scheduler，适配器 `scripts/codex-heartbeat-cycle.py` 保证「一次唤醒 = 一次有界循环」——读显式 JSON 请求（钉扎 controller/适配器 path+sha256、repo/project/policy 身份、owner/fencing token），经 `autopilot-controller` CLI（argv 数组、shell=False、有界超时）执行一次 status → reconcile，仅当通过 tick 前闸门（动作 allowlist、待验收反压阈值、配额拒绝、fencing/租约身份一致）时执行至多一次 tick，输出机器 JSON（`decision=wait/review/dispatch/park/complete`、receipt、`future_heartbeat_needed`）。硬边界：不循环、不 sleep、不派生后台进程、不注入 raw 终端输入、不改 TASKS、不按 token 丰度挑任务；不确定的 tick 按不确定上报且绝不重试，tick 后不再发起任何控制器调用；COMPLETE/硬泊车/重复拒绝建议停止心跳。请求模板 `templates/codex-heartbeat-cycle.example.json`，契约测试 `scripts/test-codex-heartbeat-cycle.py`。
 ## 5. tmux 兼容回退
 
 先用 `render-runtime-profile.sh` 生成 backend 命令，再由 `spawn-worker.sh` 加 `--no-orca-mode` 启动。spawn 后立即核对 `tmux has-session`、pane cwd 与 Session Context 的 `METADATA.json`；任一不一致都停止派单。
@@ -514,6 +516,8 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
 bash scripts/test-pm-quota-stall.sh
+python3 scripts/test-quota-preflight.py
+bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
@@ -521,6 +525,7 @@ bash scripts/test-spawn-worker-launch.sh
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh
+bash scripts/test-render-runtime-profile.sh
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh

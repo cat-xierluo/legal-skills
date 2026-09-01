@@ -23,6 +23,9 @@
 #         为显式 --allow-prompt-only-install-guard（SPAWN_WORKER_INSTALL_GUARD_DEGRADED_EXPLICIT）
 #     18. flag 解析：--no-external-imports-auto / --external-imports-auto /
 #         --allow-prompt-only-install-guard 齐全，--no-claude-code-bare-auto-degrade 已移除
+#   v2.13.0（修正：check #9 正则对齐现行 backend 家族共支形状，生产策略零改动）：
+#     9.  resolve_backend_defaults 的 claude-code 全关分支按变量逐一断言 =0，
+#         正则容忍分支内 backend 扩容（v1.20.3 Task-026 / zcode Task-077）
 #
 # 用法: bash scripts/smoke-auto-bypass.sh
 # 期望: exit 0，输出所有 "✓" check
@@ -122,12 +125,22 @@ else
   check "resolve_backend_defaults() 函数定义存在（v1.18.4 backend 分支化）" 1
 fi
 
-# 9. resolve_backend_defaults 包含 claude-code 全关分支
-if grep -A 30 "^resolve_backend_defaults() {" "$SPAWN_WORKER" | grep -qE "claude-code\|claude_code\) (TRUST_AUTO|PERMISSION_AUTO|PERMISSION_AUTO_BG)=0" ; then
-  check "resolve_backend_defaults 含 claude-code 全关分支（v1.18.4）" 0
-else
-  check "resolve_backend_defaults 含 claude-code 全关分支（v1.18.4）" 1
-fi
+# 9. resolve_backend_defaults 包含 claude-code 家族全关分支（v2.13 收口对齐）：
+#    v1.18.4 建立时分支为 claude-code 单 backend；v1.20.3 Task-026（codebuddy/
+#    qoderwork-cn/qoderclicn）与 zcode 转正（Task-077）后同一 case 分支扩为
+#    claude-code 家族多 backend 共支（TRUST_AUTO/PERMISSION_AUTO_BG 与 zcode 共支，
+#    PERMISSION_AUTO 另与 codebuddy/qoderwork-cn/qoderclicn 共支）。旧正则钉死
+#    "claude_code 紧跟右括号"故必失败。现按变量逐一匹配 claude-code 家族分支 =0
+#    （[^)]* 容忍分支内 backend 扩容），且比旧 any-one-of-three 交替更强：三个
+#    变量必须各自存在 =0 分支才算全关。生产策略不变。
+claude_off_fail=0
+for var in TRUST_AUTO PERMISSION_AUTO PERMISSION_AUTO_BG; do
+  if ! grep -A 30 "^resolve_backend_defaults() {" "$SPAWN_WORKER" | grep -qE "claude-code\|claude_code[^)]*\) ${var}=0"; then
+    claude_off_fail=1
+    break
+  fi
+done
+check "resolve_backend_defaults 含 claude-code 全关分支（v1.18.4）" "$claude_off_fail"
 
 # 10. 5 个新 flag 解析存在
 flag_ok=0
