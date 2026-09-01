@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.12.0"
+  version: "2.12.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -82,17 +82,17 @@ Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩�
 - `decision_or_gate_changed`：产出会改变什么行为或决策，而不是只描述"形成文档"；
 - `engineering_assets` / `doc_assets`：声明的非文档工程资产路径与随行文档；`implementation`/`reusable_verification` 必须至少声明一个非文档资产，`merge_gate` 必须为空并改用 `gate_target.pr` + `gate_target.head_sha`（40-hex）；
 - `verification_commands`：确定性验证命令；实现与验证资产必填，merge gate 可省略（其证据即 accept/reject 决策）；
-- `worker_pr_policy`：`worker_pr` 或 `no_worker_pr`；只有 merge_gate 允许 `no_worker_pr`；
-- `value_identity`：波内去重身份；显式重复判 duplicate，同 `value_kind` + 同 `problem_target` 判 subsumed，均拒绝；
+- `worker_pr_policy`：`worker_pr`（独立有价值的 worker PR）、`integration_pr`（并入具名集成 PR/branch，必填非占位 `integration_target`）或 `no_worker_pr`（仅 merge_gate）；实现/验证资产二选一，不把 PR 数当目标；
+- `value_identity`：必填的波内去重身份；显式重复判 duplicate，同 `value_kind` + 同 `problem_target` 判 subsumed，均拒绝；
 - `consumer`、`consume_by`、`expiry`、`observable_acceptance`、`resource_owner`：命名消费者、消费时限、到期处置、可观察验收与资源责任（无外部进程写 `none`）。
 
-`DRAFT` 默认不可派，也不自动转成 docs-only。只有命名实现已具备全部非文档输入、且缺少的合同是唯一阻塞时，才创建一次晋级任务；docs-only 交付必须带来 `DRAFT → READY`、关闭阻塞决策或新增被消费者实际调用的门禁。PM 待验收超过自身可处理能力时停止扩波；默认每波/全局活跃 worker ≤3、research/docs ≤1，项目可以收紧，只有用户显式、限期的探索窗口才可放宽。
+`DRAFT` 默认不可派。文档不是独立价值：docs-only、简单调查与纯文案/格式清理不得获得独立 worker/worktree/PR；文档只随同 implementation / reusable_verification / merge decision 的同一有价值变更交付（经 `doc_assets` 声明并过 postflight 实证），或由既有角色在无派发成本下处理。只有命名实现已具备全部非文档输入、且缺少的合同是唯一阻塞时，才创建一次晋级任务。PM 待验收超过自身可处理能力时停止扩波；默认每波/全局活跃 worker ≤3、research/docs ≤1，项目可以收紧，只有用户显式、限期的探索窗口才可放宽。
 
 额度充足时优先增加确定性测试、fixture、基准、故障注入、真实交互/样本验收工具、生成器和独立前向评测。禁止以 quota-burn、PR 数、文档行数或 worker 忙碌度作为目标。详细查表与反模式读取 `references/15-wave-autopilot.md` §5。
 
 派发前把候选波次写成 `templates/dispatch-value-gate.example.json` 同构 JSON（`schema_version: dispatch-value-gate.v2`），并运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；非零退出不得启动 worker。该门禁机械拒绝非 `READY`、合同字段缺失或占位、docs/research kind、无 `value_kind` 的通用调查、纯文档交付计划、占位资产、重复/被包含的价值身份、收敛模式并发超限、待验收 PR >2，以及启动外部资源却没有 owner 的任务；PR 数、行数、token 与 commit 数都不是价值信号。
 
-派发的 worker 交付在验收/合并前必须再过交付后门禁：用同一 spec 运行 `python3 scripts/worker-value-postflight.py --spec <spec.json> --task-id <ID> (--repo <repo> --base <sha> --head <sha> | --diff <patch>) --evidence <evidence.json>`，非零退出不得接 PR。该门禁用 diff 实证：至少一个声明的非文档工程资产真的变更、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence 中有 exit 0 执行记录；零 diff 仅对声明 `merge_gate`（`no_worker_pr` + 具名 PR + 40-hex head）放行，且报告必须给出 accept/reject 决策与决策消费者。大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。
+派发的 worker 交付在验收/合并前必须再过交付后门禁：用同一 spec 运行 `python3 scripts/worker-value-postflight.py --spec <spec.json> --task-id <ID> (--repo <repo> --base <sha> --head <sha> | --diff <patch> --delivery-head <40-hex>) --evidence <evidence.json>`，非零退出不得接 PR。该门禁用 diff 实证：至少一个声明的非文档工程资产真的变更、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence 中有 exit 0 执行记录。head 绑定是硬条件：evidence 必须含 40-hex `verified_head`，且等于 Git 模式解析 `--head` 所得的真实 commit（patch 模式等于显式 `--delivery-head`）；`merge_gate` 还要求该 head 等于 `gate_target.head_sha`，零 diff 仅对声明 `merge_gate`（`no_worker_pr` + 具名 PR + 40-hex head）放行，报告必须给出 accept/reject 决策与决策消费者。大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。
 
 ### 3.1 Harness 调用层级
 

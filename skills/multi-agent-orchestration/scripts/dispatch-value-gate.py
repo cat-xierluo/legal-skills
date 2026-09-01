@@ -24,7 +24,7 @@ REQUIRED_VALUE_FIELDS = (
 PLACEHOLDERS = {"", "tbd", "todo", "unknown", "n/a", "na", "-", "*", "**", "none"}
 DOC_KINDS = {"docs", "research"}
 VALUE_KINDS = {"implementation", "reusable_verification", "merge_gate"}
-PR_POLICIES = {"worker_pr", "no_worker_pr"}
+PR_POLICIES = {"worker_pr", "integration_pr", "no_worker_pr"}
 DOC_EXTENSIONS = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 DOC_DIR = "docs/"
 HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -101,6 +101,9 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
     if _missing(task.get("problem_target")):
         errors.append(f"{prefix}.problem_target must name the concrete problem, module, or PR")
 
+    if _missing(task.get("value_identity")):
+        errors.append(f"{prefix}.value_identity is required for in-wave dedupe and cannot be a placeholder")
+
     asset_errors, engineering_assets = _asset_list_errors(prefix, task.get("engineering_assets"), "engineering_assets")
     errors.extend(asset_errors)
     doc_errors, doc_assets = _asset_list_errors(prefix, task.get("doc_assets"), "doc_assets")
@@ -125,7 +128,7 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
             errors.append(f"{prefix}.merge_gate declares no_worker_pr and must not declare engineering_assets")
         if doc_assets:
             errors.append(f"{prefix}.merge_gate must not declare doc_assets")
-        if policy == "worker_pr":
+        if policy in {"worker_pr", "integration_pr"}:
             errors.append(f"{prefix}.merge_gate requires worker_pr_policy no_worker_pr")
         gate_target = task.get("gate_target")
         if not isinstance(gate_target, dict):
@@ -140,6 +143,11 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
         if value_kind is not None:
             if policy == "no_worker_pr":
                 errors.append(f"{prefix}.worker_pr_policy no_worker_pr is only valid for merge_gate")
+            if policy == "integration_pr" and _missing(task.get("integration_target")):
+                errors.append(
+                    f"{prefix}.integration_target must name the integration PR/branch "
+                    "when worker_pr_policy is integration_pr"
+                )
             non_doc_assets = [path for path in engineering_assets if not _is_document_path(path)]
             if not non_doc_assets:
                 errors.append(

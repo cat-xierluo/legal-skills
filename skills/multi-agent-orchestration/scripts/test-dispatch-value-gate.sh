@@ -45,6 +45,7 @@ merge_gate_task = {
     "status": "READY",
     "kind": "merge-verification",
     "value_kind": "merge_gate",
+    "value_identity": "pr-135-zero-diff-verify",
     "problem_target": "PR #135 zero-diff merge verification",
     "consumer": "PM merge decision for PR #135",
     "decision_or_gate_changed": "accept or reject merge of PR #135",
@@ -90,17 +91,8 @@ def run(spec, expected_ok, contains="", label=""):
         print(f"FAIL {label or contains}: {exc}")
 
 
-def variant(name, mutate, expected_ok, contains="", value_task=None):
-    spec = copy.deepcopy(base)
-    task = spec["tasks"][0]
-    if value_task is not None:
-        task.update(value_task)
-    mutate(task, spec)
-    run(spec, expected_ok, contains, name)
-
-
 run(base, True, label="valid implementation passes")
-run({**copy.deepcopy(base), "tasks": base["tasks"] + [merge_gate_task]}, True, label="valid merge gate passes")
+run({**copy.deepcopy(base), "tasks": base["tasks"] + [copy.deepcopy(merge_gate_task)]}, True, label="valid merge gate passes")
 
 fixture = copy.deepcopy(base)
 fixture["tasks"][0].update({
@@ -113,6 +105,13 @@ fixture["tasks"][0].update({
     "verification_commands": ["python3 skills/foo/tests/test_fixture_contract.py"],
 })
 run(fixture, True, label="reusable fixture asset passes")
+
+integration = copy.deepcopy(base)
+integration["tasks"][0].update({
+    "worker_pr_policy": "integration_pr",
+    "integration_target": "integration/wave-2026-09-01",
+})
+run(integration, True, label="implementation folded into named integration PR passes")
 
 missing_consumer = copy.deepcopy(base)
 missing_consumer["tasks"][0]["consumer"] = "{{named_consumer}}"
@@ -141,6 +140,14 @@ cleanup["tasks"][0].update({
 })
 run(cleanup, False, "value_kind must be one of", "format cleanup value_kind rejected")
 
+missing_identity = copy.deepcopy(base)
+missing_identity["tasks"][0].pop("value_identity")
+run(missing_identity, False, "value_identity is required", "missing value_identity")
+
+placeholder_identity = copy.deepcopy(base)
+placeholder_identity["tasks"][0]["value_identity"] = "tbd"
+run(placeholder_identity, False, "value_identity is required", "placeholder value_identity")
+
 missing_target = copy.deepcopy(base)
 missing_target["tasks"][0]["problem_target"] = "tbd"
 run(missing_target, False, "problem_target", "placeholder problem target")
@@ -157,6 +164,13 @@ no_verification = copy.deepcopy(base)
 no_verification["tasks"][0]["verification_commands"] = []
 run(no_verification, False, "requires verification_commands", "implementation without verification")
 
+integration_no_target = copy.deepcopy(base)
+integration_no_target["tasks"][0].update({
+    "worker_pr_policy": "integration_pr",
+    "integration_target": "tbd",
+})
+run(integration_no_target, False, "integration_target", "integration_pr without named target")
+
 gate_floating_head = copy.deepcopy(base)
 gate_task = copy.deepcopy(merge_gate_task)
 gate_task["gate_target"]["head_sha"] = "release-branch-head"
@@ -166,6 +180,10 @@ run(gate_floating_head, False, "40-hex", "merge gate floating head")
 gate_worker_pr = copy.deepcopy(base)
 gate_worker_pr["tasks"].append({**copy.deepcopy(merge_gate_task), "worker_pr_policy": "worker_pr"})
 run(gate_worker_pr, False, "no_worker_pr", "merge gate with worker PR")
+
+gate_integration_pr = copy.deepcopy(base)
+gate_integration_pr["tasks"].append({**copy.deepcopy(merge_gate_task), "worker_pr_policy": "integration_pr"})
+run(gate_integration_pr, False, "no_worker_pr", "merge gate with integration_pr")
 
 gate_with_assets = copy.deepcopy(base)
 gate_task_assets = copy.deepcopy(merge_gate_task)

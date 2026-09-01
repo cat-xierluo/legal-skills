@@ -13,11 +13,13 @@ from datetime import datetime, timezone
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 from typing import Any
 
 
 EXIT_REJECTED = 2
+HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _load_gate():
@@ -34,6 +36,28 @@ def _load_json(path: Path, label: str, errors: list[str]) -> Any:
     except (OSError, json.JSONDecodeError) as exc:
         errors.append(f"{label} is unreadable or invalid JSON: {exc}")
         return None
+
+
+def _resolve_git_head(repo: str, head: str, errors: list[str]) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "--verify", f"{head}^{{commit}}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        errors.append(f"git rev-parse failed: {exc}")
+        return None
+    if result.returncode != 0:
+        errors.append(f"head does not resolve to a commit: {head}")
+        return None
+    resolved = result.stdout.strip().casefold()
+    if not HEAD_SHA_RE.match(resolved):
+        errors.append(f"resolved head is not a 40-hex commit: {head}")
+        return None
+    return resolved
 
 
 def _git_changed_paths(repo: str, base: str, head: str, errors: list[str]) -> list[str]:
@@ -75,21 +99,33 @@ def _matches(asset: str, path: str) -> bool:
     return path == normalized or path.startswith(normalized + "/")
 
 
-def _evidence_errors(task: dict[str, Any], evidence: dict[str, Any], errors: list[str]) -> None:
-    required = task.get("verification_commands") or []
-    decision_only = task.get("value_kind") == "merge_gate" and not required
-    executed = evidence.get("executed")
-    if decision_only:
+def _evidence_errors(
+    task: dict[str, Any],
+    evidence: dict[str, Any],
+    resolved_head: str | None,
+    errors: list[str],
+) -> None:
+    # Head binding applies to every accepted postflight: the evidence must pin
+    # an immutable 40-hex revision that equals the resolved delivery head.
+    verified_head = evidence.get("verified_head")
+    if not isinstance(verified_head, str) or not HEAD_SHA_RE.match(verified_head.strip().casefold()):
+        errors.append("evidence must record an immutable 40-hex verified_head")
+        verified_head = None
+    elif resolved_head is not None and verified_head.strip().casefold() != resolved_head:
+        errors.append("evidence verified_head does not match the resolved delivery head")
+
+    if task.get("value_kind") == "merge_gate":
+        gate_head = str((task.get("gate_target") or {}).get("head_sha", "")).strip().casefold()
+        if resolved_head is not None and resolved_head != gate_head:
+            errors.append("delivery head does not match gate_target.head_sha")
         decision = evidence.get("decision")
         if decision not in {"accept", "reject"}:
             errors.append("merge gate evidence must record decision accept or reject")
-        gate_target = task.get("gate_target") or {}
-        verified_head = evidence.get("verified_head")
-        if isinstance(verified_head, str) and verified_head.strip().casefold() != str(
-            gate_target.get("head_sha", "")
-        ).strip().casefold():
-            errors.append("evidence verified_head does not match gate_target.head_sha")
+
+    required = task.get("verification_commands") or []
+    if task.get("value_kind") == "merge_gate" and not required:
         return
+    executed = evidence.get("executed")
     if not isinstance(executed, list) or not executed:
         errors.append("verification evidence missing: executed[] with command/exit_code is required")
         return
@@ -103,16 +139,6 @@ def _evidence_errors(task: dict[str, Any], evidence: dict[str, Any], errors: lis
             errors.append(f"verification evidence missing for command: {wanted}")
         elif match.get("exit_code") != 0:
             errors.append(f"verification command failed (exit_code={match.get('exit_code')}): {wanted}")
-    if task.get("value_kind") == "merge_gate":
-        decision = evidence.get("decision")
-        if decision not in {"accept", "reject"}:
-            errors.append("merge gate evidence must record decision accept or reject")
-        gate_target = task.get("gate_target") or {}
-        verified_head = evidence.get("verified_head")
-        if isinstance(verified_head, str) and verified_head.strip().casefold() != str(
-            gate_target.get("head_sha", "")
-        ).strip().casefold():
-            errors.append("evidence verified_head does not match gate_target.head_sha")
 
 
 def _postflight(task: dict[str, Any], changed: list[str]) -> tuple[list[str], dict[str, Any]]:
@@ -177,6 +203,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--base", help="base revision (with --repo/--head)")
     parser.add_argument("--head", help="head revision (with --repo/--base)")
     parser.add_argument("--diff", type=Path, help="unified diff / patch file to inspect instead")
+    parser.add_argument(
+        "--delivery-head",
+        help="immutable 40-hex delivery revision the patch was produced against (patch mode)",
+    )
     parser.add_argument("--evidence", type=Path, required=True, help="verification evidence JSON")
     return parser
 
@@ -206,20 +236,29 @@ def main() -> int:
             errors.append(f"task_id '{args.task_id}' not found in spec tasks")
 
     changed: list[str] = []
+    resolved_head: str | None = None
     diff_source = None
     if args.diff is not None:
+        if args.delivery_head is None:
+            errors.append("--delivery-head (immutable 40-hex delivery revision) is required in patch mode")
+        elif not HEAD_SHA_RE.match(args.delivery_head.strip().casefold()):
+            errors.append("--delivery-head must be an immutable 40-hex revision")
+        else:
+            resolved_head = args.delivery_head.strip().casefold()
         try:
             changed = _patch_changed_paths(args.diff.read_text(encoding="utf-8", errors="replace"), errors)
             diff_source = f"patch:{args.diff}"
         except OSError as exc:
             errors.append(f"patch unreadable: {exc}")
     elif args.repo is not None and all(diff_sources):
+        resolved_head = _resolve_git_head(args.repo, args.head, errors)
         changed = _git_changed_paths(args.repo, args.base, args.head, errors)
         diff_source = f"git:{args.repo} {args.base}..{args.head}"
 
     report: dict[str, Any] = {
         "task_id": args.task_id,
         "diff_source": diff_source,
+        "delivery_head": resolved_head,
         "changed_paths": changed,
     }
     if task is not None and task.get("value_kind") in {"implementation", "reusable_verification", "merge_gate"}:
@@ -227,7 +266,7 @@ def main() -> int:
         errors.extend(gate_errors)
         report.update(gate_report)
         if isinstance(evidence_data, dict):
-            _evidence_errors(task, evidence_data, errors)
+            _evidence_errors(task, evidence_data, resolved_head, errors)
             report["verification"] = {
                 "required": len(task.get("verification_commands") or []),
                 "evidence_commands": len(evidence_data.get("executed") or []),

@@ -67,6 +67,7 @@ gate_task = {
     "status": "READY",
     "kind": "merge-verification",
     "value_kind": "merge_gate",
+    "value_identity": "pr-135-zero-diff-verify",
     "problem_target": "PR #135 zero-diff merge verification",
     "consumer": "PM merge decision for PR #135",
     "decision_or_gate_changed": "accept or reject merge of PR #135",
@@ -157,10 +158,20 @@ def check(name, spec_path, task_id, evidence_path, expected_ok, contains="", ext
         return {}
 
 
-ok_evidence = evidence({"executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 0}]})
+ok_evidence = evidence({
+    "executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 0}],
+    "verified_head": HEAD,
+})
+stale_evidence = evidence({
+    "executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 0}],
+    "verified_head": BASE,
+})
+no_head_evidence = evidence({
+    "executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 0}],
+})
 
 payload = check(
-    "implementation diff + evidence passes",
+    "implementation diff + bound evidence passes",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, True,
     extra=["--repo", str(repo), "--base", BASE, "--head", HEAD],
 )
@@ -174,10 +185,14 @@ docs_only = patch_file(
     "docs-only.diff",
     ("skills/foo/CHANGELOG.md", "skills/foo/CHANGELOG.md"),
 )
+noisy = patch_file(
+    "noisy.diff",
+    ("skills/foo/scripts/retry.py", "skills/foo/scripts/retry.py"),
+)
 check(
     "docs-only actual diff fails",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, False, "engineering asset",
-    extra=["--diff", str(docs_only)],
+    extra=["--diff", str(docs_only), "--delivery-head", HEAD],
 )
 
 outside = patch_file(
@@ -188,7 +203,7 @@ outside = patch_file(
 check(
     "changed path outside declared assets fails",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, False, "outside declared",
-    extra=["--diff", str(outside)],
+    extra=["--diff", str(outside), "--delivery-head", HEAD],
 )
 
 empty = work / "empty.diff"
@@ -196,20 +211,27 @@ empty.write_text("", encoding="utf-8")
 check(
     "zero diff without merge gate fails",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, False, "zero diff",
-    extra=["--diff", str(empty)],
+    extra=["--diff", str(empty), "--delivery-head", HEAD],
 )
 
 check(
-    "merge gate zero diff + decision passes",
+    "patch-mode delivery with evidence head bound to --delivery-head passes",
+    spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, True,
+    extra=["--diff", str(noisy), "--delivery-head", HEAD],
+)
+
+check(
+    "merge gate pinned target compared to itself passes",
     spec(copy.deepcopy(gate_task)), "TASK-GATE",
     evidence({"decision": "accept", "verified_head": HEAD}), True,
-    extra=["--repo", str(repo), "--base", BASE, "--head", BASE],
+    extra=["--repo", str(repo), "--base", HEAD, "--head", HEAD],
 )
+
 payload = check(
     "merge gate reports decision consumer",
     spec(copy.deepcopy(gate_task)), "TASK-GATE",
-    evidence({"decision": "reject"}), True,
-    extra=["--repo", str(repo), "--base", BASE, "--head", BASE],
+    evidence({"decision": "reject", "verified_head": HEAD}), True,
+    extra=["--repo", str(repo), "--base", HEAD, "--head", HEAD],
 )
 if payload and (payload["report"].get("decision") != "reject"
                 or payload["report"].get("decision_consumer") != "PM merge decision for PR #135"):
@@ -218,15 +240,55 @@ if payload and (payload["report"].get("decision") != "reject"
 else:
     passed += 1
 
-noisy = patch_file(
-    "noisy.diff",
-    ("skills/foo/scripts/retry.py", "skills/foo/scripts/retry.py"),
-)
 check(
     "merge gate with non-zero diff fails",
     spec(copy.deepcopy(gate_task)), "TASK-GATE",
     evidence({"decision": "accept", "verified_head": HEAD}), False, "zero diff",
+    extra=["--diff", str(noisy), "--delivery-head", HEAD],
+)
+
+check(
+    "evidence without verified_head fails",
+    spec(copy.deepcopy(gate_task)), "TASK-GATE",
+    evidence({"decision": "accept"}), False, "verified_head",
+    extra=["--repo", str(repo), "--base", HEAD, "--head", HEAD],
+)
+
+check(
+    "stale evidence head fails in patch mode",
+    spec(copy.deepcopy(impl_task)), "TASK-IMPL", stale_evidence, False,
+    "verified_head does not match the resolved delivery head",
+    extra=["--diff", str(noisy), "--delivery-head", HEAD],
+)
+
+check(
+    "git head different from merge target fails",
+    spec(copy.deepcopy(gate_task)), "TASK-GATE",
+    evidence({"decision": "accept", "verified_head": BASE}), False,
+    "gate_target.head_sha",
+    extra=["--repo", str(repo), "--base", BASE, "--head", BASE],
+)
+
+mismatch = copy.deepcopy(gate_task)
+mismatch["gate_target"]["head_sha"] = "0" * 40
+check(
+    "evidence/target head mismatch fails",
+    spec(mismatch), "TASK-GATE",
+    evidence({"decision": "accept", "verified_head": HEAD}), False,
+    "gate_target.head_sha",
+    extra=["--repo", str(repo), "--base", HEAD, "--head", HEAD],
+)
+
+check(
+    "patch mode without --delivery-head fails",
+    spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, False, "--delivery-head",
     extra=["--diff", str(noisy)],
+)
+
+check(
+    "non-hex --delivery-head fails",
+    spec(copy.deepcopy(impl_task)), "TASK-IMPL", ok_evidence, False, "40-hex",
+    extra=["--diff", str(noisy), "--delivery-head", "release-branch"],
 )
 
 floating = copy.deepcopy(gate_task)
@@ -234,23 +296,14 @@ floating["gate_target"]["head_sha"] = "release-branch"
 check(
     "merge gate floating head fails",
     spec(floating), "TASK-GATE",
-    evidence({"decision": "accept"}), False, "40-hex",
-    extra=["--repo", str(repo), "--base", BASE, "--head", BASE],
-)
-
-mismatch = copy.deepcopy(gate_task)
-mismatch["gate_target"]["head_sha"] = "0" * 40
-check(
-    "verified_head mismatch fails",
-    spec(mismatch), "TASK-GATE",
-    evidence({"decision": "accept", "verified_head": HEAD}), False, "verified_head",
-    extra=["--repo", str(repo), "--base", BASE, "--head", BASE],
+    evidence({"decision": "accept", "verified_head": HEAD}), False, "40-hex",
+    extra=["--repo", str(repo), "--base", HEAD, "--head", HEAD],
 )
 
 check(
     "unexecuted verification command fails",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL",
-    evidence({"executed": [{"command": "python3 other.py", "exit_code": 0}]}), False,
+    evidence({"executed": [{"command": "python3 other.py", "exit_code": 0}], "verified_head": HEAD}), False,
     "verification evidence missing",
     extra=["--repo", str(repo), "--base", BASE, "--head", HEAD],
 )
@@ -258,7 +311,7 @@ check(
 check(
     "failed verification exit code fails",
     spec(copy.deepcopy(impl_task)), "TASK-IMPL",
-    evidence({"executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 1}]}), False,
+    evidence({"executed": [{"command": "python3 skills/foo/scripts/test_retry.py", "exit_code": 1}], "verified_head": HEAD}), False,
     "exit_code=1",
     extra=["--repo", str(repo), "--base", BASE, "--head", HEAD],
 )
