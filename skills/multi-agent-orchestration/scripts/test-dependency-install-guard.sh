@@ -44,9 +44,13 @@ PY
 hook() {
   local auth_file="$1"
   local command="$2"
+  # 本测试的 fixture 授权必须生效：显式清空 WORKER_INSTALL_AUTH_B64，
+  # 防止在真实 supervised worker 会话里运行本测试时继承 spawn 注入的
+  # 不可变快照（guard 对 B64 快照的优先级高于 WORKER_INSTALL_AUTH_FILE），
+  # 导致全部 fixture 被外层 worker 的空授权静默覆盖。
   printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
     "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$command")" |
-    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
+    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64= WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
 }
 
 expect_block() {
@@ -211,7 +215,7 @@ else
 fi
 
 missing_file_output=$(printf '{"tool_name":"Bash","tool_input":{"command":"npm ci"}}' |
-  WORKER_INSTALL_AUTH_FILE="$tmp_root/missing.json" WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD")
+  WORKER_INSTALL_AUTH_FILE="$tmp_root/missing.json" WORKER_INSTALL_AUTH_B64= WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD")
 if printf '%s' "$missing_file_output" | grep -qF "INSTALL_AUTHORIZATION_INVALID"; then
   ok "missing authorization file fails closed"
 else
