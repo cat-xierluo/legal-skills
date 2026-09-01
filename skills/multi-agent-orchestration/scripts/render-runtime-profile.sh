@@ -24,6 +24,7 @@ SETTING_SOURCES="project,local"
 NO_PROVIDER_ENV_ISOLATION=0
 NO_MCP=0
 WITH_MCP=0
+CLAUDE_BARE=0
 BIN=""
 SKIP_PERMISSIONS=0
 NO_SKIP_PERMISSIONS=0
@@ -70,6 +71,12 @@ Options:
                            concurrency; DEC-106).
   --with-mcp               Opt INTO MCP for codebuddy/qoderwork-cn (which default to --no-mcp).
                            Use only when the worker genuinely needs MCP tools.
+  --claude-bare            Opt INTO `claude --bare` for claude-code provider workers
+                           (--settings/--provider-registry with provider env isolation only).
+                           bare 跳过 hooks：默认已不加 --bare（v2.11.0 P0-② 撤销自动降级后，
+                           spawn-worker install-guard 对 --bare fail-closed）。显式 opt-in 后
+                           仍需 PM 传 --allow-prompt-only-install-guard 才能通过 spawn-worker，
+                           且输出上下文会标记 degraded/unhooked。
   --codex-profile NAME     Codex profile name
   --prompt-file PATH       Prompt file for batch mode
   --permission-mode MODE   Claude permission mode. Defaults: auto interactive, acceptEdits batch
@@ -173,6 +180,11 @@ while [[ $# -gt 0 ]]; do
       # codebuddy/qoderwork-cn 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）；
       # 需要 MCP 的 worker 显式 opt-in。
       WITH_MCP=1
+      shift
+      ;;
+    --claude-bare)
+      # 显式 opt-in：claude-code provider worker 加 --bare（unhooked/degraded）。
+      CLAUDE_BARE=1
       shift
       ;;
     --bin)
@@ -288,6 +300,15 @@ if [ "$BACKEND" = "claude-code" ] && [ -n "$PROVIDER_REGISTRY" ]; then
   jq -e --arg provider "$API_PROVIDER" '.providers[$provider] and (.providers[$provider] | type == "object")' "$PROVIDER_REGISTRY" >/dev/null
 fi
 
+# --claude-bare 只作用于 claude-code provider env isolation 路径（历史上默认 --bare 的
+# 唯一位置）；错用即 fail-closed，避免渲染出意外 unhooked 的命令。
+if [ "$CLAUDE_BARE" -eq 1 ]; then
+  if [ "$BACKEND" != "claude-code" ] || { [ -z "$SETTINGS" ] && [ -z "$PROVIDER_REGISTRY" ]; } || [ "$NO_PROVIDER_ENV_ISOLATION" -eq 1 ]; then
+    echo "ERROR: --claude-bare only applies to claude-code provider workers (--settings/--provider-registry with provider env isolation)" >&2
+    exit 64
+  fi
+fi
+
 quote_words() {
   local out=""
   local word
@@ -378,20 +399,28 @@ case "$BACKEND" in
 
     if [ "$BACKEND" = "claude-code" ] && { [ -n "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ]; }; then
       if [ "$NO_PROVIDER_ENV_ISOLATION" -eq 0 ]; then
-        # --bare: minimal mode — skip keychain reads / OAuth / plugin sync / CLAUDE.md auto-discovery.
-        # Makes Anthropic auth strictly ANTHROPIC_API_KEY (set by wrapper from provider registry/settings),
-        # fixing the bug where claude read a stale keychain sk-ant + misrouted to Fable 5 / OAuth
-        # instead of the selected 3P provider (deepseek/glm). Also suppresses the MCP trust dialog
-        # (plugin sync skipped). Task#188 worker-spawn env-routing bug, 2026-07-06.
-        claude_parts+=(--bare)
+        # v2.11.0 renderer hook 契约修复：provider env isolation 默认生成 hook-capable
+        # 命令——不再默认追加 --bare。背景：v1.20.2 Task-019 曾默认加 --bare（minimal
+        # mode：skip keychain reads / OAuth / plugin sync / CLAUDE.md auto-discovery，
+        # 让 Anthropic auth 严格走 wrapper 注入的 ANTHROPIC_API_KEY，修 Task#188 env
+        # 路由串号）；但 --bare 跳过 hooks，v2.11.0 P0-② 撤销 spawn-worker 的 --bare
+        # 自动降级后 install-guard 对其 fail-closed，标准 render → spawn 路径被拒，
+        # 逼 PM 手工删字符串。GLM 同配置实测无 --bare 也能正常路由 provider auth。
+        # bare 现在只能显式 --claude-bare opt-in，输出上下文标记 degraded/unhooked；
+        # spawn-worker 仍要求显式 --allow-prompt-only-install-guard，无自动降级。
+        BARE_MARKER=""
+        if [ "$CLAUDE_BARE" -eq 1 ]; then
+          claude_parts+=(--bare)
+          BARE_MARKER="+bare(degraded/unhooked)"
+        fi
         wrapper="$SCRIPT_DIR/claude-provider-env.sh"
         [ -f "$wrapper" ] || { echo "ERROR: missing Claude provider env wrapper: $wrapper" >&2; exit 64; }
         if [ -n "$PROVIDER_REGISTRY" ]; then
           parts=(bash "$wrapper" --provider-registry "$PROVIDER_REGISTRY" --api-provider "$API_PROVIDER" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
-          PROVIDER_ENV_ISOLATION="registry-env-wrapper(provider=$API_PROVIDER setting-sources=$SETTING_SOURCES)"
+          PROVIDER_ENV_ISOLATION="registry-env-wrapper(provider=$API_PROVIDER setting-sources=$SETTING_SOURCES)$BARE_MARKER"
         else
           parts=(bash "$wrapper" --settings "$SETTINGS" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
-          PROVIDER_ENV_ISOLATION="settings-env-wrapper(setting-sources=$SETTING_SOURCES)"
+          PROVIDER_ENV_ISOLATION="settings-env-wrapper(setting-sources=$SETTING_SOURCES)$BARE_MARKER"
         fi
       else
         parts=("${claude_parts[@]}")
