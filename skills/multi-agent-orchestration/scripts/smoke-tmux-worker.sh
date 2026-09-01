@@ -167,11 +167,14 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --verify-cmd "npm test -- --run")
 assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
-assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: pm=codex worker=codex"
+# v2.11.0：pm_harness 取决于 smoke 的真实调用方 ancestry（claude-code/codex 均可
+# 派 codex worker）；白名单契约锚定在 allowed 集合本身——v2.11 起刻意排除 zcode。
+assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: "
+assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoderwork-cn chain="
 if ! jq -e '
-  .runtime.harness_authority.pm_harness == "codex"
+  (.runtime.harness_authority.pm_harness == "codex" or .runtime.harness_authority.pm_harness == "claude-code")
   and .runtime.harness_authority.worker_backend == "codex"
-  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"])
+  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn"])
   and (.runtime.harness_authority.evidence_source != "")
 ' "$CTX/METADATA.json" >/dev/null; then
   echo "ASSERTION FAILED: METADATA missing verified Harness authority" >&2

@@ -26,10 +26,10 @@
 #   - 6 个 --*/--no-* flag 均可 force override 默认值，详见 usage 段与 DEC-112。
 #   - v1.20.2（Task-019/020/021，2026-08-05 folia Wave-1 实战）：
 #     * Task-019：claude-code provider-isolation 默认 --bare（render-runtime-profile.sh）
-#       与 install-guard fail-closed 互斥。spawn-worker 检测到 --bare 自动降级 prompt-only
-#       + 内置来源（CLAUDE_CODE_BARE_AUTO_DEGRADE=1），不再要求 PM 手写
-#       --allow-prompt-only-install-guard；--no-claude-code-bare-auto-degrade opt-out。
-#       --safe-mode / --setting-sources 排除 local / 缺 claude token 仍 fail-closed（非 --bare 不自动降级）。
+#       与 install-guard fail-closed 互斥。曾实现 --bare 自动降级 prompt-only
+#       （CLAUDE_CODE_BARE_AUTO_DEGRADE=1）；v2.11.0 复盘撤销：hook 不可证明时
+#       一律 fail-closed，只有显式 --allow-prompt-only-install-guard + 授权来源
+#       才可降级（自动降级会静默放弃机械安装门禁，见 CHANGELOG v2.11.0）。
 #     * Task-020：claude-code worker 首启弹 "external imports" dialog（CLAUDE.md @import 触发），
 #       v1.18.4 默认关 trust/permission 不覆盖此类。external_imports_auto() 单独监控（option 1 默认放行），
 #       claude-code 默认开（EXTERNAL_IMPORTS_AUTO=1，--no-external-imports-auto opt-out）。
@@ -106,9 +106,12 @@ PERMISSION_AUTO_BG=1  # v1.18.4：bg watcher 独立控制；与 sync permission_
 # 其他 backend 无此 dialog，默认关省空等。
 EXTERNAL_IMPORTS_AUTO_OVERRIDE=0
 EXTERNAL_IMPORTS_AUTO=0
-# v1.20.2 Task-019：claude-code --bare 自动降级 prompt-only install-guard（render 默认 --bare 与
-# install-guard fail-closed 互斥）。只对 --bare 自动降级；--safe-mode/setting-sources 仍 fail-closed。
-CLAUDE_CODE_BARE_AUTO_DEGRADE=1
+# v2.11.0（2026-09 复盘修复）：配额预检门（P0-①）。quota_preflight.py 的结论
+# 与显式绕过通道的授权来源，写入 METADATA 与 authority receipt 供审计。
+QUOTA_PREFLIGHT_OVERRIDE=0
+QUOTA_PREFLIGHT_OVERRIDE_SOURCE=""
+QUOTA_PREFLIGHT_STATUS=""
+QUOTA_PREFLIGHT_LANE=""
 ADD_DIRS=()
 ALLOW_PATHS=()
 # v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
@@ -333,6 +336,47 @@ route_suggest_autofill_provider
 # 的 env 由 PM 的 runtime profile 负责，不重复注入）。
 route_suggest_wrap_command
 
+# v2.11.0（P0-①，2026-09 复盘修复）：配额预检门。自动补选与显式 --api-provider
+# 一律在任何 worktree/terminal/lease/dispatch 副作用之前通过 quota_preflight.py；
+# summary 缺失/不可读/过期/低于判停线/provider-lane 不匹配/claude-code 未解析出
+# provider 全部 fail-closed（exit 3）。绕过通道只有显式 --quota-preflight-override
+# + 非空授权来源（写入 METADATA 与 authority receipt）；默认不存在人工锁定直通。
+quota_preflight_run() {
+  local gate_out gate_status gate_lane
+  set +e
+  gate_out=$(python3 "$SCRIPT_DIR/quota_preflight.py" \
+    --config "$PERSONAL_CONFIG_FILE" \
+    --provider "$API_PROVIDER" \
+    --backend "$WORKER_BACKEND_CANONICAL")
+  local gate_rc=$?
+  set -e
+  gate_status=$(printf '%s' "$gate_out" | jq -r '.status // "gate_error"' 2>/dev/null) || gate_status="gate_error"
+  gate_lane=$(printf '%s' "$gate_out" | jq -r '.lane // ""' 2>/dev/null) || gate_lane=""
+  if [ "$gate_rc" -eq 0 ]; then
+    QUOTA_PREFLIGHT_STATUS="$gate_status"
+    QUOTA_PREFLIGHT_LANE="$gate_lane"
+    printf 'SPAWN_WORKER_QUOTA_PREFLIGHT: status=%s provider=%s lane=%s\n' \
+      "$gate_status" "${API_PROVIDER:-<none>}" "${gate_lane:-<none>}"
+    return 0
+  fi
+  if [ "$gate_rc" -eq 3 ] && [ "$QUOTA_PREFLIGHT_OVERRIDE" -eq 1 ] && [ -n "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" ]; then
+    QUOTA_PREFLIGHT_STATUS="override:${gate_status}"
+    QUOTA_PREFLIGHT_LANE="$gate_lane"
+    printf 'SPAWN_WORKER_QUOTA_PREFLIGHT_OVERRIDE: denied_status=%s provider=%s authorization_source=%s（显式人工授权放行，已记入 METADATA/receipt）\n' \
+      "$gate_status" "${API_PROVIDER:-<none>}" "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" >&2
+    return 0
+  fi
+  if [ "$gate_rc" -eq 3 ]; then
+    printf 'ERROR: quota preflight denied before any worktree/terminal/lease/dispatch side effect: %s (pass --quota-preflight-override with an authorization source to override explicitly; fail-closed)\n' \
+      "$gate_out" >&2
+    exit 3
+  fi
+  printf 'ERROR: quota preflight gate crashed (rc=%s): %s; a broken gate can never pass (fail-closed)\n' \
+    "$gate_rc" "$gate_out" >&2
+  exit 3
+}
+quota_preflight_run
+
 # shellcheck source=spawn-worker-provider-lease.sh
 source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"
 
@@ -380,35 +424,19 @@ raise SystemExit(1)
 PY
 }
 
-# v1.20.2 Task-019：检测 claude-code command 是否含 --bare token（provider-isolation 必需）。
-# 用于在 install-guard fail-closed 分支里区分 --bare（自动降级）vs --safe-mode/setting-sources（仍 fail-closed）。
-# 在 if 条件里调用；返回 0 = 含 --bare，非 0 = 不含。
-claude_command_has_bare() {
-  python3 - "$COMMAND" <<'PY'
-import shlex, sys
-try:
-    tokens = shlex.split(sys.argv[1], posix=True)
-except ValueError:
-    raise SystemExit(1)
-raise SystemExit(0 if "--bare" in tokens else 1)
-PY
-}
-
+# v2.11.0（P0-②，2026-09 复盘修复）：撤销 v1.20.2 Task-019 的 --bare 自动降级。
+# hook 不可证明（--bare/--safe-mode/--setting-sources 排除 local/CLAUDE_CODE_SIMPLE/
+# 缺 claude token）时默认一律 fail-closed；唯一降级通道是显式且可审计的
+# --allow-prompt-only-install-guard + 非空授权来源（codex/zcode 等无 hook backend
+# 的既有要求保持不变）。自动降级会静默放弃机械安装门禁，不再允许。
 if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
    { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
    hook_disable_reason=$(claude_hook_disable_reason); then
   if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -eq 1 ]; then
     INSTALL_GUARD_MODE="prompt_only_degraded"
-  elif [ "$CLAUDE_CODE_BARE_AUTO_DEGRADE" -eq 1 ] && claude_command_has_bare; then
-    # v1.20.2 Task-019：claude-code + provider-isolation 默认 --bare（render-runtime-profile.sh）
-    # 与 install-guard fail-closed 互斥。检测到 --bare 自动降级 prompt-only + 内置来源，
-    # 不再要求 PM 手写 --allow-prompt-only-install-guard。PM 仍 review diff 兜底（SKILL §6）。
-    ALLOW_PROMPT_ONLY_INSTALL_GUARD=1
-    INSTALL_GUARD_DEGRADATION_SOURCE="claude-code provider-isolation 默认 --bare（render-runtime-profile.sh）跳过 PreToolUse hook；install-guard 自动降级 prompt-only，PM 仍 review diff 兜底（SKILL §6 / Task-019 / DEC-112 follow-up）"
-    INSTALL_GUARD_MODE="prompt_only_degraded"
-    echo "SPAWN_WORKER_BARE_AUTO_DEGRADE: claude-code --bare detected, install-guard auto prompt_only_degraded (source recorded); --safe-mode / setting-sources / no-claude-token 仍 fail-closed"
+    echo "SPAWN_WORKER_INSTALL_GUARD_DEGRADED_EXPLICIT: claude-code hook unprovable ($hook_disable_reason); explicit --allow-prompt-only-install-guard accepted (source recorded)"
   else
-    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command, pass --allow-prompt-only-install-guard, or this non-bare disable (--safe-mode/--setting-sources/missing token) requires explicit --allow-prompt-only-install-guard (fail-closed)" >&2
+    echo "ERROR: Claude Code command cannot prove local PreToolUse hook enforcement: $hook_disable_reason; fix the command or pass explicit --allow-prompt-only-install-guard with an authorization source (v2.11.0: --bare auto-degrade removed, fail-closed)" >&2
     exit 64
   fi
 fi
@@ -670,6 +698,10 @@ write_authority_receipt() {
     --arg degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
     --arg authorization_sha256 "$AUTHORITY_RECEIPT_SHA256" \
     --argjson authorization "$INSTALL_AUTH_JSON" \
+    --arg quota_preflight_status "$QUOTA_PREFLIGHT_STATUS" \
+    --arg quota_preflight_lane "$QUOTA_PREFLIGHT_LANE" \
+    --argjson quota_preflight_override "$QUOTA_PREFLIGHT_OVERRIDE" \
+    --arg quota_preflight_override_source "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -679,7 +711,13 @@ write_authority_receipt() {
       install_guard_mode: $mode,
       degradation_source: $degradation_source,
       authorization_sha256: $authorization_sha256,
-      authorization_snapshot: $authorization
+      authorization_snapshot: $authorization,
+      quota_preflight: {
+        status: $quota_preflight_status,
+        lane: $quota_preflight_lane,
+        override_used: $quota_preflight_override,
+        override_authorization_source: $quota_preflight_override_source
+      }
     }' > "$receipt_tmp"
   if ! ln "$receipt_tmp" "$AUTHORITY_RECEIPT_FILE" 2>/dev/null; then
     rm -f "$receipt_tmp"

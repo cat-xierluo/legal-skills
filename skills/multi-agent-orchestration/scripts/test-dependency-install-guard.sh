@@ -44,9 +44,13 @@ PY
 hook() {
   local auth_file="$1"
   local command="$2"
+  # 本测试的 fixture 授权必须生效：显式清空 WORKER_INSTALL_AUTH_B64，
+  # 防止在真实 supervised worker 会话里运行本测试时继承 spawn 注入的
+  # 不可变快照（guard 对 B64 快照的优先级高于 WORKER_INSTALL_AUTH_FILE），
+  # 导致全部 fixture 被外层 worker 的空授权静默覆盖。
   printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
     "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$command")" |
-    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
+    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64= WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
 }
 
 expect_block() {
@@ -211,7 +215,7 @@ else
 fi
 
 missing_file_output=$(printf '{"tool_name":"Bash","tool_input":{"command":"npm ci"}}' |
-  WORKER_INSTALL_AUTH_FILE="$tmp_root/missing.json" WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD")
+  WORKER_INSTALL_AUTH_FILE="$tmp_root/missing.json" WORKER_INSTALL_AUTH_B64= WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD")
 if printf '%s' "$missing_file_output" | grep -qF "INSTALL_AUTHORIZATION_INVALID"; then
   ok "missing authorization file fails closed"
 else
@@ -350,22 +354,45 @@ else
 fi
 rm -f /tmp/dependency-install-unsupported.out
 
+# v2.11.0：--bare 隐式自动降级已撤销，改为两条显式契约——
+# ① 未带 --allow-prompt-only-install-guard 时 fail-closed；
+# ② 带非空显式授权时放行，且 METADATA 记录 prompt_only_degraded 证据。
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/bare --session "$session-bare" \
   --worker-backend claude-code --command "claude --bare" --dry-run \
   >/tmp/dependency-install-bare.out 2>&1; then
-  if grep -qF "SPAWN_WORKER_BARE_AUTO_DEGRADE" /tmp/dependency-install-bare.out \
-    && grep -qF "SPAWN_WORKER_INSTALL_GUARD_DEGRADED" /tmp/dependency-install-bare.out; then
-    ok "Claude --bare explicitly records prompt-only degradation"
+  not_ok "Claude --bare without explicit guard approval fails closed"
+else
+  if grep -qF "cannot prove local PreToolUse hook enforcement" /tmp/dependency-install-bare.out \
+    && grep -qF -e "--bare auto-degrade removed, fail-closed" /tmp/dependency-install-bare.out; then
+    ok "Claude --bare without explicit guard approval fails closed"
   else
     cat /tmp/dependency-install-bare.out >&2 || true
-    not_ok "Claude --bare explicitly records prompt-only degradation"
+    not_ok "Claude --bare without explicit guard approval fails closed"
   fi
-else
-  cat /tmp/dependency-install-bare.out >&2 || true
-  not_ok "Claude --bare explicitly records prompt-only degradation"
 fi
 rm -f /tmp/dependency-install-bare.out
+
+bare_degraded_session="$session-bare-degraded"
+if bash "$SCRIPT_DIR/spawn-worker.sh" \
+  --project "$spawn_repo" --branch feat/bare-degraded --session "$bare_degraded_session" \
+  --worker-backend claude-code --command "$tmp_root/claude --bare" \
+  --allow-prompt-only-install-guard "PM 明确接受 claude --bare 无 hook 的提示级降级" \
+  --no-trust-auto --no-permission-auto \
+  >/tmp/dependency-install-bare-degraded.out 2>&1; then
+  bare_degraded_metadata="$spawn_repo/.claude/worktrees/tmux-feat-bare-degraded/.claude/agent-sessions/$bare_degraded_session/METADATA.json"
+  if jq -e '.execution_authority.install_guard_mode == "prompt_only_degraded" and .execution_authority.enforcement_source == "prompt_only_no_mechanical_enforcement" and .execution_authority.degradation_source != ""' "$bare_degraded_metadata" >/dev/null; then
+    ok "Claude --bare with explicit authorization records prompt-only degraded metadata"
+  else
+    not_ok "Claude --bare with explicit authorization records prompt-only degraded metadata"
+  fi
+else
+  cat /tmp/dependency-install-bare-degraded.out >&2 || true
+  not_ok "Claude --bare with explicit authorization records prompt-only degraded metadata"
+fi
+tmux kill-session -t "$bare_degraded_session" 2>/dev/null || true
+git -C "$spawn_repo" worktree remove --force "$spawn_repo/.claude/worktrees/tmux-feat-bare-degraded" 2>/dev/null || true
+rm -f /tmp/dependency-install-bare-degraded.out
 
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/fake-codebuddy --session "$session-fake-codebuddy" \
