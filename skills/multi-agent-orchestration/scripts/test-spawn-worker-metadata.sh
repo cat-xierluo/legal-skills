@@ -64,6 +64,10 @@ reset_metadata_case() {
   PROVIDER_LEASE_ROOT="/repo/common/leases"
   PROVIDER_LEASE_LIMIT="2"
   PROVIDER_LEASE_KEY="provider-a"
+  QUOTA_PREFLIGHT_STATUS="ok"
+  QUOTA_PREFLIGHT_LANE="primary"
+  QUOTA_PREFLIGHT_OVERRIDE=0
+  QUOTA_PREFLIGHT_OVERRIDE_SOURCE=""
   ENV_ISOLATION="isolated"
   WAVE_ID="wave-a"
   WAVE_WORKER_ID="worker-a"
@@ -105,6 +109,8 @@ assert_jq "$METADATA_FILE" '.runtime.harness_authority.pm_harness == "codex" and
   "Harness authority remains structured"
 assert_jq "$METADATA_FILE" '.runtime.provider_lease.max_concurrency == 2 and .runtime.provider_lease.provider == "provider-a"' \
   "provider lease limit remains numeric"
+assert_jq "$METADATA_FILE" '.runtime.quota_preflight == {status:"ok",lane:"primary",override_used:0,override_authorization_source:""}' \
+  "quota preflight evidence is initialized and structurally asserted"
 assert_jq "$METADATA_FILE" '.verification.commands == ["bash test-a.sh","bash test-b.sh"] and .add_dirs[1] == "/tmp/b path" and .allow_paths[0] == "skills/a/**"' \
   "repeatable arrays preserve order and spaces"
 assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length == 2' \
