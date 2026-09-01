@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.0] - 2026-09-01
+
+### 新增
+
+- **派发价值合同 v2（`dispatch-value-gate.v2`，fail-closed preflight）**：`dispatch-value-gate.py` 现要求每个任务机械声明三种 `value_kind` 之一——`implementation`（改变行为的实现/修复）、`reusable_verification`（可复用确定性测试/fixture/基准/故障注入资产）、`merge_gate`（具名 PR/change + 40-hex head 的零 diff 合并决策）——并补齐 `problem_target`、`engineering_assets`/`doc_assets`、`verification_commands`、`worker_pr_policy`（仅 merge_gate 允许 `no_worker_pr`）、`gate_target`（`pr` + 40-hex `head_sha`）与波内去重身份 `value_identity`（显式重复判 duplicate，同 `value_kind`+同 `problem_target` 判 subsumed）。docs/research kind、无 `value_kind` 的通用调查、纯文档交付计划、占位资产一律拒绝；六字段消费者合同（consumer/decision_or_gate_changed/consume_by/expiry/observable_acceptance/resource_owner）与 explore/backpressure 门禁保留。行数、token、commit/PR 数不构成价值信号。示例模板改为双任务示例（实现 + merge gate），合同测试重写为 26 用例（含模板自洽性断言）。
+- **交付后价值门禁 `worker-value-postflight.py`（新）**：读同一 spec，对 `--repo/--base/--head` 或 `--diff` patch 实证交付——至少一个声明的非文档工程资产真实变更、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence JSON 中有 exit 0 执行记录；零 diff 仅对声明 `merge_gate` 放行，报告输出 accept/reject 决策与决策消费者（`verified_head` 与 `gate_target.head_sha` 漂移拒绝）。大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。新增确定性契约测试 `test-worker-value-postflight.sh`（临时真实 Git 仓库，17 场景，成功/失败退出码与机器可读输出均断言）。`SKILL.md` §3 派发价值节同步两段门禁工作流，§12 验收清单新增 postflight 测试并扩展 Hard Fail #10；`references/15-wave-autopilot.md` §5 六字段文本审查表仍有效，机械合同以本版本与 `templates/dispatch-value-gate.example.json` 为准。
+
 ## [2.11.0] - 2026-09-01
 
 ### 修复（P0：配额与恢复门禁强化）
