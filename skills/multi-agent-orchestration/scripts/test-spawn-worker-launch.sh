@@ -405,8 +405,14 @@ printf '%s\n' \
   'exit 0' \
   > "$E2E_BIN/tmux"
 chmod +x "$E2E_BIN/tmux"
+# v2.11.0：E2E 用固定的 quota routing 禁用配置，避免依赖运行环境里
+# MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG / skill config 的真实内容
+# （quota_aware_routing 启用且无 summary 时预检会按设计 fail-closed exit 3）。
+E2E_PERSONAL_CONFIG="$CASE_ROOT/personal-quota-disabled.json"
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
 set +e
-e2e_output=$(PATH="$E2E_BIN:$PATH" bash "$REAL_SCRIPT_DIR/spawn-worker.sh" \
+e2e_output=$(PATH="$E2E_BIN:$PATH" MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
+  bash "$REAL_SCRIPT_DIR/spawn-worker.sh" \
   --project "$E2E_PROJECT" \
   --no-worktree \
   --no-orca-mode \

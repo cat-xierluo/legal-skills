@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.11.0] - 2026-09-01
+
+### 修复（P0：配额与恢复门禁强化）
+
+- **spawn-worker 配额预检门（P0-①）**：新增 `scripts/quota_preflight.py`（fail-closed 门禁，exit 3=拒绝），`spawn-worker.sh` 对自动补选与显式 `--api-provider` 的 provider 一律在**任何 worktree/terminal/lease/dispatch 副作用之前**预检：summary 缺失/不可读/过期/lane 低于判停线（闭界）/lane 不健康/provider-lane 不匹配/claude-code 未解析出 provider 全部拒绝。绕过通道只有新增显式 flag `--quota-preflight-override <非空授权来源>`（写入 METADATA `runtime.quota_preflight` 与 authority receipt，状态 `override:<原拒绝原因>`）；撤销了默认人工锁定直通。19 用例契约测试 `scripts/test-quota-preflight.py` 全绿。
+- **删除 claude-code `--bare` 自动降级（P0-②）**：撤销 v1.20.2 Task-019 的 `CLAUDE_CODE_BARE_AUTO_DEGRADE`——hook 不可证明（`--bare`/`--safe-mode`/`--setting-sources` 排除 local/`CLAUDE_CODE_SIMPLE=1`/缺 claude token）时默认 fail-closed exit 64，不再静默降级 prompt-only（静默放弃机械安装门禁）。唯一降级通道是既有显式可审计的 `--allow-prompt-only-install-guard <授权来源>`（codex/zcode 无 hook backend 的既有要求不变）。`--no-claude-code-bare-auto-degrade` flag 随之移除。
+- **pm-orchestrate 新增 `quota-park`（P0-③）**：配额停滞恢复交接命令。固定顺序：liveness gate（active/不确定仅 `--force` 可过）→ `worker-stop` 精确 fence+stop 旧 dispatch → 释放 METADATA 记录的 provider lease（`--resource-settled`，依赖 Orca terminal liveness 证明）→ METADATA `.recovery.quota_park` marker。worktree/session/checkpoint 全程保留；任何失败路径不释放 lease、不写 marker，绝不双活。park 后同 worktree 重启需新 session id（receipt 每会话唯一），切 provider 允许，两者仍受 quota preflight 约束。新增 `scripts/test-pm-orchestrate-handoff.sh`：正向/active 反向/stop 故障/lease 释放故障注入/`--force`/缺 `--reason`/tmux 模式反向/park 后换 session 交接 8 场景 31 断言全绿。
+- **zcode 默认不在 Claude Code/Codex backend 白名单（P0-④）**：`config/harness-backend-policy.json` 的 `hosts.claude-code`/`hosts.codex` 移除 `zcode`（额度 lane 独立、语义与订阅额度不同）。唯一启用通道 = 用户明确授权后显式编辑策略文件加回（git diff 可审计）；canonical 映射与命令身份门禁保留。`scripts/test-harness-backend-policy.sh` 同步断言 deny。
+
 ## [2.10.2] - 2026-08-31
 
 ### 改进

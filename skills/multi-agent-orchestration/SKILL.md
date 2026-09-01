@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.10.2"
+  version: "2.11.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -93,12 +93,14 @@ Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩�
 
 | PM 宿主 | 允许派发的 worker backend |
 |---|---|
-| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
-| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
+| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN |
+| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN |
 | CodeBuddy | CodeBuddy |
 | QoderWork CN | QoderWork CN |
 
 `spawn-worker.sh` 从完整进程祖先链的真实可执行程序识别宿主，对每层 Harness 的白名单取交集，使嵌套调用只能降权、不能借强 CLI 恢复权限；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
+
+**zcode 默认不在 Claude Code/Codex 的 backend 白名单（v2.11.0 P0-④）**：zcode 的额度 lane 独立、发放规则在服务端，与 Claude/Codex 订阅额度语义不同，默认一律拒绝派发。唯一启用通道是用户明确授权后显式编辑 `config/harness-backend-policy.json` 把 `zcode` 加回对应 host（git diff 可审计）；canonical 映射保留，策略文件是唯一开关，不存在命令行 flag 直通。
 
 声明的 worker backend 还必须与实际启动命令一致。只接受直接启动五种 CLI、受信的 Claude provider wrapper、受信的 zcode worker driver（`zcode-worker-driver.py`，唯一放行的 python 形态），或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
@@ -404,6 +406,37 @@ python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--tas
    派新 worker（脚本层该 lane 已判 `available=false`，PM 也不得手工指定 provider
    绕过）。（实战：83% 报 9%，险些向 9% lane 派 2 worker——陈旧快照的余量读数
    不可直接采信）
+
+**spawn-worker 配额预检门（v2.11.0 P0-①，fail-closed）**：启用
+`quota_aware_routing` 时，`spawn-worker.sh` 对自动补选与显式 `--api-provider`
+的 provider 一律在**任何 worktree/terminal/lease/dispatch 副作用之前**跑
+`scripts/quota_preflight.py`：summary 缺失/不可读/过期（超过 `freshness_minutes`）/
+lane 低于判停线（判停线为闭界，恰好等于也拒）/lane 不健康/provider 不在配置
+lane 内/claude-code 未解析出 provider，全部 exit 3 拒绝，不产生任何副作用。
+被拒后确要放行，只有一条显式通道：`--quota-preflight-override <非空授权来源>`
+（授权来源写入 METADATA 与 authority receipt 供审计，状态记为
+`override:<原拒绝原因>`）；**默认不存在人工锁定直通**。预检结论同时写入
+`METADATA.runtime.quota_preflight`。配 `scripts/test-quota-preflight.py`
+（19 用例门禁契约）。
+
+**配额停滞恢复交接（v2.11.0 P0-③，quota-park）**：worker 撞判停线/冻结后的
+标准恢复入口：
+
+```bash
+bash scripts/pm-orchestrate.sh quota-park --worktree <WT> --session <SESSION> \
+  --reason "配额停滞，人工确认" [--force]
+```
+
+固定顺序：liveness gate（复用 settle 真字段检查；active/不确定时仅 `--force`
+可继续，表示 PM 已人工确认配额卡死）→ `worker-stop` 精确 fence+stop 旧
+dispatch → 释放 METADATA 记录的 provider lease → METADATA
+`.recovery.quota_park` 落 marker。worktree/session/checkpoint 全程保留
+（与 settle 的区别：绝不删文件）。任何一步失败立即中止：不释放 lease、不写
+marker——**lease 释放永远在 worker-stop 成功之后，任何失败路径都不会出现
+"worker 活着 + 额度已放"的双活窗口**。park 完成后同 worktree 重启必须用新
+session id（authority receipt 每会话唯一，fail-closed），切 provider 也允许；
+两条路都仍要过 spawn-worker 配额预检。配 `scripts/test-pm-orchestrate-handoff.sh`
+（正向/反向/故障注入/交接 8 场景）。
 
 ## 10. 依赖
 

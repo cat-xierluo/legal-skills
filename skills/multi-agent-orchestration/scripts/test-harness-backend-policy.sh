@@ -32,10 +32,15 @@ expect_deny() {
   fi
 }
 
+# v2.11.0（P0-④）：zcode 默认不在 claude-code/codex 的 worker backend 白名单
+# （配额 lane 独立、人工锁定语义与 Claude/Codex 订阅不同）。显式授权通道 =
+# 用户明确编辑 harness-backend-policy.json 把 zcode 加回对应 host（可审计的
+# git diff）；canonical 映射保留，策略文件是唯一开关。
 for pm in claude-code codex; do
-  for worker in claude-code codex codebuddy qoderwork-cn zcode; do
+  for worker in claude-code codex codebuddy qoderwork-cn; do
     expect_allow "$pm" "$worker"
   done
+  expect_deny "$pm" zcode
 done
 expect_allow codebuddy codebuddy
 expect_allow qoderwork-cn qoderwork-cn

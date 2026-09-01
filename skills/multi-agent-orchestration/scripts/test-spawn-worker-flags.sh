@@ -57,7 +57,8 @@ reset_defaults() {
   PERMISSION_AUTO_BG=1
   EXTERNAL_IMPORTS_AUTO_OVERRIDE=0
   EXTERNAL_IMPORTS_AUTO=0
-  CLAUDE_CODE_BARE_AUTO_DEGRADE=1
+  QUOTA_PREFLIGHT_OVERRIDE=0
+  QUOTA_PREFLIGHT_OVERRIDE_SOURCE=""
   ADD_DIRS=()
   ALLOW_PATHS=()
   LIGHTWEIGHT_OVERRIDE=0
@@ -96,7 +97,7 @@ parse_spawn_worker_args \
   --keep-tmux-on-terminal --no-trust-auto --trust-auto \
   --no-permission-auto --permission-auto --no-permission-auto-bg \
   --no-external-imports-auto --external-imports-auto \
-  --no-claude-code-bare-auto-degrade \
+  --quota-preflight-override "PM 已确认额度恢复，人工授权放行" \
   --add-dir /tmp/a --add-dir "/tmp/b path" \
   --allow-paths "skills/a/**" --allow-paths "skills/b/**" \
   --no-worktree --no-orca-mode --orca-supervised \
@@ -118,7 +119,13 @@ assert_eq "$WITH_SENTINEL:$KEEP_TMUX_ON_TERMINAL" "1:1" "sentinel booleans parse
 assert_eq "$TRUST_AUTO:$TRUST_AUTO_OVERRIDE" "1:1" "last trust toggle wins"
 assert_eq "$PERMISSION_AUTO:$PERMISSION_AUTO_BG" "1:0" "permission toggles remain independently overridable"
 assert_eq "$EXTERNAL_IMPORTS_AUTO:$EXTERNAL_IMPORTS_AUTO_OVERRIDE" "1:1" "external import toggle parsed"
-assert_eq "$CLAUDE_CODE_BARE_AUTO_DEGRADE" "0" "bare degradation opt-out parsed"
+assert_eq "$QUOTA_PREFLIGHT_OVERRIDE:$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" \
+  "1:PM 已确认额度恢复，人工授权放行" "quota preflight override requires authorization source"
+if grep -Fq -- '--no-claude-code-bare-auto-degrade' "$FLAGS_HELPER"; then
+  bad "v2.11.0: --bare auto-degrade opt-out flag is removed"
+else
+  ok "v2.11.0: --bare auto-degrade opt-out flag is removed"
+fi
 assert_eq "$LIGHTWEIGHT_MODE:$NO_ORCA_MODE:$ORCA_SUPERVISED" "1:1:1" "transport mode flags parsed"
 assert_eq "$ORCA_RUN_ID:$ORCA_TASK_ID:$ORCA_COORDINATOR_HANDLE" "run-a:task-a:term-pm" "Wave receipt identifiers parsed"
 assert_eq "$GIT_EXPECTED_NAME:$GIT_EXPECTED_EMAIL:$GIT_INTEGRATION_BASE:$GIT_PUSH_REMOTE" \

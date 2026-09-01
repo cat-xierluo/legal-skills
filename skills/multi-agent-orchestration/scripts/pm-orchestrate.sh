@@ -40,6 +40,13 @@ Commands:
                同一链路；若注册仍被单活 fencing 拒绝，回滚新终端（不双活）并输出
                runbook #18 manual-recovery 指引。新终端建立后任何中间失败都会先关新
                终端、保留旧终端（重复调用不累积终端）。
+  quota-park  Quota-stall recovery handoff (v2.11.0 P0-③)：精确 fence + stop 旧
+               supervised Dispatch（worker-stop），完整保留 worktree/session/checkpoint，
+               释放 METADATA 记录的 provider lease，之后同 worktree 可用新 session id
+               重启或切 provider（重启仍要过 spawn-worker 的 quota preflight）。
+               任何一步失败立即中止：不释放 lease、不写 marker，绝不产生
+               "worker 活着 + 额度已放" 的双活窗口。需要 --reason；worker 仍活/
+               不确定时只有 --force（PM 人工确认配额卡死）可停靠。
 
 Common:
   --worktree PATH   Worker worktree path
@@ -111,7 +118,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$COMMAND" in
-  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize) ;;
+  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize|quota-park) ;;
   *) echo "ERROR: unknown command: $COMMAND" >&2; usage; exit 64 ;;
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
@@ -627,6 +634,134 @@ cmd_settle() {
   fi
 }
 
+# v2.11.0（P0-③，2026-09 复盘修复）：配额停滞恢复交接（quota-park）。
+#
+# 背景：worker 撞 provider 配额判停线/冻结时，PM 需要"先精确 fence 旧 dispatch，
+# 再解锁同 worktree 重启或切 provider"。此前兜底只有 settle（面向死锁，--destroy
+# 会删 worktree）或手工 provider-lease release——后者在 worker 仍活时释放额度会
+# 造成双活（两个 worker 消费同一 provider lane）。
+#
+# 与 settle 的差异：只做恢复交接，绝不删除 worktree/session/checkpoint：
+#   Step 1  liveness gate（复用 settle 的真字段检查）；active/不确定时仅 --force
+#           可继续，表示 PM 已人工确认 worker 因配额卡死
+#   Step 2  worker-stop 原子 fence+stop；失败 → 仅尝试 worker-abandon fence，
+#           绝不释放 provider lease（旧 worker 可能仍消费额度）
+#   Step 3  释放 METADATA 记录的 provider lease（--resource-settled，依赖 Orca
+#           terminal liveness 证明资源已死）；失败 → 不写 marker（额度不放）
+#   Step 4  METADATA .recovery.quota_park 落 marker；同 worktree 重启必须用新
+#           session id（authority receipt 每会话唯一，fail-closed）；切 provider
+#           后仍会过 spawn-worker 的 quota preflight。
+# 顺序保证：lease 释放永远在 worker-stop 成功之后 → 任何失败路径都不产生
+# "worker 活着 + lease 已释放"的双活窗口。
+cmd_quota_park() {
+  [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: quota-park requires an Orca supervised worker (dispatch fencing is the double-active guard)" >&2; exit 64; }
+  [ -n "$REASON" ] || { echo "ERROR: quota-park requires --reason (audit)" >&2; exit 64; }
+  [ -n "$ORCA_DISPATCH_ID" ] || { echo "ERROR: quota-park: missing dispatch_id in METADATA" >&2; exit 64; }
+
+  local show_json show_rc stop_rc abandon_rc lease_root parked_at tmp_meta
+  resolve_project_identity || exit 2
+  orca_runtime_init
+  ensure_coordinator_binding || exit 2
+
+  echo "PM_ORCHESTRATE_QUOTA_PARK_START: dispatch=$ORCA_DISPATCH_ID worktree=$ORCA_WORKTREE_ID force=$FORCE reason=$REASON"
+  write_settle_audit quota_park_started "liveness check pending; worktree/session/checkpoint will be preserved" || {
+    echo "ERROR: cannot persist quota-park audit under Git common dir; refusing mutation" >&2
+    exit 2
+  }
+
+  # Step 1: liveness gate — active/不确定 只能被显式 --force 停靠（PM 人工确认配额卡死）。
+  set +e
+  show_json=$(orca_cli orchestration worker-show --dispatch "$ORCA_DISPATCH_ID" --json 2>&1)
+  show_rc=$?
+  set -e
+  if [ "$show_rc" -ne 0 ]; then
+    if [ "$FORCE" -ne 1 ]; then
+      echo "REFUSED: worker-show failed (rc=$show_rc, cannot determine liveness); re-run with --force" >&2
+      exit 2
+    fi
+    echo "WARN: worker-show failed (rc=$show_rc) but --force given; assuming quota-stalled" >&2
+    show_json=""
+  fi
+  settle_liveness_check "$show_json" "$FORCE"
+
+  # Step 2: worker-stop 原子 fence+stop。失败 → 只 fence（abandon 兜底），绝不释放 lease。
+  set +e
+  if orca_cli orchestration worker-stop --dispatch "$ORCA_DISPATCH_ID" --json; then
+    stop_rc=0
+    echo "PM_ORCHESTRATE_QUOTA_PARK_STOPPED: dispatch=$ORCA_DISPATCH_ID"
+  else
+    stop_rc=$?
+  fi
+  set -e
+  if [ "$stop_rc" -ne 0 ]; then
+    set +e
+    orca_cli orchestration worker-abandon --dispatch "$ORCA_DISPATCH_ID" --json
+    abandon_rc=$?
+    set -e
+    write_settle_audit quota_park_stop_failed "worker-stop rc=$stop_rc; worker-abandon rc=$abandon_rc; provider lease retained" || true
+    echo "ERROR: worker-stop failed (rc=$stop_rc); provider lease retained, same-worktree restart NOT authorized (no double-active, fail-closed)" >&2
+    exit 2
+  fi
+  write_settle_audit quota_park_stopped "worker-stop fenced and stopped the old dispatch" || {
+    echo "ERROR: cannot persist post-stop audit; provider lease retained" >&2
+    exit 2
+  }
+
+  # Step 3: 释放 provider lease（同 worktree 重启/切 provider 的解锁点）。
+  # worker 已被 fence+stop；此处 liveness 证明失败只会卡额度，不会双活。
+  if [ -n "$PROVIDER_LEASE_FILE" ]; then
+    lease_root=$(provider_lease_root_for_project "$PROJECT_DIR") || {
+      echo "ERROR: cannot derive trusted provider lease root for $PROJECT_DIR (lease retained)" >&2
+      exit 2
+    }
+    if python3 "$SCRIPT_DIR/provider-lease.py" release \
+        --root "$lease_root" \
+        --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
+        --resource-settled --orca-cli "$ORCA_CLI_BIN"; then
+      echo "PM_ORCHESTRATE_QUOTA_PARK_LEASE_RELEASED: $PROVIDER_LEASE_FILE"
+    else
+      write_settle_audit quota_park_lease_release_failed "provider-lease release failed; marker not written" || true
+      echo "ERROR: provider lease release failed; park aborted, same-worktree restart NOT authorized (fail-closed)" >&2
+      exit 2
+    fi
+  else
+    echo "PM_ORCHESTRATE_QUOTA_PARK_LEASE_NONE: METADATA has no provider lease; nothing to release"
+  fi
+  write_settle_audit quota_park_lease_released "provider lease released (or absent)" || {
+    echo "ERROR: cannot persist lease-release audit" >&2
+    exit 2
+  }
+
+  # Step 4: METADATA .recovery.quota_park marker（worktree/session/checkpoint 不动）。
+  parked_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  tmp_meta=$(mktemp)
+  if jq --arg parked_at "$parked_at" --arg reason "$REASON" \
+      --arg dispatch "$ORCA_DISPATCH_ID" --arg lease_file "$PROVIDER_LEASE_FILE" \
+      --arg worktree_id "$ORCA_WORKTREE_ID" \
+      '.recovery.quota_park = {
+         parked_at: $parked_at,
+         reason: $reason,
+         dispatch_id: $dispatch,
+         provider_lease_file: $lease_file,
+         orca_worktree_id: $worktree_id,
+         restart: "same worktree requires a NEW session id (authority receipt is per-session, fail-closed); provider switch allowed and still subject to spawn-worker quota preflight"
+       }' "$METADATA" > "$tmp_meta" && mv "$tmp_meta" "$METADATA"; then
+    echo "PM_ORCHESTRATE_QUOTA_PARK_MARKER: $METADATA"
+  else
+    rm -f "$tmp_meta"
+    write_settle_audit quota_park_marker_failed "METADATA marker write failed; lease already released" || true
+    echo "ERROR: failed to write quota_park marker into METADATA (lease already released; worktree/session preserved)" >&2
+    exit 2
+  fi
+
+  write_settle_audit quota_park_parked "park complete; same-worktree restart (new session id) or provider switch authorized" || {
+    echo "ERROR: cannot persist final quota-park audit" >&2
+    exit 2
+  }
+  echo "PM_ORCHESTRATE_QUOTA_PARK_DONE: dispatch=$ORCA_DISPATCH_ID parked; worktree/session/checkpoint preserved at $WORKTREE"
+  echo "PM_ORCHESTRATE_QUOTA_PARK_NEXT: restart on the SAME worktree with a NEW session id (spawn-worker --worktree $WORKTREE --session <new-id> ...), or switch provider; both still pass quota preflight before any side effect"
+}
+
 # Task-081：reauthorize 对 dispatched(等待中) worker 的原地重授权支撑函数。
 # 背景：2026-08-30 FaroPDF 编排实测——worker 卡 escalation 等待（task 仍 dispatched）
 # 时跑 reauthorize，worker-start 被 TASK_REUSED 拒绝后直接 exit 2，而新 terminal 已
@@ -880,4 +1015,5 @@ case "$COMMAND" in
   release|retain) cmd_account ;;
   settle) cmd_settle "$@" ;;
   reauthorize) cmd_reauthorize ;;
+  quota-park) cmd_quota_park ;;
 esac
