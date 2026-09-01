@@ -35,7 +35,17 @@ detect_orca_mode() {
     ORCA_MODE="force_tmux"; return 0
   fi
   if ! orca_runtime_current_project "$PROJECT_DIR"; then
-    ORCA_MODE="force_tmux"; return 0
+    # v2.10.3：仓库未注册（结构化 error.code=selector_not_found）时先自动
+    # `orca repo add` + 复验（orca_runtime_register_current_project，fail-closed）；
+    # 其余失败形态（runtime 不可达 / path_mismatch / 非 Git / 未知错误码）不注册，
+    # 保持原有静默回退 tmux 行为。
+    if [ "${ORCA_WORKTREE_CURRENT_ERROR:-}" = "selector_not_found" ]; then
+      if ! orca_runtime_register_current_project "$PROJECT_DIR"; then
+        ORCA_MODE="force_tmux"; return 0
+      fi
+    else
+      ORCA_MODE="force_tmux"; return 0
+    fi
   fi
 
   local project_toplevel

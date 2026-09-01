@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.10.3] - 2026-09-02
+
+### 修复
+
+- **Orca 仓库未注册自动收口（Task-111，2026-09-01 custom-skills 实测事故）**：仓库是有效 Git 仓、Orca runtime 健康但 repo 未注册时，`orca worktree current --json` 只返回 `{ok:false,error:{code:"selector_not_found"}}`，Orca 模式被静默降级为 tmux；手工 `orca repo add` 后立即恢复。`scripts/orca-runtime.sh` 的 `orca_runtime_current_project` 现在把失败原因暴露为 `ORCA_WORKTREE_CURRENT_ERROR`（`selector_not_found` / `path_mismatch` / 空=runtime 不可达·非 Git·不可解析），并新增 `orca_runtime_register_current_project`：仅在错误码精确等于 `selector_not_found`、canonical Git toplevel 可解析、`orca status --json` 可达时执行一次 `orca repo add --path <toplevel> --json`，复验 `worktree current` 精确返回该 toplevel + repo 身份才算成功。`scripts/spawn-worker-orca.sh` 的 `detect_orca_mode` 接线：注册失败、合同非 ok 或复验不匹配一律打印诊断后回退既有 tmux 路径（fail-closed，早于 branch/worktree/provider 副作用）；`--dry-run` 只打印 `ORCA_RUN` 计划不执行 mutation。已注册仓库、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码一律不注册；mutation/授权边界（只注册当前这一个 Git 仓库，不触碰其他 Orca 项目）固化到 `references/13-orca-cli-worker.md` §3。
+
+### 技术优化
+
+- 新增 `scripts/test-orca-auto-register.sh`：41 用例确定性 mock 回归（fake orca CLI 经 `ORCA_CLI_COMMAND` 注入，不依赖也不改动真实 Orca 状态），覆盖 success（含 CLI 非零退出仍带错误合同）、already registered、runtime down（无 JSON / status 不可达）、non-Git、wrong error code、repo add failure、post-add path mismatch，以及 `--no-orca-mode` / DRY_RUN / path_mismatch 永不注册。
+
 ## [2.10.2] - 2026-08-31
 
 ### 改进

@@ -47,6 +47,18 @@ orca status --json
 
 `--no-orca-mode` 显式改走 tmux；跨 repo 不误触发 Orca；Orca 模式不把 tmux 当硬依赖。
 
+### 仓库自动注册与授权边界（v2.10.3，2026-09-01 实测事故）
+
+事故形态：仓库是有效 Git 仓、Orca runtime 健康，但 repo 未注册进 Orca——`worktree current --json` 只返回 `{ok:false,error:{code:"selector_not_found"}}`，Orca 模式被静默降级为 tmux；手工 `orca repo add --path <canonical 路径> --json` 注册后 `worktree current` 立即返回精确主 worktree，Orca worker 派发恢复可用。
+
+当前行为（`orca-runtime.sh` + `detect_orca_mode`）：
+
+1. `orca_runtime_current_project` 失败时把原因暴露为 `ORCA_WORKTREE_CURRENT_ERROR`：`selector_not_found`（未注册）、`path_mismatch`（命中别的仓/路径）、空（runtime 不可达 / 非 Git / 输出不可解析）。
+2. 仅当错误码**精确等于** `selector_not_found`、`PROJECT_DIR` 可解析出 canonical Git toplevel、且 `orca status --json` 可达时，执行一次 `orca repo add --path <toplevel> --json`，随后重跑 `worktree current` 并要求精确返回该 toplevel 与 repo 身份，才继续 Orca 模式（版本/capability 预检照常）。
+3. repo add 失败、返回合同非 ok、或复验不精确匹配 → 打印诊断并回退既有 tmux 路径（fail-closed）；全部检查发生在 branch/worktree/provider 副作用之前，绝不假装 Orca 管理成功。`--dry-run` 只打印 `ORCA_RUN: orca repo add ...` 计划，不执行 mutation。
+
+**授权边界**：调用 Orca-first worker 路径（`spawn-worker.sh` 自动检测、未传 `--no-orca-mode`）即授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库、不授权改动其他 Orca 项目或全局配置。repo 已注册、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码（含 `path_mismatch`）一律不注册。确定性回归见 `scripts/test-orca-auto-register.sh`（全 mock，不依赖真实 Orca 状态）。
+
 ## 4. 启动与共享 Run
 
 先把同一 Wave 写成 manifest，并在任何 worker 启动前创建/绑定一个 Run、预建全部 Task：
