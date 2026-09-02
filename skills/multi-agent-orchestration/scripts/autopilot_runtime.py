@@ -8,6 +8,7 @@ import copy
 import datetime as dt
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -46,7 +47,10 @@ STATES = {
     "PARKED_SOFT", "PARKED_HARD", "ERROR_RECONCILE_REQUIRED",
 }
 EXTERNAL_ACTIONS = {"spawn", "settle", "verify", "push", "open_pr", "merge", "writeback"}
-INTERNAL_ACTIONS = {"adopt", "observe", "retry_later", "reject_duplicate", "hard_park", "complete"}
+# repair_acceptance（v2.14.0）：验收失败的内部可恢复修复动作。checks=="fail"
+# 不再无条件 hard_park——先经 acceptance-recovery.py 分类，预算未耗尽时规划
+# repair_acceptance（不泊车），耗尽/外部依赖/安全不明才按类泊车。
+INTERNAL_ACTIONS = {"adopt", "observe", "retry_later", "reject_duplicate", "hard_park", "complete", "repair_acceptance"}
 ALLOWED_ACTIONS = EXTERNAL_ACTIONS | INTERNAL_ACTIONS
 DANGEROUS_DIRTY_ACTIONS = {"spawn", "verify", "push", "open_pr", "merge", "writeback", "adopt"}
 STATE_KEYS = {
@@ -65,6 +69,8 @@ RUNTIME_ITEM_KEYS = INITIAL_ITEM_KEYS | {
     "observed_at", "adopted_target_digest", "dirty", "worktree_count", "published",
     "checks", "mergeable", "approvals", "approvals_known", "required_approvals",
     "provider_status", "verification_passed", "evidence_sha256", "gate_contract_sha256",
+    # v2.14.0：已消耗的验收修复 episode 数（edge-triggered，见 reconcile 收尾）。
+    "repair_attempts",
 }
 
 
@@ -790,8 +796,52 @@ def _sha256_digest(value: Any) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
-def _fail_action(task_id: str, reason: str, action: str = "hard_park") -> dict[str, Any]:
-    return {"task_id": task_id, "action": action, "reason": reason, "external_mutation": False, "target": {}}
+def _load_acceptance_recovery():
+    """加载 acceptance-recovery.py——验收失败的单一机械分类合同。"""
+    module_path = Path(__file__).resolve().parent / "acceptance-recovery.py"
+    spec_loader = importlib.util.spec_from_file_location("acceptance_recovery_runtime", module_path)
+    module = importlib.util.module_from_spec(spec_loader)
+    spec_loader.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+def _fail_action(
+    task_id: str, reason: str, action: str = "hard_park", failure_class: str = "safety_unknown",
+) -> dict[str, Any]:
+    return {
+        "task_id": task_id, "action": action, "reason": reason,
+        "external_mutation": False, "target": {}, "failure_class": failure_class,
+    }
+
+
+def _plan_repair_action(task_id: str, runtime_item: dict[str, Any]) -> dict[str, Any]:
+    """验收失败（checks==fail）按机械分类合同规划动作。
+
+    internal_recoverable 且修复预算未耗尽 → 内部动作 repair_acceptance
+    （不泊车，PM 按 15-wave-autopilot §6 派发修复/独立 re-review）；预算
+    耗尽 → hard_park（internal_recoverable 类，原因注明预算耗尽）。
+    """
+    recovery = _load_acceptance_recovery()
+    used = runtime_item.get("repair_attempts", 0)
+    if type(used) is not int or used < 0:
+        used = 0
+    outcome = recovery.classify_failure("pr_checks_failed", used)
+    if outcome["action"] == recovery.ACTION_PARK:
+        return _fail_action(
+            task_id, f"acceptance checks failed: {outcome['park_reason']}",
+            failure_class=outcome["failure_class"],
+        )
+    return _action(
+        task_id, "repair_acceptance",
+        "acceptance checks failed: internal_recoverable "
+        f"({outcome['action']}, repair episode {used + 1}/{outcome['max_repair_attempts']})",
+        {
+            "task_id": task_id, "repair_step": outcome["action"],
+            "repair_attempts_used": used,
+            "max_repair_attempts": outcome["max_repair_attempts"],
+        },
+        False,
+    )
 
 
 def _action(task_id: str, action: str, reason: str, target: dict[str, Any], external: bool) -> dict[str, Any]:
@@ -920,8 +970,12 @@ def plan_action(state: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
         writeback = _fact_value(item, "project", "writeback_applied", {True, False, "unknown"})
         if branch_matches == "unknown" or pr_state == "unknown" or project_status == "unknown" or writeback == "unknown":
             return _fail_action(task_id, "Git/PR/project facts unknown")
-        if pr_state in {"open", "merged"} and checks == "unknown" or checks == "fail":
-            return _fail_action(task_id, "checks unknown/failed")
+        if pr_state in {"open", "merged"} and checks == "unknown":
+            return _fail_action(task_id, "checks unknown: facts ambiguous (safety_unknown)")
+        if checks == "fail":
+            # v2.14.0：验收失败不再硬编码泊车——先按 acceptance-recovery 分类，
+            # internal_recoverable 预算未耗尽时规划 repair_acceptance。
+            return _plan_repair_action(task_id, runtime_item)
         if project_status == "complete" and pr_state != "merged":
             return _fail_action(task_id, "project completion conflicts with PR")
         provider_status = item.get("provider", {}).get("status", "unknown") if isinstance(item.get("provider"), dict) else "unknown"
@@ -1236,6 +1290,17 @@ def _reconcile_locked(ctx: RuntimeContext, state: dict[str, Any], token: int, fa
         after.update(state="ERROR_RECONCILE_REQUIRED", parking_code="FACTS_FAIL_CLOSED", parking_detail=action["reason"])
     elif action["action"] == "retry_later":
         after.update(state="WAITING_PROVIDER_RESET", parking_code="WAITING_PROVIDER_RESET", parking_detail=action["reason"])
+    elif action["action"] == "repair_acceptance":
+        # 内部可恢复：不泊车，保持 RUNNING 等待修复收敛。修复预算按「失败
+        # episode」计数——以 absorb 前的 state（非 after）判断是否为一次新的
+        # 进入：同一 episode 内的重复 reconcile 不重复计数（修复在途 ≠ 新失败）。
+        after["state"] = "RUNNING"
+        previous = next((item for item in state["items"] if item.get("task_id") == action["task_id"]), {})
+        for item in after["items"]:
+            if item.get("task_id") == action["task_id"]:
+                if previous.get("next_action") != "repair_acceptance":
+                    item["repair_attempts"] = item.get("repair_attempts", 0) + 1
+                item["next_action"] = "repair_acceptance"
     elif action["action"] in {"adopt", "observe"}:
         after["state"] = "RUNNING"
     elif action["action"] == "complete":

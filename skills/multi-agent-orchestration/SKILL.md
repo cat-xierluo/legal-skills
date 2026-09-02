@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.13.0"
+  version: "2.14.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -105,6 +105,18 @@ python3 scripts/review-acceptance-gate.py <review-acceptance.json>
 契约见 `templates/review-acceptance.example.json`（`schema_version: review-acceptance-gate.v1`）。机械接受仅当：实现者与审查者的 `dispatch_id`/`session_id` 均非占位且互不相同；`delivery_head` 与 `reviewed_head` 为同一不可变 40-hex commit；审查结论为字面 `ACCEPT`；`verification_evidence` 为非空的 `{command, exit_code}` 记录且全部 exit 0（纯文字叙述证据无效）；`review_consumer` 与 `review_expiry` 已具名；`blocking_findings` 为空。机械拒绝：自审、身份缺失/占位、head 漂移/非 40-hex、纯文字证据、缺验证或验证失败、占位消费者/到期处置、以及 PM 实现/深度审查例外缺少非空枚举理由 + 授权来源。
 
 PM 例外仅在四种枚举情形（`role_exception.reason_code`）允许：`worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery`，且必须声明 `kind`（`pm_implementation`/`pm_deep_review`）、非空 `reason` 与 `authorized_by`；带例外通过的收口在输出中标记 `ordinary_delivery: false`，永远不得计为常规交付。边界：本门禁验证契约的内部一致性（身份、head、结论、证据、例外文书），让角色分离可执行、可审计，但不声称能 policing 所有行为——身份与例外申报是否真实发生，仍依赖角色纪律与事后审计。
+
+**Reviewer 写范围纪律（v2.14.0）**：reviewer dispatch 默认可写范围只有自身 Session Context（`<worktree>/.claude/agent-sessions/<session>/**`）；需要修复被审分支时，必须由任务合同显式授予——spawn 用 `--role reviewer --review-repair-grant <授权来源>`，无授权却传 `--allow-paths` 直接 fail-closed 拒绝 spawn（不静默收窄）。无论是否授予修复权，`config/*.local.yaml`（安装 Skill 的本地运行配置）对 reviewer 永远不可写。 Enforcement 分两层：`spawn-worker.sh` 在任何副作用前注入 `SCOPE_GUARD_ROLE/SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT` 并把角色写入 METADATA `runtime.role`；`scope-guard.py` 对 reviewer 无授权时只放行 Session Context 前缀，`config/*.local.yaml` 硬拒绝。回归：`scripts/test-reviewer-scope-guard.sh`。
+
+### 验收失败恢复分类（单一机械合同，v2.14.0）
+
+验收失败不得再硬编码「any gate failure => park」。唯一分类权威是 `scripts/acceptance-recovery.py`（`acceptance-recovery.v1`）：`internal_recoverable`（本项目自有资产可修复：PR checks 确定性失败、交付越界、验证证据缺失、review blockers、docs-only 验收修复）、`external_dependency`（配额耗尽、上游不可用、缺用户资产/授权）、`safety_unknown`（事实歧义、身份/head 漂移不可证、安全高风险、runtime 损坏）。表外信号一律 fail-closed 归 `safety_unknown`。决策：internal_recoverable 且修复预算未耗尽时动作必须是 `repair`（首次）或 `re_review`（之后），默认预算 2 次，耗尽才 `park`；external_dependency 与 safety_unknown 立即 `park`。预算按「失败 episode」计数（进入 repair_acceptance 记一次，同一 episode 内重复 reconcile 不重复计数）。autopilot runtime 与 codex-heartbeat-cycle 都从该模块导入同一张表，禁止在别处再写分类分支；回归 `scripts/test-acceptance-recovery.py`。
+
+机器行为（v2.14.0 起）：`autopilot_runtime` 对 `checks == "fail"` 不再无条件 `hard_park`——预算内规划内部动作 `repair_acceptance`（state 保持 RUNNING 不泊车，PM 按 §6 派发修复/独立 re-review），预算耗尽才 `hard_park`（`internal_recoverable` 类）；`checks == "unknown"` 维持 `hard_park`（safety_unknown）。`codex-heartbeat-cycle` 把 `repair_acceptance` 映射为 `decision=review` 且心跳继续；`decision=park`（建议停止心跳）只属于 hard_park（安全不明/外部依赖/预算耗尽）。
+
+### acceptance repair 极窄通道（`acceptance-repair.v1`，docs-only）
+
+dispatch-value-gate.v2 拒绝 docs-only 派发仍然成立；唯一例外是「已具名 PR 的验收只差文档修复」：合同模板 `templates/acceptance-repair.example.json`，派发前 `python3 scripts/acceptance-repair-gate.py preflight --spec <spec.json> --registry <ledger.json>`、交付后 `postflight`（同 spec/registry + evidence + diff 源），非零退出不得派发/接受。合同必须：钉扎既有 `target`（pr + branch + 40-hex head_sha）；`integration_target` 等于 `target.branch`（只能集成回既有 PR 分支，不存在独立文档 PR 的表达字段）；`blockers` 为结构化 `{id, source, detail}` 且 ID 唯一；`file_scope` 全部为文档路径（复用 `is_document_path` 单一语义表），非文档变更属 implementation 价值必须走 v2；具名 `consumer`、时区感知未过期 `expiry`、非空 `verification_commands`、`repair_owner` + registry 台账实现序列化 owner（同 PR 只允许一个活跃 owner，同 (pr, head_sha) 或活跃 blocker 重叠 = 重复修复，机械拒绝）；`re_review` 声明修复 worker 与独立 reviewer 互异身份；`repair_attempts_used` ≥ 2 时拒绝派发（必须按分类合同泊车）。postflight 额外机械拒绝：head 漂移（git 模式要求 delivery head 是 pinned head 的后代且 evidence `verified_head` 一致；patch 模式无法证明谱系，一律拒绝）、范围外/非文档修改、零 diff、blocker 未全部解决或解决声明超出合同、验证命令未 exit 0、owner 不一致。回归：`scripts/test-acceptance-repair-gate.sh`。
 
 ### 3.1 Harness 调用层级
 
@@ -292,7 +304,7 @@ Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推�
 
 **持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path。v2.10.0 起，`scripts/autopilot-controller.py` + `scripts/autopilot-facts.py` 提供 `L2 / CROSS_SESSION_RECOVERABLE` controller core：版本化 ledger/WAL、PM lease/fencing、可信只读 facts、幂等 reconcile 与单 mutation tick；项目必须提供固定 manifest 和受信 mutation adapter。真实 Orca/GitHub mutation 端到端与真实断电仍为 `NOT_VERIFIED`。没有外部 durable scheduler 时继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`；用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时读取 `references/16-autopilot-durability.md`，不得把 L2 controller 包装成 L3。
 
-**外部调度器适配器 `codex-heartbeat-cycle`（v2.13.0）**：Codex App heartbeat 可充当上述外部 durable scheduler，适配器 `scripts/codex-heartbeat-cycle.py` 保证「一次唤醒 = 一次有界循环」——读显式 JSON 请求（钉扎 controller/适配器 path+sha256、repo/project/policy 身份、owner/fencing token），经 `autopilot-controller` CLI（argv 数组、shell=False、有界超时）执行一次 status → reconcile，仅当通过 tick 前闸门（动作 allowlist、待验收反压阈值、配额拒绝、fencing/租约身份一致）时执行至多一次 tick，输出机器 JSON（`decision=wait/review/dispatch/park/complete`、receipt、`future_heartbeat_needed`）。硬边界：不循环、不 sleep、不派生后台进程、不注入 raw 终端输入、不改 TASKS、不按 token 丰度挑任务；不确定的 tick 按不确定上报且绝不重试，tick 后不再发起任何控制器调用；COMPLETE/硬泊车/重复拒绝建议停止心跳。请求模板 `templates/codex-heartbeat-cycle.example.json`，契约测试 `scripts/test-codex-heartbeat-cycle.py`。
+**外部调度器适配器 `codex-heartbeat-cycle`（v2.13.0）**：Codex App heartbeat 可充当上述外部 durable scheduler，适配器 `scripts/codex-heartbeat-cycle.py` 保证「一次唤醒 = 一次有界循环」——读显式 JSON 请求（钉扎 controller/适配器 path+sha256、repo/project/policy 身份、owner/fencing token），经 `autopilot-controller` CLI（argv 数组、shell=False、有界超时）执行一次 status → reconcile，仅当通过 tick 前闸门（动作 allowlist、待验收反压阈值、配额拒绝、fencing/租约身份一致）时执行至多一次 tick，输出机器 JSON（`decision=wait/review/dispatch/park/complete`、receipt、`future_heartbeat_needed`）。硬边界：不循环、不 sleep、不派生后台进程、不注入 raw 终端输入、不改 TASKS、不按 token 丰度挑任务；不确定的 tick 按不确定上报且绝不重试，tick 后不再发起任何控制器调用；COMPLETE/硬泊车/重复拒绝建议停止心跳。v2.14.0 起适配器不硬编码「任何门禁失败 => park」：控制器的 `repair_acceptance` 内部动作（验收失败经 `acceptance-recovery` 分类为 internal_recoverable 且预算未耗尽）映射为 `decision=review` 且心跳继续；`park` 只属于 hard_park（安全不明/外部依赖/修复预算耗尽）。请求模板 `templates/codex-heartbeat-cycle.example.json`，契约测试 `scripts/test-codex-heartbeat-cycle.py`。
 ## 5. tmux 兼容回退
 
 先用 `render-runtime-profile.sh` 生成 backend 命令，再由 `spawn-worker.sh` 加 `--no-orca-mode` 启动。spawn 后立即核对 `tmux has-session`、pane cwd 与 Session Context 的 `METADATA.json`；任一不一致都停止派单。
@@ -508,6 +520,8 @@ Hard Fail：
 10. 以额度余额、PR 数或 worker 忙碌度为理由派发没有 `value_kind`、命名消费者/消费时限/可观察验收的任务；或未过 `dispatch-value-gate.py` 派发、未过 `worker-value-postflight.py` 就接受交付/PR。
 11. worker/测试启动了服务或监听器，却没有资源 owner、清理证据和 PID/端口零净增量核对；或为清理而按进程名批量 kill。
 12. 非平凡实现波未过 `review-acceptance-gate.py` 就接受交付/合并；或 PM 实现/深度审查例外缺枚举 `reason_code`、非空 `reason` 或 `authorized_by`，或把 `ordinary_delivery: false` 的收口计为常规交付。
+13. 验收失败未过 `acceptance-recovery.py` 分类就泊车（internal_recoverable 修复预算未耗尽即 park），或在 runtime/heartbeat/文档之外另写「gate failure => park」分类分支。
+14. reviewer dispatch 未按 `--role reviewer` 纪律约束写范围：无 `--review-repair-grant` 授权却写自身 Session Context 之外，或写任何 `config/*.local.yaml`；或 docs-only acceptance repair 未过 `acceptance-repair-gate.py` preflight/postflight（缺字段、head 漂移、范围外/非文档修改、未解决 blocker、重复修复、owner 串行冲突任一即拒绝）。
 
 修改本 Skill 后至少运行：
 
@@ -533,6 +547,7 @@ bash scripts/test-spawn-worker-deps.sh
 bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh
+bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh

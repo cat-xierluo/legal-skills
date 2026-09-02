@@ -1128,6 +1128,95 @@ def case_v2_dirty_active_and_single_adopt() -> dict[str, Any]:
         s.close()
 
 
+def case_v2_acceptance_failure_repairs_before_park() -> dict[str, Any]:
+    """回归（v2.14.0）：checks=="fail" 不再无条件 hard_park。
+
+    内部可恢复验收失败按 acceptance-recovery 分类：预算内规划
+    repair_acceptance（不泊车，state 保持 RUNNING），按「失败 episode」
+    计数（同一 episode 重复 reconcile 不重复计数）；预算耗尽才
+    hard_park（internal_recoverable 类）。checks=="unknown" 仍 fail-closed。
+    """
+    evidence: dict[str, Any] = {}
+
+    s = ScenarioV2()
+    try:
+        first = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="fail",
+        )
+        assert first["planned_action"]["action"] == "repair_acceptance", first["planned_action"]
+        assert first["planned_action"]["external_mutation"] is False
+        assert first["planned_action"]["target"]["repair_step"] == "repair"
+        assert first["pending_intent"] is None
+        snapshot = status(s.ctx, PROJECT, s.policy)["state"]
+        assert snapshot["state"] == "RUNNING", snapshot
+        assert snapshot["parking_code"] is None
+        item = next(item for item in snapshot["items"] if item["task_id"] == "Task-X")
+        assert item["repair_attempts"] == 1 and item["next_action"] == "repair_acceptance"
+        evidence["first_episode"] = {"action": "repair_acceptance", "state": "RUNNING", "attempts": 1}
+
+        repeat = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="fail",
+        )
+        assert repeat["planned_action"]["action"] == "repair_acceptance"
+        snapshot = status(s.ctx, PROJECT, s.policy)["state"]
+        item = next(item for item in snapshot["items"] if item["task_id"] == "Task-X")
+        assert item["repair_attempts"] == 1, "同一 episode 的重复 reconcile 不得重复计数"
+        evidence["same_episode_repeat"] = {"attempts": 1}
+
+        observed = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="pending",
+        )
+        assert observed["planned_action"]["action"] == "observe"
+
+        second = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="fail",
+        )
+        assert second["planned_action"]["action"] == "repair_acceptance"
+        assert second["planned_action"]["target"]["repair_step"] == "re_review"
+        snapshot = status(s.ctx, PROJECT, s.policy)["state"]
+        item = next(item for item in snapshot["items"] if item["task_id"] == "Task-X")
+        assert item["repair_attempts"] == 2
+        evidence["second_episode"] = {"action": "repair_acceptance", "step": "re_review", "attempts": 2}
+
+        observed = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="pending",
+        )
+        assert observed["planned_action"]["action"] == "observe"
+
+        exhausted = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="fail",
+        )
+        assert exhausted["planned_action"]["action"] == "hard_park"
+        assert exhausted["planned_action"]["failure_class"] == "internal_recoverable"
+        assert "repair_budget_exhausted" in exhausted["planned_action"]["reason"]
+        snapshot = status(s.ctx, PROJECT, s.policy)["state"]
+        assert snapshot["state"] == "ERROR_RECONCILE_REQUIRED"
+        evidence["exhausted"] = {"action": "hard_park", "state": "ERROR_RECONCILE_REQUIRED"}
+    finally:
+        s.close()
+
+    s = ScenarioV2()
+    try:
+        unknown = s.run_reconcile(
+            dispatch="completed", published=True, verified=True,
+            pr_state="open", checks="unknown",
+        )
+        assert unknown["planned_action"]["action"] == "hard_park"
+        assert unknown["planned_action"]["failure_class"] == "safety_unknown"
+        snapshot = status(s.ctx, PROJECT, s.policy)["state"]
+        assert snapshot["state"] == "ERROR_RECONCILE_REQUIRED"
+        evidence["unknown_checks"] = {"action": "hard_park", "failure_class": "safety_unknown"}
+    finally:
+        s.close()
+    return evidence
+
+
 def case_v2_unknown_duplicate_and_waiting_fail_closed() -> dict[str, Any]:
     evidence: dict[str, Any] = {}
     variants = {
@@ -1520,6 +1609,7 @@ V2_CASES: list[tuple[str, Callable[[], dict[str, Any]]]] = [
     ("takeover re-fences a planned intent", case_v2_takeover_refences_planned_intent),
     ("dirty active observes and worktree adopts once", case_v2_dirty_active_and_single_adopt),
     ("unknown/duplicate/reset states fail closed without deletion", case_v2_unknown_duplicate_and_waiting_fail_closed),
+    ("验收失败按分类修复预算内不泊车，耗尽才 park", case_v2_acceptance_failure_repairs_before_park),
     ("facts binding and freshness failures produce zero writes", case_v2_facts_binding_and_freshness_fail_closed),
     ("complete item tolerates cleaned worktree", case_v2_complete_allows_cleaned_worktree),
     ("timeout and lost receipt never repeat mutation", case_v2_timeout_and_lost_receipt),

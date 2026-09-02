@@ -13,6 +13,11 @@ sleep 循环、不是 TUI 注入器、不是调度器、也不是并行控制器
   4. 输出机器 JSON：decision（wait/review/dispatch/park/complete）、精确
      receipts、是否还需要未来心跳、以及 fail-closed 原因。
 
+  v2.14.0 起本适配器不硬编码「任何门禁失败 => park」：控制器的内部动作
+  repair_acceptance（验收失败经 acceptance-recovery 分类为
+  internal_recoverable 且修复预算未耗尽）映射为 decision=review 且心跳
+  继续；只有 hard_park（安全不明/外部依赖/预算耗尽）才 decision=park。
+
 硬边界（本脚本永远不做）：
   - 不循环、不 sleep、不派生后台进程；
   - 不注入 raw 终端输入；不改 TASKS；不自行挑选价值任务（任务选择权在
@@ -549,9 +554,25 @@ class Cycle:
         elif name == "retry_later":
             self.decision = "wait"
             self.reason = "provider 等待重置（配额受限）；控制器规划 retry_later，拒绝任何 tick"
+        elif name == "repair_acceptance":
+            # v2.14.0：内部可恢复的验收失败不泊车——控制器已按
+            # acceptance-recovery 分类并保持预算内修复；心跳继续，直到预算
+            # 耗尽（届时控制器会规划 hard_park 而非 repair_acceptance）。
+            target = action.get("target") if isinstance(action.get("target"), dict) else {}
+            step = target.get("repair_step") or "repair"
+            used = target.get("repair_attempts_used", 0)
+            total = target.get("max_repair_attempts", "?")
+            self.decision = "review"
+            self.reason = (
+                f"验收失败为 internal_recoverable（{step}，修复 episode "
+                f"{used}/{total}）：按验收恢复合同派发修复/独立 re-review，"
+                "不泊车，心跳继续"
+            )
         elif name == "hard_park":
+            failure_class = action.get("failure_class")
+            class_note = f"（{failure_class}）" if isinstance(failure_class, str) and failure_class else ""
             self.decision = "park"
-            self.reason = f"控制器硬泊车：{action.get('reason', '')}；需要人工介入，心跳可以停止"
+            self.reason = f"控制器硬泊车{class_note}：{action.get('reason', '')}；需要人工介入，心跳可以停止"
             self.future_heartbeat_needed = False
         elif name == "reject_duplicate":
             self.decision = "review"

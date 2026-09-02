@@ -227,16 +227,26 @@ class Fixture:
             "recovered": False,
         })
 
-    def reconcile_internal(self, action: str, reason: str = "fixture") -> str:
+    def reconcile_internal(self, action: str, reason: str = "fixture", target: Any = None, failure_class: Any = None) -> str:
+        planned: dict[str, Any] = {
+            "task_id": "T1", "action": action, "reason": reason,
+            "external_mutation": False, "target": {} if target is None else target,
+        }
+        if failure_class is not None:
+            planned["failure_class"] = failure_class
         return controller_stdout({
-            "planned_action": {
-                "task_id": "T1", "action": action, "reason": reason,
-                "external_mutation": False, "target": {},
-            },
+            "planned_action": planned,
             "pending_intent": None,
             "disposition": "internal_only",
             "recovered": False,
         })
+
+    def reconcile_repair(self, *, step: str = "repair", used: int = 0, total: int = 2) -> str:
+        return self.reconcile_internal(
+            "repair_acceptance",
+            f"acceptance checks failed: internal_recoverable ({step}, repair episode {used + 1}/{total})",
+            target={"task_id": "T1", "repair_step": step, "repair_attempts_used": used, "max_repair_attempts": total},
+        )
 
     def reconcile_await(self, disposition: str = "await_external_fact") -> str:
         return controller_stdout({
@@ -959,6 +969,73 @@ def case_internal_observe_ticks_nothing_v2() -> dict[str, Any]:
     )
 
 
+def case_acceptance_repair_keeps_heartbeat_alive_v2() -> dict[str, Any]:
+    """回归（v2.14.0）：内部可恢复验收失败不得映射为 park/停心跳。
+
+    控制器规划 repair_acceptance（acceptance-recovery 分类为
+    internal_recoverable 且预算未耗尽）时，适配器必须输出 decision=review
+    且 future_heartbeat_needed=true、零 tick——不得硬编码
+    "any gate failure => park"。
+    """
+    f = Fixture()
+    try:
+        f.script([
+            {"exit": 0, "stdout": f.status_ok()},
+            {"exit": 0, "stdout": f.reconcile_repair(step="repair", used=0, total=2)},
+        ])
+        proc = f.run(f.base_request())
+        assert proc.returncode == 0, f"exit={proc.returncode} stderr={proc.stderr}"
+        result = f.result(proc)
+        assert result["controller_action"] == "repair_acceptance", result
+        assert result["decision"] == "review", result["reason"]
+        assert result["future_heartbeat_needed"] is True, result
+        assert result["tick"]["invoked"] is False, result["tick"]
+        assert result["fail_closed"]["refused"] is False, result["fail_closed"]
+        assert "internal_recoverable" in result["reason"], result["reason"]
+        assert len(f.tick_calls()) == 0
+
+        # 第二个修复 episode（re_review 步骤）同样不得泊车。
+        f.script([
+            {"exit": 0, "stdout": f.status_ok()},
+            {"exit": 0, "stdout": f.reconcile_repair(step="re_review", used=1, total=2)},
+        ])
+        f.log_path.unlink()
+        proc = f.run(f.base_request())
+        assert proc.returncode == 0, f"exit={proc.returncode} stderr={proc.stderr}"
+        result = f.result(proc)
+        assert result["decision"] == "review", result["reason"]
+        assert result["future_heartbeat_needed"] is True, result
+        assert "re_review" in result["reason"], result["reason"]
+        return {"ticks": 0, "decisions": ["review", "review"], "park": False}
+    finally:
+        f.close()
+
+
+def case_exhausted_repair_budget_parks_v2() -> dict[str, Any]:
+    """回归（v2.14.0）：修复预算耗尽（控制器 hard_park + internal_recoverable
+    failure_class）仍然必须 park 并停止心跳——预算耗尽不是继续心跳的理由。"""
+    f = Fixture()
+    try:
+        f.script([
+            {"exit": 0, "stdout": f.status_ok()},
+            {"exit": 0, "stdout": f.reconcile_internal(
+                "hard_park",
+                "acceptance checks failed: repair_budget_exhausted",
+                failure_class="internal_recoverable",
+            )},
+        ])
+        proc = f.run(f.base_request())
+        assert proc.returncode == 0, f"exit={proc.returncode} stderr={proc.stderr}"
+        result = f.result(proc)
+        assert result["decision"] == "park", result["reason"]
+        assert result["future_heartbeat_needed"] is False, result
+        assert result["tick"]["invoked"] is False
+        assert len(f.tick_calls()) == 0
+        return {"ticks": 0, "decision": "park"}
+    finally:
+        f.close()
+
+
 def case_hard_park_stops_heartbeat_v2() -> dict[str, Any]:
     def build(f: Fixture) -> list[dict[str, Any]]:
         return [
@@ -1010,6 +1087,8 @@ CASES: list[tuple[str, Any]] = [
     ("内部动作被标记 external 时防御性拒绝", case_internal_action_marked_external_refuses),
     ("await_revalidation 不 tick", case_await_revalidation_ticks_nothing_v2),
     ("内部 observe 不 tick", case_internal_observe_ticks_nothing_v2),
+    ("内部可恢复验收失败（repair_acceptance）不泊车且心跳继续", case_acceptance_repair_keeps_heartbeat_alive_v2),
+    ("修复预算耗尽的 hard_park 仍泊车并停止心跳", case_exhausted_repair_budget_parks_v2),
     ("hard_park 停止心跳", case_hard_park_stops_heartbeat_v2),
     ("reject_duplicate 停止心跳", case_reject_duplicate_stops_heartbeat_v2),
     ("内部 complete 停止心跳", case_internal_complete_stops_heartbeat_v2),
