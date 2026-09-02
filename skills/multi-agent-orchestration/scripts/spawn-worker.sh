@@ -114,6 +114,10 @@ QUOTA_PREFLIGHT_STATUS=""
 QUOTA_PREFLIGHT_LANE=""
 ADD_DIRS=()
 ALLOW_PATHS=()
+# v2.14.0：角色分离写范围纪律。reviewer 默认只写自身 Session Context；
+# 修复被审分支需要 --review-repair-grant 显式授权（任务合同）。
+ROLE="implementer"
+REVIEW_REPAIR_GRANT=""
 # v2.0：轻量模式（无 worktree）。默认 0 (走 worktree 隔离)；--no-worktree 显式置 1，
 # 或自动检测 --project 不是 git 仓时置 1 并打印 SPAWN_WORKER_LIGHTWEIGHT_AUTO。
 # 详见 SKILL.md §2.1.1 + references/10-parallel-lessons.md T6 实战坑。
@@ -177,6 +181,30 @@ parse_spawn_worker_args "$@"
 
 [ -n "$PROJECT_DIR" ] || { usage; exit 64; }
 [ -n "$SESSION" ] || { usage; exit 64; }
+# v2.14.0：角色与 reviewer 修复授权校验（fail-closed，任何副作用之前）
+case "$ROLE" in
+  implementer|reviewer) ;;
+  *) echo "ERROR: --role must be implementer or reviewer (got: $ROLE)" >&2; exit 64 ;;
+esac
+if [ -n "$REVIEW_REPAIR_GRANT" ] && [ "$ROLE" != "reviewer" ]; then
+  echo "ERROR: --review-repair-grant requires --role reviewer" >&2
+  exit 64
+fi
+if [ "$ROLE" = "reviewer" ] && [ -z "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATHS[@]}" -gt 0 ]; then
+  echo "ERROR: --role reviewer without --review-repair-grant may only write its own" >&2
+  echo "       Session Context; drop --allow-paths or grant branch repair explicitly" >&2
+  exit 64
+fi
+# v2.14.0 R1 边角修复：reviewer 带修复授权却完全不带 --allow-paths 时，
+# scope_guard_setup 会因 ALLOW_PATHS 为空整体跳过（不注入 SCOPE_GUARD_* env、
+# 不装 PreToolUse hook），Session Context 约束与 config/*.local.yaml 永久拒绝
+# 在该次 spawn 全部失守。空写范围的修复授权是合同违规配置 → 在任何
+# worktree/terminal/lease 副作用之前 fail-closed，要求显式给出修复写范围。
+if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
+  echo "ERROR: --role reviewer with --review-repair-grant requires explicit --allow-paths" >&2
+  echo "       (empty allow paths would leave the reviewer scope guard uninstalled; fail-closed)" >&2
+  exit 64
+fi
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
@@ -1039,6 +1067,25 @@ dependency_install_guard_setup() {
 # (codebuddy PreToolUse hook semantic parity expected).
 # Only active when --allow-paths is set; otherwise no-op (backward compatible).
 scope_guard_setup() {
+  # v2.14.0：reviewer 角色写范围纪律（角色分离验收波的强制默认）。
+  # reviewer 默认可写范围只有自身 Session Context；写被审分支必须由任务
+  # 合同显式授予修复权（--review-repair-grant）。无授权时 PM 传的任何
+  # --allow-paths 都是合同违规 → fail-closed 拒绝 spawn（不静默收窄）。
+  # config/*.local.yaml 的硬拒绝在 scope-guard.py 内生效，与授权无关。
+  if [ "$ROLE" = "reviewer" ]; then
+    if [ -z "$REVIEW_REPAIR_GRANT" ]; then
+      if [ "${#ALLOW_PATHS[@]}" -gt 0 ]; then
+        echo "ERROR: --role reviewer without --review-repair-grant may only write its own" >&2
+        echo "       Session Context; drop --allow-paths or grant branch repair explicitly" >&2
+        return 1
+      fi
+      ALLOW_PATHS=(".claude/agent-sessions/${SESSION}/**")
+      echo "SPAWN_WORKER_REVIEWER_SCOPE: session-context-only (no repair grant)"
+    else
+      echo "SPAWN_WORKER_REVIEWER_SCOPE: branch repair granted by task contract (${REVIEW_REPAIR_GRANT})"
+    fi
+  fi
+
   if [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
     return 0  # no scope guard
   fi
@@ -1059,8 +1106,14 @@ scope_guard_setup() {
   export SCOPE_GUARD_ALLOW="$scope_env"
   echo "SPAWN_WORKER_SCOPE_GUARD_ALLOW: $SCOPE_GUARD_ALLOW"
 
-  # Inject SCOPE_GUARD_ALLOW into the tmux command via wrapper
-  COMMAND="env SCOPE_GUARD_ALLOW='$SCOPE_GUARD_ALLOW' $COMMAND"
+  # Inject SCOPE_GUARD_ALLOW + reviewer role discipline into the tmux command
+  # via wrapper (v2.14.0: role env drives the reviewer layer in scope-guard.py;
+  # grant flag is 1 only for reviewer with an explicit task-contract grant)
+  local review_grant_env=0
+  if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ]; then
+    review_grant_env=1
+  fi
+  COMMAND="env SCOPE_GUARD_ALLOW='$SCOPE_GUARD_ALLOW' SCOPE_GUARD_ROLE='$ROLE' SCOPE_GUARD_SESSION_ROOT='$SESSION_CONTEXT' SCOPE_GUARD_REVIEW_REPAIR_GRANT='$review_grant_env' $COMMAND"
 
   local hook_command
   printf -v hook_command "bash '%s'" "$scope_guard_hook"
