@@ -84,12 +84,23 @@
 
 ## 6. 验收期确定性缺陷的处置（实战模式）
 
-PM 复跑门禁**确定性失败**（≥2 次同点，先排除 flake）→ 不放宽门禁、PM 不改业务代码：
+**先分类再处置（v2.14.0）**：任何验收失败先过 `scripts/acceptance-recovery.py` 的单一机械分类（`classify` 子命令或 module API），不得按「任何门禁失败 => park」直接泊车：
+
+- `internal_recoverable`（PR checks 确定性失败、交付越界、验证证据缺失、review blockers、docs-only 验收修复）：修复预算内动作必须是 `repair`（首次）或 `re_review`（之后），默认预算 **2 次**，耗尽才泊车。预算按「失败 episode」计数，修复在途的重复 reconcile 不重复计数。autopilot runtime 据此规划 `repair_acceptance`（不泊车，state 保持 RUNNING），heartbeat 适配器输出 `decision=review` 且心跳继续。
+- `external_dependency`（配额耗尽、上游不可用、缺用户资产/授权）与 `safety_unknown`（事实歧义、身份/head 漂移不可证、安全高风险、runtime 损坏；表外信号一律归此类）：立即泊车，等人工。
+
+PM 复跑门禁**确定性失败**（≥2 次同点，先排除 flake，分类为 internal_recoverable）→ 不放宽门禁、PM 不改业务代码：
 
 1. 诊断收窄：失败断言点、假设列表（按序验证）、允许所有权边界，写成精确 fix spec。
 2. 原 dispatch 已结算不复活：把失败分支 safe-push 到远端（身份门禁核验；**门禁失败不阻断 feature 分支推送**），新 fix worker 用**新分支名 + `--base-ref origin/<原分支>`** 派发。
    - 禁止同分支名重新 spawn：Orca 会因 worktree 名撞车建 `<branch>-2` 空 worktree，spawn 的 branch gate 直接 GATE_FAILED；误火用 `settle --force` + `clean-worktree --execute` 清理。
 3. fix 交付按确定性复验：目标门禁**连续 3 次**通过 + 全量门禁，随主交付同一 PR 合并，PR 描述写明缺陷根因与修复归属。
+
+**docs-only 验收修复的极窄通道（`acceptance-repair.v1`）**：既有具名 PR 的验收只差文档修复（review blockers、缺失随行文档）时，唯一合法派发形态是 `templates/acceptance-repair.example.json` 合同 + `scripts/acceptance-repair-gate.py preflight/postflight` 双门禁。合同钉扎既有 PR/branch/40-hex head、结构化 blocker IDs、纯文档 file_scope、具名消费者、到期条件、验证命令、序列化 owner（registry 台账：同 PR 单活跃 owner，同 head 或活跃 blocker 重叠 = 重复修复拒绝）与独立 re-review 身份；只能集成回既有 PR 分支，不存在独立文档 PR 的表达字段；`repair_attempts_used` 耗尽（≥2）拒绝派发，按分类合同泊车。postflight 机械拒绝 head 漂移（patch 模式无法证明谱系，一律拒绝）、范围外/非文档修改、零 diff、未解决 blocker。除本通道外，docs-only 仍一律不可派。
+
+## 6.1 Reviewer dispatch 的写范围
+
+验收/review worker 一律 `spawn-worker.sh --role reviewer`：默认可写范围只有自身 Session Context；修复被审分支必须任务合同显式 `--review-repair-grant <授权来源>`，无授权却传 `--allow-paths` 在任何副作用前 fail-closed。`config/*.local.yaml`（安装 Skill 的本地运行配置）对 reviewer 永远不可写，授权也不例外。角色与授权写入 METADATA `runtime.role` 供收口审计。
 
 ## 7. 反模式清单（全部实测踩坑）
 
@@ -104,6 +115,8 @@ PM 复跑门禁**确定性失败**（≥2 次同点，先排除 flake）→ 不�
 - 把“额度充足”解释成扩大任务源、为 DRAFT 批量写预扫或维持 worker 忙碌 → token 变成验收债务而非资产。
 - docs-only 没有状态迁移、命名消费者或过期条件仍开独立 PR → 文档继续派生文档。
 - worker 测试启动服务后只清 worktree，不核对 PID/端口净增量 → 无主服务跨波累积，浏览器还可能误连旧分支。
+- 把任何门禁失败直接泊车（未过 `acceptance-recovery` 分类）→ 内部可恢复失败被错误泊车、波次无谓中断（v2.14.0 前的真实缺陷）；反过来把 external_dependency/safety_unknown 当可修复继续烧预算 → 同样违规，两类都必须立即泊车。
+- docs-only 验收修复绕过 `acceptance-repair-gate` 双门禁、或把该通道当通用 docs-only 后门 → 文档派生文档回潮；通道只服务「既有 PR + 钉扎 head + 结构化 blockers + 序列化 owner」这一种形态。
 
 ## 8. 当前能力边界与升级路径
 
