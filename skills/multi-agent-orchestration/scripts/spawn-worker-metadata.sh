@@ -61,6 +61,8 @@ write_metadata() {
     --argjson quota_preflight_override "$QUOTA_PREFLIGHT_OVERRIDE" \
     --arg quota_preflight_override_source "$QUOTA_PREFLIGHT_OVERRIDE_SOURCE" \
     --arg env_isolation "$ENV_ISOLATION" \
+    --arg worker_role "$ROLE" \
+    --arg review_repair_grant "$REVIEW_REPAIR_GRANT" \
     --arg wave_id "$WAVE_ID" \
     --arg wave_worker_id "$WAVE_WORKER_ID" \
     --arg isolation_mode "$isolation_mode_value" \
@@ -141,6 +143,10 @@ write_metadata() {
           override_authorization_source: $quota_preflight_override_source
         },
         env_isolation: $env_isolation,
+        role: {
+          worker_role: $worker_role,
+          review_repair_grant: $review_repair_grant
+        },
         command: $command,
         command_sha256: $worker_command_sha256
       },
