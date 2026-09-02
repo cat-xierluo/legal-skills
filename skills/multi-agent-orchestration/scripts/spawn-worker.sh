@@ -195,6 +195,16 @@ if [ "$ROLE" = "reviewer" ] && [ -z "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATH
   echo "       Session Context; drop --allow-paths or grant branch repair explicitly" >&2
   exit 64
 fi
+# v2.14.0 R1 边角修复：reviewer 带修复授权却完全不带 --allow-paths 时，
+# scope_guard_setup 会因 ALLOW_PATHS 为空整体跳过（不注入 SCOPE_GUARD_* env、
+# 不装 PreToolUse hook），Session Context 约束与 config/*.local.yaml 永久拒绝
+# 在该次 spawn 全部失守。空写范围的修复授权是合同违规配置 → 在任何
+# worktree/terminal/lease 副作用之前 fail-closed，要求显式给出修复写范围。
+if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
+  echo "ERROR: --role reviewer with --review-repair-grant requires explicit --allow-paths" >&2
+  echo "       (empty allow paths would leave the reviewer scope guard uninstalled; fail-closed)" >&2
+  exit 64
+fi
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }

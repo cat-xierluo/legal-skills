@@ -7,7 +7,8 @@
 #     （即便任务合同授予了被审分支修复权）；
 #   - 非 reviewer 角色完全保持既有 allowlist 行为（向后兼容）；
 #   - spawn-worker.sh 角色校验 fail-closed：坏角色、缺授权的 grant、
-#     reviewer 无授权却带 --allow-paths，全部在任何副作用之前 exit 64。
+#     reviewer 无授权却带 --allow-paths、reviewer 带授权但空 --allow-paths
+#     （空写范围会让 scope guard 整体不安装），全部在任何副作用之前 exit 64。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -153,6 +154,31 @@ spawn_expect_rejected "invalid role rejected" --role admin
 spawn_expect_rejected "repair grant requires reviewer role" --role implementer --review-repair-grant "task-contract-1"
 spawn_expect_rejected "reviewer without grant cannot take allow-paths" --role reviewer --allow-paths 'skills/**'
 spawn_expect_rejected "reviewer without grant cannot take allow-paths (second)" --role reviewer --allow-paths 'docs/**' --allow-paths 'README.md'
+
+# R1 回归：reviewer 带修复授权却完全不带 --allow-paths。空 ALLOW_PATHS 会让
+# scope_guard_setup 整体跳过（无 SCOPE_GUARD_* env、无 PreToolUse hook），
+# Session Context 约束与 config/*.local.yaml 永久拒绝在该次 spawn 全部失守。
+# 必须命中空 allow-paths 专用错误、在任何副作用之前 exit 64——用
+# SPAWN_WORKER_HARNESS_POLICY（角色校验后第一个阶段标记）未出现证明提前退出。
+spawn_grant_empty_allowpaths_rejected() {
+  local label="$1"
+  shift
+  local output exit_code
+  set +e
+  output=$(bash "$SPAWN_WORKER" --project /tmp/mao-nonexistent-project --session rev-1 "$@" 2>&1)
+  exit_code=$?
+  set -e
+  if [ "$exit_code" -eq 64 ] \
+    && printf '%s' "$output" | grep -qF "requires explicit --allow-paths" \
+    && ! printf '%s' "$output" | grep -q "SPAWN_WORKER_HARNESS_POLICY"; then
+    passed=$((passed + 1))
+  else
+    note_fail "$label" "expected exit 64 with empty-allow-paths gate before side effects, got exit=$exit_code: $output"
+  fi
+}
+
+spawn_grant_empty_allowpaths_rejected "granted reviewer without allow-paths rejected before side effects" \
+  --role reviewer --review-repair-grant "task-contract-1"
 
 spawn_expect_ok() {
   local label="$1"
