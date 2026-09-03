@@ -330,7 +330,11 @@ def main() -> int:
         )
         if value
     }
-    if tool_name in {"Edit", "Write", "NotebookEdit"}:
+    # Update 与 Edit/Write/NotebookEdit 同为文件写工具（Task-114-R4）：spawn 生成的
+    # PreToolUse matcher 已含 Update，本分支若漏识别，implementer 可绕过不可变
+    # 授权证据边界用 Update 改写 INSTALL_AUTHORIZATION.json 等 authority evidence。
+    # Update 的 tool_input 与 Edit 同构（file_path/notebook_path），走同一条路径。
+    if tool_name in {"Edit", "Write", "NotebookEdit", "Update"}:
         target = tool_input.get("file_path") or tool_input.get("notebook_path")
         if not isinstance(target, str) or not target.strip():
             deny("INSTALL_GUARD_INPUT_INVALID", "文件工具缺少目标路径")
