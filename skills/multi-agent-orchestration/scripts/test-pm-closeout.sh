@@ -47,6 +47,18 @@ cat > "$SAFE_PUSH" <<'SH'
 set -euo pipefail
 printf '%q ' "$@" >> "${PM_TEST_SAFE_LOG:?}"
 printf '\n' >> "$PM_TEST_SAFE_LOG"
+[ "${PM_TEST_SAFE_LEAK:-0}" -eq 0 ] || { echo 'fatal: https://user:LEAK-ME@example.invalid/repository.git failed' >&2; exit 72; }
+[ "${PM_TEST_SAFE_FAIL:-0}" -eq 0 ] || exit 71
+if [ "${PM_TEST_SAFE_DO_PUSH:-0}" -eq 1 ]; then
+  repo=.; branch=
+  while [ $# -gt 0 ]; do
+    case "$1" in --repo) repo=$2; shift 2 ;; --branch) branch=$2; shift 2 ;; *) shift ;; esac
+  done
+  git -C "$repo" push -q origin "$branch"
+  if [ -n "${PM_TEST_DIRTY_MAIN_AFTER_PUSH:-}" ]; then
+    printf 'post-push drift\n' > "$PM_TEST_DIRTY_MAIN_AFTER_PUSH/post-push-drift.txt"
+  fi
+fi
 SH
 chmod +x "$SAFE_PUSH"
 
@@ -63,6 +75,12 @@ printf '%s\n' "$#:$*" >> "${PM_TEST_VERIFY_LOG:?}"
     advance_round=$(wc -l < "$PM_TEST_VERIFY_LOG" | tr -d ' ')
     advance_path="main-advanced-$advance_round.txt"
     advance_now=1
+  elif [ -n "${PM_TEST_VERIFY_ADVANCE_AT_CALL:-}" ]; then
+    advance_round=$(wc -l < "$PM_TEST_VERIFY_LOG" | tr -d ' ')
+    if [ "$advance_round" = "$PM_TEST_VERIFY_ADVANCE_AT_CALL" ]; then
+      advance_path="main-advanced-at-$advance_round.txt"
+      advance_now=1
+    fi
   else
     [ -n "${PM_TEST_ADVANCE_MARKER:-}" ]
     [ -e "$PM_TEST_ADVANCE_MARKER" ] || advance_now=1
@@ -89,19 +107,105 @@ set -euo pipefail
 printf '%q ' "$@" >> "${PM_TEST_GH_LOG:?}"
 printf '\n' >> "$PM_TEST_GH_LOG"
 case "$1 $2" in
+  "pr list")
+    if [ "${PM_TEST_GH_MODE:-ok}" = "post-create-audit-fail" ] && grep -qF 'pr create' "$PM_TEST_GH_LOG"; then
+      echo 'post-create list unavailable' >&2
+      exit 45
+    fi
+    if [ "${PM_TEST_GH_MODE:-ok}" = "existing" ] || [ "${PM_TEST_GH_MODE:-ok}" = "diff-leak" ] || [ "${PM_TEST_GH_MODE:-ok}" = "check-drift" ] || \
+       [ "${PM_TEST_GH_MODE:-ok}" = "duplicate-final" ] || [ "${PM_TEST_GH_MODE:-ok}" = "base-race" ] || \
+       [ "${PM_TEST_GH_MODE:-ok}" = "view-fail-after-merge" ] || [ "${PM_TEST_GH_MODE:-ok}" = "close-view-fail" ] || \
+       { [ "${PM_TEST_GH_MODE:-ok}" != "create-fail" ] && grep -qF 'pr create' "$PM_TEST_GH_LOG"; }; then
+      head_oid=$(git rev-parse HEAD)
+      base_oid=$(git rev-parse origin/main)
+      row=$(printf '{"number":123,"url":"https://example.invalid/repo/pull/123","baseRefName":"main","baseRefOid":"%s","headRefName":"%s","headRefOid":"%s","headRepositoryOwner":{"login":"repository"},"isCrossRepository":false,"title":"Task-097 by agent-test","body":"Task: Task-097\\nAgent: agent-test","reviewDecision":"APPROVED","statusCheckRollup":[]}' "$base_oid" "$(git branch --show-current)" "$head_oid")
+      if { [ "${PM_TEST_GH_MODE:-ok}" = "duplicate-final" ] && [ "$(grep -cF 'pr list' "$PM_TEST_GH_LOG")" -ge 2 ]; } || \
+         { [ "${PM_TEST_GH_MODE:-ok}" = "create-suspected" ] && grep -qF 'pr create' "$PM_TEST_GH_LOG"; }; then
+        row2=${row/\"number\":123/\"number\":124}; row2=${row2/pull\/123/pull\/124}
+        row2=${row2/\"headRefName\":\"$(git branch --show-current)\"/\"headRefName\":\"feat\/same-content-race\"}
+        printf '[%s,%s]\n' "$row" "$row2"
+      else
+        printf '[%s]\n' "$row"
+      fi
+    else
+      echo '[]'
+    fi
+    ;;
+  "pr diff")
+    if [ "${PM_TEST_GH_MODE:-ok}" = "diff-leak" ] && \
+       [ "$(grep -cF 'pr diff' "$PM_TEST_GH_LOG")" -ge 2 ]; then
+      echo 'fatal: https://user:PR-DIFF-LEAK@example.invalid/repository.git?access_token=DIFF-TOKEN failed' >&2
+      exit 46
+    fi
+    base=$(git merge-base HEAD origin/main)
+    git diff "$base" HEAD
+    ;;
   "pr create")
     [ "${PM_TEST_GH_MODE:-ok}" != "create-fail" ] || { echo "create failed" >&2; exit 41; }
+    [ "${PM_TEST_GH_MODE:-ok}" != "race" ] || { echo "a pull request already exists" >&2; exit 41; }
     echo "https://example.invalid/repo/pull/123"
     ;;
   "pr merge")
     [ "${PM_TEST_GH_MODE:-ok}" != "merge-fail" ] || { echo "merge failed" >&2; exit 42; }
+    if [ "${PM_TEST_GH_MODE:-ok}" != "view-fail" ] && [ "${PM_TEST_GH_MODE:-ok}" != "view-invalid" ]; then
+      main_oid=$(git rev-parse origin/main)
+      head_oid=$(git rev-parse HEAD)
+      if [ "${PM_TEST_GH_MODE:-ok}" = "base-race" ]; then
+        advance_oid=$(printf 'main advanced after final review\n' | git commit-tree "$(git rev-parse "$main_oid^{tree}")" -p "$main_oid")
+        git push -q origin "$advance_oid:refs/heads/main"
+        main_oid=$advance_oid
+      fi
+      tree_oid=$(git merge-tree --write-tree "$main_oid" "$head_oid")
+      merge_oid=$(printf 'fake squash merge\n' | git commit-tree "$tree_oid" -p "$main_oid")
+      git push -q origin "$merge_oid:refs/heads/main"
+      printf '%s\n' "$merge_oid" > "${PM_TEST_MERGE_SHA_FILE:?}"
+    fi
     ;;
   "pr view")
-    [ "${PM_TEST_GH_MODE:-ok}" != "view-fail" ] || { echo "view failed" >&2; exit 43; }
-    if [ "${PM_TEST_GH_MODE:-ok}" = "view-invalid" ]; then
-      echo '{"state":null}'
+    if grep -qF 'pr close' "$PM_TEST_GH_LOG"; then
+      [ "${PM_TEST_GH_MODE:-ok}" != "close-view-fail" ] || { echo "close state unavailable" >&2; exit 43; }
+      echo '{"state":"CLOSED"}'
+    elif grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then
+      [ "${PM_TEST_GH_MODE:-ok}" != "view-fail" ] && [ "${PM_TEST_GH_MODE:-ok}" != "view-fail-after-merge" ] || { echo "view failed" >&2; exit 43; }
+      if [ "${PM_TEST_GH_MODE:-ok}" = "view-invalid" ]; then
+        echo '{"state":"MERGED","mergedAt":null,"mergeCommit":null}'
+      else
+        merge_oid=$(cat "${PM_TEST_MERGE_SHA_FILE:?}")
+        printf '{"state":"MERGED","mergedAt":"2026-09-04T00:00:00Z","mergeCommit":{"oid":"%s"}}\n' "$merge_oid"
+      fi
     else
-      echo '{"state":"MERGED"}'
+      head_oid=$(git rev-parse HEAD)
+      base_oid=$(git rev-parse origin/main)
+      checks='[]'
+      if [ "${PM_TEST_GH_MODE:-ok}" = "check-drift" ] && [ "$(grep -cF 'pr view' "$PM_TEST_GH_LOG")" -ge 2 ]; then
+        checks='[{"name":"ci","status":"COMPLETED","conclusion":"NEUTRAL"}]'
+      fi
+      printf '{"number":123,"url":"https://example.invalid/repo/pull/123","state":"OPEN","baseRefName":"main","baseRefOid":"%s","headRefName":"%s","headRefOid":"%s","statusCheckRollup":%s,"reviewDecision":"APPROVED","mergeable":"MERGEABLE","mergedAt":null,"mergeCommit":null}\n' "$base_oid" "$(git branch --show-current)" "$head_oid" "$checks"
+    fi
+    ;;
+  "pr close") ;;
+  "api --hostname")
+    if [[ "${4:-}" == */rules/branches/main ]]; then
+      case "${PM_TEST_PROTECTION_MODE:-unprotected}" in
+        merge-queue) echo '[{"type":"merge_queue"}]' ;;
+        rules-404) echo 'HTTP 404' >&2; exit 1 ;;
+        *) echo '[]' ;;
+      esac
+    else
+      case "${PM_TEST_PROTECTION_MODE:-unprotected}" in
+        unprotected|flip-protection)
+          if [ "${PM_TEST_PROTECTION_MODE:-}" = "flip-protection" ] && \
+             [ "$(grep -cF '/branches/main' "$PM_TEST_GH_LOG")" -ge 2 ]; then
+            echo '{"protected":true}'
+          else
+            echo '{"protected":false}'
+          fi
+          ;;
+        protected|classic-protected|merge-queue) echo '{"protected":true}' ;;
+        404) echo 'HTTP 404' >&2; exit 1 ;;
+        malformed) echo '{}' ;;
+        *) exit 1 ;;
+      esac
     fi
     ;;
   *) echo "unexpected gh call: $*" >&2; exit 44 ;;
@@ -113,14 +217,58 @@ export PATH="$BIN:$PATH"
 export PM_TEST_SAFE_LOG="$TMP_ROOT/safe.log"
 export PM_TEST_VERIFY_LOG="$TMP_ROOT/verify.log"
 export PM_TEST_GH_LOG="$TMP_ROOT/gh.log"
+export PM_TEST_MERGE_SHA_FILE="$TMP_ROOT/merge-sha"
+export PM_CLOSEOUT_MODE=remote-pr
+export PM_CLOSEOUT_TASK_ID=Task-097
+export PM_CLOSEOUT_AGENT_ID=agent-test
 : > "$PM_TEST_SAFE_LOG"
 : > "$PM_TEST_VERIFY_LOG"
 : > "$PM_TEST_GH_LOG"
 
+authority_for() {
+  local repo=$1 operation=$2 pr_number=${3:-none} remote_url leaf remote_id branch sha
+  remote_url=$(git -C "$repo" remote get-url origin)
+  leaf=${remote_url##*/}; leaf=${leaf%.git}
+  remote_id="local/repository/$leaf"
+  branch=$(git -C "$repo" branch --show-current)
+  sha=$(git -C "$repo" rev-parse HEAD)
+  printf 'operation=%s;repo=%s;pr=%s;head=%s;sha=%s' "$operation" "$remote_id" "$pr_number" "$branch" "$sha"
+}
+
+candidate_authority_for() {
+  local repo=$1 operation=$2 pr_number=$3 title=$4 remote_url leaf remote_id branch sha base tree candidate date
+  remote_url=$(git -C "$repo" remote get-url origin)
+  leaf=${remote_url##*/}; leaf=${leaf%.git}
+  remote_id="local/repository/$leaf"
+  branch=$(git -C "$repo" branch --show-current)
+  sha=$(git -C "$repo" rev-parse HEAD)
+  base=$(git -C "$repo" rev-parse origin/main)
+  tree=$(git -C "$repo" merge-tree --write-tree "$base" "$sha")
+  date=$(git -C "$repo" show -s --format=%aI "$sha")
+  candidate=$(GIT_AUTHOR_DATE="$date" GIT_COMMITTER_DATE="$date" \
+    git -C "$repo" -c user.name="$(git -C "$repo" config user.name)" \
+      -c user.email="$(git -C "$repo" config user.email)" \
+      commit-tree "$tree" -p "$base" -m "$title (#$pr_number)")
+  printf 'operation=%s;repo=%s;pr=%s;head=%s;sha=%s;base=%s;candidate=%s;tree=%s' \
+    "$operation" "$remote_id" "$pr_number" "$branch" "$sha" "$base" "$candidate" "$tree"
+}
+
+INITIAL_ARGS=(
+  --integration-path change.txt
+  --authorize-branch-push "$(authority_for "$WT" branch-push)"
+  --authorize-pr-create "$(authority_for "$WT" pr-create)"
+  --authorize-remote-merge "$(authority_for "$WT" remote-merge 123)"
+  --authorize-remote-candidate "$(candidate_authority_for "$WT" remote-merge-candidate 123 test)"
+  --authorize-main-push "$(authority_for "$WT" main-push 123)"
+  --authorize-main-candidate "$(candidate_authority_for "$WT" main-push-candidate 123 test)"
+  --authorize-pr-close "$(authority_for "$WT" pr-close 123)"
+)
+INITIAL_MAIN_SHA=$(git -C "$WT" rev-parse origin/main)
+
 echo "Case 1: legacy shell-string verification is rejected before execution"
 set +e
 bash "$CLOSEOUT" --worktree "$WT" --title test --safe-push-script "$SAFE_PUSH" \
-  --verify 'touch should-not-run' > "$TMP_ROOT/legacy.out" 2>&1
+  "${INITIAL_ARGS[@]}" --verify 'touch should-not-run' > "$TMP_ROOT/legacy.out" 2>&1
 legacy_rc=$?
 set -e
 assert_eq "$legacy_rc" "64" "legacy --verify is fail-closed"
@@ -129,7 +277,7 @@ assert_eq "$legacy_rc" "64" "legacy --verify is fail-closed"
 echo "Case 2: verification command is mandatory"
 set +e
 bash "$CLOSEOUT" --worktree "$WT" --title test --safe-push-script "$SAFE_PUSH" \
-  > "$TMP_ROOT/no-verify.out" 2>&1
+  "${INITIAL_ARGS[@]}" > "$TMP_ROOT/no-verify.out" 2>&1
 no_verify_rc=$?
 set -e
 assert_eq "$no_verify_rc" "64" "missing verification blocks closeout"
@@ -140,10 +288,10 @@ echo "Case 3: argv verification preserves spaces and gh create errors stay visib
 set +e
 PM_TEST_GH_MODE=create-fail bash "$CLOSEOUT" --worktree "$WT" --title test \
   --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --verify-arg 'arg with spaces' \
-  --keep-branch > "$TMP_ROOT/create-fail.out" 2>&1
+  "${INITIAL_ARGS[@]}" --keep-branch > "$TMP_ROOT/create-fail.out" 2>&1
 create_rc=$?
 set -e
-assert_eq "$create_rc" "5" "gh pr create failure blocks merge"
+assert_eq "$create_rc" "9" "gh pr create failure becomes an explicit outcome-unknown state"
 grep -qF '1:arg with spaces' "$PM_TEST_VERIFY_LOG" && ok "verification runs as an argv array" || bad "verification argv changed"
 grep -qF 'create failed' "$TMP_ROOT/create-fail.out" && ok "gh create error is preserved" || bad "gh create error was swallowed"
 if grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then bad "merge ran after create failure"; else ok "merge does not run after create failure"; fi
@@ -154,23 +302,25 @@ for mode in view-fail view-invalid; do
   set +e
   PM_TEST_GH_MODE="$mode" bash "$CLOSEOUT" --worktree "$WT" --title test \
     --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
-    > "$TMP_ROOT/$mode.out" 2>&1
+    "${INITIAL_ARGS[@]}" > "$TMP_ROOT/$mode.out" 2>&1
   rc=$?
   set -e
-  assert_eq "$rc" "6" "$mode blocks completion"
+  assert_eq "$rc" "9" "$mode blocks success with outcome unknown"
 done
 
 echo "Case 5: happy path uses one body-file argument and confirms MERGED"
 : > "$PM_TEST_GH_LOG"
 PM_TEST_GH_MODE=ok bash "$CLOSEOUT" --worktree "$WT" --title test \
   --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
-  > "$TMP_ROOT/happy.out" 2>&1
-grep -qF 'PM_CLOSEOUT_OK: pr=123 branch=feat/closeout-test' "$TMP_ROOT/happy.out" \
+  "${INITIAL_ARGS[@]}" > "$TMP_ROOT/happy.out" 2>&1
+grep -qF 'PM_CLOSEOUT_RESULT: REMOTE_PR pr=123' "$TMP_ROOT/happy.out" \
   && ok "happy path returns a mechanically extracted PR receipt" \
   || bad "happy path receipt missing"
 create_line=$(grep -F 'pr create' "$PM_TEST_GH_LOG" | tail -1)
 body_count=$(printf '%s\n' "$create_line" | grep -o -- '--body-file' | wc -l | tr -d ' ')
 assert_eq "$body_count" "1" "PR create receives exactly one body-file"
+git --git-dir="$REMOTE" update-ref refs/heads/main "$INITIAL_MAIN_SHA"
+git -C "$WT" fetch -q origin main
 
 echo "Case 6: resolver stages only declared document conflicts and ignores literal markers elsewhere"
 DOC_REPO="$TMP_ROOT/doc-conflict"
@@ -336,6 +486,12 @@ rm -f "$ADV_WT/Makefile.bak"
 git -C "$ADV_WT" commit -qam 'worker variable block'
 printf '\n.PHONY: lint\nlint:\n\t@echo worker-lint\n' >> "$ADV_WT/Makefile"
 git -C "$ADV_WT" commit -qam 'worker target block'
+ADV_ARGS=(
+  --integration-path Makefile
+  --authorize-branch-push "$(authority_for "$ADV_WT" branch-push)"
+  --authorize-pr-create "$(authority_for "$ADV_WT" pr-create)"
+  --authorize-remote-merge "$(authority_for "$ADV_WT" remote-merge 123)"
+)
 : > "$PM_TEST_VERIFY_LOG"
 : > "$PM_TEST_SAFE_LOG"
 : > "$PM_TEST_GH_LOG"
@@ -345,26 +501,43 @@ PM_TEST_ADVANCE_REPO="$ADV_SEED" \
 PM_TEST_ADVANCE_MARKER="$TMP_ROOT/advance.marker" \
 PM_TEST_GH_MODE=ok bash "$CLOSEOUT" --worktree "$ADV_WT" --title test \
   --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
-  > "$TMP_ROOT/advance.out" 2>&1
+  "${ADV_ARGS[@]}" > "$TMP_ROOT/advance.out" 2>&1
 advance_rc=$?
 set -e
-if [ "$advance_rc" -ne 0 ]; then
+assert_eq "$advance_rc" "8" "main movement invalidates the pre-candidate authorization"
+ADV_CANDIDATE_AUTH=$(sed -n 's/^PM_CLOSEOUT_CANDIDATE_AUTHORIZATION_REQUIRED: operation=remote-merge-candidate expected=//p' "$TMP_ROOT/advance.out" | tail -1)
+[ -n "$ADV_CANDIDATE_AUTH" ] && ok "main-advance emits a candidate-bound authorization challenge" || bad "candidate challenge missing"
+set +e
+PM_TEST_GH_MODE=ok bash "$CLOSEOUT" --worktree "$ADV_WT" --title test \
+  --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  "${ADV_ARGS[@]}" --authorize-remote-candidate "$ADV_CANDIDATE_AUTH" \
+  > "$TMP_ROOT/advance-retry.out" 2>&1
+advance_retry_rc=$?
+set -e
+if [ "$advance_retry_rc" -ne 0 ]; then
+  sed -n '1,160p' "$TMP_ROOT/advance-retry.out" >&2
+fi
+assert_eq "$advance_retry_rc" "0" "candidate-bound reauthorization completes main-advance closeout"
+if [ "$advance_rc" -ne 8 ]; then
   sed -n '1,160p' "$TMP_ROOT/advance.out" >&2
 fi
-assert_eq "$advance_rc" "0" "main-advance closeout completes"
 verify_rounds=$(wc -l < "$PM_TEST_VERIFY_LOG" | tr -d ' ')
-assert_eq "$verify_rounds" "2" "main movement forces verification to run again"
-grep -qF 'PM_CLOSEOUT_MAIN_ADVANCED: round=1' "$TMP_ROOT/advance.out" \
-  && ok "pre-push refresh observes the moving main" \
-  || bad "main-advance receipt missing"
+assert_eq "$verify_rounds" "4" "main movement plus reauthorization reruns worker and candidate verification"
+grep -qF 'PM_CLOSEOUT_CANDIDATE_VERIFIED: pr=123' "$TMP_ROOT/advance.out" \
+  && ok "PR-first candidate verification emits a stable receipt" \
+  || bad "candidate verification receipt missing"
 grep -qF 'MODE ?= worker' "$ADV_WT/Makefile" \
   && grep -qF 'worker-lint' "$ADV_WT/Makefile" \
-  && grep -qF 'main advanced' "$ADV_WT/main-advanced.txt" \
-  && ok "second sync preserves worker content and the newly advanced main" \
-  || bad "main refresh lost worker or main content"
-git -C "$ADV_WT" merge-base --is-ancestor origin/main HEAD \
-  && ok "stable origin/main is an ancestor before safe-push" \
-  || bad "closeout pushed from a stale main baseline"
+  && git -C "$ADV_WT" show origin/main:main-advanced.txt | grep -qF 'main advanced' \
+  && [ ! -e "$ADV_WT/main-advanced.txt" ] \
+  && ok "PR-first keeps worker head immutable while candidate consumes fresh main" \
+  || bad "worker head or refreshed main evidence changed unexpectedly"
+[ "$(git -C "$ADV_WT" branch --show-current)" = 'feat/advance-main' ] \
+  && ok "candidate verification never checks out or mutates main in the worker tree" \
+  || bad "worker branch changed during candidate verification"
+ADV_MAIN_AFTER_VERIFY=$(git -C "$ADV_WT" rev-parse 'origin/main^1')
+git --git-dir="$ADV_REMOTE" update-ref refs/heads/main "$ADV_MAIN_AFTER_VERIFY"
+git -C "$ADV_WT" fetch -q origin main
 
 echo "Case 10: continuously moving main exhausts the bounded loop before push or PR"
 : > "$PM_TEST_VERIFY_LOG"
@@ -376,18 +549,20 @@ PM_TEST_VERIFY_ADVANCE_ALWAYS=1 \
 PM_TEST_ADVANCE_REPO="$ADV_SEED" \
 PM_TEST_GH_MODE=ok bash "$CLOSEOUT" --worktree "$ADV_WT" --title test \
   --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
-  > "$TMP_ROOT/advance-always.out" 2>&1
+  "${ADV_ARGS[@]}" > "$TMP_ROOT/advance-always.out" 2>&1
 advance_always_rc=$?
 set -e
 assert_eq "$advance_always_rc" "3" "continuous main movement fails closed"
 advance_always_rounds=$(wc -l < "$PM_TEST_VERIFY_LOG" | tr -d ' ')
-assert_eq "$advance_always_rounds" "3" "moving-main loop is bounded to three verification rounds"
+assert_eq "$advance_always_rounds" "4" "one worker verify plus three candidate rounds bounds moving-main verification"
 grep -qF 'PM_CLOSEOUT_MAIN_MOVED_TOO_MANY_TIMES' "$TMP_ROOT/advance-always.out" \
   && ok "bounded-loop exhaustion has an explicit receipt" \
   || bad "bounded-loop exhaustion receipt missing"
-[ ! -s "$PM_TEST_SAFE_LOG" ] && [ ! -s "$PM_TEST_GH_LOG" ] \
-  && ok "safe-push and PR mutations never run after loop exhaustion" \
-  || bad "external mutation ran after moving-main exhaustion"
+if grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then
+  bad "merge ran after moving-main exhaustion"
+else
+  ok "moving-main exhaustion performs no merge or main integration mutation"
+fi
 
 echo "Case 11: a clean verify-side commit is detected as a forbidden Git state mutation"
 : > "$PM_TEST_SAFE_LOG"
@@ -395,7 +570,7 @@ echo "Case 11: a clean verify-side commit is detected as a forbidden Git state m
 set +e
 PM_TEST_VERIFY_COMMIT=1 PM_TEST_GH_MODE=ok bash "$CLOSEOUT" \
   --worktree "$WT" --title test --safe-push-script "$SAFE_PUSH" \
-  --verify-cmd "$VERIFY" --keep-branch \
+  --verify-cmd "$VERIFY" "${INITIAL_ARGS[@]}" --keep-branch \
   > "$TMP_ROOT/verify-commit.out" 2>&1
 verify_commit_rc=$?
 set -e
@@ -406,6 +581,576 @@ grep -qF 'PM_CLOSEOUT_VERIFY_GIT_STATE_CHANGED' "$TMP_ROOT/verify-commit.out" \
 [ ! -s "$PM_TEST_SAFE_LOG" ] && [ ! -s "$PM_TEST_GH_LOG" ] \
   && ok "no push or PR mutation follows a verify-side commit" \
   || bad "external mutation ran after verify changed HEAD"
+
+echo "Case 12: create race re-audits and adopts the unique worker PR without a second create"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=race PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$WT" --title test --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" \
+  --integration-path change.txt \
+  --authorize-branch-push "$(authority_for "$WT" branch-push)" \
+  --authorize-pr-create "$(authority_for "$WT" pr-create)" \
+  --keep-branch > "$TMP_ROOT/race.out" 2>&1
+race_rc=$?
+set -e
+assert_eq "$race_rc" "8" "concurrent create adopts uniquely then stops without merge authority"
+grep -qF 'PM_CLOSEOUT_PR_ADOPTED_AFTER_CREATE_RACE: #123' "$TMP_ROOT/race.out" \
+  && ok "create race adopts the unique exact PR" || bad "create-race adoption receipt missing"
+assert_eq "$(grep -cF 'pr create' "$PM_TEST_GH_LOG")" "1" "create race performs exactly one create attempt"
+if grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then bad "race path merged unexpectedly"; else ok "race path creates no duplicate or merge"; fi
+
+echo "Case 13: dirty main worktree degrades locally with zero main mutation"
+MAIN_WT="$TMP_ROOT/main-worktree"
+git -C "$WT" branch -f main origin/main
+git -C "$WT" worktree add -q "$MAIN_WT" main
+main_before=$(git -C "$MAIN_WT" rev-parse HEAD)
+printf 'dirty\n' > "$MAIN_WT/uncommitted.txt"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$WT" --main-worktree "$MAIN_WT" --integration-path change.txt \
+  --authorize-main-push "$(authority_for "$WT" main-push 123)" \
+  --title test --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/dirty-main.out" 2>&1
+dirty_main_rc=$?
+set -e
+assert_eq "$dirty_main_rc" "8" "dirty main is a non-success validate-only downgrade"
+grep -qF 'reason=main-worktree-dirty' "$TMP_ROOT/dirty-main.out" \
+  && ok "dirty main yields validate-only" || bad "dirty-main reason missing"
+assert_eq "$(git -C "$MAIN_WT" rev-parse HEAD)" "$main_before" "dirty main HEAD is not mutated"
+if grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then bad "dirty main triggered merge"; else ok "dirty main performs no merge"; fi
+rm -f "$MAIN_WT/uncommitted.txt"
+
+echo "Case 14: checks drift after candidate verification leaves main unchanged"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=check-drift PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$WT" --main-worktree "$MAIN_WT" --integration-path change.txt \
+  --authorize-main-push "$(authority_for "$WT" main-push 123)" \
+  --title test --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/check-drift.out" 2>&1
+drift_rc=$?
+set -e
+assert_eq "$drift_rc" "5" "checks drift fails closed"
+grep -qF 'PM_CLOSEOUT_REVIEW_DRIFT' "$TMP_ROOT/check-drift.out" \
+  && ok "checks drift emits re-review receipt" || bad "checks drift receipt missing"
+assert_eq "$(git -C "$MAIN_WT" rev-parse HEAD)" "$main_before" "checks drift performs zero main mutation"
+
+echo "Case 15: local-after-pr commits (#PR), safe-pushes main and closes only with authority"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=existing PM_TEST_SAFE_DO_PUSH=1 PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$WT" --main-worktree "$MAIN_WT" --integration-path change.txt \
+  --authorize-main-push "$(authority_for "$WT" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$WT" main-push-candidate 123 'local integration')" \
+  --authorize-pr-close "$(authority_for "$WT" pr-close 123)" \
+  --title 'local integration' --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/local-success.out" 2>&1
+grep -qF 'PM_CLOSEOUT_RESULT: LOCAL_AFTER_PR pr=123' "$TMP_ROOT/local-success.out" \
+  && ok "local-after-pr reaches the explicit result" || bad "local result missing"
+grep -qF '(#123)' < <(git -C "$MAIN_WT" log -1 --pretty=%s) \
+  && ok "local integration subject is bound to PR number" || bad "local subject lacks PR number"
+assert_eq "$(git -C "$MAIN_WT" rev-parse HEAD)" "$(git -C "$MAIN_WT" rev-parse origin/main)" "local main push is confirmed"
+grep -qF 'pr close' "$PM_TEST_GH_LOG" && ok "authorized local integration closes with commit receipt" || bad "authorized close missing"
+
+echo "Case 16: main movement during candidate causes PR refreeze and candidate re-verification"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr \
+  PM_TEST_VERIFY_ADVANCE_MAIN=1 PM_TEST_VERIFY_ADVANCE_AT_CALL=2 \
+  PM_TEST_ADVANCE_REPO="$ADV_SEED" PM_TEST_ADVANCE_MARKER="$TMP_ROOT/unused-at-call.marker" \
+  bash "$CLOSEOUT" --worktree "$ADV_WT" --title test --safe-push-script "$SAFE_PUSH" \
+  --verify-cmd "$VERIFY" "${ADV_ARGS[@]}" --keep-branch > "$TMP_ROOT/main-refreeze.out" 2>&1
+refreeze_rc=$?
+set -e
+assert_eq "$refreeze_rc" "8" "candidate-time main movement requires a new candidate-bound authorization"
+REFREEZE_AUTH=$(sed -n 's/^PM_CLOSEOUT_CANDIDATE_AUTHORIZATION_REQUIRED: operation=remote-merge-candidate expected=//p' "$TMP_ROOT/main-refreeze.out" | tail -1)
+[ -n "$REFREEZE_AUTH" ] && ok "refrozen candidate emits a new authorization challenge" || bad "refrozen challenge missing"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$ADV_WT" --title test --safe-push-script "$SAFE_PUSH" \
+  --verify-cmd "$VERIFY" "${ADV_ARGS[@]}" --authorize-remote-candidate "$REFREEZE_AUTH" \
+  --keep-branch > "$TMP_ROOT/main-refreeze-retry.out" 2>&1
+refreeze_retry_rc=$?
+set -e
+assert_eq "$refreeze_retry_rc" "0" "refrozen candidate succeeds after exact reauthorization"
+grep -qF 'PM_CLOSEOUT_REVIEW_REFROZEN:' "$TMP_ROOT/main-refreeze.out" \
+  && ok "main movement refreezes base/diff/checks facts" || bad "PR refreeze receipt missing"
+assert_eq "$(wc -l < "$PM_TEST_VERIFY_LOG" | tr -d ' ')" "5" "refreeze plus authorized retry reverify every candidate"
+
+make_same_file_fixture() {
+  local name=$1 main_mode=$2
+  FX_REMOTE="$TMP_ROOT/$name-remote.git"
+  FX_REPO="$TMP_ROOT/$name-worker"
+  FX_MAIN="$TMP_ROOT/$name-main"
+  git init -q --bare "$FX_REMOTE"
+  git init -q "$FX_REPO"
+  git -C "$FX_REPO" config user.name "Closeout Test"
+  git -C "$FX_REPO" config user.email "closeout@example.invalid"
+  printf 'worker=base\nstable=keep\nmain=base\n' > "$FX_REPO/shared.txt"
+  git -C "$FX_REPO" add shared.txt
+  git -C "$FX_REPO" commit -qm base
+  git -C "$FX_REPO" branch -M main
+  git -C "$FX_REPO" remote add origin "$FX_REMOTE"
+  git -C "$FX_REPO" push -qu origin main
+  git --git-dir="$FX_REMOTE" symbolic-ref HEAD refs/heads/main
+  git -C "$FX_REPO" checkout -qb "feat/$name"
+  sed -i.bak 's/worker=base/worker=feature/' "$FX_REPO/shared.txt"; rm -f "$FX_REPO/shared.txt.bak"
+  git -C "$FX_REPO" commit -qam worker
+  git -C "$FX_REPO" worktree add -q "$FX_MAIN" main
+  if [ "$main_mode" = conflict ]; then
+    sed -i.bak 's/worker=base/worker=main/' "$FX_MAIN/shared.txt"
+  else
+    sed -i.bak 's/main=base/main=fresh/' "$FX_MAIN/shared.txt"
+  fi
+  rm -f "$FX_MAIN/shared.txt.bak"
+  git -C "$FX_MAIN" commit -qam 'main advances same file'
+  git -C "$FX_MAIN" push -q origin main
+  git -C "$FX_REPO" fetch -q origin main
+}
+
+echo "Case 17: validate-only with zero PR performs no push or create"
+make_same_file_fixture validate-zero preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=no-pr PM_CLOSEOUT_MODE=validate-only bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --title test --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/validate-zero.out" 2>&1
+grep -qF 'VALIDATE_ONLY pr=none' "$TMP_ROOT/validate-zero.out" \
+  && ok "zero-PR validate-only emits an explicit result" || bad "validate-only zero result missing"
+[ ! -s "$PM_TEST_SAFE_LOG" ] && ! grep -qF 'pr create' "$PM_TEST_GH_LOG" \
+  && ok "validate-only performs zero external mutation" || bad "validate-only mutated remote state"
+
+echo "Case 18: a worker-created exact PR is adopted before any branch push"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=validate-only bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --title test --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/adopt-no-push.out" 2>&1
+grep -qF 'PM_CLOSEOUT_PR_ADOPTED: #123' "$TMP_ROOT/adopt-no-push.out" \
+  && ok "worker-created PR is adopted" || bad "worker PR adoption missing"
+[ ! -s "$PM_TEST_SAFE_LOG" ] && ! grep -qF 'pr create' "$PM_TEST_GH_LOG" \
+  && ok "adoption performs zero branch push and zero create" || bad "adoption mutated branch or PR set"
+
+echo "Case 19: three-way candidate preserves a fresh main edit in the same file"
+PRESERVE_MAIN_BEFORE=$(git -C "$FX_MAIN" rev-parse HEAD)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_SAFE_DO_PUSH=1 PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$FX_REPO" main-push-candidate 123 preserve)" \
+  --title preserve --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/preserve.out" 2>&1
+preserve_rc=$?
+set -e
+assert_eq "$preserve_rc" "0" "non-overlapping same-file edits integrate"
+grep -q '^worker=feature$' "$FX_MAIN/shared.txt" && grep -q '^main=fresh$' "$FX_MAIN/shared.txt" \
+  && ok "three-way patch preserves worker and fresh-main content" || bad "same-file integration lost content"
+[ "$(git -C "$FX_MAIN" rev-parse HEAD)" = "$(git -C "$FX_MAIN" rev-parse origin/main)" ] \
+  && [ "$(git -C "$FX_MAIN" rev-parse HEAD)" != "$PRESERVE_MAIN_BEFORE" ] \
+  && ok "verified candidate is pushed then fast-forwarded locally" || bad "local/remote main did not converge"
+
+echo "Case 20: same-line conflict fails before remote or local main mutation"
+make_same_file_fixture conflict conflict
+CONFLICT_MAIN_BEFORE=$(git -C "$FX_MAIN" rev-parse HEAD)
+CONFLICT_REMOTE_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --title conflict --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/conflict.out" 2>&1
+conflict_rc=$?
+set -e
+assert_eq "$conflict_rc" "8" "same-line conflict becomes non-success validate-only"
+assert_eq "$(git -C "$FX_MAIN" rev-parse HEAD)" "$CONFLICT_MAIN_BEFORE" "conflict leaves local main unchanged"
+git -C "$FX_REPO" fetch -q origin main
+assert_eq "$(git -C "$FX_REPO" rev-parse origin/main)" "$CONFLICT_REMOTE_BEFORE" "conflict leaves remote main unchanged"
+
+echo "Case 21: unknown protection cannot be overridden into a local push"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_PROTECTION_MODE=404 PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --title protection --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/protection-unknown.out" 2>&1
+protection_unknown_rc=$?
+set -e
+assert_eq "$protection_unknown_rc" "8" "404 protection evidence degrades to non-success validate-only"
+if grep -qF 'branch main' "$PM_TEST_SAFE_LOG" || grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then
+  bad "unknown protection triggered a main mutation"
+else
+  ok "unknown protection performs zero main push/merge"
+fi
+
+echo "Case 22: safe-push failure leaves the real main worktree unchanged"
+make_same_file_fixture push-fail preserve
+PUSH_FAIL_MAIN_BEFORE=$(git -C "$FX_MAIN" rev-parse HEAD)
+PUSH_FAIL_REMOTE_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_SAFE_FAIL=1 PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$FX_REPO" main-push-candidate 123 push-fail)" \
+  --title push-fail --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/push-fail.out" 2>&1
+push_fail_rc=$?
+set -e
+assert_eq "$push_fail_rc" "71" "safe-push error propagates"
+assert_eq "$(git -C "$FX_MAIN" rev-parse HEAD)" "$PUSH_FAIL_MAIN_BEFORE" "safe-push failure leaves local main unchanged"
+git -C "$FX_REPO" fetch -q origin main
+assert_eq "$(git -C "$FX_REPO" rev-parse origin/main)" "$PUSH_FAIL_REMOTE_BEFORE" "safe-push failure leaves remote main unchanged"
+
+echo "Case 23: final duplicate PR set blocks merge after candidate verification"
+make_same_file_fixture duplicate-final preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=duplicate-final PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 duplicate)" \
+  --title duplicate --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/duplicate-final.out" 2>&1
+duplicate_final_rc=$?
+set -e
+assert_eq "$duplicate_final_rc" "5" "final duplicate set fails closed"
+if grep -qF 'pr merge' "$PM_TEST_GH_LOG"; then bad "merge ran after final PR-set drift"; else ok "PR-set drift performs zero merge"; fi
+
+echo "Case 24: remote merge requires an explicit integration scope"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --title scope --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/remote-no-scope.out" 2>&1
+remote_no_scope_rc=$?
+set -e
+assert_eq "$remote_no_scope_rc" "64" "remote-pr refuses an undeclared whole-PR scope"
+
+echo "Case 25: scope violations and pathspec magic fail before mutation"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path unrelated.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --title scope --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/scope-violation.out" 2>&1
+scope_violation_rc=$?
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path ':(glob)**' \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --title scope --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/pathspec-magic.out" 2>&1
+pathspec_magic_rc=$?
+set -e
+assert_eq "$scope_violation_rc" "3" "out-of-scope worker paths are rejected"
+assert_eq "$pathspec_magic_rc" "2" "pathspec magic is rejected"
+[ ! -s "$PM_TEST_SAFE_LOG" ] && ! grep -qF 'pr merge' "$PM_TEST_GH_LOG" \
+  && ok "scope failures perform zero push/merge" || bad "scope failure mutated remote state"
+
+echo "Case 26: positive protection evidence routes local preference to remote merge"
+make_same_file_fixture protected-route preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=existing PM_TEST_PROTECTION_MODE=protected PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 protected)" \
+  --title protected --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/protected-route.out" 2>&1
+grep -qF 'effective=remote-pr protection=protected reason=protected-main' "$TMP_ROOT/protected-route.out" \
+  && grep -qF 'PM_CLOSEOUT_RESULT: REMOTE_PR' "$TMP_ROOT/protected-route.out" \
+  && ok "protected main uses the GitHub merge path" || bad "protected main routing failed"
+
+echo "Case 27: a main worktree from another Git common dir is rejected"
+make_same_file_fixture wrong-main-a preserve
+WRONG_WORKER=$FX_REPO; WRONG_MAIN_EXPECTED=$FX_MAIN
+make_same_file_fixture wrong-main-b preserve
+OTHER_MAIN=$FX_MAIN
+WRONG_MAIN_BEFORE=$(git -C "$WRONG_MAIN_EXPECTED" rev-parse HEAD)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$WRONG_WORKER" --main-worktree "$OTHER_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$WRONG_WORKER" main-push 123)" \
+  --title wrong-main --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/wrong-main.out" 2>&1
+wrong_main_rc=$?
+set -e
+assert_eq "$wrong_main_rc" "8" "wrong-repository main becomes non-success validate-only"
+assert_eq "$(git -C "$WRONG_MAIN_EXPECTED" rev-parse HEAD)" "$WRONG_MAIN_BEFORE" "wrong-main rejection leaves intended main unchanged"
+
+echo "Case 28: a clean main with an in-progress Git operation is rejected"
+WRONG_MAIN_GIT_DIR=$(git -C "$WRONG_MAIN_EXPECTED" rev-parse --absolute-git-dir)
+printf '%s\n' "$WRONG_MAIN_BEFORE" > "$WRONG_MAIN_GIT_DIR/MERGE_HEAD"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$WRONG_WORKER" --main-worktree "$WRONG_MAIN_EXPECTED" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$WRONG_WORKER" main-push 123)" \
+  --title operation --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/main-operation.out" 2>&1
+main_operation_rc=$?
+set -e
+rm -f "$WRONG_MAIN_GIT_DIR/MERGE_HEAD"
+assert_eq "$main_operation_rc" "8" "clean main with MERGE_HEAD is rejected"
+assert_eq "$(git -C "$WRONG_MAIN_EXPECTED" rev-parse HEAD)" "$WRONG_MAIN_BEFORE" "operation-in-progress rejection leaves main unchanged"
+
+echo "Case 29: branch protected metadata covers classic protection and routes remotely"
+make_same_file_fixture classic-protection preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=existing PM_TEST_PROTECTION_MODE=classic-protected PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 classic)" \
+  --title classic --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/classic-protection.out" 2>&1
+grep -qF 'effective=remote-pr protection=protected' "$TMP_ROOT/classic-protection.out" \
+  && grep -qF 'repos/repository/classic-protection-remote/branches/main' "$PM_TEST_GH_LOG" \
+  && ok "classic/ruleset protection uses typed branch metadata" \
+  || bad "classic protection was not routed remotely"
+
+echo "Case 30: a base race after final review cannot be reported as a verified remote merge"
+make_same_file_fixture base-race preserve
+BASE_RACE_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=base-race PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 base-race)" \
+  --title base-race --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/base-race.out" 2>&1
+base_race_rc=$?
+set -e
+assert_eq "$base_race_rc" "9" "base race becomes merged-review-required, never REMOTE_PR success"
+grep -qF 'REMOTE_MERGED_REVIEW_REQUIRED' "$TMP_ROOT/base-race.out" \
+  && ok "base race reports the expected and actual merge parent/tree" \
+  || bad "base race recovery receipt missing"
+git -C "$FX_REPO" fetch -q origin main
+[ "$(git -C "$FX_REPO" rev-parse origin/main)" != "$BASE_RACE_BEFORE" ] \
+  && ok "post-commit uncertainty is explicitly distinguished from a zero-mutation failure" \
+  || bad "base-race fixture did not mutate remote main"
+
+echo "Case 31: a lost merge receipt after remote commit is outcome-unknown"
+make_same_file_fixture merge-receipt-loss preserve
+RECEIPT_MAIN_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=view-fail-after-merge PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 receipt-loss)" \
+  --title receipt-loss --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/merge-receipt-loss.out" 2>&1
+receipt_loss_rc=$?
+set -e
+assert_eq "$receipt_loss_rc" "9" "lost post-merge receipt is not misclassified as an ordinary failure"
+grep -qF 'REMOTE_MERGE_OUTCOME_UNKNOWN' "$TMP_ROOT/merge-receipt-loss.out" \
+  && ok "lost merge receipt emits a reconciliation state" || bad "outcome-unknown receipt missing"
+git -C "$FX_REPO" fetch -q origin main
+[ "$(git -C "$FX_REPO" rev-parse origin/main)" != "$RECEIPT_MAIN_BEFORE" ] \
+  && ok "receipt-loss fixture proves main may already be changed" || bad "receipt-loss fixture did not mutate main"
+
+echo "Case 32: remote main success followed by local drift becomes LOCAL_PENDING"
+make_same_file_fixture local-pending preserve
+LOCAL_PENDING_BEFORE=$(git -C "$FX_MAIN" rev-parse HEAD)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_SAFE_DO_PUSH=1 PM_TEST_DIRTY_MAIN_AFTER_PUSH="$FX_MAIN" \
+  PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$FX_REPO" main-push-candidate 123 local-pending)" \
+  --title local-pending --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/local-pending.out" 2>&1
+local_pending_rc=$?
+set -e
+assert_eq "$local_pending_rc" "9" "post-push local drift becomes a recoverable local-pending state"
+grep -qF 'REMOTE_MAIN_APPLIED_LOCAL_PENDING' "$TMP_ROOT/local-pending.out" \
+  && ok "local pending receipt names the confirmed remote commit" || bad "local pending receipt missing"
+assert_eq "$(git -C "$FX_MAIN" rev-parse HEAD)" "$LOCAL_PENDING_BEFORE" "local pending does not rewrite the drifted main worktree"
+rm -f "$FX_MAIN/post-push-drift.txt"
+
+echo "Case 33: caller-supplied ownership trailers are rejected before push/create"
+make_same_file_fixture body-trailer preserve
+BODY_WITH_TRAILER="$TMP_ROOT/body-with-trailer.md"
+printf 'Summary\n\ntask: Task-097\nagent: agent-test\n' > "$BODY_WITH_TRAILER"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=ok PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt --body-file "$BODY_WITH_TRAILER" \
+  --authorize-branch-push "$(authority_for "$FX_REPO" branch-push)" \
+  --authorize-pr-create "$(authority_for "$FX_REPO" pr-create)" \
+  --title body --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/body-trailer.out" 2>&1
+body_trailer_rc=$?
+set -e
+assert_eq "$body_trailer_rc" "64" "reserved Task/Agent trailers fail pre-mutation"
+[ ! -s "$PM_TEST_SAFE_LOG" ] && ! grep -qF 'pr create' "$PM_TEST_GH_LOG" \
+  && ok "invalid body performs zero push/create" || bad "invalid body caused a mutation"
+
+echo "Case 34: post-create same-content race is a named created-review state"
+make_same_file_fixture create-suspected preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=create-suspected PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-branch-push "$(authority_for "$FX_REPO" branch-push)" \
+  --authorize-pr-create "$(authority_for "$FX_REPO" pr-create)" \
+  --title create-race --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/create-suspected.out" 2>&1
+create_suspected_rc=$?
+set -e
+assert_eq "$create_suspected_rc" "9" "post-create suspected PR is not collapsed into ordinary failure"
+grep -qF 'PR_CREATED_REVIEW_REQUIRED pr=123' "$TMP_ROOT/create-suspected.out" \
+  && ok "created PR receipt is preserved for manual reconciliation" || bad "created-review receipt missing"
+assert_eq "$(grep -cF 'pr create' "$PM_TEST_GH_LOG")" "1" "race path creates at most one PR in this invocation"
+
+echo "Case 35: clean worktree with rebase directory is rejected"
+make_same_file_fixture rebase-marker preserve
+REBASE_GIT_DIR=$(git -C "$FX_MAIN" rev-parse --absolute-git-dir)
+mkdir -p "$REBASE_GIT_DIR/rebase-merge"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --title rebase-marker --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/rebase-marker.out" 2>&1
+rebase_marker_rc=$?
+set -e
+rmdir "$REBASE_GIT_DIR/rebase-merge"
+assert_eq "$rebase_marker_rc" "8" "clean main with rebase-merge state is rejected"
+
+echo "Case 36: closeout Git errors redact credentials"
+make_same_file_fixture fetch-redaction preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=ok PM_TEST_SAFE_LEAK=1 PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-branch-push "$(authority_for "$FX_REPO" branch-push)" \
+  --authorize-pr-create "$(authority_for "$FX_REPO" pr-create)" \
+  --title redact --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/fetch-redaction.out" 2>&1
+fetch_redaction_rc=$?
+set -e
+[ "$fetch_redaction_rc" -ne 0 ] && ok "safe-push failure is surfaced" || bad "redaction fixture unexpectedly succeeded"
+! grep -qF 'LEAK-ME' "$TMP_ROOT/fetch-redaction.out" && grep -qF '***@example.invalid' "$TMP_ROOT/fetch-redaction.out" \
+  && ok "closeout redacts remote credentials from Git stderr" || bad "credential redaction failed"
+
+make_same_file_fixture pr-diff-redaction preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=diff-leak PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --title redact-diff --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/pr-diff-redaction.out" 2>&1
+pr_diff_redaction_rc=$?
+set -e
+[ "$pr_diff_redaction_rc" -ne 0 ] && ok "PR diff failure is surfaced" || bad "PR diff redaction fixture unexpectedly succeeded"
+! grep -qE 'PR-DIFF-LEAK|DIFF-TOKEN' "$TMP_ROOT/pr-diff-redaction.out" && grep -qF '***@example.invalid' "$TMP_ROOT/pr-diff-redaction.out" \
+  && ok "closeout redacts credentials from PR diff stderr" || bad "PR diff credential redaction failed"
+
+echo "Case 37: lost PR-close receipt preserves delivered main as an outcome-unknown state"
+make_same_file_fixture close-receipt-loss preserve
+CLOSE_MAIN_BEFORE=$(git -C "$FX_MAIN" rev-parse HEAD)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=close-view-fail PM_TEST_SAFE_DO_PUSH=1 PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$FX_REPO" main-push-candidate 123 close-receipt)" \
+  --authorize-pr-close "$(authority_for "$FX_REPO" pr-close 123)" \
+  --title close-receipt --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/close-receipt-loss.out" 2>&1
+close_receipt_rc=$?
+set -e
+assert_eq "$close_receipt_rc" "9" "lost close receipt is not reported as a zero-mutation failure"
+grep -qF 'LOCAL_AFTER_PR_CLOSE_OUTCOME_UNKNOWN' "$TMP_ROOT/close-receipt-loss.out" \
+  && ok "close outcome-unknown receipt retains PR and main identities" || bad "close outcome receipt missing"
+[ "$(git -C "$FX_MAIN" rev-parse HEAD)" != "$CLOSE_MAIN_BEFORE" ] \
+  && [ "$(git -C "$FX_MAIN" rev-parse HEAD)" = "$(git -C "$FX_MAIN" rev-parse origin/main)" ] \
+  && ok "close receipt loss keeps the confirmed local/remote main delivery" \
+  || bad "main delivery was not preserved before close receipt loss"
+
+echo "Case 38: post-create audit failure preserves an outcome-unknown receipt"
+make_same_file_fixture post-create-audit preserve
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=post-create-audit-fail PM_CLOSEOUT_MODE=remote-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-branch-push "$(authority_for "$FX_REPO" branch-push)" \
+  --authorize-pr-create "$(authority_for "$FX_REPO" pr-create)" \
+  --title post-create-audit --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/post-create-audit.out" 2>&1
+post_create_audit_rc=$?
+set -e
+assert_eq "$post_create_audit_rc" "9" "post-create audit failure is outcome-unknown, not zero-mutation failure"
+grep -qF 'PR_CREATE_OUTCOME_UNKNOWN' "$TMP_ROOT/post-create-audit.out" \
+  && ok "post-create audit failure retains a reconciliation state" || bad "post-create audit state missing"
+assert_eq "$(grep -cF 'pr create' "$PM_TEST_GH_LOG")" "1" "post-create audit failure never retries create"
+
+echo "Case 39: native merge queue is left to Task-070"
+make_same_file_fixture merge-queue preserve
+MERGE_QUEUE_MAIN_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_PROTECTION_MODE=merge-queue PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 queue)" \
+  --title queue --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/merge-queue.out" 2>&1
+merge_queue_rc=$?
+set -e
+assert_eq "$merge_queue_rc" "8" "merge queue rule degrades to validate-only"
+grep -qF 'merge-queue-present-task-070-required' "$TMP_ROOT/merge-queue.out" \
+  && ! grep -qF 'pr merge' "$PM_TEST_GH_LOG" \
+  && ok "Task-097 never enqueues an asynchronous merge" || bad "merge queue boundary failed"
+git -C "$FX_REPO" fetch -q origin main
+assert_eq "$(git -C "$FX_REPO" rev-parse origin/main)" "$MERGE_QUEUE_MAIN_BEFORE" "merge queue path leaves main unchanged"
+
+echo "Case 40: protection is rechecked immediately before local main push"
+make_same_file_fixture protection-flip preserve
+PROTECTION_FLIP_MAIN_BEFORE=$(git -C "$FX_REPO" rev-parse origin/main)
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_TEST_PROTECTION_MODE=flip-protection PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --authorize-main-candidate "$(candidate_authority_for "$FX_REPO" main-push-candidate 123 protection-flip)" \
+  --title protection-flip --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/protection-flip.out" 2>&1
+protection_flip_rc=$?
+set -e
+assert_eq "$protection_flip_rc" "8" "protection flip blocks local push after candidate verification"
+grep -qF 'reason=main-protection-drift-protected' "$TMP_ROOT/protection-flip.out" \
+  && [ ! -s "$PM_TEST_SAFE_LOG" ] \
+  && ok "final protection gate performs zero main push" || bad "final protection recheck failed"
+git -C "$FX_REPO" fetch -q origin main
+assert_eq "$(git -C "$FX_REPO" rev-parse origin/main)" "$PROTECTION_FLIP_MAIN_BEFORE" "protection flip leaves remote main unchanged"
+
+echo "Case 41: stale REBASE_HEAD alone is not an active rebase"
+make_same_file_fixture stale-rebase-head preserve
+STALE_REBASE_GIT_DIR=$(git -C "$FX_MAIN" rev-parse --absolute-git-dir)
+git -C "$FX_REPO" rev-parse HEAD > "$STALE_REBASE_GIT_DIR/REBASE_HEAD"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+set +e
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=local-after-pr bash "$CLOSEOUT" \
+  --worktree "$FX_REPO" --main-worktree "$FX_MAIN" --integration-path shared.txt \
+  --authorize-main-push "$(authority_for "$FX_REPO" main-push 123)" \
+  --title stale-rebase-head --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --keep-branch \
+  > "$TMP_ROOT/stale-rebase-head.out" 2>&1
+stale_rebase_head_rc=$?
+set -e
+rm -f "$STALE_REBASE_GIT_DIR/REBASE_HEAD"
+assert_eq "$stale_rebase_head_rc" "8" "stale REBASE_HEAD reaches the later candidate authorization gate"
+grep -qF 'PM_CLOSEOUT_CANDIDATE_VERIFIED:' "$TMP_ROOT/stale-rebase-head.out" && \
+  ! grep -qF 'main-worktree-operation-in-progress-REBASE_HEAD' "$TMP_ROOT/stale-rebase-head.out" \
+  && ok "stale REBASE_HEAD is ignored while active rebase directories remain guarded" \
+  || bad "stale REBASE_HEAD was mistaken for an active rebase"
 
 printf 'pm-closeout tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

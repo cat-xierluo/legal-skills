@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.10.1。
+> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.15.0。
 
 ## 目录
 
@@ -101,35 +101,71 @@ worker 分支提交
 
 ### 4.1 先查已有 PR，避免双开
 
-worker 可能已经自行 push/开 PR。PM 在 `gh pr create` 前先按精确 head 分支列出 open PR，并核对 `baseRefName`、`headRefName`、`headRefOid`、任务范围和 Agent 归属：
+worker 可能已经自行 push/开 PR。先运行只读审计：
 
 ```bash
-gh pr list --state open --head "$BRANCH" \
-  --json number,url,baseRefName,headRefName,headRefOid,title
+bash scripts/pm-orchestrate.sh pr-audit \
+  --worktree "$WT" --base-ref main --head-ref "$BRANCH" --head-sha "$HEAD_SHA" \
+  --task-id Task-097 --agent-id agent-name
 ```
 
-- 恰有一个 PR 且 head SHA 等于本轮冻结的 worker tip：接管该 PR 做验收，不再创建。
-- 没有匹配 PR：完成 safe-push 后创建一个显式 `--head "$BRANCH"` 的 PR。
-- 多个候选、同分支但 SHA 不同、或不同分支出现疑似同内容 PR：失败关闭，逐个比较 diff 后由 PM 选择；不得猜测、不得再开一个 PR。
+- stdout 只有一个 `pr-audit.v1` JSON；stderr 只写摘要 receipt，机器消费者不得混读。
+- `exact` 同时要求 canonical repo/Git common dir、base ref/OID、head owner/ref/OID、真实 diff 指纹相等以及独立 `Task:`/`Agent:` trailer 一致；恰好一个 exact 且零 suspected 才返回 `adopt`。
+- 同 head 错 SHA、同内容异分支、fork/cross-repository、归属不完整、diff/候选事实未知或 101 条候选截断都归 `suspected/ambiguous`，禁止 push/create。
+- `create` 只表示当前只读证据允许进入授权门禁；不是 push 或创建权限。
 - 接管 worker 自建 PR 不降低门禁：仍检查完整 diff、identity、checks、review、敏感文件和声明范围。
 
-Task-097 将把上述检查机械化为 `pr-audit` 与 `pm-closeout` 的 create 前门禁；完成前按本节手工执行，不能声称已有自动去重。
+### 4.2 授权回执与 `pm-closeout`
 
-> **当前脚本能力告警**：`pm-closeout.sh` 目前是一体化的 `safe-push → gh pr create → gh pr merge`，没有“创建 PR 后暂停并转本地集成”的开关。选择 `LOCAL_INTEGRATE` 时不得运行这条旧的一体化路径；先按本节手工分段，等 Task-097 为脚本补齐显式三态后再恢复自动收口。
+所有 mutation 授权只接受本次 CLI 的显式参数，不从可继承环境变量取得。push/create 的第一阶段回执必须与脚本打印的 expected 字符串逐字一致：
 
-### 4.2 本地集成的三种结果
+```text
+operation=<branch-push|pr-create|main-push|remote-merge|pr-close>;
+repo=<HOST/OWNER/REPO>;pr=<PR号或none>;head=<branch>;sha=<40-hex>
+```
+
+实际值为单行、无换行；上方仅为字段说明。典型调用：
+
+```bash
+bash scripts/pm-closeout.sh \
+  --worktree "$WT" --main-worktree "$MAIN_WT" \
+  --mode local-after-pr --main-protection auto \
+  --task-id Task-097 --agent-id agent-name \
+  --integration-path skills/multi-agent-orchestration \
+  --title "feat(multi-agent-orchestration): ..." \
+  --safe-push-script /absolute/path/to/git-workflow/scripts/safe-push.sh \
+  --verify-cmd bash --verify-arg scripts/test-pm-closeout.sh \
+  --authorize-main-push 'operation=main-push;repo=github.com/OWNER/REPO;pr=123;head=feat/x;sha=<40-hex>' \
+  --authorize-main-candidate 'operation=main-push-candidate;repo=github.com/OWNER/REPO;pr=123;head=feat/x;sha=<40-hex>;base=<40-hex>;candidate=<40-hex>;tree=<40-hex>'
+```
+
+若预审为 zero，还需在任何写入前同时提供绑定相同 repo/head/SHA 的 `--authorize-branch-push` 与 `--authorize-pr-create`；worker 已自建 exact PR 时两者都不需要。`--authorize-pr-close` 独立可选：省略时本地集成完成后保留 PR open；提供但不匹配时在 main push 前失败。
+
+候选完成后还有第二阶段 mutation challenge，绑定最终 `base/candidate/tree`；调用方必须把完整 expected 值原样传回 `--authorize-main-candidate` 或 `--authorize-remote-candidate`。main 前移会改变 challenge，旧回执不可复用：首次调用可以停在 exit 8 的 `VALIDATE_ONLY`，审阅 challenge 后再用同一参数重跑。粗粒度 `main-push/remote-merge` 回执与候选回执缺一不可。
+
+调用方 `body-file` 不得自带 `Task:`/`Agent:` trailer；脚本在任何 push/create 前拒绝，由唯一写入点追加，避免重复或冲突归属导致“PR 已创建但无法接管”。
+
+`--main-protection auto` 读取 GitHub branch metadata 的类型化 `.protected` 布尔值；该字段同时覆盖 classic branch protection 与 rulesets。只有明确 `false` 才认定 unprotected；403/404、缺字段、畸形响应或未知状态都降为非成功 `VALIDATE_ONLY`。本地 main push 前再次读取该字段，候选验证期间从 false 变为 true/unknown 时不沿用旧结论。`--main-protection protected` 只允许显式选择更保守的远端路径，不提供 `unprotected` 绕过开关。
+
+### 4.3 三种收口结果
 
 | 结果 | 适用条件 | 行为 |
 |---|---|---|
-| `LOCAL_INTEGRATE` | 用户/项目允许 PM 更新 main，main 无保护阻断，存在干净且身份唯一的 main worktree | 从最新 `origin/main` 建本地候选，导入冻结的 PR head，复跑门禁，生成带 `(#PR)` 的本地集成提交，再按 `git-workflow` 安全推送 main |
-| `REMOTE_PR_MERGE` | main 有 branch protection、required review/checks，或项目明确以 GitHub 为合并权威 | 本地候选只做验证；确认 PR head 未漂移后用 GitHub squash/merge，并复核 `state/mergedAt/mergeCommit` |
-| `VALIDATE_ONLY` | main worktree dirty/身份不明、PR 不唯一、checks/review 未决、授权不足或范围不清 | 只报告证据与阻塞，不修改 main、不关闭 PR |
+| `LOCAL_AFTER_PR` | branch metadata 正向证明 main unprotected，存在唯一 clean/idle main worktree，且两阶段 main-push 授权均匹配 | 在隔离 main clone 对冻结 worker patch 做三方应用并验证；从隔离 clone safe-push，远端确认后才 `--ff-only` 同步真实 main；提交主题带 `(#PR)` |
+| `REMOTE_PR` | main 有 classic protection/ruleset，或项目明确以 GitHub 为合并权威 | 同样先建本地候选并验证；mutation 前重审唯一 PR 集合与冻结快照，确认无原生 merge queue 后用 `--match-head-commit` 合并，并复核 `state/mergedAt/mergeCommit`、merge 第一父提交等于已审 base、merge tree 等于候选 tree，且 merge commit 已进入 main |
+| `VALIDATE_ONLY` | 用户显式只读，或 main/PR/checks/review/授权/范围/保护状态任一不明 | 显式请求时退出 0；由写入模式自动降级时退出 8，不 push、不 create、不 merge、不 close |
 
-本地集成必须基于再次 fetch 后的最新 `origin/main`，并绑定已经审阅的精确 PR head SHA；任一 SHA、diff 或 checks 在验证期间变化，都回到 PR 审计，不沿用旧结论。
+两种写入模式都必须至少提供一个仓库相对的 `--integration-path`；拒绝绝对路径、`..`、symlink 逃逸与 pathspec magic。候选从冻结 `WORKER_BASE..WORKER_TIP` 生成限定范围的 binary/full-index patch，在 fresh main 上 `--3way --index` 应用；同文件非重叠修改可保留，语义冲突则停在零 main mutation。
 
-Monorepo 禁止直接 `git merge <feature>`。只导入任务声明范围：单 Skill 优先按目录级 checkout；仓库已明确允许 squash 时，仍须先确认 PR 已基于最新 main、diff 仅含声明目录且无意外删除。具体命令、身份门禁和提交格式以 `git-workflow` 为准。
+候选验证后、任何 main push/GitHub merge 前都重新 fetch main、重跑 `pr-audit` 并核对同一 PR 的 base/head/diff/checks/review；任何漂移回到审计，不沿用旧结论。Monorepo 禁止直接 `git merge <feature>`；最终本地同步只允许将已经远端确认的隔离 main 候选 `--ff-only` 到同一 Git common dir 的唯一 clean main worktree。
 
-### 4.3 远端结果与清理
+Task-097 不消费 GitHub 原生 merge queue：远端 mutation 前必须读到类型化 rules 数组且确认没有 `merge_queue`；发现 queue 或 API 状态未知都停在 exit 8 的 `VALIDATE_ONLY`，不得让 `gh pr merge` 留下稍后异步修改 main 的排队项。队列消费和延迟复核属于 Task-070。
+
+普通失败（exit 2–8）都发生在 main commit point 前，因此必须保持 main 未修改。分布式写入存在不可消除的“服务端已提交、客户端回执丢失”窗口；写入调用开始后若无法确认，不得伪称零 mutation，也不得误报成功，而以 exit 9 输出可恢复状态：`PR_CREATE_OUTCOME_UNKNOWN`、`PR_CREATED_REVIEW_REQUIRED`、`REMOTE_MERGE_OUTCOME_UNKNOWN`、`REMOTE_MERGED_REVIEW_REQUIRED`、`MAIN_PUSH_OUTCOME_UNKNOWN`、`REMOTE_MAIN_APPLIED_LOCAL_PENDING` 或 `LOCAL_AFTER_PR_CLOSE_OUTCOME_UNKNOWN`。看到这些状态必须先读取远端真实 PR/main 再决定恢复动作，禁止盲重试 mutation。
+
+`gh pr create` 本身也是分布式 commit point，GitHub 不提供本流程可用的幂等键，另一个 creator 可能在最终审计与 create 之间同时提交。因此本脚本能机械保证的是“commit point 前零 create、单次调用至多一次 create、结果不明时不重试”，不能承诺仓库最终全局零重复 open PR。post-create 重审发现多个候选时保留新建 PR 回执并进入 `PR_CREATED_REVIEW_REQUIRED`；不得在没有独立 close 授权时用自动关闭补偿掩盖竞态。
+
+### 4.4 远端结果与清理
 
 - 本地集成提交成功推入 main 后，原 PR 若未被 GitHub 自动标为 merged，使用包含 main commit SHA 的说明关闭；不得把 `CLOSED` 伪报成 GitHub `MERGED`。
 - GitHub 合并路径以 `state == MERGED`、非空 `mergedAt` 和 `mergeCommit.oid` 为成功证据。

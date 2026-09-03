@@ -13,10 +13,12 @@ usage() {
   cat >&2 <<'USAGE'
 Usage:
   pm-orchestrate.sh run-create --objective TEXT
+  pm-orchestrate.sh pr-audit --worktree PATH --base-ref main --head-ref BRANCH --head-sha SHA [--task-id ID] [--agent-id ID]
   pm-orchestrate.sh <command> --worktree PATH --session NAME [options]
 
 Commands:
   run-create  Create and bind one Orca Run for a Wave
+  pr-audit    Read-only classification of open PRs for one frozen worker head
   send        Send guidance: Dispatch inbox for supervised, terminal input otherwise
   read|peek   Read exact worker transcript/terminal output; peek uses 15 rows
   show        Show supervised Dispatch state
@@ -67,6 +69,11 @@ Common:
   --resume-text TEXT With `reauthorize`: short continuation note sent to the new terminal
                      after worker-start re-injection (e.g. progress preserved, continue from X)
   --task-id ID       With `reauthorize`: task override when METADATA lacks task_id
+                     With `pr-audit`: optional task ownership marker
+  --agent-id ID      With `pr-audit`: optional Agent ownership marker
+  --base-ref NAME    With `pr-audit`: expected PR base (default: main)
+  --head-ref NAME    With `pr-audit`: exact worker head branch
+  --head-sha SHA     With `pr-audit`: frozen full worker commit id
 
 Supervised wait prints the complete Delivery JSON and never auto-acks it. Process every
 message and decide release/reuse/retain before running `ack`.
@@ -93,6 +100,11 @@ DESTROY=0
 ALLOW_CMDS=()
 REAUTH_RESUME_TEXT=""
 REAUTH_TASK_ID=""
+PR_BASE_REF="main"
+PR_HEAD_REF=""
+PR_HEAD_SHA=""
+PR_TASK_ID=""
+PR_AGENT_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -111,14 +123,18 @@ while [[ $# -gt 0 ]]; do
     --force) FORCE=1; shift ;;
     --allow-cmd) ALLOW_CMDS+=("$2"); shift 2 ;;
     --resume-text) REAUTH_RESUME_TEXT="$2"; shift 2 ;;
-    --task-id) REAUTH_TASK_ID="$2"; shift 2 ;;
+    --task-id) REAUTH_TASK_ID="$2"; PR_TASK_ID="$2"; shift 2 ;;
+    --agent-id) PR_AGENT_ID="$2"; shift 2 ;;
+    --base-ref) PR_BASE_REF="$2"; shift 2 ;;
+    --head-ref) PR_HEAD_REF="$2"; shift 2 ;;
+    --head-sha) PR_HEAD_SHA="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
 done
 
 case "$COMMAND" in
-  run-create|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize|quota-park) ;;
+  run-create|pr-audit|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize|quota-park) ;;
   *) echo "ERROR: unknown command: $COMMAND" >&2; usage; exit 64 ;;
 esac
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
@@ -131,6 +147,29 @@ if [ "$COMMAND" = "run-create" ]; then
 fi
 
 [ -n "$WORKTREE" ] || { echo "ERROR: --worktree is required" >&2; exit 64; }
+[ "$COMMAND" != "pr-audit" ] || {
+  [ -n "$PR_HEAD_REF" ] && [ -n "$PR_HEAD_SHA" ] || {
+    echo "ERROR: pr-audit requires --head-ref and --head-sha" >&2
+    exit 64
+  }
+  audit_args=(
+    --repo "$WORKTREE" --base-ref "$PR_BASE_REF"
+    --head-ref "$PR_HEAD_REF" --head-sha "$PR_HEAD_SHA"
+  )
+  [ -z "$PR_TASK_ID" ] || audit_args+=(--task-id "$PR_TASK_ID")
+  [ -z "$PR_AGENT_ID" ] || audit_args+=(--agent-id "$PR_AGENT_ID")
+  audit_json=$(python3 "$SCRIPT_DIR/pr-audit.py" "${audit_args[@]}") || exit $?
+  audit_decision=$(printf '%s' "$audit_json" | jq -er '.decision') || {
+    echo "ERROR: pr-audit helper returned invalid JSON" >&2
+    exit 2
+  }
+  audit_exact=$(printf '%s' "$audit_json" | jq -er '.counts.exact')
+  audit_suspected=$(printf '%s' "$audit_json" | jq -er '.counts.suspected')
+  audit_unrelated=$(printf '%s' "$audit_json" | jq -er '.counts.unrelated')
+  echo "PM_ORCHESTRATE_PR_AUDIT: decision=$audit_decision exact=$audit_exact suspected=$audit_suspected unrelated=$audit_unrelated" >&2
+  printf '%s\n' "$audit_json"
+  exit 0
+}
 [ -n "$SESSION" ] || { echo "ERROR: --session is required" >&2; exit 64; }
 [[ "$LINES" =~ ^[0-9]+$ ]] || { echo "ERROR: --lines must be an integer" >&2; exit 64; }
 [[ "$WAIT_TIMEOUT" =~ ^[0-9]+$ ]] || { echo "ERROR: --timeout must be an integer" >&2; exit 64; }
