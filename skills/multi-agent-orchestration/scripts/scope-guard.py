@@ -3,6 +3,7 @@
 
 Reads stdin JSON (tool_name + tool_input), checks tool_input.file_path
 against SCOPE_GUARD_ALLOW glob patterns (colon-separated).
+覆盖写工具 Edit/Write/NotebookEdit 与 Claude Code 的 Update（Task-114）。
 
 Designed for both codebuddy and qoder (stdin/stdout JSON format identical).
 Based on ref 07 §9.3 (qoder PreToolUse hook, unbypassable even in bypass_permissions)
@@ -25,6 +26,17 @@ SCOPE_GUARD_ROLE=reviewer 激活 reviewer 写范围纪律——
   配置，如 orchestration-personal.local.yaml）永远拒绝——修复权不覆盖
   本机配置写入；
 - 非 reviewer 角色完全走既有 allowlist 行为（向后兼容）。
+
+Task-114-R2B（独立 reviewer 在真实 Claude Code 2.1.237 负探针中的回归）：
+
+- deny() 按 WORKER_GUARD_BACKEND 区分协议：backend 为 claude-code/
+  claude_code/claude 时，deny JSON 的 hookSpecificOutput 必须带精确
+  hookEventName="PreToolUse"，否则 Claude Code 不承认这是权限决策——
+  报 `PreToolUse:Edit hook error` 后照常执行写入（负探针实证：reviewer
+  对根 README.md 的 Update 落盘）；其他 backend 保持现有协议不变；
+- deny 真正生效后，非 reviewer 角色在 SCOPE_GUARD_SESSION_ROOT 自身
+  目录内的控制面写入（STATUS/RESULT 等）保持可达——严格前缀，不含
+  父目录、兄弟 session、仓库代码，config/*.local.yaml 明确排除。
 """
 
 import fnmatch
@@ -100,14 +112,19 @@ def match_any_pattern(file_path, patterns, worktree_root):
 
 
 def deny(permissionDecisionReason: str) -> None:
-    deny_output = {
-        "hookSpecificOutput": {
-            "permissionDecision": "deny",
-            "permissionDecisionReason": permissionDecisionReason,
-        }
+    hook_specific_output = {
+        "permissionDecision": "deny",
+        "permissionDecisionReason": permissionDecisionReason,
     }
+    # Claude Code（实证 2.1.237）要求 hookEventName 精确等于 "PreToolUse"
+    # 才把该 JSON 当权限决策；缺字段时报 hook error 后继续写入。
+    backend = os.environ.get("WORKER_GUARD_BACKEND", "").strip().lower()
+    if backend in ("claude-code", "claude_code", "claude"):
+        hook_specific_output["hookEventName"] = "PreToolUse"
+    deny_output = {"hookSpecificOutput": hook_specific_output}
     print(json.dumps(deny_output), file=sys.stdout)
     # Exit 0: codebuddy interprets JSON permissionDecision (ref: codebuddy.cn/docs/cli/permissions)
+    # claude-code 额外要求上方 hookEventName 才承认 deny。
     sys.exit(0)
 
 
@@ -124,8 +141,12 @@ def main():
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {}) or {}
 
-    # ---- only check Edit/Write/NotebookEdit ----
-    if tool_name not in ("Edit", "Write", "NotebookEdit"):
+    # ---- only check Edit/Write/NotebookEdit/Update ----
+    # Update 是 Claude Code（≥2.x）的文件编辑工具名。Task-114 实证事故：
+    # 工具集与 spawn 生成的 PreToolUse matcher 漏 Update，reviewer 对
+    # Session Context 外文件的 Update 写入完全绕过 scope guard。Update
+    # 的 tool_input 与 Edit 同构（file_path），必须走同一条 fail-closed 路径。
+    if tool_name not in ("Edit", "Write", "NotebookEdit", "Update"):
         return  # not a write tool → allow
 
     # ---- extract file path ----
@@ -163,6 +184,20 @@ def main():
             )
             return
         # 授予修复权 → 继续走下方 allowlist（spawn 已为 reviewer 注入allowlist）。
+
+    # ---- 非 reviewer 角色：自身 Session Context 控制面保持可达（Task-114-R2B）----
+    # deny 真正生效（Claude backend 补齐 hookEventName）后，窄 --allow-paths
+    # 的 implementer 会被硬挡在 .claude/agent-sessions/<session>/ 之外，无法写
+    # 任务合同要求的 STATUS/RESULT。这里放行 Session Context 自身目录内的写入；
+    # 父目录、兄弟 session、仓库代码都不在严格前缀内；config/*.local.yaml 即使
+    # 落在 session 目录内也明确排除。reviewer 层语义不受影响（上方已 return）。
+    if role != REVIEWER_ROLE:
+        session_root = os.environ.get("SCOPE_GUARD_SESSION_ROOT", "").strip()
+        if session_root and not is_config_local_yaml(file_path):
+            tried_abs = os.path.abspath(file_path)
+            root_abs = os.path.abspath(session_root)
+            if tried_abs == root_abs or tried_abs.startswith(root_abs + os.sep):
+                return  # own Session Context → allow
 
     # ---- no SCOPE_GUARD_ALLOW → no-op (backward compatible) ----
     allow_env = os.environ.get("SCOPE_GUARD_ALLOW", "").strip()
