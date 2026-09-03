@@ -1,13 +1,29 @@
 # Changelog
 
-## [2.14.1] - 2026-09-03
+## [2.14.2] - 2026-09-03
 
 ### 修复（pm-monitor tmux 判活三态，Task-113）
 
 - **判活误报根因修复**：`pm-monitor.sh` 的 `check_tmux_session` 原来把三种失败折叠进同一个 `! tmux has-session` → dead 分支——① tmux 命令不在 PATH（rc=127，Monitor/受限环境常见）、② tmux 可用但控制面查询失败（socket 不可达 / Permission denied 等）、③ 目标 session 确实不存在。真实事故：Badminton Lab 本轮 `pm-monitor` 把可由 `tmux capture-pane` / `tmux has-session` 证明仍存活的 `bl112-glm53flash`、`bl113-glm53flash` 报为 `SESSION_GONE`。现新增 `tmux_session_state` 分类函数输出三态：`alive`（控制面确认存在）、`absent`（查询成功且明确无此 session：`can't find session` / `no server running`，唯一允许发 `SESSION_GONE` 的状态）、`unknown`（命令缺失或查询失败，存活不可判定）。
 - **unknown 不再冒充 dead**：控制面查询异常时输出可机器识别的 `SESSION_UNKNOWN: <session> (branch <branch>) reason=<单行原因>` + `AGENT_NEEDS_INPUT`，PM 据此知道是观察器自身故障而非 worker 死亡；同状态跨轮去重（状态机只在翻转时发事件）；从 absent/unknown 恢复存活补发 `SESSION_RECOVERED` 供撤销告警。`check_commit_staleness` 改为复用同一分类，只对确认 alive 的 session 追提交停滞告警，不用不确定的判活去骚扰可能仍存活的 worker。
 - **新增确定性回归门禁 `scripts/test-pm-monitor.sh`**：PATH shim fake tmux（模式/序列驱动，POSIX sh）+ 临时 Git 仓库，7 案例 23 断言覆盖 alive 不误报、可靠 absent 才 SESSION_GONE、socket 查询错误报 UNKNOWN、tmux 命令缺失报 UNKNOWN、同状态 3 轮去重、恢复事件；Case 4/5/6 对旧折叠实现必红（红 13 通过/10 失败 → 修复后 23/23 全绿），零外部依赖、零常驻进程。
-- **文档同步**：`SKILL.md` §7 新增 pm-monitor 判活三态说明。版本 2.14.0 → 2.14.1。
+- **文档同步**：`SKILL.md` §7 新增 pm-monitor 判活三态说明。版本 2.14.1 → 2.14.2。
+
+## [2.14.1] - 2026-09-03
+
+### 修复
+
+- **Orca worktree 分支错配在任务注入前失败关闭**：`spawn-worker.sh` 在 worktree 落盘后、任何 terminal、Session Context、authority receipt、Task 或 `worker-start` 副作用之前执行 isolation pre-gate，机械核对目录、实际分支与 HEAD。Orca 因同名分支自动创建 `-2` 后缀分支时立即输出 `SPAWN_WORKER_ISOLATION_PREGATE_FAILED` 并退出，保留 worktree 供 PM 精确处置，不再形成“spawn 报失败但 worker 已收到任务”的 partial dispatch。
+- **收窄最终门禁职责**：launch 后的 `SPAWN_WORKER_GATE` 只保留必须等 terminal 创建后才能观察的 pane cwd 校验；branch 与 HEAD 身份由前置门禁独占，避免同一不变量在副作用前后产生不一致结论。
+
+### 技术优化
+
+- **新增真实入口回归**：`test-spawn-worker-orca.sh` 用 fake Orca CLI 实际创建 `-2` 后缀 worktree，负例断言零 terminal/run/task/worker-start 调用、零 Session Context 落盘且 worktree 保留；正例断言 worker-start 注入与 supervised METADATA 合同完整。
+- **Reviewer 证据预算**：固定 exact HEAD、diff 与受影响文件优先，外部 CI 仅在 verdict 必需时查询；环境或时序失败最多一次归因复跑，之后必须具名 `NOT_VERIFIED` 或 `REJECT`，PM 可发送 budget stop 收敛审查范围。
+
+### 文档完善
+
+- `SKILL.md` 增加 isolation pre-gate 硬约束与 Reviewer 证据预算；`references/10-parallel-lessons.md` 新增 G40 partial dispatch 复盘和 G41 evidence budget 经验。
 
 ## [2.14.0] - 2026-09-02
 
