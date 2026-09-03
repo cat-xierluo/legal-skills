@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.10.2"
+  version: "2.14.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -75,30 +75,61 @@ Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩�
 
 ### 派发价值、验收背压与资源责任
 
-额度和并发只用于路由已经成立的任务，不能生成任务。Autopilot 或普通多 worker 派发前，每个任务都必须有：
+额度和并发只用于路由已经成立的任务，不能生成任务。每个任务必须声明三种 `value_kind` 之一，并回答消费者合同：
 
-- `consumer`：命名的后续实现、用户决策、发布门禁或验收流程；
-- `decision_or_gate_changed`：产出会改变什么，而不是只描述“形成文档”；
-- `consume_by` 与 `expiry`：预计何时消费、到期未消费如何归档；
-- `observable_acceptance`：真实 diff、测试、fixture、基准、交互或决策状态迁移；
-- `resource_owner`：任务会启动的服务、端口、子进程和清理责任；没有外部进程时写 `none`。
+- `value_kind`：`implementation`（改变行为的实现/修复）、`reusable_verification`（可复用的确定性测试/fixture/基准/故障注入资产）、`merge_gate`（针对具名 PR/change + 40 位 head 的零 diff 合并/发布决策）三选一；docs/research/纯调查/文案与格式清理不可派；
+- `problem_target`：具体问题、模块或 PR，不接受 "look into it" 式占位；
+- `decision_or_gate_changed`：产出会改变什么行为或决策，而不是只描述"形成文档"；
+- `engineering_assets` / `doc_assets`：声明的非文档工程资产路径与随行文档；`implementation`/`reusable_verification` 必须至少声明一个非文档资产，`merge_gate` 必须为空并改用 `gate_target.pr` + `gate_target.head_sha`（40-hex）；
+- `verification_commands`：确定性验证命令；实现与验证资产必填，merge gate 可省略（其证据即 accept/reject 决策）；
+- `worker_pr_policy`：`worker_pr`（独立有价值的 worker PR）、`integration_pr`（并入具名集成 PR/branch，必填非占位 `integration_target`）或 `no_worker_pr`（仅 merge_gate）；实现/验证资产二选一，不把 PR 数当目标；
+- `value_identity`：必填的波内去重身份；显式重复判 duplicate，同 `value_kind` + 同 `problem_target` 判 subsumed，均拒绝；
+- `consumer`、`consume_by`、`expiry`、`observable_acceptance`、`resource_owner`：命名消费者、消费时限、到期处置、可观察验收与资源责任（无外部进程写 `none`）。
 
-`DRAFT` 默认不可派，也不自动转成 docs-only。只有命名实现已具备全部非文档输入、且缺少的合同是唯一阻塞时，才创建一次晋级任务；docs-only 交付必须带来 `DRAFT → READY`、关闭阻塞决策或新增被消费者实际调用的门禁。PM 待验收超过自身可处理能力时停止扩波；默认每波/全局活跃 worker ≤3、research/docs ≤1，项目可以收紧，只有用户显式、限期的探索窗口才可放宽。
+`DRAFT` 默认不可派。文档不是独立价值：docs-only、简单调查与纯文案/格式清理不得获得独立 worker/worktree/PR；文档只随同 implementation / reusable_verification / merge decision 的同一有价值变更交付（经 `doc_assets` 声明并过 postflight 实证），或由既有角色在无派发成本下处理。只有命名实现已具备全部非文档输入、且缺少的合同是唯一阻塞时，才创建一次晋级任务。PM 待验收超过自身可处理能力时停止扩波；默认每波/全局活跃 worker ≤3、research/docs ≤1，项目可以收紧，只有用户显式、限期的探索窗口才可放宽。
 
 额度充足时优先增加确定性测试、fixture、基准、故障注入、真实交互/样本验收工具、生成器和独立前向评测。禁止以 quota-burn、PR 数、文档行数或 worker 忙碌度作为目标。详细查表与反模式读取 `references/15-wave-autopilot.md` §5。
 
-派发前把候选波次写成 `templates/dispatch-value-gate.example.json` 同构 JSON，并运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；非零退出不得启动 worker。该门禁机械拒绝非 `READY`、六字段缺失、无状态迁移的 docs/research、收敛模式并发超限、待验收 PR >2，以及启动外部资源却没有 owner 的任务。
+派发前把候选波次写成 `templates/dispatch-value-gate.example.json` 同构 JSON（`schema_version: dispatch-value-gate.v2`），并运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；非零退出不得启动 worker。该门禁机械拒绝非 `READY`、合同字段缺失或占位、docs/research kind、无 `value_kind` 的通用调查、纯文档交付计划、占位资产、重复/被包含的价值身份、收敛模式并发超限、待验收 PR >2，以及启动外部资源却没有 owner 的任务；PR 数、行数、token 与 commit 数都不是价值信号。
+
+派发的 worker 交付在验收/合并前必须再过交付后门禁：用同一 spec 运行 `python3 scripts/worker-value-postflight.py --spec <spec.json> --task-id <ID> (--repo <repo> --base <sha> --head <sha> | --diff <patch> --delivery-head <40-hex>) --evidence <evidence.json>`，非零退出不得接 PR。该门禁用 diff 实证：至少一个声明的非文档工程资产真的变更（实际文档路径即使位于声明的工程目录之下也不算工程命中，只能经 `doc_assets` 作为随行文档）、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence 中有 exit 0 执行记录。head 绑定是硬条件：evidence 必须含 40-hex `verified_head`，且等于 Git 模式解析 `--head` 所得的真实 commit（patch 模式等于显式 `--delivery-head`）；`merge_gate` 还要求该 head 等于 `gate_target.head_sha`，零 diff 仅对声明 `merge_gate`（`no_worker_pr` + 具名 PR + 40-hex head）放行，报告必须给出 accept/reject 决策与决策消费者。大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。
+
+### 角色分离验收门禁（非平凡实现波的强制默认）
+
+非平凡实现波（`implementation`/`reusable_verification` 交付）默认实行角色分离收口：实现 worker 与深度 diff 审查 + 行为验证 worker 必须是两个不同 dispatch/session；PM 拥有方向、价值合同、粗粒度巡检、冲突/风险升级、immutable-head 记账与最终收口，在独立证据一致时不重复逐行审查或补丁实现。接受交付/合并前运行：
+
+```bash
+python3 scripts/review-acceptance-gate.py <review-acceptance.json>
+```
+
+契约见 `templates/review-acceptance.example.json`（`schema_version: review-acceptance-gate.v1`）。机械接受仅当：实现者与审查者的 `dispatch_id`/`session_id` 均非占位且互不相同；`delivery_head` 与 `reviewed_head` 为同一不可变 40-hex commit；审查结论为字面 `ACCEPT`；`verification_evidence` 为非空的 `{command, exit_code}` 记录且全部 exit 0（纯文字叙述证据无效）；`review_consumer` 与 `review_expiry` 已具名；`blocking_findings` 为空。机械拒绝：自审、身份缺失/占位、head 漂移/非 40-hex、纯文字证据、缺验证或验证失败、占位消费者/到期处置、以及 PM 实现/深度审查例外缺少非空枚举理由 + 授权来源。
+
+PM 例外仅在四种枚举情形（`role_exception.reason_code`）允许：`worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery`，且必须声明 `kind`（`pm_implementation`/`pm_deep_review`）、非空 `reason` 与 `authorized_by`；带例外通过的收口在输出中标记 `ordinary_delivery: false`，永远不得计为常规交付。边界：本门禁验证契约的内部一致性（身份、head、结论、证据、例外文书），让角色分离可执行、可审计，但不声称能 policing 所有行为——身份与例外申报是否真实发生，仍依赖角色纪律与事后审计。
+
+**Reviewer 写范围纪律（v2.14.0）**：reviewer dispatch 默认可写范围只有自身 Session Context（`<worktree>/.claude/agent-sessions/<session>/**`）；需要修复被审分支时，必须由任务合同显式授予——spawn 用 `--role reviewer --review-repair-grant <授权来源>`，无授权却传 `--allow-paths` 直接 fail-closed 拒绝 spawn（不静默收窄）。无论是否授予修复权，`config/*.local.yaml`（安装 Skill 的本地运行配置）对 reviewer 永远不可写。 Enforcement 分两层：`spawn-worker.sh` 在任何副作用前注入 `SCOPE_GUARD_ROLE/SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT` 并把角色写入 METADATA `runtime.role`；`scope-guard.py` 对 reviewer 无授权时只放行 Session Context 前缀，`config/*.local.yaml` 硬拒绝。回归：`scripts/test-reviewer-scope-guard.sh`。
+
+### 验收失败恢复分类（单一机械合同，v2.14.0）
+
+验收失败不得再硬编码「any gate failure => park」。唯一分类权威是 `scripts/acceptance-recovery.py`（`acceptance-recovery.v1`）：`internal_recoverable`（本项目自有资产可修复：PR checks 确定性失败、交付越界、验证证据缺失、review blockers、docs-only 验收修复）、`external_dependency`（配额耗尽、上游不可用、缺用户资产/授权）、`safety_unknown`（事实歧义、身份/head 漂移不可证、安全高风险、runtime 损坏）。表外信号一律 fail-closed 归 `safety_unknown`。决策：internal_recoverable 且修复预算未耗尽时动作必须是 `repair`（首次）或 `re_review`（之后），默认预算 2 次，耗尽才 `park`；external_dependency 与 safety_unknown 立即 `park`。预算按「失败 episode」计数（进入 repair_acceptance 记一次，同一 episode 内重复 reconcile 不重复计数）。autopilot runtime 与 codex-heartbeat-cycle 都从该模块导入同一张表，禁止在别处再写分类分支；回归 `scripts/test-acceptance-recovery.py`。
+
+机器行为（v2.14.0 起）：`autopilot_runtime` 对 `checks == "fail"` 不再无条件 `hard_park`——预算内规划内部动作 `repair_acceptance`（state 保持 RUNNING 不泊车，PM 按 §6 派发修复/独立 re-review），预算耗尽才 `hard_park`（`internal_recoverable` 类）；`checks == "unknown"` 维持 `hard_park`（safety_unknown）。`codex-heartbeat-cycle` 把 `repair_acceptance` 映射为 `decision=review` 且心跳继续；`decision=park`（建议停止心跳）只属于 hard_park（安全不明/外部依赖/预算耗尽）。
+
+### acceptance repair 极窄通道（`acceptance-repair.v1`，docs-only）
+
+dispatch-value-gate.v2 拒绝 docs-only 派发仍然成立；唯一例外是「已具名 PR 的验收只差文档修复」：合同模板 `templates/acceptance-repair.example.json`，派发前 `python3 scripts/acceptance-repair-gate.py preflight --spec <spec.json> --registry <ledger.json>`、交付后 `postflight`（同 spec/registry + evidence + diff 源），非零退出不得派发/接受。合同必须：钉扎既有 `target`（pr + branch + 40-hex head_sha）；`integration_target` 等于 `target.branch`（只能集成回既有 PR 分支，不存在独立文档 PR 的表达字段）；`blockers` 为结构化 `{id, source, detail}` 且 ID 唯一；`file_scope` 全部为文档路径（复用 `is_document_path` 单一语义表），非文档变更属 implementation 价值必须走 v2；具名 `consumer`、时区感知未过期 `expiry`、非空 `verification_commands`、`repair_owner` + registry 台账实现序列化 owner（同 PR 只允许一个活跃 owner，同 (pr, head_sha) 或活跃 blocker 重叠 = 重复修复，机械拒绝）；`re_review` 声明修复 worker 与独立 reviewer 互异身份；`repair_attempts_used` ≥ 2 时拒绝派发（必须按分类合同泊车）。postflight 额外机械拒绝：head 漂移（git 模式要求 delivery head 是 pinned head 的后代且 evidence `verified_head` 一致；patch 模式无法证明谱系，一律拒绝）、范围外/非文档修改、零 diff、blocker 未全部解决或解决声明超出合同、验证命令未 exit 0、owner 不一致。回归：`scripts/test-acceptance-repair-gate.sh`。
 
 ### 3.1 Harness 调用层级
 
 | PM 宿主 | 允许派发的 worker backend |
 |---|---|
-| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
-| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN、zcode |
+| Claude Code | Claude Code、Codex、CodeBuddy、QoderWork CN |
+| Codex | Claude Code、Codex、CodeBuddy、QoderWork CN |
 | CodeBuddy | CodeBuddy |
 | QoderWork CN | QoderWork CN |
 
 `spawn-worker.sh` 从完整进程祖先链的真实可执行程序识别宿主，对每层 Harness 的白名单取交集，使嵌套调用只能降权、不能借强 CLI 恢复权限；在 Orca 能唯一定位当前 worktree 的 working agent 时再交叉校验。同一 worktree 有多个 working agent 时不拿模糊 Orca 信号覆盖进程证据；若进程也无法证明身份则失败关闭。任务文本、已安装 CLI、个人偏好配置和 `--pm-harness` 都不是授权来源。`--pm-harness` 只能声明预期身份，与检测结果不一致时失败，不能向上提权。权威白名单为 `config/harness-backend-policy.json`，默认拒绝；结果写入 `METADATA.runtime.harness_authority`。
+
+**zcode 默认不在 Claude Code/Codex 的 backend 白名单（v2.11.0 P0-④）**：zcode 的额度 lane 独立、发放规则在服务端，与 Claude/Codex 订阅额度语义不同，默认一律拒绝派发。唯一启用通道是用户明确授权后显式编辑 `config/harness-backend-policy.json` 把 `zcode` 加回对应 host（git diff 可审计）；canonical 映射保留，策略文件是唯一开关，不存在命令行 flag 直通。
 
 声明的 worker backend 还必须与实际启动命令一致。只接受直接启动五种 CLI、受信的 Claude provider wrapper、受信的 zcode worker driver（`zcode-worker-driver.py`，唯一放行的 python 形态），或由 `render-runtime-profile.sh` 生成的受限 batch shell；任意 backend 标签伪装、命令链和不透明 wrapper 在副作用前拒绝。安装守卫降级不能放宽此身份门禁。
 
@@ -272,6 +303,8 @@ Autopilot 活跃期间**必须挂 recurring cron 看门狗**，并与 Orca 推�
 守夜 v2 使用 `scripts/night-revive-timer.sh`；布防参数、双通道自测、双读/游标核活、硬额度与瞬发拥塞分流、`task-list` 完成权威及 `SPAWN_WORKER_DISPATCH_BIND` 巡检全部读取 `references/15-wave-autopilot.md` §4.1，不在入口重复维护。
 
 **持久性边界**：recurring cron 只属于当前 PM 会话的低延迟 fast path。v2.10.0 起，`scripts/autopilot-controller.py` + `scripts/autopilot-facts.py` 提供 `L2 / CROSS_SESSION_RECOVERABLE` controller core：版本化 ledger/WAL、PM lease/fencing、可信只读 facts、幂等 reconcile 与单 mutation tick；项目必须提供固定 manifest 和受信 mutation adapter。真实 Orca/GitHub mutation 端到端与真实断电仍为 `NOT_VERIFIED`。没有外部 durable scheduler 时继续报告 `AUTOPILOT_L3_SCHEDULER_NOT_IMPLEMENTED`；用户要求跨会话接管、无人值守恢复或 soft park 自动恢复时读取 `references/16-autopilot-durability.md`，不得把 L2 controller 包装成 L3。
+
+**外部调度器适配器 `codex-heartbeat-cycle`（v2.13.0）**：Codex App heartbeat 可充当上述外部 durable scheduler，适配器 `scripts/codex-heartbeat-cycle.py` 保证「一次唤醒 = 一次有界循环」——读显式 JSON 请求（钉扎 controller/适配器 path+sha256、repo/project/policy 身份、owner/fencing token），经 `autopilot-controller` CLI（argv 数组、shell=False、有界超时）执行一次 status → reconcile，仅当通过 tick 前闸门（动作 allowlist、待验收反压阈值、配额拒绝、fencing/租约身份一致）时执行至多一次 tick，输出机器 JSON（`decision=wait/review/dispatch/park/complete`、receipt、`future_heartbeat_needed`）。硬边界：不循环、不 sleep、不派生后台进程、不注入 raw 终端输入、不改 TASKS、不按 token 丰度挑任务；不确定的 tick 按不确定上报且绝不重试，tick 后不再发起任何控制器调用；COMPLETE/硬泊车/重复拒绝建议停止心跳。v2.14.0 起适配器不硬编码「任何门禁失败 => park」：控制器的 `repair_acceptance` 内部动作（验收失败经 `acceptance-recovery` 分类为 internal_recoverable 且预算未耗尽）映射为 `decision=review` 且心跳继续；`park` 只属于 hard_park（安全不明/外部依赖/修复预算耗尽）。请求模板 `templates/codex-heartbeat-cycle.example.json`，契约测试 `scripts/test-codex-heartbeat-cycle.py`。
 ## 5. tmux 兼容回退
 
 先用 `render-runtime-profile.sh` 生成 backend 命令，再由 `spawn-worker.sh` 加 `--no-orca-mode` 启动。spawn 后立即核对 `tmux has-session`、pane cwd 与 Session Context 的 `METADATA.json`；任一不一致都停止派单。
@@ -405,6 +438,37 @@ python3 scripts/route_suggest.py --tier L0|L1|L2|multimodal [--scene ...] [--tas
    绕过）。（实战：83% 报 9%，险些向 9% lane 派 2 worker——陈旧快照的余量读数
    不可直接采信）
 
+**spawn-worker 配额预检门（v2.11.0 P0-①，fail-closed）**：启用
+`quota_aware_routing` 时，`spawn-worker.sh` 对自动补选与显式 `--api-provider`
+的 provider 一律在**任何 worktree/terminal/lease/dispatch 副作用之前**跑
+`scripts/quota_preflight.py`：summary 缺失/不可读/过期（超过 `freshness_minutes`）/
+lane 低于判停线（判停线为闭界，恰好等于也拒）/lane 不健康/provider 不在配置
+lane 内/claude-code 未解析出 provider，全部 exit 3 拒绝，不产生任何副作用。
+被拒后确要放行，只有一条显式通道：`--quota-preflight-override <非空授权来源>`
+（授权来源写入 METADATA 与 authority receipt 供审计，状态记为
+`override:<原拒绝原因>`）；**默认不存在人工锁定直通**。预检结论同时写入
+`METADATA.runtime.quota_preflight`。配 `scripts/test-quota-preflight.py`
+（19 用例门禁契约）。
+
+**配额停滞恢复交接（v2.11.0 P0-③，quota-park）**：worker 撞判停线/冻结后的
+标准恢复入口：
+
+```bash
+bash scripts/pm-orchestrate.sh quota-park --worktree <WT> --session <SESSION> \
+  --reason "配额停滞，人工确认" [--force]
+```
+
+固定顺序：liveness gate（复用 settle 真字段检查；active/不确定时仅 `--force`
+可继续，表示 PM 已人工确认配额卡死）→ `worker-stop` 精确 fence+stop 旧
+dispatch → 释放 METADATA 记录的 provider lease → METADATA
+`.recovery.quota_park` 落 marker。worktree/session/checkpoint 全程保留
+（与 settle 的区别：绝不删文件）。任何一步失败立即中止：不释放 lease、不写
+marker——**lease 释放永远在 worker-stop 成功之后，任何失败路径都不会出现
+"worker 活着 + 额度已放"的双活窗口**。park 完成后同 worktree 重启必须用新
+session id（authority receipt 每会话唯一，fail-closed），切 provider 也允许；
+两条路都仍要过 spawn-worker 配额预检。配 `scripts/test-pm-orchestrate-handoff.sh`
+（正向/反向/故障注入/交接 8 场景）。
+
 ## 10. 依赖
 
 ### 系统依赖
@@ -453,8 +517,11 @@ Hard Fail：
 7. 清理 active/unknown/release_pending/release_unknown supervised worker。
 8. 只凭 worker 自报、静态 lint 或单次 UI 状态声称业务完成。
 9. CodeBuddy/QoderWork CN 或未知宿主向上/跨宿主派发，或用 `--pm-harness`、个人配置伪造宿主身份。
-10. 以额度余额、PR 数或 worker 忙碌度为理由派发没有命名消费者/消费时限/验收状态迁移的任务。
+10. 以额度余额、PR 数或 worker 忙碌度为理由派发没有 `value_kind`、命名消费者/消费时限/可观察验收的任务；或未过 `dispatch-value-gate.py` 派发、未过 `worker-value-postflight.py` 就接受交付/PR。
 11. worker/测试启动了服务或监听器，却没有资源 owner、清理证据和 PID/端口零净增量核对；或为清理而按进程名批量 kill。
+12. 非平凡实现波未过 `review-acceptance-gate.py` 就接受交付/合并；或 PM 实现/深度审查例外缺枚举 `reason_code`、非空 `reason` 或 `authorized_by`，或把 `ordinary_delivery: false` 的收口计为常规交付。
+13. 验收失败未过 `acceptance-recovery.py` 分类就泊车（internal_recoverable 修复预算未耗尽即 park），或在 runtime/heartbeat/文档之外另写「gate failure => park」分类分支。
+14. reviewer dispatch 未按 `--role reviewer` 纪律约束写范围：无 `--review-repair-grant` 授权却写自身 Session Context 之外，或写任何 `config/*.local.yaml`；或 docs-only acceptance repair 未过 `acceptance-repair-gate.py` preflight/postflight（缺字段、head 漂移、范围外/非文档修改、未解决 blocker、重复修复、owner 串行冲突任一即拒绝）。
 
 修改本 Skill 后至少运行：
 
@@ -463,6 +530,8 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
 bash scripts/test-pm-quota-stall.sh
+python3 scripts/test-quota-preflight.py
+bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
@@ -470,11 +539,15 @@ bash scripts/test-spawn-worker-launch.sh
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-harness-backend-policy.sh
+bash scripts/test-render-runtime-profile.sh
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
 bash scripts/test-spawn-worker-deps.sh
 bash scripts/test-dispatch-value-gate.sh
+bash scripts/test-worker-value-postflight.sh
+bash scripts/test-review-acceptance-gate.sh
+bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
