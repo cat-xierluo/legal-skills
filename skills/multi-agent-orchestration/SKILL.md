@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.14.1"
+  version: "2.14.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -367,6 +367,8 @@ bash scripts/sentinel.sh --status-file "$CTX/STATUS.json" --tmux-session worker-
 ```
 
 Sentinel 是唤醒/观察器，不是 supervised lifecycle authority。发现偏题、阻塞、越界或验证失败时优先给原 worker 发窄纠偏；需要独立审阅时另派 reviewer。Sentinel 设计读取 `references/04-sentinel-design.md`。
+
+pm-monitor 对 tmux session 的判活是三态，不是二值：`alive` 保持静默；只有控制面查询成功且明确无此 session（`can't find session` / `no server running`）才算可靠 absent、发 `SESSION_GONE`；tmux 命令不在 PATH 或 socket/查询失败一律发 `SESSION_UNKNOWN` + `AGENT_NEEDS_INPUT`（存活不可判定，禁止冒充 dead——Badminton Lab bl112/bl113 存活被误报事故），恢复存活补发 `SESSION_RECOVERED`。同一状态跨轮去重；`check_commit_staleness` 只对确认 alive 的 session 追告警。状态机回归门禁：`bash scripts/test-pm-monitor.sh`（live/absent/查询错误/命令缺失/去重/恢复 7 案例 23 断言，旧折叠实现必红）。
 
 把运行时活性与业务进展分开判断：`worker-read --source auto`/terminal cursor 前进只证明有输出，文件、提交和测试证据才证明业务进展；cursor、CPU 或时间戳静止都不能单独证明假死。来源改变、截断、PID 身份不可证明、quiet 测试、网络等待和 ask/dialog 时降级为 `unknown`。探测默认只读，不自动 Esc/Ctrl+C/stop/release；确认终端停在 idle 且工作未完时，PM 才可显式用 `orca terminal send --terminal <handle> --text "..." --enter` 注入一次短唤醒，并复读 screen/Dispatch 状态。
 ## 8. 收口
