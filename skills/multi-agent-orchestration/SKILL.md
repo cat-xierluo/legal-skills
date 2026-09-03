@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.14.2"
+  version: "2.15.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -379,7 +379,7 @@ PM 必须：
 2. 运行与产物类型匹配的验证；GUI/Web/桌面行为要启动真实入口做代表性交互。
 3. 核对 allowed files、敏感文件、安装授权、Git identity、commit 和 PR 范围。
 4. supervised worker 先 reuse/release/retain，再 ack；不得因为只读检查“看起来完成”而跳过 settlement。worker 仍存活且漏发 `worker_done` 时先结构化提醒；确认已死才走 `settle`。terminal-managed/tmux 按用户意图保留或关闭。
-5. 用户或项目已授权 Git 外部写入时，默认按 **PR 先行** 收口：先 safe-push 并创建或接管唯一匹配的 PR，冻结其 base/head/diff/checks 作为审阅边界；PM 验收后再在最新 main 上建立本地集成候选并复跑门禁。Monorepo 不得直接 `git merge` feature 分支，按 `git-workflow` 使用目录级或 squash 集成；main 有保护规则时，本地候选只用于验收，最终仍由 GitHub PR merge。该顺序不自动授予 push/merge/close 权限；Task-097 完成前，现有 `pm-closeout.sh` 仍会在 create 后直接 GitHub merge，选择本地集成时不得调用该一体化路径。详细分流见 `references/14-pm-orchestrate.md` §4。
+5. 用户或项目已授权 Git 外部写入时，默认按 **PR 先行** 收口：先用 `pm-orchestrate.sh pr-audit` 或 `pm-closeout.sh` 只读预审 open PR；唯一 exact（含真实 diff 指纹相等）才接管，任何 suspected/多候选都失败关闭，零候选才在绑定 repo/head/SHA/operation 的显式授权回执通过后 safe-push 并创建。冻结 PR 的 base/head/diff/checks/review 后，从最新 main 构造三方 patch 候选并复跑门禁；main mutation 还需第二阶段回执绑定最终 base/candidate/tree，随后再次核对唯一 PR 集合与整份冻结快照。`local-after-pr` 仅在 GitHub branch metadata 明确 `protected=false` 时从隔离 main 候选 safe-push，并在 push 前再次确认仍为 false，远端确认后才快进本地 clean main；`remote-pr` 先确认无原生 merge queue，再使用 `--match-head-commit` 交给 GitHub 合并，并核对 merge parent/tree 与已验证候选一致；queue 消费留给 Task-070。`validate-only` 不 push、不 create、不 merge。Monorepo 不得直接 `git merge` feature 分支，两种写入模式都必须声明 `--integration-path`。main commit point 前的普通失败必须零 main mutation；commit point 后的回执丢失或结果漂移必须输出 exit 9 的 `OUTCOME_UNKNOWN/REVIEW_REQUIRED/LOCAL_PENDING`，先查远端再恢复，禁止盲重试。详细参数、授权回执和状态语义见 `references/14-pm-orchestrate.md` §4。
 6. 合并 worker 分支后必须 diff 校验共享文档真值：worker 违规写入 `docs/TASKS.md`
    等共享文档的改动会随合并带回，`git diff <base>...HEAD -- docs/TASKS.md`（及
    CHANGELOG/DECISIONS）逐处核对；发现 worker 版本覆盖 PM 真值时以 main 版本
@@ -483,7 +483,7 @@ session id（authority receipt 每会话唯一，fail-closed），切 provider �
 | `bash` 4+ | macOS: `brew install bash`；Linux: 包管理器安装 |
 | `git` | macOS: `xcode-select --install` 或 `brew install git` |
 | `jq` | macOS: `brew install jq`；Linux: `sudo apt-get install jq` |
-| `gh` | 仅 `pm-closeout.sh` 的 PR 创建/合并需要；macOS: `brew install gh`；Linux: 按 GitHub CLI 官方包安装 |
+| `gh` | `pr-audit` 的只读 PR 事实与 `pm-closeout.sh` 的授权式 PR 创建/合并需要；macOS: `brew install gh`；Linux: 按 GitHub CLI 官方包安装 |
 | `tmux` | 仅 tmux 路径需要；macOS: `brew install tmux` |
 | `python3` | 安装门禁和 scope guard 需要 |
 
@@ -527,6 +527,7 @@ Hard Fail：
 12. 非平凡实现波未过 `review-acceptance-gate.py` 就接受交付/合并；或 PM 实现/深度审查例外缺枚举 `reason_code`、非空 `reason` 或 `authorized_by`，或把 `ordinary_delivery: false` 的收口计为常规交付。
 13. 验收失败未过 `acceptance-recovery.py` 分类就泊车（internal_recoverable 修复预算未耗尽即 park），或在 runtime/heartbeat/文档之外另写「gate failure => park」分类分支。
 14. reviewer dispatch 未按 `--role reviewer` 纪律约束写范围：无 `--review-repair-grant` 授权却写自身 Session Context 之外，或写任何 `config/*.local.yaml`；或 docs-only acceptance repair 未过 `acceptance-repair-gate.py` preflight/postflight（缺字段、head 漂移、范围外/非文档修改、未解决 blocker、重复修复、owner 串行冲突任一即拒绝）。
+15. PR 收口在 create/push/merge 前未通过唯一性审计，第一阶段授权未绑定 canonical repo、PR、head branch、冻结 SHA 与 operation，第二阶段 main mutation 授权未再绑定最终 base/candidate/tree，或 mutation 前未重验 PR 集合、base/head/diff/checks/review；commit point 前的不确定性必须停在非成功 `VALIDATE_ONLY`，commit point 后的不确定性必须输出 exit 9 的可恢复状态并禁止盲重试。
 
 修改本 Skill 后至少运行：
 
@@ -557,6 +558,7 @@ bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
 bash scripts/test-recover-unconfigured.sh
+bash scripts/test-pr-audit.sh
 bash scripts/test-pm-closeout.sh
 python3 scripts/test-autopilot-controller.py
 python3 scripts/test-autopilot-facts.py
