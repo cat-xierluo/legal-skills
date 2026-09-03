@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.14.0"
+  version: "2.14.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -69,6 +69,7 @@ PM 在业务实现前完成：
 - Worker 自报、STATUS、UI 卡片、TUI idle、heartbeat 和 timeout 都不能单独证明业务完成。
 - supervised spawn 收尾自检 dispatch 绑定（Task-106；旧发布文案曾误用 Task-076）：worker-start 后主动 `dispatch-show --task` 核对；为空时按 runbook #18 自动三步补绑（无 `--inject` 的 dispatch 建绑定 → 从 preamble 提取真实 ctx id → 单行 terminal send 注入 worker_done/ask 命令形式），SPAWN 输出必须含 `SPAWN_WORKER_DISPATCH_BIND: ok|manual-required`；`manual-required` 不阻断 spawn 但属显式告警，PM 须按同三步手动补绑。
 - launch 路径 dispatch 绑定自检同权（Task-107；旧发布文案曾误用 Task-077）：Wave receipt 派单漏 `--orca-supervised` 但传了 `--orca-task-id` 时，terminal 启动后由 launch 分支对预建 Task 执行同一自检+补绑并输出同款 `SPAWN_WORKER_DISPATCH_BIND` 行（实现共用 `orchestration_dispatch_bind_selfcheck`，register/launch 两条路径勿各留一份）；缺 `--orca-run-id` 的残缺组合在任何 terminal 副作用前失败关闭；纯 terminal-managed（无 task）不涉及 dispatch，保持零变化。
+- worktree 落盘后、任何 terminal/worker-start/任务注入之前，`spawn-worker.sh` 先跑 isolation pre-gate：非 lightweight 且非 dry-run 时机械判定 worktree 目录存在、`branch --show-current == 预期分支` 且 HEAD 可解析。mismatch（实测：PM 请求复用已有 worktree/branch 时，Orca 自动改用 `-2` 后缀分支建新 worktree）打印 `SPAWN_WORKER_ISOLATION_PREGATE_FAILED` 并 exit 2——此时调用日志里没有任何 terminal create/run-create/task-create/worker-start，Session Context 与 authority receipt 尚未落盘，worktree 保留供 PM 精确清理；不存在"worker 已带任务活跑、spawn 却报失败"的 partial dispatch。final `SPAWN_WORKER_GATE` 只保留 launch 后才能观察的 pane cwd 校验。回归：`scripts/test-spawn-worker-orca.sh` 末尾的 Orca `-2` 后缀 E2E。
 - 裸调 worker-start 的冷启动心跳窗口（2026-08-30 实测）：绕过 `spawn-worker.sh` 直接 `worker-start --worktree current --agent claude` 一步起终端时，dispatch 有约 60 秒启动确认窗口，Claude Code 冷启动可能超窗 → `last_failure: "timeout"`、Task 被标 failed，并遗留 title=None 的孤儿终端；该窗口为 Orca runtime 内部行为，本机不可调。对策：优先走 `spawn-worker.sh` 预建 terminal（等 TUI ready）再 `worker-start --terminal` 的两步路径；已裸调失败时复位 Task（`task-update --status ready` 或 register 的 `--reset-failed`）+ 改 `--terminal <现存 agent 终端>` 重试，`terminal close` 清理孤儿；worker-start 返回体的 ready/terminal 字段可能为 None（部分生效），以 `dispatch-show --task` 实际状态为准。
 
 Issue 分组细则读取 `references/12-issue-grouping.md`；并发与真实踩坑读取 `references/10-parallel-lessons.md`。
@@ -107,6 +108,8 @@ python3 scripts/review-acceptance-gate.py <review-acceptance.json>
 PM 例外仅在四种枚举情形（`role_exception.reason_code`）允许：`worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery`，且必须声明 `kind`（`pm_implementation`/`pm_deep_review`）、非空 `reason` 与 `authorized_by`；带例外通过的收口在输出中标记 `ordinary_delivery: false`，永远不得计为常规交付。边界：本门禁验证契约的内部一致性（身份、head、结论、证据、例外文书），让角色分离可执行、可审计，但不声称能 policing 所有行为——身份与例外申报是否真实发生，仍依赖角色纪律与事后审计。
 
 **Reviewer 写范围纪律（v2.14.0）**：reviewer dispatch 默认可写范围只有自身 Session Context（`<worktree>/.claude/agent-sessions/<session>/**`）；需要修复被审分支时，必须由任务合同显式授予——spawn 用 `--role reviewer --review-repair-grant <授权来源>`，无授权却传 `--allow-paths` 直接 fail-closed 拒绝 spawn（不静默收窄）。无论是否授予修复权，`config/*.local.yaml`（安装 Skill 的本地运行配置）对 reviewer 永远不可写。 Enforcement 分两层：`spawn-worker.sh` 在任何副作用前注入 `SCOPE_GUARD_ROLE/SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT` 并把角色写入 METADATA `runtime.role`；`scope-guard.py` 对 reviewer 无授权时只放行 Session Context 前缀，`config/*.local.yaml` 硬拒绝。回归：`scripts/test-reviewer-scope-guard.sh`。
+
+**Reviewer 证据预算（evidence budget）**：reviewer 的证据收集有量纲，不是越多越好。优先级固定为 exact HEAD + diff + 受影响文件——已经拿到被审 commit 的 diff 后，不得再整份重读大型 canonical 文档（只按需读 diff 触及的小节）；外部 CI 查询只在 verdict（accept/reject）依赖该结果时才做。环境/时序类失败最多做一次归因复跑：归因后修复环境再跑属于新验证，不算复跑；仍失败必须具名 `NOT_VERIFIED`（无法验证）或 `REJECT`（证据指向缺陷），不得第三次盲试、不得以推测替代证据。PM 可随时发送 budget stop 截断证据收集，reviewer 收到后按已有证据收敛结论并显式标注未验证部分。该预算只约束证据获取的量，不改变验收语义：与 `--role reviewer` 写范围纪律、独立验收（实现者≠审查者）和 fail-closed 不冲突——预算耗尽不产出"放宽的通过"，只产出具名的 `NOT_VERIFIED`/`REJECT`。
 
 ### 验收失败恢复分类（单一机械合同，v2.14.0）
 

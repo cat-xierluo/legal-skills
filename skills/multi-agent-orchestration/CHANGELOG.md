@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.14.1] - 2026-09-03
+
+### 修复
+
+- **Orca worktree 分支错配在任务注入前失败关闭**：`spawn-worker.sh` 在 worktree 落盘后、任何 terminal、Session Context、authority receipt、Task 或 `worker-start` 副作用之前执行 isolation pre-gate，机械核对目录、实际分支与 HEAD。Orca 因同名分支自动创建 `-2` 后缀分支时立即输出 `SPAWN_WORKER_ISOLATION_PREGATE_FAILED` 并退出，保留 worktree 供 PM 精确处置，不再形成“spawn 报失败但 worker 已收到任务”的 partial dispatch。
+- **收窄最终门禁职责**：launch 后的 `SPAWN_WORKER_GATE` 只保留必须等 terminal 创建后才能观察的 pane cwd 校验；branch 与 HEAD 身份由前置门禁独占，避免同一不变量在副作用前后产生不一致结论。
+
+### 技术优化
+
+- **新增真实入口回归**：`test-spawn-worker-orca.sh` 用 fake Orca CLI 实际创建 `-2` 后缀 worktree，负例断言零 terminal/run/task/worker-start 调用、零 Session Context 落盘且 worktree 保留；正例断言 worker-start 注入与 supervised METADATA 合同完整。
+- **Reviewer 证据预算**：固定 exact HEAD、diff 与受影响文件优先，外部 CI 仅在 verdict 必需时查询；环境或时序失败最多一次归因复跑，之后必须具名 `NOT_VERIFIED` 或 `REJECT`，PM 可发送 budget stop 收敛审查范围。
+
+### 文档完善
+
+- `SKILL.md` 增加 isolation pre-gate 硬约束与 Reviewer 证据预算；`references/10-parallel-lessons.md` 新增 G40 partial dispatch 复盘和 G41 evidence budget 经验。
+
 ## [2.14.0] - 2026-09-02
 
 ### 修复（验收失败恢复：internal_recoverable 不再被直接泊车）
