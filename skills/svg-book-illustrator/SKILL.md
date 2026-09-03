@@ -2,7 +2,7 @@
 name: svg-book-illustrator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.0"
+version: "1.9.2"
 license: MIT
 description: 书籍/文章 SVG 配图生成工具，专注于架构图、流程图、层次图等专业技术配图。当用户需要为书籍章节或正式文章生成配图、创建架构图/流程图/层次图，或提到"章节配图"、"书籍插图"、"架构图"、"流程图"时使用此技能。
 ---
@@ -139,6 +139,7 @@ python3 scripts/verify_render_font_equivalence.py
 详见 `references/style-guide.md`。核心要点：
 
 - **画布**：**宽 720px 固定（16开 115mm 通栏物理尺寸），高度按内容裁剪**（v1.7.1）——viewBox="0 0 720 H"，H = 内容底边最大 y + 40px；**不再固定 400**（固定 400 会让内容少的图底部留白过大、SVG 下边缘离图注间距忽大忽小）。**透明背景（硬约束）**——不画背景矩形、不设底色；左右 + 顶部安全边距 40px，底部 = H − 内容底（即 40px）。底色由书页/排版提供。
+- **元素删除后的画布回收（v1.9.2,设计演进负债纪律）**：删除图内任何可见元素——历史设计的顶部「标记标题」、说明条、废弃节点/分组——时,必须**同步收紧 viewBox 与显式 height**,使留白回归口径(首内容距上缘约 24-40px、四周安全边距 40px)。「删元素不删空间」是多轮修改的技术负债:真实项目实证——早期顶部标记标题设计被整体移除后未回收画布,4 张图在书页上方遗留大片无信息留白,最终需全书统一排查修正(图 7-2/8-4/11-7/13-1)。配套检查口径:成稿 scan `--padding` 只拦「边距不足」;「留白过大」无法与有意分组留白机械区分,由视觉复审兜底——因此本纪律约束的是**删除动作的当下**,不是事后清扫。
 - **风格**：简洁、专业、静态（无动画、无渐变、无滤镜、无 emoji）
 - **颜色（v1.5.0 透明背景 + 内部模块多色版）**：新生成图**透明底**，配色用于 **SVG 内部不同模块 / 分支 / 方向 / 层级之间的多色柔和区分**——颜色尽量多样（一图 4-6 种甚至更多柔和模块色）。从 8 组预定义调色板（P1 雾蓝系 / P2 浅青系 / P3 嫩绿系 / P4 暖米系 / P5 浅紫系 / P6 浅粉系 / P7 暖灰系 / P8 混合柔和系）选 1 组，组内 5-6 个柔和模块色按"模块 1 取色 1、模块 2 取色 2…"依次分配，相邻模块不同色。文字色统一深灰 `#2D3436`/`#636E72` 保证可读。打印友好约束（文字 vs 所在模块填充色对比 ≥4.5:1 WCAG AA、相邻模块区分度 ≥10%、模块色明度 L*≥80、禁高饱和荧光、CMYK 不偏色、灰度差≥10%）。**仅新生成图用新配色，main 上既有 34 张白底单色 SVG 保持稳定不回改**。
 - **颜色语法硬约束**：颜色只用 `fill`/`stroke` 属性内联——**禁 `<style>` 块定义颜色、禁 `<svg>` 开标签写 font-family、禁 CSS 变量/class、禁画背景矩形**（已验证的 Obsidian 渲染 + 透明背景硬约束，详见 `references/style-guide.md` §5.4）。
@@ -201,7 +202,7 @@ python3 scripts/scan_consistency.py --book-root <书仓根目录> --report <报�
 - **身份**：`data-figure-id` 缺失（soft，历史不回填口径）/ 格式不安全 / `fig-template-*` 落稿 / 跨图重复
 - **sidecar 同步**：canonical 内联 SVG ↔ `manuscript/**/*_images/<stem>-svg-N.svg` 派生缓存内容一致（T261 口径）
 
-历史口径：对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记不要求回改（与本 skill「不回改历史书稿」既有口径一致）。与 BLOCKED Task-001（producer 冲突）/ Task-002（shape containment）互不侵入：本 scan 不改 producer、不做包含几何判定。
+历史口径：对 v1.8.9 前历史书稿的 SYNTAX/IDENTITY 发现只登记不要求回改（与本 skill「不回改历史书稿」既有口径一致）。v1.9.1 新增 `--exemptions <台账.json>`:逐项豁免已裁决历史项(键=file/svg_index/rule_id),命中不计 findings、未命中报警防台账漂移、坏台账 fail-closed;整规则豁免被有意排除——新图违规永远照报。与 BLOCKED Task-001（producer 冲突）/ Task-002（shape containment）互不侵入：本 scan 不改 producer、不做包含几何判定。
 
 ---
 

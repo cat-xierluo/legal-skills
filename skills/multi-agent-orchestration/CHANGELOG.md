@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.14.0] - 2026-09-02
+
+### 修复（验收失败恢复：internal_recoverable 不再被直接泊车）
+
+- **验收失败单一机械分类合同（`acceptance-recovery.v1`）**：新增 `scripts/acceptance-recovery.py`。修复前编排合同把「任何门禁失败」直接映射为泊车——`autopilot_runtime` 对 `checks == "fail"` 无条件 `hard_park`，`codex-heartbeat-cycle` 对 `hard_park` 一律 `decision=park` 且建议停止心跳，内部可恢复的验收失败（本项目自有资产即可修复）因此被错误泊车、波次无谓中断。现唯一分类权威是 `acceptance-recovery.py`：`internal_recoverable`（PR checks 确定性失败/交付越界/验证证据缺失/review blockers/docs-only 验收修复）在修复预算未耗尽时动作必须是 `repair`（首次）或 `re_review`（之后），默认预算 **2 次**，耗尽才 `park`；`external_dependency`（配额/上游/缺用户资产或授权）与 `safety_unknown`（事实歧义/身份或 head 漂移不可证/安全高风险/runtime 损坏）立即 `park`，表外信号 fail-closed 归 `safety_unknown`。修复预算按「失败 episode」计数：进入 repair_acceptance 记一次，同一 episode 内重复 reconcile 不重复计数（修复在途 ≠ 新失败）。`autopilot_runtime` 与 `codex-heartbeat-cycle` 都从该模块导入同一张表，禁止在别处再写分类分支。
+- **autopilot runtime 集成**：`checks == "fail"` 经分类后预算内规划新的内部动作 `repair_acceptance`（`INTERNAL_ACTIONS` 新增；state 保持 `RUNNING` 不泊车，item 记 `repair_attempts`，`RUNTIME_ITEM_KEYS` 同步扩键，向后兼容旧状态文件）；预算耗尽才 `hard_park`，且 `_fail_action` 携带 `failure_class`（默认 `safety_unknown`）。`checks == "unknown"` 维持 `hard_park`（safety_unknown）。
+- **codex-heartbeat 集成**：适配器 `classify_internal` 新增 `repair_acceptance` → `decision=review` 且 `future_heartbeat_needed=true`（不泊车、心跳继续）；`decision=park`（停止心跳）从此只属于 hard_park（安全不明/外部依赖/修复预算耗尽）。回归测试新增 2 用例（repair_acceptance 两个 episode 均不泊车零 tick；预算耗尽 hard_park 仍泊车停心跳），套件 31→33 用例。
+- **docs-only acceptance repair 极窄通道（`acceptance-repair.v1`）**：新增 `scripts/acceptance-repair-gate.py`（preflight/postflight 双门禁）+ `templates/acceptance-repair.example.json`，服务「已具名 PR 的验收只差文档修复」场景，dispatch-value-gate.v2 拒绝 docs-only 的规则不变。机械拒绝清单：缺字段/占位、`target.head_sha` 非 40-hex、`integration_target` ≠ `target.branch`（只能集成回既有 PR 分支，合同不存在独立文档 PR 的表达字段）、blocker 缺失/重复、`file_scope` 含非文档或 traversal 路径、过期、`repair_attempts_used` ≥ 2（必须按分类合同泊车）、re_review 自审、registry 重复修复（同 pr+head_sha 或活跃 blocker 重叠）、owner 串行冲突（同 PR 单活跃 owner）；postflight 另拒 head 漂移（git 模式要求 delivery head 是 pinned head 后代且 evidence `verified_head` 一致，patch 模式无法证明谱系一律拒绝）、范围外/非文档修改、零 diff、blocker 未全部解决或解决声明超出合同、验证命令未 exit 0、owner 不一致。
+- **reviewer 写范围纪律（角色分离验收波强制默认）**：`spawn-worker.sh` 新增 `--role implementer|reviewer` 与 `--review-repair-grant <授权来源>`。reviewer 默认可写范围只有自身 Session Context；无授权却传 `--allow-paths` 在任何副作用前 fail-closed 拒绝 spawn（不静默收窄）；`config/*.local.yaml`（安装 Skill 的本地运行配置）对 reviewer 永远不可写，授权也不例外。enforcement 分两层：spawn 在副作用前注入 `SCOPE_GUARD_ROLE/SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT` 并写 METADATA `runtime.role`；`scope-guard.py` 新增 reviewer 层（无授权只放行 Session Context 前缀；config/*.local.yaml 硬拒绝）。非 reviewer 角色行为完全不变（向后兼容）。
+- **文档同步**：`SKILL.md` §3 新增「Reviewer 写范围纪律」「验收失败恢复分类」「acceptance repair 极窄通道」三节、§4.6 heartbeat 语义更新、§12 Hard Fail 新增 #13/#14；`references/15-wave-autopilot.md` §6 重写为先分类再处置 + 修复通道 + §6.1 reviewer 写范围，§7 反模式新增两条。版本 2.13.0 → 2.14.0。
+- **测试**：新增 `scripts/test-blocker-recovery.sh`（恢复合同统一回归入口）= `test-acceptance-recovery.py`（51 断言：三类分类表、预算语义、表外 fail-closed、module/CLI 同表）+ `test-acceptance-repair-gate.sh`（33 断言：真实临时 Git 仓，preflight 19 + postflight 14 正反例）+ `test-reviewer-scope-guard.sh`（19 断言：hook 层 session-context/配置硬拒绝/授权与向后兼容 + spawn 角色门 fail-closed）。已验证：test-blocker-recovery.sh 全绿（103 断言）、test-codex-heartbeat-cycle.py 33/33、test-dispatch-value-gate.sh 31/31、test-worker-value-postflight.sh 27/27。NOT_VERIFIED（待独立 reviewer 新会话补跑后裁决）：`test-autopilot-controller.py`、`test-spawn-worker-metadata.sh`、`test-spawn-worker-flags.sh`——本 dispatch 的命令授权快照不含这三条，改动对应的运行时回归（`case_v2_acceptance_failure_repairs_before_park` 等）已写入测试文件但未在本会话执行。
+
+## [2.13.0] - 2026-09-02
+
+### 新增
+
+- **Codex 心跳有界循环适配器（`codex-heartbeat-cycle`）**：新增 `scripts/codex-heartbeat-cycle.py`，让 Codex App heartbeat 充当外部调度器驱动既有 L2 autopilot-controller，而不把 L2 包装成常驻 L3——每次心跳被唤醒只执行一次有限循环：读取显式常规文件 JSON 请求（钉扎 controller/适配器 path+sha256、repo/project/policy 身份、owner/fencing token、有界超时），经既有 `autopilot-controller` CLI（argv 数组、shell=False、有界超时、stdin=/dev/null）执行一次 status → reconcile，仅当 reconcile 给出 ready 的外部变更意图且通过 tick 前闸门（动作 allowlist、声明与机械验收反压阈值>2、配额拒绝、待定意图 planned/ready/token 一致、租约身份一致）时执行至多一次 tick，随后输出机器 JSON（`decision=wait/review/dispatch/park/complete`、精确 receipt、`future_heartbeat_needed`、fail-closed 原因）。硬边界：不循环、不 sleep、不派生后台进程、不注入 raw 终端输入、不改 TASKS、不按 token 丰度挑选价值任务；不确定的 tick（超时/非零退出/输出畸形）一律按结果不确定上报且绝不重试，tick 之后不再发起任何控制器调用；COMPLETE/硬泊车/重复拒绝时建议停止心跳。配确定性契约测试 `scripts/test-codex-heartbeat-cycle.py`（31 用例：argv 安全、每次调用至多一次 tick、每个拒绝场景零 tick、有界超时、畸形输出 fail-closed、不确定后零重试零追加调用、示例模板驱动完整循环；零网络零真实 Orca/GitHub 变更）与请求模板 `templates/codex-heartbeat-cycle.example.json`。`SKILL.md` §4.6 同步适配器边界。
+- **角色分离验收门禁（`review-acceptance-gate.v1`，fail-closed）**：新增 `scripts/review-acceptance-gate.py`，把 MAO-PM-ROLE-SEPARATION 的角色分工从文字约定变成可执行验收契约——实现 worker 负责非平凡实现，独立 reviewer worker 负责深度 diff 审查与行为验证，PM 只拥有方向、价值合同、粗粒度巡检、冲突/风险升级、immutable-head 记账与最终收口。机械接受仅当：实现者与审查者具备互不相同、非占位的 `dispatch_id`/`session_id` 身份；`delivery_head` 与 `reviewed_head` 为同一不可变 40-hex commit；审查结论为字面 `ACCEPT`；`verification_evidence` 为非空 `{command, exit_code}` 记录且全部 exit 0（纯文字叙述证据拒绝）；`review_consumer`/`review_expiry` 已具名；`blocking_findings` 为空。自审、身份缺失/占位、head 漂移/非 40-hex、纯文字证据、缺验证/验证失败、占位消费者/到期处置一律拒绝。PM 实现/深度审查例外仅在 `worker_failure`、`conflicting_verdicts`、`security_or_high_risk_evidence`、`control_plane_recovery` 四种枚举 `reason_code` 下允许，必须附非空 `reason` 与 `authorized_by`；带例外通过的收口输出 `ordinary_delivery: false`，永远不得计为常规交付。配确定性契约测试 `scripts/test-review-acceptance-gate.sh`（27 用例：正例、例外标记非常规交付、自审/同 dispatch/同 session、head 漂移、verdict 大小写、纯文字证据、失败验证、占位消费/到期、blocking findings、例外文书四反例、schema fail-closed、示例模板自洽断言，成败退出码与机器可读输出均断言）与示例 `templates/review-acceptance.example.json`（过自身门禁）。`SKILL.md` §3 新增「角色分离验收门禁」节（强制默认 + 不声称能 policing 所有行为的边界声明）、§12 Hard Fail #12 与验收命令清单同步。既有 `dispatch-value-gate.py`/`worker-value-postflight.py` 未改动。
+
+## [2.12.2] - 2026-09-01
+
+### 修复（验收纠偏 r3：堵住 docs-only 目录误报）
+
+- **postflight 先分类文档路径再匹配资产**：2.12.1 及之前，`_postflight` 先按声明资产匹配实际变更路径，宽声明（如 `engineering_assets: ["skills/foo"]`）会把其下 docs-only diff（`skills/foo/README.md`）算作工程资产命中而放行，违反"文档不得是唯一变更"的核心规则。现实际文档路径永远无法满足 `matched_engineering_assets`——即使位于声明的工程目录之下，也只能经 `doc_assets` 声明作为随行文档；未在 `doc_assets` 声明的实际文档路径保持 outside-contract。
+- **文档路径语义单一来源**：preflight 的 `_is_document_path` 升为公共 `is_document_path`（扩展名 + `docs/` 目录同一张表），postflight 通过加载 gate 模块复用同一 helper，不再各自维护扩展名清单，防止两门禁语义漂移。
+- 新增 3 条确定性回归（宽工程目录 + README-only diff 拒绝；宽目录 + 真实源码 + 已声明随行 README 通过且命中工程目录；未声明的实际文档路径保持 outside-contract），postflight 矩阵 23→27，preflight 31 用例不变，全绿。
+
+## [2.12.1] - 2026-09-01
+
+### 修复（验收纠偏 r2）
+
+- **`value_identity` 改为机械必填**：2.12.0 文档声明去重身份但代码允许缺失；现缺失/占位一律拒绝，新增缺失与占位两条回归。
+- **postflight head 绑定（真 Git revision binding，测试实证）**：2.12.0 的 CHANGELOG 曾写"`verified_head` 与 `gate_target.head_sha` 漂移拒绝"，属超前表述——该版 evidence 缺 `verified_head` 仍可通过，且 merge gate 正例比较的是 `BASE..BASE`。本版起：每个被接受的 postflight 都必须含 40-hex `verified_head`；Git 模式用 `git rev-parse --verify <head>^{commit}` 解析 `--head` 并要求 evidence 一致；patch 模式新增显式 `--delivery-head <40-hex>`（缺失/非 40-hex 拒绝）作为投递修订绑定；`merge_gate` 额外要求解析/evidence head 等于 `gate_target.head_sha`，正例改为 pinned target 自比（`HEAD..HEAD`）。新增缺失 head、stale evidence head、git head ≠ merge target、缺 `--delivery-head`、非 40-hex delivery head 五条负回归。
+- **新增 `integration_pr` 派发政策**：2.12.0 强制所有实现/验证资产走独立 `worker_pr`，助长 PR 数膨胀。现实现/可复用验证资产可选 `worker_pr` 或 `integration_pr`，选后者必填非占位 `integration_target`（具名集成 PR/branch）；merge_gate 仍仅 `no_worker_pr`。示例模板的实现任务改为 `integration_pr` + `integration_target` 演示具名集成消费。
+- **移除 SKILL.md docs-only 矛盾表述**：原文先说 docs/research 不可派、随后又允许 docs-only 换取状态迁移，现统一为：文档只随同 implementation / reusable_verification / merge decision 的同一有价值变更交付（`doc_assets` 声明 + postflight 实证），docs-only/简单调查/纯文案清理不得获得独立 worker/worktree/PR。
+- 测试矩阵：preflight 31 用例、postflight 23 场景（临时真实 Git 仓）全绿，成败退出码与机器可读输出均断言。
+
+## [2.12.0] - 2026-09-01
+
+### 新增
+
+- **派发价值合同 v2（`dispatch-value-gate.v2`，fail-closed preflight）**：`dispatch-value-gate.py` 现要求每个任务机械声明三种 `value_kind` 之一——`implementation`（改变行为的实现/修复）、`reusable_verification`（可复用确定性测试/fixture/基准/故障注入资产）、`merge_gate`（具名 PR/change + 40-hex head 的零 diff 合并决策）——并补齐 `problem_target`、`engineering_assets`/`doc_assets`、`verification_commands`、`worker_pr_policy`（仅 merge_gate 允许 `no_worker_pr`）、`gate_target`（`pr` + 40-hex `head_sha`）与波内去重身份 `value_identity`（显式重复判 duplicate，同 `value_kind`+同 `problem_target` 判 subsumed）。docs/research kind、无 `value_kind` 的通用调查、纯文档交付计划、占位资产一律拒绝；六字段消费者合同（consumer/decision_or_gate_changed/consume_by/expiry/observable_acceptance/resource_owner）与 explore/backpressure 门禁保留。行数、token、commit/PR 数不构成价值信号。示例模板改为双任务示例（实现 + merge gate），合同测试重写为 26 用例（含模板自洽性断言）。
+- **交付后价值门禁 `worker-value-postflight.py`（新）**：读同一 spec，对 `--repo/--base/--head` 或 `--diff` patch 实证交付——至少一个声明的非文档工程资产真实变更、变更路径不超出声明资产（文档可随行但不得是唯一变更）、`verification_commands` 在 evidence JSON 中有 exit 0 执行记录；零 diff 仅对声明 `merge_gate` 放行，报告输出 accept/reject 决策与决策消费者。（head/revision 绑定合同由 2.12.1 修正补齐，见该条目。）大 diff、绿色自测或 worker 活跃度不能挽救未消费/不可验证的任务。新增确定性契约测试 `test-worker-value-postflight.sh`（临时真实 Git 仓库，成功/失败退出码与机器可读输出均断言）。`SKILL.md` §3 派发价值节同步两段门禁工作流，§12 验收清单新增 postflight 测试并扩展 Hard Fail #10；`references/15-wave-autopilot.md` §5 六字段文本审查表仍有效，机械合同以本版本与 `templates/dispatch-value-gate.example.json` 为准。
+
+## [2.11.0] - 2026-09-01
+
+### 修复（P0：配额与恢复门禁强化）
+
+- **spawn-worker 配额预检门（P0-①）**：新增 `scripts/quota_preflight.py`（fail-closed 门禁，exit 3=拒绝），`spawn-worker.sh` 对自动补选与显式 `--api-provider` 的 provider 一律在**任何 worktree/terminal/lease/dispatch 副作用之前**预检：summary 缺失/不可读/过期/lane 低于判停线（闭界）/lane 不健康/provider-lane 不匹配/claude-code 未解析出 provider 全部拒绝。绕过通道只有新增显式 flag `--quota-preflight-override <非空授权来源>`（写入 METADATA `runtime.quota_preflight` 与 authority receipt，状态 `override:<原拒绝原因>`）；撤销了默认人工锁定直通。19 用例契约测试 `scripts/test-quota-preflight.py` 全绿。
+- **删除 claude-code `--bare` 自动降级（P0-②）**：撤销 v1.20.2 Task-019 的 `CLAUDE_CODE_BARE_AUTO_DEGRADE`——hook 不可证明（`--bare`/`--safe-mode`/`--setting-sources` 排除 local/`CLAUDE_CODE_SIMPLE=1`/缺 claude token）时默认 fail-closed exit 64，不再静默降级 prompt-only（静默放弃机械安装门禁）。唯一降级通道是既有显式可审计的 `--allow-prompt-only-install-guard <授权来源>`（codex/zcode 无 hook backend 的既有要求不变）。`--no-claude-code-bare-auto-degrade` flag 随之移除。
+- **修复 renderer hook 契约（P0-② 集成断点收尾）**：P0-② 落地后 `render-runtime-profile.sh` 仍对 claude-code provider env isolation 默认追加 `--bare`，标准 render → spawn 路径被 install-guard fail-closed 拒绝，逼 PM 手工删字符串。现改为：settings/registry 两路默认渲染 hook-capable 命令（无 `--bare`），wrapper、`--setting-sources project,local`、可选 `--no-mcp` 契约不变（GLM 同配置实测无 `--bare` 可正常运行）。bare 能力保留为显式 opt-in renderer flag `--claude-bare`（仅 claude-code provider isolation 路径合法，错用 exit 64），输出上下文 isolation 标签追加 `+bare(degraded/unhooked)` 标记；spawn-worker 仍要求显式 `--allow-prompt-only-install-guard`，不恢复自动降级。新增确定性契约测试 `scripts/test-render-runtime-profile.sh`（33 断言：两路默认无 `--bare`、`--no-mcp` 保留、opt-in degraded/unhooked 标记、错用 fail-closed、标准 render 输出机械提取 spawn-worker `claude_hook_disable_reason` 检查直通、bare opt-in 反向仍被拦截）。
+- **pm-orchestrate 新增 `quota-park`（P0-③）**：配额停滞恢复交接命令。固定顺序：liveness gate（active/不确定仅 `--force` 可过）→ `worker-stop` 精确 fence+stop 旧 dispatch → 释放 METADATA 记录的 provider lease（`--resource-settled`，依赖 Orca terminal liveness 证明）→ METADATA `.recovery.quota_park` marker。worktree/session/checkpoint 全程保留；任何失败路径不释放 lease、不写 marker，绝不双活。park 后同 worktree 重启需新 session id（receipt 每会话唯一），切 provider 允许，两者仍受 quota preflight 约束。新增 `scripts/test-pm-orchestrate-handoff.sh`：正向/active 反向/stop 故障/lease 释放故障注入/`--force`/缺 `--reason`/tmux 模式反向/park 后换 session 交接 8 场景 31 断言全绿。
+- **zcode 默认不在 Claude Code/Codex backend 白名单（P0-④）**：`config/harness-backend-policy.json` 的 `hosts.claude-code`/`hosts.codex` 移除 `zcode`（额度 lane 独立、语义与订阅额度不同）。唯一启用通道 = 用户明确授权后显式编辑策略文件加回（git diff 可审计）；canonical 映射与命令身份门禁保留。`scripts/test-harness-backend-policy.sh` 同步断言 deny。
+
 ## [2.10.3] - 2026-09-02
 
 ### 修复
