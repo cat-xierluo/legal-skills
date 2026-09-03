@@ -550,5 +550,188 @@ else
   bad "Task-077 register and launch share one self-check implementation"
 fi
 
+# --- Isolation pre-gate E2E 回归（partial dispatch 复现）---
+# 复现：PM 请求复用已有 worktree/branch 派 supervised worker，Orca 发现同名 branch 已
+# 存在时自动改用 -2 后缀分支建 worktree。修复前：spawn-worker.sh 先 terminal create +
+# supervised register/worker-start（任务注入），final SPAWN_WORKER_GATE 才发现 actual
+# branch != expected 而 exit 2，留下带任务的半活 Dispatch。修复后：worktree 落盘即由
+# isolation pre-gate 判定 branch/HEAD，mismatch 必须在任何 terminal/worker-start/任务
+# 注入副作用之前 fail-closed（exit 2），fake Orca 调用日志不含 worker-start/任务注入；
+# 同名成功路径保持 exit 0 且 worker-start 正常注入。
+E2E_ROOT="$CASE_ROOT/pregate-e2e"
+E2E_PROJECT="$E2E_ROOT/business repo"
+E2E_WS="$E2E_ROOT/orca workspaces"
+E2E_ORCA_BIN="$E2E_ROOT/fake-orca"
+E2E_ORCA_LOG="$E2E_ROOT/orca-calls.log"
+E2E_STATE="$E2E_ROOT/state"
+E2E_PERSONAL_CONFIG="$E2E_ROOT/personal-quota-disabled.json"
+E2E_FAKE_BIN="$E2E_ROOT/bin"
+mkdir -p "$E2E_PROJECT" "$E2E_WS" "$E2E_STATE" "$E2E_FAKE_BIN"
+git -C "$E2E_PROJECT" init -q
+git -C "$E2E_PROJECT" config user.email "spawn-orca@test.local"
+git -C "$E2E_PROJECT" config user.name "spawn-orca-test"
+git -C "$E2E_PROJECT" commit -q --allow-empty -m init
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+cat > "$E2E_ORCA_BIN" <<'SH'
+#!/usr/bin/env bash
+# fake Orca CLI：$E2E_ORCA_STATE 状态文件驱动；每次调用原文追加进 $E2E_ORCA_LOG。
+# branch-suffix-2 状态存在时，worktree create 模拟 Orca 的 -2 后缀分支行为。
+state="${E2E_ORCA_STATE:?}"
+log="${E2E_ORCA_LOG:?}"
+printf '%s\n' "$*" >> "$log"
+resp_worktree() {
+  jq -cn --arg id "repo-1::$1" --arg path "$1" '{result:{worktree:{id:$id,path:$path}}}'
+}
+case "$1 $2" in
+  "worktree current")
+    resp_worktree "$E2E_ORCA_PROJECT" ;;
+  "status --json")
+    printf '%s\n' '{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+  "worktree create")
+    name=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --name) name="$2" ;;
+      esac
+      shift
+    done
+    actual_branch="$name"
+    [ -f "$state/branch-suffix-2" ] && actual_branch="$name-2"
+    wt_path="$E2E_ORCA_WS/$actual_branch"
+    git -C "$E2E_ORCA_PROJECT" worktree add -q -b "$actual_branch" "$wt_path" HEAD >/dev/null 2>&1 || exit 1
+    resp_worktree "$wt_path" ;;
+  "worktree show")
+    wt=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        id:*|path:*) wt="${1#id:}"; wt="${wt#path:}" ;;
+      esac
+      shift
+    done
+    case "$wt" in *::*) wt="${wt#*::}" ;; esac
+    resp_worktree "$wt" ;;
+  "terminal create")
+    printf '%s\n' '{"result":{"terminal":{"handle":"term-pregate"}}}' ;;
+  "terminal wait")
+    printf '%s\n' '{"result":{"ok":true}}' ;;
+  "orchestration run-create")
+    printf '%s\n' '{"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}}}' ;;
+  "orchestration task-create")
+    printf '%s\n' '{"result":{"task":{"id":"task-pregate"}}}' ;;
+  "orchestration worker-start")
+    printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-pregate"}}}}' ;;
+  "orchestration dispatch-show")
+    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-pregate"}}}' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$E2E_ORCA_BIN"
+cat > "$E2E_FAKE_BIN/ps" <<'SH'
+#!/usr/bin/env bash
+# 让入口的 least-privilege Harness 检测在隔离测试进程树中得到完整、确定的
+# Codex 单层祖先链；真实宿主进程树由专门的 backend-policy 套件覆盖。
+case "$*" in
+  *"-o ppid="*) printf '%s\n' '1' ;;
+  *"-o comm="*) printf '%s\n' '/usr/local/bin/codex' ;;
+  *"-o args="*) printf '%s\n' 'codex' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$E2E_FAKE_BIN/ps"
+
+run_e2e_spawn() {
+  local branch="$1" session="$2" out_base="$3"
+  ORCA_CLI_COMMAND="$E2E_ORCA_BIN" \
+  E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
+  E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
+  MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
+  PATH="$E2E_FAKE_BIN:$PATH" \
+    bash "$SCRIPT_DIR/spawn-worker.sh" \
+    --project "$E2E_PROJECT" \
+    --branch "$branch" \
+    --session "$session" \
+    --worker-backend codebuddy \
+    --command 'codebuddy --permission-mode acceptEdits' \
+    --no-trust-auto --no-permission-auto --no-permission-auto-bg --no-external-imports-auto \
+    --orca-supervised \
+    --task-spec "e2e isolation pre-gate regression spec" \
+    > "$out_base.out" 2> "$out_base.err"
+}
+
+# 用例 1（复现形态）：branch 已存在，fake Orca 建了 -2 后缀分支 → pre-gate 必须在任何
+# terminal/worker-start/任务注入副作用之前 exit 2。
+git -C "$E2E_PROJECT" branch e2e-pregate-miss
+touch "$E2E_STATE/branch-suffix-2"
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-pregate-miss e2e-pregate-miss "$E2E_ROOT/mismatch"
+e2e_mismatch_rc=$?
+set -e
+if [ "$e2e_mismatch_rc" != "2" ]; then
+  sed -n '1,120p' "$E2E_ROOT/mismatch.err" >&2
+fi
+assert_eq "$e2e_mismatch_rc" "2" "-2 suffix branch mismatch exits 2 before any worker side effect"
+if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE_FAILED' "$E2E_ROOT/mismatch.err" \
+  && grep -Fq 'actual_branch=e2e-pregate-miss-2' "$E2E_ROOT/mismatch.err"; then
+  ok "-2 suffix mismatch reports the isolation pre-gate failure with both branch names"
+else
+  bad "-2 suffix mismatch reports the isolation pre-gate failure with both branch names"
+fi
+if grep -Fq 'worktree create' "$E2E_ORCA_LOG" \
+  && grep -Fq 'worktree current' "$E2E_ORCA_LOG"; then
+  ok "-2 suffix mismatch still performed the real Orca worktree create"
+else
+  bad "-2 suffix mismatch still performed the real Orca worktree create"
+fi
+if grep -Fq 'terminal create' "$E2E_ORCA_LOG" || grep -Fq 'worker-start' "$E2E_ORCA_LOG" \
+  || grep -Fq 'task-create' "$E2E_ORCA_LOG" || grep -Fq 'run-create' "$E2E_ORCA_LOG"; then
+  bad "-2 suffix mismatch must not create a terminal, run, task or worker-start"
+else
+  ok "-2 suffix mismatch must not create a terminal, run, task or worker-start"
+fi
+if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-pregate-miss" ]; then
+  ok "-2 suffix mismatch leaves no Session Context on disk"
+else
+  bad "-2 suffix mismatch leaves no Session Context on disk"
+fi
+if [ -d "$E2E_WS/e2e-pregate-miss-2" ]; then
+  ok "-2 suffix mismatch retains the created worktree for PM cleanup"
+else
+  bad "-2 suffix mismatch retains the created worktree for PM cleanup"
+fi
+
+# 用例 2（成功路径回归保护）：branch 名可用 → pre-gate 放行，supervised 注册与
+# 任务注入照常发生，final gate 通过，exit 0。
+rm -f "$E2E_STATE/branch-suffix-2"
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-pregate-ok e2e-pregate-ok "$E2E_ROOT/ok"
+e2e_ok_rc=$?
+set -e
+if [ "$e2e_ok_rc" != "0" ]; then
+  sed -n '1,120p' "$E2E_ROOT/ok.err" >&2
+fi
+assert_eq "$e2e_ok_rc" "0" "matching-branch spawn keeps the supervised success path green"
+if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE' "$E2E_ROOT/ok.out" \
+  && grep -Fq "branch=e2e-pregate-ok" "$E2E_ROOT/ok.out" \
+  && grep -Fq 'SPAWN_WORKER_GATE' "$E2E_ROOT/ok.out"; then
+  ok "matching-branch spawn passes pre-gate and final gate"
+else
+  bad "matching-branch spawn passes pre-gate and final gate"
+fi
+if grep -Fq 'terminal create' "$E2E_ORCA_LOG" \
+  && grep -Fq 'orchestration worker-start' "$E2E_ORCA_LOG" \
+  && grep -Fq 'orchestration task-create' "$E2E_ORCA_LOG"; then
+  ok "matching-branch spawn still creates the terminal and injects the task"
+else
+  bad "matching-branch spawn still creates the terminal and injects the task"
+fi
+if jq -e '.session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
+  "$E2E_WS/e2e-pregate-ok/.claude/agent-sessions/e2e-pregate-ok/METADATA.json" >/dev/null 2>&1; then
+  ok "matching-branch spawn records the supervised dispatch contract in metadata"
+else
+  bad "matching-branch spawn records the supervised dispatch contract in metadata"
+fi
+
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
