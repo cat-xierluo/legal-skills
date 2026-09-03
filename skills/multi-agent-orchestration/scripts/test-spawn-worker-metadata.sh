@@ -64,6 +64,10 @@ reset_metadata_case() {
   PROVIDER_LEASE_ROOT="/repo/common/leases"
   PROVIDER_LEASE_LIMIT="2"
   PROVIDER_LEASE_KEY="provider-a"
+  QUOTA_PREFLIGHT_STATUS="ok"
+  QUOTA_PREFLIGHT_LANE="primary"
+  QUOTA_PREFLIGHT_OVERRIDE=0
+  QUOTA_PREFLIGHT_OVERRIDE_SOURCE=""
   ENV_ISOLATION="isolated"
   WAVE_ID="wave-a"
   WAVE_WORKER_ID="worker-a"
@@ -72,6 +76,8 @@ reset_metadata_case() {
   VERIFY_COMMANDS=("bash test-a.sh" "bash test-b.sh")
   ADD_DIRS=("/tmp/a" "/tmp/b path")
   ALLOW_PATHS=("skills/a/**" "skills/b/**")
+  ROLE="implementer"
+  REVIEW_REPAIR_GRANT=""
   INSTALL_GUARD_MODE="hook"
   INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
   INSTALL_AUTHORIZATION_SOURCE="user approval"
@@ -105,6 +111,10 @@ assert_jq "$METADATA_FILE" '.runtime.harness_authority.pm_harness == "codex" and
   "Harness authority remains structured"
 assert_jq "$METADATA_FILE" '.runtime.provider_lease.max_concurrency == 2 and .runtime.provider_lease.provider == "provider-a"' \
   "provider lease limit remains numeric"
+assert_jq "$METADATA_FILE" '.runtime.quota_preflight == {status:"ok",lane:"primary",override_used:0,override_authorization_source:""}' \
+  "quota preflight evidence is initialized and structurally asserted"
+assert_jq "$METADATA_FILE" '.runtime.role == {worker_role:"implementer",review_repair_grant:""}' \
+  "role metadata defaults are recorded for scope discipline"
 assert_jq "$METADATA_FILE" '.verification.commands == ["bash test-a.sh","bash test-b.sh"] and .add_dirs[1] == "/tmp/b path" and .allow_paths[0] == "skills/a/**"' \
   "repeatable arrays preserve order and spaces"
 assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length == 2' \
@@ -123,6 +133,8 @@ METADATA_FILE="$CASE_ROOT/lightweight.json"
 SESSION_CONTEXT="/repo/project/.claude/agent-sessions/lightweight"
 LIGHTWEIGHT_MODE=1
 LIGHTWEIGHT_AUTO=1
+ROLE="reviewer"
+REVIEW_REPAIR_GRANT="task-contract-1"
 INSTALL_GUARD_MODE="prompt_only_degraded"
 PROVIDER_LEASE_LIMIT=""
 GIT_EXPECTED_NAME=""
@@ -143,6 +155,8 @@ assert_jq "$METADATA_FILE" '.isolation == {mode:"lightweight", lightweight_auto:
   "lightweight isolation and auto-detection are recorded"
 assert_jq "$METADATA_FILE" '.runtime.provider_lease.max_concurrency == null' \
   "unconfigured provider limit remains null"
+assert_jq "$METADATA_FILE" '.runtime.role == {worker_role:"reviewer",review_repair_grant:"task-contract-1"}' \
+  "granted reviewer role metadata is recorded verbatim"
 assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "prompt_only_no_mechanical_enforcement" and .execution_authority.git_identity.commit_environment_bound == false' \
   "degraded guard and unbound Git identity remain explicit"
 assert_jq "$METADATA_FILE" '.verification.commands == [] and .session.orca.mode == "force_tmux"' \

@@ -1,0 +1,40 @@
+{
+  "schema_version": "acceptance-repair.v1",
+  "target": {
+    "pr": "#136",
+    "branch": "fix-scoring-double-count",
+    "head_sha": "11ce3e04b6348327d3447a367f4decb6ad2e80f9"
+  },
+  "integration_target": "fix-scoring-double-count",
+  "blockers": [
+    {
+      "id": "BLOCKER-001",
+      "source": "review-acceptance-gate",
+      "detail": "交付缺少随行文档：README 未描述新的比分修正口径",
+      "resolution_hint": "在 README 增补「比分修正」一节并回链 PR 描述"
+    },
+    {
+      "id": "BLOCKER-002",
+      "source": "pm-rerun",
+      "detail": "docs/usage.md 引用了已重命名的 make 目标",
+      "resolution_hint": "把 make check-old 改为 make check"
+    }
+  ],
+  "file_scope": [
+    "README.md",
+    "docs/usage.md"
+  ],
+  "consumer": "PR #136 的验收收口（review-acceptance-gate 复核）",
+  "expiry": "2026-09-30T00:00:00+00:00",
+  "verification_commands": [
+    "bash scripts/lint-docs.sh"
+  ],
+  "repair_owner": "pm-badminton-lab",
+  "repair_attempts_used": 0,
+  "re_review": {
+    "worker_dispatch_id": "ctx_repair_worker_example",
+    "worker_session_id": "sess_repair_worker_example",
+    "reviewer_dispatch_id": "ctx_repair_reviewer_example",
+    "reviewer_session_id": "sess_repair_reviewer_example"
+  }
+}

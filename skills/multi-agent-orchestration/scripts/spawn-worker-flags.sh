@@ -67,10 +67,14 @@ Options:
                    and selects option 1 (default) so the worker is not blocked.
   --external-imports-auto  (v1.20.2) Force external-imports dialog watcher ON for
                    non-claude-code backends if they surface the same dialog.
-  --no-claude-code-bare-auto-degrade  (v1.20.2 Task-019) Keep install-guard fail-closed
-                   even for claude-code --bare. Default: --bare auto-degrades to
-                   prompt-only (provider-isolation requires --bare, which skips hooks).
-                   Use this to force explicit --allow-prompt-only-install-guard again.
+  --quota-preflight-override TEXT
+                   (v2.11.0, P0-①) Explicitly override a denied quota preflight
+                   (missing/stale summary, below stop line, provider-lane
+                   mismatch...). TEXT records the non-empty user/project
+                   authorization source and is written to METADATA.json and the
+                   authority receipt. Without this flag a denied preflight
+                   fails closed before any side effect; there is no default
+                   manual-lock pass-through.
   --add-dir DIR     Extra directories for codebuddy to access outside the worktree
                    (repeatable). Passed through to codebuddy's --add-dir flag.
                    Use when task files/assets are outside the worktree, e.g.:
@@ -84,6 +88,18 @@ Options:
                    even with -y/--dangerously-skip-permissions (PreToolUse hook unbypassable).
                    Use when PM wants to hard-guard against worker scope violations,
                    e.g. --allow-paths 'skills/my-skill/**' --allow-paths 'skills/another-skill/**'
+  --role ROLE       (v2.14.0) Worker role in role-separated acceptance waves.
+                   implementer (default, unchanged behavior) or reviewer.
+                   reviewer 强制写范围纪律：默认只允许写自身 Session Context
+                   （.claude/agent-sessions/<session>/**）；任何 config/*.local.yaml
+                   （安装 Skill 的本地运行配置）永远不可写。要写被审分支必须有
+                   --review-repair-grant 显式授权；无授权时传 --allow-paths 直接
+                   fail-closed 拒绝 spawn。角色与授权写入 METADATA runtime.role。
+  --review-repair-grant TEXT
+                   (v2.14.0) 任务合同显式授予 reviewer 修复被审分支的授权来源
+                   （如任务卡 ID / dispatch 记录）。仅 --role reviewer 有效；
+                   授予后 --allow-paths 才会被采纳，但 config/*.local.yaml
+                   硬拒绝仍然生效。写入 METADATA runtime.role。
   --no-worktree     (v2.0) 显式启用轻量模式：不建 git worktree、不切分支、不算 base ref；
                    worker tmux cwd 直接指向 --project 目录。METADATA 记
                    `isolation_mode: "lightweight"`，branch/base_ref/base_sha 留空。
@@ -142,9 +158,11 @@ Options:
                    Push remote used by safe-push. Default: origin.
   --allow-prompt-only-install-guard TEXT
                    Explicitly accept degraded prompt-only enforcement for a backend without
-                   PreToolUse hooks (currently codex), or a command mode that
-                   disables hooks (for example Claude Code --bare). TEXT records the user or
-                   project authorization source. Without this flag degraded paths fail closed.
+                   PreToolUse hooks (currently codex/zcode), or a command mode that
+                   disables hooks (for example Claude Code --bare; since v2.11.0 the
+                   former --bare auto-degrade is removed, so this flag is the only
+                   degradation channel). TEXT records the user or project authorization
+                   source. Without this flag degraded paths fail closed.
   --dry-run         Print actions without changing anything
 
 The script only creates isolation and starts the session. The PM must still send
@@ -288,9 +306,10 @@ parse_spawn_worker_args() {
         EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
         shift
         ;;
-      --no-claude-code-bare-auto-degrade)  # v1.20.2 Task-019：opt-out --bare 自动降级（保持 fail-closed）
-        CLAUDE_CODE_BARE_AUTO_DEGRADE=0
-        shift
+      --quota-preflight-override)  # v2.11.0 P0-①：显式绕过被拒的配额预检（须带非空授权来源）
+        QUOTA_PREFLIGHT_OVERRIDE=1
+        QUOTA_PREFLIGHT_OVERRIDE_SOURCE="$2"
+        shift 2
         ;;
       --add-dir)
         ADD_DIRS+=("$2")
@@ -298,6 +317,14 @@ parse_spawn_worker_args() {
         ;;
       --allow-paths)
         ALLOW_PATHS+=("$2")
+        shift 2
+        ;;
+      --role)  # v2.14.0：worker 角色（implementer 默认 | reviewer 触发写范围纪律）
+        ROLE="$2"
+        shift 2
+        ;;
+      --review-repair-grant)  # v2.14.0：任务合同显式授予 reviewer 被审分支修复权（须带授权来源）
+        REVIEW_REPAIR_GRANT="$2"
         shift 2
         ;;
       --no-worktree)  # v2.0：显式启用轻量模式（SKILL §2.1.1）
