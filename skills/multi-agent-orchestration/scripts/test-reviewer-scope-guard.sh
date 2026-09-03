@@ -12,7 +12,13 @@
 #   - Task-114 回归：Claude Code 文件编辑工具名为 Update，必须与
 #     Edit/Write/NotebookEdit 走同一条 fail-closed 路径——scope-guard.py
 #     工具集、spawn 生成的全部 PreToolUse matcher、claude-code 后端的
-#     scope-guard hook 接线三处都不能缺 Update。
+#     scope-guard hook 接线三处都不能缺 Update；
+#   - Task-114-R2B 回归（真实 Claude Code 2.1.237 负探针）：claude backend
+#     的 deny JSON 必须带精确 hookEventName="PreToolUse"，否则 Claude 报
+#     hook error 后照写不误；非 claude backend 保持既有协议；非 reviewer
+#     角色在自身 Session Context 内的控制面写入（STATUS/RESULT）在窄
+#     allowlist 下保持可达，父目录/兄弟 session/仓库代码/config/*.local.yaml
+#     仍拒绝。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +36,8 @@ note_fail() {
 # 本测试会在真实 reviewer 会话内运行：外层环境自带 SCOPE_GUARD_ROLE/
 # SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT/SCOPE_GUARD_ALLOW。
 # `env` 只做增量注入，不清继承变量——不清掉的话 implementer/no-role 案例
-# 会被外层 reviewer 角色污染成 deny。每次调用 hook 前先 unset 这四个变量，
+# 会被外层 reviewer 角色污染成 deny。每次调用 hook 前先 unset 这五个变量
+# （含 WORKER_GUARD_BACKEND：deny 协议按 backend 分叉，必须由案例显式指定），
 # 再应用测试案例显式传入的 env，使 reviewer/implementer/no-role 案例互相
 # 隔离；只收窄测试夹具，不放宽生产 guard 语义。
 SCOPE_GUARD_TEST_ENV_ISOLATION=(
@@ -38,6 +45,7 @@ SCOPE_GUARD_TEST_ENV_ISOLATION=(
   -u SCOPE_GUARD_SESSION_ROOT
   -u SCOPE_GUARD_REVIEW_REPAIR_GRANT
   -u SCOPE_GUARD_ALLOW
+  -u WORKER_GUARD_BACKEND
 )
 
 # run_hook <label> <expected: allow|deny> <env assignments...> -- <stdin JSON>
@@ -80,6 +88,39 @@ deny_reason() {
     passed=$((passed + 1))
   else
     note_fail "$label" "reason missing '$expected_sub' in: $output"
+  fi
+}
+
+# assert_deny_protocol <label> <expected_hookEventName|-> <env assignments...> -- <stdin JSON>
+# 断言 deny JSON 的协议字段：exit 0 + permissionDecision=deny +
+# hookSpecificOutput.hookEventName 精确等于期望值（传 "-" 表示必须缺省，
+# 锁定非 claude backend 的既有协议不被扩散）。
+assert_deny_protocol() {
+  local label="$1" expected_event="$2"
+  shift 2
+  local envs=()
+  while [ "$1" != "--" ]; do
+    envs+=("$1")
+    shift
+  done
+  shift
+  local output exit_code decision event
+  set +e
+  output=$(cd "$FIXTURE" && env "${SCOPE_GUARD_TEST_ENV_ISOLATION[@]}" PWD="$FIXTURE" "${envs[@]}" python3 "$SCOPE_GUARD" <<<"$1" 2>&1)
+  exit_code=$?
+  set -e
+  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision // "none"')
+  event=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName // ""')
+  local event_ok=0
+  if [ "$expected_event" = "-" ]; then
+    [ -z "$event" ] && event_ok=1
+  elif [ "$event" = "$expected_event" ]; then
+    event_ok=1
+  fi
+  if [ "$decision" = "deny" ] && [ "$exit_code" -eq 0 ] && [ "$event_ok" -eq 1 ]; then
+    passed=$((passed + 1))
+  else
+    note_fail "$label" "expected deny exit=0 hookEventName='${expected_event}', got exit=$exit_code decision=$decision event='$event' output=$output"
   fi
 }
 
@@ -183,6 +224,67 @@ run_hook "implementer Update allowlist match allows" allow \
 run_hook "implementer Update allowlist mismatch denies" deny \
   "SCOPE_GUARD_ALLOW=docs/**" -- \
   "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/Makefile\"}}"
+
+# -- Task-114-R2B 回归：claude backend deny 协议必须带 PreToolUse 事件名 ---------
+# 真实负探针（task114-r2-review-glm53flash，Claude Code 2.1.237）：reviewer 对
+# 根 README.md 调 Update，scope-guard 输出 deny JSON 但缺
+# hookSpecificOutput.hookEventName="PreToolUse"，Claude 报
+# `PreToolUse:Edit hook error` 后仍执行写入。缺字段 = deny 不生效。
+
+assert_deny_protocol "claude-code backend reviewer Edit outside session denies with PreToolUse" "PreToolUse" \
+  "${ROLE_ENVS[@]}" "WORKER_GUARD_BACKEND=claude-code" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+assert_deny_protocol "claude-code backend reviewer Update outside session denies with PreToolUse" "PreToolUse" \
+  "${ROLE_ENVS[@]}" "WORKER_GUARD_BACKEND=claude-code" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+assert_deny_protocol "claude_code backend reviewer Edit outside session denies with PreToolUse" "PreToolUse" \
+  "${ROLE_ENVS[@]}" "WORKER_GUARD_BACKEND=claude_code" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+assert_deny_protocol "claude backend reviewer Update outside session denies with PreToolUse" "PreToolUse" \
+  "${ROLE_ENVS[@]}" "WORKER_GUARD_BACKEND=claude" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+# 非 claude backend 保持既有协议：仍给 deny 决策，但不扩散 hookEventName
+assert_deny_protocol "codebuddy backend keeps legacy deny protocol (no hookEventName)" "-" \
+  "${ROLE_ENVS[@]}" "WORKER_GUARD_BACKEND=codebuddy" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+# -- Task-114-R2B 回归：implementer 自身 Session Context 控制面保持可达 ---------
+# deny 真正生效后，窄 --allow-paths 的 implementer 若不能写
+# .claude/agent-sessions/<session>/ 内的 STATUS/RESULT，任务闭环直接断裂。
+# 放行严格限定在 SESSION_ROOT 自身目录内；父目录、兄弟 session、仓库代码、
+# config/*.local.yaml 一律不放宽。
+
+IMPL_ENVS=("SCOPE_GUARD_ROLE=implementer" "SCOPE_GUARD_SESSION_ROOT=$SESSION_ROOT" "SCOPE_GUARD_ALLOW=skills/**")
+
+run_hook "implementer writes own session STATUS under narrow allowlist" allow \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$SESSION_ROOT/STATUS.json\"}}"
+
+run_hook "implementer Update own session RESULT under narrow allowlist" allow \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$SESSION_ROOT/RESULT.md\"}}"
+
+run_hook "implementer cannot write session-root parent directory" deny \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKTREE/.claude/agent-sessions/STATUS.json\"}}"
+
+run_hook "implementer cannot write sibling session" deny \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKTREE/.claude/agent-sessions/rev-2/RESULT.md\"}}"
+
+run_hook "implementer cannot write repo code despite session root" deny \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$WORKTREE/README.md\"}}"
+
+# config/*.local.yaml 不被 Session Context 放行（carve-out：跳过 session 放行
+# 后落入 allowlist 判定；去掉 carve-out 本案例会经 session 放行变 allow）
+run_hook "implementer session context allow does not cover config local yaml" deny \
+  "${IMPL_ENVS[@]}" -- \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$SESSION_ROOT/config/personal.local.yaml\"}}"
 
 # -- spawn-worker.sh 角色校验（任何副作用之前 fail-closed） ----------------------
 
