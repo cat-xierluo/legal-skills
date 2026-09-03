@@ -13,12 +13,38 @@ Exit 0 + deny JSON on stdout = hard block (permissionDecision: deny, short-circu
 Exit non-zero = hook error (treated as allow by most CLI implementations for safety).
 
 No SCOPE_GUARD_ALLOW → no-op (backward compatible, scope-guard not active).
+
+Reviewer role (v2.14.0, role-separated acceptance waves):
+SCOPE_GUARD_ROLE=reviewer 激活 reviewer 写范围纪律——
+
+- 默认可写范围只有 reviewer 自己的 Session Context
+  （SCOPE_GUARD_SESSION_ROOT 指向的前缀），任务合同未显式授予被审分支
+  修复权（SCOPE_GUARD_REVIEW_REPAIR_GRANT=1）时，Session Context 之外的
+  一律拒绝；
+- 即便授予了修复权，任何 `*/config/*.local.yaml`（安装 Skill 的本地运行
+  配置，如 orchestration-personal.local.yaml）永远拒绝——修复权不覆盖
+  本机配置写入；
+- 非 reviewer 角色完全走既有 allowlist 行为（向后兼容）。
 """
 
 import fnmatch
 import json
 import os
 import sys
+
+
+REVIEWER_ROLE = "reviewer"
+
+
+def is_config_local_yaml(path: str) -> bool:
+    """True when the path writes a *.local.yaml inside any config/ directory."""
+    normalized = path.replace("\\", "/")
+    parts = [segment for segment in normalized.split("/") if segment not in ("", ".")]
+    if len(parts) < 2:
+        return False
+    filename = parts[-1]
+    parent_segments = parts[:-1]
+    return filename.endswith(".local.yaml") and "config" in parent_segments
 
 
 def get_worktree_root():
@@ -73,15 +99,20 @@ def match_any_pattern(file_path, patterns, worktree_root):
     return False
 
 
+def deny(permissionDecisionReason: str) -> None:
+    deny_output = {
+        "hookSpecificOutput": {
+            "permissionDecision": "deny",
+            "permissionDecisionReason": permissionDecisionReason,
+        }
+    }
+    print(json.dumps(deny_output), file=sys.stdout)
+    # Exit 0: codebuddy interprets JSON permissionDecision (ref: codebuddy.cn/docs/cli/permissions)
+    sys.exit(0)
+
+
 def main():
-    # ---- no SCOPE_GUARD_ALLOW → no-op (backward compatible) ----
-    allow_env = os.environ.get("SCOPE_GUARD_ALLOW", "").strip()
-    if not allow_env:
-        return  # exit 0, no output → allow
-
-    allowed_patterns = [p.strip() for p in allow_env.split(":") if p.strip()]
-
-    # ---- read stdin JSON ----
+    # ---- read stdin JSON (needed for both legacy allowlist and reviewer layer) ----
     try:
         raw = sys.stdin.read()
         if not raw.strip():
@@ -105,20 +136,47 @@ def main():
     # ---- get worktree root for path normalization ----
     worktree_root = get_worktree_root()
 
+    # ---- reviewer role discipline (v2.14.0) ----
+    role = os.environ.get("SCOPE_GUARD_ROLE", "").strip()
+    if role == REVIEWER_ROLE:
+        # 硬拒绝：任何 config/ 目录下的 *.local.yaml（安装 Skill 的本地运行
+        # 配置）对 reviewer 永远不可写——授予修复权也不改变这一条。
+        if is_config_local_yaml(file_path):
+            deny(
+                "reviewer role: config/*.local.yaml 是安装 Skill 的本地运行配置，"
+                f"reviewer 永远不可写 (tried {file_path})"
+            )
+            return
+        grant = os.environ.get("SCOPE_GUARD_REVIEW_REPAIR_GRANT", "").strip() == "1"
+        if not grant:
+            session_root = os.environ.get("SCOPE_GUARD_SESSION_ROOT", "").strip()
+            if session_root:
+                tried_abs = os.path.abspath(file_path)
+                root_abs = os.path.abspath(session_root)
+                inside = tried_abs == root_abs or tried_abs.startswith(root_abs + os.sep)
+                if inside:
+                    return  # own Session Context → allow
+            deny(
+                "reviewer role: 默认可写范围只有自身 Session Context；"
+                "写被审分支需要任务合同显式授予修复权"
+                f" (tried {file_path})"
+            )
+            return
+        # 授予修复权 → 继续走下方 allowlist（spawn 已为 reviewer 注入allowlist）。
+
+    # ---- no SCOPE_GUARD_ALLOW → no-op (backward compatible) ----
+    allow_env = os.environ.get("SCOPE_GUARD_ALLOW", "").strip()
+    if not allow_env:
+        return  # exit 0, no output → allow
+
+    allowed_patterns = [p.strip() for p in allow_env.split(":") if p.strip()]
+
     # ---- check against allow list ----
     if match_any_pattern(file_path, allowed_patterns, worktree_root):
         return  # matched → allow
 
     # ---- out of scope → deny ----
-    deny_output = {
-        "hookSpecificOutput": {
-            "permissionDecision": "deny",
-            "permissionDecisionReason": f"out of scope: 仅允许 {allow_env} (tried {file_path})"
-        }
-    }
-    print(json.dumps(deny_output), file=sys.stdout)
-    # Exit 0: codebuddy interprets JSON permissionDecision (ref: codebuddy.cn/docs/cli/permissions)
-    sys.exit(0)
+    deny(f"out of scope: 仅允许 {allow_env} (tried {file_path})")
 
 
 if __name__ == "__main__":
