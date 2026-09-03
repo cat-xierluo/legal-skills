@@ -46,7 +46,12 @@
 #   CLAUDE_AGENT_STATE name/session status kind cwd
 #     Claude Code 官方后台 session 状态变化（来自 claude agents --json）
 #   SESSION_GONE session-name (branch branch-name)
-#     tmux session 已退出
+#     tmux session 可靠不存在（控制面查询成功后确认 absent）
+#   SESSION_UNKNOWN session-name (branch branch-name) reason=<reason>
+#     tmux 命令缺失或控制面查询失败，存活不可判定（随发 AGENT_NEEDS_INPUT，
+#     不冒充 dead；Task-113，Badminton Lab bl112/bl113 存活被误报事故）
+#   SESSION_RECOVERED session-name (branch branch-name)
+#     曾判 absent/unknown 的 session 重新确认存活
 #   WORKER_STALE_NO_COMMIT session branch=branch-name threshold=Ns
 #     tmux session 仍存活，但分支在阈值内没有新提交
 #   WORKER_SILENT_PROGRESS session branch=branch-name files_newer=N
@@ -301,21 +306,65 @@ dirty_count_for_worktree() {
     | awk '$2 !~ /^\.claude(\/|$)/ { count++ } END { print count + 0 }'
 }
 
+# tmux 判活三态分类（Task-113）：
+#   alive   — 控制面确认 session 存在
+#   absent  — 控制面查询成功且明确无此 session（can't find session /
+#             no server running），唯一允许发 SESSION_GONE 的状态
+#   unknown — tmux 命令不在 PATH、socket 不可达等查询失败，存活不可判定；
+#             不再折叠为 dead（Badminton Lab bl112/bl113 存活被误报事故）
+# 输出单行："alive" 或 "<absent|unknown> <单行 reason>"
+tmux_session_state() {
+  local session="$1"
+  local rc=0 out reason
+  out=$(tmux has-session -t "$session" 2>&1) || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "alive"
+    return 0
+  fi
+  reason=$(printf '%s' "$out" | head -n 1 | tr '\t\r' '  ')
+  [ -n "$reason" ] || reason="tmux has-session exit=$rc"
+  case "$reason" in
+    *"can't find session"*|*"no server running"*)
+      echo "absent $reason"
+      ;;
+    *)
+      echo "unknown $reason"
+      ;;
+  esac
+  return 0
+}
+
 check_tmux_session() {
   local branch="$1"
   local session="$2"
-  local alive=1
+  local line state reason prev
 
-  if ! tmux has-session -t "$session" 2>/dev/null; then
-    alive=0
+  line=$(tmux_session_state "$session")
+  state="${line%% *}"
+  reason="${line#* }"
+  if [ "$state" = "$line" ]; then
+    reason=""
   fi
+  prev="${last_session_alive[$branch]:-}"
+  [ "$state" = "$prev" ] && return 0
 
-  if [ "$alive" != "${last_session_alive[$branch]:-}" ]; then
-    if [ "$alive" -eq 0 ]; then
+  case "$state" in
+    alive)
+      # 从 absent/unknown 恢复时补正向事件，PM 据此撤销告警；首轮存活保持静默
+      if [ -n "$prev" ]; then
+        emit "SESSION_RECOVERED: $session (branch $branch)"
+      fi
+      ;;
+    absent)
       emit "SESSION_GONE: $session (branch $branch)"
-    fi
-    last_session_alive[$branch]="$alive"
-  fi
+      ;;
+    unknown)
+      emit "SESSION_UNKNOWN: $session (branch $branch) reason=${reason:-unspecified}"
+      emit "AGENT_NEEDS_INPUT: $session tmux liveness query failed (${reason:-unspecified}); liveness unknown, not SESSION_GONE"
+      ;;
+  esac
+  last_session_alive[$branch]="$state"
+  return 0
 }
 
 check_commit_staleness() {
@@ -323,8 +372,11 @@ check_commit_staleness() {
   local session="$2"
 
   [ "$COMMIT_STALE_THRESHOLD" -gt 0 ] || return 0
-  command -v tmux >/dev/null 2>&1 || return 0
-  tmux has-session -t "$session" 2>/dev/null || return 0
+  # 只对确认 alive 的 session 追提交停滞告警；absent/unknown（含控制面查询失败）
+  # 一律跳过，不用不确定的判活去骚扰可能仍存活的 worker（Task-113）
+  local tmux_state
+  tmux_state=$(tmux_session_state "$session")
+  [ "$tmux_state" = "alive" ] || return 0
   git show-ref --verify --quiet "refs/heads/$branch" || return 0
 
   local wt checkpoint_dir status_file status
