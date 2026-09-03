@@ -758,3 +758,34 @@ PM 合并 Wave PR 时，把 DEC 编号 race 视为常规冲突处理，不让 wo
 - **修复**：`orca terminal send --terminal <handle> --text "..." --enter` 直接键盘注入，三个 worker 立即恢复工作（transcript 时间戳恢复跳动，数分钟内出现读文档/跑命令活动）。
 - **诊断要点**：terminal tail 停在 429 行 + `peek` 返回的 transcript `timestamp`（epoch ms）距 `date +%s000` 超过几分钟 = 需要注入；判活看时间戳差值，别信 tail 文本（缓冲可能是陈旧快照，恢复思考时 spinner 只原地刷新不产生新行）。
 - **教训**：send 的「成功」语义 = 投递成功 ≠ 唤醒成功；对 idle TUI 的唤醒必须走输入通道本身。另：同账号多 worker 的 5 小时限流是**同时**触发的——波次排期要把账号配额当共享资源，多 worker 长任务尽量错峰或分账号（provider lease 按 backend 计数，拦不住同账号配额）。
+
+### G40. 复用 branch 名 → Orca 自动 `-2` 后缀 → worker-start 先于门禁的 partial dispatch（isolation pre-gate）
+
+**实战来源**：2026-09-02，PM 请求复用已有 worktree/branch 派 supervised worker（claude-code）的 spawn 事故复现。
+
+- **现象**：Orca `worktree create` 发现同名 branch 已存在时自动改用 `-2` 后缀分支新建 worktree。`spawn-worker.sh` 旧顺序里 terminal create + supervised register/worker-start（任务注入）**先**执行，末尾 final `SPAWN_WORKER_GATE` 才发现 actual branch != expected 而 exit 2——但 Dispatch/worker 已带任务活跑。spawn 报失败、编排面却留下半活 Task/Dispatch/terminal，PM 无法从退出码判断"到底起没起"。
+- **根因**：final gate 里 cwd/branch/HEAD 这类在 worktree 落盘后**立即可判定**的事实，被排在了 terminal/worker-start/dispatch 副作用之后。校验时机与副作用边界错位，失败语义就从"拒绝创建"退化成"召回半成品"。
+- **修复**：`spawn-worker.sh` 在 worktree 落盘并 realpath 后、`ensure_worktree_deps`/Session Context/authority receipt/METADATA/guard/terminal 之前插入 isolation pre-gate：非 lightweight 且非 dry-run 时机械判定 `git -C <worktree> branch --show-current == $BRANCH` 且 HEAD 可解析；mismatch 打印 `SPAWN_WORKER_ISOLATION_PREGATE_FAILED` 并 exit 2。此时 fake Orca 调用日志只有 `worktree current/status/create`，没有任何 terminal create/run-create/task-create/worker-start，Session Context 与 receipt 未落盘（失败重试不会撞 receipt 已存在的 fail-closed），worktree 保留供 PM 精确清理。final `SPAWN_WORKER_GATE` 只保留 pane cwd 这个 launch 后才能观察的校验。
+- **教训**：
+  - 凡"创建资源 → 观察资源实际形态 → 校验期望"的流程，校验必须紧贴观察点、先于下游第一个不可撤销副作用；把校验堆在流程末尾等于把失败变成召回。
+  - 门禁前移不是加一道重复检查，是同一检查换到副作用边界之前；final gate 保留的部分（pane cwd）是 launch 前原理上不可判定的，不算冗余。
+  - 失败路径还要考虑**可重试性**：pre-gate 放在 authority receipt 写盘之前，同名 session 直接重派不会撞"receipt already exists"。
+
+**回归**：`scripts/test-spawn-worker-orca.sh` 末尾 E2E（真实入口 + fake Orca CLI 真建 `-2` 分支）：mismatch 断言 exit 2 + 调用日志无 terminal create/run-create/task-create/worker-start + 无 Session Context 落盘 + worktree 保留；同名成功路径断言 exit 0 + worker-start 正常注入 + METADATA supervised 合同完整。
+
+**关联**：SKILL §3 不变量与启动门禁（isolation pre-gate 硬约束条）、§4.4（worker-start 唯一任务注入器）、G38（branch 名规范化的另一形态：spec 写斜杠）。
+
+### G41. Reviewer 证据预算（evidence budget）：证据有量纲，不是越多越好
+
+**场景**：reviewer dispatch 做独立验收时，证据收集容易无上限膨胀：已经拿到 exact HEAD + 完整 diff，还整份重读数千行 canonical 文档"求安心"；为一条不影响结论的疑问反复查外部 CI；环境/时序失败后无限复跑。证据预算纪律（已写入 SKILL §3 角色分离节）：
+
+1. **优先级固定：exact HEAD + diff + 受影响文件优先**。已有 diff 覆盖的信息不再整份重读大型 canonical 文档，只按需读 diff 触及的小节。
+2. **外部 CI 查询只在 verdict 必需时做**：accept/reject 依赖该结果才查；"顺手确认"不算必需。
+3. **环境/时序失败最多一次归因复跑**：归因后修复环境再跑属于新验证，不算复跑；仍失败必须具名 `NOT_VERIFIED`（无法验证）或 `REJECT`（证据指向缺陷），不得第三次盲试。
+4. **PM 可随时发送 budget stop** 截断证据收集；reviewer 收到后按已有证据收敛结论并显式标注未验证部分。
+
+**边界**：预算只约束证据获取的**量**，不改变验收语义——与 `--role reviewer` 写范围纪律、独立验收（实现者≠审查者）和 fail-closed 不冲突：预算耗尽不产出"放宽的通过"，只产出具名的 `NOT_VERIFIED`/`REJECT`。
+
+**与 G33 的关系**：G33 的教训是自审漏 BLOCKER 因为证据花在了"逻辑看起来对"而不是对真实输出跑验证；本条是它的镜像约束——省下的文档重读/非必需 CI 预算，应该花在 exact HEAD + diff + 真实验证上，而不是反向膨胀。
+
+**关联**：SKILL §3 角色分离验收门禁（Review 写范围纪律、证据预算段）、G33（真响应 fixture 优先）、G13（纠偏优先，接管兜底——budget stop 是 PM 的又一种低成本介入手段）。
