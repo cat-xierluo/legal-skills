@@ -129,6 +129,28 @@ else
   not_ok "worker cannot edit authorization evidence file"
 fi
 
+# Task-114-R4：Update 与 Edit/Write/NotebookEdit 同为文件写工具。直接负例——
+# 以 Update payload 尝试修改授权证据文件必须 fail-closed，且 Claude backend 的
+# deny JSON 必须携带 PreToolUse hookEventName（deny 生效协议）；其余 backend
+# 保持旧协议（无 hookEventName）不回归。
+update_immutable_output=$(printf '%s' "$deny_auth" | python3 -c 'import json,sys; print(json.dumps({"tool_name":"Update","tool_input":{"file_path":sys.stdin.read()}}))' |
+  WORKER_INSTALL_AUTH_FILE="$deny_auth" WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD")
+if printf '%s' "$update_immutable_output" | grep -qF "INSTALL_AUTHORIZATION_IMMUTABLE"; then
+  ok "worker cannot modify authorization evidence via Update"
+else
+  printf 'output=%s\n' "$update_immutable_output" >&2
+  not_ok "worker cannot modify authorization evidence via Update"
+fi
+update_claude_output=$(printf '%s' "$deny_auth" | python3 -c 'import json,sys; print(json.dumps({"tool_name":"Update","tool_input":{"file_path":sys.stdin.read()}}))' |
+  WORKER_INSTALL_AUTH_FILE="$deny_auth" WORKER_GUARD_BACKEND=claude-code python3 "$GUARD")
+if printf '%s' "$update_claude_output" | grep -qF '"hookEventName": "PreToolUse"' && \
+   printf '%s' "$update_claude_output" | grep -qF "INSTALL_AUTHORIZATION_IMMUTABLE"; then
+  ok "Update denial on Claude backend carries PreToolUse hook protocol"
+else
+  printf 'output=%s\n' "$update_claude_output" >&2
+  not_ok "Update denial on Claude backend carries PreToolUse hook protocol"
+fi
+
 tampered_auth="$tmp_root/tampered.json"
 write_auth "$tampered_auth" "worker self-approved" "brew install jq"
 deny_snapshot=$(base64 < "$deny_auth" | tr -d '\r\n')
@@ -228,8 +250,11 @@ session="install-guard-test-$$"
 git init -b main "$spawn_repo" >/dev/null
 printf 'base\n' > "$spawn_repo/base.txt"
 git -C "$spawn_repo" add base.txt
-GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid \
-GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid \
+# base commit 故意用与 worker 期望身份（Test）不同的身份：identity 断言只有在
+# spawn 真的以注入身份跑出 worker commit 时才可能 PASS（红基线中 base 与 worker
+# 同身份曾让该断言在 worker 从未启动时假阳性）。
+GIT_AUTHOR_NAME=Base GIT_AUTHOR_EMAIL=base@example.invalid \
+GIT_COMMITTER_NAME=Base GIT_COMMITTER_EMAIL=base@example.invalid \
   git -C "$spawn_repo" commit -m base >/dev/null
 worktree="$spawn_repo/.claude/worktrees/tmux-feat-install-guard-test"
 git -C "$spawn_repo" worktree add "$worktree" -b feat/install-guard-test main >/dev/null
@@ -261,10 +286,29 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --git-expected-name "Test" \
   --git-expected-email "test@example.invalid" \
   --git-integration-base "origin/main" \
+  --no-orca-mode \
   >/tmp/dependency-install-spawn.out 2>/tmp/dependency-install-spawn.err; then
   auth_file="$worktree/.claude/agent-sessions/$session/INSTALL_AUTHORIZATION.json"
   metadata_file="$worktree/.claude/agent-sessions/$session/METADATA.json"
   settings_file="$worktree/.claude/settings.local.json"
+  # Task-114-R4：环境隔离断言。本测试会在真实 supervised worker（Orca 环境）里被
+  # 执行；spawn 的 Orca auto-detect 会把临时 repo 自动注册进运行中的 Orca，并把
+  # Session Context 落到 ~/orca/workspaces/ 下另一棵 worktree、甚至自动改用 -2
+  # 后缀分支触发 isolation pre-gate（红基线实测事故）。所有嵌套 spawn 显式
+  # --no-orca-mode 固定 tmux 语义后，这里验证确实走了 force_tmux 路径，
+  # 保证 plain 环境与 worker 环境跑测试语义一致。
+  if grep -qF "SPAWN_WORKER_ORCA_FORCED_TMUX" /tmp/dependency-install-spawn.err; then
+    ok "nested spawn is pinned to tmux mode regardless of ambient Orca session"
+  else
+    not_ok "nested spawn is pinned to tmux mode regardless of ambient Orca session"
+  fi
+  # Session Context 真实落点断言：文件缺失时在此明确 FAIL，防止下游裸 jq 赋值的
+  # errexit 直接终止整个测试脚本（红基线首轮实测死法：无 SUMMARY 静默 exit 2）。
+  if [ -f "$auth_file" ] && [ -f "$metadata_file" ]; then
+    ok "spawn writes real session context at asserted worktree paths"
+  else
+    not_ok "spawn writes real session context at asserted worktree paths"
+  fi
   if jq -e '.policy == "deny_by_default" and .authorization_source != "" and (.authorized_commands == ["npm ci"]) and (.allowed_shell_commands | index("pwd") != null)' "$auth_file" >/dev/null; then
     ok "spawn writes auditable exact-command authorization"
   else
@@ -299,7 +343,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   fi
   if jq -e --arg guard "$guard_hook_command" '
       .permissions.allow == ["Read"]
-      and ([.hooks.PreToolUse[].matcher] | index("Bash|Shell|Terminal|Edit|Write|NotebookEdit") != null)
+      and ([.hooks.PreToolUse[].matcher] | index("Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update") != null)
       and ([.hooks.PreToolUse[].hooks[].command] | map(select(. == $guard)) | length == 1)
       and ([.hooks.PreToolUse[].hooks[].command] | index("echo audit-hook-preserved") != null)
     ' "$settings_file" >/dev/null; then
@@ -307,7 +351,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "spawn merges hook without overwriting existing settings"
   fi
-  receipt_file=$(jq -r '.execution_authority.authority_receipt_file' "$metadata_file")
+  receipt_file=$(jq -r '.execution_authority.authority_receipt_file' "$metadata_file" 2>/dev/null || true)
   if [ -f "$receipt_file" ] && [[ "$receipt_file" != "$worktree"/* ]] && \
      jq -e --arg digest "$(jq -r '.execution_authority.authority_receipt_sha256' "$metadata_file")" \
        '.authorization_sha256 == $digest and .install_guard_mode == "hook"' "$receipt_file" >/dev/null; then
@@ -315,13 +359,16 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "spawn writes PM authority receipt outside worker worktree"
   fi
-  attestation_file=$(jq -r '.execution_authority.guard_attestation_file' "$metadata_file")
+  attestation_file=$(jq -r '.execution_authority.guard_attestation_file' "$metadata_file" 2>/dev/null || true)
   if [ ! -e "$attestation_file" ]; then
     ok "spawn does not claim runtime hook attestation before invocation"
   else
     not_ok "spawn does not claim runtime hook attestation before invocation"
   fi
-  auth_b64=$(base64 < "$auth_file" | tr -d '\r\n')
+  auth_b64=""
+  if [ -f "$auth_file" ]; then
+    auth_b64=$(base64 < "$auth_file" | tr -d '\r\n')
+  fi
   hook_output=$(printf '{"tool_name":"Bash","tool_input":{"command":"pwd"}}' |
     WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64="$auth_b64" \
     WORKER_AUTHORITY_RECEIPT_FILE="$receipt_file" WORKER_GUARD_ATTESTATION_FILE="$attestation_file" \
@@ -341,7 +388,8 @@ rm -f /tmp/dependency-install-spawn.out /tmp/dependency-install-spawn.err
 
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/unsupported --session "$session-unsupported" \
-  --worker-backend codex --command "sleep 1" >/tmp/dependency-install-unsupported.out 2>&1; then
+  --worker-backend codex --command "sleep 1" --no-orca-mode \
+  >/tmp/dependency-install-unsupported.out 2>&1; then
   not_ok "unsupported backend without degraded approval fails closed"
   tmux kill-session -t "$session-unsupported" 2>/dev/null || true
 else
@@ -359,7 +407,7 @@ rm -f /tmp/dependency-install-unsupported.out
 # ② 带非空显式授权时放行，且 METADATA 记录 prompt_only_degraded 证据。
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/bare --session "$session-bare" \
-  --worker-backend claude-code --command "claude --bare" --dry-run \
+  --worker-backend claude-code --command "claude --bare" --dry-run --no-orca-mode \
   >/tmp/dependency-install-bare.out 2>&1; then
   not_ok "Claude --bare without explicit guard approval fails closed"
 else
@@ -378,7 +426,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/bare-degraded --session "$bare_degraded_session" \
   --worker-backend claude-code --command "$tmp_root/claude --bare" \
   --allow-prompt-only-install-guard "PM 明确接受 claude --bare 无 hook 的提示级降级" \
-  --no-trust-auto --no-permission-auto \
+  --no-trust-auto --no-permission-auto --no-orca-mode \
   >/tmp/dependency-install-bare-degraded.out 2>&1; then
   bare_degraded_metadata="$spawn_repo/.claude/worktrees/tmux-feat-bare-degraded/.claude/agent-sessions/$bare_degraded_session/METADATA.json"
   if jq -e '.execution_authority.install_guard_mode == "prompt_only_degraded" and .execution_authority.enforcement_source == "prompt_only_no_mechanical_enforcement" and .execution_authority.degradation_source != ""' "$bare_degraded_metadata" >/dev/null; then
@@ -396,7 +444,8 @@ rm -f /tmp/dependency-install-bare-degraded.out
 
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/fake-codebuddy --session "$session-fake-codebuddy" \
-  --worker-backend codebuddy --command "sleep 10" >/tmp/dependency-install-fake-backend.out 2>&1; then
+  --worker-backend codebuddy --command "sleep 10" --no-orca-mode \
+  >/tmp/dependency-install-fake-backend.out 2>&1; then
   not_ok "backend label without matching executable token fails closed"
   tmux kill-session -t "$session-fake-codebuddy" 2>/dev/null || true
 else
@@ -413,7 +462,8 @@ for disabled_command in "claude '--safe-mode'" "claude --setting-sources project
   slug=$(printf '%s' "$disabled_command" | tr -cd 'a-zA-Z' | cut -c1-18)
   if bash "$SCRIPT_DIR/spawn-worker.sh" \
     --project "$spawn_repo" --branch "feat/$slug" --session "$session-$slug" \
-    --worker-backend claude-code --command "$disabled_command" >/tmp/dependency-install-disabled.out 2>&1; then
+    --worker-backend claude-code --command "$disabled_command" --no-orca-mode \
+    >/tmp/dependency-install-disabled.out 2>&1; then
     not_ok "Claude hook-disable mode fails closed: $disabled_command"
     tmux kill-session -t "$session-$slug" 2>/dev/null || true
   else
@@ -434,7 +484,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/degraded --session "$degraded_session" \
   --worker-backend codex --command "$tmp_root/codex" \
   --allow-prompt-only-install-guard "项目 T159 明确接受无 hook 的提示级降级" \
-  --no-trust-auto --no-permission-auto \
+  --no-trust-auto --no-permission-auto --no-orca-mode \
   >/tmp/dependency-install-degraded.out 2>&1; then
   degraded_metadata="$spawn_repo/.claude/worktrees/tmux-feat-degraded/.claude/agent-sessions/$degraded_session/METADATA.json"
   if jq -e '.execution_authority.install_guard_mode == "prompt_only_degraded" and .execution_authority.enforcement_source == "prompt_only_no_mechanical_enforcement" and .execution_authority.degradation_source != ""' "$degraded_metadata" >/dev/null; then
@@ -453,7 +503,8 @@ rm -f /tmp/dependency-install-degraded.out
 if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$spawn_repo" --branch feat/npx-verify --session "$session-npx" \
   --worker-backend claude-code --command "$tmp_root/claude 10" \
-  --verify-cmd "npx playwright test" >/tmp/dependency-install-npx.out 2>&1; then
+  --verify-cmd "npx playwright test" --no-orca-mode \
+  >/tmp/dependency-install-npx.out 2>&1; then
   not_ok "install-like verification command gets no implicit authorization"
   tmux kill-session -t "$session-npx" 2>/dev/null || true
 else
