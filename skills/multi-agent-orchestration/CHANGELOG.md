@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.14.2] - 2026-09-03
+
+### 修复（pm-monitor tmux 判活三态，Task-113）
+
+- **判活误报根因修复**：`pm-monitor.sh` 的 `check_tmux_session` 原来把三种失败折叠进同一个 `! tmux has-session` → dead 分支——① tmux 命令不在 PATH（rc=127，Monitor/受限环境常见）、② tmux 可用但控制面查询失败（socket 不可达 / Permission denied 等）、③ 目标 session 确实不存在。真实事故：Badminton Lab 本轮 `pm-monitor` 把可由 `tmux capture-pane` / `tmux has-session` 证明仍存活的 `bl112-glm53flash`、`bl113-glm53flash` 报为 `SESSION_GONE`。现新增 `tmux_session_state` 分类函数输出三态：`alive`（控制面确认存在）、`absent`（查询成功且明确无此 session：`can't find session` / `no server running`，唯一允许发 `SESSION_GONE` 的状态）、`unknown`（命令缺失或查询失败，存活不可判定）。
+- **unknown 不再冒充 dead**：控制面查询异常时输出可机器识别的 `SESSION_UNKNOWN: <session> (branch <branch>) reason=<单行原因>` + `AGENT_NEEDS_INPUT`，PM 据此知道是观察器自身故障而非 worker 死亡；同状态跨轮去重（状态机只在翻转时发事件）；从 absent/unknown 恢复存活补发 `SESSION_RECOVERED` 供撤销告警。`check_commit_staleness` 改为复用同一分类，只对确认 alive 的 session 追提交停滞告警，不用不确定的判活去骚扰可能仍存活的 worker。
+- **新增确定性回归门禁 `scripts/test-pm-monitor.sh`**：PATH shim fake tmux（模式/序列驱动，POSIX sh）+ 临时 Git 仓库，7 案例 23 断言覆盖 alive 不误报、可靠 absent 才 SESSION_GONE、socket 查询错误报 UNKNOWN、tmux 命令缺失报 UNKNOWN、同状态 3 轮去重、恢复事件；Case 4/5/6 对旧折叠实现必红（红 13 通过/10 失败 → 修复后 23/23 全绿），零外部依赖、零常驻进程。
+- **文档同步**：`SKILL.md` §7 新增 pm-monitor 判活三态说明。版本 2.14.1 → 2.14.2。
+
 ## [2.14.1] - 2026-09-03
 
 ### 修复
