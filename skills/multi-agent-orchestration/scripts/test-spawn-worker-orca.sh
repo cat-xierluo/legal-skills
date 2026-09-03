@@ -565,7 +565,8 @@ E2E_ORCA_BIN="$E2E_ROOT/fake-orca"
 E2E_ORCA_LOG="$E2E_ROOT/orca-calls.log"
 E2E_STATE="$E2E_ROOT/state"
 E2E_PERSONAL_CONFIG="$E2E_ROOT/personal-quota-disabled.json"
-mkdir -p "$E2E_PROJECT" "$E2E_WS" "$E2E_STATE"
+E2E_FAKE_BIN="$E2E_ROOT/bin"
+mkdir -p "$E2E_PROJECT" "$E2E_WS" "$E2E_STATE" "$E2E_FAKE_BIN"
 git -C "$E2E_PROJECT" init -q
 git -C "$E2E_PROJECT" config user.email "spawn-orca@test.local"
 git -C "$E2E_PROJECT" config user.name "spawn-orca-test"
@@ -625,6 +626,18 @@ case "$1 $2" in
 esac
 SH
 chmod +x "$E2E_ORCA_BIN"
+cat > "$E2E_FAKE_BIN/ps" <<'SH'
+#!/usr/bin/env bash
+# 让入口的 least-privilege Harness 检测在隔离测试进程树中得到完整、确定的
+# Codex 单层祖先链；真实宿主进程树由专门的 backend-policy 套件覆盖。
+case "$*" in
+  *"-o ppid="*) printf '%s\n' '1' ;;
+  *"-o comm="*) printf '%s\n' '/usr/local/bin/codex' ;;
+  *"-o args="*) printf '%s\n' 'codex' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$E2E_FAKE_BIN/ps"
 
 run_e2e_spawn() {
   local branch="$1" session="$2" out_base="$3"
@@ -632,6 +645,7 @@ run_e2e_spawn() {
   E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
   E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
   MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
+  PATH="$E2E_FAKE_BIN:$PATH" \
     bash "$SCRIPT_DIR/spawn-worker.sh" \
     --project "$E2E_PROJECT" \
     --branch "$branch" \
@@ -653,6 +667,9 @@ set +e
 run_e2e_spawn e2e-pregate-miss e2e-pregate-miss "$E2E_ROOT/mismatch"
 e2e_mismatch_rc=$?
 set -e
+if [ "$e2e_mismatch_rc" != "2" ]; then
+  sed -n '1,120p' "$E2E_ROOT/mismatch.err" >&2
+fi
 assert_eq "$e2e_mismatch_rc" "2" "-2 suffix branch mismatch exits 2 before any worker side effect"
 if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE_FAILED' "$E2E_ROOT/mismatch.err" \
   && grep -Fq 'actual_branch=e2e-pregate-miss-2' "$E2E_ROOT/mismatch.err"; then
@@ -691,6 +708,9 @@ set +e
 run_e2e_spawn e2e-pregate-ok e2e-pregate-ok "$E2E_ROOT/ok"
 e2e_ok_rc=$?
 set -e
+if [ "$e2e_ok_rc" != "0" ]; then
+  sed -n '1,120p' "$E2E_ROOT/ok.err" >&2
+fi
 assert_eq "$e2e_ok_rc" "0" "matching-branch spawn keeps the supervised success path green"
 if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE' "$E2E_ROOT/ok.out" \
   && grep -Fq "branch=e2e-pregate-ok" "$E2E_ROOT/ok.out" \
