@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.15.0] - 2026-09-04
+
+### 新增
+
+- **PR 唯一性审计 `pr-audit.v1`**：新增 `scripts/pr-audit.py` 与 `pm-orchestrate.sh pr-audit`。按 canonical repo/Git common dir、base/head ref 与 OID、head repository、真实 diff 指纹相等以及独立 `Task:`/`Agent:` trailer，把 open PR 分为 exact、suspected、unrelated；同 head 错 SHA、元数据相同但 diff 不同、同内容异分支、fork、事实未知和候选截断均失败关闭，stdout 保持单 JSON。
+- **PR-first 三态收口**：`pm-closeout.sh` 新增 `local-after-pr`（默认）、`remote-pr`、`validate-only`，以及两阶段显式授权：第一阶段绑定 repo/PR/head/SHA/operation，main mutation 前第二阶段再绑定最终 base/candidate/tree。只读预审发生在任何 push/create 之前，唯一 worker 自建 PR 可直接接管，zero 才允许授权式 push/create；调用方 body 中保留 `Task:`/`Agent:` trailer 会在 mutation 前被拒。
+
+### 修复
+
+- **本地 main 事务边界**：候选改为在 fresh main 隔离 clone 中对冻结 worker patch 做三方应用，不再整文件覆盖 main；从隔离 main 候选 safe-push，远端确认后才快进真实 clean main。scope 冲突、safe-push 失败、错误/dirty/进行中 Git 操作的 main worktree 均保持 main 不变。
+- **保护规则与漂移失败关闭**：改读 GitHub branch metadata 的类型化 `.protected` 布尔值，同时覆盖 classic branch protection 与 rulesets；只有明确 `false` 才允许本地 main push，并在最终 push 前再次确认，403/404/畸形/中途翻转都降为非成功 `VALIDATE_ONLY`。最终 main push/GitHub merge 前重跑唯一 PR 审计并复核 base/head/diff/checks/review；远端 mutation 前另拒绝原生 merge queue（留给 Task-070），合并用 `--match-head-commit`，成功还需验证三字段、merge commit 已进入 main、第一父提交等于已审 base 且 tree 等于候选 tree。
+- **分布式 commit point 状态**：普通失败（exit 2–8）保持 main 零 mutation；create/merge/push/close 调用开始后若服务端可能已提交但回执、tree 或本地同步不确定，统一 exit 9 输出 `OUTCOME_UNKNOWN`、`REVIEW_REQUIRED` 或 `LOCAL_PENDING`，保留精确 PR/commit 供恢复，禁止把部分成功伪报成普通失败或盲重试。
+
+### 技术优化
+
+- `test-pr-audit.sh` 新增 18 项分类、GHE/凭证脱敏、diff mismatch、101 条截断和稳定错误合同测试；`test-pm-closeout.sh` 扩至 118 项，覆盖原 36 项及 validate-only 零写入、自建 PR 接管、create/same-content race、同文件三方合并/冲突、classic/ruleset/merge-queue 保护分流、保护中途翻转、base TOCTOU、candidate-bound 重授权、post-commit outcome-unknown/local-pending、Git/PR diff 凭证脱敏、scope/pathspec、safe-push 失败、错误 main worktree、可靠 Git operation marker（active rebase 目录拒绝、stale `REBASE_HEAD` 忽略）与最终 PR 集合漂移。
+
+### 待办事项
+
+- 真实 GitHub 非保护仓的 `PR → 隔离 main push → 本地 main 快进 → PR close`，以及保护仓的 `PR → 本地候选 → GitHub merge` 尚未在本次本地环境执行，标记 `NOT_VERIFIED`；确定性 fake-gh/throwaway Git 证据不得替代真实外部验收。
+
 ## [2.14.2] - 2026-09-03
 
 ### 修复（pm-monitor tmux 判活三态，Task-113）
