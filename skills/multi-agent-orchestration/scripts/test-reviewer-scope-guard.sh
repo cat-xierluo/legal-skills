@@ -8,7 +8,11 @@
 #   - 非 reviewer 角色完全保持既有 allowlist 行为（向后兼容）；
 #   - spawn-worker.sh 角色校验 fail-closed：坏角色、缺授权的 grant、
 #     reviewer 无授权却带 --allow-paths、reviewer 带授权但空 --allow-paths
-#     （空写范围会让 scope guard 整体不安装），全部在任何副作用之前 exit 64。
+#     （空写范围会让 scope guard 整体不安装），全部在任何副作用之前 exit 64；
+#   - Task-114 回归：Claude Code 文件编辑工具名为 Update，必须与
+#     Edit/Write/NotebookEdit 走同一条 fail-closed 路径——scope-guard.py
+#     工具集、spawn 生成的全部 PreToolUse matcher、claude-code 后端的
+#     scope-guard hook 接线三处都不能缺 Update。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -133,6 +137,40 @@ run_hook "config local yaml outside config dir is not hard-denied" allow \
   "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=docs/**" -- \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKTREE/docs/notes.local.yaml\"}}"
 
+# -- Task-114 回归：Claude Code Update 工具走同一条 fail-closed 路径 -------------
+# 已实证事故（Badminton Lab bl114-review-glm53flash，Claude Code 2.1.237）：
+# 文件编辑工具名为 Update，scope-guard.py 只认 Edit/Write/NotebookEdit，
+# reviewer 对 Session Context 外 Makefile 的 Update 写入完全不经过 scope guard，
+# Session-Context-only 边界被绕过。Update 必须复用 reviewer 层 + allowlist 全路径。
+
+run_hook "reviewer Update outside session context denied (Makefile)" deny \
+  "${ROLE_ENVS[@]}" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/Makefile\"}}"
+
+run_hook "reviewer Update own session context allowed" allow \
+  "${ROLE_ENVS[@]}" "SCOPE_GUARD_ALLOW=$SESSION_ROOT/**" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$SESSION_ROOT/RESULT.md\"}}"
+
+run_hook "reviewer Update cannot create skill config local yaml" deny \
+  "${ROLE_ENVS[@]}" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$SKILL_CONFIG/orchestration-personal.local.yaml\"}}"
+
+run_hook "granted reviewer Update follows allowlist (match)" allow \
+  "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+
+run_hook "granted reviewer Update follows allowlist (mismatch)" deny \
+  "${ROLE_ENVS[@]}" "SCOPE_GUARD_REVIEW_REPAIR_GRANT=1" "SCOPE_GUARD_ALLOW=docs/**" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/Makefile\"}}"
+
+run_hook "implementer Update allowlist match allows" allow \
+  "SCOPE_GUARD_ALLOW=$ALLOW_ALL" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/skills/multi-agent-orchestration/SKILL.md\"}}"
+
+run_hook "implementer Update allowlist mismatch denies" deny \
+  "SCOPE_GUARD_ALLOW=docs/**" -- \
+  "{\"tool_name\":\"Update\",\"tool_input\":{\"file_path\":\"$WORKTREE/Makefile\"}}"
+
 # -- spawn-worker.sh 角色校验（任何副作用之前 fail-closed） ----------------------
 
 spawn_expect_rejected() {
@@ -199,6 +237,46 @@ spawn_expect_ok() {
 spawn_expect_ok "implementer default passes role gate" --allow-paths 'skills/**'
 spawn_expect_ok "reviewer without allow-paths passes role gate" --role reviewer
 spawn_expect_ok "reviewer with grant and allow-paths passes role gate" --role reviewer --review-repair-grant "task-contract-1" --allow-paths 'skills/**'
+
+# -- Task-114 回归：spawn 生成的 PreToolUse matcher 必须全部包含 Update ----------
+# 不能只测 Python helper：matcher 缺 Update 时 hook 根本不会被触发，
+# scope-guard.py 改得再对也拦不住。matcher 字符串在 spawn-worker.sh 有多处
+# 生成点（dependency install guard × 3 backend + scope guard × 各 backend），
+# 必须全部一致包含 Update。
+# 结构断言：文件中每一个含 NotebookEdit 的引号 matcher 字面量都必须含 Update。
+
+generated_matchers_include_update() {
+  local label="$1" matchers missing
+  matchers=$(grep -oE '"[A-Za-z|]+NotebookEdit[A-Za-z|]*"' "$SPAWN_WORKER" | sort -u) || true
+  if [ -z "$matchers" ]; then
+    note_fail "$label" "spawn-worker.sh 找不到任何文件写入类 matcher 字面量（结构变化需同步更新本测试）"
+    return
+  fi
+  missing=$(printf '%s\n' "$matchers" | grep -vF 'Update' || true)
+  if [ -z "$missing" ]; then
+    passed=$((passed + 1))
+  else
+    note_fail "$label" "以下生成的 matcher 缺少 Update: $(printf '%s' "$missing" | tr '\n' ' ')"
+  fi
+}
+
+generated_matchers_include_update "all generated PreToolUse matchers include Update"
+
+# claude-code 是事故后端（bl114-review-glm53flash）：scope_guard_setup 必须给
+# .claude/settings.local.json 安装含 Update 的 scope-guard hook。只注入
+# SCOPE_GUARD_* env 而不装 hook，Session Context 约束在该后端完全不生效。
+claude_code_scope_guard_wired() {
+  local label="$1" body
+  body=$(sed -n '/^scope_guard_setup()/,/^}/p' "$SPAWN_WORKER")
+  if printf '%s\n' "$body" | grep -qF '.claude/settings.local.json' \
+    && printf '%s\n' "$body" | grep -qF 'Edit|Write|NotebookEdit|Update'; then
+    passed=$((passed + 1))
+  else
+    note_fail "$label" "scope_guard_setup 未给 claude-code 安装含 Update 的 scope-guard hook"
+  fi
+}
+
+claude_code_scope_guard_wired "claude-code backend gets scope-guard hook with Update matcher"
 
 rm -rf "$FIXTURE"
 echo "reviewer scope guard tests: $passed passed, $failed failed"

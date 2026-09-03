@@ -3,6 +3,7 @@
 
 Reads stdin JSON (tool_name + tool_input), checks tool_input.file_path
 against SCOPE_GUARD_ALLOW glob patterns (colon-separated).
+覆盖写工具 Edit/Write/NotebookEdit 与 Claude Code 的 Update（Task-114）。
 
 Designed for both codebuddy and qoder (stdin/stdout JSON format identical).
 Based on ref 07 §9.3 (qoder PreToolUse hook, unbypassable even in bypass_permissions)
@@ -124,8 +125,12 @@ def main():
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {}) or {}
 
-    # ---- only check Edit/Write/NotebookEdit ----
-    if tool_name not in ("Edit", "Write", "NotebookEdit"):
+    # ---- only check Edit/Write/NotebookEdit/Update ----
+    # Update 是 Claude Code（≥2.x）的文件编辑工具名。Task-114 实证事故：
+    # 工具集与 spawn 生成的 PreToolUse matcher 漏 Update，reviewer 对
+    # Session Context 外文件的 Update 写入完全绕过 scope guard。Update
+    # 的 tool_input 与 Edit 同构（file_path），必须走同一条 fail-closed 路径。
+    if tool_name not in ("Edit", "Write", "NotebookEdit", "Update"):
         return  # not a write tool → allow
 
     # ---- extract file path ----

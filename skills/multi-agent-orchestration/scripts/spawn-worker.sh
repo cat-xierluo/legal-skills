@@ -1061,13 +1061,13 @@ dependency_install_guard_setup() {
   printf -v hook_command "bash '%s'" "$guard_hook"
   case "$WORKER_BACKEND" in
     claude-code|claude_code)
-      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
       ;;
     codebuddy)
-      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
       ;;
     qoderwork-cn|qoderclicn)
-      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit" "$hook_command"
+      merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
       ;;
     *)
       echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
@@ -1135,16 +1135,25 @@ scope_guard_setup() {
   local hook_command
   printf -v hook_command "bash '%s'" "$scope_guard_hook"
 
+  # Write to claude-code settings（Task-114：事故后端 bl114-review-glm53flash）。
+  # claude-code 的文件编辑工具名为 Update；matcher 不含 Update 时 hook 根本不
+  # 触发，而旧实现只注入 SCOPE_GUARD_* env、不装 hook——Session Context 约束
+  # 在该后端完全不生效。必须与其他 backend 一样安装 scope-guard hook。
+  if [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; then
+    merge_pretool_hook "$WORKTREE/.claude/settings.local.json" \
+      "Edit|Write|NotebookEdit|Update" "$hook_command"
+  fi
+
   # Write to codebuddy settings if backend is codebuddy or unspecified
   if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
     merge_pretool_hook "$WORKTREE/.codebuddy/settings.local.json" \
-      "Edit|Write|NotebookEdit" "$hook_command"
+      "Edit|Write|NotebookEdit|Update" "$hook_command"
   fi
 
   # Write to qoder settings if backend is qoderwork-cn
   if [ "$WORKER_BACKEND" = "qoderwork-cn" ] || [ "$WORKER_BACKEND" = "qoderclicn" ]; then
     merge_pretool_hook "$WORKTREE/.qoder/settings.local.json" \
-      "Edit|Write|NotebookEdit" "$hook_command"
+      "Edit|Write|NotebookEdit|Update" "$hook_command"
   fi
 
   return 0
