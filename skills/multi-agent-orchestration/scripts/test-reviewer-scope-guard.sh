@@ -27,6 +27,19 @@ note_fail() {
   echo "FAIL $1: $2"
 }
 
+# 本测试会在真实 reviewer 会话内运行：外层环境自带 SCOPE_GUARD_ROLE/
+# SCOPE_GUARD_SESSION_ROOT/SCOPE_GUARD_REVIEW_REPAIR_GRANT/SCOPE_GUARD_ALLOW。
+# `env` 只做增量注入，不清继承变量——不清掉的话 implementer/no-role 案例
+# 会被外层 reviewer 角色污染成 deny。每次调用 hook 前先 unset 这四个变量，
+# 再应用测试案例显式传入的 env，使 reviewer/implementer/no-role 案例互相
+# 隔离；只收窄测试夹具，不放宽生产 guard 语义。
+SCOPE_GUARD_TEST_ENV_ISOLATION=(
+  -u SCOPE_GUARD_ROLE
+  -u SCOPE_GUARD_SESSION_ROOT
+  -u SCOPE_GUARD_REVIEW_REPAIR_GRANT
+  -u SCOPE_GUARD_ALLOW
+)
+
 # run_hook <label> <expected: allow|deny> <env assignments...> -- <stdin JSON>
 # hook 子进程以临时 git fixture 为 cwd/PWD：scope-guard 的 allowlist 相对
 # 匹配依赖 `git rev-parse --show-toplevel` 解析出的 worktree root。
@@ -41,7 +54,7 @@ run_hook() {
   shift
   local output exit_code decision
   set +e
-  output=$(cd "$FIXTURE" && env PWD="$FIXTURE" "${envs[@]}" python3 "$SCOPE_GUARD" <<<"$1" 2>&1)
+  output=$(cd "$FIXTURE" && env "${SCOPE_GUARD_TEST_ENV_ISOLATION[@]}" PWD="$FIXTURE" "${envs[@]}" python3 "$SCOPE_GUARD" <<<"$1" 2>&1)
   exit_code=$?
   set -e
   if [ -z "$output" ]; then
@@ -60,7 +73,7 @@ deny_reason() {
   local label="$1" expected_sub="$2" env_assignee="$3" stdin_json="$4"
   local output
   set +e
-  output=$(cd "$FIXTURE" && env PWD="$FIXTURE" "$env_assignee" python3 "$SCOPE_GUARD" <<<"$stdin_json" 2>&1)
+  output=$(cd "$FIXTURE" && env "${SCOPE_GUARD_TEST_ENV_ISOLATION[@]}" PWD="$FIXTURE" "$env_assignee" python3 "$SCOPE_GUARD" <<<"$stdin_json" 2>&1)
   set -e
   # deny reason 经 json.dumps 输出，非 ASCII 会被转义——用 -F 匹配字面片段
   if printf '%s' "$output" | grep -qF "$expected_sub"; then
