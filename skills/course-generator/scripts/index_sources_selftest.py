@@ -88,8 +88,61 @@ def main() -> int:
         if nested_paths != ["a.md", "b.txt"]:
             failures.append(f"输出目录未从来源发现中排除: {nested_paths!r}")
 
+        authority_dir = root / "authority"
+        authority_dir.mkdir()
+        historical = authority_dir / "历史稿.md"
+        historical.write_text(
+            "> 编校说明：本稿不作为现行技术规范，修订口径统一见《当前控制版》“第 1 节勘误与收束”。\n\n"
+            "历史正文使用 spec coding 和 RCP，并曾说 review_profile.example.json 也进入 .gitignore。\n",
+            encoding="utf-8",
+        )
+        control = authority_dir / "当前控制版.md"
+        control.write_text(
+            "# 当前控制版\n\n## 第 1 节勘误与概念归位\n\n"
+            "| 原课堂口径 | 修订后的课程口径 |\n|---|---|\n"
+            "| `spec coding` | 使用更清楚的轻量 Spec-Driven Development。 |\n"
+            "| RCP、RCap、r cab | 统一使用运行记录 / run record / trace。 |\n"
+            "| `review_profile.example.json` 也应加入 `.gitignore` | 真实配置加入忽略，示例配置提交到仓库。 |\n",
+            encoding="utf-8",
+        )
+        authority_result = build_index(historical, authority_dir / "authority-index.json")
+        authority = authority_result["authority"]
+        kinds_by_source = [[block["kind"] for block in source["blocks"]] for source in authority_result["sources"]]
+        if len(authority["notices"]) != 1 or authority["notices"][0]["controlling_source_ids"] != ["SRC-002"] or "authority" not in kinds_by_source[0]:
+            failures.append(f"显式权威声明未解析: {authority!r}")
+        if set(kinds_by_source[1]) != {"control"}:
+            failures.append(f"控制文档污染普通素材覆盖基线: {kinds_by_source[1]!r}")
+        corrections = authority.get("corrections") or []
+        if [item.get("id") for item in corrections] != ["COR-001", "COR-002", "COR-003"]:
+            failures.append(f"控制文档修正表未稳定编译: {corrections!r}")
+        elif corrections[0].get("deprecated_terms") != ["spec coding"] or corrections[1].get("deprecated_terms") != ["RCP", "RCap", "r cab"]:
+            failures.append(f"纯别名废弃词识别错误: {corrections!r}")
+        if corrections and corrections[2].get("deprecated_terms") != []:
+            failures.append("含解释性正文的旧口径被误转成全局禁词")
+        if corrections and any("BLK-00002" not in item.get("superseded_candidate_block_ids", []) for item in corrections):
+            failures.append(f"旧口径来源块未进入逐条修订候选: {corrections!r}")
+
+        control.unlink()
+        try:
+            build_index(historical, authority_dir / "missing-control-index.json")
+        except ValueError as exc:
+            if "控制文档" not in str(exc):
+                failures.append(f"缺失控制文档错误不明确: {exc}")
+        else:
+            failures.append("current 模式缺失控制文档时未失败关闭")
+
+        historical_result = build_index(
+            historical,
+            authority_dir / "historical-index.json",
+            authority_mode="historical",
+        )
+        if historical_result["authority"]["mode"] != "historical" or len(historical_result["sources"]) != 1:
+            failures.append(f"显式 historical 模式未保留单一历史来源: {historical_result['authority']!r}")
+        if historical_result["authority"].get("corrections") != []:
+            failures.append("historical 模式不应加载 current 修正规则")
+
     status = "PASS" if not failures else "FAIL"
-    print(json.dumps({"status": status, "case_count": 7, "failures": failures}, ensure_ascii=False, sort_keys=True))
+    print(json.dumps({"status": status, "case_count": 15, "failures": failures}, ensure_ascii=False, sort_keys=True))
     return 1 if failures else 0
 
 

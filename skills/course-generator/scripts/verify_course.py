@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a Course Generator v2.9.3 course directory against its source index and manifest."""
+"""Verify a Course Generator v2.9.15 course directory against its source index and manifest."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from index_sources import discover_sources, iter_file_blocks, sha256_bytes
+from index_sources import build_index_data
 
 
 ALL_CONSTRAINTS = (
@@ -23,6 +23,7 @@ ALL_CONSTRAINTS = (
     "CG-OUTPUT-COMPLETE",
     "CG-MATERIAL-TRACE",
     "CG-SOURCE-BLOCK-COVERAGE",
+    "CG-SOURCE-AUTHORITY",
     "CG-READER-EVIDENCE",
     "CG-CLAIM-FIDELITY",
     "CG-READER-DEPTH",
@@ -47,34 +48,59 @@ OVERVIEW_FILE_RE = re.compile(r"^00[ _-].+\.md$")
 CHAPTER_FILE_RE = re.compile(r"^[0-9]{2}[ _-].+\.md$")
 NUMBERED_MD_RE = re.compile(r"^[0-9]{2}[ _-].+\.md$")
 IMAGE_RE = re.compile(r"!\[[^\]\n]*\]\((?:[^()\\\n]|\\.|\([^()\n]*\))*\)")
-SPEAKER_AS_ACTOR_RE = re.compile(
-    r"(?:讲者|讲师|主讲人)(?:在[^，。；：\n]{0,8})?"
-    r"(?:强调|指出|提到|认为|表示|推荐|演示|警告|坦言|自嘲|说道|说|介绍|解释|建议|提醒|分享)"
-)
+SPEAKER_TERM_RE = re.compile(r"讲者|主讲人|讲师(?!资格)")
 SOURCE_FRAME_RE = re.compile(
     r"现场演示|课程现场|现场问答|本次分享中|根据原文|原文中|主讲人提到"
+    r"|(?:课程|本次|上述|后续|前面)演示|演示(?:中|里|开始时|一开始|过程(?:中)?|环节)|给大家演示"
+    r"|来自[^\n。]{0,24}(?:现场|讲课|课程)?实录|现场实录|这一轮体验里|把这一节与前面|整门课程到这里|回过头看"
 )
-FILLER_RE = re.compile(r"这样的一个|也而且|这个那个|的话就是说")
+FILLER_RE = re.compile(
+    r"这样的一个|也而且|这个那个|的话就是说|比如说|就是说|我们我们|你我|他这个里面|什么什么"
+    r"|我觉得|我有问题|你指的|还是不够|好像有|玩一玩"
+)
 VISIBLE_TRACE_RE = re.compile(
     r"^\s*>?\s*(?:原文区间|内容来源|生成来源|素材编号)\s*[:：]", re.MULTILINE
 )
+PRIVATE_AUDIT_TERM_RE = re.compile(
+    r"(?i)(?:source-index\.json|course-manifest\.json)|\b(?:SRC|BLK|MAT|IMG)-(?:[0-9]{3,}|x{3,})\b"
+)
+AUDIT_PATCH_RE = re.compile(
+    r"正文证据补丁|证据补丁|原文痕迹|coverage[_ ]?terms?|覆盖足够长度以满足证据|本节按[^\n]{0,40}MAT-xxx"
+    r"|面向门禁|生成过程术语|读者正文[^\n]{0,24}(?:门禁|审计)",
+    re.IGNORECASE,
+)
+UNSUPPORTED_SCOPE_RE = re.compile(r"普遍适用|普遍存在|常见规模|行业惯例|标准做法|属于常态|无一例外")
+ASCII_CJK_PUNCT_RE = re.compile(r"(?<=[\u3400-\u9fff])[,;:!?](?=[\u3400-\u9fffA-Za-z0-9\"“])")
 SOURCE_BLOCK_REF_RE = re.compile(r"^(SRC-[0-9]{3,})#L[0-9]{4,}-L[0-9]{4,}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-SOURCE_BLOCK_KINDS = {"content", "derived", "heading", "image", "timestamp", "speaker", "separator"}
-SKIP_CODES = {"derived_duplicate", "meeting", "device", "chatter", "pure_repeat", "no_course_value"}
+SOURCE_BLOCK_KINDS = {"content", "derived", "authority", "control", "heading", "image", "timestamp", "speaker", "separator"}
+SKIP_CODES = {"derived_duplicate", "meeting", "device", "chatter", "pure_repeat", "no_course_value", "authority_superseded"}
+GENERIC_SKIP_CODES = {"pure_repeat", "no_course_value"}
 EXPANDED_MATERIAL_TYPES = {"案例", "操作", "踩坑", "取舍", "疑问"}
 GENERIC_COVERAGE_TERMS = {
     "ai", "agent", "skill", "word", "markdown", "内容", "结果", "过程", "任务", "工作",
     "方法", "材料", "操作", "课程", "生成", "进行", "这个", "可以",
 }
+LOW_SIGNAL_COVERAGE_RE = re.compile(
+    r"(?:比如说|就是说|我觉得|我有问题|你像|我们做一个|做一个新|前面说|好像有|挺好(?:的)?|玩一玩|还是不够|你指的|除了[^，。；]{0,12}这些)"
+)
+LOW_SIGNAL_COVERAGE_PREFIX_RE = re.compile(
+    r"^(?:我|你|他|她|我们|你们|他们|们)(?:有|觉|认|说|提|像|指|做|要|就|是|的|前|这|那)"
+)
+LOW_SIGNAL_COVERAGE_SUFFIX_RE = re.compile(r"(?:了|的|呢|吧|啊|哦|嘛)$")
 MAX_INCLUDE_BLOCKS_PER_MATERIAL = 6
-GLOBAL_READER_DEPTH_RATIO = 0.55
 CHAPTER_READER_DEPTH_RATIO = 0.40
+MAX_CHAPTER_READER_EXPANSION_RATIO = 2.50
+MAX_CHAPTER_READER_EXPANSION_FLOOR = 1400
+MIN_MATERIAL_COUNT_BUDGET = 60
+MATERIAL_COUNT_BUDGET_RATIO = 0.50
 IMAGE_PROSE_BUDGET = 500
 MIN_DOCUMENT_IMAGE_BUDGET = 3
 RICH_SOURCE_IMAGE_THRESHOLD = 12
 SOURCE_IMAGES_PER_REQUIRED_READER_IMAGE = 20
 DEFAULT_MAX_CHAPTERS = 8
+GENERIC_SKIP_RATIO = 0.05
+GENERIC_SKIP_MIN_ALLOWANCE = 1200
 INVALID_FILENAME_RE = re.compile(r'[:*?"<>|]')
 TEMPLATE_MARKER_RE = re.compile(
     r"\[(?:课程名称|主题名称|基于原文生成|待替换|TBD|TODO)[^\]]*\]"
@@ -91,6 +117,43 @@ BODY_TEMPLATE_MARKER_RE = re.compile(
 ACRONYM_EXPANSION_RE = re.compile(
     r"\b([A-Z][A-Z0-9._-]{1,15})\s*[（(]([^）)\n]{2,80})[）)]"
 )
+H2_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+FORBIDDEN_TRANSIENT_SUFFIXES = {".py", ".sh", ".js", ".ts", ".command"}
+FORBIDDEN_TRANSIENT_DIRS = {".course-work", "__pycache__"}
+ALLOWED_MACHINE_JSON_FILES = {"course-manifest.json", "source-index.json"}
+
+
+def material_count_budget(content_block_count: int) -> int:
+    """Cap ledger fragmentation while leaving headroom for short sources."""
+    return max(MIN_MATERIAL_COUNT_BUDGET, math.ceil(content_block_count * MATERIAL_COUNT_BUDGET_RATIO))
+
+
+def style_prose(text: str) -> str:
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    text = re.sub(r"`[^`\n]+`", "", text)
+    text = IMAGE_RE.sub("", text)
+    return text
+
+
+def repeated_paragraph_pairs(text: str) -> list[tuple[int, int, float]]:
+    paragraphs: list[str] = []
+    for raw in re.split(r"\n\s*\n", style_prose(text)):
+        value = raw.strip()
+        if not value or value.startswith(("#", ">", "|", "![")):
+            continue
+        normalized = re.sub(r"[^\w\u3400-\u9fff]+", "", value.casefold())
+        if len(normalized) >= 120:
+            paragraphs.append(normalized)
+    grams = [{value[i : i + 5] for i in range(len(value) - 4)} for value in paragraphs]
+    pairs: list[tuple[int, int, float]] = []
+    for left in range(len(grams)):
+        for right in range(left + 1, len(grams)):
+            overlap = len(grams[left] & grams[right])
+            denominator = min(len(grams[left]), len(grams[right]))
+            ratio = overlap / denominator if denominator else 0.0
+            if overlap >= 60 and ratio >= 0.40:
+                pairs.append((left + 1, right + 1, ratio))
+    return pairs
 
 
 def sha256_file(path: Path) -> str:
@@ -99,6 +162,15 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def low_signal_coverage_term(value: str) -> bool:
+    normalized = re.sub(r"\s+", "", value.strip())
+    if not normalized:
+        return True
+    if LOW_SIGNAL_COVERAGE_RE.search(normalized) or LOW_SIGNAL_COVERAGE_PREFIX_RE.search(normalized):
+        return True
+    return bool(re.fullmatch(r"[\u4e00-\u9fff]+", normalized) and LOW_SIGNAL_COVERAGE_SUFFIX_RE.search(normalized))
 
 
 def extract_images(text: str) -> list[str]:
@@ -114,6 +186,36 @@ def visible_prose_char_count(text: str) -> int:
     visible = re.sub(r"^\s*(?:[-*+]|[0-9]+[.)、])\s+", "", visible, flags=re.MULTILINE)
     visible = re.sub(r"[#>*_`~|\\\s]", "", visible)
     return len(visible)
+
+
+def pattern_hit_summary(text: str, pattern: re.Pattern[str], limit: int = 6) -> tuple[int, str]:
+    hits: list[str] = []
+    total = 0
+    for match in pattern.finditer(text):
+        total += 1
+        if len(hits) < limit:
+            line = text.count("\n", 0, match.start()) + 1
+            hits.append(f"L{line} {match.group(0)!r}")
+    suffix = "；".join(hits)
+    if total > limit:
+        suffix += f"；另 {total - limit} 处"
+    return total, suffix
+
+
+def h2_sections(text: str) -> tuple[list[str], dict[str, str], set[str]]:
+    matches = list(H2_RE.finditer(text))
+    headings: list[str] = []
+    bodies: dict[str, str] = {}
+    duplicates: set[str] = set()
+    for index, match in enumerate(matches):
+        heading = match.group(1).strip()
+        headings.append(heading)
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        if heading in bodies:
+            duplicates.add(heading)
+        else:
+            bodies[heading] = text[match.end() : end].strip()
+    return headings, bodies, duplicates
 
 
 def normalize_fidelity_text(text: str) -> str:
@@ -245,6 +347,257 @@ def validate_source_refs(value: Any, label: str, source_ids: set[str], audit: Au
     return valid
 
 
+def validate_authority(
+    value: Any,
+    label: str,
+    source_ids: set[str],
+    all_block_ids: set[str] | None,
+    audit: Audit,
+    *,
+    require_acknowledgements: bool,
+    block_previews: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    required = (
+        {"mode", "notices", "corrections", "acknowledgements", "correction_routes"}
+        if require_acknowledgements
+        else {"mode", "notices", "corrections"}
+    )
+    authority = check_allowed_keys(value, required, set(), label, audit)
+    mode = authority.get("mode")
+    if mode not in {"current", "historical"}:
+        audit.fail("CG-SOURCE-AUTHORITY", f"{label}.mode 必须为 current 或 historical")
+    notices = require_list(authority.get("notices"), f"{label}.notices", audit)
+    notice_ids: list[str] = []
+    for index, raw in enumerate(notices, 1):
+        notice_label = f"{label}.notices[{index}]"
+        notice = check_allowed_keys(
+            raw,
+            {"id", "source_block_id", "source_ref", "controlling_titles", "controlling_source_ids", "section_hint"},
+            set(),
+            notice_label,
+            audit,
+        )
+        notice_id = notice.get("id")
+        if not isinstance(notice_id, str) or not re.fullmatch(r"AUTH-[0-9]{3,}", notice_id):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label}.id 非法")
+        else:
+            notice_ids.append(notice_id)
+        block_id = notice.get("source_block_id")
+        if not isinstance(block_id, str) or not ID_PATTERNS["block"].fullmatch(block_id):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label}.source_block_id 非法")
+        elif all_block_ids is not None and block_id not in all_block_ids:
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label} 引用了不存在的 authority block {block_id}")
+        validate_source_refs([notice.get("source_ref")], f"{notice_label}.source_ref", source_ids, audit)
+        titles = require_list(notice.get("controlling_titles"), f"{notice_label}.controlling_titles", audit, nonempty=True)
+        if not all(is_nonempty_string(item) for item in titles):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label}.controlling_titles 必须是非空字符串数组")
+        controls = require_list(notice.get("controlling_source_ids"), f"{notice_label}.controlling_source_ids", audit)
+        if any(control not in source_ids for control in controls):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label} 含不存在的控制来源 ID")
+        if mode == "current" and not controls:
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_id or notice_label} current 模式必须解析至少一个控制来源")
+        if notice.get("section_hint") is not None and not is_nonempty_string(notice.get("section_hint")):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{notice_label}.section_hint 必须为非空字符串或 null")
+    if notice_ids != [f"AUTH-{index:03d}" for index in range(1, len(notice_ids) + 1)]:
+        audit.fail("CG-SOURCE-AUTHORITY", f"{label}.notices 必须从 AUTH-001 连续编号")
+
+    corrections = require_list(authority.get("corrections"), f"{label}.corrections", audit)
+    correction_ids: list[str] = []
+    for index, raw in enumerate(corrections, 1):
+        correction_label = f"{label}.corrections[{index}]"
+        correction = check_allowed_keys(
+            raw,
+            {"id", "authority_id", "source_id", "source_ref", "original_text", "revised_text", "deprecated_terms", "superseded_candidate_block_ids"},
+            set(),
+            correction_label,
+            audit,
+        )
+        correction_id = correction.get("id")
+        if not isinstance(correction_id, str) or not re.fullmatch(r"COR-[0-9]{3,}", correction_id):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.id 非法")
+        else:
+            correction_ids.append(correction_id)
+        if correction.get("authority_id") not in notice_ids:
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.authority_id 未绑定有效声明")
+        source_id = correction.get("source_id")
+        if source_id not in source_ids:
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.source_id 未绑定有效控制来源")
+        refs = validate_source_refs([correction.get("source_ref")], f"{correction_label}.source_ref", source_ids, audit)
+        if refs and source_id and refs[0].split("#", 1)[0] != source_id:
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.source_ref 与 source_id 不一致")
+        if not is_nonempty_string(correction.get("original_text")) or not is_nonempty_string(correction.get("revised_text")):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label} 必须保留原口径与修订口径")
+        deprecated_terms = require_list(correction.get("deprecated_terms"), f"{correction_label}.deprecated_terms", audit)
+        if not all(is_nonempty_string(item) for item in deprecated_terms) or duplicate_items(deprecated_terms):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.deprecated_terms 必须是无重复非空字符串数组")
+        candidate_ids = require_list(
+            correction.get("superseded_candidate_block_ids"),
+            f"{correction_label}.superseded_candidate_block_ids",
+            audit,
+        )
+        if len(candidate_ids) > 8 or duplicate_items(candidate_ids):
+            audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label}.superseded_candidate_block_ids 必须无重复且最多 8 项")
+        for block_id in candidate_ids:
+            if not isinstance(block_id, str) or not ID_PATTERNS["block"].fullmatch(block_id):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label} 含非法候选来源块 {block_id!r}")
+            elif all_block_ids is not None and block_id not in all_block_ids:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{correction_label} 含不存在的候选来源块 {block_id}")
+    if correction_ids != [f"COR-{index:03d}" for index in range(1, len(correction_ids) + 1)]:
+        audit.fail("CG-SOURCE-AUTHORITY", f"{label}.corrections 必须从 COR-001 连续编号")
+    if mode == "historical" and corrections:
+        audit.fail("CG-SOURCE-AUTHORITY", f"{label} historical 模式不得加载 current 修正规则")
+
+    if require_acknowledgements:
+        acknowledgements = require_list(authority.get("acknowledgements"), f"{label}.acknowledgements", audit)
+        if len(acknowledgements) != len(notices):
+            audit.fail("CG-SOURCE-AUTHORITY", "全部来源权威声明必须在 plan 阶段逐项确认")
+        for notice, raw in zip(notices, acknowledgements):
+            acknowledgement = check_allowed_keys(
+                raw,
+                {"id", "action", "controlling_source_ids", "reader_notice"},
+                set(),
+                f"{label}.acknowledgements",
+                audit,
+            )
+            if acknowledgement.get("id") != notice.get("id"):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{notice.get('id')} acknowledgement 缺失或错位")
+            if mode == "current":
+                if acknowledgement.get("action") != "apply_control" or acknowledgement.get("controlling_source_ids") != notice.get("controlling_source_ids"):
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{notice.get('id')} 未精确确认控制来源")
+                if acknowledgement.get("reader_notice") is not None:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{notice.get('id')} current 模式的 reader_notice 必须为 null")
+            elif mode == "historical":
+                if acknowledgement.get("action") != "historical_disclaimer" or acknowledgement.get("controlling_source_ids") != []:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{notice.get('id')} historical 模式 acknowledgement 非法")
+                if not is_nonempty_string(acknowledgement.get("reader_notice")) or len(acknowledgement["reader_notice"].strip()) < 12:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{notice.get('id')} historical 模式缺少至少 12 字读者提示")
+        routes = require_list(authority.get("correction_routes"), f"{label}.correction_routes", audit)
+        route_ids: list[str] = []
+        all_candidate_reviews: list[dict[str, Any]] = []
+        for index, raw in enumerate(routes, 1):
+            route_label = f"{label}.correction_routes[{index}]"
+            route = check_allowed_keys(
+                raw,
+                {"id", "target_chapter_id", "target_section_heading", "supersession_status", "superseded_source_block_ids", "supersession_note", "candidate_block_reviews"},
+                set(),
+                route_label,
+                audit,
+            )
+            if route.get("id") not in correction_ids:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.id 未绑定有效修正规则")
+            else:
+                route_ids.append(route["id"])
+            if not isinstance(route.get("target_chapter_id"), str) or not ID_PATTERNS["chapter"].fullmatch(route["target_chapter_id"]):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.target_chapter_id 非法")
+            if not is_nonempty_string(route.get("target_section_heading")):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.target_section_heading 必须非空")
+            supersession_status = route.get("supersession_status")
+            superseded_ids = require_list(
+                route.get("superseded_source_block_ids"),
+                f"{route_label}.superseded_source_block_ids",
+                audit,
+            )
+            if supersession_status not in {"blocks_identified", "no_matching_source_block"}:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.supersession_status 非法")
+            if duplicate_items(superseded_ids):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.superseded_source_block_ids 不得重复")
+            for block_id in superseded_ids:
+                if not isinstance(block_id, str) or not ID_PATTERNS["block"].fullmatch(block_id):
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{route_label} 含非法被替代来源块 {block_id!r}")
+                elif all_block_ids is not None and block_id not in all_block_ids:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{route_label} 含不存在的被替代来源块 {block_id}")
+            if supersession_status == "blocks_identified" and not superseded_ids:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label} 标记 blocks_identified 时必须列出来源块")
+            if supersession_status == "no_matching_source_block" and superseded_ids:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label} 标记 no_matching_source_block 时来源块列表必须为空")
+            note = route.get("supersession_note")
+            if not is_nonempty_string(note) or len(note.strip()) < 12:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route_label}.supersession_note 必须至少 12 字")
+            correction = next(
+                (item for item in corrections if isinstance(item, dict) and item.get("id") == route.get("id")),
+                {},
+            )
+            expected_candidate_ids = correction.get("superseded_candidate_block_ids") or []
+            raw_candidate_reviews = route.get("candidate_block_reviews")
+            if not isinstance(raw_candidate_reviews, list):
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{route_label}.candidate_block_reviews 必须逐项审查全部候选来源块",
+                )
+            candidate_reviews = require_list(
+                raw_candidate_reviews,
+                f"{route_label}.candidate_block_reviews",
+                audit,
+            )
+            reviewed_candidate_ids: list[str] = []
+            superseded_candidate_ids: set[str] = set()
+            retained_candidate_ids: set[str] = set()
+            for review_index, review_raw in enumerate(candidate_reviews, 1):
+                review_label = f"{route_label}.candidate_block_reviews[{review_index}]"
+                review = check_allowed_keys(
+                    review_raw,
+                    {"source_block_id", "decision", "evidence_quote", "reason"},
+                    set(),
+                    review_label,
+                    audit,
+                )
+                block_id = review.get("source_block_id")
+                if not isinstance(block_id, str) or not ID_PATTERNS["block"].fullmatch(block_id):
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{review_label}.source_block_id 非法")
+                else:
+                    reviewed_candidate_ids.append(block_id)
+                decision = review.get("decision")
+                if decision not in {"superseded", "retained_current"}:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{review_label}.decision 非法")
+                elif isinstance(block_id, str):
+                    if decision == "superseded":
+                        superseded_candidate_ids.add(block_id)
+                    else:
+                        retained_candidate_ids.add(block_id)
+                reason = review.get("reason")
+                if not is_nonempty_string(reason) or len(reason.strip()) < 12:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{review_label}.reason 必须至少 12 字")
+                evidence_quote = review.get("evidence_quote")
+                if not is_nonempty_string(evidence_quote) or len(evidence_quote.strip()) < 6:
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{review_label}.evidence_quote 必须摘录至少 6 字候选预览原文")
+                elif isinstance(block_id, str) and evidence_quote.strip() not in (block_previews or {}).get(block_id, ""):
+                    audit.fail("CG-SOURCE-AUTHORITY", f"{review_label}.evidence_quote 必须逐字来自该候选预览")
+                all_candidate_reviews.append(review)
+            if reviewed_candidate_ids != expected_candidate_ids:
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{route.get('id')} 必须按索引顺序逐项审查全部候选块；"
+                    f"期望 {expected_candidate_ids!r}，实际 {reviewed_candidate_ids!r}",
+                )
+            normalized_reasons = [
+                re.sub(r"\s+", "", str(review.get("reason") or "")).casefold()
+                for review in candidate_reviews
+                if isinstance(review, dict) and is_nonempty_string(review.get("reason"))
+            ]
+            if len(normalized_reasons) > 1 and len(set(normalized_reasons)) == 1:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route.get('id')}.candidate_block_reviews 不得为全部候选复制同一判断理由")
+            if superseded_candidate_ids - set(superseded_ids):
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{route.get('id')} 判定 superseded 的候选块未进入隔离列表: "
+                    f"{', '.join(sorted(superseded_candidate_ids - set(superseded_ids)))}",
+                )
+            if retained_candidate_ids & set(superseded_ids):
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{route.get('id')} 判定 retained_current 的候选块被误列入隔离列表: "
+                    f"{', '.join(sorted(retained_candidate_ids & set(superseded_ids)))}",
+                )
+        if len(all_candidate_reviews) >= 12 and all(
+            isinstance(review, dict) and review.get("decision") == "superseded"
+            for review in all_candidate_reviews
+        ):
+            audit.fail("CG-SOURCE-AUTHORITY", "候选审查不得把整张高召回矩阵一律判为 superseded；须逐块区分旧结论与相邻主题")
+        if route_ids != correction_ids:
+            audit.fail("CG-SOURCE-AUTHORITY", "全部控制文档修正必须按 COR 编号顺序各路由一次")
+    return authority
+
+
 def read_required_text(path: Path | None, label: str, audit: Audit) -> str | None:
     if path is None:
         return None
@@ -316,13 +669,13 @@ def verify_course(
 
     top = check_allowed_keys(
         manifest,
-        {"schema_version", "generator_version", "course", "sources", "source_index", "overview", "chapters", "materials", "images"},
+        {"schema_version", "generator_version", "course", "sources", "source_index", "source_authority", "overview", "chapters", "materials", "images"},
         {"audit_files"},
         "manifest",
         audit,
     )
-    if top.get("schema_version") != "1.2":
-        audit.fail("CG-CONTRACT-MANIFEST", "schema_version 必须为 1.2；旧版课程需升级多摘录与忠实度契约")
+    if top.get("schema_version") != "1.8":
+        audit.fail("CG-CONTRACT-MANIFEST", "schema_version 必须为 1.8；旧版课程需重建逐块证据审查契约后升级")
     if not is_nonempty_string(top.get("generator_version")):
         audit.fail("CG-CONTRACT-MANIFEST", "generator_version 必须是非空字符串")
     course = check_allowed_keys(top.get("course"), {"title"}, {"training_date", "organizer"}, "course", audit)
@@ -375,13 +728,14 @@ def verify_course(
     content_block_ids: set[str] = set()
     content_block_char_counts: dict[str, int] = {}
     all_block_ids: set[str] = set()
+    block_previews: dict[str, str] = {}
     indexed_image_blocks: list[tuple[str, str]] = []
     source_index_pairs: list[tuple[str, str]] = []
-    indexed_source_sha: dict[str, str] = {}
+    source_index_authority: dict[str, Any] = {}
     if source_index:
-        index_top = check_allowed_keys(source_index, {"schema_version", "sources"}, set(), "source-index", audit)
-        if index_top.get("schema_version") != "1.1":
-            audit.fail("CG-SOURCE-BLOCK-COVERAGE", "source-index.schema_version 必须为 1.1")
+        index_top = check_allowed_keys(source_index, {"schema_version", "authority", "sources"}, set(), "source-index", audit)
+        if index_top.get("schema_version") != "1.4":
+            audit.fail("CG-SOURCE-BLOCK-COVERAGE", "source-index.schema_version 必须为 1.4")
         for index, item in enumerate(require_list(index_top.get("sources"), "source-index.sources", audit, nonempty=True), 1):
             label = f"source-index.sources[{index}]"
             source = check_allowed_keys(item, {"id", "path", "sha256", "blocks"}, set(), label, audit)
@@ -392,8 +746,6 @@ def verify_course(
                 audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"{label}.sha256 非法")
             if source_id and source_path:
                 source_index_pairs.append((source_id, source_path))
-                if isinstance(source_sha, str):
-                    indexed_source_sha[source_path] = source_sha
             for block_index, block_item in enumerate(require_list(source.get("blocks"), f"{label}.blocks", audit), 1):
                 block_label = f"{label}.blocks[{block_index}]"
                 block = check_allowed_keys(
@@ -429,6 +781,8 @@ def verify_course(
                     indexed_image_blocks.append((source_ref, block_sha))
                 if not is_nonempty_string(block.get("preview")) or len(str(block.get("preview", ""))) > 160:
                     audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"{block_label}.preview 必须为 1—160 字符")
+                elif block_id:
+                    block_previews[block_id] = block["preview"]
         if source_index_pairs != manifest_sources:
             audit.fail(
                 "CG-SOURCE-BLOCK-COVERAGE",
@@ -437,6 +791,32 @@ def verify_course(
         if not content_block_ids:
             audit.fail("CG-SOURCE-BLOCK-COVERAGE", "source-index 未产生任何 content block")
 
+        source_index_authority = validate_authority(
+            index_top.get("authority"),
+            "source-index.authority",
+            source_ids,
+            all_block_ids,
+            audit,
+            require_acknowledgements=False,
+        )
+
+    manifest_authority = validate_authority(
+        top.get("source_authority"),
+        "source_authority",
+        source_ids,
+        all_block_ids,
+        audit,
+        require_acknowledgements=True,
+        block_previews=block_previews,
+    )
+    if source_index_authority:
+        if (
+            manifest_authority.get("mode") != source_index_authority.get("mode")
+            or manifest_authority.get("notices") != source_index_authority.get("notices")
+            or manifest_authority.get("corrections") != source_index_authority.get("corrections")
+        ):
+            audit.fail("CG-SOURCE-AUTHORITY", "manifest.source_authority 必须与 source-index.authority 的模式、声明和修正规则完全一致")
+
     raw_source_block_texts: dict[str, str] = {}
     raw_source_text_parts: list[str] = []
     source_root_rebound = False
@@ -444,67 +824,28 @@ def verify_course(
         raw_input = source_root.expanduser().resolve()
         output_hint = source_index_path or (root / "source-index.json")
         try:
-            raw_root, discovered_sources = discover_sources(raw_input, output_hint)
-        except (OSError, ValueError) as exc:
-            audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"无法枚举 source_root: {exc}")
+            authority_mode = source_index_authority.get("mode", "current")
+            rebuilt_index, raw_source_block_texts = build_index_data(raw_input, output_hint, authority_mode)
+        except (OSError, UnicodeError, ValueError) as exc:
+            audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"无法按来源权威模式重建 source_root: {exc}")
         else:
             expected_manifest_sources = [
-                (f"SRC-{index:03d}", path.relative_to(raw_root).as_posix())
-                for index, path in enumerate(discovered_sources, 1)
+                (item.get("id"), item.get("path"))
+                for item in rebuilt_index.get("sources") or []
             ]
             if manifest_sources != expected_manifest_sources:
                 audit.fail(
                     "CG-SOURCE-BLOCK-COVERAGE",
                     f"source_root 完整来源清单与 manifest 不一致: {expected_manifest_sources!r} != {manifest_sources!r}",
                 )
-
-            recomputed_sources: list[dict[str, Any]] = []
-            block_ordinal = 0
-            can_compare_index = True
-            for source_id, raw_path in zip(
-                (item[0] for item in expected_manifest_sources), discovered_sources
-            ):
-                relative = raw_path.relative_to(raw_root).as_posix()
-                raw_sha = sha256_file(raw_path)
-                if indexed_source_sha.get(relative) != raw_sha:
-                    audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"来源文件哈希与 source-index 不一致: {relative}")
-                    can_compare_index = False
-                recomputed_blocks = []
-                try:
-                    for kind, start_line, end_line, text in iter_file_blocks(raw_path):
-                        block_ordinal += 1
-                        block_id = f"BLK-{block_ordinal:05d}"
-                        raw_source_block_texts[block_id] = text
-                        raw_source_text_parts.append(text)
-                        recomputed_blocks.append(
-                            {
-                                "id": block_id,
-                                "source_ref": f"{source_id}#L{start_line:04d}-L{end_line:04d}",
-                                "kind": kind,
-                                "char_count": len(text),
-                                "sha256": sha256_bytes(text.encode("utf-8")),
-                                "preview": re.sub(r"\s+", " ", text).strip()[:160],
-                            }
-                        )
-                except (OSError, UnicodeError) as exc:
-                    audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"来源无法重建索引 {relative}: {exc}")
-                    can_compare_index = False
-                    continue
-                recomputed_sources.append(
-                    {
-                        "id": source_id,
-                        "path": relative,
-                        "sha256": raw_sha,
-                        "blocks": recomputed_blocks,
-                    }
-                )
-            if can_compare_index and source_index.get("sources") != recomputed_sources:
+            if source_index != rebuilt_index:
                 audit.fail(
                     "CG-SOURCE-BLOCK-COVERAGE",
-                    "source-index 不是当前原始来源按确定性分块算法产生的完整结果",
+                    "source-index 不是当前原始来源按确定性分块与权威解析算法产生的完整结果",
                 )
-            elif can_compare_index:
+            else:
                 source_root_rebound = True
+                raw_source_text_parts.extend(raw_source_block_texts.values())
     elif source_index:
         audit.warn("未提供 --source-root；已验证来源索引内部契约，但未重新绑定原始来源文件")
     if not source_root_rebound:
@@ -527,15 +868,17 @@ def verify_course(
     chapter_records: list[dict[str, Any]] = []
     chapter_material_membership: dict[str, list[str]] = defaultdict(list)
     chapter_image_membership: dict[str, list[str]] = defaultdict(list)
+    chapter_section_headings: dict[str, list[str]] = {}
     raw_chapters = require_list(top.get("chapters"), "chapters", audit, nonempty=True)
     if len(raw_chapters) > max_chapters:
         audit.fail(
             "CG-OUTPUT-COMPLETE",
-            f"章节数为 {len(raw_chapters)}，超过本次上限 {max_chapters}；只有用户明确要求时才可用 --max-chapters 提高上限",
+            f"章节数为 {len(raw_chapters)}，超过本次上限 {max_chapters}；"
+            "先合并结构性薄章，只有用户明确要求超过 8 章时才读取高级覆盖说明",
         )
     for index, item in enumerate(raw_chapters, 1):
         label = f"chapters[{index}]"
-        chapter = check_allowed_keys(item, {"id", "file", "title", "source_refs", "material_ids", "image_ids"}, set(), label, audit)
+        chapter = check_allowed_keys(item, {"id", "file", "title", "section_headings", "source_refs", "material_ids", "image_ids"}, set(), label, audit)
         chapter_id = validate_id(chapter.get("id"), "chapter", f"{label}.id", audit)
         file_name = chapter.get("file")
         if chapter_id:
@@ -555,6 +898,15 @@ def verify_course(
             audit.fail("CG-CONTRACT-MANIFEST", f"{label}.title 必须非空")
         elif TEMPLATE_MARKER_RE.search(chapter["title"]):
             audit.fail("CG-OUTPUT-COMPLETE", f"{label}.title 含未替换模板标记: {chapter['title']}")
+        section_values = require_list(chapter.get("section_headings"), f"{label}.section_headings", audit, nonempty=True)
+        valid_sections: list[str] = []
+        for heading in section_values:
+            if not is_nonempty_string(heading):
+                audit.fail("CG-CONTRACT-MANIFEST", f"{label}.section_headings 含空或非字符串值")
+            else:
+                valid_sections.append(heading.strip())
+        if duplicate_items(valid_sections):
+            audit.fail("CG-CONTRACT-MANIFEST", f"{label}.section_headings 不得重复")
         validate_source_refs(chapter.get("source_refs"), f"{label}.source_refs", source_ids, audit)
         material_values = require_list(chapter.get("material_ids"), f"{label}.material_ids", audit)
         material_values = [value for value in material_values if validate_id(value, "material", f"{label}.material_ids[]", audit)]
@@ -567,19 +919,44 @@ def verify_course(
         if chapter_id:
             chapter_material_membership[chapter_id] = material_values
             chapter_image_membership[chapter_id] = image_values
-        chapter_records.append({"id": chapter_id, "file": file_name, "path": safe_relative_path(root, file_name, f"{label}.file", audit), "image_ids": image_values})
+            chapter_section_headings[chapter_id] = valid_sections
+        chapter_records.append({"id": chapter_id, "file": file_name, "path": safe_relative_path(root, file_name, f"{label}.file", audit), "image_ids": image_values, "section_headings": valid_sections})
 
     material_ids: set[str] = set()
     included_materials = 0
     covered_content_blocks: set[str] = set()
     block_dispositions: dict[str, set[str]] = defaultdict(set)
     included_blocks_by_chapter: dict[str, set[str]] = defaultdict(set)
+    included_blocks_by_section: dict[tuple[str, str], set[str]] = defaultdict(set)
+    generic_skip_block_ids: set[str] = set()
+    planned_superseded_block_ids = {
+        block_id
+        for route in manifest_authority.get("correction_routes") or []
+        if isinstance(route, dict)
+        for block_id in route.get("superseded_source_block_ids") or []
+        if isinstance(block_id, str)
+    }
+    non_content_superseded = sorted(planned_superseded_block_ids - content_block_ids)
+    if non_content_superseded:
+        audit.fail(
+            "CG-SOURCE-AUTHORITY",
+            "被当前修订替代的来源块必须都是 content block: " + ", ".join(non_content_superseded[:12]),
+        )
+    quarantined_superseded_block_ids: set[str] = set()
     evidence_records: list[dict[str, Any]] = []
-    for index, item in enumerate(require_list(top.get("materials"), "materials", audit, nonempty=True), 1):
+    section_material_counts: dict[tuple[str, str], int] = defaultdict(int)
+    raw_materials = require_list(top.get("materials"), "materials", audit, nonempty=True)
+    maximum_materials = material_count_budget(len(content_block_ids))
+    if len(raw_materials) > maximum_materials:
+        audit.fail(
+            "CG-MATERIAL-TRACE",
+            f"素材共 {len(raw_materials)} 项，超过 {len(content_block_ids)} 个 content block 对应的 {maximum_materials} 项预算；请合并同一观点、连续操作阶段或同一 skip 理由",
+        )
+    for index, item in enumerate(raw_materials, 1):
         label = f"materials[{index}]"
         material = check_allowed_keys(
             item,
-            {"id", "type", "summary", "source_refs", "source_block_ids", "coverage_terms", "disposition", "target_chapter_id", "reader_evidence"},
+            {"id", "type", "summary", "source_refs", "source_block_ids", "coverage_terms", "disposition", "target_chapter_id", "target_section_heading", "reader_evidence"},
             {"skip_reason", "skip_code"},
             label,
             audit,
@@ -612,6 +989,7 @@ def verify_course(
             audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"{material_id or label}.source_block_ids 含重复项")
         disposition = material.get("disposition")
         target = material.get("target_chapter_id")
+        target_section = material.get("target_section_heading")
         term_values = require_list(
             material.get("coverage_terms"),
             f"{label}.coverage_terms",
@@ -625,17 +1003,20 @@ def verify_course(
                 continue
             normalized = term.strip()
             valid_terms.append(normalized)
-            if is_nonempty_string(summary) and normalized not in summary:
-                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的预承诺覆盖词 {normalized!r} 未出现在素材摘要")
-        if len(valid_terms) > 5:
-            audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的 coverage_terms 最多 5 项")
+        if len(valid_terms) > 3:
+            audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的 coverage_terms 最多 3 项")
         if duplicate_items(valid_terms):
             audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的 coverage_terms 不得重复")
+        for term in valid_terms:
+            if low_signal_coverage_term(term):
+                audit.fail(
+                    "CG-READER-EVIDENCE",
+                    f"{material_id or label} 的 coverage term {term!r} 是口语指代、语气词或截断片段",
+                )
         if source_root_rebound and valid_block_values:
             bound_source_text = "\n".join(raw_source_block_texts.get(block_id, "") for block_id in valid_block_values)
-            normalized_bound_source = normalize_fidelity_text(bound_source_text)
             for term in valid_terms:
-                if normalize_fidelity_text(term) not in normalized_bound_source:
+                if term not in bound_source_text:
                     audit.fail(
                         "CG-CLAIM-FIDELITY",
                         f"{material_id or label} 的覆盖词 {term!r} 未出现在其绑定的原始来源块；不得发明抽象词后回写正文",
@@ -644,19 +1025,25 @@ def verify_course(
             if isinstance(disposition, str):
                 block_dispositions[block_id].add(disposition)
         if disposition == "include":
+            reintroduced = sorted(set(valid_block_values) & planned_superseded_block_ids)
+            if reintroduced:
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{material_id or label} 把已由当前修订替代的来源块重新作为 include: {', '.join(reintroduced)}",
+                )
             if len(valid_block_values) > MAX_INCLUDE_BLOCKS_PER_MATERIAL:
                 audit.fail(
                     "CG-READER-DEPTH",
                     f"{material_id or label} 合并了 {len(valid_block_values)} 个来源块；include 素材最多 {MAX_INCLUDE_BLOCKS_PER_MATERIAL} 个，应按可复用信息单元拆分",
                 )
-            required_term_count = max(2, min(5, math.ceil(len(valid_block_values) / 2)))
+            required_term_count = max(1, min(3, math.ceil(len(valid_block_values) / 3)))
             if len(valid_terms) < required_term_count:
                 audit.fail(
                     "CG-READER-DEPTH",
                     f"{material_id or label} 覆盖 {len(valid_block_values)} 个来源块时至少需要 {required_term_count} 个具体 coverage_terms，实际 {len(valid_terms)} 个",
                 )
-            if len(valid_terms) < 2:
-                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 include 时至少预承诺 2 个 coverage_terms")
+            if len(valid_terms) < 1:
+                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 include 时至少预承诺 1 个 coverage_term")
             if valid_terms and all(term.casefold() in GENERIC_COVERAGE_TERMS for term in valid_terms):
                 audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的 coverage_terms 不能全是通用词")
             included_materials += 1
@@ -674,6 +1061,14 @@ def verify_course(
                         "CG-MATERIAL-TRACE",
                         f"{material_id} 的章节成员关系应仅为 {target}，实际为 {memberships}",
                     )
+            if not is_nonempty_string(target_section):
+                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 include 时必须填写 target_section_heading")
+            elif target_section not in chapter_section_headings.get(str(target), []):
+                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 的目标小节未在 {target} 声明: {target_section!r}")
+            else:
+                target_section = target_section.strip()
+                section_material_counts[(str(target), target_section)] += 1
+                included_blocks_by_section[(str(target), target_section)].update(valid_block_values)
             evidence = material.get("reader_evidence")
             if not isinstance(evidence, dict):
                 audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 include 时必须填写 reader_evidence")
@@ -701,6 +1096,7 @@ def verify_course(
                         "id": material_id,
                         "type": material.get("type"),
                         "target": target,
+                        "section": target_section,
                         "quotes": valid_quotes,
                         "terms": valid_terms,
                         "source_block_count": len(valid_block_values),
@@ -711,16 +1107,47 @@ def verify_course(
                 audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 skip 时 coverage_terms 必须为空数组")
             if target is not None:
                 audit.fail("CG-MATERIAL-TRACE", f"{material_id or label} 为 skip 时 target_chapter_id 必须为 null")
+            if target_section is not None:
+                audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 skip 时 target_section_heading 必须为 null")
             if not is_nonempty_string(material.get("skip_reason")):
                 audit.fail("CG-MATERIAL-TRACE", f"{material_id or label} 为 skip 时必须填写 skip_reason")
-            if material.get("skip_code") not in SKIP_CODES:
+            skip_code = material.get("skip_code")
+            if skip_code not in SKIP_CODES:
                 audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"{material_id or label} 为 skip 时必须填写受控 skip_code")
+            elif skip_code in GENERIC_SKIP_CODES:
+                generic_skip_block_ids.update(valid_block_values)
+            if skip_code == "authority_superseded":
+                unexpected = sorted(set(valid_block_values) - planned_superseded_block_ids)
+                if unexpected:
+                    audit.fail(
+                        "CG-SOURCE-AUTHORITY",
+                        f"{material_id or label} 把未确认的来源块误标为 authority_superseded: {', '.join(unexpected)}",
+                    )
+                quarantined_superseded_block_ids.update(set(valid_block_values) & planned_superseded_block_ids)
+            elif set(valid_block_values) & planned_superseded_block_ids:
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{material_id or label} 的被替代来源块必须使用 skip_code=authority_superseded",
+                )
             if material.get("reader_evidence") is not None:
                 audit.fail("CG-READER-EVIDENCE", f"{material_id or label} 为 skip 时 reader_evidence 必须为 null")
             if material_id and any(material_id in values for values in chapter_material_membership.values()):
                 audit.fail("CG-MATERIAL-TRACE", f"skip 素材 {material_id} 不得出现在章节 material_ids")
         else:
             audit.fail("CG-CONTRACT-MANIFEST", f"{label}.disposition 必须为 include 或 skip")
+    expected_material_ids = {f"MAT-{index:03d}" for index in range(1, len(raw_materials) + 1)}
+    if material_ids != expected_material_ids:
+        missing = sorted(expected_material_ids - material_ids)
+        unexpected = sorted(material_ids - expected_material_ids)
+        details: list[str] = []
+        if missing:
+            details.append(f"缺少 {len(missing)} 个（示例: {', '.join(missing[:5])}）")
+        if unexpected:
+            details.append(f"越界 {len(unexpected)} 个（示例: {', '.join(unexpected[:5])}）")
+        audit.fail(
+            "CG-CONTRACT-MANIFEST",
+            "materials.id 必须按数组长度从 MAT-001 连续分配；" + "；".join(details),
+        )
     for chapter_id, values in chapter_material_membership.items():
         for material_id in values:
             if material_id not in material_ids:
@@ -733,6 +1160,28 @@ def verify_course(
     conflicted_blocks = sorted(block_id for block_id, values in block_dispositions.items() if len(values) > 1)
     if conflicted_blocks:
         audit.fail("CG-SOURCE-BLOCK-COVERAGE", f"来源块不得同时 include 与 skip: {', '.join(conflicted_blocks[:12])}")
+    missing_quarantine = sorted(planned_superseded_block_ids - quarantined_superseded_block_ids)
+    if missing_quarantine:
+        audit.fail(
+            "CG-SOURCE-AUTHORITY",
+            "plan 已确认的被替代来源块必须全部进入 authority_superseded skip: "
+            + ", ".join(missing_quarantine[:12]),
+        )
+    total_content_chars = sum(content_block_char_counts.values())
+    generic_skip_chars = sum(
+        content_block_char_counts.get(block_id, 0)
+        for block_id in generic_skip_block_ids
+    )
+    generic_skip_allowance = max(
+        GENERIC_SKIP_MIN_ALLOWANCE,
+        math.ceil(total_content_chars * GENERIC_SKIP_RATIO),
+    )
+    if generic_skip_chars > generic_skip_allowance:
+        audit.fail(
+            "CG-SOURCE-BLOCK-COVERAGE",
+            f"pure_repeat/no_course_value 共跳过 {generic_skip_chars} 字，超过 {generic_skip_allowance} 字预算；"
+            "拆分并纳入其中的案例、操作、踩坑、取舍或疑问，只保留真正重复或无课程价值的片段",
+        )
 
     image_records: dict[str, dict[str, Any]] = {}
     manifest_image_sequence: list[tuple[str, str, str]] = []
@@ -807,6 +1256,7 @@ def verify_course(
     reader_records = [{"id": "OVERVIEW", "file": overview_file, "path": overview_path, "image_ids": overview_image_ids}] + chapter_records
     reader_files: list[str] = []
     reader_texts: dict[str, str] = {}
+    reader_sections: dict[str, dict[str, str]] = {}
     reader_prose_chars: dict[str, int] = {}
     reader_image_counts: dict[str, int] = {}
     actual_image_total = 0
@@ -821,6 +1271,17 @@ def verify_course(
         if text is None:
             continue
         reader_texts[document_id] = text
+        headings, section_bodies, duplicate_headings = h2_sections(text)
+        reader_sections[document_id] = section_bodies
+        if document_id != "OVERVIEW":
+            declared_headings = record.get("section_headings") or []
+            if duplicate_headings:
+                audit.fail("CG-READER-EVIDENCE", f"{file_name} 含重复二级标题: {', '.join(sorted(duplicate_headings))}")
+            if headings != declared_headings:
+                audit.fail(
+                    "CG-READER-EVIDENCE",
+                    f"{file_name} 的二级标题序列必须与 manifest.section_headings 完全一致；实际 {headings!r}",
+                )
         reader_prose_chars[document_id] = visible_prose_char_count(text)
         actual_images = extract_images(text)
         reader_image_counts[document_id] = len(actual_images)
@@ -841,14 +1302,77 @@ def verify_course(
             audit.fail("CG-IMAGE-SET", f"{file_name} 图片集合不符（{'，'.join(details)}）")
         elif actual_images != expected_markdown:
             audit.fail("CG-IMAGE-ORDER", f"{file_name} 图片出现顺序与 manifest 不一致")
-        if SPEAKER_AS_ACTOR_RE.search(text):
-            audit.fail("CG-BOOKLIKE-TONE", f"{file_name} 残留讲者/讲师/主讲人作为动作发出者")
-        if SOURCE_FRAME_RE.search(text):
-            audit.fail("CG-BOOKLIKE-TONE", f"{file_name} 残留课程现场或原文框架词")
-        if FILLER_RE.search(text):
-            audit.fail("CG-BOOKLIKE-TONE", f"{file_name} 残留明确口语赘词")
+        speaker_count, speaker_hits = pattern_hit_summary(text, SPEAKER_TERM_RE)
+        if speaker_count:
+            audit.fail(
+                "CG-BOOKLIKE-TONE",
+                f"{file_name} 残留模糊讲者/讲师/主讲人指代（共 {speaker_count} 处：{speaker_hits}）",
+            )
+        frame_count, frame_hits = pattern_hit_summary(text, SOURCE_FRAME_RE)
+        if frame_count:
+            audit.fail(
+                "CG-BOOKLIKE-TONE",
+                f"{file_name} 残留课程现场或原文框架词（共 {frame_count} 处：{frame_hits}）",
+            )
+        filler_count, filler_hits = pattern_hit_summary(text, FILLER_RE)
+        if filler_count:
+            audit.fail(
+                "CG-BOOKLIKE-TONE",
+                f"{file_name} 残留明确口语赘词（共 {filler_count} 处：{filler_hits}）",
+            )
+        prose_for_style = style_prose(text)
+        ascii_punctuation = ASCII_CJK_PUNCT_RE.findall(prose_for_style)
+        if len(ascii_punctuation) >= 4:
+            audit.fail(
+                "CG-BOOKLIKE-TONE",
+                f"{file_name} 中文正文混用半角标点 {len(ascii_punctuation)} 处，应统一为中文全角标点",
+            )
+        if prose_for_style.count('"') % 2 or prose_for_style.count("“") != prose_for_style.count("”"):
+            audit.fail("CG-BOOKLIKE-TONE", f"{file_name} 存在未闭合或不成对的引号")
+        repeated_pairs = repeated_paragraph_pairs(text)
+        if repeated_pairs:
+            preview = "、".join(f"第{left}/{right}段({ratio:.0%})" for left, right, ratio in repeated_pairs[:4])
+            audit.fail("CG-BOOKLIKE-TONE", f"{file_name} 存在高度近重复长段，疑似为补足篇幅重复展开：{preview}")
+        if document_id != "OVERVIEW" and source_root_rebound:
+            for heading, section_text in section_bodies.items():
+                bound_source_text = "\n".join(
+                    raw_source_block_texts.get(block_id, "")
+                    for block_id in included_blocks_by_section.get((document_id, heading), set())
+                )
+                unsupported = sorted(
+                    {
+                        match.group(0)
+                        for match in UNSUPPORTED_SCOPE_RE.finditer(style_prose(section_text))
+                        if match.group(0) not in bound_source_text
+                    }
+                )
+                if unsupported:
+                    audit.fail(
+                        "CG-CLAIM-FIDELITY",
+                        f"{file_name}::{heading} 把单个观察扩成来源未支持的范围结论: {', '.join(unsupported)}",
+                    )
         if VISIBLE_TRACE_RE.search(text):
             audit.fail("CG-AUDIT-SEPARATION", f"{file_name} 暴露审计元数据，应移入 manifest/审计文件")
+        leaked_private_terms: list[str] = []
+        for match in PRIVATE_AUDIT_TERM_RE.finditer(text):
+            token = match.group(0)
+            if normalize_fidelity_text(token) not in normalized_raw_source and token not in leaked_private_terms:
+                leaked_private_terms.append(token)
+        if leaked_private_terms:
+            audit.fail(
+                "CG-AUDIT-SEPARATION",
+                f"{file_name} 暴露来源中不存在的生成器内部术语: {', '.join(leaked_private_terms[:8])}",
+            )
+        leaked_patch_terms: list[str] = []
+        for match in AUDIT_PATCH_RE.finditer(text):
+            token = match.group(0)
+            if normalize_fidelity_text(token) not in normalized_raw_source and token not in leaked_patch_terms:
+                leaked_patch_terms.append(token)
+        if leaked_patch_terms:
+            audit.fail(
+                "CG-AUDIT-SEPARATION",
+                f"{file_name} 暴露面向门禁的证据补丁措辞: {', '.join(leaked_patch_terms[:6])}",
+            )
         if BODY_TEMPLATE_MARKER_RE.search(text):
             audit.fail("CG-OUTPUT-COMPLETE", f"{file_name} 残留未替换模板标记")
         if source_root_rebound:
@@ -872,12 +1396,58 @@ def verify_course(
                 f"{file_name} 有 {len(actual_images)} 张正文图、{reader_prose_chars[document_id]} 个可见文字，密度上限为 {image_budget} 张；应保留代表图，其余转为 asset_only",
             )
 
+    if manifest_authority.get("mode") == "historical":
+        overview_text = reader_texts.get("OVERVIEW", "")
+        for acknowledgement in manifest_authority.get("acknowledgements") or []:
+            reader_notice = acknowledgement.get("reader_notice") if isinstance(acknowledgement, dict) else None
+            if is_nonempty_string(reader_notice) and reader_notice not in overview_text:
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{acknowledgement.get('id')} 的 historical reader_notice 未原样出现在总览",
+                )
+    elif manifest_authority.get("mode") == "current":
+        correction_catalog = {
+            item.get("id"): item
+            for item in manifest_authority.get("corrections") or []
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        for route in manifest_authority.get("correction_routes") or []:
+            if not isinstance(route, dict):
+                continue
+            correction = correction_catalog.get(route.get("id"))
+            chapter_id = route.get("target_chapter_id")
+            section_heading = route.get("target_section_heading")
+            if chapter_id not in chapter_section_headings:
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route.get('id')} 指向不存在的章节 {chapter_id!r}")
+                continue
+            if section_heading not in chapter_section_headings.get(chapter_id, []):
+                audit.fail("CG-SOURCE-AUTHORITY", f"{route.get('id')} 指向未声明的小节 {section_heading!r}")
+                continue
+            revised_text = correction.get("revised_text") if isinstance(correction, dict) else None
+            if not isinstance(revised_text, str) or revised_text not in reader_sections.get(chapter_id, {}).get(section_heading, ""):
+                audit.fail(
+                    "CG-SOURCE-AUTHORITY",
+                    f"{route.get('id')} 的修订口径未原样保留在 {chapter_id}::{section_heading}",
+                )
+        for correction in correction_catalog.values():
+            for term in correction.get("deprecated_terms") or []:
+                if not isinstance(term, str):
+                    continue
+                hits = [document_id for document_id, text in reader_texts.items() if term.casefold() in text.casefold()]
+                if hits:
+                    audit.fail(
+                        "CG-SOURCE-AUTHORITY",
+                        f"{correction.get('id')} 已废弃术语 {term!r} 仍出现在读者文档: {', '.join(hits)}",
+                    )
+
     evidence_signatures: list[str] = []
     for evidence in evidence_records:
         material_id = evidence.get("id") or "<unknown>"
         target = evidence.get("target")
+        target_section = evidence.get("section")
         quotes = evidence.get("quotes") or []
         target_text = reader_texts.get(target, "")
+        section_text = reader_sections.get(target, {}).get(target_section, "")
         if not quotes:
             continue
         evidence_signatures.append("\u241e".join(quotes))
@@ -886,6 +1456,11 @@ def verify_course(
                 audit.fail(
                     "CG-READER-EVIDENCE",
                     f"{material_id} 的 reader_evidence.quotes[{quote_index}] 未出现在目标章节 {target}",
+                )
+            elif quote not in section_text:
+                audit.fail(
+                    "CG-READER-EVIDENCE",
+                    f"{material_id} 的 reader_evidence.quotes[{quote_index}] 未出现在目标小节 {target_section!r}",
                 )
         combined_quote = "\n".join(quotes)
         visible_quote = IMAGE_RE.sub("", combined_quote)
@@ -906,16 +1481,14 @@ def verify_course(
     duplicated_evidence = duplicate_items(evidence_signatures)
     if duplicated_evidence:
         audit.fail("CG-READER-EVIDENCE", f"不同素材不得复用完全相同的正文证据摘录（共 {len(duplicated_evidence)} 组）")
+    for chapter_id, headings in chapter_section_headings.items():
+        for heading in headings:
+            if section_material_counts.get((chapter_id, heading), 0) == 0:
+                audit.fail("CG-READER-EVIDENCE", f"{chapter_id} 的小节 {heading!r} 没有任何 include 素材绑定")
 
     included_block_ids = set().union(*included_blocks_by_chapter.values()) if included_blocks_by_chapter else set()
     included_source_chars = sum(content_block_char_counts.get(block_id, 0) for block_id in included_block_ids)
     chapter_reader_prose_chars = sum(reader_prose_chars.get(chapter_id, 0) for chapter_id in chapter_ids)
-    required_global_prose_chars = math.ceil(included_source_chars * GLOBAL_READER_DEPTH_RATIO)
-    if included_source_chars and chapter_reader_prose_chars < required_global_prose_chars:
-        audit.fail(
-            "CG-READER-DEPTH",
-            f"章节可见文字共 {chapter_reader_prose_chars} 字，低于纳入来源 {included_source_chars} 字的 {GLOBAL_READER_DEPTH_RATIO:.0%} 下限（至少 {required_global_prose_chars} 字）",
-        )
     chapter_depth_measurements: dict[str, dict[str, int]] = {}
     for chapter_id in sorted(chapter_ids):
         source_chars = sum(
@@ -933,6 +1506,16 @@ def verify_course(
             audit.fail(
                 "CG-READER-DEPTH",
                 f"{chapter_id} 可见文字 {prose_chars} 字，低于本章纳入来源 {source_chars} 字的 {CHAPTER_READER_DEPTH_RATIO:.0%} 下限（至少 {required_chars} 字）",
+            )
+        maximum_chars = max(
+            MAX_CHAPTER_READER_EXPANSION_FLOOR,
+            math.ceil(source_chars * MAX_CHAPTER_READER_EXPANSION_RATIO),
+        )
+        chapter_depth_measurements[chapter_id]["maximum-reader-prose-chars"] = maximum_chars
+        if source_chars and prose_chars > maximum_chars:
+            audit.fail(
+                "CG-READER-DEPTH",
+                f"{chapter_id} 可见文字 {prose_chars} 字，超过本章纳入来源允许的扩写上限 {maximum_chars} 字；应合并到有充分来源的章节或删除来源外延伸",
             )
 
     total_reader_prose_chars = sum(reader_prose_chars.values())
@@ -963,6 +1546,29 @@ def verify_course(
     extras = sorted(actual_numbered - expected_files)
     if extras:
         audit.fail("CG-OUTPUT-COMPLETE", f"存在 manifest 未声明的读者文件: {', '.join(extras)}")
+    transient_files = sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in FORBIDDEN_TRANSIENT_SUFFIXES
+    )
+    transient_dirs = sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_dir() and path.name in FORBIDDEN_TRANSIENT_DIRS
+    )
+    transient_machine_files = sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in {".json", ".yaml", ".yml"}
+        and path.relative_to(root).as_posix() not in ALLOWED_MACHINE_JSON_FILES
+    )
+    if transient_files or transient_dirs or transient_machine_files:
+        samples = (transient_files + transient_dirs + transient_machine_files)[:12]
+        audit.fail(
+            "CG-OUTPUT-COMPLETE",
+            "候选目录残留一次性脚本、批次/计划文件或中间工作目录: " + ", ".join(samples),
+        )
 
     audit_files = top.get("audit_files", {})
     if audit_files is not None:
@@ -985,12 +1591,29 @@ def verify_course(
             "chapter-count": len(chapter_records),
             "max-chapters": max_chapters,
         },
-        "CG-MATERIAL-TRACE": {"included-material-count": included_materials},
+        "CG-MATERIAL-TRACE": {
+            "included-material-count": included_materials,
+            "total-material-count": len(raw_materials),
+            "maximum-material-count": maximum_materials,
+        },
         "CG-SOURCE-BLOCK-COVERAGE": {
             "content-block-count": len(content_block_ids),
             "covered-content-block-count": len(covered_content_blocks),
+            "generic-skip-char-count": generic_skip_chars,
+            "generic-skip-char-allowance": generic_skip_allowance,
         },
-        "CG-READER-EVIDENCE": {"evidence-count": len(evidence_records)},
+        "CG-SOURCE-AUTHORITY": {
+            "authority-mode": manifest_authority.get("mode"),
+            "authority-notice-count": len(manifest_authority.get("notices") or []),
+            "authority-acknowledgement-count": len(manifest_authority.get("acknowledgements") or []),
+            "authority-correction-count": len(manifest_authority.get("corrections") or []),
+            "authority-correction-route-count": len(manifest_authority.get("correction_routes") or []),
+        },
+        "CG-READER-EVIDENCE": {
+            "evidence-count": len(evidence_records),
+            "declared-section-count": sum(len(values) for values in chapter_section_headings.values()),
+            "grounded-section-count": sum(1 for count in section_material_counts.values() if count > 0),
+        },
         "CG-CLAIM-FIDELITY": {
             "source-root-rebound": source_root_rebound,
             "source-block-text-count": len(raw_source_block_texts),
@@ -998,7 +1621,6 @@ def verify_course(
         "CG-READER-DEPTH": {
             "included-source-char-count": included_source_chars,
             "chapter-reader-prose-char-count": chapter_reader_prose_chars,
-            "required-chapter-reader-prose-char-count": required_global_prose_chars,
             "chapter-depth": chapter_depth_measurements,
         },
         "CG-IMAGE-SOURCE-COVERAGE": {
@@ -1026,6 +1648,7 @@ def verify_course(
         "chapter-ids": sorted(chapter_ids),
         "material-ids": sorted(material_ids),
         "source-block-ids": sorted(content_block_ids),
+        "authority-ids": [item.get("id") for item in manifest_authority.get("notices") or [] if isinstance(item, dict)],
         "image-ids": sorted(image_records),
     }
     audit.warn("需人工复核：覆盖词与缩写门禁只拦截可确定的来源外补写，不证明全部事实忠实度、跨章一致性或图片视觉价值")
@@ -1033,7 +1656,7 @@ def verify_course(
 
 
 def emit_result(audit: Audit, root: Path) -> int:
-    print("========== course-generator v2.9.3 验收 ==========")
+    print("========== course-generator v2.9.15 验收 ==========")
     print(f"目录: {root}")
     for constraint_id in ALL_CONSTRAINTS:
         messages = audit.failures.get(constraint_id)
@@ -1060,7 +1683,7 @@ def emit_result(audit: Audit, root: Path) -> int:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.9.3 课程目录")
+    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.9.15 课程目录")
     parser.add_argument("course_dir", help="课程输出目录")
     parser.add_argument("--manifest", default="course-manifest.json", help="相对课程目录的 manifest 路径（默认: course-manifest.json）")
     parser.add_argument("--source-root", help="可选：索引时使用的单个来源文件或来源根目录；提供时重新枚举并校验完整输入范围")

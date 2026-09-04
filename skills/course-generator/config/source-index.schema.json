@@ -4,9 +4,69 @@
   "title": "Course Generator Source Index",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "sources"],
+  "required": ["schema_version", "authority", "sources"],
   "properties": {
-    "schema_version": {"const": "1.1"},
+    "schema_version": {"const": "1.4"},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "notices", "corrections"],
+      "properties": {
+        "mode": {"enum": ["current", "historical"]},
+        "notices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "source_block_id", "source_ref", "controlling_titles", "controlling_source_ids", "section_hint"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^AUTH-[0-9]{3,}$"},
+              "source_block_id": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"},
+              "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}#L[0-9]{4,}-L[0-9]{4,}$"},
+              "controlling_titles": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "controlling_source_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"}
+              },
+              "section_hint": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "authority_id", "source_id", "source_ref", "original_text", "revised_text", "deprecated_terms", "superseded_candidate_block_ids"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^COR-[0-9]{3,}$"},
+              "authority_id": {"type": "string", "pattern": "^AUTH-[0-9]{3,}$"},
+              "source_id": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"},
+              "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}#L[0-9]{4,}-L[0-9]{4,}$"},
+              "original_text": {"type": "string", "minLength": 1},
+              "revised_text": {"type": "string", "minLength": 1},
+              "deprecated_terms": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "superseded_candidate_block_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "maxItems": 8,
+                "items": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"}
+              }
+            }
+          }
+        }
+      }
+    },
     "sources": {
       "type": "array",
       "minItems": 1,
@@ -27,7 +87,7 @@
               "properties": {
                 "id": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"},
                 "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}#L[0-9]{4,}-L[0-9]{4,}$"},
-                "kind": {"enum": ["content", "derived", "heading", "image", "timestamp", "speaker", "separator"]},
+                "kind": {"enum": ["content", "derived", "authority", "control", "heading", "image", "timestamp", "speaker", "separator"]},
                 "char_count": {"type": "integer", "minimum": 1},
                 "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                 "preview": {"type": "string", "minLength": 1, "maxLength": 160}
