@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 本技能应在用户要求并行推进多个任务、开启多个 worker/agent、使用 Orca Run/Task/Dispatch 或 tmux 独立 session、让 PM 通过 UI/会话转录实时巡检并统一调度 Claude Code、Codex、CodeBuddy、QoderWork 等 CLI，或要求防止 PM 直接实现逃逸时使用；用户授权 Wave Autopilot 后，PM 按项目任务源固定策略自动链式推进波次（组波/派单/验收/合并/泊车）。触发词包括“并行推进”“开多个 worker”“Orca 编排”“supervised worker”“PM 总控”“独立 session”“多 agent 并行”“分派任务”“自动推进”“Wave Autopilot”“自动组波/自动推进波次”。不要用于单个短任务、纯任务状态同步，或 Git 分支/提交/PR/merge 规则。
 license: MIT
 metadata:
-  version: "2.15.0"
+  version: "2.15.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -282,6 +282,8 @@ bash scripts/pm-orchestrate.sh reauthorize --worktree "$WT" --session worker-a \
 ```
 
 一条命令完成：授权文件合并 → launch.sh B64 重写（guard 读内联快照，改文件对运行中进程无效）→ Task 复位 → 同 worktree 新终端 + Task 重注册（worker-start 重注入）→ METADATA 改路由 → 关旧终端。未提交工作区改动全部保留。
+
+worker_done 结算后（task 翻成 failed/settled、Delivery 已 release+ack）重授权若被 `TASK_REUSED` 拒绝，不再误判为单活 fencing（Task-113）：命令先复核 task-list 状态，确认仍是 failed/settled 才复位 ready 并只重试一次注册；复核翻回 dispatched（漂移=真单活出现）或 unknown/其他状态一律回滚新终端 fail-closed 不复位，任何中间失败都保持「至多一个活终端」。
 
 每次 supervised 的 send/wait/reply/release/retain/ack/settle 都先由脚本对当前 PM terminal 执行 `run-use`，并把新 coordinator handle 写回 METADATA；`check` 随后消费已绑定 Run，不携带陈旧 `--run` 路由。`wait` 不自动 ack。timeout/count=0 只是滚动巡检窗口结束，不是失败。Sentinel 不得因 STATUS、idle、heartbeat、question、escalation 或 timeout 执行 stop/release/terminal close。完整契约读取 `references/13-orca-cli-worker.md` 和 `references/14-pm-orchestrate.md`。
 
