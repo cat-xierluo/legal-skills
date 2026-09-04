@@ -18,6 +18,7 @@ KEEP_SESSION=0
 KEEP_WORKTREE=0
 DELETE_BRANCH=0
 FORCE_DIRTY=0
+FORCE_DELETE_BRANCH=0
 
 usage() {
   cat >&2 <<'USAGE'
@@ -33,6 +34,9 @@ Options:
   --keep-worktree       Do not remove git worktree
   --delete-branch       Delete local branch after worktree removal
   --force-remove-dirty  Allow removing a dirty worktree
+  --force-delete-branch Escalate to git branch -D when safe -d refuses; only for
+                        callers holding independent MERGED+head evidence (e.g.
+                        post-merge-cleanup.sh). Never use it to "align with remote".
 
 This script never deletes a remote branch and never runs git reset.
 USAGE
@@ -74,6 +78,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --force-remove-dirty)
       FORCE_DIRTY=1
+      shift
+      ;;
+    --force-delete-branch)
+      FORCE_DELETE_BRANCH=1
       shift
       ;;
     -h|--help)
@@ -344,7 +352,20 @@ fi
 
 if [ "$DELETE_BRANCH" -eq 1 ]; then
   if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
-    run git -C "$PROJECT_DIR" branch -d "$BRANCH"
+    if [ "$EXECUTE" -eq 0 ]; then
+      echo "CLEAN_WORKTREE_RUN: git -C $PROJECT_DIR branch -d $BRANCH"
+    elif git -C "$PROJECT_DIR" branch -d "$BRANCH" >/dev/null 2>&1; then
+      echo "CLEAN_WORKTREE_BRANCH_DELETED: branch=$BRANCH"
+    elif [ "$FORCE_DELETE_BRANCH" -eq 1 ]; then
+      # squash/rebase merge 后分支 tip 不可达 main，安全 -d 必拒。只有调用方已独立
+      # 证明 MERGED + head 精确一致（如 post-merge-cleanup.sh 的门禁）才允许 -D。
+      echo "CLEAN_WORKTREE_BRANCH_FORCE_DELETED: branch=$BRANCH reason=safe_delete_refused_caller_merge_evidence"
+      git -C "$PROJECT_DIR" branch -D "$BRANCH" >/dev/null
+      echo "CLEAN_WORKTREE_BRANCH_DELETED: branch=$BRANCH mode=force"
+    else
+      echo "CLEAN_WORKTREE_BRANCH_REFUSED: git branch -d refused branch=$BRANCH; escalate with --force-delete-branch only after independent MERGED evidence" >&2
+      exit 2
+    fi
   else
     echo "CLEAN_WORKTREE_BRANCH: missing branch=$BRANCH"
   fi

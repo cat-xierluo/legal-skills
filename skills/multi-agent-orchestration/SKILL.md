@@ -399,6 +399,8 @@ bash scripts/clean-worktree.sh --project "$PROJECT" --branch feat/worker-a --ses
 
 active、release_pending、release_unknown 或生命周期不明的 supervised worker 一律拒绝删除 worktree。
 
+PR 已确认合并（GitHub `state == MERGED`）后要当场回收该 worker 的分支与 worktree 时，跑 `post-merge-cleanup.sh`：删除资格真值按 git-workflow 分支清理规则机械判定——分支不是 `main/master/develop`、`--base` 或 `--protected-branch`（长期集成分支）匹配项；存在唯一 MERGED PR 且其 `headRefOid` 与本地分支 tip 精确一致（head 漂移=身份不明，一律 deferred）；无开放 stacked child PR 以该分支为 base；worktree 无未提交改动；session 生命周期可证结算（tmux 存活且无 supervised dispatch、terminal accounting 为 active/release_pending 一律拒绝）。全过才按生命周期顺序执行：经 `clean-worktree.sh --execute`（先 release/关 terminal/lease，再删 worktree 与本地分支；squash merge 后 `-d` 必拒的场景凭上述 MERGED 证据升级 `-D`），随后删远端短分支，最后机械验证零残留（本地 ref/worktree 注册/tmux/远端 ref 任一残留 → exit 9，不冒充完成）。任何门禁不确定输出 `POST_MERGE_CLEANUP_DEFERRED: reason=...` 并保持现场；默认 dry-run。即时清理是「已合并且无消费者」的显式例外：只处理显式传入的单个分支，绝不批量扫描，<24h 规则继续保护没有 MERGED 证据的对象。回归：`scripts/test-post-merge-cleanup.sh`。
+
 ## 9. Backend 与配置
 
 默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具；跨工具仍不得越过 §3.1 的 Harness 白名单。个人偏好写入 ignored 的 `config/orchestration-personal.json`，模板为 `.example.json`；项目 trunk、任务源、验证命令和 provider slots 可写入 `.claude/orchestration.config.json`。个人配置只能选择白名单以内的 backend，不能扩张宿主权限。
@@ -485,7 +487,7 @@ session id（authority receipt 每会话唯一，fail-closed），切 provider �
 | `bash` 4+ | macOS: `brew install bash`；Linux: 包管理器安装 |
 | `git` | macOS: `xcode-select --install` 或 `brew install git` |
 | `jq` | macOS: `brew install jq`；Linux: `sudo apt-get install jq` |
-| `gh` | `pr-audit` 的只读 PR 事实与 `pm-closeout.sh` 的授权式 PR 创建/合并需要；macOS: `brew install gh`；Linux: 按 GitHub CLI 官方包安装 |
+| `gh` | `pr-audit` 的只读 PR 事实、`pm-closeout.sh` 的授权式 PR 创建/合并与 `post-merge-cleanup.sh` 的 MERGED 证据/child PR 查询需要；macOS: `brew install gh`；Linux: 按 GitHub CLI 官方包安装 |
 | `tmux` | 仅 tmux 路径需要；macOS: `brew install tmux` |
 | `python3` | 安装门禁和 scope guard 需要 |
 
@@ -562,6 +564,7 @@ bash scripts/test-settle-command.sh
 bash scripts/test-recover-unconfigured.sh
 bash scripts/test-pr-audit.sh
 bash scripts/test-pm-closeout.sh
+bash scripts/test-post-merge-cleanup.sh
 python3 scripts/test-autopilot-controller.py
 python3 scripts/test-autopilot-facts.py
 bash scripts/smoke-sentinel.sh

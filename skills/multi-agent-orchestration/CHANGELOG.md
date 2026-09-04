@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.16.0] - 2026-09-05
+
+### 新增（post-merge cleanup gate，合并后即时清理）
+
+- **职责单一的 `scripts/post-merge-cleanup.sh`**：PR 确认合并后当场回收一个 worker 分支的 worktree/本地/远端短分支。删除资格真值来自 git-workflow 分支清理规则，全部门禁机械判定、fail-closed：① 分支不是 `main/master/develop`、`--base` 或 `--protected-branch`（名称或 glob，长期集成分支）匹配项；② 存在唯一 `state == MERGED` 的 PR 且其 `headRefOid` 与本地分支 tip 精确一致——squash/rebase merge 的唯一权威证据，head 漂移视为身份不明；③ 无开放 stacked child PR 以该分支为 base（gh 查询失败也拒绝）；④ worktree 无未提交改动；⑤ session 生命周期可证结算——tmux 存活且无 supervised dispatch、terminal accounting 为 active/reclaimable/release_pending/release_unknown/unknown 一律拒绝；⑥ 远端状态必须 `ls-remote` 可验证。门禁不过输出 `POST_MERGE_CLEANUP_DEFERRED: reason=...`（exit 2）保留现场。
+- **生命周期顺序执行**：execute 时先经 `clean-worktree.sh --execute --delete-branch`（worker-release → 关 terminal/lease → 删 worktree → 删本地分支），再 `git push origin --delete` 远端短分支（push 报错但 follow-up `ls-remote` 证明远端已删时按并发竞态幂等放行），最后机械零残留验证（本地 ref、worktree 注册与目录、tmux session、远端 ref）；远端删除失败或任一残留以 exit 9 报告，绝不把部分成功冒充完成。执行前复核分支 tip 未移动（TOCTOU）。默认 dry-run 零副作用；即时清理是「已合并且无消费者」对 <24h 规则的显式例外，只处理显式传入的单个分支，不批量扫描。
+- **`clean-worktree.sh` 新增 `--force-delete-branch`**：squash/rebase merge 后分支 tip 不可达 main，安全 `git branch -d` 必拒；该开关允许在 `-d` 拒绝后升级 `-D`，仅供持有独立 MERGED+head 证据的调用方（即 post-merge-cleanup.sh 门禁通过后）使用，不带开关时行为不变（拒绝并 exit 2，不再依赖 set -e 的裸失败）。
+- **文档同步**：SKILL.md §8 新增 post-merge-cleanup 段并纳入验收测试清单与 `gh` 依赖说明；`references/14-pm-orchestrate.md` §4.4 的「自动清理属于 Task-103」占位替换为实际工具指引。版本 2.15.1 → 2.16.0。
+
 ## [2.15.1] - 2026-09-04
 
 ### 修复（reauthorize 已结算 task 的 TASK_REUSED 误判，Task-113）
