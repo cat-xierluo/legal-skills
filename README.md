@@ -35,11 +35,11 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-04 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.15.0 | **PR-first 唯一审计与事务式本地集成**：create 前机械区分 exact/suspected/unrelated PR，唯一 worker 自建 PR 可接管；本地候选以三方 patch 保留 fresh main 并从隔离 clone 安全推送，保护/漂移/授权未知时停在非成功 `VALIDATE_ONLY`。 |
+| 2026-09-04 | 更新   | [course-generator](skills/course-generator/)                           | v2.10.1 | **入口地基与渐进素材预算**：description 和一级标题回归纯中文任务表达，入口改为任务 SOP；新增随已覆盖正文块增长的分批素材预算，在写入前阻断弱模型过度碎分和整账本返工。144/144 本地回归通过，MiniMax v2.10.1 前向效果待验证。 |
 | 2026-08-30 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.0 | **最终版式门禁与失败安全**：新增独立 DOCX/PDF 检查器，统一表格居中、固定列宽、跨页行和连续页码，保留横竖版边界；候选件经 LibreOffice 真实渲染通过后才发布。113 棵模板静态门禁与 21 类文书真实 PDF 抽样通过，68 棵主文书逐树长文本压力矩阵继续列为 P0。 |
 | 2026-08-30 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.2 | **事务性输出与失败安全**：参数和视频先预检，新结果在同级 staging 完整生成后才替换旧结果；新增所有权标记、旧版报告兼容校验、符号链接/未知文件/下游产物保护，以及损坏视频和提交回滚真实 CLI 回归 |
 | 2026-08-30 | 更新   | [legal-industry-report](skills/legal-industry-report/)               | v1.1.0 | **法律专业正式行业报告（月度/季度）**：增加 `legal-` 领域前缀，统一法律研报产品命名；继续面向公开展示与广泛分发，保留行业全景、规则包、证据账本和机构出版物式 PDF。 |
 | 2026-08-30 | 更新   | [legal-client-brief](skills/legal-client-brief/)                     | v1.1.0 | **法律专业客户日常简报（每日/每周/事件）**：增加 `legal-` 领域前缀，继续服务既有客户日常触达；保留完整简报、朋友圈和公众号三件套及 DRAFT 人工发布门禁。 |
-| 2026-08-26 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.4 | **弱模型前向实测与账本 fail-fast**：GLM 三门真实课程首轮均通过 14/14 领域门禁、主模型语义评分 90—93；第二轮配额失败严格记为 0/3，并据完整失败样本新增生成前素材账本预检，统一 include/skip 的连续 `MAT-*` 编号、阻断 `SKIP-*` 平行命名；同步保留个人判断、事故转述和产品效果的认识论边界，稳定性继续标记 `NOT_VERIFIED` |
 | 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.3.5  | **全书本地图片路径修复**：`--book` 在合并前按各章 Markdown 自己的目录重定位 Markdown/HTML 本地相对图片，含空格、URL 编码和可选标题的路径均可嵌入；单章与远程图片行为不变 |
 | 2026-08-25 | 更新   | [md2word](skills/md2word/)                                             | v1.2.6  | **Word 出版逃逸修复**：多列长表头受正文区硬预算约束，`tblW`、grid 与单元格宽度统一；普通及显式居中表题取消缩进且保留文字样式；引用块 `[^label]` 正确生成原生 Word 脚注，不再显示字面 marker |
 </details>
@@ -405,9 +405,9 @@
 <tr>
 <td><a href="skills/course-generator/"><strong>course-generator</strong></a></td>
 <td>工具·课程</td>
-<td style="word-break:break-word">将长转录稿或文献整理为可独立阅读、可溯源验收的课程：以确定性来源块、细粒度素材去向、预承诺覆盖词和真实正文证据守住长材料精华，同时保留章节结构与叙事写法的自由；支持用户词典、专名保真、图片克制插入和确定性验收，归档/定制方案提取仅在明确要求时执行</td>
+<td style="word-break:break-word">将长转录稿或文献整理为可独立阅读、可溯源验收的课程：以确定性来源块、细粒度素材去向、预承诺覆盖词和真实正文证据守住长材料精华，并用脚本自动收口可推导的 source refs、证据与图片映射；支持用户词典、专名保真、图片克制插入和确定性验收，归档/定制方案提取仅在明确要求时执行</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.9.0</td>
+<td style="text-align:center">v2.10.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/course-generator-2.3.3.zip">下载</a></td>
 <td>下载版 v2.3.3</td>
 </tr>
