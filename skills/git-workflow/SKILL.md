@@ -168,6 +168,8 @@ git for-each-ref --sort=committerdate refs/remotes/origin/ \
 
 **默认阈值:最后提交 < 24h 的分支一律保留(活跃,可能是刚开展/重跑的工作),不得删除。** 只有 > 24h(可配置,如 7 天更稳)的才进删除候选。时间过滤 + PR 状态 + 下面三查,缺一不可。
 
+**合并后即时清理的机械执行**:当 PR 已确认 `state == MERGED` 且分支无消费者时,上述审计可以由 `multi-agent-orchestration` 的 `scripts/post-merge-cleanup.sh` 机械化:唯一 MERGED PR 且 `headRefOid` 与本地 tip 精确一致、无开放 stacked child PR 以该分支为 base、worktree 无未提交改动、非 `main/master/develop`/长期集成分支、session 生命周期已结算——门禁全过才删本地+远端分支并强制零残留验证,任一不确定即 fail-closed 保留现场。即时清理是「已合并且无消费者」对 24h 规则的**显式例外**,只针对显式指定的单个已合并分支;批量审计仍必须走本节完整流程,没有 MERGED 证据的分支(<24h 或身份不明)继续被保护。
+
 #### 审计流程
 
 ```bash
