@@ -297,7 +297,7 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
         )
     manifest = {
         "schema_version": "1.8",
-        "generator_version": "2.9.15",
+        "generator_version": "2.10.0",
         "course": {"title": args.title},
         "sources": [{"id": source["id"], "path": source["path"]} for source in source_index["sources"]],
         "source_index": {"file": index_relative, "sha256": hashlib.sha256(index_path.read_bytes()).hexdigest()},

@@ -1,6 +1,6 @@
 # `source-index.json` 与 `course-manifest.json` 产物契约
 
-生成模式使用两份机器文件把“原文存在什么”和“课程如何处理”分开：
+课程生成使用两份机器文件把“原文存在什么”和“课程如何处理”分开：
 
 - `source-index.json`：由 `scripts/index_sources.py` 确定性生成，记录来源文件哈希、段落级 `BLK-xxxxx`、来源权威声明和结构化修正规则；不要手写。
 - `course-manifest.json`：记录课程、权威处理确认、逐条修正路由、章节、素材、图片和正文证据，并绑定来源索引 SHA-256。
@@ -15,45 +15,9 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 验证器读取真实来源、来源索引、manifest 和最终 Markdown，不采信大纲中的“已完成”文字。
 
-## 生成顺序
+## 使用方式
 
-1. 用 `index_sources.py --authority-mode current` 生成来源索引，再用 `ledger_tool.py init` 绑定真实 `--source-root` 并建立 schema 1.8 的 manifest 脚手架；来源、权威声明、结构化修正、候选旧口径块、图片、编号和哈希不由模型手写。只有用户明确要求历史口径时才使用 `historical`。
-2. 先读取 `source-index.authority`；`ledger_tool.py init/status` 会把候选 ID、source ref 和短预览汇总为 `authority_candidate_review_queue`。current 模式按 `corrections` 逐条选择目标章与目标 H2，并按 queue 原顺序把每个候选判为 `superseded` 或 `retained_current`；每项同时提交逐字来自该候选预览、至少 6 字的 `evidence_quote` 与专属理由。不得复制同一理由批量判断，也不得把 12 项以上的整张高召回矩阵一律删除。historical 模式准备读者可见的非现行声明。短预览不足以判断时回读原文，候选逐项判断不能替代候选外的同义旧结论检索。把逐项确认、逐条修正路由、候选审查矩阵、被替代来源块与最终章节、二级标题顺序写成 `chapter-plan.json`，用 `ledger_tool.py plan` 一次冻结。模型不复制或改写 `revised_text`；工具负责把它写入 manifest。每个二级标题都是证据边界，不得先生成空模板再期待正文自然补齐。
-3. 每次读取 20—40 个尚未处理的 `kind=content` 块，输出一个批次 JSON；用 `ledger_tool.py merge ... --source-root ...` 校验 coverage term、目标章/节、修订替代块、include/skip 冲突及素材总数预算并自动连续编号。`authority`、`control`、`derived` 都不建立普通素材；plan 确认的旧口径块只使用 `authority_superseded` 跳过，控制来源只修订历史表述，不自动扩成新课程主题。
-4. 用 `ledger_tool.py status --next-batch-size 30` 获取下一批精确 ID；只处理 `next_batch_content_block_ids`，不自行重算剩余块。全部覆盖后运行 ledger finalizer，再运行带 `--source-root` 的 `preflight_ledger.py`。include 素材的每个 coverage term 必须逐字存在于绑定原文、不能全是通用词，也不能是口语指代、语气词或截断片段；不要求为了审计把词硬塞进摘要。每个计划二级标题至少有一项 include 素材。
-5. 从图片相邻内容中确定代表图，提交短 `image-selection.json`，由 `ledger_tool.py select-images` 同步 manifest；再用 `scaffold` 创建精确 H1/H2 并原样注入路由到各节的修订句。不要让模型翻改整份图片数组、自行重写标题或改写修订句。
-6. 按冻结的二级标题顺序逐章填写正文；每项素材只写入自己的 `target_section_heading`。每完成一章立即运行 `check-chapter`，修到单章 PASS 后才进入下一章。中文正文统一使用全角标点并保持引号闭合；明显 ASR 异常不照抄为事实。单章超过 `max(1400 字, 本章纳入来源字符数 × 2.5)` 时，应删除来源外扩写、去除重复或合并结构性薄章，不能靠近义重复补字数。
-7. 完成后运行 final 阶段收口，只从该目标小节内回填 `reader_evidence.quotes`（1—3 段）并按最终 Markdown 复核图片映射。自动收口报告 `unresolved` 时在对应小节补真实正文，不写“正文证据补丁”“原文痕迹”或覆盖词清单，不跨节借证据；再次运行自动收口与验证器。修改正文、manifest 或来源索引后重新验收。批次/计划/图片选择 JSON 或 YAML、辅助脚本和缓存全部放在课程目录之外。
-
-对应命令顺序：
-
-```bash
-python3 scripts/ledger_tool.py init \
-  --source-index <课程目录>/source-index.json \
-  --source-root <来源文件或目录> \
-  --manifest <课程目录>/course-manifest.json \
-  --title "<真实课名>" \
-  --overview-file "00 <真实课名> - 总览.md"
-python3 scripts/ledger_tool.py plan \
-  <课程目录>/course-manifest.json <临时目录>/chapter-plan.json
-python3 scripts/ledger_tool.py merge \
-  <课程目录>/course-manifest.json <临时目录>/batch-001.json \
-  --source-root <来源文件或目录>
-python3 scripts/ledger_tool.py status \
-  <课程目录>/course-manifest.json --next-batch-size 30
-python3 scripts/finalize_manifest.py \
-  <课程目录>/course-manifest.json --phase ledger --write
-python3 scripts/preflight_ledger.py \
-  <课程目录>/course-manifest.json --source-root <来源文件或目录>
-python3 scripts/ledger_tool.py select-images \
-  <课程目录>/course-manifest.json <临时目录>/image-selection.json
-python3 scripts/ledger_tool.py scaffold \
-  <课程目录>/course-manifest.json
-python3 scripts/ledger_tool.py check-chapter \
-  <课程目录>/course-manifest.json --document CH-01
-```
-
-`plan` 默认最多 8 章；不得为了通过门禁或照搬来源结构自行放宽。只有用户明确要求超过 8 章时才读取 [advanced-overrides.md](advanced-overrides.md)。完全相同的素材批次被重试时，`merge` 幂等跳过已有记录，不重复分配 MAT ID。
+完整的命令顺序、批次策略和失败处理见 [generation-workflow.md](generation-workflow.md)。本文件只维护 manifest 字段、机器约束和可复制的 JSON 示例，避免工作流在多处重复后发生漂移。
 
 ## 弱模型输入格式
 
@@ -156,7 +120,7 @@ python3 scripts/ledger_tool.py check-chapter \
 ```json
 {
   "schema_version": "1.8",
-  "generator_version": "2.9.15",
+  "generator_version": "2.10.0",
   "course": {"title": "示例课程"},
   "sources": [
     {"id": "SRC-001", "path": "转录稿-01.md"},
