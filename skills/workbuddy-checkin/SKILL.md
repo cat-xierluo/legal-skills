@@ -1,7 +1,7 @@
 ---
 name: workbuddy-checkin
 description: WorkBuddy 每日积分自动签到。自动解密本地登录令牌，调用官方签到 API 完成每日积分领取（100 积分/天，连续第 7 天 1000 积分），并支持配置定时任务。触发词：WorkBuddy 签到、每日积分、check-in、credits。
-version: "1.0.3"
+version: "1.0.4"
 license: MIT
 ---
 
@@ -180,6 +180,22 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 - **Electron 下载慢/失败（旧版账户）**：配置 npm 镜像（见 `references/dependencies.md`）后重跑 setup；或手动放置 Electron 后用环境变量/参数指定。v5.3.8+ 新版账户无需 Electron。
 - **Windows 提示不是内部或外部命令**：用 `powershell -ExecutionPolicy Bypass -File …` 运行；确认 `curl.exe` 存在。
 - **沙箱里 `require('electron')` 报错**：Agent 沙箱默认设 `ELECTRON_RUN_AS_NODE=1`，脚本已用 `env -u`（sh）/ `Remove-Item Env:`（ps1）处理；v5.3.8+ 主路径用纯 Node，不受此影响。
+
+## Windows 兼容性修复（1.0.4）
+
+1.0.3 及之前版本的验证全部在 macOS 完成（见 CHANGELOG「已知限制」）。1.0.4 修复 Windows（Git Bash / PS 5.1）实跑暴露的 3 处问题：
+
+| # | 文件 | 症状 | 根因 | 修复 |
+|---|---|---|---|---|
+| 1 | `checkin.ps1` | `表达式或语句中包含意外的标记"}"`，脚本完全跑不起来 | 文件是**无 BOM 的 UTF-8**，PS 5.1 按 GBK 解析，中文注释变乱码破坏语法 | 补 UTF-8 BOM（零代码改动） |
+| 2 | `checkin.ps1` | `签到未成功：PARSE_ERR` | `[Console]::OutputEncoding` 中文 Windows 默认 GB2312，把 UTF-8 JSON 解成乱码并**吃掉闭合引号**，`ConvertFrom-Json` 抛错 | `Invoke-CheckinApi` 内调用 curl.exe 期间临时切 UTF-8，结束后还原 |
+| 3 | `checkin.sh` | `未找到 Node 或 Electron 运行时`（但 `node -v` 正常） | `SCRIPT_DIR` 是 MSYS 的 `/c/...`，传给原生 `node.exe` 被拼成 `C:\c\Users\...` → `Cannot find module` → 令牌为空 | 用 `cygpath -w` 归一化传给 Node 的路径；JSON 解析改为 **Node 优先、python3 回退**（Node 本就是必需依赖） |
+
+> **排错提示**：第 3 条的报错文案极具误导性——它让你去装 Node.js，但 Node 是好的，真实原因被 `decrypt` 调用的 `2>/dev/null` 吞掉。遇到这条，**先直接跑 `node "<脚本绝对路径>/decrypt-token.js"` 看真实报错**。
+
+### 已知行为（非 bug）
+
+- 重复签到时 `daily-checkin` 返回 **HTTP 400**（首次签到才是 200），业务体为 `code=10001`。判定依据始终是业务体的 `code=10001`，两个脚本均已将其视为成功。
 
 ## 安全说明
 
