@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-04 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.7.0  | **长期集成分支模式**：大型功能以具名长期分支作为功能线 mini-main，worker 短分支显式向其提 PR；通用修复先入默认主干再按波次同步，具名里程碑后才集成回主干，并禁止长期分支 rebase、force-push 或随子 PR 删除。 |
 | 2026-09-04 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.15.0 | **PR-first 唯一审计与事务式本地集成**：create 前机械区分 exact/suspected/unrelated PR，唯一 worker 自建 PR 可接管；本地候选以三方 patch 保留 fresh main 并从隔离 clone 安全推送，保护/漂移/授权未知时停在非成功 `VALIDATE_ONLY`。 |
 | 2026-08-30 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.0 | **最终版式门禁与失败安全**：新增独立 DOCX/PDF 检查器，统一表格居中、固定列宽、跨页行和连续页码，保留横竖版边界；候选件经 LibreOffice 真实渲染通过后才发布。113 棵模板静态门禁与 21 类文书真实 PDF 抽样通过，68 棵主文书逐树长文本压力矩阵继续列为 P0。 |
 | 2026-08-30 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.2 | **事务性输出与失败安全**：参数和视频先预检，新结果在同级 staging 完整生成后才替换旧结果；新增所有权标记、旧版报告兼容校验、符号链接/未知文件/下游产物保护，以及损坏视频和提交回滚真实 CLI 回归 |
@@ -41,7 +42,6 @@
 | 2026-08-30 | 更新   | [legal-client-brief](skills/legal-client-brief/)                     | v1.1.0 | **法律专业客户日常简报（每日/每周/事件）**：增加 `legal-` 领域前缀，继续服务既有客户日常触达；保留完整简报、朋友圈和公众号三件套及 DRAFT 人工发布门禁。 |
 | 2026-08-26 | 更新   | [course-generator](skills/course-generator/)                           | v2.9.4 | **弱模型前向实测与账本 fail-fast**：GLM 三门真实课程首轮均通过 14/14 领域门禁、主模型语义评分 90—93；第二轮配额失败严格记为 0/3，并据完整失败样本新增生成前素材账本预检，统一 include/skip 的连续 `MAT-*` 编号、阻断 `SKIP-*` 平行命名；同步保留个人判断、事故转述和产品效果的认识论边界，稳定性继续标记 `NOT_VERIFIED` |
 | 2026-08-26 | 更新   | [md2word](skills/md2word/)                                             | v1.3.5  | **全书本地图片路径修复**：`--book` 在合并前按各章 Markdown 自己的目录重定位 Markdown/HTML 本地相对图片，含空格、URL 编码和可选标题的路径均可嵌入；单章与远程图片行为不变 |
-| 2026-08-25 | 更新   | [md2word](skills/md2word/)                                             | v1.2.6  | **Word 出版逃逸修复**：多列长表头受正文区硬预算约束，`tblW`、grid 与单元格宽度统一；普通及显式居中表题取消缩进且保留文字样式；引用块 `[^label]` 正确生成原生 Word 脚注，不再显示字面 marker |
 </details>
 
 ## 📋 项目概述
@@ -625,10 +625,10 @@
 <tr>
 <td><a href="skills/git-workflow/"><strong>git-workflow</strong></a></td>
 <td>工具·Git</td>
-<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理和身份绑定 safe-push</td>
+<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理和身份绑定 safe-push</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.6.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/git-workflow-1.6.0.zip">下载</a></td>
+<td style="text-align:center">v1.7.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/git-workflow-1.6.0.zip">下载 v1.6.0</a></td>
 <td></td>
 </tr>
 <tr>
