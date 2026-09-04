@@ -13,10 +13,11 @@
     "chapters",
     "materials",
     "images",
-    "source_index"
+    "source_index",
+    "source_authority"
   ],
   "properties": {
-    "schema_version": {"const": "1.2"},
+    "schema_version": {"const": "1.8"},
     "generator_version": {"type": "string", "minLength": 1},
     "course": {
       "type": "object",
@@ -50,6 +51,105 @@
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
+    "source_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "notices", "corrections", "acknowledgements", "correction_routes"],
+      "properties": {
+        "mode": {"enum": ["current", "historical"]},
+        "notices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "source_block_id", "source_ref", "controlling_titles", "controlling_source_ids", "section_hint"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^AUTH-[0-9]{3,}$"},
+              "source_block_id": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"},
+              "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}#L[0-9]{4,}-L[0-9]{4,}$"},
+              "controlling_titles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+              "controlling_source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"}},
+              "section_hint": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "authority_id", "source_id", "source_ref", "original_text", "revised_text", "deprecated_terms", "superseded_candidate_block_ids"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^COR-[0-9]{3,}$"},
+              "authority_id": {"type": "string", "pattern": "^AUTH-[0-9]{3,}$"},
+              "source_id": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"},
+              "source_ref": {"type": "string", "pattern": "^SRC-[0-9]{3,}#L[0-9]{4,}-L[0-9]{4,}$"},
+              "original_text": {"type": "string", "minLength": 1},
+              "revised_text": {"type": "string", "minLength": 1},
+              "deprecated_terms": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "superseded_candidate_block_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "maxItems": 8,
+                "items": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"}
+              }
+            }
+          }
+        },
+        "acknowledgements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "action", "controlling_source_ids", "reader_notice"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^AUTH-[0-9]{3,}$"},
+              "action": {"enum": ["apply_control", "historical_disclaimer"]},
+              "controlling_source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^SRC-[0-9]{3,}$"}},
+              "reader_notice": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "correction_routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "target_chapter_id", "target_section_heading", "supersession_status", "superseded_source_block_ids", "supersession_note", "candidate_block_reviews"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^COR-[0-9]{3,}$"},
+              "target_chapter_id": {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
+              "target_section_heading": {"type": "string", "minLength": 1},
+              "supersession_status": {"enum": ["blocks_identified", "no_matching_source_block"]},
+              "superseded_source_block_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"}
+              },
+              "supersession_note": {"type": "string", "minLength": 12},
+              "candidate_block_reviews": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["source_block_id", "decision", "evidence_quote", "reason"],
+                  "properties": {
+                    "source_block_id": {"type": "string", "pattern": "^BLK-[0-9]{5,}$"},
+                    "decision": {"enum": ["superseded", "retained_current"]},
+                    "evidence_quote": {"type": "string", "minLength": 6, "maxLength": 160},
+                    "reason": {"type": "string", "minLength": 12}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "overview": {
       "type": "object",
       "additionalProperties": false,
@@ -68,11 +168,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "file", "title", "source_refs", "material_ids", "image_ids"],
+        "required": ["id", "file", "title", "section_headings", "source_refs", "material_ids", "image_ids"],
         "properties": {
           "id": {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
           "file": {"type": "string", "pattern": "^[0-9]{2}[ _-].+\\.md$"},
           "title": {"type": "string", "minLength": 1},
+          "section_headings": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
           "source_refs": {"$ref": "#/$defs/source_refs"},
           "material_ids": {
             "type": "array",
@@ -91,7 +197,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "summary", "source_refs", "source_block_ids", "coverage_terms", "disposition", "target_chapter_id", "reader_evidence"],
+        "required": ["id", "type", "summary", "source_refs", "source_block_ids", "coverage_terms", "disposition", "target_chapter_id", "target_section_heading", "reader_evidence"],
         "properties": {
           "id": {"type": "string", "pattern": "^MAT-[0-9]{3,}$"},
           "type": {
@@ -106,7 +212,7 @@
           },
           "coverage_terms": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 3,
             "items": {"type": "string", "minLength": 2}
           },
           "disposition": {"enum": ["include", "skip"]},
@@ -116,9 +222,15 @@
               {"type": "null"}
             ]
           },
+          "target_section_heading": {
+            "oneOf": [
+              {"type": "string", "minLength": 1},
+              {"type": "null"}
+            ]
+          },
           "skip_reason": {"type": "string", "minLength": 1},
           "skip_code": {
-            "enum": ["derived_duplicate", "meeting", "device", "chatter", "pure_repeat", "no_course_value"]
+            "enum": ["derived_duplicate", "meeting", "device", "chatter", "pure_repeat", "no_course_value", "authority_superseded"]
           },
           "reader_evidence": {
             "oneOf": [
@@ -145,7 +257,9 @@
             "then": {
               "properties": {
                 "source_block_ids": {"maxItems": 6},
-                "coverage_terms": {"minItems": 2},
+                "coverage_terms": {"minItems": 1},
+                "target_chapter_id": {"type": "string", "pattern": "^CH-[0-9]{2,3}$"},
+                "target_section_heading": {"type": "string", "minLength": 1},
                 "reader_evidence": {"type": "object"}
               }
             }
@@ -156,6 +270,8 @@
               "required": ["skip_reason", "skip_code"],
               "properties": {
                 "coverage_terms": {"maxItems": 0},
+                "target_chapter_id": {"type": "null"},
+                "target_section_heading": {"type": "null"},
                 "reader_evidence": {"type": "null"}
               }
             }
