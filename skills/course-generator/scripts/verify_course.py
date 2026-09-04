@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a Course Generator v2.10.0 course directory against its source index and manifest."""
+"""Verify a Course Generator v2.10.1 course directory against its source index and manifest."""
 
 from __future__ import annotations
 
@@ -1656,7 +1656,7 @@ def verify_course(
 
 
 def emit_result(audit: Audit, root: Path) -> int:
-    print("========== course-generator v2.10.0 验收 ==========")
+    print("========== course-generator v2.10.1 验收 ==========")
     print(f"目录: {root}")
     for constraint_id in ALL_CONSTRAINTS:
         messages = audit.failures.get(constraint_id)
@@ -1683,7 +1683,7 @@ def emit_result(audit: Audit, root: Path) -> int:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.10.0 课程目录")
+    parser = argparse.ArgumentParser(description="按 source-index.json 与 course-manifest.json 验收 Course Generator v2.10.1 课程目录")
     parser.add_argument("course_dir", help="课程输出目录")
     parser.add_argument("--manifest", default="course-manifest.json", help="相对课程目录的 manifest 路径（默认: course-manifest.json）")
     parser.add_argument("--source-root", help="可选：索引时使用的单个来源文件或来源根目录；提供时重新枚举并校验完整输入范围")

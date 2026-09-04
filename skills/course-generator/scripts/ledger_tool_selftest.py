@@ -43,7 +43,7 @@ def expect_error(label: str, operation, expected: str) -> bool:
 
 def main() -> int:
     passed = 0
-    total = 32
+    total = 33
     with tempfile.TemporaryDirectory(prefix="course-ledger-tool-") as temp:
         root = Path(temp)
         source = root / "source.md"
@@ -295,7 +295,77 @@ def main() -> int:
         if expect_error(
             "material-count-budget",
             lambda: command_merge(argparse.Namespace(manifest=manifest, batch=fragmented_batch, source_root=source)),
-            "超过 60 项预算",
+            "超过当前渐进预算",
+        ):
+            passed += 1
+
+        progressive_root = root / "progressive-budget"
+        progressive_root.mkdir()
+        progressive_source = progressive_root / "source.md"
+        progressive_source.write_text(
+            "\n\n".join(
+                f"步骤{number:02d}通过独立入口执行，并写回编号{number:02d}结果。"
+                for number in range(1, 31)
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        progressive_course = progressive_root / "course"
+        progressive_course.mkdir()
+        progressive_index = progressive_course / "source-index.json"
+        build_index(progressive_source, progressive_index)
+        progressive_manifest = progressive_course / "course-manifest.json"
+        command_init(
+            argparse.Namespace(
+                source_index=progressive_index,
+                source_root=progressive_source,
+                manifest=progressive_manifest,
+                title="渐进预算测试",
+                overview_file="00 渐进预算测试 - 总览.md",
+            )
+        )
+        progressive_plan = progressive_root / "plan.json"
+        write_json(
+            progressive_plan,
+            {
+                "chapters": [
+                    {
+                        "file": "01 渐进预算.md",
+                        "title": "渐进预算",
+                        "section_headings": ["操作链"],
+                    }
+                ]
+            },
+        )
+        command_plan(argparse.Namespace(manifest=progressive_manifest, plan=progressive_plan))
+        one_block_per_material = progressive_root / "one-block-per-material.json"
+        write_json(
+            one_block_per_material,
+            {
+                "materials": [
+                    {
+                        "type": "操作",
+                        "summary": f"步骤{number:02d}通过独立入口执行并写回结果。",
+                        "source_block_ids": [f"BLK-{number:05d}"],
+                        "coverage_terms": [f"编号{number:02d}"],
+                        "disposition": "include",
+                        "target_chapter_id": "CH-01",
+                        "target_section_heading": "操作链",
+                    }
+                    for number in range(1, 31)
+                ]
+            },
+        )
+        if expect_error(
+            "progressive-material-budget-fails-first-fragmented-batch",
+            lambda: command_merge(
+                argparse.Namespace(
+                    manifest=progressive_manifest,
+                    batch=one_block_per_material,
+                    source_root=progressive_source,
+                )
+            ),
+            "渐进预算 25 项",
         ):
             passed += 1
 

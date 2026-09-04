@@ -59,7 +59,7 @@ def write_fixture(root: Path) -> None:
     ]
     manifest = {
         "schema_version": "1.8",
-        "generator_version": "2.10.0",
+        "generator_version": "2.10.1",
         "course": {"title": "示例课程"},
         "sources": [{"id": item["id"], "path": item["path"]} for item in source_index["sources"]],
         "source_index": {"file": "source-index.json", "sha256": sha256_file(source_index_path)},

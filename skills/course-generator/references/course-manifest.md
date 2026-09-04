@@ -120,7 +120,7 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 ```json
 {
   "schema_version": "1.8",
-  "generator_version": "2.10.0",
+  "generator_version": "2.10.1",
   "course": {"title": "示例课程"},
   "sources": [
     {"id": "SRC-001", "path": "转录稿-01.md"},
@@ -263,7 +263,7 @@ bash scripts/verify.sh <课程目录> --source-root <单个来源文件或来源
 
 - 每个 `kind=content` 的 `BLK-xxxxx` 至少出现在一个素材的 `source_block_ids` 中；未知块、非 content 块、完全未覆盖的块都验收失败。
 - `MAT-xxx` 表示一个读者可复用的信息单元，而不是一个发言片段、标题或整节汇总。通常把 2—5 个相邻、同一教学点或同一连续操作阶段的块合并为一项；只有新内容本身能独立讲清时才拆分，不因微步骤、插话或块边界逐项建素材。include 素材最多绑定 6 个来源块；来源已把多个独立教学点塞在同一长块时才允许一块拆成多项。同一块不得同时 include 与 skip。
-- 整份账本的素材总数不得超过 `max(60, ceil(content block 数 × 0.5))`。`status.maximum_material_count` 给出当前上限；超过时合并同一观点、连续操作阶段或同一 skip 理由，再进入正文阶段。
+- 整份账本的素材总数不得超过 `max(60, ceil(content block 数 × 0.5))`。`status.maximum_material_count` 给出整课上限，`status.maximum_new_material_count_for_next_batch` 给出下一批最多可新增数量；任一预算不足时合并同一观点、连续操作阶段或同一 skip 理由，再提交批次。
 - 全部素材共用 `MAT-xxx` 命名空间并从 `MAT-001` 连续分配，skip 项也不例外。禁止 `SKIP-001`、`OMIT-001` 等平行编号；去向只由 `disposition` 表达。
 - `include` 素材必须指定目标章节，并出现在该章 `material_ids` 中。
 - 每章必须声明非空且不重复的 `section_headings`；最终章节的 H2 必须与该数组文字和顺序完全一致。每个 H2 至少绑定一个 include 素材，禁止没有素材的“自然延伸”、总结性空节或模板节。

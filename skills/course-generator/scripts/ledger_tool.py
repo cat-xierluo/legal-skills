@@ -61,6 +61,7 @@ MAX_CHAPTER_READER_EXPANSION_RATIO = 2.50
 MAX_CHAPTER_READER_EXPANSION_FLOOR = 1400
 MIN_MATERIAL_COUNT_BUDGET = 60
 MATERIAL_COUNT_BUDGET_RATIO = 0.50
+PROGRESSIVE_MATERIAL_BUDGET_SLACK = 10
 
 
 class BatchValidationError(ValueError):
@@ -74,6 +75,15 @@ class BatchValidationError(ValueError):
 def material_count_budget(content_block_count: int) -> int:
     """Cap ledger fragmentation while leaving headroom for short sources."""
     return max(MIN_MATERIAL_COUNT_BUDGET, math.ceil(content_block_count * MATERIAL_COUNT_BUDGET_RATIO))
+
+
+def progressive_material_count_budget(covered_content_block_count: int, content_block_count: int) -> int:
+    """Fail fragmentation early instead of exhausting the total budget late."""
+    return min(
+        material_count_budget(content_block_count),
+        math.ceil(covered_content_block_count * MATERIAL_COUNT_BUDGET_RATIO)
+        + PROGRESSIVE_MATERIAL_BUDGET_SLACK,
+    )
 
 
 def read_json(path: Path) -> Any:
@@ -233,6 +243,16 @@ def manifest_status(
         [item.get("id") for item in correction_routes if isinstance(item, dict)]
         == [item.get("id") for item in authority_corrections if isinstance(item, dict)]
     )
+    current_material_count = len(manifest.get("materials") or [])
+    covered_content_count = len(content_ids & covered)
+    next_batch_ids = remaining[:next_batch_size]
+    projected_covered_count = covered_content_count + len(next_batch_ids)
+    progressive_limit_after_next_batch = progressive_material_count_budget(
+        projected_covered_count, len(content_ids)
+    )
+    maximum_new_materials_for_next_batch = max(
+        0, progressive_limit_after_next_batch - current_material_count
+    )
     if authority_notices and (not authority_acknowledged or not authority_corrections_routed):
         next_action = "read authority corrections and route every correction to one planned H2"
     elif chapter_count == 0:
@@ -246,12 +266,17 @@ def manifest_status(
     return {
         "content_block_count": len(content_ids),
         "maximum_material_count": material_count_budget(len(content_ids)),
-        "covered_content_block_count": len(content_ids & covered),
+        "covered_content_block_count": covered_content_count,
         "remaining_content_block_count": len(remaining),
         "remaining_content_block_ids": remaining[:40],
         "next_batch_size": next_batch_size,
-        "next_batch_content_block_ids": remaining[:next_batch_size],
-        "material_count": len(manifest.get("materials") or []),
+        "next_batch_content_block_ids": next_batch_ids,
+        "material_count": current_material_count,
+        "current_progressive_material_limit": progressive_material_count_budget(
+            covered_content_count, len(content_ids)
+        ),
+        "progressive_material_limit_after_next_batch": progressive_limit_after_next_batch,
+        "maximum_new_material_count_for_next_batch": maximum_new_materials_for_next_batch,
         "chapter_count": chapter_count,
         "section_count": section_count,
         "source_image_count": len(manifest.get("images") or []),
@@ -297,7 +322,7 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
         )
     manifest = {
         "schema_version": "1.8",
-        "generator_version": "2.10.0",
+        "generator_version": "2.10.1",
         "course": {"title": args.title},
         "sources": [{"id": source["id"], "path": source["path"]} for source in source_index["sources"]],
         "source_index": {"file": index_relative, "sha256": hashlib.sha256(index_path.read_bytes()).hexdigest()},
@@ -773,14 +798,22 @@ def command_merge(args: argparse.Namespace) -> dict[str, Any]:
             existing_dispositions.setdefault(block_id, set()).add(record["disposition"])
     if validation_errors:
         raise BatchValidationError(validation_errors)
-    maximum_materials = material_count_budget(sum(1 for block in catalog.values() if block.get("kind") == "content"))
-    if len(existing) + len(additions) > maximum_materials:
+    content_block_ids = {block_id for block_id, block in catalog.items() if block.get("kind") == "content"}
+    maximum_materials = material_count_budget(len(content_block_ids))
+    covered_after_merge = {
+        block_id
+        for block_id in existing_dispositions
+        if block_id in content_block_ids
+    }
+    progressive_limit = progressive_material_count_budget(len(covered_after_merge), len(content_block_ids))
+    if len(existing) + len(additions) > progressive_limit:
         raise BatchValidationError(
             [
                 {
                     "entry_index": 0,
                     "message": (
-                        f"合并后将有 {len(existing) + len(additions)} 项素材，超过 {maximum_materials} 项预算；"
+                        f"合并后覆盖 {len(covered_after_merge)} 个来源块、将有 {len(existing) + len(additions)} 项素材，"
+                        f"超过当前渐进预算 {progressive_limit} 项（整课上限 {maximum_materials} 项）；"
                         "请合并同一观点、连续操作阶段或同一 skip 理由，不要按发言片段或微步骤逐块建素材"
                     ),
                 }

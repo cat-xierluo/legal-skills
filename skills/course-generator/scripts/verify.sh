@@ -1,5 +1,5 @@
 #!/bin/sh
-# Compatibility entrypoint for the Course Generator v2.10.0 verifier.
+# Compatibility entrypoint for the Course Generator v2.10.1 verifier.
 
 set -eu
 
