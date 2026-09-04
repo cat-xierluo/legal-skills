@@ -169,7 +169,7 @@ Task-097 不消费 GitHub 原生 merge queue：远端 mutation 前必须读到�
 
 - 本地集成提交成功推入 main 后，原 PR 若未被 GitHub 自动标为 merged，使用包含 main commit SHA 的说明关闭；不得把 `CLOSED` 伪报成 GitHub `MERGED`。
 - GitHub 合并路径以 `state == MERGED`、非空 `mergedAt` 和 `mergeCommit.oid` 为成功证据。
-- 只有远端结果已确认且 worker/worktree 无未提交改动，才进入 release、分支和 worktree 清理。自动清理仍属于 Task-103，当前不得假装已实现。
+- 只有远端结果已确认且 worker/worktree 无未提交改动，才进入 release、分支和 worktree 清理。合并确认后的自动化清理由 `scripts/post-merge-cleanup.sh` 承担：git-workflow 删除资格门禁（唯一 MERGED PR + head 精确一致 + 无 stacked child + 非长期分支）全过才经 `clean-worktree.sh` 执行，远端删除失败或残留验证不过以 exit 9 报告；门禁不过则输出 deferred 理由保留现场。清理前仍需先 dry-run 审阅计划。
 
 ## 5. 安全边界
 

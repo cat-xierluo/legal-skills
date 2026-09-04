@@ -1,5 +1,11 @@
 # 变更日志
 
+## [1.7.1] - 2026-09-05
+
+### 改进
+
+- 「分支清理」的 24h 时间过滤段新增机械执行指引：PR 已 `MERGED` 且分支无消费者时的即时清理，由 `multi-agent-orchestration` 的 `scripts/post-merge-cleanup.sh` 按 git-workflow 删除资格真值机械化（唯一 MERGED PR + headRefOid 精确一致 + 无 stacked child + worktree 干净 + 非长期/默认分支 + 生命周期已结算，删除后强制零残留验证）。明确即时清理是「已合并且无消费者」对 24h 规则的显式例外，只针对显式指定的单个分支；批量审计仍必须走本节完整流程。本 Skill 未改脚本与规则本身。
+
 ## [1.7.0] - 2026-09-04
 
 ### 新增
