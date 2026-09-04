@@ -54,7 +54,7 @@ def source_index() -> dict:
 def manifest() -> dict:
     return {
         "schema_version": "1.8",
-        "generator_version": "2.9.15",
+        "generator_version": "2.10.0",
         "course": {"title": "测试课程"},
         "sources": [{"id": "SRC-001", "path": "source.md"}],
         "source_index": {"file": "source-index.json", "sha256": "d" * 64},
