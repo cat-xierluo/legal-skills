@@ -33,7 +33,15 @@ print(*(parts(sd) + parts(ed)))
 PY
 )
 
-esc() { printf '%s' "$1" | sed 's/"/\\"/g'; }
+# 转义双引号;换行只在行间转成 " & linefeed & " 拼接(字面量不能含裸换行;单行/末行不加,否则等值匹配会带上换行符)
+esc() {
+  local s="${1//\"/\\\"}" out="" line
+  while IFS= read -r line; do
+    [ -n "$out" ] && out+='" & linefeed & "'
+    out+="$line"
+  done <<< "$s"
+  printf '%s' "$out"
+}
 T_E=$(esc "$TITLE"); C_E=$(esc "$CAL"); L_E=$(esc "$LOC"); N_E=$(esc "$NOTES")
 
 /usr/bin/osascript <<APPLESCRIPT 2>&1
