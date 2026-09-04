@@ -2,9 +2,9 @@
 name: git-workflow
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.6.0"
+version: "1.7.0"
 license: MIT
-description: Git 工作流安全助手。本技能应在需要执行分支管理、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 ---
 
 # Git 全流程工作流
@@ -12,6 +12,7 @@ description: Git 工作流安全助手。本技能应在需要执行分支管理
 ## 触发场景
 
 - 分支创建、切换、管理
+- 长期集成分支及其子 PR、里程碑 PR 管理
 - 合并代码到 main（特别是 Monorepo 仓库）
 - 创建、审查、合并 PR
 - 解决合并冲突
@@ -71,10 +72,16 @@ bash scripts/check-outgoing-identities.sh \
 
 ### 创建新分支
 
+普通短分支从最新默认主干创建；项目若已显式声明长期集成目标，则 worker 短分支必须从最新远端集成目标创建，不能仍默认从 `main` 起步。
+
 ```bash
 # 从最新 main 创建
 git checkout main && git pull origin main
 git checkout -b <type>/<short-description>
+
+# 从长期集成目标创建 worker 短分支
+git fetch origin
+git switch -c <type>/<short-description> origin/<integration-branch>
 
 # 命名规范
 feat/add-ocr-support
@@ -111,6 +118,20 @@ tmux-ch01
 subagent-fix-copy
 team-feature-a
 ```
+
+### 长期集成分支模式
+
+仅当一个大型功能需要跨多个可独立验收的子 PR 或多个开发波次、但整体尚不应进入默认主干时，才显式建立长期集成分支。普通功能仍使用短分支直接向默认主干提 PR；不要把长期分支当作无门禁 WIP 仓库。
+
+长期集成分支是单一功能线的阶段主干（mini-main），必须遵守与默认主干同等级的 review、测试、身份和 push 门禁：
+
+- 默认主干保存项目稳定基线；长期集成分支只聚合该功能线；worker 短分支承载一次性子任务。
+- 长期分支由固定集成者/PM Worktree 独占检出；worker 从最新 `origin/<integration-branch>` 建独立短分支和 Worktree，并显式把 PR base 指向该集成分支。
+- 子 PR 经独立验收后 squash merge 到长期分支；达到预先命名且有退出条件的里程碑后，才由长期分支向默认主干提集成 PR。
+- 默认主干的通用修复先进入默认主干，再在无待合并子 PR 的波次边界 merge 到长期分支；同步后冻结本波 base，避免 worker 基线漂移。
+- 长期分支禁止 rebase、force-push 或随子 PR 删除；里程碑合入默认主干后也继续保留，直到功能线被明确关闭。
+
+执行建线、同步、PR、里程碑和清理时，读取 `references/long-lived-integration-branch.md`。项目专属的分支名、固定 Worktree 路径、任务字段和里程碑门禁留在项目规则中，不写入本通用 Skill。
 
 ### 分支清理
 
@@ -334,6 +355,8 @@ ls .gitignore .env 2>/dev/null  # 确认关键文件还在
 ### GitHub PR 合并
 
 若用 GitHub PR 合并 Monorepo 中的某个 Skill 改动：
+
+> 下列 rebase 流程只适用于普通短分支。已声明为长期集成分支的阶段主干禁止 rebase/force-push，改为按 `references/long-lived-integration-branch.md` 在波次边界 merge 最新默认主干；其 worker 短分支仍按项目策略处理。
 
 1. **先 rebase** feature 分支到最新 main，确保 base commit 包含所有文件
 2. 确认 PR diff 只涉及目标 Skill 目录
@@ -1003,6 +1026,7 @@ git checkout main
 
 ## 参考资源
 
+- `references/long-lived-integration-branch.md` — 长期集成分支的适用条件、拓扑、同步方向、波次与里程碑门禁
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
