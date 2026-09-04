@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # WorkBuddy 每日积分签到（Windows PowerShell 版，兼容 PS 5.1）
 #
 # 流程：读取本地令牌 -> 查询签到状态 -> 未签到则领取 -> 写日志
@@ -129,7 +129,18 @@ function Invoke-CheckinApi([string]$Path) {
     if ($AccDomain) { $a += "-H"; $a += "X-Domain: $AccDomain" }
     if ($EntId) { $a += "-H"; $a += "X-Enterprise-Id: $EntId"; $a += "-H"; $a += "X-Tenant-Id: $EntId" }
     $a += "-d"; $a += "{}"
-    $raw = & curl.exe @a 2>$null
+    # 关键：PowerShell 解码原生进程输出用的是 [Console]::OutputEncoding，中文 Windows
+    # 默认为 GB2312/GBK。接口返回的是 UTF-8 JSON，按 GBK 解码会把中文 msg 转成乱码，
+    # 且乱码字节可能吃掉闭合引号 —— 结果是 ConvertFrom-Json 抛
+    # 「传入的对象无效，应为“:”或“}”」，被外层 catch 成 PARSE_ERR，误报「签到未成功」。
+    # 因此在调用 curl.exe 期间临时切到 UTF-8，结束后还原。
+    $prevEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $raw = & curl.exe @a 2>$null
+    } finally {
+        [Console]::OutputEncoding = $prevEnc
+    }
     # 末行是 HTTP 状态码，其余为响应体；返回 [状态码, 响应体]
     if (-not $raw) { return @("000", "") }
     $lines = @($raw)

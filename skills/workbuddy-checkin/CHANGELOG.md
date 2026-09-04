@@ -1,5 +1,25 @@
 # 变更日志
 
+## [1.0.4] - 2026-09-04
+
+### 修复（Windows 兼容性，PR #125）
+
+1.0.3 及之前版本的验证全部在 macOS 完成，Windows（Git Bash / PowerShell 5.1）实跑时脚本完全无法工作。本版修复 4 处：
+
+- **`checkin.ps1` 补 UTF-8 BOM**：文件原为无 BOM 的 UTF-8，PS 5.1 在中文 Windows 按 GBK 解析，中文注释变乱码破坏语法，直接报 `表达式或语句中包含意外的标记"}"`。补 BOM 后正常（零代码改动）。
+- **`checkin.ps1` JSON 解析编码**：`[Console]::OutputEncoding` 中文 Windows 默认 GB2312，接口返回的 UTF-8 JSON 按其解码会变乱码且吃掉闭合引号，`ConvertFrom-Json` 抛错被外层 catch 成 `PARSE_ERR`。现 `Invoke-CheckinApi` 在调用 curl.exe 期间临时切 UTF-8、结束后还原。
+- **`checkin.sh` 路径归一化**：MSYS 的 `SCRIPT_DIR`（`/c/...` 形式）原样传给原生 `node.exe` 被拼成 `C:\c\Users\...` → `Cannot find module` → 令牌为空 → 误报「未找到 Node 运行时」（真实报错被 `2>/dev/null` 吞掉）。现经 `cygpath -w` 归一化后再传给原生程序；JSON 解析改为 Node 优先、python3 回退（Node 本就是必需依赖，避免缺 python3 时无法解析结果）。
+- **新增本 skill 目录 `.gitattributes`**（`*.sh text eol=lf`）：Git for Windows 默认 `core.autocrlf=true` 会把 `.sh` 检出为 CRLF，bash 执行报 `bad interpreter: /bin/bash^M`。
+
+### 修复（review 期间发现）
+
+- **`checkin.sh` 已签到快速短路失效**：Node 分支解析 `today_checked_in` 原输出 JS 小写 `true`，与下游 `[ "$CHECKED" = "True" ]`（对齐 python3 的 `True`，bash `=` 大小写敏感）不匹配。后果：已签到用户每次多打一次 `daily-checkin` 请求（由 `code=10001` 兜底保住幂等，不会重复领取，但「省一次请求」的短路优化在装有 Node 的机器上全部失效）。已改为输出与 python3 分支一致的 `True` / `False`。
+
+### 验证
+
+- 贡献者在 Windows 11 / PowerShell 5.1 / Git Bash 实机跑通 `checkin.sh` 与 `checkin.ps1`；重复签到幂等正确（以业务码 `code=10001` 判定）。
+- 维护者合并前复核：`bash -n` 通过；Node 解析分支对 `today_checked_in` 为 `true` / `false` / 字段缺失 / 非法 JSON 四种输入实测输出 `True` / `False` / `False` / `unknown`，与 python3 分支语义一致；`checkin.ps1` BOM（`EF BB BF`）确认存在且未破坏。
+
 ## [1.0.3] - 2026-08-12
 
 ### 修复
