@@ -42,6 +42,10 @@ Commands:
                同一链路；若注册仍被单活 fencing 拒绝，回滚新终端（不双活）并输出
                runbook #18 manual-recovery 指引。新终端建立后任何中间失败都会先关新
                终端、保留旧终端（重复调用不累积终端）。
+               (Task-113) worker_done 结算后（task failed/settled、Delivery release+ack）
+               注册返回 TASK_REUSED 时不再误判为仍 dispatched：先复核状态，确认仍是
+               failed/settled 才复位 ready 并只重试一次注册；复核翻回 dispatched（漂移）
+               或 unknown/其他状态一律回滚新终端 fail-closed 不复位。
   quota-park  Quota-stall recovery handoff (v2.11.0 P0-③)：精确 fence + stop 旧
                supervised Dispatch（worker-stop），完整保留 worktree/session/checkpoint，
                释放 METADATA 记录的 provider lease，之后同 worktree 可用新 session id
@@ -810,6 +814,9 @@ cmd_quota_park() {
 #      缺省续接说明作为 reply 发给该 dispatch，worker 解锁继续；task 保持 dispatched）
 #   ③ 终端回滚（新 terminal 建立后任何中间失败先关新终端、保留旧终端——任何时刻
 #      至多一个活终端，重复调用 reauthorize 不累积终端）
+# Task-113：TASK_REUSED 不再固定解释为「仍 dispatched」。注册返回 TASK_REUSED 时按
+#   预检状态有界区分：failed/settled（worker_done 结算后的残留态）复核一致后复位
+#   ready 并只重试一次注册；dispatched 维持单活 fencing 回滚；unknown/漂移 fail-closed。
 reauthorize_task_state() {
   local task_id="$1" state="unknown" list_out
   if list_out=$(orca_cli orchestration task-list --run "$ORCA_RUN_ID" --json 2>/dev/null); then
@@ -984,18 +991,63 @@ PY
         exit 2
       }
     elif printf '%s' "$register_out" | grep -qi "task_reused"; then
-      # Task-081 ③：dispatched task 的注册通道硬限制（单活 fencing：活 Dispatch 未
-      # 结算前 worker-start 必被拒）。不裸抛 TASK_REUSED——先回滚新终端防双活，再给
-      # manual-recovery 指引（等待已在 Step 0 消费，worker 可继续用旧终端跑）。
-      reauthorize_rollback_new_terminal "$new_handle" "task 仍 dispatched，重注册被单活 fencing 拒绝"
-      {
-        echo "PM_REAUTHORIZE_REGISTER_TASK_REUSED: task $task_id 仍处于 dispatched（活 Dispatch 未结算），Orca 拒绝重复注册"
-        echo "PM_REAUTHORIZE_MANUAL_RECOVERY: 已完成：授权文件合并 + launch.sh B64 刷新（下次启动生效）+ 等待消费。后续三选一："
-        echo "  1) worker 仍在跑：等它发 worker_done 自然结算（task 翻转）后重跑本命令，届时走既有换终端链"
-        echo "  2) worker 进程已死：先 settle 再重跑本命令——pm-orchestrate settle --worktree <WT> --session $SESSION --reason \"...\"（fence+stop 翻转 task 后 reauthorize 即可正常换终端）"
-        echo "  3) 按 runbook #18 三步补绑手工重建通道：① orca orchestration dispatch --task $task_id --to $WORKER_HANDLE --run $ORCA_RUN_ID --return-preamble（不带 --inject） ② 从返回 preamble 提取真实 ctx id ③ orca terminal send --terminal $WORKER_HANDLE --text \"<单行 worker_done/ask 命令形式>\" --enter（必须单行）"
-      } >&2
-      exit 2
+      # Task-081 ③ + Task-113：TASK_REUSED 有两种互斥语义，按 Step 0 预检状态有界区分，
+      # 不放宽任何身份/fencing/Delivery 门槛：
+      #   a) 真单活（预检 dispatched）：活 Dispatch 未结算，worker-start 必被拒 →
+      #      维持回滚新终端 + manual-recovery 指引（等待已在 Step 0 消费）。
+      #   b) 已结算残留（Task-113 实测：worker_done outcome=failed 结算、Delivery
+      #      release+ack 之后 task=failed/dispatch settled，注册仍返回 TASK_REUSED）：
+      #      旧实现固定解释为仍 dispatched，已结算任务永远无法换终端恢复。此处先复核
+      #      一次状态，仅当复核仍是 failed/settled 才复位 ready 并只重试一次注册。
+      #   其余（unknown/其他）：无法区分真单活与结算残留，fail-closed 回滚不复位。
+      if [ "$reauth_task_state" = "failed" ] || [ "$reauth_task_state" = "settled" ]; then
+        local recheck_state
+        recheck_state=$(reauthorize_task_state "$task_id")
+        if [ "$recheck_state" != "failed" ] && [ "$recheck_state" != "settled" ]; then
+          reauthorize_rollback_new_terminal "$new_handle" "TASK_REUSED 复核状态漂移（${reauth_task_state} → ${recheck_state}）"
+          echo "PM_REAUTHORIZE_TASK_STATE_DRIFT: task $task_id 预检 ${reauth_task_state} → 复核 ${recheck_state}，疑似真单活出现"
+          echo "ERROR: task $task_id 状态漂移（${reauth_task_state} → ${recheck_state}），fail-closed 不复位" >&2
+          exit 2
+        fi
+        echo "PM_REAUTHORIZE_TASK_RESET: task $task_id 已结算（${reauth_task_state}）且复核一致，TASK_REUSED 为结算残留；复位 ready 重试一次"
+        orca_cli orchestration task-update --id "$task_id" --status ready \
+          --run "$ORCA_RUN_ID" --from "$ORCA_COORDINATOR_HANDLE" >/dev/null || {
+          reauthorize_rollback_new_terminal "$new_handle" "task-update 复位失败"
+          echo "ERROR: failed to reset task $task_id to ready" >&2
+          exit 2
+        }
+        register_out=$(bash "$register_cmd" \
+          --worktree-id "$ORCA_WORKTREE_ID" \
+          --terminal-handle "$new_handle" \
+          --run-id "$ORCA_RUN_ID" \
+          --task-id "$task_id" \
+          --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1) || {
+          reauthorize_rollback_new_terminal "$new_handle" "复位后重注册仍失败"
+          echo "ERROR: re-registration failed after settled-task reset: $register_out" >&2
+          exit 2
+        }
+      elif [ "$reauth_task_state" = "dispatched" ]; then
+        # Task-081 ③：dispatched task 的注册通道硬限制（单活 fencing：活 Dispatch 未
+        # 结算前 worker-start 必被拒）。不裸抛 TASK_REUSED——先回滚新终端防双活，再给
+        # manual-recovery 指引（等待已在 Step 0 消费，worker 可继续用旧终端跑）。
+        reauthorize_rollback_new_terminal "$new_handle" "task 仍 dispatched，重注册被单活 fencing 拒绝"
+        {
+          echo "PM_REAUTHORIZE_REGISTER_TASK_REUSED: task $task_id 仍处于 dispatched（活 Dispatch 未结算），Orca 拒绝重复注册"
+          echo "PM_REAUTHORIZE_MANUAL_RECOVERY: 已完成：授权文件合并 + launch.sh B64 刷新（下次启动生效）+ 等待消费。后续三选一："
+          echo "  1) worker 仍在跑：等它发 worker_done 自然结算（task 翻转）后重跑本命令，届时走既有换终端链"
+          echo "  2) worker 进程已死：先 settle 再重跑本命令——pm-orchestrate settle --worktree <WT> --session $SESSION --reason \"...\"（fence+stop 翻转 task 后 reauthorize 即可正常换终端）"
+          echo "  3) 按 runbook #18 三步补绑手工重建通道：① orca orchestration dispatch --task $task_id --to $WORKER_HANDLE --run $ORCA_RUN_ID --return-preamble（不带 --inject） ② 从返回 preamble 提取真实 ctx id ③ orca terminal send --terminal $WORKER_HANDLE --text \"<单行 worker_done/ask 命令形式>\" --enter（必须单行）"
+        } >&2
+        exit 2
+      else
+        # unknown/其他状态：不猜测语义，fail-closed（不比旧实现差，仅补充状态指引）。
+        reauthorize_rollback_new_terminal "$new_handle" "task 状态 ${reauth_task_state} 下 TASK_REUSED 语义不可判定"
+        {
+          echo "PM_REAUTHORIZE_REGISTER_TASK_REUSED: task $task_id 预检状态为 ${reauth_task_state}（非 dispatched，也非 failed/settled），无法安全区分单活 fencing 与结算残留，fail-closed 不复位"
+          echo "PM_REAUTHORIZE_MANUAL_RECOVERY: 已回滚新终端。先人工核实状态：orca orchestration task-list --run $ORCA_RUN_ID --json；确认已结算（failed/settled）后重跑本命令即走 Task-113 复位恢复链，确认仍 dispatched 则按 runbook #18 三步补绑处理"
+        } >&2
+        exit 2
+      fi
     else
       # Task-081 ②：中间失败不得留双活终端——先回滚新终端再报错
       reauthorize_rollback_new_terminal "$new_handle" "重注册失败"
