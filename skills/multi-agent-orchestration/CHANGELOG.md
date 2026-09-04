@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.15.1] - 2026-09-04
+
+### 修复（reauthorize 已结算 task 的 TASK_REUSED 误判，Task-113）
+
+- **有界区分真单活与结算残留**：worker_done outcome=failed 正常结算（task 翻成 failed、Dispatch settled、Delivery release+ack）后跑 `pm-orchestrate reauthorize`，预检打印 task state=failed，但新 terminal 注册返回 `TASK_REUSED`；旧实现（Task-081）把 TASK_REUSED 固定解释为「task 仍 dispatched（单活 fencing）」，回滚新终端并指引 PM「先 settle 再重跑」——task 早已结算，恢复链死循环。现注册返回 TASK_REUSED 时按 Step 0 预检状态三分：`failed/settled`（结算残留）先复核一次 task-list，确认仍是 failed/settled 才 `task-update ready` 并只重试一次注册，成功后照常改路由/关旧终端；`dispatched` 维持原单活 fencing 回滚 + runbook #18 指引零变化；`unknown`/其他状态与「预检 failed/settled → 复核翻回 dispatched」的漂移一律回滚新终端 fail-closed 不复位。身份、coordinator 绑定、terminal ownership、Delivery/settlement、provider lease 与 scope guard 全部未放宽；新终端建立后任何中间失败仍先关新终端、保留旧终端（重复调用不累积终端）。
+- **回归门禁扩容**：`test-pm-reauthorize.sh` 9 案例 71 断言 → 14 案例 95 断言。新增 J（failed+settled+TASK_REUSED 复核一致 → 复位重试恢复、零终端泄漏）、J2（settled 状态字串同链路）、K（复位后重试仍 TASK_REUSED → 有界单次重试 + 回滚）、L（预检 failed → 复核翻回 dispatched 漂移 → fail-closed 不复位）、M（unknown + TASK_REUSED → 不猜测不复位）、N（结算恢复链重复调用不累积终端）。fake CLI 新增 `task_reused_once` 模式（仅当 task-update 复位后才放行重试，保证验证「复位 → 重试」因果链）与 `task-status-next` 一次性状态轮换（漂移注入）。红→绿实测：修复前 71 通过 / 24 失败（全部落在 J/J2/K/L/N），修复后 95/95 全绿；`test-pm-orchestrate-handoff.sh` 31/31、`bash -n pm-orchestrate.sh` 通过。
+- **文档同步**：`SKILL.md` §4.5 reauthorize 段新增结算残留语义说明。版本 2.15.0 → 2.15.1。
+
 ## [2.15.0] - 2026-09-04
 
 ### 新增
