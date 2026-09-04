@@ -24,8 +24,24 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DECRYPT_JS="$SCRIPT_DIR/decrypt-token.js"
 LOG_DIR="$SCRIPT_DIR/../logs"
+
+# ---------- Windows / Git Bash 路径归一化 ----------
+# MSYS 的 pwd 返回 /c/... 形式，原样传给原生 node.exe 会被拼成 C:\c\Users\... ，
+# 报 "Cannot find module '<path>'" → 取不到令牌 → 误报「未找到 Node 运行时」
+# （真实原因被 decrypt 调用的 2>/dev/null 吞掉，排查方向完全跑偏）。
+# 凡是要交给原生 Windows 程序（node.exe / electron.exe）的路径，都先转原生形式。
+to_native_path() {
+  local p="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$p" 2>/dev/null || printf '%s' "$p"
+  else
+    printf '%s' "$p"
+  fi
+}
+
+# 注意：DECRYPT_JS 用原生路径；LOG_DIR 仍用 MSYS 路径（只给 mkdir/tee 用）
+DECRYPT_JS="$(to_native_path "$SCRIPT_DIR")/decrypt-token.js"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/checkin.log"
 
@@ -150,7 +166,20 @@ fi
 # 注意：today_checked_in 字段在 v5.3.8 实测不可靠（签到成功后仍可能为 false）。
 # 此处仅用于「能省一次签到请求就省」的快速短路与 401 探测；真正的幂等兜底
 # 放在下方 daily-checkin 的 code=10001 处理。
-CHECKED=$(echo "$STATUS" | python3 -c "
+# JSON 解析：Node 优先（本脚本已依赖 Node 读取令牌，无额外依赖），python3 仅回退。
+# 原实现只用 python3：缺 python3 时结果为空，会把「已成功」误报成
+# 「签到请求已提交，无法解析结果」，无法确认当日是否真的领到积分。
+NODE_BIN="$(find_node)"
+CHECKED=""
+if [ -n "$NODE_BIN" ]; then
+  CHECKED=$(JSON_PAYLOAD="$STATUS" "$NODE_BIN" -e '
+const s = process.env.JSON_PAYLOAD || "";
+try { const d = JSON.parse(s); console.log(String((d.data || {}).today_checked_in)); }
+catch (e) { console.log("unknown"); }
+' 2>/dev/null)
+fi
+if [ -z "$CHECKED" ]; then
+  CHECKED=$(echo "$STATUS" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -158,6 +187,7 @@ try:
 except Exception:
     print('unknown')
 " 2>/dev/null)
+fi
 
 if [ "$CHECKED" = "True" ]; then
   log "✅ 今日已签到，无需重复领取"
@@ -184,7 +214,25 @@ if [ -z "$RESULT" ]; then
   exit 1
 fi
 
-CREDIT=$(echo "$RESULT" | python3 -c "
+CREDIT=""
+if [ -n "$NODE_BIN" ]; then
+  CREDIT=$(JSON_PAYLOAD="$RESULT" "$NODE_BIN" -e '
+const s = process.env.JSON_PAYLOAD || "";
+try {
+  const d = JSON.parse(s);
+  if (d.code === 0) {
+    const dd = d.data || {};
+    console.log("OK credit=" + dd.credit + " streak_days=" + dd.streak_days);
+  } else if (d.code === 10001) {
+    console.log("ALREADY today");   // 当日已签到：接口幂等拒绝，视为成功
+  } else {
+    console.log("FAIL code=" + d.code + " msg=" + d.msg);
+  }
+} catch (e) { console.log("PARSE_ERR"); }
+' 2>/dev/null)
+fi
+if [ -z "$CREDIT" ]; then
+  CREDIT=$(echo "$RESULT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -199,6 +247,7 @@ try:
 except Exception:
     print('PARSE_ERR')
 " 2>/dev/null)
+fi
 
 if [[ "$CREDIT" == OK* ]]; then
   log "🎉 签到成功！领取 $CREDIT"
