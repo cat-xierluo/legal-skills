@@ -1,0 +1,3 @@
+# Windows 兼容性：Git for Windows 默认 core.autocrlf=true，会把 .sh 检出为 CRLF，
+# bash 执行时报 "bad interpreter: /bin/bash^M"。强制本 skill 目录下 .sh 一律 LF。
+*.sh text eol=lf
