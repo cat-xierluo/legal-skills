@@ -1,13 +1,20 @@
 # DSH Plugin Lint 审查配置示例。
 # 复制为 config/harness-path.local.yaml 后填写本地路径；local 文件不提交。
-# §2 事实层溯源与（规划中的）facts.mjs 都从这里读 harness 仓库位置。
+#
+# harness 根解析优先级（高→低）：
+#   1. lint.mjs 的 --harness-root 参数
+#   2. 环境变量 DSH_HARNESS_ROOT
+#   3. 本文件（harness_root 字段）
+#
+# 版本溯源优先走官方可执行门（<harness_root>/apps/cli/lib/bin.js --version），
+# 并以根 package.json 交叉核对；git 仓库会额外报告 commit。
 
 schema_version: 1
 
 # harness 源码仓库的绝对路径（含 packages/ apps/ docs/）。
-# 事实核对（事件/slot/工具契约）都以此仓库为准。
+# 平台模块表、纯度正则、主题变量、包 manifest 等全部对账以此仓库当前源码为准。
 harness_root: "/path/to/deepseek-harness"
 
-# 记录审查基线版本（package.json 的 @deepseek-ai/dsh-base 版本）。
-# 规范的"实测坑清单/slot 表"以 0.1.0-rc.7 为准；基线不同时先复核规范再审查。
-harness_baseline: "0.1.0-rc.7"
+# 可选：记录审查时参考的基线版本。与当前 harness 版本不一致时 lint 会出
+# WARN 提醒先复核规范再审查；不写此字段则不做该提醒。
+harness_baseline: "0.1.2-rc.1"
