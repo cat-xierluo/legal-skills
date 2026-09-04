@@ -1,7 +1,7 @@
 ---
 name: workbuddy-checkin
 description: WorkBuddy 每日积分自动签到。自动解密本地登录令牌，调用官方签到 API 完成每日积分领取（100 积分/天，连续第 7 天 1000 积分），并支持配置定时任务。触发词：WorkBuddy 签到、每日积分、check-in、credits。
-version: "1.0.3"
+version: "1.0.4"
 license: MIT
 ---
 
@@ -181,9 +181,9 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 - **Windows 提示不是内部或外部命令**：用 `powershell -ExecutionPolicy Bypass -File …` 运行；确认 `curl.exe` 存在。
 - **沙箱里 `require('electron')` 报错**：Agent 沙箱默认设 `ELECTRON_RUN_AS_NODE=1`，脚本已用 `env -u`（sh）/ `Remove-Item Env:`（ps1）处理；v5.3.8+ 主路径用纯 Node，不受此影响。
 
-## 本机已打补丁（Windows）⚠️
+## Windows 兼容性修复（1.0.4）
 
-上游 1.0.3 的验证全部在 macOS 完成（见 CHANGELOG「已知限制」）。本机（Windows / Git Bash / PS 5.1）实跑暴露 3 处问题，均已修复：
+1.0.3 及之前版本的验证全部在 macOS 完成（见 CHANGELOG「已知限制」）。1.0.4 修复 Windows（Git Bash / PS 5.1）实跑暴露的 3 处问题：
 
 | # | 文件 | 症状 | 根因 | 修复 |
 |---|---|---|---|---|
@@ -192,8 +192,6 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 | 3 | `checkin.sh` | `未找到 Node 或 Electron 运行时`（但 `node -v` 正常） | `SCRIPT_DIR` 是 MSYS 的 `/c/...`，传给原生 `node.exe` 被拼成 `C:\c\Users\...` → `Cannot find module` → 令牌为空 | 用 `cygpath -w` 归一化传给 Node 的路径；JSON 解析改为 **Node 优先、python3 回退**（Node 本就是必需依赖） |
 
 > **排错提示**：第 3 条的报错文案极具误导性——它让你去装 Node.js，但 Node 是好的，真实原因被 `decrypt` 调用的 `2>/dev/null` 吞掉。遇到这条，**先直接跑 `node "<脚本绝对路径>/decrypt-token.js"` 看真实报错**。
-
-原文件备份在 `scripts/checkin.sh.bak` / `scripts/checkin.ps1.bak`。**若上游更新覆盖了这两个脚本，请按上表重新打补丁。**
 
 ### 已知行为（非 bug）
 

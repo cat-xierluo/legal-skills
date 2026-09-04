@@ -172,9 +172,13 @@ fi
 NODE_BIN="$(find_node)"
 CHECKED=""
 if [ -n "$NODE_BIN" ]; then
+  # 输出协议与下方 python3 分支对齐：True / False / unknown。
+  # 必须输出大写 True（JS 原生 String(true) 是小写 true，与下游
+  # [ "$CHECKED" = "True" ] 大小写敏感比较不匹配，会让已签到快速短路失效，
+  # 每次多打一次 daily-checkin 请求、只能靠 code=10001 兜底）。
   CHECKED=$(JSON_PAYLOAD="$STATUS" "$NODE_BIN" -e '
 const s = process.env.JSON_PAYLOAD || "";
-try { const d = JSON.parse(s); console.log(String((d.data || {}).today_checked_in)); }
+try { const d = JSON.parse(s); console.log((d.data || {}).today_checked_in === true ? "True" : "False"); }
 catch (e) { console.log("unknown"); }
 ' 2>/dev/null)
 fi
