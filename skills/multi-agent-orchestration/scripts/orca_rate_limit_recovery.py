@@ -38,9 +38,9 @@ ACTIONABLE_QUOTA_RE = re.compile(
     r"^\s*http\s+429\b|^\s*(?:status|code)\s*[:=]\s*429\b|"
     r"^\s*429\s*[:=-]?\s*(?:too many requests|rate[ _-]?limit|usage[ _-]?limit|quota|error)|"
     r"^\s*\{.*\"(?:code|status)\"\s*:\s*429\b|"
-    r"\b(?:you(?:'ve| have)?\s+)?hit\s+(?:your\s+)?limit\b|"
-    r"\b(?:rate[ _-]?limit|usage[ _-]?limit)\s+(?:reached|exceeded|exhausted|depleted)\b|"
-    r"\bquota[\s_-]*(?:exceeded|exhausted|depleted)\b|\blimit\s+resets?\b",
+    r"^\s*(?:you(?:'ve| have)?\s+)?hit\s+(?:your\s+)?limit\b|"
+    r"^\s*(?:rate[ _-]?limit|usage[ _-]?limit)\s+(?:reached|exceeded|exhausted|depleted)\b|"
+    r"^\s*quota[\s_-]*(?:exceeded|exhausted|depleted)\b|^\s*limit\s+resets?\b",
     re.IGNORECASE,
 )
 DISCUSSION_RE = re.compile(
