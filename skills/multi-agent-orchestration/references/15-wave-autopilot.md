@@ -72,9 +72,9 @@
 
 说不出任一字段不派。docs-only 必须至少带来 `DRAFT → READY`、关闭阻塞决策或新增被消费者实际调用的门禁；纯摘要、手写镜像索引和没有入站引用的预扫不成为独立 PR。派生地图能由工具生成则优先生成，无法生成且没有稳定刷新触发器则不维护。
 
-文本审查之后必须再过机器门禁：按 `templates/dispatch-value-gate.example.json` 生成本波 JSON，运行 `python3 scripts/dispatch-value-gate.py <spec.json>`。退出非零时不得以人工“高价值”判断绕过；若项目确需更宽阈值，先用显式、带到期时间的 explore 窗口表达，而不是改弱 converge 默认值。
+文本审查之后必须再过机器门禁：按 `templates/dispatch-value-gate.example.json` 生成本波 JSON，运行 `python3 scripts/dispatch-value-gate.py <spec.json>`；门禁机械执行 converge 活跃 worker ≤8、显式且有效期内的 explore ≤10、待验收 PR >4 停派。退出非零时不得以人工“高价值”判断绕过；若项目确需更宽阈值，先用显式、带到期时间的 explore 窗口表达（上限 10），而不是改弱 converge 默认值。
 
-默认每波/全局活跃 worker ≤3，research/docs ≤1。PM 待验收 PR >2 时停止新派；项目的用户/真实环境 `AWAITING_ACCEPTANCE` 积压显著时，只派能降低验收成本、修复验收缺陷或补真实证据的工作。只有用户显式开启且限定期限的探索窗口、验收积压为零时，项目才可临时提高并发；窗口结束自动回收敛模式。
+默认每波/全局活跃 worker ≤8，research/docs ≤1（2026-09-05 用户显式授权把全局 worker 上限从 3 放宽到 5—10 档，converge 默认取 8，Task-117）。PM 待验收 PR >4 时停止新派（同一授权从 >2 放宽）；项目的用户/真实环境 `AWAITING_ACCEPTANCE` 积压显著时，只派能降低验收成本、修复验收缺陷或补真实证据的工作。只有用户显式开启且限定期限的探索窗口、验收积压为零时，项目才可把并发提高到最多 10；窗口结束自动回收敛模式。并发放宽不削弱其余门禁：provider/backend 个人配置 lease、research/docs ≤1、READY 状态与价值合同、重复/被包含价值身份拒绝、文件所有权与 `no_worker_pr` 约束、资源 owner 与过期窗口拒绝全部保持原样。
 
 泳道互斥、同泳道串行；文件范围正交、验收独立、共享合同冻结才并行。相同根因/模块、共同验收的 2—3 个小项优先一个 worker + 一个 PR，详细粒度读取 `references/12-issue-grouping.md`。`TASKS/DECISIONS/AGENTS/ROADMAP` 等 shared context 默认只有一个 PM writer；编号预分配只分配标识，不授权并发写共享文档。
 
