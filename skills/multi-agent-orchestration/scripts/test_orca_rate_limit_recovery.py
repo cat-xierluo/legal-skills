@@ -84,6 +84,8 @@ if args[:2] == ["terminal", "show"]:
         incarnation = "incarnation-drifted"
     if mode == "drift_post" and count == 3:
         incarnation = "incarnation-drifted"
+    if item.get("break_state_after_post") and count == 3:
+        Path(config["state_dir"]).chmod(0o500)
     emit({"ok": True, "result": {"terminal": {
         "handle": handle,
         "incarnationId": incarnation,
@@ -118,6 +120,12 @@ if args[:2] == ["terminal", "wait"]:
         emit({"ok": False, "error": {"code": "runtime"}}, 1)
     if mode == "malformed":
         emit({"ok": True, "result": {"wait": {"handle": handle, "satisfied": False}}})
+    if mode == "idle_missing_status":
+        emit({"ok": True, "result": {"wait": {"handle": handle, "condition": "tui-idle",
+             "satisfied": True, "exitCode": None}}})
+    if mode == "idle_exited":
+        emit({"ok": True, "result": {"wait": {"handle": handle, "condition": "tui-idle",
+             "satisfied": True, "status": "exited", "exitCode": 0}}})
     emit({"ok": True, "result": {"wait": {"handle": handle, "condition": "tui-idle",
          "satisfied": True, "status": "running", "exitCode": None}}})
 
@@ -262,13 +270,16 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(self.calls(("terminal", "send")), [])
 
     def test_discussion_or_test_output_about_429_is_not_actionable(self) -> None:
-        item = worker(
-            "term-discussion",
-            tail=["PASS test parses HTTP 429 Too Many Requests fixture", "Analyzing rate limit behavior and retry design"],
-        )
-        result = self.run_target(self.write_case([item]), execute=True)
+        items = [
+            worker("term-expected", tail=["The expected response is HTTP 429 Too Many Requests"]),
+            worker("term-provider-returns", tail=["Provider returns HTTP 429 under load"]),
+            worker("term-discussion", tail=["Analyzing rate limit behavior and retry design"]),
+        ]
+        result = self.run_target(self.write_case(items), execute=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.receipt(result)["workers"][0]["reason"], "no_actionable_quota_evidence")
+        self.assertTrue(
+            all(item["reason"] == "no_actionable_quota_evidence" for item in self.receipt(result)["workers"])
+        )
         self.assertEqual(self.calls(("terminal", "send")), [])
 
     def test_quota_followed_by_substantive_progress_is_not_tail_anchored(self) -> None:
@@ -294,6 +305,8 @@ class RecoveryTest(unittest.TestCase):
             ({"worker_extra": {"show_mode": "malformed"}}, "terminal_show_malformed"),
             ({"worker_extra": {"read_mode": "malformed"}}, "terminal_read_malformed"),
             ({"worker_extra": {"wait_mode": "malformed"}}, "terminal_wait_malformed"),
+            ({"worker_extra": {"wait_mode": "idle_missing_status"}}, "terminal_wait_malformed"),
+            ({"worker_extra": {"wait_mode": "idle_exited"}}, "terminal_wait_malformed"),
             ({"worker_extra": {"wait_mode": "fail"}}, "terminal_wait_failed"),
         ]
         for index, (settings, expected_reason) in enumerate(cases):
@@ -355,6 +368,22 @@ class RecoveryTest(unittest.TestCase):
                 self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
                 self.assertEqual(len(self.calls(("terminal", "send"))), expected_sends)
                 self.assertEqual(self.receipt(second)["workers"][0]["action"], "already_handled")
+
+    def test_wake_accepted_state_commit_failure_preserves_intent(self) -> None:
+        item = worker("term-state-commit", break_state_after_post=True)
+        manifest = self.write_case([item], state_dir=str(self.state_dir))
+        first = self.run_target(manifest, execute=True)
+        self.assertEqual(first.returncode, 74, first.stdout + first.stderr)
+        first_receipt = self.receipt(first)
+        self.assertEqual(first_receipt["status"], "WAKE_ACCEPTED_STATE_COMMIT_FAILED")
+        self.assertEqual(first_receipt["summary"]["wake_accepted"], 1)
+        self.assertEqual(first_receipt["workers"][0]["action"], "wake_accepted_state_commit_failed")
+        self.assertEqual(len(self.calls(("terminal", "send"))), 1)
+        self.state_dir.chmod(0o700)
+        second = self.run_target(manifest, execute=True)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertEqual(len(self.calls(("terminal", "send"))), 1)
+        self.assertEqual(self.receipt(second)["workers"][0]["action"], "already_handled")
 
     def test_state_symlink_and_insecure_permissions_fail_closed(self) -> None:
         manifest = self.write_case([worker("term-state")])
