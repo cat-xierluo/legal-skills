@@ -1,0 +1,19 @@
+{
+  "contract": "multi-agent-orchestration.orca-rate-limit-workers.v1",
+  "workers": [
+    {
+      "source": "orca",
+      "terminal_handle": "term_worker_a",
+      "incarnation_id": "replace-with-orca-incarnation-id",
+      "provider": "glm",
+      "account_group": "glm-lane-a"
+    },
+    {
+      "source": "orca",
+      "terminal_handle": "term_worker_b",
+      "incarnation_id": "replace-with-orca-incarnation-id",
+      "provider": "minimax",
+      "account_group": "minimax-lane-a"
+    }
+  ]
+}
