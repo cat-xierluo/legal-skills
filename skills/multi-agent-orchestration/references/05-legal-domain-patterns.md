@@ -145,7 +145,7 @@
 
 ## 4. 法律"类 Issue"拆解方法论
 
-法律项目不一定使用 GitHub Issue。任务源由具体项目约定；`cross-agent-coordination` 可按项目配置解析和分配任务，本 Skill 只负责把可执行任务拆给本地 Agent 会话。
+法律项目不一定使用 GitHub Issue。任务源及其状态由具体项目约定；本 Skill 只负责把已经确认可执行的任务拆给本地 Agent 会话。
 
 ### 4.1 任务载体对比
 
@@ -226,6 +226,6 @@
 
 本文档只提供法律项目在多 Agent 本地执行层的拆分样例，不定义任务主状态、外部 Agent 注册表或法律模板文件路径。
 
-- 任务来源、负责人、依赖和交接记录由 `cross-agent-coordination` 及项目任务源维护。
+- 任务来源、负责人、依赖和交接记录由项目既有任务源维护。
 - 本 Skill 只负责把已确认可执行的任务分配到本地 session、worktree 和 PM 巡检流程中。
 - 需要法律检索、OCR、语音转写等能力时，在 worker prompt 中说明调用对应 Skill，不在本参考文档中新增独立 catalog。

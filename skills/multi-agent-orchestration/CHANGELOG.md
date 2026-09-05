@@ -1,22 +1,15 @@
+Warning: truncated output (original token count: 47635)
+Total output lines: 1554
+
 # Changelog
 
-## [2.16.0] - 2026-09-05
+## [2.16.4] - 2026-09-05
 
-### 新增（post-merge cleanup gate，合并后即时清理）
+### 改进
 
-- **职责单一的 `scripts/post-merge-cleanup.sh`**：PR 确认合并后当场回收一个 worker 分支的 worktree/本地/远端短分支。删除资格真值来自 git-workflow 分支清理规则，全部门禁机械判定、fail-closed：① 分支不是 `main/master/develop`、`--base` 或 `--protected-branch`（名称或 glob，长期集成分支）匹配项；② 存在唯一 `state == MERGED` 的 PR 且其 `headRefOid` 与本地分支 tip 精确一致——squash/rebase merge 的唯一权威证据，head 漂移视为身份不明；③ 无开放 stacked child PR 以该分支为 base（gh 查询失败也拒绝）；④ worktree 无未提交改动；⑤ session 生命周期可证结算——tmux 存活且无 supervised dispatch、terminal accounting 为 active/reclaimable/release_pending/release_unknown/unknown 一律拒绝；⑥ 远端状态必须 `ls-remote` 可验证。门禁不过输出 `POST_MERGE_CLEANUP_DEFERRED: reason=...`（exit 2）保留现场。
-- **生命周期顺序执行**：execute 时先经 `clean-worktree.sh --execute --delete-branch`（worker-release → 关 terminal/lease → 删 worktree → 删本地分支），再 `git push origin --delete` 远端短分支（push 报错但 follow-up `ls-remote` 证明远端已删时按并发竞态幂等放行），最后机械零残留验证（本地 ref、worktree 注册与目录、tmux session、远端 ref）；远端删除失败或任一残留以 exit 9 报告，绝不把部分成功冒充完成。执行前复核分支 tip 未移动（TOCTOU）。默认 dry-run 零副作用；即时清理是「已合并且无消费者」对 <24h 规则的显式例外，只处理显式传入的单个分支，不批量扫描。
-- **`clean-worktree.sh` 新增 `--force-delete-branch`**：squash/rebase merge 后分支 tip 不可达 main，安全 `git branch -d` 必拒；该开关允许在 `-d` 拒绝后升级 `-D`，仅供持有独立 MERGED+head 证据的调用方（即 post-merge-cleanup.sh 门禁通过后）使用，不带开关时行为不变（拒绝并 exit 2，不再依赖 set -e 的裸失败）。
-- **文档同步**：SKILL.md §8 新增 post-merge-cleanup 段并纳入验收测试清单与 `gh` 依赖说明；`references/14-pm-orchestrate.md` §4.4 的「自动清理属于 Task-103」占位替换为实际工具指引。版本 2.15.1 → 2.16.0。
+- 移除 `multi-agent-orchestration` 主文档、法律场景 reference 和历史记录中对其他任务协调 Skill 的名称与职责跳转；任务来源只表述为“由项目既有任务源确定”，本 Skill 独立聚焦本地 Worker 执行编排。
 
-## [2.15.1] - 2026-09-04
-
-### 修复（reauthorize 已结算 task 的 TASK_REUSED 误判，Task-113）
-
-- **有界区分真单活与结算残留**：worker_done outcome=failed 正常结算（task 翻成 failed、Dispatch settled、Delivery release+ack）后跑 `pm-orchestrate reauthorize`，预检打印 task state=failed，但新 terminal 注册返回 `TASK_REUSED`；旧实现（Task-081）把 TASK_REUSED 固定解释为「task 仍 dispatched（单活 fencing）」，回滚新终端并指引 PM「先 settle 再重跑」——task 早已结算，恢复链死循环。现注册返回 TASK_REUSED 时按 Step 0 预检状态三分：`failed/settled`（结算残留）先复核一次 task-list，确认仍是 failed/settled 才 `task-update ready` 并只重试一次注册，成功后照常改路由/关旧终端；`dispatched` 维持原单活 fencing 回滚 + runbook #18 指引零变化；`unknown`/其他状态与「预检 failed/settled → 复核翻回 dispatched」的漂移一律回滚新终端 fail-closed 不复位。身份、coordinator 绑定、terminal ownership、Delivery/settlement、provider lease 与 scope guard 全部未放宽；新终端建立后任何中间失败仍先关新终端、保留旧终端（重复调用不累积终端）。
-- **回归门禁扩容**：`test-pm-reauthorize.sh` 9 案例 71 断言 → 14 案例 95 断言。新增 J（failed+settled+TASK_REUSED 复核一致 → 复位重试恢复、零终端泄漏）、J2（settled 状态字串同链路）、K（复位后重试仍 TASK_REUSED → 有界单次重试 + 回滚）、L（预检 failed → 复核翻回 dispatched 漂移 → fail-closed 不复位）、M（unknown + TASK_REUSED → 不猜测不复位）、N（结算恢复链重复调用不累积终端）。fake CLI 新增 `task_reused_once` 模式（仅当 task-update 复位后才放行重试，保证验证「复位 → 重试」因果链）与 `task-status-next` 一次性状态轮换（漂移注入）。红→绿实测：修复前 71 通过 / 24 失败（全部落在 J/J2/K/L/N），修复后 95/95 全绿；`test-pm-orchestrate-handoff.sh` 31/31、`bash -n pm-orchestrate.sh` 通过。
-- **文档同步**：`SKILL.md` §4.5 reauthorize 段新增结算残留语义说明。版本 2.15.0 → 2.15.1。
-## [2.16.2] - 2026-09-05
+## [2.16.3] - 2026-09-05
 
 ### 改进
 
@@ -36,7 +29,7 @@
 - 两个 Skill 的 quick validation 与 Git `diff --check` 通过；安全扫描为 0 critical / 0 high；cleanup 37/37、closeout 120/120、dependency guard 67/67、spawn flags 30/30、metadata 21/21 通过。
 - Harness Failure Audit 继续保留 5 个既有 hard finding（受精确交付证据约束的远端分支删除通用命中 1 个、旧测试退出码模式 4 个）；Instruction Stability 因缺正式约束追踪合同与签名多轮证据保持 `NOT_VERIFIED`。真实 GitHub/Orca 外部链路继续沿用 v2.16.1 的 `NOT_VERIFIED` 边界，不因文档重构扩大结论。
 
-## [2.16.1] - 2026-09-05
+## [2.16.2] - 2026-09-05
 
 ### 修复
 
@@ -52,7 +45,7 @@
 - 真实 GitHub 仓库中“短 Worker PR → 长期集成分支 → 自动清理 Worker head”的外部链路仍为 `NOT_VERIFIED`；当前证据来自 fake-gh 与真实临时 Git 仓。
 - Skill Lint 安全扫描为 0 critical / 0 high；Harness 静态审查仍因受精确交付证据约束的 `git push --delete` 报通用 `HFA-011`，并命中 4 个本轮未改旧测试的 `HRA-001`，因此不声明全 Skill Harness 已验证，也不以命令变形规避扫描。候选缺少正式约束追踪合同与签名多轮证据，Instruction Stability 继续为 `NOT_VERIFIED`。
 
-## [2.16.0] - 2026-09-05
+## [2.16.1] - 2026-09-05
 
 ### 新增
 
@@ -72,6 +65,23 @@
 
 - 真实 GitHub 仓库的 delivery → 远端分支 → Orca lifecycle/worktree → 本地 ref 全链自动清理仍为 `NOT_VERIFIED`；本次结论只覆盖 throwaway Git 与 fake-gh 确定性证据。
 - 全量回归未形成全绿回执：既有 `codex → zcode` policy 与“zcode 默认禁用”的正文/测试冲突；真实 Orca smoke 在 terminal send 失败（其创建的两个精确 terminal 已关闭）。Instruction Stability 仍为 `NOT_VERIFIED`；Skill Lint 对本功能受 exact tip/PR/delivery 约束的远端删除仍给出通用 `HFA-011`，未用命令变形规避扫描。
+
+## [2.16.0] - 2026-09-05
+
+### 新增（post-merge cleanup gate，合并后即时清理）
+
+- **职责单一的 `scripts/post-merge-cleanup.sh`**：PR 确认合并后当场回收一个 worker 分支的 worktree/本地/远端短分支。删除资格真值来自 git-workflow 分支清理规则，全部门禁机械判定、fail-closed：① 分支不是 `main/master/develop`、`--base` 或 `--protected-branch`（名称或 glob，长期集成分支）匹配项；② 存在唯一 `state == MERGED` 的 PR 且其 `headRefOid` 与本地分支 tip 精确一致——squash/rebase merge 的唯一权威证据，head 漂移视为身份不明；③ 无开放 stacked child PR 以该分支为 base（gh 查询失败也拒绝）；④ worktree 无未提交改动；⑤ session 生命周期可证结算——tmux 存活且无 supervised dispatch、terminal accounting 为 active/reclaimable/release_pending/release_unknown/unknown 一律拒绝；⑥ 远端状态必须 `ls-remote` 可验证。门禁不过输出 `POST_MERGE_CLEANUP_DEFERRED: reason=...`（exit 2）保留现场。
+- **生命周期顺序执行**：execute 时先经 `clean-worktree.sh --execute --delete-branch`（worker-release → 关 terminal/lease → 删 worktree → 删本地分支），再 `git push origin --delete` 远端短分支（push 报错但 follow-up `ls-remote` 证明远端已删时按并发竞态幂等放行），最后机械零残留验证（本地 ref、worktree 注册与目录、tmux session、远端 ref）；远端删除失败或任一残留以 exit 9 报告，绝不把部分成功冒充完成。执行前复核分支 tip 未移动（TOCTOU）。默认 dry-run 零副作用；即时清理是「已合并且无消费者」对 <24h 规则的显式例外，只处理显式传入的单个分支，不批量扫描。
+- **`clean-worktree.sh` 新增 `--force-delete-branch`**：squash/rebase merge 后分支 tip 不可达 main，安全 `git branch -d` 必拒；该开关允许在 `-d` 拒绝后升级 `-D`，仅供持有独立 MERGED+head 证据的调用方（即 post-merge-cleanup.sh 门禁通过后）使用，不带开关时行为不变（拒绝并 exit 2，不再依赖 set -e 的裸失败）。
+- **文档同步**：SKILL.md §8 新增 post-merge-cleanup 段并纳入验收测试清单与 `gh` 依赖说明；`references/14-pm-orchestrate.md` §4.4 的「自动清理属于 Task-103」占位替换为实际工具指引。版本 2.15.1 → 2.16.0。
+
+## [2.15.1] - 2026-09-04
+
+### 修复（reauthorize 已结算 task 的 TASK_REUSED 误判，Task-113）
+
+- **有界区分真单活与结算残留**：worker_done outcome=failed 正常结算（task 翻成 failed、Dispatch settled、Delivery release+ack）后跑 `pm-orchestrate reauthorize`，预检打印 task state=failed，但新 terminal 注册返回 `TASK_REUSED`；旧实现（Task-081）把 TASK_REUSED 固定解释为「task 仍 dispatched（单活 fencing）」，回滚新终端并指引 PM「先 settle 再重跑」——task 早已结算，恢复链死循环。现注册返回 TASK_REUSED 时按 Step 0 预检状态三分：`failed/settled`（结算残留）先复核一次 task-list，确认仍是 failed/settled 才 `task-update ready` 并只重试一次注册，成功后照常改路由/关旧终端；`dispatched` 维持原单活 fencing 回滚 + runbook #18 指引零变化；`unknown`/其他状态与「预检 failed/settled → 复核翻回 dispatched」的漂移一律回滚新终端 fail-closed 不复位。身份、coordinator 绑定、terminal ownership、Delivery/settlement、provider lease 与 scope guard 全部未放宽；新终端建立后任何中间失败仍先关新终端、保留旧终端（重复调用不累积终端）。
+- **回归门禁扩容**：`test-pm-reauthorize.sh` 9 案例 71 断言 → 14 案例 95 断言。新增 J（failed+settled+TASK_REUSED 复核一致 → 复位重试恢复、零终端泄漏）、J2（settled 状态字串同链路）、K（复位后重试仍 TASK_REUSED → 有界单次重试 + 回滚）、L（预检 failed → 复核翻回 dispatched 漂移 → fail-closed 不复位）、M（unknown + TASK_REUSED → 不猜测不复位）、N（结算恢复链重复调用不累积终端）。fake CLI 新增 `task_reused_once` 模式（仅当 task-update 复位后才放行重试，保证验证「复位 → 重试」因果链）与 `task-status-next` 一次性状态轮换（漂移注入）。红→绿实测：修复前 71 通过 / 24 失败（全部落在 J/J2/K/L/N），修复后 95/95 全绿；`test-pm-orchestrate-handoff.sh` 31/31、`bash -n pm-orchestrate.sh` 通过。
+- **文档同步**：`SKILL.md` §4.5 reauthorize 段新增结算残留语义说明。版本 2.15.0 → 2.15.1。
 
 ## [2.15.0] - 2026-09-04
 
@@ -362,628 +372,7 @@
 
 ### 新增
 
-- `pm-orchestrate reauthorize` 子命令（Task-058）：spawn 授权快照的运行时刷新一条命令化——合并 `--allow-cmd` 进授权文件、重写 `launch.sh` 内联 B64（guard 读进程环境快照，直接改授权文件对运行中 worker 无效）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 终端/Dispatch 路由、可选发送 `--resume-text` 续接说明、关闭旧终端。未提交的工作区改动全部保留。badminton-lab Wave 2 事故的 7 步手工抢救链路固化。
-- `spawn-worker.sh --python-runtime-symlink PATH`（Task-061）：Python 项目 PM 显式授权共享主仓 `.runtime`（venv/models）。fail-closed：worktree 已有 `.runtime` 保留、源解释器缺失或为 0 字节占位拒绝启动、软链失败退出非零。`clean-worktree.sh` 删除 worktree 前安全 unlink 该软链（防 untracked 软链让 `git worktree remove` 视为脏）。
-- `orca-supervised-register.sh --reset-failed`（Task-060）：`worker-start` 被 `task_not_startable` 拒绝时复位 Task 到 ready 重试一次；不带旗标保持 fail-closed。
-
-### 改进
-
-- `inject_default_verify_commands` 增加 Makefile 兜底（Task-057）：npm scripts 零注入时解析 Makefile `^target:` 目标，白名单动词 `test / test-* / check / ci / lint` 注入 `make <target>`；`.PHONY`/变量赋值/文件目标不匹配，npm-first 双清单项目不双注入。根因：Make 驱动的 Python 项目（无 package.json）此前零注入，worker 全部 make 门禁被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截。
-- `orca-wave-prepare.sh` fail-closed 拒绝 spec 内含斜杠的 branch 名（Task-059）：Orca worktree `--name` 与 `safe_branch` 会把 `/` 规范成 `-`，spec 写斜杠名会让 worker 隔离门禁误判 blocked（Wave 1 三 worker 同时跑偏）；路径引用（如 `docs/plans`）不误报。
-- `pm-orchestrate read` 接受 `--limit` 作为 `--lines` 别名（与 `orca terminal read` 参数名对齐）。
-- 内部上下文同步：`references/10-parallel-lessons.md` 新增 G34—G38（Make 零注入、B64 快照陷阱、Task failed 翻转、基线落后假删除、spec 斜杠分支名）；`references/14-pm-orchestrate.md` 增补 reauthorize 契约；`references/03-checkpoint-files.md` 明确 supervised 下 STATUS 为辅助信号；`templates/pm-spawn-postflight.md` 增补 `SPAWN_WORKER_VERIFY_INJECTED*` 回看；`DECISIONS.md` 新增 DEC-124（刷新放命令层、不动 guard B64 优先级）。
-- SKILL.md：§3.2 记录 Makefile 兜底与 python-runtime-symlink；§4.4 增加『spec 分支名一律连字符』『共享文档编号预分配（DEC/CHANGELOG 槽位）』与 `--reset-failed`；§4.5 增加 reauthorize 用法块；§6 明确 supervised 模式 STATUS 是辅助观察信号（完成权威是 Delivery，spec 不应要求周期性 STATUS 更新）。
-
-### 验证
-
-- `test-spawn-worker-deps.sh` 13/13 PASS（新增 Case 8-13：Makefile-only/混合/npm-first 三态 + 运行时软链有效/假解释器拒绝/已有保留）。
-- 全部改动脚本 `bash -n` 通过；`lint-wait-script.sh` 通过；斜杠 spec 拒绝三态实测（拒绝/放行/路径不误报）。
-
-
-## [2.6.3] - 2026-08-14
-
-### 改进
-
-- `inject_default_verify_commands` 默认注入清单由 `typecheck/lint/test/build` 扩展为 `typecheck/lint/test/test:e2e/build`：`test:e2e` 是 verification-gate 的功能完成线（编译过 ≠ 功能可用，FaroPDF 2026-08-05 QA-02 教训），项目 `package.json` 声明该 script 即默认进 worker verify 白名单；未声明的项目由 `grep -qx` 守卫自动跳过，行为不变。SKILL.md §3.2 同步。
-
-### 验证
-
-- `test-spawn-worker-deps.sh` 7/7 PASS（fixture 无 `test:e2e` script，守卫正确跳过，验证不注入劣化路径）。
-
-## [2.6.2] - 2026-08-14
-
-### 修复
-
-- 修复带空格 worker command 的 `--dry-run` 仍创建 Session Context 并写入 `launch.sh` 的副作用；预演现在只报告最终 wrapper 路径与命令，不创建目录、文件或执行权限。
-- 保持非 dry-run 的 `launch.sh` 内容、tmux/Orca transport 和 supervised 注册路径不变。
-
-### 验证
-
-- `test-spawn-worker-launch.sh` 从 11 个扩展到 16 个断言，新增 helper 与真实入口的 dry-run 零写入检查；完整生命周期、权限、Wave、settle、Sentinel、tmux 和 Orca 回归通过。
-
-## [2.6.1] - 2026-08-14
-
-### 改进
-
-- 完成 Task-048 的渐进解耦：把 `spawn-worker.sh` 的 usage/flags、Orca runtime 与 terminal helpers、Session Context metadata、provider lease 和 tmux/Orca 共用启动边界拆成 5 个 sourced 模块；入口脚本由 1,944 行降至 1,131 行，保持既有 CLI、全局输入输出和生命周期顺序。
-- 明确模块只承载单一职责、不得绕过入口门禁独立执行生产副作用；后续行为变化须另立任务，不与结构移动混合。
-
-### 新增
-
-- 新增 5 组直接合同测试，共 86 个断言，覆盖参数重复项与 toggle、Orca 回退/能力门禁、metadata schema、lease 临时失败与精确 transport 绑定、tmux/Orca launch 及 supervised receipt 注册。
-
-### 验证
-
-- 每个切片均运行完整回归；最终通过新增模块测试、dependency guard 58/58、Harness 26/26、worker command 15/15、依赖补偿 7/7、Wave 10/10、settle 10/10 + 14/14，以及 Sentinel、tmux、Orca runtime/control-plane 和 auto-bypass smoke。
-
-## [2.6.0] - 2026-08-14
-
-### 新增
-
-- 新增 `orca-wave-prepare.sh` 与 Wave receipt：在任何 worker 启动前创建/绑定一个 Run、预建全部独立 Task，并固化 coordinator handle；并发 spawn 直接复用 `run_id/coordinator_handle/task_id`，不再并发 rebinding 或重复建 Task。
-- 新增统一 Task-spec 完成协议前缀，要求 worker 使用 live preamble 的真实 IDs 精确发送一次 `worker_done`；明确 commit、tests、STATUS、heartbeat 与 idle 都不能结算 Dispatch。
-- 新增 `test-settle-command.sh`、`test-orca-wave-lifecycle.sh` 与 `test-spawn-worker-deps.sh`，覆盖生命周期 mutation 顺序、失败资源保留、精确 worktree 删除、持久审计、Wave 并发屏障和依赖补偿失败关闭。
-
-### 修复
-
-- 重写 `settle` 为当前 Orca lifecycle：严格 known-dead 双信号门禁后先调 `worker-stop` 原子 fence+stop；stop 失败仅尝试一次 `worker-abandon` 兜底并禁止 destroy，避免旧版 abandon→stop 顺序和“stop 失败仍删除”风险。
-- `--destroy` 在破坏性删除前校验 METADATA.project 与 worker 属于同一 Git common dir，先释放 provider lease，再由 Orca 删除精确 worktree，最后只对完全匹配路径执行 Git fallback；修复前缀匹配失效、Session Context 删除后丢 worktree ID 和审计随 worktree 消失的问题。
-- liveness gate 改为严格 allowlist：只有 `observation.status=exited|missing` 且 `worker.state=succeeded|failed|stopped` 通过；缺字段、active 和未知未来状态默认拒绝。
-- 依赖补偿对断裂 `node_modules` symlink 或创建失败改为 spawn 非零退出，避免 worker 已启动但无法执行验证。
-
-### 改进
-
-- worker Shell 门禁新增 Orca 自报告语义白名单：只允许带真实 task/dispatch、subject/body/outcome 和有界 timeout 的 `worker_done/heartbeat/escalation`、`ask` 与只读 `check`；拒绝 `task-update`、`worker-stop`、群发、缺 outcome 和 shell chaining。
-- PM 的 supervised mutation/wait/accounting 命令先 `run-use` 绑定当前终端并刷新 METADATA coordinator handle；`wait/ack` 消费当前绑定 Run，不再传陈旧 `--run`。
-- `SKILL.md`、Orca/PM references 与 postflight 模板区分业务验收和 lifecycle settlement，并按 supervised、terminal-managed、tmux 三种模式给出独立巡检与收口协议。
-
-### 验证
-
-- 新增回归分别达到 dependency guard 58/58、Wave lifecycle 10/10、settle liveness 10/10、settle command 14/14、worktree dependency 7/7；完整 smoke 与静态门禁结果见本版本任务验收记录。
-
-## [2.5.4] - 2026-08-14
-
-### 新增
-
-- `pm-orchestrate settle` 子命令（Task-047 v2，PR #84 review 修复版）：supervised dispatch 死锁兜底——worker 进程死但未发 `worker_done` 时，按 Orca 官方 lifecycle fence+stop（`worker-abandon` fence dispatch、`worker-stop` 停 terminal），不破坏 METADATA。默认安全（不删 worktree/files，PM 后续跑 `clean-worktree.sh --execute --force-remove-dirty`）；`--destroy` 一站式清理（含 symlink unlink + dirty 检查 + git worktree remove + orca worktree rm + lease release + session_context 清）。`--reason` 强制审计；liveness gate 用真字段 `.result.observation.status`/`.result.worker.state`，任一缺失或仍 active → REFUSED（除非 `--force`）。
-
-### 修复
-
-- PR #84 review BLOCKER 1：liveness gate 不再用 `.result.workerSession`（该字段在真 Orca 响应里不存在 → 永远 DEAD 等于无门槛，会误杀活 worker）。
-- PR #84 review BLOCKER 2：不再删 METADATA（导致 dispatch/run_id 丢失，`worker-abandon` 变 unrecoverable leak），保留 METADATA 给 PM 后续清理。
-- PR #84 review MAJOR 3：--destroy 路径先 unlink `node_modules` 软链（`[ -L ] && rm -f` 无尾斜杠），不跟随软链误删主仓。
-- PR #84 review MAJOR 4：provider-lease release fail-loud（禁止 `>/dev/null 2>&1` 吞错），失败 exit 非 0。
-- PR #84 review MAJOR 5：--destroy 路径含 dirty 检查 + git worktree remove，与 `clean-worktree.sh` 同步。
-- PR #84 review MAJOR 6：references/13-orca-cli-worker.md §9 + references/14-pm-orchestrate.md 命令清单同步更新（之前文档与 v1 行为矛盾）。
-
-### 改进
-
-- PR #84 review MINOR 7：session_context 删除顺序正确（--destroy 末尾，且 fence+stop 已成功）。
-- PR #84 review MINOR 8：liveness gate 兼容 `set -euo pipefail`（局部 `set +e +o pipefail`），PARSE_ERROR fallback 可达。
-- PR #84 review NIT 9：`--force/--reason` 是 settle-specific（cmd_settle 内部局部变量），不污染其他子命令；`--reason` 用于审计。
-- PR #84 review NIT 10：新增 `scripts/test-settle-liveness.sh`（9 fixture cases）+ `scripts/tests/fixtures/worker-show-*.json`（真 Orca worker-show **完整包装** response）。
-
-### 修复（PR #86 review-v2，对真 Orca CLI 验证后）
-
-- **BLOCKER B1**：`settle_liveness_check` jq 路径缺 `.result` 前缀（fixture 预解包导致测试绿但生产无效——同 v1 BLOCKER 1 形状）。改 `.result.observation.status` / `.result.worker.state`；fixture 改完整包装（含 `_meta/id/ok/result`）。gate 逻辑改：拒绝 `active`/`input_accepted`（活），允许 `missing`/`exited`/`succeeded`（死/GC），双 ABSENT 保守拒绝（completed dispatch 的 observation 在 GC 后是 `missing` 非 `exited`）。
-- **BLOCKER B2**：`--force` 未在全局 args 解析（cmd_settle 内部解析是死代码，$@ 在 dispatch 时空）。全局加 `--force) FORCE=1`，cmd_settle 读 `${FORCE:-0}`。
-- **MAJOR M1**：删无效 symlink `scripts/tests/fixtures/fixtures`（残渣，指错绝对路径）。
-- **MAJOR M2**：`--reason` 持久化到 `SETTLE_AUDIT.log`（之前只 echo）；usage "encouraged" 改 "required"。
-- **MAJOR M3**：`worker-show`/`worker-stop` 调用用 `set +e` 保护（`set -euo pipefail` 下失败击穿脚本，liveness REFUSED 和 WARN 分支不可达）。
-- **MAJOR M4**：`settle_destroy_worktree` 注释改"故意偏离 clean-worktree 顺序"（git 先 vs orca 先，所有权语义不同）。
-- **MINOR m1**：`wt_id` 空时 WARN（不静默跳过 orca worktree rm）。
-- **MINOR m2**：usage "encouraged" 与强制矛盾修正（并入 M2）。
-- **NIT n1**：测试用 env var 传 JSON（避免 eval 单引号脆弱）。
-- **NIT n2**：fixture 加 README 说明（observation GC 语义 + 死锁未真测）。
-
-## [2.5.3] - 2026-08-14
-
-### 改进
-
-- `references/05-legal-domain-patterns.md` §2.1 新增「诉讼 worker 的证据访问约定」（Task-049）：澄清代码 `node_modules`「隐式解析 → 必须软链」与诉讼证据「显式访问 → 绝对路径直读」的机制差异；规定 PM spawn 诉讼 worker 时 prompt 必须包含「主仓项目根 + 案件相对路径 + 产出写路径 + md 引证用相对名」四要素，并明确反模式（不软链证据目录、不硬编码绝对路径、不让 worker 假设完整路径）。文档示例全部用 `<占位符>` 表达，不绑定具体运行机器/案件，保证 Skill 跨用户可复用。
-
-## [2.5.2] - 2026-08-14
-
-### 改进
-
-- SKILL.md §3.3 新增「PM spawn 操作纪律」（Task-041~044，Wave-2 实战撞坑固化）：spawn 后不重复 send 完整 prompt（与 `worker-start` live preamble 重复，Task-042）；`run-create` 只调一次避免 `consumer_fenced`（Task-043）；supervised worker 不用 `pm-monitor`/`sentinel` 判完成（靠 `worker_done → Delivery`，Task-041）；spawn 前后独立 Bash 调用并行（Task-044）。
-
-## [2.5.1] - 2026-08-14
-
-### 修复
-
-- Orca supervised worker 无法自验（Task-045/046，G31）：worktree 落在 `~/orca/workspaces/`（独立路径树，不在主仓父链）→ `npm run` 向上解析找不到主仓 `node_modules` → `tsc/vitest/eslint: command not found`；`VERIFY_COMMANDS` 默认空 → `allowed_shell` 仅 3 条 → worker 跑不了验证门/推不了 PR。tmux worktree 靠在主仓子树（`.claude/worktrees/`）的路径巧合白嫖向上解析（G28），Orca 路径打破后塌方。
-
-### 新增
-
-- `scripts/spawn-worker-deps.sh`（独立 source 文件，不加剧 spawn-worker.sh 膨胀）：`ensure_worktree_deps` 项目类型感知依赖补偿（Node 软链 `node_modules` / Rust cargo 共享 / Python venv 路径敏感标 blocked）；`inject_default_verify_commands` 按 `package.json` scripts 注入默认 `npm run typecheck/lint/test/build` 到白名单（PM 显式 `--verify-cmd` 优先不覆盖）。
-- `spawn-worker.sh` source deps + 两处调用（worktree 创建后 `ensure_worktree_deps`、`write_install_authorization` 前 `inject_default_verify_commands`）。
-- `clean-worktree.sh` 删 worktree 前安全 unlink `node_modules` 软链（`[ -L ] && rm -f` 无尾斜杠，绝不跟随删主仓）。
-
-### 改进
-
-- `SKILL.md` §3.2 + `worker-prompt.md` + G31 lesson（`references/09`）说明依赖补偿 + 默认 verify 机制；G31 含「统一 Orca worktree 路径到主仓」的 A-否决查证（Orca `worktree create` 无 `--path`，软链是唯一实际补偿）。
-
-## [2.5.0] - 2026-08-13
-
-### 修复
-
-- Harness 权限改为对完整可证明祖先链取白名单交集；弱宿主嵌套 Codex/Claude Code 仍只能保留弱权限，链路读取不完整时失败关闭。
-- 新增 worker backend/启动命令身份绑定，拒绝标签伪装、命令链、不透明 wrapper 与任意命令替换；安装守卫的 prompt-only 降级不再能绕过 backend 身份门禁。
-- Harness 的 Orca 证据统一使用版本匹配的 `orca-runtime.sh`，避免权限检测与 worker 控制选择不同 CLI。
-
-### 新增
-
-- 新增跨 worktree 的 provider 原子并发租约：按个人配置在副作用前占槽，启动后绑定精确 tmux session 或 Orca terminal，并在真实资源结算后释放。
-- 租约存放于 Git common dir 的可信根，使用文件锁与原子写入；释放同时校验可信路径、session、资源句柄和运行时存活状态，未知状态失败关闭。
-- 新增 `test-worker-command-policy.sh` 与 `test-provider-lease.sh`，覆盖四后端 renderer、wrapper、伪装命令、额度竞争、陈旧租约、越界路径和存活资源提前释放。
-
-### 改进
-
-- Orca worktree 创建显式继承项目 setup 策略；继续采用门禁优先的两阶段启动，不直接切换会在权限文件落盘前启动 Agent 的 `worktree create --agent`。
-- 当前运行合同明确收口为 Claude Code、Codex、CodeBuddy、QoderWork CN 四个 backend；OpenCode/custom 等旧内容只保留为历史调研或独立诊断，不构成派发授权。
-- 同步 `SKILL.md`、Orca reference、个人配置模板和根 README 的 v2.5.0 说明，传统 tmux 路径保持可用。
-
-### 验证
-
-- Harness 层级门禁 26/26、命令身份门禁 15/15、provider lease 原子与生命周期回归全部通过。
-- 在 Orca 1.4.180 中使用本地无模型调用的假 Codex 完成真实 worktree/terminal/metadata/lease/close/clean 闭环；终端关闭后为 `connected=false`、`writable=false`，未消耗模型额度。
-
-## [2.4.0] - 2026-08-13
-
-### 新增 — Harness 调用层级门禁
-
-- 新增 `config/harness-backend-policy.json` 和 `scripts/harness-backend-policy.sh`：Claude Code/Codex PM 可派发 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy 与 QoderWork CN PM 只能派发自身。
-- 派发 backend 收口为上述四种；旧版兼容代码中出现的 OpenCode、custom 或未知 backend 均不再获得 spawn 权限，防止个人配置扩张授权面。
-- `spawn-worker.sh` 在创建 worktree/terminal 之前从真实进程祖先识别 PM 宿主，并在 Orca 能唯一定位 working agent 时交叉校验；多 Agent 共用 worktree 时不让模糊 UI 信号覆盖进程证据，未知、真实冲突或不可证明身份仍失败关闭。
-- `--pm-harness` 仅作为预期身份断言，不能覆盖运行时证据或向上提权；授权结果写入 `METADATA.runtime.harness_authority`。
-
-### 测试
-
-- 新增 `test-harness-backend-policy.sh`，覆盖 10 个允许组合、8 个拒绝组合、未知 backend、运行时识别及伪造宿主断言。
-- 既有 Orca/tmux smoke 改用已配置 backend，确保层级门禁进入真实 spawn 回归而非只做静态文档约束。
-
-## [2.3.0] - 2026-08-12
-
-### 修复 — Orca runtime 与 supervised 生命周期
-
-- Orca auto-detect 改用 `worktree current` 的实际项目路径，不再依赖真实会话可能缺失的 `TERM_PROGRAM` / `ORCA_WORKTREE_ID`；新增 `scripts/orca-runtime.sh` 统一版本匹配 CLI。
-- supervised 注册固定为共享 Run 下的 `task-create → worker-start --terminal`，worker-start 成为唯一任务注入器；注册失败返回非零并保留恢复证据，不再静默降级为“看似 supervised”。
-- Sentinel 不再根据 STATUS/timeout 自动 stop、release 或关闭 supervised terminal；`worker_done`、完整 Delivery、reuse/release/retain、ack 成为单一结算顺序。
-- `clean-worktree.sh` 仅在 Dispatch 已 settled 且 terminal accounting 可证明安全时结算，active/unknown/release_pending/release_unknown 均失败关闭。
-- `pm-orchestrate.sh` 扩展为 supervised / terminal-managed / tmux 三模式，支持 Dispatch guidance、worker transcript、show、Delivery wait、reply、release、retain 和显式 ack。
-- supervised 注册保存并显式传递 coordinator handle，修复真实 Run 下的 `consumer_fenced`；external terminal 清理增加 settled 状态、ownership/reason 与精确句柄四重校验。
-- Codex render 识别已固定相同 sandbox/approval 的本地安全 launcher，避免重复参数导致 CLI 启动失败；不匹配或不可证明时仍显式传参。
-
-### 改进 — Orca-first 多 CLI 总控
-
-- CodeBuddy、QoderWork 和 custom CLI 可保留在 Orca terminal-managed 层，由 UI 展示 worktree/branch/terminal，PM 用 terminal read/send/wait 巡检；未被 Orca 识别时不伪造 Task/Dispatch。
-- trust/permission/external-import watcher 支持 Orca terminal read/send，不再因脱离 tmux 而失效。
-- `worktree-status.sh` 和 `pm-monitor.sh` 统一使用实际 Orca CLI；文档重写为双层能力、运行时检测、共享 Run、UI 状态来源和恢复边界。
-- terminal-managed `read` 支持 Orca cursor 增量读取，并明确 `tui-idle` 只是 liveness/readiness，不能冒充任务完成信号。
-
-### 安全与 Git
-
-- 根 `.gitignore` 新增 `**/config/*.bak*`，阻止带真实凭证的 provider 配置备份进入普通 Git 历史。
-- 核查确认既有 Orca 提交已经进入 `origin/main`，因此不重写公开历史，改用本版本前向修复 metadata/version 漂移与契约问题。
-- `SKILL.md` 新增本地命令、worktree/terminal、Orca 状态写入、清理与 provider Token 的权限/副作用声明。
-- `SKILL.md` 从 1000+ 行压缩为核心路由与生命周期入口，backend、checkpoint、Sentinel 和历史踩坑继续按需下沉到既有 references，恢复 Progressive Disclosure。
-
-### 测试
-
-- 新增 `smoke-orca-control-plane.sh`，以本地 fake CLI 验证注册顺序、Dispatch 路由、worker-read、Delivery wait 不自动 ack 及 release/retain/ack 命令。
-- `smoke-orca-worker.sh` 覆盖无宿主环境变量识别、opt-out、轻量模式边界与 supervised 单一注入。
-- 修正 `claude --bare` 安装门禁回归断言，与既有“明确记录 prompt-only 降级”设计一致。
-- 真实前向矩阵：Claude Code 与 Codex 在 Orca supervised 中完成 `worker_done → Delivery → external terminal 结算 → ack`；CodeBuddy 在 Orca terminal 中得到完整响应；QoderWork 验证 cursor history 与批处理响应；传统 tmux 下 Codex 完成响应，Claude 启动/收发链路通过但当次 provider 因 429 额度限制未完成模型响应。
-- 六份 Claude provider settings 探针 5 份通过；MiniMax M2.7 返回 401，需更新本地凭证。
-
-## [2.2.0] - 2026-08-12
-
-### 新增 — PM 控制 worker 统一入口（Task-034）
-
-PM 90% 场景用 `pm-orchestrate.sh` 一个统一入口控制 worker（ORCA / tmux 双模式自动判断），不用手敲 `orca terminal send` 或 `tmux send-keys`。
-
-- `scripts/pm-orchestrate.sh` 新脚本：子命令 `send / read / peek / wait`
-- 读 `<worktree>/.claude/agent-sessions/<session>/METADATA.json` 自动路由：
-  - `session.orca.terminal_handle` 非空 → ORCA（`orca terminal send/read/wait`）
-  - 否则 → tmux（`tmux send-keys/capture-pane`，session 名 = `<session>`）
-- `send` 超长（>500 字符 或含反引号/`$`/`|`/``` ```）自动走 SKILL §5.2 WORKER_PROMPT.md + 短 Read 指令（避免终端注入转义问题）
-- `peek` = `read --lines 15`（PM 快速 peek 常用）
-- `wait` tmux 模式无原生 tui-idle，降级 sleep（建议用 sentinel.sh）
-
-端到端验证（ORCA claude worker）：`send --text "请只回一句：pm-orchestrate send OK"` → `read --lines 100` 显示 `❯ 请只回一句：pm-orchestrate send OK` + `⏺ pm-orchestrate send OK`，PM 一个命令管 worker ✓。
-
-- `references/14-pm-orchestrate.md` 新 reference：双模式自动判断 + 子命令 + 与 sentinel/pm-monitor/CLI 兜底的关系 + 实战范例 + 已知限制
-- SKILL §7.1 ORCA PM 分支加 pm-orchestrate 段落（替代手敲 orca terminal send）
-- SKILL §10 references + scripts 列表加 references/13 和 pm-orchestrate.sh
-
-非 ORCA / tmux 不受影响（向后兼容，PM 不传也用 tmux 默认）。
-
-## [2.1.0] - 2026-08-12
-
-### 新增 — ORCA 检测 + STATUS.json 分层互补（Task-032）
-
-sentinel ORCA 模式 done 判定加双信号：`STATUS=done` 时先查 `orca worktree ps` 的 agent state，`working` 拒绝认终态（抗 worker LLM 谎报 done），`done/idle` 才 sync + exit。ORCA 检测（进程层客观）+ STATUS.json（任务层自报告）分层互补。实测：claude worker 跑 sleep 30（state=working）+ 谎报 done → sentinel 12s 内 5 次 SENTINEL_ORCA_STATUS_CONFLICT 拒绝误杀。
-
-- `sentinel.sh`：`orca_agent_state()` 函数（查 worktree ps 的 `.worktreeId` 匹配 + `agents[0].state`）；done 分支双信号判定
-
-### 新增 — ORCA supervised 深度对接（Task-033）
-
-spawn-worker `--orca-supervised` flag：ORCA 模式 spawn 后把 worker terminal 纳入 ORCA supervised 体系（run-create + task-create + worker-start --terminal），保留 provider env 隔离。worker 出现在 `worker-list`，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
-
-- `scripts/orca-supervised-register.sh` 新 helper：run-create + task-create + worker-start --terminal --worktree --task；输出 run_id/task_id/dispatch_id（KV）。worker-start 前 sleep 6s（runtime 注册延迟）+ 单次不 retry（retry 致 task_not_startable/failed）+ worker-list 兜底查 dispatch（应对 runtime_unavailable 但 server 端成功）
-- `spawn-worker.sh`：`--orca-supervised` / `--task-spec` / `--task-title` flag；ORCA 模式调 helper；METADATA `session.orca.supervised.{run_id,task_id,dispatch_id}`；SENTINEL_CMD 加 `--dispatch-id`
-- `sentinel.sh`：`--dispatch-id` 参数 + `sync_orca_supervised_release()`；done→worker-release, failed/timeout→worker-stop
-- `clean-worktree.sh`：读 METADATA dispatch_id，清理时 worker-stop（在 orca worktree rm 前）
-- `references/13-orca-cli-worker.md` §11：supervised 体系 / spawn 集成 / 全生命周期闭环 / helper 踩坑 / PM 巡检增益
-
-端到端验证（真实 claude worker）：spawn `--orca-supervised` → worker-list workerState=ready → sentinel done worker-release → clean --execute worker-stop + worktree rm，全链路通。
-
-### 改进 — ORCA 模式 task-032/033 配套
-
-- SKILL §6.5 加 supervised 深度对接 + 分层互补段落
-- 非 ORCA / 不加 `--orca-supervised` 零变化（向后兼容 v2.0）
-
-## [2.0.0] - 2026-08-12
-
-### 新增 — ORCA CLI worker backend（DEC-114）
-
-PM 在 ORCA 桌面端内嵌终端里调 `spawn-worker.sh` 时，auto-detect 走 ORCA worktree + ORCA terminal 路径，ORCA UI 直接反映 worker 生命周期（spawn 立即出卡 `in-progress`、sentinel 终态自动切 `completed`/`in-review`、stale 同步 `in-review`、clean-worktree 删 ORCA 跟踪）。
-
-**触发**：`TERM_PROGRAM=Orca` + `ORCA_WORKTREE_ID` 非空 + worktree path 段 = `PROJECT_DIR` git toplevel + `orca status --json` 成功 + capability 含 `terminal.multiplex.v1`。命中走 ORCA；非 ORCA 终端 / 跨 repo / `--no-orca-mode` 走原 tmux 路径不变。详见 SKILL §6.5 + `references/13-orca-cli-worker.md`。
-
-**改动**：
-
-- `scripts/spawn-worker.sh`：新增 `detect_orca_mode()` / `orca_worktree_create()` / `orca_terminal_create_and_send()` 三个 helper + `--no-orca-mode` flag + METADATA `session.orca` 子块（mode / worktree_id / worktree_path / terminal_handle / tui_ready_method / app_version / capabilities）；ORCA 模式跳过 trust/permission/external-imports dialog 监控（ORCA 桌面端自管）
-- `scripts/sentinel.sh`：新增 `--terminal-handle --worktree-id` 双路径（与 `--tmux-session` 二选一）+ `sync_orca_worktree_status()`（done→completed / failed→in-review / timeout→in-review）
-- `scripts/pm-monitor.sh`：新增 `orca_worktree_set_status()` helper；`CHECKPOINT_STALE` + `WORKER_STALE_NO_COMMIT` 两个 emit 后同步 ORCA `in-review`
-- `scripts/clean-worktree.sh`：tmux kill 后加 `orca worktree rm --force` 同步清理 ORCA 跟踪（dry-run 友好）
-- `scripts/worktree-status.sh`：加 ORCA 只读状态块（`ORCA_WORKSPACE_STATUS` / `ORCA_CARD_STATUS` / `ORCA_COMMENT`）
-- `references/13-orca-cli-worker.md`：新建完整 Level 2 reference（9 节：边界 / 检测协议 / ORCA API 速查 / METADATA 锚点 / sentinel 双路径 / pm-monitor 同步点 / clean-worktree 清理 / 已知限制 / 实战范例）
-- `SKILL.md`：§6.5 ORCA 终端模式新节 + §7.1 加 ORCA PM 分支 + §10 references 加 references/12
-
-### 改进 — `ensure-claude-path.sh` 参数化为 `ensure_in_path <bin>`
-
-候选目录追加 `/Applications/Orca.app/Contents/Resources/bin`，让 spawn-worker.sh ORCA 模式可直接 `ensure_in_path orca` 探测 ORCA CLI。保留 `ensure_claude_in_path` 作为 `ensure_in_path claude` 的别名，所有现有调用方零改动。
-
-### Known Limitations / Follow-up
-
-- ORCA 模式与 `--no-worktree` 轻量模式互斥（ORCA worktree 必须有 git 仓），命中轻量模式自动回落 tmux
-- ORCA app 未运行 / `orca` CLI 不在 PATH / 缺 `terminal.multiplex.v1` capability → fail-loud `exit 64`（提示 `orca open` 或 `--no-orca-mode`）
-- **`--command` 必须是 agent CLI（claude/codex/opencode）ORCA 才自动识别为 agent session**（references/12 §9 关键发现 1）；用 shell 命令测试时 agent session 不显示，但 worktree 卡片 + workspace-status 仍正常
-- **端到端验证（2026-08-12）暴露并修复 4 个 jq 嵌套字段 bug**：`worktree create` / `terminal create` / `terminal read` / `worktree show` 响应都嵌套在 `.result.<resource>`（不是顶层）。共性模式记入 references/12 §9 关键发现 3
-- **下一步探索**：ORCA 有更高层的 `orchestration worker-start` / `task-create` / `dispatch` / `gate-create` / `send` 体系（supervised worker + 任务 + decision gate + inter-agent 消息）。当前 skill 对接底层 `terminal create`，后续评估切到 `orchestration worker-start` 层（references/12 §9 关键发现 4）
-
-## [1.20.5] - 2026-08-05
-
-### 改进 — qoderclicn v1.0.45 + codebuddy v2.115.0 模型清单同步
-
-CLI 升级后模型清单大变化，references/07 §4 + references/06 §0/§7.2/§5A + personal example + SKILL §2.4 全部同步实测（`qoderclicn --list-models` + `codebuddy --help --model` 权威输出）。
-
-#### qoderclicn（1.0.24 → 1.0.45）
-
-- **新旗舰 `Qwen3.8-Max`**：`qmodel_latest` alias 仍解析 3.7-Max（没跟 3.8）→ **推荐用具体名 `-m Qwen3.8-Max`**
-- **新增 `GLM-5.2` / `Kimi-K2.7-Code` / `MiniMax-M2.7`**（旧 alias `gm51model`/`kmodel` 映射过时）
-- 模型表从"alias key"改成"`--list-models` 实际名（推荐）+ 旧 alias（兼容过时）"双列
-- 普通终端用：`~/.local/bin/qoderclicn` symlink（指向 .app bundle）+ `qoderclicn login`，之后 `qoderclicn --list-models` / `-m Qwen3.8-Max`
-
-#### codebuddy（2.103.3 → 2.115.0）
-
-- `--model` 权威列表：`auto, hy3, glm-5.2, glm-5.1, glm-5v-turbo, minimax-m3, kimi-k3-1, kimi-k2.7, kimi-k2.6, deepseek-v4-flash, deepseek-v4-pro, custom-local:*`（references/08 §4.1 主力已覆盖；新增 `kimi-k3-1` / `glm-5v-turbo` / `custom-local` 系列）
-- 用户偏好 `hy3` / `deepseek-v4-flash` 仍在 ✓
-
-#### personal example + SKILL §2.4
-
-- `backend_model_routing.qoderwork-cn.default_models`：`["qmodel_latest",...]` → `["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"]`（具体名优先）
-- SKILL §2.4 qoderwork-cn 偏好同步 + "推荐具体名，旧 alias 过时"提示
-
-### Test
-
-- `qoderclicn --list-models` → 10 模型（Qwen3.8-Max 新旗舰确认）；`qoderclicn --version` → 1.0.45
-- `codebuddy --version` → 2.115.0
-- `~/.local/bin/qoderclicn` symlink 普通终端 PATH 可达（`which qoderclicn` + `--version` 确认）
-- 纯文档/配置同步，smoke 不涉及
-
-## [1.20.4] - 2026-08-05
-
-### 改进 — CodeBuddy 拼写校正 + ref 08 结构精简
-
-#### 拼写校正（qodebuddy → CodeBuddy，腾讯产品名）
-
-修正全 skill 共 59 处 `qodebuddy`（错误拼写）→ `CodeBuddy`（正确产品名，腾讯旗下）。文件系统客观路径不动（`codebuddy` CLI 二进制名、`WorkBuddy.app` app bundle、`~/.codebuddy/` / `~/.workbuddy/` 配置目录、`CODEBUDDY_*` 环境变量）。
-
-- **references/08-codebuddy-cli-worker.md**：40 处（全文 Python 批量替换）
-- **SKILL.md**：7 处 + 4 处文件名引用 `08-qodebuddy-cli-worker.md` → `08-codebuddy-cli-worker.md`
-- **references/06-agent-cli-reference.md**：6 处（表格行、章节标题、注释）
-- **scripts/render-runtime-profile.sh**：3 处注释
-- **scripts/spawn-worker.sh**：1 处注释
-- **scripts/check-dependencies.sh**：1 处提示信息
-- **config/orchestration-personal.example.json**：1 处注释 + 文件名引用
-
-#### ref 08 结构精简（945 → 858 行）
-
-- **合并旧 §10（2026-07-05 五轮）+ 旧 §14（2026-07-08 三轮）→ 新 §10「spawn 实战坑点」**：原两节讲同一批坑（权限/Enter/session 断流）的二次叙述，按"坑点类型"重组，两张速查表合一。新增 §10.6 session 断流、§10.7 原生 `--worktree --tmux` 对比测方向、§10.8 合并速查表。删除旧 §10.7（§9 修订说明，合并后失效）和整个旧 §14。
-- **删除旧 §6.6 / §6.7 历史实测段**：snapshot-copy-into-worktree pattern 已固化为 SKILL.md §2.3 + DEC-037；render-runtime-profile 支持情况见 `--help`。保留 §6.6 精简指针段。
-- **版本记录区压缩**：8 条 2026-07-08 过程性微调（"首次"~"第七次"逐条 smoke test 中间态）合并为 1 条关键节点。
-- **交叉引用校准**：L330 旧 `§6.7` 引用改 `§5`（MCP 关闭规则实际位置）。
-
-### 待办清零 + qoderclicn trust dialog 修复（本次推进）
-
-- **ref 08 §3 主标题补齐 + L159 孤立 §2.6 消除**（上面"待办事项"两条其实是同一问题）：L159 `### 2.6`（孤立重复编号）→ `## 3. 命令行用法`（§3 主标题，§3.1/§3.2 归属正确）。历史遗留待办清零。
-- **Task-031 trust_auto backend-specific 选项处理**（`scripts/spawn-worker.sh`）：qoderclicn 2 选项 trust dialog（1=Trust folder / 2=Don't trust and exit，**默认高亮 option 2 Don't trust**）被旧 generic fallback `Down×3+Enter` 误选 option 2 = Don't trust → qoderclicn 立即 exit 42。修复：generic fallback 加 `WORKER_BACKEND` case，`qoderwork-cn|qoderclicn` 发数字键 `"1"` 选 Trust folder（与 `permission_auto` `"2"` 同数字键模式，不依赖默认高亮）；codebuddy（4 选项）等保留 `Down×3+Enter`。
-- **qoderclicn 真机端到端验证（Task-031）**：spawn-worker **5 秒 exit** + `SPAWN_WORKER_TRUST_AUTO: trust dialog detected (qoder 2-option), selecting option 1 Trust folder (key '1')` + qoderclicn **过 trust 进 REPL ready**（pane: `Thinking ▪ 准备好了，请告诉我需要做什么` + `Qwen3.7-Max Model · ctx 15%`，**无 "The current folder is not trusted. Exiting."**）。qoderclicn backend 端到端可用 ✓。
-
-### Test
-
-- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**
-- `bash scripts/smoke-sentinel.sh` / `smoke-tmux-worker.sh` / `lint-wait-script.sh` → 全 OK
-- `bash -n scripts/spawn-worker.sh scripts/render-runtime-profile.sh` → OK
-- **qoderclicn 真机 throwaway（Task-031）**：5s spawn-worker exit + trust 处理 + REPL ready ✓
-
-## [1.20.3] - 2026-08-05
-
-### 新增 — folia Wave-1 + W1/W2 dogfood 实战撞坑修复（Task-026 ~ Task-030）
-
-本轮在 v1.20.2 setsid 修复基础上，针对 W1 (claude-code) + W2 (codebuddy) dogfood 撞坑沉淀的 G29 6 项实战问题（references/10-parallel-lessons.md）完成 5 项修复。**Task-026 真机 throwaway 验证：codebuddy spawn-worker 主进程 22 秒 exit**（v1.20.2 W2 撞坑 120s+ SIGTERM），节省 ~98 秒，< 60s 目标达成。
-
-#### scripts/spawn-worker.sh（Task-026）
-
-- **`resolve_backend_defaults` 加 `codebuddy/qoderwork-cn/qoderclicn` 默认 `PERMISSION_AUTO=0`**（与 `claude-code` 同分支）：acceptEdits 仍弹 dialog（references/08 §14.1），但同步监控空等浪费 + 撞 PM Bash 2min timeout（v1.20.2 W2 撞坑实测）。bg 段（`permission_auto_bg` setsid）独立处理 dialog，不依赖 sync。
-- **`trust_auto` backend-specific max_wait**：`codebuddy/qoderwork-cn/qoderclicn` 默认 30→15s（acceptEdits 不弹 trust dialog，30s 空等浪费）。
-
-#### scripts/render-runtime-profile.sh（Task-027）
-
-- **`resolve_settings_path` 函数**：`--settings` / `--provider-registry` 相对路径自动转绝对（fallback：render cwd → `SCRIPT_DIR` → `SKILL_DIR/config/`）；绝对路径验证存在；URL 跳过。消除 W1 撞坑（`config/*.json` 相对路径在 worktree cwd 找不到 + gitignore）。
-- **5 场景测试全过**：相对路径 / basename / 绝对存在 / 绝对不存在（exit 64）/ 相对不存在（exit 64）。
-
-#### scripts/dependency-install-guard.py（Task-028）
-
-- **`is_safe_lifecycle_command` 加 `date` 允许**（拒绝 `-s` / `--set` / `--reference` 改系统时间）：解决 W2 写 `STATUS.updated_at` 时 `date -u +"%Y-%m-%dT%H:%M:%SZ"` 被 `SHELL_COMMAND_NOT_ALLOWLED` 拦的撞坑。
-- **12/12 测试通过**：W2 场景 allow + 安全（`-s` / `--set` / `--reference` deny）+ 回归（`pwd` / `stat` 不变）。
-
-#### templates/worker-prompt.md（Task-029 + Task-030）
-
-- **Bootstrap Isolation Gate 加 STATUS/RESULT path sanity 硬约束（Task-030）**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 必须在 `$(pwd)/.claude/agent-sessions/<session-id>/` 下，写错位置 = done 信号无效。解决 W2 写 `skills/.../STATUS.json` 撞坑。
-- **Process step 8 加 Commit-Verify 硬约束（Task-029）**：commit 前必跑 Verify 全部 PASS；commit 后 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD` 验证文件实际改了；LLM 幻觉 done = done 信号无效。引用 W2 `64cd3d7` 撞坑（commit message 说改 4 文件但实际破坏 smoke + 错位置 STATUS）为实证。
-
-### Test — 多轮验证全绿
-
-- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（v1.18.3 + v1.18.4 + v1.20.2 + v1.20.3 + HRA-001 exit 64 断言）
-- `bash scripts/smoke-sentinel.sh` → SMOKE_SENTINEL_OK
-- `bash scripts/smoke-tmux-worker.sh` → SMOKE_TMUX_WORKER_OK
-- `bash scripts/lint-wait-script.sh` → LINT_WAIT_SCRIPT_OK
-- `dependency-install-guard.py` `is_safe_lifecycle_command` → 12/12 PASS（Task-028）
-- `render-runtime-profile.sh` `resolve_settings_path` → 5/5 PASS（Task-027）
-- **真机 throwaway codebuddy**（Task-026）：spawn-worker 主进程 **22 秒 exit**（< 60s 目标；v1.20.2 W2 撞坑 120s+ SIGTERM），`accept edits on` ready，session ALIVE
-
-### Known Limitations / Follow-up
-
-- **Task-026 qoderclicn throwaway 未真机验证**：harness 自动拒绝 spawn qoderclicn 的二次执行（视为"launch-workbuddy daemon force-killed"）；codebuddy 验证通过 + 改动代码对 `codebuddy/qoderwork-cn/qoderclicn` 三个 backend 一致 case pattern，逻辑上 qoderclicn 应有同等效果。下次派 worker 跑 qoderclicn 真机复测。
-- **TASKS.md（本地 gitignored）**：记录 v1.20.3 候选 DRAFT（`Task-026` ~ `Task-030`）已全部完成，可清理或转历史。
-
-### Hotfix v1.20.3.1 — bg watcher 真机端到端修复（2026-08-05 当日）
-
-**严重 bug**（v1.20.2 引入，v1.20.3 端到端真机验证发现）：`spawn-worker.sh` 的 `permission_auto_bg` / `external_imports_auto` 后台 watcher 用 `nohup` / `setsid`（外部 binary）调用 spawn-worker.sh 的 bash 函数 —— 但 nohup / setsid 子进程找不到父 shell 函数定义，报 `command not found`，**bg watcher 从未启动**。v1.20.2 假设 `setsid / nohup` 能调用 bash 函数是错的（v1.18.3 旧版用 subshell `( ... & disown )` 模式继承函数能跑）。
-
-- **修复**：`scripts/spawn-worker.sh` PERMISSION_AUTO_BG + EXTERNAL_IMPORTS_AUTO 段改回 v1.18.3 subshell inherit function 模式（`( func "$SESSION" & disown ) >/dev/null 2>&1 < /dev/null &`）。已知限制：spawn-worker SIGTERM 时同进程组 bg 会死（v1.18.3 限制）；mitigation = Task-026 让 spawn-worker 主进程 < 60s exit（v1.20.3 验证 19 秒），bg 有时间跑完（dialog 通常 30s 内弹）。
-- `scripts/smoke-auto-bypass.sh` 的 v1.20.2 检查 #5（`permission_auto_bg`）/ #17（`external_imports_auto`）—— 原来匹配 `setsid / nohup` 字符串改为匹配 subshell inherit function 模式（v1.20.3.1 hotfix 实现形式）。
-
-#### 真机端到端验证（codebuddy + `--permission-mode acceptEdits`）
-
-- spawn-worker 主进程 **19 秒 exit**（< 60s ✓）
-- worker 跑 `pwd` 命令：bg watcher 真启（PID detached subshell, PPID=1）+ 自动按 `2` 处理 `"Do you want to proceed?"` dialog（session-allow）+ pwd 命令输出（端到端通过）
-- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（hotfix + smoke check 更新）
-- `bash scripts/smoke-sentinel.sh` / `smoke-tmux-worker.sh` / `lint-wait-script.sh` → 全 OK
-
-## [1.20.2] - 2026-08-05
-
-### 新增 — folia Wave-1 实战三修 + 本 skill 自身 dogfood 验证
-
-本轮来自 folia Wave-1（2026-08-04/05，claude-code + codebuddy 5-worker）实战沉淀，覆盖 spawn / 监测 / prompt 投递 / 收口四个环节。**Task-016/017 由本 skill 自身 dogfood**（W1 worker 改 `pm-sentinel-response.md`）真机完成，验证 spawn-worker.sh 修复 + sentinel 事件驱动 + 超长 prompt 投递全链路。
-
-#### spawn-worker.sh（Task-019/020/021）
-
-- **Task-019 — claude-code `--bare` 自动降级 prompt-only**：`render-runtime-profile.sh` 对 claude-code provider-isolation 默认加 `--bare`（必需：skip keychain/OAuth/CLAUDE.md auto-discovery），但 `--bare` 触发 spawn-worker install-guard fail-closed（`:520-528` 要 PM 手写 `--allow-prompt-only-install-guard`）。新增 `claude_command_has_bare()` 检测：claude-code + `--bare` 自动降级 prompt-only + 内置来源文本（`CLAUDE_CODE_BARE_AUTO_DEGRADE=1`，`--no-claude-code-bare-auto-degrade` opt-out），PM 不再手写降级。`--safe-mode` / `--setting-sources` 排除 local / 缺 claude token 仍 fail-closed（非 `--bare` 不自动降级）。**真机验证**：dogfood W1 spawn 输出 `SPAWN_WORKER_BARE_AUTO_DEGRADE: claude-code --bare detected, install-guard auto prompt_only_degraded (source recorded)`，worker 正常启动（banner `glm-5.2[1M]`）。
-- **Task-020 — `external_imports_auto()` 监控 claude-code external imports dialog**：CLAUDE.md `@import` 触发 claude 首启弹 "Yes allow external imports" dialog（v1.18.4 默认关 trust/permission 不覆盖此类）。新增 `external_imports_auto()` 后台 watcher（120s，option 1 默认放行），claude-code 默认开（`EXTERNAL_IMPORTS_AUTO=1`，`--no-external-imports-auto` opt-out）。`--bare` 模式下 CLAUDE.md 被 skip、dialog 通常不弹，watcher 作兜底无副作用。
-- **Task-021 — `permission_auto_bg` setsid + codebuddy Bash timeout 文档**：`:1207` `( permission_auto_bg & disown ) &` 改 `setsid`（macOS 无 setsid 时 fallback `nohup + disown`），spawn-worker 被 SIGTERM 时 watcher 尽量存活。SKILL §6 补"codebuddy 同步监控逼近 PM Bash 2min timeout，建议 PM Bash timeout 调到 180s+"。
-
-#### pm-sentinel-response.md（Task-016/017，W1 dogfood 完成）
-
-- **Task-016 — §2 显式归类 exit 137/143（SIGKILL/SIGTERM）**：exit code 表补 137/143 两行；新增 §2.5「Exit 137/143（signal kill）」分支（session 状态 × STATUS 终态组合诊断 + 137 OOM/harness 强杀/手动 kill + 143 温和）；§4 降级段加指向 §2.5 的交叉引用。folia Wave-1 复盘：sentinel 被 signal 杀时 PM 缺明确分支。
-- **Task-017 — §1 step 2 `tail -5` 改 grep 关键标记**：长任务 sentinel 持续写 `SENTINEL_PENDING`（5s/行）刷掉前面的 TERMINAL/TIMEOUT/UNKNOWN_STATUS。改 `grep -E "SENTINEL_(TERMINAL|TIMEOUT|UNKNOWN_STATUS|FAILED)" | tail -5` + 保留 `tail -5` 看上下文。
-
-#### cron-monitor-prompt.md（Task-024）
-
-- **Task-024 — 自删改硬指令第 0 步**：prompt 模板判定段加第 0 步硬指令（最高优先级）：读所有 worker STATUS，全终态（done/failed/blocked/stopped）且无 pending PR/未合入 → 立即 `CronDelete` 本 cron，不做巡检。folia Wave-1：3 worker 全 done 后 cron 仍触发一次兜底巡检，PM 手动 CronDelete。
-
-#### SKILL.md 文档（Task-022/025）
-
-- **Task-022 — §5.2 超长 prompt 投递标准模式**：Full Worker Prompt 填任务后超 2-4 KB + 特殊字符，直接 `send-keys -l` 有转义/截断风险。标准模式：写 `{session_context}/WORKER_PROMPT.md` + `send-keys` 短读取指令（"请 Read WORKER_PROMPT.md 并执行"）。folia 3 worker + 本轮 W1 dogfood 均此模式，100% 投递成功。
-- **Task-025 — §3 第 11 步 webview 项目分流**：Tauri/Electron/WKWebView 的 webview 不暴露 macOS a11y，orca/computer-use 读不了（`role:null`）也写不了（click 不触发 React 事件）。web 交互必须走 Playwright e2e，orca 仅原生控件 + screencapture。folia（Tauri）#92 验证：orca 4 次 click 截图字节零变化。修正 TASKS 里 stale 的 §3.11 引用（实际是 §3 第 11 步）。
-
-### 改进 — smoke HRA-001 修复（skill-lint 验收触发）
-
-skill-lint `harness_failure_audit` 基线报 3 处 hard finding（HRA-001：测试 `|| true` 丢被测命令退出码）。本轮全部修复：
-- **`smoke-sentinel.sh:167/170`**：usage 路径 `|| true` 改显式断言 exit 64（no-arg + --bogus 都 exit 64）+ `assert_contains`。
-- **`smoke-auto-bypass.sh:87/143`**：spawn-worker 无参 `|| true` 改显式保存 exit code + 断言 exit 64（#6 加新 check）；smoke 总数 13 → 21（v1.18.4 + v1.20.2 段 + exit 64 断言）。
-- **`smoke-provider-settings.sh:86`**：provider 调用 `|| true` 改保存 exit code，区分 ERROR（provider exit≠0 + 无 token）vs FAIL（exit 0 + 无 token），PASS 若 exit≠0 附诊断。⚠️ 本项未真机验证（provider 调用非确定，依赖网络/token），逻辑保留 capture-response-诊断语义。
-
-### 入库 — G25-G28 FaroPDF Wave 1+2 实战沉淀（references/10-parallel-lessons.md）
-
-G25-G28（2026-08-04 FaroPDF 5-worker：codebuddy W1 + claude-code W2-W5）此前已写进 `10-parallel-lessons.md` 工作区但未入 CHANGELOG，本轮正式入库：
-- **G25**：spawn-worker backend token 检查（`--command` basename 必须含 backend；bash launch.sh wrapper 会触发 fail-closed，改用 backend 二进制直起 + `/tmp/empty-mcp.json` 文件避 tmux 引号吞）。
-- **G26**：claude-code worker 派 subagent 不可用（glm 第三方 provider API 1211/500）→ 主进程 Grep 替代 + prompt 显式禁 subagent。
-- **G27**：漏 commit 也犯 claude-code（不只 codebuddy）—— 收口必查 `git log main..HEAD` 非空。
-- **G28**：verify 用主仓 node_modules（worktree 向上解析，免 npm ci）+ 提效/降 token 汇总表。
-
-### Test — dogfood 链路全验证（本 skill 自身做 PM）
-
-- Task-016/017 由 W1 worker（claude-code/glm-5.2[1M]）在 worktree 完成：spawn（render + settings 绝对路径 + `--bare` 自动降级）→ 投递（§5.2 WORKER_PROMPT.md + 短指令）→ worker 自主执行（Isolation Gate + STATUS + 改文件 + Verify + commit `755ffe3` + done）→ sentinel exit 0 唤醒 PM → 收口 apply。
-- `bash scripts/smoke-auto-bypass.sh` → **21/21 PASS**（v1.18.3 + v1.18.4 + v1.20.2 段 + HRA-001 exit 64 断言）。
-- `bash scripts/smoke-sentinel.sh` → SMOKE_SENTINEL_OK（含 HRA-001 exit 64 断言）。
-- `bash scripts/smoke-tmux-worker.sh` → SMOKE_TMUX_WORKER_OK。
-- `bash scripts/lint-wait-script.sh` → LINT_WAIT_SCRIPT_OK。
-
-### 关联
-
-- 来源：folia Wave-1（2026-08-04/05，5-worker / 2-backend）+ FaroPDF Wave 1+2（2026-08-04）实战沉淀。
-- 关联章节：§2.1 防逃逸门禁、§3.8 spawn 后核验、§3 第 11 步 webview 分流、§5.2 超长 prompt 投递、§6 启动方式（setsid / Bash timeout）、§7.2/§7.3 sentinel + cron。
-- 已知 follow-up：Task-019/020/021 的 codebuddy 端真机验证（本轮验证 claude-code 端；codebuddy 同步监控提速 + setsid 在 codebuddy spawn 的效果待 codebuddy Wave 验证）。
-
-## [1.20.1] - 2026-08-01
-
-### 新增 — 非 CLI 主会话不宜扮演 PM 的适用边界
-
-- **`references/10-parallel-lessons.md` G24（新）**：记录 2026-08-01 FaroPDF 仓审计 Wave 实战教训。在 ZCode 这类**非 CLI 的 harness 内嵌 agent**会话里扮演 PM、调 `spawn-worker.sh` + tmux + sentinel 派只读审计 worker，编排层勉强跑通但三个 worker 全部 `SENTINEL_TIMEOUT` + `TMUX_KILLED`、零产出。根因是 **CLI 范式错配**（非配置问题）：skill 的 worker 启动（`claude-provider-env.sh` wrapper）、权限路由（`--permission-mode`）、进程生命周期都依赖 CLI 能力，非 CLI agent 够不着这些层。三个具体卡点：① provider env 污染（tmux session 继承混合 env → 模型不存在，必须走 wrapper）② permission dialog 杀死只读 worker（`acceptEdits` 不自动批准 Shell，审计跑 `grep`/`find` 逐条弹 dialog → 卡死 → 超时）③ 监测盲区（只挂 sentinel 不做定时 pane 巡检 → silent 卡死无人发现）。结论：多 worktree worker 编排应在 Claude Code CLI 会话做 PM；ZCode 类 harness 要并行改用自带 subagent/Agent 工具。
-- **SKILL.md §1 边界**：「不使用本 Skill」新增「PM 是非 CLI 的 harness 内嵌 agent（ZCode 等）」一条，指向 G24。
-
-### 关联
-
-- 来源：FaroPDF 仓审计 Wave 实战（3 个只读 worker：任务源 / 技术债 / 架构，GLM `glm-5.2[1M]` provider）。链路逐段验证通过（worktree 隔离 / wrapper 统一 provider / scope-guard / worker 收 prompt 建清单），但卡在 permission dialog 层全军覆没。本条不否定 skill 在 CLI 环境的价值，只划清适用边界：**PM 必须是能被 spawn、能配 permission、能跑 settings 路由的 CLI 会话**。
-- 关联章节：§2.1 防逃逸门禁、§3.8.1 spawn 后核验、§6 启动方式（wrapper）、§7 巡检与介入。
-- 附带发现（不入 skill，记 FaroPDF 仓内处理）：`.claude/-settings.json` 文件名带横杠且缺 `ANTHROPIC_MODEL` 字段为坏配置；GLM token 在诊断过程中二次泄露到会话日志（需 rotate）。
-
-## [1.20.0] - 2026-07-31
-
-### 新增 — Issue 分组与合并 PR 判断
-
-- **`references/12-issue-grouping.md`（新）**：补齐 SKILL.md §3「先分组」缺失的两个维度。原「先分组」只覆盖依赖链，本文给出三维度骨架：**① 同根因合并**（多 Issue → 一个 worker → 一个 PR）、**② 依赖链顺序**、**③ 独立并行**。每维度给触发信号 / 前置条件，配套软阈值（同根因合并建议合并后 diff < ~300 行、组内 ≤ 3 个）、决策树、反模式清单（默认一对一 / 硬塞不同类型 / 为凑数合并 / 大改动打包 / 跨模块强合等）。
-- **任务源：本地 task 卡 vs 云端 GitHub Issue**：明确区分两类任务源的分组前预处理。本地结构化任务文件字段齐全、依赖显式；云端 Issue 他人提交、自由文本、依赖需从 body 推断，必须先 `gh issue list/view` 读 body + labels + 最近 commits 做相关性分析，并配套分组 SOP 命令。覆盖原 Skill 任务源模型偏本地、未处理云端 Issue 的缺口。
-- **`templates/issue-batch-pr.md`（新）**：维度①「同根因合并」时的多 Issue PR 描述模板。核心是「统一根因」段（让 reviewer 一眼看清为什么这几个 Issue 要一起改）+ 逐 Issue 修复点 + `Closes #xx, #yy` 批量关闭 + 逐个 Issue 手动验证勾选。含与单 Issue PR 的区别速查、使用纪律（每个 Issue 必须单独验证、写不出统一根因说明可能不该合并）。
-
-### 改进
-
-- **SKILL.md §3 标准流程**：把第 2 步「先分组」从一句话扩成三维度判断（指向 `references/11`）；新增第 1.5 步「识别任务源形态」，要求区分本地 task 卡和云端 Issue 并做不同预处理。强调拿不准时默认**分开**。
-- **SKILL.md §10 参考**：references 列表加 `12-issue-grouping.md`，templates 列表加 `issue-batch-pr.md`。
-- **frontmatter**：version 1.19.0 → 1.20.0。
-
-### 关联
-
-- 来源：Folia 项目 issue 分组审查实测。发现 Skill 原「先分组」逻辑只处理依赖链，既没覆盖「多 Issue → 一个 PR」的打包合并场景，任务源模型也偏本地结构化任务，未处理云端他人提的 GitHub Issue。
-- 范例：Folia `#75`（标题输入英文生成多余 `****`）+ `#76`（标题行删除/方向键时光标漂移）判定为维度①同根因合并（均发生在标题行 WYSIWYG、涉及 heading 节点 IR/Selection、改动位置重叠、均为小修），`#78`（内置 Word 模板导出非预期颜色）单独处理（纯导出模块、与编辑器那组正交）。
-
-## [1.19.0] - 2026-07-13
-
-### 新增 — 验证不授权安装依赖的可执行边界
-
-- 新增 `dependency-install-guard.py` + hook wrapper：PreToolUse 对直接 Shell 工具调用默认 fail-closed，窄生命周期命令或 spawn 的精确 allowlist 才放行；系统/语言包管理器、全局链接、项目本地安装与 `npx`/`npm exec`/`pnpm dlx` 等按需获取命令还须精确安装授权及来源。授权快照缺失/损坏、hook 输入异常均 fail-closed。
-- `spawn-worker.sh` 新增安装与 Shell 精确授权参数；权威快照及 SHA-256 receipt 落到 Git common-dir，worktree 内 JSON 明确只是 mirror。hook 读 spawn 进程快照，并阻断文件工具改写 receipt/settings/mirror。settings 合并只移除旧 guard command，不丢同 entry 的其他 audit hooks。
-- 新增 Git identity 参数，把 author/committer 四个一次性环境变量绑定 worker 进程（不写共享 config），生成并精确放行 `git-workflow/safe-push.sh`；raw push 被 Shell gate 阻断，safe-push 把完整 PR range 身份证据绑定实际推送 OID。
-- 未接入 PreToolUse 的 Codex / OpenCode / custom backend 默认拒绝 spawn；只有 `--allow-prompt-only-install-guard '<来源>'` 显式接受降级并留痕时才放行。
-- Claude Code `--bare` / `--safe-mode` / `CLAUDE_CODE_SIMPLE=1`、排除 local settings 或不可证明的 wrapper 命令默认 fail-closed；CodeBuddy/Qoder backend 也须暴露对应 executable token。初始 METADATA 只记 `settings_wired...runtime_unproven`，首次 hook 调用另写 PM-side attestation；显式降级写 `prompt_only_no_mechanical_enforcement`，不虚报 hook 执行。
-- 新增 49 项故障注入，覆盖命令绕行、按需获取工具、危险 Git/rg/awk 参数、授权快照防篡改、settings 多 hook 保留、PM receipt/runtime attestation、backend executable proof、显式降级、install-like verify 拒绝、worker 进程 Git identity 与 safe-push spawn 集成。
-
-### 改进
-
-- worker prompt、STATUS、RESULT 增加 allowed Shell、PM receipt、enforcement source 与 identity-bound safe-push 证据字段；缺依赖时先找已有二进制，仍缺则 `status=blocked` 并记录 skipped verification，不得把验证要求解释成安装权限。
-- 依赖参考文档与 PATH-less 检查移除自动安装/全局 symlink 暗示；安装命令只作为用户明确批准后的参考。`check-dependencies.sh` 增加 `python3` 只读检查并明确只报告、不授权安装。
-
-### 关联
-
-- 通用化来源：法律 AI 书项目 T159 / DEC-131。本仓只沉淀可执行机制，不复制项目决策正文；`multi-agent-orchestration` 的 ignored 本地 TASKS/DECISIONS 继续不入库。
-
-## [1.18.4] - 2026-07-11
-
-### Changed — spawn 启动期提速 + spawn 后异步纪律（2026-07-10 多 worker Wave 实战三连修）
-
-- **`scripts/spawn-worker.sh` 同步 dialog 监控默认值按 backend 分支化**（T1）：claude-code backend 实测 `--permission-mode auto --bare` 不弹 dialog，默认 `--no-trust-auto --no-permission-auto --no-permission-auto-bg`（省 trust_auto 30s + permission_auto 60s = 90s 空等）；其他 backend（codebuddy / qoderwork-cn / codex / opencode）默认全开。新增 `resolve_backend_defaults()` 函数 + 3 个 `*_OVERRIDE` 标志 + 主流程 PERMISSION_AUTO_BG 独立 gate（与 sync 解耦）。
-- **6 个 `--*/--no-*` flag 精细控制**：`--trust-auto` / `--permission-auto` / `--permission-auto-bg`（显式 opt-in，升级后 dialog 行为变化兜底）；`--no-trust-auto` / `--no-permission-auto`（v1.18.3 兼容，分别同时关 trust+permission / sync+bg）；`--no-permission-auto-bg`（只关 bg watcher）。`--no-permission-auto` 保留 v1.18.3 "both off" 语义。
-- **`SKILL.md` 新增 §3.8**（T2+T3）：`§3.8.1` spawn 后 30 秒内必跑的 4 条核验命令（tmux has-session / capture-pane / METADATA.json / STATUS.json with timeout 120）；`§3.8.2` 并行 spawn 投递纪律（一开始就并行 spawn，不先串行验证流程）；`§3.8.3` 反模式清单（TaskOutput block=true / tmux attach / while sleep 不带 timeout 等）；`§3.8.4` v1.18.4 backend 分支化同步 dialog 监控默认值说明。注：原计划 §3.7 已被 commit a33f057 用作"派发 SOP 必带 skill 路径清单"（当前以 `## Project Skills` 形式存在），故 renumber 到 §3.8。
-- **`SKILL.md §6` 行 593 后补 4 条核验 snippet**：spawn 后立即跑 4 条命令 + 反向引用 §3.8.1。
-- **`SKILL.md §3.5` 末尾加 v1.18.4 注**：claude-code backend 默认全关反向引用 §3.8.4。
-- **`SKILL.md` frontmatter**：version 1.18.2 → 1.18.4（v1.18.3 由 commit 4d168a1 部分入仓但 frontmatter 未更新）。
-- **新增 `templates/pm-spawn-postflight.md`**：4 条核验命令扩展版 cheatsheet（何时用 / 反例 / 多 worker 并行 spawn 提示）。
-- **`references/10-parallel-lessons.md` 加 G23**：spawn 阶段并行投递纪律与已有 G22（wave 内任务颗粒度）形成两层闭环。
-
-### 受影响的 PM 行为
-- 单次 claude-code backend spawn 主进程退出时间从 v1.18.3 实测 2-4 min 降到 v1.18.4 秒级返回。
-- PM 派活后**禁止**用 `TaskOutput block=true` 等 `spawn-worker.sh` 退出，必须跑 §3.8.1 的 4 条核验命令。
-- 多 worker Wave 一开始就并行 spawn（每个 worker 走 `bg spawn-worker.sh` + `bg sentinel.sh` 各一次 fg Bash 调用），不先串行验证流程再补并行。
-
-### Test
-- `bash scripts/smoke-auto-bypass.sh` → 13/13 PASS（v1.18.3 7 项 + v1.18.4 6 项）。
-
-### Background
-- 来源：2026-07-10 某客户委托项目多 worker Wave 实战（3 个不同 skill backend 的 worker，全 claude-code backend），PM 派发阶段（spawn 3 worker + 投 prompt）实测耗 20+ min，用户反馈「着实影响并行推进任务」。TASKS.md L116-118 登记三条 follow-up，合并 v1.18.4。详见 DEC-112（gitignore 本地）。
-
-## [1.18.3] - 2026-07-08
-
-### Changed — spawn-worker.sh auto-bypass permission dialog（踩坑 7 真正修复）
-
-v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，PM 仍需 spawn 后 `tmux attach` 手按 2。v1.18.3 真正自动化：
-
-- **`permission_auto()` 关键修复**：旧版用 `tmux send-keys -t "$session" Down Enter`（按箭头 + Enter 选 option 2），PM 2026-07-08 wave-1 实测在某些 TUI 状态不稳。v1.18.3 改用 `tmux send-keys -t "$session" "2"`（直接发数字键），稳定 work。
-- **`permission_auto_bg()` 新加**：后台 watcher 通过 `( permission_auto_bg "$SESSION" & disown ) &` 启 disown，spawn-worker.sh 退出不影响 watcher。watcher 默认 7200s（与 sentinel --max-wait 对齐），覆盖同步 60s 窗口外的 dialog（worker 启动后 60-7200s 期间任何 tool 调用都自动按 2）。可用 env var `SPAWN_PERMISSION_BG_MAX_WAIT` / `SPAWN_PERMISSION_BG_POLL`（默认 5s）调整。
-- **新 flag `--no-permission-auto`**（v1.18.3 精细 opt-out）：**只**关 permission_auto + permission_auto_bg（不影响 trust_auto）。与 `--no-trust-auto`（同时关 trust + permission）区分，给精细控制。
-- **新 smoke `scripts/smoke-auto-bypass.sh`**：v1.18.3 新增验证脚本，跑 7 项 check（permission_auto 函数定义、数字键 `2`、permission_auto_bg 函数、--no-permission-auto flag 解析、调用点 disown、usage 输出、头部 v1.18.3 标记）。
-- **SKILL.md**：
-  - §3.5 改写为"spawn 后 auto-bypass（v1.18.3）—— PM 不需要手按 dialog"。
-  - 新增 §3.5.1"auto-bypass 实现细节"：v1.18.3 修复点、permission_auto_bg 行为、opt-out flag、smoke 验证。
-- **scripts/spawn-worker.sh 头部注释**：trust + permission dialog 兜底章节改写，明确 v1.18.3 auto-bypass 三层保护（trust_auto / permission_auto / permission_auto_bg），PM 默认不需要 attach tmux 盯。
-
-### 受影响的 spawn-worker.sh 行为
-- 默认情况下，PM 派活后**不需要**任何手按（trust_auto + permission_auto + permission_auto_bg 三层自动）。仅当 worker 在 1-2 分钟还没写 STATUS.json 时，再 `tmux attach` 手动 inspect（说明 dialog 真卡住）。
-- 仍用 `--no-trust-auto` opt-out 同时关 trust + permission（向后兼容）。
-- 新增 `--no-permission-auto` 精细 opt-out（v1.18.3）。
-
-### Test
-- `bash scripts/smoke-auto-bypass.sh` → 7/7 PASS（v1.18.3 验证）。
-
-### Background
-- v1.18.3 由 PM 主动接管，原因是 wave-3 派 worker G 时撞 WorkBuddy 平台 `sg.tgalileo.com` 端点临时 hang（axios 旧 connection 不释放），worker 反复死锁失败。PM 按 §2.1 防逃逸门禁例外"修复 PM 自己生成的 orchestration 文档/配置"直接改 spawn-worker.sh（worker 任务范围明确 + 范围小）。worker G 在 workbuddy 平台恢复后再跑相同任务应能复现。
-
-## [1.18.2] - 2026-07-08
-
-### Added
-- **CodeBuddy tmux spawn 实测改进**（`references/08-workbuddy-cli-worker.md` §14）：基于三轮不同形态的 spawn 任务（多步文本编辑 / SVG 生成 / CLI 研究调研）补强 §10（2026-07-05 五轮实测）。三个具体卡点 + 顺跑配置：
-  - **权限机制坑（§14.1）**：`acceptEdits -y` 组合下，acceptEdits 只 accept edits，**读 worktree 外路径 / 特殊路径（tmux socket、跨 worktree 符号链接）仍弹权限对话框**；`-y`（`--dangerously-skip-permissions`）被 acceptEdits 覆盖、没真正跳过读权限；`--add-dir <项目根>` 只预授权文件目录、不覆盖工具调用层。后果：**多步任务（Read 多文件 + Bash 多次）权限循环卡死**，单步少路径任务勉强过。顺跑：多步任务一律 `--permission-mode bypassPermissions`（§10.1 launch.sh），`acceptEdits` 只适合单步 / 少路径。
-  - **Enter 提交坑（§14.2）**：`tmux send-keys -t <session> "prompt" Enter` 的 `Enter` **没提交 prompt**（pane 显示 prompt 完整在 `>` 输入框但没执行）——codebuddy TUI 稳定行为，**与 glm worker 同坑**。顺跑投递配方：`send-keys -l` 投文本 + 单独 `send-keys Enter`（或 `C-m` 更稳）+ sleep 12-15s + 兜底补一发 Enter。
-  - **session 断流坑（§14.3）**：权限确认对话框（选 don't-ask / session-allow）后，prompt 流程被打断，codebuddy 回 `>` 空等、**不自动续原 prompt**。顺跑：重发 prompt（§14.2 配方）或 `codebuddy -c` resume；最佳策略=bypassPermissions 从根上绕开权限框。
-  - **原生替代方向（§14.4）**：CodeBuddy 原生支持 `--worktree --tmux`（§7.3），可替代 spawn-worker.sh + launch.sh 手工组合；记为 long-term 优化方向，**待对比测（权限框透传 / pm-monitor 识别 / worktree 收口三项未测），未测前不替换 spawn-worker.sh 路径**。
-  - SKILL.md frontmatter version 1.18.1→1.18.2。
-- 原则跨项目通用（不绑定具体项目 / 章节 / AGENTS / DEC），案例匿名化。
-
-## [1.18.1] - 2026-07-08
-
-### Added
-- **G22 多维度任务的颗粒度纪律**（`references/10-parallel-lessons.md`）：单 worker 改多章 × 多维度时注意力被高优维度（Critical / Important）占满、末位维度（如"标题删重"）静默漏掉。沉淀三条通用改进：①多维度任务 prompt 用 **checklist 强制逐维度**（每维度独立 commit / 勾选，worker 必须覆盖完所有维度才算完成）；②大批量改后必派 **wave2 复查 worker**（只读 review）抓漏；③精细深查（箭头落点 / 字体逐核 / 像素对齐）拆**单维度 worker**处理深度。主因非模型能力，是任务粒度 + prompt 结构。原则跨项目通用，不绑定具体项目或章节。
-- SKILL.md §3.1 Wave 模式段加一段交叉引用，指向 G22；frontmatter version 1.18.0→1.18.1。
-
-## [1.18.0] - 2026-07-07
-
-### BREAKING — 删除全部 headless / batch 模式（DEC-044）
-- **`render-runtime-profile.sh` 移除 `--mode` / `--prompt-file`**：删除参数、校验、`append_redirection` / `shell_wrap` 辅助函数。5 个 backend（claude-code / codex / opencode / codebuddy / qoderwork-cn）只保留 interactive 分支，输出删 `WORKER_MODE`。传 `--mode` / `--prompt-file` 现在显式报错并指向 DEC-044 + 迁移指引（短任务用同宿主 Subagent）。
-- **理由（用户原话）**：「我们使用 TMUX 就是要去进行交互式的 worker 监控。如果是 `-p` 模式的话，它更适合那种短程的任务，那种任务其实使用 subagent 也能完成，所以我们要删掉这个模式，避免 agent 错误调用这样一种模式」。headless 一发跑完 = 放弃 tmux 监控可纠偏；而它适合的短任务本就该走 Subagent。分工由此清晰：**短任务 → Subagent；需编排/监控 → tmux 交互 worker**。
-- **SKILL.md**：§2 执行模式表 + §6 启动方式删除 Claude Code 批处理 bullet、`< redirect 必须 bash -lc`、`claude -p autocompact thrash` 两条警示，换成「所有 worker 一律交互式」说明；Codex/OpenCode bullet 改为交互式命令。§2 表加「同宿主 Subagent」替代 headless 的说明。
-- **references/06/07/08**：顶部加「batch 已于 v1.18.0 移除（DEC-044）」横幅，正文 batch 段保留作历史参考。
-- **supersede**：DEC-033（batch 部分）、DEC-040（batch flag 修正）、DEC-042（「保留 batch 兜底」结论）的 batch 相关部分；交互式默认值与 DEC-042 长任务交互 canonical pattern 保留并扩展到短任务。
-- **不变**：`smoke-provider-settings.sh` 仍用 `claude -p` 做一次性 provider 验证（测试工具非派 worker，故意保留）。
-
-### Added — 轻量模式 `--no-worktree`（DEC-045）
-- **`spawn-worker.sh --no-worktree`**：非默认的轻量隔离模式。worker tmux session cwd 直接指向目标文件夹，不建 git worktree / branch / base ref。两种触发：(a) 用户显式 `--no-worktree`；(b) `--project` 检测为非 git work tree 时自动切换（打印 `SPAWN_WORKER_LIGHTWEIGHT_AUTO`，非静默降级）。
-- **`METADATA.json` 加 `isolation_mode` 字段**（`"worktree"` | `"lightweight"`）；轻量模式 `branch / base_ref / base_sha` 留空。
-- **Isolation Gate 分支化**：worktree 模式验 cwd + branch；轻量模式只验 cwd（非 git 不验 branch）。info/exclude 写入加 git 存在性 guard（非 git 跳过）。
-- **worker-prompt.md**：Context 加 `{{isolation_mode}}`；Isolation Gate / Commit Cadence / Git-PR 段加轻量分支（非 git 文件夹跳过 commit/PR，交付物直接落盘 + RESULT.md 清单）。
-- **适用场景**：一个 PM session 派多个 worker 各管一个独立文件夹、目标不是 git 仓、或不需要 git 级隔离。隔离 = 文件夹分离（硬约束：worker 必须占互不重叠的文件夹；越界靠 `--allow-paths` scope-guard 兜底）。SKILL.md 新增 §2.1.1 + §6 轻量 spawn 示例 + §11 轻量 smoke benchmark。
-
-### Changed
-- **版本号 frontmatter**：SKILL.md `version` 从 `1.17.6` 修正为 `1.18.0`（此前 1.17.7/1.17.8 patch 未同步 frontmatter，一并修正）。
-
-## [1.17.8] - 2026-07-06
-
-### Fixed
-- **第三方 provider worker 串到 Fable 5 / OAuth 的 env 路由 bug（DEC-043）**：`render-runtime-profile.sh` 在 provider-isolation 路径（wrapper）的 `claude_parts` 追加 `--bare`。`--bare`（minimal mode）禁 keychain reads / OAuth / plugin sync / CLAUDE.md auto-discovery，使 Anthropic auth 严格走 wrapper 设的 `ANTHROPIC_API_KEY`（来自 provider registry/settings），不再读 keychain 残留 sk-ant。修前：deepseek/glm worker 启动弹"是否使用此 API key"（sk-ant），选 No 后串 Fable 5 而非目标 provider；MCP 信任框也每次弹。修后实测：claude 直显"deepseek-v4-pro · API Usage Billing"，无 keychain/MCP 框。inherit-style worker（不走 wrapper）不受影响。
-
-## [1.17.7] - 2026-07-05
-
-### Added
-- **`config/orchestration-personal.json` 个人偏好初始化**：基于 `config/orchestration-personal.example.json` 模板创建本地个人配置。`host=claude-code`，`main_force.task_routing` 走 deepseek-v4-pro（高端）/ deepseek-v4-flash（简单+多模态）；`codex_policy.policy=explicit_only` + `strict_mode=true`（CodeX 默认锁死，仅用户原话命中 `trigger_phrases` 才解封）；`backend_model_routing.codebuddy.default_models = ["deepseek-v4-pro", "deepseek-v4-flash"]`（workbuddy/codebuddy CLI 只启用这两个模型档位，不引入 kimi/minimax/sonnet/opus 等其它模型）；`backend_model_routing.qoderwork-cn.default_models = ["deepseek-v4-pro", "deepseek-v4-flash", "qmodel_latest", "qmodel"]`（QoderWork CN 启用 Deepseek 两档 + Qwen3.7-Max / Qwen3.7-Plus），其中 Qwen 两个档位通过 `discount_window`（22:00-08:00 Asia/Shanghai，含跨午夜）标注为「二折优惠时段优先」。文件受 `.gitignore` 的 `**/config/*.json` 规则保护，不入库。
-
-### Changed
-- **codebuddy backend 模型白名单收敛**：个人偏好中 `backend_model_routing.codebuddy.default_models` 仅保留 `deepseek-v4-pro` 和 `deepseek-v4-flash`。`kimi-k2.6` / `kimi-k2.7` / `minimax-m3` / `sonnet` / `opus` / `auto` 等档位不启用——后续如需扩展，再追加到 `default_models` 数组。
-- **qoderwork-cn backend 模型白名单收敛**：个人偏好中 `backend_model_routing.qoderwork-cn.default_models` 收敛为 `["deepseek-v4-pro", "deepseek-v4-flash", "qmodel_latest", "qmodel"]`，与 codebuddy 共享 Deepseek 两档；Qwen3.7-Max（`qmodel_latest`）和 Qwen3.7-Plus（`qmodel`）在 `discount_window`（22:00-08:00）享受二折优惠，PM 派 qoderwork-cn worker 时若当前时间落在折扣窗口，应优先路由到 `qmodel_latest` / `qmodel`；窗口外则回落 Deepseek 两档。
-- **新增 `discount_window` 字段**：在 `backend_model_routing.qoderwork-cn` 下声明折扣时段 `start=22:00 / end=08:00 / timezone=Asia/Shanghai / cross_midnight=true`，并列出 `models_in_window`（Qwen 两档）与 `models_outside_window`（Deepseek 两档），`rate_note="二折（约 20% 原价）"`。当前 `render-runtime-profile.sh` 尚未解析该字段，PM 需手动判断时段后再选 model。
-- **CodeX 路由硬规则收紧**：在 SKILL.md §2.4 `codex_policy.policy = "explicit_only"` 基础上，新增 `strict_mode=true` + `trigger_phrases` + `fallback_when_blocked` + `pm_must_log_on_unlock` 字段。PM 必须看到用户原话命中 `trigger_phrases`（如「用 Codex / 调用 Codex / 跑 Codex / use codex / run codex / spawn codex」等）才解封；任何弱暗示（「更适合 Codex / Codex 额度还行 / 试试 Codex」）不算解封。CodeX 被 block 时回落 DeepSeek 两档，不替换为其它高额度模型。解封时必须在 Wave 计划 + `STATUS.json.pm_notes` 记录用户原话、wave_id、worker_id 与 codex profile/model，便于审计。
+- `pm-orchestrate reauthorize` 子命令（Task-058）：spawn 授权快照的运行时刷新一条命令化——合并 `--allow-cmd` 进授权文件、重写 `launch.s…17635 tokens truncated…
 
 ### Reason
 - 来源：用户明确「Workbody 这个 Agent 的 CLI 只选用 Deepseek V4 Pro 和 Deepseek V4 Flash 两个模型」，并补充「qoderwork-cn 也只调用 Deepseek V4 Pro / Deepseek V4 Flash / Qwen3.7-Max / Qwen3.7-Plus，其中后两个更推荐在晚上 10 点到早上 8 点之间调用，因为会打二折」，「除非我明确要求，尽量不要调用 CodeX」。落地为个人偏好 `backend_model_routing.codebuddy` + `backend_model_routing.qoderwork-cn` + `codex_policy`，并通过 `discount_window` 把折扣时段、`trigger_phrases` 把 CodeX 解封条件显式标注，让 PM 派 worker 时能直接看到「此时段是否用 Qwen 两档最划算」与「CodeX 默认锁死、必须看到原话才解封」。
@@ -1454,14 +843,14 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 ## [1.8.1] - 2026-05-20
 
 ### Changed
-- 同步相关 Skill 引用：`cross-agent-collab` 更名为 `cross-agent-coordination` 后，更新任务协调层边界说明和参考文档。
+- 同步任务协调层边界说明和参考文档命名。
 
 ## [1.8.0] - 2026-05-20
 
 ### Changed
 - 重命名 Skill：`multi-agent-workflow` → `multi-agent-orchestration`，标题改为 Multi-Agent Orchestration，以突出“本地多 Agent 执行编排”而非普通流程说明。
 - 同步更新 SKILL.md description 和开篇说明，统一使用“执行编排”表述。
-- 同步更新 `cross-agent-coordination` 中对本 Skill 的边界引用。
+- 同步更新相关边界引用。
 
 ## [1.7.0] - 2026-05-20
 
@@ -1469,7 +858,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 - 重命名 Skill：`parallel-agent-workflow` → `multi-agent-workflow`，标题改为 Multi-Agent Workflow，以匹配当前“多 Agent 本地执行编排”的职责边界。
 - 优化 SKILL.md frontmatter description，补充正向触发场景和负向边界。
 - 补充脚本依赖说明，明确 `pm-monitor.sh` 与 `terminal-split.sh` 的系统依赖和可选终端依赖。
-- 同步更新 `cross-agent-coordination` 中对本 Skill 的边界引用。
+- 同步更新相关边界引用。
 
 ## [1.6.0] - 2026-05-19
 
@@ -1493,7 +882,7 @@ v1.18.2 文档化了 "acceptEdits -y 仍弹 dialog" 但**未改默认行为**，
 
 ### Changed
 - 明确本 Skill 只负责本地 Agent 会话、并行执行、PM 巡检和 worktree 隔离，不拥有任务主状态。
-- 标准流程改为从项目任务源接任务；任务读取、外部 Agent 邮件触发和跨平台归属交给 `cross-agent-coordination`。
+- 标准流程改为从项目既有任务源接收已经确认可执行的任务。
 - 将 `git-task-orchestrator` 定位改为历史蓝图，不再作为当前协作入口，也不迁入其旧 worktree/session 方案。
 
 ## [1.3.0] - 2026-05-09
