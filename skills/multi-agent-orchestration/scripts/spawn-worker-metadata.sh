@@ -69,6 +69,8 @@ write_metadata() {
     --arg isolation_mode "$isolation_mode_value" \
     --argjson lightweight_auto "$LIGHTWEIGHT_AUTO" \
     --argjson verification_commands "$verify_json" \
+    --arg verification_source "${VERIFY_COMMAND_SOURCE:-}" \
+    --argjson verification_required "${REQUIRE_VERIFICATION:-0}" \
     --argjson add_dirs "$(array_to_json "${ADD_DIRS[@]}")" \
     --argjson allow_paths "$(array_to_json "${ALLOW_PATHS[@]}")" \
     --arg install_guard_mode "$INSTALL_GUARD_MODE" \
@@ -157,6 +159,8 @@ write_metadata() {
         worker_id: $wave_worker_id
       },
       verification: {
+        required: ($verification_required == 1),
+        source: $verification_source,
         commands: $verification_commands
       },
       execution_authority: {
