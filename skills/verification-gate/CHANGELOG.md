@@ -1,5 +1,18 @@
 # Verification Gate Skill 变更记录
 
+## [1.3.0] - 2026-09-05
+
+### 新增
+
+- **PEA 分层回执适配器**：新增 `build_staged_receipt.py`，把已经真实执行的 `verification-gate-stage-report/v1` 阶段事实转换为 `production-engineering-completion-evidence/v1` staged receipt；适配器只校验、归一化与写入证据，不执行阶段命令、不启动后台进程，也不自行裁定 READY / RELEASED。
+- **真实消费者回归**：新增 16 项自包含测试，覆盖临时 Git 仓库中生成回执后交给 `production-engineering-audit` 实际消费、失败阶段触发 hard、候选 HEAD 绑定、证据路径穿透、跳过规则与 Skill fresh-context 边界。
+- **输入样例与契约说明**：新增 staged report 样例及 `references/staged-receipt.md`，明确 verification-gate 是执行/记录层，PEA 是完成等级唯一裁决层。
+
+### 安全与性能
+
+- 拒绝回执文本中的绝对路径、`file://`、PEM 私钥、Basic Auth、JWT 与 URI 内嵌凭证；写出采用同目录临时文件 + 原子替换，失败不覆盖既有 receipt。
+- URI 检测采用有起始边界、长度有界的 scheme 匹配；32K/64K 长文本回归阻断平方级正则回溯。
+
 ## [1.2.0] - 2026-08-15
 
 ### 新增
