@@ -645,7 +645,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.16.3</td>
+<td style="text-align:center">v2.16.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>
