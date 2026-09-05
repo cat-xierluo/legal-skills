@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.17.0] - 2026-09-05
+
+### 新增
+
+- 新增 Orca-only `orca_rate_limit_recovery.py`：以显式 `terminal_handle + incarnationId + provider + account_group` 清单跨项目巡检 Worker，区分 `RUNNING`、`RATE_LIMIT_RETRYING`、`RATE_LIMIT_IDLE`、`UNKNOWN`；默认只读，只有 `--execute` 才对高置信 idle episode 通过 terminal 输入通道发送固定“继续”。
+- 新增 provider/account group 分组错峰、`handle + incarnation + cursor + timestamp + evidence` episode 幂等、私有 owner/symlink 防护状态、非阻塞锁、发送前 identity/cursor/idle 复核和发送后 identity 复核。发送结果只记 `WAKE_ACCEPTED`，不冒充额度或业务恢复。
+
+### 改进
+
+- 从 `pm-quota-stall.sh` 抽出共享 `provider_error_classifier.py`，统一 auth/config/network/quota 优先级；混合 auth/config + 429、仅讨论/测试 429、陈旧 tail、断连/不可写、tmux/未知来源和 Orca 畸形/截断清单全部失败关闭或不发送。
+- 主文档只保留入口与 Hard Fail；manifest、状态机、退出码、错峰、幂等和安全 runbook 放入 `references/20-orca-rate-limit-recovery.md`，并在 Wave Autopilot 中建立按需入口。
+
+### 验证
+
+- 新增 fake-Orca 确定性矩阵，覆盖 dry-run 零发送、retrying/RUNNING 不发送、idle 只执行一次、新 evidence 可再处置、分组顺序与最小间隔、auth/config 混合、源码/测试日志讨论 429、断连/不可写/陈旧证据、截断/畸形/失败 Orca、tmux 来源与参数拒绝、敏感原文不出回执、identity 漂移、send/post-check 不确定后的 intent 幂等、状态 symlink/权限与锁竞争。
+- fake-Orca 15/15、`pm-quota-stall` 39/39、`night-watch` 31/31 通过；全部 Shell `bash -n`、Python `py_compile`、Skill quick validation 与 Git whitespace 检查通过。真实 Orca 1.4.197 只读 smoke 验证 list/show/read/wait schema、`UNKNOWN/no_actionable_quota_evidence`、零 send 且不创建 state。
+- Skill Lint security scan 为 0 critical / 0 high；本轮新增生产脚本只有已披露且 `shell=False`/参数数组调用的 subprocess medium，以及工具定位/私有状态路径所需的环境变量 low。Harness failure audit 未在本轮新增文件命中，仍保留全 Skill 既有 6 个 hard finding，不以命令变形规避。
+
+### 待办事项
+
+- 真实 GLM/MiniMax 429、真实 Orca 多项目批量 `WAKE_ACCEPTED → cursor 前进 → 业务进展`、Task-064 的真实 provider quota→available E2E 均为 `NOT_VERIFIED`；本版本不实现 lane availability probe、自动切 provider、tmux、长期守护或 L3 scheduler。
+
 ## [2.16.5] - 2026-09-05
 
 ### 文档完善

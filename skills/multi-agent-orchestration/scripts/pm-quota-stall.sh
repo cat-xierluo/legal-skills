@@ -273,21 +273,29 @@ if [ "$probe_status" -eq 0 ]; then
   exit 0
 fi
 
-combined_error=$(LC_ALL=C tr '[:upper:]' '[:lower:]' < "$PROBE_STDERR"; LC_ALL=C tr '[:upper:]' '[:lower:]' < "$PROBE_STDOUT")
+combined_error=$(cat "$PROBE_STDERR" "$PROBE_STDOUT")
+set +e
+provider_classification=$(printf '%s' "$combined_error" | "$PYTHON_CLI_BIN" "$SCRIPT_DIR/provider_error_classifier.py")
+classifier_status=$?
+set -e
+if [ "$classifier_status" -ne 0 ]; then
+  emit_result unknown fail_closed
+  exit "$EXIT_UNKNOWN"
+fi
 
-if printf '%s' "$combined_error" | grep -Eiq '(^|[^0-9])(401|403)([^0-9]|$)|unauthori[sz]ed|forbidden|authentication|invalid[[:space:]_-]*(api[[:space:]_-]*)?key|login[[:space:]]+required|not[[:space:]]+logged[[:space:]]+in'; then
+if [ "$provider_classification" = auth ]; then
   emit_result auth fail_closed
   exit "$EXIT_AUTH"
 fi
-if printf '%s' "$combined_error" | grep -Eiq '(^|[^0-9])400([^0-9]|$)|bad[[:space:]]+request|invalid.*model|model.*(not[[:space:]_-]*found|does[[:space:]]+not[[:space:]]+exist|unsupported|unknown)|modelcode|config(uration)?[[:space:]_-]*error|unknown[[:space:]]+option|usage:[[:space:]]*claude'; then
+if [ "$provider_classification" = config ]; then
   emit_result config fail_closed
   exit "$EXIT_CONFIG"
 fi
-if printf '%s' "$combined_error" | grep -Eiq 'network|connection|connect[[:space:]_-]*(failed|refused|reset)|dns|econn|enotfound|socket|tls|certificate|request[[:space:]]+timed[[:space:]]+out|temporary[[:space:]]+failure'; then
+if [ "$provider_classification" = network ]; then
   emit_result network retry_manually
   exit "$EXIT_NETWORK"
 fi
-if printf '%s' "$combined_error" | grep -Eiq '(^|[^0-9])429([^0-9]|$)|rate[ _-]?limit|usage[ _-]?limit|quota[[:space:]_-]*(exceed|exhaust|deplet|limit|reset)|credits?[[:space:]].*(exhaust|deplet)|hit[[:space:]]+(your[[:space:]]+)?limit|limit[[:space:]]+resets?'; then
+if [ "$provider_classification" = quota ]; then
   emit_result quota wait
   exit "$EXIT_QUOTA"
 fi

@@ -20,6 +20,8 @@
 
 ```bash
 find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+python3 -m py_compile scripts/provider_error_classifier.py scripts/orca_rate_limit_recovery.py scripts/test_orca_rate_limit_recovery.py
+python3 scripts/test_orca_rate_limit_recovery.py
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
 bash scripts/test-pm-quota-stall.sh

@@ -55,6 +55,8 @@
 3. **先区分硬额度与瞬发拥塞再复活**：PM 自身可用、任一 worker 能维持长 turn、复活探针被消费且有增量进展，表示边际可用；冻死 worker ≤3 个/批、间隔 8 秒错峰复活并周期重试。只有单请求也稳定 429 才等刷新点统一恢复。
 4. **完成权威先查 task-list**：每跳第一项运行 `orca orchestration task-list --run <run> --json`；队列空不等于 worker 未完成。并核对每个 spawn receipt 的 `SPAWN_WORKER_DISPATCH_BIND`，出现 `manual-required` 立即按 `references/14-pm-orchestrate.md` §1.1 恢复路由，不等到 worker_done 缺失才处理。
 
+跨项目或同 wave 多终端出现疑似 429 时，不要凭 tail 批量广播。按 `references/20-orca-rate-limit-recovery.md` 准备显式 provider/account group 清单，先用 `orca_rate_limit_recovery.py` 做只读 audit，再由 `--execute` 对高置信 idle episode 分组错峰发送固定“继续”。该动作只表示 `WAKE_ACCEPTED`；是否恢复仍由后续 cursor 与业务证据确认。
+
 ## 5. 组波查表规则（模板；具体值落项目策略节）
 
 只派 `READY`；`DRAFT` 默认不可派，也不自动生成“晋级合同”。只有命名实现已经具备全部非文档输入、且缺少的合同是唯一阻塞时，PM 才能新建一次合同任务。实现仍被用户资产、环境、授权或真实样本卡住时直接泊车。
