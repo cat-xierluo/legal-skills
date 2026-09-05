@@ -1,0 +1,55 @@
+{
+  "contract": "verification-gate-stage-report/v1",
+  "claim": {
+    "id": "FEATURE-EXAMPLE-001",
+    "type": "feature",
+    "statement": "代表性服务入口由真实 consumer 观察到预期终态",
+    "claimed_level": "e2e_verified",
+    "observed_at": "2026-09-05T10:30:00+08:00"
+  },
+  "candidate": {
+    "git_commit": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "target": {
+    "type": "service",
+    "name": "example-service"
+  },
+  "stages": [
+    {
+      "id": "build",
+      "kind": "build",
+      "status": "passed",
+      "required": true,
+      "command": "python3 -m build --wheel",
+      "exit_code": 0,
+      "failure_count": 0,
+      "evidence": "artifacts/verification/build.log"
+    },
+    {
+      "id": "integration",
+      "kind": "integration",
+      "status": "not_run",
+      "required": false,
+      "skip_reason": "当前声明不依赖外部 provider"
+    },
+    {
+      "id": "e2e",
+      "kind": "e2e",
+      "status": "passed",
+      "required": true,
+      "command": "python3 tests/e2e_representative.py",
+      "exit_code": 0,
+      "failure_count": 0,
+      "evidence": "artifacts/verification/e2e.log"
+    }
+  ],
+  "consumer": {
+    "name": "example-downstream-consumer",
+    "observed": true,
+    "evidence": "artifacts/verification/consumer.log"
+  },
+  "unsupported_claims": [
+    "真实第三方 provider 与长时容量未验证",
+    "本模板的时间和 commit 是占位值，使用前必须替换为当前候选的真实事实"
+  ]
+}
