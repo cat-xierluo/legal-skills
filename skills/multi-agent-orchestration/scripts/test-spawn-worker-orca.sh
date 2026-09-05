@@ -641,6 +641,7 @@ chmod +x "$E2E_FAKE_BIN/ps"
 
 run_e2e_spawn() {
   local branch="$1" session="$2" out_base="$3"
+  shift 3
   ORCA_CLI_COMMAND="$E2E_ORCA_BIN" \
   E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
   E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
@@ -655,50 +656,101 @@ run_e2e_spawn() {
     --no-trust-auto --no-permission-auto --no-permission-auto-bg --no-external-imports-auto \
     --orca-supervised \
     --task-spec "e2e isolation pre-gate regression spec" \
+    "$@" \
     > "$out_base.out" 2> "$out_base.err"
 }
 
-# 用例 1（复现形态）：branch 已存在，fake Orca 建了 -2 后缀分支 → pre-gate 必须在任何
-# terminal/worker-start/任务注入副作用之前 exit 2。
+# Task-116 既有 Worktree 预门禁断言：命中 exact path/branch 占用时零 mutation 副作用
+# （无 worktree create / terminal / run / task / worker-start，无 Session Context），
+# 稳定输出 EXISTING_WORKTREE_REQUIRES_RECOVERY 且退出码 3。
+assert_existing_worktree_rejection() {
+  local out_base="$1" label="$2"
+  if grep -Fq 'EXISTING_WORKTREE_REQUIRES_RECOVERY' "$out_base.err"; then
+    ok "$label reports the stable existing-worktree machine code"
+  else
+    bad "$label reports the stable existing-worktree machine code"
+  fi
+  if grep -Eq 'worktree create|terminal create|run-create|task-create|worker-start' "$E2E_ORCA_LOG"; then
+    bad "$label performs zero Orca create/terminal/dispatch side effects"
+  else
+    ok "$label performs zero Orca create/terminal/dispatch side effects"
+  fi
+  if [ ! -e "$E2E_PROJECT/.claude/agent-sessions" ]; then
+    ok "$label leaves no Session Context on disk"
+  else
+    bad "$label leaves no Session Context on disk"
+  fi
+}
+
+# 用例 1（Task-116 复现形态）：exact branch 已存在于本仓 → 既有 Worktree 预门禁在任何
+# provider lease / Orca worktree create / terminal / dispatch 之前稳定拒绝（exit 3），
+# Orca 不再生成 -2 后缀 worktree，零残留。
 git -C "$E2E_PROJECT" branch e2e-pregate-miss
-touch "$E2E_STATE/branch-suffix-2"
+rm -f "$E2E_STATE/branch-suffix-2"
 : > "$E2E_ORCA_LOG"
 set +e
 run_e2e_spawn e2e-pregate-miss e2e-pregate-miss "$E2E_ROOT/mismatch"
 e2e_mismatch_rc=$?
 set -e
-if [ "$e2e_mismatch_rc" != "2" ]; then
+if [ "$e2e_mismatch_rc" != "3" ]; then
   sed -n '1,120p' "$E2E_ROOT/mismatch.err" >&2
 fi
-assert_eq "$e2e_mismatch_rc" "2" "-2 suffix branch mismatch exits 2 before any worker side effect"
-if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE_FAILED' "$E2E_ROOT/mismatch.err" \
-  && grep -Fq 'actual_branch=e2e-pregate-miss-2' "$E2E_ROOT/mismatch.err"; then
-  ok "-2 suffix mismatch reports the isolation pre-gate failure with both branch names"
+assert_eq "$e2e_mismatch_rc" "3" "existing exact branch exits 3 before any side effect"
+assert_existing_worktree_rejection "$E2E_ROOT/mismatch" "existing exact branch"
+if grep -Fq 'worktree current' "$E2E_ORCA_LOG"; then
+  ok "existing exact branch still used read-only Orca runtime detection"
 else
-  bad "-2 suffix mismatch reports the isolation pre-gate failure with both branch names"
+  bad "existing exact branch still used read-only Orca runtime detection"
+fi
+if [ ! -e "$E2E_WS/e2e-pregate-miss" ] && [ ! -e "$E2E_WS/e2e-pregate-miss-2" ]; then
+  ok "existing exact branch leaves no worktree residue at all"
+else
+  bad "existing exact branch leaves no worktree residue at all"
+fi
+
+# 用例 1b（兜底回归）：branch 名只存在于 origin（本地 ref 不存在）→ 预门禁不误伤
+# 新建流程；若 Orca runtime 漂移仍生成 -2 后缀，late isolation pre-gate 保持
+# exit 2 的兜底语义（零 terminal/任务注入，残留 worktree 保留供 PM 清理）。
+git -C "$E2E_PROJECT" update-ref "refs/remotes/origin/e2e-late-collide" HEAD
+touch "$E2E_STATE/branch-suffix-2"
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-late-collide e2e-late-collide "$E2E_ROOT/late-collide"
+e2e_late_rc=$?
+set -e
+if [ "$e2e_late_rc" != "2" ]; then
+  sed -n '1,120p' "$E2E_ROOT/late-collide.err" >&2
+fi
+assert_eq "$e2e_late_rc" "2" "origin-only name collision falls through to the isolation pre-gate backstop"
+if grep -Fq 'SPAWN_WORKER_ISOLATION_PREGATE_FAILED' "$E2E_ROOT/late-collide.err" \
+  && grep -Fq 'actual_branch=e2e-late-collide-2' "$E2E_ROOT/late-collide.err"; then
+  ok "-2 suffix mismatch still reports the isolation pre-gate failure with both branch names"
+else
+  bad "-2 suffix mismatch still reports the isolation pre-gate failure with both branch names"
 fi
 if grep -Fq 'worktree create' "$E2E_ORCA_LOG" \
   && grep -Fq 'worktree current' "$E2E_ORCA_LOG"; then
-  ok "-2 suffix mismatch still performed the real Orca worktree create"
+  ok "origin-only collision still performed the real Orca worktree create"
 else
-  bad "-2 suffix mismatch still performed the real Orca worktree create"
+  bad "origin-only collision still performed the real Orca worktree create"
 fi
 if grep -Fq 'terminal create' "$E2E_ORCA_LOG" || grep -Fq 'worker-start' "$E2E_ORCA_LOG" \
   || grep -Fq 'task-create' "$E2E_ORCA_LOG" || grep -Fq 'run-create' "$E2E_ORCA_LOG"; then
-  bad "-2 suffix mismatch must not create a terminal, run, task or worker-start"
+  bad "origin-only collision must not create a terminal, run, task or worker-start"
 else
-  ok "-2 suffix mismatch must not create a terminal, run, task or worker-start"
+  ok "origin-only collision must not create a terminal, run, task or worker-start"
 fi
-if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-pregate-miss" ]; then
-  ok "-2 suffix mismatch leaves no Session Context on disk"
+if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-late-collide" ]; then
+  ok "origin-only collision leaves no Session Context on disk"
 else
-  bad "-2 suffix mismatch leaves no Session Context on disk"
+  bad "origin-only collision leaves no Session Context on disk"
 fi
-if [ -d "$E2E_WS/e2e-pregate-miss-2" ]; then
-  ok "-2 suffix mismatch retains the created worktree for PM cleanup"
+if [ -d "$E2E_WS/e2e-late-collide-2" ]; then
+  ok "origin-only collision retains the created worktree for PM cleanup"
 else
-  bad "-2 suffix mismatch retains the created worktree for PM cleanup"
+  bad "origin-only collision retains the created worktree for PM cleanup"
 fi
+rm -f "$E2E_STATE/branch-suffix-2"
 
 # 用例 2（成功路径回归保护）：branch 名可用 → pre-gate 放行，supervised 注册与
 # 任务注入照常发生，final gate 通过，exit 0。
@@ -731,6 +783,123 @@ if jq -e '.session.orca.supervised.task_id == "task-pregate" and .session.orca.s
   ok "matching-branch spawn records the supervised dispatch contract in metadata"
 else
   bad "matching-branch spawn records the supervised dispatch contract in metadata"
+fi
+
+# --- Task-116 既有 Worktree 预门禁矩阵 ---
+# exact --worktree 路径 / exact branch 已被同 repo worktree 占用、错仓、脏工作区、
+# 非 git 目录（未知状态）一律在任何 provider lease / Orca worktree create /
+# Session Context / terminal / dispatch 副作用之前稳定拒绝（exit 3 +
+# EXISTING_WORKTREE_REQUIRES_RECOVERY）；恢复必须走 reauthorize/quota-park/明确入口。
+
+# 用例 3：exact branch 已被同 repo worktree 占用（checked out）→ 拒绝，零副作用。
+OCC_BRANCH_WT="$E2E_ROOT/occ-branch-wt"
+git -C "$E2E_PROJECT" worktree add -q -b e2e-occ-branch "$OCC_BRANCH_WT" HEAD
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-occ-branch e2e-occ-branch "$E2E_ROOT/occ-branch"
+occ_branch_rc=$?
+set -e
+if [ "$occ_branch_rc" != "3" ]; then
+  sed -n '1,120p' "$E2E_ROOT/occ-branch.err" >&2
+fi
+assert_eq "$occ_branch_rc" "3" "branch occupied by a same-repo worktree exits 3"
+assert_existing_worktree_rejection "$E2E_ROOT/occ-branch" "occupied branch"
+if grep -Fq "$OCC_BRANCH_WT" "$E2E_ROOT/occ-branch.err"; then
+  ok "occupied branch rejection names the occupying worktree"
+else
+  bad "occupied branch rejection names the occupying worktree"
+fi
+
+# 用例 4：exact --worktree 路径已被同 repo worktree 占用（干净）→ 拒绝。
+OCC_PATH_WT="$E2E_ROOT/occ-path-wt"
+git -C "$E2E_PROJECT" worktree add -q -b e2e-occ-path-branch "$OCC_PATH_WT" HEAD
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-fresh-occ-path e2e-occ-path "$E2E_ROOT/occ-path" --worktree "$OCC_PATH_WT"
+occ_path_rc=$?
+set -e
+if [ "$occ_path_rc" != "3" ]; then
+  sed -n '1,120p' "$E2E_ROOT/occ-path.err" >&2
+fi
+assert_eq "$occ_path_rc" "3" "existing exact worktree path exits 3"
+assert_existing_worktree_rejection "$E2E_ROOT/occ-path" "existing exact path"
+
+# 用例 5：exact --worktree 路径是脏的同 repo worktree → 拒绝并点名 dirty。
+DIRTY_WT="$E2E_ROOT/dirty-wt"
+git -C "$E2E_PROJECT" worktree add -q -b e2e-dirty-branch "$DIRTY_WT" HEAD
+printf 'uncommitted\n' > "$DIRTY_WT/dirty.txt"
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-fresh-dirty e2e-dirty "$E2E_ROOT/dirty" --worktree "$DIRTY_WT"
+dirty_rc=$?
+set -e
+if [ "$dirty_rc" != "3" ]; then
+  sed -n '1,120p' "$E2E_ROOT/dirty.err" >&2
+fi
+assert_eq "$dirty_rc" "3" "dirty existing exact path exits 3"
+assert_existing_worktree_rejection "$E2E_ROOT/dirty" "dirty existing path"
+if grep -Fq 'dirty' "$E2E_ROOT/dirty.err"; then
+  ok "dirty rejection surfaces the dirty signal"
+else
+  bad "dirty rejection surfaces the dirty signal"
+fi
+
+# 用例 6：exact --worktree 路径属于另一个仓库（错仓）→ fail-closed 拒绝。
+OTHER_REPO="$E2E_ROOT/other repo"
+OTHER_WT="$E2E_ROOT/other-wt"
+mkdir -p "$OTHER_REPO"
+git -C "$OTHER_REPO" init -q
+git -C "$OTHER_REPO" config user.email "spawn-orca@test.local"
+git -C "$OTHER_REPO" config user.name "spawn-orca-test"
+git -C "$OTHER_REPO" commit -q --allow-empty -m init
+git -C "$OTHER_REPO" worktree add -q -b other-branch "$OTHER_WT" HEAD
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-fresh-other-repo e2e-other-repo "$E2E_ROOT/other-repo" --worktree "$OTHER_WT"
+other_repo_rc=$?
+set -e
+if [ "$other_repo_rc" != "3" ]; then
+  sed -n '1,120p' "$E2E_ROOT/other-repo.err" >&2
+fi
+assert_eq "$other_repo_rc" "3" "wrong-repo existing exact path exits 3"
+assert_existing_worktree_rejection "$E2E_ROOT/other-repo" "wrong-repo path"
+
+# 用例 7：exact --worktree 路径存在但不是 git worktree（未知状态）→ fail-closed 拒绝。
+PLAIN_DIR="$E2E_ROOT/plain-dir"
+mkdir -p "$PLAIN_DIR"
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-fresh-plain e2e-plain "$E2E_ROOT/plain" --worktree "$PLAIN_DIR"
+plain_rc=$?
+set -e
+if [ "$plain_rc" != "3" ]; then
+  sed -n '1,120p' "$E2E_ROOT/plain.err" >&2
+fi
+assert_eq "$plain_rc" "3" "non-git existing exact path (unknown state) exits 3"
+assert_existing_worktree_rejection "$E2E_ROOT/plain" "unknown-state path"
+
+# 用例 8：路径不存在的新建流程保持不变——fresh branch + fresh --worktree 路径照常
+# 完成 supervised spawn（exit 0），Orca create / terminal / worker-start 照常发生。
+FRESH_WT="$E2E_ROOT/fresh-wt-8"
+if [ -e "$FRESH_WT" ]; then rm -rf "$FRESH_WT"; fi
+: > "$E2E_ORCA_LOG"
+set +e
+run_e2e_spawn e2e-fresh-explicit-path e2e-fresh-explicit "$E2E_ROOT/fresh-explicit" --worktree "$FRESH_WT"
+fresh_explicit_rc=$?
+set -e
+if [ "$fresh_explicit_rc" != "0" ]; then
+  sed -n '1,120p' "$E2E_ROOT/fresh-explicit.err" >&2
+fi
+assert_eq "$fresh_explicit_rc" "0" "fresh branch with non-existing explicit path keeps the green path"
+if grep -Fq 'worktree create' "$E2E_ORCA_LOG" && grep -Fq 'orchestration worker-start' "$E2E_ORCA_LOG"; then
+  ok "fresh explicit-path spawn still creates the worktree and injects the task"
+else
+  bad "fresh explicit-path spawn still creates the worktree and injects the task"
+fi
+if grep -Fq 'EXISTING_WORKTREE_REQUIRES_RECOVERY' "$E2E_ROOT/fresh-explicit.err"; then
+  bad "fresh explicit-path spawn must not report the existing-worktree code"
+else
+  ok "fresh explicit-path spawn must not report the existing-worktree code"
 fi
 
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
