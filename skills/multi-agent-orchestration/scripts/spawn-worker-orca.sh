@@ -230,6 +230,72 @@ orca_worktree_create() {
   printf '%s\n' "$worktree_id"
 }
 
+# Task-116（Badminton Lab 实测事故②）：既有 Worktree 预门禁（仅 ORCA auto 模式）。
+# PM 请求一个已存在的精确 worktree 路径/branch 时，Orca worktree create 发现 name/branch
+# 被占会自动改用 -2/-3 后缀新建；旧顺序里 isolation pre-gate 要等 worktree 落盘后才拒绝，
+# 留下必须人工清理的无价值残留。本门禁在任何 provider lease / Orca worktree create /
+# Session Context / terminal / dispatch 副作用之前机械判定，命中即稳定输出
+# EXISTING_WORKTREE_REQUIRES_RECOVERY 并 exit 3（fail-closed）：
+#   ① exact branch 已被同 repo worktree 占用（checked out）；
+#   ② exact branch 本地 ref 已存在（Orca create 将生成 -2 后缀）；
+#   ③ exact --worktree 路径已存在：同仓 worktree/错仓/脏工作区/非 git 目录
+#      （未知状态）一律拒绝。
+# 已有 Worktree 的恢复必须走 reauthorize/quota-park/明确恢复入口；本 skill 不做
+# 自动复用。仅命中 ORCA auto：tmux 路径的既有复用/报错语义保持不变；
+# 路径不存在的新建流程零变化。origin-only 同名 ref 不在本门禁范围（无法证明
+# Orca 一定会后缀化），由 worktree 落盘后的 isolation pre-gate 兜底。
+spawn_worker_existing_worktree_pregate() {
+  [ "$ORCA_MODE" = "auto" ] || return 0
+  [ "$LIGHTWEIGHT_MODE" -eq 0 ] || return 0
+  local gate_branch="$safe_branch" occupied_wt wt_common project_common dirty_count
+  if [ -z "$gate_branch" ]; then
+    echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: worktree 模式下 branch 为空，无法证明新建不与既有 Worktree 冲突（fail-closed）" >&2
+    exit 3
+  fi
+  if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    occupied_wt=$(git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | awk -v target="refs/heads/$gate_branch" '
+      /^worktree / { wt = substr($0, 10) }
+      /^branch / { if (substr($0, 8) == target) { print wt; exit } }
+    ') || occupied_wt=""
+    if [ -n "$occupied_wt" ]; then
+      echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: branch ${gate_branch} 已被同 repo worktree 占用: ${occupied_wt}；已有 Worktree 的恢复必须走 reauthorize/quota-park/明确恢复入口，spawn 不自动复用（fail-closed）" >&2
+      exit 3
+    fi
+  fi
+  if git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$gate_branch" 2>/dev/null; then
+    echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: branch ${gate_branch} 已存在于本仓，Orca worktree create 将自动生成 -2 后缀 worktree；请改用新分支或走 reauthorize/quota-park/明确恢复入口（fail-closed）" >&2
+    exit 3
+  fi
+  if [ -e "$WORKTREE" ]; then
+    wt_common=$(git -C "$WORKTREE" rev-parse --git-common-dir 2>/dev/null) || wt_common=""
+    if [ -n "$wt_common" ]; then
+      case "$wt_common" in
+        /*) ;;
+        *) wt_common="$WORKTREE/$wt_common" ;;
+      esac
+      wt_common=$(cd "$wt_common" 2>/dev/null && pwd -P) || wt_common=""
+    fi
+    project_common=$(git -C "$PROJECT_DIR" rev-parse --git-common-dir 2>/dev/null) || project_common=""
+    if [ -n "$project_common" ]; then
+      case "$project_common" in
+        /*) ;;
+        *) project_common="$PROJECT_DIR/$project_common" ;;
+      esac
+      project_common=$(cd "$project_common" 2>/dev/null && pwd -P) || project_common=""
+    fi
+    if [ -n "$wt_common" ] && [ -n "$project_common" ] && [ "$wt_common" = "$project_common" ]; then
+      dirty_count=$(git -C "$WORKTREE" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: exact worktree 路径已被同 repo worktree 占用: ${WORKTREE}（dirty=${dirty_count}）；已有 Worktree 的恢复必须走 reauthorize/quota-park/明确恢复入口，spawn 不自动复用（fail-closed）" >&2
+    elif [ -n "$wt_common" ]; then
+      echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: exact worktree 路径已存在且属于另一个仓库（错仓）: ${WORKTREE}；拒绝在未知归属路径上做任何 spawn 副作用（fail-closed）" >&2
+    else
+      echo "EXISTING_WORKTREE_REQUIRES_RECOVERY: exact worktree 路径已存在但无法证明是可安全新建的空位（非 git worktree/未知状态）: ${WORKTREE}（fail-closed）" >&2
+    fi
+    exit 3
+  fi
+  echo "SPAWN_WORKER_EXISTING_WORKTREE_PREGATE: branch=${gate_branch} path=${WORKTREE}（未被占用，新建流程放行）"
+}
+
 # ORCA terminal create + tui-idle wait helper。只有非 supervised 模式才发送普通 prompt；
 # supervised 模式由 worker-start 注入唯一的生命周期 preamble + TASK，禁止双重投递。
 # 输入：worktree id、title、worker command。

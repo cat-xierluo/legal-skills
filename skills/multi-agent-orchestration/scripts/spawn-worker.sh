@@ -369,6 +369,45 @@ route_suggest_autofill_provider
 # 的 env 由 PM 的 runtime profile 负责，不重复注入）。
 route_suggest_wrap_command
 
+# shellcheck source=spawn-worker-orca.sh
+source "$SCRIPT_DIR/spawn-worker-orca.sh"
+
+# v2.1（DEC-114）：ORCA 终端模式 auto-detect。必须在 detect_orca_mode / orca_worktree_create /
+# orca_terminal_create_and_send 三个 helper 定义之后调用（bash 函数先定义后调用）。
+# v2.16.0（Task-116）：整块检测提前到 quota preflight / provider lease 之前——既有
+# Worktree 预门禁（EXISTING_WORKTREE_REQUIRES_RECOVERY）必须在任何 provider lease /
+# Orca worktree create / Session Context / terminal / dispatch 副作用之前判定，
+# 而 detect_orca_mode 的 runtime 事实是门禁只命中 ORCA auto 模式的前提。
+# 命中 auto 时：
+#   - ORCA_MODE=auto
+#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
+#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
+#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
+#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
+if [ "$ORCA_MODE" = "missing_orca" ]; then
+  exit 64
+fi
+if [ "$ORCA_SUPERVISED" -eq 1 ]; then
+  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: --orca-supervised requires --task-spec or --orca-task-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_RUN_ID" ] || { echo "ERROR: --orca-task-id requires --orca-run-id" >&2; exit 64; }
+  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_COORDINATOR_HANDLE" ] || { echo "ERROR: --orca-task-id requires --orca-coordinator-handle from the Wave receipt" >&2; exit 64; }
+  [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
+  has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
+  [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
+fi
+if [ "$ORCA_MODE" != "auto" ] && ! command -v tmux >/dev/null 2>&1; then
+  echo "ERROR: tmux is required outside Orca terminal mode" >&2
+  exit 64
+fi
+
+# Task-116（Badminton Lab 实测事故②）：既有 Worktree 预门禁。exact branch/路径已被
+# 同 repo worktree 占用（或本地分支已存在，Orca 将生成 -2 后缀）时，在任何 provider
+# lease / Orca worktree create / Session Context / terminal / dispatch 之前稳定拒绝
+# （exit 3 + EXISTING_WORKTREE_REQUIRES_RECOVERY，零副作用）；路径不存在的新建流程
+# 零变化。仅命中 ORCA auto 模式，tmux 路径语义不变。
+spawn_worker_existing_worktree_pregate
+
 # v2.11.0（P0-①，2026-09 复盘修复）：配额预检门。自动补选与显式 --api-provider
 # 一律在任何 worktree/terminal/lease/dispatch 副作用之前通过 quota_preflight.py；
 # summary 缺失/不可读/过期/低于判停线/provider-lane 不匹配/claude-code 未解析出
@@ -486,34 +525,6 @@ array_to_json() {
     printf '%s\n' "$@" | jq -R . | jq -s .
   fi
 }
-
-# shellcheck source=spawn-worker-orca.sh
-source "$SCRIPT_DIR/spawn-worker-orca.sh"
-
-# v2.1（DEC-114）：ORCA 终端模式 auto-detect。必须在 detect_orca_mode / orca_worktree_create /
-# orca_terminal_create_and_send 三个 helper 定义之后调用（bash 函数先定义后调用）。
-# 命中 auto 时：
-#   - ORCA_MODE=auto
-#   - ORCA_WORKTREE_PATH = PROJECT_DIR 的 git toplevel
-#   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
-#   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
-#   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
-detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
-if [ "$ORCA_MODE" = "missing_orca" ]; then
-  exit 64
-fi
-if [ "$ORCA_SUPERVISED" -eq 1 ]; then
-  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: --orca-supervised requires --task-spec or --orca-task-id" >&2; exit 64; }
-  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_RUN_ID" ] || { echo "ERROR: --orca-task-id requires --orca-run-id" >&2; exit 64; }
-  [ -z "$ORCA_TASK_ID" ] || [ -n "$ORCA_COORDINATOR_HANDLE" ] || { echo "ERROR: --orca-task-id requires --orca-coordinator-handle from the Wave receipt" >&2; exit 64; }
-  [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
-  has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
-  [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
-fi
-if [ "$ORCA_MODE" != "auto" ] && ! command -v tmux >/dev/null 2>&1; then
-  echo "ERROR: tmux is required outside Orca terminal mode" >&2
-  exit 64
-fi
 
 # v1.18.4：backend 分支化 trust/permission dialog 监控默认值（DEC-112）。
 # 仅在 *_OVERRIDE 标志为 0 时（即用户没显式传 flag）才按 backend 默认。
