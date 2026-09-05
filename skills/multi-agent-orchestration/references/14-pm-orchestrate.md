@@ -71,6 +71,8 @@ terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入
 
 `reauthorize`（Task-058）用于 worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦验证且根因是 spawn 授权快照缺命令时：guard 读 `launch.sh` 内联的 `WORKER_INSTALL_AUTH_B64`（进程环境，运行中改授权文件无效），本命令合并 `--allow-cmd` 进授权文件后重写 B64（回验解码一致）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 的 terminal_handle/dispatch_id、可选发送 `--resume-text`、最后关闭旧终端句柄。未提交的工作区改动全部保留；provider lease 的 transport 记账留给 release/clean-worktree 阶段。
 
+liveness 预门禁（Task-116）：在任何 mutation（含 run-use 回绑、METADATA 改写、授权合并、B64 重写、新终端创建）之前，命令先读权威 Dispatch 状态（`worker-show`）。只有未 released/acked/settled 的 live 目标继续原链路；已进入结算链（`terminalResource.releaseState` 非 `not_requested`、status=settled）、Dispatch 记录缺失或 worker-show 调用失败（状态不可证明）的目标稳定输出 `REAUTHORIZE_NOT_LIVE` 并零副作用退出——授权文件、launch.sh、终端、METADATA 均不变。METADATA 残留的旧 `dispatch_id` 不再让死目标被当成 live。已结算目标的恢复不在 reauthorize 内进行：先按 §3 正常 release/ack 收口，再走 quota-park 或明确恢复入口。
+
 ## 3. Supervised 收口顺序
 
 1. `wait` 获取完整 Delivery；不要立即 ack。
