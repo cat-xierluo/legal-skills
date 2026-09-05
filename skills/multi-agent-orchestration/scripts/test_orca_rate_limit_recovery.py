@@ -274,6 +274,8 @@ class RecoveryTest(unittest.TestCase):
             worker("term-expected", tail=["The expected response is HTTP 429 Too Many Requests"]),
             worker("term-provider-returns", tail=["Provider returns HTTP 429 under load"]),
             worker("term-discussion", tail=["Analyzing rate limit behavior and retry design"]),
+            worker("term-design-note", tail=["Design note: quota exceeded responses should be retried"]),
+            worker("term-account-doc", tail=["The account hit your limit according to the documentation"]),
         ]
         result = self.run_target(self.write_case(items), execute=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
