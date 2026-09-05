@@ -77,7 +77,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许安装。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
 - 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。
-- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白/安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
+- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
 - 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
 
 ## 4. Orca-first 执行

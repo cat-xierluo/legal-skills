@@ -309,6 +309,41 @@ else
   fi
 fi
 
+nul_project_config="$tmp_root/nul-project-config.json"
+nul_dispatch_contract="$tmp_root/nul-dispatch-contract.json"
+python3 - "$nul_project_config" "$nul_dispatch_contract" <<'PY'
+import json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({"schema":"multi-agent-orchestration.project-config.v1","verification":{"required":True,"default":["pwd\u0000git status --short"],"by_worker_type":{}}}, stream)
+task = {"task_id":"NUL-TASK","status":"READY","kind":"bugfix","value_kind":"implementation","value_identity":"nul-task","problem_target":"reject NUL authority","consumer":"current test","decision_or_gate_changed":"no split authority","engineering_assets":["src/example.py"],"doc_assets":[],"verification_commands":["pwd\u0000git status --short"],"worker_pr_policy":"worker_pr","consume_by":"current test","expiry":"archive after test","observable_acceptance":"spawn rejects before mutation","starts_external_resources":False,"resource_owner":"none","state_transition":""}
+with open(sys.argv[2], "w", encoding="utf-8") as stream:
+    json.dump({"schema_version":"dispatch-value-gate.v2","mode":"converge","pending_acceptance_prs":0,"explore_authorized_by":"","explore_expires_at":"","tasks":[task]}, stream)
+PY
+for nul_source in project contract; do
+  nul_branch="feat/nul-$nul_source"
+  nul_worktree="$spawn_repo/.claude/worktrees/tmux-feat-nul-$nul_source"
+  : > "$fake_orca_log"
+  nul_args=(--project "$spawn_repo" --branch "$nul_branch" --session "$session-nul-$nul_source"
+    --worker-backend claude-code --command "$tmp_root/claude 30" --require-verification)
+  if [ "$nul_source" = project ]; then
+    nul_args+=(--project-config "$nul_project_config")
+  else
+    nul_args+=(--verification-contract "$nul_dispatch_contract" --verification-task-id NUL-TASK)
+  fi
+  if ORCA_CLI_COMMAND="$tmp_root/orca" bash "$SCRIPT_DIR/spawn-worker.sh" "${nul_args[@]}" \
+    >"$tmp_root/nul-$nul_source.out" 2>&1; then
+    not_ok "$nul_source U+0000 verification authority fails before side effects"
+  elif grep -qF "must not contain U+0000" "$tmp_root/nul-$nul_source.out" \
+    && [ ! -e "$nul_worktree" ] \
+    && ! git -C "$spawn_repo" show-ref --verify --quiet "refs/heads/$nul_branch" \
+    && ! grep -Eq 'worktree create|terminal create|task-create|worker-start|dispatch-' "$fake_orca_log"; then
+    ok "$nul_source U+0000 verification authority fails before worktree/Orca mutation"
+  else
+    cat "$tmp_root/nul-$nul_source.out" >&2 || true
+    not_ok "$nul_source U+0000 verification authority fails before worktree/Orca mutation"
+  fi
+done
+
 worktree="$spawn_repo/.claude/worktrees/tmux-feat-install-guard-test"
 git -C "$spawn_repo" worktree add "$worktree" -b feat/install-guard-test main >/dev/null
 mkdir -p "$worktree/.claude"

@@ -87,4 +87,4 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 不要合并多个权威来源；CLI 与合同并存会失败关闭。合同中的 `implementation` / `reusable_verification` 自动要求非空验证命令；其他要求自验的派发传 `--require-verification`，项目也可设置 `verification.required: true`。Python 自动发现只认根 `pyproject.toml` / `requirements.txt` / `setup.py` 与根 `tests/`，固定注入 unittest discover；嵌套项目必须在 `by_worker_type` 显式声明完整命令。
 
-命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在副作用前拒绝。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
+命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。

@@ -284,6 +284,8 @@ resolve_verification_commands() {
     selected_json=$(printf '%s' "$config_json" | jq -c '.[0].verification_commands')
     printf '%s' "$selected_json" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null \
       || verification_fail "selected task verification_commands must be an array of strings" || return $?
+    printf '%s' "$selected_json" | jq -e 'all(.[]; contains("\u0000") | not)' >/dev/null \
+      || verification_fail "selected task verification_commands must not contain U+0000" || return $?
     read_verification_json_array "$selected_json"
     VERIFY_COMMAND_SOURCE="dispatch-contract:$VERIFICATION_TASK_ID"
     case "$value_kind" in
@@ -322,6 +324,8 @@ resolve_verification_commands() {
       fi
       printf '%s' "$selected_json" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null \
         || verification_fail "selected project verification profile must be an array of strings" || return $?
+      printf '%s' "$selected_json" | jq -e 'all(.[]; contains("\u0000") | not)' >/dev/null \
+        || verification_fail "selected project verification profile must not contain U+0000" || return $?
       read_verification_json_array "$selected_json"
       if printf '%s' "$config_json" | jq -e '.verification.required == true' >/dev/null; then
         REQUIRE_VERIFICATION=1
