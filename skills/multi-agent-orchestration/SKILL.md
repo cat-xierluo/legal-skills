@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.17.0"
+  version: "2.18.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -76,7 +76,9 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许安装。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
-- Node/Make/Python worktree 依赖补偿与默认 verify 注入由 `spawn-worker-deps.sh` 处理；不得让 worker 用安装绕过缺失依赖。具体行为读取 `references/02-runtime-dependencies.md` 与 `references/10-parallel-lessons.md`。
+- 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。
+- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白/安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
+- 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
 
 ## 4. Orca-first 执行
 
@@ -100,6 +102,7 @@ bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-
 bash scripts/spawn-worker.sh \
   --project "$PROJECT" --branch feat/worker-a --session worker-a \
   --branch-lifecycle ephemeral-worker --worker-backend claude-code \
+  --verification-contract /tmp/dispatch-spec.json --verification-task-id TASK-A \
   --command "$AGENT_COMMAND" --orca-supervised \
   --orca-run-id "$RUN_ID" --orca-coordinator-handle "$COORDINATOR_HANDLE" \
   --orca-task-id "$TASK_A_ID"

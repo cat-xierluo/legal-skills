@@ -88,6 +88,12 @@ ENV_ISOLATION=""
 WAVE_ID=""
 WAVE_WORKER_ID=""
 VERIFY_COMMANDS=()
+VERIFY_COMMAND_SOURCE=""
+REQUIRE_VERIFICATION=0
+VERIFICATION_CONTRACT=""
+VERIFICATION_TASK_ID=""
+PROJECT_CONFIG_FILE=""
+WORKER_TYPE=""
 WITH_SENTINEL=0
 SENTINEL_POLL_INTERVAL=5
 SENTINEL_MAX_WAIT=7200
@@ -285,6 +291,13 @@ case "$WORKER_BACKEND" in
 esac
 
 PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd -P)
+
+# Resolve the task's verification contract before Orca detection, provider lease,
+# worktree creation, terminal creation, Task/Dispatch registration, or prompt
+# injection. The resulting strings are the exact Shell authority; they are never
+# tokenized, normalized, or converted into install authorization.
+resolve_verification_commands || exit $?
+validate_verification_commands || exit $?
 
 # v2.0：轻量模式判定（SKILL §2.1.1）。
 # 1. --no-worktree 显式：LIGHTWEIGHT_MODE=1，BRANCH 不必填。
@@ -698,10 +711,6 @@ fi
 
 write_install_authorization() {
   local commands_json shell_commands_json
-  # Task-046 / G31：PM 未显式传 --verify-cmd 时，按 package.json scripts 注入
-  # 默认 verify 命令（npm run typecheck/lint/test/build）到 VERIFY_COMMANDS，
-  # 让 worker 默认能跑验证门（否则 allowed_shell 仅 3 条，worker 无法自验）。
-  inject_default_verify_commands
   commands_json=$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS=(
     "pwd"
@@ -715,6 +724,9 @@ write_install_authorization() {
     --arg schema "multi-agent-orchestration.install-authorization.v1" \
     --arg policy "deny_by_default" \
     --arg source "$INSTALL_AUTHORIZATION_SOURCE" \
+    --arg verification_source "$VERIFY_COMMAND_SOURCE" \
+    --argjson verification_required "$REQUIRE_VERIFICATION" \
+    --argjson verification_commands "$(array_to_json "${VERIFY_COMMANDS[@]}")" \
     --argjson commands "$commands_json" \
     --argjson shell_commands "$shell_commands_json" \
     '{
@@ -722,7 +734,12 @@ write_install_authorization() {
       policy: $policy,
       authorization_source: $source,
       authorized_commands: $commands,
-      allowed_shell_commands: $shell_commands
+      allowed_shell_commands: $shell_commands,
+      verification: {
+        required: ($verification_required == 1),
+        source: $verification_source,
+        commands: $verification_commands
+      }
     }')
   echo "SPAWN_WORKER_INSTALL_AUTH: $INSTALL_AUTH_FILE mode=$INSTALL_GUARD_MODE"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -759,6 +776,9 @@ write_authority_receipt() {
     --arg degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
     --arg authorization_sha256 "$AUTHORITY_RECEIPT_SHA256" \
     --argjson authorization "$INSTALL_AUTH_JSON" \
+    --arg verification_source "$VERIFY_COMMAND_SOURCE" \
+    --argjson verification_required "$REQUIRE_VERIFICATION" \
+    --argjson verification_commands "$(array_to_json "${VERIFY_COMMANDS[@]}")" \
     --arg quota_preflight_status "$QUOTA_PREFLIGHT_STATUS" \
     --arg quota_preflight_lane "$QUOTA_PREFLIGHT_LANE" \
     --argjson quota_preflight_override "$QUOTA_PREFLIGHT_OVERRIDE" \
@@ -773,6 +793,11 @@ write_authority_receipt() {
       degradation_source: $degradation_source,
       authorization_sha256: $authorization_sha256,
       authorization_snapshot: $authorization,
+      verification: {
+        required: ($verification_required == 1),
+        source: $verification_source,
+        commands: $verification_commands
+      },
       quota_preflight: {
         status: $quota_preflight_status,
         lane: $quota_preflight_lane,

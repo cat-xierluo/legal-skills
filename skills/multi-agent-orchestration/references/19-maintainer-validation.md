@@ -40,6 +40,7 @@ bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
 bash scripts/test-spawn-worker-deps.sh
+bash scripts/test-spawn-worker-verification.sh
 bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh

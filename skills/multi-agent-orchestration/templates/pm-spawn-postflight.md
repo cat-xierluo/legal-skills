@@ -19,14 +19,16 @@ supervised Wave 必须先完成：
 
 ```bash
 test -f "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
-jq '{worktree,branch,session,runtime}' \
+jq '{worktree,branch,session,runtime,verification,execution_authority}' \
   "$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
 git -C "$WORKTREE" status --short --branch
 ```
 
 确认 cwd/worktree/branch/session、Harness authority、安装门禁、provider lease 与允许文件范围符合任务卡。核验失败就停止派发，不由 PM 静默接管业务实现。
 
-同时回看 spawn 输出中的 `SPAWN_WORKER_VERIFY_INJECTED*` 行：没有它且 PM 未显式传 `--verify-cmd`，说明该项目的验证命令未进白名单（Make/其他构建体系均无匹配），worker 会在第一步验证就 `SHELL_COMMAND_NOT_ALLOWLISTED`——补 `--verify-cmd` 重新 spawn，或等 worker 上报后用 `pm-orchestrate reauthorize --allow-cmd ...` 刷新（Task-057/058，badminton-lab Wave 2 教训）。
+同时核对 `SPAWN_WORKER_VERIFY_PREFLIGHT`、METADATA `.verification`、`.execution_authority.allowed_shell_commands` 与 Git common-dir authority receipt：任务合同中的每条命令必须保持同一完整字符串。实现/可复用验证任务优先传 `--verification-contract ... --verification-task-id ...`；没有 JSON 合同时逐条传 `--verify-cmd` 并加 `--require-verification`。嵌套项目使用项目配置 `verification.by_worker_type`，不得把 `cd <subdir> && <verify>` 拆成两条或改成泛化 Shell 授权。
+
+存量 supervised Worker 已冻结进程快照，不能靠手改 JSON 生效。命令漏传时使用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建并重绑 Worker；对尚未启动的派发则修正合同后重新 spawn。
 
 ## Orca supervised
 

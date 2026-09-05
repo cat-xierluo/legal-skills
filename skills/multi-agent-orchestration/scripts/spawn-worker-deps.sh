@@ -165,8 +165,8 @@ ensure_worktree_deps() {
   esac
 }
 
-# write_install_authorization 前（spawn-worker.sh 内）调用：按 package.json scripts
-# 或 Makefile 目标注入默认 verify 命令到全局 VERIFY_COMMANDS。
+# 派发副作用前调用：按 package.json scripts、Makefile 目标或有界 Python 标记
+# 注入默认 verify 命令到全局 VERIFY_COMMANDS。
 # 全局读写：VERIFY_COMMANDS、PROJECT_DIR。
 # PM 已显式传 --verify-cmd（VERIFY_COMMANDS 非空）则不覆盖——PM 显式优先。
 # package.json 路径：把 scripts 里存在的 typecheck/lint/test/test:e2e/build 注入
@@ -215,22 +215,156 @@ inject_default_verify_commands() {
   fi
 
   local mk="$PROJECT_DIR/Makefile"
-  [ -f "$mk" ] || return 0
-  local targets
-  targets=$(grep -E '^[a-zA-Z0-9_.-]+:' "$mk" 2>/dev/null | sed 's/:.*$//' | sort -u) || targets=""
-  [ -n "$targets" ] || return 0
-
   local make_added=""
-  local t
-  for t in $targets; do
-    case "$t" in
-      test|test-*|check|ci|lint)
-        VERIFY_COMMANDS+=("make $t")
-        make_added="$make_added $t"
-        ;;
-    esac
-  done
+  if [ -f "$mk" ]; then
+    local targets
+    targets=$(grep -E '^[a-zA-Z0-9_.-]+:' "$mk" 2>/dev/null | sed 's/:.*$//' | sort -u) || targets=""
+    local t
+    for t in $targets; do
+      case "$t" in
+        test|test-*|check|ci|lint)
+          VERIFY_COMMANDS+=("make $t")
+          make_added="$make_added $t"
+          ;;
+      esac
+    done
+  fi
   if [ -n "$make_added" ]; then
     echo "SPAWN_WORKER_VERIFY_INJECTED_MAKEFILE: 默认 verify 命令已注入白名单 (make) -$make_added"
+    return 0
+  fi
+
+  # Python 仅识别项目根的显式 manifest + 根 tests/ 目录，不递归搜索、不执行配置，
+  # 也不猜 pytest/tox/nox 等可能依赖额外环境的命令。嵌套项目必须走项目配置或
+  # dispatch contract，以完整 `cd <dir> && ...` 字符串精确授权。
+  if { [ -f "$PROJECT_DIR/pyproject.toml" ] || [ -f "$PROJECT_DIR/requirements.txt" ] || [ -f "$PROJECT_DIR/setup.py" ]; } \
+    && [ -d "$PROJECT_DIR/tests" ]; then
+    VERIFY_COMMANDS+=("python3 -m unittest discover -s tests -v")
+    echo "SPAWN_WORKER_VERIFY_INJECTED_PYTHON: 默认 unittest discover 命令已注入白名单（仅项目根 tests/）"
+  fi
+}
+
+verification_fail() {
+  echo "ERROR: SPAWN_WORKER_VERIFICATION_CONTRACT_INVALID: $*" >&2
+  return 64
+}
+
+# 将 JSON 数组逐项原样读入 VERIFY_COMMANDS。jq 的 NUL 分隔避免空格、引号和中文
+# 被 shell 分词；命令本身禁止换行/NUL，保证它仍是单条可审计 Shell 输入。
+read_verification_json_array() {
+  local json="$1" command
+  VERIFY_COMMANDS=()
+  while IFS= read -r -d '' command; do
+    VERIFY_COMMANDS+=("$command")
+  done < <(printf '%s' "$json" | jq -j '.[] | ., "\u0000"')
+}
+
+# 单一来源顺序：无合同时的显式 --verify-cmd；否则 dispatch 合同；再到项目
+# 配置与有界默认发现。多个权威来源不静默合并：CLI 与合同并存会拒绝。
+resolve_verification_commands() {
+  local config_path config_json selected_json matches value_kind
+
+  if [ -n "${VERIFICATION_CONTRACT:-}" ] || [ -n "${VERIFICATION_TASK_ID:-}" ]; then
+    [ -n "${VERIFICATION_CONTRACT:-}" ] && [ -n "${VERIFICATION_TASK_ID:-}" ] \
+      || verification_fail "--verification-contract and --verification-task-id must be provided together" || return $?
+    [ "${#VERIFY_COMMANDS[@]}" -eq 0 ] \
+      || verification_fail "do not combine --verify-cmd with --verification-contract; the task contract must remain the single authority" || return $?
+    [ -f "$VERIFICATION_CONTRACT" ] \
+      || verification_fail "verification contract is not a readable file: $VERIFICATION_CONTRACT" || return $?
+    python3 "$SCRIPT_DIR/dispatch-value-gate.py" "$VERIFICATION_CONTRACT" >/dev/null 2>&1 \
+      || verification_fail "verification contract did not pass dispatch-value-gate.v2 preflight" || return $?
+    config_json=$(jq -c --arg id "$VERIFICATION_TASK_ID" '
+      if .schema_version != "dispatch-value-gate.v2" then error("schema_version") else . end
+      | [.tasks[]? | select(.task_id == $id)]' "$VERIFICATION_CONTRACT" 2>/dev/null) \
+      || verification_fail "contract must be valid dispatch-value-gate.v2 JSON" || return $?
+    matches=$(printf '%s' "$config_json" | jq 'length')
+    [ "$matches" -eq 1 ] \
+      || verification_fail "task_id '$VERIFICATION_TASK_ID' must match exactly one contract task (matched $matches)" || return $?
+    value_kind=$(printf '%s' "$config_json" | jq -r '.[0].value_kind // ""')
+    selected_json=$(printf '%s' "$config_json" | jq -c '.[0].verification_commands')
+    printf '%s' "$selected_json" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null \
+      || verification_fail "selected task verification_commands must be an array of strings" || return $?
+    read_verification_json_array "$selected_json"
+    VERIFY_COMMAND_SOURCE="dispatch-contract:$VERIFICATION_TASK_ID"
+    case "$value_kind" in
+      implementation|reusable_verification) REQUIRE_VERIFICATION=1 ;;
+      merge_gate) ;;
+      *) verification_fail "selected task has unsupported value_kind '$value_kind'" || return $? ;;
+    esac
+  elif [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
+    VERIFY_COMMAND_SOURCE="cli:--verify-cmd"
+  else
+    config_path="${PROJECT_CONFIG_FILE:-}"
+    if [ -n "$config_path" ]; then
+      case "$config_path" in
+        /*) ;;
+        *) config_path="$PROJECT_DIR/$config_path" ;;
+      esac
+    fi
+    if [ -z "$config_path" ] && [ -f "$PROJECT_DIR/.claude/orchestration.config.json" ]; then
+      config_path="$PROJECT_DIR/.claude/orchestration.config.json"
+    fi
+    if [ -n "$config_path" ]; then
+      [ -f "$config_path" ] \
+        || verification_fail "project config is not a readable file: $config_path" || return $?
+      config_json=$(jq -c '
+        if .schema != "multi-agent-orchestration.project-config.v1" then error("schema") else . end
+        | if (.verification | type) != "object" then error("verification") else . end' "$config_path" 2>/dev/null) \
+        || verification_fail "project config must be valid project-config.v1 JSON with a verification object" || return $?
+      if [ -n "${WORKER_TYPE:-}" ]; then
+        printf '%s' "$config_json" | jq -e --arg type "$WORKER_TYPE" '.verification.by_worker_type | type == "object" and has($type)' >/dev/null \
+          || verification_fail "unknown worker type '$WORKER_TYPE' in verification.by_worker_type" || return $?
+        selected_json=$(printf '%s' "$config_json" | jq -c --arg type "$WORKER_TYPE" '.verification.by_worker_type[$type]')
+        VERIFY_COMMAND_SOURCE="project-config:by_worker_type:$WORKER_TYPE"
+      else
+        selected_json=$(printf '%s' "$config_json" | jq -c '.verification.default')
+        VERIFY_COMMAND_SOURCE="project-config:default"
+      fi
+      printf '%s' "$selected_json" | jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null \
+        || verification_fail "selected project verification profile must be an array of strings" || return $?
+      read_verification_json_array "$selected_json"
+      if printf '%s' "$config_json" | jq -e '.verification.required == true' >/dev/null; then
+        REQUIRE_VERIFICATION=1
+      elif ! printf '%s' "$config_json" | jq -e '.verification.required == false or .verification.required == null' >/dev/null; then
+        verification_fail "verification.required must be boolean when present" || return $?
+      fi
+      PROJECT_CONFIG_FILE="$config_path"
+    else
+      [ -z "${WORKER_TYPE:-}" ] \
+        || verification_fail "--worker-type requires a project config" || return $?
+      inject_default_verify_commands
+      if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
+        VERIFY_COMMAND_SOURCE="bounded-project-discovery"
+      else
+        VERIFY_COMMAND_SOURCE="none"
+      fi
+    fi
+  fi
+  printf 'SPAWN_WORKER_VERIFY_PREFLIGHT: source=%s required=%s count=%s\n' \
+    "$VERIFY_COMMAND_SOURCE" "$REQUIRE_VERIFICATION" "${#VERIFY_COMMANDS[@]}"
+}
+
+validate_verification_commands() {
+  local command seen="" index=0
+  for command in "${VERIFY_COMMANDS[@]}"; do
+    [ -n "$command" ] \
+      || verification_fail "verification command[$index] is empty" || return $?
+    case "$command" in
+      [[:space:]]*|*[[:space:]]) verification_fail "verification command[$index] has surrounding whitespace" || return $? ;;
+    esac
+    case "$command" in
+      *$'\n'*|*$'\r'*) verification_fail "verification command[$index] must be one line" || return $? ;;
+    esac
+    if printf '%s\n' "$seen" | grep -Fqx -- "$command"; then
+      verification_fail "duplicate verification command[$index]: $command" || return $?
+    fi
+    seen="${seen}${seen:+$'\n'}$command"
+    if python3 "$SCRIPT_DIR/dependency-install-guard.py" --classify-install "$command"; then
+      verification_fail "verification command may install or mutate dependencies: $command; authorize installation separately" || return $?
+    fi
+    index=$((index + 1))
+  done
+  if [ "${REQUIRE_VERIFICATION:-0}" -eq 1 ] && [ "${#VERIFY_COMMANDS[@]}" -eq 0 ]; then
+    verification_fail "self-verification is required but no command resolved; use --verify-cmd, --verification-contract + --verification-task-id, or project verification config" || return $?
   fi
 }

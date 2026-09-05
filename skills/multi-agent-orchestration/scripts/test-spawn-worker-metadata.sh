@@ -75,6 +75,8 @@ reset_metadata_case() {
   LIGHTWEIGHT_MODE=0
   LIGHTWEIGHT_AUTO=0
   VERIFY_COMMANDS=("bash test-a.sh" "bash test-b.sh")
+  VERIFY_COMMAND_SOURCE="dispatch-contract:TASK-A"
+  REQUIRE_VERIFICATION=1
   ADD_DIRS=("/tmp/a" "/tmp/b path")
   ALLOW_PATHS=("skills/a/**" "skills/b/**")
   ROLE="implementer"
@@ -120,6 +122,8 @@ assert_jq "$METADATA_FILE" '.runtime.role == {worker_role:"implementer",review_r
   "role metadata defaults are recorded for scope discipline"
 assert_jq "$METADATA_FILE" '.verification.commands == ["bash test-a.sh","bash test-b.sh"] and .add_dirs[1] == "/tmp/b path" and .allow_paths[0] == "skills/a/**"' \
   "repeatable arrays preserve order and spaces"
+assert_jq "$METADATA_FILE" '.verification.required == true and .verification.source == "dispatch-contract:TASK-A"' \
+  "verification authority source and requirement are auditable"
 assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length == 2' \
   "allowed Shell commands remain unique"
 assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' \
