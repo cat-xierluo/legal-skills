@@ -129,6 +129,16 @@ def is_install_command(command: str) -> bool:
     return any(pattern.search(executable_text) for pattern in INSTALL_PATTERNS)
 
 
+def is_safe_sed_read_command(args: list[str]) -> bool:
+    """Allow only `sed -n <numeric-range>p <file>` as a bounded read."""
+    if len(args) != 3 or args[0] not in {"-n", "--quiet", "--silent"}:
+        return False
+    expression, path = args[1:]
+    if not path or path.startswith("-"):
+        return False
+    return re.fullmatch(r"(?:[1-9][0-9]*|\$)(?:,(?:[1-9][0-9]*|\$))?p", expression) is not None
+
+
 def is_safe_lifecycle_command(command: str) -> bool:
     """Allow a narrow set of direct, non-interpreter worker lifecycle commands."""
     try:
@@ -147,6 +157,12 @@ def is_safe_lifecycle_command(command: str) -> bool:
     read_only = {"pwd", "ls", "grep", "cat", "head", "tail", "wc", "stat", "file", "true", "false"}
     if program in read_only:
         return True
+    if program == "sed":
+        # Arbitrary sed is not read-only (`w`, `e`, `-i`).  The common source
+        # inspection form is safe enough to grant without enumerating every
+        # path in spawn metadata; all other programs still require an exact
+        # `--allow-shell-command` entry.
+        return is_safe_sed_read_command(args)
     if program == "date":
         # v1.20.3 Task-028：仅允许读取时间（拒绝 -s/--set/--reference 改系统时间）。
         # 解决 worker 写 STATUS.updated_at 时 `date -u +"%Y-%m-%dT%H:%M:%SZ"` 被拦的撞坑

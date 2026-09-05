@@ -9,6 +9,13 @@ fail=0
 tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/dependency-install-guard.XXXXXX")
 trap 'rm -rf "$tmp_root"' EXIT
 
+# 隔离安装门禁测试与开发者本地的额度路由配置。否则真实
+# orchestration-personal.json 的过期 summary 会让 quota preflight 在被测
+# install/shell guard 之前拒绝 spawn，导致测试结果随运行机器漂移。
+test_personal_config="$tmp_root/orchestration-personal.json"
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$test_personal_config"
+export MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$test_personal_config"
+
 ok() {
   printf 'PASS: %s\n' "$1"
   pass=$((pass + 1))
@@ -191,6 +198,14 @@ expect_block "raw git push is denied in favor of identity-bound safe-push" "SHEL
   hook "$deny_auth" "git push --force origin HEAD"
 expect_allow "normal git lifecycle command remains available" \
   hook "$deny_auth" "git diff --check"
+expect_allow "bounded read-only sed range remains available" \
+  hook "$deny_auth" "sed -n '180,340p' tests/browser/ux\\_workbench\\_contract\\_browser\\_test.js"
+expect_block "sed write command remains denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "sed -n '1,20w /tmp/worker-copy' src/app.ts"
+expect_block "sed execute command remains denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "sed -n '1e id' src/app.ts"
+expect_block "unbounded sed program remains exact-authority only" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "sed 's/old/new/' src/app.ts"
 
 expect_allow "Dispatch-scoped worker_done is allowed" \
   hook "$deny_auth" 'orca orchestration send --type worker_done --subject "done" --body "implemented and verified" --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --files-modified "src/a.ts" --json'

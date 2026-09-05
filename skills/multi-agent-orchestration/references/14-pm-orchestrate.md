@@ -170,6 +170,10 @@ Task-097 不消费 GitHub 原生 merge queue：远端 mutation 前必须读到�
 - 本地集成提交成功推入 main 后，原 PR 若未被 GitHub 自动标为 merged，使用包含 main commit SHA 的说明关闭；不得把 `CLOSED` 伪报成 GitHub `MERGED`。
 - GitHub 合并路径以 `state == MERGED`、非空 `mergedAt` 和 `mergeCommit.oid` 为成功证据。
 - 只有远端结果已确认且 worker/worktree 无未提交改动，才进入 release、分支和 worktree 清理。合并确认后的自动化清理由 `scripts/post-merge-cleanup.sh` 承担：git-workflow 删除资格门禁（唯一 MERGED PR + head 精确一致 + 无 stacked child + 非长期分支）全过才经 `clean-worktree.sh` 执行，远端删除失败或残留验证不过以 exit 9 报告；门禁不过则输出 deferred 理由保留现场。清理前仍需先 dry-run 审阅计划。
+- 只有远端结果已确认且 worker/worktree 无未提交改动，才进入 release、分支和 worktree 清理。`pm-closeout.sh` 默认把冻结的 worker tip、PR、delivery mode/commit、worktree 与 Session identity 交给 `pm-cleanup-worker.sh --execute`；无需 PM 再凭记忆手工扫尾。`--keep-branch` 是显式 opt-out，必须输出保留理由。
+- `remote-pr` 只有 PR 的 exact head 与 `MERGED + mergedAt + mergeCommit` 全部匹配才删远端分支；`local-after-pr` 必须证明 delivery commit 已进入 `origin/main`，PR 仍 `OPEN` 时保留远端 head，避免把活 PR 的来源分支删掉。远端查询失败、未知 PR 状态、dirty worktree、tip 漂移或生命周期未结算均失败关闭。
+- 本地删除在 worktree 已安全移除后，以 expected tip 作为 old-value 执行精确 ref 删除。这样 squash/rebase merge 不依赖 `git branch -d` 的祖先判断，也不使用无条件 `git branch -D`。
+- 清理结果固定为 `CLEANED`、`RETAINED_WITH_REASON`、`CLEANUP_PENDING`。delivery commit 已确认后，清理失败是独立资源债务，禁止重跑 push/merge；但 `CLEANUP_PENDING` 未显式记录和继续处置前，不得把整个任务报告为完全闭环。
 
 ## 5. 安全边界
 
