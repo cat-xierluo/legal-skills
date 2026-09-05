@@ -2,21 +2,27 @@
 name: verification-gate
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.0"
+version: "1.3.0"
 license: MIT
-description: 代码改完后的验证门禁。完成 feature / 重大变更 / 创建 PR / 重构 / 声称「修完」前使用——跑 8 阶段验证，其中 e2e 功能 + 真机是 READY 硬门禁（编译过 ≠ 功能可用）。覆盖 Tauri 桌面 / Web / 服务 / Skill 四类分支。本地即可跑完整验证，CI 是可选自动化强化（平台不限 GitHub Actions）。不要用于：业务领域验证、Skill 质量审查（用 skill-lint）、纯文档变更、一次性脚本。
+description: 代码改完后的分层验证执行与证据记录。完成 feature / 重大变更 / 创建 PR / 重构 / 声称「修完」前使用——按项目运行 build、unit、e2e、真机等代表性阶段并记录真实结果（编译过 ≠ 功能可用）。覆盖 Tauri 桌面 / Web / 服务 / Skill 四类分支，可把已执行事实转换为 production-engineering-audit staged receipt；完成等级与发布结论由 production-engineering-audit 裁决。不要用于：业务领域验证、Skill 质量审查（用 skill-lint）、纯文档变更、一次性脚本。
 ---
 
 # Verification Gate（代码改完后的验证门禁）
 
-本 skill 是「代码改完 → 声称完成 / 提交 PR」之间的**强制验证门禁**。核心解决一个问题：**编译过 ≠ 功能可用**。
+本 skill 是「代码改完 → 声称完成 / 提交 PR」之间的**验证执行与证据记录层**。核心解决一个问题：**编译过 ≠ 功能可用**。
+
+它负责真实运行适用阶段、观察功能终态并保留阶段事实；`production-engineering-audit`（PEA）是完成
+层级的唯一裁决者。需要机器可消费的分层证据时，读取
+[`references/staged-receipt.md`](references/staged-receipt.md)，用确定性转换器生成 staged receipt，
+再交给 PEA。不要在本 Skill 内另造 READY / RELEASED 判决。
 
 > 直接教训：改完 reader worker 加载，`typecheck` / build / lint / 单测全过，就声称「修完」，实机却「文字层未知」（`textLayerStatus` 卡 unknown）崩——编译层根本抓不到运行时功能问题。这类坑的唯一解是 **e2e（功能验证）+ 真机**。
 
 ## 工作原则
 
 - **先编译层（1-4），再功能层（5-6）**：编译层是前置门禁，但**不充分**；功能层（e2e + 真机）才是完成线。
-- **e2e/真机是硬门禁**：5/6 不过 = NOT READY，无论 1-4 多干净。
+- **e2e/真机失败必须如实记录**：5/6 不过就不能作为对应完成声明的通过证据，无论 1-4 多干净；
+  是否达到项目要求的完成层级交给 PEA 按项目契约裁决。
 - **断言功能结果，非「存在元素」**：教用户写 e2e 时断言「canvas 像素非空 / textLayerStatus ≠ unknown / 点击后面板真的弹出」，而非「存在 canvas / 存在按钮」（防伪渲染 / 假成功）。
 - **Bug 修复必须新增复现测试**（回归规范）：修完一个 bug，加一条能复现该 bug 的 e2e/单测，防止回归。
 - **套件悬挂 = 未通过**：`npm test` 永不退出（summary 不打印 / 进程不退）按 P0 基础设施缺陷处理，诊断 playbook 见 `references/lessons-from-practice.md` 教训 12；用子集绕开只能是登记过任务的临时态——悬挂会掩盖真实失败（教训 11：修复当日暴露 3 条被藏数周的失败）。
@@ -69,7 +75,8 @@ npm run test:e2e -- tests/e2e/reader-renders.test.ts   # FaroPDF 实际路径示
 
 **断言深度**——不只「存在元素」，断言功能结果（见 `references/assertion-depth.md`）。
 
-**门禁**：e2e 不过 = NOT READY（不提交 PR / 不声称 behavior-complete / worker STATUS 不写 done）。
+**门禁事实**：e2e 不过就记录 `failed`，不把该阶段当作 behavior-complete 证据；由 PEA 判断当前
+声明是否被阻断。
 
 ### 阶段 6：真机验证（核心完成线）
 
@@ -81,7 +88,7 @@ dev server e2e 不够——真实运行时（Tauri WKWebView / Web build 产物 
 | Web | `npm run build` + `vite preview`（build 产物，非 dev server） |
 | 服务 | staging 环境真实请求 |
 
-**门禁**：真机行为与 dev e2e 一致；prod-only 问题（worker/协议/路径）必须真机抓到。
+**阶段通过条件**：真机行为与 dev e2e 一致；prod-only 问题（worker/协议/路径）必须真机抓到。
 
 ### 阶段 7-8：安全 + Diff（前置）
 
@@ -140,7 +147,7 @@ npm test                                              # 4 unit + integration
 - 完成 feature 或重大代码变更后
 - **创建 PR 之前**（PR 合并的硬门禁）
 - 重构之后
-- **声称「修完」「behavior-complete」「done」之前**（e2e/真机不过不声称）
+- **声称「修完」「behavior-complete」「done」之前**（先产出阶段事实，再由 PEA 对完成层级裁决）
 - Bug 修复后（+ 新增复现测试）
 - **release / 交付收尾、把 NOT_VERIFIED 清单「移交用户」之前**——先分层收口（见 §NOT_VERIFIED 分层收口）
 
@@ -150,17 +157,17 @@ npm test                                              # 4 unit + integration
 
 **不需要 GitHub Actions 也能做完整验证。** 本 skill 的 8 阶段本质是「一组要在代码声称完成前跑的命令 + 判定标准」，它在哪跑、谁来跑是独立的：
 
-- **本地验证**：你（或 AI 代理）手动跑 `build → typecheck → lint → test → test:e2e`，看实际输出，对照验证报告判定 READY / NOT READY。即时、灵活，但**靠自觉**——容易「编译过了就声称修完」（正是本 skill 要防的坑）。
+- **本地验证**：你（或 AI 代理）手动跑 `build → typecheck → lint → test → test:e2e`，看实际输出并记录阶段事实。即时、灵活，但**靠自觉**——容易「编译过了就声称修完」（正是本 skill 要防的坑）。
 - **CI 门禁**（GitHub Actions / GitLab CI / Gitea / Jenkins 等）：把**同一组命令**写进流水线，在 push / 开 PR 时自动跑，失败就**阻断 merge**。它不改变「验证什么」，只是把门禁变成**客观强制**——没过门禁的代码合不进去。
 
 **关键认知**：
 
 1. CI 不是「另一种验证」，是**同一套验证的自动化载体**。本地能过、CI 才能过；本地乱跳阶段，CI 会拦回来。
 2. **平台不限 GitHub Actions**。可选：GitHub Actions、GitLab CI、Gitea Actions、Jenkins；本地也能用 `act`（本地跑 GitHub Actions）、`lefthook` / `husky` 的 pre-push hook 在提交前自动跑。
-3. **没有 CI 也能用本 skill**——只要你在声称「修完 / 提 PR」前，老老实实本地跑完 8 阶段并填验证报告。CI 是「团队不用担心有人跳过门禁」的强化，不是前提。
+3. **没有 CI 也能用本 skill**——只要你在声称「修完 / 提 PR」前，本地跑完适用阶段、保存证据并交由 PEA 判定。CI 是「团队不用担心有人跳过门禁」的强化，不是前提。
 4. **真机（阶段 6）CI 一般难模拟**：Tauri WKWebView、build 产物行为、staging 真实请求，通常放本地或独立 staging 流水线。CI 跑 1-5 + 7-8，真机缺口要在验证报告的「6 真机」栏记原因（NOT_RUN 需充分理由）。
 
-> 落地建议：先本地把 8 阶段跑顺、验证报告模板用熟；再把它搬进 CI（见 `references/e2e-practice.md` 的「CI 门禁」通用模板）。两者结论必须一致——CI 红 = 本地 NOT READY。
+> 落地建议：先本地把 8 阶段跑顺、阶段报告用熟；再把它搬进 CI（见 `references/e2e-practice.md` 的「CI 门禁」通用模板）。同一阶段在本地与 CI 的事实应一致，冲突时保留证据并排查环境差异，不手工覆盖红灯。
 
 ## 本地开发：哪些验证必要（按场景的最低清单）
 
@@ -212,7 +219,7 @@ npm test                                              # 4 unit + integration
 - 自检问句：「这份清单里有多少是我没跑 Playwright，而不是真验不了？」
 - 细节与案例见 `references/lessons-from-practice.md` 教训 10；className→CSS 真实渲染断言见 `references/assertion-depth.md`「视觉 / CSS 类」。
 
-## 最终输出：验证报告
+## 最终输出：阶段报告
 
 ```
 | 阶段        | 结果                          |
@@ -226,10 +233,12 @@ npm test                                              # 4 unit + integration
 | 7 安全      | PASS / FAIL (X issues)        |
 | 8 Diff      | X files, 范围合规/越界        |
 | CI 门禁     | 1-5+7-8 全绿 / 有 job 红（阻断说明） |
-| **Overall** | **READY / NOT READY for PR**  |
 ```
 
-**READY 条件**：1-4 + 7-8 过 **且** 5 e2e 过 **且** 6 真机过（或 NOT_RUN 有充分原因）。**5/6 任一 FAIL = NOT READY**。
+表格适合人读，但不得附加本 Skill 自行裁定的 READY / RELEASED。需要机器消费时，把同一批真实阶段
+事实写成 `verification-gate-stage-report/v1`，按
+[`references/staged-receipt.md`](references/staged-receipt.md) 转换，再由 PEA 根据 target、consumer、
+候选 commit 与项目最低层级裁决。失败阶段同样必须进入回执，不能因为想生成绿灯而省略。
 
 ## 完成定义（落地）
 
@@ -239,9 +248,10 @@ npm test                                              # 4 unit + integration
 3. **6 真机验证过**（核心，桌面/Web/服务按类型）。
 4. 7-8 安全 + Diff 合规。
 5. Bug 修复**新增复现测试**（回归）。
-6. 验证报告 Overall = READY。
+6. 输出完整阶段事实和仓内 evidence，并把完成声明交给 PEA 裁决。
 
-**e2e/真机不过 = 未完成**：不提交 PR、不 merge、不 release、worker STATUS 不写 `done`、不向用户声称「修完」。
+**e2e/真机不过 = 对应阶段失败**：不得把失败阶段伪装为通过或省略；是否阻断提交、合并或发布，
+由 PEA 结合项目配置与声明层级判定。
 
 ## 依赖
 
@@ -268,13 +278,16 @@ npm test                                              # 4 unit + integration
 - `references/e2e-practice.md`：**落地 e2e / 真机 / CI**——Playwright spec 写法、fixture 矩阵、CI 通用模板（平台不限 GitHub Actions）、Tauri etv 真机。对应 §阶段 5/6 与 §本地 vs CI 门禁。
 - `references/test-pyramid.md`：**组织单测 / verify 脚本 / 回归规范**——vitest 分层、build 内嵌 verify、bug 修复必加复现测试、lint 严格。对应 §阶段 3/4。
 - `references/lessons-from-practice.md`：**跑 skill 踩过的坑**——pre-existing 失败判定、e2e 缺失、Tauri invoke 限制、快速模式 vs 全量、真机证据来源等，持续反哺。对应 §本地开发清单 的「快速模式」与 §阶段 4/5/6 边界。
+- `references/staged-receipt.md`：**阶段已经真实执行后**——输入契约、证据路径、HEAD 绑定、转换命令与 PEA 消费边界。对应 §最终输出。
 
 ## Related Skills
 
-| 维度 | verification-gate | skill-lint |
-|---|---|---|
-| 定位 | **代码**改完后的验证门禁 | **Skill** 创建/改造后的质量审查 |
-| 对象 | 代码项目（Tauri/Web/服务） | Skill 本身（SKILL.md/references/契约） |
-| 关系 | 验证代码功能可用 | 验证 Skill 结构合规 |
+| 维度 | verification-gate | skill-lint | production-engineering-audit |
+|---|---|---|---|
+| 定位 | 分层验证执行与事实记录 | Skill 创建/改造后的质量审查 | 结构性浪费与完成声明裁决 |
+| 对象 | Tauri/Web/服务/Skill 的真实阶段 | Skill 本身（SKILL.md/references/契约） | 项目配置、热路径与完成证据 |
+| 关系 | 生产 staged receipt，不裁定等级 | 验证 Skill 结构合规 | 消费 receipt，裁定证据支持上限 |
 
-代码项目用 verification-gate，Skill 用 skill-lint。改 Skill 的代码脚本（如 multi-agent-orchestration 的 spawn-worker.sh）两者都适用（先 skill-lint 审 Skill 结构，再 verification-gate 验脚本功能）。
+代码项目用 verification-gate 执行阶段，Skill 用 skill-lint 审结构；改 Skill 的代码脚本时两者都适用。
+准备声称「已修复 / 已完成 / 可发布」时，再把 staged receipt 交给 production-engineering-audit；三者不
+互相替代。

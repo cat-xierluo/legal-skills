@@ -2,7 +2,7 @@
 name: course-generator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.10.1"
+version: "2.10.2"
 license: MIT
 description: 将课程转录稿、逐字稿、讲稿或文献整理为可独立阅读的 Markdown 课程，并通过来源索引、素材账本和确定性验收保留关键案例、操作步骤与专业判断。用户要求从一份或多份现有文本生成课程总览、章节或完整课程时使用。
 ---
@@ -65,7 +65,7 @@ description: 将课程转录稿、逐字稿、讲稿或文献整理为可独立�
 - 总览、manifest 声明的全部章节和两份强制 JSON 均存在。
 - 素材账本覆盖全部有效来源块，跳过项有受控理由，高价值内容没有无理由净丢失。
 - 每章 `check-chapter` 通过，最终 `verify.sh` 退出码为 `0`。
-- 人工抽查确认数字、动作链、建议、结果和专名可回溯，修订口径无冲突，章节之间没有明显重复。
+- 独立审阅者读取 [quality-evaluation.md](references/quality-evaluation.md)，按证据完成语义验收；人工抽查确认数字、动作链、建议、结果和专名可回溯，修订口径无冲突，章节之间没有明显重复。
 - 读者正文不出现 `SRC/BLK/MAT/IMG`、门禁解释、生成日志、临时文件或来源没有讨论的内部术语。
 
 脚本通过只证明客观契约成立，不等于语义质量已经通过。交付时分别报告脚本结果、人工复核范围和未验证部分。
@@ -97,5 +97,6 @@ description: 将课程转录稿、逐字稿、讲稿或文献整理为可独立�
 - [overview_prompt.md](references/overview_prompt.md)：总览写作要求；生成总览时读取。
 - [chapter_prompt.md](references/chapter_prompt.md)：章节写作和单章自检；逐章生成时读取。
 - [course-manifest.md](references/course-manifest.md)：manifest 字段和 JSON 示例；准备计划、批次或图片选择文件时按需查询。
+- [quality-evaluation.md](references/quality-evaluation.md)：课程成品的语义硬失败、质量评分和版本晋级标准；独立验收或回归比较时读取，不提供给生成者作为写作提纲。
 - [post-generation-actions.md](references/post-generation-actions.md)：归档和培训方案提取；仅在用户明确要求时读取。
 - [verify.sh](scripts/verify.sh)：最终确定性验收入口。
