@@ -2,6 +2,8 @@
   "schema_version": "dispatch-value-gate.v2",
   "mode": "converge",
   "pending_acceptance_prs": 0,
+  "explore_authorized_by": "",
+  "explore_expires_at": "",
   "tasks": [
     {
       "task_id": "TASK-EXAMPLE",
