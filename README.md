@@ -35,7 +35,7 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-05 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.2  | **分支生命周期与清理分层**：以独立 reference 统一一次性/长期分支、单 Worker 自动清理、批量 stale 审计与功能线关闭；主文档保留最短判定入口，删除授权不放宽。 |
-| 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.16.3 | **主文档结构治理**：SKILL 从 579 行收敛到 208 行；派发/验收合同与维护测试按需加载，同时保留长期分支机械保护、PR-first 收口和 fail-closed 门禁。 |
+| 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.16.4 | **独立执行编排边界**：移除对其他任务协调 Skill 的名称与职责跳转；任务来源由项目既有任务源确定，主文档继续按需加载派发/验收合同与维护测试。 |
 | 2026-09-04 | 更新   | [course-generator](skills/course-generator/)                           | v2.10.1 | **入口地基与渐进素材预算**：description 和一级标题回归纯中文任务表达，入口改为任务 SOP；新增随已覆盖正文块增长的分批素材预算，在写入前阻断弱模型过度碎分和整账本返工。144/144 本地回归通过，MiniMax v2.10.1 前向效果待验证。 |
 | 2026-08-30 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.0 | **最终版式门禁与失败安全**：新增独立 DOCX/PDF 检查器，统一表格居中、固定列宽、跨页行和连续页码，保留横竖版边界；候选件经 LibreOffice 真实渲染通过后才发布。113 棵模板静态门禁与 21 类文书真实 PDF 抽样通过，68 棵主文书逐树长文本压力矩阵继续列为 P0。 |
 | 2026-08-30 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.2 | **事务性输出与失败安全**：参数和视频先预检，新结果在同级 staging 完整生成后才替换旧结果；新增所有权标记、旧版报告兼容校验、符号链接/未知文件/下游产物保护，以及损坏视频和提交回滚真实 CLI 回归 |
@@ -645,7 +645,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.16.2</td>
+<td style="text-align:center">v2.16.3</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>
