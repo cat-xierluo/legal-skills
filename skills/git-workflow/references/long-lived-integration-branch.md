@@ -37,6 +37,7 @@
 | `default_branch` | 最终里程碑 PR 的 base |
 | `integration_owner` | 唯一集成者或 PM；负责长期分支同步与合并 |
 | `integration_worktree` | 固定 Worktree；不得与其他 Worktree 重复检出同一长期分支 |
+| `branch_lifecycle` | 长期分支固定为 `long-lived`；其子 Worker 分支固定为 `ephemeral-worker` |
 | `milestone` | 具名结果、退出条件和复验门禁 |
 | `sync_policy` | 默认主干同步时机、未决子 PR 的处理和冻结字段 |
 
@@ -50,6 +51,20 @@
 git fetch origin
 git worktree add -b <worker-branch> <worker-worktree> origin/<integration-branch>
 ```
+
+通过 `multi-agent-orchestration` 派发时，把生命周期和 base 一并固化到 Session metadata：
+
+```bash
+bash scripts/spawn-worker.sh \
+  --project <project> \
+  --branch <worker-branch> \
+  --base-ref origin/<integration-branch> \
+  --branch-lifecycle ephemeral-worker \
+  --session <session> \
+  <其他参数>
+```
+
+若某次受控会话直接承载长期集成基线，必须改传 `--branch-lifecycle long-lived`；不得依赖分支名称猜测生命周期。
 
 提交和 push 仍遵守主 Skill 的身份门禁。完整 PR range 的 base 必须显式指向长期集成分支：
 
@@ -110,5 +125,6 @@ gh pr create \
 
 - worker PR 合并并确认无未推送工作后，删除其短分支和临时 Worktree。
 - 长期集成分支及固定 Worktree 持续保留，按普通活跃主干审计，不进入常规 stale branch 批量清理候选。
+- 自动清理必须同时核对 Session metadata 的 `branch_lifecycle`、`base_ref` 和 GitHub PR 的 `baseRefName`。短 Worker 合入长期分支时只删除 Worker head；integration target 始终保留。元数据声明 `long-lived` 时输出具名保留结果，不执行任何 ref/Worktree 删除。
 - 只有功能线完成或取消、未决工作已处置、最终状态已写回项目任务源，并取得明确删除授权后，才清理长期分支与固定 Worktree。
 - 删除前仍执行主 Skill 的 PR 状态、最后提交时间、Worktree 未提交改动三查；不得 `git worktree remove --force` 或 `git branch -D` 绕过证据。
