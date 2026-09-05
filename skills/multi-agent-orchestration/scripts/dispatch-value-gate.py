@@ -28,6 +28,15 @@ PR_POLICIES = {"worker_pr", "integration_pr", "no_worker_pr"}
 DOC_EXTENSIONS = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 DOC_DIR = "docs/"
 HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+# Concurrency policy (Task-117): the user authorized on 2026-09-05 widening the
+# global active-worker cap from 3 into the 5-10 band. Converge stays the
+# conservative default (8); only an explicit, unexpired explore window may
+# reach 10. Acceptance backpressure moves from >2 to >4. All other gates
+# (provider lease, research/docs <= 1, READY contract, dedupe, file ownership,
+# resource owner, expiry windows) are intentionally unchanged.
+CONVERGE_MAX_WORKERS = 8
+EXPLORE_MAX_WORKERS = 10
+MAX_PENDING_ACCEPTANCE_PRS = 4
 
 
 def _parse_time(value: str) -> datetime:
@@ -174,8 +183,10 @@ def validate(spec: Any, now: datetime) -> list[str]:
     pending = spec.get("pending_acceptance_prs")
     if not isinstance(pending, int) or isinstance(pending, bool) or pending < 0:
         errors.append("pending_acceptance_prs must be a non-negative integer")
-    elif pending > 2:
-        errors.append("acceptance backpressure: pending_acceptance_prs exceeds 2")
+    elif pending > MAX_PENDING_ACCEPTANCE_PRS:
+        errors.append(
+            f"acceptance backpressure: pending_acceptance_prs exceeds {MAX_PENDING_ACCEPTANCE_PRS}"
+        )
 
     if mode == "explore":
         authorized_by = spec.get("explore_authorized_by")
@@ -197,8 +208,10 @@ def validate(spec: Any, now: datetime) -> list[str]:
         errors.append("tasks must be a non-empty array")
         return errors
 
-    if mode == "converge" and len(tasks) > 3:
-        errors.append("converge mode permits at most 3 active workers")
+    if mode == "converge" and len(tasks) > CONVERGE_MAX_WORKERS:
+        errors.append(f"converge mode permits at most {CONVERGE_MAX_WORKERS} active workers")
+    elif mode == "explore" and len(tasks) > EXPLORE_MAX_WORKERS:
+        errors.append(f"explore mode permits at most {EXPLORE_MAX_WORKERS} active workers")
     doc_count = sum(
         1 for item in tasks if isinstance(item, dict) and item.get("kind") in DOC_KINDS
     )
