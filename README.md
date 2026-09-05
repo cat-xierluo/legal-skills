@@ -111,24 +111,6 @@
 <td>推荐统一入口</td>
 </tr>
 <tr>
-<td><a href="skills/mineru-ocr/"><strong>mineru-ocr</strong></a></td>
-<td>工具·OCR</td>
-<td style="word-break:break-word">通过 MinerU API 将 PDF、图片等文档转换为 Markdown，支持 OCR 文字识别、表格识别和数学公式识别</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.2.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/mineru-ocr-1.2.0.zip">下载</a></td>
-<td>功能已由 legal-ocr 覆盖；建议新用户使用 legal-ocr</td>
-</tr>
-<tr>
-<td><a href="skills/paddle-ocr/"><strong>paddle-ocr</strong></a></td>
-<td>工具·OCR</td>
-<td style="word-break:break-word">面向法律 PDF 与扫描件的 PaddleOCR 结构化解析，将 PDF 或图片转换为 Markdown，支持表格识别、公式识别、版面分析，保留 archive 归档</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.1.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/paddle-ocr-1.1.1.zip">下载</a></td>
-<td>功能已由 legal-ocr 覆盖；保留兼容旧工作流，需配置 API Token</td>
-</tr>
-<tr>
 <td><a href="skills/funasr-transcribe/"><strong>funasr-transcribe</strong></a></td>
 <td>工具·ASR</td>
 <td style="word-break:break-word">本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录</td>
@@ -728,6 +710,8 @@
 
 | 技能                     | 版本   | 说明                                                                                                                                          |
 | ------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| mineru-ocr               | v1.2.0 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 MinerU API Token 才能正常使用 |
+| paddle-ocr               | v1.1.1 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 PaddleOCR API 才能正常使用 |
 | multi-search             | v1.1.0 | 智能多主题深度研究工具，功能被[multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
 | skill-architect          | v1.6.2 | 已重定位为[skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护                                                          |
 | minimax-image-understand | v0.1.0 | 各平台已原生支持 MiniMax MCP 图像理解，无需独立 skill                                                                                         |
