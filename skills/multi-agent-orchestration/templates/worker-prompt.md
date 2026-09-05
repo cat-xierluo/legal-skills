@@ -66,7 +66,7 @@ Context:
 - API Provider: {{api_provider}}
 - Model: {{model_name}}
 - Provider Slot: {{provider_slot}}
-- Worker Type: {{worker_type_ui_wiring_contract_extension_tauri_command_docs_research_custom}}
+- Worker Type: {{worker_type_ui_wiring_contract_extension_tauri_command_python_nested_merge_review_custom}}
 - Effort: {{effort_low_medium_high}}
 - Install Guard Mode: {{install_guard_mode_hook_or_prompt_only_degraded}}
 - Install Authorization Source: {{install_authorization_source_or_none}}
