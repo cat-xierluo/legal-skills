@@ -33,6 +33,7 @@ reset_defaults() {
   WORKTREE=""
   SESSION=""
   BASE_REF="main"
+  BRANCH_LIFECYCLE="ephemeral-worker"
   COMMAND=""
   DRY_RUN=0
   WORKER_BACKEND=""
@@ -89,6 +90,7 @@ reset_defaults
 parse_spawn_worker_args \
   --project "/tmp/project path" --branch "feat/flags" --worktree "/tmp/worker path" \
   --session "flags-session" --base-ref "origin/main" --command "codex exec" \
+  --branch-lifecycle long-lived \
   --worker-backend codex --pm-harness codex --runtime-profile strict \
   --api-provider provider-a --model model-a --provider-slot slot-a \
   --env-isolation isolated --wave-id wave-a --wave-worker-id worker-a \
@@ -113,6 +115,7 @@ parse_spawn_worker_args \
 
 assert_eq "$PROJECT_DIR" "/tmp/project path" "project preserves spaces"
 assert_eq "$BRANCH" "feat/flags" "branch parsed"
+assert_eq "$BRANCH_LIFECYCLE" "long-lived" "branch lifecycle parsed"
 assert_eq "$SESSION" "flags-session" "session parsed"
 assert_eq "$WORKER_BACKEND" "codex" "backend parsed"
 assert_eq "$WITH_SENTINEL:$KEEP_TMUX_ON_TERMINAL" "1:1" "sentinel booleans parsed"
@@ -160,6 +163,11 @@ if printf '%s' "$help_output" | grep -Fq -- '--deps-mode'; then
   ok "usage documents --deps-mode"
 else
   bad "usage documents --deps-mode"
+fi
+if printf '%s' "$help_output" | grep -Fq -- '--branch-lifecycle'; then
+  ok "usage documents branch lifecycle"
+else
+  bad "usage documents branch lifecycle"
 fi
 assert_eq "$unknown_rc" "64" "unknown flag keeps exit 64"
 if printf '%s' "$unknown_output" | grep -Fq 'Unknown argument: --unknown-flag'; then

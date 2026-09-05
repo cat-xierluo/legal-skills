@@ -16,6 +16,62 @@
 - **有界区分真单活与结算残留**：worker_done outcome=failed 正常结算（task 翻成 failed、Dispatch settled、Delivery release+ack）后跑 `pm-orchestrate reauthorize`，预检打印 task state=failed，但新 terminal 注册返回 `TASK_REUSED`；旧实现（Task-081）把 TASK_REUSED 固定解释为「task 仍 dispatched（单活 fencing）」，回滚新终端并指引 PM「先 settle 再重跑」——task 早已结算，恢复链死循环。现注册返回 TASK_REUSED 时按 Step 0 预检状态三分：`failed/settled`（结算残留）先复核一次 task-list，确认仍是 failed/settled 才 `task-update ready` 并只重试一次注册，成功后照常改路由/关旧终端；`dispatched` 维持原单活 fencing 回滚 + runbook #18 指引零变化；`unknown`/其他状态与「预检 failed/settled → 复核翻回 dispatched」的漂移一律回滚新终端 fail-closed 不复位。身份、coordinator 绑定、terminal ownership、Delivery/settlement、provider lease 与 scope guard 全部未放宽；新终端建立后任何中间失败仍先关新终端、保留旧终端（重复调用不累积终端）。
 - **回归门禁扩容**：`test-pm-reauthorize.sh` 9 案例 71 断言 → 14 案例 95 断言。新增 J（failed+settled+TASK_REUSED 复核一致 → 复位重试恢复、零终端泄漏）、J2（settled 状态字串同链路）、K（复位后重试仍 TASK_REUSED → 有界单次重试 + 回滚）、L（预检 failed → 复核翻回 dispatched 漂移 → fail-closed 不复位）、M（unknown + TASK_REUSED → 不猜测不复位）、N（结算恢复链重复调用不累积终端）。fake CLI 新增 `task_reused_once` 模式（仅当 task-update 复位后才放行重试，保证验证「复位 → 重试」因果链）与 `task-status-next` 一次性状态轮换（漂移注入）。红→绿实测：修复前 71 通过 / 24 失败（全部落在 J/J2/K/L/N），修复后 95/95 全绿；`test-pm-orchestrate-handoff.sh` 31/31、`bash -n pm-orchestrate.sh` 通过。
 - **文档同步**：`SKILL.md` §4.5 reauthorize 段新增结算残留语义说明。版本 2.15.0 → 2.15.1。
+## [2.16.2] - 2026-09-05
+
+### 改进
+
+- **主文档按运行阶段收敛**：`SKILL.md` 从候选版 579 行压缩为 208 行，只保留触发边界、模式选择、门禁顺序、最短执行闭环与 Hard Fail；详细派发/交付/review/修复合同迁入 `references/18-dispatch-acceptance-contracts.md`，维护者模块边界与完整回归迁入 `references/19-maintainer-validation.md`。
+- **按需加载地图**：将 Orca、Autopilot、backend、验收合同和维护测试映射到明确 reference，避免一个会话默认加载全部历史事故、操作参数和测试矩阵；现有脚本合同、门禁顺序与安全语义不变。
+
+### 技术优化
+
+- `test-dependency-install-guard.sh` 使用临时的禁用额度路由配置，隔离开发者本地 `orchestration-personal.json` 与过期 quota summary，确保 spawn 集成断言检验安装/Shell 门禁本身，而不是被更早的个人配额预检污染。
+
+### 文档完善
+
+- 同步指向 `git-workflow` 的分支生命周期权威文档，明确编排层只负责触发 delivery-bound 清理，Git 层负责一次性/长期分支判定、批量 stale 审计和长期功能线关闭。
+
+### 验证
+
+- 两个 Skill 的 quick validation 与 Git `diff --check` 通过；安全扫描为 0 critical / 0 high；cleanup 37/37、closeout 120/120、dependency guard 67/67、spawn flags 30/30、metadata 21/21 通过。
+- Harness Failure Audit 继续保留 5 个既有 hard finding（受精确交付证据约束的远端分支删除通用命中 1 个、旧测试退出码模式 4 个）；Instruction Stability 因缺正式约束追踪合同与签名多轮证据保持 `NOT_VERIFIED`。真实 GitHub/Orca 外部链路继续沿用 v2.16.1 的 `NOT_VERIFIED` 边界，不因文档重构扩大结论。
+
+## [2.16.1] - 2026-09-05
+
+### 修复
+
+- **长期分支误清理保护**：派发新增 `--branch-lifecycle ephemeral-worker|long-lived`，并把生命周期与 `base_ref` 持久化到 Session `METADATA.json`。清理优先读取元数据，调用方不得把 `long-lived` 降级为一次性分支；长期源分支固定保留远端 ref、本地 ref 与 Worktree。
+- **合并目标与 Worker head 分离**：`pm-cleanup-worker.sh` 新增 `--integration-target`，要求 GitHub PR `baseRefName` 精确匹配。短 Worker 合入长期功能/集成分支时只删除 Worker head，integration target 永不成为本次清理对象；本地集成交付证明也改查实际远端目标，不再写死 `origin/main`。
+
+### 技术优化
+
+- `test-pm-cleanup-worker.sh` 从 23 扩至 37 项，新增 PR base 错配、保护性升级、长期目标保留、长期源分支三类 Git 资源全保留及生命周期防降级回归；spawn flags 30/30、metadata 21/21、pm-closeout 120/120 全绿。
+
+### 待办事项
+
+- 真实 GitHub 仓库中“短 Worker PR → 长期集成分支 → 自动清理 Worker head”的外部链路仍为 `NOT_VERIFIED`；当前证据来自 fake-gh 与真实临时 Git 仓。
+- Skill Lint 安全扫描为 0 critical / 0 high；Harness 静态审查仍因受精确交付证据约束的 `git push --delete` 报通用 `HFA-011`，并命中 4 个本轮未改旧测试的 `HRA-001`，因此不声明全 Skill Harness 已验证，也不以命令变形规避扫描。候选缺少正式约束追踪合同与签名多轮证据，Instruction Stability 继续为 `NOT_VERIFIED`。
+
+## [2.16.0] - 2026-09-05
+
+### 新增
+
+- **验收后自动清理**：新增 `pm-cleanup-worker.sh`，`pm-closeout.sh` 的 `remote-pr` / `local-after-pr` 成功路径默认以冻结 PR/head/tip、delivery commit、worktree 和 Session identity 调用执行；`--keep-branch` 作为显式保留例外。
+- **资源终态合同**：统一输出 `CLEANED`、`RETAINED_WITH_REASON`、`CLEANUP_PENDING`。交付 commit 与清理债务分开记账，清理失败不盲重试 merge/push，但不能被静默隐藏为“完全完成”。
+
+### 修复
+
+- **只读 `sed` 被误拦**：Shell fail-closed 门禁补入受限数字范围读取 `sed -n '<range>p' <单文件>`；写入 `w`、执行 `e`、替换、多文件及其他形式仍需精确 allowlist。该报错属于 spawn 授权策略遗漏，不是系统文件权限不足。
+- **squash 分支可删性**：远端分支先核 exact tip 与 PR/delivery 事实；worktree 安全移除后，本地分支以 expected tip 为 old-value 精确删 ref，不依赖 `git branch -d` 的可达性，也不使用无条件 `git branch -D`。
+
+### 技术优化
+
+- 新增 `test-pm-cleanup-worker.sh` 23 项，覆盖 dirty/非法 metadata/远端查询失败/PR-head mismatch/未知 PR 状态/dry-run/merged 全清理/open PR 保留远端等路径；dependency guard 67/67 覆盖受限 `sed` 正负例；`test-pm-closeout.sh` 120/120，含默认 cleanup 参数与回执集成断言。
+
+### 待办事项
+
+- 真实 GitHub 仓库的 delivery → 远端分支 → Orca lifecycle/worktree → 本地 ref 全链自动清理仍为 `NOT_VERIFIED`；本次结论只覆盖 throwaway Git 与 fake-gh 确定性证据。
+- 全量回归未形成全绿回执：既有 `codex → zcode` policy 与“zcode 默认禁用”的正文/测试冲突；真实 Orca smoke 在 terminal send 失败（其创建的两个精确 terminal 已关闭）。Instruction Stability 仍为 `NOT_VERIFIED`；Skill Lint 对本功能受 exact tip/PR/delivery 约束的远端删除仍给出通用 `HFA-011`，未用命令变形规避扫描。
 
 ## [2.15.0] - 2026-09-04
 

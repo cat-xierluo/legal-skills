@@ -63,6 +63,7 @@ BRANCH=""
 WORKTREE=""
 SESSION=""
 BASE_REF="main"
+BRANCH_LIFECYCLE="ephemeral-worker"
 COMMAND=""
 DRY_RUN=0
 WORKER_BACKEND=""
@@ -181,6 +182,10 @@ parse_spawn_worker_args "$@"
 
 [ -n "$PROJECT_DIR" ] || { usage; exit 64; }
 [ -n "$SESSION" ] || { usage; exit 64; }
+case "$BRANCH_LIFECYCLE" in
+  ephemeral-worker|long-lived) ;;
+  *) echo "ERROR: --branch-lifecycle must be ephemeral-worker or long-lived (got: $BRANCH_LIFECYCLE)" >&2; exit 64 ;;
+esac
 # v2.14.0：角色与 reviewer 修复授权校验（fail-closed，任何副作用之前）
 case "$ROLE" in
   implementer|reviewer) ;;

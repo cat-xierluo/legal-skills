@@ -10,6 +10,10 @@ Usage:
 Options:
   --worktree PATH   Worktree path. Defaults to .claude/worktrees/tmux-{branch}
   --base-ref REF    Base ref for new branches. Default: main
+  --branch-lifecycle KIND
+                   Git branch lifecycle recorded in METADATA.json:
+                   ephemeral-worker (default; eligible for delivery-bound cleanup) or
+                   long-lived (integration/feature baseline; branch and worktree retained).
   --command CMD     Command to run. Default: the executable for the verified backend
   --worker-backend NAME
                    Worker backend: claude-code, codex, codebuddy, qoderwork-cn or zcode
@@ -200,6 +204,10 @@ parse_spawn_worker_args() {
         ;;
       --base-ref)
         BASE_REF="$2"
+        shift 2
+        ;;
+      --branch-lifecycle)
+        BRANCH_LIFECYCLE="$2"
         shift 2
         ;;
       --command)

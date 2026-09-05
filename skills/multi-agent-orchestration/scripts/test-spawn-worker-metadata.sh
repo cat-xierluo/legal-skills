@@ -45,6 +45,7 @@ reset_metadata_case() {
   WORKTREE="/repo/project/.claude/worktrees/worker"
   BRANCH="feat/worker"
   BASE_REF="origin/main"
+  BRANCH_LIFECYCLE="ephemeral-worker"
   BASE_SHA="base-sha"
   SESSION="worker-session"
   SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
@@ -105,6 +106,8 @@ METADATA_FILE="$CASE_ROOT/worktree.json"
 write_metadata > "$CASE_ROOT/worktree.out"
 assert_jq "$METADATA_FILE" '.schema == "multi-agent-orchestration.worktree-metadata.v1" and .project == "/repo/project"' \
   "schema and project identity are preserved"
+assert_jq "$METADATA_FILE" '.branch_lifecycle == "ephemeral-worker" and .base_ref == "origin/main"' \
+  "branch lifecycle and integration target are persisted"
 assert_jq "$METADATA_FILE" '.isolation == {mode:"worktree", lightweight_auto:0}' \
   "worktree isolation is explicit"
 assert_jq "$METADATA_FILE" '.runtime.harness_authority.pm_harness == "codex" and .runtime.harness_authority.allowed_worker_backends == ["claude-code","codex"]' \
@@ -133,6 +136,7 @@ METADATA_FILE="$CASE_ROOT/lightweight.json"
 SESSION_CONTEXT="/repo/project/.claude/agent-sessions/lightweight"
 LIGHTWEIGHT_MODE=1
 LIGHTWEIGHT_AUTO=1
+BRANCH_LIFECYCLE="long-lived"
 ROLE="reviewer"
 REVIEW_REPAIR_GRANT="task-contract-1"
 INSTALL_GUARD_MODE="prompt_only_degraded"
@@ -153,6 +157,8 @@ ORCA_CAPABILITIES_JSON='[]'
 write_metadata > "$CASE_ROOT/lightweight.out"
 assert_jq "$METADATA_FILE" '.isolation == {mode:"lightweight", lightweight_auto:1}' \
   "lightweight isolation and auto-detection are recorded"
+assert_jq "$METADATA_FILE" '.branch_lifecycle == "long-lived"' \
+  "long-lived lifecycle is recorded verbatim"
 assert_jq "$METADATA_FILE" '.runtime.provider_lease.max_concurrency == null' \
   "unconfigured provider limit remains null"
 assert_jq "$METADATA_FILE" '.runtime.role == {worker_role:"reviewer",review_repair_grant:"task-contract-1"}' \
