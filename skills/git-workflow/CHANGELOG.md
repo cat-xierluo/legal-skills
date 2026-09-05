@@ -1,5 +1,42 @@
 # 变更日志
 
+## [1.8.2] - 2026-09-05
+
+### 改进
+
+- **清理规则单一来源**：新增 `references/branch-lifecycle-and-cleanup.md`，集中承载一次性/长期分支生命周期、单 Worker delivery-bound 清理、squash/rebase expected-tip 删除、批量 stale 审计和长期功能线关闭。
+- `SKILL.md` 的分支管理章节改为最短判定入口，删除与 reference 重复的命令、候选表和红线；长期集成分支 reference 继续负责建线/同步/里程碑，职责不混杂。
+
+### 安全
+
+- 保持 `long-lived`、integration target、24 小时活跃阈值、dirty Worktree、用户确认和 expected-tip 原子删除等既有边界；本次为结构优化，不放宽删除授权。
+
+## [1.8.1] - 2026-09-05
+
+### 修复
+
+- 收窄“合并后清理”为仅清理 `ephemeral-worker` 一次性 head；长期功能/集成分支及其固定 Worktree 即使里程碑已合入默认主干，也不因单 Worker 验收自动删除。
+- 分离 PR head 与 `integration_target`：短 Worker 合入长期分支时只清理 head，并要求 PR `baseRefName` 精确匹配；持久元数据声明 `long-lived` 后，调用方不得降级绕过保护。
+
+### 关联
+
+- 机械实现位于 `multi-agent-orchestration` v2.16.1；确定性回归覆盖长期目标保留、长期源分支全资源保留和生命周期防降级。
+
+## [1.8.0] - 2026-09-05
+
+### 新增
+
+- 新增编排 worker 的验收后单任务清理协议：交付完成后默认收口远端分支、worktree 与本地分支，并统一输出 `CLEANED`、`RETAINED_WITH_REASON`、`CLEANUP_PENDING`。
+
+### 安全
+
+- 清理绑定 exact PR/head、40 位 worker tip、delivery commit、远端 tip、干净 worktree 和已结算 lifecycle；查询失败、未知状态或身份漂移一律失败关闭。
+- squash/rebase merge 下不使用无条件 `git branch -D`，改为 worktree 移除后以 expected tip 为 old-value 精确删除本地 ref；清理失败作为独立债务，不重放已经确认的 merge/push。
+
+### 关联
+
+- 机械实现位于 `multi-agent-orchestration` v2.16.0 的 `pm-closeout.sh` 与 `pm-cleanup-worker.sh`；本 Skill 保持 Git 安全判据与批量清理授权边界。
+
 ## [1.7.1] - 2026-09-05
 
 ### 改进
