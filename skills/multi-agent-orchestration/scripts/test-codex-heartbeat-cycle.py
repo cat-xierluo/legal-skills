@@ -403,9 +403,10 @@ def case_second_heartbeat_after_receipt_ticks_nothing() -> dict[str, Any]:
 
 
 def case_mechanical_backpressure_blocks_spawn() -> dict[str, Any]:
+    # 阈值收敛到 4 后唯一保留的机械阻断档：5 个 open PR 仍必须拒绝 spawn。
     f = Fixture()
     try:
-        items = open_pr_items(3)
+        items = open_pr_items(5)
         f.script([
             {"exit": 0, "stdout": f.status_ok(items=items)},
             {"exit": 0, "stdout": f.reconcile_ready("spawn")},
@@ -418,7 +419,33 @@ def case_mechanical_backpressure_blocks_spawn() -> dict[str, Any]:
         assert "反压" in result["reason"], result["reason"]
         assert len(f.tick_calls()) == 0
         assert len(f.calls) == 3
-        return {"open_prs": 3, "ticks": 0}
+        return {"open_prs": 5, "ticks": 0}
+    finally:
+        f.close()
+
+
+def case_four_open_prs_allow_spawn() -> dict[str, Any]:
+    # dispatch gate 的验收反压已放宽为 >4（MAX_PENDING_ACCEPTANCE_PRS=4），
+    # 心跳机械阈值必须同口径：4 个 open PR 不得再拒绝 spawn。
+    # 旧实现（阈值 2）在此用例上必红——failure-first 回归锚点。
+    f = Fixture()
+    try:
+        items = open_pr_items(4)
+        f.script([
+            {"exit": 0, "stdout": f.status_ok(items=items)},
+            {"exit": 0, "stdout": f.reconcile_ready("spawn")},
+            {"exit": 0, "stdout": f.status_ok(items=items)},
+            {"exit": 0, "stdout": f.tick_receipt()},
+        ])
+        proc = f.run(f.base_request())
+        assert proc.returncode == 0, proc.stderr
+        result = f.result(proc)
+        assert result["decision"] == "dispatch", result["reason"]
+        assert "反压" not in result["reason"], result["reason"]
+        assert result["tick"]["mutation_count"] == 1
+        assert len(f.tick_calls()) == 1
+        assert len(f.calls) == 4
+        return {"open_prs": 4, "ticks": 1}
     finally:
         f.close()
 
@@ -1076,7 +1103,8 @@ CASES: list[tuple[str, Any]] = [
     ("receipt 之后的下一次心跳不再 tick", case_second_heartbeat_after_receipt_ticks_nothing),
     ("声明配额拒绝时拒绝 tick", case_quota_denied_gate_blocks_tick),
     ("声明验收反压时拒绝 spawn tick", case_declared_backpressure_blocks_spawn),
-    ("机械验收反压（3 个 open PR）拒绝 spawn tick", case_mechanical_backpressure_blocks_spawn),
+    ("机械验收反压（5 个 open PR）拒绝 spawn tick", case_mechanical_backpressure_blocks_spawn),
+    ("4 个 open PR 允许 spawn tick（阈值收敛到 4）", case_four_open_prs_allow_spawn),
     ("2 个 open PR 允许 spawn tick", case_two_open_prs_allow_spawn),
     ("provider 重置（retry_later）不 tick", case_provider_reset_ticks_nothing),
     ("reconcile 失败（事实过期）不 tick", case_stale_facts_ticks_nothing),
