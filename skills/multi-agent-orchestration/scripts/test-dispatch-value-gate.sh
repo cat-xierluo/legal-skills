@@ -94,6 +94,17 @@ def run(spec, expected_ok, contains="", label=""):
 run(base, True, label="valid implementation passes")
 run({**copy.deepcopy(base), "tasks": base["tasks"] + [copy.deepcopy(merge_gate_task)]}, True, label="valid merge gate passes")
 
+
+def distinct_tasks(count):
+    tasks = []
+    for index in range(count):
+        item = copy.deepcopy(base["tasks"][0])
+        item["task_id"] = f"TASK-{index}"
+        item["value_identity"] = f"identity-{index}"
+        item["problem_target"] = f"module-{index} distinct defect"
+        tasks.append(item)
+    return tasks
+
 fixture = copy.deepcopy(base)
 fixture["tasks"][0].update({
     "value_kind": "reusable_verification",
@@ -208,18 +219,20 @@ cousin["value_identity"] = "different-explicit-id"
 subsumed_target["tasks"].append(cousin)
 run(subsumed_target, False, "subsumed", "subsumed problem target")
 
+converge_at_cap = copy.deepcopy(base)
+converge_at_cap["tasks"] = distinct_tasks(8)
+run(converge_at_cap, True, label="converge permits 8 active workers")
+
 too_many = copy.deepcopy(base)
-too_many["tasks"] = []
-for index in range(4):
-    item = copy.deepcopy(base["tasks"][0])
-    item["task_id"] = f"TASK-{index}"
-    item["value_identity"] = f"identity-{index}"
-    item["problem_target"] = f"module-{index} distinct defect"
-    too_many["tasks"].append(item)
-run(too_many, False, "at most 3", "converge concurrency cap")
+too_many["tasks"] = distinct_tasks(9)
+run(too_many, False, "at most 8", "converge concurrency cap")
+
+pending_at_cap = copy.deepcopy(base)
+pending_at_cap["pending_acceptance_prs"] = 4
+run(pending_at_cap, True, label="pending acceptance PRs at 4 passes")
 
 backpressure = copy.deepcopy(base)
-backpressure["pending_acceptance_prs"] = 3
+backpressure["pending_acceptance_prs"] = 5
 run(backpressure, False, "acceptance backpressure", "acceptance backpressure")
 
 unowned_service = copy.deepcopy(base)
@@ -227,11 +240,16 @@ unowned_service["tasks"][0]["starts_external_resources"] = True
 unowned_service["tasks"][0]["resource_owner"] = "none"
 run(unowned_service, False, "resource_owner", "unowned external resource")
 
-explore = copy.deepcopy(too_many)
+explore = copy.deepcopy(base)
 explore["mode"] = "explore"
 explore["explore_authorized_by"] = "user 2026-09-01"
 explore["explore_expires_at"] = "2026-09-02T00:00:00+00:00"
-run(explore, True, label="explore window permits 4 workers")
+explore["tasks"] = distinct_tasks(10)
+run(explore, True, label="explore window permits 10 workers")
+
+explore_over_cap = copy.deepcopy(explore)
+explore_over_cap["tasks"] = distinct_tasks(11)
+run(explore_over_cap, False, "at most 10", "explore concurrency cap")
 
 expired = copy.deepcopy(explore)
 expired["explore_expires_at"] = "2026-08-31T00:00:00+00:00"
