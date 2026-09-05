@@ -15,6 +15,7 @@
 ### 修复
 
 - 独立审阅后收紧 `tui-idle` 合同：除 `satisfied=true` 外还必须精确为 `status=running` 且 `exitCode=null`；缺字段、已退出和非 running 均失败关闭。额度证据改为尾部锚定的实际错误行，说明句 `expected response` / `provider returns` 不再触发。
+- 自然语言额度错误模板统一要求行首锚定；`Design note: quota exceeded...`、`The account hit your limit...` 等解释性句子即使包含额度短语也不再 actionable，优先接受漏报而不是误唤醒。
 - Orca 已接受唤醒且后置 identity 复核成功、但 `sent` 状态提交失败时，回执明确标记 `WAKE_ACCEPTED_STATE_COMMIT_FAILED`，磁盘上的 WAL intent 继续阻止同 episode 重发。
 
 ### 验证
