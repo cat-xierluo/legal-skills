@@ -12,10 +12,15 @@
 - 从 `pm-quota-stall.sh` 抽出共享 `provider_error_classifier.py`，统一 auth/config/network/quota 优先级；混合 auth/config + 429、仅讨论/测试 429、陈旧 tail、断连/不可写、tmux/未知来源和 Orca 畸形/截断清单全部失败关闭或不发送。
 - 主文档只保留入口与 Hard Fail；manifest、状态机、退出码、错峰、幂等和安全 runbook 放入 `references/20-orca-rate-limit-recovery.md`，并在 Wave Autopilot 中建立按需入口。
 
+### 修复
+
+- 独立审阅后收紧 `tui-idle` 合同：除 `satisfied=true` 外还必须精确为 `status=running` 且 `exitCode=null`；缺字段、已退出和非 running 均失败关闭。额度证据改为尾部锚定的实际错误行，说明句 `expected response` / `provider returns` 不再触发。
+- Orca 已接受唤醒且后置 identity 复核成功、但 `sent` 状态提交失败时，回执明确标记 `WAKE_ACCEPTED_STATE_COMMIT_FAILED`，磁盘上的 WAL intent 继续阻止同 episode 重发。
+
 ### 验证
 
 - 新增 fake-Orca 确定性矩阵，覆盖 dry-run 零发送、retrying/RUNNING 不发送、idle 只执行一次、新 evidence 可再处置、分组顺序与最小间隔、auth/config 混合、源码/测试日志讨论 429、断连/不可写/陈旧证据、截断/畸形/失败 Orca、tmux 来源与参数拒绝、敏感原文不出回执、identity 漂移、send/post-check 不确定后的 intent 幂等、状态 symlink/权限与锁竞争。
-- fake-Orca 15/15、`pm-quota-stall` 39/39、`night-watch` 31/31 通过；全部 Shell `bash -n`、Python `py_compile`、Skill quick validation 与 Git whitespace 检查通过。真实 Orca 1.4.197 只读 smoke 验证 list/show/read/wait schema、`UNKNOWN/no_actionable_quota_evidence`、零 send 且不创建 state。
+- fake-Orca 16/16、`pm-quota-stall` 39/39、`night-watch` 31/31 通过；全部 Shell `bash -n`、Python `py_compile`、Skill quick validation 与 Git whitespace 检查通过。真实 Orca 1.4.197 只读 smoke 验证 list/show/read/wait schema、`UNKNOWN/no_actionable_quota_evidence`、零 send 且不创建 state。
 - Skill Lint security scan 为 0 critical / 0 high；本轮新增生产脚本只有已披露且 `shell=False`/参数数组调用的 subprocess medium，以及工具定位/私有状态路径所需的环境变量 low。Harness failure audit 未在本轮新增文件命中，仍保留全 Skill 既有 6 个 hard finding，不以命令变形规避。
 
 ### 待办事项

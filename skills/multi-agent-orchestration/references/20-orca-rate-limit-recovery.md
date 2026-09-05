@@ -34,7 +34,7 @@
 |---|---|---|
 | `RUNNING` | connected/writable；无可执行额度证据；`tui-idle` 未满足；输出时间新鲜 | 否 |
 | `RATE_LIMIT_RETRYING` | 尾部存在明确 provider quota error；cursor/timestamp 新鲜；TUI 仍非 idle 或尚未过 idle 阈值 | 否 |
-| `RATE_LIMIT_IDLE` | 明确 quota error + latest cursor + 未过期 `lastOutputAt` + connected/writable + `tui-idle satisfied` + 超过 idle 阈值 | 仅 `--execute` 候选 |
+| `RATE_LIMIT_IDLE` | 明确 quota error + latest cursor + 未过期 `lastOutputAt` + connected/writable + `tui-idle satisfied`，且 wait 精确为 `status=running`、`exitCode=null` + 超过 idle 阈值 | 仅 `--execute` 候选 |
 | `UNKNOWN` | 身份缺失/漂移、断连、不可写、陈旧证据、auth/config/network、仅讨论/测试 429、结构不明等 | 否 |
 
 单一 `429` 关键词、源码/测试/fixture 对 429 的讨论、429 后已有实质进展的非锚定 tail、陈旧 tail、`agentWait`、单独 idle 或单独 cursor 都不是充分证据。认证/配置文字和 429 混合时按非额度错误失败关闭。
@@ -67,7 +67,7 @@ python3 scripts/orca_rate_limit_recovery.py \
 
 执行状态默认写入 `~/.local/state/multi-agent-orchestration/orca-rate-limit-recovery/`；可用 `--state-dir` 指向其他私有目录。目录必须归当前用户所有、拒绝 symlink、group/world 无权限；state/lock 必须为私有 regular file，FIFO、设备和 socket 均拒绝。锁竞争立即失败，不无限等待。
 
-episode key 绑定 `terminal handle + incarnationId + latestCursor + lastOutputAt + quota evidence fingerprint`。发送前重新执行 show/read/wait，要求 identity、timestamp、cursor 和 idle 均未漂移；随后先持久化 `intent`，再发送固定文本“继续”，最后复核 terminal identity 并把状态改为 `sent`。send 或后置复核结果不确定时保留 `intent`，同一 episode 后续执行只报 `already_handled`，不会盲重发；只有新的 cursor/timestamp 证据才形成新 episode。
+episode key 绑定 `terminal handle + incarnationId + latestCursor + lastOutputAt + quota evidence fingerprint`。发送前重新执行 show/read/wait，要求 identity、timestamp、cursor 和 idle 均未漂移；随后先持久化 `intent`，再发送固定文本“继续”，最后复核 terminal identity 并把状态改为 `sent`。send 或后置复核结果不确定时保留 `intent`；Orca 已接受且后置复核成功、但 `sent` 提交失败时输出 `WAKE_ACCEPTED_STATE_COMMIT_FAILED` 并同样保留磁盘 WAL intent。同一 episode 后续执行只报 `already_handled`，不会盲重发；只有新的 cursor/timestamp 证据才形成新 episode。
 
 状态与回执只保存/输出 fingerprint、分类状态和原因码，不回显 provider 原始错误、settings、凭证或 account group 原文。
 
