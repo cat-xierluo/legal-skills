@@ -36,6 +36,7 @@ write_metadata() {
     --arg project "$PROJECT_DIR" \
     --arg worktree "$WORKTREE" \
     --arg branch "$BRANCH" \
+    --arg branch_lifecycle "$BRANCH_LIFECYCLE" \
     --arg base_ref "$BASE_REF" \
     --arg base_sha "$BASE_SHA" \
     --arg session "$SESSION" \
@@ -98,6 +99,7 @@ write_metadata() {
       project: $project,
       worktree: $worktree,
       branch: $branch,
+      branch_lifecycle: $branch_lifecycle,
       base_ref: $base_ref,
       base_sha: $base_sha,
       isolation: {
