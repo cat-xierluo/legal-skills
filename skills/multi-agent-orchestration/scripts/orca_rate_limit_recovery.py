@@ -32,13 +32,15 @@ MAX_JSON_BYTES = 4 * 1024 * 1024
 HANDLE_RE = re.compile(r"[A-Za-z0-9._:-]+")
 IDENTITY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}")
 PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,31}")
-QUOTA_CONTEXT_RE = re.compile(
-    r"(?:api|http|request|response|status|error|failed|failure).{0,100}"
-    r"(?:\b429\b|rate[ _-]?limit|usage[ _-]?limit|quota)|"
-    r"\b429\b.{0,100}(?:too many requests|rate|limit|quota|error)|"
-    r"(?:rate[ _-]?limit|usage[ _-]?limit).{0,100}(?:reach|exceed|exhaust|deplet|reset|retry\s+(?:after|in)|try again)|"
-    r"quota[\s_-]*(?:exceed|exhaust|deplet|limit|reset)|"
-    r"hit\s+(?:your\s+)?limit|limit\s+resets?",
+ACTIONABLE_QUOTA_RE = re.compile(
+    r"^(?:[^\w]{0,8})?(?:(?:api|provider|request|response)\s+)?"
+    r"(?:error|failed|failure)\s*[:=#-]?\s*(?:http\s*)?429\b|"
+    r"^\s*http\s+429\b|^\s*(?:status|code)\s*[:=]\s*429\b|"
+    r"^\s*429\s*[:=-]?\s*(?:too many requests|rate[ _-]?limit|usage[ _-]?limit|quota|error)|"
+    r"^\s*\{.*\"(?:code|status)\"\s*:\s*429\b|"
+    r"\b(?:you(?:'ve| have)?\s+)?hit\s+(?:your\s+)?limit\b|"
+    r"\b(?:rate[ _-]?limit|usage[ _-]?limit)\s+(?:reached|exceeded|exhausted|depleted)\b|"
+    r"\bquota[\s_-]*(?:exceeded|exhausted|depleted)\b|\blimit\s+resets?\b",
     re.IGNORECASE,
 )
 DISCUSSION_RE = re.compile(
@@ -228,7 +230,15 @@ def parse_idle_wait(status: str, payload: dict[str, Any], handle: str) -> bool:
     wait = result.get("wait") if isinstance(result, dict) else None
     if not isinstance(wait, dict):
         raise RecoveryError(EXIT_RUNTIME, "terminal_wait_malformed")
-    if wait.get("handle") != handle or wait.get("condition") != "tui-idle" or wait.get("satisfied") is not True:
+    if (
+        wait.get("handle") != handle
+        or wait.get("condition") != "tui-idle"
+        or wait.get("satisfied") is not True
+        or "status" not in wait
+        or wait.get("status") != "running"
+        or "exitCode" not in wait
+        or wait.get("exitCode") is not None
+    ):
         raise RecoveryError(EXIT_RUNTIME, "terminal_wait_malformed")
     return True
 
@@ -246,10 +256,10 @@ def actionable_quota_evidence(tail: list[str]) -> str:
         line = lines[index]
         if DISCUSSION_RE.search(line):
             continue
-        if QUOTA_CONTEXT_RE.search(line) and classify_provider_error(line) == "quota":
+        if ACTIONABLE_QUOTA_RE.search(line) and classify_provider_error(line) == "quota":
             trailing = lines[index + 1 :]
             if all(
-                (QUOTA_CONTEXT_RE.search(value) and classify_provider_error(value) == "quota")
+                (ACTIONABLE_QUOTA_RE.search(value) and classify_provider_error(value) == "quota")
                 or NON_PROGRESS_AFTER_QUOTA_RE.fullmatch(value)
                 for value in trailing
             ):
@@ -421,9 +431,11 @@ def load_state(path: Path) -> dict[str, Any]:
 
 def write_state(path: Path, state: dict[str, Any]) -> None:
     encoded = (json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    fd, temp_name = tempfile.mkstemp(prefix=".state.", dir=path.parent)
-    temp_path = Path(temp_name)
+    fd = -1
+    temp_path: Path | None = None
     try:
+        fd, temp_name = tempfile.mkstemp(prefix=".state.", dir=path.parent)
+        temp_path = Path(temp_name)
         os.fchmod(fd, 0o600)
         os.write(fd, encoded)
         os.fsync(fd)
@@ -440,10 +452,11 @@ def write_state(path: Path, state: dict[str, Any]) -> None:
     finally:
         if fd >= 0:
             os.close(fd)
-        try:
-            temp_path.unlink()
-        except FileNotFoundError:
-            pass
+        if temp_path is not None:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def recheck_before_send(orca: str, item: dict[str, Any], worker: dict[str, str]) -> None:
@@ -597,14 +610,22 @@ def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
                 raise
             state["actions"][evidence]["status"] = "sent"
             state["actions"][evidence]["sent_at"] = int(time.time() * 1000)
-            write_state(state_path, state)
             item.update(action="wake_accepted", eligible=False, reason="wake_accepted_not_recovery_proof")
             receipt["summary"]["wake_accepted"] += 1
+            try:
+                write_state(state_path, state)
+            except RecoveryError:
+                item.update(
+                    action="wake_accepted_state_commit_failed",
+                    reason="wake_accepted_but_state_commit_failed",
+                )
+                receipt["status"] = "WAKE_ACCEPTED_STATE_COMMIT_FAILED"
+                raise
             previous_group = item["group_fingerprint"]
         receipt["status"] = "EXECUTION_COMPLETE"
         return 0, receipt
     except RecoveryError as exc:
-        if receipt["status"] != "SEND_OUTCOME_UNKNOWN":
+        if receipt["status"] not in {"SEND_OUTCOME_UNKNOWN", "WAKE_ACCEPTED_STATE_COMMIT_FAILED"}:
             receipt["status"] = "FAILED_CLOSED"
         receipt["reason"] = exc.reason
         exc.receipt = receipt
