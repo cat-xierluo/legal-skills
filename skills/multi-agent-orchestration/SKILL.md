@@ -1,9 +1,9 @@
 ---
 name: multi-agent-orchestration
-description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
+description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.16.5"
+  version: "2.17.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -135,6 +135,8 @@ bash scripts/spawn-worker.sh \
 
 Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才启用。L1 当前会话推进读取 `references/15-wave-autopilot.md`；跨会话 L2 controller 与尚未实现的 L3 scheduler 边界读取 `references/16-autopilot-durability.md`。不要把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。
 
+跨项目检查 Orca Worker 是否因 429/usage limit 停在 idle 时，运行 `scripts/orca_rate_limit_recovery.py --manifest <私有清单>`；默认只读，只有显式 `--execute` 才对高置信 `RATE_LIMIT_IDLE` 通过 terminal 输入通道发送一次固定“继续”。tmux、单关键词/陈旧 tail、未分组身份和状态不确定一律不处置；`WAKE_ACCEPTED` 不等于额度恢复或业务继续。完整 manifest、状态机、错峰、幂等、TOCTOU 与退出码读取 `references/20-orca-rate-limit-recovery.md`。
+
 ## 6. 验收、Git 交付与资源收口
 
 PM 依次完成：
@@ -186,6 +188,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | Orca worker 与 PM 操作 | `references/13-orca-cli-worker.md`、`14-pm-orchestrate.md` |
 | Autopilot | `references/15-wave-autopilot.md`、`16-autopilot-durability.md` |
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
+| Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
@@ -204,5 +207,6 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - PR create/push/merge 前未通过唯一性与冻结事实审计，或结果不确定时盲重试 mutation。
 - worker 启动的服务/监听器没有 owner 与零净增量证据，或按进程名批量 kill。
 - 清理 active/unknown/release pending worker；误删长期分支或 integration target；交付后没有记录三种资源终态之一。
+- 仅凭单一 429 关键词、陈旧 tail 或 idle 状态注入；向身份未绑定、不可写、非 Orca 或仍在 retrying 的 terminal 发送“继续”；把 `WAKE_ACCEPTED` 声称为额度或业务恢复。
 
 修改本 Skill 后，按 `references/19-maintainer-validation.md` 运行受影响测试和完整回归。只有真实启动受支持 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能把该 backend 的 supervised 路径标记为已验证；其他 backend 不得类推。
