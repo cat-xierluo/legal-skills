@@ -14,6 +14,7 @@
     "root": ".claude/agent-sessions"
   },
   "verification": {
+    "required": true,
     "default": [
       "npm run typecheck",
       "npm test",
@@ -29,6 +30,9 @@
         "npm run typecheck",
         "npm test",
         "npm run build"
+      ],
+      "python-nested": [
+        "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v"
       ],
       "tauri-command": [
         "npm run typecheck",

@@ -25,6 +25,16 @@ python3 scripts/dispatch-value-gate.py <dispatch-spec.json>
 
 非零退出不得创建 worker。PR 数、行数、token、commit 数和忙碌度都不是价值信号。
 
+门禁通过后，把同一份合同直接绑定到 spawn，避免人工转抄遗漏或改写验证命令：
+
+```bash
+bash scripts/spawn-worker.sh ... \
+  --verification-contract <dispatch-spec.json> \
+  --verification-task-id <task_id>
+```
+
+脚本要求 task_id 恰好匹配一次，并把 `verification_commands` 每项作为完整字符串写入精确 Shell allowlist；`implementation` / `reusable_verification` 解析为空时在派发副作用前拒绝。不要同时传 `--verify-cmd` 制造两个权威来源。
+
 ## 2. 交付后价值门
 
 验收或接 PR 前，用派发时同一份 spec 检查真实交付：

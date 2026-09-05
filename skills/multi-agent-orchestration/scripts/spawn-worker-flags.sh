@@ -34,6 +34,19 @@ Options:
   --wave-worker-id ID
                    Worker ID within the wave
   --verify-cmd CMD Expected verification command; repeat for multiple commands
+  --require-verification
+                   Require at least one valid verification command. Fails before
+                   worktree/terminal/Task/Dispatch side effects when resolution is empty.
+  --verification-contract FILE
+                   Read exact verification_commands from one dispatch-value-gate.v2 task.
+                   Requires --verification-task-id; cannot be combined with --verify-cmd.
+  --verification-task-id ID
+                   Exact task_id selected from --verification-contract.
+  --project-config FILE
+                   Project config containing verification.default/by_worker_type.
+                   Defaults to <project>/.claude/orchestration.config.json when present.
+  --worker-type TYPE
+                   Select verification.by_worker_type[TYPE]; unknown types fail closed.
   --with-sentinel   Print recommended sentinel.sh command (does NOT start sentinel itself)
   --sentinel-poll-interval N
                    Default 5; passed to the recommended sentinel command
@@ -252,6 +265,26 @@ parse_spawn_worker_args() {
         ;;
       --verify-cmd)
         VERIFY_COMMANDS+=("$2")
+        shift 2
+        ;;
+      --require-verification)
+        REQUIRE_VERIFICATION=1
+        shift
+        ;;
+      --verification-contract)
+        VERIFICATION_CONTRACT="$2"
+        shift 2
+        ;;
+      --verification-task-id)
+        VERIFICATION_TASK_ID="$2"
+        shift 2
+        ;;
+      --project-config)
+        PROJECT_CONFIG_FILE="$2"
+        shift 2
+        ;;
+      --worker-type)
+        WORKER_TYPE="$2"
         shift 2
         ;;
       --with-sentinel)

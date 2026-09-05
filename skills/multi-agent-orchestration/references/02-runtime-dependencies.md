@@ -76,3 +76,15 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - 不要默认复制 `.env`、真实 provider settings、token 或 key 到 worktree。
 - `gh` 用于 PR/mergeability 判断；没有 `gh` 时 PM 必须用其他方式确认 PR 状态，不能假定已合并。
 - Claude Code 原生 `--worktree --tmux` 可作为启动后端，但仍要接回本 Skill 的 `METADATA.json` / `STATUS.json` / Wave / review / merge 门禁。
+
+## 6. 验证命令授权
+
+验证命令是 Shell 执行授权，不是安装授权。`spawn-worker.sh` 在任何 terminal、Task、Dispatch 或任务注入前只选择一个来源：
+
+1. 无文件合同时，使用重复的 `--verify-cmd '<完整命令>'`；或使用 `--verification-contract <dispatch-value-gate.v2.json> --verification-task-id <ID>` 选择的唯一任务，两者互斥；
+2. 上述均未提供时，读取 `.claude/orchestration.config.json`（或显式 `--project-config`）中的 `verification.default` / `verification.by_worker_type[<--worker-type>]`；
+3. 没有项目配置时，才使用项目根的有界 Node/Make/Python 发现。
+
+不要合并多个权威来源；CLI 与合同并存会失败关闭。合同中的 `implementation` / `reusable_verification` 自动要求非空验证命令；其他要求自验的派发传 `--require-verification`，项目也可设置 `verification.required: true`。Python 自动发现只认根 `pyproject.toml` / `requirements.txt` / `setup.py` 与根 `tests/`，固定注入 unittest discover；嵌套项目必须在 `by_worker_type` 显式声明完整命令。
+
+命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在副作用前拒绝。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
