@@ -77,8 +77,10 @@ TIMEOUT_BOUNDS = {
     "reconcile_seconds": (1, 300),
     "tick_seconds": (1, 600),
 }
-# 与 dispatch-value-gate.v2 的验收反压阈值一致：待验收 PR > 2 时不允许再 spawn。
-BACKPRESSURE_THRESHOLD = 2
+# 与 dispatch-value-gate.v2 的验收反压阈值一致（MAX_PENDING_ACCEPTANCE_PRS=4，
+# 验收反压口径为 >4）：待验收 PR > 4 时不允许再 spawn。显式声明
+# gates.acceptance_backpressure 的拒绝路径独立于本阈值，始终生效。
+BACKPRESSURE_THRESHOLD = 4
 
 OID_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 HEX64_RE = re.compile(r"[0-9a-f]{64}")
