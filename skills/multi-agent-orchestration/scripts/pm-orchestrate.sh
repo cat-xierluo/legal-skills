@@ -46,6 +46,11 @@ Commands:
                注册返回 TASK_REUSED 时不再误判为仍 dispatched：先复核状态，确认仍是
                failed/settled 才复位 ready 并只重试一次注册；复核翻回 dispatched（漂移）
                或 unknown/其他状态一律回滚新终端 fail-closed 不复位。
+               (Task-116) 任何 mutation 之前先读权威 Dispatch 状态（worker-show）：仅
+               未 released/acked/settled 的 live 目标可继续；已进入结算链或状态不可证
+               的目标稳定输出 REAUTHORIZE_NOT_LIVE，零副作用（授权文件/launch.sh/
+               终端/METADATA 均不变）。已结算目标的恢复走 release/ack 正常收口或
+               quota-park/明确恢复入口。
   quota-park  Quota-stall recovery handoff (v2.11.0 P0-③)：精确 fence + stop 旧
                supervised Dispatch（worker-stop），完整保留 worktree/session/checkpoint，
                释放 METADATA 记录的 provider lease，之后同 worktree 可用新 session id
@@ -871,6 +876,46 @@ reauthorize_rollback_new_terminal() {
   fi
 }
 
+# Task-116（Badminton Lab 实测事故①）：reauthorize liveness 预门禁。
+# 旧 Dispatch 已 worker_done → release → ack → settled 后，METADATA 残留的 dispatch_id
+# 会让本命令把死目标当 live：先合并授权、重写 launch.sh B64、创建替换终端，直到注册
+# 阶段才发现目标已结算并回滚——授权/终端副作用全部白做。本预门禁在任何 mutation
+# （包括 ensure_coordinator_binding 的 run-use/METADATA 改写）之前读取权威 Dispatch
+# 状态（worker-show）：只有调用可达、Dispatch 记录仍存在、且未进入结算链
+# （terminalResource.releaseState 仍是 not_requested/缺省）的 live 目标才允许继续；
+# released/released_retained/settled、记录缺失、调用失败等其余一切状态一律输出稳定
+# 机器码 REAUTHORIZE_NOT_LIVE 并零副作用退出（fail-closed）。已有 Worktree/Task 的
+# 恢复必须走 reauthorize（仅限 live 目标）/quota-park/明确恢复入口，不在死目标上做副作用。
+reauthorize_liveness_pregate() {
+  local show_json show_rc release_state dispatch_status
+  set +e
+  show_json=$(orca_cli orchestration worker-show --dispatch "$ORCA_DISPATCH_ID" --json 2>&1)
+  show_rc=$?
+  set -e
+  if [ "$show_rc" -ne 0 ]; then
+    echo "REAUTHORIZE_NOT_LIVE: worker-show 不可达（rc=${show_rc}），无法证明 Dispatch 仍 live；未知状态 fail-closed，未做任何变更" >&2
+    exit 2
+  fi
+  if [ -z "$(printf '%s' "$show_json" | jq -r '.result.dispatch.id // empty' 2>/dev/null)" ]; then
+    echo "REAUTHORIZE_NOT_LIVE: worker-show 无 Dispatch 记录（已 GC 或契约不完整），无法证明仍 live；零副作用拒绝" >&2
+    exit 2
+  fi
+  release_state=$(printf '%s' "$show_json" | jq -r '.result.terminalResource.releaseState // .result.terminal_resource.releaseState // empty' 2>/dev/null)
+  dispatch_status=$(printf '%s' "$show_json" | jq -r '.result.dispatch.status // empty' 2>/dev/null)
+  case "$release_state" in
+    ""|null|"not_requested") ;;
+    *)
+      echo "REAUTHORIZE_NOT_LIVE: Dispatch 已进入结算链（releaseState=${release_state}），worker_done 已被 release/ack/settled；请按正常收口处理或走明确恢复入口，reauthorize 零副作用拒绝" >&2
+      exit 2
+      ;;
+  esac
+  if [ "$dispatch_status" = "settled" ]; then
+    echo "REAUTHORIZE_NOT_LIVE: Dispatch status=settled（worker_done 已结算），reauthorize 零副作用拒绝" >&2
+    exit 2
+  fi
+  echo "PM_REAUTHORIZE_LIVENESS_OK: dispatch=$ORCA_DISPATCH_ID releaseState=${release_state:-not_requested} status=${dispatch_status:-unknown}"
+}
+
 cmd_reauthorize() {
   # Task-058: spawn 授权快照的运行时刷新。guard 的 load_authorization() 中
   # WORKER_INSTALL_AUTH_B64（launch.sh 内联、进程环境）绝对优先于授权文件且
@@ -901,6 +946,9 @@ cmd_reauthorize() {
   local launch_sh="$SESSION_CONTEXT/launch.sh"
   [ -f "$auth_file" ] || { echo "ERROR: authorization file not found: $auth_file" >&2; exit 64; }
   [ -f "$launch_sh" ] || { echo "ERROR: launch.sh not found: $launch_sh" >&2; exit 64; }
+  # Task-116：任何 mutation（run-use/METADATA 改写、授权合并、B64 重写、新终端）之前
+  # 先证明目标 Dispatch 仍 live；settled/released/acked/未知一律 REAUTHORIZE_NOT_LIVE。
+  reauthorize_liveness_pregate
   ensure_coordinator_binding || exit 2
 
   # Step 0 (Task-081)：dispatched 等待态探测与消费。仅 dispatched 分支有额外动作；
