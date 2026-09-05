@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.16.5] - 2026-09-05
+
+### 文档完善
+
+- 合并编排指南中两条重复的自动清理说明，明确 `pm-closeout.sh → pm-cleanup-worker.sh` 是持有完整交付绑定的标准路径；`post-merge-cleanup.sh` 仅用于已经合并但未走标准 closeout 的单一遗留 worker，不替代标准路径也不用于批量扫描。
+
 ## [2.16.4] - 2026-09-05
 
 ### 改进
