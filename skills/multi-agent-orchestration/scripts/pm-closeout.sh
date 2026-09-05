@@ -5,6 +5,10 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SP="${PM_CLOSEOUT_SAFE_PUSH:-}"
 GIT_NAME="${EXPECTED_GIT_NAME:-}"; GIT_EMAIL="${EXPECTED_GIT_EMAIL:-}"
 WT=""; MAIN_WT=""; TITLE=""; BODY_FILE=""; VERIFY_BIN=""; KEEP_BRANCH=0; TMP_BODY=""
+cleanup_script_default="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pm-cleanup-worker.sh"
+CLEANUP_SCRIPT="${PM_CLOSEOUT_CLEANUP_SCRIPT:-$cleanup_script_default}"
+CLEANUP_PROJECT=""; CLEANUP_SESSION=""
+BRANCH_LIFECYCLE=""
 WORKER_BASE=""; WORKER_TIP=""; START_MAIN=""; STABLE_MAIN=""
 MODE="${PM_CLOSEOUT_MODE:-local-after-pr}"; MAIN_PROTECTION="${PM_CLOSEOUT_MAIN_PROTECTION:-auto}"
 TASK_ID="${PM_CLOSEOUT_TASK_ID:-}"; AGENT_ID="${PM_CLOSEOUT_AGENT_ID:-}"
@@ -56,6 +60,9 @@ while [ $# -gt 0 ]; do case $1 in
   --verify-arg) VERIFY_ARGS+=("$2"); shift 2 ;;
   --verify) echo "PM_CLOSEOUT_USAGE: --verify 字符串已停用；改用 --verify-cmd + --verify-arg，禁止 shell 字符串执行" >&2; exit 64 ;;
   --keep-branch) KEEP_BRANCH=1; shift ;;
+  --cleanup-project) CLEANUP_PROJECT="$2"; shift 2 ;;
+  --cleanup-session) CLEANUP_SESSION="$2"; shift 2 ;;
+  --branch-lifecycle) BRANCH_LIFECYCLE="$2"; shift 2 ;;
   --mode) MODE="$2"; shift 2 ;;
   --main-protection) MAIN_PROTECTION="$2"; shift 2 ;;
   --task-id) TASK_ID="$2"; shift 2 ;;
@@ -73,6 +80,7 @@ esac; done
 [ -n "$WT" ] && [ -n "$TITLE" ] || { echo "PM_CLOSEOUT_USAGE: 需要 --worktree 与 --title" >&2; exit 64; }
 [ -n "$TASK_ID" ] && [ -n "$AGENT_ID" ] || { echo "PM_CLOSEOUT_USAGE: 需要 --task-id 与 --agent-id 绑定 PR 归属" >&2; exit 64; }
 case "$MODE" in local-after-pr|remote-pr|validate-only) ;; *) echo "PM_CLOSEOUT_USAGE: 非法 --mode $MODE" >&2; exit 64 ;; esac
+case "$BRANCH_LIFECYCLE" in ""|ephemeral-worker|long-lived) ;; *) echo "PM_CLOSEOUT_USAGE: --branch-lifecycle 仅接受 ephemeral-worker|long-lived" >&2; exit 64 ;; esac
 case "$MAIN_PROTECTION" in auto|protected) ;; *) echo "PM_CLOSEOUT_USAGE: --main-protection 仅接受 auto|protected；unprotected 必须由 GitHub branch metadata 正向证明" >&2; exit 64 ;; esac
 [ "$MODE" = "validate-only" ] || [ "${#INTEGRATION_PATHS[@]}" -gt 0 ] || {
   echo "PM_CLOSEOUT_USAGE: local-after-pr/remote-pr 至少需要一个 --integration-path" >&2; exit 64
@@ -201,6 +209,42 @@ finish_validate_only() {
   echo "PM_CLOSEOUT_RESULT: VALIDATE_ONLY pr=$pr_number head=$WORKER_TIP reason=$reason"
   [ "$MODE" = "validate-only" ] && exit 0
   exit 8
+}
+
+run_post_delivery_cleanup() {
+  local delivery_mode=$1 delivery_commit=$2 cleanup_rc cleanup_args
+  if [ "$KEEP_BRANCH" -eq 1 ]; then
+    echo "PM_CLOSEOUT_CLEANUP: RETAINED_WITH_REASON reason=--keep-branch"
+    return 0
+  fi
+  if [ ! -f "$CLEANUP_SCRIPT" ] || [ -L "$CLEANUP_SCRIPT" ]; then
+    echo "PM_CLOSEOUT_CLEANUP: CLEANUP_PENDING reason=cleanup-script-unavailable script=$CLEANUP_SCRIPT" >&2
+    return 0
+  fi
+  cleanup_args=(
+    --worktree "$WT" --branch "$BR" --pr "$PR_N"
+    --expected-tip "$WORKER_TIP" --delivery-mode "$delivery_mode"
+    --delivery-commit "$delivery_commit" --repository "$REMOTE" --execute
+    --integration-target main
+  )
+  [ -z "$BRANCH_LIFECYCLE" ] || cleanup_args+=(--branch-lifecycle "$BRANCH_LIFECYCLE")
+  [ -z "$CLEANUP_PROJECT" ] || cleanup_args+=(--project "$CLEANUP_PROJECT")
+  [ -z "$CLEANUP_SESSION" ] || cleanup_args+=(--session "$CLEANUP_SESSION")
+  set +e
+  bash "$CLEANUP_SCRIPT" "${cleanup_args[@]}"
+  cleanup_rc=$?
+  set -e
+  if [ "$cleanup_rc" -eq 0 ]; then
+    echo "PM_CLOSEOUT_CLEANUP: CLEANED"
+  elif [ "$cleanup_rc" -eq 11 ]; then
+    echo "PM_CLOSEOUT_CLEANUP: RETAINED_WITH_REASON reason=helper-retained"
+  else
+    # Delivery has already crossed its confirmed commit point.  Cleanup debt is
+    # surfaced independently so callers do not misreport delivery failure or
+    # blindly retry push/merge, but PM must not call the whole task closed.
+    echo "PM_CLOSEOUT_CLEANUP: CLEANUP_PENDING exit=$cleanup_rc" >&2
+  fi
+  return 0
 }
 
 if [ "$AUDIT_DECISION" = "adopt" ]; then
@@ -620,7 +664,7 @@ if [ "$EFFECTIVE_MODE" = "remote-pr" ]; then
     exit 9
   fi
   echo "PM_CLOSEOUT_MERGED: #$PR_N commit=$MERGE_SHA"
-  [ "$KEEP_BRANCH" -eq 1 ] || echo "PM_CLOSEOUT_BRANCH_RETAINED: automatic cleanup belongs to Task-103; no raw delete push"
+  run_post_delivery_cleanup remote-pr "$MERGE_SHA"
   echo "PM_CLOSEOUT_RESULT: REMOTE_PR pr=$PR_N head=$WORKER_TIP merge_commit=$MERGE_SHA"; exit 0
 fi
 
@@ -704,4 +748,5 @@ if [ -n "$AUTH_PR_CLOSE" ]; then
 else
   echo "PM_CLOSEOUT_PR_LEFT_OPEN: #$PR_N reason=close-authorization-missing"
 fi
+run_post_delivery_cleanup local-after-pr "$LOCAL_SHA"
 echo "PM_CLOSEOUT_RESULT: LOCAL_AFTER_PR pr=$PR_N head=$WORKER_TIP main_commit=$LOCAL_SHA"

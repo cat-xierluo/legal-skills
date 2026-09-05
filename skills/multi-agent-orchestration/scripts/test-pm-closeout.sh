@@ -1152,5 +1152,34 @@ grep -qF 'PM_CLOSEOUT_CANDIDATE_VERIFIED:' "$TMP_ROOT/stale-rebase-head.out" && 
   && ok "stale REBASE_HEAD is ignored while active rebase directories remain guarded" \
   || bad "stale REBASE_HEAD was mistaken for an active rebase"
 
+echo "Case 42: confirmed delivery invokes the default cleanup hook"
+make_same_file_fixture cleanup-hook preserve
+FAKE_CLEANUP="$TMP_ROOT/fake-cleanup.sh"
+CLEANUP_LOG="$TMP_ROOT/cleanup-hook.log"
+cat > "$FAKE_CLEANUP" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' "$@" > "${PM_TEST_CLEANUP_LOG:?}"
+printf '\n' >> "$PM_TEST_CLEANUP_LOG"
+echo 'PM_CLEANUP_RESULT: CLEANED remote=deleted worktree=removed local=deleted'
+SH
+chmod +x "$FAKE_CLEANUP"
+: > "$PM_TEST_SAFE_LOG"; : > "$PM_TEST_GH_LOG"; : > "$PM_TEST_VERIFY_LOG"
+PM_TEST_GH_MODE=existing PM_CLOSEOUT_MODE=remote-pr \
+PM_CLOSEOUT_CLEANUP_SCRIPT="$FAKE_CLEANUP" PM_TEST_CLEANUP_LOG="$CLEANUP_LOG" \
+bash "$CLOSEOUT" --worktree "$FX_REPO" --title cleanup-hook \
+  --safe-push-script "$SAFE_PUSH" --verify-cmd "$VERIFY" --integration-path shared.txt \
+  --branch-lifecycle ephemeral-worker \
+  --authorize-remote-merge "$(authority_for "$FX_REPO" remote-merge 123)" \
+  --authorize-remote-candidate "$(candidate_authority_for "$FX_REPO" remote-merge-candidate 123 cleanup-hook)" \
+  > "$TMP_ROOT/cleanup-hook.out" 2>&1
+grep -qF 'PM_CLOSEOUT_CLEANUP: CLEANED' "$TMP_ROOT/cleanup-hook.out" \
+  && ok "delivery success records CLEANED" || bad "delivery success did not record CLEANED"
+grep -qF -- '--execute' "$CLEANUP_LOG" && grep -qF -- '--expected-tip' "$CLEANUP_LOG" \
+  && grep -qF -- '--integration-target main' "$CLEANUP_LOG" \
+  && grep -qF -- '--branch-lifecycle ephemeral-worker' "$CLEANUP_LOG" \
+  && ok "cleanup hook receives execute, immutable head and protected integration target" \
+  || bad "cleanup hook did not receive delivery-bound arguments"
+
 printf 'pm-closeout tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
