@@ -43,7 +43,11 @@ with open(path, "w", encoding="utf-8") as fh:
         "policy": "deny_by_default",
         "authorization_source": source,
         "authorized_commands": commands,
-        "allowed_shell_commands": ["npm test", "rg -n 'brew install' references/"],
+        "allowed_shell_commands": [
+            "npm test",
+            "rg -n 'brew install' references/",
+            "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v",
+        ],
     }, fh, ensure_ascii=False)
 PY
 }
@@ -172,6 +176,10 @@ fi
 
 expect_allow "benign verification command is not blocked" \
   hook "$deny_auth" "npm test"
+expect_allow "exact nested Python verification command is allowed as one string" \
+  hook "$deny_auth" "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v"
+expect_block "nested Python authority does not generalize to another command" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "cd 律师IP/motion-composer && python3 -m unittest discover -s tests"
 expect_allow "searching documentation text is not mistaken for install" \
   hook "$deny_auth" "rg -n 'brew install' references/"
 expect_block "variable indirection is blocked by exact Shell allowlist" "SHELL_COMMAND_NOT_ALLOWLISTED" \
@@ -271,6 +279,36 @@ git -C "$spawn_repo" add base.txt
 GIT_AUTHOR_NAME=Base GIT_AUTHOR_EMAIL=base@example.invalid \
 GIT_COMMITTER_NAME=Base GIT_COMMITTER_EMAIL=base@example.invalid \
   git -C "$spawn_repo" commit -m base >/dev/null
+
+required_empty_branch="feat/required-empty"
+required_empty_worktree="$spawn_repo/.claude/worktrees/tmux-feat-required-empty"
+fake_orca_log="$tmp_root/required-empty-orca.log"
+printf '%s\n' '#!/usr/bin/env bash' \
+  "printf '%s\\n' \"\$*\" >> '$fake_orca_log'" \
+  'printf '\''{"ok":false,"error":{"code":"unexpected_call"}}\n'\''' > "$tmp_root/orca"
+chmod +x "$tmp_root/orca"
+if ORCA_CLI_COMMAND="$tmp_root/orca" bash "$SCRIPT_DIR/spawn-worker.sh" \
+  --project "$spawn_repo" --branch "$required_empty_branch" --session "$session-required-empty" \
+  --worker-backend claude-code --command "$tmp_root/claude 30" \
+  --require-verification \
+  >"$tmp_root/required-empty.out" 2>&1; then
+  not_ok "required empty verification fails before worker side effects"
+else
+  if grep -qF "self-verification is required but no command resolved" "$tmp_root/required-empty.out" \
+    && [ ! -e "$required_empty_worktree" ] \
+    && ! git -C "$spawn_repo" show-ref --verify --quiet "refs/heads/$required_empty_branch" \
+    && ! grep -Eq 'worktree create|terminal create|task-create|worker-start|dispatch-' "$fake_orca_log" 2>/dev/null; then
+    ok "required empty verification fails before worktree/branch and Orca terminal/Task/Dispatch side effects"
+  else
+    cat "$tmp_root/required-empty.out" >&2 || true
+    printf 'required-empty diagnostics: worktree=%s branch_ref=%s orca_log=%s\n' \
+      "$([ -e "$required_empty_worktree" ] && echo present || echo absent)" \
+      "$(git -C "$spawn_repo" show-ref --verify --quiet "refs/heads/$required_empty_branch" && echo present || echo absent)" \
+      "$([ -e "$fake_orca_log" ] && { tr '\n' ' ' < "$fake_orca_log"; } || echo absent)" >&2
+    not_ok "required empty verification fails before worktree/branch and Orca terminal/Task/Dispatch side effects"
+  fi
+fi
+
 worktree="$spawn_repo/.claude/worktrees/tmux-feat-install-guard-test"
 git -C "$spawn_repo" worktree add "$worktree" -b feat/install-guard-test main >/dev/null
 mkdir -p "$worktree/.claude"
@@ -296,6 +334,8 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --session "$session" \
   --worker-backend claude-code \
   --command "$tmp_root/claude 30" \
+  --verify-cmd "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" \
+  --require-verification \
   --allow-install-command "npm ci" \
   --install-authorization-source "项目锁文件验证流程明确授权" \
   --git-expected-name "Test" \
@@ -324,15 +364,30 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "spawn writes real session context at asserted worktree paths"
   fi
-  if jq -e '.policy == "deny_by_default" and .authorization_source != "" and (.authorized_commands == ["npm ci"]) and (.allowed_shell_commands | index("pwd") != null)' "$auth_file" >/dev/null; then
-    ok "spawn writes auditable exact-command authorization"
+  if jq -e --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" '
+      .policy == "deny_by_default"
+      and .authorization_source != ""
+      and (.authorized_commands == ["npm ci"])
+      and (.allowed_shell_commands | index("pwd") != null)
+      and (.allowed_shell_commands | index($verify) != null)
+      and .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
+    ' "$auth_file" >/dev/null; then
+    ok "spawn writes exact verification command into authorization snapshot"
   else
-    not_ok "spawn writes auditable exact-command authorization"
+    not_ok "spawn writes exact verification command into authorization snapshot"
   fi
   if jq -e '.execution_authority.install_guard_mode == "hook" and .execution_authority.environment_mutation_policy == "deny_by_default" and .execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' "$metadata_file" >/dev/null; then
     ok "spawn records install guard mode in metadata"
   else
     not_ok "spawn records install guard mode in metadata"
+  fi
+  if jq -e --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" '
+      .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
+      and (.execution_authority.allowed_shell_commands | index($verify) != null)
+    ' "$metadata_file" >/dev/null; then
+    ok "metadata preserves verification source, requirement and exact Shell authority"
+  else
+    not_ok "metadata preserves verification source, requirement and exact Shell authority"
   fi
   if jq -e '
       .execution_authority.git_identity.safe_push_command as $push
@@ -369,10 +424,13 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   receipt_file=$(jq -r '.execution_authority.authority_receipt_file' "$metadata_file" 2>/dev/null || true)
   if [ -f "$receipt_file" ] && [[ "$receipt_file" != "$worktree"/* ]] && \
      jq -e --arg digest "$(jq -r '.execution_authority.authority_receipt_sha256' "$metadata_file")" \
-       '.authorization_sha256 == $digest and .install_guard_mode == "hook"' "$receipt_file" >/dev/null; then
-    ok "spawn writes PM authority receipt outside worker worktree"
+       --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" \
+       '.authorization_sha256 == $digest and .install_guard_mode == "hook"
+        and .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
+        and (.authorization_snapshot.allowed_shell_commands | index($verify) != null)' "$receipt_file" >/dev/null; then
+    ok "PM receipt preserves exact verification authority outside worker worktree"
   else
-    not_ok "spawn writes PM authority receipt outside worker worktree"
+    not_ok "PM receipt preserves exact verification authority outside worker worktree"
   fi
   attestation_file=$(jq -r '.execution_authority.guard_attestation_file' "$metadata_file" 2>/dev/null || true)
   if [ ! -e "$attestation_file" ]; then

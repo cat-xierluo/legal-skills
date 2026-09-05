@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.18.0] - 2026-09-05
+
+### 新增
+
+- 接通 `dispatch-value-gate.v2` 的 `verification_commands` 到 spawn：新增 `--verification-contract + --verification-task-id`，以唯一 task 为权威原样写入进程授权快照、Git common-dir authority receipt、METADATA 与精确 Shell allowlist；实现/可复用验证任务解析为空时在任何 Worker 副作用前拒绝。
+- 正式消费项目 `.claude/orchestration.config.json` 的 `verification.default/by_worker_type`，新增 `--project-config`、`--worker-type` 与 `verification.required`；嵌套 Python 项目可显式声明完整 `cd ... && python3 -m unittest ...` 命令，unknown type、畸形/空配置均失败关闭。
+- 新增 `--require-verification` 与根 Python 项目有界发现：仅根 Python manifest 与根 `tests/` 同时存在时注入固定 unittest discover，不递归搜索或猜测 pytest/tox/nox。
+
+### 修复
+
+- 修复 PM 已在任务合同声明验证命令、但派发时漏转抄，导致 Worker 首次自验普遍触发 `SHELL_COMMAND_NOT_ALLOWLISTED` 的系统性断点。命令保持单一完整字符串，不开放全 Shell、通配、泛化 `cd` 或 hook 绕过。
+- 空白、换行、重复、安装型验证命令和 CLI/合同双权威冲突现在均在 worktree、terminal、Task、Dispatch、provider lease 与任务注入前拒绝；安装授权继续使用独立显式通道。
+
+### 验证
+
+- 新增 `test-spawn-worker-verification.sh` 确定性矩阵，覆盖合同/项目配置正例、嵌套 Python 原样保真、unknown worker type、required-empty、畸形配置、重复/安装型命令、双权威冲突、Python 有界发现与 merge gate 空命令。
+- 扩展依赖 Shell 门禁测试，直接证明示例嵌套 unittest 命令完整精确授权可首次通过，而少一个参数的近似命令仍被拒绝；Node/Make 默认注入、metadata 与 flag 回归保持通过。
+- 验证命令合同 11/11、dependency/Shell guard 71/71、Node/Make/Python deps 18/18、flags 31/31、metadata 22/22、存量 supervised reauthorize 113/113 通过；维护矩阵其余测试与 Orca/fake control-plane smoke 通过。tmux smoke 首轮受当前真实 Orca 自动注册影响触发既有 isolation pre-gate，以 `ORCA_CLI_COMMAND=/usr/bin/false` 隔离后复跑通过。
+- 所有 Shell `bash -n`、Skill quick validation 与 Git whitespace 检查通过；security scan 为 0 critical / 0 high。Harness failure audit 保留全 Skill 既有 6 条 hard finding（1 条清理脚本通用命中、5 条旧测试退出码模式），本次没有新增类别。
+
+### 待办事项
+
+- 本轮未启动真实 Orca Agent 验证 `worker_done → Delivery` 外部生命周期，标记 `NOT_VERIFIED`；存量 Worker 继续使用 `pm-orchestrate.sh reauthorize --allow-cmd` 重建不可变进程快照。
+
 ## [2.17.0] - 2026-09-05
 
 ### 新增
