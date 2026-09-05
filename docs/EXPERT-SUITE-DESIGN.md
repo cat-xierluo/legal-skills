@@ -1,626 +1,527 @@
-# Legal Skills 专家套件设计思路
+# Legal Skills 专家套件设计与发布方案
 
-本文档用于说明 Legal Skills 如何从单个 Skill 与松散 pack，升级为面向真实法律工作场景的专家套件。
+- 状态：`DRAFT`
+- 日期：2026-09-03
+- 适用仓库：`cat-xierluo/legal-skills`
 
-参考对象包括 LobsterAI 的 Kit / 专家套件实现及其 Legal Kit 中的 Skill 写法。结论是：Legal Skills 可以借鉴 LobsterAI 的 YAML 元数据、套件选择、Skill 触发描述和输出模板写法，但不应把套件仅理解为一个文件夹或一个可安装包。Legal Skills 的核心价值应放在场景流程、上下游交接、质量门槛和人工复核边界上。
+## 1. 核心定义
 
-## 1. 核心判断
+Legal Skills 第一阶段的“专家套件”定位为一个面向使用者的策展与分发集合：
 
-### 1.1 Kit 与 Expert Suite 不是同一层
+- 围绕一个法律工作或 Skill 工程场景，选择一组相关 Skill；
+- 在一个 README 中说明场景、成员、用途和下载方式；
+- 在仓库中通过相对符号链接引用真实 Skill；
+- 在 GitHub Release 中生成一个包含全部成员 Skill 的自包含 ZIP；
+- 用户既可以下载整套，也可以通过 README 单独下载某个 Skill。
 
-LobsterAI 的 Kit 更接近分发和选择层：
-
-- Kit 记录名称、描述、图标、版本、示例问题。
-- Kit 引用若干 Skills、MCP Servers、Connectors。
-- 用户选择 Kit 后，系统把 Kit 展开成一组 Skill，并把所选 Kit / Skill 写入上下文。
-- Kit 本身不提供独立 Agent 身份，也不直接主导 Skill 之间的工作流。
-
-因此，LobsterAI 的 Kit 可以解决“如何安装、展示、选择一组 Skill”，但不能单独解决“这些 Skill 如何协作完成一个法律任务”。
-
-Legal Skills 更适合采用以下分层：
-
-| 层级 | 作用 | 是否主导流程 |
-| :--- | :--- | :--- |
-| Skill | 一个可复用能力单元 | 否，只负责自己边界内的任务 |
-| Pack | 松散归类，用于浏览、分发和理解 | 否 |
-| Expert Suite | 面向场景的流程组织、阶段、交接、质量门槛 | 是 |
-| Kit | 面向平台的安装 / 导出包 | 否，是分发形态 |
-| Agent | 运行时角色、上下文和执行策略 | 是，但属于更重的运行层 |
-
-建议对外中文仍使用“专家套件”，对内结构使用 `expert-suite`。未来如果需要兼容某个平台的分发机制，再把 Expert Suite 导出为 Kit。
-
-### 1.2 不要把专家套件做成“文件夹命名”
-
-如果只是把几个 Skill 放进一个目录，然后称为“诉讼套件”或“合同套件”，问题仍然存在：
-
-- Skill 之间不知道谁在前、谁在后。
-- 上游输出没有稳定格式，下游只能重新理解。
-- 缺少阶段目标，用户不知道当前处于哪一步。
-- 缺少升级条件，AI 容易在应当人工复核的地方继续生成。
-- 难以评估一个套件到底是否完成了法律工作。
-
-专家套件应至少回答五个问题：
-
-1. 这个套件解决什么场景。
-2. 这个场景分为哪些阶段。
-3. 每个阶段由哪些 Skill 负责。
-4. Skill 之间交接什么输入和输出。
-5. 哪些节点必须提示人工复核或升级处理。
-
-## 2. 从 LobsterAI Legal Kit 学到什么
-
-LobsterAI Legal Kit 包含 `brief`、`compliance-check`、`legal-response`、`legal-risk-assessment`、`meeting-briefing`、`review-contract`、`signature-request`、`triage-nda`、`vendor-check` 等 Skill。
-
-这些 Skill 对 Legal Skills 最有启发的不是美国法务内容本身，而是它们的写法。
-
-### 2.1 强触发描述
-
-LobsterAI 的 `description` 通常不是一句功能描述，而是包含：
-
-- 这个 Skill 做什么。
-- 用户在什么场景下需要它。
-- 典型任务是什么。
-- 触发边界在哪里。
-
-例如 `triage-nda` 会直接说明用于 NDA 初筛、GREEN / YELLOW / RED 分类、发现竞业限制或缺少 carveout 时触发。
-
-Legal Skills 可借鉴这种写法。每个法律专业 Skill 的 `description` 不应只写“用于法律分析”，而应写清：
-
-- 任务对象：判决书、起诉状、证据材料、法院短信、合同、专利交底书等。
-- 使用场景：立案准备、证据整理、诉讼研判、客户沟通、检索支撑、交付成文等。
-- 不适用场景：例如普通文本润色、非法律 OCR、无事实材料的泛泛咨询。
-
-### 2.2 Skill 内部有可执行流程
-
-LobsterAI 的法律 Skill 通常包含明确步骤：
-
-- 接收材料。
-- 补充上下文。
-- 加载 playbook 或模板。
-- 逐项检查。
-- 分类 / 路由。
-- 输出结构化结果。
-
-这比“请分析合同风险”稳定得多。Legal Skills 也应要求专业 Skill 至少包含：
-
-```markdown
-## 工作流程
-
-### Step 1: 接收材料
-说明接受哪些输入、缺少输入时如何追问。
-
-### Step 2: 识别任务类型
-说明如何判断当前属于哪类法律任务。
-
-### Step 3: 执行分析或处理
-说明分析维度、检查清单或脚本调用方式。
-
-### Step 4: 生成输出
-给出固定输出格式。
-
-### Step 5: 交接或升级
-说明下游 Skill、handoff package 或人工复核条件。
-```
-
-### 2.3 Playbook 优先，默认规则兜底
-
-`triage-nda`、`review-contract` 等 Skill 会先尝试加载组织自己的 playbook；如果没有，再使用市场通用默认规则，并明确提示当前是默认规则。
-
-这对 Legal Skills 很重要。法律工作不能长期只靠 Skill 内置经验，应支持：
-
-- 用户自己的办案模板。
-- 律师团队的审查清单。
-- 特定法院 / 地区 / 案由的经验规则。
-- 客户偏好的文风和交付格式。
-
-建议写法：
-
-```markdown
-## Playbook
-
-优先读取用户提供的 playbook、模板、既有案例或项目规则。
-如果没有可用 playbook，可以使用本 Skill 的默认规则，但必须在输出中标注“使用默认规则，未读取团队 playbook”。
-```
-
-### 2.4 风险分级与路由
-
-LobsterAI Legal Kit 很常用 GREEN / YELLOW / RED 或 severity x likelihood 这类分类方法。它的价值不是颜色本身，而是把下一步动作绑定到风险等级：
-
-- GREEN：可按标准流程继续。
-- YELLOW：需要律师复核或补充材料。
-- RED：停止自动处理，进入完整法律审查或人工决策。
-
-Legal Skills 可以按中国律师工作语境调整为：
-
-| 等级 | 含义 | 推荐动作 |
-| :--- | :--- | :--- |
-| 可继续 | 信息充分、风险较低、适合自动进入下游 | 生成 handoff package 或进入交付 Skill |
-| 需补充 | 事实、证据、主体、期限或依据不足 | 先列补充清单，不直接下结论 |
-| 需复核 | 涉及重大法律判断、诉讼策略、客户承诺、期限风险 | 提醒律师复核后再输出 |
-| 停止自动化 | 可能误导客户、涉及保全 / 上诉 / 再审期限、重大合规或伦理风险 | 不继续生成实质建议 |
-
-### 2.5 输出模板很稳定
-
-LobsterAI 的 Skill 往往直接给出 Markdown 输出结构，包括表格、风险列表、下一步行动。这一点值得强借鉴。
-
-法律专业 Skill 的输出不宜每次漂移。建议每个核心 Skill 至少固定：
-
-- 摘要。
-- 材料依据。
-- 分析过程。
-- 风险或问题清单。
-- 建议动作。
-- 缺失信息。
-- 下游交接。
-
-### 2.6 明确升级条件
-
-`legal-response` 这类 Skill 会先检查是否存在不得使用模板回复的情形，例如监管机关、潜在诉讼、重大承诺、多法域冲突等。
-
-Legal Skills 也需要类似机制，尤其是在：
-
-- 客户可直接依赖的法律结论。
-- 诉讼期限、上诉期限、再审期限。
-- 证据保全、财产保全、行为保全。
-- 可能构成虚假陈述或误导客户的表达。
-- 未脱敏材料、敏感个人信息、商业秘密。
-- AI 无法核验的事实来源。
-
-## 3. 不宜直接照搬的部分
-
-### 3.1 不把长篇实体法知识全部塞进 SKILL.md
-
-LobsterAI 的某些 Skill 把大量美国法务清单直接写在 `SKILL.md` 中。它适合演示，也能开箱即用，但会带来两个问题：
-
-- `SKILL.md` 过长，影响渐进式加载。
-- 法域、团队、客户差异很大，内置知识容易变成过期规则。
-
-Legal Skills 应遵守本仓库的 Progressive Disclosure 原则：
-
-- `SKILL.md` 放任务流程、触发条件、输出格式、关键判断框架。
-- `references/` 放详细 playbook、法律规则、示例和检查清单。
-- `scripts/` 放可执行处理逻辑。
-- `assets/` 放模板、示例配置和输出资源。
-
-### 3.2 不把企业法务连接器假设当成默认前提
-
-LobsterAI Legal Kit 经常假设 CLM、CRM、Email、Calendar、Cloud Storage、E-signature 等连接器。
-
-Legal Skills 当前更贴近律师个人与律所工作流，应优先支持：
-
-- 本地案件目录。
-- 扫描件、PDF、图片、音视频、Word。
-- 法律检索平台。
-- Obsidian / Markdown 知识库。
-- 客户沟通材料和法院短信。
-
-连接器可以作为增强能力，不应成为套件成立的前提。
-
-### 3.3 不把 Kit 当 Agent
-
-Kit 不等于 Agent。Kit 只是能力包；Expert Suite 是场景组织；Agent 才是运行时角色。
-
-Legal Skills 早期不必急着做 Suite Agent。先把 suite.yaml、README、handoff 和 Skill 写法稳定下来，就足以解决“不是一堆 Skill 放文件夹”的问题。
-
-## 4. 推荐目录结构
-
-现有 `pack-skills/` 可以继续作为松散归类目录。新增专家套件时，建议使用独立目录：
+专家套件第一阶段不承担运行时编排，不要求 Agent 识别新的 Suite 协议，也不改变单个 Skill 的触发和执行方式。
 
 ```text
-expert-suites/
+Skill             最小可复用能力单元
+Expert Suite      面向场景的 Skill 选择与下载集合
+Release ZIP       Expert Suite 的自包含分发产物
+Workflow / Agent  未来如有需要，另行设计运行时编排
+```
+
+README 可以给出建议使用顺序，但这只是用户指引，不是机器执行合同。现有 `docs/SKILL-ORCHESTRATION-GUIDE.md` 和 `docs/SKILL-HANDOFF-GUIDE.md` 继续管理真正的跨 Skill 工作流，不塞进专家套件第一阶段。
+
+## 2. 目标与非目标
+
+### 2.1 目标
+
+- 让用户从业务场景出发选择一组 Skill；
+- 让用户只下载一个 ZIP 就能取得整套 Skill；
+- 保留每个 Skill 的独立下载入口；
+- 保证 Skill 源码仍只在 `skills/<id>/` 维护一份；
+- 允许同一个 Skill 同时出现在多个专家套件；
+- 利用现有 monorepo Release 能力自动构建和上传套件 ZIP；
+- 让专家套件目录对人直观，对构建脚本也足够确定。
+
+### 2.2 非目标
+
+第一阶段不做：
+
+- 不创建 `suite.yaml`、`suite.json` 或 README frontmatter；
+- 不创建 `suite.lock.json` 或套件安装注册表；
+- 不默认创建 `references/`；
+- 不建立套件嵌套、继承或 `includes`；
+- 不创建 Suite Agent 或套件入口 Skill；
+- 不自动编排成员 Skill；
+- 不把私有 Skill、Customer Skill 或仓库外 Skill 打入公开套件；
+- 不改变成员 Skill 的许可证；
+- 不用正式 Release 测试打包逻辑。
+
+如果未来真实使用证明需要运行时编排，再基于独立需求设计 Workflow 或 Agent，不提前把这类复杂度放进分发套件。
+
+## 3. 仓库结构
+
+### 3.1 标准目录
+
+```text
+skills/                                      # 唯一 Skill 源码
+├── legal-ocr/
+├── pdf-organizer/
+├── legal-case-analysis/
+└── ...
+
+expert-suites/                               # 套件定义
+├── legal-material-evidence/
+│   ├── README.md
+│   ├── CHANGELOG.md
+│   ├── LICENSE.txt
+│   └── skills/
+│       ├── legal-ocr -> ../../../skills/legal-ocr
+│       ├── pdf-organizer -> ../../../skills/pdf-organizer
+│       └── pdf-processor -> ../../../skills/pdf-processor
 ├── litigation-assessment/
 │   ├── README.md
-│   ├── suite.yaml
-│   └── references/
-│       └── playbook.md
-├── material-digitization/
-│   ├── README.md
-│   └── suite.yaml
-└── document-delivery/
-    ├── README.md
-    └── suite.yaml
+│   ├── CHANGELOG.md
+│   ├── LICENSE.txt
+│   └── skills/
+│       ├── legal-ocr -> ../../../skills/legal-ocr
+│       ├── legal-case-analysis -> ../../../skills/legal-case-analysis
+│       └── yuandian-law-search -> ../../../skills/yuandian-law-search
+└── ...
+
+pack-skills/                                 # 本地/CI 构建产物，继续忽略
+├── legal-ocr-1.5.0.zip
+├── suite-legal-material-evidence-0.1.0.zip
+└── suite-litigation-assessment-0.1.0.zip
 ```
 
-关系建议：
+每个专家套件默认只维护：
 
-- `skills/` 是 Skill 源码的唯一真实位置。
-- `pack-skills/` 用于展示和松散归类。
-- `expert-suites/` 用于场景编排和专家套件。
-- `expert-suites/*/suite.yaml` 只引用 Skill，不复制 Skill。
-- 若未来需要平台分发，再从 `expert-suites/*/suite.yaml` 导出 Kit 元数据。
-
-## 5. suite.yaml 设计
-
-### 5.1 最小可用结构
-
-```yaml
-id: litigation-assessment
-type: expert-suite
-name: 诉讼研判套件
-version: 0.1.0
-status: draft
-summary: 从案件材料进入、事实证据整理、法律检索、诉讼研判到客户交付的场景套件。
-
-domain:
-  primary: litigation
-  jurisdiction: CN
-  language: zh-CN
-
-audience:
-  - litigation-lawyer
-  - legal-assistant
-
-skills:
-  - id: legal-ocr
-    role: material_ingestion
-    required: true
-  - id: pdf-organizer
-    role: material_organization
-    required: false
-  - id: legal-case-analysis
-    role: general_legal_analysis
-    required: true
-  - id: yuandian-law-search
-    role: legal_research
-    required: false
-  - id: litigation-analysis
-    role: litigation_strategy
-    required: true
-  - id: legal-proposal-generator
-    role: client_delivery
-    required: false
-  - id: md2word
-    role: document_export
-    required: false
-
-stages:
-  - id: intake
-    name: 材料进入
-    objective: 将扫描件、PDF、图片、音视频或法院短信转为可分析材料。
-    skills:
-      - legal-ocr
-      - funasr-transcribe
-      - court-sms
-    outputs:
-      - markdown_materials
-      - source_file_index
-    exit_criteria:
-      - 主要材料已转为 Markdown 或可引用文本。
-      - 原始文件路径可追溯。
-
-  - id: facts
-    name: 事实与证据整理
-    objective: 形成案件事实、时间线、证据目录和证明目的。
-    skills:
-      - legal-case-analysis
-    outputs:
-      - fact_summary
-      - evidence_catalog
-      - missing_evidence
-    exit_criteria:
-      - 关键事实、证据缺口和争议点已列明。
-
-  - id: research
-    name: 法律检索与依据补强
-    objective: 检索法条、案例和裁判观点，为诉讼研判提供依据。
-    skills:
-      - yuandian-law-search
-      - zhihe-legal-research
-    outputs:
-      - law_and_case_research_notes
-    exit_criteria:
-      - 关键法律依据有来源说明。
-
-  - id: analysis
-    name: 诉讼研判
-    objective: 形成胜败风险、诉讼路径、举证策略和沟通建议。
-    skills:
-      - litigation-analysis
-    outputs:
-      - litigation_assessment
-      - strategy_options
-      - review_flags
-    exit_criteria:
-      - 明确哪些结论可交付，哪些需要律师复核。
-
-  - id: delivery
-    name: 客户交付
-    objective: 将研判结果转化为客户可读的方案、备忘录或 Word 文档。
-    skills:
-      - legal-proposal-generator
-      - de-ai-polish
-      - md2word
-    outputs:
-      - client_memo
-      - word_document
-    exit_criteria:
-      - 输出结构完整，风险提示和依据保留。
-
-handoff:
-  - from: intake
-    to: facts
-    package_type: material_package
-    required_fields:
-      - source_file_index
-      - markdown_materials
-      - missing_or_unreadable_files
-
-  - from: facts
-    to: analysis
-    package_type: case_brief
-    required_fields:
-      - fact_summary
-      - evidence_catalog
-      - disputed_issues
-      - missing_evidence
-
-  - from: analysis
-    to: delivery
-    package_type: client_delivery_brief
-    required_fields:
-      - litigation_assessment
-      - strategy_options
-      - review_flags
-      - client_communication_points
-
-quality_gates:
-  - id: source_traceability
-    name: 来源可追溯
-    rule: 关键事实和引用材料必须能回到原始文件或检索来源。
-  - id: missing_information
-    name: 缺失信息显式列明
-    rule: 缺材料、缺事实、缺检索依据时，不得假装完整。
-  - id: lawyer_review
-    name: 律师复核
-    rule: 涉及诉讼策略、期限、重大风险和客户承诺时，必须标注需律师复核。
-
-routing:
-  default_entry_stage: intake
-  allow_skip_stages:
-    - research
-    - delivery
-  escalation:
-    - condition: 涉及上诉、再审、保全、时效或重大期限。
-      action: stop_and_request_lawyer_review
-    - condition: 关键材料不可读或来源不可追溯。
-      action: request_missing_materials
-
-distribution:
-  exportable_as_kit: true
-  kit_id: litigation-assessment
-  display_category: 诉讼案件
+```text
+README.md
+CHANGELOG.md
+LICENSE.txt
+skills/               # 成员符号链接
 ```
 
-### 5.2 字段说明
+只有套件确实出现无法放入 README 的独有材料时，才按需增加 `references/`。不创建空目录或占位文件。
 
-| 字段 | 作用 |
+### 3.2 单一真值
+
+| 信息 | 权威来源 |
 | :--- | :--- |
-| `id` | 套件稳定标识，建议英文短横线命名 |
-| `type` | 固定为 `expert-suite`，避免和普通 pack 混淆 |
-| `status` | `draft`、`usable`、`stable`、`deprecated` |
-| `skills` | 套件引用的 Skill 清单，不复制 Skill 内容 |
-| `stages` | 场景流程阶段，是 Expert Suite 区别于 Kit 的关键 |
-| `handoff` | 阶段或 Skill 之间的交接契约 |
-| `quality_gates` | 套件级质量门槛 |
-| `routing` | 默认入口、可跳过阶段、升级条件 |
-| `distribution` | 未来导出为 Kit 或市场包时使用 |
+| Skill 源码 | `skills/<id>/` |
+| 套件成员 | `expert-suites/<suite-id>/skills/` 下的符号链接集合 |
+| 套件用户说明 | 套件 `README.md` |
+| 套件版本 | 套件 `CHANGELOG.md` 最新版本 |
+| 套件外层许可证 | 套件 `LICENSE.txt` |
+| 成员许可证 | 各成员自己的 `LICENSE.txt` |
+| Release 产物 | GitHub Release 中的套件 ZIP |
 
-## 6. README.md 应该写什么
+README 中的成员表是面向用户的展示，符号链接集合是构建时的成员真值。发布前校验器必须检查二者一致，避免 README 漏写或多写成员。
 
-每个专家套件目录下的 `README.md` 应面向使用者，而不是面向系统。
+## 4. 符号链接规则
 
-建议结构：
+### 4.1 为什么使用符号链接
+
+符号链接适合当前的仓库内表达：
+
+- 目录中可以直接看到套件包含哪些 Skill；
+- 同一个 Skill 可以出现在多个套件中；
+- 不复制 `SKILL.md`、脚本、模板和许可证；
+- Skill 更新后，所有套件在下次构建时自动取得最新源码；
+- 不需要额外维护机器清单文件。
+
+### 4.2 多对多关系
+
+专家套件不是互斥分类：
+
+```text
+一个 Expert Suite → 包含多个 Skill 链接
+一个 Skill        → 可以被多个 Expert Suite 链接
+```
+
+例如：
+
+| Skill | 可以出现的专家套件 |
+| :--- | :--- |
+| `legal-ocr` | 法律材料与证据、诉讼研判、合同顾问、知识产权 |
+| `legal-case-analysis` | 诉讼研判、诉讼推进、合同顾问、知识产权 |
+| `yuandian-law-search` | 诉讼研判、合同顾问、知识产权、客户洞察 |
+| `legal-proposal-generator` | 诉讼研判、诉讼推进、合同顾问、知识产权 |
+| `legal-visualization` | 诉讼研判、知识产权、客户洞察、知识生产 |
+| `md2word` | 诉讼推进、合同顾问、客户洞察、知识生产 |
+
+多个套件链接同一个 `skills/<id>/`，不构成源码重复。
+
+### 4.3 链接约束
+
+每个成员链接必须满足：
+
+- 使用相对链接，不写本机绝对路径；
+- 位于 `expert-suites/<suite-id>/skills/<skill-id>`；
+- 链接目标固定为 `../../../skills/<skill-id>`；
+- 链接名与目标目录名一致；
+- 目标位于当前仓库公开 `skills/` 下；
+- 目标被 Git 跟踪，并包含 `SKILL.md`；
+- 不允许链接链、目录逃逸、仓库外目标或损坏链接；
+- 不允许链接到 `private-skills/`、`custom-skills/` 或 `~/.myagents/skills/`。
+
+标准创建方式：
+
+```bash
+ln -s ../../../skills/legal-ocr \
+  expert-suites/legal-material-evidence/skills/legal-ocr
+```
+
+Windows 或关闭符号链接支持的 Git 环境可能把链接检出为普通文本文件。因此符号链接用于仓库组织和 CI 构建，不作为用户安装形态；GitHub Release ZIP 中必须全部展开成真实目录。
+
+## 5. README 规范
+
+README 是专家套件的核心用户入口，不承担隐藏的机器协议。
+
+### 5.1 推荐结构
 
 ```markdown
-# 诉讼研判套件
+# 诉讼案件前期研判专家套件
+
+> [下载完整专家套件](<suite-download-url>)
 
 ## 适用场景
 
 ## 不适用场景
 
-## 你需要准备什么材料
+## 包含的 Skills
 
-## 套件工作流
+| Skill | 在本套件中的作用 | 单独下载 |
+| :--- | :--- | :--- |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 案件事实与证据分析 | [下载](<skill-download-url>) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 法律法规与类案检索 | [下载](<skill-download-url>) |
 
-## 包含的 Skill
+## 建议使用方式
 
-## 输出物
+## 安装方法
 
-## 人工复核边界
+## 人工复核与使用边界
 
-## 常见用法
+## 版本与许可证
 ```
 
-其中“人工复核边界”必须保留。法律套件不能给用户一种“自动法律意见已经完成”的错觉。
+### 5.2 下载链接
 
-## 7. 单个 Skill 的改写建议
+README 同时提供：
 
-为了让 Expert Suite 真正可编排，核心 Skill 应增加以下章节。不是每个 Skill 都必须很长，但关键法律专业 Skill 应具备这些接口。
+1. 页面顶部的完整套件 ZIP 下载链接；
+2. 成员表中每个 Skill 的独立下载链接；
+3. 每个 Skill 在仓库中的源码链接。
 
-### 7.1 推荐章节
+源码 README 可以先使用 `releases/latest/download/<id>.zip` 形式的占位链接。现有 `.github/workflows/update-readme.yml` 后续扩展为扫描根 README 和 `expert-suites/*/README.md`，并同时识别占位链接与上一次 Release 的实际链接，确保每次发布都能刷新到最新资产 URL。
+
+构建套件 ZIP 时，脚本应在 staging 副本中渲染当次 Release 的精确下载链接，不回写源文件。
+
+### 5.3 成员表一致性
+
+成员表使用固定三列：
+
+```text
+Skill | 在本套件中的作用 | 单独下载
+```
+
+校验器从第一列的 `../../skills/<id>/` 链接提取 Skill ID，与 `skills/` 下符号链接名称逐项对照：
+
+- README 缺少一个链接成员：失败；
+- README 多写一个不存在的成员：失败；
+- ID、路径或大小写不一致：失败；
+- 同一成员重复出现：失败。
+
+## 6. CHANGELOG 与版本
+
+每个专家套件维护独立 `CHANGELOG.md`，版本从最新版本标题读取，沿用项目已有格式：
 
 ```markdown
-## 在套件中的角色
+## [0.1.0] - 2026-09-03
 
-说明本 Skill 在哪些 Expert Suite 中通常承担什么职责。
-
-## 输入
-
-列明可接受输入、必须输入、可选输入、缺失时如何追问。
-
-## 输出
-
-列明稳定输出结构，以及能交给哪些下游 Skill。
-
-## 工作流程
-
-按步骤说明如何处理任务。
-
-## 质量门槛
-
-列明不能省略的检查项。
-
-## 与其他 Skill 配合
-
-说明上游来源和下游去向。
-
-## 升级 / 人工复核条件
-
-说明哪些情形必须停止自动化或提示律师复核。
+### 新增
+- 建立诉讼案件前期研判套件。
+- 收录案件分析、法律检索和方案交付 Skills。
 ```
 
-### 7.2 推荐 Frontmatter 写法
+### 6.1 版本变化规则
+
+以下变化需要升级套件版本并写 CHANGELOG：
+
+- 新增或移除成员符号链接；
+- 修改套件名称、定位、适用边界或建议使用方式；
+- 修改套件 ZIP 结构或安装方法；
+- 修改套件外层许可证；
+- 修复 README 成员、下载链接或发布信息错误。
+
+成员 Skill 自身的普通修复不要求同步升级所有引用它的套件版本。具体成员版本由其 `SKILL.md` 和 `CHANGELOG.md` 说明，套件 ZIP 所属的仓库 Release tag 表示本次打包快照。
+
+新建但未公开验证的套件可以使用 `0.x.x`；达到可公开使用的成熟条件后再进入 `1.x.x`。
+
+## 7. LICENSE
+
+### 7.1 套件外层许可证
+
+`expert-suites/<id>/LICENSE.txt` 只授权套件 README、成员选择和外层组织，不覆盖成员 Skill 的许可证。
+
+建议分类：
+
+| 套件 | 外层许可证 |
+| :--- | :--- |
+| 法律材料与证据处理 | MIT |
+| 诉讼案件前期研判 | CC BY-NC |
+| 诉讼文书与案件推进 | CC BY-NC |
+| 合同审查与企业顾问 | CC BY-NC |
+| 知识产权业务 | CC BY-NC |
+| 法律研究与客户洞察 | CC BY-NC |
+| 律师知识生产 | MIT |
+| Skill 开发与质量保障 | MIT |
+| Skill 发布与分发 | MIT |
+
+### 7.2 成员许可证
+
+Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README 的“版本与许可证”一节明确：
+
+> 本专家套件是多个独立 Skill 的集合。套件外层文件按本目录 LICENSE.txt 授权；各成员 Skill 按其目录内 LICENSE.txt 分别授权。下载或使用套件不改变成员原有许可条件。
+
+包含 CC BY-NC 成员的套件不能被整体宣传为“全部 MIT”或“可自由商用”。
+
+## 8. 专家套件版图
+
+建议当前收敛为 9 个中等粒度套件：
+
+| ID | 专家套件 | 主要成员 Skill | 主要用途 |
+| :--- | :--- | :--- | :--- |
+| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`funasr-transcribe`、`transcription-corrector`、`paddle-ocr`、`mineru-ocr`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
+| `litigation-assessment` | 诉讼案件前期研判 | `new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`pdf-organizer`、`legal-visualization`、`md2word`、`court-sms` | 收案、事实证据、争点、检索和诉讼策略 |
+| `litigation-documents-operations` | 诉讼文书与案件推进 | `elements-complaint-generator`、`litigation-analysis`、`legal-proposal-generator`、`md2word`、`legal-case-analysis`、`yuandian-law-search`、`new-case`、`court-sms`、`legal-visualization` | 起诉答辩、裁判分析、上诉再审和客户交付 |
+| `contract-business-counsel` | 合同审查与企业顾问 | `opc-legal-counsel`、`contract-copilot`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`legal-visualization`、`md2word` | 企业问题分诊、合同审查和顾问交付 |
+| `intellectual-property-practice` | 知识产权业务 | `patent-download`、`patent-analysis`、`code2patent`、`trademark-assistant`、`new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-visualization` | 专利分析、代码专利化和商标申请规划 |
+| `legal-research-client-insight` | 法律研究与客户洞察 | `yuandian-law-search`、`legal-client-brief`、`legal-industry-report`、`legal-text-format`、`wechat-article-fetch`、`legal-visualization`、`de-ai-polish`、`md2word`、`piclist-upload` | 法律研究、客户简报和行业报告 |
+| `lawyer-knowledge-production` | 律师知识生产 | `dingtalk-minutes`、`funasr-transcribe`、`transcription-corrector`、`lecture-review`、`course-generator`、`article2book`、`de-ai-polish`、`md2word`、文章/书籍插图 Skills、`piclist-upload` | 从既有内容资产生成课程、书稿和文章 |
+| `skill-development-quality` | Skill 开发与质量保障 | `project-init`、`legal-harness-init`、`skill-lint`、`verification-gate`、`git-workflow`、`multi-agent-orchestration`、`cross-agent-coordination`、`agent-email` | Skill 项目初始化、开发、验证与协作收口 |
+| `skill-release-distribution` | Skill 发布与分发 | `git-batch-commit`、`git-workflow`、`release-workflow`、`skill-publish-sync`、`subtree-publish`、`skill-manager`、`skill-lint`、`verification-gate` | 版本、Release、多渠道同步和用户安装 |
+
+同一个 Skill 在表中重复出现是有意设计，不需要为避免重复而删减场景成员。
+
+第一批建议先建立：
+
+1. `legal-material-evidence`；
+2. `litigation-assessment`；
+3. `litigation-documents-operations`；
+4. `skill-development-quality`；
+5. `skill-release-distribution`。
+
+`case-progress`、`case-dashboard` 当前仍在各自 `SKILL.md` 中标为骨架版本，第一批不放入公开套件；达到可用状态后再考虑加入“诉讼文书与案件推进”。
+
+## 9. Release 套件包
+
+### 9.1 产物结构
+
+仓库中的成员是符号链接，Release ZIP 中的成员必须是完整真实目录：
+
+```text
+suite-litigation-assessment-0.1.0.zip
+└── litigation-assessment/
+    ├── README.md
+    ├── CHANGELOG.md
+    ├── LICENSE.txt
+    └── skills/
+        ├── new-case/
+        │   ├── SKILL.md
+        │   ├── CHANGELOG.md
+        │   ├── LICENSE.txt
+        │   └── ...
+        ├── legal-case-analysis/
+        └── yuandian-law-search/
+```
+
+套件 ZIP 直接包含成员 Skill 目录，不在大 ZIP 中再次嵌套各个单 Skill ZIP。这样用户解压后可以直接把 `skills/*` 复制到 Agent 的 Skills 目录。每个单 Skill 的独立 ZIP 仍通过套件 README 提供。
+
+### 9.2 构建原则
+
+构建器不能简单执行 `zip -r` 或盲目跟随符号链接。推荐流程：
+
+1. 遍历 `expert-suites/*/`；
+2. 从套件 CHANGELOG 读取最新版本；
+3. 验证 README、CHANGELOG、LICENSE 和 `skills/` 存在；
+4. 枚举 `skills/` 下的成员符号链接；
+5. 解析并确认每个目标严格位于仓库 `skills/<id>/`；
+6. 检查目标被 Git 跟踪、包含 SKILL.md 和 LICENSE；
+7. 对照 README 成员表，阻断漏写、多写和重复；
+8. 使用 `git archive HEAD --worktree-attributes -- skills/<id>/` 从当前提交导出真实成员内容；
+9. 把套件 README、CHANGELOG、LICENSE 和真实成员目录组装到临时 staging；
+10. 生成 `pack-skills/suite-<suite-id>-<version>.zip`；
+11. 解压回验后才把产物视为成功。
+
+使用 `git archive` 而不是 `cp -L` 的原因：只发布当前 commit 已跟踪内容，并继续应用 `.gitattributes` 对 archive、缓存、数据库和本地配置的排除规则。
+
+### 9.3 与现有 Release 的衔接
+
+建议在 `skills/release-workflow/scripts/` 增加：
+
+```text
+build-suite-zips.sh
+validate-expert-suites.py
+test-build-suite-zips.sh
+```
+
+`.github/workflows/release.yml` 现有上传规则是：
 
 ```yaml
----
-name: litigation-analysis
-description: |
-  本技能应在用户需要对中国诉讼案件进行胜败风险、争议焦点、举证责任、诉讼路径和客户沟通策略分析时使用，适用于已有起诉状、判决书、证据材料、庭审笔录或案件事实摘要的场景。
-  不要用于：无事实材料的泛泛法律咨询、单纯 OCR/格式转换、非诉合同审查、未经过律师复核即可直接发送客户的最终法律意见。
-version: 1.x.x
-license: CC-BY-NC
----
+files: |
+  pack-skills/*.zip
 ```
 
-### 7.3 推荐输出结构
+套件 ZIP 继续输出到 `pack-skills/`，因此上传资产 glob 不需要改变，只需在普通 Skill 构建之后增加套件构建和数量校验。
 
-```markdown
-## 诉讼研判结果
+`.github/workflows/update-readme.yml` 应扩展为同时更新：
 
-### 1. 材料基础
-- 已读取材料：
-- 未读取 / 不可读材料：
-- 关键事实来源：
+- 根目录 `README.md` 的单 Skill 和专家套件链接；
+- `expert-suites/*/README.md` 的整套下载链接；
+- `expert-suites/*/README.md` 中每个成员的单独下载链接。
 
-### 2. 案件摘要
+### 9.4 Preview 门禁
 
-### 3. 争议焦点
+套件打包先在本地和非发布 Preview 中验证：
 
-### 4. 证据与证明责任
+- 本地构建全部套件；
+- Pull Request 的 Ubuntu job 构建并上传 Actions artifact；
+- 解压检查目录和成员；
+- 从临时目录模拟安装。
 
-### 5. 法律依据与案例参考
+正式 tag 和 GitHub Release 只发布已经通过 Preview 的产物，不能用来测试脚本。
 
-### 6. 风险分级
+## 10. 安装与使用
 
-### 7. 策略选项
+### 10.1 整套安装
 
-### 8. 需律师复核的问题
+用户下载套件 ZIP 后：
 
-### 9. 下游交接
+1. 解压 ZIP；
+2. 阅读根目录 README；
+3. 把其中 `skills/*` 复制到目标 Agent 的 Skills 根目录；
+4. 按 README 检查需要的系统依赖、Python 包、Token 或平台限制；
+5. 正常通过各成员 Skill 的 description 触发使用。
+
+### 10.2 单 Skill 安装
+
+如果用户只需要其中一个能力，直接使用 README 成员表里的单独下载链接，不必下载整个套件。
+
+### 10.3 安装器不是第一阶段前提
+
+第一阶段不要求 `skill-manager` 理解 Expert Suite。套件 ZIP 本身已经是可手工安装的目录集合。
+
+后续如需一键安装，可以让 `skill-manager` 接受套件 ZIP，遍历其中 `skills/*` 并复用现有单 Skill 安装逻辑；不需要重新引入 `suite.yaml`。
+
+## 11. 校验与安全
+
+### 11.1 仓库静态校验
+
+- 套件目录名使用英文短横线；
+- README、CHANGELOG、LICENSE 和 `skills/` 齐全；
+- CHANGELOG 最新版本可解析；
+- 所有成员都是相对符号链接；
+- 链接名、目标 Skill 目录名和 SKILL.md `name` 一致；
+- 链接目标在公开 `skills/` 内并被 Git 跟踪；
+- README 成员表与符号链接集合完全一致；
+- README 包含整套下载和每个成员的单独下载入口；
+- 不存在损坏、仓库外、私有或循环链接。
+
+### 11.2 构建产物校验
+
+- ZIP 中不存在符号链接，所有成员均为真实目录；
+- 每个成员包含 SKILL.md、CHANGELOG 和 LICENSE；
+- 成员数量与仓库符号链接数量一致；
+- 同一成员不重复打包；
+- ZIP 内没有 `.env`、Token、数据库、archive、缓存和本机绝对路径；
+- 构建中途失败不会覆盖上一份完整产物；
+- 解压后 `skills/*` 可以被目标 Agent 正常发现。
+
+### 11.3 跨平台边界
+
+- GitHub Actions 的 Ubuntu runner 作为正式打包环境；
+- macOS 和 Linux 可以正常使用仓库符号链接；
+- Windows 仓库检出可能受 Git symlink 配置影响，但不影响用户下载 Release ZIP；
+- 不把仓库源码 ZIP 当作专家套件安装包，用户应下载 Release 资产。
+
+## 12. 分阶段实施
+
+### 阶段 1：第一批套件目录
+
+- 创建首批 5 个 `expert-suites/<id>/`；
+- 编写 README、CHANGELOG 和 LICENSE；
+- 创建成员相对符号链接；
+- 增加静态校验器；
+- 暂不修改正式 Release。
+
+### 阶段 2：本地打包与 Preview
+
+- 实现 `build-suite-zips.sh`；
+- 增加链接逃逸、损坏链接、README 漂移和构建回滚测试；
+- 增加非发布 Preview job；
+- 实际解压并模拟安装至少一个套件。
+
+### 阶段 3：README 展示与正式发布
+
+- 在根 README 增加专家套件区；
+- 扩展下载链接更新工作流；
+- 完成 Release 五问自检；
+- 同时发布单 Skill ZIP 与套件 ZIP；
+- 从 Release 下载产物并复验。
+
+### 阶段 4：补齐剩余套件
+
+- 合同审查与企业顾问；
+- 知识产权业务；
+- 法律研究与客户洞察；
+- 律师知识生产。
+
+每套独立验证后再进入公开列表。
+
+## 13. 预计涉及文件
+
+真正实施时预计涉及：
+
+```text
+expert-suites/*
+README.md
+.github/workflows/release.yml
+.github/workflows/update-readme.yml
+.github/workflows/<suite-preview>.yml
+skills/release-workflow/scripts/build-suite-zips.sh
+skills/release-workflow/scripts/validate-expert-suites.py
+skills/release-workflow/scripts/test-build-suite-zips.sh
+skills/release-workflow/SKILL.md
+skills/release-workflow/TASKS.md
+skills/release-workflow/DECISIONS.md
+skills/release-workflow/CHANGELOG.md
 ```
 
-## 8. 首批专家套件建议
+如果后续升级 `skill-manager` 支持套件 ZIP，再单独修改其 SKILL、脚本、测试和技能级文档，不与第一批套件目录和 Release 构建混在同一个任务中。
 
-### 8.1 文档入库与材料数字化套件
+## 14. 验收标准
 
-目的：把 PDF、扫描件、图片、音视频、法院短信等材料转成可分析的 Markdown / Word / 案件目录。
+- [ ] 每个专家套件只维护 README、CHANGELOG、LICENSE 和成员链接；
+- [ ] 不存在 `suite.yaml`、README 机器 frontmatter 或默认 `references/`；
+- [ ] 每个成员链接都指向仓库公开 `skills/<id>/`；
+- [ ] 同一个 Skill 可以被多个套件链接；
+- [ ] README 成员表与符号链接完全一致；
+- [ ] README 提供整套 ZIP 和单 Skill 下载链接；
+- [ ] 套件 ZIP 包含 README、CHANGELOG、LICENSE 和真实 Skill 目录；
+- [ ] 套件 ZIP 不包含符号链接或嵌套的单 Skill ZIP；
+- [ ] 成员原始 LICENSE 全部保留；
+- [ ] 本地和 Preview 构建、解压、敏感文件检查及模拟安装通过；
+- [ ] 正式 Release 前不使用 tag 测试构建；
+- [ ] 从 GitHub Release 下载的套件能够直接解压并安装。
 
-候选 Skill：
+## 15. 最终决策
 
-- `legal-ocr`
-- `pdf-organizer`
-- `funasr-transcribe`
-- `tingwu-asr`
-- `court-sms`
-- `md2word`
-
-### 8.2 诉讼案件研判套件
-
-目的：从案件材料进入，到事实证据整理、法律检索、诉讼策略和客户交付。
-
-候选 Skill：
-
-- `legal-case-analysis`
-- `litigation-analysis`
-- `yuandian-law-search`
-- `zhihe-legal-research`
-- `legal-proposal-generator`
-- `de-ai-polish`
-- `md2word`
-
-### 8.3 法律研究与知识库套件
-
-目的：围绕法律问题做检索、归纳、知识库沉淀和后续复用。
-
-候选 Skill：
-
-- `multi-search`
-- `yuandian-law-search`
-- `zhihe-legal-research`
-- `wechat-article-fetch`
-- `legal-qa-extractor`
-- `article2book`
-
-### 8.4 知识产权专利商标套件
-
-目的：支持专利交底、专利分析、商标申请 / 异议 / 无效等 IP 工作。
-
-候选 Skill：
-
-- `code2patent`
-- `patent-analysis`
-- `trademark-assistant`
-- `legal-case-analysis`
-- `legal-proposal-generator`
-
-### 8.5 交付成文套件
-
-目的：把分析结果转成客户可读、可交付、可归档的正式文档。
-
-候选 Skill：
-
-- `legal-proposal-generator`
-- `legal-text-format`
-- `de-ai-polish`
-- `md2word`
-- `legal-qa-extractor`
-
-## 9. 轻量落地路线
-
-### v0：命名与说明
-
-- 保留 `pack-skills/` 作为松散归类。
-- 新增 `expert-suites/` 作为场景套件目录。
-- 每个套件先写 `README.md` 和 `suite.yaml`。
-
-### v1：阶段与交接
-
-- 为 3 个核心套件补齐 `stages` 和 `handoff`。
-- 给相关核心 Skill 增加“输入 / 输出 / 下游 / 复核条件”章节。
-- 与 `SKILL-HANDOFF-GUIDE.md` 的 Markdown Package 结构保持一致。
-
-### v2：质量门槛
-
-- 增加套件级 `quality_gates`。
-- 为诉讼、知识产权、交付成文等套件定义人工复核边界。
-- 增加简单校验脚本：检查 `suite.yaml` 引用的 Skill 是否存在。
-
-### v3：导出为 Kit
-
-- 在 `distribution` 字段中增加平台导出信息。
-- 根据目标平台生成 Kit 元数据。
-- Kit 仍然是分发产物，不反过来定义 Expert Suite。
-
-### v4：Suite Agent
-
-- 当套件流程稳定后，再考虑为特定套件配置 Agent 上下文。
-- Suite Agent 可以读取 `suite.yaml`，负责阶段推进、Skill 选择和复核提醒。
-- 不建议在 v0 就引入 Agent，否则会把结构问题隐藏到提示词里。
-
-## 10. 设计原则
-
-1. Expert Suite 是流程，不是文件夹。
-2. Skill 是能力单元，不直接依赖其他 Skill 的内部实现。
-3. Handoff 是接口，不能只靠自然语言含糊接力。
-4. Playbook 优先于通用经验。
-5. 法律判断必须保留人工复核边界。
-6. 先轻量可用，再考虑自动化导出和 Suite Agent。
-7. Kit 是分发形态，不是 Legal Skills 的核心抽象。
-
-## 11. 与现有文档的关系
-
-- `SKILL-DEV-GUIDE.md`：约束单个 Skill 如何写。
-- `SKILL-ORCHESTRATION-GUIDE.md`：说明多个 Skill 为什么需要编排。
-- `SKILL-HANDOFF-GUIDE.md`：定义 Skill 之间如何交接。
-- 本文档：定义 Expert Suite 如何组织场景、阶段、Skill 引用和质量门槛。
-
+1. Expert Suite v1 是场景化 Skill 下载集合，不是运行时工作流；
+2. 不创建 `suite.yaml`，也不把 README 变成隐藏 manifest；
+3. 套件成员由 `skills/` 子目录中的相对符号链接表达；
+4. `skills/` 仍是全部 Skill 源码的唯一真实位置；
+5. Skill 与套件是多对多关系；
+6. 每套默认维护 README、CHANGELOG、LICENSE 和成员链接；
+7. `references/` 只在出现套件独有材料时按需创建；
+8. Release 构建解析并校验符号链接，再从 Git commit 导出真实 Skill 目录；
+9. 套件 ZIP 不保留符号链接，不嵌套单 Skill ZIP；
+10. README 同时提供完整套件和成员单独下载入口；
+11. 第一批先做 5 套，打包链路稳定后再补剩余 4 套；
+12. 运行时编排、Suite Agent 和自动安装留给未来独立需求。
