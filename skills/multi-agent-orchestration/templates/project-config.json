@@ -40,7 +40,9 @@
         "npm run build",
         "cargo check --manifest-path src-tauri/Cargo.toml --offline"
       ],
-      "docs/research": []
+      "merge-review": [
+        "git diff --check"
+      ]
     }
   },
   "provider_slots": [

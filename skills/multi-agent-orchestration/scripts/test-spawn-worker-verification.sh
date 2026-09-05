@@ -148,5 +148,52 @@ else
   ok "full dispatch-value preflight rejects invalid sibling task"
 fi
 
+echo "Case 12: project config rejects embedded U+0000 before array decoding"
+reset_case
+mkdir -p "$PROJECT_DIR/.claude"
+python3 - "$PROJECT_DIR/.claude/orchestration.config.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({
+        "schema": "multi-agent-orchestration.project-config.v1",
+        "verification": {
+            "required": True,
+            "default": ["pwd\u0000git status --short"],
+            "by_worker_type": {},
+        },
+    }, stream)
+PY
+if resolve_verification_commands >"$CASE_ROOT/nul-project.out" 2>&1; then
+  bad "project U+0000 command was split into authority"
+elif [ "${#VERIFY_COMMANDS[@]}" -eq 0 ] \
+  && grep -qF "must not contain U+0000" "$CASE_ROOT/nul-project.out"; then
+  ok "project U+0000 command rejected with zero decoded authority"
+else
+  bad "project U+0000 rejection was not fail-closed"
+fi
+rm -f "$PROJECT_DIR/.claude/orchestration.config.json"
+
+echo "Case 13: dispatch contract rejects embedded U+0000 before array decoding"
+reset_case
+write_contract
+python3 - "$CASE_ROOT/contract.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+data["tasks"][0]["verification_commands"] = ["pwd\u0000git status --short"]
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(data, stream, ensure_ascii=False)
+PY
+VERIFICATION_CONTRACT="$CASE_ROOT/contract.json"
+VERIFICATION_TASK_ID="PY-NESTED"
+if resolve_verification_commands >"$CASE_ROOT/nul-contract.out" 2>&1; then
+  bad "contract U+0000 command was split into authority"
+elif [ "${#VERIFY_COMMANDS[@]}" -eq 0 ] \
+  && grep -qF "must not contain U+0000" "$CASE_ROOT/nul-contract.out"; then
+  ok "contract U+0000 command rejected with zero decoded authority"
+else
+  bad "contract U+0000 rejection was not fail-closed"
+fi
+
 printf 'spawn-worker verification tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
