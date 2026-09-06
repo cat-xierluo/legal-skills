@@ -462,6 +462,46 @@ quota_preflight_run() {
 }
 quota_preflight_run
 
+# v2.21.0（2026-09-06）：物理内存预算预检门（mem budget lane）。quota preflight 管
+# API 配额维度，本门管物理内存维度：现场探测 hw.memsize / vm_stat / memory_pressure /
+# vm.swapusage，按 per-worker 预算（默认 3GiB，SPAWN_WORKER_MEM_BUDGET_BYTES 可调）折算
+# 还能安全承诺几个 worker。额度为 0 → exit 4（专用退出码）+ SPAWN_WORKER_MEM_BUDGET_DENIED，
+# PM 不 spawn、按 §5 排队规则记 PARKED_FOR_MEMORY 下一轮巡检重试；probe 读失败同样
+# fail-closed 拒绝（坏门永远不放行）。SPAWN_WORKER_MEM_BUDGET_BYTES=0 显式关闭整道门
+# （与 NODE_OPTIONS 堆顶的 opt-out 风格一致）。每次 spawn 都现场探测、不缓存——同一任务
+# OOM 退避后 PM 重拉天然重跑 probe（§5）。数据源与推导权威：references/22-mem-budget-lane.md。
+mem_budget_gate_run() {
+  local probe_out probe_rc probe_status probe_reason
+  set +e
+  probe_out=$(python3 "$SCRIPT_DIR/mem_budget_probe.py" --json)
+  probe_rc=$?
+  set -e
+  probe_status=$(printf '%s' "$probe_out" | jq -r '.status // "unprobeable"' 2>/dev/null) || probe_status="unprobeable"
+  if [ "$probe_rc" -eq 0 ] && [ "$probe_status" = "ok" ]; then
+    printf 'SPAWN_WORKER_MEM_BUDGET: available=%s budget=%s slots=%s pressure=%s\n' \
+      "$(printf '%s' "$probe_out" | jq -r '.safe_available_bytes')" \
+      "$(printf '%s' "$probe_out" | jq -r '.budget_bytes')" \
+      "$(printf '%s' "$probe_out" | jq -r '.slots')" \
+      "$(printf '%s' "$probe_out" | jq -r '.pressure.level')"
+    return 0
+  fi
+  if [ "$probe_rc" -eq 0 ] && [ "$probe_status" = "disabled" ]; then
+    echo "SPAWN_WORKER_MEM_BUDGET: disabled (SPAWN_WORKER_MEM_BUDGET_BYTES=0)"
+    return 0
+  fi
+  probe_reason=$(printf '%s' "$probe_out" | jq -r '.reason // "probe produced no reason"' 2>/dev/null) || probe_reason="probe produced no reason"
+  if [ "$probe_status" = "denied" ]; then
+    printf 'ERROR: memory budget gate denied before any worktree/terminal/lease/dispatch side effect: %s\n' "$probe_reason" >&2
+    echo "SPAWN_WORKER_MEM_BUDGET_DENIED: 本轮不 spawn，任务记 PARKED_FOR_MEMORY 下一轮巡检重试（SKILL §5 排队规则）" >&2
+  else
+    printf 'ERROR: memory budget probe failed (rc=%s status=%s): %s; a broken gate can never pass (fail-closed)\n' \
+      "$probe_rc" "$probe_status" "$probe_reason" >&2
+    echo "SPAWN_WORKER_MEM_BUDGET_PROBE_FAILED: 内存现场不可探测，本轮不 spawn（fail-closed）" >&2
+  fi
+  exit 4
+}
+mem_budget_gate_run
+
 # shellcheck source=spawn-worker-provider-lease.sh
 source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.21.0] - 2026-09-06
+
+### 新增
+
+- 新增物理内存预算预检门 `scripts/mem_budget_probe.py`：读 hw.memsize 与 vm_stat / memory_pressure / vm.swapusage 现场快照，输出 `memory-budget.summary.v1` JSON（可用安全内存、swap 压力信号、按 per-worker 预算折算的可派发额度）；读取失败 exit 1 且不输出额度（fail-closed，绝不编造）。
+- per-worker 预算默认 3 GiB（agent 本体约 1.2 GiB + 测试/构建余量约 2 GiB，与 v2.20.0 堆顶量级对齐）；`SPAWN_WORKER_MEM_BUDGET_BYTES` 可调（非法值 fail-closed），`=0` 显式关闭整道门。压力分级收紧：warn 把可承诺额度折半、critical 额度归零。
+- `spawn-worker.sh` 在任何 worktree/terminal/lease/dispatch 副作用之前接线内存门：额度不足以专用退出码 4 拒绝并输出 可用/预算/缺口 诊断与 `SPAWN_WORKER_MEM_BUDGET_DENIED` 稳定标记；放行输出 `SPAWN_WORKER_MEM_BUDGET: available=… budget=… slots=…` 账本行；probe 读失败同样 fail-closed 拒绝（坏门永远不放行）。
+- SKILL §5 新增排队规则：额度不足不 spawn、本轮记 `PARKED_FOR_MEMORY`、下一轮巡检重试，同一任务连续 3 轮不足泊车并向用户报告（附 probe 输出）；OOM 退避重拉前必须重跑 probe（每次 spawn 现场探测、不缓存）。
+- SKILL §6 收口清单新增第 6 条：`STATUS=done` 但进程仍存活的 worker（含跨会话遗留）当轮即触发收口或上报，滞留进程持续挤占物理内存派发额度。
+- 新增 `references/22-mem-budget-lane.md`（数据源、预算推导、排队状态机、与 OOM 退避交互、维护矩阵）；维护矩阵 `references/19-maintainer-validation.md` 收录 `test-mem-budget-probe.py`。
+
+### 非目标（边界）
+
+- 不建跨项目全局 worker 注册表/文件锁：现场物理探测天然覆盖跨项目占用。probe 只读、只做派发门槛，不做自动杀进程、自动降级、swap 清理等任何回收动作。quota lane 既有语义不变。
+
+### 验证
+
+- 新增 `scripts/test-mem-budget-probe.py` 52/52 通过：vm_stat（16k/4k page size、行集差异、缺关键行/表头）、memory_pressure（关键词句式、百分比句式、垃圾输入）、vm.swapusage（M/G 后缀、零 swap）解析；swap 高压 warn 折半、critical 归零；全读失败 exit 1 且 payload 无额度字段；`--json` schema 字段稳定（key set 逐字段钉住）；预算 env 覆盖与 `=0` 直通；真实机器 smoke 现场读源。E2E（fake Orca CLI，与真实 runtime 隔离）：低内存 fixture 专用退出码 4 + 诊断 + 零 worktree/terminal 副作用 + 无 Session Context 残留；健康 fixture 放行并输出账本行；`=0` 低内存直通。
+- 既有矩阵回归：`test-spawn-worker-orca.sh` 104/104、`test-spawn-worker-flags.sh` 31/31、`test-spawn-worker-deps.sh` 18/18、`test-spawn-worker-verification.sh` 13/13、`bash -n scripts/spawn-worker.sh` 通过。
+
 ## [2.20.0] - 2026-09-05
 
 ### 新增
