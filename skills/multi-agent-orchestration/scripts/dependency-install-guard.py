@@ -139,24 +139,192 @@ def is_safe_sed_read_command(args: list[str]) -> bool:
     return re.fullmatch(r"(?:[1-9][0-9]*|\$)(?:,(?:[1-9][0-9]*|\$))?p", expression) is not None
 
 
-def is_safe_lifecycle_command(command: str) -> bool:
-    """Allow a narrow set of direct, non-interpreter worker lifecycle commands."""
+# v2.22.0 worker 默认权限放大（用户决策 2026-09-06）：worker 被隔离在专属分支
+# worktree 内，push+PR 是必要交付路径；常规读取不应因复合形式（管道/;/&&/2>/dev/null）
+# 被 fail-closed。safe 类从「裸命令白名单」升级为「分段校验」：命令先按顶层分隔符切
+# 段，每段独立过段级白名单；任一段不安全即整体拒绝。force push、主干目标、远端删
+# 除、子 shell、命令替换、非临时目录重定向仍 fail-closed。
+READ_ONLY_PROGRAMS = {
+    "pwd", "ls", "grep", "cat", "head", "tail", "wc", "stat", "file",
+    "true", "false", "echo", "which", "type", "jq",
+    "sort", "uniq", "cut", "tr", "basename", "dirname", "diff",
+}
+VERSION_ONLY_PROGRAMS = {"node", "npm", "pnpm", "yarn", "bun", "python", "python3"}
+GIT_READ_SUBCOMMANDS = {
+    "status", "diff", "log", "show", "rev-parse", "merge-base", "fetch", "ls-remote",
+}
+GIT_DELIVERY_SUBCOMMANDS = {"add", "commit", "push", "rebase"}
+GIT_BRANCH_DISPLAY_FLAGS = {
+    "", "-a", "-v", "-av", "-va", "-vv", "-avv", "-r", "-rv", "-ar", "-arv",
+    "--all", "--list", "--show-current", "--verbose",
+}
+GIT_PUSH_FORBIDDEN_ARGS = {
+    "--force", "-f", "--force-with-lease", "--force-if-includes",
+    "--all", "--mirror", "--tags", "--follow-tags", "--delete", "-d",
+}
+PROTECTED_BRANCH_NAMES = {"main", "master"}
+SEGMENT_SEPARATORS = {";", "&&", "&", "||", "|"}
+DENIED_PUNCTUATION = {"<", "(", ")", ";;", "&>", ">&", "<<", "<<<", "<&", ">&"}
+FD_REDIRECT_TOKENS = {">", ">>", ">&"}
+ALLOWED_REDIRECT_STD_TARGETS = {"&1", "&2", "/dev/null"}
+
+
+def _allowed_redirect_prefixes() -> tuple[str, ...]:
+    prefixes = ["/tmp/", "/private/tmp/", "/var/folders/"]
+    tmpdir = os.environ.get("TMPDIR", "").rstrip("/")
+    if tmpdir:
+        prefixes.append(tmpdir + "/")
+    return tuple(prefixes)
+
+
+def _is_allowed_redirect_target(target: str) -> bool:
+    if target in ALLOWED_REDIRECT_STD_TARGETS:
+        return True
+    if target.startswith("&") or target.startswith("-"):
+        return False
+    # 临时目录前缀内不允许 `..` 穿越（`/tmp/../etc/hosts` 一类）。
+    if "/../" in target or target.endswith("/.."):
+        return False
+    return target.startswith(_allowed_redirect_prefixes())
+
+
+def _is_safe_git_push_args(args: list[str]) -> bool:
+    for arg in args:
+        if arg in GIT_PUSH_FORBIDDEN_ARGS:
+            return False
+        if (
+            arg.startswith("--force-with-lease=")
+            or arg.startswith("--force-if-includes=")
+            or arg.startswith("--exec")
+            or arg.startswith("--receive-pack")
+        ):
+            return False
+        # `+src:dst` 强推语法与 `:dst` 远端删除语法整体拒绝。
+        if arg.startswith("+") or arg.startswith(":"):
+            return False
+        dst = arg.rsplit(":", 1)[-1]
+        if dst.startswith("refs/heads/"):
+            dst = dst[len("refs/heads/"):]
+        if dst in PROTECTED_BRANCH_NAMES:
+            return False
+    return True
+
+
+def _is_safe_git_args(args: list[str]) -> bool:
+    if not args or args[0].startswith("-"):
+        return False
+    subcommand = args[0]
+    rest = args[1:]
+    if subcommand == "branch":
+        return all(flag in GIT_BRANCH_DISPLAY_FLAGS for flag in rest)
+    if subcommand == "remote":
+        return all(flag in {"-v", "--verbose"} for flag in rest)
+    if subcommand == "diff" and "--ext-diff" in rest:
+        return False
+    if subcommand == "commit" and any(arg in {"--no-verify", "-n"} for arg in rest):
+        return False
+    if subcommand == "rebase" and any(
+        arg == "-x" or arg.startswith("--exec") for arg in rest
+    ):
+        return False
+    if subcommand == "push":
+        return _is_safe_git_push_args(rest)
+    if subcommand == "fetch" and any(
+        arg.startswith("--upload-pack") or arg.startswith("--negotiation-tip=")
+        for arg in rest
+    ):
+        # file:// 传输时 --upload-pack 在本机执行，属命令执行逃逸。
+        return False
+    return subcommand in GIT_READ_SUBCOMMANDS | GIT_DELIVERY_SUBCOMMANDS
+
+
+def _is_safe_gh_args(args: list[str]) -> bool:
+    if len(args) >= 2 and args[0] == "pr" and args[1] in {
+        "create", "view", "diff", "checks", "status",
+    }:
+        return True
+    if args[:2] == ["auth", "status"]:
+        return not any(
+            arg in {"--refresh", "-h", "--with-token"} for arg in args[2:]
+        )
+    if args[:2] == ["repo", "view"]:
+        return not any(arg in {"--edit", "-e", "--clone", "-c"} for arg in args[2:])
+    return False
+
+
+def _tokenize_worker_command(command: str) -> list[str] | None:
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>()")
         lexer.whitespace_split = True
-        tokens = list(lexer)
+        return list(lexer)
     except ValueError:
-        return False
-    if not tokens or any(token in {";", "&&", "&", "|", "||", "<", ">", "(", ")"} for token in tokens):
-        return False
-    if any("$(" in token or "`" in token for token in tokens):
-        return False
+        return None
 
+
+def _split_worker_segments(tokens: list[str]) -> list[list[str]] | None:
+    """Split tokens on top-level separators; validate redirects while walking.
+
+    Returns None when the command uses denied shell constructs (subshells,
+    input redirects, heredocs, command substitution) or redirects output to a
+    non-temporary path.
+    """
+    segments: list[list[str]] = [[]]
+    index = 0
+    total = len(tokens)
+    while index < total:
+        token = tokens[index]
+        if token in SEGMENT_SEPARATORS:
+            segments.append([])
+            index += 1
+            continue
+        if token in FD_REDIRECT_TOKENS:
+            # fd 前缀形式：`2>` / `1>>` 会被切成独立的 fd 数字 token。
+            if segments[-1] and segments[-1][-1] in {"1", "2"}:
+                segments[-1].pop()
+            if index + 1 >= total:
+                return None
+            if not _is_allowed_redirect_target(tokens[index + 1]):
+                return None
+            index += 2
+            continue
+        if token in DENIED_PUNCTUATION:
+            return None
+        if "$(" in token or "`" in token:
+            return None
+        segments[-1].append(token)
+        index += 1
+    return segments
+
+
+def _is_safe_worker_segment(tokens: list[str]) -> bool:
+    if not tokens:
+        return False
+    if any(
+        token in SEGMENT_SEPARATORS
+        or token in FD_REDIRECT_TOKENS
+        or token in DENIED_PUNCTUATION
+        for token in tokens
+    ):
+        return False
     program = os.path.basename(tokens[0])
     args = tokens[1:]
-    read_only = {"pwd", "ls", "grep", "cat", "head", "tail", "wc", "stat", "file", "true", "false"}
-    if program in read_only:
+    if program in READ_ONLY_PROGRAMS:
+        # sort 的 -o/--output 直接写文件，从只读类里排除。
+        if program == "sort" and any(
+            arg in {"-o", "--output"} or arg.startswith("--output=") for arg in args
+        ):
+            return False
         return True
+    if program in VERSION_ONLY_PROGRAMS:
+        return bool(args) and all(
+            arg in {"--version", "-v", "-V", "version"} for arg in args
+        )
+    if program == "command":
+        return (
+            len(args) >= 2
+            and args[0] in {"-v", "-V"}
+            and not any(arg.startswith("-") and arg not in {"-v", "-V"} for arg in args[1:])
+        )
     if program == "sed":
         # Arbitrary sed is not read-only (`w`, `e`, `-i`).  The common source
         # inspection form is safe enough to grant without enumerating every
@@ -181,24 +349,26 @@ def is_safe_lifecycle_command(command: str) -> bool:
             for arg in args
         )
     if program == "git":
-        if not args or args[0].startswith("-"):
-            return False
-        subcommand = args[0]
-        if subcommand == "branch":
-            return args[1:] == ["--show-current"]
-        if subcommand == "diff" and "--ext-diff" in args[1:]:
-            return False
-        if subcommand == "commit" and any(arg in {"--no-verify", "-n"} for arg in args[1:]):
-            return False
-        return subcommand in {
-            "status", "diff", "log", "show", "rev-parse", "merge-base",
-            "fetch", "add", "commit",
-        }
+        return _is_safe_git_args(args)
     if program == "gh":
-        return len(args) >= 2 and args[0] == "pr" and args[1] in {
-            "create", "view", "diff", "checks", "status",
-        }
+        return _is_safe_gh_args(args)
     return False
+
+
+def is_safe_lifecycle_command(command: str) -> bool:
+    """v2.22.0：安全段复合校验——每段须为只读或交付命令，整体才放行。"""
+    tokens = _tokenize_worker_command(command)
+    if not tokens:
+        return False
+    segments = _split_worker_segments(tokens)
+    if segments is None:
+        return False
+    for segment in segments:
+        if not segment:
+            continue
+        if not _is_safe_worker_segment(segment):
+            return False
+    return True
 
 
 def _parse_long_options(
@@ -302,7 +472,7 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
         options = _parse_long_options(
             args,
             boolean_options={"--json", "--unread", "--peek", "--all", "--format", "--wait"},
-            value_options={"--types", "--timeout-ms", "--retry-request"},
+            value_options={"--types", "--timeout-ms", "--retry-request", "--terminal"},
         )
         if options is None:
             return False

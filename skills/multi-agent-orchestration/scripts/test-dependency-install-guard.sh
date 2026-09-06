@@ -202,10 +202,92 @@ expect_block "rg preprocessor escape is denied" "DEPENDENCY_INSTALL_BLOCKED" \
   hook "$deny_auth" "rg --pre 'sh -c brew install shellcheck' pattern"
 expect_block "git commit no-verify is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
   hook "$deny_auth" "git commit --no-verify -m bypass"
-expect_block "raw git push is denied in favor of identity-bound safe-push" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "force push is denied even under widened default" "SHELL_COMMAND_NOT_ALLOWLISTED" \
   hook "$deny_auth" "git push --force origin HEAD"
 expect_allow "normal git lifecycle command remains available" \
   hook "$deny_auth" "git diff --check"
+
+# v2.22.0 worker 默认权限放大（用户决策 2026-09-06）：worker 被隔离在专属分支
+# worktree 内，push+PR 是必要交付路径。safe 类从「裸命令白名单」升级为「分段校验」：
+# 每段必须是安全读或安全交付命令；force/主干/远端删除仍 fail-closed。
+expect_allow "plain git push of tracked branch is allowed by default" \
+  hook "$deny_auth" "git push"
+expect_allow "git push -u origin HEAD is allowed" \
+  hook "$deny_auth" "git push -u origin HEAD"
+expect_allow "git push origin feature branch is allowed" \
+  hook "$deny_auth" "git push origin chore-issue-templates"
+expect_allow "git push refspec to feature branch is allowed" \
+  hook "$deny_auth" "git push origin HEAD:chore-issue-templates"
+expect_block "git push --force-with-lease is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push --force-with-lease origin HEAD"
+expect_block "git push to main is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push origin HEAD:main"
+expect_block "git push bare main is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push origin main"
+expect_block "git push deleting remote ref is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push origin :feat/x"
+expect_block "git push --mirror is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push --mirror origin"
+expect_block "git push --tags is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push --tags origin"
+expect_allow "compound read pipeline with && is allowed" \
+  hook "$deny_auth" "git status && git log --oneline -5 && git branch --show-current"
+expect_allow "piped read pipeline is allowed" \
+  hook "$deny_auth" "git log --oneline -8 | head -5"
+expect_allow "grep pipeline with head is allowed" \
+  hook "$deny_auth" 'grep -rn "extractDocxParts" src | head -20'
+expect_allow "semicolon separated reads with stderr muted are allowed" \
+  hook "$deny_auth" 'ls .github 2>/dev/null; ls .github/ISSUE_TEMPLATE'
+expect_allow "output redirect to /tmp is allowed" \
+  hook "$deny_auth" "git diff > /tmp/worker-diff.patch"
+expect_block "output redirect to project file is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git diff > src/index.ts"
+expect_block "input redirect is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git log < commit-list.txt"
+expect_block "compound with install segment is denied as install" "DEPENDENCY_INSTALL_BLOCKED" \
+  hook "$deny_auth" "git status && brew install jq"
+expect_block "compound with unlisted program segment is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git status && node server.js"
+expect_allow "version-only queries are allowed" \
+  hook "$deny_auth" "node --version"
+expect_allow "command -v lookups are allowed" \
+  hook "$deny_auth" "command -v node pnpm"
+expect_allow "type lookup is allowed" \
+  hook "$deny_auth" "type pnpm"
+expect_allow "git remote -v is allowed" \
+  hook "$deny_auth" "git remote -v"
+expect_allow "git branch listing flags are allowed" \
+  hook "$deny_auth" "git branch -av"
+expect_block "git branch delete is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git branch -D feat/x"
+expect_allow "git rebase onto integration base is allowed" \
+  hook "$deny_auth" "git rebase origin/main"
+expect_allow "git fetch then rebase chain is allowed" \
+  hook "$deny_auth" "git fetch origin && git rebase origin/main"
+expect_allow "gh auth status is allowed" \
+  hook "$deny_auth" "gh auth status"
+expect_allow "gh repo view is allowed" \
+  hook "$deny_auth" "gh repo view --json defaultBranchRef"
+expect_block "gh api remains exact-authority only" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "gh api repos/cat-xierluo/dsh-contract-copilot --jq .default_branch"
+expect_block "gh repo sync remains denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "gh repo sync"
+expect_allow "jq read of metadata file is allowed" \
+  hook "$deny_auth" "jq -r .policy .claude/agent-sessions/w/INSTALL_AUTHORIZATION.json"
+expect_allow "filter chain sort uniq cut tr is allowed" \
+  hook "$deny_auth" "git log --format=%s | sort | uniq -c | sort -rn | head -10"
+expect_block "xargs escape from read pipeline is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "grep -rl TODO src | xargs rm"
+expect_allow "full delivery chain add commit push is allowed" \
+  hook "$deny_auth" "git add .github && git commit -m 'chore(governance): issue templates' && git push -u origin HEAD"
+expect_block "env-prefixed command stays exact-authority only" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/vitest run tests/x.spec.ts"
+expect_block "subshell grouping is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "(git status)"
+expect_block "tmp redirect path traversal is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git diff > /tmp/../etc/worker-escape"
+expect_block "git fetch upload-pack escape is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git fetch --upload-pack='touch /tmp/x' file:///repo"
 expect_allow "bounded read-only sed range remains available" \
   hook "$deny_auth" "sed -n '180,340p' tests/browser/ux\\_workbench\\_contract\\_browser\\_test.js"
 expect_block "sed write command remains denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
@@ -223,6 +305,8 @@ expect_allow "bounded worker ask is allowed" \
   hook "$deny_auth" 'orca orchestration ask --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
 expect_allow "read-only worker check is allowed" \
   hook "$deny_auth" 'orca-ide orchestration check --peek --types "status,dispatch" --json'
+expect_allow "worker check by preamble terminal handle is allowed" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_8cfbab5c-e451-416b-aace-a94fcefb39df'
 expect_block "worker protocol cannot target a group" "SHELL_COMMAND_NOT_ALLOWLISTED" \
   hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --to @all --json'
 expect_block "worker_done requires explicit outcome" "SHELL_COMMAND_NOT_ALLOWLISTED" \
@@ -428,7 +512,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
       .execution_authority.git_identity.safe_push_command as $push
       |
       .execution_authority.git_identity.integration_base == "origin/main"
-      and .execution_authority.git_identity.raw_git_push_allowed == false
+      and .execution_authority.git_identity.raw_git_push_allowed == true
       and .execution_authority.git_identity.commit_environment_bound == true
       and ($push | contains("safe-push.sh"))
       and (.execution_authority.allowed_shell_commands | index($push) != null)

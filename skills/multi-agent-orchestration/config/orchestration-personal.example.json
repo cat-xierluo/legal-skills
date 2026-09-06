@@ -3,7 +3,6 @@
   "_schema_version": "1.2",
   "_read_by": "multi-agent-orchestration skill PM (任意主会话)",
   "_path_user": "config/orchestration-personal.json（在 skill config/ 目录内，但被 .gitignore 排除、不入库；每人按自己偏好改，不 commit）",
-
   "main_force": {
     "_comment": "PM 主力宿主工具 + 按任务类型选 model（非轮换）。host = 你当前主会话用的 Agent 工具；task_routing = 按任务难度/模态选 model。",
     "host": "<你的主力 Agent 工具：claude-code / codex / codebuddy / qoderwork-cn>",
@@ -13,29 +12,60 @@
       "default": "<任务类型不明时回落，通常 = high_end>"
     }
   },
-
   "quota_aware_routing": {
-    "_comment": "额度感知路由【模板】。enabled=true 时 PM 派单前跑 scripts/route_suggest.py 按各 lane 余量/倒计时/健康评分选 provider。summary_path 指向一个 quota-aware-routing.summary.v1 schema 的 JSON 文件（产出方不限：定时探针/网关/手写均可；留空或读不到即整体退化走任务卡显式 provider 或 main_force.task_routing）。lanes/tier_policy 全部是个人模型池快照，改模型只改这里不动 skill。",
+    "_comment": "额度感知路由【模板】。enabled=true 时 PM 派单前跑 scripts/route_suggest.py 按各 lane 余量/倒计时/健康评分选 provider。summary_path 指向一个 quota-aware-routing.summary.v1 schema 的 JSON 文件（产出方不限：定时探针/网关/手写均可；留空或读不到即整体退化走任务卡显式 provider 或 main_force.task_routing）。lanes/tier_policy 全部是个人模型池快照，改模型只改这里不动 skill。。zcode lane 可用 scripts/quota_summary_zcode.py 作生产方（消费 ~/bin/zcode-quota 观测，合并写入只更新 zcode lane；启用与合并语义见 references/21-zcode-quota-producer.md，勿将 zcode lane 加入 tier_policy 链）",
     "enabled": false,
     "summary_path": "<你的余量 summary JSON 绝对路径，schema 见 scripts/route_suggest.py docstring>",
     "freshness_minutes": 30,
     "stop_line_percent": 15,
     "urgency_window_minutes": 120,
     "lanes": {
-      "<lane-1>": {"type": "fuel", "providers": ["<provider 名，须有 config/<provider>.settings.json 或 registry 条目>"]},
-      "<lane-2>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1},
-      "<lane-3>": {"type": "reservoir", "providers": ["<provider 名>"], "concurrency_cap": 1, "open_tiers": ["multimodal"]}
+      "<lane-1>": {
+        "type": "fuel",
+        "providers": [
+          "<provider 名，须有 config/<provider>.settings.json 或 registry 条目>"
+        ]
+      },
+      "<lane-2>": {
+        "type": "reservoir",
+        "providers": [
+          "<provider 名>"
+        ],
+        "concurrency_cap": 1
+      },
+      "<lane-3>": {
+        "type": "reservoir",
+        "providers": [
+          "<provider 名>"
+        ],
+        "concurrency_cap": 1,
+        "open_tiers": [
+          "multimodal"
+        ]
+      }
     },
     "tier_policy": {
-      "L2": ["<lane-1>"],
-      "L1": ["<lane-1>"],
-      "L0": ["<lane-1>", "<lane-2>"],
-      "multimodal": ["<lane-1>"],
+      "L2": [
+        "<lane-1>"
+      ],
+      "L1": [
+        "<lane-1>"
+      ],
+      "L0": [
+        "<lane-1>",
+        "<lane-2>"
+      ],
+      "multimodal": [
+        "<lane-1>"
+      ],
       "default": "<lane-1>"
     },
-    "reservoir_scenes": ["overnight_batch", "archive_review", "long_tail_cleanup"]
+    "reservoir_scenes": [
+      "overnight_batch",
+      "archive_review",
+      "long_tail_cleanup"
+    ]
   },
-
   "concurrency": {
     "_comment": "同一 API 来源(provider)的机械并发上限。spawn-worker 在副作用前原子占槽，终端/会话结算后释放。per_backend 优先于 max_per_provider。",
     "max_per_provider": 3,
@@ -48,38 +78,59 @@
     "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",
     "overflow_strategy": "配额耗尽时 spawn 退出 75；PM 可等待额度，或在 Harness 白名单内改派另一已配置 backend。"
   },
-
   "codex_policy": {
     "_comment": "Codex 路由硬规则。explicit_only = 仅用户明确说'用 Codex'时启用；allowed = 默认可作为 worker backend。",
     "policy": "<explicit_only 或 allowed>",
     "reason": "<填你的理由>"
   },
-
   "harness_backend_policy": {
     "_comment": "只读说明镜像；强制规则以已入库的 config/harness-backend-policy.json 为准。宿主身份由进程祖先/Orca working-agent 证明，不能靠个人配置或 CLI 参数提权。",
     "policy": "deny_by_default",
-    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codebuddy": ["codebuddy"],
-    "qoderwork-cn": ["qoderwork-cn"]
+    "claude-code": [
+      "claude-code",
+      "codex",
+      "codebuddy",
+      "qoderwork-cn"
+    ],
+    "codex": [
+      "claude-code",
+      "codex",
+      "codebuddy",
+      "qoderwork-cn"
+    ],
+    "codebuddy": [
+      "codebuddy"
+    ],
+    "qoderwork-cn": [
+      "qoderwork-cn"
+    ]
   },
-
   "backend_model_routing": {
     "_comment": "已配置 CLI backend 的默认 model + 何时用。Harness 门禁只接受 claude-code、codex、codebuddy、qoderwork-cn；这里的模型偏好不能增加 backend。",
     "codebuddy": {
       "_comment": "WorkBuddy 桌面端 CLI（references/08-codebuddy-cli-worker.md）。2026-08-05 用户偏好：hy3 首选 / deepseek-v4-flash 次选；不用 deepseek-v4-pro 作主。spawn-worker.sh 派 codebuddy worker 时按此顺序选 --model。",
-      "default_models": ["hy3", "deepseek-v4-flash", "deepseek-v4-pro"],
+      "default_models": [
+        "hy3",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro"
+      ],
       "use_case": "WorkBuddy 桌面端登录态 + 平台额度（无需 API key）；按首选 → 次选 → 回退 顺序派 worker。",
       "tier_note": "hy3 = WorkBuddy 平台自定义模型（首选）；deepseek-v4-flash = 平台批量模型（次选）；deepseek-v4-pro 仅作回退（用户偏好不用作主）。"
     },
     "qoderwork-cn": {
       "_comment": "QoderWork CN CLI（references/07-qoderwork-cli-worker.md，v1.0.45）。2026-08-05 --list-models：Qwen3.8-Max 新旗舰 + GLM-5.2 / Kimi-K2.7-Code / MiniMax-M2.7。推荐具体名（-m Qwen3.8-Max），旧 alias（qmodel_latest 等）兼容但映射过时。",
-      "default_models": ["Qwen3.8-Max", "Qwen3.7-Max", "Qwen3.7-Plus", "DeepSeek-V4-Pro", "GLM-5.2", "Kimi-K2.7-Code"],
+      "default_models": [
+        "Qwen3.8-Max",
+        "Qwen3.7-Max",
+        "Qwen3.7-Plus",
+        "DeepSeek-V4-Pro",
+        "GLM-5.2",
+        "Kimi-K2.7-Code"
+      ],
       "use_case": "QoderWork 桌面端登录态 + 平台额度（无需 API key）；首选 Qwen3.8-Max，references/07 §4/§5.1 推荐具体名 + --permission-mode auto。",
       "tier_note": "Qwen3.8-Max = 2026-08 新旗舰（首选）；Qwen3.7-Max/Plus = 上一代；DeepSeek-V4-Pro/GLM-5.2/Kimi-K2.7-Code = 备选。旧 alias qmodel_latest 解析 3.7-Max（没跟 3.8），推荐用具体名。"
     }
   },
-
   "notes": [
     "SKILL.md 与 harness-backend-policy.json 定义四种可用 Harness 及调用层级；本文件只在该集合内选择 host 和 model。",
     "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 只提示 advisory、不假装硬限额；backend_model_routing 缺失 → 空 dict。",
