@@ -2,9 +2,31 @@
   "schema": "multi-agent-orchestration.harness-backend-policy.v1",
   "policy": "deny_by_default",
   "hosts": {
-    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codebuddy": ["codebuddy"],
-    "qoderwork-cn": ["qoderwork-cn"]
-  }
+    "claude-code": [
+      "claude-code",
+      "codex",
+      "codebuddy",
+      "qoderwork-cn"
+    ],
+    "codex": [
+      "claude-code",
+      "codex",
+      "codebuddy",
+      "qoderwork-cn",
+      "zcode"
+    ],
+    "codebuddy": [
+      "codebuddy"
+    ],
+    "qoderwork-cn": [
+      "qoderwork-cn"
+    ],
+    "zcode": [
+      "claude-code",
+      "codex"
+    ]
+  },
+  "policy_notes": [
+    "2026-09-05 zcode PM enabled by explicit user authorization (badminton-lab takeover session): dispatch independent workers, several in parallel."
+  ]
 }
