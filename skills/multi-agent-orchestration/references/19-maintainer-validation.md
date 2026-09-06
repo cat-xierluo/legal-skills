@@ -26,6 +26,7 @@ bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
 bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
+python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
