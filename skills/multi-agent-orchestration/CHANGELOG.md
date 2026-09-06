@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.21.1] - 2026-09-06
+
+### 修复
+
+- `scripts/mem_budget_probe.py` memory_pressure 百分比兜底路径补齐钳位：`available = total × pct/100` 后与 vm_stat 主路径一致地取 `min(available, total)`，病态快照（可用百分比 >100%）不再虚增可用内存（references/22 §3 声明的 [0, total] 钳位至此两条基准路径全覆盖）。
+- SKILL §5 OOM 识别信号脱敏：本机崩溃报告路径 `~/Library/Logs/DiagnosticReports/node-*.ips` 改为抽象表述「系统崩溃报告目录（DiagnosticReports）中 node OOM 报告新增且时间吻合」，识别信号保留、随行 doc 资产不再含本机路径（DEC-141 边界）。
+
+### 验证
+
+- `scripts/test-mem-budget-probe.py` 53/53 通过：新增病态 fixture 用例（memory_pressure 可用百分比 150% 时 `availability_basis=memory_pressure_percent` 且钳位到物理总量），既有 52 项全量回归。
+- `bash -n scripts/spawn-worker.sh` 语法回归通过（本次未改其逻辑）。
+
 ## [2.21.0] - 2026-09-06
 
 ### 新增
