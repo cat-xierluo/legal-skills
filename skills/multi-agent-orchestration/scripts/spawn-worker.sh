@@ -1200,8 +1200,31 @@ scope_guard_setup() {
   return 0
 }
 
+# v2.20.0：worker node 堆上限（2026-09-05 OOM 崩溃循环事故止血）。
+# 事故：多 worker 长输出场景下，会话内 node 进程（claude CLI / vitest / 测试脚本）
+# V8 堆无界增长 → FatalProcessOutOfMemory SIGABRT，PM 周期性重拉形成崩溃循环，
+# 极端时整机内存挤压触发 shutdown_stall 强制重启。注入 NODE_OPTIONS old-space
+# 上限：worker 到限自身退出（sentinel 记 failed，PM 按 §5 OOM 规则退避），不再拖垮系统。
+# 与 scope_guard 的 env 包装同模式（tmux new-session / Orca terminal 均经 shell 解析 COMMAND）。
+# 默认 2048MB；SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0 显式关闭；环境已有 NODE_OPTIONS
+# 时跳过（不覆盖用户显式配置，只打印提示）。
+node_mem_cap_setup() {
+  local cap_mb="${SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB:-2048}"
+  if [ "$cap_mb" = "0" ]; then
+    echo "SPAWN_WORKER_NODE_MEM_CAP: disabled (SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0)"
+    return 0
+  fi
+  if [ -n "${NODE_OPTIONS:-}" ]; then
+    echo "SPAWN_WORKER_NODE_MEM_CAP: skipped, NODE_OPTIONS already set by caller: $NODE_OPTIONS"
+    return 0
+  fi
+  COMMAND="env NODE_OPTIONS=--max-old-space-size=${cap_mb} $COMMAND"
+  echo "SPAWN_WORKER_NODE_MEM_CAP: --max-old-space-size=${cap_mb}MB (opt-out: SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0)"
+}
+
 dependency_install_guard_setup
 scope_guard_setup
+node_mem_cap_setup
 write_metadata
 
 exclude_file=$(git -C "$WORKTREE" rev-parse --git-path info/exclude 2>/dev/null || echo "")
