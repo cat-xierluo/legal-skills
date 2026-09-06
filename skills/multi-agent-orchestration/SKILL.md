@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.21.1"
+  version: "2.21.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -55,6 +55,7 @@ PM 在任何 worker 副作用前完成：
 3. 为每个 worker 指定 branch、`branch_lifecycle`、integration target/base、worktree、session、角色、backend/profile/model、provider slot 和资源 owner。
 4. 普通 worker 默认为 `ephemeral-worker`；只有项目任务合同明确声明的长期功能/集成基线才使用 `--branch-lifecycle long-lived`。源分支生命周期与合并目标是两个字段，不得混同。
 5. 默认每波及全局活跃 worker 不超过 3；PM 待验收交付超过 2 个时停止扩波。项目可以收紧，只有用户明确、限期的探索窗口才可放宽。
+6. 验证命令默认写 scoped：单 spec / 定向用例 / `--bail 1` 早停；整包全量套件（全量 test/build 链）不进 worker 自验合同，全量验证单一在飞（跨项目互斥），默认归宿是 PM 收口时串行复跑。本条约束验证类别，不约束 worker 数量（见 §5 验证负载纪律）。
 
 Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事故读取 `references/10-parallel-lessons.md`。
 
@@ -143,6 +144,8 @@ Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才�
 **Worker node OOM 识别与退避**（2026-09-05 事故：多 worker 长输出使会话内 node 进程 V8 堆耗尽 `FatalProcessOutOfMemory → SIGABRT`，PM 周期重拉形成崩溃循环并一度触发整机强制重启）。`spawn-worker.sh` v2.20.0 起默认给 worker 会话注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0` 可关），worker 到限自身退出而非拖垮系统。PM 巡检发现 worker node OOM（退出码 134 / SIGABRT / 日志含 `FatalProcessOutOfMemory` / 系统崩溃报告目录（DiagnosticReports）中 node OOM 报告新增且时间吻合）时：同任务不得立即重拉，至少等下一轮巡检并全局并发 -1，且重拉前必须重跑内存预算预检（probe 每次 spawn 都现场探测、不缓存；额度不足按 `PARKED_FOR_MEMORY` 排队，不得绕过）；同一任务连续 2 次 OOM 后停止重拉、泊车并向用户报告——这通常意味着任务本身产生超长输出（全量日志聚合、超大测试跑），需任务侧降输出或拆分，而不是更用力地重试。
 
 **物理内存预算排队（mem budget lane）**：`spawn-worker.sh` 在任何 worktree/terminal/lease/dispatch 副作用之前运行 `scripts/mem_budget_probe.py`，按 per-worker 预算（默认 3 GiB；`SPAWN_WORKER_MEM_BUDGET_BYTES` 可调，`=0` 显式关闭整道门）把现场可用物理内存折算成可派发额度。额度不足或探测不可读时 spawn 以专用退出码 4 拒绝，输出 `SPAWN_WORKER_MEM_BUDGET_DENIED` 与 可用/预算/缺口 诊断；放行则在 PM 日志留下 `SPAWN_WORKER_MEM_BUDGET: available=… budget=… slots=…` 账本行。PM 收到该拒绝不得忙等、不得改走手动 spawn：本轮巡检把任务记 `PARKED_FOR_MEMORY` 并留存 probe 输出，下一轮巡检重试；同一任务连续 3 轮额度不足则正式泊车并向用户报告（附 probe JSON）。单进程堆顶（v2.20.0）管单个 worker 的失血点，本门管总量叠加承诺，也覆盖无堆顶可依赖的非 node runtime。数据源、预算推导、压力收紧与排队状态机读取 `references/22-mem-budget-lane.md`。
+
+**验证负载纪律（verification lane）**：约束验证类别，不约束 worker 数量。worker 自验默认 scoped（单 spec / 定向用例 / `--bail 1`）；全量套件单一在飞、跨项目互斥——确需 worker 现场跑全量时，先探测既有全量测试进程（如 `pgrep -fl 'vitest|pytest|jest|go test'`），无法确认独占就退避等待或改 scoped。探测是尽力而为的现场信号，不建跨项目锁文件，宁可少并发不可误并发；PM 收口时的全量复跑天然串行，是全量验证的默认归宿。验证输出一律重定向日志文件、只把有界尾部（如 `tail -50`）带回 terminal/session——长输出无界刷屏正是会话侧 node 运行时 OOM 的喂食管。PM 巡检发现系统负载飙升且多个 worker 同时在跑验证时，纠偏为错峰排队（等在飞验证收尾再放下一批），不砍 worker 数量。本纪律与单进程堆顶、物理内存 lane 互补：堆顶管单进程失血点，mem lane 管总量承诺，本纪律管验证执行的并发类别与输出体量（2026-09-05/06 事故中三者缺最后一环：并发全量自验同时制造了负载尖峰与超长输出）。
 
 ## 6. 验收、Git 交付与资源收口
 
