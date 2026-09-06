@@ -318,7 +318,9 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
         availability_basis = "vm_stat"
         page_size: int | None = vm_stat["page_size"]
     elif memory_pressure is not None and memory_pressure["available_percent"] is not None:
-        available_bytes = int(total_bytes * memory_pressure["available_percent"] / 100.0)
+        # 百分比兜底同样钳位到 [0, total]：病态快照（>100%）不得虚增可用内存。
+        available_bytes = min(int(total_bytes * memory_pressure["available_percent"] / 100.0),
+                              total_bytes)
         availability_basis = "memory_pressure_percent"
         page_size = None
     else:

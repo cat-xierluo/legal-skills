@@ -240,6 +240,8 @@ pctonly_fx = fixture("pctonly", hw_memsize="34359738368\n", memory_pressure=HEAL
 clamp_fx = fixture("clamp", hw_memsize="34359738368\n",
                    vm_stat=vm_stat_text(16384, 10 ** 7, 10 ** 6, 10 ** 6),
                    memory_pressure=HEALTHY_MP, vm_swapusage=HEALTHY_SWAP)
+pctclamp_fx = fixture("pctclamp", hw_memsize="34359738368\n",
+                      memory_pressure="Memory status: (10% of memory in use, 150% available)\n")
 
 # 正常放行：健康快照 + 默认预算 → slots >= 1，schema 字段稳定。
 code, out = run_probe(["--fixture-dir", healthy_fx])
@@ -324,6 +326,14 @@ code, clamp_out = run_probe(["--fixture-dir", clamp_fx])
 check("availability is clamped to the physical total",
       code == 0 and clamp_out and clamp_out["available_bytes"] == TOTAL_32G,
       f"(code={code} out={clamp_out})")
+
+# 病态百分比兜底：memory_pressure 可用百分比 >100%（病态快照）时钳位到物理总量。
+code, pctclamp_out = run_probe(["--fixture-dir", pctclamp_fx])
+check("pathological memory_pressure percent above 100 clamps to the physical total",
+      code == 0 and pctclamp_out
+      and pctclamp_out["availability_basis"] == "memory_pressure_percent"
+      and pctclamp_out["available_bytes"] == TOTAL_32G,
+      f"(code={code} out={pctclamp_out})")
 
 # env 覆盖：预算 1GiB 时低内存档变为可派发 1 slot。
 code, over_out = run_probe(["--fixture-dir", lowmem_fx],
