@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.20.0"
+  version: "2.21.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -140,7 +140,9 @@ Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才�
 
 跨项目检查 Orca Worker 是否因 429/usage limit 停在 idle 时，运行 `scripts/orca_rate_limit_recovery.py --manifest <私有清单>`；默认只读，只有显式 `--execute` 才对高置信 `RATE_LIMIT_IDLE` 通过 terminal 输入通道发送一次固定“继续”。tmux、单关键词/陈旧 tail、未分组身份和状态不确定一律不处置；`WAKE_ACCEPTED` 不等于额度恢复或业务继续。完整 manifest、状态机、错峰、幂等、TOCTOU 与退出码读取 `references/20-orca-rate-limit-recovery.md`。
 
-**Worker node OOM 识别与退避**（2026-09-05 事故：多 worker 长输出使会话内 node 进程 V8 堆耗尽 `FatalProcessOutOfMemory → SIGABRT`，PM 周期重拉形成崩溃循环并一度触发整机强制重启）。`spawn-worker.sh` v2.20.0 起默认给 worker 会话注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0` 可关），worker 到限自身退出而非拖垮系统。PM 巡检发现 worker node OOM（退出码 134 / SIGABRT / 日志含 `FatalProcessOutOfMemory` / 机器 `~/Library/Logs/DiagnosticReports/node-*.ips` 新增且时间吻合）时：同任务不得立即重拉，至少等下一轮巡检并全局并发 -1；同一任务连续 2 次 OOM 后停止重拉、泊车并向用户报告——这通常意味着任务本身产生超长输出（全量日志聚合、超大测试跑），需任务侧降输出或拆分，而不是更用力地重试。
+**Worker node OOM 识别与退避**（2026-09-05 事故：多 worker 长输出使会话内 node 进程 V8 堆耗尽 `FatalProcessOutOfMemory → SIGABRT`，PM 周期重拉形成崩溃循环并一度触发整机强制重启）。`spawn-worker.sh` v2.20.0 起默认给 worker 会话注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0` 可关），worker 到限自身退出而非拖垮系统。PM 巡检发现 worker node OOM（退出码 134 / SIGABRT / 日志含 `FatalProcessOutOfMemory` / 机器 `~/Library/Logs/DiagnosticReports/node-*.ips` 新增且时间吻合）时：同任务不得立即重拉，至少等下一轮巡检并全局并发 -1，且重拉前必须重跑内存预算预检（probe 每次 spawn 都现场探测、不缓存；额度不足按 `PARKED_FOR_MEMORY` 排队，不得绕过）；同一任务连续 2 次 OOM 后停止重拉、泊车并向用户报告——这通常意味着任务本身产生超长输出（全量日志聚合、超大测试跑），需任务侧降输出或拆分，而不是更用力地重试。
+
+**物理内存预算排队（mem budget lane）**：`spawn-worker.sh` 在任何 worktree/terminal/lease/dispatch 副作用之前运行 `scripts/mem_budget_probe.py`，按 per-worker 预算（默认 3 GiB；`SPAWN_WORKER_MEM_BUDGET_BYTES` 可调，`=0` 显式关闭整道门）把现场可用物理内存折算成可派发额度。额度不足或探测不可读时 spawn 以专用退出码 4 拒绝，输出 `SPAWN_WORKER_MEM_BUDGET_DENIED` 与 可用/预算/缺口 诊断；放行则在 PM 日志留下 `SPAWN_WORKER_MEM_BUDGET: available=… budget=… slots=…` 账本行。PM 收到该拒绝不得忙等、不得改走手动 spawn：本轮巡检把任务记 `PARKED_FOR_MEMORY` 并留存 probe 输出，下一轮巡检重试；同一任务连续 3 轮额度不足则正式泊车并向用户报告（附 probe JSON）。单进程堆顶（v2.20.0）管单个 worker 的失血点，本门管总量叠加承诺，也覆盖无堆顶可依赖的非 node runtime。数据源、预算推导、压力收紧与排队状态机读取 `references/22-mem-budget-lane.md`。
 
 ## 6. 验收、Git 交付与资源收口
 
@@ -151,6 +153,7 @@ PM 依次完成：
 3. supervised worker 先 reuse/release/retain，再 ack；仍存活但漏发完成时先结构化提醒，确认已死才使用 `settle`。
 4. 用户或项目已授权 Git 外部写入时，使用 `pm-closeout.sh` 的 PR-first 流程。PR 唯一性、冻结 head/diff/check/review、两阶段 mutation receipt、Monorepo integration path 与结果不确定恢复统一以 `references/14-pm-orchestrate.md` 为准。
 5. 交付确认后立即取得资源终态；不得把清理留给 PM 记忆。
+6. `STATUS=done`（或 PR 已合并）但进程仍存活的 worker——含跨会话遗留——当轮巡检即触发收口或上报：按 owner 通道 closeout / 释放 terminal / 结算 lifecycle，无法处置时向用户报告具体滞留对象。滞留进程持续挤占物理内存派发额度（`references/22-mem-budget-lane.md`），不收口就直接压缩下一波可派发 worker 数。
 
 ```bash
 bash scripts/pm-cleanup-worker.sh \
@@ -195,6 +198,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
 | Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
 | zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
+| 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
