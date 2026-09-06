@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.18.0"
+  version: "2.20.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -140,6 +140,8 @@ Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才�
 
 跨项目检查 Orca Worker 是否因 429/usage limit 停在 idle 时，运行 `scripts/orca_rate_limit_recovery.py --manifest <私有清单>`；默认只读，只有显式 `--execute` 才对高置信 `RATE_LIMIT_IDLE` 通过 terminal 输入通道发送一次固定“继续”。tmux、单关键词/陈旧 tail、未分组身份和状态不确定一律不处置；`WAKE_ACCEPTED` 不等于额度恢复或业务继续。完整 manifest、状态机、错峰、幂等、TOCTOU 与退出码读取 `references/20-orca-rate-limit-recovery.md`。
 
+**Worker node OOM 识别与退避**（2026-09-05 事故：多 worker 长输出使会话内 node 进程 V8 堆耗尽 `FatalProcessOutOfMemory → SIGABRT`，PM 周期重拉形成崩溃循环并一度触发整机强制重启）。`spawn-worker.sh` v2.20.0 起默认给 worker 会话注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0` 可关），worker 到限自身退出而非拖垮系统。PM 巡检发现 worker node OOM（退出码 134 / SIGABRT / 日志含 `FatalProcessOutOfMemory` / 机器 `~/Library/Logs/DiagnosticReports/node-*.ips` 新增且时间吻合）时：同任务不得立即重拉，至少等下一轮巡检并全局并发 -1；同一任务连续 2 次 OOM 后停止重拉、泊车并向用户报告——这通常意味着任务本身产生超长输出（全量日志聚合、超大测试跑），需任务侧降输出或拆分，而不是更用力地重试。
+
 ## 6. 验收、Git 交付与资源收口
 
 PM 依次完成：
@@ -172,7 +174,7 @@ Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分�
 
 默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具。个人偏好写入 ignored 的 `config/orchestration-personal.json`，项目策略写入 `.claude/orchestration.config.json`；个人配置只能在 harness 白名单内选择 backend。
 
-启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。
+启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。
 
 系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI。检查命令：
 
@@ -192,6 +194,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | Autopilot | `references/15-wave-autopilot.md`、`16-autopilot-durability.md` |
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
 | Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
+| zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
