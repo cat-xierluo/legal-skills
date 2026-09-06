@@ -747,6 +747,10 @@ if [ "$git_identity_field_count" -eq 3 ]; then
   printf -v SAFE_PUSH_COMMAND 'bash %q --repo %q --base %q --remote %q --branch %q --expected-name %q --expected-email %q' \
     "$safe_push_script" "$WORKTREE" "$GIT_INTEGRATION_BASE" "$GIT_PUSH_REMOTE" "$BRANCH" \
     "$GIT_EXPECTED_NAME" "$GIT_EXPECTED_EMAIL"
+else
+  # v2.22.0：无 identity 四件套时 push 不再无路可走——guard 段级安全类默认放行
+  # 本分支裸 push（拒 force/主干/远端删除）。safe-push 仍是 OID 全链核验的强化路径。
+  echo "SPAWN_WORKER_PUSH_PATH: raw-safe (guard safe-class allows plain branch push; force/protected-branch/delete denied; identity quadruple recommended for OID-verified delivery)"
 fi
 
 write_install_authorization() {
