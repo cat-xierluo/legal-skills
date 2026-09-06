@@ -171,7 +171,8 @@ Verification:
 - {{verify_command_3}}
 
 Verification Floor:
-- For frontend/UI workers, run typecheck, tests, and build unless PM explicitly narrows verification.
+- For frontend/UI workers, run typecheck, tests, and build unless PM explicitly narrows verification. Interpret this floor as scoped-first: prefer single-spec / targeted-case runs (`--bail 1` early stop) over whole-suite runs for self-verification.
+- Verification load discipline: a full-suite run is machine-exclusive. Before starting one, probe for an in-flight full-suite test process (e.g. `pgrep -fl 'vitest|pytest|jest|go test'`); if you cannot confirm exclusivity, back off, wait, or keep verification scoped and defer the full run to PM closeout. Redirect long verification output to a log file and paste only a bounded tail (e.g. `tail -50`) into the terminal/session — unbounded streamed output has OOM'd the host runtime before.
 - For Tauri/Rust workers, run `cargo check --manifest-path src-tauri/Cargo.toml --offline` as the required Rust floor; run `cargo build` only when local native dependencies are available.
 - Record every skipped command with the exact reason in RESULT.md.
 

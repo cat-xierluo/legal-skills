@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.21.2] - 2026-09-06
+
+### 新增
+
+- SKILL §3.1 第 6 条 + §5「验证负载纪律（verification lane）」：worker 自验默认 scoped（单 spec / 定向用例 / `--bail 1`）；全量套件单一在飞、跨项目互斥——确需现场跑全量时先探测既有全量测试进程（如 `pgrep -fl 'vitest|pytest|jest|go test'`），无法确认独占即退避或改 scoped（探测是尽力而为的现场信号，不建跨项目锁文件，宁可少并发不可误并发）；PM 收口时的串行全量复跑是全量验证的默认归宿。验证输出一律重定向日志文件、只回传有界尾部（如 `tail -50`）——长输出无界刷屏是会话侧 node 运行时 OOM 的喂食管。本纪律约束验证类别而不约束 worker 数量；与单进程堆顶（v2.20.0）、物理内存 lane（v2.21.0）互补：堆顶管单进程失血点，mem lane 管总量承诺，本纪律管验证执行的并发类别与输出体量。
+- `templates/worker-prompt.md` Verification Floor 新增 scoped-first 解读与验证负载纪律条（全量探测独占 + 输出有界）；既有 "typecheck, tests, and build" 底线按 scoped 优先解读。
+
+### 非目标（边界）
+
+- 不建跨项目验证互斥锁文件或全局注册表：与物理内存 lane 同哲学（现场探测、不建注册表），接受尽力而为的互斥精度，不做机械强制。
+- 不改 `scripts/dispatch-value-gate.py` 的 spec schema（`dispatch-value-gate.v2` 不加字段）：纪律落在 PM 派发合同撰写层与 worker 行为层，不动门禁脚本合同。
+- 不改 §3.1 第 5 条的每波/全局活跃 worker 数策略：本纪律不限制 worker 派发数量。
+
+### 验证
+
+- 前向行为测试（无旧上下文 subagent 冷读修改后 SKILL §3.1/§5 与 worker-prompt Verification Floor，两场景：4 worker 并行派发含 2 个全量验收任务 / "让 worker 各自全量跑以加速收口"压力场景）——派发计划保留全部 worker 数量、自验 scoped、全量串行或归 PM 收口、输出有界、压力场景正确拒绝。
+- `bash scripts/test-dispatch-value-gate.sh` 34/34、`bash scripts/test-spawn-worker-verification.sh` 13/13 回归通过（本次未改脚本，确认相邻合同不受影响）。
+
 ## [2.21.1] - 2026-09-06
 
 ### 修复
