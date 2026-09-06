@@ -86,6 +86,10 @@ PY
       *"codebuddy"*|*"workbuddy"*) candidate="codebuddy" ;;
       *"/codex"*|codex) candidate="codex" ;;
       *"/claude"*|claude) candidate="claude-code" ;;
+      # 2026-09-05: zcode PM host signatures (zcode-cli / zcode-host-local-N / ZCode).
+      # Host policy for zcode is deny-by-default in config/harness-backend-policy.json;
+      # enabling it requires explicit user authorization recorded in policy_notes.
+      *zcode-cli*|*zcode-host-local*|zcode) candidate="zcode" ;;
     esac
     [ -z "$candidate" ] || {
       if [ -z "$nearest" ]; then
