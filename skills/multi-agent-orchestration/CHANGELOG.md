@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.22.0] - 2026-09-06
+
+### 新增
+
+- Worker 默认执行权限放大（用户决策 2026-09-06：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，常规读取不应因复合形式被拦）。`scripts/dependency-install-guard.py` 安全类从「裸命令白名单」升级为「分段校验」：命令按顶层 `;`/`&&`/`||`/`|` 切段，每段独立过段级白名单（安全读 + 安全交付），全部通过才放行。
+- 段级白名单新增：`git push`（本分支裸 push / `-u origin HEAD` / refspec 到 feature 分支；拒 `--force`/`-f`/`--force-with-lease`、拒 main/master 目标、拒 `:branch` 远端删除与 `+src:dst` 强推、拒 `--mirror`/`--tags`/`--delete`/`--receive-pack`）、`git rebase`（拒 `--exec`/`-x` 执行逃逸）、`git branch` 展示 flag、`git remote -v`、`git ls-remote`、`git fetch`（拒 `--upload-pack` file:// 执行逃逸）、`gh auth status`、`gh repo view`、`echo`/`which`/`type`/`jq`/`sort`/`uniq`/`cut`/`tr`/`basename`/`dirname`/`diff`、`command -v`、`node`/`npm`/`pnpm`/`yarn`/`bun`/`python3` 版本查询。
+- 复合只读管道默认放行：`git status && git log --oneline -5`、`grep -rn X src | head -20`、`git log --format=%s | sort | uniq -c | sort -rn | head` 等（此前裸读命令放行但一加管道/分号即被拦，r4/r8/gov-03 实测 15+ 次误拦）。重定向仅允许 `/dev/null`、`&1`/`&2` 与临时目录（`/tmp/`、`/private/tmp/`、`/var/folders/`、`$TMPDIR`；拒绝 `..` 穿越）；子 shell、输入重定向、heredoc、命令替换仍拒。
+- `templates/worker-prompt.md` push 政策改写：本分支 push 默认放行（force/主干/删除仍拒），identity 四件套绑定的 safe-push 仍是 OID 全链核验的强化替代；`SKILL.md` §3.3 新增「Worker 默认执行权限」条目；`references/10-parallel-lessons.md` G31 方向 B 补 v2.22.0 落地注记。
+
+### 修复
+
+- `scripts/spawn-worker-metadata.sh`：`execution_authority.git_identity.raw_git_push_allowed` 由恒 `false` 改为 `true`，与 guard 实际行为一致（此前 metadata 声称裸 push 被拒，与安全类语义脱节）。`spawn-worker.sh` 在 identity 四件套缺失时输出 `SPAWN_WORKER_PUSH_PATH: raw-safe` 账本行，push 路径不再静默。
+- `scripts/dependency-install-guard.py` Orca 协议校验：`check` 子命令补 `--terminal` 选项——preamble 教 worker 用 `orca orchestration check --terminal <handle>` 收协调消息，但该形式不在合法选项集内被 fail-closed 拦截（gov-03 实测 worker 连轮询 PM 消息都被拦）。
+
+### 非目标（边界）
+
+- 验证命令（`pnpm test`/`npm run build` 等）仍走 9dfb4a14 的合同绑定路径（`--verify-cmd` / `--verification-contract` → `allowed_shell_commands` 精确串），不默认放行：保持派发合同对验证权威的单一来源。
+- `gh api`（通用读写 API）、`gh repo sync`（fork 分支强制覆盖）、安装类命令、`xargs`（读管道转任意执行）、`awk`（system 转义）、env 前缀命令、`git -C` 仍 fail-closed，需精确 `--allow-shell-command` / `--allow-install-command`。
+- 不改 identity 四件套语义：safe-push 绑定、author/committer 身份注入、OID 校验推送不变，仅不再是 push 的唯一通路。
+
+### 验证
+
+- `bash scripts/test-dependency-install-guard.sh`：新增 35 个门禁用例（push 放行 4 + push 拒绝 7 + 复合读/重定向/版本查询/gh/jq/filter 链 17 + 穿越/upload-pack/逃逸加固 2 + 协议 `--terminal` 1 + 既有语义回归 4），全量 113/113 通过；metadata 断言同步 `raw_git_push_allowed == true`。
+- `bash scripts/test-spawn-worker-verification.sh` 13/13、`bash -n scripts/spawn-worker.sh` 通过（相邻合同不受影响）。
+- 真机事故复盘锚定：dsh-contract-copilot gov-01/03（2026-09-06）15 次被拦命令中，`git push` 三形态、`gh repo sync`、`gh api` 修复后分别落入放行/继续拒绝的预期桶；`ls 2>/dev/null; ...`、`grep | head` 复合读恢复可用。
+
 ## [2.21.2] - 2026-09-06
 
 ### 新增

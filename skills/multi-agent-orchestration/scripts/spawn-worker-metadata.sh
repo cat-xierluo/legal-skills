@@ -181,7 +181,7 @@ write_metadata() {
           expected_email: $git_expected_email,
           integration_base: $git_integration_base,
           safe_push_command: $safe_push_command,
-          raw_git_push_allowed: false,
+          raw_git_push_allowed: true,
           commit_environment_bound: ($git_expected_name != "" and $git_expected_email != "")
         }
       },
