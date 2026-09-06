@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.20.0] - 2026-09-05
+
+### 新增
+
+- `spawn-worker.sh` 新增 `node_mem_cap_setup`：worker 会话默认注入 `NODE_OPTIONS=--max-old-space-size=2048`（`SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB` 可调，`=0` 关闭；调用方已设 `NODE_OPTIONS` 时跳过不覆盖）。与 scope-guard 同款 `env` 前缀包装，tmux 与 Orca terminal 路径均生效。
+- SKILL §5 新增 Worker node OOM 识别与退避规则：退出码 134 / SIGABRT / `FatalProcessOutOfMemory` 判定后同任务不得立即重拉（下一轮巡检 + 全局并发 -1），连续 2 次 OOM 停止重拉、泊车并上报。
+
+### 背景与动机
+
+- 2026-09-05 事故复盘（badminton-lab 机器）：多 worker 长输出场景下，会话内 node 进程（agent CLI / vitest worker）V8 堆无界增长触发 `FatalProcessOutOfMemory → SIGABRT`，PM 周期性重拉形成崩溃循环（单日 4 崩），并叠加整机内存挤压导致一次 shutdown_stall 强制重启。上游排查结论：Orca 本体（daemon/runtime）跨全部崩溃时刻存活，非宿主缺陷；止血责任在本编排层——堆上限让 worker 到限自身退出（sentinel 记 failed），退避规则阻断"更用力重试"的循环放大。
+
+### 验证
+
+- `bash -n` 语法通过；注入输出行 `SPAWN_WORKER_NODE_MEM_CAP` 进 PM 日志可审计；dry-run 路径不新增副作用（包装只改 COMMAND 字符串）。
+
+## [2.19.0] - 2026-09-05
+
+### 新增
+
+- 新增 zcode 额度 lane 的 summary 生产适配器 `scripts/quota_summary_zcode.py`：把本机 zcode-quota 监测器（`~/bin/zcode-quota`，个人脚本）的真实观测（BigModel coding plan 5h 窗口余量与重置时刻）转成 `quota-aware-routing.summary.v1` 的 zcode fuel lane，供既有 `quota_preflight.py` / `route_suggest.py` 消费。数据源优先级 `--stdin-obs`（watch 钩子直连）> watch-log 尾读（默认 300s 新鲜度）> `--json` 现场拉取；全部失败 exit 1 且不写文件（fail-closed，绝不编造 lane 数据）。
+- 确立多生产方合并语义：只替换 zcode lane，其余 lane 与 `generated_at` 原样保留——合并方不替其他生产方"续期"，生产方停摆必须表现为整体 stale 被预检门拒绝，而不是被 zcode lane 的刷新掩盖；写入原子（tmp + `os.replace`），lane 记录带 `updated_at`/`source` 溯源附加键。
+- 新增 `references/21-zcode-quota-producer.md`：公私边界（凭证解密逻辑永不进入公开仓库）、数据流、启用方式、fail-closed 行为表与第二期接线点（spawn 侧 provider 映射、429 恢复前置额度确认）。
+
+### 技术优化
+
+- 公开技能对 zcode 额度保持"中立合同消费方"定位：适配器只消费 zcode-quota 的输出（stdin/日志/CLI），不直接调用官方接口、不读取或解密 `~/.zcode/v2/credentials.json`。
+
+### 验证
+
+- 新增 `scripts/test-quota-summary-zcode.py` 10/10 通过：覆盖数据源回退链（stdin 优先、日志过期回退现场拉取、全失败 exit 1 且文件原样）、合并语义（其他 lane 与 generated_at 保留、自定义 lane 名）、字段映射（remaining 钳位 [0,100]、epoch ms→ISO、可缺省 resets_at、跳过 tokens_pct 缺失行），以及与 `quota_preflight.py` 的联动（余量充足放行 `ok`、判停线拒绝 `lane_below_stop_line`）。
+- 真实环境接入验证通过：zcode lane 合并进既有 route-summary（glm-api/minimax/codebuddy-hy4/autoclaw 四条 lane 原样保留）；`zcode-quota --watch` 经 `ZCODE_QUOTA_SUMMARY_HOOK` 每 120s 自动刷新 zcode lane（source=stdin，含真实 `resets_at`）。
+
+### 待办事项
+
+- 第二期接线（本期未动 spawn 行为）：`spawn-worker.sh` 对 `--worker-backend zcode` 显式以 `provider=zcode` 走预检门（当前 `not_applicable` 放行）；`orca_rate_limit_recovery.py` 唤醒前确认 5h 窗口真实余量。
+- 自动讨卡/用卡动作不进入编排链：自动用卡已被用户明确禁止；自动讨卡如需接入必须另设显式授权门。
+
 ## [2.18.0] - 2026-09-05
 
 ### 新增
