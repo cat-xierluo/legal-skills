@@ -45,6 +45,26 @@
 
 ## 4. Worker 分支与子 PR
 
+### 子 PR 的 squash 重做断裂与树等价验证（2026-09-07 实战）
+
+长期分支上的提交只应经子 PR 进入（不直推）。若历史上已有直推提交、事后回退分支改走 PR 重做，注意：**同一树内容经 squash 重做后与原 squash 提交无共同祖先**——即使内容逐字节相同，GitHub 也判 `CONFLICTING`（merge-base 落在更早的基点，两边"各自"做了同样改动）。处置流程：
+
+```bash
+# 1) 本地合并，冲突一律以"完成态"树为准
+git checkout <integration-branch>
+git merge --no-ff <step-branch> || true
+git checkout <step-branch> -- . && git add -A
+git commit --no-edit -m "merge: <step>（PR #N，冲突以完成态树解决）"
+# 2) 树等价验证——必须 0 差异才允许 push
+git diff <step-branch> HEAD --stat   # 输出必须为空
+git push origin <integration-branch>
+# 3) push 后 PR 自动转 MERGED（head 已包含于 base）
+```
+
+树等价验证是本流程的 fail-closed 门：`--stat` 非空说明冲突解决引入了内容偏差，禁止 push。
+
+
+
 每个 worker 在创建 Worktree 前刷新远端，并从长期集成分支的远端跟踪 ref 创建短分支：
 
 ```bash
@@ -108,6 +128,20 @@ gh pr create \
 同步期间若长期分支、默认主干、任务合同或待合并 PR 发生漂移，旧验收失效，重新核验后再派发或合并。
 
 ## 7. 里程碑集成 PR
+
+### 时机红线（2026-09-07 实战教训）
+
+集成 PR（base=默认主干）只在里程碑真正达成时开——"还要继续拆/还有子 PR 在排"就不是里程碑。提早开总 PR 的代价：功能线未完就得反复关注它的过期与 rebase，且总 PR 会掩盖"哪些子 PR 已合入"的可见性。正确形态是**先只开子 PR（base=长期分支），总 PR 留到退出条件满足的那一刻**。若总 PR 已提早存在且功能线仍在推进，保持 open 但不合并，并在项目任务源注明"总 PR 仅作合并提醒，里程碑未到"。
+
+### GitHub 自动关闭 PR 的坑（2026-09-07 实战）
+
+对 PR 的 head 分支 force-push 重置（如把分支回退到 base 以重做子 PR 纪律）时，一旦 head 与 base 无差异，GitHub 会**自动把该 PR 置为 CLOSED**——不留通知、容易被误读为"被拒绝"。处置：
+
+- 重做完成后必须重开 PR（`gh pr create` 同 base/head），PR 号会变；
+- 项目任务源、会话记忆里凡引用旧 PR 号的地方逐一更新；
+- 判别方法：`gh pr view <n> --json state` 显示 `CLOSED` 且 commits=0，即此坑。
+
+
 
 长期分支向默认主干提 PR 前，必须满足：
 
