@@ -199,7 +199,7 @@ remote_url=$(git -C "$PROJECT" remote get-url "$REMOTE" 2>/dev/null || true)
 repo_slug="$REPOSITORY"
 if [ -z "$repo_slug" ]; then
   repo_slug=$(printf '%s' "$remote_url" | sed -nE \
-    's#^(https?://|ssh://git@|git@)([^/:]+)[:/]([^/]+/[^/]+?)(\.git)?$#\2/\3#p')
+    's#^(https?://|ssh://git@|git@)([^/:]+)[:/]([^/]+/[^/]+)(\.git)?$#\2/\3#p')
   repo_slug=${repo_slug%.git}
 fi
 [[ "$repo_slug" =~ ^[^/[:space:]]+/[^/[:space:]]+/[^/[:space:]]+$ ]] || repo_slug=""
