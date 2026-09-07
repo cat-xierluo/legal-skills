@@ -3,6 +3,7 @@
 #
 # 覆盖三路径（mock orca CLI）：
 #   Case 1: handle detection miss → 拒绝、未触达 run-use、提示如何在 Orca 终端跑/显式传 --from
+#   Case 1: handle detection miss → 拒绝、未触达 run-current、提示如何在 Orca 终端跑/显式传 --from
 #   Case 2: successful rebind     → run-use + run-current 都对得上、stdout 输出 run_id / coordinator
 #   Case 3: verify mismatch        → run-use 成功但 run-current 报另一 run_id，拒绝并出恢复提示
 #   Case 4 (extra): run-use call failure → exit 1、提示勿盲重试
@@ -175,6 +176,7 @@ assert_grep    out "^run_id=run-x"                            "stdout has run_id
 assert_grep    out "^coordinator=term-pm"                     "stdout has coordinator=term-pm"
 assert_grep    log "orchestration run-use .* run-x .* term-pm" "run-use called with --id run-x --from term-pm"
 assert_grep    log "orchestration run-current"                "run-current called for verification"
+assert_grep    log "run-current .* --from term-pm"        "run-current verifies with --from (F1 cross-terminal)"
 
 # ============================== Case 3 ==============================
 echo "Case 3: verify mismatch — run-use OK but run-current returns stale run_id → exit 2, recovery printed"
