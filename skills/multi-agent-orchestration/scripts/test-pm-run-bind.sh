@@ -176,7 +176,7 @@ assert_grep    out "^run_id=run-x"                            "stdout has run_id
 assert_grep    out "^coordinator=term-pm"                     "stdout has coordinator=term-pm"
 assert_grep    log "orchestration run-use .* run-x .* term-pm" "run-use called with --id run-x --from term-pm"
 assert_grep    log "orchestration run-current"                "run-current called for verification"
-assert_grep    log "run-current .* --from term-pm"        "run-current verifies with --from (F1 cross-terminal)"
+assert_grep    log "run-current --from term-pm"           "run-current verifies with --from (F1 cross-terminal)"
 
 # ============================== Case 3 ==============================
 echo "Case 3: verify mismatch — run-use OK but run-current returns stale run_id → exit 2, recovery printed"
