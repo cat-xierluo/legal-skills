@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.2"
+  version: "1.8.3"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -131,6 +131,7 @@ team-feature-a
 - 子 PR 经独立验收后 squash merge 到长期分支；达到预先命名且有退出条件的里程碑后，才由长期分支向默认主干提集成 PR。
 - 默认主干的通用修复先进入默认主干，再在无待合并子 PR 的波次边界 merge 到长期分支；同步后冻结本波 base，避免 worker 基线漂移。
 - 长期分支禁止 rebase、force-push 或随子 PR 删除；里程碑合入默认主干后也继续保留，直到功能线被明确关闭。
+- 集成 PR（base=默认主干）只在里程碑达成时开；功能线推进期只开子 PR（base=长期分支）。head 分支被重置致 PR 自动 CLOSED、squash 重做的 CONFLICTING 与树等价验证，详见 references/long-lived-integration-branch.md 第 4/7 节。
 
 执行建线、同步、PR、里程碑和清理时，读取 `references/long-lived-integration-branch.md`。项目专属的分支名、固定 Worktree 路径、任务字段和里程碑门禁留在项目规则中，不写入本通用 Skill。
 
