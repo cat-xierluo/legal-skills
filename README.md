@@ -35,13 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
+| 2026-09-06 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.20.0–2.22.0 | **Worker 权限放大与内存治理**：安全类改分段校验，本分支 push/PR 成为默认交付路径（复合只读管道放行，force/主干/删除仍拒）；新增物理内存预算门与派发排队（额度不足泊车）、node 堆顶注入与 OOM 退避、scoped 自验默认与全量单一在飞的验证负载纪律。 |
 | 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.19.0 | **zcode 额度 lane 生产方**：新增 `quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实 5h 窗口观测合并进 quota summary（只更新 zcode lane、不替其他生产方续期，不接触凭证）；全数据源失败 fail-closed 不写文件，spawn 行为待第二期接线。 |
 | 2026-09-05 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.2  | **分支生命周期与清理分层**：以独立 reference 统一一次性/长期分支、单 Worker 自动清理、批量 stale 审计与功能线关闭；主文档保留最短判定入口，删除授权不放宽。 |
 | 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.18.0 | **验证命令授权闭环**：任务合同或项目配置中的验证命令原样进入精确 Shell 白名单、receipt 与 metadata；要求自验却无有效命令时在 Worker 副作用前失败，并支持有界 Python 根项目发现与显式嵌套项目配置。 |
 | 2026-09-04 | 更新   | [course-generator](skills/course-generator/)                           | v2.10.2 | **质量合同与评测资产化**：新增运行有效性、机械门禁、语义硬失败和 70 分内容质量量表；固定串行 canary 止损，并将真实课程、历轮产物和评分历史分层沉淀到私有评测 Dataset。v2.10.2 弱模型效果仍为 `NOT_VERIFIED`。 |
 | 2026-08-30 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.0 | **最终版式门禁与失败安全**：新增独立 DOCX/PDF 检查器，统一表格居中、固定列宽、跨页行和连续页码，保留横竖版边界；候选件经 LibreOffice 真实渲染通过后才发布。113 棵模板静态门禁与 21 类文书真实 PDF 抽样通过，68 棵主文书逐树长文本压力矩阵继续列为 P0。 |
 | 2026-08-30 | 更新   | [video-screenshot](skills/video-screenshot/)                           | v0.8.2 | **事务性输出与失败安全**：参数和视频先预检，新结果在同级 staging 完整生成后才替换旧结果；新增所有权标记、旧版报告兼容校验、符号链接/未知文件/下游产物保护，以及损坏视频和提交回滚真实 CLI 回归 |
-| 2026-08-30 | 更新   | [legal-industry-report](skills/legal-industry-report/)               | v1.1.0 | **法律专业正式行业报告（月度/季度）**：增加 `legal-` 领域前缀，统一法律研报产品命名；继续面向公开展示与广泛分发，保留行业全景、规则包、证据账本和机构出版物式 PDF。 |
 </details>
 
 ## 📋 项目概述
