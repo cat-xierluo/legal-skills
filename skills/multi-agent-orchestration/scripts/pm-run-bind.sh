@@ -156,7 +156,7 @@ echo "PM_RUN_BIND_USED: run=$RUN_ID handle=$HANDLE" >&2
 
 # ---------- run-current verification ----------
 set +e
-run_current_out=$(orca_cli orchestration run-current --json 2>&1)
+run_current_out=$(orca_cli orchestration run-current --from "$HANDLE" --json 2>&1)
 run_current_rc=$?
 set -e
 
