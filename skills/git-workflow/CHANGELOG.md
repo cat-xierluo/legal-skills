@@ -1,5 +1,14 @@
 # 变更日志
 
+## [1.8.3] - 2026-09-07 - 长期分支 PR 实战三坑入册（custom-skills 拆分线实证）
+
+### 改进
+
+- **集成 PR 时机红线**（reference §7 新增"时机红线"）：base=默认主干的总 PR 只在里程碑达成时开；功能线推进期只开子 PR（base=长期分支）。提早开的总 PR 保持 open 仅作提醒，并在项目任务源注明。
+- **GitHub 自动关闭 PR 的坑**（reference §7 新增）：head 分支 force-push 重置致与 base 无差异时，PR 被自动 CLOSED（无通知）；重开后 PR 号变化，须更新项目任务源与记忆中的旧号引用。
+- **squash 重做断裂与树等价验证**（reference §4 新增）：同一树内容 squash 重做后与原 squash 无共同祖先，GitHub 判 CONFLICTING；给出本地解决流程（merge→以完成态树 checkout→`git diff <完成态> HEAD --stat` 必须为空才 push），树等价验证是 fail-closed 门。
+- SKILL.md 长期集成分支小节补一行索引指向 §4/§7。
+
 ## [1.8.2] - 2026-09-05
 
 ### 改进
