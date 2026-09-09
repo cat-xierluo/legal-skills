@@ -187,10 +187,68 @@ def main():
                 sys.exit(3)
             print("[5] 登录成功 ✓")
 
-        print("[6] 保存 cookie...")
+        print("[6] 等待 SPA 完整初始化(暖机 + cookie 轮询)...")
         page.goto("https://tingwu.aliyun.com/home", wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(5000)
+        # 触发听悟关键 API 拉取,促使 XSRF-TOKEN / JSESSIONID / arms_uid 等
+        # 二次下发完成(SPA 登录态 cookie 集分两批下发,首批是 aliyun 主域,
+        # 第二批是听悟自身的 _bl_uid / XSRF-TOKEN 等)
+        try:
+            warmup = page.evaluate(
+                """async () => {
+                  try {
+                    await fetch('/api/account/v2/user/info?c=web', { credentials: 'include' });
+                    await fetch('/api/tingwu/account/info?c=web', { credentials: 'include' });
+                    return 'ok';
+                  } catch (e) { return 'err: ' + e.message; }
+                }"""
+            )
+            print(f"   暖机 API 调用: {warmup}")
+        except Exception as e:
+            print(f"   (暖机 API 调用失败: {e};继续,可能受限)")
         page.wait_for_timeout(3000)
+
+        # 多轮 ctx.cookies() 直到两次结果数量稳定(关键 cookie 已全部下发)
+        # 经验值:登录后 ~8s 内会追加 XSRF-TOKEN/JSESSIONID/arms_uid/_bl_uid 等
+        print("[6] 等待 cookie 集合稳定(轮询)...")
+        stable = 0
+        prev = -1
+        for i in range(20):
+            cur = len([
+                c for c in ctx.cookies()
+                if any(d in c.get("domain", "") for d in
+                       ("aliyun.com", "taobao.com", "alicdn.com"))
+            ])
+            if cur == prev and cur >= 20:
+                stable += 1
+                if stable >= 2:
+                    print(f"   cookie 已稳定({cur} 个,稳定 {stable} 轮)")
+                    break
+            else:
+                stable = 0
+            prev = cur
+            page.wait_for_timeout(1500)
+        else:
+            print(f"   (警告:cookie 集合未完全稳定,当前 {prev} 个;继续保存)")
+
         raw = ctx.cookies()
+        names = {c["name"] for c in raw}
+        # 听悟 API 双重校验关键 cookie;缺失则 [CMN.NotLogin]
+        # - login_aliyunid_ticket: HttpOnly 主会话 ticket
+        # - XSRF-TOKEN: API 反 CSRF token(配合 header 双重校验)
+        # - JSESSIONID: aliyun 网关会话
+        # - atpsida / isg: 风控标识
+        critical = ("login_aliyunid_ticket", "login_aliyunid",
+                    "XSRF-TOKEN", "JSESSIONID", "atpsida", "isg")
+        missing = [k for k in critical if k not in names]
+        if missing:
+            print(f"!! 关键 cookie 缺失: {missing}")
+            print("   听悟 API 将判 [CMN.NotLogin] 并拒绝转录。请:")
+            print("   1) 重新运行本脚本登录;")
+            print("   2) 检查浏览器是否被广告拦截/隐私插件劫持 cookie。")
+            browser.close()
+            sys.exit(4)
+
         cookie_map = {}
         for c in raw:
             d = c.get("domain", "")
@@ -199,6 +257,7 @@ def main():
         data = {
             "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "cookies": cookie_map,
+            "verified_critical_cookies": list(critical),
         }
         COOKIE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[6] 已保存 {len(cookie_map)} 个 cookie → {COOKIE_PATH}")
