@@ -14,6 +14,11 @@ UPLOAD_INTERVAL="${UPLOAD_INTERVAL:-0.5}"
 BATCH_SIZE="${BATCH_SIZE:-20}"
 BATCH_REST="${BATCH_REST:-3}"
 
+# Retry parameters
+MAX_RETRIES="${MAX_RETRIES:-1}"
+RETRY_DELAY="${RETRY_DELAY:-2}"
+PICLIST_START_WAIT="${PICLIST_START_WAIT:-15}"
+
 # Global counters
 TOTAL_UPLOADED=0
 TOTAL_SKIPPED=0
@@ -54,7 +59,7 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-# Function to upload a single image
+# Function to upload a single image (with retries)
 upload_image() {
     local image_path="$1"
 
@@ -63,25 +68,37 @@ upload_image() {
         return 1
     fi
 
-    local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "$PICLIST_SERVER/upload" -F "file=@$image_path" 2>/dev/null)
+    local attempt=0
+    while [ "$attempt" -le "$MAX_RETRIES" ]; do
+        # Bypass system proxy for localhost: PICLIST is local; system proxies
+        # (e.g. http://127.0.0.1:1082) often return 503 for unknown ports,
+        # which fools naive connectivity checks.
+        local response
+        response=$(curl -s --noproxy '*' -w "\n%{http_code}" -X POST "$PICLIST_SERVER/upload" -F "file=@$image_path" 2>/dev/null)
 
-    # Split response body and HTTP status code
-    local http_code
-    http_code=$(echo "$response" | tail -1)
-    local body
-    body=$(echo "$response" | sed '$d')
+        # Split response body and HTTP status code
+        local http_code
+        http_code=$(echo "$response" | tail -1)
+        local body
+        body=$(echo "$response" | sed '$d')
 
-    # Check for success
-    if echo "$body" | jq -e '.success == true' >/dev/null 2>&1; then
-        local url
-        url=$(echo "$body" | jq -r '.result[0]')
-        echo "$url"
-        return 0
-    else
-        echo "❌ Upload failed: $image_path" >&2
-        return 1
-    fi
+        # Check for success
+        if echo "$body" | jq -e '.success == true' >/dev/null 2>&1; then
+            local url
+            url=$(echo "$body" | jq -r '.result[0]')
+            echo "$url"
+            return 0
+        fi
+
+        attempt=$((attempt + 1))
+        if [ "$attempt" -le "$MAX_RETRIES" ]; then
+            echo "  ⚠️  Upload attempt $attempt failed (HTTP ${http_code:-???}), retrying in ${RETRY_DELAY}s..." >&2
+            sleep "$RETRY_DELAY"
+        fi
+    done
+
+    echo "❌ Upload failed after $((MAX_RETRIES + 1)) attempt(s): $image_path (last HTTP ${http_code:-???})" >&2
+    return 1
 }
 
 # Function to delete local image file
@@ -223,25 +240,98 @@ process_markdown_file() {
     fi
 }
 
+# Extract host:port from PICLIST_SERVER URL (http://host:port/...)
+extract_port() {
+    echo "$PICLIST_SERVER" | sed -E 's|^https?://||; s|/.*$||; s|.*:||'
+}
+
+# Check if anything listens on the PicList port (local).
+port_listening() {
+    local port="$1"
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | grep -q LISTEN
+}
+
+# Wait up to N seconds for PicList port to start listening.
+wait_for_port() {
+    local port="$1"
+    local max="${2:-$PICLIST_START_WAIT}"
+    local i=0
+    while [ "$i" -lt "$max" ]; do
+        if port_listening "$port"; then
+            return 0
+        fi
+        sleep 1
+        i=$((i + 1))
+    done
+    return 1
+}
+
+# Try to launch PicList app (macOS only; ignored elsewhere).
+launch_piclist_app() {
+    if [ "$(uname -s)" != "Darwin" ]; then
+        return 1
+    fi
+    if [ ! -d "/Applications/PicList.app" ]; then
+        return 1
+    fi
+    echo "🚀 尝试启动 PicList 应用..." >&2
+    open -a PicList >/dev/null 2>&1
+    return $?
+}
+
 # Function to check PicList Server availability
 check_piclist_server() {
-    echo "🔍 检查 PicList HTTP Server..."
+    local port
+    port=$(extract_port)
+    echo "🔍 检查 PicList HTTP Server (port $port)..."
 
-    # Test if server is accessible
-    if ! curl -s --connect-timeout 3 "$PICLIST_SERVER/upload" >/dev/null 2>&1; then
-        echo "❌ 无法连接到 PicList HTTP Server"
-        echo
-        echo "请确保："
-        echo "  1. PicList 应用正在运行"
-        echo "  2. HTTP Server 已启用（默认端口 36677）"
-        echo
-        echo "配置指南: references/setup.md"
-        echo "下载地址: https://github.com/Kuingsmile/PicList/releases"
+    # Step 1: confirm something is actually listening on the port (bypass proxy).
+    if ! port_listening "$port"; then
+        echo "⚠️  PicList 端口 $port 未监听"
+        if launch_piclist_app; then
+            echo "⏳ 等待 PicList 启动（最多 ${PICLIST_START_WAIT}s）..."
+            if wait_for_port "$port"; then
+                echo "✅ PicList 已就绪"
+            else
+                echo "❌ PicList 启动超时"
+                echo
+                echo "请确保："
+                echo "  1. PicList 应用正在运行"
+                echo "  2. HTTP Server 已启用（默认端口 36677）"
+                echo
+                echo "配置指南: references/setup.md"
+                echo "下载地址: https://github.com/Kuingsmile/PicList/releases"
+                echo
+                exit 1
+            fi
+        else
+            echo "❌ 无法自动启动 PicList"
+            echo
+            echo "请确保："
+            echo "  1. PicList 应用正在运行"
+            echo "  2. HTTP Server 已启用（默认端口 36677）"
+            echo
+            echo "配置指南: references/setup.md"
+            echo "下载地址: https://github.com/Kuingsmile/PicList/releases"
+            echo
+            exit 1
+        fi
+    fi
+
+    # Step 2: probe business endpoint directly (bypass proxy). A system proxy
+    # (e.g. 127.0.0.1:1082) returns 503 for unknown ports, so a bare `curl`
+    # would falsely report "connection successful".
+    local code
+    code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -m 5 "$PICLIST_SERVER/upload" 2>/dev/null || echo "000")
+    if [ "$code" = "000" ] || [ "$code" = "503" ]; then
+        echo "❌ PicList 业务端点不可达 (HTTP $code)"
+        echo "   端口在监听，但上传端点无响应 — 通常是 PicList 应用卡死或图床后端未配置。"
+        echo "   建议：在 PicList 应用里确认默认图床已选中且 token 未失效，必要时重启 PicList。"
         echo
         exit 1
     fi
 
-    echo "✅ PicList Server 连接成功 ($PICLIST_SERVER)"
+    echo "✅ PicList Server 连接成功 ($PICLIST_SERVER, HTTP $code)"
     echo
 }
 
