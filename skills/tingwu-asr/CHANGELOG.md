@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.2] - 2026-09-09
+
+### Fixed
+- `login_pw.py` 修复偶发 `[CMN.NotLogin]: 未登录`：此前保存 cookie 前仅固定等待 3 秒，SPA 第二批关键 cookie（`XSRF-TOKEN` / `JSESSIONID` / `arms_uid` / `_bl_uid` / `aliyun_lang` 等）尚未下发即落盘，导致 API 双重校验失败
+- 保存前先导航 `/home` 并主动触发 `user/info`、`tingwu/account/info` 两个 API 暖机，促使第二批 cookie 下发（暖机失败不阻断，降级继续）
+- 多轮 `ctx.cookies()` 轮询直到 cookie 数连续 2 轮稳定（阈值 ≥20，最多 20 轮 × 1.5s），覆盖分批下发窗口期
+- 新增关键 cookie 校验：`login_aliyunid_ticket` / `login_aliyunid` / `XSRF-TOKEN` / `JSESSIONID` / `atpsida` / `isg`，缺失则 `sys.exit(4)` 并给出重试与排查提示
+- cookies.json 新增 `verified_critical_cookies` 字段留痕，便于事后排错
+
+### 验证
+- 完整登录实测：抓到 26 个 cookie（此前仅 19 个），`check_auth.py` 返回账户信息
+
 ## [0.4.1] - 2026-08-24
 
 ### Fixed
