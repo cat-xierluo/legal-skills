@@ -1,0 +1,29 @@
+name: Legal Text Format
+
+on:
+  pull_request:
+    paths:
+      - "skills/legal-text-format/**"
+      - ".github/workflows/legal-text-format.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/legal-text-format/**"
+      - ".github/workflows/legal-text-format.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile formatter
+        run: python -m py_compile skills/legal-text-format/scripts/format_legal_cases.py
+      - name: Run formatter regressions
+        run: python -m unittest discover -s skills/legal-text-format/scripts/tests -p 'test_*.py' -v
