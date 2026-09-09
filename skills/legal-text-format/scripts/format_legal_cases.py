@@ -112,7 +112,8 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
                     last_case_pos = m.start()
     
     # Find a good paragraph break before the footer
-    for i in range(last_case_pos, max(0, last_case_pos - 2000), -1):
+    scan_start = min(last_case_pos, len(text) - 1)
+    for i in range(scan_start, max(0, scan_start - 2000), -1):
         if text[i] == '\n' and text[i-1] == '\n':
             # Check if we're in a case section or footer
             snippet = text[max(0, i-200):i]
@@ -134,7 +135,7 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
         # Find end of that section
         end_search = text[last_meaning.end():last_meaning.end()+500]
         # Find next case or footer
-        next_case = re.search(r'(?:/**|案例\s*\d+|案例[一二三四五六七八九十]+|来源|扫码|END)', end_search)
+        next_case = re.search(r'(?:/\*\*|案例\s*\d+|案例[一二三四五六七八九十]+|来源|扫码|END)', end_search)
         if next_case:
             last_case_pos = last_meaning.end() + next_case.start()
         else:
@@ -147,12 +148,16 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
         (r'\(', '（'), (r'\)', '）'),
         (r',', '，'), (r'\.', '。'), (r':', '：'), (r';', '；'),
         (r'!', '！'), (r'\?', '？'),
-        (r'"', '"'), (r'"', '"'),
-        (r'''\ '''', '''‘'), (r'''\ ''', '''’'),
     ]
     
     for pattern, repl in replacements:
         text = re.sub(pattern, repl, text)
+
+    # Convert balanced straight quotes without changing unmatched quotes or
+    # apostrophes. A single regex replacement cannot distinguish opening and
+    # closing quote characters.
+    text = re.sub(r'"([^"\n]+)"', r'“\1”', text)
+    text = re.sub(r"'([^'\n]+)'", r'‘\1’', text)
     
     # Convert numbers to half-width (already mostly half-width, but ensure)
     # Full-width digits: ０１２３４５６７８９ -> 0123456789
@@ -358,7 +363,9 @@ if __name__ == '__main__':
     
     formatted = format_text(body, court_name, source_url, title)
     
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(formatted)
     
