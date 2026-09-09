@@ -230,3 +230,6 @@ skills/officecli
 
 # legal-visualization export 报告（runtime 输出，含绝对路径，本地缓存）
 skills/legal-visualization/export-report.json
+
+# 本地参考项目（外部克隆代码，含 node_modules，不入库）
+/参考项目/
