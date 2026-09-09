@@ -79,9 +79,10 @@ bash scripts/process.sh --dry-run <file.md|directory...>
 
 ## 错误处理
 
-- **PicList Server 未运行**: 提示启动 PicList 应用
+- **PicList 进程未运行**: 脚本会先做端口级探测，缺失则自动尝试 `open -a PicList.app`（仅 macOS）并等待最多 15 秒（`PICLIST_START_WAIT`）；仍无响应才退出。
+- **PicList 在监听但业务端点 503/000**: 通常是 PicList 应用卡死或图床后端未配置。脚本会报错并提示用户在 PicList 应用里检查默认图床/token，必要时重启应用。
 - **文件不存在**: 跳过并显示 ⚠️ 警告，继续处理
-- **上传失败**: 保留原始路径，标记 ❌，继续
+- **单张上传失败**: 自动重试一次（`MAX_RETRIES=1`，间隔 `RETRY_DELAY=2s`），仍失败则保留原始路径，标记 ❌，继续
 - **无效 JSON**: 视为上传失败
 
 ## 配置
@@ -90,6 +91,10 @@ PicList Server 默认地址为 `http://127.0.0.1:36677/upload`。可通过环境
 
 ```bash
 export PICLIST_SERVER=http://127.0.0.1:PORT
+# 以下为可选调优（一般无需改动）
+export PICLIST_START_WAIT=15   # 启动 PicList 后等待端口就绪的秒数
+export MAX_RETRIES=1           # 单图上传失败时的额外重试次数
+export RETRY_DELAY=2           # 重试间隔秒数
 ```
 
 ## 支持格式
