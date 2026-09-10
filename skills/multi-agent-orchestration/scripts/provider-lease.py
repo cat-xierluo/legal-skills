@@ -111,6 +111,10 @@ def orca_terminal_alive(handle: str, orca_cli: str) -> bool | None:
 def lease_alive(lease: dict, orca_cli: str) -> bool:
     if lease.get("schema") != SCHEMA:
         return True
+    if "runtime_binding_sha256" in lease:
+        # Bound allocations require exact Dispatch resource accounting. A stale
+        # terminal handle must never return their capacity to acquire's sweeper.
+        return True
     state = lease.get("state")
     if state == "provisional":
         created = parse_time(lease.get("created_at", ""))
@@ -244,6 +248,9 @@ def cmd_finalize(args: argparse.Namespace) -> int:
             print(f"ERROR: {exc}: {path}", file=sys.stderr)
             return 64
         lease["state"] = "active"
+        if "runtime_binding_sha256" in lease and (lease.get("transport") != args.transport or lease.get("resource_handle") != args.resource_handle):
+            print("ERROR: a runtime-bound allocation cannot change its resource", file=sys.stderr)
+            return 75
         lease["updated_at"] = iso_now()
         lease["transport"] = args.transport
         lease["resource_handle"] = args.resource_handle
@@ -253,6 +260,8 @@ def cmd_finalize(args: argparse.Namespace) -> int:
 
 
 def cmd_release(args: argparse.Namespace) -> int:
+    if getattr(args, "runtime_binding", None) or getattr(args, "release_receipt", None):
+        return cmd_bound_release(args)
     try:
         path = resolve_exact_lease_path(args.root, args.lease_file)
     except ValueError as exc:
@@ -270,6 +279,9 @@ def cmd_release(args: argparse.Namespace) -> int:
         except ValueError as exc:
             print(f"ERROR: {exc}: {path}", file=sys.stderr)
             return 64
+        if "runtime_binding_sha256" in lease:
+            print("ERROR: runtime-bound lease requires --runtime-binding and --release-receipt", file=sys.stderr)
+            return 75
         if lease.get("state") == "provisional":
             if args.owner_pid <= 1 or args.owner_pid != int(lease.get("owner_pid", 0) or 0):
                 print("ERROR: only the exact acquiring process may release a provisional lease", file=sys.stderr)
@@ -284,6 +296,115 @@ def cmd_release(args: argparse.Namespace) -> int:
         path.unlink()
     print(json.dumps({"lease_file": str(path), "released": True}))
     return 0
+
+
+def runtime_inputs(args):
+    """Opt-in binding; legacy lease operations retain their existing interface."""
+    import runtime_settlement as rs
+    binding_path = rs.checked(Path(args.runtime_binding).absolute())
+    binding = rs.validate_binding(rs.parse(rs.read(binding_path)))
+    path = rs.checked(Path(args.lease_file).absolute(), missing=True)
+    root = rs.checked(Path(args.root).absolute(), directory=True)
+    if (binding["lease"]["requirement"] != "REQUIRED" or binding["lease"]["path"] != str(path)
+            or binding["session_id"] != args.session or path.parent.parent != root):
+        rs.fail("IDENTITY_MISMATCH", "runtime binding 与 lease 路径/Session 不符")
+    return rs, binding, path, root
+
+
+def check_runtime_lease(rs, binding, path, lease, *, require_bound):
+    expected = {"schema": SCHEMA, "state": "active", "session": binding["session_id"],
+                "provider": binding["lease"]["provider"], "transport": "orca_terminal",
+                "resource_handle": binding["terminal_handle"]}
+    for key, value in expected.items():
+        rs.equal_identity(lease.get(key), value, "lease." + key)
+    frozen = {"allocation_id": binding["lease"]["allocation_id"],
+              "runtime_binding_sha256": rs.digest(binding), "lease_path": str(path)}
+    for key, value in frozen.items():
+        if require_bound or key in lease:
+            rs.equal_identity(lease.get(key), value, "lease." + key)
+    return frozen
+
+
+def cmd_bind_runtime(args: argparse.Namespace) -> int:
+    try:
+        rs, binding, path, root = runtime_inputs(args)
+        with provider_lock(root):
+            lease = rs.parse(rs.read(path))
+            frozen = check_runtime_lease(rs, binding, path, lease, require_bound=False)
+            if not all(lease.get(key) == value for key, value in frozen.items()):
+                lease.update(frozen)
+                atomic_write(path, lease)
+            record_hash = rs.raw_sha(rs.read(path))
+        print(json.dumps({"lease_file": str(path), "bound": True, "allocation_id": binding["lease"]["allocation_id"],
+                          "runtime_binding_sha256": rs.digest(binding), "lease_record_sha256": record_hash,
+                          "release_receipt_path": str(root / ".runtime-release-receipts" / (rs.digest(binding) + ".json"))}))
+        return 0
+    except (ValueError, OSError) as exc:
+        print(json.dumps({"ok": False, "error": {"code": getattr(exc, "code", "INVALID_LEASE"), "message": str(exc)}}))
+        return 64
+
+
+def cmd_bound_release(args: argparse.Namespace) -> int:
+    """Delete one proven allocation, preserving a receipt for idempotent replay.
+
+    An interruption after unlink but before receipt publication stays UNKNOWN.
+    Missing files alone never create a release receipt.
+    """
+    try:
+        if not args.runtime_binding or not args.release_receipt or not args.resource_settled:
+            raise ValueError("bound release requires runtime binding, release receipt and --resource-settled")
+        rs, binding, path, root = runtime_inputs(args)
+        if args.orca_cli != binding["cli_argv0"]:
+            rs.fail("IDENTITY_MISMATCH", "bound release CLI 不匹配")
+        receipt_path = root / ".runtime-release-receipts" / (rs.digest(binding) + ".json")
+        if Path(args.release_receipt).absolute() != receipt_path:
+            rs.fail("UNSAFE_PATH", "release receipt 必须使用 binding hash 对应的固定路径")
+        rs.checked(receipt_path, missing=True)
+        with provider_lock(root):
+            if receipt_path.exists():
+                receipt = rs.parse(rs.read(receipt_path))
+                payload = rs.validate_lease_release(receipt, binding)
+                rs.equal_identity(payload.get("expected_binding"), binding, "lease_release.expected_binding")
+                rs.equal_identity(payload.get("lease_path"), str(path), "lease_release.lease_path")
+                if path.exists() or payload.get("released") is not True:
+                    rs.fail("LEASE_RELEASE_CONFLICT", "已有释放收据与当前 lease 状态冲突")
+            elif not path.exists():
+                print(json.dumps({"lease_file": str(path), "released": False, "reason": "already_missing"}))
+                return 0
+            else:
+                raw = rs.read(path)
+                lease = rs.parse(raw)
+                check_runtime_lease(rs, binding, path, lease, require_bound=True)
+                worker_argv = [args.orca_cli, "orchestration", "worker-show", "--dispatch", binding["dispatch_id"], "--json"]
+                result = subprocess.run(worker_argv, capture_output=True, timeout=8, check=False)
+                response = rs.parse(result.stdout)
+                if result.returncode != 0 or response.get("ok") is not True:
+                    print(json.dumps({"lease_file": str(path), "released": False, "reason": "exact_worker_unavailable"}))
+                    return 75
+                observer_runtime = rs.text(response.get("_meta", {}).get("runtimeId"))
+                worker = rs.native_worker(response, binding)
+                if not rs.terminal_is_released(worker):
+                    print(json.dumps({"lease_file": str(path), "released": False, "reason": "resource_active_or_unknown"}))
+                    return 75
+                released_at = iso_now()
+                if worker["terminal_resource"]["releaseCompletedAt"] > rs.timestamp(released_at):
+                    rs.fail("INVALID_ORDER", "worker 资源后态不能来自未来")
+                if rs.read(path) != raw:
+                    rs.fail("INPUT_CHANGED", "释放前 lease 发生变化")
+                path.unlink()
+                payload = {"expected_binding": binding, "binding_sha256": rs.digest(binding), "lease_path": str(path),
+                           "lease_record_sha256": rs.raw_sha(raw), "released": True, "released_at": released_at,
+                           "resource_observation": {"argv": worker_argv, "exit_code": 0, "stdout": result.stdout.decode('utf-8'), "stdout_sha256": rs.raw_sha(result.stdout),
+                                                    "stderr": result.stderr.decode('utf-8'), "stderr_sha256": rs.raw_sha(result.stderr),
+                                                    "observer_runtime_id": observer_runtime, "worker": worker}}
+                receipt = rs.envelope(rs.LEASE_RELEASE, payload)
+                rs.publish(receipt_path, receipt)
+            print(json.dumps({"lease_file": str(path), "released": True, "runtime_release": receipt}, sort_keys=True))
+            return 0
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        print(json.dumps({"ok": False, "released": False,
+                          "error": {"code": getattr(exc, "code", "INVALID_LEASE"), "message": str(exc)}}))
+        return 64
 
 
 def parser() -> argparse.ArgumentParser:
@@ -316,7 +437,16 @@ def parser() -> argparse.ArgumentParser:
     release.add_argument("--resource-settled", action="store_true")
     release.add_argument("--orca-cli", default="")
     release.add_argument("--owner-pid", type=int, default=0)
+    release.add_argument("--runtime-binding")
+    release.add_argument("--release-receipt")
     release.set_defaults(func=cmd_release)
+
+    bind = subcommands.add_parser("bind-runtime")
+    bind.add_argument("--root", required=True)
+    bind.add_argument("--lease-file", required=True)
+    bind.add_argument("--session", required=True)
+    bind.add_argument("--runtime-binding", required=True)
+    bind.set_defaults(func=cmd_bind_runtime)
     return root
 
 

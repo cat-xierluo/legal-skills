@@ -13,11 +13,13 @@ usage() {
   cat >&2 <<'USAGE'
 Usage:
   pm-orchestrate.sh run-create --objective TEXT
+  pm-orchestrate.sh reconcile --snapshot PATH --output PATH
   pm-orchestrate.sh pr-audit --worktree PATH --base-ref main --head-ref BRANCH --head-sha SHA [--task-id ID] [--agent-id ID]
   pm-orchestrate.sh <command> --worktree PATH --session NAME [options]
 
 Commands:
   run-create  Create and bind one Orca Run for a Wave
+  reconcile   Derive settlement from captured exact observations; no Orca lifecycle mutation
   pr-audit    Read-only classification of open PRs for one frozen worker head
   send        Send guidance: Dispatch inbox for supervised, terminal input otherwise
   read|peek   Read exact worker transcript/terminal output; peek uses 15 rows
@@ -60,6 +62,8 @@ Commands:
                不确定时只有 --force（PM 人工确认配额卡死）可停靠。
 
 Common:
+  --snapshot PATH  With reconcile: verified observation snapshot
+  --output PATH    With reconcile: immutable settlement receipt destination
   --worktree PATH   Worker worktree path
   --session NAME    spawn-worker session id
   --text TEXT       Prompt, guidance or reply body
@@ -114,9 +118,13 @@ PR_HEAD_REF=""
 PR_HEAD_SHA=""
 PR_TASK_ID=""
 PR_AGENT_ID=""
+RECON_SNAPSHOT=""
+RECON_OUTPUT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --snapshot) RECON_SNAPSHOT="${2:?--snapshot needs a path}"; shift 2 ;;
+    --output) RECON_OUTPUT="${2:?--output needs a path}"; shift 2 ;;
     --worktree) WORKTREE="$2"; shift 2 ;;
     --session) SESSION="$2"; shift 2 ;;
     --text) SEND_TEXT="$2"; shift 2 ;;
@@ -143,9 +151,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$COMMAND" in
-  run-create|pr-audit|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize|quota-park) ;;
+  run-create|pr-audit|reconcile|send|read|peek|show|wait|ack|reply|release|retain|settle|reauthorize|quota-park) ;;
   *) echo "ERROR: unknown command: $COMMAND" >&2; usage; exit 64 ;;
 esac
+# Reconciliation must not pass through coordinator binding or metadata mutation.
+if [ "$COMMAND" = "reconcile" ]; then
+  [ -n "$RECON_SNAPSHOT" ] && [ -n "$RECON_OUTPUT" ] || {
+    echo "ERROR: reconcile requires --snapshot and --output" >&2; exit 64;
+  }
+  [ "$FORCE" -eq 0 ] && [ "$DESTROY" -eq 0 ] || {
+    echo "ERROR: reconcile never accepts --force or --destroy" >&2; exit 64;
+  }
+  command -v python3 >/dev/null 2>&1 || {
+    echo "ERROR: Python 3 is required for runtime reconciliation" >&2; exit 64;
+  }
+  exec python3 "$SCRIPT_DIR/runtime-reconcile.py" reconcile --snapshot "$RECON_SNAPSHOT" --output "$RECON_OUTPUT"
+fi
+[ -z "$RECON_SNAPSHOT$RECON_OUTPUT" ] || {
+  echo "ERROR: --snapshot/--output are only accepted by reconcile" >&2; exit 64;
+}
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 
 if [ "$COMMAND" = "run-create" ]; then
