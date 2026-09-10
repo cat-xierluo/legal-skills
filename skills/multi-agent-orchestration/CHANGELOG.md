@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.23.0] - 2026-09-11
+
+### 新增
+
+- 增加 runtime/resource 只读观察与结算适配器，绑定 Run、Task、Dispatch、Worker generation、terminal、provider lease 和 Delivery；从原始命令证据重新推导唯一结算状态、缺失证据和恢复动作。
+- PM reconcile 入口消费冻结 snapshot，重复执行幂等；不调用 RPC 或自动执行资源操作。
+- provider lease 增加 runtime 绑定和可复验释放收据，为正常资源结算提供实际生产入口。
+
+### 修复
+
+- Task ready 与 Dispatch failed、terminal missing、abandon、历史 lease 文件缺失及 ack 单一信号均不能冒充完整结算；正常 worker_done 必须核对整批 Delivery 和精确 ack 目标。
+
+### 文档完善
+
+- 记录当前 Orca 字段来源与合成回归边界；生产 provider 及真实生命周期验证单独标记，不由本地协议测试推定。
+
 ## [2.22.0] - 2026-09-06
 
 ### 新增

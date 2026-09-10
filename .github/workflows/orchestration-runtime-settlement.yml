@@ -1,0 +1,40 @@
+name: Orchestration Runtime Settlement
+
+on:
+  pull_request:
+    paths:
+      - "skills/multi-agent-orchestration/**"
+      - ".github/workflows/orchestration-runtime-settlement.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/multi-agent-orchestration/**"
+      - ".github/workflows/orchestration-runtime-settlement.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-settlement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate runtime and lease evidence with isolated fixtures
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          python3 scripts/test_runtime_settlement.py -v
+          python3 scripts/test_provider_lease_runtime.py -v
+          python3 scripts/test_pm_runtime_reconcile.py -v
+          bash scripts/test-provider-lease.sh
+          bash scripts/test-spawn-worker-provider-lease.sh
+          bash scripts/test-settle-liveness.sh
+          bash scripts/test-settle-command.sh
+      - name: Check changed entrypoint syntax
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          bash -n scripts/pm-orchestrate.sh
+          python3 -m py_compile scripts/runtime_settlement.py scripts/runtime-reconcile.py scripts/provider-lease.py
