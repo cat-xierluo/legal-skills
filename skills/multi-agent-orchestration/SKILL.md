@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.21.2"
+  version: "2.23.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -149,6 +149,8 @@ Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才�
 **验证负载纪律（verification lane）**：约束验证类别，不约束 worker 数量。worker 自验默认 scoped（单 spec / 定向用例 / `--bail 1`）；全量套件单一在飞、跨项目互斥——确需 worker 现场跑全量时，先探测既有全量测试进程（如 `pgrep -fl 'vitest|pytest|jest|go test'`），无法确认独占就退避等待或改 scoped。探测是尽力而为的现场信号，不建跨项目锁文件，宁可少并发不可误并发；PM 收口时的全量复跑天然串行，是全量验证的默认归宿。验证输出一律重定向日志文件、只把有界尾部（如 `tail -50`）带回 terminal/session——长输出无界刷屏正是会话侧 node 运行时 OOM 的喂食管。PM 巡检发现系统负载飙升且多个 worker 同时在跑验证时，纠偏为错峰排队（等在飞验证收尾再放下一批），不砍 worker 数量。本纪律与单进程堆顶、物理内存 lane 互补：堆顶管单进程失血点，mem lane 管总量承诺，本纪律管验证执行的并发类别与输出体量（2026-09-05/06 事故中三者缺最后一环：并发全量自验同时制造了负载尖峰与超长输出）。
 
 ## 6. 验收、Git 交付与资源收口
+
+长周期 supervised 运行使用 `references/23-runtime-settlement.md` 的只读证据适配器核对 runtime 身份、逻辑终态、terminal、provider lease 与 Delivery。`pm-orchestrate.sh reconcile --snapshot ... --output ...` 只复算已捕获证据；退出码 0 不等于 `complete=true`。缺证和矛盾状态必须保留未结算，由有权限的 owner 执行所列恢复动作后重新观察。
 
 PM 依次完成：
 
