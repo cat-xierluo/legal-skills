@@ -1,0 +1,8 @@
+{
+  "schema_version": "multi-agent-orchestration.command-observation.v1",
+  "argv": ["/absolute/path/to/orca", "orchestration", "worker-show", "--dispatch", "dispatch-example-001", "--json"],
+  "exit_code": 0,
+  "observed_at": "2026-09-11T00:00:00+08:00",
+  "stdout": {"path": "worker.stdout.json", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "stderr": {"path": "worker.stderr.txt", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+}

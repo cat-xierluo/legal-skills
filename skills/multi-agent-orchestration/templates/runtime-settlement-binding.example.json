@@ -1,0 +1,33 @@
+{
+  "schema_version": "multi-agent-orchestration.runtime-binding.v1",
+  "binding_id": "binding-example-001",
+  "cli_argv0": "/absolute/path/to/orca",
+  "runtime": {
+    "observer_runtime_id": "runtime-current-001",
+    "worker_runtime_epoch": "worker-epoch-001",
+    "process_incarnation": "worktree-example@@process-example"
+  },
+  "run": {
+    "run_id": "run-example-001",
+    "consumer_generation": 1
+  },
+  "task_id": "task-example-001",
+  "dispatch_id": "dispatch-example-001",
+  "worktree_id": "worktree-example-001",
+  "terminal_handle": "terminal-example-001",
+  "session_id": "session-example-001",
+  "lease": {
+    "requirement": "REQUIRED",
+    "allocation_id": "allocation-example-001",
+    "provider": "provider-example",
+    "reason": "DECLARED_ALLOCATION",
+    "path": "/absolute/trusted/provider-leases/provider/allocation.json"
+  },
+  "delivery": {
+    "requirement": "REQUIRED",
+    "reason": "WORKER_DONE",
+    "delivery_id": null,
+    "message_ids": []
+  },
+  "correlation": null
+}

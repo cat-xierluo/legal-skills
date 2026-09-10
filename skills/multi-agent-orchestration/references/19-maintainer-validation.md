@@ -22,6 +22,9 @@
 find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 python3 -m py_compile scripts/provider_error_classifier.py scripts/orca_rate_limit_recovery.py scripts/test_orca_rate_limit_recovery.py
 python3 scripts/test_orca_rate_limit_recovery.py
+python3 scripts/test_runtime_settlement.py -v
+python3 scripts/test_provider_lease_runtime.py -v
+python3 scripts/test_pm_runtime_reconcile.py -v
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
 bash scripts/test-pm-quota-stall.sh
@@ -68,3 +71,5 @@ bash scripts/smoke-orca-control-plane.sh
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
 - 若 Skill Lint 或 Harness 规则命中已知通用误报，保留原始证据和约束说明，不通过命令变形规避扫描。
+
+- runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
