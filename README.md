@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-11 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.1 | **终稿版式与发布链加固**：逐表居中/跨页列位/语义重复表头、中文字形与出版物残码门禁；输入全消费、原子发布和 E2E 防假绿；消除附件分节、同方向书册节及尾部空段落造成的空白页，113/113 静态与三轮 21/21 家族真实渲染通过。 |
 | 2026-09-11 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.23.0 | 运行时与资源结算：从冻结身份和原始命令证据复算逻辑终态、terminal、provider lease、整批 Delivery 与 ack；缺证保持未结算，重复执行幂等。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
@@ -41,7 +42,6 @@
 | 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
 | 2026-09-06 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.20.0–2.22.0 | **Worker 权限放大与内存治理**：安全类改分段校验，本分支 push/PR 成为默认交付路径（复合只读管道放行，force/主干/删除仍拒）；新增物理内存预算门与派发排队（额度不足泊车）、node 堆顶注入与 OOM 退避、scoped 自验默认与全量单一在飞的验证负载纪律。 |
 | 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.19.0 | **zcode 额度 lane 生产方**：新增 `quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实 5h 窗口观测合并进 quota summary（只更新 zcode lane、不替其他生产方续期，不接触凭证）；全数据源失败 fail-closed 不写文件，spawn 行为待第二期接线。 |
-| 2026-09-05 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.2  | **分支生命周期与清理分层**：以独立 reference 统一一次性/长期分支、单 Worker 自动清理、批量 stale 审计与功能线关闭；主文档保留最短判定入口，删除授权不放宽。 |
 </details>
 
 ## 📋 项目概述

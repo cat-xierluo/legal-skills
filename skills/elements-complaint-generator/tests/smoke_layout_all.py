@@ -14,7 +14,9 @@ sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
 from fill_template import (  # noqa: E402
     DocParts,
+    apply_publication_mark_cleanup,
     apply_rules,
+    apply_semantic_table_headers,
     fix_footers_and_pagination,
     load_text_parts,
     merge_sections_and_normalize,
@@ -50,6 +52,13 @@ def main() -> int:
                 layout_stats = merge_sections_and_normalize(parts)
                 save_text_parts(work, parts)
                 policy = load_policy(policy_path, source.name)
+                # 与 fill_template 主流水线一致：出版物页码清理先于门禁。
+                apply_publication_mark_cleanup(work, policy)
+                semantic_stats = apply_semantic_table_headers(work, policy)
+                if semantic_stats["errors"]:
+                    raise RuntimeError(
+                        f"表级表头合同失败: {semantic_stats['errors'][:3]}"
+                    )
                 footers_fixed = fix_footers_and_pagination(
                     work, page_mode=policy.get("page_numbers", "required")
                 )

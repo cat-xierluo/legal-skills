@@ -8,15 +8,90 @@
     "require_fixed_table_layout": true,
     "require_row_cant_split": true,
     "forbid_blank_pages": true,
+    "require_visible_glyphs": true,
+    "require_column_geometry_consistency": true,
+    "require_cell_alignment": true,
+    "require_repeated_table_header": true,
+    "require_cell_alignment_declaration": false,
+    "require_repeated_table_header_declaration": false,
     "center_tolerance_twips": 40,
     "render_center_tolerance_points": 2.5,
     "render_page_number_center_tolerance_points": 18.0,
-    "render_a4_tolerance_points": 2.0
+    "render_a4_tolerance_points": 2.0,
+    "column_alignment_tolerance_points": 1.5,
+    "render_cell_cross_tolerance_points": 1.0,
+    "render_column_min_segment_points": 6.0,
+    "render_table_bottom_zone_points": 90.0,
+    "render_continuation_top_points": 160.0,
+    "render_continuation_band_top_tolerance_points": 24.0,
+    "min_glyph_survival_ratio": 0.995,
+    "font_compatibility": {
+      "enabled": true,
+      "reason": "官方模板使用方正书宋_GBK 等商业字体；在缺少这些精确字体名的 LibreOffice/fontconfig 环境中会被模糊错配到无中文字形的拉丁字体（实测 Verdana，且裸名「黑体」「楷体」在本机 fontconfig 同样错配 Verdana），中文渲染为空白。候选链按交付环境常用字体排序（正文 SimSun，标题 STZhongsong，黑体 Microsoft YaHei，楷体 Kaiti SC），随后依次回退到本地化名、macOS 系统字体（Songti SC/Heiti SC 等）与 Source Han/Noto；生成时对每个候选用 fc-match 验证，选取首个 lang 覆盖中文的名字，把 rFonts 四槽（eastAsia/ascii/hAnsi/cs）中等于被映射原字体的属性全部改写为该替代名（仅动字体名，字号/加粗/其余属性不动，保留标题/正文/落款层级差异），并同步写入 fontTable altName。候选全部无法解析出中文覆盖字体时按 fail-closed 阻断生成。渲染验证由 layout_gate 的渲染器选址优先使用正式版 LibreOffice（headless 开发构建不暴露系统中文字体，不能作为中文视觉 oracle）。",
+      "cjk_replacements": {
+        "方正书宋_GBK": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正书宋简体": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "宋体-简": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正大标宋_GBK": ["STZhongsong", "SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正小标宋_GBK": ["STZhongsong", "SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正黑体_GBK": ["Microsoft YaHei", "微软雅黑", "SimHei", "Heiti SC", "PingFang SC", "Source Han Sans CN", "Noto Sans CJK SC"],
+        "方正楷体_GBK": ["Kaiti SC", "楷体-简", "STKaiti", "KaiTi", "楷体", "AR PL UKai CN"],
+        "汉仪楷体简": ["Kaiti SC", "楷体-简", "STKaiti", "KaiTi", "楷体", "AR PL UKai CN"]
+      }
+    }
   },
   "templates": {
     "22-侵害著作权及邻接权纠纷-民事起诉状": {
       "page_numbers": "forbidden",
       "reason": "2026-08-28 法院实际发放基准件不带页码；禁止由全局规则自行添加。"
+    },
+    "24-侵害发明专利权纠纷-民事起诉状": {
+      "semantic_table_headers": {
+        "enabled": true,
+        "reason": "关联民事案件信息表横跨多页，表头由三行构成（表题行/专利信息行/栏目标题行）；Word 仅在自首行起连续各行都声明 tblHeader 时才在续页重复整块表头。生成时按合同为该表首部连续 3 行补写 w:tblHeader，定位失败（找不到/重复命中/锚点不在首行/行数不足）一律 fail-closed 阻断生成。",
+        "contracts": [
+          {
+            "anchor": "关联民事案件信息表",
+            "header_rows": 3
+          }
+        ]
+      },
+      "publication_mark_cleanup": {
+        "enabled": true,
+        "reason": "法院发放的基准件残留出版物页码，与页脚 PAGE 域构成双页码：398 为透明背景竖排图片（word/media/image1.png，经 document.xml.rels rId14 以 a:blip 引用，宿主 run 挂在“附件 3”标题段落），399 为旋转 90 度的 VML 文本框（宿主 run 在注释段落开头）。生成时按本策略精确清理；普通正文数字与非页码文本框不受影响。",
+        "forbidden_text_marks": ["399"],
+        "forbidden_images": [
+          {
+            "target": "media/image1.png",
+            "sha256": "0c3992d07eca39860e655c286f26412a48bb43d67150a8e393416c5d0a85d10d",
+            "note": "透明背景竖排页码 398"
+          }
+        ]
+      }
+    },
+    "25-侵害外观设计专利权纠纷-民事起诉状": {
+      "semantic_table_headers": {
+        "enabled": true,
+        "reason": "关联民事案件信息表横跨多页，表头由三行构成（表题行/专利信息行/栏目标题行）；Word 仅在自首行起连续各行都声明 tblHeader 时才在续页重复整块表头。生成时按合同为该表首部连续 3 行补写 w:tblHeader，定位失败（找不到/重复命中/锚点不在首行/行数不足）一律 fail-closed 阻断生成。",
+        "contracts": [
+          {
+            "anchor": "关联民事案件信息表",
+            "header_rows": 3
+          }
+        ]
+      },
+      "publication_mark_cleanup": {
+        "enabled": true,
+        "reason": "法院发放的基准件残留出版物页码，与页脚 PAGE 域构成双页码：430 为透明背景竖排图片（word/media/image1.png，经 document.xml.rels rId14 以 a:blip 引用，宿主 run 挂在“附件 2”标题段落），431 为旋转 90 度的 VML 文本框（宿主 run 在注释段落开头，段落其余为正常注释文字）。生成时按本策略精确清理这三处；普通正文中的数字（案号/年份/金额/表格序号）与非页码文本框不受影响。",
+        "forbidden_text_marks": ["431"],
+        "forbidden_images": [
+          {
+            "target": "media/image1.png",
+            "sha256": "f0790f989049ae8a48db11731c6f0c817e14a038d5c06ec5bfcca6de48109c30",
+            "note": "透明背景竖排页码 430"
+          }
+        ]
+      }
     }
   }
 }
