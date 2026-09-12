@@ -364,7 +364,7 @@ generated_matchers_include_update() {
   local label="$1" matchers missing grep_rc=0
   matchers=$(grep -oE '"[A-Za-z|]+NotebookEdit[A-Za-z|]*"' "$SPAWN_WORKER") || grep_rc=$?
   if [ "$grep_rc" -gt 1 ]; then
-    note_fail "$label" "读取 spawn-worker.sh matcher 失败（grep rc=$grep_rc）"
+    note_fail "$label" "读取 spawn-worker.sh matcher 失败（grep rc=${grep_rc}）"
     return
   fi
   if [ -z "$matchers" ]; then
@@ -378,7 +378,7 @@ generated_matchers_include_update() {
   grep_rc=0
   missing=$(printf '%s\n' "$matchers" | grep -vF 'Update') || grep_rc=$?
   if [ "$grep_rc" -gt 1 ]; then
-    note_fail "$label" "检查 matcher 内容失败（grep rc=$grep_rc）"
+    note_fail "$label" "检查 matcher 内容失败（grep rc=${grep_rc}）"
     return
   fi
   if [ -z "$missing" ]; then
@@ -410,13 +410,21 @@ for injection_stage in extract filter sort missing-file; do
     }
     if [ "$injection_stage" = missing-file ]; then SPAWN_WORKER="$FIXTURE/missing-spawn.sh"; fi
     generated_matchers_include_update "injected grep failure ($injection_stage)"
+    printf 'NOTE_FAIL_COUNT=%s\n' "$failed"
     [ "$failed" -eq 0 ]
   ) > "$FIXTURE/injected-$injection_stage.out" 2>&1 || injection_rc=$?
-  if [ "$injection_rc" -eq 1 ]; then
+  case "$injection_stage" in
+    extract|missing-file) expected_diagnostic='读取 spawn-worker.sh matcher 失败（grep rc=2）' ;;
+    filter) expected_diagnostic='检查 matcher 内容失败（grep rc=2）' ;;
+    sort) expected_diagnostic='matcher 排序失败' ;;
+  esac
+  if [ "$injection_rc" -eq 1 ] &&
+     command grep -Fxq 'NOTE_FAIL_COUNT=1' "$FIXTURE/injected-$injection_stage.out" &&
+     command grep -Fxq "FAIL injected grep failure ($injection_stage): $expected_diagnostic" "$FIXTURE/injected-$injection_stage.out"; then
     passed=$((passed + 1))
     printf 'PASS matcher fault injection: %s preserves failure\n' "$injection_stage"
   else
-    note_fail "matcher fault injection ($injection_stage)" "grep failure was swallowed: exit=$injection_rc"
+    note_fail "matcher fault injection ($injection_stage)" "expected diagnostic/count missing or failure swallowed: exit=$injection_rc"
   fi
 done
 
