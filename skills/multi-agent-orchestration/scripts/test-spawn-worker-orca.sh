@@ -580,7 +580,7 @@ state="${E2E_ORCA_STATE:?}"
 log="${E2E_ORCA_LOG:?}"
 printf '%s\n' "$*" >> "$log"
 resp_worktree() {
-  jq -cn --arg id "repo-1::$1" --arg path "$1" '{result:{worktree:{id:$id,path:$path}}}'
+  jq -cn --arg id "repo-1::$1" --arg path "$1" '{ok:true,result:{worktree:{id:$id,path:$path}}}'
 }
 case "$1 $2" in
   "worktree current")
