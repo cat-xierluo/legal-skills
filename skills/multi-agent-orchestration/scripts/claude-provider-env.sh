@@ -52,6 +52,7 @@ The wrapper:
   - clears inherited Anthropic/Claude provider-routing env vars;
   - exports env entries from the given settings JSON, or resolves provider/model
     from a registry JSON;
+  - rejects settings env names reserved for wrapper control and NUL values;
   - fills both credential variables by default; explicit auth_token/api_key
     keeps only that credential variable (no provider-name/URL inference);
   - pins ANTHROPIC_MODEL to --model;
@@ -189,10 +190,25 @@ if [ -n "$SETTINGS" ]; then
     echo "ERROR: auth_token_clear_api_key settings must omit or empty ANTHROPIC_API_KEY before --settings reload" >&2
     exit 64
   fi
-  while IFS='=' read -r key value; do
+  # Only wrapper control names are reserved; normal subprocess env remains open.
+  # In particular PROVIDER_REGISTRY must not switch a validated settings launch
+  # into the registry branch below, and AUTH_TYPE must retain its CLI selection.
+  if jq -e '.env | to_entries | any(.[]; (.key | contains("\u0000")) or (.value | tostring | contains("\u0000")))' "$SETTINGS" >/dev/null; then
+    echo "ERROR: settings env cannot contain NUL characters" >&2
+    exit 64
+  fi
+  while IFS='=' read -r -d '' key value; do
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    case "$key" in
+      AUTH_TYPE|SETTINGS_AUTH_TYPE|SETTINGS|PROVIDER_REGISTRY|API_PROVIDER|MODEL|MODEL_ALIAS|RESOLVED_MODEL|SETTING_SOURCES|PRINT_ENV_SUMMARY|NO_MCP|SCRIPT_DIR_CPE)
+        echo "ERROR: settings env name is reserved for wrapper control: $key" >&2
+        exit 64
+        ;;
+    esac
     export "$key=$value"
-  done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' "$SETTINGS")
+  # NUL-separated records keep multi-line values intact instead of turning a
+  # line such as AUTH_TYPE=both inside a value into a second assignment.
+  done < <(jq -j '.env | to_entries[] | .key, "=", (.value | tostring), "\u0000"' "$SETTINGS")
 fi
 
 if [ -n "$PROVIDER_REGISTRY" ]; then

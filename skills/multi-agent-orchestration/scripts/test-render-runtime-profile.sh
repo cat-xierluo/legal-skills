@@ -270,5 +270,30 @@ assert_contains "$summary" auth_token=present "summary 如实标注存在的 tok
 assert_contains "$summary" api_key=unset "summary 如实标注 unset 的 key"
 assert_not_contains "$summary" fake-profile-token "summary 不输出凭证值"
 
+echo "=== 7. settings.env 不能覆盖 wrapper 控制状态 ==="
+CONTROL_SETTINGS="$TMP_ROOT/control.settings.json"
+for control_key in AUTH_TYPE SETTINGS_AUTH_TYPE PROVIDER_REGISTRY API_PROVIDER MODEL MODEL_ALIAS RESOLVED_MODEL SETTINGS SETTING_SOURCES PRINT_ENV_SUMMARY NO_MCP SCRIPT_DIR_CPE; do
+  jq --arg key "$control_key" '.env[$key]="both"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+  expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+  diagnostic=$(< "$TMP_ROOT/auth-error.out")
+  assert_contains "$diagnostic" "reserved for wrapper control: $control_key" "保留控制变量 $control_key 在执行前拒绝"
+done
+# This would previously change branches after the settings single-auth check.
+jq --arg registry "$AUTH_REGISTRY" '.env.PROVIDER_REGISTRY=$registry | .env.API_PROVIDER="minimax"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+# Multi-line custom values stay values, including assignment-looking text;
+# proxy and application env remain supported (no blanket env allowlist).
+jq '.env.CUSTOM_WORKER_NOTE="first\nAUTH_TYPE=both\nPROVIDER_REGISTRY=other.json" | .env.HTTPS_PROXY="http://proxy.example.invalid:8080"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+multiline_rc=0
+bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c '
+  [[ "$CUSTOM_WORKER_NOTE" == $'"'"'first\nAUTH_TYPE=both\nPROVIDER_REGISTRY=other.json'"'"' ]] &&
+  [[ "$HTTPS_PROXY" == http://proxy.example.invalid:8080 ]] &&
+  [[ "${ANTHROPIC_API_KEY+x}" != x ]] &&
+  [[ "$ANTHROPIC_AUTH_TOKEN" == fake-profile-token ]]
+' || multiline_rc=$?
+assert_eq "$multiline_rc" 0 "多行业务 env 与代理保留，显式单认证仍成立"
+jq '.env.CUSTOM_WORKER_NOTE="first\u0000AUTH_TYPE=both"' "$AUTH_SETTINGS" > "$CONTROL_SETTINGS"
+expect_auth_error bash "$WRAPPER" --settings "$CONTROL_SETTINGS" --model test --auth-type auth_token -- bash -c 'exit 91'
+
 printf 'SUMMARY: pass=%d fail=%d\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
