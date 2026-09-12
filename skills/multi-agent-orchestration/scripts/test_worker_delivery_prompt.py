@@ -24,24 +24,81 @@ args = sys.argv[1:]
 log = Path(os.environ["DELIVERY_ORCA_LOG"])
 with log.open("a") as stream:
     stream.write(json.dumps(args) + "\n")
+
+def refuse(message):
+    print("FAKE_ORCA_REFUSED: " + message + " " + repr(args), file=sys.stderr)
+    sys.exit(97)
+
+def flags(valued=(), switches=("--json",), required=()):
+    parsed = {}
+    tail = args[2:]
+    while tail:
+        key, *tail = tail
+        if key in parsed:
+            refuse("duplicate flag")
+        if key in switches:
+            parsed[key] = True
+        elif key in valued and tail:
+            parsed[key], *tail = tail
+        else:
+            refuse("unknown flag or missing value")
+    if any(key not in parsed for key in required):
+        refuse("missing required flag")
+    return parsed
+
+runtime = os.environ.get("DELIVERY_RUNTIME_ID", "runtime-delivery")
+meta_runtime = runtime
 if args == ["status", "--json"]:
-    result = {"runtime": {"reachable": True, "runtimeId": "runtime-delivery"}}
-elif args[:2] in (["orchestration", "run-create"], ["orchestration", "run-use"]):
+    result = {"runtime": {"reachable": True, "runtimeId": runtime}}
+elif args[:2] == ["terminal", "show"]:
+    parsed = flags(("--terminal",), required=("--terminal", "--json"))
+    if parsed["--terminal"] != "term-pm":
+        print(json.dumps({"ok": False, "error": {"code": "selector_not_found"}}))
+        sys.exit(1)
+    meta_runtime = os.environ.get("DELIVERY_TERMINAL_RUNTIME_ID", runtime)
+    result = {"terminal": {"handle": "term-pm", "connected": True, "writable": True,
+                           "orphaned": False, "exitCause": None}}
+elif args[:2] in (["orchestration", "run-create"], ["orchestration", "run-use"],
+                  ["orchestration", "run-current"]):
+    action_flag = {"run-create": "--objective", "run-use": "--id"}.get(args[1])
+    required = ("--from", "--json") + ((action_flag,) if action_flag else ())
+    parsed = flags(("--from",) + ((action_flag,) if action_flag else ()), required=required)
+    if parsed["--from"] != "term-pm" or (args[1] == "run-use" and parsed["--id"] != "run-delivery"):
+        refuse("wrong Run/sender")
+    meta_runtime = os.environ.get("DELIVERY_RUN_RUNTIME_ID", runtime)
     result = {"run": {"id": "run-delivery", "coordinator_handle": "term-pm"}}
 elif args[:2] == ["orchestration", "task-create"]:
+    required = ("--spec", "--task-title", "--run", "--from", "--json")
+    parsed = flags(required[:-1], required=required)
+    if parsed["--from"] != "term-pm" or parsed["--run"] != "run-delivery":
+        refuse("wrong task Run/sender")
     count = sum(json.loads(line)[:2] == ["orchestration", "task-create"]
                 for line in log.read_text().splitlines())
     result = {"task": {"id": "task-" + str(count)}}
 elif args[:2] == ["orchestration", "worker-start"]:
-    task = args[args.index("--task") + 1]
+    required = ("--task", "--terminal", "--worktree", "--run", "--from", "--timeout-ms", "--json")
+    parsed = flags(required[:-1], required=required)
+    if (parsed["--from"] != "term-pm" or parsed["--run"] != "run-delivery"
+            or parsed["--terminal"] != "term-worker"
+            or parsed["--worktree"] != "id:repo-fixture::worker"):
+        refuse("wrong worker identity")
+    task = parsed["--task"]
     result = {"dispatch": {"id": "ctx-" + task}}
+elif args[:2] == ["orchestration", "dispatch-show"]:
+    parsed = flags(("--task",), required=("--task", "--json"))
+    result = {"dispatch": {"id": "ctx-" + parsed["--task"]}}
 elif args[:2] in (["worktree", "current"], ["worktree", "show"]):
+    if args[1] == "current":
+        flags(required=("--json",))
+    else:
+        parsed = flags(("--worktree",), required=("--worktree", "--json"))
+        if parsed["--worktree"] != "id:repo-fixture::worker":
+            refuse("wrong worktree selector")
     print(json.dumps({"ok": False, "error": {"code": "selector_not_found"}}))
     sys.exit(1)
 else:
-    print("FAKE_ORCA_REFUSED: " + repr(args), file=sys.stderr)
-    sys.exit(97)
-print(json.dumps({"ok": True, "result": result}))
+    refuse("unsupported command")
+print(json.dumps({"ok": True, "result": result, "_meta": {"runtimeId": meta_runtime}}))
 '''
 
 
@@ -61,7 +118,9 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         self.env = os.environ.copy()
         for name in ("SCOPE_GUARD_SESSION_ROOT", "WORKER_INSTALL_AUTH_FILE",
                      "WORKER_INSTALL_AUTH_B64", "WORKER_GUARD_ATTESTATION_FILE",
-                     "WORKER_GUARD_SETTINGS_FILE", "WORKER_AUTHORITY_RECEIPT_FILE"):
+                     "WORKER_GUARD_SETTINGS_FILE", "WORKER_AUTHORITY_RECEIPT_FILE",
+                     "ORCA_TERMINAL_HANDLE", "DELIVERY_RUNTIME_ID",
+                     "DELIVERY_TERMINAL_RUNTIME_ID", "DELIVERY_RUN_RUNTIME_ID"):
             self.env.pop(name, None)
         self.env.update(
             ORCA_CLI_COMMAND=str(self.fake_orca), ORCA_CLI_BIN=str(self.fake_orca),
@@ -104,15 +163,15 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                      "Push, PR and history changes follow the PM task contract"):
             self.assertIn(rule, spec)
 
-    def wave(self, bodies):
+    def wave(self, bodies, *, sender="term-pm", expected=0):
         manifest = self.root / "wave.json"
         manifest.write_text(json.dumps({"objective": "delivery fixture", "tasks": [
             {"key": str(index), "title": "Worker " + str(index), "spec": body}
             for index, body in enumerate(bodies)
         ]}))
         output = self.run_command(["bash", str(SCRIPTS / "orca-wave-prepare.sh"),
-                                   "--manifest", str(manifest)])
-        return json.loads(output.stdout)
+                                   "--from", sender, "--manifest", str(manifest)], expected=expected)
+        return json.loads(output.stdout) if expected == 0 else output
 
     def register(self, *extra):
         return self.run_command([
@@ -128,6 +187,14 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         bodies = ["Implement owned.py only.\nVerify: python3 owned_test.py",
                   "Review-only: report findings; no branch changes. Literal $HOME stays literal."]
         receipt = self.wave(bodies)
+        self.assertEqual(receipt["run_id"], "run-delivery")
+        self.assertEqual(receipt["coordinator_handle"], "term-pm")
+        self.assertEqual(receipt["_meta"]["runtimeId"], "runtime-delivery")
+        self.assertEqual(self.calls(["orchestration", "run-create"]), [
+            ["orchestration", "run-create", "--objective", "delivery fixture", "--from", "term-pm", "--json"]])
+        self.assertTrue(self.calls(["orchestration", "run-current"]))
+        for call in self.calls(["orchestration", "run-current"]):
+            self.assertEqual(call, ["orchestration", "run-current", "--from", "term-pm", "--json"])
         self.assertEqual(len(receipt["tasks"]), 2)
         self.assertFalse((self.root / "worktree").exists())
         calls = self.calls(["orchestration", "task-create"])
@@ -154,12 +221,45 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         body = "Implement only owned.py; stop at verified commit."
         receipt = self.wave([body])
         before = self.calls(["orchestration", "task-create"])
+        bindings_before = self.calls(["orchestration", "run-create"]) + self.calls(["orchestration", "run-use"])
         self.register("--task-id", receipt["tasks"][0]["task_id"], "--task-spec", body)
         self.assertEqual(self.calls(["orchestration", "task-create"]), before)
+        self.assertEqual(self.calls(["orchestration", "run-create"]) + self.calls(["orchestration", "run-use"]),
+                         bindings_before)
         starts = self.calls(["orchestration", "worker-start"])
         self.assertEqual(len(starts), 1)
         self.assertEqual(starts[0][starts[0].index("--task") + 1], "task-1")
         self.assert_no_second_injector()
+
+    def test_wave_rejects_wrong_sender_or_runtime_before_task_injection(self):
+        cases = [
+            ("term-unrelated", {}, "terminal show failed", False),
+            ("term-pm", {"DELIVERY_TERMINAL_RUNTIME_ID": "runtime-other"},
+             "sender handle/runtime must match", False),
+            ("term-pm", {"DELIVERY_RUN_RUNTIME_ID": "runtime-other"},
+             "ORCA_COORDINATOR_RUN_MISMATCH", True),
+        ]
+        for sender, overrides, diagnostic, run_created in cases:
+            with self.subTest(sender=sender, overrides=overrides):
+                self.log.write_text("")
+                self.env.pop("DELIVERY_TERMINAL_RUNTIME_ID", None)
+                self.env.pop("DELIVERY_RUN_RUNTIME_ID", None)
+                self.env.update(overrides)
+                result = self.wave(["Must never be injected."], sender=sender, expected=3)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertEqual(bool(self.calls(["orchestration", "run-create"])), run_created)
+                self.assertEqual(self.calls(["orchestration", "task-create"]), [])
+                self.assertEqual(self.calls(["orchestration", "worker-start"]), [])
+                self.assert_no_second_injector()
+
+    def test_fake_refuses_unknown_or_unofficial_sender_arguments(self):
+        for args in (["terminal", "show", "--from", "term-pm", "--json"],
+                     ["orchestration", "run-current", "--from", "term-pm", "--unknown", "--json"]):
+            with self.subTest(args=args):
+                result = self.run_command([str(self.fake_orca), *args], expected=97)
+                self.assertIn("FAKE_ORCA_REFUSED:", result.stderr)
+        self.assertEqual(self.calls(["orchestration", "task-create"]), [])
+        self.assertEqual(self.calls(["orchestration", "worker-start"]), [])
 
     def test_exact_prefix_is_idempotent_when_reused_as_direct_spec(self):
         body = "Business text with quotes ' and \" and a second line.\nNo changes means no empty commit."
