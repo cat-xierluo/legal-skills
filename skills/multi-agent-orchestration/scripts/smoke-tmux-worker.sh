@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REAL_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TMP_ROOT=$(mktemp -d)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 SESSION="smoke-worker-$$"
@@ -14,11 +14,22 @@ CTX="$WT/.claude/agent-sessions/$SESSION"
 STATUS_FILE="$CTX/STATUS.json"
 
 cleanup() {
-  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  local rc=$?
+  trap - EXIT
+  # Only the private socket/session created by this test; never the user server.
+  if [ -n "${SMOKE_REAL_TMUX:-}" ]; then
+    "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION" 2>/dev/null || true
+  fi
   if [ -d "$REPO" ]; then
     git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || true
   fi
+  if [ -s "$TMP_ROOT/orca-unexpected.log" ]; then
+    echo "ASSERTION FAILED: unexpected fake Orca calls (all refused):" >&2
+    cat "$TMP_ROOT/orca-unexpected.log" >&2
+    rc=1
+  fi
   rm -rf "$TMP_ROOT"
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -52,6 +63,54 @@ command -v git >/dev/null 2>&1 || { echo "SKIP: git is required"; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
 
+# This is the historical tmux compatibility fixture, not the user's policy or
+# live Orca runtime. Keep real harness detection (including its read-only probe).
+FIXTURE_SKILL="$TMP_ROOT/fixture-skill"
+mkdir -p "$FIXTURE_SKILL/config" "$TMP_ROOT/isolated-bin"
+cp -R "$REAL_SCRIPT_DIR" "$FIXTURE_SKILL/scripts"
+cp "$REAL_SCRIPT_DIR/../config/claude-provider-settings.example.json" "$FIXTURE_SKILL/config/"
+jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]
+    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]' \
+  "$REAL_SCRIPT_DIR/../config/harness-backend-policy.json" > "$FIXTURE_SKILL/config/harness-backend-policy.json"
+SCRIPT_DIR="$FIXTURE_SKILL/scripts"
+export SMOKE_ORCA_LOG="$TMP_ROOT/orca-probes.log"
+export SMOKE_ORCA_UNEXPECTED="$TMP_ROOT/orca-unexpected.log"
+cat > "$TMP_ROOT/isolated-bin/orca" <<'FAKE_ORCA'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" -eq 3 ] && [ "$1" = worktree ] && [ "$2" = current ] && [ "$3" = --json ]; then
+  printf '%s\n' 'worktree current --json' >> "$SMOKE_ORCA_LOG"
+  printf '%s\n' '{"ok":false,"error":{"code":"selector_not_found"}}'
+  exit 1
+fi
+printf '%q ' "$@" >> "$SMOKE_ORCA_UNEXPECTED"
+printf '\n' >> "$SMOKE_ORCA_UNEXPECTED"
+echo 'SMOKE_ORCA_REFUSED: unexpected call; no live Orca forwarding' >&2
+exit 97
+FAKE_ORCA
+chmod +x "$TMP_ROOT/isolated-bin/orca"
+ln -s orca "$TMP_ROOT/isolated-bin/orca-dev"
+ln -s orca "$TMP_ROOT/isolated-bin/orca-ide"
+# Override both resolver inputs, including an inherited resolved CLI. No fallback
+# can reach the packaged app while this executable fixture is present.
+export ORCA_CLI_COMMAND="$TMP_ROOT/isolated-bin/orca"
+export ORCA_CLI_BIN="$ORCA_CLI_COMMAND"
+export SMOKE_REAL_TMUX="$(command -v tmux)"
+export SMOKE_TMUX_SOCKET="$TMP_ROOT/tmux.sock"
+cat > "$TMP_ROOT/isolated-bin/tmux" <<'FAKE_TMUX'
+#!/usr/bin/env bash
+exec "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null "$@"
+FAKE_TMUX
+chmod +x "$TMP_ROOT/isolated-bin/tmux"
+export PATH="$TMP_ROOT/isolated-bin:$PATH"
+# Prove the tripwire rejects mutations, using a separate diagnostic log.
+refusal_rc=0
+SMOKE_ORCA_UNEXPECTED="$TMP_ROOT/orca-tripwire-proof.log" \
+  "$ORCA_CLI_COMMAND" repo add --path "$REPO" > "$TMP_ROOT/tripwire.out" 2>&1 || refusal_rc=$?
+[ "$refusal_rc" -eq 97 ] && [ -s "$TMP_ROOT/orca-tripwire-proof.log" ] || {
+  echo "ASSERTION FAILED: fake Orca mutation tripwire did not reject and record" >&2; exit 1;
+}
+
 deps_out=$("$SCRIPT_DIR/check-dependencies.sh" --backend codex)
 assert_contains "$deps_out" "DEPENDENCY_CHECK_OK"
 
@@ -67,7 +126,7 @@ eval "$profile_shell"
 WORKER_COMMAND="$TMP_ROOT/codex"
 printf '%s\n' '#!/usr/bin/env bash' \
   "printf '%s\\n' 'worker-start' 'TOKEN=abc123' 'worker-end'" \
-  'sleep 60' > "$WORKER_COMMAND"
+  'exec sleep 60' > "$WORKER_COMMAND"
 chmod +x "$WORKER_COMMAND"
 
 claude_command=$("$SCRIPT_DIR/render-runtime-profile.sh" \
@@ -146,6 +205,7 @@ git -C "$REPO" commit -q -m "init"
 git -C "$REPO" branch -M main
 
 spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
+  --no-orca-mode \
   --project "$REPO" \
   --branch "$BRANCH" \
   --worktree "$WT" \
@@ -167,8 +227,7 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --verify-cmd "npm test -- --run")
 assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
-# v2.11.0：pm_harness 取决于 smoke 的真实调用方 ancestry（claude-code/codex 均可
-# 派 codex worker）；白名单契约锚定在 allowed 集合本身——v2.11 起刻意排除 zcode。
+# pm_harness still comes from real ancestry; only the policy is fixture-local.
 assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: "
 assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoderwork-cn chain="
 if ! jq -e '
@@ -289,4 +348,12 @@ assert_contains "$clean_out" "CLEAN_WORKTREE_MODE: dry-run"
 assert_contains "$clean_out" "CLEAN_WORKTREE_METADATA: base=main"
 assert_contains "$clean_out" "CLEAN_WORKTREE_DRY_RUN_DONE"
 
+[ ! -s "$SMOKE_ORCA_UNEXPECTED" ] || {
+  echo "ASSERTION FAILED: tmux path attempted unexpected Orca work" >&2; exit 1;
+}
+probe_count=0
+if [ -f "$SMOKE_ORCA_LOG" ]; then
+  probe_count=$(wc -l < "$SMOKE_ORCA_LOG" | tr -d ' ')
+fi
+printf 'SMOKE_ORCA_ISOLATION: fake_readonly_probes=%s live_calls=0 mutations=0 tripwire_exit=%s\n' "$probe_count" "$refusal_rc"
 echo "SMOKE_TMUX_WORKER_OK"

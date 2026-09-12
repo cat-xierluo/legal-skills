@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.23.7] - 2026-09-13
+
+### 改进
+
+- 实际 supervised Task spec 补齐最小实施、scoped 验证、授权文件提交与唯一 Session Context RESULT 规则；review-only/no-change 不造空提交，路径绑定缺失或冲突时停止猜测，不扩 Shell、安装或 PR 权限。
+- 各后端统一注入仅用于定位的 WORKER_SESSION_CONTEXT，并核对既有 guard 路径；合法 Codex prompt-only 降级且无 scope 的启动也能定位交付目录，不把路径注入冒充 guard 已启用。
+- 补任务辅助命令的既有精确授权流程与根级 .venv opt-in 复用指引，说明软链忽略陷阱、共享 exclude 和源环境保护。
+- 启动失败恢复以 request/Dispatch/资源归属回执为依据，撤下按空标题直接清终端的建议；区分原生与 external terminal 回收、未知结果恢复、信任弹窗授权和心跳/业务进度。
+
+### 验证
+
+- 新增真实 Task 构造/启动命令、Session Context 绑定、真实 guard hook 及 sender 契约正反例；tmux smoke 使用独立 socket 和无转发 Orca stub，验证兼容路径且不触真实 Orca 资源。代表性脚本证据不替代真实 provider 全生命周期证明。
+- 跨 Claude/Codex、实施者/reviewer、有无 scope 的真实生成命令执行交付路径检查，并验证冲突绑定继续拒绝，避免仅测试具备 hook 的后端产生假覆盖。
+
 ## [2.23.6] - 2026-09-13
 
 ### 修复

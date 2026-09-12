@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.23.6"
+  version: "2.23.7"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -119,6 +119,8 @@ bash scripts/spawn-worker.sh \
 ### 4.3 Worker Prompt 与 Session Context
 
 使用 `templates/worker-prompt.md`，至少写明：任务卡、范围、禁止项、验证命令、完成协议、branch lifecycle、integration target、资源 owner、安装授权和 Git identity。supervised 的 `worker-start` 是唯一任务注入器；长 prompt 可落到 `WORKER_PROMPT.md`，terminal 只发送短 Read 指令。
+
+实际 Task spec 的共同前缀补齐最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。`spawn-worker.sh` 在所有合法后端启动链路注入绝对 `WORKER_SESSION_CONTEXT`，不依赖安装/scope guard 是否启用；合法 `prompt_only_degraded` 且无 allow-paths 的 worker 也能定位。该值仅用于定位，不授予安装/Shell/scope 权限，不把降级冒充 hook 活跃。Worker 在自身进程中检查该值及所有非空旧 guard 绑定（`SCOPE_GUARD_SESSION_ROOT`、`WORKER_INSTALL_AUTH_FILE` 父目录）拼写一致且目录存在，全部检查成功后才采用路径；全缺失、任一相对/冲突/不可用时交 PM，不猜仓库根目录，不修改 authority。旧调用仍可由旧 guard 绑定定位。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
 
 ```text
 <worktree>/.claude/agent-sessions/<session>/
