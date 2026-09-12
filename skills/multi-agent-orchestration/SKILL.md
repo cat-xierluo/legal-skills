@@ -120,6 +120,8 @@ bash scripts/spawn-worker.sh \
 
 使用 `templates/worker-prompt.md`，至少写明：任务卡、范围、禁止项、验证命令、完成协议、branch lifecycle、integration target、资源 owner、安装授权和 Git identity。supervised 的 `worker-start` 是唯一任务注入器；长 prompt 可落到 `WORKER_PROMPT.md`，terminal 只发送短 Read 指令。
 
+实际 Task spec 的共同前缀补齐最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。Worker 在自身进程中读取已注入的 session 绑定，检查均成功后才采用路径；缺失、相对或冲突时交 PM，不猜仓库根目录。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
+
 ```text
 <worktree>/.claude/agent-sessions/<session>/
 ├── METADATA.json
