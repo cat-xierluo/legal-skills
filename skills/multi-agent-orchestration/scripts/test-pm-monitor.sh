@@ -100,7 +100,9 @@ build_stripped_path() {
         .|..|tmux) continue ;;
       esac
       [ -f "$entry" ] && [ -x "$entry" ] || continue
-      [ -e "$dest/$name" ] || ln -s "$entry" "$dest/$name" 2>/dev/null || true
+      if [ ! -e "$dest/$name" ]; then
+        ln -s "$entry" "$dest/$name"
+      fi
     done
   done
   IFS=$oldIFS
@@ -128,7 +130,7 @@ SESSION="worker-a"
 # ===== 运行辅助 =====
 run_once() {
   # $1=FAKE_TMUX_MODE $2=输出文件 $3=PATH（可选，默认 fake-bin + 原 PATH）
-  local mode="$1" outfile="$2" path="${3:-$FAKE_BIN:$PATH}"
+  local mode="$1" outfile="$2" path="${3:-$FAKE_BIN:$PATH}" monitor_rc
   set +e
   (
     cd "$TMP_ROOT" || exit 99
@@ -141,7 +143,11 @@ run_once() {
       --base-ref main \
       --once
   ) >"$outfile" 2>&1
+  monitor_rc=$?
   set -e
+  if [ "$monitor_rc" -ne 0 ]; then
+    bad "pm-monitor --once 意外退出 $monitor_rc"
+  fi
 }
 
 run_loop() {
@@ -171,18 +177,27 @@ run_loop() {
   set -e
 }
 
-count_lines() { # $1=needle $2=file → 打印次数（grep -c 无匹配时 exit 1）
-  grep -cF "$1" "$2" 2>/dev/null || true
+count_lines() { # 只有 grep exit 1 表示无匹配，读错必须保留非零退出。
+  local count grep_rc=0
+  count=$(grep -cF "$1" "$2") || grep_rc=$?
+  case "$grep_rc" in
+    0) printf '%s\n' "$count" ;;
+    1) printf '0\n' ;;
+    *) return "$grep_rc" ;;
+  esac
 }
 
 assert_count() { # $1=说明 $2=期望次数 $3=needle $4=file
   local label="$1" expected="$2" needle="$3" file="$4" actual
-  actual=$(count_lines "$needle" "$file")
+  if ! actual=$(count_lines "$needle" "$file"); then
+    bad "${label}（无法读取计数日志）"
+    return
+  fi
   if [ "$actual" = "$expected" ]; then
     ok "$label"
   else
     bad "${label}（期望 ${expected} 次，实际 ${actual} 次）"
-    grep -n "SESSION" "$file" 2>/dev/null | head -10 >&2 || true
+    awk '/SESSION/ {print NR ":" $0; shown += 1; if (shown == 10) exit}' "$file" >&2
   fi
 }
 
@@ -191,9 +206,32 @@ assert_run_completed() { # $1=file
     ok "巡检完整跑完（PM_MONITOR_ONCE_COMPLETE）"
   else
     bad "巡检未完整跑完（缺 PM_MONITOR_ONCE_COMPLETE，控制面故障不得中断监控主循环）"
-    head -20 "$1" >&2 || true
+    if [ -f "$1" ]; then head -20 "$1" >&2; fi
   fi
 }
+
+injection_rc=0
+(
+  count=$(count_lines SESSION "$TMP_ROOT/missing.log")
+) > "$TMP_ROOT/injected-count.out" 2>&1 || injection_rc=$?
+if [ "$injection_rc" -eq 2 ]; then ok "缺失日志保留 grep 读错退出码"; else bad "缺失日志错误被吞掉"; fi
+injection_rc=0
+(
+  fail=0
+  assert_count "故障注入：缺失日志" 0 SESSION "$TMP_ROOT/missing.log"
+  [ "$fail" -eq 0 ]
+) > "$TMP_ROOT/injected-assert.out" 2>&1 || injection_rc=$?
+if [ "$injection_rc" -eq 1 ]; then ok "缺失日志不得通过零事件断言"; else bad "零事件断言吞掉读错"; fi
+injection_rc=0
+(
+  fail=0
+  # 真实运行 bash -c exit 23；不依赖 monitor 是否留下完成标记。
+  PM="$TMP_ROOT/failing-monitor.sh"
+  printf '%s\n' 'exit 23' > "$PM"
+  run_once live "$TMP_ROOT/injected-monitor.out"
+  [ "$fail" -eq 0 ]
+) > "$TMP_ROOT/injected-run.out" 2>&1 || injection_rc=$?
+if [ "$injection_rc" -eq 1 ]; then ok "monitor 非零退出使测试失败"; else bad "monitor 失败被吞掉"; fi
 
 echo "Case 1: session 存活（fake tmux exit 0）→ 不得报 SESSION_GONE/UNKNOWN"
 OUT1="$TMP_ROOT/case1.out"
