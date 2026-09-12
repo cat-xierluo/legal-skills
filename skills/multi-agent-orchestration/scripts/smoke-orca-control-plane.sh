@@ -41,6 +41,8 @@ cat > "$FAKE_ORCA" <<'FAKE'
 set -euo pipefail
 printf '%s\n' "$*" >> "$ORCA_FAKE_LOG"
 case "$1 $2" in
+  "status --json") printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-smoke"}}}' ;;
+  "terminal show") jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:true,writable:true,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-smoke"}}' ;;
   "worktree show")
     if [ "${ORCA_FAKE_WORKTREE_MODE:-ok}" = "malformed" ]; then
       printf '%s\n' '{"ok":true,"result":{"worktree":{"id":null}}}'
@@ -49,7 +51,10 @@ case "$1 $2" in
     fi
     ;;
   "orchestration run-create") printf '%s\n' '{"ok":true,"result":{"run":{"id":"run_test","coordinator_handle":"term_pm"}}}' ;;
-  "orchestration run-use") printf '%s\n' '{"ok":true,"result":{"run":{"id":"run_test","coordinator_handle":"term_pm"}}}' ;;
+  "orchestration run-use"|"orchestration run-current") printf '%s\n' '{"ok":true,"result":{"run":{"id":"run_test","coordinator_handle":"term_pm"}},"_meta":{"runtimeId":"runtime-smoke"}}' ;;
+  "orchestration worker-release"|"orchestration worker-retain")
+    [[ " $* " != *' --from '* ]] || exit 64
+    printf '%s\n' '{"ok":true,"result":{}}' ;;
   "orchestration task-create") printf '%s\n' '{"ok":true,"result":{"task":{"id":"task_test"}}}' ;;
   "orchestration worker-start") printf '%s\n' '{"ok":true,"result":{"dispatch":{"id":"ctx_test"}}}' ;;
   "orchestration worker-read") printf '%s\n' '{"ok":true,"result":{"source":"transcript","cursor":"cursor_2","rows":[]}}' ;;
@@ -111,7 +116,7 @@ ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" read --worktree "$WT" --session "$SESSION" --lines 12 --cursor cursor_1 >/dev/null
 ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" show --worktree "$WT" --session "$SESSION" >/dev/null
-assert_log_contains 'orchestration send --to dispatch:ctx_test --type status --subject PM guidance --body 只修测试 --json'
+assert_log_contains 'orchestration send --to dispatch:ctx_test --type status --subject PM guidance --body 只修测试 --from term_pm --json'
 assert_log_contains 'orchestration worker-read --dispatch ctx_test --limit 12 --cursor cursor_1 --json'
 assert_log_contains 'orchestration worker-show --dispatch ctx_test --json'
 assert_log_not_contains 'terminal send'
@@ -120,8 +125,9 @@ echo "=== PM wait/account/ack: Delivery is not auto-acked ==="
 : > "$FAKE_LOG"
 ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" wait --worktree "$WT" --session "$SESSION" --timeout 3 >/dev/null
-assert_log_contains 'orchestration run-use --id run_test --json'
-assert_log_contains 'orchestration check --wait --types worker_done,escalation,question --timeout-ms 3000 --json'
+assert_log_contains 'orchestration run-use --id run_test --from term_pm --json'
+assert_log_contains 'orchestration run-current --from term_pm --json'
+assert_log_contains 'orchestration check --wait --types worker_done,escalation,question --timeout-ms 3000 --terminal term_pm --json'
 assert_log_not_contains '--ack'
 ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" release --worktree "$WT" --session "$SESSION" >/dev/null
@@ -131,7 +137,7 @@ ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   bash "$SCRIPT_DIR/pm-orchestrate.sh" ack --worktree "$WT" --session "$SESSION" --delivery-id delivery_test >/dev/null
 assert_log_contains 'orchestration worker-release --dispatch ctx_test --json'
 assert_log_contains 'orchestration worker-retain --dispatch ctx_test --json'
-assert_log_contains 'orchestration check --ack delivery_test --json'
+assert_log_contains 'orchestration check --ack delivery_test --terminal term_pm --json'
 
 echo "=== terminal-managed read: cursor is preserved for alternate-screen TUIs ==="
 cat > "$CTX/METADATA.json" <<'JSON'

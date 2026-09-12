@@ -20,7 +20,7 @@ class PMRuntimeReconcileTest(unittest.TestCase):
         fake = self.root / "orca-fake"
         fake.write_text('#!/bin/sh\ntouch "$(dirname "$0")/unexpected-rpc"\nexit 97\n')
         fake.chmod(0o700)
-        self.env = dict(os.environ, ORCA_CLI_COMMAND=str(fake))
+        self.env = dict(os.environ, ORCA_CLI_COMMAND=str(fake), ORCA_TERMINAL_HANDLE="term-unrelated")
         binding = json.loads((SCRIPTS.parent / "templates/runtime-settlement-binding.example.json").read_text())
         raw = json.dumps(binding).encode()
         (self.root / "binding.json").write_bytes(raw)
@@ -42,7 +42,7 @@ class PMRuntimeReconcileTest(unittest.TestCase):
         return result
 
     def test_unsettled_is_valid_evidence_but_not_completion_and_is_idempotent(self):
-        args = ["reconcile", "--snapshot", str(self.root / "snapshot.json"), "--output", str(self.root / "receipt.json")]
+        args = ["reconcile", "--snapshot", str(self.root / "snapshot.json"), "--output", str(self.root / "receipt.json"), "--from", "term-closed"]
         first = self.call(*args)
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
         result = json.loads(first.stdout)

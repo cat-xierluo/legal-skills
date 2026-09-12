@@ -124,7 +124,8 @@ Options:
                    `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
                    SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
   --no-orca-mode    显式 opt-out ORCA 终端模式：强制走原 tmux + git worktree路径，
-                   不调任何 orca CLI。auto-detect 默认以 `orca worktree current --json`
+                   不走 Orca 控制或资源创建；宿主身份检查可能进行只读 Orca 探测。
+                   auto-detect 默认以 `orca worktree current --json`
                    确认 PROJECT_DIR 是当前 Orca worktree，不依赖 TERM_PROGRAM / ORCA_WORKTREE_ID。
                    命中后用 `orca worktree create` + `orca terminal create --command`，保留 provider env /
                    runtime profile / wrapper / 超长 prompt 投递等所有现有能力；ORCA UI 直接反映

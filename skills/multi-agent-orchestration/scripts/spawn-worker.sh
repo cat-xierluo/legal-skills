@@ -51,6 +51,8 @@ ensure_claude_in_path
 # 是否被宿主传入。CLI 选择顺序与版本匹配的 orca-cli skill 保持一致。
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=orca-coordinator.sh
+source "$SCRIPT_DIR/orca-coordinator.sh"
 # shellcheck source=harness-backend-policy.sh
 source "$SCRIPT_DIR/harness-backend-policy.sh"
 # shellcheck source=provider-lease-root.sh
@@ -141,6 +143,8 @@ ORCA_WORKTREE_ID="${ORCA_WORKTREE_ID:-}"  # 兼容旧调用方；命中 auto 后
 ORCA_WORKTREE_PATH=""    # 仅 auto 时填（git rev-parse --show-toplevel）
 ORCA_PROJECT_TOPLEVEL="" # `orca worktree current` 已验证的 PROJECT_DIR git top
 ORCA_EXPECTED_REPO_ID="" # 从 current worktree id 冻结，create 后必须一致
+# Preserve only the caller's injected selector before this variable becomes the worker handle.
+ORCA_CALLER_TERMINAL_HANDLE="${ORCA_TERMINAL_HANDLE:-}"
 ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
 ORCA_APP_VERSION=""      # 来自 orca status --json
 ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
@@ -509,6 +513,33 @@ mem_budget_gate_run() {
   exit 4
 }
 mem_budget_gate_run
+
+# Prove the PM sender and Run before acquiring a lease or creating worker resources.
+# Existing Wave receipts stay read-only; single-worker callers may still create one Run.
+if [ "$ORCA_MODE" = auto ] && { [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "$ORCA_TASK_ID" ]; }; then
+  spawn_sender="$ORCA_COORDINATOR_HANDLE"
+  if [ -z "$spawn_sender" ] && [ -z "$ORCA_RUN_ID" ]; then
+    spawn_sender="$ORCA_CALLER_TERMINAL_HANDLE"
+  fi
+  orca_coordinator_select "$spawn_sender" "" 0 || exit $?
+  if [ "$DRY_RUN" -eq 1 ]; then
+    orca_coordinator_probe "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    if [ -n "$ORCA_RUN_ID" ]; then
+      orca_coordinator_current "$ORCA_RUN_ID" || exit $?
+    fi
+    echo "ORCA_RUN: sender verified; prepare Run before worker resources (dry-run, no binding)"
+  elif [ -n "$ORCA_RUN_ID" ]; then
+    orca_coordinator_prepare verify "$ORCA_RUN_ID" "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    if [ -z "$ORCA_EXPECTED_RUNTIME_ID" ]; then
+      echo "SPAWN_COORDINATOR_RUNTIME_REVERIFIED: current binding verified; historical continuity NOT_VERIFIED" >&2
+    fi
+  else
+    orca_coordinator_prepare create "" "$ORCA_EXPECTED_RUNTIME_ID" "$TASK_SPEC" || exit $?
+    ORCA_RUN_ID="$ORCA_PM_RUN_ID"
+  fi
+  ORCA_COORDINATOR_HANDLE="$ORCA_PM_SENDER"
+  ORCA_EXPECTED_RUNTIME_ID="$ORCA_PM_RUNTIME_ID"
+fi
 
 # shellcheck source=spawn-worker-provider-lease.sh
 source "$SCRIPT_DIR/spawn-worker-provider-lease.sh"

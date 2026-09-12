@@ -586,7 +586,12 @@ case "$1 $2" in
   "worktree current")
     resp_worktree "$E2E_ORCA_PROJECT" ;;
   "status --json")
-    printf '%s\n' '{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-pregate","appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+  "terminal show")
+    sender="$4"
+    live=true
+    [ "$sender" != term-closed ] || live=false
+    jq -cn --arg sender "$sender" --argjson live "$live" '{ok:true,result:{terminal:{handle:$sender,connected:$live,writable:$live,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-pregate"}}' ;;
   "worktree create")
     name=""
     while [ "$#" -gt 0 ]; do
@@ -615,7 +620,11 @@ case "$1 $2" in
   "terminal wait")
     printf '%s\n' '{"result":{"ok":true}}' ;;
   "orchestration run-create")
-    printf '%s\n' '{"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}},"_meta":{"runtimeId":"runtime-pregate"}}' ;;
+  "orchestration run-current")
+    run=run-pregate
+    [ ! -f "$state/run-current-mismatch" ] || run=run-other
+    jq -cn --arg run "$run" '{ok:true,result:{run:{id:$run,coordinator_handle:"term-pm-pregate"}},_meta:{runtimeId:"runtime-pregate"}}' ;;
   "orchestration task-create")
     printf '%s\n' '{"result":{"task":{"id":"task-pregate"}}}' ;;
   "orchestration worker-start")
@@ -643,6 +652,8 @@ run_e2e_spawn() {
   local branch="$1" session="$2" out_base="$3"
   shift 3
   ORCA_CLI_COMMAND="$E2E_ORCA_BIN" \
+  ORCA_TERMINAL_HANDLE="${E2E_PM_HANDLE-term-pm-pregate}" \
+  SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
   E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
   E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
   MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
@@ -735,10 +746,10 @@ else
   bad "origin-only collision still performed the real Orca worktree create"
 fi
 if grep -Fq 'terminal create' "$E2E_ORCA_LOG" || grep -Fq 'worker-start' "$E2E_ORCA_LOG" \
-  || grep -Fq 'task-create' "$E2E_ORCA_LOG" || grep -Fq 'run-create' "$E2E_ORCA_LOG"; then
-  bad "origin-only collision must not create a terminal, run, task or worker-start"
+  || grep -Fq 'task-create' "$E2E_ORCA_LOG"; then
+  bad "origin-only collision must not create a terminal, task or worker-start"
 else
-  ok "origin-only collision must not create a terminal, run, task or worker-start"
+  ok "origin-only collision preserves prepared Run without starting a worker"
 fi
 if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-late-collide" ]; then
   ok "origin-only collision leaves no Session Context on disk"
@@ -778,7 +789,7 @@ if grep -Fq 'terminal create' "$E2E_ORCA_LOG" \
 else
   bad "matching-branch spawn still creates the terminal and injects the task"
 fi
-if jq -e '.session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
+if jq -e '.session.orca.runtime_id == "runtime-pregate" and .session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
   "$E2E_WS/e2e-pregate-ok/.claude/agent-sessions/e2e-pregate-ok/METADATA.json" >/dev/null 2>&1; then
   ok "matching-branch spawn records the supervised dispatch contract in metadata"
 else
@@ -900,6 +911,49 @@ if grep -Fq 'EXISTING_WORKTREE_REQUIRES_RECOVERY' "$E2E_ROOT/fresh-explicit.err"
   bad "fresh explicit-path spawn must not report the existing-worktree code"
 else
   ok "fresh explicit-path spawn must not report the existing-worktree code"
+fi
+
+# Sender failures must precede lease/worktree/session/terminal/Task side effects.
+for sender_case in missing closed run-mismatch runtime-mismatch; do
+  : > "$E2E_ORCA_LOG"
+  extra_sender_args=()
+  E2E_PM_HANDLE=term-pm-pregate
+  case "$sender_case" in
+    missing) E2E_PM_HANDLE="" ;;
+    closed) E2E_PM_HANDLE=term-closed ;;
+    run-mismatch) touch "$E2E_STATE/run-current-mismatch" ;;
+    runtime-mismatch) extra_sender_args=(--orca-coordinator-handle term-pm-pregate --orca-runtime-id other-runtime) ;;
+  esac
+  sender_rc=0
+  run_e2e_spawn "sender-$sender_case" "sender-$sender_case" "$E2E_ROOT/sender-$sender_case" "${extra_sender_args[@]}" || sender_rc=$?
+  assert_eq "$sender_rc" 3 "sender $sender_case is rejected before resources"
+  if grep -Eq 'worktree create|terminal create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || grep -Eq 'SPAWN_WORKER_PROVIDER_LEASE|SPAWN_WORKER_METADATA:' "$E2E_ROOT/sender-$sender_case.out" \
+    || [ -e "$E2E_WS/sender-$sender_case" ]; then
+    bad "sender $sender_case leaves zero worker resources"
+  else
+    ok "sender $sender_case leaves zero worker resources"
+  fi
+  rm -f "$E2E_STATE/run-current-mismatch"
+done
+unset E2E_PM_HANDLE
+
+# A prebuilt Wave is verified read-only, preserving the one Run/Task preparation barrier.
+: > "$E2E_ORCA_LOG"
+wave_rc=0
+run_e2e_spawn sender-prebuilt sender-prebuilt "$E2E_ROOT/sender-prebuilt" \
+  --orca-run-id run-pregate --orca-task-id task-pregate \
+  --orca-coordinator-handle term-pm-pregate --orca-runtime-id runtime-pregate || wave_rc=$?
+assert_eq "$wave_rc" 0 "prebuilt Wave still starts its existing Task"
+if grep -Eq 'run-create|run-use|task-create' "$E2E_ORCA_LOG"; then
+  bad "prebuilt Wave must not recreate or rebind Run/Task"
+else
+  ok "prebuilt Wave has zero Run/Task mutations"
+fi
+if grep -Fq 'run-current --from term-pm-pregate' "$E2E_ORCA_LOG"; then
+  ok "prebuilt Wave verifies its precise coordinator binding"
+else
+  bad "prebuilt Wave verifies its precise coordinator binding"
 fi
 
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
