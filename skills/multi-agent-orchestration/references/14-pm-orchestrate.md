@@ -43,7 +43,7 @@ ORCAREG_METADATA_BIND=ok
 
 ```bash
 # 每个 Wave 一次；输出 .result.run.id
-pm-orchestrate.sh run-create --objective "Wave objective"
+pm-orchestrate.sh run-create --objective "Wave objective" --from "$PM_TERMINAL"
 
 # 三种模式通用
 pm-orchestrate.sh send --worktree "$WT" --session "$S" --text "..."
@@ -63,7 +63,13 @@ pm-orchestrate.sh reauthorize --worktree "$WT" --session "$S" \
   --allow-cmd "make test" --resume-text "断点续接说明" [--task-id ID]
 ```
 
-supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断读到的是精确 transcript 还是 terminal fallback。除只读 `read/show` 外，supervised 命令先对当前 PM terminal 执行 `run-use --id`，刷新 METADATA 的 coordinator handle；`wait/ack` 随后消费当前绑定 Run，不传陈旧 `--run`。
+supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断精确 transcript 与 terminal fallback。
+
+非 Orca PM 可对控制命令传 `--from <本轮PM终端>`；显式参数优先，缺省使用当前 Session Context 已记录的 coordinator。已有绑定不被环境覆盖；仅没有既有 session 绑定的新 Run 才兼容宿主 `ORCA_TERMINAL_HANDLE`，且仍需全部验证。禁止以 `terminal current`/UI 焦点自动挑选 sender。
+
+控制命令先验证终端精确 handle、connected/writable、非 orphaned/无 exitCause 与 runtime；以 `run-use --id ... --from ...` 绑定后再 `run-current --from ...` 读回精确 Run/coordinator 并复查。metadata 保存 `.session.orca.runtime_id`；旧记录缺字段时只可正向重验当前绑定后回填，历史连续性仍 `NOT_VERIFIED`，非空 runtime 漂移不可被 --from 绕过。`read/peek/show/reconcile/pr-audit` 保持只读，零 rebind/metadata 写入。
+
+官方 argv 各不相同：send/reply/Run 命令带 `--from`；wait/ack 的 check 带 `--terminal`，不传陈旧 --run；worker-list 显式 `--run`。release/retain 仅接受 `--dispatch`，不注入不存在的 --from，但仍做相同 sender/Run 前置核验。CLI 合同变化时先读当前 --help，不用宽松 fake 接受未知参数。
 
 Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首次从 `0` 读取并保存响应里的 `nextCursor`；后续按 cursor 增量读取，避免默认 tail 只剩 spinner。`wait` 的 `tui-idle` 只表示当前可交互/空闲，不是业务终态。
 
