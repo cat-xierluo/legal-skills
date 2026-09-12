@@ -399,17 +399,55 @@ with open(E2E_PERSONAL_CONFIG, "w", encoding="utf-8") as stream:
 with open(E2E_ORCA_BIN, "w", encoding="utf-8") as stream:
     stream.write("""#!/usr/bin/env bash
 # fake Orca CLI：测试状态文件驱动；每次调用原文追加进日志（源自 test-spawn-worker-orca.sh）。
+set -euo pipefail
 state="${E2E_ORCA_STATE:?}"
 log="${E2E_ORCA_LOG:?}"
 printf '%s\\n' "$*" >> "$log"
+reject_argv() { echo "FAKE_ORCA_UNSUPPORTED_ARGV: $*" >&2; echo REJECTED_ARGV >> "$log"; exit 64; }
+validate_flags() {
+  local allowed="$1"; shift
+  local flag from="" run=""
+  while [ "$#" -gt 0 ]; do
+    flag="$1"; shift
+    case " $allowed " in *" $flag "*) ;; *) reject_argv "$flag" ;; esac
+    case "$flag" in --json|--no-parent) ;; *)
+      [ "$#" -gt 0 ] || reject_argv "$flag needs a value"
+      case "$flag" in --from) from="$1" ;; --run) run="$1" ;; esac
+      shift ;;
+    esac
+  done
+  case " $allowed " in *" --from "*) [ "$from" = term-pm-membudget ] || reject_argv "wrong --from" ;; esac
+  case " $allowed " in *" --run "*) [ "$run" = run-membudget ] || reject_argv "wrong --run" ;; esac
+}
+case "$1 $2" in
+  "status --json") [ "$#" -eq 2 ] || reject_argv "$*" ;;
+  "worktree current") [ "$*" = 'worktree current --json' ] || reject_argv "$*" ;;
+  "worktree ps") [ "$*" = 'worktree ps --limit 100 --json' ] || reject_argv "$*" ;;
+  "terminal show") [ "$*" = 'terminal show --terminal term-pm-membudget --json' ] || reject_argv "$*" ;;
+  "orchestration run-current") [ "$*" = 'orchestration run-current --from term-pm-membudget --json' ] || reject_argv "$*" ;;
+  "worktree create") validate_flags '--name --no-parent --base-branch --setup --json' "${@:3}" ;;
+  "worktree show") validate_flags '--worktree --json' "${@:3}" ;;
+  "terminal create") validate_flags '--worktree --title --command --json' "${@:3}" ;;
+  "terminal wait") validate_flags '--terminal --for --timeout-ms --json' "${@:3}" ;;
+  "orchestration run-create") validate_flags '--objective --from --json' "${@:3}" ;;
+  "orchestration task-create") validate_flags '--spec --task-title --run --from --json' "${@:3}" ;;
+  "orchestration worker-start") validate_flags '--task --terminal --worktree --run --from --timeout-ms --json' "${@:3}" ;;
+  "orchestration dispatch-show") validate_flags '--task --json' "${@:3}" ;;
+  *) reject_argv "$*" ;;
+esac
 resp_worktree() {
-  jq -cn --arg id "repo-1::$1" --arg path "$1" '{result:{worktree:{id:$id,path:$path}}}'
+  jq -cn --arg id "repo-1::$1" --arg path "$1" '{ok:true,result:{worktree:{id:$id,path:$path}}}'
 }
 case "$1 $2" in
   "worktree current")
     resp_worktree "$E2E_ORCA_PROJECT" ;;
+  "worktree ps")
+    # 无 Orca agent 观察；宿主权限仍由下方 fake ps 的完整 codex 祖先链证明。
+    printf '%s\\n' '{"ok":true,"result":{"worktrees":[]}}' ;;
   "status --json")
-    printf '%s\\n' '{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-membudget","appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+  "terminal show")
+    printf '%s\\n' '{"ok":true,"_meta":{"runtimeId":"runtime-membudget"},"result":{"terminal":{"handle":"term-pm-membudget","connected":true,"writable":true,"orphaned":false,"exitCause":null}}}' ;;
   "worktree create")
     name=""
     while [ "$#" -gt 0 ]; do
@@ -432,18 +470,18 @@ case "$1 $2" in
     case "$wt" in *::*) wt="${wt#*::}" ;; esac
     resp_worktree "$wt" ;;
   "terminal create")
-    printf '%s\\n' '{"result":{"terminal":{"handle":"term-membudget"}}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"terminal":{"handle":"term-membudget"}}}' ;;
   "terminal wait")
-    printf '%s\\n' '{"result":{"ok":true}}' ;;
-  "orchestration run-create")
-    printf '%s\\n' '{"result":{"run":{"id":"run-membudget","coordinator_handle":"term-pm-membudget"}}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"ok":true}}' ;;
+  "orchestration run-create"|"orchestration run-current")
+    printf '%s\\n' '{"ok":true,"_meta":{"runtimeId":"runtime-membudget"},"result":{"run":{"id":"run-membudget","coordinator_handle":"term-pm-membudget"}}}' ;;
   "orchestration task-create")
-    printf '%s\\n' '{"result":{"task":{"id":"task-membudget"}}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"task":{"id":"task-membudget"}}}' ;;
   "orchestration worker-start")
-    printf '%s\\n' '{"result":{"worker":{"dispatch":{"id":"ctx-membudget"}}}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"worker":{"dispatch":{"id":"ctx-membudget"}}}}' ;;
   "orchestration dispatch-show")
-    printf '%s\\n' '{"result":{"dispatch":{"id":"ctx-membudget"}}}' ;;
-  *) exit 1 ;;
+    printf '%s\\n' '{"ok":true,"result":{"dispatch":{"id":"ctx-membudget"}}}' ;;
+  *) reject_argv "$*" ;;
 esac
 """)
 os.chmod(E2E_ORCA_BIN, 0o755)
@@ -472,6 +510,8 @@ def run_spawn(branch, fixture_dir, budget=None, timeout=300):
     )
     if budget is not None:
         env["SPAWN_WORKER_MEM_BUDGET_BYTES"] = budget
+    env.pop("ORCA_CLI_BIN", None)
+    env.pop("ORCA_TERMINAL_HANDLE", None)
     proc = subprocess.run(
         ["bash", SPAWN_WORKER,
          "--project", E2E_PROJECT, "--branch", branch, "--session", branch,
@@ -479,6 +519,7 @@ def run_spawn(branch, fixture_dir, budget=None, timeout=300):
          "--command", "codebuddy --permission-mode acceptEdits",
          "--no-trust-auto", "--no-permission-auto", "--no-permission-auto-bg",
          "--no-external-imports-auto", "--orca-supervised",
+         "--orca-coordinator-handle", "term-pm-membudget",
          "--task-spec", "mem budget gate e2e spec"],
         capture_output=True, text=True, env=env, timeout=timeout)
     return proc
@@ -516,6 +557,7 @@ check("low-memory rejection leaves no worktree under the workspace root",
       not os.path.exists(os.path.join(E2E_WS, "membudget-deny")))
 
 # E2E 用例 2：健康 fixture → 放行并输出 SPAWN_WORKER_MEM_BUDGET 账本行。
+open(E2E_ORCA_LOG, "w").close()
 proc = run_spawn("membudget-ok", healthy_fx)
 check("healthy fixture spawn passes the gate and exits 0",
       proc.returncode == 0, f"(rc={proc.returncode} stderr={proc.stderr[-800:]})")
@@ -528,13 +570,32 @@ if ledger:
           int(ledger.group(1)) == 16 * GIB - int(TOTAL_32G * 0.10)
           and int(ledger.group(2)) == BUDGET_DEFAULT and int(ledger.group(3)) >= 1,
           f"(ledger={ledger.group(0)})")
+calls = orca_log_text().splitlines()
+stages = [next((i for i, line in enumerate(calls) if line.startswith(prefix)), -1)
+          for prefix in ("orchestration run-create ", "orchestration run-current ",
+                         "worktree create ", "terminal create ", "orchestration worker-start ")]
+check("healthy spawn proves the Run before worker resources and reaches worker-start",
+      all(i >= 0 for i in stages) and stages == sorted(stages), f"(stages={stages})")
+check("healthy spawn never calls an unsupported fake argv", "REJECTED_ARGV" not in calls,
+      f"(argv={calls})")
 
 # E2E 用例 3：SPAWN_WORKER_MEM_BUDGET_BYTES=0 → 直通放行。
+open(E2E_ORCA_LOG, "w").close()
 proc = run_spawn("membudget-off", lowmem_fx, budget="0")
 check("budget=0 keeps a low-memory spawn flowing (explicit opt-out)",
       proc.returncode == 0
       and "SPAWN_WORKER_MEM_BUDGET: disabled" in proc.stdout,
       f"(rc={proc.returncode} stdout_tail={proc.stdout[-400:]})")
+check("opt-out reaches worker-start after sender verification",
+      "orchestration run-current --from term-pm-membudget --json" in orca_log_text()
+      and "orchestration worker-start " in orca_log_text()
+      and "REJECTED_ARGV" not in orca_log_text(), f"(argv={orca_log_text()})")
+invalid = subprocess.run(
+    [E2E_ORCA_BIN, "terminal", "show", "--from", "term-pm-membudget", "--json"],
+    capture_output=True, text=True,
+    env=probe_env(E2E_ORCA_STATE=E2E_STATE, E2E_ORCA_LOG=E2E_ORCA_LOG))
+check("fake rejects unofficial terminal show --from", invalid.returncode == 64
+      and "FAKE_ORCA_UNSUPPORTED_ARGV:" in invalid.stderr)
 
 # ---- 清理 ----
 shutil.rmtree(FIXTURES, ignore_errors=True)

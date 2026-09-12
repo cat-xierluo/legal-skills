@@ -9,6 +9,7 @@ PM="$SCRIPT_DIR/pm-orchestrate.sh"
 LEASE_PY="$SCRIPT_DIR/provider-lease.py"
 FIXDIR="$SCRIPT_DIR/tests/fixtures"
 TMP_ROOT=$(mktemp -d)
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 pass=0
@@ -33,23 +34,29 @@ cat > "$FAKE_ORCA" <<'FAKE'
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_ORCA_LOG"
 case "$*" in
-  "orchestration run-use"*)
-    echo '{"ok":true,"result":{"run":{"id":"run-test","coordinator_handle":"term-pm"}}}'
+  "status --json")
+    echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-test"}}}'
     ;;
-  "orchestration worker-show"*)
+  "terminal show --terminal term-pm --json")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"terminal":{"handle":"term-pm","connected":true,"writable":true,"orphaned":false,"exitCause":null}}}'
+    ;;
+  "orchestration run-use --id run-test --from term-pm --json"|"orchestration run-current --from term-pm --json")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"run":{"id":"run-test","coordinator_handle":"term-pm"}}}'
+    ;;
+  "orchestration worker-show --dispatch ctx-test --json")
     cat "$FAKE_SHOW_JSON"
     ;;
-  "orchestration worker-stop"*)
+  "orchestration worker-stop --dispatch ctx-test --json")
     if [ "${FAKE_STOP_FAIL:-0}" = "1" ]; then
       echo '{"ok":false,"error":"injected stop failure"}' >&2
       exit 1
     fi
     echo '{"ok":true,"result":{"status":"stopped"}}'
     ;;
-  "orchestration worker-abandon"*)
+  "orchestration worker-abandon --dispatch ctx-test --json")
     echo '{"ok":true,"result":{"status":"abandoned"}}'
     ;;
-  "terminal show"*)
+  "terminal show --terminal term-test --json")
     # provider-lease.py 的 orca_terminal liveness 检查：connected/writable 任一为真
     # 即视为资源仍活（额度必须保留）。
     if [ "${FAKE_TERMINAL_CONNECTED:-0}" = "1" ]; then
@@ -59,7 +66,8 @@ case "$*" in
     fi
     ;;
   *)
-    echo '{"ok":true,"result":{}}'
+    echo "FAKE_ORCA_UNSUPPORTED_ARGV: $*" >&2
+    exit 64
     ;;
 esac
 FAKE
@@ -92,7 +100,7 @@ new_case() {
     --arg worktree "$WT" \
     --arg session "$SESSION" \
     --arg lease_file "$LEASE_FILE" \
-    '{project:$project,worktree:$worktree,session:{id:$session,orca:{worktree_id:"repo-test::worker",terminal_handle:"term-test",supervised:{run_id:"run-test",coordinator_handle:"term-pm",task_id:"task-test",dispatch_id:"ctx-test"}}},runtime:{provider_lease:{file:$lease_file}}}' \
+    '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-test",worktree_id:"repo-test::worker",terminal_handle:"term-test",supervised:{run_id:"run-test",coordinator_handle:"term-pm",task_id:"task-test",dispatch_id:"ctx-test"}}},runtime:{provider_lease:{file:$lease_file}}}' \
     > "$WT/.claude/agent-sessions/$SESSION/METADATA.json"
   # 未提交工作 + checkpoint 文件：park 必须完整保留
   printf '%s\n' "wip for $name" > "$WT/uncommitted.txt"
@@ -133,6 +141,8 @@ echo "Case 2: active worker is refused before any lifecycle mutation (no double-
 new_case active-refused
 FAKE_SHOW_JSON_FILE="$FIXDIR/worker-show-active.json" run_park
 [ "$PARK_RC" -eq 2 ] && ok "active worker returns 2" || bad "active expected rc=2, got $PARK_RC"
+grep -qx 'orchestration worker-show --dispatch ctx-test --json' "$FAKE_ORCA_LOG" && ok "active reached worker-show" || bad "active rejected before liveness"
+grep -q '^REFUSED: observation.status=active is not a known-dead state' "$CASE_ROOT/output.log" && ok "active liveness diagnostic" || bad "active liveness diagnostic missing"
 if grep -q 'worker-stop' "$FAKE_ORCA_LOG"; then
   bad "active path reached worker-stop"
 else
@@ -156,6 +166,8 @@ echo "Case 4: lease-release fault injection aborts before the marker (quota stay
 new_case lease-fail
 FAKE_TERMINAL_CONNECTED=1 run_park
 [ "$PARK_RC" -eq 2 ] && ok "lease-release failure returns 2" || bad "lease failure expected rc=2, got $PARK_RC"
+grep -qx 'orchestration worker-stop --dispatch ctx-test --json' "$FAKE_ORCA_LOG" && ok "lease failure reached stop" || bad "lease failure rejected before stop"
+grep -qx 'terminal show --terminal term-test --json' "$FAKE_ORCA_LOG" && ok "lease checks worker, not PM liveness" || bad "worker liveness probe missing"
 [ -e "$LEASE_FILE" ] && ok "provider lease retained on release failure" || bad "lease vanished on release failure"
 jq -e '.recovery.quota_park == null' "$WT/.claude/agent-sessions/$SESSION/METADATA.json" >/dev/null \
   && ok "no marker after lease failure (restart not authorized)" || bad "marker written after lease failure"
@@ -198,6 +210,12 @@ set -e
 [ "$HANDOFF_RC" -eq 0 ] && ok "new session acquires the released provider slot" || bad "new session acquire failed rc=$HANDOFF_RC: $HANDOFF_OUT"
 HANDOFF_LEASE=$(printf '%s' "$HANDOFF_OUT" | jq -r .lease_file)
 [ -f "$HANDOFF_LEASE" ] && ok "acquire created the new session lease file" || bad "acquire lease file missing: $HANDOFF_LEASE"
+
+echo "Case 9: fake rejects an unrecognized sender selector"
+fake_rc=0
+"$FAKE_ORCA" terminal show --terminal term-unrelated --json > "$TMP_ROOT/argv-error" 2>&1 || fake_rc=$?
+[ "$fake_rc" -eq 64 ] && ok "unknown selector rejected" || bad "fake accepted unknown sender"
+grep -q '^FAKE_ORCA_UNSUPPORTED_ARGV:' "$TMP_ROOT/argv-error" && ok "fake rejection is explicit" || bad "fake rejection missing"
 
 echo ""
 echo "Result: $pass pass, $fail fail"

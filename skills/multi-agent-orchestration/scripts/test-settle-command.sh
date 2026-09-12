@@ -6,6 +6,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PM="$SCRIPT_DIR/pm-orchestrate.sh"
 FIXDIR="$SCRIPT_DIR/tests/fixtures"
 TMP_ROOT=$(mktemp -d)
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 pass=0
@@ -30,27 +31,34 @@ cat > "$FAKE_ORCA" <<'FAKE'
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_ORCA_LOG"
 case "$*" in
-  "orchestration run-use"*)
-    echo '{"ok":true,"result":{"run":{"id":"run-test","coordinator_handle":"term-pm"}}}'
+  "status --json")
+    echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-test"}}}'
     ;;
-  "orchestration worker-show"*)
+  "terminal show --terminal term-pm --json")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"terminal":{"handle":"term-pm","connected":true,"writable":true,"orphaned":false,"exitCause":null}}}'
+    ;;
+  "orchestration run-use --id run-test --from term-pm --json"|"orchestration run-current --from term-pm --json")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"run":{"id":"run-test","coordinator_handle":"term-pm"}}}'
+    ;;
+  "orchestration worker-show --dispatch ctx-test --json")
     cat "$FAKE_SHOW_JSON"
     ;;
-  "orchestration worker-stop"*)
+  "orchestration worker-stop --dispatch ctx-test --json")
     if [ "${FAKE_STOP_FAIL:-0}" = "1" ]; then
       echo '{"ok":false,"error":"injected stop failure"}' >&2
       exit 1
     fi
     echo '{"ok":true,"result":{"status":"stopped"}}'
     ;;
-  "orchestration worker-abandon"*)
+  "orchestration worker-abandon --dispatch ctx-test --json")
     echo '{"ok":true,"result":{"status":"abandoned"}}'
     ;;
-  "worktree rm"*)
+  "worktree rm --worktree id:repo-test::worker --force --json")
     echo '{"ok":true,"result":{"removed":true}}'
     ;;
   *)
-    echo '{"ok":true,"result":{}}'
+    echo "FAKE_ORCA_UNSUPPORTED_ARGV: $*" >&2
+    exit 64
     ;;
 esac
 FAKE
@@ -77,7 +85,7 @@ new_case() {
     --arg project "$REPO" \
     --arg worktree "$WT" \
     --arg session "$SESSION" \
-    '{project:$project,worktree:$worktree,session:{id:$session,orca:{worktree_id:"repo-test::worker",terminal_handle:"term-test",supervised:{run_id:"run-test",coordinator_handle:"term-pm",task_id:"task-test",dispatch_id:"ctx-test"}}},runtime:{provider_lease:{file:""}}}' \
+    '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-test",worktree_id:"repo-test::worker",terminal_handle:"term-test",supervised:{run_id:"run-test",coordinator_handle:"term-pm",task_id:"task-test",dispatch_id:"ctx-test"}}},runtime:{provider_lease:{file:""}}}' \
     > "$WT/.claude/agent-sessions/$SESSION/METADATA.json"
   : > "$FAKE_ORCA_LOG"
 }
@@ -93,10 +101,18 @@ run_settle() {
   set -e
 }
 
+echo "Case 0: fake rejects unofficial/misdirected argv"
+fake_rc=0
+"$FAKE_ORCA" orchestration worker-stop --dispatch ctx-test --from term-pm --json > "$TMP_ROOT/argv-error" 2>&1 || fake_rc=$?
+[ "$fake_rc" -eq 64 ] && ok "extra --from is rejected" || bad "fake accepted unsupported --from"
+grep -q '^FAKE_ORCA_UNSUPPORTED_ARGV:' "$TMP_ROOT/argv-error" && ok "fake emits exact rejection" || bad "fake rejection missing"
+
 echo "Case 1: active worker is refused before lifecycle mutation"
 new_case active
 run_settle "$FIXDIR/worker-show-active.json" 0 "active must stay"
 [ "$SETTLE_RC" -eq 2 ] && ok "active returns 2" || bad "active expected rc=2, got $SETTLE_RC"
+grep -qx 'orchestration worker-show --dispatch ctx-test --json' "$FAKE_ORCA_LOG" && ok "active reached worker-show" || bad "active rejected before liveness"
+grep -q '^REFUSED: observation.status=active is not a known-dead state' "$CASE_ROOT/output.log" && ok "active liveness diagnostic" || bad "active liveness diagnostic missing"
 if grep -q 'worker-stop\|worker-abandon\|worktree rm' "$FAKE_ORCA_LOG"; then
   bad "active path reached mutation"
 else
@@ -110,6 +126,8 @@ jq '.result.observation.status="future_idle" | .result.worker.state="future_read
   "$FIXDIR/worker-show-exited.json" > "$UNKNOWN_JSON"
 run_settle "$UNKNOWN_JSON" 0 "unknown must stay"
 [ "$SETTLE_RC" -eq 2 ] && ok "unknown state returns 2" || bad "unknown expected rc=2, got $SETTLE_RC"
+grep -qx 'orchestration worker-show --dispatch ctx-test --json' "$FAKE_ORCA_LOG" && ok "unknown reached worker-show" || bad "unknown rejected before liveness"
+grep -q '^REFUSED: observation.status=future_idle is not a known-dead state' "$CASE_ROOT/output.log" && ok "unknown liveness diagnostic" || bad "unknown liveness diagnostic missing"
 
 echo "Case 3: worker-stop failure fences uncertainty but blocks destroy"
 new_case stop-failure
@@ -117,6 +135,8 @@ run_settle "$FIXDIR/worker-show-exited.json" 1 "stop failure retained" --destroy
 [ "$SETTLE_RC" -eq 2 ] && ok "stop failure returns 2" || bad "stop failure expected rc=2, got $SETTLE_RC"
 [ -d "$WT" ] && ok "worktree retained after stop failure" || bad "worktree was deleted after stop failure"
 grep -q 'orchestration worker-abandon' "$FAKE_ORCA_LOG" && ok "fallback abandon attempted" || bad "fallback abandon missing"
+grep -qx 'orchestration worker-stop --dispatch ctx-test --json' "$FAKE_ORCA_LOG" && ok "stop failure reached worker-stop" || bad "worker-stop missing"
+grep -q '^ERROR: worker-stop failed (rc=1)' "$CASE_ROOT/output.log" && ok "stop failure classified" || bad "stop failure diagnostic missing"
 if grep -q '^worktree rm' "$FAKE_ORCA_LOG"; then
   bad "destroy continued after stop failure"
 else
@@ -127,6 +147,7 @@ echo "Case 4: destroy removes only the exact worktree and preserves audit"
 new_case destroy
 run_settle "$FIXDIR/worker-show-exited.json" 0 "destroy integration" --destroy
 [ "$SETTLE_RC" -eq 0 ] && ok "destroy returns 0" || bad "destroy expected rc=0, got $SETTLE_RC"
+grep -qx 'worktree rm --worktree id:repo-test::worker --force --json' "$FAKE_ORCA_LOG" && ok "destroy targeted exact Orca worktree" || bad "exact Orca teardown missing"
 [ ! -e "$WT" ] && ok "target worktree removed" || bad "target worktree still exists"
 [ -d "$OTHER_WT" ] && ok "sibling worktree retained" || bad "sibling worktree was removed"
 if git -C "$REPO" worktree list --porcelain | awk -v target="$WT" '
