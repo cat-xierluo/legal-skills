@@ -119,6 +119,7 @@ PM create/bind Run
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
 - `spawn-worker.sh` 自动向 register 传 PM 冻结的 `--authority-receipt`；直接调用 `orca-supervised-register.sh` 时该参数现在必填，且须使用该次启动真实生成的 authority receipt，不可从可写 METADATA 临时换一个路径。缺失或非法时在 worker-start 前拒绝。
+- `recover-unconfigured-worker.sh` 从真实 Git common-dir 和已校验 session 推导该次既有 receipt，核对身份后才允许注入/重绑；缺失、软链、metadata 改址或身份错配时要求人工处理，不新建 receipt 冒充旧启动授权。
 - worker-start 后的 completion receipt 位于相同 `agent-authority` 目录，绑定 authority 路径与 SHA-256、task/dispatch/terminal/run/runtime、process incarnation 及 capability SHA-256，不保存 capability 明文。发送时以启动快照读取 receipt，并通过只读 dispatch-show 复核当前身份；元数据不能成为新权威，精确 Shell allowlist 也不能覆盖完成校验失败。这是 hook 权限边界，不是同一 OS 用户之间的安全沙箱，最终 mutation 仍由 Orca 验证。
 - preamble 中反斜杠续行的 worker_done 是合法命令形态，应原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后停止并报告协议阻塞，不换引号、编码、子进程或 wrapper/helper 重试；PM 按精确 Dispatch 检查，不根据 STATUS 强行结算。
 - Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
