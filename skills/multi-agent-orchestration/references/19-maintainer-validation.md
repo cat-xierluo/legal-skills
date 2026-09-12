@@ -38,7 +38,11 @@ bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
+bash scripts/test-completion-authority.sh
+python3 scripts/test_completion_authority.py
 bash scripts/test-pm-cleanup-worker.sh
+bash scripts/test-pm-run-bind.sh
+bash scripts/test-post-merge-cleanup.sh
 bash scripts/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
 bash scripts/test-worker-command-policy.sh

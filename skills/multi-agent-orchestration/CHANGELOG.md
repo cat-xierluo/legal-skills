@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.23.3] - 2026-09-13
+
+### 修复
+
+- Supervised 完成权限绑定启动时 PM authority 与 live Dispatch 身份，保留 capability 摘要而非明文；支持原生反斜杠续行，拒绝 metadata 换权威、陈旧 runtime/process/run 和精确 Shell allowlist 绕过。
+- 手动 register 必须传真实 `--authority-receipt`，spawn 自动传递；无有效 authority 时在 worker-start 前停止。完成校验失败后上报协议阻塞，不变形重试。
+- PM run-bind 对畸形 JSON 和缺失/错误身份 fail-closed；两条清理路径按精确 OID 原子删除远端分支，远端并发推进时保留较新提交并报告待清理。
+
+### 验证
+
+- 增加完成权限生产/消费反例、绑定异常响应，以及真实临时 bare remote 的删除竞态用例；与既有 runtime 身份和资源结算保护一并回归。真实 provider supervised 完整生命周期仍为 `NOT_VERIFIED`，本地测试不代表已完成生产验收。
+
 ## [2.23.2] - 2026-09-12
 
 ### 修复

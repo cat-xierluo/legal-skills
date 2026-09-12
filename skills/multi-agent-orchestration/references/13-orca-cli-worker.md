@@ -118,12 +118,16 @@ PM create/bind Run
 硬边界：
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
+- `spawn-worker.sh` 自动向 register 传 PM 冻结的 `--authority-receipt`；直接调用 `orca-supervised-register.sh` 时该参数现在必填，且须使用该次启动真实生成的 authority receipt，不可从可写 METADATA 临时换一个路径。缺失或非法时在 worker-start 前拒绝。
+- worker-start 后的 completion receipt 位于相同 `agent-authority` 目录，绑定 authority 路径与 SHA-256、task/dispatch/terminal/run/runtime、process incarnation 及 capability SHA-256，不保存 capability 明文。发送时以启动快照读取 receipt，并通过只读 dispatch-show 复核当前身份；元数据不能成为新权威，精确 Shell allowlist 也不能覆盖完成校验失败。这是 hook 权限边界，不是同一 OS 用户之间的安全沙箱，最终 mutation 仍由 Orca 验证。
+- preamble 中反斜杠续行的 worker_done 是合法命令形态，应原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后停止并报告协议阻塞，不换引号、编码、子进程或 wrapper/helper 重试；PM 按精确 Dispatch 检查，不根据 STATUS 强行结算。
 - Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
 - `STATUS.json=done` 只唤醒 PM，不结算 Task/Dispatch。
 - Sentinel 不得因 STATUS、timeout、idle、heartbeat、question 或 escalation 执行 `worker-stop` / `worker-release` / `terminal close`。
 - PM 只对 accepted、settled 的 worker 执行 release；要保留排障就显式 retain；有立即后续任务可复用同一 terminal。
 - `check --wait` 返回一个 Delivery；处理全部消息再 ack，并继续等到全部预期 Dispatch settle。
 - PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
+- `pm-run-bind.sh` 将 handle probe/run-use 畸形响应视为失败（exit 1），run-current 不可验证或身份不匹配返回 exit 2；绑定未知时先检查原始响应，不盲目重试。远端分支清理绑定预期 OID 做原子比较删除，较新 tip 不会被删除；远端失败可能发生在本地资源已回收之后，须保留并处理 remote-pending 结果，不能声称整组资源均已保留或清空。
 
 ## 6. PM 实时感知
 
