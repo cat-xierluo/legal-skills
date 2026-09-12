@@ -11,6 +11,7 @@
 ### 验证
 
 - 增加 sender、关闭/漂移身份、早期零 Worker 资源、只读入口和实际 argv 回归；随行修正已有 metadata Git 权限事实与旧断言漂移，不改变生产权限。真实 backend 全生命周期与重启期间派发未由 fake CLI 测试证明。
+- 邻接 settle、handoff、重新授权、runtime 与内存测试迁移完整 sender 回执，验证实际抵达目标分支，避免在身份前门提前退出造成假阳性；真实 Orca smoke 以只读代理验证无/错 sender 的拒绝，不用虚构 Wave 身份冒充正例。
 
 ## [2.23.5] - 2026-09-13
 

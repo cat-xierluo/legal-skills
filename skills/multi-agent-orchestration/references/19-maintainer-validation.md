@@ -32,6 +32,7 @@ python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
+bash scripts/test-pm-reauthorize.sh
 bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
@@ -72,7 +73,7 @@ bash scripts/smoke-orca-control-plane.sh
 
 ## 3. 证据边界
 
-- `smoke-orca-worker.sh` 只验证真实 runtime 检测，不启动 Agent。
+- `smoke-orca-worker.sh` 通过严格只读代理验证真实 runtime 检测和无/错 sender 的前置拒绝，不启动 Agent 或创建 Run。正向单一任务注入与 Wave 复用由隔离套件验证，不使用虚构 handle 作为真实成功证据。
 - `smoke-orca-control-plane.sh` 使用 fake CLI 验证命令路由、cursor 与 external terminal accounting。
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
