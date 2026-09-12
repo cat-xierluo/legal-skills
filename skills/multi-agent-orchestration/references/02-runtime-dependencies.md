@@ -88,3 +88,21 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 不要合并多个权威来源；CLI 与合同并存会失败关闭。合同中的 `implementation` / `reusable_verification` 自动要求非空验证命令；其他要求自验的派发传 `--require-verification`，项目也可设置 `verification.required: true`。Python 自动发现只认根 `pyproject.toml` / `requirements.txt` / `setup.py` 与根 `tests/`，固定注入 unittest discover；嵌套项目必须在 `by_worker_type` 显式声明完整命令。
 
 命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
+
+### 任务辅助命令
+
+已有 `--allow-shell-command '<完整精确命令>'` 可在启动前声明生成图标、转换本任务输入等辅助命令。它与验证命令列表分开，不授予安装权限，不是目录信任或通配授权。PM 核对输入、输出、工作目录与文件范围后，连同验证合同派发；Worker 以不可变授权快照为准。
+
+运行中漏授权时，先说明命令的输入、输出、幂等性与范围，由 PM 选择限定代跑并记录证据，或经现有 `pm-orchestrate.sh reauthorize --allow-cmd '<精确命令>'` 正规重建。后者仍须满足 live Dispatch 等入口门禁，不能对已结算目标强行使用；不得热改 B64、镜像 JSON 或 authority receipt 绕过。未获授权则记录 BLOCKED，不反复变形命令。
+
+## 7. 根级 .venv 的显式复用
+
+内置 `--python-runtime-symlink` 仅服务 `.runtime/venv` 布局；根级 `.venv` 使用以下 opt-in 手工流程，不默认跨项目共享。
+
+1. PM 证明源 venv 与目标 worktree 属于本任务、源解释器可执行，且目标 `.venv` 不存在（包括 dangling symlink）。不得覆盖既有目标。
+2. 用已核实的绝对源路径创建目标 `.venv` 符号链接；路径始终引用。不复制凭据、不安装依赖、不升级共享 venv。共享源被其他任务更新会使验证失效，优先采用独立环境或固定依赖约定。
+3. `.gitignore` 的 `.venv/` 不保证忽略软链。在 `git rev-parse --git-common-dir` 对应的 `info/exclude` 保留原内容，缺少时仅追加精确根模式 `/.venv`；不得覆盖整个文件。linked worktree 共用 exclude，先告知 owner 这一影响。已跟踪路径不受新 exclude 影响，发现时停止并交 PM 判断。
+4. 执行 `git check-ignore -v .venv`、`git status --short --untracked-files=all`，并用链接解释器实际运行最小 import/目标测试。只授予 worker 所需 helper/test 的精确命令。提交前核对 staged paths 不含 `.venv`，不以 `git add -A` 代替授权文件清单。
+5. 回收只移除本次证明归属的软链，或随干净一次性 worktree 收口，绝不删除源 venv。来源不可靠、解释器损坏或缺依赖时记录 NOT_VERIFIED/BLOCKED，不自行安装。
+
+纯临时 Git + `venv --without-pip` 实操已证明目录忽略陷阱、链接解释器可运行和精确 exclude 防误收；这不保证所有第三方包均可跨路径复用。
