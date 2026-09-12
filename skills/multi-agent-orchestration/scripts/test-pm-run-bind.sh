@@ -12,6 +12,9 @@
 #   Case 6 (extra): ORCA_TERMINAL_HANDLE env 优先于 probe
 #   Case 7 (extra): run-use 退 0 但 payload ok:false → exit 1
 #   Case 8 (extra): run-use OK 但 run-current 不可达 → exit 2
+#   Case 9 (extra): terminal-current 返回非法 JSON → exit 1，不触达 run-use
+#   Case 10 (extra): run-use 返回非法 JSON → exit 1，不触达 run-current
+#   Case 11 (extra): run-current 返回非法 JSON → exit 2
 #
 # 工具缺失红先证：测试首行检查 pm-run-bind.sh 存在性；缺失时直接退 1。
 set -euo pipefail
@@ -42,7 +45,7 @@ assert_grep() {
   local haystack
   case "$source" in
     out) haystack="$OUT" ;;
-    log) haystack=$(cat "$FAKE_LOG" 2>/dev/null || true) ;;
+    log) if [ -f "$FAKE_LOG" ]; then haystack=$(<"$FAKE_LOG"); else haystack=""; fi ;;
     *)   bad "INTERNAL: assert_grep source=$source"; return ;;
   esac
   if printf '%s\n' "$haystack" | grep -qE -- "$pat"; then
@@ -50,7 +53,7 @@ assert_grep() {
   else
     bad "$desc (source=$source pattern=$pat)"
     echo "    --- FAKE LOG ($FAKE_LOG) ---" >&2
-    sed 's/^/    | /' "$FAKE_LOG" 2>/dev/null >&2 || true
+    if [ -f "$FAKE_LOG" ]; then sed 's/^/    | /' "$FAKE_LOG" >&2; fi
     echo "    --- OUT ---" >&2
     sed 's/^/    | /' <<<"$OUT" >&2
   fi
@@ -60,13 +63,13 @@ assert_not_grep() {
   local haystack
   case "$source" in
     out) haystack="$OUT" ;;
-    log) haystack=$(cat "$FAKE_LOG" 2>/dev/null || true) ;;
+    log) if [ -f "$FAKE_LOG" ]; then haystack=$(<"$FAKE_LOG"); else haystack=""; fi ;;
     *)   bad "INTERNAL: assert_not_grep source=$source"; return ;;
   esac
   if printf '%s\n' "$haystack" | grep -qE -- "$pat"; then
     bad "$desc (source=$source should NOT contain: $pat)"
     echo "    --- FAKE LOG ($FAKE_LOG) ---" >&2
-    sed 's/^/    | /' "$FAKE_LOG" 2>/dev/null >&2 || true
+    if [ -f "$FAKE_LOG" ]; then sed 's/^/    | /' "$FAKE_LOG" >&2; fi
   else
     ok "$desc"
   fi
@@ -99,6 +102,14 @@ case "$1 $2" in
       echo '{"ok":true,"result":{"terminal":{}}}'  # 无 handle
       exit 0
     fi
+    if [ -e "$S/terminal-current-malformed" ]; then
+      echo '{not-json'
+      exit 0
+    fi
+    if [ -e "$S/terminal-current-invalid-handle" ]; then
+      echo '{"ok":true,"result":{"terminal":{"handle":["term-pm"]}}}'
+      exit 0
+    fi
     handle=$(cat "$S/terminal-current-handle" 2>/dev/null) || handle="term-from-probe"
     printf '{"ok":true,"result":{"terminal":{"handle":"%s"}}}\n' "$handle"
     ;;
@@ -113,6 +124,15 @@ case "$1 $2" in
       echo '{"ok":false,"error":{"code":"RUN_LOCKED","message":"locked"}}'
       exit 0
     fi
+    if [ -e "$S/run-use-malformed" ]; then
+      echo '{not-json'
+      exit 0
+    fi
+    if [ -e "$S/run-use-stream" ]; then
+      echo '{"ok":false}'
+      echo '{"ok":true}'
+      exit 0
+    fi
     echo '{"ok":true,"result":{"run":{"id":"run-x","coordinator_handle":"term-pm"}}}'
     ;;
   # ---------- 校验：run-current ----------
@@ -120,6 +140,14 @@ case "$1 $2" in
     if [ -e "$S/run-current-unavailable" ]; then
       echo '{"ok":false,"error":{"code":"INTERNAL","message":"unavailable"}}' >&2
       exit 1
+    fi
+    if [ -e "$S/run-current-malformed" ]; then
+      echo '{not-json'
+      exit 0
+    fi
+    if [ -e "$S/run-current-invalid-fields" ]; then
+      echo '{"ok":true,"result":{"run":{"id":"run-x","coordinator_handle":17}}}'
+      exit 0
     fi
     if [ -e "$S/run-current-mismatch" ]; then
       echo '{"ok":true,"result":{"run":{"id":"run-stale","coordinator_handle":"term-old"}}}'
@@ -243,6 +271,52 @@ assert_grep    out "PM_RUN_BIND_USED"                         "run-use succeeded
 assert_grep    out "run-current verification call failed"     "verify-failure error line"
 assert_grep    out "binding status unknown"                   "hint flags binding as unknown"
 
+# ============================== Case 9 ==============================
+echo "Case 9: terminal-current malformed JSON → exit 1, no bind mutation"
+reset_state
+touch "$STATE/terminal-current-malformed"
+unset ORCA_TERMINAL_HANDLE
+run_bind run-x
+assert_rc 1 "malformed handle probe exits 1"
+assert_grep out "terminal-current returned malformed JSON" "malformed probe is explicit"
+assert_not_grep log "orchestration run-use " "malformed probe never reaches run-use"
+
+# ============================== Case 10 =============================
+echo "Case 10: run-use malformed JSON → exit 1, no verification"
+reset_state
+touch "$STATE/run-use-malformed"
+run_bind run-x --from term-pm
+assert_rc 1 "malformed run-use exits 1"
+assert_grep out "run-use returned malformed JSON" "malformed run-use is explicit"
+assert_not_grep log "orchestration run-current" "malformed run-use never reaches verification"
+
+# ============================== Case 11 =============================
+echo "Case 11: run-current malformed JSON → exit 2"
+reset_state
+touch "$STATE/run-current-malformed"
+run_bind run-x --from term-pm
+assert_rc 2 "malformed run-current exits 2"
+assert_grep out "run-current returned malformed JSON" "malformed verification is explicit"
+
 echo ""
+reset_state
+touch "$STATE/terminal-current-invalid-handle"
+unset ORCA_TERMINAL_HANDLE
+run_bind run-x
+assert_rc 1 "non-string probe handle fails closed"
+assert_not_grep log "orchestration run-use " "invalid handle causes no binding mutation"
+
+reset_state
+touch "$STATE/run-use-stream"
+run_bind run-x --from term-pm
+assert_rc 1 "multiple JSON responses cannot hide a failure"
+assert_not_grep log "orchestration run-current" "ambiguous response causes no blind continuation"
+
+reset_state
+touch "$STATE/run-current-invalid-fields"
+run_bind run-x --from term-pm
+assert_rc 2 "malformed run identity is a verification failure"
+assert_grep out "malformed identity fields" "identity field error includes recovery context"
+
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]
