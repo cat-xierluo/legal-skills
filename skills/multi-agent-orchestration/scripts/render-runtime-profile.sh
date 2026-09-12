@@ -21,6 +21,7 @@ APPROVAL="never"
 CUSTOM_COMMAND=""
 OUTPUT="shell"
 SETTING_SOURCES="project,local"
+SETTINGS_AUTH_TYPE=""
 NO_PROVIDER_ENV_ISOLATION=0
 NO_MCP=0
 WITH_MCP=0
@@ -56,6 +57,9 @@ Options:
   --model NAME             Model name
   --provider-slot SLOT     Provider concurrency slot label
   --settings PATH          Claude Code settings path
+  --auth-type TYPE         Settings wrapper authentication: both (default),
+                           auth_token, api_key, auth_token_clear_api_key.
+                           Registry auth_type cannot be overridden with this flag.
   --provider-registry PATH Claude Code provider/model registry path
   --setting-sources LIST   Claude Code setting sources for provider workers.
                            Default: project,local (excludes user settings)
@@ -138,6 +142,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --setting-sources)
       SETTING_SOURCES="$2"
+      shift 2
+      ;;
+    --auth-type)
+      SETTINGS_AUTH_TYPE="$2"
+      case "$SETTINGS_AUTH_TYPE" in both|auth_token|api_key|auth_token_clear_api_key) ;;
+        *) echo "ERROR: unsupported --auth-type" >&2; exit 64 ;;
+      esac
       shift 2
       ;;
     --no-provider-env-isolation)
@@ -300,6 +311,13 @@ if [ "$BACKEND" = "claude-code" ] && [ -n "$PROVIDER_REGISTRY" ]; then
   jq -e --arg provider "$API_PROVIDER" '.providers[$provider] and (.providers[$provider] | type == "object")' "$PROVIDER_REGISTRY" >/dev/null
 fi
 
+# Authentication has one authority: settings CLI choice or registry entry.
+if [ -n "$SETTINGS_AUTH_TYPE" ]; then
+  if [ "$BACKEND" != claude-code ] || [ -z "$SETTINGS" ] || [ -n "$PROVIDER_REGISTRY" ] || [ "$NO_PROVIDER_ENV_ISOLATION" -ne 0 ]; then
+    echo "ERROR: --auth-type requires isolated claude-code --settings; registry auth_type remains authoritative" >&2
+    exit 64
+  fi
+fi
 # --claude-bare 只作用于 claude-code provider env isolation 路径（历史上默认 --bare 的
 # 唯一位置）；错用即 fail-closed，避免渲染出意外 unhooked 的命令。
 if [ "$CLAUDE_BARE" -eq 1 ]; then
@@ -419,7 +437,9 @@ case "$BACKEND" in
           parts=(bash "$wrapper" --provider-registry "$PROVIDER_REGISTRY" --api-provider "$API_PROVIDER" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
           PROVIDER_ENV_ISOLATION="registry-env-wrapper(provider=$API_PROVIDER setting-sources=$SETTING_SOURCES)$BARE_MARKER"
         else
-          parts=(bash "$wrapper" --settings "$SETTINGS" --model "$MODEL" --setting-sources "$SETTING_SOURCES" -- "${claude_parts[@]}")
+          parts=(bash "$wrapper" --settings "$SETTINGS" --model "$MODEL" --setting-sources "$SETTING_SOURCES")
+          [ -z "$SETTINGS_AUTH_TYPE" ] || parts+=(--auth-type "$SETTINGS_AUTH_TYPE")
+          parts+=(-- "${claude_parts[@]}")
           PROVIDER_ENV_ISOLATION="settings-env-wrapper(setting-sources=$SETTING_SOURCES)$BARE_MARKER"
         fi
       else

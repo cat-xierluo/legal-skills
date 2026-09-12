@@ -71,6 +71,7 @@ cat > /tmp/wave.json <<'JSON'
 ]}
 JSON
 bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-receipt.json
+WAVE_RUNTIME_ID=$(jq -er '._meta.runtimeId' /tmp/wave-receipt.json)
 ```
 
 receipt 成功后才可并行启动；每个 supervised worker 传同一个 Run/coordinator 和自己的 Task：
@@ -85,6 +86,7 @@ bash scripts/spawn-worker.sh \
   --orca-supervised \
   --orca-run-id "$RUN_ID" \
   --orca-coordinator-handle "$COORDINATOR_HANDLE" \
+  --orca-runtime-id "$WAVE_RUNTIME_ID" \
   --orca-task-id "$TASK_A_ID"
 ```
 
@@ -93,6 +95,8 @@ bash scripts/spawn-worker.sh \
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
 Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave helper 必须把它作为 `--from` 传给全部 `task-create`；worker helper 必须复用同一 handle 传给 `worker-start`。缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
+
+receipt 同时冻结 `_meta.runtimeId`，新 Wave 按上例传入 `--orca-runtime-id`；手工 register 使用 `--runtime-id`。prepare 前后、spawn 早期、terminal 创建前及每次 worker-start 前检查可观察到的身份漂移。检测失败保留诊断，不盲目重建 Run/Task；制备中途失败可能已有部分记录，必须先核查。旧调用省略参数时仅保持兼容并输出 `SPAWN_COORDINATOR_RUNTIME_UNVERIFIED`。同 runtime 不等于 coordinator 活着，status 与实际启动之间仍有时间窗口，最终以 Orca consumer fencing 为准。确定性回归见 `scripts/test-orca-runtime-identity.sh`；真实重启期间派发未由该回归证明。
 
 若不传 `--orca-run-id`，helper 为单 worker 新建 Run，适合独立监督；多 worker Wave 不应各建一个 Run。
 

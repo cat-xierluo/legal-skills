@@ -29,7 +29,9 @@ Manifest schema:
 All tasks must be independent and have unique non-empty keys/specs. The command creates
 or binds one Run, creates every Task serially, then emits one JSON receipt. Only after this
 command succeeds may callers start workers in parallel with the receipt's run_id,
-coordinator_handle and task_id values.
+coordinator_handle and task_id values. Pass _meta.runtimeId as --orca-runtime-id
+to spawn-worker.sh (or --runtime-id to orca-supervised-register.sh). Runtime
+identity matching detects restarts; it does not establish coordinator liveness.
 USAGE
 }
 
@@ -78,6 +80,11 @@ if [ -n "$slash_specs" ]; then
 fi
 
 orca_runtime_init
+orca_runtime_current_runtime_id || {
+  echo "ERROR: cannot verify current runtime identity; no Wave mutations performed" >&2
+  exit 3
+}
+RUNTIME_ID_AT_PREPARE="$ORCA_RUNTIME_ID_NOW"
 OBJECTIVE=$(jq -r '.objective' "$MANIFEST")
 COORDINATOR_HANDLE=""
 
@@ -130,13 +137,20 @@ while IFS= read -r task_json; do
 done < <(jq -c '.tasks[]' "$MANIFEST")
 
 created_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+# Do not publish a usable receipt if the runtime changed during preparation.
+# Created Run/Task records may remain: inspect them instead of blind retries.
+orca_runtime_require_identity "$RUNTIME_ID_AT_PREPARE" || {
+  echo "ORCA_WAVE_PARTIAL: Run $RUN_ID and created Tasks require inspection; no receipt published" >&2
+  exit 3
+}
 RESULT=$(jq -s \
   --arg schema 'multi-agent-orchestration.wave-receipt.v1' \
   --arg created_at "$created_at" \
   --arg objective "$OBJECTIVE" \
   --arg run_id "$RUN_ID" \
   --arg coordinator_handle "$COORDINATOR_HANDLE" \
-  '{schema:$schema,created_at:$created_at,objective:$objective,run_id:$run_id,coordinator_handle:$coordinator_handle,tasks:.,launch_contract:"start workers only after this receipt exists; pass --orca-run-id, --orca-coordinator-handle and each --orca-task-id"}' \
+  --arg runtime_id "$RUNTIME_ID_AT_PREPARE" \
+  '{schema:$schema,created_at:$created_at,objective:$objective,run_id:$run_id,coordinator_handle:$coordinator_handle,tasks:.,_meta:{runtimeId:$runtime_id},launch_contract:"start workers only after this receipt exists; pass --orca-run-id, --orca-coordinator-handle, --orca-runtime-id from _meta.runtimeId and each --orca-task-id"}' \
   "$TASKS_TMP")
 
 if [ -n "$RECEIPT" ]; then
