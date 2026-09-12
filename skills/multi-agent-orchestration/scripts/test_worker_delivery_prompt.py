@@ -116,7 +116,7 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         for name in ("orca-dev", "orca-ide"):
             (self.bin / name).symlink_to("orca")
         self.env = os.environ.copy()
-        for name in ("SCOPE_GUARD_SESSION_ROOT", "WORKER_INSTALL_AUTH_FILE",
+        for name in ("WORKER_SESSION_CONTEXT", "SCOPE_GUARD_SESSION_ROOT", "WORKER_INSTALL_AUTH_FILE",
                      "WORKER_INSTALL_AUTH_B64", "WORKER_GUARD_ATTESTATION_FILE",
                      "WORKER_GUARD_SETTINGS_FILE", "WORKER_AUTHORITY_RECEIPT_FILE",
                      "ORCA_TERMINAL_HANDLE", "DELIVERY_RUNTIME_ID",
@@ -182,6 +182,7 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         ])
 
     def test_wave_precreation_preserves_body_without_expanding_pm_environment(self):
+        self.env["WORKER_SESSION_CONTEXT"] = "/pm-locator-must-not-leak"
         self.env["SCOPE_GUARD_SESSION_ROOT"] = "/pm-context-must-not-leak"
         self.env["WORKER_INSTALL_AUTH_FILE"] = "/pm-auth-must-not-leak/auth.json"
         bodies = ["Implement owned.py only.\nVerify: python3 owned_test.py",
@@ -202,6 +203,7 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         for call, body in zip(calls, bodies):
             spec = call[call.index("--spec") + 1]
             self.assert_delivery_spec(spec, body)
+            self.assertNotIn("/pm-locator-must-not-leak", spec)
             self.assertNotIn("/pm-context-must-not-leak", spec)
             self.assertNotIn("/pm-auth-must-not-leak", spec)
         self.assertEqual(self.calls(["orchestration", "worker-start"]), [])
@@ -293,7 +295,8 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
             "policy": "deny_by_default", "authorized_commands": [],
             "allowed_shell_commands": [], "authorization_source": "",
         }).encode()).decode()
-        env = {**self.env, "WORKER_INSTALL_AUTH_B64": snapshot, "WORKER_GUARD_BACKEND": "claude-code"}
+        env = {**self.env, "WORKER_INSTALL_AUTH_B64": snapshot, "WORKER_GUARD_BACKEND": "claude-code",
+               "WORKER_SESSION_CONTEXT": str(self.root / "location-only")}
         for tool in ("Bash", "Shell"):
             event = json.dumps({"tool_name": tool, "tool_input": {"command": snippet}})
             result = self.run_command(["bash", str(SCRIPTS / "dependency-install-guard-hook.sh")],
@@ -301,10 +304,11 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
             self.assertEqual(result.stdout, "", "hook denied the generated binding command")
         # A denied arbitrary Python resolver proves that empty output above is
         # genuine admission, not a dead/no-op hook that accepts every event.
-        denied = self.run_command(["bash", str(SCRIPTS / "dependency-install-guard-hook.sh")],
-                                  env=env, input_text=json.dumps({
-                                      "tool_name": "Bash", "tool_input": {"command": "python3 -c 'print(1)'"}}))
-        self.assertEqual(json.loads(denied.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
+        for command in ("python3 -c 'print(1)'", "pip install unapproved-package"):
+            denied = self.run_command(["bash", str(SCRIPTS / "dependency-install-guard-hook.sh")],
+                                      env=env, input_text=json.dumps({
+                                          "tool_name": "Bash", "tool_input": {"command": command}}))
+            self.assertEqual(json.loads(denied.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
 
     def test_delivered_binding_command_fails_closed_without_guessing_or_writing(self):
         snippet = self.binding_snippet()
@@ -317,8 +321,10 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         alias.symlink_to(context, target_is_directory=True)
         cases = [
             ({}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": "relative/context"}, "nonzero"),
             ({"SCOPE_GUARD_SESSION_ROOT": ".claude/agent-sessions/guessed"}, "nonzero"),
             ({"WORKER_INSTALL_AUTH_FILE": "relative/auth.json"}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": str(self.root / "missing")}, "nonzero"),
             ({"SCOPE_GUARD_SESSION_ROOT": str(self.root / "missing")}, "nonzero"),
             ({"SCOPE_GUARD_SESSION_ROOT": str(context),
               "WORKER_INSTALL_AUTH_FILE": str(self.root / "other" / "auth.json")}, "nonzero"),
@@ -326,6 +332,16 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
             ({"WORKER_INSTALL_AUTH_FILE": str(auth)}, 0),
             ({"SCOPE_GUARD_SESSION_ROOT": str(context), "WORKER_INSTALL_AUTH_FILE": str(auth)}, 0),
             ({"SCOPE_GUARD_SESSION_ROOT": str(alias), "WORKER_INSTALL_AUTH_FILE": str(auth)}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": str(context)}, 0),
+            ({"WORKER_SESSION_CONTEXT": str(context), "SCOPE_GUARD_SESSION_ROOT": str(context),
+              "WORKER_INSTALL_AUTH_FILE": str(auth)}, 0),
+            ({"WORKER_SESSION_CONTEXT": str(context),
+              "SCOPE_GUARD_SESSION_ROOT": str(self.root / "other")}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": str(context),
+              "WORKER_INSTALL_AUTH_FILE": str(self.root / "other" / "auth.json")}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": str(context), "WORKER_INSTALL_AUTH_FILE": "relative/auth.json"}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": "relative/context", "SCOPE_GUARD_SESSION_ROOT": str(context)}, "nonzero"),
+            ({"WORKER_SESSION_CONTEXT": str(alias), "SCOPE_GUARD_SESSION_ROOT": str(context)}, "nonzero"),
         ]
         before = sorted(str(path) for path in self.root.rglob("*"))
         for bindings, expected in cases:
@@ -343,7 +359,7 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "")
                 self.assertEqual(sorted(str(path) for path in self.root.rglob("*")), before)
 
-    def test_real_spawn_commands_bind_scope_and_install_paths_for_delivery(self):
+    def test_real_spawn_commands_bind_context_independently_of_guards(self):
         snippet = self.binding_snippet()
         # Explicit, hermetic process-identity fixture; the actual detector/policy
         # still execute. No real agent/provider or tmux process is started here.
@@ -352,9 +368,10 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                       "*ppid=*) echo 1 ;;\n*comm=*|*args=*) echo /fixture/codex ;;\n"
                       "*) exit 97 ;;\nesac\n")
         ps.chmod(0o755)
-        fake_claude = self.bin / "claude"
-        fake_claude.write_text("#!/usr/bin/env bash\nexit 97 # dry-run must never start provider\n")
-        fake_claude.chmod(0o755)
+        for name in ("claude", "codex"):
+            backend_command = self.bin / name
+            backend_command.write_text("#!/usr/bin/env bash\nexit 97 # dry-run must never start provider\n")
+            backend_command.chmod(0o755)
         repo = self.root / "fixture repo"
         repo.mkdir()
         self.run_command(["git", "init", "-q", str(repo)])
@@ -362,18 +379,25 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         self.run_command(["git", "-C", str(repo), "add", "owned.txt"])
         self.run_command(["git", "-C", str(repo), "commit", "-qm", "fixture base"])
         self.run_command(["git", "-C", str(repo), "branch", "-M", "main"])
-        for role, scoped in (("implementer", True), ("implementer", False), ("reviewer", False)):
-            with self.subTest(role=role, scoped=scoped):
-                session = f"delivery-{role}-{int(scoped)}"
+        cases = [(backend, role, scoped) for backend in ("claude-code", "codex")
+                 for role, scoped in (("implementer", True), ("implementer", False), ("reviewer", False))]
+        spawn_calls_before = len(self.calls())
+        for backend, role, scoped in cases:
+            with self.subTest(backend=backend, role=role, scoped=scoped):
+                session = f"delivery-{backend}-{role}-{int(scoped)}"
                 worktree = self.root / f"worker {session}"
+                backend_command = self.bin / ("claude" if backend == "claude-code" else "codex")
                 args = ["bash", str(SCRIPTS / "spawn-worker.sh"), "--dry-run", "--no-orca-mode",
                         "--project", str(repo), "--worktree", str(worktree), "--session", session,
                         "--branch", "codex/" + session, "--base-ref", "main", "--role", role,
-                        "--worker-backend", "claude-code", "--command", str(fake_claude),
+                        "--worker-backend", backend, "--command", str(backend_command),
                         "--no-trust-auto", "--no-permission-auto", "--no-external-imports-auto",
                         "--verify-cmd", "git diff --check"]
                 if scoped:
                     args += ["--allow-paths", "owned.txt"]
+                if backend == "codex":
+                    args += ["--allow-prompt-only-install-guard",
+                             "Explicit isolated delivery regression; no provider execution"]
                 result = self.run_command(args)
                 lines = [line for line in result.stdout.splitlines()
                          if line.startswith("SPAWN_WORKER_DRY_RUN_LAUNCH_SH:")]
@@ -381,11 +405,22 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                 fields = dict(item.split("=", 1) for item in shlex.split(lines[0])[1:])
                 command = shlex.split(fields["command"])
                 bindings = dict(item.split("=", 1) for item in command if item.startswith((
-                    "SCOPE_GUARD_SESSION_ROOT=", "WORKER_INSTALL_AUTH_FILE=")))
+                    "WORKER_SESSION_CONTEXT=", "SCOPE_GUARD_SESSION_ROOT=", "WORKER_INSTALL_AUTH_FILE=")))
                 context = worktree / ".claude" / "agent-sessions" / session
                 self.assertFalse(worktree.exists(), "dry-run must not create the future worktree")
-                self.assertEqual(bindings["WORKER_INSTALL_AUTH_FILE"],
-                                 str(context / "INSTALL_AUTHORIZATION.json"))
+                self.assertEqual(bindings["WORKER_SESSION_CONTEXT"], str(context))
+                if backend == "claude-code":
+                    self.assertEqual(bindings["WORKER_INSTALL_AUTH_FILE"],
+                                     str(context / "INSTALL_AUTHORIZATION.json"))
+                    self.assertIn("SPAWN_WORKER_INSTALL_GUARD: mode=hook", result.stdout)
+                else:
+                    self.assertNotIn("WORKER_INSTALL_AUTH_FILE", bindings)
+                    self.assertFalse(any(item.startswith(("WORKER_GUARD_", "WORKER_INSTALL_AUTH_B64=",
+                                                         "WORKER_AUTHORITY_RECEIPT_FILE=")) for item in command))
+                    self.assertIn("mode=prompt_only_degraded", result.stdout)
+                    self.assertIn("SPAWN_WORKER_INSTALL_GUARD_DEGRADED: backend=codex", result.stderr)
+                    self.assertNotIn("SPAWN_WORKER_INSTALL_GUARD: mode=hook", result.stdout)
+                    self.assertNotIn("SPAWN_WORKER_HOOK_SETTINGS:", result.stdout)
                 if scoped or role == "reviewer":
                     self.assertEqual(bindings["SCOPE_GUARD_SESSION_ROOT"], str(context))
                 else:
@@ -393,9 +428,24 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                 # Emulate only the already-created Session Context at worker time,
                 # then execute the actual snippet captured from the real Task call.
                 context.mkdir(parents=True)
-                (context / "INSTALL_AUTHORIZATION.json").write_text("{}")
-                resolved = self.run_command(["bash", "-c", snippet], env={**self.env, **bindings})
+                auth = context / "INSTALL_AUTHORIZATION.json"
+                auth.write_text("{}")
+                before = sorted(str(path) for path in self.root.rglob("*"))
+                # Retain the complete generated env wrapper, replacing only the
+                # inert backend executable with the actual read-only prefix.
+                self.assertEqual(command[-1], str(backend_command))
+                resolved = self.run_command(command[:-1] + ["bash", "-c", snippet])
                 self.assertEqual(resolved.stdout.splitlines(), [str(context), str(context) + "/."])
+                # The new locator must never mask a stale/foreign guard binding.
+                conflict = self.run_command(["bash", "-c", snippet], expected=5, env={
+                    **self.env, **bindings, "WORKER_INSTALL_AUTH_FILE": str(self.root / "foreign" / "auth.json")})
+                self.assertIn("BLOCKED: conflicting Session Context binding", conflict.stderr)
+                self.assertEqual(conflict.stdout, "")
+                self.assertEqual(auth.read_text(), "{}")
+                self.assertEqual(sorted(str(path) for path in self.root.rglob("*")), before)
+                print(f"DELIVERY_SPAWN_CONTEXT: backend={backend} role={role} scoped={scoped} "
+                      f"spawn_exit={result.returncode} prefix_exit={resolved.returncode} conflict_exit={conflict.returncode}")
+        self.assertEqual(self.calls()[spawn_calls_before:], [["worktree", "current", "--json"]] * len(cases))
         self.assert_no_second_injector()
 
 

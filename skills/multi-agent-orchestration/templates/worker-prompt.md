@@ -28,7 +28,7 @@ Context:
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
-- **Session Context 路径核验**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 只写入已绑定的绝对 `{{session_context_path}}`，不得写到仓库根目录或 skill 内部。用 worker 进程已有的 `SCOPE_GUARD_SESSION_ROOT` 或 `WORKER_INSTALL_AUTH_FILE` 父目录核验；两者同时存在时须解析到同一现存目录，并与本模板路径一致。缺失、相对路径、冲突或目录不存在时向 PM 报告并停止，不从 cwd/session 名猜路径、不另建状态目录。Orca 自动任务前缀提供同一核验命令；预建 Task 时不需要提前知道尚未创建的 worktree 路径。
+- **Session Context 路径核验**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 只写入已绑定的绝对 `{{session_context_path}}`，不得写到仓库根目录或 skill 内部。用 worker 进程的 `WORKER_SESSION_CONTEXT` 定位；兼容旧 `SCOPE_GUARD_SESSION_ROOT` 或 `WORKER_INSTALL_AUTH_FILE` 父目录，但所有非空绑定必须拼写一致、指向同一现存目录，并与本模板路径一致（不同 symlink 拼写也拒绝）。新定位变量在 guard 显式降级时仍注入，仅用于定位，不授予安装/Shell/scope 权限或证明 hook 活跃。全部缺失、任一相对路径、冲突或目录不存在时向 PM 报告并停止，不从 cwd/session 名猜路径、不另建状态目录。Orca 自动任务前缀提供同一核验命令；预建 Task 时不需要提前知道尚未创建的 worktree 路径。
 - If cwd, branch, or worktree isolation is wrong, report the mismatch and stop; write `status=blocked`, `phase=bootstrap` only when the Session Context binding above has been verified. Do not implement in the PM/main workspace.
 
 Task:
@@ -80,7 +80,7 @@ Context:
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
-- Before writing any checkpoint, verify the existing absolute `SCOPE_GUARD_SESSION_ROOT` or the parent of absolute `WORKER_INSTALL_AUTH_FILE` in this worker process. Both, if present, must resolve to the same existing directory and match `{{session_context_path}}`. Missing/relative/unavailable/conflicting bindings mean report BLOCKED to PM without guessing from cwd/session name or creating a new STATUS/RESULT directory.
+- Before writing any checkpoint, verify the existing absolute `WORKER_SESSION_CONTEXT` launch locator. Legacy `SCOPE_GUARD_SESSION_ROOT` and the parent of `WORKER_INSTALL_AUTH_FILE` remain compatible, but every nonempty binding must use the same directory spelling (different symlink spellings are rejected), exist and match `{{session_context_path}}`. The locator is injected even for explicitly degraded guards; it grants no installation, Shell or scope authority and does not prove an active hook. All bindings missing, or any relative/unavailable/conflicting binding, means report BLOCKED to PM without guessing from cwd/session name or creating a new STATUS/RESULT directory.
 - Update `STATUS.json` with the isolation gate result.
 - If cwd, branch, or worktree isolation is wrong, set `status=blocked`, `phase=bootstrap`, `pm_action_required=true`, describe the mismatch, and stop. Do not implement in the PM/main workspace.
 

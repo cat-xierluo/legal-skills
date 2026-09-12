@@ -1307,6 +1307,10 @@ node_mem_cap_setup() {
 
 dependency_install_guard_setup
 scope_guard_setup
+# Session Context location is independent of install/scope guard activation.
+# This locator grants no authority and must agree with any existing guard binding.
+printf -v session_context_q '%q' "$SESSION_CONTEXT"
+COMMAND="env WORKER_SESSION_CONTEXT=$session_context_q $COMMAND"
 node_mem_cap_setup
 write_metadata
 
