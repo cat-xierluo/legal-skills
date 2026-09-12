@@ -85,10 +85,19 @@ assert_eq() {
   local actual="$1" expected="$2" label="$3"
   if [ "$actual" = "$expected" ]; then ok "$label"; else bad "$label (expected=$expected actual=$actual)"; fi
 }
-assert_log_has() { grep -Fq -- "$1" "$FAKE_ORCA_LOG" && ok "$2" || bad "$2"; }
-assert_log_lacks() { grep -Fq -- "$1" "$FAKE_ORCA_LOG" && bad "$2" || ok "$2"; }
-assert_err_has()  { grep -Fq -- "$1" "$ERR_FILE" && ok "$2" || bad "$2"; }
-assert_err_lacks() { grep -Fq -- "$1" "$ERR_FILE" && bad "$2" || ok "$2"; }
+assert_file_match() {
+  local needle="$1" file="$2" expected_rc="$3" label="$4" grep_rc=0
+  grep -Fq -- "$needle" "$file" || grep_rc=$?
+  if [ "$grep_rc" -eq "$expected_rc" ]; then
+    ok "$label"
+  else
+    bad "$label (grep rc=$grep_rc expected=$expected_rc)"
+  fi
+}
+assert_log_has() { assert_file_match "$1" "$FAKE_ORCA_LOG" 0 "$2"; }
+assert_log_lacks() { assert_file_match "$1" "$FAKE_ORCA_LOG" 1 "$2"; }
+assert_err_has() { assert_file_match "$1" "$ERR_FILE" 0 "$2"; }
+assert_err_lacks() { assert_file_match "$1" "$ERR_FILE" 1 "$2"; }
 
 ERR_FILE="$CASE_ROOT/detect.err"
 SELECTOR_JSON=$(jq -cn '{ok:false,error:{code:"selector_not_found"}}')
@@ -115,7 +124,7 @@ reset_case() {
   ORCA_WORKTREE_CURRENT_ERROR=""
   ORCA_CLI_BIN=""
   ORCA_CLI_COMMAND="$FAKE_ORCA_BIN"
-  unset TERM_PROGRAM || true
+  unset TERM_PROGRAM
   export FAKE_PROJECT_TOP="$PROJECT_REPO"
   export FAKE_CURRENT_ERROR_JSON="$SELECTOR_JSON"
   export FAKE_CURRENT_RC=1
@@ -126,8 +135,50 @@ reset_case() {
   export FAKE_WORKTREE_ID="repo-1::$PROJECT_REPO"
 }
 
-run_detect() { detect_orca_mode >/dev/null 2> "$ERR_FILE" || true; }
-current_call_count() { grep -c '^worktree current --json$' "$FAKE_ORCA_LOG" || true; }
+run_detect() {
+  local detect_rc
+  set +e
+  detect_orca_mode >/dev/null 2> "$ERR_FILE"
+  detect_rc=$?
+  set -e
+  if [ "$detect_rc" -ne 0 ]; then
+    bad "detect_orca_mode unexpectedly exited $detect_rc"
+  fi
+}
+current_call_count() {
+  local count grep_rc=0
+  count=$(grep -c '^worktree current --json$' "$FAKE_ORCA_LOG") || grep_rc=$?
+  case "$grep_rc" in
+    0) printf '%s\n' "$count" ;;
+    1) printf '0\n' ;;
+    *) return "$grep_rc" ;;
+  esac
+}
+
+# 测试自己的故障语义：真实缺日志/检测器非零不得变成零调用或 PASS。
+# 子 shell 隔离故意制造的 failed 计数，外层检查其最终退出码。
+injection_rc=0
+(
+  failed=0
+  detect_orca_mode() { return 23; }
+  run_detect
+  [ "$failed" -eq 0 ]
+) > "$CASE_ROOT/injected-detector.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 1 "fault injection: detector error makes the test fail"
+injection_rc=0
+(
+  FAKE_ORCA_LOG="$CASE_ROOT/missing.log"
+  count=$(current_call_count)
+) > "$CASE_ROOT/injected-count.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 2 "fault injection: missing log is a read error, not zero calls"
+injection_rc=0
+(
+  failed=0
+  FAKE_ORCA_LOG="$CASE_ROOT/missing.log"
+  assert_log_lacks "repo add" "injected missing log"
+  [ "$failed" -eq 0 ]
+) > "$CASE_ROOT/injected-absence.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 1 "fault injection: missing log cannot prove absence"
 
 # --- 1a. success：未注册（错误合同 + CLI 非零退出）→ repo add → 复验 → auto ---
 reset_case

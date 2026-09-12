@@ -361,13 +361,26 @@ spawn_expect_ok "reviewer with grant and allow-paths passes role gate" --role re
 # 结构断言：文件中每一个含 NotebookEdit 的引号 matcher 字面量都必须含 Update。
 
 generated_matchers_include_update() {
-  local label="$1" matchers missing
-  matchers=$(grep -oE '"[A-Za-z|]+NotebookEdit[A-Za-z|]*"' "$SPAWN_WORKER" | sort -u) || true
+  local label="$1" matchers missing grep_rc=0
+  matchers=$(grep -oE '"[A-Za-z|]+NotebookEdit[A-Za-z|]*"' "$SPAWN_WORKER") || grep_rc=$?
+  if [ "$grep_rc" -gt 1 ]; then
+    note_fail "$label" "读取 spawn-worker.sh matcher 失败（grep rc=$grep_rc）"
+    return
+  fi
   if [ -z "$matchers" ]; then
     note_fail "$label" "spawn-worker.sh 找不到任何文件写入类 matcher 字面量（结构变化需同步更新本测试）"
     return
   fi
-  missing=$(printf '%s\n' "$matchers" | grep -vF 'Update' || true)
+  if ! matchers=$(printf '%s\n' "$matchers" | sort -u); then
+    note_fail "$label" "matcher 排序失败"
+    return
+  fi
+  grep_rc=0
+  missing=$(printf '%s\n' "$matchers" | grep -vF 'Update') || grep_rc=$?
+  if [ "$grep_rc" -gt 1 ]; then
+    note_fail "$label" "检查 matcher 内容失败（grep rc=$grep_rc）"
+    return
+  fi
   if [ -z "$missing" ]; then
     passed=$((passed + 1))
   else
@@ -376,6 +389,36 @@ generated_matchers_include_update() {
 }
 
 generated_matchers_include_update "all generated PreToolUse matchers include Update"
+
+# grep 失败即使 stdout 看似合法/为空也不能冒充 matcher 全含 Update。
+for injection_stage in extract filter sort missing-file; do
+  injection_rc=0
+  (
+    failed=0
+    grep() {
+      if [ "$injection_stage" = extract ] && [ "$1" = -oE ]; then
+        printf '%s\n' '"Edit|Write|NotebookEdit|Update"'
+        return 2
+      elif [ "$injection_stage" = filter ] && [ "$1" = -vF ]; then
+        return 2
+      fi
+      command grep "$@"
+    }
+    sort() {
+      if [ "$injection_stage" = sort ]; then return 1; fi
+      command sort "$@"
+    }
+    if [ "$injection_stage" = missing-file ]; then SPAWN_WORKER="$FIXTURE/missing-spawn.sh"; fi
+    generated_matchers_include_update "injected grep failure ($injection_stage)"
+    [ "$failed" -eq 0 ]
+  ) > "$FIXTURE/injected-$injection_stage.out" 2>&1 || injection_rc=$?
+  if [ "$injection_rc" -eq 1 ]; then
+    passed=$((passed + 1))
+    printf 'PASS matcher fault injection: %s preserves failure\n' "$injection_stage"
+  else
+    note_fail "matcher fault injection ($injection_stage)" "grep failure was swallowed: exit=$injection_rc"
+  fi
+done
 
 # claude-code 是事故后端（bl114-review-glm53flash）：scope_guard_setup 必须给
 # .claude/settings.local.json 安装含 Update 的 scope-guard hook。只注入
