@@ -1,5 +1,12 @@
 # Decisions
 
+## D-2026-09-13-01 远端分支删除按“无 outgoing commit + exact-tip lease”审查
+
+- 背景：HFA-011 原先在整行搜索 `commit`，会把 `git cat-file "$DELIVERY_COMMIT^{commit}"` 误判为工作树提交；对 `git -C ... push --delete` 又沿用普通推送的 author/committer 校验建议，无法表达远端删除没有 outgoing commit 的实际风险。
+- 决策：先按真实 Git 子命令区分 checkout/switch/commit/push。普通 push 继续要求 safe-push 或完整 outgoing identity；远端分支删除改为要求原子 exact-tip `--force-with-lease`、远端 head 读取和删除后复验。
+- 理由：远端删除的核心危险是“删错 ref 或在预检后分支前移仍被删除”，而不是提交作者身份。exact-tip lease 把删除与已验收 head 原子绑定，事后复验负责确认结果；两者缺一仍是 hard finding。
+- 边界：仅凭出现 `--delete`、`ls-remote` 或变量名不构成安全删除；合法近似正例和缺 lease 反例必须同时保留。审计仍是静态预筛，不替代真实 Git 故障注入与远端权限验证。
+
 ## D-2026-07-30-02 候选版本身份兼容顶层与 metadata 两种位置
 
 - 背景：部分平台接受项目发布字段位于 frontmatter 顶层；官方 Codex Skill 校验则要求扩展字段放入 `metadata`。稳定性门禁只读取顶层 `version`，导致使用 `metadata.version` 的合法候选无法与合同身份对齐。

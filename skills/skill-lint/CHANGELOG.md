@@ -2,6 +2,18 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.8.1] - 2026-09-13
+
+### 修复
+
+- 修正 HFA-011 对 Git 工作树副作用的子命令识别：不再把 `git cat-file ...^{commit}`、`DELIVERY_COMMIT` 等提交对象引用误判为 `git commit`，同时继续拦截真实 `checkout`、`switch` 与 `commit`。
+- HFA-011 现在识别 `git -C <path> push`，并把已交付远端 worker 分支删除与普通提交推送分开审查：删除不要求无意义的 outgoing author/committer 校验，但必须具备原子 exact-tip `--force-with-lease`、远端 head 读取和删除后复验。
+
+### 技术优化
+
+- 新增合法近似正例与危险反例：`cat-file ...^{commit}` + exact-tip 删除应通过，缺少 lease 的远端删除仍稳定报告 hard finding。
+- 由 Course Generator 弱模型评测的 completion authority 候选复现并校准该误报；审计器仍只做静态读取，不执行候选 Git 命令。
+
 ## [2.8.0] - 2026-08-05
 
 ### 新增：security_scan.py 五类新检测
