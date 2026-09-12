@@ -416,6 +416,33 @@ def _valid_bounded_timeout(value: object) -> bool:
     return 1 <= timeout <= 3_600_000
 
 
+def _normalize_shell_line_continuations(command: str) -> str:
+    """Delete unquoted/double-quoted backslash-LF pairs as the shell does.
+
+    Preserve single-quoted literals, escaped backslashes and the indentation
+    after a continuation; replacing a pair with a space changes command words.
+    """
+    normalized: list[str] = []
+    quote = ""
+    index = 0
+    while index < len(command):
+        character = command[index]
+        if character == "\\" and quote != "'" and index + 1 < len(command):
+            following = command[index + 1]
+            if following != "\n":
+                normalized.extend((character, following))
+            index += 2
+            continue
+        if character in {"'", '"'}:
+            if not quote:
+                quote = character
+            elif quote == character:
+                quote = ""
+        normalized.append(character)
+        index += 1
+    return "".join(normalized)
+
+
 def _tokenize_orca_protocol_command(command: str) -> list[str] | None:
     """Parse one native Orca command, including its documented ``\\\n`` layout."""
     if "\x00" in command:
@@ -423,7 +450,7 @@ def _tokenize_orca_protocol_command(command: str) -> list[str] | None:
     # Orca's live preamble renders long commands with POSIX line continuations.
     # shlex(punctuation_chars=...) otherwise emits every continued newline as a
     # positional token, so an exact copy of the native command is denied.
-    normalized = re.sub(r"\\\r?\n[ \t]*", " ", command)
+    normalized = _normalize_shell_line_continuations(command)
     if "\n" in normalized or "\r" in normalized:
         return None
     try:
@@ -453,7 +480,7 @@ def _contains_orca_protocol_invocation(command: str, depth: int = 0) -> bool:
     failures must not reclassify a protocol mutation as an ordinary exact task
     command. It is not a sandbox for arbitrary programs that execute scripts.
     """
-    normalized = re.sub(r"\\\r?\n[ \t]*", " ", strip_heredoc_bodies(command))
+    normalized = _normalize_shell_line_continuations(strip_heredoc_bodies(command))
     # Bound nested shell parsing; excessive nesting cannot become a generic
     # allowlist escape. Single-quoted command examples are data, not execution.
     if depth >= 16:

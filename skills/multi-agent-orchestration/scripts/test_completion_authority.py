@@ -82,6 +82,16 @@ class CompletionAuthorityTests(unittest.TestCase):
         self.assertIn("\\\n", self.command)
         self.assertEqual(self.hook(), "")
 
+    def test_native_continuation_splits_join_command_words(self):
+        commands = [
+            self.command.replace("orca", "or\\\nca", 1),
+            self.command.replace("orchestration", "orches\\\ntration", 1),
+            self.command.replace("orca", '"or\\\nca"', 1),
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), "")
+
     def test_restart_rejects_old_receipt(self):
         self.live["_meta"]["runtimeId"] = "runtime_restarted"
         self.write_json(self.live_file, self.live)
@@ -140,6 +150,9 @@ class CompletionAuthorityTests(unittest.TestCase):
             "bash -c " + shlex.quote(native), "eval " + shlex.quote(native),
             "env -S " + shlex.quote(native),
             "echo `" + native + "`", 'echo "$(' + native + ')"',
+            native.replace("orca", "or\\\nca", 1),
+            native.replace("orchestration", "orches\\\ntration", 1),
+            native.replace("orca", '"or\\\nca"', 1),
         ]
         self.env.update(WORKER_COMPLETION_AUTHORITY_FILE="", WORKER_AUTHORITY_RECEIPT_FILE="",
                         WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256="")
@@ -163,6 +176,9 @@ class CompletionAuthorityTests(unittest.TestCase):
             "printf '%s\\n' 'orca orchestration send --type worker_done'",
             "echo orca orchestration send --type worker_done",
             "printf '%s\\n' '$(orca orchestration send --type worker_done)'",
+            "'or\\\nca' orchestration send --type worker_done",
+            "or\\\\\nca orchestration send --type worker_done",
+            "or\\\n  ca orchestration send --type worker_done",
         ]
         for command in commands:
             with self.subTest(command=command):
