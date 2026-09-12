@@ -262,14 +262,14 @@ def register(cli: str, top: Path, common: Path, timeout: float, wait_seconds: fl
             repo = result.get("repo") if isinstance(result, dict) else None
             if code != 0 or added.get("ok") is not True or added.get("error") or not isinstance(repo, dict) or not text_identity(repo.get("id")) or not REPO_ID.fullmatch(repo["id"]):
                 raise RegistrationError("repo_add_unconfirmed")
+            # Preserve the acknowledged ID even if the optional path is wrong.
+            # Later current queries must not reconcile pending to another repo.
+            write_pending(fd, top, repo["id"])
             if "path" in repo and repo["path"] != str(top):
                 raise RegistrationError("repo_add_identity_mismatch")
         except RegistrationError:
             print("ERROR: orca repo add 失败或未返回明确成功身份，不进入 Orca 模式（回退 tmux；不得盲目重试）", file=sys.stderr)
             raise
-        # Preserve the acknowledged identity before the post-add query. A later
-        # current response with another repo id cannot clear this pending state.
-        write_pending(fd, top, repo["id"])
         try:
             current = current_project(cli, top, timeout)
             if current is None or current["result"]["worktree"]["id"].partition("::")[0] != repo["id"]:

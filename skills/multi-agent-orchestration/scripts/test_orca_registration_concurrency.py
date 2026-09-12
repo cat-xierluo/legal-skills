@@ -137,6 +137,7 @@ REGISTRATION_TEST_PROJECT=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)
 LIGHTWEIGHT_MODE=0 NO_ORCA_MODE=0 DRY_RUN="${TEST_DRY_RUN:-0}" ORCA_SUPERVISED=0
 ORCA_MODE="" ORCA_WORKTREE_ID=""
 detect_orca_mode
+printf 'DETECT_RESULT mode=%s error=%s\n' "$ORCA_MODE" "${ORCA_WORKTREE_CURRENT_ERROR:-}" >&2
 printf '%s\n' "${ORCA_CURRENT_WORKTREE_JSON:-}"
 [ "$ORCA_MODE" = auto ]
 '''
@@ -389,6 +390,60 @@ class RegistrationTest(unittest.TestCase):
         self.assertEqual(detector.returncode, 1, detector.stdout + detector.stderr)
         self.assertEqual(marker.read_bytes(), pending_before)
         self.assertEqual(len(self.calls(repo, ("repo", "add"))), 1)
+
+    def test_wrong_path_acknowledgment_keeps_known_id_across_real_processes(self) -> None:
+        repo = self.repo(add_mode="wrong_path", post_mode="wrong_repo")
+        self.assert_failure(self.run_helper(repo), "repo_add_identity_mismatch")
+        marker = repo / ".git" / LOCK_NAME
+        inode = marker.stat().st_ino
+        pending_before = marker.read_bytes()
+        with self.subTest(stage="acknowledged-id"):
+            self.assertEqual(json.loads(pending_before), {
+                "schema": registration.PENDING_SCHEMA, "state": "pending",
+                "project": str(repo), "repo_id": "repo-test",
+            })
+        self.assertEqual(len(self.calls(repo, ("repo", "add"))), 1)
+        self.assertEqual(len(self.calls(repo, ("worktree", "current"))), 1)
+
+        # Every entry point runs in a fresh process against the same durable
+        # marker. The detector must expose the precise rejection, not merely
+        # exit nonzero because the shell or fake CLI failed unexpectedly.
+        for entry, extra in (("probe", ("--probe-only",)), ("detector", ()), ("helper", ())):
+            with self.subTest(stage=entry):
+                if entry == "detector":
+                    result = subprocess.run(
+                        ["bash", "-c", BASH_DETECT, "_", str(SCRIPT_DIR), str(repo)],
+                        env=self.env, capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn("DETECT_RESULT mode=force_tmux error=registration_pending_identity_mismatch", result.stderr)
+                    self.assertEqual(result.stdout.strip(), "")
+                else:
+                    self.assert_failure(self.run_helper(repo, *extra), "registration_pending_identity_mismatch", 75)
+            with self.subTest(stage=entry + "-preserves-marker"):
+                self.assertEqual(marker.read_bytes(), pending_before)
+                self.assertEqual(marker.stat().st_ino, inode)
+                self.assertEqual(len(self.calls(repo, ("repo", "add"))), 1)
+
+        # Once current exposes the acknowledged ID at the exact project path,
+        # a read-only probe preserves pending; only the locked helper clears it.
+        (self.state(repo) / "config.json").write_text(json.dumps({"add_mode": "wrong_path"}))
+        with self.subTest(stage="same-id-probe"):
+            probe = self.run_helper(repo, "--probe-only")
+            self.assertEqual(probe.returncode, 0, probe.stdout + probe.stderr)
+            payload = json.loads(probe.stdout)
+            self.assertEqual(payload["result"]["worktree"]["id"], "repo-test::" + str(repo))
+            self.assertEqual(payload.get("registration"), {"status": "observed", "pending_marker_preserved": True})
+            self.assertEqual(marker.read_bytes(), pending_before)
+        resolved = self.run_helper(repo)
+        self.assertEqual(resolved.returncode, 0, resolved.stdout + resolved.stderr)
+        payload = json.loads(resolved.stdout)
+        self.assertEqual(payload["result"]["worktree"]["id"], "repo-test::" + str(repo))
+        self.assertEqual(payload["registration"]["status"], "already_registered")
+        self.assertEqual(marker.read_bytes(), b"")
+        self.assertEqual(marker.stat().st_ino, inode)
+        self.assertEqual(len(self.calls(repo, ("repo", "add"))), 1)
+        self.assertFalse((self.state_root / "fake-errors.jsonl").exists())
 
     def test_foreign_marker_is_not_cleared_or_used_for_registration(self) -> None:
         repo = self.repo()
