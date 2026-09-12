@@ -104,6 +104,12 @@ SELECTOR_JSON=$(jq -cn '{ok:false,error:{code:"selector_not_found"}}')
 OTHER_CODE_JSON=$(jq -cn '{ok:false,error:{code:"runtime_unavailable"}}')
 
 reset_case() {
+  # Each case resets its fake Orca state and owns this isolated fixture repo.
+  # All preceding helper processes have exited; clear only this fixture's
+  # pending marker, retaining the same lock inode (never a production lock).
+  if [ -f "$PROJECT_REPO/.git/mao-orca-register.lock" ]; then
+    : > "$PROJECT_REPO/.git/mao-orca-register.lock"
+  fi
   rm -rf "$FAKE_ORCA_STATE"; mkdir -p "$FAKE_ORCA_STATE"
   : > "$FAKE_ORCA_LOG"; : > "$ERR_FILE"
   PROJECT_DIR="$PROJECT_REPO"
@@ -190,7 +196,7 @@ assert_eq "$ORCA_APP_VERSION" "1.4.194" "success(rc=1): status capability gate s
 assert_log_has "repo add --path $PROJECT_REPO --json" "success(rc=1): repo add targets the exact canonical Git top"
 assert_err_has "SPAWN_WORKER_ORCA_AUTO_REGISTER:" "success(rc=1): registration announces the mutation before it happens"
 assert_err_has "SPAWN_WORKER_ORCA_AUTO:" "success(rc=1): auto mode confirmed after re-verification"
-assert_eq "$(current_call_count)" "2" "success(rc=1): worktree current probed before and after repo add"
+assert_eq "$(current_call_count)" "3" "success(rc=1): initial probe, locked re-probe and post-add verification"
 cur1=$(grep -n '^worktree current --json$' "$FAKE_ORCA_LOG" | head -1 | cut -d: -f1)
 add=$(grep -n '^repo add' "$FAKE_ORCA_LOG" | head -1 | cut -d: -f1)
 if [ -n "$cur1" ] && [ -n "$add" ] && [ "$cur1" -lt "$add" ]; then
@@ -251,7 +257,7 @@ export FAKE_REPO_ADD_FAIL=1
 run_detect
 assert_eq "$ORCA_MODE" "force_tmux" "repo-add-failure: falls back to tmux before any side effect"
 assert_log_has "repo add" "repo-add-failure: registration was attempted exactly once"
-assert_eq "$(current_call_count)" "1" "repo-add-failure: no re-probe after failed add"
+assert_eq "$(current_call_count)" "2" "repo-add-failure: initial plus locked re-probe, none after failed add"
 assert_err_has "orca repo add 失败" "repo-add-failure: failure diagnostic is explicit"
 assert_err_lacks "SPAWN_WORKER_ORCA_AUTO:" "repo-add-failure: never claims Orca mode"
 
@@ -260,7 +266,7 @@ reset_case
 export FAKE_POST_ADD_PATH="$CASE_ROOT/other place"
 run_detect
 assert_eq "$ORCA_MODE" "force_tmux" "post-add-mismatch: exact path re-verification gates Orca mode"
-assert_eq "$(current_call_count)" "2" "post-add-mismatch: re-probe ran after repo add"
+assert_eq "$(current_call_count)" "3" "post-add-mismatch: locked re-probe plus post-add identity check"
 assert_err_has "复验失败" "post-add-mismatch: re-verification failure is reported"
 assert_err_lacks "SPAWN_WORKER_ORCA_AUTO:" "post-add-mismatch: never claims Orca mode"
 

@@ -3,6 +3,7 @@
 # Source this file; do not execute it directly.
 
 ORCA_CLI_BIN="${ORCA_CLI_BIN:-}"
+ORCA_RUNTIME_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 orca_runtime_resolve_cli() {
   local candidate=""
@@ -87,23 +88,16 @@ orca_runtime_require_identity() {
 #                        实测事故形态，唯一允许 orca_runtime_register_current_project
 #                        自动修复的情况）
 #   path_mismatch      — worktree current 命中了别的仓/路径
-#   ""                 — 非 Git / runtime 不可达 / 输出不可解析（禁止据此注册）
-orca_runtime_current_project() {
-  local project_dir="$1"
-  local project_top current_json current_path current_id probe_rc
-
+#   其他错误或空值       — 非 Git / runtime 不可达 / 身份或 pending 状态未知，禁止注册
+orca_runtime_accept_current_project() {
+  local project_top="$1" current_json="$2"
+  local current_path current_id
   ORCA_WORKTREE_CURRENT_ERROR=""
-
-  project_top=$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null) || return 1
-  # worktree current is cwd-scoped; ask from the project top even when the PM
-  # invokes spawn-worker from another directory.
-  current_json=""
-  probe_rc=0
-  current_json=$(cd "$project_top" && orca_cli worktree current --json 2>/dev/null) || probe_rc=$?
+  printf '%s' "$current_json" | jq -e '.ok == true' >/dev/null 2>&1 || return 1
   current_path=$(printf '%s' "$current_json" | jq -r '.result.worktree.path // empty' 2>/dev/null)
   current_id=$(printf '%s' "$current_json" | jq -r '.result.worktree.id // empty' 2>/dev/null)
-  if [ "$probe_rc" -eq 0 ] && [ -n "$current_path" ] && [ -n "$current_id" ]; then
-    if [ "$current_path" = "$project_top" ]; then
+  if [ -n "$current_path" ] && [ -n "$current_id" ]; then
+    if [ "$current_path" = "$project_top" ] && [[ "$current_id" == *::"$project_top" ]] && [ -n "${current_id%%::*}" ]; then
       ORCA_CURRENT_WORKTREE_JSON="$current_json"
       ORCA_CURRENT_WORKTREE_ID="$current_id"
       ORCA_CURRENT_WORKTREE_PATH="$current_path"
@@ -112,8 +106,23 @@ orca_runtime_current_project() {
     ORCA_WORKTREE_CURRENT_ERROR="path_mismatch"
     return 1
   fi
-  # CLI 非零退出时 stdout 仍可能是合法错误合同（如 {ok:false,error:{code:...}}），
-  # 继续解析结构化错误码供调用方区分。
+  return 1
+}
+
+orca_runtime_current_project() {
+  local project_dir="$1" project_top current_json probe_rc=0
+  ORCA_WORKTREE_CURRENT_ERROR=""
+  project_top=$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+  project_top=$(cd "$project_top" && pwd -P) || return 1
+  orca_runtime_init || return 1
+  # The Python argv-only adapter bounds each CLI call and requires explicit
+  # success/error contracts. It creates no lock or registration in probe mode.
+  current_json=$(python3 "$ORCA_RUNTIME_SCRIPT_DIR/orca-register-project.py" \
+    --project "$project_top" --orca-cli "$ORCA_CLI_BIN" --probe-only 2>/dev/null) || probe_rc=$?
+  if [ "$probe_rc" -eq 0 ]; then
+    orca_runtime_accept_current_project "$project_top" "$current_json"
+    return $?
+  fi
   ORCA_WORKTREE_CURRENT_ERROR=$(printf '%s' "$current_json" | jq -r '.error.code // empty' 2>/dev/null)
   return 1
 }
@@ -130,8 +139,10 @@ orca_runtime_current_project() {
 #   3. `orca status --json` 可达（runtime 不可用时不做 mutation；版本/capability
 #      兼容性由 detect_orca_mode 的 status 预检兜底，不兼容会 missing_orca 失败关闭，
 #      早于任何 branch/worktree/provider 副作用）。
-# repo add 失败、返回合同非 ok、或注册后 orca_runtime_current_project 复验不精确
+# repo add 失败、返回合同非 ok、或注册后 worktree current 复验不精确
 # 返回该 toplevel + repo 身份，都返回 1，由调用方回退 tmux，绝不假装 Orca 管理成功。
+# Git common-dir 下的普通锁文件保留 pending；副作用前 fsync，结果未知不得重复
+# add。只有同项目的精确身份（已收到 repo.id 时还须一致）才可解除该 pending。
 #
 # 授权边界（references/13 §3）：仅 Orca-first worker 路径（detect_orca_mode）调用，
 # 只授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库或改动其他
@@ -139,11 +150,12 @@ orca_runtime_current_project() {
 # 直接成功，也永不进入本 helper。
 orca_runtime_register_current_project() {
   local project_dir="$1"
-  local project_top add_out
+  local project_top registered_json
 
   [ "${ORCA_WORKTREE_CURRENT_ERROR:-}" = "selector_not_found" ] || return 1
 
   project_top=$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+  project_top=$(cd "$project_top" && pwd -P) || return 1
 
   if [ "${DRY_RUN:-0}" -eq 1 ]; then
     # dry-run 不做 mutation；没有注册就无法复验身份，只能 fail-closed 回退 tmux。
@@ -151,22 +163,16 @@ orca_runtime_register_current_project() {
     return 1
   fi
 
-  orca_cli status --json >/dev/null 2>&1 || {
-    echo "SPAWN_WORKER_ORCA_AUTO_REGISTER_SKIPPED: worktree current=selector_not_found 但 orca status 不可达，跳过自动注册（回退 tmux）" >&2
+  orca_runtime_init || return 1
+  # The same common-dir flock remains held through re-probe, mutation and
+  # post-add identity verification. Never run a second, unlocked repo add here.
+  registered_json=$(python3 "$ORCA_RUNTIME_SCRIPT_DIR/orca-register-project.py" \
+    --project "$project_top" --orca-cli "$ORCA_CLI_BIN") || {
+    ORCA_WORKTREE_CURRENT_ERROR=$(printf '%s' "$registered_json" | jq -r '.error.code // empty' 2>/dev/null)
     return 1
   }
-
-  echo "SPAWN_WORKER_ORCA_AUTO_REGISTER: 仓库未注册 Orca，注册当前 Git toplevel: $project_top" >&2
-  add_out=$(orca_cli repo add --path "$project_top" --json 2>&1) || {
-    echo "ERROR: orca repo add 失败，不进入 Orca 模式（回退 tmux）: $add_out" >&2
-    return 1
-  }
-  printf '%s' "$add_out" | jq -e '(.ok // true) != false' >/dev/null 2>&1 || {
-    echo "ERROR: orca repo add 返回非 ok 合同，不进入 Orca 模式（回退 tmux）: $add_out" >&2
-    return 1
-  }
-
-  orca_runtime_current_project "$project_dir" || {
+  # Hydrate the globals from the exact snapshot already verified under lock.
+  orca_runtime_accept_current_project "$project_top" "$registered_json" || {
     echo "ERROR: repo add 后 worktree current 复验失败（error=${ORCA_WORKTREE_CURRENT_ERROR:-unknown}），不进入 Orca 模式（回退 tmux；请人工核对 Orca repo 注册状态）" >&2
     return 1
   }
