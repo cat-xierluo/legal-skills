@@ -5,17 +5,20 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=orca-coordinator.sh
+source "$SCRIPT_DIR/orca-coordinator.sh"
 # shellcheck source=orca-supervised-protocol.sh
 source "$SCRIPT_DIR/orca-supervised-protocol.sh"
 
 MANIFEST=""
 RECEIPT=""
 RUN_ID=""
+PM_FROM=""
 
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  orca-wave-prepare.sh --manifest FILE [--run-id ID] [--receipt FILE]
+  orca-wave-prepare.sh --manifest FILE [--from HANDLE] [--run-id ID] [--receipt FILE]
 
 Manifest schema:
   {
@@ -39,6 +42,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --manifest) MANIFEST="$2"; shift 2 ;;
     --run-id) RUN_ID="$2"; shift 2 ;;
+    --from) PM_FROM="${2:?--from needs a handle}"; shift 2 ;;
     --receipt) RECEIPT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
@@ -79,33 +83,19 @@ if [ -n "$slash_specs" ]; then
   exit 64
 fi
 
-orca_runtime_init
-orca_runtime_current_runtime_id || {
-  echo "ERROR: cannot verify current runtime identity; no Wave mutations performed" >&2
-  exit 3
-}
-RUNTIME_ID_AT_PREPARE="$ORCA_RUNTIME_ID_NOW"
 OBJECTIVE=$(jq -r '.objective' "$MANIFEST")
-COORDINATOR_HANDLE=""
+allow_environment=0
+[ -n "$RUN_ID" ] || allow_environment=1
+orca_coordinator_select "$PM_FROM" "" "$allow_environment" || exit $?
 
 if [ -z "$RUN_ID" ]; then
-  run_out=$(orca_cli orchestration run-create --objective "$OBJECTIVE" --json 2>&1) || {
-    echo "ERROR: run-create failed; do not retry blindly: $run_out" >&2
-    exit 1
-  }
-  RUN_ID=$(printf '%s' "$run_out" | jq -r '.result.run.id // empty')
-  COORDINATOR_HANDLE=$(printf '%s' "$run_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
+  orca_coordinator_prepare create "" "" "$OBJECTIVE" || exit $?
 else
-  run_out=$(orca_cli orchestration run-use --id "$RUN_ID" --json 2>&1) || {
-    echo "ERROR: run-use failed for $RUN_ID: $run_out" >&2
-    exit 1
-  }
-  COORDINATOR_HANDLE=$(printf '%s' "$run_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
+  orca_coordinator_prepare use "$RUN_ID" || exit $?
 fi
-[ -n "$RUN_ID" ] && [ -n "$COORDINATOR_HANDLE" ] || {
-  echo "ERROR: Run receipt missing run id or coordinator handle" >&2
-  exit 1
-}
+RUN_ID="$ORCA_PM_RUN_ID"
+COORDINATOR_HANDLE="$ORCA_PM_SENDER"
+RUNTIME_ID_AT_PREPARE="$ORCA_PM_RUNTIME_ID"
 
 TASKS_TMP=$(mktemp)
 RECEIPT_TMP=""
@@ -139,7 +129,7 @@ done < <(jq -c '.tasks[]' "$MANIFEST")
 created_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 # Do not publish a usable receipt if the runtime changed during preparation.
 # Created Run/Task records may remain: inspect them instead of blind retries.
-orca_runtime_require_identity "$RUNTIME_ID_AT_PREPARE" || {
+orca_coordinator_prepare verify "$RUN_ID" "$RUNTIME_ID_AT_PREPARE" || {
   echo "ORCA_WAVE_PARTIAL: Run $RUN_ID and created Tasks require inspection; no receipt published" >&2
   exit 3
 }

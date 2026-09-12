@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.23.6] - 2026-09-13
+
+### 修复
+
+- PM 与 Wave 支持显式 sender，核验精确终端、当前 runtime 和 Run/coordinator，避免非 Orca PM 缺身份或误用已关闭终端。已有 session 绑定不被环境覆盖；只读入口不重绑或改写 metadata。
+- Single Worker 在 quota/mem 通过后、lease/worktree/terminal 创建前准备 Run；预建 Wave 只读核验，不重复创建 Task。metadata 保留 runtime 身份，旧记录的迁移只证明当前绑定，不追认历史连续性。
+- send/reply/Run 使用官方 --from，check/ack 使用 --terminal；release/retain 遵守仅 --dispatch 的官方合同并做前置身份核验。修正 --no-orca-mode 帮助，区分 tmux 控制路径和可能保留的只读宿主探测。
+
+### 验证
+
+- 增加 sender、关闭/漂移身份、早期零 Worker 资源、只读入口和实际 argv 回归；随行修正已有 metadata Git 权限事实与旧断言漂移，不改变生产权限。真实 backend 全生命周期与重启期间派发未由 fake CLI 测试证明。
+- 邻接 settle、handoff、重新授权、runtime 与内存测试迁移完整 sender 回执，验证实际抵达目标分支，避免在身份前门提前退出造成假阳性；真实 Orca smoke 以只读代理验证无/错 sender 的拒绝，不用虚构 Wave 身份冒充正例。
+
 ## [2.23.5] - 2026-09-13
 
 ### 修复
