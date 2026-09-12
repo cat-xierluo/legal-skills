@@ -77,6 +77,7 @@ bash scripts/smoke-orca-control-plane.sh
 - `smoke-orca-worker.sh` 通过严格只读代理验证真实 runtime 检测和无/错 sender 的前置拒绝，不启动 Agent 或创建 Run。正向单一任务注入与 Wave 复用由隔离套件验证，不使用虚构 handle 作为真实成功证据。
 - `smoke-orca-control-plane.sh` 使用 fake CLI 验证命令路由、cursor 与 external terminal accounting。
 - `test_worker_delivery_prompt.py` 检查实际 Task spec/启动命令与真实 guard hook 的准入/拒绝，不启动 provider；`smoke-tmux-worker.sh` 使用独立 tmux socket、固定本地脚本与无转发 Orca stub，按真实记录区分 fake 只读探测和 live 调用。
+- Session Context 回归覆盖 Claude/Codex、实施者/reviewer 与有无 scope 的六个实际启动命令组合；路径定位变量不证明 guard 激活，Codex 显式 prompt-only 降级必须保持其真实权限状态。
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
 - 若 Skill Lint 或 Harness 规则命中已知通用误报，保留原始证据和约束说明，不通过命令变形规避扫描。
