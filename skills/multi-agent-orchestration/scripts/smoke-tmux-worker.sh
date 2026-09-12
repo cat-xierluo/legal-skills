@@ -145,11 +145,21 @@ git -C "$REPO" add README.md
 git -C "$REPO" commit -q -m "init"
 git -C "$REPO" branch -M main
 
-spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
+# Exercise the historical four-backend contract using a private policy copy;
+# the production policy may explicitly enable additional backends for the user.
+FIXTURE_SKILL="$TMP_ROOT/fixture-skill"
+mkdir -p "$FIXTURE_SKILL/config"
+cp -R "$SCRIPT_DIR" "$FIXTURE_SKILL/scripts"
+jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]
+    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]' \
+  "$SCRIPT_DIR/../config/harness-backend-policy.json" > "$FIXTURE_SKILL/config/harness-backend-policy.json"
+
+spawn_out=$("$FIXTURE_SKILL/scripts/spawn-worker.sh" \
   --project "$REPO" \
   --branch "$BRANCH" \
   --worktree "$WT" \
   --session "$SESSION" \
+  --no-orca-mode \
   --base-ref main \
   --command "$WORKER_COMMAND" \
   --worker-backend "$WORKER_BACKEND" \
@@ -167,8 +177,7 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --verify-cmd "npm test -- --run")
 assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
-# v2.11.0：pm_harness 取决于 smoke 的真实调用方 ancestry（claude-code/codex 均可
-# 派 codex worker）；白名单契约锚定在 allowed 集合本身——v2.11 起刻意排除 zcode。
+# pm_harness 仍由真实 ancestry 判定；allowed 集合使用上方隔离 policy fixture。
 assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: "
 assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoderwork-cn chain="
 if ! jq -e '

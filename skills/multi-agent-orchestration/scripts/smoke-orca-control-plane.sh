@@ -12,6 +12,7 @@ FAKE_LOG="$TMP_ROOT/orca.log"
 WT="$TMP_ROOT/worktree"
 SESSION="worker-a"
 CTX="$WT/.claude/agent-sessions/$SESSION"
+AUTHORITY_FILE="$TMP_ROOT/agent-authority/$SESSION.json"
 
 cleanup() {
   rm -rf "$TMP_ROOT"
@@ -52,6 +53,7 @@ case "$1 $2" in
   "orchestration run-use") printf '%s\n' '{"ok":true,"result":{"run":{"id":"run_test","coordinator_handle":"term_pm"}}}' ;;
   "orchestration task-create") printf '%s\n' '{"ok":true,"result":{"task":{"id":"task_test"}}}' ;;
   "orchestration worker-start") printf '%s\n' '{"ok":true,"result":{"dispatch":{"id":"ctx_test"}}}' ;;
+  "orchestration dispatch-show") printf '%s\n' '{"ok":true,"_meta":{"runtimeId":"runtime_smoke"},"result":{"dispatch":{"id":"ctx_test","task_id":"task_test","assignee_handle":"term_test","run_id":"run_test","capability_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","process_incarnation":"process_smoke"}}}' ;;
   "orchestration worker-read") printf '%s\n' '{"ok":true,"result":{"source":"transcript","cursor":"cursor_2","rows":[]}}' ;;
   "orchestration worker-show") printf '%s\n' '{"ok":true,"result":{"worker":{"state":"ready","task_status":"dispatched","dispatch_status":"dispatched"}}}' ;;
   "orchestration check") printf '%s\n' '{"ok":true,"result":{"delivery":{"id":"delivery_test","messages":[]}}}' ;;
@@ -61,23 +63,18 @@ case "$1 $2" in
 esac
 FAKE
 chmod +x "$FAKE_ORCA"
-mkdir -p "$CTX"
+mkdir -p "$CTX" "$(dirname "$AUTHORITY_FILE")"
 : > "$FAKE_LOG"
-
-cat > "$CTX/METADATA.json" <<'JSON'
-{
-  "session": {
-    "orca": {
-      "terminal_handle": "term_test"
-    }
-  }
-}
-JSON
+printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$AUTHORITY_FILE"
+chmod 600 "$AUTHORITY_FILE"
+jq -n --arg authority "$AUTHORITY_FILE" \
+  '{execution_authority:{authority_receipt_file:$authority},session:{orca:{terminal_handle:"term_test"}}}' > "$CTX/METADATA.json"
 
 echo "=== register: one mutation sequence, worker-start is the injector ==="
 register_out=$(ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" ORCA_FAKE_WORKTREE_PATH="$WT" \
   bash "$SCRIPT_DIR/orca-supervised-register.sh" \
   --worktree-id 'repo::/tmp/worker-a' --terminal-handle term_test \
+  --authority-receipt "$AUTHORITY_FILE" \
   --task-title 'worker-a' --task-spec '完成限定任务并验证')
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_RUN_ID=run_test'
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_COORDINATOR_HANDLE=term_pm'
@@ -85,6 +82,7 @@ printf '%s\n' "$register_out" | grep -qF 'ORCAREG_TASK_ID=task_test'
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_DISPATCH_ID=ctx_test'
 printf '%s\n' "$register_out" | grep -qF 'ORCAREG_METADATA_BIND=ok'
 jq -e '.session.orca.supervised == {run_id:"run_test",coordinator_handle:"term_pm",task_id:"task_test",dispatch_id:"ctx_test",dispatch_bind:"ok",contract:"orca.orchestration.contract.v1",completion_authority:"worker_done",terminal_ownership:"external"}' "$CTX/METADATA.json" >/dev/null
+jq -e '.task_id == "task_test" and .dispatch_id == "ctx_test" and .runtime_id == "runtime_smoke"' "${AUTHORITY_FILE%.json}.completion.json" >/dev/null
 assert_log_contains 'orchestration run-create --objective 完成限定任务并验证 --json'
 assert_log_contains 'orchestration task-create --spec SUPERVISED COMPLETION PROTOCOL (MANDATORY):'
 assert_log_contains '完成限定任务并验证 --task-title worker-a --run run_test --from term_pm --json'
@@ -92,12 +90,15 @@ assert_log_contains 'orchestration worker-start --task task_test --terminal term
 
 echo "=== register metadata: malformed worktree JSON fails closed without rewriting ==="
 metadata_before=$(jq -c . "$CTX/METADATA.json")
+malformed_rc=0
 malformed_out=$(ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
   ORCA_FAKE_WORKTREE_PATH="$WT" ORCA_FAKE_WORKTREE_MODE=malformed \
   bash "$SCRIPT_DIR/orca-supervised-register.sh" \
   --worktree-id 'repo::/tmp/worker-a' --terminal-handle term_test \
-  --task-title 'worker-a' --task-spec '完成限定任务并验证')
-printf '%s\n' "$malformed_out" | grep -qF 'ORCAREG_METADATA_BIND=manual-required'
+  --authority-receipt "$AUTHORITY_FILE" \
+  --task-title 'worker-a' --task-spec '完成限定任务并验证' 2>&1) || malformed_rc=$?
+[ "$malformed_rc" -eq 1 ] || { echo "FAIL: malformed metadata lookup must fail registration" >&2; exit 1; }
+printf '%s\n' "$malformed_out" | grep -qF 'ORCAREG_METADATA_LOOKUP_FAILED'
 [ "$(jq -c . "$CTX/METADATA.json")" = "$metadata_before" ] || {
   echo "FAIL: malformed worktree JSON rewrote METADATA" >&2
   exit 1

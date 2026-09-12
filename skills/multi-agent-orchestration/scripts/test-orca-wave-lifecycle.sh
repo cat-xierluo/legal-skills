@@ -17,6 +17,7 @@ bad() { echo "  ✗ $1" >&2; fail=$((fail + 1)); }
 FAKE="$TMP_ROOT/fake-orca"
 export FAKE_ORCA_LOG="$TMP_ROOT/orca.log"
 export FAKE_ORCA_STATE="$TMP_ROOT/orca-state"
+export FAKE_WAVE_ROOT="$TMP_ROOT"
 : > "$FAKE_ORCA_LOG"
 : > "$FAKE_ORCA_STATE"
 
@@ -50,6 +51,19 @@ case "$1 $2" in
       shift
     done
     printf '{"ok":true,"result":{"dispatch":{"id":"ctx-%s"}}}\n' "$task"
+    ;;
+  "worktree show")
+    id=${4#id:}
+    name=${id##*/}
+    jq -n --arg id "$id" --arg path "$FAKE_WAVE_ROOT/$name" '{ok:true,result:{worktree:{id:$id,path:$path}}}'
+    ;;
+  "orchestration dispatch-show")
+    task=$4
+    case "$task" in task-1) name=api ;; task-2) name=ui ;; *) exit 64 ;; esac
+    jq -n --arg task "$task" --arg terminal "term-$name" \
+      '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:("ctx-"+$task),task_id:$task,
+        assignee_handle:$terminal,run_id:"run-wave",process_incarnation:"process-fixture",
+        capability_hash:("a"*64)}}}'
     ;;
   "orchestration check")
     echo '{"ok":true,"result":{"count":0}}'
@@ -93,9 +107,19 @@ else
 fi
 
 echo "Case 2: pre-created Tasks are reused without task-create races"
+mkdir -p "$TMP_ROOT/agent-authority"
+for name in api ui; do
+  mkdir -p "$TMP_ROOT/$name/.claude/agent-sessions/wave"
+  printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$TMP_ROOT/agent-authority/$name.json"
+  jq -n --arg authority "$TMP_ROOT/agent-authority/$name.json" --arg terminal "term-$name" --arg wt "repo::/tmp/$name" \
+    '{session:{orca:{terminal_handle:$terminal,worktree_id:$wt}},execution_authority:{authority_receipt_file:$authority}}' \
+    > "$TMP_ROOT/$name/.claude/agent-sessions/wave/METADATA.json"
+done
 bash "$REGISTER" --worktree-id 'repo::/tmp/api' --terminal-handle term-api \
+  --authority-receipt "$TMP_ROOT/agent-authority/api.json" \
   --run-id run-wave --coordinator-handle term-pm --task-id task-1 > "$TMP_ROOT/register-api.out"
 bash "$REGISTER" --worktree-id 'repo::/tmp/ui' --terminal-handle term-ui \
+  --authority-receipt "$TMP_ROOT/agent-authority/ui.json" \
   --run-id run-wave --coordinator-handle term-pm --task-id task-2 > "$TMP_ROOT/register-ui.out"
 [ "$(grep -c '^orchestration task-create ' "$FAKE_ORCA_LOG")" -eq 2 ] && ok "register reused Tasks without creating more" || bad "register created a Task during worker start"
 [ "$(grep -c '^orchestration worker-start ' "$FAKE_ORCA_LOG")" -eq 2 ] && ok "both workers started from pre-created Tasks" || bad "expected two worker-start calls"

@@ -7,6 +7,14 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 export ORCA_CLI_COMMAND="$TMP_ROOT/orca"
 export IDENTITY_LOG="$TMP_ROOT/calls" IDENTITY_STATE="$TMP_ROOT/count"
 export IDENTITY_MODE=match
+export IDENTITY_WORKTREE="$TMP_ROOT/worker"
+AUTHORITY_FILE="$TMP_ROOT/agent-authority/runtime-session.json"
+METADATA_FILE="$IDENTITY_WORKTREE/.claude/agent-sessions/runtime-session/METADATA.json"
+mkdir -p "$(dirname "$AUTHORITY_FILE")" "$(dirname "$METADATA_FILE")"
+printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$AUTHORITY_FILE"
+chmod 600 "$AUTHORITY_FILE"
+jq -n --arg authority "$AUTHORITY_FILE" \
+  '{execution_authority:{authority_receipt_file:$authority},session:{orca:{worktree_id:"repo::worker",terminal_handle:"term-worker"}}}' > "$METADATA_FILE"
 cat > "$ORCA_CLI_COMMAND" <<'FAKE'
 #!/usr/bin/env bash
 set -eu
@@ -29,6 +37,10 @@ case "$1 $2" in
   'orchestration run-create') echo '{"ok":true,"result":{"run":{"id":"run-a","coordinator_handle":"term-pm"}}}' ;;
   'orchestration task-create') echo '{"ok":true,"result":{"task":{"id":"task-a"}}}' ;;
   'orchestration worker-start') echo '{"ok":true,"result":{"dispatch":{"id":"dispatch-a"}}}' ;;
+  'worktree show')
+    jq -n --arg path "$IDENTITY_WORKTREE" '{ok:true,result:{worktree:{id:"repo::worker",path:$path}}}' ;;
+  'orchestration dispatch-show')
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-a"},"result":{"dispatch":{"id":"dispatch-a","task_id":"task-a","assignee_handle":"term-worker","run_id":"run-a","capability_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","process_incarnation":"process-runtime-test"}}}' ;;
   *) echo '{"ok":true,"result":{}}' ;;
 esac
 FAKE
@@ -37,6 +49,7 @@ printf '%s\n' '{"objective":"identity test","tasks":[{"key":"a","spec":"test sco
 pass=0
 check() { if "$@"; then pass=$((pass+1)); else echo "FAIL: $*" >&2; exit 1; fi; }
 reset_probe() { : > "$IDENTITY_LOG"; printf 0 > "$IDENTITY_STATE"; }
+no_worker_start() { ! grep -q '^orchestration worker-start ' "$IDENTITY_LOG"; }
 expect_rc() {
   local expected="$1" actual=0; shift
   "$@" > "$TMP_ROOT/out" 2> "$TMP_ROOT/err" || actual=$?
@@ -59,15 +72,19 @@ expect_rc 3 bash "$SCRIPT_DIR/orca-wave-prepare.sh" --manifest "$TMP_ROOT/manife
 check test ! -e "$TMP_ROOT/drift.json"
 check grep -q SPAWN_COORDINATOR_STALE "$TMP_ROOT/err"
 
-register=(bash "$SCRIPT_DIR/orca-supervised-register.sh" --worktree-id repo::worker --terminal-handle term-worker --run-id run-a --coordinator-handle term-pm --task-id task-a)
+register=(bash "$SCRIPT_DIR/orca-supervised-register.sh" --worktree-id repo::worker --terminal-handle term-worker --run-id run-a --coordinator-handle term-pm --task-id task-a --authority-receipt "$AUTHORITY_FILE")
 export IDENTITY_MODE=stale
 reset_probe
 expect_rc 3 "${register[@]}" --runtime-id runtime-a
 check test "$(wc -l < "$IDENTITY_LOG" | tr -d ' ')" -eq 1
+check no_worker_start
+check test ! -e "$TMP_ROOT/agent-authority/runtime-session.completion.json"
 export IDENTITY_MODE=match
 reset_probe
 expect_rc 0 "${register[@]}" --runtime-id runtime-a
 check grep -q '^orchestration worker-start ' "$IDENTITY_LOG"
+check jq -e '.task_id == "task-a" and .dispatch_id == "dispatch-a" and .runtime_id == "runtime-a"' "$TMP_ROOT/agent-authority/runtime-session.completion.json"
+check jq -e '.session.orca.supervised.dispatch_id == "dispatch-a" and (.execution_authority.completion_authority_file | endswith("runtime-session.completion.json"))' "$METADATA_FILE"
 reset_probe
 expect_rc 0 "${register[@]}"
 check grep -q SPAWN_COORDINATOR_RUNTIME_UNVERIFIED "$TMP_ROOT/err"
@@ -76,6 +93,7 @@ reset_probe
 expect_rc 1 "${register[@]}" --runtime-id runtime-a
 check grep -q SPAWN_COORDINATOR_STALE "$TMP_ROOT/err"
 check test "$(wc -l < "$IDENTITY_LOG" | tr -d ' ')" -eq 2
+check no_worker_start
 
 # Exercise the production launch function at the last pre-terminal boundary.
 export IDENTITY_MODE=stale

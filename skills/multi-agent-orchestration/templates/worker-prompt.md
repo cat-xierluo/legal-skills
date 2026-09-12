@@ -187,6 +187,7 @@ Orca Supervised Lifecycle:
 - 进度与纠偏优先读取 Dispatch inbox；阻塞问题用注入协议中的 `orca orchestration ask`，不要让 PM 反复读取整段终端猜测问题。
 - 完成或失败时，先写 STATUS/RESULT/PATCH_SUMMARY 并完成验证，再从你自己的 worker terminal 按 preamble 精确发送一次 `worker_done`，显式写 `--outcome succeeded|failed`、变更文件和剩余工作。
 - `STATUS.json=done` 只唤醒 PM，不会结算 Orca Task。未发送 `worker_done` 就不算 supervised 完成。
+- preamble 的 `worker_done` 可能包含反斜杠续行；原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后立即停止并报告协议阻塞，不改 receipt、不换引号/编码、不调用子进程或 wrapper/helper 重试。
 - 发送 `worker_done` 后结束当前 turn 并保持 idle；不要自行 close terminal、release worker、继续领取任务或重复发送。PM 处理 Delivery 后决定 reuse / release / retain / ack。
 
 Out of Scope:
