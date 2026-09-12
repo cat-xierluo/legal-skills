@@ -52,6 +52,9 @@ bash scripts/test-review-acceptance-gate.sh
 bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-orca-runtime-identity.sh
+bash scripts/test-orca-auto-register.sh
+bash scripts/test-pm-monitor.sh
+bash scripts/test-reviewer-scope-guard.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
 bash scripts/test-recover-unconfigured.sh
@@ -72,5 +75,7 @@ bash scripts/smoke-orca-control-plane.sh
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
 - 若 Skill Lint 或 Harness 规则命中已知通用误报，保留原始证据和约束说明，不通过命令变形规避扫描。
+- 阴性断言必须区分预期无匹配与读取/执行错误；测试自身的故障注入也须能得到非零测试结算。后端策略测试使用隔离 fixture，不通过修改正式授权配置凑绿。
+- 锁竞争验收分别观察真实非阻塞锁操作与 CLI 拒绝结果。完整 CLI 的观测/子进程启动耗时不是单独的锁等待；测试防悬挂 timeout 也不是响应性能承诺。
 
 - runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
