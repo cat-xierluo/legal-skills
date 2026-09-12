@@ -91,6 +91,17 @@ for separator in ("\x0b", "\x0c", "\x85", "\u2028", "\u2029", "\x1c", "\x1d", "\
         first = bare.replace("+worker", "+worker" + separator + fragment)
         second = first.replace(fragment, fragment.replace("content-A", "content-B").replace("123", "abc"))
         assert mod.fingerprint(first) != mod.fingerprint(second), repr(separator)
+# Exercise the real subprocess boundary: universal-newline decoding used to
+# turn an in-content CR into LF before fingerprint() could preserve it.
+for separator in (b"\r", b"\xff", b"\xc2\x85"):
+    left = bare.encode().replace(b"+worker", b"+literal" + separator + b"@@ -7 +7 @@ alpha")
+    right = left.replace(b"alpha", b"beta")
+    decoded = [
+        mod.run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes.fromhex(sys.argv[1]))", raw.hex()], cwd=".").stdout
+        for raw in (left, right)
+    ]
+    assert decoded[0].encode("utf-8", errors="surrogateescape") == left
+    assert mod.fingerprint(decoded[0]) != mod.fingerprint(decoded[1]), repr(separator)
 PY
 then
   ok "normalization retains ranges, modes, paths, content and binary payload"
