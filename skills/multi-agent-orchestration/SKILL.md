@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.23.5"
+  version: "2.23.6"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -99,7 +99,7 @@ orca status --json
 多 worker supervised Wave 必须先一次性写 manifest、创建一个 Run 并预建全部 Task，receipt 成功后才并行启动。不要让并发 spawn 各自创建/重绑 Run，也不要在 `worker-start` 注入任务后再次发送完整 prompt。
 
 ```bash
-bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-receipt.json
+bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --from "$PM_TERMINAL" --receipt /tmp/wave-receipt.json
 WAVE_RUNTIME_ID=$(jq -er '._meta.runtimeId' /tmp/wave-receipt.json)
 
 bash scripts/spawn-worker.sh \
@@ -112,7 +112,7 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-新 Wave 必须把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；启动前、terminal 创建前与 worker-start 前核对，发现漂移即拒绝。旧调用省略时明确标记 `SPAWN_COORDINATOR_RUNTIME_UNVERIFIED`，不具备此检查；runtime 相同也不证明 handle 存活，仍需 Orca 的 consumer fencing。
+`PM_TERMINAL` 必须是明确属于本轮 PM 的终端句柄，不从 UI 焦点猜测。新 Wave 把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；sender、终端活性与 Run/coordinator 在创建 Worker 资源前共同核验，预建 Wave 不重复建 Task/重绑 Run。单 Worker 可在 quota/mem 通过后、新建 lease/worktree/terminal 前准备 Run；无可靠 sender 则拒绝。旧上下文缺 runtime 时只能正向重验当前绑定并明确历史连续性未验证，已有 runtime 漂移不能绕过；仍以 Orca consumer fencing 作最终判断。
 
 完整 manifest、Terminal-managed、Dispatch 自检、cold-start 恢复、settle 与 metadata 合同读取 `references/13-orca-cli-worker.md`。PM 的 read/show/send/wait/reply/release/ack/settle/pr-audit/closeout 命令读取 `references/14-pm-orchestrate.md`。
 
