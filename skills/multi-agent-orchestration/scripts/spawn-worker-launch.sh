@@ -69,6 +69,7 @@ launch_worker_session() {
             --terminal-handle "$ORCA_TERMINAL_HANDLE"
             --task-spec "$TASK_SPEC"
             --task-title "${TASK_TITLE:-spawn-worker $SESSION}"
+            --authority-receipt "${AUTHORITY_RECEIPT_FILE:-}"
           )
           if [ -n "$ORCA_RUN_ID" ]; then
             reg_args+=(--run-id "$ORCA_RUN_ID")
@@ -144,6 +145,14 @@ launch_worker_session() {
           # 与 supervised 分支同款告警：不阻断 spawn（terminal 已启动），显式告警代替静默缺失。
           echo "WARN: dispatch 绑定自动补绑未完成(manual-required)：worker 已启动，但 worker_done 无通道。PM 按 runbook #18 三步手动补绑：① orca orchestration dispatch --task $ORCA_SUPERVISED_TASK_ID --to $ORCA_TERMINAL_HANDLE --run $ORCA_SUPERVISED_RUN_ID --return-preamble（不带 --inject）② 从 preamble 提取真实 ctx id ③ 单行 terminal send 注入 worker_done/ask 命令形式（必须单行）" >&2
         fi
+        if [ "$ORCA_SUPERVISED_DISPATCH_BIND" = "ok" ]; then
+          orchestration_completion_authority_write \
+            "$ORCA_SUPERVISED_TASK_ID" "$ORCA_SUPERVISED_DISPATCH_ID" \
+            "$ORCA_TERMINAL_HANDLE" "$ORCA_SUPERVISED_RUN_ID" "$METADATA_FILE" "${AUTHORITY_RECEIPT_FILE:-}" || {
+              echo "ERROR: pre-created Task bound, but completion authority receipt could not be created" >&2
+              exit 1
+            }
+        fi
         # METADATA 补 supervised 块（run/task/coordinator/dispatch/bind）：与 supervised
         # 分支同款合同；空 dispatch_id 下 pm-orchestrate 自动按 terminal-managed 路由。
         if [ -f "$METADATA_FILE" ]; then
@@ -151,7 +160,13 @@ launch_worker_session() {
           jq --arg run "$ORCA_SUPERVISED_RUN_ID" --arg coordinator "$ORCA_SUPERVISED_COORDINATOR_HANDLE" \
             --arg task "$ORCA_SUPERVISED_TASK_ID" --arg disp "$ORCA_SUPERVISED_DISPATCH_ID" \
             --arg bind "$ORCA_SUPERVISED_DISPATCH_BIND" \
-            '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
+            --arg completion_file "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}" \
+            --arg completion_sha "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}" \
+            '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}
+             | if $completion_file != "" then
+                 .execution_authority.completion_authority_file = $completion_file
+                 | .execution_authority.completion_authority_sha256 = $completion_sha
+               else . end' "$METADATA_FILE" > "$tmp_meta" && mv "$tmp_meta" "$METADATA_FILE"
           echo "SPAWN_WORKER_ORCA_PRECREATED_TASK_BOUND: dispatch=${ORCA_SUPERVISED_DISPATCH_ID:-none} run=$ORCA_SUPERVISED_RUN_ID task=$ORCA_SUPERVISED_TASK_ID bind=$ORCA_SUPERVISED_DISPATCH_BIND" >&2
         fi
       fi

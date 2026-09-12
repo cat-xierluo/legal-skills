@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 import re
 import shlex
 import sys
-import base64
 from pathlib import Path
 from typing import Any
+
+from completion_authority import load_completion, live_dispatch_matches
 
 
 SEGMENT = (
@@ -178,6 +181,14 @@ def _allowed_redirect_prefixes() -> tuple[str, ...]:
 
 
 def _is_allowed_redirect_target(target: str) -> bool:
+    # A worktree can itself live under /tmp. Temporary-path permission must not
+    # make the PM authority directory writable through `echo > receipt.json`.
+    authority_path = os.environ.get("WORKER_AUTHORITY_RECEIPT_FILE", "")
+    if authority_path:
+        directory = os.path.realpath(os.path.dirname(authority_path))
+        resolved = os.path.realpath(target)
+        if resolved == directory or resolved.startswith(directory + os.sep):
+            return False
     if target in ALLOWED_REDIRECT_STD_TARGETS:
         return True
     if target.startswith("&") or target.startswith("-"):
@@ -405,25 +416,95 @@ def _valid_bounded_timeout(value: object) -> bool:
     return 1 <= timeout <= 3_600_000
 
 
-def is_safe_orca_worker_protocol_command(command: str) -> bool:
-    """Allow only Dispatch-scoped worker protocol commands; Orca validates live IDs."""
+def _tokenize_orca_protocol_command(command: str) -> list[str] | None:
+    """Parse one native Orca command, including its documented ``\\\n`` layout."""
+    if "\x00" in command:
+        return None
+    # Orca's live preamble renders long commands with POSIX line continuations.
+    # shlex(punctuation_chars=...) otherwise emits every continued newline as a
+    # positional token, so an exact copy of the native command is denied.
+    normalized = re.sub(r"\\\r?\n[ \t]*", " ", command)
+    if "\n" in normalized or "\r" in normalized:
+        return None
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>()")
+        lexer = shlex.shlex(normalized, posix=True, punctuation_chars=";&|<>()")
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
-        return False
+        return None
     if len(tokens) < 3 or any(
         token in {";", "&&", "&", "|", "||", "<", ">", "(", ")"}
         for token in tokens
     ):
-        return False
+        return None
     if any("$(" in token or "`" in token for token in tokens):
-        return False
+        return None
     if os.path.basename(tokens[0]) not in {"orca", "orca-ide", "orca-dev"}:
-        return False
+        return None
     if tokens[1] != "orchestration":
+        return None
+    return tokens
+
+
+def _load_completion_authority(path_text: str) -> dict[str, str] | None:
+    if not path_text:
+        return None
+    try:
+        data = load_completion(
+            path_text,
+            os.environ.get("WORKER_AUTHORITY_RECEIPT_FILE", ""),
+            os.environ.get("WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256", ""),
+        )
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("schema") != "multi-agent-orchestration.completion-authority.v1":
+        return None
+    required = {
+        "state": "active",
+        "task_id": "task_",
+        "dispatch_id": "ctx_",
+        "terminal_handle": "term_",
+        "run_id": "run_",
+    }
+    for key, prefix in required.items():
+        value = data.get(key)
+        if key == "state":
+            if value != prefix:
+                return None
+        elif not isinstance(value, str) or not value.startswith(prefix):
+            return None
+    capability_hash = data.get("capability_hash")
+    process_incarnation = data.get("process_incarnation")
+    if not isinstance(capability_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", capability_hash):
+        return None
+    if not isinstance(process_incarnation, str) or not process_incarnation:
+        return None
+    if not isinstance(data.get("runtime_id"), str) or not data["runtime_id"]:
+        return None
+    return {key: str(value) for key, value in data.items() if isinstance(value, str)}
+
+
+def _matches_completion_authority(options: dict[str, str | bool], path_text: str) -> bool:
+    authority = _load_completion_authority(path_text)
+    if authority is None:
         return False
+    capability = options.get("--dispatch-capability")
+    if not isinstance(capability, str):
+        return False
+    return (
+        options.get("--task-id") == authority["task_id"]
+        and options.get("--dispatch-id") == authority["dispatch_id"]
+        and options.get("--from") == authority["terminal_handle"]
+        and hashlib.sha256(capability.encode("utf-8")).hexdigest() == authority["capability_hash"]
+        and live_dispatch_matches(authority, os.environ.get("WORKER_ORCA_CLI_BIN", ""))
+    )
+
+
+def orca_worker_protocol_decision(command: str, completion_authority_file: str) -> tuple[bool, bool]:
+    """Return ``(recognized, allowed)`` for the deliberately small Orca surface."""
+    tokens = _tokenize_orca_protocol_command(command)
+    if tokens is None:
+        return False, False
 
     subcommand = tokens[2]
     args = tokens[3:]
@@ -438,18 +519,22 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
             },
         )
         if options is None:
-            return False
+            return True, False
         message_type = options.get("--type")
         if message_type not in {"worker_done", "heartbeat", "escalation"}:
-            return False
+            return True, False
         required = {"--type", "--subject", "--task-id", "--dispatch-id"}
         if message_type in {"worker_done", "escalation"}:
             required.add("--body")
         if not required.issubset(options):
-            return False
+            return True, False
         if message_type == "worker_done":
-            return options.get("--outcome") in {"succeeded", "failed"}
-        return "--outcome" not in options
+            return True, (
+                tokens[0] in {"orca", "orca-ide", "orca-dev", os.environ.get("WORKER_ORCA_CLI_BIN", "")}
+                and options.get("--outcome") in {"succeeded", "failed"}
+                and _matches_completion_authority(options, completion_authority_file)
+            )
+        return True, "--outcome" not in options
 
     if subcommand == "ask":
         options = _parse_long_options(
@@ -461,12 +546,12 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
             },
         )
         if options is None:
-            return False
+            return True, False
         has_question = "--question" in options
         has_resume = "--resume" in options
         if has_question == has_resume:
-            return False
-        return _valid_bounded_timeout(options.get("--timeout-ms"))
+            return True, False
+        return True, _valid_bounded_timeout(options.get("--timeout-ms"))
 
     if subcommand == "check":
         options = _parse_long_options(
@@ -475,17 +560,22 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
             value_options={"--types", "--timeout-ms", "--retry-request", "--terminal"},
         )
         if options is None:
-            return False
+            return True, False
         history_modes = sum(option in options for option in {"--unread", "--peek", "--all"})
         if history_modes > 1:
-            return False
+            return True, False
         if "--wait" in options:
-            return _valid_bounded_timeout(options.get("--timeout-ms"))
+            return True, _valid_bounded_timeout(options.get("--timeout-ms"))
         if "--timeout-ms" in options:
-            return _valid_bounded_timeout(options.get("--timeout-ms"))
-        return True
+            return True, _valid_bounded_timeout(options.get("--timeout-ms"))
+        return True, True
 
-    return False
+    return True, False
+
+
+def is_safe_orca_worker_protocol_command(command: str, completion_authority_file: str = "") -> bool:
+    """Compatibility wrapper used by tests and callers that only need a bool."""
+    return orca_worker_protocol_decision(command, completion_authority_file)[1]
 
 
 def main() -> int:
@@ -506,6 +596,7 @@ def main() -> int:
         return 0
 
     auth_file = os.environ.get("WORKER_INSTALL_AUTH_FILE", "").strip()
+    completion_authority_file = os.environ.get("WORKER_COMPLETION_AUTHORITY_FILE", "").strip()
     protected_files = {
         value
         for value in (
@@ -513,6 +604,7 @@ def main() -> int:
             os.environ.get("WORKER_AUTHORITY_RECEIPT_FILE", "").strip(),
             os.environ.get("WORKER_GUARD_SETTINGS_FILE", "").strip(),
             os.environ.get("WORKER_GUARD_ATTESTATION_FILE", "").strip(),
+            completion_authority_file,
         )
         if value
     }
@@ -552,11 +644,18 @@ def main() -> int:
         return 0
 
     if not is_install_command(command):
-        if (
-            command in allowed_shell
-            or is_safe_lifecycle_command(command)
-            or is_safe_orca_worker_protocol_command(command)
-        ):
+        protocol_recognized, protocol_allowed = orca_worker_protocol_decision(
+            command, completion_authority_file
+        )
+        if protocol_recognized:
+            if protocol_allowed:
+                return 0
+            deny(
+                "ORCA_COMPLETION_AUTHORITY_INVALID",
+                "Orca 协议命令与本次运行期 completion receipt 不匹配；立即停止，不得改写、包装或重试",
+            )
+            return 0
+        if command in allowed_shell or is_safe_lifecycle_command(command):
             return 0
         deny(
             "SHELL_COMMAND_NOT_ALLOWLISTED",

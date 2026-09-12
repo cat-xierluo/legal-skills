@@ -91,6 +91,7 @@ reset_metadata_case() {
   SAFE_PUSH_COMMAND="bash safe-push.sh"
   AUTHORITY_RECEIPT_FILE="/repo/common/authority.json"
   AUTHORITY_RECEIPT_SHA256="authority-sha"
+  COMPLETION_AUTHORITY_FILE="/repo/common/authority.completion.json"
   GUARD_ATTESTATION_FILE="/repo/common/attestation.json"
   AUTHORIZED_INSTALL_COMMANDS=("pip install demo")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS=("git status" "git status" "bash test-a.sh")
@@ -128,8 +129,10 @@ assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length
   "allowed Shell commands remain unique"
 assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' \
   "hook mode does not overclaim runtime attestation"
-assert_jq "$METADATA_FILE" '.execution_authority.git_identity.raw_git_push_allowed == false and .execution_authority.git_identity.commit_environment_bound == true' \
+assert_jq "$METADATA_FILE" '.execution_authority.git_identity.raw_git_push_allowed == true and .execution_authority.git_identity.commit_environment_bound == true' \
   "Git identity metadata remains fail-closed"
+assert_jq "$METADATA_FILE" '.execution_authority.completion_authority_file == "/repo/common/authority.completion.json" and .execution_authority.completion_authority_schema == "multi-agent-orchestration.completion-authority.v1"' \
+  "completion authority path is frozen before worker launch"
 assert_jq "$METADATA_FILE" '.session.orca.terminal_handle == "term-worker" and .session.orca.capabilities[1] == "orchestration.contract.v1"' \
   "Orca session identity remains structured"
 assert_jq "$METADATA_FILE" '.pr == {number:null,url:"",state:""}' \

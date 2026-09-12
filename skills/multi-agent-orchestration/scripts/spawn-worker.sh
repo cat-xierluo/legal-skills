@@ -175,6 +175,7 @@ INSTALL_GUARD_MODE="hook"
 INSTALL_AUTH_JSON=""
 AUTHORITY_RECEIPT_FILE=""
 AUTHORITY_RECEIPT_SHA256=""
+COMPLETION_AUTHORITY_FILE=""
 INSTALL_GUARD_SETTINGS_FILE=""
 GIT_EXPECTED_NAME=""
 GIT_EXPECTED_EMAIL=""
@@ -637,6 +638,7 @@ if [ "$PROJECT_IS_GIT" -eq 1 ]; then
   esac
   git_common_dir=$(cd "$git_common_dir" && pwd -P)
   AUTHORITY_RECEIPT_FILE="$git_common_dir/agent-authority/$SESSION.json"
+  COMPLETION_AUTHORITY_FILE="$git_common_dir/agent-authority/$SESSION.completion.json"
   if [ "$INSTALL_GUARD_MODE" = "hook" ]; then
     GUARD_ATTESTATION_FILE="$git_common_dir/agent-authority/$SESSION.hook-attested.json"
   fi
@@ -1125,7 +1127,7 @@ dependency_install_guard_setup() {
     return 1
   fi
 
-  local auth_q auth_b64 auth_b64_q backend_q receipt_q settings_q attestation_q
+  local auth_q auth_b64 auth_b64_q backend_q receipt_q completion_q settings_q attestation_q receipt_content_sha receipt_sha_q orca_cli_q
   case "$WORKER_BACKEND" in
     claude-code|claude_code) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.claude/settings.local.json" ;;
     codebuddy) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.codebuddy/settings.local.json" ;;
@@ -1140,9 +1142,16 @@ dependency_install_guard_setup() {
   printf -v auth_b64_q '%q' "$auth_b64"
   printf -v backend_q '%q' "${WORKER_BACKEND:-claude-code}"
   printf -v receipt_q '%q' "$AUTHORITY_RECEIPT_FILE"
+  receipt_content_sha=""
+  if [ -n "$AUTHORITY_RECEIPT_FILE" ] && [ "$DRY_RUN" -eq 0 ]; then
+    receipt_content_sha=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+  fi
+  printf -v receipt_sha_q '%q' "$receipt_content_sha"
+  printf -v orca_cli_q '%q' "${ORCA_CLI_BIN:-}"
+  printf -v completion_q '%q' "$COMPLETION_AUTHORITY_FILE"
   printf -v settings_q '%q' "$INSTALL_GUARD_SETTINGS_FILE"
   printf -v attestation_q '%q' "$GUARD_ATTESTATION_FILE"
-  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
+  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256=$receipt_sha_q WORKER_COMPLETION_AUTHORITY_FILE=$completion_q WORKER_ORCA_CLI_BIN=$orca_cli_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
   if [ -n "$GIT_EXPECTED_NAME" ]; then
     local git_name_q git_email_q
     printf -v git_name_q '%q' "$GIT_EXPECTED_NAME"

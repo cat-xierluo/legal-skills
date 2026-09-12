@@ -379,8 +379,12 @@ FAKE_ORCA_BIN="$CASE_ROOT/fake-orca"
 FAKE_ORCA_STATE="$CASE_ROOT/fake-orca-state"
 FAKE_ORCA_LOG="$CASE_ROOT/fake-orca-calls.log"
 FAKE_ORCA_SENDS="$CASE_ROOT/fake-orca-sends.log"
+FAKE_ORCA_WORKTREE="$CASE_ROOT/fake-orca-worktree"
+FAKE_ORCA_CAPABILITY='dcap_register_fixture'
+FAKE_ORCA_CAPABILITY_HASH=$(printf '%s' "$FAKE_ORCA_CAPABILITY" | shasum -a 256 | awk '{print $1}')
 # fake CLI 作为 register 子进程的孙进程运行，状态/日志路径必须导出
-export FAKE_ORCA_STATE FAKE_ORCA_LOG FAKE_ORCA_SENDS
+export FAKE_ORCA_STATE FAKE_ORCA_LOG FAKE_ORCA_SENDS FAKE_ORCA_WORKTREE
+export FAKE_ORCA_CAPABILITY FAKE_ORCA_CAPABILITY_HASH
 cat > "$FAKE_ORCA_BIN" <<'SH'
 #!/usr/bin/env bash
 # fake orca CLI：由 $FAKE_ORCA_STATE 状态文件驱动 canned 响应
@@ -391,6 +395,8 @@ case "$1 $2" in
     printf '%s\n' '{"result":{"run":{"id":"run-1","coordinator_handle":"term-pm"}}}' ;;
   "orchestration task-create")
     printf '%s\n' '{"result":{"task":{"id":"task-1"}}}' ;;
+  "worktree show")
+    jq -n --arg path "$FAKE_ORCA_WORKTREE" '{result:{worktree:{id:"repo-1::worker",path:$path}}}' ;;
   "orchestration worker-start")
     if [ -f "$state/worker-start-has-dispatch" ]; then
       printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-healthy"}}}}'
@@ -400,9 +406,9 @@ case "$1 $2" in
     fi ;;
   "orchestration dispatch-show")
     if [ -f "$state/worker-start-has-dispatch" ]; then
-      printf '%s\n' '{"result":{"dispatch":{"id":"ctx-healthy"}}}'
+      jq -n --arg hash "$FAKE_ORCA_CAPABILITY_HASH" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:"ctx-healthy",task_id:"task-1",assignee_handle:"term-worker",run_id:"run-1",capability_hash:$hash,process_incarnation:"process-healthy"}}}'
     elif [ -f "$state/rebound" ]; then
-      printf '%s\n' "{\"result\":{\"dispatch\":{\"id\":\"$(cat "$state/dispatch-id" 2>/dev/null || echo ctx-auto)\"}}}"
+      jq -n --arg hash "$FAKE_ORCA_CAPABILITY_HASH" --arg id "$(cat "$state/dispatch-id" 2>/dev/null || echo ctx-auto)" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:$id,task_id:"task-1",assignee_handle:"term-worker",run_id:"run-1",capability_hash:$hash,process_incarnation:"process-auto"}}}'
     else
       printf '%s\n' '{"result":{}}'
     fi ;;
@@ -413,8 +419,8 @@ case "$1 $2" in
     fi
     printf '%s\n' "ctx-auto" > "$state/dispatch-id"
     touch "$state/rebound"
-    # 混合形态：JSON + preamble 文本（真实 --return-preamble 可能非纯 JSON）
-    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-auto"},"preamble":"live preamble dispatch_id=ctx-auto task=task-1"}}' ;;
+    jq -n --arg cap "$FAKE_ORCA_CAPABILITY" \
+      '{result:{dispatch:{id:"ctx-auto"},preamble:("live preamble\norca orchestration send --from term-worker --dispatch-capability " + $cap + " \\\n  --type worker_done --subject done \\\n  --body summary --task-id task-1 --dispatch-id ctx-auto --outcome succeeded --json")}}' ;;
   "terminal send")
     if [ -f "$state/inject-fails" ]; then
       echo "ERROR: terminal send failed" >&2
@@ -432,6 +438,16 @@ reset_dispatch_case() {
   mkdir -p "$FAKE_ORCA_STATE"
   : > "$FAKE_ORCA_LOG"
   : > "$FAKE_ORCA_SENDS"
+  rm -rf "$FAKE_ORCA_WORKTREE"
+  mkdir -p "$FAKE_ORCA_WORKTREE/.claude/agent-sessions/register-session"
+  mkdir -p "$CASE_ROOT/agent-authority"
+  authority="$CASE_ROOT/agent-authority/register-authority.json"
+  rm -f "$CASE_ROOT/agent-authority/register-authority.completion.json"
+  printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$authority"
+  jq -n --arg authority "$authority" '{
+    session:{orca:{terminal_handle:"term-worker",worktree_id:"repo-1::worker"}},
+    execution_authority:{authority_receipt_file:$authority}
+  }' > "$FAKE_ORCA_WORKTREE/.claude/agent-sessions/register-session/METADATA.json"
 }
 
 run_register_helper() {
@@ -439,6 +455,7 @@ run_register_helper() {
     bash "$SCRIPT_DIR/orca-supervised-register.sh" \
     --worktree-id "repo-1::worker" \
     --terminal-handle "term-worker" \
+    --authority-receipt "$authority" \
     --task-spec "do the thing" "$@"
 }
 
@@ -463,6 +480,20 @@ if grep -Fq 'dispatch-show' "$FAKE_ORCA_LOG"; then
   ok "Task-076 self-check actively calls dispatch-show after worker-start"
 else
   bad "Task-076 self-check actively calls dispatch-show after worker-start"
+fi
+healthy_completion=$(sed -n 's/^ORCAREG_COMPLETION_AUTHORITY_FILE=//p' "$CASE_ROOT/t76-healthy.out")
+if [ -f "$healthy_completion" ] && jq -e \
+  '.task_id == "task-1" and .dispatch_id == "ctx-healthy" and .terminal_handle == "term-worker"' \
+  "$healthy_completion" >/dev/null; then
+  ok "Task-076 healthy path creates the exact post-start completion receipt"
+else
+  bad "Task-076 healthy path creates the exact post-start completion receipt"
+fi
+if grep -Fq "$FAKE_ORCA_CAPABILITY" "$healthy_completion" \
+  || grep -R -Fq "$FAKE_ORCA_CAPABILITY" "$FAKE_ORCA_WORKTREE/.claude/agent-sessions"; then
+  bad "Task-076 receipts and Session Context contain no capability plaintext"
+else
+  ok "Task-076 receipts and Session Context contain no capability plaintext"
 fi
 
 # 用例 2（实战事故形态）：receipt 与 dispatch-show 均空 → 三步自动补绑成功
@@ -496,10 +527,10 @@ send_lines=$(wc -l < "$FAKE_ORCA_SENDS" | tr -d ' ')
 assert_eq "$send_lines" "1" "Task-076 rebind injects exactly one single-line send"
 if grep -Fq 'ctx-auto' "$FAKE_ORCA_SENDS" && grep -Fq -- '--type worker_done' "$FAKE_ORCA_SENDS" \
   && grep -Fq -- '--task-id task-1' "$FAKE_ORCA_SENDS" && grep -Fq -- '--from term-worker' "$FAKE_ORCA_SENDS" \
-  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS"; then
-  ok "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  && grep -Fq -- '--dispatch-capability' "$FAKE_ORCA_SENDS"; then
+  ok "Task-076 injected line carries the native capability-bound worker_done"
 else
-  bad "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  bad "Task-076 injected line carries the native capability-bound worker_done"
 fi
 
 # 用例 3（补绑 mutation 失败）：manual-required + 显式告警 + 不阻断（exit 0）
@@ -621,7 +652,8 @@ case "$1 $2" in
   "orchestration worker-start")
     printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-pregate"}}}}' ;;
   "orchestration dispatch-show")
-    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-pregate"}}}' ;;
+    capability_hash=$(printf '%s' 'dcap_e2e_fixture' | shasum -a 256 | awk '{print $1}')
+    jq -n --arg hash "$capability_hash" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:"ctx-pregate",task_id:"task-pregate",assignee_handle:"term-pregate",run_id:"run-pregate",capability_hash:$hash,process_incarnation:"process-pregate"}}}' ;;
   *) exit 1 ;;
 esac
 SH

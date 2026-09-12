@@ -83,6 +83,7 @@ write_metadata() {
     --arg safe_push_command "$SAFE_PUSH_COMMAND" \
     --arg authority_receipt_file "$AUTHORITY_RECEIPT_FILE" \
     --arg authority_receipt_sha256 "$AUTHORITY_RECEIPT_SHA256" \
+    --arg completion_authority_file "${COMPLETION_AUTHORITY_FILE:-}" \
     --arg guard_attestation_file "$GUARD_ATTESTATION_FILE" \
     --arg enforcement_source "$enforcement_source" \
     --argjson worker_mirror_authoritative "$worker_mirror_authoritative" \
@@ -174,6 +175,8 @@ write_metadata() {
         enforcement_source: $enforcement_source,
         authority_receipt_file: $authority_receipt_file,
         authority_receipt_sha256: $authority_receipt_sha256,
+        completion_authority_file: $completion_authority_file,
+        completion_authority_schema: "multi-agent-orchestration.completion-authority.v1",
         guard_attestation_file: $guard_attestation_file,
         worker_mirror_authoritative: $worker_mirror_authoritative,
         git_identity: {
