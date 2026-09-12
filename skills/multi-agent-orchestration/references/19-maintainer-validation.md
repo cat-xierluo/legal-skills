@@ -51,6 +51,7 @@ bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh
 bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
+bash scripts/test-orca-runtime-identity.sh
 bash scripts/test-settle-liveness.sh
 bash scripts/test-settle-command.sh
 bash scripts/test-recover-unconfigured.sh
