@@ -100,6 +100,7 @@ reset_metadata_case() {
   ORCA_TERMINAL_HANDLE="term-worker"
   ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
   ORCA_APP_VERSION="1.4.9"
+  ORCA_EXPECTED_RUNTIME_ID="runtime-metadata"
   ORCA_CAPABILITIES_JSON='["terminal.multiplex.v1","orchestration.contract.v1"]'
 }
 
@@ -128,10 +129,13 @@ assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length
   "allowed Shell commands remain unique"
 assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' \
   "hook mode does not overclaim runtime attestation"
-assert_jq "$METADATA_FILE" '.execution_authority.git_identity.raw_git_push_allowed == false and .execution_authority.git_identity.commit_environment_bound == true' \
-  "Git identity metadata remains fail-closed"
+# Existing published policy permits ordinary push; this sender change does not alter it.
+assert_jq "$METADATA_FILE" '.execution_authority.git_identity == {expected_name:"Expected User",expected_email:"expected@example.com",integration_base:"origin/main",safe_push_command:"bash safe-push.sh",raw_git_push_allowed:true,commit_environment_bound:true}' \
+  "published Git policy and exact identity metadata are preserved"
 assert_jq "$METADATA_FILE" '.session.orca.terminal_handle == "term-worker" and .session.orca.capabilities[1] == "orchestration.contract.v1"' \
   "Orca session identity remains structured"
+assert_jq "$METADATA_FILE" '.session.orca.runtime_id == "runtime-metadata"' \
+  "verified coordinator runtime survives supervised block replacement"
 assert_jq "$METADATA_FILE" '.pr == {number:null,url:"",state:""}' \
   "PR placeholder contract is preserved"
 
@@ -157,6 +161,7 @@ ORCA_WORKTREE_ID=""
 ORCA_WORKTREE_PATH=""
 ORCA_TERMINAL_HANDLE=""
 ORCA_APP_VERSION=""
+ORCA_EXPECTED_RUNTIME_ID=""
 ORCA_CAPABILITIES_JSON='[]'
 write_metadata > "$CASE_ROOT/lightweight.out"
 assert_jq "$METADATA_FILE" '.isolation == {mode:"lightweight", lightweight_auto:1}' \

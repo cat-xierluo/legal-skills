@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=orca-runtime.sh
 source "$SCRIPT_DIR/orca-runtime.sh"
+# shellcheck source=orca-coordinator.sh
+source "$SCRIPT_DIR/orca-coordinator.sh"
 # shellcheck source=provider-lease-root.sh
 source "$SCRIPT_DIR/provider-lease-root.sh"
 
@@ -66,6 +68,7 @@ Common:
   --output PATH    With reconcile: immutable settlement receipt destination
   --worktree PATH   Worker worktree path
   --session NAME    spawn-worker session id
+  --from HANDLE     Explicit PM sender; otherwise use this session's recorded coordinator
   --text TEXT       Prompt, guidance or reply body
   --prompt-file P   Read prompt/guidance from a file
   --lines N         Read limit (default: 50); --limit accepted as an alias (orca terminal read spelling)
@@ -107,6 +110,7 @@ WAIT_TIMEOUT=60
 DELIVERY_ID=""
 MESSAGE_ID=""
 OBJECTIVE=""
+PM_FROM=""
 REASON=""
 FORCE=0
 DESTROY=0
@@ -135,6 +139,7 @@ while [[ $# -gt 0 ]]; do
     --delivery-id) DELIVERY_ID="$2"; shift 2 ;;
     --message-id) MESSAGE_ID="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
+    --from) PM_FROM="${2:?--from needs a handle}"; shift 2 ;;
     --destroy) DESTROY=1; shift ;;
     --reason) REASON="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
@@ -174,8 +179,22 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 
 if [ "$COMMAND" = "run-create" ]; then
   [ -n "$OBJECTIVE" ] || { echo "ERROR: run-create requires --objective" >&2; exit 64; }
-  orca_runtime_init
-  orca_cli orchestration run-create --objective "$OBJECTIVE" --json
+  recorded_sender=""
+  recorded_runtime=""
+  allow_environment=1
+  if [ -n "$WORKTREE$SESSION" ]; then
+    [ -n "$WORKTREE" ] && [ -n "$SESSION" ] || {
+      echo "ERROR: run-create session context requires both --worktree and --session" >&2; exit 64;
+    }
+    metadata="$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
+    [ -f "$metadata" ] || { echo "ERROR: METADATA not found: $metadata" >&2; exit 64; }
+    recorded_sender=$(jq -r '.session.orca.supervised.coordinator_handle // empty' "$metadata")
+    recorded_runtime=$(jq -r '.session.orca.runtime_id // empty' "$metadata")
+    allow_environment=0
+  fi
+  orca_coordinator_select "$PM_FROM" "$recorded_sender" "$allow_environment" || exit $?
+  orca_coordinator_prepare create "" "$recorded_runtime" "$OBJECTIVE" || exit $?
+  printf '%s\n' "$ORCA_PM_RUN_RECEIPT"
   exit 0
 fi
 
@@ -215,6 +234,7 @@ WORKER_HANDLE=""
 ORCA_RUN_ID=""
 ORCA_DISPATCH_ID=""
 ORCA_COORDINATOR_HANDLE=""
+ORCA_RECORDED_RUNTIME_ID=""
 ORCA_WORKTREE_ID=""
 PROVIDER_LEASE_FILE=""
 PROJECT_DIR=""
@@ -230,6 +250,7 @@ resolve_worker() {
   ORCA_RUN_ID=$(jq -r '.session.orca.supervised.run_id // empty' "$METADATA")
   ORCA_DISPATCH_ID=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$METADATA")
   ORCA_COORDINATOR_HANDLE=$(jq -r '.session.orca.supervised.coordinator_handle // empty' "$METADATA")
+  ORCA_RECORDED_RUNTIME_ID=$(jq -r '.session.orca.runtime_id // empty' "$METADATA")
   ORCA_WORKTREE_ID=$(jq -r '.session.orca.worktree_id // empty' "$METADATA")
   PROVIDER_LEASE_FILE=$(jq -r '.runtime.provider_lease.file // empty' "$METADATA")
   PROJECT_DIR=$(jq -r '.project // empty' "$METADATA")
@@ -315,31 +336,29 @@ ensure_coordinator_binding() {
     echo "ERROR: supervised METADATA is missing run_id" >&2
     return 2
   }
-  orca_runtime_init
-  local use_out rebound_handle
-  use_out=$(orca_cli orchestration run-use --id "$ORCA_RUN_ID" --json 2>&1) || {
-    echo "ERROR: cannot bind the invoking PM terminal to Run $ORCA_RUN_ID: $use_out" >&2
-    echo "RECOVERY: use read-only show/dispatch-show for inspection; do not ack or clean an active Dispatch" >&2
-    return 2
-  }
-  rebound_handle=$(printf '%s' "$use_out" | jq -r '.result.run.coordinator_handle // .result.run.coordinatorHandle // empty')
-  [ -n "$rebound_handle" ] || {
-    echo "ERROR: run-use succeeded without a coordinator handle" >&2
-    return 2
-  }
-  if [ "$rebound_handle" != "$ORCA_COORDINATOR_HANDLE" ]; then
-    ORCA_COORDINATOR_HANDLE="$rebound_handle"
+  orca_coordinator_select "$PM_FROM" "$ORCA_COORDINATOR_HANDLE" 0 || return $?
+  if [ -z "$ORCA_RECORDED_RUNTIME_ID" ]; then
+    # Legacy metadata can establish a current binding, never historical continuity.
+    orca_coordinator_prepare verify "$ORCA_RUN_ID" || return $?
+    echo "PM_ORCHESTRATE_RUNTIME_REVERIFIED: legacy metadata; historical continuity NOT_VERIFIED" >&2
+    ORCA_RECORDED_RUNTIME_ID="$ORCA_PM_RUNTIME_ID"
+  fi
+  orca_coordinator_prepare use "$ORCA_RUN_ID" "$ORCA_RECORDED_RUNTIME_ID" || return $?
+  if [ "$ORCA_PM_SENDER" != "$ORCA_COORDINATOR_HANDLE" ] || \
+    [ "$(jq -r '.session.orca.runtime_id // empty' "$METADATA")" != "$ORCA_PM_RUNTIME_ID" ]; then
     local tmp_meta
-    tmp_meta=$(mktemp)
-    if jq --arg coordinator "$rebound_handle" \
-        '.session.orca.supervised.coordinator_handle = $coordinator' "$METADATA" > "$tmp_meta" \
+    tmp_meta=$(mktemp "${METADATA}.tmp.XXXXXX") || return 2
+    if jq --arg coordinator "$ORCA_PM_SENDER" --arg runtime "$ORCA_PM_RUNTIME_ID" \
+        '.session.orca.supervised.coordinator_handle = $coordinator | .session.orca.runtime_id = $runtime' "$METADATA" > "$tmp_meta" \
         && mv "$tmp_meta" "$METADATA"; then
-      echo "PM_ORCHESTRATE_COORDINATOR_REBOUND: run=$ORCA_RUN_ID handle=$rebound_handle" >&2
+      echo "PM_ORCHESTRATE_COORDINATOR_REBOUND: run=$ORCA_RUN_ID handle=$ORCA_PM_SENDER" >&2
     else
       rm -f "$tmp_meta"
-      echo "WARN: Run rebound but METADATA coordinator handle could not be refreshed" >&2
+      echo "ERROR: Run rebound but METADATA could not be refreshed; inspect binding before retrying" >&2
+      return 2
     fi
   fi
+  ORCA_COORDINATOR_HANDLE="$ORCA_PM_SENDER"
 }
 
 load_text() {
@@ -381,7 +400,7 @@ cmd_send() {
   if [ "$WORKER_MODE" = "orca_supervised" ]; then
     ensure_coordinator_binding || exit 2
     orca_cli orchestration send --to "dispatch:$ORCA_DISPATCH_ID" \
-      --type status --subject "PM guidance" --body "$text" --json
+      --type status --subject "PM guidance" --body "$text" --from "$ORCA_COORDINATOR_HANDLE" --json
     return
   fi
   if needs_prompt_file "$text"; then
@@ -424,7 +443,7 @@ cmd_wait() {
     ensure_coordinator_binding || exit 2
     # A timeout is a liveness checkpoint, not failure. The JSON remains unacknowledged.
     orca_cli orchestration check --wait \
-      --types worker_done,escalation,question --timeout-ms "$timeout_ms" --json
+      --types worker_done,escalation,question --timeout-ms "$timeout_ms" --terminal "$ORCA_COORDINATOR_HANDLE" --json
   elif [ "$WORKER_MODE" = "orca_terminal" ]; then
     orca_runtime_init
     orca_cli terminal wait --terminal "$WORKER_HANDLE" --for tui-idle --timeout-ms "$timeout_ms" --json
@@ -438,7 +457,7 @@ cmd_ack() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: ack requires an Orca supervised worker" >&2; exit 64; }
   [ -n "$DELIVERY_ID" ] || { echo "ERROR: ack requires --delivery-id" >&2; exit 64; }
   ensure_coordinator_binding || exit 2
-  orca_cli orchestration check --ack "$DELIVERY_ID" --json
+  orca_cli orchestration check --ack "$DELIVERY_ID" --terminal "$ORCA_COORDINATOR_HANDLE" --json
 }
 
 cmd_reply() {
@@ -447,7 +466,7 @@ cmd_reply() {
   local text
   text=$(load_text)
   ensure_coordinator_binding || exit 2
-  orca_cli orchestration reply --id "$MESSAGE_ID" --body "$text" --json
+  orca_cli orchestration reply --id "$MESSAGE_ID" --body "$text" --from "$ORCA_COORDINATOR_HANDLE" --json
 }
 
 cmd_account() {
@@ -458,7 +477,7 @@ cmd_account() {
   printf '%s\n' "$result"
   if [ "$COMMAND" = "release" ] && [ -n "$PROVIDER_LEASE_FILE" ]; then
     local workers terminal_state lease_root
-    workers=$(orca_cli orchestration worker-list --json 2>/dev/null || echo '{}')
+    workers=$(orca_cli orchestration worker-list --run "$ORCA_RUN_ID" --json 2>/dev/null || echo '{}')
     terminal_state=$(printf '%s' "$workers" | jq -r --arg dispatch "$ORCA_DISPATCH_ID" '
       [(.result.workers // [])[]?
         | select((.dispatch_id // .dispatchId // .id) == $dispatch)
@@ -862,7 +881,7 @@ reauthorize_task_state() {
 
 reauthorize_consume_pending_wait() {
   local resume_text="$1" dispatch_id="$2" check_out msg_id body
-  check_out=$(orca_cli orchestration check --json 2>/dev/null) || check_out=""
+  check_out=$(orca_cli orchestration check --terminal "$ORCA_COORDINATOR_HANDLE" --json 2>/dev/null) || check_out=""
   msg_id=""
   if [ -n "$check_out" ]; then
     set +e +o pipefail
@@ -882,7 +901,7 @@ reauthorize_consume_pending_wait() {
   fi
   body="$resume_text"
   [ -n "$body" ] || body="PM reauthorize: 授权快照已刷新，请继续执行当前任务"
-  if orca_cli orchestration reply --id "$msg_id" --body "$body" --json >/dev/null 2>&1; then
+  if orca_cli orchestration reply --id "$msg_id" --body "$body" --from "$ORCA_COORDINATOR_HANDLE" --json >/dev/null 2>&1; then
     echo "PM_REAUTHORIZE_WAIT_CONSUMED: message=${msg_id}（worker 等待已解锁；task 保持 dispatched）"
   else
     echo "WARN: reply $msg_id 失败；worker 等待未被消费，后续重注册预计仍被 TASK_REUSED 拒绝" >&2

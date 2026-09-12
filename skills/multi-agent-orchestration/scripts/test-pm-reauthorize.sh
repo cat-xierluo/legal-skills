@@ -39,6 +39,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PM="$SCRIPT_DIR/pm-orchestrate.sh"
 TMP_ROOT=$(mktemp -d)
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 DEBUG_RC="${DEBUG_RC:-0}" # 置 1 时打印每次 run_reauth 的 rc 与完整输出（调试用）
 
@@ -73,10 +74,59 @@ set -euo pipefail
   printf '\n'
 } >> "$FAKE_ORCA_LOG"
 S="$FAKE_ORCA_STATE"
+reject_argv() {
+  echo "FAKE_ORCA_UNSUPPORTED_ARGV: $*" >&2
+  echo REJECTED_ARGV >> "$FAKE_ORCA_LOG"
+  exit 64
+}
+validate_flags() {
+  local allowed="$1"; shift
+  local flag
+  local from="" run=""
+  while [ "$#" -gt 0 ]; do
+    flag="$1"; shift
+    case " $allowed " in *" $flag "*) ;; *) reject_argv "$flag" ;; esac
+    case "$flag" in
+      --json|--enter) ;;
+      *)
+        [ "$#" -gt 0 ] || reject_argv "$flag needs a value"
+        case "$flag" in --from) from="$1" ;; --run) run="$1" ;; esac
+        shift ;;
+    esac
+  done
+  case " $allowed " in *" --from "*) [ "$from" = term-pm ] || reject_argv "wrong --from" ;; esac
+  case " $allowed " in *" --run "*) [ "$run" = run-r ] || reject_argv "wrong --run" ;; esac
+}
 case "$1 $2" in
-  "orchestration run-use")
-    echo '{"ok":true,"result":{"run":{"id":"run-r","coordinator_handle":"term-pm"}}}
-'
+  "status --json") [ "$#" -eq 2 ] || reject_argv "$*" ;;
+  "terminal show"|"orchestration check")
+    [ "$*" = "$1 $2 --terminal term-pm --json" ] || reject_argv "$*" ;;
+  "orchestration run-use") [ "$*" = "orchestration run-use --id run-r --from term-pm --json" ] || reject_argv "$*" ;;
+  "orchestration run-current") [ "$*" = "orchestration run-current --from term-pm --json" ] || reject_argv "$*" ;;
+  "orchestration task-list") validate_flags '--run --json' "${@:3}" ;;
+  "orchestration reply") validate_flags '--id --body --from --json' "${@:3}" ;;
+  "orchestration worker-start") validate_flags '--task --terminal --worktree --run --from --timeout-ms --json' "${@:3}" ;;
+  "orchestration worker-show") validate_flags '--dispatch --json' "${@:3}" ;;
+  "orchestration dispatch-show") validate_flags '--task --json' "${@:3}" ;;
+  "orchestration task-update") validate_flags '--id --status --run --from --json' "${@:3}" ;;
+  "terminal create") validate_flags '--worktree --title --command --json' "${@:3}" ;;
+  "terminal close") validate_flags '--terminal --json' "${@:3}" ;;
+  "terminal send") validate_flags '--terminal --text --enter --json' "${@:3}" ;;
+  "worktree show") [ "$*" = 'worktree show --worktree id:repo::worker --json' ] || reject_argv "$*" ;;
+  *) reject_argv "$*" ;;
+esac
+case "$1 $2" in
+  "status --json")
+    echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-test"}}}'
+    ;;
+  "terminal show")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"terminal":{"handle":"term-pm","connected":true,"writable":true,"orphaned":false,"exitCause":null}}}'
+    ;;
+  "orchestration run-use"|"orchestration run-current")
+    echo '{"ok":true,"_meta":{"runtimeId":"runtime-test"},"result":{"run":{"id":"run-r","coordinator_handle":"term-pm"}}}'
+    ;;
+  "worktree show")
+    jq -cn --arg path "$FAKE_WORKTREE" '{ok:true,result:{worktree:{id:"repo::worker",path:$path}}}'
     ;;
   "orchestration task-list")
     if [ -e "$S/task-list-unavailable" ]; then
@@ -208,7 +258,7 @@ case "$1 $2" in
     echo '{"ok":true,"result":{}}'
     ;;
   *)
-    echo '{"ok":true,"result":{}}'
+    reject_argv "$*"
     ;;
 esac
 FAKE
@@ -223,6 +273,7 @@ make_fixture() {
   base="$TMP_ROOT/$case_name"
   REPO="$base/repo"
   WT="$base/wt"
+  export FAKE_WORKTREE="$WT"
   SESSION="w-$case_name"
   SD="$STATE_ROOT/$case_name"
   METADATA="$WT/.claude/agent-sessions/$SESSION/METADATA.json"
@@ -238,7 +289,7 @@ make_fixture() {
   git -C "$REPO" worktree add -q -b "b-$case_name" "$WT"
   mkdir -p "$SC"
   jq -n --arg project "$REPO" --arg worktree "$WT" --arg session "$SESSION" \
-    '{project:$project,worktree:$worktree,session:{id:$session,orca:{worktree_id:"repo::worker",terminal_handle:"term-old",supervised:{run_id:"run-r",coordinator_handle:"term-pm",task_id:"task-1",dispatch_id:"ctx-old"}}},runtime:{provider_lease:{file:""}}}' \
+    '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-test",worktree_id:"repo::worker",terminal_handle:"term-old",supervised:{run_id:"run-r",coordinator_handle:"term-pm",task_id:"task-1",dispatch_id:"ctx-old"}}},runtime:{provider_lease:{file:""}}}' \
     > "$METADATA"
   printf '{"allowed_shell_commands":["cmd-old"],"version":1}\n' > "$SC/INSTALL_AUTHORIZATION.json"
   local b64
@@ -264,6 +315,11 @@ live_is_solely() { [ "$(live_count)" = "1" ] && grep -qx "$1" "$SD/terminals.liv
 run_reauth() { # run_reauth <额外参数...>；产出全局 RC/OUT
   RC=0
   OUT=$(bash "$PM" reauthorize --worktree "$WT" --session "$SESSION" "$@" 2>&1) || RC=$?
+  check_not "调用未被 fake 的 argv 合同提前拒绝" grep -qx REJECTED_ARGV "$FAKE_ORCA_LOG"
+  if [[ "$OUT" == *PM_REAUTHORIZE_LIVENESS_OK:* ]]; then
+    check "live 目标通过 sender 前门抵达 task-state 分支" grep -q 'PM_REAUTHORIZE_TASK_STATE:' <<<"$OUT"
+    check "显式 run-use 使用本 session PM" grep -q '^orchestration run-use --id run-r --from term-pm --json' "$FAKE_ORCA_LOG"
+  fi
   if [ "$DEBUG_RC" = "1" ]; then
     printf '  [debug rc=%s]\n' "$RC"
     printf '%s\n' "$OUT" | sed 's/^/    | /'
@@ -512,6 +568,12 @@ check "输出含 REAUTHORIZE_NOT_LIVE" grep -q "REAUTHORIZE_NOT_LIVE" <<<"$OUT"
 check "launch.sh 未被改写" cmp -s "$TMP_ROOT/O3-launch-before.sh" "$SC/launch.sh"
 check_not "零新终端创建" test "$(cat "$SD/terminal-create.count" 2>/dev/null || echo 0)" != "0"
 assert "旧终端保留且唯一" 'live_is_solely term-old'
+
+echo "Case P: fake 拒绝不存在的 check --from 参数"
+fake_rc=0
+"$FAKE" orchestration check --from term-pm --json > "$TMP_ROOT/argv-error" 2>&1 || fake_rc=$?
+check "错误 check selector 被拒绝" test "$fake_rc" -eq 64
+check "精确 argv 拒绝诊断" grep -q '^FAKE_ORCA_UNSUPPORTED_ARGV:' "$TMP_ROOT/argv-error"
 
 echo ""
 echo "Result: $pass pass, $fail fail"
