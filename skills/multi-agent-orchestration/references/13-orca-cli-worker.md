@@ -191,10 +191,11 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 
 ## 9. 失败与恢复
 
-- `worker-start` 非零：保留其完整 receipt，检查 `stage/effects/residualResources/recovery`；不要固定 sleep 后盲目 retry。
-- **裸调 worker-start 的 60 秒冷启动窗口（2026-08-30 实测）**：不经 `spawn-worker.sh` 预建、直接 `worker-start --worktree current --agent claude` 时，新起 Claude Code 终端未能在约 60 秒启动确认窗口内发心跳 → dispatch `last_failure: "timeout"`、Task 标 failed、遗留孤儿终端（`terminal list` 中 title=None、无 worktree）。窗口为 Orca runtime 内部行为，本机不可调（orca 无 settings 命令），疑似对慢冷启动 agent 的兼容问题，可上游反馈。恢复序列：①`terminal list` 找孤儿 handle 并 `terminal close` 清理；②`task-update --id <task> --status ready` 复活（或 register 路径 `--reset-failed`）；③改用 `worker-start --task <id> --terminal <现存 agent 终端句柄>` 复用活终端重试（实测一次成功）。另注：worker-start 返回体 ready/terminal 字段可能为 None（部分生效），判读以 `dispatch-show --task` 实际 assignee/status 为准；dispatch-show 只显示当前 dispatch，重试后历史失败记录被覆盖。教训：裸调 orca 原生命令前先确认 helper（spawn-worker.sh）是否已有对应两步路径——它预建 terminal 等 TUI ready 再注册，正是为规避此窗口。
-- mutation outcome unknown：只按 receipt 的 `--retry-request` 精确恢复，或用 `dispatch-show --task` 做只读核对。
-- terminal handle stale：按 worktree 重新 `terminal list`，后续只用新 handle，禁止双发。
+- `worker-start` 非零或结果未知：保留原始 receipt 的 `requestId/failedStage/stage/effects/residualResources/recovery/runtimeId`，以及精确 Run、Task、Dispatch、terminal/incarnation/worktree。空 title、timeout、TUI idle 和心跳不能证明孤儿或业务完成。
+- 先只读 `request-show --request <id>`、`dispatch-show --task <task>`、`worker-show --dispatch <dispatch>` 与具名 `worker-list --run <run>`。request completed 读取原结果；pending 先确认原命令是否仍在飞，再依同一 request 的恢复指令处理；absent 不是零副作用证明，先核现场。不得换新 Run/Task 盲重试，也不双发已被终端接受但提交未确认的输入。
+- 原生 `worker-start` 在 agent ready 前失败仍可能拥有已创建 terminal，按 receipt/fleet 的精确 reclaimable 资源调用 `worker-release`，不手工 `terminal close`。`release_pending/release_unknown` 依精确 recovery 继续；exit 0 不是回收完成证明。已接受 `worker_done` 后先验收，reuse/retain/release 后再 ack。
+- 只有已证明 failed/stopped 的重试才使用原 Task、`--retry-of` 和显式 placement；遵守重试熔断，不靠复位 ready 或新 Run 绕过。2026-08-30 曾有慢冷启动失败与复用终端重试成功的现场记录，不作为所有版本的通用恢复命令。当前合同以 `orca skills get orchestration --reference references/recovery-and-cleanup.md` 与对应 `--help` 为准；旧 host 缺字段时不猜。
+- terminal handle stale：只读重新定位后，还须证明 owner、同一资源及 incarnation/状态，不能仅取列表中的新 handle 接管。未知/活跃/不匹配资源保留并上报。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
 - active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；不要用 worktree rm 代替生命周期处理。只读 `worker-show/dispatch-show` 与 diff/tests 只能用于观察/业务验收，不能结算 Dispatch。
 - **Dispatch 死锁兜底（Task-047R，settle）**：若 worker 进程已死但未发 `worker_done`，用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
@@ -205,6 +206,12 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
   5. 审计在 `<git-common-dir>/orchestration/settle-audit.ndjson`，删除 Session Context 后仍存在。`--force` 只覆盖 liveness 不确定性，不覆盖身份、审计、stop、lease 或删除失败。
   - 验证脚本：`test-settle-liveness.sh`（字段矩阵）与 `test-settle-command.sh`（真实命令顺序和资源保留）。
 - provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。settled 后 `worker-release` 返回 `retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。任何 active/unknown/mismatch 都拒绝清理。
+
+外部终端关闭还须核对 incarnation、已 settled 且未被用户接管；精确关闭后读回复验 disconnected，再结算 lease。不得把 terminal close 用作 `release_pending/release_unknown` 的替代。上述 legacy settle 参数不是未知现场的新授权；证据不足时即使有 `--force` 也不执行，优先按当前官方 recovery 合同处理。
+
+Claude 信任/MCP/外部导入弹窗：用受支持的 `worker-read`/`agentWait` 有界证据确认实际等待内容，交有权限的人或明确授权流程处理；不自动改全局 `~/.claude.json`、接受全部 MCP 或导入外部配置。未响应不等于死进程，不因此强杀/重派。terminal read 偶发错误尚无稳定复现，保存 runtime、时间、精确 handle 与退出码，不伪称已修复。
+
+心跳正常但缺文件、commit 或测试产物时，只能说明协议活性。PM 按任务阶段与最近业务产物判断停滞，向原 worker 给一条窄纠偏：先完成已列第一项并做定向验证。不自动换模型、改 effort、杀进程或领取额外任务；长期无进展按任务门禁升级。
 
 ## 10. METADATA 契约
 
