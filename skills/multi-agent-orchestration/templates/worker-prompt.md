@@ -28,8 +28,8 @@ Context:
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
-- If cwd, branch, or worktree isolation is wrong, write `{{session_context_path}}/STATUS.json` with `status=blocked`, `phase=bootstrap`, the mismatch details, and stop. Do not implement in the PM/main workspace.
-- **STATUS/RESULT path sanity（v1.20.3 Task-030，W2 撞坑：写错位置 = done 信号无效）**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 必须在 `$(pwd)/.claude/agent-sessions/<your-session-id>/` 下，**不能**写到 skill 内部目录（如 `skills/<skill>/STATUS.json`）。Bootstrap Task 第 1 步前先 `mkdir -p "$(pwd)/.claude/agent-sessions/<session-id>"`，写 STATUS 时用 `pwd` 验证路径 = `"$(pwd)/.claude/agent-sessions/<session-id>/STATUS.json"`。如果 STATUS 写错位置（不在 `.claude/agent-sessions/` 下），即便 `status="done"` 也**无效**——sentinel 监测的是 session context 路径，sentinel 不会 exit，PM 不会被唤醒。
+- **Session Context 路径核验**：所有 `STATUS.json` / `RESULT.md` / `PATCH_SUMMARY.md` 只写入已绑定的绝对 `{{session_context_path}}`，不得写到仓库根目录或 skill 内部。用 worker 进程的 `WORKER_SESSION_CONTEXT` 定位；兼容旧 `SCOPE_GUARD_SESSION_ROOT` 或 `WORKER_INSTALL_AUTH_FILE` 父目录，但所有非空绑定必须拼写一致、指向同一现存目录，并与本模板路径一致（不同 symlink 拼写也拒绝）。新定位变量在 guard 显式降级时仍注入，仅用于定位，不授予安装/Shell/scope 权限或证明 hook 活跃。全部缺失、任一相对路径、冲突或目录不存在时向 PM 报告并停止，不从 cwd/session 名猜路径、不另建状态目录。Orca 自动任务前缀提供同一核验命令；预建 Task 时不需要提前知道尚未创建的 worktree 路径。
+- If cwd, branch, or worktree isolation is wrong, report the mismatch and stop; write `status=blocked`, `phase=bootstrap` only when the Session Context binding above has been verified. Do not implement in the PM/main workspace.
 
 Task:
 1. 只创建 `{{session_context_path}}/STATUS.json`。
@@ -80,6 +80,7 @@ Context:
 
 Isolation Gate:
 - Before reading task files or implementing anything, confirm `pwd` is `{{worktree_path}}` and `git branch --show-current` is `{{branch_name}}`.
+- Before writing any checkpoint, verify the existing absolute `WORKER_SESSION_CONTEXT` launch locator. Legacy `SCOPE_GUARD_SESSION_ROOT` and the parent of `WORKER_INSTALL_AUTH_FILE` remain compatible, but every nonempty binding must use the same directory spelling (different symlink spellings are rejected), exist and match `{{session_context_path}}`. The locator is injected even for explicitly degraded guards; it grants no installation, Shell or scope authority and does not prove an active hook. All bindings missing, or any relative/unavailable/conflicting binding, means report BLOCKED to PM without guessing from cwd/session name or creating a new STATUS/RESULT directory.
 - Update `STATUS.json` with the isolation gate result.
 - If cwd, branch, or worktree isolation is wrong, set `status=blocked`, `phase=bootstrap`, `pm_action_required=true`, describe the mismatch, and stop. Do not implement in the PM/main workspace.
 
@@ -91,7 +92,7 @@ Background:
 - Relevant inputs: {{inputs}}
 
 Mission:
-在限定范围内完成可 review 的最小闭环。PM 不会默认代你实现；你负责在本 worktree 内完成实现、验证、提交和 PR，PM 负责巡检、纠偏、review 和收口。
+在限定范围内完成可 review 的最小闭环。PM 不会默认代你实现；实施任务由你在本 worktree 内完成实现、定向验证和提交，push/PR 按 PM 合同执行；纯 review 或确实无更改的任务不制造空提交。PM 负责巡检、纠偏、review 和收口。
 不要自行领取 Goal 或任务源中的其他任务；多轮推进由 PM 在 Wave 收口后决定。
 
 Scope:
@@ -114,7 +115,7 @@ Execution Authority:
 - Shell is also fail-closed, evaluated per segment: pipelines and `;`/`&&` chains are allowed only when every segment is a built-in safe read/delivery command (git status/diff/log/show/fetch/add/commit/push/rebase, gh pr create/view, ls/grep/cat/jq/sort and similar filters) or the exact `Allowed Shell Commands` emitted by spawn. Redirects are limited to `/dev/null` and temporary directories; subshells, input redirects and command substitution are denied. The built-in `sed` exception is deliberately narrow: only `sed -n '<numeric-range>p' <single-file>` is read-only; substitutions, `w`/`e`, multi-file and other forms still require an exact allowlist entry. `--verify-cmd` grants execution authority only after install-like commands such as `npx`/`npm exec`/`pnpm dlx` are rejected.
 - Run `verification.commands[]` from METADATA exactly as stored. Spawn resolves those commands from direct `--verify-cmd`, a pinned dispatch contract task, the selected project verification profile, or bounded root Node/Make/Python discovery; compound nested-project commands remain one exact string. Node worktrees outside the main repo tree (Orca `~/orca/workspaces/`) may receive a `node_modules` symlink to the main checkout. If a required runtime is still missing, set `status=blocked` per the rule below — do not install it yourself.
 - The authorization JSON inside the worktree is a worker-readable mirror, not the authority source. The PM receipt under Git common-dir and the process snapshot are authoritative. Initial metadata proves settings wiring only; after your first Shell/File tool call, PM must see the runtime attestation file before treating the hook as runtime-proven. Do not edit the receipt, attestation or hook settings.
-- Push policy (v2.22.0): pushing your own worker branch is allowed by default — `git push -u origin HEAD` or `git push origin <branch>` are safe-class commands. Force push (`--force`/`-f`/`--force-with-lease`), pushing to `main`/`master`, remote-ref deletion (`git push origin :branch`) and `--mirror`/`--tags` remain denied. If an identity-bound safe-push command is listed above, prefer it: it verifies every commit from the remote PR base through current HEAD, then pushes only the verified immutable OID. After pushing, open the PR with `gh pr create` (also safe-class).
+- Push policy: obey the PM task contract; a command being safe-class does not override a no-push/no-PR assignment. When push is authorized, use the listed identity-bound safe-push command if provided. Force push (`--force`/`-f`/`--force-with-lease`), pushing to `main`/`master`, remote-ref deletion (`git push origin :branch`) and `--mirror`/`--tags` remain denied. Create a PR only when the task contract assigns that step to you.
 - A normal lockfile-based project install is allowed only when its exact command is listed above; this avoids treating an expected project dependency flow as an implicit machine-wide authorization.
 - If a required tool is missing, first locate an existing binary or supported project-local runtime. If still unavailable, set `status=blocked`, record the missing dependency and skipped verification in RESULT, and stop. Do not install it yourself.
 
@@ -130,12 +131,12 @@ Expected Deliverables:
   - `{{session_context_path}}/STATUS.json`
   - `{{session_context_path}}/RESULT.md`
   - `{{session_context_path}}/PATCH_SUMMARY.md`
-- Git/PR: commit, push, create PR when the task is complete.
+- Git/PR: commit verified implementation changes in authorized files; push/PR only as assigned by PM. Review-only/no-change work reports its real HEAD without an empty commit.
 
 Process:
 1. Bootstrap: run the Isolation Gate and create or update `STATUS.json` before deep work.
-2. Implement: stay inside Scope; do not expand the task.
-3. **Heartbeat cadence (mandatory)**: refresh `STATUS.json` (`updated_at` / `phase` / `current_action` / `next_action` / `git.commits_since_base` / `git.last_commit_sha`) **every 10 minutes at most**, even if no progress — write a `phase=thinking-deep` heartbeat entry with `current_action="still working on X, no change"` and `next_action="continue milestone Y"`. PM uses stale `updated_at` to detect silent workers. Do not wait until phase changes to write.
+2. Implement: make the smallest in-scope implementation first, then run scoped verification; do not expand the task or start with an unassigned full matrix.
+3. **Heartbeat cadence**: refresh `STATUS.json` (`updated_at` / `phase` / `current_action` / `next_action` / `git.commits_since_base` / `git.last_commit_sha`) **every 10 minutes at most** when checkpoint monitoring is assigned, even if no progress. A heartbeat is liveness evidence only, not business progress or completion; for Orca supervised workers the live Dispatch protocol remains authoritative. Record a concise blocker/current action instead of treating repeated thinking heartbeats as deliverables.
 4. Commit message discipline: prefix each commit with `[phase] feat|fix|docs|chore: ...` (e.g. `[m2] feat(forms): 字段校验规则引擎`). This lets PM grep phase progression from git log when STATUS.json is stale.
 5. Long thinking protocol: when a single decision takes >5 min to reason through, write a brief "considering X because Y" to `current_action` and `next_action` so PM can see *what* you're stuck on without reading your full thinking chain.
 6. Checkpoint: refresh `updated_at`, `phase`, `current_action`, `next_action`, tests, git fields and issues on phase changes (in addition to the 10-min heartbeat).
@@ -144,7 +145,7 @@ Process:
    - Before any Shell command outside the narrow lifecycle set, confirm it exactly matches `Allowed Shell Commands`; otherwise request PM authority instead of rewriting/encoding it to evade the hook.
    - If this task started a service, listener or child process, record its PID/process group/port, stop only that owned resource, wait boundedly for exit, verify the port is closed, and compare the project process set with the pre-task baseline. Do not kill by process name and do not stop a user-owned pre-existing service.
 8. **Commit-Verify hard constraint（v1.20.3 Task-029，W2 撞坑：worker LLM 幻觉 "done"）**：commit 前必跑 Verify（step 7）**全部 PASS**；commit 完成后立即跑 `git show --stat HEAD` + `git diff --stat HEAD~1..HEAD`，确认改动文件数 / 行数与意图一致（不允许 "commit message 说改了 N 文件但 git diff 显示空" 或 "改动了破坏 smoke 的核心函数但 verify 没检出"）。如果 verify 不全 PASS 或 git diff 与意图不符，**不要**写 `status="done"`——fix 后重跑。LLM 幻觉 "完成" 是真实风险：commit 描述 ≠ 实际改动会破坏 smoke / 错位置写 STATUS，最终 PM 收口时才发现（v1.20.2 W2 实战：`64cd3d7` 改了 4 文件但破坏 `permission_auto` 数字键 `'2'` send-keys + 错位置写 `skills/.../STATUS.json` + pane 说 done 但核心修复未生效）。
-9. Finish: write RESULT/PATCH_SUMMARY, commit, push and create PR. Confirm PR diff does not contain Session Context files.
+9. Finish: write RESULT/PATCH_SUMMARY only under the verified absolute Session Context with exact verification commands/exits, limitations and the real `git rev-parse HEAD` (40 characters). Commit implementation changes in authorized files; push/PR only per the PM contract. Confirm the deliverable diff contains no Session Context files; reviewer/no-change tasks report that fact without an empty commit.
 9. **Canonical terminal status (mandatory)**: on the final `STATUS.json` update, set `status="done"` **exactly**. The sentinel matches only the canonical success value; `completed` / `finished` / `complete` are invalid and remain visible until correction or timeout. For Orca supervised workers this checkpoint only wakes PM; accepted `worker_done` is still required to settle the Task/Dispatch.
 
 Worker Type Rules:
@@ -158,8 +159,8 @@ Commit Cadence:
 - Do not wait until a very large final diff if smaller reviewable commits are available.
 - Follow the project `git-workflow` / `git-batch-commit` rules for commit format; this prompt does not redefine them.
 - After each commit, refresh `STATUS.json.git.last_commit_sha` and the current phase/action fields.
-- **Commit 是强制的收尾步骤，不是可选**：即使本任务要求"不 push、不开 PR"（由 PM 负责 push/PR），也必须 `git add` + `git commit` 自己的全部产出，让改动进入分支历史。未 commit 的工作区改动 = 任务未完成，PM 无法 review/收口、sentinel 检测到的 `done` 也无 commit 可验收。
-- **rebase / reset / 任何重写历史操作之后，必须确认工作区改动已重新 commit**：否则 `git diff --check main...HEAD` 验证的是空 diff（HEAD 仍在 base），是假通过。正确自检：`git log --oneline main..HEAD` 必须能看到自己的 commit；若为空，先 commit 再验。
+- **实施更改必须提交**：即使本任务要求“不 push、不开 PR”，也须精准 `git add` 本任务授权文件并提交已验证的工程产出；不能提交其他人的修改或 Session Context/runtime 文件。实施产出仍未提交时不报告成功。纯 reviewer 或确实无更改的任务报告 no changes 和真实 HEAD，不强迫空提交。
+- 若 PM 已授权 rebase 等历史操作，之后复核实际文件差异与提交范围，不能把空 diff 的静态检查当实现验收；本提示不授权 reset/rebase，也不要求在确实无更改时造提交。
 
 Decision ID Rule:
 - If editing project decision logs, first grep existing IDs such as `^## DEC-` or `^### [DEC-`.
@@ -178,7 +179,7 @@ Verification Floor:
 
 Autonomy:
 - Do not wait for PM after partial completion.
-- Continue until verified PR unless `needs_input=true`, `pm_action_required=true`, or the task is genuinely blocked.
+- Continue until the PM contract's verified delivery point (commit, review report or PR as assigned), unless `needs_input=true`, `pm_action_required=true`, or the task is genuinely blocked.
 - If blocked, update STATUS with blocker, issues, current_action and next_action.
 - Do not ask PM to implement your assigned scope directly; ask only for missing input, permission, or correction.
 

@@ -3,9 +3,42 @@
 
 orca_supervised_task_spec() {
   local task_spec="$1"
-  printf '%s\n\n%s' \
-    'SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, execute the exact worker_done command from this attempt’s live Orca preamble using its real task/dispatch IDs, then stop new work. A commit, green tests, STATUS=done, heartbeat, or an idle TUI does not complete the Dispatch; do not invent or reuse IDs.' \
-    "$task_spec"
+  local completion_protocol delivery_protocol protocol
+  completion_protocol='SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, execute the exact worker_done command from this attempt’s live Orca preamble using its real task/dispatch IDs, then stop new work. A commit, green tests, STATUS=done, heartbeat, or an idle TUI does not complete the Dispatch; do not invent or reuse IDs.'
+  # Keep this literal: Wave Tasks can be created before the worker/worktree exists.
+  # Resolve the existing launch binding inside the worker, never in the PM shell.
+  delivery_protocol=$(cat <<'DELIVERY'
+WORKER DELIVERY PROTOCOL (MANDATORY):
+- Start with the smallest in-scope implementation, then run the contract's scoped verification commands, one suite at a time. Do not substitute a full matrix or dependency installation without PM authorization.
+- Before writing checkpoints, run this read-only command in the worker process to check its already-bound absolute Session Context. WORKER_SESSION_CONTEXT is a location-only launch binding, including when guards are explicitly degraded; it grants no installation, Shell or scope authority and does not prove a hook is active. Every present guard binding must agree with it. Use the first printed path only if BOTH checks succeed; the second checks that it is an existing directory. Missing, relative, unavailable or differently spelled/conflicting bindings are BLOCKED: report to PM; do not guess from cwd, repo root, task title or session name, and do not create another task-state directory.
+```bash
+jq -ner '
+  (env.WORKER_SESSION_CONTEXT // "") as $context |
+  (env.SCOPE_GUARD_SESSION_ROOT // "") as $scope |
+  (env.WORKER_INSTALL_AUTH_FILE // "") as $auth |
+  [$context, $scope, $auth] | map(select(length > 0)) as $bindings |
+  if ($bindings | length) == 0 or any($bindings[]; startswith("/") | not)
+  then error("BLOCKED: missing/relative Session Context binding; report to PM")
+  else ([$context, $scope | select(length > 0)] +
+        [$auth | select(length > 0) | sub("/[^/]*$"; "")]) |
+    map(sub("/+$"; "")) | unique |
+    if length != 1 or .[0] == ""
+    then error("BLOCKED: conflicting Session Context binding; report to PM")
+    else .[0] end
+  end
+' && ls -d -- "${WORKER_SESSION_CONTEXT:-${SCOPE_GUARD_SESSION_ROOT:-${WORKER_INSTALL_AUTH_FILE%/*}}}/."
+```
+- Write RESULT.md and PATCH_SUMMARY.md only under that resolved Session Context, never repository-root RESULT.md; keep these and STATUS.json out of Git. Record exact verification commands/exits, changed files, limitations and the real 40-character git rev-parse HEAD. These files are evidence, not new completion authority.
+- For implementation changes, git add only the task-authorized files and commit the verified deliverable before reporting success, even when PM owns push/PR. Do not stage other workers' changes or checkpoint/runtime files. Review-only or genuinely no-change work must report no changes and the real HEAD, not manufacture an empty commit. Push, PR and history changes follow the PM task contract; this protocol grants none of them.
+DELIVERY
+)
+  protocol="$completion_protocol"$'\n\n'"$delivery_protocol"
+  # Exact-prefix idempotence also covers callers reusing an already prepared spec.
+  case "$task_spec" in
+    "$protocol"|"$protocol"$'\n\n'*) printf '%s' "$task_spec"; return ;;
+    "$completion_protocol"$'\n\n'*) task_spec="${task_spec#"$completion_protocol"$'\n\n'}" ;;
+  esac
+  printf '%s\n\n%s' "$protocol" "$task_spec"
 }
 
 # Task-106/Task-107（旧发布别名 Task-076/077-Dispatch）：worker 启动后的 Dispatch 绑定自检与三步自动补绑（register/launch 共用实现）。
