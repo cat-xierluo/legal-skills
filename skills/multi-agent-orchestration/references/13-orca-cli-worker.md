@@ -96,9 +96,11 @@ bash scripts/spawn-worker.sh \
 
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
-Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave helper 必须把它作为 `--from` 传给全部 `task-create`；worker helper 必须复用同一 handle 传给 `worker-start`。缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
+Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave prepare 使用 `--from <本轮PM终端>`；没有显式 sender、也没有 session 绑定的新 Run 才可把宿主 `ORCA_TERMINAL_HANDLE` 作为待核 selector。统一 helper 核对 `status`、`terminal show` 与 `run-current` 的同一 runtime、精确 handle/Run/coordinator，以及终端 connected/writable/非 orphaned/无 exitCause。环境值和 runtime 相同都不是活性证明，不从当前焦点选择别人终端。
 
-receipt 同时冻结 `_meta.runtimeId`，新 Wave 按上例传入 `--orca-runtime-id`；手工 register 使用 `--runtime-id`。prepare 前后、spawn 早期、terminal 创建前及每次 worker-start 前检查可观察到的身份漂移。检测失败保留诊断，不盲目重建 Run/Task；制备中途失败可能已有部分记录，必须先核查。旧调用省略参数时仅保持兼容并输出 `SPAWN_COORDINATOR_RUNTIME_UNVERIFIED`。同 runtime 不等于 coordinator 活着，status 与实际启动之间仍有时间窗口，最终以 Orca consumer fencing 为准。确定性回归见 `scripts/test-orca-runtime-identity.sh`；真实重启期间派发未由该回归证明。
+Wave helper 将冻结 handle 作为 `--from` 传给全部 `task-create`；worker helper 复用它传给 `worker-start`。单 worker 在 quota/mem 通过后、provider lease/worktree/session/terminal 创建前准备 Run；有 Run/Task 的 Wave 只读验证，不重绑或重复创建 Task。失败可能已经建立或重绑 Run，必须先只读核查现有结果，不盲试；零 Worker 资源不等于零 Run 记录。
+
+receipt 同时冻结 `_meta.runtimeId`，新 Wave 按上例传入 `--orca-runtime-id`；手工 register 使用 `--runtime-id`。prepare 前后、spawn 早期、terminal 创建前及每次 worker-start 前检查可观察到的身份漂移；metadata 另存 `.session.orca.runtime_id`。旧上下文缺 runtime 时，统一 helper 只能从当前 status/terminal/Run 三方正向核验后冻结，并声明历史连续性 `NOT_VERIFIED`；已有非空 runtime 漂移即拒绝，显式 --from 也不绕过。consumer fencing 仍作最终判断；该前置核验不扩展为直接独立 register legacy 入口已全面迁移。回归见 `scripts/test_pm_sender_binding.py` 与既有 runtime 身份测试；真实重启期间派发未由其证明。
 
 若不传 `--orca-run-id`，helper 为单 worker 新建 Run，适合独立监督；多 worker Wave 不应各建一个 Run。
 
@@ -215,6 +217,7 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
       "worktree_path": "/abs/path",
       "terminal_handle": "term_xxx",
       "app_version": "1.4.180",
+      "runtime_id": "<validated-runtime-id>",
       "capabilities": ["terminal.multiplex.v1", "orchestration.contract.v1"],
       "supervised": {
         "run_id": "run_xxx",

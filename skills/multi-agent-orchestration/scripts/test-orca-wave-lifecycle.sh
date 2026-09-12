@@ -32,10 +32,18 @@ case "$1 $2" in
     echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-wave"}}}'
     ;;
   "orchestration run-create")
-    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm"}}}'
+    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm"}},"_meta":{"runtimeId":"runtime-wave"}}'
     ;;
-  "orchestration run-use")
-    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm-rebound"}}}'
+  "orchestration run-use"|"orchestration run-current")
+    sender=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --from ]; then sender="$2"; break; fi
+      shift
+    done
+    jq -cn --arg sender "$sender" '{ok:true,result:{run:{id:"run-wave",coordinator_handle:$sender}},_meta:{runtimeId:"runtime-wave"}}'
+    ;;
+  "terminal show")
+    jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:true,writable:true,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-wave"}}'
     ;;
   "orchestration task-create")
     count=$(wc -l < "$FAKE_ORCA_STATE" | tr -d ' ')
@@ -75,7 +83,7 @@ JSON
 
 echo "Case 1: Wave creates one Run and every Task before worker start"
 RECEIPT="$TMP_ROOT/wave-receipt.json"
-bash "$WAVE" --manifest "$MANIFEST" --receipt "$RECEIPT" > "$TMP_ROOT/wave.out"
+bash "$WAVE" --manifest "$MANIFEST" --from term-pm --receipt "$RECEIPT" > "$TMP_ROOT/wave.out"
 if jq -e '.run_id == "run-wave" and (.tasks | length == 2) and .tasks[0].task_id == "task-1" and .tasks[1].task_id == "task-2"' "$RECEIPT" >/dev/null; then
   ok "Wave receipt contains one Run and two Tasks"
 else
@@ -119,14 +127,16 @@ GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid \
 git -C "$REPO" worktree add -q -b test-pm-rebind "$WT"
 mkdir -p "$WT/.claude/agent-sessions/$SESSION"
 jq -n --arg project "$REPO" --arg worktree "$WT" --arg session "$SESSION" \
-  '{project:$project,worktree:$worktree,session:{id:$session,orca:{worktree_id:"repo::worker",terminal_handle:"term-worker",supervised:{run_id:"run-wave",coordinator_handle:"term-old",task_id:"task-1",dispatch_id:"ctx-task-1"}}},runtime:{provider_lease:{file:""}}}' \
+  '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-wave",worktree_id:"repo::worker",terminal_handle:"term-worker",supervised:{run_id:"run-wave",coordinator_handle:"term-old",task_id:"task-1",dispatch_id:"ctx-task-1"}}},runtime:{provider_lease:{file:""}}}' \
   > "$WT/.claude/agent-sessions/$SESSION/METADATA.json"
 : > "$FAKE_ORCA_LOG"
-bash "$PM" wait --worktree "$WT" --session "$SESSION" --timeout 1 > "$TMP_ROOT/wait.out"
-first_call=$(sed -n '1p' "$FAKE_ORCA_LOG")
-second_call=$(sed -n '2p' "$FAKE_ORCA_LOG")
-[[ "$first_call" == orchestration\ run-use* ]] && ok "run-use happens before check" || bad "first PM call was not run-use"
-[[ "$second_call" == orchestration\ check* ]] && [[ "$second_call" != *'--run'* ]] && ok "check consumes the bound Run without stale --run routing" || bad "check did not use rebound coordinator"
+bash "$PM" wait --worktree "$WT" --session "$SESSION" --from term-pm-rebound --timeout 1 > "$TMP_ROOT/wait.out"
+control_calls=$(grep '^orchestration ' "$FAKE_ORCA_LOG")
+first_call=$(printf '%s\n' "$control_calls" | sed -n '1p')
+second_call=$(printf '%s\n' "$control_calls" | sed -n '2p')
+last_call=$(printf '%s\n' "$control_calls" | tail -1)
+[[ "$first_call" == *'run-use --id run-wave --from term-pm-rebound'* ]] && [[ "$second_call" == *'run-current --from term-pm-rebound'* ]] && ok "explicit run-use is verified with run-current before check" || bad "PM binding was not read back"
+[[ "$last_call" == orchestration\ check* ]] && [[ "$last_call" == *'--terminal term-pm-rebound'* ]] && [[ "$last_call" != *'--run'* ]] && ok "check consumes the exact sender's bound Run" || bad "check did not use rebound coordinator"
 [ "$(jq -r '.session.orca.supervised.coordinator_handle' "$WT/.claude/agent-sessions/$SESSION/METADATA.json")" = "term-pm-rebound" ] && ok "rebound coordinator handle persisted" || bad "METADATA coordinator handle was not refreshed"
 
 echo ""

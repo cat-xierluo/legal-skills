@@ -94,6 +94,7 @@ write_metadata() {
     --arg orca_terminal_handle "${ORCA_TERMINAL_HANDLE:-}" \
     --arg orca_tui_ready_method "${ORCA_TUI_READY_METHOD:-orca_terminal_wait_tui-idle}" \
     --arg orca_app_version "${ORCA_APP_VERSION:-}" \
+    --arg orca_runtime_id "${ORCA_EXPECTED_RUNTIME_ID:-}" \
     --argjson orca_capabilities "${ORCA_CAPABILITIES_JSON:-[]}" \
     '{
       schema: $schema,
@@ -118,6 +119,7 @@ write_metadata() {
           terminal_handle: $orca_terminal_handle,
           tui_ready_method: $orca_tui_ready_method,
           app_version: $orca_app_version,
+          runtime_id: $orca_runtime_id,
           capabilities: $orca_capabilities
         }
       },
