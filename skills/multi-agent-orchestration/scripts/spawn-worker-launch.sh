@@ -22,6 +22,10 @@ launch_worker_session() {
   fi
 
   if [ "$ORCA_MODE" = "auto" ]; then
+    # Repeat immediately before terminal creation: preparation may take time.
+    if [ -n "${ORCA_EXPECTED_RUNTIME_ID:-}" ]; then
+      orca_runtime_require_identity "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    fi
     # Task-077 前置校验（terminal 副作用前 fail-closed）：PM 按 Wave receipt 传了
     # --orca-task-id 但漏 --orca-supervised 时，下方 self-check 分支会接手 dispatch 绑定，
     # 它需要 --orca-run-id（dispatch mutation 的 --run 参数）。残缺组合在创建 terminal
@@ -74,6 +78,9 @@ launch_worker_session() {
           fi
           if [ -n "$ORCA_COORDINATOR_HANDLE" ]; then
             reg_args+=(--coordinator-handle "$ORCA_COORDINATOR_HANDLE")
+          fi
+          if [ -n "${ORCA_EXPECTED_RUNTIME_ID:-}" ]; then
+            reg_args+=(--runtime-id "$ORCA_EXPECTED_RUNTIME_ID")
           fi
           if reg_out=$(bash "$reg_helper" "${reg_args[@]}" 2>&1); then
             # 从 stdout KV 提取（stderr 是日志，reg_out 含两者，grep stdout KV）
