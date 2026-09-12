@@ -137,7 +137,11 @@ Options:
   --orca-task-id ID 复用 `orca-wave-prepare.sh` 预创建的 Task；必须同时传 --orca-run-id
                    与 --orca-coordinator-handle。
   --orca-coordinator-handle ID
+                   复用 Wave coordinator；配合 --orca-runtime-id 检测 runtime 漂移。
                    复用 Wave receipt 的 coordinator_handle，避免并发 worker 重复 run-use。
+  --orca-runtime-id ID
+                   Wave receipt 的 _meta.runtimeId；缺失的旧调用仅警告未验证，
+                   传入后必须匹配可达 runtime。匹配不证明 handle 仍存活。
   --task-spec TEXT  supervised Task 的完整任务说明。
   --task-title TEXT supervised Task 的简短标题。
   --allow-install-command CMD
@@ -399,6 +403,11 @@ parse_spawn_worker_args() {
         ;;
       --orca-coordinator-handle)  # Wave receipt 中已绑定的 coordinator；并发启动时直接复用
         ORCA_COORDINATOR_HANDLE="$2"
+        shift 2
+        ;;
+      --orca-runtime-id)
+        ORCA_EXPECTED_RUNTIME_ID="$2"
+        [ -n "$ORCA_EXPECTED_RUNTIME_ID" ] || { echo "ERROR: --orca-runtime-id cannot be empty" >&2; exit 64; }
         shift 2
         ;;
       --allow-install-command)
