@@ -86,6 +86,11 @@ for label, changed in {
     assert mod.fingerprint(bare) != mod.fingerprint(changed), label
 assert mod.fingerprint("@@ malformed @@ one\n") != mod.fingerprint("@@ malformed @@ two\n")
 assert mod.fingerprint("GIT binary patch\nliteral 3\nabc\n") != mod.fingerprint("GIT binary patch\nliteral 3\nabd\n")
+for separator in ("\x0b", "\x0c", "\x85", "\u2028", "\u2029", "\x1c", "\x1d", "\x1e"):
+    for fragment in ("@@ -1 +1 @@ content-A", "index 123..456"):
+        first = bare.replace("+worker", "+worker" + separator + fragment)
+        second = first.replace(fragment, fragment.replace("content-A", "content-B").replace("123", "abc"))
+        assert mod.fingerprint(first) != mod.fingerprint(second), repr(separator)
 PY
 then
   ok "normalization retains ranges, modes, paths, content and binary payload"

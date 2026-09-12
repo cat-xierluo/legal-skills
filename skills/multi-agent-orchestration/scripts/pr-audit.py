@@ -95,10 +95,12 @@ def fingerprint(raw: str) -> str:
     # the same hunk. Ignore those and object IDs, but retain hunk ranges,
     # file modes, paths, and every content byte (including trailing spaces).
     kept: list[str] = []
-    for line in raw.splitlines(keepends=True):
+    # Unified diff uses LF, not Unicode/vertical separators inside file data.
+    # splitlines() would expose a content fragment as a fake header.
+    for line in raw.split("\n"):
         line = re.sub(r"^index [0-9a-f]+\.\.[0-9a-f]+", "index <oids>", line)
         kept.append(re.sub(r"^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@)[^\n]*", r"\1", line))
-    return hashlib.sha256("".join(kept).encode("utf-8")).hexdigest()
+    return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
 
 
 def ownership_evidence(row: dict[str, Any], task_id: str, agent_id: str) -> dict[str, Any]:
