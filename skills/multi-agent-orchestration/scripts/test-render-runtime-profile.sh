@@ -197,5 +197,78 @@ else
   bad "spawn-worker hook 检查函数提取失败, claude_hook_disable_reason 函数边界变化"
 fi
 
+echo "=== 6. 显式认证模式与 provider 名称无关（假凭证、离线子进程） ==="
+WRAPPER="$SCRIPT_DIR/claude-provider-env.sh"
+STUB_BIN="$TMP_ROOT/bin"
+mkdir -p "$STUB_BIN"
+cat > "$STUB_BIN/claude" <<'STUB'
+#!/usr/bin/env bash
+for key in ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY; do
+  state=unset
+  if [ "${!key+x}" = x ]; then
+    state=empty
+    [ -z "${!key}" ] || state=present
+  fi
+  printf '%s=%s\n' "$key" "$state"
+done
+if [ "${ANTHROPIC_AUTH_TOKEN:-}" = fake-profile-token ] || [ "${ANTHROPIC_API_KEY:-}" = fake-profile-token ]; then
+  echo PROFILE_CREDENTIAL=selected
+fi
+STUB
+chmod +x "$STUB_BIN/claude"
+AUTH_SETTINGS="$TMP_ROOT/minimax.settings.json"
+KEY_SETTINGS="$TMP_ROOT/key.settings.json"
+BOTH_SETTINGS="$TMP_ROOT/both.settings.json"
+jq -n '{env:{ANTHROPIC_BASE_URL:"https://minimax.example.invalid/anthropic",ANTHROPIC_AUTH_TOKEN:"fake-profile-token"}}' > "$AUTH_SETTINGS"
+jq -n '{env:{ANTHROPIC_BASE_URL:"https://gateway.example.invalid/anthropic",ANTHROPIC_API_KEY:"fake-profile-token"}}' > "$KEY_SETTINGS"
+jq '.env.ANTHROPIC_API_KEY="fake-second-credential"' "$AUTH_SETTINGS" > "$BOTH_SETTINGS"
+probe() {
+  local rendered
+  rendered=$(bash "$RENDERER" "$@" --output command) || return $?
+  ( export PATH="$STUB_BIN:$PATH" ANTHROPIC_AUTH_TOKEN=fake-parent-token ANTHROPIC_API_KEY=fake-parent-key
+    eval "$rendered" )
+}
+expect_auth_error() {
+  local actual=0
+  "$@" > "$TMP_ROOT/auth-error.out" 2>&1 || actual=$?
+  assert_eq "$actual" 64 "认证参数错误在执行前拒绝"
+}
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token)
+assert_contains "$out" ANTHROPIC_AUTH_TOKEN=present "settings 显式 token 保留 Bearer 凭证"
+assert_contains "$out" ANTHROPIC_API_KEY=unset "settings 显式 token 不回填 API key"
+assert_contains "$out" PROFILE_CREDENTIAL=selected "父进程凭证被选择的 profile 替换"
+out=$(probe --backend claude-code --settings "$KEY_SETTINGS" --model test --auth-type api_key)
+assert_contains "$out" ANTHROPIC_AUTH_TOKEN=unset "settings 显式 key 不回填 token"
+assert_contains "$out" ANTHROPIC_API_KEY=present "settings 显式 key 保留 API key"
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test)
+assert_contains "$out" ANTHROPIC_API_KEY=present "默认兼容 both，不凭 minimax 文件名或 URL 自动改单变量"
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type auth_token
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type api_key
+expect_auth_error probe --backend claude-code --settings "$BOTH_SETTINGS" --model test --auth-type auth_token_clear_api_key
+out=$(probe --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token_clear_api_key)
+assert_contains "$out" ANTHROPIC_API_KEY=empty "settings 显式清空模式保留空串语义"
+expect_auth_error bash "$RENDERER" --backend codex --model test --auth-type auth_token
+expect_auth_error bash "$RENDERER" --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type auth_token --no-provider-env-isolation
+expect_auth_error bash "$RENDERER" --backend claude-code --settings "$AUTH_SETTINGS" --model test --auth-type unknown
+AUTH_REGISTRY="$TMP_ROOT/registry.json"
+for auth_mode in both auth_token api_key auth_token_clear_api_key; do
+  jq -n --arg mode "$auth_mode" '{providers:{minimax:{base_url:"https://minimax.example.invalid/anthropic",auth_type:$mode,auth_token:"fake-profile-token"}}}' > "$AUTH_REGISTRY"
+  out=$(probe --backend claude-code --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test)
+  case "$auth_mode" in
+    both) expected_token=present; expected_key=present ;;
+    auth_token) expected_token=present; expected_key=unset ;;
+    api_key) expected_token=unset; expected_key=present ;;
+    auth_token_clear_api_key) expected_token=present; expected_key=empty ;;
+  esac
+  assert_contains "$out" "ANTHROPIC_AUTH_TOKEN=$expected_token" "registry $auth_mode 的 token 状态"
+  assert_contains "$out" "ANTHROPIC_API_KEY=$expected_key" "registry $auth_mode 的 key 状态"
+done
+expect_auth_error bash "$RENDERER" --backend claude-code --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test --auth-type auth_token
+expect_auth_error bash "$WRAPPER" --provider-registry "$AUTH_REGISTRY" --api-provider minimax --model test --auth-type auth_token -- true
+summary=$(bash "$WRAPPER" --settings "$AUTH_SETTINGS" --model test --auth-type auth_token --print-env-summary -- true 2>&1)
+assert_contains "$summary" auth_token=present "summary 如实标注存在的 token"
+assert_contains "$summary" api_key=unset "summary 如实标注 unset 的 key"
+assert_not_contains "$summary" fake-profile-token "summary 不输出凭证值"
+
 printf 'SUMMARY: pass=%d fail=%d\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
