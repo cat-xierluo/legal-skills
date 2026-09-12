@@ -53,6 +53,7 @@ bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
 bash scripts/test-orca-runtime-identity.sh
 bash scripts/test-orca-auto-register.sh
+python3 scripts/test_orca_registration_concurrency.py
 bash scripts/test-pm-monitor.sh
 bash scripts/test-reviewer-scope-guard.sh
 bash scripts/test-settle-liveness.sh

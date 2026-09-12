@@ -54,10 +54,12 @@ orca status --json
 当前行为（`orca-runtime.sh` + `detect_orca_mode`）：
 
 1. `orca_runtime_current_project` 失败时把原因暴露为 `ORCA_WORKTREE_CURRENT_ERROR`：`selector_not_found`（未注册）、`path_mismatch`（命中别的仓/路径）、空（runtime 不可达 / 非 Git / 输出不可解析）。
-2. 仅当错误码**精确等于** `selector_not_found`、`PROJECT_DIR` 可解析出 canonical Git toplevel、且 `orca status --json` 可达时，执行一次 `orca repo add --path <toplevel> --json`，随后重跑 `worktree current` 并要求精确返回该 toplevel 与 repo 身份，才继续 Orca 模式（版本/capability 预检照常）。
-3. repo add 失败、返回合同非 ok、或复验不精确匹配 → 打印诊断并回退既有 tmux 路径（fail-closed）；全部检查发生在 branch/worktree/provider 副作用之前，绝不假装 Orca 管理成功。`--dry-run` 只打印 `ORCA_RUN: orca repo add ...` 计划，不执行 mutation。
+2. 仅当错误码**精确等于** `selector_not_found` 时，调用 `orca-register-project.py`：在 Git common-dir 的 `mao-orca-register.lock` 普通文件上有界互斥，并在锁内重新读取 `worktree current`；其他 helper 已注册则复用。只有锁内仍明确未注册、canonical Git toplevel 可证明且 `orca status --json` 可达时，才执行一次 `repo add`。要求明确 `ok:true`/repo.id，再在同一锁内复验精确路径和 repo 身份，才继续 Orca 模式（版本/capability 预检照常）。
+3. 默认锁等待 5 秒、每次 CLI 调用 10 秒；使用 Python 标准库，不另安装系统 flock。锁文件必须是当前用户的私有普通文件；symlink、FIFO、hardlink、未知/损坏内容均拒绝，不删除重建所谓陈旧锁。
+4. mutation 前写入并 fsync pending。请求超时、回执丢失或复验失败不证明服务端没执行：保留 pending，后续没有精确身份则返回 `registration_prior_outcome_unknown`，不再 add。已有 acknowledged repo.id 时还必须一致。初始只读 probe 可复用精确身份但不清标记；注册 helper 在锁内证明身份后才清空标记内容，锁文件保留。PM 对未知结果先只读调查，不通过删锁或清标记“重试修复”。
+5. 注册失败或身份不符 → 诊断并回退既有 tmux 检测路径，绝不假装 Orca 管理成功；不因此跳过其他启动门禁。全部检查发生在 branch/worktree/provider 副作用之前。`--dry-run` 只打印计划，不创建注册/锁文件。
 
-**授权边界**：调用 Orca-first worker 路径（`spawn-worker.sh` 自动检测、未传 `--no-orca-mode`）即授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库、不授权改动其他 Orca 项目或全局配置。repo 已注册、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码（含 `path_mismatch`）一律不注册。确定性回归见 `scripts/test-orca-auto-register.sh`（全 mock，不依赖真实 Orca 状态）。
+**授权边界**：调用 Orca-first worker 路径（`spawn-worker.sh` 自动检测、未传 `--no-orca-mode`）即授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库、不授权改动其他 Orca 项目或全局配置。repo 已注册、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码（含 `path_mismatch`）一律不注册。互斥只协调本机采用此 helper 的同一 Git common-dir，不约束 UI、其他客户端或独立 clone，也不自动治理既有重复注册。回归见 `scripts/test-orca-auto-register.sh` 与 `scripts/test_orca_registration_concurrency.py`；后者使用真实进程/锁与 fake CLI，不代表真实 Orca mutation 已验证。
 
 ## 4. 启动与共享 Run
 
