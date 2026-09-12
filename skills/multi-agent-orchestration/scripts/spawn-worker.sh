@@ -155,6 +155,7 @@ TASK_TITLE=""
 ORCA_RUN_ID=""
 ORCA_TASK_ID=""
 ORCA_COORDINATOR_HANDLE=""
+ORCA_EXPECTED_RUNTIME_ID=""
 ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
 ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
 ORCA_SUPERVISED_TASK_ID=""   # helper 输出
@@ -400,6 +401,13 @@ source "$SCRIPT_DIR/spawn-worker-orca.sh"
 detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
 if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
+fi
+if [ -n "$ORCA_EXPECTED_RUNTIME_ID" ] && { [ "$ORCA_MODE" != "auto" ] || [ -z "$ORCA_COORDINATOR_HANDLE" ]; }; then
+  echo "ERROR: --orca-runtime-id requires Orca mode and --orca-coordinator-handle" >&2
+  exit 64
+fi
+if [ "$ORCA_MODE" = "auto" ] && [ -n "$ORCA_COORDINATOR_HANDLE" ]; then
+  orca_runtime_require_identity "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
 fi
 if [ "$ORCA_SUPERVISED" -eq 1 ]; then
   [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: --orca-supervised requires --task-spec or --orca-task-id" >&2; exit 64; }

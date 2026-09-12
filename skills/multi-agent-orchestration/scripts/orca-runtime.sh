@@ -50,6 +50,35 @@ orca_cli() {
   "$ORCA_CLI_BIN" "$@"
 }
 
+# runtimeId binds a receipt to one runtime, not to a live coordinator terminal.
+# A matching id cannot prove handle liveness; worker-start still owns fencing.
+orca_runtime_current_runtime_id() {
+  local status_json
+  ORCA_RUNTIME_ID_NOW=""
+  status_json=$(orca_cli status --json 2>/dev/null) || return 1
+  ORCA_RUNTIME_ID_NOW=$(printf '%s' "$status_json" | jq -er '
+    select(.ok == true and .result.runtime.reachable == true)
+    | .result.runtime.runtimeId
+    | select(type == "string" and length > 0 and . != "none")
+  ' 2>/dev/null) || { ORCA_RUNTIME_ID_NOW=""; return 1; }
+}
+
+orca_runtime_require_identity() {
+  local expected="$1"
+  if [ -z "$expected" ]; then
+    echo "SPAWN_COORDINATOR_RUNTIME_UNVERIFIED: legacy handle has no runtime identity; runtime drift is not checked. Re-prepare a receipt and pass its _meta.runtimeId." >&2
+    return 0
+  fi
+  if ! orca_runtime_current_runtime_id; then
+    echo "SPAWN_COORDINATOR_RUNTIME_UNVERIFIED: current runtime identity is unavailable; refusing dispatch." >&2
+    return 3
+  fi
+  if [ "$expected" != "$ORCA_RUNTIME_ID_NOW" ]; then
+    echo "SPAWN_COORDINATOR_STALE: receipt runtime differs from the current runtime; refusing dispatch. Inspect the existing Run/Tasks and rebind the coordinator on the current runtime; do not blindly recreate Tasks." >&2
+    return 3
+  fi
+}
+
 # Detect whether PROJECT_DIR is the current Orca-managed worktree. This is the
 # source of truth; TERM_PROGRAM and ORCA_WORKTREE_ID are optional hints only.
 # On success it fills ORCA_CURRENT_WORKTREE_JSON/ID/PATH.
