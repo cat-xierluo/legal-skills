@@ -91,11 +91,13 @@ def canonical_remote(url: str) -> str:
 
 
 def fingerprint(raw: str) -> str:
-    # Normalize only Git's transport/object-id decoration.  Content lines,
-    # including trailing spaces, are preserved byte-for-byte.
+    # Git and GitHub may choose different function-context annotations for
+    # the same hunk. Ignore those and object IDs, but retain hunk ranges,
+    # file modes, paths, and every content byte (including trailing spaces).
     kept: list[str] = []
     for line in raw.splitlines(keepends=True):
-        kept.append(re.sub(r"^index [0-9a-f]+\.\.[0-9a-f]+", "index <oids>", line))
+        line = re.sub(r"^index [0-9a-f]+\.\.[0-9a-f]+", "index <oids>", line)
+        kept.append(re.sub(r"^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@)[^\n]*", r"\1", line))
     return hashlib.sha256("".join(kept).encode("utf-8")).hexdigest()
 
 

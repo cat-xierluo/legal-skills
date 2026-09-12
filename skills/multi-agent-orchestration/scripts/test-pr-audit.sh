@@ -59,6 +59,40 @@ MISMATCH=$(AUDIT_DIFF="$TMP_ROOT/different.diff" python3 "$SCRIPT_DIR/pr-audit.p
   [ "$(printf '%s' "$MISMATCH" | jq -r '.suspected[0].reasons[]' | grep -c '^pr_diff_mismatch$')" = 1 ] \
   && ok "exact metadata with a different PR diff is suspected" || bad "PR diff mismatch was adopted or reason unreachable"
 
+sed -E 's/^(@@ [^@]*@@).*/\1 static int annotated_fn(const struct ctx *state)/' "$TMP_ROOT/diff" > "$TMP_ROOT/annotated.diff"
+ANNOTATED=$(AUDIT_DIFF="$TMP_ROOT/annotated.diff" python3 "$SCRIPT_DIR/pr-audit.py" --repo "$REPO" --base-ref main --head-ref feat/audit --head-sha "$HEAD_SHA" --task-id Task-097 --agent-id agent-a)
+[ "$(printf '%s' "$ANNOTATED" | jq -r '.decision')" = adopt ] && \
+  [ "$(printf '%s' "$ANNOTATED" | jq -r '.counts.exact')" = 1 ] \
+  && ok "annotation-only rendering difference is adopted" || bad "annotation-only difference was not exact"
+
+if python3 - "$SCRIPT_DIR/pr-audit.py" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("pr_audit", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+bare = "diff --git a/file.txt b/file.txt\nindex 223bade..5e2a0e7 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1,2 @@\n base\n+worker\n"
+annotated = bare.replace("@@\n", "@@ static int callback(void)\n", 1)
+assert mod.fingerprint(bare) == mod.fingerprint(annotated)
+for label, changed in {
+    "hunk start": bare.replace("@@ -1 +1,2 @@", "@@ -7 +7,2 @@"),
+    "hunk count": bare.replace("@@ -1 +1,2 @@", "@@ -1 +1,3 @@"),
+    "mode": bare.replace("100644", "100755"),
+    "path": bare.replace("file.txt", "other.txt"),
+    "content": bare.replace("+worker", "+different"),
+    "trailing whitespace": bare.replace("+worker", "+worker "),
+    "newline": bare.removesuffix("\n"),
+    "header-like content": bare.replace("+worker", "+@@ -1 +1,2 @@ content"),
+}.items():
+    assert mod.fingerprint(bare) != mod.fingerprint(changed), label
+assert mod.fingerprint("@@ malformed @@ one\n") != mod.fingerprint("@@ malformed @@ two\n")
+assert mod.fingerprint("GIT binary patch\nliteral 3\nabc\n") != mod.fingerprint("GIT binary patch\nliteral 3\nabd\n")
+PY
+then
+  ok "normalization retains ranges, modes, paths, content and binary payload"
+else
+  bad "normalization concealed a substantive patch difference"
+fi
+
 WRONG_SHA=$(printf 'f%.0s' {1..40})
 printf '[{"number":2,"url":"https://example/pull/2","baseRefName":"main","baseRefOid":"%s","headRefName":"feat/audit","headRefOid":"%s","headRepositoryOwner":{"login":"repository"},"isCrossRepository":false,"title":"Task-097 by agent-a","body":"Task: Task-097\\nAgent: agent-a","reviewDecision":"APPROVED","statusCheckRollup":[]}]\n' "$BASE_SHA" "$WRONG_SHA" > "$AUDIT_FIXTURE"
 [ "$(decision)" = ambiguous ] && ok "same head with different SHA is ambiguous" || bad "same-head SHA mismatch"
