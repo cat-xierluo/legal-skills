@@ -446,6 +446,100 @@ def _tokenize_orca_protocol_command(command: str) -> list[str] | None:
     return tokens
 
 
+def _contains_orca_protocol_invocation(command: str, depth: int = 0) -> bool:
+    """Recognize protocol intent independently of the narrow allow parser.
+
+    This classifier only causes denial. Operators, wrappers and partial parse
+    failures must not reclassify a protocol mutation as an ordinary exact task
+    command. It is not a sandbox for arbitrary programs that execute scripts.
+    """
+    normalized = re.sub(r"\\\r?\n[ \t]*", " ", strip_heredoc_bodies(command))
+    # Bound nested shell parsing; excessive nesting cannot become a generic
+    # allowlist escape. Single-quoted command examples are data, not execution.
+    if depth >= 16:
+        return True
+    single = double = escaped = False
+    for index, character in enumerate(normalized):
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\" and not single:
+            escaped = True
+            continue
+        if character == "'" and not double:
+            single = not single
+            continue
+        if character == '"' and not single:
+            double = not double
+            continue
+        if not single and (character == "`" or normalized[index:index + 2] == "$("):
+            start = index + (1 if character == "`" else 2)
+            end = normalized.find("`" if character == "`" else ")", start)
+            if _contains_orca_protocol_invocation(normalized[start:end if end >= 0 else None], depth + 1):
+                return True
+    lexer = shlex.shlex(normalized, posix=True, punctuation_chars=";&|<>()\n")
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    tokens: list[str] = []
+    try:
+        while True:
+            token = lexer.get_token()
+            if token is None:
+                break
+            tokens.append(token)
+    except ValueError:
+        # Preserve already decoded command words if a later argument is broken.
+        pass
+
+    def segment_has_protocol(segment: list[str]) -> bool:
+        while segment and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", segment[0])
+                           or segment[0] in {"if", "then", "elif", "else", "do", "!", "{"}):
+            segment = segment[1:]
+        # A leading redirect may precede the executable name.
+        while len(segment) >= 2:
+            offset = 1 if segment[0].isdigit() else 0
+            if len(segment) > offset + 1 and segment[offset] in {">", ">>", "<", ">&", "<&"}:
+                segment = segment[offset + 2:]
+            else:
+                break
+        if not segment:
+            return False
+        program = os.path.basename(segment[0])
+        if program in {"orca", "orca-ide", "orca-dev"}:
+            return len(segment) > 1 and segment[1] == "orchestration"
+        if program in {"command", "builtin", "exec", "env", "nohup", "sudo", "timeout", "nice", "setsid"}:
+            # Search only executable-shaped words, avoiding recursive expansion
+            # over a long chain of wrappers/options.
+            executable_names = {"orca", "orca-ide", "orca-dev", "sh", "bash", "dash", "zsh", "ksh", "eval"}
+            if any(segment_has_protocol(segment[index:]) for index in range(1, len(segment))
+                   if os.path.basename(segment[index]) in executable_names):
+                return True
+            if program == "env":
+                return any(option in {"-S", "--split-string"}
+                           and _contains_orca_protocol_invocation(segment[index + 1], depth + 1)
+                           for index, option in enumerate(segment[:-1]))
+            return False
+        if program in {"sh", "bash", "dash", "zsh", "ksh"}:
+            return any(
+                re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*|--command", option)
+                and _contains_orca_protocol_invocation(segment[index + 1], depth + 1)
+                for index, option in enumerate(segment[:-1])
+            )
+        if program == "eval":
+            return _contains_orca_protocol_invocation(" ".join(segment[1:]), depth + 1)
+        return False
+
+    segment: list[str] = []
+    for token in tokens + [";"]:
+        if token and all(character in ";&|()\n" for character in token):
+            if segment_has_protocol(segment):
+                return True
+            segment = []
+        else:
+            segment.append(token)
+    return False
+
+
 def _load_completion_authority(path_text: str) -> dict[str, str] | None:
     if not path_text:
         return None
@@ -504,7 +598,7 @@ def orca_worker_protocol_decision(command: str, completion_authority_file: str) 
     """Return ``(recognized, allowed)`` for the deliberately small Orca surface."""
     tokens = _tokenize_orca_protocol_command(command)
     if tokens is None:
-        return False, False
+        return _contains_orca_protocol_invocation(command), False
 
     subcommand = tokens[2]
     args = tokens[3:]
@@ -643,18 +737,19 @@ def main() -> int:
         deny("INSTALL_AUTHORIZATION_INVALID", str(exc))
         return 0
 
-    if not is_install_command(command):
-        protocol_recognized, protocol_allowed = orca_worker_protocol_decision(
-            command, completion_authority_file
-        )
-        if protocol_recognized:
-            if protocol_allowed:
-                return 0
-            deny(
-                "ORCA_COMPLETION_AUTHORITY_INVALID",
-                "Orca 协议命令与本次运行期 completion receipt 不匹配；立即停止，不得改写、包装或重试",
-            )
+    # Protocol authority outranks both generic shell and installation grants.
+    protocol_recognized, protocol_allowed = orca_worker_protocol_decision(
+        command, completion_authority_file
+    )
+    if protocol_recognized:
+        if protocol_allowed:
             return 0
+        deny(
+            "ORCA_COMPLETION_AUTHORITY_INVALID",
+            "Orca 协议命令与本次运行期 completion receipt 不匹配；立即停止，不得改写、包装或重试",
+        )
+        return 0
+    if not is_install_command(command):
         if command in allowed_shell or is_safe_lifecycle_command(command):
             return 0
         deny(

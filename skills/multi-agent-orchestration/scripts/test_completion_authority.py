@@ -2,6 +2,7 @@
 """Exercise the real hook with launch-bound receipts and an isolated CLI."""
 
 import hashlib
+import base64
 import json
 import os
 from pathlib import Path
@@ -126,6 +127,48 @@ class CompletionAuthorityTests(unittest.TestCase):
         self.write_json(self.auth, {"policy": "deny_by_default", "authorized_commands": [],
                                    "allowed_shell_commands": [invalid], "authorization_source": ""})
         self.assert_denied(invalid)
+
+    def test_protocol_variants_cannot_fall_through_exact_allowlist(self):
+        native = self.command.replace("\\\n", " ").replace("ctx_test", "ctx_wrong")
+        variants = [
+            native + " 2>/dev/null", native + "; true", "true && " + native,
+            native + " | cat", "true\n" + native, "command " + native,
+            "env TEST=1 " + native, "exec " + native, "(" + native + ")",
+            "2>/dev/null " + native, native.replace("orca ", '"orca" ', 1) + " 2>/dev/null",
+            native.replace("orca ", 'o"rc"a ', 1) + "; true",
+            native + ' --unknown "unterminated',
+            "bash -c " + shlex.quote(native), "eval " + shlex.quote(native),
+            "env -S " + shlex.quote(native),
+            "echo `" + native + "`", 'echo "$(' + native + ')"',
+        ]
+        self.env.update(WORKER_COMPLETION_AUTHORITY_FILE="", WORKER_AUTHORITY_RECEIPT_FILE="",
+                        WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256="")
+        for command in variants:
+            with self.subTest(command=command):
+                snapshot = {"policy": "deny_by_default", "authorization_source": "",
+                            "authorized_commands": [], "allowed_shell_commands": [command]}
+                self.env["WORKER_INSTALL_AUTH_B64"] = base64.b64encode(json.dumps(snapshot).encode()).decode()
+                self.assert_denied(command)
+
+    def test_install_grant_cannot_override_protocol_authority(self):
+        invalid = self.command.replace("ctx_test", "ctx_other") + "; npm install test-package"
+        self.write_json(self.auth, {"policy": "deny_by_default", "authorized_commands": [invalid],
+                                   "allowed_shell_commands": [], "authorization_source": "test fixture grant"})
+        self.assert_denied(invalid)
+
+    def test_ordinary_exact_commands_and_protocol_text_remain_allowed(self):
+        commands = [
+            "python3 scripts/check_case.py --case focused 2>/dev/null",
+            "cd subproject && python3 -m unittest focused_test",
+            "printf '%s\\n' 'orca orchestration send --type worker_done'",
+            "echo orca orchestration send --type worker_done",
+            "printf '%s\\n' '$(orca orchestration send --type worker_done)'",
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.write_json(self.auth, {"policy": "deny_by_default", "authorized_commands": [],
+                                           "allowed_shell_commands": [command], "authorization_source": ""})
+                self.assertEqual(self.hook(command), "")
 
     def test_arbitrary_executable_named_orca_is_denied(self):
         self.assert_denied(self.command.replace("orca orchestration", "/tmp/untrusted/orca orchestration"))

@@ -378,7 +378,7 @@ expect_block "worker protocol does not grant task mutation" "ORCA_COMPLETION_AUT
   hook "$deny_auth" 'orca orchestration task-update --id task_123 --status completed --json'
 expect_block "worker check cannot acknowledge coordinator Delivery" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration check --ack delivery_123 --json'
-expect_block "worker protocol rejects shell chaining" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker protocol rejects shell chaining" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration check --peek --json && git status --short'
 expect_block "worker protocol cannot stop another Dispatch" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration worker-stop --dispatch ctx_456 --json'
