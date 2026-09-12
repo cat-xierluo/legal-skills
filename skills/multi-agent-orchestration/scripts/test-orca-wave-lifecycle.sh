@@ -28,6 +28,9 @@ set -euo pipefail
   printf '\n'
 } >> "$FAKE_ORCA_LOG"
 case "$1 $2" in
+  "status --json")
+    echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-wave"}}}'
+    ;;
   "orchestration run-create")
     echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm"}}}'
     ;;

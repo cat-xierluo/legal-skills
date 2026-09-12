@@ -20,6 +20,7 @@ API_PROVIDER=""
 MODEL=""
 SETTING_SOURCES="project,local"
 PRINT_ENV_SUMMARY=0
+SETTINGS_AUTH_TYPE=""
 # v2.0：--no-mcp 显式禁用 MCP server 加载，规避项目 .mcp.json 触发的
 # "N new MCP servers found" 选择 dialog（references/09 T6 实战坑）。
 # wrapper 把 --strict-mcp-config --mcp-config '{"mcpServers":{}}' 注入给 claude。
@@ -35,6 +36,11 @@ Options:
   --setting-sources LIST   Sources passed to claude when it does not already
                            provide --setting-sources. Default: project,local
   --print-env-summary      Print a sanitized env summary to stderr before exec
+  --auth-type TYPE         Settings only: both (default), auth_token, api_key,
+                           or auth_token_clear_api_key. Registry auth_type is
+                           authoritative; combining it with this flag is rejected.
+                           Single-auth settings must omit the opposite env key
+                           so Claude cannot restore it when reloading --settings.
   --no-mcp                 (v2.0) Disable MCP server loading by injecting
                            --strict-mcp-config --mcp-config '{"mcpServers":{}}'
                            into the wrapped claude command. Use when project
@@ -46,7 +52,9 @@ The wrapper:
   - clears inherited Anthropic/Claude provider-routing env vars;
   - exports env entries from the given settings JSON, or resolves provider/model
     from a registry JSON;
-  - sets ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN together when one is absent;
+  - rejects settings env names reserved for wrapper control and NUL values;
+  - fills both credential variables by default; explicit auth_token/api_key
+    keeps only that credential variable (no provider-name/URL inference);
   - pins ANTHROPIC_MODEL to --model;
   - sets CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1; and
   - injects --setting-sources project,local for claude commands by default.
@@ -78,6 +86,13 @@ while [[ $# -gt 0 ]]; do
     --print-env-summary)
       PRINT_ENV_SUMMARY=1
       shift
+      ;;
+    --auth-type)
+      SETTINGS_AUTH_TYPE="$2"
+      case "$SETTINGS_AUTH_TYPE" in both|auth_token|api_key|auth_token_clear_api_key) ;;
+        *) echo "ERROR: unsupported --auth-type" >&2; exit 64 ;;
+      esac
+      shift 2
       ;;
     --no-mcp)  # v2.0：禁用 MCP server 加载（references/09 T6 坑）
       NO_MCP=1
@@ -117,6 +132,7 @@ if [ -n "$SETTINGS" ]; then
   jq -e '.env and (.env | type == "object")' "$SETTINGS" >/dev/null
 fi
 if [ -n "$PROVIDER_REGISTRY" ]; then
+  [ -z "$SETTINGS_AUTH_TYPE" ] || { echo "ERROR: registry auth_type and --auth-type are mutually exclusive" >&2; exit 64; }
   [ -f "$PROVIDER_REGISTRY" ] || { echo "ERROR: provider registry not found: $PROVIDER_REGISTRY" >&2; exit 64; }
   [ -n "$API_PROVIDER" ] || { echo "ERROR: --api-provider is required with --provider-registry" >&2; exit 64; }
   jq -e --arg provider "$API_PROVIDER" '.providers[$provider] and (.providers[$provider] | type == "object")' "$PROVIDER_REGISTRY" >/dev/null
@@ -154,14 +170,45 @@ for key in "${PROVIDER_ENV_KEYS[@]}"; do
 done
 
 AUTH_TYPE="both"
+if [ -n "$SETTINGS_AUTH_TYPE" ]; then AUTH_TYPE="$SETTINGS_AUTH_TYPE"; fi
 MODEL_ALIAS="$MODEL"
 RESOLVED_MODEL="$MODEL"
 
 if [ -n "$SETTINGS" ]; then
-  while IFS='=' read -r key value; do
+  # The renderer passes this file to Claude again. Do not claim env isolation
+  # while its explicit settings can reintroduce the removed credential.
+  forbidden_auth_key=""
+  case "$AUTH_TYPE" in
+    auth_token) forbidden_auth_key=ANTHROPIC_API_KEY ;;
+    api_key) forbidden_auth_key=ANTHROPIC_AUTH_TOKEN ;;
+  esac
+  if [ -n "$forbidden_auth_key" ] && jq -e --arg key "$forbidden_auth_key" '.env | has($key)' "$SETTINGS" >/dev/null; then
+    echo "ERROR: single-auth settings must omit $forbidden_auth_key; --settings reload could otherwise restore it" >&2
+    exit 64
+  fi
+  if [ "$AUTH_TYPE" = auth_token_clear_api_key ] && jq -e '.env.ANTHROPIC_API_KEY != null and .env.ANTHROPIC_API_KEY != ""' "$SETTINGS" >/dev/null; then
+    echo "ERROR: auth_token_clear_api_key settings must omit or empty ANTHROPIC_API_KEY before --settings reload" >&2
+    exit 64
+  fi
+  # Only wrapper control names are reserved; normal subprocess env remains open.
+  # In particular PROVIDER_REGISTRY must not switch a validated settings launch
+  # into the registry branch below, and AUTH_TYPE must retain its CLI selection.
+  if jq -e '.env | to_entries | any(.[]; (.key | contains("\u0000")) or (.value | tostring | contains("\u0000")))' "$SETTINGS" >/dev/null; then
+    echo "ERROR: settings env cannot contain NUL characters" >&2
+    exit 64
+  fi
+  while IFS='=' read -r -d '' key value; do
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    case "$key" in
+      AUTH_TYPE|SETTINGS_AUTH_TYPE|SETTINGS|PROVIDER_REGISTRY|API_PROVIDER|MODEL|MODEL_ALIAS|RESOLVED_MODEL|SETTING_SOURCES|PRINT_ENV_SUMMARY|NO_MCP|SCRIPT_DIR_CPE)
+        echo "ERROR: settings env name is reserved for wrapper control: $key" >&2
+        exit 64
+        ;;
+    esac
     export "$key=$value"
-  done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' "$SETTINGS")
+  # NUL-separated records keep multi-line values intact instead of turning a
+  # line such as AUTH_TYPE=both inside a value into a second assignment.
+  done < <(jq -j '.env | to_entries[] | .key, "=", (.value | tostring), "\u0000"' "$SETTINGS")
 fi
 
 if [ -n "$PROVIDER_REGISTRY" ]; then
@@ -223,13 +270,17 @@ if [ -n "$PROVIDER_REGISTRY" ]; then
 
   export ANTHROPIC_BASE_URL
   case "$AUTH_TYPE" in
-    both|auth_token)
+    both)
       export ANTHROPIC_AUTH_TOKEN="$token"
       export ANTHROPIC_API_KEY="$token"
       ;;
+    auth_token)
+      export ANTHROPIC_AUTH_TOKEN="$token"
+      unset ANTHROPIC_API_KEY
+      ;;
     api_key)
       export ANTHROPIC_API_KEY="$token"
-      export ANTHROPIC_AUTH_TOKEN=""
+      unset ANTHROPIC_AUTH_TOKEN
       ;;
     auth_token_clear_api_key)
       export ANTHROPIC_AUTH_TOKEN="$token"
@@ -252,7 +303,7 @@ if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   exit 64
 fi
 
-if [ "$AUTH_TYPE" = "both" ] || [ "$AUTH_TYPE" = "auth_token" ]; then
+if [ "$AUTH_TYPE" = "both" ]; then
   if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
     export ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_API_KEY}"
   fi
@@ -260,6 +311,17 @@ if [ "$AUTH_TYPE" = "both" ] || [ "$AUTH_TYPE" = "auth_token" ]; then
     export ANTHROPIC_API_KEY="${ANTHROPIC_AUTH_TOKEN}"
   fi
 fi
+
+case "$AUTH_TYPE" in
+  auth_token|auth_token_clear_api_key)
+    [ -n "${ANTHROPIC_AUTH_TOKEN:-}" ] || { echo "ERROR: selected auth_type requires ANTHROPIC_AUTH_TOKEN" >&2; exit 64; }
+    if [ "$AUTH_TYPE" = auth_token ]; then unset ANTHROPIC_API_KEY; else export ANTHROPIC_API_KEY=""; fi
+    ;;
+  api_key)
+    [ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "ERROR: selected auth_type requires ANTHROPIC_API_KEY" >&2; exit 64; }
+    unset ANTHROPIC_AUTH_TOKEN
+    ;;
+esac
 
 export ANTHROPIC_MODEL="$RESOLVED_MODEL"
 : "${ANTHROPIC_MODEL_NAME:=$RESOLVED_MODEL}"
@@ -315,8 +377,14 @@ fi
 
 if [ "$PRINT_ENV_SUMMARY" -eq 1 ]; then
   base_label=$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
-  auth_label="present"
-  api_key_label="present"
+  auth_label="unset"
+  api_key_label="unset"
+  if [ "${ANTHROPIC_AUTH_TOKEN+x}" = x ]; then
+    auth_label="empty"; [ -z "$ANTHROPIC_AUTH_TOKEN" ] || auth_label="present"
+  fi
+  if [ "${ANTHROPIC_API_KEY+x}" = x ]; then
+    api_key_label="empty"; [ -z "$ANTHROPIC_API_KEY" ] || api_key_label="present"
+  fi
   if [ -n "$PROVIDER_REGISTRY" ]; then
     printf 'CLAUDE_PROVIDER_ENV_SUMMARY: registry=%s provider=%s model_alias=%s resolved_model=%s base=%s auth_token=%s api_key=%s setting_sources=%s host_managed=1\n' \
       "$PROVIDER_REGISTRY" "$API_PROVIDER" "$MODEL_ALIAS" "$RESOLVED_MODEL" "$base_label" "$auth_label" "$api_key_label" "$SETTING_SOURCES" >&2

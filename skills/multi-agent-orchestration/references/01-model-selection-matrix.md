@@ -54,6 +54,8 @@
 
 默认 Claude Code worker 使用 `claude-provider`。推荐把多个第三方 provider 合并到一个本地 registry，参考 `config/claude-provider-registry.example.json`；每个 provider 写自己的 base URL、key 环境变量和模型清单，真实 registry 放 ignored local 文件。旧的每 provider 一个 settings JSON 路径继续兼容，参考 `config/claude-provider-settings.example.json`。标准命令由 `render-runtime-profile.sh` 生成，并默认包 `scripts/claude-provider-env.sh`，排除用户级 `~/.claude/settings.json` 的 provider/model 覆写。只有用户明确要走订阅/OAuth 时，才使用 `claude-oauth` 并清理 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN` 和第三方 `ANTHROPIC_BASE_URL`。
 
+认证模式以显式配置为准：registry 的 `auth_type` 是唯一来源；settings 路径可向 renderer/wrapper 传 `--auth-type auth_token` 或 `--auth-type api_key`，默认仍为 `both`。单认证模式分别 unset 相反变量；`auth_token_clear_api_key` 保留 API_KEY 为空串的旧语义。registry 与 CLI 同时声明时拒绝，不能按 provider 名称、URL 或文件名推断并覆盖认证方式。settings 中仍有相反变量键时，单认证模式拒绝启动，以免 Claude 重读原配置后复活该变量；须先由配置所有者移除相反键。此修复只证明启动环境遵守显式选择，不证明某个 provider 的历史停滞原因或真实请求已恢复。
+
 ### 1.4 各执行模式下指定模型
 
 **Claude Code Agent Teams 模式**：如果要走第三方 API，先让该 session 通过 registry 或 settings 加载 provider env，并显式指定 `--model <provider-model>`。registry 模式可用模型别名，但渲染命令时必须解析成 provider 真实模型名。

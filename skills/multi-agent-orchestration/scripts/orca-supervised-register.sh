@@ -30,6 +30,7 @@ OBJECTIVE=""
 TIMEOUT_MS=60000
 RESET_FAILED=0
 COORDINATOR_HANDLE=""
+EXPECTED_RUNTIME_ID=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -48,6 +49,8 @@ Optional:
   --coordinator-handle ID  Reuse the coordinator handle from the Wave receipt;
                            required with --task-id to avoid concurrent run-use rebinding
   --objective TEXT         Objective for a newly created Run
+  --runtime-id ID          Wave receipt _meta.runtimeId; check before mutations
+                           and every worker-start. Legacy omission is UNVERIFIED.
   --timeout-ms N           worker-start readiness timeout (default: 60000)
   --reset-failed           When worker-start is rejected with task_not_startable
                            (Task flipped to failed/blocked by a prior worker's ask
@@ -67,6 +70,10 @@ while [[ $# -gt 0 ]]; do
     --task-id) TASK_ID="$2"; shift 2 ;;
     --run-id) RUN_ID="$2"; shift 2 ;;
     --coordinator-handle) COORDINATOR_HANDLE="$2"; shift 2 ;;
+    --runtime-id)
+      EXPECTED_RUNTIME_ID="$2"
+      [ -n "$EXPECTED_RUNTIME_ID" ] || { echo "ERROR: --runtime-id cannot be empty" >&2; exit 64; }
+      shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
     --reset-failed) RESET_FAILED=1; shift ;;
@@ -83,6 +90,9 @@ done
 [[ "$TIMEOUT_MS" =~ ^[0-9]+$ ]] || { echo "ERROR: --timeout-ms must be an integer" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 orca_runtime_init
+if [ -n "$COORDINATOR_HANDLE" ] || [ -n "$EXPECTED_RUNTIME_ID" ]; then
+  orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || exit $?
+fi
 
 patch_supervised_metadata() {
   local show_out resolved_identity resolved_id resolved_path metadata_root candidate
@@ -183,6 +193,9 @@ else
 fi
 
 worker_start_once() {
+  if [ -n "$EXPECTED_RUNTIME_ID" ]; then
+    orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || return $?
+  fi
   orca_cli orchestration worker-start \
     --task "$TASK_ID" \
     --terminal "$TERMINAL_HANDLE" \

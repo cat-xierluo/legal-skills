@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.23.2] - 2026-09-12
+
+### 修复
+
+- Wave receipt 冻结 runtime 身份，并通过 spawn/register 显式参数在派发链重复核对，发现重启或身份不可验证时停止相应派发；旧调用明确报告未验证，保留 consumer fencing 的最终判断。
+- Provider wrapper 遵守显式单认证模式，settings/renderer 增加 `--auth-type`；默认双变量与空串兼容模式保留。拒绝双配置来源和 settings 相反键重载风险，不根据名称或 URL 自动改写认证选择。
+
+### 验证
+
+- 增加 runtime 身份漂移与认证有效环境的正反例；采用 fake Orca 与本地子进程探针。真实重启期间派发、Claude 配置重载及 provider 请求仍为 `NOT_VERIFIED`。
+
 ## [2.23.1] - 2026-09-12
 
 ### 修复
