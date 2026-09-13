@@ -5,6 +5,7 @@
 - 仓库内含 N 个独立可发布的子项目(skill、CLI、npm 包、binary 等)
 - 每个子项目自己的 `CHANGELOG.md` 维护 semver(如 `v1.3.1`)
 - 希望一次 `git push tag` 同时发布所有子项目的 zip
+- 希望把仓库内符号链接定义的专家套件展开为自包含 zip
 - README 表格含「下载(latest)」列,自动同步到 GitHub Release
 
 ## 端到端流程
@@ -16,6 +17,7 @@
 - [x] `references/release-notes-guide.md` 加 `monorepo-skills` profile
 - [x] `SKILL.md` description 加 monorepo 触发词 + 「模式 B」章节
 - [x] `scripts/build-zips.sh` + `scripts/release-monorepo.sh` 已就位
+- [x] 启用专家套件时，`validate-expert-suites.py` + `build-suite-zips.sh` 已就位
 - [x] `.github/workflows/release.yml` 与 `update-readme.yml` 已部署到仓库根
 
 ### 2. 发布前(每次)
@@ -32,20 +34,17 @@ cd /path/to/<repo>
 bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 ```
 
-**一气呵成完成 6 步**:
+**一气呵成完成 7 步**:
 
-1. `build-zips.sh <tag>` 遍历 `skills/`(或配置的根目录),按 `CHANGELOG.md` 头部 semver 命名 zip → `<output_dir>/`
-2. `git tag <YYYY.MM.DD-tag>` 打 tag
-3. `git push origin <YYYY.MM.DD-tag>` 推 tag,触发 `.github/workflows/release.yml`
-4. Actions 跑 `build-zips.sh`,用 `softprops/action-gh-release` 上传 `<output_dir>/*.zip`
-5. `gh run watch --exit-status` 等 Actions 完成
-6. **`update-readme.py` 内嵌调用**:从 GitHub API 拿最新 release 的 assets,
-   用真实 `browser_download_url` 替换 README 表格占位,
-   若有变更自动 commit + push(无需依赖 `.github/workflows/update-readme.yml` 跨 workflow 事件)
+1. `build-zips.sh <tag>` 遍历 `skills/`(或配置的根目录),按 `CHANGELOG.md` 头部 semver 命名单 Skill zip → `<output_dir>/`
+2. 如配置 `expert_suites_root`，校验套件链接和 README 后，由 `build-suite-zips.sh <tag>` 从 Git tree 展开成员，生成 `suite-<id>-<semver>.zip`
+3. 完成 Release 五问后，仅从与 `origin/main` 完全一致的干净 `main` 创建 annotated tag，并核验 tagger 与目标 commit
+4. 把已核验的不可变 tag object 精确推送到目标 ref，触发 `.github/workflows/release.yml`
+5. Actions 构建两类 zip,用 `softprops/action-gh-release` 上传 `<output_dir>/*.zip`
+6. `gh run watch --exit-status` 等 Actions 完成并核对资产总数
+7. `update-readme.yml` 在 release workflow 成功后通过 `workflow_run` 触发，从 GitHub API 获取最新 assets，用真实 `browser_download_url` 替换根 README 和专家套件 README 的占位并提交。
 
-> 设计取舍:`update-readme` 逻辑优先内嵌在 `release-monorepo.sh` 末尾(单脚本完成全流程),
-> `.github/workflows/update-readme.yml` 仍保留作为兜底(给直接用 `workflow_dispatch` 触发 release 的用户)。
-> 首次 release 出现过 `.github/workflows/update-readme.yml` 未自动触发的事件路由问题,内嵌后 100% 保证。
+> 设计取舍：不再依赖由 `GITHUB_TOKEN` 创建 Release 后产生新的 `release` workflow 事件，也不让本地发布脚本直接提交、推送 main。`workflow_run` 以 release workflow 的成功终态为触发源；手动补跑可使用 `workflow_dispatch`。
 
 ### 4. 发布后(每次)
 
@@ -60,6 +59,7 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 |---|---|---|
 | tag 频率 | CalVer,每周/每月一次 | 子项目用户不期望每天有新版本 |
 | zip 命名 | `<item>-<semver>.zip` | 用户能直接看到版本;CHANGELOG 是真理来源 |
+| 套件 zip 命名 | `suite-<id>-<semver>.zip` | 与单 Skill 资产区分，仍能从 CHANGELOG 解析版本 |
 | zip 内路径 | `<name>/...`(用 git archive + tar --strip-components=1 去 `skills/` 前缀) | 用户解压后直接得到 `<name>/` 文件夹,复制到目标 skills 目录 |
 | README 列 | 两列:版本 + 下载(latest) | 保留语义可读性 + 一键下载 |
 | 包排除 | `.gitattributes` export-ignore | git 原生,跨平台一致,不依赖 .gitignore |
@@ -67,7 +67,8 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 
 ## 已知限制 / 后续可优化
 
-- **Symlink 子项目跳过**:指向外部目录的 symlink 不打包(避免重复或外部污染)
+- **Skill 根目录 Symlink 跳过**:指向外部目录的 symlink 不作为单 Skill 打包(避免外部污染)
+- **专家套件 Symlink 只作成员指针**:必须严格指向当前仓库 `skills/<id>`；套件 ZIP 内展开为真实目录
 - **无 CHANGELOG / 无 semver 的子项目跳过**:首次发布前需补 CHANGELOG
 - **并发发布**:CalVer 频率下基本不会撞车,但建议在 `release.yml` 加 `concurrency:` 控制
 - **CI 配额**:`gh release upload` 1000 asset 上限、单个 2GiB,目前远低于
@@ -87,7 +88,8 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 
 - `skills/` 根目录下 50 个独立 skill,各自维护 semver
 - 6 个 symlink skill(hatch-pet、myagents-cli 等)被自动跳过
-- 50 个 zip 上传到同一 release
+- 首批 5 个专家套件通过仓库内相对符号链接复用公开 Skill
+- 单 Skill zip 与 `suite-*.zip` 上传到同一 release
 - README 表格 50 个 skill 全部有 download 列(7 个独立仓库 skill 除外但仍打 zip)
 - `projects.yaml` 配置:
 
@@ -96,6 +98,7 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
     repo: cat-xierluo/legal-skills
     type: monorepo-skills
     skills_root: skills
+    expert_suites_root: expert-suites
     output_dir: pack-skills
     exclude_globs:
       - "**/archive/**"
@@ -112,4 +115,4 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 
 - 跳过归档的 skill:`SKIP_ARCHIVED="skill-architect repo-research" bash build-zips.sh ...`
 
-其他项目接入模式 B 时,只需复制 build-zips.sh / release-monorepo.sh 两个脚本 + 在 `projects.yaml` 加自己的条目即可,无需修改 release-workflow skill 本身。
+其他项目只发布单组件时，复制 `build-zips.sh` / `release-monorepo.sh` 即可；启用专家套件时，再复制校验与套件构建脚本并配置 `expert_suites_root`，无需修改 release-workflow skill 本身。

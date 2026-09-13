@@ -16,13 +16,18 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Build zips
-        run: bash skills/release-workflow/scripts/build-zips.sh "${GITHUB_REF_NAME}"
+      - name: Build skill zips
+        run: bash skills/release-workflow/scripts/build-zips.sh "${RELEASE_TAG}"
+
+      - name: Build expert-suite zips
+        run: bash skills/release-workflow/scripts/build-suite-zips.sh "${RELEASE_TAG}"
 
       - name: Generate release notes
         # 从 README 自动提取"最近更新"表格 + 项目 notes: 配置,生成结构化 body
@@ -31,17 +36,17 @@ jobs:
         run: |
           python3 skills/release-workflow/scripts/generate-release-notes.py \
             "${{ github.repository }}" \
-            "${GITHUB_REF_NAME}" \
+            "${RELEASE_TAG}" \
             "legal-skills" || \
           python3 skills/release-workflow/scripts/generate-release-notes.py \
             "${{ github.repository }}" \
-            "${GITHUB_REF_NAME}"
+            "${RELEASE_TAG}"
 
       - name: Create release & upload
         uses: softprops/action-gh-release@d99959edae48b5ffffd7b00da66dcdb0a33a52ee  # v2.0.2
         with:
-          tag_name: ${{ github.ref_name || inputs.tag }}
-          name: "Skills Release ${{ github.ref_name || inputs.tag }}"
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "Skills Release ${{ env.RELEASE_TAG }}"
           body_path: .release-notes.md
           fail_on_unmatched_files: false
           files: |

@@ -1,8 +1,11 @@
 # Legal Skills 专家套件设计与发布方案
 
-- 状态：`DRAFT`
-- 日期：2026-09-03
+- 状态：`IMPLEMENTED — FIRST BATCH（待 PR 审查与合并）`
+- 初稿日期：2026-09-03
+- 首批实现日期：2026-09-13
 - 适用仓库：`cat-xierluo/legal-skills`
+
+首批实现已经打通 5 个套件的仓库目录、静态校验、自包含 ZIP、Pull Request Preview、正式 Release 上传和下载链接回写。剩余 4 个套件继续作为第二批候选，不影响首批分发合同。
 
 ## 1. 核心定义
 
@@ -288,7 +291,7 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 
 | ID | 专家套件 | 主要成员 Skill | 主要用途 |
 | :--- | :--- | :--- | :--- |
-| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`funasr-transcribe`、`transcription-corrector`、`paddle-ocr`、`mineru-ocr`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
+| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`funasr-transcribe`、`transcription-corrector`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
 | `litigation-assessment` | 诉讼案件前期研判 | `new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`pdf-organizer`、`legal-visualization`、`md2word`、`court-sms` | 收案、事实证据、争点、检索和诉讼策略 |
 | `litigation-documents-operations` | 诉讼文书与案件推进 | `elements-complaint-generator`、`litigation-analysis`、`legal-proposal-generator`、`md2word`、`legal-case-analysis`、`yuandian-law-search`、`new-case`、`court-sms`、`legal-visualization` | 起诉答辩、裁判分析、上诉再审和客户交付 |
 | `contract-business-counsel` | 合同审查与企业顾问 | `opc-legal-counsel`、`contract-copilot`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`legal-visualization`、`md2word` | 企业问题分诊、合同审查和顾问交付 |
@@ -309,6 +312,8 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 5. `skill-release-distribution`。
 
 `case-progress`、`case-dashboard` 当前仍在各自 `SKILL.md` 中标为骨架版本，第一批不放入公开套件；达到可用状态后再考虑加入“诉讼文书与案件推进”。
+
+`mineru-ocr` 和 `paddle-ocr` 已在 2026-09-04 归档并由 `legal-ocr` 统一承接，因此首批“法律材料与证据处理”不再链接这两个已归档目录。
 
 ## 9. Release 套件包
 
@@ -354,12 +359,14 @@ suite-litigation-assessment-0.1.0.zip
 
 ### 9.3 与现有 Release 的衔接
 
-建议在 `skills/release-workflow/scripts/` 增加：
+首批实现在 `skills/release-workflow/scripts/` 增加：
 
 ```text
 build-suite-zips.sh
 validate-expert-suites.py
 test-build-suite-zips.sh
+test_validate_expert_suites.py
+test_update_readme.py
 ```
 
 `.github/workflows/release.yml` 现有上传规则是：
@@ -443,28 +450,28 @@ files: |
 
 ## 12. 分阶段实施
 
-### 阶段 1：第一批套件目录
+### 阶段 1：第一批套件目录（已实现）
 
 - 创建首批 5 个 `expert-suites/<id>/`；
 - 编写 README、CHANGELOG 和 LICENSE；
 - 创建成员相对符号链接；
 - 增加静态校验器；
-- 暂不修改正式 Release。
+- 首批目录先由静态校验器验收。
 
-### 阶段 2：本地打包与 Preview
+### 阶段 2：本地打包与 Preview（已实现）
 
 - 实现 `build-suite-zips.sh`；
 - 增加链接逃逸、损坏链接、README 漂移和构建回滚测试；
 - 增加非发布 Preview job；
 - 实际解压并模拟安装至少一个套件。
 
-### 阶段 3：README 展示与正式发布
+### 阶段 3：README 展示与正式发布接线（已实现，尚未打 tag）
 
 - 在根 README 增加专家套件区；
 - 扩展下载链接更新工作流；
-- 完成 Release 五问自检；
-- 同时发布单 Skill ZIP 与套件 ZIP；
-- 从 Release 下载产物并复验。
+- 正式发布时完成 Release 五问自检；
+- Release 工作流已接线为同时上传单 Skill ZIP 与套件 ZIP；
+- 首次正式发布后，从 Release 下载产物并复验。
 
 ### 阶段 4：补齐剩余套件
 
@@ -484,13 +491,13 @@ expert-suites/*
 README.md
 .github/workflows/release.yml
 .github/workflows/update-readme.yml
-.github/workflows/<suite-preview>.yml
+.github/workflows/expert-suite-preview.yml
 skills/release-workflow/scripts/build-suite-zips.sh
 skills/release-workflow/scripts/validate-expert-suites.py
 skills/release-workflow/scripts/test-build-suite-zips.sh
+skills/release-workflow/scripts/test_validate_expert_suites.py
+skills/release-workflow/scripts/test_update_readme.py
 skills/release-workflow/SKILL.md
-skills/release-workflow/TASKS.md
-skills/release-workflow/DECISIONS.md
 skills/release-workflow/CHANGELOG.md
 ```
 

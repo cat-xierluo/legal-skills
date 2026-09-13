@@ -1,5 +1,24 @@
 # 变更日志
 
+## [1.5.0] - 2026-09-13
+
+### 新增
+
+- **专家套件无清单发布链路**：新增 `validate-expert-suites.py`，直接以 `expert-suites/<id>/skills/*` 相对符号链接为成员真值，校验链接逃逸、目标跟踪状态、Skill 名称、README 成员表、版本下载链接和许可证，不引入 `suite.yaml`。
+- **自包含套件 ZIP**：新增 `build-suite-zips.sh`，从指定 Git tree 导出成员真实目录，保留套件 README、CHANGELOG、LICENSE 和各成员许可证；产物命名为 `suite-<id>-<semver>.zip`，失败时不覆盖上一批完整产物。
+- **确定性回归测试**：新增静态校验 7 项单测、README 回写 3 项离线单测和端到端打包 fixture，覆盖损坏链接阻断、符号链接展开、下载资产精确匹配、精确 tag 渲染、路径逃逸拦截、模拟安装与失败回滚。
+
+### 改进
+
+- `release.yml` 在单 Skill ZIP 之后构建并上传专家套件 ZIP；新增 PR Preview 工作流，正式 tag 前即可下载和检查套件产物。
+- `update-readme.py` 统一扫描根 README 与全部专家套件 README，同时刷新整套和成员下载链接，并修复 `releases/latest/download/` 链接未被旧正则识别的问题。
+- `release-monorepo.sh` 增加套件构建、套件数量门禁和 Release 资产总数核对；dry-run 不再创建临时 tag，正式发布要求五问确认、干净 main、远端 HEAD 对齐、tagger 身份与不可变 tag OID 绑定，并移除本地脚本直接提交、推送 README 的高风险路径。
+- `update-readme.yml` 改由 release workflow 成功后的 `workflow_run` 触发，避开 `GITHUB_TOKEN` 创建 Release 时不会再次触发 `release` workflow 的事件路由限制。
+
+### 文档完善
+
+- 更新 monorepo 发布说明、项目配置和专家套件设计稿，明确源码符号链接与 Release 自包含目录的边界。
+
 ## [1.4.1] - 2026-08-06
 
 ### 修复

@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-13 | 更新   | [release-workflow](skills/release-workflow/)                           | v1.5.0  | **专家套件发布链路**：以仓库内相对符号链接定义成员，增加静态校验、自包含 ZIP、PR Preview、正式 Release 上传及根 README/套件 README 下载链接同步。 |
+| 2026-09-13 | 更新   | [md2word](skills/md2word/)                                             | v1.3.6  | 补齐与 `license: MIT` 一致的标准 `LICENSE.txt`，确保单 Skill 与专家套件 ZIP 都携带完整许可文本。 |
+| 2026-09-13 | 更新   | [git-batch-commit](skills/git-batch-commit/)                           | v1.4.3  | 补齐与 `license: MIT` 一致的标准 `LICENSE.txt`，确保单 Skill 与专家套件 ZIP 都携带完整许可文本。 |
 | 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.23.8 | Orca worktree 固定跳过前置 Setup；`inherit/run` 在机械门禁落地前失败关闭，并记录实际 Setup policy。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 | 2026-09-09 | 更新   | [legal-text-format](skills/legal-text-format/)                         | v1.2.2  | **案例格式化脚本恢复可执行**：修复阻断启动的引号替换语法、案例标记正则错误、无页脚输入越界和当前目录输出失败，并增加虚构案例回归测试与独立 CI。 |
 | 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
-| 2026-09-06 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.20.0–2.22.0 | **Worker 权限放大与内存治理**：安全类改分段校验，本分支 push/PR 成为默认交付路径（复合只读管道放行，force/主干/删除仍拒）；新增物理内存预算门与派发排队（额度不足泊车）、node 堆顶注入与 OOM 退避、scoped 自验默认与全量单一在飞的验证负载纪律。 |
-| 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.19.0 | **zcode 额度 lane 生产方**：新增 `quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实 5h 窗口观测合并进 quota summary（只更新 zcode lane、不替其他生产方续期，不接触凭证）；全数据源失败 fail-closed 不写文件，spawn 行为待第二期接线。 |
-| 2026-09-05 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.2  | **分支生命周期与清理分层**：以独立 reference 统一一次性/长期分支、单 Worker 自动清理、批量 stale 审计与功能线关闭；主文档保留最短判定入口，删除授权不放宽。 |
 </details>
 
 ## 📋 项目概述
@@ -68,6 +68,20 @@
 - 📦 **独立自包含**：每个技能都是完整的模块，可单独使用或组合使用
 - 📝 **文档完善**：每个技能配备决策记录、任务跟踪、变更日志
 - 🌐 **跨平台支持**：全面支持 Windows、macOS 和 Linux
+
+## 🧰 专家套件
+
+专家套件是按法律工作或 Skill 工程场景策展的一组 Skills。仓库中用相对符号链接指向同一份 Skill 源码，同一个 Skill 可以出现在多个套件；Release 下载包会把链接展开为完整目录，用户一次下载即可取得整套能力。
+
+专家套件只负责选择、说明和分发，不会自动编排成员 Skill。真正的跨 Skill 工作流仍遵循下方开发与编排指南。
+
+| 专家套件 | 适用场景 | 成员数 | 版本 | 整套下载 |
+| :--- | :--- | ---: | :---: | :---: |
+| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 文档、扫描件、PDF、音视频、法院来文的数字化和归档 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-legal-material-evidence-0.1.0.zip) |
+| [诉讼案件前期研判](expert-suites/litigation-assessment/) | 新案建档、事实证据分析、法律检索、策略和客户交付 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-assessment-0.1.0.zip) |
+| [诉讼文书与案件推进](expert-suites/litigation-documents-operations/) | 起诉文书、裁判分析、上诉再审和案件沟通 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-documents-operations-0.1.0.zip) |
+| [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-development-quality-0.1.0.zip) |
+| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-release-distribution-0.1.0.zip) |
 
 ## 🛠️ 技能列表
 
@@ -461,8 +475,8 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/md2word-1.2.0.zip">下载</a></td>
+<td style="text-align:center">v1.3.6</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/md2word-1.3.6.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -600,8 +614,8 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/git-batch-commit-1.4.2.zip">下载</a></td>
+<td style="text-align:center">v1.4.3</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-batch-commit-1.4.3.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -634,10 +648,10 @@
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
 <td>工具·发布</td>
-<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
+<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号、Release Notes、CI 与发布验证；支持 monorepo 单 Skill ZIP 和基于符号链接定义、Release 时展开的专家套件 ZIP</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/release-workflow-1.4.0.zip">下载</a></td>
+<td style="text-align:center">v1.5.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/release-workflow-1.5.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -694,6 +708,10 @@
 将以下内容复制到你的 Agent 平台，让它帮你安装：
 
 > 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
+
+### 一次下载专家套件
+
+从上方“专家套件”表格下载一个 `suite-<id>-<version>.zip`，解压后先阅读套件根目录 README，再把其中 `skills/*` 复制到 Agent 的 Skills 根目录。套件中的每个 Skill 都是完整真实目录，不依赖仓库符号链接。
 
 ### 单独下载某个 skill（推荐，无需 Git）
 
