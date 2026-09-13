@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.23.9"
+  version: "2.24.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -118,11 +118,13 @@ bash scripts/spawn-worker.sh \
 
 跨 session 的重要请求使用 `pm-orchestrate.sh send --message-contract`：先用 `worker-show` 复验精确 Run/Task/Dispatch/worker，再固定 sender、业务 thread、correlation、expected action 与 evidence refs；Orca 原生 thread 承载 correlation，使无 payload 的原生 reply 仍能继承可核对的关联标识，业务 thread 保留在合同 payload。send receipt 必须绑定同一 Dispatch relay 的 Orca message ID 与完整请求摘要；成功只证明 `durably_enqueued`。只读巡检使用 `inbox`（`check --peek`），所有出现的顶层及 payload 身份/类型别名必须一致；结构化消息须有精确 provenance，无 payload 的原生关联消息须同时给 thread+correlation 过滤器并精确匹配 worker sender、coordinator recipient、Run 与原生 correlation thread。相关消息可见不证明执行过 `reply`、已消费、开始执行或完成业务。状态层级、白名单、幂等指纹和敏感载荷拒绝规则统一读取 `references/14-pm-orchestrate.md`，不要另造聊天层或用 terminal prompt 代替 Orca 消息。
 
+Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或断线后只按原 message ID `--resume`，不得重发新问题，也不得把普通 ask 升格为 decision gate。PM 的 `wait` 按最多 50 条完整 FIFO Delivery 返回顺序分类 receipt，同一批在 ack 前重放；逐条完成 question reply、escalation 处置、worker_done 业务验收及 terminal ownership 后，才 ack 精确 Delivery。ack 回执若同时交付下一批，必须按 receipt 继续处理，不能把确认上一批误当作下一批已处理。Worker 在新文件前、每次 scoped test 后和 `worker_done` 前执行非 peek `check --terminal <live worker handle>`，处理整批后仅以同一 handle ack 该 Worker Delivery，并继续排空后续批次；`send` 成功或 `inbox --peek` 可见均不证明 Worker 已处理。`consumer_fenced` 表示 consumer generation/进程身份已被替换，`dispatch_inactive` 表示原 Dispatch 已 settled、stopped 或不再 active；任一出现都立即停止、不得重试 check 或发送 `worker_done`。强制前缀和 Shell 门禁共同拒绝以 `--peek/--all/--unread` 冒充处理；Worker 的 scoped ack 不能指定 coordinator handle，也不授予 reply、release、stop 或 Task mutation。
+
 ### 4.3 Worker Prompt 与 Session Context
 
 使用 `templates/worker-prompt.md`，至少写明：任务卡、范围、禁止项、验证命令、完成协议、branch lifecycle、integration target、资源 owner、安装授权和 Git identity。supervised 的 `worker-start` 是唯一任务注入器；长 prompt 可落到 `WORKER_PROMPT.md`，terminal 只发送短 Read 指令。
 
-实际 Task spec 的共同前缀补齐最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。`spawn-worker.sh` 在所有合法后端启动链路注入绝对 `WORKER_SESSION_CONTEXT`，不依赖安装/scope guard 是否启用；合法 `prompt_only_degraded` 且无 allow-paths 的 worker 也能定位。该值仅用于定位，不授予安装/Shell/scope 权限，不把降级冒充 hook 活跃。Worker 在自身进程中检查该值及所有非空旧 guard 绑定（`SCOPE_GUARD_SESSION_ROOT`、`WORKER_INSTALL_AUTH_FILE` 父目录）拼写一致且目录存在，全部检查成功后才采用路径；全缺失、任一相对/冲突/不可用时交 PM，不猜仓库根目录，不修改 authority。旧调用仍可由旧 guard 绑定定位。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
+实际 Task spec 的共同前缀补齐 ask/resume、自然检查点收件、最终收件、最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。`spawn-worker.sh` 在所有合法后端启动链路注入绝对 `WORKER_SESSION_CONTEXT`，不依赖安装/scope guard 是否启用；合法 `prompt_only_degraded` 且无 allow-paths 的 worker 也能定位。该值仅用于定位，不授予安装/Shell/scope 权限，不把降级冒充 hook 活跃。Worker 在自身进程中检查该值及所有非空旧 guard 绑定（`SCOPE_GUARD_SESSION_ROOT`、`WORKER_INSTALL_AUTH_FILE` 父目录）拼写一致且目录存在，全部检查成功后才采用路径；全缺失、任一相对/冲突/不可用时交 PM，不猜仓库根目录，不修改 authority。旧调用仍可由旧 guard 绑定定位。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
 
 ```text
 <worktree>/.claude/agent-sessions/<session>/

@@ -521,10 +521,11 @@ send_lines=$(wc -l < "$FAKE_ORCA_SENDS" | tr -d ' ')
 assert_eq "$send_lines" "1" "Task-076 rebind injects exactly one single-line send"
 if grep -Fq 'ctx-auto' "$FAKE_ORCA_SENDS" && grep -Fq -- '--type worker_done' "$FAKE_ORCA_SENDS" \
   && grep -Fq -- '--task-id task-1' "$FAKE_ORCA_SENDS" && grep -Fq -- '--from term-worker' "$FAKE_ORCA_SENDS" \
-  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS"; then
-  ok "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS" && grep -Fq -- 'ask --resume' "$FAKE_ORCA_SENDS" \
+  && grep -Fq -- 'orchestration check --terminal' "$FAKE_ORCA_SENDS"; then
+  ok "Task-076 injected line carries dispatch id and worker_done/ask/resume/check command forms"
 else
-  bad "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  bad "Task-076 injected line carries dispatch id and worker_done/ask/resume/check command forms"
 fi
 
 # 用例 3（补绑 mutation 失败）：manual-required + 显式告警 + 不阻断（exit 0）
