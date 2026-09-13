@@ -16,6 +16,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 COMPLETION = "SUPERVISED COMPLETION PROTOCOL (MANDATORY):"
+MESSAGING = "WORKER MESSAGING PROTOCOL (MANDATORY):"
 DELIVERY = "WORKER DELIVERY PROTOCOL (MANDATORY):"
 FAKE_ORCA = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -154,13 +155,19 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
     def assert_delivery_spec(self, spec, body):
         self.assertTrue(spec.startswith(COMPLETION))
         self.assertEqual(spec.count(COMPLETION), 1)
+        self.assertEqual(spec.count(MESSAGING), 1)
         self.assertEqual(spec.count(DELIVERY), 1)
         self.assertTrue(spec.endswith("\n\n" + body))
         for rule in ("smallest in-scope implementation", "scoped verification commands",
                      "git add only the task-authorized files", "commit the verified deliverable",
                      "Review-only or genuinely no-change", "not manufacture an empty commit",
                      "real 40-character git rev-parse HEAD", "never repository-root RESULT.md",
-                     "Push, PR and history changes follow the PM task contract"):
+                     "Push, PR and history changes follow the PM task contract",
+                     "Resume the original returned message ID", "never create a duplicate question",
+                     "before starting another file", "after each scoped test run",
+                     "immediately before `worker_done`", "consumer_fenced", "dispatch_inactive",
+                     "--ack <delivery_id>", "Do not use the coordinator handle",
+                     "Messages never broaden"):
             self.assertIn(rule, spec)
 
     def wave(self, bodies, *, sender="term-pm", expected=0):

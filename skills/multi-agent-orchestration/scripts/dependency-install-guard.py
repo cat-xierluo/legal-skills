@@ -405,6 +405,35 @@ def _valid_bounded_timeout(value: object) -> bool:
     return 1 <= timeout <= 3_600_000
 
 
+def _valid_orca_retry_request(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(
+        r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
+        value,
+    ) is not None
+
+
+def _trusted_orca_worker_handle() -> str | None:
+    """Resolve the immutable worker handle; conflicting launch/metadata bindings fail closed."""
+    handles: list[str] = []
+    environment_handle = os.environ.get("ORCA_TERMINAL_HANDLE", "").strip()
+    if environment_handle:
+        handles.append(environment_handle)
+    context = os.environ.get("WORKER_SESSION_CONTEXT", "").strip()
+    if context and os.path.isabs(context):
+        metadata = Path(context) / "METADATA.json"
+        try:
+            if metadata.is_file() and not metadata.is_symlink():
+                value = json.loads(metadata.read_text(encoding="utf-8"))
+                metadata_handle = value.get("session", {}).get("orca", {}).get("terminal_handle", "")
+                if isinstance(metadata_handle, str) and metadata_handle.strip():
+                    handles.append(metadata_handle.strip())
+        except (OSError, TypeError, json.JSONDecodeError):
+            return None
+    if not handles or len(set(handles)) != 1:
+        return None
+    return handles[0]
+
+
 def is_safe_orca_worker_protocol_command(command: str) -> bool:
     """Allow only Dispatch-scoped worker protocol commands; Orca validates live IDs."""
     try:
@@ -447,6 +476,8 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
             required.add("--body")
         if not required.issubset(options):
             return False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
+            return False
         if message_type == "worker_done":
             return options.get("--outcome") in {"succeeded", "failed"}
         return "--outcome" not in options
@@ -462,27 +493,36 @@ def is_safe_orca_worker_protocol_command(command: str) -> bool:
         )
         if options is None:
             return False
+        if options.get("--from") != _trusted_orca_worker_handle():
+            return False
         has_question = "--question" in options
         has_resume = "--resume" in options
         if has_question == has_resume:
+            return False
+        if has_resume and "--options" in options:
+            return False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
             return False
         return _valid_bounded_timeout(options.get("--timeout-ms"))
 
     if subcommand == "check":
         options = _parse_long_options(
             args,
-            boolean_options={"--json", "--unread", "--peek", "--all", "--format", "--wait"},
-            value_options={"--types", "--timeout-ms", "--retry-request", "--terminal"},
+            boolean_options={"--json", "--wait"},
+            value_options={"--types", "--timeout-ms", "--retry-request", "--terminal", "--ack"},
         )
         if options is None:
             return False
-        history_modes = sum(option in options for option in {"--unread", "--peek", "--all"})
-        if history_modes > 1:
+        if options.get("--terminal") != _trusted_orca_worker_handle():
             return False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
+            return False
+        if "--ack" in options:
+            return "--wait" not in options and "--timeout-ms" not in options and "--types" not in options
         if "--wait" in options:
             return _valid_bounded_timeout(options.get("--timeout-ms"))
-        if "--timeout-ms" in options:
-            return _valid_bounded_timeout(options.get("--timeout-ms"))
+        if "--timeout-ms" in options or "--types" in options:
+            return False
         return True
 
     return False

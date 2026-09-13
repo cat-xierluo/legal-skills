@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.24.0] - 2026-09-13
+
+### 新增
+
+- Supervised Task 强制前缀加入 Worker ask/resume 与自然检查点收件协议：阻塞问题超时、取消或断线后只恢复原 message ID；新文件前、每次 scoped test 后及 `worker_done` 前排空 consuming check，处理整批后仅 ack 自有 Worker Delivery，`consumer_fenced` 或 `dispatch_inactive` 时立即停止。
+- PM wait 为完整 FIFO Delivery 生成顺序分类 receipt，明确 question、escalation、worker_done 的不同处置义务；reply 支持同一未知结果的 `--retry-request` 精确恢复，并返回不夸大的持久回复 receipt。
+
+### 修复
+
+- Worker Shell 门禁不再允许以 `peek/all/unread` 冒充已处理 guidance，也拒绝 resume 时附带新 options、无 wait 的 timeout/types 与无界 wait；只允许绑定自身 handle 的 Worker Delivery ack，coordinator handle ack、reply、release、stop 和 Task mutation 权限维持拒绝。
+- PM wait 同时校验 result 与逐消息 Run，拒绝 alias 冲突、超过 50 条、空/非字符串 ID、缺少显式 null 的空批 Delivery 或 count 不一致。ack 除精确 Run 与 acknowledged Delivery ID 外，还完整校验同一响应交付的下一批、拒绝旧/新 Delivery 复用同一 ID，并单列 next Delivery receipt，避免确认上一批时遗漏下一批。reply 的 mutation 前预检改按 Orca 1.4.200 真实 question 行校验 `dispatch:<dispatch> → run:<run>` 路由、message-id thread 与 JSON-string Task/Dispatch payload，再用 post-reply asker 绑定 worker terminal；post-reply 对所有出现的 aliases 保留显式 null 并要求 reply 使用独立 message ID。跨 Dispatch、复用 question ID 或任一路由/alias 漂移继续失败关闭。所有 receipt 均区分入队、可见、消费、回复、执行和业务完成，避免把队列动作误报为工作已执行。
+- 修正上一版把 `--retry-request` 当作业务自定义键的真实 CLI 不兼容：首次 send/reply 必须省略，恢复时只接受 Orca 对未知 mutation 回传的 UUID；transport retry 不再混入业务 payload 或请求摘要，避免原命令与恢复参数漂移。
+
+### 验证
+
+- 新增 stateful fake-Orca 回归，覆盖旧 Delivery 重放、50 条 FIFO 边界、逐消息 Run 漂移、显式 null 空批、ack 响应内下一批及畸形/同 ID 批次、真实 Orca question message row、post-reply 显式 null alias/复用 question ID、同 Orca UUID 幂等回复与换 UUID 重复回复；同步扩展真实 Task spec、sender argv、transport retry UUID 和 Shell 门禁正反例。fake 测试不替代真实跨 session 消息层或 provider 全生命周期验证。
+- 在 Orca 1.4.200 的两个隔离 shell terminal 上完成真实消息层正例：ask timeout 保留原 message ID、PM Delivery 在 ack 前同批重放、重复同答案复用原 reply、resume 得到答案、guidance 在 Worker 自有 Delivery 中消费并 ack 后不再 unread。测试 Dispatch 已 fence、两个精确 terminal 已关闭；未启动 provider，不能据此声明 backend 全生命周期通过。
+
 ## [2.23.9] - 2026-09-13
 
 ### 新增

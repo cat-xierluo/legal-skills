@@ -24,7 +24,7 @@ allowed = {
  ("orchestration", "run-use"): {"--id", "--from", "--json"},
  ("orchestration", "run-current"): {"--from", "--json"},
  ("orchestration", "send"): {"--to", "--type", "--subject", "--body", "--from", "--json"},
- ("orchestration", "reply"): {"--id", "--body", "--from", "--json"},
+ ("orchestration", "reply"): {"--id", "--body", "--from", "--retry-request", "--json"},
  ("orchestration", "check"): {"--wait", "--types", "--timeout-ms", "--ack", "--terminal", "--json"},
  ("orchestration", "worker-release"): {"--dispatch", "--json"},
  ("orchestration", "worker-retain"): {"--dispatch", "--json"},
@@ -76,6 +76,44 @@ elif command[1] == "task-create":
     response["result"] = {"task": {"id": "task-new"}}
 elif command[1] == "worker-list":
     response["result"] = {"workers": [{"dispatch_id": "ctx-test", "terminal_state": "retained"}]}
+elif command[1] == "worker-show":
+    response["result"] = {
+        "dispatch": {"id": "ctx-test", "task_id": "task-test", "run_id": "run-test",
+                     "assignee_handle": "term-worker", "status": "dispatched"},
+        "worker": {"dispatch_id": "ctx-test", "agent_terminal_handle": "term-worker",
+                   "state": "active"},
+    }
+elif command[1] == "check":
+    response["result"] = {"runId": "run-test", "deliveryId": None,
+                          "count": 0, "messages": []}
+    if "--ack" in flags:
+        response["result"]["acknowledged"] = flags["--ack"]
+    elif "--wait" not in flags:
+        response["result"].update({
+            "deliveryId": "delivery-questions", "count": 2,
+            "messages": [
+                {"id": "msg", "type": "question", "run_id": "run-test",
+                 "from_handle": "dispatch:ctx-test", "to_handle": "run:run-test",
+                 "thread_id": "msg",
+                 "payload": json.dumps({"taskId": "task-test", "dispatchId": "ctx-test",
+                                        "question": "Need guidance?", "options": []})},
+                {"id": "msg-question", "type": "question", "run_id": "run-test",
+                 "from_handle": "dispatch:ctx-test", "to_handle": "run:run-test",
+                 "thread_id": "msg-question",
+                 "payload": json.dumps({"taskId": "task-test", "dispatchId": "ctx-test",
+                                        "question": "Continue?", "options": []})},
+            ],
+        })
+elif command[1] == "reply":
+    response["result"] = {"message": {"id": "msg-reply", "run_id": "run-test",
+                                       "from_handle": "run:run-test",
+                                       "to_handle": config.get("reply_to", "dispatch:ctx-test"),
+                                       "thread_id": flags["--id"], "body": flags["--body"]},
+                          "question": {"message_id": flags["--id"], "run_id": "run-test",
+                                       "dispatch_id": "ctx-test", "asker_handle": "term-worker",
+                                       "status": "answered",
+                                       "answer_message_id": "msg-reply", "answer_body": flags["--body"]},
+                          "duplicate": False}
 if config.get("fail_command") == list(command):
     response = {"ok": False, "error": {"code": "fixture_failure"}}
     print(json.dumps(response))
@@ -101,7 +139,8 @@ class SenderBindingTest(unittest.TestCase):
         self.metadata = self.root / ".claude/agent-sessions/worker/METADATA.json"
         self.metadata.parent.mkdir(parents=True)
         self.data = {"session": {"orca": {"runtime_id": "runtime-test", "terminal_handle": "term-worker",
-                     "supervised": {"run_id": "run-test", "coordinator_handle": "term-recorded", "dispatch_id": "ctx-test"}}}}
+                     "supervised": {"run_id": "run-test", "coordinator_handle": "term-recorded",
+                                    "task_id": "task-test", "dispatch_id": "ctx-test"}}}}
         self.save_metadata()
         self.env = dict(os.environ, ORCA_CLI_COMMAND=str(self.fake), SENDER_FIXTURE=str(self.root),
                         ORCA_TERMINAL_HANDLE="term-wrong-environment")
@@ -163,6 +202,32 @@ class SenderBindingTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls()[-1][-3:], ["--from", "term-recorded", "--json"])
         self.assertEqual(self.metadata.read_bytes(), before)
+
+    def test_reply_exact_recovery_passes_retry_request_and_emits_scoped_receipt(self):
+        retry_id = "11111111-1111-4111-8111-111111111111"
+        result = self.pm("reply", "--message-id", "msg-question", "--text", "answer",
+                         "--retry-request", retry_id)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls()[-1], ["orchestration", "reply", "--id", "msg-question",
+                         "--body", "answer", "--from", "term-recorded",
+                         "--retry-request", retry_id, "--json"])
+        receipt = json.loads(result.stdout)["mao_reply_receipt"]
+        self.assertEqual(receipt["state"], "reply_committed")
+        self.assertEqual(receipt["question_message_id"], "msg-question")
+        self.assertEqual(receipt["reply_message_id"], "msg-reply")
+        self.assertEqual(receipt["task_id"], "task-test")
+        self.assertEqual(receipt["dispatch_id"], "ctx-test")
+        self.assertEqual(receipt["worker_handle"], "term-worker")
+        self.assertEqual(receipt["source_delivery_id"], "delivery-questions")
+        self.assertFalse(receipt["duplicate"])
+        self.assertEqual(receipt["retry_request"], retry_id)
+        self.assertIn("worker_consumed_reply", receipt["does_not_prove"])
+
+    def test_reply_rejects_non_orca_retry_identity_before_binding(self):
+        result = self.pm("reply", "--message-id", "msg-question", "--text", "answer",
+                         "--retry-request", "business-retry-key")
+        self.assertEqual(result.returncode, 64, result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_missing_recorded_sender_never_uses_environment(self):
         self.data["session"]["orca"]["supervised"].pop("coordinator_handle")

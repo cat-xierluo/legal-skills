@@ -59,7 +59,13 @@ case "$1 $2" in
   "orchestration worker-start") printf '%s\n' '{"ok":true,"result":{"dispatch":{"id":"ctx_test"}}}' ;;
   "orchestration worker-read") printf '%s\n' '{"ok":true,"result":{"source":"transcript","cursor":"cursor_2","rows":[]}}' ;;
   "orchestration worker-show") printf '%s\n' '{"ok":true,"result":{"worker":{"state":"ready","task_status":"dispatched","dispatch_status":"dispatched"}}}' ;;
-  "orchestration check") printf '%s\n' '{"ok":true,"result":{"delivery":{"id":"delivery_test","messages":[]}}}' ;;
+  "orchestration check")
+    if [[ " $* " == *' --ack delivery_test '* ]]; then
+      printf '%s\n' '{"ok":true,"result":{"runId":"run_test","acknowledgedDeliveryId":"delivery_test","deliveryId":null,"count":0,"messages":[]}}'
+    else
+      printf '%s\n' '{"ok":true,"result":{"runId":"run_test","deliveryId":null,"count":0,"messages":[]}}'
+    fi
+    ;;
   "orchestration worker-list") printf '%s\n' "{\"ok\":true,\"result\":{\"workers\":[{\"dispatch_id\":\"ctx_external\",\"worker_state\":\"succeeded\",\"dispatch_status\":\"completed\",\"terminal_state\":\"retained\",\"agentTerminalHandle\":\"${ORCA_FAKE_RESOURCE_HANDLE:-term_external}\",\"resource\":{\"ownershipState\":\"external\",\"retainedReason\":\"external_terminal\"}}]}}" ;;
   "terminal read") printf '%s\n' '{"ok":true,"result":{"terminal":{"nextCursor":"terminal_cursor_2","tail":[]}}}' ;;
   *) printf '%s\n' '{"ok":true,"result":{}}' ;;
