@@ -21,7 +21,7 @@ PENDING_PATH = SKILL_ROOT / "config" / "pending_tasks.json"
 COMPLETED_PATH = SKILL_ROOT / "config" / "completed_tasks.json"
 LOCK_PATH = SKILL_ROOT / "config" / ".pending_tasks.lock"
 
-STATUS_NAMES = {0: "已完成", 1: "排队中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
+STATUS_NAMES = {0: "已提交，待转录开始", 1: "排队中/转录中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
 
 
 @contextlib.contextmanager
@@ -199,7 +199,10 @@ def check_once(client):
             status = info.get("status", -1)
             name = STATUS_NAMES.get(status, f"未知({status})")
 
-            if status in (0, 3):
+            # 实测 status=0 二义：刚提交（transStartTime 为空）与真正完成均为 0，
+            # 仅凭 status 会把刚提交的任务误判完成并生成空 Markdown。
+            # 仅当 transStartTime 已设置才视为完成。
+            if status == 3 or (status == 0 and info.get("transStartTime")):
                 print(f"[{trans_id}] {name} — 正在生成输出...")
                 try:
                     result_info = finish_task(client, task)
