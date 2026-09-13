@@ -231,7 +231,6 @@ contract_args=(
   --priority high
   --thread-id "thread.task-contract"
   --correlation-id "corr.task-contract.1"
-  --retry-request "retry.task-contract.1"
   --expected-action "Review the frozen head and reply with evidence."
   --evidence-ref "git:abc123"
   --evidence-ref "path:skills/multi-agent-orchestration/SKILL.md"
@@ -248,11 +247,11 @@ assert_true "receipt names durable enqueue and excludes later states" jq -e '
   and .mao_message_receipt.thread_id == "thread.task-contract"
   and .mao_message_receipt.native_thread_id == "corr.task-contract.1"
   and .mao_message_receipt.correlation_id == "corr.task-contract.1"
-  and .mao_message_receipt.retry_request == "retry.task-contract.1"
+  and .mao_message_receipt.retry_request == null
   and (.mao_message_receipt.contract_sha256 | test("^[0-9a-f]{64}$"))
   and (.mao_message_receipt.does_not_prove == ["delivered_visible","consumed","replied","action_started","business_completed"])
 ' "$TMP_ROOT/stdout" >/dev/null
-assert_true "native send receives exact routing, type, priority, thread and retry identity" jq -s -e '
+assert_true "new native send receives exact routing, type and thread without a fabricated retry identity" jq -s -e '
   def after($flag): . as $a | ($a | index($flag)) as $i | if $i == null then null else $a[$i + 1] end;
   .[-1]
   | .[0:2] == ["orchestration","send"]
@@ -262,7 +261,7 @@ assert_true "native send receives exact routing, type, priority, thread and retr
     and after("--type") == "decision_gate"
     and after("--priority") == "high"
     and after("--thread-id") == "corr.task-contract.1"
-    and after("--retry-request") == "retry.task-contract.1"
+    and index("--retry-request") == null
     and index("--task-id") == null
     and index("--dispatch-id") == null
 ' "$FAKE_ORCA_LOG" >/dev/null
@@ -277,7 +276,7 @@ assert_true "payload freezes context, correlation, action and typed evidence" jq
   .[-1] | after("--payload") | fromjson
   | .schema == "multi-agent-orchestration.message-contract.v1"
     and .correlation_id == "corr.task-contract.1"
-    and .retry_request == "retry.task-contract.1"
+    and (has("retry_request") | not)
     and .expected_action == "Review the frozen head and reply with evidence."
     and .authority == "informational_only"
     and .message.thread_id == "thread.task-contract"
@@ -286,23 +285,38 @@ assert_true "payload freezes context, correlation, action and typed evidence" jq
     and .recipient == {kind:"dispatch",dispatch_id:"ctx-contract"}
     and .context == {run_id:"run-contract",task_id:"task-contract",dispatch_id:"ctx-contract"}
 ' "$FAKE_ORCA_LOG" >/dev/null
-assert_true "retry fingerprint ledger stores only request identity and digest" jq -s -e '
+if [ ! -e "$CONTEXT/MESSAGE_RETRY_FINGERPRINTS.ndjson" ]; then
+  ok "new send without an unknown-outcome UUID creates no retry ledger"
+else
+  not_ok "new send without an unknown-outcome UUID creates no retry ledger"
+fi
+
+retry_args=("${contract_args[@]}" --retry-request "11111111-1111-4111-8111-111111111111")
+run_pm "${retry_args[@]}"
+assert_eq "Orca UUID recovery reaches the native send" "0" "$LAST_RC"
+assert_true "recovery receipt preserves the Orca UUID outside the business payload" jq -e '
+  .mao_message_receipt.retry_request == "11111111-1111-4111-8111-111111111111"
+' "$TMP_ROOT/stdout" >/dev/null
+assert_true "native recovery receives the exact Orca UUID" jq -s -e '
+  def after($flag): . as $a | ($a | index($flag)) as $i | if $i == null then null else $a[$i + 1] end;
+  .[-1] | after("--retry-request") == "11111111-1111-4111-8111-111111111111"
+' "$FAKE_ORCA_LOG" >/dev/null
+assert_true "retry fingerprint ledger stores only Orca UUID and business request digest" jq -s -e '
   length == 1
   and .[0].schema == "multi-agent-orchestration.message-retry-fingerprint.v1"
-  and .[0].retry_request == "retry.task-contract.1"
+  and .[0].retry_request == "11111111-1111-4111-8111-111111111111"
   and (.[0].contract_sha256 | test("^[0-9a-f]{64}$"))
   and (.[0] | has("body") | not)
 ' "$CONTEXT/MESSAGE_RETRY_FINGERPRINTS.ndjson" >/dev/null
 
-run_pm "${contract_args[@]}"
-assert_eq "exact native retry succeeds" "0" "$LAST_RC"
+run_pm "${retry_args[@]}"
+assert_eq "exact unknown-outcome recovery succeeds" "0" "$LAST_RC"
 assert_eq "exact retry does not duplicate the fingerprint" "1" "$(wc -l < "$CONTEXT/MESSAGE_RETRY_FINGERPRINTS.ndjson" | tr -d ' ')"
 
 printf '%s\n' "Case 2: normal priority is contract metadata, not a native Orca flag"
 normal_args=("${contract_args[@]}")
 for index in "${!normal_args[@]}"; do
   if [ "${normal_args[index]}" = "high" ]; then normal_args[index]="normal"; fi
-  if [ "${normal_args[index]}" = "retry.task-contract.1" ]; then normal_args[index]="retry.task-contract.normal"; fi
 done
 run_pm "${normal_args[@]}"
 assert_eq "normal-priority send succeeds" "0" "$LAST_RC"
@@ -320,7 +334,7 @@ assert_zero_orca_rejection() {
 }
 
 printf '%s\n' "Case 3: invalid contract inputs are rejected before any Orca call"
-changed_retry_args=("${contract_args[@]}")
+changed_retry_args=("${retry_args[@]}")
 for index in "${!changed_retry_args[@]}"; do
   if [ "${changed_retry_args[index]}" = "Please review the frozen candidate." ]; then
     changed_retry_args[index]="Changed body under the same retry identity."
@@ -357,6 +371,11 @@ run_pm send --worktree "$WT" --session "$SESSION" --message-contract \
   --thread-id thread-1 --correlation-id corr-1 --retry-request ghp_abcdefghijklmnopqrstuv \
   --expected-action act --text body
 assert_zero_orca_rejection "credential-like retry id" "PM_MESSAGE_CONTRACT_SENSITIVE_REJECTED"
+
+run_pm send --worktree "$WT" --session "$SESSION" --message-contract \
+  --thread-id thread-1 --correlation-id corr-1 --retry-request business-retry-key \
+  --expected-action act --text body
+assert_zero_orca_rejection "non-Orca retry id" "PM_MESSAGE_CONTRACT_RETRY_INVALID"
 
 run_pm send --worktree "$WT" --session "$SESSION" --message-contract \
   --thread-id thread-1 --correlation-id corr-1 --expected-action act \
