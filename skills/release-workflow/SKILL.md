@@ -1,6 +1,7 @@
 ---
 name: release-workflow
-description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
+description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"、"专家套件 zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
+version: "1.5.0"
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -156,16 +157,16 @@ publish job 失败：
 
 ## 模式 B:monorepo 多组件批量发布
 
-适用:一个仓库下有 N 个独立可发布的子项目(skill 集、CLI 工具集、npm 包集等),希望一次 tag 同时发布所有子项目的 zip,但保留各自的版本号。
+适用:一个仓库下有 N 个独立可发布的子项目(skill 集、CLI 工具集、npm 包集等),希望一次 tag 同时发布所有子项目的 zip；也支持由仓库内符号链接定义、Release 时展开为真实目录的专家套件 zip。
 
-**前置**:对应项目需在 `config/projects.yaml` 有 `type: monorepo-skills` 条目,并配套 `scripts/build-zips.sh` + `scripts/release-monorepo.sh` 两个脚本(完整 SOP 见 `references/monorepo-release.md`)。
+**前置**:对应项目需在 `config/projects.yaml` 有 `type: monorepo-skills` 条目,并配套 `scripts/build-zips.sh` + `scripts/release-monorepo.sh`。启用专家套件时，再配置 `expert_suites_root` 并使用 `validate-expert-suites.py` + `build-suite-zips.sh`；完整 SOP 见 `references/monorepo-release.md`。
 
 **与模式 A 的关键差异**(相对单仓库单应用):
 
 | 维度 | 模式 A(单应用) | 模式 B(monorepo) |
 |---|---|---|
 | tag 频率 | 每应用 1 tag | 每发布轮次 1 tag(常用 CalVer) |
-| zip 命名 | `<App>-<ver>.<ext>` | `<skill>-<semver>.zip` |
+| zip 命名 | `<App>-<ver>.<ext>` | `<skill>-<semver>.zip`；套件为 `suite-<id>-<semver>.zip` |
 | Release Notes | 单应用 changelog | N 个 skill changelog 合并 |
 | 验证 | 平台矩阵(win/mac/linux) | 子项目数量清单 + 关键项抽查 |
 | 回写 README | 不适用 | 是(把 latest URL 写进表格) |
@@ -173,15 +174,26 @@ publish job 失败：
 **核心流程**(详见 `references/monorepo-release.md`):
 
 1. 读 `projects.yaml` 的 `<project-key>` 条目,获取 `skills_root`、`output_dir`、`exclude_globs`
-2. 跑 `build-zips.sh <tag>` 生成 `<output_dir>/<item>-<semver>.zip`
+2. 跑 `build-zips.sh <tag>` 生成单 Skill ZIP；存在专家套件时，再跑静态校验与 `build-suite-zips.sh <tag>`
 3. 打 tag、推 tag
 4. GitHub Actions 自动:上传 zip + 触发 update-readme.yml
-5. update-readme.yml 调 GitHub API 拿 assets 列表,替换 README 里的占位 URL
+5. update-readme.yml 调 GitHub API 拿 assets 列表,替换根 README 与 `expert-suites/*/README.md` 里的占位 URL
 6. 验证 release 页 assets 数量 = 期望子项目数
+
+专家套件成员以 `expert-suites/<id>/skills/*` 的相对符号链接为唯一构建清单，不增加 `suite.yaml`。构建器先校验链接未逃逸、README 成员表一致、成员许可证齐全，再从指定 Git tree 导出真实 Skill 目录；Release ZIP 中不得保留符号链接。
 
 不要用于:单应用桌面/CLI/Web 项目(用模式 A 上文 7 步流程)、跨仓库分发(用 subtree-publish skill)。
 
 ---
+
+## 所需权限与副作用
+
+- 本地 Preview 只读取当前 Git tree，并在仓库 `pack-skills/` 写入 ZIP；不会创建 tag、联网、安装依赖或修改 README。
+- 正式发布会读取 Git 状态、执行 `git fetch`、创建 annotated tag、把已核验的不可变 tag OID 推送到 `origin`，并通过 `gh` 读取 Actions 与 Release 状态。执行前必须完成 Release 五问并设置 `RELEASE_CONFIRMED=1`。
+- 正式发布只允许从干净、非 detached、且 HEAD 与 `origin/main` 一致的 main 工作树执行；已有同名本地或远端 tag、身份缺失、CI 失败或资产数不一致均 fail-closed。
+- `RELEASE_GIT_NAME` 与 `RELEASE_GIT_EMAIL` 可显式绑定 tagger 身份；未设置时读取当前 Git 身份，但字段为空会阻断。
+- 下载链接回写由权限仅为 `contents: write` 的 `update-readme.yml` 在 release workflow 成功后执行；本地发布脚本不提交或推送分支。
+- 脚本仅访问 GitHub 当前仓库及其 Actions/Release API，不读取云服务凭证内容；Token 由 GitHub Actions 或 `gh` 自身管理，不写入产物和日志。
 
 ## 发布流程
 
