@@ -95,6 +95,7 @@ reset_metadata_case() {
   AUTHORIZED_INSTALL_COMMANDS=("pip install demo")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS=("git status" "git status" "bash test-a.sh")
   ORCA_MODE="auto"
+  ORCA_SETUP_MODE="skip"
   ORCA_WORKTREE_ID="repo-1::worker"
   ORCA_WORKTREE_PATH="$WORKTREE"
   ORCA_TERMINAL_HANDLE="term-worker"
@@ -134,6 +135,8 @@ assert_jq "$METADATA_FILE" '.execution_authority.git_identity == {expected_name:
   "published Git policy and exact identity metadata are preserved"
 assert_jq "$METADATA_FILE" '.session.orca.terminal_handle == "term-worker" and .session.orca.capabilities[1] == "orchestration.contract.v1"' \
   "Orca session identity remains structured"
+assert_jq "$METADATA_FILE" '.session.orca.setup_mode == "skip"' \
+  "Orca Setup policy is recorded in metadata"
 assert_jq "$METADATA_FILE" '.session.orca.runtime_id == "runtime-metadata"' \
   "verified coordinator runtime survives supervised block replacement"
 assert_jq "$METADATA_FILE" '.pr == {number:null,url:"",state:""}' \
@@ -157,6 +160,7 @@ ALLOW_PATHS=()
 AUTHORIZED_INSTALL_COMMANDS=()
 EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
 ORCA_MODE="force_tmux"
+ORCA_SETUP_MODE="skip"
 ORCA_WORKTREE_ID=""
 ORCA_WORKTREE_PATH=""
 ORCA_TERMINAL_HANDLE=""
@@ -176,6 +180,8 @@ assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "prompt_o
   "degraded guard and unbound Git identity remain explicit"
 assert_jq "$METADATA_FILE" '.verification.commands == [] and .session.orca.mode == "force_tmux"' \
   "empty verification and tmux fallback remain valid"
+assert_jq "$METADATA_FILE" '.session.orca.setup_mode == "not_applicable"' \
+  "tmux metadata does not claim an Orca Setup policy"
 
 reset_metadata_case
 METADATA_FILE="$CASE_ROOT/dry-run.json"

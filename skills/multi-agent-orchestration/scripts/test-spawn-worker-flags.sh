@@ -71,6 +71,7 @@ reset_defaults() {
   LIGHTWEIGHT_OVERRIDE=0
   LIGHTWEIGHT_MODE=0
   NO_ORCA_MODE=0
+  ORCA_SETUP_MODE="skip"
   ORCA_SUPERVISED=0
   TASK_SPEC=""
   TASK_TITLE=""
@@ -109,7 +110,7 @@ parse_spawn_worker_args \
   --quota-preflight-override "PM 已确认额度恢复，人工授权放行" \
   --add-dir /tmp/a --add-dir "/tmp/b path" \
   --allow-paths "skills/a/**" --allow-paths "skills/b/**" \
-  --no-worktree --no-orca-mode --orca-supervised \
+  --no-worktree --no-orca-mode --orca-setup-mode skip --orca-supervised \
   --task-spec "full spec" --task-title "short title" \
   --orca-run-id run-a --orca-task-id task-a --orca-coordinator-handle term-pm \
   --allow-install-command "pip install demo" \
@@ -137,6 +138,7 @@ else
   ok "v2.11.0: --bare auto-degrade opt-out flag is removed"
 fi
 assert_eq "$LIGHTWEIGHT_MODE:$NO_ORCA_MODE:$ORCA_SUPERVISED" "1:1:1" "transport mode flags parsed"
+assert_eq "$ORCA_SETUP_MODE" "skip" "Orca Setup policy parses explicitly"
 assert_eq "$ORCA_RUN_ID:$ORCA_TASK_ID:$ORCA_COORDINATOR_HANDLE" "run-a:task-a:term-pm" "Wave receipt identifiers parsed"
 assert_eq "$GIT_EXPECTED_NAME:$GIT_EXPECTED_EMAIL:$GIT_INTEGRATION_BASE:$GIT_PUSH_REMOTE" \
   "Expected User:expected@example.com:origin/main:upstream" "safe-push identity fields parsed"
@@ -188,12 +190,20 @@ fi
 set +e
 invalid_deps_output=$( (parse_spawn_worker_args --deps-mode nonsense) 2>&1 )
 invalid_deps_rc=$?
+invalid_setup_output=$( (parse_spawn_worker_args --orca-setup-mode unsafe) 2>&1 )
+invalid_setup_rc=$?
 set -e
 assert_eq "$invalid_deps_rc" "64" "invalid --deps-mode keeps exit 64"
 if printf '%s' "$invalid_deps_output" | grep -Fq 'only accepts auto|symlink|local'; then
   ok "invalid --deps-mode keeps diagnostic"
 else
   bad "invalid --deps-mode keeps diagnostic"
+fi
+assert_eq "$invalid_setup_rc" "64" "invalid --orca-setup-mode keeps exit 64"
+if printf '%s' "$invalid_setup_output" | grep -Fq 'only accepts skip|inherit|run'; then
+  ok "invalid --orca-setup-mode keeps diagnostic"
+else
+  bad "invalid --orca-setup-mode keeps diagnostic"
 fi
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-flags.sh"' "$SPAWN_WORKER" \

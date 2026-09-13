@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.23.7 | 实际 Task 提示补齐提交、验证与 RESULT 位置；完善精确授权、venv 复用和资源归属恢复指引，隔离 tmux 回归。 |
+| 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.23.8 | Orca worktree 固定跳过前置 Setup；`inherit/run` 在机械门禁落地前失败关闭，并记录实际 Setup policy。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 | 2026-09-09 | 更新   | [legal-text-format](skills/legal-text-format/)                         | v1.2.2  | **案例格式化脚本恢复可执行**：修复阻断启动的引号替换语法、案例标记正则错误、无页脚输入越界和当前目录输出失败，并增加虚构案例回归测试与独立 CI。 |
@@ -627,7 +627,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.18.0</td>
+<td style="text-align:center">v2.23.8</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>

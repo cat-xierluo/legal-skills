@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.23.8] - 2026-09-13
+
+### 修复
+
+- Orca worktree 创建默认并固定使用 `--setup skip`，避免 repo Setup 在 Session Context、安装门禁和 scope hook 写入前执行依赖安装或其他环境变更。
+- 新增 `--orca-setup-mode` 审计入口；`inherit/run` 在任何 worktree、provider、terminal 或 Dispatch 副作用前稳定拒绝，且明确不继承 `--allow-install-command` 的后置授权。
+- Session metadata 记录实际 `setup_mode`；tmux 路径写入 `not_applicable`，避免把未发生的 Orca Setup 冒充已验证事实。
+
+### 验证
+
+- 增加 helper 与完整入口正反例：核验正常路径真实 argv 为 `--setup skip`，`inherit/run` 零 Orca mutation，单独安装授权不能绕过前置拒绝，并保持 supervised 成功路径和 tmux 语义不变。
+
 ## [2.23.7] - 2026-09-13
 
 ### 改进
