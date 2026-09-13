@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.23.8"
+  version: "2.23.9"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -115,6 +115,8 @@ bash scripts/spawn-worker.sh \
 `PM_TERMINAL` 必须是明确属于本轮 PM 的终端句柄，不从 UI 焦点猜测。新 Wave 把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；sender、终端活性与 Run/coordinator 在创建 Worker 资源前共同核验，预建 Wave 不重复建 Task/重绑 Run。单 Worker 可在 quota/mem 通过后、新建 lease/worktree/terminal 前准备 Run；无可靠 sender 则拒绝。旧上下文缺 runtime 时只能正向重验当前绑定并明确历史连续性未验证，已有 runtime 漂移不能绕过；仍以 Orca consumer fencing 作最终判断。
 
 完整 manifest、Terminal-managed、Dispatch 自检、cold-start 恢复、settle 与 metadata 合同读取 `references/13-orca-cli-worker.md`。PM 的 read/show/send/wait/reply/release/ack/settle/pr-audit/closeout 命令读取 `references/14-pm-orchestrate.md`。
+
+跨 session 的重要请求使用 `pm-orchestrate.sh send --message-contract`：先用 `worker-show` 复验精确 Run/Task/Dispatch/worker，再固定 sender、业务 thread、correlation、expected action 与 evidence refs；Orca 原生 thread 承载 correlation，使无 payload 的原生 reply 仍能继承可核对的关联标识，业务 thread 保留在合同 payload。send receipt 必须绑定同一 Dispatch relay 的 Orca message ID 与完整请求摘要；成功只证明 `durably_enqueued`。只读巡检使用 `inbox`（`check --peek`），所有出现的顶层及 payload 身份/类型别名必须一致；结构化消息须有精确 provenance，无 payload 的原生关联消息须同时给 thread+correlation 过滤器并精确匹配 worker sender、coordinator recipient、Run 与原生 correlation thread。相关消息可见不证明执行过 `reply`、已消费、开始执行或完成业务。状态层级、白名单、幂等指纹和敏感载荷拒绝规则统一读取 `references/14-pm-orchestrate.md`，不要另造聊天层或用 terminal prompt 代替 Orca 消息。
 
 ### 4.3 Worker Prompt 与 Session Context
 
