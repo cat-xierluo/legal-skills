@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.23.9 | 新增 Orca 跨 session 消息合同与只读 inbox：以原生 correlation thread 衔接无 payload reply、业务 thread 保留在 payload，并对顶层/payload 身份与类型别名失败关闭，严格区分消息可见与已回复、已执行或业务完成。 |
+| 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.24.0 | 完成 Orca Worker 阻塞问答与收件闭环：ask 超时/断线按原 message ID 恢复，Worker 在自然检查点和完成前强制消费 follow-up；PM 按 50 条 FIFO Delivery 顺序分类、精确 reply/ack receipt 收口，严格区分入队、可见、消费、回复与执行。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 | 2026-09-09 | 更新   | [legal-text-format](skills/legal-text-format/)                         | v1.2.2  | **案例格式化脚本恢复可执行**：修复阻断启动的引号替换语法、案例标记正则错误、无页脚输入越界和当前目录输出失败，并增加虚构案例回归测试与独立 CI。 |
@@ -627,7 +627,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.23.9</td>
+<td style="text-align:center">v2.24.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>

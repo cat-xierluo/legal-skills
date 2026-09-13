@@ -60,7 +60,16 @@ case "$1 $2" in
     printf '{"ok":true,"result":{"dispatch":{"id":"ctx-%s"}}}\n' "$task"
     ;;
   "orchestration check")
-    echo '{"ok":true,"result":{"count":0}}'
+    ack=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --ack ]; then ack="$2"; break; fi
+      shift
+    done
+    if [ -n "$ack" ]; then
+      jq -cn --arg ack "$ack" '{ok:true,result:{runId:"run-wave",count:0,messages:[],acknowledged:$ack}}'
+    else
+      echo '{"ok":true,"result":{"runId":"run-wave","deliveryId":null,"count":0,"messages":[]}}'
+    fi
     ;;
   *)
     echo '{"ok":true,"result":{}}'

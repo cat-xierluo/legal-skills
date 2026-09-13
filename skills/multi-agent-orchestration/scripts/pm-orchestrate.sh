@@ -29,7 +29,8 @@ Commands:
   show        Show supervised Dispatch state
   wait        Wait for Run Delivery (supervised) or TUI idle (terminal)
   ack         Acknowledge a processed Orca Delivery (`--delivery-id`)
-  reply       Reply to a worker question (`--message-id` + `--text`)
+  reply       Reply to a worker question (`--message-id` + `--text`); an exact
+               unknown-outcome recovery may reuse the same `--retry-request`
   release     Release a settled supervised worker terminal
   retain      Retain a settled supervised worker terminal for debugging
   settle      Force-settle a deadlocked supervised worker (Task-047R): verify the worker
@@ -80,7 +81,7 @@ Common:
   --correlation-id ID
                     Business correlation id; with `inbox`, optional exact-match filter
   --retry-request ID
-                    Orca mutation retry id; reuse only for the exact same send attempt
+                    Orca mutation retry id; reuse only for the exact same send or reply attempt
   --expected-action TEXT
                     One requested next action; informational, never grants authority
   --evidence-ref REF
@@ -134,6 +135,7 @@ MESSAGE_PRIORITY="normal"
 MESSAGE_THREAD_ID=""
 MESSAGE_CORRELATION_ID=""
 MESSAGE_RETRY_REQUEST=""
+REPLY_RETRY_REQUEST=""
 MESSAGE_EXPECTED_ACTION=""
 MESSAGE_EVIDENCE_REFS=()
 MESSAGE_CONTRACT_SHA256=""
@@ -173,7 +175,16 @@ while [[ $# -gt 0 ]]; do
     --priority) MESSAGE_PRIORITY="${2:?--priority needs a value}"; MESSAGE_CONTRACT_FIELD_SEEN=1; MESSAGE_SEND_ONLY_FIELD_SEEN=1; shift 2 ;;
     --thread-id) MESSAGE_THREAD_ID="${2:?--thread-id needs an id}"; MESSAGE_CONTRACT_FIELD_SEEN=1; shift 2 ;;
     --correlation-id) MESSAGE_CORRELATION_ID="${2:?--correlation-id needs an id}"; MESSAGE_CONTRACT_FIELD_SEEN=1; shift 2 ;;
-    --retry-request) MESSAGE_RETRY_REQUEST="${2:?--retry-request needs an id}"; MESSAGE_CONTRACT_FIELD_SEEN=1; MESSAGE_SEND_ONLY_FIELD_SEEN=1; shift 2 ;;
+    --retry-request)
+      if [ "$COMMAND" = "reply" ]; then
+        REPLY_RETRY_REQUEST="${2:?--retry-request needs an id}"
+      else
+        MESSAGE_RETRY_REQUEST="${2:?--retry-request needs an id}"
+        MESSAGE_CONTRACT_FIELD_SEEN=1
+        MESSAGE_SEND_ONLY_FIELD_SEEN=1
+      fi
+      shift 2
+      ;;
     --expected-action) MESSAGE_EXPECTED_ACTION="${2:?--expected-action needs text}"; MESSAGE_CONTRACT_FIELD_SEEN=1; MESSAGE_SEND_ONLY_FIELD_SEEN=1; shift 2 ;;
     --evidence-ref) MESSAGE_EVIDENCE_REFS+=("${2:?--evidence-ref needs a typed reference}"); MESSAGE_CONTRACT_FIELD_SEEN=1; MESSAGE_SEND_ONLY_FIELD_SEEN=1; shift 2 ;;
     --destroy) DESTROY=1; shift ;;
@@ -469,6 +480,11 @@ message_contract_identifier_valid() {
   [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$ ]]
 }
 
+orca_retry_request_valid() {
+  local value="$1"
+  [[ "$value" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]
+}
+
 message_contract_sensitive() {
   local value="$1"
   printf '%s' "$value" | LC_ALL=C grep -Eiq -- \
@@ -497,9 +513,6 @@ validate_message_contract() {
   if [ -z "$MESSAGE_CORRELATION_ID" ] || ! message_contract_identifier_valid "$MESSAGE_CORRELATION_ID"; then
     message_contract_fail "PM_MESSAGE_CONTRACT_CORRELATION_INVALID" "--correlation-id must be 1-128 safe identifier characters" || return $?
   fi
-  if [ -n "$MESSAGE_RETRY_REQUEST" ] && ! message_contract_identifier_valid "$MESSAGE_RETRY_REQUEST"; then
-    message_contract_fail "PM_MESSAGE_CONTRACT_RETRY_INVALID" "--retry-request must be a safe identifier" || return $?
-  fi
   if [ -z "$MESSAGE_EXPECTED_ACTION" ] || [ "${#MESSAGE_EXPECTED_ACTION}" -gt 500 ]; then
     message_contract_fail "PM_MESSAGE_CONTRACT_ACTION_INVALID" "--expected-action is required and limited to 500 characters" || return $?
   fi
@@ -516,6 +529,9 @@ validate_message_contract() {
     message_contract_sensitive "$MESSAGE_EXPECTED_ACTION" || \
     message_contract_sensitive "$1"; then
     message_contract_fail "PM_MESSAGE_CONTRACT_SENSITIVE_REJECTED" "message fields resemble sensitive authentication material" || return $?
+  fi
+  if [ -n "$MESSAGE_RETRY_REQUEST" ] && ! orca_retry_request_valid "$MESSAGE_RETRY_REQUEST"; then
+    message_contract_fail "PM_MESSAGE_CONTRACT_RETRY_INVALID" "--retry-request must be the UUID Orca reported for the exact unknown-outcome mutation; omit it on a new send" || return $?
   fi
   local ref path_value
   for ref in "${MESSAGE_EVIDENCE_REFS[@]}"; do
@@ -551,7 +567,6 @@ build_message_contract_payload() {
   jq -cn \
     --arg schema "multi-agent-orchestration.message-contract.v1" \
     --arg correlation_id "$MESSAGE_CORRELATION_ID" \
-    --arg retry_request "$MESSAGE_RETRY_REQUEST" \
     --arg expected_action "$MESSAGE_EXPECTED_ACTION" \
     --arg message_type "$MESSAGE_TYPE" \
     --arg priority "$MESSAGE_PRIORITY" \
@@ -564,7 +579,6 @@ build_message_contract_payload() {
     '{
       schema: $schema,
       correlation_id: $correlation_id,
-      retry_request: (if $retry_request == "" then null else $retry_request end),
       expected_action: $expected_action,
       evidence_refs: $evidence_refs,
       authority: "informational_only",
@@ -600,7 +614,6 @@ build_message_contract_digest_input() {
     --arg body "$body" \
     --arg thread_id "$MESSAGE_THREAD_ID" \
     --arg correlation_id "$MESSAGE_CORRELATION_ID" \
-    --arg retry_request "$MESSAGE_RETRY_REQUEST" \
     --argjson payload "$payload" \
     '{
       schema: $schema,
@@ -613,7 +626,6 @@ build_message_contract_digest_input() {
         logical_thread_id: $thread_id,
         native_thread_id: $correlation_id
       },
-      retry_request: (if $retry_request == "" then null else $retry_request end),
       payload: $payload
     }' | jq -cS .
 }
@@ -1007,12 +1019,94 @@ cmd_show() {
 }
 
 cmd_wait() {
-  local timeout_ms=$(( WAIT_TIMEOUT * 1000 ))
+  local timeout_ms=$(( WAIT_TIMEOUT * 1000 )) result
   if [ "$WORKER_MODE" = "orca_supervised" ]; then
     ensure_coordinator_binding || exit 2
     # A timeout is a liveness checkpoint, not failure. The JSON remains unacknowledged.
-    orca_cli orchestration check --wait \
-      --types worker_done,escalation,question --timeout-ms "$timeout_ms" --terminal "$ORCA_COORDINATOR_HANDLE" --json
+    result=$(orca_cli orchestration check --wait \
+      --types worker_done,escalation,question --timeout-ms "$timeout_ms" --terminal "$ORCA_COORDINATOR_HANDLE" --json) || return $?
+    printf '%s' "$result" | jq -e \
+      --arg run_id "$ORCA_RUN_ID" \
+      --arg coordinator "$ORCA_COORDINATOR_HANDLE" '
+      def aliases($object; $keys):
+        [$keys[] as $key | select($object | has($key)) | $object[$key]];
+      select(.ok == true and (.result | type) == "object")
+      | . as $root
+      | (.result.messages // null) as $messages
+      | select(($messages | type) == "array")
+      | select(
+          (.result.count | type) == "number"
+          and .result.count >= 0
+          and (.result.count | floor) == .result.count
+          and .result.count == ($messages | length)
+        )
+      | select(($messages | length) <= 50)
+      | aliases(.result; ["runId", "run_id"]) as $run_ids
+      | aliases(.result; ["deliveryId", "delivery_id"]) as $delivery_ids
+      | select(
+          ($run_ids | length) > 0
+          and all($run_ids[]; type == "string" and length > 0 and . == $run_id)
+          and ($run_ids | unique | length) == 1
+        )
+      | select(
+          if ($messages | length) == 0 then
+            ($delivery_ids | length) > 0
+            and all($delivery_ids[]; . == null)
+          else
+            ($delivery_ids | length) > 0
+            and all($delivery_ids[]; type == "string" and length > 0)
+            and ($delivery_ids | unique | length) == 1
+          end
+        )
+      | [range(0; $messages | length) as $index
+          | $messages[$index]
+          | . as $message
+          | aliases($message; ["id", "message_id", "messageId"]) as $ids
+          | aliases($message; ["type", "message_type", "messageType"]) as $types
+          | aliases($message; ["run_id", "runId"]) as $message_runs
+          | select(
+              ($ids | length) > 0
+              and all($ids[]; type == "string" and length > 0)
+              and ($ids | unique | length) == 1
+              and ($types | length) > 0
+              and all($types[]; type == "string" and length > 0)
+              and ($types | unique | length) == 1
+              and ($message_runs | length) > 0
+              and all($message_runs[]; type == "string" and length > 0 and . == $run_id)
+              and ($message_runs | unique | length) == 1
+            )
+          | {
+              position: ($index + 1),
+              message_id: $ids[0],
+              message_type: $types[0],
+              required_action: (
+                if $types[0] == "question" then "reply_required"
+                elif $types[0] == "escalation" then "intervention_required"
+                elif $types[0] == "worker_done" then "validate_and_account_terminal"
+                else "review_required" end
+              )
+            }
+        ] as $ordered
+      | select(($ordered | length) == ($messages | length))
+      | $root + {
+          mao_delivery_receipt: {
+            schema: "multi-agent-orchestration.delivery-receipt.v1",
+            operation: "wait",
+            state: (if ($messages | length) == 0 then "checkpoint_empty" else "delivery_consumed_unacknowledged" end),
+            run_id: $run_id,
+            coordinator_handle: $coordinator,
+            delivery_id: (if ($messages | length) == 0 then null else $delivery_ids[0] end),
+            message_count: ($messages | length),
+            fifo_limit: 50,
+            ordered_messages: $ordered,
+            whole_delivery_must_be_processed_before_ack: true,
+            acknowledged: false,
+            does_not_prove: ["replied", "guidance_executed", "business_validated", "terminal_accounted"]
+          }
+        }' || {
+      echo "PM_DELIVERY_RECEIPT_INVALID: Orca wait did not return one valid complete FIFO Delivery" >&2
+      return 2
+    }
   elif [ "$WORKER_MODE" = "orca_terminal" ]; then
     orca_runtime_init
     orca_cli terminal wait --terminal "$WORKER_HANDLE" --for tui-idle --timeout-ms "$timeout_ms" --json
@@ -1026,7 +1120,96 @@ cmd_ack() {
   [ "$WORKER_MODE" = "orca_supervised" ] || { echo "ERROR: ack requires an Orca supervised worker" >&2; exit 64; }
   [ -n "$DELIVERY_ID" ] || { echo "ERROR: ack requires --delivery-id" >&2; exit 64; }
   ensure_coordinator_binding || exit 2
-  orca_cli orchestration check --ack "$DELIVERY_ID" --terminal "$ORCA_COORDINATOR_HANDLE" --json
+  local result
+  result=$(orca_cli orchestration check --ack "$DELIVERY_ID" --terminal "$ORCA_COORDINATOR_HANDLE" --json) || return $?
+  printf '%s' "$result" | jq -e \
+    --arg run_id "$ORCA_RUN_ID" \
+    --arg coordinator "$ORCA_COORDINATOR_HANDLE" \
+    --arg delivery_id "$DELIVERY_ID" '
+    def aliases($object; $keys):
+      [$keys[] as $key | select($object | has($key)) | $object[$key]];
+    select(.ok == true and (.result | type) == "object")
+    | . as $root
+    | (.result.messages // null) as $messages
+    | select(($messages | type) == "array")
+    | aliases(.result; ["runId", "run_id"]) as $run_ids
+    | aliases(.result; ["acknowledged", "acknowledgedDeliveryId", "acknowledged_delivery_id"]) as $ack_ids
+    | aliases(.result; ["deliveryId", "delivery_id"]) as $next_delivery_ids
+    | select(
+        ($run_ids | length) > 0
+        and all($run_ids[]; type == "string" and length > 0 and . == $run_id)
+        and ($run_ids | unique | length) == 1
+        and ($ack_ids | length) > 0
+        and all($ack_ids[]; type == "string" and length > 0 and . == $delivery_id)
+        and ($ack_ids | unique | length) == 1
+      )
+    | select(
+        (.result.count | type) == "number"
+        and .result.count >= 0
+        and (.result.count | floor) == .result.count
+        and .result.count == ($messages | length)
+        and ($messages | length) <= 50
+      )
+    | select(
+        if ($messages | length) == 0 then
+          ($next_delivery_ids | length) > 0
+          and all($next_delivery_ids[]; . == null)
+        else
+          ($next_delivery_ids | length) > 0
+          and all($next_delivery_ids[]; type == "string" and length > 0)
+          and ($next_delivery_ids | unique | length) == 1
+          and all($next_delivery_ids[]; . != $delivery_id)
+        end
+      )
+    | [range(0; $messages | length) as $index
+        | $messages[$index]
+        | . as $message
+        | aliases($message; ["id", "message_id", "messageId"]) as $ids
+        | aliases($message; ["type", "message_type", "messageType"]) as $types
+        | aliases($message; ["run_id", "runId"]) as $message_runs
+        | select(
+            ($ids | length) > 0
+            and all($ids[]; type == "string" and length > 0)
+            and ($ids | unique | length) == 1
+            and ($types | length) > 0
+            and all($types[]; type == "string" and length > 0)
+            and ($types | unique | length) == 1
+            and ($message_runs | length) > 0
+            and all($message_runs[]; type == "string" and length > 0 and . == $run_id)
+            and ($message_runs | unique | length) == 1
+          )
+        | {
+            position: ($index + 1),
+            message_id: $ids[0],
+            message_type: $types[0],
+            required_action: (
+              if $types[0] == "question" then "reply_required"
+              elif $types[0] == "escalation" then "intervention_required"
+              elif $types[0] == "worker_done" then "validate_and_account_terminal"
+              else "review_required" end
+            )
+          }
+      ] as $ordered
+    | select(($ordered | length) == ($messages | length))
+    | $root + {
+        mao_delivery_receipt: {
+          schema: "multi-agent-orchestration.delivery-receipt.v1",
+          operation: "ack",
+          state: "delivery_acknowledged",
+          run_id: $run_id,
+          coordinator_handle: $coordinator,
+          acknowledged_delivery_id: $delivery_id,
+          next_delivery_id: (if ($messages | length) == 0 then null else $next_delivery_ids[0] end),
+          next_message_count: ($messages | length),
+          next_ordered_messages: $ordered,
+          next_delivery_acknowledged: false,
+          whole_next_delivery_must_be_processed_before_ack: true,
+          does_not_prove: ["all_messages_processed", "questions_replied", "business_validated", "terminal_accounted"]
+        }
+      }' || {
+    echo "PM_DELIVERY_ACK_NOT_VERIFIED: Orca did not positively acknowledge the exact Run and requested Delivery" >&2
+    return 2
+  }
 }
 
 cmd_reply() {
@@ -1034,8 +1217,185 @@ cmd_reply() {
   [ -n "$MESSAGE_ID" ] || { echo "ERROR: reply requires --message-id" >&2; exit 64; }
   local text
   text=$(load_text)
+  if [ -n "$REPLY_RETRY_REQUEST" ]; then
+    if message_contract_sensitive "$REPLY_RETRY_REQUEST"; then
+      echo "PM_REPLY_RETRY_SENSITIVE_REJECTED: --retry-request resembles sensitive authentication material" >&2
+      return 64
+    fi
+    if ! orca_retry_request_valid "$REPLY_RETRY_REQUEST"; then
+      echo "PM_REPLY_RETRY_INVALID: --retry-request must be the UUID Orca reported for the exact unknown-outcome reply; omit it on a new reply" >&2
+      return 64
+    fi
+  fi
+  verify_message_dispatch_binding inspect || return $?
   ensure_coordinator_binding || exit 2
-  orca_cli orchestration reply --id "$MESSAGE_ID" --body "$text" --from "$ORCA_COORDINATOR_HANDLE" --json
+  local target_delivery reply_delivery_id
+  target_delivery=$(orca_cli orchestration check --terminal "$ORCA_COORDINATOR_HANDLE" --json) || return $?
+  reply_delivery_id=$(printf '%s' "$target_delivery" | jq -er \
+    --arg run_id "$ORCA_RUN_ID" \
+    --arg task_id "$ORCA_TASK_ID" \
+    --arg dispatch_id "$ORCA_DISPATCH_ID" \
+    --arg message_id "$MESSAGE_ID" '
+    def aliases($object; $keys):
+      [$keys[] as $key | select($object | has($key)) | $object[$key]];
+    select(.ok == true and (.result | type) == "object")
+    | (.result.messages // null) as $messages
+    | select(($messages | type) == "array")
+    | aliases(.result; ["runId", "run_id"]) as $delivery_runs
+    | aliases(.result; ["deliveryId", "delivery_id"]) as $delivery_ids
+    | select(
+        (.result.count | type) == "number"
+        and .result.count >= 1
+        and (.result.count | floor) == .result.count
+        and .result.count == ($messages | length)
+        and ($messages | length) <= 50
+        and ($delivery_runs | length) > 0
+        and all($delivery_runs[]; type == "string" and length > 0 and . == $run_id)
+        and ($delivery_runs | unique | length) == 1
+        and ($delivery_ids | length) > 0
+        and all($delivery_ids[]; type == "string" and length > 0)
+        and ($delivery_ids | unique | length) == 1
+      )
+    | ([$messages[]
+        | . as $candidate
+        | aliases($candidate; ["id", "message_id", "messageId"]) as $candidate_ids
+        | select(any($candidate_ids[]; . == $message_id))
+      ]) as $target_rows
+    | select(($target_rows | length) == 1)
+    | [$target_rows[]
+      | . as $message
+        | aliases($message; ["id", "message_id", "messageId"]) as $ids
+        | aliases($message; ["type", "message_type", "messageType"]) as $types
+        | aliases($message; ["run_id", "runId"]) as $runs
+        | aliases($message; ["from_handle", "fromHandle", "from"]) as $senders
+        | aliases($message; ["to_handle", "toHandle", "to"]) as $recipients
+        | aliases($message; ["thread_id", "threadId"]) as $threads
+        | ($message.payload | if type == "string" then try fromjson catch null else null end) as $payload
+        | aliases($payload; ["task_id", "taskId"]) as $tasks
+        | aliases($payload; ["dispatch_id", "dispatchId"]) as $dispatches
+        | select(
+            ($ids | length) > 0
+            and all($ids[]; type == "string" and length > 0 and . == $message_id)
+            and ($ids | unique | length) == 1
+            and ($types | length) > 0
+            and all($types[]; . == "question")
+            and ($types | unique | length) == 1
+            and ($runs | length) > 0
+            and all($runs[]; type == "string" and length > 0 and . == $run_id)
+            and ($runs | unique | length) == 1
+            and ($payload | type) == "object"
+            and ($tasks | length) > 0
+            and all($tasks[]; type == "string" and length > 0 and . == $task_id)
+            and ($tasks | unique | length) == 1
+            and ($dispatches | length) > 0
+            and all($dispatches[]; type == "string" and length > 0 and . == $dispatch_id)
+            and ($dispatches | unique | length) == 1
+            and ($senders | length) > 0
+            and all($senders[]; type == "string" and . == ("dispatch:" + $dispatch_id))
+            and ($senders | unique | length) == 1
+            and ($recipients | length) > 0
+            and all($recipients[]; type == "string" and . == ("run:" + $run_id))
+            and ($recipients | unique | length) == 1
+            and ($threads | length) > 0
+            and all($threads[]; type == "string" and . == $message_id)
+            and ($threads | unique | length) == 1
+          )
+      ]
+    | select(length == 1)
+    | $delivery_ids[0]') || {
+    echo "PM_REPLY_TARGET_INVALID: message must be one question in the current unacknowledged Delivery for this exact Run/Dispatch/worker" >&2
+    return 2
+  }
+  local args=(orchestration reply --id "$MESSAGE_ID" --body "$text" --from "$ORCA_COORDINATOR_HANDLE")
+  [ -z "$REPLY_RETRY_REQUEST" ] || args+=(--retry-request "$REPLY_RETRY_REQUEST")
+  local result
+  result=$(orca_cli "${args[@]}" --json) || return $?
+  printf '%s' "$result" | jq -e \
+    --arg run_id "$ORCA_RUN_ID" \
+    --arg task_id "$ORCA_TASK_ID" \
+    --arg dispatch_id "$ORCA_DISPATCH_ID" \
+    --arg worker_handle "$WORKER_HANDLE" \
+    --arg coordinator "$ORCA_COORDINATOR_HANDLE" \
+    --arg source_delivery_id "$reply_delivery_id" \
+    --arg question_message_id "$MESSAGE_ID" \
+    --arg answer_body "$text" \
+    --arg retry_request "$REPLY_RETRY_REQUEST" '
+    def aliases($object; $keys):
+      [$keys[] as $key | select($object | has($key)) | $object[$key]];
+    select(.ok == true and (.result.message | type) == "object")
+    | aliases(.result.message; ["id", "message_id", "messageId"]) as $reply_ids
+    | aliases(.result.message; ["run_id", "runId"]) as $reply_runs
+    | aliases(.result.message; ["from_handle", "fromHandle", "from"]) as $reply_senders
+    | aliases(.result.message; ["to_handle", "toHandle", "to"]) as $reply_recipients
+    | aliases(.result.message; ["thread_id", "threadId"]) as $reply_threads
+    | aliases(.result.message; ["body"]) as $reply_bodies
+    | aliases(.result.question; ["message_id", "messageId"]) as $question_ids
+    | aliases(.result.question; ["run_id", "runId"]) as $question_runs
+    | aliases(.result.question; ["dispatch_id", "dispatchId"]) as $question_dispatches
+    | aliases(.result.question; ["asker_handle", "askerHandle"]) as $question_askers
+    | aliases(.result.question; ["answer_message_id", "answerMessageId"]) as $answer_ids
+    | aliases(.result.question; ["answer_body", "answerBody"]) as $answer_bodies
+    | select(
+        (.result.question | type) == "object"
+        and ($reply_ids | length) > 0
+        and all($reply_ids[]; type == "string" and length > 0)
+        and ($reply_ids | unique | length) == 1
+        and all($reply_ids[]; . != $question_message_id)
+        and ($reply_runs | length) > 0
+        and all($reply_runs[]; . == $run_id)
+        and ($reply_runs | unique | length) == 1
+        and ($reply_senders | length) > 0
+        and all($reply_senders[]; . == ("run:" + $run_id))
+        and ($reply_senders | unique | length) == 1
+        and ($reply_recipients | length) > 0
+        and all($reply_recipients[]; . == ("dispatch:" + $dispatch_id))
+        and ($reply_recipients | unique | length) == 1
+        and ($reply_threads | length) > 0
+        and all($reply_threads[]; . == $question_message_id)
+        and ($reply_threads | unique | length) == 1
+        and ($reply_bodies | length) > 0
+        and all($reply_bodies[]; . == $answer_body)
+        and ($question_ids | length) > 0
+        and all($question_ids[]; . == $question_message_id)
+        and ($question_ids | unique | length) == 1
+        and ($question_runs | length) > 0
+        and all($question_runs[]; . == $run_id)
+        and ($question_runs | unique | length) == 1
+        and ($question_dispatches | length) > 0
+        and all($question_dispatches[]; . == $dispatch_id)
+        and ($question_dispatches | unique | length) == 1
+        and ($question_askers | length) > 0
+        and all($question_askers[]; . == $worker_handle)
+        and ($question_askers | unique | length) == 1
+        and .result.question.status == "answered"
+        and ($answer_ids | length) > 0
+        and all($answer_ids[]; . == $reply_ids[0])
+        and ($answer_ids | unique | length) == 1
+        and ($answer_bodies | length) > 0
+        and all($answer_bodies[]; . == $answer_body)
+        and (.result | has("duplicate"))
+        and (.result.duplicate | type) == "boolean"
+      )
+    | . + {
+        mao_reply_receipt: {
+          schema: "multi-agent-orchestration.reply-receipt.v1",
+          state: (if (.result.duplicate // false) then "reply_existing_same_answer" else "reply_committed" end),
+          run_id: $run_id,
+          task_id: $task_id,
+          dispatch_id: $dispatch_id,
+          worker_handle: $worker_handle,
+          coordinator_handle: $coordinator,
+          source_delivery_id: $source_delivery_id,
+          question_message_id: $question_message_id,
+          reply_message_id: $reply_ids[0],
+          duplicate: (.result.duplicate // false),
+          retry_request: (if $retry_request == "" then null else $retry_request end),
+          does_not_prove: ["worker_consumed_reply", "guidance_executed", "business_completed"]
+        }
+      }' || {
+    echo "PM_REPLY_RECEIPT_INVALID: Orca did not return a successful reply message receipt" >&2
+    return 2
+  }
 }
 
 cmd_account() {

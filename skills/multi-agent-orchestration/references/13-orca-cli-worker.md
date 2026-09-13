@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.6.0（2026-08-14）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.24.0（2026-09-13）。
 
 ## 目录
 
@@ -122,12 +122,41 @@ PM create/bind Run
 硬边界：
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
-- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
+- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 必须在新问题与原 message ID resume 中二选一且 bounded timeout，resume 不得带新 options；`check` 只允许已绑定 Worker handle 的 consuming default、bounded wait，或对同一 Worker inbox 已处理 Delivery 的 ack，不允许 `peek/all/unread` 冒充处理，也不能指定 coordinator handle。`reply`、coordinator Delivery ack、`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
 - `STATUS.json=done` 只唤醒 PM，不结算 Task/Dispatch。
 - Sentinel 不得因 STATUS、timeout、idle、heartbeat、question 或 escalation 执行 `worker-stop` / `worker-release` / `terminal close`。
 - PM 只对 accepted、settled 的 worker 执行 release；要保留排障就显式 retain；有立即后续任务可复用同一 terminal。
 - `check --wait` 返回一个 Delivery；处理全部消息再 ack，并继续等到全部预期 Dispatch settle。
 - PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
+
+### 5.1 Worker 问答与跟进收件
+
+阻塞问题必须从 live preamble 复制 Orca executable、worker handle 与 Dispatch capability：
+
+```bash
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --question "需要 PM 回答的问题" --options "A,B" --timeout-ms 600000 --json
+
+# timeout/cancel/断线后只恢复原 message ID；不再创建新 question
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --resume "$MESSAGE_ID" --timeout-ms 600000 --json
+```
+
+`ask` 是 Worker 与 PM 的阻塞问答，不是 coordinator-owned Task DAG decision gate。超时或断线不会取消原问题；只有 resume 返回成功 answer receipt 才证明已收到答复，仍不证明后续动作已经执行。
+
+PM 的 `send --to dispatch:<id>` 只保证 durable enqueue，且不会自动打断 Worker。Worker 必须在开始下一个文件前、每次 scoped test 后和 `worker_done` 前执行：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --json
+```
+
+这是 Worker inbox 的 consuming check；禁止用 `--peek/--all/--unread` 代替。先处理返回 Delivery 的全部消息，再用输出的 delivery ID 推进同一 Worker inbox：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --ack "$WORKER_DELIVERY_ID" --json
+```
+
+ack 调用可能直接返回下一批；继续处理、ack，直到 count=0。这个权限由 Shell 门禁绑定 Worker 自己的 handle，不可改用 coordinator handle，因此不是 coordinator Delivery ack。没有 non-peek Delivery 及其处理/ack 回执，只能说消息已入队或可见，不能声称 Worker 已处理。返回 `consumer_fenced`（consumer generation/进程身份被替换）或 `dispatch_inactive`（原 Dispatch 已 settled、stopped 或不再 active）时立即停止，不发 `worker_done`、不重试 check；其他 guidance 仍受原任务与权限边界约束。发出 `worker_done` 后停止收件和新工作。
 
 ## 6. PM 实时感知
 

@@ -314,10 +314,11 @@ t77_send_lines=$(wc -l < "$T77_SENDS" | tr -d ' ')
 assert_eq "$t77_send_lines" "1" "Task-077 rebind injects exactly one single-line send"
 if grep -Fq 'ctx-auto' "$T77_SENDS" && grep -Fq -- '--type worker_done' "$T77_SENDS" \
   && grep -Fq -- '--task-id task-worker' "$T77_SENDS" && grep -Fq -- '--from term-worker' "$T77_SENDS" \
-  && grep -Fq -- 'orchestration ask' "$T77_SENDS"; then
-  ok "Task-077 injected line carries dispatch id and worker_done/ask command forms"
+  && grep -Fq -- 'orchestration ask' "$T77_SENDS" && grep -Fq -- 'ask --resume' "$T77_SENDS" \
+  && grep -Fq -- 'orchestration check --terminal' "$T77_SENDS"; then
+  ok "Task-077 injected line carries dispatch id and worker_done/ask/resume/check command forms"
 else
-  bad "Task-077 injected line carries dispatch id and worker_done/ask command forms"
+  bad "Task-077 injected line carries dispatch id and worker_done/ask/resume/check command forms"
 fi
 if jq -e '.session.orca.supervised == {run_id:"run-wave",coordinator_handle:"term-pm",task_id:"task-worker",dispatch_id:"ctx-auto",dispatch_bind:"ok",contract:"orca.orchestration.contract.v1",completion_authority:"worker_done",terminal_ownership:"external"}' "$METADATA_FILE" >/dev/null; then
   ok "Task-077 rebind patches the full supervised lifecycle contract into metadata"

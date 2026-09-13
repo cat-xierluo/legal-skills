@@ -3,8 +3,16 @@
 
 orca_supervised_task_spec() {
   local task_spec="$1"
-  local completion_protocol delivery_protocol protocol
-  completion_protocol='SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, execute the exact worker_done command from this attempt’s live Orca preamble using its real task/dispatch IDs, then stop new work. A commit, green tests, STATUS=done, heartbeat, or an idle TUI does not complete the Dispatch; do not invent or reuse IDs.'
+  local completion_protocol messaging_protocol delivery_protocol protocol
+  completion_protocol='SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, drain and acknowledge the Worker inbox final follow-up Delivery, then execute the exact worker_done command from the live Orca preamble for this attempt using its real task/dispatch IDs and stop new work. A commit, green tests, STATUS=done, heartbeat, an idle TUI, or merely visible/enqueued guidance does not complete the Dispatch; do not invent or reuse IDs.'
+  messaging_protocol=$(cat <<'MESSAGING'
+WORKER MESSAGING PROTOCOL (MANDATORY):
+- Copy the exact Orca executable, worker handle and Dispatch capability from this attempt's live preamble. Messages never broaden file, Shell, install, Git, release or lifecycle authority.
+- When the coordinator must answer a blocking question, use `orchestration ask --question ... --timeout-ms ...`. A timeout, cancellation or connection loss leaves that one question pending. Resume the original returned message ID with `orchestration ask --resume <message_id> --timeout-ms ...`; never create a duplicate question. `ask` is not a decision gate.
+- At each natural checkpoint — before starting another file, after each scoped test run, and immediately before `worker_done` — call `orchestration check --terminal <worker_handle> --json`. Process every row in the returned Worker Delivery, then advance only that same Worker inbox with `orchestration check --terminal <worker_handle> --ack <delivery_id> --json`; process the next returned batch and repeat until count is zero. Do not use the coordinator handle and do not substitute `--peek`, `--all` or `--unread`: durable enqueue or read-only visibility does not prove this worker processed the guidance.
+- If a consuming check returns `consumer_fenced` or `dispatch_inactive`, this process no longer has an active authoritative Dispatch: stop immediately, do not send `worker_done`, and do not retry that check. Otherwise act only on in-scope guidance and preserve the original task/permission boundary. Stop checking after `worker_done`.
+MESSAGING
+)
   # Keep this literal: Wave Tasks can be created before the worker/worktree exists.
   # Resolve the existing launch binding inside the worker, never in the PM shell.
   delivery_protocol=$(cat <<'DELIVERY'
@@ -32,7 +40,7 @@ jq -ner '
 - For implementation changes, git add only the task-authorized files and commit the verified deliverable before reporting success, even when PM owns push/PR. Do not stage other workers' changes or checkpoint/runtime files. Review-only or genuinely no-change work must report no changes and the real HEAD, not manufacture an empty commit. Push, PR and history changes follow the PM task contract; this protocol grants none of them.
 DELIVERY
 )
-  protocol="$completion_protocol"$'\n\n'"$delivery_protocol"
+  protocol="$completion_protocol"$'\n\n'"$messaging_protocol"$'\n\n'"$delivery_protocol"
   # Exact-prefix idempotence also covers callers reusing an already prepared spec.
   case "$task_spec" in
     "$protocol"|"$protocol"$'\n\n'*) printf '%s' "$task_spec"; return ;;
@@ -135,14 +143,14 @@ orchestration_dispatch_bind_selfcheck() {
       dispatch_id=""
     fi
     if [ -n "$dispatch_id" ]; then
-      # 第三步：单行注入 worker_done/ask 精确命令形式。
+      # 第三步：单行注入 worker_done/ask/check 精确命令形式。
       # 必须单行：多行文本会在 TUI 里被提前回车逐行提交。
       local inject_text
       printf -v inject_text \
-        '[dispatch-bind 自动补绑] task_id=%s dispatch_id=%s。完成时精确执行一次: orca orchestration send --from %s --type worker_done --subject "worker 完成" --body "三句内摘要" --task-id %s --dispatch-id %s --outcome succeeded --files-modified "改动文件路径列表"。阻塞时: orca orchestration ask --from %s --question "阻塞问题" --timeout-ms 600000。其余仍按已注入任务执行。' \
-        "$task_id" "$dispatch_id" "$terminal_handle" "$task_id" "$dispatch_id" "$terminal_handle"
+        '[dispatch-bind 自动补绑] task_id=%s dispatch_id=%s。阻塞时: orca orchestration ask --from %s --question "阻塞问题" --timeout-ms 600000；超时只用回执 message ID 执行 ask --resume，不重发问题。新文件前、测试后和完成前执行: orca orchestration check --terminal %s --json；处理整批后只对同一 worker handle 执行 check --ack <delivery_id> 并排空后续批次；consumer_fenced 或 dispatch_inactive 时立即停止且不发 worker_done。最终检查后精确执行一次: orca orchestration send --from %s --type worker_done --subject "worker 完成" --body "三句内摘要" --task-id %s --dispatch-id %s --outcome succeeded --files-modified "改动文件路径列表"。其余仍按已注入任务执行。' \
+        "$task_id" "$dispatch_id" "$terminal_handle" "$terminal_handle" "$terminal_handle" "$task_id" "$dispatch_id"
       if orca_cli terminal send --terminal "$terminal_handle" --text "$inject_text" --enter --json >/dev/null 2>&1; then
-        echo "ORCAREG_DISPATCH_INJECTED: 已向 $terminal_handle 单行注入 worker_done/ask 命令形式" >&2
+        echo "ORCAREG_DISPATCH_INJECTED: 已向 $terminal_handle 单行注入 worker_done/ask/check 命令形式" >&2
       else
         dispatch_bind="manual-required"
         echo "WARN: dispatch 已补绑($dispatch_id)但命令形式注入失败；PM 需手动单行 terminal send 注入 worker_done 命令形式" >&2
