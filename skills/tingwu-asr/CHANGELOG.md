@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.3] - 2026-09-13
+
+### Fixed
+- `poll_tasks.py` / `tingwu.py` 修复异步任务刚提交即被误判"已完成"：实测听悟 `status=0` 有二义性（刚提交、转录未开始 与 真正完成 均为 0），原 `status in (0, 3)` 判定在提交后首轮轮询就拉取空结果，生成空 Markdown 并写入空归档
+- 完成判定改为 `status == 3 or (status == 0 and transStartTime 已设置)`；transStartTime 在转录实际开始后才会下发，可区分"刚创建"与"已完成"
+- 状态标签同步修正：`0` 显示为"已提交，待转录开始"，`1` 显示为"排队中/转录中"
+
+### 验证
+- Vol21 全场回放（116 分钟）实测复现误判并修复后重新拉取：36,575 字、说话人 2 人分离、43 张幻灯片、章节索引覆盖 00:00–01:56:23
+- 边界用例 5/5：刚提交（status=0 无 transStartTime）→ 未完成；转录中（status=1）→ 未完成；上传中（status=11）→ 未完成；status=3 → 完成；status=0 + transStartTime → 完成
+
 ## [0.4.2] - 2026-09-09
 
 ### Fixed
