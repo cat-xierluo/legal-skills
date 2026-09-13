@@ -167,12 +167,16 @@ orca_rollback_created_worktree() {
 # ORCA worktree create helper。返回 ORCA worktreeId (含完整 <repoId>::<path>)。
 # 失败时打印 ERROR 并 return 64。--dry-run 模式只打印计划不真调。
 orca_worktree_create() {
-  local name="$1" base_branch="$2"
+  local name="$1" base_branch="$2" setup_mode="${3:-${ORCA_SETUP_MODE:-skip}}"
   local project_toplevel="${ORCA_PROJECT_TOPLEVEL:-}"
   local expected_repo_id="${ORCA_EXPECTED_REPO_ID:-}"
+  if [ "$setup_mode" != "skip" ]; then
+    echo "ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT: mode=$setup_mode is rejected before worktree creation; repo Setup runs before MAO guards" >&2
+    return 64
+  fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf 'ORCA_RUN: (cd %q && orca worktree create --name %q --no-parent --base-branch %q --setup inherit --json)\n' \
-      "$project_toplevel" "$name" "$base_branch"
+    printf 'ORCA_RUN: (cd %q && orca worktree create --name %q --no-parent --base-branch %q --setup %q --json)\n' \
+      "$project_toplevel" "$name" "$base_branch" "$setup_mode"
     echo "orca_worktree_id_placeholder"
     return 0
   fi
@@ -196,7 +200,7 @@ orca_worktree_create() {
   # 已由 `orca worktree current` 验证的 PROJECT_DIR git top，避免符号链接技能目录把
   # create 路由到其物理目标仓库；不全局 cd，保持 lightweight/相对参数语义不变。
   out=$(cd "$project_toplevel" && \
-    orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --setup inherit --json 2>&1) || {
+    orca_cli worktree create --name "$name" --no-parent --base-branch "$base_branch" --setup "$setup_mode" --json 2>&1) || {
     echo "ERROR: orca worktree create 失败: $out" >&2
     return 64
   }

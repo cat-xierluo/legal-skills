@@ -149,6 +149,7 @@ ORCA_TERMINAL_HANDLE=""  # 形如 "term_xxx"，仅 auto 时填
 ORCA_APP_VERSION=""      # 来自 orca status --json
 ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
 ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
+ORCA_SETUP_MODE="skip"  # Repo Setup runs before MAO can install Session Context/guards.
 NO_ORCA_MODE=0
 # v2.1.1（Task-033）：ORCA supervised 注册（run-create + task-create + worker-start --terminal）。
 # --orca-supervised 启用时，ORCA 模式 spawn 后把 worker terminal 纳入 supervised 体系。
@@ -404,6 +405,10 @@ source "$SCRIPT_DIR/spawn-worker-orca.sh"
 #   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
 detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
 if [ "$ORCA_MODE" = "missing_orca" ]; then
+  exit 64
+fi
+if [ "$ORCA_MODE" = "auto" ] && [ "$ORCA_SETUP_MODE" != "skip" ]; then
+  echo "ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT: mode=$ORCA_SETUP_MODE is rejected before worktree/provider/terminal/dispatch side effects; repo Setup runs before MAO guards and is not authorized by --allow-install-command" >&2
   exit 64
 fi
 if [ -n "$ORCA_EXPECTED_RUNTIME_ID" ] && { [ "$ORCA_MODE" != "auto" ] || [ -z "$ORCA_COORDINATOR_HANDLE" ]; }; then
@@ -694,7 +699,7 @@ elif [ "$ORCA_MODE" = "auto" ]; then
      || git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
     orca_base="$BRANCH"
   fi
-  ORCA_WORKTREE_ID=$(orca_worktree_create "$BRANCH" "$orca_base")
+  ORCA_WORKTREE_ID=$(orca_worktree_create "$BRANCH" "$orca_base" "$ORCA_SETUP_MODE")
   # ORCA worktree create 后实际 path 可能不是 PROJECT_DIR（ORCA 默认放 ~/orca/workspaces/<name>）；
   # 用 ORCA_WORKTREE_ID 解析的真实 path 覆盖 WORKTREE + ORCA_WORKTREE_PATH。
   if [ -n "$ORCA_WORKTREE_ID" ] && [ "$ORCA_WORKTREE_ID" != "orca_worktree_id_placeholder" ]; then
