@@ -60,6 +60,7 @@ reset_orca_case() {
   ORCA_TERMINAL_HANDLE=""
   ORCA_APP_VERSION=""
   ORCA_CAPABILITIES_JSON=""
+  ORCA_SETUP_MODE="skip"
   ORCA_SUPERVISED=0
   DRY_RUN=0
   RUNTIME_AVAILABLE=1
@@ -165,6 +166,8 @@ reset_orca_case
 DRY_RUN=1
 dry_worktree_output=$(orca_worktree_create worker main)
 if printf '%s' "$dry_worktree_output" | grep -Fq 'orca worktree create' \
+  && printf '%s' "$dry_worktree_output" | grep -Fq -- '--setup skip' \
+  && ! printf '%s' "$dry_worktree_output" | grep -Fq -- '--setup inherit' \
   && printf '%s' "$dry_worktree_output" | grep -Fq 'orca_worktree_id_placeholder'; then
   ok "worktree dry-run prints plan and placeholder"
 else
@@ -174,6 +177,28 @@ fi
 reset_orca_case
 actual_worktree_id=$(orca_worktree_create worker main)
 assert_eq "$actual_worktree_id" "repo-1::worker" "worktree helper returns exact runtime id"
+if grep -Fq -- 'worktree create --name worker --no-parent --base-branch main --setup skip --json' "$FAKE_LOG"; then
+  ok "worktree helper always passes the explicit skip policy"
+else
+  bad "worktree helper always passes the explicit skip policy"
+fi
+
+for unsafe_setup_mode in inherit run; do
+  reset_orca_case
+  ORCA_SETUP_MODE="$unsafe_setup_mode"
+  unsafe_setup_rc=0
+  set +e
+  orca_worktree_create worker main > "$CASE_ROOT/setup-$unsafe_setup_mode.out" 2> "$CASE_ROOT/setup-$unsafe_setup_mode.err"
+  unsafe_setup_rc=$?
+  set -e
+  assert_eq "$unsafe_setup_rc" "64" "$unsafe_setup_mode Setup fails before worktree creation"
+  if grep -Fq 'ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT' "$CASE_ROOT/setup-$unsafe_setup_mode.err" \
+    && [ ! -s "$FAKE_LOG" ]; then
+    ok "$unsafe_setup_mode Setup has a stable code and zero Orca calls"
+  else
+    bad "$unsafe_setup_mode Setup has a stable code and zero Orca calls"
+  fi
+done
 
 reset_orca_case
 WORKTREE_CREATE_JSON='not-json'
@@ -671,6 +696,42 @@ run_e2e_spawn() {
     > "$out_base.out" 2> "$out_base.err"
 }
 
+# Repo Setup happens inside Orca before MAO can write Session Context and guards. Non-skip
+# modes therefore fail before Run/worktree/terminal/Dispatch mutation, even when the caller
+# separately authorizes an install command for the later guarded worker phase.
+for setup_mode in inherit run; do
+  setup_out="$E2E_ROOT/setup-$setup_mode"
+  : > "$E2E_ORCA_LOG"
+  set +e
+  run_e2e_spawn "e2e-setup-$setup_mode" "e2e-setup-$setup_mode" "$setup_out" \
+    --orca-setup-mode "$setup_mode" \
+    --allow-install-command 'pnpm install' \
+    --install-authorization-source 'test-only later guarded phase'
+  setup_rc=$?
+  set -e
+  assert_eq "$setup_rc" "64" "$setup_mode Setup is rejected before Orca resource mutation"
+  if grep -Fq 'ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT' "$setup_out.err"; then
+    ok "$setup_mode entrypoint reports the stable prelaunch Setup refusal code"
+  else
+    bad "$setup_mode entrypoint reports the stable prelaunch Setup refusal code"
+  fi
+  if grep -Eq 'worktree create|terminal create|run-create|task-create|worker-start' "$E2E_ORCA_LOG"; then
+    bad "$setup_mode rejection performs zero Orca mutation"
+  else
+    ok "$setup_mode rejection performs zero Orca mutation"
+  fi
+  if grep -Eq 'SPAWN_WORKER_PROVIDER_LEASE' "$setup_out.out" "$setup_out.err" >/dev/null 2>&1; then
+    bad "$setup_mode rejection performs zero provider lease acquisition"
+  else
+    ok "$setup_mode rejection performs zero provider lease acquisition"
+  fi
+  if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-setup-$setup_mode" ]; then
+    ok "$setup_mode rejection leaves no Session Context"
+  else
+    bad "$setup_mode rejection leaves no Session Context"
+  fi
+done
+
 # Task-116 既有 Worktree 预门禁断言：命中 exact path/branch 占用时零 mutation 副作用
 # （无 worktree create / terminal / run / task / worker-start，无 Session Context），
 # 稳定输出 EXISTING_WORKTREE_REQUIRES_RECOVERY 且退出码 3。
@@ -789,7 +850,12 @@ if grep -Fq 'terminal create' "$E2E_ORCA_LOG" \
 else
   bad "matching-branch spawn still creates the terminal and injects the task"
 fi
-if jq -e '.session.orca.runtime_id == "runtime-pregate" and .session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
+if grep -Fq -- 'worktree create --name e2e-pregate-ok --no-parent --base-branch main --setup skip --json' "$E2E_ORCA_LOG"; then
+  ok "matching-branch spawn uses explicit Setup skip"
+else
+  bad "matching-branch spawn uses explicit Setup skip"
+fi
+if jq -e '.session.orca.runtime_id == "runtime-pregate" and .session.orca.setup_mode == "skip" and .session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
   "$E2E_WS/e2e-pregate-ok/.claude/agent-sessions/e2e-pregate-ok/METADATA.json" >/dev/null 2>&1; then
   ok "matching-branch spawn records the supervised dispatch contract in metadata"
 else

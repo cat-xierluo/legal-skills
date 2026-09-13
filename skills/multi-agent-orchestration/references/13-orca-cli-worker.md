@@ -92,7 +92,7 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-`orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup inherit`，先写入 Session Context、安装门禁和 scope hook，再用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
+`orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup skip`：repo Setup 会早于 Session Context、安装门禁和 scope hook，因此不能继承或强制执行。显式 `--orca-setup-mode inherit|run` 会在任何 worktree/provider/terminal/Dispatch 副作用前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；即使同时提供 `--allow-install-command` 也不放行，因为后者只约束门禁已就位后的 worker 阶段。之后再写入 Session Context 与机械门禁，用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
 
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
@@ -220,6 +220,7 @@ Claude 信任/MCP/外部导入弹窗：用受支持的 `worker-read`/`agentWait`
   "session": {
     "orca": {
       "mode": "auto",
+      "setup_mode": "skip",
       "worktree_id": "<repoId>::<path>",
       "worktree_path": "/abs/path",
       "terminal_handle": "term_xxx",

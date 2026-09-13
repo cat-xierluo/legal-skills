@@ -3,7 +3,7 @@
 # This file is sourced after spawn-worker.sh initializes runtime and authority globals.
 
 write_metadata() {
-  local enforcement_source worker_mirror_authoritative
+  local enforcement_source worker_mirror_authoritative orca_setup_mode_value
   created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
   if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
     verify_json=$(printf '%s\n' "${VERIFY_COMMANDS[@]}" | jq -R . | jq -s .)
@@ -28,6 +28,11 @@ write_metadata() {
   else
     enforcement_source="prompt_only_no_mechanical_enforcement"
     worker_mirror_authoritative=false
+  fi
+  if [ "${ORCA_MODE:-force_tmux}" = "auto" ]; then
+    orca_setup_mode_value="${ORCA_SETUP_MODE:-skip}"
+  else
+    orca_setup_mode_value="not_applicable"
   fi
 
   jq -n \
@@ -89,6 +94,7 @@ write_metadata() {
     --argjson authorized_install_commands "$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")" \
     --argjson allowed_shell_commands "$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')" \
     --arg orca_mode "${ORCA_MODE:-force_tmux}" \
+    --arg orca_setup_mode "$orca_setup_mode_value" \
     --arg orca_worktree_id "${ORCA_WORKTREE_ID:-}" \
     --arg orca_worktree_path "${ORCA_WORKTREE_PATH:-}" \
     --arg orca_terminal_handle "${ORCA_TERMINAL_HANDLE:-}" \
@@ -114,6 +120,7 @@ write_metadata() {
         context: $session_context,
         orca: {
           mode: $orca_mode,
+          setup_mode: $orca_setup_mode,
           worktree_id: $orca_worktree_id,
           worktree_path: $orca_worktree_path,
           terminal_handle: $orca_terminal_handle,
