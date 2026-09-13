@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.23.9] - 2026-09-13
+
+### 新增
+
+- PM supervised `send` 增加显式 `--message-contract`：以 Orca 原生消息承载经 `worker-show` 复验的 Run/Task/Dispatch/worker、sender、thread、correlation、expected action 与 typed evidence，不另建聊天层。
+- 增加只读 `inbox` 命令，固定使用 `check --peek` 观察当前 coordinator inbox，不重绑 Run、不改 metadata、不消费或 ack Delivery；receipt 只统计精确 Run/Task/Dispatch，可选再按 thread+correlation 双过滤。
+
+### 修复
+
+- 明确 `durably_enqueued → delivered_visible → consumed → replied → action_started → business_completed` 六层证据边界；Dispatch send 只有在同一真实 relay 的 destination、dispatchId 与 messageId 均验证后才生成 enqueue receipt，不接受旁支或旧形状 message ID，也不把发送成功误读为已送达、已执行、已完成。原生 thread 改为承载 correlation，业务 thread 留在 payload，使原生无 payload reply 可在严格双过滤下关联；这种可见性仍不证明执行过 reply。
+- 对消息类型、优先级、标识符、仓库相对 evidence path 和所有用户可控消息字段（含 inbox 的显式/记录 sender 与 worker handle）做敏感载荷检查；同一 retry ID 只允许完全相同的请求摘要，变化时在首次 Orca 调用前拒绝。runtime/sender 漂移、Task/Dispatch 错绑、缺消息 provenance、顶层或 payload lifecycle/sender/recipient/type 别名冲突、错 coordinator recipient 或非 live 发送目标继续失败关闭。
+
+### 验证
+
+- 新增 fake-Orca 参数级回归，使用当前真实 relay/check/reply schema 覆盖权威 worker-show 关系、message ID/请求摘要 receipt、relay 缺失/错目标/旁支 ID、原生 argv/payload、normal priority、相同与冲突 retry、旧 send 兼容、敏感字段零副作用拒绝、peek 不消费、空/缺 sender/错 sender/缺 provenance/跨 Dispatch/顶层与 payload 别名冲突 inbox、无 payload 原生 reply correlation bridge、stale runtime/sender 与异常 receipt。
+
 ## [2.23.8] - 2026-09-13
 
 ### 修复

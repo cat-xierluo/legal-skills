@@ -32,6 +32,7 @@ python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
+bash scripts/test-pm-message-contract.sh
 bash scripts/test-pm-reauthorize.sh
 bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
@@ -78,6 +79,7 @@ bash scripts/smoke-orca-control-plane.sh
 - `smoke-orca-control-plane.sh` 使用 fake CLI 验证命令路由、cursor 与 external terminal accounting。
 - `test_worker_delivery_prompt.py` 检查实际 Task spec/启动命令与真实 guard hook 的准入/拒绝，不启动 provider；`smoke-tmux-worker.sh` 使用独立 tmux socket、固定本地脚本与无转发 Orca stub，按真实记录区分 fake 只读探测和 live 调用。
 - `test-spawn-worker-orca.sh` 必须同时证明：正常 worktree create 的真实 argv 含 `--setup skip`；`inherit/run` 在任何 worktree、provider lease、Session Context、terminal、Run/Task/Dispatch 副作用前返回 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT`；`--allow-install-command` 不得把门禁后的授权外溢到 repo Setup。
+- `test-pm-message-contract.sh` 必须使用当前真实 Dispatch relay 回执形状（`relay.messageId/dispatchId/destination`）和 `check --peek` 行形状（结构化消息的顶层 `run_id/from_handle/to_handle/thread_id`、字符串 payload 内 camelCase lifecycle IDs，以及原生 reply 的 `runId/from/to/threadId` 无 payload 形状），并证明：所有用户可控消息字段的敏感值及冲突 retry 在首次 Orca 调用前拒绝；`worker-show` 证明精确 live Run/Task/Dispatch/worker；合同 payload 固定路由、业务 thread、correlation、expected action 与 typed evidence，原生 thread 固定承载 correlation；send receipt 的 message ID 只能来自同一精确 Dispatch relay，并绑定 sender、业务/原生 thread、correlation、retry 与完整请求摘要且只声明 `durably_enqueued`；`inbox` 只用 `check --peek` 且不调用 run-use、send 或 ack，所有出现的顶层及 payload lifecycle/sender/recipient/type 别名必须一致，拒绝缺/错 sender/recipient、缺 Run/归属证据、同 Run 其他 Dispatch 或任一别名冲突。无 payload 的原生关联消息只有在线程双过滤、精确 worker→coordinator 路由和 correlation thread 下可见，receipt 不得据此声明执行过 reply。fake Orca 不证明真实跨 session 可见性或业务执行。
 - Session Context 回归覆盖 Claude/Codex、实施者/reviewer 与有无 scope 的六个实际启动命令组合；路径定位变量不证明 guard 激活，Codex 显式 prompt-only 降级必须保持其真实权限状态。
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
