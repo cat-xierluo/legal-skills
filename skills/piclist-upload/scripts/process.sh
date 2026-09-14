@@ -165,8 +165,11 @@ process_markdown_file() {
             continue
         fi
 
-        # Resolve relative path
-        local full_path="$md_dir/$image_path"
+        # Resolve path: absolute image paths used as-is, relative resolved against md dir
+        local full_path="$image_path"
+        if [[ "$image_path" != /* ]]; then
+            full_path="$md_dir/$image_path"
+        fi
 
         # Normalize path
         full_path=$(cd "$(dirname "$full_path")" 2>/dev/null && pwd)/$(basename "$full_path") 2>/dev/null || true
