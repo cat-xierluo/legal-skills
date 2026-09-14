@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.24.0"
+  version: "2.26.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -73,7 +73,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 ### 3.3 运行时安全门
 
 - `spawn-worker.sh` 从完整进程祖先链识别真实 PM harness，并对嵌套层白名单取交集。未知、冲突或不可证明的宿主失败关闭；`--pm-harness` 只做一致性声明，不能提权。
-- Claude Code/Codex PM 可派 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy、QoderWork CN PM 只能派自身。zcode 默认禁用，只有用户明确授权后修改 `config/harness-backend-policy.json` 才可开启。
+- Claude Code/Codex PM 可派 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy、QoderWork CN PM 只能派自身。zcode 与 hermes 仅在用户明确授权并记录于 `config/harness-backend-policy.json` 的 `policy_notes` 后开启（hermes PM 宿主签名走路径级识别：Hermes.app bundle 与 `.hermes/hermes-agent/` 安装目录，裸 `hermes` 词不作为签名；hermes PM 可派 Claude Code、Codex）。
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许门禁后的 worker 安装。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
