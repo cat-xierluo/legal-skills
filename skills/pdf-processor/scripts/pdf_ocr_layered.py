@@ -653,17 +653,18 @@ def _apply_semantic_actual_text(
     row_content_xrefs: dict[int, list[int]],
     row_texts: dict[int, str],
     semantic_paragraphs: list[dict],
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """为连续行流添加 /ActualText；不改变行级字形与选区坐标。
 
-    返回 ``(applied, invalid_mapping_count)``：
+    返回 ``(applied, invalid_mapping_count, filtered_refs)``：
     - ``applied``：成功写入 /ActualText 的段数。
-    - ``invalid_mapping_count``：row_indices 指向不存在行或文字拼接不匹配的段数。
-      这类是真正的映射错误，调用方应据此判定是否抛完整性异常。
-      “行存在但物理上不连续”（如跳过印章碎片）不算映射错误，仅跳过该段。
+    - ``invalid_mapping_count``：保留字段，当前判定路径下恒为 0（见下）。
+    - ``filtered_refs``：段落引用被置信度阈值过滤的行（或行文字不匹配），
+      已降级为行级呈现，不视为致命错误。
+    “行存在但物理上不连续”（如跳过印章碎片）也不算映射错误，仅跳过该段。
     """
     if not semantic_paragraphs:
-        return 0, 0
+        return 0, 0, 0
 
     doc = page.parent
     page_contents = list(page.get_contents())
@@ -671,6 +672,8 @@ def _apply_semantic_actual_text(
     used_xrefs: set[int] = set()
     applied = 0
     invalid_mapping = 0
+    # 指向被置信度过滤行的段落数：降级为行级呈现，不算致命错误
+    filtered_refs = 0
 
     for paragraph in semantic_paragraphs:
         if not isinstance(paragraph, dict):
@@ -683,13 +686,19 @@ def _apply_semantic_actual_text(
             indices = [int(value) for value in row_indices]
         except (TypeError, ValueError):
             continue
-        # 指向不存在的行 = 真正的映射错误
-        if any(index not in row_content_xrefs or index not in row_texts for index in indices):
-            invalid_mapping += 1
+        # 段落引用的行被置信度阈值过滤时（常见于封面/封底艺术字、装饰图形），
+        # 该段已无行级字形可挂 /ActualText，降级为行级呈现即可，文字不丢失。
+        if any(
+            index not in row_content_xrefs or index not in row_texts
+            for index in indices
+        ):
+            filtered_refs += 1
             continue
         physical_text = "".join(row_texts[index] for index in indices)
         if re.sub(r"\s+", "", physical_text) != re.sub(r"\s+", "", text):
-            invalid_mapping += 1
+            # 段文字与过滤后行文字不匹配（同上：行被过滤或重排），
+            # 降级为行级呈现，不视为致命映射错误。
+            filtered_refs += 1
             continue
 
         xrefs = [xref for index in indices for xref in row_content_xrefs[index]]
@@ -713,7 +722,7 @@ def _apply_semantic_actual_text(
         used_xrefs.update(xrefs)
         applied += 1
 
-    return applied, invalid_mapping
+    return applied, invalid_mapping, filtered_refs
 
 
 def _normalize_body_paragraph_font_sizes(
@@ -879,25 +888,25 @@ def _insert_text_blocks(
         row_texts[source_row_index] = content
         page_inserted += n_lines
 
-    actual_text_count, invalid_mapping = _apply_semantic_actual_text(
+    actual_text_count, invalid_mapping, filtered_refs = _apply_semantic_actual_text(
         page,
         row_content_xrefs,
         row_texts,
         semantic_paragraphs or [],
     )
     # row_indices 指向不存在行或文字拼接不匹配 = 真正的映射错误，必须失败。
-    # “行存在但不连续”（如跳过印章碎片）已在 _apply_semantic_actual_text 内部降级跳过，
-    # 这些段仍以行级字形呈现（文字不丢失，仅复制时退化为按行断行），不视为致命错误。
+    # “行存在但不连续”（如跳过印章碎片）已在 _apply_semantic_actual_text 内部降级跳过；
+    # “段落引用被置信度过滤的行”（封面艺术字等）同样降级为行级呈现，不阻塞整册。
     if invalid_mapping:
         raise TextLayerIntegrityError(
             f"ActualText 自然段映射无效（{invalid_mapping} 段指向不存在的行或文字不匹配）"
         )
     total_paragraphs = len(semantic_paragraphs or [])
     skipped_discontinuous = total_paragraphs - actual_text_count
-    if skipped_discontinuous and not quiet:
+    if (skipped_discontinuous or filtered_refs) and not quiet:
         print(
             f"    ActualText 提示: {actual_text_count}/{total_paragraphs} 段写入，"
-            f"{skipped_discontinuous} 段因行不连续降级为行级（文字完整，复制可能按行断行）"
+            f"{skipped_discontinuous} 段降级为行级（行不连续或行被过滤；文字完整，复制可能按行断行）"
         )
 
     if not quiet:
@@ -1036,6 +1045,23 @@ def apply_page_entries_as_layered_pdf(
             failure_reason = f"第 {pno} 页没有可验证的 OCR 坐标结果"
             break
 
+        # 云端对整页插图/空白页会返回空文本行（坐标存在、text 为空），
+        # 阈值过滤后为空是合法情况：跳过该页文字层，不判死整册。
+        min_score = float(getattr(args, "paddle_min_score", 0.0) or 0.0)
+        effective_rows = [
+            row
+            for row in rows
+            if str(row[0] or "").strip() and float(row[1] or 0) >= min_score
+        ]
+        if not effective_rows:
+            skipped_pages += 1
+            if not args.quiet:
+                print(
+                    f"  第 {pno}/{total_pages} 页({source_name}): OCR 有效行为空，"
+                    f"跳过文字层（整页图形/空白页）"
+                )
+            continue
+
         source_w, source_h = entry.get("width"), entry.get("height")
         if not source_w or not source_h:
             coords = [
@@ -1105,8 +1131,13 @@ def apply_page_entries_as_layered_pdf(
             inserted_pages += 1
             inserted_blocks += page_inserted
         else:
-            failure_reason = f"第 {pno} 页 OCR 结果经阈值过滤后为空"
-            break
+            # 全部行被 CJK 归一化或内容清洗过滤（纯装饰字符页）：
+            # 与“有效行为空”同类，跳过该页文字层，不判死整册。
+            skipped_pages += 1
+            if not args.quiet:
+                print(
+                    f"  第 {pno}/{total_pages} 页({source_name}): 过滤后无可排版行，跳过文字层"
+                )
 
     if failure_reason:
         doc.close()
