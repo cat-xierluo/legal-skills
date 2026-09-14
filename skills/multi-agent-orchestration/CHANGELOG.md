@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.26.0] - 2026-09-15
+
+### 新增
+
+- hermes 接入 PM 宿主白名单（用户明确授权，记录于 `config/harness-backend-policy.json` `policy_notes`）：Hermes Agent 作为 PM 派发 claude-code/codex worker。宿主识别走路径级签名——进程帧含 `Hermes.app` bundle 路径或 `.hermes/hermes-agent/` 安装目录才算 hermes，裸 `hermes` 词不作签名防止无关路径误命中；`canonical_harness_backend` 收 `hermes` 别名。帧匹配逻辑提取为 `pm_harness_candidate_for_frame` helper（行为保持），配套回归 `scripts/tests/test-harness-backend-policy.sh`（签名匹配/白名单交集/deny-by-default/本机 Hermes 祖先链实测）。
+
 ## [2.25.0] - 2026-09-14
 
 ### 新增
