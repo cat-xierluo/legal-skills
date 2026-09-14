@@ -17,9 +17,15 @@ backend 的价值：
 - **合规面干净**：官方二进制 + 官方协议 + 本人 GUI 登录凭证，无逆向、无指纹
   伪造（对比网关类项目的灰色边界）。
 
-与其他四家 backend 的本质差异：**zcode 无独立 TUI**（`@zcode/tui` 未随桌面端
-打包，官方无独立 CLI 分发），因此 spawn 起的是本 skill 自带的
-`scripts/zcode-worker-driver.py` 包装器（§6），不是裸 CLI。
+与其他四家 backend 的本质差异：**桌面端捆绑的 zcode CLI 无独立 TUI**（`@zcode/tui`
+未随桌面端打包），因此 spawn 起的是本 skill 自带的
+`scripts/zcode-worker-driver.py` 包装器（§6），不是裸 CLI。2026-09-07 研究修订
+（§11）：npm 上存在**社区非官方终端客户端 `zcode-app-cli`**（作者
+kingsword09，repo `kingsword09/zcode-cli`，MIT，v3.11.2-21，`--version`
+输出带 `zcode-app-cli` 前缀，具备交互 TUI），自 ZCode Desktop 提取官方
+`glm` 运行时内核运行、自带 TUI 层——"官方无独立 CLI 分发"仍成立（智谱
+官方只有桌面捆绑 CLI）；但本 skill 当前 zcode backend 仍基于桌面捆绑发行版，
+driver/app-server 路径不变。
 
 ## 2. 二进制位置与首次配置（ prerequisite 清单）
 
@@ -139,9 +145,10 @@ worker 实测踩坑 2026-08-27）。成功响应空 result，随后
 
 ## 5. 关键限制
 
-1. **无 TUI**：`zcode`/`zcode tui` 直接跑必报 `Cannot find package '@zcode/tui'`
-   （bundle 内逻辑：非 SEA 单文件版直接 import 外部包，桌面端打包未携带）。
-   worker 只能走 driver（长驻协议）或 headless（一次性）。
+1. **桌面捆绑发行版无 TUI**：`zcode`/`zcode tui` 直接跑必报 `Cannot find package
+   '@zcode/tui'`（bundle 内逻辑：非 SEA 单文件版直接 import 外部包，桌面端打包
+   未携带）。worker 只能走 driver（长驻协议）或 headless（一次性）。社区非官方
+   客户端 `zcode-app-cli` 不受此限（§11，未本机验证）。
 2. **headless 必须 yolo**：无人值守执行需用户授权（与 claude-code
    bypassPermissions 同级风险面）；install-guard 因此走 prompt-only 降级
    （同 codex，需显式 `--allow-prompt-only-install-guard`）。
@@ -204,7 +211,10 @@ headless 备选（render `--mode batch`）：
   派 zcode 被拒（deny_by_default，测试矩阵覆盖）。
 - 身份门禁三重门：policy JSON + `canonical_harness_backend` case +
   `validate-worker-command.py`（basename `zcode` 或 trusted-driver realpath）。
-- install-guard：prompt_only_degraded（无 PreToolUse hook 机制）。
+- install-guard：prompt_only_degraded（历史依据"无 PreToolUse hook 机制"）。
+  2026-09-07 上游研究发现 ZCode 实际支持 Claude 兼容生命周期 hook（含
+  PreToolUse，配置面 `~/.zcode/cli/config.json` 的 `hooks.events`，见 §11），
+  本机未验证、行为暂不变；本地验证通过后再评估 install-guard 是否升级。
 - trust/permission/external-imports dialog 自动化默认全关（无 TUI 无 dialog，
   避免空等）。
 - Session Context（METADATA/STATUS/RESULT）照常：STATUS 由 worker prompt
@@ -232,8 +242,78 @@ headless 备选（render `--mode batch`）：
    PM 所在目录误判为删除目标而拒绝——在真身仓根目录执行清理可避开
    （记忆：spawn/clean 必须站项目根）。
 
+## 11. 发行版全景与上游 TUI 建模研究（2026-09-07）
+
+> 证据来源：stablyai/orca 未合并 PR #13965/#16227/#16228（guanbear 系列，实现
+> "ZCode as a first-class supported agent"，issue #10564）的完整 diff 阅读 +
+> 本机实测（桌面端 0.16.5、npm registry 查询、`~/.zcode/cli/config.json`
+> 结构、`ps` 进程观测）。上游设计**未合并、非既成事实**；标注"未本机验证"的
+> 结论不得写成已验证能力。
+
+### 11.1 官方捆绑版与社区非官方 TUI 客户端
+
+| 维度 | 官方桌面捆绑版（本 skill 现用） | 社区非官方客户端 |
+|---|---|---|
+| 入口 | `~/.local/bin/zcode` → `/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs`（symlink） | `node_modules/zcode-app-cli/bin/zcode.js` |
+| 归属 | 智谱官方（随 App 分发） | kingsword09 `zcode-app-cli`（npm，MIT，**非官方**，README 自述 not affiliated with Z.ai） |
+| 版本线 | 0.16.x（随 App 演化，本机 0.16.5） | 3.11.2-21（客户端自有版本线） |
+| `--version` 输出 | 裸版本号（如 `0.16.5`） | `zcode-app-cli X.Y.Z`（**发行版探测的特征位**） |
+| 交互 TUI | ❌ 缺 `@zcode/tui`（§5.1） | ✅ 自带 TUI（`@earendil-works/pi-tui`）；**实现方式=从 ZCode Desktop 提取官方 `glm` 内核作 node 子进程**，凭证/agent/工具逻辑仍在官方内核，客户端只补 TUI 层 + macOS OAuth 回调桥 |
+| 进程标题 | `zcode-cli`（+ 同伴 `zcode-host-local-1` 桥接进程，本机 `ps` 实测） | `zcode-cli`（上游 entrypoint-identity 识别规则） |
+| 运行时形态 | App-Service 背书：CLI 连接桌面 App 的 host 桥 | 官方内核直跑（提取自桌面端安装） |
+| 配置面 | `~/.zcode/cli/config.json` | 同路径但**不覆盖既有文件**；可从桌面端导入 provider 设置，凭证需重新登录 |
+
+上游用 `zcode --version` 输出是否匹配 `^zcode-app-cli\s+\S+` 区分二者；
+桌面捆绑版输出裸版本号不命中 → 一律走一次性 argv 注入。**该探测依赖版本
+输出形状这一未承诺契约**——两发行版版本号独立演化，任何一侧改版式都会
+静默改变分流结果（本 skill 若未来采用同类探测，须带失效兜底）。
+
+### 11.2 上游的三层 TUI 建模（对独立发行版才生效）
+
+1. **注入分流**：`agent-input`（等 TUI composer 就绪后粘贴 prompt）vs
+   `startup-command`（argv 一次性）。远程会话、用户命令覆盖、交互失败后的
+   10 分钟冷却期一律 fail-closed 落到 startup-command。
+2. **就绪三重门**：进程 ready（entrypoint 识别为 `zcode-cli`）→ composer
+   input-ready（draft-paste-ready 扫描器盯 bracketed-paste `?2004h` 等信号，
+   区分 shell 光标与真正的 agent composer）→ hook 上报 provider session
+   （`session_id`；10 秒等不到则警告"输出回退终端显示"）。
+3. **状态不走 TUI 刮取**：生命周期事件走 Claude 兼容 hook（POST 到编排方
+   本地端口）；会话记录直接读 ZCode 自己的 SQLite 会话库（同 §3
+   `~/.zcode/cli/db`）。TUI 终端只是启动面与兜底显示面。
+
+对本 skill 的含义：driver（app-server 长驻协议）+ headless 的双路径对桌面
+捆绑发行版仍是正确设计，与上游对"签名桌面运行时"的降级处理一致；若未来
+需要交互 TUI worker，前置条件是安装社区客户端 `zcode-app-cli`（非官方，
+信任决策归用户；bin 名同为 `zcode`，安装后必须 `which -a zcode` 核对未遮蔽
+官方软链——本 skill 的 zcode backend 与 credential-sync 均假设软链指向官方
+bundle）并重验 §11.1 特征位。
+
+### 11.3 ZCode hook 能力（上游证据，未本机验证）
+
+上游 PR 向 `~/.zcode/cli/config.json` 的 `hooks.events` 写托管块，事件集为
+`SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / PostToolUseFailure /
+PermissionRequest / Stop`，payload 为 Claude 兼容格式（`session_id` 等字段，
+上游直接复用 kimi 的归一化器）。配置结构：顶层 `hooks: { enabled, events:
+{<事件名>: [{matcher, hooks: [{type, command, enabled, timeoutMs}]}]} }`（JSON
+对象树，非 TOML）。若本机验证成立，install-guard（§8）与 worker 状态观测
+（PM 巡检可用 hook 事件替代/补充 driver 渲染行）都有升级空间。
+
+**并发写风险（本机实证）**：`~/.zcode/cli/config.json` 是多写者文件——本机
+存在 `.bak-pm` / `.bak-pm2` / `.bak-zcode-worker` 备份（本 skill 自己的
+credential-sync 与 worker 流程产物），桌面端、CLI、编排方都可能改写它。
+任何 hook 安装/凭证同步必须：改前备份、原子写（临时文件 + rename）、改后
+校验；不得假设自己是唯一写者。
+
 ## 版本记录
 
 - 2026-08-27：协议全链真机验证（偏好应答/create/send/stop/注入）；backend
   转正（Task-077）：identity gate、driver、render、deps、测试矩阵、端到端
   两轮产物验收。
+- 2026-09-07：发行版全景修订（§1/§5.1/§8/§11）——发现社区**非官方**终端
+  客户端 `zcode-app-cli`（kingsword09/zcode-cli，MIT，v3.11.2-21，`--version`
+  带 `zcode-app-cli` 前缀、自带交互 TUI；实现=提取桌面端官方 glm 内核直跑，
+  凭证逻辑留在官方内核），"无 TUI"改为按客户端区分、"官方无独立 CLI 分发"
+  维持成立；上游 orca PR #13965/#16227/#16228 的 TUI 建模研究（注入分流/
+  就绪三重门/hook+SQLite 状态通道——其交互路径特征位锚定的正是这个社区
+  客户端）与 config.json 多写者并发风险入册。社区客户端与 hook 能力均未本机
+  验证，验证项见 TASKS `TASK-2026-09-07-ZCODE-DISTRIBUTION-RESEARCH`。
