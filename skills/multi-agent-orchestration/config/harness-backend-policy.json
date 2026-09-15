@@ -27,11 +27,14 @@
     ],
     "hermes": [
       "claude-code",
-      "codex"
+      "codex",
+      "codebuddy",
+      "qoderwork-cn",
+      "zcode"
     ]
   },
   "policy_notes": [
     "2026-09-05 zcode PM enabled by explicit user authorization (badminton-lab takeover session): dispatch independent workers, several in parallel.",
-    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs (claude-code/codex) in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir); worker grant intentionally minimal (claude-code+codex), widen only with new explicit authorization."
+    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir). 2026-09-15 widened to all worker backends (claude-code/codex/codebuddy/qoderwork-cn/zcode) by explicit user authorization: hermes as PM host may dispatch every supported worker backend."
   ]
 }
