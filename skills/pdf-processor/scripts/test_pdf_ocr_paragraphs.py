@@ -363,6 +363,41 @@ class TestSemanticPdfMetadata(unittest.TestCase):
             )
         doc.close()
 
+    def test_filtered_row_reference_degrades_to_line_level(self):
+        """行存在但被置信度阈值过滤（封面艺术字等）→ 降级为行级，不抛异常。
+
+        回归场景：《吾辈如神》整册扫描书，封面段落引用了低置信度行，
+        叠层不应因该段无法挂 /ActualText 而判死整册（修复前行为）。
+        """
+        doc = fitz.open()
+        page = doc.new_page(width=300, height=300)
+        font = fitz.Font("cjk")
+        rows = [
+            row("正文行", 30, 30, 160, 60),        # 0: 正常行
+            row("低置信行", 30, 90, 160, 120, score=0.3),  # 1: 低于 min_score 被过滤
+        ]
+        try:
+            inserted = layered._insert_text_blocks(
+                page,
+                font,
+                rows,
+                scale_x=1.0,
+                scale_y=1.0,
+                min_score=0.5,  # 行1 置信度 0.3 低于阈值被过滤
+                cjk_normalize=False,
+                page_rotation=0,
+                source_name="test",
+                pno=1,
+                total_pages=1,
+                quiet=True,
+                # 段落引用行1（存在于原始行集，但被阈值过滤）
+                semantic_paragraphs=[{"text": "低置信行", "row_indices": [1]}],
+            )
+            self.assertGreater(inserted, 0)
+        except layered.TextLayerIntegrityError:
+            self.fail("行被置信度过滤时应降级为行级，不应抛 TextLayerIntegrityError")
+        doc.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -653,14 +653,16 @@ def _apply_semantic_actual_text(
     row_content_xrefs: dict[int, list[int]],
     row_texts: dict[int, str],
     semantic_paragraphs: list[dict],
+    total_rows: int = 0,
 ) -> tuple[int, int, int]:
     """为连续行流添加 /ActualText；不改变行级字形与选区坐标。
 
     返回 ``(applied, invalid_mapping_count, filtered_refs)``：
     - ``applied``：成功写入 /ActualText 的段数。
-    - ``invalid_mapping_count``：保留字段，当前判定路径下恒为 0（见下）。
-    - ``filtered_refs``：段落引用被置信度阈值过滤的行（或行文字不匹配），
-      已降级为行级呈现，不视为致命错误。
+    - ``invalid_mapping_count``：row_indices 越界（指向 OCR 原始行集之外），
+      或全部行在位但拼接文字仍不匹配 —— 属数据损坏，调用方应抛完整性异常。
+    - ``filtered_refs``：段落引用的行存在但被置信度阈值过滤（封面/封底
+      艺术字、装饰图形等），该段降级为行级呈现，不视为致命错误。
     “行存在但物理上不连续”（如跳过印章碎片）也不算映射错误，仅跳过该段。
     """
     if not semantic_paragraphs:
@@ -686,19 +688,19 @@ def _apply_semantic_actual_text(
             indices = [int(value) for value in row_indices]
         except (TypeError, ValueError):
             continue
-        # 段落引用的行被置信度阈值过滤时（常见于封面/封底艺术字、装饰图形），
-        # 该段已无行级字形可挂 /ActualText，降级为行级呈现即可，文字不丢失。
-        if any(
-            index not in row_content_xrefs or index not in row_texts
-            for index in indices
-        ):
+        # row_indices 越界 = 指向 OCR 原始行集之外 = 真正的映射损坏，保持 fail-closed
+        if total_rows and any(index < 0 or index >= total_rows for index in indices):
+            invalid_mapping += 1
+            continue
+        # 行存在但被置信度阈值过滤（常见于封面/封底艺术字、装饰图形）：
+        # 该段已无行级字形可挂 /ActualText，降级为行级呈现，文字不丢失。
+        if any(index not in row_content_xrefs or index not in row_texts for index in indices):
             filtered_refs += 1
             continue
         physical_text = "".join(row_texts[index] for index in indices)
         if re.sub(r"\s+", "", physical_text) != re.sub(r"\s+", "", text):
-            # 段文字与过滤后行文字不匹配（同上：行被过滤或重排），
-            # 降级为行级呈现，不视为致命映射错误。
-            filtered_refs += 1
+            # 行全部在位但拼接仍不匹配 = 段落数据与行数据不一致，保持 fail-closed
+            invalid_mapping += 1
             continue
 
         xrefs = [xref for index in indices for xref in row_content_xrefs[index]]
@@ -893,13 +895,14 @@ def _insert_text_blocks(
         row_content_xrefs,
         row_texts,
         semantic_paragraphs or [],
+        total_rows=len(rows),
     )
-    # row_indices 指向不存在行或文字拼接不匹配 = 真正的映射错误，必须失败。
+    # row_indices 越界或行全在位但文字拼接不匹配 = 真正的映射损坏，必须失败。
     # “行存在但不连续”（如跳过印章碎片）已在 _apply_semantic_actual_text 内部降级跳过；
     # “段落引用被置信度过滤的行”（封面艺术字等）同样降级为行级呈现，不阻塞整册。
     if invalid_mapping:
         raise TextLayerIntegrityError(
-            f"ActualText 自然段映射无效（{invalid_mapping} 段指向不存在的行或文字不匹配）"
+            f"ActualText 自然段映射无效（{invalid_mapping} 段越界或文字不匹配）"
         )
     total_paragraphs = len(semantic_paragraphs or [])
     skipped_discontinuous = total_paragraphs - actual_text_count
