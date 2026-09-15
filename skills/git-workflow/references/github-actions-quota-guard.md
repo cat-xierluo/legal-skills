@@ -6,8 +6,17 @@
 
 ## 1. 诊断：谁在烧分钟
 
-- 额度是**账号级**：公共仓 Actions 免费，只有私有仓计费（Linux 1x / Windows 2x / macOS 10x 倍率）。
-  排查时先过滤掉公共仓，别浪费精力停挂免费流量。
+- 额度是**账号级**，但"公共仓免费"**有严格边界条件**（2026-09-16 修正）：
+  - 公共仓 + **标准 runner**（ubuntu-latest/windows-latest/macos-latest）：免费 ✅
+  - 公共仓 + **Larger runner**（4/8/16/32GB 等规格，含 custom image）：**计费**，
+    且套餐内免费分钟**不能抵扣**（[runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing)）——
+    排查时必须检查 workflow 的 `runs-on:` 是否含非标准标签
+  - 2026-03 起 GitHub 宣布所有 Actions 调用加 **$0.002/min cloud platform charge**
+    （含 self-hosted 与标准 runner，[changelog](https://github.blog/changelog/2025-12-16-coming-soon-simpler-pricing-and-a-better-experience-for-github-actions/)）——
+    如适用于公共仓则"公共仓免费"不再绝对；以当期官方 billing 文档为准
+  - **存储费用**（artifact/cache 超额）与仓可见性无关，照计费
+  - 实操结论：先用 `gh api .../billing/actions` 看 `total_minutes_used` 与
+    `included_minutes` 差值来定位真实消耗源；不能仅凭"公共仓"跳过排查
 - 账号用量：`gh api /users/<owner>/settings/billing/actions`
   （`total_minutes_used` / `included_minutes` / `included_quantity`）。
 - 逐仓近 N 天触发计数：
