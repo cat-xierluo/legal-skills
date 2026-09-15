@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.3"
+  version: "1.8.4"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -932,12 +932,31 @@ git checkout main
    - 有冲突标记 → 合并中途退出，需手工恢复
 ```
 
+## 11. GitHub Actions 额度治理（CI 停挂止血）
+
+### 场景
+
+账号级 GitHub Actions 分钟额度耗尽或告警；私有仓 CI 在 push/pull_request 上高频自动触发。
+
+### 最短判定
+
+1. 额度是账号级且公共仓免费——先 `gh api /users/<owner>/settings/billing/actions` 看用量，
+   再逐私有仓统计近 30 天 `(workflow × event)` 触发数定位大户；`push+pull_request` 双开
+   即双计费。
+2. 检查类（lint/unittest/build）→ 停挂为 `workflow_dispatch`（文件内注释保留原触发器与
+   本地等价命令，走 PR 合并，本次 PR 不再计费）；release/deploy/签名/跨平台 → 保留；
+   被 `uses:` 复用的 workflow 必须保留 `workflow_call:`。
+3. 立即止血可用仓级总闸 `actions/permissions -f enabled=false`（可逆、不在 git 里可见）。
+
+完整诊断脚本、`on:` 块改写模板、验证与事故备忘见 `references/github-actions-quota-guard.md`。
+
 ## 参考资源
 
 - `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计与长期功能线关闭
 - `references/long-lived-integration-branch.md` — 长期集成分支的适用条件、拓扑、同步方向、波次与里程碑门禁
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
+- `references/github-actions-quota-guard.md` — Actions 额度诊断、停挂配方（workflow_dispatch 化）、仓级总闸、恢复与红线
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
 - `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
