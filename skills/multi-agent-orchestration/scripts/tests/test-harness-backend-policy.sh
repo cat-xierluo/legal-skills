@@ -95,14 +95,15 @@ echo '== 3. 真实 policy 文件：白名单交集 / deny-by-default =='
 [ -f "$POLICY_JSON" ] || { bad "policy 文件缺失: config/harness-backend-policy.json"; }
 jq -e 'select(.schema == "multi-agent-orchestration.harness-backend-policy.v1")
       | select(.policy == "deny_by_default")
-      | select(.hosts.hermes == ["claude-code", "codex"])' "$POLICY_JSON" >/dev/null 2>&1 \
-  && ok 'policy JSON：hermes host 条目与授权面正确' \
+      | select(.hosts.hermes == ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"])' "$POLICY_JSON" >/dev/null 2>&1 \
+  && ok 'policy JSON：hermes host 条目与全 backend 授权面正确' \
   || bad 'policy JSON：schema/policy/hermes 条目校验失败'
 
-assert_chain 'hermes 单层链' '["hermes"]' 'claude-code codex'
-assert_chain 'hermes→claude-code 嵌套交集' '["hermes","claude-code"]' 'claude-code codex'
+assert_chain 'hermes 单层链' '["hermes"]' 'claude-code codex codebuddy qoderwork-cn zcode'
+assert_chain 'hermes→claude-code 嵌套交集' '["hermes","claude-code"]' 'claude-code codex codebuddy qoderwork-cn'
 assert_chain 'hermes→zcode 嵌套交集' '["hermes","zcode"]' 'claude-code codex'
-assert_chain 'hermes→codebuddy 无交集 fail-closed' '["hermes","codebuddy"]' '__fail__'
+assert_chain 'hermes→codebuddy 交集含 codebuddy' '["hermes","codebuddy"]' 'codebuddy'
+assert_chain 'hermes→qoderwork-cn 交集含 qoderwork-cn' '["hermes","qoderwork-cn"]' 'qoderwork-cn'
 assert_chain '未知宿主 fail-closed' '["unknown-host"]' '__fail__'
 assert_chain 'zcode 既有授权不回归' '["zcode"]' 'claude-code codex'
 
