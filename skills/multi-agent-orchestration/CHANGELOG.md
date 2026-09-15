@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.27.0] - 2026-09-15
+
+### 改进
+
+- hermes PM 宿主授权面由 claude-code/codex 扩为**全部受支持 worker backend**（claude-code、codex、codebuddy、qoderwork-cn、zcode），用户明确授权；测试断言同步（hermes→codebuddy / hermes→qoderwork-cn 嵌套交集由 fail-closed 反转为放行）。
+
 ## [2.26.0] - 2026-09-15
 
 ### 新增
