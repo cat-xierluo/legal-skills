@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """视频压缩工具 — 使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景。"""
 
+from __future__ import annotations
+
 import argparse
 import shutil
 import subprocess
@@ -10,7 +12,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from hw_detect import build_encode_args, detect_hardware, print_hardware_info, select_profile
+from hw_detect import (build_encode_args, detect_hardware, print_hardware_info,
+                       probe_bitrate, select_profile)
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".ts"}
 
@@ -37,6 +40,7 @@ def compress_video(
     encode_args: list[str],
     output_suffix: str,
     detach: bool = False,
+    overwrite: bool = False,
 ) -> tuple[bool, str, int, int]:
     """压缩单个视频文件。
 
@@ -45,6 +49,15 @@ def compress_video(
     - detach 模式: 信息是 "PID=<pid> 日志=<path>"，压缩后大小始终为 0
     """
     output_path = input_path.parent / f"{input_path.stem}{output_suffix}.mp4"
+    if output_path.exists() and not overwrite:
+        # 防覆盖：已存在同名输出时自动序号递增，绝不静默毁掉旧压缩结果
+        n = 2
+        candidate = input_path.parent / f"{input_path.stem}{output_suffix}_{n}.mp4"
+        while candidate.exists():
+            n += 1
+            candidate = input_path.parent / f"{input_path.stem}{output_suffix}_{n}.mp4"
+        print(f"  输出 {output_path.name} 已存在，改用 {candidate.name}（--overwrite 可覆盖）")
+        output_path = candidate
     original_size = input_path.stat().st_size
 
     cmd = [
@@ -135,15 +148,23 @@ def main():
     parser.add_argument("--detach", action="store_true",
                         help="启动 ffmpeg 后立即返回（脱离会话组），"
                              "父进程被杀也不会影响编码，适合长视频或会话易断开的场景")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="允许覆盖已存在的同名输出文件（默认自动改用 _compressed_2 等序号）")
     args = parser.parse_args()
 
     if not shutil.which("ffmpeg"):
         print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
         sys.exit(1)
 
-    # 硬件检测与编码配置
+    # 硬件检测与编码配置（探测首个输入文件的码率，录屏/低码率源自动避开硬件路径）
     hw = detect_hardware()
-    profile = select_profile(hw, user_codec=args.codec)
+    source_bitrate = None
+    for p in args.input:
+        probe_path = Path(p)
+        if probe_path.is_file() and probe_path.suffix.lower() in VIDEO_EXTENSIONS:
+            source_bitrate = probe_bitrate(probe_path)
+            break
+    profile = select_profile(hw, user_codec=args.codec, source_bitrate=source_bitrate)
     encode_args = build_encode_args(
         profile,
         crf=args.crf if not profile["is_hardware"] else None,
@@ -175,9 +196,9 @@ def main():
     def task(index: int, video: Path):
         ok, output, orig, comp = compress_video(
             video, encode_args, args.output_suffix, detach=args.detach,
+            overwrite=args.overwrite,
         )
         return index, video, ok, output, orig, comp
-
     start_time = time.monotonic()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(task, i, v): i for i, v in enumerate(videos)}
