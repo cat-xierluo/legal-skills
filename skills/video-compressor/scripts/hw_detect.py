@@ -4,6 +4,8 @@
 检测系统硬件能力（Apple Silicon VideoToolbox 等），
 自动选择最优 FFmpeg 编码参数。"""
 
+from __future__ import annotations
+
 import os
 import re
 import shutil
@@ -14,6 +16,11 @@ from datetime import datetime
 from pathlib import Path
 
 _hw_cache: dict | None = None
+
+# 低码率源阈值 (bps)：源总码率 ≤ 此值视为录屏/课件特征，
+# 硬件路径（写死 2000k 目标码率、无 CRF）对这类源压缩收益极低，
+# 自动回退 x264 CRF 自适应编码
+LOW_BITRATE_THRESHOLD = 3_000_000
 
 
 def ffmpeg_smoke_test(ffmpeg_path: str) -> None:
@@ -159,9 +166,28 @@ def detect_hardware() -> dict:
     return hw
 
 
-def select_profile(hw: dict, user_codec: str | None = None) -> dict:
-    """根据硬件信息和用户偏好选择编码配置。"""
-    # 用户手动指定
+def probe_bitrate(video_path: Path) -> int | None:
+    """用 ffprobe 探测视频文件总码率 (bps)。失败或文件不存在返回 None。"""
+    ffprobe = shutil.which("ffprobe")
+    path = Path(video_path)
+    if not ffprobe or not path.exists():
+        return None
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=bit_rate",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        value = result.stdout.strip()
+        return int(value) if value.isdigit() else None
+    except (subprocess.SubprocessError, ValueError):
+        return None
+
+
+def select_profile(hw: dict, user_codec: str | None = None,
+                   source_bitrate: int | None = None) -> dict:
+    """根据硬件信息、用户偏好和源文件码率选择编码配置。"""
+    # 用户手动指定（最高优先级）
     codec_map = {
         "hevc_vt": _profile_hevc_vt,
         "h264_vt": _profile_h264_vt,
@@ -171,6 +197,15 @@ def select_profile(hw: dict, user_codec: str | None = None) -> dict:
     }
     if user_codec and user_codec in codec_map:
         return codec_map[user_codec]()
+
+    # 录屏/低码率源陷阱：硬件路径在 build_encode_args 中写死目标码率 2000k
+    # 且不支持 CRF 自适应，源总码率 ≤3 Mbps 时压完接近原大小甚至更大
+    # （实测 1.1 GB → 1.0 GB）。CRF 软件编码按画面内容动态分配码率，
+    # 静止画面几乎不耗码率，对录屏/课件类源压缩比和速度都显著更优。
+    if source_bitrate and source_bitrate <= LOW_BITRATE_THRESHOLD:
+        print(f"  源码率 {source_bitrate / 1_000_000:.1f} Mbps ≤ 3 Mbps（录屏/课件特征），"
+              f"自动选用 x264 CRF 自适应编码（--codec hevc_vt 可强制硬件路径）")
+        return _profile_x264()
 
     # 自动选择
     if hw["platform"] == "apple_silicon" and hw["has_hevc_vt"]:
