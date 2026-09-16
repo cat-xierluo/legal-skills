@@ -9,12 +9,20 @@
       浏览器端负责 generatePutLink / startTrans / getResult
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+
+# macOS (Apple Silicon) + cryptography<=41 静态链接的 OpenSSL 在 CPU 探测时
+# (_armv8_sve_probe) 会死循环导致 dlopen 挂起；提前禁用 armcap 探测可绕过。
+# 本模块会被 MCP Playwright 单独加载（不经 tingwu.py），须自带防护。
+# 必须在 import oss2/cryptography 之前设置。
+if sys.platform == "darwin" and not os.environ.get("OPENSSL_armcap"):
+    os.environ["OPENSSL_armcap"] = "0"
 
 # 这个模块被 MCP playwright 通过 run_code_unsafe 调用
 # Python 端只暴露 OSS 上传 + syncPutLink
