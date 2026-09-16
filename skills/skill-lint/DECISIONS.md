@@ -1,5 +1,14 @@
 # Decisions
 
+## D-2026-09-16-01 Skill 间合并判定采用「四判据 + 五档处置」，机械聚类与语义判定分层
+
+- 背景：自沉淀 skill 增至 35 个后职责重叠频发（判例：local-worktree-pr-workflow 1.5K SOP vs git-workflow 24.8K 规则手册，"开 worktree 提 PR"意图双命中）。每周 cron `skill-merge-review` 的上游 `skill-cluster-check.py` 纯词重叠聚类，"hermes"/"Use when" 等高频词把 15 个 skill 挤成一簇，cron agent 无判定规则可依只能整簇跳过。
+- 用户确认：小 SOP 优先**降级为成熟大 skill 的 reference**（渐进式披露在 skill 间的应用），而非维持平级独立 skill，避免体系里手搓重复配件；判定不确定时永远选影响更小的处置。
+- 决策：新增 `references/skill-merge-standards.md`——四判据（T 触发重叠率 / C 内容重复率 / S 体量差 / B 边界可声明性）按 T→S→B 顺序查表，五档处置（合并 / 降级为 reference / 加边界声明 / 拆分重构 / 保留独立）。聚类脚本 v2 加停用词表并预计算 S/C 原始值，机械层只找候选不判定；cron prompt 指向判定表，禁止自由心证。
+- 理由：合并的代价是触发精度（合错后用户意图再也精确命中不了），分裂的代价只是导航成本，故不确定时偏保守；机械层确定性可回归测试，语义层按表执行，接口是"簇+预计算判据"。
+- 边界：本规则只管判定与聚类质量；一切合并/降级变更仍走 skill_manage 暂存 → 审批台终审，审批链路不属于本模块。软链真源（legal-skills 仓库本体）不参与 personal/ 聚类扫描。
+- 影响：v2 实测 15 成员巨簇 → 5 小簇；git-workflow/local-worktree-pr-workflow 正确聚出（S=16.9x 直指降级处置），与用户直觉一致。首跑 2026-09-21。
+
 ## D-2026-09-13-01 远端分支删除按“无 outgoing commit + exact-tip lease”审查
 
 - 背景：HFA-011 原先在整行搜索 `commit`，会把 `git cat-file "$DELIVERY_COMMIT^{commit}"` 误判为工作树提交；对 `git -C ... push --delete` 又沿用普通推送的 author/committer 校验建议，无法表达远端删除没有 outgoing commit 的实际风险。
