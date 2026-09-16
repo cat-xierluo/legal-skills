@@ -11,6 +11,8 @@
   - 被剪掉的片段汇总（方便复查）
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -22,7 +24,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hw_detect import build_encode_args, detect_hardware, print_hardware_info, select_profile
+from hw_detect import (build_encode_args, detect_hardware, print_hardware_info,
+                       probe_bitrate, select_profile)
 
 
 @dataclass
@@ -380,9 +383,10 @@ def main():
         print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
         sys.exit(1)
 
-    # 硬件检测与编码配置
+    # 硬件检测与编码配置（探测源码率，录屏/低码率源自动避开硬件路径）
     hw = detect_hardware()
-    profile = select_profile(hw, user_codec=args.codec)
+    profile = select_profile(hw, user_codec=args.codec,
+                             source_bitrate=probe_bitrate(video_path))
     encode_args = build_encode_args(
         profile,
         crf=args.crf if not profile["is_hardware"] else None,
