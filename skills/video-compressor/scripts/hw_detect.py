@@ -17,6 +17,11 @@ from pathlib import Path
 
 _hw_cache: dict | None = None
 
+# 低码率源阈值 (bps)：源总码率 ≤ 此值视为录屏/课件特征，
+# 硬件路径（写死 2000k 目标码率、无 CRF）对这类源压缩收益极低，
+# 自动回退 x264 CRF 自适应编码
+LOW_BITRATE_THRESHOLD = 3_000_000
+
 
 def ffmpeg_smoke_test(ffmpeg_path: str) -> None:
     """ffmpeg 二进制健全性测试。
@@ -197,7 +202,7 @@ def select_profile(hw: dict, user_codec: str | None = None,
     # 且不支持 CRF 自适应，源总码率 ≤3 Mbps 时压完接近原大小甚至更大
     # （实测 1.1 GB → 1.0 GB）。CRF 软件编码按画面内容动态分配码率，
     # 静止画面几乎不耗码率，对录屏/课件类源压缩比和速度都显著更优。
-    if source_bitrate and source_bitrate <= 3_000_000:
+    if source_bitrate and source_bitrate <= LOW_BITRATE_THRESHOLD:
         print(f"  源码率 {source_bitrate / 1_000_000:.1f} Mbps ≤ 3 Mbps（录屏/课件特征），"
               f"自动选用 x264 CRF 自适应编码（--codec hevc_vt 可强制硬件路径）")
         return _profile_x264()

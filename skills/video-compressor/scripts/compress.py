@@ -156,15 +156,19 @@ def main():
         print("错误：未找到 ffmpeg，请先安装: brew install ffmpeg")
         sys.exit(1)
 
-    # 硬件检测与编码配置（探测首个输入文件的码率，录屏/低码率源自动避开硬件路径）
+    # 硬件检测与编码配置
+    # - 显式 --codec：全局统一使用该编码器（用户选择优先级最高）
+    # - 自动模式：以首个输入文件决定全局默认（硬件展示、推荐并发），
+    #   但每个文件编码时按自身源码率自适应——批量混压时低码率录屏
+    #   不再被首个高码率文件拖进硬件路径（写死 2000k、无 CRF，压不动）
     hw = detect_hardware()
-    source_bitrate = None
+    first_bitrate = None
     for p in args.input:
         probe_path = Path(p)
         if probe_path.is_file() and probe_path.suffix.lower() in VIDEO_EXTENSIONS:
-            source_bitrate = probe_bitrate(probe_path)
+            first_bitrate = probe_bitrate(probe_path)
             break
-    profile = select_profile(hw, user_codec=args.codec, source_bitrate=source_bitrate)
+    profile = select_profile(hw, user_codec=args.codec, source_bitrate=first_bitrate)
     encode_args = build_encode_args(
         profile,
         crf=args.crf if not profile["is_hardware"] else None,
@@ -173,6 +177,33 @@ def main():
         audio_bitrate=args.audio_bitrate,
         preset=args.preset if not profile["is_hardware"] else None,
     )
+
+    def args_for(video: Path):
+        """按单个文件的源码率返回 (profile, encode_args)。
+
+        显式 --codec 或 ffprobe 失败（返回 None）时沿用全局配置；
+        自动模式下与全局选择不同的文件按需重建参数（低码率→x264 CRF，
+        高码率→硬件路径）。注意：并发数仍按全局 profile 推荐，
+        混合批次中个别文件可能与全局并发策略不完全匹配，属可接受权衡。
+        """
+        if args.codec:
+            return profile, encode_args
+        bitrate = probe_bitrate(video)
+        if bitrate is None:
+            return profile, encode_args
+        file_profile = select_profile(hw, user_codec=None, source_bitrate=bitrate)
+        if file_profile["name"] == profile["name"]:
+            return profile, encode_args
+        file_args = build_encode_args(
+            file_profile,
+            crf=args.crf if not file_profile["is_hardware"] else None,
+            maxrate=args.maxrate if not file_profile["is_hardware"] else None,
+            bufsize=args.bufsize if not file_profile["is_hardware"] else None,
+            audio_bitrate=args.audio_bitrate,
+            preset=args.preset if not file_profile["is_hardware"] else None,
+        )
+        return file_profile, file_args
+
     print_hardware_info(hw, profile)
     print()
 
@@ -194,8 +225,11 @@ def main():
     results: dict[int, tuple[str, bool, int, int, str]] = {}
 
     def task(index: int, video: Path):
+        file_profile, file_args = args_for(video)
+        if file_profile["name"] != profile["name"]:
+            print(f"  [自适应] {video.name}: {file_profile['display_name']}")
         ok, output, orig, comp = compress_video(
-            video, encode_args, args.output_suffix, detach=args.detach,
+            video, file_args, args.output_suffix, detach=args.detach,
             overwrite=args.overwrite,
         )
         return index, video, ok, output, orig, comp
