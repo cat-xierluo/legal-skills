@@ -1,8 +1,9 @@
 ---
 name: video-compressor
-description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件并选择最优编码方案（Apple Silicon 默认使用 VideoToolbox 硬件加速，实际 1080p60 约 2-5x 实时速度）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
+description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件与源码率并选择最优编码方案（高码率源走 VideoToolbox 硬件加速，低码率录屏自动改用 x264 CRF 自适应编码）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
+version: "1.5.0"
 license: MIT
 ---
 
@@ -168,6 +169,8 @@ python3 scripts/trim_silences.py -i <路径> --noise-db -40 --min-duration 5
 
 > 速度提示：上述数值为实际测试参考范围，实际速度受分辨率、帧率、画质参数、系统负载影响。1080p60 高帧率场景下 VideoToolbox 实际约 2-5x 实时（而非 5-15x），3 小时视频约需 50 分钟。
 
+> 录屏/课件源码率陷阱（v1.5.0 已自动化）：压缩前先 `ffprobe` 查源文件 `bit_rate`。硬件路径（hevc_vt/h264_vt）在 `hw_detect.py` 中写死目标码率 2000k 且忽略 `--crf/--maxrate` 参数；源总码率 ≤3 Mbps（录屏/课件特征）时脚本自动选用 x264 CRF 自适应编码并打印提示，高码率源仍走硬件路径，`--codec` 显式指定可覆盖自动选择。CRF 自适应对静止画面几乎不耗码率，实测录屏压缩比 80-88%、速度 12-20x 实时。手动估算可用 60 秒采样：`ffmpeg -ss <中段> -t 60 -i 输入 -c:v libx264 -crf 23 ...` 看采样大小推算全片。
+
 启动时自动打印检测结果，如：
 ```
 硬件检测: Apple Silicon (10 核 / 64 GB)
@@ -222,16 +225,18 @@ brew reinstall ffmpeg      # 完全重装
 ## 硬约束
 
 - **不覆盖原文件**：输出文件始终添加后缀
+- **不静默覆盖旧输出**：输出文件已存在时自动改用 `_compressed_2` 等序号递增，`--overwrite` 才允许覆盖
 - **输出到同目录**：精剪版和被剪片段目录都与原文件在同一目录
 - **保留音频质量**：音频使用 AAC 编码，默认 96k
 - **固定 MP4 输出**：所有输出文件均为 MP4 格式（硬件编码 HEVC/H.264 + AAC，软件编码 x264 + AAC）
+- **长视频一律 `--detach`**：预期超过几分钟的编码必须加 `--detach`（ffmpeg 脱离进程组，会话超时/终止不影响编码）；同步模式或终端托管后台都实测被杀过，残缺输出无 moov atom 不可播放
 
 ## 依赖
 
 | 依赖 | 版本要求 | 安装方式 |
 |------|----------|----------|
 | `ffmpeg` | ≥ 5.0（推荐 ≥ 7.0 for VideoToolbox `-q:v`） | `brew install ffmpeg` |
-| `Python` | ≥ 3.10 | 系统自带或 `brew install python` |
+| `Python` | ≥ 3.9（脚本已兼容系统自带 python3） | 系统自带或 `brew install python` |
 
 ## 与其他技能配合
 
