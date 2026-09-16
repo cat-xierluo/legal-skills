@@ -8,6 +8,12 @@ import time
 import uuid
 from pathlib import Path
 
+# macOS (Apple Silicon) + cryptography<=41 静态链接的 OpenSSL 在 CPU 探测时
+# (_armv8_sve_probe) 会死循环导致 dlopen 挂起；提前禁用 armcap 探测可绕过。
+# 必须在 import oss2/cryptography 之前设置。
+if sys.platform == "darwin" and not os.environ.get("OPENSSL_armcap"):
+    os.environ["OPENSSL_armcap"] = "0"
+
 try:
     import requests
 except ImportError:

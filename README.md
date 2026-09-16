@@ -34,14 +34,15 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-16 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4  | **跨 runtime 鲁棒性修复**：Apple Silicon 上 cryptography≤41 的 OpenSSL CPU 探测死循环致脚本无输出挂死，入口自动设 `OPENSSL_armcap=0` 绕过；AI 总结改三分支（无 json 提示不报错 / 有 json 真实注入 / 子进程改 `sys.executable`）；落地 status=2 后端拒绝软错误识别（防无限轮询）+ 补 `--once`/`--task-id` CLI，watch_active.sh 恢复可用；存量 4 单测全挂转 4/4 通过。 |
 | 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.24.0 | 完成 Orca Worker 阻塞问答与收件闭环：ask 超时/断线按原 message ID 恢复，Worker 在自然检查点和完成前强制消费 follow-up；PM 按 50 条 FIFO Delivery 顺序分类、精确 reply/ack receipt 收口，严格区分入队、可见、消费、回复与执行。 |
 | 2026-09-13 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.8.1  | **Git 副作用审计误报修复**：HFA-011 按真实 Git 子命令识别，不再把 `cat-file ...^{commit}` 当作工作树提交；远端 worker 分支删除改按 exact-tip lease、远端 head 读取与删除后复验审查。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 | 2026-09-09 | 更新   | [legal-text-format](skills/legal-text-format/)                         | v1.2.2  | **案例格式化脚本恢复可执行**：修复阻断启动的引号替换语法、案例标记正则错误、无页脚输入越界和当前目录输出失败，并增加虚构案例回归测试与独立 CI。 |
 | 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
-| 2026-09-06 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.20.0–2.22.0 | **Worker 权限放大与内存治理**：安全类改分段校验，本分支 push/PR 成为默认交付路径（复合只读管道放行，force/主干/删除仍拒）；新增物理内存预算门与派发排队（额度不足泊车）、node 堆顶注入与 OOM 退避、scoped 自验默认与全量单一在飞的验证负载纪律。 |
 | 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.19.0 | **zcode 额度 lane 生产方**：新增 `quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实 5h 窗口观测合并进 quota summary（只更新 zcode lane、不替其他生产方续期，不接触凭证）；全数据源失败 fail-closed 不写文件，spawn 行为待第二期接线。 |
+
 </details>
 
 ## 📋 项目概述
