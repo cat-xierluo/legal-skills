@@ -214,5 +214,52 @@ else
   bad "entrypoint delegates parsing without retaining legacy loop"
 fi
 
+# v2.27.1：--base-ref 40-hex sha 在任何 worktree/provider/terminal 副作用之前拒绝。
+# 用 --dry-run 复用既有早停机制（run() 与 write_*() 都会跳过），并要求
+# PROJECT_DIR 是一个已存在的目录（spawn-worker.sh 第 299 行 cd + pwd 必走）。
+hex_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-hex.XXXXXX")
+set +e
+hex_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$hex_proj" --session "test-base-hex" --branch "feat/base-hex" \
+    --base-ref "abcdef1234567890abcdef1234567890abcdef12" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+hex_rc=$?
+set -e
+if [ "$hex_rc" -ne 0 ] && printf '%s' "$hex_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  ok "40-hex --base-ref rejected before any side effect"
+else
+  bad "40-hex --base-ref rejected before any side effect (rc=$hex_rc)"
+  printf '%s\n' "$hex_out" >&2
+fi
+if [ ! -d "$hex_proj/.claude/worktrees" ] && [ ! -d "$hex_proj/.claude/agent-sessions" ]; then
+  ok "40-hex rejection did not create worktree or session context"
+else
+  bad "40-hex rejection must not create worktree or session context (found under $hex_proj/.claude)"
+fi
+rm -rf "$hex_proj"
+
+# v2.27.1：--base-ref main 正常进入后续（不触发 BASE_REF_MUST_BE_REF 拒绝）。
+# 这里只断言我们的拒绝消息没有出现，不强求 0 退出——后续步骤在临时空目录
+# 下可能因 harness/lease 等真实副作用前的检测而以非零退出，但本任务不关心。
+main_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-main.XXXXXX")
+set +e
+main_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$main_proj" --session "test-base-main" --branch "feat/base-main" \
+    --base-ref "main" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+main_rc=$?
+set -e
+if printf '%s' "$main_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  bad "--base-ref main must not trigger BASE_REF_MUST_BE_REF (rc=$main_rc)"
+  printf '%s\n' "$main_out" >&2
+else
+  ok "--base-ref main proceeds past base-ref gate"
+fi
+rm -rf "$main_proj"
+
 printf 'spawn-worker flags tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
