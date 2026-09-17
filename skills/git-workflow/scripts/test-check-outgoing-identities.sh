@@ -132,5 +132,24 @@ else
   not_ok "safe-push remote ref equals verified oid"
 fi
 
+# v1.8.5：safe-push --base 接受裸分支名（自动规范化为 $REMOTE/<branch>），
+# 同时保持对其他 remote 前缀的严格拒绝。
+git -C "$repo" switch -C feat/safe-bare origin/main >/dev/null
+commit_as "$repo" "maoking" "secretxierluo@gmail.com" "maoking" "secretxierluo@gmail.com" "safe-push-bare-base"
+expect_ok "safe-push accepts bare branch name (--base main ≡ --base origin/main)" \
+  "$SAFE_PUSH" --repo "$repo" --base main --remote origin --branch feat/safe-bare \
+  --expected-name maoking --expected-email secretxierluo@gmail.com
+if [ "$(git -C "$repo" rev-parse HEAD)" = "$(git --git-dir="$remote" rev-parse refs/heads/feat/safe-bare)" ]; then
+  ok "safe-push bare-base remote ref equals verified oid"
+else
+  not_ok "safe-push bare-base remote ref equals verified oid"
+fi
+
+# 其他 remote 前缀（如 upstream/main 而 remote=origin）仍以 SAFE_PUSH_BASE_REMOTE_MISMATCH 拒绝。
+# 路径无 '/' 才是裸分支，'upstream/main' 含 '/' 且不等于 'origin/...' → 必拒。
+expect_fail_contains "safe-push rejects other-remote --base" "SAFE_PUSH_BASE_REMOTE_MISMATCH" \
+  "$SAFE_PUSH" --repo "$repo" --base upstream/main --remote origin --branch feat/safe-bare \
+  --expected-name maoking --expected-email secretxierluo@gmail.com
+
 printf 'SUMMARY: pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
