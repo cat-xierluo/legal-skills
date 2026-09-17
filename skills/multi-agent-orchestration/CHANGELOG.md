@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.27.1] - 2026-09-17
+
+### 修复
+
+- `spawn-worker.sh` 的 `--base-ref` 解析后、任何 worktree/provider/terminal/Dispatch 副作用之前新增 40-hex sha 拒绝门：若值匹配 `^[0-9a-f]{40}$`，或 7—40 位纯十六进制且 git 能解析为 commit 但不是真实 ref（`refs/heads/<v>` / `refs/remotes/<v>` / `refs/tags/<v>`），打印 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 并以非零退出。引用名（`main`、`origin/main`、`refs/heads/x`）行为不变。事故：原样记录到 `METADATA.base_ref` 的 sha 会让 `pm-cleanup-worker` 在 `INTEGRATION_TARGET_MISMATCH`（argument=main vs metadata=sha）与 `PR_BASE_MISMATCH`（expected=sha vs actual=main）之间死锁。
+- SKILL.md §3.3 新增一句说明 `--base-ref` 只接受引用名、不接受裸 sha。
+
+### 验证
+
+- `test-spawn-worker-flags.sh` 新增两个用例：传 40-hex 拒绝且退出前未创建 worktree/未写 METADATA；传 `main` 正常进入后续（沿用既有 `--dry-run` 早停机制）。
+
 ## [2.27.0] - 2026-09-15
 
 ### 改进
