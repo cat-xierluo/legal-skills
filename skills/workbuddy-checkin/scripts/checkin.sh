@@ -2,7 +2,7 @@
 # ============================================================
 # WorkBuddy 每日积分签到（通用版，可分发）
 #
-# 流程：读取本地令牌 → 查询签到状态 → 未签到则领取 → 写日志
+# 流程：读取本地令牌 → 直接调用签到接口（幂等）→ 写日志
 # 用法：
 #   ./checkin.sh                      # 自动探测运行时（Node 优先，Electron 回退）
 #   WB_CHECKIN_NODE=<path> ./checkin.sh
@@ -88,22 +88,37 @@ find_electron() {
 }
 
 # ---------- 读取令牌：Node 优先，Electron 回退 ----------
+# 保留 decrypt-token.js 的全部输出（token + 账号字段），供后续提取鉴权头使用。
+DECRYPT_OUT=""
 read_token() {
-  local out="" node_bin electron_bin
+  local node_bin electron_bin
   node_bin="$(find_node)"
   if [ -n "$node_bin" ]; then
-    out=$("$node_bin" "$DECRYPT_JS" 2>/dev/null | grep "^DECRYPT_RESULT:" | sed 's/^DECRYPT_RESULT://')
+    DECRYPT_OUT=$("$node_bin" "$DECRYPT_JS" 2>/dev/null)
   fi
-  if [ -z "$out" ] || [[ "$out" == ERR* ]]; then
-    # Node 未产出 token（未装 Node / 崩溃），或 Node 报 ERR（如旧版账户无明文文件、
-    # 纯 Node 无法解密 state.vscdb）→ 回退到 Electron 解旧版库
+  if [ -z "$DECRYPT_OUT" ] || ! printf '%s\n' "$DECRYPT_OUT" | grep -q "^DECRYPT_RESULT:"; then
     electron_bin="$(find_electron)"
     if [ -n "$electron_bin" ]; then
-      out=$(env -u ELECTRON_RUN_AS_NODE "$electron_bin" "$DECRYPT_JS" 2>/dev/null \
-        | grep "^DECRYPT_RESULT:" | sed 's/^DECRYPT_RESULT://')
+      DECRYPT_OUT=$(env -u ELECTRON_RUN_AS_NODE "$electron_bin" "$DECRYPT_JS" 2>/dev/null)
     fi
   fi
-  echo "$out"
+}
+
+# 从解密输出提取 token 与账号字段（逆向自客户端 buildHeaders 的鉴权头）
+extract_fields() {
+  TOKEN=$(printf '%s\n' "$DECRYPT_OUT" | grep "^DECRYPT_RESULT:" | sed 's/^DECRYPT_RESULT://')
+  ACC_UID=$(printf '%s\n' "$DECRYPT_OUT" | grep "^ACCOUNT_UID:" | sed 's/^ACCOUNT_UID://')
+  ACC_DOMAIN=$(printf '%s\n' "$DECRYPT_OUT" | grep "^AUTH_DOMAIN:" | sed 's/^AUTH_DOMAIN://')
+  ACC_EID=$(printf '%s\n' "$DECRYPT_OUT" | grep "^ENTERPRISE_ID:" | sed 's/^ENTERPRISE_ID://')
+}
+
+# 构造鉴权头数组：Authorization 必带，X-User-Id 等按账号字段补齐。
+# APISIX 网关缺 X-User-Id 等会判未授权（401）；原 sh 版漏带这些头，此处对齐 ps1 版。
+build_auth_headers() {
+  AUTH_HEADERS=(-H "Content-Type: application/json" -H "Accept: application/json" \
+    -H "Authorization: Bearer $TOKEN" -H "X-User-Id: $ACC_UID")
+  if [ -n "$ACC_DOMAIN" ]; then AUTH_HEADERS+=(-H "X-Domain: $ACC_DOMAIN"); fi
+  if [ -n "$ACC_EID" ]; then AUTH_HEADERS+=(-H "X-Enterprise-Id: $ACC_EID" -H "X-Tenant-Id: $ACC_EID"); fi
 }
 
 log() {
@@ -120,8 +135,10 @@ if [ "${WB_CHECKIN_JITTER:-0}" -gt 0 ] 2>/dev/null; then
   [ "$jitter" -gt 0 ] && sleep "$jitter"
 fi
 
-# ---------- 1. 读取令牌 ----------
-TOKEN="$(read_token)"
+# ---------- 1. 读取令牌并提取字段 ----------
+TOKEN=""; ACC_UID=""; ACC_DOMAIN=""; ACC_EID=""; AUTH_HEADERS=()
+read_token
+extract_fields
 
 if [ -z "$TOKEN" ]; then
   log "❌ 未找到 Node 或 Electron 运行时，或运行时未能产出令牌。请安装 Node.js，或设置 WB_CHECKIN_NODE / WB_CHECKIN_ELECTRON 指向可用运行时。"
@@ -133,92 +150,33 @@ if [[ "$TOKEN" == ERR* ]]; then
 fi
 
 API="https://copilot.tencent.com"
+build_auth_headers
 
-# ---------- 2. 查询签到状态 ----------
-# 鉴权失败一律以真实 HTTP 状态码判定，不再匹配响应体子串。
-# 旧实现用 `grep -qi "401\|unauthorized"` 扫响应体，而响应体带随机 UUID 的 requestId，
-# 约 0.57%/次 会因 UUID 里恰好出现 "401" 被误判为令牌过期 —— 脚本在调 daily-checkin
-# 之前就退出，导致当日积分未领取、连续签到中断（第 7 天 1000 积分奖励作废）。
-# 每天跑一次时，一年内约 87% 概率至少踩中一次。
-RESP=$(curl -s -m 15 -w '\n%{http_code}' -X POST "$API/billing/meter/checkin-status" \
-  -H "Content-Type: application/json" -H "Accept: application/json" \
-  -H "Authorization: Bearer $TOKEN" -d '{}' 2>/dev/null || echo "")
+# ---------- 2. 执行签到（幂等，code=10001 表示当日已签） ----------
+# 说明：原「先查 checkin-status 再决定是否签到」的链路依赖 today_checked_in 字段，
+# 而该字段在 v5.3.8 实测不可靠（签到成功后仍可能为 false）——既会假阴性多打请求，
+# 也会假阳性（显示已签实际未签）导致在真正签到前 exit 0、当日漏签、连签中断（第 7 天 1000 积分奖励作废）。
+# 因此直接调用 daily-checkin；该接口幂等，已签时返回 code=10001，下方统一兜底为成功。
+RESP=$(curl -s -m 15 -w '\n%{http_code}' -X POST "$API/billing/meter/daily-checkin" \
+  "${AUTH_HEADERS[@]}" -d '{}' 2>/dev/null || echo "")
 HTTP_CODE=$(printf '%s' "$RESP" | tail -n 1)
-STATUS=$(printf '%s' "$RESP" | sed '$d')
+RESULT=$(printf '%s' "$RESP" | sed '$d')
 
 if [ -z "$RESP" ] || [ "$HTTP_CODE" = "000" ]; then
-  log "❌ 查询签到状态失败（网络异常）"
+  log "❌ 签到请求失败（网络异常）"
   exit 1
 fi
 if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
   log "❌ 令牌已过期或无权限（HTTP $HTTP_CODE），请打开 WorkBuddy 桌面端刷新登录态后重试"
   exit 1
 fi
-if [ "$HTTP_CODE" != "200" ]; then
-  log "❌ 查询签到状态失败（HTTP $HTTP_CODE）"
-  exit 1
-fi
-if [ -z "$STATUS" ]; then
-  log "❌ 查询签到状态失败（响应为空，HTTP $HTTP_CODE）"
-  exit 1
-fi
-
-# 注意：today_checked_in 字段在 v5.3.8 实测不可靠（签到成功后仍可能为 false）。
-# 此处仅用于「能省一次签到请求就省」的快速短路与 401 探测；真正的幂等兜底
-# 放在下方 daily-checkin 的 code=10001 处理。
-# JSON 解析：Node 优先（本脚本已依赖 Node 读取令牌，无额外依赖），python3 仅回退。
-# 原实现只用 python3：缺 python3 时结果为空，会把「已成功」误报成
-# 「签到请求已提交，无法解析结果」，无法确认当日是否真的领到积分。
-NODE_BIN="$(find_node)"
-CHECKED=""
-if [ -n "$NODE_BIN" ]; then
-  # 输出协议与下方 python3 分支对齐：True / False / unknown。
-  # 必须输出大写 True（JS 原生 String(true) 是小写 true，与下游
-  # [ "$CHECKED" = "True" ] 大小写敏感比较不匹配，会让已签到快速短路失效，
-  # 每次多打一次 daily-checkin 请求、只能靠 code=10001 兜底）。
-  CHECKED=$(JSON_PAYLOAD="$STATUS" "$NODE_BIN" -e '
-const s = process.env.JSON_PAYLOAD || "";
-try { const d = JSON.parse(s); console.log((d.data || {}).today_checked_in === true ? "True" : "False"); }
-catch (e) { console.log("unknown"); }
-' 2>/dev/null)
-fi
-if [ -z "$CHECKED" ]; then
-  CHECKED=$(echo "$STATUS" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('data', {}).get('today_checked_in', False))
-except Exception:
-    print('unknown')
-" 2>/dev/null)
-fi
-
-if [ "$CHECKED" = "True" ]; then
-  log "✅ 今日已签到，无需重复领取"
-  exit 0
-fi
-
-# ---------- 3. 执行签到 ----------
-RESP2=$(curl -s -m 15 -w '\n%{http_code}' -X POST "$API/billing/meter/daily-checkin" \
-  -H "Content-Type: application/json" -H "Accept: application/json" \
-  -H "Authorization: Bearer $TOKEN" -d '{}' 2>/dev/null || echo "")
-HTTP_CODE2=$(printf '%s' "$RESP2" | tail -n 1)
-RESULT=$(printf '%s' "$RESP2" | sed '$d')
-
-if [ -z "$RESP2" ] || [ "$HTTP_CODE2" = "000" ]; then
-  log "❌ 签到请求失败（网络异常）"
-  exit 1
-fi
-if [ "$HTTP_CODE2" = "401" ] || [ "$HTTP_CODE2" = "403" ]; then
-  log "❌ 令牌已过期或无权限（HTTP $HTTP_CODE2），请打开 WorkBuddy 桌面端刷新登录态后重试"
-  exit 1
-fi
 if [ -z "$RESULT" ]; then
-  log "❌ 签到请求失败（响应为空，HTTP $HTTP_CODE2）"
+  log "❌ 签到请求失败（响应为空，HTTP $HTTP_CODE）"
   exit 1
 fi
 
 CREDIT=""
+NODE_BIN="$(find_node)"
 if [ -n "$NODE_BIN" ]; then
   CREDIT=$(JSON_PAYLOAD="$RESULT" "$NODE_BIN" -e '
 const s = process.env.JSON_PAYLOAD || "";
@@ -244,7 +202,6 @@ try:
         data = d.get('data', {})
         print(f\"OK credit={data.get('credit')} streak_days={data.get('streak_days')}\")
     elif d.get('code') == 10001:
-        # 当日已签到：接口幂等拒绝，视为成功
         print('ALREADY today')
     else:
         print(f\"FAIL code={d.get('code')} msg={d.get('msg')}\")
@@ -253,13 +210,20 @@ except Exception:
 " 2>/dev/null)
 fi
 
+# ---------- 3. 结果判定与退出码 ----------
+# exit 0：成功 / 已签 / 未知（缺 python3 无法解析，服务端可能已成功，不误报失败）
+# exit 1：明确失败（code 非 0 非 10001）——便于定时任务捕获并告警
 if [[ "$CREDIT" == OK* ]]; then
   log "🎉 签到成功！领取 $CREDIT"
+  exit 0
 elif [[ "$CREDIT" == ALREADY* ]]; then
   log "✅ 今日已签到，无需重复领取（接口返回已签到）"
+  exit 0
 elif [ -z "$CREDIT" ]; then
   # 多为缺 python3 导致结果无法解析：服务端可能已成功，不能误报失败
   log "⚠️ 签到请求已提交，但缺少 python3 无法解析结果（请打开 WorkBuddy 确认；安装 python3 可恢复明细）"
+  exit 0
 else
-  log "⚠️ 签到未成功：$CREDIT"
+  log "❌ 签到未成功：$CREDIT"
+  exit 1
 fi
