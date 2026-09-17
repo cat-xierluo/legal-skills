@@ -226,6 +226,34 @@ command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
 
+# v2.27.1: --base-ref must be a ref name (main, origin/main, refs/heads/x).
+# A bare 40-hex sha (or 7-40 hex that resolves only as a commit) would be recorded
+# into METADATA.base_ref and later deadlock pm-cleanup-worker between
+# INTEGRATION_TARGET_MISMATCH (argument=main vs metadata=sha) and
+# PR_BASE_MISMATCH (expected=sha vs actual=main). Reject early, before any
+# worktree/provider/terminal/Dispatch side effect.
+spawn_worker_check_base_ref_is_ref() {
+  local value="$1"
+  [ -n "$value" ] || return 0
+  if [[ "$value" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a 40-character commit sha)" >&2
+    return 64
+  fi
+  if [[ "$value" =~ ^[0-9a-f]{7,40}$ ]] \
+     && [ -d "$PROJECT_DIR" ] \
+     && git -C "$PROJECT_DIR" rev-parse --verify --quiet "$value^{commit}" >/dev/null 2>&1; then
+    # Resolves as a commit — only allow if it is also a real ref name
+    if ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/tags/$value" 2>/dev/null; then
+      echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a commit-ish)" >&2
+      return 64
+    fi
+  fi
+  return 0
+}
+spawn_worker_check_base_ref_is_ref "$BASE_REF" || exit $?
+
 DETECTED_PM_HARNESS=""
 detect_pm_harness "$PROJECT_DIR" || exit $?
 detected_pm_harness="$DETECTED_PM_HARNESS"
