@@ -1,5 +1,21 @@
 # 变更日志
 
+## [1.9.1] - 2026-09-18
+
+### 修复（issue #158：--no-report 语义与归档耦合）
+
+- **归档失败不再吞掉已取得的响应**：`api_post` / `api_get` 改经 `_archive_save_guarded` 写归档，目录不可写等 `OSError` 只降级为 stderr 告警（附 `--archive-dir` / `--no-archive` 修复出口提示）并返回 None，不再以异常中断交付；告警明确"本次响应已保留、不会自动重试"，杜绝调用方误判失败重试造成重复扣积分。
+- **SKILL.md 语义修正**：`--no-report` 实际仅跳过 `.md` 报告（archive 与 CWD 两份），此前文档宣称"完全跳过"失实；同步修正命令帮助文本。
+
+### 新增
+
+- `--no-archive`：关闭全部本地留存（archive JSON 与 `.md` 都不写）；查重仍读取已有归档（命中即免请求），帮助文本明示"新查询不再入缓存、下次同查询可能重复消耗积分"的取舍。
+- `--archive-dir` / 环境变量 `YD_ARCHIVE_DIR`：自定义归档目录，优先级 CLI > 环境变量 > 默认 `<skill>/archive`；须在首个检索命令前生效（`_apply_archive_settings` 于 `main` 统一应用）。
+
+### 技术优化
+
+- 新增 `scripts/verify-archive-failure-contracts.py` 无网络故障注入回归（4 项契约）：归档 PermissionError 不吞 POST/GET 响应且零重试、`--no-archive` 零写入且查重可命中已有归档、目录解析三级优先级、SKILL.md 无失实表述；存量 `verify-runtime-contracts.py` / `verify-research-delivery-contracts.py` 全部保持 PASS。
+
 ## [1.9.0] - 2026-08-30
 
 ### 新增
