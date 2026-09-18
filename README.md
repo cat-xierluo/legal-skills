@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-18 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.4.0  | **跨系统兼容性根修 + 两个存量 bug**：脚本去 bash4+ 依赖（关联数组→换行列表），macOS 自带 bash 3.2 开箱即用（旧版 `declare -A` 直接报错，v1.1.1 只改 shebang 未根治，`/usr/bin/env bash` 在 macOS 仍解析到 3.2）；`bc`→`awk`、`lsof` 缺失回退 `/dev/tcp`；修复重复引用图片在本地文件删除后留死链（现复用已传 URL）；修复路径含括号（如 `file (1).png`）在首个 `)` 截断解析失败。 |
 | 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.5  | **异步监控会话无关化**：后台监控改双档位——推荐 `nohup` 脱离 Agent 会话 + 日志落盘（含 `watch_active.sh` 接管），Agent 托管进程明确"随会话回收"风险；新增会话恢复接管四步流程（读 pending_tasks.json → 一次性 poll_tasks 当场收尾 → finish_task 勿设短超时 → 幂等重拉），进程丢失≠任务丢失；注意事项补代理坑（常驻代理变量会掐断 OSS 大文件分片上传，实测 771MB 在 50% 处 ProxyError，上传前 unset）。 |
 | 2026-09-17 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.27.2 | 完成权限绑定 PM authority 与 live Dispatch；PM 绑定拒绝畸形响应，远端清理按精确 OID 防并发误删；preamble 反斜杠续行的原生 worker_done 可被守卫识别原样执行。 |
 | 2026-09-16 | 更新   | [video-compressor](skills/video-compressor/)                           | v1.5.0  | **源码率感知编码选择 + 防覆盖**：源码率 ≤3 Mbps（录屏/课件特征）自动改用 x264 CRF 自适应编码（实测录屏压缩比 80-88%、12-20x 实时），修复硬件路径写死 2000k 目标码率压低码率源仅省 11% 的问题；输出已存在自动序号递增防静默覆盖（`--overwrite` 才允许）；补 Python 3.9 兼容；SKILL.md 硬约束固化"长视频一律 `--detach`"。 |
@@ -41,7 +42,6 @@
 | 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |
 | 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.24.0 | 完成 Orca Worker 阻塞问答与收件闭环：ask 超时/断线按原 message ID 恢复，Worker 在自然检查点和完成前强制消费 follow-up；PM 按 50 条 FIFO Delivery 顺序分类、精确 reply/ack receipt 收口，严格区分入队、可见、消费、回复与执行。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
-| 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 
 </details>
 
