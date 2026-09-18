@@ -16,6 +16,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RECOVER="$SCRIPT_DIR/recover-unconfigured-worker.sh"
 TMP_ROOT=$(mktemp -d)
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
 pass=0
@@ -87,7 +88,9 @@ case "$1 $2" in
     elif [ "$d" = "__invalid_shape__" ]; then
       echo '{"ok":true,"result":{"dispatch":[]}}'
     elif [ -n "$d" ]; then
-      printf '{"ok":true,"result":{"dispatch":{"id":"%s"}}}\n' "$d"
+      jq -cn --arg id "$d" '{ok:true,_meta:{runtimeId:"runtime-recover"},result:{dispatch:{
+        id:$id,task_id:"task-9",assignee_handle:"term-worker",run_id:"run-wave",
+        process_incarnation:"process-recover",capability_hash:("a"*64)}}}'
     else
       echo '{"ok":true,"result":{}}'
     fi
@@ -95,6 +98,9 @@ case "$1 $2" in
   "orchestration worker-start")
     printf 'ctx-recovered' > "$STATE_DIR/dispatch"
     echo '{"ok":true,"result":{"dispatch":{"id":"ctx-recovered"}}}'
+    ;;
+  "worktree show")
+    jq -cn --arg path "${FAKE_RECOVER_WORKTREE:?}" '{ok:true,result:{worktree:{id:"repo::wt-recover",path:$path}}}'
     ;;
   *)
     echo '{"ok":true,"result":{}}'
@@ -117,13 +123,22 @@ make_fixture() {
   local name="$1" variant="$2" wt session
   wt="$TMP_ROOT/wt-$name"
   session="recover-test"
+  git init -q -b main "$wt"
+  GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid \
+    GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid \
+    git -C "$wt" commit -q --allow-empty -m fixture
+  mkdir -p "$wt/.git/agent-authority"
+  local authority="$wt/.git/agent-authority/$session.json"
+  jq -n --arg wt "$wt" --arg session "$session" \
+    '{schema:"multi-agent-orchestration.authority-receipt.v1",worktree:$wt,session:$session,branch:"main"}' > "$authority"
   mkdir -p "$wt/.claude/agent-sessions/$session"
   printf '#!/bin/bash\n# spawn-worker 自动生成 launch 包装\nexec bash -c "claude --session-token-placeholder"\n' \
     > "$wt/.claude/agent-sessions/$session/launch.sh"
   chmod +x "$wt/.claude/agent-sessions/$session/launch.sh"
   local meta
-  meta=$(jq -n --arg project "$TMP_ROOT/repo" --arg worktree "$wt" --arg session "$session" \
+  meta=$(jq -n --arg project "$TMP_ROOT/repo" --arg worktree "$wt" --arg session "$session" --arg authority "$authority" \
     '{project:$project,worktree:$worktree,
+      execution_authority:{authority_receipt_file:$authority},
       session:{id:$session,orca:{worktree_id:"repo::wt-recover",terminal_handle:"term-worker",
         supervised:{run_id:"run-wave",coordinator_handle:"term-pm",task_id:"task-9",dispatch_id:"",dispatch_bind:"manual-required"}}},
       runtime:{command:"claude --model test"}}')
@@ -136,9 +151,13 @@ make_fixture() {
 
 run_recover() {
   # $@ 透传；stdout/stderr 合并落盘，rc 记入 RECOVER_RC
-  local out
+  local out arg previous="" fixture_worktree=""
+  for arg in "$@"; do
+    if [ "$previous" = "--worktree" ]; then fixture_worktree="$arg"; fi
+    previous="$arg"
+  done
   set +e
-  out=$(bash "$RECOVER" "$@" 2>&1)
+  out=$(FAKE_RECOVER_WORKTREE="$fixture_worktree" bash "$RECOVER" "$@" 2>&1)
   RECOVER_RC=$?
   set -e
   RECOVER_OUT="$out"
@@ -260,5 +279,45 @@ printf '%s\n' "$RECOVER_OUT" | grep -q 'TUI_STATE=unknown\|无法安全判定' \
 [ "$(worker_start_count)" -eq 0 ] && ok "合法空 tail 零 worker-start" || bad "态8 不应 worker-start"
 
 echo ""
+echo "态9: 既有 PM receipt 缺失/错配/软链时，在所有 Orca 副作用前拒绝"
+for authority_fault in missing metadata-redirect wrong-session wrong-worktree wrong-branch receipt-link parent-link session-link; do
+  WT9=$(make_fixture "authority-$authority_fault" full)
+  auth="$WT9/.git/agent-authority/recover-test.json"
+  meta="$WT9/.claude/agent-sessions/recover-test/METADATA.json"
+  case "$authority_fault" in
+    missing) rm "$auth" ;;
+    metadata-redirect)
+      cp "$auth" "$WT9/.git/agent-authority/other.json"
+      jq --arg other "$WT9/.git/agent-authority/other.json" '.execution_authority.authority_receipt_file = $other' "$meta" > "$meta.tmp"
+      mv "$meta.tmp" "$meta" ;;
+    wrong-session|wrong-worktree|wrong-branch)
+      case "$authority_fault" in wrong-session) key=session ;; wrong-worktree) key=worktree ;; *) key=branch ;; esac
+      jq --arg key "$key" '.[$key] = "not-this-worker"' "$auth" > "$auth.tmp"
+      mv "$auth.tmp" "$auth" ;;
+    receipt-link)
+      mv "$auth" "$WT9/saved-authority.json"
+      ln -s "$WT9/saved-authority.json" "$auth" ;;
+    parent-link)
+      mv "$WT9/.git/agent-authority" "$WT9/saved-authority"
+      ln -s "$WT9/saved-authority" "$WT9/.git/agent-authority" ;;
+    session-link)
+      mv "$WT9/.claude/agent-sessions/recover-test" "$WT9/saved-session"
+      ln -s "$WT9/saved-session" "$WT9/.claude/agent-sessions/recover-test" ;;
+  esac
+  reset_state shell ""
+  run_recover --worktree "$WT9" --session recover-test --poll-interval 0.05 --timeout 5
+  [ "$RECOVER_RC" -eq 3 ] && ok "$authority_fault 退出 3" || bad "$authority_fault 应退出 3，实得 $RECOVER_RC"
+  printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=authority-receipt-invalid$' \
+    && ok "$authority_fault 原因明确" || bad "$authority_fault 缺少 authority 拒绝原因"
+  [ ! -s "$FAKE_ORCA_LOG" ] && ok "$authority_fault 零 Orca 调用" || bad "$authority_fault 不应调用 Orca"
+  if [ "$authority_fault" = missing ]; then
+    [ ! -e "$auth" ] && ok "缺失 receipt 不被重建" || bad "不应重建旧 receipt"
+  fi
+done
+reset_state shell ""
+run_recover --worktree "$WT1" --session ../recover-test
+[ "$RECOVER_RC" -eq 64 ] && ok "session 穿越退出 64" || bad "session 穿越应退出 64"
+[ ! -s "$FAKE_ORCA_LOG" ] && ok "session 穿越零 Orca 调用" || bad "session 穿越不应调用 Orca"
+
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]

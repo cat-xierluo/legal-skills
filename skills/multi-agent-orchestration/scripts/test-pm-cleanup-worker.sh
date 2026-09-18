@@ -206,5 +206,34 @@ if [ ! -d "$WORKTREE" ]; then ok "open PR still reclaims local worktree"; else b
 if ! git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH"; then ok "open PR still reclaims local branch"; else bad "open PR still reclaims local branch"; fi
 if [ -n "$(git -C "$PROJECT" ls-remote --heads origin "refs/heads/$BRANCH")" ]; then ok "open PR retains remote branch"; else bad "open PR retains remote branch"; fi
 
+# Race after ls-remote: use a real bare remote and advance its exact ref at
+# the push boundary. Git's receive-side lease must preserve the newer tip.
+make_fixture raced-delete
+DELIVERY_MODE=remote-pr
+DELIVERY_COMMIT=$(git -C "$PROJECT" rev-parse main)
+REAL_GIT=$(command -v git)
+ADVANCED=$(git -C "$PROJECT" commit-tree "$TIP^{tree}" -p "$TIP" -m concurrent)
+git -C "$PROJECT" push -q origin "$ADVANCED:refs/heads/race-object"
+export PM_RACE_REAL_GIT="$REAL_GIT" PM_RACE_ORIGIN="$ORIGIN"
+export PM_RACE_BRANCH="$BRANCH" PM_RACE_ADVANCED="$ADVANCED" PM_RACE_TIP="$TIP"
+cat > "$BIN/git" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ " $* " == *" push "* && " $* " == *" --delete "* ]]; then
+  "$PM_RACE_REAL_GIT" --git-dir="$PM_RACE_ORIGIN" update-ref \
+    "refs/heads/$PM_RACE_BRANCH" "$PM_RACE_ADVANCED" "$PM_RACE_TIP"
+fi
+exec "$PM_RACE_REAL_GIT" "$@"
+SH
+chmod +x "$BIN/git"
+set +e
+run_cleanup --execute > "$TMP_ROOT/raced-delete.out" 2>&1
+race_rc=$?
+set -e
+[ "$race_rc" -eq 10 ] && ok "remote advance at delete boundary leaves remote cleanup pending" || bad "remote advance at delete boundary leaves remote cleanup pending"
+actual_tip=$("$REAL_GIT" --git-dir="$ORIGIN" rev-parse "refs/heads/$BRANCH")
+[ "$actual_tip" = "$ADVANCED" ] && ok "compare-and-swap preserves concurrently advanced remote" || bad "compare-and-swap preserves concurrently advanced remote"
+assert_true "delete race reports the remaining remote cleanup debt" grep -qF 'PM_CLEANUP_RESULT: CLEANUP_PENDING remote=pending' "$TMP_ROOT/raced-delete.out"
+
 printf 'pm-cleanup-worker tests: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
