@@ -1,5 +1,23 @@
 # 更新日志
 
+## [2.13.0] - 2026-09-18
+
+### 新增
+
+- 本地 RapidOCR 双层后端 `--backend rapidocr_local`：onnx 本地推理（随包 PP-OCR 系检测+识别模型）逐页识别中文，复用 `pdf_ocr_layered` 透明文字层叠层生成可搜索双层 PDF；全程不出本机，适合敏感材料本地处理。实测 220 DPI 扫描件中文识别质量明显高于 tesseract/ocrmypdf 路径（2 页测试件 11/11 关键词命中）。
+- 新参数 `--rapid-dpi`（默认 300）、`--rapid-min-score`（默认 0.5）、`--rapid-skip-text-min-chars`（默认 1）。
+
+### 改进
+
+- auto 回退链升级为「Paddle API → MinerU → 本地 RapidOCR → ocrmypdf」：本地兜底优先 RapidOCR（中文质量好），未安装或执行失败时保持 ocrmypdf 兜底，原行为完全向下兼容。
+- `--local-only` 同样改为本地引擎优先链：RapidOCR 可用时不再退而求其次用 tesseract 识别中文。
+- `pdf-preprocess-ocr.py` 新增「RapidOCR 原图短路」：本地引擎为 RapidOCR 时跳过统一栅格化与预压缩，直接在原扫描页上叠文字层（与 Paddle 原图短路同理，保留扫描分辨率）；ocrmypdf 原生清理短路仅在本地引擎确为 ocrmypdf 时触发。
+- 新模块 `scripts/pdf_ocr_rapid_local.py`，兼容 `rapidocr`（新版统一包）与 `rapidocr_onnxruntime`（经典包）两种安装形态，未安装时给出明确安装提示并自动回退。
+
+### 技术优化
+
+- RapidOCR 各版本输出（`OCRResult` 属性 / 经典二元组 / 扁平列表）统一解析为 `(text, score, poly4)` 行，与 Paddle 行数据格式对齐，直接复用既有叠层与 CJK 空格归一化。
+
 ## [2.12.1] - 2026-09-14
 
 ### 修复

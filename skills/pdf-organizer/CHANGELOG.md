@@ -1,5 +1,27 @@
 # 变更日志
 
+## [0.6.0] - 2026-09-18
+
+### 新增
+
+- 页引用集合模型：所有 segment（`pages` 拆分 / `input_file` 复制 / `source_items` 合并）在执行前统一编译为「文件 + 页码」有序引用集合，拆/合/删/拼都只是引用运算，manifest 即引用表，确认执行前物理 PDF 一个字节不动。
+- segment 新增 `refs` 字段：跨源页引用拼合成为一等操作，可从多份 PDF 各取若干页按序拼成一份新材料（如证据组合卷）。
+- `--validate-manifest`：只做引用编译与覆盖审计，不写任何 PDF；检查文件存在、页码越界、孤儿页与重复引用页。
+- 页覆盖审计（`coverage_check`，默认 `warn`，可 `strict`/`off`）：报告每个源文件的总页数、被引用页、孤儿页（未被任何段引用）与重复引用页（被多段引用）；`strict` 模式发现孤儿/重复直接终止，保证整份拆分"每页都被且仅被引用一次"。
+- 新模块 `scripts/pdf_page_refs.py`：引用编译、覆盖审计、标签生成与统一执行器。
+- `handoff.json` 每份文书新增 `source_refs`（归一化页引用）与 `source_refs_label`（人读标签，如 `起诉状.pdf P5 + 证据卷.pdf P1-3`），下游可做页级溯源。
+
+### 改进
+
+- `resolved manifest` 中每段新增 `page_refs` 与跨源页码标签（如 `甲.pdf P1-2 + 乙.pdf P3`），替代原合并段的 `mixed` 记录。
+- 整文件单源段保留字节级复制快路径（不经 pypdf 重写，保留原文件全部字节与元数据）。
+- 覆盖审计结果（模式/明细/发现）写入 `organize_manifest.resolved.json` 与报告，随 run 归档可审计。
+
+### 技术优化
+
+- 删除旧执行路径 `split_pdf` / `merge_pdf_items` / `copy_pdf` / `parse_pages`，统一由引用执行器消费；页码越界在编译期即报错，不再等到写出阶段。
+- 旧格式 manifest（`pages` / `input_file` / `source_items`）完全兼容，无需迁移。
+
 ## [0.5.0] - 2026-05-31
 
 ### 新增
