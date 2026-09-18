@@ -2,7 +2,7 @@
 name: tingwu-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.4"
+version: "0.4.5"
 license: MIT
 description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 FunASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
 ---
@@ -172,24 +172,39 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/video.mp4 --async --spe
 
 上传完成后立即返回任务 ID，任务信息保存到 `config/pending_tasks.json`。
 
-### 2. 后台监控（Claude Code 增强模式）
+### 2. 后台监控（按 Agent 运行时选择）
 
-提交后，用 `Bash` 工具的 `run_in_background` 启动后台监控：
+监控进程的生命周期是关键差异点：**Agent 的后台进程普遍随会话结束被回收**（Hermes 会话切换界面、Claude Code 会话退出同理）。监控一死，Agent 就收不到"转录完成"信号，长任务静默搁浅。因此分两档：
 
+**档位 A — 会话无关监控（推荐，长任务首选）**：让监控完全脱离 Agent 会话，进度写日志文件，Agent 回来只读状态、不持有进程。
+
+```bash
+# Claude Code / 任意运行时：nohup 脱离会话，日志落盘
+nohup python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor --timeout 7200 --interval 120 \
+  >> /tmp/tingwu_monitor.log 2>&1 &
+
+# 单任务高频盯梢（含 macOS 原生通知）：watch_active.sh 本身就是会话无关的
+nohup bash skills/tingwu-asr/scripts/watch_active.sh <task_id> >> /tmp/tingwu_watch.log 2>&1 &
 ```
-command: "python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor --timeout 3600 --interval 120"
-run_in_background: true
-timeout: 600000
-```
 
-**注意**：`timeout` 必须设为 `600000`（10 分钟），否则默认 2 分钟会超时。
+Agent 恢复会话后按此顺序接管（不重新提交任务）：
 
-监控完成后会自动收到通知，此时展示转录结果路径给用户。
+1. `cat skills/tingwu-asr/config/pending_tasks.json` — 非空即有未完任务，拿 trans_id
+2. `python3 skills/tingwu-asr/scripts/poll_tasks.py`（一次性）— 已完成则当场触发 finish_task 收尾（下载 PPT/生成 Markdown/归档），未完成则打印状态与预计剩余时间
+3. finish_task 收尾可能耗时数分钟（185 张幻灯片下载+压缩实测约 3 分钟）：**用后台运行且不要设短超时**，或改用 watch_active.sh 接管
+4. 需要持续监控再启动档位 A/B，重跑安全幂等（flock 防并发重复归档）
+
+**档位 B — Agent 托管后台进程**：适合 Agent 会话确定存续的短等待。
+
+- Claude Code：Bash 工具 `run_in_background: true` + `timeout: 600000`（必须 10 分钟，默认 2 分钟会掐断 finish_task）
+- Hermes：`terminal(background=true)` 提交 + process_manage 轮询等待；会话切界面/退出后进程会被回收，此时回到恢复流程第 1 步
+
+**无论哪档，重跑 poll_tasks.py 都是安全的**：任务状态以云端为准，pending_tasks.json 有 flock 互斥，不会重复转录、不会重复归档。进程丢失≠任务丢失。
 
 ### 3. 手动查询
 
 ```bash
-# 检查所有待处理任务的状态
+# 检查所有待处理任务的状态（已完成会当场收尾并打印输出路径）
 python3 skills/tingwu-asr/scripts/poll_tasks.py
 
 # 阻塞式监控
@@ -202,6 +217,10 @@ python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor
 - 网页端免费额度有限，大文件或高频使用可能触发风控
 - 支持格式: mp3/wav/m4a/wma/aac/ogg/amr/flac/aiff/mp4/wmv/mov/mkv/webm/avi 等
 - 音频最大 500M，视频最大 6G，单文件最长 6 小时
+- 代理环境下 OSS 上传可能中断：本机 shell 常驻 `HTTP_PROXY/HTTPS_PROXY`（如 Clash 系）时，
+  oss2 上传会走代理，大文件分片上传易被代理掐断长连接（实测 771MB 视频在 50% 处
+  `ProxyError: Cannot connect to proxy`）。听悟 OSS 为国内节点，无需代理，上传前剥掉：
+  `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`
 - macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测
   （`_armv8_sve_probe`）时会死循环挂起，症状是任何 import oss2 的脚本无输出卡死。
   已在 `tingwu.py` 入口自动设置 `OPENSSL_armcap=0` 绕过；若仍遇到，运行前手动
