@@ -1,5 +1,23 @@
 # 变更记录
 
+## [1.6.0] - 2026-09-18
+
+### 新增：本地 RapidOCR 后端（`--backend rapid`）
+
+> **背景**：本技能此前没有任何本地 OCR 引擎——两套云端 API 都未配置时走 MinerU
+> 轻量接口（仍是云端），敏感材料"不出本机"场景无解。RapidOCR（PP-OCR 系模型的
+> onnx 本地推理）中文行级识别质量已接近云端，补齐了这个缺口。
+
+- 新模块 `scripts/rapid_ocr.py`：本地 PDF（pypdfium2 渲染，默认 220 DPI，`LEGAL_OCR_RAPID_DPI` 可调）与常见图片输入；行级识别结果按几何规则排成视觉行（同行按 x 拼接），CJK/数字间 OCR 空格与全角数字统一归一。
+- 段落重建交给统一后处理链的硬换行整理（与 PDF 文本层直读分支行为对称），其编号/法律标签/标题保留规则比纯几何段落判定可靠；页间插空行阻断跨页串段。
+- 路由：`--backend rapid` 显式指定；auto 模式下本地 PDF/图片把 rapid 作为云端 API 失败后的最后一级候选；**两套 API 都未配置且本机已装 RapidOCR 时优先本地识别（材料不出本机）**，MinerU 轻量接口退为兜底。
+- 依赖可选：未安装时 auto 不受影响；显式 `--backend rapid` 给出安装提示（`uv run --with rapidocr --with onnxruntime ...` 或 `pip install rapidocr` 后用 python3 直跑）。
+- 能力边界（写入 metadata.limitations）：无版面分析，单栏文书可靠、多栏可能错序；不提取图片资源（印章/签名/图表不出现在 Markdown）；Office/URL 不支持（仍走 MinerU）。
+
+### 改进
+
+- `linebreaks.py` 法律标签表补充 `具状人|答辩人|证据[一二三四五六七八九十\d]+：`——起诉状落款与证据列表条目不再被硬换行整理粘进上一段；该修复同时惠及文本层直读与云端后端输出。
+
 ## [1.5.0] - 2026-07-10
 
 ### 新增：PDF 原生文本层双路径（先直读，不达标再 OCR）

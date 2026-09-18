@@ -234,18 +234,23 @@ def should_use_ocrmypdf_native_preprocess(
     preprocess_only: bool,
     enable_crop: bool,
     force_raster_preprocess: bool,
+    rapid_local_available: bool = False,
 ) -> bool:
-    """Prefer OCRmyPDF's native cleanup when the effective backend is local.
+    """Prefer OCRmyPDF's native cleanup when the effective backend is ocrmypdf.
 
     Re-rasterizing an already full-resolution scan before Tesseract can discard
     recognition detail.  Explicit preprocessing requests continue to win.
+    When RapidOCR is installed it takes the local-first slot, so ocrmypdf
+    native cleanup no longer applies in that case.
     """
     if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
         return False
-    local_selected = backend == "local_ocrmypdf" or (
-        backend == "auto" and (local_only or not external_backend_configured)
+    local_engine_is_ocrmypdf = backend == "local_ocrmypdf" or (
+        backend == "auto"
+        and (local_only or not external_backend_configured)
+        and not rapid_local_available
     )
-    return local_selected
+    return local_engine_is_ocrmypdf
 
 
 def resolve_configured_external_order(
@@ -287,6 +292,32 @@ def should_use_paddle_original_input(
         backend == "auto" and not local_only and paddle_selected_by_auto
     )
     return paddle_selected
+
+
+def should_use_rapid_original_input(
+    *,
+    backend: str,
+    local_only: bool,
+    external_backend_configured: bool,
+    rapid_local_available: bool,
+    skip_preprocess: bool,
+    preprocess_only: bool,
+    enable_crop: bool,
+    force_raster_preprocess: bool,
+) -> bool:
+    """Keep the original PDF when RapidOCR is the effective local OCR engine.
+
+    RapidOCR overlays an invisible text layer on the original scan without
+    re-rasterizing, so unified rasterization would only discard detail.
+    """
+    if skip_preprocess or preprocess_only or enable_crop or force_raster_preprocess:
+        return False
+    if not rapid_local_available:
+        return False
+    rapid_selected = backend == "rapidocr_local" or (
+        backend == "auto" and (local_only or not external_backend_configured)
+    )
+    return rapid_selected
 
 
 def classify_pdf_layer_content(pdf_path: str | Path) -> dict:
@@ -574,9 +605,9 @@ def main():
     # OCR 参数（透传给 pdf-ocr.py 的 run_ocr()）
     parser.add_argument(
         "--backend",
-        choices=["auto", "local_ocrmypdf", "paddle_api", "mineru_api"],
+        choices=["auto", "rapidocr_local", "local_ocrmypdf", "paddle_api", "mineru_api"],
         default="auto",
-        help="OCR 后端，默认 auto（已配置时 Paddle/MinerU 优先，失败回退本地）",
+        help="OCR 后端，默认 auto（已配置时 Paddle/MinerU 优先，失败回退本地 RapidOCR→ocrmypdf）",
     )
     parser.add_argument(
         "--api-order",
@@ -585,7 +616,7 @@ def main():
     parser.add_argument(
         "--local-only",
         action="store_true",
-        help="强制不调用外部 OCR API，仅使用本地 ocrmypdf",
+        help="强制不调用外部 OCR API，仅使用本地引擎（优先 RapidOCR，未安装时 ocrmypdf）",
     )
     parser.add_argument(
         "--mode",
@@ -784,6 +815,29 @@ def main():
                 "\n[PaddleOCR 原图短路] 跳过统一栅格化与预压缩；"
                 "直接提交原 PDF，以保留扫描分辨率和原有图层"
             )
+        try:
+            from pdf_ocr_rapid_local import is_rapidocr_available
+            rapid_local_available = is_rapidocr_available()
+        except Exception:
+            rapid_local_available = False
+        rapid_original_input_shortcut = (
+            not preserve_original_layers
+            and should_use_rapid_original_input(
+                backend=args.backend,
+                local_only=args.local_only,
+                external_backend_configured=external_backend_configured,
+                rapid_local_available=rapid_local_available,
+                skip_preprocess=args.skip_preprocess,
+                preprocess_only=args.preprocess_only,
+                enable_crop=args.enable_crop,
+                force_raster_preprocess=args.force_raster_preprocess,
+            )
+        )
+        if rapid_original_input_shortcut and not args.quiet:
+            print(
+                "\n[RapidOCR 原图短路] 跳过统一栅格化与预压缩；"
+                "本地 RapidOCR 直接在原扫描页上叠文字层，保留扫描分辨率"
+            )
         local_native_preprocess_shortcut = (
             not preserve_original_layers
             and should_use_ocrmypdf_native_preprocess(
@@ -794,6 +848,7 @@ def main():
                 preprocess_only=args.preprocess_only,
                 enable_crop=args.enable_crop,
                 force_raster_preprocess=args.force_raster_preprocess,
+                rapid_local_available=rapid_local_available,
             )
         )
         if local_native_preprocess_shortcut and not args.quiet:
@@ -845,6 +900,7 @@ def main():
             not args.skip_preprocess
             and not api_preprocessing_shortcut
             and not paddle_original_input_shortcut
+            and not rapid_original_input_shortcut
             and not local_native_preprocess_shortcut
             and not preserve_original_layers
         ):
@@ -912,6 +968,8 @@ def main():
                 print("\n[跳过] 预处理阶段已跳过（--skip-preprocess）")
             elif paddle_original_input_shortcut:
                 print("\n[跳过] 预处理阶段已跳过（PaddleOCR 原 PDF 直送）")
+            elif rapid_original_input_shortcut:
+                print("\n[跳过] 预处理阶段已跳过（RapidOCR 原 PDF 直送）")
             elif api_preprocessing_shortcut:
                 print("\n[跳过] 预处理阶段已跳过（PaddleOCR API 服务端预处理）")
             elif local_native_preprocess_shortcut:
@@ -931,6 +989,7 @@ def main():
                 args.no_compress
                 or preserve_original_layers
                 or paddle_original_input_shortcut
+                or rapid_original_input_shortcut
                 or local_native_preprocess_shortcut
             ),
             preprocessed=preprocessed,
@@ -989,6 +1048,8 @@ def main():
                 if preserve_original_layers
                 else "PaddleOCR 原 PDF 直送"
                 if paddle_original_input_shortcut
+                else "RapidOCR 原 PDF 直送"
+                if rapid_original_input_shortcut
                 else "OCRmyPDF 本地原生预处理"
                 if local_native_preprocess_shortcut
                 else "--no-compress"
@@ -1009,6 +1070,7 @@ def main():
                 "preprocess_skipped": (
                     args.skip_preprocess
                     or paddle_original_input_shortcut
+                    or rapid_original_input_shortcut
                     or api_preprocessing_shortcut
                     or local_native_preprocess_shortcut
                     or preserve_original_layers
@@ -1018,6 +1080,8 @@ def main():
                 "preprocess_shortcut_reason": (
                     "paddle_original"
                     if paddle_original_input_shortcut
+                    else "rapid_original"
+                    if rapid_original_input_shortcut
                     else "paddle_api"
                     if api_preprocessing_shortcut
                     else "ocrmypdf_native"
@@ -1086,6 +1150,7 @@ def main():
             "preprocess_skipped": (
                 args.skip_preprocess
                 or paddle_original_input_shortcut
+                or rapid_original_input_shortcut
                 or api_preprocessing_shortcut
                 or local_native_preprocess_shortcut
                 or preserve_original_layers
@@ -1125,6 +1190,7 @@ def main():
                 args.no_compress
                 or preserve_original_layers
                 or paddle_original_input_shortcut
+                or rapid_original_input_shortcut
                 or local_native_preprocess_shortcut
             ),
             "compress_merged_into_preprocess": compress_merged_into_preprocess,
@@ -1134,6 +1200,7 @@ def main():
                     args.no_compress
                     or preserve_original_layers
                     or paddle_original_input_shortcut
+                    or rapid_original_input_shortcut
                     or local_native_preprocess_shortcut
                 )
                 else None

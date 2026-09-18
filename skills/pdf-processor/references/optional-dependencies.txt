@@ -18,6 +18,10 @@ pymupdf>=1.23.0
 # PDF 解密、合并辅助
 pypdf>=3.17.0
 
+# 本地 RapidOCR 双层后端（推荐安装：auto/local-only 的本地优先引擎，中文识别质量好）
+rapidocr>=3.0.0
+# 或经典包（二选一）：rapidocr_onnxruntime>=1.3.0
+
 # 本地 Paddle 双层实验后端（非默认生产链路，需要时再安装）
 # paddleocr
 # paddlepaddle

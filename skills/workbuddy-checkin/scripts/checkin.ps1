@@ -1,7 +1,7 @@
 ﻿# ============================================================
 # WorkBuddy 每日积分签到（Windows PowerShell 版，兼容 PS 5.1）
 #
-# 流程：读取本地令牌 -> 查询签到状态 -> 未签到则领取 -> 写日志
+# 流程：读取本地令牌 -> 直接调用签到接口（幂等）-> 写日志
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File checkin.ps1
 # 或（显式指定运行时）：
@@ -149,25 +149,11 @@ function Invoke-CheckinApi([string]$Path) {
     return @($code, $body)
 }
 
-# 2. 查询签到状态
-# 鉴权失败一律以真实 HTTP 状态码判定，不再匹配响应体子串。
-# 旧实现用 `$Status -match "401|unauthorized"` 扫响应体，而响应体带随机 UUID 的 requestId，
-# 约 0.57%/次 会因 UUID 里恰好出现 "401" 被误判为令牌过期 —— 脚本在调 daily-checkin
-# 之前就退出，导致当日积分未领取、连续签到中断（第 7 天 1000 积分奖励作废）。
-$Status = ""; $HttpCode = "000"
-try { $r = Invoke-CheckinApi "/v2/billing/meter/checkin-status"; $HttpCode = $r[0]; $Status = $r[1] } catch { $HttpCode = "000"; $Status = "" }
-if ($HttpCode -eq "000") { Write-Log "查询签到状态失败（网络异常）"; exit 1 }
-if ($HttpCode -eq "401" -or $HttpCode -eq "403") { Write-Log "令牌已过期或无权限（HTTP $HttpCode），请打开 WorkBuddy 桌面端刷新登录态后重试"; exit 1 }
-if ($HttpCode -ne "200") { Write-Log "查询签到状态失败（HTTP $HttpCode）"; exit 1 }
-if (-not $Status) { Write-Log "查询签到状态失败（响应为空，HTTP $HttpCode）"; exit 1 }
-
-# 注意：today_checked_in 字段在 v5.3.8 实测不可靠（签到成功后仍可能为 false）。
-# 此处仅用于快速短路与 401 探测；真正的幂等兜底在下方 daily-checkin 的 code=10001 处理。
-$Checked = $false
-try { $Checked = [bool]($Status | ConvertFrom-Json).data.today_checked_in } catch {}
-if ($Checked) { Write-Log "今日已签到，无需重复领取"; exit 0 }
-
-# 3. 执行签到
+# 2. 直接执行签到（不预先调用 checkin-status）
+# 说明：原实现先调 checkin-status、再用 today_checked_in 字段短路。该字段在
+# v5.3.8 实测不可靠（签到成功后仍可能为 false），既会假阴性多打请求，也会假阳性
+#（显示已签实际未签）导致在真正签到前 exit 0、当日漏签、连续签到中断。
+# daily-checkin 接口幂等：已签时返回 code=10001，下方统一兜底为成功。
 $Result = ""; $HttpCode2 = "000"
 try { $r2 = Invoke-CheckinApi "/v2/billing/meter/daily-checkin"; $HttpCode2 = $r2[0]; $Result = $r2[1] } catch { $HttpCode2 = "000"; $Result = "" }
 if ($HttpCode2 -eq "000") { Write-Log "签到请求失败（网络异常）"; exit 1 }
@@ -182,6 +168,6 @@ try {
     else { $Credit = "FAIL code=$($d.code) msg=$($d.msg)" }
 } catch { $Credit = "PARSE_ERR" }
 
-if ($Credit -like "OK*") { Write-Log "签到成功！领取 $Credit" }
-elseif ($Credit -like "ALREADY*") { Write-Log "今日已签到，无需重复领取（接口返回已签到）" }
-else { Write-Log ("签到未成功：" + $Credit) }
+if ($Credit -like "OK*") { Write-Log "签到成功！领取 $Credit"; exit 0 }
+elseif ($Credit -like "ALREADY*") { Write-Log "今日已签到，无需重复领取（接口返回已签到）"; exit 0 }
+else { Write-Log ("签到未成功：" + $Credit); exit 1 }

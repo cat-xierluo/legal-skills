@@ -1,5 +1,19 @@
 # 变更日志
 
+## [1.0.5] - 2026-09-17
+
+### 修复（健壮性与正确性，外部 review）
+
+- **`checkin.sh` 补齐鉴权头（P0）**：原实现只 `grep "^DECRYPT_RESULT:"` 取 token，漏掉 `decrypt-token.js` 同时输出的 `ACCOUNT_UID` / `AUTH_DOMAIN` / `ENTERPRISE_ID`，`daily-checkin` 请求未带 `X-User-Id` 等头。现提取全部字段并组装 `Authorization` + `X-User-Id`（+ `X-Domain` / `X-Enterprise-Id` / `X-Tenant-Id`），对齐 `checkin.ps1`（1.0.3 已为其补齐）。网关当前不强制这些头，但属前向兼容加固。
+- **移除 `checkin-status` 预检短路（P0）**：`today_checked_in` 字段在 v5.3.8 实测不可靠（签到成功后仍可能为 `false`）。原 `checkin.sh` / `checkin.ps1` 用它提前 `exit 0`，假阳性（显示已签实际未签）会导致当日漏签、连续签到中断（第 7 天 1000 积分奖励作废）。现删除预检，直接调用幂等的 `daily-checkin`，由 `code=10001` 兜底。
+- **退出码正确化（P1）**：`checkin.sh` / `checkin.ps1` 原末尾隐式 `exit 0`，签到失败也被定时任务视为成功、无法告警。现：成功 / 已签（`code=10001`）/ 缺 python3 无法解析（服务端可能已成功）→ `exit 0`；明确失败（`code` 非 0 非 10001，含 `PARSE_ERR`）→ `exit 1`，便于 crontab / schtasks 捕获并告警。
+- **`references/dependencies.md` 平台表修正（P1）**：Windows 新版明文登录态路径误写为 `%APPDATA%`，正确应为 `%LOCALAPPDATA%`（与 `decrypt-token.js` 代码、`SKILL.md` 平台表一致；`%APPDATA%` 仅为回退）。避免误导用户到错误目录找文件。
+
+### 文档
+
+- `SKILL.md`：版本升至 1.0.5；原理第 5 点改为「直接调用 `daily-checkin`（不再预查 `checkin-status`）」，并明确幂等性完全依赖 `code=10001` 兜底。
+- `CHANGELOG.md`：新增本条目。
+
 ## [1.0.4] - 2026-09-04
 
 ### 修复（Windows 兼容性，PR #125）
