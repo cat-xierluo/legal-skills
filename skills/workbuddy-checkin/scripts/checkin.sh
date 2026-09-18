@@ -96,7 +96,17 @@ read_token() {
   if [ -n "$node_bin" ]; then
     DECRYPT_OUT=$("$node_bin" "$DECRYPT_JS" 2>/dev/null)
   fi
+  # Node 未产出结果（未装 Node / 崩溃）→ 回退 Electron
   if [ -z "$DECRYPT_OUT" ] || ! printf '%s\n' "$DECRYPT_OUT" | grep -q "^DECRYPT_RESULT:"; then
+    electron_bin="$(find_electron)"
+    if [ -n "$electron_bin" ]; then
+      DECRYPT_OUT=$(env -u ELECTRON_RUN_AS_NODE "$electron_bin" "$DECRYPT_JS" 2>/dev/null)
+    fi
+  fi
+  # Node 报 ERR（ERR 行同样带 DECRYPT_RESULT: 前缀，如旧版账户无明文文件、
+  # 纯 Node 无法解密 state.vscdb）→ 同样回退 Electron 解旧版库，对齐 1.0.4 行为。
+  # 否则旧版账户在装有 Electron 的机器上会直接 exit 1，丢掉唯一可用路径。
+  if printf '%s\n' "$DECRYPT_OUT" | grep -q "^DECRYPT_RESULT:ERR"; then
     electron_bin="$(find_electron)"
     if [ -n "$electron_bin" ]; then
       DECRYPT_OUT=$(env -u ELECTRON_RUN_AS_NODE "$electron_bin" "$DECRYPT_JS" 2>/dev/null)
