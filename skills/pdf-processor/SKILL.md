@@ -2,7 +2,7 @@
 name: pdf-processor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.12.1"
+version: "2.13.0"
 description: PDF 处理工具，支持扫描件预处理、OCR 双层 PDF、页码添加、PDF 合并、解密、水印去除和压缩。本技能应在用户需要一键处理、优化或整理 PDF 文档时使用。不要用于：纯文本 PDF 内容编辑、PDF 阅读与批注、电子签名、非压缩目的的格式转换。
 license: MIT
 ---
@@ -25,7 +25,7 @@ license: MIT
 
 - 不修改原始文件；输出到新文件，重名时加 `_1`、`_2` 等序号。
 - 扫描件、拍照件、证据材料默认继续生成可搜索双层 PDF；PaddleOCR 与本地 `ocrmypdf` 默认直接保留原 PDF，只有 MinerU 或显式图像处理请求才走统一栅格预处理。
-- `auto` 在已配置时默认优先 PaddleOCR API，再尝试 MinerU，最后回退本地 `ocrmypdf`；明确禁止外传的材料必须使用 `--local-only`。
+- `auto` 在已配置时默认优先 PaddleOCR API，再尝试 MinerU，最后回退本地引擎（已安装 RapidOCR 时优先 RapidOCR，否则 `ocrmypdf`）；明确禁止外传的材料必须使用 `--local-only`。
 - 输入含姓名、案号、医疗、账号等敏感信息且用户尚未明确授权该文件外传时，先说明将上传完整 PDF 并取得一次确认；已授权当前文件后不重复询问，授权不扩展到同目录或其他材料。
 - 电子 PDF 或混合 PDF 默认保留文字、矢量、图片和批注层，跳过栅格化预处理与重压缩；只有用户明确接受层丢失风险时才使用 `--force-raster-preprocess`。
 - “只预处理”“不要 OCR”“只矫正压缩”才使用 `--preprocess-only`。
@@ -81,10 +81,16 @@ python3 scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf \
 python3 scripts/pdf-ocr.py --input input.pdf --output output.pdf
 ```
 
-默认后端为 `auto`：已配置 PaddleOCR 时先用 `PP-OCRv6` 的行级坐标生成文字层，再按 `OCR_API_ORDER` 尝试 MinerU；外部服务失败或未配置时回退本地 `ocrmypdf`。该默认路径会上传完整 PDF，不允许外传时使用：
+默认后端为 `auto`：已配置 PaddleOCR 时先用 `PP-OCRv6` 的行级坐标生成文字层，再按 `OCR_API_ORDER` 尝试 MinerU；外部服务失败或未配置时回退本地引擎——已安装 RapidOCR 时优先本地 RapidOCR（中文行级识别质量好、不出本机），否则回退本地 `ocrmypdf`。该默认路径会上传完整 PDF，不允许外传时使用：
 
 ```bash
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
+```
+
+`--local-only` 同样走本地优先链（RapidOCR → ocrmypdf）。敏感材料的本地中文 OCR 推荐先安装 RapidOCR：
+
+```bash
+pip install rapidocr
 ```
 
 `--allow-external-upload` 仅为旧命令兼容参数，不再控制后端选择。Paddle 的服务端方向矫正和去畸变默认关闭，避免 OCR 坐标与原图空间不一致。
@@ -92,6 +98,9 @@ python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --local-only
 ```bash
 # 强制本地兜底
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend local_ocrmypdf
+
+# 强制本地 RapidOCR（onnx 本地推理，中文质量好且不出本机）
+python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf --backend rapidocr_local
 
 # 强制 PaddleOCR API；PP-OCRv6 是双层 PDF 默认模型
 python3 scripts/pdf-ocr.py -i input.pdf -o output.pdf \
@@ -227,6 +236,14 @@ Linux:
 ```bash
 sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim
 ```
+
+### 本地 RapidOCR（推荐，本地优先引擎）
+
+```bash
+pip install rapidocr
+```
+
+安装后 `auto` 的本地回退与 `--local-only` 都会优先使用 RapidOCR（onnx 本地推理，中文行级识别质量明显高于 tesseract，且全程不出本机）；首次运行自动下载检测/识别模型（各约 5-16MB，仅一次）。也可显式指定 `--backend rapidocr_local`。
 
 完整可选依赖清单见 `references/optional-dependencies.txt`。历史保留的本地 Paddle 双层实现已拆到 `scripts/pdf_ocr_paddle_local.py`，不属于默认生产链路；需要实验时再安装 `paddleocr paddlepaddle` 并单独接入。
 
