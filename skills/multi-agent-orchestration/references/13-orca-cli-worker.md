@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.6.0（2026-08-14）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.24.0（2026-09-13）。
 
 ## 目录
 
@@ -54,10 +54,12 @@ orca status --json
 当前行为（`orca-runtime.sh` + `detect_orca_mode`）：
 
 1. `orca_runtime_current_project` 失败时把原因暴露为 `ORCA_WORKTREE_CURRENT_ERROR`：`selector_not_found`（未注册）、`path_mismatch`（命中别的仓/路径）、空（runtime 不可达 / 非 Git / 输出不可解析）。
-2. 仅当错误码**精确等于** `selector_not_found`、`PROJECT_DIR` 可解析出 canonical Git toplevel、且 `orca status --json` 可达时，执行一次 `orca repo add --path <toplevel> --json`，随后重跑 `worktree current` 并要求精确返回该 toplevel 与 repo 身份，才继续 Orca 模式（版本/capability 预检照常）。
-3. repo add 失败、返回合同非 ok、或复验不精确匹配 → 打印诊断并回退既有 tmux 路径（fail-closed）；全部检查发生在 branch/worktree/provider 副作用之前，绝不假装 Orca 管理成功。`--dry-run` 只打印 `ORCA_RUN: orca repo add ...` 计划，不执行 mutation。
+2. 仅当错误码**精确等于** `selector_not_found` 时，调用 `orca-register-project.py`：在 Git common-dir 的 `mao-orca-register.lock` 普通文件上有界互斥，并在锁内重新读取 `worktree current`；其他 helper 已注册则复用。只有锁内仍明确未注册、canonical Git toplevel 可证明且 `orca status --json` 可达时，才执行一次 `repo add`。要求明确 `ok:true`/repo.id，再在同一锁内复验精确路径和 repo 身份，才继续 Orca 模式（版本/capability 预检照常）。
+3. 默认锁等待 5 秒、每次 CLI 调用 10 秒；使用 Python 标准库，不另安装系统 flock。锁文件必须是当前用户的私有普通文件；symlink、FIFO、hardlink、未知/损坏内容均拒绝，不删除重建所谓陈旧锁。
+4. mutation 前写入并 fsync pending。请求超时、回执丢失或复验失败不证明服务端没执行：保留 pending，后续没有精确身份则返回 `registration_prior_outcome_unknown`，不再 add。已有 acknowledged repo.id 时还必须一致。初始只读 probe 可复用精确身份但不清标记；注册 helper 在锁内证明身份后才清空标记内容，锁文件保留。PM 对未知结果先只读调查，不通过删锁或清标记“重试修复”。
+5. 注册失败或身份不符 → 诊断并回退既有 tmux 检测路径，绝不假装 Orca 管理成功；不因此跳过其他启动门禁。全部检查发生在 branch/worktree/provider 副作用之前。`--dry-run` 只打印计划，不创建注册/锁文件。
 
-**授权边界**：调用 Orca-first worker 路径（`spawn-worker.sh` 自动检测、未传 `--no-orca-mode`）即授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库、不授权改动其他 Orca 项目或全局配置。repo 已注册、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码（含 `path_mismatch`）一律不注册。确定性回归见 `scripts/test-orca-auto-register.sh`（全 mock，不依赖真实 Orca 状态）。
+**授权边界**：调用 Orca-first worker 路径（`spawn-worker.sh` 自动检测、未传 `--no-orca-mode`）即授权把「当前这一个 Git 仓库」注册进 Orca；不授权移动/克隆/删除仓库、不授权改动其他 Orca 项目或全局配置。repo 已注册、`--no-orca-mode`、非 Git、runtime 不可达、其他错误码（含 `path_mismatch`）一律不注册。互斥只协调本机采用此 helper 的同一 Git common-dir，不约束 UI、其他客户端或独立 clone，也不自动治理既有重复注册。回归见 `scripts/test-orca-auto-register.sh` 与 `scripts/test_orca_registration_concurrency.py`；后者使用真实进程/锁与 fake CLI，不代表真实 Orca mutation 已验证。
 
 ## 4. 启动与共享 Run
 
@@ -90,13 +92,15 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-`orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup inherit`，先写入 Session Context、安装门禁和 scope hook，再用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
+`orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup skip`：repo Setup 会早于 Session Context、安装门禁和 scope hook，因此不能继承或强制执行。显式 `--orca-setup-mode inherit|run` 会在任何 worktree/provider/terminal/Dispatch 副作用前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；即使同时提供 `--allow-install-command` 也不放行，因为后者只约束门禁已就位后的 worker 阶段。之后再写入 Session Context 与机械门禁，用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
 
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
-Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave helper 必须把它作为 `--from` 传给全部 `task-create`；worker helper 必须复用同一 handle 传给 `worker-start`。缺失时立即失败并保留 terminal，不能靠当前焦点猜 coordinator。
+Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave prepare 使用 `--from <本轮PM终端>`；没有显式 sender、也没有 session 绑定的新 Run 才可把宿主 `ORCA_TERMINAL_HANDLE` 作为待核 selector。统一 helper 核对 `status`、`terminal show` 与 `run-current` 的同一 runtime、精确 handle/Run/coordinator，以及终端 connected/writable/非 orphaned/无 exitCause。环境值和 runtime 相同都不是活性证明，不从当前焦点选择别人终端。
 
-receipt 同时冻结 `_meta.runtimeId`，新 Wave 按上例传入 `--orca-runtime-id`；手工 register 使用 `--runtime-id`。prepare 前后、spawn 早期、terminal 创建前及每次 worker-start 前检查可观察到的身份漂移。检测失败保留诊断，不盲目重建 Run/Task；制备中途失败可能已有部分记录，必须先核查。旧调用省略参数时仅保持兼容并输出 `SPAWN_COORDINATOR_RUNTIME_UNVERIFIED`。同 runtime 不等于 coordinator 活着，status 与实际启动之间仍有时间窗口，最终以 Orca consumer fencing 为准。确定性回归见 `scripts/test-orca-runtime-identity.sh`；真实重启期间派发未由该回归证明。
+Wave helper 将冻结 handle 作为 `--from` 传给全部 `task-create`；worker helper 复用它传给 `worker-start`。单 worker 在 quota/mem 通过后、provider lease/worktree/session/terminal 创建前准备 Run；有 Run/Task 的 Wave 只读验证，不重绑或重复创建 Task。失败可能已经建立或重绑 Run，必须先只读核查现有结果，不盲试；零 Worker 资源不等于零 Run 记录。
+
+receipt 同时冻结 `_meta.runtimeId`，新 Wave 按上例传入 `--orca-runtime-id`；手工 register 使用 `--runtime-id`。prepare 前后、spawn 早期、terminal 创建前及每次 worker-start 前检查可观察到的身份漂移；metadata 另存 `.session.orca.runtime_id`。旧上下文缺 runtime 时，统一 helper 只能从当前 status/terminal/Run 三方正向核验后冻结，并声明历史连续性 `NOT_VERIFIED`；已有非空 runtime 漂移即拒绝，显式 --from 也不绕过。consumer fencing 仍作最终判断；该前置核验不扩展为直接独立 register legacy 入口已全面迁移。回归见 `scripts/test_pm_sender_binding.py` 与既有 runtime 身份测试；真实重启期间派发未由其证明。
 
 若不传 `--orca-run-id`，helper 为单 worker 新建 Run，适合独立监督；多 worker Wave 不应各建一个 Run。
 
@@ -122,13 +126,42 @@ PM create/bind Run
 - `recover-unconfigured-worker.sh` 从真实 Git common-dir 和已校验 session 推导该次既有 receipt，核对身份后才允许注入/重绑；缺失、软链、metadata 改址或身份错配时要求人工处理，不新建 receipt 冒充旧启动授权。
 - worker-start 后的 completion receipt 位于相同 `agent-authority` 目录，绑定 authority 路径与 SHA-256、task/dispatch/terminal/run/runtime、process incarnation 及 capability SHA-256，不保存 capability 明文。发送时以启动快照读取 receipt，并通过只读 dispatch-show 复核当前身份；元数据不能成为新权威，精确 Shell allowlist 也不能覆盖完成校验失败。这是 hook 权限边界，不是同一 OS 用户之间的安全沙箱，最终 mutation 仍由 Orca 验证。
 - preamble 中反斜杠续行的 worker_done 是合法命令形态，应原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后停止并报告协议阻塞，不换引号、编码、子进程或 wrapper/helper 重试；PM 按精确 Dispatch 检查，不根据 STATUS 强行结算。
-- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
+- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 必须在新问题与原 message ID resume 中二选一且 bounded timeout，resume 不得带新 options；`check` 只允许已绑定 Worker handle 的 consuming default、bounded wait，或对同一 Worker inbox 已处理 Delivery 的 ack，不允许 `peek/all/unread` 冒充处理，也不能指定 coordinator handle。`reply`、coordinator Delivery ack、`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
 - `STATUS.json=done` 只唤醒 PM，不结算 Task/Dispatch。
 - Sentinel 不得因 STATUS、timeout、idle、heartbeat、question 或 escalation 执行 `worker-stop` / `worker-release` / `terminal close`。
 - PM 只对 accepted、settled 的 worker 执行 release；要保留排障就显式 retain；有立即后续任务可复用同一 terminal。
 - `check --wait` 返回一个 Delivery；处理全部消息再 ack，并继续等到全部预期 Dispatch settle。
 - PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
 - `pm-run-bind.sh` 将 handle probe/run-use 畸形响应视为失败（exit 1），run-current 不可验证或身份不匹配返回 exit 2；绑定未知时先检查原始响应，不盲目重试。远端分支清理绑定预期 OID 做原子比较删除，较新 tip 不会被删除；远端失败可能发生在本地资源已回收之后，须保留并处理 remote-pending 结果，不能声称整组资源均已保留或清空。
+
+### 5.1 Worker 问答与跟进收件
+
+阻塞问题必须从 live preamble 复制 Orca executable、worker handle 与 Dispatch capability：
+
+```bash
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --question "需要 PM 回答的问题" --options "A,B" --timeout-ms 600000 --json
+
+# timeout/cancel/断线后只恢复原 message ID；不再创建新 question
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --resume "$MESSAGE_ID" --timeout-ms 600000 --json
+```
+
+`ask` 是 Worker 与 PM 的阻塞问答，不是 coordinator-owned Task DAG decision gate。超时或断线不会取消原问题；只有 resume 返回成功 answer receipt 才证明已收到答复，仍不证明后续动作已经执行。
+
+PM 的 `send --to dispatch:<id>` 只保证 durable enqueue，且不会自动打断 Worker。Worker 必须在开始下一个文件前、每次 scoped test 后和 `worker_done` 前执行：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --json
+```
+
+这是 Worker inbox 的 consuming check；禁止用 `--peek/--all/--unread` 代替。先处理返回 Delivery 的全部消息，再用输出的 delivery ID 推进同一 Worker inbox：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --ack "$WORKER_DELIVERY_ID" --json
+```
+
+ack 调用可能直接返回下一批；继续处理、ack，直到 count=0。这个权限由 Shell 门禁绑定 Worker 自己的 handle，不可改用 coordinator handle，因此不是 coordinator Delivery ack。没有 non-peek Delivery 及其处理/ack 回执，只能说消息已入队或可见，不能声称 Worker 已处理。返回 `consumer_fenced`（consumer generation/进程身份被替换）或 `dispatch_inactive`（原 Dispatch 已 settled、stopped 或不再 active）时立即停止，不发 `worker_done`、不重试 check；其他 guidance 仍受原任务与权限边界约束。发出 `worker_done` 后停止收件和新工作。
 
 ## 6. PM 实时感知
 
@@ -192,10 +225,11 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 
 ## 9. 失败与恢复
 
-- `worker-start` 非零：保留其完整 receipt，检查 `stage/effects/residualResources/recovery`；不要固定 sleep 后盲目 retry。
-- **裸调 worker-start 的 60 秒冷启动窗口（2026-08-30 实测）**：不经 `spawn-worker.sh` 预建、直接 `worker-start --worktree current --agent claude` 时，新起 Claude Code 终端未能在约 60 秒启动确认窗口内发心跳 → dispatch `last_failure: "timeout"`、Task 标 failed、遗留孤儿终端（`terminal list` 中 title=None、无 worktree）。窗口为 Orca runtime 内部行为，本机不可调（orca 无 settings 命令），疑似对慢冷启动 agent 的兼容问题，可上游反馈。恢复序列：①`terminal list` 找孤儿 handle 并 `terminal close` 清理；②`task-update --id <task> --status ready` 复活（或 register 路径 `--reset-failed`）；③改用 `worker-start --task <id> --terminal <现存 agent 终端句柄>` 复用活终端重试（实测一次成功）。另注：worker-start 返回体 ready/terminal 字段可能为 None（部分生效），判读以 `dispatch-show --task` 实际 assignee/status 为准；dispatch-show 只显示当前 dispatch，重试后历史失败记录被覆盖。教训：裸调 orca 原生命令前先确认 helper（spawn-worker.sh）是否已有对应两步路径——它预建 terminal 等 TUI ready 再注册，正是为规避此窗口。
-- mutation outcome unknown：只按 receipt 的 `--retry-request` 精确恢复，或用 `dispatch-show --task` 做只读核对。
-- terminal handle stale：按 worktree 重新 `terminal list`，后续只用新 handle，禁止双发。
+- `worker-start` 非零或结果未知：保留原始 receipt 的 `requestId/failedStage/stage/effects/residualResources/recovery/runtimeId`，以及精确 Run、Task、Dispatch、terminal/incarnation/worktree。空 title、timeout、TUI idle 和心跳不能证明孤儿或业务完成。
+- 先只读 `request-show --request <id>`、`dispatch-show --task <task>`、`worker-show --dispatch <dispatch>` 与具名 `worker-list --run <run>`。request completed 读取原结果；pending 先确认原命令是否仍在飞，再依同一 request 的恢复指令处理；absent 不是零副作用证明，先核现场。不得换新 Run/Task 盲重试，也不双发已被终端接受但提交未确认的输入。
+- 原生 `worker-start` 在 agent ready 前失败仍可能拥有已创建 terminal，按 receipt/fleet 的精确 reclaimable 资源调用 `worker-release`，不手工 `terminal close`。`release_pending/release_unknown` 依精确 recovery 继续；exit 0 不是回收完成证明。已接受 `worker_done` 后先验收，reuse/retain/release 后再 ack。
+- 只有已证明 failed/stopped 的重试才使用原 Task、`--retry-of` 和显式 placement；遵守重试熔断，不靠复位 ready 或新 Run 绕过。2026-08-30 曾有慢冷启动失败与复用终端重试成功的现场记录，不作为所有版本的通用恢复命令。当前合同以 `orca skills get orchestration --reference references/recovery-and-cleanup.md` 与对应 `--help` 为准；旧 host 缺字段时不猜。
+- terminal handle stale：只读重新定位后，还须证明 owner、同一资源及 incarnation/状态，不能仅取列表中的新 handle 接管。未知/活跃/不匹配资源保留并上报。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
 - active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；不要用 worktree rm 代替生命周期处理。只读 `worker-show/dispatch-show` 与 diff/tests 只能用于观察/业务验收，不能结算 Dispatch。
 - **Dispatch 死锁兜底（Task-047R，settle）**：若 worker 进程已死但未发 `worker_done`，用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
@@ -207,6 +241,12 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
   - 验证脚本：`test-settle-liveness.sh`（字段矩阵）与 `test-settle-command.sh`（真实命令顺序和资源保留）。
 - provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。settled 后 `worker-release` 返回 `retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。任何 active/unknown/mismatch 都拒绝清理。
 
+外部终端关闭还须核对 incarnation、已 settled 且未被用户接管；精确关闭后读回复验 disconnected，再结算 lease。不得把 terminal close 用作 `release_pending/release_unknown` 的替代。上述 legacy settle 参数不是未知现场的新授权；证据不足时即使有 `--force` 也不执行，优先按当前官方 recovery 合同处理。
+
+Claude 信任/MCP/外部导入弹窗：用受支持的 `worker-read`/`agentWait` 有界证据确认实际等待内容，交有权限的人或明确授权流程处理；不自动改全局 `~/.claude.json`、接受全部 MCP 或导入外部配置。未响应不等于死进程，不因此强杀/重派。terminal read 偶发错误尚无稳定复现，保存 runtime、时间、精确 handle 与退出码，不伪称已修复。
+
+心跳正常但缺文件、commit 或测试产物时，只能说明协议活性。PM 按任务阶段与最近业务产物判断停滞，向原 worker 给一条窄纠偏：先完成已列第一项并做定向验证。不自动换模型、改 effort、杀进程或领取额外任务；长期无进展按任务门禁升级。
+
 ## 10. METADATA 契约
 
 ```json
@@ -214,10 +254,12 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
   "session": {
     "orca": {
       "mode": "auto",
+      "setup_mode": "skip",
       "worktree_id": "<repoId>::<path>",
       "worktree_path": "/abs/path",
       "terminal_handle": "term_xxx",
       "app_version": "1.4.180",
+      "runtime_id": "<validated-runtime-id>",
       "capabilities": ["terminal.multiplex.v1", "orchestration.contract.v1"],
       "supervised": {
         "run_id": "run_xxx",

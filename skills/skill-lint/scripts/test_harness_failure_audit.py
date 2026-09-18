@@ -233,6 +233,40 @@ class HarnessFailureAuditTests(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["file"], "scripts/lib/common.sh")
 
+    def test_commit_object_and_bounded_remote_delete_are_not_worktree_mutation(self) -> None:
+        root = self.make_good("bounded-branch-cleanup")
+        self.write(
+            root,
+            "scripts/cleanup.sh",
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'git -C "$PROJECT" cat-file -e "$DELIVERY_COMMIT^{commit}"\n'
+            'query_remote_branch() { git -C "$PROJECT" ls-remote --heads "$REMOTE" "refs/heads/$BRANCH"; }\n'
+            'remote_row=$(query_remote_branch)\n'
+            'remote_tip=${remote_row%%[[:space:]]*}\n'
+            '[ "$remote_tip" = "$EXPECTED_TIP" ] || exit 2\n'
+            'git -C "$PROJECT" push --force-with-lease="refs/heads/$BRANCH:$EXPECTED_TIP" "$REMOTE" --delete "$BRANCH"\n'
+            'test -z "$(query_remote_branch)" || exit 2\n',
+        )
+        report = audit_candidate(root)
+        matches = [item for item in report["findings"] if item["id"] == "HFA-011"]
+        self.assertEqual(matches, [])
+
+    def test_remote_delete_without_exact_tip_lease_is_still_blocked(self) -> None:
+        root = self.make_good("unsafe-branch-cleanup")
+        self.write(
+            root,
+            "scripts/cleanup.sh",
+            "#!/usr/bin/env bash\n"
+            'git -C "$PROJECT" ls-remote --heads "$REMOTE" "refs/heads/$BRANCH"\n'
+            'git -C "$PROJECT" push "$REMOTE" --delete "$BRANCH"\n'
+            'git -C "$PROJECT" ls-remote --heads "$REMOTE" "refs/heads/$BRANCH"\n',
+        )
+        report = audit_candidate(root)
+        matches = [item for item in report["findings"] if item["id"] == "HFA-011"]
+        self.assertEqual(len(matches), 1)
+        self.assertIn("safe-push", matches[0]["message"])
+
     def test_batch_discovery_excludes_archive_and_summarizes(self) -> None:
         self.make_bad()
         self.make_good()

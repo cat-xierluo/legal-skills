@@ -71,6 +71,7 @@ reset_defaults() {
   LIGHTWEIGHT_OVERRIDE=0
   LIGHTWEIGHT_MODE=0
   NO_ORCA_MODE=0
+  ORCA_SETUP_MODE="skip"
   ORCA_SUPERVISED=0
   TASK_SPEC=""
   TASK_TITLE=""
@@ -109,7 +110,7 @@ parse_spawn_worker_args \
   --quota-preflight-override "PM 已确认额度恢复，人工授权放行" \
   --add-dir /tmp/a --add-dir "/tmp/b path" \
   --allow-paths "skills/a/**" --allow-paths "skills/b/**" \
-  --no-worktree --no-orca-mode --orca-supervised \
+  --no-worktree --no-orca-mode --orca-setup-mode skip --orca-supervised \
   --task-spec "full spec" --task-title "short title" \
   --orca-run-id run-a --orca-task-id task-a --orca-coordinator-handle term-pm \
   --allow-install-command "pip install demo" \
@@ -137,6 +138,7 @@ else
   ok "v2.11.0: --bare auto-degrade opt-out flag is removed"
 fi
 assert_eq "$LIGHTWEIGHT_MODE:$NO_ORCA_MODE:$ORCA_SUPERVISED" "1:1:1" "transport mode flags parsed"
+assert_eq "$ORCA_SETUP_MODE" "skip" "Orca Setup policy parses explicitly"
 assert_eq "$ORCA_RUN_ID:$ORCA_TASK_ID:$ORCA_COORDINATOR_HANDLE" "run-a:task-a:term-pm" "Wave receipt identifiers parsed"
 assert_eq "$GIT_EXPECTED_NAME:$GIT_EXPECTED_EMAIL:$GIT_INTEGRATION_BASE:$GIT_PUSH_REMOTE" \
   "Expected User:expected@example.com:origin/main:upstream" "safe-push identity fields parsed"
@@ -188,12 +190,20 @@ fi
 set +e
 invalid_deps_output=$( (parse_spawn_worker_args --deps-mode nonsense) 2>&1 )
 invalid_deps_rc=$?
+invalid_setup_output=$( (parse_spawn_worker_args --orca-setup-mode unsafe) 2>&1 )
+invalid_setup_rc=$?
 set -e
 assert_eq "$invalid_deps_rc" "64" "invalid --deps-mode keeps exit 64"
 if printf '%s' "$invalid_deps_output" | grep -Fq 'only accepts auto|symlink|local'; then
   ok "invalid --deps-mode keeps diagnostic"
 else
   bad "invalid --deps-mode keeps diagnostic"
+fi
+assert_eq "$invalid_setup_rc" "64" "invalid --orca-setup-mode keeps exit 64"
+if printf '%s' "$invalid_setup_output" | grep -Fq 'only accepts skip|inherit|run'; then
+  ok "invalid --orca-setup-mode keeps diagnostic"
+else
+  bad "invalid --orca-setup-mode keeps diagnostic"
 fi
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-flags.sh"' "$SPAWN_WORKER" \
@@ -203,6 +213,53 @@ if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-flags.sh"' "$SPAWN_WORKER" \
 else
   bad "entrypoint delegates parsing without retaining legacy loop"
 fi
+
+# v2.27.1：--base-ref 40-hex sha 在任何 worktree/provider/terminal 副作用之前拒绝。
+# 用 --dry-run 复用既有早停机制（run() 与 write_*() 都会跳过），并要求
+# PROJECT_DIR 是一个已存在的目录（spawn-worker.sh 第 299 行 cd + pwd 必走）。
+hex_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-hex.XXXXXX")
+set +e
+hex_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$hex_proj" --session "test-base-hex" --branch "feat/base-hex" \
+    --base-ref "abcdef1234567890abcdef1234567890abcdef12" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+hex_rc=$?
+set -e
+if [ "$hex_rc" -ne 0 ] && printf '%s' "$hex_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  ok "40-hex --base-ref rejected before any side effect"
+else
+  bad "40-hex --base-ref rejected before any side effect (rc=$hex_rc)"
+  printf '%s\n' "$hex_out" >&2
+fi
+if [ ! -d "$hex_proj/.claude/worktrees" ] && [ ! -d "$hex_proj/.claude/agent-sessions" ]; then
+  ok "40-hex rejection did not create worktree or session context"
+else
+  bad "40-hex rejection must not create worktree or session context (found under $hex_proj/.claude)"
+fi
+rm -rf "$hex_proj"
+
+# v2.27.1：--base-ref main 正常进入后续（不触发 BASE_REF_MUST_BE_REF 拒绝）。
+# 这里只断言我们的拒绝消息没有出现，不强求 0 退出——后续步骤在临时空目录
+# 下可能因 harness/lease 等真实副作用前的检测而以非零退出，但本任务不关心。
+main_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-main.XXXXXX")
+set +e
+main_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$main_proj" --session "test-base-main" --branch "feat/base-main" \
+    --base-ref "main" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+main_rc=$?
+set -e
+if printf '%s' "$main_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  bad "--base-ref main must not trigger BASE_REF_MUST_BE_REF (rc=$main_rc)"
+  printf '%s\n' "$main_out" >&2
+else
+  ok "--base-ref main proceeds past base-ref gate"
+fi
+rm -rf "$main_proj"
 
 printf 'spawn-worker flags tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

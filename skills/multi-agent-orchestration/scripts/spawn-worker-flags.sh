@@ -124,12 +124,18 @@ Options:
                    `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
                    SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
   --no-orca-mode    显式 opt-out ORCA 终端模式：强制走原 tmux + git worktree路径，
-                   不调任何 orca CLI。auto-detect 默认以 `orca worktree current --json`
+                   不走 Orca 控制或资源创建；宿主身份检查可能进行只读 Orca 探测。
+                   auto-detect 默认以 `orca worktree current --json`
                    确认 PROJECT_DIR 是当前 Orca worktree，不依赖 TERM_PROGRAM / ORCA_WORKTREE_ID。
                    命中后用 `orca worktree create` + `orca terminal create --command`，保留 provider env /
                    runtime profile / wrapper / 超长 prompt 投递等所有现有能力；ORCA UI 直接反映
                    worker 生命周期（spawn 完 ORCA 列表多一张卡，sentinel 终态自动切 workspace-status）。
                    --no-worktree 与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。详见 SKILL §6.5。
+  --orca-setup-mode MODE
+                   Orca worktree Setup policy. Default: skip. Although the CLI accepts
+                   skip|inherit|run, MAO currently rejects inherit/run before resource
+                   creation because repo Setup executes before Session Context and guards.
+                   --allow-install-command does not authorize this pre-guard phase.
   --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
                    或同时传 --orca-run-id + --orca-task-id 复用 Wave 预创建 Task；
                    worker-start 是该路径唯一的任务注入器，worker 必须发送一次 worker_done。
@@ -380,6 +386,17 @@ parse_spawn_worker_args() {
       --no-orca-mode)  # v2.1（DEC-114）：显式 opt-out ORCA 终端模式，强制走 tmux 路径
         NO_ORCA_MODE=1
         shift
+        ;;
+      --orca-setup-mode)
+        case "$2" in
+          skip|inherit|run) ORCA_SETUP_MODE="$2" ;;
+          *)
+            echo "ERROR: --orca-setup-mode only accepts skip|inherit|run (got: $2)" >&2
+            usage
+            exit 64
+            ;;
+        esac
+        shift 2
         ;;
       --orca-supervised)  # ORCA 模式 spawn 后纳入原生 Run/Task/Dispatch 生命周期
         ORCA_SUPERVISED=1

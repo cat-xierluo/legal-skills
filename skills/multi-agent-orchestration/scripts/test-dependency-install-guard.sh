@@ -68,6 +68,8 @@ hook() {
     WORKER_AUTHORITY_RECEIPT_FILE="${completion_parent_authority:-}" \
     WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256="${completion_parent_sha:-}" \
     WORKER_ORCA_CLI_BIN="${completion_fake_cli:-}" \
+    ORCA_TERMINAL_HANDLE=term_worker \
+    WORKER_SESSION_CONTEXT= \
     WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
 }
 
@@ -365,11 +367,31 @@ fi
 expect_allow "Dispatch-scoped heartbeat is allowed" \
   hook "$deny_auth" 'orca-dev orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --phase implementing --json'
 expect_allow "bounded worker ask is allowed" \
-  hook "$deny_auth" 'orca orchestration ask --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
-expect_allow "read-only worker check is allowed" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --dispatch-capability cap_123 --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
+expect_allow "pending worker ask resumes the original message id" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --dispatch-capability cap_123 --resume msg_question --timeout-ms 600000 --json'
+expect_block "resumed worker ask cannot create new options" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --resume msg_question --options "A,B" --timeout-ms 600000 --json'
+expect_allow "worker mutation recovery accepts an Orca UUID" \
+  hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --retry-request 11111111-1111-4111-8111-111111111111 --json'
+expect_block "worker mutation recovery rejects a business retry key" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --retry-request retry-business-key --json'
+expect_allow "consuming worker check is allowed" \
+  hook "$deny_auth" 'orca-ide orchestration check --terminal term_worker --json'
+expect_allow "bounded consuming worker wait is allowed" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --wait --types "status,dispatch,decision_gate" --timeout-ms 600000 --json'
+expect_allow "worker may acknowledge only its own processed Delivery" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --ack delivery_worker_1 --json'
+expect_block "worker cannot acknowledge through the coordinator handle" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_coordinator --ack delivery_coordinator_1 --json'
+expect_block "worker peek cannot substitute for consumed guidance" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca-ide orchestration check --peek --types "status,dispatch" --json'
+expect_block "worker check timeout requires an explicit wait" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --timeout-ms 600000 --json'
+expect_block "worker wait requires a bounded timeout" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --wait --json'
 expect_allow "worker check by preamble terminal handle is allowed" \
-  hook "$deny_auth" 'orca orchestration check --terminal term_8cfbab5c-e451-416b-aace-a94fcefb39df'
+    hook "$deny_auth" 'orca orchestration check --terminal term_worker'
 expect_block "worker protocol cannot target a group" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --to @all --json'
 expect_block "worker_done requires explicit outcome" "ORCA_COMPLETION_AUTHORITY_INVALID" \

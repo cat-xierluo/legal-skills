@@ -1,5 +1,22 @@
 # 变更日志
 
+## [1.8.5] - 2026-09-17
+
+### 修复
+
+- `safe-push.sh` 接受裸分支名作为 `--base`：含 `/` 的值必须以 `$REMOTE/` 开头，其他 remote 前缀仍报 `SAFE_PUSH_BASE_REMOTE_MISMATCH`；不含 `/` 的裸分支名规范化为 `$REMOTE/<branch>`，与 `spawn-worker` 白名单生成的 `--base main` 调用形式一致，后续 `base_branch` 派生与 `git fetch $REMOTE $base_branch` 校验沿用规范化后的值。事故：旧实现只接受 `<remote>/<branch>`，`spawn-worker` 派发 worker 调用 `--base main` 一律 `SAFE_PUSH_BASE_REMOTE_MISMATCH`，worker 只能回落到普通裸 push（绕过身份门禁）。
+
+### 验证
+
+- `test-check-outgoing-identities.sh` 新增两个用例：`--base main` 与 `--base origin/main` 等价放行；`--base upstream/main`（remote≠`$REMOTE`）仍以 `SAFE_PUSH_BASE_REMOTE_MISMATCH` 拒绝。
+
+## [1.8.4] - 2026-09-15 - GitHub Actions 额度治理入册（4 仓 7 workflow 停挂实战）
+
+### 新增
+
+- **SKILL.md §11 + `references/github-actions-quota-guard.md`**：账号级分钟额度诊断（billing API、逐仓 (workflow × event) 触发统计、push+PR 双计费识别）；停挂配方（`on:` 块 workflow_dispatch 化、本地等价命令入注释、被 uses 复用须保留 workflow_call、PR 分支自身不再计费）；仓级总闸 `actions/permissions enabled=false`；恢复手册即文件内注释。
+- **事故备忘**：`gh pr merge` 网络中断 + 清理未以 merged 确认为门禁 → head 分支被删 PR 自动关闭；恢复 = 本地重建分支指向原 sha → push → reopen。壳层两坑（JSON 控制字符、管道退出码）一并入册。
+- 触发词：GitHub Actions 额度 / CI 分钟耗尽 / workflow 停挂。
 ## [1.8.3] - 2026-09-07 - 长期分支 PR 实战三坑入册（custom-skills 拆分线实证）
 
 ### 改进

@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 import hashlib
 import fcntl
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,9 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
+
+import orca_rate_limit_recovery as recovery
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -210,7 +215,9 @@ class RecoveryTest(unittest.TestCase):
         if extra:
             command.extend(extra)
         env = {"PATH": os.environ["PATH"], "ORCA_CLI_COMMAND": str(self.fake)}
-        return subprocess.run(command, capture_output=True, text=True, env=env, check=False)
+        # Hang protection, not a latency acceptance threshold. In particular,
+        # lock tests must not include fake CLI startup cost in lock wait timing.
+        return subprocess.run(command, capture_output=True, text=True, env=env, check=False, timeout=30)
 
     def calls(self, command: tuple[str, str]) -> list[dict[str, object]]:
         if not self.log.exists():
@@ -408,12 +415,49 @@ class RecoveryTest(unittest.TestCase):
         with lock_path.open("w") as lock:
             lock_path.chmod(0o600)
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            started = time.monotonic()
+            # The CLI must finish while another open file description STILL
+            # owns the lock. A blocking regression times out, never gets an
+            # unlocked window in which to send, and is killed by run_target.
             result = self.run_target(manifest, execute=True)
-            elapsed = time.monotonic() - started
         self.assertEqual(result.returncode, 75)
-        self.assertLess(elapsed, 2)
         self.assertEqual(self.receipt(result)["reason"], "state_lock_busy")
+        self.assertEqual(self.calls(("terminal", "send")), [])
+
+    def test_busy_state_lock_requests_nonblocking_flock_and_never_sleeps(self) -> None:
+        manifest = self.write_case([worker("term-lock-flags")])
+        self.state_dir.mkdir(mode=0o700)
+        lock_path = self.state_dir / "lock"
+        real_flock = fcntl.flock
+        output = io.StringIO()
+        with lock_path.open("w") as lock:
+            lock_path.chmod(0o600)
+            real_flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            owned = os.fstat(lock.fileno())
+
+            def checked_flock(fd: int, operation: int) -> None:
+                # Assert before calling the OS, so removing LOCK_NB cannot
+                # deadlock this in-process regression test.
+                self.assertEqual(operation, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                attempted = os.fstat(fd)
+                self.assertEqual((attempted.st_dev, attempted.st_ino), (owned.st_dev, owned.st_ino))
+                real_flock(fd, operation)
+
+            with (
+                mock.patch.dict(os.environ, {"ORCA_CLI_COMMAND": str(self.fake)}),
+                mock.patch.object(recovery.fcntl, "flock", side_effect=checked_flock) as flock_call,
+                # Replace only recovery's module binding: patching the global
+                # time.sleep would also intercept subprocess's own wait loop.
+                mock.patch.object(recovery, "time", wraps=time) as recovery_time,
+                redirect_stdout(output),
+            ):
+                recovery_time.sleep.side_effect = AssertionError("busy lock must not retry/sleep")
+                result = recovery.main([
+                    "--manifest", str(manifest), "--state-dir", str(self.state_dir),
+                    "--execute", "--json",
+                ])
+            flock_call.assert_called_once()
+        self.assertEqual(result, 75, output.getvalue())
+        self.assertEqual(json.loads(output.getvalue())["reason"], "state_lock_busy")
         self.assertEqual(self.calls(("terminal", "send")), [])
 
     def test_non_regular_state_lock_is_rejected(self) -> None:

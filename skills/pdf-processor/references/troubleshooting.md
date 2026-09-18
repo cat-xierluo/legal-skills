@@ -1,5 +1,28 @@
 # 故障排除
 
+## 系统 python3 卡死（macOS Xcode Python 3.9）
+
+症状：`pdf-preprocess-ocr.py --help` 或主流程启动后无输出、CPU 0%、无网络活动。原因：`PATH` 里 `/usr/bin/python3` 解析到 Xcode 自带 Python 3.9，import `cryptography`/`_scproxy` 时挂起。处理：显式用 Homebrew Python 并加 `-u` 关闭输出缓冲：
+
+```bash
+/opt/homebrew/bin/python3 -u scripts/pdf-preprocess-ocr.py --input input.pdf --output output.pdf
+```
+
+注意本机 Homebrew Python 3.14 已装齐 pymupdf/pypdf/requests 等依赖，可直接使用。
+
+## PaddleOCR 云端任务已完成但本地叠层失败：结果找回
+
+症状：日志出现两次完整 `OCR 进度: 365/368 页` 后报 `PaddleOCR 叠层失败`（如 ActualText 映射错误或某页过滤为空）。云端任务结果保留期内可直接按 jobId 重新下载，避免重新上传大文件：
+
+1. 从日志取两个 jobId（PP-OCRv6 文字任务 + PP-StructureV3 版面任务）。
+2. `GET {endpoint}/{jobId}`（带 `Authorization: token <key>`）→ `data.resultUrl.jsonUrl` → 下载 JSONL。
+3. 用 `pdf_ocr_paddle_api.parse_jsonl_to_page_entries` / `parse_ppstructure_jsonl_to_page_entries` 解析，`pdf_ocr_corrections.dump_page_entries` 落盘为 dump。
+4. 本地重建：`pdf-ocr.py -i input.pdf -o output.pdf --backend paddle_api --ocr-resume text_dump.json --layout-dump layout_dump.json`。
+
+## MinerU 401 Unauthorized
+
+Token 有效期约 90 天，过期后 `auto` 会跳过 MinerU 直接走 Paddle；到 https://mineru.net/apiManage/token 更新并同步 `config/.env` 的 `MINERU_API_TOKEN`。
+
 ## PDF 预处理报错
 
 检查可选依赖是否已安装：

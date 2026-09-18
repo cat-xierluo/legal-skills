@@ -416,6 +416,35 @@ def _valid_bounded_timeout(value: object) -> bool:
     return 1 <= timeout <= 3_600_000
 
 
+def _valid_orca_retry_request(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(
+        r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
+        value,
+    ) is not None
+
+
+def _trusted_orca_worker_handle() -> str | None:
+    """Resolve the immutable worker handle; conflicting launch/metadata bindings fail closed."""
+    handles: list[str] = []
+    environment_handle = os.environ.get("ORCA_TERMINAL_HANDLE", "").strip()
+    if environment_handle:
+        handles.append(environment_handle)
+    context = os.environ.get("WORKER_SESSION_CONTEXT", "").strip()
+    if context and os.path.isabs(context):
+        metadata = Path(context) / "METADATA.json"
+        try:
+            if metadata.is_file() and not metadata.is_symlink():
+                value = json.loads(metadata.read_text(encoding="utf-8"))
+                metadata_handle = value.get("session", {}).get("orca", {}).get("terminal_handle", "")
+                if isinstance(metadata_handle, str) and metadata_handle.strip():
+                    handles.append(metadata_handle.strip())
+        except (OSError, TypeError, json.JSONDecodeError):
+            return None
+    if not handles or len(set(handles)) != 1:
+        return None
+    return handles[0]
+
+
 def _normalize_shell_line_continuations(command: str) -> str:
     """Delete unquoted/double-quoted backslash-LF pairs as the shell does.
 
@@ -649,6 +678,8 @@ def orca_worker_protocol_decision(command: str, completion_authority_file: str) 
             required.add("--body")
         if not required.issubset(options):
             return True, False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
+            return True, False
         if message_type == "worker_done":
             return True, (
                 tokens[0] in {"orca", "orca-ide", "orca-dev", os.environ.get("WORKER_ORCA_CLI_BIN", "")}
@@ -668,27 +699,36 @@ def orca_worker_protocol_decision(command: str, completion_authority_file: str) 
         )
         if options is None:
             return True, False
+        if options.get("--from") != _trusted_orca_worker_handle():
+            return True, False
         has_question = "--question" in options
         has_resume = "--resume" in options
         if has_question == has_resume:
+            return True, False
+        if has_resume and "--options" in options:
+            return True, False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
             return True, False
         return True, _valid_bounded_timeout(options.get("--timeout-ms"))
 
     if subcommand == "check":
         options = _parse_long_options(
             args,
-            boolean_options={"--json", "--unread", "--peek", "--all", "--format", "--wait"},
-            value_options={"--types", "--timeout-ms", "--retry-request", "--terminal"},
+            boolean_options={"--json", "--wait"},
+            value_options={"--types", "--timeout-ms", "--retry-request", "--terminal", "--ack"},
         )
         if options is None:
             return True, False
-        history_modes = sum(option in options for option in {"--unread", "--peek", "--all"})
-        if history_modes > 1:
+        if options.get("--terminal") != _trusted_orca_worker_handle():
             return True, False
+        if "--retry-request" in options and not _valid_orca_retry_request(options.get("--retry-request")):
+            return True, False
+        if "--ack" in options:
+            return True, ("--wait" not in options and "--timeout-ms" not in options and "--types" not in options)
         if "--wait" in options:
             return True, _valid_bounded_timeout(options.get("--timeout-ms"))
-        if "--timeout-ms" in options:
-            return True, _valid_bounded_timeout(options.get("--timeout-ms"))
+        if "--timeout-ms" in options or "--types" in options:
+            return True, False
         return True, True
 
     return True, False

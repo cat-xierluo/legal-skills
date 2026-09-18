@@ -1,5 +1,18 @@
 # 更新日志
 
+## [2.12.1] - 2026-09-14
+
+### 修复
+
+- 叠层不再因个别页面的 ActualText 段落引用被置信度过滤的行而判死整册：`_apply_semantic_actual_text` 区分「row_indices 越界/文字拼接不匹配（数据损坏，保持 fail-closed）」与「行存在但被置信度阈值过滤（封面/封底艺术字等，降级为行级呈现）」两种情况，后者只跳过该段并计入 `filtered_refs`，不再中断整本书。实测场景：《吾辈如神》368 页扫描书，封面 3D 艺术字段落曾导致全书叠层失败。
+- 整页插图/空白页经阈值过滤后无有效行时，跳过该页文字层并计数（`OCR 有效行为空`），不再以「OCR 结果经阈值过滤后为空」中断整册。
+
+### 技术优化
+
+- `_apply_semantic_actual_text` 新增 `total_rows` 参数用于越界判定；返回值扩展为 `(applied, invalid_mapping, filtered_refs)` 三元组。
+- 新增回归测试 `test_filtered_row_reference_degrades_to_line_level`（行被过滤 → 降级不抛异常），并保留原 fail-closed 契约测试。
+- troubleshooting 新增：macOS Xcode Python 3.9 启动挂死的替代方案（Homebrew Python 3.14 + `-u`）；PaddleOCR 云端任务已完成后按 jobId 找回结果避免重新上传的完整步骤。
+
 ## [2.12.0] - 2026-08-14
 
 ### 新增

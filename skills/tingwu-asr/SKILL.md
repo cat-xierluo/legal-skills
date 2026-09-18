@@ -2,7 +2,7 @@
 name: tingwu-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.2"
+version: "0.4.4"
 license: MIT
 description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 FunASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
 ---
@@ -202,3 +202,7 @@ python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor
 - 网页端免费额度有限，大文件或高频使用可能触发风控
 - 支持格式: mp3/wav/m4a/wma/aac/ogg/amr/flac/aiff/mp4/wmv/mov/mkv/webm/avi 等
 - 音频最大 500M，视频最大 6G，单文件最长 6 小时
+- macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测
+  （`_armv8_sve_probe`）时会死循环挂起，症状是任何 import oss2 的脚本无输出卡死。
+  已在 `tingwu.py` 入口自动设置 `OPENSSL_armcap=0` 绕过；若仍遇到，运行前手动
+  `export OPENSSL_armcap=0`，或升级 cryptography>=42。

@@ -14,6 +14,8 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
+import research_contract
+
 BASE_URL = "https://open.chineselaw.com"
 TIMEOUT = 60
 COST_PER_CALL = "本次调用消耗 10 积分"
@@ -852,8 +854,8 @@ def _ingest_format_raw_json(response):
     return f"```json\n{json.dumps(response, ensure_ascii=False, indent=2)}\n```"
 
 
-# endpoint → (类别, data 提取函数, formatter)
-# - "类别" 用于 consolidate 分组（和 ENDPOINT_CATEGORY 一致）
+# endpoint → (归档类别, data 提取函数, formatter)
+# - "归档类别" 只用于 per-call 底稿格式化，不决定正式报告取舍
 # - 提取函数：response → 列表/字典
 # - formatter：列表/字典 → Markdown 字符串
 INGEST_ROUTING = {
@@ -1050,7 +1052,8 @@ def cmd_ingest(args):
     """从 MCP / 外部 JSON 源消费数据，走与直接 API 相同的归档 + .md 流程。
 
     使用场景：agent 调 mcp__yuandian__* 工具拿到 JSON，把 JSON 喂给本命令，
-    即可走完归档 + 结构化报告 + 后续 consolidate 全流程。
+    生成可追溯的候选底稿。是否进入正式交付，仍由 Agent 复核后写入
+    selected-sources.json；本命令不签发实体法律相关性结论。
     """
     # 1. 读 JSON
     if args.input:
@@ -1756,27 +1759,9 @@ def cmd_enterprise_list(args):
     _print_footer(cost_label=cost_label, archive_md=archive_md, cwd_md=cwd_md)
 
 
-# ── consolidate：把多次 per-call 报告汇总成法律检索报告 ──────────────
+# ── consolidate：从研究计划和 Agent 精选来源生成正式报告 ─────────
 
 
-ENDPOINT_CATEGORY = {
-    "/open/law_vector_search": "法律依据",
-    "/open/rh_ft_search": "法律依据",
-    "/open/rh_ft_detail": "法律依据",
-    "/open/case_vector_search": "司法案例",
-    "/open/rh_ptal_search": "司法案例",
-    "/open/rh_qwal_search": "司法案例",
-    "/open/rh_case_details": "司法案例",
-    "/open/rh_fg_search": "行政法规",
-    "/open/rh_fg_detail": "行政法规",
-}
-
-CATEGORY_ORDER = ["法律依据", "司法案例", "行政法规"]
-CATEGORY_HEADING = {
-    "法律依据": "### 6.1 法律依据",
-    "司法案例": "### 6.2 司法案例",
-    "行政法规": "### 6.3 行政法规",
-}
 YUANDIAN_MD_PATTERN = re.compile(r"^\d{8}_\d{6}_.+\.md$")
 
 
@@ -1788,38 +1773,6 @@ def _consolidate_report_link(path):
         return path.resolve().as_uri()
     except (OSError, ValueError):
         return path.name
-
-
-def _consolidate_build_support_table(records, limit=12):
-    """生成结论区的核心依据速查表，让读者先看到支撑材料地图。"""
-    role_by_category = {
-        "法律依据": "确认规范依据",
-        "司法案例": "类案裁判观点",
-        "行政法规": "补充监管规则",
-    }
-    rows = []
-    for record in records[:limit]:
-        category = record.get("category") or "其他"
-        role = role_by_category.get(category, "核实或背景材料")
-        md_path = record.get("md_path")
-        md_link = _consolidate_report_link(md_path) if md_path else ""
-        report_link = f"[查看底稿]({md_link})" if md_link else "（无底稿）"
-        rows.append(
-            f"| {category} | {record.get('query_summary', '')} | {role} | {report_link} |"
-        )
-
-    if not rows:
-        return "_（本次报告未纳入可展示的检索底稿）_"
-
-    table = "\n".join([
-        "| 类型 | 检索方向 | 对结论的作用 | 底稿 |",
-        "|------|----------|--------------|------|",
-        *rows,
-    ])
-    extra_count = max(len(records) - limit, 0)
-    if extra_count:
-        table += f"\n\n_另有 {extra_count} 条底稿见第七节检索明细。_"
-    return table
 
 
 def _consolidate_slugify(s):
@@ -1860,31 +1813,6 @@ def _consolidate_resolve_includes(include_str, cwd):
     return sorted(matched, key=lambda x: x[0].name)
 
 
-def _consolidate_extract_body(md_path):
-    """从 per-call .md 提取 '## 检索结果' 到 '## 引用来源' 之间的正文。
-
-    同时去掉 per-call 报告里的 '共 X 条结果' 提示行（consolidate 中冗余，
-    因为检索明细表里已经能看到每条的命中数）。
-    """
-    try:
-        content = md_path.read_text("utf-8")
-    except OSError:
-        return ""
-    start_marker = "## 检索结果"
-    end_marker = "## 引用来源"
-    start_idx = content.find(start_marker)
-    if start_idx < 0:
-        return content
-    end_idx = content.find(end_marker, start_idx)
-    if end_idx < 0:
-        end_idx = len(content)
-    body = content[start_idx + len(start_marker):end_idx]
-    # 去掉 per-call 的"共 X 条结果..."提示行
-    body = re.sub(r"^共\s+\d+\s+条结果[，,]\s*显示前\s+\d+\s+条\s*\n+", "", body, flags=re.MULTILINE)
-    body = re.sub(r"^共\s+\d+\s+条结果，当前第\s+\d+\s+页（每页\s+\d+\s+条）\s*\n+", "", body, flags=re.MULTILINE)
-    return body.strip()
-
-
 def _consolidate_extract_meta(json_path):
     """从 per-call .json 提取元信息（时间/接口）。"""
     if json_path is None:
@@ -1910,16 +1838,50 @@ def _consolidate_extract_cost_from_md(md_path):
 
 
 def cmd_consolidate(args):
-    """把多次检索的 per-call 报告汇总成一份法律检索报告，并归类到项目子目录"""
+    """从有效研究计划和 Agent 精选清单生成法律检索报告。"""
     cwd = Path(os.environ.get("YD_USER_CWD") or str(Path.cwd()))
-    include_str = args.include
-    if not include_str:
-        print("错误：--include 必填，逗号分隔的查询子串（如 '违约金,高空抛物'）", file=sys.stderr)
+    # 延迟导入以避免 query_filter_validator 在加载真实 CLI parser 时产生顶层循环依赖。
+    try:
+        import query_filter_validator
+    except Exception as exc:
+        print(f"错误：无法加载查询字段校验器：{type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        plan = research_contract.load_json_object(args.research_plan, "research plan")
+        selection = research_contract.load_json_object(args.selection, "selected sources")
+        filter_errors, _ = query_filter_validator.validate_plan(plan)
+    except (research_contract.ContractInputError, query_filter_validator.PlanInputError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as exc:
+        print(f"错误：合同校验器初始化／执行失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    plan_errors = research_contract.validate_research_plan(plan)
+    selection_errors = research_contract.validate_selected_sources(selection, plan)
+    if plan_errors or filter_errors or selection_errors:
+        for label, errors in (("research plan", plan_errors), ("selected sources", selection_errors)):
+            if not errors:
+                continue
+            print(f"错误：{label} 存在 {len(errors)} 处合同违规：", file=sys.stderr)
+            for item in errors:
+                print(f"  - {item['path']}: {item['msg']}", file=sys.stderr)
+        if filter_errors:
+            print(f"错误：research plan 存在 {len(filter_errors)} 处 interface×filter 违规：", file=sys.stderr)
+            for item in filter_errors:
+                field = f" field={item['field']}" if item.get("field") is not None else ""
+                print(
+                    f"  - [{item['case_id']}] {item['query_id']} interface={item['interface']}"
+                    f"{field}: {item['msg']}",
+                    file=sys.stderr,
+                )
+        print("正式报告已阻断；先修正合同并重新运行 validate-research-contract.py。", file=sys.stderr)
         sys.exit(1)
 
-    pairs = _consolidate_resolve_includes(include_str, cwd)
-    if not pairs:
-        print(f"错误：未在 {cwd} 中匹配到任何 yuandian 报告", file=sys.stderr)
+    include_str = args.include or ""
+    pairs = _consolidate_resolve_includes(include_str, cwd) if include_str else []
+    if include_str and not pairs:
+        print(f"错误：未在 {cwd} 中匹配到任何 yuandian 原始检索报告", file=sys.stderr)
         print(f"  - --include：{include_str}", file=sys.stderr)
         print(f"  - 匹配规则：*<子串>*.md 且符合 <8位时间戳>_<6位时间戳>_<查询>.md 命名", file=sys.stderr)
         sys.exit(1)
@@ -1934,6 +1896,12 @@ def cmd_consolidate(args):
         project_name = f"untitled-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     project_dir = SKILL_ROOT / "archive" / project_name
     project_dir.mkdir(parents=True, exist_ok=True)
+
+    # 把本次正式交付使用的两个合同一并归档；原文件不移动。
+    plan_copy = project_dir / "research-plan.json"
+    selection_copy = project_dir / "selected-sources.json"
+    plan_copy.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    selection_copy.write_text(json.dumps(selection, ensure_ascii=False, indent=2) + "\n", "utf-8")
 
     # 移动 per-call .md 和 .json 到项目子目录
     # - .md: 从 archive/ 根目录的"v1.4.0 副本"移动（v1.4.0 同时也写了 CWD 副本，工作副本不丢）
@@ -1969,32 +1937,6 @@ def cmd_consolidate(args):
         project_pairs.append((project_md, json_path, query_summary))
     pairs = project_pairs
 
-    # 按 endpoint 类别分组
-    by_category = {cat: [] for cat in CATEGORY_ORDER}
-    other_records = []
-    all_records = []
-
-    for md_path, json_path, query_summary in pairs:
-        meta = _consolidate_extract_meta(json_path) if json_path else {}
-        endpoint = meta.get("endpoint", "")
-        category_key = ENDPOINT_CATEGORY.get(endpoint)
-        body = _consolidate_extract_body(md_path)
-        record = {
-            "md_path": md_path,
-            "json_path": json_path,
-            "query_summary": query_summary,
-            "endpoint": endpoint,
-            "timestamp": meta.get("timestamp", ""),
-            "cost": _consolidate_extract_cost_from_md(md_path),
-            "body": body,
-            "category": category_key or "其他",
-        }
-        if category_key in by_category:
-            by_category[category_key].append(record)
-        else:
-            other_records.append(record)
-        all_records.append(record)
-
     # 渲染报告
     timestamp = datetime.now().isoformat(timespec="seconds")
 
@@ -2002,18 +1944,14 @@ def cmd_consolidate(args):
     if args.purpose:
         purpose_section = args.purpose
     else:
-        topics = [q for _, _, q in pairs]
-        topics_str = "、".join(topics)
-        purpose_section = f"本次检索围绕 **{topics_str}** 等方向展开。"
+        issue_questions = [
+            issue.get("question", "")
+            for issue in plan.get("issues", [])
+            if isinstance(issue, dict) and issue.get("question")
+        ]
+        purpose_section = "本次检索验证以下法律命题：" + "；".join(issue_questions)
 
-    # 检索结论
-    if args.conclusion:
-        conclusion_section = args.conclusion
-    else:
-        conclusion_section = (
-            "（未传入 --conclusion。面向客户、法官或内部复核交付时，"
-            "请在此补写一句话结论：可否主张、主要依据、关键风险。）"
-        )
+    conclusion_section = args.conclusion
 
     risks_section = args.risks or (
         "（请结合第四节分析补充：不利类案、法律适用分歧、效力时点、"
@@ -2023,23 +1961,12 @@ def cmd_consolidate(args):
         "（请补充可执行步骤：补强证据、追加检索、调整诉讼请求、"
         "准备抗辩或向客户确认事实。）"
     )
-    support_table = _consolidate_build_support_table(all_records)
-
-    # 检索结果（按类别）
-    result_sections = []
-    for cat in CATEGORY_ORDER:
-        records = by_category[cat]
-        if not records:
-            continue
-        heading = CATEGORY_HEADING[cat]
-        bodies = "\n\n---\n\n".join(r["body"] for r in records if r["body"])
-        if bodies:
-            result_sections.append(f"{heading}\n\n{bodies}")
-
-    if other_records:
-        other_bodies = "\n\n---\n\n".join(r["body"] for r in other_records if r["body"])
-        if other_bodies:
-            result_sections.append(f"### 6.4 其他核实材料\n\n{other_bodies}")
+    support_table = research_contract.render_support_table(selection)
+    selected_sections = research_contract.render_selected_sections(selection)
+    subsumption_table = research_contract.render_subsumption_summary(plan)
+    query_trace = research_contract.render_query_trace(plan)
+    unresolved_table = research_contract.render_unresolved(selection)
+    excluded_table = research_contract.render_excluded(selection)
 
     # 检索明细表（链接指向项目子目录里的副本，json 仍用 file://）
     detail_rows = []
@@ -2058,7 +1985,8 @@ def cmd_consolidate(args):
         detail_rows.append(
             f"| {i} | {ts} | {query_summary} | `{endpoint}` | {cost} | {report_links} |"
         )
-    detail_table = "\n".join(detail_rows)
+    detail_table = "\n".join(detail_rows) if detail_rows else "_未附带原始 per-call 文件；检索计划与精选清单已归档。_"
+    selected_count = len(selection.get("selected_sources", []))
 
     # 拼装
     md_content = (
@@ -2067,7 +1995,8 @@ def cmd_consolidate(args):
         f"> 生成时间：{timestamp}\n"
         f"> 检索主体：AI Agent / yuandian-law-search\n"
         f"> 检索平台：元典开放平台 open.chineselaw.com\n"
-        f"> 引用检索明细：{len(pairs)} 条\n"
+        f"> 精选依据：{selected_count} 条\n"
+        f"> 原始检索调用：{len(pairs)} 条（仅作轨迹，不整体进入正文）\n"
         f"> 项目包：`archive/{project_name}/`\n"
         f"\n"
         f"## 一、案情简介\n"
@@ -2098,26 +2027,47 @@ def cmd_consolidate(args):
         f"\n"
         f"## 四、分析与判断\n"
         f"\n"
+        f"### 4.1 涵摄矩阵摘要\n"
+        f"\n"
+        f"{subsumption_table}\n"
+        f"\n"
+        f"### 4.2 综合分析\n"
+        f"\n"
         f"{args.analysis}\n"
         f"\n"
         f"## 五、检索思路与方法\n"
         f"\n"
         f"{args.strategy}\n"
         f"\n"
-        f"### 5.1 检索范围\n"
+        f"### 5.1 命题—缺口—查询轨迹\n"
+        f"\n"
+        f"{query_trace}\n"
+        f"\n"
+        f"### 5.2 交付门禁\n"
         f"\n"
         f"| 项目 | 内容 |\n"
         f"|------|------|\n"
-        f"| 纳入规则 | `{include_str}` |\n"
+        f"| 正文来源 | `selected-sources.json`（仅 HIGH/MEDIUM 且已核验） |\n"
+        f"| 原始召回 | 仅归档和检索轨迹，不复制进入正文 |\n"
         f"| 检索平台 | 元典开放平台 |\n"
         f"| 生成时间 | {timestamp} |\n"
         f"| 项目包 | `archive/{project_name}/` |\n"
         f"\n"
-        f"## 六、检索结果\n"
+        f"## 六、精选法律依据与案例\n"
         f"\n"
-        f"{chr(10).join(result_sections) if result_sections else '_（本次检索未匹配到法律/案例/法规类别）_'}\n"
+        f"{selected_sections}\n"
         f"\n"
-        f"## 七、检索明细\n"
+        f"## 七、未解决问题、排除记录与原始轨迹\n"
+        f"\n"
+        f"### 7.1 尚未取得充分依据的命题\n"
+        f"\n"
+        f"{unresolved_table}\n"
+        f"\n"
+        f"### 7.2 已排除候选\n"
+        f"\n"
+        f"{excluded_table}\n"
+        f"\n"
+        f"### 7.3 原始检索调用\n"
         f"\n"
         f"| # | 时间 | 检索词 | 接口 | 积分 | 报告 |\n"
         f"|---|------|--------|------|------|------|\n"
@@ -2146,17 +2096,14 @@ def cmd_consolidate(args):
     print(f"已生成项目包：{project_dir}")
     print(f"  - 项目名称：{project_name}")
     print(f"  - 法律检索报告：{project_report_path}")
+    print(f"  - research plan：{plan_copy}")
+    print(f"  - selected sources：{selection_copy}")
     if cwd_copy:
         print(f"  - CWD 副本：{cwd_copy}")
     print(f"  - per-call .md：移动 {moved_md} 份 + 复制 {copied_md} 份到项目子目录（CWD 保留工作副本）")
     print(f"  - per-call .json：移动 {moved_json} 份到项目子目录（archive 根目录已清理）")
-    print(f"  - 检索明细：{len(pairs)} 条")
-    for cat in CATEGORY_ORDER:
-        n = len(by_category[cat])
-        if n:
-            print(f"  - {cat}：{n} 条")
-    if other_records:
-        print(f"  - 其他（未分类）：{len(other_records)} 条")
+    print(f"  - 精选依据：{selected_count} 条")
+    print(f"  - 原始检索调用：{len(pairs)} 条（仅归档／轨迹）")
 
 
 # ── 参数解析 ──────────────────────────────────────────────
@@ -2172,6 +2119,11 @@ def _add_law_filters(parser):
 
 def build_parser():
     _strategy = load_strategy()
+    _semantic_return_num = {
+        "economical": 8,
+        "balanced": 12,
+        "aggressive": 20,
+    }.get(_strategy, 12)
 
     parser = argparse.ArgumentParser(
         description="元典法条检索命令行工具（开放平台版）",
@@ -2204,7 +2156,8 @@ def build_parser():
     _add_law_filters(p)
     p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询（默认 true）")
     p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=20 if _strategy == "economical" else 45, help="返回数量")
+    p.add_argument("--return-num", type=int, default=_semantic_return_num,
+                   help=f"候选返回数量（当前策略默认 {_semantic_return_num}；原始召回不直接进入正式报告）")
     p.add_argument("--law-start", help="法条生效起始日期 yyyy-MM-dd")
     p.add_argument("--law-end", help="法条生效结束日期 yyyy-MM-dd")
     p.set_defaults(func=cmd_search)
@@ -2265,7 +2218,8 @@ def build_parser():
     p.add_argument("--cj", help="法院层级：最高/高级/中级/基层")
     p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询")
     p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=20 if _strategy == "economical" else 45, help="返回数量")
+    p.add_argument("--return-num", type=int, default=_semantic_return_num,
+                   help=f"候选返回数量（当前策略默认 {_semantic_return_num}；原始召回不直接进入正式报告）")
     p.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
     p.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
     p.set_defaults(func=cmd_case_semantic)
@@ -2347,18 +2301,23 @@ def build_parser():
     p.set_defaults(func=cmd_strategy)
 
     # ── consolidate ──
-    p = sub.add_parser("consolidate", help="把多次检索的 per-call 报告汇总成一份法律检索报告")
+    p = sub.add_parser("consolidate", help="从研究计划和 Agent 精选来源生成法律检索报告")
     p.add_argument("--title", help="报告标题（默认 '法律检索报告'）")
     p.add_argument("--project", help="项目子目录名（默认从 --title slugify；用于 archive/<project>/ 归类）")
     p.add_argument("--case", required=True, help="案情简介（一、案情简介）")
     p.add_argument("--strategy", required=True, help="检索思路与方法（五、检索思路与方法）")
     p.add_argument("--analysis", required=True, help="分析与判断（四、分析与判断）")
-    p.add_argument("--include", required=True, help="要包含的 per-call 报告（逗号分隔的查询子串）")
-    p.add_argument("--purpose", help="检索目的与问题（二、可选；不传则基于检索词自动推断）")
-    p.add_argument("--conclusion", help="检索结论（三、强烈建议传入；不传则保留补写提示）")
+    p.add_argument("--research-plan", required=True, help="已通过校验的涵摄式 research-plan.json")
+    p.add_argument("--selection", required=True, help="Agent 复核后生成的 selected-sources.json")
+    p.add_argument("--include", help="仅归档／列示的 per-call 报告查询子串；其正文不会进入正式报告")
+    p.add_argument("--purpose", help="检索目的与问题（二、可选；不传则基于 research plan 争点生成）")
+    p.add_argument("--conclusion", required=True, help="检索结论（三、正式报告必填）")
     p.add_argument("--risks", help="风险与不确定性（三、可选；用于 3.3）")
     p.add_argument("--next-actions", help="后续行动（三、可选；用于 3.4）")
-    p.add_argument("--output", help="输出文件路径（默认同时写 CWD 和 archive/<project>/；指定则只写到指定路径）")
+    p.add_argument(
+        "--output",
+        help="额外输出文件路径（项目包始终保留正式报告；指定后不再写 CWD 默认副本）",
+    )
     p.set_defaults(func=cmd_consolidate)
 
     # ── hall-detect ──

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.4] - 2026-09-16
+
+### 修复
+- `tingwu.py` / `browser_auth.py`：macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测（`_armv8_sve_probe`）死循环，任何 import oss2 的脚本无输出挂死（dlopen 阶段）。入口自动设置 `OPENSSL_armcap=0` 绕过；`browser_auth.py` 被 MCP Playwright 单独加载，补同款防护
+- `transcribe.py` / `poll_tasks.py`：AI 总结环节每次必报「总结文件不存在」——`summary.py inject` 需要 Agent 预先生成 `{out}.json`（prompt → LLM → inject），纯脚本 runtime 里 json 不存在属正常态。改为三分支：无 json 打印延后提示、有 json 真实注入并校验 rc、summary.py 缺失时跳过。顺带子进程 `python3` 改 `sys.executable`（venv/其他解释器 runtime 下不再错调系统 Python）
+
+### 新增
+- `poll_tasks.py` 落地 9ae3c71f 预定但从未实现的软错误识别：后端把拒绝类错误（如「仅支持16k及以上采样率文件」）归到 status=2（名义"转录中"），仅看 status 会无限轮询（2026-06-22 抖音无声视频真实案例）。从 statusMsg 关键词识别，命中即判失败并记录 `后端拒绝(status=2): ...`
+- `poll_tasks.py` 补 `check_once(task_id_filter=)` 签名与 CLI `--once` / `--task-id` 参数——watch_active.sh 一直调用的就是这组参数，此前 argparse 直接报错；过滤模式下写回 pending 按 trans_id 剔除，不再误抹其他任务
+- `tests/test_summary_flow.py`：AI 总结三分支回归测试（无 json / 有 json 真实注入 / verify 校验）
+
+### 验证
+- 65 分钟培训视频全流程实测（261MB，说话人 2 分离，56 张幻灯片，17,460 字）
+- 存量 4 个 poll_tasks 单测从全挂到 4/4 通过；新增 summary 三分支测试 ALL PASS；watch_active.sh `bash -n` 语法通过
+
+## [0.4.3] - 2026-09-13
+
+### Fixed
+- `poll_tasks.py` / `tingwu.py` 修复异步任务刚提交即被误判"已完成"：实测听悟 `status=0` 有二义性（刚提交、转录未开始 与 真正完成 均为 0），原 `status in (0, 3)` 判定在提交后首轮轮询就拉取空结果，生成空 Markdown 并写入空归档
+- 完成判定改为 `status == 3 or (status == 0 and transStartTime 已设置)`；transStartTime 在转录实际开始后才会下发，可区分"刚创建"与"已完成"
+- 状态标签同步修正：`0` 显示为"已提交，待转录开始"，`1` 显示为"排队中/转录中"
+
+### 验证
+- Vol21 全场回放（116 分钟）实测复现误判并修复后重新拉取：36,575 字、说话人 2 人分离、43 张幻灯片、章节索引覆盖 00:00–01:56:23
+- 边界用例 5/5：刚提交（status=0 无 transStartTime）→ 未完成；转录中（status=1）→ 未完成；上传中（status=11）→ 未完成；status=3 → 完成；status=0 + transStartTime → 完成
+
 ## [0.4.2] - 2026-09-09
 
 ### Fixed

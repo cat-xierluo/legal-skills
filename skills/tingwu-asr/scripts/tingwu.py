@@ -8,6 +8,12 @@ import time
 import uuid
 from pathlib import Path
 
+# macOS (Apple Silicon) + cryptography<=41 静态链接的 OpenSSL 在 CPU 探测时
+# (_armv8_sve_probe) 会死循环导致 dlopen 挂起；提前禁用 armcap 探测可绕过。
+# 必须在 import oss2/cryptography 之前设置。
+if sys.platform == "darwin" and not os.environ.get("OPENSSL_armcap"):
+    os.environ["OPENSSL_armcap"] = "0"
+
 try:
     import requests
 except ImportError:
@@ -221,7 +227,7 @@ class TingwuClient:
 
     def poll_until_done(self, trans_id, interval=10, timeout=3600):
         start = time.time()
-        status_names = {0: "已完成", 1: "排队中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
+        status_names = {0: "已提交，待转录开始", 1: "排队中/转录中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
         while time.time() - start < timeout:
             try:
                 info = self.get_trans_list(trans_id)
@@ -246,7 +252,10 @@ class TingwuClient:
                     extra += f" | 音频时长: {duration / 60:.0f} 分钟"
 
                 print(f"\r  转录状态: {name}{extra}        ", end="", flush=True)
-                if status in (0, 3):
+                # 实测 status=0 有二义性：刚提交（转录未开始，transStartTime 为空）与
+                # 真正完成均是 0。仅当 transStartTime 已设置才视为完成，否则会把刚
+                # 提交的任务误判为已完成并拉到空结果（2026-09-13 Vol21 实录）。
+                if status == 3 or (status == 0 and info.get("transStartTime")):
                     print()
                     return info
                 if status == 4:

@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.23.3"
+  version: "2.27.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -28,7 +28,7 @@ metadata:
 - branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
 - 宿主不能启动或控制本地 Agent CLI 时：使用宿主自己的 subagent 能力。
 
-本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。真实 provider 配置及备份不得进入 Git、日志或交付物。
+本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
 
 交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
 
@@ -72,11 +72,11 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 
 ### 3.3 运行时安全门
 
-- `spawn-worker.sh` 从完整进程祖先链识别真实 PM harness，并对嵌套层白名单取交集。未知、冲突或不可证明的宿主失败关闭；`--pm-harness` 只做一致性声明，不能提权。
-- Claude Code/Codex PM 可派 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy、QoderWork CN PM 只能派自身。zcode 默认禁用，只有用户明确授权后修改 `config/harness-backend-policy.json` 才可开启。
+- `spawn-worker.sh` 从完整进程祖先链识别真实 PM harness，并对嵌套层白名单取交集。未知、冲突或不可证明的宿主失败关闭；`--pm-harness` 只做一致性声明，不能提权。`--base-ref` 只接受引用名（`main`、`origin/main`、`refs/heads/x` 等），不接受裸 sha——40-hex（以及 7—40 位纯十六进制且 git 解析为 commit 而非引用名）会在任何 worktree/provider/terminal 副作用前以 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 拒绝并退出，避免后续 pm-cleanup-worker 在 `INTEGRATION_TARGET_MISMATCH`（argument=main vs metadata=sha）与 `PR_BASE_MISMATCH`（expected=sha vs actual=main）之间死锁。
+- Claude Code/Codex PM 可派 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy、QoderWork CN PM 只能派自身。zcode 与 hermes 仅在用户明确授权并记录于 `config/harness-backend-policy.json` 的 `policy_notes` 后开启（hermes PM 宿主签名走路径级识别：Hermes.app bundle 与 `.hermes/hermes-agent/` 安装目录，裸 `hermes` 词不作为签名；hermes PM 可派全部受支持 worker backend：claude-code、codex、codebuddy、qoderwork-cn、zcode）。
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
-- Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许安装。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
+- Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许门禁后的 worker 安装。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
 - 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。
@@ -100,7 +100,7 @@ orca status --json
 多 worker supervised Wave 必须先一次性写 manifest、创建一个 Run 并预建全部 Task，receipt 成功后才并行启动。不要让并发 spawn 各自创建/重绑 Run，也不要在 `worker-start` 注入任务后再次发送完整 prompt。
 
 ```bash
-bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --receipt /tmp/wave-receipt.json
+bash scripts/orca-wave-prepare.sh --manifest /tmp/wave.json --from "$PM_TERMINAL" --receipt /tmp/wave-receipt.json
 WAVE_RUNTIME_ID=$(jq -er '._meta.runtimeId' /tmp/wave-receipt.json)
 
 bash scripts/spawn-worker.sh \
@@ -113,13 +113,19 @@ bash scripts/spawn-worker.sh \
   --orca-task-id "$TASK_A_ID"
 ```
 
-新 Wave 必须把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；启动前、terminal 创建前与 worker-start 前核对，发现漂移即拒绝。旧调用省略时明确标记 `SPAWN_COORDINATOR_RUNTIME_UNVERIFIED`，不具备此检查；runtime 相同也不证明 handle 存活，仍需 Orca 的 consumer fencing。
+`PM_TERMINAL` 必须是明确属于本轮 PM 的终端句柄，不从 UI 焦点猜测。新 Wave 把 receipt 的 `_meta.runtimeId` 程序化传入 `--orca-runtime-id`；sender、终端活性与 Run/coordinator 在创建 Worker 资源前共同核验，预建 Wave 不重复建 Task/重绑 Run。单 Worker 可在 quota/mem 通过后、新建 lease/worktree/terminal 前准备 Run；无可靠 sender 则拒绝。旧上下文缺 runtime 时只能正向重验当前绑定并明确历史连续性未验证，已有 runtime 漂移不能绕过；仍以 Orca consumer fencing 作最终判断。
 
 完整 manifest、Terminal-managed、Dispatch 自检、cold-start 恢复、settle 与 metadata 合同读取 `references/13-orca-cli-worker.md`。PM 的 read/show/send/wait/reply/release/ack/settle/pr-audit/closeout 命令读取 `references/14-pm-orchestrate.md`。
+
+跨 session 的重要请求使用 `pm-orchestrate.sh send --message-contract`：先用 `worker-show` 复验精确 Run/Task/Dispatch/worker，再固定 sender、业务 thread、correlation、expected action 与 evidence refs；Orca 原生 thread 承载 correlation，使无 payload 的原生 reply 仍能继承可核对的关联标识，业务 thread 保留在合同 payload。send receipt 必须绑定同一 Dispatch relay 的 Orca message ID 与完整请求摘要；成功只证明 `durably_enqueued`。只读巡检使用 `inbox`（`check --peek`），所有出现的顶层及 payload 身份/类型别名必须一致；结构化消息须有精确 provenance，无 payload 的原生关联消息须同时给 thread+correlation 过滤器并精确匹配 worker sender、coordinator recipient、Run 与原生 correlation thread。相关消息可见不证明执行过 `reply`、已消费、开始执行或完成业务。状态层级、白名单、幂等指纹和敏感载荷拒绝规则统一读取 `references/14-pm-orchestrate.md`，不要另造聊天层或用 terminal prompt 代替 Orca 消息。
+
+Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或断线后只按原 message ID `--resume`，不得重发新问题，也不得把普通 ask 升格为 decision gate。PM 的 `wait` 按最多 50 条完整 FIFO Delivery 返回顺序分类 receipt，同一批在 ack 前重放；逐条完成 question reply、escalation 处置、worker_done 业务验收及 terminal ownership 后，才 ack 精确 Delivery。ack 回执若同时交付下一批，必须按 receipt 继续处理，不能把确认上一批误当作下一批已处理。Worker 在新文件前、每次 scoped test 后和 `worker_done` 前执行非 peek `check --terminal <live worker handle>`，处理整批后仅以同一 handle ack 该 Worker Delivery，并继续排空后续批次；`send` 成功或 `inbox --peek` 可见均不证明 Worker 已处理。`consumer_fenced` 表示 consumer generation/进程身份已被替换，`dispatch_inactive` 表示原 Dispatch 已 settled、stopped 或不再 active；任一出现都立即停止、不得重试 check 或发送 `worker_done`。强制前缀和 Shell 门禁共同拒绝以 `--peek/--all/--unread` 冒充处理；Worker 的 scoped ack 不能指定 coordinator handle，也不授予 reply、release、stop 或 Task mutation。
 
 ### 4.3 Worker Prompt 与 Session Context
 
 使用 `templates/worker-prompt.md`，至少写明：任务卡、范围、禁止项、验证命令、完成协议、branch lifecycle、integration target、资源 owner、安装授权和 Git identity。supervised 的 `worker-start` 是唯一任务注入器；长 prompt 可落到 `WORKER_PROMPT.md`，terminal 只发送短 Read 指令。
+
+实际 Task spec 的共同前缀补齐 ask/resume、自然检查点收件、最终收件、最小实施、scoped 验证、授权文件 commit 和唯一 Session Context RESULT；review-only/no-change 不造空提交。`spawn-worker.sh` 在所有合法后端启动链路注入绝对 `WORKER_SESSION_CONTEXT`，不依赖安装/scope guard 是否启用；合法 `prompt_only_degraded` 且无 allow-paths 的 worker 也能定位。该值仅用于定位，不授予安装/Shell/scope 权限，不把降级冒充 hook 活跃。Worker 在自身进程中检查该值及所有非空旧 guard 绑定（`SCOPE_GUARD_SESSION_ROOT`、`WORKER_INSTALL_AUTH_FILE` 父目录）拼写一致且目录存在，全部检查成功后才采用路径；全缺失、任一相对/冲突/不可用时交 PM，不猜仓库根目录，不修改 authority。旧调用仍可由旧 guard 绑定定位。前缀不扩安装、Shell 或 push/PR 权限；辅助命令与 `.venv` opt-in 流程见 `references/02-runtime-dependencies.md`。
 
 ```text
 <worktree>/.claude/agent-sessions/<session>/
@@ -188,7 +194,7 @@ Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分�
 
 默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具。个人偏好写入 ignored 的 `config/orchestration-personal.json`，项目策略写入 `.claude/orchestration.config.json`；个人配置只能在 harness 白名单内选择 backend。
 
-启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。
+启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。sub2api 网关的四条积分 lane（qwenworkai / lobsterai / autoclaw / codebuddy）可用 `scripts/quota_summary_sub2api.py` 从网关 `/ui/api/quota` 聚合端点拉取合并写入（只更新这四条 lane、其余 lane 原样保留；qw 每日 100 当日过期、lobster campaign 分项临期 → lane 记录带 `remaining_total` / `credit_items`，PM 派简单批量任务前先看临期分项，把当日过期积分在过期前吃掉），数据流与 lane 定义读取 `references/24-sub2api-quota-producer.md`。
 
 系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI。检查命令：
 
@@ -209,6 +215,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
 | Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
 | zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
+| sub2api 四条积分 lane（qw/lobster/autoclaw/codebuddy）的生产链路与临期调度 | `references/24-sub2api-quota-producer.md` |
 | 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
