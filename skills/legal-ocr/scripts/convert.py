@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from base import BackendResult, ConvertOptions  # noqa: E402
 from mineru_ocr import MinerUBackend  # noqa: E402
 from paddle_ocr import PaddleOCRBackend  # noqa: E402
+from rapid_ocr import RapidOCRBackend  # noqa: E402
 from common import (  # noqa: E402
     PADDLE_LOCAL_SUFFIXES,
     SourceInfo,
@@ -58,7 +59,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="将 PDF、图片、Office 文档或 URL 转换为 Markdown，并在法律材料中自动启用保守增强"
     )
     parser.add_argument("input", help='本地文件、远程 URL，或 "checktoken"')
-    parser.add_argument("--backend", choices=["auto", "paddle", "mineru"], default=None)
+    parser.add_argument("--backend", choices=["auto", "paddle", "mineru", "rapid"], default=None)
     parser.add_argument(
         "--text-layer",
         choices=["auto", "never", "always"],
@@ -157,6 +158,8 @@ def make_backend(name: str, env: dict[str, str]) -> Any:
         return PaddleOCRBackend(env)
     if name == "mineru":
         return MinerUBackend(env)
+    if name == "rapid":
+        return RapidOCRBackend(env)
     raise ValueError(f"未知后端：{name}")
 
 
@@ -528,9 +531,9 @@ def maybe_probe_text_layer(
     if mode == "never":
         return None, {"enabled": False, "reason": "mode_never"}
 
-    # 显式指定 --backend paddle|mineru 时，用户想要 OCR；文本层分支让位。
+    # 显式指定 --backend paddle|mineru|rapid 时，用户想要 OCR；文本层分支让位。
     configured_backend = (args.backend or env.get("LEGAL_OCR_BACKEND", "auto")).lower()
-    if configured_backend in {"paddle", "mineru"} and mode != "always":
+    if configured_backend in {"paddle", "mineru", "rapid"} and mode != "always":
         return None, {"enabled": False, "reason": "explicit_ocr_backend"}
 
     thresholds = load_thresholds(env)

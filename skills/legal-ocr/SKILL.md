@@ -1,7 +1,7 @@
 ---
 name: legal-ocr
 description: 本技能应在用户需要 OCR、扫描识别、图片文字识别、文档识别，或将 PDF、图片、Office 文档、URL 转换为 Markdown 时使用。检测到法律材料时可进行保守的法律术语与文书结构优化。不要用于法律事实判断、补写缺失内容、语义改写、印章深度识别或图表实体分析。
-version: "1.5.0"
+version: "1.6.0"
 license: MIT
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -14,7 +14,9 @@ homepage: https://github.com/cat-xierluo/legal-skills
 - 只配置 PaddleOCR：PaddleOCR 支持的 PDF / 图片优先走 PaddleOCR；超出能力边界时再提示或改走 MinerU 支持链路。
 - 只配置 MinerU Token：所有 MinerU 支持的输入统一走 MinerU，包含 PDF、图片、Office、远程文档 URL 和网页 URL。
 - 同时配置两套 API：本地 PDF / 图片优先 PaddleOCR，Office / 网页 URL 优先 MinerU；首选后端出现额度、频率、鉴权、网络或服务失败时自动尝试候选后端。
-- 两套 API 都未配置：使用 MinerU 轻量接口处理小文件，并在超限时提示补充 Token。
+- 本机已安装 RapidOCR 时，本地 PDF / 图片把本地 RapidOCR 作为云端失败后的最后一级候选。
+- 两套 API 都未配置：本机已装 RapidOCR 时优先本地识别（材料不出本机），MinerU 轻量接口退为兜底；未装 RapidOCR 时使用 MinerU 轻量接口处理小文件，并在超限时提示补充 Token。
+- 敏感材料不允许外传时，显式使用 `--backend rapid`（本地 onnx 推理，全程不出本机）。
 
 旧的 `paddle-ocr` 和 `mineru-ocr` 保持可用；本技能是新的统一入口，目标是覆盖两者的常用 OCR/转换场景。
 
@@ -50,8 +52,16 @@ homepage: https://github.com/cat-xierluo/legal-skills
 |------|------|----------|
 | `httpx` | 调用 PaddleOCR 与 MinerU API | `pip install httpx` |
 | `pypdfium2` | 读取 PDF 页数与拆分页码范围 | `pip install pypdfium2` |
+| `rapidocr` + `onnxruntime` | 可选：本地 RapidOCR 后端（`--backend rapid`） | `uv run --with rapidocr --with onnxruntime scripts/convert.py ...` 或 `pip install rapidocr` |
 
 如直接用 `python scripts/convert.py` 运行且缺少依赖，脚本会给出安装提示。
+
+### 本地 RapidOCR 后端能力边界
+
+- 只有文字检测+识别，没有版面分析：段落由统一后处理链重建，单栏文书（判决书、合同扫描件等）可靠，多栏版面可能错序。
+- 不提取图片资源：印章、签名、图表不会出现在 Markdown 里。
+- Office 文档与 URL 不支持（仍走 MinerU）。
+- 渲染 DPI 默认 220，可用 `LEGAL_OCR_RAPID_DPI` 调整；置信度阈值 `LEGAL_OCR_RAPID_MIN_SCORE`（默认 0.5）。
 
 ## 首次配置
 
@@ -89,6 +99,12 @@ uv run scripts/convert.py "/path/to/judgment.pdf" --legal-terms always
 uv run scripts/convert.py checktoken
 ```
 
+敏感材料本地识别（不出本机）：
+
+```bash
+uv run --with rapidocr --with onnxruntime scripts/convert.py "/path/to/scan.pdf" --backend rapid
+```
+
 兼容 JXA 入口：
 
 ```bash
@@ -99,7 +115,7 @@ uv run scripts/convert.py checktoken
 
 | 参数 | 说明 |
 |------|------|
-| `--backend auto|paddle|mineru` | 指定后端；默认读取 `LEGAL_OCR_BACKEND`，未配置时为 `auto` |
+| `--backend auto|paddle|mineru|rapid` | 指定后端；默认读取 `LEGAL_OCR_BACKEND`，未配置时为 `auto`。`rapid` 为本地 RapidOCR（onnx 推理，不出本机） |
 | `--text-layer auto|never|always` | PDF 原生文本层分支；默认 `auto`，达标则直读跳过 OCR；`never` 强制走 OCR；`always` 强制文本层，不可用即失败 |
 | `--output <path>` | 输出 Markdown 路径或目录 |
 | `--pages <spec>` | 页码范围，如 `1-20`、`1-5,8,10-12` |
@@ -223,7 +239,9 @@ archive 内包含：
 | 问题 | 解决方式 |
 |------|----------|
 | PaddleOCR 未配置 | 补充 `PADDLEOCR_DOC_PARSING_API_URL` 与 `PADDLEOCR_ACCESS_TOKEN`，或显式使用 `--backend mineru` |
-| MinerU 轻量接口超限 | 配置 `MINERU_API_TOKEN` 后重试 |
+| MinerU 轻量接口超限 | 配置 `MINERU_API_TOKEN` 后重试，或安装 RapidOCR 走本地识别 |
+| 敏感材料不允许外传 | `uv run --with rapidocr --with onnxruntime scripts/convert.py <文件> --backend rapid` |
+| `--backend rapid` 提示未安装 | 用 `uv run --with rapidocr --with onnxruntime ...`，或 `pip install rapidocr` 后用 `python3` 直跑 |
 | 一个 API 额度用尽 | 同时配置另一套 API，并保持 `--backend auto`；转换时会自动尝试候选后端 |
 | 网页 URL 失败 | 网页 URL 需要 MinerU Token，不支持轻量模式 |
 | DOCX/PPTX 走 PaddleOCR 失败 | Office 文档只能走 MinerU，使用 `--backend auto` 或 `--backend mineru` |
