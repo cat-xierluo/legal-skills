@@ -2,8 +2,8 @@
 name: pdf-organizer
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.5.0"
-description: 当需要整理法律 PDF 时使用：检测文字层，生成页面索引、整理草稿和下游交接文件，按内容拆分、合并或直接重命名 OCR 后双层扫描件并规范命名；可做旋转与倾斜校正，不做 OCR 或压缩。
+version: "0.6.0"
+description: 当需要整理法律 PDF 时使用：检测文字层，生成页面索引、整理草稿和下游交接文件，按内容拆分、合并或直接重命名 OCR 后双层扫描件并规范命名；支持跨源页引用拼合与页覆盖审计（孤儿页/重复引用）；可做旋转与倾斜校正，不做 OCR 或压缩。
 license: MIT
 ---
 
@@ -20,7 +20,8 @@ license: MIT
 3. 对不需要拆分或合并的 PDF，直接根据内容识别结果规范命名。
 4. 根据标题、主体、相对方、案由、日期等要素生成规范文件名。
 5. 生成页面级检查索引和 manifest 草稿，供 AI/人工复核。
-6. 生成下游 `handoff.json`，供案件材料整理、合同审查、诉讼分析等 Skill 协同使用。
+6. 以页引用集合统一表达拆分、复制、合并与跨源拼合，执行前可审计页覆盖（孤儿页/重复引用页）。
+7. 生成下游 `handoff.json`，附页级来源引用，供案件材料整理、合同审查、诉讼分析等 Skill 协同使用。
 7. 在整理前后做轻量页面方向处理，例如 90/180/270 度旋转；倾斜校正作为可选预处理能力。
 8. 将 PDF 每页标准化为 A4 尺寸：横向页面自动适配 A4 横版（842×595 pt），竖向页面自动适配 A4 竖版（595×842 pt），等比缩放居中。
 
@@ -148,6 +149,8 @@ archive 默认包含：
 
 执行前先生成 `organize_manifest.json`。字段说明见 `references/organize-manifest-schema.md`。
 
+所有 segment 在执行前都会被编译为「文件 + 页码」的页引用集合：拆分、复制、合并、跨源拼合都只是引用运算，manifest 即引用表，物理 PDF 在确认执行前一个字节不动。执行器只消费引用表；整文件单源段保留字节级复制。
+
 ### 拆分示例
 
 ```json
@@ -189,6 +192,32 @@ archive 默认包含：
   ]
 }
 ```
+
+### 跨源页引用拼合示例
+
+从多份来源 PDF 各取若干页拼成一份新材料（如证据组合卷），使用 `refs` 字段：
+
+```json
+{
+  "output_dir": "/path/to/output",
+  "segments": [
+    {
+      "id": "D001",
+      "refs": [
+        {"file": "/path/to/起诉状.pdf", "pages": "5"},
+        {"file": "/path/to/证据卷.pdf", "pages": "1-3"},
+        {"file": "/path/to/补充说明.pdf"}
+      ],
+      "suggested_filename": "证据组合 原告提交.pdf",
+      "confidence": "medium",
+      "needs_review": true,
+      "evidence": "起诉状第5页列明的证据与证据卷第1-3页对应。"
+    }
+  ]
+}
+```
+
+`refs` 按数组顺序拼合；每项 `pages` 可省略（默认整份）。
 
 ### 方向处理示例
 
@@ -254,6 +283,20 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/pdf_organizer.py --manifest organize_manifest.json --dry-run
 ```
 
+只做页引用编译与覆盖审计（不写任何 PDF），检查文件存在、页码越界、孤儿页与重复引用页：
+
+```bash
+python3 scripts/pdf_organizer.py --validate-manifest organize_manifest.json
+```
+
+覆盖审计模式（`off` / `warn` / `strict`）：默认 `warn`（孤儿页/重复引用页提示不拦截）；`strict` 时发现孤儿页或重复引用页直接终止，一个 PDF 都不写。可命令行 `--coverage-check strict` 或 manifest 顶层 `"coverage_check": "strict"` 指定：
+
+```bash
+python3 scripts/pdf_organizer.py --manifest organize_manifest.json --coverage-check strict
+```
+
+拆分整份扫描件时推荐 `strict`：它保证每一页都被且仅被一份输出文书引用，避免漏页或多切。
+
 只检测 PDF 是否有可检索文字层：
 
 ```bash
@@ -315,6 +358,8 @@ python3 scripts/pdf_organizer.py \
 
 每次正式执行都会在 archive 中生成 `handoff.json`。下游 Skill 优先读取该文件，而不是重新猜测文件名和文书类型。
 
+每份输出文书都带页级溯源：`source_refs`（归一化页引用 `[{file, pages}]`）和 `source_refs_label`（人读标签如 `起诉状.pdf P5 + 证据卷.pdf P1-3`），下游引用任何关键信息时可回溯到具体来源页。
+
 `suggested_downstream` 按文书类别给出路由标签，不绑定具体 Skill 名称：
 
 - 合同、协议 → `合同审查`。
@@ -330,7 +375,8 @@ python3 scripts/pdf_organizer.py \
 完成后检查：
 
 1. 输出 PDF 数量与 manifest segment 数一致。
-2. 拆分文件页数与 `pages` 对应；合并文件页数等于来源 PDF 页数之和。
-3. archive 中的 `organize_report.md` 没有 `low` 且 `needs_review: true` 的未处理项；如果有，明确提示用户人工复核。
-4. 原始 PDF 和原始碎片 PDF 未被覆盖或移动。
-5. 命名依据能回溯到 OCR 文本或页面内容，没有臆测日期、案号或主体。
+2. 拆分文件页数与 `pages` 对应；合并文件页数等于来源页数之和。
+3. 覆盖审计无未解释的孤儿页或重复引用页；有则说明漏页、多切或有意复用，需向用户说明。
+4. archive 中的 `organize_report.md` 没有 `low` 且 `needs_review: true` 的未处理项；如果有，明确提示用户人工复核。
+5. 原始 PDF 和原始碎片 PDF 未被覆盖或移动。
+6. 命名依据能回溯到 OCR 文本或页面内容，没有臆测日期、案号或主体。
