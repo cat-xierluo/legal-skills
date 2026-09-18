@@ -13,6 +13,7 @@
 | `archive_root` | 否 | 归档根目录。缺省为本 Skill 的 `archive/`，可被命令行 `--archive-root` 覆盖 |
 | `text_check` | 否 | 文字层检测模式：`strict`、`warn`、`off`。缺省为 `strict`，检测不到文字层时停止执行 |
 | `require_text_layer` | 否 | 兼容字段。设为 `false` 等同于 `text_check: "off"` |
+| `coverage_check` | 否 | 页覆盖审计模式：`warn`（默认，孤儿页/重复引用页仅提示）、`strict`（发现即终止，不写任何 PDF）、`off`（关闭）。可被命令行 `--coverage-check` 覆盖 |
 | `rotate` | 否 | 顶层旋转角度，作用于所有 segment。可选 `90`、`180`、`270` |
 | `deskew` | 否 | 顶层倾斜校正开关，作用于所有 segment。需要系统安装 `ocrmypdf` |
 | `segments` | 是 | 待输出的文书数组，按自然顺序排列 |
@@ -27,6 +28,7 @@
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | `id` | 建议 | 稳定编号，如 `D001` |
+| `refs` | 条件必填 | 跨源页引用数组，按序拼合：`[{"file": "...", "pages": "1-3"}, ...]`，`pages` 可省略（默认整份）。用于从多份 PDF 各取若干页拼成一份新材料 |
 | `pages` | 条件必填 | 页码范围，如 `1-2`、`5`、`7-8,10`。从 `source_pdf` 拆分时使用 |
 | `input_file` | 条件必填 | 单个 PDF 路径。对现成 PDF 复制、重命名或旋转时使用 |
 | `source_items` | 条件必填 | 多个来源 PDF 或页码片段。用于把碎片合并成一个输出 PDF |
@@ -44,7 +46,23 @@
 | `evidence` | 建议 | 支持拆分、合并或命名判断的短证据 |
 | `notes` | 否 | 当前 segment 的补充说明 |
 
-`pages`、`input_file`、`source_items` / `input_files` 至少填写一个。优先级为：`source_items` / `input_files` → `input_file` → `pages`。
+`pages`、`input_file`、`refs`、`source_items` / `input_files` 至少填写一个。优先级为：`refs` → `source_items` / `input_files` → `input_file` → `pages`。
+
+所有形态在执行前都会编译为统一的页引用集合；`--validate-manifest` 可单独执行编译与覆盖审计（文件存在、页码越界、孤儿页、重复引用页），不写任何 PDF。
+
+## refs（跨源页引用拼合）
+
+从多份来源 PDF 各取若干页，按数组顺序拼成一份输出：
+
+```json
+[
+  {"file": "/path/to/起诉状.pdf", "pages": "5"},
+  {"file": "/path/to/证据卷.pdf", "pages": "1-3"},
+  {"file": "/path/to/补充说明.pdf"}
+]
+```
+
+与 `source_items` 的区别：`source_items` 表达"把同一份文书的碎片合并回去"；`refs` 表达"按内容需要从不同来源组页"，适用于证据组合卷、递交清单附件等场景。
 
 ## source_items
 
@@ -154,6 +172,8 @@
 | `file` / `filename` | 最终 PDF 路径和文件名 |
 | `document_type` / `title` | 文书类型和标题 |
 | `source_pages` | 来源页码或来源片段 |
+| `source_refs` | 归一化页引用 `[{file, pages}]`，页级溯源 |
+| `source_refs_label` | 人读来源标签，如 `起诉状.pdf P5 + 证据卷.pdf P1-3` |
 | `parties` / `date` / `document_no` | 主体、日期、案号/函号等命名要素 |
 | `confidence` / `needs_review` | 置信度和复核状态 |
 | `suggested_downstream` | 按文书类别的路由标签，如 `合同审查`、`诉讼分析`、`材料整理`、`复核`；不绑定具体 Skill 名称 |
