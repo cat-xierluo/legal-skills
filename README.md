@@ -41,7 +41,7 @@
 | 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4+v0.4.5 | **跨 runtime 鲁棒性 + 异步监控双档位**：Apple Silicon cryptography≤41 的 OpenSSL CPU 探测死循环自动绕过（`OPENSSL_armcap=0`），AI 总结三分支注入 + status=2 软错误识别 + `--once`/`--task-id` CLI；异步监控 `nohup` 脱离会话 + 日志落盘 + 会话恢复接管四步流程（进程丢失≠任务丢失），常驻代理变量掐断 OSS 分片上传需先 unset。 |
 | 2026-09-17 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.27.2 | 完成权限绑定 PM authority 与 live Dispatch；PM 绑定拒绝畸形响应，远端清理按精确 OID 防并发误删；preamble 反斜杠续行的原生 worker_done 可被守卫识别原样执行。 |
 | 2026-09-17 | 更新   | [workbuddy-checkin](skills/workbuddy-checkin/)                         | v1.0.5  | **签到链路正确性修复（外部 review）**：checkin.sh 补齐 X-User-Id/X-Domain 等鉴权头对齐桌面端；移除 today_checked_in 不可靠预检（假阳性会漏签断连签），幂等完全靠 daily-checkin code=10001 兜底；退出码正确化（明确失败 exit 1 供定时任务告警）；Windows 登录态路径修正 %LOCALAPPDATA%；合并前 review 追加修复 Node ERR 时 Electron 回退丢失与 ps1 双 BOM。 |
-| 2026-09-16 | 更新   | [video-compressor](skills/video-compressor/)                           | v1.5.0  | **源码率感知编码选择 + 防覆盖**：源码率 ≤3 Mbps（录屏/课件特征）自动改用 x264 CRF 自适应编码（实测录屏压缩比 80-88%、12-20x 实时），修复硬件路径写死 2000k 目标码率压低码率源仅省 11% 的问题；输出已存在自动序号递增防静默覆盖（`--overwrite` 才允许）；补 Python 3.9 兼容；SKILL.md 硬约束固化"长视频一律 `--detach`"。 |
+| 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |
 
 </details>
 
