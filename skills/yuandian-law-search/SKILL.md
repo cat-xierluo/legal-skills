@@ -2,7 +2,7 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.0"
+version: "1.9.1"
 license: MIT
 description: 元典涵摄式法律研究中间层。本技能应在查询中国法律法规或案例，或根据案件事实、争议焦点、既有法律分析报告制定检索策略、查找正反类案、形成精选依据或可追溯报告时使用；先做要件涵摄与检索缺口分析，再按向量、关键词和结构化字段调用元典 API/MCP，并由 Agent 逐条精选。不要用于替代完整证据审查、诉讼方案或正式法律意见。
 ---
@@ -15,7 +15,7 @@ description: 元典涵摄式法律研究中间层。本技能应在查询中国�
 
 本技能在提供便利的同时会产生本地留存与外部传输，使用前请知悉：
 
-- **本地归档**：每次检索的原始响应与 per-call 结构化底稿会自动写入 `archive/`（按 `YD_PROJECT` 或日期归类），并默认在运行命令的工作目录生成一份 `.md` 工作副本（供 Agent 复核，不是正式交付；当工作目录恰为 skill 根目录时自动跳过）。可用 `--no-report` 完全跳过、`--no-cwd-report` 仅跳过工作目录副本。这些文件可能包含案由、当事人、裁判文书正文等敏感内容，**请勿将其提交至公开仓库、复制进案件交付目录或随意分享**。
+- **本地归档**：每次检索的原始响应与 per-call 结构化底稿会自动写入 `archive/`（按 `YD_PROJECT` 或日期归类），并默认在运行命令的工作目录生成一份 `.md` 工作副本（供 Agent 复核，不是正式交付；当工作目录恰为 skill 根目录时自动跳过）。`--no-report` 仅跳过 `.md` 报告（archive 与工作目录两份），**仍会写 archive JSON**；`--no-cwd-report` 仅跳过工作目录副本；`--no-archive` 才会关闭全部本地留存（JSON 与 `.md` 都不写，查重仍读已有归档，命中即免请求——但新查询不再入缓存，下次同查询可能重复消耗积分）；`--archive-dir`（或环境变量 `YD_ARCHIVE_DIR`）可指定归档目录。归档写入失败（如目录不可写）只降级为 stderr 告警，**不会吞掉已取得的响应、不会自动重试**。这些文件可能包含案由、当事人、裁判文书正文等敏感内容，**请勿将其提交至公开仓库、复制进案件交付目录或随意分享**。
 - **外部传输**：检索请求与（如幻觉检测）待查文本会发送至元典开放平台 `open.chineselaw.com`。提交给 `hall-detect` 等接口的文本可能包含案卷事实、合同或客户信息，**建议先脱敏再提交**。平台侧的留存策略以其服务条款为准。
 - **敏感内容最小化**：案例文书、企业信息含个人或商业敏感数据，引用与归档时遵循"最小必要"原则，避免大段全文外泄。
 
@@ -24,7 +24,7 @@ description: 元典涵摄式法律研究中间层。本技能应在查询中国�
 本技能运行需要以下本地能力，均限定在检索与归档目的内：
 
 - **网络访问**：检索请求仅发送到 `open.chineselaw.com`（HTTPS）；`--network-check` 还会对 `ydzk.chineselaw.com` 做 DNS/TLS 连通性检查，不发送案件内容。
-- **文件系统读写**：可读取 `scripts/.env`（API Key）；写入 `archive/` 与当前工作目录的报告副本（可经 `--no-report`/`--no-cwd-report` 关闭）。
+- **文件系统读写**：可读取 `scripts/.env`（API Key）；写入 `archive/`（可用 `--archive-dir`/`YD_ARCHIVE_DIR` 重定向）与当前工作目录的报告副本（`.md` 副本可经 `--no-report`/`--no-cwd-report` 跳过；全部留存经 `--no-archive` 关闭）。
 - **环境变量**：读取 `YD_API_KEY`（鉴权）、`YD_STRATEGY`/`YD_PROJECT`（检索策略与归类）等；`yd-run` 以干净环境启动 Python，仅保留必要变量。
 - **本地代码执行**：通过 `scripts/yd-run` 调用 Python 检索脚本；不安装第三方运行时、不执行自动更新。
 
