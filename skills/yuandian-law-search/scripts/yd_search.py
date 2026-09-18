@@ -20,7 +20,12 @@ BASE_URL = "https://open.chineselaw.com"
 TIMEOUT = 60
 COST_PER_CALL = "本次调用消耗 10 积分"
 SKILL_ROOT = Path(__file__).parent.parent
+# 归档目录：可被 --archive-dir / YD_ARCHIVE_DIR 重设（main 中 global 重绑，运行期读取均生效）
 ARCHIVE_DIR = SKILL_ROOT / "archive"
+# --no-archive：不写任何本地留存（archive JSON 与 .md 报告）。
+# 查重（_archive_lookup）仍读取已有归档，命中即免请求；但新查询不再写入，
+# 意味着同查询下次无法命中缓存，可能重复消耗积分。
+NO_ARCHIVE = False
 
 
 def load_api_key():
@@ -267,6 +272,8 @@ def _resolve_project():
 
 def _archive_save(endpoint, payload, response):
     """将查询和响应归档（按 project 子目录归类）"""
+    if NO_ARCHIVE:
+        return None
     ARCHIVE_DIR.mkdir(exist_ok=True)
     fingerprint = _query_fingerprint(endpoint, payload)
     filename = _make_archive_name(endpoint, payload)
@@ -287,6 +294,24 @@ def _archive_save(endpoint, payload, response):
     }
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2), "utf-8")
     return str(path)
+
+
+def _archive_save_guarded(endpoint, payload, response):
+    """归档失败不阻断响应交付（issue #158）。
+
+    调到这里时 API 已成功返回且积分已消耗：PermissionError/OSError 只降级为
+    stderr 告警并返回 None，避免结果被异常吞掉、调用方误判失败而重试，
+    造成重复扣积分。真正的修复出口是 --archive-dir 指定可写目录或 --no-archive。
+    """
+    try:
+        return _archive_save(endpoint, payload, response)
+    except OSError as e:
+        print(
+            f"警告: 归档写入失败（{e}）。本次响应已保留并正常交付，不会自动重试。"
+            "可用 --archive-dir 指定可写目录，或 --no-archive 关闭本地留存。",
+            file=sys.stderr,
+        )
+        return None
 
 
 def _archive_write_report(archive_path, formatted_text, cost_label,
@@ -436,7 +461,7 @@ def api_post(endpoint, body, use_cache=True):
 
     archive_path = None
     if use_cache:
-        archive_path = _archive_save(endpoint, body, result)
+        archive_path = _archive_save_guarded(endpoint, body, result)
     return result, False, archive_path
 
 
@@ -473,7 +498,7 @@ def api_get(endpoint, params=None, use_cache=True):
 
     archive_path = None
     if use_cache:
-        archive_path = _archive_save(endpoint, params or {}, result)
+        archive_path = _archive_save_guarded(endpoint, params or {}, result)
     return result, False, archive_path
 
 
@@ -2145,9 +2170,14 @@ def build_parser():
 """
     )
     parser.add_argument("--no-report", action="store_true",
-                        help="跳过 .md 检索报告生成（archive + CWD），仅写 archive JSON")
+                        help="跳过 .md 检索报告生成（archive + CWD），仍写 archive JSON")
     parser.add_argument("--no-cwd-report", action="store_true",
                         help="仅跳过工作目录副本，仍写 archive/ 报告（默认同时写两份）")
+    parser.add_argument("--no-archive", action="store_true",
+                        help="不写任何本地留存（archive JSON 与 .md 报告）；查重仍读已有归档，"
+                             "命中即免请求。注意：新查询不再写入意味着下次无法命中缓存，可能重复消耗积分")
+    parser.add_argument("--archive-dir", metavar="DIR",
+                        help="归档目录（默认 <skill>/archive），优先级高于环境变量 YD_ARCHIVE_DIR")
     sub = parser.add_subparsers(dest="command")
 
     # ── search ──
@@ -2362,6 +2392,21 @@ def build_parser():
     return parser
 
 
+def _apply_archive_settings(args):
+    """--archive-dir / YD_ARCHIVE_DIR / --no-archive → 模块全局。
+
+    必须在首个 cmd_*（内含 api 调用与归档写入）之前调用。
+    """
+    global ARCHIVE_DIR, NO_ARCHIVE
+    if getattr(args, "archive_dir", None):
+        ARCHIVE_DIR = Path(args.archive_dir).expanduser().resolve()
+    else:
+        env_dir = os.environ.get("YD_ARCHIVE_DIR", "").strip()
+        if env_dir:
+            ARCHIVE_DIR = Path(env_dir).expanduser().resolve()
+    NO_ARCHIVE = bool(getattr(args, "no_archive", False))
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
@@ -2369,6 +2414,7 @@ def main():
         parser.print_help()
         sys.exit(0)
 
+    _apply_archive_settings(args)
     args.func(args)
 
 
