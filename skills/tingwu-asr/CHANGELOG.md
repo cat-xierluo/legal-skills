@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.6] - 2026-09-18
+
+### 修复
+- `tingwu.py`：OSS 上传代理掐断根治（Task-004）——shell 常驻 `HTTP_PROXY/HTTPS_PROXY`（Clash 系）时，oss2 分片上传走代理，771MB 视频实测在 50% 处被 `ProxyError: Cannot connect to proxy` 掐断，v0.4.5 只做了文档提醒。本次代码级兜底：新增 `_build_oss_bucket()`，上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS 节点；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复走代理旧行为；requests 兜底 PUT 同样处理（独立 `trust_env=False` Session）。yt-dlp 下载不受影响，海外源仍按环境代理走
+- 顺带补 oss2 缺失时的明确报错（`_build_oss_bucket` 守卫）
+
+### 新增
+- `tests/test_oss_proxy_isolation.py`：5 用例回归——常驻代理下 bucket 内层 session 必须 trust_env=False / 逃生阀恢复 / 无代理环境同样无条件直连 / 兜底 PUT 走 trust_env=False Session / 逃生阀时恢复模块级 requests.put 旧行为
+
+### 验证
+- 单测 5/5 通过；全量（含存量 test_poll_tasks_errors 4 用例 + test_summary_flow）绿
+- 首轮测试自身两处错误已修正：fake bucket 名 `b` 不满足 OSS ≥3 字符规则；"无代理环境"用例预期写反（设计为无条件直连）
+
 ## [0.4.5] - 2026-09-18
 
 ### 改进

@@ -2,7 +2,7 @@
 name: tingwu-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.5"
+version: "0.4.6"
 license: MIT
 description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 FunASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
 ---
@@ -217,10 +217,11 @@ python3 skills/tingwu-asr/scripts/poll_tasks.py --monitor
 - 网页端免费额度有限，大文件或高频使用可能触发风控
 - 支持格式: mp3/wav/m4a/wma/aac/ogg/amr/flac/aiff/mp4/wmv/mov/mkv/webm/avi 等
 - 音频最大 500M，视频最大 6G，单文件最长 6 小时
-- 代理环境下 OSS 上传可能中断：本机 shell 常驻 `HTTP_PROXY/HTTPS_PROXY`（如 Clash 系）时，
-  oss2 上传会走代理，大文件分片上传易被代理掐断长连接（实测 771MB 视频在 50% 处
-  `ProxyError: Cannot connect to proxy`）。听悟 OSS 为国内节点，无需代理，上传前剥掉：
-  `unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy`
+- 代理环境下 OSS 上传已自动直连（v0.4.6）：shell 常驻 `HTTP_PROXY/HTTPS_PROXY`（如 Clash 系）时，
+  oss2 分片上传曾走代理被掐断长连接（实测 771MB 视频在 50% 处
+  `ProxyError: Cannot connect to proxy`）。现上传 session 默认 `trust_env=False`
+  忽略环境代理直连国内 OSS 节点；确需经代理出海时设 `TINGWU_OSS_USE_PROXY=1` 恢复。
+  注意：yt-dlp 下载链接（小宇宙/YouTube/B站）不受此改动影响，海外源仍按环境代理走
 - macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测
   （`_armv8_sve_probe`）时会死循环挂起，症状是任何 import oss2 的脚本无输出卡死。
   已在 `tingwu.py` 入口自动设置 `OPENSSL_armcap=0` 绕过；若仍遇到，运行前手动

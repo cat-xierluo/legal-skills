@@ -160,12 +160,7 @@ class TingwuClient:
         file_path = str(file_path)
 
         if oss2 is not None:
-            auth = oss2.StsAuth(
-                sts["accessKeyId"],
-                sts["accessKeySecret"],
-                sts["securityToken"],
-            )
-            bucket = oss2.Bucket(auth, sts["endpoint"], sts["bucket"])
+            bucket = _build_oss_bucket(sts)
             print(f"  正在上传到 OSS (使用 oss2 SDK)...")
             oss2.resumable_upload(
                 bucket,
@@ -502,6 +497,27 @@ def _oss_progress(consumed, total):
         print(f"\r  上传进度: {pct}%", end="", flush=True)
 
 
+def _build_oss_bucket(sts):
+    """构造 OSS 上传专用 Bucket。
+
+    听悟 OSS 为国内节点，代理（HTTP_PROXY/HTTPS_PROXY）对大文件分片上传弊大于利：
+    实测 771MB 视频走 Clash 代理在 50% 处被掐断（ProxyError: Cannot connect to proxy）。
+    默认给上传 session 设 trust_env=False，忽略环境代理变量直连；
+    确有需要经代理出海的场景，设 TINGWU_OSS_USE_PROXY=1 恢复旧行为。
+    """
+    if oss2 is None:
+        raise RuntimeError("缺少 oss2 库，无法 STS 上传。请运行: pip3 install oss2")
+    auth = oss2.StsAuth(
+        sts["accessKeyId"],
+        sts["accessKeySecret"],
+        sts["securityToken"],
+    )
+    bucket = oss2.Bucket(auth, sts["endpoint"], sts["bucket"])
+    if not os.environ.get("TINGWU_OSS_USE_PROXY"):
+        bucket.session.session.trust_env = False
+    return bucket
+
+
 def _upload_via_requests(file_path, put_link_result):
     """备用上传方式：通过 PUT 直接上传（不使用 oss2 SDK）"""
     put_link = put_link_result.get("putLink")
@@ -514,10 +530,21 @@ def _upload_via_requests(file_path, put_link_result):
 
     print(f"  正在上传 (PUT 直传)...")
     with open(file_path, "rb") as f:
-        resp = requests.put(
-            put_link,
-            data=f,
-            headers={"Content-Type": content_type},
-            timeout=600,
-        )
+        if os.environ.get("TINGWU_OSS_USE_PROXY"):
+            resp = requests.put(
+                put_link,
+                data=f,
+                headers={"Content-Type": content_type},
+                timeout=600,
+            )
+        else:
+            # 同 _build_oss_bucket：忽略环境代理，国内 OSS 直连
+            s = requests.Session()
+            s.trust_env = False
+            resp = s.put(
+                put_link,
+                data=f,
+                headers={"Content-Type": content_type},
+                timeout=600,
+            )
     resp.raise_for_status()
