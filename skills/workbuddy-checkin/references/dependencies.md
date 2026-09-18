@@ -47,7 +47,7 @@
 | 平台 | Shell | 新版明文登录态（v5.3.8+，主路径） | 旧版 state.vscdb（回退） | Electron 二进制（仅旧版） |
 |---|---|---|---|---|
 | macOS | `checkin.sh`（bash） | `~/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` | `~/Library/Application Support/WorkBuddy/User/globalStorage/state.vscdb` | `Electron.app/Contents/MacOS/Electron` |
-| Windows | `checkin.ps1`（PowerShell）或 Git Bash 下 `checkin.sh` | `%APPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info` | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` | `electron.exe` |
+| Windows | `checkin.ps1`（PowerShell）或 Git Bash 下 `checkin.sh` | `%LOCALAPPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info`（回退 `%APPDATA%`） | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` | `electron.exe` |
 | Linux | `checkin.sh`（bash） | `~/.config/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` | `~/.config/WorkBuddy/User/globalStorage/state.vscdb` | `electron`（无 .app 包裹） |
 
 > ⚠️ Windows / Linux 的 `CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` 路径基于 v5.3.8 桌面端约定推导，已在 macOS 实测命中；其他平台如路径不一致，请以实际安装为准并反馈。
