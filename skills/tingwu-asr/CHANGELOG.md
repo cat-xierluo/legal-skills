@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.5] - 2026-09-18
+
+### 改进
+- `SKILL.md`「异步转录模式」重写后台监控章节：监控从"依赖 Agent 会话持有进程"改为"会话无关 + 状态落盘可恢复"双档位——档位 A（推荐）`nohup` 脱离会话 + 日志落盘（含 `watch_active.sh` 接管用法）；档位 B Agent 托管后台进程（Claude Code `run_in_background` / Hermes `terminal(background=true)`），并明确 Agent 后台进程会随会话结束被回收的风险。新增"会话恢复接管四步流程"（读 pending_tasks.json → 一次性 poll_tasks 当场收尾 → finish_task 长耗时警告 → 幂等重拉），强调重跑 poll_tasks.py 安全（云端状态为准 + flock 互斥），进程丢失≠任务丢失
+- `SKILL.md`「注意事项」新增代理环境坑：shell 常驻 `HTTP_PROXY/HTTPS_PROXY` 时 oss2 大文件分片上传会被代理掐断（实测 771MB 视频在 50% 处 `ProxyError`），听悟 OSS 为国内节点无需代理，上传前 unset 代理变量
+
+### 验证
+- 186 分钟分享视频（771MB）全流程实测：代理中断复现 → 剥代理直连重传成功 → 会话切换监控进程被回收 → 按"恢复接管流程"重拉 poll_tasks.py 正确接续（转录已完成、直接进入 finish_task，185 张幻灯片下载压缩约 3 分钟完成），44,114 字 + 说话人 2 人分离输出正常
+
 ## [0.4.4] - 2026-09-16
 
 ### 修复
