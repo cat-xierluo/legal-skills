@@ -480,8 +480,10 @@ case "$1 $2" in
   "orchestration worker-start")
     printf '%s\\n' '{"ok":true,"result":{"worker":{"dispatch":{"id":"ctx-membudget"}}}}' ;;
   "orchestration dispatch-show")
-    printf '%s\\n' '{"ok":true,"result":{"dispatch":{"id":"ctx-membudget"}}}' ;;
-  *) reject_argv "$*" ;;
+    jq -cn '{ok:true,_meta:{runtimeId:"runtime-membudget"},result:{dispatch:{
+      id:"ctx-membudget",task_id:"task-membudget",assignee_handle:"term-membudget",
+      run_id:"run-membudget",process_incarnation:"process-membudget",capability_hash:("a"*64)}}}' ;;
+  *) exit 1 ;;
 esac
 """)
 os.chmod(E2E_ORCA_BIN, 0o755)

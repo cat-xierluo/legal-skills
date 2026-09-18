@@ -88,6 +88,9 @@ done
 
 [ -n "$WORKTREE" ] || { echo "ERROR: --worktree 必填" >&2; exit 64; }
 [ -n "$SESSION" ] || { echo "ERROR: --session 必填" >&2; exit 64; }
+[[ "$SESSION" =~ ^[A-Za-z0-9_.-]+$ ]] && [ "$SESSION" != "." ] && [ "$SESSION" != ".." ] || {
+  echo "ERROR: --session 须为单一安全目录名" >&2; exit 64;
+}
 [[ "$TIMEOUT_SEC" =~ ^[0-9]+$ ]] && [ "$TIMEOUT_SEC" -gt 0 ] || { echo "ERROR: --timeout 须为正整数" >&2; exit 64; }
 [[ "$POLL_INTERVAL" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "ERROR: --poll-interval 须为数字" >&2; exit 64; }
 [[ "$TAIL_LINES" =~ ^[0-9]+$ ]] && [ "$TAIL_LINES" -gt 0 ] || { echo "ERROR: --tail-lines 须为正整数" >&2; exit 64; }
@@ -126,6 +129,12 @@ manual_required() {
 
 # ---------- ① METADATA 合同 ----------
 
+WORKTREE=$(cd "$WORKTREE" 2>/dev/null && pwd -P) || {
+  manual_required 3 "worktree 不存在或不可读" "核对 --worktree；本次未执行 Orca 注入或 register。" "" "authority-receipt-invalid"
+}
+SESSION_CONTEXT="$WORKTREE/.claude/agent-sessions/$SESSION"
+METADATA="$SESSION_CONTEXT/METADATA.json"
+
 [ -f "$METADATA" ] || {
   manual_required 3 "METADATA 不存在: ${METADATA}（Session Context 被删或路径错误；核对 --worktree/--session）" \
     "人工核对 worktree 与 session 名；若 Session Context 已被清理，该 worker 只能重派。"
@@ -147,6 +156,61 @@ PREV_DISPATCH=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$METADATA
   manual_required 3 "METADATA 缺 supervised 路由段（run_id/task_id/coordinator_handle 任一为空），register 无从重绑" \
     "PM 从 Wave receipt 补齐三件套后重跑本命令：jq 写入 .session.orca.supervised.{run_id,task_id,coordinator_handle}；receipt 在 orca-wave-prepare.sh --receipt 输出。"
 }
+
+# 从真实 Git 仓和调用方 session 推导既有 PM receipt；METADATA 只用于交叉核对，
+# 不能选择或重建授权来源。校验早于 terminal send / reset-failed / worker-start。
+if ! AUTHORITY_RECEIPT_FILE=$(python3 - "$SCRIPT_DIR" "$WORKTREE" "$SESSION" "$METADATA" <<'PY'
+import json
+from pathlib import Path
+import stat
+import subprocess
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from completion_authority import load_authority
+
+worktree = Path(sys.argv[2])
+session = sys.argv[3]
+metadata = Path(sys.argv[4])
+
+def git(*args):
+    return subprocess.run(["git", "-C", str(worktree), *args], check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+try:
+    if Path(git("rev-parse", "--show-toplevel")).resolve(strict=True) != worktree:
+        raise ValueError("worktree must be the exact Git root")
+    branch = git("symbolic-ref", "--quiet", "--short", "HEAD")
+    common = Path(git("rev-parse", "--git-common-dir"))
+    if not common.is_absolute():
+        common = worktree / common
+    common = common.resolve(strict=True)
+    authority = common / "agent-authority" / (session + ".json")
+    current = worktree
+    for part in metadata.relative_to(worktree).parts:
+        current = current / part
+        if stat.S_ISLNK(current.lstat().st_mode):
+            raise ValueError("Session Context must not contain symlinks")
+    data = json.loads(metadata.read_text(encoding="utf-8"))
+    receipt, _ = load_authority(str(authority))
+    if receipt.get("session") != session or receipt.get("branch") != branch:
+        raise ValueError("PM receipt session/branch does not match the worker")
+    if not isinstance(receipt.get("worktree"), str) or Path(receipt["worktree"]).resolve(strict=True) != worktree:
+        raise ValueError("PM receipt belongs to a different worktree")
+    if data.get("session", {}).get("id") != session or data.get("worktree") != str(worktree):
+        raise ValueError("Session Context identity does not match the worker")
+    if data.get("execution_authority", {}).get("authority_receipt_file") != str(authority):
+        raise ValueError("metadata cannot select a different PM authority receipt")
+    print(authority)
+except (AttributeError, KeyError, OSError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+    print("RECOVER_AUTHORITY_INVALID: " + str(exc), file=sys.stderr)
+    raise SystemExit(1)
+PY
+); then
+  manual_required 3 "既有 PM authority receipt 缺失、身份错配或路径不可信，停止恢复" \
+    "核对原始 spawn 的 Git common-dir/agent-authority/${SESSION}.json；不要改用 metadata 指向的其他文件或重建旧授权。本次未执行 terminal send 或 register。" \
+    "" "authority-receipt-invalid"
+fi
 
 orca_runtime_init
 
@@ -311,7 +375,7 @@ if [ "$TUI_STATE" = "shell" ]; then
     fi
     if [ "$SECONDS" -ge "$deadline" ]; then
       manual_required 2 "启动命令已注入但 TUI 标记 ${TIMEOUT_SEC}s 内未出现（最后判定=${TUI_STATE}）：命令可能启动失败，不静默重试" \
-      "人工步骤：① orca terminal read --terminal $TERMINAL_HANDLE --limit 50 --json 查看报错；② 修复后人工注入并跑 orca-supervised-register.sh --worktree-id $WORKTREE_ID --terminal-handle $TERMINAL_HANDLE --run-id $RUN_ID --task-id $TASK_ID --coordinator-handle $COORDINATOR_HANDLE --reset-failed。"
+      "人工步骤：① orca terminal read --terminal $TERMINAL_HANDLE --limit 50 --json 查看报错；② 修复后重跑本恢复命令，复验既有 authority receipt 后再 register。"
     fi
   done
 else
@@ -329,6 +393,7 @@ echo "RECOVER: register 重绑 task=${TASK_ID} run=${RUN_ID} terminal=${TERMINAL
 if ! REGISTER_OUT=$(bash "$REGISTER" \
     --worktree-id "$WORKTREE_ID" \
     --terminal-handle "$TERMINAL_HANDLE" \
+    --authority-receipt "$AUTHORITY_RECEIPT_FILE" \
     --run-id "$RUN_ID" \
     --task-id "$TASK_ID" \
     --coordinator-handle "$COORDINATOR_HANDLE" \
