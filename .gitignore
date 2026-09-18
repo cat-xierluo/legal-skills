@@ -20,6 +20,9 @@ templates/
 .agents/*.json
 **/DECISIONS.md
 **/TASKS.md
+# moot-court 开发文档随技能源码维护
+!skills/moot-court/DECISIONS.md
+!skills/moot-court/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 
