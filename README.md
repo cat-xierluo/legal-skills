@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-17 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.27.2 | 完成权限绑定 PM authority 与 live Dispatch；PM 绑定拒绝畸形响应，远端清理按精确 OID 防并发误删；preamble 反斜杠续行的原生 worker_done 可被守卫识别原样执行。 |
 | 2026-09-16 | 更新   | [video-compressor](skills/video-compressor/)                           | v1.5.0  | **源码率感知编码选择 + 防覆盖**：源码率 ≤3 Mbps（录屏/课件特征）自动改用 x264 CRF 自适应编码（实测录屏压缩比 80-88%、12-20x 实时），修复硬件路径写死 2000k 目标码率压低码率源仅省 11% 的问题；输出已存在自动序号递增防静默覆盖（`--overwrite` 才允许）；补 Python 3.9 兼容；SKILL.md 硬约束固化"长视频一律 `--detach`"。 |
 | 2026-09-16 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4  | **跨 runtime 鲁棒性修复**：Apple Silicon 上 cryptography≤41 的 OpenSSL CPU 探测死循环致脚本无输出挂死，入口自动设 `OPENSSL_armcap=0` 绕过；AI 总结改三分支（无 json 提示不报错 / 有 json 真实注入 / 子进程改 `sys.executable`）；落地 status=2 后端拒绝软错误识别（防无限轮询）+ 补 `--once`/`--task-id` CLI，watch_active.sh 恢复可用；存量 4 单测全挂转 4/4 通过。 |
+| 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |
 | 2026-09-13 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.24.0 | 完成 Orca Worker 阻塞问答与收件闭环：ask 超时/断线按原 message ID 恢复，Worker 在自然检查点和完成前强制消费 follow-up；PM 按 50 条 FIFO Delivery 顺序分类、精确 reply/ack receipt 收口，严格区分入队、可见、消费、回复与执行。 |
-| 2026-09-13 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.8.1  | **Git 副作用审计误报修复**：HFA-011 按真实 Git 子命令识别，不再把 `cat-file ...^{commit}` 当作工作树提交；远端 worker 分支删除改按 exact-tip lease、远端 head 读取与删除后复验审查。 |
 | 2026-09-09 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.3.0  | **连通性检查假阳性根除 + 自动启动**：`lsof` 端口级探测 + `--noproxy '*'` 直连替代裸 curl（系统代理对本地端口返 503 会欺骗旧检查）；PicList 未运行时自动启动并等待就绪；单图失败重试 1 次，故障分级提示。 |
 | 2026-09-09 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.2  | **登录 cookie 完整性修复**：保存前暖机（触发 `user/info` 等 API）+ 多轮轮询至 cookie 集合稳定 + 关键字段（`XSRF-TOKEN`/`JSESSIONID` 等 6 项）校验，缺失即 fail-closed 退出，根除偶发 `[CMN.NotLogin]`。 |
 | 2026-09-09 | 更新   | [legal-text-format](skills/legal-text-format/)                         | v1.2.2  | **案例格式化脚本恢复可执行**：修复阻断启动的引号替换语法、案例标记正则错误、无页脚输入越界和当前目录输出失败，并增加虚构案例回归测试与独立 CI。 |
-| 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
 
 </details>
 

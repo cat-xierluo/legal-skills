@@ -19,13 +19,13 @@
 # On any failure: prints a RECOVERY block on stderr with current binding (when
 # retrievable), the --from value the operator should pass, and an explicit
 # "do NOT retry blindly" warning. Exits 64 (usage), 1 (orca call failure), or
-# 2 (verify mismatch after run-use reported success).
+# 2 (verification unavailable/malformed/mismatched after run-use succeeded).
 #
 # Failure surface (PM-facing):
 #   exit 64 — handle detection failed (no --from, env var unset, probe empty)
-#   exit 1  — run-use failed (orca CLI returned non-zero / not-ok payload)
-#   exit 2  — run-use succeeded but run-current reports a different run_id
-#             (binding is stale / silently dropped; do NOT retry the same handle)
+#   exit 1  — handle probe or run-use failed (non-zero, malformed or not-ok)
+#   exit 2  — run-use succeeded but run-current is malformed/unavailable or
+#             reports a different run_id (do NOT retry the same handle)
 
 set -euo pipefail
 
@@ -89,8 +89,14 @@ resolve_handle() {
   probe_rc=$?
   set -e
   if [ "$probe_rc" -eq 0 ] && [ -n "$probe_out" ]; then
-    probe_handle=$(printf '%s' "$probe_out" \
-      | jq -r '.result.terminal.handle // .result.handle // empty' 2>/dev/null || true)
+    if ! printf '%s' "$probe_out" | jq -se 'length == 1 and (.[0] | type == "object" and .ok == true and (.result | type == "object"))' >/dev/null 2>&1; then
+      echo "PM_RUN_BIND_HANDLE_PROBE_INVALID_JSON" >&2
+      return 2
+    fi
+    if ! probe_handle=$(printf '%s' "$probe_out" \
+      | jq -r '(.result.terminal.handle // .result.handle // "") | if type == "string" and (test("[[:space:]]") | not) then . else error("invalid handle") end'); then
+      return 2
+    fi
     if [ -n "$probe_handle" ]; then
       printf '%s' "$probe_handle"
       return 0
@@ -100,7 +106,16 @@ resolve_handle() {
 }
 
 HANDLE=""
-if ! HANDLE=$(resolve_handle); then
+set +e
+HANDLE=$(resolve_handle)
+handle_rc=$?
+set -e
+if [ "$handle_rc" -ne 0 ]; then
+  if [ "$handle_rc" -eq 2 ]; then
+    echo "ERROR: terminal-current returned malformed JSON; refusing to infer a handle" >&2
+    echo "RECOVERY: inspect 'orca terminal current --json'; do NOT retry blindly." >&2
+    exit 1
+  fi
   echo "ERROR: cannot determine sending terminal handle (no --from, ORCA_TERMINAL_HANDLE unset, terminal-current probe empty)" >&2
   cat >&2 <<'HINT'
 RECOVERY (handle missing — no Orca call was made):
@@ -134,6 +149,12 @@ RECOVERY (run-use failed — current binding was NOT changed):
        pm-run-bind.sh $RUN_ID --from <handle>
 Do NOT retry blindly — the underlying bind may be held by someone else.
 HINT
+  exit 1
+fi
+
+if ! printf '%s' "$run_use_out" | jq -se 'length == 1 and (.[0] | type == "object" and (.ok | type == "boolean"))' >/dev/null 2>&1; then
+  echo "ERROR: run-use returned malformed JSON; current binding status is unknown" >&2
+  echo "RECOVERY: inspect the raw Orca response; do NOT retry blindly." >&2
   exit 1
 fi
 
@@ -172,6 +193,12 @@ HINT
   exit 2
 fi
 
+if ! printf '%s' "$run_current_out" | jq -se 'length == 1 and (.[0] | type == "object" and (.ok | type == "boolean"))' >/dev/null 2>&1; then
+  echo "ERROR: run-current returned malformed JSON; binding status is unknown" >&2
+  echo "RECOVERY: inspect the raw Orca response; do NOT retry blindly." >&2
+  exit 2
+fi
+
 # Treat `{ok:false,...}` as verify-failure too.
 if printf '%s' "$run_current_out" | jq -e '.ok == false' >/dev/null 2>&1; then
   echo "ERROR: run-current returned not-ok payload: $run_current_out" >&2
@@ -182,10 +209,14 @@ HINT
   exit 2
 fi
 
-verified_run=$(printf '%s' "$run_current_out" \
-  | jq -r '.result.run.id // .result.runId // .result.id // empty' 2>/dev/null || true)
-verified_coord=$(printf '%s' "$run_current_out" \
-  | jq -r '.result.run.coordinator_handle // .result.coordinatorHandle // .result.run.coordinator // empty' 2>/dev/null || true)
+if ! verified_run=$(printf '%s' "$run_current_out" \
+  | jq -er '(.result.run.id // .result.runId // .result.id) | select(type == "string" and length > 0 and (test("[[:space:]]") | not))') || \
+   ! verified_coord=$(printf '%s' "$run_current_out" \
+  | jq -er '(.result.run.coordinator_handle // .result.coordinatorHandle // .result.run.coordinator) | select(type == "string" and length > 0 and (test("[[:space:]]") | not))'); then
+  echo "ERROR: run-current returned malformed identity fields; binding status is unknown" >&2
+  echo "RECOVERY: inspect the Orca response; do NOT retry blindly." >&2
+  exit 2
+fi
 
 if [ "$verified_run" != "$RUN_ID" ]; then
   echo "ERROR: run-current returned run_id='${verified_run:-<empty>}', expected '$RUN_ID' (verify mismatch)" >&2
