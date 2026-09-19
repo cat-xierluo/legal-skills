@@ -240,6 +240,78 @@ else
 fi
 rm -rf "$hex_proj"
 
+# v2.27.3：--base-ref 大写 40-hex 同样在任何 worktree/provider/terminal 副作用
+# 之前拒绝（字符类 [0-9a-f]→[0-9a-fA-F]，防止 96A304DF… 绕过）。用法与 v2.27.1
+# 40-hex 用例完全镜像，仅把基线值改为大写；断言 rc=64 + 拒绝消息 +
+# 无 worktree/METADATA 副作用一并回归。
+upper_hex_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-upper-hex.XXXXXX")
+set +e
+upper_hex_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$upper_hex_proj" --session "test-base-upper-hex" --branch "feat/base-upper-hex" \
+    --base-ref "96A304DF1234567890ABCDEF1234567890ABCDEF" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+upper_hex_rc=$?
+set -e
+if [ "$upper_hex_rc" -ne 0 ] && printf '%s' "$upper_hex_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  ok "uppercase 40-hex --base-ref rejected before any side effect"
+else
+  bad "uppercase 40-hex --base-ref rejected before any side effect (rc=$upper_hex_rc)"
+  printf '%s\n' "$upper_hex_out" >&2
+fi
+if [ ! -d "$upper_hex_proj/.claude/worktrees" ] && [ ! -d "$upper_hex_proj/.claude/agent-sessions" ]; then
+  ok "uppercase 40-hex rejection did not create worktree or session context"
+else
+  bad "uppercase 40-hex rejection must not create worktree or session context (found under $upper_hex_proj/.claude)"
+fi
+rm -rf "$upper_hex_proj"
+
+# v2.27.3：大小写混合 40-hex 同样拒绝（防御性，断言正则严格区分大小写——
+# 单纯改大小写不绕开；真实上游通常给出统一小写但不能依赖）。
+mixed_hex_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-mixed-hex.XXXXXX")
+set +e
+mixed_hex_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$mixed_hex_proj" --session "test-base-mixed-hex" --branch "feat/base-mixed-hex" \
+    --base-ref "AbCdEf1234567890aBcDeF1234567890AbCdEf12" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+mixed_hex_rc=$?
+set -e
+if [ "$mixed_hex_rc" -ne 0 ] && printf '%s' "$mixed_hex_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  ok "mixed-case 40-hex --base-ref rejected before any side effect"
+else
+  bad "mixed-case 40-hex --base-ref rejected before any side effect (rc=$mixed_hex_rc)"
+  printf '%s\n' "$mixed_hex_out" >&2
+fi
+rm -rf "$mixed_hex_proj"
+
+# v2.27.3：大写 hex 形态的分支名若真实存在（refs/heads/<v> 大小写敏感），
+# 仍应放行——show-ref/--verify 是精确路径匹配，新建 DEADBEEF2 这样的分支
+# 不应被守卫误伤。建在临时 fixture 仓库里，跑完即抛。
+deadbeef_proj=$(mktemp -d "${TMPDIR:-/tmp}/spawn-base-ref-deadbeef.XXXXXX")
+git -C "$deadbeef_proj" init -q -b main
+git -C "$deadbeef_proj" -c user.name=test -c user.email=test@example.com commit --allow-empty -q -m seed
+git -C "$deadbeef_proj" checkout -q -b DEADBEEF2
+deadbeef_branch=$(git -C "$deadbeef_proj" rev-parse --verify DEADBEEF2)
+set +e
+deadbeef_out=$(
+  bash "$SPAWN_WORKER" \
+    --project "$deadbeef_proj" --session "test-base-deadbeef" --branch "feat/base-deadbeef" \
+    --base-ref "DEADBEEF2" \
+    --command "true" --worker-backend claude-code --no-worktree --dry-run 2>&1
+)
+deadbeef_rc=$?
+set -e
+if printf '%s' "$deadbeef_out" | grep -Fq 'SPAWN_WORKER_BASE_REF_MUST_BE_REF'; then
+  bad "uppercase-hex real branch DEADBEEF2 must not trigger BASE_REF_MUST_BE_REF (rc=$deadbeef_rc)"
+  printf '%s\n' "$deadbeef_out" >&2
+else
+  ok "uppercase-hex real branch DEADBEEF2 proceeds past base-ref gate"
+fi
+rm -rf "$deadbeef_proj"
+
 # v2.27.1：--base-ref main 正常进入后续（不触发 BASE_REF_MUST_BE_REF 拒绝）。
 # 这里只断言我们的拒绝消息没有出现，不强求 0 退出——后续步骤在临时空目录
 # 下可能因 harness/lease 等真实副作用前的检测而以非零退出，但本任务不关心。
