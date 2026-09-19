@@ -253,6 +253,18 @@ else
   bad "explicit symlink did not force the symlink"
 fi
 
+echo "Case 19: invalid deps mode fails with the stable diagnostic under nounset"
+DEPS_MODE="invalid"
+invalid_mode_rc=0
+invalid_mode_output=$(resolve_deps_mode 2>&1) || invalid_mode_rc=$?
+if [ "$invalid_mode_rc" -eq 1 ] \
+  && printf '%s\n' "$invalid_mode_output" | grep -q 'SPAWN_WORKER_DEPS_MODE_INVALID: invalid（只接受 auto|symlink|local）' \
+  && ! printf '%s\n' "$invalid_mode_output" | grep -q 'unbound variable'; then
+  ok "invalid deps mode remains fail-closed without Unicode-adjacent variable expansion"
+else
+  bad "invalid deps mode did not return the stable fail-closed diagnostic: $invalid_mode_output"
+fi
+
 echo ""
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]
