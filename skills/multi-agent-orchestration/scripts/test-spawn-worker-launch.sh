@@ -426,7 +426,18 @@ printf '%s\n' \
   'if [ "${1:-}" = "has-session" ]; then exit 1; fi' \
   'exit 0' \
   > "$E2E_BIN/tmux"
-chmod +x "$E2E_BIN/tmux"
+# This case tests the launch wrapper, not the host process namespace. Supply a
+# complete one-frame Codex ancestry so a sandbox-hidden outer PID cannot make
+# the unrelated harness gate fail first; production detection remains unchanged.
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'case "${4:-}" in' \
+  '  ppid=) printf "1\n" ;;' \
+  '  comm=|args=) printf "/opt/codex\n" ;;' \
+  '  *) exit 1 ;;' \
+  'esac' \
+  > "$E2E_BIN/ps"
+chmod +x "$E2E_BIN/tmux" "$E2E_BIN/ps"
 # v2.11.0：E2E 用固定的 quota routing 禁用配置，避免依赖运行环境里
 # MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG / skill config 的真实内容
 # （quota_aware_routing 启用且无 summary 时预检会按设计 fail-closed exit 3）。
@@ -434,6 +445,7 @@ E2E_PERSONAL_CONFIG="$CASE_ROOT/personal-quota-disabled.json"
 printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
 set +e
 e2e_output=$(PATH="$E2E_BIN:$PATH" MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
+  SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
   bash "$REAL_SCRIPT_DIR/spawn-worker.sh" \
   --project "$E2E_PROJECT" \
   --no-worktree \

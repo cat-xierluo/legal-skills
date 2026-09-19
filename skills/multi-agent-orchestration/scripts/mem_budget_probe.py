@@ -307,6 +307,47 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
         "sources": sources,
     }
 
+    # Explicit opt-out is a control decision, not a claim that host telemetry is
+    # readable. Keep best-effort source evidence when available, but never turn
+    # an intentionally disabled gate back into an unprobeable hard failure.
+    if budget_bytes == 0:
+        payload["status"] = "disabled"
+        payload["slots"] = None
+        payload["reason"] = (f"{BUDGET_ENV}=0 显式关闭内存预算门"
+                             "（opt-out；可读探测数据按最佳努力保留）")
+        if total_bytes is None:
+            return payload
+        payload["total_bytes"] = total_bytes
+        availability_basis: str | None = None
+        available_bytes: int | None = None
+        page_size: int | None = None
+        if vm_stat is not None:
+            available_bytes = min(vm_stat["available_bytes"], total_bytes)
+            availability_basis = "vm_stat"
+            page_size = vm_stat["page_size"]
+        elif memory_pressure is not None and memory_pressure["available_percent"] is not None:
+            available_bytes = min(
+                int(total_bytes * memory_pressure["available_percent"] / 100.0),
+                total_bytes,
+            )
+            availability_basis = "memory_pressure_percent"
+        if available_bytes is not None:
+            reserve_bytes = max(RESERVE_FLOOR_BYTES, int(total_bytes * RESERVE_RATIO))
+            safe_available = max(0, available_bytes - reserve_bytes)
+            pressure = aggregate_pressure(memory_pressure, swap)
+            payload.update({
+                "page_size": page_size,
+                "availability_basis": availability_basis,
+                "available_bytes": available_bytes,
+                "reserve_bytes": reserve_bytes,
+                "safe_available_bytes": safe_available,
+                "pressure": pressure,
+            })
+            if swap is not None:
+                payload["swap"] = {key: swap[key] for key in
+                                   ("total_bytes", "used_bytes", "free_bytes", "used_ratio")}
+        return payload
+
     if total_bytes is None:
         payload["status"] = "unprobeable"
         payload["reason"] = "hw.memsize 不可读：无法确立物理内存总量（fail-closed，不输出额度）"
@@ -347,12 +388,6 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
         payload["swap"] = {key: swap[key] for key in
                            ("total_bytes", "used_bytes", "free_bytes", "used_ratio")}
 
-    if budget_bytes == 0:
-        payload["status"] = "disabled"
-        payload["slots"] = None
-        payload["reason"] = f"{BUDGET_ENV}=0 显式关闭内存预算门（opt-out，探测数据照常输出）"
-        return payload
-
     effective = int(safe_available * pressure["tighten_factor"])
     slots = effective // budget_bytes
     payload["slots"] = slots
@@ -380,6 +415,9 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
 def human_summary(payload: dict[str, Any]) -> str:
     if payload.get("status") == "unprobeable":
         return f"MEM_BUDGET_PROBE: status=unprobeable reason={payload.get('reason', '')}"
+    if payload.get("status") == "disabled" and "available_bytes" not in payload:
+        return ("MEM_BUDGET_PROBE: status=disabled budget=0 "
+                f"sources={payload.get('sources', {})}")
     pressure = payload.get("pressure", {})
     return (f"MEM_BUDGET_PROBE: status={payload.get('status')} "
             f"total={_gib(payload['total_bytes'])} "

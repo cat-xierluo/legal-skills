@@ -15,13 +15,24 @@ STATUS_FILE="$CTX/STATUS.json"
 
 cleanup() {
   local rc=$?
+  local cleanup_rc=0
+  local cleanup_out=""
   trap - EXIT
   # Only the private socket/session created by this test; never the user server.
   if [ -n "${SMOKE_REAL_TMUX:-}" ]; then
-    "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION" 2>/dev/null || true
+    cleanup_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION" 2>&1) || cleanup_rc=$?
+    if [ "$cleanup_rc" -ne 0 ] && ! printf '%s\n' "$cleanup_out" | grep -Eqi "can't find session|no server running"; then
+      printf 'ASSERTION FAILED: private tmux cleanup failed: %s\n' "$cleanup_out" >&2
+      [ "$rc" -ne 0 ] || rc=1
+    fi
   fi
   if [ -d "$REPO" ]; then
-    git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || true
+    cleanup_rc=0
+    cleanup_out=$(git -C "$REPO" worktree remove --force "$WT" 2>&1) || cleanup_rc=$?
+    if [ "$cleanup_rc" -ne 0 ]; then
+      printf 'ASSERTION FAILED: private worktree cleanup failed: %s\n' "$cleanup_out" >&2
+      [ "$rc" -ne 0 ] || rc=1
+    fi
   fi
   if [ -s "$TMP_ROOT/orca-unexpected.log" ]; then
     echo "ASSERTION FAILED: unexpected fake Orca calls (all refused):" >&2
@@ -97,6 +108,27 @@ export ORCA_CLI_COMMAND="$TMP_ROOT/isolated-bin/orca"
 export ORCA_CLI_BIN="$ORCA_CLI_COMMAND"
 export SMOKE_REAL_TMUX="$(command -v tmux)"
 export SMOKE_TMUX_SOCKET="$TMP_ROOT/tmux.sock"
+set +e
+tmux_probe_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null \
+  new-session -d -s "$SESSION-probe" 'sleep 2' 2>&1)
+tmux_probe_create_rc=$?
+tmux_probe_show_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" has-session -t "$SESSION-probe" 2>&1)
+tmux_probe_show_rc=$?
+set -e
+if [ "$tmux_probe_create_rc" -ne 0 ] || [ "$tmux_probe_show_rc" -ne 0 ]; then
+  if printf '%s\n%s' "$tmux_probe_out" "$tmux_probe_show_out" | \
+    grep -Eqi 'operation not permitted|permission denied|no such file or directory'; then
+    echo "SKIP: sandbox does not permit an isolated tmux socket; deterministic tmux contract tests remain available"
+    SMOKE_REAL_TMUX=
+    exit 0
+  fi
+  echo "ASSERTION FAILED: isolated tmux probe failed: $tmux_probe_out $tmux_probe_show_out" >&2
+  exit 1
+fi
+"$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION-probe" >/dev/null 2>&1 || {
+  echo "ASSERTION FAILED: isolated tmux probe could not clean up its session" >&2
+  exit 1
+}
 cat > "$TMP_ROOT/isolated-bin/tmux" <<'FAKE_TMUX'
 #!/usr/bin/env bash
 exec "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null "$@"

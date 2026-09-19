@@ -5,6 +5,25 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TMP_ROOT=$(mktemp -d)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 LEASE="$SCRIPT_DIR/provider-lease.py"
+TEST_BIN="$TMP_ROOT/bin"
+TMUX_STATE="$TMP_ROOT/tmux-state"
+mkdir -p "$TEST_BIN" "$TMUX_STATE"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  "state_root=$(printf '%q' "$TMUX_STATE")" \
+  'session=""' \
+  'for ((i=1; i<=$#; i++)); do' \
+  '  if [ "${!i}" = "-s" ] || [ "${!i}" = "-t" ]; then j=$((i + 1)); session="${!j}"; fi' \
+  'done' \
+  'case "${1:-}" in' \
+  '  new-session) : > "$state_root/$session" ;;' \
+  '  has-session) [ -f "$state_root/$session" ] ;;' \
+  '  kill-session) rm -f "$state_root/$session" ;;' \
+  '  *) exit 1 ;;' \
+  'esac' \
+  > "$TEST_BIN/tmux"
+chmod +x "$TEST_BIN/tmux"
+export PATH="$TEST_BIN:$PATH"
 
 first=$(python3 "$LEASE" acquire --root "$TMP_ROOT/leases" --provider provider-a \
   --backend codex --session worker-a --project "$TMP_ROOT/project" --max 1 --owner-pid $$)

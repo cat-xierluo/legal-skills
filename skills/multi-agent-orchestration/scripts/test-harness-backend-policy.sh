@@ -91,8 +91,69 @@ ln -s /bin/bash "$TMP_ROOT/codebuddy"
 ln -s /bin/bash "$TMP_ROOT/codex"
 ln -s /bin/bash "$TMP_ROOT/claude"
 ln -s /bin/bash "$TMP_ROOT/qoderclicn"
+# Some CI/sandbox process namespaces expose an inner parent PID but not the
+# outer frame. Production must fail closed there; this test instead completes
+# only that unreadable boundary with a neutral /bin/sh -> PID 1 frame so the
+# synthetic named executables remain the facts under test.
+REAL_PS_BIN=$(command -v ps)
+export REAL_PS_BIN
+cat > "$TMP_ROOT/ps" <<'SH'
+#!/usr/bin/env bash
+if [ -n "${HARNESS_TEST_CHAIN:-}" ] && [ -n "${HARNESS_TEST_ROOT_PID:-}" ]; then
+  pid=""
+  format=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -p) pid="$2"; shift 2 ;;
+      -o) format="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  IFS=',' read -r -a frames <<< "$HARNESS_TEST_CHAIN"
+  if [ "$pid" = "$HARNESS_TEST_ROOT_PID" ]; then
+    index=0
+  elif [ "$pid" -ge 900001 ] 2>/dev/null; then
+    index=$((pid - 900000))
+  else
+    exit 1
+  fi
+  [ "$index" -lt "${#frames[@]}" ] || exit 1
+  case "$format" in
+    ppid=)
+      if [ $((index + 1)) -lt "${#frames[@]}" ]; then
+        printf '%s\n' $((900000 + index + 1))
+      else
+        printf '1\n'
+      fi
+      ;;
+    comm=|args=)
+      case "${frames[$index]}" in
+        claude-code) printf '/opt/claude\n' ;;
+        codex) printf '/opt/codex\n' ;;
+        codebuddy) printf '/opt/codebuddy\n' ;;
+        qoderwork-cn) printf '/opt/qoderclicn\n' ;;
+        zcode) printf '/opt/zcode-cli\n' ;;
+        hermes) printf '/Applications/Hermes.app/Contents/MacOS/hermes\n' ;;
+        *) printf '/bin/sh\n' ;;
+      esac
+      ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+if "$REAL_PS_BIN" "$@"; then
+  exit 0
+fi
+case " $* " in
+  *" ppid= "*) printf '1\n' ;;
+  *" comm= "*|*" args= "*) printf '/bin/sh\n' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$TMP_ROOT/ps"
+export PATH="$TMP_ROOT:$PATH"
 mkdir -p "$TMP_ROOT/non-orca-project"
-if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; rc=$?; :; exit "$rc"' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codebuddy bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: codebuddy -> codebuddy\n'
   pass=$((pass + 1))
@@ -101,7 +162,7 @@ else
   fail=$((fail + 1))
 fi
 weak_rc=0
-ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness claude-code --worker-backend codex; rc=$?; :; exit "$rc"' _ \
+ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codebuddy bash "$1" --project "$2" --pm-harness claude-code --worker-backend codex; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1 || weak_rc=$?
 if [ "$weak_rc" -eq 64 ]; then
   printf 'PASS ancestry deny: codebuddy cannot assert claude-code or dispatch codex\n'
@@ -110,7 +171,7 @@ else
   printf 'FAIL ancestry deny: codebuddy escalation exit=%s\n' "$weak_rc" >&2
   fail=$((fail + 1))
 fi
-if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; rc=$?; :; exit "$rc"' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=qoderwork-cn bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: qoderwork-cn -> qoderwork-cn\n'
   pass=$((pass + 1))
@@ -123,7 +184,7 @@ fi
 # strong CLI. The effective permission is the intersection of every ancestor.
 nested_rc=0
 ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/codebuddy" -c '
-  codex -c '\''bash "$1" --project "$2" --pm-harness codex --worker-backend claude-code; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
+  codex -c '\''HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codex,codebuddy bash "$1" --project "$2" --pm-harness codex --worker-backend claude-code; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
   rc=$?; :; exit "$rc"
 ' _ "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1 || nested_rc=$?
 if [ "$nested_rc" -eq 64 ]; then
@@ -136,7 +197,7 @@ fi
 
 strong_nested_out=""
 if strong_nested_out=$(ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/claude" -c '
-  codex -c '\''bash "$1" --project "$2" --pm-harness codex --worker-backend codebuddy; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
+  codex -c '\''HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codex,claude-code bash "$1" --project "$2" --pm-harness codex --worker-backend codebuddy; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
   rc=$?; :; exit "$rc"
 ' _ "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" 2>&1) \
   && printf '%s' "$strong_nested_out" | grep -q 'allowed=claude-code codex codebuddy qoderwork-cn'; then
@@ -154,7 +215,7 @@ git -C "$blocked_repo" -c user.name=Smoke -c user.email=smoke@example.invalid \
   commit --allow-empty -q -m init
 blocked_rc=0
 ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c '
-  bash "$1" --project "$2" --branch feat/blocked-escalation --session blocked-escalation \
+  HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codebuddy bash "$1" --project "$2" --branch feat/blocked-escalation --session blocked-escalation \
     --worker-backend codex --command "sleep 1" \
     --allow-prompt-only-install-guard "policy fault injection" --no-orca-mode
   rc=$?; :; exit "$rc"
@@ -172,7 +233,7 @@ fi
 
 label_mismatch_rc=0
 ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$TMP_ROOT/codebuddy" -c '
-  bash "$1" --project "$2" --branch feat/label-mismatch --session label-mismatch \
+  HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codebuddy bash "$1" --project "$2" --branch feat/label-mismatch --session label-mismatch \
     --worker-backend codebuddy --command codex \
     --allow-prompt-only-install-guard "identity mismatch must never degrade" \
     --no-orca-mode --dry-run
@@ -191,6 +252,11 @@ DETECTED_PM_HARNESS=""
 runtime_rc=0
 process_probe_rc=0
 orca_probe_rc=0
+HARNESS_TEST_ROOT_PID="$PPID"
+HARNESS_TEST_CHAIN=codex
+export HARNESS_TEST_ROOT_PID HARNESS_TEST_CHAIN
+ORCA_CLI_COMMAND=/usr/bin/false
+export ORCA_CLI_COMMAND
 process_probe=$(pm_harness_from_process "$PPID" 2>/dev/null) || process_probe_rc=$?
 process_probe_host=$(printf '%s\n' "$process_probe" | sed -n '1p')
 orca_probe_host=$(pm_harness_from_orca "" 2>/dev/null) || orca_probe_rc=$?
