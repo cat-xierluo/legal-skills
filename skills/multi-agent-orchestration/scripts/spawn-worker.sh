@@ -227,23 +227,27 @@ command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
 
-# v2.27.1: --base-ref must be a ref name (main, origin/main, refs/heads/x).
+# v2.27.3: --base-ref must be a ref name (main, origin/main, refs/heads/x).
 # A bare 40-hex sha (or 7-40 hex that resolves only as a commit) would be recorded
 # into METADATA.base_ref and later deadlock pm-cleanup-worker between
 # INTEGRATION_TARGET_MISMATCH (argument=main vs metadata=sha) and
 # PR_BASE_MISMATCH (expected=sha vs actual=main). Reject early, before any
 # worktree/provider/terminal/Dispatch side effect.
+# 字符类覆盖大小写十六进制（[0-9a-fA-F]）——先前 [0-9a-f] 让大写 sha
+# （如 96A304DF…）绕过守卫并原样写入 METADATA.base_ref，重现同款死锁。
 spawn_worker_check_base_ref_is_ref() {
   local value="$1"
   [ -n "$value" ] || return 0
-  if [[ "$value" =~ ^[0-9a-f]{40}$ ]]; then
+  if [[ "$value" =~ ^[0-9a-fA-F]{40}$ ]]; then
     echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a 40-character commit sha)" >&2
     return 64
   fi
-  if [[ "$value" =~ ^[0-9a-f]{7,40}$ ]] \
+  if [[ "$value" =~ ^[0-9a-fA-F]{7,40}$ ]] \
      && [ -d "$PROJECT_DIR" ] \
      && git -C "$PROJECT_DIR" rev-parse --verify --quiet "$value^{commit}" >/dev/null 2>&1; then
-    # Resolves as a commit — only allow if it is also a real ref name
+    # Resolves as a commit — only allow if it is also a real ref name.
+    # refs/heads|remotes|tags 查找本身大小写敏感：分支名恰为大写 hex 形态且
+    # 真实存在时（如 DEADBEEF2）仍放行，否则一律拒绝（包含大小写混合 sha）。
     if ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$value" 2>/dev/null \
        && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/$value" 2>/dev/null \
        && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/tags/$value" 2>/dev/null; then
