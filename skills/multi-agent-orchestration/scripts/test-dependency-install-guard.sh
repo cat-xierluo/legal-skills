@@ -7,6 +7,7 @@ GUARD="$SCRIPT_DIR/dependency-install-guard.py"
 pass=0
 fail=0
 tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/dependency-install-guard.XXXXXX")
+tmp_root=$(cd "$tmp_root" && pwd -P)
 trap 'rm -rf "$tmp_root"' EXIT
 
 # 隔离安装门禁测试与开发者本地的额度路由配置。否则真实
@@ -55,13 +56,21 @@ PY
 hook() {
   local auth_file="$1"
   local command="$2"
+  local completion_authority_file="${3:-}"
   # 本测试的 fixture 授权必须生效：显式清空 WORKER_INSTALL_AUTH_B64，
   # 防止在真实 supervised worker 会话里运行本测试时继承 spawn 注入的
   # 不可变快照（guard 对 B64 快照的优先级高于 WORKER_INSTALL_AUTH_FILE），
   # 导致全部 fixture 被外层 worker 的空授权静默覆盖。
   printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
     "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$command")" |
-    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64= WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
+    WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64= \
+    WORKER_COMPLETION_AUTHORITY_FILE="$completion_authority_file" \
+    WORKER_AUTHORITY_RECEIPT_FILE="${completion_parent_authority:-}" \
+    WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256="${completion_parent_sha:-}" \
+    WORKER_ORCA_CLI_BIN="${completion_fake_cli:-}" \
+    ORCA_TERMINAL_HANDLE=term_worker \
+    WORKER_SESSION_CONTEXT= \
+    WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
 }
 
 expect_block() {
@@ -297,27 +306,103 @@ expect_block "sed execute command remains denied" "SHELL_COMMAND_NOT_ALLOWLISTED
 expect_block "unbounded sed program remains exact-authority only" "SHELL_COMMAND_NOT_ALLOWLISTED" \
   hook "$deny_auth" "sed 's/old/new/' src/app.ts"
 
-expect_allow "Dispatch-scoped worker_done is allowed" \
-  hook "$deny_auth" 'orca orchestration send --type worker_done --subject "done" --body "implemented and verified" --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --files-modified "src/a.ts" --json'
+completion_capability='dcap_round34_regression_value'
+completion_hash=$(printf '%s' "$completion_capability" | shasum -a 256 | awk '{print $1}')
+mkdir -p "$tmp_root/agent-authority"
+completion_parent_authority="$tmp_root/agent-authority/worker.json"
+printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$completion_parent_authority"
+completion_parent_sha=$(shasum -a 256 "$completion_parent_authority" | awk '{print $1}')
+completion_authority="$tmp_root/agent-authority/worker.completion.json"
+completion_fake_cli="$tmp_root/fake-completion-orca"
+cat > "$completion_fake_cli" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$*" = 'orchestration dispatch-show --task task_123 --json' ] || exit 64
+jq --arg runtime "${FAKE_COMPLETION_RUNTIME:-runtime-fixture}" \
+  --arg process "${FAKE_COMPLETION_PROCESS:-fixture-process-incarnation}" \
+  '{ok:true,_meta:{runtimeId:$runtime},result:{dispatch:{id:.dispatch_id,task_id:.task_id,
+    assignee_handle:.terminal_handle,run_id:.run_id,capability_hash:.capability_hash,process_incarnation:$process}}}' \
+  "$WORKER_COMPLETION_AUTHORITY_FILE"
+SH
+chmod +x "$completion_fake_cli"
+jq -n --arg hash "$completion_hash" --arg authority "$completion_parent_authority" --arg sha "$completion_parent_sha" '{
+  schema:"multi-agent-orchestration.completion-authority.v1",
+  created_at:"2026-09-12T00:00:00Z",
+  state:"active",
+  task_id:"task_123",
+  dispatch_id:"ctx_456",
+  terminal_handle:"term_789",
+  run_id:"run_abc",
+  capability_hash:$hash,
+  process_incarnation:"fixture-process-incarnation",
+  runtime_id:"runtime-fixture",
+  authority_receipt_file:$authority,
+  authority_receipt_sha256:$sha
+}' > "$completion_authority"
+native_worker_done=$(cat <<EOF
+orca orchestration send --from term_789 --dispatch-capability "$completion_capability" \
+  --type worker_done --subject "done" \
+  --body "implemented and verified" \
+  --task-id task_123 --dispatch-id ctx_456 --outcome succeeded \
+  --files-modified "src/a.ts" --json
+EOF
+)
+expect_allow "native multiline worker_done is allowed by the bound completion receipt" \
+  hook "$deny_auth" "$native_worker_done" "$completion_authority"
+expect_block "worker_done without a runtime receipt fails closed" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration send --from term_789 --dispatch-capability missing --type worker_done --subject "done" --body "summary" --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --json'
+expect_block "wrong completion task has zero authority" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" "orca orchestration send --from term_789 --dispatch-capability $completion_capability --type worker_done --subject done --body summary --task-id task_wrong --dispatch-id ctx_456 --outcome succeeded --json" "$completion_authority"
+expect_block "wrong completion dispatch has zero authority" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" "orca orchestration send --from term_789 --dispatch-capability $completion_capability --type worker_done --subject done --body summary --task-id task_123 --dispatch-id ctx_wrong --outcome succeeded --json" "$completion_authority"
+expect_block "wrong completion terminal has zero authority" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" "orca orchestration send --from term_wrong --dispatch-capability $completion_capability --type worker_done --subject done --body summary --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --json" "$completion_authority"
+expect_block "tampered completion capability has zero authority" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration send --from term_789 --dispatch-capability dcap_tampered --type worker_done --subject done --body summary --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --json' "$completion_authority"
+if grep -qF "$completion_capability" "$completion_authority"; then
+  not_ok "completion receipt contains no raw capability text"
+else
+  ok "completion receipt contains no raw capability text"
+fi
 expect_allow "Dispatch-scoped heartbeat is allowed" \
   hook "$deny_auth" 'orca-dev orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --phase implementing --json'
 expect_allow "bounded worker ask is allowed" \
-  hook "$deny_auth" 'orca orchestration ask --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
-expect_allow "read-only worker check is allowed" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --dispatch-capability cap_123 --question "choose A or B" --options "A,B" --timeout-ms 600000 --json'
+expect_allow "pending worker ask resumes the original message id" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --dispatch-capability cap_123 --resume msg_question --timeout-ms 600000 --json'
+expect_block "resumed worker ask cannot create new options" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration ask --from term_worker --resume msg_question --options "A,B" --timeout-ms 600000 --json'
+expect_allow "worker mutation recovery accepts an Orca UUID" \
+  hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --retry-request 11111111-1111-4111-8111-111111111111 --json'
+expect_block "worker mutation recovery rejects a business retry key" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --retry-request retry-business-key --json'
+expect_allow "consuming worker check is allowed" \
+  hook "$deny_auth" 'orca-ide orchestration check --terminal term_worker --json'
+expect_allow "bounded consuming worker wait is allowed" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --wait --types "status,dispatch,decision_gate" --timeout-ms 600000 --json'
+expect_allow "worker may acknowledge only its own processed Delivery" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --ack delivery_worker_1 --json'
+expect_block "worker cannot acknowledge through the coordinator handle" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_coordinator --ack delivery_coordinator_1 --json'
+expect_block "worker peek cannot substitute for consumed guidance" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca-ide orchestration check --peek --types "status,dispatch" --json'
+expect_block "worker check timeout requires an explicit wait" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --timeout-ms 600000 --json'
+expect_block "worker wait requires a bounded timeout" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+  hook "$deny_auth" 'orca orchestration check --terminal term_worker --wait --json'
 expect_allow "worker check by preamble terminal handle is allowed" \
-  hook "$deny_auth" 'orca orchestration check --terminal term_8cfbab5c-e451-416b-aace-a94fcefb39df'
-expect_block "worker protocol cannot target a group" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+    hook "$deny_auth" 'orca orchestration check --terminal term_worker'
+expect_block "worker protocol cannot target a group" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration send --type heartbeat --subject "alive" --task-id task_123 --dispatch-id ctx_456 --to @all --json'
-expect_block "worker_done requires explicit outcome" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker_done requires explicit outcome" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration send --type worker_done --subject "done" --body "summary" --task-id task_123 --dispatch-id ctx_456 --json'
-expect_block "worker protocol does not grant task mutation" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker protocol does not grant task mutation" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration task-update --id task_123 --status completed --json'
-expect_block "worker check cannot acknowledge coordinator Delivery" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker check cannot acknowledge coordinator Delivery" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration check --ack delivery_123 --json'
-expect_block "worker protocol rejects shell chaining" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker protocol rejects shell chaining" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration check --peek --json && git status --short'
-expect_block "worker protocol cannot stop another Dispatch" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+expect_block "worker protocol cannot stop another Dispatch" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration worker-stop --dispatch ctx_456 --json'
 
 heredoc_command=$(printf 'cat <<EOF\nbrew install jq\nEOF')
@@ -540,7 +625,10 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "spawn merges hook without overwriting existing settings"
   fi
-  receipt_file=$(jq -r '.execution_authority.authority_receipt_file' "$metadata_file" 2>/dev/null || true)
+  if ! receipt_file=$(jq -er '.execution_authority.authority_receipt_file | select(type == "string" and length > 0)' "$metadata_file"); then
+    receipt_file=""
+    not_ok "metadata exposes a valid PM authority receipt path"
+  fi
   if [ -f "$receipt_file" ] && [[ "$receipt_file" != "$worktree"/* ]] && \
      jq -e --arg digest "$(jq -r '.execution_authority.authority_receipt_sha256' "$metadata_file")" \
        --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" \
@@ -551,7 +639,10 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "PM receipt preserves exact verification authority outside worker worktree"
   fi
-  attestation_file=$(jq -r '.execution_authority.guard_attestation_file' "$metadata_file" 2>/dev/null || true)
+  if ! attestation_file=$(jq -er '.execution_authority.guard_attestation_file | select(type == "string" and length > 0)' "$metadata_file"); then
+    attestation_file=""
+    not_ok "metadata exposes a valid runtime attestation path"
+  fi
   if [ ! -e "$attestation_file" ]; then
     ok "spawn does not claim runtime hook attestation before invocation"
   else

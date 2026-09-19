@@ -12,6 +12,7 @@ from common import (
     resolve_mineru_token,
     sanitize_config_value,
 )
+from rapid_ocr import is_rapid_available, rapid_supports
 
 
 OFFICE_SUFFIXES = {".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
@@ -71,6 +72,11 @@ def _light_note(source: SourceInfo) -> str:
     return "未检测到 MinerU Token 时会使用轻量接口；大文件、长 PDF 或高频请求可能受限"
 
 
+def _rapid_ready(source: SourceInfo) -> bool:
+    """本地 RapidOCR 可用且支持该输入（作为最后一级候选或无 API 时的首选）。"""
+    return rapid_supports(source) and is_rapid_available()
+
+
 def _optimal_candidates(
     source: SourceInfo,
     env: dict[str, str],
@@ -105,6 +111,9 @@ def _optimal_candidates(
             _append_unique(candidates, "paddle")
         if mineru_supports and mineru_ready:
             _append_unique(candidates, "mineru")
+        if _rapid_ready(source):
+            _append_unique(candidates, "rapid")
+            notes.append("本地 RapidOCR 可用，作为云端 API 失败后的本地兜底候选")
         return candidates
 
     if mineru_supports:
@@ -126,6 +135,21 @@ def choose_backend(
             preferred=explicit_backend,
             candidates=[explicit_backend],
             reason=f"用户显式指定 {explicit_backend} 后端",
+            fallback_allowed=False,
+        )
+
+    if explicit_backend == "rapid":
+        if not rapid_supports(source):
+            raise ValueError("rapid 后端不支持该输入类型（Office/URL 请使用 MinerU）")
+        if not is_rapid_available():
+            raise ValueError(
+                "本地 RapidOCR 未安装。启用方式：uv run --with rapidocr scripts/convert.py ... "
+                "或 pip install rapidocr 后用 python3 运行"
+            )
+        return RouteDecision(
+            preferred="rapid",
+            candidates=["rapid"],
+            reason="用户显式指定本地 RapidOCR 后端（识别不出本机）",
             fallback_allowed=False,
         )
 
@@ -153,6 +177,8 @@ def choose_backend(
         candidates: list[str] = []
         if _paddle_supports(source, env):
             _append_unique(candidates, "paddle")
+            if _rapid_ready(source):
+                _append_unique(candidates, "rapid")
         elif _mineru_supports(source):
             _append_unique(candidates, "mineru")
             notes.append("已检测到 PaddleOCR 配置，但该输入类型不适合 PaddleOCR，改用 MinerU 支持链路")
@@ -163,18 +189,31 @@ def choose_backend(
             preferred=candidates[0],
             candidates=candidates,
             reason="仅检测到 PaddleOCR API 配置，优先使用 PaddleOCR；超出 PaddleOCR 能力时才改用 MinerU",
-            fallback_allowed=False,
+            fallback_allowed=len(candidates) > 1,
             notes=notes,
         )
 
     if mineru_ready and not paddle_ready:
         if not _mineru_supports(source):
             raise ValueError(f"不支持的输入类型：{source.suffix or source.raw}")
+        candidates = ["mineru"]
+        if _rapid_ready(source):
+            _append_unique(candidates, "rapid")
         return RouteDecision(
             preferred="mineru",
-            candidates=["mineru"],
+            candidates=candidates,
             reason="仅检测到 MinerU Token/API 配置，所有支持的输入统一使用 MinerU",
-            fallback_allowed=False,
+            fallback_allowed=len(candidates) > 1,
+            notes=notes,
+        )
+
+    if _rapid_ready(source):
+        notes.append(_light_note(source))
+        return RouteDecision(
+            preferred="rapid",
+            candidates=["rapid", "mineru"] if _mineru_supports(source) else ["rapid"],
+            reason="未检测到可用 OCR API 配置，本地 RapidOCR 可用，优先本地识别（材料不出本机）",
+            fallback_allowed=_mineru_supports(source),
             notes=notes,
         )
 

@@ -60,6 +60,7 @@ reset_orca_case() {
   ORCA_TERMINAL_HANDLE=""
   ORCA_APP_VERSION=""
   ORCA_CAPABILITIES_JSON=""
+  ORCA_SETUP_MODE="skip"
   ORCA_SUPERVISED=0
   DRY_RUN=0
   RUNTIME_AVAILABLE=1
@@ -165,6 +166,8 @@ reset_orca_case
 DRY_RUN=1
 dry_worktree_output=$(orca_worktree_create worker main)
 if printf '%s' "$dry_worktree_output" | grep -Fq 'orca worktree create' \
+  && printf '%s' "$dry_worktree_output" | grep -Fq -- '--setup skip' \
+  && ! printf '%s' "$dry_worktree_output" | grep -Fq -- '--setup inherit' \
   && printf '%s' "$dry_worktree_output" | grep -Fq 'orca_worktree_id_placeholder'; then
   ok "worktree dry-run prints plan and placeholder"
 else
@@ -174,6 +177,28 @@ fi
 reset_orca_case
 actual_worktree_id=$(orca_worktree_create worker main)
 assert_eq "$actual_worktree_id" "repo-1::worker" "worktree helper returns exact runtime id"
+if grep -Fq -- 'worktree create --name worker --no-parent --base-branch main --setup skip --json' "$FAKE_LOG"; then
+  ok "worktree helper always passes the explicit skip policy"
+else
+  bad "worktree helper always passes the explicit skip policy"
+fi
+
+for unsafe_setup_mode in inherit run; do
+  reset_orca_case
+  ORCA_SETUP_MODE="$unsafe_setup_mode"
+  unsafe_setup_rc=0
+  set +e
+  orca_worktree_create worker main > "$CASE_ROOT/setup-$unsafe_setup_mode.out" 2> "$CASE_ROOT/setup-$unsafe_setup_mode.err"
+  unsafe_setup_rc=$?
+  set -e
+  assert_eq "$unsafe_setup_rc" "64" "$unsafe_setup_mode Setup fails before worktree creation"
+  if grep -Fq 'ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT' "$CASE_ROOT/setup-$unsafe_setup_mode.err" \
+    && [ ! -s "$FAKE_LOG" ]; then
+    ok "$unsafe_setup_mode Setup has a stable code and zero Orca calls"
+  else
+    bad "$unsafe_setup_mode Setup has a stable code and zero Orca calls"
+  fi
+done
 
 reset_orca_case
 WORKTREE_CREATE_JSON='not-json'
@@ -379,8 +404,12 @@ FAKE_ORCA_BIN="$CASE_ROOT/fake-orca"
 FAKE_ORCA_STATE="$CASE_ROOT/fake-orca-state"
 FAKE_ORCA_LOG="$CASE_ROOT/fake-orca-calls.log"
 FAKE_ORCA_SENDS="$CASE_ROOT/fake-orca-sends.log"
+FAKE_ORCA_WORKTREE="$CASE_ROOT/fake-orca-worktree"
+FAKE_ORCA_CAPABILITY='dcap_register_fixture'
+FAKE_ORCA_CAPABILITY_HASH=$(printf '%s' "$FAKE_ORCA_CAPABILITY" | shasum -a 256 | awk '{print $1}')
 # fake CLI 作为 register 子进程的孙进程运行，状态/日志路径必须导出
-export FAKE_ORCA_STATE FAKE_ORCA_LOG FAKE_ORCA_SENDS
+export FAKE_ORCA_STATE FAKE_ORCA_LOG FAKE_ORCA_SENDS FAKE_ORCA_WORKTREE
+export FAKE_ORCA_CAPABILITY FAKE_ORCA_CAPABILITY_HASH
 cat > "$FAKE_ORCA_BIN" <<'SH'
 #!/usr/bin/env bash
 # fake orca CLI：由 $FAKE_ORCA_STATE 状态文件驱动 canned 响应
@@ -391,6 +420,8 @@ case "$1 $2" in
     printf '%s\n' '{"result":{"run":{"id":"run-1","coordinator_handle":"term-pm"}}}' ;;
   "orchestration task-create")
     printf '%s\n' '{"result":{"task":{"id":"task-1"}}}' ;;
+  "worktree show")
+    jq -n --arg path "$FAKE_ORCA_WORKTREE" '{result:{worktree:{id:"repo-1::worker",path:$path}}}' ;;
   "orchestration worker-start")
     if [ -f "$state/worker-start-has-dispatch" ]; then
       printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-healthy"}}}}'
@@ -400,9 +431,9 @@ case "$1 $2" in
     fi ;;
   "orchestration dispatch-show")
     if [ -f "$state/worker-start-has-dispatch" ]; then
-      printf '%s\n' '{"result":{"dispatch":{"id":"ctx-healthy"}}}'
+      jq -n --arg hash "$FAKE_ORCA_CAPABILITY_HASH" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:"ctx-healthy",task_id:"task-1",assignee_handle:"term-worker",run_id:"run-1",capability_hash:$hash,process_incarnation:"process-healthy"}}}'
     elif [ -f "$state/rebound" ]; then
-      printf '%s\n' "{\"result\":{\"dispatch\":{\"id\":\"$(cat "$state/dispatch-id" 2>/dev/null || echo ctx-auto)\"}}}"
+      jq -n --arg hash "$FAKE_ORCA_CAPABILITY_HASH" --arg id "$(cat "$state/dispatch-id" 2>/dev/null || echo ctx-auto)" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:$id,task_id:"task-1",assignee_handle:"term-worker",run_id:"run-1",capability_hash:$hash,process_incarnation:"process-auto"}}}'
     else
       printf '%s\n' '{"result":{}}'
     fi ;;
@@ -413,8 +444,8 @@ case "$1 $2" in
     fi
     printf '%s\n' "ctx-auto" > "$state/dispatch-id"
     touch "$state/rebound"
-    # 混合形态：JSON + preamble 文本（真实 --return-preamble 可能非纯 JSON）
-    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-auto"},"preamble":"live preamble dispatch_id=ctx-auto task=task-1"}}' ;;
+    jq -n --arg cap "$FAKE_ORCA_CAPABILITY" \
+      '{result:{dispatch:{id:"ctx-auto"},preamble:("live preamble\norca orchestration send --from term-worker --dispatch-capability " + $cap + " \\\n  --type worker_done --subject done \\\n  --body summary --task-id task-1 --dispatch-id ctx-auto --outcome succeeded --json")}}' ;;
   "terminal send")
     if [ -f "$state/inject-fails" ]; then
       echo "ERROR: terminal send failed" >&2
@@ -432,6 +463,16 @@ reset_dispatch_case() {
   mkdir -p "$FAKE_ORCA_STATE"
   : > "$FAKE_ORCA_LOG"
   : > "$FAKE_ORCA_SENDS"
+  rm -rf "$FAKE_ORCA_WORKTREE"
+  mkdir -p "$FAKE_ORCA_WORKTREE/.claude/agent-sessions/register-session"
+  mkdir -p "$CASE_ROOT/agent-authority"
+  authority="$CASE_ROOT/agent-authority/register-authority.json"
+  rm -f "$CASE_ROOT/agent-authority/register-authority.completion.json"
+  printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$authority"
+  jq -n --arg authority "$authority" '{
+    session:{orca:{terminal_handle:"term-worker",worktree_id:"repo-1::worker"}},
+    execution_authority:{authority_receipt_file:$authority}
+  }' > "$FAKE_ORCA_WORKTREE/.claude/agent-sessions/register-session/METADATA.json"
 }
 
 run_register_helper() {
@@ -439,6 +480,7 @@ run_register_helper() {
     bash "$SCRIPT_DIR/orca-supervised-register.sh" \
     --worktree-id "repo-1::worker" \
     --terminal-handle "term-worker" \
+    --authority-receipt "$authority" \
     --task-spec "do the thing" "$@"
 }
 
@@ -463,6 +505,20 @@ if grep -Fq 'dispatch-show' "$FAKE_ORCA_LOG"; then
   ok "Task-076 self-check actively calls dispatch-show after worker-start"
 else
   bad "Task-076 self-check actively calls dispatch-show after worker-start"
+fi
+healthy_completion=$(sed -n 's/^ORCAREG_COMPLETION_AUTHORITY_FILE=//p' "$CASE_ROOT/t76-healthy.out")
+if [ -f "$healthy_completion" ] && jq -e \
+  '.task_id == "task-1" and .dispatch_id == "ctx-healthy" and .terminal_handle == "term-worker"' \
+  "$healthy_completion" >/dev/null; then
+  ok "Task-076 healthy path creates the exact post-start completion receipt"
+else
+  bad "Task-076 healthy path creates the exact post-start completion receipt"
+fi
+if grep -Fq "$FAKE_ORCA_CAPABILITY" "$healthy_completion" \
+  || grep -R -Fq "$FAKE_ORCA_CAPABILITY" "$FAKE_ORCA_WORKTREE/.claude/agent-sessions"; then
+  bad "Task-076 receipts and Session Context contain no capability plaintext"
+else
+  ok "Task-076 receipts and Session Context contain no capability plaintext"
 fi
 
 # 用例 2（实战事故形态）：receipt 与 dispatch-show 均空 → 三步自动补绑成功
@@ -496,10 +552,12 @@ send_lines=$(wc -l < "$FAKE_ORCA_SENDS" | tr -d ' ')
 assert_eq "$send_lines" "1" "Task-076 rebind injects exactly one single-line send"
 if grep -Fq 'ctx-auto' "$FAKE_ORCA_SENDS" && grep -Fq -- '--type worker_done' "$FAKE_ORCA_SENDS" \
   && grep -Fq -- '--task-id task-1' "$FAKE_ORCA_SENDS" && grep -Fq -- '--from term-worker' "$FAKE_ORCA_SENDS" \
-  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS"; then
-  ok "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  && grep -Fq -- '--dispatch-capability' "$FAKE_ORCA_SENDS" \
+  && grep -Fq -- 'orchestration ask' "$FAKE_ORCA_SENDS" && grep -Fq -- 'ask --resume' "$FAKE_ORCA_SENDS" \
+  && grep -Fq -- 'orchestration check --terminal' "$FAKE_ORCA_SENDS"; then
+  ok "Task-076 injected line carries native capability worker_done plus ask/resume/check forms"
 else
-  bad "Task-076 injected line carries dispatch id and worker_done/ask command forms"
+  bad "Task-076 injected line carries native capability worker_done plus ask/resume/check forms"
 fi
 
 # 用例 3（补绑 mutation 失败）：manual-required + 显式告警 + 不阻断（exit 0）
@@ -580,13 +638,18 @@ state="${E2E_ORCA_STATE:?}"
 log="${E2E_ORCA_LOG:?}"
 printf '%s\n' "$*" >> "$log"
 resp_worktree() {
-  jq -cn --arg id "repo-1::$1" --arg path "$1" '{result:{worktree:{id:$id,path:$path}}}'
+  jq -cn --arg id "repo-1::$1" --arg path "$1" '{ok:true,result:{worktree:{id:$id,path:$path}}}'
 }
 case "$1 $2" in
   "worktree current")
     resp_worktree "$E2E_ORCA_PROJECT" ;;
   "status --json")
-    printf '%s\n' '{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-pregate","appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+  "terminal show")
+    sender="$4"
+    live=true
+    [ "$sender" != term-closed ] || live=false
+    jq -cn --arg sender "$sender" --argjson live "$live" '{ok:true,result:{terminal:{handle:$sender,connected:$live,writable:$live,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-pregate"}}' ;;
   "worktree create")
     name=""
     while [ "$#" -gt 0 ]; do
@@ -615,13 +678,18 @@ case "$1 $2" in
   "terminal wait")
     printf '%s\n' '{"result":{"ok":true}}' ;;
   "orchestration run-create")
-    printf '%s\n' '{"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}},"_meta":{"runtimeId":"runtime-pregate"}}' ;;
+  "orchestration run-current")
+    run=run-pregate
+    [ ! -f "$state/run-current-mismatch" ] || run=run-other
+    jq -cn --arg run "$run" '{ok:true,result:{run:{id:$run,coordinator_handle:"term-pm-pregate"}},_meta:{runtimeId:"runtime-pregate"}}' ;;
   "orchestration task-create")
     printf '%s\n' '{"result":{"task":{"id":"task-pregate"}}}' ;;
   "orchestration worker-start")
     printf '%s\n' '{"result":{"worker":{"dispatch":{"id":"ctx-pregate"}}}}' ;;
   "orchestration dispatch-show")
-    printf '%s\n' '{"result":{"dispatch":{"id":"ctx-pregate"}}}' ;;
+    capability_hash=$(printf '%s' 'dcap_e2e_fixture' | shasum -a 256 | awk '{print $1}')
+    jq -n --arg hash "$capability_hash" '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:"ctx-pregate",task_id:"task-pregate",assignee_handle:"term-pregate",run_id:"run-pregate",capability_hash:$hash,process_incarnation:"process-pregate"}}}' ;;
   *) exit 1 ;;
 esac
 SH
@@ -643,6 +711,8 @@ run_e2e_spawn() {
   local branch="$1" session="$2" out_base="$3"
   shift 3
   ORCA_CLI_COMMAND="$E2E_ORCA_BIN" \
+  ORCA_TERMINAL_HANDLE="${E2E_PM_HANDLE-term-pm-pregate}" \
+  SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
   E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
   E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
   MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
@@ -659,6 +729,42 @@ run_e2e_spawn() {
     "$@" \
     > "$out_base.out" 2> "$out_base.err"
 }
+
+# Repo Setup happens inside Orca before MAO can write Session Context and guards. Non-skip
+# modes therefore fail before Run/worktree/terminal/Dispatch mutation, even when the caller
+# separately authorizes an install command for the later guarded worker phase.
+for setup_mode in inherit run; do
+  setup_out="$E2E_ROOT/setup-$setup_mode"
+  : > "$E2E_ORCA_LOG"
+  set +e
+  run_e2e_spawn "e2e-setup-$setup_mode" "e2e-setup-$setup_mode" "$setup_out" \
+    --orca-setup-mode "$setup_mode" \
+    --allow-install-command 'pnpm install' \
+    --install-authorization-source 'test-only later guarded phase'
+  setup_rc=$?
+  set -e
+  assert_eq "$setup_rc" "64" "$setup_mode Setup is rejected before Orca resource mutation"
+  if grep -Fq 'ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT' "$setup_out.err"; then
+    ok "$setup_mode entrypoint reports the stable prelaunch Setup refusal code"
+  else
+    bad "$setup_mode entrypoint reports the stable prelaunch Setup refusal code"
+  fi
+  if grep -Eq 'worktree create|terminal create|run-create|task-create|worker-start' "$E2E_ORCA_LOG"; then
+    bad "$setup_mode rejection performs zero Orca mutation"
+  else
+    ok "$setup_mode rejection performs zero Orca mutation"
+  fi
+  if grep -Eq 'SPAWN_WORKER_PROVIDER_LEASE' "$setup_out.out" "$setup_out.err" >/dev/null 2>&1; then
+    bad "$setup_mode rejection performs zero provider lease acquisition"
+  else
+    ok "$setup_mode rejection performs zero provider lease acquisition"
+  fi
+  if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-setup-$setup_mode" ]; then
+    ok "$setup_mode rejection leaves no Session Context"
+  else
+    bad "$setup_mode rejection leaves no Session Context"
+  fi
+done
 
 # Task-116 既有 Worktree 预门禁断言：命中 exact path/branch 占用时零 mutation 副作用
 # （无 worktree create / terminal / run / task / worker-start，无 Session Context），
@@ -735,10 +841,10 @@ else
   bad "origin-only collision still performed the real Orca worktree create"
 fi
 if grep -Fq 'terminal create' "$E2E_ORCA_LOG" || grep -Fq 'worker-start' "$E2E_ORCA_LOG" \
-  || grep -Fq 'task-create' "$E2E_ORCA_LOG" || grep -Fq 'run-create' "$E2E_ORCA_LOG"; then
-  bad "origin-only collision must not create a terminal, run, task or worker-start"
+  || grep -Fq 'task-create' "$E2E_ORCA_LOG"; then
+  bad "origin-only collision must not create a terminal, task or worker-start"
 else
-  ok "origin-only collision must not create a terminal, run, task or worker-start"
+  ok "origin-only collision preserves prepared Run without starting a worker"
 fi
 if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/e2e-late-collide" ]; then
   ok "origin-only collision leaves no Session Context on disk"
@@ -778,7 +884,12 @@ if grep -Fq 'terminal create' "$E2E_ORCA_LOG" \
 else
   bad "matching-branch spawn still creates the terminal and injects the task"
 fi
-if jq -e '.session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
+if grep -Fq -- 'worktree create --name e2e-pregate-ok --no-parent --base-branch main --setup skip --json' "$E2E_ORCA_LOG"; then
+  ok "matching-branch spawn uses explicit Setup skip"
+else
+  bad "matching-branch spawn uses explicit Setup skip"
+fi
+if jq -e '.session.orca.runtime_id == "runtime-pregate" and .session.orca.setup_mode == "skip" and .session.orca.supervised.task_id == "task-pregate" and .session.orca.supervised.dispatch_id == "ctx-pregate" and .session.orca.supervised.dispatch_bind == "ok"' \
   "$E2E_WS/e2e-pregate-ok/.claude/agent-sessions/e2e-pregate-ok/METADATA.json" >/dev/null 2>&1; then
   ok "matching-branch spawn records the supervised dispatch contract in metadata"
 else
@@ -900,6 +1011,49 @@ if grep -Fq 'EXISTING_WORKTREE_REQUIRES_RECOVERY' "$E2E_ROOT/fresh-explicit.err"
   bad "fresh explicit-path spawn must not report the existing-worktree code"
 else
   ok "fresh explicit-path spawn must not report the existing-worktree code"
+fi
+
+# Sender failures must precede lease/worktree/session/terminal/Task side effects.
+for sender_case in missing closed run-mismatch runtime-mismatch; do
+  : > "$E2E_ORCA_LOG"
+  extra_sender_args=()
+  E2E_PM_HANDLE=term-pm-pregate
+  case "$sender_case" in
+    missing) E2E_PM_HANDLE="" ;;
+    closed) E2E_PM_HANDLE=term-closed ;;
+    run-mismatch) touch "$E2E_STATE/run-current-mismatch" ;;
+    runtime-mismatch) extra_sender_args=(--orca-coordinator-handle term-pm-pregate --orca-runtime-id other-runtime) ;;
+  esac
+  sender_rc=0
+  run_e2e_spawn "sender-$sender_case" "sender-$sender_case" "$E2E_ROOT/sender-$sender_case" "${extra_sender_args[@]}" || sender_rc=$?
+  assert_eq "$sender_rc" 3 "sender $sender_case is rejected before resources"
+  if grep -Eq 'worktree create|terminal create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || grep -Eq 'SPAWN_WORKER_PROVIDER_LEASE|SPAWN_WORKER_METADATA:' "$E2E_ROOT/sender-$sender_case.out" \
+    || [ -e "$E2E_WS/sender-$sender_case" ]; then
+    bad "sender $sender_case leaves zero worker resources"
+  else
+    ok "sender $sender_case leaves zero worker resources"
+  fi
+  rm -f "$E2E_STATE/run-current-mismatch"
+done
+unset E2E_PM_HANDLE
+
+# A prebuilt Wave is verified read-only, preserving the one Run/Task preparation barrier.
+: > "$E2E_ORCA_LOG"
+wave_rc=0
+run_e2e_spawn sender-prebuilt sender-prebuilt "$E2E_ROOT/sender-prebuilt" \
+  --orca-run-id run-pregate --orca-task-id task-pregate \
+  --orca-coordinator-handle term-pm-pregate --orca-runtime-id runtime-pregate || wave_rc=$?
+assert_eq "$wave_rc" 0 "prebuilt Wave still starts its existing Task"
+if grep -Eq 'run-create|run-use|task-create' "$E2E_ORCA_LOG"; then
+  bad "prebuilt Wave must not recreate or rebind Run/Task"
+else
+  ok "prebuilt Wave has zero Run/Task mutations"
+fi
+if grep -Fq 'run-current --from term-pm-pregate' "$E2E_ORCA_LOG"; then
+  ok "prebuilt Wave verifies its precise coordinator binding"
+else
+  bad "prebuilt Wave verifies its precise coordinator binding"
 fi
 
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"

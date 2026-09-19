@@ -3,9 +3,168 @@
 
 orca_supervised_task_spec() {
   local task_spec="$1"
-  printf '%s\n\n%s' \
-    'SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, execute the exact worker_done command from this attempt’s live Orca preamble using its real task/dispatch IDs, then stop new work. A commit, green tests, STATUS=done, heartbeat, or an idle TUI does not complete the Dispatch; do not invent or reuse IDs.' \
-    "$task_spec"
+  local completion_protocol messaging_protocol delivery_protocol protocol
+  completion_protocol='SUPERVISED COMPLETION PROTOCOL (MANDATORY): After the business work and verification finish, drain and acknowledge the Worker inbox final follow-up Delivery, then execute the exact worker_done command from the live Orca preamble for this attempt using its real task/dispatch IDs and stop new work. A commit, green tests, STATUS=done, heartbeat, an idle TUI, or merely visible/enqueued guidance does not complete the Dispatch; do not invent or reuse IDs.'
+  messaging_protocol=$(cat <<'MESSAGING'
+WORKER MESSAGING PROTOCOL (MANDATORY):
+- Copy the exact Orca executable, worker handle and Dispatch capability from this attempt's live preamble. Messages never broaden file, Shell, install, Git, release or lifecycle authority.
+- When the coordinator must answer a blocking question, use `orchestration ask --question ... --timeout-ms ...`. A timeout, cancellation or connection loss leaves that one question pending. Resume the original returned message ID with `orchestration ask --resume <message_id> --timeout-ms ...`; never create a duplicate question. `ask` is not a decision gate.
+- At each natural checkpoint — before starting another file, after each scoped test run, and immediately before `worker_done` — call `orchestration check --terminal <worker_handle> --json`. Process every row in the returned Worker Delivery, then advance only that same Worker inbox with `orchestration check --terminal <worker_handle> --ack <delivery_id> --json`; process the next returned batch and repeat until count is zero. Do not use the coordinator handle and do not substitute `--peek`, `--all` or `--unread`: durable enqueue or read-only visibility does not prove this worker processed the guidance.
+- If a consuming check returns `consumer_fenced` or `dispatch_inactive`, this process no longer has an active authoritative Dispatch: stop immediately, do not send `worker_done`, and do not retry that check. Otherwise act only on in-scope guidance and preserve the original task/permission boundary. Stop checking after `worker_done`.
+MESSAGING
+)
+  # Keep this literal: Wave Tasks can be created before the worker/worktree exists.
+  # Resolve the existing launch binding inside the worker, never in the PM shell.
+  delivery_protocol=$(cat <<'DELIVERY'
+WORKER DELIVERY PROTOCOL (MANDATORY):
+- Start with the smallest in-scope implementation, then run the contract's scoped verification commands, one suite at a time. Do not substitute a full matrix or dependency installation without PM authorization.
+- Before writing checkpoints, run this read-only command in the worker process to check its already-bound absolute Session Context. WORKER_SESSION_CONTEXT is a location-only launch binding, including when guards are explicitly degraded; it grants no installation, Shell or scope authority and does not prove a hook is active. Every present guard binding must agree with it. Use the first printed path only if BOTH checks succeed; the second checks that it is an existing directory. Missing, relative, unavailable or differently spelled/conflicting bindings are BLOCKED: report to PM; do not guess from cwd, repo root, task title or session name, and do not create another task-state directory.
+```bash
+jq -ner '
+  (env.WORKER_SESSION_CONTEXT // "") as $context |
+  (env.SCOPE_GUARD_SESSION_ROOT // "") as $scope |
+  (env.WORKER_INSTALL_AUTH_FILE // "") as $auth |
+  [$context, $scope, $auth] | map(select(length > 0)) as $bindings |
+  if ($bindings | length) == 0 or any($bindings[]; startswith("/") | not)
+  then error("BLOCKED: missing/relative Session Context binding; report to PM")
+  else ([$context, $scope | select(length > 0)] +
+        [$auth | select(length > 0) | sub("/[^/]*$"; "")]) |
+    map(sub("/+$"; "")) | unique |
+    if length != 1 or .[0] == ""
+    then error("BLOCKED: conflicting Session Context binding; report to PM")
+    else .[0] end
+  end
+' && ls -d -- "${WORKER_SESSION_CONTEXT:-${SCOPE_GUARD_SESSION_ROOT:-${WORKER_INSTALL_AUTH_FILE%/*}}}/."
+```
+- Write RESULT.md and PATCH_SUMMARY.md only under that resolved Session Context, never repository-root RESULT.md; keep these and STATUS.json out of Git. Record exact verification commands/exits, changed files, limitations and the real 40-character git rev-parse HEAD. These files are evidence, not new completion authority.
+- For implementation changes, git add only the task-authorized files and commit the verified deliverable before reporting success, even when PM owns push/PR. Do not stage other workers' changes or checkpoint/runtime files. Review-only or genuinely no-change work must report no changes and the real HEAD, not manufacture an empty commit. Push, PR and history changes follow the PM task contract; this protocol grants none of them.
+DELIVERY
+)
+  protocol="$completion_protocol"$'\n\n'"$messaging_protocol"$'\n\n'"$delivery_protocol"
+  # Exact-prefix idempotence also covers callers reusing an already prepared spec.
+  case "$task_spec" in
+    "$protocol"|"$protocol"$'\n\n'*) printf '%s' "$task_spec"; return ;;
+    "$completion_protocol"$'\n\n'*) task_spec="${task_spec#"$completion_protocol"$'\n\n'}" ;;
+  esac
+  printf '%s\n\n%s' "$protocol" "$task_spec"
+}
+
+# Bind the post-worker-start Dispatch identity into the worker's already-running
+# hook without persisting the raw dispatch capability. The stable path is known
+# before launch and injected into the worker environment; only this hash-bound
+# receipt is created after Orca has minted the Dispatch capability.
+orchestration_completion_authority_write() {
+  local task_id="$1"
+  local dispatch_id="$2"
+  local terminal_handle="$3"
+  local run_id="$4"
+  local metadata_file="$5"
+  local expected_authority_file="${6:-}"
+  local authority_file completion_file show_out
+  local actual_task actual_dispatch actual_terminal actual_run capability_hash process_incarnation runtime_id authority_sha
+  local created_at receipt_tmp receipt_sha
+
+  ORCAREG_COMPLETION_AUTHORITY_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_SHA256=""
+
+  [ -n "$dispatch_id" ] || {
+    echo "ERROR: completion authority requires a bound dispatch" >&2
+    return 1
+  }
+  [ -f "$metadata_file" ] && [ ! -L "$metadata_file" ] || {
+    echo "ERROR: completion authority metadata is missing or symlinked: $metadata_file" >&2
+    return 1
+  }
+  authority_file=$(jq -er '.execution_authority.authority_receipt_file | select(type == "string" and length > 0)' \
+    "$metadata_file" 2>/dev/null) || {
+    echo "ERROR: metadata lacks the PM authority receipt path; completion transport stays closed" >&2
+    return 1
+  }
+  [ -n "$expected_authority_file" ] && [ "$authority_file" = "$expected_authority_file" ] || {
+    echo "ERROR: metadata authority path differs from the PM launch binding" >&2
+    return 1
+  }
+  [ -f "$authority_file" ] && [ ! -L "$authority_file" ] || {
+    echo "ERROR: PM authority receipt is missing or symlinked: $authority_file" >&2
+    return 1
+  }
+  completion_file="${authority_file%.json}.completion.json"
+  [ "$completion_file" != "$authority_file" ] || completion_file="${authority_file}.completion.json"
+  authority_sha=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' \
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" "$authority_file") || return 1
+
+  show_out=$(orca_cli orchestration dispatch-show --task "$task_id" --json 2>&1) || {
+    echo "ERROR: dispatch-show failed while binding completion authority" >&2
+    return 1
+  }
+  printf '%s' "$show_out" | jq -e '.ok == true' >/dev/null 2>&1 || return 1
+  runtime_id=$(printf '%s' "$show_out" | jq -er '._meta.runtimeId | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  actual_task=$(printf '%s' "$show_out" | jq -er '.result.dispatch.task_id | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  actual_dispatch=$(printf '%s' "$show_out" | jq -er '.result.dispatch.id | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  actual_terminal=$(printf '%s' "$show_out" | jq -er '.result.dispatch.assignee_handle | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  actual_run=$(printf '%s' "$show_out" | jq -er '.result.dispatch.run_id | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  capability_hash=$(printf '%s' "$show_out" | jq -er '.result.dispatch.capability_hash | select(type == "string" and test("^[0-9a-f]{64}$"))' 2>/dev/null) || return 1
+  process_incarnation=$(printf '%s' "$show_out" | jq -er '.result.dispatch.process_incarnation | select(type == "string" and length > 0)' 2>/dev/null) || return 1
+  if [ "$actual_task" != "$task_id" ] || [ "$actual_dispatch" != "$dispatch_id" ] || \
+     [ "$actual_terminal" != "$terminal_handle" ] || [ "$actual_run" != "$run_id" ]; then
+    echo "ERROR: dispatch identity drift while binding completion authority" >&2
+    return 1
+  fi
+
+  mkdir -p "$(dirname "$completion_file")"
+  created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+  receipt_tmp=$(mktemp "${completion_file}.tmp.XXXXXX") || return 1
+  umask 077
+  jq -n \
+    --arg schema "multi-agent-orchestration.completion-authority.v1" \
+    --arg created_at "$created_at" \
+    --arg task "$task_id" \
+    --arg dispatch "$dispatch_id" \
+    --arg terminal "$terminal_handle" \
+    --arg run "$run_id" \
+    --arg capability_hash "$capability_hash" \
+    --arg process_incarnation "$process_incarnation" \
+    --arg runtime_id "$runtime_id" \
+    --arg authority_receipt_file "$authority_file" \
+    --arg authority_receipt_sha256 "$authority_sha" \
+    '{schema:$schema,created_at:$created_at,state:"active",task_id:$task,dispatch_id:$dispatch,
+      terminal_handle:$terminal,run_id:$run,capability_hash:$capability_hash,
+      process_incarnation:$process_incarnation,runtime_id:$runtime_id,
+      authority_receipt_file:$authority_receipt_file,authority_receipt_sha256:$authority_receipt_sha256}' \
+    > "$receipt_tmp" || { rm -f "$receipt_tmp"; return 1; }
+  chmod 600 "$receipt_tmp"
+  if [ -e "$completion_file" ]; then
+    if [ -L "$completion_file" ] || [ ! -f "$completion_file" ]; then
+      rm -f "$receipt_tmp"
+      echo "ERROR: existing completion authority is not a regular file" >&2
+      return 1
+    fi
+    if jq -e --arg task "$task_id" --arg dispatch "$dispatch_id" --arg terminal "$terminal_handle" \
+      --arg run "$run_id" --arg capability_hash "$capability_hash" --arg process "$process_incarnation" \
+      --arg runtime "$runtime_id" --arg authority "$authority_file" --arg authority_sha "$authority_sha" \
+      '.schema == "multi-agent-orchestration.completion-authority.v1" and .state == "active"
+       and .task_id == $task and .dispatch_id == $dispatch and .terminal_handle == $terminal
+       and .run_id == $run and .capability_hash == $capability_hash and .process_incarnation == $process
+       and .runtime_id == $runtime and .authority_receipt_file == $authority and .authority_receipt_sha256 == $authority_sha' \
+      "$completion_file" >/dev/null 2>&1; then
+      rm -f "$receipt_tmp"
+    else
+      rm -f "$receipt_tmp"
+      echo "ERROR: completion authority already exists with a different Dispatch identity" >&2
+      return 1
+    fi
+  elif ! ln "$receipt_tmp" "$completion_file" 2>/dev/null; then
+    rm -f "$receipt_tmp"
+    echo "ERROR: could not atomically create completion authority receipt" >&2
+    return 1
+  else
+    rm -f "$receipt_tmp"
+  fi
+
+  receipt_sha=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$completion_file")
+  ORCAREG_COMPLETION_AUTHORITY_FILE="$completion_file"
+  ORCAREG_COMPLETION_AUTHORITY_SHA256="$receipt_sha"
+  echo "ORCAREG_COMPLETION_AUTHORITY: $completion_file sha256=$receipt_sha" >&2
 }
 
 # Task-106/Task-107（旧发布别名 Task-076/077-Dispatch）：worker 启动后的 Dispatch 绑定自检与三步自动补绑（register/launch 共用实现）。
@@ -69,7 +228,8 @@ orchestration_dispatch_bind_selfcheck() {
     rebind_out=$(orca_cli orchestration dispatch --task "$task_id" --to "$terminal_handle" \
       --run "$run_id" --return-preamble 2>&1) || rebind_out=""
     if [ -n "$rebind_out" ]; then
-      printf 'ORCAREG_DISPATCH_REBIND_RECEIPT: %s\n' "$rebind_out" >&2
+      printf 'ORCAREG_DISPATCH_REBIND_RECEIPT: sha256=%s (capability text redacted)\n' \
+        "$(printf '%s' "$rebind_out" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')" >&2
     fi
     rebind_id=$(printf '%s' "$rebind_out" | jq -r '
       .result.dispatch.id
@@ -102,14 +262,54 @@ orchestration_dispatch_bind_selfcheck() {
       dispatch_id=""
     fi
     if [ -n "$dispatch_id" ]; then
-      # 第三步：单行注入 worker_done/ask 精确命令形式。
+      # 第三步：单行注入 worker_done/ask/check 精确命令形式。
       # 必须单行：多行文本会在 TUI 里被提前回车逐行提交。
-      local inject_text
+      local inject_text completion_command
+      completion_command=$(printf '%s' "$rebind_out" | python3 -c '
+import json, re, sys
+raw = sys.stdin.read()
+texts = [raw]
+try:
+    data = json.loads(raw)
+    texts = []
+    def walk(value):
+        if isinstance(value, str):
+            texts.append(value)
+        elif isinstance(value, dict):
+            for item in value.values(): walk(item)
+        elif isinstance(value, list):
+            for item in value: walk(item)
+    walk(data)
+except json.JSONDecodeError:
+    pass
+for text in texts:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if "orca orchestration send" not in line:
+            continue
+        parts = [line.strip()]
+        while parts[-1].endswith("\\") and index + len(parts) < len(lines):
+            parts.append(lines[index + len(parts)].strip())
+        command = re.sub(r"\\\s*$", "", parts[0])
+        for part in parts[1:]:
+            command += " " + re.sub(r"\\\s*$", "", part)
+        if "--type worker_done" in command and "--dispatch-capability" in command:
+            print(command)
+            raise SystemExit(0)
+raise SystemExit(1)
+' 2>/dev/null) || completion_command=""
+      if [ -z "$completion_command" ]; then
+        dispatch_bind="manual-required"
+        echo "WARN: dispatch 已补绑($dispatch_id)但未能从 live preamble 提取原生 worker_done；拒绝注入无 capability 的伪命令" >&2
+        ORCAREG_BIND_DISPATCH_ID="$dispatch_id"
+        ORCAREG_BIND_STATUS="$dispatch_bind"
+        return 0
+      fi
       printf -v inject_text \
-        '[dispatch-bind 自动补绑] task_id=%s dispatch_id=%s。完成时精确执行一次: orca orchestration send --from %s --type worker_done --subject "worker 完成" --body "三句内摘要" --task-id %s --dispatch-id %s --outcome succeeded --files-modified "改动文件路径列表"。阻塞时: orca orchestration ask --from %s --question "阻塞问题" --timeout-ms 600000。其余仍按已注入任务执行。' \
-        "$task_id" "$dispatch_id" "$terminal_handle" "$task_id" "$dispatch_id" "$terminal_handle"
+        '[dispatch-bind 自动补绑] task_id=%s dispatch_id=%s。完成时原样执行且只执行一次以下命令（首次权限拒绝后立即停止，不得改写或包装）: %s。阻塞时: orca orchestration ask --from %s --question "阻塞问题" --timeout-ms 600000；超时只用回执 message ID 执行 ask --resume，不重发问题。新文件前、测试后和完成前执行: orca orchestration check --terminal %s --json；处理整批后只对同一 worker handle 执行 check --ack <delivery_id> 并排空后续批次；consumer_fenced 或 dispatch_inactive 时立即停止且不发 worker_done。其余仍按已注入任务执行。' \
+        "$task_id" "$dispatch_id" "$completion_command" "$terminal_handle" "$terminal_handle"
       if orca_cli terminal send --terminal "$terminal_handle" --text "$inject_text" --enter --json >/dev/null 2>&1; then
-        echo "ORCAREG_DISPATCH_INJECTED: 已向 $terminal_handle 单行注入 worker_done/ask 命令形式" >&2
+        echo "ORCAREG_DISPATCH_INJECTED: 已向 $terminal_handle 单行注入 worker_done/ask/check 命令形式" >&2
       else
         dispatch_bind="manual-required"
         echo "WARN: dispatch 已补绑($dispatch_id)但命令形式注入失败；PM 需手动单行 terminal send 注入 worker_done 命令形式" >&2

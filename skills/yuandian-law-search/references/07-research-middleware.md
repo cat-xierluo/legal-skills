@@ -7,7 +7,7 @@
 ## 1. 与既有约定的关系
 
 - v1.6.1+ 已有的「5 字段争点识别表」（见 [`02-typical-workflows.md`](02-typical-workflows.md) 场景 4：行为主体 / 角色定位 / 行为模式 / 抗辩点 / 用户已明确的论点）是本流程 `research_brief` 的**子集**，不重复执行。
-- 本流程把争点识别扩展为：`research_brief`（检索简报）→ `propositions`（检索命题）→ `query_matrix`（查询矩阵）→ 对位复核。
+- 本流程把争点识别扩展为：`research_brief`（任务边界）→ `issues[].element_matrix`（涵摄矩阵）→ `propositions`（检索命题）→ `queries`（查询矩阵）→ 对位复核。
 - 关键词扩展三原则（[`01-keyword-expansion.md`](01-keyword-expansion.md)）仍适用，但降级为查询矩阵**内部**的一条改写手段，不再是案件检索的默认主路径（[DEC-006] pt 5）。
 
 ## 2. 执行合同（调用任何检索接口前必须完成）
@@ -16,14 +16,35 @@
 
 ```
 ① 轻量案件研判 ─► research_brief
-② 由 brief 派生 ─► propositions（正向支持 + 反向排除）
-③ 由 propositions 派生 ─► query_matrix（一争点一查询，单一接口）
+② 拆解微型涵摄 ─► issues[].element_matrix
+③ 只从 legal_research 缺口派生 ─► propositions + queries（正向支持 + 反向排除）
 ④ 小样本试检（1-2 条命题先验证接口与表达是否有效）
 ⑤ 对位复核（HIGH / MEDIUM / LOW / MISMATCH）─► 策略修正
-⑥ 正式检索 ─► 结论—依据—查询可追溯报告
+⑥ 正式检索 ─► 候选池（原始召回仅归档）
+⑦ Agent 精选来源 ─► 对话答复；明确要求时才生成正式报告
 ```
 
 > 简单检索（用户给出明确法条名+条号、或明确案号、或问"XX 法怎么规定"且无案件事实）走 [`SKILL.md` 接口速查](../SKILL.md#接口速查)即可，**不启动本流程**。判定边界见 §7。
+
+### 2.1 思维模型：涵摄为骨架，假设验证为检索方法
+
+案件检索不是查找所有“相关内容”，而是识别涵摄链条中哪个环节缺少权威依据：
+
+```text
+请求／抗辩路径
+  → 候选大前提（适用范围、要件、例外、法律后果）
+  → 法律化小前提（事实及其证明状态）
+  → 暂定涵摄（满足／不满足／不确定）
+  → 正向与反向假设
+  → 只对 research_gap 生成查询
+  → 结果反过来修正规范、事实定性或结论
+```
+
+- **大前提不是一个法律名称**：必须至少表达候选规范、适用范围、构成要件、例外和法律后果；规范本身不确定时，将其标为待检索验证。
+- **小前提不是案件叙述原文**：把事实映射至具体法律要件，并区分 `established`、`alleged`、`disputed`、`missing` 及相应证明状态。
+- **涵摄不是关键词重合**：主题、案由或行业相似不等于主体关系、请求权基础和决定性事实对位。
+- **检索结论是可修正假设**：每个决定性争点同时生成支持与反向命题；候选结果可能要求更换大前提、补充事实或调整请求路径。
+- **检索不能代替补证**：缺口属于 `fact_supplement` 或 `evidence_review` 时，不生成法律查询，不用更多法条和案例掩盖事实缺失。
 
 ## 3. research_brief（检索简报）schema
 
@@ -31,13 +52,13 @@
 |---|---|---|---|
 | `research_goal` | string | 是 | 本次研究要回答的法律问题（用户真正要求裁判/判断的命题，不是案由复述） |
 | `party_stance` | object | 是 | 当事人立场：`role`（原告/被告/被申请人/代理人…）+ `claim_or_defense`（核心诉求或抗辩） |
-| `procedure_stage` | string | 否 | 程序阶段（一审/二审/再审/仲裁/执行/诉前） |
+| `procedure_stage` | string | 是 | 程序阶段（一审/二审/再审/仲裁/执行/诉前）；无法确认时写“未确认”，不静默省略 |
 | `dispute_focus` | string[] | 是 | 争议焦点：用户原话里已明确的核心论点（来自 5 字段表的"用户已明确论点"） |
-| `claim_or_defense_path` | string[] | 是 | 请求权/抗辩路径——由本案事实推导，用于区分主题相近但请求权基础不同的近邻案型（不预设特定法律领域） |
-| `legal_elements` | object[] | 是 | 法律要件：`element`（要件名）+ `source`（法源线索，待检索验证）+ `covered`（brief 是否已覆盖该要件的事实）。`covered` **不是装饰字段**：`covered=false` 的要件必须落入 `facts_to_supplement` 并标注是否阻断路径，驱动补问/假设继续——若全员 `covered=true` 却仍要检索，说明要件拆解流于形式 |
+| `claim_or_defense_path` | string[] | 否（摘要） | 请求权／抗辩路径的便捷汇总；权威表达在 `issues[].claim_or_defense_basis`，不要维护两份互相冲突的真相。 |
+| `legal_elements` | object[] | 否（兼容摘要） | 旧版 brief 的要件汇总；新版以 `issues[].major_premise.elements` 与 `element_matrix` 为权威来源，不再要求重复填写 `covered`。 |
 | `decisive_facts` | string[] | 是 | 决定性事实（must_match）：检索简报和查询表达必须覆盖的事实 |
 | `background_facts` | string[] | 否 | 背景事实（影响裁判尺度但不决定争点定性） |
-| `facts_to_supplement` | object[] | 否 | 待补事实：`fact` + `blocks_path`（是否改变检索路径）+ `action`（补问/标注假设继续） |
+| `facts_to_supplement` | object[] | 否（摘要） | 待补事实汇总；权威缺口在 `element_matrix[].research_gap`，且应取 `fact_supplement` 或 `evidence_review`。 |
 | `must_exclude_neighbor_types` | string[] | 是 | 必须排除的近邻案型（must_not_match），见 §8 |
 | `key_decisive_facts` | string[] | 否（建议） | `decisive_facts` 的**置顶短摘要**（3-5 条精简版），放在 brief 顶部便于人/judge 快速复核，不得与 `decisive_facts` 矛盾 |
 | `key_exclusions` | string[] | 否（建议） | `must_exclude_neighbor_types` 的**置顶短摘要**，同上 |
@@ -80,6 +101,42 @@
 
 **硬约束**：不得因报告存在而跳过 §2 轻量研判；每条 `report_conclusions` 都应有对应 `hypotheses_to_verify` 条目；报告结论不得直接出现在 `decisive_facts`（那是 must_match 事实位）。
 
+### 3.3 `issues[].element_matrix`（涵摄矩阵）schema
+
+`research_brief` 说明检索任务整体边界；真正派生查询的单元是 `issues[].element_matrix`。一个案件通常包含多个微型涵摄，不得只写一个总括三段论。
+
+| 层级／字段 | 说明 |
+|---|---|
+| `issues[].id` | 争点 ID，如 `I-01` |
+| `question` | 需要作出法律判断的问题 |
+| `claim_or_defense_basis` | 请求权或抗辩权路径 |
+| `importance` | `decisive` / `supportive` |
+| `major_premise.candidate_rule` | 候选规则，不确定时明确写“待检索验证”的候选内容 |
+| `major_premise.applicability` | 规范对主体、客体、行为、时间的适用边界 |
+| `major_premise.elements` | 构成要件 |
+| `major_premise.exceptions` | 例外或反向规则，可为空数组 |
+| `major_premise.legal_consequence` | 要件满足／不满足的法律后果 |
+| `element_matrix[].id` | 要件 ID，如 `E-01` |
+| `element` | 单一法律要件或适用条件 |
+| `facts` | 映射至该要件的案件事实；事实缺失时为空数组 |
+| `fact_status` | `established` / `alleged` / `disputed` / `missing` |
+| `proof_status` | `sufficient` / `weak` / `none` / `unknown` |
+| `provisional_subsumption` | `satisfied` / `not_satisfied` / `uncertain` |
+| `opposing_path` | 对方论证、例外或该要件不成立的路径 |
+| `research_gap` | 无缺口为 `null`；有缺口时见下表 |
+| `provisional_conclusion` | 当前附条件结论，不得把未核验假设写成确定结论 |
+
+`research_gap`：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 缺口 ID，如 `G-01` |
+| `question` | 需要解决的具体缺口 |
+| `resolution_path` | `legal_research` / `fact_supplement` / `evidence_review` / `none` |
+| `required_source_types` | 只有 `legal_research` 必须填写；说明所需法源或类案类型 |
+
+**查询派生硬约束**：只有 `resolution_path=legal_research` 可以派生 proposition 和 query。事实缺失、证明不足或材料冲突分别交给补事实／证据审查，不得转化为宽泛法律检索。`provisional_subsumption=uncertain` 时必须给出 `research_gap`，不能只标“待定”却不声明是补法、补事实还是审证据。
+
 ## 4. propositions（检索命题）schema
 
 每个命题只验证**一项**可被法条或案例支持/否定的判断。
@@ -87,11 +144,11 @@
 | 字段 | 取值 |
 |---|---|
 | `id` | `P-NN` |
+| `issue_id` / `element_id` / `research_gap_id` | 必须回指产生该命题的争点、要件和法律检索缺口 |
 | `statement` | 单一判断陈述（"……构成/不构成……""……要件需要/不需要……"） |
 | `type` | `normative`（规范命题：法条如何规定）/ `fact-structure`（事实结构命题：此类事实是否落入该规范）/ `adjudication-rule`（裁判规则命题：裁判者如何认定）/ `reverse`（反向命题：对方抗辩或不利类案的裁判路径） |
 | `direction` | `support`（支持我方立场）/ `oppose`（对方抗辩、不利类案、否定要件） |
 | `importance` | `decisive`（决定争点定性）/ `supportive`（影响尺度或佐证） |
-| `parent_element` | 关联的 `legal_elements[].element` 或 `dispute_focus` |
 
 **正反向必生成**：每个 decisive 争点至少生成 1 条 `support` + 1 条 `reverse` 命题（[DEC-006] pt 3）。反向命题是"近邻陷阱"的主要防线——它显式表达"什么情况下我方命题不成立"，对应到查询就是排除条件。
 
@@ -101,6 +158,7 @@
 |---|---|
 | `id` | `Q-NN` |
 | `proposition_id` | 承载的单一命题（`P-NN`） |
+| `research_gap_id` | 回指该命题要解决的 `legal_research` 缺口 |
 | `interface` | `search` / `keyword` / `detail` / `case` / `case-semantic` / `regulation` / `regulation-detail` / `case-detail` |
 | `routing_rationale` | 为何选此接口（基于接口的真实匹配机制，见 §9） |
 | `query_field` | 主查询字段（自然语言问题 / 关键词组合 / 结构化字段） |
@@ -108,12 +166,13 @@
 | `filters` | 筛选条件（`--sxx`/`--effect1`/`--province`/`--jarq-*`/`--ay`/`--yyft` 等） |
 | `allow_rewrite` | 是否允许后端改写（向量接口默认 true；关键词接口不适用） |
 | `expected_hit` | 预期命中类型（法源/类案/裁判规则） |
-| `exclusion_criteria` | 排除标准（来自 `must_exclude_neighbor_types`，对应反向命题） |
+| `exclusion_criteria` | 非空排除标准（来自 `must_exclude_neighbor_types`，对应反向命题） |
 | `fallback_path` | 零命中或低对位时的降级路径（换接口 / 缩短关键词 / 切 OR / 换语义 / 超平台领域 fallback 外部渠道，见 §9.2） |
 
 **一争点多小查询**（[DEC-006] pt 4，硬约束）：
 
 - 每个 `query` 只承载**一个争点 + 一组决定性事实**。
+- 每个 proposition 至少对应一条 query，不得为了形式上满足“正反命题”而只检索其中一边。
 - `case` / `keyword` 接口的后端只支持**全局 AND/OR**，**不得**把多个争点或一长串事实压成嵌套布尔串。
 - 一个争点通常对应 2-4 条 query（不同接口、不同方向、正反各一），而不是 1 条巨查询。
 - `--expand` 全局 OR 仅作为单条 query **内部**的改写手段保留兼容，不再作为案件检索主路径。
@@ -198,6 +257,12 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
 
 **硬校验**：案件查询计划必须先用 `scripts/validate-query-filters.py <research-plan.json>` 校验。退出码 0 合法、1 为查询违规、2 为输入或工具初始化错误；任一非 0 都停止 API/MCP 调用。未知接口、非对象 `filters`、非法字段归属均失败关闭，不得因未开 `--strict` 而放行。单条 query 可用 `--query '{"interface":"case","filters":{...}}'`。校验器从 `yd_search.py` 的真实 subparser 读取字段集合，覆盖 15 个可规划 API 接口且不维护硬编码字段回退；`scripts/verify-runtime-contracts.py` 另行回归 CLI→payload 的日期字段映射。
 
+完整案件检索应优先运行统一合同门禁；它同时校验涵摄矩阵、research gap、命题／查询映射和真实 CLI 字段归属：
+
+```bash
+scripts/validate-research-contract.py --plan research-plan.json
+```
+
 ### 9.2 平台覆盖边界意识
 
 元典开放平台法源以**民商事 / 刑事**为主，案例库含民事 / 刑事 / 行政案件分类（`--wenshu-type`）。但**部分领域的法源覆盖可能有限**：行政诉讼法 / 行政处罚法 / 行政复议法、市场监督管理等部门规章、国家赔偿、部分专项法规等。案件检索时若本案主要落入这些领域，必须**显式标注平台边界**，不得用民商事法源 / 案例强行替代（避免误导）：
@@ -227,16 +292,19 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
 | `LOW` | 仅主题/行业/案由相近，不能直接支撑核心结论 |
 | `MISMATCH` | 争点、主体角色、行为模式或裁判命题不同，应排除 |
 
-首轮结果按此标签复核；只有诊断出偏差原因（接口误选 / 表达不适配 / 近邻混入）后，才允许扩展查询或换接口。
+首轮结果按此标签复核；只有诊断出偏差原因（接口误选 / 表达不适配 / 近邻混入）后，才允许扩展查询或换接口。复核后按 [`08-selected-sources-delivery.md`](08-selected-sources-delivery.md) 生成 `selected-sources.json`；原始候选池不直接进入对话答复或正式报告。
 
 ## 12. 机器可读导出骨架（Task-004 预留）
 
-为支持 Agent Eval Lab 与人工复盘，案件检索建议导出以下结构（字段稳定，不绑定特定评测平台格式）：
+为支持 Eval Harness 与人工复盘，案件检索建议导出以下结构（字段稳定，不绑定特定评测平台格式）：
 
 ```json
 {
+  "schema_version": "1.0",
+  "case_id": "...",
   "research_brief": { /* §3 字段 */ },
-  "propositions": [ /* §4 */ ],
+  "issues": [ /* §3.3 涵摄矩阵 */ ],
+  "propositions": [ /* §4，含 issue/element/research_gap 映射 */ ],
   "queries": [ /* §5 */ ],
   "results": [
     { "result_id": "", "backend_score": null, "relevance_label": "HIGH|MEDIUM|LOW|MISMATCH",
@@ -248,5 +316,7 @@ filter 必须挂在**真正支持它**的接口上，否则会被忽略或报错
   "run_meta": { "skill_version": "", "strategy_version": "", "model": "", "live": false, "credits": 0 }
 }
 ```
+
+上述 `results` / `conclusion_links` 是后续 Eval 导出视图，不是正式报告数据源。正式交付只读取另行校验的 `selected-sources.json`；完整合同、排序和失败关闭规则见 [`08-selected-sources-delivery.md`](08-selected-sources-delivery.md)。
 
 脱敏要求：导出对象不得包含未脱敏案件全文、API Key 或 live 响应原文；冻结响应的版本策略见 Task-004。

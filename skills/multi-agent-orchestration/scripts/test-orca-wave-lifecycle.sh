@@ -17,6 +17,7 @@ bad() { echo "  ✗ $1" >&2; fail=$((fail + 1)); }
 FAKE="$TMP_ROOT/fake-orca"
 export FAKE_ORCA_LOG="$TMP_ROOT/orca.log"
 export FAKE_ORCA_STATE="$TMP_ROOT/orca-state"
+export FAKE_WAVE_ROOT="$TMP_ROOT"
 : > "$FAKE_ORCA_LOG"
 : > "$FAKE_ORCA_STATE"
 
@@ -28,11 +29,22 @@ set -euo pipefail
   printf '\n'
 } >> "$FAKE_ORCA_LOG"
 case "$1 $2" in
-  "orchestration run-create")
-    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm"}}}'
+  "status --json")
+    echo '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-wave"}}}'
     ;;
-  "orchestration run-use")
-    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm-rebound"}}}'
+  "orchestration run-create")
+    echo '{"ok":true,"result":{"run":{"id":"run-wave","coordinator_handle":"term-pm"}},"_meta":{"runtimeId":"runtime-wave"}}'
+    ;;
+  "orchestration run-use"|"orchestration run-current")
+    sender=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --from ]; then sender="$2"; break; fi
+      shift
+    done
+    jq -cn --arg sender "$sender" '{ok:true,result:{run:{id:"run-wave",coordinator_handle:$sender}},_meta:{runtimeId:"runtime-wave"}}'
+    ;;
+  "terminal show")
+    jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:true,writable:true,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-wave"}}'
     ;;
   "orchestration task-create")
     count=$(wc -l < "$FAKE_ORCA_STATE" | tr -d ' ')
@@ -48,8 +60,30 @@ case "$1 $2" in
     done
     printf '{"ok":true,"result":{"dispatch":{"id":"ctx-%s"}}}\n' "$task"
     ;;
+  "worktree show")
+    id=${4#id:}
+    name=${id##*/}
+    jq -n --arg id "$id" --arg path "$FAKE_WAVE_ROOT/$name" '{ok:true,result:{worktree:{id:$id,path:$path}}}'
+    ;;
+  "orchestration dispatch-show")
+    task=$4
+    case "$task" in task-1) name=api ;; task-2) name=ui ;; *) exit 64 ;; esac
+    jq -n --arg task "$task" --arg terminal "term-$name" \
+      '{ok:true,_meta:{runtimeId:"runtime-fixture"},result:{dispatch:{id:("ctx-"+$task),task_id:$task,
+        assignee_handle:$terminal,run_id:"run-wave",process_incarnation:"process-fixture",
+        capability_hash:("a"*64)}}}'
+    ;;
   "orchestration check")
-    echo '{"ok":true,"result":{"count":0}}'
+    ack=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --ack ]; then ack="$2"; break; fi
+      shift
+    done
+    if [ -n "$ack" ]; then
+      jq -cn --arg ack "$ack" '{ok:true,result:{runId:"run-wave",count:0,messages:[],acknowledged:$ack}}'
+    else
+      echo '{"ok":true,"result":{"runId":"run-wave","deliveryId":null,"count":0,"messages":[]}}'
+    fi
     ;;
   *)
     echo '{"ok":true,"result":{}}'
@@ -72,7 +106,7 @@ JSON
 
 echo "Case 1: Wave creates one Run and every Task before worker start"
 RECEIPT="$TMP_ROOT/wave-receipt.json"
-bash "$WAVE" --manifest "$MANIFEST" --receipt "$RECEIPT" > "$TMP_ROOT/wave.out"
+bash "$WAVE" --manifest "$MANIFEST" --from term-pm --receipt "$RECEIPT" > "$TMP_ROOT/wave.out"
 if jq -e '.run_id == "run-wave" and (.tasks | length == 2) and .tasks[0].task_id == "task-1" and .tasks[1].task_id == "task-2"' "$RECEIPT" >/dev/null; then
   ok "Wave receipt contains one Run and two Tasks"
 else
@@ -90,9 +124,19 @@ else
 fi
 
 echo "Case 2: pre-created Tasks are reused without task-create races"
+mkdir -p "$TMP_ROOT/agent-authority"
+for name in api ui; do
+  mkdir -p "$TMP_ROOT/$name/.claude/agent-sessions/wave"
+  printf '%s\n' '{"schema":"multi-agent-orchestration.authority-receipt.v1"}' > "$TMP_ROOT/agent-authority/$name.json"
+  jq -n --arg authority "$TMP_ROOT/agent-authority/$name.json" --arg terminal "term-$name" --arg wt "repo::/tmp/$name" \
+    '{session:{orca:{terminal_handle:$terminal,worktree_id:$wt}},execution_authority:{authority_receipt_file:$authority}}' \
+    > "$TMP_ROOT/$name/.claude/agent-sessions/wave/METADATA.json"
+done
 bash "$REGISTER" --worktree-id 'repo::/tmp/api' --terminal-handle term-api \
+  --authority-receipt "$TMP_ROOT/agent-authority/api.json" \
   --run-id run-wave --coordinator-handle term-pm --task-id task-1 > "$TMP_ROOT/register-api.out"
 bash "$REGISTER" --worktree-id 'repo::/tmp/ui' --terminal-handle term-ui \
+  --authority-receipt "$TMP_ROOT/agent-authority/ui.json" \
   --run-id run-wave --coordinator-handle term-pm --task-id task-2 > "$TMP_ROOT/register-ui.out"
 [ "$(grep -c '^orchestration task-create ' "$FAKE_ORCA_LOG")" -eq 2 ] && ok "register reused Tasks without creating more" || bad "register created a Task during worker start"
 [ "$(grep -c '^orchestration worker-start ' "$FAKE_ORCA_LOG")" -eq 2 ] && ok "both workers started from pre-created Tasks" || bad "expected two worker-start calls"
@@ -116,14 +160,16 @@ GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid \
 git -C "$REPO" worktree add -q -b test-pm-rebind "$WT"
 mkdir -p "$WT/.claude/agent-sessions/$SESSION"
 jq -n --arg project "$REPO" --arg worktree "$WT" --arg session "$SESSION" \
-  '{project:$project,worktree:$worktree,session:{id:$session,orca:{worktree_id:"repo::worker",terminal_handle:"term-worker",supervised:{run_id:"run-wave",coordinator_handle:"term-old",task_id:"task-1",dispatch_id:"ctx-task-1"}}},runtime:{provider_lease:{file:""}}}' \
+  '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-wave",worktree_id:"repo::worker",terminal_handle:"term-worker",supervised:{run_id:"run-wave",coordinator_handle:"term-old",task_id:"task-1",dispatch_id:"ctx-task-1"}}},runtime:{provider_lease:{file:""}}}' \
   > "$WT/.claude/agent-sessions/$SESSION/METADATA.json"
 : > "$FAKE_ORCA_LOG"
-bash "$PM" wait --worktree "$WT" --session "$SESSION" --timeout 1 > "$TMP_ROOT/wait.out"
-first_call=$(sed -n '1p' "$FAKE_ORCA_LOG")
-second_call=$(sed -n '2p' "$FAKE_ORCA_LOG")
-[[ "$first_call" == orchestration\ run-use* ]] && ok "run-use happens before check" || bad "first PM call was not run-use"
-[[ "$second_call" == orchestration\ check* ]] && [[ "$second_call" != *'--run'* ]] && ok "check consumes the bound Run without stale --run routing" || bad "check did not use rebound coordinator"
+bash "$PM" wait --worktree "$WT" --session "$SESSION" --from term-pm-rebound --timeout 1 > "$TMP_ROOT/wait.out"
+control_calls=$(grep '^orchestration ' "$FAKE_ORCA_LOG")
+first_call=$(printf '%s\n' "$control_calls" | sed -n '1p')
+second_call=$(printf '%s\n' "$control_calls" | sed -n '2p')
+last_call=$(printf '%s\n' "$control_calls" | tail -1)
+[[ "$first_call" == *'run-use --id run-wave --from term-pm-rebound'* ]] && [[ "$second_call" == *'run-current --from term-pm-rebound'* ]] && ok "explicit run-use is verified with run-current before check" || bad "PM binding was not read back"
+[[ "$last_call" == orchestration\ check* ]] && [[ "$last_call" == *'--terminal term-pm-rebound'* ]] && [[ "$last_call" != *'--run'* ]] && ok "check consumes the exact sender's bound Run" || bad "check did not use rebound coordinator"
 [ "$(jq -r '.session.orca.supervised.coordinator_handle' "$WT/.claude/agent-sessions/$SESSION/METADATA.json")" = "term-pm-rebound" ] && ok "rebound coordinator handle persisted" || bad "METADATA coordinator handle was not refreshed"
 
 echo ""

@@ -8,6 +8,12 @@ import time
 import uuid
 from pathlib import Path
 
+# macOS (Apple Silicon) + cryptography<=41 静态链接的 OpenSSL 在 CPU 探测时
+# (_armv8_sve_probe) 会死循环导致 dlopen 挂起；提前禁用 armcap 探测可绕过。
+# 必须在 import oss2/cryptography 之前设置。
+if sys.platform == "darwin" and not os.environ.get("OPENSSL_armcap"):
+    os.environ["OPENSSL_armcap"] = "0"
+
 try:
     import requests
 except ImportError:
@@ -154,12 +160,7 @@ class TingwuClient:
         file_path = str(file_path)
 
         if oss2 is not None:
-            auth = oss2.StsAuth(
-                sts["accessKeyId"],
-                sts["accessKeySecret"],
-                sts["securityToken"],
-            )
-            bucket = oss2.Bucket(auth, sts["endpoint"], sts["bucket"])
+            bucket = _build_oss_bucket(sts)
             print(f"  正在上传到 OSS (使用 oss2 SDK)...")
             oss2.resumable_upload(
                 bucket,
@@ -221,7 +222,7 @@ class TingwuClient:
 
     def poll_until_done(self, trans_id, interval=10, timeout=3600):
         start = time.time()
-        status_names = {0: "已完成", 1: "排队中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
+        status_names = {0: "已提交，待转录开始", 1: "排队中/转录中", 2: "转录中", 3: "已完成", 4: "失败", 11: "上传中"}
         while time.time() - start < timeout:
             try:
                 info = self.get_trans_list(trans_id)
@@ -246,7 +247,10 @@ class TingwuClient:
                     extra += f" | 音频时长: {duration / 60:.0f} 分钟"
 
                 print(f"\r  转录状态: {name}{extra}        ", end="", flush=True)
-                if status in (0, 3):
+                # 实测 status=0 有二义性：刚提交（转录未开始，transStartTime 为空）与
+                # 真正完成均是 0。仅当 transStartTime 已设置才视为完成，否则会把刚
+                # 提交的任务误判为已完成并拉到空结果（2026-09-13 Vol21 实录）。
+                if status == 3 or (status == 0 and info.get("transStartTime")):
                     print()
                     return info
                 if status == 4:
@@ -493,6 +497,27 @@ def _oss_progress(consumed, total):
         print(f"\r  上传进度: {pct}%", end="", flush=True)
 
 
+def _build_oss_bucket(sts):
+    """构造 OSS 上传专用 Bucket。
+
+    听悟 OSS 为国内节点，代理（HTTP_PROXY/HTTPS_PROXY）对大文件分片上传弊大于利：
+    实测 771MB 视频走 Clash 代理在 50% 处被掐断（ProxyError: Cannot connect to proxy）。
+    默认给上传 session 设 trust_env=False，忽略环境代理变量直连；
+    确有需要经代理出海的场景，设 TINGWU_OSS_USE_PROXY=1 恢复旧行为。
+    """
+    if oss2 is None:
+        raise RuntimeError("缺少 oss2 库，无法 STS 上传。请运行: pip3 install oss2")
+    auth = oss2.StsAuth(
+        sts["accessKeyId"],
+        sts["accessKeySecret"],
+        sts["securityToken"],
+    )
+    bucket = oss2.Bucket(auth, sts["endpoint"], sts["bucket"])
+    if not os.environ.get("TINGWU_OSS_USE_PROXY"):
+        bucket.session.session.trust_env = False
+    return bucket
+
+
 def _upload_via_requests(file_path, put_link_result):
     """备用上传方式：通过 PUT 直接上传（不使用 oss2 SDK）"""
     put_link = put_link_result.get("putLink")
@@ -505,10 +530,21 @@ def _upload_via_requests(file_path, put_link_result):
 
     print(f"  正在上传 (PUT 直传)...")
     with open(file_path, "rb") as f:
-        resp = requests.put(
-            put_link,
-            data=f,
-            headers={"Content-Type": content_type},
-            timeout=600,
-        )
+        if os.environ.get("TINGWU_OSS_USE_PROXY"):
+            resp = requests.put(
+                put_link,
+                data=f,
+                headers={"Content-Type": content_type},
+                timeout=600,
+            )
+        else:
+            # 同 _build_oss_bucket：忽略环境代理，国内 OSS 直连
+            s = requests.Session()
+            s.trust_env = False
+            resp = s.put(
+                put_link,
+                data=f,
+                headers={"Content-Type": content_type},
+                timeout=600,
+            )
     resp.raise_for_status()

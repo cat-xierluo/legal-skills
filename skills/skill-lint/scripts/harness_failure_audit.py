@@ -617,11 +617,16 @@ def _scan_json_emission(production: list[SourceFile]) -> list[dict[str, Any]]:
 
 def _scan_git_side_effects(production: list[SourceFile]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
+    git_prefix = r"^\s*git\b(?:\s+-C\s+(?:\"[^\"]+\"|'[^']+'|\S+))?\s+"
     side_effect = re.compile(
-        r"^\s*\bgit\b(?:\s+-C\s+(?:\"[^\"]+\"|'[^']+'|\S+))?\s+"
-        r"(?:checkout|switch|commit|push)\b|\bgh\s+pr\s+create\b",
+        git_prefix + r"(?:checkout|switch|commit|push)\b|\bgh\s+pr\s+create\b",
         re.I,
     )
+    worktree_mutation = re.compile(
+        git_prefix + r"(?:checkout|switch|commit)\b",
+        re.I | re.M,
+    )
+    push_command = re.compile(git_prefix + r"push\b", re.I | re.M)
     for source in production:
         hits = [
             number
@@ -639,13 +644,7 @@ def _scan_git_side_effects(production: list[SourceFile]) -> list[dict[str, Any]]
             continue
         safety = source.text.lower()
         missing: list[str] = []
-        mutates_worktree = bool(
-            re.search(
-                r"^\s*git\b[^\n]*\b(?:checkout|switch|commit)\b",
-                source.text,
-                re.I | re.M,
-            )
-        )
+        mutates_worktree = bool(worktree_mutation.search(source.text))
         isolated_temp_repo = bool(
             re.search(r"\bmktemp\b", source.text, re.I)
             and re.search(r"^\s*git\s+init\b", source.text, re.I | re.M)
@@ -666,11 +665,27 @@ def _scan_git_side_effects(production: list[SourceFile]) -> list[dict[str, Any]]
                 re.I | re.S,
             )
         )
+        # Deleting an already-delivered remote worker branch transfers no
+        # outgoing commits, so author/committer checks do not apply. It still
+        # needs an atomic exact-tip lease plus before/after remote observation;
+        # otherwise a race could delete a branch that advanced after preflight.
+        has_remote_delete_push = bool(
+            push_command.search(source.text)
+            and re.search(r"(?:--delete\b|:\s*refs/heads/|:refs/heads/)", source.text, re.I)
+        )
+        is_bounded_remote_delete = bool(
+            has_remote_delete_push
+            and re.search(r"--force-with-lease(?:=|\s)", source.text, re.I)
+            and re.search(r"\bls-remote\b[^\n]*--heads\b", source.text, re.I)
+            and re.search(r"(?:expected[_-]?tip|remote[_-]?tip)", source.text, re.I)
+            and len(re.findall(r"(?:query[_-]?remote[_-]?branch|ls-remote)", source.text, re.I)) >= 3
+        )
         if (
-            "git push" in safety
+            push_command.search(source.text)
             and "safe-push" not in safety
             and "safe_push" not in safety
             and not is_safe_push_implementation
+            and not is_bounded_remote_delete
         ):
             missing.append("safe-push/提交身份与 outgoing range 核验")
         if "gh pr create" in safety and not re.search(

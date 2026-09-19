@@ -42,7 +42,13 @@
 | 2026-09-07 | 更新   | [git-workflow](skills/git-workflow/)                                   | v1.8.3  | **长期分支 PR 实战三坑入册**：集成 PR 时机红线（里程碑未到只开子 PR，总 PR 仅作合并提醒）、head 分支重置致 PR 静默自动 CLOSED 的判别与重开改号处置、squash 重做断裂的树等价 fail-closed 验证流程；均经 custom-skills 拆分线实证。 |
 | 2026-09-06 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.20.0–2.22.0 | **Worker 权限放大与内存治理**：安全类改分段校验，本分支 push/PR 成为默认交付路径（复合只读管道放行，force/主干/删除仍拒）；新增物理内存预算门与派发排队（额度不足泊车）、node 堆顶注入与 OOM 退避、scoped 自验默认与全量单一在飞的验证负载纪律。 |
 | 2026-09-05 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.19.0 | **zcode 额度 lane 生产方**：新增 `quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实 5h 窗口观测合并进 quota summary（只更新 zcode lane、不替其他生产方续期，不接触凭证）；全数据源失败 fail-closed 不写文件，spawn 行为待第二期接线。 |
-</details>
+| 2026-09-18 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                     | v1.9.1  | **归档失败与响应交付解耦（issue #158 修复）**：归档目录不可写只降级 stderr 告警，不再吞掉已取得的 API 响应、不自动重试（杜绝误判重试重复扣积分）；新增 `--no-archive` 关闭全部本地留存（查重仍读已有归档）与 `--archive-dir`/`YD_ARCHIVE_DIR` 自定义归档目录；修正 `--no-report` 失实语义；补 4 项无网络故障注入回归。 |
+| 2026-09-18 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.4.0  | **跨系统兼容性根修 + 两个存量 bug**：脚本去 bash4+ 依赖（关联数组→换行列表），macOS 自带 bash 3.2 开箱即用（旧版 `declare -A` 直接报错，v1.1.1 只改 shebang 未根治，`/usr/bin/env bash` 在 macOS 仍解析到 3.2）；`bc`→`awk`、`lsof` 缺失回退 `/dev/tcp`；修复重复引用图片在本地文件删除后留死链（现复用已传 URL）；修复路径含括号（如 `file (1).png`）在首个 `)` 截断解析失败。 |
+| 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4→v0.4.6 | **跨 runtime 鲁棒性 + 异步监控会话无关化 + OSS 上传代理隔离**：cryptography≤41 OpenSSL 探测死循环自动绕过；监控改 nohup 脱离会话 + 恢复接管四步（进程丢失≠任务丢失）；上传 session 默认 trust_env=False 直连国内 OSS（常驻代理掐断 771MB 上传的根治，TINGWU_OSS_USE_PROXY=1 逃生阀），yt-dlp 不受影响；：上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS——v0.4.5 只做了文档提醒，常驻 Clash 代理仍会掐断 771MB 级大文件分片上传（50% 处 ProxyError）；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复旧行为；requests 兜底 PUT 同样隔离；yt-dlp 下载不受影响。新增 5 用例代理隔离回归测试。 |
+| 2026-09-18 | 更新   | [legal-ocr](skills/legal-ocr/)                                         | v1.6.0  | **本地 RapidOCR 后端**：`--backend rapid` onnx 本地推理转 Markdown（PDF 220 DPI 渲染 + 几何行排序 + CJK/数字空格与全角数字归一，段落交给既有后处理链重建）；无 API 配置且已装 RapidOCR 时 auto 优先本地识别（材料不出本机），云端失败后亦有本地兜底；顺带修复具状人/证据 N 标签被硬换行整理粘连的问题。 |
+| 2026-09-18 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.13.0 | **本地 RapidOCR 双层后端**：onnx 本地推理中文行级识别 + 行级坐标透明文字层，实测扫描件识别质量明显高于 tesseract；auto 与 `--local-only` 本地链升级为「RapidOCR → ocrmypdf」，敏感材料不出本机也能拿到高质量双层 PDF；preprocess 新增 RapidOCR 原图短路保留扫描分辨率。 |
+| 2026-09-18 | 更新   | [pdf-organizer](skills/pdf-organizer/)                                 | v0.6.0  | **页引用集合模型**：拆分/复制/合并/跨源拼合统一编译为「文件+页码」引用，manifest 即引用表，执行前零副作用；新增 `refs` 跨源页引用拼合与 `--validate-manifest` 覆盖审计（孤儿页/重复引用页，strict 模式拦截漏页多切）；`handoff.json` 附页级来源溯源。 |
+| 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |</details>
 
 ## 📋 项目概述
 
@@ -582,7 +588,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.8.0</td>
+<td style="text-align:center">v2.8.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/skill-lint-2.8.0.zip">下载 v2.8.0</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
@@ -627,7 +633,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.18.0</td>
+<td style="text-align:center">v2.24.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>

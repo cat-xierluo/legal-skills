@@ -283,7 +283,11 @@ if [ -n "$remote_row" ]; then
   fi
   if [ "$EXECUTE" -eq 1 ] && [ "$remote_state" = "planned-delete" ]; then
     push_rc=0
-    git -C "$PROJECT" push "$REMOTE" --delete "$BRANCH" >/dev/null 2>&1 || push_rc=$?
+    # Bind deletion atomically to the exact PR head already observed above.
+    # A branch that advances between ls-remote and push is retained.
+    git -C "$PROJECT" push \
+      --force-with-lease="refs/heads/$BRANCH:$EXPECTED_TIP" \
+      "$REMOTE" --delete "$BRANCH" >/dev/null 2>&1 || push_rc=$?
     if query_remote_branch && [ -z "$remote_query_output" ]; then
       remote_state="deleted"
     else

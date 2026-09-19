@@ -46,7 +46,15 @@ def redact_sensitive(text: str) -> str:
 def run(argv: list[str], *, cwd: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     label = " ".join(argv[:3])
     try:
-        proc = subprocess.run(argv, cwd=cwd, text=True, capture_output=True, shell=False)
+        raw_proc = subprocess.run(argv, cwd=cwd, capture_output=True, shell=False)
+        # text=True translates CR/CRLF to LF, which can turn file content
+        # into a fake diff header. Decode without newline translation and
+        # round-trip non-UTF-8 file bytes through surrogateescape.
+        proc = subprocess.CompletedProcess(
+            raw_proc.args, raw_proc.returncode,
+            raw_proc.stdout.decode("utf-8", errors="surrogateescape"),
+            raw_proc.stderr.decode("utf-8", errors="surrogateescape"),
+        )
     except FileNotFoundError as exc:
         raise AuditError(f"dependency_missing command={argv[0]}") from exc
     except OSError as exc:
@@ -91,12 +99,16 @@ def canonical_remote(url: str) -> str:
 
 
 def fingerprint(raw: str) -> str:
-    # Normalize only Git's transport/object-id decoration.  Content lines,
-    # including trailing spaces, are preserved byte-for-byte.
+    # Git and GitHub may choose different function-context annotations for
+    # the same hunk. Ignore those and object IDs, but retain hunk ranges,
+    # file modes, paths, and every content byte (including trailing spaces).
     kept: list[str] = []
-    for line in raw.splitlines(keepends=True):
-        kept.append(re.sub(r"^index [0-9a-f]+\.\.[0-9a-f]+", "index <oids>", line))
-    return hashlib.sha256("".join(kept).encode("utf-8")).hexdigest()
+    # Unified diff uses LF, not Unicode/vertical separators inside file data.
+    # splitlines() would expose a content fragment as a fake header.
+    for line in raw.split("\n"):
+        line = re.sub(r"^index [0-9a-f]+\.\.[0-9a-f]+", "index <oids>", line)
+        kept.append(re.sub(r"^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@)[^\n]*", r"\1", line))
+    return hashlib.sha256("\n".join(kept).encode("utf-8", errors="surrogateescape")).hexdigest()
 
 
 def ownership_evidence(row: dict[str, Any], task_id: str, agent_id: str) -> dict[str, Any]:

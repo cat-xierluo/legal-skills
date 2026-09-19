@@ -19,6 +19,7 @@
 | 物理结构 | `structure-standards.md` | 检查目录、文件、引用、references 命名 | Skill 是否能被正确加载和维护 |
 | 元数据分层 | `frontmatter-metadata-policy.md` | 检查 frontmatter 字段归属 | 普通字段与发布字段是否混淆 |
 | 触发描述 | `trigger-description-standards.md` | 检查 `name`、`description` | 触发边界是否清楚 |
+| 多 Skill 重叠 | `skill-merge-standards.md` | 两个及以上 skill 疑似职责重叠、合并/降级/拆分决策，或消费聚类报告 | 四判据判定：合并、降级为 reference、加边界声明、拆分或保留独立 |
 | 配置与隐私 | `configuration-privacy-standards.md` | 检查 config、example、公开内容 | 是否泄露真实信息或本地配置 |
 | 安全评估 | `security-assessment-standards.md` | 检查外部 Skill、脚本、MCP、网络、依赖或提示词风险 | 是否存在危险执行、敏感访问、数据外传或提示词安全问题 |
 | 发布治理 | `publishing-standards.md` | 检查 LICENSE、CHANGELOG、version、索引 | 是否符合发布目标 |
@@ -34,6 +35,7 @@
 1. 读取 `repository-skill-discovery-standards.md`，确认输入目标是单个 Skill、monorepo、Skill-like 文档集合还是普通仓库。
 2. 读取 `structure-standards.md`，对已确认或选中的最小 Skill 单元检查物理结构。
 3. 读取 `frontmatter-metadata-policy.md` 和 `trigger-description-standards.md`，检查通用 frontmatter 与触发描述。
+3b. 输入包含多个 skill 或聚类报告时，读取 `skill-merge-standards.md`，按四判据判定合并/降级/边界声明/保留独立。
 4. 读取 `configuration-privacy-standards.md`，检查 example、本地配置隔离和公开内容去具体化。
 5. 读取 `security-assessment-standards.md`，检查危险执行、敏感访问、数据外传、凭证、依赖、MCP 和提示词安全。
 6. 若目标是公开发布、项目内正式 Skill 或用户要求发布审查，再读取 `publishing-standards.md`。

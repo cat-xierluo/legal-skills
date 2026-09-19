@@ -85,16 +85,31 @@ assert_eq() {
   local actual="$1" expected="$2" label="$3"
   if [ "$actual" = "$expected" ]; then ok "$label"; else bad "$label (expected=$expected actual=$actual)"; fi
 }
-assert_log_has() { grep -Fq -- "$1" "$FAKE_ORCA_LOG" && ok "$2" || bad "$2"; }
-assert_log_lacks() { grep -Fq -- "$1" "$FAKE_ORCA_LOG" && bad "$2" || ok "$2"; }
-assert_err_has()  { grep -Fq -- "$1" "$ERR_FILE" && ok "$2" || bad "$2"; }
-assert_err_lacks() { grep -Fq -- "$1" "$ERR_FILE" && bad "$2" || ok "$2"; }
+assert_file_match() {
+  local needle="$1" file="$2" expected_rc="$3" label="$4" grep_rc=0
+  grep -Fq -- "$needle" "$file" || grep_rc=$?
+  if [ "$grep_rc" -eq "$expected_rc" ]; then
+    ok "$label"
+  else
+    bad "$label (grep rc=$grep_rc expected=$expected_rc)"
+  fi
+}
+assert_log_has() { assert_file_match "$1" "$FAKE_ORCA_LOG" 0 "$2"; }
+assert_log_lacks() { assert_file_match "$1" "$FAKE_ORCA_LOG" 1 "$2"; }
+assert_err_has() { assert_file_match "$1" "$ERR_FILE" 0 "$2"; }
+assert_err_lacks() { assert_file_match "$1" "$ERR_FILE" 1 "$2"; }
 
 ERR_FILE="$CASE_ROOT/detect.err"
 SELECTOR_JSON=$(jq -cn '{ok:false,error:{code:"selector_not_found"}}')
 OTHER_CODE_JSON=$(jq -cn '{ok:false,error:{code:"runtime_unavailable"}}')
 
 reset_case() {
+  # Each case resets its fake Orca state and owns this isolated fixture repo.
+  # All preceding helper processes have exited; clear only this fixture's
+  # pending marker, retaining the same lock inode (never a production lock).
+  if [ -f "$PROJECT_REPO/.git/mao-orca-register.lock" ]; then
+    : > "$PROJECT_REPO/.git/mao-orca-register.lock"
+  fi
   rm -rf "$FAKE_ORCA_STATE"; mkdir -p "$FAKE_ORCA_STATE"
   : > "$FAKE_ORCA_LOG"; : > "$ERR_FILE"
   PROJECT_DIR="$PROJECT_REPO"
@@ -115,7 +130,7 @@ reset_case() {
   ORCA_WORKTREE_CURRENT_ERROR=""
   ORCA_CLI_BIN=""
   ORCA_CLI_COMMAND="$FAKE_ORCA_BIN"
-  unset TERM_PROGRAM || true
+  unset TERM_PROGRAM
   export FAKE_PROJECT_TOP="$PROJECT_REPO"
   export FAKE_CURRENT_ERROR_JSON="$SELECTOR_JSON"
   export FAKE_CURRENT_RC=1
@@ -126,8 +141,50 @@ reset_case() {
   export FAKE_WORKTREE_ID="repo-1::$PROJECT_REPO"
 }
 
-run_detect() { detect_orca_mode >/dev/null 2> "$ERR_FILE" || true; }
-current_call_count() { grep -c '^worktree current --json$' "$FAKE_ORCA_LOG" || true; }
+run_detect() {
+  local detect_rc
+  set +e
+  detect_orca_mode >/dev/null 2> "$ERR_FILE"
+  detect_rc=$?
+  set -e
+  if [ "$detect_rc" -ne 0 ]; then
+    bad "detect_orca_mode unexpectedly exited $detect_rc"
+  fi
+}
+current_call_count() {
+  local count grep_rc=0
+  count=$(grep -c '^worktree current --json$' "$FAKE_ORCA_LOG") || grep_rc=$?
+  case "$grep_rc" in
+    0) printf '%s\n' "$count" ;;
+    1) printf '0\n' ;;
+    *) return "$grep_rc" ;;
+  esac
+}
+
+# 测试自己的故障语义：真实缺日志/检测器非零不得变成零调用或 PASS。
+# 子 shell 隔离故意制造的 failed 计数，外层检查其最终退出码。
+injection_rc=0
+(
+  failed=0
+  detect_orca_mode() { return 23; }
+  run_detect
+  [ "$failed" -eq 0 ]
+) > "$CASE_ROOT/injected-detector.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 1 "fault injection: detector error makes the test fail"
+injection_rc=0
+(
+  FAKE_ORCA_LOG="$CASE_ROOT/missing.log"
+  count=$(current_call_count)
+) > "$CASE_ROOT/injected-count.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 2 "fault injection: missing log is a read error, not zero calls"
+injection_rc=0
+(
+  failed=0
+  FAKE_ORCA_LOG="$CASE_ROOT/missing.log"
+  assert_log_lacks "repo add" "injected missing log"
+  [ "$failed" -eq 0 ]
+) > "$CASE_ROOT/injected-absence.out" 2>&1 || injection_rc=$?
+assert_eq "$injection_rc" 1 "fault injection: missing log cannot prove absence"
 
 # --- 1a. success：未注册（错误合同 + CLI 非零退出）→ repo add → 复验 → auto ---
 reset_case
@@ -139,7 +196,7 @@ assert_eq "$ORCA_APP_VERSION" "1.4.194" "success(rc=1): status capability gate s
 assert_log_has "repo add --path $PROJECT_REPO --json" "success(rc=1): repo add targets the exact canonical Git top"
 assert_err_has "SPAWN_WORKER_ORCA_AUTO_REGISTER:" "success(rc=1): registration announces the mutation before it happens"
 assert_err_has "SPAWN_WORKER_ORCA_AUTO:" "success(rc=1): auto mode confirmed after re-verification"
-assert_eq "$(current_call_count)" "2" "success(rc=1): worktree current probed before and after repo add"
+assert_eq "$(current_call_count)" "3" "success(rc=1): initial probe, locked re-probe and post-add verification"
 cur1=$(grep -n '^worktree current --json$' "$FAKE_ORCA_LOG" | head -1 | cut -d: -f1)
 add=$(grep -n '^repo add' "$FAKE_ORCA_LOG" | head -1 | cut -d: -f1)
 if [ -n "$cur1" ] && [ -n "$add" ] && [ "$cur1" -lt "$add" ]; then
@@ -200,7 +257,7 @@ export FAKE_REPO_ADD_FAIL=1
 run_detect
 assert_eq "$ORCA_MODE" "force_tmux" "repo-add-failure: falls back to tmux before any side effect"
 assert_log_has "repo add" "repo-add-failure: registration was attempted exactly once"
-assert_eq "$(current_call_count)" "1" "repo-add-failure: no re-probe after failed add"
+assert_eq "$(current_call_count)" "2" "repo-add-failure: initial plus locked re-probe, none after failed add"
 assert_err_has "orca repo add 失败" "repo-add-failure: failure diagnostic is explicit"
 assert_err_lacks "SPAWN_WORKER_ORCA_AUTO:" "repo-add-failure: never claims Orca mode"
 
@@ -209,7 +266,7 @@ reset_case
 export FAKE_POST_ADD_PATH="$CASE_ROOT/other place"
 run_detect
 assert_eq "$ORCA_MODE" "force_tmux" "post-add-mismatch: exact path re-verification gates Orca mode"
-assert_eq "$(current_call_count)" "2" "post-add-mismatch: re-probe ran after repo add"
+assert_eq "$(current_call_count)" "3" "post-add-mismatch: locked re-probe plus post-add identity check"
 assert_err_has "复验失败" "post-add-mismatch: re-verification failure is reported"
 assert_err_lacks "SPAWN_WORKER_ORCA_AUTO:" "post-add-mismatch: never claims Orca mode"
 

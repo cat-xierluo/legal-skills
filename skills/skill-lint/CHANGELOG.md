@@ -2,6 +2,30 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.9.0] - 2026-09-16
+
+### 新增
+
+- `references/skill-merge-standards.md`：Skill 间合并/去重判定规则模块——四判据（T 触发重叠率 / C 内容重复率 / S 体量差 / B 边界可声明性）+ 五档处置判定表（合并 / 降级为 reference / 加边界声明 / 拆分重构 / 保留独立）+ 反例库 + cron/审查共用执行流程（Task-031，PR #164）。
+- `skill-standards.md` 审查模块表新增「多 Skill 重叠」入口，默认审查顺序插入 3b 步：输入含多个 skill 或聚类报告时按四判据判定。
+
+### 技术优化
+
+- 判定不确定时的保守排序固定为：保留独立 > 加边界声明 > 降级 > 合并（合并的代价是触发精度，分裂的代价只是导航成本）。
+- 设计依据与判例（local-worktree-pr-workflow vs git-workflow，S=16.9x 降级处置）记录于 `DECISIONS.md` D-2026-09-16-01。
+
+## [2.8.1] - 2026-09-13
+
+### 修复
+
+- 修正 HFA-011 对 Git 工作树副作用的子命令识别：不再把 `git cat-file ...^{commit}`、`DELIVERY_COMMIT` 等提交对象引用误判为 `git commit`，同时继续拦截真实 `checkout`、`switch` 与 `commit`。
+- HFA-011 现在识别 `git -C <path> push`，并把已交付远端 worker 分支删除与普通提交推送分开审查：删除不要求无意义的 outgoing author/committer 校验，但必须具备原子 exact-tip `--force-with-lease`、远端 head 读取和删除后复验。
+
+### 技术优化
+
+- 新增合法近似正例与危险反例：`cat-file ...^{commit}` + exact-tip 删除应通过，缺少 lease 的远端删除仍稳定报告 hard finding。
+- 由 Course Generator 弱模型评测的 completion authority 候选复现并校准该误报；审计器仍只做静态读取，不执行候选 Git 命令。
+
 ## [2.8.0] - 2026-08-05
 
 ### 新增：security_scan.py 五类新检测

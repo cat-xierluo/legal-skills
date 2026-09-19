@@ -16,6 +16,31 @@ canonical_harness_backend() {
     codebuddy|workbuddy) printf '%s\n' "codebuddy" ;;
     qoder|qoderwork|qoderwork-cn|qoderclicn) printf '%s\n' "qoderwork-cn" ;;
     zcode) printf '%s\n' "zcode" ;;
+    hermes) printf '%s\n' "hermes" ;;
+    *) return 1 ;;
+  esac
+}
+
+# One process frame -> PM harness candidate, or return 1 when unrecognized.
+# Extracted from pm_harness_from_process so signature matching is unit-testable
+# without fabricating process ancestry.
+pm_harness_candidate_for_frame() {
+  local normalized="$1"
+  case "$normalized" in
+    *"qoderclicn"*|*"qoderwork cn"*) printf '%s\n' "qoderwork-cn" ;;
+    *"codebuddy"*|*"workbuddy"*) printf '%s\n' "codebuddy" ;;
+    *"/codex"*|codex) printf '%s\n' "codex" ;;
+    *"/claude"*|claude) printf '%s\n' "claude-code" ;;
+    # 2026-09-05: zcode PM host signatures (zcode-cli / zcode-host-local-N / ZCode).
+    # Host policy for zcode is deny-by-default in config/harness-backend-policy.json;
+    # enabling it requires explicit user authorization recorded in policy_notes.
+    *zcode-cli*|*zcode-host-local*|zcode) printf '%s\n' "zcode" ;;
+    # 2026-09-15: hermes PM host signatures (Hermes.app bundle / .hermes install
+    # dir). Path-based on purpose: a bare "hermes" basename would false-positive
+    # on unrelated user paths. Host policy for hermes is deny-by-default in
+    # config/harness-backend-policy.json; enabling it requires explicit user
+    # authorization recorded in policy_notes.
+    *".hermes/hermes-agent/"*|*"hermes.app"*) printf '%s\n' "hermes" ;;
     *) return 1 ;;
   esac
 }
@@ -81,16 +106,7 @@ print(" ".join(parts).lower())
 PY
 )
     candidate=""
-    case "$normalized" in
-      *"qoderclicn"*|*"qoderwork cn"*) candidate="qoderwork-cn" ;;
-      *"codebuddy"*|*"workbuddy"*) candidate="codebuddy" ;;
-      *"/codex"*|codex) candidate="codex" ;;
-      *"/claude"*|claude) candidate="claude-code" ;;
-      # 2026-09-05: zcode PM host signatures (zcode-cli / zcode-host-local-N / ZCode).
-      # Host policy for zcode is deny-by-default in config/harness-backend-policy.json;
-      # enabling it requires explicit user authorization recorded in policy_notes.
-      *zcode-cli*|*zcode-host-local*|zcode) candidate="zcode" ;;
-    esac
+    candidate=$(pm_harness_candidate_for_frame "$normalized") || candidate=""
     [ -z "$candidate" ] || {
       if [ -z "$nearest" ]; then
         nearest="$candidate"

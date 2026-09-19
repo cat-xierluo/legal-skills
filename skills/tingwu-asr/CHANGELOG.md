@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.6] - 2026-09-18
+
+### 修复
+- `tingwu.py`：OSS 上传代理掐断根治（Task-004）——shell 常驻 `HTTP_PROXY/HTTPS_PROXY`（Clash 系）时，oss2 分片上传走代理，771MB 视频实测在 50% 处被 `ProxyError: Cannot connect to proxy` 掐断，v0.4.5 只做了文档提醒。本次代码级兜底：新增 `_build_oss_bucket()`，上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS 节点；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复走代理旧行为；requests 兜底 PUT 同样处理（独立 `trust_env=False` Session）。yt-dlp 下载不受影响，海外源仍按环境代理走
+- 顺带补 oss2 缺失时的明确报错（`_build_oss_bucket` 守卫）
+
+### 新增
+- `tests/test_oss_proxy_isolation.py`：5 用例回归——常驻代理下 bucket 内层 session 必须 trust_env=False / 逃生阀恢复 / 无代理环境同样无条件直连 / 兜底 PUT 走 trust_env=False Session / 逃生阀时恢复模块级 requests.put 旧行为
+
+### 验证
+- 单测 5/5 通过；全量（含存量 test_poll_tasks_errors 4 用例 + test_summary_flow）绿
+- 首轮测试自身两处错误已修正：fake bucket 名 `b` 不满足 OSS ≥3 字符规则；"无代理环境"用例预期写反（设计为无条件直连）
+
+## [0.4.5] - 2026-09-18
+
+### 改进
+- `SKILL.md`「异步转录模式」重写后台监控章节：监控从"依赖 Agent 会话持有进程"改为"会话无关 + 状态落盘可恢复"双档位——档位 A（推荐）`nohup` 脱离会话 + 日志落盘（含 `watch_active.sh` 接管用法）；档位 B Agent 托管后台进程（Claude Code `run_in_background` / Hermes `terminal(background=true)`），并明确 Agent 后台进程会随会话结束被回收的风险。新增"会话恢复接管四步流程"（读 pending_tasks.json → 一次性 poll_tasks 当场收尾 → finish_task 长耗时警告 → 幂等重拉），强调重跑 poll_tasks.py 安全（云端状态为准 + flock 互斥），进程丢失≠任务丢失
+- `SKILL.md`「注意事项」新增代理环境坑：shell 常驻 `HTTP_PROXY/HTTPS_PROXY` 时 oss2 大文件分片上传会被代理掐断（实测 771MB 视频在 50% 处 `ProxyError`），听悟 OSS 为国内节点无需代理，上传前 unset 代理变量
+
+### 验证
+- 186 分钟分享视频（771MB）全流程实测：代理中断复现 → 剥代理直连重传成功 → 会话切换监控进程被回收 → 按"恢复接管流程"重拉 poll_tasks.py 正确接续（转录已完成、直接进入 finish_task，185 张幻灯片下载压缩约 3 分钟完成），44,114 字 + 说话人 2 人分离输出正常
+
+## [0.4.4] - 2026-09-16
+
+### 修复
+- `tingwu.py` / `browser_auth.py`：macOS Apple Silicon 上 `cryptography<=41` 的 `_rust.abi3.so` 在 OpenSSL CPU 探测（`_armv8_sve_probe`）死循环，任何 import oss2 的脚本无输出挂死（dlopen 阶段）。入口自动设置 `OPENSSL_armcap=0` 绕过；`browser_auth.py` 被 MCP Playwright 单独加载，补同款防护
+- `transcribe.py` / `poll_tasks.py`：AI 总结环节每次必报「总结文件不存在」——`summary.py inject` 需要 Agent 预先生成 `{out}.json`（prompt → LLM → inject），纯脚本 runtime 里 json 不存在属正常态。改为三分支：无 json 打印延后提示、有 json 真实注入并校验 rc、summary.py 缺失时跳过。顺带子进程 `python3` 改 `sys.executable`（venv/其他解释器 runtime 下不再错调系统 Python）
+
+### 新增
+- `poll_tasks.py` 落地 9ae3c71f 预定但从未实现的软错误识别：后端把拒绝类错误（如「仅支持16k及以上采样率文件」）归到 status=2（名义"转录中"），仅看 status 会无限轮询（2026-06-22 抖音无声视频真实案例）。从 statusMsg 关键词识别，命中即判失败并记录 `后端拒绝(status=2): ...`
+- `poll_tasks.py` 补 `check_once(task_id_filter=)` 签名与 CLI `--once` / `--task-id` 参数——watch_active.sh 一直调用的就是这组参数，此前 argparse 直接报错；过滤模式下写回 pending 按 trans_id 剔除，不再误抹其他任务
+- `tests/test_summary_flow.py`：AI 总结三分支回归测试（无 json / 有 json 真实注入 / verify 校验）
+
+### 验证
+- 65 分钟培训视频全流程实测（261MB，说话人 2 分离，56 张幻灯片，17,460 字）
+- 存量 4 个 poll_tasks 单测从全挂到 4/4 通过；新增 summary 三分支测试 ALL PASS；watch_active.sh `bash -n` 语法通过
+
+## [0.4.3] - 2026-09-13
+
+### Fixed
+- `poll_tasks.py` / `tingwu.py` 修复异步任务刚提交即被误判"已完成"：实测听悟 `status=0` 有二义性（刚提交、转录未开始 与 真正完成 均为 0），原 `status in (0, 3)` 判定在提交后首轮轮询就拉取空结果，生成空 Markdown 并写入空归档
+- 完成判定改为 `status == 3 or (status == 0 and transStartTime 已设置)`；transStartTime 在转录实际开始后才会下发，可区分"刚创建"与"已完成"
+- 状态标签同步修正：`0` 显示为"已提交，待转录开始"，`1` 显示为"排队中/转录中"
+
+### 验证
+- Vol21 全场回放（116 分钟）实测复现误判并修复后重新拉取：36,575 字、说话人 2 人分离、43 张幻灯片、章节索引覆盖 00:00–01:56:23
+- 边界用例 5/5：刚提交（status=0 无 transStartTime）→ 未完成；转录中（status=1）→ 未完成；上传中（status=11）→ 未完成；status=3 → 完成；status=0 + transStartTime → 完成
+
 ## [0.4.2] - 2026-09-09
 
 ### Fixed

@@ -1,9 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SOURCE_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TMP_ROOT=$(mktemp -d)
 trap 'rm -rf "$TMP_ROOT"' EXIT
+# 保留真实脚本（含 subprocess 入口），只隔离策略文件；正式策略可能已有
+# 用户对 codex -> zcode 的授权，不是默认拒绝案例的夹具。
+SCRIPT_DIR="$TMP_ROOT/skill/scripts"
+mkdir -p "$SCRIPT_DIR" "$TMP_ROOT/skill/config"
+for script in "$SOURCE_SCRIPT_DIR"/*; do
+  ln -s "$script" "$SCRIPT_DIR/${script##*/}"
+done
+DEFAULT_POLICY="$TMP_ROOT/skill/config/harness-backend-policy.json"
+cat > "$DEFAULT_POLICY" <<'JSON'
+{
+  "schema": "multi-agent-orchestration.harness-backend-policy.v1",
+  "policy": "deny_by_default",
+  "hosts": {
+    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "codebuddy": ["codebuddy"],
+    "qoderwork-cn": ["qoderwork-cn"],
+    "zcode": []
+  }
+}
+JSON
 # shellcheck source=harness-backend-policy.sh
 source "$SCRIPT_DIR/harness-backend-policy.sh"
 
@@ -22,13 +43,14 @@ expect_allow() {
 }
 
 expect_deny() {
-  local pm="$1" worker="$2"
-  if enforce_harness_backend_policy "$pm" "$worker" >/dev/null 2>&1; then
-    printf 'FAIL expected deny: %s -> %s\n' "$pm" "$worker" >&2
-    fail=$((fail + 1))
-  else
+  local pm="$1" worker="$2" policy_rc=0
+  enforce_harness_backend_policy "$pm" "$worker" >/dev/null 2>&1 || policy_rc=$?
+  if [ "$policy_rc" -eq 64 ]; then
     printf 'PASS deny: %s -> %s\n' "$pm" "$worker"
     pass=$((pass + 1))
+  else
+    printf 'FAIL expected deny exit 64: %s -> %s (exit=%s)\n' "$pm" "$worker" "$policy_rc" >&2
+    fail=$((fail + 1))
   fi
 }
 
@@ -50,13 +72,27 @@ for worker in claude-code codex codebuddy zcode; do expect_deny qoderwork-cn "$w
 expect_deny unknown codebuddy
 expect_deny codex custom
 
+# 显式授权只作用于被授权的 host；不改正式配置，也不扩张较弱宿主权限。
+AUTHORIZED_POLICY="$TMP_ROOT/authorized-policy.json"
+jq '.hosts.codex += ["zcode"]' "$DEFAULT_POLICY" > "$AUTHORIZED_POLICY"
+HARNESS_BACKEND_POLICY_FILE="$AUTHORIZED_POLICY"
+expect_allow codex zcode
+expect_deny claude-code zcode
+expect_deny codebuddy zcode
+expect_deny qoderwork-cn zcode
+jq '.hosts["claude-code"] += ["zcode"]' "$AUTHORIZED_POLICY" > "$TMP_ROOT/both-authorized-policy.json"
+HARNESS_BACKEND_POLICY_FILE="$TMP_ROOT/both-authorized-policy.json"
+expect_allow claude-code zcode
+expect_allow codex zcode
+HARNESS_BACKEND_POLICY_FILE="$DEFAULT_POLICY"
+
 # Exercise real ancestry detection through executables named as weak harnesses.
 ln -s /bin/bash "$TMP_ROOT/codebuddy"
 ln -s /bin/bash "$TMP_ROOT/codex"
 ln -s /bin/bash "$TMP_ROOT/claude"
 ln -s /bin/bash "$TMP_ROOT/qoderclicn"
 mkdir -p "$TMP_ROOT/non-orca-project"
-if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; :' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/codebuddy" -c 'bash "$1" --project "$2" --pm-harness codebuddy --worker-backend codebuddy; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: codebuddy -> codebuddy\n'
   pass=$((pass + 1))
@@ -74,7 +110,7 @@ else
   printf 'FAIL ancestry deny: codebuddy escalation exit=%s\n' "$weak_rc" >&2
   fail=$((fail + 1))
 fi
-if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; :' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
   printf 'PASS ancestry allow: qoderwork-cn -> qoderwork-cn\n'
   pass=$((pass + 1))

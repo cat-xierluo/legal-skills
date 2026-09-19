@@ -124,12 +124,18 @@ Options:
                    `SPAWN_WORKER_LIGHTWEIGHT_AUTO`）。多 worker 共享同仓时按
                    SKILL §2.1.1 配 --allow-paths 做 scope 硬护栏。详见 SKILL §2.1.1。
   --no-orca-mode    显式 opt-out ORCA 终端模式：强制走原 tmux + git worktree路径，
-                   不调任何 orca CLI。auto-detect 默认以 `orca worktree current --json`
+                   不走 Orca 控制或资源创建；宿主身份检查可能进行只读 Orca 探测。
+                   auto-detect 默认以 `orca worktree current --json`
                    确认 PROJECT_DIR 是当前 Orca worktree，不依赖 TERM_PROGRAM / ORCA_WORKTREE_ID。
                    命中后用 `orca worktree create` + `orca terminal create --command`，保留 provider env /
                    runtime profile / wrapper / 超长 prompt 投递等所有现有能力；ORCA UI 直接反映
                    worker 生命周期（spawn 完 ORCA 列表多一张卡，sentinel 终态自动切 workspace-status）。
                    --no-worktree 与 ORCA 模式互斥（ORCA worktree 必须有 git 仓）。详见 SKILL §6.5。
+  --orca-setup-mode MODE
+                   Orca worktree Setup policy. Default: skip. Although the CLI accepts
+                   skip|inherit|run, MAO currently rejects inherit/run before resource
+                   creation because repo Setup executes before Session Context and guards.
+                   --allow-install-command does not authorize this pre-guard phase.
   --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
                    或同时传 --orca-run-id + --orca-task-id 复用 Wave 预创建 Task；
                    worker-start 是该路径唯一的任务注入器，worker 必须发送一次 worker_done。
@@ -137,7 +143,11 @@ Options:
   --orca-task-id ID 复用 `orca-wave-prepare.sh` 预创建的 Task；必须同时传 --orca-run-id
                    与 --orca-coordinator-handle。
   --orca-coordinator-handle ID
+                   复用 Wave coordinator；配合 --orca-runtime-id 检测 runtime 漂移。
                    复用 Wave receipt 的 coordinator_handle，避免并发 worker 重复 run-use。
+  --orca-runtime-id ID
+                   Wave receipt 的 _meta.runtimeId；缺失的旧调用仅警告未验证，
+                   传入后必须匹配可达 runtime。匹配不证明 handle 仍存活。
   --task-spec TEXT  supervised Task 的完整任务说明。
   --task-title TEXT supervised Task 的简短标题。
   --allow-install-command CMD
@@ -377,6 +387,17 @@ parse_spawn_worker_args() {
         NO_ORCA_MODE=1
         shift
         ;;
+      --orca-setup-mode)
+        case "$2" in
+          skip|inherit|run) ORCA_SETUP_MODE="$2" ;;
+          *)
+            echo "ERROR: --orca-setup-mode only accepts skip|inherit|run (got: $2)" >&2
+            usage
+            exit 64
+            ;;
+        esac
+        shift 2
+        ;;
       --orca-supervised)  # ORCA 模式 spawn 后纳入原生 Run/Task/Dispatch 生命周期
         ORCA_SUPERVISED=1
         shift
@@ -399,6 +420,11 @@ parse_spawn_worker_args() {
         ;;
       --orca-coordinator-handle)  # Wave receipt 中已绑定的 coordinator；并发启动时直接复用
         ORCA_COORDINATOR_HANDLE="$2"
+        shift 2
+        ;;
+      --orca-runtime-id)
+        ORCA_EXPECTED_RUNTIME_ID="$2"
+        [ -n "$ORCA_EXPECTED_RUNTIME_ID" ] || { echo "ERROR: --orca-runtime-id cannot be empty" >&2; exit 64; }
         shift 2
         ;;
       --allow-install-command)
