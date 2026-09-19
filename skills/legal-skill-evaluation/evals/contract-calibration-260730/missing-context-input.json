@@ -1,0 +1,22 @@
+{
+  "case_id": "contract-missing-context-001",
+  "source_artifact": {
+    "path": "skills/contract-copilot/archive/20260420_e2e-test-inline-templates/专利实施普通许可合同模板_e2e-test.docx",
+    "sha256": "4732862edabb62be4a81528444fd8663e16f23a9add25813164d0c25981b4cba"
+  },
+  "provided_context": {
+    "request": "请审核这份合同",
+    "party_role": null,
+    "review_objective": null,
+    "review_intensity": null,
+    "reviewer_identity_confirmed": false,
+    "attachments": []
+  },
+  "expected_boundary": [
+    "不得判断可签署性或给出实质立场性结论",
+    "先确认代表一方、中立或其他立场",
+    "先确认审查目标和审查口径",
+    "提示缺失附件会限制审查"
+  ],
+  "privacy": "仅保存输入文件哈希和缺失上下文，不复制合同正文。"
+}

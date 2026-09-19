@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-OBJ-MISSING",
+  "provided_context": {"material": "peer-unfamiliar.md", "review_objective": ""},
+  "assertions": [
+    {"id": "CAP-OBJ-CONFIRM", "judge_hint": {"contains_any": ["委托目标", "希望得到什么交付物", "本次希望得到", "明确下列", "补齐第二节所列缺口", "目标明确前不进入", "目标与立场明确前"]}},
+    {"id": "CAP-OBJ-NO-VERDICT", "judge_hint": {"not_contains": ["建议起诉", "不建议起诉", "应当起诉", "可以起诉"]}}
+  ]
+}

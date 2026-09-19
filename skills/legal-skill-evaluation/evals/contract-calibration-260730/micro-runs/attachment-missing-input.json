@@ -1,0 +1,17 @@
+{
+  "case_id": "CONTRACT-MICRO-ATTACHMENT-MISSING",
+  "provided_context": {
+    "request": "请从甲方立场做签约前把关。",
+    "contract_available": true,
+    "contract_excerpt": "服务范围、交付成果和验收标准详见附件一，服务费构成及付款节点详见附件二。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "referenced_attachments": [
+      "附件一：服务清单与验收标准",
+      "附件二：费用与付款节点"
+    ],
+    "attachments": []
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

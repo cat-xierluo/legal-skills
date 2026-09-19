@@ -1,0 +1,7 @@
+{
+  "case_id": "CASE-ANON-TOGGLE",
+  "provided_context": {"material": "familiar-sample.md", "public_use_declared": false},
+  "assertions": [
+    {"id": "CAP-ANON-DEFAULT-REAL", "judge_hint": {"not_contains": ["以下信息已脱敏", "为保密进行匿名处理", "化名："]}}
+  ]
+}
