@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.5"
+  version: "1.8.7"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -366,6 +366,50 @@ gh pr diff <number>
 gh pr review <number> --approve --body "LGTM"
 gh pr review <number> --request-changes --body "建议修改..."
 ```
+
+### 审查外部 PR：分层审查——必要性 gate 先于代码审查
+
+**核心教训**：对外部贡献者的 PR 先做代码级深审，最后才在「项目要不要这个改动」层面否决——代码审查投入全部沉没（实例：某 PR 深审后列出多个代码缺陷，最终以"功能不在路线图、无用户诉求"关闭，缺陷分析全部白做）。
+
+**第一层：项目契合度 gate（先于看 diff / 任何代码检查）**，只回答一个问题——"这个改动是不是这个项目现在需要的"：
+
+1. **有无需求来源**：对应 issue / ROADMAP / TASKS / 项目规则里的既定规划？逐项核对，引用出处。
+2. **无来源时的判据**：是否服务项目核心主张（README 一句话定位）？还是贡献者自己的个性化偏好？个性化偏好不是错，但不应由维护者承担合并与长期维护成本。
+3. **伪需求识别**：issue 里的"遗留场景"在当前架构下是否仍存在（例："打开文档替换当前内容"的确认场景在多标签架构下已不适用——不要把历史场景描述当成"要新增单文档模式"的诉求）。
+4. **gate 不通过 → 直接关闭，不进入代码审查**。留言模板：感谢贡献 → 说明不在路线图/无用户诉求（对事不对人，不评价代码质量）→ 给重启路径（欢迎开 issue 讨论需求场景，有真实需求时基于此思路重启）。
+
+**第二层：代码审查**（gate 通过才投入）：
+
+- diff 范围检查（见下方 Monorepo PR Diff 检查清单）
+- 本地验证走隔离 worktree（见「本地验证的环境卫生」）
+- 按正文最低要求、Fail-Closed 合并门禁逐项过
+
+必要性依据（ROADMAP、issue、核心主张）是**项目级答案**，本 Skill 只约束流程顺序：先 gate 后代码。答案缺失时问用户或查项目规则，不要用"代码看起来没问题"替代 gate 判断。
+
+### 审查外部 PR：本地验证的环境卫生（防遗留状态污染结论）
+
+**核心陷阱**：审自己的 PR 时主工作区通常就是干净的；审**他人**的 PR（尤其多 PR 串行接力审查时）主工作区可能残留上一轮的中间态——未完成的 merge/rebase（`.git/MERGE_HEAD` 存在、`UU` 冲突文件）、未提交的 `M` 文件。此时 `gh pr checkout <N>` 会把遗留变更叠加到 PR 检出上形成「混血工作区」，之后跑 typecheck / test 得到的错误可能来自**遗留状态而非 PR 本身**——把别的 PR 的缺陷误写进当前 PR 的 review 结论（假阳性）。实例：审 PR-A 前主工作区残留审 PR-B 时中断的 merge，checkout PR-A 后 typecheck 报错全属 PR-B，险些误判 PR-A 不合格。
+
+**规则**：审查/验证他人 PR 一律用隔离 worktree，永不在主工作区 `gh pr checkout`：
+
+```bash
+# 1. 动手前主工作区体检：有 UU / MERGE_HEAD / 未提交变更 → 先恢复干净再动手
+git status --short && ls .git/MERGE_HEAD 2>/dev/null
+
+# 2. 隔离 worktree 检出 PR（不污染主工作区）
+git fetch origin pull/<N>/head
+git worktree add /tmp/pr-<N> FETCH_HEAD
+
+# 3. typecheck / test 全部在 worktree 里跑；node_modules 可符号链接主仓库复用
+ln -sfn <主仓库>/node_modules /tmp/pr-<N>/node_modules
+
+# 4. 审完清理
+git worktree remove /tmp/pr-<N> && git worktree prune
+```
+
+**收尾纪律**：会话内做过的 merge / rebase / checkout 试验，结束前要么完成要么 `--abort`；新会话接手审查前先 `git status` 确认无中间态。清理 merge 中间态不丢数据——遗留内容都在 git 对象中（MERGE_HEAD 指向的提交、分支 tip 均可随时恢复）。
+
+**判读参照**：typecheck/test 报错与 PR diff 对不上（报错文件不在 `gh pr diff --name-only` 列表里）→ 先怀疑工作区污染，切干净 worktree 复跑后再写 review 结论。
 
 ### 合并 PR
 
