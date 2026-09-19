@@ -128,8 +128,10 @@ if [ "$frame_rc" -eq 0 ]; then
   fi
 elif [ "$frame_rc" -eq 1 ]; then
   skip '当前环境祖先链无可识别宿主（非 Hermes 宿主运行），签名用例已在第 1 节覆盖'
+elif [ "$frame_rc" -eq 67 ]; then
+  skip '当前环境祖先链不完整，生产门禁会 fail-closed；签名用例已在第 1 节覆盖'
 else
-  bad "pm_harness_from_process 异常退出码 $frame_rc（预期仅 0/1）"
+  bad "pm_harness_from_process 异常退出码 ${frame_rc}（预期 0/1/67）"
 fi
 
 echo

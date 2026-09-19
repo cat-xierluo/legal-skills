@@ -23,6 +23,9 @@ templates/
 # moot-court 开发文档随技能源码维护
 !skills/moot-court/DECISIONS.md
 !skills/moot-court/TASKS.md
+# multi-agent-orchestration 的跨会话维护上下文随 Skill 源码维护
+!skills/multi-agent-orchestration/DECISIONS.md
+!skills/multi-agent-orchestration/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 

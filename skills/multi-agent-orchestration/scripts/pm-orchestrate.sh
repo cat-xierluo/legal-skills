@@ -1848,6 +1848,61 @@ reauthorize_rollback_new_terminal() {
   fi
 }
 
+# reauthorize 必须复用原始 spawn 在 Git common-dir 冻结的 PM authority receipt。
+# receipt 路径由 worktree/session 推导，METADATA 只做交叉核对，不能选择授权来源；
+# 校验在 run-use、授权合并、launch.sh 改写和新终端创建等副作用之前完成。
+resolve_reauthorize_authority_receipt() {
+  resolve_project_identity || return 2
+  local expected="$GIT_COMMON_DIR/agent-authority/$SESSION.json"
+  python3 - "$SCRIPT_DIR" "$WORKTREE" "$SESSION" "$METADATA" "$expected" <<'PY'
+import json
+from pathlib import Path
+import stat
+import subprocess
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from completion_authority import load_authority
+
+worktree = Path(sys.argv[2])
+session = sys.argv[3]
+metadata = Path(sys.argv[4])
+authority = Path(sys.argv[5])
+
+def git(*args):
+    return subprocess.run(
+        ["git", "-C", str(worktree), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+try:
+    if Path(git("rev-parse", "--show-toplevel")).resolve(strict=True) != worktree:
+        raise ValueError("worktree must be the exact Git root")
+    branch = git("symbolic-ref", "--quiet", "--short", "HEAD")
+    current = worktree
+    for part in metadata.relative_to(worktree).parts:
+        current = current / part
+        if stat.S_ISLNK(current.lstat().st_mode):
+            raise ValueError("Session Context must not contain symlinks")
+    data = json.loads(metadata.read_text(encoding="utf-8"))
+    receipt, _ = load_authority(str(authority))
+    if receipt.get("session") != session or receipt.get("branch") != branch:
+        raise ValueError("PM receipt session/branch does not match the worker")
+    if not isinstance(receipt.get("worktree"), str) or Path(receipt["worktree"]).resolve(strict=True) != worktree:
+        raise ValueError("PM receipt belongs to a different worktree")
+    if data.get("session", {}).get("id") != session or data.get("worktree") != str(worktree):
+        raise ValueError("Session Context identity does not match the worker")
+    if data.get("execution_authority", {}).get("authority_receipt_file") != str(authority):
+        raise ValueError("metadata cannot select a different PM authority receipt")
+    print(authority)
+except (AttributeError, KeyError, OSError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+    print("PM_REAUTHORIZE_AUTHORITY_INVALID: " + str(exc), file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
 # Task-116（Badminton Lab 实测事故①）：reauthorize liveness 预门禁。
 # 旧 Dispatch 已 worker_done → release → ack → settled 后，METADATA 残留的 dispatch_id
 # 会让本命令把死目标当 live：先合并授权、重写 launch.sh B64、创建替换终端，直到注册
@@ -1916,8 +1971,13 @@ cmd_reauthorize() {
 
   local auth_file="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
   local launch_sh="$SESSION_CONTEXT/launch.sh"
+  local authority_receipt
   [ -f "$auth_file" ] || { echo "ERROR: authorization file not found: $auth_file" >&2; exit 64; }
   [ -f "$launch_sh" ] || { echo "ERROR: launch.sh not found: $launch_sh" >&2; exit 64; }
+  authority_receipt=$(resolve_reauthorize_authority_receipt) || {
+    echo "ERROR: original PM authority receipt is missing, mismatched or untrusted; reauthorize made no changes" >&2
+    exit 2
+  }
   # Task-116：任何 mutation（run-use/METADATA 改写、授权合并、B64 重写、新终端）之前
   # 先证明目标 Dispatch 仍 live；settled/released/acked/未知一律 REAUTHORIZE_NOT_LIVE。
   reauthorize_liveness_pregate
@@ -1991,7 +2051,10 @@ PY
       --terminal-handle "$new_handle" \
       --run-id "$ORCA_RUN_ID" \
       --task-id "$task_id" \
-      --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1); then
+      --coordinator-handle "$ORCA_COORDINATOR_HANDLE" \
+      --runtime-id "$ORCA_RECORDED_RUNTIME_ID" \
+      --metadata-file "$METADATA" \
+      --authority-receipt "$authority_receipt" 2>&1); then
     if printf '%s' "$register_out" | grep -q "task_not_startable"; then
       echo "PM_REAUTHORIZE_TASK_RESET: task $task_id not startable; resetting to ready"
       orca_cli orchestration task-update --id "$task_id" --status ready \
@@ -2005,7 +2068,10 @@ PY
         --terminal-handle "$new_handle" \
         --run-id "$ORCA_RUN_ID" \
         --task-id "$task_id" \
-        --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1) || {
+        --coordinator-handle "$ORCA_COORDINATOR_HANDLE" \
+        --runtime-id "$ORCA_RECORDED_RUNTIME_ID" \
+        --metadata-file "$METADATA" \
+        --authority-receipt "$authority_receipt" 2>&1) || {
         reauthorize_rollback_new_terminal "$new_handle" "复位后重注册仍失败"
         echo "ERROR: re-registration failed after task reset: $register_out" >&2
         exit 2
@@ -2041,7 +2107,10 @@ PY
           --terminal-handle "$new_handle" \
           --run-id "$ORCA_RUN_ID" \
           --task-id "$task_id" \
-          --coordinator-handle "$ORCA_COORDINATOR_HANDLE" 2>&1) || {
+          --coordinator-handle "$ORCA_COORDINATOR_HANDLE" \
+          --runtime-id "$ORCA_RECORDED_RUNTIME_ID" \
+          --metadata-file "$METADATA" \
+          --authority-receipt "$authority_receipt" 2>&1) || {
           reauthorize_rollback_new_terminal "$new_handle" "复位后重注册仍失败"
           echo "ERROR: re-registration failed after settled-task reset: $register_out" >&2
           exit 2
