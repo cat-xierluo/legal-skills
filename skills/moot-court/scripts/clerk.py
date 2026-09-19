@@ -180,6 +180,21 @@ def summary(state):
             k: state["active"][k] for k in ("turn_id", "role", "issue", "stage", "read_through")}}
 
 
+def public_history(events, through):
+    """Join public procedural context without exposing internal dispatch prompts."""
+    assignments = {e["payload"]["turn_id"]: e["payload"]
+                   for e in events if e["kind"] == "dispatch" and e["seq"] <= through}
+    history = []
+    for event in events:
+        if event["kind"] != "speech" or event["seq"] > through:
+            continue
+        speech = event["payload"]
+        assignment = assignments[speech["turn_id"]]
+        history.append({"seq": event["seq"], "speech": speech,
+                        "context": {k: assignment[k] for k in ("issue", "stage")}})
+    return history
+
+
 def packet(state, events):
     active = state["active"]
     require(active is not None, "没有待处理发言；请先 dispatch")
@@ -189,8 +204,7 @@ def packet(state, events):
             "assignment": active,
             "documents": [d for d in state["manifest"]["documents"]
                           if d["visible_to"] == ["all"] or active["role"] in d["visible_to"]],
-            "history": [{"seq": e["seq"], "speech": e["payload"]}
-                        for e in events if e["kind"] == "speech" and e["seq"] <= active["read_through"]],
+            "history": public_history(events, active["read_through"]),
             "submission_template": contract}
 
 
@@ -246,12 +260,15 @@ def execute(args):
             event = existing or append_event(root, events, "speech", submission)
             return {"accepted_seq": event["seq"], "duplicate": existing is not None}
         if args.command == "render":
+            contexts = {item["seq"]: item["context"]
+                        for item in public_history(events, state["last_seq"])}
             lines = ["# 模拟庭审记录", "", "庭前推演产出；不是实际庭审笔录或裁判预测。",
                      f"运行：{state['run_id']}；记录截至 E-{state['last_seq']:06d}", ""]
             for event in events:
                 p = event["payload"]
                 if event["kind"] == "speech":
                     lines.extend([f"## E-{event['seq']:06d} · {p['role']} · {p['turn_id']}",
+                                  f"争点：{contexts[event['seq']]['issue']}；阶段：{contexts[event['seq']]['stage']}",
                                   f"材料版本：{p['material_version']}；回应：{p['responds_to']}", "",
                                   p["body"], "", "引用材料：" + ", ".join(p["citations"]), ""])
                 elif event["kind"] == "cancel":
