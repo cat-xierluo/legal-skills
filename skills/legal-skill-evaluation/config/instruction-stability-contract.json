@@ -1,0 +1,330 @@
+{
+  "schema_version": 1,
+  "skill": {
+    "name": "legal-skill-evaluation",
+    "version": "0.8.1"
+  },
+  "producer": {
+    "id": "legal-evaluation-workflow",
+    "implementation_paths": [
+      "SKILL.md",
+      "references/universal-dimensions.md",
+      "references/scenario-tuning-notes.md",
+      "templates/skill-evaluation-report.md",
+      "config/evaluation-package.example.json",
+      "config/capability-run-receipts.example.json"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "evaluation-package",
+      "stage": "final",
+      "required": true
+    }
+  ],
+  "checkers": [
+    {
+      "id": "evaluation-package-gate",
+      "kind": "active",
+      "modality": "semantic",
+      "artifact_stages": [
+        "final"
+      ],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/evaluation_package_gate.py",
+      "args": [
+        "check",
+        "--input",
+        "{artifact:evaluation-package}",
+        "--stability-protocol"
+      ],
+      "timeout_seconds": 30
+    }
+  ],
+  "constraints": [
+    {
+      "id": "EVAL-REPORT-COVERAGE",
+      "severity": "hard",
+      "requirement_type": "coverage",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#EVAL-REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "case_ids": [
+        "evaluation-valid",
+        "evaluation-legal-near-miss",
+        "evaluation-missing-dimension",
+        "historical-template-omission"
+      ],
+      "historical_failure_known": true
+    },
+    {
+      "id": "EVAL-EVIDENCE-BINDING",
+      "severity": "hard",
+      "requirement_type": "semantic",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#EVAL-EVIDENCE-BINDING"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "case_ids": [
+        "evaluation-valid",
+        "evaluation-stale-candidate",
+        "evaluation-scope-mismatch"
+      ],
+      "historical_failure_known": false
+    },
+    {
+      "id": "EVAL-CLOSURE",
+      "severity": "hard",
+      "requirement_type": "semantic",
+      "stage": "final",
+      "source_refs": [
+        "SKILL.md#EVAL-CLOSURE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "case_ids": [
+        "evaluation-valid",
+        "evaluation-false-pass",
+        "historical-unbound-false-pass",
+        "evaluation-out-of-scope-false-pass"
+      ],
+      "historical_failure_known": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "evaluation-valid",
+      "kind": "positive",
+      "constraint_ids": [
+        "EVAL-REPORT-COVERAGE",
+        "EVAL-EVIDENCE-BINDING",
+        "EVAL-CLOSURE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-valid.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "evaluation-legal-near-miss",
+      "kind": "positive",
+      "constraint_ids": [
+        "EVAL-REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-legal-near-miss.json"
+        }
+      ],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "evaluation-missing-dimension",
+      "kind": "mutation",
+      "constraint_ids": [
+        "EVAL-REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-missing-dimension.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "historical-template-omission",
+      "kind": "historical",
+      "constraint_ids": [
+        "EVAL-REPORT-COVERAGE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-historical-omission.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "evaluation-stale-candidate",
+      "kind": "mutation",
+      "constraint_ids": [
+        "EVAL-EVIDENCE-BINDING"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-stale-candidate.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "evaluation-false-pass",
+      "kind": "mutation",
+      "constraint_ids": [
+        "EVAL-CLOSURE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-false-pass.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "evaluation-scope-mismatch",
+      "kind": "mutation",
+      "constraint_ids": [
+        "EVAL-EVIDENCE-BINDING"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-scope-mismatch.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "historical-unbound-false-pass",
+      "kind": "historical",
+      "constraint_ids": [
+        "EVAL-CLOSURE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-unbound-false-pass.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
+    {
+      "id": "evaluation-out-of-scope-false-pass",
+      "kind": "mutation",
+      "constraint_ids": [
+        "EVAL-CLOSURE"
+      ],
+      "checker_ids": [
+        "evaluation-package-gate"
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "evaluation-package",
+          "path": "assets/evaluation-package-out-of-scope-false-pass.json"
+        }
+      ],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    }
+  ],
+  "stability": {
+    "minimum_runs": 3,
+    "measurements": [
+      {
+        "id": "dimension-coverage-count",
+        "checker_id": "evaluation-package-gate",
+        "constraint_id": "EVAL-REPORT-COVERAGE",
+        "value_type": "integer",
+        "condition": "gte",
+        "expected": 18
+      },
+      {
+        "id": "candidate-hash-match",
+        "checker_id": "evaluation-package-gate",
+        "constraint_id": "EVAL-EVIDENCE-BINDING",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
+        "id": "closure-consistent",
+        "checker_id": "evaluation-package-gate",
+        "constraint_id": "EVAL-CLOSURE",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      }
+    ],
+    "observables": [
+      {
+        "id": "case-types",
+        "checker_id": "evaluation-package-gate",
+        "constraint_ids": [
+          "EVAL-REPORT-COVERAGE"
+        ],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "candidate-binding",
+        "checker_id": "evaluation-package-gate",
+        "constraint_ids": [
+          "EVAL-EVIDENCE-BINDING"
+        ],
+        "comparison": "exact",
+        "required": true,
+        "tolerance": null
+      },
+      {
+        "id": "closure-state",
+        "checker_id": "evaluation-package-gate",
+        "constraint_ids": [
+          "EVAL-CLOSURE"
+        ],
+        "comparison": "exact",
+        "required": true,
+        "tolerance": null
+      }
+    ]
+  }
+}

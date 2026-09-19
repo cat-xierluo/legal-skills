@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-DESIGN-IP-USE",
+  "provided_context": {
+    "request": "请审核这份设计成果交付合同。",
+    "contract_available": true,
+    "contract_excerpt": "设计成果知识产权归乙方所有；甲方不得复制、修改或向施工单位提供该成果。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

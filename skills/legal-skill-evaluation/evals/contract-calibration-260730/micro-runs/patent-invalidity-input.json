@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-PATENT-INVALIDITY",
+  "provided_context": {
+    "request": "请从受让方立场审这份专利许可合同。",
+    "contract_available": true,
+    "contract_excerpt": "因许可专利引发的第三方侵权，由受让方承担全部法律责任。",
+    "party_role": "受让方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

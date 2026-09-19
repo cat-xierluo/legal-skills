@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-LIT-REASONING-TRACE",
+  "provided_context": {"material": "familiar-sample.md"},
+  "assertions": [
+    {"id": "CAP-LIT-REASON-QUOTE", "judge_hint": {"contains_any": ["二审认定", "原审法院认为", "原审认定", "溯源", "认定原文", "二审原文", "争议焦点"]}},
+    {"id": "CAP-LIT-REASON-NO-BLANK", "judge_hint": {"not_contains": ["显然应当胜诉", "必然改判", "毫无疑问", "绝对成立"]}}
+  ]
+}

@@ -1,0 +1,28 @@
+{
+    "meta": {
+        "contract_name": "脱敏许可合同",
+        "client_name": "示例委托方",
+        "party_role": "中立",
+        "review_intensity": "常规",
+        "reviewer": "评测审查人",
+        "reviewer_organization": "评测机构",
+        "review_state": "已复核"
+    },
+    "summary": {
+        "contract_type": "普通许可合同",
+        "parties": {"party_a": "示例许可方", "party_b": "示例被许可方"},
+        "overall_risk": "P0",
+        "core_conclusion": "核心信息补齐前不应签署"
+    },
+    "findings": [
+        {
+            "id": "R001",
+            "risk_level": "P0",
+            "action": "comment",
+            "target_text": "许可标的：____",
+            "replacement_text": "许可标的：专利号及权利状态待核验",
+            "comment": "专号、权利人和权利状态均未填写，应列为签署前条件。",
+            "legal_basis": "《民法典》第 845 条"
+        }
+    ]
+}

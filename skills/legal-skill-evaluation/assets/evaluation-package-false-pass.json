@@ -1,0 +1,39 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": [
+        "cases",
+        1,
+        "taste",
+        0,
+        "status"
+      ],
+      "value": "fail"
+    },
+    {
+      "op": "set",
+      "path": [
+        "cases",
+        1,
+        "taste",
+        0,
+        "evidence"
+      ],
+      "value": "产出把对方主张写成已确认事实，但 verdict 仍错误地写 enter-workflow。"
+    },
+    {
+      "op": "set",
+      "path": [
+        "verdict",
+        "recommendation"
+      ],
+      "value": "enter-workflow"
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "mutation",
+    "expected_failed_constraint": "EVAL-CLOSURE"
+  }
+}
