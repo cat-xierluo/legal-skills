@@ -15,12 +15,26 @@ TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 SESSION_DONE="smoke-sentinel-done-$$"
 SESSION_TIMEOUT="smoke-sentinel-timeout-$$"
 SESSION_INVALID_METADATA="smoke-sentinel-invalid-metadata-$$"
+SMOKE_TMUX_ACTIVE=0
 
 cleanup() {
-  tmux kill-session -t "$SESSION_DONE" 2>/dev/null || true
-  tmux kill-session -t "$SESSION_TIMEOUT" 2>/dev/null || true
-  tmux kill-session -t "$SESSION_INVALID_METADATA" 2>/dev/null || true
+  local rc=$?
+  local cleanup_rc=0
+  local cleanup_out=""
+  local cleanup_session=""
+  trap - EXIT
+  if [ "$SMOKE_TMUX_ACTIVE" -eq 1 ]; then
+    for cleanup_session in "$SESSION_DONE" "$SESSION_TIMEOUT" "$SESSION_INVALID_METADATA"; do
+      cleanup_rc=0
+      cleanup_out=$(tmux kill-session -t "$cleanup_session" 2>&1) || cleanup_rc=$?
+      if [ "$cleanup_rc" -ne 0 ] && ! printf '%s\n' "$cleanup_out" | grep -Eqi "can't find session|no server running"; then
+        printf 'ASSERTION FAILED: private tmux cleanup failed: %s\n' "$cleanup_out" >&2
+        [ "$rc" -ne 0 ] || rc=1
+      fi
+    done
+  fi
   rm -rf "$TMP_ROOT"
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -52,6 +66,38 @@ assert_not_contains() {
 
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq is required"; exit 77; }
 command -v tmux >/dev/null 2>&1 || { echo "SKIP: tmux is required"; exit 77; }
+
+SMOKE_REAL_TMUX=$(command -v tmux)
+SMOKE_TMUX_SOCKET="$TMP_ROOT/tmux.sock"
+set +e
+tmux_probe_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null \
+  new-session -d -s "$SESSION_DONE-probe" 'sleep 2' 2>&1)
+tmux_probe_create_rc=$?
+tmux_probe_show_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" has-session -t "$SESSION_DONE-probe" 2>&1)
+tmux_probe_show_rc=$?
+set -e
+if [ "$tmux_probe_create_rc" -ne 0 ] || [ "$tmux_probe_show_rc" -ne 0 ]; then
+  if printf '%s\n%s' "$tmux_probe_out" "$tmux_probe_show_out" | \
+    grep -Eqi 'operation not permitted|permission denied|no such file or directory'; then
+    echo "SKIP: sandbox does not permit an isolated tmux socket; deterministic sentinel tests remain available"
+    exit 0
+  fi
+  echo "ASSERTION FAILED: isolated tmux probe failed: $tmux_probe_out $tmux_probe_show_out" >&2
+  exit 1
+fi
+"$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION_DONE-probe" >/dev/null 2>&1 || {
+  echo "ASSERTION FAILED: isolated tmux probe could not clean up its session" >&2
+  exit 1
+}
+mkdir -p "$TMP_ROOT/isolated-bin"
+cat > "$TMP_ROOT/isolated-bin/tmux" <<'FAKE_TMUX'
+#!/usr/bin/env bash
+exec "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null "$@"
+FAKE_TMUX
+chmod +x "$TMP_ROOT/isolated-bin/tmux"
+export SMOKE_REAL_TMUX SMOKE_TMUX_SOCKET
+export PATH="$TMP_ROOT/isolated-bin:$PATH"
+SMOKE_TMUX_ACTIVE=1
 
 CTX_DONE="$TMP_ROOT/done/.claude/agent-sessions/$SESSION_DONE"
 CTX_TIMEOUT="$TMP_ROOT/timeout/.claude/agent-sessions/$SESSION_TIMEOUT"

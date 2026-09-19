@@ -49,6 +49,44 @@ DELIVERY
   printf '%s\n\n%s' "$protocol" "$task_spec"
 }
 
+# Roll back/finalize an in-flight completion-authority replacement.  Replacement
+# is a two-file transaction: the receipt is rotated first, then METADATA.json is
+# atomically updated by the caller.  Keep a private copy of the prior receipt so
+# a metadata write failure cannot fence the still-live old worker.
+orchestration_completion_authority_rollback() {
+  local rollback_file="${ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE:-}"
+  local replaced_file="${ORCAREG_COMPLETION_AUTHORITY_REPLACED_FILE:-}"
+
+  [ -n "$rollback_file" ] || return 0
+  if [ -z "$replaced_file" ] || [ ! -f "$rollback_file" ] || [ -L "$rollback_file" ] || \
+     [ ! -f "$replaced_file" ] || [ -L "$replaced_file" ]; then
+    echo "ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FAILED: replacement receipt rollback state is invalid" >&2
+    return 1
+  fi
+  if ! mv "$rollback_file" "$replaced_file"; then
+    echo "ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FAILED: could not restore prior receipt: $replaced_file" >&2
+    return 1
+  fi
+  ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_REPLACED_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_SHA256=""
+  echo "ORCAREG_COMPLETION_AUTHORITY_ROLLED_BACK: $replaced_file" >&2
+}
+
+orchestration_completion_authority_commit() {
+  local rollback_file="${ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE:-}"
+
+  if [ -n "$rollback_file" ] && ! rm -f "$rollback_file"; then
+    # Receipt and metadata already agree.  A stale private backup is cleanup
+    # debt, not grounds for rolling a successfully rebound worker backwards.
+    echo "ORCAREG_COMPLETION_AUTHORITY_BACKUP_CLEANUP_FAILED: $rollback_file" >&2
+  fi
+  ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_REPLACED_FILE=""
+  return 0
+}
+
 # Bind the post-worker-start Dispatch identity into the worker's already-running
 # hook without persisting the raw dispatch capability. The stable path is known
 # before launch and injected into the worker environment; only this hash-bound
@@ -60,12 +98,15 @@ orchestration_completion_authority_write() {
   local run_id="$4"
   local metadata_file="$5"
   local expected_authority_file="${6:-}"
+  local allow_replace="${7:-0}"
   local authority_file completion_file show_out
   local actual_task actual_dispatch actual_terminal actual_run capability_hash process_incarnation runtime_id authority_sha
-  local created_at receipt_tmp receipt_sha
+  local created_at receipt_tmp receipt_sha old_dispatch old_terminal rollback_file
 
   ORCAREG_COMPLETION_AUTHORITY_FILE=""
   ORCAREG_COMPLETION_AUTHORITY_SHA256=""
+  ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE=""
+  ORCAREG_COMPLETION_AUTHORITY_REPLACED_FILE=""
 
   [ -n "$dispatch_id" ] || {
     echo "ERROR: completion authority requires a bound dispatch" >&2
@@ -148,6 +189,43 @@ orchestration_completion_authority_write() {
        and .runtime_id == $runtime and .authority_receipt_file == $authority and .authority_receipt_sha256 == $authority_sha' \
       "$completion_file" >/dev/null 2>&1; then
       rm -f "$receipt_tmp"
+    elif [ "$allow_replace" = "1" ]; then
+      old_dispatch=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$metadata_file")
+      old_terminal=$(jq -r '.session.orca.terminal_handle // empty' "$metadata_file")
+      if [ -z "$old_dispatch" ] || [ -z "$old_terminal" ] || \
+        ! jq -e --arg task "$task_id" --arg dispatch "$old_dispatch" --arg terminal "$old_terminal" \
+          --arg run "$run_id" --arg authority "$authority_file" --arg authority_sha "$authority_sha" \
+          '.schema == "multi-agent-orchestration.completion-authority.v1" and .state == "active"
+           and .task_id == $task and .dispatch_id == $dispatch and .terminal_handle == $terminal
+           and .run_id == $run and .authority_receipt_file == $authority
+           and .authority_receipt_sha256 == $authority_sha' \
+          "$completion_file" >/dev/null 2>&1; then
+        rm -f "$receipt_tmp"
+        echo "ERROR: existing completion authority does not match the exact replacement source" >&2
+        return 1
+      fi
+      rollback_file=$(mktemp "${completion_file}.rollback.XXXXXX") || {
+        rm -f "$receipt_tmp"
+        echo "ERROR: could not create completion authority rollback copy" >&2
+        return 1
+      }
+      if ! cp "$completion_file" "$rollback_file"; then
+        rm -f "$receipt_tmp" "$rollback_file"
+        echo "ERROR: could not preserve prior completion authority receipt" >&2
+        return 1
+      fi
+      if ! chmod 600 "$rollback_file"; then
+        rm -f "$receipt_tmp" "$rollback_file"
+        echo "ERROR: could not protect completion authority rollback copy" >&2
+        return 1
+      fi
+      if ! mv "$receipt_tmp" "$completion_file"; then
+        rm -f "$receipt_tmp" "$rollback_file"
+        echo "ERROR: could not atomically replace completion authority receipt" >&2
+        return 1
+      fi
+      ORCAREG_COMPLETION_AUTHORITY_ROLLBACK_FILE="$rollback_file"
+      ORCAREG_COMPLETION_AUTHORITY_REPLACED_FILE="$completion_file"
     else
       rm -f "$receipt_tmp"
       echo "ERROR: completion authority already exists with a different Dispatch identity" >&2
@@ -161,7 +239,12 @@ orchestration_completion_authority_write() {
     rm -f "$receipt_tmp"
   fi
 
-  receipt_sha=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$completion_file")
+  if ! receipt_sha=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$completion_file"); then
+    if ! orchestration_completion_authority_rollback; then
+      echo "ERROR: completion authority hash failed and the prior receipt could not be restored" >&2
+    fi
+    return 1
+  fi
   ORCAREG_COMPLETION_AUTHORITY_FILE="$completion_file"
   ORCAREG_COMPLETION_AUTHORITY_SHA256="$receipt_sha"
   echo "ORCAREG_COMPLETION_AUTHORITY: $completion_file sha256=$receipt_sha" >&2
