@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.27.3] - 2026-09-19
+
+### 修复
+
+- `spawn-worker.sh` 的 `--base-ref` 守卫字符类由 `[0-9a-f]` 扩为 `[0-9a-fA-F]`：大写 sha（如 `96A304DF…`）与大小写混合 sha 在任何 worktree/provider/terminal 副作用前同样以 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 拒绝并退出。事故：原守卫只匹配小写十六进制，PM 探针实证大写 sha rc=0 放行后被原样写入 `METADATA.base_ref`，重现 v2.27.1 已堵的 `pm-cleanup-worker` 死锁（`INTEGRATION_TARGET_MISMATCH` argument=main vs metadata=sha 与 `PR_BASE_MISMATCH` expected=sha vs actual=main）。
+- 第二分支「真实 ref 名放行」语义不变：`refs/heads|<value>` / `refs/remotes/<value>` / `refs/tags/<value>` 大小写敏感，分支名恰为大写 hex 形态且真实存在时（fixture `DEADBEEF2`）仍放行；该路径对应「校验」而非「拦截」。
+
+### 文档
+
+- SKILL.md §3.3 显式标注「字符类大小写敏感」与「分支名恰为大写 hex 形态且真实存在时仍放行」。
+
+### 验证
+
+- `test-spawn-worker-flags.sh` 新增三个用例：大写 40-hex（`96A304DF…`）拒绝且 rc=64 + 无 worktree/METADATA 副作用；大小写混合 40-hex（`AbCdEf…`）拒绝；临时 fixture 仓库建分支 `DEADBEEF2`（9 位大写 hex）后传该名 `--base-ref`，验证不触发 `SPAWN_WORKER_BASE_REF_MUST_BE_REF`、继续后续流程（或既有早停）。
+
 ## [2.27.2] - 2026-09-17
 
 ### 修复
