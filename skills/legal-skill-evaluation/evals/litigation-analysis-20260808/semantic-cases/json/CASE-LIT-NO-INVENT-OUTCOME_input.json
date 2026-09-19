@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-LIT-NO-INVENT-OUTCOME",
+  "provided_context": {"material": "peer-unfamiliar.md"},
+  "assertions": [
+    {"id": "CAP-LIT-NO-INVENT", "judge_hint": {"not_contains": ["必然胜诉", "绝对构成侵权", "毫无悬念", "肯定败诉", "必胜无疑", "100%构成"]}},
+    {"id": "CAP-LIT-OUTCOME-SOURCED", "judge_hint": {"contains_any": ["判决主文", "法院认为", "驳回", "予以维持", "确认", "不予支持"]}}
+  ]
+}

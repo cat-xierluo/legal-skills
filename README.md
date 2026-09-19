@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
+| 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
 | 2026-09-18 | 更新 | [moot-court](skills/moot-court/) | v1.1.0 | **自动多角色模拟庭审**：主 Agent 兼任书记员，分派法官与民事原被告／刑事控辩，通过限定材料包与正式记录完成攻防；新增标准库记录工具，支持版本化派发、同稿去重、取消重派、状态恢复和笔录生成；撤销故意弱化角色，分离案件缺口与执行失误。 |
 | 2026-09-18 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                     | v1.9.1  | **归档失败与响应交付解耦（issue #158 修复）**：归档目录不可写只降级 stderr 告警，不再吞掉已取得的 API 响应、不自动重试（杜绝误判重试重复扣积分）；新增 `--no-archive` 关闭全部本地留存（查重仍读已有归档）与 `--archive-dir`/`YD_ARCHIVE_DIR` 自定义归档目录；修正 `--no-report` 失实语义；补 4 项无网络故障注入回归。 |
 | 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4→v0.4.6 | **跨 runtime 鲁棒性 + 异步监控会话无关化 + OSS 上传代理隔离**：cryptography≤41 OpenSSL 探测死循环自动绕过；监控改 nohup 脱离会话 + 恢复接管四步（进程丢失≠任务丢失）；上传 session 默认 trust_env=False 直连国内 OSS（常驻代理掐断 771MB 上传的根治，TINGWU_OSS_USE_PROXY=1 逃生阀），yt-dlp 不受影响；：上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS——v0.4.5 只做了文档提醒，常驻 Clash 代理仍会掐断 771MB 级大文件分片上传（50% 处 ProxyError）；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复旧行为；requests 兜底 PUT 同样隔离；yt-dlp 下载不受影响。新增 5 用例代理隔离回归测试。 |
 | 2026-09-18 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.4.0  | **跨系统兼容性根修 + 两个存量 bug**：脚本去 bash4+ 依赖（关联数组→换行列表），macOS 自带 bash 3.2 开箱即用（旧版 `declare -A` 直接报错，v1.1.1 只改 shebang 未根治，`/usr/bin/env bash` 在 macOS 仍解析到 3.2）；`bc`→`awk`、`lsof` 缺失回退 `/dev/tcp`；修复重复引用图片在本地文件删除后留死链（现复用已传 URL）；修复路径含括号（如 `file (1).png`）在首个 `)` 截断解析失败。 |
 | 2026-09-18 | 更新   | [legal-ocr](skills/legal-ocr/)                                         | v1.6.0  | **本地 RapidOCR 后端**：`--backend rapid` onnx 本地推理转 Markdown（PDF 220 DPI 渲染 + 几何行排序 + CJK/数字空格与全角数字归一，段落交给既有后处理链重建）；无 API 配置且已装 RapidOCR 时 auto 优先本地识别（材料不出本机），云端失败后亦有本地兜底；顺带修复具状人/证据 N 标签被硬换行整理粘连的问题。 |
-| 2026-09-18 | 更新   | [pdf-processor](skills/pdf-processor/)                                 | v2.13.0 | **本地 RapidOCR 双层后端**：onnx 本地推理中文行级识别 + 行级坐标透明文字层，实测扫描件识别质量明显高于 tesseract；auto 与 `--local-only` 本地链升级为「RapidOCR → ocrmypdf」，敏感材料不出本机也能拿到高质量双层 PDF；preprocess 新增 RapidOCR 原图短路保留扫描分辨率。 |
 | 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |</details>
-| 2026-09-11 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.15.1 | **终稿版式与发布链加固**：逐表居中/跨页列位/语义重复表头、中文字形与出版物残码门禁；输入全消费、原子发布和 E2E 防假绿；消除附件分节、同方向书册节及尾部空段落造成的空白页，113/113 静态与三轮 21/21 家族真实渲染通过。 |
 
 ## 📋 项目概述
 
@@ -343,6 +343,24 @@
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.8.2</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/legal-visualization-0.8.2.zip">下载 v0.8.2</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/legal-skill-alignment/"><strong>legal-skill-alignment</strong></a></td>
+<td>专业·Skill开发</td>
+<td style="word-break:break-word">写法律 Skill 前的前置目标对齐：通过苏格拉底式五问（question-set/v1）把零散的法律经验、办案 SOP、咨询记录厘清为结构化 Legal Skill Brief v1，交给 skill-creator 等下游编译；含法源溯源三列、敏感材料边界与 blocker/warning 待确认清单</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v1.0.7</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/legal-skill-evaluation/"><strong>legal-skill-evaluation</strong></a></td>
+<td>专业·Skill开发</td>
+<td style="word-break:break-word">法律 Skill 分层质量评测：消费 skill-lint 通用质量结论，再用三份测试材料、通用六维度、场景微调与律师 taste 评估法律产出并定位最小修复单元；含评测包结构化契约、运行收据门禁与指令稳定性边界</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.8.12</td>
+<td></td>
 <td></td>
 </tr>
 </tbody>

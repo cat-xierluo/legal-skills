@@ -1,0 +1,8 @@
+{
+  "case_id": "CONTRACT-MICRO-REVIEWER-UNCONFIRMED",
+  "evidence": "候选在非交互环境因缺少 author 和 organization 明确阻断。",
+  "exception_type": "ValueError",
+  "message": "未检测到完整的审查人配置。请先填写 <isolated-config-root>/config/reviewer_profile.json，至少提供 author 和 organization，或在执行时显式传入 --author 与 --organization。",
+  "observed": "pass",
+  "profile_written": false
+}

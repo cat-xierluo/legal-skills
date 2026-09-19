@@ -1,0 +1,30 @@
+{
+  "fixture_base": "../evals/contract-calibration-260730/capability-suite.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": [
+        "status"
+      ],
+      "value": "verified"
+    },
+    {
+      "op": "set",
+      "path": [
+        "formal_markers"
+      ],
+      "value": [
+        "DOMAIN_VERIFIED"
+      ]
+    },
+    {
+      "op": "set",
+      "path": [
+        "domain_receipts"
+      ],
+      "value": [
+        "self-asserted"
+      ]
+    }
+  ]
+}

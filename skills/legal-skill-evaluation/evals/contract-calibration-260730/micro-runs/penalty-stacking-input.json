@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-PENALTY-STACKING",
+  "provided_context": {
+    "request": "请从甲方立场审这份服务合同。",
+    "contract_available": true,
+    "contract_excerpt": "逾期每日按合同总额 3% 支付违约金，并另行支付 20% 固定违约金，同时赔偿甲方全部损失。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

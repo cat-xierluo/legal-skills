@@ -1,0 +1,42 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": ["generic_gate", "raw_hard_findings"],
+      "value": [{"id": "ISG-001", "severity": "hard"}]
+    },
+    {
+      "op": "set",
+      "path": ["generic_gate", "finding_adjudications"],
+      "value": [
+        {
+          "finding_id": "ISG-001",
+          "disposition": "out-of-scope",
+          "reason": "本轮不处理稳定性证据。",
+          "evidence": "评测状态仍为 NOT_VERIFIED。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "path": ["generic_gate", "domain_status"],
+      "value": "DOMAIN_VERIFIED"
+    },
+    {
+      "op": "set",
+      "path": ["verdict", "recommendation"],
+      "value": "enter-workflow"
+    },
+    {
+      "op": "set",
+      "path": ["verdict", "formal_markers"],
+      "value": ["DOMAIN_VERIFIED"]
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "mutation",
+    "purpose": "范围外 finding 仍未关闭，不得支撑进入工作流",
+    "expected_failed_constraint": "EVAL-CLOSURE"
+  }
+}

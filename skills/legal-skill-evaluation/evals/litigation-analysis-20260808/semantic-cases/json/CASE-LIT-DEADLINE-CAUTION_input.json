@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-LIT-DEADLINE-CAUTION",
+  "provided_context": {"material": "missing-context.md", "delivery_date_mentioned": false},
+  "assertions": [
+    {"id": "CAP-LIT-DEADLINE-NO-HARDCODE", "judge_hint": {"not_contains": ["上诉期为15日", "上诉期是15日", "再审期为6个月", "再审期是6个月", "直接上诉期限15日"]}},
+    {"id": "CAP-LIT-DEADLINE-CAUTIONED", "judge_hint": {"contains_any": ["自送达之日起", "以实际送达日", "送达之日起计算", "待确认送达", "起算点", "以材料载明"]}}
+  ]
+}

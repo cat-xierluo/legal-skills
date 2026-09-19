@@ -52,6 +52,7 @@ templates/
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
 !skills/legal-harness-init/config/instruction-stability-contract.json
+!skills/legal-skill-evaluation/config/instruction-stability-contract.json
 !skills/video-screenshot/config/instruction-stability-contract.json
 !skills/video-screenshot/config/evidence-lead-taxonomy.json
 !skills/multi-agent-orchestration/config/harness-backend-policy.json

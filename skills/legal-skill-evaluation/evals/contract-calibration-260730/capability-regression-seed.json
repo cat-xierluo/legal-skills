@@ -1,0 +1,119 @@
+{
+  "schema_version": "seed-1",
+  "suite_id": "contract-copilot-seed-20260730",
+  "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+  "candidate_hash_scope": "git-tracked",
+  "status": "expanded-suite-linked",
+  "superseded_by": "evals/contract-calibration-260730/capability-suite.json",
+  "coverage": {
+    "case_count": 20,
+    "target_case_count": "20-50",
+    "target_completed": true,
+    "candidate_bound_case_count": 20,
+    "historical_unbound_case_count": 0,
+    "dynamically_executed_case_count": 7,
+    "prepared_not_run_case_count": 13
+  },
+  "capability_assertions": [
+    {
+      "id": "CAP-CONTRACT-001",
+      "case_id": "contract-familiar-design-current",
+      "assertion": "能识别付款先于完整成果交付、验收标准不足和交付范围模糊等核心履约风险。",
+      "evidence_status": "current-candidate",
+      "observed": "pass"
+    },
+    {
+      "id": "CAP-CONTRACT-002",
+      "case_id": "contract-familiar-design-current",
+      "assertion": "每项风险保留条款位置、原文、风险、建议文本和法律依据。",
+      "evidence_status": "current-candidate",
+      "observed": "pass"
+    },
+    {
+      "id": "CAP-CONTRACT-003",
+      "case_id": "contract-peer-patent-current",
+      "assertion": "不同 review-plan 字段版本均能完整渲染到最终报告，不得统一退化为占位符。",
+      "evidence_status": "current-candidate",
+      "observed": "fail"
+    },
+    {
+      "id": "CAP-CONTRACT-004",
+      "case_id": "contract-peer-patent-current",
+      "assertion": "执行成功状态必须由最终报告关键字段完整性复算，不采信脚本自报 applied 数量。",
+      "evidence_status": "current-candidate",
+      "observed": "fail"
+    },
+    {
+      "id": "CAP-CONTRACT-005",
+      "case_id": "contract-missing-context-current",
+      "assertion": "缺少审查立场、目标和口径时停止实质审查并请求澄清。",
+      "evidence_status": "current-candidate",
+      "observed": "pass"
+    },
+    {
+      "id": "CAP-CONTRACT-006",
+      "case_id": "contract-missing-context-current",
+      "assertion": "缺少附件时明确限制，不评价价格合理性、范围完整性或可签署性。",
+      "evidence_status": "current-candidate",
+      "observed": "pass"
+    },
+    {
+      "id": "CAP-CONTRACT-007",
+      "case_id": "contract-familiar-design-current",
+      "assertion": "正式律师署名外观必须绑定已完成人工复核的可验证状态。",
+      "evidence_status": "current-candidate",
+      "observed": "fail"
+    }
+  ],
+  "regression_assertions": [
+    {
+      "id": "REG-CONTRACT-001",
+      "failure_family": "legacy-plan-field-collapse",
+      "fixture": "contract-peer-patent-current",
+      "expected": "风险标题、位置、描述、建议和依据不得全部变为未提及/待补充。",
+      "current_status": "current-candidate-fail"
+    },
+    {
+      "id": "REG-CONTRACT-002",
+      "failure_family": "producer-self-reported-success",
+      "fixture": "contract-peer-patent-current",
+      "expected": "最终报告关键字段为空时 checker 非零退出，不得记录全部成功。",
+      "current_status": "current-candidate-fail"
+    },
+    {
+      "id": "REG-CONTRACT-003",
+      "failure_family": "missing-role-overreach",
+      "fixture": "contract-missing-context-current",
+      "expected": "party_role 为空或待确认时只输出澄清请求。",
+      "current_status": "runtime-probe-fail-agent-boundary-pass-stability-not-verified"
+    },
+    {
+      "id": "REG-CONTRACT-004",
+      "failure_family": "formal-opinion-without-review-state",
+      "fixture": "contract-familiar-design-current",
+      "expected": "待复核草稿与已复核正式意见使用机器可判状态区分。",
+      "current_status": "current-candidate-fail"
+    },
+    {
+      "id": "REG-EVAL-001",
+      "failure_family": "runtime-files-pollute-candidate-hash",
+      "fixture": "test_git_tracked_scope_ignores_untracked_runtime_files",
+      "expected": "Git 跟踪范围哈希不受 archive 和本地配置变化影响。",
+      "current_status": "pass"
+    },
+    {
+      "id": "REG-EVAL-002",
+      "failure_family": "historical-output-false-pass",
+      "fixture": "evaluation-package-unbound-false-pass.json",
+      "expected": "历史未绑定产出不得支撑 DOMAIN_VERIFIED 或 enter-workflow。",
+      "current_status": "pass"
+    },
+    {
+      "id": "REG-EVAL-003",
+      "failure_family": "out-of-scope-finding-false-pass",
+      "fixture": "evaluation-package-out-of-scope-false-pass.json",
+      "expected": "仍标为 out-of-scope 的通用 Hard Finding 不得支撑 enter-workflow。",
+      "current_status": "pass"
+    }
+  ]
+}
