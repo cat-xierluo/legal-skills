@@ -75,6 +75,23 @@ class ClerkTest(unittest.TestCase):
         submission["body"] += "更改观点"
         self.commit(submission, fails=True)
 
+    def test_history_keeps_public_context_without_private_dispatch_prompt(self):
+        packet = self.cli("dispatch", "--role", "plaintiff", "--stage", "questions",
+                          "--issue", "I-002", "--prompt", "私有调度提示：青石备忘录不可披露")
+        original = self.submission(packet)
+        seq = self.commit(original)["accepted_seq"]
+        response_packet = self.dispatch("defendant", [seq])
+        prior = response_packet["history"][0]
+        self.assertEqual(prior["context"], {"issue": "I-002", "stage": "questions"})
+        self.assertEqual(prior["speech"], original)
+        self.assertNotIn("青石", json.dumps(response_packet, ensure_ascii=False))
+        self.assertNotIn("prompt", prior["context"])
+        self.assertEqual(self.cli("packet"), response_packet)
+        self.cli("render")
+        transcript = (self.run / "transcript.md").read_text()
+        self.assertIn("争点：I-002；阶段：questions", transcript)
+        self.assertNotIn("私有调度提示", transcript)
+
     def test_wrong_envelope_rejected_without_advancing(self):
         submission = self.submission(self.dispatch())
         for field, bad in (("role", "defendant"), ("material_version", 0),
