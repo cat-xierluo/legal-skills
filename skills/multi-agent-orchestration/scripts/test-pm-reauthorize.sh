@@ -35,6 +35,8 @@
 #   O2. worker-show 不可达（状态未知）→ fail-closed 零副作用拒绝
 #   O3. 已结算目标不带 --allow-cmd 的纯快照刷新 → 同样拒绝
 #   Q.  原始 PM authority receipt 缺失 → 在任何 Orca/授权/终端副作用前拒绝
+#   R.  replacement receipt 已旋转但 METADATA 原子写回失败 → 恢复旧 receipt，
+#       回滚新终端，旧 worker 的完成权限保持有效
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -43,6 +45,8 @@ TMP_ROOT=$(mktemp -d)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 DEBUG_RC="${DEBUG_RC:-0}" # 置 1 时打印每次 run_reauth 的 rc 与完整输出（调试用）
+REAL_MV=$(command -v mv)
+export REAL_MV
 
 pass=0
 fail=0
@@ -610,6 +614,48 @@ check "METADATA 未改" cmp -s "$TMP_ROOT/Q-metadata-before.json" "$METADATA"
 check "零 Orca 调用" test ! -s "$FAKE_ORCA_LOG"
 check_not "零新终端创建" test "$(cat "$SD/terminal-create.count" 2>/dev/null || echo 0)" != "0"
 assert "旧终端保留且唯一" 'live_is_solely term-old'
+
+echo "Case R: replacement receipt 后 METADATA 写回失败 → receipt/路由/活终端一并回滚"
+make_fixture R
+printf 'failed\n' > "$SD/task-status"
+printf 'task_not_startable\n' > "$SD/worker-start-result"
+run_reauth --allow-cmd "cmd-r1"
+check "基线重授权成功" test "$RC" -eq 0
+completion_file=$(jq -r '.execution_authority.completion_authority_file' "$METADATA")
+cp "$completion_file" "$TMP_ROOT/R-completion-before.json"
+cp "$METADATA" "$TMP_ROOT/R-metadata-before.json"
+fail_mv_bin="$TMP_ROOT/fail-metadata-mv-bin"
+mkdir -p "$fail_mv_bin"
+export FAIL_METADATA_PATH="$METADATA"
+cat > "$fail_mv_bin/mv" <<'FAKE_MV'
+#!/usr/bin/env bash
+set -euo pipefail
+last=""
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$FAIL_METADATA_PATH" ]; then
+  echo "INJECTED_METADATA_MV_FAILURE: $last" >&2
+  exit 91
+fi
+exec "$REAL_MV" "$@"
+FAKE_MV
+chmod +x "$fail_mv_bin/mv"
+PATH="$fail_mv_bin:$PATH" run_reauth --allow-cmd "cmd-r2"
+check "元数据故障导致重授权失败" test "$RC" -ne 0
+check "输出含元数据写回失败诊断" grep -q "ORCAREG_METADATA_WRITE_FAILED" <<<"$OUT"
+check "输出确认旧 completion receipt 已恢复" grep -q "ORCAREG_COMPLETION_AUTHORITY_ROLLED_BACK" <<<"$OUT"
+check "METADATA 完整恢复到旧路由" cmp -s "$TMP_ROOT/R-metadata-before.json" "$METADATA"
+check "completion receipt 完整恢复旧授权" cmp -s "$TMP_ROOT/R-completion-before.json" "$completion_file"
+check "恢复后 receipt SHA 仍匹配 METADATA" test \
+  "$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$completion_file")" = \
+  "$(jq -r '.execution_authority.completion_authority_sha256' "$METADATA")"
+if find "$(dirname "$completion_file")" -maxdepth 1 -name "$(basename "$completion_file").rollback.*" -print -quit | grep -q .; then
+  bad "无遗留 completion rollback 临时文件"
+else
+  ok "无遗留 completion rollback 临时文件"
+fi
+check "失败的新终端已关闭" grep -qx "term-new-2" "$SD/terminals.closed"
+assert "旧 worker 终端仍是唯一活终端" 'live_is_solely term-new-1'
+check "METADATA 仍指向旧 worker 终端" test "$(jq -r '.session.orca.terminal_handle' "$METADATA")" = "term-new-1"
 
 echo ""
 echo "Result: $pass pass, $fail fail"

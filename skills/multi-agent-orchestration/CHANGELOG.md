@@ -8,7 +8,7 @@
 - 修复 Hermes backend 策略测试同类变量插值问题，并把“当前进程祖先链无法完整证明”（rc=67）明确作为环境探针跳过条件；生产门禁仍按原合同 fail-closed。
 - 修复旧通用 backend-policy 测试对宿主进程命名空间的隐式依赖：保留所有可读真实帧，只在测试夹具内把不可见的最外层边界补为中性 shell，使具名祖先链正反例在容器/CI 中可重复；生产检测逻辑不变。
 - 修复内存预算显式 opt-out 的顺序错误：`SPAWN_WORKER_MEM_BUDGET_BYTES=0` 现在即使宿主遥测在沙箱/CI 中全部不可读也稳定返回 `disabled`，可读数据仍按最佳努力保留；默认非零预算继续对不可探测环境 fail-closed。
-- 修复 `pm-orchestrate reauthorize` 未跟进 completion authority receipt 契约的回归：重授权现在从 Git common-dir 推导原始回执，交叉核对 session/worktree/branch/runtime 与受信 METADATA，在任何新终端副作用前拒绝缺失或漂移身份；register 只在该受限替换路径内轮换 terminal/Dispatch/completion receipt，普通注册仍禁止用可写 metadata 换权威。
+- 修复 `pm-orchestrate reauthorize` 未跟进 completion authority receipt 契约的回归：重授权现在从 Git common-dir 推导原始回执，交叉核对 session/worktree/branch/runtime 与受信 METADATA，在任何新终端副作用前拒绝缺失或漂移身份；register 只在该受限替换路径内轮换 terminal/Dispatch/completion receipt，普通注册仍禁止用可写 metadata 换权威。receipt 替换与 METADATA 写回组成有补偿回滚的事务：后者失败时恢复旧 receipt，再由 PM 回收新终端，避免仍存活的旧 Worker 被意外剥夺完成权限。
 - 维护测试不再把受限 sandbox 的宿主遥测缺失误报为功能回归：真实机器 smoke 在可探测时验证额度，在不可探测时验证稳定 `unprobeable`、无 `slots` 的 fail-closed 合同。
 - 为启动、依赖安装、provider lease 与 Worker prompt 回归补齐测试私有的进程/tmux 夹具，使其只验证各自合同，不依赖当前宿主命名空间或用户 tmux server；两个真实 tmux smoke 都改用独立 socket，在 sandbox 明确禁止创建时报告环境跳过，并严格检查私有资源清理错误，而不是吞掉退出码或伪造通过。
 - 将 Hermes 专项 `scripts/tests/test-harness-backend-policy.sh` 纳入维护者完整验证矩阵，避免只运行旧的通用策略测试而漏掉宿主签名回归。
@@ -21,7 +21,7 @@
 
 ### 验证
 
-- 维护者确定性矩阵连续运行至 `autopilot facts 21/21` 全部通过；重授权专项为 `176 pass / 0 fail`，内存预算为 `58 pass / 0 fail`，依赖安装门禁为 `129 pass / 0 fail`，Hermes 专项为 `23 pass / 0 fail / 1 environment skip`。
+- 维护者确定性矩阵连续运行至 `autopilot facts 21/21` 全部通过；重授权专项为 `193 pass / 0 fail`（含 receipt 已替换而 METADATA 写回失败的故障注入与旧权限恢复），内存预算为 `58 pass / 0 fail`，依赖安装门禁为 `129 pass / 0 fail`，Hermes 专项为 `23 pass / 0 fail / 1 environment skip`。
 - `quick_validate.py` 通过；Harness Failure Audit 为 `PASS`；Security Scan 为 `0 critical / 0 high`，其余命中为既有测试攻击样例、受控子进程/文件访问等审计项。
 - `smoke-orca-control-plane.sh` 通过；真实 tmux 两个 smoke 因 sandbox 禁止隔离 socket 明确跳过，真实 Orca worker smoke 因当前 runtime 缺 `terminal.multiplex.v1` 以 rc=77 跳过。真实 provider 全生命周期与全 Skill instruction stability 仍为 `NOT_VERIFIED`，不得据此扩张结论。
 

@@ -208,6 +208,9 @@ PY
     fi
   fi
   tmp_meta=$(mktemp "${candidate}.tmp.XXXXXX") || {
+    if ! orchestration_completion_authority_rollback; then
+      echo "ORCAREG_METADATA_ROLLBACK_FAILED: prior completion authority may require manual restoration" >&2
+    fi
     echo "ORCAREG_METADATA_WRITE_FAILED: 无法创建同目录临时文件；worker 已注册，请按 runbook 手工补写" >&2
     return "$metadata_required"
   }
@@ -223,9 +226,13 @@ PY
          | .execution_authority.completion_authority_sha256 = $completion_sha
        else . end' \
     "$candidate" > "$tmp_meta" && mv "$tmp_meta" "$candidate"; then
+    orchestration_completion_authority_commit
     ORCAREG_METADATA_BIND="ok"
     echo "ORCAREG_METADATA_UPDATED: $candidate" >&2
   else
+    if ! orchestration_completion_authority_rollback; then
+      echo "ORCAREG_METADATA_ROLLBACK_FAILED: prior completion authority may require manual restoration" >&2
+    fi
     rm -f "$tmp_meta"
     echo "ORCAREG_METADATA_WRITE_FAILED: worker 已注册但 METADATA 原子写回失败，请按 runbook 手工补写" >&2
     return "$metadata_required"
