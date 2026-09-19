@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-NOTICE",
+  "provided_context": {
+    "request": "请审核这份供应合同。",
+    "contract_available": true,
+    "contract_excerpt": "任何一方通知以书面文件为准；电子邮件发出即视为对方认可；地址变更另行通知。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

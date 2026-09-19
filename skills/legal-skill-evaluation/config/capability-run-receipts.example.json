@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "example-capability-suite",
+  "candidate": {
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash_scope": "git-tracked"
+  },
+  "evidence_policy": {
+    "real_case_raw_outputs_stored": false,
+    "synthetic_probe_artifacts_stored": true,
+    "configuration_isolated": true
+  },
+  "runs": [
+    {
+      "id": "example-run",
+      "case_id": "EXAMPLE-CASE",
+      "candidate_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "input_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "output_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "evaluator-side-runner",
+        "command": "python3 evaluator_probe.py --case EXAMPLE-CASE",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "EXAMPLE-ASSERTION",
+          "observed": "fail",
+          "evidence": "描述从真实输出观察到的可复查缺陷。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/example/input.json",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "role": "output",
+          "path": "evals/example/output.json",
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ]
+    }
+  ]
+}

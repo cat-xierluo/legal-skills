@@ -1,0 +1,40 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": ["cases", 0, "candidate_binding"],
+      "value": "historical-unbound"
+    },
+    {
+      "op": "remove",
+      "path": ["cases", 0, "candidate_sha256"]
+    },
+    {
+      "op": "set",
+      "path": ["cases", 0, "historical_candidate_ref"],
+      "value": "历史归档未记录候选清单哈希"
+    },
+    {
+      "op": "set",
+      "path": ["generic_gate", "domain_status"],
+      "value": "DOMAIN_VERIFIED"
+    },
+    {
+      "op": "set",
+      "path": ["verdict", "recommendation"],
+      "value": "enter-workflow"
+    },
+    {
+      "op": "set",
+      "path": ["verdict", "formal_markers"],
+      "value": ["DOMAIN_VERIFIED"]
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "historical-failure",
+    "historical_failure_known": true,
+    "purpose": "历史未绑定产出不得冒充当前候选领域验收通过",
+    "expected_failed_constraint": "EVAL-CLOSURE"
+  }
+}
