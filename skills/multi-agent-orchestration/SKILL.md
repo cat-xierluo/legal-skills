@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.27.3"
+  version: "2.27.4"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -194,7 +194,7 @@ Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分�
 
 默认优先与 PM 同宿主，只有额度、模型能力或用户明确要求时跨工具。个人偏好写入 ignored 的 `config/orchestration-personal.json`，项目策略写入 `.claude/orchestration.config.json`；个人配置只能在 harness 白名单内选择 backend。
 
-启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。sub2api 网关的四条积分 lane（qwenworkai / lobsterai / autoclaw / codebuddy）可用 `scripts/quota_summary_sub2api.py` 从网关 `/ui/api/quota` 聚合端点拉取合并写入（只更新这四条 lane、其余 lane 原样保留；qw 每日 100 当日过期、lobster campaign 分项临期 → lane 记录带 `remaining_total` / `credit_items`，PM 派简单批量任务前先看临期分项，把当日过期积分在过期前吃掉），数据流与 lane 定义读取 `references/24-sub2api-quota-producer.md`。
+启用 `quota_aware_routing` 时，派单前必须用新鲜 summary 运行 `route_suggest.py`；summary 缺失、过期、lane 低于判停线、provider 不健康或未映射时，`quota_preflight.py` 在任何副作用前拒绝。显式 override 必须携带授权来源并写入 receipt。额度只为已经通过价值门的任务选路，不能生成 quota-burn 工作。模型与 lane 判断读取 `references/01-model-selection-matrix.md` 和 `references/17-model-capability-profile.md`。summary 合同的生产方不限；zcode lane 可用 `scripts/quota_summary_zcode.py` 把本机 zcode-quota 监测器的真实观测合并写入 summary（只更新 zcode lane、不改写其他 lane 的 generated_at，不接触凭证），数据流与合并语义读取 `references/21-zcode-quota-producer.md`。ZCode CLI driver 的启动绑定、配置隔离和证据边界读取 `references/24-zcode-driver-safety.md`。sub2api 网关的四条积分 lane（qwenworkai / lobsterai / autoclaw / codebuddy）可用 `scripts/quota_summary_sub2api.py` 从网关 `/ui/api/quota` 聚合端点拉取合并写入（只更新这四条 lane、其余 lane 原样保留；qw 每日 100 当日过期、lobster campaign 分项临期 → lane 记录带 `remaining_total` / `credit_items`，PM 派简单批量任务前先看临期分项，把当日过期积分在过期前吃掉），数据流与 lane 定义读取 `references/24-sub2api-quota-producer.md`。
 
 系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI。检查命令：
 
@@ -215,6 +215,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
 | Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
 | zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
+| ZCode CLI driver 的启动绑定、配置隔离与安全验证 | `references/24-zcode-driver-safety.md` |
 | sub2api 四条积分 lane（qw/lobster/autoclaw/codebuddy）的生产链路与临期调度 | `references/24-sub2api-quota-producer.md` |
 | 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |

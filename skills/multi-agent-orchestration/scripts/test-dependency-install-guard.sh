@@ -10,6 +10,57 @@ tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/dependency-install-guard.XXXXXX")
 tmp_root=$(cd "$tmp_root" && pwd -P)
 trap 'rm -rf "$tmp_root"' EXIT
 
+# This suite tests dependency/install authority, not the caller's process
+# namespace or host memory telemetry. Pin those independent entry gates to
+# deterministic, least-privilege fixtures so sandbox-hidden ancestors and
+# unreadable host counters cannot mask the assertions below.
+test_bin="$tmp_root/test-bin"
+mkdir -p "$test_bin"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'case "${4:-}" in' \
+  '  ppid=) printf "1\n" ;;' \
+  '  comm=|args=) printf "/opt/codex\n" ;;' \
+  '  *) exit 1 ;;' \
+  'esac' \
+  > "$test_bin/ps"
+tmux_state="$tmp_root/tmux-state"
+mkdir -p "$tmux_state"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  "state_root=$(printf '%q' "$tmux_state")" \
+  'case "${1:-}" in' \
+  '  has-session)' \
+  '    session=""; while [ "$#" -gt 0 ]; do [ "$1" != "-t" ] || { session="$2"; break; }; shift; done' \
+  '    [ -f "$state_root/$session" ] ;;' \
+  '  kill-session)' \
+  '    session=""; while [ "$#" -gt 0 ]; do [ "$1" != "-t" ] || { session="$2"; break; }; shift; done' \
+  '    rm -f "$state_root/$session"; exit 0 ;;' \
+  '  display-message)' \
+  '    session=""; while [ "$#" -gt 0 ]; do [ "$1" != "-t" ] || { session="$2"; break; }; shift; done' \
+  '    cat "$state_root/$session" ;;' \
+  '  new-session)' \
+  '    shift' \
+  '    cwd=""; session=""' \
+  '    while [ "$#" -gt 0 ]; do' \
+  '      case "$1" in' \
+  '        -d) shift ;;' \
+  '        -s) session="$2"; shift 2 ;;' \
+  '        -c) cwd="$2"; shift 2 ;;' \
+  '        *) break ;;' \
+  '      esac' \
+  '    done' \
+  '    printf "%s\n" "$cwd" > "$state_root/$session"' \
+  '    (cd "$cwd" && bash -c "$*") >/dev/null 2>&1 &' \
+  '    sleep 0.3' \
+  '    exit 0 ;;' \
+  '  *) exit 1 ;;' \
+  'esac' \
+  > "$test_bin/tmux"
+chmod +x "$test_bin/ps" "$test_bin/tmux"
+export PATH="$test_bin:$PATH"
+export SPAWN_WORKER_MEM_BUDGET_BYTES=0
+
 # 隔离安装门禁测试与开发者本地的额度路由配置。否则真实
 # orchestration-personal.json 的过期 summary 会让 quota preflight 在被测
 # install/shell guard 之前拒绝 spawn，导致测试结果随运行机器漂移。

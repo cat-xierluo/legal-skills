@@ -60,9 +60,10 @@ orchestration_completion_authority_write() {
   local run_id="$4"
   local metadata_file="$5"
   local expected_authority_file="${6:-}"
+  local allow_replace="${7:-0}"
   local authority_file completion_file show_out
   local actual_task actual_dispatch actual_terminal actual_run capability_hash process_incarnation runtime_id authority_sha
-  local created_at receipt_tmp receipt_sha
+  local created_at receipt_tmp receipt_sha old_dispatch old_terminal
 
   ORCAREG_COMPLETION_AUTHORITY_FILE=""
   ORCAREG_COMPLETION_AUTHORITY_SHA256=""
@@ -148,6 +149,22 @@ orchestration_completion_authority_write() {
        and .runtime_id == $runtime and .authority_receipt_file == $authority and .authority_receipt_sha256 == $authority_sha' \
       "$completion_file" >/dev/null 2>&1; then
       rm -f "$receipt_tmp"
+    elif [ "$allow_replace" = "1" ]; then
+      old_dispatch=$(jq -r '.session.orca.supervised.dispatch_id // empty' "$metadata_file")
+      old_terminal=$(jq -r '.session.orca.terminal_handle // empty' "$metadata_file")
+      if [ -z "$old_dispatch" ] || [ -z "$old_terminal" ] || \
+        ! jq -e --arg task "$task_id" --arg dispatch "$old_dispatch" --arg terminal "$old_terminal" \
+          --arg run "$run_id" --arg authority "$authority_file" --arg authority_sha "$authority_sha" \
+          '.schema == "multi-agent-orchestration.completion-authority.v1" and .state == "active"
+           and .task_id == $task and .dispatch_id == $dispatch and .terminal_handle == $terminal
+           and .run_id == $run and .authority_receipt_file == $authority
+           and .authority_receipt_sha256 == $authority_sha' \
+          "$completion_file" >/dev/null 2>&1; then
+        rm -f "$receipt_tmp"
+        echo "ERROR: existing completion authority does not match the exact replacement source" >&2
+        return 1
+      fi
+      mv "$receipt_tmp" "$completion_file"
     else
       rm -f "$receipt_tmp"
       echo "ERROR: completion authority already exists with a different Dispatch identity" >&2

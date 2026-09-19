@@ -34,7 +34,7 @@ tighten          = normal 1.0 | warn 0.5 | critical 0.0
 slots            = floor(safe_available × tighten / budget_bytes)
 ```
 
-- per-worker 预算默认 3 GiB：agent 本体（约 1.2 GiB）+ 测试/构建余量（约 2 GiB），与 v2.20.0 `--max-old-space-size=2048` 堆顶量级对齐。`SPAWN_WORKER_MEM_BUDGET_BYTES` 调整（十进制字节数；`--budget` 可临时覆盖，优先级 flag > env > 默认），非法值 exit 1；`=0` 显式关闭整道门（探测数据照常输出，slots 为 null）。
+- per-worker 预算默认 3 GiB：agent 本体（约 1.2 GiB）+ 测试/构建余量（约 2 GiB），与 v2.20.0 `--max-old-space-size=2048` 堆顶量级对齐。`SPAWN_WORKER_MEM_BUDGET_BYTES` 调整（十进制字节数；`--budget` 可临时覆盖，优先级 flag > env > 默认），非法值 exit 1；`=0` 显式关闭整道门（`slots=null`，宿主探测数据仅按最佳努力保留，全部不可读也不得把显式 opt-out 变回硬失败）。
 - 压力分级取各信号最坏值：memory_pressure 关键词（`critical` / `increasing pressure` / `sufficient space`；无关键词但有官方可用百分比时按 ≤5% critical、≤15% warn 推导）与 swap used 比例（≥0.95 critical、≥0.75 warn）。warn 把可承诺额度折半，critical 直接 slots=0。
 - vm_stat 的 Swapins/Swapouts 是开机累计计数、不是瞬时压力，不参与判定。
 - available 计入 inactive 页：可回收但可能触发换出 I/O；保留底仓 + 压力收紧覆盖尾部风险，换取正常负载下的合理吞吐。

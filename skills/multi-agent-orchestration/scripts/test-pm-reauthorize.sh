@@ -34,6 +34,7 @@
 #   O.  acked（released_retained）→ 同 J 拒绝
 #   O2. worker-show 不可达（状态未知）→ fail-closed 零副作用拒绝
 #   O3. 已结算目标不带 --allow-cmd 的纯快照刷新 → 同样拒绝
+#   Q.  原始 PM authority receipt 缺失 → 在任何 Orca/授权/终端副作用前拒绝
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -162,6 +163,13 @@ case "$1 $2" in
     echo '{"ok":true,"result":{}}'
     ;;
   "orchestration worker-start")
+    worker_terminal=""
+    worker_args=("$@")
+    for ((i=0; i<${#worker_args[@]}; i++)); do
+      if [ "${worker_args[$i]}" = "--terminal" ] && [ $((i + 1)) -lt "${#worker_args[@]}" ]; then
+        worker_terminal="${worker_args[$((i + 1))]}"
+      fi
+    done
     mode=$(cat "$S/worker-start-result" 2>/dev/null) || mode="ok"
     # task_not_startable 一次性：模拟真实 Orca——task-update 复位 ready 后重试即成功。
     # TASK_REUSED 保持粘滞：活 Dispatch 存续期间重复注册必被单活 fencing 拒绝。
@@ -177,6 +185,7 @@ case "$1 $2" in
     fi
     case "$mode" in
       ok)
+        printf '%s\n' "$worker_terminal" > "$S/last-worker-terminal.txt"
         echo '{"ok":true,"result":{"dispatch":{"id":"ctx-new-1"}}}
 '
         ;;
@@ -210,8 +219,9 @@ case "$1 $2" in
     fi
     ;;
   "orchestration dispatch-show")
-    echo '{"ok":true,"result":{"dispatch":{"id":"ctx-new-1"}}}
-'
+    worker_terminal=$(cat "$S/last-worker-terminal.txt" 2>/dev/null) || worker_terminal="term-new-1"
+    jq -cn --arg terminal "$worker_terminal" \
+      '{ok:true,_meta:{runtimeId:"runtime-test"},result:{dispatch:{id:"ctx-new-1",task_id:"task-1",assignee_handle:$terminal,run_id:"run-r",capability_hash:("a" * 64),process_incarnation:"proc-1"}}}'
     ;;
   "orchestration task-update")
     echo 1 >> "$S/task-update.count"
@@ -269,7 +279,7 @@ export ORCA_CLI_COMMAND="$FAKE"
 # make_fixture <case>: 建独立 git repo+worktree+METADATA+Session Context，
 # 并把 fake 状态目录指向本 case；产出全局 WT/SESSION/METADATA/SC/SD。
 make_fixture() {
-  local case_name="$1" base
+  local case_name="$1" base git_common authority
   base="$TMP_ROOT/$case_name"
   REPO="$base/repo"
   WT="$base/wt"
@@ -288,8 +298,17 @@ make_fixture() {
     git -C "$REPO" commit -q -m base
   git -C "$REPO" worktree add -q -b "b-$case_name" "$WT"
   mkdir -p "$SC"
-  jq -n --arg project "$REPO" --arg worktree "$WT" --arg session "$SESSION" \
-    '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-test",worktree_id:"repo::worker",terminal_handle:"term-old",supervised:{run_id:"run-r",coordinator_handle:"term-pm",task_id:"task-1",dispatch_id:"ctx-old"}}},runtime:{provider_lease:{file:""}}}' \
+  git_common=$(git -C "$WT" rev-parse --git-common-dir)
+  case "$git_common" in /*) ;; *) git_common="$WT/$git_common" ;; esac
+  git_common=$(cd "$git_common" && pwd -P)
+  authority="$git_common/agent-authority/$SESSION.json"
+  mkdir -p "$(dirname "$authority")"
+  jq -n --arg session "$SESSION" --arg worktree "$WT" --arg branch "b-$case_name" \
+    '{schema:"multi-agent-orchestration.authority-receipt.v1",session:$session,worktree:$worktree,branch:$branch}' \
+    > "$authority"
+  chmod 600 "$authority"
+  jq -n --arg project "$REPO" --arg worktree "$WT" --arg session "$SESSION" --arg authority "$authority" \
+    '{project:$project,worktree:$worktree,session:{id:$session,orca:{runtime_id:"runtime-test",worktree_id:"repo::worker",terminal_handle:"term-old",supervised:{run_id:"run-r",coordinator_handle:"term-pm",task_id:"task-1",dispatch_id:"ctx-old"}}},runtime:{provider_lease:{file:""}},execution_authority:{authority_receipt_file:$authority}}' \
     > "$METADATA"
   printf '{"allowed_shell_commands":["cmd-old"],"version":1}\n' > "$SC/INSTALL_AUTHORIZATION.json"
   local b64
@@ -302,7 +321,7 @@ make_fixture() {
   : > "$FAKE_ORCA_LOG"
   rm -f "$SD/terminals.live" "$SD/terminals.closed" "$SD/task-update.count" \
         "$SD/terminal-create.count" "$SD/last-reply-body.txt" "$SD/last-reply-id.txt" \
-        "$SD/last-terminal-send.txt" "$SD/terminal-create-fail" "$SD/task-list-unavailable" \
+        "$SD/last-terminal-send.txt" "$SD/last-worker-terminal.txt" "$SD/terminal-create-fail" "$SD/task-list-unavailable" \
         "$SD/task-status" "$SD/task-status-next" "$SD/worker-start-result" "$SD/pending-message.json" \
         "$SD/dispatch-settled" "$SD/dispatch-released" "$SD/dispatch-acked" \
         "$SD/worker-show-unavailable"
@@ -574,6 +593,23 @@ fake_rc=0
 "$FAKE" orchestration check --from term-pm --json > "$TMP_ROOT/argv-error" 2>&1 || fake_rc=$?
 check "错误 check selector 被拒绝" test "$fake_rc" -eq 64
 check "精确 argv 拒绝诊断" grep -q '^FAKE_ORCA_UNSUPPORTED_ARGV:' "$TMP_ROOT/argv-error"
+
+echo "Case Q: 原始 PM authority receipt 缺失 → mutation 前 fail-closed"
+make_fixture Q
+authority_file=$(jq -r '.execution_authority.authority_receipt_file' "$METADATA")
+mv "$authority_file" "$authority_file.missing"
+cp "$SC/INSTALL_AUTHORIZATION.json" "$TMP_ROOT/Q-auth-before.json"
+cp "$SC/launch.sh" "$TMP_ROOT/Q-launch-before.sh"
+cp "$METADATA" "$TMP_ROOT/Q-metadata-before.json"
+run_reauth --allow-cmd "cmd-q"
+check "退出码非 0" test "$RC" -ne 0
+check "输出含 authority fail-closed 诊断" grep -q "PM_REAUTHORIZE_AUTHORITY_INVALID" <<<"$OUT"
+check "授权文件未改" cmp -s "$TMP_ROOT/Q-auth-before.json" "$SC/INSTALL_AUTHORIZATION.json"
+check "launch.sh 未改" cmp -s "$TMP_ROOT/Q-launch-before.sh" "$SC/launch.sh"
+check "METADATA 未改" cmp -s "$TMP_ROOT/Q-metadata-before.json" "$METADATA"
+check "零 Orca 调用" test ! -s "$FAKE_ORCA_LOG"
+check_not "零新终端创建" test "$(cat "$SD/terminal-create.count" 2>/dev/null || echo 0)" != "0"
+assert "旧终端保留且唯一" 'live_is_solely term-old'
 
 echo ""
 echo "Result: $pass pass, $fail fail"

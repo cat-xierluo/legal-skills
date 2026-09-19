@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-20 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.4 | **维护上下文与回归收口**：任务/决策源改为随 Skill 跟踪，合并状态、依赖和接手合同不再只留在单一会话；修复 reauthorize 授权回执兼容、全角括号邻接变量与内存预算 opt-out 回归；补齐隔离测试和 Orca/ZCode 读取路由。 |
 | 2026-09-20 | 更新 | [moot-court](skills/moot-court/) | v1.2.1 | **Runtime 分级验证门禁**：按命令入口、模型、子任务、落盘、四发言短闭环和完整民事流程逐级验收；Claude Code短闭环实测通过但有语义发现，完整候选仍待验证；WorkBuddy、千问办公等办公类Agent列入后续实测。 |
 | 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
 | 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
@@ -41,7 +42,7 @@
 | 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4→v0.4.6 | **跨 runtime 鲁棒性 + 异步监控会话无关化 + OSS 上传代理隔离**：cryptography≤41 OpenSSL 探测死循环自动绕过；监控改 nohup 脱离会话 + 恢复接管四步（进程丢失≠任务丢失）；上传 session 默认 trust_env=False 直连国内 OSS（常驻代理掐断 771MB 上传的根治，TINGWU_OSS_USE_PROXY=1 逃生阀），yt-dlp 不受影响；：上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS——v0.4.5 只做了文档提醒，常驻 Clash 代理仍会掐断 771MB 级大文件分片上传（50% 处 ProxyError）；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复旧行为；requests 兜底 PUT 同样隔离；yt-dlp 下载不受影响。新增 5 用例代理隔离回归测试。 |
 | 2026-09-18 | 更新   | [piclist-upload](skills/piclist-upload/)                               | v1.4.0  | **跨系统兼容性根修 + 两个存量 bug**：脚本去 bash4+ 依赖（关联数组→换行列表），macOS 自带 bash 3.2 开箱即用（旧版 `declare -A` 直接报错，v1.1.1 只改 shebang 未根治，`/usr/bin/env bash` 在 macOS 仍解析到 3.2）；`bc`→`awk`、`lsof` 缺失回退 `/dev/tcp`；修复重复引用图片在本地文件删除后留死链（现复用已传 URL）；修复路径含括号（如 `file (1).png`）在首个 `)` 截断解析失败。 |
 | 2026-09-18 | 更新   | [legal-ocr](skills/legal-ocr/)                                         | v1.6.0  | **本地 RapidOCR 后端**：`--backend rapid` onnx 本地推理转 Markdown（PDF 220 DPI 渲染 + 几何行排序 + CJK/数字空格与全角数字归一，段落交给既有后处理链重建）；无 API 配置且已装 RapidOCR 时 auto 优先本地识别（材料不出本机），云端失败后亦有本地兜底；顺带修复具状人/证据 N 标签被硬换行整理粘连的问题。 |
-| 2026-09-16 | 更新   | [skill-lint](skills/skill-lint/)                                       | v2.9.0  | **Skill 间合并/去重判定规则**：新增 `references/skill-merge-standards.md`——四判据（触发重叠率/内容重复率/体量差/边界可声明性）+ 五档处置判定表（合并/降级为 reference/加边界声明/拆分重构/保留独立）+ 反例库；判定不确定时保守排序固定为保留独立 > 加边界声明 > 降级 > 合并（Task-031，PR #164）。 |</details>
+</details>
 
 ## 📋 项目概述
 
@@ -653,7 +654,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.24.0</td>
+<td style="text-align:center">v2.27.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.08.06/multi-agent-orchestration-1.20.5.zip">下载 v1.20.5</a></td>
 <td></td>
 </tr>
