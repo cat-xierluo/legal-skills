@@ -9,11 +9,12 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-from completion_authority import load_completion, live_dispatch_matches
+from completion_authority import load_authority, load_completion, live_dispatch_matches
 
 
 SEGMENT = (
@@ -69,7 +70,9 @@ def deny(code: str, reason: str) -> None:
     print(json.dumps({"hookSpecificOutput": hook_output}, ensure_ascii=False))
 
 
-def load_authorization(path_text: str, encoded_text: str) -> tuple[str, set[str], set[str]]:
+def load_authorization(
+    path_text: str, encoded_text: str
+) -> tuple[str, set[str], set[str], tuple[str, ...]]:
     try:
         if encoded_text:
             raw = base64.b64decode(encoded_text, validate=True).decode("utf-8")
@@ -92,17 +95,28 @@ def load_authorization(path_text: str, encoded_text: str) -> tuple[str, set[str]
     source = data.get("authorization_source", "")
     commands = data.get("authorized_commands", [])
     allowed_shell = data.get("allowed_shell_commands", [])
-    if not isinstance(source, str) or not isinstance(commands, list) or not isinstance(allowed_shell, list):
-        raise ValueError("authorization_source/authorized_commands/allowed_shell_commands 类型错误")
+    allowed_write_paths = data.get("allowed_write_paths", [])
+    if (
+        not isinstance(source, str)
+        or not isinstance(commands, list)
+        or not isinstance(allowed_shell, list)
+        or not isinstance(allowed_write_paths, list)
+    ):
+        raise ValueError(
+            "authorization_source/authorized_commands/allowed_shell_commands/"
+            "allowed_write_paths 类型错误"
+        )
     if any(not isinstance(item, str) or not item.strip() for item in commands):
         raise ValueError("authorized_commands 只能包含非空字符串")
     if any(not isinstance(item, str) or not item.strip() for item in allowed_shell):
         raise ValueError("allowed_shell_commands 只能包含非空字符串")
+    if any(not isinstance(item, str) or not item.strip() for item in allowed_write_paths):
+        raise ValueError("allowed_write_paths 只能包含非空字符串")
     normalized = {item.strip() for item in commands}
     normalized_shell = {item.strip() for item in allowed_shell}
     if normalized and not source.strip():
         raise ValueError("存在授权命令但缺少可审计 authorization_source")
-    return source.strip(), normalized, normalized_shell
+    return source.strip(), normalized, normalized_shell, tuple(allowed_write_paths)
 
 
 def strip_heredoc_bodies(command: str) -> str:
@@ -266,6 +280,10 @@ def _is_safe_gh_args(args: list[str]) -> bool:
 def _tokenize_worker_command(command: str) -> list[str] | None:
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>()")
+        # POSIX shells only start a comment when `#` begins a word; shlex's
+        # default commenters would truncate `tracked#name` and let the guard
+        # authorize a different path from the one git actually receives.
+        lexer.commenters = ""
         lexer.whitespace_split = True
         return list(lexer)
     except ValueError:
@@ -380,6 +398,198 @@ def is_safe_lifecycle_command(command: str) -> bool:
         if not _is_safe_worker_segment(segment):
             return False
     return True
+
+
+GIT_RM_PATH_FORBIDDEN_CHARS = frozenset("*?[]{}$~`")
+GIT_RM_TRACKED_MODES = {"100644", "100755", "120000"}
+
+
+def _segment_invokes_git_rm(tokens: list[str]) -> bool:
+    """Recognize git-rm intent broadly so exact Shell grants cannot bypass it."""
+    if not tokens:
+        return False
+    for index, token in enumerate(tokens):
+        if os.path.basename(token) != "git":
+            continue
+        if any(
+            candidate.lower().startswith("git_config_key_")
+            and "=alias." in candidate.lower()
+            for candidate in tokens[:index]
+        ) or any(
+            candidate.lower().startswith("git_config_parameters=")
+            and "alias." in candidate.lower()
+            for candidate in tokens[:index]
+        ):
+            return True
+        # `git -C <dir> rm`, absolute git binaries and prefixed/compound forms
+        # are intentionally recognized here, then rejected by the exact parser.
+        for candidate in tokens[index + 1:]:
+            if candidate in SEGMENT_SEPARATORS or candidate in DENIED_PUNCTUATION:
+                break
+            if candidate == "rm":
+                return True
+            alias_candidate = candidate[2:] if candidate.startswith("-c") else candidate
+            if re.fullmatch(
+                r"alias\.[^=]+=(?:!.*\b)?rm(?:\s.*)?",
+                alias_candidate,
+                flags=re.IGNORECASE,
+            ):
+                return True
+            if candidate.lower().startswith("--config-env=alias."):
+                return True
+        for option_index, candidate in enumerate(tokens[index + 1:], start=index + 1):
+            if candidate == "--config-env" and option_index + 1 < len(tokens):
+                if tokens[option_index + 1].lower().startswith("alias."):
+                    return True
+        return False
+    return False
+
+
+def _looks_like_git_rm(command: str, depth: int = 0) -> bool:
+    # Dynamic executable names (`$g rm`, `$(printf git) rm`, brace/glob
+    # expansion, backticks) cannot be evaluated safely at hook time.  Any rm
+    # command shape combined with Shell expansion is high risk and must not
+    # fall through to an exact allowed_shell_commands grant.
+    if any(marker in command for marker in GIT_RM_PATH_FORBIDDEN_CHARS) and re.search(
+        r"(?:^|[\s;&|()])rm(?:[\s;&|()]|$)", command
+    ):
+        return True
+    tokens = _tokenize_worker_command(command)
+    if not tokens:
+        # An unparsable string that visibly invokes git rm is still high risk.
+        return re.search(r"(?:^|[;&|\n]\s*|\s)(?:[^\s;&|]+/)?git\s+(?:-[^\s]+\s+)*rm(?:\s|$)", command) is not None
+    segment: list[str] = []
+    for token in tokens + [";"]:
+        if token in SEGMENT_SEPARATORS:
+            if _segment_invokes_git_rm(segment):
+                return True
+            for index, candidate in enumerate(segment):
+                program = os.path.basename(candidate)
+                if program in {"sh", "bash", "dash", "zsh"}:
+                    for option_index in range(index + 1, len(segment) - 1):
+                        option = segment[option_index]
+                        if option == "--command" or re.fullmatch(r"-[A-Za-z]*c", option):
+                            # Recursion is bounded for predictable hook latency,
+                            # but reaching the cap must fail closed: another
+                            # command wrapper remains a high-risk shell escape.
+                            if depth >= 4 or _looks_like_git_rm(
+                                segment[option_index + 1], depth + 1
+                            ):
+                                return True
+                            break
+                if program == "eval" and index + 1 < len(segment):
+                    if depth >= 4 or _looks_like_git_rm(
+                        " ".join(segment[index + 1:]), depth + 1
+                    ):
+                        return True
+            segment = []
+        else:
+            segment.append(token)
+    return False
+
+
+def _canonical_repo_relative_path(path: str) -> bool:
+    if not path or path.startswith(("/", "./", "../", ":")) or "\\" in path:
+        return False
+    if any(character in path for character in GIT_RM_PATH_FORBIDDEN_CHARS):
+        return False
+    if any(character in path for character in ("\n", "\r", "\x00")):
+        return False
+    parts = path.split("/")
+    return all(part not in {"", ".", ".."} for part in parts)
+
+
+def _matches_frozen_write_scope(path: str, allowed_write_paths: tuple[str, ...]) -> bool:
+    # Scope-guard globs remain useful for Edit/Write, but deletion authority is
+    # deliberately narrower: only an exact canonical path string is authority.
+    return path in allowed_write_paths
+
+
+def _tracked_git_entry_mode(worktree: str, path: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                "git", "-C", worktree, "--literal-pathspecs", "ls-files",
+                "--stage", "-z", "--error-unmatch", "--", path,
+            ],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    records = [record for record in result.stdout.split(b"\x00") if record]
+    if len(records) != 1:
+        return None
+    try:
+        header, record_path = records[0].split(b"\t", 1)
+        mode, _object_id, stage = header.decode("ascii").split(" ", 2)
+        decoded_path = record_path.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if stage != "0" or decoded_path != path:
+        return None
+    return mode
+
+
+def git_rm_authority_decision(command: str) -> tuple[bool, bool, str]:
+    """Return (recognized, allowed, reason) for the narrow tracked-file deletion class."""
+    if not _looks_like_git_rm(command):
+        return False, False, ""
+
+    tokens = _tokenize_worker_command(command)
+    if tokens is None or len(tokens) != 4 or tokens[:3] != ["git", "rm", "--"]:
+        return True, False, "只允许单段精确命令 git rm -- <一个 repo-relative tracked file>"
+    path = tokens[3]
+    if not _canonical_repo_relative_path(path):
+        return True, False, "删除路径必须是无 pathspec、Shell 展开、绝对路径或遍历的规范仓库相对路径"
+    authority_path = os.environ.get("WORKER_AUTHORITY_RECEIPT_FILE", "").strip()
+    authority_sha = os.environ.get("WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256", "").strip()
+    if not authority_path or not authority_sha:
+        return True, False, "缺少绑定启动快照的 PM authority receipt"
+    try:
+        receipt, _receipt_sha = load_authority(authority_path, authority_sha)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return True, False, "PM authority receipt 不可验证或已漂移"
+    snapshot = receipt.get("authorization_snapshot")
+    frozen_paths = snapshot.get("allowed_write_paths") if isinstance(snapshot, dict) else None
+    if not isinstance(frozen_paths, list) or any(
+        not isinstance(item, str) or not item.strip() for item in frozen_paths
+    ):
+        return True, False, "PM authority receipt 的 allowed_write_paths 缺失或非法"
+    allowed_write_paths = tuple(frozen_paths)
+    if not allowed_write_paths:
+        return True, False, "spawn 未冻结 allowed_write_paths；tracked 文件删除默认拒绝"
+    if not _matches_frozen_write_scope(path, allowed_write_paths):
+        return True, False, "删除路径未命中 spawn 时冻结的 allowed_write_paths"
+    worktree = receipt.get("worktree")
+    if not isinstance(worktree, str) or not os.path.isabs(worktree):
+        return True, False, "PM authority receipt 缺少绝对 worktree 身份"
+    worktree = os.path.realpath(worktree)
+    try:
+        root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        branch_result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True, False, "当前 Git worktree 身份不可验证"
+    current_root = os.path.realpath(root_result.stdout.strip()) if root_result.returncode == 0 else ""
+    current_branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
+    if current_root != worktree or os.path.realpath(os.getcwd()) != worktree:
+        return True, False, "git rm 必须从 receipt 绑定的 worktree 根目录执行"
+    if receipt.get("branch") != current_branch or not current_branch:
+        return True, False, "当前分支与 PM authority receipt 不一致"
+
+    mode = _tracked_git_entry_mode(worktree, path)
+    if mode not in GIT_RM_TRACKED_MODES:
+        return True, False, "目标不是唯一 stage-0 tracked 普通文件或符号链接；目录、gitlink 与未跟踪路径均拒绝"
+    return True, True, ""
 
 
 def _parse_long_options(
@@ -796,7 +1006,7 @@ def main() -> int:
     command = command.strip()
 
     try:
-        source, authorized, allowed_shell = load_authorization(
+        source, authorized, allowed_shell, _mirror_allowed_write_paths = load_authorization(
             auth_file,
             os.environ.get("WORKER_INSTALL_AUTH_B64", "").strip(),
         )
@@ -815,6 +1025,16 @@ def main() -> int:
             "ORCA_COMPLETION_AUTHORITY_INVALID",
             "Orca 协议命令与本次运行期 completion receipt 不匹配；立即停止，不得改写、包装或重试",
         )
+        return 0
+    # Tracked-file deletion is a high-risk built-in class.  It must run before
+    # exact allowed_shell_commands so reauthorization cannot turn a dangerous
+    # git-rm spelling into authority.  The scope comes only from the hash-bound
+    # PM receipt, not the worker-readable mirror or process B64 copy.
+    git_rm_recognized, git_rm_allowed, git_rm_reason = git_rm_authority_decision(command)
+    if git_rm_recognized:
+        if git_rm_allowed:
+            return 0
+        deny("GIT_RM_AUTHORITY_BLOCKED", git_rm_reason)
         return 0
     if not is_install_command(command):
         if command in allowed_shell or is_safe_lifecycle_command(command):

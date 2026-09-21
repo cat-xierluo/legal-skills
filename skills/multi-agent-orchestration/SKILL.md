@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.27.4"
+  version: "2.27.6"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -30,7 +30,7 @@ metadata:
 
 本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
 
-交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
+交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。supervised 清理必须从 Session Context 取得精确 Run，按 `worker-list --run <run> --limit 100` 完整遍历 opaque cursor 后唯一定位 Dispatch；前置分页、身份或结果不可证明时，在 release、terminal、worktree 和分支 mutation 前停止。`reclaimable` release 后还须重新执行同一完整查询；若后置结果不可证明，release 可能已发生，但不得继续 terminal、worktree 或分支 mutation。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
 
 ## 2. 模式选择
 
@@ -79,6 +79,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许门禁后的 worker 安装。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
+- tracked 文件删除是独立高风险类，先于普通 Shell allowlist 判定。只有 hook-enabled worker 可从 receipt 绑定的 worktree 根运行 `git rm -- <一个 canonical repo-relative tracked file>`，且该精确路径必须在 spawn 时写入不可变 `allowed_write_paths`；scope glob、后续 `reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开和复合命令均不能扩大权限。Codex/ZCode 的 `prompt_only_degraded` 只提供提示，不能声称机械删除保护；详见 `references/02-runtime-dependencies.md` §6。
 - 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。
 - 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
 - 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
@@ -184,6 +185,7 @@ bash scripts/pm-cleanup-worker.sh \
 清理必须区分源分支生命周期与合并目标：
 
 - `ephemeral-worker`：只有 exact PR head/base、expected tip、delivery commit、干净 worktree 和 settled lifecycle 全部一致时才清理。
+- supervised lifecycle 必须先以 metadata 中的 Run/Dispatch 做完整分页预检；只有 `released`、或可精确结算的 `reclaimable` / `retained external` 才进入后续清理。任何缺页、游标循环、重复/缺失 Dispatch、跨 Run 行或读取失败均保留 terminal、worktree 与分支。
 - `long-lived`，或源分支等于 integration target：保留远端 ref、本地 ref 与固定 worktree，输出 `RETAINED_WITH_REASON reason=long-lived-branch`。
 - 调用参数不得把 metadata 的 `long-lived` 降级；短 Worker 合入长期分支时只清理 Worker head，绝不清理 integration target。
 - 结果只允许 `CLEANED`、`RETAINED_WITH_REASON`、`CLEANUP_PENDING`。交付已确认后，清理失败作为独立债务继续处理，不重跑 push/merge；隐去 `CLEANUP_PENDING` 后声称完全闭环属于 Hard Fail。

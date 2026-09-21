@@ -247,12 +247,14 @@ fi
 # ---- Gate 5: session 生命周期可证结算（active/release_pending 一律拒绝）----------
 METADATA_FILE=""
 DISPATCH_ID=""
+RUN_ID=""
 if [ "$WORKTREE_PRESENT" -eq 1 ]; then
   METADATA_FILE="$WORKTREE/.claude/agent-sessions/$SESSION/METADATA.json"
   [ -f "$METADATA_FILE" ] || defer "session_metadata_missing" "file=$METADATA_FILE; orchestration workers always carry METADATA"
   jq -e 'type == "object"' "$METADATA_FILE" >/dev/null 2>&1 || \
     defer "session_metadata_invalid" "file=$METADATA_FILE; retain for recovery"
   DISPATCH_ID=$(jq -r '.session.orca.supervised.dispatch_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
+  RUN_ID=$(jq -r '.session.orca.supervised.run_id // ""' "$METADATA_FILE" 2>/dev/null || echo "")
 fi
 
 TMUX_ALIVE=0
@@ -266,10 +268,11 @@ fi
 TERMINAL_STATE="no-dispatch"
 if [ -n "$DISPATCH_ID" ]; then
   if orca_runtime_init >/dev/null 2>&1; then
-    worker_json=$(orca_cli orchestration worker-list --json 2>/dev/null || echo '{}')
-    worker_row=$(printf '%s' "$worker_json" | jq -c --arg disp "$DISPATCH_ID" '
-      [(.result.workers // [])[]? | select((.dispatch_id // .dispatchId // .id) == $disp)][0] // {}' 2>/dev/null || echo '{}')
-    TERMINAL_STATE=$(printf '%s' "$worker_row" | jq -r '.terminal_state // .terminalState // .accounting_state // .accountingState // "unknown"' 2>/dev/null || echo "unknown")
+    [ -n "$RUN_ID" ] || defer "session_run_missing" "dispatch=$DISPATCH_ID has no authoritative supervised run_id"
+    orca_runtime_worker_row_exact "$DISPATCH_ID" "$RUN_ID" || \
+      defer "terminal_accounting_unverifiable" "dispatch=$DISPATCH_ID run=$RUN_ID exact paginated WorkerList query failed"
+    worker_row="$ORCA_WORKER_ROW_JSON"
+    TERMINAL_STATE=$(printf '%s' "$worker_row" | jq -r '.terminalState // .terminal_state // .accountingState // .accounting_state // "unknown"' 2>/dev/null || echo "unknown")
     [ -n "$TERMINAL_STATE" ] || TERMINAL_STATE="unknown"
     case "$TERMINAL_STATE" in
       released|retained)

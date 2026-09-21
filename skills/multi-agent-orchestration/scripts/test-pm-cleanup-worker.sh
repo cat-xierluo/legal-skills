@@ -43,6 +43,17 @@ SH
 chmod +x "$BIN/gh"
 export PATH="$BIN:$PATH"
 
+FAKE_CLEAN_FAIL="$TMP_ROOT/clean-worktree-fail"
+cat > "$FAKE_CLEAN_FAIL" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${PM_TEST_CLEAN_LOG:?}"
+exit 19
+SH
+chmod +x "$FAKE_CLEAN_FAIL"
+PM_TEST_CLEAN_LOG="$TMP_ROOT/clean-worktree.log"
+: > "$PM_TEST_CLEAN_LOG"
+
 make_fixture() {
   local name=$1
   ORIGIN="$TMP_ROOT/$name-origin.git"
@@ -75,6 +86,8 @@ run_cleanup() {
   env PM_TEST_HEAD_OID="$TIP" PM_TEST_HEAD_REF="$BRANCH" PM_TEST_MERGE_OID="$DELIVERY_COMMIT" \
     PM_TEST_BASE_REF="${PM_TEST_BASE_REF:-main}" \
     PM_TEST_GH_MODE="${PM_TEST_GH_MODE:-merged}" \
+    PM_TEST_CLEAN_LOG="$PM_TEST_CLEAN_LOG" \
+    PM_CLEANUP_CLEAN_WORKTREE_SCRIPT="${PM_TEST_CLEAN_SCRIPT:-}" \
     bash "$CLEANUP" --worktree "$WORKTREE" --branch "$BRANCH" --pr 123 \
       --expected-tip "$TIP" --delivery-mode "$DELIVERY_MODE" \
       --delivery-commit "$DELIVERY_COMMIT" --repository github.com/example/project "$@"
@@ -141,6 +154,17 @@ git -C "$PROJECT" remote set-url origin "$original_origin"
 run_cleanup > "$TMP_ROOT/dry-run.out"
 assert_true "dry-run reports planned cleanup" grep -qF 'PM_CLEANUP_RESULT: DRY_RUN' "$TMP_ROOT/dry-run.out"
 assert_true "dry-run keeps worktree" test -d "$WORKTREE"
+
+set +e
+PM_TEST_CLEAN_SCRIPT="$FAKE_CLEAN_FAIL" run_cleanup --execute > "$TMP_ROOT/clean-script-fail.out" 2>&1
+clean_script_fail_rc=$?
+set -e
+[ "$clean_script_fail_rc" -eq 2 ] && ok "clean-worktree failure leaves cleanup pending" || bad "clean-worktree failure leaves cleanup pending"
+assert_true "injected clean-worktree failure is exercised" grep -qF -- "--branch $BRANCH" "$PM_TEST_CLEAN_LOG"
+assert_true "clean-worktree failure preserves worktree" test -d "$WORKTREE"
+assert_true "clean-worktree failure preserves local branch" git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH"
+assert_true "clean-worktree failure preserves remote branch before any delete" sh -c "test -n \"\$(git -C '$PROJECT' ls-remote --heads origin 'refs/heads/$BRANCH')\""
+assert_true "clean-worktree failure reports retained remote ordering" grep -qF 'PM_CLEANUP_RESULT: CLEANUP_PENDING remote=planned-delete worktree=retained local=retained reason=clean-worktree-refused' "$TMP_ROOT/clean-script-fail.out"
 
 run_cleanup --execute > "$TMP_ROOT/merged.out"
 assert_true "merged delivery reports CLEANED" grep -qF 'PM_CLEANUP_RESULT: CLEANED' "$TMP_ROOT/merged.out"
