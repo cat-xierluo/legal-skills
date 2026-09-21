@@ -31,6 +31,7 @@ folia:
       - full_changelog_link
       - auto_update_assets_note
       - macos_gatekeeper_warning
+      - contributor_attribution
     warning:
       include_when:
         - macos_unsigned
@@ -77,6 +78,7 @@ faropdf:
       - full_changelog_link
       - auto_update_assets_note
       - macos_gatekeeper_warning
+      - contributor_attribution
     warning:
       include_when:
         - macos_unsigned
