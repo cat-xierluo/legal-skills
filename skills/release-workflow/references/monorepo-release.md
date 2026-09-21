@@ -70,6 +70,27 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 > 分层原则：`projects.yaml` 的 `type: monorepo-skills` 是通用/个性的分界——脚本行为
 > 对本类型所有项目一致；确属单仓库的差异（如 intro 文案）走 `notes:` 配置，不进脚本。
 
+### 4b. 已知摩擦与处置（长期 PR 的两条规律）
+
+**摩擦一：main 上 Skill 升版本 → 套件成员链接过时。**
+长期 feature PR 每次 merge main 时，若 main 期间有 Skill 升版本（CHANGELOG 头部变化），
+分支里的 `expert-suites/*/README.md` 成员下载链接就会落后于当前版本，被
+`validate-expert-suites.py` 拦截（它按 CHANGELOG 当前 semver 校验——这是设计行为，
+不是误报）。处置：在 PR 分支跑
+`python3 skills/release-workflow/scripts/align-suite-links.py`（`--dry-run` 可预览），
+然后重跑 validate 确认 `PASS`。链接版本短暂超前于已发布 zip 属预期：
+`latest/download` 占位在下次发版后生效。
+
+**摩擦二：merge main 时 README 版本列冲突，一律取 PR 侧。**
+main 侧版本列是**已发布快照**（对齐最近一次 Release 的实际 zip 版本，由
+`update-readme.py` 自动回写）；PR 侧是**待发版时态**（新版本号 + `latest/download`
+占位链接，等本 PR 合入后的下次发版回写）。两者必然不同值，冲突时取 PR 侧——
+这是"版本列=下载版本"约定的时态推论，不是偏好。
+
+> 附注：本仓库的 Skill Lint Harness / Orchestration CI 均有 `paths:` 过滤，
+> release-workflow 路径的 PR 不会触发它们——合并前的等价验证（py_compile、
+> workflow YAML 校验、`security_scan audit`、相关单测）在本地完成。
+
 ### 4. 发布后(每次)
 
 - 检查 release page:`https://github.com/<owner>/<repo>/releases/tag/<tag>`

@@ -197,3 +197,18 @@ grep -o 'releases/download/[^/]*/' /tmp/check/latest.json   # 必须输出 relea
 ```
 
 线上已发错的 latest.json **不必重跑整个 build**：本地下 `*.sig` + 重跑 manifest 脚本生成新 `latest.json` + `gh release upload vX.Y.Z latest.json --clobber` 覆盖线上坏的（asset 本身不用动）。详见 `tauri-release.md` §8。
+
+## 12. 本机 `gh api` 大请求体 PUT 被 EOF 掐断（GET 正常）
+
+**症状**：本地用 `gh api -X PUT contents/<file>` 提交较大文件（base64 后几十 KB 以上，如整份 README）时连续 `EOF` / 连接重置；同会话的 `gh api` GET 正常，git push 也正常。CI 上无此问题。
+
+**原因**：本机常驻代理（系统代理或 `*_proxy` 环境变量）对长连接大请求体不稳定，掐断上传方向；GET 响应体小不受影响。
+
+**解决方案**：清空代理变量直连重试，不需要关掉代理本身：
+
+```bash
+env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+  gh api -X PUT repos/<owner>/<repo>/contents/<file> ...
+```
+
+若直连仍失败再考虑网络本身。同根因的其他表现：常驻代理掐断大文件分片上传（见各技能 CHANGELOG 中的 OSS 上传代理隔离条目）。
