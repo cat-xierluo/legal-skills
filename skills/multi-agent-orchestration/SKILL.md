@@ -30,7 +30,7 @@ metadata:
 
 本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
 
-交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。supervised 清理必须从 Session Context 取得精确 Run，按 `worker-list --run <run> --limit 100` 完整遍历 opaque cursor 后唯一定位 Dispatch；分页、身份或结果不可证明时，在 release、terminal、worktree 和分支 mutation 前停止。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
+交付成功后，`pm-closeout.sh` 默认清理一次性 worker 的远端 head、worktree 与本地分支；长期功能/集成分支及固定 worktree 必须声明 `long-lived` 并保留。事实未知、身份漂移或生命周期未结算时失败关闭。supervised 清理必须从 Session Context 取得精确 Run，按 `worker-list --run <run> --limit 100` 完整遍历 opaque cursor 后唯一定位 Dispatch；前置分页、身份或结果不可证明时，在 release、terminal、worktree 和分支 mutation 前停止。`reclaimable` release 后还须重新执行同一完整查询；若后置结果不可证明，release 可能已发生，但不得继续 terminal、worktree 或分支 mutation。对已经确认合并、但未走标准 closeout 的单一遗留 worker，可使用 `post-merge-cleanup.sh` 做严格 dry-run/execute 清理；它不替代标准 closeout，也不得用于批量扫描。
 
 ## 2. 模式选择
 

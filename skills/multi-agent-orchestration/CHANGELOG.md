@@ -4,7 +4,7 @@
 
 ### 修复
 
-- supervised 资源清理不再在无 Run、仅默认第一页的 WorkerList 上先执行 `worker-release`。清理链现在从 Session Context 读取精确 Run，以 `--limit 100` 遍历 opaque cursor，并用冻结的 `page.total` 与实际行数证明结果完整、要求目标 Dispatch 在同一 Run 中唯一出现；缺页、total 漂移/超限、scope/run 漂移、空或循环游标、目标缺失/重复、非法响应和读取失败全部在 lifecycle、tmux session、terminal、worktree 与分支 mutation 前失败关闭。
+- supervised 资源清理不再在无 Run、仅默认第一页的 WorkerList 上先执行 `worker-release`。清理链现在从 Session Context 读取精确 Run，以 `--limit 100` 遍历 opaque cursor，并用冻结的 `page.total` 与实际行数证明结果完整、要求目标 Dispatch 在同一 Run 中唯一出现；前置查询的缺页、total 漂移/超限、scope/run 漂移、空或循环游标、目标缺失/重复、非法响应和读取失败全部在 lifecycle、tmux session、terminal、worktree 与分支 mutation 前失败关闭。`reclaimable` release 后重读异常时，release 可能已发生，但后续 terminal、worktree 与分支 mutation 全部停止。
 - `clean-worktree.sh` 只对完整预检后的 `reclaimable` 执行一次精确 release，并在 release 后重新读取完整 WorkerList；`released` 不重复 release，`retained/external_terminal` 继续要求 settled 状态与 metadata 句柄精确一致，close 后还必须由精确 handle 的结构化 show 回执证明 `connected=false` 且 `writable=false`，否则保留 terminal 与文件现场。
 - `post-merge-cleanup.sh` 与 `pm-orchestrate account release` 复用同一 Run-scoped 分页查询，避免前置门禁或 provider lease 结算继续漏掉后页目标；`pm-cleanup-worker.sh` 把远端分支删除移到 lifecycle/worktree/local cleanup 成功之后，WorkerList 预检拒绝时不再留下“远端已删、资源仍活”的部分状态。
 - supervised cleanup 现在把 `jq` 作为硬依赖；缺少解析能力时不再把存在的 Session Context 降级成无生命周期信息。
