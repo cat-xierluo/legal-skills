@@ -20,13 +20,13 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-ocr-1.5.0.zip) |
-| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-processor-2.12.0.zip) |
-| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-organizer-0.5.0.zip) |
+| [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-ocr-1.6.0.zip) |
+| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-processor-2.13.0.zip) |
+| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-organizer-0.6.0.zip) |
 | [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/video-screenshot-0.8.2.zip) |
 | [funasr-transcribe](../../skills/funasr-transcribe/) | 本地转录音视频并保留时间戳 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/funasr-transcribe-1.9.4.zip) |
 | [transcription-corrector](../../skills/transcription-corrector/) | 纠正同音字、专有名词和 ASR 漂移 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/transcription-corrector-1.0.8.zip) |
-| [tingwu-asr](../../skills/tingwu-asr/) | 使用通义听悟完成云端长音视频转录 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/tingwu-asr-0.4.2.zip) |
+| [tingwu-asr](../../skills/tingwu-asr/) | 使用通义听悟完成云端长音视频转录 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/tingwu-asr-0.4.6.zip) |
 | [court-sms](../../skills/court-sms/) | 解析法院短信、下载文书并归档到案件目录 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/court-sms-1.5.1.zip) |
 | [dingtalk-minutes](../../skills/dingtalk-minutes/) | 读取钉钉 AI 听记摘要、逐字稿和待办 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/dingtalk-minutes-1.1.0.zip) |
 

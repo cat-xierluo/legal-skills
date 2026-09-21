@@ -21,12 +21,12 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-batch-commit-1.4.3.zip) |
-| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-workflow-1.8.3.zip) |
-| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/release-workflow-1.5.0.zip) |
+| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-workflow-1.8.7.zip) |
+| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/release-workflow-1.6.0.zip) |
 | [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-publish-sync-1.7.2.zip) |
 | [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/subtree-publish-1.7.1.zip) |
 | [skill-manager](../../skills/skill-manager/) | 管理多 Agent 平台的 Skill 安装、同步和状态 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-manager-1.7.2.zip) |
-| [skill-lint](../../skills/skill-lint/) | 在发布前审查 Skill 结构、安全和质量 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-lint-2.8.0.zip) |
+| [skill-lint](../../skills/skill-lint/) | 在发布前审查 Skill 结构、安全和质量 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-lint-2.9.0.zip) |
 | [verification-gate](../../skills/verification-gate/) | 为脚本和发布链路生成真实验证证据 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/verification-gate-1.3.0.zip) |
 
 ## 建议使用方式

@@ -117,7 +117,7 @@ legal-skills:
   # generate-release-notes.py 用的项目级个性化配置
   notes:
     project_label: "Legal Skills"
-    intro_template: "本版继续提供公开 Skill 的最新 ZIP，并同时发布场景化专家套件 ZIP；用户既可下载单个 Skill，也可一次取得整套能力。"
+    intro_template: "本版包含 **{total} 个 skill** 的最新 ZIP，并同时发布 **{suites} 个场景化专家套件** ZIP；用户既可下载单个 Skill，也可一次取得整套能力（套件清单见下文「专家套件」节）。"
     recent:
       source_marker: "🆕 最近更新的 Skill"
       top_n: 5

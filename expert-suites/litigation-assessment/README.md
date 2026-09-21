@@ -22,10 +22,10 @@
 | :--- | :--- | :--- |
 | [new-case](../../skills/new-case/) | 建立标准案件目录、信息看板和期限底座 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/new-case-1.4.0.zip) |
 | [legal-case-analysis](../../skills/legal-case-analysis/) | 梳理事实、证据、争点、风险和诉讼策略 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-case-analysis-1.0.0.zip) |
-| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索矩阵并核验法规与正反类案 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/yuandian-law-search-1.8.9.zip) |
+| [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索矩阵并核验法规与正反类案 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/yuandian-law-search-1.9.1.zip) |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把研判结果转成诉讼方案、咨询或沟通报告 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-proposal-generator-0.3.2.zip) |
-| [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-ocr-1.5.0.zip) |
-| [pdf-organizer](../../skills/pdf-organizer/) | 建立页码索引并按材料内容整理 PDF | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-organizer-0.5.0.zip) |
+| [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-ocr-1.6.0.zip) |
+| [pdf-organizer](../../skills/pdf-organizer/) | 建立页码索引并按材料内容整理 PDF | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/pdf-organizer-0.6.0.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵等图解 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-visualization-0.8.2.zip) |
 | [md2word](../../skills/md2word/) | 把审定后的 Markdown 转成正式 Word 文档 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/md2word-1.3.6.zip) |
 | [court-sms](../../skills/court-sms/) | 解析法院通知、获取文书并回填案件材料 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/court-sms-1.5.1.zip) |
