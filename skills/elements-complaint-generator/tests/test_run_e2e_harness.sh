@@ -23,20 +23,20 @@ fail=0
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/ecg-harness-test-XXXXXXXX")"
 t5_backup="$tmp/backup"
 mkdir -p "$t5_backup"
-t5_planted=""
+t5_planted=()
 
 # 恢复所有已植入伪文件：有备份（原本存在）则还原，否则删除本次新建。
 # 幂等：恢复后清空 t5_planted，可安全重复调用（trap 与流程内各调一次）。
 restore_planted() {
-  [ -n "$t5_planted" ] || return 0
-  for p in $t5_planted; do
+  [ "${#t5_planted[@]}" -gt 0 ] || return 0
+  for p in "${t5_planted[@]}"; do
     if [ -f "$t5_backup/$(basename "$p")" ]; then
       mv "$t5_backup/$(basename "$p")" "$p"
     else
       rm -f "$p"
     fi
   done
-  t5_planted=""
+  t5_planted=()
 }
 
 # 在旧布局固定路径植入伪产物：若 harness 复用旧路径，断言阶段会因非法 zip 崩溃
@@ -45,7 +45,7 @@ plant_stale() {
     p="$OUTROOT/$f"
     if [ -f "$p" ]; then mv "$p" "$t5_backup/$f"; fi
     printf 'STALE-GARBAGE-NOT-A-ZIP-ECG003' > "$p"
-    t5_planted="$t5_planted $p"
+    t5_planted+=("$p")
   done
 }
 
@@ -219,12 +219,12 @@ fi
 if grep -q "证据已保留" "$tmp/t6run.log"; then ok "失败路径给出证据目录指引"; else ng "失败路径缺少证据目录指引"; fi
 
 echo "==== R2/T7 植入伪文件恢复逻辑可重复调用 ===="
-t7_probe="$OUTROOT/zz-ecg003-restore-probe.docx"
+t7_probe="$OUTROOT/zz ecg003 restore probe.docx"
 # 场景 A：位置原有文件 → 恢复应还原原内容
 printf 'ORIGINAL-CONTENT-ECG003' > "$t7_probe"
 mv "$t7_probe" "$t5_backup/$(basename "$t7_probe")"
 printf 'PLANTED-FAKE' > "$t7_probe"
-t5_planted=" $t7_probe"
+t5_planted=("$t7_probe")
 restore_planted
 if [ "$(cat "$t7_probe" 2>/dev/null)" = "ORIGINAL-CONTENT-ECG003" ]; then
   ok "原有文件被植入后恢复为原内容"
@@ -239,7 +239,7 @@ else
 fi
 # 场景 B：位置原本无文件 → 恢复应删除本次新建伪文件
 printf 'PLANTED-FAKE-B' > "$t7_probe"
-t5_planted=" $t7_probe"
+t5_planted=("$t7_probe")
 restore_planted
 restore_planted
 if [ ! -f "$t7_probe" ]; then
