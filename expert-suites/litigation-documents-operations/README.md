@@ -20,7 +20,7 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把常规起诉状转成官方要素式示范文本结构 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/elements-complaint-generator-0.15.1.zip) |
+| [elements-complaint-generator](../../skills/elements-complaint-generator/) | 把常规起诉状转成官方要素式示范文本结构 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/elements-complaint-generator-0.15.2.zip) |
 | [litigation-analysis](../../skills/litigation-analysis/) | 深度分析裁判、庭审和上诉再审可行性 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/litigation-analysis-1.4.0.zip) |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 生成诉讼方案、沟通报告和结案汇报 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-proposal-generator-0.3.2.zip) |
 | [md2word](../../skills/md2word/) | 输出符合中文专业排版的 Word 文档 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/md2word-1.3.6.zip) |

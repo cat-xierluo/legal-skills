@@ -25,7 +25,7 @@
 | [skill-lint](../../skills/skill-lint/) | 审查 Skill 结构、指令稳定性、安全和发布质量 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-lint-2.9.0.zip) |
 | [verification-gate](../../skills/verification-gate/) | 运行分层验证并记录可复查证据 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/verification-gate-1.3.0.zip) |
 | [git-workflow](../../skills/git-workflow/) | 管理分支、Worktree、PR、合并和安全回退 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-workflow-1.8.7.zip) |
-| [multi-agent-orchestration](../../skills/multi-agent-orchestration/) | 编排两个以上边界独立的本地 Worker | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/multi-agent-orchestration-2.27.4.zip) |
+| [multi-agent-orchestration](../../skills/multi-agent-orchestration/) | 编排两个以上边界独立的本地 Worker | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/multi-agent-orchestration-2.27.6.zip) |
 | [cross-agent-coordination](../../skills/cross-agent-coordination/) | 协调不同 Agent 平台的归属、路由和交接 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/cross-agent-coordination-1.0.0.zip) |
 | [agent-email](../../skills/agent-email/) | 为 Agent 提供统一邮件收发和任务分发通道 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/agent-email-0.4.1.zip) |
 
