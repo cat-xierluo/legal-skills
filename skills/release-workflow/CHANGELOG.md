@@ -8,6 +8,7 @@
 - **自包含套件 ZIP**：新增 `build-suite-zips.sh`，从指定 Git tree 导出成员真实目录，保留套件 README、CHANGELOG、LICENSE 和各成员许可证；产物命名为 `suite-<id>-<semver>.zip`，失败时不覆盖上一批完整产物。
 - **确定性回归测试**：新增静态校验 7 项单测、README 回写 3 项离线单测和端到端打包 fixture，覆盖损坏链接阻断、符号链接展开、下载资产精确匹配、精确 tag 渲染、路径逃逸拦截、模拟安装与失败回滚。
 - **Release Notes 专家套件适配**：`generate-release-notes.py` 新增「专家套件」清单节——遍历 `expert_suites_root`（默认 `expert-suites/`）下各套件的 README（标题/一句话简介）与 CHANGELOG（semver）并统计成员数；`{total}` 计数排除 `suite-` 前缀产物，新增 `{suites}` 占位符（套件数），杜绝套件 ZIP 混入 skill 总数。
+- **README 版本列与改名死链自动回写**：`update-readme.py` 回写不再按链接自身 slug 映射，改为按**行内声明的技能名**（HTML 表行 `href="skills/<name>/"`、套件 md 行 `](../skills/<name>/)`）重映射——根治改名残留死链（如 skill-publish-sync 行曾长期指向旧名 clawhub-sync 的 zip）；同时把紧邻下载列的版本号列对齐到 zip 实际版本（含 `vA.B.C→vX.Y.Z` 区间写法），链接已最新而版本列滞后的存量状态重跑即可修复。独立仓库下载行（链接域名非本仓库）整行不动。v2026.09.21 存量实测：一次运行修复 1 个死链 + 对齐 25 处版本列，49 行全部三方一致。
 
 ### 改进
 
