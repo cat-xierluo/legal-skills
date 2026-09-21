@@ -1,0 +1,33 @@
+{
+  "assertions": [
+    {
+      "evidence": "输出披露附件缺失对服务范围、验收和价款判断的限制，并把补齐与一致性核验列为签前条件。",
+      "id": "CAP-MICRO-ATTACHMENT-MISSING-LIMIT",
+      "observed": "pass"
+    }
+  ],
+  "case_id": "CONTRACT-MICRO-ATTACHMENT-MISSING",
+  "failed_constraint_ids": [],
+  "input_sha256": "40be51cadfd1be16c9489dc4229a7e6189d20afe146ff1c75e85e789b06d0330",
+  "limitations": [
+    "本门禁只验证输出是否具备预先声明的最小边界，不证明法律判断完整或正确。",
+    "受控 Agent 输出未经过候选外独立生产者和领域专家盲评，不签发 DOMAIN_VERIFIED。"
+  ],
+  "measurements": {
+    "acknowledges_missing_attachments": true,
+    "avoids_formal_signability_verdict": true,
+    "input_boundary_valid": true,
+    "limitation_terms": {
+      "acceptance": true,
+      "price_or_fee": true,
+      "service_scope": true
+    },
+    "signing_precondition_present": true
+  },
+  "output_sha256": "148691d10ea7901e02ce9c4fc498d772424d4f5de4c0c89a1fc5b4f285500c19",
+  "passed_constraint_ids": [
+    "CAP-MICRO-ATTACHMENT-MISSING-LIMIT"
+  ],
+  "schema_version": "1.0",
+  "status": "pass"
+}

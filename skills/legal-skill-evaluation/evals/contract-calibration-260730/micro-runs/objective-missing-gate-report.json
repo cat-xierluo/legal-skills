@@ -1,0 +1,30 @@
+{
+  "assertions": [
+    {
+      "evidence": "输出列出审查目标选项，请求用户确认，并在确认前暂停实质审查且不自行选择交付强度。",
+      "id": "CAP-MICRO-OBJECTIVE-MISSING-STOP",
+      "observed": "pass"
+    }
+  ],
+  "case_id": "CONTRACT-MICRO-OBJECTIVE-MISSING",
+  "failed_constraint_ids": [],
+  "input_sha256": "31b763bebfcf4bdc01cdddcec6ad0e0fc2a588a707dbe61216747e4a6ea6e56d",
+  "limitations": [
+    "本门禁只验证输出是否具备预先声明的最小边界，不证明法律判断完整或正确。",
+    "受控 Agent 输出未经过候选外独立生产者和领域专家盲评，不签发 DOMAIN_VERIFIED。"
+  ],
+  "measurements": {
+    "asks_for_confirmation": true,
+    "avoids_formal_signability_verdict": true,
+    "avoids_self_selected_intensity": true,
+    "input_boundary_valid": true,
+    "objective_option_count": 3,
+    "stops_substantive_review": true
+  },
+  "output_sha256": "202442165cc559cb7088c78a849730b6cf9de4bf1b380028de76e9ed55ece319",
+  "passed_constraint_ids": [
+    "CAP-MICRO-OBJECTIVE-MISSING-STOP"
+  ],
+  "schema_version": "1.0",
+  "status": "pass"
+}

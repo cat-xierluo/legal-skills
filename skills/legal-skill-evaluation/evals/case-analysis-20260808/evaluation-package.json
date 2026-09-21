@@ -1,0 +1,338 @@
+{
+  "schema_version": "1.1",
+  "evaluation_id": "legal-case-analysis-calibration-20260808",
+  "mode": "standard",
+  "candidate": {
+    "path": "skills/legal-case-analysis",
+    "sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+    "hash_scope": "git-tracked"
+  },
+  "scope": {
+    "scenario": "legal-analysis",
+    "deliverable": "法律分析底稿 / 客户说明 / 案件研判",
+    "audience": "承办律师内部校准",
+    "anonymization": "不脱敏（真实办案口径，材料为本地真实运行产物，不外传原始敏感组合）",
+    "exclusions": [
+      "不签发 DOMAIN_VERIFIED（指令型 agent 运行，非领域终审）",
+      "标准模式已做三案例真实运行 + 六维度/taste 全覆盖 + 5 语义 case 判定",
+      "不把单轮运行表述为稳定性证据"
+    ]
+  },
+  "generic_gate": {
+    "skill_lint_version": "2.6.1",
+    "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+    "candidate_hash_scope": "git-tracked",
+    "raw_hard_findings": [],
+    "hard_findings": [],
+    "finding_adjudications": [],
+    "harness_status": "NOT_VERIFIED",
+    "instruction_stability_status": "NOT_VERIFIED",
+    "domain_status": "NOT_VERIFIED",
+    "evidence_receipts": [
+      "candidate-snapshot:git-tracked:25-files",
+      "evals/case-analysis-20260808/calibration-report.md",
+      "evals/case-analysis-20260808/runs/peer-unfamiliar-output.md",
+      "evals/case-analysis-20260808/runs/missing-context-output.md"
+    ]
+  },
+  "cases": [
+    {
+      "id": "case-familiar-sample-current",
+      "type": "familiar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "484f268145934337265a02b29492819b2aaacec7b10b4ef4eddc60da76640281",
+      "output_sha256": "e200880751c4dbd890afff97c9c34e04a9289615ee4a5461c1d3d190061df381",
+      "input_refs": [
+        "evals/case-analysis-20260808/materials/familiar-sample.md"
+      ],
+      "output_refs": [
+        "evals/case-analysis-20260808/runs/familiar-sample-output.md"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "evidence": "请求权基础、解除与返还链条引用具体法条并标注来源；部分商业取舍仍需律师复核",
+          "rating": 4
+        },
+        {
+          "id": "DIM-2",
+          "evidence": "材料台账区分客观证据/当事人陈述/争议材料，标注证明力",
+          "rating": 5
+        },
+        {
+          "id": "DIM-3",
+          "evidence": "问题树—论证—风险—策略链条完整",
+          "rating": 5
+        },
+        {
+          "id": "DIM-4",
+          "evidence": "抓住解除效力、交付条件、执行救济主线",
+          "rating": 5
+        },
+        {
+          "id": "DIM-5",
+          "evidence": "可直接进入诉讼方案与执行异议",
+          "rating": 5
+        },
+        {
+          "id": "DIM-6",
+          "evidence": "概况、画像、材料清单、事实、论证、风险、策略齐全",
+          "rating": 5
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "结论边界清楚，未把不确定写成确定"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "区分法律风险与商业谈判点"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "材料未提及信息标待补充/未提及"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "立场为本方（买受方）清晰"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "无绝对化承诺"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "明示为分析底稿，须经承办律师复核"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "提示法条适用性需律师核验"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "提示缺失材料影响判断"
+        }
+      ],
+      "legal_redlines": [],
+      "run_receipts": [
+        "evals/case-analysis-20260808/runs/familiar-sample-output.md"
+      ]
+    },
+    {
+      "id": "case-peer-unfamiliar-current",
+      "type": "peer-unfamiliar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "42218ff76463a055df81ed37f61e5548e49dcd37b5e48883d5e9140d5f7bc143",
+      "output_sha256": "da37e1abffe678bfdd890e5a31fbd7355222f55c45b3c5bd07ce6b6399e7ab7f",
+      "input_refs": [
+        "evals/case-analysis-20260808/materials/peer-unfamiliar.md"
+      ],
+      "output_refs": [
+        "evals/case-analysis-20260808/runs/peer-unfamiliar-output.md"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "evidence": "正确识别委托目标缺失，不妄断法律关系或结论",
+          "rating": 5
+        },
+        {
+          "id": "DIM-2",
+          "evidence": "材料按类型（客观证据/单方/对方/往来）与证据强度初评分类",
+          "rating": 5
+        },
+        {
+          "id": "DIM-3",
+          "evidence": "目标确认（阻断）→ 材料清单 → 表面焦点 → 待补 → 下一步，链条清楚",
+          "rating": 5
+        },
+        {
+          "id": "DIM-4",
+          "evidence": "目标缺失下不强行抓争议焦点，正确暂停，仅列表面争点",
+          "rating": 4
+        },
+        {
+          "id": "DIM-5",
+          "evidence": "列 A–F 可选项 + 待补信息清单，行动明确可执行",
+          "rating": 5
+        },
+        {
+          "id": "DIM-6",
+          "evidence": "目标确认/材料清单/焦点/缺口/下一步结构稳定",
+          "rating": 5
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "未把表面争议写成确定结论，明示不构成结论"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "未混淆法律与商业判断"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "目标/立场/条款原文均标待补充，未编造"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "未代入对方立场，明示待确认主张主体"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "无绝对化承诺"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "明示为材料接收与路径提示，非正式意见"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "提示条号需检索回填、待律师核验"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "列明合同原文/仲裁条款等缺失对判断的影响"
+        }
+      ],
+      "legal_redlines": [],
+      "run_receipts": [
+        "evals/case-analysis-20260808/runs/peer-unfamiliar-output.md"
+      ]
+    },
+    {
+      "id": "case-missing-context-current",
+      "type": "missing-context",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "413e7ae4b155370ffead0d788a26aaafe0ed37cccd6945d662c1786a3a2fbb9c",
+      "output_sha256": "d302c99068484c75c4ed16b6aba9c4346246a2836d316799637d8f1a217a6a6c",
+      "input_refs": [
+        "evals/case-analysis-20260808/materials/missing-context.md"
+      ],
+      "output_refs": [
+        "evals/case-analysis-20260808/runs/missing-context-output.md"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "evidence": "未凭记忆写条号，一律标条号待检索/依据待补充",
+          "rating": 5
+        },
+        {
+          "id": "DIM-2",
+          "evidence": "仅限委托人自述，未虚构主体/事实，来源标注清晰",
+          "rating": 5
+        },
+        {
+          "id": "DIM-3",
+          "evidence": "缺口清单 → 程序性提示 → 下一步，逻辑自洽",
+          "rating": 5
+        },
+        {
+          "id": "DIM-4",
+          "evidence": "背景缺失下不强行抓焦点，正确标缺失",
+          "rating": 4
+        },
+        {
+          "id": "DIM-5",
+          "evidence": "明确下一步补齐缺口，行动可执行",
+          "rating": 5
+        },
+        {
+          "id": "DIM-6",
+          "evidence": "材料充分性提示/已识别信息/缺口/路径/下一步结构稳定",
+          "rating": 5
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "未把单方转述写成确定事实"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "未混淆法律与商业判断"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "7 项缺口全部标待补充，未编造"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "未代入对方立场"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "无绝对化承诺，明示非结论"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "明示为缺口梳理，非起诉可行性意见"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "提示条号/仲裁机构规则需检索核验"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "列明合同原文/仲裁条款缺失影响判断"
+        }
+      ],
+      "legal_redlines": [],
+      "run_receipts": [
+        "evals/case-analysis-20260808/runs/missing-context-output.md"
+      ]
+    }
+  ],
+  "semantic_cases": [
+    "evals/case-analysis-20260808/semantic-cases/objective-missing.md",
+    "evals/case-analysis-20260808/semantic-cases/fact-statement-distinction.md",
+    "evals/case-analysis-20260808/semantic-cases/no-recalled-article-number.md",
+    "evals/case-analysis-20260808/semantic-cases/no-fabricated-missing.md",
+    "evals/case-analysis-20260808/semantic-cases/anonymization-toggle.md"
+  ],
+  "hard_failures": [],
+  "repair_units": [],
+  "regression": {
+    "fail_to_pass": "not-run",
+    "pass_to_pass": "not-run",
+    "receipts": [
+      "evals/case-analysis-20260808/capability-suite.json"
+    ]
+  },
+  "verdict": {
+    "recommendation": "adopt-with-notes",
+    "formal_markers": [
+      "NOT_VERIFIED"
+    ]
+  }
+}

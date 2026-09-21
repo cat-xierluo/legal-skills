@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-PATENT-FEE",
+  "provided_context": {
+    "request": "请审核这份专利许可合同。",
+    "contract_available": true,
+    "contract_excerpt": "受让方按约定向许可方支付许可使用费。",
+    "party_role": "受让方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

@@ -109,6 +109,27 @@ def parse_runtime_from_log(log_path: Path) -> float | None:
     return None
 
 
+def parse_exclude_pages(spec: str, total_pages: int) -> list[int]:
+    """解析 --exclude-pages 参数为 1-based 页码列表，越界页码报错。"""
+    if not spec or not spec.strip():
+        return []
+    pages = []
+    for token in spec.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            pno = int(token)
+        except ValueError:
+            raise SystemExit(f"--exclude-pages 含非法页码: {token!r}")
+        if pno < 1 or pno > total_pages:
+            raise SystemExit(
+                f"--exclude-pages 页码越界: {pno}（输出共 {total_pages} 页）"
+            )
+        pages.append(pno)
+    return sorted(set(pages))
+
+
 def main():
     parser = argparse.ArgumentParser(description="OCR 双层 PDF 质量验收脚本")
     parser.add_argument("--input-pdf", "-i", required=True, help="输入 PDF（OCR 前）")
@@ -126,6 +147,12 @@ def main():
     parser.add_argument("--runtime-log", help="包含耗时信息的日志文件路径（可选）")
 
     # 阈值（可选）
+    parser.add_argument(
+        "--exclude-pages",
+        help="从可检索率分母中排除的页码（逗号分隔，如 \"30,116,343\"）。"
+             "用于书籍装帧空白页、整页插图等本就无文字的页面；"
+             "排除页会记录在报告的 excluded_pages 字段中，保持可审计",
+    )
     parser.add_argument(
         "--min-searchable-ratio", type=float, default=1.0,
         help="最小可检索页占比（0-1），默认 1.0，避免空门禁通过",
@@ -152,8 +179,19 @@ def main():
     output_pages, output_full_text = extract_pdf_text(output_pdf)
     total_pages = len(output_pages)
     page_count_match = input_page_count == total_pages and total_pages > 0
-    searchable_pages = sum(1 for t in output_pages if len((t or "").strip()) >= args.searchable_min_chars)
-    searchable_ratio = (searchable_pages / total_pages) if total_pages else 0.0
+    excluded_pages = parse_exclude_pages(args.exclude_pages, total_pages)
+    excluded_set = set(excluded_pages)
+    # 可检索率分母剔除显式排除页（空白页/整页插图）；分子仍按全量统计口径
+    effective_pages = [
+        (idx, text) for idx, text in enumerate(output_pages, start=1)
+        if idx not in excluded_set
+    ]
+    searchable_pages = sum(
+        1 for _, text in effective_pages
+        if len((text or "").strip()) >= args.searchable_min_chars
+    )
+    searchable_total = len(effective_pages)
+    searchable_ratio = (searchable_pages / searchable_total) if searchable_total else 0.0
 
     keywords = load_keywords(args)
     keyword_hits = []
@@ -222,6 +260,8 @@ def main():
         "page_count_match": page_count_match,
         "searchable_pages": searchable_pages,
         "searchable_ratio": searchable_ratio,
+        "excluded_pages": excluded_pages,
+        "searchable_total": searchable_total,
         "keyword_total": len(keywords),
         "keyword_hit_rate": keyword_hit_rate,
         "keyword_hits": keyword_hits,
@@ -239,7 +279,10 @@ def main():
     print("OCR 质量验收报告")
     print("=" * 60)
     print(f"页数: 输入 {input_page_count} / 输出 {total_pages} ({'一致' if page_count_match else '不一致'})")
-    print(f"可检索页: {searchable_pages}/{total_pages} ({searchable_ratio:.2%})")
+    if excluded_pages:
+        print(f"可检索页: {searchable_pages}/{searchable_total} ({searchable_ratio:.2%}) [已排除 {len(excluded_pages)} 页: {','.join(map(str, excluded_pages))}]")
+    else:
+        print(f"可检索页: {searchable_pages}/{total_pages} ({searchable_ratio:.2%})")
     if keyword_hit_rate is not None:
         print(f"关键词命中率: {keyword_hit_rate:.2%} ({sum(1 for x in keyword_hits if x['hit'])}/{len(keyword_hits)})")
     if cer is not None:

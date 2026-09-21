@@ -1,5 +1,44 @@
 # 变更日志
 
+## [1.9.1] - 2026-09-18
+
+### 修复（issue #158：--no-report 语义与归档耦合）
+
+- **归档失败不再吞掉已取得的响应**：`api_post` / `api_get` 改经 `_archive_save_guarded` 写归档，目录不可写等 `OSError` 只降级为 stderr 告警（附 `--archive-dir` / `--no-archive` 修复出口提示）并返回 None，不再以异常中断交付；告警明确"本次响应已保留、不会自动重试"，杜绝调用方误判失败重试造成重复扣积分。
+- **SKILL.md 语义修正**：`--no-report` 实际仅跳过 `.md` 报告（archive 与 CWD 两份），此前文档宣称"完全跳过"失实；同步修正命令帮助文本。
+
+### 新增
+
+- `--no-archive`：关闭全部本地留存（archive JSON 与 `.md` 都不写）；查重仍读取已有归档（命中即免请求），帮助文本明示"新查询不再入缓存、下次同查询可能重复消耗积分"的取舍。
+- `--archive-dir` / 环境变量 `YD_ARCHIVE_DIR`：自定义归档目录，优先级 CLI > 环境变量 > 默认 `<skill>/archive`；须在首个检索命令前生效（`_apply_archive_settings` 于 `main` 统一应用）。
+
+### 技术优化
+
+- 新增 `scripts/verify-archive-failure-contracts.py` 无网络故障注入回归（4 项契约）：归档 PermissionError 不吞 POST/GET 响应且零重试、`--no-archive` 零写入且查重可命中已有归档、目录解析三级优先级、SKILL.md 无失实表述；存量 `verify-runtime-contracts.py` / `verify-research-delivery-contracts.py` 全部保持 PASS。
+
+## [1.9.0] - 2026-08-30
+
+### 新增
+
+- 新增涵摄式 `research-plan.json` 合同，将案件拆为争点、候选大前提、法律要件／例外／后果、法律化事实、证明状态、暂定涵摄和 `research_gap`；只有法律检索缺口可派生正反命题与查询。
+- 新增 Agent 生成的 `selected-sources.json` 精选交付合同，强制命题／查询映射、HIGH/MEDIUM 对位度、来源核验、时效说明、适用理由和可追溯引用。
+- 新增 `validate-research-contract.py` 统一门禁和 `verify-research-delivery-contracts.py` 无网络故障注入回归，覆盖空清单、LOW、未核验、未知命题、重复来源、事实缺口误检索和原始召回泄漏。
+
+### 改进
+
+- 将主流程固化为“涵摄为骨架、假设验证为检索方法、正反对抗为质量控制”；明确 MCP 仅是调用协议，向量用于候选发现，关键词、结构化字段和详情接口用于复检与核验。
+- 区分对话研究答复、精选研究包和正式报告；默认交付结论与少量精选依据，只在用户明确要求时生成落盘报告。
+- 语义候选默认数量收紧为 economical 8／balanced 12／aggressive 20；正式报告与候选规模解耦，最多纳入 12 条精选来源，core 依据必须为 HIGH。
+
+### 修复
+
+- 重写 `consolidate`：必须消费有效研究计划和 Agent 精选清单；`--include` 仅归档并列示 per-call 轨迹，不再把原始召回正文按 endpoint 整体复制进报告。
+- 将规范性法律依据与司法案例分组，依据先按 core／supplementary、再按法律位阶确定性排序；被排除候选只在正文显示统计，不重复暴露无关标题。
+
+### 验证边界
+
+- 已完成 Python 编译、原有 runtime contract 回归和新增合同／报告隔离回归；未运行需消耗积分的 live API/MCP 检索，不声称已验证真实召回质量。
+
 ## [1.8.9] - 2026-08-09
 
 ### 修复

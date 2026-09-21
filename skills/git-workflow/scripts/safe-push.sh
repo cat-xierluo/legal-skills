@@ -40,8 +40,18 @@ current_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || \
 [ "$BRANCH" = "$current_branch" ] || \
   die "SAFE_PUSH_BRANCH_MISMATCH" "current=$current_branch requested=$BRANCH"
 case "$BASE_REF" in
-  "$REMOTE"/*) ;;
-  *) die "SAFE_PUSH_BASE_REMOTE_MISMATCH" "base=$BASE_REF 必须属于 remote=$REMOTE" ;;
+  */*)
+    case "$BASE_REF" in
+      "$REMOTE"/*) ;;
+      *) die "SAFE_PUSH_BASE_REMOTE_MISMATCH" "base=$BASE_REF 必须属于 remote=${REMOTE}（或不写 remote 前缀、留作裸分支名自动规范化为 ${REMOTE}/<branch>）" ;;
+    esac
+    ;;
+  *)
+    # 裸分支名（如 --base main）规范化为 "$REMOTE/<branch>"，与白名单
+    # spawn-worker 的常见调用一致；后续 base_branch 派生与 fetch 校验沿用
+    # 规范化后的值。含 '/' 但前缀不是 $REMOTE 的情形已被上一种 case 拒绝。
+    BASE_REF="${REMOTE}/$BASE_REF"
+    ;;
 esac
 
 base_branch=${BASE_REF#"$REMOTE"/}

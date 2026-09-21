@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-PATENT-SCOPE",
+  "provided_context": {
+    "request": "请审核这份专利普通许可合同。",
+    "contract_available": true,
+    "contract_excerpt": "许可方允许受让方与第三方合作生产许可产品。",
+    "party_role": "受让方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

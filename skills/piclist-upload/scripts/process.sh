@@ -26,8 +26,10 @@ TOTAL_FAILED=0
 TOTAL_DIRS_REMOVED=0
 TOTAL_SESSION_UPLOADED=0
 
-# Track directories where files were deleted
-declare -A deleted_dirs
+# Track directories where files were deleted.
+# bash 3.2 (macOS stock /bin/bash, most Linux distros) has no associative
+# arrays: keep a newline-separated list, dedup via exact-line grep -Fxq.
+DELETED_DIRS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -107,14 +109,34 @@ delete_local_image() {
     if [ "$KEEP_LOCAL" = true ]; then
         return 0
     fi
+    # Without --in-place the rewritten markdown only goes to stdout, so the
+    # upload URL is not persisted anywhere: deleting the local image would
+    # destroy the only copy. Keep it; use --keep-local/--in-place explicitly.
+    if [ "$IN_PLACE" = false ]; then
+        return 0
+    fi
 
     if [ -f "$image_path" ]; then
         local dir_path
         dir_path="$(dirname "$image_path")"
         rm -f "$image_path"
         echo "  🗑️  Deleted: $image_path"
-        deleted_dirs["$dir_path"]=1
+        if ! printf '%s\n' "$DELETED_DIRS" | grep -Fxq -- "$dir_path"; then
+            DELETED_DIRS="${DELETED_DIRS:+$DELETED_DIRS$'\n'}$dir_path"
+        fi
     fi
+}
+
+# Write content back to the md file atomically (tmp + mv), bash 3.2 safe.
+# Called after EVERY successful upload so an interrupted run (timeout, crash,
+# Ctrl-C) never leaves images deleted on disk while their URLs exist only in
+# memory: the md on disk always reflects every upload already performed.
+flush_content() {
+    local md_file="$1"
+    local content="$2"
+    local temp_file="${md_file}.tmp"
+    printf '%s\n' "$content" > "$temp_file"
+    mv "$temp_file" "$md_file"
 }
 
 # Function to process a single markdown file
@@ -124,7 +146,10 @@ process_markdown_file() {
     local upload_count=0
     local skip_count=0
     local fail_count=0
-    declare -A uploaded_files  # Track uploaded files to delete later
+    # Track uploaded files (path + url, parallel newline lists) to delete
+    # later and to fix up repeated references — bash 3.2 compatible
+    local uploaded_paths=""
+    local uploaded_urls=""
 
     echo "Processing: $md_file"
 
@@ -136,9 +161,12 @@ process_markdown_file() {
     local md_dir
     md_dir="$(dirname "$md_file")"
 
-    # Extract all image references using grep
+    # Extract all image references using grep.
+    # ERE allowing paren groups inside the path: downloaded duplicates like
+    # "file (1).png" are common and a bare [^)]* would truncate the path at
+    # the first ')'. Handles multiple groups, e.g. "dir (1)/file (2).png".
     local images
-    images=$(grep -o '!\[[^]]*\]([^)]*)' "$md_file" 2>/dev/null || true)
+    images=$(grep -oE '!\[[^]]*\]\([^()]*(\([^()]*\)[^()]*)*\)' "$md_file" 2>/dev/null || true)
 
     # Process each unique image
     local processed_paths=""
@@ -152,24 +180,42 @@ process_markdown_file() {
         image_path="${image_path#[\(]}"
         image_path="${image_path%\)}"
 
-        # Skip if already processed this path
-        if [[ "$processed_paths" =~ "|$image_path|" ]]; then
-            : $((skip_count++))
-            continue
-        fi
-        processed_paths="$processed_paths|$image_path|"
-
         # Skip if already a URL
         if [[ "$image_path" =~ ^https?:// ]]; then
             : $((skip_count++))
             continue
         fi
 
-        # Resolve relative path
-        local full_path="$md_dir/$image_path"
+        # Resolve path: absolute image paths used as-is, relative resolved against md dir
+        local full_path="$image_path"
+        if [[ "$image_path" != /* ]]; then
+            full_path="$md_dir/$image_path"
+        fi
 
         # Normalize path
         full_path=$(cd "$(dirname "$full_path")" 2>/dev/null && pwd)/$(basename "$full_path") 2>/dev/null || true
+
+        # Repeated reference to a path already handled in this run: the local
+        # file may already be deleted, so rewrite it with the uploaded URL
+        # instead of leaving a dead link. (Parallel newline lists, bash 3.2 safe.)
+        if [[ "$processed_paths" == *"|$image_path|"* ]]; then
+            if [ "$DRY_RUN" = false ] && [ -n "$uploaded_paths" ]; then
+                local li=0 p reuse_url=""
+                while IFS= read -r p; do
+                    li=$((li + 1))
+                    if [ "$p" = "$full_path" ]; then
+                        reuse_url=$(printf '%s\n' "$uploaded_urls" | awk -v n="$li" 'NR == n')
+                        break
+                    fi
+                done <<< "$uploaded_paths"
+                if [ -n "$reuse_url" ]; then
+                    content="${content//"$match"/![${alt_text}](${reuse_url})}"
+                fi
+            fi
+            : $((skip_count++))
+            continue
+        fi
+        processed_paths="$processed_paths|$image_path|"
 
         # Check if file exists
         if [ ! -f "$full_path" ]; then
@@ -194,15 +240,30 @@ process_markdown_file() {
             content="${content//"$match"/![${alt_text}](${new_url})}"
             : $((upload_count++))
 
-            # Track for deletion (use full_path as key)
-            uploaded_files["$full_path"]=1
+            # Track for deletion + reuse (exact full_path line in the lists)
+            if ! printf '%s\n' "$uploaded_paths" | grep -Fxq -- "$full_path"; then
+                uploaded_paths="${uploaded_paths:+$uploaded_paths$'\n'}$full_path"
+                uploaded_urls="${uploaded_urls:+$uploaded_urls$'\n'}$new_url"
+            fi
+
+            # Persist the rewritten content BEFORE deleting the local file, so
+            # an interruption between these two steps can at worst leave a
+            # local file whose URL is already recorded (re-run re-uploads it),
+            # never a deleted file with an unrecoverable URL.
+            # Only in --in-place mode; without it the file must stay untouched
+            # (final content is echoed to stdout as before).
+            if [ "$IN_PLACE" = true ]; then
+                flush_content "$md_file" "$content"
+            fi
 
             # Delete local file immediately after successful upload
             delete_local_image "$full_path"
 
             # Throttle: basic interval after each upload
             TOTAL_SESSION_UPLOADED=$((TOTAL_SESSION_UPLOADED + 1))
-            if [ "$(echo "$UPLOAD_INTERVAL > 0" | bc 2>/dev/null || echo 0)" = "1" ]; then
+            # awk instead of bc: bc is not installed by default on many
+            # systems (minimal Debian/Ubuntu, some NAS/servers)
+            if [ "$(awk -v a="$UPLOAD_INTERVAL" 'BEGIN { print (a > 0) ? 1 : 0 }')" = "1" ]; then
                 sleep "$UPLOAD_INTERVAL"
             fi
 
@@ -246,9 +307,15 @@ extract_port() {
 }
 
 # Check if anything listens on the PicList port (local).
+# Prefers lsof; falls back to bash's /dev/tcp when lsof is unavailable
+# (minimal Linux images, some containers).
 port_listening() {
     local port="$1"
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | grep -q LISTEN
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | grep -q LISTEN
+        return $?
+    fi
+    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && exec 3>&- 3<&-
 }
 
 # Wait up to N seconds for PicList port to start listening.
@@ -373,14 +440,15 @@ for md_file in "${md_files[@]}"; do
 done
 
 # Clean up empty directories left after deleting images
-if [ "$KEEP_LOCAL" = false ] && [ ${#deleted_dirs[@]} -gt 0 ]; then
-    for dir in "${!deleted_dirs[@]}"; do
+if [ "$KEEP_LOCAL" = false ] && [ -n "$DELETED_DIRS" ]; then
+    while IFS= read -r dir; do
+        [ -z "$dir" ] && continue
         if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
             rmdir "$dir"
             echo "  🗑️  Removed empty dir: $dir"
             : $((TOTAL_DIRS_REMOVED++))
         fi
-    done
+    done <<< "$DELETED_DIRS"
 fi
 
 echo

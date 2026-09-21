@@ -1,0 +1,27 @@
+# 产物不可变哈希（sha256，2026-08-23 固化）
+
+## worker 输入
+6ec0df2ffdd80dd5fbc35e810db5c6d6d37c97e51fd4e5ea20927569a186a262  worker-inputs/case-01.md
+6da13a1844ade6f67eaf399f6e8825eaf458a6f9f0c600474e11849ba798cefb  worker-inputs/case-02.md
+c7a56f5bd04927814c9c41f3e4fde30aae104f83d82c86255b8fab6ed51f5666  worker-inputs/case-03.md
+e81e455b019730221f60741bb59668a9835004c189a92612339a44b763ae68b2  worker-inputs/case-05a.md
+
+## worker 输出
+7e76e5e967db68925010bb95d0490e4cd7c1e0f4fdd9e9c2d6c62998ce2d989d  worker-outputs/case-01-R1-brief.md
+b7b6c1a9b8eb83c58b9afabc2833b86611a9d88a8bf9ece408df261efa3bb726  worker-outputs/case-01-R2-brief.md
+d21e12b35fc349a995d91783c3e9b4ce436fd5a1b8f671b5f9e4db4b6c96953c  worker-outputs/case-02-brief.md
+f04a3b140284acfa29f1af1f213f1bc11e2d41982e2475ce2e9b261480fcf4f8  worker-outputs/case-03-brief.md
+de8f679cb85c83cdfd882cd9f68f1c42dbef9cfcd5572b73fb4d36a39660abc4  worker-outputs/case-05a-response.md
+
+## 评分回执与比对
+4c33f0f6b1b280b6564918ac90d9688a36c116f6c5b60e0f7aad7f93673a3771  judge/case-01-R1.md
+c1978b3b1769a68a1c2f6bf008c608679ddb24b1d43cb6ef547672fc6e5f3749  judge/case-01-R2.md
+54767bb1a5fd11d2142dc021f6b237e78e3419a281aa8eae1bb99222a32d925f  judge/case-02.md
+b2ac2586e9d465b2d378bbb7a8ad4764f05abf09602501664b2f09db93694859  judge/case-03.md
+a2c805fdaf534e57192354614fb75c3be370762cf02ab3c53bab58058be60806  judge/case-05a.md
+7552e922a437d8d6eeeb6bac00f75a3c7a026468e669b7c88044c5c15fb8435d  stability-comparison.md
+db5b43ad35201192272e94c38f29f990ad8763479ef2817cf87fd44ab8e85cd5  consumer-check.md
+9b56f321247ca811c903e3a55138840ae1bc583f3649602c50b79e971f9e4af9  README.md
+
+## 被测候选快照
+97deb91be593d23e35892212140eb3f9e3625d1146f583d93ee009e2ab4f4896  ../../SKILL.md

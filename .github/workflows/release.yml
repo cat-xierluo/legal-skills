@@ -51,3 +51,36 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             pack-skills/*.zip
+
+      # README 回写内嵌在本 workflow,不依赖 on:release 事件——
+      # GITHUB_TOKEN 创建的 Release 不会级联触发其他 workflow(GitHub 防递归机制)
+      - name: Checkout main for README sync
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-tree
+
+      # 重写版 update-readme.py 从 cwd 自动发现根 README + expert-suites/*/README.md
+      # (套件目录不存在时自动降级为仅根 README,PR 合入前后打 tag 均可工作),
+      # 同时刷新整套与成员下载链接(含 suite-* 资产)
+      - name: Sync README download links
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: main-tree
+        run: |
+          python3 ../skills/release-workflow/scripts/update-readme.py \
+            "${{ github.repository }}"
+
+      - name: Commit README (if changed)
+        run: |
+          cd main-tree
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if [ -d expert-suites ]; then git add expert-suites/*/README.md; fi
+          if git diff --cached --quiet; then
+            echo "README 与专家套件下载链接无变更"
+          else
+            git commit -m "docs: 同步 README 与专家套件下载链接到最新 release"
+            git push
+          fi

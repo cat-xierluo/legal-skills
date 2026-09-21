@@ -15,13 +15,24 @@ STATUS_FILE="$CTX/STATUS.json"
 
 cleanup() {
   local rc=$?
+  local cleanup_rc=0
+  local cleanup_out=""
   trap - EXIT
   # Only the private socket/session created by this test; never the user server.
   if [ -n "${SMOKE_REAL_TMUX:-}" ]; then
-    "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION" 2>/dev/null || true
+    cleanup_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION" 2>&1) || cleanup_rc=$?
+    if [ "$cleanup_rc" -ne 0 ] && ! printf '%s\n' "$cleanup_out" | grep -Eqi "can't find session|no server running"; then
+      printf 'ASSERTION FAILED: private tmux cleanup failed: %s\n' "$cleanup_out" >&2
+      [ "$rc" -ne 0 ] || rc=1
+    fi
   fi
   if [ -d "$REPO" ]; then
-    git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || true
+    cleanup_rc=0
+    cleanup_out=$(git -C "$REPO" worktree remove --force "$WT" 2>&1) || cleanup_rc=$?
+    if [ "$cleanup_rc" -ne 0 ]; then
+      printf 'ASSERTION FAILED: private worktree cleanup failed: %s\n' "$cleanup_out" >&2
+      [ "$rc" -ne 0 ] || rc=1
+    fi
   fi
   if [ -s "$TMP_ROOT/orca-unexpected.log" ]; then
     echo "ASSERTION FAILED: unexpected fake Orca calls (all refused):" >&2
@@ -97,6 +108,27 @@ export ORCA_CLI_COMMAND="$TMP_ROOT/isolated-bin/orca"
 export ORCA_CLI_BIN="$ORCA_CLI_COMMAND"
 export SMOKE_REAL_TMUX="$(command -v tmux)"
 export SMOKE_TMUX_SOCKET="$TMP_ROOT/tmux.sock"
+set +e
+tmux_probe_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null \
+  new-session -d -s "$SESSION-probe" 'sleep 2' 2>&1)
+tmux_probe_create_rc=$?
+tmux_probe_show_out=$("$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" has-session -t "$SESSION-probe" 2>&1)
+tmux_probe_show_rc=$?
+set -e
+if [ "$tmux_probe_create_rc" -ne 0 ] || [ "$tmux_probe_show_rc" -ne 0 ]; then
+  if printf '%s\n%s' "$tmux_probe_out" "$tmux_probe_show_out" | \
+    grep -Eqi 'operation not permitted|permission denied|no such file or directory'; then
+    echo "SKIP: sandbox does not permit an isolated tmux socket; deterministic tmux contract tests remain available"
+    SMOKE_REAL_TMUX=
+    exit 0
+  fi
+  echo "ASSERTION FAILED: isolated tmux probe failed: $tmux_probe_out $tmux_probe_show_out" >&2
+  exit 1
+fi
+"$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" kill-session -t "$SESSION-probe" >/dev/null 2>&1 || {
+  echo "ASSERTION FAILED: isolated tmux probe could not clean up its session" >&2
+  exit 1
+}
 cat > "$TMP_ROOT/isolated-bin/tmux" <<'FAKE_TMUX'
 #!/usr/bin/env bash
 exec "$SMOKE_REAL_TMUX" -S "$SMOKE_TMUX_SOCKET" -f /dev/null "$@"
@@ -204,12 +236,21 @@ git -C "$REPO" add README.md
 git -C "$REPO" commit -q -m "init"
 git -C "$REPO" branch -M main
 
-spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
-  --no-orca-mode \
+# Exercise the historical four-backend contract using a private policy copy;
+# the production policy may explicitly enable additional backends for the user.
+FIXTURE_SKILL="$TMP_ROOT/fixture-skill"
+mkdir -p "$FIXTURE_SKILL/config"
+cp -R "$SCRIPT_DIR" "$FIXTURE_SKILL/scripts"
+jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]
+    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]' \
+  "$SCRIPT_DIR/../config/harness-backend-policy.json" > "$FIXTURE_SKILL/config/harness-backend-policy.json"
+
+spawn_out=$("$FIXTURE_SKILL/scripts/spawn-worker.sh" \
   --project "$REPO" \
   --branch "$BRANCH" \
   --worktree "$WT" \
   --session "$SESSION" \
+  --no-orca-mode \
   --base-ref main \
   --command "$WORKER_COMMAND" \
   --worker-backend "$WORKER_BACKEND" \
@@ -227,7 +268,7 @@ spawn_out=$("$SCRIPT_DIR/spawn-worker.sh" \
   --verify-cmd "npm test -- --run")
 assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
-# pm_harness still comes from real ancestry; only the policy is fixture-local.
+# pm_harness 仍由真实 ancestry 判定；allowed 集合使用上方隔离 policy fixture。
 assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: "
 assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoderwork-cn chain="
 if ! jq -e '

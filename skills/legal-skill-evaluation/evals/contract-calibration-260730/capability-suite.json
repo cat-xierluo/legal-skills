@@ -1,0 +1,804 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "contract-copilot-capability-20260730",
+  "candidate": {
+    "path": "skills/contract-copilot",
+    "sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+    "hash_scope": "git-tracked"
+  },
+  "status": "regression-detected",
+  "formal_markers": [
+    "NOT_VERIFIED"
+  ],
+  "coverage_target": {
+    "minimum": 20,
+    "maximum": 50,
+    "note": "13 例 not-run 已构造 fixture 并标记 fixture_ready（布尔）；其中 2 例经门禁静态判定 pass，9 例门禁待扩展",
+    "fixture_ready_case_count": 13
+  },
+  "cases": [
+    {
+      "id": "CONTRACT-E2E-DESIGN-CURRENT",
+      "title": "设计委托合同当前候选端到端重跑",
+      "case_type": "familiar",
+      "tier": "full-e2e",
+      "source_kind": "current-run",
+      "capabilities": [
+        "service-contract",
+        "output-integrity",
+        "human-review",
+        "regression-closure"
+      ],
+      "fixture_spec": "原始设计委托合同 + 25 项审查计划；甲方立场、常规口径、隔离评测身份。",
+      "input_refs": [
+        "skills/contract-copilot/archive/20260326_223905_230725审核-设计委托合同/input.docx",
+        "skills/contract-copilot/archive/20260326_223905_230725审核-设计委托合同/review-plan.json",
+        "evals/contract-calibration-260730/current-run-receipts.json#design-current"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "input_sha256": "0a2305f8169a26ea7ce6c4a125c9cb676e500f3188f79c8d7c5b8da9d7d56800",
+      "output_sha256": "ba030c4684864d06211cf591a8be88a24efb6daf869027c68f59053ffc69abf7",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "design-current",
+          "record_sha256": "99e652e049c29ecceb8f604388fd0a4b57e3677f6e0ef755daa8d99ce9d74c24"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-DESIGN-DOCX-INTEGRITY",
+          "expected": "修订版与 Word 报告均为可解包 DOCX，且执行日志没有失败项。",
+          "observed": "pass",
+          "evidence": "两份 DOCX unzip -t 通过；日志 14 applied、11 report_only、0 failed。"
+        },
+        {
+          "id": "CAP-DESIGN-REPORT-INTEGRITY",
+          "expected": "25 项风险在最终报告保留标题、位置、风险、建议和依据，不批量塌缩为占位符。",
+          "observed": "pass",
+          "evidence": "最终报告含 25 项详细意见，仅签署时间 1 处使用未提及/待补充。"
+        },
+        {
+          "id": "CAP-DESIGN-ROLE-BOUNDARY",
+          "expected": "报告从显式甲方立场展开，并在概况、摘要和修改建议中保持一致。",
+          "observed": "pass",
+          "evidence": "报告元信息与开篇均为甲方立场，核心意见围绕付款、验收、交付及项目使用权。"
+        },
+        {
+          "id": "CAP-DESIGN-HUMAN-REVIEW-STATE",
+          "expected": "正式审查意见书外观应有机器可判的待复核或已复核状态。",
+          "observed": "fail",
+          "evidence": "报告包含审查人、机构和出具信息，但全文没有草稿、待复核、人工复核或已复核状态。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-E2E-PATENT-CURRENT",
+      "title": "专利实施普通许可合同当前候选端到端重跑",
+      "case_type": "peer-unfamiliar",
+      "tier": "full-e2e",
+      "source_kind": "current-run",
+      "capabilities": [
+        "ip-contract",
+        "output-integrity",
+        "human-review",
+        "regression-closure"
+      ],
+      "fixture_spec": "由原始 DOC 临时转换出的无批注 DOCX + 8 项旧字段审查计划；中立立场、常规口径、隔离评测身份。",
+      "input_refs": [
+        "skills/contract-copilot/archive/20260324_211054_专利实施普通许可合同模板/input.doc",
+        "skills/contract-copilot/archive/20260324_211054_专利实施普通许可合同模板/review-plan.json",
+        "evals/contract-calibration-260730/current-run-receipts.json#patent-current-clean"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "input_sha256": "5f252de337af04c641a9549e19cfb7fc03d2e46eebdfd851305ed0774638da1b",
+      "output_sha256": "6de4d7bd66ac885e461cb26567f34d29b451a73bd4ec0c6f171a8155b861c556",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "patent-current-clean",
+          "record_sha256": "d420cab649b0d1cb86479b31a86e9ae7a105275c689bcdefc616e535e58b51c7"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-PATENT-DOCX-INTEGRITY",
+          "expected": "干净输入可生成可解包修订版和 Word 报告，执行动作可定位。",
+          "observed": "pass",
+          "evidence": "两份 DOCX unzip -t 通过；修订版新增 8 条批注和 1 组删除/插入修订。"
+        },
+        {
+          "id": "CAP-PATENT-REPORT-FIELD-INTEGRITY",
+          "expected": "风险标题、位置、描述、建议和法律依据必须从审查计划完整进入最终报告。",
+          "observed": "fail",
+          "evidence": "最终报告出现 48 次未提及/待补充，8 项法律依据全部渲染为 /。"
+        },
+        {
+          "id": "CAP-PATENT-PRODUCER-SUCCESS",
+          "expected": "最终报告关键字段不完整时不得仅凭动作执行成功返回整体成功。",
+          "observed": "fail",
+          "evidence": "脚本返回 0 并报告 8 项全部成功，但最终报告逐项关键字段批量缺失。"
+        },
+        {
+          "id": "CAP-PATENT-SIGNABILITY-CLOSURE",
+          "expected": "专利号、许可费、期限、主体和核心义务未补齐时不得给出可签署结论。",
+          "observed": "fail",
+          "evidence": "概况的主体、合同类型、期限、价款和核心义务均待补充，核心结论仍为有条件可签。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-DYNAMIC-MISSING-CONTEXT",
+      "title": "缺少角色、目标和附件时停止实质审查",
+      "case_type": "missing-context",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run",
+      "capabilities": [
+        "intake",
+        "role-objective"
+      ],
+      "fixture_spec": "仅提供专利许可合同名称，不提供文件、角色、目标、口径和审查人确认。",
+      "input_refs": [
+        "evals/contract-calibration-260730/missing-context-input.json"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "input_sha256": "ed9d59de8a85dc4a4f74f3e7ba58d6a4ac376c540c85985d81f8d42f5953ddb5",
+      "output_sha256": "809d7fa6f2105b43c0924309f8f0163ac3933fc78ff19baf072b015fb9ae020f",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "missing-context-controlled",
+          "record_sha256": "ef8e0f3d229a701c9e09ceec47e378577234b1654ab840f4c2fecaf5d90bd383"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-INTAKE-MISSING-CONTEXT-STOP",
+          "expected": "只请求补充角色、目标、口径、审查人确认和附件，不评价可签署性。",
+          "observed": "pass",
+          "evidence": "受控响应列出五类缺口并明确不进入实质审查。"
+        },
+        {
+          "id": "CAP-INTAKE-MISSING-CONTEXT-DISCLAIMER",
+          "expected": "明确当前响应不是正式审查意见，后续结果仍须律师复核。",
+          "observed": "pass",
+          "evidence": "输出明确材料限制、非正式意见属性及承办律师复核要求。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-ROLE-MISSING",
+      "title": "审查立场为空",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "reference-derived",
+      "capabilities": [
+        "intake",
+        "role-objective"
+      ],
+      "fixture_spec": "合同与审查目标完整，但 party_role 为空。",
+      "input_refs": [
+        "skills/contract-copilot/references/review-framework.md#四步审查流程"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "input_sha256": "4e2001d95ccaa1f3753742fa589d401ab8ec17dee7f39a2cc75dffd95076ca31",
+      "output_sha256": "8c65e4295ba37c3f38f5eb7631cf4be4c59bdc14b6d97224e8a3171b3be8b686",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "role-missing-synthetic",
+          "record_sha256": "b10994cf068cc79135fc5152703b44dfe327153c3fb12c4a043163cb08cf358e"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ROLE-MISSING-STOP",
+          "expected": "停止立场性分析并请求确认代表哪一方。",
+          "observed": "fail",
+          "evidence": "候选外合成探针显示：非交互环境把空立场自动解析为“其他”，没有停止并请求确认。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-OBJECTIVE-MISSING",
+      "title": "审查目标为空",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "reference-derived",
+      "capabilities": [
+        "intake",
+        "role-objective"
+      ],
+      "fixture_spec": "合同与甲方立场完整，但未说明目标是风险提示、谈判还是直接修订。",
+      "input_refs": [
+        "skills/contract-copilot/references/review-framework.md#四步审查流程"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-OBJECTIVE-MISSING-STOP",
+          "expected": "请求明确目标，不自行选择交付强度。",
+          "observed": "fail",
+          "evidence": "候选识别 review_objective 为空，但 SKILL.md 阻塞清单仅含立场/口径（二者已具备），据此未暂停整轮审查，自行按『签约前把关』默认目的推进并出具完整审查意见（结论『不建议签』），仅在文末标注待确认；未遵守『目标确认前暂停、不自行选择交付强度』。暴露 SKILL.md 对审查目的缺失的处置口径自相矛盾（§9.1 必问 vs §3.2/§1.1 阻塞清单未列），行为可复现性差。"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 FAIL（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "f633cf6efbdfed55ee9cabb95b21bce6c2acc22f1527775b76948f3287f52dcf",
+      "output_sha256": "c216f48c7e4588ae232bd669f9758048fe285a204553e36342b09c4e2d30d760",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-objective-missing-real-run",
+          "record_sha256": "a82ef048840d5507afd6139683f0eb6a659d1b097c762e8cccab2c0380bf6388"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-REVIEWER-UNCONFIRMED",
+      "title": "审查人身份未确认",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "reference-derived",
+      "capabilities": [
+        "intake",
+        "human-review"
+      ],
+      "fixture_spec": "非交互运行且没有显式 author/organization，隔离配置目录中也无身份配置。",
+      "input_refs": [
+        "skills/contract-copilot/scripts/README.md#一体化执行（推荐）"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "input_sha256": "7b6bdae61eee21cbba42b2ae07b5b359ed6053e20d6e856e5de8272600fbc88e",
+      "output_sha256": "7a0b60b3cdd853496c245b1c9daab7d4349498ba70defa35085df48169d63be4",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "reviewer-unconfirmed-synthetic",
+          "record_sha256": "534c3863278d213d2315898f3cfdec0df07f46fbab76646455123a7ca1717c10"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-REVIEWER-UNCONFIRMED-BLOCK",
+          "expected": "非交互环境明确阻断，不生成带虚假署名的正式外观。",
+          "observed": "pass",
+          "evidence": "候选外合成探针显示：缺少 author 和 organization 时抛出 ValueError，且隔离配置目录没有写入身份文件。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-ATTACHMENT-MISSING",
+      "title": "合同附件缺失",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "reference-derived",
+      "capabilities": [
+        "intake",
+        "output-integrity"
+      ],
+      "fixture_spec": "正文多次引用服务清单或技术附件，但附件未提供。",
+      "input_refs": [
+        "skills/contract-copilot/references/review-framework.md#签署前必检清单"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ATTACHMENT-MISSING-LIMIT",
+          "expected": "明确附件缺失对范围、验收和价款判断的限制，并列为签前条件。",
+          "observed": "pass",
+          "evidence": "候选开篇列明四份附件全部未提供，明确指出正文空心化、实质内容全在附件且附件效力高于正文；明确声明不对服务范围、验收标准、价款、知识产权出具实体结论（四项均标『未提及/待补充』），并将『取得并审阅附件一至四』列为签署前先决事项第 1 项（最高优先级、其余事项前提）。未完全暂停整轮（就正文结构可独立认定的风险出具 P0 意见并声明为阶段性成果），符合 SKILL.md 立场/口径完备即可推进的规则，满足断言『明确限制并列为签前条件』。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "c2bd5aa9dff4c6bafb4ed10b1d57be4e3b53512ad89cdf2d5cf61308aa151529",
+      "output_sha256": "82c7b3d9674ecf61a293165f84cf1b0a9098433038a82d45532cc2a86357e63d",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-attachment-missing-real-run",
+          "record_sha256": "3c2ee8710ad29dbfe8cb15273e6260ddb620b2c6b025a203fe7f2f5311705f97"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-SERVICE-SCOPE",
+      "title": "服务范围与交付件",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract"
+      ],
+      "fixture_spec": "服务条款只写提供全程服务，没有事项、频次、成果形式和扩项机制。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/03-service/general-service.md#服务范围与配合义务"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-SERVICE-SCOPE-BOUNDARY",
+          "expected": "识别范围过粗并给出服务清单、频次、成果和书面扩项机制。",
+          "observed": "pass",
+          "evidence": "候选将服务范围条款定为 P0 标的不能确定，给出重写措辞但显式暂停、声明不替用户臆测，未落可签/有条件可签/不建议签任一正式定性。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "846a720de5cde4472db6dd68c94168830d990f59b404bf50707333acaabc0dde",
+      "output_sha256": "9a33219058b5920fe8074c41554a5169796c0ec4ccfe890d5adcc3b8cf08cf5c",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-service-scope-real-run",
+          "record_sha256": "a90e438e0b40437a12ea0ce5f296504fa4ef02a50afa3d41bad8f2093f713900"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-ACCEPTANCE-PAYMENT",
+      "title": "验收与付款联动",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract"
+      ],
+      "fixture_spec": "尾款在完整成果交付和验收之前到期。",
+      "input_refs": [
+        "evals/contract-calibration-260730/current-run-receipts.json#design-current"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ACCEPTANCE-PAYMENT-LINK",
+          "expected": "把尾款节点与完整交付、可验证验收和整改期限联动。",
+          "observed": "fail",
+          "evidence": "候选识别尾款/验收脱节为 P0，却直接给出完整修改方案并出具正式结论『不建议签』，未在信息补齐前暂停实质审查，也未避免正式可签结论。"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 FAIL（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "16958f283f4bd8d3088709ef93f8b62474dddf677064150b88433a408870c3d7",
+      "output_sha256": "389f6b3a608299e1a6ff29edd928ca84f93cad5223b6d7dd7198f3a572de4f8b",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-acceptance-payment-real-run",
+          "record_sha256": "42c41d5579a221723b599b2ae6c04b5c55e5ea7d5438d91ea1c9608d0a7820d3"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-CHANGE-FEE",
+      "title": "修改次数与扩项收费",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract",
+        "role-objective"
+      ],
+      "fixture_spec": "合同把设计缺陷修改与客户新增需求混为一类并固定高额单次收费。",
+      "input_refs": [
+        "skills/contract-copilot/references/revision-strategy.md#商务条款"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-CHANGE-FEE-AUTHORIZATION",
+          "expected": "区分缺陷整改与新增需求；未获授权时不替客户直接确定新价格。",
+          "observed": "fail",
+          "evidence": "候选识别修改费混同风险并给推荐措辞，却出具正式结论『有条件可签』，未触发暂停、未避免正式可签结论。"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 FAIL（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "7ff80d184040a337bfc8972a96e1fdc3c4657ba060f9dfea6ac14cedda407ce5",
+      "output_sha256": "c59933f7dd33a2f909ecf7b4f1228720e215bead590ca82aecb1082126169ee8",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-change-fee-real-run",
+          "record_sha256": "1248bb35fa1a86bd92135fa995875372914cf53ff9bed6db9e46ad72c82b805f"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PENALTY-STACKING",
+      "title": "违约金叠加与责任边界",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract"
+      ],
+      "fixture_spec": "日违约金、固定比例违约金和全部损失赔偿同时适用，未写责任边界。",
+      "input_refs": [
+        "skills/contract-copilot/references/revision-strategy.md#违约责任和解除条款"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PENALTY-STACKING-BOUNDARY",
+          "expected": "识别重复责任并给出催告、补救、合理损失和必要例外的最小修订。",
+          "observed": "fail",
+          "evidence": "候选识别违约金三重叠加为 P0 并给修订草案，却出具正式结论『有条件可签』，未暂停、未避免正式可签结论。"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 FAIL（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "38f4877adbf114f5757369c8b2b428d0ecd0ceb777c5e6321cd17990033e5e0c",
+      "output_sha256": "3473897dacd431d937edeeba160390aa9fe29afaaadf15b1a0ba86111ad291b1",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-penalty-stacking-real-run",
+          "record_sha256": "43c7d5da71dc9f46999dfea7f0ea26c16d37e152040c80699c07f39823abe1cd"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-DESIGN-IP-USE",
+      "title": "设计成果向施工方使用",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract",
+        "ip-contract"
+      ],
+      "fixture_spec": "成果权利归服务方且禁止委托方向施工单位复制、修改或提供。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/03-service/general-service.md#成果归属、保密与数据边界"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-DESIGN-IP-PROJECT-USE",
+          "expected": "区分既有工具与定制成果，保留本项目实施所需的使用、修改和受控再许可。",
+          "observed": "pass",
+          "evidence": "候选识别成果 IP 归属使甲方目的落空为 P0，给出修改措辞但明确『本轮不出具正式可签结论』，列出前置事项后定稿，满足暂停与不作正式结论。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "59c1f89e8411c148493149da4b5c5ae34b96be65fd8d0edd925828a01a81b31a",
+      "output_sha256": "c94e6bd5feb55145001da4db9ed58b8704c6d1b88afc732ed34e5fc032780cc9",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-design-ip-use-real-run",
+          "record_sha256": "1e987b1e4040f61540681ffe873fd32f3e40f8d3a216990fb51710228807d9fa"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-NOTICE",
+      "title": "通知送达机制",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract"
+      ],
+      "fixture_spec": "通知条款只有书面文件，电子邮件以发出即认可，地址变更规则不完整。",
+      "input_refs": [
+        "skills/contract-copilot/references/review-framework.md#微观层"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-NOTICE-DELIVERY",
+          "expected": "区分送达与实体认可，并明确渠道、地址、退信/拒收和变更规则。",
+          "observed": "pass",
+          "evidence": "候选识别通知送达混淆为 P0，给重写措辞但声明『本轮不出具正式可签结论，暂停并等待补充材料』，满足暂停与不作正式结论。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "3190718726979d50e72edcb643aacac0f97081915964848e5dadfdc257eaba83",
+      "output_sha256": "46a31e0b03b8b9f2eb4ee8c0a166e58d16944dfb58924145e2666b101e10ae72",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-notice-real-run",
+          "record_sha256": "6e974d8b3fe6296fb822309daae39c17799298f641702ca393bacbcea35bcfec"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-JURISDICTION",
+      "title": "争议管辖连接点",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "service-contract"
+      ],
+      "fixture_spec": "只写合同签订地法院，但签订地范围模糊或正文未明确。",
+      "input_refs": [
+        "skills/contract-copilot/references/review-framework.md#微观层"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-JURISDICTION-CONNECTION",
+          "expected": "识别连接点不确定并提供可执行的具体法院或完整仲裁条款。",
+          "observed": "pass",
+          "evidence": "候选识别管辖连接点模糊为 P0，给推荐措辞但明示『本轮不出具正式的可签结论』并附先决事项，满足暂停与不作正式结论。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "d7ba62309f8d8fa80367b6c319f8c862ab7b44790ca8f09b7365d72d967d9b5f",
+      "output_sha256": "dcbda565ada342c8c1f0433eae9c97757ba8be48f318811e925c62328464008b",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-jurisdiction-real-run",
+          "record_sha256": "a13f2df59588406bafec8f03eea4db7172cc05fe4e006f3c54c9164e6dd647ff"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PATENT-SUBJECT",
+      "title": "专利对象与权利状态",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "current-run-derived",
+      "capabilities": [
+        "ip-contract"
+      ],
+      "fixture_spec": "专利号、权利人、共有、质押、无效程序和在先许可信息留空。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/04-ip/patent.md#宏观层面审查要点"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-SUBJECT-BLOCK",
+          "expected": "把权利状态核验列为签前条件，信息未补齐时不作可签结论。",
+          "observed": "pass",
+          "evidence": "候选识别专利权利状态未核验为 P0 标的问题，给推荐措辞但明确『暂不出具可签与否的正式结论』，缺口填补前不作可签判断，满足暂停与不作正式结论。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "41f303f08fb26f8d955950effdb3ccc5d39cb5e65ebc6a8d15ea9cd3c1382485",
+      "output_sha256": "4625b74dff96161f3f181d5e49083c267ddeef0fe1036a7f510e333b68ddcdb8",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-patent-subject-real-run",
+          "record_sha256": "ab9463cccaaeb4ba15fdbe9732d9b794b9eac0040d8bf7de11eb16c432ceba3c"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PATENT-SCOPE",
+      "title": "许可范围与 OEM/ODM",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "historical-derived",
+      "capabilities": [
+        "ip-contract"
+      ],
+      "fixture_spec": "普通许可允许与第三方合作生产，但未说明分许可、地域、产品线和第三方责任。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/04-ip/patent.md#中观层面审查要点"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-SCOPE-SUBLICENSE",
+          "expected": "区分合作生产与分许可，明确同意、报备、审计和第三方责任传导。",
+          "observed": "pass",
+          "evidence": "候选识别分许可性质不明为 P0，给两套措辞但明确不代作商务选择、列阻塞确认事项后定稿；结论为『不建议签』但声明确认闭环前不构成可签结论（边界接近正式三档，按暂停优先判 pass）。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "b7a960695051f57e251ad1f7aa33b20743989e182c7a246d20ac274e95aa5083",
+      "output_sha256": "023e8d8b2fd4e26669dc5c4c8cf7a8269c1d9abc7828f1ed4c493eb10a186076",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-patent-scope-real-run",
+          "record_sha256": "06018849998d37cb7c505c4e30788f889efa3489ff23bbbc48ca847edf4f6227"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PATENT-FEE",
+      "title": "许可费、提成与审计",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "historical-derived",
+      "capabilities": [
+        "ip-contract",
+        "role-objective"
+      ],
+      "fixture_spec": "固定许可费、提成比例和销售额口径均为空。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/04-ip/patent.md#价款、技术支持与改进成果"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-FEE-AUDIT",
+          "expected": "列出费用、提成基数、周期、税费和审计缺口，不擅自代填商业数字。",
+          "observed": "pass",
+          "evidence": "候选识别许可费六项全缺为 P0，给推荐措辞但声明『本轮不出具正式可签结论，审查暂停待补』，满足暂停与不作正式结论。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "7913cebc829ac3616f4616715f9c4ad4bd80243f75deb138d4224f53b9ef4f88",
+      "output_sha256": "17de3511faf2bfc122f93be9e68cfe8b394e1f1c57db9fb56ddf5533d9fd2e23",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-patent-fee-real-run",
+          "record_sha256": "950ff12ea34df7f2ac2106f0493e83d2b779be9ff04c50adad1936d3e6366015"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PATENT-INVALIDITY",
+      "title": "专利无效、侵权与维权协作",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "historical-derived",
+      "capabilities": [
+        "ip-contract"
+      ],
+      "fixture_spec": "合同用负一切法律责任概括第三方侵权，未区分无效、应诉、费用和退款。",
+      "input_refs": [
+        "skills/contract-copilot/references/contract-types/04-ip/patent.md#侵权、无效与维权协作"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-pass",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-INVALIDITY-ALLOCATION",
+          "expected": "分别处理无效、权利瑕疵、第三方指控、维权主体、费用与退款后果。",
+          "observed": "pass",
+          "evidence": "候选识别第三方侵权责任过宽为 P0，给重写措辞但在事实层面暂停、列待补事实；结论『不建议按现有文本签署』并说明完成先决后可转有条件可签（边界接近正式三档，按暂停优先判 pass）。"
+        }
+      ],
+      "gate_verdict": "executed-pass",
+      "gate_note": "v0.8.5 真实动态执行：候选实际产出经 artifact-backed 收据判定 PASS（非 v0.8.4 的静态 fixture 判定）。",
+      "input_sha256": "7a47b31c5dd963ae9c652e38e18337e9d9d71ae6e39b4d88dfbec852a6ff1dfa",
+      "output_sha256": "392112b7e794608d6f55a9edad48d58c892aaa6d3a3966310ae825195126f90a",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "contract-micro-patent-invalidity-real-run",
+          "record_sha256": "e86341fda7f8e82fbcf9838844150f4f004711c08854d5129c3da0a4eb925150"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-REPORT-FIELD-COLLAPSE",
+      "title": "旧计划字段导致最终报告塌缩",
+      "case_type": "micro",
+      "tier": "dynamic-micro",
+      "source_kind": "historical-derived",
+      "capabilities": [
+        "output-integrity",
+        "regression-closure"
+      ],
+      "fixture_spec": "合法 finding 使用 risk/suggestion/comment 等旧字段组合，最终报告必须完整映射。",
+      "input_refs": [
+        "evals/contract-calibration-260730/current-run-receipts.json#patent-current-clean"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "input_sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15",
+      "output_sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "report-field-collapse-synthetic",
+          "record_sha256": "80a215a10f5f09e2fa4c890281d0455b3d0ed653d8c270b50dfe30d3970c970b"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-REPORT-FIELD-NONEMPTY",
+          "expected": "标题、条款位置、风险概述、建议和法律依据不批量为空；checker 读取最终报告。",
+          "observed": "fail",
+          "evidence": "脱敏旧字段计划生成的报告出现 14 个待补占位和 1 个空法律依据，候选函数仍正常返回。"
+        }
+      ]
+    },
+    {
+      "id": "CONTRACT-MICRO-PRODUCER-SELF-SUCCESS",
+      "title": "生产器自报成功不得关闭回归",
+      "case_type": "micro",
+      "tier": "static-contract",
+      "source_kind": "historical-derived",
+      "capabilities": [
+        "output-integrity",
+        "human-review",
+        "regression-closure"
+      ],
+      "fixture_spec": "执行日志全部 applied，但最终报告关键字段为空且没有复核状态。",
+      "input_refs": [
+        "references/contract-scenario-rubric.md#2026-07-30-contract-copilot-校准新增核查",
+        "skills/skill-lint/references/harness-reliability-standards.md#Hard-Fail"
+      ],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "execution_status": "executed-fail",
+      "input_sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15",
+      "output_sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4",
+      "run_receipts": [
+        {
+          "manifest": "evals/contract-calibration-260730/current-run-receipts.json",
+          "run_id": "producer-self-success-synthetic",
+          "record_sha256": "fb2405a24dacf129d05016e342798e02897a97874d5500497c3424bb80c827f3"
+        }
+      ],
+      "gate_verdict": "executed-fail",
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PRODUCER-SELF-SUCCESS-BLOCK",
+          "expected": "独立 checker 对最终报告非零退出，回归状态保持开放。",
+          "observed": "fail",
+          "evidence": "候选报告函数正常返回，但最终报告仍有 14 个待补占位和 1 个空法律依据。"
+        },
+        {
+          "id": "CAP-MICRO-FORMAL-REVIEW-STATE",
+          "expected": "待复核与已复核状态机器可判，未复核产物不签发正式意见。",
+          "observed": "fail",
+          "evidence": "生成的正式意见书外观中没有草稿、待复核、已复核或复核状态字段。"
+        }
+      ]
+    }
+  ]
+}

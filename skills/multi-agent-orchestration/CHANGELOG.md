@@ -1,5 +1,124 @@
 # Changelog
 
+## [2.27.4] - 2026-09-20
+
+### 修复
+
+- 修复 `spawn-worker-deps.sh` 无效 `DEPS_MODE` 诊断中变量与中文全角括号邻接，在 `set -u` 下被 Bash 误解析为另一变量名并提前崩溃的问题；新增稳定退出码与诊断回归。
+- 修复 Hermes backend 策略测试同类变量插值问题，并把“当前进程祖先链无法完整证明”（rc=67）明确作为环境探针跳过条件；生产门禁仍按原合同 fail-closed。
+- 修复旧通用 backend-policy 测试对宿主进程命名空间的隐式依赖：保留所有可读真实帧，只在测试夹具内把不可见的最外层边界补为中性 shell，使具名祖先链正反例在容器/CI 中可重复；生产检测逻辑不变。
+- 修复内存预算显式 opt-out 的顺序错误：`SPAWN_WORKER_MEM_BUDGET_BYTES=0` 现在即使宿主遥测在沙箱/CI 中全部不可读也稳定返回 `disabled`，可读数据仍按最佳努力保留；默认非零预算继续对不可探测环境 fail-closed。
+- 修复 `pm-orchestrate reauthorize` 未跟进 completion authority receipt 契约的回归：重授权现在从 Git common-dir 推导原始回执，交叉核对 session/worktree/branch/runtime 与受信 METADATA，在任何新终端副作用前拒绝缺失或漂移身份；register 只在该受限替换路径内轮换 terminal/Dispatch/completion receipt，普通注册仍禁止用可写 metadata 换权威。receipt 替换与 METADATA 写回组成有补偿回滚的事务：后者失败时恢复旧 receipt，再由 PM 回收新终端，避免仍存活的旧 Worker 被意外剥夺完成权限。
+- 维护测试不再把受限 sandbox 的宿主遥测缺失误报为功能回归：真实机器 smoke 在可探测时验证额度，在不可探测时验证稳定 `unprobeable`、无 `slots` 的 fail-closed 合同。
+- 为启动、依赖安装、provider lease 与 Worker prompt 回归补齐测试私有的进程/tmux 夹具，使其只验证各自合同，不依赖当前宿主命名空间或用户 tmux server；两个真实 tmux smoke 都改用独立 socket，在 sandbox 明确禁止创建时报告环境跳过，并严格检查私有资源清理错误，而不是吞掉退出码或伪造通过。
+- 将 Hermes 专项 `scripts/tests/test-harness-backend-policy.sh` 纳入维护者完整验证矩阵，避免只运行旧的通用策略测试而漏掉宿主签名回归。
+
+### 文档完善
+
+- 将本 Skill 的 `TASKS.md`、`DECISIONS.md` 纳入版本控制，按 `READY / RESTART_REQUIRED / BLOCKED / PARKED / OBSERVE / COMPLETE` 重整任务状态、依赖、允许范围、验收命令和接手模板；PR #145/#147 等已合并事实不再保留为待处理状态。
+- 把 Hermes 首次实战遗留拆成 Bash 版本诊断、首次交互安全设计、GitHub merge 恢复三张独立卡；只有版本诊断进入可领取维护池，另外两项继续停放，避免其他 Agent 从一张混合卡擅自扩大权限。
+- 同步根 README 技能版本与最近更新区、Orca Worker/PM 参考页版本头，并把 ZCode driver safety 参考页接入 `SKILL.md` 按需读取地图。
+
+### 验证
+
+- 维护者确定性矩阵连续运行至 `autopilot facts 21/21` 全部通过；重授权专项为 `193 pass / 0 fail`（含 receipt 已替换而 METADATA 写回失败的故障注入与旧权限恢复），内存预算为 `58 pass / 0 fail`，依赖安装门禁为 `129 pass / 0 fail`，Hermes 专项为 `23 pass / 0 fail / 1 environment skip`。
+- `quick_validate.py` 通过；Harness Failure Audit 为 `PASS`；Security Scan 为 `0 critical / 0 high`，其余命中为既有测试攻击样例、受控子进程/文件访问等审计项。
+- `smoke-orca-control-plane.sh` 通过；真实 tmux 两个 smoke 因 sandbox 禁止隔离 socket 明确跳过，真实 Orca worker smoke 因当前 runtime 缺 `terminal.multiplex.v1` 以 rc=77 跳过。真实 provider 全生命周期与全 Skill instruction stability 仍为 `NOT_VERIFIED`，不得据此扩张结论。
+
+### 边界
+
+- 本版本只修复已确认回归并整理维护上下文，不实现 WorkerList 分页、`git rm` 权限、Cross-PM Handoff、Peer Comms、通信 E2E 或 ZCode RuntimeAdapter。
+
+## [2.27.3] - 2026-09-19
+
+### 修复
+
+- `spawn-worker.sh` 的 `--base-ref` 守卫字符类由 `[0-9a-f]` 扩为 `[0-9a-fA-F]`：大写 sha（如 `96A304DF…`）与大小写混合 sha 在任何 worktree/provider/terminal 副作用前同样以 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 拒绝并退出。事故：原守卫只匹配小写十六进制，PM 探针实证大写 sha rc=0 放行后被原样写入 `METADATA.base_ref`，重现 v2.27.1 已堵的 `pm-cleanup-worker` 死锁（`INTEGRATION_TARGET_MISMATCH` argument=main vs metadata=sha 与 `PR_BASE_MISMATCH` expected=sha vs actual=main）。
+- 第二分支「真实 ref 名放行」语义不变：`refs/heads|<value>` / `refs/remotes/<value>` / `refs/tags/<value>` 大小写敏感，分支名恰为大写 hex 形态且真实存在时（fixture `DEADBEEF2`）仍放行；该路径对应「校验」而非「拦截」。
+
+### 文档
+
+- SKILL.md §3.3 显式标注「字符类大小写敏感」与「分支名恰为大写 hex 形态且真实存在时仍放行」。
+
+### 验证
+
+- `test-spawn-worker-flags.sh` 新增三个用例：大写 40-hex（`96A304DF…`）拒绝且 rc=64 + 无 worktree/METADATA 副作用；大小写混合 40-hex（`AbCdEf…`）拒绝；临时 fixture 仓库建分支 `DEADBEEF2`（9 位大写 hex）后传该名 `--base-ref`，验证不触发 `SPAWN_WORKER_BASE_REF_MUST_BE_REF`、继续后续流程（或既有早停）。
+
+## [2.27.2] - 2026-09-17
+
+### 修复
+
+- Supervised 完成权限绑定启动时 PM authority 与 live Dispatch 身份，保留 capability 摘要而非明文（completion authority 绑定并入 2.24.0+ 的 ask/check trusted-handle 门禁：--from/--terminal 必须等于环境或 METADATA 冻结的唯一 worker handle）；preamble 原生反斜杠续行的 worker_done 现可被 Shell 门禁识别原样放行，拒绝 metadata 换权威、陈旧 runtime/process/run 和精确 Shell allowlist 绕过。
+- 手动 register 必须传真实 `--authority-receipt`，spawn 自动传递；无有效 authority 时在 worker-start 前停止。完成校验失败后上报协议阻塞，不变形重试。
+- agent-unconfigured 恢复从真实 Git common-dir 与安全 session 推导既有 PM receipt，核对身份后才注入或重绑；缺失、改址或错配时停止，不临时重建授权。
+- PM run-bind 对畸形 JSON 和缺失/错误身份 fail-closed；两条清理路径按精确 OID 原子删除远端分支，远端并发推进时保留较新提交并报告待清理。
+
+### 验证
+
+- 增加完成权限生产/消费反例、绑定异常响应，以及真实临时 bare remote 的删除竞态用例；与既有 runtime 身份和资源结算保护一并回归。真实 provider supervised 完整生命周期仍为 `NOT_VERIFIED`，本地测试不代表已完成生产验收。
+## [2.27.1] - 2026-09-17
+
+### 修复
+
+- `spawn-worker.sh` 的 `--base-ref` 解析后、任何 worktree/provider/terminal/Dispatch 副作用之前新增 40-hex sha 拒绝门：若值匹配 `^[0-9a-f]{40}$`，或 7—40 位纯十六进制且 git 能解析为 commit 但不是真实 ref（`refs/heads/<v>` / `refs/remotes/<v>` / `refs/tags/<v>`），打印 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 并以非零退出。引用名（`main`、`origin/main`、`refs/heads/x`）行为不变。事故：原样记录到 `METADATA.base_ref` 的 sha 会让 `pm-cleanup-worker` 在 `INTEGRATION_TARGET_MISMATCH`（argument=main vs metadata=sha）与 `PR_BASE_MISMATCH`（expected=sha vs actual=main）之间死锁。
+- SKILL.md §3.3 新增一句说明 `--base-ref` 只接受引用名、不接受裸 sha。
+
+### 验证
+
+- `test-spawn-worker-flags.sh` 新增两个用例：传 40-hex 拒绝且退出前未创建 worktree/未写 METADATA；传 `main` 正常进入后续（沿用既有 `--dry-run` 早停机制）。
+
+## [2.27.0] - 2026-09-15
+
+### 改进
+
+- hermes PM 宿主授权面由 claude-code/codex 扩为**全部受支持 worker backend**（claude-code、codex、codebuddy、qoderwork-cn、zcode），用户明确授权；测试断言同步（hermes→codebuddy / hermes→qoderwork-cn 嵌套交集由 fail-closed 反转为放行）。
+
+## [2.26.0] - 2026-09-15
+
+### 新增
+
+- hermes 接入 PM 宿主白名单（用户明确授权，记录于 `config/harness-backend-policy.json` `policy_notes`）：Hermes Agent 作为 PM 派发 claude-code/codex worker。宿主识别走路径级签名——进程帧含 `Hermes.app` bundle 路径或 `.hermes/hermes-agent/` 安装目录才算 hermes，裸 `hermes` 词不作签名防止无关路径误命中；`canonical_harness_backend` 收 `hermes` 别名。帧匹配逻辑提取为 `pm_harness_candidate_for_frame` helper（行为保持），配套回归 `scripts/tests/test-harness-backend-policy.sh`（签名匹配/白名单交集/deny-by-default/本机 Hermes 祖先链实测）。
+
+## [2.25.0] - 2026-09-14
+
+### 新增
+
+- sub2api 网关四条积分 lane（qwenworkai / lobsterai / autoclaw / codebuddy）接入额度 summary 生产链：`scripts/quota_summary_sub2api.py` 从网关 `/ui/api/quota` 聚合端点拉取并合并写入 summary 合同（只更新这四条 lane、其余 lane 原样保留；qw 每日 100 当日过期、lobster campaign 分项临期 → lane 记录带 `remaining_total` / `credit_items`，PM 派简单批量任务前先看临期分项，把当日过期积分在过期前吃掉）。数据流与 lane 定义读取 `references/24-sub2api-quota-producer.md`（纯知识文档，脚本不读取）；配套测试 `tests/test-quota-summary-sub2api.py`（4 用例）。
+
+## [2.24.0] - 2026-09-13
+
+### 新增
+
+- Supervised Task 强制前缀加入 Worker ask/resume 与自然检查点收件协议：阻塞问题超时、取消或断线后只恢复原 message ID；新文件前、每次 scoped test 后及 `worker_done` 前排空 consuming check，处理整批后仅 ack 自有 Worker Delivery，`consumer_fenced` 或 `dispatch_inactive` 时立即停止。
+- PM wait 为完整 FIFO Delivery 生成顺序分类 receipt，明确 question、escalation、worker_done 的不同处置义务；reply 支持同一未知结果的 `--retry-request` 精确恢复，并返回不夸大的持久回复 receipt。
+
+### 修复
+
+- Worker Shell 门禁不再允许以 `peek/all/unread` 冒充已处理 guidance，也拒绝 resume 时附带新 options、无 wait 的 timeout/types 与无界 wait；只允许绑定自身 handle 的 Worker Delivery ack，coordinator handle ack、reply、release、stop 和 Task mutation 权限维持拒绝。
+- PM wait 同时校验 result 与逐消息 Run，拒绝 alias 冲突、超过 50 条、空/非字符串 ID、缺少显式 null 的空批 Delivery 或 count 不一致。ack 除精确 Run 与 acknowledged Delivery ID 外，还完整校验同一响应交付的下一批、拒绝旧/新 Delivery 复用同一 ID，并单列 next Delivery receipt，避免确认上一批时遗漏下一批。reply 的 mutation 前预检改按 Orca 1.4.200 真实 question 行校验 `dispatch:<dispatch> → run:<run>` 路由、message-id thread 与 JSON-string Task/Dispatch payload，再用 post-reply asker 绑定 worker terminal；post-reply 对所有出现的 aliases 保留显式 null 并要求 reply 使用独立 message ID。跨 Dispatch、复用 question ID 或任一路由/alias 漂移继续失败关闭。所有 receipt 均区分入队、可见、消费、回复、执行和业务完成，避免把队列动作误报为工作已执行。
+- 修正上一版把 `--retry-request` 当作业务自定义键的真实 CLI 不兼容：首次 send/reply 必须省略，恢复时只接受 Orca 对未知 mutation 回传的 UUID；transport retry 不再混入业务 payload 或请求摘要，避免原命令与恢复参数漂移。
+
+### 验证
+
+- 新增 stateful fake-Orca 回归，覆盖旧 Delivery 重放、50 条 FIFO 边界、逐消息 Run 漂移、显式 null 空批、ack 响应内下一批及畸形/同 ID 批次、真实 Orca question message row、post-reply 显式 null alias/复用 question ID、同 Orca UUID 幂等回复与换 UUID 重复回复；同步扩展真实 Task spec、sender argv、transport retry UUID 和 Shell 门禁正反例。fake 测试不替代真实跨 session 消息层或 provider 全生命周期验证。
+- 在 Orca 1.4.200 的两个隔离 shell terminal 上完成真实消息层正例：ask timeout 保留原 message ID、PM Delivery 在 ack 前同批重放、重复同答案复用原 reply、resume 得到答案、guidance 在 Worker 自有 Delivery 中消费并 ack 后不再 unread。测试 Dispatch 已 fence、两个精确 terminal 已关闭；未启动 provider，不能据此声明 backend 全生命周期通过。
+
+## [2.23.9] - 2026-09-13
+
+### 新增
+
+- PM supervised `send` 增加显式 `--message-contract`：以 Orca 原生消息承载经 `worker-show` 复验的 Run/Task/Dispatch/worker、sender、thread、correlation、expected action 与 typed evidence，不另建聊天层。
+- 增加只读 `inbox` 命令，固定使用 `check --peek` 观察当前 coordinator inbox，不重绑 Run、不改 metadata、不消费或 ack Delivery；receipt 只统计精确 Run/Task/Dispatch，可选再按 thread+correlation 双过滤。
+
+### 修复
+
+- 明确 `durably_enqueued → delivered_visible → consumed → replied → action_started → business_completed` 六层证据边界；Dispatch send 只有在同一真实 relay 的 destination、dispatchId 与 messageId 均验证后才生成 enqueue receipt，不接受旁支或旧形状 message ID，也不把发送成功误读为已送达、已执行、已完成。原生 thread 改为承载 correlation，业务 thread 留在 payload，使原生无 payload reply 可在严格双过滤下关联；这种可见性仍不证明执行过 reply。
+- 对消息类型、优先级、标识符、仓库相对 evidence path 和所有用户可控消息字段（含 inbox 的显式/记录 sender 与 worker handle）做敏感载荷检查；同一 retry ID 只允许完全相同的请求摘要，变化时在首次 Orca 调用前拒绝。runtime/sender 漂移、Task/Dispatch 错绑、缺消息 provenance、顶层或 payload lifecycle/sender/recipient/type 别名冲突、错 coordinator recipient 或非 live 发送目标继续失败关闭。
+
+### 验证
+
+- 新增 fake-Orca 参数级回归，使用当前真实 relay/check/reply schema 覆盖权威 worker-show 关系、message ID/请求摘要 receipt、relay 缺失/错目标/旁支 ID、原生 argv/payload、normal priority、相同与冲突 retry、旧 send 兼容、敏感字段零副作用拒绝、peek 不消费、空/缺 sender/错 sender/缺 provenance/跨 Dispatch/顶层与 payload 别名冲突 inbox、无 payload 原生 reply correlation bridge、stale runtime/sender 与异常 receipt。
+
 ## [2.23.8] - 2026-09-13
 
 ### 修复
@@ -96,6 +215,22 @@
 ### 文档完善
 
 - 记录当前 Orca 字段来源与合成回归边界；生产 provider 及真实生命周期验证单独标记，不由本地协议测试推定。
+
+## [2.22.1] - 2026-09-07
+
+### 新增
+
+- `references/09-zcode-cli-worker.md` 新增 §11「发行版全景与上游 TUI 建模研究」：发现 npm 社区**非官方**终端客户端 `zcode-app-cli`（kingsword09/zcode-cli，MIT，v3.11.2-21，`--version` 输出带 `zcode-app-cli` 前缀；实现=从 ZCode Desktop 提取官方 `glm` 内核作 node 子进程、自带 `pi-tui` 交互层，凭证/agent 逻辑留在官方内核，README 自述 not affiliated with Z.ai），据此把 §1/§5.1 的"无 TUI"旧表述修订为按客户端区分（官方桌面捆绑 0.16.x 仍无 TUI，本 skill 现行 driver/app-server 路径不变，"官方无独立 CLI 分发"维持成立）；收录上游 stablyai/orca PR #13965/#16227/#16228（未合并）对 zcode 的 TUI 建模：`--version` 特征位发行版探测（其交互路径锚定的正是上述社区客户端）、`agent-input`（composer 粘贴 + 就绪三重门：进程 → composer input-ready → hook 上报 provider session）vs `startup-command`（argv 一次性，fail-closed）注入分流、状态经 Claude 兼容 hook（7 事件含 PreToolUse，配置面 `~/.zcode/cli/config.json` `hooks.events`）+ SQLite 会话库而非刮取 TUI；`config.json` 多写者并发风险入册（本机 `.bak-pm`/`.bak-pm2`/`.bak-zcode-worker` 实证，任何写入须备份+原子写+校验）；社区客户端 bin 名同为 `zcode`，安装后须 `which -a zcode` 核对不遮蔽官方软链。§8 install-guard 的"无 PreToolUse hook 机制"历史依据标注待重验（上游证据显示 hook 存在，本机未验证，行为不变）。archive 草稿同步版本记录修订行。
+- 研究来源与未验证边界：上游 PR diff 通读 + `npm view zcode-app-cli` + repo README 阅读 + 本机 `zcode --version`（0.16.5 裸号）/config 结构/ps 进程观测；社区客户端与 hook 能力均标注"未本机验证"，验证项落在 TASKS `TASK-2026-09-07-ZCODE-DISTRIBUTION-RESEARCH`（安装属非官方第三方包，信任决策与安装授权均归用户）。
+
+### 非目标（边界）
+
+- 不改 zcode backend 行为：driver/app-server/headless 路径、install-guard 降级、身份门禁全部维持原状；发行版区分与研究结论仅入 reference，不产生新的自动探测或配置写入。
+- 不安装 npm `zcode-app-cli`、不修改 `~/.zcode/cli/config.json`（多写者文件，且属用户环境副作用）。
+
+### 验证
+
+- docs-only 改动（reference + CHANGELOG + TASKS + archive 版本记录），无脚本/模板/配置/主文档变更，不在 `references/19-maintainer-validation.md` 强制范围内；`scripts/` 无任何解析 09 号文档的逻辑（grep 确认 references 仅作 help 文本指针），无测试联动。
 
 ## [2.22.0] - 2026-09-06
 

@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.6.0（2026-08-14）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.27.4（2026-09-20）。
 
 ## 目录
 
@@ -122,12 +122,46 @@ PM create/bind Run
 硬边界：
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
-- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 与只读 `check` 也限制参数和 timeout。`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
+- `spawn-worker.sh` 自动向 register 传 PM 冻结的 `--authority-receipt`；直接调用 `orca-supervised-register.sh` 时该参数现在必填，且须使用该次启动真实生成的 authority receipt，不可从可写 METADATA 临时换一个路径。缺失或非法时在 worker-start 前拒绝。内部 `--metadata-file` 只供 `pm-orchestrate reauthorize` 在已核对原始 receipt、runtime、session、worktree、branch 与目标文件无软链后轮换既有 registration；它不是普通手动 register 的替代入口。
+- `recover-unconfigured-worker.sh` 从真实 Git common-dir 和已校验 session 推导该次既有 receipt，核对身份后才允许注入/重绑；缺失、软链、metadata 改址或身份错配时要求人工处理，不新建 receipt 冒充旧启动授权。
+- worker-start 后的 completion receipt 位于相同 `agent-authority` 目录，绑定 authority 路径与 SHA-256、task/dispatch/terminal/run/runtime、process incarnation 及 capability SHA-256，不保存 capability 明文。发送时以启动快照读取 receipt，并通过只读 dispatch-show 复核当前身份；元数据不能成为新权威，精确 Shell allowlist 也不能覆盖完成校验失败。`reauthorize` 轮换既有 receipt 时先保留私有回滚副本，只有 METADATA 原子写回成功才提交替换；写回失败必须恢复旧 receipt，让仍存活的旧 Worker 保持原完成权限。这是 hook 权限边界，不是同一 OS 用户之间的安全沙箱，最终 mutation 仍由 Orca 验证。
+- preamble 中反斜杠续行的 worker_done 是合法命令形态，应原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后停止并报告协议阻塞，不换引号、编码、子进程或 wrapper/helper 重试；PM 按精确 Dispatch 检查，不根据 STATUS 强行结算。
+- Worker 的 Shell 门禁只对严格语义白名单放行 Orca 自报告协议：`send` 仅允许 `worker_done/heartbeat/escalation`，并校验真实 task/dispatch、subject/body/outcome；`ask` 必须在新问题与原 message ID resume 中二选一且 bounded timeout，resume 不得带新 options；`check` 只允许已绑定 Worker handle 的 consuming default、bounded wait，或对同一 Worker inbox 已处理 Delivery 的 ack，不允许 `peek/all/unread` 冒充处理，也不能指定 coordinator handle。`reply`、coordinator Delivery ack、`task-update`、`worker-stop`、群发目标、缺 outcome 或 shell chaining 一律拒绝，最终仍由 Orca runtime 验证 live Dispatch。
 - `STATUS.json=done` 只唤醒 PM，不结算 Task/Dispatch。
 - Sentinel 不得因 STATUS、timeout、idle、heartbeat、question 或 escalation 执行 `worker-stop` / `worker-release` / `terminal close`。
 - PM 只对 accepted、settled 的 worker 执行 release；要保留排障就显式 retain；有立即后续任务可复用同一 terminal。
 - `check --wait` 返回一个 Delivery；处理全部消息再 ack，并继续等到全部预期 Dispatch settle。
 - PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
+- `pm-run-bind.sh` 将 handle probe/run-use 畸形响应视为失败（exit 1），run-current 不可验证或身份不匹配返回 exit 2；绑定未知时先检查原始响应，不盲目重试。远端分支清理绑定预期 OID 做原子比较删除，较新 tip 不会被删除；远端失败可能发生在本地资源已回收之后，须保留并处理 remote-pending 结果，不能声称整组资源均已保留或清空。
+
+### 5.1 Worker 问答与跟进收件
+
+阻塞问题必须从 live preamble 复制 Orca executable、worker handle 与 Dispatch capability：
+
+```bash
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --question "需要 PM 回答的问题" --options "A,B" --timeout-ms 600000 --json
+
+# timeout/cancel/断线后只恢复原 message ID；不再创建新 question
+orca orchestration ask --from "$WORKER_HANDLE" --dispatch-capability "$CAPABILITY" \
+  --resume "$MESSAGE_ID" --timeout-ms 600000 --json
+```
+
+`ask` 是 Worker 与 PM 的阻塞问答，不是 coordinator-owned Task DAG decision gate。超时或断线不会取消原问题；只有 resume 返回成功 answer receipt 才证明已收到答复，仍不证明后续动作已经执行。
+
+PM 的 `send --to dispatch:<id>` 只保证 durable enqueue，且不会自动打断 Worker。Worker 必须在开始下一个文件前、每次 scoped test 后和 `worker_done` 前执行：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --json
+```
+
+这是 Worker inbox 的 consuming check；禁止用 `--peek/--all/--unread` 代替。先处理返回 Delivery 的全部消息，再用输出的 delivery ID 推进同一 Worker inbox：
+
+```bash
+orca orchestration check --terminal "$WORKER_HANDLE" --ack "$WORKER_DELIVERY_ID" --json
+```
+
+ack 调用可能直接返回下一批；继续处理、ack，直到 count=0。这个权限由 Shell 门禁绑定 Worker 自己的 handle，不可改用 coordinator handle，因此不是 coordinator Delivery ack。没有 non-peek Delivery 及其处理/ack 回执，只能说消息已入队或可见，不能声称 Worker 已处理。返回 `consumer_fenced`（consumer generation/进程身份被替换）或 `dispatch_inactive`（原 Dispatch 已 settled、stopped 或不再 active）时立即停止，不发 `worker_done`、不重试 check；其他 guidance 仍受原任务与权限边界约束。发出 `worker_done` 后停止收件和新工作。
 
 ## 6. PM 实时感知
 

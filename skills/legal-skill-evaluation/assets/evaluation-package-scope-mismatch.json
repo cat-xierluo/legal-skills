@@ -1,0 +1,15 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": ["generic_gate", "candidate_hash_scope"],
+      "value": "git-tracked"
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "mutation",
+    "purpose": "相同哈希文本但读取范围不同，不得视为同一候选证据",
+    "expected_failed_constraint": "EVAL-EVIDENCE-BINDING"
+  }
+}

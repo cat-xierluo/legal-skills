@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-CHANGE-FEE",
+  "provided_context": {
+    "request": "请审核这份设计服务合同。",
+    "contract_available": true,
+    "contract_excerpt": "任何修改均按每次 20000 元固定收费，包括乙方设计缺陷导致的修改与客户新增需求。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

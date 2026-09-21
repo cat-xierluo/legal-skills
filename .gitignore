@@ -20,6 +20,12 @@ templates/
 .agents/*.json
 **/DECISIONS.md
 **/TASKS.md
+# moot-court 开发文档随技能源码维护
+!skills/moot-court/DECISIONS.md
+!skills/moot-court/TASKS.md
+# multi-agent-orchestration 的跨会话维护上下文随 Skill 源码维护
+!skills/multi-agent-orchestration/DECISIONS.md
+!skills/multi-agent-orchestration/TASKS.md
 !CLAUDE.md
 **/*/CLAUDE.md
 
@@ -49,6 +55,7 @@ templates/
 !skills/legal-visualization/config/visual-role-registry.json
 !skills/patent-analysis/config/legal-source-register.json
 !skills/legal-harness-init/config/instruction-stability-contract.json
+!skills/legal-skill-evaluation/config/instruction-stability-contract.json
 !skills/video-screenshot/config/instruction-stability-contract.json
 !skills/video-screenshot/config/evidence-lead-taxonomy.json
 !skills/multi-agent-orchestration/config/harness-backend-policy.json
@@ -206,6 +213,11 @@ skills/myagents-docs
 
 # myagents-task-automation (symlink to ~/.myagents/skills/myagents-task-automation)
 skills/myagents-task-automation
+
+# cuse / myagents-speech-recognition / myagents-task-alignment (symlink to ~/.myagents/skills/...)
+skills/cuse
+skills/myagents-speech-recognition
+skills/myagents-task-alignment
 
 # Packed skills（打包输出目录）
 pack-skills/

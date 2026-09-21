@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-NO-FABRICATE",
+  "provided_context": {"material": "missing-context.md"},
+  "assertions": [
+    {"id": "CAP-FAB-MARK", "judge_hint": {"contains_any": ["未提及", "待补充", "待核实", "待调取"]}},
+    {"id": "CAP-FAB-NO-INVENT", "judge_hint": {"not_contains": ["经审理查明", "本院认定", "被告张三", "原告李四"]}}
+  ]
+}

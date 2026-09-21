@@ -49,7 +49,7 @@ resolve_deps_mode() {
       fi
       ;;
     *)
-      echo "ERROR: SPAWN_WORKER_DEPS_MODE_INVALID: $DEPS_MODE（只接受 auto|symlink|local）" >&2
+      echo "ERROR: SPAWN_WORKER_DEPS_MODE_INVALID: ${DEPS_MODE}（只接受 auto|symlink|local）" >&2
       return 1
       ;;
   esac

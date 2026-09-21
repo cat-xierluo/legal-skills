@@ -1,0 +1,7 @@
+{
+  "contract_name": "脱敏服务合同",
+  "client_name": "示例甲方",
+  "party_role": null,
+  "review_intensity": "常规",
+  "expected": "停止立场性分析并请求确认代表哪一方"
+}

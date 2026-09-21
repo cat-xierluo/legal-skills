@@ -1,0 +1,8 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [],
+  "fixture_metadata": {
+    "kind": "positive",
+    "purpose": "完整标准模式评测包"
+  }
+}

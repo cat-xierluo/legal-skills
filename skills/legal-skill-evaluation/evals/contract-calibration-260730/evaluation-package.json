@@ -1,0 +1,213 @@
+{
+  "schema_version": "1.1",
+  "evaluation_id": "contract-copilot-calibration-20260730",
+  "mode": "standard",
+  "candidate": {
+    "path": "skills/contract-copilot",
+    "sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+    "hash_scope": "git-tracked"
+  },
+  "scope": {
+    "scenario": "contract",
+    "deliverable": "审核修订版合同与合同审查意见书",
+    "audience": "承办律师内部校准",
+    "exclusions": [
+      "不签发 DOMAIN_VERIFIED",
+      "不把 3 例种子表述为 20—50 例完整 suite",
+      "不复制合同正文或本地审查人配置"
+    ]
+  },
+  "generic_gate": {
+    "skill_lint_version": "2.6.1",
+    "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+    "candidate_hash_scope": "git-tracked",
+    "raw_hard_findings": [
+      {"id": "ISG-001", "severity": "hard"},
+      {"id": "ISG-002", "severity": "hard"},
+      {"id": "ISG-003", "severity": "hard"},
+      {"id": "ISG-004", "severity": "hard"},
+      {"id": "ISG-005", "severity": "hard"}
+    ],
+    "hard_findings": [],
+    "finding_adjudications": [
+      {
+        "finding_id": "ISG-001",
+        "disposition": "out-of-scope",
+        "reason": "本轮是标准领域校准，不声称指令稳定性正式验收。",
+        "evidence": "instruction_stability_gate assess 明确返回 NOT_VERIFIED；评测包亦保持 NOT_VERIFIED。"
+      },
+      {
+        "finding_id": "ISG-002",
+        "disposition": "false-positive",
+        "reason": "命中词均为合同授权边界、渠道边界、数据使用边界等法律语义，不是视觉或几何要求。",
+        "evidence": "ISG-002 的全部证据定位均来自合同类型 Markdown 的法律风险表，候选不生产视觉或几何产物。"
+      },
+      {
+        "finding_id": "ISG-003",
+        "disposition": "out-of-scope",
+        "reason": "本轮只建立三例校准种子，不作至少三轮稳定性签发。",
+        "evidence": "scope.exclusions 明确不签发 DOMAIN_VERIFIED，稳定性状态保持 NOT_VERIFIED。"
+      },
+      {
+        "finding_id": "ISG-004",
+        "disposition": "out-of-scope",
+        "reason": "没有把候选中的完成措辞作为本轮正式验证证据。",
+        "evidence": "verdict 设为 blocked，且 formal_markers 仅为 NOT_VERIFIED。"
+      },
+      {
+        "finding_id": "ISG-005",
+        "disposition": "out-of-scope",
+        "reason": "候选尚无约束到 checker 的完整映射，因此本轮不声称脚本覆盖全部要求。",
+        "evidence": "instruction_stability_status 保持 NOT_VERIFIED；脚本存在只作候选事实，不作覆盖证明。"
+      }
+    ],
+    "harness_status": "NOT_VERIFIED",
+    "instruction_stability_status": "NOT_VERIFIED",
+    "domain_status": "NOT_VERIFIED",
+    "evidence_receipts": [
+      "skill-lint:harness_failure_audit:2026-07-30:PASS:0-findings",
+      "skill-lint:instruction_stability_gate:2026-07-30:NOT_VERIFIED",
+      "candidate-snapshot:git-tracked:102-files",
+      "evals/contract-calibration-260730/current-run-receipts.json"
+    ]
+  },
+  "cases": [
+    {
+      "id": "contract-familiar-design-current",
+      "type": "familiar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "0a2305f8169a26ea7ce6c4a125c9cb676e500f3188f79c8d7c5b8da9d7d56800",
+      "output_sha256": "ba030c4684864d06211cf591a8be88a24efb6daf869027c68f59053ffc69abf7",
+      "run_receipts": [
+        "evals/contract-calibration-260730/current-run-receipts.json#design-current"
+      ],
+      "dimensions": [
+        {"id": "DIM-1", "rating": 4, "evidence": "主要意见能区分履约、违约、送达、知识产权与管辖问题，并给出法源；部分商业取舍仍需律师复核。", "not_applicable_reason": null},
+        {"id": "DIM-2", "rating": 5, "evidence": "25 项意见均定位到具体条款，保留原条款并列出修改文本；留空项使用待补占位。", "not_applicable_reason": null},
+        {"id": "DIM-3", "rating": 5, "evidence": "每项使用条款位置—风险概述—审查意见—建议修改—法律依据链条。", "not_applicable_reason": null},
+        {"id": "DIM-4", "rating": 4, "evidence": "抓住成果范围、验收与付款先后等核心履约问题；25 项均进入详细意见，摘要层优先级仍可进一步压缩。", "not_applicable_reason": null},
+        {"id": "DIM-5", "rating": 5, "evidence": "修改文本可直接用于谈判和红线修订，缺失联系人、邮箱等事项可直接分派补齐。", "not_applicable_reason": null},
+        {"id": "DIM-6", "rating": 5, "evidence": "报告有概况、综合意见、风险提示、详细意见、声明和出具信息，字段稳定。", "not_applicable_reason": null}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "status": "pass", "evidence": "对缺失信息使用待补占位，没有把空白写成已确认事实。"},
+        {"id": "TASTE-2", "status": "pass", "evidence": "对费用、修改次数等问题给出谈判修改方向，没有直接宣称商业价格违法。"},
+        {"id": "TASTE-3", "status": "pass", "evidence": "负责人、邮箱等空白被识别为事实缺口。"},
+        {"id": "TASTE-4", "status": "pass", "evidence": "意见持续从甲方履约与付款安全立场展开。"},
+        {"id": "TASTE-5", "status": "pass", "evidence": "未承诺合同绝对安全或争议结果。"},
+        {"id": "TASTE-6", "status": "fail", "evidence": "当前产物以正式审查意见书体例列出审查人和机构，但没有机器可判的草稿、待复核或已复核状态。"},
+        {"id": "TASTE-7", "status": "fail", "evidence": "声明要求事实核查，但没有明确法条适用性、时效性和最终文本须由承办律师复核。"},
+        {"id": "TASTE-8", "status": "pass", "evidence": "报告列出附件、成果清单和主体信息等缺失对判断的影响。"}
+      ],
+      "legal_redlines": [
+        "当前候选真实产物采用正式审查意见书外观并包含署名信息，却缺少可验证的人工复核状态。"
+      ]
+    },
+    {
+      "id": "contract-peer-patent-current",
+      "type": "peer-unfamiliar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "5f252de337af04c641a9549e19cfb7fc03d2e46eebdfd851305ed0774638da1b",
+      "output_sha256": "6de4d7bd66ac885e461cb26567f34d29b451a73bd4ec0c6f171a8155b861c556",
+      "run_receipts": [
+        "evals/contract-calibration-260730/current-run-receipts.json#patent-current-clean"
+      ],
+      "dimensions": [
+        {"id": "DIM-1", "rating": 3, "evidence": "执行摘要能识别许可范围、分许可、侵权处理与专利无效风险，但详细报告缺少法源和论证，不能充分复核准确性。", "not_applicable_reason": null},
+        {"id": "DIM-2", "rating": 1, "evidence": "当前候选最终报告出现 48 次未提及/待补充，8 项详细意见的法律依据全部为 /。", "not_applicable_reason": null},
+        {"id": "DIM-3", "rating": 1, "evidence": "执行摘要与风险分级存在，但详细条款—风险—建议链条全部丢失。", "not_applicable_reason": null},
+        {"id": "DIM-4", "rating": 3, "evidence": "摘要抓住许可费、专利号、OEM/ODM 与专利无效等关键问题，但无法从详细意见核实排序依据。", "not_applicable_reason": null},
+        {"id": "DIM-5", "rating": 1, "evidence": "除三条摘要建议外，报告中的逐项修改方向和推荐措辞不可用。", "not_applicable_reason": null},
+        {"id": "DIM-6", "rating": 1, "evidence": "表面字段齐全但内容塌缩为占位符；当前执行日志仍记录 8 项 applied、0 failed 并返回 0。", "not_applicable_reason": null}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "status": "pass", "evidence": "摘要使用有条件可签，没有承诺确定结果。"},
+        {"id": "TASTE-2", "status": "pass", "evidence": "摘要把许可费等列为需补齐事项，没有直接判价格违法。"},
+        {"id": "TASTE-3", "status": "pass", "evidence": "未识别字段以待补充表示，没有填造具体事实。"},
+        {"id": "TASTE-4", "status": "pass", "evidence": "本轮显式使用中立立场，报告未擅自替许可方或被许可方站队。"},
+        {"id": "TASTE-5", "status": "pass", "evidence": "未使用无任何风险或确保有效等绝对表述。"},
+        {"id": "TASTE-6", "status": "fail", "evidence": "报告以正式合同审查报告体例列出律师和机构，未标明为待复核草稿。"},
+        {"id": "TASTE-7", "status": "fail", "evidence": "没有提示具体法源、适用性和时效性须由律师复核。"},
+        {"id": "TASTE-8", "status": "pass", "evidence": "摘要明确列出专利号、费用比例和附件交付清单等缺失材料。"}
+      ],
+      "legal_redlines": [
+        "主体、合同类型、期限、价款与核心义务均待补充时仍给出有条件可签结论。",
+        "当前候选最终报告的详细风险字段批量退化为占位符，执行日志却记录全部成功并返回 0。"
+      ]
+    },
+    {
+      "id": "contract-missing-context-current",
+      "type": "missing-context",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "ed9d59de8a85dc4a4f74f3e7ba58d6a4ac376c540c85985d81f8d42f5953ddb5",
+      "output_sha256": "809d7fa6f2105b43c0924309f8f0163ac3933fc78ff19baf072b015fb9ae020f",
+      "run_receipts": [
+        "evals/contract-calibration-260730/missing-context-input.json",
+        "evals/contract-calibration-260730/missing-context-output.md",
+        "agent-run:2026-07-30:current-candidate-controlled-boundary"
+      ],
+      "dimensions": [
+        {"id": "DIM-1", "rating": 4, "evidence": "响应不评价合同是否可签，也不对许可费和范围作实质判断。", "not_applicable_reason": null},
+        {"id": "DIM-2", "rating": 5, "evidence": "准确识别角色、目标、口径、审查人确认和附件五类缺口。", "not_applicable_reason": null},
+        {"id": "DIM-3", "rating": 5, "evidence": "缺失背景—不得出结论—补齐事项—后续交付的链条清楚。", "not_applicable_reason": null},
+        {"id": "DIM-4", "rating": 5, "evidence": "优先处理决定审查方向的角色与目标，而非先展开一般条款风险。", "not_applicable_reason": null},
+        {"id": "DIM-5", "rating": 5, "evidence": "列出可直接回复的五项补充信息，并说明补齐后的文件交付动作。", "not_applicable_reason": null},
+        {"id": "DIM-6", "rating": 4, "evidence": "作为例外分支响应结构完整；它不是正式合同审查意见书。", "not_applicable_reason": null}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "status": "pass", "evidence": "没有把缺失信息写成确定事实。"},
+        {"id": "TASTE-2", "status": "pass", "evidence": "没有把价格、范围等商业判断包装成法律结论。"},
+        {"id": "TASTE-3", "status": "pass", "evidence": "明确区分已收到文件与尚缺上下文。"},
+        {"id": "TASTE-4", "status": "pass", "evidence": "先询问代表立场，没有擅自站队。"},
+        {"id": "TASTE-5", "status": "pass", "evidence": "没有绝对化承诺。"},
+        {"id": "TASTE-6", "status": "pass", "evidence": "明确本响应不替代正式审查意见。"},
+        {"id": "TASTE-7", "status": "pass", "evidence": "明确后续交付须由承办律师复核。"},
+        {"id": "TASTE-8", "status": "pass", "evidence": "逐项说明附件和上下文缺失将限制审查。"}
+      ],
+      "legal_redlines": []
+    }
+  ],
+  "hard_failures": [],
+  "repair_units": [
+    {
+      "type": "template-schema",
+      "target": "contract-copilot 报告生成层",
+      "finding": "兼容旧 review-plan 字段，禁止合法 finding 被统一渲染成未提及/待补充。",
+      "regression_id": "REG-CONTRACT-001"
+    },
+    {
+      "type": "checker",
+      "target": "contract-copilot 完成门禁",
+      "finding": "成功状态必须读取最终报告，关键字段为空时不得记录全部执行成功。",
+      "regression_id": "REG-CONTRACT-002"
+    },
+    {
+      "type": "intake-boundary",
+      "target": "contract-copilot 前置澄清",
+      "finding": "party_role 为待确认时禁止输出立场性风险等级和可签结论。",
+      "regression_id": "REG-CONTRACT-003"
+    },
+    {
+      "type": "template-schema",
+      "target": "contract-copilot 正式意见书状态",
+      "finding": "增加草稿/待律师复核/已复核状态，只有已复核状态才允许正式署名外观。",
+      "regression_id": "REG-CONTRACT-004"
+    }
+  ],
+  "regression": {
+    "fail_to_pass": "fail",
+    "pass_to_pass": "pass",
+    "receipts": [
+      "evals/contract-calibration-260730/capability-regression-seed.json",
+      "evals/contract-calibration-260730/capability-suite.json",
+      "evals/contract-calibration-260730/current-run-receipts.json"
+    ]
+  },
+  "verdict": {
+    "recommendation": "blocked",
+    "formal_markers": ["NOT_VERIFIED"]
+  }
+}

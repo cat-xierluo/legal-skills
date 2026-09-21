@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.15.0。
+> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.27.4。
 
 ## 目录
 
@@ -53,8 +53,11 @@ pm-orchestrate.sh peek --worktree "$WT" --session "$S"
 pm-orchestrate.sh wait --worktree "$WT" --session "$S" --timeout 900
 
 # supervised 专用
+pm-orchestrate.sh inbox --worktree "$WT" --session "$S" \
+  [--thread-id "task.TASK-123" --correlation-id "TASK-123.review.1"]
 pm-orchestrate.sh show --worktree "$WT" --session "$S"
-pm-orchestrate.sh reply --worktree "$WT" --session "$S" --message-id "$MID" --text "..."
+pm-orchestrate.sh reply --worktree "$WT" --session "$S" --message-id "$MID" --text "..." \
+  [--retry-request "<UUID Orca reported for this unknown-outcome reply>"]
 pm-orchestrate.sh release --worktree "$WT" --session "$S"
 pm-orchestrate.sh retain --worktree "$WT" --session "$S"
 pm-orchestrate.sh ack --worktree "$WT" --session "$S" --delivery-id "$DID"
@@ -65,28 +68,69 @@ pm-orchestrate.sh reauthorize --worktree "$WT" --session "$S" \
 
 supervised `send` 是结构化 inbox mail，不是 terminal prompt injection；`read` 输出 Orca JSON 并保留 `source/cursor/fallbackReason`，便于 PM 判断精确 transcript 与 terminal fallback。
 
+### 2.1 跨 session 消息合同
+
+普通兼容性 `send` 保持原参数不变；需要跨 PM、Worker、reviewer 追踪重要请求时，显式启用版本化合同：
+
+```bash
+pm-orchestrate.sh send --worktree "$WT" --session "$S" \
+  --message-contract \
+  --subject "Review frozen head" \
+  --message-type decision_gate \
+  --priority high \
+  --thread-id "task.TASK-123" \
+  --correlation-id "TASK-123.review.1" \
+  --expected-action "审查冻结 head，并用 reply 返回 verdict 与证据引用" \
+  --evidence-ref "git:0123456789abcdef" \
+  --evidence-ref "path:skills/example/SKILL.md" \
+  --text "请只审查该冻结提交，不修改实现。"
+```
+
+合同复用 Orca 原生 `send/check/reply/ask`，不创建第二套聊天系统。路由始终是 metadata 中的精确 `dispatch:<id>`；发送前通过只读 `worker-show` 证明该 Dispatch 当前属于同一 Run、Task 和 worker terminal，且仍是 live authoritative attempt，再把这些身份与 coordinator handle、业务 thread、correlation、expected action 和 evidence refs 写进受控 payload。原生 `send --thread-id` 使用 correlation，业务 thread 只写入 payload；这样当前 Orca 原生 `reply` 即使只继承顶层 Run/from/to/thread、未复制 payload，接收方仍可用原生 thread 精确关联本次请求。当前 CLI 的 raw `--payload` 与结构化 `--task-id/--dispatch-id` 互斥，因此不重复传后两项，身份权威来自前置 `worker-show`，payload 只承载冻结副本。`expected_action` 只是任务说明，`authority=informational_only`，不会扩大 Shell、安装、Git 或发布权限。
+
+新 send/reply 必须省略 `--retry-request`。只有 Orca 明确报告 mutation outcome unknown 并给出 `orchestrationRequestId` UUID 时，先按其 `request-show` 指引只读核查，再把同一 UUID 与原命令其余参数原样用于一次精确恢复。该 UUID 是 Orca transport mutation identity，不是自定义业务幂等键，也不进入 message-contract payload 或业务请求摘要；业务去重继续使用 thread/correlation。不可自行编造 `TASK-123...` 一类 retry 值。
+
+| 状态 | 最小证据 | 明确不代表 |
+|---|---|---|
+| `durably_enqueued` | `send` 返回 `.ok=true`；Dispatch relay 回执还须精确匹配 `destination=worker`、`dispatchId` 与 `messageId`。脚本 receipt 同时绑定 sender、thread、correlation、完整业务请求的 SHA-256，以及仅在未知结果恢复时出现的 Orca retry UUID | 已可见、已消费、已回复、已执行、已完成 |
+| `delivered_visible` | `inbox` 的只读 `check --peek` 快照包含精确归属的结构化 message，或在双过滤下包含精确关联的原生无 payload message | 已消费、执行过 `reply` 或会采取行动 |
+| `consumed` | 非 peek `check` 交付的 Delivery 包含该 message | 已回复、已执行或业务完成；整批处理后仍需显式 ack |
+| `replied` | `reply --id <message-id>` 或 `ask` 恢复返回成功回执 | 请求动作已经开始或完成 |
+| `action_started` | 接收方返回与 correlation/thread 对齐的进度及首个真实工作证据 | 业务完成 |
+| `business_completed` | 任务合同要求的真实产物、测试、review/`worker_done` 与结算证据全部满足 | 不能由 send、peek、heartbeat 或一段自报代替 |
+
+合同字段规则：
+
+- `message-type` 仅接受 coordinator 可发送的 `status|dispatch|merge_ready|handoff|decision_gate|question`；拒绝伪造 `worker_done`、`heartbeat` 或未知类型。
+- `priority` 仅接受 `normal|high|urgent`；`normal` 只留在合同 payload，避免依赖原生 CLI 的缺省值漂移。
+- `thread-id` 和 `correlation-id` 必填并使用稳定安全标识；前者是业务分组，保存在 payload，后者同时作为 Orca 原生 thread。同一业务请求恢复沿用 correlation。`--retry-request` 只接受 Orca 对原 unknown-outcome mutation 回传的 UUID；首次发送省略。Session Context 只保存该 UUID、thread、correlation 和不含 transport retry 字段的完整业务请求 SHA-256，不复制正文；同一 UUID 改变 body、subject、路由或 payload 会在首次 Orca 调用前拒绝，完全相同的业务请求才交给 Orca 原生恢复。
+- evidence refs 仅接受 `git:|path:|pr:|test:|message:|task:|report:`；`path:` 必须是无 `..` 穿越的仓库相对路径。
+- body、subject、显式或 metadata sender、worker handle、thread、correlation、retry request、expected action 或 evidence 命中密钥、Token、密码、Authorization、私钥等模式时，在第一次 Orca 调用前拒绝。无 supervised Dispatch、缺身份、Run/Task/Dispatch/worker 关系不符、非 live 发送目标、runtime 漂移或 stale sender 同样失败关闭。
+- `inbox` 始终执行 `check --peek`，只验证当前 coordinator/Run/runtime，不做 `run-use`、不写 metadata、不 ack。顶层 Run 必须与 metadata 精确相等，sender/recipient 必须分别等于 `worker-show` 复验的 worker handle 和当前 coordinator；snake_case/camelCase 以及原生 from/to/thread 等所有已出现别名都必须彼此一致并满足期望，不能用一个正确字段遮住冲突字段。结构化入站消息还须由 payload 内成对的 Task+Dispatch 身份证明归属；payload 若声明当前消息的 `sender`、`recipient` 或 `message.type`，必须分别与当前 worker、`kind=dispatch`/当前 Dispatch 和顶层消息类型一致，不把这些字段解释成原请求快照。提供 thread+correlation 双过滤时，同时要求 payload 业务 thread、payload correlation 和原生 correlation thread 精确匹配。
+- 当前 Orca 原生 `reply` 不复制 Task/Dispatch payload。只有显式同时传入业务 thread 与 correlation 时，`inbox` 才允许一条受限的原生 thread bridge：消息不得携带 Task/Dispatch 或 payload correlation 别名，顶层 Run、worker sender、coordinator recipient 与原生 thread 必须分别精确匹配。receipt 以 `match_basis=native_thread_correlation` 标识这种关联，并把业务 thread 留为 `null`，避免声称消息本身携带了该字段。它只证明与该请求关联的消息可见，不证明接收方确实执行过 `reply`；无双过滤时，这类无 provenance 消息保持排除。零匹配输出 `none_visible`；有精确匹配只说明 `delivered_visible` 且仍未消费。
+
 非 Orca PM 可对控制命令传 `--from <本轮PM终端>`；显式参数优先，缺省使用当前 Session Context 已记录的 coordinator。已有绑定不被环境覆盖；仅没有既有 session 绑定的新 Run 才兼容宿主 `ORCA_TERMINAL_HANDLE`，且仍需全部验证。禁止以 `terminal current`/UI 焦点自动挑选 sender。
 
-控制命令先验证终端精确 handle、connected/writable、非 orphaned/无 exitCause 与 runtime；以 `run-use --id ... --from ...` 绑定后再 `run-current --from ...` 读回精确 Run/coordinator 并复查。metadata 保存 `.session.orca.runtime_id`；旧记录缺字段时只可正向重验当前绑定后回填，历史连续性仍 `NOT_VERIFIED`，非空 runtime 漂移不可被 --from 绕过。`read/peek/show/reconcile/pr-audit` 保持只读，零 rebind/metadata 写入。
+发送、等待、reply、ack 与资源结算等变更型控制命令先验证终端精确 handle、connected/writable、非 orphaned/无 exitCause 与 runtime；以 `run-use --id ... --from ...` 绑定后再 `run-current --from ...` 读回精确 Run/coordinator 并复查。metadata 保存 `.session.orca.runtime_id`；旧记录缺字段时只可正向重验当前绑定后回填，历史连续性仍 `NOT_VERIFIED`，非空 runtime 漂移不可被 --from 绕过。`inbox/read/peek/show/reconcile/pr-audit` 保持只读；其中 `inbox` 只用 `run-current` 验证既有绑定，零 rebind/metadata 写入。
 
-官方 argv 各不相同：send/reply/Run 命令带 `--from`；wait/ack 的 check 带 `--terminal`，不传陈旧 --run；worker-list 显式 `--run`。release/retain 仅接受 `--dispatch`，不注入不存在的 --from，但仍做相同 sender/Run 前置核验。CLI 合同变化时先读当前 --help，不用宽松 fake 接受未知参数。
+官方 argv 各不相同：send/reply/Run 命令带 `--from`；wait/ack 的 check 带 `--terminal`，不传陈旧 --run；worker-list 显式 `--run`。release/retain 仅接受 `--dispatch`，不注入不存在的 --from，但仍做相同 sender/Run 前置核验。`reply` 在 mutation 前先以 coordinator consuming check 重放当前未 ack Delivery；当前 Orca question 行的顶层路由是 `dispatch:<dispatch> → run:<run>`，thread 等于 question message ID，Task/Dispatch 身份位于 JSON-string payload。wrapper 必须按这一真实形状验证所有出现的 aliases、payload 与 `worker-show` 绑定，目标 ID 才能作为当前 Delivery 中精确 Run/Task/Dispatch 的唯一 question；worker terminal 在 post-reply 的 `question.asker_handle` 再次核对。该预检不 ack，已不在当前批次或同 Run 另一 Dispatch 的 question 均拒绝。`reply --retry-request` 仅用于同一未知结果的精确恢复：同 question、body、sender 与 Orca UUID 原样重放；已确认成功后不应主动再答一次。当前 Orca 对同一 question+answer 的重复 reply 返回原 reply message 并标记 duplicate，wrapper 还会逐项核对所有出现的 question/reply aliases、question 的 Run/Dispatch/asker/answer 与 reply message 的 `run:<run>` sender、`dispatch:<dispatch>` recipient、question thread 和 body；reply message ID 必须是不同于原 question 的独立非空 ID。只有全部一致才输出 `reply_committed` 或 `reply_existing_same_answer`，显式 null alias、复用 question ID、不同 answer 或路由漂移均失败关闭。reply receipt 写入经双重验证的 Task/Dispatch/worker，只证明回复已持久化，不证明 Worker 消费或执行。CLI 合同变化时先读当前 --help，不用宽松 fake 接受未知参数。
 
 Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首次从 `0` 读取并保存响应里的 `nextCursor`；后续按 cursor 增量读取，避免默认 tail 只剩 spinner。`wait` 的 `tui-idle` 只表示当前可交互/空闲，不是业务终态。
 
 terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入 session context 的 `WORKER_PROMPT.md`，再投短 Read 指令。supervised guidance 直接写消息 body，不创建新的 prompt 文件。
 
-`reauthorize`（Task-058）用于 worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦验证且根因是 spawn 授权快照缺命令时：guard 读 `launch.sh` 内联的 `WORKER_INSTALL_AUTH_B64`（进程环境，运行中改授权文件无效），本命令合并 `--allow-cmd` 进授权文件后重写 B64（回验解码一致）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 的 terminal_handle/dispatch_id、可选发送 `--resume-text`、最后关闭旧终端句柄。未提交的工作区改动全部保留；provider lease 的 transport 记账留给 release/clean-worktree 阶段。
+`reauthorize`（Task-058）用于 worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦验证且根因是 spawn 授权快照缺命令时：guard 读 `launch.sh` 内联的 `WORKER_INSTALL_AUTH_B64`（进程环境，运行中改授权文件无效），本命令合并 `--allow-cmd` 进授权文件后重写 B64（回验解码一致）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 的 terminal_handle/dispatch_id、可选发送 `--resume-text`、最后关闭旧终端句柄。重注册前必须从 Git common-dir 推导原始 authority receipt，并交叉核对 receipt、runtime、session、worktree、branch 与受信 METADATA；任一缺失、软链或漂移都在创建新终端前失败。register 的显式 metadata 替换和 completion receipt 轮换只在这条已核对路径开放，普通手动 register 不能借此换权威；轮换时旧 receipt 保留到 METADATA 原子写回成功，写回失败则恢复旧 receipt，随后回滚新终端，不能留下“旧路由 + 新完成权限”的撕裂状态。未提交的工作区改动全部保留；provider lease 的 transport 记账留给 release/clean-worktree 阶段。
 
 ## 3. Supervised 收口顺序
 
 1. `wait` 获取完整 Delivery；不要立即 ack。
-2. 处理每条 `question/escalation/worker_done`。
+2. 按 receipt 的 `ordered_messages` 顺序处理每条 `question/escalation/worker_done`；当前 Orca 单批最多 50 条，类型过滤只控制 wait 唤醒，不过滤 Delivery。ack 前重复 wait 必须重放同一批，不能跳到下一批。
 3. 用 `show` 核对 accepted settlement，用 `read` 和真实 diff/tests 验收。只读状态与业务验收不能替代生命周期 settlement。
 4. 每个 settled worker 选择立即复用、`release` 或用户明确要求时 `retain`。
-5. 全部处理完后 `ack --delivery-id ...`。
+5. 全部处理完后 `ack --delivery-id ...`；ack 回执中的 `acknowledged` 只确认上一批，若同一响应携带新的非空 `deliveryId/messages`，立即按 `next_ordered_messages` 处理下一批，不能丢弃或视为已确认。
 6. 继续 `wait`，直到所有预期 Dispatch settle。
 
-`wait` timeout 是 checkpoint，不是 failure；不要因此 stop/release worker。
+`wait` receipt 把 question 标为 `reply_required`、escalation 标为 `intervention_required`、worker_done 标为 `validate_and_account_terminal`；它的 `delivery_consumed_unacknowledged` 仍不证明这些动作已经完成。wrapper 要求原生 result 与每条 message 的 Run 精确等于 metadata Run，count 为与 messages 等长的非负整数，非空批次的 Delivery/message ID 为一致的非空字符串，空批次必须显式返回 null Delivery ID；所有出现的兼容 alias 必须一致。`ack` 只有在 Orca 回执正向包含同一 Run 和精确 `acknowledged` Delivery ID，且同一响应携带的下一批也通过上述完整批次校验时成功；非空 next Delivery 的 ID 必须不同于刚确认的上一批。receipt 分开记录 `acknowledged_delivery_id` 与 `next_delivery_id/next_ordered_messages`，不把“已确认上一批”冒充“下一批已处理”。`wait` timeout 是 checkpoint，不是 failure；不要因此 stop/release worker。
 
 ## 4. PR 先行与本地集成
 

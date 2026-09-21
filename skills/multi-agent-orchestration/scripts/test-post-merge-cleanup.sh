@@ -105,7 +105,7 @@ SH
 #!/usr/bin/env bash
 set -euo pipefail
 cmd="$1"
-shift || true
+shift
 case "$cmd" in
   has-session)
     if [ "${FAKE_TMUX_ALIVE:-0}" = "1" ] && [ ! -e "${FAKE_TMUX_DEAD:?}" ]; then
@@ -139,6 +139,8 @@ if [ "\$is_push_delete" -eq 1 ]; then
   case "\${FAKE_GIT_PUSH_DELETE_MODE:-passthrough}" in
     fail) echo 'remote: refusing delete (test injection)' >&2; exit 5 ;;
     lie) echo 'fake push claims success without deleting' ; exit 0 ;;
+    race) "$REAL_GIT" --git-dir="\${FAKE_RACE_REMOTE:?}" update-ref \
+      "\${FAKE_RACE_REF:?}" "\${FAKE_RACE_NEW:?}" "\${FAKE_RACE_OLD:?}" ;;
   esac
 fi
 exec "$REAL_GIT" "\$@"
@@ -150,7 +152,7 @@ SH
   : > "$WORLD/git.log"
   # 用例间通过函数前缀赋值传递的环境必须清零，避免向后续用例泄漏状态。
   unset FAKE_TMUX_ALIVE FAKE_GIT_PUSH_DELETE_MODE FAKE_ORCA_TERMINAL_STATE \
-    FAKE_ORCA_DISPATCH FAKE_GH_MERGED_FAIL FAKE_GH_OPEN_FAIL ORCA_CLI_CMD || true
+    FAKE_ORCA_DISPATCH FAKE_GH_MERGED_FAIL FAKE_GH_OPEN_FAIL ORCA_CLI_CMD
 
   cat > "$BIN/orca" <<'SH'
 #!/usr/bin/env bash
@@ -243,7 +245,7 @@ assert_contains "remote_branch=delete" "$OUT" "plan includes remote deletion"
 git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH" && ok "dry-run kept the local branch" || bad "dry-run deleted the local branch"
 git --git-dir="$REMOTE" show-ref --verify --quiet "refs/heads/$BRANCH" && ok "dry-run kept the remote branch" || bad "dry-run deleted the remote branch"
 assert_not_contains "CLEAN_WORKTREE_MODE: execute" "$OUT" "dry-run never executes clean-worktree"
-assert_not_contains "push origin --delete" "$WORLD/git.log" "dry-run never deletes the remote branch"
+assert_not_contains "--delete" "$WORLD/git.log" "dry-run never deletes the remote branch"
 
 echo "Case 2: execute cleans a merged worker and verifies zero residue"
 run_helper --execute
@@ -473,7 +475,38 @@ assert_eq "$HELPER_RC" "2" "open-query failure defers cleanup"
 assert_contains "reason=child_pr_query_unavailable" "$ERR" "open-query deferred reason"
 git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH" && ok "branch kept through gh failures" || bad "branch deleted through gh failures"
 
-echo "Case 16: usage errors exit 64"
+echo "Case 16: advanced remote is retained before deletion"
+build_world
+make_worker feat/advanced-remote worker-advanced
+set_merged_pr "$TIP"
+write_metadata <<JSON
+{"session":{"id":"worker-advanced"},"runtime":{"provider_lease":{"file":""}}}
+JSON
+ADVANCED=$(git -C "$PROJECT" commit-tree "$TIP^{tree}" -p "$TIP" -m concurrent)
+git -C "$PROJECT" push -q origin "$ADVANCED:refs/heads/$BRANCH"
+run_helper --execute
+assert_eq "$HELPER_RC" "2" "advanced remote defers cleanup"
+assert_contains "reason=remote_head_mismatch" "$ERR" "remote mismatch is explicit"
+test -d "$WT" && ok "advanced remote preserves worktree" || bad "advanced remote lost worktree"
+
+echo "Case 17: remote advances between observation and push"
+build_world
+make_worker feat/race-remote worker-race
+set_merged_pr "$TIP"
+write_metadata <<JSON
+{"session":{"id":"worker-race"},"runtime":{"provider_lease":{"file":""}}}
+JSON
+ADVANCED=$(git -C "$PROJECT" commit-tree "$TIP^{tree}" -p "$TIP" -m concurrent)
+git -C "$PROJECT" push -q origin "$ADVANCED:refs/heads/race-object"
+export FAKE_RACE_REMOTE="$REMOTE" FAKE_RACE_REF="refs/heads/$BRANCH" FAKE_RACE_NEW="$ADVANCED" FAKE_RACE_OLD="$TIP"
+FAKE_GIT_PUSH_DELETE_MODE=race run_helper --execute
+assert_eq "$HELPER_RC" "9" "delete lease rejection is reported"
+actual_tip=$(git --git-dir="$REMOTE" rev-parse "refs/heads/$BRANCH")
+assert_eq "$actual_tip" "$ADVANCED" "delete lease preserves concurrently advanced remote"
+assert_contains "local cleanup already applied" "$ERR" "delete race explicitly reports the remaining remote debt"
+unset FAKE_RACE_REMOTE FAKE_RACE_REF FAKE_RACE_NEW FAKE_RACE_OLD
+
+echo "Case 18: usage errors exit 64"
 build_world
 make_worker feat/usage worker-u
 set_merged_pr "$TIP"

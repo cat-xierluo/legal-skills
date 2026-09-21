@@ -2,20 +2,20 @@
 name: yuandian-law-search
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.9"
+version: "1.9.1"
 license: MIT
-description: 元典检索机制感知型法律研究中间层。本技能应在需要查询中国法律法规或案例，或用户提供案件事实、争议焦点、既有法律分析报告并要求制定检索策略、查找正反类案、生成可追溯检索报告时使用；先做轻量案件研判与查询矩阵，再按向量、关键词和结构化字段调用元典 API 或 MCP。不要用于替代完整证据审查、诉讼方案或正式法律意见。
+description: 元典涵摄式法律研究中间层。本技能应在查询中国法律法规或案例，或根据案件事实、争议焦点、既有法律分析报告制定检索策略、查找正反类案、形成精选依据或可追溯报告时使用；先做要件涵摄与检索缺口分析，再按向量、关键词和结构化字段调用元典 API/MCP，并由 Agent 逐条精选。不要用于替代完整证据审查、诉讼方案或正式法律意见。
 ---
 
 # 元典法条与案例检索
 
-先把案件事实和诉讼立场转换为可验证的检索命题，再按元典开放平台的向量、关键词和结构化过滤机制调用 API 或 MCP，并把结果复核、归档为可追溯报告。**每次 API 调用消耗 1-50 积分**（视接口而定）。
+先用“涵摄—假设检验”模型把案件事实和诉讼立场转换为法律要件、事实映射、正反命题与检索缺口，再按元典开放平台的向量、关键词和结构化过滤机制调用 API 或 MCP。完整响应只是候选池；Agent 逐条复核形成精选依据，默认在对话中交付，用户明确要求时才生成正式报告。**每次 API 调用消耗 1-50 积分**（视接口而定）。
 
 ## 数据留存与隐私警示
 
 本技能在提供便利的同时会产生本地留存与外部传输，使用前请知悉：
 
-- **本地归档**：每次检索的原始响应与结构化报告会自动写入 `archive/`（按 `YD_PROJECT` 或日期归类），并默认在您运行命令的工作目录生产一份 `.md` 副本（便于附卷；当工作目录恰为 skill 根目录时自动跳过）。可用 `--no-report` 完全跳过、`--no-cwd-report` 仅跳过工作目录副本。这些文件可能包含案由、当事人、裁判文书正文等敏感内容，**请勿将其提交至公开仓库或随意分享**。
+- **本地归档**：每次检索的原始响应与 per-call 结构化底稿会自动写入 `archive/`（按 `YD_PROJECT` 或日期归类），并默认在运行命令的工作目录生成一份 `.md` 工作副本（供 Agent 复核，不是正式交付；当工作目录恰为 skill 根目录时自动跳过）。`--no-report` 仅跳过 `.md` 报告（archive 与工作目录两份），**仍会写 archive JSON**；`--no-cwd-report` 仅跳过工作目录副本；`--no-archive` 才会关闭全部本地留存（JSON 与 `.md` 都不写，查重仍读已有归档，命中即免请求——但新查询不再入缓存，下次同查询可能重复消耗积分）；`--archive-dir`（或环境变量 `YD_ARCHIVE_DIR`）可指定归档目录。归档写入失败（如目录不可写）只降级为 stderr 告警，**不会吞掉已取得的响应、不会自动重试**。这些文件可能包含案由、当事人、裁判文书正文等敏感内容，**请勿将其提交至公开仓库、复制进案件交付目录或随意分享**。
 - **外部传输**：检索请求与（如幻觉检测）待查文本会发送至元典开放平台 `open.chineselaw.com`。提交给 `hall-detect` 等接口的文本可能包含案卷事实、合同或客户信息，**建议先脱敏再提交**。平台侧的留存策略以其服务条款为准。
 - **敏感内容最小化**：案例文书、企业信息含个人或商业敏感数据，引用与归档时遵循"最小必要"原则，避免大段全文外泄。
 
@@ -24,7 +24,7 @@ description: 元典检索机制感知型法律研究中间层。本技能应在�
 本技能运行需要以下本地能力，均限定在检索与归档目的内：
 
 - **网络访问**：检索请求仅发送到 `open.chineselaw.com`（HTTPS）；`--network-check` 还会对 `ydzk.chineselaw.com` 做 DNS/TLS 连通性检查，不发送案件内容。
-- **文件系统读写**：可读取 `scripts/.env`（API Key）；写入 `archive/` 与当前工作目录的报告副本（可经 `--no-report`/`--no-cwd-report` 关闭）。
+- **文件系统读写**：可读取 `scripts/.env`（API Key）；写入 `archive/`（可用 `--archive-dir`/`YD_ARCHIVE_DIR` 重定向）与当前工作目录的报告副本（`.md` 副本可经 `--no-report`/`--no-cwd-report` 跳过；全部留存经 `--no-archive` 关闭）。
 - **环境变量**：读取 `YD_API_KEY`（鉴权）、`YD_STRATEGY`/`YD_PROJECT`（检索策略与归类）等；`yd-run` 以干净环境启动 Python，仅保留必要变量。
 - **本地代码执行**：通过 `scripts/yd-run` 调用 Python 检索脚本；不安装第三方运行时、不执行自动更新。
 
@@ -106,24 +106,33 @@ scripts/yd-run --network-check
 
 当用户描述事实结构、争议焦点、诉讼立场，或问"类似案件怎么判""能不能主张 XX""对方抗辩怎么办"时，**先完成案件检索主流程，再调用接口**（DEC-006）。简单法条/案号/纯概念检索（`detail` / `case-detail` / 单条 `search`）不启动本流程，直接看下方接口速查。
 
-1. **轻量案件研判** → 产出检索简报（争点、要件、决定性事实、待补事实、必须排除的近邻案型、已有报告来源）。
-2. **派生检索命题** → 每个命题只验证一项判断，区分规范 / 事实结构 / 裁判规则 / 反向；每个 decisive 争点至少 1 条正向 + 1 条反向。
-3. **派生查询矩阵** → 一争点一查询、单一接口；案例关键词只放 4-6 个高信息密度词，不构造后端无法表达的长 AND。
-4. **小样本试检** → 1-2 条命题先验证接口与表达是否有效。
-5. **对位复核** → 按 HIGH / MEDIUM / LOW / MISMATCH 复核；只有诊断出偏差原因（接口误选 / 表达不适配 / 近邻混入）后才扩展查询或换接口。
-6. **正式检索** → 结论—依据—查询可追溯报告。
+1. **形成检索简报** → 明确请求／抗辩路径、争点、决定性事实、待补事实和必须排除的近邻案型。
+2. **建立涵摄矩阵** → 为每个争点拆出候选大前提、法律要件／例外／后果、法律化事实、证明状态和暂定涵摄；区分法律检索缺口与事实／证据缺口。
+3. **派生正反命题与查询** → 只有 `legal_research` 缺口才能生成 query；每个决定性争点至少 1 条支持命题 + 1 条反向命题，一查询只承载一个缺口。
+4. **小样本试检** → 先用少量候选验证接口与表达；向量接口负责发现，关键词、结构化字段和详情接口负责复检／核验。
+5. **对位复核与策略修正** → Agent 按 HIGH / MEDIUM / LOW / MISMATCH 审查主体、请求权基础、行为链条和决定性事实；后端分数不替代法律相关性。
+6. **形成精选来源** → 仅将 HIGH/MEDIUM、已核验、已映射命题且说明本案适用理由的材料写入 `selected-sources.json`；核心依据必须为 HIGH，正式报告最多 12 条，完整召回只归档。
+7. **按需交付** → 默认在对话中给结论与少量精选依据；用户明确要求正式报告或落盘时，才由 `consolidate` 消费精选清单。
 
 信息不足时按"最小必要"补问（最多 1 轮，只问会改变检索路径的最关键问题），不空跑查询；事实不足但不影响查询方向的，标注假设继续。
 
-完整字段定义、接口路由规则、近邻案型排除清单、前置门禁判定与机器可读导出骨架见：[`references/07-research-middleware.md`](references/07-research-middleware.md)。
+完整涵摄矩阵、接口路由、近邻排除和 research plan 合同见 [`references/07-research-middleware.md`](references/07-research-middleware.md)；精选来源、输出模式和报告门禁见 [`references/08-selected-sources-delivery.md`](references/08-selected-sources-delivery.md)。
 
-案件检索形成机器可读 `research-plan.json` 后，**必须先过字段归属门禁再调用 API/MCP**：
+案件检索形成机器可读 `research-plan.json` 后，**必须先过统一合同门禁再调用 API/MCP**：
 
 ```bash
-scripts/validate-query-filters.py research-plan.json
+scripts/validate-research-contract.py --plan research-plan.json
 ```
 
-退出码非 0 时停止调用并修正；未知接口、非法字段归属和错误数据类型均按失败关闭。单条查询可用 `--query '{"interface":"case","filters":{"--province":"广西"}}'`。
+正式报告前还必须运行：
+
+```bash
+scripts/validate-research-contract.py \
+  --plan research-plan.json \
+  --selection selected-sources.json
+```
+
+退出码非 0 时停止调用或报告生成。门禁检查涵摄缺口、命题／查询映射、真实 CLI 字段归属和精选来源合同；它不根据关键词替 Agent 判断实体法律相关性。
 
 > 下方「接口速查」是执行第 3 步查询矩阵时"按机制选接口"的依据，不是检索的起点。
 
@@ -190,7 +199,7 @@ scripts/validate-query-filters.py research-plan.json
 
 - **普通检索接口**：查询矩阵通过门禁后直接使用；`hall-detect` 涉及待查文本外传，仍须用户明确要求
 - **case-detail**：自动获取最相关的 2-3 个案例的完整判决书，不需用户逐一选择
-- **补充检索**：对同一问题同时运行语义+关键词双检索，合并去重后展示
+- **补充检索**：对同一命题同时运行语义+关键词双检索，候选合并去重后仍由 Agent 逐条精选，不因调用更多而扩大正文
 - **积分报告**：简要说明消耗即可，不强调节约
 - **额外行为**：法条检索后发现与当前命题直接相关的法规（如司法解释），可追加 regulation 检索；歧义会改变检索路径时仍先做一轮最小必要补问，不用宽泛检索代替争点确认
 
@@ -221,9 +230,9 @@ scripts/validate-query-filters.py research-plan.json
 | **子命令** | `search`（法条）/ `case-semantic`（案例） | `keyword`（法条）/ `case`（案例） |
 | **输入** | 自然语言问题或描述 | 精确关键词组合 |
 | **匹配** | 语义相似度，概念关联 | 字面匹配，AND/OR 逻辑 |
-| **返回量** | 默认 45 条 | 默认 10 条 |
+| **返回量** | economical 8 / balanced 12 / aggressive 20 条候选 | 通常 10 条；aggressive 可到 20 条候选 |
 
-**用语义检索**：用户提出法律问题 / 描述场景 / 不确定关键词 / 需要广覆盖 → 不确定时默认用
+**用语义检索**：需要发现未知规范、裁判用语或事实结构类案 → 作为候选发现入口，不把召回量等同于交付量
 **用关键词检索**：用户给出明确关键词 / 需要 AND/OR 逻辑 / 需按日期、效力级别、法院等精确筛选 / 语义检索结果不够聚焦
 **案例检索红线**：综合案件和类案对标的第一轮优先 `case-semantic`；`case` 只放 4-6 个高信息密度关键词，避免长事实结构默认 AND 导致零命中。
 
@@ -352,6 +361,7 @@ scripts/yd-run hall-detect "根据《中华人民共和国数据保护法》第3
 - [MCP 协同工作流](references/05-mcp-workflow.md)
 - [企业全息画像](references/06-enterprise-portrait.md)
 - [检索机制感知型中间层执行合同](references/07-research-middleware.md)
+- [Agent 精选来源与交付门禁](references/08-selected-sources-delivery.md)
 
 ### 接口清单与 API 端点文档
 
@@ -380,117 +390,39 @@ scripts/yd-run archive-list --keyword "正当防卫"
 
 ## 法律检索报告（consolidate）
 
-多次检索之后，把 per-call 报告汇总成一份完整的法律检索报告。**这是律师/客户看的交付物**，per-call 报告是数据底稿。
+`consolidate` 只在用户明确要求正式报告或落盘时使用。它必须读取已经通过校验的 `research-plan.json` 与 Agent 生成的 `selected-sources.json`；缺失、空清单、超过 12 条、未核验、无命题映射、`LOW/MISMATCH` 或决定性命题无去向时失败关闭。
 
-### 7 节"结论先行"标准结构
-
-**核心原则**：用户最想知道的是**最终结论**（能不能做、怎么做、风险在哪），法条和案例只是用来核实结论的支撑材料。所以结构应是 **结论先行 → 分析支撑 → 检索底稿垫后**。
-
-模板文件位于 `templates/legal-research-report.md`；`scripts/yd-run consolidate` 会按同一结构自动生成报告。
-
-1. **案情简介** — 当事人、争议焦点、当前阶段（最少必要）
-2. **检索目的与问题** — 本次检索要回答的法律问题（1-3 个核心 Q）
-3. **检索结论** ⭐ — **最先读到的内容**：
-   - 3.1 一句话定性（"能做/不能做" + 法律依据）
-   - 3.2 核心论点的判例支撑速查（用表格/列表，让用户 30 秒内 get 到）
-   - 3.3 风险点（诚实告知，不要只说好的）
-   - 3.4 后续行动（具体可执行的步骤）
-4. **分析与判断** — 抗辩应对、法条适用、诉讼请求结构、赔偿酌定、证据准备
-5. **检索思路与方法** — 关键词组合、筛选条件、检索顺序（备查）
-6. **检索结果** — 按 endpoint 分组：6.1 法律依据 / 6.2 司法案例 / 6.3 行政法规 / 6.4 其他（核实材料）
-7. **检索明细** — 表格，链接到每条 per-call 报告（末尾，使用可回溯本地链接）
-
-### 检索报告质量要求
-
-- **结论区必须能独立阅读**：3.1-3.4 应让律师、客户或法官先得到答案，再决定是否看底稿
-- **核心依据用表格速查**：不要让读者从几十条法条/案例中自行拼结论
-- **方法区保留检索痕迹**：写清关键词、筛选条件、平台、时间、纳入规则
-- **结果区只放支撑材料**：法条、案例、法规按类型分组，不替代第四节分析
-- **风险必须明示**：包括不利类案、法律适用分歧、地域差异、时效或证据缺口
-- **无法确认的信息标注待补充**：不要把检索不到或材料未提及的事实写成确定结论
-
-> **节号从 1 重新编号**（案情=1，结论=3，结果=6，明细=7），不沿用 1-6 顺序编号；体现"结论在第 3 节"的视觉位置。
-
-**反例**（曾出现过的旧版结构）：
-- 案情 → 目的 → 思路 → 检索结果 → 分析 → 结论
-- 用户反馈：检索结果（法条案例）全是"核实材料"，要翻到最后才看到结论 → 太累
-- 新版：结论放到第 3 节，用户看完 3.1-3.4 就能得到 80% 答案
-
-末尾附"本次检索明细"表格，链接到每条 per-call 报告。
-
-### 调用方式
+报告保持 7 节结论先行结构，但第六节只渲染精选来源：规范性法源按核心／补充和法律位阶排序，案例单独分组。完整 MCP/API 响应与 per-call 报告只归档并在第七节列调用轨迹，不复制正文。
 
 ```bash
 scripts/yd-run consolidate \
-    --title "张某买卖合同违约金调整" \
-    --project "case-2024-zhangsan" \
-    --case "案情：..." \
-    --strategy "检索思路：..." \
-    --analysis "分析与判断：..." \
-    --conclusion "一句话结论：..." \
-    --risks "主要风险：..." \
-    --next-actions "后续行动：..." \
-    --include "违约金,高空抛物"
+  --title "案件主题" \
+  --project "case-project" \
+  --case "案情：..." \
+  --strategy "涵摄缺口、查询路由和复检过程：..." \
+  --analysis "结合精选依据完成的分析：..." \
+  --conclusion "附条件的一句话结论：..." \
+  --research-plan research-plan.json \
+  --selection selected-sources.json \
+  --include "可选：仅归档／列示的原始查询子串"
 ```
 
-- `--case` / `--strategy` / `--analysis` 必填：AI 显式传本次任务的案情/思路/判断
-- `--include` 必填：逗号分隔的查询子串，明确指定"本次任务范围"（不取最近 N 条）
-  - 匹配规则：CWD 中所有符合 `<8位时间戳>_<6位时间戳>_<查询>.md` 命名的 .md 文件，文件名包含任一子串即被纳入
-- `--project` 可选：项目子目录名。默认从 `--title` slugify（如 "张某买卖合同违约金调整" → "张某买卖合同违约金调整"）。用于 `archive/<project>/` 归类
-- `--title` / `--purpose` / `--conclusion` / `--risks` / `--next-actions` / `--output` 可选
-  - `--purpose` 不传则基于检索词自动生成
-  - `--conclusion` 强烈建议传入；不传会在 3.1 保留补写提示
-  - `--risks` / `--next-actions` 不传会保留补写提示
-  - `--output` 默认同时写 CWD 和 `archive/<project>/`；指定则只写到指定路径
-
-### 项目子目录组织
-
-consolidate 会把这次任务的所有文件归类到 `archive/<project>/` 子目录：
-
-```
-archive/
-  case-2024-zhangsan/
-    20260610_192031_货款逾期违约金_司法实践.json   ← 从 archive/ 根目录移入
-    20260610_192031_货款逾期违约金_司法实践.md    ← 从 CWD 复制
-    20260610_192032_逾期付款_违约金_调整.json
-    20260610_192032_逾期付款_违约金_调整.md
-    20260610_192058_法律检索报告.md                ← 主交付物
-```
-
-- **.md 复制**（CWD 保留工作副本）：用户的工作目录不被破坏
-- **.json 移动**（archive 根目录已清理）：避免根目录重复积累，扁平区只放"in-flight 暂存"
-- 重复运行 consolidate 同一项目：idempotent，文件已在子目录则跳过
-
-### 与 per-call 报告的关系
-
-```
-多次 yd-run 检索（自动写 per-call .md 到 archive + CWD）
-       ↓
-AI 汇总判断后调 consolidate --project "case-x"
-       ↓
-创建 archive/case-x/，.md 复制进来，.json 移进来，法律检索报告写进去
-       ↓
-CWD 也有法律检索报告副本，per-call .md 仍在 CWD（工作副本）
-       ↓
-报告末尾的"检索明细表"链接回 archive/case-x/ 里的副本
-```
-
-per-call .md 是数据底稿，可独立查看；session 报告是主交付物，附案情/思路/判断；项目子目录是组织容器。
+正式报告工作流、项目包、输出结构和失败条件见 [`references/03-report-consolidation.md`](references/03-report-consolidation.md)；精选清单 schema 与逐条复核规则见 [`references/08-selected-sources-delivery.md`](references/08-selected-sources-delivery.md)。
 
 ## 目标目录归档规范（强制）
 
 目标目录（通常是案件文件夹 `02 - 案件分析` / `03 - 法律研究` 等）与 AI 进程的 CWD 是不同的两个位置。
-目标目录只允许出现：整合后的法律检索报告 + 外部素材 + 基于整合报告再生成的下游文件；
+目标目录只允许出现：正式法律检索报告 + 外部素材 + 用户明确要求交接的精选研究包 + 基于报告再生成的下游文件；
 **禁止** per-call 检索记录、检索明细 JSON、AI 进程 CWD 的工作副本。
 
-完整规则（标准工作流 4 步、反例、验证清单 4 条）见：
+完整规则见：
 
 [`references/03-report-consolidation.md`](references/03-report-consolidation.md#目标目录归档规范强制)
 
 ## MCP 协同工作流（v1.6.0+）
 
-元典官方 MCP（https://open.chineselaw.com/mcp-config）已发布，3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。MCP 只替换数据接入层；本 Skill 仍先完成轻量案件研判、命题与查询矩阵，调用后复核对位度，再负责归档和可追溯法律检索报告。
+元典官方 MCP（https://open.chineselaw.com/mcp-config）已发布，3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。MCP 只替换数据接入层，具体工具仍分别对应向量、关键词、结构化字段和详情机制。本 Skill 在调用前完成涵摄式研究计划，在调用后完成 Agent 精选；MCP 返回不能直接成为正式报告正文。
 
-完整工作流（元典 MCP 接入配置、Agent 三步法、ingest 子命令、模式选型表）见：
+完整工作流（元典 MCP 接入配置、五步法、ingest 归档和精选门禁）见：
 
 [`references/05-mcp-workflow.md`](references/05-mcp-workflow.md)

@@ -409,21 +409,29 @@ def _transcribe_one(client, file_path, args, lang, verbose=True, existing_task=N
         output_paths.append(str(md_path))
 
     # 4. 自动 AI 总结（除非指定 --no-summary）
+    # summary.py inject 需要 Agent 预先生成 {out}.json（prompt → LLM → inject 流程），
+    # 纯脚本 runtime 里 json 不存在属正常情况：打印延后提示而非报错。
     if not getattr(args, "no_summary", False):
         try:
             summary_py = SKILL_ROOT.parent / "funasr-transcribe" / "scripts" / "summary.py"
-            if summary_py.exists():
+            summary_json = out_path.with_suffix(".json")
+            if not summary_py.exists():
                 if verbose:
-                    print(f"[{file_path.name}] 生成 AI 总结...")
-                subprocess.run(
+                    print(f"[{file_path.name}] 跳过 AI 总结: 未找到 funasr-transcribe/summary.py")
+            elif summary_json.exists():
+                if verbose:
+                    print(f"[{file_path.name}] 注入 AI 总结...")
+                proc = subprocess.run(
                     [
-                        "python3", str(summary_py), "inject",
-                        str(out_path), str(out_path.with_suffix(".json")),
+                        sys.executable, str(summary_py), "inject",
+                        str(out_path), str(summary_json),
                     ],
                     check=False, timeout=120,
                 )
-                if verbose:
-                    print(f"[{file_path.name}] AI 总结已生成")
+                if verbose and proc.returncode == 0:
+                    print(f"[{file_path.name}] AI 总结已注入")
+            elif verbose:
+                print(f"[{file_path.name}] AI 总结待生成: 缺 {summary_json.name}（Agent 可用 summary.py prompt 生成后 inject）")
         except Exception as e:
             if verbose:
                 print(f"[{file_path.name}] AI 总结失败: {e}")

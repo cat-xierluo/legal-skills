@@ -1,0 +1,895 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "contract-copilot-capability-20260730",
+  "candidate": {
+    "path": "skills/contract-copilot",
+    "sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+    "hash_scope": "git-tracked",
+    "file_count": 102
+  },
+  "evidence_policy": {
+    "real_case_raw_outputs_stored": false,
+    "synthetic_probe_artifacts_stored": true,
+    "runtime_location": "candidate-outside-temporary-directory",
+    "configuration_isolated": true,
+    "note": "真实合同只保存候选绑定、输入/输出哈希、结构计数和质量观察，不复制合同正文、DOCX 产物或本地审查人配置；脱敏合成微案例保存可复算输入、输出和探针观察。"
+  },
+  "runs": [
+    {
+      "id": "design-current",
+      "case_id": "CONTRACT-E2E-DESIGN-CURRENT",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "0a2305f8169a26ea7ce6c4a125c9cb676e500f3188f79c8d7c5b8da9d7d56800",
+      "output_sha256": "ba030c4684864d06211cf591a8be88a24efb6daf869027c68f59053ffc69abf7",
+      "execution_status": "executed-fail",
+      "evidence_level": "digest-only",
+      "runner": {
+        "id": "contract-copilot-cli",
+        "command": "apply_review_plan.py --no-archive --party-role=甲方 --review-intensity=常规 --edit-policy=revise-first",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-DESIGN-DOCX-INTEGRITY",
+          "observed": "pass",
+          "evidence": "两份 DOCX unzip -t 通过；日志 14 applied、11 report_only、0 failed。"
+        },
+        {
+          "id": "CAP-DESIGN-REPORT-INTEGRITY",
+          "observed": "pass",
+          "evidence": "最终报告含 25 项详细意见，仅签署时间 1 处使用未提及/待补充。"
+        },
+        {
+          "id": "CAP-DESIGN-ROLE-BOUNDARY",
+          "observed": "pass",
+          "evidence": "报告元信息与开篇均为甲方立场，核心意见围绕付款、验收、交付及项目使用权。"
+        },
+        {
+          "id": "CAP-DESIGN-HUMAN-REVIEW-STATE",
+          "observed": "fail",
+          "evidence": "报告包含审查人、机构和出具信息，但全文没有草稿、待复核、人工复核或已复核状态。"
+        }
+      ],
+      "executed_at": "2026-07-30T13:15:00+08:00",
+      "entrypoint": "scripts/review/apply_review_plan.py",
+      "runtime_flags": [
+        "--no-archive",
+        "--party-role=甲方",
+        "--review-intensity=常规",
+        "--edit-policy=revise-first",
+        "--author-profile=evaluation-isolated"
+      ],
+      "input": {
+        "source_ref": "skills/contract-copilot/archive/20260326_223905_230725审核-设计委托合同/input.docx",
+        "source_sha256": "3328940c40fd17ab042e1888a3c11d2828c3e85b90b46735ac9a2a8ef1e6cc03",
+        "plan_ref": "skills/contract-copilot/archive/20260326_223905_230725审核-设计委托合同/review-plan.json",
+        "plan_sha256": "cee616878550f4e346012c1fb84256e55849b04ee90a366a490ec29f7262e103",
+        "bundle_sha256": "0a2305f8169a26ea7ce6c4a125c9cb676e500f3188f79c8d7c5b8da9d7d56800"
+      },
+      "artifacts": {
+        "reviewed_docx": {
+          "sha256": "746322d4486f0c7883cb1e961cb012f830b936c40a3d46959ff7e3ca9e6eeed9",
+          "zip_integrity": "pass",
+          "revision_insert_count": 9,
+          "revision_delete_count": 7,
+          "comment_count": 14
+        },
+        "report_markdown": {
+          "sha256": "ba030c4684864d06211cf591a8be88a24efb6daf869027c68f59053ffc69abf7",
+          "detailed_finding_count": 25,
+          "missing_placeholder_count": 1,
+          "empty_legal_basis_count": 0
+        },
+        "report_docx": {
+          "sha256": "f8e2a4936ac5431b4c7a571c5fea3e2a06b090c77da490512550436d5aee72a4",
+          "zip_integrity": "pass"
+        },
+        "execution_log": {
+          "sha256": "aa6f927c3ca3504791d8474d5051cd24c4c62380eee4fc5ff6f7f68d628b58f2",
+          "applied_count": 14,
+          "report_only_count": 11,
+          "failed_count": 0
+        }
+      },
+      "quality_observations": [
+        "甲方立场与摘要、风险排序和修改方向保持一致。",
+        "25 项详细意见的标题、位置、风险、建议和依据完整。",
+        "正式意见书外观缺少机器可判的待复核或已复核状态。"
+      ],
+      "result": "executed-with-findings"
+    },
+    {
+      "id": "patent-current-clean",
+      "case_id": "CONTRACT-E2E-PATENT-CURRENT",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "5f252de337af04c641a9549e19cfb7fc03d2e46eebdfd851305ed0774638da1b",
+      "output_sha256": "6de4d7bd66ac885e461cb26567f34d29b451a73bd4ec0c6f171a8155b861c556",
+      "execution_status": "executed-fail",
+      "evidence_level": "digest-only",
+      "runner": {
+        "id": "contract-copilot-cli",
+        "command": "apply_review_plan.py --no-archive --party-role=中立 --review-intensity=常规 --edit-policy=revise-first",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-PATENT-DOCX-INTEGRITY",
+          "observed": "pass",
+          "evidence": "两份 DOCX unzip -t 通过；修订版新增 8 条批注和 1 组删除/插入修订。"
+        },
+        {
+          "id": "CAP-PATENT-REPORT-FIELD-INTEGRITY",
+          "observed": "fail",
+          "evidence": "最终报告出现 48 次未提及/待补充，8 项法律依据全部渲染为 /。"
+        },
+        {
+          "id": "CAP-PATENT-PRODUCER-SUCCESS",
+          "observed": "fail",
+          "evidence": "脚本返回 0 并报告 8 项全部成功，但最终报告逐项关键字段批量缺失。"
+        },
+        {
+          "id": "CAP-PATENT-SIGNABILITY-CLOSURE",
+          "observed": "fail",
+          "evidence": "概况的主体、合同类型、期限、价款和核心义务均待补充，核心结论仍为有条件可签。"
+        }
+      ],
+      "executed_at": "2026-07-30T13:18:00+08:00",
+      "entrypoint": "scripts/review/apply_review_plan.py",
+      "runtime_flags": [
+        "--no-archive",
+        "--party-role=中立",
+        "--review-intensity=常规",
+        "--edit-policy=revise-first",
+        "--author-profile=evaluation-isolated"
+      ],
+      "input": {
+        "source_ref": "skills/contract-copilot/archive/20260324_211054_专利实施普通许可合同模板/input.doc",
+        "source_sha256": "375357a3f45d130fb61e1b10aa68c6875adb1bbc381bd5f309cf11a99ad6d6f5",
+        "conversion": "LibreOffice headless DOC to DOCX in an isolated temporary directory",
+        "converted_input_sha256": "42b9507e0d54fd2476e7d84d60f49f64e086113b5d992d1ee7d5c69952e01b8a",
+        "converted_input_preexisting_comments": 0,
+        "converted_input_preexisting_revisions": 0,
+        "plan_ref": "skills/contract-copilot/archive/20260324_211054_专利实施普通许可合同模板/review-plan.json",
+        "plan_sha256": "4a2165d070051d965be0b6b59a58956c5bf16457e27a5e1ba5de2dd01d97f690",
+        "bundle_sha256": "5f252de337af04c641a9549e19cfb7fc03d2e46eebdfd851305ed0774638da1b"
+      },
+      "artifacts": {
+        "reviewed_docx": {
+          "sha256": "ea4d3800bc8aabeb7d5a6b0a9d18af20865116b269483ab36692565050d36ddf",
+          "zip_integrity": "pass",
+          "revision_insert_count": 1,
+          "revision_delete_count": 1,
+          "comment_count": 8
+        },
+        "report_markdown": {
+          "sha256": "6de4d7bd66ac885e461cb26567f34d29b451a73bd4ec0c6f171a8155b861c556",
+          "detailed_finding_count": 8,
+          "missing_placeholder_count": 48,
+          "empty_legal_basis_count": 8
+        },
+        "report_docx": {
+          "sha256": "2f4c0c72ba524a5bc6e2a24db4ff29fb26434e90ef8786be6b94b1a998c0a29c",
+          "zip_integrity": "pass"
+        },
+        "execution_log": {
+          "sha256": "f81ac3aac605e6cf4b8ba4d61bf20de0bb63b47b387e91575c5dfbde54b0db6e",
+          "applied_count": 8,
+          "report_only_count": 0,
+          "failed_count": 0
+        }
+      },
+      "quality_observations": [
+        "干净输入能够生成可解包的修订版、报告和执行日志。",
+        "最终报告出现 48 次未提及/待补充，8 项法律依据全部为 /。",
+        "主体、合同类型、期限、价款和核心义务均待补充时仍给出有条件可签。",
+        "执行器返回 0 并自报 8 项成功，未读取最终报告关键字段完整性。"
+      ],
+      "result": "executed-with-regression"
+    },
+    {
+      "id": "missing-context-controlled",
+      "case_id": "CONTRACT-DYNAMIC-MISSING-CONTEXT",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "ed9d59de8a85dc4a4f74f3e7ba58d6a4ac376c540c85985d81f8d42f5953ddb5",
+      "output_sha256": "809d7fa6f2105b43c0924309f8f0163ac3933fc78ff19baf072b015fb9ae020f",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "evaluator-controlled-agent-run",
+        "command": "controlled missing-context boundary run",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-INTAKE-MISSING-CONTEXT-STOP",
+          "observed": "pass",
+          "evidence": "受控响应列出五类缺口并明确不进入实质审查。"
+        },
+        {
+          "id": "CAP-INTAKE-MISSING-CONTEXT-DISCLAIMER",
+          "observed": "pass",
+          "evidence": "输出明确材料限制、非正式意见属性及承办律师复核要求。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/missing-context-input.json",
+          "sha256": "ed9d59de8a85dc4a4f74f3e7ba58d6a4ac376c540c85985d81f8d42f5953ddb5"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/missing-context-output.md",
+          "sha256": "809d7fa6f2105b43c0924309f8f0163ac3933fc78ff19baf072b015fb9ae020f"
+        }
+      ]
+    },
+    {
+      "id": "role-missing-synthetic",
+      "case_id": "CONTRACT-MICRO-ROLE-MISSING",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "4e2001d95ccaa1f3753742fa589d401ab8ec17dee7f39a2cc75dffd95076ca31",
+      "output_sha256": "8c65e4295ba37c3f38f5eb7631cf4be4c59bdc14b6d97224e8a3171b3be8b686",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-ROLE-MISSING",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ROLE-MISSING-STOP",
+          "observed": "fail",
+          "evidence": "候选在非交互环境把空立场自动解析为其他，没有停止并请求确认。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/role-missing-input.json",
+          "sha256": "4e2001d95ccaa1f3753742fa589d401ab8ec17dee7f39a2cc75dffd95076ca31"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/role-missing-output.json",
+          "sha256": "8c65e4295ba37c3f38f5eb7631cf4be4c59bdc14b6d97224e8a3171b3be8b686"
+        }
+      ]
+    },
+    {
+      "id": "reviewer-unconfirmed-synthetic",
+      "case_id": "CONTRACT-MICRO-REVIEWER-UNCONFIRMED",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "7b6bdae61eee21cbba42b2ae07b5b359ed6053e20d6e856e5de8272600fbc88e",
+      "output_sha256": "7a0b60b3cdd853496c245b1c9daab7d4349498ba70defa35085df48169d63be4",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-REVIEWER-UNCONFIRMED",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-REVIEWER-UNCONFIRMED-BLOCK",
+          "observed": "pass",
+          "evidence": "候选在非交互环境因缺少 author 和 organization 抛出 ValueError，且未写入身份配置。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/reviewer-unconfirmed-input.json",
+          "sha256": "7b6bdae61eee21cbba42b2ae07b5b359ed6053e20d6e856e5de8272600fbc88e"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/reviewer-unconfirmed-output.json",
+          "sha256": "7a0b60b3cdd853496c245b1c9daab7d4349498ba70defa35085df48169d63be4"
+        }
+      ]
+    },
+    {
+      "id": "report-field-collapse-synthetic",
+      "case_id": "CONTRACT-MICRO-REPORT-FIELD-COLLAPSE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15",
+      "output_sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-REPORT-FIELD-COLLAPSE",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-REPORT-FIELD-NONEMPTY",
+          "observed": "fail",
+          "evidence": "脱敏旧字段计划生成的报告出现 14 个待补占位和 1 个空法律依据，候选函数仍正常返回。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/report-legacy-plan.json",
+          "sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/report-field-collapse-output.md",
+          "sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4"
+        },
+        {
+          "role": "supporting",
+          "path": "evals/contract-calibration-260730/micro-runs/contract-micro-report-field-collapse-probe.json",
+          "sha256": "ab636df8aafa248586f29b9dbf8824112a6cbdebebaa3ed541d5c6f87245def1"
+        }
+      ]
+    },
+    {
+      "id": "producer-self-success-synthetic",
+      "case_id": "CONTRACT-MICRO-PRODUCER-SELF-SUCCESS",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15",
+      "output_sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PRODUCER-SELF-SUCCESS",
+        "exit_code": 0
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PRODUCER-SELF-SUCCESS-BLOCK",
+          "observed": "fail",
+          "evidence": "候选报告函数正常返回，但最终报告仍有 14 个待补占位和 1 个空法律依据。"
+        },
+        {
+          "id": "CAP-MICRO-FORMAL-REVIEW-STATE",
+          "observed": "fail",
+          "evidence": "生成的正式意见书外观中没有草稿、待复核、已复核或复核状态字段。"
+        }
+      ],
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/report-legacy-plan.json",
+          "sha256": "b4d832253a048798eb520d8392ed7e5254560d717e99ef83c80b0dd9f7328e15"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/producer-self-success-output.md",
+          "sha256": "dc58ebbcc75bd3a5b4289a0353df12d87f265357ba82dedb23c2a85c5421b6e4"
+        },
+        {
+          "role": "supporting",
+          "path": "evals/contract-calibration-260730/micro-runs/contract-micro-producer-self-success-probe.json",
+          "sha256": "e731c55a64236adf84b002d89f273e8bbfda54e2b972946424253f00ce3ff3fb"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-service-scope-real-run",
+      "case_id": "CONTRACT-MICRO-SERVICE-SCOPE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "846a720de5cde4472db6dd68c94168830d990f59b404bf50707333acaabc0dde",
+      "output_sha256": "9a33219058b5920fe8074c41554a5169796c0ec4ccfe890d5adcc3b8cf08cf5c",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-SERVICE-SCOPE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-SERVICE-SCOPE-BOUNDARY",
+          "observed": "pass",
+          "evidence": "候选将服务范围条款定为 P0 标的不能确定，给出重写措辞但显式暂停、声明不替用户臆测，未落可签/有条件可签/不建议签任一正式定性。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-SERVICE-SCOPE-bundle.md",
+          "sha256": "846a720de5cde4472db6dd68c94168830d990f59b404bf50707333acaabc0dde"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-service-scope.docx",
+          "sha256": "8ee6d2b8519441173d0774518d30fe9049a2aed7b7ede5ed83b9619d8e155f18"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-SERVICE-SCOPE-real-output.md",
+          "sha256": "9a33219058b5920fe8074c41554a5169796c0ec4ccfe890d5adcc3b8cf08cf5c"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-acceptance-payment-real-run",
+      "case_id": "CONTRACT-MICRO-ACCEPTANCE-PAYMENT",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "16958f283f4bd8d3088709ef93f8b62474dddf677064150b88433a408870c3d7",
+      "output_sha256": "389f6b3a608299e1a6ff29edd928ca84f93cad5223b6d7dd7198f3a572de4f8b",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-ACCEPTANCE-PAYMENT --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ACCEPTANCE-PAYMENT-LINK",
+          "observed": "fail",
+          "evidence": "候选识别尾款/验收脱节为 P0，却直接给出完整修改方案并出具正式结论『不建议签』，未在信息补齐前暂停实质审查，也未避免正式可签结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-ACCEPTANCE-PAYMENT-bundle.md",
+          "sha256": "16958f283f4bd8d3088709ef93f8b62474dddf677064150b88433a408870c3d7"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-acceptance-payment.docx",
+          "sha256": "25953a43e35029ae191463e85e19a10b4935b89264cf590add11b11591bed79f"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-ACCEPTANCE-PAYMENT-real-output.md",
+          "sha256": "389f6b3a608299e1a6ff29edd928ca84f93cad5223b6d7dd7198f3a572de4f8b"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-change-fee-real-run",
+      "case_id": "CONTRACT-MICRO-CHANGE-FEE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "7ff80d184040a337bfc8972a96e1fdc3c4657ba060f9dfea6ac14cedda407ce5",
+      "output_sha256": "c59933f7dd33a2f909ecf7b4f1228720e215bead590ca82aecb1082126169ee8",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-CHANGE-FEE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-CHANGE-FEE-AUTHORIZATION",
+          "observed": "fail",
+          "evidence": "候选识别修改费混同风险并给推荐措辞，却出具正式结论『有条件可签』，未触发暂停、未避免正式可签结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-CHANGE-FEE-bundle.md",
+          "sha256": "7ff80d184040a337bfc8972a96e1fdc3c4657ba060f9dfea6ac14cedda407ce5"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-change-fee.docx",
+          "sha256": "8a9fc729775d96a4655db63da228812661b22cf0940ad267b7c442a294ed575a"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-CHANGE-FEE-real-output.md",
+          "sha256": "c59933f7dd33a2f909ecf7b4f1228720e215bead590ca82aecb1082126169ee8"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-penalty-stacking-real-run",
+      "case_id": "CONTRACT-MICRO-PENALTY-STACKING",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "38f4877adbf114f5757369c8b2b428d0ecd0ceb777c5e6321cd17990033e5e0c",
+      "output_sha256": "3473897dacd431d937edeeba160390aa9fe29afaaadf15b1a0ba86111ad291b1",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PENALTY-STACKING --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PENALTY-STACKING-BOUNDARY",
+          "observed": "fail",
+          "evidence": "候选识别违约金三重叠加为 P0 并给修订草案，却出具正式结论『有条件可签』，未暂停、未避免正式可签结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PENALTY-STACKING-bundle.md",
+          "sha256": "38f4877adbf114f5757369c8b2b428d0ecd0ceb777c5e6321cd17990033e5e0c"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-penalty-stacking.docx",
+          "sha256": "46b30115561c5235350138964c484038bdff0738667962a304b11e34b235a07e"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PENALTY-STACKING-real-output.md",
+          "sha256": "3473897dacd431d937edeeba160390aa9fe29afaaadf15b1a0ba86111ad291b1"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-design-ip-use-real-run",
+      "case_id": "CONTRACT-MICRO-DESIGN-IP-USE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "59c1f89e8411c148493149da4b5c5ae34b96be65fd8d0edd925828a01a81b31a",
+      "output_sha256": "c94e6bd5feb55145001da4db9ed58b8704c6d1b88afc732ed34e5fc032780cc9",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-DESIGN-IP-USE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-DESIGN-IP-PROJECT-USE",
+          "observed": "pass",
+          "evidence": "候选识别成果 IP 归属使甲方目的落空为 P0，给出修改措辞但明确『本轮不出具正式可签结论』，列出前置事项后定稿，满足暂停与不作正式结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-DESIGN-IP-USE-bundle.md",
+          "sha256": "59c1f89e8411c148493149da4b5c5ae34b96be65fd8d0edd925828a01a81b31a"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-design-ip-use.docx",
+          "sha256": "b80fdc6ff05e244fa10d2a790b7578c5b56e73a81d4ff5b39c472f64f59f629a"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-DESIGN-IP-USE-real-output.md",
+          "sha256": "c94e6bd5feb55145001da4db9ed58b8704c6d1b88afc732ed34e5fc032780cc9"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-notice-real-run",
+      "case_id": "CONTRACT-MICRO-NOTICE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "3190718726979d50e72edcb643aacac0f97081915964848e5dadfdc257eaba83",
+      "output_sha256": "46a31e0b03b8b9f2eb4ee8c0a166e58d16944dfb58924145e2666b101e10ae72",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-NOTICE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-NOTICE-DELIVERY",
+          "observed": "pass",
+          "evidence": "候选识别通知送达混淆为 P0，给重写措辞但声明『本轮不出具正式可签结论，暂停并等待补充材料』，满足暂停与不作正式结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-NOTICE-bundle.md",
+          "sha256": "3190718726979d50e72edcb643aacac0f97081915964848e5dadfdc257eaba83"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-notice.docx",
+          "sha256": "2f385b272cde00ca77fe086401a59f76da1ac44761755131c68a4c2b603e9a34"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-NOTICE-real-output.md",
+          "sha256": "46a31e0b03b8b9f2eb4ee8c0a166e58d16944dfb58924145e2666b101e10ae72"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-jurisdiction-real-run",
+      "case_id": "CONTRACT-MICRO-JURISDICTION",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "d7ba62309f8d8fa80367b6c319f8c862ab7b44790ca8f09b7365d72d967d9b5f",
+      "output_sha256": "dcbda565ada342c8c1f0433eae9c97757ba8be48f318811e925c62328464008b",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-JURISDICTION --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-JURISDICTION-CONNECTION",
+          "observed": "pass",
+          "evidence": "候选识别管辖连接点模糊为 P0，给推荐措辞但明示『本轮不出具正式的可签结论』并附先决事项，满足暂停与不作正式结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-JURISDICTION-bundle.md",
+          "sha256": "d7ba62309f8d8fa80367b6c319f8c862ab7b44790ca8f09b7365d72d967d9b5f"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-jurisdiction.docx",
+          "sha256": "9496c5c241987ee8565087bde17af9d96c95e219433447f9a55c29a1713d71d5"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-JURISDICTION-real-output.md",
+          "sha256": "dcbda565ada342c8c1f0433eae9c97757ba8be48f318811e925c62328464008b"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-patent-subject-real-run",
+      "case_id": "CONTRACT-MICRO-PATENT-SUBJECT",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "41f303f08fb26f8d955950effdb3ccc5d39cb5e65ebc6a8d15ea9cd3c1382485",
+      "output_sha256": "4625b74dff96161f3f181d5e49083c267ddeef0fe1036a7f510e333b68ddcdb8",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PATENT-SUBJECT --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-SUBJECT-BLOCK",
+          "observed": "pass",
+          "evidence": "候选识别专利权利状态未核验为 P0 标的问题，给推荐措辞但明确『暂不出具可签与否的正式结论』，缺口填补前不作可签判断，满足暂停与不作正式结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-SUBJECT-bundle.md",
+          "sha256": "41f303f08fb26f8d955950effdb3ccc5d39cb5e65ebc6a8d15ea9cd3c1382485"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-patent-subject.docx",
+          "sha256": "dbcd92176cd3c829d69758e3354e3799d5a2d28996f6d957e70698b5d962a10f"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-SUBJECT-real-output.md",
+          "sha256": "4625b74dff96161f3f181d5e49083c267ddeef0fe1036a7f510e333b68ddcdb8"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-patent-scope-real-run",
+      "case_id": "CONTRACT-MICRO-PATENT-SCOPE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "b7a960695051f57e251ad1f7aa33b20743989e182c7a246d20ac274e95aa5083",
+      "output_sha256": "023e8d8b2fd4e26669dc5c4c8cf7a8269c1d9abc7828f1ed4c493eb10a186076",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PATENT-SCOPE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-SCOPE-SUBLICENSE",
+          "observed": "pass",
+          "evidence": "候选识别分许可性质不明为 P0，给两套措辞但明确不代作商务选择、列阻塞确认事项后定稿；结论为『不建议签』但声明确认闭环前不构成可签结论（边界接近正式三档，按暂停优先判 pass）。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-SCOPE-bundle.md",
+          "sha256": "b7a960695051f57e251ad1f7aa33b20743989e182c7a246d20ac274e95aa5083"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-patent-scope.docx",
+          "sha256": "3797bfc00a70db631ffd3d42bc2afc58a611c2426797ba6f7dfa3b39a818c9dc"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-SCOPE-real-output.md",
+          "sha256": "023e8d8b2fd4e26669dc5c4c8cf7a8269c1d9abc7828f1ed4c493eb10a186076"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-patent-fee-real-run",
+      "case_id": "CONTRACT-MICRO-PATENT-FEE",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "7913cebc829ac3616f4616715f9c4ad4bd80243f75deb138d4224f53b9ef4f88",
+      "output_sha256": "17de3511faf2bfc122f93be9e68cfe8b394e1f1c57db9fb56ddf5533d9fd2e23",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PATENT-FEE --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-FEE-AUDIT",
+          "observed": "pass",
+          "evidence": "候选识别许可费六项全缺为 P0，给推荐措辞但声明『本轮不出具正式可签结论，审查暂停待补』，满足暂停与不作正式结论。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-FEE-bundle.md",
+          "sha256": "7913cebc829ac3616f4616715f9c4ad4bd80243f75deb138d4224f53b9ef4f88"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-patent-fee.docx",
+          "sha256": "c69eb448bdeb257f701aaa7af2b6a9ee96f99796e665781bab17879fc9a38b66"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-FEE-real-output.md",
+          "sha256": "17de3511faf2bfc122f93be9e68cfe8b394e1f1c57db9fb56ddf5533d9fd2e23"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-patent-invalidity-real-run",
+      "case_id": "CONTRACT-MICRO-PATENT-INVALIDITY",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "7a47b31c5dd963ae9c652e38e18337e9d9d71ae6e39b4d88dfbec852a6ff1dfa",
+      "output_sha256": "392112b7e794608d6f55a9edad48d58c892aaa6d3a3966310ae825195126f90a",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-PATENT-INVALIDITY --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-PATENT-INVALIDITY-ALLOCATION",
+          "observed": "pass",
+          "evidence": "候选识别第三方侵权责任过宽为 P0，给重写措辞但在事实层面暂停、列待补事实；结论『不建议按现有文本签署』并说明完成先决后可转有条件可签（边界接近正式三档，按暂停优先判 pass）。"
+        }
+      ],
+      "executed_at": "2026-08-07T20:18:45+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-INVALIDITY-bundle.md",
+          "sha256": "7a47b31c5dd963ae9c652e38e18337e9d9d71ae6e39b4d88dfbec852a6ff1dfa"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-patent-invalidity.docx",
+          "sha256": "fc56cd2743c4cc6a22ba93fdf921ce0977068c2ede61e898278bdb5f119d8959"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-PATENT-INVALIDITY-real-output.md",
+          "sha256": "392112b7e794608d6f55a9edad48d58c892aaa6d3a3966310ae825195126f90a"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-objective-missing-real-run",
+      "case_id": "CONTRACT-MICRO-OBJECTIVE-MISSING",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "f633cf6efbdfed55ee9cabb95b21bce6c2acc22f1527775b76948f3287f52dcf",
+      "output_sha256": "c216f48c7e4588ae232bd669f9758048fe285a204553e36342b09c4e2d30d760",
+      "execution_status": "executed-fail",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-OBJECTIVE-MISSING --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-OBJECTIVE-MISSING-STOP",
+          "observed": "fail",
+          "evidence": "候选识别 review_objective 为空，但 SKILL.md 阻塞清单仅含立场/口径（二者已具备），据此未暂停整轮审查，自行按『签约前把关』默认目的推进并出具完整审查意见（结论『不建议签』），仅在文末标注待确认；未遵守『目标确认前暂停、不自行选择交付强度』。暴露 SKILL.md 对审查目的缺失的处置口径自相矛盾（§9.1 必问 vs §3.2/§1.1 阻塞清单未列），行为可复现性差。"
+        }
+      ],
+      "executed_at": "2026-08-07T22:31:06+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-OBJECTIVE-MISSING-bundle.md",
+          "sha256": "f633cf6efbdfed55ee9cabb95b21bce6c2acc22f1527775b76948f3287f52dcf"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-objective-missing.docx",
+          "sha256": "512e55c547b6f533173f9ea1c1ba9991aaf0d8c55746cc68ac91dd79a4374d9f"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-OBJECTIVE-MISSING-real-output.md",
+          "sha256": "c216f48c7e4588ae232bd669f9758048fe285a204553e36342b09c4e2d30d760"
+        }
+      ]
+    },
+    {
+      "id": "contract-micro-attachment-missing-real-run",
+      "case_id": "CONTRACT-MICRO-ATTACHMENT-MISSING",
+      "candidate_sha256": "f3fa86a8996d3a05f6baa57ccf34c90e94703078098cfbc15b9b7122a32b1e37",
+      "input_sha256": "c2bd5aa9dff4c6bafb4ed10b1d57be4e3b53512ad89cdf2d5cf61308aa151529",
+      "output_sha256": "82c7b3d9674ecf61a293165f84cf1b0a9098433038a82d45532cc2a86357e63d",
+      "execution_status": "executed-pass",
+      "evidence_level": "artifact-backed",
+      "runner": {
+        "id": "contract-copilot-micro-probe",
+        "command": "contract_copilot_micro_probe.py --case CONTRACT-MICRO-ATTACHMENT-MISSING --synthetic-docx",
+        "exit_code": 0,
+        "note": "真实动态执行：contract-copilot 候选（AI agent 遵循 SKILL.md）对合成 DOCX + provided_context 产出真实审查意见；未读取 expected 输出 fixture。"
+      },
+      "assertions": [
+        {
+          "id": "CAP-MICRO-ATTACHMENT-MISSING-LIMIT",
+          "observed": "pass",
+          "evidence": "候选开篇列明四份附件全部未提供，明确指出正文空心化、实质内容全在附件且附件效力高于正文；明确声明不对服务范围、验收标准、价款、知识产权出具实体结论（四项均标『未提及/待补充』），并将『取得并审阅附件一至四』列为签署前先决事项第 1 项（最高优先级、其余事项前提）。未完全暂停整轮（就正文结构可独立认定的风险出具 P0 意见并声明为阶段性成果），符合 SKILL.md 立场/口径完备即可推进的规则，满足断言『明确限制并列为签前条件』。"
+        }
+      ],
+      "executed_at": "2026-08-08T00:01:10+08:00",
+      "artifacts": [
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-ATTACHMENT-MISSING-bundle.md",
+          "sha256": "c2bd5aa9dff4c6bafb4ed10b1d57be4e3b53512ad89cdf2d5cf61308aa151529"
+        },
+        {
+          "role": "input",
+          "path": "evals/contract-calibration-260730/micro-runs/synthetic/contract-micro-attachment-missing.docx",
+          "sha256": "a668d7788447868822d7a61b9bf83b5f392199fa07aa92e370ccaf8a6f32fdf2"
+        },
+        {
+          "role": "output",
+          "path": "evals/contract-calibration-260730/micro-runs/real-runs/CONTRACT-MICRO-ATTACHMENT-MISSING-real-output.md",
+          "sha256": "82c7b3d9674ecf61a293165f84cf1b0a9098433038a82d45532cc2a86357e63d"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": [
+        "scope",
+        "scenario"
+      ],
+      "value": "legal-qa-snippet"
+    },
+    {
+      "op": "set",
+      "path": [
+        "scope",
+        "deliverable"
+      ],
+      "value": "单一法律问答片段"
+    },
+    {
+      "op": "set",
+      "path": [
+        "cases",
+        0,
+        "dimensions",
+        5,
+        "rating"
+      ],
+      "value": null
+    },
+    {
+      "op": "set",
+      "path": [
+        "cases",
+        0,
+        "dimensions",
+        5,
+        "not_applicable_reason"
+      ],
+      "value": "本轮只评问答片段，不产出完整终端交付物；格式完整度不在本次范围。"
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "positive-near-miss",
+    "purpose": "验证 N/A 必须带理由且不会被误判为缺项"
+  }
+}

@@ -180,6 +180,7 @@ INSTALL_GUARD_MODE="hook"
 INSTALL_AUTH_JSON=""
 AUTHORITY_RECEIPT_FILE=""
 AUTHORITY_RECEIPT_SHA256=""
+COMPLETION_AUTHORITY_FILE=""
 INSTALL_GUARD_SETTINGS_FILE=""
 GIT_EXPECTED_NAME=""
 GIT_EXPECTED_EMAIL=""
@@ -225,6 +226,38 @@ fi
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
+
+# v2.27.3: --base-ref must be a ref name (main, origin/main, refs/heads/x).
+# A bare 40-hex sha (or 7-40 hex that resolves only as a commit) would be recorded
+# into METADATA.base_ref and later deadlock pm-cleanup-worker between
+# INTEGRATION_TARGET_MISMATCH (argument=main vs metadata=sha) and
+# PR_BASE_MISMATCH (expected=sha vs actual=main). Reject early, before any
+# worktree/provider/terminal/Dispatch side effect.
+# 字符类覆盖大小写十六进制（[0-9a-fA-F]）——先前 [0-9a-f] 让大写 sha
+# （如 96A304DF…）绕过守卫并原样写入 METADATA.base_ref，重现同款死锁。
+spawn_worker_check_base_ref_is_ref() {
+  local value="$1"
+  [ -n "$value" ] || return 0
+  if [[ "$value" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a 40-character commit sha)" >&2
+    return 64
+  fi
+  if [[ "$value" =~ ^[0-9a-fA-F]{7,40}$ ]] \
+     && [ -d "$PROJECT_DIR" ] \
+     && git -C "$PROJECT_DIR" rev-parse --verify --quiet "$value^{commit}" >/dev/null 2>&1; then
+    # Resolves as a commit — only allow if it is also a real ref name.
+    # refs/heads|remotes|tags 查找本身大小写敏感：分支名恰为大写 hex 形态且
+    # 真实存在时（如 DEADBEEF2）仍放行，否则一律拒绝（包含大小写混合 sha）。
+    if ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/heads/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/remotes/$value" 2>/dev/null \
+       && ! git -C "$PROJECT_DIR" show-ref --verify --quiet "refs/tags/$value" 2>/dev/null; then
+      echo "ERROR: SPAWN_WORKER_BASE_REF_MUST_BE_REF: $value (--base-ref must be a ref name like 'main' or 'origin/<branch>'; pass a branch or remote-tracking ref, not a commit-ish)" >&2
+      return 64
+    fi
+  fi
+  return 0
+}
+spawn_worker_check_base_ref_is_ref "$BASE_REF" || exit $?
 
 DETECTED_PM_HARNESS=""
 detect_pm_harness "$PROJECT_DIR" || exit $?
@@ -673,6 +706,7 @@ if [ "$PROJECT_IS_GIT" -eq 1 ]; then
   esac
   git_common_dir=$(cd "$git_common_dir" && pwd -P)
   AUTHORITY_RECEIPT_FILE="$git_common_dir/agent-authority/$SESSION.json"
+  COMPLETION_AUTHORITY_FILE="$git_common_dir/agent-authority/$SESSION.completion.json"
   if [ "$INSTALL_GUARD_MODE" = "hook" ]; then
     GUARD_ATTESTATION_FILE="$git_common_dir/agent-authority/$SESSION.hook-attested.json"
   fi
@@ -1161,7 +1195,7 @@ dependency_install_guard_setup() {
     return 1
   fi
 
-  local auth_q auth_b64 auth_b64_q backend_q receipt_q settings_q attestation_q
+  local auth_q auth_b64 auth_b64_q backend_q receipt_q completion_q settings_q attestation_q receipt_content_sha receipt_sha_q orca_cli_q
   case "$WORKER_BACKEND" in
     claude-code|claude_code) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.claude/settings.local.json" ;;
     codebuddy) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.codebuddy/settings.local.json" ;;
@@ -1176,9 +1210,16 @@ dependency_install_guard_setup() {
   printf -v auth_b64_q '%q' "$auth_b64"
   printf -v backend_q '%q' "${WORKER_BACKEND:-claude-code}"
   printf -v receipt_q '%q' "$AUTHORITY_RECEIPT_FILE"
+  receipt_content_sha=""
+  if [ -n "$AUTHORITY_RECEIPT_FILE" ] && [ "$DRY_RUN" -eq 0 ]; then
+    receipt_content_sha=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+  fi
+  printf -v receipt_sha_q '%q' "$receipt_content_sha"
+  printf -v orca_cli_q '%q' "${ORCA_CLI_BIN:-}"
+  printf -v completion_q '%q' "$COMPLETION_AUTHORITY_FILE"
   printf -v settings_q '%q' "$INSTALL_GUARD_SETTINGS_FILE"
   printf -v attestation_q '%q' "$GUARD_ATTESTATION_FILE"
-  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
+  COMMAND="env WORKER_INSTALL_AUTH_FILE=$auth_q WORKER_INSTALL_AUTH_B64=$auth_b64_q WORKER_AUTHORITY_RECEIPT_FILE=$receipt_q WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256=$receipt_sha_q WORKER_COMPLETION_AUTHORITY_FILE=$completion_q WORKER_ORCA_CLI_BIN=$orca_cli_q WORKER_GUARD_SETTINGS_FILE=$settings_q WORKER_GUARD_ATTESTATION_FILE=$attestation_q WORKER_GUARD_BACKEND=$backend_q $COMMAND"
   if [ -n "$GIT_EXPECTED_NAME" ]; then
     local git_name_q git_email_q
     printf -v git_name_q '%q' "$GIT_EXPECTED_NAME"

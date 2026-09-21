@@ -1,0 +1,26 @@
+{
+    "meta": {
+        "contract_name": "脱敏许可合同",
+        "client_name": "",
+        "party_role": "",
+        "review_intensity": "",
+        "reviewer": "",
+        "reviewer_organization": ""
+    },
+    "summary": {
+        "contract_type": "",
+        "parties": {},
+        "overall_risk": "",
+        "core_conclusion": ""
+    },
+    "findings": [
+        {
+            "id": "R001",
+            "risk_level": "P0",
+            "action": "comment",
+            "target_text": "许可标的：____",
+            "replacement_text": "许可标的：专利号及权利状态待核验",
+            "comment": "专号、权利人和权利状态均未填写，应列为签署前条件。"
+        }
+    ]
+}

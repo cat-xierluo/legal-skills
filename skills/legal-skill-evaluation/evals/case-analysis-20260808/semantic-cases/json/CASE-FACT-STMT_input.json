@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-FACT-STMT",
+  "provided_context": {"material": "familiar-sample.md"},
+  "assertions": [
+    {"id": "CAP-FACT-LABEL", "judge_hint": {"contains_any": ["客观证据", "当事人陈述", "证明力", "待核实"]}},
+    {"id": "CAP-FACT-NO-MIX", "judge_hint": {"not_contains": ["销售人员承诺成立", "承诺即为事实"]}}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "remove_by_id",
+      "path": [
+        "cases",
+        0,
+        "dimensions"
+      ],
+      "id": "DIM-6"
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "mutation",
+    "expected_failed_constraint": "EVAL-REPORT-COVERAGE"
+  }
+}

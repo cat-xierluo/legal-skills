@@ -13,6 +13,8 @@ license: MIT License - 详见 LICENSE.txt
 
 GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 故障排查（`references/ci-troubleshooting.md`）和特定项目类型指南（`references/` 下各文档）作为发布流程的补充参考。
 
+**与 git-workflow 的职责边界**：本技能只负责发版流程内的 CI 构建监控（第 4 步）与发布成本约束（配额红灯）。日常 Actions 配额治理——CI 分钟耗尽停挂止血、workflow 停挂/恢复、workflow_dispatch 化、仓级总闸——由 `git-workflow` §11 负责。发版中出现 CI 故障：构建产物/签名/发布链路问题读本技能；账号级配额治理问题转 git-workflow。
+
 ## 项目配置
 
 `config/projects.yaml` 集中管理各项目的发布配置（仓库、平台、自动更新、排除产物等）。发布时先读取对应项目配置，按配置决定构建矩阵和预期产物。模板见 `config/projects.example.yaml`。
@@ -173,12 +175,13 @@ publish job 失败：
 
 **核心流程**(详见 `references/monorepo-release.md`):
 
-1. 读 `projects.yaml` 的 `<project-key>` 条目,获取 `skills_root`、`output_dir`、`exclude_globs`
+1. 读 `projects.yaml` 的 `<project-key>` 条目,获取 `skills_root`、`expert_suites_root`、`output_dir`、`exclude_globs`
 2. 跑 `build-zips.sh <tag>` 生成单 Skill ZIP；存在专家套件时，再跑静态校验与 `build-suite-zips.sh <tag>`
 3. 打 tag、推 tag
-4. GitHub Actions 自动:上传 zip + 触发 update-readme.yml
-5. update-readme.yml 调 GitHub API 拿 assets 列表,替换根 README 与 `expert-suites/*/README.md` 里的占位 URL
-6. 验证 release 页 assets 数量 = 期望子项目数
+4. GitHub Actions(release.yml)自动:上传单 Skill ZIP + 专家套件 ZIP + 生成 Release Notes(含「专家套件」清单节) + **内嵌 README 回写**(checkout main → 调 `scripts/update-readme.py` 同步根 README 与 `expert-suites/*/README.md` 的下载链接 → commit + push)
+5. 验证 release 页 assets 数量 = 单 Skill ZIP 数 + 套件 ZIP 数;Release Notes 里的 skill 总数取自产物目录但排除 `suite-*` 前缀,套件数用 `{suites}` 单独渲染
+
+> README 回写不依赖 `on: release` 事件——GITHUB_TOKEN 创建的 Release 受 GitHub 防递归机制限制,不会级联触发其他 workflow(实际从未生效过)。`update-readme.yml` 以 `workflow_run`(Release workflow 成功后)+ `workflow_dispatch` 作兜底,与 release.yml 调用同一份 `scripts/update-readme.py`,不存在第二份逻辑;workflow_run 触发时 checkout 显式 `ref: main`(默认会 checkout 到 tag SHA 的 detached HEAD,push 失败)。
 
 专家套件成员以 `expert-suites/<id>/skills/*` 的相对符号链接为唯一构建清单，不增加 `suite.yaml`。构建器先校验链接未逃逸、README 成员表一致、成员许可证齐全，再从指定 Git tree 导出真实 Skill 目录；Release ZIP 中不得保留符号链接。
 
@@ -235,7 +238,17 @@ git log ${PREV_TAG}..HEAD --oneline
 git log ${PREV_TAG}..HEAD --format="- %s (%h)"
 ```
 
-综合两个来源，按模板组织 Release Notes。模板和格式指南见 `references/release-notes-guide.md`。如果 `config/projects.yaml` 中存在 `release_notes.profile`，优先使用项目配置指定的结构；未配置时按项目类型选择默认结构。
+**来源 3 — PR 作者信息（外部贡献者识别）**：
+
+```bash
+# 本版本区间合入的 PR 与作者（识别需要致谢的外部贡献者）
+gh pr list --state merged --limit 50 --json number,title,author \
+  --jq '.[] | "\(.number)\t\(.author.login)\t\(.title)"'
+```
+
+外部贡献者（非维护者）的 PR——包括被「承接 #N」重做的原始 PR——必须在 Release Notes 中致谢：条目行内 `(#N, @user)` + 文末「贡献者」节。识别方法与格式细则见 `references/release-notes-guide.md`「贡献者致谢」。
+
+综合三个来源，按模板组织 Release Notes。模板和格式指南见 `references/release-notes-guide.md`。如果 `config/projects.yaml` 中存在 `release_notes.profile`，优先使用项目配置指定的结构；未配置时按项目类型选择默认结构。
 
 ### 第 3 步：提交并打 Tag
 
@@ -305,7 +318,8 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 2. `exclude_assets` 中列出的产物是否意外出现
 3. 产物命名是否符合规范
 4. Release Notes 是否符合 `release_notes.required_sections` 和 `release_notes.always_include` 约束
-5. **产物完整矩阵对照**（带自动更新项目必查）：见下表，对照产物清单逐行打勾
+5. 本版本合入外部贡献者 PR 时，Release Notes 是否包含致谢（行内标注或「贡献者」节）
+6. **产物完整矩阵对照**（带自动更新项目必查）：见下表，对照产物清单逐行打勾
 
 | 平台 | 安装包 | updater binary | .sig | latest.json entry |
 |------|--------|---------------|------|-------------------|
@@ -342,6 +356,7 @@ macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历�
 - [ ] 所有平台 / 矩阵构建全部成功
 - [ ] GitHub Release 产物完整
 - [ ] Release Notes 已更新，且正文没有重复的版本标题
+- [ ] 外部贡献者已在 Release Notes 致谢（本版有外部 PR 合入时，含被承接的原始 PR）
 - [ ] 镜像同步成功（如已配置）
 - [ ] 旧的失败 Actions runs 已清理
 - [ ] 项目文档已更新（TASKS / DECISIONS / CHANGELOG 等）

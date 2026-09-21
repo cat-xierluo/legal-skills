@@ -1,0 +1,7 @@
+{
+  "case_id": "CASE-NO-RECALL-ARTICLE",
+  "provided_context": {"material": "familiar-sample.md", "retrieval_done": false},
+  "assertions": [
+    {"id": "CAP-ARTICLE-SOURCED", "judge_hint": {"contains_any": ["校准文件", "材料回填", "检索", "待检索", "条号待"]}}
+  ]
+}

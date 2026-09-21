@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "evaluation_id": "litigation-analysis-eval-20260808",
+  "mode": "standard",
+  "candidate": {
+    "ref": "../../../legal-skills/skills/litigation-analysis",
+    "version": "1.3.2",
+    "hash_scope": "git-tracked",
+    "sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f"
+  },
+  "scope": {
+    "scenario": "legal-analysis",
+    "deliverable": "判决书深度分析（上诉/再审决策支持）内部版/研究版/客户版",
+    "audience": "承办律师内部校准",
+    "anonymization": "不脱敏（材料为脱敏占位样本，产出不外传原始敏感组合）",
+    "exclusions": [
+      "不签发 DOMAIN_VERIFIED（指令型 agent 运行，非领域终审）",
+      "标准模式已做三案例真实运行 + 六维度/taste 全覆盖 + 4 诉讼专属语义 case 判定",
+      "不把单轮运行表述为稳定性证据"
+    ]
+  },
+  "generic_gate": {
+    "skill_lint_version": "2.6.1",
+    "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+    "candidate_hash_scope": "git-tracked",
+    "raw_hard_findings": [],
+    "hard_findings": [],
+    "finding_adjudications": [],
+    "harness_status": "NOT_VERIFIED",
+    "instruction_stability_status": "NOT_VERIFIED",
+    "domain_status": "NOT_VERIFIED",
+    "evidence_receipts": [
+      "candidate-snapshot:git-tracked:litigation-analysis",
+      "evals/litigation-analysis-20260808/calibration-report.md",
+      "evals/litigation-analysis-20260808/runs/familiar-sample-output.md",
+      "evals/litigation-analysis-20260808/runs/peer-unfamiliar-output.md",
+      "evals/litigation-analysis-20260808/runs/missing-context-output.md"
+    ]
+  },
+  "cases": [
+    {
+      "id": "case-lit-familiar-current",
+      "type": "familiar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "7d7e928160b5d627a860ebe8950fd9bc8d400491f3fcc231ad5999cf4b2a46b8",
+      "output_sha256": "cc563de3dafed0c5f40ea5b162c127343b3431bb8ff78cbb9495ad9433dadfc4",
+      "input_refs": ["evals/litigation-analysis-20260808/materials/familiar-sample.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/familiar-sample-output.md"],
+      "run_receipts": ["evals/litigation-analysis-20260808/runs/familiar-sample-output.md"],
+      "dimensions": [
+        {"id": "DIM-1", "name": "法律准确性", "rating": 5, "evidence": "法条均标材料载明来源或'条号待检索'，未凭记忆写未核验条号；终审效力正确"},
+        {"id": "DIM-2", "name": "事实与证据运用", "rating": 5, "evidence": "事实链完整溯源原审/二审认定，区分合同约定与法院认定"},
+        {"id": "DIM-3", "name": "逻辑说服力", "rating": 5, "evidence": "质量异议失效、违约金调减均引原文说理，决策链清晰"},
+        {"id": "DIM-4", "name": "关键问题把握", "rating": 5, "evidence": "抓住'有效书面异议'胜负手与再审突破空间"},
+        {"id": "DIM-5", "name": "实务可用性", "rating": 5, "evidence": "上诉/再审路径、执行期起算、研究课题均给可执行下一步"},
+        {"id": "DIM-6", "name": "格式完整度", "rating": 5, "evidence": "速览/事实链/分析/决策/期限五段齐全，合规自检完备"}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "name": "把不确定当确定", "status": "pass", "evidence": "期限/生效日均标'以实际送达日为准'"},
+        {"id": "TASTE-2", "name": "混淆事实与观点", "status": "pass", "evidence": "事实与法律分析分段"},
+        {"id": "TASTE-3", "name": "过度承诺", "status": "pass", "evidence": "未承诺胜诉，再审空间客观评估"},
+        {"id": "TASTE-4", "name": "泄露隐私", "status": "pass", "evidence": "脱敏样本，无新隐私字段"},
+        {"id": "TASTE-5", "name": "虚构依据", "status": "pass", "evidence": "法条标来源或待检索，无虚构"},
+        {"id": "TASTE-6", "name": "忽略边界", "status": "pass", "evidence": "标'不构成对送达日确认'边界"},
+        {"id": "TASTE-7", "name": "格式噪音", "status": "pass", "evidence": "结构清晰无冗余"},
+        {"id": "TASTE-8", "name": "未标草稿/待核", "status": "pass", "evidence": "多处待核实/条号待检索标注"}
+      ],
+      "legal_redlines": []
+    },
+    {
+      "id": "case-lit-peer-current",
+      "type": "peer-unfamiliar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "1a49522ab4c26b0a511f25ec7b7260d69fdf587e013e6d618288b2de6c94b238",
+      "output_sha256": "748e1c01f96d67c8c26a4588344c459605de3a128e6b7ef8a822deae0629279b",
+      "input_refs": ["evals/litigation-analysis-20260808/materials/peer-unfamiliar.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/peer-unfamiliar-output.md"],
+      "run_receipts": ["evals/litigation-analysis-20260808/runs/peer-unfamiliar-output.md"],
+      "dimensions": [
+        {"id": "DIM-1", "name": "法律准确性", "rating": 5, "evidence": "著作权法/软件条例标材料载明或待检索，权属适用正确"},
+        {"id": "DIM-2", "name": "事实与证据运用", "rating": 5, "evidence": "通用组件独立性、复用行为均溯源判决原文"},
+        {"id": "DIM-3", "name": "逻辑说服力", "rating": 5, "evidence": "从约定权属到通用组件例外推理完整"},
+        {"id": "DIM-4", "name": "关键问题把握", "rating": 4, "evidence": "抓'通用组件边界'核心，提示依赖事实认定可进一步"},
+        {"id": "DIM-5", "name": "实务可用性", "rating": 5, "evidence": "丁公司上诉空间、戊侧证据链保留均给可执行建议"},
+        {"id": "DIM-6", "name": "格式完整度", "rating": 5, "evidence": "速览/事实链/分析/决策/风险五段齐全"}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "name": "把不确定当确定", "status": "pass", "evidence": "上诉期标以实际送达日为准"},
+        {"id": "TASTE-2", "name": "混淆事实与观点", "status": "pass", "evidence": "事实与法律分析分段"},
+        {"id": "TASTE-3", "name": "过度承诺", "status": "pass", "evidence": "未写必胜，客观评估翻盘空间"},
+        {"id": "TASTE-4", "name": "泄露隐私", "status": "pass", "evidence": "脱敏样本，无新隐私"},
+        {"id": "TASTE-5", "name": "虚构依据", "status": "pass", "evidence": "结论溯源判决主文，无虚构"},
+        {"id": "TASTE-6", "name": "忽略边界", "status": "pass", "evidence": "标'待补充证据'边界"},
+        {"id": "TASTE-7", "name": "格式噪音", "status": "pass", "evidence": "结构清晰"},
+        {"id": "TASTE-8", "name": "未标草稿/待核", "status": "pass", "evidence": "多处待确认/待补充标注"}
+      ],
+      "legal_redlines": []
+    },
+    {
+      "id": "case-lit-missing-current",
+      "type": "missing-context",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "1eebae76d0a4e27ed8d81cfbb496f0139fe1d671d8fde8e5e500333df2fdfdaf",
+      "output_sha256": "28ce6cf018d6b3075541438a57a0f7bbbc26d6a634a519d67f960fc3bca9d9af",
+      "input_refs": ["evals/litigation-analysis-20260808/materials/missing-context.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/missing-context-output.md"],
+      "run_receipts": ["evals/litigation-analysis-20260808/runs/missing-context-output.md"],
+      "dimensions": [
+        {"id": "DIM-1", "name": "法律准确性", "rating": 5, "evidence": "未妄写条号，期限一律标以实际送达日为准"},
+        {"id": "DIM-2", "name": "事实与证据运用", "rating": 5, "evidence": "仅呈现片段原文可识别信息，不扩写"},
+        {"id": "DIM-3", "name": "逻辑说服力", "rating": 5, "evidence": "缺口→补齐→不妄断推理严谨"},
+        {"id": "DIM-4", "name": "关键问题把握", "rating": 5, "evidence": "正确识别审级/主文/送达三重缺失，未强行抓焦点"},
+        {"id": "DIM-5", "name": "实务可用性", "rating": 5, "evidence": "明确下一步补齐完整判决书与送达信息"},
+        {"id": "DIM-6", "name": "格式完整度", "rating": 5, "evidence": "阻断项/可识别/缺口/提示/下一步五段齐全"}
+      ],
+      "taste": [
+        {"id": "TASTE-1", "name": "把不确定当确定", "status": "pass", "evidence": "无死写天数，全标以实际送达日为准"},
+        {"id": "TASTE-2", "name": "混淆事实与观点", "status": "pass", "evidence": "片段原文与待确认分明"},
+        {"id": "TASTE-3", "name": "过度承诺", "status": "pass", "evidence": "未形成任何胜负判断"},
+        {"id": "TASTE-4", "name": "泄露隐私", "status": "pass", "evidence": "脱敏片段，无新隐私"},
+        {"id": "TASTE-5", "name": "虚构依据", "status": "pass", "evidence": "未妄补裁判主文"},
+        {"id": "TASTE-6", "name": "忽略边界", "status": "pass", "evidence": "显式标'不形成任何胜诉/败诉判断'"},
+        {"id": "TASTE-7", "name": "格式噪音", "status": "pass", "evidence": "结构清晰"},
+        {"id": "TASTE-8", "name": "未标草稿/待核", "status": "pass", "evidence": "全程待确认/待补充标注"}
+      ],
+      "legal_redlines": []
+    }
+  ],
+  "semantic_cases": [
+    "evals/litigation-analysis-20260808/semantic-cases/effective-law.md",
+    "evals/litigation-analysis-20260808/semantic-cases/reasoning-trace.md",
+    "evals/litigation-analysis-20260808/semantic-cases/no-invented-outcome.md",
+    "evals/litigation-analysis-20260808/semantic-cases/deadline-caution.md"
+  ],
+  "hard_failures": [],
+  "repair_units": [],
+  "regression": {
+    "pass_to_pass": "not-run",
+    "fail_to_pass": "not-run"
+  },
+  "verdict": {
+    "recommendation": "adopt-with-notes",
+    "formal_markers": ["NOT_VERIFIED"],
+    "rationale": "指令型 bundle 三案例 agent 真实运行均通过核心语义门禁（法条来源标注、说理溯源、不妄断结论、期限谨慎），运行已闭环但未签发 DOMAIN_VERIFIED，适用 adopt-with-notes。"
+  }
+}

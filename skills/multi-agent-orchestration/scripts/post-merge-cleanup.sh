@@ -299,8 +299,12 @@ if [ "$LS_RC" -ne 0 ]; then
 fi
 if [ -n "$LS_REMOTE_OUT" ]; then
   REMOTE_STATE="present"
+  REMOTE_TIP=${LS_REMOTE_OUT%%[[:space:]]*}
+  [ "$REMOTE_TIP" = "$BRANCH_TIP" ] || \
+    defer "remote_head_mismatch" "expected=$BRANCH_TIP actual=$REMOTE_TIP; refusing to delete an advanced remote branch"
 else
   REMOTE_STATE="absent"
+  REMOTE_TIP=""
 fi
 echo "POST_MERGE_CLEANUP_REMOTE_STATE: branch=$BRANCH state=$REMOTE_STATE"
 
@@ -329,7 +333,9 @@ if [ "$EXECUTE" -eq 1 ]; then
     REMOTE_OUTCOME="kept"
   elif [ "$REMOTE_STATE" = "present" ]; then
     set +e
-    git -C "$PROJECT_DIR" push origin --delete "refs/heads/$BRANCH"
+    git -C "$PROJECT_DIR" push \
+      --force-with-lease="refs/heads/$BRANCH:$BRANCH_TIP" \
+      origin --delete "refs/heads/$BRANCH"
     PUSH_RC=$?
     set -e
     if [ "$PUSH_RC" -ne 0 ]; then

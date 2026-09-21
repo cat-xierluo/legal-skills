@@ -1,0 +1,17 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "set",
+      "path": [
+        "generic_gate",
+        "candidate_sha256"
+      ],
+      "value": "9999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "mutation",
+    "expected_failed_constraint": "EVAL-EVIDENCE-BINDING"
+  }
+}

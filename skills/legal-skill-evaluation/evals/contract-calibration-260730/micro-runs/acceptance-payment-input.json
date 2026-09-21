@@ -1,0 +1,15 @@
+{
+  "case_id": "CONTRACT-MICRO-ACCEPTANCE-PAYMENT",
+  "provided_context": {
+    "request": "请从甲方立场审这份开发服务合同。",
+    "contract_available": true,
+    "contract_excerpt": "甲方应于合同生效后 30 日内支付全部尾款；乙方交付成果后视为验收合格。",
+    "party_role": "甲方",
+    "review_objective": "签约前把关",
+    "review_intensity": "常规",
+    "attachments": [
+      "合同正文"
+    ]
+  },
+  "privacy": "脱敏合成输入，不含真实客户、合同正文或身份配置。"
+}

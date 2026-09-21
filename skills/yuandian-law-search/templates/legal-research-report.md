@@ -3,7 +3,8 @@
 > 生成时间：{{generated_at}}
 > 检索主体：{{researcher}}
 > 检索平台：元典开放平台 open.chineselaw.com
-> 引用检索明细：{{source_count}} 条
+> 精选依据：{{selected_source_count}} 条
+> 原始检索调用：{{raw_call_count}} 条（仅作轨迹，不整体进入正文）
 > 项目包：`archive/{{project}}/`
 
 ## 一、案情简介
@@ -22,11 +23,9 @@
 
 ### 3.2 核心依据速查
 
-| 类型 | 检索方向 | 对结论的作用 | 底稿 |
-|------|----------|--------------|------|
-| 法律依据 | {{law_topic}} | 确认规范依据 | {{law_report_link}} |
-| 司法案例 | {{case_topic}} | 类案裁判观点 | {{case_report_link}} |
-| 行政法规 | {{regulation_topic}} | 补充监管规则 | {{regulation_report_link}} |
+| 编号 | 位阶／类型 | 核心引用 | 对应命题 | 作用 | 相关性 |
+|---|---|---|---|---|---|
+| {{source_id}} | {{source_type}} | {{citation}} | {{proposition_ids}} | {{priority}}/{{stance}} | {{relevance_label}} |
 
 ### 3.3 风险与不确定性
 
@@ -38,40 +37,59 @@
 
 ## 四、分析与判断
 
+### 4.1 涵摄矩阵摘要
+
+{{subsumption_matrix}}
+
+### 4.2 综合分析
+
 {{analysis}}
 
 ## 五、检索思路与方法
 
 {{strategy}}
 
-### 5.1 检索范围
+### 5.1 命题—缺口—查询轨迹
+
+{{query_trace}}
+
+### 5.2 交付门禁
 
 | 项目 | 内容 |
 |------|------|
-| 纳入规则 | `{{include}}` |
+| 正文来源 | `selected-sources.json`（仅 HIGH/MEDIUM 且已核验） |
+| 原始召回 | 仅归档和检索轨迹，不复制进入正文 |
 | 检索平台 | 元典开放平台 |
 | 生成时间 | {{generated_at}} |
 | 项目包 | `archive/{{project}}/` |
 
-## 六、检索结果
+## 六、精选法律依据与案例
 
-### 6.1 法律依据
+### 6.1 规范性法律依据
 
-{{law_results}}
+> 每条显示 `current` / `historical` 效力状态；历史法源只能作补充背景。
 
-### 6.2 司法案例
+{{selected_normative_sources}}
 
-{{case_results}}
+### 6.2 精选司法案例
 
-### 6.3 行政法规
+{{selected_cases}}
 
-{{regulation_results}}
+### 6.3 其他核实材料
 
-### 6.4 其他核实材料
+{{selected_other_sources}}
 
-{{other_results}}
+## 七、未解决问题、排除记录与原始轨迹
 
-## 七、检索明细
+### 7.1 尚未取得充分依据的命题
+
+{{unresolved_propositions}}
+
+### 7.2 已排除候选
+
+{{excluded_summary}}
+
+### 7.3 原始检索调用
 
 | # | 时间 | 检索词 | 接口 | 积分 | 报告 |
 |---|------|--------|------|------|------|

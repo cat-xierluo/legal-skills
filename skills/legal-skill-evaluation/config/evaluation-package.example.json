@@ -1,0 +1,320 @@
+{
+  "schema_version": "1.1",
+  "evaluation_id": "eval-contract-review-001",
+  "mode": "standard",
+  "candidate": {
+    "path": "/path/to/contract-review-skill",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "hash_scope": "full-directory"
+  },
+  "scope": {
+    "scenario": "contract",
+    "deliverable": "合同风险审查报告",
+    "audience": "承办律师内部复核"
+  },
+  "generic_gate": {
+    "skill_lint_version": "2.6.0",
+    "candidate_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "candidate_hash_scope": "full-directory",
+    "raw_hard_findings": [],
+    "hard_findings": [],
+    "finding_adjudications": [],
+    "harness_status": "NOT_VERIFIED",
+    "instruction_stability_status": "NOT_VERIFIED",
+    "domain_status": "NOT_VERIFIED",
+    "evidence_receipts": [
+      "receipt:skill-lint-summary"
+    ]
+  },
+  "cases": [
+    {
+      "id": "case-familiar",
+      "type": "familiar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "output_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "run_receipts": [
+        "receipt:case-familiar:run-1"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-1",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-2",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-2",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-3",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-3",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-4",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-4",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-5",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-5",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-6",
+          "rating": 4,
+          "evidence": "case-familiar 产出中的脱敏证据定位 DIM-6",
+          "not_applicable_reason": null
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-1，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-2，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-3，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-4，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-5，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-6，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-7，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "case-familiar 未命中 TASTE-8，见脱敏核查记录"
+        }
+      ],
+      "legal_redlines": []
+    },
+    {
+      "id": "case-peer",
+      "type": "peer-unfamiliar",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "output_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "run_receipts": [
+        "receipt:case-peer:run-1"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-1",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-2",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-2",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-3",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-3",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-4",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-4",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-5",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-5",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-6",
+          "rating": 4,
+          "evidence": "case-peer 产出中的脱敏证据定位 DIM-6",
+          "not_applicable_reason": null
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-1，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-2，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-3，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-4，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-5，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-6，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-7，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "case-peer 未命中 TASTE-8，见脱敏核查记录"
+        }
+      ],
+      "legal_redlines": []
+    },
+    {
+      "id": "case-missing",
+      "type": "missing-context",
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "output_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "run_receipts": [
+        "receipt:case-missing:run-1"
+      ],
+      "dimensions": [
+        {
+          "id": "DIM-1",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-1",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-2",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-2",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-3",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-3",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-4",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-4",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-5",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-5",
+          "not_applicable_reason": null
+        },
+        {
+          "id": "DIM-6",
+          "rating": 4,
+          "evidence": "case-missing 产出中的脱敏证据定位 DIM-6",
+          "not_applicable_reason": null
+        }
+      ],
+      "taste": [
+        {
+          "id": "TASTE-1",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-1，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-2",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-2，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-3",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-3，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-4",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-4，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-5",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-5，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-6",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-6，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-7",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-7，见脱敏核查记录"
+        },
+        {
+          "id": "TASTE-8",
+          "status": "pass",
+          "evidence": "case-missing 未命中 TASTE-8，见脱敏核查记录"
+        }
+      ],
+      "legal_redlines": []
+    }
+  ],
+  "hard_failures": [],
+  "repair_units": [],
+  "regression": {
+    "fail_to_pass": "not-applicable",
+    "pass_to_pass": "not-applicable",
+    "receipts": []
+  },
+  "verdict": {
+    "recommendation": "revise-and-retest",
+    "formal_markers": [
+      "NOT_VERIFIED"
+    ]
+  }
+}

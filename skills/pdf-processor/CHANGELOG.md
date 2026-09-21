@@ -1,5 +1,36 @@
 # 更新日志
 
+## [2.13.0] - 2026-09-18
+
+### 新增
+
+- 本地 RapidOCR 双层后端 `--backend rapidocr_local`：onnx 本地推理（随包 PP-OCR 系检测+识别模型）逐页识别中文，复用 `pdf_ocr_layered` 透明文字层叠层生成可搜索双层 PDF；全程不出本机，适合敏感材料本地处理。实测 220 DPI 扫描件中文识别质量明显高于 tesseract/ocrmypdf 路径（2 页测试件 11/11 关键词命中）。
+- 新参数 `--rapid-dpi`（默认 300）、`--rapid-min-score`（默认 0.5）、`--rapid-skip-text-min-chars`（默认 1）。
+
+### 改进
+
+- auto 回退链升级为「Paddle API → MinerU → 本地 RapidOCR → ocrmypdf」：本地兜底优先 RapidOCR（中文质量好），未安装或执行失败时保持 ocrmypdf 兜底，原行为完全向下兼容。
+- `--local-only` 同样改为本地引擎优先链：RapidOCR 可用时不再退而求其次用 tesseract 识别中文。
+- `pdf-preprocess-ocr.py` 新增「RapidOCR 原图短路」：本地引擎为 RapidOCR 时跳过统一栅格化与预压缩，直接在原扫描页上叠文字层（与 Paddle 原图短路同理，保留扫描分辨率）；ocrmypdf 原生清理短路仅在本地引擎确为 ocrmypdf 时触发。
+- 新模块 `scripts/pdf_ocr_rapid_local.py`，兼容 `rapidocr`（新版统一包）与 `rapidocr_onnxruntime`（经典包）两种安装形态，未安装时给出明确安装提示并自动回退。
+
+### 技术优化
+
+- RapidOCR 各版本输出（`OCRResult` 属性 / 经典二元组 / 扁平列表）统一解析为 `(text, score, poly4)` 行，与 Paddle 行数据格式对齐，直接复用既有叠层与 CJK 空格归一化。
+
+## [2.12.1] - 2026-09-14
+
+### 修复
+
+- 叠层不再因个别页面的 ActualText 段落引用被置信度过滤的行而判死整册：`_apply_semantic_actual_text` 区分「row_indices 越界/文字拼接不匹配（数据损坏，保持 fail-closed）」与「行存在但被置信度阈值过滤（封面/封底艺术字等，降级为行级呈现）」两种情况，后者只跳过该段并计入 `filtered_refs`，不再中断整本书。实测场景：《吾辈如神》368 页扫描书，封面 3D 艺术字段落曾导致全书叠层失败。
+- 整页插图/空白页经阈值过滤后无有效行时，跳过该页文字层并计数（`OCR 有效行为空`），不再以「OCR 结果经阈值过滤后为空」中断整册。
+
+### 技术优化
+
+- `_apply_semantic_actual_text` 新增 `total_rows` 参数用于越界判定；返回值扩展为 `(applied, invalid_mapping, filtered_refs)` 三元组。
+- 新增回归测试 `test_filtered_row_reference_degrades_to_line_level`（行被过滤 → 降级不抛异常），并保留原 fail-closed 契约测试。
+- troubleshooting 新增：macOS Xcode Python 3.9 启动挂死的替代方案（Homebrew Python 3.14 + `-u`）；PaddleOCR 云端任务已完成后按 jobId 找回结果避免重新上传的完整步骤。
+
 ## [2.12.0] - 2026-08-14
 
 ### 新增

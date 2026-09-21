@@ -1,0 +1,19 @@
+{
+  "fixture_base": "../config/evaluation-package.example.json",
+  "mutations": [
+    {
+      "op": "remove",
+      "path": [
+        "cases",
+        0,
+        "dimensions"
+      ]
+    }
+  ],
+  "fixture_metadata": {
+    "kind": "historical-failure",
+    "historical_failure_known": true,
+    "purpose": "复现旧报告模板未强制通用六维度完整覆盖的问题",
+    "expected_failed_constraint": "EVAL-REPORT-COVERAGE"
+  }
+}

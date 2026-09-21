@@ -14,6 +14,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from pdf_page_refs import (
+    PageCountCache,
+    RefsCompileError,
+    SegmentRefs,
+    audit_page_coverage,
+    compile_segment_refs,
+    copy_refs_whole_file,
+    format_coverage_report,
+    refs_pages_label,
+    refs_to_compact,
+    write_refs_pdf,
+)
+
 
 INVALID_FILENAME_CHARS = r'<>:"/\\|?*'
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -57,33 +70,6 @@ def resolve_path(value: str | None, base_dir: Path) -> Path | None:
     if not path.is_absolute():
         path = base_dir / path
     return path.resolve()
-
-
-def parse_pages(spec: str, total_pages: int | None = None) -> list[int]:
-    pages: list[int] = []
-    for raw_part in str(spec).split(","):
-        part = raw_part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            start_raw, end_raw = part.split("-", 1)
-            start = int(start_raw.strip())
-            end = int(end_raw.strip())
-            if start > end:
-                raise ValueError(f"Invalid descending page range: {part}")
-            pages.extend(range(start, end + 1))
-        else:
-            pages.append(int(part))
-
-    if not pages:
-        raise ValueError("Page range is empty.")
-    if any(page < 1 for page in pages):
-        raise ValueError("Pages are 1-based and must be greater than 0.")
-    if total_pages is not None:
-        too_large = [page for page in pages if page > total_pages]
-        if too_large:
-            raise ValueError(f"Page out of bounds: {too_large[0]} > {total_pages}")
-    return pages
 
 
 def sanitize_filename(name: str, fallback: str) -> str:
@@ -610,59 +596,6 @@ def write_json_output(data: dict[str, Any], output_path: str | None) -> None:
         print(content, end="")
 
 
-def copy_pdf(input_file: Path, output_file: Path, dry_run: bool) -> None:
-    if dry_run:
-        return
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(input_file, output_file)
-
-
-def split_pdf(source_pdf: Path, output_file: Path, pages: list[int], dry_run: bool) -> None:
-    if dry_run:
-        return
-    PdfReader, PdfWriter = load_pypdf()
-    reader = PdfReader(str(source_pdf))
-    writer = PdfWriter()
-    total_pages = len(reader.pages)
-    for page in pages:
-        if page > total_pages:
-            raise ValueError(f"Page out of bounds: {page} > {total_pages}")
-        writer.add_page(reader.pages[page - 1])
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with output_file.open("wb") as f:
-        writer.write(f)
-
-
-def merge_pdf_items(items: list[dict[str, Any]], output_file: Path, base_dir: Path, dry_run: bool) -> str:
-    labels: list[str] = []
-    if dry_run:
-        for item in items:
-            file_path = resolve_path(item.get("file") or item.get("input_file"), base_dir)
-            pages = str(item.get("pages") or "")
-            labels.append(f"{file_path}{':' + pages if pages else ''}")
-        return "; ".join(labels)
-
-    PdfReader, PdfWriter = load_pypdf()
-    writer = PdfWriter()
-    for item in items:
-        file_path = resolve_path(item.get("file") or item.get("input_file"), base_dir)
-        if not file_path or not file_path.exists():
-            raise FileNotFoundError(f"Input PDF does not exist: {file_path}")
-        reader = PdfReader(str(file_path))
-        pages_spec = item.get("pages")
-        if pages_spec:
-            page_numbers = parse_pages(str(pages_spec), len(reader.pages))
-        else:
-            page_numbers = list(range(1, len(reader.pages) + 1))
-        for page_number in page_numbers:
-            writer.add_page(reader.pages[page_number - 1])
-        labels.append(f"{file_path}{':' + str(pages_spec) if pages_spec else ''}")
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with output_file.open("wb") as f:
-        writer.write(f)
-    return "; ".join(labels)
-
-
 def normalize_source_items(segment: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = segment.get("source_items")
     if raw_items is None:
@@ -700,6 +633,10 @@ def collect_text_check_paths(segments: list[Any], source_pdf: Path | None, manif
         if source_items:
             for item in source_items:
                 add(resolve_path(item.get("file") or item.get("input_file"), manifest_dir))
+        elif segment.get("refs"):
+            for entry in segment["refs"]:
+                file_value = entry if isinstance(entry, str) else entry.get("file")
+                add(resolve_path(file_value, manifest_dir))
         elif input_file:
             add(input_file)
         elif segment.get("pages"):
@@ -831,6 +768,8 @@ def build_handoff(resolved: dict[str, Any]) -> dict[str, Any]:
             "document_type": segment.get("document_type"),
             "title": segment.get("title"),
             "source_pages": segment.get("pages") or segment.get("resolved_pages"),
+            "source_refs": segment.get("page_refs") or [],
+            "source_refs_label": segment.get("resolved_pages"),
             "resolved_source": segment.get("resolved_source"),
             "parties": segment.get("parties", []),
             "date": segment.get("date"),
@@ -947,11 +886,6 @@ def process_manifest(args: argparse.Namespace) -> int:
     if not isinstance(segments, list) or not segments:
         raise SystemExit("Manifest must contain a non-empty segments array.")
 
-    needs_source_split = any(
-        isinstance(segment, dict) and segment.get("pages") and not segment.get("input_file")
-        for segment in segments
-    )
-    total_pages: int | None = None
     if source_pdf and not source_pdf.exists():
         raise SystemExit(f"Source PDF does not exist: {source_pdf}")
 
@@ -990,54 +924,99 @@ def process_manifest(args: argparse.Namespace) -> int:
         print("\n".join(report_lines))
         return 1
 
-    if source_pdf and needs_source_split and not args.dry_run:
-        PdfReader, _ = load_pypdf()
-        total_pages = len(PdfReader(str(source_pdf)).pages)
-
     resolved_segments: list[dict[str, Any]] = []
     report_lines = build_report_header(manifest_path, output_dir, archive_dir, args.dry_run, text_check_lines)
     warnings: list[str] = failures[:] if text_check_mode == "warn" else []
     errors: list[str] = []
+    counts = PageCountCache()
 
+    # Pass 1：全部段先编译为页引用（纯引用运算，此阶段不写任何 PDF）
+    compiled: dict[int, SegmentRefs] = {}
+    compile_errors: dict[int, str] = {}
     for index, segment in enumerate(segments, start=1):
         if not isinstance(segment, dict):
-            errors.append(f"Segment {index} must be an object.")
+            compile_errors[index] = "Segment must be an object."
             continue
+        try:
+            compiled[index] = compile_segment_refs(
+                segment, base_dir=manifest_dir, source_pdf=source_pdf, counts=counts
+            )
+        except RefsCompileError as exc:
+            compile_errors[index] = str(exc)
 
-        segment_id = str(segment.get("id") or f"D{index:03d}")
-        input_file = resolve_path(segment.get("input_file"), manifest_dir)
-        source_items = normalize_source_items(segment)
-        pages_spec = segment.get("pages")
-        target_name = segment_filename(segment, index)
+    # 覆盖审计：孤儿页/重复引用页提示拆分完整性问题
+    coverage_mode = args.coverage_check or str(manifest.get("coverage_check") or "warn").lower()
+    if coverage_mode not in {"off", "warn", "strict"}:
+        raise SystemExit("coverage_check must be one of: off, warn, strict.")
+    coverage: dict[str, Any] | None = None
+    coverage_findings: list[str] = []
+    if coverage_mode != "off" and compiled:
+        segments_refs = {
+            str(segments[i - 1].get("id") or f"D{i:03d}"): seg_refs.refs
+            for i, seg_refs in compiled.items()
+        }
+        try:
+            coverage = audit_page_coverage(segments_refs, counts)
+        except Exception as exc:  # noqa: BLE001
+            coverage_findings.append(f"coverage audit failed: {exc}")
+        else:
+            for item in coverage.get("per_file", []):
+                if item.get("orphan_pages"):
+                    preview = ",".join(str(p) for p in item["orphan_pages"][:12])
+                    coverage_findings.append(
+                        f"{Path(item['file']).name}: {len(item['orphan_pages'])} 页未被任何段引用（{preview}…）"
+                        if len(item["orphan_pages"]) > 12
+                        else f"{Path(item['file']).name}: 孤儿页 {preview}"
+                    )
+                for dup in item.get("duplicated_pages", []):
+                    coverage_findings.append(
+                        f"{Path(item['file']).name} P{dup['page']} 被 {','.join(dup['segments'])} 重复引用"
+                    )
+
+    if coverage_findings and coverage_mode == "strict":
+        report_lines.extend(["", "## Errors", ""])
+        report_lines.extend(f"- {finding}" for finding in coverage_findings)
+        resolved = dict(manifest)
+        resolved["source_pdf"] = str(source_pdf) if source_pdf else manifest.get("source_pdf")
+        resolved["output_dir"] = str(output_dir)
+        resolved["archive_dir"] = str(archive_dir) if archive_dir else None
+        resolved["resolved_at"] = datetime.now().isoformat(timespec="seconds")
+        resolved["dry_run"] = bool(args.dry_run)
+        resolved["coverage_check"] = {"mode": coverage_mode, "result": coverage, "findings": coverage_findings}
+        resolved["segments"] = []
+        if archive_dir:
+            write_archive(archive_dir, manifest, resolved, report_lines)
+        print("\n".join(report_lines))
+        return 1
+
+    if coverage_findings and coverage_mode == "warn":
+        warnings.extend(coverage_findings)
+
+    for index, segment in enumerate(segments, start=1):
+        segment_id = str(segment.get("id") or f"D{index:03d}") if isinstance(segment, dict) else f"D{index:03d}"
+        target_name = segment_filename(segment, index) if isinstance(segment, dict) else f"segment_{index:02d}.pdf"
         target_path = unique_path(output_dir / target_name)
-        confidence = str(segment.get("confidence") or "")
-        needs_review = bool(segment.get("needs_review", False))
+        confidence = str(segment.get("confidence") or "") if isinstance(segment, dict) else ""
+        needs_review = bool(segment.get("needs_review", False)) if isinstance(segment, dict) else False
         status = "planned" if args.dry_run else "ok"
-        action = "copy"
+        seg_refs = compiled.get(index)
+        action = seg_refs.kind if seg_refs else "error"
         source_label = ""
-        pages_label = str(pages_spec or "")
+        pages_label = refs_pages_label(seg_refs.refs) if seg_refs else ""
         transforms: list[str] = []
 
         try:
-            if source_items:
-                action = "merge"
-                source_label = merge_pdf_items(source_items, target_path, manifest_dir, args.dry_run)
-                pages_label = "mixed"
-            elif input_file:
-                if not input_file.exists():
-                    raise FileNotFoundError(f"Input PDF does not exist: {input_file}")
-                source_label = str(input_file)
-                copy_pdf(input_file, target_path, args.dry_run)
-            elif pages_spec:
-                if not source_pdf:
-                    raise ValueError("source_pdf is required when segment uses pages.")
-                pages = parse_pages(str(pages_spec), total_pages)
-                source_label = str(source_pdf)
-                pages_label = ",".join(str(page) for page in pages)
-                split_pdf(source_pdf, target_path, pages, args.dry_run)
-                action = "split"
+            if index in compile_errors:
+                raise ValueError(compile_errors[index])
+            if seg_refs is None:
+                raise ValueError("segment did not compile")
+            if seg_refs.is_whole_single_file:
+                # 整文件单源段：字节级复制，保留原文件全部内容与元数据
+                source_label = str(seg_refs.refs[0][0])
+                copy_refs_whole_file(seg_refs.refs, target_path, dry_run=args.dry_run)
             else:
-                raise ValueError("Segment must contain input_file, source_items/input_files, or pages.")
+                source_label = "; ".join(str(p) for p in seg_refs.files)
+                pages_label = write_refs_pdf(seg_refs.refs, target_path, dry_run=args.dry_run)
             if not args.dry_run:
                 transforms = apply_transforms(target_path, segment, manifest)
                 if transforms:
@@ -1046,13 +1025,14 @@ def process_manifest(args: argparse.Namespace) -> int:
             status = f"error: {exc}"
             errors.append(f"{segment_id}: {exc}")
 
-        resolved_segment = dict(segment)
+        resolved_segment = dict(segment) if isinstance(segment, dict) else {"segment": segment}
         resolved_segment.update(
             {
                 "id": segment_id,
                 "output_file": str(target_path),
                 "resolved_source": source_label,
                 "resolved_pages": pages_label,
+                "page_refs": refs_to_compact(seg_refs.refs) if seg_refs else [],
                 "action": action,
                 "transforms": transforms,
                 "status": status,
@@ -1074,6 +1054,11 @@ def process_manifest(args: argparse.Namespace) -> int:
         "mode": text_check_mode,
         "sample_pages": args.text_check_pages,
         "results": text_check_results,
+    }
+    resolved["coverage_check"] = {
+        "mode": coverage_mode,
+        "result": coverage,
+        "findings": coverage_findings,
     }
     resolved["segments"] = resolved_segments
 
@@ -1228,6 +1213,66 @@ def normalize_a4_command(paths: list[str], in_place: bool, output_dir: str | Non
     return 1 if errors else 0
 
 
+def validate_manifest_command(manifest_path: str, coverage_override: str | None) -> int:
+    """只做页引用编译与覆盖审计，不写任何 PDF。"""
+    path = Path(manifest_path).expanduser().resolve()
+    manifest = read_json(path)
+    manifest_dir = path.parent
+    source_pdf = resolve_path(manifest.get("source_pdf"), manifest_dir)
+
+    segments = manifest.get("segments")
+    lines = [
+        "# Manifest page-refs validation",
+        "",
+        f"- Manifest: {path}",
+        f"- Time: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+    ]
+    if not isinstance(segments, list) or not segments:
+        lines.append("错误：manifest 必须包含非空 segments 数组。")
+        print("\n".join(lines))
+        return 1
+
+    counts = PageCountCache()
+    compiled: dict[int, SegmentRefs] = {}
+    errors: list[str] = []
+    for index, segment in enumerate(segments, start=1):
+        if not isinstance(segment, dict):
+            errors.append(f"D{index:03d}: segment 必须是对象")
+            continue
+        seg_id = str(segment.get("id") or f"D{index:03d}")
+        try:
+            seg_refs = compile_segment_refs(
+                segment, base_dir=manifest_dir, source_pdf=source_pdf, counts=counts
+            )
+            compiled[index] = seg_refs
+            lines.append(f"- {seg_id}: {seg_refs.kind} · {refs_pages_label(seg_refs.refs)}")
+        except RefsCompileError as exc:
+            errors.append(f"{seg_id}: {exc}")
+
+    coverage_mode = coverage_override or str(manifest.get("coverage_check") or "warn").lower()
+    failed = bool(errors)
+    if compiled and coverage_mode != "off":
+        segments_refs = {
+            str(segments[i - 1].get("id") or f"D{i:03d}"): seg_refs.refs
+            for i, seg_refs in compiled.items()
+        }
+        try:
+            coverage = audit_page_coverage(segments_refs, counts)
+            lines.extend(["", "## 覆盖审计", ""])
+            lines.extend(format_coverage_report(coverage))
+            if coverage_mode == "strict" and not coverage["clean"]:
+                failed = True
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"覆盖审计失败：{exc}")
+
+    if errors:
+        lines.extend(["", "## Errors", ""])
+        lines.extend(f"- {error}" for error in errors)
+    print("\n".join(lines))
+    return 1 if failed else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Organize legal PDF documents according to a manifest.")
     parser.add_argument("--manifest", help="Path to organize_manifest.json")
@@ -1260,6 +1305,15 @@ def main() -> int:
     parser.add_argument("--suggest-manifest", help="Generate a draft organize_manifest.json from one OCR PDF.")
     parser.add_argument("--dry-run", action="store_true", help="Preview planned outputs without writing PDFs")
     parser.add_argument(
+        "--validate-manifest",
+        help="Only compile the manifest into page refs and audit page coverage (orphan/duplicate). No PDFs are written.",
+    )
+    parser.add_argument(
+        "--coverage-check",
+        choices=["off", "warn", "strict"],
+        help="Page coverage audit mode. Defaults to manifest coverage_check or warn.",
+    )
+    parser.add_argument(
         "--normalize-a4",
         nargs="+",
         help="Normalize PDF pages to A4: landscape pages to A4 landscape, portrait pages to A4 portrait.",
@@ -1286,8 +1340,10 @@ def main() -> int:
         return inspect_command(args.inspect, args.inspect_output, args.include_text)
     if args.suggest_manifest:
         return suggest_manifest_command(args.suggest_manifest, args.output_dir, args.manifest_output)
+    if args.validate_manifest:
+        return validate_manifest_command(args.validate_manifest, args.coverage_check)
     if not args.manifest:
-        parser.error("--manifest is required unless --check-text-layer, --inspect, or --suggest-manifest is used")
+        parser.error("--manifest is required unless --check-text-layer, --inspect, --suggest-manifest, or --validate-manifest is used")
     return process_manifest(args)
 
 

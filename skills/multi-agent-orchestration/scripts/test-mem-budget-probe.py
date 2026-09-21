@@ -352,20 +352,40 @@ check("SPAWN_WORKER_MEM_BUDGET_BYTES=0 disables the gate (opt-out passthrough)",
       and "SPAWN_WORKER_MEM_BUDGET_BYTES=0" in off_out["reason"],
       f"(code={code} out={off_out})")
 
+# 预算 =0 即使所有宿主探针都不可读也必须直通；这是 opt-out，不是健康声明。
+empty_probe_fx = tempfile.mkdtemp(prefix="mem-budget-empty-")
+code, off_unprobeable_out = run_probe(
+    ["--fixture-dir", empty_probe_fx],
+    env=probe_env(SPAWN_WORKER_MEM_BUDGET_BYTES="0"),
+)
+check("disabled gate does not require readable host telemetry",
+      code == 0 and off_unprobeable_out
+      and off_unprobeable_out["status"] == "disabled"
+      and off_unprobeable_out["slots"] is None
+      and all(value == "failed" for value in off_unprobeable_out["sources"].values()),
+      f"(code={code} out={off_unprobeable_out})")
+
 # 非法预算：fail-closed exit 1。
 code, bad_out = run_probe([], env=probe_env(SPAWN_WORKER_MEM_BUDGET_BYTES="3GB"))
 check("invalid env budget fails closed with config_invalid",
       code == 1 and bad_out and bad_out["status"] == "config_invalid"
       and "slots" not in bad_out, f"(code={code} out={bad_out})")
 
-# 真实机器 smoke：无 fixture 时现场读源，本机必须可探测且 schema 一致。
+# 真实机器 smoke：无 fixture 时现场读源；普通宿主应给出额度，受限
+# sandbox/CI 允许以稳定 unprobeable 合同 fail-closed，不把环境缺口伪装为额度。
 code, real_out = run_probe([])
-check("real-machine smoke probe stays probeable with a stable schema",
-      code in (0, 3) and real_out
-      and real_out.get("status") in ("ok", "denied")
-      and real_out.get("schema") == "memory-budget.summary.v1"
-      and isinstance(real_out.get("slots"), int),
-      f"(code={code} out={real_out})")
+if real_out and real_out.get("status") == "unprobeable":
+    check("restricted real-machine smoke fails closed with the stable schema",
+          code == 1 and real_out.get("schema") == "memory-budget.summary.v1"
+          and "slots" not in real_out,
+          f"(code={code} out={real_out})")
+else:
+    check("real-machine smoke probe stays probeable with a stable schema",
+          code in (0, 3) and real_out
+          and real_out.get("status") in ("ok", "denied")
+          and real_out.get("schema") == "memory-budget.summary.v1"
+          and isinstance(real_out.get("slots"), int),
+          f"(code={code} out={real_out})")
 if real_out and real_out.get("status") == "ok":
     print(f"  real-machine ledger: {real_out['reason']}")
 
@@ -480,8 +500,10 @@ case "$1 $2" in
   "orchestration worker-start")
     printf '%s\\n' '{"ok":true,"result":{"worker":{"dispatch":{"id":"ctx-membudget"}}}}' ;;
   "orchestration dispatch-show")
-    printf '%s\\n' '{"ok":true,"result":{"dispatch":{"id":"ctx-membudget"}}}' ;;
-  *) reject_argv "$*" ;;
+    jq -cn '{ok:true,_meta:{runtimeId:"runtime-membudget"},result:{dispatch:{
+      id:"ctx-membudget",task_id:"task-membudget",assignee_handle:"term-membudget",
+      run_id:"run-membudget",process_incarnation:"process-membudget",capability_hash:("a"*64)}}}' ;;
+  *) exit 1 ;;
 esac
 """)
 os.chmod(E2E_ORCA_BIN, 0o755)

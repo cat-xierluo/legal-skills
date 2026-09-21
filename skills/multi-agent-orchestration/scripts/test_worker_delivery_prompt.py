@@ -16,6 +16,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parent
 COMPLETION = "SUPERVISED COMPLETION PROTOCOL (MANDATORY):"
+MESSAGING = "WORKER MESSAGING PROTOCOL (MANDATORY):"
 DELIVERY = "WORKER DELIVERY PROTOCOL (MANDATORY):"
 FAKE_ORCA = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -86,16 +87,22 @@ elif args[:2] == ["orchestration", "worker-start"]:
     result = {"dispatch": {"id": "ctx-" + task}}
 elif args[:2] == ["orchestration", "dispatch-show"]:
     parsed = flags(("--task",), required=("--task", "--json"))
-    result = {"dispatch": {"id": "ctx-" + parsed["--task"]}}
+    task = parsed["--task"]
+    result = {"dispatch": {"id": "ctx-" + task, "task_id": task,
+                           "assignee_handle": "term-worker", "run_id": "run-delivery",
+                           "capability_hash": "a" * 64,
+                           "process_incarnation": "delivery-process-1"}}
 elif args[:2] in (["worktree", "current"], ["worktree", "show"]):
     if args[1] == "current":
         flags(required=("--json",))
+        print(json.dumps({"ok": False, "error": {"code": "selector_not_found"}}))
+        sys.exit(1)
     else:
         parsed = flags(("--worktree",), required=("--worktree", "--json"))
         if parsed["--worktree"] != "id:repo-fixture::worker":
             refuse("wrong worktree selector")
-    print(json.dumps({"ok": False, "error": {"code": "selector_not_found"}}))
-    sys.exit(1)
+        result = {"worktree": {"id": "repo-fixture::worker",
+                               "path": os.environ["DELIVERY_WORKTREE"]}}
 else:
     refuse("unsupported command")
 print(json.dumps({"ok": True, "result": result, "_meta": {"runtimeId": meta_runtime}}))
@@ -110,6 +117,19 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.log = self.root / "orca.jsonl"
+        self.worker_root = self.root / "worker-root"
+        self.metadata = self.worker_root / ".claude" / "agent-sessions" / "fixture" / "METADATA.json"
+        self.metadata.parent.mkdir(parents=True)
+        authority_dir = self.root / "agent-authority"
+        authority_dir.mkdir()
+        self.authority = authority_dir / "delivery.json"
+        self.authority.write_text(json.dumps({"schema": "multi-agent-orchestration.authority-receipt.v1"}))
+        self.authority.chmod(0o600)
+        self.metadata.write_text(json.dumps({
+            "session": {"orca": {"terminal_handle": "term-worker",
+                                    "worktree_id": "repo-fixture::worker"}},
+            "execution_authority": {"authority_receipt_file": str(self.authority)},
+        }))
         self.fake_orca = self.bin / "orca"
         self.fake_orca.write_text(FAKE_ORCA)
         self.fake_orca.chmod(0o755)
@@ -125,6 +145,7 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         self.env.update(
             ORCA_CLI_COMMAND=str(self.fake_orca), ORCA_CLI_BIN=str(self.fake_orca),
             DELIVERY_ORCA_LOG=str(self.log), PATH=f"{self.bin}:{self.env['PATH']}",
+            DELIVERY_WORKTREE=str(self.worker_root), SPAWN_WORKER_MEM_BUDGET_BYTES="0",
             MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG=str(self.root / "absent-personal.json"),
             GIT_AUTHOR_NAME="Delivery Test", GIT_COMMITTER_NAME="Delivery Test",
             GIT_AUTHOR_EMAIL="delivery@example.invalid",
@@ -154,13 +175,19 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
     def assert_delivery_spec(self, spec, body):
         self.assertTrue(spec.startswith(COMPLETION))
         self.assertEqual(spec.count(COMPLETION), 1)
+        self.assertEqual(spec.count(MESSAGING), 1)
         self.assertEqual(spec.count(DELIVERY), 1)
         self.assertTrue(spec.endswith("\n\n" + body))
         for rule in ("smallest in-scope implementation", "scoped verification commands",
                      "git add only the task-authorized files", "commit the verified deliverable",
                      "Review-only or genuinely no-change", "not manufacture an empty commit",
                      "real 40-character git rev-parse HEAD", "never repository-root RESULT.md",
-                     "Push, PR and history changes follow the PM task contract"):
+                     "Push, PR and history changes follow the PM task contract",
+                     "Resume the original returned message ID", "never create a duplicate question",
+                     "before starting another file", "after each scoped test run",
+                     "immediately before `worker_done`", "consumer_fenced", "dispatch_inactive",
+                     "--ack <delivery_id>", "Do not use the coordinator handle",
+                     "Messages never broaden"):
             self.assertIn(rule, spec)
 
     def wave(self, bodies, *, sender="term-pm", expected=0):
@@ -178,7 +205,8 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
             "bash", str(SCRIPTS / "orca-supervised-register.sh"),
             "--worktree-id", "repo-fixture::worker", "--terminal-handle", "term-worker",
             "--run-id", "run-delivery", "--coordinator-handle", "term-pm",
-            "--runtime-id", "runtime-delivery", *extra,
+            "--runtime-id", "runtime-delivery",
+            "--authority-receipt", str(self.authority), *extra,
         ])
 
     def test_wave_precreation_preserves_body_without_expanding_pm_environment(self):

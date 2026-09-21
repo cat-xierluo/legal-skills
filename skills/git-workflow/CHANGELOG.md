@@ -1,5 +1,42 @@
 # 变更日志
 
+## [1.8.7] - 2026-09-19 - 外部 PR 分层审查：必要性 gate 先于代码审查
+
+### 新增
+
+- **SKILL.md §4「审查外部 PR：分层审查——必要性 gate 先于代码审查」**：审外部贡献者的 PR 先做项目契合度 gate——核对需求来源（issue / ROADMAP / TASKS / 项目规则）、无来源时对照 README 核心主张判断是贡献者个性化偏好还是真实需求、伪需求识别（issue 遗留场景在当前架构下是否仍存在，例：「打开文档替换当前内容」的确认场景在多标签架构下不适用）。gate 不通过直接礼貌关闭（留言模板：感谢→说明不在路线图且不评价代码质量→给重启路径），不进入代码审查。必要性依据是项目级答案，Skill 只约束流程顺序；答案缺失时问用户或查项目规则，不得用「代码看起来没问题」替代 gate 判断。
+
+### 缘由
+
+- 实战教训（Folia #165）：先做代码深审列出多个缺陷（单标签模式数据丢失链、「保存」按钮不兑现等），最终以「功能不在路线图、无用户诉求、伪需求」关闭——代码审查投入全部沉没。gate 前置切断这类沉没成本。
+
+## [1.8.6] - 2026-09-19 - 外部 PR 本地验证的环境卫生
+
+### 新增
+
+- **SKILL.md §4「审查外部 PR：本地验证的环境卫生（防遗留状态污染结论）」**：审他人 PR 一律隔离 worktree 检出（`git fetch origin pull/<N>/head` + `git worktree add <path> FETCH_HEAD`），永不在主工作区 `gh pr checkout`；动手前主工作区体检（UU / MERGE_HEAD / 未提交变更先恢复干净）；会话内 merge / rebase / checkout 试验的收尾纪律（要么完成要么 `--abort`）；判读参照：typecheck / test 报错文件不在 `gh pr diff --name-only` 列表里 = 工作区污染信号，切干净 worktree 复跑后再写 review 结论。node_modules 可符号链接主仓库复用。
+
+### 缘由
+
+- 实战事故（Folia #165 审查）：主工作区残留审 #166 时中断的 merge（MERGE_HEAD 存在），`gh pr checkout 165` 把遗留变更叠加成混血工作区，typecheck 假阳性（tocAlwaysPinned 报错全属 #166），险些把别的 PR 的缺陷写进当前 PR 的 review 结论。
+
+## [1.8.5] - 2026-09-17
+
+### 修复
+
+- `safe-push.sh` 接受裸分支名作为 `--base`：含 `/` 的值必须以 `$REMOTE/` 开头，其他 remote 前缀仍报 `SAFE_PUSH_BASE_REMOTE_MISMATCH`；不含 `/` 的裸分支名规范化为 `$REMOTE/<branch>`，与 `spawn-worker` 白名单生成的 `--base main` 调用形式一致，后续 `base_branch` 派生与 `git fetch $REMOTE $base_branch` 校验沿用规范化后的值。事故：旧实现只接受 `<remote>/<branch>`，`spawn-worker` 派发 worker 调用 `--base main` 一律 `SAFE_PUSH_BASE_REMOTE_MISMATCH`，worker 只能回落到普通裸 push（绕过身份门禁）。
+
+### 验证
+
+- `test-check-outgoing-identities.sh` 新增两个用例：`--base main` 与 `--base origin/main` 等价放行；`--base upstream/main`（remote≠`$REMOTE`）仍以 `SAFE_PUSH_BASE_REMOTE_MISMATCH` 拒绝。
+
+## [1.8.4] - 2026-09-15 - GitHub Actions 额度治理入册（4 仓 7 workflow 停挂实战）
+
+### 新增
+
+- **SKILL.md §11 + `references/github-actions-quota-guard.md`**：账号级分钟额度诊断（billing API、逐仓 (workflow × event) 触发统计、push+PR 双计费识别）；停挂配方（`on:` 块 workflow_dispatch 化、本地等价命令入注释、被 uses 复用须保留 workflow_call、PR 分支自身不再计费）；仓级总闸 `actions/permissions enabled=false`；恢复手册即文件内注释。
+- **事故备忘**：`gh pr merge` 网络中断 + 清理未以 merged 确认为门禁 → head 分支被删 PR 自动关闭；恢复 = 本地重建分支指向原 sha → push → reopen。壳层两坑（JSON 控制字符、管道退出码）一并入册。
+- 触发词：GitHub Actions 额度 / CI 分钟耗尽 / workflow 停挂。
 ## [1.8.3] - 2026-09-07 - 长期分支 PR 实战三坑入册（custom-skills 拆分线实证）
 
 ### 改进

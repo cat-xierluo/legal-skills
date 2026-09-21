@@ -11,6 +11,9 @@ v0.2 架构（相对 v0.1 python-docx 版）：
 - 多 part 覆盖：word/document.xml + header*/footer* 等全部文本 part
 - 残留校验 --verify-residual：替换后扫描全文档，报告未清除的旧串
 - 渲染流程：复制模板树 → 编辑 XML → pack_docx 打包 → 校验
+- 发布完整性：全部门禁通过后，先写输出同目录临时文件再原子替换正式产物，
+  任何失败不留临时文件、不覆盖已有输出；未知/错位的业务字段路径按路径级
+  Schema 默认 fail-closed（--allow-unknown-fields 可显式放行）
 
 依赖
 ----
@@ -28,7 +31,9 @@ python scripts/fill_template.py \\
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -2166,6 +2171,217 @@ def build_rules_10_creditcard(tree_dir=None, elements=None) -> list[RuleFunc]:
 
 
 # ---------------------------------------------------------------------------
+# 业务字段路径 Schema（fail-closed 依据）
+# ---------------------------------------------------------------------------
+#
+# 叶路径级白名单：列表下标规范化为 "#" 后，业务叶路径必须精确命中本表。
+# 相比"分段名词表"，本表校验层级——合法名字出现在错误层级（如 诉讼请求.姓名）
+# 同样拒绝。推导方式：tests/fixtures 全量叶位 ∪ 规则查询路径（全量记录）
+# − 纯容器位；当事人家族按 角色×字段 全组合展开（角色语义与主体类型正交）。
+#
+# 维护约定：
+# - 新增业务字段先补 tests/fixtures 样例、再登记到对应分组（可靠性测试校验
+#   "fixture 全量叶路径 ⊆ 本表"，防止样例与 Schema 漂移）。
+# - 勾选/填空/标签 三容器的子键是模板锚文本（自由命名，见 generic_rules
+#   通用 Schema），整棵子树豁免。
+# - 仅 None / 空字符串 / 空容器按空值放行；false/0 是明确业务输入，同样校验。
+
+_FREE_FORM_CONTAINERS = frozenset({"勾选", "填空", "标签"})
+
+_PARTY_ROLES = ("原告", "被告", "第三人",
+                "自然人1", "自然人2", "自然人3", "自然人4",
+                "法人1", "法人2", "法人3", "法人4")
+_PARTY_FIELDS = (
+    # 自然人字段
+    "姓名", "性别", "出生日期", "民族", "工作单位", "职务", "联系电话",
+    "住所地", "经常居住地", "证件类型", "证件号码", "主体类型",
+    # 法人字段
+    "名称", "统一社会信用代码", "法定代表人", "注册地", "类型",
+    "所有制性质", "所有制_控股", "所有制_参股",
+    # 执行类收款账户（60-68 执行文书）
+    "银行账号", "开户名", "开户行",
+)
+_AGENT_FIELDS = ("姓名", "单位", "职务", "联系电话",
+                 "是否委托", "代理权限", "特别授权", "主体类型")
+
+
+def _build_known_path_patterns() -> frozenset:
+    patterns = {f"当事人.{role}.{field}"
+                for role in _PARTY_ROLES for field in _PARTY_FIELDS}
+    patterns |= {f"当事人.委托诉讼代理人.#.{field}" for field in _AGENT_FIELDS}
+    patterns |= {
+        # 落款 / 通用意愿块 / 执行类身份
+        "具状人_签字_盖章", "具状日期", "关联案件", "关联案件.勾选",
+        "对纠纷解决方式的意愿.是否了解调解",
+        "对纠纷解决方式的意愿.是否了解先行调解好处.#",
+        "对纠纷解决方式的意愿.是否考虑先行调解",
+        "身份.类型",
+        # 约定管辖 / 诉前保全（含合并键与独立键两种布局）
+        "约定管辖.有无", "约定管辖.合同条款及内容",
+        "约定管辖和诉前保全.有无仲裁_法院管辖约定", "约定管辖和诉前保全.合同条款及内容",
+        "约定管辖和诉前保全.是否已经诉前保全", "约定管辖和诉前保全.保全法院",
+        "约定管辖和诉前保全.保全时间", "约定管辖和诉前保全.保全案号",
+        "诉前保全.是否已经诉前保全", "诉前保全.保全法院",
+        "诉前保全.保全时间", "诉前保全.保全案号",
+        "保全.有无", "保全.保全案号",
+        # 执行依据 / 申请执行事项（60-68 执行文书）
+        "执行依据.作出机构", "执行依据.案由", "执行依据.文书号",
+        "执行依据.判项主文", "执行依据.生效日期", "执行依据.文书类型",
+        "申请执行事项.类型", "申请执行事项.类型.#", "申请执行事项.金额",
+    }
+    patterns |= {
+        # 事实与理由（民间借贷 / 离婚 / 买卖 / 知产等案由字段）
+        "事实与理由." + name for name in (
+            "之前有无提起过离婚诉讼", "买受人", "事实理由", "侵权时间地点",
+            "借款人", "借款提供时间", "借款提供金额",
+            "借款利率.数值", "借款利率.单位", "借款利率.合同条款",
+            "借款期限.是否到期", "借款期限.约定期限起", "借款期限.约定期限止",
+            "借款金额.约定", "借款金额.实际提供", "借款金额.提供方式",
+            "其他", "其他需要说明的内容", "出卖人", "分期方式", "单价",
+            "双方生活情况", "合同签订情况_名称_编号_签订时间_地点",
+            "夫妻共同债务情况", "夫妻共同财产情况",
+            "子女抚养费情况", "子女探望权情况", "子女直接抚养情况",
+            "完整表述", "定金勾选", "实际发放", "已还本金",
+            "担保人", "担保债权的确定时间", "担保物", "担保额度",
+            "支付方式", "支付节奏", "是否到期",
+            "是否最高额担保_抵押_质押",
+            "其他担保方式.勾选", "其他担保方式.形式", "其他担保方式.签订时间",
+            "是否办理抵押_质押_登记.勾选", "是否办理抵押_质押_登记.正式登记",
+            "是否办理抵押_质押_登记.预告登记",
+            "是否存在逾期还款.勾选", "是否存在逾期还款.逾期时间",
+            "是否签订物的担保_抵押_质押_合同.勾选",
+            "是否签订物的担保_抵押_质押_合同.签订时间",
+            "是否签订保证合同.勾选", "是否签订保证合同.签订时间",
+            "是否签订保证合同.保证人", "是否签订保证合同.保证方式",
+            "是否签订保证合同.主要内容",
+            "权项.信息网络传播权", "权项.侵权通知",
+            "著作权客体.作品名称", "著作权客体.作品完成时间",
+            "著作权客体.首次发表", "著作权客体.登记时间",
+            "行为方式.其他", "被诉决定",
+            "签订主体.出借人", "签订主体.借款人",
+            "约定金额", "结婚时间", "生育子女情况", "离婚事由",
+            "计算标准", "证据清单", "请求依据", "违约金勾选",
+            "请求依据_合同约定", "请求依据_法律规定",
+            "贷款人", "赔偿补偿帮助相关情况", "还款方式", "违约责任", "透支金额",
+            "还款情况.已还本金", "还款情况.已还利息", "还款情况.还息至",
+        )
+    }
+    patterns |= {
+        # 诉讼请求（各案由字段）
+        "诉讼请求." + name for name in (
+            "交通凭证", "交通费", "住院伙食补助费", "侵权行为", "侵权链接",
+            "保险金", "停工损失", "其他请求", "其他请求.#",
+            "具体情形", "具体请求", "合同效力", "后续利息起算日", "后续起算日",
+            "医疗票据", "双倍工资", "未休年休假工资", "社保经济损失",
+            "违法解除赔偿金", "残疾赔偿金", "精神损害抚慰金", "投资差额损失",
+            "经济损失", "给付价款", "营养费", "标的总额",
+            "履行或解除", "完整表述", "提前还款或解除", "解除确认日期",
+            "计算方式", "计算依据或参考因素", "损失计算依据",
+            "是否主张诉讼费用", "请求至实际清偿之日", "逾期违约金",
+            "违约类型", "赔偿损失", "赔偿金", "明细", "律师费勾选", "调查费勾选",
+            "鉴定机构名称", "超付利息至清偿",
+            "停止侵权.勾选", "停止侵权.内容",
+            "公证费.金额", "公证费.凭证",
+            "利息.尚欠利息", "利息.截至日期", "利息.计算方式",
+            "利息.请求至实际清偿之日", "利息.期内利息", "利息.复利",
+            "利息.罚息", "利息.合计", "利息.利息",
+            "本金.金额", "本金.尚欠金额", "本金.截至日期",
+            "加班费.勾选", "加班费.明细",
+            "医疗费.医院", "医疗费.起", "医疗费.止", "医疗费.金额",
+            "取证费.金额", "取证费.凭证",
+            "工资支付.勾选", "工资支付.明细",
+            "差旅费.金额", "差旅费.凭证",
+            "律师费.金额", "律师费.凭证",
+            "调查取证费.金额", "调查取证费.凭证",
+            "夫妻共同财产.勾选", "夫妻共同财产.其他",
+            "夫妻共同财产.房屋.归属", "夫妻共同财产.房屋.其他说明",
+            "夫妻共同财产.汽车.归属", "夫妻共同财产.汽车.其他说明",
+            "夫妻共同财产.存款.归属", "夫妻共同财产.存款.其他说明",
+            "夫妻共同债务.勾选",
+            "夫妻共同债务.债务1.内容", "夫妻共同债务.债务1.承担主体",
+            "夫妻共同债务.债务1.其他说明",
+            "夫妻共同债务.债务2.内容", "夫妻共同债务.债务2.承担主体",
+            "夫妻共同债务.债务2.其他说明",
+            "子女直接抚养.勾选",
+            "子女直接抚养.子女1.姓名", "子女直接抚养.子女1.归属",
+            "子女直接抚养.子女2.姓名", "子女直接抚养.子女2.归属",
+            "子女抚养费.勾选", "子女抚养费.承担主体",
+            "子女抚养费.金额及明细", "子女抚养费.支付方式",
+            "探望权.勾选", "探望权.行使主体", "探望权.行使方式",
+            "实现债权费用.勾选", "实现债权费用.明细", "实现债权费用.费用明细",
+            "尚欠物业费.金额", "尚欠物业费.截至日期",
+            "工程款利息违约金.利息", "工程款利息违约金.截至日期",
+            "工程款利息违约金.违约金",
+            "惩罚性赔偿.勾选", "惩罚性赔偿.基数", "惩罚性赔偿.倍数",
+            "担保权利.勾选", "担保权利.内容",
+            "是否主张担保权利.勾选", "是否主张担保权利.内容",
+            "是否主张实现债权的费用.勾选", "是否主张实现债权的费用.明细",
+            "是否要求提前还款或解除合同.勾选",
+            "是否要求提前还款或解除合同.提前还款_加速到期",
+            "是否要求提前还款或解除合同.解除合同",
+            "瑕疵责任方式.#",
+            "离婚损害赔偿.勾选", "离婚损害赔偿.金额",
+            "离婚经济补偿.勾选", "离婚经济补偿.金额",
+            "离婚经济帮助.勾选", "离婚经济帮助.金额",
+            "解除经济补偿.勾选", "解除经济补偿.明细",
+            "解除合同.勾选", "解除合同.确认合同于",
+            "解除婚姻关系.具体主张",
+            "误工费.金额", "误工费.起", "误工费.止",
+            "责任主体.勾选", "责任主体.责任主体及责任范围",
+            "超付利息.截至日期", "超付利息.利息",
+            "违约金.金额", "违约金.截至日期",
+            "违约金滞纳金.违约金.金额", "违约金滞纳金.违约金.截至日期",
+            "违约金滞纳金.滞纳金.金额", "违约金滞纳金.滞纳金.截至日期",
+            "连带责任.勾选", "连带责任.内容",
+            "迟延利息.利息", "迟延利息.截至日期", "迟延利息.违约金",
+            "迟延租金利息.利息", "迟延租金利息.截至日期",
+            "保险费违约金.利息", "保险费违约金.截至日期", "保险费违约金.违约金",
+            "鉴定申请.勾选", "鉴定申请.内容",
+        )
+    }
+    return frozenset(patterns)
+
+
+KNOWN_PATH_PATTERNS = _build_known_path_patterns()
+
+
+def _iter_leaf_paths(value, prefix=()):
+    """枚举业务字段的叶子路径：dict/list 递归下钻（列表按下标），标量为叶。"""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield from _iter_leaf_paths(v, prefix + (str(k),))
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            yield from _iter_leaf_paths(v, prefix + (str(i),))
+    else:
+        yield prefix, value
+
+
+def _is_empty_value(value) -> bool:
+    """仅 None / 空字符串 / 空容器按空值放行；false/0 是明确业务输入。"""
+    return value is None or value == "" or value == [] or value == {}
+
+
+def find_unknown_fields(elements: dict) -> list[str]:
+    """找出未知或错位且具有业务语义的叶路径（打印用原始下标路径）。
+
+    判定：叶子值非空（_is_empty_value 为假），且不在自由命名容器子树内，
+    且其规范化路径（下标→#）未登记在 KNOWN_PATH_PATTERNS。
+    """
+    unknown = []
+    for segments, value in _iter_leaf_paths(elements):
+        if _is_empty_value(value):
+            continue
+        if segments and segments[0] in _FREE_FORM_CONTAINERS:
+            continue
+        normalized = ".".join("#" if seg.isdigit() else seg for seg in segments)
+        if normalized in KNOWN_PATH_PATTERNS:
+            continue
+        unknown.append(".".join(segments))
+    return sorted(unknown)
+
+
+# ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 
@@ -2371,7 +2587,8 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
     """
     W = "{%s}" % W_NS
     stats = {"sections_removed": 0, "page_breaks_added": 0,
-             "tables_centered": 0, "rows_protected": 0, "orientation_fixed": 0}
+             "tables_centered": 0, "rows_protected": 0, "orientation_fixed": 0,
+             "trailing_empty_paragraphs_removed": 0}
 
     def section_ranges(body):
         ranges = []
@@ -2434,16 +2651,6 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
             return (0, 0)
         return (int(size.get(f"{W}w") or 0), int(size.get(f"{W}h") or 0))
 
-    def has_substantive_content(children):
-        for child in children:
-            if child.tag == f"{W}tbl":
-                return True
-            if child.tag == f"{W}p":
-                text = "".join(t.text or "" for t in child.iter(Wt)).strip()
-                if text:
-                    return True
-        return False
-
     def insert_before_first(parent, element, local_names):
         target_tags = {f"{W}{name}" for name in local_names}
         for position, child in enumerate(parent):
@@ -2469,19 +2676,46 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
         for start, end, sect, _ in ranges:
             normalize_section(sect, max_table_width(children, start, end))
 
-        # 保留所有横竖版切换边界；若最后一个段落节后仍有内容，也保留作为
-        # 调解/附件/末尾独立节边界。节后只剩空段落则删除，避免空白尾页。
+        # 保留所有横竖版切换与明确附件边界；其余同方向分节属于官方书册
+        # 的分页痕迹，统一合并并让后续表格自然续排。官方 56/61/67 等模板
+        # 把分节放在独立空段落上：字体度量变化使前表恰好铺满时，该段落会
+        # 独占下一页，形成“只有页码”的空白页。把它改成空段落段前分页仍会
+        # 触发同一类 LibreOffice 波动，因此这里不保留任何空段落分页载体。
         keep_indices = set()
         paragraph_ranges = ranges[:-1] if ranges else []
         for i, current in enumerate(paragraph_ranges):
             next_range = ranges[i + 1]
             if orientation(current[2]) != orientation(next_range[2]):
                 keep_indices.add(current[3])
-        if paragraph_ranges:
-            last = paragraph_ranges[-1]
-            after = children[last[3] + 1:-1]
-            if has_substantive_content(after):
-                keep_indices.add(last[3])
+                continue
+            # 已进入附件内容后的节边界可能继续承载下一张附件表（24/25
+            # 专利模板）。不能把它降级成普通段前分页，否则会丢失附件节的
+            # 独立页眉/页脚与页面设置语义。
+            if any(
+                child.tag == f"{W}p"
+                and re.fullmatch(
+                    r"附件(?:\s*[0-9一二三四五六七八九十]+)?",
+                    "".join(t.text or "" for t in child.iter(Wt)).strip(),
+                )
+                for child in children[current[0]:current[1]]
+            ):
+                keep_indices.add(current[3])
+                continue
+            # 官方附件前的 same-orientation next-page 节同样是有意义的页面边界。
+            # 旧逻辑把它当普通主文节删除，随后再给附件标题叠加硬分页；当前文
+            # 恰好自然铺满整页时，LibreOffice 会因此生成“只有页码”的空白页。
+            # 跳过空段落查看该节后的首个实质节点，若是附件标题就保留原节。
+            for following in children[current[3] + 1:]:
+                following_text = "".join(t.text or "" for t in following.iter(Wt)).strip()
+                if following.tag == f"{W}p" and not following_text:
+                    continue
+                if (following.tag == f"{W}p"
+                        and re.fullmatch(
+                            r"附件(?:\s*[0-9一二三四五六七八九十]+)?",
+                            following_text,
+                        )):
+                    keep_indices.add(current[3])
+                break
         for _start, _end, sect, index in paragraph_ranges:
             if index in keep_indices:
                 continue
@@ -2542,7 +2776,8 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
                     )
                     stats["rows_protected"] += 1
 
-        # 附件标题必须起页。若前一段已保留 sectPr（如横竖版切换），不再叠加分页符。
+        # 附件标题必须起页。若前一段已保留 sectPr（如横竖版切换或官方附件
+        # next-page 边界），不再叠加分页符，避免正文自然铺满时制造空白页。
         children = list(body)
         for i, child in enumerate(children):
             if child.tag != f"{W}p":
@@ -2571,6 +2806,411 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
             ppr = child.find(f"./{W}pPr")
             child.insert(1 if ppr is not None else 0, run)
             stats["page_breaks_added"] += 1
+
+        # 删除节属性后，原承载分节的空段落可能残留在正文末尾。末表/签名
+        # 恰好落到页底时，这些段落会独占一张只含页码的尾页。只清理最终
+        # sectPr 之前没有任何文字、域、图形、分页或节语义的空段落；正文
+        # 中间用于留白的段落及附件边界均不触碰。
+        protected_empty_content = {
+            "sectPr", "pageBreakBefore", "br", "drawing", "pict", "object",
+            "fldSimple", "instrText", "hyperlink", "bookmarkStart", "bookmarkEnd",
+            "footnoteReference", "endnoteReference", "commentReference", "tab",
+        }
+        while len(body) >= 2:
+            candidate = body[-2]
+            if candidate.tag != f"{W}p":
+                break
+            if "".join(t.text or "" for t in candidate.iter(Wt)).strip():
+                break
+            if any(
+                etree.QName(node).localname in protected_empty_content
+                for node in candidate.iter()
+            ):
+                break
+            body.remove(candidate)
+            stats["trailing_empty_paragraphs_removed"] += 1
+    return stats
+
+
+def _fc_match_has_cjk(name: str, fc_match: str) -> bool:
+    """用 fc-match 验证字体名在本机会解析为覆盖中文的字形。
+
+    fontconfig 对不存在的名字也总返回“最佳匹配”（如 黑体/楷体 → Verdana），
+    所以必须检查解析结果的 lang 覆盖是否含 zh，而不是只看命令是否成功。
+    LibreOffice 的字体查找走同一条 fontconfig 链路，因此该验证即
+    “该名字在渲染环境中能取到中文字形”的可机检证据。
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [fc_match, "-f", "%{file}|%{lang}", "--", name],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return False
+    fields = proc.stdout.strip().split("|")
+    langs = fields[1:] if len(fields) > 1 else []
+    return any(lang == "zh" or lang.startswith("zh-") for lang in langs)
+
+
+# rFonts 的字体槽：凡属性值等于被映射原字体的槽都要改写（缺一会被
+# LibreOffice 的继承样式/混排 run 选择逻辑继续错配到无中文字形的字体）。
+FONT_SLOTS = ("eastAsia", "ascii", "hAnsi", "cs")
+
+
+def apply_font_compatibility(tree_dir: Path, policy: dict) -> dict:
+    """中文字体兼容：按 config 策略重写已知方正 *_GBK 字体的全部字体槽引用。
+
+    官方模板正文/标题全部指向 方正书宋_GBK / 方正大标宋_GBK 等商业字体。
+    在没有这些精确字体名的环境（典型：LibreOffice + fontconfig），fontTable
+    里的 altName（Arial Unicode MS）往往也不存在，fontconfig 会把陌生家族名
+    模糊错配到无中文字形的拉丁字体（实测 Verdana；裸名「黑体」「楷体」同样
+    错配 Verdana），中文整段渲染为空白。
+
+    只改 eastAsia 并不足够：rFonts 的 ascii/hAnsi/cs 槽若残留方正旧名，
+    LibreOffice 对继承样式或中西混排的 run 仍会按这些槽选字体，继续错配到
+    Verdana，视觉上中文字形为空白（PDF 文本层却仍可提取，存活率被高估）。
+    因此对 eastAsia/ascii/hAnsi/cs 四个槽中“值等于被映射原字体”的属性，
+    一律改写为该原字体候选链中已验证的替代名；Times New Roman/Arial 等
+    不在映射表的正常字体保持不动。
+
+    策略中每个原字体对应一个有序候选字体列表；本函数用 fc-match 逐个验证，
+    只采用首个 lang 覆盖中文的名字。本机无 fc-match（如 Windows + Word，
+    宋体/雅黑为系统内置）时无法验证，按候选链首位写入并明确告警。候选全部
+    无法解析出中文覆盖字体时返回 ok=False，由调用方 fail-closed 阻断生成
+    ——此时渲染必然丢字，不得产出不可读文书。
+    """
+    W = "{%s}" % W_NS
+    stats = {
+        "attribute_count": 0, "altname_count": 0, "fonts": {},
+        "unresolved": [], "unverified": [], "ok": True,
+    }
+    section = policy.get("font_compatibility") or {}
+    if not section.get("enabled", True):
+        return stats
+    raw_map = section.get("cjk_replacements") or {}
+    candidates: dict[str, list[str]] = {
+        str(font): [str(n) for n in names] if isinstance(names, list) else [str(names)]
+        for font, names in raw_map.items()
+    }
+    if not candidates:
+        return stats
+
+    # 逐原字体解析候选链：首个 fc-match 验证为中文覆盖的名字胜出。
+    import shutil as _shutil
+    fc_match = _shutil.which("fc-match")
+    resolved: dict[str, str] = {}
+    for font, names in candidates.items():
+        if fc_match is None:
+            # 无 fontconfig 的环境（Windows/Word 场景）无法验证：按首位写入并告警。
+            resolved[font] = names[0]
+            stats["unverified"].append(font)
+            continue
+        chosen = next(
+            (name for name in names if _fc_match_has_cjk(name, fc_match)), None
+        )
+        if chosen is None:
+            stats["unresolved"].append(font)
+        else:
+            resolved[font] = chosen
+    if stats["unresolved"]:
+        stats["ok"] = False
+        return stats
+
+    def rewrite_rfonts(rfonts) -> int:
+        count = 0
+        for slot in FONT_SLOTS:
+            value = rfonts.get(f"{W}{slot}")
+            if value in resolved:
+                rfonts.set(f"{W}{slot}", resolved[value])
+                count += 1
+        return count
+
+    # 1) 重写全部文本 part 中 rFonts 四槽的方正字体引用（document/styles/footer 等）。
+    for xml_file in sorted((tree_dir / "word").glob("*.xml")):
+        if xml_file.name == "fontTable.xml":
+            continue
+        try:
+            tree = etree.parse(str(xml_file))
+        except etree.XMLSyntaxError:
+            continue
+        count = 0
+        for rfonts in tree.iter(f"{W}rFonts"):
+            count += rewrite_rfonts(rfonts)
+        if count:
+            xml_file.write_bytes(
+                etree.tostring(tree, xml_declaration=True, encoding="UTF-8", standalone=True)
+            )
+            stats["attribute_count"] += count
+
+    # 2) fontTable：给被替代的原字体条目补 altName=替代名（保留条目本身，
+    #    已有 altName 直接覆盖），Word/其他阅读器按原字体名查找失败时同样
+    #    命中同一个已验证可渲染中文的替代字体。
+    font_table = tree_dir / "word" / "fontTable.xml"
+    if font_table.exists():
+        try:
+            tree = etree.parse(str(font_table))
+        except etree.XMLSyntaxError:
+            tree = None
+        if tree is not None:
+            for font in tree.iter(f"{W}font"):
+                name = font.get(f"{W}name")
+                if name not in resolved:
+                    continue
+                stats["fonts"][name] = resolved[name]
+                alt = font.find(f"{W}altName")
+                if alt is None:
+                    alt = etree.Element(f"{W}altName")
+                    font.insert(0, alt)
+                alt.set(f"{W}val", resolved[name])
+                stats["altname_count"] += 1
+            font_table.write_bytes(
+                etree.tostring(tree, xml_declaration=True, encoding="UTF-8", standalone=True)
+            )
+    return stats
+
+
+def apply_publication_mark_cleanup(tree_dir: Path, policy: dict) -> dict:
+    """按 config 策略清理模板残留的出版物页码（25-专利：430 图片 / 431 文本框）。
+
+    法院发放的部分基准件把出版排版用的页码留在正文里，与页脚 PAGE 域构成
+    双页码。本函数只处理 config/layout-policy.json 中对应模板
+    publication_mark_cleanup 段点名的内容，识别是精确的：
+    - forbidden_text_marks：仅命中图形对象（VML v:textbox 等）内文本
+      恰为该标记的宿主 run，普通正文文字（案号/年份/金额/表格序号）
+      一律不扫描、不改动；
+    - forbidden_images：关系 Target 与（可复核的）sha256 双重确认，
+      只删被点名的图片引用。
+    删除后清理因此失去引用的 media 文件。原始 templates 树绝不改动：
+    本函数只在生成流程复制出的临时树上执行。
+    """
+    W = "{%s}" % W_NS
+    R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    R = "{%s}" % R_NS
+    stats = {
+        "textboxes_removed": 0, "images_removed": 0,
+        "relationships_removed": 0, "media_removed": 0,
+        "hash_mismatches": [],
+    }
+    section = policy.get("publication_mark_cleanup") or {}
+    if not section.get("enabled", True):
+        return stats
+    forbidden_marks = [str(m) for m in (section.get("forbidden_text_marks") or [])]
+    forbidden_images = section.get("forbidden_images") or []
+
+    document_path = tree_dir / "word" / "document.xml"
+    if not document_path.exists():
+        return stats
+    document = etree.parse(str(document_path))
+
+    def host_run(node):
+        """向上找图形对象的 w:r 宿主；图形不在 run 内时返回 None。"""
+        while node is not None:
+            if node.tag == f"{W}r":
+                return node
+            node = node.getparent()
+        return None
+
+    # 1) 图形对象内文本恰为禁止标记的宿主 run（普通正文不受影响）。
+    if forbidden_marks:
+        doomed_runs = []
+        for run in document.iter(f"{W}r"):
+            text = "".join(t.text or "" for t in run.iter(f"{W}t")).strip()
+            if text in forbidden_marks and (
+                run.find(".//{urn:schemas-microsoft-com:vml}textbox") is not None
+                or run.find(f".//{W}pict") is not None
+                or run.find(f".//{W}drawing") is not None
+            ):
+                doomed_runs.append(run)
+        for run in doomed_runs:
+            parent = run.getparent()
+            if parent is not None:
+                parent.remove(run)
+                stats["textboxes_removed"] += 1
+
+    # 2) 被点名图片的引用 run + 关系条目（Target 与 sha256 双重确认：
+    #    哈希不符说明模板图片已被替换，不删，交由 gate 报精确错误）。
+    rels_path = tree_dir / "word" / "_rels" / "document.xml.rels"
+    rels_tree = etree.parse(str(rels_path)) if rels_path.exists() else None
+    doomed_rids: set[str] = set()
+    doomed_media: set[Path] = set()
+    if rels_tree is not None and forbidden_images:
+        for rel in rels_tree.getroot():
+            if not (rel.get("Type") or "").endswith("/image"):
+                continue
+            target = (rel.get("Target") or "").lstrip("/")
+            for rule in forbidden_images:
+                rule_target = str(rule.get("target") or "").strip().lstrip("/")
+                if not rule_target:
+                    continue
+                if target != rule_target and not target.endswith("/" + rule_target):
+                    continue
+                media_path = tree_dir / "word" / target
+                if media_path.exists():
+                    actual = hashlib.sha256(media_path.read_bytes()).hexdigest()
+                    if actual != str(rule.get("sha256") or ""):
+                        stats["hash_mismatches"].append(
+                            f"{target}: 文件哈希 {actual[:12]}… 与策略 {str(rule.get('sha256'))[:12]}… 不符，未删除"
+                        )
+                        continue
+                    doomed_media.add(media_path)
+                doomed_rids.add(rel.get("Id") or "")
+        if doomed_rids:
+            for attr_tag in (f"{R}embed", f"{R}id", f"{R}link"):
+                for node in document.iter():
+                    if node.get(attr_tag) in doomed_rids:
+                        run = host_run(node)
+                        if run is not None and run.getparent() is not None:
+                            run.getparent().remove(run)
+                            stats["images_removed"] += 1
+            for rel in list(rels_tree.getroot()):
+                if (rel.get("Id") or "") in doomed_rids:
+                    rels_tree.getroot().remove(rel)
+                    stats["relationships_removed"] += 1
+
+    if stats["textboxes_removed"] or stats["images_removed"] or doomed_rids:
+        document_path.write_bytes(
+            etree.tostring(document, xml_declaration=True, encoding="UTF-8", standalone=True)
+        )
+        if rels_tree is not None and stats["relationships_removed"]:
+            rels_path.write_bytes(
+                etree.tostring(rels_tree, xml_declaration=True, encoding="UTF-8", standalone=True)
+            )
+
+    # 3) 只清理 policy 点名且哈希一致、且经 word 下全部 .rels（含嵌套 part）
+    #    确认已无任何引用的 media 文件；其他无引用 media 一律不碰。
+    if doomed_media:
+        referenced: set[str] = set()
+        for rels_file in (tree_dir / "word").rglob("*.rels"):
+            try:
+                rels = etree.parse(str(rels_file))
+            except etree.XMLSyntaxError:
+                continue
+            base = rels_file.parent.parent  # word/
+            for rel in rels.getroot():
+                target = rel.get("Target") or ""
+                if rel.get("TargetMode") == "External" or not target:
+                    continue
+                referenced.add(str((base / target.lstrip("/")).resolve()))
+        for media_path in sorted(doomed_media):
+            if media_path.exists() and str(media_path.resolve()) not in referenced:
+                media_path.unlink()
+                stats["media_removed"] += 1
+    return stats
+
+
+def apply_semantic_table_headers(tree_dir: Path, policy: dict) -> dict:
+    """按 config 表级合同为目标表首部连续行补写 w:tblHeader（跨页重复表头）。
+
+    24/25 专利基准件的「关联民事案件信息表」横跨多页，表头由三行构成
+    （表题行/专利信息行/栏目标题行）。Word/LibreOffice 仅在自首行起连续
+    各行都声明 tblHeader 时才在续页重复整块表头，因此合同要求：
+    - anchor 在全文档唯一命中（找不到/重复命中均属定位失败）；
+    - 命中处必须落在目标表首行（锚点不在首行视为模板结构漂移）；
+    - 目标表行数不少于 header_rows（行数不足视为结构漂移）。
+    定位失败一律记入 errors，由调用方 fail-closed 阻断生成，不做部分写入。
+    原始 templates 树绝不改动：本函数只在生成流程复制出的临时树上执行。
+    无对应合同的模板（如 09）按空合同处理，文档零改动。
+    """
+    W = "{%s}" % W_NS
+    stats = {"contracts_applied": 0, "rows_marked": 0, "errors": []}
+    section = policy.get("semantic_table_headers") or {}
+    if not section.get("enabled", True):
+        return stats
+    contracts = section.get("contracts") or []
+
+    document_path = tree_dir / "word" / "document.xml"
+    if not document_path.exists():
+        stats["errors"] = [f"document.xml 不存在：{document_path}"]
+        return stats
+    if not contracts:
+        return stats
+    document = etree.parse(str(document_path))
+
+    def insert_before_first(parent, element, local_names):
+        target_tags = {f"{W}{name}" for name in local_names}
+        for position, child in enumerate(parent):
+            if child.tag in target_tags:
+                parent.insert(position, element)
+                return element
+        parent.append(element)
+        return element
+
+    for contract in contracts:
+        anchor = str(contract.get("anchor") or "").strip()
+        header_rows = int(contract.get("header_rows") or 0)
+        if not anchor or header_rows < 1:
+            stats["errors"].append(
+                f"表级合同非法：anchor={anchor!r} header_rows={header_rows}"
+            )
+            continue
+        # 锚点全文唯一命中：逐段扫描，段落向上回溯所属行/表
+        # （表内段落先遇 w:tr 再遇 w:tbl，即最内层行/表；表外段落两者皆空）。
+        hits: list[tuple] = []
+        for p in document.iter(f"{W}p"):
+            text = "".join(t.text or "" for t in p.iter(f"{W}t"))
+            if anchor not in text:
+                continue
+            node = p.getparent()
+            row = table = None
+            while node is not None:
+                if row is None and node.tag == f"{W}tr":
+                    row = node
+                elif table is None and node.tag == f"{W}tbl":
+                    table = node
+                    break
+                node = node.getparent()
+            hits.append((row, table))
+        if not hits:
+            stats["errors"].append(f"锚点 {anchor!r} 未命中任何段落，找不到目标表")
+            continue
+        if len(hits) > 1:
+            stats["errors"].append(
+                f"锚点 {anchor!r} 命中 {len(hits)} 处，目标表不唯一（重复命中）"
+            )
+            continue
+        row, table = hits[0]
+        if table is None or row is None:
+            stats["errors"].append(
+                f"锚点 {anchor!r} 命中于表格外段落，无法定位目标表"
+            )
+            continue
+        rows = table.findall(f"./{W}tr")
+        if not rows or rows[0] is not row:
+            position = rows.index(row) + 1 if row in rows else "?"
+            stats["errors"].append(
+                f"锚点 {anchor!r} 位于目标表第 {position} 行，不在首行"
+            )
+            continue
+        if len(rows) < header_rows:
+            stats["errors"].append(
+                f"目标表共 {len(rows)} 行，不足合同要求的 header_rows={header_rows}"
+            )
+            continue
+        marked = 0
+        for tr in rows[:header_rows]:
+            trpr = tr.find(f"./{W}trPr")
+            if trpr is None:
+                trpr = etree.Element(f"{W}trPr")
+                tr.insert(0, trpr)
+            if trpr.find(f"./{W}tblHeader") is not None:
+                continue
+            # CT_TrPr 顺序：cantSplit/trHeight 之后、tblCellSpacing/jc 之前。
+            insert_before_first(
+                trpr, etree.Element(f"{W}tblHeader"),
+                ("tblCellSpacing", "jc", "hidden", "ins", "del", "trPrChange"),
+            )
+            marked += 1
+        stats["rows_marked"] += marked
+        stats["contracts_applied"] += 1
+
+    if stats["rows_marked"]:
+        document_path.write_bytes(
+            etree.tostring(document, xml_declaration=True, encoding="UTF-8", standalone=True)
+        )
     return stats
 
 
@@ -2765,12 +3405,18 @@ def run_batch(args) -> int:
                 fail += 1
                 continue
             out = out_dir / (f.stem.replace("-elements", "") + "-要素式起诉状.docx")
-            # 复用单件渲染（子进程避免规则状态串扰）
+            # 复用单件渲染（子进程避免规则状态串扰）。
+            # 门禁相关旗标必须完整透传，批量与单件的校验口径保持一致。
+            cmd = [sys.executable, "-B", str(Path(__file__).resolve()),
+                   "--case-type", ct, "--elements", str(f), "--output", str(out),
+                   "--layout-check", args.layout_check,
+                   "--templates-dir", str(args.templates_dir)]
+            if args.verify_residual:
+                cmd += ["--verify-residual", args.verify_residual]
+            if args.allow_unknown_fields:
+                cmd += ["--allow-unknown-fields"]
             import subprocess
-            r = subprocess.run([sys.executable, "-B", str(Path(__file__).resolve()),
-                                "--case-type", ct, "--elements", str(f), "--output", str(out),
-                                "--layout-check", args.layout_check],
-                               capture_output=True, text=True, timeout=120)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             if r.returncode == 0:
                 ok += 1
                 print(f"  ✓ {f.name} → {out.name}")
@@ -2801,6 +3447,11 @@ def main() -> int:
         help='替换后扫描残留旧串，逗号分隔。例: "旧姓名,旧电话"',
     )
     parser.add_argument(
+        "--allow-unknown-fields", action="store_true",
+        help="放行未知/错位的业务字段路径（默认 fail-closed，仅限排查时使用，"
+             "产物不得标记为可交付）",
+    )
+    parser.add_argument(
         "--batch", type=Path, default=None,
         help="批量模式：目录下每个 *-elements.json 渲染为同名 .docx（按文件内 case_type 字段路由案由）",
     )
@@ -2826,6 +3477,21 @@ def main() -> int:
         elements = elements_raw["elements"]
     else:
         elements = elements_raw
+
+    # 未知/错位业务字段 fail-closed：路径不在 Schema（或合法名字放错层级）时，
+    # 有输入却无对应规则的字段会被静默丢弃，宁可拒绝渲染也不产出缺内容的文书。
+    if not args.allow_unknown_fields:
+        unknown_fields = find_unknown_fields(elements)
+        if unknown_fields:
+            print(
+                f"[fill_template] 阻断：{len(unknown_fields)} 个未知或错位的业务字段路径，未发布输出"
+                f"（路径 Schema 见 fill_template.KNOWN_PATH_PATTERNS；"
+                f"如确认可忽略请改用 --allow-unknown-fields）",
+                file=sys.stderr,
+            )
+            for path in unknown_fields:
+                print(f"  - {path}", file=sys.stderr)
+            return 6
 
     tree_src, rules_builder = resolve_case(args.case_type, args.templates_dir)
     if not tree_src.is_dir():
@@ -2863,12 +3529,64 @@ def main() -> int:
             f"保护行={layout_stats['rows_protected']} "
             f"居中表={layout_stats['tables_centered']} "
             f"方向修复={layout_stats['orientation_fixed']} "
-            f"附件分页={layout_stats['page_breaks_added']}"
+            f"附件分页={layout_stats['page_breaks_added']} "
+            f"尾空段清理={layout_stats['trailing_empty_paragraphs_removed']}"
         )
         save_text_parts(tree_work, parts)
         from layout_gate import check as check_layout, load_policy
         policy_path = Path(__file__).resolve().parent.parent / "config/layout-policy.json"
         layout_policy = load_policy(policy_path, tree_src.name)
+        font_stats = apply_font_compatibility(tree_work, layout_policy)
+        if not font_stats["ok"]:
+            print(
+                "[fill_template] 阻断：字体兼容策略的候选字体全部无法解析出中文覆盖"
+                f"（{', '.join(font_stats['unresolved'])}），渲染必然丢字，未发布输出",
+                file=sys.stderr,
+            )
+            return 6
+        if font_stats["unverified"]:
+            print(
+                "[fill_template] 警告：本机无 fc-match，字体兼容候选未经验证，"
+                f"按策略首位写入：{', '.join(font_stats['unverified'])}",
+                file=sys.stderr,
+            )
+        if font_stats["attribute_count"] or font_stats["altname_count"]:
+            replaced = "、".join(
+                f"{name}→{alias}" for name, alias in sorted(font_stats["fonts"].items())
+            )
+            print(
+                f"[fill_template] 字体兼容：CJK 引用替代 {font_stats['attribute_count']} 处，"
+                f"fontTable altName {font_stats['altname_count']} 项（{replaced}）"
+            )
+        cleanup_stats = apply_publication_mark_cleanup(tree_work, layout_policy)
+        if any(cleanup_stats[key] for key in (
+            "textboxes_removed", "images_removed",
+            "relationships_removed", "media_removed",
+        )):
+            print(
+                "[fill_template] 出版物页码清理："
+                f"文本框 {cleanup_stats['textboxes_removed']} 个、"
+                f"图片 {cleanup_stats['images_removed']} 张、"
+                f"关系 {cleanup_stats['relationships_removed']} 条、"
+                f"无引用 media {cleanup_stats['media_removed']} 个"
+            )
+        for mismatch in cleanup_stats["hash_mismatches"]:
+            print(f"[fill_template] 警告：出版物页码图片 {mismatch}，版式门禁将按残留处理", file=sys.stderr)
+        header_stats = apply_semantic_table_headers(tree_work, layout_policy)
+        if header_stats["errors"]:
+            print(
+                "[fill_template] 阻断：表级表头合同定位失败，未发布输出",
+                file=sys.stderr,
+            )
+            for message in header_stats["errors"]:
+                print(f"  - {message}", file=sys.stderr)
+            return 6
+        if header_stats["rows_marked"]:
+            print(
+                "[fill_template] 表级表头合同："
+                f"{header_stats['contracts_applied']} 张表共 {header_stats['rows_marked']} 行"
+                "设置跨页重复表头"
+            )
         footer_fixed = fix_footers_and_pagination(
             tree_work, page_mode=layout_policy.get("page_numbers", "required")
         )
@@ -2930,8 +3648,23 @@ def main() -> int:
         else:
             print("[fill_template] 警告：已关闭版式门禁，不得将本次产物标记为可交付", file=sys.stderr)
 
+        # 原子发布：先写输出同目录临时文件，再一次性替换正式产物。
+        # 中途失败只清理临时文件，绝不留下半成品、不覆盖已有输出。
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(candidate, args.output)
+        fd, staged_name = tempfile.mkstemp(
+            prefix=f".{args.output.name}.", suffix=".publish", dir=args.output.parent
+        )
+        os.close(fd)
+        staged = Path(staged_name)
+        try:
+            shutil.copy2(candidate, staged)
+            os.replace(staged, args.output)
+        except BaseException:
+            try:
+                staged.unlink()
+            except FileNotFoundError:
+                pass
+            raise
         print(f"[fill_template] output    = {args.output}")
         return 0
     finally:

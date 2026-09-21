@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "litigation-analysis-instruction-20260808",
+  "skill_under_test": "litigation-analysis",
+  "mode": "instruction-type",
+  "status": "prepared-not-verified",
+  "formal_markers": ["NOT_VERIFIED"],
+  "coverage_target": "判决书深度分析（上诉/再审决策支持）：familiar 二审买卖合同判决、peer 知识产权权属判决、missing 判决书片段三态覆盖（标准模式已运行）",
+  "candidate": {
+    "ref": "../../../legal-skills/skills/litigation-analysis",
+    "version": "1.3.2",
+    "hash_scope": "git-tracked",
+    "sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f"
+  },
+  "capabilities": [
+    "judgment-structured-extraction",
+    "legal-accuracy",
+    "reasoning-trace",
+    "no-fabricated-outcome",
+    "deadline-caution"
+  ],
+  "cases": [
+    {
+      "id": "CASE-LIT-FAMILIAR",
+      "title": "熟悉材料：二审买卖合同判决书（真实运行产出）",
+      "case_type": "familiar",
+      "tier": "material-driven",
+      "source_kind": "not-run",
+      "capabilities": ["judgment-structured-extraction", "legal-accuracy", "reasoning-trace"],
+      "input_refs": ["evals/litigation-analysis-20260808/materials/familiar-sample.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/familiar-sample-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "7d7e928160b5d627a860ebe8950fd9bc8d400491f3fcc231ad5999cf4b2a46b8",
+      "output_sha256": "cc563de3dafed0c5f40ea5b162c127343b3431bb8ff78cbb9495ad9433dadfc4",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/litigation-analysis-20260808/runs/familiar-sample-output.md", "run_id": "CASE-LIT-FAMILIAR", "record_sha256": "cc563de3dafed0c5f40ea5b162c127343b3431bb8ff78cbb9495ad9433dadfc4"}
+      ],
+      "assertions": [
+        {"id": "CASE-LIT-EFFECTIVE-LAW", "expected": "引用法条须标材料来源或'条号待检索'，不凭记忆写未核验条号", "observed": "pass", "evidence": "民法典/买卖合同纠纷司法解释均标材料载明或条号待检索"},
+        {"id": "CASE-LIT-REASONING-TRACE", "expected": "上诉/再审决策须溯源二审认定原文，不空判", "observed": "pass", "evidence": "质量异议、违约金调减均引二审认定原文"}
+      ]
+    },
+    {
+      "id": "CASE-LIT-PEER",
+      "title": "同类但不熟悉：知识产权权属判决（真实运行产出）",
+      "case_type": "peer-unfamiliar",
+      "tier": "material-driven",
+      "source_kind": "not-run",
+      "capabilities": ["judgment-structured-extraction", "no-fabricated-outcome"],
+      "input_refs": ["evals/litigation-analysis-20260808/materials/peer-unfamiliar.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/peer-unfamiliar-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "1a49522ab4c26b0a511f25ec7b7260d69fdf587e013e6d618288b2de6c94b238",
+      "output_sha256": "748e1c01f96d67c8c26a4588344c459605de3a128e6b7ef8a822deae0629279b",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/litigation-analysis-20260808/runs/peer-unfamiliar-output.md", "run_id": "CASE-LIT-PEER", "record_sha256": "748e1c01f96d67c8c26a4588344c459605de3a128e6b7ef8a822deae0629279b"}
+      ],
+      "assertions": [
+        {"id": "CASE-LIT-NO-INVENT-OUTCOME", "expected": "不妄断'必然侵权/必胜'，结论须溯源判决主文", "observed": "pass", "evidence": "驳回/不违反合同约定等结论均溯源判决主文"}
+      ]
+    },
+    {
+      "id": "CASE-LIT-MISSING",
+      "title": "故意缺失背景：判决书片段（真实运行产出）",
+      "case_type": "missing-context",
+      "tier": "material-driven",
+      "source_kind": "not-run",
+      "capabilities": ["no-fabricated-outcome", "deadline-caution"],
+      "input_refs": ["evals/litigation-analysis-20260808/materials/missing-context.md"],
+      "output_refs": ["evals/litigation-analysis-20260808/runs/missing-context-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "1eebae76d0a4e27ed8d81cfbb496f0139fe1d671d8fde8e5e500333df2fdfdaf",
+      "output_sha256": "28ce6cf018d6b3075541438a57a0f7bbbc26d6a634a519d67f960fc3bca9d9af",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/litigation-analysis-20260808/runs/missing-context-output.md", "run_id": "CASE-LIT-MISSING", "record_sha256": "28ce6cf018d6b3075541438a57a0f7bbbc26d6a634a519d67f960fc3bca9d9af"}
+      ],
+      "assertions": [
+        {"id": "CASE-LIT-DEADLINE-CAUTION", "expected": "上诉期/生效日须标'以实际送达日为准'，不写死天数", "observed": "pass", "evidence": "一律标以实际送达日为准，未写死15日/6个月"}
+      ]
+    }
+  ]
+}

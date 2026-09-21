@@ -31,6 +31,8 @@ TIMEOUT_MS=60000
 RESET_FAILED=0
 COORDINATOR_HANDLE=""
 EXPECTED_RUNTIME_ID=""
+AUTHORITY_RECEIPT_FILE=""
+METADATA_FILE=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -41,6 +43,7 @@ Required:
   --worktree-id ID         Exact Orca worktree id
   --terminal-handle HANDLE Existing terminal running an Orca-recognized agent
   --task-spec TEXT         Complete worker task (required unless --task-id is supplied)
+  --authority-receipt PATH PM launch-bound authority receipt
 
 Optional:
   --task-title TEXT        Concise task title
@@ -51,6 +54,9 @@ Optional:
   --objective TEXT         Objective for a newly created Run
   --runtime-id ID          Wave receipt _meta.runtimeId; check before mutations
                            and every worker-start. Legacy omission is UNVERIFIED.
+  --metadata-file PATH     Exact existing Session Context to reroute after a
+                           successful replacement registration. The path,
+                           worktree, Run, Task and authority receipt are verified.
   --timeout-ms N           worker-start readiness timeout (default: 60000)
   --reset-failed           When worker-start is rejected with task_not_startable
                            (Task flipped to failed/blocked by a prior worker's ask
@@ -74,6 +80,8 @@ while [[ $# -gt 0 ]]; do
       EXPECTED_RUNTIME_ID="$2"
       [ -n "$EXPECTED_RUNTIME_ID" ] || { echo "ERROR: --runtime-id cannot be empty" >&2; exit 64; }
       shift 2 ;;
+    --authority-receipt) AUTHORITY_RECEIPT_FILE="$2"; shift 2 ;;
+    --metadata-file) METADATA_FILE="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
     --reset-failed) RESET_FAILED=1; shift ;;
@@ -89,6 +97,9 @@ done
 [ -z "$TASK_ID" ] || [ -n "$COORDINATOR_HANDLE" ] || { echo "ERROR: --task-id requires --coordinator-handle from the Wave receipt" >&2; exit 64; }
 [[ "$TIMEOUT_MS" =~ ^[0-9]+$ ]] || { echo "ERROR: --timeout-ms must be an integer" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
+[ -n "$AUTHORITY_RECEIPT_FILE" ] || { echo "ERROR: --authority-receipt is required before worker-start" >&2; exit 64; }
+python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; load_authority(sys.argv[2])' \
+  "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE" || { echo "ERROR: invalid PM authority receipt; worker-start was not attempted" >&2; exit 64; }
 orca_runtime_init
 if [ -n "$COORDINATOR_HANDLE" ] || [ -n "$EXPECTED_RUNTIME_ID" ]; then
   orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || exit $?
@@ -96,14 +107,15 @@ fi
 
 patch_supervised_metadata() {
   local show_out resolved_identity resolved_id resolved_path metadata_root candidate
-  local tmp_meta
+  local tmp_meta metadata_required=0
   local -a matches=()
 
   ORCAREG_METADATA_BIND="manual-required"
+  [ "$DISPATCH_BIND" != "ok" ] || metadata_required=1
 
   if ! show_out=$(orca_cli worktree show --worktree "id:$WORKTREE_ID" --json 2>&1); then
     echo "ORCAREG_METADATA_LOOKUP_FAILED: worktree show 失败；worker 已注册，请按 runbook 手工补写 METADATA: $show_out" >&2
-    return 0
+    return "$metadata_required"
   fi
   if ! resolved_identity=$(printf '%s' "$show_out" | jq -er '
     .result.worktree
@@ -113,49 +125,117 @@ patch_supervised_metadata() {
     | @tsv
   ' 2>/dev/null); then
     echo "ORCAREG_METADATA_LOOKUP_FAILED: Orca worktree JSON 非法或缺少 id/path；worker 已注册，请按 runbook 手工补写 METADATA" >&2
-    return 0
+    return "$metadata_required"
   fi
   IFS=$'\t' read -r resolved_id resolved_path <<< "$resolved_identity"
   if [ "$resolved_id" != "$WORKTREE_ID" ] || [ ! -d "$resolved_path" ]; then
     echo "ORCAREG_METADATA_LOOKUP_FAILED: Orca worktree identity/path 缺失或错配；worker 已注册，请按 runbook 手工补写 METADATA" >&2
-    return 0
+    return "$metadata_required"
   fi
 
   metadata_root="$resolved_path/.claude/agent-sessions"
   if [ ! -d "$metadata_root" ] || [ -L "$metadata_root" ]; then
     echo "ORCAREG_METADATA_NOT_FOUND: $metadata_root 不存在或是符号链接；worker 已注册，请按 runbook 手工补写 METADATA" >&2
-    return 0
+    return "$metadata_required"
   fi
 
-  while IFS= read -r -d '' candidate; do
-    [ -f "$candidate" ] && [ ! -L "$candidate" ] || continue
-    if jq -e --arg terminal "$TERMINAL_HANDLE" --arg worktree "$WORKTREE_ID" \
-      '.session.orca.terminal_handle == $terminal
-       and (.session.orca.worktree_id // $worktree) == $worktree' \
+  if [ -n "$METADATA_FILE" ]; then
+    if ! candidate=$(python3 - "$metadata_root" "$METADATA_FILE" <<'PY'
+from pathlib import Path
+import stat
+import sys
+
+root = Path(sys.argv[1]).resolve(strict=True)
+candidate = Path(sys.argv[2])
+try:
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError("metadata path must be absolute without traversal")
+    relative = candidate.relative_to(root)
+    if len(relative.parts) != 2 or relative.parts[-1] != "METADATA.json":
+        raise ValueError("metadata must be one session below the resolved worktree root")
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if stat.S_ISLNK(current.lstat().st_mode):
+            raise ValueError("metadata path must not contain symlinks")
+    resolved = candidate.resolve(strict=True)
+    if resolved.name != "METADATA.json" or resolved.parent.parent != root:
+        raise ValueError("metadata must be one session below the resolved worktree root")
+    if not resolved.is_file():
+        raise ValueError("metadata is not a regular file")
+    print(resolved)
+except (OSError, ValueError) as exc:
+    print("ORCAREG_METADATA_EXPLICIT_INVALID: " + str(exc), file=sys.stderr)
+    raise SystemExit(1)
+PY
+    ); then
+      echo "ORCAREG_METADATA_EXPLICIT_INVALID: replacement metadata path is not trusted" >&2
+      return "$metadata_required"
+    fi
+    if jq -e --arg worktree "$WORKTREE_ID" --arg run "$RUN_ID" --arg task "$TASK_ID" \
+      --arg authority "$AUTHORITY_RECEIPT_FILE" \
+      '.session.orca.worktree_id == $worktree
+       and .session.orca.supervised.run_id == $run
+       and .session.orca.supervised.task_id == $task
+       and .execution_authority.authority_receipt_file == $authority' \
       "$candidate" >/dev/null 2>&1; then
       matches+=("$candidate")
     fi
-  done < <(find "$metadata_root" -mindepth 2 -maxdepth 2 -type f -name METADATA.json -print0 2>/dev/null)
+  else
+    while IFS= read -r -d '' candidate; do
+      [ -f "$candidate" ] && [ ! -L "$candidate" ] || continue
+      if jq -e --arg terminal "$TERMINAL_HANDLE" --arg worktree "$WORKTREE_ID" \
+        '.session.orca.terminal_handle == $terminal
+         and (.session.orca.worktree_id // $worktree) == $worktree' \
+        "$candidate" >/dev/null 2>&1; then
+        matches+=("$candidate")
+      fi
+    done < <(find "$metadata_root" -mindepth 2 -maxdepth 2 -type f -name METADATA.json -print0 2>/dev/null)
+  fi
 
   if [ "${#matches[@]}" -ne 1 ]; then
-    echo "ORCAREG_METADATA_AMBIGUOUS: terminal=$TERMINAL_HANDLE 匹配 ${#matches[@]} 个 METADATA.json；worker 已注册，请按 runbook 手工补写" >&2
-    return 0
+    echo "ORCAREG_METADATA_AMBIGUOUS: terminal=$TERMINAL_HANDLE 匹配 ${#matches[@]} 个可信 METADATA.json；worker 已注册，请按 runbook 手工补写" >&2
+    return "$metadata_required"
   fi
 
   candidate="${matches[0]}"
+  if [ "$DISPATCH_BIND" = "ok" ]; then
+    if ! orchestration_completion_authority_write \
+      "$TASK_ID" "$DISPATCH_ID" "$TERMINAL_HANDLE" "$RUN_ID" "$candidate" \
+      "$AUTHORITY_RECEIPT_FILE" "${METADATA_FILE:+1}"; then
+      echo "ORCAREG_COMPLETION_AUTHORITY_FAILED: worker 已启动，但 completion transport 未进入实际 hook authority" >&2
+      return 1
+    fi
+  fi
   tmp_meta=$(mktemp "${candidate}.tmp.XXXXXX") || {
+    if ! orchestration_completion_authority_rollback; then
+      echo "ORCAREG_METADATA_ROLLBACK_FAILED: prior completion authority may require manual restoration" >&2
+    fi
     echo "ORCAREG_METADATA_WRITE_FAILED: 无法创建同目录临时文件；worker 已注册，请按 runbook 手工补写" >&2
-    return 0
+    return "$metadata_required"
   }
   if jq --arg run "$RUN_ID" --arg task "$TASK_ID" --arg disp "$DISPATCH_ID" \
+    --arg terminal "$TERMINAL_HANDLE" \
     --arg coordinator "$COORDINATOR_HANDLE" --arg bind "$DISPATCH_BIND" \
-    '.session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}' \
+    --arg completion_file "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}" \
+    --arg completion_sha "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}" \
+    '.session.orca.terminal_handle = $terminal
+     | .session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}
+     | if $completion_file != "" then
+         .execution_authority.completion_authority_file = $completion_file
+         | .execution_authority.completion_authority_sha256 = $completion_sha
+       else . end' \
     "$candidate" > "$tmp_meta" && mv "$tmp_meta" "$candidate"; then
+    orchestration_completion_authority_commit
     ORCAREG_METADATA_BIND="ok"
     echo "ORCAREG_METADATA_UPDATED: $candidate" >&2
   else
+    if ! orchestration_completion_authority_rollback; then
+      echo "ORCAREG_METADATA_ROLLBACK_FAILED: prior completion authority may require manual restoration" >&2
+    fi
     rm -f "$tmp_meta"
     echo "ORCAREG_METADATA_WRITE_FAILED: worker 已注册但 METADATA 原子写回失败，请按 runbook 手工补写" >&2
+    return "$metadata_required"
   fi
 }
 
@@ -241,4 +321,6 @@ printf 'ORCAREG_COORDINATOR_HANDLE=%s\n' "$COORDINATOR_HANDLE"
 printf 'ORCAREG_TASK_ID=%s\n' "$TASK_ID"
 printf 'ORCAREG_DISPATCH_ID=%s\n' "$DISPATCH_ID"
 printf 'ORCAREG_DISPATCH_BIND=%s\n' "$DISPATCH_BIND"
+printf 'ORCAREG_COMPLETION_AUTHORITY_FILE=%s\n' "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}"
+printf 'ORCAREG_COMPLETION_AUTHORITY_SHA256=%s\n' "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}"
 printf 'ORCAREG_METADATA_BIND=%s\n' "$ORCAREG_METADATA_BIND"

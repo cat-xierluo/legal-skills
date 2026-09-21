@@ -1,0 +1,51 @@
+name: PDF Processor Regression
+
+on:
+  pull_request:
+    paths:
+      - "skills/pdf-processor/**"
+      - ".github/workflows/pdf-processor-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/pdf-processor/**"
+      - ".github/workflows/pdf-processor-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 测试直接依赖：pymupdf(fitz)/PIL；被测脚本延迟 import：
+      # opencv-python(cv2)/numpy/pdf2image（pdf_preprocess_skew / pdf-preprocess-core）
+      # pytesseract 为可选依赖，test_pdf_preprocess_speed_options 会 mock 它的属性
+      - name: Install test dependencies
+        run: pip install pymupdf pypdf pillow numpy opencv-python pdf2image pytesseract
+
+      - name: Install poppler (pdf2image runtime)
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
+      - name: Compile scripts
+        run: |
+          python -m py_compile \
+            skills/pdf-processor/scripts/pdf_ocr_layered.py \
+            skills/pdf-processor/scripts/pdf_ocr_paragraphs.py \
+            skills/pdf-processor/scripts/pdf_ocr_paddle_api.py \
+            skills/pdf-processor/scripts/pdf_ocr_corrections.py \
+            skills/pdf-processor/scripts/pdf-ocr-quality-check.py \
+            skills/pdf-processor/scripts/pdf-preprocess-ocr.py \
+            skills/pdf-processor/scripts/pdf-ocr.py
+
+      - name: Run regressions
+        working-directory: skills/pdf-processor/scripts
+        run: python -m unittest discover -s . -p 'test_*.py' -v

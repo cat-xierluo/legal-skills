@@ -40,11 +40,18 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 2. 如配置 `expert_suites_root`，校验套件链接和 README 后，由 `build-suite-zips.sh <tag>` 从 Git tree 展开成员，生成 `suite-<id>-<semver>.zip`
 3. 完成 Release 五问后，仅从与 `origin/main` 完全一致的干净 `main` 创建 annotated tag，并核验 tagger 与目标 commit
 4. 把已核验的不可变 tag object 精确推送到目标 ref，触发 `.github/workflows/release.yml`
-5. Actions 构建两类 zip,用 `softprops/action-gh-release` 上传 `<output_dir>/*.zip`
-6. `gh run watch --exit-status` 等 Actions 完成并核对资产总数
-7. `update-readme.yml` 在 release workflow 成功后通过 `workflow_run` 触发，从 GitHub API 获取最新 assets，用真实 `browser_download_url` 替换根 README 和专家套件 README 的占位并提交。
+5. Actions 构建两类 zip,用 `softprops/action-gh-release` 上传 `<output_dir>/*.zip`,并生成含「专家套件」清单节的 Release Notes
+6. `gh run watch --exit-status` 等 Actions 完成并核对资产总数 = 单 Skill ZIP 数 + 套件 ZIP 数
+7. **README 回写(三层,均调同一份 `scripts/update-readme.py`,幂等)**:
+   - `release.yml` 末尾内嵌步骤:checkout main → 同步根 README 与 `expert-suites/*/README.md` 下载链接 → commit + push(主路径,CI 发版)
+   - `update-readme.yml` 在 release workflow 成功后通过 `workflow_run` 触发兜底(也可 `workflow_dispatch` 手动补跑);checkout 显式 `ref: main`
+   - `release-monorepo.sh` 末尾本地调用(本地驱动路径)
 
-> 设计取舍：不再依赖由 `GITHUB_TOKEN` 创建 Release 后产生新的 `release` workflow 事件，也不让本地发布脚本直接提交、推送 main。`workflow_run` 以 release workflow 的成功终态为触发源；手动补跑可使用 `workflow_dispatch`。
+> 设计取舍:README 回写不走 `on: release` 跨 workflow 事件——release.yml 用内置
+> GITHUB_TOKEN 创建 Release,GitHub 防递归机制下该事件**不会**级联触发其他 workflow
+> (`update-readme.yml` 的 `release: published` 因此从未自动生效,v1.4.0 首次观察到,
+> v1.5.1 定位根因)。主路径内嵌在 release.yml 末尾 100% 保证;`workflow_run` 兜底
+> 以 release workflow 的成功终态为触发源;本地发布脚本不直接提交、推送 main。
 
 ### 4. 发布后(每次)
 

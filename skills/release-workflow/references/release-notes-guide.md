@@ -13,12 +13,15 @@
 | Typst | Rust 排版系统 | 叙述式安全问题 + 贡献者致谢 |
 | Claude Code | CLI 工具 | 高频发布，平铺条目 |
 | NiceHash | 桌面应用 | 安装指引优先 + 安全验证 |
+| eslint | JavaScript Linter | 全条目行内作者括注 `(#PR) (author)`，全自动生成 |
+| stablyai/orca | Electron 桌面应用 | GitHub 原生 generate-notes：`by @user in #PR` + 文末 Contributors 头像墙 |
 
 参考样例：
 - Clash Verge Rev v2.5.1: https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/v2.5.1
 - Zettlr v4.5.0: https://github.com/Zettlr/Zettlr/releases/tag/v4.5.0
 - Obsidian v1.12.7: https://github.com/obsidianmd/obsidian-releases/releases/tag/v1.12.7
 - Tauri CLI v2.11.2: https://github.com/tauri-apps/tauri/releases/tag/tauri-cli-v2.11.2
+- stablyai/orca v1.4.205: https://github.com/stablyai/orca/releases/tag/v1.4.205
 
 ## 结构选择
 
@@ -41,7 +44,8 @@
 6. `> [!WARNING]`：有安装限制、终端命令、破坏性变更、安全提示时必须出现。
 7. `## 下载`：桌面应用必须出现，列出面向用户的安装包。
 8. 自动更新产物说明：有 `.tar.gz` / `.sig` / `latest.json` 时必须说明普通用户无需下载。
-9. 完整变更日志：最后一行使用 compare 链接。
+9. `## 贡献者`：仅在本版本合入外部贡献者（非维护者）的 PR 时出现，列 handle 与 GitHub 主页链接，条目正文同步做行内标注；无外部贡献者时整节省略（规则见下文「贡献者致谢」）。
+10. 完整变更日志：最后一行使用 compare 链接。
 
 `新增 / 变更 / 修复` 中没有内容的分区直接省略，不保留空标题。
 
@@ -93,6 +97,12 @@
 
 ---
 
+## 贡献者
+
+- [@user](https://github.com/user) — 贡献了某修复（#N；仅列外部贡献者，无外部贡献时整节省略）
+
+---
+
 **完整变更日志**: https://github.com/<owner>/<repo>/compare/<上个tag>...vX.Y.Z
 ```
 
@@ -107,7 +117,53 @@
 | 表格列下载链接 | 比 `###` / `####` 分级轻量，比纯链接结构化，适合 Folia 这种多平台桌面应用 |
 | `> [!WARNING]` 标注破坏性变更 | GitHub 原生 callout，视觉醒目 |
 | 每条附 PR 号 | Zettlr / SiYuan / bat 的共识做法，可追溯 |
+| 条目行内标注外部贡献者 | eslint `(#PR) (author)` / bat `(@handle)` / GitHub 原生 `by @user in #PR` 的共识；仅标外部贡献者，维护者自身省略，让致谢信号聚焦 |
+| 文末「贡献者」汇总节 | bat「### Contributors」与 GitHub 原生 Contributors 头像墙的做法；放下载区之后、Full Changelog 之前 |
 | Full Changelog 比较链接 | Zettlr 的做法，一键查看完整 diff |
+
+## 贡献者致谢（Attribution）
+
+外部贡献者的 PR 必须在 Release Notes 中致谢——这是社区项目的基本礼仪，漏掉会直接打击贡献者积极性。触发背景：Folia v0.8.1 曾整版遗漏——该版三个修复全部源自同一位外部贡献者（#169 直接合入，#166 / #167 为承接 PR 的原始方案），notes 与 CHANGELOG 均无一字提及。
+
+### 谁需要致谢
+
+| 对象 | 判定 |
+|------|------|
+| 直接合入的外部 PR | `gh pr list --state merged` 的 author login 不在维护者名单（单人项目 = owner 之外的所有人） |
+| 被承接的原始 PR | 标题 / 描述含「承接 #N」的 PR，回溯原始 PR 致谢其作者——方案来源同样值得致谢 |
+| Co-Authored-By 外部作者 | squash merge 保留了 trailer 时 |
+| 不需要致谢 | 维护者自身条目；bot（renovate / dependabot / github-actions[bot]） |
+
+### 识别命令
+
+```bash
+# 本版本区间合入的 PR 与作者
+gh pr list --state merged --limit 50 --json number,title,author \
+  --jq '.[] | "\(.number)\t\(.author.login)\t\(.title)"'
+
+# squash commit 里保留的 Co-Authored-By trailer
+git log <上个tag>..HEAD --format='%(trailers:key=Co-Authored-By)'
+```
+
+### 标注格式（行内必选，汇总节推荐，可叠加）
+
+| 位置 | 写法 | 出处 |
+|------|------|------|
+| 条目行内（必选） | `- 修复描述 (#169, @Yillan-lamb)`；承接条目写 `- 描述 (#171, 原始方案 @Yillan-lamb #166)` | eslint `(#PR) (author)` / bat `(@handle)` / GitHub 原生 `by @user in #PR` |
+| `## 贡献者` 汇总节（有外部贡献者时推荐） | `- [@Yillan-lamb](https://github.com/Yillan-lamb) — iCloud 卸载防护（#169）`，置于下载区之后、Full Changelog 之前 | bat「### Contributors」/ GitHub 原生 Contributors 头像墙 |
+
+`@user` 写法在 GitHub Release 页面会自动渲染为用户链接并给对方发通知——致谢即触达，不需要额外动作。
+
+### 低成本兜底
+
+担心手写 notes 漏识别外部 PR 时，GitHub 原生生成的贡献信息可直接取用：
+
+```bash
+gh api --method POST repos/{owner}/{repo}/releases/generate-notes \
+  -f tag_name=vX.Y.Z -f previous_tag_name=<上个tag>
+```
+
+返回 body 含每个 PR 的 `by @user` 标注与 Contributors 列表；手写项目可只搬 Contributors 段补进 notes（orca 全量采用该格式，是最省维护成本的选择）。
 
 ## 不同项目类型的适配
 

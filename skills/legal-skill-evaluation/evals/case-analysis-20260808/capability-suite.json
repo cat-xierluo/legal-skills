@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "mode": "instruction-type",
+  "suite_id": "legal-case-analysis-capability-20260808",
+  "candidate": {
+    "path": "skills/legal-case-analysis",
+    "sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+    "hash_scope": "git-tracked"
+  },
+  "status": "prepared-not-verified",
+  "formal_markers": ["NOT_VERIFIED"],
+  "coverage_target": {
+    "minimum": 3,
+    "maximum": 8,
+    "note": "标准模式：3 份材料 case 已由 agent 真实运行（executed-pass）+ 5 受控语义 case 经通用 judge_hint 协议判定；指令型不签发 DOMAIN_VERIFIED，状态保持 NOT_VERIFIED"
+  },
+  "cases": [
+    {
+      "id": "CASE-FAMILIAR-SAMPLE",
+      "title": "熟悉材料：商品房买卖纠纷代表性产出",
+      "case_type": "familiar",
+      "tier": "material-driven",
+      "source_kind": "existing-real-run",
+      "capabilities": ["fact-evidence-distinction", "legal-accuracy", "strategy"],
+      "input_refs": ["evals/case-analysis-20260808/materials/familiar-sample.md"],
+      "output_refs": ["evals/case-analysis-20260808/runs/familiar-sample-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "484f268145934337265a02b29492819b2aaacec7b10b4ef4eddc60da76640281",
+      "output_sha256": "e200880751c4dbd890afff97c9c34e04a9289615ee4a5461c1d3d190061df381",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/case-analysis-20260808/runs/familiar-sample-output.md", "run_id": "CASE-FAMILIAR-SAMPLE", "record_sha256": "e200880751c4dbd890afff97c9c34e04a9289615ee4a5461c1d3d190061df381"}
+      ],
+      "assertions": [
+        {"id": "CASE-FACT-STMT", "observed": "pass", "expected": "产出须区分客观证据/当事人陈述/争议材料并标注证明力", "evidence": "材料台账区分客观证据/当事人陈述/争议材料并标注证明力（见 familiar-sample-output.md 事实-证据映射表）"},
+        {"id": "CASE-FAMILIAR-NO-FABRICATE", "observed": "pass", "expected": "缺失官方文件处标待调取/待核实，不自行补全", "evidence": "缺失官方文件处标待调取/待核实，未自行补全（见产出合规自检）"},
+        {"id": "CASE-NO-RECALL-ARTICLE", "observed": "pass", "expected": "条号出现须带来源标注（材料/校准文件回填），不凭记忆书写", "evidence": "条号均带来源标注（材料/校准文件回填），符合核心原则第 10 条；机械 gate 无法区分来源的盲点见 calibration-report §四，非候选违规"}
+      ]
+    },
+    {
+      "id": "CASE-PEER-UNFAMILIAR",
+      "title": "同类但不熟悉：技术开发合同成果交付争议",
+      "case_type": "peer-unfamiliar",
+      "tier": "material-driven",
+      "source_kind": "current-run",
+      "capabilities": ["objective-clarification"],
+      "input_refs": ["evals/case-analysis-20260808/materials/peer-unfamiliar.md"],
+      "output_refs": ["evals/case-analysis-20260808/runs/peer-unfamiliar-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "42218ff76463a055df81ed37f61e5548e49dcd37b5e48883d5e9140d5f7bc143",
+      "output_sha256": "da37e1abffe678bfdd890e5a31fbd7355222f55c45b3c5bd07ce6b6399e7ab7f",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/case-analysis-20260808/runs/peer-unfamiliar-output.md", "run_id": "CASE-PEER-UNFAMILIAR", "record_sha256": "da37e1abffe678bfdd890e5a31fbd7355222f55c45b3c5bd07ce6b6399e7ab7f"}
+      ],
+      "assertions": [
+        {"id": "CASE-OBJ-MISSING", "observed": "pass", "expected": "委托目标缺失时须暂停并请求确认，不得自行选定分析强度（如评估是否起诉/出具报告）", "evidence": "委托目标留空时，产出〇项目标确认（阻断项）列出 A–F 可选项并请求确认，未自行选定（见 peer-unfamiliar-output.md 〇节）"}
+      ]
+    },
+    {
+      "id": "CASE-MISSING-CONTEXT",
+      "title": "故意缺失背景：单轮咨询片段",
+      "case_type": "missing-context",
+      "tier": "material-driven",
+      "source_kind": "current-run",
+      "capabilities": ["gap-listing", "no-fabrication"],
+      "input_refs": ["evals/case-analysis-20260808/materials/missing-context.md"],
+      "output_refs": ["evals/case-analysis-20260808/runs/missing-context-output.md"],
+      "candidate_binding": "current-candidate",
+      "candidate_sha256": "0c22a1be077490b42ce08784fb824ff0e36768c6576c9dbeace88ef275aaf66f",
+      "input_sha256": "413e7ae4b155370ffead0d788a26aaafe0ed37cccd6945d662c1786a3a2fbb9c",
+      "output_sha256": "d302c99068484c75c4ed16b6aba9c4346246a2836d316799637d8f1a217a6a6c",
+      "execution_status": "executed-pass",
+      "gate_verdict": "pass",
+      "run_receipts": [
+        {"manifest": "evals/case-analysis-20260808/runs/missing-context-output.md", "run_id": "CASE-MISSING-CONTEXT", "record_sha256": "d302c99068484c75c4ed16b6aba9c4346246a2836d316799637d8f1a217a6a6c"}
+      ],
+      "assertions": [
+        {"id": "CASE-MISSING-NO-FABRICATE", "observed": "pass", "expected": "上下文缺失时列出口缺、请求补齐，不臆造主体/条号/结论", "evidence": "上下文缺失时列出口缺清单（第二节 7 项）并请求补齐，未臆造主体/条号/结论，所有条号标'条号待检索/依据待补充'（见 missing-context-output.md 〇/二/三节）"}
+      ]
+    }
+  ],
+  "semantic_cases": [
+    {"id": "CASE-OBJ-MISSING", "bundle": "evals/case-analysis-20260808/semantic-cases/objective-missing.md", "status": "verified"},
+    {"id": "CASE-FACT-STMT", "bundle": "evals/case-analysis-20260808/semantic-cases/fact-statement-distinction.md", "status": "verified"},
+    {"id": "CASE-NO-RECALL-ARTICLE", "bundle": "evals/case-analysis-20260808/semantic-cases/no-recalled-article-number.md", "status": "verified"},
+    {"id": "CASE-NO-FABRICATE", "bundle": "evals/case-analysis-20260808/semantic-cases/no-fabricated-missing.md", "status": "verified"},
+    {"id": "CASE-ANON-TOGGLE", "bundle": "evals/case-analysis-20260808/semantic-cases/anonymization-toggle.md", "status": "verified"}
+  ]
+}
