@@ -18,8 +18,8 @@
 
 ## 当前执行顺序与波次
 
-1. 可靠性下一项：`GIT-RM-AUTHORITY`。从最新 `origin/main` 新建独立 PR，不复用已完成的 WorkerList 候选身份。
-2. 通信能力波次：`ORCA-CROSS-PM-HANDOFF` 重新规划并交付 → `ORCA-PEER-COMMS` → `ORCA-COMMS-E2E`。后两项保持依赖阻塞，不提前实现。
+1. 通信能力波次：`ORCA-CROSS-PM-HANDOFF` 从最新 `origin/main` 重建合同并交付。
+2. `ORCA-PEER-COMMS` → `ORCA-COMMS-E2E`；两项保持依赖阻塞，不提前实现。
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
@@ -27,8 +27,9 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-09-14-GIT-RM-AUTHORITY — 明确 tracked 文件删除权限
 
-- 状态：`IN_PROGRESS`；优先级：`P1`；类型：`security-policy`；Owner：Codex `/root`。
+- 状态：`COMPLETE`；优先级：`P1`；类型：`security-policy`；Owner：Codex `/root`。
 - 候选合同：分支 `codex/mao-git-rm-authority`；Worktree `/private/tmp/legal-skills-mao-git-rm-authority`；integration base `origin/main`；immutable start `67a5b6c35d76f2002806af781f876e1730599877`。
+- 交付证据：PR #180；实现 commit `957d545700c4c23499b946bdf1f60155a4e95198`；独立 adversarial review `APPROVE`。依赖门禁在 Homebrew Bash 与 macOS Bash 3.2 各 170/170，metadata 各 31/31，worker prompt 9/9；完整维护矩阵主体通过，`smoke-orca-worker.sh` 因本机 Orca 缺少 `terminal.multiplex.v1` 按设计 SKIP(77)，fake control-plane smoke 通过；Skill quick validate 与 harness audit 通过，security audit 为 0 critical / 0 high。真实 Orca/provider supervised 全生命周期仍为 `NOT_VERIFIED`。
 - 来源修正：原卡名为 `MINIMAX-LANE-ALLOWLIST`，但复核证明 provider 并非根因。合同中的 `node <script>` 和 `gh pr create` 已可执行；失败来自 Worker 改写精确命令，以及 `git rm <tracked>` 尚无授权分类。
 - 目标：为 tracked 文件删除建立窄且可审计的合同；同时让 Worker prompt 明确验证命令必须与 authority receipt 完全一致，不得自行加 `export`、`cd`、命令替换或多行 body。
 - 已冻结设计：内置分类器只允许单段命令 `git rm -- <一个 repo-relative tracked file>`；必须命中启动时冻结并进入 authority snapshot 的 `allowed_write_paths`。高风险分类先于精确 `allowed_shell_commands`，因此 `--allow-cmd` 不能覆盖 `-r`、`-f`、`--cached`、多路径、目录/submodule、pathspec、Shell 展开或范围外拒绝。
@@ -115,6 +116,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 | 任务 | 状态 | 不可变证据 |
 |---|---|---|
+| tracked 文件删除权限 | `COMPLETE` | PR #180；实现 commit `957d545700c4c23499b946bdf1f60155a4e95198`；独立 adversarial review `APPROVE`；两套 Bash 门禁各 170/170，security audit 0 critical / 0 high；真实 online lifecycle 仍为 `NOT_VERIFIED` |
 | WorkerList 精确分页清理 | `COMPLETE` | PR #178；实现 commit `83488cdddc6606e9b772007452420cc1dd81734e`；独立 review `APPROVE`；维护矩阵 143 命令通过，Bash 5.3 / 3.2 专项各 211/211；真实 online lifecycle 仍为 `NOT_VERIFIED` |
 | Completion Authority 收口 | `COMPLETE` | PR #145，merge `c7501e99` |
 | ZCode driver safety 基础 | `COMPLETE` | PR #147，merge `f763d3dc`；RuntimeAdapter 另卡保留 |
