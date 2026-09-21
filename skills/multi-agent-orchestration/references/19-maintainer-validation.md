@@ -42,6 +42,7 @@ bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-completion-authority.sh
 python3 scripts/test_completion_authority.py
+bash scripts/test-clean-worktree-worker-list.sh
 bash scripts/test-pm-cleanup-worker.sh
 bash scripts/test-pm-run-bind.sh
 bash scripts/test-post-merge-cleanup.sh

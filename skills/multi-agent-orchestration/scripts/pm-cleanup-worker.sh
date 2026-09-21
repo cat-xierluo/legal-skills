@@ -281,22 +281,11 @@ if [ -n "$remote_row" ]; then
   else
     remote_state="planned-delete"
   fi
-  if [ "$EXECUTE" -eq 1 ] && [ "$remote_state" = "planned-delete" ]; then
-    push_rc=0
-    # Bind deletion atomically to the exact PR head already observed above.
-    # A branch that advances between ls-remote and push is retained.
-    git -C "$PROJECT" push \
-      --force-with-lease="refs/heads/$BRANCH:$EXPECTED_TIP" \
-      "$REMOTE" --delete "$BRANCH" >/dev/null 2>&1 || push_rc=$?
-    if query_remote_branch && [ -z "$remote_query_output" ]; then
-      remote_state="deleted"
-    else
-      remote_state="pending"
-      echo "PM_CLEANUP_REMOTE_DELETE_PENDING: branch=$BRANCH push_rc=$push_rc" >&2
-    fi
-  fi
 fi
 
+# Lifecycle/worktree cleanup must succeed before any branch deletion.  In
+# particular, an unreadable or ambiguous paginated WorkerList must not leave a
+# deleted remote head while the authoritative worker resources remain live.
 clean_args=(--project "$PROJECT" --branch "$BRANCH" --session "$SESSION" --worktree "$WORKTREE")
 [ "$EXECUTE" -eq 0 ] || clean_args+=(--execute)
 if ! bash "$CLEAN_SCRIPT" "${clean_args[@]}"; then
@@ -327,6 +316,21 @@ fi
 if git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "PM_CLEANUP_RESULT: CLEANUP_PENDING remote=$remote_state worktree=removed local=present reason=local-delete-failed" >&2
   exit 2
+fi
+
+if [ "$remote_state" = "planned-delete" ]; then
+  push_rc=0
+  # Bind deletion atomically to the exact PR head observed before lifecycle
+  # cleanup. A concurrent advance is retained and reported as pending.
+  git -C "$PROJECT" push \
+    --force-with-lease="refs/heads/$BRANCH:$EXPECTED_TIP" \
+    "$REMOTE" --delete "$BRANCH" >/dev/null 2>&1 || push_rc=$?
+  if query_remote_branch && [ -z "$remote_query_output" ]; then
+    remote_state="deleted"
+  else
+    remote_state="pending"
+    echo "PM_CLEANUP_REMOTE_DELETE_PENDING: branch=$BRANCH push_rc=$push_rc" >&2
+  fi
 fi
 
 if [ "$remote_state" = "pending" ]; then
