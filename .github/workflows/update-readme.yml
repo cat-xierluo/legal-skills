@@ -1,8 +1,15 @@
 name: Update README Download Links
 
+# 兜底通道:正常发版时 README 回写由 release.yml 末尾内嵌步骤完成。
+#
+# 为什么 release: published 在本仓库从未自动触发——release.yml 用内置
+# GITHUB_TOKEN 创建 Release,GitHub 防递归机制规定 GITHUB_TOKEN 产生的
+# 事件不会级联触发其他 workflow。保留该触发是给将来用 PAT 创建 Release
+# 的场景;手动兜底走 workflow_dispatch。
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,63 +20,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # 显式取 main:release 事件默认 checkout 到 tag SHA,README 改动须落在 main
+          ref: main
           fetch-depth: 0
 
-      - name: Replace placeholders with real asset URLs
+      - name: Run update-readme script
+        # 统一调用技能内脚本(正则已覆盖 latest/download 占位形式与显式 tag 形式,
+        # 幂等、跨仓库安全),不再维护 inline 副本防止两份逻辑漂移
         env:
-          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 << 'EOF'
-          import os, re, json, urllib.request
-          from pathlib import Path
+          python3 skills/release-workflow/scripts/update-readme.py \
+            "${{ github.repository }}" \
+            README.md
 
-          owner, repo = os.environ["GH_REPO"].split("/")
-          api = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-          req = urllib.request.Request(api, headers={"Authorization": f"token {os.environ['GH_TOKEN']}"})
-          data = json.loads(urllib.request.urlopen(req).read())
-
-          # 真实 URL 映射:<skill>-<semver>.zip → browser_download_url
-          url_map = {}
-          for a in data["assets"]:
-              if not a["name"].endswith(".zip"):
-                  continue
-              base = a["name"][:-4]
-              skill = base.rsplit("-", 1)[0]
-              url_map[skill] = a["browser_download_url"]
-          print(f"latest release assets: {len(url_map)}")
-
-          readme = Path("README.md").read_text()
-          # 匹配 README 里的占位 URL:releases/latest/download/<skill>.zip
-          pattern = re.compile(
-              r'https://github\.com/' + re.escape(f"{owner}/{repo}") +
-              r'/releases/latest/download/([a-z0-9.-]+)\.zip')
-
-          replaced = 0
-          def repl(m):
-              nonlocal replaced
-              skill = m.group(1)
-              if skill in url_map:
-                  replaced += 1
-                  return url_map[skill]
-              return m.group(0)
-
-          new = pattern.sub(repl, readme)
-          if replaced > 0:
-              Path("README.md").write_text(new)
-              print(f"README 已更新 {replaced} 个下载链接")
-          else:
-              print("README 无可替换链接")
-          EOF
-
-      - name: Commit
+      - name: Commit README (if changed)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet README.md; then
-              echo "README 无变更"
+            echo "README 无变更"
           else
-              git add README.md
-              git commit -m "docs: 同步 README 下载链接到最新 release"
-              git push
+            git add README.md
+            git commit -m "docs: 同步 README 下载链接到最新 release"
+            git push
           fi
