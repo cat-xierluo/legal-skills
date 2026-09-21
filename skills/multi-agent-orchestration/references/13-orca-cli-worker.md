@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.27.4（2026-09-20）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.27.5（2026-09-21）。
 
 ## 目录
 
@@ -231,7 +231,7 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
 - 只有已证明 failed/stopped 的重试才使用原 Task、`--retry-of` 和显式 placement；遵守重试熔断，不靠复位 ready 或新 Run 绕过。2026-08-30 曾有慢冷启动失败与复用终端重试成功的现场记录，不作为所有版本的通用恢复命令。当前合同以 `orca skills get orchestration --reference references/recovery-and-cleanup.md` 与对应 `--help` 为准；旧 host 缺字段时不猜。
 - terminal handle stale：只读重新定位后，还须证明 owner、同一资源及 incarnation/状态，不能仅取列表中的新 handle 接管。未知/活跃/不匹配资源保留并上报。
 - `check --wait` timeout / count=0：这是 rolling wait checkpoint，不是 worker failed。
-- active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；不要用 worktree rm 代替生命周期处理。只读 `worker-show/dispatch-show` 与 diff/tests 只能用于观察/业务验收，不能结算 Dispatch。
+- active/unknown Dispatch 的文件清理：`clean-worktree.sh --execute` fail-closed；不要用 worktree rm 代替生命周期处理。清理器必须从 `METADATA.session.orca.supervised.run_id` 取得权威 Run，以 `worker-list --run <run> --limit 100` 遍历全部 opaque cursor，并且只接受在同一 Run 中唯一出现的目标 Dispatch。前置查询出现缺页、空/循环游标、scope/run 漂移、读取失败、目标缺失或重复时，在 `worker-release`、terminal close、worktree rm 和分支删除前停止；不得回退到无 `--run` 的默认 fleet 页。`reclaimable` release 后的同一查询若失败，只能说明 release 可能已发生，仍必须停止 terminal、worktree 和分支后续 mutation。只读 `worker-show/dispatch-show` 与 diff/tests 只能用于观察/业务验收，不能结算 Dispatch。
 - **Dispatch 死锁兜底（Task-047R，settle）**：若 worker 进程已死但未发 `worker_done`，用 `pm-orchestrate settle --worktree <WT> --session <S> --reason "..." [--force] [--destroy]`：
   1. 校验 METADATA.project 与 worker 的 Git common dir 一致，并先把 reason 写入 common-dir NDJSON 审计；不可写则拒绝 mutation。
   2. 只有 `observation.status=exited|missing` 且 `worker.state=succeeded|failed|stopped` 通过；缺字段、active 与未知未来值默认拒绝。
@@ -239,7 +239,7 @@ Orca terminal 对 `--command` 是开放的，但 `spawn-worker.sh` 只允许 Cla
   4. 默认不删文件。显式 `--destroy` 只在 stop 成功后释放 lease、执行 Orca worktree rm，再用完整路径匹配 Git registration 做 fallback；任何失败都 fail-loud。
   5. 审计在 `<git-common-dir>/orchestration/settle-audit.ndjson`，删除 Session Context 后仍存在。`--force` 只覆盖 liveness 不确定性，不覆盖身份、审计、stop、lease 或删除失败。
   - 验证脚本：`test-settle-liveness.sh`（字段矩阵）与 `test-settle-command.sh`（真实命令顺序和资源保留）。
-- provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。settled 后 `worker-release` 返回 `retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。任何 active/unknown/mismatch 都拒绝清理。
+- provider/custom argv 由 `spawn-worker.sh` 预创建的 terminal 会被 Orca 标记为 external。完整分页预检已经证明目标唯一且 settled 后，`retained/external_terminal` 是所有权结果，不是失败；只有 METADATA 与 worker resource 的句柄精确一致时，创建者才可关闭。`reclaimable` 先按目标 Dispatch release，再用同一 Run 完整重读；后置结果不可证时不继续直接关闭 terminal 或删除文件。任何 active/unknown/mismatch 都拒绝清理。
 
 外部终端关闭还须核对 incarnation、已 settled 且未被用户接管；精确关闭后读回复验 disconnected，再结算 lease。不得把 terminal close 用作 `release_pending/release_unknown` 的替代。上述 legacy settle 参数不是未知现场的新授权；证据不足时即使有 `--force` 也不执行，优先按当前官方 recovery 合同处理。
 
