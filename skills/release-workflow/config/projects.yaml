@@ -89,6 +89,10 @@ faropdf:
 # === legal-skills: monorepo-many-skills 发布模式 ===
 # 一次性给仓库内 N 个独立 skill 各打一个 zip,挂到 GitHub Release。
 # 与 folia/funes/faropdf 的「单应用 build matrix」模式并列,通过 type 字段区分。
+# 注意: update-readme.py 的表行回写(链接刷新+版本列对齐+改名死链自愈)依赖
+# monorepo-skills 类型的 README 结构约定,见
+# skills/release-workflow/references/monorepo-release.md「README 结构约定」一节。
+# 新的 monorepo-skills 项目按该约定书写 README 即可复用回写能力。
 legal-skills:
   repo: cat-xierluo/legal-skills
   type: monorepo-skills

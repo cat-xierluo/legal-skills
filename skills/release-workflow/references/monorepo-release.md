@@ -53,6 +53,23 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 > v1.5.1 定位根因)。主路径内嵌在 release.yml 末尾 100% 保证;`workflow_run` 兜底
 > 以 release workflow 的成功终态为触发源;本地发布脚本不直接提交、推送 main。
 
+### 4a. monorepo-skills README 结构约定（回写的通用性边界）
+
+`update-readme.py` 的表行回写**不是仓库个性化补丁，而是本类型的项目约定**：凡
+`type: monorepo-skills` 的项目，根 README 技能表须遵循以下结构，回写脚本按此实现；
+新项目按约定书写即可复用全部回写能力（链接刷新 + 版本列对齐 + 改名死链自愈）。
+
+1. **HTML 技能表**：每个技能一行 `<tr>`，行内以 `href="skills/<skill-name>/"` 声明技能名
+   （回写按此**行内名**映射资产，不信任链接里的旧 slug）；版本列 `<td>vX.Y.Z</td>`
+   紧邻下载列 `<td><a href=".../<skill>-<semver>.zip">下载</a></td>`（版本列会被
+   自动对齐到 zip 实际版本，`vA.B.C→vX.Y.Z` 区间写法整体替换）。
+2. **独立仓库行**：下载链接域名非本仓库的行（配"独立仓库"列）整行不动。
+3. **套件 README（可选）**：成员表行以 `](../skills/<name>/)` 声明成员名，成员
+   下载链接按行内成员名映射；正文散链（blockquote 整套下载等）按链接自身 slug 映射。
+
+> 分层原则：`projects.yaml` 的 `type: monorepo-skills` 是通用/个性的分界——脚本行为
+> 对本类型所有项目一致；确属单仓库的差异（如 intro 文案）走 `notes:` 配置，不进脚本。
+
 ### 4. 发布后(每次)
 
 - 检查 release page:`https://github.com/<owner>/<repo>/releases/tag/<tag>`

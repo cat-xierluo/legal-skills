@@ -20,6 +20,7 @@
 ### 文档完善
 
 - 更新 monorepo 发布说明、项目配置和专家套件设计稿，明确源码符号链接与 Release 自包含目录的边界。
+- **README 结构约定显式化**：`references/monorepo-release.md` 新增「monorepo-skills README 结构约定」一节——表行回写（链接刷新/版本列对齐/改名死链自愈）是 `type: monorepo-skills` 的类型级约定而非单仓库个性化补丁，`projects.yaml` 的 `type` 字段即通用/个性分界；确属单仓库的差异走 `notes:` 配置。
 
 ## [1.5.1] - 2026-09-21
 
