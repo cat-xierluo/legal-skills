@@ -39,13 +39,16 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 3. `git push origin <YYYY.MM.DD-tag>` 推 tag,触发 `.github/workflows/release.yml`
 4. Actions 跑 `build-zips.sh`,用 `softprops/action-gh-release` 上传 `<output_dir>/*.zip`
 5. `gh run watch --exit-status` 等 Actions 完成
-6. **`update-readme.py` 内嵌调用**:从 GitHub API 拿最新 release 的 assets,
-   用真实 `browser_download_url` 替换 README 表格占位,
-   若有变更自动 commit + push(无需依赖 `.github/workflows/update-readme.yml` 跨 workflow 事件)
+6. **README 回写(双保险,均调同一份 `scripts/update-readme.py`)**:
+   - `release.yml` 末尾内嵌步骤:checkout main → 替换下载链接 → commit + push(CI 发版路径)
+   - `release-monorepo.sh` 末尾本地调用(本地驱动路径)
 
-> 设计取舍:`update-readme` 逻辑优先内嵌在 `release-monorepo.sh` 末尾(单脚本完成全流程),
-> `.github/workflows/update-readme.yml` 仍保留作为兜底(给直接用 `workflow_dispatch` 触发 release 的用户)。
-> 首次 release 出现过 `.github/workflows/update-readme.yml` 未自动触发的事件路由问题,内嵌后 100% 保证。
+> 设计取舍:README 回写不走 `on: release` 跨 workflow 事件——release.yml 用内置
+> GITHUB_TOKEN 创建 Release,GitHub 防递归机制下该事件**不会**级联触发其他 workflow
+> (`update-readme.yml` 的 `release: published` 因此从未自动生效,v1.4.0 首次观察到,
+> v1.5.1 定位根因)。两条发布路径各自内嵌回写后 100% 保证;`update-readme.yml`
+> 降级为 `workflow_dispatch` 手动兜底,并同样调用 `scripts/update-readme.py`,
+> 不再维护 inline 副本(旧副本正则只认 latest/download 占位形式,与技能脚本漂移过)。
 
 ### 4. 发布后(每次)
 
