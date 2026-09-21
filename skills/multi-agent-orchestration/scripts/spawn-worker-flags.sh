@@ -105,6 +105,9 @@ Options:
                    even with -y/--dangerously-skip-permissions (PreToolUse hook unbypassable).
                    Use when PM wants to hard-guard against worker scope violations,
                    e.g. --allow-paths 'skills/my-skill/**' --allow-paths 'skills/another-skill/**'
+                   For tracked-file deletion, only a canonical repo-relative value with
+                   no glob characters grants that exact path to `git rm -- <path>`;
+                   glob entries continue to guard Edit/Write but never grant deletion.
   --role ROLE       (v2.14.0) Worker role in role-separated acceptance waves.
                    implementer (default, unchanged behavior) or reviewer.
                    reviewer 强制写范围纪律：默认只允许写自身 Session Context

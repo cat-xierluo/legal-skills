@@ -1,6 +1,6 @@
 # Orca-first Worker Backend
 
-> 配合 `SKILL.md` §4 阅读。版本：v2.27.5（2026-09-21）。
+> 配合 `SKILL.md` §4 阅读。版本：v2.27.6（2026-09-21）。
 
 ## 目录
 
