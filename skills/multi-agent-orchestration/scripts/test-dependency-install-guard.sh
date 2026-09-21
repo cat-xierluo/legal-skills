@@ -100,6 +100,7 @@ with open(path, "w", encoding="utf-8") as fh:
             "rg -n 'brew install' references/",
             "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v",
         ],
+        "allowed_write_paths": [],
     }, fh, ensure_ascii=False)
 PY
 }
@@ -320,6 +321,227 @@ expect_allow "git branch listing flags are allowed" \
   hook "$deny_auth" "git branch -av"
 expect_block "git branch delete is denied" "SHELL_COMMAND_NOT_ALLOWLISTED" \
   hook "$deny_auth" "git branch -D feat/x"
+
+# GIT-RM-AUTHORITY：删除权限只来自 hash-bound PM receipt 中启动时冻结的
+# exact allowed_write_paths。普通 Shell 精确白名单、scope glob、worker mirror
+# 都不能扩大；拒绝必须保持 index/worktree 不变。
+git_rm_repo="$tmp_root/git-rm-repo"
+git init -b main "$git_rm_repo" >/dev/null
+mkdir -p "$git_rm_repo/dir" "$git_rm_repo/pattern" "$git_rm_repo/vendor"
+printf 'owned\n' > "$git_rm_repo/owned.txt"
+printf 'hash collision\n' > "$git_rm_repo/owned.txt#outside"
+printf 'outside\n' > "$git_rm_repo/outside.txt"
+printf 'missing\n' > "$git_rm_repo/missing.txt"
+printf 'nested\n' > "$git_rm_repo/dir/file.txt"
+printf 'pattern\n' > "$git_rm_repo/pattern/file.txt"
+ln -s owned.txt "$git_rm_repo/link.txt"
+git -C "$git_rm_repo" add owned.txt 'owned.txt#outside' outside.txt missing.txt dir/file.txt pattern/file.txt link.txt
+GIT_AUTHOR_NAME=Fixture GIT_AUTHOR_EMAIL=fixture@example.invalid \
+GIT_COMMITTER_NAME=Fixture GIT_COMMITTER_EMAIL=fixture@example.invalid \
+  git -C "$git_rm_repo" commit -m fixture >/dev/null
+gitlink_oid=$(git -C "$git_rm_repo" rev-parse HEAD)
+git -C "$git_rm_repo" update-index --add --cacheinfo "160000,$gitlink_oid,vendor/submodule"
+rm "$git_rm_repo/missing.txt"
+printf 'untracked\n' > "$git_rm_repo/untracked.txt"
+git_rm_auth="$tmp_root/git-rm-auth.json"
+git_rm_authority_dir="$git_rm_repo/.git/agent-authority"
+mkdir -p "$git_rm_authority_dir"
+git_rm_receipt="$git_rm_authority_dir/git-rm.json"
+
+python3 - "$git_rm_auth" "$tmp_root/git-rm-deep-wrapper.txt" <<'PY'
+import json
+import shlex
+import sys
+
+commands = [
+    "git rm -r -- dir",
+    "git rm -f -- owned.txt",
+    "git rm --cached -- owned.txt",
+    "git rm -- owned.txt outside.txt",
+    "/usr/bin/git rm -- owned.txt",
+    "git -C . rm -- owned.txt",
+    "cd . && git rm -- owned.txt",
+    "git rm -- pattern/file.txt",
+    "git rm -- dir",
+    "git rm -- vendor/submodule",
+    "git rm -- untracked.txt",
+    "git rm -- outside.txt",
+    "git rm -- owned.txt#outside",
+    "sh -c 'git rm -- outside.txt'",
+    "bash -lc 'git rm -- outside.txt'",
+    "eval 'git rm -- outside.txt'",
+    "command sh -c 'git rm -- outside.txt'",
+    "echo $(git rm -- outside.txt)",
+    "$(printf git) rm -- outside.txt",
+    "g=git; $g rm -- outside.txt",
+    "git -c alias.x=rm x -- outside.txt",
+    "git -c ALIAS.x=rm x -- outside.txt",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=rm git x -- outside.txt",
+]
+deep_wrapper = "git rm -- outside.txt"
+for _ in range(5):
+    deep_wrapper = "sh -c " + shlex.quote(deep_wrapper)
+commands.append(deep_wrapper)
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    json.dump({
+        "schema": "multi-agent-orchestration.install-authorization.v1",
+        "policy": "deny_by_default",
+        "authorization_source": "",
+        "authorized_commands": [],
+        "allowed_shell_commands": commands,
+        "allowed_write_paths": [
+            "owned.txt", "link.txt", "missing.txt", "dir",
+            "vendor/submodule", "untracked.txt", "pattern/**",
+        ],
+    }, stream, ensure_ascii=False)
+with open(sys.argv[2], "w", encoding="utf-8") as stream:
+    stream.write(deep_wrapper + "\n")
+PY
+IFS= read -r git_rm_deep_wrapper < "$tmp_root/git-rm-deep-wrapper.txt"
+
+write_git_rm_receipt() {
+  local auth_file="$1" receipt_file="$2" worktree="$3" branch="$4"
+  python3 - "$auth_file" "$receipt_file" "$worktree" "$branch" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    snapshot = json.load(stream)
+with open(sys.argv[2], "w", encoding="utf-8") as stream:
+    json.dump({
+        "schema": "multi-agent-orchestration.authority-receipt.v1",
+        "created_at": "2026-09-21T00:00:00Z",
+        "session": "git-rm-fixture",
+        "worktree": sys.argv[3],
+        "branch": sys.argv[4],
+        "authorization_snapshot": snapshot,
+    }, stream, ensure_ascii=False)
+PY
+  chmod 600 "$receipt_file"
+}
+
+write_git_rm_receipt "$git_rm_auth" "$git_rm_receipt" "$git_rm_repo" main
+git_rm_receipt_sha=$(shasum -a 256 "$git_rm_receipt" | awk '{print $1}')
+
+git_rm_hook() {
+  local repo="$1" auth_file="$2" receipt_file="$3" receipt_sha="$4" command="$5"
+  (
+    cd "$repo"
+    printf '{"tool_name":"Bash","tool_input":{"command":%s}}' \
+      "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$command")" |
+      WORKER_INSTALL_AUTH_FILE="$auth_file" WORKER_INSTALL_AUTH_B64= \
+      WORKER_AUTHORITY_RECEIPT_FILE="$receipt_file" \
+      WORKER_AUTHORITY_RECEIPT_CONTENT_SHA256="$receipt_sha" \
+      WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
+  )
+}
+
+git_rm_state() {
+  git -C "$git_rm_repo" status --porcelain=v1
+  git -C "$git_rm_repo" ls-files --stage
+}
+
+expect_git_rm_block_unchanged() {
+  local name="$1" command="$2" auth_file="${3:-$git_rm_auth}" \
+    receipt_file="${4:-$git_rm_receipt}" receipt_sha="${5:-$git_rm_receipt_sha}"
+  local before output after
+  before=$(git_rm_state)
+  output=$(git_rm_hook "$git_rm_repo" "$auth_file" "$receipt_file" "$receipt_sha" "$command")
+  after=$(git_rm_state)
+  if printf '%s' "$output" | grep -qF "GIT_RM_AUTHORITY_BLOCKED" && [ "$before" = "$after" ]; then
+    ok "$name"
+  else
+    printf 'output=%s\n' "$output" >&2
+    not_ok "$name"
+  fi
+}
+
+expect_allow "exact tracked regular file deletion is authorized" \
+  git_rm_hook "$git_rm_repo" "$git_rm_auth" "$git_rm_receipt" "$git_rm_receipt_sha" "git rm -- owned.txt"
+expect_allow "exact tracked symlink deletion is authorized" \
+  git_rm_hook "$git_rm_repo" "$git_rm_auth" "$git_rm_receipt" "$git_rm_receipt_sha" "git rm -- link.txt"
+expect_allow "index-tracked worktree-missing file remains a narrow authorized deletion" \
+  git_rm_hook "$git_rm_repo" "$git_rm_auth" "$git_rm_receipt" "$git_rm_receipt_sha" "git rm -- missing.txt"
+
+no_scope_auth="$tmp_root/git-rm-no-scope-auth.json"
+python3 - "$git_rm_auth" "$no_scope_auth" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    data = json.load(stream)
+data["allowed_write_paths"] = []
+with open(sys.argv[2], "w", encoding="utf-8") as stream:
+    json.dump(data, stream, ensure_ascii=False)
+PY
+no_scope_receipt="$git_rm_authority_dir/git-rm-no-scope.json"
+write_git_rm_receipt "$no_scope_auth" "$no_scope_receipt" "$git_rm_repo" main
+no_scope_sha=$(shasum -a 256 "$no_scope_receipt" | awk '{print $1}')
+expect_git_rm_block_unchanged "missing frozen deletion scope is denied" "git rm -- owned.txt" \
+  "$no_scope_auth" "$no_scope_receipt" "$no_scope_sha"
+expect_git_rm_block_unchanged "wrong receipt hash is denied" "git rm -- owned.txt" \
+  "$git_rm_auth" "$git_rm_receipt" "0000000000000000000000000000000000000000000000000000000000000000"
+
+wrong_root_receipt="$git_rm_authority_dir/git-rm-wrong-root.json"
+write_git_rm_receipt "$git_rm_auth" "$wrong_root_receipt" "$tmp_root" main
+wrong_root_sha=$(shasum -a 256 "$wrong_root_receipt" | awk '{print $1}')
+expect_git_rm_block_unchanged "receipt worktree drift is denied" "git rm -- owned.txt" \
+  "$git_rm_auth" "$wrong_root_receipt" "$wrong_root_sha"
+wrong_branch_receipt="$git_rm_authority_dir/git-rm-wrong-branch.json"
+write_git_rm_receipt "$git_rm_auth" "$wrong_branch_receipt" "$git_rm_repo" other
+wrong_branch_sha=$(shasum -a 256 "$wrong_branch_receipt" | awk '{print $1}')
+expect_git_rm_block_unchanged "receipt branch drift is denied" "git rm -- owned.txt" \
+  "$git_rm_auth" "$wrong_branch_receipt" "$wrong_branch_sha"
+
+expect_git_rm_block_unchanged "untracked path is denied even when frozen exactly" "git rm -- untracked.txt"
+expect_git_rm_block_unchanged "tracked path outside frozen scope is denied" "git rm -- outside.txt"
+expect_git_rm_block_unchanged "hash inside a path is not truncated to an authorized prefix" "git rm -- owned.txt#outside"
+expect_git_rm_block_unchanged "scope glob does not grant deletion authority" "git rm -- pattern/file.txt"
+expect_git_rm_block_unchanged "tracked directory path is denied" "git rm -- dir"
+expect_git_rm_block_unchanged "tracked gitlink is denied" "git rm -- vendor/submodule"
+expect_git_rm_block_unchanged "absolute path is denied" "git rm -- $git_rm_repo/owned.txt"
+expect_git_rm_block_unchanged "dot-relative path is denied" "git rm -- ./owned.txt"
+expect_git_rm_block_unchanged "parent traversal is denied" "git rm -- ../owned.txt"
+expect_git_rm_block_unchanged "pathspec magic is denied" "git rm -- :(literal)owned.txt"
+expect_git_rm_block_unchanged "glob expansion is denied" "git rm -- '*.txt'"
+expect_git_rm_block_unchanged "recursive deletion is denied despite exact Shell allowlist" "git rm -r -- dir"
+expect_git_rm_block_unchanged "forced deletion is denied despite exact Shell allowlist" "git rm -f -- owned.txt"
+expect_git_rm_block_unchanged "cached-only deletion is denied despite exact Shell allowlist" "git rm --cached -- owned.txt"
+expect_git_rm_block_unchanged "multiple paths are denied despite exact Shell allowlist" "git rm -- owned.txt outside.txt"
+expect_git_rm_block_unchanged "absolute git executable is denied despite exact Shell allowlist" "/usr/bin/git rm -- owned.txt"
+expect_git_rm_block_unchanged "git -C is denied despite exact Shell allowlist" "git -C . rm -- owned.txt"
+expect_git_rm_block_unchanged "compound cd and git rm is denied despite exact Shell allowlist" "cd . && git rm -- owned.txt"
+expect_git_rm_block_unchanged "piped git rm is denied" "git rm -- owned.txt | cat"
+expect_git_rm_block_unchanged "redirected git rm is denied" "git rm -- owned.txt > /tmp/git-rm-fixture.out"
+git_rm_multiline=$(printf 'git rm -- owned.txt\ngit status --short')
+expect_git_rm_block_unchanged "multiline git rm is denied" "$git_rm_multiline"
+expect_git_rm_block_unchanged "sh -c cannot hide git rm behind exact Shell authority" "sh -c 'git rm -- outside.txt'"
+expect_git_rm_block_unchanged "bash -lc cannot hide git rm behind exact Shell authority" "bash -lc 'git rm -- outside.txt'"
+expect_git_rm_block_unchanged "eval cannot hide git rm behind exact Shell authority" "eval 'git rm -- outside.txt'"
+expect_git_rm_block_unchanged "command sh -c cannot hide git rm behind exact Shell authority" "command sh -c 'git rm -- outside.txt'"
+expect_git_rm_block_unchanged "command substitution cannot hide git rm behind exact Shell authority" 'echo $(git rm -- outside.txt)'
+expect_git_rm_block_unchanged "command substitution cannot synthesize a git executable under exact Shell authority" '$(printf git) rm -- outside.txt'
+expect_git_rm_block_unchanged "variable expansion cannot synthesize a git executable under exact Shell authority" 'g=git; $g rm -- outside.txt'
+expect_git_rm_block_unchanged "inline Git alias cannot synthesize git rm under exact Shell authority" "git -c alias.x=rm x -- outside.txt"
+expect_git_rm_block_unchanged "case-insensitive inline Git alias cannot synthesize git rm" "git -c ALIAS.x=rm x -- outside.txt"
+expect_git_rm_block_unchanged "Git config environment cannot synthesize git rm" "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=rm git x -- outside.txt"
+expect_git_rm_block_unchanged "deeply nested sh -c fails closed at the recursion cap" "$git_rm_deep_wrapper"
+expect_block "remote ref deletion is not confused with tracked-file deletion" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "git push origin :feat/x"
+
+positive_before=$(git_rm_state)
+positive_output=$(git_rm_hook "$git_rm_repo" "$git_rm_auth" "$git_rm_receipt" "$git_rm_receipt_sha" "git rm -- owned.txt")
+if [ -z "$positive_output" ]; then
+  git -C "$git_rm_repo" rm -- owned.txt >/dev/null
+fi
+positive_after=$(git_rm_state)
+if [ -z "$positive_output" ] && [ "$positive_before" != "$positive_after" ] && \
+   [ ! -e "$git_rm_repo/owned.txt" ] && git -C "$git_rm_repo" diff --cached --name-status | grep -qF $'D\towned.txt'; then
+  ok "authorized git rm changes only the exact tracked fixture"
+else
+  printf 'output=%s\n' "$positive_output" >&2
+  not_ok "authorized git rm changes only the exact tracked fixture"
+fi
+
 expect_allow "git rebase onto integration base is allowed" \
   hook "$deny_auth" "git rebase origin/main"
 expect_allow "git fetch then rebase chain is allowed" \
@@ -593,6 +815,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --require-verification \
   --allow-install-command "npm ci" \
   --install-authorization-source "项目锁文件验证流程明确授权" \
+  --allow-paths "base.txt" \
   --git-expected-name "Test" \
   --git-expected-email "test@example.invalid" \
   --git-integration-base "origin/main" \
@@ -625,6 +848,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
       and (.authorized_commands == ["npm ci"])
       and (.allowed_shell_commands | index("pwd") != null)
       and (.allowed_shell_commands | index($verify) != null)
+      and .allowed_write_paths == ["base.txt"]
       and .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
     ' "$auth_file" >/dev/null; then
     ok "spawn writes exact verification command into authorization snapshot"
@@ -639,6 +863,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   if jq -e --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" '
       .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
       and (.execution_authority.allowed_shell_commands | index($verify) != null)
+      and .execution_authority.allowed_write_paths == ["base.txt"]
     ' "$metadata_file" >/dev/null; then
     ok "metadata preserves verification source, requirement and exact Shell authority"
   else
@@ -681,14 +906,19 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
     not_ok "metadata exposes a valid PM authority receipt path"
   fi
   if [ -f "$receipt_file" ] && [[ "$receipt_file" != "$worktree"/* ]] && \
-     jq -e --arg digest "$(jq -r '.execution_authority.authority_receipt_sha256' "$metadata_file")" \
+     jq -e --arg receipt_digest "$(jq -r '.execution_authority.authority_receipt_sha256' "$metadata_file")" \
+       --arg actual_receipt_digest "$(shasum -a 256 "$receipt_file" | awk '{print $1}')" \
+       --arg authorization_digest "$(jq -r '.execution_authority.authorization_snapshot_sha256' "$metadata_file")" \
        --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" \
-       '.authorization_sha256 == $digest and .install_guard_mode == "hook"
+       '.authorization_sha256 == $authorization_digest
+        and $receipt_digest == $actual_receipt_digest
+        and .install_guard_mode == "hook"
         and .verification == {required:true,source:"cli:--verify-cmd",commands:[$verify]}
-        and (.authorization_snapshot.allowed_shell_commands | index($verify) != null)' "$receipt_file" >/dev/null; then
-    ok "PM receipt preserves exact verification authority outside worker worktree"
+        and (.authorization_snapshot.allowed_shell_commands | index($verify) != null)
+        and .authorization_snapshot.allowed_write_paths == ["base.txt"]' "$receipt_file" >/dev/null; then
+    ok "PM receipt preserves exact verification and deletion authority outside worker worktree"
   else
-    not_ok "PM receipt preserves exact verification authority outside worker worktree"
+    not_ok "PM receipt preserves exact verification and deletion authority outside worker worktree"
   fi
   if ! attestation_file=$(jq -er '.execution_authority.guard_attestation_file | select(type == "string" and length > 0)' "$metadata_file"); then
     attestation_file=""

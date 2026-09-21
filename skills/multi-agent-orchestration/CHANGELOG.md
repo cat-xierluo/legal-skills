@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.27.6] - 2026-09-21
+
+### 新增
+
+- 新增 receipt 绑定的 tracked 文件删除权限：spawn 在任何资源副作用前把任务显式 `--allow-paths` 冻结为独立 `allowed_write_paths`，同时写入 worker authorization snapshot、Git common-dir PM authority receipt 与 METADATA；reviewer 后续合成的 Session Context scope 不会泄漏为删除权限。
+- `dependency-install-guard.py` 新增先于普通 Shell allowlist 的 `git rm` 高风险分类，只允许在 receipt 绑定的 worktree 根与分支上执行 `git rm -- <一个 canonical repo-relative tracked file>`。路径必须与冻结数组精确相等，index 中必须是唯一 stage-0 普通文件或符号链接；scope glob、`reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开、绝对路径、`git -C`、pipe/redirect/多行与其他复合形式均不能扩权。
+- 将 authorization snapshot SHA-256 与真实 PM receipt 内容 SHA-256 分开记录；METADATA 不再把前者误标为 receipt hash，worker 启动门禁还会复核 receipt 在写入后、hook 启动前没有漂移。
+
+### 改进
+
+- Worker prompt 与 supervised Task 前缀要求逐字执行冻结的 verification command，不得自行添加 `export/env/cd`、flags、命令替换、pipe/redirect 或多行包装；命令不适用时请求 PM 修正权限。
+- 明确 `prompt_only_degraded` 的 Codex/ZCode 没有机械删除保护：高风险删除必须改用 hook-enabled backend，或由 PM 核对 receipt、路径与索引后执行，不得仅凭提示宣称已强制。
+- metadata 数组序列化兼容 macOS Bash 3.2 的空 indexed array + `set -u` 行为，避免空删除范围在写 METADATA 时误报 unbound variable。
+
+### 验证
+
+- `test-dependency-install-guard.sh` 在 Homebrew Bash 与 macOS `/bin/bash` 3.2 均为 170/170，覆盖普通文件、符号链接、worktree 已缺失但 index 仍跟踪的文件，以及无范围、receipt hash/worktree/branch 漂移、untracked、范围外、`#` 路径、glob、目录、gitlink、pathspec、flags、多路径、绝对 git、`git -C`、shell/eval 包装（含递归深度上限失败关闭）、动态 executable、inline Git alias、复合/pipe/redirect/multiline 与拒绝前后 index/worktree 不变。
+- `test-spawn-worker-metadata.sh` 在两套 Bash 均为 31/31；`test_worker_delivery_prompt.py` 为 9/9；Python 编译检查通过。
+
 ## [2.27.5] - 2026-09-21
 
 ### 修复
