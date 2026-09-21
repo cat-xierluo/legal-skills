@@ -18,24 +18,12 @@
 
 ## 当前执行顺序与波次
 
-1. 可靠性波次：`WORKERLIST-PAGINATION-CLEANUP` → `GIT-RM-AUTHORITY`。两项虽然代码边界不同，但会共享版本、CHANGELOG、README 和维护矩阵，按独立 PR 串行合入。
+1. 可靠性下一项：`GIT-RM-AUTHORITY`。从最新 `origin/main` 新建独立 PR，不复用已完成的 WorkerList 候选身份。
 2. 通信能力波次：`ORCA-CROSS-PM-HANDOFF` 重新规划并交付 → `ORCA-PEER-COMMS` → `ORCA-COMMS-E2E`。后两项保持依赖阻塞，不提前实现。
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
 独立维护池另有 `HERMES-BASH-VERSION-GATE` 可领取；它只增加入口版本诊断，不得顺带处理首次 trust/MCP 交互或 GitHub merge 恢复。
-
-## TASK-2026-09-13-WORKERLIST-PAGINATION-CLEANUP — 精确查询目标 Dispatch
-
-- 状态：`IN_PROGRESS`；优先级：`P1`；类型：`bugfix`；Owner：当前 Codex 会话。
-- 候选：分支 `codex/mao-workerlist-cleanup`；冻结起点 `57b41aebfb74ab253217f5021562f39c4e56ce18`；生命周期 `ephemeral-worker`；integration base `origin/main`。
-- 问题：`clean-worktree.sh` 无 `--run`、无翻页地读取 `worker-list` 默认第一页；历史 worker 较多时目标 Dispatch 落在后页，被误判为 `terminal_state=unknown` 并拒绝清理。
-- 已核基线：当前 Orca CLI 的 `worker-list` 明确支持 `--run`、`--cursor`、`--limit 1-100`，游标位于 `result.page.nextCursor`；本机 runtime 当前未运行，因此只把 CLI 合同与离线故障注入计为本任务证据，不冒充真实 lifecycle 验证。
-- 实施边界：必须从 `METADATA.session.orca.supervised.run_id` 取得权威 Run，使用 `worker-list --run <run> --limit 100`，并按 opaque `result.page.nextCursor` 有界翻页直到 `hasMore=false`；禁止回退到无 `--run` 查询。缺 page、scope/run 漂移、cursor 畸形/循环、页数超限、目标缺失或重复均失败关闭；不得放宽 retained/external、handle、Dispatch、terminal 或 owner 判定。
-- 允许范围：`scripts/orca-runtime.sh`、`clean-worktree.sh`、`post-merge-cleanup.sh`、`pm-cleanup-worker.sh`、`pm-orchestrate.sh`、对应定向测试、`references/19-maintainer-validation.md`、必要的 `SKILL.md`/`CHANGELOG.md`/README 版本同步和本任务卡。
-- 验收：覆盖目标在第一页、后续页、不存在、重复 Dispatch、cursor 畸形/循环、Orca 读取失败；查询预检失败或身份不唯一时保持零 `worker-release`、零 terminal mutation、零删除。运行受影响测试和维护矩阵。
-- 定向验证：`bash scripts/test-clean-worktree-worker-list.sh`、`bash scripts/smoke-orca-control-plane.sh`、`bash scripts/test-post-merge-cleanup.sh`、`bash scripts/test-pm-cleanup-worker.sh`，随后执行 `references/19-maintainer-validation.md` 完整矩阵。
-- 非目标：不顺带重写生命周期、自动清理 unknown worker 或批量扫描其他 Worktree。
 
 ## TASK-2026-09-14-GIT-RM-AUTHORITY — 明确 tracked 文件删除权限
 
@@ -126,6 +114,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 | 任务 | 状态 | 不可变证据 |
 |---|---|---|
+| WorkerList 精确分页清理 | `COMPLETE` | PR #178；实现 commit `83488cdddc6606e9b772007452420cc1dd81734e`；独立 review `APPROVE`；维护矩阵 143 命令通过，Bash 5.3 / 3.2 专项各 211/211；真实 online lifecycle 仍为 `NOT_VERIFIED` |
 | Completion Authority 收口 | `COMPLETE` | PR #145，merge `c7501e99` |
 | ZCode driver safety 基础 | `COMPLETE` | PR #147，merge `f763d3dc`；RuntimeAdapter 另卡保留 |
 | Orca Setup 安装策略 | `COMPLETE` | PR #151，merge `b368d62d` |
