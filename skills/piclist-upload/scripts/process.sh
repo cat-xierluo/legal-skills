@@ -109,6 +109,12 @@ delete_local_image() {
     if [ "$KEEP_LOCAL" = true ]; then
         return 0
     fi
+    # Without --in-place the rewritten markdown only goes to stdout, so the
+    # upload URL is not persisted anywhere: deleting the local image would
+    # destroy the only copy. Keep it; use --keep-local/--in-place explicitly.
+    if [ "$IN_PLACE" = false ]; then
+        return 0
+    fi
 
     if [ -f "$image_path" ]; then
         local dir_path
@@ -119,6 +125,18 @@ delete_local_image() {
             DELETED_DIRS="${DELETED_DIRS:+$DELETED_DIRS$'\n'}$dir_path"
         fi
     fi
+}
+
+# Write content back to the md file atomically (tmp + mv), bash 3.2 safe.
+# Called after EVERY successful upload so an interrupted run (timeout, crash,
+# Ctrl-C) never leaves images deleted on disk while their URLs exist only in
+# memory: the md on disk always reflects every upload already performed.
+flush_content() {
+    local md_file="$1"
+    local content="$2"
+    local temp_file="${md_file}.tmp"
+    printf '%s\n' "$content" > "$temp_file"
+    mv "$temp_file" "$md_file"
 }
 
 # Function to process a single markdown file
@@ -226,6 +244,16 @@ process_markdown_file() {
             if ! printf '%s\n' "$uploaded_paths" | grep -Fxq -- "$full_path"; then
                 uploaded_paths="${uploaded_paths:+$uploaded_paths$'\n'}$full_path"
                 uploaded_urls="${uploaded_urls:+$uploaded_urls$'\n'}$new_url"
+            fi
+
+            # Persist the rewritten content BEFORE deleting the local file, so
+            # an interruption between these two steps can at worst leave a
+            # local file whose URL is already recorded (re-run re-uploads it),
+            # never a deleted file with an unrecoverable URL.
+            # Only in --in-place mode; without it the file must stay untouched
+            # (final content is echoed to stdout as before).
+            if [ "$IN_PLACE" = true ]; then
+                flush_content "$md_file" "$content"
             fi
 
             # Delete local file immediately after successful upload
