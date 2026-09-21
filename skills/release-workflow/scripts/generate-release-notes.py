@@ -28,7 +28,9 @@
 行为:
   1. 从 projects.yaml 读项目级 notes: 配置(如有)
   2. 从 README 提取最近更新表格(按 source_marker 定位)
-  3. 拼装结构化 release notes
+  3. 确定本版 skill 总数:OUTPUT_DIR(默认 pack-skills/)下的 zip 数 >
+     README badge(Skills-<数字>)> 最近更新条数(兜底)
+  4. 拼装结构化 release notes
 
 依赖:仅 Python 3 标准库(解析 YAML 用内置正则简化,如需完整 YAML 可加 PyYAML)。
 """
@@ -226,6 +228,17 @@ def extract_skill_count(readme_text: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def count_built_zips(output_dir: Path) -> int:
+    """数构建产物目录下的 zip 数量(本版 skill 总数的准确来源)
+
+    release.yml 中 build-zips.sh 先于本脚本执行,pack-skills/ 必然存在;
+    本地单独运行(无产物)时返回 0,由调用方回退到 README badge。
+    """
+    if not output_dir.is_dir():
+        return 0
+    return sum(1 for p in output_dir.iterdir() if p.is_file() and p.suffix == ".zip")
+
+
 def render_body(
     repo: str,
     tag: str,
@@ -353,11 +366,19 @@ def main() -> int:
 
     readme_text = readme_path.read_text()
     recent = extract_recent_updates(readme_text, source_marker, top_n)
-    skill_count = extract_skill_count(readme_text)
+    # 总数取值优先级:构建产物 zip 数(准确)> README badge(历史路径)> recent 条数(兜底)。
+    # 不能直接用 recent 条数——top_n 截断后远小于实际发布数
+    # (v2026.09.21 曾因此把 64 个 skill 误写成 5 个)。
+    pack_dir = Path(os.environ.get("OUTPUT_DIR", "pack-skills"))
+    skill_count = count_built_zips(pack_dir) or extract_skill_count(readme_text)
     body = render_body(repo, tag, recent, skill_count, notes_cfg)
 
     output_path.write_text(body)
-    print(f"✅ release notes 已生成:{output_path} (top {len(recent)} 条最近更新, project={project_key or '(default)'})")
+    print(
+        f"✅ release notes 已生成:{output_path} "
+        f"(本版共 {skill_count or len(recent)} 个 {notes_cfg.get('project_label') or repo.split('/')[-1]}, "
+        f"top {len(recent)} 条最近更新, project={project_key or '(default)'})"
+    )
     return 0
 
 

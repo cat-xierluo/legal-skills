@@ -46,3 +46,33 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             pack-skills/*.zip
+
+      # README 回写内嵌在本 workflow,不依赖 on:release 事件——
+      # GITHUB_TOKEN 创建的 Release 不会级联触发其他 workflow(GitHub 防递归机制),
+      # update-readme.yml 的 release:published 触发因此从未生效
+      - name: Checkout main for README sync
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-tree
+
+      - name: Sync README download links
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 skills/release-workflow/scripts/update-readme.py \
+            "${{ github.repository }}" \
+            main-tree/README.md
+
+      - name: Commit README (if changed)
+        run: |
+          cd main-tree
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet README.md; then
+            echo "README 无变更"
+          else
+            git add README.md
+            git commit -m "docs: 同步 README 下载链接到最新 release"
+            git push
+          fi

@@ -177,9 +177,10 @@ publish job 失败：
 1. 读 `projects.yaml` 的 `<project-key>` 条目,获取 `skills_root`、`output_dir`、`exclude_globs`
 2. 跑 `build-zips.sh <tag>` 生成 `<output_dir>/<item>-<semver>.zip`
 3. 打 tag、推 tag
-4. GitHub Actions 自动:上传 zip + 触发 update-readme.yml
-5. update-readme.yml 调 GitHub API 拿 assets 列表,替换 README 里的占位 URL
-6. 验证 release 页 assets 数量 = 期望子项目数
+4. GitHub Actions(release.yml)自动:上传 zip + 生成 Release Notes + **内嵌 README 回写**(checkout main → 调 `scripts/update-readme.py` 替换下载链接 → commit + push)
+5. 验证 release 页 assets 数量 = 期望子项目数;Release Notes 里的 skill 总数应等于 zip 数(取自产物目录,不再依赖 README badge)
+
+> README 回写不依赖 `on: release` 事件——GITHUB_TOKEN 创建的 Release 受 GitHub 防递归机制限制,不会级联触发其他 workflow(实际从未生效过)。`update-readme.yml` 仅作 `workflow_dispatch` 手动兜底,与 release.yml 调用同一份 `scripts/update-readme.py`,不存在第二份逻辑。
 
 不要用于:单应用桌面/CLI/Web 项目(用模式 A 上文 7 步流程)、跨仓库分发(用 subtree-publish skill)。
 
