@@ -28,7 +28,7 @@ allowed = {
  ("orchestration", "check"): {"--wait", "--types", "--timeout-ms", "--ack", "--terminal", "--json"},
  ("orchestration", "worker-release"): {"--dispatch", "--json"},
  ("orchestration", "worker-retain"): {"--dispatch", "--json"},
- ("orchestration", "worker-list"): {"--run", "--json"},
+ ("orchestration", "worker-list"): {"--run", "--limit", "--cursor", "--json"},
  ("orchestration", "worker-read"): {"--dispatch", "--limit", "--cursor", "--json"},
  ("orchestration", "worker-show"): {"--dispatch", "--json"},
  ("orchestration", "task-create"): {"--spec", "--task-title", "--run", "--from", "--json"},
@@ -75,7 +75,17 @@ elif command[1] == "run-current":
 elif command[1] == "task-create":
     response["result"] = {"task": {"id": "task-new"}}
 elif command[1] == "worker-list":
-    response["result"] = {"workers": [{"dispatch_id": "ctx-test", "terminal_state": "retained"}]}
+    if config.get("worker_list_invalid"):
+        response["result"] = {"workers": []}
+    else:
+        response["result"] = {
+            "scope": {"source": "flag", "runId": flags["--run"]},
+            "workers": [{"dispatchId": "ctx-test", "runId": flags["--run"],
+                         **({} if config.get("worker_terminal_state_missing")
+                            else {"terminalState": "retained"})}],
+            "page": {"limit": int(flags["--limit"]), "total": 1,
+                     "hasMore": False, "nextCursor": None},
+        }
 elif command[1] == "worker-show":
     response["result"] = {
         "dispatch": {"id": "ctx-test", "task_id": "task-test", "run_id": "run-test",
@@ -192,9 +202,36 @@ class SenderBindingTest(unittest.TestCase):
         self.save_metadata()
         result = self.pm("release")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls()[-1], ["orchestration", "worker-list", "--run", "run-test", "--json"])
+        self.assertEqual(self.calls()[-1], ["orchestration", "worker-list", "--run", "run-test",
+                                            "--limit", "100", "--json"])
         self.assertEqual(lease.read_text(), "preserve\n")
         print("SENDER_ACCOUNTING_SCOPE: " + json.dumps(self.calls()[-1]))
+
+    def test_accounting_failure_is_nonzero_and_preserves_provider_lease(self):
+        lease = self.root / "lease-invalid.json"
+        lease.write_text("preserve\n")
+        self.data["runtime"] = {"provider_lease": {"file": str(lease)}}
+        self.save_metadata()
+        config = json.loads((self.root / "config.json").read_text())
+        config["worker_list_invalid"] = True
+        (self.root / "config.json").write_text(json.dumps(config))
+        result = self.pm("release")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("PM_ORCHESTRATE_PROVIDER_LEASE_RETAINED", result.stderr)
+        self.assertEqual(lease.read_text(), "preserve\n")
+
+    def test_unknown_terminal_accounting_is_nonzero_and_preserves_provider_lease(self):
+        lease = self.root / "lease-unknown.json"
+        lease.write_text("preserve\n")
+        self.data["runtime"] = {"provider_lease": {"file": str(lease)}}
+        self.save_metadata()
+        config = json.loads((self.root / "config.json").read_text())
+        config["worker_terminal_state_missing"] = True
+        (self.root / "config.json").write_text(json.dumps(config))
+        result = self.pm("release")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("accounting is not proven", result.stderr)
+        self.assertEqual(lease.read_text(), "preserve\n")
 
     def test_recorded_sender_wins_over_wrong_environment(self):
         before = self.metadata.read_bytes()
