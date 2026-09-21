@@ -4,7 +4,7 @@
 #
 # 覆盖场景（对应任务合同）：
 #   1. 即时安全清理：dry-run 计划（Case 1）/ execute 全链路（Case 2）/ supervised
-#      released + 存活 tmux 的 release→kill→rm 顺序（Case 3）
+#      released + 存活 tmux 的 exact-list→kill→rm 顺序（Case 3）
 #   2. 开放 child PR 阻止删除（Case 4）
 #   3. 长期集成/默认分支阻止（Case 5：main、--protected-branch 模式、--base 自身）
 #   4. dirty worktree 阻止（Case 6）
@@ -152,7 +152,7 @@ SH
   : > "$WORLD/git.log"
   # 用例间通过函数前缀赋值传递的环境必须清零，避免向后续用例泄漏状态。
   unset FAKE_TMUX_ALIVE FAKE_GIT_PUSH_DELETE_MODE FAKE_ORCA_TERMINAL_STATE \
-    FAKE_ORCA_DISPATCH FAKE_GH_MERGED_FAIL FAKE_GH_OPEN_FAIL ORCA_CLI_CMD
+    FAKE_ORCA_DISPATCH FAKE_ORCA_RUN FAKE_GH_MERGED_FAIL FAKE_GH_OPEN_FAIL ORCA_CLI_CMD
 
   cat > "$BIN/orca" <<'SH'
 #!/usr/bin/env bash
@@ -163,11 +163,11 @@ set -euo pipefail
 } >> "${FAKE_ORCA_LOG:?}"
 case "$1 $2" in
   "orchestration worker-list")
-    printf '{"ok":true,"result":{"workers":[{"dispatch_id":"%s","terminal_state":"%s","worker_state":"succeeded","dispatch_status":"completed"}]}}' \
-      "${FAKE_ORCA_DISPATCH:-ctx-1}" "${FAKE_ORCA_TERMINAL_STATE:-released}"
+    printf '{"ok":true,"result":{"scope":{"source":"flag","runId":"%s"},"workers":[{"dispatchId":"%s","runId":"%s","terminalState":"%s","workerState":"succeeded","dispatchStatus":"completed"}],"page":{"limit":100,"total":1,"hasMore":false,"nextCursor":null}}}' \
+      "${FAKE_ORCA_RUN:-run-1}" "${FAKE_ORCA_DISPATCH:-ctx-1}" "${FAKE_ORCA_RUN:-run-1}" "${FAKE_ORCA_TERMINAL_STATE:-released}"
     ;;
   "orchestration worker-release")
-    printf '{"ok":true,"result":{"release":{"dispatch_id":"%s"}}}\n' "${FAKE_ORCA_DISPATCH:-ctx-1}"
+    printf '{"ok":true,"result":{"release":{"dispatchId":"%s"}}}\n' "${FAKE_ORCA_DISPATCH:-ctx-1}"
     ;;
   *)
     echo '{"ok":true,"result":{}}'
@@ -221,6 +221,7 @@ run_helper() {
     FAKE_ORCA_LOG="$WORLD/orca.log" \
     FAKE_ORCA_TERMINAL_STATE="${FAKE_ORCA_TERMINAL_STATE:-released}" \
     FAKE_ORCA_DISPATCH="${FAKE_ORCA_DISPATCH:-ctx-1}" \
+    FAKE_ORCA_RUN="${FAKE_ORCA_RUN:-run-1}" \
     PATH="$BIN:$PATH" \
     bash "$HELPER" --project "$PROJECT" --branch "$BRANCH" --session "$SESSION" "$@"
   ) > "$OUT" 2> "$ERR"
@@ -260,11 +261,11 @@ assert_contains "POST_MERGE_CLEANUP_RESULT: CLEANED" "$OUT" "result receipt"
 git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH" && bad "local branch residue" || ok "local branch absent"
 assert_remote_branch_absent "$BRANCH"
 
-echo "Case 3: supervised released dispatch is released first, then cleaned"
+echo "Case 3: supervised released dispatch is verified exactly, then cleaned"
 build_world
 make_worker feat/supervised worker-s
 write_metadata <<JSON
-{"session":{"id":"worker-s","orca":{"worktree_id":"repo::wt1","terminal_handle":"term-x","mode":"orca","supervised":{"dispatch_id":"ctx-1"}}},"runtime":{"worker_backend":"codex","provider_lease":{"file":""}}}
+{"session":{"id":"worker-s","orca":{"worktree_id":"repo::wt1","terminal_handle":"term-x","mode":"orca","supervised":{"run_id":"run-1","dispatch_id":"ctx-1"}}},"runtime":{"worker_backend":"codex","provider_lease":{"file":""}}}
 JSON
 set_merged_pr "$TIP"
 ORCA_CLI_CMD="$BIN/orca" FAKE_TMUX_ALIVE=1 run_helper
@@ -276,10 +277,11 @@ assert_contains "terminal=released" "$OUT" "released accounting surfaced in dry-
 rm -f "$WORLD/tmux-dead"
 ORCA_CLI_CMD="$BIN/orca" FAKE_TMUX_ALIVE=1 run_helper --execute
 assert_eq "$HELPER_RC" "0" "supervised execute exits 0"
-assert_contains "orchestration worker-release" "$WORLD/orca.log" "worker released before filesystem cleanup"
-release_line=$(grep -n 'orchestration worker-release' "$WORLD/orca.log" | head -1 | cut -d: -f1)
+assert_not_contains "orchestration worker-release" "$WORLD/orca.log" "released worker is not released again"
+assert_contains "orchestration worker-list --run run-1 --limit 100 --json" "$WORLD/orca.log" "exact run-scoped WorkerList preflight executed"
+list_line=$(grep -n 'orchestration worker-list' "$WORLD/orca.log" | head -1 | cut -d: -f1)
 rm_line=$(grep -n '^worktree rm' "$WORLD/orca.log" | head -1 | cut -d: -f1)
-if [ -n "$rm_line" ] && [ "$release_line" -lt "$rm_line" ]; then ok "release happens before worktree rm"; else bad "release ordering broken (release=$release_line rm=$rm_line)"; fi
+if [ -n "$rm_line" ] && [ "$list_line" -lt "$rm_line" ]; then ok "exact accounting happens before worktree rm"; else bad "accounting ordering broken (list=$list_line rm=$rm_line)"; fi
 assert_contains "kill-session" "$WORLD/tmux.log" "tmux session killed after accounting released"
 assert_contains "POST_MERGE_CLEANUP_DONE" "$OUT" "supervised cleanup completed"
 [ ! -d "$WT" ] && ok "supervised worktree removed" || bad "supervised worktree still present"
@@ -342,7 +344,7 @@ echo "Case 7: active and release_pending accounting refuse filesystem cleanup"
 build_world
 make_worker feat/active worker-p
 write_metadata <<JSON
-{"session":{"id":"worker-p","orca":{"worktree_id":"repo::wt2","terminal_handle":"term-y","supervised":{"dispatch_id":"ctx-1"}}},"runtime":{"provider_lease":{"file":""}}}
+{"session":{"id":"worker-p","orca":{"worktree_id":"repo::wt2","terminal_handle":"term-y","supervised":{"run_id":"run-1","dispatch_id":"ctx-1"}}},"runtime":{"provider_lease":{"file":""}}}
 JSON
 set_merged_pr "$TIP"
 ORCA_CLI_CMD="$BIN/orca" FAKE_ORCA_TERMINAL_STATE=active run_helper --execute
@@ -354,7 +356,7 @@ if grep -q 'orchestration worker-release' "$WORLD/orca.log"; then bad "active wo
 build_world
 make_worker feat/pending worker-q
 write_metadata <<JSON
-{"session":{"id":"worker-q","orca":{"worktree_id":"repo::wt3","terminal_handle":"term-z","supervised":{"dispatch_id":"ctx-2"}}},"runtime":{"provider_lease":{"file":""}}}
+{"session":{"id":"worker-q","orca":{"worktree_id":"repo::wt3","terminal_handle":"term-z","supervised":{"run_id":"run-1","dispatch_id":"ctx-2"}}},"runtime":{"provider_lease":{"file":""}}}
 JSON
 set_merged_pr "$TIP"
 ORCA_CLI_CMD="$BIN/orca" FAKE_ORCA_DISPATCH=ctx-2 FAKE_ORCA_TERMINAL_STATE=release_pending run_helper --execute
