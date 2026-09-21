@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.4 | **维护上下文与回归收口**：任务/决策源改为随 Skill 跟踪，合并状态、依赖和接手合同不再只留在单一会话；修复 reauthorize 授权回执兼容、全角括号邻接变量与内存预算 opt-out 回归；补齐隔离测试和 Orca/ZCode 读取路由。 |
+| 2026-09-21 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.5 | **WorkerList 精确分页清理**：supervised 清理绑定 metadata Run 并遍历全部 cursor，目标缺失、重复、跨 Run 或响应异常时在 release、terminal、worktree 与分支 mutation 前失败关闭；同步整理任务波次、权限设计和可接手上下文。 |
 | 2026-09-20 | 更新 | [moot-court](skills/moot-court/) | v1.2.1 | **Runtime 分级验证门禁**：按命令入口、模型、子任务、落盘、四发言短闭环和完整民事流程逐级验收；Claude Code短闭环实测通过但有语义发现，完整候选仍待验证；WorkBuddy、千问办公等办公类Agent列入后续实测。 |
 | 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
 | 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
@@ -654,8 +654,8 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.27.4</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/multi-agent-orchestration-2.27.4.zip">下载 v1.20.5</a></td>
+<td style="text-align:center">v2.27.5</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/multi-agent-orchestration-2.27.4.zip">下载 v2.27.4</a></td>
 <td></td>
 </tr>
 <tr>

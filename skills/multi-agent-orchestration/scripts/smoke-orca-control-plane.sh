@@ -43,7 +43,17 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$ORCA_FAKE_LOG"
 case "$1 $2" in
   "status --json") printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-smoke"}}}' ;;
-  "terminal show") jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:true,writable:true,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-smoke"}}' ;;
+  "terminal show")
+    if [ -n "${ORCA_FAKE_CLOSED_FILE:-}" ] && [ -f "$ORCA_FAKE_CLOSED_FILE" ]; then
+      jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:false,writable:false,orphaned:false,exitCause:{kind:"operator_close"}}},_meta:{runtimeId:"runtime-smoke"}}'
+    else
+      jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:true,writable:true,orphaned:false,exitCause:null}},_meta:{runtimeId:"runtime-smoke"}}'
+    fi
+    ;;
+  "terminal close")
+    [ -n "${ORCA_FAKE_CLOSED_FILE:-}" ] && : > "$ORCA_FAKE_CLOSED_FILE"
+    jq -cn --arg sender "$4" '{ok:true,result:{terminal:{handle:$sender,connected:false,writable:false}},_meta:{runtimeId:"runtime-smoke"}}'
+    ;;
   "worktree show")
     if [ "${ORCA_FAKE_WORKTREE_MODE:-ok}" = "malformed" ]; then
       printf '%s\n' '{"ok":true,"result":{"worktree":{"id":null}}}'
@@ -68,7 +78,7 @@ case "$1 $2" in
       printf '%s\n' '{"ok":true,"result":{"runId":"run_test","deliveryId":null,"count":0,"messages":[]}}'
     fi
     ;;
-  "orchestration worker-list") printf '%s\n' "{\"ok\":true,\"result\":{\"workers\":[{\"dispatch_id\":\"ctx_external\",\"worker_state\":\"succeeded\",\"dispatch_status\":\"completed\",\"terminal_state\":\"retained\",\"agentTerminalHandle\":\"${ORCA_FAKE_RESOURCE_HANDLE:-term_external}\",\"resource\":{\"ownershipState\":\"external\",\"retainedReason\":\"external_terminal\"}}]}}" ;;
+  "orchestration worker-list") printf '%s\n' "{\"ok\":true,\"result\":{\"scope\":{\"source\":\"flag\",\"runId\":\"run_external\"},\"workers\":[{\"dispatchId\":\"ctx_external\",\"runId\":\"run_external\",\"workerState\":\"succeeded\",\"dispatchStatus\":\"completed\",\"terminalState\":\"retained\",\"agentTerminalHandle\":\"${ORCA_FAKE_RESOURCE_HANDLE:-term_external}\",\"resource\":{\"ownershipState\":\"external\",\"retainedReason\":\"external_terminal\"}}],\"page\":{\"limit\":100,\"total\":1,\"hasMore\":false,\"nextCursor\":null}}}" ;;
   "terminal read") printf '%s\n' '{"ok":true,"result":{"terminal":{"nextCursor":"terminal_cursor_2","tail":[]}}}' ;;
   *) printf '%s\n' '{"ok":true,"result":{}}' ;;
 esac
@@ -172,13 +182,15 @@ git -C "$clean_repo" branch -M main
 git -C "$clean_repo" worktree add -q -b feat/clean-worker "$clean_wt" main
 mkdir -p "$clean_wt/.claude/agent-sessions/$clean_session"
 cat > "$clean_wt/.claude/agent-sessions/$clean_session/METADATA.json" <<'JSON'
-{"base_ref":"main","session":{"orca":{"mode":"auto","worktree_id":"repo::clean","terminal_handle":"term_external","supervised":{"dispatch_id":"ctx_external","terminal_ownership":"external"}}}}
+{"base_ref":"main","session":{"orca":{"mode":"auto","worktree_id":"repo::clean","terminal_handle":"term_external","supervised":{"run_id":"run_external","dispatch_id":"ctx_external","terminal_ownership":"external"}}}}
 JSON
 : > "$FAKE_LOG"
-ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" \
+closed_file="$TMP_ROOT/closed-terminal"
+ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" ORCA_FAKE_CLOSED_FILE="$closed_file" \
   bash "$SCRIPT_DIR/clean-worktree.sh" --project "$clean_repo" \
   --branch feat/clean-worker --session "$clean_session" --execute >/dev/null
-assert_log_contains 'orchestration worker-release --dispatch ctx_external --json'
+assert_log_contains 'orchestration worker-list --run run_external --limit 100 --json'
+assert_log_not_contains 'orchestration worker-release --dispatch ctx_external --json'
 assert_log_contains 'terminal close --terminal term_external --json'
 assert_log_contains 'worktree rm --worktree id:repo::clean --force --json'
 
@@ -188,7 +200,7 @@ bad_session="bad-clean-worker"
 git -C "$clean_repo" worktree add -q -b feat/bad-clean-worker "$bad_wt" main
 mkdir -p "$bad_wt/.claude/agent-sessions/$bad_session"
 cat > "$bad_wt/.claude/agent-sessions/$bad_session/METADATA.json" <<'JSON'
-{"base_ref":"main","session":{"orca":{"mode":"auto","worktree_id":"repo::bad-clean","terminal_handle":"term_external","supervised":{"dispatch_id":"ctx_external","terminal_ownership":"external"}}}}
+{"base_ref":"main","session":{"orca":{"mode":"auto","worktree_id":"repo::bad-clean","terminal_handle":"term_external","supervised":{"run_id":"run_external","dispatch_id":"ctx_external","terminal_ownership":"external"}}}}
 JSON
 : > "$FAKE_LOG"
 if ORCA_CLI_COMMAND="$FAKE_ORCA" ORCA_FAKE_LOG="$FAKE_LOG" ORCA_FAKE_RESOURCE_HANDLE="term_other" \

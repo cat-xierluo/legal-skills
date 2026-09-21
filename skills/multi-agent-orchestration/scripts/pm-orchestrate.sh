@@ -1405,30 +1405,35 @@ cmd_account() {
   result=$(orca_cli orchestration "worker-$COMMAND" --dispatch "$ORCA_DISPATCH_ID" --json) || return $?
   printf '%s\n' "$result"
   if [ "$COMMAND" = "release" ] && [ -n "$PROVIDER_LEASE_FILE" ]; then
-    local workers terminal_state lease_root
-    workers=$(orca_cli orchestration worker-list --run "$ORCA_RUN_ID" --json 2>/dev/null || echo '{}')
-    terminal_state=$(printf '%s' "$workers" | jq -r --arg dispatch "$ORCA_DISPATCH_ID" '
-      [(.result.workers // [])[]?
-        | select((.dispatch_id // .dispatchId // .id) == $dispatch)
-        | (.terminal_state // .terminalState // .accounting_state // .accountingState // "unknown")][0]
-      // "unknown"
-    ')
-    if [ "$terminal_state" = "released" ]; then
-      lease_root=$(provider_lease_root_for_project "$WORKTREE") || {
-        echo "ERROR: cannot derive trusted provider lease root" >&2
-        return 2
-      }
-      python3 "$SCRIPT_DIR/provider-lease.py" release \
-        --root "$lease_root" \
-        --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
-        --resource-settled --orca-cli "$ORCA_CLI_BIN" >/dev/null || {
-        echo "ERROR: Orca terminal released but provider lease release failed" >&2
-        return 2
-      }
-      echo "PM_ORCHESTRATE_PROVIDER_LEASE_RELEASED: session=$SESSION" >&2
-    else
-      echo "PM_ORCHESTRATE_PROVIDER_LEASE_RETAINED: terminal_state=$terminal_state; close/account resource before releasing quota" >&2
+    local terminal_state lease_root
+    terminal_state="unknown"
+    if orca_runtime_worker_row_exact "$ORCA_DISPATCH_ID" "$ORCA_RUN_ID"; then
+      terminal_state=$(printf '%s' "$ORCA_WORKER_ROW_JSON" | jq -r \
+        '.terminalState // .terminal_state // .accountingState // .accounting_state // "unknown"')
     fi
+    case "$terminal_state" in
+      released)
+        lease_root=$(provider_lease_root_for_project "$WORKTREE") || {
+          echo "ERROR: cannot derive trusted provider lease root" >&2
+          return 2
+        }
+        python3 "$SCRIPT_DIR/provider-lease.py" release \
+          --root "$lease_root" \
+          --lease-file "$PROVIDER_LEASE_FILE" --session "$SESSION" \
+          --resource-settled --orca-cli "$ORCA_CLI_BIN" >/dev/null || {
+          echo "ERROR: Orca terminal released but provider lease release failed" >&2
+          return 2
+        }
+        echo "PM_ORCHESTRATE_PROVIDER_LEASE_RELEASED: session=$SESSION" >&2
+        ;;
+      retained|reclaimable|release_pending|release_unknown|active)
+        echo "PM_ORCHESTRATE_PROVIDER_LEASE_RETAINED: terminal_state=$terminal_state; close/account resource before releasing quota" >&2
+        ;;
+      *)
+        echo "PM_ORCHESTRATE_PROVIDER_LEASE_RETAINED: terminal_state=$terminal_state; accounting is not proven" >&2
+        return 2
+        ;;
+    esac
   fi
 }
 
