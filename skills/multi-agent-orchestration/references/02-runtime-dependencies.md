@@ -87,11 +87,19 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 不要合并多个权威来源；CLI 与合同并存会失败关闭。合同中的 `implementation` / `reusable_verification` 自动要求非空验证命令；其他要求自验的派发传 `--require-verification`，项目也可设置 `verification.required: true`。Python 自动发现只认根 `pyproject.toml` / `requirements.txt` / `setup.py` 与根 `tests/`，固定注入 unittest discover；嵌套项目必须在 `by_worker_type` 显式声明完整命令。
 
-命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
+命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。Worker 必须逐字执行 `verification.commands[]`，不得自行添加 `export`/`env`/`cd`、flags、pipe、redirect、命令替换或多行包装。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
 
 ### 任务辅助命令
 
 已有 `--allow-shell-command '<完整精确命令>'` 可在启动前声明生成图标、转换本任务输入等辅助命令。它与验证命令列表分开，不授予安装权限，不是目录信任或通配授权。PM 核对输入、输出、工作目录与文件范围后，连同验证合同派发；Worker 以不可变授权快照为准。
+
+### tracked 文件删除权限
+
+`git rm` 不消费普通 `allowed_shell_commands`，也不能通过 `reauthorize --allow-cmd` 追认。spawn 在任何副作用前把任务显式传入的 `--allow-paths` 复制为独立 `allowed_write_paths`，写入 authorization snapshot 与 Git common-dir PM receipt；reviewer 后续生成的 Session Context scope 不会进入该快照。删除分类器先于普通精确命令白名单，只允许从 receipt 绑定的 worktree 根执行 `git rm -- <一个 canonical repo-relative tracked file>`，且路径必须与冻结数组中的一个字符串完全相等。普通 scope glob 只服务 Edit/Write，不授予删除。
+
+目标必须是 index 中唯一 stage-0 的普通文件或符号链接；目录、gitlink/submodule、未跟踪路径、`-r`、`-f`、`--cached`、多路径、pathspec magic、Shell 展开、绝对/遍历路径、绝对 git、`git -C`、复合命令、pipe、redirect 与 multiline 全部失败关闭。worktree 文件已缺失但 index 仍精确跟踪时仍可通过分类，最终是否能删除由原生 `git rm` 判断；拒绝路径不得改变 index 或 worktree。
+
+此保护依赖 PreToolUse hook。`prompt_only_degraded`（当前 Codex/ZCode）只能携带提示，不能宣称机械强制；需要高风险删除时改用 hook-enabled backend，或由 PM 在核对 receipt、路径和索引后执行。
 
 运行中漏授权时，先说明命令的输入、输出、幂等性与范围，由 PM 选择限定代跑并记录证据，或经现有 `pm-orchestrate.sh reauthorize --allow-cmd '<精确命令>'` 正规重建。后者仍须满足 live Dispatch 等入口门禁，不能对已结算目标强行使用；不得热改 B64、镜像 JSON 或 authority receipt 绕过。未获授权则记录 BLOCKED，不反复变形命令。
 

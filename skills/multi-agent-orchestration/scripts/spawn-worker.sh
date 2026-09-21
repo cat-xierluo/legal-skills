@@ -123,6 +123,7 @@ QUOTA_PREFLIGHT_STATUS=""
 QUOTA_PREFLIGHT_LANE=""
 ADD_DIRS=()
 ALLOW_PATHS=()
+FROZEN_ALLOWED_WRITE_PATHS=()
 # v2.14.0：角色分离写范围纪律。reviewer 默认只写自身 Session Context；
 # 修复被审分支需要 --review-repair-grant 显式授权（任务合同）。
 ROLE="implementer"
@@ -180,6 +181,7 @@ INSTALL_GUARD_MODE="hook"
 INSTALL_AUTH_JSON=""
 AUTHORITY_RECEIPT_FILE=""
 AUTHORITY_RECEIPT_SHA256=""
+AUTHORIZATION_SNAPSHOT_SHA256=""
 COMPLETION_AUTHORITY_FILE=""
 INSTALL_GUARD_SETTINGS_FILE=""
 GIT_EXPECTED_NAME=""
@@ -223,6 +225,11 @@ if [ "$ROLE" = "reviewer" ] && [ -n "$REVIEW_REPAIR_GRANT" ] && [ "${#ALLOW_PATH
   echo "       (empty allow paths would leave the reviewer scope guard uninstalled; fail-closed)" >&2
   exit 64
 fi
+# Freeze task-authored write scope before any worktree/provider/terminal side
+# effect.  scope_guard_setup may later synthesize a reviewer Session Context
+# pattern; that runtime control path must never become tracked-file deletion
+# authority.  Exact git-rm authority consumes this independent snapshot.
+FROZEN_ALLOWED_WRITE_PATHS=("${ALLOW_PATHS[@]}")
 command -v git >/dev/null 2>&1 || { echo "ERROR: git is required" >&2; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 64; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required for dependency install guard; do not install it without user authorization" >&2; exit 64; }
@@ -832,7 +839,7 @@ else
 fi
 
 write_install_authorization() {
-  local commands_json shell_commands_json
+  local commands_json shell_commands_json write_paths_json
   commands_json=$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS=(
     "pwd"
@@ -842,6 +849,7 @@ write_install_authorization() {
   [ -z "$SAFE_PUSH_COMMAND" ] || EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("$SAFE_PUSH_COMMAND")
   EFFECTIVE_ALLOWED_SHELL_COMMANDS+=("${VERIFY_COMMANDS[@]}" "${ALLOWED_SHELL_COMMANDS[@]}")
   shell_commands_json=$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')
+  write_paths_json=$(array_to_json "${FROZEN_ALLOWED_WRITE_PATHS[@]}")
   INSTALL_AUTH_JSON=$(jq -cn \
     --arg schema "multi-agent-orchestration.install-authorization.v1" \
     --arg policy "deny_by_default" \
@@ -851,12 +859,14 @@ write_install_authorization() {
     --argjson verification_commands "$(array_to_json "${VERIFY_COMMANDS[@]}")" \
     --argjson commands "$commands_json" \
     --argjson shell_commands "$shell_commands_json" \
+    --argjson write_paths "$write_paths_json" \
     '{
       schema: $schema,
       policy: $policy,
       authorization_source: $source,
       authorized_commands: $commands,
       allowed_shell_commands: $shell_commands,
+      allowed_write_paths: $write_paths,
       verification: {
         required: ($verification_required == 1),
         source: $verification_source,
@@ -874,8 +884,8 @@ write_install_authorization
 
 write_authority_receipt() {
   local receipt_dir receipt_tmp created_at
-  AUTHORITY_RECEIPT_SHA256=$(printf '%s' "$INSTALL_AUTH_JSON" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
-  echo "SPAWN_WORKER_AUTHORITY_RECEIPT: $AUTHORITY_RECEIPT_FILE sha256=$AUTHORITY_RECEIPT_SHA256"
+  AUTHORIZATION_SNAPSHOT_SHA256=$(printf '%s' "$INSTALL_AUTH_JSON" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
+  echo "SPAWN_WORKER_AUTHORITY_RECEIPT: $AUTHORITY_RECEIPT_FILE authorization_snapshot_sha256=$AUTHORIZATION_SNAPSHOT_SHA256"
   if [ "$DRY_RUN" -eq 1 ]; then
     return 0
   fi
@@ -896,7 +906,7 @@ write_authority_receipt() {
     --arg branch "$BRANCH" \
     --arg mode "$INSTALL_GUARD_MODE" \
     --arg degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
-    --arg authorization_sha256 "$AUTHORITY_RECEIPT_SHA256" \
+    --arg authorization_sha256 "$AUTHORIZATION_SNAPSHOT_SHA256" \
     --argjson authorization "$INSTALL_AUTH_JSON" \
     --arg verification_source "$VERIFY_COMMAND_SOURCE" \
     --argjson verification_required "$REQUIRE_VERIFICATION" \
@@ -933,6 +943,8 @@ write_authority_receipt() {
     return 1
   fi
   rm -f "$receipt_tmp"
+  AUTHORITY_RECEIPT_SHA256=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+  echo "SPAWN_WORKER_AUTHORITY_RECEIPT_CONTENT: $AUTHORITY_RECEIPT_FILE sha256=$AUTHORITY_RECEIPT_SHA256"
 }
 
 # authority receipt 仅在 git 仓（worktree 模式）下生成；轻量模式 AUTHORITY_RECEIPT_FILE 为空，跳过。
@@ -1213,6 +1225,10 @@ dependency_install_guard_setup() {
   receipt_content_sha=""
   if [ -n "$AUTHORITY_RECEIPT_FILE" ] && [ "$DRY_RUN" -eq 0 ]; then
     receipt_content_sha=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authority import load_authority; print(load_authority(sys.argv[2])[1])' "$SCRIPT_DIR" "$AUTHORITY_RECEIPT_FILE") || return 1
+    if [ -z "$AUTHORITY_RECEIPT_SHA256" ] || [ "$receipt_content_sha" != "$AUTHORITY_RECEIPT_SHA256" ]; then
+      echo "ERROR: PM authority receipt content hash drifted before guard launch" >&2
+      return 1
+    fi
   fi
   printf -v receipt_sha_q '%q' "$receipt_content_sha"
   printf -v orca_cli_q '%q' "${ORCA_CLI_BIN:-}"
