@@ -79,6 +79,7 @@ reset_metadata_case() {
   REQUIRE_VERIFICATION=1
   ADD_DIRS=("/tmp/a" "/tmp/b path")
   ALLOW_PATHS=("skills/a/**" "skills/b/**")
+  FROZEN_ALLOWED_WRITE_PATHS=("skills/a/file.md" "skills/b/other.py")
   ROLE="implementer"
   REVIEW_REPAIR_GRANT=""
   INSTALL_GUARD_MODE="hook"
@@ -90,7 +91,8 @@ reset_metadata_case() {
   GIT_INTEGRATION_BASE="origin/main"
   SAFE_PUSH_COMMAND="bash safe-push.sh"
   AUTHORITY_RECEIPT_FILE="/repo/common/authority.json"
-  AUTHORITY_RECEIPT_SHA256="authority-sha"
+  AUTHORITY_RECEIPT_SHA256="receipt-content-sha"
+  AUTHORIZATION_SNAPSHOT_SHA256="authorization-snapshot-sha"
   COMPLETION_AUTHORITY_FILE="/repo/common/authority.completion.json"
   GUARD_ATTESTATION_FILE="/repo/common/attestation.json"
   AUTHORIZED_INSTALL_COMMANDS=("pip install demo")
@@ -129,6 +131,10 @@ assert_jq "$METADATA_FILE" '.verification.required == true and .verification.sou
   "verification authority source and requirement are auditable"
 assert_jq "$METADATA_FILE" '.execution_authority.allowed_shell_commands | length == 2' \
   "allowed Shell commands remain unique"
+assert_jq "$METADATA_FILE" '.execution_authority.allowed_write_paths == ["skills/a/file.md","skills/b/other.py"]' \
+  "tracked-file deletion scope is published from the frozen authority snapshot"
+assert_jq "$METADATA_FILE" '.execution_authority.authority_receipt_sha256 == "receipt-content-sha" and .execution_authority.authorization_snapshot_sha256 == "authorization-snapshot-sha"' \
+  "receipt bytes and authorization snapshot hashes remain separately auditable"
 assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' \
   "hook mode does not overclaim runtime attestation"
 assert_jq "$METADATA_FILE" '.execution_authority.git_identity.raw_git_push_allowed == true and .execution_authority.git_identity.commit_environment_bound == true' \
@@ -161,6 +167,7 @@ GIT_EXPECTED_EMAIL=""
 VERIFY_COMMANDS=()
 ADD_DIRS=()
 ALLOW_PATHS=()
+FROZEN_ALLOWED_WRITE_PATHS=()
 AUTHORIZED_INSTALL_COMMANDS=()
 EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
 ORCA_MODE="force_tmux"
@@ -184,8 +191,18 @@ assert_jq "$METADATA_FILE" '.execution_authority.enforcement_source == "prompt_o
   "degraded guard and unbound Git identity remain explicit"
 assert_jq "$METADATA_FILE" '.verification.commands == [] and .session.orca.mode == "force_tmux"' \
   "empty verification and tmux fallback remain valid"
+assert_jq "$METADATA_FILE" '.execution_authority.allowed_write_paths == []' \
+  "missing frozen write scope grants no tracked-file deletion authority"
 assert_jq "$METADATA_FILE" '.session.orca.setup_mode == "not_applicable"' \
   "tmux metadata does not claim an Orca Setup policy"
+
+reset_metadata_case
+METADATA_FILE="$CASE_ROOT/reviewer-late-scope.json"
+ALLOW_PATHS=(".claude/agent-sessions/worker-session/**")
+FROZEN_ALLOWED_WRITE_PATHS=()
+write_metadata > "$CASE_ROOT/reviewer-late-scope.out"
+assert_jq "$METADATA_FILE" '.allow_paths == [".claude/agent-sessions/worker-session/**"] and .execution_authority.allowed_write_paths == []' \
+  "late reviewer Session Context scope never becomes deletion authority"
 
 reset_metadata_case
 METADATA_FILE="$CASE_ROOT/dry-run.json"

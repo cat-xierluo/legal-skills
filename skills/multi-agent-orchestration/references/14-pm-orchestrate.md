@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.27.5。
+> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.27.6。
 
 ## 目录
 
@@ -120,6 +120,8 @@ Orca terminal-managed `read` 同样透传 `--cursor`。alternate-screen TUI 首�
 terminal/tmux 的超长 prompt（>500 字或含反引号、`$`、`|`）会写入 session context 的 `WORKER_PROMPT.md`，再投短 Read 指令。supervised guidance 直接写消息 body，不创建新的 prompt 文件。
 
 `reauthorize`（Task-058）用于 worker 被 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦验证且根因是 spawn 授权快照缺命令时：guard 读 `launch.sh` 内联的 `WORKER_INSTALL_AUTH_B64`（进程环境，运行中改授权文件无效），本命令合并 `--allow-cmd` 进授权文件后重写 B64（回验解码一致）、把被提问/中止翻成 failed 的 Task 复位 ready、在同一 worktree 创建新终端并复用 Task 重注册（worker-start 重注入完整任务）、改写 METADATA 的 terminal_handle/dispatch_id、可选发送 `--resume-text`、最后关闭旧终端句柄。重注册前必须从 Git common-dir 推导原始 authority receipt，并交叉核对 receipt、runtime、session、worktree、branch 与受信 METADATA；任一缺失、软链或漂移都在创建新终端前失败。register 的显式 metadata 替换和 completion receipt 轮换只在这条已核对路径开放，普通手动 register 不能借此换权威；轮换时旧 receipt 保留到 METADATA 原子写回成功，写回失败则恢复旧 receipt，随后回滚新终端，不能留下“旧路由 + 新完成权限”的撕裂状态。未提交的工作区改动全部保留；provider lease 的 transport 记账留给 release/clean-worktree 阶段。
+
+`reauthorize --allow-cmd` 只扩充普通 Shell 精确命令，不能修改或覆盖 spawn 时封存在 PM receipt 的 `allowed_write_paths`。`git rm` 高风险分类先于该白名单；即使把 `git rm -r`、`-f`、`--cached`、多路径、范围外路径或复合命令原样加入 `--allow-cmd`，仍必须拒绝。只有 hook-enabled backend 能机械执行 receipt 绑定的单 tracked 文件删除；prompt-only degraded worker 应交由 PM 或新建 hook-enabled worker 处理。
 
 ## 3. Supervised 收口顺序
 

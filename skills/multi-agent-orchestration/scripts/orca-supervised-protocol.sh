@@ -18,6 +18,8 @@ MESSAGING
   delivery_protocol=$(cat <<'DELIVERY'
 WORKER DELIVERY PROTOCOL (MANDATORY):
 - Start with the smallest in-scope implementation, then run the contract's scoped verification commands, one suite at a time. Do not substitute a full matrix or dependency installation without PM authorization.
+- Execute each frozen verification command byte-for-byte as delivered. Do not prepend export/env/cd, add flags, wrap command substitutions, pipe/redirect it or turn it into a multiline body; ask the PM for corrected authority when the stored command is not applicable.
+- `git rm` is never granted by a generic exact Shell allowlist. A hook-enabled worker may delete only one tracked regular file or symlink with `git rm -- <canonical repo-relative path>` when that exact path was frozen at spawn; scope globs, flags, multiple paths, directories/gitlinks, pathspecs and compound Shell remain denied. Prompt-only degraded backends cannot claim mechanical deletion enforcement and must defer high-risk deletion to a hook-enabled worker or PM.
 - Before writing checkpoints, run this read-only command in the worker process to check its already-bound absolute Session Context. WORKER_SESSION_CONTEXT is a location-only launch binding, including when guards are explicitly degraded; it grants no installation, Shell or scope authority and does not prove a hook is active. Every present guard binding must agree with it. Use the first printed path only if BOTH checks succeed; the second checks that it is an existing directory. Missing, relative, unavailable or differently spelled/conflicting bindings are BLOCKED: report to PM; do not guess from cwd, repo root, task title or session name, and do not create another task-state directory.
 ```bash
 jq -ner '

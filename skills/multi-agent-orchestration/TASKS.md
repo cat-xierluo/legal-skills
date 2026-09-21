@@ -27,7 +27,8 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-09-14-GIT-RM-AUTHORITY — 明确 tracked 文件删除权限
 
-- 状态：`READY`；优先级：`P1`；类型：`security-policy`；Owner：未领取。
+- 状态：`IN_PROGRESS`；优先级：`P1`；类型：`security-policy`；Owner：Codex `/root`。
+- 候选合同：分支 `codex/mao-git-rm-authority`；Worktree `/private/tmp/legal-skills-mao-git-rm-authority`；integration base `origin/main`；immutable start `67a5b6c35d76f2002806af781f876e1730599877`。
 - 来源修正：原卡名为 `MINIMAX-LANE-ALLOWLIST`，但复核证明 provider 并非根因。合同中的 `node <script>` 和 `gh pr create` 已可执行；失败来自 Worker 改写精确命令，以及 `git rm <tracked>` 尚无授权分类。
 - 目标：为 tracked 文件删除建立窄且可审计的合同；同时让 Worker prompt 明确验证命令必须与 authority receipt 完全一致，不得自行加 `export`、`cd`、命令替换或多行 body。
 - 已冻结设计：内置分类器只允许单段命令 `git rm -- <一个 repo-relative tracked file>`；必须命中启动时冻结并进入 authority snapshot 的 `allowed_write_paths`。高风险分类先于精确 `allowed_shell_commands`，因此 `--allow-cmd` 不能覆盖 `-r`、`-f`、`--cached`、多路径、目录/submodule、pathspec、Shell 展开或范围外拒绝。

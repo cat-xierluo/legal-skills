@@ -183,12 +183,26 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
                      "Review-only or genuinely no-change", "not manufacture an empty commit",
                      "real 40-character git rev-parse HEAD", "never repository-root RESULT.md",
                      "Push, PR and history changes follow the PM task contract",
+                     "byte-for-byte as delivered", "Do not prepend export/env/cd",
+                     "`git rm` is never granted by a generic exact Shell allowlist",
+                     "Prompt-only degraded backends cannot claim mechanical deletion enforcement",
                      "Resume the original returned message ID", "never create a duplicate question",
                      "before starting another file", "after each scoped test run",
                      "immediately before `worker_done`", "consumer_fenced", "dispatch_inactive",
                      "--ack <delivery_id>", "Do not use the coordinator handle",
                      "Messages never broaden"):
             self.assertIn(rule, spec)
+
+    def test_worker_prompt_carries_exact_command_and_git_rm_boundaries(self):
+        prompt = (SCRIPTS.parent / "templates" / "worker-prompt.md").read_text()
+        for rule in (
+            "Run `verification.commands[]` from METADATA exactly as stored",
+            "Do not prepend `export`/`env`/`cd`",
+            "`git rm` is a separate high-risk class",
+            "scope globs do not grant deletion",
+            "Prompt-only degraded backends",
+        ):
+            self.assertIn(rule, prompt)
 
     def wave(self, bodies, *, sender="term-pm", expected=0):
         manifest = self.root / "wave.json"

@@ -2,6 +2,33 @@
 # spawn-worker-metadata.sh — Session Context metadata writer for spawn-worker.sh.
 # This file is sourced after spawn-worker.sh initializes runtime and authority globals.
 
+metadata_array_to_json() {
+  # macOS Bash 3.2 + set -u treats expansion of an explicitly empty indexed
+  # array as an unbound variable.  Use explicit, fixed-name branches so the
+  # empty case avoids expansion without dynamic eval/indirect execution.
+  case "$1" in
+    ADD_DIRS)
+      [ "${#ADD_DIRS[@]}" -eq 0 ] && printf '[]\n' || array_to_json "${ADD_DIRS[@]}"
+      ;;
+    ALLOW_PATHS)
+      [ "${#ALLOW_PATHS[@]}" -eq 0 ] && printf '[]\n' || array_to_json "${ALLOW_PATHS[@]}"
+      ;;
+    AUTHORIZED_INSTALL_COMMANDS)
+      [ "${#AUTHORIZED_INSTALL_COMMANDS[@]}" -eq 0 ] && printf '[]\n' || array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}"
+      ;;
+    EFFECTIVE_ALLOWED_SHELL_COMMANDS)
+      [ "${#EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" -eq 0 ] && printf '[]\n' || array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}"
+      ;;
+    FROZEN_ALLOWED_WRITE_PATHS)
+      [ "${#FROZEN_ALLOWED_WRITE_PATHS[@]}" -eq 0 ] && printf '[]\n' || array_to_json "${FROZEN_ALLOWED_WRITE_PATHS[@]}"
+      ;;
+    *)
+      echo "ERROR: unsupported metadata array: $1" >&2
+      return 64
+      ;;
+  esac
+}
+
 write_metadata() {
   local enforcement_source worker_mirror_authoritative orca_setup_mode_value
   created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
@@ -76,8 +103,8 @@ write_metadata() {
     --argjson verification_commands "$verify_json" \
     --arg verification_source "${VERIFY_COMMAND_SOURCE:-}" \
     --argjson verification_required "${REQUIRE_VERIFICATION:-0}" \
-    --argjson add_dirs "$(array_to_json "${ADD_DIRS[@]}")" \
-    --argjson allow_paths "$(array_to_json "${ALLOW_PATHS[@]}")" \
+    --argjson add_dirs "$(metadata_array_to_json ADD_DIRS)" \
+    --argjson allow_paths "$(metadata_array_to_json ALLOW_PATHS)" \
     --arg install_guard_mode "$INSTALL_GUARD_MODE" \
     --arg install_authorization_file "$INSTALL_AUTH_FILE" \
     --arg install_authorization_source "$INSTALL_AUTHORIZATION_SOURCE" \
@@ -88,12 +115,14 @@ write_metadata() {
     --arg safe_push_command "$SAFE_PUSH_COMMAND" \
     --arg authority_receipt_file "$AUTHORITY_RECEIPT_FILE" \
     --arg authority_receipt_sha256 "$AUTHORITY_RECEIPT_SHA256" \
+    --arg authorization_snapshot_sha256 "$AUTHORIZATION_SNAPSHOT_SHA256" \
     --arg completion_authority_file "${COMPLETION_AUTHORITY_FILE:-}" \
     --arg guard_attestation_file "$GUARD_ATTESTATION_FILE" \
     --arg enforcement_source "$enforcement_source" \
     --argjson worker_mirror_authoritative "$worker_mirror_authoritative" \
-    --argjson authorized_install_commands "$(array_to_json "${AUTHORIZED_INSTALL_COMMANDS[@]}")" \
-    --argjson allowed_shell_commands "$(array_to_json "${EFFECTIVE_ALLOWED_SHELL_COMMANDS[@]}" | jq 'unique')" \
+    --argjson authorized_install_commands "$(metadata_array_to_json AUTHORIZED_INSTALL_COMMANDS)" \
+    --argjson allowed_shell_commands "$(metadata_array_to_json EFFECTIVE_ALLOWED_SHELL_COMMANDS | jq 'unique')" \
+    --argjson allowed_write_paths "$(metadata_array_to_json FROZEN_ALLOWED_WRITE_PATHS)" \
     --arg orca_mode "${ORCA_MODE:-force_tmux}" \
     --arg orca_setup_mode "$orca_setup_mode_value" \
     --arg orca_worktree_id "${ORCA_WORKTREE_ID:-}" \
@@ -180,10 +209,12 @@ write_metadata() {
         install_authorization_source: $install_authorization_source,
         authorized_install_commands: $authorized_install_commands,
         allowed_shell_commands: $allowed_shell_commands,
+        allowed_write_paths: $allowed_write_paths,
         degradation_source: $install_guard_degradation_source,
         enforcement_source: $enforcement_source,
         authority_receipt_file: $authority_receipt_file,
         authority_receipt_sha256: $authority_receipt_sha256,
+        authorization_snapshot_sha256: $authorization_snapshot_sha256,
         completion_authority_file: $completion_authority_file,
         completion_authority_schema: "multi-agent-orchestration.completion-authority.v1",
         guard_attestation_file: $guard_attestation_file,
