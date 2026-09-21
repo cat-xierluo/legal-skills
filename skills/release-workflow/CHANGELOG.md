@@ -1,5 +1,18 @@
 # 变更日志
 
+## [1.5.0] - 2026-09-21
+
+### 新增
+
+- **贡献者致谢（Attribution）规则**：`references/release-notes-guide.md` 新增「贡献者致谢」章节——外部贡献者 PR（含被「承接 #N」重做的原始 PR、Co-Authored-By 外部作者）必须在 Release Notes 致谢：条目行内 `(#N, @user)`（必选）+ 文末「贡献者」汇总节（推荐）；维护者自身与 bot 不标。`desktop-standard` 固定结构新增第 9 项「贡献者」节（无外部贡献者时省略），推荐模板同步补充。
+- **SKILL.md 第 2 步新增来源 3（PR 作者识别）**：`gh pr list --state merged` 列本版本区间 PR 与作者；第 6 步验证清单加「外部贡献者致谢检查」；发布完成检查清单加对应确认项。
+- **`config/projects.yaml` / `projects.example.yaml`**：`release_notes.always_include` 新增 `contributor_attribution` 约束键（folia / faropdf 已启用）。
+- **调研补充**：调研来源表新增 eslint（全条目行内作者括注）、stablyai/orca（GitHub 原生 generate-notes：`by @user in #PR` + Contributors 头像墙）；新增 generate-notes API 调用作为漏识别兜底。
+
+### 触发背景
+
+Folia v0.8.1 发布后 Release Notes 整版遗漏外部贡献者致谢——该版三个修复全部源自外部贡献者 @Yillan-lamb（#169 直接合入；#166 / #167 为 #171 / #170 的承接来源），notes 与 CHANGELOG 均无一字提及。
+
 ## [1.4.1] - 2026-08-06
 
 ### 修复

@@ -60,6 +60,8 @@ your-app:
       - summary_blockquote
       - full_changelog_link
       - auto_update_assets_note
+      # 有外部贡献者 PR 时必须致谢（行内标注 + 「贡献者」节）
+      - contributor_attribution
     warning:
       include_when:
         - macos_unsigned
