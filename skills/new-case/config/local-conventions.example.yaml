@@ -1,0 +1,32 @@
+# 复制为 local-conventions.local.yaml 后填写。真实配置不提交 Git。
+version: 1
+updated_at: "<YYYY-MM-DD>"
+
+# 可选：记录规则来源的泛化说明，不写客户名、案号或本机绝对路径。
+evidence:
+  - kind: "directory-sample"
+    summary: "<例：根据 3 个已有诉讼项目的目录名称和层级归纳>"
+
+# 可选：所有预设共用的个人习惯。
+global:
+  project_naming: "<项目目录命名规则>"
+  file_naming: "<材料文件命名规则>"
+
+# 只写需覆盖的预设和字段。
+# 映射递归合并，列表整段替换；未出现的字段继承 assets/<preset>.yaml。
+presets:
+  consultation:
+    # 列表为整段替换，所以这里列出该个人预设的完整目录。
+    directories:
+      - id: "01"
+        icon: "📂"
+        name: "<客户提供>"
+        description: "<客户原始材料的收纳范围>"
+      - id: "02"
+        icon: "📝"
+        name: "<律师工作>"
+        description: "<律师产出文件的收纳范围>"
+    # 映射递归合并；只需写希望改变的键。
+    management_files:
+      case_info:
+        output: "项目信息.md"
