@@ -2,8 +2,8 @@
 name: new-case
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.0"
-description: 将案件/咨询/商标/专利材料整理成标准化目录结构。支持诉讼案件（12目录）、潜在项目/咨询（2目录）、商标案件（按业务子类型选 2 个模板：注册 7 目录含独立商标注册证/异议复审无效 8 目录含独立商标注册证）、专利案件（按业务子类型选 3 个模板：申请 7 目录/复审无效 8 目录/检索其他 4 目录，目录顺序按项目进展）四种预设。本技能应在用户需要创建新案件、初始化案件目录结构、整理咨询材料、接收商标/专利新业务、或通过参数和自然语言指定案件编号、委托人、案件类型等信息快速创建案件时使用。不要用于：单独生成法律文书、进行法律研究、证据分析等非案件初始化任务。
+version: "1.5.0"
+description: 将案件/咨询/商标/专利材料整理成标准化目录结构，并可从用户描述或已有本地目录学习个人文档规范，存入不公开的本地覆盖配置。支持诉讼、咨询、商标和专利四种预设。本技能应在用户需要创建新案件、初始化或整理案件目录，或说“学习我的目录习惯”“以这些项目为模板”时使用。不要用于：单独生成法律文书、进行法律研究、证据分析等非案件初始化任务。
 license: CC-BY-NC
 ---
 
@@ -35,6 +35,8 @@ license: CC-BY-NC
 - "新建案件"
 - "整理咨询材料：/path/to/consultation-folder"
 - "整理这个潜在项目的文件"
+- "学习我的案件目录习惯：/path/to/existing-cases"
+- "以这几个项目为模板，以后按我的规范建档"
 
 ### 参数化触发
 支持以下参数（通过自然语言或结构化方式传递）：
@@ -57,6 +59,12 @@ license: CC-BY-NC
 ```
 
 ## 工作流程
+
+### 配置前置：加载或学习个人规范
+
+1. 普通建档前，检查 `config/local-conventions.local.yaml`。文件存在时，按“本次明确指令 > 个人配置 > 内置预设”的优先级加载。
+2. 用户明确要求学习、记住或更新个人目录规范时，先读取 [references/local-conventions.md](references/local-conventions.md)，完成只读盘点、规则归纳、变更草案和用户确认，再写入个人配置。
+3. 普通单次建档不得暗中学习或持久化习惯。学习流程不修改 `assets/*.yaml`。
 
 ### 第零步：确定类型并加载预设
 
@@ -284,6 +292,7 @@ license: CC-BY-NC
 | [references/naming-conventions.md](references/naming-conventions.md) | 案件编号、案件名称、文件命名规则 |
 | [references/classification-guide.md](references/classification-guide.md) | 材料分类决策逻辑、模糊场景处理 |
 | [references/extraction-rules.md](references/extraction-rules.md) | 从不同材料类型提取案件信息的规则 |
+| [references/local-conventions.md](references/local-conventions.md) | 从用户描述或已有目录学习个人规范，生成本地覆盖配置 |
 
 ## 时间要求
 
@@ -293,6 +302,10 @@ license: CC-BY-NC
 - 剩余天数计算准确
 
 ## 自定义配置
+
+### 个人覆盖配置
+
+个人目录习惯写入 `config/local-conventions.local.yaml`，格式参考 `config/local-conventions.example.yaml`。该文件只作为本地覆盖层，不改变公开内置预设。识别、更新、合并和失败回退规则见 [references/local-conventions.md](references/local-conventions.md)。
 
 ### 预设配置
 
@@ -331,6 +344,7 @@ license: CC-BY-NC
 - [ ] 目录结构已按预设配置创建
 - [ ] 所有材料已分类移动到对应目录
 - [ ] 管理文件已按预设的 management_files 配置生成
+- [ ] 如加载个人配置，已验证 YAML、预设 ID、目录 ID 和模板路径
 - [ ] 文件命名符合规范
 - [ ] 时间逻辑正确
 
@@ -340,3 +354,5 @@ license: CC-BY-NC
 - 禁止创建额外的说明文档或 README
 - 禁止遗漏任何已有材料
 - 禁止虚构案件信息
+- 禁止在用户未明确要求“学习/记住/更新规范”时写入个人配置
+- 禁止将个人习惯或本地绝对路径写入公开 `assets/*.yaml`
