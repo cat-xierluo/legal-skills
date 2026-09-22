@@ -70,7 +70,8 @@ _NOTDEF_SAMPLE = "缺͸字"
 
 
 def make_document(*, centered: bool = True, grid_ok: bool = True,
-                  cant_split: bool = True, long_text: bool = False,
+                  cant_split: bool = True, cant_split_value: str | None = None,
+                  long_text: bool = False,
                   header_repeat: bool = True, valign_ok: bool = True,
                   jc_ok: bool = True, suspect_char: str | None = None,
                   single_row: bool = False,
@@ -99,7 +100,8 @@ def make_document(*, centered: bool = True, grid_ok: bool = True,
         row = etree.SubElement(table, W + "tr")
         row_properties = etree.SubElement(row, W + "trPr")
         if cant_split:
-            etree.SubElement(row_properties, W + "cantSplit")
+            attributes = {W + "val": cant_split_value} if cant_split_value else {}
+            etree.SubElement(row_properties, W + "cantSplit", attributes)
         if header and header_repeat:
             etree.SubElement(row_properties, W + "tblHeader")
         for index, width in enumerate(widths):
@@ -164,7 +166,8 @@ def make_footer(*, hardcoded: bool = False) -> bytes:
 
 
 def write_docx(directory: Path, *, centered: bool = True, grid_ok: bool = True,
-               cant_split: bool = True, long_text: bool = False,
+               cant_split: bool = True, cant_split_value: str | None = None,
+               long_text: bool = False,
                hardcoded_page: bool = False, header_repeat: bool = True,
                valign_ok: bool = True, jc_ok: bool = True,
                suspect_char: str | None = None, single_row: bool = False,
@@ -175,7 +178,8 @@ def write_docx(directory: Path, *, centered: bool = True, grid_ok: bool = True,
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("word/document.xml", make_document(
             centered=centered, grid_ok=grid_ok,
-            cant_split=cant_split, long_text=long_text,
+            cant_split=cant_split, cant_split_value=cant_split_value,
+            long_text=long_text,
             header_repeat=header_repeat, valign_ok=valign_ok, jc_ok=jc_ok,
             suspect_char=suspect_char, single_row=single_row,
             grid=grid, margins=margins, continuation_grid=continuation_grid,
@@ -243,6 +247,21 @@ class DocxLayoutGateTests(unittest.TestCase):
 
     def test_splittable_row_is_blocked(self):
         self.assert_fails(write_docx(self.root, cant_split=False), "ECG-LAYOUT-ROW-BREAK")
+
+    def test_oversized_long_row_may_split_naturally(self):
+        """超过整页容量的长事实行允许自然跨页；对它强制 cantSplit 会让
+        LibreOffice 在忽略约束时出现不稳定的整行推页。"""
+        report = audit_docx(
+            write_docx(
+                self.root, cant_split=True, cant_split_value="0",
+                long_text=True, single_row=True,
+            ),
+            copy.deepcopy(POLICY),
+        )
+        self.assertNotIn(
+            "ECG-LAYOUT-ROW-BREAK", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
 
     def test_hardcoded_page_number_is_blocked(self):
         self.assert_fails(write_docx(self.root, hardcoded_page=True), "ECG-LAYOUT-PAGINATION")
@@ -497,7 +516,8 @@ class RenderedLayoutGateTests(unittest.TestCase):
         )
         self.assertTrue(report["ok"], report["issues"])
 
-    def test_rendered_column_drift_across_pages_is_blocked(self):
+    def test_rendered_internal_gridspan_change_is_left_to_docx_gate(self):
+        """PDF 无法区分内部列漂移与合法 gridSpan 子集，不能据此误报。"""
         header = [(80, 130, "项目"), (320, 130, "内容")]
         page_two = {
             "columns": [64.0, 280.0, 531.28],  # 中列漂移 17.6 pt
@@ -508,7 +528,10 @@ class RenderedLayoutGateTests(unittest.TestCase):
             self.build_table_pdf([self.bottom_reaching_page(), page_two]),
             copy.deepcopy(POLICY),
         )
-        self.assertIn("ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]})
+        self.assertNotIn(
+            "ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
 
     def test_rendered_second_table_on_continuation_page_is_not_compared(self):
         """同一页并存“续接表 + 列位不同的新表”：只比对首个（页顶）带，新表不误报。"""
@@ -645,8 +668,8 @@ class RenderedLayoutGateTests(unittest.TestCase):
         )
         self.assertTrue(report["ok"], report["issues"])
 
-    def test_rendered_new_column_at_continuation_top_is_blocked(self):
-        """真漂移反例：续页顶部就出现上一页没有的新列边界，必须拦截。"""
+    def test_rendered_refined_row_grid_at_continuation_top_passes(self):
+        """上一页为合并行、续页恢复内部网格：只新增列而未移动列，属合法 gridSpan。"""
         page_two = {
             "columns": [64.0, 297.64, 400.0, 531.28],  # 400.0 为带顶新增列
             "row_lines": [100.0, 140.0, 180.0, 220.0],
@@ -656,23 +679,60 @@ class RenderedLayoutGateTests(unittest.TestCase):
             self.build_table_pdf([self.bottom_reaching_page(), page_two]),
             copy.deepcopy(POLICY),
         )
-        self.assertIn("ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]})
+        self.assertNotIn(
+            "ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
 
-    def test_rendered_vanished_column_is_blocked(self):
-        """真漂移反例：中列大幅移位（297.64→400）必然表现为续页带顶出现
-        上一页不存在的新 x=400，由“带顶新增列”判据拦截。
-        （不设“旧列在带内消失即漂移”的对称判据：合法整行合并的续页中旧列
-        会在带内完全不出现，对称判据会误杀，见下一用例。）"""
+    def test_rendered_24_split_row_refinement_passes(self):
+        """24 专利长文本第8→9页：三列合并行续到四列明细行，不是列位漂移。"""
+        page_one = {
+            "columns": [64.1, 177.5, 531.3],
+            "row_lines": [100.0 + 40.0 * step for step in range(18)],
+            "texts": [(80, 130, "责任承担"), (200, 130, "停止侵害")],
+        }
         page_two = {
-            "columns": [64.0, 400.0, 531.28],
+            "columns": [64.1, 177.5, 328.2, 531.3],
             "row_lines": [100.0, 140.0, 180.0, 220.0],
-            "texts": [(80, 130, "项目"), (320, 130, "内容"), (80, 170, "王五"), (320, 170, "担保人")],
+            "texts": [(80, 130, "赔偿责任"), (200, 130, "补偿性赔偿")],
+        }
+        report = audit_pdf(
+            self.build_table_pdf([page_one, page_two]),
+            copy.deepcopy(POLICY),
+        )
+        self.assertNotIn(
+            "ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
+
+    def test_rendered_outer_table_boundary_drift_is_blocked(self):
+        """真漂移反例：跨页后的表格整体右移，左右外边界必须拦截。"""
+        page_two = {
+            "columns": [84.0, 317.64, 551.28],
+            "row_lines": [100.0, 140.0, 180.0, 220.0],
+            "texts": [(100, 130, "项目"), (340, 130, "内容"), (100, 170, "王五"), (340, 170, "担保人")],
         }
         report = audit_pdf(
             self.build_table_pdf([self.bottom_reaching_page(), page_two]),
             copy.deepcopy(POLICY),
         )
         self.assertIn("ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]})
+
+    def test_rendered_alternate_gridspan_subset_passes(self):
+        """合法近似：相邻行可显示不同内部网格子集，外边界未变化。"""
+        page_two = {
+            "columns": [64.0, 400.0, 531.28],
+            "row_lines": [100.0, 140.0, 180.0, 220.0],
+            "texts": [(80, 130, "项目"), (420, 130, "内容"), (80, 170, "王五")],
+        }
+        report = audit_pdf(
+            self.build_table_pdf([self.bottom_reaching_page(), page_two]),
+            copy.deepcopy(POLICY),
+        )
+        self.assertNotIn(
+            "ECG-LAYOUT-COLUMN-GRID", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
 
     def test_rendered_full_row_merged_continuation_passes(self):
         """回归（24-专利模板第6→7页真实误报复现）：续页为合法整行合并，
@@ -780,6 +840,22 @@ class RenderedLayoutGateTests(unittest.TestCase):
             "row_lines": [100.0, 140.0, 180.0, 220.0],
             "partial_verticals": [(177.5, 100.0, 140.0)],
             "texts": [(120, 150, "指导性案例、人民法院案例库案例等情况")],
+        }
+        report = audit_pdf(self.build_table_pdf([spec]), copy.deepcopy(POLICY))
+        self.assertNotIn(
+            "ECG-LAYOUT-CELL-ALIGN", {item["code"] for item in report["issues"]},
+        )
+        self.assertTrue(report["ok"], report["issues"])
+
+    def test_rendered_adjacent_zero_padding_cells_are_not_merged_as_crossing(self):
+        """左右单元格文字紧贴列线时，PyMuPDF words 会把两侧文字拼接；
+        span 级几何仍应识别为两个单元格，而不是越界。"""
+        spec = {
+            "columns": [64.0, 177.5, 531.28],
+            "row_lines": [100.0, 140.0, 180.0],
+            "texts": [(133.5, 130, "违约责任")],
+            # TextWriter 单独绘制右单元格，保留与左侧不同的 PDF span。
+            "writer_text": (177.85, 130, "压力明细长文本"),
         }
         report = audit_pdf(self.build_table_pdf([spec]), copy.deepcopy(POLICY))
         self.assertNotIn(

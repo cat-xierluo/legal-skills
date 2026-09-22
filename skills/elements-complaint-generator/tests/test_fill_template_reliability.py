@@ -195,6 +195,131 @@ class AttachmentPaginationTests(unittest.TestCase):
         second = _ft.merge_sections_and_normalize(parts)
         self.assertEqual(second["trailing_empty_paragraphs_removed"], 0)
 
+    def test_28_promotes_terminal_attachment_section_without_blank_tail(self):
+        """28 号附件后的空分节不得产生只有页码的末页；附件节属性应提升
+        为最终 body 节属性，避免删除后改变附件页边距和页脚。"""
+        template = SKILL_DIR / "templates/28-技术合同纠纷-民事起诉状"
+        parts = _ft.load_text_parts(template)
+        namespace = "{%s}" % _ft.W_NS
+        original_body = parts["word/document.xml"].getroot().find(f"{namespace}body")
+        terminal_paragraph = next(
+            paragraph for paragraph in reversed(original_body.findall(f"./{namespace}p"))
+            if paragraph.find(f"./{namespace}pPr/{namespace}sectPr") is not None
+        )
+        original_terminal_section = terminal_paragraph.find(
+            f"./{namespace}pPr/{namespace}sectPr"
+        )
+        first = _ft.merge_sections_and_normalize(parts)
+
+        body = parts["word/document.xml"].getroot().find(f"{namespace}body")
+        self.assertIsNotNone(body)
+        self.assertEqual(body[-1].tag, f"{namespace}sectPr")
+        def section_signature(section):
+            return [
+                (
+                    _ft.etree.QName(node).localname,
+                    sorted(
+                        (_ft.etree.QName(name).localname, value)
+                        for name, value in node.attrib.items()
+                    ),
+                )
+                for node in section.iter()
+            ]
+        self.assertEqual(
+            section_signature(body[-1]), section_signature(original_terminal_section)
+        )
+        self.assertIsNone(body[-2].find(f"./{namespace}pPr/{namespace}sectPr"))
+        self.assertGreaterEqual(first["trailing_empty_paragraphs_removed"], 1)
+
+        second = _ft.merge_sections_and_normalize(parts)
+        self.assertEqual(second["trailing_empty_paragraphs_removed"], 0)
+
+    def test_terminal_section_with_bookmark_is_not_promoted_or_deleted(self):
+        template = SKILL_DIR / "templates/28-技术合同纠纷-民事起诉状"
+        parts = _ft.load_text_parts(template)
+        namespace = "{%s}" % _ft.W_NS
+        body = parts["word/document.xml"].getroot().find(f"{namespace}body")
+        terminal_paragraph = next(
+            paragraph for paragraph in reversed(body.findall(f"./{namespace}p"))
+            if paragraph.find(f"./{namespace}pPr/{namespace}sectPr") is not None
+        )
+        bookmark = _ft.etree.Element(f"{namespace}bookmarkStart")
+        bookmark.set(f"{namespace}id", "999")
+        bookmark.set(f"{namespace}name", "terminal-marker")
+        terminal_paragraph.append(bookmark)
+
+        stats = _ft.merge_sections_and_normalize(parts)
+
+        self.assertIsNotNone(
+            body.find(f".//{namespace}bookmarkStart[@{namespace}name='terminal-marker']")
+        )
+        self.assertIsNotNone(
+            terminal_paragraph.find(f"./{namespace}pPr/{namespace}sectPr")
+        )
+        # 末尾另一个纯空段仍可清理，但带书签的分节段本身必须保留。
+        self.assertGreaterEqual(stats["trailing_empty_paragraphs_removed"], 1)
+
+
+class LongTextCapacityTests(unittest.TestCase):
+    def test_long_replacement_removes_only_direct_right_indent(self):
+        namespace = "{%s}" % _ft.W_NS
+        paragraph = _ft.etree.fromstring(
+            f'<w:p xmlns:w="{_ft.W_NS}"><w:pPr><w:ind w:left="83" '
+            f'w:right="5554" w:rightChars="400"/></w:pPr><w:r><w:t>具体赔偿请求：</w:t>'
+            f'</w:r></w:p>'
+        )
+        doc = _ft.DocParts({"word/document.xml": _ft.etree.ElementTree(paragraph)})
+        rule = _ft.make_text_replace_rule("请求", "具体赔偿请求：")
+        self.assertTrue(rule(doc, {"请求": "长" * 100}))
+        indent = paragraph.find(f"./{namespace}pPr/{namespace}ind")
+        self.assertEqual(indent.get(f"{namespace}left"), "83")
+        self.assertIsNone(indent.get(f"{namespace}right"))
+        self.assertIsNone(indent.get(f"{namespace}rightChars"))
+
+    def test_short_replacement_preserves_template_right_indent(self):
+        namespace = "{%s}" % _ft.W_NS
+        paragraph = _ft.etree.fromstring(
+            f'<w:p xmlns:w="{_ft.W_NS}"><w:pPr><w:ind w:right="5554"/></w:pPr>'
+            f'<w:r><w:t>金额：</w:t></w:r></w:p>'
+        )
+        doc = _ft.DocParts({"word/document.xml": _ft.etree.ElementTree(paragraph)})
+        rule = _ft.make_text_replace_rule("金额", "金额：")
+        self.assertTrue(rule(doc, {"金额": "100元"}))
+        indent = paragraph.find(f"./{namespace}pPr/{namespace}ind")
+        self.assertEqual(indent.get(f"{namespace}right"), "5554")
+
+    def test_long_fill_removes_direct_right_indent(self):
+        namespace = "{%s}" % _ft.W_NS
+        paragraph = _ft.etree.fromstring(
+            f'<w:p xmlns:w="{_ft.W_NS}"><w:pPr><w:ind w:right="5554"/>'
+            f'</w:pPr><w:r><w:t>事实：</w:t></w:r><w:r><w:t>    </w:t></w:r>'
+            f'<w:r><w:t>证据：</w:t></w:r></w:p>'
+        )
+        doc = _ft.DocParts({"word/document.xml": _ft.etree.ElementTree(paragraph)})
+        rule = _ft.make_text_fill_rule("事实", "事实：", "证据：")
+        self.assertTrue(rule(doc, {"事实": "长" * 100}))
+        indent = paragraph.find(f"./{namespace}pPr/{namespace}ind")
+        self.assertIsNone(indent.get(f"{namespace}right"))
+
+    def test_long_row_threshold_comes_from_policy(self):
+        namespace = "{%s}" % _ft.W_NS
+        document = _ft.etree.fromstring(
+            f'<w:document xmlns:w="{_ft.W_NS}"><w:body><w:tbl><w:tr><w:trPr>'
+            f'<w:cantSplit/></w:trPr><w:tc><w:p><w:r><w:t>{"长" * 12}</w:t>'
+            f'</w:r></w:p></w:tc></w:tr><w:tblPr/><w:tblGrid><w:gridCol w:w="100"/>'
+            f'</w:tblGrid></w:tbl><w:sectPr/></w:body></w:document>'
+        )
+        paragraph = _ft.Para(document.find(f".//{namespace}p"))
+        _ft._mark_row_splittable(paragraph)
+        parts = {"word/document.xml": _ft.etree.ElementTree(document)}
+        stats = _ft.merge_sections_and_normalize(
+            parts, {"long_row_split_min_chars": 10}
+        )
+        self.assertEqual(stats["long_rows_split_enabled"], 1)
+        cant_split = document.find(f".//{namespace}cantSplit")
+        self.assertIsNotNone(cant_split)
+        self.assertEqual(cant_split.get(f"{namespace}val"), "0")
+
 
 class BatchPassThroughTests(unittest.TestCase):
     def test_batch_passes_templates_dir_through(self):

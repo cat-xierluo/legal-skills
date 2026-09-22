@@ -49,9 +49,9 @@ def main() -> int:
                 rules_result = apply_rules(
                     DocParts(parts), build_generic_rules(source, elements), elements
                 )
-                layout_stats = merge_sections_and_normalize(parts)
-                save_text_parts(work, parts)
                 policy = load_policy(policy_path, source.name)
+                layout_stats = merge_sections_and_normalize(parts, policy)
+                save_text_parts(work, parts)
                 # 与 fill_template 主流水线一致：出版物页码清理先于门禁。
                 apply_publication_mark_cleanup(work, policy)
                 semantic_stats = apply_semantic_table_headers(work, policy)

@@ -7,6 +7,7 @@
     "require_table_center": true,
     "require_fixed_table_layout": true,
     "require_row_cant_split": true,
+    "long_row_split_min_chars": 300,
     "forbid_blank_pages": true,
     "require_visible_glyphs": true,
     "require_column_geometry_consistency": true,
@@ -27,16 +28,18 @@
     "min_glyph_survival_ratio": 0.995,
     "font_compatibility": {
       "enabled": true,
-      "reason": "官方模板使用方正书宋_GBK 等商业字体；在缺少这些精确字体名的 LibreOffice/fontconfig 环境中会被模糊错配到无中文字形的拉丁字体（实测 Verdana，且裸名「黑体」「楷体」在本机 fontconfig 同样错配 Verdana），中文渲染为空白。候选链按交付环境常用字体排序（正文 SimSun，标题 STZhongsong，黑体 Microsoft YaHei，楷体 Kaiti SC），随后依次回退到本地化名、macOS 系统字体（Songti SC/Heiti SC 等）与 Source Han/Noto；生成时对每个候选用 fc-match 验证，选取首个 lang 覆盖中文的名字，把 rFonts 四槽（eastAsia/ascii/hAnsi/cs）中等于被映射原字体的属性全部改写为该替代名（仅动字体名，字号/加粗/其余属性不动，保留标题/正文/落款层级差异），并同步写入 fontTable altName。候选全部无法解析出中文覆盖字体时按 fail-closed 阻断生成。渲染验证由 layout_gate 的渲染器选址优先使用正式版 LibreOffice（headless 开发构建不暴露系统中文字体，不能作为中文视觉 oracle）。",
+      "reason": "官方模板使用方正书宋_GBK 等商业字体；在缺少这些精确字体名的 LibreOffice/fontconfig 环境中会被模糊错配到无中文字形的拉丁字体（实测 Verdana，且裸名「黑体」「楷体」在本机 fontconfig 同样错配 Verdana），中文渲染为空白。STZhongsong、Kaiti SC 虽可被 fc-match 找到，但作为兼容替代名交给 LibreOffice 连续渲染时会分别漂移到华文楷体、娃娃体、华文宋体等不同字体并改变分页，因此标题和楷体旧名也统一优先归一到已验证稳定的 SimSun。候选链按交付环境常用字体排序，随后依次回退到本地化名、macOS 系统字体（Songti SC/Heiti SC 等）与 Source Han/Noto；生成时对每个候选用 fc-match 验证，选取首个 lang 覆盖中文的名字，把 rFonts 四槽（eastAsia/ascii/hAnsi/cs）中等于被映射原字体的属性全部改写为该替代名（仅动字体名，字号/加粗/其余属性不动，标题/正文/落款仍由字号、加粗和段落样式保持层级），并同步写入 fontTable altName。候选全部无法解析出中文覆盖字体时按 fail-closed 阻断生成。渲染验证由 layout_gate 的渲染器选址优先使用正式版 LibreOffice（headless 开发构建不暴露系统中文字体，不能作为中文视觉 oracle）。",
       "cjk_replacements": {
-        "方正书宋_GBK": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
-        "方正书宋简体": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
-        "宋体-简": ["SimSun", "宋体", "STZhongsong", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
-        "方正大标宋_GBK": ["STZhongsong", "SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
-        "方正小标宋_GBK": ["STZhongsong", "SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正书宋_GBK": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正书宋简体": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "宋体-简": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正大标宋_GBK": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "方正小标宋_GBK": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
         "方正黑体_GBK": ["Microsoft YaHei", "微软雅黑", "SimHei", "Heiti SC", "PingFang SC", "Source Han Sans CN", "Noto Sans CJK SC"],
-        "方正楷体_GBK": ["Kaiti SC", "楷体-简", "STKaiti", "KaiTi", "楷体", "AR PL UKai CN"],
-        "汉仪楷体简": ["Kaiti SC", "楷体-简", "STKaiti", "KaiTi", "楷体", "AR PL UKai CN"]
+        "方正楷体_GBK": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "汉仪楷体简": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "STZhongsong": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"],
+        "Kaiti SC": ["SimSun", "宋体", "Songti SC", "Source Han Serif CN", "Noto Serif CJK SC"]
       }
     }
   },
