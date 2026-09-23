@@ -23,7 +23,7 @@ Release ZIP       Expert Suite 的自包含分发产物
 Workflow / Agent  未来如有需要，另行设计运行时编排
 ```
 
-README 可以给出建议使用顺序，但这只是用户指引，不是机器执行合同。现有 `docs/SKILL-ORCHESTRATION-GUIDE.md` 和 `docs/SKILL-HANDOFF-GUIDE.md` 继续管理真正的跨 Skill 工作流，不塞进专家套件第一阶段。
+README 可以给出建议使用顺序，但这只是用户指引，不是机器执行合同。真正的跨 Skill 工作流继续由 skill-lint 的 `references/skill-orchestration-guide.md` 与 Harness 七层模型的 Composition 层（跨 Skill 契约与交接产物）管理，不塞进专家套件第一阶段。
 
 ## 2. 目标与非目标
 
