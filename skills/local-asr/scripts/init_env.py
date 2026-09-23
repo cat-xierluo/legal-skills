@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 """
-FunASR Skill 环境检测与配置生成脚本
+Local ASR 环境检测与配置生成脚本
 
 检测当前环境的工具路径和依赖，生成 skill-env.json 供执行器读取。
 适用于 Claude Code CLI（诊断用）和 Raycast agent-executor（环境注入用）。
@@ -23,6 +23,8 @@ import shutil
 import platform
 import subprocess
 import argparse
+import importlib.util
+import importlib.metadata
 from pathlib import Path
 from datetime import datetime
 
@@ -35,7 +37,7 @@ REQUIRED_TOOLS = ["python3", "curl"]
 # 可选但建议的工具
 OPTIONAL_TOOLS = ["ffmpeg", "ffprobe"]
 # Python 依赖（检测是否已安装）
-PYTHON_DEPS = ["funasr", "funasr_onnx", "torch", "fastapi", "uvicorn"]
+PYTHON_DEPS = ["mlx_audio", "funasr", "funasr_onnx", "torch", "fastapi", "uvicorn"]
 
 
 def get_login_shell_path():
@@ -100,14 +102,13 @@ def check_python_deps():
     installed = {}
     for dep in PYTHON_DEPS:
         try:
-            result = subprocess.run(
-                [sys.executable, "-c", f"import {dep}; print({dep}.__version__)"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                installed[dep] = result.stdout.strip()
-            else:
+            if importlib.util.find_spec(dep) is None:
                 installed[dep] = None
+                continue
+            try:
+                installed[dep] = importlib.metadata.version(dep.replace("_", "-"))
+            except importlib.metadata.PackageNotFoundError:
+                installed[dep] = "已安装"
         except Exception:
             installed[dep] = None
     return installed
@@ -117,9 +118,11 @@ def run_detection():
     """执行完整的环境检测"""
     issues = []
     warnings = []
+    default_backend = os.environ.get("FUNASR_SERVER_DEFAULT_MODEL", "moss-mlx")
 
     # 1. 获取完整 PATH
-    full_path = get_login_shell_path()
+    # 登录 shell 可能丢掉当前虚拟环境；执行器必须继续使用检测过依赖的 Python。
+    full_path = os.pathsep.join((str(Path(sys.executable).parent), get_login_shell_path()))
     if not full_path:
         issues.append("无法获取 PATH 环境变量")
 
@@ -144,7 +147,8 @@ def run_detection():
             detected_tools[tool] = path
         else:
             if tool == "ffmpeg":
-                warnings.append(f"可选工具 {tool} 未安装（视频关键帧提取需要）")
+                message = "ffmpeg 未安装（MOSS 音频归一化必需；macOS: brew install ffmpeg）"
+                (issues if default_backend == "moss-mlx" else warnings).append(message)
 
     # 4. Python 版本
     python_version = None
@@ -157,12 +161,20 @@ def run_detection():
 
     # 5. Python 依赖
     python_deps = check_python_deps()
+    if default_backend == "moss-mlx":
+        if platform.system() != "Darwin" or platform.machine() != "arm64":
+            issues.append("MOSS 默认后端需要 Apple Silicon macOS；旧管线可设置 FUNASR_SERVER_DEFAULT_MODEL=paraformer")
+        if sys.version_info < (3, 10):
+            issues.append("MOSS 默认后端需要 Python 3.10+")
+        if not python_deps.get("mlx_audio"):
+            issues.append("缺少 mlx-audio[stt]；运行 python3 -m pip install -r assets/requirements-moss-mlx.txt")
 
     return {
         "full_path": full_path,
         "tools": detected_tools,
         "python_version": python_version,
         "python_deps": python_deps,
+        "default_backend": default_backend,
         "issues": issues,
         "warnings": warnings,
     }
@@ -170,9 +182,15 @@ def run_detection():
 
 def generate_env_json(detection):
     """生成 skill-env.json 内容"""
+    # 只保留实际需要的命令目录，避免把登录 shell 的临时/个人 PATH 写入配置。
+    path_dirs = [str(Path(sys.executable).parent)]
+    path_dirs.extend(str(Path(path).parent) for path in detection["tools"].values() if path)
+    path_dirs.extend(("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"))
+    runtime_path = os.pathsep.join(dict.fromkeys(path_dirs))
     env_data = {
         "env": {
-            "PATH": detection["full_path"],
+            "PATH": runtime_path,
+            "FUNASR_SERVER_DEFAULT_MODEL": detection["default_backend"],
         },
         "detected": {
             **detection["tools"],
@@ -181,12 +199,13 @@ def generate_env_json(detection):
             "platform": platform.system(),
             "machine": platform.machine(),
             "detected_at": datetime.now().isoformat(),
+            "default_backend": detection["default_backend"],
         },
     }
 
     # 添加自定义环境变量
     if "python3" in detection["tools"]:
-        env_data["env"]["FUNASR_PYTHON"] = detection["tools"]["python3"]
+        env_data["env"]["FUNASR_PYTHON"] = sys.executable
 
     return env_data
 
@@ -195,7 +214,7 @@ def print_results(detection):
     """打印检测结果"""
     print()
     print("=" * 60)
-    print("  FunASR Skill - 环境检测")
+    print("  Local ASR - 环境检测")
     print("=" * 60)
     print()
 
@@ -241,7 +260,7 @@ def print_results(detection):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FunASR Skill 环境检测与配置生成")
+    parser = argparse.ArgumentParser(description="Local ASR 环境检测与配置生成")
     parser.add_argument("--check", action="store_true", help="只检测，不写文件")
     parser.add_argument("--force", action="store_true", help="强制重新检测")
     args = parser.parse_args()

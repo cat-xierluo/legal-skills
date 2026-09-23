@@ -55,7 +55,7 @@ AI 的编排能力来源于：
 ```markdown
 ## 与其他技能配合
 
-下载的视频可以使用 [funasr-transcribe] 转录为 Markdown 文件。
+下载的视频可以使用 [local-asr] 转录为 Markdown 文件。
 两个技能独立运行，可根据需要灵活组合使用。
 ```
 

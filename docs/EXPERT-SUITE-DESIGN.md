@@ -288,13 +288,13 @@ Release ZIP 必须保留每个成员目录中的原始 `LICENSE.txt`。README �
 
 | ID | 专家套件 | 主要成员 Skill | 主要用途 |
 | :--- | :--- | :--- | :--- |
-| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`funasr-transcribe`、`transcription-corrector`、`paddle-ocr`、`mineru-ocr`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
+| `legal-material-evidence` | 法律材料与证据处理 | `legal-ocr`、`pdf-processor`、`pdf-organizer`、`video-screenshot`、`local-asr`、`transcription-corrector`、`paddle-ocr`、`mineru-ocr`、`tingwu-asr`、`court-sms`、`dingtalk-minutes` | 把原始文档、扫描件和音视频转成可分析材料 |
 | `litigation-assessment` | 诉讼案件前期研判 | `new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`pdf-organizer`、`legal-visualization`、`md2word`、`court-sms` | 收案、事实证据、争点、检索和诉讼策略 |
 | `litigation-documents-operations` | 诉讼文书与案件推进 | `elements-complaint-generator`、`litigation-analysis`、`legal-proposal-generator`、`md2word`、`legal-case-analysis`、`yuandian-law-search`、`new-case`、`court-sms`、`legal-visualization` | 起诉答辩、裁判分析、上诉再审和客户交付 |
 | `contract-business-counsel` | 合同审查与企业顾问 | `opc-legal-counsel`、`contract-copilot`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-ocr`、`legal-visualization`、`md2word` | 企业问题分诊、合同审查和顾问交付 |
 | `intellectual-property-practice` | 知识产权业务 | `patent-download`、`patent-analysis`、`code2patent`、`trademark-assistant`、`new-case`、`legal-case-analysis`、`yuandian-law-search`、`legal-proposal-generator`、`legal-visualization` | 专利分析、代码专利化和商标申请规划 |
 | `legal-research-client-insight` | 法律研究与客户洞察 | `yuandian-law-search`、`legal-client-brief`、`legal-industry-report`、`legal-text-format`、`wechat-article-fetch`、`legal-visualization`、`de-ai-polish`、`md2word`、`piclist-upload` | 法律研究、客户简报和行业报告 |
-| `lawyer-knowledge-production` | 律师知识生产 | `dingtalk-minutes`、`funasr-transcribe`、`transcription-corrector`、`lecture-review`、`course-generator`、`article2book`、`de-ai-polish`、`md2word`、文章/书籍插图 Skills、`piclist-upload` | 从既有内容资产生成课程、书稿和文章 |
+| `lawyer-knowledge-production` | 律师知识生产 | `dingtalk-minutes`、`local-asr`、`transcription-corrector`、`lecture-review`、`course-generator`、`article2book`、`de-ai-polish`、`md2word`、文章/书籍插图 Skills、`piclist-upload` | 从既有内容资产生成课程、书稿和文章 |
 | `skill-development-quality` | Skill 开发与质量保障 | `project-init`、`legal-harness-init`、`skill-lint`、`verification-gate`、`git-workflow`、`multi-agent-orchestration`、`cross-agent-coordination`、`agent-email` | Skill 项目初始化、开发、验证与协作收口 |
 | `skill-release-distribution` | Skill 发布与分发 | `git-batch-commit`、`git-workflow`、`release-workflow`、`skill-publish-sync`、`subtree-publish`、`skill-manager`、`skill-lint`、`verification-gate` | 版本、Release、多渠道同步和用户安装 |
 

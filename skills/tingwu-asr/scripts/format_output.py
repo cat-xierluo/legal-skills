@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""将通义听悟 API 返回的 JSON 结果转换为 funasr-transcribe 兼容的 Markdown 格式"""
+"""将通义听悟 API 返回的 JSON 结果转换为 local-asr 兼容的 Markdown 格式"""
 
 import json
 from datetime import datetime

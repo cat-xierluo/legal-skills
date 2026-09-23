@@ -93,7 +93,7 @@ except ImportError:
 
 2. **通用工具类技能**：使用 MIT 许可证
    - 内容获取、格式转换、开发工具等通用功能
-   - 示例：`mineru-ocr`、`funasr-transcribe`、`skill-manager`、`piclist-upload`、`course-generator` 等
+   - 示例：`mineru-ocr`、`local-asr`、`skill-manager`、`piclist-upload`、`course-generator` 等
 
 3. **官方技能**：保持原有许可证不变
    - `skill-creator`、`pdf`
@@ -136,7 +136,7 @@ Copyright (c) 2025 杨卫薪律师（微信ywxlaw）
 **例外情况**：
 
 - **官方技能**（skill-creator、pdf）：保持原作者版权信息
-- **协作技能**：如 mineru-ocr、funasr-transcribe 等基于外部项目的技能，可保留项目特定的版权信息（如 "MinerU Skill Contributors"）
+- **协作技能**：如 mineru-ocr、local-asr 等基于外部项目的技能，可保留项目特定的版权信息（如 "MinerU Skill Contributors"）
 
 ### README.md 许可证列
 
@@ -394,6 +394,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.9.1 | 2026-09-23 | 将通用工具及协作技能示例由旧名 funasr-transcribe 更新为 local-asr |
 | v1.9.0 | 2026-08-09 | 停用 Cloud Plugin Marketplace，删除 `.claude-plugin/marketplace.json` 与 `plugin.json` 及对应配置规范；公开 Skill 以 `skills/` 为交付源，发布索引由 README 与实际启用渠道维护 |
 | v1.8.1 | 2026-05-20 | 修正 Skill 开发指南链接，明确后续 Skill 规范以 docs/SKILL-DEV-GUIDE.md 为准 |
 | v1.8.0 | 2026-05-17 | 新增 README 最近更新区维护规范：要求新增、正式发布或更新公开 Skill 时同步维护根 README 动态 |
