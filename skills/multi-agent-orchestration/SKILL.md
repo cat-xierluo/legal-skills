@@ -208,6 +208,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 | 当前问题 | 读取 |
 |---|---|
+| 标准快速派发（Claude Code + GLM/MiniMax + Orca，常规 worker 三步） | `references/00-fast-dispatch-runbook.md` |
 | 模型、provider、执行模式 | `references/01-model-selection-matrix.md`、`references/17-model-capability-profile.md` |
 | 依赖、checkpoint、Sentinel | `references/02-runtime-dependencies.md`、`03-checkpoint-files.md`、`04-sentinel-design.md` |
 | 法律任务拆分、Issue 分组、并发事故 | `references/05-legal-domain-patterns.md`、`10-parallel-lessons.md`、`12-issue-grouping.md` |
