@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 """
-FunASR 转录客户端 - 调用本地 ASR 服务进行转录
+本地 ASR 转录客户端 - 调用本地服务进行转录
 """
 
 import os
@@ -27,29 +27,32 @@ except ImportError:
 DEFAULT_SERVER = "http://127.0.0.1:8765"
 
 AVAILABLE_MODELS = {
-    "paraformer": "FunASR 原生 Paraformer（默认，支持 diarization）",
+    "paraformer": "FunASR 原生 Paraformer（旧管线，支持 diarization）",
     "paraformer-onnx": "ONNX Paraformer（更快，支持 diarization）",
     "sensevoice": "SenseVoice-Small ONNX（实验性单人路径，不支持 diarization）",
     "sensevoice-onnx": "SenseVoice-Small ONNX（sensevoice 别名）",
+    "moss-mlx": "MOSS-Transcribe-Diarize（Apple Silicon，默认）",
 }
 
 
 def check_server(server_url: str) -> bool:
-    """检查服务是否运行"""
+    """检查目标地址是否为本技能的服务。"""
     try:
         req = urllib.request.Request(f"{server_url}/health")
         with urllib.request.urlopen(req, timeout=5) as response:
-            return response.status == 200
-    except:
+            return response.status == 200 and json.load(response).get("service") == "Local ASR"
+    except (OSError, ValueError):
         return False
 
 
 def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
-                    output_path: str = None, diarize: bool = False,
-                    model: str = None,
+                    output_path: str = None, diarize: bool = True,
+                    model: str = "moss-mlx",
                     model_id: str = None,
                     fast: bool = False,
-                    extract_slides: bool = False, slide_threshold: float = 27.0) -> dict:
+                    extract_slides: bool = None, slide_threshold: float = 27.0,
+                    include_summary_prompt: bool = True,
+                    hotwords: list[str] = None) -> dict:
     """
     转录单个文件
 
@@ -77,6 +80,7 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         "fast": fast,
         "extract_slides": extract_slides,
         "slide_threshold": slide_threshold,
+        "include_summary_prompt": include_summary_prompt,
     }
     if output_path:
         payload["output_path"] = os.path.abspath(output_path)
@@ -84,6 +88,8 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         payload["model"] = model
     if model_id:
         payload["model_id"] = model_id
+    if hotwords:
+        payload["hotwords"] = hotwords
 
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
@@ -93,7 +99,7 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=600) as response:
+        with urllib.request.urlopen(req, timeout=10800) as response:
             return json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
@@ -108,9 +114,9 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
 
 
 def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
-                     output_dir: str = None, diarize: bool = False,
-                     model: str = None, model_id: str = None,
-                     fast: bool = False) -> dict:
+                     output_dir: str = None, diarize: bool = True,
+                     model: str = "moss-mlx", model_id: str = None,
+                     fast: bool = False, hotwords: list[str] = None) -> dict:
     """
     批量转录目录中的文件
 
@@ -152,6 +158,8 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
         payload["model"] = model
     if model_id:
         payload["model_id"] = model_id
+    if hotwords:
+        payload["hotwords"] = hotwords
 
     data = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
@@ -161,7 +169,7 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=3600) as response:
+        with urllib.request.urlopen(req, timeout=10800) as response:
             return json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
@@ -177,11 +185,11 @@ def batch_transcribe(directory: str, server_url: str = DEFAULT_SERVER,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='FunASR 转录客户端 - 将音频/视频转换为 Markdown',
+        description='Local ASR 转录客户端 - 将音频/视频转换为 Markdown',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  # 转录单个文件
+  # 默认使用 MOSS-MLX 转录单个文件
   python transcribe.py /path/to/audio.mp3
 
   # 转录并指定输出路径
@@ -190,11 +198,14 @@ def main():
   # 禁用说话人分离
   python transcribe.py /path/to/audio.mp3 --no-diarize
 
-  # 单人快速模式（关闭说话人分离，保留默认 Paraformer）
+  # 单人快速模式（关闭说话人分离，仍使用 MOSS）
   python transcribe.py /path/to/course.m4a --fast
 
   # 指定 Paraformer ONNX（默认启用说话人分离）
   python transcribe.py /path/to/meeting.m4a --model paraformer-onnx
+
+  # 保留原 FunASR 管线
+  python transcribe.py /path/to/meeting.m4a --model paraformer
 
   # Paraformer ONNX 单人路径（VAD 分段 ASR，不做说话人聚类）
   python transcribe.py /path/to/course.m4a --model paraformer-onnx --no-diarize
@@ -218,10 +229,15 @@ def main():
     parser.add_argument('--json', action='store_true', help='以 JSON 格式输出结果')
     parser.add_argument('--no-summary', action='store_true', help='禁用 AI 总结功能（默认启用）')
     parser.add_argument('--auto-summary', action='store_true', help='自动调用 LLM 生成并注入总结（需要 API Key）')
-    parser.add_argument('--model', choices=list(AVAILABLE_MODELS.keys()),
-                       help='选择使用的 ASR 模型')
+    parser.add_argument('--model', choices=list(AVAILABLE_MODELS.keys()), default='moss-mlx',
+                       help='选择使用的 ASR 模型（默认 moss-mlx；旧管线可选 paraformer）')
+    parser.add_argument('--model-id', help='底层模型 ID 或本地目录；MOSS 可指定 ModelScope 下载目录')
     parser.add_argument('--fast', action='store_true', help='单人快速模式：关闭 diarization，保留当前模型路径')
-    parser.add_argument('--slides', action='store_true', help='提取视频关键帧截图（PPT幻灯片）')
+    parser.add_argument('--hotword', action='append', default=[], help='MOSS 专用热词；可重复传入')
+    slide_choice = parser.add_mutually_exclusive_group()
+    slide_choice.add_argument('--slides', action='store_true', dest='slides', help='提取视频关键帧截图（PPT幻灯片）')
+    slide_choice.add_argument('--no-slides', action='store_false', dest='slides', help='视频仅转录，不提取截图')
+    parser.set_defaults(slides=None)
     parser.add_argument('--slide-threshold', type=float, default=27.0, help='场景检测阈值（默认27.0，值越低越灵敏）')
 
     args = parser.parse_args()
@@ -230,16 +246,13 @@ def main():
         args.diarize = False
         print("⚡ fast 模式已自动关闭说话人分离")
 
-    if args.model:
-        print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})")
-    elif args.fast:
-        print("⚡ 使用单人快速模式（关闭说话人分离，保留默认 Paraformer）")
+    print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})")
 
     # 检查服务是否运行
     if not check_server(args.server):
         print(f"❌ 无法连接到转录服务: {args.server}")
         print(f"\n请先启动服务:")
-        print(f"  python ~/.claude/skills/transcribe/server.py")
+        print(f"  python3 {Path(__file__).parent / 'server.py'}")
         sys.exit(1)
 
     # 执行转录
@@ -250,8 +263,9 @@ def main():
             output_dir=args.output,
             diarize=args.diarize,
             model=args.model,
-            model_id=None,
+            model_id=args.model_id,
             fast=args.fast,
+            hotwords=args.hotword,
         )
     else:
         result = transcribe_file(
@@ -260,10 +274,12 @@ def main():
             output_path=args.output,
             diarize=args.diarize,
             model=args.model,
-            model_id=None,
+            model_id=args.model_id,
             fast=args.fast,
             extract_slides=args.slides,
             slide_threshold=args.slide_threshold,
+            include_summary_prompt=not args.no_summary,
+            hotwords=args.hotword,
         )
 
     # 输出结果
@@ -310,7 +326,10 @@ def main():
 
                     # 标准模式：输出提示词供 LLM 调用
                     print("🤖 正在准备 AI 总结...")
-                    success, prompt, text = summarize_file_for_claude(md_path)
+                    if result.get('summary_prompt'):
+                        success, prompt = True, result['summary_prompt']
+                    else:
+                        success, prompt, _ = summarize_file_for_claude(md_path)
 
                     if not success:
                         print(f"❌ {prompt}")

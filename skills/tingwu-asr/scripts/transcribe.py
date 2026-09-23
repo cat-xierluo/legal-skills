@@ -413,11 +413,11 @@ def _transcribe_one(client, file_path, args, lang, verbose=True, existing_task=N
     # 纯脚本 runtime 里 json 不存在属正常情况：打印延后提示而非报错。
     if not getattr(args, "no_summary", False):
         try:
-            summary_py = SKILL_ROOT.parent / "funasr-transcribe" / "scripts" / "summary.py"
+            summary_py = SKILL_ROOT.parent / "local-asr" / "scripts" / "summary.py"
             summary_json = out_path.with_suffix(".json")
             if not summary_py.exists():
                 if verbose:
-                    print(f"[{file_path.name}] 跳过 AI 总结: 未找到 funasr-transcribe/summary.py")
+                    print(f"[{file_path.name}] 跳过 AI 总结: 未找到 local-asr/summary.py")
             elif summary_json.exists():
                 if verbose:
                     print(f"[{file_path.name}] 注入 AI 总结...")
