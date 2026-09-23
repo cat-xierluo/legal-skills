@@ -1,5 +1,19 @@
 # 变更日志
 
+## [1.5.0] - 2026-09-23
+
+### 新增
+
+- **Obsidian `file://` 引用支持**：Obsidian 导出的图片引用格式 `![alt](<file:///绝对路径.jpg>)`（尖括号 + `file://` 协议）此前无法解析——路径带着尖括号与协议前缀直接做文件存在性检查，每张都报 "File not found"（2026-09-23 处理新疆律协授课报道 4 张图全部失败的实战案例）。现识别并剥离尖括号与 `file://` scheme：`file:///abs/path` 取 `//` 后的绝对路径；`file://<host>/path`（如 `file://localhost/...`）去掉主机名保留路径；URL 内百分号编码（`%20` 空格等）解码为真实路径——仅对 file:// 引用解码，普通路径中的字面 `%`（如 `50%.png`）不受影响
+
+### 验证
+
+- 新增回归脚本 `scripts/test_file_url_refs.sh`（mock PicList server，无需真实上传）：file:// 引用上传替换、同一图多次引用去重复用 URL、`--dry-run` 识别、`file://localhost` 形式、`--keep-local` 保留、已有云端链接不动——10 项断言全过；补充分离验证：`%20` 编码路径解码上传成功、字面 `%` 路径不解码直传成功
+- 修复前后对照：旧版 file:// 引用 100% "File not found"，新版全部正常上传
+- macOS `/bin/bash` 3.2.57 与 Homebrew bash 双 runtime 通过；`bash -n` 通过；shellcheck 无新增告警（仅存量 3 处 SC2219 style）
+
+---
+
 ## [1.4.1] - 2026-09-21
 
 ### 修复

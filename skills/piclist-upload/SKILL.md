@@ -2,7 +2,7 @@
 name: piclist-upload
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.1"
+version: "1.5.0"
 description: 通过 PicList HTTP Server 将 Markdown 文件中的本地图片上传到图床，并替换为云端链接。本技能应在用户需要上传 Markdown 中的图片、处理包含本地图片引用的 Markdown、批量处理多个 Markdown 文件或目录、或替换本地路径为云端链接以实现跨设备访问时使用。
 license: Complete terms in LICENSE.txt
 ---
@@ -106,3 +106,13 @@ export RETRY_DELAY=2           # 重试间隔秒数
 ## 支持格式
 
 png, jpg, jpeg, gif, webp, svg, bmp
+
+## 支持的引用写法
+
+| 写法 | 示例 | 处理 |
+|------|------|------|
+| 普通路径 | `![alt](/abs/pic.png)`、`![alt](rel/pic.png)` | 原样解析（v1.0.0 起） |
+| 尖括号路径 | `![alt](</abs/pic (1).png>)` | 剥离尖括号后解析 |
+| Obsidian file:// | `![alt](<file:///abs/pic.jpg>)` | 剥离尖括号与 `file://`，`file://<host>/` 形式去掉主机名；URL 内百分号编码（`%20` 等）解码为真实路径（v1.5.0 起） |
+
+普通路径中的字面 `%`（如 `50%.png`）不会被解码，保持原样。

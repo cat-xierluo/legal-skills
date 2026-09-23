@@ -180,6 +180,37 @@ process_markdown_file() {
         image_path="${image_path#[\(]}"
         image_path="${image_path%\)}"
 
+        # Obsidian-style reference: ![alt](<file:///abs/path.jpg>). The angle
+        # brackets and the file:// scheme must be stripped before the string
+        # can be treated as a local path; otherwise every such image is
+        # reported as "File not found" (seen with real Obsidian notes).
+        local had_file_url=false
+        case "$image_path" in
+            '<'*'>')
+                image_path="${image_path#?}"
+                image_path="${image_path%?}"
+                ;;
+        esac
+        case "$image_path" in
+            file:///*)
+                had_file_url=true
+                image_path="${image_path#file://}"
+                ;;
+            file://*)
+                # file://<host>/<path> form (e.g. file://localhost/...):
+                # drop the host label, keep the path.
+                had_file_url=true
+                image_path="/${image_path#file://*/}"
+                ;;
+        esac
+        if [ "$had_file_url" = true ] && [[ "$image_path" == *%* ]]; then
+            # Percent-escapes (%20 etc.) inside a file:// URL: decode to a
+            # real path. Only done for file:// refs — a literal '%' in a plain
+            # path (e.g. "50%.png") must stay untouched. '\' is escaped first
+            # so printf %b cannot misread a backslash in the filename.
+            image_path=$(printf '%b' "$(printf '%s' "$image_path" | sed -e 's/\\/\\\\/g' -e 's/%/\\x/g')")
+        fi
+
         # Skip if already a URL
         if [[ "$image_path" =~ ^https?:// ]]; then
             : $((skip_count++))
