@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.1"
+version: "0.6.3"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -61,11 +61,14 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
    ```bash
    gh api user/starred/owner/repo 2>/dev/null
    ```
+   HTTP 204 = 已 star，404 = 未 star。
 
 4. **Star 仓库**
+   `gh repo star` 子命令在部分 gh 版本不存在（如 2.83.0 报 unknown command），统一用 API，幂等且跨版本可用：
    ```bash
-   gh repo star owner/repo
+   gh api -X PUT user/starred/owner/repo
    ```
+   成功后用第 3 步的 GET 回读，204 才算完成，不要以 PUT 退出码为准。
 
 5. **生成报告**
    - 新 star 的仓库列表
