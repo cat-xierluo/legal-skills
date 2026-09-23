@@ -62,6 +62,21 @@
 
    - 诉讼分析、法律方案生成、法律文本格式化、法律问答提取、法院短信处理等专业应用
 
+## 🚀 安装方法
+
+将以下内容复制到你的 Agent 平台，让它帮你安装：
+
+> 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
+
+### 单独下载某个 skill（推荐，无需 Git）
+
+进入 [GitHub Releases 最新版](https://github.com/cat-xierluo/legal-skills/releases/latest) 页面，
+下载你需要的 skill 的 zip 文件，解压后直接得到 `<name>/` 文件夹，把整个文件夹复制到 Agent 的 skills 目录即可。
+
+例如 `contract-copilot-1.5.3.zip` 解压后得到 `contract-copilot/` 文件夹，复制到 `~/.claude/skills/` 即可。
+
+上表「下载」列已提供每个 skill 的最新版本直链（指向 latest），新增版本发布后由 GitHub Actions 自动同步。
+
 ## 🛠️ 技能列表
 
 以下均为本项目自研技能，面向法律工作者的实际工作流按场景整理：
@@ -755,20 +770,6 @@
 - **透明变更**：所有修改写入 CHANGELOG.md，遵循版本号规范
 - **保留证据**：输出引用可回溯，缺失信息明确标注
 
-## 🚀 安装方法
-
-将以下内容复制到你的 Agent 平台，让它帮你安装：
-
-> 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
-
-### 单独下载某个 skill（推荐，无需 Git）
-
-进入 [GitHub Releases 最新版](https://github.com/cat-xierluo/legal-skills/releases/latest) 页面，
-下载你需要的 skill 的 zip 文件，解压后直接得到 `<name>/` 文件夹，把整个文件夹复制到 Agent 的 skills 目录即可。
-
-例如 `contract-copilot-1.5.3.zip` 解压后得到 `contract-copilot/` 文件夹，复制到 `~/.claude/skills/` 即可。
-
-上表「下载」列已提供每个 skill 的最新版本直链（指向 latest），新增版本发布后由 GitHub Actions 自动同步。
 
 <details>
 <summary>📦 已归档/已合并技能</summary>
