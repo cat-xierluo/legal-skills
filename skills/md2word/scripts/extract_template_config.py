@@ -149,6 +149,9 @@ BASE_CONFIG: Dict[str, Any] = {
         "show_caption": True,
     },
     "horizontal_rule": {
+        "style": "border",
+        "border_size": 6,
+        "border_space": 1,
         "character": "─",
         "repeat_count": 55,
         "font": "Times New Roman",
