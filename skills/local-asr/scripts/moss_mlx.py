@@ -1,0 +1,364 @@
+"""Apple Silicon 上的可选 MOSS 转写后端。
+
+只在实际进入 moss-mlx 路由时导入 mlx-audio；长音频分段后用 CAM++
+把每段内的匿名说话人标签链接成文件内一致的标签。
+"""
+
+from __future__ import annotations
+
+import platform
+import importlib.util
+import os
+import re
+import subprocess
+import tempfile
+import time
+import wave
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+
+
+DEFAULT_MODEL_ID = "OpenMOSS-Team/MOSS-Transcribe-Diarize"
+SAMPLE_RATE = 16000
+try:
+    CHUNK_SECONDS = max(60, min(600, int(os.environ.get("FUNASR_MOSS_CHUNK_SECONDS", "600"))))
+except ValueError as exc:
+    raise RuntimeError("FUNASR_MOSS_CHUNK_SECONDS 必须是 60–600 的整数秒数") from exc
+MAX_OUTPUT_TOKENS = 16000
+SPEAKER_MATCH_THRESHOLD = 0.55
+SEGMENT_RE = re.compile(
+    r"\[(?P<start>\d+(?:\.\d+)?)\]\[(?P<speaker>S\d+)\]"
+    r"(?P<text>.*?)\[(?P<end>\d+(?:\.\d+)?)\]",
+    re.DOTALL,
+)
+TRANSCRIPTION_PROMPT = (
+    "请将音频转写为文本，每一段需以起始时间戳和说话人编号（[S01]、[S02]、[S03]…）开头，"
+    "正文为对应的语音内容，并在段末标注结束时间戳，以清晰标明该段语音范围。"
+)
+
+
+def load_model(model_id: str = DEFAULT_MODEL_ID):
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise RuntimeError("moss-mlx 仅支持 Apple Silicon macOS；其他设备请使用 FunASR。")
+    if importlib.util.find_spec("mlx_audio") is None:
+        raise RuntimeError(
+            "缺少默认 MOSS-MLX 依赖。请在服务使用的 Python 环境运行 "
+            "`python3 -m pip install 'mlx-audio[stt]>=0.4.5,<0.5'`。"
+        )
+    try:
+        from mlx_audio.stt.utils import load
+    except ImportError as exc:
+        raise RuntimeError(f"MOSS-MLX 依赖已安装但无法导入：{exc}") from exc
+    if model_id == DEFAULT_MODEL_ID:
+        cache_root = Path(os.environ.get("MODELSCOPE_CACHE", os.path.expanduser("~/.cache/modelscope/hub")))
+        cached_model = cache_root / "models" / "OpenMOSS" / "MOSS-Transcribe-Diarize"
+        if (cached_model / "config.json").is_file():
+            try:
+                return load(str(cached_model))
+            except Exception as cache_exc:
+                print(f"ModelScope 本地 MOSS 缓存加载失败，继续尝试远端来源：{cache_exc}")
+    try:
+        return load(model_id)
+    except Exception as exc:
+        if model_id == DEFAULT_MODEL_ID:
+            try:
+                from modelscope.hub.snapshot_download import snapshot_download
+            except ImportError as dependency_exc:
+                raise RuntimeError(
+                    "Hugging Face 模型加载失败，且缺少 ModelScope 回退依赖；"
+                    "请安装基础 requirements 或使用 --model-id 指向本地模型目录。"
+                ) from dependency_exc
+            try:
+                print("Hugging Face 模型加载失败，尝试从 ModelScope 获取 MOSS 权重")
+                local_path = snapshot_download("OpenMOSS/MOSS-Transcribe-Diarize")
+                return load(local_path)
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    f"MOSS-MLX 在 Hugging Face 和 ModelScope 均加载失败：{fallback_exc}。"
+                    "可用 --model-id 指向已下载的本地模型目录。"
+                ) from fallback_exc
+        raise RuntimeError(
+            f"MOSS-MLX 模型加载失败：{exc}。若 Hugging Face 连接失败，可先从 ModelScope "
+            "下载 OpenMOSS/MOSS-Transcribe-Diarize，再通过 model_id/--model-id 指向本地目录。"
+        ) from exc
+
+
+def _wav_info(path: Path) -> tuple[int, int]:
+    with wave.open(str(path), "rb") as stream:
+        if (stream.getnchannels(), stream.getsampwidth(), stream.getframerate()) != (1, 2, SAMPLE_RATE):
+            raise RuntimeError("MOSS 音频归一化结果不是 16kHz 单声道 PCM16")
+        return stream.getnframes(), stream.getframerate()
+
+
+def _read_samples(path: Path, start_frame: int, end_frame: int) -> np.ndarray:
+    with wave.open(str(path), "rb") as stream:
+        stream.setpos(start_frame)
+        return np.frombuffer(stream.readframes(end_frame - start_frame), dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _split_points(path: Path, total_frames: int) -> list[int]:
+    """在 10 分钟目标点附近寻找较安静的切点；绝不丢弃音频帧。"""
+    points = [0]
+    step = CHUNK_SECONDS * SAMPLE_RATE
+    while total_frames - points[-1] > step:
+        target = points[-1] + step
+        start = max(points[-1] + SAMPLE_RATE, target - 15 * SAMPLE_RATE)
+        end = min(total_frames - SAMPLE_RATE, target + 15 * SAMPLE_RATE)
+        window = _read_samples(path, start, end)
+        block = SAMPLE_RATE // 4
+        usable = len(window) // block * block
+        if usable:
+            rms = np.sqrt(np.mean(window[:usable].reshape(-1, block) ** 2, axis=1))
+            quiet = np.flatnonzero(rms < 0.004)
+            runs = []
+            if quiet.size:
+                run_start = previous = int(quiet[0])
+                for item in quiet[1:]:
+                    item = int(item)
+                    if item != previous + 1:
+                        if previous - run_start + 1 >= 4:  # 至少 1 秒静音
+                            runs.append((run_start, previous))
+                        run_start = item
+                    previous = item
+                if previous - run_start + 1 >= 4:
+                    runs.append((run_start, previous))
+            if runs:
+                midpoints = [start + ((a + b + 1) * block) // 2 for a, b in runs]
+                cut = min(midpoints, key=lambda point: abs(point - target))
+            else:
+                cut = start + (int(np.argmin(rms)) * block) + block // 2
+        else:
+            cut = target
+        if cut <= points[-1] or cut >= total_frames:
+            cut = target
+        points.append(cut)
+    points.append(total_frames)
+    return points
+
+
+def _write_chunk(source: Path, target: Path, start_frame: int, end_frame: int) -> None:
+    with wave.open(str(source), "rb") as reader, wave.open(str(target), "wb") as writer:
+        reader.setpos(start_frame)
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(SAMPLE_RATE)
+        writer.writeframes(reader.readframes(end_frame - start_frame))
+
+
+def _is_near_silent(path: Path) -> bool:
+    """仅跳过整段几乎为零的波形，避免长录音中的纯静音块触发幻觉。"""
+    with wave.open(str(path), "rb") as stream:
+        while frames := stream.readframes(SAMPLE_RATE):
+            samples = np.frombuffer(frames, dtype="<i2")
+            if samples.size and int(np.max(np.abs(samples.astype(np.int32)))) > 3:
+                return False
+    return True
+
+
+def _parse_output(output, duration_s: float) -> list[dict]:
+    raw = str(getattr(output, "text", "") or "").strip()
+    token_count = getattr(output, "generation_tokens", None)
+    if token_count is not None and token_count >= MAX_OUTPUT_TOKENS:
+        raise RuntimeError("MOSS 输出达到 token 上限，可能截断；可调低 FUNASR_MOSS_CHUNK_SECONDS 后重启服务重试。")
+    matches = list(SEGMENT_RE.finditer(raw))
+    if (
+        not matches
+        or raw[:matches[0].start()].strip()
+        or raw[matches[-1].end():].strip()
+        or any(raw[left.end():right.start()].strip() for left, right in zip(matches, matches[1:]))
+    ):
+        raise RuntimeError("MOSS 输出缺少完整的时间戳/说话人段，拒绝写入不完整转录稿。")
+    segments = []
+    previous_start = -1.0
+    for match in matches:
+        start = float(match.group("start"))
+        end = float(match.group("end"))
+        sentence = match.group("text").strip()
+        if (
+            not sentence or start < previous_start or end <= start
+            or start >= duration_s + 0.01 or end > duration_s + 0.5
+        ):
+            raise RuntimeError("MOSS 输出段的文字或时间戳无效，拒绝写入转录稿。")
+        segments.append({
+            "start": start,
+            "end": end,
+            "speaker": match.group("speaker"),
+            "text": sentence,
+        })
+        previous_start = start
+    return segments
+
+
+def _discard_near_silent(path: Path, segments: list[dict]) -> tuple[list[dict], int]:
+    """仅剔除几乎没有任何波形能量的生成段；正常低音量人声保留。"""
+    kept = []
+    removed = 0
+    for segment in segments:
+        start = max(0, int(segment["start"] * SAMPLE_RATE))
+        end = max(start + 1, int(segment["end"] * SAMPLE_RATE))
+        samples = _read_samples(path, start, end)
+        if samples.size and float(np.max(np.abs(samples))) <= 0.0001:
+            removed += 1
+        else:
+            kept.append(segment)
+    return kept, removed
+
+
+def _speaker_embeddings(path: Path, segments: list[dict], speaker_model) -> dict[str, np.ndarray]:
+    """每个段内说话人最多取 30 秒音频；短发言不强行跨段认人。"""
+    regions = defaultdict(list)
+    for segment in segments:
+        regions[segment["speaker"]].append(segment)
+    samples, labels = [], []
+    for label, turns in regions.items():
+        pieces = []
+        remaining = 30 * SAMPLE_RATE
+        for turn in sorted(turns, key=lambda item: item["end"] - item["start"], reverse=True):
+            start = max(0, int(turn["start"] * SAMPLE_RATE))
+            end = min(int(turn["end"] * SAMPLE_RATE), start + remaining)
+            if end > start:
+                pieces.append(_read_samples(path, start, end))
+                remaining -= end - start
+            if remaining <= 0:
+                break
+        if pieces and sum(len(piece) for piece in pieces) >= 3 * SAMPLE_RATE:
+            samples.append(np.concatenate(pieces))
+            labels.append(label)
+    if not samples:
+        return {}
+    raw, _ = speaker_model.model.inference(
+        samples, key=[f"moss_spk_{index}" for index in range(len(samples))], **speaker_model.kwargs
+    )
+    vectors = raw[0]["spk_embedding"]
+    if hasattr(vectors, "detach"):
+        vectors = vectors.detach().cpu().numpy()
+    else:
+        vectors = np.asarray(vectors)
+    return {label: np.asarray(vector, dtype=np.float32).reshape(-1) for label, vector in zip(labels, vectors)}
+
+
+def _link_speakers(chunks: list[tuple[Path, list[dict]]], speaker_model) -> list[dict]:
+    """贪心链接跨段声纹；同一段内不同标签不能并入同一个全局说话人。"""
+    profiles: list[np.ndarray | None] = []
+    linked = []
+    for chunk_index, (path, segments) in enumerate(chunks):
+        embeddings = _speaker_embeddings(path, segments, speaker_model)
+        local_to_global = {}
+        used = set()
+        for local in dict.fromkeys(seg["speaker"] for seg in segments):
+            vector = embeddings.get(local)
+            if vector is not None:
+                vector = vector / max(float(np.linalg.norm(vector)), 1e-8)
+            candidates = [
+                (float(np.dot(vector, profile)), index)
+                for index, profile in enumerate(profiles)
+                if vector is not None and profile is not None and index not in used
+            ]
+            best_score, best_index = max(candidates, default=(-1.0, -1))
+            if best_score >= SPEAKER_MATCH_THRESHOLD:
+                global_index = best_index
+                blended = profiles[best_index] + vector
+                profiles[best_index] = blended / max(float(np.linalg.norm(blended)), 1e-8)
+            else:
+                global_index = len(profiles)
+                profiles.append(vector)
+            local_to_global[local] = global_index
+            used.add(global_index)
+        for segment in segments:
+            linked.append({**segment, "speaker": f"S{local_to_global[segment['speaker']] + 1:02d}", "chunk": chunk_index})
+    return linked
+
+
+def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list[str] | None = None,
+               diarize: bool = True) -> dict:
+    """返回兼容 FunASR 的 text / sentence_info 结构。"""
+    timings = {}
+    warnings = []
+    started = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="moss_mlx_") as temp_dir:
+        workspace = Path(temp_dir)
+        normalized = workspace / "audio.wav"
+        phase = time.perf_counter()
+        try:
+            process = subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", file_path,
+                 "-vn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-acodec", "pcm_s16le", str(normalized)],
+                capture_output=True, text=True, check=False,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("缺少 ffmpeg；请在 macOS 运行 `brew install ffmpeg` 后重试") from exc
+        if process.returncode != 0:
+            raise RuntimeError(f"音频归一化失败：{process.stderr.strip()[:300]}")
+        total_frames, _ = _wav_info(normalized)
+        if total_frames == 0:
+            raise RuntimeError("音频为空，无法转录")
+        points = _split_points(normalized, total_frames)
+        timings["audio_prepare_s"] = round(time.perf_counter() - phase, 3)
+        chunks = []
+        phase = time.perf_counter()
+        for index, (start, end) in enumerate(zip(points, points[1:])):
+            chunk_path = workspace / f"chunk_{index:04d}.wav"
+            _write_chunk(normalized, chunk_path, start, end)
+            if _is_near_silent(chunk_path):
+                chunks.append((chunk_path, []))
+                warnings.append(f"第 {index + 1} 段音频近乎静音，已跳过模型推理")
+                continue
+            try:
+                prompt = TRANSCRIPTION_PROMPT
+                if hotwords:
+                    prompt += "热词提示：" + ", ".join(hotwords[:30])
+                output = model.generate(
+                    str(chunk_path), max_tokens=MAX_OUTPUT_TOKENS,
+                    prompt=prompt, temperature=0.0,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"MOSS 第 {index + 1} 段推理失败：{exc}") from exc
+            duration = (end - start) / SAMPLE_RATE
+            segments = _parse_output(output, duration)
+            segments, silent_count = _discard_near_silent(chunk_path, segments)
+            if silent_count:
+                warnings.append(f"第 {index + 1} 段剔除 {silent_count} 条近乎静音的模型输出")
+            chunks.append((chunk_path, segments))
+        if not any(segments for _, segments in chunks):
+            raise RuntimeError("MOSS 未输出可验证的语音段，未生成转录稿。")
+        timings["asr_s"] = round(time.perf_counter() - phase, 3)
+        phase = time.perf_counter()
+        if len(chunks) > 1 and diarize:
+            if speaker_model_factory is None:
+                raise RuntimeError("长录音需要 CAM++ 跨段链接说话人，但说话人模型不可用")
+            speaker_model = speaker_model_factory()
+            linked = _link_speakers(chunks, speaker_model)
+        else:
+            linked = [
+                {**segment, "chunk": index}
+                for index, (_, segments) in enumerate(chunks)
+                for segment in segments
+            ]
+        timings["speaker_link_s"] = round(time.perf_counter() - phase, 3)
+        sentence_info = []
+        for segment in linked:
+            offset = points[segment["chunk"]] / SAMPLE_RATE
+            sentence_info.append({
+                "start": round((offset + segment["start"]) * 1000),
+                "end": round((offset + segment["end"]) * 1000),
+                "sentence": segment["text"],
+                "spk": segment["speaker"],
+            })
+        if diarize:
+            speaker_durations = defaultdict(float)
+            for segment in sentence_info:
+                speaker_durations[segment["spk"]] += (segment["end"] - segment["start"]) / 1000
+            if len(speaker_durations) >= 2:
+                for label, duration in speaker_durations.items():
+                    if duration < 3:
+                        warnings.append(f"说话人 {label} 总发言约 {duration:.1f} 秒，匿名标签可能不稳定，请人工核对")
+    timings["moss_total_s"] = round(time.perf_counter() - started, 3)
+    return {
+        "text": "".join(segment["sentence"] for segment in sentence_info),
+        "sentence_info": sentence_info,
+        "speaker_scope": "global" if diarize else "none",
+        "_timings": timings,
+        "_warnings": warnings,
+    }

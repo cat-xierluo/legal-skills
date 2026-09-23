@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
-"""
-FunASR 语音转文字 - 一键安装脚本
-自动安装依赖和下载模型，支持 Windows/macOS/Linux
-"""
+"""本地转录一键安装：Apple Silicon 默认 MOSS-MLX，--legacy 保留 FunASR。"""
 
 import os
 import sys
@@ -19,12 +16,16 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent.absolute()
 SKILL_DIR = SCRIPT_DIR.parent
 REQUIREMENTS_FILE = SKILL_DIR / "assets" / "requirements.txt"
+MOSS_REQUIREMENTS_FILE = SKILL_DIR / "assets" / "requirements-moss-mlx.txt"
 MODELS_CONFIG = SKILL_DIR / "assets" / "models.json"
+MOSS_MODELSCOPE_ID = "OpenMOSS/MOSS-Transcribe-Diarize"
+# FunASR 1.3.x 的 `cam++` 别名实际映射到此模型；预下载必须与运行时一致。
+CAMPP_MODELSCOPE_ID = "iic/speech_campplus_sv_zh-cn_16k-common"
 
 # 最低系统要求
 MIN_MEMORY_GB = 4  # 最低内存要求
 MIN_DISK_GB = 5    # 最低磁盘空间要求（模型约 1.2GB + 依赖）
-MIN_PYTHON_VERSION = (3, 8)
+MIN_PYTHON_VERSION = (3, 10)
 
 
 def print_step(msg: str):
@@ -108,7 +109,7 @@ def get_system_info():
     return info
 
 
-def check_system_requirements():
+def check_system_requirements(backend: str = "moss-mlx"):
     """检查系统环境是否满足要求"""
     print_step("检查系统环境")
 
@@ -118,6 +119,8 @@ def check_system_requirements():
 
     # 操作系统
     os_name = info['os']
+    if backend == "moss-mlx" and (os_name != 'Darwin' or info['machine'] != 'arm64'):
+        errors.append("MOSS-MLX 默认安装需要 Apple Silicon macOS；旧 FunASR 管线请使用 --legacy")
     if os_name == 'Darwin':
         print_success(f"操作系统: macOS ({info['os_version']})")
         print_info(f"架构: {info['machine']}")
@@ -134,8 +137,11 @@ def check_system_requirements():
     # Python 版本
     py_version = info['python_version']
     print(f"Python 版本: {py_version.major}.{py_version.minor}.{py_version.micro}")
-    if py_version < MIN_PYTHON_VERSION:
-        errors.append(f"需要 Python {MIN_PYTHON_VERSION[0]}.{MIN_PYTHON_VERSION[1]} 或更高版本")
+    min_python = MIN_PYTHON_VERSION
+    if py_version < min_python:
+        errors.append(f"需要 Python {min_python[0]}.{min_python[1]} 或更高版本")
+    elif py_version >= (3, 13):
+        errors.append("完整安装保留 funasr-onnx 0.4.1，需 Python 3.10–3.12（建议原生 3.11 虚拟环境）")
     else:
         print_success("Python 版本符合要求")
 
@@ -249,12 +255,15 @@ def is_externally_managed_env():
         return False
 
 
-def install_dependencies():
+def install_dependencies(backend: str = "moss-mlx"):
     """安装 pip 依赖"""
     print_step("安装依赖包")
 
     if not REQUIREMENTS_FILE.exists():
         print_error(f"找不到 requirements.txt: {REQUIREMENTS_FILE}")
+        return False
+    if backend == "moss-mlx" and not MOSS_REQUIREMENTS_FILE.exists():
+        print_error(f"找不到 MOSS 依赖文件: {MOSS_REQUIREMENTS_FILE}")
         return False
 
     print(f"从 {REQUIREMENTS_FILE} 安装依赖...")
@@ -262,6 +271,8 @@ def install_dependencies():
 
     # 构建安装命令
     cmd = [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)]
+    if backend == "moss-mlx":
+        cmd.extend(["-r", str(MOSS_REQUIREMENTS_FILE)])
 
     # 检测是否为外部管理环境（如 Homebrew Python）
     if is_externally_managed_env():
@@ -301,9 +312,29 @@ def check_model_exists(model_id: str) -> bool:
     return model_path.exists() and any(model_path.iterdir())
 
 
-def download_models():
+def download_models(backend: str = "moss-mlx"):
     """下载所有需要的模型"""
     print_step("下载 ASR 模型")
+
+    if backend == "moss-mlx":
+        try:
+            from modelscope.hub.snapshot_download import snapshot_download
+        except ImportError:
+            print_error("MOSS 模型下载需要 modelscope；请先安装依赖")
+            return False
+        local_model = os.environ.get("FUNASR_MOSS_MODEL_ID")
+        model_ids = (CAMPP_MODELSCOPE_ID,) if local_model and Path(local_model).exists() else (MOSS_MODELSCOPE_ID, CAMPP_MODELSCOPE_ID)
+        for model_id in model_ids:
+            if check_model_exists(model_id):
+                print_success(f"已缓存模型: {model_id}")
+                continue
+            try:
+                print_info(f"下载模型: {model_id}")
+                snapshot_download(model_id)
+            except Exception as exc:
+                print_error(f"模型下载失败 {model_id}: {exc}")
+                return False
+        return True
 
     config = load_models_config()
     if not config:
@@ -359,7 +390,7 @@ def download_models():
     return success_count == total_count
 
 
-def verify_installation():
+def verify_installation(backend: str = "moss-mlx"):
     """验证安装结果"""
     print_step("验证安装")
 
@@ -377,6 +408,24 @@ def verify_installation():
         print_success(f"Uvicorn {uvicorn.__version__}")
     except ImportError:
         errors.append("Uvicorn 未安装")
+
+    if backend == "moss-mlx":
+        import importlib.util
+        if platform.system() != "Darwin" or platform.machine() != "arm64":
+            errors.append("MOSS-MLX 需要 Apple Silicon macOS；旧管线可使用 --legacy")
+        if sys.version_info < (3, 10):
+            errors.append("MOSS-MLX 需要 Python 3.10+")
+        if importlib.util.find_spec("mlx_audio") is None:
+            errors.append("mlx-audio[stt] 未安装")
+        else:
+            print_success("mlx-audio 已安装")
+        if shutil.which("ffmpeg") is None:
+            errors.append("ffmpeg 未安装（macOS: brew install ffmpeg）")
+        if not (os.environ.get("FUNASR_MOSS_MODEL_ID") and Path(os.environ["FUNASR_MOSS_MODEL_ID"]).exists()) \
+                and not check_model_exists(MOSS_MODELSCOPE_ID):
+            print_warning("未检测到 ModelScope 本地 MOSS 权重；若 Hugging Face 缓存也不存在，首次转录会下载")
+        if not check_model_exists(CAMPP_MODELSCOPE_ID):
+            print_warning("CAM++ 未缓存；超过约 10 分钟的录音首次使用时需下载")
 
     try:
         import funasr
@@ -417,14 +466,14 @@ def verify_installation():
     try:
         import numpy
         print_success(f"numpy {numpy.__version__}")
-        if numpy.__version__.startswith('2.'):
-            print_warning("检测到 numpy 2.x，可能与部分依赖不兼容，建议使用 numpy<2")
+        if numpy.__version__.startswith('2.') and sys.version_info < (3, 13):
+            print_warning("检测到 numpy 2.x；如旧 FunASR 扩展出现二进制兼容问题，可在 Python 3.12 环境尝试 numpy<2")
     except ImportError:
         errors.append("numpy 未安装")
 
     # 检查模型
     config = load_models_config()
-    if config:
+    if config and backend != "moss-mlx":
         models = config.get('models', [])
         for model in models:
             if model.get('required', True):
@@ -445,7 +494,7 @@ def verify_installation():
 
 def main():
     parser = argparse.ArgumentParser(
-        description='FunASR 语音转文字 - 一键安装脚本（支持 Windows/macOS/Linux）',
+        description='本地语音转文字一键安装（默认 Apple Silicon MOSS-MLX；--legacy 安装旧 FunASR）',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -454,57 +503,63 @@ def main():
   python setup.py --skip-models # 只安装依赖
   python setup.py --verify     # 只验证安装
   python setup.py --check      # 只检查系统环境
+  python setup.py --legacy     # 安装原 FunASR 管线（含 Paraformer / ONNX）
 """
     )
     parser.add_argument('--skip-deps', action='store_true', help='跳过依赖安装')
     parser.add_argument('--skip-models', action='store_true', help='跳过模型下载')
     parser.add_argument('--verify', action='store_true', help='只验证安装，不安装任何内容')
     parser.add_argument('--check', action='store_true', help='只检查系统环境')
+    parser.add_argument('--legacy', action='store_true', help='安装/验证原 FunASR 管线；默认安装 MOSS-MLX')
 
     args = parser.parse_args()
+    backend = "paraformer" if args.legacy else "moss-mlx"
+    setup_env = os.environ.copy()
+    setup_env["FUNASR_SERVER_DEFAULT_MODEL"] = backend
 
     print("\n" + "="*60)
-    print("  FunASR 语音转文字 - 一键安装")
-    print("  支持: Windows / macOS / Linux")
+    print(f"  本地语音转文字 - 一键安装（{backend}）")
+    print("  MOSS 默认仅支持 Apple Silicon；--legacy 可安装旧管线")
     print("="*60)
 
     # 只验证安装
     if args.verify:
-        success = verify_installation()
+        success = verify_installation(backend)
         if success:
             print_info("正在刷新环境配置 skill-env.json ...")
             subprocess.run(
                 [sys.executable, str(SCRIPT_DIR / "init_env.py"), "--force"],
                 check=False,
+                env=setup_env,
             )
         sys.exit(0 if success else 1)
 
     # 只检查环境
     if args.check:
-        success = check_system_requirements()
+        success = check_system_requirements(backend)
         sys.exit(0 if success else 1)
 
     # 检查系统环境
-    if not check_system_requirements():
+    if not check_system_requirements(backend):
         print_error("\n系统环境不满足要求，请解决上述问题后重试")
         sys.exit(1)
 
     # 安装依赖
     if not args.skip_deps:
-        if not install_dependencies():
+        if not install_dependencies(backend):
             sys.exit(1)
     else:
         print_info("跳过依赖安装")
 
     # 下载模型
     if not args.skip_models:
-        if not download_models():
+        if not download_models(backend):
             sys.exit(1)
     else:
         print_info("跳过模型下载")
 
     # 验证
-    if not verify_installation():
+    if not verify_installation(backend):
         print_error("\n安装可能不完整，请检查上述错误")
         sys.exit(1)
 
@@ -519,6 +574,7 @@ def main():
         subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "init_env.py"), "--force"],
             check=False,
+            env=setup_env,
         )
     except Exception:
         print_warning("生成 skill-env.json 失败，不影响正常使用")

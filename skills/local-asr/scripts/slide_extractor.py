@@ -12,12 +12,17 @@
 仅对视频文件生效，音频文件会被跳过。
 
 依赖:
-    pip install scenedetect[opencv] imagehash Pillow
+    pip install opencv-python imagehash Pillow
 """
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+try:
+    import cv2
+except ImportError as exc:
+    raise ImportError("视频关键帧提取需要 opencv-python；请运行 pip install opencv-python imagehash Pillow") from exc
 
 # 视频文件扩展名
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm'}
@@ -41,7 +46,7 @@ class SlideExtractor:
         视频 → 场景检测+兜底采样 → pHash 去重 → 空白回查补帧 → 最终过滤
 
     Args:
-        threshold: ContentDetector 灵敏度阈值（默认 20.0，值越低越灵敏）
+        threshold: OpenCV HSV 平均帧差与变化像素比例的组合阈值（默认 20.0，值越低越灵敏）
         min_scene_len: 最小场景时长（秒），短于此间隔的切换会被过滤
         hash_threshold: pHash 汉明距离阈值，低于此值视为相同画面（默认16）
         fallback_interval: 兜底采样间隔（秒），保证每 N 秒至少有一帧（默认60）
@@ -115,7 +120,7 @@ class SlideExtractor:
 
         frames = {}  # key: timestamp_ms, value: SlideFrame
 
-        # --- 通道 A：PySceneDetect ---
+        # --- 通道 A：OpenCV 场景变化检测 ---
         scene_frames = self._detect_scenes(video_path, output_dir)
         for f in scene_frames:
             if f.timestamp_ms not in frames:
@@ -154,51 +159,38 @@ class SlideExtractor:
         return sorted(frames.values(), key=lambda f: f.timestamp_ms)
 
     def _detect_scenes(self, video_path: str, output_dir: str) -> list:
-        """场景检测子函数"""
-        try:
-            from scenedetect import SceneManager, open_video
-            from scenedetect.detectors import ContentDetector
-        except ImportError:
-            print("[slide_extractor] 缺少依赖，请安装: pip install scenedetect[opencv]")
-            return []
-
-        try:
-            video = open_video(video_path)
-        except Exception as e:
-            print(f"[slide_extractor] 无法打开视频: {e}")
-            return []
-
-        scene_manager = SceneManager()
-        scene_manager.add_detector(
-            ContentDetector(
-                threshold=self.threshold,
-                min_scene_len=int(self.min_scene_len * video.frame_rate) if video.frame_rate else 90,
-            )
-        )
-
-        scene_manager.detect_scenes(video)
-        scene_list = scene_manager.get_scene_list()
-
-        if not scene_list:
-            return []
-
-        import cv2
+        """以 2 fps 采样 HSV 变化量与变化像素比例，保留场景开始帧。"""
         frames = []
         cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"[slide_extractor] 无法打开视频: {video_path}")
+            return []
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-
-        for i, (start, _end) in enumerate(scene_list):
-            frame_num = start.get_frames()
-            timestamp_sec = frame_num / fps
-            timestamp_ms = int(timestamp_sec * 1000)
-
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        sample_step = max(1, round(fps / 2))
+        last_saved = -self.min_scene_len
+        previous_hsv = None
+        for frame_num in range(0, total_frames, sample_step):
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
             ret, frame = cap.read()
             if not ret:
                 continue
+            small = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_AREA)
+            current_hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+            timestamp_sec = frame_num / fps
+            if previous_hsv is None:
+                score = 255.0
+            else:
+                difference = cv2.absdiff(current_hsv, previous_hsv)
+                changed_fraction = (difference.max(axis=2) > 20).mean()
+                score = float(difference.mean() + 200.0 * changed_fraction)
+            previous_hsv = current_hsv
+            if score < self.threshold or timestamp_sec - last_saved < self.min_scene_len:
+                continue
+            timestamp_ms = int(timestamp_sec * 1000)
 
             time_label = self._format_time_label(timestamp_sec)
-            img_filename = f"slide_{i + 1:03d}_{time_label}.jpg"
+            img_filename = f"slide_{len(frames) + 1:03d}_{time_label}.jpg"
             img_path = os.path.join(output_dir, img_filename)
 
             cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -208,6 +200,7 @@ class SlideExtractor:
                 image_path=img_path,
                 time_label=time_label,
             ))
+            last_saved = timestamp_sec
 
         cap.release()
         return frames

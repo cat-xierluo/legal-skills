@@ -2,6 +2,12 @@
 
 All notable changes to this skill will be documented in this file.
 
+## [2.9.1] - 2026-09-23
+
+### 文档完善
+
+- 开发与编排参考文档中的 ASR 技能路径改为 `local-asr`。
+
 ## [2.9.0] - 2026-09-16
 
 ### 新增

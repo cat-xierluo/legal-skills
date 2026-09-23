@@ -3,7 +3,7 @@ name: video-compressor
 description: 视频压缩与静默片段剪切工具。使用 FFmpeg CRF 模式压缩视频，适配屏幕录制/课件场景；支持检测并去除静默静止片段。自动检测硬件与源码率并选择最优编码方案（高码率源走 VideoToolbox 硬件加速，低码率录屏自动改用 x264 CRF 自适应编码）。本技能应在用户需要压缩视频、减小视频大小、去除视频空档时使用。不要用于：视频剪辑、音频提取、格式转换。
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
-version: "1.5.0"
+version: "1.5.2"
 license: MIT
 ---
 
@@ -241,4 +241,4 @@ brew reinstall ffmpeg      # 完全重装
 ## 与其他技能配合
 
 - 可与 `universal-media-downloader` 配合：下载视频后压缩节省空间
-- 可与 `funasr-transcribe` / `tingwu-asr` 配合：压缩后再转录，减少文件传输时间
+- 可与 `local-asr` / `tingwu-asr` 配合：压缩后再转录，减少文件传输时间

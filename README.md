@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-23 | 更新 | [local-asr](skills/local-asr/) | v2.0.0 | 技能由 funasr-transcribe 正式更名；MOSS-MLX 保持默认，FunASR 管线保留，迁移同仓调用及本机环境路径。 |
+| 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
+| 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
+| 2026-09-23 | 更新 | [project-init](skills/project-init/) | v1.2.5 | 更新示例配置中的本地 ASR 技能名称。 |
+| 2026-09-23 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.1 | 更新开发与编排参考文档中的本地 ASR 路径。 |
+| 2026-09-23 | 更新 | [transcription-corrector](skills/transcription-corrector/) | v1.0.9 | 更新配置示例中的上游转录技能名称。 |
+| 2026-09-23 | 更新 | [video-compressor](skills/video-compressor/) | v1.5.2 | 更新本地转录技能链接，并对齐前端元数据版本。 |
 | 2026-09-23 | 更新   | [md2word](skills/md2word/)                                             | v1.3.8  | **修复水平线折行**：55 个 `─` 在 Times New Roman 字体回退后按全角宽渲染，总宽超版心必折成两行；默认改用 Word 原生段落底边框（`w:pBdr/w:bottom` 单线），自适应栏宽不折行，`style: character` 可回退旧行为；回归 26/26 + 真实法律文档渲染目检通过。 |
-| 2026-09-23 | 更新 | [piclist-upload](skills/piclist-upload/) | v1.5.0 | **Obsidian file:// 引用支持**：识别 `![alt](<file:///绝对路径>)` 格式，剥离尖括号与 file:// 协议再解析，URL 百分号编码同步解码；此前该格式 100% 误报 File not found。mock server 回归 10 断言 + `%` 边界对照全过。 |
-| 2026-09-22 | 更新 | [new-case](skills/new-case/) | v1.5.0 | 新增个人目录规范学习与本地覆盖配置：可从用户描述或已有案件目录归纳习惯，确认后写入不提交 Git 的 local 配置；普通建档不暗中学习，公开预设保持不变。 |
-| 2026-09-22 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.16.0 | **68 主文书长文本矩阵 + 分页根修**：新增逐树长当事人/诉请/事实真实渲染、候选内容哈希和三轮稳定指纹；修复长字段窄栏裁切、终端空分节、合法网格细化、零内边距误报及 LibreOffice 字体替代漂移，超长行改为自然跨页；204/204 计量通过，0 失败、0 不稳定。 |
-| 2026-09-21 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.6 | **tracked 文件删除权限**：`git rm` 改为 receipt 绑定的高风险分类，仅允许冻结范围内单一 tracked 文件/符号链接；flags、多路径、目录/gitlink、pathspec、Shell 包装与普通 allowlist 绕过全部失败关闭，并明确 prompt-only backend 不具机械保护。 |
-| 2026-09-20 | 更新 | [moot-court](skills/moot-court/) | v1.2.1 | **Runtime 分级验证门禁**：按命令入口、模型、子任务、落盘、四发言短闭环和完整民事流程逐级验收；Claude Code短闭环实测通过但有语义发现，完整候选仍待验证；WorkBuddy、千问办公等办公类Agent列入后续实测。 |
-| 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
-| 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
 </details>
 
 ## 📋 项目概述
@@ -119,20 +119,20 @@
 <td>推荐统一入口</td>
 </tr>
 <tr>
-<td><a href="skills/funasr-transcribe/"><strong>funasr-transcribe</strong></a></td>
+<td><a href="skills/local-asr/"><strong>local-asr</strong></a></td>
 <td>工具·ASR</td>
-<td style="word-break:break-word">本地语音识别服务，将音频/视频转录为带时间戳的 Markdown，支持说话人分离、会议记录、视频字幕、播客转录</td>
+<td style="word-break:break-word">本地语音识别服务，Apple Silicon 默认 MOSS-MLX，保留 FunASR 管线；输出带时间戳和匿名说话人的 Markdown</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.9.4</td>
+<td style="text-align:center">v2.0.0（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/funasr-transcribe-1.9.4.zip">下载</a></td>
-<td></td>
+<td>旧名历史包；新名称源码尚未发布</td>
 </tr>
 <tr>
 <td><a href="skills/tingwu-asr/"><strong>tingwu-asr</strong></a></td>
 <td>工具·ASR</td>
 <td style="word-break:break-word">阿里云通义听悟云端语音转录，适用于长音频、高精度场景，支持说话人分离和 AI 摘要生成</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.4.6</td>
+<td style="text-align:center">v0.4.7（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/tingwu-asr-0.4.6.zip">下载</a></td>
 <td></td>
 </tr>
@@ -150,7 +150,7 @@
 <td>工具·下载</td>
 <td style="word-break:break-word">抖音视频批量下载工具，基于 F2 框架，支持单个/批量博主下载，自动 Cookie 管理，差量更新机制</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.8.0</td>
+<td style="text-align:center">v1.8.1（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/douyin-batch-download-1.8.0.zip">下载</a></td>
 <td></td>
 </tr>
@@ -451,7 +451,7 @@
 <td>工具·校对</td>
 <td style="word-break:break-word">ASR 转录稿纠错与轻度优化工具：按用户词典统一替换同音字与英文专有名称漂移，可选合并同发言人发言、清理标点和切分段落；与 course-generator 共用词典格式，原始文件保持不动并双写归档</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.8</td>
+<td style="text-align:center">v1.0.9（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/transcription-corrector-1.0.8.zip">下载</a></td>
 <td></td>
 </tr>
@@ -532,7 +532,7 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">视频压缩与静默片段剪切工具，使用 FFmpeg CRF 模式压缩视频，自动检测硬件选择最优编码方案（Apple Silicon VideoToolbox 硬件加速），支持检测并去除静默静止片段</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.1</td>
+<td style="text-align:center">v1.5.2（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/video-compressor-1.5.1.zip">下载</a></td>
 <td></td>
 </tr>
@@ -626,7 +626,7 @@
 <td>工具·项目管理</td>
 <td style="word-break:break-word">项目初始化工具，读取全局协议，分析项目实际情况，按配置检测项目类型并生成项目特定的 AGENTS.md、CLAUDE.md、docs/ 文档体系与 .claude/ 配置</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.2.4</td>
+<td style="text-align:center">v1.2.5（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/project-init-1.2.4.zip">下载 v1.2.4</a></td>
 <td></td>
 </tr>
@@ -662,7 +662,7 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">Skill 创建预检与可靠性验收工具，支持具体 Harness 失效模式批量定位、旧版指令失稳识别、领域 checker 双向充分性边界、硬要求来源定位、逐约束追踪、验证模态/产物阶段匹配、Ed25519 签名证据与多轮漂移门禁、业务流和安全风险审查</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.9.0</td>
+<td style="text-align:center">v2.9.1（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/skill-lint-2.9.0.zip">下载 v2.8.0</a></td>
 <td>正式验收需区分 Harness 审查、指令稳定性与领域功能验证</td>
 </tr>
