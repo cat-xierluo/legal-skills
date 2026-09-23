@@ -184,6 +184,11 @@ image:
 
 # 分割线设置
 horizontal_rule:
+  # border: 段落底边框渲染分割线（默认，自适应栏宽不折行）；character: 重复字符（旧实现，兼容保留）
+  # border_size 单位 1/8 pt（6=0.75pt），border_space 为边框与文字间距 pt
+  style: border
+  border_size: 6
+  border_space: 1
   character: "─"
   repeat_count: 55
   font: "Times New Roman"

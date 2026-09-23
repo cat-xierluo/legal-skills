@@ -2,7 +2,7 @@
 name: md2word
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.3.5"
+version: "1.3.8"
 license: MIT
 description: Markdown转Word文档技能。将Markdown文档转换为符合中文排版标准的专业格式Word文档，支持多种预设格式。适用于正式文档、论文、报告等需要规范排版的文档转换。
 ---
@@ -53,7 +53,7 @@ python scripts/md2word.py input.md --notes=endnote
 python scripts/md2word.py --book ch01.md ch02.md ch03.md -o book.docx --preset=book-publish
 ```
 
-> `--book` 只把相邻输入文件的边界转换为新 section。章节正文里的 Markdown 水平线 `---`、`***`、`___` 在单章和全书模式下都会保留为水平线，不承担分页或分章语义。
+> `--book` 只把相邻输入文件的边界转换为新 section。章节正文里的 Markdown 水平线 `---`、`***`、`___` 在单章和全书模式下都会保留为水平线，不承担分页或分章语义。1.3.8 起水平线默认以 Word 原生段落底边框渲染（空段落 + `w:pBdr/w:bottom` 单线），宽度自适应正文栏，不再因字体回退把 55 个 `─` 字符撑到折行；`horizontal_rule.style: character` 可回退旧行为。
 
 > `--book` 会在合并前按每个章节 Markdown 自己所在的目录解析本地相对图片路径，再写入临时合并稿。Markdown 图片与 HTML `<img src>` 均支持；HTTP/HTTPS、data URI、锚点和绝对路径保持原样。单章转换的图片解析流程不变。
 

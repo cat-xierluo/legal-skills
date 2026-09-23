@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-23 | 更新   | [md2word](skills/md2word/)                                             | v1.3.8  | **修复水平线折行**：55 个 `─` 在 Times New Roman 字体回退后按全角宽渲染，总宽超版心必折成两行；默认改用 Word 原生段落底边框（`w:pBdr/w:bottom` 单线），自适应栏宽不折行，`style: character` 可回退旧行为；回归 26/26 + 真实法律文档渲染目检通过。 |
 | 2026-09-22 | 更新 | [new-case](skills/new-case/) | v1.5.0 | 新增个人目录规范学习与本地覆盖配置：可从用户描述或已有案件目录归纳习惯，确认后写入不提交 Git 的 local 配置；普通建档不暗中学习，公开预设保持不变。 |
 | 2026-09-22 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.16.0 | **68 主文书长文本矩阵 + 分页根修**：新增逐树长当事人/诉请/事实真实渲染、候选内容哈希和三轮稳定指纹；修复长字段窄栏裁切、终端空分节、合法网格细化、零内边距误报及 LibreOffice 字体替代漂移，超长行改为自然跨页；204/204 计量通过，0 失败、0 不稳定。 |
 | 2026-09-21 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.6 | **tracked 文件删除权限**：`git rm` 改为 receipt 绑定的高风险分类，仅允许冻结范围内单一 tracked 文件/符号链接；flags、多路径、目录/gitlink、pathspec、Shell 包装与普通 allowlist 绕过全部失败关闭，并明确 prompt-only backend 不具机械保护。 |
@@ -41,7 +42,6 @@
 | 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
 | 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
 | 2026-09-18 | 更新   | [yuandian-law-search](skills/yuandian-law-search/)                     | v1.9.1  | **归档失败与响应交付解耦（issue #158 修复）**：归档目录不可写只降级 stderr 告警，不再吞掉已取得的 API 响应、不自动重试（杜绝误判重试重复扣积分）；新增 `--no-archive` 关闭全部本地留存（查重仍读已有归档）与 `--archive-dir`/`YD_ARCHIVE_DIR` 自定义归档目录；修正 `--no-report` 失实语义；补 4 项无网络故障注入回归。 |
-| 2026-09-18 | 更新   | [tingwu-asr](skills/tingwu-asr/)                                       | v0.4.4→v0.4.6 | **跨 runtime 鲁棒性 + 异步监控会话无关化 + OSS 上传代理隔离**：cryptography≤41 OpenSSL 探测死循环自动绕过；监控改 nohup 脱离会话 + 恢复接管四步（进程丢失≠任务丢失）；上传 session 默认 trust_env=False 直连国内 OSS（常驻代理掐断 771MB 上传的根治，TINGWU_OSS_USE_PROXY=1 逃生阀），yt-dlp 不受影响；：上传 session 默认 `trust_env=False` 无条件忽略环境代理直连国内 OSS——v0.4.5 只做了文档提醒，常驻 Clash 代理仍会掐断 771MB 级大文件分片上传（50% 处 ProxyError）；`TINGWU_OSS_USE_PROXY=1` 逃生阀恢复旧行为；requests 兜底 PUT 同样隔离；yt-dlp 下载不受影响。新增 5 用例代理隔离回归测试。 |
 </details>
 
 ## 📋 项目概述
@@ -514,7 +514,7 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.5</td>
+<td style="text-align:center">v1.3.8</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/md2word-1.3.5.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
