@@ -4,6 +4,14 @@
 
 ---
 
+## [0.6.3] - 2026-09-23
+
+### 修复
+
+- **对话模块 star 命令在 gh 2.83.0 不可用**：SKILL.md 中 `gh repo star owner/repo` 实际报 `unknown command "star" for "gh repo"`（该子命令并非所有 gh 版本都有），改用 REST API `gh api -X PUT user/starred/owner/repo`，幂等且跨版本可用
+- **star 结果验证语义**：补充检查是否已 star 的响应语义（HTTP 204 = 已 star，404 = 未 star），并要求 star 后以 GET 回读 204 为完成标准，不以 PUT 退出码为准
+- **frontmatter 版本滞后**：SKILL.md version 停留在 0.6.1，与 CHANGELOG 已发布的 0.6.2 脱节，本次一并同步到 0.6.3
+
 ## [0.6.2] - 2026-05-10
 
 ### 修复
