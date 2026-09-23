@@ -28,6 +28,15 @@ except ValueError as exc:
     raise RuntimeError("FUNASR_MOSS_CHUNK_SECONDS 必须是 60–600 的整数秒数") from exc
 MAX_OUTPUT_TOKENS = 16000
 SPEAKER_MATCH_THRESHOLD = 0.55
+# diarize 时总是提取说话人声纹（含单段短录音），供认领注册与识别复用；
+# 确定不需要时设 FUNASR_MOSS_SPEAKER_EMBEDDINGS=0 可跳过单段提取以省资源。
+SPEAKER_EMBEDDINGS_ENABLED = os.environ.get("FUNASR_MOSS_SPEAKER_EMBEDDINGS", "1") != "0"
+try:
+    # 识别阈值与跨段链接一致：六段真实录音验收中，同人跨录音最低 0.56、
+    # 非同人最高 0.14，分离边际充足；0.60 会漏识弱信道（如微信 8kHz）录音。
+    SPEAKER_IDENTIFY_THRESHOLD = max(0.0, min(1.0, float(os.environ.get("FUNASR_SPEAKER_IDENTIFY_THRESHOLD", "0.55"))))
+except ValueError as exc:
+    raise RuntimeError("FUNASR_SPEAKER_IDENTIFY_THRESHOLD 必须是 0–1 之间的数值") from exc
 SEGMENT_RE = re.compile(
     r"\[(?P<start>\d+(?:\.\d+)?)\]\[(?P<speaker>S\d+)\]"
     r"(?P<text>.*?)\[(?P<end>\d+(?:\.\d+)?)\]",
@@ -239,8 +248,11 @@ def _speaker_embeddings(path: Path, segments: list[dict], speaker_model) -> dict
     return {label: np.asarray(vector, dtype=np.float32).reshape(-1) for label, vector in zip(labels, vectors)}
 
 
-def _link_speakers(chunks: list[tuple[Path, list[dict]]], speaker_model) -> list[dict]:
-    """贪心链接跨段声纹；同一段内不同标签不能并入同一个全局说话人。"""
+def _link_speakers(chunks: list[tuple[Path, list[dict]]], speaker_model) -> tuple[list[dict], dict[str, np.ndarray]]:
+    """贪心链接跨段声纹；同一段内不同标签不能并入同一个全局说话人。
+
+    同时返回全局标签到单位声纹向量的映射，供声纹识别/认领复用。
+    """
     profiles: list[np.ndarray | None] = []
     linked = []
     for chunk_index, (path, segments) in enumerate(chunks):
@@ -268,12 +280,48 @@ def _link_speakers(chunks: list[tuple[Path, list[dict]]], speaker_model) -> list
             used.add(global_index)
         for segment in segments:
             linked.append({**segment, "speaker": f"S{local_to_global[segment['speaker']] + 1:02d}", "chunk": chunk_index})
-    return linked
+    global_embeddings = {
+        f"S{index + 1:02d}": profile for index, profile in enumerate(profiles) if profile is not None
+    }
+    return linked, global_embeddings
+
+
+def _identify_speakers(embeddings: dict[str, np.ndarray], speaker_profiles: list[dict]) -> dict[str, dict | None]:
+    """把文件内说话人标签与本地声纹库比对；分数需达阈值，同一注册名只命中一个标签。"""
+    identification: dict[str, dict | None] = {label: None for label in embeddings}
+    registry = []
+    for profile in speaker_profiles or []:
+        name = str(profile.get("name", "")).strip()
+        raw = np.asarray(profile.get("embedding") or [], dtype=np.float32).reshape(-1)
+        norm = float(np.linalg.norm(raw))
+        if name and raw.size and norm > 1e-8:
+            registry.append((name, raw / norm))
+    candidates = []
+    for label, vector in embeddings.items():
+        norm = float(np.linalg.norm(vector))
+        if norm <= 1e-8 or not registry:
+            continue
+        unit = vector / norm
+        name, score = max(
+            ((name, float(np.dot(unit, ref))) for name, ref in registry),
+            key=lambda item: item[1],
+        )
+        candidates.append((score, label, name))
+    used_names = set()
+    for score, label, name in sorted(candidates, reverse=True):
+        if score >= SPEAKER_IDENTIFY_THRESHOLD and name not in used_names:
+            identification[label] = {"name": name, "score": round(score, 4)}
+            used_names.add(name)
+    return identification
 
 
 def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list[str] | None = None,
-               diarize: bool = True) -> dict:
-    """返回兼容 FunASR 的 text / sentence_info 结构。"""
+               diarize: bool = True, speaker_profiles: list[dict] | None = None) -> dict:
+    """返回兼容 FunASR 的 text / sentence_info 结构。
+
+    diarize 时额外返回 speaker_embeddings（文件内标签→单位声纹向量，供认领注册）
+    和 speaker_identification（与本地声纹库比对结果；库为空时不比对）。
+    """
     timings = {}
     warnings = []
     started = time.perf_counter()
@@ -325,17 +373,25 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
             raise RuntimeError("MOSS 未输出可验证的语音段，未生成转录稿。")
         timings["asr_s"] = round(time.perf_counter() - phase, 3)
         phase = time.perf_counter()
+        speaker_embeddings: dict[str, np.ndarray] = {}
         if len(chunks) > 1 and diarize:
             if speaker_model_factory is None:
                 raise RuntimeError("长录音需要 CAM++ 跨段链接说话人，但说话人模型不可用")
             speaker_model = speaker_model_factory()
-            linked = _link_speakers(chunks, speaker_model)
+            linked, speaker_embeddings = _link_speakers(chunks, speaker_model)
         else:
             linked = [
                 {**segment, "chunk": index}
                 for index, (_, segments) in enumerate(chunks)
                 for segment in segments
             ]
+            if diarize and SPEAKER_EMBEDDINGS_ENABLED and speaker_model_factory is not None and len(chunks) == 1:
+                # 单段录音：无跨段链接需求，但为声纹识别/认领提取嵌入
+                try:
+                    speaker_model = speaker_model_factory()
+                    speaker_embeddings = _speaker_embeddings(chunks[0][0], chunks[0][1], speaker_model)
+                except Exception as exc:
+                    warnings.append(f"声纹提取失败，本次不做说话人识别: {exc}")
         timings["speaker_link_s"] = round(time.perf_counter() - phase, 3)
         sentence_info = []
         for segment in linked:
@@ -355,10 +411,35 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
                     if duration < 3:
                         warnings.append(f"说话人 {label} 总发言约 {duration:.1f} 秒，匿名标签可能不稳定，请人工核对")
     timings["moss_total_s"] = round(time.perf_counter() - started, 3)
-    return {
+    result = {
         "text": "".join(segment["sentence"] for segment in sentence_info),
         "sentence_info": sentence_info,
         "speaker_scope": "global" if diarize else "none",
         "_timings": timings,
         "_warnings": warnings,
     }
+    if diarize and speaker_embeddings:
+        unit_embeddings = {
+            label: vector / max(float(np.linalg.norm(vector)), 1e-8)
+            for label, vector in speaker_embeddings.items()
+        }
+        result["speaker_embeddings"] = {
+            label: [round(float(x), 6) for x in vector]
+            for label, vector in unit_embeddings.items()
+        }
+        if speaker_profiles:
+            identification = _identify_speakers(unit_embeddings, speaker_profiles)
+            result["speaker_identification"] = identification
+            hits = [
+                f"{label}={info['name']}({info['score']:.2f})"
+                for label, info in identification.items() if info
+            ]
+            misses = [label for label, info in identification.items() if not info]
+            parts = []
+            if hits:
+                parts.append("已识别 " + "、".join(hits))
+            if misses:
+                parts.append("未识别 " + "、".join(misses) + "（可经用户确认后认领注册）")
+            if parts:
+                warnings.append("说话人声纹识别：" + "；".join(parts))
+    return result
