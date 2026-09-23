@@ -1,5 +1,7 @@
 # API 参考文档
 
+各后端的依赖、模型权重下载与启用方式见 [`model-backends.md`](model-backends.md)。
+
 ## 端点列表
 
 | 方法 | 路径 | 描述 |
@@ -23,7 +25,7 @@ GET /health
 ```json
 {
   "status": "ok",
-  "service": "FunASR Transcribe",
+  "service": "Local ASR",
   "uptime": 300,
   "idle_time": 120
 }
@@ -52,7 +54,6 @@ Content-Type: application/json
   "file_path": "/path/to/audio.mp3",
   "output_path": "/path/to/output.md",
   "diarize": true,
-  "model": "paraformer-onnx",
   "fast": false
 }
 ```
@@ -64,14 +65,18 @@ Content-Type: application/json
 | `file_path` | string | 是 | 要转录的文件绝对路径 |
 | `output_path` | string | 否 | 输出 Markdown 文件路径（默认：原文件同目录下的 .md 文件） |
 | `diarize` | boolean | 否 | 是否启用说话人分离（默认：true） |
-| `model` | string | 否 | 逻辑模型名：`paraformer`、`paraformer-onnx`、`sensevoice`、`sensevoice-onnx` |
+| `model` | string | 否 | 省略时默认 `moss-mlx`；旧管线可显式选 `paraformer`、`paraformer-onnx`，另有 `sensevoice`、`sensevoice-onnx` |
 | `model_id` | string | 否 | 自定义底层模型 ID |
-| `fast` | boolean | 否 | 单人快速模式；关闭 diarization，默认保留 `paraformer` |
+| `fast` | boolean | 否 | 单人快速模式；关闭 diarization，不改变所选模型（省略 `model` 时仍为 MOSS） |
 | `quantize` | boolean | 否 | ONNX 模式是否启用 INT8 量化 |
+| `hotwords` | string[] | 否 | MOSS-MLX 热词，最多 30 个；FunASR 路径会明确报不支持 |
+| `extract_slides` | boolean/null | 否 | 视频默认自动截图；`false` 显式跳过；`true` 显式提取 |
+| `include_summary_prompt` | boolean | 否 | 是否准备 AI 总结提示词，默认 true |
 
-> `paraformer-onnx` 单人和多人路径都会先使用 ONNX VAD 分段，再补做 ONNX 文本清理、标点恢复和句子级时间戳映射；`diarize=false` 时使用全局标点恢复，`diarize=true` 时使用逐段标点并额外执行 CAM++ 说话人聚类。质量优先时仍建议使用原生 `paraformer`。
+> 保留的 `paraformer-onnx` 单人和多人路径都会先使用 ONNX VAD 分段，再补做 ONNX 文本清理、标点恢复和句子级时间戳映射；`diarize=false` 时使用全局标点恢复，`diarize=true` 时使用逐段标点并额外执行 CAM++ 说话人聚类。
 > 默认文本源为清理后的 `preds`；如需回退到 `raw_tokens`，可在启动服务前设置 `FUNASR_ONNX_TEXT_SOURCE=raw_tokens`。
 > ONNX 句子级时间戳通过字符比例近似映射 token 时间戳，适合段落级定位，不代表逐字强对齐。
+> 默认 `moss-mlx` 仅支持 Apple Silicon。短录音由模型同时生成转写、时间戳和匿名说话人；长录音按约 600 秒分段，再用 CAM++ 声纹链接跨段标签。可在启动服务前设置 `FUNASR_MOSS_MODEL_ID` 指向本地权重目录，或设置 `FUNASR_MOSS_CHUNK_SECONDS=300` 缩短分段（限制 60–600 秒）。说话人匹配为启发式，输出须人工复核。非 Apple Silicon 可设置 `FUNASR_SERVER_DEFAULT_MODEL=paraformer` 启动旧管线服务；CLI 还需显式传 `--model paraformer`，API 请求也可显式传 `"model": "paraformer"`。不会静默回退。
 
 **支持的格式**
 
@@ -86,8 +91,8 @@ Content-Type: application/json
   "output_path": "/path/to/audio.md",
   "text": "这是转录的文本内容...",
   "sentence_count": 25,
-  "resolved_model": "paraformer-onnx",
-  "resolved_runtime": "onnx",
+  "resolved_model": "moss-mlx",
+  "resolved_runtime": "mlx",
   "warnings": []
 }
 ```
@@ -101,8 +106,11 @@ Content-Type: application/json
 | `text` | string | 转录的纯文本内容 |
 | `sentence_count` | integer | 转录句子数量 |
 | `resolved_model` | string | 最终生效的逻辑模型 |
-| `resolved_runtime` | string | 最终运行时（`torch` / `onnx`） |
+| `resolved_runtime` | string | 最终运行时（`mlx` / `torch` / `onnx`） |
 | `warnings` | array | 自动路由或兼容性提示 |
+| `timings` | object | 阶段墙钟耗时（秒）；`total_s` 为请求整体耗时 |
+| `speaker_scope` | string/null | MOSS 返回 `global`（文件内匿名标签）或 `none` |
+| `segments` | array/null | MOSS 结构化段：`start/end` 秒、`speaker`、`text` |
 | `error` | string | 错误信息（仅失败时返回） |
 
 **响应示例（失败）**
@@ -142,7 +150,12 @@ curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/course.m4a", "model": "paraformer-onnx", "diarize": false}'
 
-# 单人快速模式（关闭说话人分离，保留默认 Paraformer）
+# MOSS-MLX：匿名说话人、时间戳与热词
+curl -X POST http://127.0.0.1:8765/transcribe \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/meeting.m4a", "model": "moss-mlx", "hotwords": ["请求权基础", "DeepSeek"], "include_summary_prompt": false}'
+
+# 单人快速模式（关闭说话人分离，仍使用默认 MOSS）
 curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/course.m4a", "fast": true}'
@@ -161,8 +174,7 @@ Content-Type: application/json
 {
   "directory": "/path/to/media_folder",
   "output_dir": "/path/to/output_folder",
-  "diarize": true,
-  "model": "paraformer"
+  "diarize": true
 }
 ```
 
@@ -173,7 +185,7 @@ Content-Type: application/json
 | `directory` | string | 是 | 要转录的目录绝对路径 |
 | `output_dir` | string | 否 | 输出目录（默认：同输入目录） |
 | `diarize` | boolean | 否 | 是否启用说话人分离（默认：true） |
-| `model` | string | 否 | 逻辑模型名 |
+| `model` | string | 否 | 省略时默认 `moss-mlx`；可显式选择旧 FunASR 管线 |
 | `fast` | boolean | 否 | 单人快速模式 |
 
 **响应示例（成功）**
@@ -234,7 +246,7 @@ curl -X POST http://127.0.0.1:8765/batch_transcribe \
   -H "Content-Type: application/json" \
   -d '{"directory": "/path/to/meetings", "diarize": true}'
 
-# 批量单人快速模式（关闭说话人分离，保留默认 Paraformer）
+# 批量单人快速模式（关闭说话人分离，仍使用默认 MOSS）
 curl -X POST http://127.0.0.1:8765/batch_transcribe \
   -H "Content-Type: application/json" \
   -d '{"directory": "/path/to/courses", "fast": true}'

@@ -80,7 +80,7 @@ profiles:
         - md2word
         - legal-text-format
         # 语音转文字
-        - funasr-transcribe
+        - local-asr
         - tingwu-asr
         # 法律检索
         - yuandian-law-search

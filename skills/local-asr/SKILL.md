@@ -1,14 +1,15 @@
 ---
-name: funasr-transcribe
+name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.4"
-license: Complete terms in LICENSE.txt
-description: 使用本地 FunASR 服务将音频或视频文件转录为带时间戳的 Markdown 文件，支持 mp4、mov、mp3、wav、m4a 等常见格式。本技能应在用户需要语音转文字、会议记录、视频字幕、播客转录时使用。
+version: "2.0.0"
+license: MIT
+description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和匿名说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
-# FunASR 语音转文字
+# 本地 ASR 语音转文字（MOSS 默认）
 
 本 skill 提供本地语音识别服务，将音频或视频文件转换为结构化的 Markdown 文档。
+本技能原名 `funasr-transcribe`；现以 `local-asr` 统一入口，默认引擎为 MOSS-MLX，FunASR 为可显式选择的保留后端。
 
 ## 功能概述
 
@@ -16,10 +17,13 @@ description: 使用本地 FunASR 服务将音频或视频文件转录为带时�
 - 自动生成时间戳
 - 支持说话人分离（diarization，默认启用）
 - **ONNX 加速模式**：支持 `paraformer-onnx` 与实验性的 `SenseVoice-Small ONNX`
-- **单人快速模式**：`--fast` / `"fast": true` 关闭 diarization，默认仍走 `paraformer`
+- **MOSS-MLX 默认模式**：Apple Silicon 上使用 MOSS 同时转写、标时间戳和区分匿名说话人；长录音分段后用 CAM++ 链接跨段标签
+- **FunASR 保留模式**：显式指定 `--model paraformer` 或 `--model paraformer-onnx` 调用原管线
+- **单人快速模式**：`--fast` / `"fast": true` 关闭 diarization，不改变所选模型
 - **Paraformer ONNX 后处理优化**：`paraformer-onnx` 单人/多人路径都会先 VAD 分段，再清理文本输出、恢复标点并输出句子级时间戳；单人路径使用全局标点恢复，多人路径使用逐段标点以保留 speaker 对齐
-- **视频关键帧截图提取**：自动检测并提取 PPT 幻灯片，插入到转录稿对应位置（视频文件自动启用）
+- **视频关键帧截图提取**：视频默认自动提取，`--no-slides` 可跳过耗时截图步骤
 - 转录后自动附带 AI 总结提示词，Agent 可一步完成总结
+- API 返回转录、截图、归档、摘要等阶段耗时；可通过 `include_summary_prompt=false` 跳过摘要准备
 - 输出 Markdown 格式，便于阅读和编辑
 
 ## 依赖
@@ -28,8 +32,9 @@ description: 使用本地 FunASR 服务将音频或视频文件转录为带时�
 
 | 依赖 | 安装方式 |
 |------|----------|
-| Python 3.8+ | macOS: `brew install python@3.14` |
+| Apple Silicon 原生 Python 3.10–3.12（建议 3.11；完整旧管线也需此范围） | macOS: `brew install python@3.11` |
 | curl | macOS 通常自带；如缺失可执行 `brew install curl` |
+| ffmpeg（MOSS 音频归一化必需，也用于视频处理） | macOS: `brew install ffmpeg` |
 
 ### Python 包
 
@@ -37,12 +42,63 @@ description: 使用本地 FunASR 服务将音频或视频文件转录为带时�
 |------|------|----------|
 | `funasr` | FunASR 原生推理与 CAM++ diarization | `pip install -r assets/requirements.txt` |
 | `funasr-onnx` | Paraformer / SenseVoice ONNX 加速 | `pip install -r assets/requirements.txt` |
-| `scenedetect[opencv]`、`imagehash` | 视频关键帧提取 | `pip install -r assets/requirements.txt` |
+| `opencv-python`、`imagehash` | 视频关键帧提取 | `pip install -r assets/requirements.txt` |
+| `mlx-audio[stt]` | Apple Silicon 默认 MOSS 后端 | `python3 -m pip install -r assets/requirements-moss-mlx.txt` |
+
+默认安装在 Apple Silicon 上同时保留 FunASR/CAM++ 依赖并安装 MOSS-MLX；`python3 scripts/setup.py --legacy` 只安装原 FunASR 管线。非 Apple Silicon 使用旧管线时，启动服务前设置 `FUNASR_SERVER_DEFAULT_MODEL=paraformer`，或运行 `server-onnx.py`；CLI 仍须显式传 `--model paraformer`（或 `--model paraformer-onnx`）。
+`funasr-onnx` 0.4.1 要求 NumPy ≤1.26.4，因此两套后端同装需 Python 3.10–3.12；Python 3.13+ 的 NumPy 2 环境不能据此保证旧 ONNX 路线可用。
+
+首次安装或更换后端时，按 [`references/model-backends.md`](references/model-backends.md) 核对设备、依赖、权重 ID、下载时机和启用命令；下方保留默认后端的最短安装路径。
+
+推荐使用技能目录内被 Git 忽略的虚拟环境，避免把 MLX-Audio 依赖装进系统 Python：
+
+```bash
+cd <skill目录>
+/opt/homebrew/bin/python3.11 -m venv venv
+source venv/bin/activate
+python3 scripts/setup.py
+```
+
+以后从同一环境运行 `python3 scripts/server.py` 和 `python3 scripts/auto_transcribe.py`。已配置旧环境的用户可在该环境安装 MOSS 依赖；本机如果已经使用 `venv/`，可直接运行 `venv/bin/python`。
+
+若已有旧版环境，首次使用默认 MOSS 前，在**启动 `server.py` 的同一个 Python 环境**安装 MOSS 依赖：
+
+```bash
+python3 -m pip install -r assets/requirements-moss-mlx.txt
+```
+
+`setup.py` 默认从 ModelScope 下载 MOSS 权重与 CAM++；若跳过模型下载，首次调用会优先从 Hugging Face 获取 MOSS，失败时改用 ModelScope。显式选择旧 FunASR 管线不需要 MOSS 依赖。MLX 后端仅支持 Apple Silicon macOS；长录音需要现有的 CAM++ 模型链接分段说话人。MOSS 的 `[S01]` 等标签只表示同一份录音中的匿名说话人，不识别真实姓名。
+
+如需离线运行或固定模型路径，可通过已安装的 `modelscope` 预下载模型，并把实际输出目录传给 `--model-id`：
+
+```bash
+python3 -c "from modelscope.hub.snapshot_download import snapshot_download; print(snapshot_download('OpenMOSS/MOSS-Transcribe-Diarize'))"
+python3 scripts/transcribe.py /path/to/meeting.m4a --model-id /path/to/downloaded/model
+```
+
+MOSS 长录音默认按约 600 秒切段，并在目标点附近选择连续静音；`FUNASR_MOSS_CHUNK_SECONDS=300` 可缩短为约 5 分钟（须重启服务）。分段说话人由 CAM++ 声纹启发式链接，短插话仍可能拆成多个标签；总发言不足 3 秒的说话人会在 `warnings` 中提示人工核对。输出时间戳越界、缺失标签或达到生成上限时会报错；近乎零波形能量的整段会跳过推理，幻觉句会被剔除并提示。此处不保证实际会议中的说话人准确率，需要对真实样本人工复核。
+
+### MOSS 性能与可选量化
+
+默认使用原始 MOSS 权重。MLX-Audio 可把本地权重转换为 4-bit 或 8-bit 模型；量化主要减少权重与运行内存，**不保证更快或维持同样的说话人标签**。在 M1 Max 上，约 4 分半的重复合成双人语音中，原始权重两次用时 13.4/14.7 秒，4-bit 为 18.4/19.4 秒，8-bit 为 21.6/20.3 秒；量化模型更慢。短真实通话片段的量化输出还出现额外的短说话人标签，未经人工真值核对。此测试不能代替真实长录音验收。
+
+若设备内存不足，可从**已下载的原始模型目录**生成独立量化副本，再显式选择它（目录应放在技能仓库外；首次转换需要足够的临时磁盘空间）：
+
+```bash
+python3 -m mlx_audio.convert --hf-path /path/to/original-moss-model --mlx-path /path/to/moss-q8 --quantize --q-bits 8 --model-domain stt
+python3 scripts/transcribe.py /path/to/meeting.m4a --model-id /path/to/moss-q8
+```
+
+常驻服务可设置 `FUNASR_MOSS_MODEL_ID=/path/to/moss-q8` 后重启；恢复默认时移除该环境变量。API 请求中的 `quantize` 只控制旧 ONNX INT8 路线，**不会**量化 MOSS；CLI 没有 MOSS 自动量化开关。`FUNASR_MOSS_CHUNK_SECONDS` 可在 60–600 秒间调整输出预算与切点，但更短的分段会增加 CAM++ 跨段链接和切点风险，不应仅凭速度更改默认值。
+
+## 所需权限与安全说明
+
+读取用户指定的本地音视频，写入 Markdown、截图及技能目录下的 `archive/`。服务默认只监听 `127.0.0.1:8765`；CLI 经本机 HTTP 调用该服务，不上传音频到云端。首次安装依赖或模型时会联网访问包索引、ModelScope 或 Hugging Face，之后本地缓存可复用。脚本会调用 `ffmpeg`、Python 子进程和本地文件操作；无需 ASR API Key。含客户录音的 `archive/` 与本机生成的 `assets/skill-env.json` 仅供本地使用，不属于分享材料。
 
 首次需要运行 ONNX 模式时，直接执行：
 
 ```bash
-python3 scripts/setup.py
+python3 scripts/setup.py --legacy
 ```
 
 即可同时安装 `funasr-onnx` 及其依赖；`SenseVoiceSmall` 仅在显式指定 `model=sensevoice` 时按需下载。
@@ -71,26 +127,28 @@ ONNX 句子级时间戳是根据字符位置和 token 时间戳做的近似映�
 
 当用户请求转录音频/视频时，应遵循以下流程，**一次性完成转录和 AI 总结**：
 
-**前置步骤（必须第一个执行）：设置 PATH。** 某些执行环境（如 agent-executor headless 模式）的 PATH 被限制为只有插件目录，`curl`、`python3` 等系统命令找不到。必须先执行：
+**前置步骤（必须第一个执行）：进入技能目录并设置 PATH。** 某些执行环境（如 agent-executor headless 模式）的 PATH 被限制为只有插件目录，`curl`、`python3` 等系统命令找不到。必须先执行：
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 ```
 
-> 之后所有 bash 命令都必须在同一命令块中跟在 `export PATH=...` 后面，或在每个命令块开头都加上这行。
+> 之后所有 bash 命令都必须在同一命令块中跟在这行后面，或在每个命令块开头重复。`venv/` 不存在时先按上文创建并安装。
 
 ### 步骤 0：环境检测（自动）
 
-在执行转录前，检查 `assets/skill-env.json` 是否存在。如果不存在，先运行环境检测：
+在执行转录前，检查 `assets/skill-env.json` 是否存在，且其中 `FUNASR_SERVER_DEFAULT_MODEL` 为 `moss-mlx`、`FUNASR_PYTHON` 指向已安装 MLX-Audio 的 Python。旧配置需要加 `--force` 重新检测：
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && cd <skill目录> && python3 scripts/init_env.py
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && python3 scripts/init_env.py
 ```
+
+若配置仍指向旧环境，运行 `python3 scripts/init_env.py --force`，并确认其中的 `FUNASR_PYTHON` 指向 `venv/bin/python`。
 
 如果检测失败（退出码非0），按提示运行安装脚本：
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && cd <skill目录> && python3 scripts/setup.py
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && python3 scripts/setup.py
 ```
 
 安装完成后会自动重新检测并生成 `skill-env.json`。
@@ -98,13 +156,13 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 ### 步骤 1：启动/检查服务
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && curl -s http://127.0.0.1:8765/health
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && curl -s http://127.0.0.1:8765/health
 ```
 
 如果服务未运行，后台启动：
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && cd <skill目录> && python3 scripts/server.py --idle-timeout 600 &
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && python3 scripts/server.py --idle-timeout 600 &
 ```
 
 等待服务就绪（轮询 `/health` 直到返回 200）。
@@ -112,14 +170,14 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 ### 步骤 2：转录文件
 
 ```bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && curl -s -X POST http://127.0.0.1:8765/transcribe \
+cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && curl -s -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/audio.aac"}'
 ```
 
 > 注意：`diarize` 默认为 `true`，无需显式传入。如需禁用，传 `"diarize": false`。
 > 视频文件（mp4、mov 等）会自动启用关键帧截图提取（`extract_slides`），无需手动传入。如需禁用，显式传 `"extract_slides": false`。
-> 单人讲课/语音可传 `"fast": true` 关闭说话人分离，默认仍使用 `paraformer`；`"model": "sensevoice"` 仅作为实验性显式选项。
+> 单人讲课/语音可传 `"fast": true` 关闭说话人分离，仍使用默认 MOSS；`"model": "paraformer"` 或 `"model": "paraformer-onnx"` 可调用原 FunASR 管线。
 
 响应中包含以下关键字段：
 - `output_path`: 转录输出的 Markdown 文件路径
@@ -234,14 +292,16 @@ python3 scripts/check_env.py
 运行安装脚本完成环境配置：
 
 ```bash
+/opt/homebrew/bin/python3.11 -m venv venv
+source venv/bin/activate
 python3 scripts/setup.py
 ```
 
 安装脚本会自动：
 
-1. 检查 Python 版本（需要 >= 3.8）
-2. 安装依赖包（FastAPI、Uvicorn、FunASR、funasr-onnx、PyTorch）
-3. 下载 ASR 模型到 `~/.cache/modelscope/hub/models/`
+1. 检查 Apple Silicon 和 Python 版本（默认双后端安装需 3.10–3.12）
+2. 安装依赖包（FastAPI、FunASR/CAM++、MLX-Audio 等；旧管线依赖一并保留）
+3. 下载 MOSS 和 CAM++ 模型到 ModelScope 缓存；`--legacy` 只安装旧 FunASR 模型
 
 验证安装状态：
 
@@ -255,7 +315,7 @@ python3 scripts/setup.py --verify
 python3 scripts/server.py
 ```
 
-如需默认开启 ONNX 加速与 INT8 量化，使用：
+如需运行保留的 ONNX 旧管线，使用：
 
 ```bash
 python3 scripts/server-onnx.py --preload
@@ -303,20 +363,29 @@ python3 scripts/transcribe.py /path/to/video.mp4 -o transcript.md
 # 启用说话人分离
 python3 scripts/transcribe.py /path/to/meeting.m4a --diarize
 
-# Paraformer ONNX（更快；默认仍支持 diarization）
+# 保留的 FunASR 原生管线
+python3 scripts/transcribe.py /path/to/meeting.m4a --model paraformer
+
+# 保留的 Paraformer ONNX 管线
 python3 scripts/transcribe.py /path/to/meeting.m4a --model paraformer-onnx
 
 # Paraformer ONNX 单人路径（VAD 分段 ASR，不做说话人聚类）
 python3 scripts/transcribe.py /path/to/course.m4a --model paraformer-onnx --no-diarize
 
-# 单人讲课快速模式（关闭说话人分离，保留默认 Paraformer）
+# 单人讲课快速模式（关闭说话人分离，仍使用默认 MOSS）
 python3 scripts/transcribe.py /path/to/course.m4a --fast
+
+# 默认 MOSS 说话人转录与法律术语热词
+python3 scripts/transcribe.py /path/to/meeting.m4a --hotword 请求权基础 --hotword DeepSeek
 
 # 批量转录目录
 python3 scripts/transcribe.py /path/to/media_folder/
 
 # 提取视频关键帧截图（PPT幻灯片）
 python3 scripts/transcribe.py /path/to/video.mp4 --slides
+
+# 视频只转录，不提取截图
+python3 scripts/transcribe.py /path/to/video.mp4 --no-slides
 
 # 自定义场景检测阈值（值越低越灵敏，默认20.0）
 python3 scripts/transcribe.py /path/to/video.mp4 --slides --slide-threshold 15.0
@@ -388,7 +457,7 @@ curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/audio.mp3"}'
 
-# 单人快速模式（关闭说话人分离，保留默认 Paraformer）
+# 单人快速模式（关闭说话人分离，仍使用默认 MOSS）
 curl -X POST http://127.0.0.1:8765/transcribe \
   -H "Content-Type: application/json" \
   -d '{"file_path": "/path/to/course.m4a", "fast": true}'
@@ -425,7 +494,7 @@ FastAPI 自动生成交互式 API 文档，访问：[http://127.0.0.1:8765/docs]
 ```json
 {
   "status": "ok",
-  "service": "FunASR Transcribe",
+  "service": "Local ASR",
   "uptime": 300,
   "idle_time": 120
 }
@@ -474,7 +543,7 @@ python3 scripts/auto_transcribe.py /path/to/audio.aac
 # 禁用说话人分离
 python3 scripts/auto_transcribe.py /path/to/audio.aac --no-diarize
 
-# 单人快速模式（关闭说话人分离，保留默认 Paraformer）
+# 单人快速模式（关闭说话人分离，仍使用默认 MOSS）
 python3 scripts/auto_transcribe.py /path/to/course.m4a --fast
 
 # 只获取总结提示词，不生成总结
@@ -559,22 +628,19 @@ curl -X POST http://127.0.0.1:8765/inject_summary \
 - VAD 模型 - 4MB
 - 标点模型 - 283MB
 - 说话人分离模型 - 28MB
+- MOSS-Transcribe-Diarize（默认）- 模型权重约 1.8GB，运行内存高于权重大小
 
 ## STT 转录优先级（重要）
 
-**正确顺序**：FunASR（优先）→ Whisper CLI（fallback）
+**默认顺序**：先使用 MOSS-MLX；若 MOSS 失败，检查错误、依赖与模型路径。需要继续处理时可显式改用 `--model paraformer` 或 `--model paraformer-onnx`，并向用户说明已切换管线；不要静默回退。非 Apple Silicon 用旧管线时先设置 `FUNASR_SERVER_DEFAULT_MODEL=paraformer` 启动服务，再在 CLI 显式指定旧模型。
 
-- **FunASR 是主选**：中文识别质量更高，支持时间戳、说话人分离、视频关键帧
-- **Whisper CLI 是 fallback**：仅在 FunASR 服务不可用时使用（例如 funasr-onnx 安装失败、服务报错 500）
-- **绝对不要**：在没有先尝试 FunASR 的情况下直接用 Whisper
+### MOSS 失败时的排查步骤
 
-### FunASR 失败时的排查步骤
+1. 在启动服务的同一 Python 环境运行 `python3 scripts/setup.py --verify`，核对 MLX-Audio、ffmpeg 与模型缓存。
+2. 检查服务日志；若 Hugging Face 下载失败，可设置 `FUNASR_MOSS_MODEL_ID` 为本地模型目录后重启。
+3. 时间戳缺失、输出截断或短发言标签不稳时，保留错误/警告并人工复核；必要时显式调用原 FunASR 管线对照。
 
-1. 运行 `python3 scripts/setup.py --verify` 检查 funasr-onnx 是否可用
-2. 查看服务进程日志：`process_log` 查看 `proc_<session_id>`
-3. 如果 funasr-onnx 装不上，用 Whisper CLI 作为临时 fallback（见下方）
-
-### Whisper CLI Fallback（仅在 FunASR 不可用时）
+### Whisper CLI 应急路径（需明确选择）
 
 ```bash
 # 提取音频（16kHz 单声道）
@@ -608,8 +674,8 @@ ffmpeg -i "/path/to/video.mp4" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "/tmp/au
 # 确认 cv2 可用后再启动服务
 python3 -c "import cv2; print('cv2 ok')"
 
-# 如服务已在运行，先杀掉再重启
-lsof -ti:8765 | xargs kill -9 2>/dev/null; sleep 1
+# 如需重启，先核对占用进程确为本技能的 server.py，再正常停止该进程
+lsof -nP -iTCP:8765 -sTCP:LISTEN
 
 # 重启服务
 python3 scripts/server.py --idle-timeout 600 &
@@ -619,11 +685,14 @@ python3 scripts/server.py --idle-timeout 600 &
 
 **症状**：`Address already in use`（Errno 48）
 
+先运行 `lsof -nP -iTCP:8765 -sTCP:LISTEN` 查明占用者。若是其他服务，保留该进程，并为本技能指定其他空闲端口：
+
 ```bash
-# 杀掉占用端口的进程
-lsof -ti:8765 | xargs kill -9 2>/dev/null
-sleep 1
+python3 scripts/server.py --port 8766
+python3 scripts/transcribe.py /path/to/audio.mp3 --server http://127.0.0.1:8766
 ```
+
+自动转录入口可改用 `python3 scripts/auto_transcribe.py /path/to/audio.mp3 --api http://127.0.0.1:8766`，其自动启动服务也会使用指定端口。两个客户端会核对 `/health` 的服务标识，避免把其他服务误判为本地 ASR。
 
 ### FunASR 服务无响应 / 模型加载慢
 
@@ -632,7 +701,7 @@ sleep 1
 **视频截图功能：**
 
 视频文件（mp4、mov、avi、mkv、wmv、webm）转录时会自动启用关键帧提取。
-依赖 `scenedetect[opencv]` 和 `imagehash` 已包含在 requirements.txt 中，`setup.py` 安装时会一并安装。
+依赖 `opencv-python` 和 `imagehash` 已包含在 requirements.txt 中，`setup.py` 安装时会一并安装。
 如未安装这些依赖，服务端会输出提示但不影响普通转录功能。
 
 服务启动失败时，运行验证命令检查安装状态：

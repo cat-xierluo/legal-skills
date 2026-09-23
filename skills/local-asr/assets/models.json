@@ -19,10 +19,10 @@
       "required": true
     },
     {
-      "id": "damo/speech_campplus_speaker-diarization_common",
+      "id": "iic/speech_campplus_sv_zh-cn_16k-common",
       "name": "说话人分离模型 (CAM++)",
       "description": "识别不同说话人",
-      "required": false
+      "required": true
     },
     {
       "id": "iic/SenseVoiceSmall",
@@ -31,5 +31,7 @@
       "required": false
     }
   ],
-  "default_model": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
+  "default_backend": "moss-mlx",
+  "default_model": "OpenMOSS-Team/MOSS-Transcribe-Diarize",
+  "legacy_default_model": "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
 }

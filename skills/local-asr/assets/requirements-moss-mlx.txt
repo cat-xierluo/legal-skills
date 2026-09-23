@@ -1,0 +1,2 @@
+# Optional Apple Silicon backend. Install into the Python environment that runs server.py.
+mlx-audio[stt]>=0.4.5,<0.5

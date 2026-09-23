@@ -2,7 +2,7 @@
 name: douyin-batch-download
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.0"
+version: "1.8.1"
 license: MIT
 description: 抖音视频批量下载工具 - 基于 F2 框架实现高效、增量的视频下载功能。支持单个/批量博主下载，自动 Cookie 管理，差量更新机制。本技能应在用户需要批量下载特定博主视频、服务器部署自动化下载、或定期更新视频库时使用。
 ---
@@ -195,8 +195,8 @@ skills/douyin-batch-download/
 
 ## 与其他技能配合
 
-### FunASR 语音转文字
+### 本地 ASR 语音转文字
 
-下载的视频可以使用 [funasr-transcribe](../../skills/funasr-transcribe/) 技能将视频转录为带时间戳的 Markdown 文件。
+下载的视频可以使用 [local-asr](../../skills/local-asr/) 技能将视频转录为带时间戳的 Markdown 文件。
 
-**配合方式**：先使用抖音下载技能获取视频，再使用 FunASR 技能进行转录。两个技能独立运行，可根据需要灵活组合使用。
+**配合方式**：先使用抖音下载技能获取视频，再使用 local-asr 技能进行转录。两个技能独立运行，可根据需要灵活组合使用。

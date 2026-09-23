@@ -2,21 +2,21 @@
 name: tingwu-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.4.6"
+version: "0.4.7"
 license: MIT
-description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 FunASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
+description: 使用阿里云通义听悟进行云端音频/视频转录。本技能应在用户需要云端语音转文字、长音频转录、本地 ASR 不可用或需要更高精度时使用。不适用于无网络环境或需要完全离线的场景。
 ---
 
 # 通义听悟云端转录 (tingwu-asr)
 
-通过逆向封装通义听悟网页端内部 REST API，实现云端音频/视频文件转录，输出与 `funasr-transcribe` 兼容的 Markdown 格式。
+通过逆向封装通义听悟网页端内部 REST API，实现云端音频/视频文件转录，输出与 `local-asr` 兼容的 Markdown 格式。
 
 ## 功能
 
 - 上传本地音频/视频文件到阿里云 OSS
 - 云端转录，支持说话人分离（单人/2人/多人）
 - 支持中文、英文、日文、粤语、中英文混合
-- 输出 funasr-transcribe 兼容的 Markdown，可直接用 `summary.py` 注入 AI 总结
+- 输出 local-asr 兼容的 Markdown，可直接用 `summary.py` 注入 AI 总结
 
 ## 依赖
 
@@ -129,12 +129,12 @@ python3 skills/tingwu-asr/scripts/transcribe.py /path/to/audio1.mp3 /path/to/aud
 
 **PPT 幻灯片**: 视频文件会自动提取 PPT 幻灯片，图片保存在 `{文件名}_slides/` 子目录中（每个文件独立目录，避免同目录下多视频冲突）。
 
-### 3. 生成 AI 总结（复用 funasr-transcribe）
+### 3. 生成 AI 总结（复用 local-asr）
 
-转录完成后，复用 funasr-transcribe 的 summary 模块:
+转录完成后，复用 local-asr 的 summary 模块:
 ```bash
-python3 skills/funasr-transcribe/scripts/summary.py inject transcript.md summary.json
-python3 skills/funasr-transcribe/scripts/summary.py verify transcript.md
+python3 skills/local-asr/scripts/summary.py inject transcript.md summary.json
+python3 skills/local-asr/scripts/summary.py verify transcript.md
 ```
 
 ## 文件结构
