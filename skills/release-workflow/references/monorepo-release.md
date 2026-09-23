@@ -104,6 +104,10 @@ main 侧版本列是**已发布快照**（对齐最近一次 Release 的实际 z
 - 检查 release page:`https://github.com/<owner>/<repo>/releases/tag/<tag>`
 - 抽查 1-2 个 zip:`curl -L -o /tmp/test.zip <URL>; unzip -l /tmp/test.zip | head -20`
 - 检查 README「下载(latest)」列点击能否下载
+- **README 结构性同步核查**:`python3 skills/release-workflow/scripts/check-readme-coverage.py <owner>/<repo>`
+  通过(无缺行/缺链接);抽查分节归属——通用工具类技能(报销整理/签到/复盘等)不得留在
+  「法律专业应用」节(v2026.08.06–09.21 期间 invoice-organizer 曾错位、15 个技能缺行,
+  均为发版环节无人负责 README 结构性维护所致)
 - 通知用户(沟通用业务语言,不说"CI 过了")
 
 ## 关键设计决策

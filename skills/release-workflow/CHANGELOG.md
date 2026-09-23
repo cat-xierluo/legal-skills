@@ -9,6 +9,7 @@
 - **确定性回归测试**：新增静态校验 7 项单测、README 回写 3 项离线单测和端到端打包 fixture，覆盖损坏链接阻断、符号链接展开、下载资产精确匹配、精确 tag 渲染、路径逃逸拦截、模拟安装与失败回滚。
 - **Release Notes 专家套件适配**：`generate-release-notes.py` 新增「专家套件」清单节——遍历 `expert_suites_root`（默认 `expert-suites/`）下各套件的 README（标题/一句话简介）与 CHANGELOG（semver）并统计成员数；`{total}` 计数排除 `suite-` 前缀产物，新增 `{suites}` 占位符（套件数），杜绝套件 ZIP 混入 skill 总数。
 - **README 版本列与改名死链自动回写**：`update-readme.py` 回写不再按链接自身 slug 映射，改为按**行内声明的技能名**（HTML 表行 `href="skills/<name>/"`、套件 md 行 `](../skills/<name>/)`）重映射——根治改名残留死链（如 skill-publish-sync 行曾长期指向旧名 clawhub-sync 的 zip）；同时把紧邻下载列的版本号列对齐到 zip 实际版本（含 `vA.B.C→vX.Y.Z` 区间写法），链接已最新而版本列滞后的存量状态重跑即可修复。独立仓库下载行（链接域名非本仓库）整行不动。v2026.09.21 存量实测：一次运行修复 1 个死链 + 对齐 25 处版本列，49 行全部三方一致。
+- **README 结构性同步入册（发版必查环节）**：SKILL.md 模式 B 新增「README 结构性同步」段——自动回写只覆盖已有表行的链接与版本列，加行/分节归属/描述属结构性维护，发版时须跑覆盖校验 + 分节归属自查（通用工具不进法律专业应用节）+ 描述与 SKILL.md frontmatter 对齐；发布完成检查清单与 monorepo-release.md「发布后」清单同步加条。背景：v2026.08.06–09.21 期间 15 个技能缺行/缺链接、invoice-organizer 分节错位，均因发版环节无人负责 README 结构性维护（已另行修复，main 24c76d0286）。
 - **README 覆盖校验脚本 `check-readme-coverage.py`**：对照最新 Release 资产与 README 技能表，缺行/缺链接即拦截（独立仓库下载行豁免，`--assets-json` 离线可用）——把"新技能漏维护 README 表格行"从静默缺失变成显式拦截（v2026.09.21 曾有 15 个技能缺行/缺链接达 46 天未被发现）。处置写入 `monorepo-release.md`「已知摩擦与处置」摩擦三。
 - **套件成员链接对齐脚本 `align-suite-links.py`**：把"main 上 Skill 升版本 → 长期 PR merge main 后套件 README 成员链接过时 → validate 拦截"的处置固化为脚本（按各 Skill CHANGELOG 当前 semver 批量改写，`--dry-run` 预览）；配合 `monorepo-release.md` 新增的「已知摩擦与处置」小节（含 README 版本列 merge 冲突取 PR 侧的时态原则），处置知识不再依赖个人记忆。
 

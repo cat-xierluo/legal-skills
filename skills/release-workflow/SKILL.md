@@ -185,6 +185,12 @@ publish job 失败：
 
 专家套件成员以 `expert-suites/<id>/skills/*` 的相对符号链接为唯一构建清单，不增加 `suite.yaml`。构建器先校验链接未逃逸、README 成员表一致、成员许可证齐全，再从指定 Git tree 导出真实 Skill 目录；Release ZIP 中不得保留符号链接。
 
+**README 结构性同步（发版必查，回写覆盖不了的部分）**：自动回写只处理已有表行的链接与版本列；**加行、分节归属、描述**是结构性维护，必须在发版环节人工/AI 完成——
+
+1. 跑 `scripts/check-readme-coverage.py`：Release 每个资产在 README 技能表必须有行、有下载链接（独立仓库行豁免）；缺行说明新技能/迁移技能没同步 README，先补行再发版或发版后立即补
+2. 分节归属自查：行的分节与技能性质一致——通用工具类（报销整理、签到、复盘等）不进「法律专业应用」节；分类标签（第 2 列）与许可证、SKILL.md description 相互印证
+3. 描述与 `skills/<name>/SKILL.md` frontmatter 一致，不得凭空编写
+
 不要用于:单应用桌面/CLI/Web 项目(用模式 A 上文 7 步流程)、跨仓库分发(用 subtree-publish skill)。
 
 ---
@@ -357,6 +363,7 @@ macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历�
 - [ ] GitHub Release 产物完整
 - [ ] Release Notes 已更新，且正文没有重复的版本标题
 - [ ] 外部贡献者已在 Release Notes 致谢（本版有外部 PR 合入时，含被承接的原始 PR）
+- [ ] **README 技能列表已同步**：`check-readme-coverage.py` 通过（无缺行/缺链接），分节归属与描述正确（见模式 B「README 结构性同步」）
 - [ ] 镜像同步成功（如已配置）
 - [ ] 旧的失败 Actions runs 已清理
 - [ ] 项目文档已更新（TASKS / DECISIONS / CHANGELOG 等）
