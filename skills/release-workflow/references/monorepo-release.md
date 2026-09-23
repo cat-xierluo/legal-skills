@@ -87,6 +87,14 @@ main 侧版本列是**已发布快照**（对齐最近一次 Release 的实际 z
 占位链接，等本 PR 合入后的下次发版回写）。两者必然不同值，冲突时取 PR 侧——
 这是"版本列=下载版本"约定的时态推论，不是偏好。
 
+**摩擦三：新技能未同步 README 表格行——回写无法自愈。**
+`update-readme.py` 只能改写已有表行，不能补行：新技能上传时若漏维护 README
+技能表格（AGENTS.md 已要求），其 zip 进了 Release 但 README 无下载入口。
+用 `scripts/check-readme-coverage.py` 核对（对照最新 Release 资产与 README 行，
+独立仓库下载行豁免；支持 `--assets-json` 离线）。缺行属内容维护：按现有行
+结构补 `<tr>`（技能链接列/分类/描述/许可证/版本/下载链接）,并在
+`skills/<name>/` 的 SKILL.md 与 CHANGELOG 就绪后提交。
+
 > 附注：本仓库的 Skill Lint Harness / Orchestration CI 均有 `paths:` 过滤，
 > release-workflow 路径的 PR 不会触发它们——合并前的等价验证（py_compile、
 > workflow YAML 校验、`security_scan audit`、相关单测）在本地完成。
