@@ -250,6 +250,9 @@ PYEOF
   echo "[e2e] ========== 全案由冒烟（68 编号通用级渲染）=========="
   run_stage_tail smoke-all.log 2 python3 -B tests/smoke_all.py
 
+  echo "[e2e] ========== 68 主文书长文本矩阵合同（快速）=========="
+  run_stage longtext-contract.log python3 -B tests/test_longtext_matrix.py
+
   echo "[e2e] ========== 113 棵模板树版式静态门禁 =========="
   run_stage layout-static.log \
     python3 -B tests/smoke_layout_all.py --json-output "$EVIDENCE_DIR/layout-all-report.json"
