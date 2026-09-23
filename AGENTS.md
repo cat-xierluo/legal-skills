@@ -234,7 +234,7 @@ Copyright (c) 2025 杨卫薪律师（微信ywxlaw）
 
 ## Skill 开发指南
 
-关于 Skill 的目录结构、Frontmatter 元数据、Progressive Disclosure 设计、文档编写最佳实践等详细规范,请参阅 [docs/SKILL-DEV-GUIDE.md](./docs/SKILL-DEV-GUIDE.md)。
+Skill 开发与合规规范以 [skills/skill-lint](./skills/skill-lint/) 为唯一维护源：目录结构、Frontmatter 元数据、Progressive Disclosure、编排协作等细则见其 `references/`（如 `skill-dev-guide.md`、`skill-orchestration-guide.md`）。交付前以 skill-lint 审计结果为准，不另维护 docs/ 下的开发指南副本。
 
 ## 多技能协作
 
@@ -394,6 +394,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.9.2 | 2026-09-23 | Skill 开发规范唯一维护源改为 skill-lint（细则在其 references/），删除 docs/ 下已内化的 8 份开发/协作指南文档 |
 | v1.9.1 | 2026-09-23 | 将通用工具及协作技能示例由旧名 funasr-transcribe 更新为 local-asr |
 | v1.9.0 | 2026-08-09 | 停用 Cloud Plugin Marketplace，删除 `.claude-plugin/marketplace.json` 与 `plugin.json` 及对应配置规范；公开 Skill 以 `skills/` 为交付源，发布索引由 README 与实际启用渠道维护 |
 | v1.8.1 | 2026-05-20 | 修正 Skill 开发指南链接，明确后续 Skill 规范以 docs/SKILL-DEV-GUIDE.md 为准 |
