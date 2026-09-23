@@ -2,6 +2,21 @@
 
 本文件记录 md2word 技能的所有重要变更。
 
+## [1.3.8] - 2026-09-23
+
+### 修复
+- **Markdown 水平线在 Word 中折成两行**：旧实现输出 55 个 `─`（U+2500）居中字符行。U+2500 不在 Times New Roman 字库内，Word 触发字体回退后常按全角宽度（≈0.58–0.7 em）渲染，55 字符总宽 ≈385–405pt，超出 legal 预设正文栏宽（A4 21cm − 3.17cm×2 ≈ 415pt，实测 Mac 版心 ≈361pt）而必然折行，第二行居中残留十几个字符——用户 2026-09-23 转换《王丽英职务侵占案 事实梳理》时实际踩到。现改为 Word 原生**段落底边框**渲染（空段落 + `w:pBdr/w:bottom` 单线，`border_size`=6 即 0.75pt、颜色沿用 `color` 配置）：线宽由版心决定、与字体度量无关、任何阅读器不折行。
+- 兼容保留：`horizontal_rule.style: character` 显式指定时仍走旧重复字符渲染（`character`/`repeat_count`/`font`/`size` 语义不变）。
+
+### 改进
+- 全部 6 个预设 yaml（academic/book-publish/legal/minimal/report/service-plan）与 `assets/config-template.yaml`、`scripts/config.py` 默认值、`scripts/extract_template_config.py` 模板提取默认值同步新增 `style: border` + `border_size`/`border_space` 键。
+- `references/config-reference.md` 分割线章节补 border/character 双模式说明与历史缺陷归因。
+
+### 验证
+- `python3 -m unittest test_regressions` 26/26 通过（含新增 2 例：三预设默认 border 渲染断言 pBdr/bottom@single、character 模式回退断言；原有 2 处按字符行匹配的断言改为按段落底边框匹配）。
+- 端到端：以真实法律文档《260923 王丽英职务侵占案 事实梳理（刑事律师交接）.md》（4 页、4 表、2 条 `---`）经修复后脚本 `--preset=legal` 转换，LibreOffice 渲染 PDF/PNG 逐页目检：第 1、4 页两条分割线均为单条完整细线、恰好铺满正文栏、左右与页边距对齐、无异常空隙。
+- 修复前复现：同一最小样例（`# 测试 / 第一段。/ ---`）在旧代码下渲染确认折成两行（第一行占满栏宽、第二行居中残段），定位机制为 U+2500 字体回退全角宽度。
+
 ## [1.3.5] - 2026-08-26
 
 ### 修复

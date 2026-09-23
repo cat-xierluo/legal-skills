@@ -164,6 +164,10 @@ image:
 
 # ==================== 分割线设置 ====================
 horizontal_rule:
+  # style: border=段落底边框（推荐，自适应栏宽不折行）；character=重复字符（旧实现，会因字体回退变宽折行）
+  style: border              # 分割线渲染方式
+  border_size: 6               # 边框粗细，单位 1/8 pt（6=0.75pt）
+  border_space: 1              # 边框与文字间距 pt
   character: "─"              # 分割线字符
   repeat_count: 55            # 重复次数
   font: "Times New Roman"

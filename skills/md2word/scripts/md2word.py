@@ -189,25 +189,74 @@ def download_external_image(url):
 # 文档结构元素
 # ============================================================================
 
+def _make_hr_border_paragraph(doc, hr_config):
+    """以 Word 原生段落底边框渲染分割线（border 模式）。
+
+    空段落 + pBdr/bottom 单线：线宽由段落版心决定（自动铺满正文栏），
+    不依赖任何字符度量与字体回退，任何阅读器里都不会折行。
+    """
+    p = doc.add_paragraph()
+
+    color_hex = str(hr_config.get('color', '#808080')).lstrip('#')
+    border_size = str(int(hr_config.get('border_size', 6)))    # 单位 1/8 pt，6=0.75pt
+    border_space = str(int(hr_config.get('border_space', 1)))  # 边框与文字间距 pt
+
+    p_pr = p._p.get_or_add_pPr()
+    existing_bdr = p_pr.find(qn('w:pBdr'))
+    if existing_bdr is not None:
+        p_pr.remove(existing_bdr)
+
+    p_bdr = OxmlElement('w:pBdr')
+    bottom = OxmlElement('w:bottom')
+    bottom.set(qn('w:val'), 'single')
+    bottom.set(qn('w:sz'), border_size)
+    bottom.set(qn('w:space'), border_space)
+    bottom.set(qn('w:color'), color_hex)
+    p_bdr.append(bottom)
+    # OOXML 对 pPr 子元素顺序敏感：pBdr 必须位于 shd/tabs/spacing/ind/jc/rPr/sectPr 之前
+    # （insert_element_before 内部自行做 qn 转换，这里必须传 'w:xxx' 前缀字符串）
+    p_pr.insert_element_before(
+        p_bdr,
+        'w:shd', 'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku',
+        'w:wordWrap', 'w:overflowPunct', 'w:topLinePunct',
+        'w:autoSpaceDE', 'w:autoSpaceDN', 'w:bidi', 'w:adjustRightInd',
+        'w:snapToGrid', 'w:spacing', 'w:ind', 'w:contextualSpacing',
+        'w:mirrorIndents', 'w:suppressOverlap', 'w:jc', 'w:textDirection',
+        'w:textAlignment', 'w:textboxTightWrap', 'w:outlineLvl', 'w:divId',
+        'w:cnfStyle', 'w:rPr', 'w:sectPr', 'w:pPrChange',
+    )
+    return p
+
+
 def add_horizontal_line(doc):
-    """添加分割线"""
+    """添加分割线。
+
+    style=border（默认）：空段落 + 段落底边框，自适应正文栏宽，不折行。
+    style=character（旧实现）：重复字符居中；宽度取决于 repeat_count 与实际
+    渲染字体——U+2500 不在 Times New Roman 字库内，字体回退后常呈全角宽，
+    55 个字符在多种预设的版心里都会超出栏宽折成两行，故仅作兼容保留。
+    """
     config = get_config()
     hr_config = config.get('horizontal_rule', {})
-    
-    p = doc.add_paragraph()
-    p.alignment = parse_alignment(hr_config.get('alignment', 'center'))
-    
-    character = hr_config.get('character', '─')
-    repeat_count = hr_config.get('repeat_count', 55)
-    run = p.add_run(character * repeat_count)
-    
-    font_name = hr_config.get('font', 'Times New Roman')
-    font_size = hr_config.get('size', 12)
-    color_hex = hr_config.get('color', '#808080')
-    
-    run.font.name = font_name
-    run.font.size = Pt(font_size)
-    run.font.color.rgb = hex_to_rgb(color_hex)
+
+    if hr_config.get('style', 'border') == 'character':
+        p = doc.add_paragraph()
+        p.alignment = parse_alignment(hr_config.get('alignment', 'center'))
+
+        character = hr_config.get('character', '─')
+        repeat_count = hr_config.get('repeat_count', 55)
+        run = p.add_run(character * repeat_count)
+
+        font_name = hr_config.get('font', 'Times New Roman')
+        font_size = hr_config.get('size', 12)
+        color_hex = hr_config.get('color', '#808080')
+
+        run.font.name = font_name
+        run.font.size = Pt(font_size)
+        run.font.color.rgb = hex_to_rgb(color_hex)
+        return
+
+    _make_hr_border_paragraph(doc, hr_config)
 
 
 def add_task_list(doc, line):
