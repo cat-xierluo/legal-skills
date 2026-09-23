@@ -746,18 +746,6 @@
 
 > 💡 **为什么包含通用工具？** 法律从业者兼具专业工作者与创作者的双重身份。撰写专业文章、整理研究资料、分享知识都需要内容获取与处理能力。这些通用工具是法律专业写作的基础设施。
 
-## 📚 开发与编排指南
-
-开发规范与协作编排已随 Skill 分发，直接使用对应技能（见上方技能列表）：
-
-- [skill-lint](skills/skill-lint/)：单个 Skill 的创建预检、可靠性验收与格式审查——开发规范的实际执行者
-- [multi-agent-orchestration](skills/multi-agent-orchestration/)：多个 Skill/worker 的协作编排（PM 拆解、派发、巡检、验收、PR 收口）
-- [cross-agent-coordination](skills/cross-agent-coordination/)：跨 Agent 任务协调与 Skill 间交接上下文契约
-
-`docs/` 下的同名历史指南（SKILL-DEV-GUIDE 等）已停更，仅作存档，规范以技能为准。
-
----
-
 ## 📖 协作规范
 
 本项目遵循 [AGENTS.md](AGENTS.md) 定义的协作规范：
