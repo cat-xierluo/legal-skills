@@ -43,6 +43,8 @@ templates/
 !**/.env.example
 # local-asr 会自动生成含本机绝对路径的环境配置，不能随技能发布
 skills/local-asr/assets/skill-env.json
+# local-asr 声纹库含姓名与声纹向量（生物识别信息），仅限本机使用
+skills/local-asr/assets/speaker-profiles.json
 **/.agent-profiles/
 **/config/*.yaml
 !**/config/*.example.yaml
