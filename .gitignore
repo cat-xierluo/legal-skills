@@ -41,6 +41,8 @@ templates/
 # Use .env.example for templates
 **/.env
 !**/.env.example
+# local-asr 会自动生成含本机绝对路径的环境配置，不能随技能发布
+skills/local-asr/assets/skill-env.json
 **/.agent-profiles/
 **/config/*.yaml
 !**/config/*.example.yaml
