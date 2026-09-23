@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/).
 
+## [0.4.7] - 2026-09-23
+
+### 修复
+- 跟随本地转录技能更名，将摘要注入与轮询收尾脚本中的兄弟目录路径改为 `local-asr/scripts/summary.py`，避免找不到旧 `funasr-transcribe` 目录时跳过总结。
+
+### 文档完善
+- 更新输出格式兼容说明、总结命令和本地 ASR 触发描述；云端转录行为不变。
+
 ## [0.4.6] - 2026-09-18
 
 ### 修复

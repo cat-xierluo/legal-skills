@@ -361,7 +361,7 @@ output_dir: ""  # 为空时默认保存到 skill 内部的 output/ 目录
 
 转录时运行：
 \`\`\`bash
-python ../../skills/funasr-transcribe/scripts/transcribe.py
+python ../../skills/local-asr/scripts/transcribe.py
 \`\`\`
 ```
 
