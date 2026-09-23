@@ -10,8 +10,8 @@ fontTable 中 方正书宋_GBK 的 altName=Arial Unicode MS。在缺少这些精
 
 修复：fill_template.apply_font_compatibility 按 config/layout-policy.json 的
 font_compatibility 段，把最终 OOXML 中 rFonts 的 eastAsia 引用重写为通用
-中文字体名（ascii/hAnsi/cs、字号、加粗等其余属性一律不动，标题黑体/正文宋体/
-落款楷体的层级差异保留），并把同一替代名写入 fontTable altName。
+中文字体名（ascii/hAnsi/cs 同步改写，字号、加粗等其余属性一律不动，
+标题/正文/落款的字号与段落层级保留），并把同一替代名写入 fontTable altName。
 
 本文件在声明层机械复现并拦截该故障：产物不得再携带
 “eastAsia=方正*_GBK + altName=Arial Unicode MS”这一触发组合。
@@ -161,13 +161,14 @@ class FontCompatibilityTests(unittest.TestCase):
         bold_after = sum(1 for _ in after.iter(f"{W}b"))
         self.assertEqual(bold_before, bold_after)
 
-        # 类别差异保留：正文/标题/落款各自映射到不同的候选链
-        chains = replacements
-        self.assertTrue(
-            chains["方正书宋_GBK"] != chains["方正黑体_GBK"]
-            and chains["方正楷体_GBK"] != chains["方正书宋_GBK"],
-            "正文/标题/落款必须保留类别差异（各自独立的候选链）",
-        )
+        # 已证明会让 LibreOffice 漂移的名字不得再次成为候选；标题/正文/
+        # 落款的层级由上面的字号、加粗和段落样式不变断言保障。
+        unstable = {"STZhongsong", "Kaiti SC"}
+        for font, names in replacements.items():
+            self.assertFalse(
+                set(names) & unstable,
+                f"{font} 候选链仍含不稳定字体: {set(names) & unstable}",
+            )
 
     def test_font_table_altname_follows_policy(self):
         """fontTable：被替代字体的 altName 更新为策略替代名；未列名字体不动。"""
@@ -334,6 +335,38 @@ class FontCompatibilityTests(unittest.TestCase):
             if name == "方正书宋简体":
                 self.assertIsNotNone(alt)
                 self.assertIn(alt.get(f"{W}val"), candidates_of(self.policy, "方正书宋简体"))
+
+    def test_case_47_unstable_mapped_font_names_are_rewritten(self):
+        """回归：47 模板映射出的 STZhongsong/Kaiti SC 在同一 LibreOffice
+        中连续渲染会漂移到不同实际字体并造成 3/4 页波动；四槽必须统一归一。"""
+        case_dir = SKILL_DIR / "templates" / "47-国有土地上房屋征收决定-行政起诉状"
+        tree = self.root / "tree47"
+        shutil.copytree(case_dir, tree)
+
+        before = etree.parse(str(tree / "word" / "document.xml"))
+        unstable = {"STZhongsong", "Kaiti SC"}
+        before_names = {
+            rf.get(f"{W}{slot}")
+            for rf in before.iter(f"{W}rFonts")
+            for slot in ("eastAsia", "ascii", "hAnsi", "cs")
+            if rf.get(f"{W}{slot}")
+        }
+        source_fonts = {"方正大标宋_GBK", "方正小标宋_GBK", "方正楷体_GBK"}
+        self.assertTrue(before_names & source_fonts, "47 模板应保留故障前提")
+
+        stats = apply_font_compatibility(tree, self.policy)
+        self.assertTrue(stats["ok"], stats)
+        after = etree.parse(str(tree / "word" / "document.xml"))
+        for slot in ("eastAsia", "ascii", "hAnsi", "cs"):
+            values = {
+                rf.get(f"{W}{slot}")
+                for rf in after.iter(f"{W}rFonts")
+                if rf.get(f"{W}{slot}")
+            }
+            self.assertFalse(
+                values & unstable,
+                f"47 模板 {slot} 槽仍残留不稳定字体: {values & unstable}",
+            )
 
     def test_no_cjk_fallback_names_are_not_used(self):
         """回归：曾被 fc-match 错配 Verdana 的裸名不得再作为唯一候选进入策略。"""
