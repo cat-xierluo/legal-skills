@@ -226,7 +226,7 @@
 <td style="word-break:break-word">基于案卷自动组织多角色模拟庭审：法官与民事原被告／刑事控辩通过书记员记录交换发言；支持版本化材料、取消重派与进度恢复，交付庭审笔录、争点复盘和庭前补强清单</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.2.1</td>
-<td></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/moot-court-1.2.1.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -262,7 +262,7 @@
 <td style="word-break:break-word">面向既有客户的每日、每周或事件增量追踪：在白名单内生成完整简报、朋友圈和公众号三件套，校验窗口、案例、跨渠道事实与 A4 PDF</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center">待发布</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/legal-client-brief-1.1.0.zip">下载</a></td>
 <td>不自动改名或外发</td>
 </tr>
 <tr>
@@ -271,7 +271,7 @@
 <td style="word-break:break-word">面向公开展示与广泛分发的月度/季度行业报告：通过行业规则包组织市场、产业链、政策监管、企业、法律风险与服务机会，并生成可追溯的正式报告包</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.1.0</td>
-<td style="text-align:center">待发布</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/legal-industry-report-1.1.0.zip">下载</a></td>
 <td>律师复核前为 PUBLIC_REVIEW</td>
 </tr>
 <tr>
@@ -307,7 +307,7 @@
 <td style="word-break:break-word">中国发明与实用新型专利分析工具，支持10种场景；以 A/B/C/D 证据门禁、无网址多条款法源登记和2026年指南影响映射约束侵权、无效、FTO、规避设计、估值和可视化结论</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v2.2.0</td>
-<td style="text-align:center">待发布</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/patent-analysis-2.2.0.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/patent-analysis.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -333,8 +333,8 @@
 <td>专业·顾问</td>
 <td style="word-break:break-word">面向一人公司、单人创业者与小微企业的法律业务判断技能：识别经营主矛盾、跨领域风险、行动和升级边界；现行法条、税率、名录、地方政策与平台规则通过工具中立协议交由法律数据库、MCP 或官方来源核验</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.0.1</td>
-<td style="text-align:center">待发布</td>
+<td style="text-align:center">v1.0.2</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/opc-legal-counsel-1.0.2.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/opc-legal-counsel.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -352,7 +352,7 @@
 <td style="word-break:break-word">写法律 Skill 前的前置目标对齐：通过苏格拉底式五问（question-set/v1）把零散的法律经验、办案 SOP、咨询记录厘清为结构化 Legal Skill Brief v1，交给 skill-creator 等下游编译；含法源溯源三列、敏感材料边界与 blocker/warning 待确认清单</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v1.0.7</td>
-<td></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/legal-skill-alignment-1.0.7.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -361,7 +361,34 @@
 <td style="word-break:break-word">法律 Skill 分层质量评测：消费 skill-lint 通用质量结论，再用三份测试材料、通用六维度、场景微调与律师 taste 评估法律产出并定位最小修复单元；含评测包结构化契约、运行收据门禁与指令稳定性边界</td>
 <td style="text-align:center">CC-BY-NC</td>
 <td style="text-align:center">v0.8.12</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/legal-skill-evaluation-0.8.12.zip">下载</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/case-dashboard/"><strong>case-dashboard</strong></a></td>
+<td>专业·案件管理</td>
+<td style="word-break:break-word">律师案件看板：本地零依赖看板服务（案件总览、任务三态看板、期限预警、进度写回）＋周研判分析</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.9.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/case-dashboard-0.9.0.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/case-progress/"><strong>case-progress</strong></a></td>
+<td>专业·案件管理</td>
+<td style="word-break:break-word">案件进度与状态台账管理：案件 case.yaml 的唯一写入引擎（新增/推进任务、登记期限、更新案件阶段、校验、存量迁移）</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.8.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/case-progress-0.8.1.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/elements-complaint-generator/"><strong>elements-complaint-generator</strong></a></td>
+<td>专业·文书生成</td>
+<td style="word-break:break-word">把律师已写好的常规起诉状（md/docx）或对话描述转换为最高法 67 类官方要素式示范文本形态的 Word 文书</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.15.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/elements-complaint-generator-0.15.1.zip">下载</a></td>
 <td></td>
 </tr>
 </tbody>
@@ -539,6 +566,24 @@
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/apple-smart-schedule-0.2.0.zip">下载</a></td>
 <td>仅 macOS</td>
 </tr>
+<tr>
+<td><a href="skills/lecture-review/"><strong>lecture-review</strong></a></td>
+<td>工具·复盘</td>
+<td style="word-break:break-word">讲课/培训表现复盘：口癖、语言习惯、节奏、时间分配、承诺回收、互动密度，支持课件逐页对照与跨场次对比</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.2.3</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/lecture-review-1.2.3.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/workbuddy-checkin/"><strong>workbuddy-checkin</strong></a></td>
+<td>工具·签到</td>
+<td style="word-break:break-word">WorkBuddy 每日积分自动签到：自动解密本地登录令牌调用官方签到 API，支持连续签到与补签窗口</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.5</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/workbuddy-checkin-1.0.5.zip">下载</a></td>
+<td></td>
+</tr>
 </tbody>
 </table>
 
@@ -583,7 +628,7 @@
 <td style="word-break:break-word">面向法律工作者初始化和增量治理 AGENTS.md/CLAUDE.md：三种引导模式、三档隐私治理、法律安全基线、受管区块安全合并及新会话行为验证</td>
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v0.5.2</td>
-<td style="text-align:center"></td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/legal-harness-init-0.5.2.zip">下载</a></td>
 <td>写入成功不等于已加载；无法新建会话时标 NOT_VERIFIED</td>
 </tr>
 <tr>
@@ -618,8 +663,8 @@
 <td>工具·Skill开发</td>
 <td style="word-break:break-word">代码改完后的验证门禁 skill，跑 8 阶段验证（构建/类型/lint/单测/e2e 功能/真机/安全/diff），其中 e2e 功能 + 真机是 READY 的硬门禁，覆盖 Tauri 桌面/Web/服务/Skill 四类项目分支；本地即可跑完整验证，CI 是可选自动化强化</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.2</td>
-<td style="text-align:center"></td>
+<td style="text-align:center">v1.3.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/verification-gate-1.3.0.zip">下载</a></td>
 <td>编译过 ≠ 功能可用，e2e + 真机为完成硬门禁</td>
 </tr>
 <tr>
@@ -692,6 +737,15 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.7.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/subtree-publish-1.7.1.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/dsh-plugin-lint/"><strong>dsh-plugin-lint</strong></a></td>
+<td>工具·质量审查</td>
+<td style="word-break:break-word">DeepSeek Harness（DSH）插件的设计预检、质量审查与发布验收工具（版本感知）</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/dsh-plugin-lint-1.0.0.zip">下载</a></td>
 <td></td>
 </tr>
 </tbody>
