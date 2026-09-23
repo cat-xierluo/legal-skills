@@ -205,13 +205,18 @@ image:
 
 ```yaml
 horizontal_rule:
-  character: "─"           # 分割线字符
-  repeat_count: 55         # 重复次数
+  style: "border"           # border=段落底边框（默认，自适应栏宽不折行）；character=重复字符（旧实现）
+  border_size: 6            # 边框粗细，单位 1/8 pt（6=0.75pt）——仅 border 模式
+  border_space: 1           # 边框与文字间距 pt——仅 border 模式
+  character: "─"            # 分割线字符——仅 character 模式
+  repeat_count: 55          # 重复次数——仅 character 模式
   font: "Times New Roman"
   size: 12
   color: "#808080"
   alignment: "center"
 ```
+
+> `character` 模式的历史缺陷：U+2500（─）不在 Times New Roman 字库内，Word 字体回退后常按全角宽度渲染，55 个字符 ≈ 385–405pt，在 legal/report 等预设的正文栏宽（≤415pt）内必然折成两行。1.3.8 起默认改用段落底边框，与字体度量无关；如需复现旧样式可显式设 `style: "character"`。
 
 ### 列表设置 (lists)
 

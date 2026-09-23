@@ -290,6 +290,10 @@ def get_fallback_config() -> Config:
             'show_caption': True,
         },
         'horizontal_rule': {
+            # border: 段落底边框（默认，自适应栏宽不折行）；character: 重复字符（旧实现，兼容保留）
+            'style': 'border',
+            'border_size': 6,
+            'border_space': 1,
             'character': '─',
             'repeat_count': 55,
             'font': 'Times New Roman',

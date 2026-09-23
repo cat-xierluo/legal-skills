@@ -31,6 +31,18 @@ from table_handler import _calc_column_widths, contains_markdown_formatting  # n
 import md2word  # noqa: E402
 
 
+def _is_border_rule_paragraph(paragraph):
+    """识别以段落底边框渲染的分割线（1.3.8 起 horizontal_rule 默认 style=border）。"""
+    pPr = paragraph._p.pPr
+    if pPr is None:
+        return False
+    pBdr = pPr.find(qn("w:pBdr"))
+    if pBdr is None:
+        return False
+    bottom = pBdr.find(qn("w:bottom"))
+    return bottom is not None and bottom.get(qn("w:val")) == "single"
+
+
 class Md2WordRegressionTest(unittest.TestCase):
     def test_plain_identifiers_keep_intraword_underscores_without_emphasis(self):
         config = md2word.get_preset("book-publish")
@@ -864,12 +876,11 @@ class Md2WordRegressionTest(unittest.TestCase):
             md2word.create_book([str(chapter_one), str(chapter_two)], str(output), config)
 
             document = Document(output)
-            horizontal_rule = "─" * config.get("horizontal_rule.repeat_count", 55)
             self.assertEqual(len(document.sections), 2, "两章合并应恰好产生两个 section")
             self.assertEqual(
-                sum(paragraph.text == horizontal_rule for paragraph in document.paragraphs),
+                sum(_is_border_rule_paragraph(paragraph) for paragraph in document.paragraphs),
                 1,
-                "第一章内的 Markdown 水平线应保留",
+                "第一章内的 Markdown 水平线应保留（段落底边框渲染）",
             )
             for section in document.sections:
                 footnote_properties = section._sectPr.find(qn("w:footnotePr"))
@@ -1011,16 +1022,92 @@ class Md2WordRegressionTest(unittest.TestCase):
             md2word.create_word_document(str(markdown), str(output), config=config)
 
             document = Document(output)
-            horizontal_rule = "─" * config.get("horizontal_rule.repeat_count", 55)
             self.assertEqual(len(document.sections), 1)
             self.assertEqual(
-                sum(paragraph.text == horizontal_rule for paragraph in document.paragraphs),
+                sum(_is_border_rule_paragraph(paragraph) for paragraph in document.paragraphs),
                 3,
-                "---、***、___ 都应按 Markdown 语义渲染为水平线",
+                "---、***、___ 都应按 Markdown 语义渲染为水平线（段落底边框）",
             )
             with zipfile.ZipFile(output) as archive:
                 document_xml = archive.read("word/document.xml").decode("utf-8")
             self.assertNotIn('<w:br w:type="page"', document_xml)
+
+    def test_hr_defaults_to_border_paragraph_and_fits_text_width(self):
+        """水平线默认用段落底边框渲染：无字符残留、自适应栏宽、不会折成两行。"""
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "hr.md"
+            output = temp_dir / "hr.docx"
+            markdown.write_text(
+                "# 标题\n\n第一段。\n\n---\n\n第二段。\n",
+                encoding="utf-8",
+            )
+            for preset_name in ("legal", "report", "book-publish"):
+                config = md2word.get_preset(preset_name)
+                md2word.set_config(config)
+                output = temp_dir / f"hr-{preset_name}.docx"
+                md2word.create_word_document(str(markdown), str(output), config=config)
+
+                document = Document(output)
+                border_rules = [
+                    paragraph
+                    for paragraph in document.paragraphs
+                    if _is_border_rule_paragraph(paragraph)
+                ]
+                self.assertEqual(
+                    len(border_rules), 1, f"{preset_name}: 应恰好渲染一条底边框水平线"
+                )
+                rule = border_rules[0]
+                self.assertEqual(
+                    rule.text, "", f"{preset_name}: border 模式不应残留重复字符"
+                )
+                bottom = rule._p.pPr.find(qn("w:pBdr")).find(qn("w:bottom"))
+                self.assertEqual(bottom.get(qn("w:val")), "single")
+                self.assertEqual(bottom.get(qn("w:sz")), "6")
+                self.assertEqual(bottom.get(qn("w:color")), "808080")
+                # 字符宽度上限校验：即使回退到全角宽度，边框线也不占字符宽度
+                from docx.shared import Length
+
+                section = document.sections[0]
+                text_width_pt = Length(
+                    int(section.page_width - section.left_margin - section.right_margin)
+                ).pt
+                self.assertGreater(text_width_pt, 0)
+                self.assertEqual(
+                    sum("─" in paragraph.text for paragraph in document.paragraphs),
+                    0,
+                    f"{preset_name}: border 模式不应输出 U+2500 字符串",
+                )
+
+    def test_hr_character_style_still_supported(self):
+        """显式 style=character 时保留旧版重复字符渲染，供旧配置回退。"""
+        with TemporaryDirectory() as temp:
+            temp_dir = Path(temp)
+            markdown = temp_dir / "hr-char.md"
+            output = temp_dir / "hr-char.docx"
+            markdown.write_text("# 标题\n\n第一段。\n\n---\n\n第二段。\n", encoding="utf-8")
+            config = md2word.get_preset("legal")
+            data = config.to_dict()
+            hr_overrides = dict(data.get("horizontal_rule") or {})
+            hr_overrides["style"] = "character"
+            hr_overrides["repeat_count"] = 10
+            data["horizontal_rule"] = hr_overrides
+            config = md2word.Config(data)
+            md2word.set_config(config)
+
+            md2word.create_word_document(str(markdown), str(output), config=config)
+
+            document = Document(output)
+            rule_paragraphs = [
+                paragraph
+                for paragraph in document.paragraphs
+                if paragraph.text == "─" * 10
+            ]
+            self.assertEqual(len(rule_paragraphs), 1, "character 模式应输出重复字符行")
+            self.assertFalse(
+                any(_is_border_rule_paragraph(paragraph) for paragraph in document.paragraphs),
+                "character 模式不应写入段落底边框",
+            )
 
     def test_book_publish_exact_headings_use_native_page_break_before(self):
         with TemporaryDirectory() as temp:
