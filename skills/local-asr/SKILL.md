@@ -2,9 +2,9 @@
 name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.0.0"
+version: "2.1.1"
 license: MIT
-description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和匿名说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
+description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择；支持认领式声纹注册，本人声纹注册后自动识别标注。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
 # 本地 ASR 语音转文字（MOSS 默认）
 
@@ -22,6 +22,7 @@ description: 使用本地 ASR 服务将音频或视频文件转录为带时间�
 - **单人快速模式**：`--fast` / `"fast": true` 关闭 diarization，不改变所选模型
 - **Paraformer ONNX 后处理优化**：`paraformer-onnx` 单人/多人路径都会先 VAD 分段，再清理文本输出、恢复标点并输出句子级时间戳；单人路径使用全局标点恢复，多人路径使用逐段标点以保留 speaker 对齐
 - **视频关键帧截图提取**：视频默认自动提取，`--no-slides` 可跳过耗时截图步骤
+- **声纹注册与说话人识别**：本人声纹经认领注册后，后续转录自动识别并直接标注注册名；详见 [`references/speaker-registry.md`](references/speaker-registry.md)
 - 转录后自动附带 AI 总结提示词，Agent 可一步完成总结
 - API 返回转录、截图、归档、摘要等阶段耗时；可通过 `include_summary_prompt=false` 跳过摘要准备
 - 输出 Markdown 格式，便于阅读和编辑
@@ -185,7 +186,32 @@ cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/
 - `summary_prompt`: AI 总结提示词（**已自动附带**，无需额外调用 `/summary`）
 - `text_preview`: 转录文本前 500 字预览
 
-### 步骤 3：生成 AI 总结
+### 步骤 3：说话人识别与认领（默认 MOSS 路径）
+
+转录响应中的 `speaker_identification` 显示每个说话人是否已被声纹库识别（`{"S01": {"name": "杨律师", "score": 0.74}, "S02": null}`）。已命中的说话人在 Markdown 中直接显示注册名。
+
+**当存在值为 null 的说话人时，必须先向用户逐一确认身份再继续。**询问前，先根据响应 `segments`（每段含 speaker 与 text）为**每位未识别说话人生成一段简要叙述**，随问题一并呈现，供用户凭内容判断身份——这是打标的主要依据，不要只报编号：
+
+叙述格式（每位说话人 2-3 句，基于其全部发言归纳）：
+- **发言占比**：该说话人发言时长/段数占全会的比例；
+- **内容概述**：他说了什么——诉求、立场、给出的信息、向谁发问；
+- **身份线索**：自称（"我是杨律师"）、被对方称呼（"张女士"）、角色口吻（咨询方/解答方/主导方）。
+
+示例呈现："转录完成，共 2 位说话人。**发言人1**（占 35% 发言）：自述是房东，询问拖欠房租的起诉流程，多次被对方称为'张女士'。**发言人2**（占 65% 发言）：以律师口吻分析证据和诉讼策略，开头说'诶，张女士'。请问这两位分别是谁？"
+
+用户回答"是我"、"客户张三"或"不用标"后，对命名的说话人执行认领注册：
+
+```bash
+curl -s -X POST http://127.0.0.1:8765/speaker/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "<用户确认的名字>", "embedding": <响应 speaker_embeddings 中该标签的数组>, "source_file": "<文件名>", "source_label": "S01"}'
+```
+
+- 认领完成后当前 Markdown 无需重跑；下一份录音中同一人将自动识别标注。
+- 用户表示"不用标"的说话人保持匿名，不注册。
+- 客户或第三方声纹的注册须先取得其单独同意（声纹属敏感个人信息）；本人声纹无此要求。完整流程、阈值与纠错见 [`references/speaker-registry.md`](references/speaker-registry.md)。
+
+### 步骤 4：生成 AI 总结
 
 根据 `summary_prompt`（或直接根据 `text` 内容），Agent 生成结构化 JSON 总结：
 
@@ -204,7 +230,7 @@ cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/
 }
 ```
 
-### 步骤 4：注入总结到文件
+### 步骤 5：注入总结到文件
 
 **重要：不要只描述注入操作，必须实际执行以下命令。**
 
@@ -222,16 +248,16 @@ python3 <skill目录>/scripts/summary.py inject "<output_path>" /tmp/summary_<�
 - 注入到 Markdown 文件的正确位置
 - 添加 `<!-- AI-SUMMARY:START -->` / `<!-- AI-SUMMARY:END -->` 标记
 
-### 步骤 5：验证注入结果（必须执行）
+### 步骤 6：验证注入结果（必须执行）
 
-**注入后必须执行验证，确认摘要确实写入文件。如果验证失败，必须重试步骤 4。**
+**注入后必须执行验证，确认摘要确实写入文件。如果验证失败，必须重试步骤 5。**
 
 ```bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && python3 <skill目录>/scripts/summary.py verify "<output_path>"
 ```
 
 - 如果输出 `✅ 摘要已存在` → 成功，向用户报告完成
-- 如果输出 `❌ 摘要不存在` → 失败，回到步骤 4 重试
+- 如果输出 `❌ 摘要不存在` → 失败，回到步骤 5 重试
 
 ### 完整流程示例
 
@@ -240,10 +266,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
   ↓
 Agent：
   1. 检查/启动服务
-  2. POST /transcribe {"file_path": "xxx.aac"}  ← 一次调用拿到转录+提示词
-  3. 根据转录内容直接生成总结 JSON
-  4. 写 JSON 到临时文件 → python3 summary.py inject 注入
-  5. python3 summary.py verify 验证 → 失败则重试步骤 4
+  2. POST /transcribe {"file_path": "xxx.aac"}  ← 一次调用拿到转录+识别结果+提示词
+  3. 有未识别说话人时询问用户身份 → POST /speaker/register 认领注册
+  4. 根据转录内容直接生成总结 JSON
+  5. 写 JSON 到临时文件 → python3 summary.py inject 注入
+  6. python3 summary.py verify 验证 → 失败则重试步骤 5
   ↓
 用户：收到带 AI 总结的 Markdown 文件
 ```
@@ -527,6 +554,7 @@ FastAPI 自动生成交互式 API 文档，访问：[http://127.0.0.1:8765/docs]
 | `scripts/server-onnx.py`   | 启动默认 ONNX 加速服务             |
 | `scripts/transcribe.py`    | 命令行客户端                        |
 | `scripts/auto_transcribe.py` | **自动化转录脚本（推荐）**         |
+| `scripts/speaker_registry.py` | 声纹库管理（list / remove / test） |
 
 ---
 
@@ -587,6 +615,10 @@ curl -X POST http://127.0.0.1:8765/inject_summary \
 | `/summary`            | POST | 生成 AI 总结提示词         |
 | `/inject_summary`     | POST | 将总结注入 Markdown 文件    |
 | `/verify_summary`     | POST | 验证摘要是否已注入          |
+| `/speaker/register`   | POST | 认领注册说话人声纹          |
+| `/speaker/list`       | GET  | 列出已注册说话人            |
+| `/speaker/remove`     | POST | 删除已注册说话人            |
+| `/speaker/test`       | POST | 音频声纹与库比对            |
 
 ## 配置文件
 
