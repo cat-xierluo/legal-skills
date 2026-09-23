@@ -16,13 +16,18 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Build zips
-        run: bash skills/release-workflow/scripts/build-zips.sh "${GITHUB_REF_NAME}"
+      - name: Build skill zips
+        run: bash skills/release-workflow/scripts/build-zips.sh "${RELEASE_TAG}"
+
+      - name: Build expert-suite zips
+        run: bash skills/release-workflow/scripts/build-suite-zips.sh "${RELEASE_TAG}"
 
       - name: Generate release notes
         # 从 README 自动提取"最近更新"表格 + 项目 notes: 配置,生成结构化 body
@@ -31,48 +36,51 @@ jobs:
         run: |
           python3 skills/release-workflow/scripts/generate-release-notes.py \
             "${{ github.repository }}" \
-            "${GITHUB_REF_NAME}" \
+            "${RELEASE_TAG}" \
             "legal-skills" || \
           python3 skills/release-workflow/scripts/generate-release-notes.py \
             "${{ github.repository }}" \
-            "${GITHUB_REF_NAME}"
+            "${RELEASE_TAG}"
 
       - name: Create release & upload
         uses: softprops/action-gh-release@d99959edae48b5ffffd7b00da66dcdb0a33a52ee  # v2.0.2
         with:
-          tag_name: ${{ github.ref_name || inputs.tag }}
-          name: "Skills Release ${{ github.ref_name || inputs.tag }}"
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "Skills Release ${{ env.RELEASE_TAG }}"
           body_path: .release-notes.md
           fail_on_unmatched_files: false
           files: |
             pack-skills/*.zip
 
       # README 回写内嵌在本 workflow,不依赖 on:release 事件——
-      # GITHUB_TOKEN 创建的 Release 不会级联触发其他 workflow(GitHub 防递归机制),
-      # update-readme.yml 的 release:published 触发因此从未生效
+      # GITHUB_TOKEN 创建的 Release 不会级联触发其他 workflow(GitHub 防递归机制)
       - name: Checkout main for README sync
         uses: actions/checkout@v4
         with:
           ref: main
           path: main-tree
 
+      # 重写版 update-readme.py 从 cwd 自动发现根 README + expert-suites/*/README.md
+      # (套件目录不存在时自动降级为仅根 README,PR 合入前后打 tag 均可工作),
+      # 同时刷新整套与成员下载链接(含 suite-* 资产)
       - name: Sync README download links
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: main-tree
         run: |
-          python3 skills/release-workflow/scripts/update-readme.py \
-            "${{ github.repository }}" \
-            main-tree/README.md
+          python3 ../skills/release-workflow/scripts/update-readme.py \
+            "${{ github.repository }}"
 
       - name: Commit README (if changed)
         run: |
           cd main-tree
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet README.md; then
-            echo "README 无变更"
+          git add README.md
+          if [ -d expert-suites ]; then git add expert-suites/*/README.md; fi
+          if git diff --cached --quiet; then
+            echo "README 与专家套件下载链接无变更"
           else
-            git add README.md
-            git commit -m "docs: 同步 README 下载链接到最新 release"
+            git commit -m "docs: 同步 README 与专家套件下载链接到最新 release"
             git push
           fi

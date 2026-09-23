@@ -89,10 +89,15 @@ faropdf:
 # === legal-skills: monorepo-many-skills 发布模式 ===
 # 一次性给仓库内 N 个独立 skill 各打一个 zip,挂到 GitHub Release。
 # 与 folia/funes/faropdf 的「单应用 build matrix」模式并列,通过 type 字段区分。
+# 注意: update-readme.py 的表行回写(链接刷新+版本列对齐+改名死链自愈)依赖
+# monorepo-skills 类型的 README 结构约定,见
+# skills/release-workflow/references/monorepo-release.md「README 结构约定」一节。
+# 新的 monorepo-skills 项目按该约定书写 README 即可复用回写能力。
 legal-skills:
   repo: cat-xierluo/legal-skills
   type: monorepo-skills
   skills_root: skills
+  expert_suites_root: expert-suites
   output_dir: pack-skills
   exclude_globs:
     - "**/archive/**"
@@ -116,14 +121,14 @@ legal-skills:
   # generate-release-notes.py 用的项目级个性化配置
   notes:
     project_label: "Legal Skills"
-    intro_template: "本版包含 **{total} 个 skill** 的最新 zip,覆盖法律 AI 协作全流程(内容获取 / 内容处理 / 法律专业应用 / 开发工具)。"
+    intro_template: "本版包含 **{total} 个 skill** 的最新 ZIP，并同时发布 **{suites} 个场景化专家套件** ZIP；用户既可下载单个 Skill，也可一次取得整套能力（套件清单见下文「专家套件」节）。"
     recent:
       source_marker: "🆕 最近更新的 Skill"
       top_n: 5
     install:
-      single_label: "skill"
+      single_label: "skill 或专家套件"
       full_clone_prompt: "请帮我从 GitHub 安装 legal-skills 技能集合:{repo_url}"
-      single_note: "3. 解压后直接得到 `<skill>/` 文件夹,复制到 Agent 的 skills 目录即可"
+      single_note: "3. 单 Skill ZIP 解压后得到 `<skill>/`；专家套件 ZIP 解压后把其中 `skills/*` 复制到 Agent 的 skills 目录"
   tag:
     scheme: calver
     format: "vYYYY.MM.DD"

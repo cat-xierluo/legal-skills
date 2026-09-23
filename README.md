@@ -37,6 +37,7 @@
 | 2026-09-22 | 更新 | [new-case](skills/new-case/) | v1.5.0 | 新增个人目录规范学习与本地覆盖配置：可从用户描述或已有案件目录归纳习惯，确认后写入不提交 Git 的 local 配置；普通建档不暗中学习，公开预设保持不变。 |
 | 2026-09-22 | 更新   | [elements-complaint-generator](skills/elements-complaint-generator/)   | v0.16.0 | **68 主文书长文本矩阵 + 分页根修**：新增逐树长当事人/诉请/事实真实渲染、候选内容哈希和三轮稳定指纹；修复长字段窄栏裁切、终端空分节、合法网格细化、零内边距误报及 LibreOffice 字体替代漂移，超长行改为自然跨页；204/204 计量通过，0 失败、0 不稳定。 |
 | 2026-09-21 | 更新   | [multi-agent-orchestration](skills/multi-agent-orchestration/)         | v2.27.6 | **tracked 文件删除权限**：`git rm` 改为 receipt 绑定的高风险分类，仅允许冻结范围内单一 tracked 文件/符号链接；flags、多路径、目录/gitlink、pathspec、Shell 包装与普通 allowlist 绕过全部失败关闭，并明确 prompt-only backend 不具机械保护。 |
+| 2026-09-21 | 更新   | [release-workflow](skills/release-workflow/)                           | v1.6.0  | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节，`{total}` 排除套件、新增 `{suites}` 占位符；README 回写三层幂等（release.yml 内嵌为主 + workflow_run 兜底 + 本地驱动）。 |
 | 2026-09-20 | 更新 | [moot-court](skills/moot-court/) | v1.2.1 | **Runtime 分级验证门禁**：按命令入口、模型、子任务、落盘、四发言短闭环和完整民事流程逐级验收；Claude Code短闭环实测通过但有语义发现，完整候选仍待验证；WorkBuddy、千问办公等办公类Agent列入后续实测。 |
 | 2026-09-19 | 正式发布 | [legal-skill-alignment](skills/legal-skill-alignment/) | v1.0.7 | **迁移公开发布（自私有仓整树快照迁移）**：写法律 Skill 前的五问目标对齐（question-set/v1），把零散经验／办案 SOP／咨询记录厘清为结构化 Legal Skill Brief v1 交给 skill-creator 编译；私有仓内部技能引用泛化为通用表述（五问流程与 Brief 契约无变更）；evals 附 2026-08-23 独立复核全套 sha256 固化证据。 |
 | 2026-09-19 | 正式发布 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.12 | **迁移公开发布（自私有仓整树快照迁移）**：法律 Skill 分层质量评测（skill-lint 通用门禁 + 三份测试材料／六维度／律师 taste 领域评测 + 最小修复单元定位）；修正 frontmatter 版本漂移（0.8.1→0.8.12）与 homepage；20 例 capability suite 执行证据链与 suite／receipt 双门禁齐全。 |
@@ -68,6 +69,20 @@
 - 📦 **独立自包含**：每个技能都是完整的模块，可单独使用或组合使用
 - 📝 **文档完善**：每个技能配备决策记录、任务跟踪、变更日志
 - 🌐 **跨平台支持**：全面支持 Windows、macOS 和 Linux
+
+## 🧰 专家套件
+
+专家套件是按法律工作或 Skill 工程场景策展的一组 Skills。仓库中用相对符号链接指向同一份 Skill 源码，同一个 Skill 可以出现在多个套件；Release 下载包会把链接展开为完整目录，用户一次下载即可取得整套能力。
+
+专家套件只负责选择、说明和分发，不会自动编排成员 Skill。真正的跨 Skill 工作流仍遵循下方开发与编排指南。
+
+| 专家套件 | 适用场景 | 成员数 | 版本 | 整套下载 |
+| :--- | :--- | ---: | :---: | :---: |
+| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 文档、扫描件、PDF、音视频、法院来文的数字化和归档 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-legal-material-evidence-0.1.0.zip) |
+| [诉讼案件前期研判](expert-suites/litigation-assessment/) | 新案建档、事实证据分析、法律检索、策略和客户交付 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-assessment-0.1.0.zip) |
+| [诉讼文书与案件推进](expert-suites/litigation-documents-operations/) | 起诉文书、裁判分析、上诉再审和案件沟通 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-documents-operations-0.1.0.zip) |
+| [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-development-quality-0.1.0.zip) |
+| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-release-distribution-0.1.0.zip) |
 
 ## 🛠️ 技能列表
 
@@ -506,8 +521,8 @@
 <td>工具·格式转换</td>
 <td style="word-break:break-word">将 Markdown 文档转换为专业格式 Word 文档，支持法律文书标准，自动应用字体、字号、行距和段落格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.3.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/md2word-1.3.5.zip">下载</a></td>
+<td style="text-align:center">v1.3.6</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/md2word-1.3.6.zip">下载</a></td>
 <td><a href="https://github.com/cat-xierluo/md2word.skill">独立仓库</a></td>
 </tr>
 <tr>
@@ -672,8 +687,8 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/git-batch-commit-1.4.2.zip">下载</a></td>
+<td style="text-align:center">v1.4.3</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-batch-commit-1.4.3.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -706,10 +721,10 @@
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
 <td>工具·发布</td>
-<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
+<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号、Release Notes、CI 与发布验证；支持 monorepo 单 Skill ZIP 和基于符号链接定义、Release 时展开的专家套件 ZIP</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/release-workflow-1.5.0.zip">下载</a></td>
+<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/release-workflow-1.6.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -775,6 +790,10 @@
 将以下内容复制到你的 Agent 平台，让它帮你安装：
 
 > 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
+
+### 一次下载专家套件
+
+从上方“专家套件”表格下载一个 `suite-<id>-<version>.zip`，解压后先阅读套件根目录 README，再把其中 `skills/*` 复制到 Agent 的 Skills 根目录。套件中的每个 Skill 都是完整真实目录，不依赖仓库符号链接。
 
 ### 单独下载某个 skill（推荐，无需 Git）
 

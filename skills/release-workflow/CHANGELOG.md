@@ -1,5 +1,30 @@
 # 变更日志
 
+## [1.6.0] - 2026-09-21
+
+### 新增
+
+- **专家套件无清单发布链路**：新增 `validate-expert-suites.py`，直接以 `expert-suites/<id>/skills/*` 相对符号链接为成员真值，校验链接逃逸、目标跟踪状态、Skill 名称、README 成员表、版本下载链接和许可证，不引入 `suite.yaml`。
+- **自包含套件 ZIP**：新增 `build-suite-zips.sh`，从指定 Git tree 导出成员真实目录，保留套件 README、CHANGELOG、LICENSE 和各成员许可证；产物命名为 `suite-<id>-<semver>.zip`，失败时不覆盖上一批完整产物。
+- **确定性回归测试**：新增静态校验 7 项单测、README 回写 3 项离线单测和端到端打包 fixture，覆盖损坏链接阻断、符号链接展开、下载资产精确匹配、精确 tag 渲染、路径逃逸拦截、模拟安装与失败回滚。
+- **Release Notes 专家套件适配**：`generate-release-notes.py` 新增「专家套件」清单节——遍历 `expert_suites_root`（默认 `expert-suites/`）下各套件的 README（标题/一句话简介）与 CHANGELOG（semver）并统计成员数；`{total}` 计数排除 `suite-` 前缀产物，新增 `{suites}` 占位符（套件数），杜绝套件 ZIP 混入 skill 总数。
+- **README 版本列与改名死链自动回写**：`update-readme.py` 回写不再按链接自身 slug 映射，改为按**行内声明的技能名**（HTML 表行 `href="skills/<name>/"`、套件 md 行 `](../skills/<name>/)`）重映射——根治改名残留死链（如 skill-publish-sync 行曾长期指向旧名 clawhub-sync 的 zip）；同时把紧邻下载列的版本号列对齐到 zip 实际版本（含 `vA.B.C→vX.Y.Z` 区间写法），链接已最新而版本列滞后的存量状态重跑即可修复。独立仓库下载行（链接域名非本仓库）整行不动。v2026.09.21 存量实测：一次运行修复 1 个死链 + 对齐 25 处版本列，49 行全部三方一致。
+- **README 结构性同步入册（发版必查环节）**：SKILL.md 模式 B 新增「README 结构性同步」段——自动回写只覆盖已有表行的链接与版本列，加行/分节归属/描述属结构性维护，发版时须跑覆盖校验 + 分节归属自查（通用工具不进法律专业应用节）+ 描述与 SKILL.md frontmatter 对齐；发布完成检查清单与 monorepo-release.md「发布后」清单同步加条。背景：v2026.08.06–09.21 期间 15 个技能缺行/缺链接、invoice-organizer 分节错位，均因发版环节无人负责 README 结构性维护（已另行修复，main 24c76d0286）。
+- **README 覆盖校验脚本 `check-readme-coverage.py`**：对照最新 Release 资产与 README 技能表，缺行/缺链接即拦截（独立仓库下载行豁免，`--assets-json` 离线可用）——把"新技能漏维护 README 表格行"从静默缺失变成显式拦截（v2026.09.21 曾有 15 个技能缺行/缺链接达 46 天未被发现）。处置写入 `monorepo-release.md`「已知摩擦与处置」摩擦三。
+- **套件成员链接对齐脚本 `align-suite-links.py`**：把"main 上 Skill 升版本 → 长期 PR merge main 后套件 README 成员链接过时 → validate 拦截"的处置固化为脚本（按各 Skill CHANGELOG 当前 semver 批量改写，`--dry-run` 预览）；配合 `monorepo-release.md` 新增的「已知摩擦与处置」小节（含 README 版本列 merge 冲突取 PR 侧的时态原则），处置知识不再依赖个人记忆。
+
+### 改进
+
+- `release.yml` 在单 Skill ZIP 之后构建并上传专家套件 ZIP；新增 PR Preview 工作流，正式 tag 前即可下载和检查套件产物。
+- `update-readme.py` 统一扫描根 README 与全部专家套件 README，同时刷新整套和成员下载链接，并修复 `releases/latest/download/` 链接未被旧正则识别的问题。
+- `release-monorepo.sh` 增加套件构建、套件数量门禁和 Release 资产总数核对；dry-run 不再创建临时 tag，正式发布要求五问确认、干净 main、远端 HEAD 对齐、tagger 身份与不可变 tag OID 绑定，并移除本地脚本直接提交、推送 README 的高风险路径。
+- **README 回写双保险定稿**：`release.yml` 内嵌回写步骤（checkout main → 调重写版 `update-readme.py` → commit + push）为主路径；`update-readme.yml` 以 `workflow_run`（Release workflow 成功后）+ `workflow_dispatch` 作兜底，checkout 显式 `ref: main` 修复 workflow_run 默认 checkout 在 tag SHA 上 detached 导致 `git push` 失败的问题。两处均调用同一份技能脚本并覆盖套件 README，无 inline 副本。
+
+### 文档完善
+
+- 更新 monorepo 发布说明、项目配置和专家套件设计稿，明确源码符号链接与 Release 自包含目录的边界。
+- **README 结构约定显式化**：`references/monorepo-release.md` 新增「monorepo-skills README 结构约定」一节——表行回写（链接刷新/版本列对齐/改名死链自愈）是 `type: monorepo-skills` 的类型级约定而非单仓库个性化补丁，`projects.yaml` 的 `type` 字段即通用/个性分界；确属单仓库的差异走 `notes:` 配置。
+
 ## [1.5.1] - 2026-09-21
 
 ### 修复（v2026.09.21 发布暴露的三个链路缺陷）
