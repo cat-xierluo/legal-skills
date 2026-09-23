@@ -194,15 +194,6 @@
 <td>参考自 <a href="https://github.com/Lawyer-ray/FachuanHybridSystem">法穿</a></td>
 </tr>
 <tr>
-<td><a href="skills/invoice-organizer/"><strong>invoice-organizer</strong></a></td>
-<td>通用·报销整理</td>
-<td style="word-break:break-word">整理一批发票/票据 PDF（增值税普通发票、铁路电子客票、住宿交通餐饮等），按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.1.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/invoice-organizer-0.1.1.zip">下载</a></td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/new-case/"><strong>new-case</strong></a></td>
 <td>通用·案件管理</td>
 <td style="word-break:break-word">将诉讼、咨询、商标和专利材料整理成标准化目录结构；可从用户描述或已有案件目录学习个人文档规范，以本地覆盖配置持久保存</td>
@@ -582,6 +573,15 @@
 <td style="text-align:center">MIT</td>
 <td style="text-align:center">v1.0.5</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/workbuddy-checkin-1.0.5.zip">下载</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="skills/invoice-organizer/"><strong>invoice-organizer</strong></a></td>
+<td>通用·报销整理</td>
+<td style="word-break:break-word">整理一批发票/票据 PDF（增值税普通发票、铁路电子客票、住宿交通餐饮等），按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v0.1.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/invoice-organizer-0.1.1.zip">下载</a></td>
 <td></td>
 </tr>
 </tbody>
