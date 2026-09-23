@@ -67,6 +67,11 @@ send worker prompt, then wait for .../STATUS.json`。
    `SPAWN_WORKER_BASE_REF_MUST_BE_REF` 拒绝。
 4. 默认命令（不传 `--command`）= 空 claude 会话，不会自动领任务；常规派发必须传
    带 Read 指向任务书的 `--command`。长 prompt 放 /tmp 文件，命令里只留一句 Read。
-5. 项目侧前置（badminton-lab）：BL/DEC 取号必须先 registry+TASKS 进 main 再
+5. GLM worker 在高 token 消耗（实测 100-260k）后常提前结束回合、跳过最后交付步骤
+   （发 PR 评论/写 RESULT/建 PR），终端停在 "new task? /clear" 空闲提示符——表象是
+   卡死，实际一催就活。PM 巡检发现「长时间无 commit/dirty 不动」先读终端尾部确认
+   idle，再 terminal send 精确叫醒（指明剩余步骤），连续两轮无效才重派；reviewer
+   任务书结尾务必写明「完成即交付结论到 PR+RESULT，不要停在完成审查未交付」。
+6. 项目侧前置（badminton-lab）：BL/DEC 取号必须先 registry+TASKS 进 main 再
    spawn；TASKS `next_transition` ≤200 字；registry 状态词只能用
    已分配/已兑现/已交付待验收/已交付但验收否决（`check_task_source_consistency.py` 强制）。
