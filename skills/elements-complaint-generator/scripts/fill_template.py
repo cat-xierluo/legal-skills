@@ -31,6 +31,7 @@ python scripts/fill_template.py \\
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -157,7 +158,68 @@ def replace_in_paragraph(p: Para, old: str, new: str, replace_count: int = -1) -
         if 0 < replace_count <= changed:
             break
         pos = idx + len(new)
+    if changed:
+        # 常规替换立即修正异常缩进；apply_rules 结束后还会基于整份文档
+        # 差异兜底直接 p.text 写入和新插段落，覆盖所有规则实现形态。
+        _normalize_long_text_capacity(p, str(new))
     return changed > 0
+
+
+def _normalize_long_text_capacity(
+    p: Para, value: str, threshold: int = 80, *, allow_row_split: bool = True,
+) -> None:
+    """长段落替换时移除模板为短占位符设置的巨大右缩进。
+
+    部分官方行政模板用 ``w:right`` 把一行短提示压成窄栏。标签被替换为
+    实际事实、请求或依据后继续继承该缩进，会把数百字挤在不足一百磅的
+    可用宽度内，最终被行高/分页裁切。这里只处理达到长文本阈值的替换值，
+    保留姓名、日期、金额等短字段的原版式。
+    """
+    W = "{%s}" % W_NS
+    indent = p._p.find(f"./{W}pPr/{W}ind")
+    if indent is not None and len(p.text) >= threshold:
+        right = indent.get(f"{W}right")
+        try:
+            abnormal_right_indent = int(right or 0) >= 1440
+        except ValueError:
+            abnormal_right_indent = False
+        if abnormal_right_indent:
+            for attribute in (f"{W}right", f"{W}rightChars"):
+                indent.attrib.pop(attribute, None)
+
+    # 只有本次实际写入的单字段本身达到长行阈值，才显式允许所属行跨页。
+    # w:cantSplit w:val="0" 是有效 OOXML，不会把模板中原有的 300 字普通行
+    # 批量放宽；后处理和门禁会再次核对该标记与阈值。
+    if not allow_row_split or len(str(value)) < _long_row_split_threshold():
+        return
+    _mark_row_splittable(p)
+
+
+def _mark_row_splittable(p: Para) -> None:
+    """以合法 OOXML 显式标记该行可跨页，供后处理/门禁复核。"""
+    W = "{%s}" % W_NS
+    row = p._p.getparent()
+    while row is not None and row.tag != f"{W}tr":
+        row = row.getparent()
+    if row is None:
+        return
+    row_properties = row.find(f"./{W}trPr")
+    if row_properties is None:
+        row_properties = etree.Element(f"{W}trPr")
+        row.insert(0, row_properties)
+    cant_split = row_properties.find(f"./{W}cantSplit")
+    if cant_split is None:
+        cant_split = etree.SubElement(row_properties, f"{W}cantSplit")
+    cant_split.set(f"{W}val", "0")
+
+
+def _long_row_split_threshold() -> int:
+    policy_path = Path(__file__).resolve().parent.parent / "config/layout-policy.json"
+    try:
+        raw = json.loads(policy_path.read_text(encoding="utf-8"))
+        return int((raw.get("defaults") or {}).get("long_row_split_min_chars", 300))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 300
 
 
 def check_box(p: Para, target_text: str, checked: bool) -> bool:
@@ -1681,7 +1743,12 @@ def _enforcement_doc_specifics(role_ctx: str) -> list[RuleFunc]:
 
 def build_rules_61_limit_lift(tree_dir=None, elements=None) -> list[RuleFunc]:
     """61 暂时解除乘坐飞机高铁限制措施。"""
-    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：被执行人□"), elements)
+    specifics = _enforcement_doc_specifics("身份：被执行人□") + [
+        make_fill_after_rule(
+            "申请事项.理由", "需要赴外地从事生产经营、务工等活动"
+        ),
+    ]
+    return _generic_plus(tree_dir, specifics, elements)
 
 
 def build_rules_62_distribution(tree_dir=None, elements=None) -> list[RuleFunc]:
@@ -1691,12 +1758,18 @@ def build_rules_62_distribution(tree_dir=None, elements=None) -> list[RuleFunc]:
 
 def build_rules_63_guarantee(tree_dir=None, elements=None) -> list[RuleFunc]:
     """63 执行担保申请书。"""
-    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：被执行人□"), elements)
+    specifics = _enforcement_doc_specifics("身份：被执行人□") + [
+        make_fill_after_rule("担保信息.担保范围", "担保范围"),
+    ]
+    return _generic_plus(tree_dir, specifics, elements)
 
 
 def build_rules_64_preemption(tree_dir=None, elements=None) -> list[RuleFunc]:
     """64 确认优先购买权。"""
-    return _generic_plus(tree_dir, _enforcement_doc_specifics("身份：申请执行人□"), elements)
+    specifics = _enforcement_doc_specifics("身份：申请执行人□") + [
+        make_fill_after_rule("申请事项.优先购买理由", "申请优先购买理由"),
+    ]
+    return _generic_plus(tree_dir, specifics, elements)
 
 
 def build_rules_65_objection(tree_dir=None, elements=None) -> list[RuleFunc]:
@@ -2228,6 +2301,7 @@ def _build_known_path_patterns() -> frozenset:
         "执行依据.作出机构", "执行依据.案由", "执行依据.文书号",
         "执行依据.判项主文", "执行依据.生效日期", "执行依据.文书类型",
         "申请执行事项.类型", "申请执行事项.类型.#", "申请执行事项.金额",
+        "申请事项.理由", "申请事项.优先购买理由", "担保信息.担保范围",
     }
     patterns |= {
         # 事实与理由（民间借贷 / 离婚 / 买卖 / 知产等案由字段）
@@ -2513,6 +2587,9 @@ def apply_rules(doc: DocParts, rules: list[RuleFunc], elements: dict) -> dict:
     一条成功就不误报。当 elements[path] 有实际值且该组无一命中时，
     返回 unresolved_inputs，由主流程 fail-closed。
     """
+    # 保留 element proxy 强引用，避免只存整数 id 后 lxml 重建 proxy 或 Python
+    # 复用 id，导致未改段落被误判为新增长段。
+    original_paragraphs = {p._p: p.text for p in iter_paragraphs(doc)}
     details = []
     applied_count = 0
     skipped_count = 0
@@ -2551,6 +2628,21 @@ def apply_rules(doc: DocParts, rules: list[RuleFunc], elements: dict) -> dict:
         has_value = bool(value)
         if has_value and "applied" not in outcomes:
             unresolved.append(path)
+
+    # 一些通用/案由闭包直接给 p.text 赋值或插入新段落，绕过文本替换原语。
+    # 在全部规则完成后对真实段落差异统一收口：最终长段落移除异常右缩进；
+    # 单段新增达到长行阈值时，显式允许所属表格行自然跨页。
+    long_threshold = _long_row_split_threshold()
+    for paragraph in iter_paragraphs(doc):
+        original = original_paragraphs.get(paragraph._p)
+        if original == paragraph.text:
+            continue
+        _normalize_long_text_capacity(
+            paragraph, paragraph.text, allow_row_split=False
+        )
+        growth = len(paragraph.text) if original is None else max(0, len(paragraph.text) - len(original))
+        if len(paragraph.text) >= long_threshold and growth >= long_threshold:
+            _mark_row_splittable(paragraph)
     return {
         "applied": applied_count,
         "skipped": skipped_count,
@@ -2573,7 +2665,9 @@ def load_text_parts(tree_dir: Path) -> dict[str, etree._ElementTree]:
     return parts
 
 
-def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
+def merge_sections_and_normalize(
+    parts: dict, layout_policy: dict | None = None,
+) -> dict[str, int]:
     """后处理页面和表格，但不破坏横竖版切换。
 
     官方模板用大量 next-page 节和左/右交替边距模拟书籍排版。
@@ -2586,9 +2680,13 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
     对高于整页的合法长行，排版器仍可按自身规则自然换页。
     """
     W = "{%s}" % W_NS
+    long_row_split_min_chars = int(
+        (layout_policy or {}).get("long_row_split_min_chars", 300)
+    )
     stats = {"sections_removed": 0, "page_breaks_added": 0,
              "tables_centered": 0, "rows_protected": 0, "orientation_fixed": 0,
-             "trailing_empty_paragraphs_removed": 0}
+             "trailing_empty_paragraphs_removed": 0,
+             "long_rows_split_enabled": 0}
 
     def section_ranges(body):
         ranges = []
@@ -2767,14 +2865,26 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
                 if row_properties is None:
                     row_properties = etree.Element(f"{W}trPr")
                     row.insert(0, row_properties)
-                if row_properties.find(f"./{W}cantSplit") is None:
-                    insert_before_first(
+                cant_split = row_properties.find(f"./{W}cantSplit")
+                row_text = "".join(t.text or "" for t in row.iter(Wt))
+                explicitly_splittable = (
+                    cant_split is not None
+                    and (cant_split.get(f"{W}val") or "").lower()
+                    in {"0", "false", "off", "no"}
+                )
+                if explicitly_splittable and len(row_text) >= long_row_split_min_chars:
+                    stats["long_rows_split_enabled"] += 1
+                    continue
+                if cant_split is None:
+                    cant_split = insert_before_first(
                         row_properties,
                         etree.Element(f"{W}cantSplit"),
                         ("trHeight", "tblHeader", "tblCellSpacing", "jc", "hidden",
                          "cantSplit", "tblPrEx", "trPrChange"),
                     )
-                    stats["rows_protected"] += 1
+                else:
+                    cant_split.attrib.pop(f"{W}val", None)
+                stats["rows_protected"] += 1
 
         # 附件标题必须起页。若前一段已保留 sectPr（如横竖版切换或官方附件
         # next-page 边界），不再叠加分页符，避免正文自然铺满时制造空白页。
@@ -2814,10 +2924,35 @@ def merge_sections_and_normalize(parts: dict) -> dict[str, int]:
         protected_empty_content = {
             "sectPr", "pageBreakBefore", "br", "drawing", "pict", "object",
             "fldSimple", "instrText", "hyperlink", "bookmarkStart", "bookmarkEnd",
-            "footnoteReference", "endnoteReference", "commentReference", "tab",
+            "footnoteReference", "endnoteReference", "commentReference",
+            "commentRangeStart", "commentRangeEnd", "permStart", "permEnd", "sdt", "tab",
         }
+        # 若最后一个实质内容节以空段落 sectPr 收尾，而其后只有 body 级
+        # sectPr，LibreOffice 会为这个没有内容的最终节生成一张“仅页码”
+        # 的空白页。把前一节属性提升为 body 级属性，既保留附件实际使用的
+        # 页边距、页脚和方向，也消除无内容的尾节。
         while len(body) >= 2:
             candidate = body[-2]
+            final_section = body[-1]
+            paragraph_section = (
+                candidate.find(f"./{W}pPr/{W}sectPr")
+                if candidate.tag == f"{W}p"
+                else None
+            )
+            if (
+                paragraph_section is not None
+                and final_section.tag == f"{W}sectPr"
+                and not "".join(t.text or "" for t in candidate.iter(Wt)).strip()
+                and not any(
+                    etree.QName(node).localname in protected_empty_content - {"sectPr"}
+                    for node in candidate.iter()
+                )
+            ):
+                body.replace(final_section, copy.deepcopy(paragraph_section))
+                body.remove(candidate)
+                stats["sections_removed"] += 1
+                stats["trailing_empty_paragraphs_removed"] += 1
+                continue
             if candidate.tag != f"{W}p":
                 break
             if "".join(t.text or "" for t in candidate.iter(Wt)).strip():
@@ -2862,9 +2997,10 @@ FONT_SLOTS = ("eastAsia", "ascii", "hAnsi", "cs")
 
 
 def apply_font_compatibility(tree_dir: Path, policy: dict) -> dict:
-    """中文字体兼容：按 config 策略重写已知方正 *_GBK 字体的全部字体槽引用。
+    """中文字体兼容：按 config 策略重写已知不兼容字体的全部字体槽引用。
 
-    官方模板正文/标题全部指向 方正书宋_GBK / 方正大标宋_GBK 等商业字体。
+    官方模板正文/标题多指向 方正书宋_GBK / 方正大标宋_GBK 等商业字体；
+    少数模板还直接引用 LibreOffice 下解析不稳定的 macOS 字体族名。
     在没有这些精确字体名的环境（典型：LibreOffice + fontconfig），fontTable
     里的 altName（Arial Unicode MS）往往也不存在，fontconfig 会把陌生家族名
     模糊错配到无中文字形的拉丁字体（实测 Verdana；裸名「黑体」「楷体」同样
@@ -2929,7 +3065,8 @@ def apply_font_compatibility(tree_dir: Path, policy: dict) -> dict:
                 count += 1
         return count
 
-    # 1) 重写全部文本 part 中 rFonts 四槽的方正字体引用（document/styles/footer 等）。
+    # 1) 重写全部文本 part 中 rFonts 四槽的不兼容字体引用
+    #    （document/styles/footer 等）。
     for xml_file in sorted((tree_dir / "word").glob("*.xml")):
         if xml_file.name == "fontTable.xml":
             continue
@@ -3522,7 +3659,10 @@ def main() -> int:
                 print(f"  - {path}", file=sys.stderr)
             return 3
 
-        layout_stats = merge_sections_and_normalize(parts)
+        from layout_gate import check as check_layout, load_policy
+        policy_path = Path(__file__).resolve().parent.parent / "config/layout-policy.json"
+        layout_policy = load_policy(policy_path, tree_src.name)
+        layout_stats = merge_sections_and_normalize(parts, layout_policy)
         print(
             "[fill_template] 版式归一："
             f"删节={layout_stats['sections_removed']} "
@@ -3533,9 +3673,6 @@ def main() -> int:
             f"尾空段清理={layout_stats['trailing_empty_paragraphs_removed']}"
         )
         save_text_parts(tree_work, parts)
-        from layout_gate import check as check_layout, load_policy
-        policy_path = Path(__file__).resolve().parent.parent / "config/layout-policy.json"
-        layout_policy = load_policy(policy_path, tree_src.name)
         font_stats = apply_font_compatibility(tree_work, layout_policy)
         if not font_stats["ok"]:
             print(
