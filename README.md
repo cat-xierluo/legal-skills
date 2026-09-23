@@ -755,9 +755,13 @@
 
 ## 📚 开发与编排指南
 
-- [SKILL-DEV-GUIDE.md](docs/SKILL-DEV-GUIDE.md)：单个 Skill 的开发规范
-- [SKILL-ORCHESTRATION-GUIDE.md](docs/SKILL-ORCHESTRATION-GUIDE.md)：多个 Skill 的协作编排规范
-- [SKILL-HANDOFF-GUIDE.md](docs/SKILL-HANDOFF-GUIDE.md)：多个 Skill 之间的交接契约与 handoff package 规范
+开发规范与协作编排已随 Skill 分发，直接使用对应技能（见上方技能列表）：
+
+- [skill-lint](skills/skill-lint/)：单个 Skill 的创建预检、可靠性验收与格式审查——开发规范的实际执行者
+- [multi-agent-orchestration](skills/multi-agent-orchestration/)：多个 Skill/worker 的协作编排（PM 拆解、派发、巡检、验收、PR 收口）
+- [cross-agent-coordination](skills/cross-agent-coordination/)：跨 Agent 任务协调与 Skill 间交接上下文契约
+
+`docs/` 下的同名历史指南（SKILL-DEV-GUIDE 等）已停更，仅作存档，规范以技能为准。
 
 ---
 
