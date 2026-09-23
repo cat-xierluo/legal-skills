@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.3"
+version: "0.6.4"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -55,6 +55,12 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
 2. **仓库发现与智能匹配**
    - 直接匹配：内容中找到的完整 GitHub URL
    - 按名称搜索：当只有项目名时使用 `gh search repos`
+   - 同名候选消歧（社交内容常只给项目名，同名候选多为 fork/搬运/衍生项目，按序锚定原仓库）：
+     1. **Star 数量级**：原仓库通常比 fork/搬运高 1–2 个数量级（实测：mono-color-skill 3250 vs 0~3；native-subtitle-quote-image 795 vs 5/7）；数量级相近时用下两条区分
+     2. **图片语义锚定**：不要只提取图中的项目名文字——把截图展示的功能场景与各候选仓库 description 逐一比对（如"单色印刷审美"帖 ↔ "One-ink editorial print"；"英文内嵌字幕视频截图" ↔ "保留视频内嵌字幕，精确取帧生成长图"）
+     3. **衍生仓库排除**：name 带 `-lite`/`-editor`/`-skills` 等后缀、description 自述"基于上游/fork 适配/补原仓库不做的半边"的直接排除
+     4. **版本交叉核对**：内容提到版本号（如"升级到 2.0"）时，查候选仓库 releases/tags，原仓库应存在对应版本轨迹
+   - 候选仍无法唯一确定时：不凭猜测 star，列出候选与判断依据请用户确认
    - 上下文相关性验证：检查 topics、description、技术栈是否匹配
 
 3. **检查是否已 Star**
