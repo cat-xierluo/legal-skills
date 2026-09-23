@@ -562,7 +562,18 @@ def audit_docx(docx_path: Path, policy: dict[str, Any]) -> dict[str, Any]:
                 measurements["rows"] += 1
                 row_properties = row.find("./" + W + "trPr")
                 cant_split = row_properties.find("./" + W + "cantSplit") if row_properties is not None else None
-                if policy.get("require_row_cant_split", True) and cant_split is None:
+                row_text = "".join(node.text or "" for node in row.iter(W + "t"))
+                long_row_threshold = int(policy.get("long_row_split_min_chars", 300))
+                explicitly_splittable = (
+                    cant_split is not None
+                    and (cant_split.get(W + "val") or "").lower()
+                    in {"0", "false", "off", "no"}
+                )
+                if (policy.get("require_row_cant_split", True)
+                        and (
+                            cant_split is None
+                            or (explicitly_splittable and len(row_text) < long_row_threshold)
+                        )):
                     issues.append(_issue(
                         "ECG-LAYOUT-ROW-BREAK",
                         f"表 {number} 第 {row_index} 行未禁止非必要的跨页拆行",
@@ -993,29 +1004,43 @@ def _cell_crossings(page, geometry: dict[str, Any], tolerance: float) -> list[tu
     y_low, y_high = geometry["y0"] - 4.0, geometry["y1"] + 4.0
     crossings: list[tuple[str, float]] = []
     seen_rows: set[tuple[int, float]] = set()
-    for word in page.get_text("words"):
-        x0, y0, x1, y1, text = word[0], word[1], word[2], word[3], str(word[4])
-        if x0 < x_low or x1 > x_high or y0 < y_low or y1 > y_high:
-            continue
-        for boundary in columns[1:-1]:
-            if x0 < boundary - tolerance and x1 > boundary + tolerance:
-                if not any(
-                    abs(segment[0] - boundary) <= 2.5
-                    and (
-                        min(segment[2], y1) - max(segment[1], y0)
-                        >= max(1.5, min((y1 - y0) * 0.25, 4.0))
-                    )
-                    for segment in segments
-                ):
-                    # 该列位在本行没有贯穿文字高度的竖线（合法合并单元格），
-                    # 或竖线只在相邻行边界与 PDF 字形包围盒轻微相交；后者在
-                    # LibreOffice/PyMuPDF 的小数坐标取整中会波动，不能算越界。
+    # ``get_text('words')`` 会在零内边距表格中把左单元格末字和右单元格
+    # 首字拼成同一个“词”，从而制造跨列假阳性。rawdict 的 span 保留两侧
+    # 独立绘制边界；用去除首尾空白后的真实字符包围盒判断视觉越线。
+    raw = page.get_text("rawdict")
+    for block in raw.get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                chars = [char for char in span.get("chars", []) if not char.get("c", "").isspace()]
+                if not chars:
                     continue
-                key = (round(y0 / 4), boundary)
-                if key not in seen_rows:
-                    seen_rows.add(key)
-                    crossings.append((text, boundary))
-                break
+                x0 = min(char["bbox"][0] for char in chars)
+                y0 = min(char["bbox"][1] for char in chars)
+                x1 = max(char["bbox"][2] for char in chars)
+                y1 = max(char["bbox"][3] for char in chars)
+                text = "".join(char.get("c", "") for char in chars)[:80]
+                if x0 < x_low or x1 > x_high or y0 < y_low or y1 > y_high:
+                    continue
+                for boundary in columns[1:-1]:
+                    if not (x0 < boundary - tolerance and x1 > boundary + tolerance):
+                        continue
+                    if not any(
+                        abs(segment[0] - boundary) <= 2.5
+                        and (
+                            min(segment[2], y1) - max(segment[1], y0)
+                            >= max(1.5, min((y1 - y0) * 0.25, 4.0))
+                        )
+                        for segment in segments
+                    ):
+                        # 该列位在本行没有贯穿文字高度的竖线（合法合并单元格），
+                        # 或竖线只在相邻行边界与 PDF 字形包围盒轻微相交；后者在
+                        # LibreOffice/PyMuPDF 的小数坐标取整中会波动，不能算越界。
+                        continue
+                    key = (round(y0 / 4), boundary)
+                    if key not in seen_rows:
+                        seen_rows.add(key)
+                        crossings.append((text, boundary))
+                    break
     return crossings
 
 
@@ -1221,13 +1246,15 @@ def audit_pdf(
                 active_anchors or interior_continuity or same_top_line
             )
 
-            # 漂移判据：续页带顶出现上一页不存在的列边界（新 x）才算漂移。
-            # 真正的列位偏移必然表现为带顶的新 x（如中列 297.64→400）；
-            # 而续页首行/首段为合法整行合并时，旧列边界可能在当前带完全不
-            # 出现（只剩左右边框），“旧列消失即漂移”的对称判据会把这种
-            # 合法形态误报成漂移，故不设消失列判据（DOCX 层紧邻表网格
-            # 一致性检查仍兜底物理拆表的网格漂移）。
-            drifted = any(not _has_column(previous_columns, x) for x in top_columns)
+            # 同一 tblGrid 的不同行可用不同 gridSpan 子集：内部边界既可能
+            # 纯新增/消失，也可能合法地由一个位置换到另一个位置。PDF 几何
+            # 无法区分这种行级合并与真实内部列漂移，故这里只硬判不会被
+            # gridSpan 改变的表格左右外边界；内部网格守恒交给 DOCX 层的
+            # tblGrid/tcW/gridSpan 检查。
+            drifted = (
+                not _has_column([previous_columns[0]], top_columns[0])
+                or not _has_column([previous_columns[-1]], top_columns[-1])
+            )
             if check_columns and identity_confident and drifted:
                 issues.append(_issue(
                     "ECG-LAYOUT-COLUMN-GRID",

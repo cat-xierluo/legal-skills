@@ -60,9 +60,9 @@ def main() -> int:
                 errors = [name for status, name in rules_result["details"] if status == "error"]
                 if errors:
                     raise RuntimeError(f"规则执行失败: {errors[:3]}")
-                layout_stats = merge_sections_and_normalize(parts)
-                save_text_parts(work, parts)
                 policy = load_policy(policy_path, tree_name)
+                layout_stats = merge_sections_and_normalize(parts, policy)
+                save_text_parts(work, parts)
                 # 与 fill_template 主流水线保持一致：字体兼容必须在页脚修复前
                 # 完成；候选字体无法解析出中文覆盖时该家族按失败处理。
                 font_stats = apply_font_compatibility(work, policy)
