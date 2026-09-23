@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-23 | 更新 | [local-asr](skills/local-asr/) | v2.0.0 | 技能由 funasr-transcribe 正式更名；MOSS-MLX 保持默认，FunASR 管线保留，迁移同仓调用及本机环境路径。 |
+| 2026-09-23 | 更新 | [local-asr](skills/local-asr/) | v2.0.0→v2.1.1 | 技能由 funasr-transcribe 正式更名；MOSS-MLX 保持默认，FunASR 管线保留；新增认领式声纹注册——本人声纹从转录结果认领入库，后续录音自动识别标注说话人；认领询问附带每位说话人的发言叙述，凭内容即可打标。 |
 | 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
 | 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
 | 2026-09-23 | 更新 | [project-init](skills/project-init/) | v1.2.5 | 更新示例配置中的本地 ASR 技能名称。 |
@@ -121,9 +121,9 @@
 <tr>
 <td><a href="skills/local-asr/"><strong>local-asr</strong></a></td>
 <td>工具·ASR</td>
-<td style="word-break:break-word">本地语音识别服务，Apple Silicon 默认 MOSS-MLX，保留 FunASR 管线；输出带时间戳和匿名说话人的 Markdown</td>
+<td style="word-break:break-word">本地语音识别服务，Apple Silicon 默认 MOSS-MLX，保留 FunASR 管线；输出带时间戳和说话人的 Markdown，支持认领式声纹注册自动标注本人</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.0.0（源码）</td>
+<td style="text-align:center">v2.1.1（源码）</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/funasr-transcribe-1.9.4.zip">下载</a></td>
 <td>旧名历史包；新名称源码尚未发布</td>
 </tr>
