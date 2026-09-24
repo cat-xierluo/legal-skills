@@ -228,6 +228,11 @@ else
 fi
 
 # ── route_suggest_wrap_command（v2.9.4：补选 provider 注入运行 env）────────
+if grep -Fq 'claude-code) COMMAND="claude --permission-mode auto" ;;' "$SPAWN_WORKER"; then
+  ok "default Claude worker command selects auto mode"
+else
+  bad "default Claude worker command selects auto mode"
+fi
 # fixture：假 scripts/ 目录（含假 wrapper）+ config/prov-a1.settings.json。
 FAKE_SCRIPTS="$CASE_ROOT/fake-scripts"
 mkdir -p "$FAKE_SCRIPTS" "$CASE_ROOT/config"
@@ -257,6 +262,17 @@ fi
 grep -Fq 'ROUTE_SUGGEST_ENV: provider=prov-a1' "$CASE_ROOT/w1.err" \
   && ok "wrap emits ROUTE_SUGGEST_ENV marker" \
   || bad "wrap emits ROUTE_SUGGEST_ENV marker"
+
+# 新默认命令已带 auto；包装后仍只能有一个权限模式参数。
+reset_wrap_case
+COMMAND="claude --permission-mode auto"
+route_suggest_wrap_command 2>/dev/null
+if [[ "$COMMAND" == *"-- claude --permission-mode auto" ]] \
+   && [[ "$COMMAND" != *"--permission-mode auto --permission-mode auto"* ]]; then
+  ok "wrap preserves a single auto permission flag"
+else
+  bad "wrap preserves a single auto permission flag (COMMAND=$COMMAND)"
+fi
 
 # 场景 W2：显式 --command（COMMAND_WAS_DEFAULT=0）→ 不包装。
 reset_wrap_case prov-a1 0
