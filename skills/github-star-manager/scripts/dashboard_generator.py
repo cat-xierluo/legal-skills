@@ -34,8 +34,8 @@ def generate_dashboard(projects: list, output_dir: str = "output") -> dict:
     with open(data_js_path, "w", encoding="utf-8") as f:
         f.write(f"const PROJECTS_DATA = {json_str};\n")
 
-    # 查找模板文件
-    example_path = Path("assets/dashboard.example.html")
+    # 查找模板文件（锚定技能目录自身，避免随 cwd 漂移找不到模板）
+    example_path = Path(__file__).parent.parent / "assets" / "dashboard.example.html"
 
     if example_path.exists():
         dashboard_path = _generate_from_template(projects, example_path, output_path)
