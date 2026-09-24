@@ -72,7 +72,7 @@ def deny(code: str, reason: str) -> None:
 
 def load_authorization(
     path_text: str, encoded_text: str
-) -> tuple[str, set[str], set[str], tuple[str, ...]]:
+) -> tuple[str, set[str], set[str], tuple[str, ...], str]:
     try:
         if encoded_text:
             raw = base64.b64decode(encoded_text, validate=True).decode("utf-8")
@@ -92,6 +92,9 @@ def load_authorization(
         raise ValueError("授权文件根节点必须是对象")
     if data.get("policy") != "deny_by_default":
         raise ValueError("policy 必须是 deny_by_default")
+    shell_policy = data.get("shell_policy", "exact_allowlist")
+    if shell_policy not in {"exact_allowlist", "claude_auto"}:
+        raise ValueError("shell_policy 必须是 exact_allowlist 或 claude_auto")
     source = data.get("authorization_source", "")
     commands = data.get("authorized_commands", [])
     allowed_shell = data.get("allowed_shell_commands", [])
@@ -116,7 +119,7 @@ def load_authorization(
     normalized_shell = {item.strip() for item in allowed_shell}
     if normalized and not source.strip():
         raise ValueError("存在授权命令但缺少可审计 authorization_source")
-    return source.strip(), normalized, normalized_shell, tuple(allowed_write_paths)
+    return source.strip(), normalized, normalized_shell, tuple(allowed_write_paths), shell_policy
 
 
 def strip_heredoc_bodies(command: str) -> str:
@@ -398,6 +401,88 @@ def is_safe_lifecycle_command(command: str) -> bool:
         if not _is_safe_worker_segment(segment):
             return False
     return True
+
+
+def claude_auto_protected_shell_reason(command: str, depth: int = 0) -> str | None:
+    """Keep explicit worker Git boundaries while Claude auto judges ordinary Bash.
+
+    This is not a general shell sandbox: opaque programs remain subject to Claude
+    Code's native auto classifier and the user's settings.  Known high-risk Git
+    operations must not be delegated to that classifier.
+    """
+    if depth > 3:
+        return "shell wrapper nesting exceeds the protected-command limit"
+    tokens = _tokenize_worker_command(command)
+    if not tokens:
+        return None
+    segments = _split_worker_segments(tokens)
+    if segments is None:
+        return None
+    for segment in segments:
+        if not segment:
+            continue
+        program = os.path.basename(segment[0])
+        args = segment[1:]
+        if program == "sudo":
+            return "privilege elevation is outside worker auto authority"
+        if program in {"env", "command", "builtin"}:
+            while args:
+                if program == "env" and args[0] in {"-u", "--unset"}:
+                    args = args[2:]
+                elif args[0] == "--" or (program == "env" and "=" in args[0]):
+                    args = args[1:]
+                else:
+                    break
+            if args:
+                program, args = os.path.basename(args[0]), args[1:]
+        if program in {"bash", "sh", "zsh", "dash"} and len(args) >= 2:
+            if args[0] in {"-c", "-lc", "-ic", "--command"}:
+                nested = claude_auto_protected_shell_reason(args[1], depth + 1)
+                if nested:
+                    return nested
+        if program == "eval" and args:
+            nested = claude_auto_protected_shell_reason(" ".join(args), depth + 1)
+            if nested:
+                return nested
+        if program == "git" and args:
+            # Git global -C/-c/--git-dir/--work-tree options precede the verb.
+            while args:
+                if args[0] in {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}:
+                    if args[0] == "-c" and len(args) > 1 and args[1].lower().startswith("alias."):
+                        return "inline Git aliases can hide protected operations"
+                    args = args[2:]
+                    continue
+                if args[0].startswith("-calias.") or args[0].startswith("--config-env=alias."):
+                    return "inline Git aliases can hide protected operations"
+                if args[0].startswith(("--git-dir=", "--work-tree=", "--namespace=")):
+                    args = args[1:]
+                    continue
+                break
+            if not args:
+                continue
+            subcommand, rest = args[0], args[1:]
+            if subcommand == "push" and not _is_safe_git_push_args(rest):
+                return "force push, protected-branch push and remote deletion require PM control"
+            if subcommand == "commit" and any(arg in {"--no-verify", "-n"} for arg in rest):
+                return "git commit --no-verify bypasses repository checks"
+            if subcommand == "rebase" and any(
+                arg == "-x" or arg.startswith("--exec") for arg in rest
+            ):
+                return "git rebase --exec runs an unreviewed shell command"
+            if subcommand == "fetch" and any(arg.startswith("--upload-pack") for arg in rest):
+                return "git fetch --upload-pack can execute a local program"
+            if subcommand == "reset" and any(arg == "--hard" for arg in rest):
+                return "git reset --hard is destructive"
+            if subcommand == "clean" and any(arg.startswith("-f") or arg == "--force" for arg in rest):
+                return "git clean --force is destructive"
+            if subcommand == "branch" and any(arg in {"-D", "--delete", "--force"} for arg in rest):
+                return "branch deletion requires PM control"
+        if program == "gh" and args:
+            if args[0] == "api" or tuple(args[:2]) in {
+                ("repo", "sync"), ("repo", "delete"), ("pr", "merge")
+            }:
+                return "GitHub mutation requires PM control"
+    return None
 
 
 GIT_RM_PATH_FORBIDDEN_CHARS = frozenset("*?[]{}$~`")
@@ -1006,12 +1091,17 @@ def main() -> int:
     command = command.strip()
 
     try:
-        source, authorized, allowed_shell, _mirror_allowed_write_paths = load_authorization(
+        source, authorized, allowed_shell, _mirror_allowed_write_paths, shell_policy = load_authorization(
             auth_file,
             os.environ.get("WORKER_INSTALL_AUTH_B64", "").strip(),
         )
     except ValueError as exc:
         deny("INSTALL_AUTHORIZATION_INVALID", str(exc))
+        return 0
+    if shell_policy == "claude_auto" and os.environ.get(
+        "WORKER_GUARD_BACKEND", ""
+    ).strip().lower() not in {"claude-code", "claude_code"}:
+        deny("INSTALL_AUTHORIZATION_INVALID", "claude_auto 仅适用于 Claude Code worker")
         return 0
 
     # Protocol authority outranks both generic shell and installation grants.
@@ -1037,6 +1127,12 @@ def main() -> int:
         deny("GIT_RM_AUTHORITY_BLOCKED", git_rm_reason)
         return 0
     if not is_install_command(command):
+        if shell_policy == "claude_auto":
+            protected_reason = claude_auto_protected_shell_reason(command)
+            if protected_reason:
+                deny("CLAUDE_AUTO_PROTECTED_COMMAND", protected_reason)
+            # No decision: Claude Code's auto classifier and settings rules run.
+            return 0
         if command in allowed_shell or is_safe_lifecycle_command(command):
             return 0
         deny(

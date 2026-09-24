@@ -80,7 +80,10 @@ print((cfg.get("env") or {}).get("ANTHROPIC_MODEL", ""))
 PY
 ) || model=""
   [ -n "$model" ] || return 0
-  COMMAND="bash '$wrapper' --settings '$settings' --model '$model' -- $COMMAND --permission-mode auto"
+  # The default Claude command already carries auto mode.  Preserve one mode
+  # flag in the final command so spawn can bind its Shell policy unambiguously.
+  [ "$COMMAND" != "claude" ] || COMMAND="claude --permission-mode auto"
+  COMMAND="bash '$wrapper' --settings '$settings' --model '$model' -- $COMMAND"
   echo "ROUTE_SUGGEST_ENV: provider=${API_PROVIDER} settings=${API_PROVIDER}.settings.json model=${model}（默认命令自动包装 provider env）" >&2
   return 0
 }
