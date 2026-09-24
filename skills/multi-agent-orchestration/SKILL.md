@@ -26,10 +26,7 @@ metadata:
 - 单个短任务、一次性问答或无并行价值的单文件修改。
 - 纯任务源、负责人和依赖状态同步：遵循项目任务源规则，不在本 Skill 扩展。
 - branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
-- **通道选择（subagent vs 独立 worker）是平行决策，不是降级回退**：
-  - **宿主 subagent 首选**：中小型任务卡（单卡 ≤1h 工作量）、质量敏感（像素/数值级验证）、希望快（15-45 分钟/卡实测）、宿主额度充裕。实证（Fathom 2026-09-24，八卡 082-093）：全绿零返工、白名单零越权、运维成本近零。
-  - **独立 worker 首选**：宿主额度紧张/已撞限（subagent 与宿主共享额度，撞限时在途全灭）、大批量长任务并行、需要模型多样性（lane 切换走用户 API 额度）、宿主会话可能中断的任务。
-  - 混用纪律与通道无关：同文件域串行、异文件域并行的冲突控制对所有通道通用。
+- 宿主不能启动或控制本地 Agent CLI 时：使用宿主自己的 subagent 能力。
 
 本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
 
@@ -43,7 +40,7 @@ metadata:
 | Orca terminal-managed | 白名单 backend 未采用 supervised，或 CLI 仅能由外部 terminal 管理 | terminal 输出 + checkpoint + 真实产物，PM 验收 |
 | tmux worktree | Orca 不可用、用户指定 tmux 或兼容性回归 | checkpoint + Git/测试/产物，PM 验收 |
 | tmux lightweight | 用户明确不要 worktree，或非 Git 目标且目录绝不重叠 | checkpoint + 真实产物，PM 验收 |
-| 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
+| 同宿主 subagent | 窄范围、短任务、无需独立进程或分支 | 宿主决定 |
 
 同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
 

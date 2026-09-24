@@ -30,7 +30,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 目标：仅对显式 auto 且 hook 生效的 Claude Code Worker，让普通 Bash 由原生 auto/settings 决定；保留安装、Orca 协议、tracked 删除和受保护 Git 操作的编排边界。其他 backend 与非 auto 模式保持精确白名单。
 - 允许范围：本 Skill 的 `dependency-install-guard.py`、spawn/metadata/provider 包装、定向测试、`SKILL.md`、worker prompt、运行时参考、`DECISIONS.md`、`CHANGELOG.md`、`TASKS.md`，以及根 README 对本 Skill 的版本索引。
 - 验收：原报错命令在 Claude auto 策略下不再由 hook 拒绝；安装、强推、主干 push、`gh pr merge`、tracked 删除与其他 backend 拒绝仍有效；spawn snapshot/METADATA/receipt 策略一致；运行定向门禁与 Skill 审查。真实 Claude auto 分类器是否最终批准该命令须在线实测，未测标 `NOT_VERIFIED`。
-- 本地证据（2026-09-24）：`test-dependency-install-guard.sh` 182/182；`test-spawn-worker-metadata.sh` 31/31；`test_worker_delivery_prompt.py` 9/9；provider 路由回归 29/29；Python 编译与 Bash 语法通过；`git diff --check` 通过；skill-lint Harness Failure Audit 0 finding，Security Scan 0 critical / 0 high（其他命中主要为既有测试 fixture 与受控脚本能力）。真实 Claude Code auto 分类器对该命令的最终决策、真实 Orca/provider 生命周期为 `NOT_VERIFIED`。本轮提交并推送独立候选分支；尚未创建 PR。原工作树有其他 Skill 的既存修改，未纳入本候选。
+- 本地证据（2026-09-24）：`test-dependency-install-guard.sh` 190/190；`test-spawn-worker-metadata.sh` 31/31；`test_worker_delivery_prompt.py` 9/9；provider 路由回归 29/29；Python 编译与 Bash 语法通过；`git diff --check` 通过；skill-lint Harness Failure Audit 0 finding，Security Scan 0 critical / 0 high（其他命中主要为既有测试 fixture 与受控脚本能力）。真实 Claude Code auto 分类器对该命令的最终决策、真实 Orca/provider 生命周期为 `NOT_VERIFIED`。审查时移除无关的 subagent 通道选择文案，并修复 auto 门禁对重定向、赋值前缀和复合语法的误放行。候选分支独立于原工作树；原工作树其他 Skill 的既存修改未纳入本候选。
 
 独立维护池另有 `HERMES-BASH-VERSION-GATE` 可领取；它只增加入口版本诊断，不得顺带处理首次 trust/MCP 交互或 GitHub merge 恢复。
 

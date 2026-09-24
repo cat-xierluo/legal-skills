@@ -6,6 +6,7 @@
 
 - Claude Code Worker 的默认启动命令显式使用 `--permission-mode auto`；provider 自动包装避免重复追加该参数。本地 hook 生效时，普通 Bash 命令交回 Claude Code 原生 auto 和 settings 判断。定向 `unittest` 等开发循环命令不再因编排层未列入精确 Shell 白名单而直接失败；正式交付仍须原样运行验证合同命令并记录退出码。
 - 授权快照、PM receipt 与 METADATA 记录 `shell_policy=claude_auto`；其他 backend 和非 auto 模式继续使用 `exact_allowlist`。安装授权、Orca 协议、tracked 删除及受保护 Git 操作仍由编排 hook 独立处理。
+- 审查时补强 auto 模式下的受保护命令识别：带重定向、管道、环境变量前缀及 `exec` 包装的 Git 操作仍会被检查；无法可靠解析的复合 Shell 语法失败关闭。
 
 ### 文档完善
 
@@ -13,7 +14,7 @@
 
 ### 验证
 
-- `test-dependency-install-guard.sh` 182/182、`test-spawn-worker-metadata.sh` 31/31、`test_worker_delivery_prompt.py` 9/9、provider 路由回归 29/29；Python 编译、Bash 语法、`git diff --check` 通过。skill-lint Harness Failure Audit 0 finding，Security Scan 0 critical / 0 high。真实 Claude Code auto 分类器的在线批准行为为 `NOT_VERIFIED`，不以 hook 放行冒充 CLI 最终批准。
+- `test-dependency-install-guard.sh` 190/190、`test-spawn-worker-metadata.sh` 31/31、`test_worker_delivery_prompt.py` 9/9、provider 路由回归 29/29；Python 编译、Bash 语法、`git diff --check` 通过。skill-lint Harness Failure Audit 0 finding，Security Scan 0 critical / 0 high。真实 Claude Code auto 分类器的在线批准行为为 `NOT_VERIFIED`，不以 hook 放行冒充 CLI 最终批准。
 
 ## [2.27.6] - 2026-09-21
 
