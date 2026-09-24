@@ -1,5 +1,26 @@
 # 变更日志
 
+## [1.0.6] - 2026-09-25
+
+### 修复（v5.6.2 信封加密适配，issue #191）
+
+- **`decrypt-token.js` 新增 `$wbEncrypted` 信封解密分支**：WorkBuddy 桌面端 5.6.2（约 2026-09-23 起）把登录态文件 `workbuddy-desktop.info` 中的 `auth.accessToken` / `auth.refreshToken` 从明文字符串改为信封对象 `{ $wbEncrypted: 1, envelope: "<base64>" }`，旧逻辑 `typeof token === "string"` 恒为 false，签到必然失败且报「未找到新版明文认证文件」的误导性错误。新分支：
+  1. 检测 accessToken 为 `$wbEncrypted` 信封对象时，先经 WorkBuddy 定制 Electron 二进制（`ELECTRON_RUN_AS_NODE=1` 纯 Node 模式，不启动 GUI）调用原生绑定 `electron_browser_workbuddy_storage.loggerGet()` 取得编译期静态钥 `atRestSecretKey`；
+  2. 以 `key = sha256(atRestSecretKey 字符串 UTF-8 字节)` 推导 AES-256 密钥（与官方 `normalizeAtRestKeyPayload` 一致），并校验 `sha256(key)` 前 16 hex 与信封 `keyId` 一致；
+  3. 按 AtRestCrypto sym-v1 域分离格式构建 AAD（`WB-AAD\0` 前缀 + 长度前缀编码，framing=field），AES-256-GCM 解密得到明文 token。
+- **解密失败时报确切原因并退出**（退出码 7）：找不到 WorkBuddy 二进制 / `loggerGet` 失败 / keyId 不匹配（官方换加密方案）/ AES 校验失败，均给出可操作提示，不再静默落入「未找到明文文件」的误导分支（issue #191 投诉点）。
+- **二进制定位**：macOS 枚举 `/Applications/WorkBuddy.app/Contents/MacOS`（及 `~/Applications` 下同名）可执行文件；Windows 探测 `%LOCALAPPDATA%\Programs\WorkBuddy\WorkBuddy.exe`、`%ProgramFiles%` 等 NSIS 常见位置；均可用新环境变量 `WB_CHECKIN_WORKBUDDY_BIN` 显式指定。
+- **兼容性**：明文形态（v5.3.8 ~ 5.5.x）与旧版 `state.vscdb` 回退分支不受影响；信封字段外的 `account.uid` / `auth.domain` 等仍为明文，直接读取。
+
+### 验证
+
+- macOS（M1 Max / WorkBuddy 5.6.2 / darwin arm64）实机：`node decrypt-token.js` 信封解密成功（派生 keyId 与信封一致，明文 1970 字符 JWT）；`bash scripts/checkin.sh` 端到端跑通，接口返回 `code=10001`（今日已签到）幂等判定正确。
+- Windows 路径探测基于 NSIS 安装惯例，待 issue #191 报告者实机验证（候选未命中时可用 `WB_CHECKIN_WORKBUDDY_BIN` 指定）。
+
+### 文档
+
+- `SKILL.md`：版本升至 1.0.6；原理、环境变量、排错同步信封分支说明；依赖无新增（仍为 Node.js + 本机 WorkBuddy 安装）。
+
 ## [1.0.5] - 2026-09-17
 
 ### 修复（健壮性与正确性，外部 review）
