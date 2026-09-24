@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-24 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.28.0 | Claude Code auto Worker 的普通 Bash 改由原生 auto 和 settings 判断；编排 hook 保留安装、Orca 协议、tracked 删除及受保护 Git 操作门禁。 |
 | 2026-09-23 | 更新 | [local-asr](skills/local-asr/) | v2.0.0→v2.1.1 | 技能由 funasr-transcribe 正式更名；MOSS-MLX 保持默认，FunASR 管线保留；新增认领式声纹注册——本人声纹从转录结果认领入库，后续录音自动识别标注说话人；认领询问附带每位说话人的发言叙述，凭内容即可打标。 |
 | 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
 | 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
@@ -41,7 +42,6 @@
 | 2026-09-23 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.1 | 更新开发与编排参考文档中的本地 ASR 路径。 |
 | 2026-09-23 | 更新 | [transcription-corrector](skills/transcription-corrector/) | v1.0.9 | 更新配置示例中的上游转录技能名称。 |
 | 2026-09-23 | 更新 | [video-compressor](skills/video-compressor/) | v1.5.2 | 更新本地转录技能链接，并对齐前端元数据版本。 |
-| 2026-09-23 | 更新   | [md2word](skills/md2word/)                                             | v1.3.8  | **修复水平线折行**：55 个 `─` 在 Times New Roman 字体回退后按全角宽渲染，总宽超版心必折成两行；默认改用 Word 原生段落底边框（`w:pBdr/w:bottom` 单线），自适应栏宽不折行，`style: character` 可回退旧行为；回归 26/26 + 真实法律文档渲染目检通过。 |
 </details>
 
 ## 📋 项目概述
@@ -707,7 +707,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal UI、Run/Task/Dispatch、worker transcript、Orca 429 idle 巡检与错峰唤醒、严格 lifecycle 结算、五后端总控、Harness 层级门禁、Wave Autopilot live-session 快路径与 L2 跨会话持久 controller core</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.27.4</td>
+<td style="text-align:center">v2.28.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/multi-agent-orchestration-2.27.4.zip">下载 v2.27.4</a></td>
 <td></td>
 </tr>

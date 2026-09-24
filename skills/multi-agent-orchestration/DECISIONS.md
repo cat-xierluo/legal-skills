@@ -1,5 +1,15 @@
 # 决策记录
 
+## DEC-2026-09-24-CLAUDE-AUTO-SHELL — Claude Code auto 接管普通 Shell 决策
+
+- 日期：2026-09-24
+- 状态：已采纳；本地定向验收通过，真实 Claude Code auto 决策 `NOT_VERIFIED`
+- 背景：Claude Code Worker 已用 `--permission-mode auto`，用户也在 Claude Code settings 中配置常规命令，但编排层的 PreToolUse 精确白名单先行拒绝定向 `unittest`，使原生 auto 与用户设置无法生效。
+- 考虑方案：逐条补 `--verify-cmd` 维持机械最小权限，但开发循环仍频繁遇到命令变体；复制 settings 的 Bash 模式会重实现 Claude Code 匹配语义，且不能覆盖 auto 分类器；让 hook 对普通 Bash 返回无决定，则可复用原生权限系统。
+- 决策：仅在 Claude Code 的本地 hook 生效、实际启动命令显式声明 `--permission-mode auto` 时，冻结 `shell_policy=claude_auto`；普通 Bash 交由 Claude Code auto/settings，编排层继续拦安装、受保护的 Git 操作、Orca 完成协议与 tracked 删除。其他模式与 backend 维持 `exact_allowlist`。验证命令仍是交付证据要求，须原样执行并保留退出码。
+- 边界：auto 分类器不是 OS 沙箱，任意 Shell 程序可能写出 `--allow-paths` 范围；编排层只对识别出的保护类做机械拒绝，不把普通 Bash 声称为受范围硬隔离。PM 需审查真实 diff、测试与外部副作用；需要所有 Shell 都受机械范围控制时使用精确白名单模式。
+- 重新评估条件：若 Claude Code 提供可验证的 Shell 路径沙箱或编排层有完整命令执行追踪，可强化范围保证；若真实 auto 模式无法加载本地 hook，则回到精确白名单或显式阻断派发。
+
 ## DEC-2026-09-20-TRACK-MAINTAINER-CONTEXT — 任务与决策上下文随 Skill 源码维护
 
 - 日期：2026-09-20

@@ -87,7 +87,13 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 不要合并多个权威来源；CLI 与合同并存会失败关闭。合同中的 `implementation` / `reusable_verification` 自动要求非空验证命令；其他要求自验的派发传 `--require-verification`，项目也可设置 `verification.required: true`。Python 自动发现只认根 `pyproject.toml` / `requirements.txt` / `setup.py` 与根 `tests/`，固定注入 unittest discover；嵌套项目必须在 `by_worker_type` 显式声明完整命令。
 
-命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。Worker 必须逐字执行 `verification.commands[]`，不得自行添加 `export`/`env`/`cd`、flags、pipe、redirect、命令替换或多行包装。运行中的 Worker 使用不可变进程快照；漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
+命令原字符串同时写入 authorization snapshot、Git common-dir authority receipt 和 METADATA。空白、换行、U+0000、重复、安装型命令、未知 worker type、非唯一 task 或畸形配置都会在数组解码和派发副作用前拒绝。`verification.required: true` 的项目模板只保留可执行 profile；docs-only 工作本来就不可独立派发，不用空数组伪装成可选 profile。Worker 必须逐字执行 `verification.commands[]` 作为交付证据，不得自行添加 `export`/`env`/`cd`、flags、pipe、redirect、命令替换或多行包装。运行中的 Worker 使用不可变进程快照；精确白名单模式漏授权须用 `pm-orchestrate.sh reauthorize --allow-cmd '<exact command>'` 重建，不得手改镜像 JSON。
+
+### Claude Code auto 的 Shell 策略
+
+Claude Code Worker 的实际启动命令显式带 `--permission-mode auto`、且本地 PreToolUse hook 可证明生效时，spawn 将 `shell_policy=claude_auto` 固定到授权快照、PM receipt 和 METADATA。普通 Bash 命令由 hook 返回“无决定”，继续由 Claude Code auto 分类器和用户/项目 settings 判定；例如定向 `python3 -m unittest ...` 可用于开发循环，不必为每一种输出过滤写新的 Shell 白名单。hook 仍独立处理识别出的安装命令、Orca 完成协议、tracked `git rm`，并拒绝直接及常见 Shell 包装的强推、主干 push、远端删除、跳过 Git 检查及 `gh pr merge` 等受保护命令。非 auto、hook 不可用以及其他 backend 均维持 `exact_allowlist`；不会因为命令行字符串含有 `auto` 就关闭 hook。
+
+auto 分类器是权限决策，不是操作系统沙箱；Shell 内运行的任意程序可能写出 `--allow-paths` 范围，也可能通过不透明脚本触发门禁无法静态识别的安装或 Git 副作用。PM 应检查实际 diff、测试结果和外部副作用；需要 Shell 写入范围的机械保证时使用精确白名单模式。`verification.commands[]` 仍须原样运行并记录真实退出码，临时添加 `| tail` 的开发命令不能替代正式验证证据。Claude Code 对 auto 的可用性由其运行时决定，无法启动时不得把 fallback 模式冒充 auto。
 
 ### 任务辅助命令
 

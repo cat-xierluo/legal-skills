@@ -109,6 +109,7 @@ hook() {
   local auth_file="$1"
   local command="$2"
   local completion_authority_file="${3:-}"
+  local backend="${4:-codebuddy}"
   # 本测试的 fixture 授权必须生效：显式清空 WORKER_INSTALL_AUTH_B64，
   # 防止在真实 supervised worker 会话里运行本测试时继承 spawn 注入的
   # 不可变快照（guard 对 B64 快照的优先级高于 WORKER_INSTALL_AUTH_FILE），
@@ -122,7 +123,7 @@ hook() {
     WORKER_ORCA_CLI_BIN="${completion_fake_cli:-}" \
     ORCA_TERMINAL_HANDLE=term_worker \
     WORKER_SESSION_CONTEXT= \
-    WORKER_GUARD_BACKEND=codebuddy python3 "$GUARD"
+    WORKER_GUARD_BACKEND="$backend" python3 "$GUARD"
 }
 
 expect_block() {
@@ -152,8 +153,54 @@ expect_allow() {
   fi
 }
 
+claude_auto_auth="$tmp_root/claude-auto.json"
+write_auth "$claude_auto_auth" ""
+jq '.shell_policy = "claude_auto"' "$claude_auto_auth" > "$claude_auto_auth.tmp"
+mv "$claude_auto_auth.tmp" "$claude_auto_auth"
+expect_allow "Claude auto delegates scoped unittest with output filter to native permissions" \
+  hook "$claude_auto_auth" \
+  "python3 -m unittest eval-harness.tests.test_worker_contract_integration -v 2>&1 | tail -10" "" claude-code
+expect_block "Claude auto still blocks dependency install" "DEPENDENCY_INSTALL_BLOCKED" \
+  hook "$claude_auto_auth" "python3 -m pip install pytest" "" claude-code
+expect_block "Claude auto still blocks force push" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks clustered force flag" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push -qf origin HEAD" "" claude-code
+expect_block "Claude auto still blocks protected push inside shell wrapper" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "bash -c 'git push origin main'" "" claude-code
+expect_block "Claude auto still blocks force push with Git global -C" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git -C . push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push with output redirect" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push --force origin HEAD > /tmp/push.log" "" claude-code
+expect_block "Claude auto still blocks force push with stderr merge" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push --force origin HEAD 2>&1 | tail -10" "" claude-code
+expect_block "Claude auto still blocks force push with assignment prefix" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "TRACE=1 git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push with leading redirect" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "> /tmp/push.log git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push through exec" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "exec git push --force origin HEAD" "" claude-code
+expect_block "Claude auto rejects command substitution" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" 'echo $(git push --force origin HEAD)' "" claude-code
+expect_block "Claude auto still blocks force push through env" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "env TRACE=1 git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push through eval" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "eval 'git push --force origin HEAD'" "" claude-code
+expect_block "Claude auto rejects inline Git aliases that can hide force push" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git -c alias.fp='!git push --force' fp" "" claude-code
+expect_block "Claude auto still blocks gh pr merge" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "gh pr merge 42" "" claude-code
+expect_block "Claude auto still blocks gh pr merge with global repo" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "gh -R cat-xierluo/legal-skills pr merge 42" "" claude-code
+expect_block "Claude auto still blocks privilege elevation" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "sudo git push origin feature" "" claude-code
+expect_block "Claude auto authority cannot be used by another backend" "INSTALL_AUTHORIZATION_INVALID" \
+  hook "$claude_auto_auth" "python3 -m unittest discover -s tests -v" "" codebuddy
+
 deny_auth="$tmp_root/deny.json"
 write_auth "$deny_auth" ""
+expect_block "Claude without auto retains exact Shell authority" "SHELL_COMMAND_NOT_ALLOWLISTED" \
+  hook "$deny_auth" "python3 -m unittest eval-harness.tests.test_worker_contract_integration -v" "" claude-code
 expect_block "missing approval blocks machine install" "DEPENDENCY_INSTALL_BLOCKED" \
   hook "$deny_auth" "brew install shellcheck"
 claude_output=$(printf '{"tool_name":"Bash","tool_input":{"command":"brew install shellcheck"}}' |
@@ -810,7 +857,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   --branch feat/install-guard-test \
   --session "$session" \
   --worker-backend claude-code \
-  --command "$tmp_root/claude 30" \
+  --command "$tmp_root/claude --permission-mode auto" \
   --verify-cmd "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" \
   --require-verification \
   --allow-install-command "npm ci" \
@@ -844,6 +891,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   fi
   if jq -e --arg verify "cd 律师IP/motion-composer && python3 -m unittest discover -s tests -v" '
       .policy == "deny_by_default"
+      and .shell_policy == "claude_auto"
       and .authorization_source != ""
       and (.authorized_commands == ["npm ci"])
       and (.allowed_shell_commands | index("pwd") != null)
@@ -855,7 +903,7 @@ if bash "$SCRIPT_DIR/spawn-worker.sh" \
   else
     not_ok "spawn writes exact verification command into authorization snapshot"
   fi
-  if jq -e '.execution_authority.install_guard_mode == "hook" and .execution_authority.environment_mutation_policy == "deny_by_default" and .execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' "$metadata_file" >/dev/null; then
+  if jq -e '.execution_authority.install_guard_mode == "hook" and .execution_authority.shell_policy == "claude_auto" and .execution_authority.environment_mutation_policy == "deny_by_default" and .execution_authority.enforcement_source == "pretool_hook_settings_wired_process_snapshot_runtime_unproven" and .execution_authority.worker_mirror_authoritative == false' "$metadata_file" >/dev/null; then
     ok "spawn records install guard mode in metadata"
   else
     not_ok "spawn records install guard mode in metadata"
