@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.5"
+version: "0.6.6"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -56,6 +56,9 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
 2. **仓库发现与智能匹配**
    - 直接匹配：内容中找到的完整 GitHub URL
    - 半截 URL 补全：owner 确定而 name 截断（如 `mcncarl/jianyi…`）时，列该 owner 名下仓库（`gh api users/OWNER/repos`），按名称前缀 + description 语义匹配补全（实测：jianyi…→jianying-headless，yichen…→yichen-skills）
+   - owner 拼写修正：截图直读的 owner 404 时先怀疑 OCR 误读而非仓库不存在——按 repo 名搜索锁定真身，用星数量级与截图侧栏数字互证（实测：截图误读 `webadderalorg`→真身 `webadderallorg/Recordly`，30.9k⭐ 与侧栏 20.1k 同量级确认）
+   - 社交账号名 ↔ GitHub owner 互证：博主昵称与 owner 名常有派生关系，可作中优先级佐证（实测：抖音"耳朵"→erduo1998-cell、"姚老师"→yaojingang、"文森特"→Vincentwei1021），但不单独定论
+   - 改名仓库识别：内容中的旧名 404 时，查 `gh api repos/旧名` 是否返回 301/新 full_name——GitHub API 对改名仓库自动重定向，返回的 full_name 即新名；若新仓库已在库则视为同一项目跳过（实测：erduo-hyperframes-broll → erduo-broll-loop-engineering）
    - 按名称搜索：当只有项目名时使用 `gh search repos`
    - 同名候选消歧（社交内容常只给项目名，同名候选多为 fork/搬运/衍生项目）。**证据优先级：来源亲授全称 > 语义比对 > 排除规则 > 版本轨迹；Star 数量级只是参考信号，永不单独定论**——实测反例：taste-skill 同名的 Leonxlnx 版 8.9 万⭐比目标 senlindesign 版（366⭐）高两个数量级，靠语义（"Reverse-engineer any website's design taste" 与帖内 tastelab 页面吻合）+ 作者评论区亲授全称才锁定 senlindesign 版：
      1. **来源亲授证据**：作者/评论区给出的 owner/repo 全称直接采信，跳过其余消歧
@@ -165,7 +168,9 @@ export OPENAI_API_KEY="你的_openai_api_key"
 ### 2. 启动 Dashboard（推荐）
 ```bash
 # 导出数据并打开 Dashboard
-python scripts/main.py --export --user 你的用户名 && open dashboard.html
+# 产物固定落在技能目录 output/ 下（绝对路径，与当前工作目录无关），脚本结束时会打印完整路径
+python scripts/main.py --export --user 你的用户名
+open skills/github-star-manager/output/dashboard.html
 ```
 
 **首次使用说明**: 如果 `dashboard.html` 不存在，系统会自动从 `assets/dashboard.example.html` 复制一份。
