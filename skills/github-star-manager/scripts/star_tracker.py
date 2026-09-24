@@ -5,6 +5,7 @@ GitHub Star 追踪器 - 核心分析模块
 
 import os
 import json
+import time
 import yaml
 import requests
 from datetime import datetime, timedelta
@@ -19,6 +20,12 @@ class StarTracker:
     # 使用项目目录内的 output/ 目录（自包含项目原则）
     CACHE_DIR = Path(__file__).parent.parent / "output"
     CONFIG_DIR = CACHE_DIR  # 配置文件目录
+
+    # 网络请求重试配置（代理长跑抖动容错）
+    RETRY_MAX_ATTEMPTS = 8
+    RETRY_INITIAL_DELAY = 2      # 秒，指数退避起点
+    RETRY_MAX_DELAY = 60         # 秒，退避封顶
+    RETRY_STATUS_CODES = {429, 500, 502, 503, 504}  # 触发重试的状态码
 
     # 配置文件路径
     CATEGORIES_FILE = CONFIG_DIR / "categories.yaml"
@@ -41,6 +48,46 @@ class StarTracker:
         self.categories = self._load_categories()
         self.tags = self._load_tags()
         self.settings = self._load_settings()
+
+    def _request_with_retry(self, method: str, url: str, timeout: int = 30,
+                            **kwargs) -> Optional[requests.Response]:
+        """带指数退避重试的请求封装
+
+        代理长跑场景（如全量导出数百个仓库）下，HTTP 503 隧道错误与
+        RemoteDisconnected 闪断是常态而非异常。裸 requests 调用一次即崩，
+        673 仓的导出窗口内必折。本方法统一容错：
+
+        - 网络异常（ConnectionError/Timeout/RemoteDisconnected 等均归入
+          requests.RequestException）：指数退避后重试
+        - 429/5xx 状态码：同样退避重试（429 尊重 Retry-After 头）
+        - 其他状态码（401/404/422 等）：语义明确，原样返回不重试
+
+        Returns:
+            最终响应。网络异常重试耗尽时返回 None（无响应可给）；
+            状态码类重试耗尽时返回最后一个响应（如 503），调用方按既有
+            「is None or status_code != 200」分支处理，可检查真实状态码
+        """
+        delay = self.RETRY_INITIAL_DELAY
+        for attempt in range(1, self.RETRY_MAX_ATTEMPTS + 1):
+            try:
+                response = requests.request(method, url, timeout=timeout, **kwargs)
+                if response.status_code in self.RETRY_STATUS_CODES:
+                    retry_after = response.headers.get("Retry-After")
+                    wait = int(retry_after) if (retry_after and retry_after.isdigit()) else delay
+                    if attempt < self.RETRY_MAX_ATTEMPTS:
+                        print(f"  [retry] HTTP {response.status_code}，{wait}s 后第 {attempt}/{self.RETRY_MAX_ATTEMPTS} 次重试: {url}")
+                        time.sleep(wait)
+                        delay = min(delay * 2, self.RETRY_MAX_DELAY)
+                        continue
+                return response
+            except requests.RequestException as e:
+                if attempt >= self.RETRY_MAX_ATTEMPTS:
+                    print(f"  [retry] 重试耗尽（{self.RETRY_MAX_ATTEMPTS} 次）: {url} · {e}")
+                    return None
+                print(f"  [retry] 网络异常，{delay}s 后第 {attempt}/{self.RETRY_MAX_ATTEMPTS} 次重试: {type(e).__name__}")
+                time.sleep(delay)
+                delay = min(delay * 2, self.RETRY_MAX_DELAY)
+        return None
 
     def _load_categories(self) -> List[Dict]:
         """加载分类配置"""
@@ -121,7 +168,9 @@ class StarTracker:
 
         try:
             url = f"{self.API_BASE}/user"
-            response = requests.get(url, headers=self.headers)
+            response = self._request_with_retry("GET", url, headers=self.headers)
+            if response is None:
+                return None
 
             if response.status_code == 200:
                 user_data = response.json()
@@ -171,10 +220,10 @@ class StarTracker:
             else:
                 url = f"{self.API_BASE}/users/{username}/starred?page={page}&per_page={per_page}"
 
-            response = requests.get(url, headers=starred_headers)
+            response = self._request_with_retry("GET", url, headers=starred_headers)
 
-            if response.status_code != 200:
-                print(f"警告: 获取 Star 列表失败 (状态码: {response.status_code})")
+            if response is None or response.status_code != 200:
+                print(f"警告: 获取 Star 列表失败 (状态码: {response.status_code if response else '网络异常重试耗尽'})")
                 break
 
             data = response.json()
@@ -246,9 +295,9 @@ class StarTracker:
     def get_latest_release(self, repo_full_name: str) -> Optional[Dict]:
         """获取项目的最新 Release"""
         url = f"{self.API_BASE}/repos/{repo_full_name}/releases/latest"
-        response = requests.get(url, headers=self.headers)
+        response = self._request_with_retry("GET", url, headers=self.headers)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             return response.json()
         return None
 
@@ -256,18 +305,18 @@ class StarTracker:
         """获取最近的 Commit"""
         since = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
         url = f"{self.API_BASE}/repos/{repo_full_name}/commits?since={since}"
-        response = requests.get(url, headers=self.headers)
+        response = self._request_with_retry("GET", url, headers=self.headers)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             return response.json()
         return []
 
     def get_repo_health(self, repo_full_name: str) -> Dict:
         """获取项目健康度指标"""
         url = f"{self.API_BASE}/repos/{repo_full_name}"
-        response = requests.get(url, headers=self.headers)
+        response = self._request_with_retry("GET", url, headers=self.headers)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             data = response.json()
             return {
                 "stars": data.get("stargazers_count", 0),
@@ -293,12 +342,14 @@ class StarTracker:
             包含最新元数据的字典，失败时返回 None
         """
         url = f"{self.API_BASE}/repos/{repo_full_name}"
-        response = requests.get(url, headers=self.headers)
+        response = self._request_with_retry("GET", url, headers=self.headers)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             return response.json()
-        elif response.status_code == 404:
+        elif response is not None and response.status_code == 404:
             print(f"  ⚠ 仓库不存在或已删除: {repo_full_name}")
+        elif response is None:
+            print(f"  ⚠ 获取元数据失败 (网络异常重试耗尽): {repo_full_name}")
         else:
             print(f"  ⚠ 获取元数据失败 ({response.status_code}): {repo_full_name}")
         return None
@@ -401,14 +452,15 @@ class StarTracker:
     def get_readme(self, repo_full_name: str) -> str:
         """获取 README 内容"""
         url = f"{self.API_BASE}/repos/{repo_full_name}/readme"
-        response = requests.get(url, headers=self.headers)
+        response = self._request_with_retry("GET", url, headers=self.headers)
 
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             content_url = response.json().get("download_url")
             if content_url:
-                readme_res = requests.get(content_url)
-                # 限制长度防止过长
-                return readme_res.text[:6000]
+                readme_res = self._request_with_retry("GET", content_url, timeout=60)
+                if readme_res is not None and readme_res.status_code == 200:
+                    # 限制长度防止过长
+                    return readme_res.text[:6000]
 
     def add_star(self, repo_full_name: str) -> tuple[bool, str]:
         """为仓库添加 Star（需要 repo_deployment 权限）
@@ -423,12 +475,14 @@ class StarTracker:
             return False, "需要 GitHub Token"
 
         url = f"{self.API_BASE}/user/starred/{repo_full_name}"
-        response = requests.put(url, headers=self.headers)
+        response = self._request_with_retry("PUT", url, headers=self.headers)
 
-        if response.status_code == 204:
+        if response is not None and response.status_code == 204:
             return True, f"✓ 已 Star: {repo_full_name}"
-        elif response.status_code == 404:
+        elif response is not None and response.status_code == 404:
             return False, f"✗ 仓库不存在"
+        elif response is None:
+            return False, f"✗ 网络异常重试耗尽"
         else:
             return False, f"✗ 操作失败 ({response.status_code})"
 
@@ -604,8 +658,8 @@ README 内容（前6000字）:
     def get_commits_between_releases(self, repo_full_name: str, limit: int = 10) -> List[Dict]:
         """获取两个版本之间的 commits"""
         url = f"{self.API_BASE}/repos/{repo_full_name}/commits?per_page={limit}"
-        response = requests.get(url, headers=self.headers)
-        if response.status_code == 200:
+        response = self._request_with_retry("GET", url, headers=self.headers)
+        if response is not None and response.status_code == 200:
             return response.json()
         return []
 
@@ -721,14 +775,16 @@ README 内容（前6000字）:
             return False, "需要 GitHub Token 才能执行此操作"
 
         url = f"{self.API_BASE}/user/starred/{repo_full_name}"
-        response = requests.put(url, headers=self.headers)
+        response = self._request_with_retry("PUT", url, headers=self.headers)
 
-        if response.status_code == 204:
+        if response is not None and response.status_code == 204:
             return True, f"✓ 已 Star: {repo_full_name}"
-        elif response.status_code == 404:
+        elif response is not None and response.status_code == 404:
             return False, f"✗ 仓库不存在: {repo_full_name}"
-        elif response.status_code == 422:
+        elif response is not None and response.status_code == 422:
             return False, f"✗ 已经在 Star 列表中: {repo_full_name}"
+        elif response is None:
+            return False, f"✗ 网络异常重试耗尽"
         else:
             return False, f"✗ 操作失败 ({response.status_code}): {response.text}"
 
@@ -745,12 +801,14 @@ README 内容（前6000字）:
             return False, "需要 GitHub Token 才能执行此操作"
 
         url = f"{self.API_BASE}/user/starred/{repo_full_name}"
-        response = requests.delete(url, headers=self.headers)
+        response = self._request_with_retry("DELETE", url, headers=self.headers)
 
-        if response.status_code == 204:
+        if response is not None and response.status_code == 204:
             return True, f"✓ 已取消 Star: {repo_full_name}"
-        elif response.status_code == 404:
+        elif response is not None and response.status_code == 404:
             return False, f"✗ 不在 Star 列表中: {repo_full_name}"
+        elif response is None:
+            return False, f"✗ 网络异常重试耗尽"
         else:
             return False, f"✗ 操作失败 ({response.status_code}): {response.text}"
 
@@ -767,8 +825,8 @@ README 内容（前6000字）:
             return False
 
         url = f"{self.API_BASE}/user/starred/{repo_full_name}"
-        response = requests.get(url, headers=self.headers)
-        return response.status_code == 204
+        response = self._request_with_retry("GET", url, headers=self.headers)
+        return response is not None and response.status_code == 204
 
     def batch_unstar(self, repo_list: List[str], dry_run: bool = True) -> tuple[int, int, List[str]]:
         """批量取消 Star
