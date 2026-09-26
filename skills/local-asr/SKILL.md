@@ -2,7 +2,7 @@
 name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.1.1"
+version: "2.2.0"
 license: MIT
 description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择；支持认领式声纹注册，本人声纹注册后自动识别标注。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
@@ -188,9 +188,16 @@ cd <skill目录> && export PATH="$PWD/venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/
 
 ### 步骤 3：说话人识别与认领（默认 MOSS 路径）
 
-转录响应中的 `speaker_identification` 显示每个说话人是否已被声纹库识别（`{"S01": {"name": "杨律师", "score": 0.74}, "S02": null}`）。已命中的说话人在 Markdown 中直接显示注册名。
+转录响应中的 `speaker_identification` 逐人显示每个说话人是否已被声纹库识别（`{"S01": {"name": "杨律师", "score": 0.74}, "S02": null}`；首次空库时全部为 null）。已命中的说话人在 Markdown 中直接显示注册名。
 
-**当存在值为 null 的说话人时，必须先向用户逐一确认身份再继续。**询问前，先根据响应 `segments`（每段含 speaker 与 text）为**每位未识别说话人生成一段简要叙述**，随问题一并呈现，供用户凭内容判断身份——这是打标的主要依据，不要只报编号：
+`speaker_states` 为每位说话人给出完整状态，按状态决定下一步动作：
+- `matched`：已命中注册声纹（`name` 为注册名），无需询问；
+- `unknown`：有声纹向量但未达阈值，**可认领注册**——按下述流程询问用户；
+- `insufficient_audio`：总发言不足 3 秒，无声纹向量，**只能根据用户说明在 Markdown 中为本稿标注，不能注册**；
+- `extraction_failed`：声纹提取/识别失败，本次无法识别或认领，可提示用户重试；
+- `disabled`：说话人声纹识别未启用（fast/显式关闭/CAM++ 不可用），跳过认领流程。
+
+**当存在 `unknown` 状态的说话人时，必须先向用户逐一确认身份再继续。**询问前，先根据响应 `segments`（每段含 speaker 与 text）为**每位未识别说话人生成一段简要叙述**，随问题一并呈现，供用户凭内容判断身份——这是打标的主要依据，不要只报编号：
 
 叙述格式（每位说话人 2-3 句，基于其全部发言归纳）：
 - **发言占比**：该说话人发言时长/段数占全会的比例；
@@ -208,8 +215,9 @@ curl -s -X POST http://127.0.0.1:8765/speaker/register \
 ```
 
 - 认领完成后当前 Markdown 无需重跑；下一份录音中同一人将自动识别标注。
-- 用户表示"不用标"的说话人保持匿名，不注册。
+- 用户表示"不用标"的说话人保持匿名，不注册。用户只是说明某说话人**本稿身份**而不愿长期注册时，直接在 Markdown 中标注，不调用注册。
 - 客户或第三方声纹的注册须先取得其单独同意（声纹属敏感个人信息）；本人声纹无此要求。完整流程、阈值与纠错见 [`references/speaker-registry.md`](references/speaker-registry.md)。
+- 推荐入口（`auto_transcribe.py`）可用 `--json` 获取完整响应（含识别结果与向量）、`--save-result` 保存结果文件；认领时用 `python3 scripts/speaker_registry.py claim <名字> --result <结果JSON> --label S01` 按标签确定性取向量，避免手工复制 192 个浮点数。
 
 ### 步骤 4：生成 AI 总结
 
@@ -256,8 +264,10 @@ python3 <skill目录>/scripts/summary.py inject "<output_path>" /tmp/summary_<�
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH" && python3 <skill目录>/scripts/summary.py verify "<output_path>"
 ```
 
-- 如果输出 `✅ 摘要已存在` → 成功，向用户报告完成
+- 如果输出 `✅ 摘要已存在` 且 `✅ 发言人覆盖完整` → 成功，向用户报告完成
 - 如果输出 `❌ 摘要不存在` → 失败，回到步骤 5 重试
+- 如果输出 `❌ 摘要遗漏发言人` / `❌ 摘要出现稿件中不存在的发言人`（退出码非零）→ 说明总结遗漏或虚构了发言人，回到步骤 4 按 `speaker_states`/正文标签重新生成总结后再次注入；**覆盖不完整的摘要不得作为已验收交付**
+- 输出 `⚠️ 发言人覆盖无法验证`（fast/无发言行结构稿件）→ 章节完整即可交付，如实说明覆盖未验证
 
 ### 完整流程示例
 
@@ -267,10 +277,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 Agent：
   1. 检查/启动服务
   2. POST /transcribe {"file_path": "xxx.aac"}  ← 一次调用拿到转录+识别结果+提示词
-  3. 有未识别说话人时询问用户身份 → POST /speaker/register 认领注册
-  4. 根据转录内容直接生成总结 JSON
+  3. 按 speaker_states 处理：unknown 说话人询问用户身份 → POST /speaker/register 认领注册
+     （insufficient_audio 只能本稿标注，不能注册）
+  4. 根据转录内容直接生成总结 JSON（speaker_order 逐字用稿件发言标签）
   5. 写 JSON 到临时文件 → python3 summary.py inject 注入
-  6. python3 summary.py verify 验证 → 失败则重试步骤 5
+  6. python3 summary.py verify 验证（含发言人覆盖）→ 失败则重试步骤 4-5
   ↓
 用户：收到带 AI 总结的 Markdown 文件
 ```
@@ -554,7 +565,7 @@ FastAPI 自动生成交互式 API 文档，访问：[http://127.0.0.1:8765/docs]
 | `scripts/server-onnx.py`   | 启动默认 ONNX 加速服务             |
 | `scripts/transcribe.py`    | 命令行客户端                        |
 | `scripts/auto_transcribe.py` | **自动化转录脚本（推荐）**         |
-| `scripts/speaker_registry.py` | 声纹库管理（list / remove / test） |
+| `scripts/speaker_registry.py` | 声纹库管理（list / remove / claim / test） |
 
 ---
 
@@ -576,6 +587,15 @@ python3 scripts/auto_transcribe.py /path/to/course.m4a --fast
 
 # 只获取总结提示词，不生成总结
 python3 scripts/auto_transcribe.py /path/to/audio.aac --prompt-only
+
+# 机器模式：stdout 仅输出完整响应 JSON（含说话人识别/向量/段落），日志走 stderr
+python3 scripts/auto_transcribe.py /path/to/audio.aac --json
+
+# 保存完整响应 JSON 到文件（0600 权限；含声纹向量，注意保密）
+python3 scripts/auto_transcribe.py /path/to/audio.aac --json --save-result /tmp/asr-result.json
+
+# 认领注册：从结果 JSON 按标签取声纹向量（需用户确认身份且同意长期注册）
+python3 scripts/speaker_registry.py claim <用户确认的名字> --result /tmp/asr-result.json --label S01
 ```
 
 ### 方式二：HTTP API 调用

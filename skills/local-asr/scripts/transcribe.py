@@ -50,7 +50,7 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
                     model: str = "moss-mlx",
                     model_id: str = None,
                     fast: bool = False,
-                    extract_slides: bool = None, slide_threshold: float = 27.0,
+                    extract_slides: bool = None, slide_threshold: float = None,
                     include_summary_prompt: bool = True,
                     hotwords: list[str] = None) -> dict:
     """
@@ -63,7 +63,7 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         diarize: 是否启用说话人分离
         model_id: 指定使用的模型 ID（可选）
         extract_slides: 是否提取视频关键帧截图
-        slide_threshold: 场景检测阈值
+        slide_threshold: 场景检测阈值；None 表示不携带该字段，由服务按统一默认执行
 
     Returns:
         转录结果字典
@@ -78,10 +78,12 @@ def transcribe_file(file_path: str, server_url: str = DEFAULT_SERVER,
         "file_path": file_path,
         "diarize": diarize,
         "fast": fast,
-        "extract_slides": extract_slides,
-        "slide_threshold": slide_threshold,
         "include_summary_prompt": include_summary_prompt,
     }
+    if extract_slides is not None:
+        payload["extract_slides"] = extract_slides
+    if slide_threshold is not None:
+        payload["slide_threshold"] = slide_threshold
     if output_path:
         payload["output_path"] = os.path.abspath(output_path)
     if model:
@@ -238,15 +240,18 @@ def main():
     slide_choice.add_argument('--slides', action='store_true', dest='slides', help='提取视频关键帧截图（PPT幻灯片）')
     slide_choice.add_argument('--no-slides', action='store_false', dest='slides', help='视频仅转录，不提取截图')
     parser.set_defaults(slides=None)
-    parser.add_argument('--slide-threshold', type=float, default=27.0, help='场景检测阈值（默认27.0，值越低越灵敏）')
+    parser.add_argument('--slide-threshold', type=float, default=None,
+                        help='场景检测阈值（未指定时与服务默认一致，当前 20.0，值越低越灵敏）')
 
     args = parser.parse_args()
 
     if args.fast and args.diarize:
         args.diarize = False
-        print("⚡ fast 模式已自动关闭说话人分离")
+        print("⚡ fast 模式已自动关闭说话人分离", file=sys.stderr if args.json else sys.stdout)
 
-    print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})")
+    # --json 机器模式：人类可读日志走 stderr，保证 stdout 只有完整响应 JSON
+    _log_target = sys.stderr if args.json else sys.stdout
+    print(f"🔧 使用模型: {args.model} ({AVAILABLE_MODELS[args.model]})", file=_log_target)
 
     # 检查服务是否运行
     if not check_server(args.server):
