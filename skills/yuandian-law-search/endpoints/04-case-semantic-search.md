@@ -8,7 +8,7 @@
 | 字段名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | query | string | 是 | 待检索问题 / 查询文本 |
-| rewrite_flag | boolean | 否 | 是否对查询做改写，默认 true |
+| rewrite_flag | boolean | 否 | 是否对查询做改写，默认 false；2026-09-22 核对官方 api-square/16，CLI 未显式设置时不发送 |
 | wenshu_filter | object | 否 | 案例检索过滤条件 |
 | return_num | int | 否 | 返回案例数量（默认45） |
 
