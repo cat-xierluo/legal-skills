@@ -33,13 +33,13 @@ def write_md(root: Path, name: str, body: str) -> Path:
 
 MIXED_MD = """# 转录：咨询录音.m4a
 
-> 说话人识别：S01 → 杨卫薪（声纹相似度 0.82）
+> 说话人识别：S01 → 杨律师（声纹相似度 0.82）
 
 ## AI 摘要占位
 
 ## 转录内容
 
-杨卫薪 00:00
+杨律师 00:00
 我询问办理流程。张女士的材料也带来了。
 
 发言人2 59:59
@@ -103,7 +103,7 @@ def test_extraction_keeps_speakers(root: Path) -> None:
     # 实名/匿名混合 + 小时边界：归属逐行保留
     mixed = write_md(root, "mixed.md", MIXED_MD)
     text = summary.get_transcription_text(mixed)
-    assert "杨卫薪：我询问办理流程。张女士的材料也带来了。" in text
+    assert "杨律师：我询问办理流程。张女士的材料也带来了。" in text
     assert "发言人2：我介绍所需材料。" in text
     assert "发言人3：好的，收到。" in text
     assert "发言人2：那张判决书带了吗。" in text
@@ -111,7 +111,7 @@ def test_extraction_keeps_speakers(root: Path) -> None:
     assert "01:00:04" not in text and "59:59" not in text
 
     expected = summary._extract_speaker_orders(mixed.read_text(encoding="utf-8"))
-    assert expected == ["杨卫薪", "发言人2", "发言人3"], expected
+    assert expected == ["杨律师", "发言人2", "发言人3"], expected
     # 正文提及"张女士"没有被当成发言人；截图引用不产生发言人
 
     # 旧 speaker_N 格式归一
@@ -162,7 +162,7 @@ def test_coverage_check(root: Path) -> None:
     # 实名标签摘要（带姓名注记）与预期集合一致
     mixed = write_md(root, "mixed2.md", MIXED_MD)
     summary.inject_summary_to_file(mixed, summary_block(
-        [("杨卫薪（律师）", "本人"), ("发言人2", "客户"), ("发言人3", "客户")]
+        [("杨律师（律师）", "本人"), ("发言人2", "客户"), ("发言人3", "客户")]
     ))
     result = summary.verify_summary_in_file(mixed)
     assert result["speaker_coverage"] == "complete", result
@@ -205,7 +205,7 @@ def test_prompt_injection_safe(root: Path) -> None:
     payload = {
         "full_summary": "这是总结。" * 50,
         "speaker_summary": [
-            {"speaker_order": "杨卫薪", "speaker_name": "律师", "summary": "本人提问流程。"},
+            {"speaker_order": "杨律师", "speaker_name": "律师", "summary": "本人提问流程。"},
             {"speaker_order": "发言人2", "speaker_name": "未知", "summary": "对方介绍材料。"},
             {"speaker_order": "发言人3", "speaker_name": "未知", "summary": "对方确认收到。"},
         ],
@@ -216,11 +216,11 @@ def test_prompt_injection_safe(root: Path) -> None:
     assert success, message
     content = mixed.read_text(encoding="utf-8")
     assert "我询问办理流程。" in content and "那张判决书带了吗。" in content
-    assert "杨卫薪 00:00" in content and "发言人3 01:00:00" in content
+    assert "杨律师 00:00" in content and "发言人3 01:00:00" in content
     result = summary.verify_summary_in_file(mixed)
     assert result["speaker_coverage"] == "complete", result
     # 提示词要求逐字使用稿件标签
-    prompt = summary.create_summary_prompt("杨卫薪 00:00\n内容\n")
+    prompt = summary.create_summary_prompt("杨律师 00:00\n内容\n")
     assert "逐字" in prompt and "speaker_order" in prompt
     print("注入安全：正文与实名标注未损坏，JSON 摘要按稿件标签注入且覆盖完整")
 
