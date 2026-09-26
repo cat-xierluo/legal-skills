@@ -1,6 +1,6 @@
 ## 法律检索报告 · 7 节设计原理（"结论先行"规约）
 
-> 本文件是 consolidate 报告生成的**格式约定 + 设计原理**，供 AI 在手动整合时遵循。
+> 本文件仅适用于 schema 1.0 深度报告。普通报告使用 focused 四节简版，见 [报告生成](03-report-consolidation.md)，不要为遵守本篇升级普通任务。
 > 注意：`templates/legal-research-report.md` 是可维护的模板参考；`yd_search.py` 当前用代码内 f-string 渲染。
 > 本文件描述的是**结构与设计动机**，与运行时具体格式解耦。
 

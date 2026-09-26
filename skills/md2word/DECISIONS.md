@@ -2,6 +2,28 @@
 
 本文档记录 `md2word` 技能的重要设计决策与工作日志。
 
+## [DEC-023] - 2026-09-23 - 水平线以 Word 原生段落底边框渲染
+
+### 背景
+用户 2026-09-23 以 legal 预设转换《260923 王丽英职务侵占案 事实梳理（刑事律师交接）.md》后反馈：Markdown `---` 分割线在 Word 中折成两行，第一行占满栏宽、第二行居中残留十几个字符。旧 `add_horizontal_line()` 输出 55 个 `─`（U+2500）字符行并指定 Times New Roman；该码点不在 Times New Roman 字库内，渲染器触发字体回退后按近全角宽（实测 ≈7pt/字符）度量，55 字符 ≈385pt 超出 legal 预设版心（A4 21cm − 3.17cm×2，LibreOffice 实测 ≈361pt），必然折行。7 个预设 yaml 全部 `repeat_count: 55`，无一幸免。
+
+### 决策
+1. `add_horizontal_line()` 默认改走 border 模式：空段落 + `w:pBdr/w:bottom` 单线，`border_size`（1/8 pt，默认 6=0.75pt）与 `border_space`（默认 1pt）可配，颜色沿用 `color` 配置。线宽由版心决定，与字体度量、字体回退、阅读器全部无关。
+2. 显式 `horizontal_rule.style: character` 时保留旧重复字符渲染，`character`/`repeat_count`/`font`/`size` 语义不变，供旧配置回退。
+3. 6 个预设 yaml、config-template、config.py 默认值、extract_template_config.py 模板提取基底同步新增 `style: border` + `border_size`/`border_space`；缺 `style` 键的旧配置默认 border，无需迁移。
+4. OOXML 合规：`w:pBdr` 以 `insert_element_before` 插入 `w:pPr`，位于 `w:shd`/`w:spacing`/`w:ind`/`w:jc`/`w:rPr` 等后继元素之前（注意该 API 接受 `'w:xxx'` 前缀字符串，内部自行 qn 转换——首版传 qn 展开串触发 `KeyError: '{http'`）。
+5. 回归测试：新增 border 默认渲染（legal/report/book-publish 三预设断言 pBdr/bottom@single/ sz=6/ color=808080、无 U+2500 残留）与 character 回退两用例；原 2 处按字符行匹配的断言改为按段落底边框匹配。
+
+### 方案取舍
+- 不下调 `repeat_count` 或改窄字符：字体回退链因系统而异，任何字符数都只是概率性修复，且各预设版心不同无法一值通吃。
+- 不改用 `w:pBdr/top` 或表格边框实现：底边框是 Word 排版中“分割线”的原生语义，LibreOffice/Pages/WPS 均稳定支持。
+- 不直接删除 character 模式：保留显式回退路径，旧配置与已发布文章的复现需求不受影响。
+
+### 影响与回退
+- 所有预设的 `---`/`***`/`___` 视觉从“居中灰色字符行”变为“铺满正文栏的 0.75pt 灰线”，视觉变化即本决策目的。
+- 回退可设 `horizontal_rule.style: character` 恢复旧行为；移除 border 分支即可整体回滚，无迁移成本。
+- 施工细节：临时 worktree `fix/md2word-hr-line-wrap`（基于 origin/main `a0c47b15`）完成，主工作区未动；端到端验证用 LibreOffice 无头转 PDF + pdftoppm 渲染 + 视觉目检，确认修复前折行/修复后单行铺满版心。
+
 ## [DEC-022] - 2026-08-26 - 全书合并前按各章源目录重定位本地图片
 
 ### 背景

@@ -197,6 +197,8 @@ class WorkerDeliveryPromptTests(unittest.TestCase):
         prompt = (SCRIPTS.parent / "templates" / "worker-prompt.md").read_text()
         for rule in (
             "Run `verification.commands[]` from METADATA exactly as stored",
+            "Read `execution_authority.shell_policy` in METADATA",
+            "If `shell_policy=claude_auto`, let Claude Code auto/settings decide ordinary commands",
             "Do not prepend `export`/`env`/`cd`",
             "`git rm` is a separate high-risk class",
             "scope globs do not grant deletion",

@@ -2,9 +2,9 @@
 name: legal-proposal-generator
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: 0.3.2
+version: 0.4.1
 license: CC-BY-NC
-description: 根据案件材料或沟通记录生成各类法律服务文档（诉讼方案、咨询报告、非诉方案、建议书、沟通报告、结案汇报、案件分析摘要等）。本技能应在用户需要将案件材料、咨询记录或沟通内容整理为专业法律文档时使用。
+description: 根据案件材料或沟通记录生成诉讼方案、非诉方案、建议书、咨询报告、结案汇报等法律服务文档；对外方案可直接生成带设计版式、可编辑的 Word（C/D/E/F 四款封面，可选团队与律所附页）。用户需要法律服务文档或设计版 Word 方案时使用。
 disable-model-invocation: true
 ---
 
@@ -13,6 +13,8 @@ disable-model-invocation: true
 ## 概述
 
 从案件材料或沟通记录生成专业法律服务文档。支持多种文档类型，采用模块化架构自动匹配场景。
+
+对外服务方案的主交付形态为**逐案 Markdown 源稿 + 可编辑设计版 Word**。需要不再修改、直接发送的 HTML/PDF 时，另用 `legal-proposal-designer` 渲染同一份内容；该 Skill 的其他设计化能力继续独立演进。
 
 **核心原则**：
 
@@ -178,7 +180,7 @@ disable-model-invocation: true
 
 对于**诉讼服务方案、非诉服务方案、法律服务建议书**三类对外方案文档，读取 [config/team-config.md](config/team-config.md) 获取主办律师介绍、律所简介和合作伙伴信息，填入模板的团队相关章节。
 
-- 用户会指定主办律师（如"主办律师是律师 A 和律师 B"），从 team-config 的 HTML 表格中提取对应律师的 `<tr>` 块（含头像 rowspan），直接插入方案的服务团队章节
+- 用户会指定主办律师（如"主办律师是律师 A 和律师 B"）。Markdown 方案需要展示团队章节时，从 team-config 的 HTML 表格中提取对应律师内容；**走设计版 Word 完整版时，不把 HTML 表格插入源稿**，由 Word 渲染器按选定姓名直接读取团队配置并生成可编辑卡片。
 - **图片路径必须转为绝对路径**：team-config.md 中的图片引用（如 `images/avatar-xxx.png`）是相对于 skill config 目录的相对路径，在输出文档中无法解析。生成文档时，须将所有 `images/` 开头的图片 src 替换为本 skill 的绝对路径前缀，即 `SKILL_DIR/config/images/`（其中 SKILL_DIR 为本 skill 所在目录的绝对路径）。例如 `images/avatar-example.png` 应替换为 `/path/to/your/skills/legal-proposal-generator/config/images/avatar-example.png`
 - 律所简介可直接引用，也可根据项目特点做适当裁剪
 - 其他文档类型（咨询报告、沟通报告、结案汇报、内部沟通报告、案件分析摘要）无需团队章节
@@ -211,6 +213,21 @@ disable-model-invocation: true
 - 如存在客户授权条件与实际结果差异，应如实说明原因，不得淡化
 - 金额、数量、履行状态等结果性信息应优先回到结案文书或沟通记录核对
 
-### 步骤 4: 保存输出
+### 步骤 4: 保存并生成交付文件
 
-自动保存为 Markdown 文件，文件名格式为文档类型+案件/项目名称。
+先保存 Markdown 源稿，文件名格式为文档类型+案件/项目名称。诉讼服务方案、非诉服务方案和法律服务建议书如需向客户交付，默认再生成设计版 Word；用户只要 Markdown 时仅交付源稿。其他文档类型按用户指定格式处理。
+
+Word 源稿须在顶部提供 `law_firm`、`client`、`lawyer`、`date`，首个 `#` 为封面标题；也可在命令行补充这些字段。正文可用章/节标题、段落、简单列表、表格、引文和加粗。**不要在 Word 源稿中重复插入 team-config 的 HTML 团队页**。先核实内容和团队选择，再渲染；排版器不负责补全事实、法条或报价。运行方式、JSON 内容契约、模板 token 快速通道及跨引擎验收见 [Word 管线说明](word/README.md)。
+
+**生成设计版 Word 的依赖**：Node.js ≥ 22、`docx` 包。首次使用执行 `npm install -g docx`；在本 Skill 根目录运行：
+
+```bash
+NODE_PATH=$(npm root -g) node word/render.js \
+  --input /绝对路径/方案.md --output /绝对路径/方案.docx --cover C
+```
+
+用户要包含承办团队、相关裁判文书、律所简介和荣誉的完整版时，增加 `--full --lawyers 姓名1,姓名2`；渲染器默认从本地 `config/team-config.md` 读取，经 `--team-config` 可覆盖。未选主办律师时先根据已提供材料确定，不能随意把配置中所有人列为承办团队。交付前检查所有引用图片已脱敏；逐页检查 DOCX 及导出的 PDF，并在实际 WPS、Microsoft Word 中核对封面和分页。页数随内容变化，不把既有案例的 6/10 页当作固定规范。
+
+Word 的正文页码从 1 起算，后部附页用页名作页脚；HTML/PDF 的“当前页 / 正文总页数”在 Word 中只保留可更新的当前页。具体版式对应关系和限制见 [Word 管线说明](word/README.md)。
+
+少量变量填充的 `word/fill.py` 需 `python-docx`，首次使用执行 `python3 -m pip install python-docx`；它只用于固定模板，不代替逐案正文生成。

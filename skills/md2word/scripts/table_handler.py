@@ -342,9 +342,13 @@ def contains_markdown_formatting(text):
     """检查文本是否包含Markdown格式标记"""
     from formatter import contains_inline_formatting
 
+    from formatter import LINK_PATTERN
+
     return bool(
         re.search(r'!\[.*?\]\([^)]+\)', text)
         or re.search(r'<br\s*/?>', text, flags=re.IGNORECASE)
+        # 行内链接同样需要走富文本渲染路径，否则会退化成 [文字](url) 原文
+        or LINK_PATTERN.search(text)
         or contains_inline_formatting(text)
     )
 
@@ -439,9 +443,18 @@ def _render_text_into_cell(cell, text, is_header):
     """将格式化文本（不含图片 markdown 语法）写入表格 cell"""
     from formatter import (
         INLINE_FORMAT_PATTERNS,
+        LINK_PATTERN,
+        add_hyperlink,
         convert_quotes_to_chinese,
         parse_formatted_text,
     )
+
+    def _plain(segment_text):
+        text_parts = parse_formatted_text(segment_text, INLINE_FORMAT_PATTERNS)
+        for part_text, formats in text_parts:
+            if part_text:  # 只有非空文本才创建run
+                run = cell.paragraphs[0].add_run(part_text)
+                set_table_run_format(run, formats, is_header)
 
     # 转换引号
     text = convert_quotes_to_chinese(text)
@@ -452,11 +465,15 @@ def _render_text_into_cell(cell, text, is_header):
     for idx, segment in enumerate(parts_by_br):
         if idx > 0:
             cell.paragraphs[0].add_run().add_break()
-        text_parts = parse_formatted_text(segment, INLINE_FORMAT_PATTERNS)
-        for part_text, formats in text_parts:
-            if part_text:  # 只有非空文本才创建run
-                run = cell.paragraphs[0].add_run(part_text)
-                set_table_run_format(run, formats, is_header)
+        # 行内 Markdown 链接渲染为真正的 Word 超链接（出处链接多落在表格里）
+        pos = 0
+        for match in LINK_PATTERN.finditer(segment):
+            if match.start() > pos:
+                _plain(segment[pos:match.start()])
+            add_hyperlink(cell.paragraphs[0], match.group(1), match.group(2))
+            pos = match.end()
+        if pos < len(segment):
+            _plain(segment[pos:])
 
 
 def set_table_run_format(run, formats, is_header=False):
