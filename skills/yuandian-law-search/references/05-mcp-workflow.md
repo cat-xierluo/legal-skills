@@ -1,88 +1,36 @@
-## MCP 协同工作流（v1.6.0+）
+# MCP 优先，按需归档
 
-元典已发布官方 MCP（https://open.chineselaw.com/mcp-config），3 个 servers：yuandian-law（法律法规）、yuandian-case（案例文书）、yuandian-company（企业信息）。MCP 只替换数据接入层，不代表统一检索算法：具体工具仍分别对应向量、关键词、结构化筛选和详情接口。本 Skill 的中间层价值是先形成涵摄式研究计划，再将 MCP 返回视为候选池，由 Agent 逐条精选后答复或生成报告。
+有可用元典 MCP 时直接调用，不另跑 API。MCP 是接入方式，不是统一搜索算法；以当前客户端公开的工具 schema 为准，选择其中的语义、关键词、详情或结构化筛选工具。
 
-### 接入元典 MCP
+## 默认执行
 
-模板在 `scripts/.mcp.json.example`（与 `scripts/.env.example` 同目录）。把它复制为客户端能识别位置的 `.mcp.json`：
+1. 单个明确法律问题：保留决定性事实，直接调用相应工具。
+2. 未指定的可选参数留给工具默认值；不用本地 `YD_STRATEGY` 覆盖。
+3. 复核候选的适用性及文本支持，给精选答复；仅因有明确未解决问题才追加。
+4. 用户要求报告时，整理实际执行过的查询和精选来源，见 [报告生成](03-report-consolidation.md)。
 
-```json
-{
-  "mcpServers": {
-    "yuandian-law":    { "url": "https://open.chineselaw.com/mcp/law/stream",    "headers": {"Authorization": "Bearer ${YD_API_KEY}"} },
-    "yuandian-case":   { "url": "https://open.chineselaw.com/mcp/case/stream",   "headers": {"Authorization": "Bearer ${YD_API_KEY}"} },
-    "yuandian-company":{ "url": "https://open.chineselaw.com/mcp/company/stream","headers": {"Authorization": "Bearer ${YD_API_KEY}"} }
-  }
-}
-```
+不把研究计划 JSON、CLI 校验、`ingest`、正反两轮查询或固定数量详情设为 MCP 前置条件。也不要求每个对话答复都生成精选 JSON。
 
-设置环境变量后重启客户端，agent 即可自动获得 `mcp__yuandian_law__*`、`mcp__yuandian_case__*`、`mcp__yuandian_company__*` 工具。
+## 配置与机制依据
 
-### AI Agent 五步工作流
+配置以 [元典官方 MCP 页面](https://open.chineselaw.com/mcp-config/) 和客户端支持方式为准。仓库 `scripts/.mcp.json.example` 是部分服务的模板，不是官方服务全量清单，也不保证不同客户端采用同样的工具名称。
 
-开始下列数据调用前，先按 [`07-research-middleware.md`](07-research-middleware.md) 形成涵摄矩阵、`propositions` 和 `query_matrix`；机器可读查询计划必须通过 `scripts/validate-research-contract.py --plan research-plan.json`。MCP 工具参数同样受字段归属与一争点一查询规则约束。
+2026-09-22 核对的官方说明：
 
-```
-Step 1: 先完成并校验 research-plan.json
-  scripts/validate-research-contract.py --plan research-plan.json
-  → 非 0：停止调用；区分法律检索缺口与事实/证据缺口
+- [法条语义检索](https://open.chineselaw.com/api-square/17/) 与 [案例语义检索](https://open.chineselaw.com/api-square/16/) 暴露 `query`、`rewrite_flag`（默认 false）与 `return_num`（默认 45）。后端未公开完整算法细节，不推断其 embedding、重排模型或精度保证。
+- [普通案例关键词检索](https://open.chineselaw.com/api-square/7/) 支持关键词及结构化字段，默认 AND、top_k 10。
+- 若当前 MCP schema 与页面不同，遵循当前工具实际参数并记录差异，不能机械透传 CLI 字段。
+- 案例语义返回可以含平台整理的内容；“内容完整”不保证是原判逐字全文。
 
-Step 2: 按 query_matrix 调 MCP 拿候选数据（agent 直接调，不经 yd-run）
-  mcp__yuandian_law__yuandian_law_vector_search("违约金", sxx="现行有效")
-  → 拿到 API 响应 JSON
+这些默认值可能变化，运行时不靠 Skill 硬编码来冒充服务端默认。
 
-Step 3: 喂给 yd-run ingest 归档 + 生成 per-call 底稿
-  echo "<上一步的 JSON>" | yd-run ingest \
-      --query "违约金 调整" \
-      --endpoint "/open/law_vector_search"
-  → archive/<ts>_违约金_调整.json + .md（同直接 API 模式）
-  → CWD/<ts>_违约金_调整.md 工作副本
+## 可选：归档已有响应文件
 
-Step 4: Agent 逐条复核候选，生成 selected-sources.json
-  scripts/validate-research-contract.py \
-      --plan research-plan.json \
-      --selection selected-sources.json
-  → 仅 HIGH/MEDIUM、verified、已映射命题的来源可进入交付
-
-Step 5: 默认在对话中给结论和少量精选依据；用户明确要求正式报告时才 consolidate
-  yd-run consolidate --project "case-2024-xxx" \
-      --case "..." --strategy "..." --analysis "..." \
-      --conclusion "一句话结论：..." \
-      --risks "主要风险：..." \
-      --next-actions "后续行动：..." \
-      --research-plan research-plan.json \
-      --selection selected-sources.json \
-      --include "违约金"
-  → archive/case-2024-xxx/ 项目包 + 7 节精选报告
-  → --include 只归档/列示原始调用，不复制原始召回正文
-```
-
-### ingest 子命令详细
+只有需要留痕且工具已提供响应文件时，再使用：
 
 ```bash
-# 方式 1: 文件输入
-yd-run ingest --query "<Q>" --endpoint "/open/<E>" --input <file.json>
-
-# 方式 2: stdin pipe（agent 友好）
-cat result.json | yd-run ingest --query "<Q>" --endpoint "/open/<E>"
-
-# 必填
-#   --query:     用于生成文件名 + 元信息
-#   --endpoint:  对应 API 路径，用于 routing 到 formatter（见 INGEST_ROUTING）
-# 可选
-#   --cost:        成本标签（默认 "10 积分"）
-#   --no-report:   跳过 .md 报告生成
-#   --no-cwd-report: 跳过 CWD 副本
+scripts/yd-run --no-report ingest --query "本次法律问题" \
+  --endpoint "/open/law_vector_search" --input /absolute/path/result.json
 ```
 
-`--endpoint` 取值见 INGEST_ROUTING 路由表（36 个 endpoint 全部覆盖，包括元典 MCP 暴露的数据 tools）。`ingest` 只负责归档与格式化候选底稿，不签发“可以进入正式报告”的结论。
-
-### 何时用哪种模式
-
-| 场景 | 推荐模式 |
-|---|---|
-| agent 调 mcp__yuandian__* | 走 MCP + yd-run ingest；随后由 Agent 精选 |
-| 客户端没装 MCP / 单次脚本 | 走 yd-run search/case/... 直接 API（v1.5.x 兼容）|
-| 调试 / 看 raw JSON | 走 yd-run raw |
-
-两种数据接入模式产出的 archive 格式和 per-call 元信息一致，可混用；无论来自 MCP 还是直接 API，都必须经过同一 `selected-sources` 门禁，数据来源不能替代法律相关性审查。
+该操作不再次请求 API。不要通过大段 echo 或人工转写重建整个响应；没有原始文件时保留调用记录和具体来源链接，不编造 archive_ref。原始响应只供复核，不自动纳入正式报告。普通检索无需为了留痕完成这一步。

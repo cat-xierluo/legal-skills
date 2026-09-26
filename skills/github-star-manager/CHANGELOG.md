@@ -4,6 +4,20 @@
 
 ---
 
+## [0.6.6] - 2026-09-24
+
+### 修复
+
+- **导出脚本网络重试加固（重要）**：`star_tracker.py` 全部 14 处裸 `requests.get/put/delete` 改走新增的 `_request_with_retry()` 封装——指数退避重试（2s 起步、60s 封顶、最多 8 次），覆盖网络异常（ProxyError/RemoteDisconnected/Timeout 等）与 429/5xx 状态码，429 尊重 `Retry-After` 头。事故背景：全量导出 673 仓（约 2000+ 次请求）在代理环境下连续两晚失败——首次 HTTP 503 隧道错误（处理到 multica-ai/multica 时）、次次 `RemoteDisconnected`，裸调用一次即崩，长窗口任务必折。修复后全量导出 681 仓一次通过、零失败
+- **导出产物路径不再随 cwd 漂移**：`main.py` 导出 Dashboard 与 config 原写入相对路径 `output/`，从其他目录（如仓库根）启动时产物散落工作区、污染共享仓库（实测：`scripts/output/` 出现 data.js/dashboard.html 两个 untracked 脏文件）；现统一锚定技能自身 `output/` 目录（`StarTracker.CACHE_DIR`，已被 .gitignore 覆盖）。`dashboard_generator.py` 模板查找同步从相对路径改为锚定技能目录，否则非技能根目录启动时永远走简化模板
+
+### 改进
+
+- **对话模块消歧经验扩充（3 条实战模式入 SKILL.md）**：① owner 拼写修正——截图直读 owner 404 时先怀疑 OCR 误读，按 repo 名搜索锁定真身并用星数量级与截图侧栏数字互证（实测 webadderalorg→webadderallorg/Recordly）；② 社交账号名 ↔ GitHub owner 互证——博主昵称与 owner 名的派生关系作中优先级佐证（实测：耳朵→erduo1998-cell、姚老师→yaojingang、文森特→Vincentwei1021）；③ 改名仓库识别——旧名 404 时查 API 301 重定向，返回的 full_name 即新名，已在库则跳过（实测：erduo-hyperframes-broll→erduo-broll-loop-engineering）
+- SKILL.md Dashboard 使用说明同步产物路径变化
+
+---
+
 ## [0.6.5] - 2026-09-23
 
 ### 改进

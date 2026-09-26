@@ -222,20 +222,21 @@ def export_command(tracker: StarTracker, args):
             'reason': repo.get('notes', '')
         })
 
-    # 使用 dashboard_generator 生成 HTML 和数据文件
-    result = dashboard_generator.generate_dashboard(export_data, "output")
+    # 使用项目目录内的 output/ 目录（自包含项目原则），避免随 cwd 漂移污染共享仓库
+    result = dashboard_generator.generate_dashboard(export_data, str(StarTracker.CACHE_DIR))
 
     print(f"\n✓ 数据已导出: {result['data_js_path']}")
     print(f"  Dashboard: {result['dashboard_path']}")
     print(f"  项目数量: {result['project_count']}")
-    print(f"  可以直接双击 output/dashboard.html 查看可视化面板")
+    print(f"  可以直接双击 {result['dashboard_path']} 查看可视化面板")
 
 
 def export_config_command(tracker: StarTracker, args):
     """导出配置到文件"""
     config = tracker.export_config(args.user, include_repos=True)
 
-    output_path = Path("config-export.json")
+    output_path = StarTracker.CACHE_DIR / "config-export.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
