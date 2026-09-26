@@ -164,10 +164,24 @@ expect_block "Claude auto still blocks dependency install" "DEPENDENCY_INSTALL_B
   hook "$claude_auto_auth" "python3 -m pip install pytest" "" claude-code
 expect_block "Claude auto still blocks force push" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks clustered force flag" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push -qf origin HEAD" "" claude-code
 expect_block "Claude auto still blocks protected push inside shell wrapper" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "bash -c 'git push origin main'" "" claude-code
 expect_block "Claude auto still blocks force push with Git global -C" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "git -C . push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push with output redirect" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push --force origin HEAD > /tmp/push.log" "" claude-code
+expect_block "Claude auto still blocks force push with stderr merge" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "git push --force origin HEAD 2>&1 | tail -10" "" claude-code
+expect_block "Claude auto still blocks force push with assignment prefix" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "TRACE=1 git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push with leading redirect" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "> /tmp/push.log git push --force origin HEAD" "" claude-code
+expect_block "Claude auto still blocks force push through exec" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "exec git push --force origin HEAD" "" claude-code
+expect_block "Claude auto rejects command substitution" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" 'echo $(git push --force origin HEAD)' "" claude-code
 expect_block "Claude auto still blocks force push through env" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "env TRACE=1 git push --force origin HEAD" "" claude-code
 expect_block "Claude auto still blocks force push through eval" "CLAUDE_AUTO_PROTECTED_COMMAND" \
@@ -176,6 +190,8 @@ expect_block "Claude auto rejects inline Git aliases that can hide force push" "
   hook "$claude_auto_auth" "git -c alias.fp='!git push --force' fp" "" claude-code
 expect_block "Claude auto still blocks gh pr merge" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "gh pr merge 42" "" claude-code
+expect_block "Claude auto still blocks gh pr merge with global repo" "CLAUDE_AUTO_PROTECTED_COMMAND" \
+  hook "$claude_auto_auth" "gh -R cat-xierluo/legal-skills pr merge 42" "" claude-code
 expect_block "Claude auto still blocks privilege elevation" "CLAUDE_AUTO_PROTECTED_COMMAND" \
   hook "$claude_auto_auth" "sudo git push origin feature" "" claude-code
 expect_block "Claude auto authority cannot be used by another backend" "INSTALL_AUTHORIZATION_INVALID" \
