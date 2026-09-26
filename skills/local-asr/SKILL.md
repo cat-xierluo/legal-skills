@@ -2,7 +2,7 @@
 name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.2.0"
+version: "2.2.1"
 license: MIT
 description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择；支持认领式声纹注册，本人声纹注册后自动识别标注。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
