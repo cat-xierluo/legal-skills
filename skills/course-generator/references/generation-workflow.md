@@ -22,6 +22,8 @@ python3 scripts/ledger_tool.py init \
 
 默认使用 `current`。只有用户明确要求保留历史课堂口径时才使用 `historical`。控制文档缺失、同名不唯一或声明无法解析时停止，不得自行降级。
 
+解释器注意：macOS 默认 `/usr/bin/python3` 是 3.9，低于本技能要求的 3.10；验收前用 `PATH=/opt/homebrew/bin:$PATH bash scripts/verify.sh ...`（或显式 python3.11+）运行，否则报"Python 版本过低"退出码 2。
+
 若存在 `config/user_dictionary.yaml`，先按其中词条对专名和固定术语做高置信纠正，再建立来源索引。词典不用于改写句意；无法从上下文确认的疑似误识别保持原样或在人工复核时标记。
 
 索引器给每个来源和内容块分配稳定的 `SRC-xxx`、`BLK-xxxxx`，并记录哈希、行号、块类型和预览。平台摘要、关键词和自动生成的 Q&A 标为 `derived`，只帮助定位，不作为新事实来源。
@@ -69,7 +71,7 @@ python3 scripts/ledger_tool.py status \
 - 每批新增素材不得超过 `status.maximum_new_material_count_for_next_batch`，整份账本不得超过 `maximum_material_count`。渐进预算会在首批就阻断按发言片段逐块建素材，避免处理到一半才整批返工。额度不足时合并同一观点、连续操作阶段或相同跳过理由，不把独立教学点粗暴压在一起。
 - `pure_repeat`、`no_course_value` 只用于真正重复或没有课程价值的片段，不能整体跳过案例、演示、错误修正、版本比较或产品效果。
 - 每项 include 素材预先填写 1—3 个 `coverage_terms`。词语必须逐字存在于绑定原文，优先选择步骤、结果、数字、限制或专名，不使用“我觉得”“比如说”“做一个”等低信号或截断片段。
-- 完全相同的批次因超时重试时，`merge` 会幂等跳过；不要重新分配编号或手改 manifest。
+- 完全相同的批次因超时重试时，`merge` 会幂等跳过；不要重新分配编号或手改 manifest。注意 `merge` 校验错误的 `entry_index` 是 1 基序号，与 0 基数组下标差 1；coverage term 必须逐字（含口语转写形式，如"get提交""1月19号""两层错峰"）存在于绑定来源块——ASR 转写与书面语（git 提交/1 月 19 日）不一致时以原转写为准，正文可读性靠括注规范写法解决。素材预算（maximum_material_count）按渐进机制收紧时，合并同观点素材优先于删除内容。
 
 全部内容块处理完后运行：
 

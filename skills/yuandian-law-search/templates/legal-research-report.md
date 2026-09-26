@@ -4,7 +4,7 @@
 > 检索主体：{{researcher}}
 > 检索平台：元典开放平台 open.chineselaw.com
 > 精选依据：{{selected_source_count}} 条
-> 原始检索调用：{{raw_call_count}} 条（仅作轨迹，不整体进入正文）
+> 附带原始底稿：{{raw_call_count}} 份（不等于实际 API 调用数）
 > 项目包：`archive/{{project}}/`
 
 ## 一、案情简介
@@ -37,7 +37,7 @@
 
 ## 四、分析与判断
 
-### 4.1 涵摄矩阵摘要
+### 4.1 问题与适用前提
 
 {{subsumption_matrix}}
 

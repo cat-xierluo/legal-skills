@@ -1,104 +1,86 @@
-## 法律检索报告（consolidate）
+# 精选法律检索报告
 
-`consolidate` 只在用户明确要求正式报告或落盘时使用。它不再把 per-call 报告汇总为正文，而是从已经通过校验的 `research-plan.json` 与 `selected-sources.json` 生成交付物。完整精选合同见 [`08-selected-sources-delivery.md`](08-selected-sources-delivery.md)。
+只有用户要求报告／落盘时，才将实际查询和精选依据整理成两个输入文件。普通对话无需 JSON。报告不是完整召回的汇编，`consolidate` 只消费通过校验的精选清单。
 
-## 交付数据流
+## 轻量报告：focused 记录
 
-```text
-案件事实
-  → 涵摄式 research plan
-  → API/MCP 候选召回
-  → Agent 逐条复核
-  → selected sources
-  → consolidate 正式报告
+单争点及普通检索报告使用 `schema_version=1.1, mode=focused`，不要求要件矩阵、反向命题或预先计划文件。可以在检索后如实记录；不得把没执行过的建议查询记成已执行。
 
-per-call .md/.json 与完整响应
-  → archive/<project>/（数据底稿）
-  ↛ 第六节正文
+```json
+{
+  "schema_version": "1.1",
+  "mode": "focused",
+  "case_id": "example-guarantee-period",
+  "research_brief": {
+    "research_goal": "核对保证期间条文",
+    "dispute_focus": ["民法典第692条的具体内容"]
+  },
+  "propositions": [
+    {"id": "P1", "statement": "核对保证期间及未约定期间的规则", "importance": "decisive"}
+  ],
+  "queries": [
+    {
+      "id": "Q1",
+      "proposition_id": "P1",
+      "interface": "detail",
+      "query_expression": "中华人民共和国民法典",
+      "filters": {"--ft-name": "第六百九十二条"}
+    }
+  ]
+}
 ```
 
-报告生成前必须执行：
+这是结构示例，不是已执行证据。记录真实接口的 CLI 等价名及字段；MCP 原始工具名／参数可另记扩展字段，不得把 CLI 参数直接用作 MCP 入参。未设置的筛选记 `{}`，不补造改写、地区或时间参数。
+
+另一份 `selected-sources.json` 沿用 [精选来源合同](08-selected-sources-delivery.md) 的 schema 1.0，只放拟采用的少量来源。两份文件的 schema 版本不必相同。每项须说明支持哪一命题、适用理由、来源、核验范围；案例与规范分开。
+
+focused 报告输出四节：结论与适用前提、分析、精选依据、未解决问题。查询轨迹折叠置后，不重复展示完整矩阵、依据速查表和程序门禁表。
+
+## 深度报告：保留兼容
+
+确需完整涵摄矩阵和多争点记录时使用 [深度研究](07-research-middleware.md) 的 schema 1.0。原七节报告仍受支持；不要只因要落盘就升级深度。
+
+## 校验与生成
 
 ```bash
 scripts/validate-research-contract.py \
-  --plan research-plan.json \
-  --selection selected-sources.json
-```
+  --plan /absolute/path/research-plan.json \
+  --selection /absolute/path/selected-sources.json
 
-任一非零退出码都停止报告生成。该门禁验证结构、映射和可追溯声明，不替代律师对实体法律相关性的复核。
-
-## 7 节结论先行结构
-
-1. **案情简介**：与检索争点有关的最少必要事实。
-2. **检索目的与问题**：对应 research plan 的争点。
-3. **检索结论**：一句话定性、核心依据速查、风险和后续行动。
-4. **分析与判断**：先展示涵摄矩阵摘要，再给综合法律分析。
-5. **检索思路与方法**：展示命题—缺口—查询轨迹和交付门禁。
-6. **精选法律依据与案例**：只渲染 `selected_sources`；规范性法源与案例分开。
-7. **未解决问题、排除统计与原始轨迹**：披露未解决命题、排除数量和 per-call 链接，不复制原始正文。
-
-第六节不是“召回结果区”。它是经过法律对位审查后的精选依据区。案例不得混入规范性法律依据；规范性材料先按核心／补充，再按法律位阶排列。
-
-## 调用方式
-
-```bash
 scripts/yd-run consolidate \
-  --title "案件主题" \
-  --project "case-project" \
-  --case "案情：..." \
-  --strategy "涵摄缺口、查询路由和复检过程：..." \
-  --analysis "结合精选依据完成的分析：..." \
-  --conclusion "附条件的一句话结论：..." \
-  --risks "主要风险：..." \
-  --next-actions "后续行动：..." \
-  --research-plan research-plan.json \
-  --selection selected-sources.json \
-  --include "可选：仅归档的原始查询子串"
+  --title "案件主题" --project "case-project" \
+  --case "最少必要案情与假设" \
+  --strategy "实际查询及追加原因" \
+  --analysis "结合精选来源的分析" \
+  --conclusion "附条件结论" \
+  --risks "未确认事实与核验边界" \
+  --next-actions "必要后续动作；没有则说明无" \
+  --research-plan /absolute/path/research-plan.json \
+  --selection /absolute/path/selected-sources.json \
+  --output /absolute/path/法律检索报告.md
 ```
 
-- `--research-plan` 必填：涵摄式研究计划，包含争点、要件矩阵、法律检索缺口、正反命题和查询。
-- `--selection` 必填：Agent 逐条复核后的精选来源清单。
-- `--case` / `--strategy` / `--analysis` / `--conclusion` 必填：正式报告不得保留待补写占位符。
-- `--include` 可选：匹配 CWD 中 `<时间戳>_<查询>.md`，仅把原始 per-call 文件归档到项目包并在第七节列出调用轨迹；不再控制正文来源。
-- `--output` 可选：指定额外报告路径；不传时在 CWD 写工作副本。
+非零校验退出码阻断报告。校验器只验证结构、映射和核验声明，不证明法律适用判断正确，也不保证 source_url／archive_ref 实际可达；Agent 仍须实际复核。现有历史法源 core 限制见精选合同，不能为过门禁伪造现行状态。
 
-## 项目包
+规范先按核心／补充，再按类型排序；典型案例不进入法律依据组。最多12条是上限，不是目标。已排除候选只显示统计，不把无关标题再带进正文。
 
-```text
-archive/<project>/
-  research-plan.json
-  selected-sources.json
-  <timestamp>_<query>.json       # 可选，原始响应
-  <timestamp>_<query>.md         # 可选，per-call 底稿
-  <timestamp>_法律检索报告.md     # 正式报告
-```
+## 留存与原始轨迹
 
-`research-plan.json` 和 `selected-sources.json` 是正式报告的两份直接输入。原始响应用于回查候选池和调用过程；不能因为位于同一项目包，就被视为已经纳入法律分析。
+报告、两份输入保存到所选归档目录的项目子目录。默认 `archive/<project>/`；也可用 `--archive-dir` 或 `YD_ARCHIVE_DIR`。正式报告本身是明确的写入操作，不用 `--no-archive` 代替取消报告生成。
 
-## 目标目录归档规范
+`--include` 可选，仅从工作目录匹配 `<时间戳>_<查询>.md`，将底稿归档并列出链接；不决定报告正文来源。**不必为了生成报告补齐每次调用的 Markdown。**
 
-用户的案件目录只放：
+- `--no-report` 跑过的检索没有 Markdown，但原始 JSON 仍可作为来源追溯。
+- 缓存命中不会补写 Markdown，也不重复扣积分。
+- 缺少底稿时直接省略 `--include`，在精选来源中引用已有 JSON／来源链接即可。不为补底稿重跑收费请求。
+- 确需重建 Markdown 时，从已有 JSON 离线格式化或 `ingest --input`；不人工重抄全文。
+- “附带底稿文件数”不是“实际 API 调用数”，更不是费用账单。
 
-1. 正式法律检索报告；
-2. 用户提供的外部素材；
-3. 明确需要交接时的精选研究包；
-4. 基于报告生成的下游文件。
+案件目录只放正式报告及用户要求的交接材料；原始响应、临时文件和客户敏感材料不提交公开仓库。
 
-不得把 per-call 检索记录、完整 MCP/API 响应或临时文件复制到案件目录。原始材料保留在 Skill 的 `archive/`，且该目录不提交 Git。
+## 验收
 
-## 失败关闭条件
-
-- 缺少 research plan 或 selected sources。
-- 精选清单为空、重复、包含 `LOW/MISMATCH`、来源未核验或没有命题映射。
-- 决定性命题既无精选来源，也未标记 `unresolved`。
-- 使用旧 `--include` 试图把整份 per-call 报告写入正文。
-- 规范性法源和案例混排，或历史法源被标为核心依据。
-
-## 验证清单
-
-- [ ] 正文中的每条依据均来自 `selected-sources.json`。
-- [ ] 第六节没有原始召回正文、无关法条标题或完整候选列表。
-- [ ] 规范性法源按位阶排列，案例单独分组。
-- [ ] 每条精选来源都有命题、适用理由、核验说明和溯源信息。
-- [ ] 未解决命题和排除数量已披露，但排除候选标题没有污染正文。
-- [ ] per-call 文件只在 `archive/` 项目包中作为底稿存在。
+- 正文仅使用已核验且对位的精选来源；无原始召回全文。
+- 规范与案例分组，来源去重，适用时间明确。
+- 决定性命题有支持来源或明确列入未解决问题。
+- 缺少精选、LOW/MISMATCH、待核验、错误映射等不能通过换 focused 模式绕过门禁。

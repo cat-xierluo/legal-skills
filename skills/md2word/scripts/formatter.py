@@ -10,9 +10,22 @@ from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml.shared import OxmlElement
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 # 导入配置模块
 from config import Config, get_config
+
+# Markdown 行内链接：[显示文本](URL)、[显示文本](URL "title")
+# 负向断言排除图片语法 ![alt](path)（图片由 md2word 单独处理）。
+LINK_PATTERN = re.compile(r'(?<!!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"[^"\n]*")?\)')
+
+# 显示文本本身不含出处的泛化标签：法律/检索类文档的打印稿需要把 URL 印出来，
+# 故在这些标签后补记 URL，避免纸质件丢失出处。
+# 仅收录"打印稿会丢失出处"的引用型标签；md/json 之类的本地轨迹链接不加，
+# 否则 file:// 长路径会把表格撑到不可读。
+_GENERIC_LINK_LABELS = {
+    '来源页面', '来源', '原文', '链接', '出处', 'link', 'source',
+}
 
 
 # 正文与 Markdown 表格共用同一组行内格式规则。下划线强调要求分隔符
@@ -134,8 +147,59 @@ def convert_quotes_to_chinese(text):
     return text
 
 
+def _add_plain_text(paragraph, text, title_level, is_quote):
+    """按行内格式规则写入一段普通文本（含加粗/斜体等）。"""
+    text_parts = parse_formatted_text(text, INLINE_FORMAT_PATTERNS)
+    for part_text, formats in text_parts:
+        if part_text:  # 只有非空文本才创建run
+            run = paragraph.add_run(part_text)
+            set_run_format_with_styles(run, formats, title_level=title_level, is_quote=is_quote)
+
+
+def add_hyperlink(paragraph, text, url, title_level=0, is_quote=False):
+    """写入一个真正的 Word 超链接 run。
+
+    早期版本不识别 Markdown 链接，Word 稿里会留下 `[文字](url)` 的原始标记；
+    法律/检索类文档的"出处"字段尤其依赖可点击链接，故在此补上。
+    """
+    if not url:
+        _add_plain_text(paragraph, text, title_level, is_quote)
+        return None
+    try:
+        r_id = paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    except Exception:
+        # 关系写入失败（非法 URL 等）时降级为普通文本，保证内容不丢
+        _add_plain_text(paragraph, f'{text}（{url}）', title_level, is_quote)
+        return None
+
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '0563C1')
+    rPr.append(color)
+
+    underline = OxmlElement('w:u')
+    underline.set(qn('w:val'), 'single')
+    rPr.append(underline)
+
+    new_run.append(rPr)
+
+    t = OxmlElement('w:t')
+    t.set(qn('xml:space'), 'preserve')
+    t.text = text
+    new_run.append(t)
+
+    hyperlink.append(new_run)
+    paragraph._p.append(hyperlink)
+    return hyperlink
+
+
 def parse_text_formatting(paragraph, text, title_level=0, is_quote=False):
-    """解析文本格式（支持加粗、斜体、下划线，转换引号为中文）"""
+    """解析文本格式（支持加粗、斜体、下划线、超链接，转换引号为中文）"""
 
     # 转换英文引号为中文引号
     text = convert_quotes_to_chinese(text)
@@ -144,11 +208,19 @@ def parse_text_formatting(paragraph, text, title_level=0, is_quote=False):
     segments = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
 
     for idx, segment in enumerate(segments):
-        text_parts = parse_formatted_text(segment, INLINE_FORMAT_PATTERNS)
-        for part_text, formats in text_parts:
-            if part_text:  # 只有非空文本才创建run
-                run = paragraph.add_run(part_text)
-                set_run_format_with_styles(run, formats, title_level=title_level, is_quote=is_quote)
+        pos = 0
+        for match in LINK_PATTERN.finditer(segment):
+            if match.start() > pos:
+                _add_plain_text(paragraph, segment[pos:match.start()], title_level, is_quote)
+            label, url = match.group(1), match.group(2)
+            add_hyperlink(paragraph, label, url, title_level=title_level, is_quote=is_quote)
+            # 泛化标签（"来源页面"/"md" 等）本身不带出处，补记 URL 便于打印稿引用
+            if label.strip() in _GENERIC_LINK_LABELS:
+                run = paragraph.add_run(f'（{url}）')
+                set_run_format_with_styles(run, {}, title_level=title_level, is_quote=is_quote)
+            pos = match.end()
+        if pos < len(segment):
+            _add_plain_text(paragraph, segment[pos:], title_level, is_quote)
         if idx < len(segments) - 1:
             paragraph.add_run().add_break()
 

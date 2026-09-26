@@ -106,6 +106,7 @@ write_metadata() {
     --argjson add_dirs "$(metadata_array_to_json ADD_DIRS)" \
     --argjson allow_paths "$(metadata_array_to_json ALLOW_PATHS)" \
     --arg install_guard_mode "$INSTALL_GUARD_MODE" \
+    --arg shell_policy "${SHELL_POLICY:-exact_allowlist}" \
     --arg install_authorization_file "$INSTALL_AUTH_FILE" \
     --arg install_authorization_source "$INSTALL_AUTHORIZATION_SOURCE" \
     --arg install_guard_degradation_source "$INSTALL_GUARD_DEGRADATION_SOURCE" \
@@ -205,6 +206,7 @@ write_metadata() {
       execution_authority: {
         environment_mutation_policy: "deny_by_default",
         install_guard_mode: $install_guard_mode,
+        shell_policy: $shell_policy,
         install_authorization_file: $install_authorization_file,
         install_authorization_source: $install_authorization_source,
         authorized_install_commands: $authorized_install_commands,

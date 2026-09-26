@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.27.6"
+  version: "2.28.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -26,7 +26,10 @@ metadata:
 - 单个短任务、一次性问答或无并行价值的单文件修改。
 - 纯任务源、负责人和依赖状态同步：遵循项目任务源规则，不在本 Skill 扩展。
 - branch/commit/push/PR/merge/冲突规则：使用 `git-workflow`。
-- 宿主不能启动或控制本地 Agent CLI 时：使用宿主自己的 subagent 能力。
+- **通道选择（subagent vs 独立 worker）是平行决策，不是降级回退**：
+  - **宿主 subagent 首选**：中小型任务卡（单卡 ≤1h 工作量）、质量敏感（像素/数值级验证）、希望快（15-45 分钟/卡实测）、宿主额度充裕。实证（Fathom 2026-09-24，八卡 082-093）：全绿零返工、白名单零越权、运维成本近零。
+  - **独立 worker 首选**：宿主额度紧张/已撞限（subagent 与宿主共享额度，撞限时在途全灭）、大批量长任务并行、需要模型多样性（lane 切换走用户 API 额度）、宿主会话可能中断的任务。
+  - 混用纪律与通道无关：同文件域串行、异文件域并行的冲突控制对所有通道通用。
 
 本 Skill 可能创建 Git/Orca worktree、分支、Session Context、终端、tmux session，以及 supervised Run/Task/Dispatch。它不自动安装依赖，也不自行扩张 push、merge、发布或外部调度授权。Orca worktree 创建固定使用 `--setup skip`：repo Setup 发生在本 Skill 写入 Session Context 和机械门禁之前，`inherit/run` 会在资源创建前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；`--allow-install-command` 只授权门禁已就位后的 worker 阶段，不能追认 Setup。真实 provider 配置及备份不得进入 Git、日志或交付物。
 
@@ -40,7 +43,7 @@ metadata:
 | Orca terminal-managed | 白名单 backend 未采用 supervised，或 CLI 仅能由外部 terminal 管理 | terminal 输出 + checkpoint + 真实产物，PM 验收 |
 | tmux worktree | Orca 不可用、用户指定 tmux 或兼容性回归 | checkpoint + Git/测试/产物，PM 验收 |
 | tmux lightweight | 用户明确不要 worktree，或非 Git 目标且目录绝不重叠 | checkpoint + 真实产物，PM 验收 |
-| 同宿主 subagent | 窄范围、短任务、无需独立进程或分支 | 宿主决定 |
+| 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
 
 同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
 
@@ -76,11 +79,11 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - Claude Code/Codex PM 可派 Claude Code、Codex、CodeBuddy、QoderWork CN；CodeBuddy、QoderWork CN PM 只能派自身。zcode 与 hermes 仅在用户明确授权并记录于 `config/harness-backend-policy.json` 的 `policy_notes` 后开启（hermes PM 宿主签名走路径级识别：Hermes.app bundle 与 `.hermes/hermes-agent/` 安装目录，裸 `hermes` 词不作为签名；hermes PM 可派全部受支持 worker backend：claude-code、codex、codebuddy、qoderwork-cn、zcode）。
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
-- Shell 与安装均 fail-closed。验证命令不等于安装授权；只有精确 `--allow-install-command` 和可审计授权来源才允许门禁后的 worker 安装。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。内置 `sed` 只放行 `sed -n '<数字或 $>[,<数字或 $>]p' <单文件>`，替换、写入、执行、多文件和其他形式仍需精确 allowlist。
+- Shell 按后端和启动模式执行两种策略：Claude Code 的本地 hook 生效且启动命令显式使用 `--permission-mode auto` 时，普通 Bash 交给 Claude Code 的 auto 分类器和用户 settings；编排 hook 继续拦识别出的安装命令、直接及常见 Shell 包装的受保护 Git 操作、Orca 协议和受限 tracked 删除。其他后端与 Claude Code 非 auto 模式继续使用精确 `allowed_shell_commands`。`execution_authority.shell_policy` 固定所选策略；Claude auto 不是 Shell 文件写范围或任意程序副作用的机械沙箱，PM 仍须核对真实 diff 与外部副作用。验证命令不等于安装授权；安装类命令只有精确 `--allow-install-command` 和可审计授权来源才可通过编排门禁。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
 - tracked 文件删除是独立高风险类，先于普通 Shell allowlist 判定。只有 hook-enabled worker 可从 receipt 绑定的 worktree 根运行 `git rm -- <一个 canonical repo-relative tracked file>`，且该精确路径必须在 spawn 时写入不可变 `allowed_write_paths`；scope glob、后续 `reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开和复合命令均不能扩大权限。Codex/ZCode 的 `prompt_only_degraded` 只提供提示，不能声称机械删除保护；详见 `references/02-runtime-dependencies.md` §6。
-- 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。
+- 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。在 Claude auto 策略下，该列表仍是交付验收的必跑命令，不是普通 Bash 的唯一执行权限来源。
 - 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
 - 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
 

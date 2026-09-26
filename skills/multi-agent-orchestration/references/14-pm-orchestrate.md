@@ -1,6 +1,6 @@
 # PM 统一控制入口
 
-> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.27.6。
+> `scripts/pm-orchestrate.sh`；本页适配 `multi-agent-orchestration` v2.28.0。
 
 ## 目录
 

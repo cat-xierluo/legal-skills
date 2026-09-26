@@ -8,7 +8,7 @@
 | 字段名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | query | string | 是 | 待检索问题 / 查询文本 |
-| rewrite_flag | boolean | 否 | 是否对查询做改写，默认为 true |
+| rewrite_flag | boolean | 否 | 是否对查询做改写，默认 false；2026-09-22 核对官方 api-square/17，CLI 未显式设置时不发送 |
 | fatiao_filter | object | 否 | 法律法规检索过滤条件 |
 | return_num | int | 否 | 返回法律法规数量（默认45，最大不超过检索回总数） |
 

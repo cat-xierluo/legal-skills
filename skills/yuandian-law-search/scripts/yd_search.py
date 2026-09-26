@@ -274,7 +274,7 @@ def _archive_save(endpoint, payload, response):
     """将查询和响应归档（按 project 子目录归类）"""
     if NO_ARCHIVE:
         return None
-    ARCHIVE_DIR.mkdir(exist_ok=True)
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     fingerprint = _query_fingerprint(endpoint, payload)
     filename = _make_archive_name(endpoint, payload)
     project_dir = ARCHIVE_DIR / _resolve_project()
@@ -1172,7 +1172,7 @@ def _resolve_keyword_search_mode(args, expanded):
     return "or" if expanded else "and"
 
 
-def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_dropped=0):
+def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_dropped=0, cached=False):
     """打印调用成本提示 + 报告路径
 
     Args:
@@ -1181,7 +1181,11 @@ def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_droppe
         cwd_md: 工作目录报告路径（写入失败时为 None）
         industry_dropped: 已剔除的办案无关条数（律协指引/行政机关工作文件/党内法规/军事法规等）
     """
-    if cost_label is None:
+    # 命中本地归档缓存时未发起网络请求，不消耗积分；此处须显式覆盖，
+    # 否则调用方传入的固定成本标签会让使用者误判实际成本。
+    if cached:
+        cost_label = "命中本地归档缓存，本次调用消耗 0 积分"
+    elif cost_label is None:
         cost_label = COST_PER_CALL
     print(f"\n--- {cost_label} ---")
     if industry_dropped:
@@ -1195,11 +1199,7 @@ def _print_footer(cost_label=None, archive_md=None, cwd_md=None, industry_droppe
 
 def cmd_search(args):
     """法条语义检索"""
-    body = {
-        "query": args.query,
-        "rewrite_flag": args.rewrite_flag,
-        "return_num": args.return_num,
-    }
+    body = _semantic_body(args)
     fatiao_filter = {}
     if args.effect1:
         fatiao_filter["effect1"] = args.effect1
@@ -1221,7 +1221,7 @@ def cmd_search(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped, cached=cached)
 
 
 def cmd_keyword(args):
@@ -1265,7 +1265,7 @@ def cmd_keyword(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped, cached=cached)
 
 
 def cmd_detail(args):
@@ -1282,7 +1282,7 @@ def cmd_detail(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_case(args):
@@ -1354,16 +1354,12 @@ def cmd_case(args):
         archive_path, report_body, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_case_semantic(args):
     """案例语义检索"""
-    body = {
-        "query": args.query,
-        "rewrite_flag": args.rewrite_flag,
-        "return_num": args.return_num,
-    }
+    body = _semantic_body(args)
     wenshu_filter = {}
     if args.xzqh_p:
         wenshu_filter["xzqh_p"] = args.xzqh_p
@@ -1392,7 +1388,7 @@ def cmd_case_semantic(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_case_detail(args):
@@ -1419,7 +1415,7 @@ def cmd_case_detail(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_regulation(args):
@@ -1464,7 +1460,7 @@ def cmd_regulation(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, industry_dropped=industry_dropped, cached=cached)
 
 
 def cmd_regulation_detail(args):
@@ -1493,7 +1489,7 @@ def cmd_regulation_detail(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise(args):
@@ -1516,7 +1512,7 @@ def cmd_enterprise(args):
         archive_path, report_body, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise_detail(args):
@@ -1537,7 +1533,7 @@ def cmd_enterprise_detail(args):
         archive_path, formatted, "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_archive_list(args):
@@ -1650,7 +1646,7 @@ def cmd_raw(args):
         archive_path, f"```json\n{formatted}\n```\n", "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_strategy(args):
@@ -1658,6 +1654,7 @@ def cmd_strategy(args):
     labels = {"balanced": "均衡", "economical": "省钱", "aggressive": "激进"}
     s = load_strategy()
     print(f"当前策略：{labels.get(s, s)}（{s}）")
+    print("历史兼容配置：不再控制检索编排、语义改写或候选数量；未传参数时使用服务端默认值。")
 
 
 def cmd_hall_detect(args):
@@ -1672,7 +1669,7 @@ def cmd_hall_detect(args):
         archive_path, formatted, "50 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(cost_label="本次调用消耗 50 积分", archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(cost_label="本次调用消耗 50 积分", archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise_search(args):
@@ -1691,7 +1688,7 @@ def cmd_enterprise_search(args):
         archive_path, formatted, "1 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(cost_label="本次调用消耗 1 积分", archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(cost_label="本次调用消耗 1 积分", archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise_base(args):
@@ -1713,7 +1710,7 @@ def cmd_enterprise_base(args):
         archive_path, f"```json\n{formatted}\n```\n", "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise_summary(args):
@@ -1735,7 +1732,7 @@ def cmd_enterprise_summary(args):
         archive_path, f"```json\n{formatted}\n```\n", "10 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(cost_label="本次调用消耗 10 积分", archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 def cmd_enterprise_list(args):
@@ -1781,7 +1778,7 @@ def cmd_enterprise_list(args):
         archive_path, report_body, f"{cost} 积分",
         no_report=args.no_report, no_cwd_report=args.no_cwd_report,
     )
-    _print_footer(cost_label=cost_label, archive_md=archive_md, cwd_md=cwd_md)
+    _print_footer(cost_label=cost_label, archive_md=archive_md, cwd_md=cwd_md, cached=cached)
 
 
 # ── consolidate：从研究计划和 Agent 精选来源生成正式报告 ─────────
@@ -1818,7 +1815,7 @@ def _consolidate_resolve_includes(include_str, cwd):
     if not patterns:
         return []
 
-    archive_dir = SKILL_ROOT / "archive"
+    archive_dir = ARCHIVE_DIR
     matched = []
 
     for md_path in cwd.glob("*.md"):
@@ -1919,7 +1916,7 @@ def cmd_consolidate(args):
         project_name = _consolidate_slugify(args.title) or f"untitled-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     else:
         project_name = f"untitled-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    project_dir = SKILL_ROOT / "archive" / project_name
+    project_dir = ARCHIVE_DIR / project_name
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # 把本次正式交付使用的两个合同一并归档；原文件不移动。
@@ -1941,7 +1938,7 @@ def cmd_consolidate(args):
         if md_path.resolve() == project_md.resolve():
             pass  # 已经在子目录里（重复运行 consolidate）
         else:
-            archive_md = SKILL_ROOT / "archive" / md_path.name
+            archive_md = ARCHIVE_DIR / md_path.name
             if archive_md.exists() and archive_md.resolve() != project_md.resolve():
                 shutil.move(str(archive_md), str(project_md))
                 moved_md += 1
@@ -1974,6 +1971,8 @@ def cmd_consolidate(args):
             for issue in plan.get("issues", [])
             if isinstance(issue, dict) and issue.get("question")
         ]
+        if not issue_questions:
+            issue_questions = plan.get("research_brief", {}).get("dispute_focus", [])
         purpose_section = "本次检索验证以下法律命题：" + "；".join(issue_questions)
 
     conclusion_section = args.conclusion
@@ -2021,7 +2020,7 @@ def cmd_consolidate(args):
         f"> 检索主体：AI Agent / yuandian-law-search\n"
         f"> 检索平台：元典开放平台 open.chineselaw.com\n"
         f"> 精选依据：{selected_count} 条\n"
-        f"> 原始检索调用：{len(pairs)} 条（仅作轨迹，不整体进入正文）\n"
+        f"> 附带原始底稿：{len(pairs)} 份（不等于实际 API 调用数）\n"
         f"> 项目包：`archive/{project_name}/`\n"
         f"\n"
         f"## 一、案情简介\n"
@@ -2052,7 +2051,7 @@ def cmd_consolidate(args):
         f"\n"
         f"## 四、分析与判断\n"
         f"\n"
-        f"### 4.1 涵摄矩阵摘要\n"
+        f"### 4.1 问题与适用前提\n"
         f"\n"
         f"{subsumption_table}\n"
         f"\n"
@@ -2103,6 +2102,25 @@ def cmd_consolidate(args):
         f"*本报告由 yuandian-law-search 技能 `consolidate` 子命令生成*\n"
     )
 
+    if plan.get("mode") == "focused" and plan.get("schema_version") == "1.1":
+        # 单争点报告避免重复展开矩阵、速查表和程序门禁表；来源门禁不放宽。
+        compact_sources = research_contract.render_selected_sections(selection, section_number=3)
+        md_content = (
+            f"# 法律检索报告 · {title}\n\n"
+            f"> 生成时间：{timestamp}；精选依据 {selected_count} 条。\n\n"
+            f"## 一、结论与适用前提\n\n{conclusion_section}\n\n"
+            f"**案情范围**：{args.case}\n\n"
+            f"**风险与未确认事项**：{risks_section}\n\n"
+            f"**后续行动**：{next_actions_section}\n\n"
+            f"## 二、分析\n\n{args.analysis}\n\n"
+            f"## 三、精选依据\n\n{compact_sources}\n\n"
+            f"## 四、未解决问题\n\n{unresolved_table}\n\n"
+            f"<details>\n<summary>检索过程与追溯</summary>\n\n"
+            f"{args.strategy}\n\n{query_trace}\n\n{excluded_table}\n\n"
+            f"附带底稿（不等于实际调用数）：{len(pairs)} 份。\n\n{detail_table}\n\n"
+            f"</details>\n"
+        )
+
     # 主交付物：写入项目子目录
     report_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_法律检索报告.md"
     project_report_path = project_dir / report_filename
@@ -2142,13 +2160,35 @@ def _add_law_filters(parser):
                         help="保留默认剔除的办案无关条目（律协指引/行政机关工作文件/党内法规/军事法规等）")
 
 
+def _semantic_body(args):
+    """未显式设置的参数留给服务端默认值，不继承本地策略档位。"""
+    body = {"query": args.query}
+    for name in ("rewrite_flag", "return_num"):
+        value = getattr(args, name, None)
+        if value is not None:
+            body[name] = value
+    return body
+
+
+def _positive_int(value):
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("必须是正整数")
+    return number
+
+
+def _add_semantic_options(parser):
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--rewrite-flag", action="store_true", dest="rewrite_flag",
+                       help="显式启用服务端查询改写")
+    group.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag",
+                       help="显式禁用服务端查询改写")
+    parser.set_defaults(rewrite_flag=None)
+    parser.add_argument("--return-num", type=_positive_int, default=None,
+                        help="显式限制候选数；不传则使用服务端默认值")
+
+
 def build_parser():
-    _strategy = load_strategy()
-    _semantic_return_num = {
-        "economical": 8,
-        "balanced": 12,
-        "aggressive": 20,
-    }.get(_strategy, 12)
 
     parser = argparse.ArgumentParser(
         description="元典法条检索命令行工具（开放平台版）",
@@ -2184,10 +2224,7 @@ def build_parser():
     p = sub.add_parser("search", help="法条语义检索")
     p.add_argument("query", help="自然语言问题")
     _add_law_filters(p)
-    p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询（默认 true）")
-    p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=_semantic_return_num,
-                   help=f"候选返回数量（当前策略默认 {_semantic_return_num}；原始召回不直接进入正式报告）")
+    _add_semantic_options(p)
     p.add_argument("--law-start", help="法条生效起始日期 yyyy-MM-dd")
     p.add_argument("--law-end", help="法条生效结束日期 yyyy-MM-dd")
     p.set_defaults(func=cmd_search)
@@ -2206,7 +2243,7 @@ def build_parser():
     p.add_argument("--fbrq-end", help="发布日期终点")
     p.add_argument("--ssrq-start", help="实施日期起点")
     p.add_argument("--ssrq-end", help="实施日期终点")
-    p.add_argument("--top-k", type=int, default=20 if _strategy == "aggressive" else None, help="返回条数上限")
+    p.add_argument("--top-k", type=_positive_int, default=None, help="返回条数上限；不传则使用服务端默认值")
     p.set_defaults(func=cmd_keyword)
 
     # ── detail ──
@@ -2231,7 +2268,7 @@ def build_parser():
     p.add_argument("--wszl", action="append", help="文书种类")
     p.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
     p.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
-    p.add_argument("--top-k", type=int, default=20 if _strategy == "aggressive" else None, help="返回条数上限")
+    p.add_argument("--top-k", type=_positive_int, default=None, help="返回条数上限；不传则使用服务端默认值")
     p.add_argument("--fxgc", help="分析过程关键词")
     p.add_argument("--yyft", action="append", help="援引法条（可多次指定）")
     p.add_argument("--ft-search-mode", choices=["and", "or"], default="and", help="援引法条拼接模式")
@@ -2246,10 +2283,7 @@ def build_parser():
     p.add_argument("--wenshu-type", help="案件类型，如 民事案件")
     p.add_argument("--wszl", action="append", help="文书种类编码（1=判决书 2=裁定书 等）")
     p.add_argument("--cj", help="法院层级：最高/高级/中级/基层")
-    p.add_argument("--rewrite-flag", action="store_true", default=True, help="是否改写查询")
-    p.add_argument("--no-rewrite", action="store_false", dest="rewrite_flag", help="禁用查询改写")
-    p.add_argument("--return-num", type=int, default=_semantic_return_num,
-                   help=f"候选返回数量（当前策略默认 {_semantic_return_num}；原始召回不直接进入正式报告）")
+    _add_semantic_options(p)
     p.add_argument("--jarq-start", help="结案日期起点 yyyy-MM-dd")
     p.add_argument("--jarq-end", help="结案日期终点 yyyy-MM-dd")
     p.set_defaults(func=cmd_case_semantic)
@@ -2385,7 +2419,7 @@ def build_parser():
     p.add_argument("--id", help="企业 ID")
     p.add_argument("--uscc", help="统一社会信用代码")
     p.add_argument("--page", type=int, default=1, help="页码（默认 1）")
-    p.add_argument("--size", type=int, default={"economical": 10, "aggressive": 50}.get(_strategy, 30), help="每页条数（默认 30，economical 10，aggressive 50）")
+    p.add_argument("--size", type=int, default=30, help="每页条数（默认 30）")
     p.add_argument("--no-cache", action="store_true", help="跳过缓存，强制重新请求")
     p.set_defaults(func=cmd_enterprise_list)
 

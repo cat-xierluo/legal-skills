@@ -1,0 +1,57 @@
+examples:
+  - id: organize-lecture-notes
+    title:
+      zh: 整理课程逐字稿为讲义
+      en: Organize a course transcript into lecture notes
+    description:
+      zh: 把录音转写的口语逐字稿整理成结构化书面讲义 Markdown
+      en: Turn a raw speech-to-text transcript into structured written lecture notes
+    prompt:
+      zh: |-
+        请把这份法律 AI 课程的录音转写稿整理成书面讲义：
+
+        转写稿：{{转写稿文件路径}}
+        课程主题：{{可选，如"律师用 AI 做合同审查"}}
+        讲者：{{可选}}
+
+        要求：口语转书面、删冗余不改观点，法条和工具名不确定的标待核实，输出到 {{输出路径}}。
+      en: |-
+        Please organize this legal AI course transcript into written lecture notes:
+
+        Transcript: {{transcript file path}}
+        Course topic: {{optional, e.g. "AI-assisted contract review for lawyers"}}
+        Speaker: {{optional}}
+
+        Requirements: polish oral speech into written style, remove redundancy without changing viewpoints, mark unverifiable statute/tool references as to-verify, and write the result to {{output path}}.
+  - id: long-transcript-outline-first
+    title:
+      zh: 长稿先出大纲再整理
+      en: "Long transcript: outline first, then organize"
+    description:
+      zh: 超长课程稿先确认模块划分，再展开成完整讲义
+      en: Confirm module outline for a long course transcript before expanding into full notes
+    prompt:
+      zh: |-
+        这份课程转写稿比较长：{{转写稿文件路径}}
+
+        请先通读并给我一页大纲（模块划分 + 各模块要点），我确认后再整理成完整讲义。
+      en: |-
+        This course transcript is long: {{transcript file path}}
+
+        Please read it through and give me a one-page outline (module breakdown + key points per module). I will confirm before you produce the full lecture notes.
+  - id: extract-quotes-and-faq
+    title:
+      zh: 提取金句与答疑精选
+      en: Extract quotes and Q&A highlights
+    description:
+      zh: 在整理讲义之外，单独输出讲者金句集和答疑精选
+      en: Additionally produce a standalone quotes collection and Q&A highlights alongside the notes
+    prompt:
+      zh: |-
+        请整理这份课程转写稿：{{转写稿文件路径}}
+
+        除了标准讲义外，请额外单独输出一份金句集（讲者原话 + 出处位置）和答疑精选。
+      en: |-
+        Please organize this course transcript: {{transcript file path}}
+
+        Besides the standard lecture notes, also produce a separate quotes collection (verbatim speaker quotes with source locations) and Q&A highlights.

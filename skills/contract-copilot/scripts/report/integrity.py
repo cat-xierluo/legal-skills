@@ -57,7 +57,10 @@ def check_plan_integrity(plan: dict[str, Any]) -> dict[str, Any]:
 
 def check_report_integrity(report: str) -> dict[str, Any]:
     """检查最终文本的字段塌缩和详细审查项法律依据覆盖。"""
-    missing_count = report.count(MISSING_PLACEHOLDER)
+    # 模板类合同正文自带【待补充：…】填空标记，引用原条款/建议修改时必然包含；
+    # 门禁关注的是报告作者自身的字段塌缩，故先剔除全角括号内的模板标记再计数。
+    report_wo_template_markers = re.sub(r"【[^】]*】", "", report)
+    missing_count = report_wo_template_markers.count(MISSING_PLACEHOLDER)
     detail_match = _DETAIL_SECTION.search(report)
     detail_section = detail_match.group(1) if detail_match else ""
     finding_count = len(_FINDING_HEADING.findall(detail_section))

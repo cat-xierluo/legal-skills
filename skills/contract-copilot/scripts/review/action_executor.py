@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 try:
@@ -223,13 +224,21 @@ def _looks_like_placeholder_finding(finding: dict[str, Any]) -> bool:
             "reason",
         )
     )
-    target_haystack = " ".join(
-        str(finding.get(field) or "") for field in ("target_text", "search")
-    )
-    full_haystack = f"{descriptive_haystack} {target_haystack}"
-    if "____" in full_haystack or "【" in full_haystack or "】" in full_haystack:
+    # 模板类合同原文自带【待补充：…】填空标记，target_text 引用原条款时必然包含，
+    # 不能据此把整条审查项误判为“占位待填”。占位判定只看：① 描述字段中的占位关键词；
+    # ② 改文载荷（replacement/insert）是否新增了原文没有的空位标记——那才是“代填空白”。
+    if any(keyword in descriptive_haystack for keyword in PLACEHOLDER_HINT_KEYWORDS):
         return True
-    return any(keyword in descriptive_haystack for keyword in PLACEHOLDER_HINT_KEYWORDS)
+    target_text = str(finding.get("target_text") or finding.get("search") or "")
+    replacement_text = resolve_replacement_text(finding, edit_policy="revise-first") or ""
+    insert_text = str(finding.get("insert_text") or "")
+    target_markers = set(re.findall(r"【[^】]*】", target_text))
+    for payload in (replacement_text, insert_text):
+        if set(re.findall(r"【[^】]*】", payload)) - target_markers:
+            return True
+        if "____" in payload:
+            return True
+    return False
 
 
 def _is_minor_clerical_finding(finding: dict[str, Any]) -> bool:

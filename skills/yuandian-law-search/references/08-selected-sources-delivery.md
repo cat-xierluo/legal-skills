@@ -1,15 +1,15 @@
 # Agent 精选来源与交付门禁
 
-本 reference 规定候选召回之后、对话答复或正式报告之前的中间层责任。适用于案件综合检索、类案对标和既有报告复盘；简单法条或案号查询可直接答复，但仍不得把未核验结果表述为确定依据。
+本 reference 的 JSON 合同仅用于用户要求的报告／研究包，不是普通对话检索的必经步骤。对话直接说明精选依据和核验边界；不为答复先写两个 JSON。
 
 ## 1. 核心边界
 
 ```text
-research-plan.json
-  → API/MCP 候选召回
+问题 → API/MCP 候选召回
   → Agent 逐条法律相关性复核
-  → selected-sources.json
-  → 对话答复 / 正式报告
+  → 直接对话答复
+  → 用户要求报告时才整理 research-plan.json + selected-sources.json
+  → 正式报告
 
 完整响应、per-call .md/.json
   → archive/（数据底稿）
@@ -25,11 +25,11 @@ research-plan.json
 
 | 模式 | 默认条件 | 输出 | 原始召回 |
 |---|---|---|---|
-| 对话研究答复 | 默认 | 结论、关键前提、风险和少量精选依据 | 仅归档 |
+| 对话研究答复 | 默认 | 结论、关键前提、风险和少量精选依据；不要求 JSON | 不强制另行归档 |
 | 精选研究包 | 用户要求留痕、复核或交接 | `research-plan.json` + `selected-sources.json` + 必要说明 | 仅归档，可链接 |
 | 正式法律检索报告 | 用户明确要求正式报告或落盘 | 结论先行报告，只消费精选清单 | 仅在末尾列调用轨迹，不复制正文 |
 
-检索深度与输出长度相互独立。`aggressive` 可以增加命题、接口复检和详情核验，但不得把更多候选自动写进报告。
+检索深度与输出长度相互独立。不再用 `aggressive` 自动增加查询；原生默认可能返回很多候选，仍只保留解释结论必需的来源。单争点报告使用 [focused 记录](03-report-consolidation.md)。
 
 ## 3. `selected-sources.json` 合同
 
@@ -84,14 +84,14 @@ research-plan.json
 - `relevance_label` 只允许 `HIGH` / `MEDIUM`。`LOW` / `MISMATCH` 进入 `excluded_candidates`，不进入 `selected_sources`。
 - `priority` 取 `core` / `supplementary`；`stance` 取 `support` / `oppose` / `mixed`。`core` 必须为 `HIGH`，`MEDIUM` 只能作补充依据。
 - `verification_status` 在正式报告中必须为 `verified`。核验至少覆盖来源存在、引用内容一致；规范性法源还要核对时效和适用范围。
-- 规范性法源的 `validity_status` 为 `current` 或 `historical`；历史法源只能作补充背景，不能标为 `core`。案例使用 `not_applicable`。
+- 规范性法源的 `validity_status` 为 `current` 或 `historical`；当前脚本尚不接受历史法源作 `core`。这是报告能力限制，不是旧案不得适用旧法；遇此情形披露限制、保留时间适用分析，不伪标 current。案例使用 `not_applicable`。
 - `proposition_ids` 必须存在于本次 research plan；`trace.query_ids` 必须存在，且其父命题属于该来源的 `proposition_ids`。
 - `trace.source_url` 和 `trace.archive_ref` 至少提供一项。链接和归档只是可追溯证据，不能替代 `applicability`。
 - 每条决定性命题必须至少有一条精选来源，或显式进入 `unresolved_propositions`；不得用沉默掩盖检索失败。
 
 ## 4. Agent 逐条复核问题
 
-对每条候选依次回答：
+对拟采用的来源核查下列问题；显然不对位的候选直接排除，不逐条写长评语：
 
 1. 它支持或反对哪个具体命题，而不是笼统属于哪个案由？
 2. 规范是否真的适用于本案主体、客体、行为和时间？
@@ -119,7 +119,7 @@ research-plan.json
 
 ## 6. 确定性门禁
 
-案件检索前：
+只有选择 schema 1.0 完整深度计划时，执行前检查：
 
 ```bash
 scripts/validate-research-contract.py --plan research-plan.json
@@ -136,7 +136,7 @@ scripts/validate-research-contract.py \
 退出码：
 
 - `0`：结构、接口字段和交叉映射合法；不代表实体法律判断已经由机器证明正确。
-- `1`：合同违规，停止 API/MCP 调用或正式报告生成。
+- `1`：合同违规，阻断本次完整计划执行或正式报告生成；普通对话无此文件前置要求。
 - `2`：文件、JSON 或校验器初始化错误，停止执行。
 
 `consolidate` 会再次校验研究计划与精选清单，缺少清单、空清单、超过 12 条、未核验来源、未知命题、`LOW/MISMATCH`、重复引用或决定性命题无去向时失败关闭。
@@ -167,4 +167,4 @@ scripts/yd-run consolidate \
 - 把案例、典型案例写进规范性法律依据。
 - 纳入失效但未说明历史用途的法源，或纳入与本案主体／客体明显不适用的专项规则。
 - 对决定性命题既无精选依据，也不披露尚未解决。
-- 因 aggressive 模式扩大候选召回而降低精选门槛或增加正文材料数量。
+- 因候选量增加而降低精选门槛或增加正文材料数量。

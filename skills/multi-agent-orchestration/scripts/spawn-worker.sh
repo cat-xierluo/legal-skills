@@ -178,6 +178,7 @@ EFFECTIVE_ALLOWED_SHELL_COMMANDS=()
 ALLOW_PROMPT_ONLY_INSTALL_GUARD=0
 INSTALL_GUARD_DEGRADATION_SOURCE=""
 INSTALL_GUARD_MODE="hook"
+SHELL_POLICY="exact_allowlist"
 INSTALL_AUTH_JSON=""
 AUTHORITY_RECEIPT_FILE=""
 AUTHORITY_RECEIPT_SHA256=""
@@ -385,7 +386,7 @@ METADATA_FILE="$SESSION_CONTEXT/METADATA.json"
 INSTALL_AUTH_FILE="$SESSION_CONTEXT/INSTALL_AUTHORIZATION.json"
 if [ -z "$COMMAND" ]; then
   case "$WORKER_BACKEND_CANONICAL" in
-    claude-code) COMMAND="claude" ;;
+    claude-code) COMMAND="claude --permission-mode auto" ;;
     codex) COMMAND="codex" ;;
     codebuddy) COMMAND="codebuddy" ;;
     qoderwork-cn) COMMAND="qoderclicn" ;;
@@ -650,6 +651,38 @@ if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
   fi
 fi
 
+# A Claude Code worker explicitly launched in auto mode delegates ordinary Bash
+# decisions to Claude's native classifier and settings.  Keep this mode tied to
+# the actual command and a live local hook; all other backends/modes retain the
+# exact Shell allowlist.  The authorization snapshot freezes the selected mode.
+claude_command_uses_auto_mode() {
+  python3 - "$COMMAND" <<'PY'
+import os, shlex, sys
+try:
+    tokens = shlex.split(sys.argv[1], posix=True)
+except ValueError:
+    raise SystemExit(1)
+claude_positions = [index for index, token in enumerate(tokens)
+                    if os.path.basename(token) == "claude"]
+if len(claude_positions) != 1:
+    raise SystemExit(1)
+modes = []
+for position in range(claude_positions[0] + 1, len(tokens)):
+    value = tokens[position]
+    if value == "--permission-mode" and position + 1 < len(tokens):
+        modes.append(tokens[position + 1])
+    elif value.startswith("--permission-mode="):
+        modes.append(value.split("=", 1)[1])
+raise SystemExit(0 if modes == ["auto"] else 1)
+PY
+}
+if [ "$INSTALL_GUARD_MODE" = "hook" ] && \
+   { [ "$WORKER_BACKEND" = "claude-code" ] || [ "$WORKER_BACKEND" = "claude_code" ]; } && \
+   claude_command_uses_auto_mode; then
+  SHELL_POLICY="claude_auto"
+fi
+printf 'SPAWN_WORKER_SHELL_POLICY: %s\n' "$SHELL_POLICY"
+
 run() {
   printf 'SPAWN_WORKER_RUN: %s\n' "$*"
   [ "$DRY_RUN" -eq 1 ] || "$@"
@@ -853,6 +886,7 @@ write_install_authorization() {
   INSTALL_AUTH_JSON=$(jq -cn \
     --arg schema "multi-agent-orchestration.install-authorization.v1" \
     --arg policy "deny_by_default" \
+    --arg shell_policy "$SHELL_POLICY" \
     --arg source "$INSTALL_AUTHORIZATION_SOURCE" \
     --arg verification_source "$VERIFY_COMMAND_SOURCE" \
     --argjson verification_required "$REQUIRE_VERIFICATION" \
@@ -863,6 +897,7 @@ write_install_authorization() {
     '{
       schema: $schema,
       policy: $policy,
+      shell_policy: $shell_policy,
       authorization_source: $source,
       authorized_commands: $commands,
       allowed_shell_commands: $shell_commands,

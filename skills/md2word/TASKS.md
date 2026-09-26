@@ -2,6 +2,16 @@
 
 ## 已完成
 
+### Task-016：修复水平线在 Word 中折成两行
+
+- **状态**：✅ 已完成（PR #183，待合并；分支 `fix/md2word-hr-line-wrap`，commit `cd196cfc`）
+- **目标**：消除 Markdown `---`/`***`/`___` 分割线在 Word 中因字符宽度超出版心折成两行的缺陷，改为在任何阅读器中都单行、自适应栏宽的渲染。
+- **范围**：`add_horizontal_line()` border/character 双模式、`_make_hr_border_paragraph()`、6 个预设 yaml + config-template + config.py 默认值 + extract_template_config.py、config-reference、SKILL.md v1.3.8、CHANGELOG、README 最近更新区、回归测试（新增 2 + 改写 2 处断言）。
+- **非目标**：不修改 character 模式既有语义；不调整版心/页边距；不引入新依赖；不动主工作区与他人未提交改动。
+- **验收证据**：`python3 -m unittest test_regressions` 26/26 通过；`py_compile` 4 文件通过；CI harness-regression/Skill Lint Harness SUCCESS。端到端：真实法律文档《260923 王丽英职务侵占案 事实梳理（刑事律师交接）.md》（4 页、4 表、2 条 `---`）修复后转换，LibreOffice 渲染 PDF/PNG 逐页目检，两条分割线均单条完整细线、恰好铺满正文栏、与页边距对齐；修复前同一管线复现折行（第一行占满栏宽 + 第二行居中残段）。
+- **遗留**：单文件模式下 `-o`/`--out` 参数不生效（只认第二个位置参数，见 `main()` L1387 `output_file = args.output if args.output else generate_output_filename(md_file)`），施工时实际踩到；待另开任务修复。
+- **关联**：DEC-023；用户 2026-09-23 转换王丽英事实梳理稿时踩到。
+
 ### Task-015：修复全书合并的章节本地图片路径
 
 - **状态**：✅ 已完成（PR #104）

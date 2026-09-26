@@ -889,13 +889,31 @@ def create_word_document(md_file_path, output_path, template_file=None, config: 
         # 获取body元素
         body = doc._element.body
 
-        # 记住sectPr的位置和内容
+        # 记住sectPr：优先取 body 直挂的节属性；部分模板（如律所模板）把唯一 sectPr
+        # 放在末段落的 pPr 内，此时直接 find 会取不到，清空后文档将失去页面设置，
+        # 导致 doc.sections 为空并在后续 add_table 时抛 IndexError。
         sectPr = body.find(qn('w:sectPr'))
+        nested_sectPr = None
+        if sectPr is None:
+            for p in body.iter(qn('w:p')):
+                pPr = p.find(qn('w:pPr'))
+                if pPr is not None:
+                    candidate = pPr.find(qn('w:sectPr'))
+                    if candidate is not None:
+                        nested_sectPr = candidate
+                        break
 
         # 移除body中的所有子元素（除了sectPr）
         for child in list(body):
             if child.tag != qn('w:sectPr'):
                 body.remove(child)
+
+        # 嵌套写法：将 sectPr 提升为 body 级，保留页面设置与页眉页脚引用
+        if nested_sectPr is not None:
+            parent = nested_sectPr.getparent()
+            if parent is not None:
+                parent.remove(nested_sectPr)
+            body.append(nested_sectPr)
 
         use_template_headers = True
         print("✅ 已清空模板内容，保留页眉页脚")
