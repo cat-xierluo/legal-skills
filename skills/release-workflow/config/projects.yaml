@@ -1,130 +1,180 @@
-# 项目 Release 配置
-# 发布时读取此文件获取对应项目的构建和产物配置
-
 folia:
   repo: cat-xierluo/Folia
   type: tauri
   auto_update: true
-  # Windows 安装格式：exe 或 msi，不要两者都发布
   windows_format: exe
   platforms:
-    - macos-aarch64
-    - macos-x64
-    - windows-x64
-  # 排除的产物（支持 glob 模式）
+  - macos-aarch64
+  - macos-x64
+  - windows-x64
   exclude_assets:
-    - "*.msi"
-    - "*.msi.sig"
+  - '*.msi'
+  - '*.msi.sig'
   release_notes:
     profile: desktop-standard
     language: zh-CN
     required_sections:
-      - Highlights
-      - 下载
+    - Highlights
+    - 下载
     optional_sections:
-      - 新增
-      - 变更
-      - 修复
+    - 新增
+    - 变更
+    - 修复
     always_include:
-      - no_duplicate_title
-      - summary_blockquote
-      - full_changelog_link
-      - auto_update_assets_note
-      - macos_gatekeeper_warning
-      - contributor_attribution
+    - no_duplicate_title
+    - summary_blockquote
+    - full_changelog_link
+    - auto_update_assets_note
+    - macos_gatekeeper_warning
+    - contributor_attribution
     warning:
       include_when:
-        - macos_unsigned
-        - terminal_command_required
-        - breaking_change
-        - security_notice
-
+      - macos_unsigned
+      - terminal_command_required
+      - breaking_change
+      - security_notice
 funes:
   repo: cat-xierluo/Funes
   type: tauri
   auto_update: true
   windows_format: exe
   platforms:
-    - macos-aarch64
-    - macos-x64
-    - windows-x64
-
+  - macos-aarch64
+  - macos-x64
+  - windows-x64
 faropdf:
   repo: cat-xierluo/FaroPDF
   type: tauri
   auto_update: true
-  # FaroPDF 跟 Folia 保持一致：Windows 单 .exe（不发 .msi）
   windows_format: exe
   platforms:
-    - macos-aarch64
-    - macos-x64
-    - windows-x64
+  - macos-aarch64
+  - macos-x64
+  - windows-x64
   exclude_assets:
-    - "*.msi"
-    - "*.msi.sig"
+  - '*.msi'
+  - '*.msi.sig'
   release_notes:
     profile: desktop-standard
     language: zh-CN
     required_sections:
-      - Highlights
-      - 下载
+    - Highlights
+    - 下载
     optional_sections:
-      - 新增
-      - 变更
-      - 修复
+    - 新增
+    - 变更
+    - 修复
     always_include:
-      - no_duplicate_title
-      - summary_blockquote
-      - full_changelog_link
-      - auto_update_assets_note
-      - macos_gatekeeper_warning
-      - contributor_attribution
+    - no_duplicate_title
+    - summary_blockquote
+    - full_changelog_link
+    - auto_update_assets_note
+    - macos_gatekeeper_warning
+    - contributor_attribution
     warning:
       include_when:
-        - macos_unsigned
-        - terminal_command_required
-        - breaking_change
-        - security_notice
-
-# === legal-skills: monorepo-many-skills 发布模式 ===
-# 一次性给仓库内 N 个独立 skill 各打一个 zip,挂到 GitHub Release。
-# 与 folia/funes/faropdf 的「单应用 build matrix」模式并列,通过 type 字段区分。
+      - macos_unsigned
+      - terminal_command_required
+      - breaking_change
+      - security_notice
 legal-skills:
   repo: cat-xierluo/legal-skills
   type: monorepo-skills
   skills_root: skills
   output_dir: pack-skills
   exclude_globs:
-    - "**/archive/**"
-    - "**/downloads/**"
-    - "**/output/**"
-    - "**/DECISIONS.md"
-    - "**/TASKS.md"
-    - "**/.claude/**"
-    - "**/.playwright-data/**"
-    - "**/__pycache__/**"
-    - "**/node_modules/**"
+  - '**/archive/**'
+  - '**/downloads/**'
+  - '**/output/**'
+  - '**/DECISIONS.md'
+  - '**/TASKS.md'
+  - '**/.claude/**'
+  - '**/.playwright-data/**'
+  - '**/__pycache__/**'
+  - '**/node_modules/**'
   readme_download_column: true
   release_notes:
     profile: monorepo-skills
     language: zh-CN
     required_sections:
-      - 本版包含
-      - 下载
+    - 本版包含
+    - 下载
     optional_sections:
-      - skill 更新明细
-  # generate-release-notes.py 用的项目级个性化配置
+    - skill 更新明细
   notes:
-    project_label: "Legal Skills"
-    intro_template: "本版包含 **{total} 个 skill** 的最新 zip,覆盖法律 AI 协作全流程(内容获取 / 内容处理 / 法律专业应用 / 开发工具)。"
+    project_label: Legal Skills
+    intro_template: 本版包含 **{total} 个 skill** 的最新 zip,覆盖法律 AI 协作全流程(内容获取 / 内容处理 / 法律专业应用
+      / 开发工具)。
     recent:
-      source_marker: "🆕 最近更新的 Skill"
+      source_marker: 🆕 最近更新的 Skill
       top_n: 5
     install:
-      single_label: "skill"
-      full_clone_prompt: "请帮我从 GitHub 安装 legal-skills 技能集合:{repo_url}"
-      single_note: "3. 解压后直接得到 `<skill>/` 文件夹,复制到 Agent 的 skills 目录即可"
+      single_label: skill
+      full_clone_prompt: 请帮我从 GitHub 安装 legal-skills 技能集合:{repo_url}
+      single_note: 3. 解压后直接得到 `<skill>/` 文件夹,复制到 Agent 的 skills 目录即可
   tag:
     scheme: calver
-    format: "vYYYY.MM.DD"
+    format: vYYYY.MM.DD
     example: v2026.06.30
+fathom:
+  repo: cat-xierluo/fathom
+  type: tauri
+  auto_update: true
+  platforms:
+  - macos-aarch64
+  exclude_assets: []
+  release_notes:
+    profile: desktop-standard
+    language: zh-CN
+    required_sections:
+    - Highlights
+    - 下载
+    optional_sections:
+    - 新增
+    - 变更
+    - 修复
+    always_include:
+    - no_duplicate_title
+    - summary_blockquote
+    - full_changelog_link
+    - auto_update_assets_note
+    - macos_gatekeeper_warning
+    - contributor_attribution
+    warning:
+      include_when:
+      - macos_unsigned
+      - terminal_command_required
+      - breaking_change
+      - security_notice
+  project_notes:
+    platform_scope: macOS only (Apple Silicon arm64); Intel Mac 在计划中；Windows 不在当前计划（DEC-026）
+    signing: 未签名 + DMG 内放行指引（DEC-022）
+    upgrade_path: v0.3.0 → v0.3.1 须手动下载覆盖一次（dev 公钥验不了生产签名）；v0.3.1+ 应用内更新启用
+  release_rules:
+    发布顺序:
+    - tag 推送触发 workflow（Draft，绝不跳过 draft 直发）
+    - 构建全绿后 verify_release_candidate.sh --release <tag> 六项校验全过
+    - verify_update_manifest.py --manifest latest.json --allow-single-platform 通过
+    - 按 desktop-standard 模板写 release notes 后 gh release edit
+    - 用户确认后才 publish（publish 前更新源不可达属预期）
+    发版前门禁:
+    - ci_pytest.sh 全量（当前断言 720，计数变更须四处同步）
+    - check_version_consistency.sh ok（单一版本源四处：fathom/__init__.py / Cargo.toml / Cargo.lock
+      / tauri.conf.json）
+    - 版本 bump 后字面锚检查：test_version_consistency 已动态化（CURRENT 常量）、build_helper 身份面断言已动态化——新增测试/脚本禁止硬编码版本号
+    - verify_frontend_refresh.cjs（当前 132）+ ci_browser_checks.sh 39
+    产物特例:
+    - Tauri v2 updater 产物名为 <App>.app.tar.gz（不带版本）——workflow 上传前重命名为 Fathom_<版本>_aarch64.app.tar.gz
+      以过 040A 清单工具的版本-产物守卫
+    - checksums.txt 含 DMG+tar.gz 两条（校验器按文件名取记录）
+    - 仅 arm64（--allow-single-platform）；Intel/Windows 不在计划（DEC-026）
+    已知陷阱（v0.3.1 六轮实战）:
+    - git push 代理挂（127.0.0.1:1082 拒连）时直连：git -c http.proxy= -c https.proxy= push
+    - gh pr merge 偶发 TLS/EOF：重试；持续失败走本地 git merge + push（PR 自动标 MERGED）
+    - GitHub mergeability 计算有延迟：UNKNOWN 时等 5-8 秒重查
+    - 编辑脚本改文件必须读/改/写三步分离（open(w) 先清空文件的求值陷阱）
+    - release.yml 的 shell 里 $() 命令替换内嵌双引号段会切碎参数——用相对路径+完整闭合写法（与版本门同款）
+    - '红态基线演示测试（test_zz_red_demo）依赖历史提交——CI checkout 必须 fetch-depth: 0'
+    notes_规范补充: v0.3.1 的 Release notes 为范本（摘要 blockquote + Highlights 分条 + 下载表 + 放行指引
+      + 验证 + 已知限制 + 升级路径）；未签名提示与 xattr -cr 命令必含；语言 zh-CN
+    升级路径提醒: v0.3.0 及更早用户须手动下载覆盖一次（dev 公钥验不了生产签名）；v0.3.1+ 应用内更新——首个真实 N→N+1 实测待下一版触发

@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
   version: "1.8.7"
@@ -147,6 +147,8 @@ team-feature-a
 完整的单 Worker 自动清理、squash/rebase expected-tip 删除、批量 stale 审计、长期功能线关闭与红线统一读取 `references/branch-lifecycle-and-cleanup.md`。
 
 ### Worktree（工作树）
+
+本地仓库（maoscripts 等）的 worktree→PR→merge 标准全流程 SOP——含 Node/Raycast 扩展附加步骤与「不跳步」硬约束——见 `references/local-worktree-sop.md`（原独立 skill local-worktree-pr-workflow，2026-09-20 并入）。
 
 #### 开 worktree 前的必做 3 查（防止 base 过期导致 PR 报 not mergeable）
 
@@ -977,6 +979,8 @@ git checkout main
 ```
 
 ## 11. GitHub Actions 额度治理（CI 停挂止血）
+
+**与 release-workflow 的职责边界**：本节负责日常 CI/Actions 配额治理——停挂止血、workflow_dispatch 化、仓级总闸与恢复。release-workflow 只在发版流程内做 CI 构建监控与配额红灯检查（打 tag 前的成本约束），不做治理动作。用户报「CI 分钟耗尽 / 停挂 / 配额告急」时以本节为准；发版语境下的 CI 故障先读 release-workflow 的发布门禁与 `references/ci-troubleshooting.md`。
 
 ### 场景
 

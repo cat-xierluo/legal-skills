@@ -113,7 +113,7 @@ def _require_text(errors, obj, key, path):
 
 def _require_enum(errors, obj, key, allowed, path):
     value = obj.get(key)
-    if value not in allowed:
+    if not isinstance(value, str) or value not in allowed:
         errors.append(_error(f"{path}.{key}", f"必须是 {sorted(allowed)} 之一"))
 
 
@@ -122,6 +122,8 @@ def validate_research_plan(plan):
     errors = []
     if not isinstance(plan, dict):
         return [_error("$", "顶层必须是 JSON 对象")]
+    if plan.get("schema_version") == "1.1" and plan.get("mode") == "focused":
+        return _validate_focused_plan(plan)
     if plan.get("schema_version") != SCHEMA_VERSION:
         errors.append(_error("$.schema_version", f"必须为 {SCHEMA_VERSION}"))
     _require_text(errors, plan, "case_id", "$")
@@ -360,6 +362,47 @@ def validate_research_plan(plan):
     return errors
 
 
+def _validate_focused_plan(plan):
+    """报告阶段的轻量记录；不要求伪造矩阵、反向命题或未执行的查询。"""
+    errors = []
+    _require_text(errors, plan, "case_id", "$")
+    brief = plan.get("research_brief")
+    if not isinstance(brief, dict):
+        errors.append(_error("$.research_brief", "必须是对象"))
+    else:
+        _require_text(errors, brief, "research_goal", "$.research_brief")
+        if not _string_list(brief.get("dispute_focus")):
+            errors.append(_error("$.research_brief.dispute_focus", "必须是非空字符串数组"))
+    ids = {}
+    for key, required in (("propositions", ("id", "statement")),
+                          ("queries", ("id", "proposition_id", "interface", "query_expression"))):
+        rows = plan.get(key)
+        ids[key] = set()
+        if not isinstance(rows, list) or not rows:
+            errors.append(_error(f"$.{key}", "必须是非空数组"))
+            continue
+        for index, row in enumerate(rows):
+            path = f"$.{key}[{index}]"
+            if not isinstance(row, dict):
+                errors.append(_error(path, "必须是对象"))
+                continue
+            for field in required:
+                _require_text(errors, row, field, path)
+            row_id = row.get("id")
+            if _text(row_id):
+                if row_id in ids[key]:
+                    errors.append(_error(f"{path}.id", "id 重复"))
+                ids[key].add(row_id)
+            if key == "propositions":
+                _require_enum(errors, row, "importance", IMPORTANCE_LEVELS, path)
+            else:
+                if not _text(row.get("proposition_id")) or row["proposition_id"] not in ids["propositions"]:
+                    errors.append(_error(f"{path}.proposition_id", "未知命题"))
+                if not isinstance(row.get("filters"), dict):
+                    errors.append(_error(f"{path}.filters", "必须是对象；未设置筛选时使用 {}"))
+    return errors
+
+
 def validate_selected_sources(selection, plan):
     """校验 Agent 精选清单及其与 research plan 的映射。"""
     errors = []
@@ -566,11 +609,11 @@ def render_support_table(selection):
     return "\n".join(rows)
 
 
-def render_selected_sections(selection):
+def render_selected_sections(selection, section_number=6):
     groups = [
-        ("### 6.1 规范性法律依据", NORMATIVE_SOURCE_TYPES),
-        ("### 6.2 精选司法案例", CASE_SOURCE_TYPES),
-        ("### 6.3 其他核实材料", {"other"}),
+        (f"### {section_number}.1 规范性法律依据", NORMATIVE_SOURCE_TYPES),
+        (f"### {section_number}.2 精选司法案例", CASE_SOURCE_TYPES),
+        (f"### {section_number}.3 其他核实材料", {"other"}),
     ]
     sections = []
     ordered = sorted_sources(selection)
@@ -608,6 +651,11 @@ def render_selected_sections(selection):
 
 
 def render_subsumption_summary(plan):
+    if plan.get("mode") == "focused" and plan.get("schema_version") == "1.1":
+        return "\n".join(
+            f"- {_md_cell(item.get('id'))}：{_md_cell(item.get('statement'))}"
+            for item in plan.get("propositions", [])
+        )
     rows = [
         "| 争点／要件 | 法律化事实与证明状态 | 暂定涵摄 | 检索缺口或补充路径 |",
         "|---|---|---|---|",
@@ -637,7 +685,7 @@ def render_query_trace(plan):
         filters = json.dumps(query.get("filters", {}), ensure_ascii=False, sort_keys=True)
         rows.append(
             f"| {_md_cell(query.get('id'))} | "
-            f"{_md_cell(str(query.get('proposition_id')) + ' / ' + str(query.get('research_gap_id')))} | "
+            f"{_md_cell(str(query.get('proposition_id')) + ' / ' + str(query.get('research_gap_id', '—')))} | "
             f"{_md_cell(query.get('interface'))} | {_md_cell(query.get('query_expression'))} | `{_md_cell(filters)}` |"
         )
     return "\n".join(rows)
