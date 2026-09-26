@@ -9,6 +9,10 @@
 | GET | `/health` | 健康检查 |
 | POST | `/transcribe` | 转录单个文件 |
 | POST | `/batch_transcribe` | 批量转录目录 |
+| POST | `/speaker/register` | 认领注册说话人声纹 |
+| GET | `/speaker/list` | 列出已注册说话人 |
+| POST | `/speaker/remove` | 删除已注册说话人 |
+| POST | `/speaker/test` | 音频声纹与库比对 |
 
 ## 1. 健康检查
 
@@ -71,6 +75,7 @@ Content-Type: application/json
 | `quantize` | boolean | 否 | ONNX 模式是否启用 INT8 量化 |
 | `hotwords` | string[] | 否 | MOSS-MLX 热词，最多 30 个；FunASR 路径会明确报不支持 |
 | `extract_slides` | boolean/null | 否 | 视频默认自动截图；`false` 显式跳过；`true` 显式提取 |
+| `slide_threshold` | number/null | 否 | 场景检测阈值；省略（null）时使用服务默认 20.0（与提取器/CLI 同一权威源），显式传入时覆盖 |
 | `include_summary_prompt` | boolean | 否 | 是否准备 AI 总结提示词，默认 true |
 
 > 保留的 `paraformer-onnx` 单人和多人路径都会先使用 ONNX VAD 分段，再补做 ONNX 文本清理、标点恢复和句子级时间戳映射；`diarize=false` 时使用全局标点恢复，`diarize=true` 时使用逐段标点并额外执行 CAM++ 说话人聚类。
@@ -111,6 +116,9 @@ Content-Type: application/json
 | `timings` | object | 阶段墙钟耗时（秒）；`total_s` 为请求整体耗时 |
 | `speaker_scope` | string/null | MOSS 返回 `global`（文件内匿名标签）或 `none` |
 | `segments` | array/null | MOSS 结构化段：`start/end` 秒、`speaker`、`text` |
+| `speaker_identification` | object/null | MOSS diarize 时逐人返回：文件内标签 → `{"name","score"}`（score 为归一化余弦相似度，达阈值才命中）或 `null`；空库全部为 `null` |
+| `speaker_states` | object/null | MOSS diarize 时逐人返回：`{"status": "matched"/"unknown"/"insufficient_audio"/"extraction_failed"/"disabled", "name", "detail"}`；认领流程只对 `unknown` 执行 |
+| `speaker_embeddings` | object/null | MOSS：文件内标签 → 单位声纹向量（192 维，认领注册用；默认输出不倾倒给人类终端） |
 | `error` | string | 错误信息（仅失败时返回） |
 
 **响应示例（失败）**
@@ -301,8 +309,8 @@ AI 总结功能会生成：
 ### 4.4 提示词特点
 
 - 专门针对中文口语化对话优化
-- 保留发言人上下文和对话流程
-- 自动识别发言人顺序（speaker_0, speaker_1 等）
+- 保留发言人上下文和对话流程（提取文本时保留每行的发言标签归属）
+- 要求 `speaker_order` 逐字使用逐字稿行首的发言标签（`发言人N` 或实名），不得改写、合并或新造
 - 结构化 JSON 输出便于解析和格式化
 
 ### 4.5 示例
@@ -326,7 +334,7 @@ AI 总结功能会生成：
   "full_summary": "至少400字，分成2-3段，交代背景、问题、关键事实、数据、风险与行动建议",
   "speaker_summary": [
     {
-      "speaker_order": "发言人1",
+      "speaker_order": "逐字使用逐字稿中行首的发言标签，例如 发言人1 或实名",
       "speaker_name": "如能识别请写姓名，否则写未知",
       "summary": "至少180字，涵盖该发言人的观点、依据、数据、态度与潜在影响"
     }
@@ -335,7 +343,10 @@ AI 总结功能会生成：
   "keywords": ["5-8个关键词"]
 }
 
-请确保逐字稿中出现的每一位发言人（发言人1、发言人2……）都提供总结，不得遗漏或虚构。
+要求：
+- speaker_summary 必须覆盖逐字稿中出现的每一位发言人，不得遗漏、重复或虚构。
+- speaker_order 必须逐字使用逐字稿行首的发言标签（如"发言人1"、"杨卫薪"），不得改写、合并或新造标签。
+- 每条总结只基于该发言人的实际发言，不得把他人观点归属给该发言人。
 
 以下是完整文本：
 [转录文本内容...]
@@ -343,3 +354,51 @@ AI 总结功能会生成：
 请输出 JSON 格式的总结。
 ============================================================
 ```
+
+## 5. 声纹端点
+
+声纹库文件 `assets/speaker-profiles.json` 属本地个人数据（.gitignore 排除）。读写由服务与 CLI 共用的存储层保护：注册向量按当前模型（CAM++，192 维）显式校验；写入为原子替换并加进程间锁；库损坏时读路径降级告警、写路径拒绝并保留原件；库与锁文件仅当前用户可读写。
+
+### POST /speaker/register
+
+认领注册：把转录响应 `speaker_embeddings` 中某标签的向量以指定名称写入声纹库。同名重复注册视为重新认领，覆盖旧向量。
+
+```bash
+curl -s -X POST http://127.0.0.1:8765/speaker/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "杨律师", "embedding": [...192 维数组...], "source_file": "meeting.m4a", "source_label": "S01"}'
+```
+
+| 参数 | 类型 | 必需 | 描述 |
+|------|------|------|------|
+| `name` | string | 是 | 说话人名称（非空） |
+| `embedding` | number[] | 是 | 声纹向量；必须为当前模型维度（192）、数值有限、范数有效 |
+| `source_file` | string | 否 | 认领来源录音名 |
+| `source_label` | string | 否 | 认领来源文件内标签（如 S01） |
+
+响应：`{"success": true, "name": "...", "replaced": bool, "total": n}`。
+
+**错误语义**：`400` = name 为空或向量校验失败（维度不符/含 NaN·Inf/float32 溢出/零向量，detail 给出具体原因）；`409` = 声纹库损坏，拒绝写入以保护原有记录（此时应人工检查库文件，不会被静默当作空库覆盖）。
+
+### GET /speaker/list
+
+列出声纹库（不含向量本体）。响应含 `total`、`profiles`（name/created_at/source_file/source_label/dim/model）及坏条目信息：`isolated_count`、`isolated_issues`（坏条目原因，不含向量原文）、`corrupt`（库整体是否损坏）。
+
+### POST /speaker/remove
+
+按名称删除；`404` = 无此说话人；`409` = 库损坏拒绝写入。历史坏条目不会被删除操作顺带清理。
+
+### POST /speaker/test
+
+提取一段音频的声纹并与库比对。`score` 为归一化向量的**余弦相似度（声纹相似度）**，不是经过校准的身份正确概率，也不是证据级身份认定。
+
+响应字段：`scores`（每个注册名一条，向量维度不一致时 `score` 为 null 并附 note）、`best`（最高分候选）、`best_is_match`（best 是否达到阈值）、`identified`（达到阈值时为 `{"name","score"}`，否则 null——最高分低于阈值时明确"未识别"，不把最佳候选当命中）、`threshold`、`note`。
+
+### 认领流程（Agent）
+
+1. 转录响应中检查 `speaker_states`：只对 `unknown`（有声纹、未达阈值）执行认领；
+2. 按 `segments` 为每位 `unknown` 说话人生成叙述，向用户确认身份；
+3. 用户同意长期注册后注册：推荐入口为 `python3 scripts/speaker_registry.py claim <名字> --result <结果JSON> --label <标签>`（确定性取向量），或直接 POST `/speaker/register`；
+4. `insufficient_audio`/`extraction_failed`/`disabled` 无合格向量或未启用，不得引导用户注册——前者只能根据用户说明在 Markdown 中为本稿标注。
+
+CLI 等价：`speaker_registry.py list / remove / claim / test`；`remove` 与 `list` 直接读写库文件无需服务，`claim`/`test` 需服务运行。声纹属敏感个人信息：注册本人无合规障碍；注册客户或第三方须先取得其单独同意。
