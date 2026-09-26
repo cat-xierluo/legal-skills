@@ -220,6 +220,12 @@ def _is_safe_git_push_args(args: list[str]) -> bool:
     for arg in args:
         if arg in GIT_PUSH_FORBIDDEN_ARGS:
             return False
+        # Git accepts clustered short flags: `-qf` and `-vd` must retain the
+        # same force/delete denial as standalone `-f` and `-d`.
+        if arg.startswith("-") and not arg.startswith("--") and any(
+            flag in arg[1:] for flag in ("f", "d")
+        ):
+            return False
         if (
             arg.startswith("--force-with-lease=")
             or arg.startswith("--force-if-includes=")
@@ -412,17 +418,44 @@ def claude_auto_protected_shell_reason(command: str, depth: int = 0) -> str | No
     """
     if depth > 3:
         return "shell wrapper nesting exceeds the protected-command limit"
+    # Unlike the exact-allowlist parser, the auto classifier must inspect
+    # commands with ordinary redirects (including `2>&1 | tail`).  Returning
+    # no decision on a parse failure would let a protected operation through.
+    if "\n" in command or "\r" in command:
+        return "multiline shell commands require explicit PM authority"
     tokens = _tokenize_worker_command(command)
+    if tokens is None:
+        return "shell command cannot be parsed for protected operations"
     if not tokens:
         return None
-    segments = _split_worker_segments(tokens)
-    if segments is None:
-        return None
+    if any(token in {"(", ")", "<", "<<", "<<<", ";;"}
+           or token.startswith(("$(", "<(", ">("))
+           or "`" in token for token in tokens):
+        return "opaque shell syntax requires explicit PM authority"
+    segments = [[]]
+    for token in tokens:
+        if token in SEGMENT_SEPARATORS:
+            segments.append([])
+        else:
+            segments[-1].append(token)
     for segment in segments:
+        # Assignment and leading redirect prefixes precede the executable in
+        # POSIX shells.  They must not hide `git` or `gh` from this check.
+        while segment:
+            if re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*=.*", segment[0]):
+                segment = segment[1:]
+                continue
+            offset = 1 if segment[0] in {"0", "1", "2"} and len(segment) > 1 else 0
+            if len(segment) > offset + 1 and segment[offset] in {">", ">>", ">&"}:
+                segment = segment[offset + 2:]
+                continue
+            break
         if not segment:
             continue
         program = os.path.basename(segment[0])
         args = segment[1:]
+        if program in {"exec", "nohup", "time"} and args:
+            program, args = os.path.basename(args[0]), args[1:]
         if program == "sudo":
             return "privilege elevation is outside worker auto authority"
         if program in {"env", "command", "builtin"}:
@@ -478,9 +511,18 @@ def claude_auto_protected_shell_reason(command: str, depth: int = 0) -> str | No
             if subcommand == "branch" and any(arg in {"-D", "--delete", "--force"} for arg in rest):
                 return "branch deletion requires PM control"
         if program == "gh" and args:
-            if args[0] == "api" or tuple(args[:2]) in {
+            # `gh -R owner/repo pr merge` is the same mutation as the direct
+            # form; global repo selectors precede the command group.
+            while args:
+                if args[0] in {"-R", "--repo"} and len(args) > 1:
+                    args = args[2:]
+                elif args[0].startswith(("--repo=", "-R=")):
+                    args = args[1:]
+                else:
+                    break
+            if args and (args[0] == "api" or tuple(args[:2]) in {
                 ("repo", "sync"), ("repo", "delete"), ("pr", "merge")
-            }:
+            }):
                 return "GitHub mutation requires PM control"
     return None
 
