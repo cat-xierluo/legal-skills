@@ -19,6 +19,11 @@ from pathlib import Path
 
 import numpy as np
 
+try:
+    from . import speaker_store
+except ImportError:
+    import speaker_store
+
 
 DEFAULT_MODEL_ID = "OpenMOSS-Team/MOSS-Transcribe-Diarize"
 SAMPLE_RATE = 16000
@@ -286,44 +291,115 @@ def _link_speakers(chunks: list[tuple[Path, list[dict]]], speaker_model) -> tupl
     return linked, global_embeddings
 
 
-def _identify_speakers(embeddings: dict[str, np.ndarray], speaker_profiles: list[dict]) -> dict[str, dict | None]:
-    """把文件内说话人标签与本地声纹库比对；分数需达阈值，同一注册名只命中一个标签。"""
+def _identify_speakers(embeddings: dict[str, np.ndarray], speaker_profiles: list[dict]
+                       ) -> tuple[dict[str, dict | None], list[str]]:
+    """把文件内说话人标签与本地声纹库比对；分数需达阈值，同一注册名只命中一个标签。
+
+    声纹库历史条目与比对计算都做逐条防御：坏条目/计算异常只隔离该条或该标签，
+    进入 issues 告警，绝不让识别附加步骤抛错阻断转录。
+    返回 (identification: 标签 → {"name","score"} 或 null, issues: 隔离原因)。
+    """
     identification: dict[str, dict | None] = {label: None for label in embeddings}
+    issues: list[str] = []
     registry = []
     for profile in speaker_profiles or []:
-        name = str(profile.get("name", "")).strip()
-        raw = np.asarray(profile.get("embedding") or [], dtype=np.float32).reshape(-1)
-        norm = float(np.linalg.norm(raw))
-        if name and raw.size and norm > 1e-8:
+        try:
+            if not isinstance(profile, dict):
+                raise ValueError("条目不是对象")
+            name = str(profile.get("name", "")).strip()
+            if not name:
+                raise ValueError("条目缺少有效 name")
+            raw = np.asarray(profile.get("embedding") or [], dtype=np.float32).reshape(-1)
+            if raw.size != speaker_store.EXPECTED_EMBEDDING_DIM:
+                raise ValueError(
+                    f"条目向量维度 {raw.size} 与当前模型 {speaker_store.EXPECTED_EMBEDDING_DIM} 不符"
+                )
+            norm = float(np.linalg.norm(raw.astype(np.float64)))
+            if raw.size == 0 or not np.all(np.isfinite(raw)) or not np.isfinite(norm) or norm <= 1e-8:
+                raise ValueError("条目向量无效（数值/范数）")
             registry.append((name, raw / norm))
+        except (ValueError, TypeError) as exc:
+            label_hint = str(profile.get("name", "<未命名>"))[:50] if isinstance(profile, dict) else "<非对象条目>"
+            issues.append(f"声纹库条目已隔离（{label_hint}）: {exc}")
     candidates = []
     for label, vector in embeddings.items():
-        norm = float(np.linalg.norm(vector))
-        if norm <= 1e-8 or not registry:
-            continue
-        unit = vector / norm
-        name, score = max(
-            ((name, float(np.dot(unit, ref))) for name, ref in registry),
-            key=lambda item: item[1],
-        )
-        candidates.append((score, label, name))
+        try:
+            norm = float(np.linalg.norm(vector.astype(np.float64)))
+            if norm <= 1e-8 or not np.isfinite(norm) or not np.all(np.isfinite(vector)):
+                issues.append(f"说话人 {label} 声纹向量无效，本次保持匿名")
+                continue
+            if not registry:
+                break
+            unit = vector / norm
+            name, score = max(
+                ((name, float(np.dot(unit, ref))) for name, ref in registry),
+                key=lambda item: item[1],
+            )
+            if not np.isfinite(score):
+                issues.append(f"说话人 {label} 声纹比对出现非有限分数，本次保持匿名")
+                continue
+            candidates.append((score, label, name))
+        except (ValueError, TypeError) as exc:
+            issues.append(f"说话人 {label} 声纹比对失败，本次保持匿名: {exc}")
     used_names = set()
     for score, label, name in sorted(candidates, reverse=True):
         if score >= SPEAKER_IDENTIFY_THRESHOLD and name not in used_names:
             identification[label] = {"name": name, "score": round(score, 4)}
             used_names.add(name)
-    return identification
+    return identification, issues
+
+
+def _build_speaker_states(all_labels: list[str], identification: dict,
+                          unit_embeddings: dict[str, np.ndarray],
+                          extraction_failed: bool = False,
+                          identify_failed: bool = False,
+                          disabled_reason: str | None = None) -> dict[str, dict]:
+    """按稳定 speaker ID 构建完整识别状态（Task-019 契约）。
+
+    状态语义：
+    - matched            命中注册声纹（name 为注册名）
+    - unknown            有合格声纹向量但未达阈值（可认领注册）
+    - insufficient_audio 总发言不足 3 秒，未提取声纹（仅可为本稿命名，不能持久注册）
+    - extraction_failed  声纹提取/识别步骤失败（本次无法识别/认领）
+    - disabled           说话人声纹识别未启用（fast / 显式关闭提取 / CAM++ 模型不可用）
+    """
+    states: dict[str, dict] = {}
+    for label in all_labels:
+        hit = identification.get(label)
+        if hit:
+            states[label] = {"status": "matched", "name": hit["name"]}
+        elif disabled_reason:
+            states[label] = {"status": "disabled", "name": None, "detail": disabled_reason}
+        elif identify_failed:
+            states[label] = {"status": "extraction_failed", "name": None,
+                             "detail": "声纹识别步骤失败，本次保持匿名"}
+        elif label in unit_embeddings:
+            states[label] = {"status": "unknown", "name": None,
+                             "detail": "有声纹向量但未达阈值，可经用户确认后认领注册"}
+        elif extraction_failed:
+            states[label] = {"status": "extraction_failed", "name": None,
+                             "detail": "声纹提取失败，本次无法识别或认领"}
+        else:
+            states[label] = {"status": "insufficient_audio", "name": None,
+                             "detail": "总发言不足 3 秒，未提取声纹；只能为本稿命名，不能持久注册"}
+    return states
 
 
 def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list[str] | None = None,
                diarize: bool = True, speaker_profiles: list[dict] | None = None) -> dict:
     """返回兼容 FunASR 的 text / sentence_info 结构。
 
-    diarize 时额外返回 speaker_embeddings（文件内标签→单位声纹向量，供认领注册）
-    和 speaker_identification（与本地声纹库比对结果；库为空时不比对）。
+    diarize 时额外返回 speaker_embeddings（文件内标签→单位声纹向量，供认领注册）、
+    speaker_identification（与本地声纹库逐人比对结果；空库时全部为 null，识别故障时
+    保持匿名并告警）和 speaker_states（每位说话人的完整识别状态，含 insufficient_audio /
+    extraction_failed / disabled 等显式原因）。
     """
     timings = {}
     warnings = []
+    speaker_extraction_failed = False
+    speaker_disabled_reason: str | None = None
+    if diarize and not SPEAKER_EMBEDDINGS_ENABLED:
+        speaker_disabled_reason = "声纹提取已显式关闭（FUNASR_MOSS_SPEAKER_EMBEDDINGS=0）"
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="moss_mlx_") as temp_dir:
         workspace = Path(temp_dir)
@@ -391,7 +467,10 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
                     speaker_model = speaker_model_factory()
                     speaker_embeddings = _speaker_embeddings(chunks[0][0], chunks[0][1], speaker_model)
                 except Exception as exc:
+                    speaker_extraction_failed = True
                     warnings.append(f"声纹提取失败，本次不做说话人识别: {exc}")
+            elif diarize and SPEAKER_EMBEDDINGS_ENABLED and speaker_model_factory is None and len(chunks) == 1:
+                speaker_disabled_reason = "CAM++ 说话人模型不可用，未提取声纹"
         timings["speaker_link_s"] = round(time.perf_counter() - phase, 3)
         sentence_info = []
         for segment in linked:
@@ -418,18 +497,40 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
         "_timings": timings,
         "_warnings": warnings,
     }
-    if diarize and speaker_embeddings:
-        unit_embeddings = {
-            label: vector / max(float(np.linalg.norm(vector)), 1e-8)
-            for label, vector in speaker_embeddings.items()
-        }
-        result["speaker_embeddings"] = {
-            label: [round(float(x), 6) for x in vector]
-            for label, vector in unit_embeddings.items()
-        }
-        if speaker_profiles:
-            identification = _identify_speakers(unit_embeddings, speaker_profiles)
-            result["speaker_identification"] = identification
+    if diarize:
+        # Task-019：以全部转录段的稳定 speaker ID 为全集建立识别状态，
+        # 空库/短发言/提取失败/主动关闭都有明确结果，不再依赖字段缺失推断。
+        all_labels = list(dict.fromkeys(segment["spk"] for segment in sentence_info))
+        unit_embeddings: dict[str, np.ndarray] = {}
+        for label, vector in speaker_embeddings.items():
+            norm = float(np.linalg.norm(np.asarray(vector, dtype=np.float64)))
+            if np.isfinite(norm) and norm > 1e-8:
+                unit_embeddings[label] = np.asarray(vector, dtype=np.float64) / norm
+        identification: dict[str, dict | None] = {label: None for label in all_labels}
+        identify_issues: list[str] = []
+        identify_failed = False
+        if unit_embeddings and speaker_profiles is not None:
+            try:
+                identification, identify_issues = _identify_speakers(unit_embeddings, speaker_profiles)
+                identification = {**{label: None for label in all_labels}, **identification}
+            except Exception as exc:  # 识别附加步骤失败：降级为全匿名，不影响文字稿交付
+                identify_failed = True
+                identify_issues.append(f"声纹识别步骤失败，本次全部保持匿名: {exc}")
+        if identify_issues:
+            warnings.extend(identify_issues)
+        if speaker_embeddings:
+            result["speaker_embeddings"] = {
+                label: [round(float(x), 6) for x in vector]
+                for label, vector in unit_embeddings.items()
+            }
+        result["speaker_identification"] = identification
+        result["speaker_states"] = _build_speaker_states(
+            all_labels, identification, unit_embeddings,
+            extraction_failed=speaker_extraction_failed,
+            identify_failed=identify_failed,
+            disabled_reason=speaker_disabled_reason,
+        )
+        if speaker_profiles is not None and unit_embeddings:
             hits = [
                 f"{label}={info['name']}({info['score']:.2f})"
                 for label, info in identification.items() if info
@@ -442,4 +543,11 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
                 parts.append("未识别 " + "、".join(misses) + "（可经用户确认后认领注册）")
             if parts:
                 warnings.append("说话人声纹识别：" + "；".join(parts))
+    else:
+        # fast / 显式关闭分离：明确表达识别未启用，不谎报为"未识别"。
+        result["speaker_states"] = {
+            segment["spk"]: {"status": "disabled", "name": None,
+                             "detail": "说话人声纹识别未启用（fast/diarize=false）"}
+            for segment in sentence_info if segment.get("spk")
+        }
     return result

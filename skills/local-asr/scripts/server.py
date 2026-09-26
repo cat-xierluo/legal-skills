@@ -25,6 +25,12 @@ import platform
 
 import numpy as np
 
+# 声纹库共用存储层（HTTP 服务与本地 CLI 共用读写契约）
+try:
+    from . import speaker_store
+except ImportError:
+    import speaker_store
+
 # 获取脚本所在目录和 skill 根目录
 SCRIPT_DIR = Path(__file__).parent.absolute()
 SKILL_DIR = SCRIPT_DIR.parent
@@ -34,34 +40,35 @@ SPEAKER_PROFILES_PATH = SKILL_DIR / "assets" / "speaker-profiles.json"
 
 
 def load_speaker_profiles() -> list:
-    """读取本地声纹库；文件不存在视为空库，坏文件跳过识别但不阻断转录。
+    """读取本地声纹库（兼容旧调用）：返回有效条目，坏条目隔离，损坏库降级为空库并打印告警。
 
+    转录路径请用 read_speaker_registry() 以便把隔离原因带回响应 warnings；
+    注册/删除路径必须用 speaker_store.mutate_profiles（损坏库会拒绝写入）。
     库文件由 /speaker/register 生成，含姓名与声纹向量，属本地个人数据，
     被 .gitignore 排除，不入公开仓库。
     """
-    try:
-        with open(SPEAKER_PROFILES_PATH, "r", encoding="utf-8") as stream:
-            data = json.load(stream)
-    except FileNotFoundError:
-        return []
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"[speaker-registry] 声纹库读取失败，本次跳过识别: {exc}")
-        return []
-    profiles = data.get("profiles") if isinstance(data, dict) else None
-    if not isinstance(profiles, list):
-        return []
-    return [item for item in profiles if isinstance(item, dict) and str(item.get("name", "")).strip()]
+    profiles, _issues = read_speaker_registry()
+    return profiles
+
+
+def read_speaker_registry() -> tuple[list, list[str]]:
+    """转录路径读取声纹库：不存在视为空库；损坏/坏条目降级隔离并返回告警，不阻断转录。"""
+    profiles, issues, corrupt = speaker_store.load_profiles(SPEAKER_PROFILES_PATH)
+    for issue in issues:
+        print(f"[speaker-registry] {issue}")
+    if corrupt:
+        issues = issues + ["声纹库不可读，本次跳过说话人识别；请检查 assets/speaker-profiles.json"]
+    return profiles, issues
 
 
 def save_speaker_profiles(profiles: list) -> None:
-    SPEAKER_PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "version": 1,
-        "profiles": profiles,
-        "updated_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    with open(SPEAKER_PROFILES_PATH, "w", encoding="utf-8") as stream:
-        json.dump(payload, stream, ensure_ascii=False, indent=2)
+    """原子保存整个声纹库（保留旧名以兼容既有测试；业务写入请走 mutate 入口）。"""
+    speaker_store.save_profiles(SPEAKER_PROFILES_PATH, profiles)
+
+
+def _mutate_registry(mutate):
+    """在锁与校验保护下修改声纹库；库损坏时抛 RegistryCorruptError 交由端点转 4xx。"""
+    return speaker_store.mutate_profiles(SPEAKER_PROFILES_PATH, mutate)
 
 
 def build_archive_subdir(source_file: str) -> Path:
@@ -1362,14 +1369,17 @@ def run_transcription(file_path: str, resolved: dict, hotwords: Optional[list[st
         if cache_key not in MODEL_CACHE:
             MODEL_CACHE[cache_key] = moss_mlx.load_model(resolved["model_id"])
         model_load_s = round(time.perf_counter() - phase_start, 3)
+        registry_profiles, registry_issues = read_speaker_registry() if resolved["diarize"] else ([], [])
         result = moss_mlx.transcribe(
             file_path,
             MODEL_CACHE[cache_key],
             speaker_model_factory=init_speaker_model,
             hotwords=hotwords,
             diarize=resolved["diarize"],
-            speaker_profiles=load_speaker_profiles() if resolved["diarize"] else None,
+            speaker_profiles=registry_profiles,
         )
+        if registry_issues:
+            result.setdefault("_warnings", [])[:0] = [f"声纹库: {issue}" for issue in registry_issues]
         result.setdefault("_timings", {})["model_load_s"] = model_load_s
         return result
 
@@ -1494,7 +1504,7 @@ def result_to_markdown(result: dict, filename: str, diarize: bool = False, slide
     speaker_identification = result.get("speaker_identification") or {}
     if speaker_identification:
         hits = [
-            f"{label} → {info['name']}（置信度 {info['score']:.2f}）"
+            f"{label} → {info['name']}（声纹相似度 {info['score']:.2f}）"
             for label, info in speaker_identification.items() if info
         ]
         if hits:
@@ -1662,7 +1672,7 @@ class TranscribeRequest(BaseModel):
     fast: bool = False  # 单人快速模式
     quantize: Optional[bool] = None  # ONNX INT8 量化
     extract_slides: Optional[bool] = None  # None: 视频自动提取；False: 显式跳过
-    slide_threshold: float = 20.0  # 场景检测阈值
+    slide_threshold: Optional[float] = None  # None: 使用 slide_extractor.DEFAULT_SLIDE_THRESHOLD
     include_summary_prompt: bool = True
     hotwords: Optional[list[str]] = None  # 当前仅 MOSS-MLX 支持
 
@@ -1693,7 +1703,8 @@ class TranscribeResponse(BaseModel):
     timings: Optional[dict[str, float]] = None  # 阶段墙钟耗时（秒）
     speaker_scope: Optional[str] = None  # global / none
     segments: Optional[list[dict]] = None  # MOSS 结构化说话人段
-    speaker_identification: Optional[dict] = None  # MOSS：文件内标签 → {"name","score"} 或 null
+    speaker_identification: Optional[dict] = None  # MOSS：文件内标签 → {"name","score"} 或 null（diarize 时逐人返回）
+    speaker_states: Optional[dict] = None  # MOSS：文件内标签 → {"status","name","detail"} 完整识别状态
     speaker_embeddings: Optional[dict] = None  # MOSS：文件内标签 → 单位声纹向量（认领注册用）
     error: Optional[str] = None
 
@@ -1920,66 +1931,84 @@ class SpeakerTestRequest(BaseModel):
 async def speaker_register(request: SpeakerRegisterRequest):
     """认领注册：把转录响应中的说话人声纹向量以指定名称写入本地声纹库。
 
+    向量按当前声纹模型显式校验（维度/有限性/范数），非法输入返回 400 且不改动库文件。
     同名重复注册视为重新认领，覆盖旧向量。声纹库文件仅存本机（.gitignore 覆盖）。
     """
     update_activity()
     name = request.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="name 不能为空")
-    vector = np.asarray(request.embedding, dtype=np.float32).reshape(-1)
-    if vector.size < 16:
-        raise HTTPException(status_code=400, detail="embedding 无效或维度过短")
-    norm = float(np.linalg.norm(vector))
-    if norm <= 1e-8:
-        raise HTTPException(status_code=400, detail="embedding 为零向量，无法注册")
-    profiles = load_speaker_profiles()
-    entry = {
-        "name": name,
-        "embedding": [round(float(x), 6) for x in (vector / norm)],
-        "dim": int(vector.size),
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "source_file": request.source_file,
-        "source_label": request.source_label,
-    }
-    replaced = False
-    for index, item in enumerate(profiles):
-        if item.get("name") == name:
-            entry["created_at"] = item.get("created_at") or entry["created_at"]
-            profiles[index] = entry
-            replaced = True
-            break
-    if not replaced:
-        profiles.append(entry)
-    save_speaker_profiles(profiles)
+    try:
+        unit_vector = speaker_store.validate_embedding(request.embedding)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"embedding 无效：{exc}") from exc
+    entry = speaker_store.build_entry(
+        name, unit_vector,
+        source_file=request.source_file,
+        source_label=request.source_label,
+    )
+
+    def _mutate(profiles: list, _isolated_issues: list[str]):
+        replaced = False
+        for index, item in enumerate(profiles):
+            if isinstance(item, dict) and item.get("name") == name:
+                entry["created_at"] = item.get("created_at") or entry["created_at"]
+                profiles[index] = entry
+                replaced = True
+                break
+        if not replaced:
+            profiles.append(entry)
+        return profiles, replaced
+
+    try:
+        profiles, replaced, _isolated = _mutate_registry(_mutate)
+    except speaker_store.RegistryCorruptError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=f"声纹库损坏，拒绝写入以保护原有记录：{exc}",
+        ) from exc
     print(f"[speaker-registry] {'更新' if replaced else '注册'}说话人: {name}（库内共 {len(profiles)} 人）")
     return {"success": True, "name": name, "replaced": replaced, "total": len(profiles)}
 
 
 @app.get("/speaker/list")
 async def speaker_list():
-    """列出声纹库（不含向量本体）。"""
+    """列出声纹库（不含向量本体）。坏条目仅报告数量与原因，不输出向量原文。"""
     update_activity()
-    profiles = load_speaker_profiles()
+    profiles, issues, corrupt = speaker_store.load_profiles(SPEAKER_PROFILES_PATH)
     return {
         "success": True,
         "total": len(profiles),
         "profiles": [
-            {key: item.get(key) for key in ("name", "created_at", "source_file", "source_label", "dim")}
+            {key: item.get(key) for key in ("name", "created_at", "source_file", "source_label", "dim", "model")}
             for item in profiles
         ],
+        "isolated_count": len(issues),
+        "isolated_issues": issues,
+        "corrupt": corrupt,
     }
 
 
 @app.post("/speaker/remove")
 async def speaker_remove(request: SpeakerRemoveRequest):
-    """从声纹库删除指定说话人。"""
+    """从声纹库删除指定说话人。库损坏时拒绝删除并保留原件。"""
     update_activity()
     name = request.name.strip()
-    profiles = load_speaker_profiles()
-    remaining = [item for item in profiles if item.get("name") != name]
-    if len(remaining) == len(profiles):
+
+    def _mutate(profiles: list, _isolated_issues: list[str]):
+        # 只剔除名字匹配的条目；坏条目原样保留（不自动改写/清理真实库）。
+        remaining = [item for item in profiles if not (isinstance(item, dict) and item.get("name") == name)]
+        return remaining, len(remaining) != len(profiles)
+
+    try:
+        remaining, found, _isolated = _mutate_registry(_mutate)
+    except speaker_store.RegistryCorruptError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=f"声纹库损坏，拒绝写入以保护原有记录：{exc}",
+        ) from exc
+    if not found:
         raise HTTPException(status_code=404, detail=f"声纹库中没有说话人: {name}")
-    save_speaker_profiles(remaining)
     return {"success": True, "removed": name, "total": len(remaining)}
 
 
@@ -2020,7 +2049,10 @@ async def speaker_test(request: SpeakerTestRequest):
     else:
         vectors = np.asarray(vectors)
     vector = np.asarray(vectors[0], dtype=np.float32).reshape(-1)
+    if vector.size != speaker_store.EXPECTED_EMBEDDING_DIM or not np.all(np.isfinite(vector)):
+        raise HTTPException(status_code=500, detail="声纹提取结果异常，请重试或检查 CAM++ 模型")
     vector = vector / max(float(np.linalg.norm(vector)), 1e-8)
+    threshold = moss_mlx.SPEAKER_IDENTIFY_THRESHOLD
     scores = []
     for item in profiles:
         ref = np.asarray(item.get("embedding") or [], dtype=np.float32).reshape(-1)
@@ -2034,11 +2066,22 @@ async def speaker_test(request: SpeakerTestRequest):
         key=lambda item: item["score"],
         default=None,
     )
+    # score 是归一化向量的余弦相似度，不是经过校准的身份正确概率（Task-023）。
+    # 最高分低于阈值时明确"未识别"，避免把最佳候选误当命中。
+    best_is_match = bool(best) and best["score"] >= threshold
     return {
         "success": True,
         "scores": scores,
         "best": best,
-        "threshold": moss_mlx.SPEAKER_IDENTIFY_THRESHOLD,
+        "best_is_match": best_is_match,
+        "identified": (
+            {"name": best["name"], "score": best["score"]} if best_is_match else None
+        ),
+        "threshold": threshold,
+        "note": (
+            "score 为声纹相似度（余弦相似度），达到阈值才算识别；"
+            "不代表身份正确概率，也不是证据级身份认定"
+        ),
     }
 
 
@@ -2119,12 +2162,17 @@ async def transcribe(request: TranscribeRequest):
         # 视频关键帧提取（仅视频文件 + extract_slides=True）
         slides = None
         slide_count = 0
+        slide_threshold = (
+            request.slide_threshold
+            if request.slide_threshold is not None
+            else slide_extractor_module.DEFAULT_SLIDE_THRESHOLD
+        )
         phase_start = time.perf_counter()
         if request.extract_slides and SLIDE_EXTRACTOR_AVAILABLE:
             if slide_extractor_module.SlideExtractor.is_video_file(request.file_path):
                 slides_dir = str(Path(output_path).parent / "slides")
                 extractor = slide_extractor_module.SlideExtractor(
-                    threshold=request.slide_threshold,
+                    threshold=slide_threshold,
                 )
                 slides = extractor.extract(request.file_path, slides_dir)
                 # 设置相对路径
@@ -2155,7 +2203,7 @@ async def transcribe(request: TranscribeRequest):
             output_md=output_path,
             slides=slides,
             diarize=resolved["diarize"],
-            slide_threshold=request.slide_threshold,
+            slide_threshold=slide_threshold,
         )
         timings["archive_s"] = round(time.perf_counter() - phase_start, 3)
 
@@ -2191,6 +2239,7 @@ async def transcribe(request: TranscribeRequest):
             timings=timings,
             speaker_scope=result.get("speaker_scope"),
             speaker_identification=result.get("speaker_identification"),
+            speaker_states=result.get("speaker_states"),
             speaker_embeddings=result.get("speaker_embeddings"),
             segments=(
                 [
