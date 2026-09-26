@@ -27,6 +27,10 @@ except ImportError as exc:
 # 视频文件扩展名
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.webm'}
 
+# 场景检测阈值的唯一权威默认值：API、两个 CLI 与批量路径均引用此处，
+# CLI 未显式指定时不携带该字段，由服务按此默认执行（Task-022 对齐基准）。
+DEFAULT_SLIDE_THRESHOLD = 20.0
+
 
 @dataclass
 class SlideFrame:
@@ -55,7 +59,7 @@ class SlideExtractor:
 
     def __init__(
         self,
-        threshold: float = 20.0,
+        threshold: float = DEFAULT_SLIDE_THRESHOLD,
         min_scene_len: float = 3.0,
         hash_threshold: int = 16,
         fallback_interval: int = 60,

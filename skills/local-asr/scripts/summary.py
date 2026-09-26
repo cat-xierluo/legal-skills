@@ -37,12 +37,34 @@ def _format_list(values: Any) -> list[str]:
     return []
 
 
+# 发言行：行首"标签 + 时间戳"（合并段格式：`发言人1 00:00` / `杨卫薪 00:02:49`）。
+# 空白限定为同行空格/制表符（\s 会匹配换行，导致标签跨行吞掉下一行的时间戳）。
+# 正文行不会整行以时间戳结尾，且只有真实发言行带行首标签，正文提及人名不会误报。
+SPEAKER_LINE_RE = re.compile(r"^(?P<label>.+?)[ \t]+(?P<ts>\d{1,2}:\d{2}(?::\d{2})?)[ \t]*$", re.MULTILINE)
+TIMESTAMP_ONLY_RE = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
+OLD_SPEAKER_LINE_RE = re.compile(r"^speaker_(\d+)(?::|\s|$)")
+
+
 def _extract_speaker_orders(markdown_text: str) -> list[str]:
-    """从 Markdown 文本中提取发言人编号列表"""
+    """从 Markdown 文本中提取发言人标签集合（保持出现顺序）。
+
+    支持：行首"标签 + 时间戳"（发言人N / 实名 / 匿名编号，Task-021 契约）
+    与旧版 speaker_N 行首格式（归一为 发言人N+1）。
+    只认发言行结构，不从普通正文出现的人名猜测发言人。
+    """
     orders: list[str] = []
-    # 匹配 speaker_0, speaker_1 等格式
+    for match in SPEAKER_LINE_RE.finditer(markdown_text):
+        label = match.group("label").strip()
+        if not label or TIMESTAMP_ONLY_RE.fullmatch(label):
+            continue
+        # 旧版 speaker_N 标签归一为 发言人N+1，避免与新格式重复入列
+        old_style = re.fullmatch(r"speaker_(\d+)", label)
+        if old_style:
+            label = f"发言人{int(old_style.group(1)) + 1}"
+        if label not in orders:
+            orders.append(label)
     for match in re.finditer(r"^speaker_(\d+)", markdown_text, re.MULTILINE):
-        order = f"发言人{match.group(1)}"
+        order = f"发言人{int(match.group(1)) + 1}"
         if order not in orders:
             orders.append(order)
     return orders
@@ -137,17 +159,18 @@ def _build_summary_markdown(
             elif isinstance(entry, str) and entry.strip():
                 normalized[entry.strip()] = {"name": entry.strip(), "summary": entry.strip()}
 
-    # 格式化发言人列表
+    # 格式化发言人列表：order 保留稿件中的原始标签（发言人N / 实名）
     formatted_speakers: list[str] = []
     orders = expected_orders or list(normalized.keys())
     if not orders and normalized:
         orders = list(normalized.keys())
 
-    for idx, order in enumerate(orders, start=1):
+    for order in orders:
         info = normalized.get(order) or {}
         summary = info.get("summary") or "（摘要缺失，请补充。）"
-        label = order if order.startswith("发言人") else f"发言人{idx}"
-        formatted_speakers.append(f"- {label}：{summary}")
+        name = info.get("name") or ""
+        suffix = f"（{name}）" if name and name != "未知" else ""
+        formatted_speakers.append(f"- {order}{suffix}：{summary}")
 
     # 添加未包含在预期顺序中的发言人
     for order, info in normalized.items():
@@ -185,25 +208,49 @@ def _build_summary_markdown(
 # ============================================================================
 
 def get_transcription_text(md_path: Path) -> str:
-    """从转录文件中提取纯文本内容"""
+    """从转录文件中提取纯文本内容，保留每位发言的说话人归属。
+
+    每行输出为 `标签：正文`（标签为发言人N / 实名 / 匿名编号；Task-021：摘要
+    预处理不得先删掉归属）。无说话人的行（fast/纯时间戳行）原样保留。
+    """
     text = md_path.read_text(encoding="utf-8")
 
-    # 提取"转录内容"部分，去除时间戳和说话人标记
+    # 提取"转录内容"部分，去除时间戳但保留说话人标签
     marker = "\n## 转录内容"
     idx = text.find(marker)
     if idx != -1:
         content_section = text[idx + len(marker):].strip()
         lines = []
+        current_speaker: str | None = None
         for line in content_section.split('\n'):
-            if line.strip():
-                # 移除时间戳和说话人标记（格式：发言人1 00:00:00）
-                line = re.sub(r'^发言人?\d+\s+\d{2}:\d{2}:\d{2}\s*', '', line)
-                # 移除旧格式的时间戳标记
-                line = re.sub(r'\*\*\[[0-9]{2}:[0-9]{2}:[0-9]{2} - [0-9]{2}:[0-9]{2}\].*?\*\*', '', line)
-                line = re.sub(r'\*\*\[.*?\]\*\*', '', line)
-                line = line.strip()
-                if line:
-                    lines.append(line)
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # 移除旧格式的时间戳标记
+            line = re.sub(r'\*\*\[[0-9]{2}:[0-9]{2}:[0-9]{2} - [0-9]{2}:[0-9]{2}\].*?\*\*', '', line)
+            line = re.sub(r'\*\*\[.*?\]\*\*', '', line)
+            line = line.strip()
+            if not line:
+                continue
+            speaker_match = OLD_SPEAKER_LINE_RE.match(line)
+            if speaker_match:
+                current_speaker = f"发言人{int(speaker_match.group(1)) + 1}"
+                line = OLD_SPEAKER_LINE_RE.sub('', line).strip()
+                if not line:
+                    continue
+                lines.append(f"{current_speaker}：{line}")
+                continue
+            line_match = SPEAKER_LINE_RE.match(line)
+            if line_match and not TIMESTAMP_ONLY_RE.fullmatch(line_match.group("label")):
+                current_speaker = line_match.group("label").strip()
+                continue
+            if TIMESTAMP_ONLY_RE.fullmatch(stripped):
+                current_speaker = None
+                continue
+            if current_speaker:
+                lines.append(f"{current_speaker}：{line}")
+            else:
+                lines.append(line)
         return '\n'.join(lines)
 
     # 如果找不到"转录内容"，返回整个文本
@@ -219,7 +266,7 @@ def create_summary_prompt(text: str) -> str:
   "full_summary": "至少400字，分成2-3段，交代背景、问题、关键事实、数据、风险与行动建议",
   "speaker_summary": [
     {{
-      "speaker_order": "发言人1",
+      "speaker_order": "逐字使用逐字稿中行首的发言标签，例如 发言人1 或实名",
       "speaker_name": "如能识别请写姓名，否则写未知",
       "summary": "至少180字，涵盖该发言人的观点、依据、数据、态度与潜在影响"
     }},
@@ -229,7 +276,10 @@ def create_summary_prompt(text: str) -> str:
   "keywords": ["5-8个关键词"]
 }}
 
-请确保逐字稿中出现的每一位发言人（发言人1、发言人2……）都提供总结，不得遗漏或虚构。
+要求：
+- speaker_summary 必须覆盖逐字稿中出现的每一位发言人，不得遗漏、重复或虚构。
+- speaker_order 必须逐字使用逐字稿行首的发言标签（如"发言人1"、"杨卫薪"），不得改写、合并或新造标签。
+- 每条总结只基于该发言人的实际发言，不得把他人观点归属给该发言人。
 
 以下是完整文本：
 {text}
@@ -333,19 +383,27 @@ def generate_summary_via_api(md_path: Path) -> tuple[bool, str]:
 # 验证功能
 # ============================================================================
 
+def _extract_summary_speaker_labels(summary_block: str) -> list[str]:
+    """从摘要块的"### 发言人总结"小节提取实际覆盖的发言人标签（保持顺序、去重）。"""
+    covered: list[str] = []
+    section = re.search(r"###\s*发言人总结(.*?)(?=\n### |\Z)", summary_block, re.DOTALL)
+    if not section:
+        return covered
+    for item in re.finditer(r"^-\s*(.+?)：", section.group(1), re.MULTILINE):
+        # 兼容 `- 标签（姓名）：` 形式，剥掉括号注记后比对
+        label = re.sub(r"（[^（）]*）\s*$", "", item.group(1).strip()).strip()
+        if label and label not in covered:
+            covered.append(label)
+    return covered
+
+
 def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
-    """验证 Markdown 文件中是否已注入 AI 摘要
+    """验证 Markdown 文件中是否已注入 AI 摘要，并检查发言人覆盖。
 
-    Args:
-        md_path: Markdown 文件路径
-
-    Returns:
-        dict: {
-            has_summary: bool,           - 是否存在摘要
-            summary_length: int,         - 摘要字符数
-            has_all_sections: bool,      - 是否包含所有必需章节
-            missing_sections: list[str], - 缺失的章节名称
-        }
+    区分三种结论（Task-021）：
+    - has_all_sections：只说明"有摘要块且章节标题齐全"，不等于内容完整；
+    - speaker_coverage：complete = 稿件每位发言人都出现在摘要中且无杜撰；
+      incomplete = 漏人/杜撰；not_applicable = 稿件无发言行结构，无法验证（不假定通过）。
     """
     if not md_path.exists():
         return {
@@ -353,6 +411,11 @@ def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
             "summary_length": 0,
             "has_all_sections": False,
             "missing_sections": ["文件不存在"],
+            "speaker_coverage": "not_applicable",
+            "expected_speakers": [],
+            "covered_speakers": [],
+            "missing_speakers": [],
+            "unexpected_speakers": [],
         }
 
     text = md_path.read_text(encoding="utf-8")
@@ -367,6 +430,11 @@ def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
             "summary_length": 0,
             "has_all_sections": False,
             "missing_sections": ["AI-SUMMARY 标记"],
+            "speaker_coverage": "not_applicable",
+            "expected_speakers": _extract_speaker_orders(text),
+            "covered_speakers": [],
+            "missing_speakers": [],
+            "unexpected_speakers": [],
         }
 
     # 提取摘要块
@@ -381,6 +449,11 @@ def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
             "summary_length": 0,
             "has_all_sections": False,
             "missing_sections": ["摘要内容"],
+            "speaker_coverage": "not_applicable",
+            "expected_speakers": _extract_speaker_orders(text),
+            "covered_speakers": [],
+            "missing_speakers": [],
+            "unexpected_speakers": [],
         }
 
     summary_block = match.group(1)
@@ -389,11 +462,28 @@ def verify_summary_in_file(md_path: Path) -> Dict[str, Any]:
     required_sections = ["全文总结", "发言人总结", "重点内容", "关键词"]
     missing = [s for s in required_sections if s not in summary_block]
 
+    # 发言人覆盖：期望集合来自稿件正文（剔除摘要块），实际集合来自摘要发言人小节
+    expected_speakers = _extract_speaker_orders(pattern.sub("", text))
+    covered_speakers = _extract_summary_speaker_labels(summary_block)
+    missing_speakers = [s for s in expected_speakers if s not in covered_speakers]
+    unexpected_speakers = [s for s in covered_speakers if s not in expected_speakers]
+    if not expected_speakers:
+        speaker_coverage = "not_applicable"
+    elif missing_speakers or unexpected_speakers:
+        speaker_coverage = "incomplete"
+    else:
+        speaker_coverage = "complete"
+
     return {
         "has_summary": True,
         "summary_length": len(summary_block.strip()),
         "has_all_sections": len(missing) == 0,
         "missing_sections": missing,
+        "speaker_coverage": speaker_coverage,
+        "expected_speakers": expected_speakers,
+        "covered_speakers": covered_speakers,
+        "missing_speakers": missing_speakers,
+        "unexpected_speakers": unexpected_speakers,
     }
 
 
@@ -446,12 +536,22 @@ def inject_from_file(md_path: Path, summary_file: Path) -> tuple[bool, str]:
 
     inject_summary_to_file(md_path, content_to_inject)
 
-    # 验证注入结果
+    # 验证注入结果（含发言人覆盖；incomplete 时如实报告，调用方不得当作已验收交付）
     result = verify_summary_in_file(md_path)
-    if result["has_summary"]:
-        return True, f"总结已注入 ({result['summary_length']} 字符)"
-    else:
+    if not result["has_summary"]:
         return False, "注入后验证失败，总结未写入文件"
+    message = f"总结已注入 ({result['summary_length']} 字符)"
+    coverage = result.get("speaker_coverage", "not_applicable")
+    if coverage == "incomplete":
+        if result["missing_speakers"]:
+            message += f"；⚠️ 摘要遗漏发言人: {', '.join(result['missing_speakers'])}"
+        if result["unexpected_speakers"]:
+            message += f"；⚠️ 摘要出现稿件中不存在的发言人: {', '.join(result['unexpected_speakers'])}"
+    elif coverage == "not_applicable":
+        message += "；发言人覆盖无法验证（稿件无发言行结构）"
+    else:
+        message += "；发言人覆盖完整"
+    return True, message
 
 
 # ============================================================================
@@ -488,12 +588,22 @@ def main():
             sys.exit(1)
         md_path = Path(sys.argv[2])
         result = verify_summary_in_file(md_path)
-        if result["has_summary"]:
+        coverage = result.get("speaker_coverage", "not_applicable")
+        if result["has_summary"] and result["has_all_sections"] and coverage != "incomplete":
             sections_status = "完整" if result["has_all_sections"] else f"缺少: {', '.join(result['missing_sections'])}"
             print(f"✅ 摘要已存在 ({result['summary_length']} 字符, 章节{sections_status})")
+            if coverage == "complete":
+                print(f"✅ 发言人覆盖完整: {', '.join(result['covered_speakers'])}")
+            elif coverage == "not_applicable":
+                print("⚠️  发言人覆盖无法验证：稿件中没有发言行结构（不判定通过）")
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print(f"❌ 摘要不存在 (缺少: {', '.join(result['missing_sections'])})")
+            print(f"❌ 摘要不完整 (缺少: {', '.join(result['missing_sections'])})")
+            if coverage == "incomplete":
+                if result["missing_speakers"]:
+                    print(f"❌ 摘要遗漏发言人: {', '.join(result['missing_speakers'])}")
+                if result["unexpected_speakers"]:
+                    print(f"❌ 摘要出现稿件中不存在的发言人: {', '.join(result['unexpected_speakers'])}")
             print(json.dumps(result, ensure_ascii=False, indent=2))
             sys.exit(1)
 
