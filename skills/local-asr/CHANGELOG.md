@@ -2,6 +2,12 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [2.2.1] - 2026-09-27
+
+### 修复
+
+- **隐私**：公开文档与代码示例中的说话人注册名由用户真名统一替换为职业称呼"杨律师"（summary.py 注释与提示词、`references/api-reference.md`、`verify_default_routes.py`/`verify_summary_coverage.py` 合成样例与断言，共 13 处），回归"真名不进 Git"的既有隐私边界（真名仅存本机声纹库与 author 署名字段）。`verify_summary_coverage.py`/`verify_default_routes.py` 替换后回归通过。
+
 ## [2.2.0] - 2026-09-27
 
 ### 修复
