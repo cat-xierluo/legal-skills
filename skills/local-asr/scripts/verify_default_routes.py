@@ -164,9 +164,9 @@ def verify_auto_cli_json(root: Path) -> None:
         "success": True,
         "output_path": str(root / "audio.md"),
         "summary_prompt": "总结提示词",
-        "speaker_identification": {"S01": {"name": "杨卫薪", "score": 0.9}, "S02": None},
+        "speaker_identification": {"S01": {"name": "杨律师", "score": 0.9}, "S02": None},
         "speaker_states": {
-            "S01": {"status": "matched", "name": "杨卫薪"},
+            "S01": {"status": "matched", "name": "杨律师"},
             "S02": {"status": "unknown", "name": None, "detail": "有声纹向量但未达阈值，可经用户确认后认领注册"},
         },
         "speaker_embeddings": {"S01": [0.0] * 191 + [1.0], "S02": [1.0] + [0.0] * 191},
