@@ -18,6 +18,8 @@ from typing import Any, Dict
 
 SUMMARY_START = "<!-- AI-SUMMARY:START -->"
 SUMMARY_END = "<!-- AI-SUMMARY:END -->"
+# 缺席发言人的占位文本（Task-021 F1）：占位行不是真实摘要，覆盖检查不得计入
+MISSING_SUMMARY_PLACEHOLDER = "（摘要缺失，请补充。）"
 
 DEFAULT_SYSTEM_PROMPT = (
     "你是一位擅长处理口语化中文对话的专业纪要分析师。请从非结构化逐字稿中提炼事件脉络、各方观点、关键数据和行动建议，保持客观，不捏造信息。"
@@ -148,6 +150,7 @@ def _build_summary_markdown(
     # 处理发言人总结
     speaker_entries = data.get("speaker_summary") or data.get("speaker_summaries") or []
     normalized: Dict[str, Dict[str, str]] = {}
+    duplicate_orders: list[str] = []
     if isinstance(speaker_entries, list):
         for entry in speaker_entries:
             if isinstance(entry, dict):
@@ -155,9 +158,21 @@ def _build_summary_markdown(
                 name = str(entry.get("speaker_name") or entry.get("name") or entry.get("speaker") or "").strip()
                 summary = str(entry.get("summary") or entry.get("content") or "").strip()
                 if order and summary:
+                    # 重复条目在归一化（dict 覆盖）前发现，避免抹掉重复证据（Task-021 F1）
+                    if order in normalized:
+                        duplicate_orders.append(order)
+                        continue
                     normalized[order] = {"name": name or "未知", "summary": summary}
             elif isinstance(entry, str) and entry.strip():
-                normalized[entry.strip()] = {"name": entry.strip(), "summary": entry.strip()}
+                label = entry.strip()
+                if label in normalized:
+                    duplicate_orders.append(label)
+                    continue
+                normalized[label] = {"name": label, "summary": label}
+    if duplicate_orders:
+        raise ValueError(
+            "总结数据中发言人标签重复（疑似凑人数）: " + "、".join(sorted(set(duplicate_orders)))
+        )
 
     # 格式化发言人列表：order 保留稿件中的原始标签（发言人N / 实名）
     formatted_speakers: list[str] = []
@@ -167,7 +182,7 @@ def _build_summary_markdown(
 
     for order in orders:
         info = normalized.get(order) or {}
-        summary = info.get("summary") or "（摘要缺失，请补充。）"
+        summary = info.get("summary") or MISSING_SUMMARY_PLACEHOLDER
         name = info.get("name") or ""
         suffix = f"（{name}）" if name and name != "未知" else ""
         formatted_speakers.append(f"- {order}{suffix}：{summary}")
@@ -176,7 +191,7 @@ def _build_summary_markdown(
     for order, info in normalized.items():
         if order in orders:
             continue
-        summary = info.get("summary") or "（摘要缺失，请补充。）"
+        summary = info.get("summary") or MISSING_SUMMARY_PLACEHOLDER
         formatted_speakers.append(f"- {order}：{summary}")
 
     # 构建完整的 Markdown
@@ -384,16 +399,22 @@ def generate_summary_via_api(md_path: Path) -> tuple[bool, str]:
 # ============================================================================
 
 def _extract_summary_speaker_labels(summary_block: str) -> list[str]:
-    """从摘要块的"### 发言人总结"小节提取实际覆盖的发言人标签（保持顺序、去重）。"""
+    """从摘要块的"### 发言人总结"小节提取实际覆盖的发言人标签（保持顺序、去重）。
+
+    摘要内容为缺失占位（（摘要缺失，请补充。））的条目不充当覆盖（Task-021 F1）。
+    """
     covered: list[str] = []
     section = re.search(r"###\s*发言人总结(.*?)(?=\n### |\Z)", summary_block, re.DOTALL)
     if not section:
         return covered
-    for item in re.finditer(r"^-\s*(.+?)：", section.group(1), re.MULTILINE):
+    for item in re.finditer(r"^-\s*(?P<label>.+?)：(?P<text>.*)$", section.group(1), re.MULTILINE):
         # 兼容 `- 标签（姓名）：` 形式，剥掉括号注记后比对
-        label = re.sub(r"（[^（）]*）\s*$", "", item.group(1).strip()).strip()
-        if label and label not in covered:
-            covered.append(label)
+        label = re.sub(r"（[^（）]*）\s*$", "", item.group("label").strip()).strip()
+        if not label or label in covered:
+            continue
+        if item.group("text").strip() == MISSING_SUMMARY_PLACEHOLDER:
+            continue
+        covered.append(label)
     return covered
 
 
@@ -526,7 +547,11 @@ def inject_from_file(md_path: Path, summary_file: Path) -> tuple[bool, str]:
             md_text = md_path.read_text(encoding="utf-8")
             expected_orders = _extract_speaker_orders(md_text)
 
-            content_to_inject = _build_summary_markdown(data, expected_orders)
+            try:
+                content_to_inject = _build_summary_markdown(data, expected_orders)
+            except ValueError as exc:
+                # 重复发言人条目等不合格数据：拒绝注入，不能当纯文本写入
+                return False, f"总结数据不合格，未注入: {exc}"
     except (json.JSONDecodeError, KeyError, TypeError):
         pass  # 非 JSON 格式，当作纯文本处理
 
@@ -576,10 +601,15 @@ def main():
         md_path = Path(sys.argv[2])
         summary_file = Path(sys.argv[3])
         success, msg = inject_from_file(md_path, summary_file)
-        if success:
-            print(f"✅ {msg}")
-        else:
+        if not success:
             print(f"❌ {msg}")
+            sys.exit(1)
+        print(f"✅ {msg}")
+        # 写入成功 ≠ 质量通过（Task-021 F1）：覆盖不完整时非零退出并明确草稿语义
+        result = verify_summary_in_file(md_path)
+        if result.get("speaker_coverage") == "incomplete":
+            print("❌ 摘要质量未通过：发言人覆盖不完整（见上方遗漏/多余提示）。"
+                  "注入内容已保留为草稿，须补齐后重新生成并注入，不得视为已验收交付")
             sys.exit(1)
 
     elif command == "verify":

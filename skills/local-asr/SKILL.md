@@ -2,7 +2,7 @@
 name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.2.1"
+version: "2.3.0"
 license: MIT
 description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择；支持认领式声纹注册，本人声纹注册后自动识别标注。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
@@ -267,7 +267,10 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 - 如果输出 `✅ 摘要已存在` 且 `✅ 发言人覆盖完整` → 成功，向用户报告完成
 - 如果输出 `❌ 摘要不存在` → 失败，回到步骤 5 重试
 - 如果输出 `❌ 摘要遗漏发言人` / `❌ 摘要出现稿件中不存在的发言人`（退出码非零）→ 说明总结遗漏或虚构了发言人，回到步骤 4 按 `speaker_states`/正文标签重新生成总结后再次注入；**覆盖不完整的摘要不得作为已验收交付**
+- **inject 命令本身也会在覆盖不完整时以非零退出**（打印"摘要质量未通过"，注入内容保留为草稿）：写入成功 ≠ 质量通过，见非零退出必须回到步骤 4 重新生成，不得当作已交付
+- 总结 JSON 中同一发言人出现多条（重复凑人数）时，inject 直接拒绝写入并指出重复标签 → 重新生成含全部发言人的总结
 - 输出 `⚠️ 发言人覆盖无法验证`（fast/无发言行结构稿件）→ 章节完整即可交付，如实说明覆盖未验证
+- HTTP `/inject_summary`、`/verify_summary` 的 `success` 只表示调用执行成功；质量以响应中的 `quality_passed` / `speaker_coverage` 字段为准，不得只凭 `success` 宣布已交付
 
 ### 完整流程示例
 
@@ -591,7 +594,7 @@ python3 scripts/auto_transcribe.py /path/to/audio.aac --prompt-only
 # 机器模式：stdout 仅输出完整响应 JSON（含说话人识别/向量/段落），日志走 stderr
 python3 scripts/auto_transcribe.py /path/to/audio.aac --json
 
-# 保存完整响应 JSON 到文件（0600 权限；含声纹向量，注意保密）
+# 保存完整响应 JSON 到文件（新建与覆盖均保持 0600 私密权限；含声纹向量，注意保密）
 python3 scripts/auto_transcribe.py /path/to/audio.aac --json --save-result /tmp/asr-result.json
 
 # 认领注册：从结果 JSON 按标签取声纹向量（需用户确认身份且同意长期注册）
