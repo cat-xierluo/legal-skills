@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import requests
 from pathlib import Path
 from urllib.parse import urlparse
@@ -50,12 +51,27 @@ def _log(message: str = "") -> None:
 
 
 def save_result_file(result: dict, path: str) -> str:
-    """把完整响应 JSON 保存到本地文件（0600，含声纹向量等敏感数据）。"""
+    """把完整响应 JSON 保存到本地文件（0600，含声纹向量等敏感数据）。
+
+    覆盖已存在文件时同样保持私密（Task-020 F2）：os.open 的 mode 只作用于新建，
+    不收紧已有文件的宽权限（如 0644）。因此先写同目录 0600 临时文件，写完
+    fsync 后原子替换；替换前旧文件保持完整，失败时清理临时文件并抛错。
+    """
     target = Path(path).expanduser().absolute()
     target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-        json.dump(result, stream, ensure_ascii=False, indent=2)
+    descriptor, temp_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent)
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(result, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, target)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
     return str(target)
 
 
@@ -269,13 +285,21 @@ def main():
     # 机器模式：stdout 只输出完整响应 JSON，其余信息一律走 stderr
     if args.json_output:
         if args.save_result:
-            saved = save_result_file(transcribe_result, args.save_result)
+            try:
+                saved = save_result_file(transcribe_result, args.save_result)
+            except OSError as exc:
+                _log(f"❌ 结果文件保存失败（权限/磁盘），未写入: {exc}")
+                sys.exit(1)
             print(f"结果已保存: {saved}", file=sys.stderr)
         print(json.dumps(transcribe_result, ensure_ascii=False))
         return
 
     if args.save_result:
-        saved = save_result_file(transcribe_result, args.save_result)
+        try:
+            saved = save_result_file(transcribe_result, args.save_result)
+        except OSError as exc:
+            _log(f"❌ 完整响应保存失败（权限/磁盘），未写入: {exc}")
+            sys.exit(1)
         _log(f"💾 完整响应已保存: {saved}（含声纹向量，请注意保密）")
 
     # 步骤 2: 获取总结提示词

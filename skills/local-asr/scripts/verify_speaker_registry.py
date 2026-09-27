@@ -14,8 +14,10 @@ FastAPI TestClient 验证，声纹库路径重定向到临时目录，不触碰�
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
+import sys
 import tempfile
 import wave
 from pathlib import Path
@@ -25,6 +27,7 @@ from unittest.mock import patch
 import numpy as np
 
 import moss_mlx
+import speaker_registry
 import speaker_store
 
 
@@ -200,15 +203,50 @@ def test_transcribe_states() -> None:
         assert all(state["status"] == "extraction_failed" for state in result["speaker_states"].values())
         assert any("声纹提取失败" in warning for warning in result["_warnings"])
 
-        # 显式关闭提取：disabled，不谎报为未识别
+        # 显式关闭提取（单段路径）：disabled，不谎报为未识别，且不触发额外 CAM++（Task-019 F3）
+        factory_calls = []
+
+        def counting_factory():
+            factory_calls.append(1)
+            return object()
+
         with patch.object(moss_mlx, "SPEAKER_EMBEDDINGS_ENABLED", False):
             result = moss_mlx.transcribe(
                 str(source), FakeModel(("S01", "S02")),
-                speaker_model_factory=lambda: object(),
+                speaker_model_factory=counting_factory,
                 diarize=True, speaker_profiles=profiles,
             )
         assert all(state["status"] == "disabled" for state in result["speaker_states"].values())
         assert "speaker_identification" in result  # 仍逐人 null，不缺字段
+        assert not factory_calls, "关闭提取的单段路径不得触发 CAM++ 模型加载"
+        disabled_states = result["speaker_states"]
+
+        # F3 反例：多段 × 开关关闭 → 跨段链接不受影响，有向量的标签为 unknown 而非 disabled
+        link_calls = []
+
+        def spying_link(chunks, model):
+            link_calls.append(1)
+            linked = [
+                {**segment, "chunk": index}
+                for index, (_, segments) in enumerate(chunks)
+                for segment in segments
+            ]
+            return linked, vectors
+
+        with patch.object(moss_mlx, "CHUNK_SECONDS", 2), \
+             patch.object(moss_mlx, "SPEAKER_EMBEDDINGS_ENABLED", False), \
+             patch.object(moss_mlx, "_link_speakers", side_effect=spying_link):
+            result = moss_mlx.transcribe(
+                str(source), FakeModel(("S01", "S02")),
+                speaker_model_factory=counting_factory,
+                diarize=True, speaker_profiles=[],
+            )
+        assert link_calls, "多段输入必须执行跨段链接（开关仅跳过单段附加提取）"
+        assert set(result["speaker_embeddings"]) == {"S01", "S02"}, "多段链接产出的向量必须保留"
+        assert result["speaker_identification"] == {"S01": None, "S02": None}
+        assert all(state["status"] == "unknown" for state in result["speaker_states"].values()), \
+            result["speaker_states"]
+        assert result["speaker_states"]["S01"]["detail"] == "有声纹向量但未达阈值，可经用户确认后认领注册"
 
         # fast 模式：disabled 状态
         result = moss_mlx.transcribe(str(source), FakeModel(("S01",)), diarize=False)
@@ -227,7 +265,64 @@ def test_transcribe_states() -> None:
         assert result["speaker_identification"] == {"S01": None, "S02": None}
         assert all(state["status"] == "extraction_failed" for state in result["speaker_states"].values())
         assert any("识别步骤失败" in warning for warning in result["_warnings"])
-    print("Task-019 说话人状态：空库/部分命中/短发言/提取失败/关闭/fast 六路契约全部满足")
+
+        # F3 认领闭环：多段 unknown + 合格向量可经 claim 提交正确向量；disabled 仍拒绝
+        result_file = Path(temp_dir) / "multichunk_result.json"
+        result_file.write_text(json.dumps({
+            "speaker_embeddings": {
+                label: [round(float(x), 6) for x in vector]
+                for label, vector in vectors.items()
+            },
+            "speaker_states": {
+                label: {"status": "unknown", "name": None,
+                        "detail": "有声纹向量但未达阈值，可经用户确认后认领注册"}
+                for label in ("S01", "S02")
+            },
+        }, ensure_ascii=False), encoding="utf-8")
+        registered = {}
+
+        class _FakeRegisterResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return json.dumps({"success": True, "name": "示例人", "replaced": False, "total": 1}).encode()
+
+        def fake_register(request, timeout=None):
+            registered["payload"] = json.loads(request.data.decode("utf-8"))
+            return _FakeRegisterResponse()
+
+        argv = ["speaker_registry.py", "claim", "示例人", "--result", str(result_file), "--label", "S01"]
+        with patch.object(speaker_registry.urllib.request, "urlopen", side_effect=fake_register), \
+             patch.object(sys, "argv", argv), \
+             contextlib.redirect_stdout(io.StringIO()):
+            assert speaker_registry.main() == 0
+        assert registered["payload"]["source_label"] == "S01"
+        assert len(registered["payload"]["embedding"]) == speaker_store.EXPECTED_EMBEDDING_DIM
+        assert abs(registered["payload"]["embedding"][0] - 1.0) < 1e-5
+
+        disabled_file = Path(temp_dir) / "disabled_result.json"
+        disabled_file.write_text(json.dumps({
+            "speaker_states": disabled_states,
+            "speaker_embeddings": {"S01": [0.0] * speaker_store.EXPECTED_EMBEDDING_DIM},
+        }, ensure_ascii=False), encoding="utf-8")
+        argv = ["speaker_registry.py", "claim", "示例人", "--result", str(disabled_file), "--label", "S01"]
+        network_called = []
+
+        def refusing_network(request, timeout=None):
+            network_called.append(1)
+            raise AssertionError("disabled 状态不得发出注册请求")
+
+        with patch.object(speaker_registry.urllib.request, "urlopen", side_effect=refusing_network), \
+             patch.object(sys, "argv", argv), \
+             contextlib.redirect_stdout(io.StringIO()):
+            assert speaker_registry.main() == 1
+        assert not network_called, "disabled 状态的 claim 必须在发请求前拒绝"
+    print("Task-019 说话人状态：空库/部分命中/短发言/提取失败/关闭/fast/多段×开关关闭 契约全部满足，"
+          "多段 unknown 认领闭环与 disabled 拒绝均有断言")
 
 
 def test_registry_file_roundtrip() -> None:
