@@ -2,6 +2,30 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [2.3.0] - 2026-09-27
+
+### 修复
+
+- **F3 多段录音在关闭声纹提取开关时被误标 disabled、无法认领（Task-019 复核重新开放）**：`FUNASR_MOSS_SPEAKER_EMBEDDINGS=0` 时多段长录音的跨段链接照常执行并产出 192 维向量（既有文档行为），但 `speaker_states` 仍把有向量的标签标为 `disabled`，导致 claim 在发出注册请求前就被拒绝、首次认领流程断裂。现 disabled 状态按实际提取/链接路径声明：多段链接产出的向量在空库时为 `unknown`（可认领）、命中时为 `matched`；开关仅跳过单段附加提取的单段路径仍为 `disabled` 且不触发 CAM++ 加载。回归新增"多段 × 开关关闭"反例（强制切段 + 模拟链接），以及多段 unknown 认领闭环（claim 提交正确标签向量）与 disabled 拒绝（不发网络请求）断言。
+- **F2 结果文件覆盖旧文件时未收紧权限（Task-020 复核重新开放）**：`auto_transcribe.py --save-result` 用 `os.open(..., 0o600)` 写结果文件，但 mode 只作用于新建——预置 0644 的旧文件覆盖后仍为 0644，含声纹向量的结果可能继续对本机其他用户可读。现改为同目录 0600 临时文件写入 + fsync + 原子替换：新建与覆盖（0600/0640/0644 初态）写后均仅本人可读写，替换失败时旧文件保持完整、临时文件被清理、CLI 非零退出且不虚报保存成功。回归覆盖单元级四种初态、实际 `--save-result` 与 `--json --save-result` 两种 CLI 覆盖路径、注入替换失败的回滚断言。
+- **F1 摘要 JSON 补位掩盖漏人、注入成功与质量通过混淆（Task-021 复核重新开放）**：推荐的"生成 JSON → 格式化 → 注入"路径中，格式化器为缺席发言人补"（摘要缺失，请补充。）"占位行，覆盖检查把占位行当作已覆盖——两人稿只给一人、`speaker_summary` 为空、摘要为空字符串均假通过 `complete`；同一发言人重复多条会被字典静默覆盖。现覆盖检查只统计有真实摘要的发言人（占位行保留用于提示但不计入覆盖）；重复发言人条目在归一化前被拒绝注入并指明标签；CLI `inject` 在覆盖不完整时以非零退出并明确"注入内容保留为草稿"；HTTP `/inject_summary`、`/verify_summary` 新增 `quality_passed` / `speaker_coverage` / `missing_speakers` / `unexpected_speakers` 字段，`success` 仅表示调用执行成功。回归新增 formatter 路径负例组（缺人/空/空摘要/仅占位/重复凑人数全部拦截，正例与重复注入不受影响）。
+
+### 改进
+
+- **Task-022 端到端证据补齐**：截图阈值参数一致性此前只有载荷捕获与提取器直测，缺"实际 CLI → HTTP → FFmpeg → 图片文件"链路证据。回归新增 stub server 端到端组（MOSS/CAM++ 为同构替身，HTTP/CLI/FFmpeg/图片链路真实执行，动态端口且声纹库指向临时路径）：同一 12 秒三页合成视频经单文件 HTTP、`transcribe.py`、`auto_transcribe.py` 三入口输出截图引用与文件完全一致（默认各 3 帧 0/4/8 秒）；显式阈值 20 与默认一致、27 仅首帧、`--no-slides` 零图成功产稿、批量端点不提取截图（既有能力边界如实断言）、纯音频默认不调用提取器。结果文件与截图断言均检查真实落盘文件而非仅日志。
+
+### 文档完善
+
+- SKILL.md 步骤 6 补充 inject 非零退出与 HTTP `quality_passed` 判据（写入成功 ≠ 质量通过）；`--save-result` 权限说明精确为"新建与覆盖均保持 0600"；版本号升至 2.3.0。
+- `references/api-reference.md` 新增"4.6 注入与验证端点"：`/inject_summary`、`/verify_summary` 的质量判定字段、占位行语义、重复条目拒绝行为与 CLI 退出码契约。
+- `references/speaker-registry.md` 精确 `disabled` 状态语义：只在单段未提取路径出现，多段跨段链接不受开关影响。
+
+### 验证
+
+- 四组回归全部退出 0：`verify_moss_mlx.py`（既有适配器）、`verify_speaker_registry.py`（新增多段×开关关闭反例与认领闭环）、`verify_summary_coverage.py`（新增 formatter 负例组）、`verify_default_routes.py`（新增权限组与 stub server 端到端组）。
+- 共享消费者兼容：`tingwu-asr/scripts/tests/test_summary_flow.py` ALL PASS（exit 0）。
+- 缺口与边界：真实模型烟测、独立声纹准确率（Task-024）与无旧上下文 Agent 前向检查（Task-025 关闭条件 3）保持 NOT_VERIFIED；本轮全部使用合成/模拟输入与临时库，生产声纹库未触碰。
+
 ## [2.2.1] - 2026-09-27
 
 ### 修复

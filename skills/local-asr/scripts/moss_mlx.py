@@ -397,9 +397,9 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
     timings = {}
     warnings = []
     speaker_extraction_failed = False
+    # disabled 状态按实际提取/链接路径声明（Task-019 F3）：多段跨段链接不受
+    # FUNASR_MOSS_SPEAKER_EMBEDDINGS 开关影响（既有行为），有向量的标签不得标 disabled。
     speaker_disabled_reason: str | None = None
-    if diarize and not SPEAKER_EMBEDDINGS_ENABLED:
-        speaker_disabled_reason = "声纹提取已显式关闭（FUNASR_MOSS_SPEAKER_EMBEDDINGS=0）"
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="moss_mlx_") as temp_dir:
         workspace = Path(temp_dir)
@@ -461,16 +461,19 @@ def transcribe(file_path: str, model, speaker_model_factory=None, hotwords: list
                 for index, (_, segments) in enumerate(chunks)
                 for segment in segments
             ]
-            if diarize and SPEAKER_EMBEDDINGS_ENABLED and speaker_model_factory is not None and len(chunks) == 1:
-                # 单段录音：无跨段链接需求，但为声纹识别/认领提取嵌入
-                try:
-                    speaker_model = speaker_model_factory()
-                    speaker_embeddings = _speaker_embeddings(chunks[0][0], chunks[0][1], speaker_model)
-                except Exception as exc:
-                    speaker_extraction_failed = True
-                    warnings.append(f"声纹提取失败，本次不做说话人识别: {exc}")
-            elif diarize and SPEAKER_EMBEDDINGS_ENABLED and speaker_model_factory is None and len(chunks) == 1:
-                speaker_disabled_reason = "CAM++ 说话人模型不可用，未提取声纹"
+            if diarize and len(chunks) == 1:
+                # 单段录音：无跨段链接需求，附加提取按开关与模型可用性决定
+                if not SPEAKER_EMBEDDINGS_ENABLED:
+                    speaker_disabled_reason = "声纹提取已显式关闭（FUNASR_MOSS_SPEAKER_EMBEDDINGS=0）"
+                elif speaker_model_factory is None:
+                    speaker_disabled_reason = "CAM++ 说话人模型不可用，未提取声纹"
+                else:
+                    try:
+                        speaker_model = speaker_model_factory()
+                        speaker_embeddings = _speaker_embeddings(chunks[0][0], chunks[0][1], speaker_model)
+                    except Exception as exc:
+                        speaker_extraction_failed = True
+                        warnings.append(f"声纹提取失败，本次不做说话人识别: {exc}")
         timings["speaker_link_s"] = round(time.perf_counter() - phase, 3)
         sentence_info = []
         for segment in linked:

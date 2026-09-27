@@ -6,7 +6,8 @@
 
 - 转录时（默认 MOSS 路径、开启 `diarize`），CAM++ 声纹模型为每个文件内说话人提取 192 维声纹向量（每人最多取 30 秒、至少 3 秒音频）。
 - 转录响应携带 `speaker_embeddings`（各说话人向量，供认领注册）、`speaker_identification`（与声纹库的**逐人**比对结果，首次空库时全部为 null）和 `speaker_states`（每位说话人的完整识别状态）。
-- `speaker_states` 状态语义：`matched`（命中注册声纹）、`unknown`（有声纹未达阈值，可认领注册）、`insufficient_audio`（总发言不足 3 秒，无声纹向量，只能本稿标注不能注册）、`extraction_failed`（提取/识别失败，已降级保持匿名并告警）、`disabled`（fast/显式关闭/CAM++ 不可用）。认领流程只对 `unknown` 执行。
+- `speaker_states` 状态语义：`matched`（命中注册声纹）、`unknown`（有声纹未达阈值，可认领注册）、`insufficient_audio`（总发言不足 3 秒，无声纹向量，只能本稿标注不能注册）、`extraction_failed`（提取/识别失败，已降级保持匿名并告警）、`disabled`（fast/单段显式关闭提取/CAM++ 不可用）。认领流程只对 `unknown` 执行。
+- **`disabled` 只在实际未提取声纹的路径出现**：多段长录音的跨段链接不受 `FUNASR_MOSS_SPEAKER_EMBEDDINGS=0` 开关影响（既有行为），链接产出向量的标签在空库时为 `unknown`、命中时为 `matched`，不会被误标为 disabled；开关仅跳过单段录音的附加提取。状态、向量、warnings 与 CLI 认领提示逐标签一致。
 - 比对使用余弦相似度，默认阈值 **0.55**（环境变量 `FUNASR_SPEAKER_IDENTIFY_THRESHOLD` 可调，范围 0–1；由六段真实录音验收标定——同人跨录音最低 0.56、非同人最高 0.14，分离边际充足，0.60 会漏识微信 8kHz 弱信道录音）。达到阈值的标签标注注册名，未达阈值保持匿名并可在 warnings 中看到提示。**score 是归一化向量的余弦相似度（0–1），不是经过校准的身份正确概率**。
 - 同一次录音内，一个注册名最多命中一个说话人标签（分数最高者优先），避免两个匿名标签都映射到同一注册人。
 - 命中的说话人在输出 Markdown 中直接显示注册名（如"杨律师 00:02:49"），并在文件头附识别注记（含声纹相似度）；未命中的保持"发言人N"。
