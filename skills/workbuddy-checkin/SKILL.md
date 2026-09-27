@@ -1,7 +1,7 @@
 ---
 name: workbuddy-checkin
 description: WorkBuddy 每日积分自动签到。自动解密本地登录令牌，调用官方签到 API 完成每日积分领取（100 积分/天，连续第 7 天 1000 积分），并支持配置定时任务。触发词：WorkBuddy 签到、每日积分、check-in、credits。
-version: "1.0.5"
+version: "1.0.6"
 license: MIT
 ---
 
@@ -12,17 +12,20 @@ license: MIT
 
 ## 原理
 
-1. WorkBuddy 桌面端登录后，会在本地保存登录态。**v5.3.8+ 的新版桌面端**改为明文 JSON 文件：
+1. WorkBuddy 桌面端登录后，会在本地保存登录态。**v5.3.8+ 的新版桌面端**使用 JSON 文件：
    - macOS：`~/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info`
-   - 结构 `{ account, auth: { accessToken, refreshToken, expiresAt, ... }, accounts }`，桌面端临近过期会自动刷新，纯 Node 即可读取 `auth.accessToken`。
-2. **旧版 WorkBuddy/CodeBuddy** 仍把 auth session 用 Electron `safeStorage` 加密存于 `state.vscdb`；新版明文文件缺失时回退到此路径，用 Electron 运行时执行 `safeStorage.decryptString()` 解密（macOS 命中钥匙串；Windows/Linux 走 DPAPI/keyring）。
-3. 运行时策略：**Node 优先**（读新版明文文件，无需 Electron），缺失时回退 Electron（解旧版 `state.vscdb`）。
-4. 调用腾讯官方签到 API：
+   - 结构 `{ account, auth: { accessToken, refreshToken, expiresAt, ... }, accounts }`，桌面端临近过期会自动刷新。
+2. **accessToken 存储形态按版本分两种**（1.0.6 起均支持）：
+   - **v5.3.8 ~ 5.5.x：明文字符串**，纯 Node 直接读取；
+   - **v5.6.2+：`$wbEncrypted` 信封对象**（`{ $wbEncrypted: 1, envelope }`，AES-256-GCM）。解密所需的对称静态钥编译在 WorkBuddy 定制 Electron 里，脚本以 `ELECTRON_RUN_AS_NODE=1`（纯 Node 模式，不启动 GUI）调用其原生绑定 `workbuddyStorage.loggerGet()` 取得，再按官方 `AtRestCrypto` sym-v1 格式（sha256 派生密钥 + 域分离 AAD）在本进程完成解密。全程跟随官方密钥管理，不硬编码任何密钥。
+3. **旧版 WorkBuddy/CodeBuddy** 仍把 auth session 用 Electron `safeStorage` 加密存于 `state.vscdb`；新版登录态文件缺失时回退到此路径，用 Electron 运行时执行 `safeStorage.decryptString()` 解密（macOS 命中钥匙串；Windows/Linux 走 DPAPI/keyring）。
+4. 运行时策略：**Node 优先**（读新版登录态文件，无需 Electron），缺失时回退 Electron（解旧版 `state.vscdb`）。信封解密用的 WorkBuddy 二进制在已安装桌面端的机器上自动定位。
+5. 调用腾讯官方签到 API：
    - 查状态：`POST https://copilot.tencent.com/v2/billing/meter/checkin-status`
    - 执行签到：`POST https://copilot.tencent.com/v2/billing/meter/daily-checkin`
    - 认证：`Authorization: Bearer <accessToken>`，并按桌面端 `buildHeaders` 附带 `X-User-Id: <account.uid>`；有 `auth.domain` 时加 `X-Domain`，企业账号另加 `X-Enterprise-Id` / `X-Tenant-Id`
    - 兼容说明：`checkin.ps1` 走上述 `/v2/` 全量签名（对齐桌面端）；`checkin.sh` 仍走不带 `/v2/` 前缀、仅 `Authorization` 的旧写法。**两种写法实测均返回 200**（见 CHANGELOG 1.0.3 的验证矩阵），网关当前未强制 `/v2/` 或 `X-User-Id`；对齐桌面端属前向兼容加固，不是修复 401 的必要条件
-5. 脚本幂等：直接调用 `daily-checkin`（不再预查 `checkin-status`）。`daily-checkin` 返回 `code=10001`（今天已签到）视为成功；`today_checked_in` 字段不可靠，预查反而会在假阳性时漏签、中断连续签到。
+6. 脚本幂等：直接调用 `daily-checkin`（不再预查 `checkin-status`）。`daily-checkin` 返回 `code=10001`（今天已签到）视为成功；`today_checked_in` 字段不可靠，预查反而会在假阳性时漏签、中断连续签到。
 
 > ⚠️ v5.3.8 实测 `checkin-status` 的 `today_checked_in` 字段不可靠（签到成功后仍可能为 `false`），原计划用于预查跳过的逻辑已移除；幂等性完全依赖 `daily-checkin` 的 `code=10001` 兜底。
 
@@ -147,9 +150,9 @@ WorkBuddy 环境下可调用自动化任务工具（`automation_update`，recurr
 
 ## 平台说明
 
-新版明文登录态（v5.3.8+，主路径，Node 读取）与旧版 `state.vscdb`（回退路径，Electron 解密）均自动探测。
+新版登录态文件（v5.3.8+，主路径：明文 / v5.6.2+ 信封，Node 读取）与旧版 `state.vscdb`（回退路径，Electron 解密）均自动探测。
 
-| 平台 | 脚本 | 新版明文登录态（v5.3.8+，主路径） | 旧版 state.vscdb（回退） |
+| 平台 | 脚本 | 新版登录态文件（v5.3.8+，主路径） | 旧版 state.vscdb（回退） |
 |---|---|---|---|
 | macOS | `checkin.sh` | `~/Library/Application Support/CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info` | `~/Library/Application Support/WorkBuddy/User/globalStorage/state.vscdb` |
 | Windows | `checkin.ps1`（或 Git Bash 跑 `checkin.sh`） | `%LOCALAPPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info`（回退 `%APPDATA%`） | `%APPDATA%\WorkBuddy\User\globalStorage\state.vscdb` |
@@ -163,6 +166,7 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 | 变量 | 作用 |
 |------|------|
 | `WB_CHECKIN_NODE=<path>` | 指定 Node 二进制路径（v5.3.8+ 主路径用，sh/ps1 通用） |
+| `WB_CHECKIN_WORKBUDDY_BIN=<path>` | 指定 WorkBuddy 桌面端主程序路径（v5.6.2+ 信封解密取静态钥用；自动探测失败时设置） |
 | `WB_CHECKIN_ELECTRON=<path>` | 指定 Electron 二进制路径（仅旧版 state.vscdb 回退用，sh 版） |
 | `-ElectronPath <path>` | 同上（ps1 版参数） |
 | `WB_CHECKIN_APP_NAME=CodeBuddy` | 兼容旧版应用名（仅旧版 state.vscdb 分支的 macOS 钥匙串密钥） |
@@ -170,6 +174,8 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 
 ## 排错
 
+- **升级 WorkBuddy 5.6.2+ 后签到失败，报「未找到新版明文认证文件」（< 1.0.6）**：桌面端已把 `accessToken` 改为 `$wbEncrypted` 信封加密（issue #191）。升级 skill 到 1.0.6+ 即可解密；1.0.6 起若再失败会报确切原因（见下一条）。
+- **报「无法从 WorkBuddy 定制 Electron 获取静态钥」**：v5.6.2+ 信封解密需定位 WorkBuddy 桌面端主程序（以纯 Node 模式调用，不启动 GUI）。自动探测路径未覆盖自定义安装位置时，用 `WB_CHECKIN_WORKBUDDY_BIN=<主程序路径>` 显式指定（Windows 一般是 `WorkBuddy.exe`，macOS 是 `WorkBuddy.app/Contents/MacOS/` 下的主二进制）。报「静态钥与信封 keyId 不匹配」则说明官方已更换加密方案，请提 issue。
 - **「获取令牌失败（未知原因）」/ 未找到本地登录态**：先确认 WorkBuddy 桌面端已登录并打开过至少一次。v5.3.8+ 用户检查 Node.js 是否安装（`node -v`），或用 `WB_CHECKIN_NODE` 指定。
 - **v5.3.8 已登录但仍报令牌失败**：本机 skill 版本过旧（< 1.0.2），不识别新版明文存储；升级到 1.0.2+。
 - **当日重跑提示「签到未成功 / code=10001」**：旧版本（< 1.0.2）未把 `code=10001` 识别为「已签到」；1.0.2+ 会正确报告「今日已签到」。
@@ -227,8 +233,8 @@ Windows PowerShell 执行策略用 `-ExecutionPolicy Bypass`；需 `curl.exe`（
 
 | 权限 | 范围 | 说明 |
 |------|------|------|
-| 本地代码执行 | 仅本 skill 的 `checkin.sh/.ps1`、`decrypt-token.js`、`setup.sh/.ps1` | 用户手动或定时触发，非后台常驻 |
-| 本地文件读取 | 用户目录下的 WorkBuddy 登录态（v5.3.8+ 明文 `workbuddy-desktop.info` / 旧版 `state.vscdb`） | 读取登录态以获取调用官方接口所需的 accessToken |
+| 本地代码执行 | 仅本 skill 的 `checkin.sh/.ps1`、`decrypt-token.js`、`setup.sh/.ps1`，以及以纯 Node 模式（`ELECTRON_RUN_AS_NODE=1`）调用本机 WorkBuddy 主程序提取静态钥（v5.6.2+ 信封解密用，不启动 GUI、不修改 WorkBuddy 任何状态） | 用户手动或定时触发，非后台常驻 |
+| 本地文件读取 | 用户目录下的 WorkBuddy 登录态（v5.3.8+ 登录态文件 `workbuddy-desktop.info` / 旧版 `state.vscdb`） | 读取登录态以获取调用官方接口所需的 accessToken |
 | 网络访问 | 仅 `copilot.tencent.com` 官方签到接口 | 不访问任何其他域名 |
-| 环境变量读取 | `WB_CHECKIN_*`（Node/Electron 路径、应用名、错峰、回退开关） | 均为本机用户显式配置 |
+| 环境变量读取 | `WB_CHECKIN_*`（Node/WorkBuddy/Electron 路径、应用名、错峰、回退开关） | 均为本机用户显式配置 |
 | 定时任务 | 由用户显式配置 crontab / launchd / 任务计划程序 | skill 不自动写入系统定时 |
