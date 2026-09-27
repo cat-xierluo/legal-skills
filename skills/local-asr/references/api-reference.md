@@ -355,6 +355,44 @@ AI 总结功能会生成：
 ============================================================
 ```
 
+### 4.6 注入与验证端点（写入成功 ≠ 质量通过）
+
+#### POST /inject_summary
+
+```json
+{
+  "md_path": "/path/to/audio.md",
+  "summary_content": "<!-- AI-SUMMARY:START -->...<!-- AI-SUMMARY:END -->"
+}
+```
+
+响应（`success` 只表示写入执行成功，**质量判定见 `quality_passed`**）：
+
+```json
+{
+  "success": true,
+  "output_path": "/path/to/audio.md",
+  "quality_passed": false,
+  "speaker_coverage": "incomplete",
+  "missing_speakers": ["发言人2"],
+  "unexpected_speakers": []
+}
+```
+
+- `quality_passed`：`has_summary` 且章节齐全且发言人覆盖不是 `incomplete` 时为 `true`；`false` 时摘要已写入文件但**保留为草稿，不得视为已验收交付**，须补齐后重新生成并注入。
+- `speaker_coverage`：`complete`（每位稿件发言人都有真实摘要且无杜撰）/ `incomplete`（漏人、杜撰或仅有缺失占位）/ `not_applicable`（稿件无发言行结构，无法验证，不假定通过）。
+- 缺席发言人在注入内容中会以"（摘要缺失，请补充。）"占位行呈现；占位行**不充当覆盖**，覆盖检查只统计有真实摘要的发言人。
+- 总结 JSON 中同一发言人出现多条（重复凑人数）时，注入被拒绝（`success: false` 并指明重复标签），不写入半成品。
+
+#### POST /verify_summary
+
+响应在 4 章字段基础上新增 `speaker_coverage`（语义同上）、`expected_speakers` / `covered_speakers` / `missing_speakers` / `unexpected_speakers` 集合与 `quality_passed`。`success: true` 仅表示调用执行成功；消费者必须以 `quality_passed` / `speaker_coverage` 判定质量，不得只凭 `success` 宣布已交付。
+
+#### CLI `summary.py inject` / `verify`
+
+- `inject`：数据不合格（发言人标签重复）拒绝写入并非零退出；写入成功但覆盖不完整时打印"摘要质量未通过"（注入内容保留为草稿）并**非零退出**。
+- `verify`：覆盖不完整非零退出并指明缺谁；`complete` / `not_applicable`（如实说明）退出 0。
+
 ## 5. 声纹端点
 
 声纹库文件 `assets/speaker-profiles.json` 属本地个人数据（.gitignore 排除）。读写由服务与 CLI 共用的存储层保护：注册向量按当前模型（CAM++，192 维）显式校验；写入为原子替换并加进程间锁；库损坏时读路径降级告警、写路径拒绝并保留原件；库与锁文件仅当前用户可读写。

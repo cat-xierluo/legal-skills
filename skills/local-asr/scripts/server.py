@@ -1860,10 +1860,21 @@ async def inject_summary(request: SummaryRequest):
         # 写入总结到文件
         output_path = Path(request.output_path) if request.output_path else md_path
         SUMMARY_MODULE.inject_summary_to_file(md_path, summary_content)
-        
+
+        # success 表示写入执行成功；质量判定见 quality_passed / speaker_coverage（Task-021 F1）
+        check = SUMMARY_MODULE.verify_summary_in_file(md_path)
+        quality_passed = bool(
+            check.get("has_summary")
+            and check.get("has_all_sections")
+            and check.get("speaker_coverage") != "incomplete"
+        )
         return {
             "success": True,
-            "output_path": str(output_path)
+            "output_path": str(output_path),
+            "quality_passed": quality_passed,
+            "speaker_coverage": check.get("speaker_coverage"),
+            "missing_speakers": check.get("missing_speakers", []),
+            "unexpected_speakers": check.get("unexpected_speakers", []),
         }
         
     except HTTPException:
@@ -1901,6 +1912,12 @@ async def verify_summary(request: VerifySummaryRequest):
         result = SUMMARY_MODULE.verify_summary_in_file(md_path)
         result["md_path"] = str(md_path)
         result["success"] = True
+        # success 只表示调用执行成功；质量以 quality_passed / speaker_coverage 为准（Task-021 F1）
+        result["quality_passed"] = bool(
+            result.get("has_summary")
+            and result.get("has_all_sections")
+            and result.get("speaker_coverage") != "incomplete"
+        )
         return result
 
     except HTTPException:
