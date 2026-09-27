@@ -7,7 +7,9 @@
 - 覆盖检查：漏人/重复凑数/杜撰发言人必须失败，完整合法摘要通过
 - 不误报：正文提及人名、截图引用不凭空增加发言人
 - fast 无说话人稿件：not_applicable（不假定通过也不误判失败）
-- CLI verify 对覆盖不完整以非零退出码传递给调用方
+- CLI verify/inject 对覆盖不完整以非零退出码传递给调用方
+- formatter 负例（Task-021 F1）：缺失占位不充当覆盖、重复条目拒绝注入、
+  推荐的"生成 JSON → 格式化 → 注入 → 验证"路径与 CLI 退出码一致
 
 不依赖模型推理，全部用合成 Markdown 与受控摘要数据。
 """
@@ -88,6 +90,17 @@ FAST_MD = """# 转录：单人课程.m4a
 
 01:30
 继续讲解。
+"""
+
+TWO_SPK_MD = """# 转录：两人对话.wav
+
+## 转录内容
+
+发言人1 00:00
+第一人提问。
+
+发言人2 00:30
+第二人解答。
 """
 
 
@@ -225,10 +238,121 @@ def test_prompt_injection_safe(root: Path) -> None:
     print("注入安全：正文与实名标注未损坏，JSON 摘要按稿件标签注入且覆盖完整")
 
 
-def _write_json(root: Path, data: dict) -> Path:
-    path = root / "summary.json"
+def _write_json(root: Path, data: dict, name: str = "summary.json") -> Path:
+    path = root / name
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def _speaker(order: str, name: str = "", text: str | None = None) -> dict:
+    entry = {"speaker_order": order, "summary": f"{order}的观点。" if text is None else text}
+    if name:
+        entry["speaker_name"] = name
+    return entry
+
+
+def test_json_formatter_quality(root: Path) -> None:
+    """Task-021 F1：推荐的"生成 JSON → 格式化 → 注入 → 验证"路径，缺失占位不充当覆盖。"""
+    base = {
+        "full_summary": "两人讨论了流程。",
+        "highlights": ["要点"],
+        "keywords": ["关键词"],
+    }
+
+    def run_inject(md_name: str, speakers: list, raw: dict | None = None) -> tuple:
+        path = write_md(root, md_name, TWO_SPK_MD)
+        data = dict(base)
+        data["speaker_summary"] = speakers
+        return path, summary.inject_from_file(path, _write_json(root, data, f"{md_name}.json"))
+
+    # 两人稿 JSON 只给第一人：formatter 补的占位行不得算覆盖，verify 必须报漏人
+    path, (success, message) = run_inject("fmt_missing.md", [_speaker("发言人1")])
+    assert success, message
+    content = path.read_text(encoding="utf-8")
+    assert "发言人2：（摘要缺失，请补充。）" in content, "占位行保留可提示补齐"
+    result = summary.verify_summary_in_file(path)
+    assert result["speaker_coverage"] == "incomplete", result
+    assert result["missing_speakers"] == ["发言人2"], result
+
+    # CLI inject 同路径：质量失败非零退出（写入成功 ≠ 验收通过）
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "inject", str(path),
+         str(root / "fmt_missing.md.json")],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0, proc.stdout
+    assert "摘要质量未通过" in proc.stdout and "发言人2" in proc.stdout
+
+    # 空 speaker_summary：两人全部缺失
+    path, (success, _) = run_inject("fmt_empty.md", [])
+    assert success
+    result = summary.verify_summary_in_file(path)
+    assert result["speaker_coverage"] == "incomplete"
+    assert result["missing_speakers"] == ["发言人1", "发言人2"], result
+
+    # summary 为空字符串：该条目无效，等同缺失
+    path, (success, _) = run_inject("fmt_blank.md", [_speaker("发言人1", text="")])
+    assert success
+    result = summary.verify_summary_in_file(path)
+    assert result["speaker_coverage"] == "incomplete"
+    assert result["missing_speakers"] == ["发言人1", "发言人2"], result
+
+    # 摘要内容只有占位文本：不充当覆盖
+    path, (success, _) = run_inject(
+        "fmt_placeholder.md",
+        [_speaker("发言人1", text=summary.MISSING_SUMMARY_PLACEHOLDER), _speaker("发言人2", text="乙")],
+    )
+    assert success
+    result = summary.verify_summary_in_file(path)
+    assert result["speaker_coverage"] == "incomplete", result
+    assert result["missing_speakers"] == ["发言人1"], result
+    assert result["covered_speakers"] == ["发言人2"], result
+
+    # 重复第一人凑人数：formatter 在归一化前拒绝，不写入半成品
+    path, (success, message) = run_inject(
+        "fmt_duplicate.md", [_speaker("发言人1", text="甲"), _speaker("发言人1", text="甲又")]
+    )
+    assert not success, "重复发言人条目必须拒绝注入"
+    assert "发言人1" in message and "重复" in message, message
+    assert summary.SUMMARY_START not in path.read_text(encoding="utf-8"), "被拒绝的数据不得写入文件"
+
+    # 三人稿同样适用（漏两人）
+    three_md = write_md(root, "three.md", LONG_MD)
+    data = dict(base)
+    data["speaker_summary"] = [_speaker("发言人1", text="甲")]
+    success, _ = summary.inject_from_file(three_md, _write_json(root, data, "three.json"))
+    assert success
+    result = summary.verify_summary_in_file(three_md)
+    assert result["speaker_coverage"] == "incomplete"
+    assert result["missing_speakers"] == ["发言人2", "发言人3"], result
+
+    # 完整合法 JSON（含姓名注记）正例：complete 且 CLI inject 退出 0
+    path = write_md(root, "fmt_ok.md", TWO_SPK_MD)
+    data = dict(base)
+    data["speaker_summary"] = [_speaker("发言人1", name="杨律师"), _speaker("发言人2", name="客户")]
+    ok_json = _write_json(root, data, "fmt_ok.json")
+    success, message = summary.inject_from_file(path, ok_json)
+    assert success, message
+    result = summary.verify_summary_in_file(path)
+    assert result["speaker_coverage"] == "complete", result
+    assert "- 发言人1（杨律师）：" in path.read_text(encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "inject", str(path), str(ok_json)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    # 重复注入不破坏正文：正文发言与时间戳仍在
+    assert "第一人提问。" in path.read_text(encoding="utf-8")
+
+    # CLI verify 对 formatter 产出的漏人稿同样非零退出
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "verify", str(root / "fmt_missing.md")],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0 and "发言人2" in proc.stdout
+    print("formatter 负例：缺人/空/空摘要/仅占位/重复凑人数均被拦截，"
+          "CLI inject 与 verify 退出码一致反映质量失败，正例与重复注入不受影响")
 
 
 def main() -> None:
@@ -238,7 +362,8 @@ def main() -> None:
         test_coverage_check(root)
         test_cli_exit_code(root)
         test_prompt_injection_safe(root)
-    print("摘要说话人归属与覆盖回归通过（提取保留身份 / 覆盖正反例 / CLI 退出码 / 注入安全）")
+        test_json_formatter_quality(root)
+    print("摘要说话人归属与覆盖回归通过（提取保留身份 / 覆盖正反例 / CLI 退出码 / 注入安全 / formatter 负例）")
 
 
 if __name__ == "__main__":
