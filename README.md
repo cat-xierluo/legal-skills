@@ -575,15 +575,6 @@
 <td></td>
 </tr>
 <tr>
-<td><a href="skills/workbuddy-checkin/"><strong>workbuddy-checkin</strong></a></td>
-<td>工具·签到</td>
-<td style="word-break:break-word">WorkBuddy 每日积分自动签到：自动解密本地登录令牌调用官方签到 API，支持连续签到与补签窗口</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.5</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/workbuddy-checkin-1.0.5.zip">下载</a></td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/invoice-organizer/"><strong>invoice-organizer</strong></a></td>
 <td>通用·报销整理</td>
 <td style="word-break:break-word">整理一批发票/票据 PDF（增值税普通发票、铁路电子客票、住宿交通餐饮等），按购买方抬头匹配所属案件项目，向上回溯读取项目上下文自动填补事由，复制归档（原件不动）并出具报销清单（可切换消费清单/对账流水）</td>
@@ -594,6 +585,8 @@
 </tr>
 </tbody>
 </table>
+
+> **已下架：workbuddy-checkin（2026-09-28）**：WorkBuddy 官方自 v5.6.2 起对本地登录态启用信封加密等技术保护措施，继续维护解密链路并公开分发的合规风险显著上升，经评估下架该技能并停止公开分发，历史版本不再提供下载。
 
 ### 🔧 开发工具
 
