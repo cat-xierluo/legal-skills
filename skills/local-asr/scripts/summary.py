@@ -151,23 +151,30 @@ def _build_summary_markdown(
     speaker_entries = data.get("speaker_summary") or data.get("speaker_summaries") or []
     normalized: Dict[str, Dict[str, str]] = {}
     duplicate_orders: list[str] = []
+    seen_orders: set[str] = set()
     if isinstance(speaker_entries, list):
         for entry in speaker_entries:
             if isinstance(entry, dict):
                 order = str(entry.get("speaker_order") or entry.get("speaker") or "").strip()
                 name = str(entry.get("speaker_name") or entry.get("name") or entry.get("speaker") or "").strip()
                 summary = str(entry.get("summary") or entry.get("content") or "").strip()
-                if order and summary:
-                    # 重复条目在归一化（dict 覆盖）前发现，避免抹掉重复证据（Task-021 F1）
-                    if order in normalized:
-                        duplicate_orders.append(order)
-                        continue
+                if not order:
+                    continue
+                # 重复判定在归一化（dict 覆盖）前、且不依赖摘要非空（Task-021 余项）：
+                # 同一标签"空摘要 + 有效摘要"任意顺序出现都抹掉凑人数证据，必须拒绝
+                if order in seen_orders:
+                    duplicate_orders.append(order)
+                    continue
+                seen_orders.add(order)
+                # 无重复的空摘要条目不写入 normalized，按缺人/占位处理
+                if summary:
                     normalized[order] = {"name": name or "未知", "summary": summary}
             elif isinstance(entry, str) and entry.strip():
                 label = entry.strip()
-                if label in normalized:
+                if label in seen_orders:
                     duplicate_orders.append(label)
                     continue
+                seen_orders.add(label)
                 normalized[label] = {"name": label, "summary": label}
     if duplicate_orders:
         raise ValueError(
@@ -561,11 +568,13 @@ def inject_from_file(md_path: Path, summary_file: Path) -> tuple[bool, str]:
 
     inject_summary_to_file(md_path, content_to_inject)
 
-    # 验证注入结果（含发言人覆盖；incomplete 时如实报告，调用方不得当作已验收交付）
+    # 验证注入结果（含章节完整性与发言人覆盖；失败时如实报告，调用方不得当作已验收交付）
     result = verify_summary_in_file(md_path)
     if not result["has_summary"]:
         return False, "注入后验证失败，总结未写入文件"
     message = f"总结已注入 ({result['summary_length']} 字符)"
+    if not result["has_all_sections"]:
+        message += f"；⚠️ 缺少必需章节: {', '.join(result['missing_sections'])}"
     coverage = result.get("speaker_coverage", "not_applicable")
     if coverage == "incomplete":
         if result["missing_speakers"]:
@@ -605,10 +614,21 @@ def main():
             print(f"❌ {msg}")
             sys.exit(1)
         print(f"✅ {msg}")
-        # 写入成功 ≠ 质量通过（Task-021 F1）：覆盖不完整时非零退出并明确草稿语义
+        # 写入成功 ≠ 质量通过（Task-021 F1/余项）：质量判定与 verify 一致——
+        # 章节完整性 + 发言人覆盖；不完整内容保留为草稿，但必须打印未通过并非零退出
         result = verify_summary_in_file(md_path)
+        quality_failures: list[str] = []
+        if not result["has_all_sections"]:
+            quality_failures.append(f"缺少必需章节: {', '.join(result['missing_sections'])}")
         if result.get("speaker_coverage") == "incomplete":
-            print("❌ 摘要质量未通过：发言人覆盖不完整（见上方遗漏/多余提示）。"
+            if result["missing_speakers"]:
+                quality_failures.append(f"摘要遗漏发言人: {', '.join(result['missing_speakers'])}")
+            if result["unexpected_speakers"]:
+                quality_failures.append(
+                    f"摘要出现稿件中不存在的发言人: {', '.join(result['unexpected_speakers'])}"
+                )
+        if quality_failures:
+            print("❌ 摘要质量未通过：" + "；".join(quality_failures) + "。"
                   "注入内容已保留为草稿，须补齐后重新生成并注入，不得视为已验收交付")
             sys.exit(1)
 

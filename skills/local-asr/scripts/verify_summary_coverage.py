@@ -10,6 +10,8 @@
 - CLI verify/inject 对覆盖不完整以非零退出码传递给调用方
 - formatter 负例（Task-021 F1）：缺失占位不充当覆盖、重复条目拒绝注入、
   推荐的"生成 JSON → 格式化 → 注入 → 验证"路径与 CLI 退出码一致
+- 验收余例（2026-09-28）：空摘要重复条目（空+有效两种顺序）在归一化前拒绝；
+  缺必需章节时 CLI inject/verify 与 HTTP quality_passed 一致判质量失败
 
 不依赖模型推理，全部用合成 Markdown 与受控摘要数据。
 """
@@ -316,6 +318,22 @@ def test_json_formatter_quality(root: Path) -> None:
     assert "发言人1" in message and "重复" in message, message
     assert summary.SUMMARY_START not in path.read_text(encoding="utf-8"), "被拒绝的数据不得写入文件"
 
+    # 空摘要重复条目（2026-09-28 验收余项）：同一标签"空+有效"两种顺序都在
+    # 归一化前拒绝，不得静默跳过空条目后放行
+    for name, entries in (
+        ("fmt_dup_blank_first.md",
+         [_speaker("发言人1", text=""), _speaker("发言人1", text="甲"), _speaker("发言人2", text="乙")]),
+        ("fmt_dup_blank_second.md",
+         [_speaker("发言人1", text="甲"), _speaker("发言人1", text=""), _speaker("发言人2", text="乙")]),
+    ):
+        path = write_md(root, name, TWO_SPK_MD)
+        data = dict(base)
+        data["speaker_summary"] = entries
+        success, message = summary.inject_from_file(path, _write_json(root, data, f"{name}.json"))
+        assert not success, f"{name}: 空摘要重复条目必须拒绝注入"
+        assert "发言人1" in message and "重复" in message, message
+        assert summary.SUMMARY_START not in path.read_text(encoding="utf-8"), "被拒绝的数据不得写入文件"
+
     # 三人稿同样适用（漏两人）
     three_md = write_md(root, "three.md", LONG_MD)
     data = dict(base)
@@ -351,8 +369,63 @@ def test_json_formatter_quality(root: Path) -> None:
         capture_output=True, text=True,
     )
     assert proc.returncode != 0 and "发言人2" in proc.stdout
-    print("formatter 负例：缺人/空/空摘要/仅占位/重复凑人数均被拦截，"
+    print("formatter 负例：缺人/空/空摘要/仅占位/重复凑人数（含空+有效两种顺序）均被拦截，"
           "CLI inject 与 verify 退出码一致反映质量失败，正例与重复注入不受影响")
+
+
+def test_missing_section_quality_gate(root: Path) -> None:
+    """2026-09-28 验收余项：缺必需章节时 CLI inject 与 verify 一致非零，HTTP quality_passed=false。"""
+    # 缺"关键词"章节、但两人归属完整的纯 Markdown 摘要
+    payload = write_md(
+        root, "missing_section.payload.md",
+        "## AI 摘要\n### 全文总结\n概述。\n"
+        "### 发言人总结\n- 发言人1：甲\n- 发言人2：乙\n"
+        "### 重点内容\n- 要点\n",
+    )
+
+    # CLI inject：允许保留草稿，但必须非零退出并说明缺什么，不得只打印 ✅
+    path = write_md(root, "missing_section.md", TWO_SPK_MD)
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "inject", str(path), str(payload)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0, proc.stdout
+    assert "摘要质量未通过" in proc.stdout and "关键词" in proc.stdout, proc.stdout
+    assert "第一人提问。" in path.read_text(encoding="utf-8"), "草稿注入不得损坏正文"
+
+    # 同一文件 verify：同样非零且指出缺失章节
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "verify", str(path)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0 and "关键词" in proc.stdout, proc.stdout
+
+    # HTTP /inject_summary 对同一输入 quality_passed=false；success 仍只表示写入执行成功
+    import server
+    from fastapi.testclient import TestClient
+    http_path = write_md(root, "missing_section_http.md", TWO_SPK_MD)
+    client = TestClient(server.app, raise_server_exceptions=False)
+    response = client.post("/inject_summary", json={
+        "md_path": str(http_path),
+        "summary_content": payload.read_text(encoding="utf-8"),
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True and body["quality_passed"] is False, body
+    check = summary.verify_summary_in_file(http_path)
+    assert check["missing_sections"] == ["关键词"], check
+
+    # 对照正例：章节齐全的纯 Markdown 摘要 CLI inject 退出 0
+    ok_md = write_md(root, "complete_section.md", TWO_SPK_MD)
+    ok_payload = write_md(root, "complete_section.payload.md", summary_block(
+        [("发言人1", "甲观点"), ("发言人2", "乙观点")]
+    ))
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "summary.py"), "inject", str(ok_md), str(ok_payload)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    print("缺章节质量门：CLI inject/verify 与 HTTP quality_passed 一致拒绝缺章节草稿，完整 Markdown 通过")
 
 
 def main() -> None:
@@ -363,7 +436,9 @@ def main() -> None:
         test_cli_exit_code(root)
         test_prompt_injection_safe(root)
         test_json_formatter_quality(root)
-    print("摘要说话人归属与覆盖回归通过（提取保留身份 / 覆盖正反例 / CLI 退出码 / 注入安全 / formatter 负例）")
+        test_missing_section_quality_gate(root)
+    print("摘要说话人归属与覆盖回归通过（提取保留身份 / 覆盖正反例 / CLI 退出码 / 注入安全 / "
+          "formatter 负例 / 缺章节质量门）")
 
 
 if __name__ == "__main__":
