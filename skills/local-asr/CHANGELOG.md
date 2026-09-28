@@ -2,6 +2,19 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [2.3.1] - 2026-09-28
+
+### 修复
+
+- **F1 余项一：空摘要重复条目绕过重复检测（Task-021 独立验收重新开放）**：`_build_summary_markdown` 的重复检测只针对"标签与摘要都非空"的条目——同一发言人给两条（一条空摘要、一条有效摘要，先后顺序均可）时空条目被静默跳过，重复凑人数证据被抹掉，两人稿注入假通过 `speaker_coverage=complete`。现重复判定移到归一化前且不依赖摘要非空：`seen_orders` 按原始 `speaker_order` 记录，同一标签第二条（含空摘要）即拒绝注入并指明标签；无重复的空摘要条目仍按缺人/占位处理，行为不变。
+- **F1 余项二：缺必需章节时 CLI inject 假成功（Task-021 独立验收重新开放）**：纯 Markdown 摘要缺"关键词"等必需章节时，`summary.py inject` 只检查发言人覆盖，exit 0 并打印 ✅，而同一文件 `verify` exit 1、HTTP `quality_passed=false`。现 CLI `inject` 的质量门与 `verify`/HTTP 判定对齐：覆盖不完整或缺任一必需章节均打印"摘要质量未通过"并指明缺什么（注入内容保留为草稿）且非零退出；`inject_from_file` 消息同步附缺章节提示。HTTP 端逻辑未改（已正确）。
+
+### 验证
+
+- `verify_summary_coverage.py` 新增两组负向回归：空摘要重复条目（空+有效两种顺序，真正穿过 JSON formatter，拒绝写入且文件无摘要标记）；缺章节纯 Markdown 的 CLI inject/verify 非零、输出指明"关键词"、正文不损坏、HTTP `/inject_summary` `success=true` 且 `quality_passed=false`、完整 Markdown 正例退出 0。全组退出 0。
+- 四组回归（`verify_moss_mlx.py` / `verify_speaker_registry.py` / `verify_summary_coverage.py` / `verify_default_routes.py`）与共享消费者 `tingwu-asr/scripts/tests/test_summary_flow.py` 全部退出 0；2026-09-28 验收探针 `archive/20260928-v230-accept/reproduce_gaps.py` 对修复后代码重跑 exit 1（其断言的是缺陷行为，无法再复现即缺陷已消除；探针本体保持原样作为验收证据）。
+- 输入类型：全部为合成 Markdown/受控 JSON 与临时路径，生产声纹库与真实录音未参与；未验证范围与 Task-024/025 缺口不变（真实模型烟测、独立声纹准确率、无旧上下文 Agent 前向检查仍 NOT_VERIFIED）。
+
 ## [2.3.0] - 2026-09-27
 
 ### 修复
