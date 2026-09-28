@@ -286,8 +286,54 @@ fi
 # Lifecycle/worktree cleanup must succeed before any branch deletion.  In
 # particular, an unreadable or ambiguous paginated WorkerList must not leave a
 # deleted remote head while the authoritative worker resources remain live.
+# Session Context 归档(session-pilot 观测面, 2026-09-28): worktree 即将删除,
+# 把 METADATA/STATUS/RESULT 摘要快照到 PM home 的插件数据目录, 供会话领航员
+# 在 worker 收口后继续显示 branch/PR/终态。纯观测旁路: 归档失败只警告,
+# 不阻塞清理(环境变量 PM_CLEANUP_ARCHIVE_DIR 显式指路, =0 关闭);
+# 敏感面由字段白名单控制, 不整文件复制。必须在 clean-worktree 之前执行
+# (clean 会连 .claude/agent-sessions/ 一起删除)。
+archive_worker_snapshot() {
+  local arch_dir="$1" ctx="$WORKTREE/.claude/agent-sessions/$SESSION"
+  [ -f "$ctx/METADATA.json" ] || return 0
+  local branch model backend pr_num pr_url final_status result_head
+  branch=$(jq -r '.branch // ""' "$ctx/METADATA.json" 2>/dev/null)
+  model=$(jq -r '.runtime.model // ""' "$ctx/METADATA.json" 2>/dev/null)
+  backend=$(jq -r '.runtime.worker_backend // ""' "$ctx/METADATA.json" 2>/dev/null)
+  pr_num="$PR_NUMBER"
+  pr_url=$(jq -r '.pr.url // ""' "$ctx/METADATA.json" 2>/dev/null)
+  final_status=$(jq -r '.status // "done"' "$ctx/STATUS.json" 2>/dev/null || echo done)
+  result_head=$( { head -c 2000 "$ctx/RESULT.md" 2>/dev/null || true; } | jq -R -s . 2>/dev/null || true)
+  # RESULT.md 缺失时管道输出空串; --argjson 需要合法 JSON, 统一兜底 '""'
+  if [ -z "$result_head" ]; then result_head='""'; fi
+  mkdir -p "$arch_dir"
+  jq -n \
+    --arg session "$SESSION" \
+    --arg branch "$branch" \
+    --arg model "$model" \
+    --arg backend "$backend" \
+    --arg pr_number "$pr_num" \
+    --arg pr_url "$pr_url" \
+    --arg final_status "$final_status" \
+    --arg archived_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    --argjson result_head "$result_head" \
+    '{session:$session, branch:$branch, model:$model, backend:$backend,
+      pr_number:(if $pr_number=="" then null else ($pr_number|tonumber) end),
+      pr_url:$pr_url, final_status:$final_status, archived_at:$archived_at,
+      result_head:$result_head}' \
+    > "$arch_dir/$SESSION.json"
+}
+
 clean_args=(--project "$PROJECT" --branch "$BRANCH" --session "$SESSION" --worktree "$WORKTREE")
 [ "$EXECUTE" -eq 0 ] || clean_args+=(--execute)
+# 归档先于 lifecycle 清理执行(唯一还能读到 Session Context 的时点)
+if [ "$EXECUTE" -eq 1 ]; then
+  ARCHIVE_DIR="${PM_CLEANUP_ARCHIVE_DIR:-$HOME/.hermes/plugin-data/session-pilot/workers}"
+  if [ "$ARCHIVE_DIR" != "0" ] && [ -d "$WORKTREE" ]; then
+    if ! archive_worker_snapshot "$ARCHIVE_DIR" 2>/dev/null; then
+      echo "PM_CLEANUP_ARCHIVE_WARN: session-pilot snapshot failed (cleanup continues)" >&2
+    fi
+  fi
+fi
 if ! bash "$CLEAN_SCRIPT" "${clean_args[@]}"; then
   echo "PM_CLEANUP_RESULT: CLEANUP_PENDING remote=$remote_state worktree=retained local=retained reason=clean-worktree-refused" >&2
   exit 2

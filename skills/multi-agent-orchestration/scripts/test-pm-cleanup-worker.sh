@@ -88,6 +88,7 @@ run_cleanup() {
     PM_TEST_GH_MODE="${PM_TEST_GH_MODE:-merged}" \
     PM_TEST_CLEAN_LOG="$PM_TEST_CLEAN_LOG" \
     PM_CLEANUP_CLEAN_WORKTREE_SCRIPT="${PM_TEST_CLEAN_SCRIPT:-}" \
+    PM_CLEANUP_ARCHIVE_DIR="${PM_TEST_ARCHIVE_DIR:-$TMP_ROOT/archive}" \
     bash "$CLEANUP" --worktree "$WORKTREE" --branch "$BRANCH" --pr 123 \
       --expected-tip "$TIP" --delivery-mode "$DELIVERY_MODE" \
       --delivery-commit "$DELIVERY_COMMIT" --repository github.com/example/project "$@"
@@ -168,6 +169,9 @@ assert_true "clean-worktree failure reports retained remote ordering" grep -qF '
 
 run_cleanup --execute > "$TMP_ROOT/merged.out"
 assert_true "merged delivery reports CLEANED" grep -qF 'PM_CLEANUP_RESULT: CLEANED' "$TMP_ROOT/merged.out"
+# session-pilot 归档(2026-09-28): 清理成功路径必须在删除 worktree 前落归档快照
+assert_true "session-pilot archive snapshot written" test -f "$TMP_ROOT/archive/merged-cleanup-session.json"
+assert_true "archive carries pr and final status" jq -e '.pr_number == 123 and .final_status == "done" and (.branch == "feat/merged-cleanup")' "$TMP_ROOT/archive/merged-cleanup-session.json" >/dev/null
 if [ ! -d "$WORKTREE" ]; then ok "merged cleanup removes worktree"; else bad "merged cleanup removes worktree"; fi
 if ! git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH"; then ok "merged cleanup deletes exact local branch"; else bad "merged cleanup deletes exact local branch"; fi
 if [ -z "$(git -C "$PROJECT" ls-remote --heads origin "refs/heads/$BRANCH")" ]; then ok "merged cleanup deletes exact remote branch"; else bad "merged cleanup deletes exact remote branch"; fi
@@ -200,7 +204,6 @@ assert_true "long-lived reason is explicit" grep -qF 'reason=long-lived-branch' 
 assert_true "long-lived worktree is retained" test -d "$WORKTREE"
 assert_true "long-lived local branch is retained" git -C "$PROJECT" show-ref --verify --quiet "refs/heads/$BRANCH"
 assert_true "long-lived remote branch is retained" sh -c "test -n \"\$(git -C '$PROJECT' ls-remote --heads origin 'refs/heads/$BRANCH')\""
-
 set +e
 run_cleanup --branch-lifecycle ephemeral-worker --execute > "$TMP_ROOT/lifecycle-mismatch.out" 2>&1
 lifecycle_mismatch_rc=$?

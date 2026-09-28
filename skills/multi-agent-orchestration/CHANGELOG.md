@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.29.1] - 2026-09-28
+
+### 新增
+
+- `pm-cleanup-worker.sh` 在 lifecycle 清理**之前**把 worker Session Context 的字段白名单摘要（branch/model/backend/PR/终态/RESULT 前 2000 字符）归档到 `$HOME/.hermes/plugin-data/session-pilot/workers/<session>.json`，供 session-pilot 插件在 worktree 删除后继续显示收口状态。纯观测旁路：归档失败只输出 `PM_CLEANUP_ARCHIVE_WARN` 不阻塞清理；`PM_CLEANUP_ARCHIVE_DIR=0` 显式关闭，测试用该变量隔离到临时目录。归档先于 `clean-worktree` 执行是硬约束（clean 会连 `.claude/agent-sessions/` 一起删除）。
+
+### 验证
+
+- `test-pm-cleanup-worker.sh` 新增归档断言（快照存在 + pr/final_status/branch 字段正确）并修正 `long-lived remote branch is retained` 断言的 `$(...)` 转义（旧代码在加载时立即求值导致恒假）；48/48 通过。
+
 ## [2.28.0] - 2026-09-24
 
 ### 改进
