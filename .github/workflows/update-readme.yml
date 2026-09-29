@@ -1,47 +1,54 @@
 name: Update README Download Links
 
-# 兜底通道:正常发版时 README 回写由 release.yml 末尾内嵌步骤完成。
+# 兜底通道:正常发版时 README 回写由 release.yml 末尾内嵌步骤完成,本 workflow 幂等重跑无害。
 #
-# 为什么 release: published 在本仓库从未自动触发——release.yml 用内置
-# GITHUB_TOKEN 创建 Release,GitHub 防递归机制规定 GITHUB_TOKEN 产生的
-# 事件不会级联触发其他 workflow。保留该触发是给将来用 PAT 创建 Release
-# 的场景;手动兜底走 workflow_dispatch。
+# 触发设计:
+# - workflow_run:release workflow 成功后触发,避开 GITHUB_TOKEN 创建 Release
+#   不会级联触发其他 workflow 的防递归限制(release: published 因此从未生效,已移除)
+# - workflow_dispatch:手动兜底
+# 注意 checkout 显式 ref: main——workflow_run 事件默认 checkout 在触发 run 的
+# head SHA(tag 上,detached),git push 会失败
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release Skills (monorepo)"]
+    types: [completed]
   workflow_dispatch:
+
+concurrency:
+  group: update-release-download-links
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   update-readme:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # 显式取 main:release 事件默认 checkout 到 tag SHA,README 改动须落在 main
           ref: main
           fetch-depth: 0
 
+      # 重写版 update-readme.py 从 cwd 自动发现根 README + expert-suites/*/README.md
+      # (套件目录不存在时自动降级为仅根 README),统一调用技能内脚本防止逻辑漂移
       - name: Run update-readme script
-        # 统一调用技能内脚本(正则已覆盖 latest/download 占位形式与显式 tag 形式,
-        # 幂等、跨仓库安全),不再维护 inline 副本防止两份逻辑漂移
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 skills/release-workflow/scripts/update-readme.py \
-            "${{ github.repository }}" \
-            README.md
+            "${{ github.repository }}"
 
       - name: Commit README (if changed)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet README.md; then
-            echo "README 无变更"
+          git add README.md
+          if [ -d expert-suites ]; then git add expert-suites/*/README.md; fi
+          if git diff --cached --quiet; then
+            echo "README 与专家套件下载链接无变更"
           else
-            git add README.md
-            git commit -m "docs: 同步 README 下载链接到最新 release"
+            git commit -m "docs: 同步 README 与专家套件下载链接到最新 release"
             git push
           fi

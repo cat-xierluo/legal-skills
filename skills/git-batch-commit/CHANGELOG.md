@@ -7,6 +7,7 @@
 - 首例登记 **dsh-plugins**：PR 流程仓库，`trigger: after-merge-to-main`（特性分支提交不提示、PR 合入 main 后才提示，防止把未合并分支派发到独立镜像）；推送走目标仓 `bash scripts/subtree-push.sh --auto`（自带 main/远端一致性/non-FF 守卫）。
 - `references/subtree-push-check.md` 新增「配置解析」步骤与 after-merge-to-main、non-FF 失败处置；SKILL.md 工作流程第 6 步、能力边界与"纯提交"说明同步更新。
 - 未登记仓库行为不变：仍按默认路径 `skills/subtree-publish/config/subtree-skills.json` 检测。
+- 补齐与 SKILL.md `license: MIT` 一致的标准 `LICENSE.txt`，使单 Skill ZIP 和专家套件 ZIP 都能携带完整许可文本。
 
 ## [1.4.2] - 2026-08-05
 

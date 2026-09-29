@@ -12,6 +12,10 @@
 - 全部 6 个预设 yaml（academic/book-publish/legal/minimal/report/service-plan）与 `assets/config-template.yaml`、`scripts/config.py` 默认值、`scripts/extract_template_config.py` 模板提取默认值同步新增 `style: border` + `border_size`/`border_space` 键。
 - `references/config-reference.md` 分割线章节补 border/character 双模式说明与历史缺陷归因。
 
+### 文档完善
+
+- 补齐与 SKILL.md `license: MIT` 一致的标准 `LICENSE.txt`，使单 Skill ZIP 和专家套件 ZIP 都能携带完整许可文本。
+
 ### 验证
 - `python3 -m unittest test_regressions` 26/26 通过（含新增 2 例：三预设默认 border 渲染断言 pBdr/bottom@single、character 模式回退断言；原有 2 处按字符行匹配的断言改为按段落底边框匹配）。
 - 端到端：以真实法律文档《260923 王丽英职务侵占案 事实梳理（刑事律师交接）.md》（4 页、4 表、2 条 `---`）经修复后脚本 `--preset=legal` 转换，LibreOffice 渲染 PDF/PNG 逐页目检：第 1、4 页两条分割线均为单条完整细线、恰好铺满正文栏、左右与页边距对齐、无异常空隙。
