@@ -22,7 +22,7 @@
 | :--- | :--- | :--- |
 | [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-batch-commit-1.4.3.zip) |
 | [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip) |
-| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/release-workflow-1.6.0.zip) |
+| [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/release-workflow-1.6.1.zip) |
 | [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-publish-sync-1.7.2.zip) |
 | [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/subtree-publish-1.7.1.zip) |
 | [skill-manager](../../skills/skill-manager/) | 管理多 Agent 平台的 Skill 安装、同步和状态 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-manager-1.7.2.zip) |
@@ -47,4 +47,4 @@ Tag、Release、第三方平台上传和独立仓库推送都会改变外部状�
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`。套件外层文件按 [LICENSE.txt](LICENSE.txt) 的 MIT License 授权；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权。下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。

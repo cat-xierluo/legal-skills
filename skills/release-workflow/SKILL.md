@@ -1,7 +1,7 @@
 ---
 name: release-workflow
 description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"、"专家套件 zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
-version: "1.6.0"
+version: "1.6.1"
 license: MIT License - 详见 LICENSE.txt
 ---
 

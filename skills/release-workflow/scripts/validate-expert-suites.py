@@ -107,7 +107,7 @@ def validate_suite(
     if not SUITE_ID_RE.fullmatch(suite_id):
         raise ValidationError(f"非法套件目录名: {suite_id}")
 
-    required_files = ("README.md", "CHANGELOG.md", "LICENSE.txt")
+    required_files = ("README.md", "CHANGELOG.md")
     for name in required_files:
         path = suite_dir / name
         if not path.is_file() or path.is_symlink():
