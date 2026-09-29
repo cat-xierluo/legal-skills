@@ -32,7 +32,7 @@
 | 实验后生产 profile 变了 | **profile-selection/profile-preferences 按共享 userData 存放**，`DSH_HOME` 隔离不了它；隔离 home 无 profile 时应用回退创建默认并改写选择 | 实验前后快照/恢复该文件（流程 1/6） |
 | 每次启动重弹基础配置向导 | 向导完成态在 `userData/profile-setup/<homeHash>/state.json`；只有 `.pending` 就重弹 | 按完成态 schema 补种（7 字段按排序比较、profileHash 须与路径哈希一致、outcome=completed/skipped、version=2；解析器 profile-channel-admission） |
 | `open -a` 恢复"没反应" | 单例锁把启动请求**转发给尚存活的实验实例**（ premature 恢复） | 退出验证与恢复命令**分步执行、逐门通过**——曾因此时序竞态二次 SIGTERM |
-| renderer 偶发 boot failed | 30s 健康超时；两种形态（compatibility-chrome.html ERR_FAILED / Unknown client plugin），五次实验两现 | Host 侧不受影响；GUI 级验收（截图/交互）前需定位；定性勿过度（非每次发生） |
+| renderer 偶发 boot failed | 30s 健康超时；两种形态（compatibility-chrome.html ERR_FAILED / Unknown client plugin），五次实验两现。**语义解码（2026-09-29 静态归因）：「Unknown client plugin」是显示伪影——插件列表为空时的占位文案，而主进程超时路径恰好构造空列表报告；真实含义 = 渲染器 30s 整体静默（未到插件枚举），与被测插件无关** | Host 侧不受影响；GUI 级验收（截图/交互）前需定位；三假设（资源竞态/首启路径/系统代理）与判别复跑方案见 dsh-plugins `docs/research/2026-09-29-renderer-static-diagnosis.md`；隔离 home 种子 cordis.patch.yml 只留本实验 insert 行（生产皮肤残留只警告但添噪） |
 | 全屏截图取证 | 会截到用户无关私人窗口 | **不用全屏截图做宿主证据**；Host 半体以宿主日志为权威 |
 
 ## 无 GUI 验证入口

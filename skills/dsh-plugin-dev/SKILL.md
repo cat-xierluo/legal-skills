@@ -2,7 +2,7 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.3.0"
+version: "0.3.1"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
