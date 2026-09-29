@@ -45,6 +45,7 @@ cat > "$CASE_ROOT/personal.json" <<EOF
       "active_session_cap": 999,
       "min_free_disk_gb": 0,
       "min_free_memory_percent": 0,
+      "orca_environment": "alpha-env",
       "connect_timeout_seconds": 5
     }
   }
@@ -78,6 +79,8 @@ case "$cmd" in
   "cat "*)
     target=$(printf '%s' "$cmd" | sed -E "s/^cat '([^']*)'.*/\1/")
     [ -f "$target" ] && cat "$target" || echo '(尚无 STATUS.json——worker 刚启动或路径未生成)' ;;
+  "jq -r '.session.orca.terminal_handle "*)
+    echo "term_mock_01" ;;
   "jq -r '.status // empty' "*)
     target=$(printf '%s' "$cmd" | sed -E "s/.*'([^']*)' 2>.*$/\1/")
     if [ -f "$target" ]; then jq -r '.status // empty' "$target"; else echo ""; fi ;;
@@ -107,6 +110,17 @@ exit 0
 EOF
 chmod +x "$CASE_ROOT/bin/rsync"
 
+cat > "$CASE_ROOT/bin/orca" <<'EOF'
+#!/usr/bin/env bash
+printf 'ORCA: %s
+' "$*" >> "$MOCK_LOG"
+case "$1 $2" in
+  "terminal send") exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$CASE_ROOT/bin/orca"
+
 cat > "$CASE_ROOT/bin/gh" <<EOF
 #!/usr/bin/env bash
 case "\$1" in
@@ -129,9 +143,11 @@ bash "$REMOTE" spawn --node ghost --branch b1 --session s --worker-backend claud
 expect_rc 64 "节点未配置 → 64" "$rc"
 
 # ---- 2) spawn 成功：receipt/远端命令构造断言 + 软账落盘 ----
+printf '任务书：在 README 末尾追加一行。用 Edit 工具改文件（不要用 shell 追加）。
+完成后写 {"status":"done"} 到 STATUS.json。\n' > "$CASE_ROOT/worker-prompt.md"
 bash "$REMOTE" spawn --node alpha --branch fix/demo --session rs1 --worker-backend claude-code \
   --verify-cmd 'python3 -m pytest -q' --remote-env SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824 \
-  --trust-worktree \
+  --trust-worktree --prompt-file "$CASE_ROOT/worker-prompt.md" \
   --local-project "$CASE_ROOT/pm-project" \
   > "$CASE_ROOT/spawn.out" 2>&1 && rc=$? || rc=$?
 expect_rc 0 "spawn 成功（mock 全链）" "$rc"
@@ -149,6 +165,14 @@ spawn_cmd=$(grep 'SSH: zsh -lc' "$MOCK_LOG" | tail -1)
 grep -qF -- '--verify-cmd\ python3\\\ -m\\\ pytest\\\ -q' "$MOCK_LOG" && ok "verify-cmd 透传" || bad "verify-cmd 透传"
 grep -qF -- 'SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824' "$MOCK_LOG" && ok "--remote-env 注入节点侧 export" || bad "--remote-env 注入节点侧 export"
 grep -q 'TRUST_PRESET_OK' "$MOCK_LOG" && ok "--trust-worktree 预置节点信任" || bad "--trust-worktree 预置节点信任"
+grep -q 'SPAWN_WORKER_REMOTE_PROMPT_DELIVERED: node=alpha terminal=term_mock_01 environment=alpha-env' "$CASE_ROOT/spawn.out" \
+  && ok "--prompt-file 投递成功行" || bad "--prompt-file 投递成功行"
+orca_send_line=$(grep 'ORCA: terminal send' "$MOCK_LOG" | tail -1)
+[[ "$orca_send_line" == *"--terminal term_mock_01"* && "$orca_send_line" == *"--environment alpha-env"* ]] \
+  && ok "跨机 terminal send 带 handle+environment" || bad "跨机 terminal send 带 handle+environment"
+[[ "$orca_send_line" == *"用 Edit 工具改文件"* ]] && ok "任务书内容送达" || bad "任务书内容送达"
+jq -e '.prompt.delivered==true and (.prompt.sha256|length==64)' "$LEDGER_DIR/alpha/rs1.json" >/dev/null \
+  && ok "软账记录 prompt.delivered/sha256" || bad "软账记录 prompt.delivered/sha256"
 cat_line=$(grep 'SSH: cat > ' "$MOCK_LOG" | tail -1)
 [[ "$cat_line" == *"remote-dispatch-inbox/receipt-"* ]] && ok "receipt 经 ssh cat 传到受限 inbox" || bad "receipt 经 ssh cat 传到受限 inbox"
 

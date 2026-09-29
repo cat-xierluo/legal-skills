@@ -42,6 +42,13 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 结案证据（2026-09-29 深夜，v2.30.4）：**派发管道全链真机验证通过**——probe 全门（ok/容量4/不可达65/基线3/版本门）；receipt 签发→Air 消费→重放拒绝；fail-closed 不变量；两次完整 spawn（Air 本机 lease acquire/finalize + ORCA worktree `~/orca/workspaces/legal-skills/` + `--trust-worktree` 预置生效 + worker 以借用 key 真实运行并修改 README）；PM 监督面（status 软账回写 + `orca terminal read --environment Air` 实读 + 双机 ORCA 终端列表同步）；失败恢复两轮全净（terminal close → lease release `--orca-cli` 显式 → worktree/branch/软账清零）。
 - **未完成腿：worker 端到端交付 PR**。两次失败根因：①untrusted worktree（已由 v2.30.4 `--trust-worktree` 解决）；②worker 任务设计与 provider 稳定性——shell 白名单不含 `echo >>` 追加导致 worker 用多步 Edit 绕行，且 GLM（借用 key）当晚限流窗口直接终止会话（无 result 记录）。跟进要求：worker prompt 改用 Edit 工具而非 shell 追加；provider 稳定窗口重试。本腿转记到下方 AUTODISCOVER/调度 epic 前置，不单独阻塞 M0 结案。
 
+## TASK-2026-09-29-REMOTE-NODE-PROMPT-DELIVERY — 远程 worker 任务投递与终端可见性
+
+- 状态：`COMPLETE`（v2.30.5 交付）；优先级：`P1`；类型：`fix`；来源：用户 2026-09-29 观察"派发远程 worker 后对应终端没有真实推进"。
+- 根因：v2.30.0-2.30.4 E2E 用 `claude -p` 内嵌任务——`-p` 模式缓冲全部输出到进程结束，终端只见 preamble；worker 实际在干活（transcript 有完整操作）但双机 Orca UI 均不可见；同时绕开 terminal-managed 的 checkpoint 契约（STATUS.json 无人写）。
+- 交付：`spawn --prompt-file`（节点 METADATA 取 terminal_handle + `orca terminal send --environment` 跨机投递 + 失败重试 + 软账 prompt 段）；节点段新增可选 `orca_environment`；任务书规范（Edit 工具 + STATUS 契约）入 references/25。
+- 真机验证：`NOT_VERIFIED`（等 provider 稳定窗口按新流程重跑完整 E2E 交付腿，与 SMART-SCHEDULING 开局一并做）。
+
 ## TASK-2026-09-29-REMOTE-NODE-AUTODISCOVER — ORCA 配对设备自动发现并登记 remote_nodes
 
 - 状态：`READY`；优先级：`P2`；类型：`feature`；来源：用户 2026-09-29——用户说"派发远程 worker"时，检测本机 ORCA 是否配置了远程设备/服务器（`orca environment list` / `orca host list` 即现成清单），有则登记进 personal config `remote_nodes` 供后续直接复用。

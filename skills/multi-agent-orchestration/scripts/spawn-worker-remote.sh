@@ -34,6 +34,8 @@ HOME_ORCA_WS="$HOME/orca/workspaces"
 LEDGER_SCHEMA="multi-agent-orchestration.remote-dispatch.v1"
 # REMOTE_DISPATCH_SSH_COMMAND：仅测试注入用（mock ssh/rsync）；正式链路固定走 ssh/rsync。
 REMOTE_DISPATCH_SSH_BIN="${REMOTE_DISPATCH_SSH_COMMAND:-ssh}"
+# REMOTE_DISPATCH_ORCA_COMMAND：仅测试注入用（mock orca）；--prompt-file 投递用。
+REMOTE_DISPATCH_ORCA_BIN="${REMOTE_DISPATCH_ORCA_COMMAND:-orca}"
 
 # 远程派发前在节点 shell 里 unset 的 provider 路由变量：与 claude-provider-env.sh
 # 的 PROVIDER_ENV_KEYS 保持同一清单（现场提取，防两处漂移；测试覆盖清单非空）。
@@ -56,7 +58,11 @@ Usage:
     用于按节点调优，如 SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824；
     --trust-worktree：节点侧预置 Claude Code 工作区信任 hasTrustDialogAccepted=true，
     解决 headless 远程 worktree 无法弹信任对话框导致 permissions.allow 被忽略、
-    git/gh Bash 步骤不可执行的问题。显式 flag 默认关闭，写入动作记入 PM 软账）
+    git/gh Bash 步骤不可执行的问题。显式 flag 默认关闭，写入动作记入 PM 软账；
+    --prompt-file F：spawn 后把任务书投进节点终端（经 orca terminal send --environment，
+    TUI 实时可见；需 personal config 该节点带 orca_environment 字段）。任务书建议按
+    templates/worker-prompt.md 生成并要求 worker 用 Edit 工具改文件、按 checkpoint
+    契约写 STATUS.json）
   spawn-worker-remote.sh status --node NAME --session NAME
   spawn-worker-remote.sh cleanup --node NAME --session NAME [--force-with-reason R]
 
@@ -87,6 +93,7 @@ remote_node_config_load() {
   REMOTE_NODE_MAX_WORKERS=$(jq -r '.max_workers // 2' <<<"$cfg")
   REMOTE_NODE_ALLOWED_BACKENDS=$(jq -r '(.allowed_backends // []) | join(" ")' <<<"$cfg")
   REMOTE_NODE_ENABLED=$(jq -r '.enabled // false' <<<"$cfg")
+  REMOTE_NODE_ORCA_ENV=$(jq -r '.orca_environment // empty' <<<"$cfg")
   local missing=()
   [ -n "$REMOTE_NODE_SSH_ALIAS" ] || missing+=(ssh_alias)
   [ -n "$REMOTE_NODE_ROOT" ] || missing+=(remote_root)
@@ -122,7 +129,7 @@ remote_ledger_active_count() {
 
 cmd_spawn() {
   local node="" branch="" session="" worker_backend="" command="" local_project=""
-  local receipt_ttl="" require_verification=0 provision=0 trust_worktree=0
+  local receipt_ttl="" require_verification=0 provision=0 trust_worktree=0 prompt_file=""
   local api_provider="" model="" runtime_profile=""
   local verify_commands=() remote_envs=()
   while [ "$#" -gt 0 ]; do
@@ -141,6 +148,7 @@ cmd_spawn() {
       --receipt-ttl-seconds) receipt_ttl="$2"; shift 2 ;;
       --provision) provision=1; shift ;;
       --trust-worktree) trust_worktree=1; shift ;;
+      --prompt-file) prompt_file="$2"; shift 2 ;;
       --remote-env)
         [[ "$2" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || {
           printf 'ERROR: --remote-env expects KEY=VALUE (got: %s)\n' "$2" >&2; return 64; }
@@ -156,6 +164,10 @@ cmd_spawn() {
   if [ "${#missing[@]}" -gt 0 ]; then
     printf 'ERROR: spawn: missing required arguments: %s\n' "${missing[*]}" >&2
     remote_usage
+    return 64
+  fi
+  if [ -n "$prompt_file" ] && [ ! -f "$prompt_file" ]; then
+    printf 'ERROR: --prompt-file not found: %s\n' "$prompt_file" >&2
     return 64
   fi
   [ "${#REMOTE_PROVIDER_ENV_KEYS[@]}" -gt 0 ] || {
@@ -360,6 +372,41 @@ TRUST_PY
     return 64
   }
   remote_status_file=$(dirname "$remote_metadata_file")/STATUS.json
+
+  # --prompt-file：把任务书投进节点终端（v2.30.5）。节点侧 spawn 已对 TUI 投过通用
+  # preamble（"详细指令将由 PM 后续投递"），本步补上真正的任务书：跨机 terminal send
+  # 经 --environment 直达节点 ORCA 终端，TUI 实时渲染（双机 Orca UI 可见真实推进）。
+  # 这修正了 v2.30.0-2.30.4 E2E 用 `claude -p` 内嵌任务的错误模式：-p 全程缓冲输出，
+  # 终端看不到任何推进，且绕开了 terminal-managed 的 checkpoint 契约。
+  local prompt_delivered=false prompt_sha256=""
+  if [ -n "$prompt_file" ]; then
+    local term_handle
+    term_handle=$($REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes -o ConnectTimeout=15 "$REMOTE_NODE_SSH_ALIAS" \
+      "jq -r '.session.orca.terminal_handle // empty' '$remote_metadata_file' 2>/dev/null") || term_handle=""
+    prompt_sha256=$(shasum -a 256 "$prompt_file" | cut -d' ' -f1)
+    if [ -z "$term_handle" ]; then
+      printf 'WARN: --prompt-file 未投递：节点 METADATA 无 orca terminal handle（tmux 模式？）。任务书=%s；请经 status 巡检后人工 ssh send-keys 或重派 Orca 模式\n' "$prompt_file" >&2
+    elif [ -z "$REMOTE_NODE_ORCA_ENV" ]; then
+      printf 'WARN: --prompt-file 未投递：remote_nodes.%s 缺 orca_environment 字段（Orca 配对名）。手动补投：orca terminal send --terminal %s --environment <配对名> --text <任务书> --enter\n' "$node" "$term_handle" >&2
+    else
+      # TUI 就绪已在节点侧 spawn 内等待过（tui-idle）；此处重试一次以吸收跨机启动抖动
+      local send_rc=0 attempt
+      for attempt in 1 2; do
+        if "$REMOTE_DISPATCH_ORCA_BIN" terminal send --terminal "$term_handle" \
+            --environment "$REMOTE_NODE_ORCA_ENV" \
+            --text "$(cat "$prompt_file")" --enter --json >/dev/null 2>&1; then
+          prompt_delivered=true; break
+        fi
+        [ "$attempt" -eq 1 ] && { printf 'WARN: terminal send 第 1 次未达（TUI 未就绪？），10s 后重试\n' >&2; sleep 10; }
+      done
+      if [ "$prompt_delivered" = true ]; then
+        printf 'SPAWN_WORKER_REMOTE_PROMPT_DELIVERED: node=%s terminal=%s environment=%s sha256=%s\n' \
+          "$node" "$term_handle" "$REMOTE_NODE_ORCA_ENV" "${prompt_sha256:0:12}"
+      else
+        printf 'WARN: --prompt-file 两次投递均失败（terminal=%s environment=%s）。worker 已在跑；手动补投见上行命令\n' "$term_handle" "$REMOTE_NODE_ORCA_ENV" >&2
+      fi
+    fi
+  fi
   mkdir -p "$ledger_dir/$node"
   jq -n \
     --arg schema "$LEDGER_SCHEMA" \
@@ -370,6 +417,8 @@ TRUST_PY
     --arg remote_metadata_file "$remote_metadata_file" --arg remote_status_file "$remote_status_file" \
     --arg pm_origin_main_sha "$pm_origin_main_sha" --arg pm_skill_version "$pm_skill_version" \
     --argjson trust_preinstalled "$trust_worktree" \
+    --argjson prompt_delivered "$([ "$prompt_delivered" = true ] && echo true || echo false)" \
+    --arg prompt_sha256 "$prompt_sha256" \
     --argjson spawned_at_epoch "$(date +%s)" \
     '{schema: $schema, node: $node, session: $session, branch: $branch, remote_branch: $remote_branch,
       worker_backend: $worker_backend, pm_harness: $pm_harness, pm_harness_source: $pm_harness_source,
@@ -377,6 +426,7 @@ TRUST_PY
       remote: {root: $remote_root, skill_root: $remote_skill_root,
                metadata_file: $remote_metadata_file, status_file: $remote_status_file},
       pm: {origin_main_sha: $pm_origin_main_sha, skill_version: $pm_skill_version, trust_preinstalled: ($trust_preinstalled == 1)},
+      prompt: {delivered: $prompt_delivered, sha256: (if $prompt_sha256 == "" then null else $prompt_sha256 end)},
       spawned_at_epoch: $spawned_at_epoch, last_poll_at_epoch: null, state: "dispatched"}' \
     > "$ledger_dir/$node/$session.json"
   chmod 600 "$ledger_dir/$node/$session.json"
