@@ -33,7 +33,20 @@
 - **注意**：GUI 里供用户选择的模型要求 adapter 实现 `listModels` 并入目录；一次性调用直接指定 provider/model 字符串不受此限。实现时先 `ctx.llm.listProviders()` 探测宿主实际激活的路由（取决于 profile/设置，不能假设）。
 - 证据全文：dsh-plugins `docs/research/2026-09-29-dsh006-llm-call-entry.md`（DSH-006 关闭记录，含 NOT_VERIFIED 边界：宿主实际激活路由、GLM 网关连通性归实现验收）。
 
+### #2 会话内长任务——`ctx.jobs`（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：agent 会话内的长任务注册表（`@deepseek-ai/dsh-jobs`，服务键 `'jobs'`）：`<kind>-N` 稳定 id，owner=发起 agent 会话（围栏是授权不是保密），可读输出/限时等待/请求取消；结算经事件流→`dsh-tool-jobs` 转会话内通知（免轮询）；输出进有界环形缓冲（stdout/stderr 到模型、log 仅观察者）。
+- **边界**：进程内存储（`jobs-local`），**不跨重启、无定时语义**；启动需 controller（组合须加载 tool-jobs）；适合「工具把长活挂后台、agent 继续干」——不适合定时调度。
+- 证据：dsh-plugins `docs/research/2026-09-30-dsh003-jobs-schedule-capability.md`。
+
+### #3 持久定时调度——`packages/schedule`（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：Host 拥有的持久提醒/定时任务（`ScheduleService`，Typert Remote）：六种时序选择器（`after_seconds`/`at`/`every_seconds`≥60s/`daily`/`weekly`/五字段 Vixie cron，显式 IANA 时区，cron 最小 1 分钟）；**跨 Host 重启持久化**（storage-domain 后端）；管理面完整（模型工具 schedule_create/list/update/delete + Remote catalog 跨会话巡检 + history 游标分页）。
+- **关键边界**：**交付 = 到期以 follow-up 消息投递进原会话触发 agent turn**——每火一次是一次模型成本；不是零模型定时作业。会话归档被活跃提醒阻止，停止即全删。update 是整记录 compare-and-set（`schedule_conflict` 冲突不覆盖）。
+- **组合前提**：`static inject = ['agents','sessions','tools','storageDomain','sessionController','sessionPersistence']`——**必须 Host Web 组合内挂载，headless/SDK-only 不能单挂**。
+- **消费者取舍模板**（星标 G06 先例）：定时「agent 任务」用 schedule + 专用会话（得编排/重试，有模型成本）；零模型定时拉取只能插件内 host 存活期 timer（不持久、host 退出即停）。两者语义不同，立项时按需选。
+- 证据：dsh-plugins `docs/research/2026-09-30-dsh003-jobs-schedule-capability.md`（DSH-003 缺口登记第 3 项判定：剩余空档仅「零模型持久定时作业」，出现再立项）。
+
 ## 待查清单（已登记未核查的能力问号）
 
 - 读取回执类语义（「读过此案」READ_REQUIRED）：bizlink v1 无此概念，划业务 owner 责任，公共化待第二消费者需求（dsh-plugins DSH-003 公共缺口登记第 2 项）。
-- 后台作业/定时能力：星标 G06 与超能调度的共同语义，官方 `packages/jobs`（0.1.7-rc.2 存在该包组）是否可承载**未核查**——待第一消费者立项时按上节方法查证后入册。
