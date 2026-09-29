@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -58,7 +59,7 @@ URI_PATTERNS = [
 ]
 
 
-def resolve_numeric_id(url: str) -> str | None:
+def resolve_numeric_id(url: str) -> Optional[str]:
     """从任意抖音链接解析 numeric_id。
 
     优先从原 URL 直接提取；若是短链（v.douyin.com），跟随 302 后从最终落点提取。
@@ -81,7 +82,7 @@ def resolve_numeric_id(url: str) -> str | None:
     return None
 
 
-def fetch_video_id(numeric_id: str) -> str | None:
+def fetch_video_id(numeric_id: str) -> Optional[str]:
     """从 SSR share 页提取 video_id（页面 HTML 中渲染的 uri 字段）。"""
     share_url = f"https://www.iesdouyin.com/share/video/{numeric_id}/"
     try:
@@ -95,7 +96,7 @@ def fetch_video_id(numeric_id: str) -> str | None:
     return None
 
 
-def fetch_cdn_url(video_id: str, ratio: str = "540p") -> str | None:
+def fetch_cdn_url(video_id: str, ratio: str = "540p") -> Optional[str]:
     """用 video_id 换 CDN 直链。
 
     v1/play 正常返回 302，Location 即 CDN 直链；不跟随重定向以便取出 Location。
