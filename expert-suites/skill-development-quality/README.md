@@ -1,6 +1,6 @@
 # Skill 开发与质量保障专家套件
 
-> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-development-quality-0.1.0.zip)
+> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-development-quality-0.1.0.zip)
 
 用于初始化法律类 Skill 项目、约束 Agent 协作、开展质量审查、执行分层验证，并通过安全的 Git 和多 Agent 流程完成工程收口。
 
@@ -20,14 +20,14 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [project-init](../../skills/project-init/) | 初始化项目上下文和最小协作指令 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/project-init-1.2.6.zip) |
-| [legal-harness-init](../../skills/legal-harness-init/) | 为法律工作区治理 AGENTS.md、CLAUDE.md 等 Harness | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/legal-harness-init-0.5.2.zip) |
-| [skill-lint](../../skills/skill-lint/) | 审查 Skill 结构、指令稳定性、安全和发布质量 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/skill-lint-2.9.1.zip) |
-| [verification-gate](../../skills/verification-gate/) | 运行分层验证并记录可复查证据 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/verification-gate-1.3.0.zip) |
-| [git-workflow](../../skills/git-workflow/) | 管理分支、Worktree、PR、合并和安全回退 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-workflow-1.8.7.zip) |
-| [multi-agent-orchestration](../../skills/multi-agent-orchestration/) | 编排两个以上边界独立的本地 Worker | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/multi-agent-orchestration-2.30.5.zip) |
-| [cross-agent-coordination](../../skills/cross-agent-coordination/) | 协调不同 Agent 平台的归属、路由和交接 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/cross-agent-coordination-1.0.0.zip) |
-| [agent-email](../../skills/agent-email/) | 为 Agent 提供统一邮件收发和任务分发通道 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/agent-email-0.4.1.zip) |
+| [project-init](../../skills/project-init/) | 初始化项目上下文和最小协作指令 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/project-init-1.2.6.zip) |
+| [legal-harness-init](../../skills/legal-harness-init/) | 为法律工作区治理 AGENTS.md、CLAUDE.md 等 Harness | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-harness-init-0.5.2.zip) |
+| [skill-lint](../../skills/skill-lint/) | 审查 Skill 结构、指令稳定性、安全和发布质量 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-lint-2.9.1.zip) |
+| [verification-gate](../../skills/verification-gate/) | 运行分层验证并记录可复查证据 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/verification-gate-1.3.0.zip) |
+| [git-workflow](../../skills/git-workflow/) | 管理分支、Worktree、PR、合并和安全回退 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip) |
+| [multi-agent-orchestration](../../skills/multi-agent-orchestration/) | 编排两个以上边界独立的本地 Worker | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip) |
+| [cross-agent-coordination](../../skills/cross-agent-coordination/) | 协调不同 Agent 平台的归属、路由和交接 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/cross-agent-coordination-1.0.0.zip) |
+| [agent-email](../../skills/agent-email/) | 为 Agent 提供统一邮件收发和任务分发通道 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/agent-email-0.4.1.zip) |
 
 ## 建议使用方式
 
