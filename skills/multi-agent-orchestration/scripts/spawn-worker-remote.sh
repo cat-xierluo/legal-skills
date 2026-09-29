@@ -51,6 +51,8 @@ Usage:
       [--require-verification] [--local-project PATH] [--receipt-ttl-seconds N] \\
       [--provision]
   spawn-worker-remote.sh provision --node NAME [--local-project PATH] [--skip-clone]
+  （spawn 另支持 --remote-env KEY=VALUE 可重复：在节点侧 spawn-worker.sh 之前 export，
+    用于按节点调优，如 SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824）
   spawn-worker-remote.sh status --node NAME --session NAME
   spawn-worker-remote.sh cleanup --node NAME --session NAME [--force-with-reason R]
 
@@ -118,7 +120,7 @@ cmd_spawn() {
   local node="" branch="" session="" worker_backend="" command="" local_project=""
   local receipt_ttl="" require_verification=0 provision=0
   local api_provider="" model="" runtime_profile=""
-  local verify_commands=()
+  local verify_commands=() remote_envs=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --node) node="$2"; shift 2 ;;
@@ -134,6 +136,10 @@ cmd_spawn() {
       --local-project) local_project="$2"; shift 2 ;;
       --receipt-ttl-seconds) receipt_ttl="$2"; shift 2 ;;
       --provision) provision=1; shift ;;
+      --remote-env)
+        [[ "$2" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || {
+          printf 'ERROR: --remote-env expects KEY=VALUE (got: %s)\n' "$2" >&2; return 64; }
+        remote_envs+=("$2"); shift 2 ;;
       *) printf 'ERROR: spawn: unknown argument: %s\n' "$1" >&2; remote_usage; return 64 ;;
     esac
   done
@@ -287,7 +293,13 @@ cmd_spawn() {
   for env_key in "${REMOTE_PROVIDER_ENV_KEYS[@]}"; do
     unset_prefix+="unset $env_key; "
   done
-  local remote_command="${unset_prefix}exec '$remote_bash_bin' '$REMOTE_NODE_SKILL_ROOT/scripts/spawn-worker.sh' "
+  # --remote-env：节点侧调优变量（如 SPAWN_WORKER_MEM_BUDGET_BYTES）在 unset 之后、
+  # exec 之前 export；值为原样单引号包裹（含空格安全）。
+  local env_prefix="" remote_env
+  for remote_env in "${remote_envs[@]}"; do
+    env_prefix+="export ${remote_env%%=*}=$(printf '%q' "${remote_env#*=}"); "
+  done
+  local remote_command="${unset_prefix}${env_prefix}exec '$remote_bash_bin' '$REMOTE_NODE_SKILL_ROOT/scripts/spawn-worker.sh' "
   local arg
   for arg in "${remote_args[@]}"; do
     remote_command+=$(printf '%q ' "$arg")

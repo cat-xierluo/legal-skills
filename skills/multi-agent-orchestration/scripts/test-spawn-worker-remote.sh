@@ -127,7 +127,8 @@ expect_rc 64 "节点未配置 → 64" "$rc"
 
 # ---- 2) spawn 成功：receipt/远端命令构造断言 + 软账落盘 ----
 bash "$REMOTE" spawn --node alpha --branch fix/demo --session rs1 --worker-backend claude-code \
-  --verify-cmd 'python3 -m pytest -q' --local-project "$CASE_ROOT/pm-project" \
+  --verify-cmd 'python3 -m pytest -q' --remote-env SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824 \
+  --local-project "$CASE_ROOT/pm-project" \
   > "$CASE_ROOT/spawn.out" 2>&1 && rc=$? || rc=$?
 expect_rc 0 "spawn 成功（mock 全链）" "$rc"
 grep -q 'SPAWN_WORKER_REMOTE_OK: node=alpha session=rs1 branch=node-alpha/fix/demo' "$CASE_ROOT/spawn.out" \
@@ -142,6 +143,7 @@ spawn_cmd=$(grep 'SSH: zsh -lc' "$MOCK_LOG" | tail -1)
 [[ "$spawn_cmd" == *"--branch\\ node-alpha/fix/demo"* ]] && ok "分支加 node- 前缀" || bad "分支加 node- 前缀"
 [[ "$spawn_cmd" == *"unset\\ ANTHROPIC_AUTH_TOKEN"* ]] && ok "unset 继承 provider env" || bad "unset 继承 provider env"
 grep -qF -- '--verify-cmd\ python3\\\ -m\\\ pytest\\\ -q' "$MOCK_LOG" && ok "verify-cmd 透传" || bad "verify-cmd 透传"
+grep -qF -- 'SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824' "$MOCK_LOG" && ok "--remote-env 注入节点侧 export" || bad "--remote-env 注入节点侧 export"
 cat_line=$(grep 'SSH: cat > ' "$MOCK_LOG" | tail -1)
 [[ "$cat_line" == *"remote-dispatch-inbox/receipt-"* ]] && ok "receipt 经 ssh cat 传到受限 inbox" || bad "receipt 经 ssh cat 传到受限 inbox"
 

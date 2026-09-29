@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.30.3] - 2026-09-29
+
+### 新增
+
+- `spawn-worker-remote.sh spawn --remote-env KEY=VALUE`（可重复）：在节点侧 spawn-worker.sh 之前 export 的调优变量（unset 继承 provider env 之后注入），用于按节点设置如 `SPAWN_WORKER_MEM_BUDGET_BYTES`——真机 E2E 实测 Air 当前可回收内存 ~2GiB 低于默认 3GiB/worker 预算，按节点调低预算即可放行 smoke 级 worker 而无须改全局默认。
+
 ## [2.30.2] - 2026-09-29
 
 ### 修复
