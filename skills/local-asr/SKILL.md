@@ -2,7 +2,7 @@
 name: local-asr
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "2.3.1"
+version: "2.3.2"
 license: MIT
 description: 使用本地 ASR 服务将音频或视频文件转录为带时间戳和说话人的 Markdown，Apple Silicon 默认使用 MOSS-MLX，保留 FunASR 原生及 ONNX 管线供显式选择；支持认领式声纹注册，本人声纹注册后自动识别标注。支持 mp4、mov、mp3、wav、m4a 等格式；用于会议记录、电话录音、视频字幕和播客转录。
 ---
@@ -569,6 +569,7 @@ FastAPI 自动生成交互式 API 文档，访问：[http://127.0.0.1:8765/docs]
 | `scripts/transcribe.py`    | 命令行客户端                        |
 | `scripts/auto_transcribe.py` | **自动化转录脚本（推荐）**         |
 | `scripts/speaker_registry.py` | 声纹库管理（list / remove / claim / test） |
+| `scripts/align_words.py` | 词级对齐：参考转录 + 音频 → 字符级 words（秒制，归一化轴与 MOSS 一致；需本 skill venv 的 funasr 与已缓存 Paraformer） |
 
 ---
 
@@ -673,6 +674,20 @@ curl -X POST http://127.0.0.1:8765/inject_summary \
 ![](slides/slide_002_03m30s.jpg)
 这是第二段的内容...
 ```
+
+## 词级时间戳（align_words.py）
+
+`/transcribe` 默认返回段级 `segments`（MOSS 路径），无词级边界。需要逐字时间戳（如剪辑字幕的"删语音同步删字幕文本"）时，用独立入口对齐——不改默认转录行为：
+
+```bash
+./venv/bin/python scripts/align_words.py <音视频> \
+    --transcript work/transcript.json --output work/transcript-words.json
+```
+
+- 输入参考转录为 cut 标准 `segments`（或火山 `result.utterances`）；输出原样保留并给每段附 `words`（字符级，秒制，归一化音频轴，与 MOSS 转录同轴）。
+- 对齐策略：逐段切音频 → 已缓存 Paraformer 识别 → difflib 与参考文本块对齐映射；相似度低于 `--min-similarity`（默认 0.6）的段 words 缺省并在 `word_alignment_warnings` 记录——可信才用，不制造伪对齐。
+- `asr.word_timestamps` 元信息声明 `available/granularity=character/aligned_segments` 等真实状态。
+- 依赖：本 skill venv 的 `funasr`（缓存于 `~/.cache/modelscope/hub/models/iic/`，与 MOSS 权重分开）；首次缺缓存会给出明确提示。参考：2 分钟原片约 25-30s。
 
 ## 模型信息
 
