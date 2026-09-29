@@ -1,6 +1,8 @@
-# DSH 插件开发规范（dsh-plugin-development-standards）
+# DSH 插件开发规范（0.1.2-rc.1 基线，历史保留）
 
-DeepSeek Harness（DSH）out-of-tree 插件的开发范式。事实核对于 **2026-09-04，对应 harness 0.1.2-rc.1（commit `76fda729`）**；0.1.0-rc.7 时期的历史结论单独标注。DSH 处于 rc 阶段——**升级后按 §参考文件索引 逐条复核**，不采信本文记忆。机械层核查可用 `dsh-plugin-lint/scripts/lint.mjs --harness-root <DSH 源码仓库>` 自动对账（版本、平台模块表、inject/external、主题变量均从当前源码声明读取）。
+> 2026-09-29 起本文由 dsh-plugin-lint 并入本技能（dsh-plugin-dev），作为 0.1.2 期契约与坑清单的历史权威保留；0.1.7-rc.2 增量与差异见 host-plugin-essentials.md 与 harness-facts-017rc2.md。
+
+DeepSeek Harness（DSH）out-of-tree 插件的开发范式。事实核对于 **2026-09-04，对应 harness 0.1.2-rc.1（commit `76fda729`）**；0.1.0-rc.7 时期的历史结论单独标注。DSH 处于 rc 阶段——**升级后按 §参考文件索引 逐条复核**，不采信本文记忆。机械层核查可用本技能 `scripts/lint.mjs --harness-root <DSH 源码仓库>` 自动对账（版本、平台模块表、inject/external、主题变量均从当前源码声明读取）。
 
 来源：dsh-contract-copilot 插件全程开发实测（含多轮 e2e 与浏览器验证）+ 0.1.2-rc.1 源码核对，踩坑记录见文末"实测坑清单"。
 
