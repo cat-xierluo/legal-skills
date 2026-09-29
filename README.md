@@ -34,14 +34,14 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
+| 2026-09-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.5.0→v1.6.0 | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节与 `{suites}` 占位符；新增 README 覆盖校验（含 latest/download 链接形态修复与更名资产豁免）与套件链接对齐脚本；md2word/git-batch-commit 补齐 MIT LICENSE。 |
 | 2026-09-30 | 更新 | [universal-media-downloader](skills/universal-media-downloader/) | v0.5.1→v0.5.2 | 修复无登录直连脚本在 Python 3.9 下函数定义即崩溃（PEP 604 `str\|None` 注解需 3.10+，macOS 系统 python3 为 3.9.6），改 `Optional[str]`；旧版实测复现、新版 3.9 实测通过，第一级 fallback 恢复可用。 |
 | 2026-09-28 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.1 | 复核反例与独立验收余项修复：多段长录音关闭声纹提取开关不再误标 disabled、认领闭环打通；--save-result 覆盖旧文件强制 0600；摘要重复发言人（含空摘要条目）拒绝注入、缺必需章节时 CLI inject 与 verify/HTTP 质量判定一致非零退出；补齐截图端到端证据。 |
 | 2026-09-24 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.28.0 | Claude Code auto Worker 的普通 Bash 改由原生 auto 和 settings 判断；编排 hook 保留安装、Orca 协议、tracked 删除及受保护 Git 操作门禁。 |
 | 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
 | 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
 | 2026-09-23 | 更新 | [project-init](skills/project-init/) | v1.2.5 | 更新示例配置中的本地 ASR 技能名称。 |
-| 2026-09-23 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.1 | 更新开发与编排参考文档中的本地 ASR 路径。 |
-| 2026-09-23 | 更新 | [transcription-corrector](skills/transcription-corrector/) | v1.0.9 | 更新配置示例中的上游转录技能名称。 |
 </details>
 
 ## 📋 项目概述
@@ -76,6 +76,20 @@
 例如 `contract-copilot-1.5.3.zip` 解压后得到 `contract-copilot/` 文件夹，复制到 `~/.claude/skills/` 即可。
 
 上表「下载」列已提供每个 skill 的最新版本直链（指向 latest），新增版本发布后由 GitHub Actions 自动同步。
+
+## 🧰 专家套件
+
+专家套件是按法律工作或 Skill 工程场景策展的一组 Skills。仓库中用相对符号链接指向同一份 Skill 源码，同一个 Skill 可以出现在多个套件；Release 下载包会把链接展开为完整目录，用户一次下载即可取得整套能力。
+
+专家套件只负责选择、说明和分发，不会自动编排成员 Skill。真正的跨 Skill 工作流仍遵循下方开发与编排指南。
+
+| 专家套件 | 适用场景 | 成员数 | 版本 | 整套下载 |
+| :--- | :--- | ---: | :---: | :---: |
+| [法律材料与证据处理](expert-suites/legal-material-evidence/) | 文档、扫描件、PDF、音视频、法院来文的数字化和归档 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-legal-material-evidence-0.1.0.zip) |
+| [诉讼案件前期研判](expert-suites/litigation-assessment/) | 新案建档、事实证据分析、法律检索、策略和客户交付 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-assessment-0.1.0.zip) |
+| [诉讼文书与案件推进](expert-suites/litigation-documents-operations/) | 起诉文书、裁判分析、上诉再审和案件沟通 | 9 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-documents-operations-0.1.0.zip) |
+| [Skill 开发与质量保障](expert-suites/skill-development-quality/) | 项目初始化、Harness、质量审查、验证和 Agent 协作 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-development-quality-0.1.0.zip) |
+| [Skill 发布与分发](expert-suites/skill-release-distribution/) | Git、版本、Release、多渠道同步和用户安装 | 8 | v0.1.0 | [下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-release-distribution-0.1.0.zip) |
 
 ## 🛠️ 技能列表
 
@@ -673,8 +687,8 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">智能 Git 批量提交工具，自动将混合的文件修改按类型分类并创建多个清晰聚焦的提交，使用标准化的提交信息格式</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.4.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/git-batch-commit-1.4.2.zip">下载</a></td>
+<td style="text-align:center">v1.4.3</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-batch-commit-1.4.3.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -707,10 +721,10 @@
 <tr>
 <td><a href="skills/release-workflow/"><strong>release-workflow</strong></a></td>
 <td>工具·发布</td>
-<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理，含 Tauri 桌面应用和 CI 故障排查专项指南</td>
+<td style="word-break:break-word">GitHub 项目全流程发布工作流：版本号、Release Notes、CI 与发布验证；支持 monorepo 单 Skill ZIP 和基于符号链接定义、Release 时展开的专家套件 ZIP</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.5.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/release-workflow-1.5.0.zip">下载</a></td>
+<td style="text-align:center">v1.6.0</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/latest/download/release-workflow-1.6.0.zip">下载</a></td>
 <td></td>
 </tr>
 <tr>
@@ -762,6 +776,22 @@
 - **文档即上下文**：关键决策、任务、变更记录在文档中
 - **透明变更**：所有修改写入 CHANGELOG.md，遵循版本号规范
 - **保留证据**：输出引用可回溯，缺失信息明确标注
+
+
+> 请帮我从 GitHub 安装 legal-skills 技能集合：[https://github.com/cat-xierluo/legal-skills](https://github.com/cat-xierluo/legal-skills)
+
+### 一次下载专家套件
+
+从上方“专家套件”表格下载一个 `suite-<id>-<version>.zip`，解压后先阅读套件根目录 README，再把其中 `skills/*` 复制到 Agent 的 Skills 根目录。套件中的每个 Skill 都是完整真实目录，不依赖仓库符号链接。
+
+### 单独下载某个 skill（推荐，无需 Git）
+
+进入 [GitHub Releases 最新版](https://github.com/cat-xierluo/legal-skills/releases/latest) 页面，
+下载你需要的 skill 的 zip 文件，解压后直接得到 `<name>/` 文件夹，把整个文件夹复制到 Agent 的 skills 目录即可。
+
+例如 `contract-copilot-1.5.3.zip` 解压后得到 `contract-copilot/` 文件夹，复制到 `~/.claude/skills/` 即可。
+
+上表「下载」列已提供每个 skill 的最新版本直链（指向 latest），新增版本发布后由 GitHub Actions 自动同步。
 
 
 <details>
