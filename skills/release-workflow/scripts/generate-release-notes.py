@@ -28,9 +28,12 @@
 行为:
   1. 从 projects.yaml 读项目级 notes: 配置(如有)
   2. 从 README 提取最近更新表格(按 source_marker 定位)
-  3. 确定本版 skill 总数:OUTPUT_DIR(默认 pack-skills/)下的 zip 数 >
-     README badge(Skills-<数字>)> 最近更新条数(兜底)
-  4. 拼装结构化 release notes
+  3. 确定本版数量:OUTPUT_DIR(默认 pack-skills/)下的 zip 数 >
+     README badge(Skills-<数字>)> 最近更新条数(兜底);套件 zip(suite-* 前缀)
+     单独计数为 {suites},不混入 skill 总数 {total}
+  4. 清点 EXPERT_SUITES_ROOT(默认 expert-suites/)下各套件的 README/CHANGELOG,
+     渲染「专家套件」清单节(目录缺失时整节省略,向后兼容无套件项目)
+  5. 拼装结构化 release notes
 
 依赖:仅 Python 3 标准库(解析 YAML 用内置正则简化,如需完整 YAML 可加 PyYAML)。
 """
@@ -228,15 +231,78 @@ def extract_skill_count(readme_text: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-def count_built_zips(output_dir: Path) -> int:
-    """数构建产物目录下的 zip 数量(本版 skill 总数的准确来源)
+def count_built_zips(output_dir: Path) -> tuple[int, int]:
+    """数构建产物目录下的 zip 数量,按 suite- 前缀拆分为 (skill 数, 套件数)
 
-    release.yml 中 build-zips.sh 先于本脚本执行,pack-skills/ 必然存在;
-    本地单独运行(无产物)时返回 0,由调用方回退到 README badge。
+    release.yml 中 build-zips.sh / build-suite-zips.sh 先于本脚本执行,
+    pack-skills/ 必然存在;本地单独运行(无产物)时返回 (0, 0),
+    由调用方回退到 README badge / expert-suites 目录清点。
+    套件 ZIP(suite-<id>-<semver>.zip)不是 skill,绝不能混入 skill 总数。
     """
     if not output_dir.is_dir():
-        return 0
-    return sum(1 for p in output_dir.iterdir() if p.is_file() and p.suffix == ".zip")
+        return 0, 0
+    skills = suites = 0
+    for p in output_dir.iterdir():
+        if not (p.is_file() and p.suffix == ".zip"):
+            continue
+        if p.name.startswith("suite-"):
+            suites += 1
+        else:
+            skills += 1
+    return skills, suites
+
+
+def collect_expert_suites(suites_root: Path) -> list[dict]:
+    """清点 expert-suites/<id>/ 下各套件的展示信息
+
+    每个套件返回 {id, title, summary, version, members}:
+      - title/summary 取自 README.md 的首个 # 标题与其后第一段(blockquote 优先)
+      - version 取自 CHANGELOG.md 头部 semver(与 build-suite-zips.sh 同款格式)
+      - members 为 skills/ 下成员条目数(符号链接即成员)
+    目录缺失或单个套件解析失败时跳过,不阻断 notes 生成。
+    """
+    if not suites_root.is_dir():
+        return []
+    suites: list[dict] = []
+    for suite_dir in sorted(suites_root.iterdir()):
+        if not suite_dir.is_dir():
+            continue
+        readme = suite_dir / "README.md"
+        changelog = suite_dir / "CHANGELOG.md"
+        if not (readme.is_file() and changelog.is_file()):
+            continue
+        text = readme.read_text()
+        title, summary, version = "", "", ""
+        for line in text.splitlines():
+            if not title and line.startswith("# "):
+                title = line[2:].strip()
+                continue
+            if not title:
+                continue
+            stripped = line.strip()
+            # 跳过空行、标题、表格、列表;跳过纯链接行(README 首个 blockquote
+            # 通常是"下载完整专家套件"链接,不是定位描述)
+            if not stripped or stripped.startswith(("#", "|", "-", "1.", "2.")):
+                continue
+            content = stripped.lstrip("> ").strip()
+            if content.startswith(("[", "![", "<")):
+                continue
+            summary = content
+            break
+        m = re.search(r"## \[?v?([0-9]+\.[0-9]+\.[0-9]+)\]?", changelog.read_text())
+        if m:
+            version = m.group(1)
+        members = sum(
+            1 for p in (suite_dir / "skills").iterdir()
+        ) if (suite_dir / "skills").is_dir() else 0
+        suites.append({
+            "id": suite_dir.name,
+            "title": title or suite_dir.name,
+            "summary": summary,
+            "version": version,
+            "members": members,
+        })
+    return suites
 
 
 def render_body(
@@ -245,21 +311,24 @@ def render_body(
     recent: list[dict],
     skill_count: int,
     notes_cfg: dict | None = None,
+    suites: list[dict] | None = None,
 ) -> str:
     """生成 release notes 主体。
 
     notes_cfg(从 projects.yaml 读的项目 notes 块):
       - project_label: 标题用名
-      - intro_template: 简介模板
+      - intro_template: 简介模板(支持 {total} {suites} {label} 占位符)
       - recent.source_marker: 表格章节标题
       - recent.top_n: 数量
       - install.single_label: "skill"/"package" 等
       - install.full_clone_prompt: 整仓克隆提示词模板
       - install.single_note: 单 zip 说明
+    suites(collect_expert_suites 的结果,可选):非空时渲染「专家套件」清单节。
     """
     notes_cfg = notes_cfg or {}
     n = len(recent)
     total = skill_count or n
+    suites = suites or []
     label = notes_cfg.get("project_label") or repo.split("/")[-1]
 
     # 简介(支持项目级模板覆盖)
@@ -269,7 +338,7 @@ def render_body(
     if intro_template:
         # 用 .format() 而非 f-string,因为模板里可能含 {total} {label} 等占位符
         try:
-            intro = intro_template.format(total=total, label=label)
+            intro = intro_template.format(total=total, suites=len(suites), label=label)
         except KeyError:
             intro = intro_template  # 模板含未知占位符时,原样使用
     else:
@@ -292,6 +361,26 @@ def render_body(
                 summary = summary[:77] + "..."
             lines.append(
                 f"| {r['date']} | **{r['skill']}** | {r['version']} | {summary} |"
+            )
+        lines.append("")
+
+    # 专家套件清单(仅当 expert-suites/ 存在且可解析时渲染)
+    if suites:
+        lines.append(f"## 专家套件（{len(suites)} 个）")
+        lines.append("")
+        lines.append(
+            f"场景化套件把协同工作的 Skill 打包为一套 ZIP"
+            f"(`suite-<id>-<semver>.zip`),同一 Skill 可被多个套件复用:"
+        )
+        lines.append("")
+        lines.append("| 套件 | 版本 | 收录 | 定位 |")
+        lines.append("|------|------|------|------|")
+        for s in suites:
+            summary = s["summary"]
+            if len(summary) > 70:
+                summary = summary[:67] + "..."
+            lines.append(
+                f"| **{s['id']}** | {s['version']} | {s['members']} 个 Skill | {summary} |"
             )
         lines.append("")
 
@@ -369,15 +458,28 @@ def main() -> int:
     # 总数取值优先级:构建产物 zip 数(准确)> README badge(历史路径)> recent 条数(兜底)。
     # 不能直接用 recent 条数——top_n 截断后远小于实际发布数
     # (v2026.09.21 曾因此把 64 个 skill 误写成 5 个)。
+    # 套件 zip(suite-* 前缀)单列,不混入 skill 总数。
     pack_dir = Path(os.environ.get("OUTPUT_DIR", "pack-skills"))
-    skill_count = count_built_zips(pack_dir) or extract_skill_count(readme_text)
-    body = render_body(repo, tag, recent, skill_count, notes_cfg)
+    built_skills, built_suites = count_built_zips(pack_dir)
+    skill_count = built_skills or extract_skill_count(readme_text)
+    suites_root = Path(os.environ.get("EXPERT_SUITES_ROOT", "expert-suites"))
+    suites = collect_expert_suites(suites_root)
+    # 套件数以 expert-suites/ 目录清点为准(README+符号链接是仓库真值,与清单节/模板自洽);
+    # 产物数仅作一致性告警,不覆盖——两数不等说明构建与目录状态异常,应人工介入
+    if built_suites and built_suites != len(suites):
+        print(
+            f"WARN: 套件产物数({built_suites})与 expert-suites/ 清点数({len(suites)})不一致,"
+            "请核查构建是否完整",
+            file=sys.stderr,
+        )
+    body = render_body(repo, tag, recent, skill_count, notes_cfg, suites)
 
     output_path.write_text(body)
+    label = notes_cfg.get("project_label") or repo.split("/")[-1]
     print(
         f"✅ release notes 已生成:{output_path} "
-        f"(本版共 {skill_count or len(recent)} 个 {notes_cfg.get('project_label') or repo.split('/')[-1]}, "
-        f"top {len(recent)} 条最近更新, project={project_key or '(default)'})"
+        f"(本版共 {skill_count or len(recent)} 个 skill + {len(suites)} 个专家套件, "
+        f"top {len(recent)} 条最近更新, project={project_key or '(default)'} {label})"
     )
     return 0
 
