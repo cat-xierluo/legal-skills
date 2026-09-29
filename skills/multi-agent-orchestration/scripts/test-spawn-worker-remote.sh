@@ -73,6 +73,8 @@ case "$cmd" in
   "rm -f "*) exit 0 ;;
   "bash -s -- "*)
     exec bash -c "$cmd" ;;
+  "cat > "*)
+    exit 0 ;;
   "cat "*)
     target=$(printf '%s' "$cmd" | sed -E "s/^cat '([^']*)'.*/\1/")
     [ -f "$target" ] && cat "$target" || echo '(尚无 STATUS.json——worker 刚启动或路径未生成)' ;;
@@ -140,8 +142,8 @@ spawn_cmd=$(grep 'SSH: zsh -lc' "$MOCK_LOG" | tail -1)
 [[ "$spawn_cmd" == *"--branch\\ node-alpha/fix/demo"* ]] && ok "分支加 node- 前缀" || bad "分支加 node- 前缀"
 [[ "$spawn_cmd" == *"unset\\ ANTHROPIC_AUTH_TOKEN"* ]] && ok "unset 继承 provider env" || bad "unset 继承 provider env"
 grep -qF -- '--verify-cmd\ python3\\\ -m\\\ pytest\\\ -q' "$MOCK_LOG" && ok "verify-cmd 透传" || bad "verify-cmd 透传"
-rsync_line=$(grep 'RSYNC:' "$MOCK_LOG" | tail -1)
-[[ "$rsync_line" == *"remote-dispatch-inbox/receipt-"* ]] && ok "receipt 传到受限 inbox" || bad "receipt 传到受限 inbox"
+cat_line=$(grep 'SSH: cat > ' "$MOCK_LOG" | tail -1)
+[[ "$cat_line" == *"remote-dispatch-inbox/receipt-"* ]] && ok "receipt 经 ssh cat 传到受限 inbox" || bad "receipt 经 ssh cat 传到受限 inbox"
 
 # ---- 3) 软账自限 ----
 bash "$REMOTE" spawn --node alpha --branch fix/demo --session rs1 --worker-backend claude-code \
