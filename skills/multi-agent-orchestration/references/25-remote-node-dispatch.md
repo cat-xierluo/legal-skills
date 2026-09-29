@@ -91,6 +91,7 @@ provision 子命令（节点首次接入）：路径检查 → clone（PM 的 or
 
 - 状态：`status` 子命令（ssh cat STATUS.json + gh pr list）｜`orca terminal read --environment <节点>` 实时读远程 worker 终端（可选辅助）｜GitHub PR 共享事实。
 - 干预：`orca terminal send --environment <节点>` 向远程 worker 终端送追加指令（与本机 terminal send 同机制）。
+- **任务投递（v2.30.5）**：`spawn --prompt-file F` 在 spawn 后自动把任务书投进节点终端（节点段需 `orca_environment` 配对名）。worker 默认 TUI 模式实时渲染——**不要用 `claude -p` 内嵌任务**：`-p` 缓冲全部输出到进程结束，终端全程无推进可见，且绕开 checkpoint 契约。任务书规范：用 Edit 工具改文件（shell `echo >>` 不在 worker 白名单）、完成写 STATUS.json 终态。
 - 收口：`cleanup` 子命令——前置（PR MERGED/CLOSED 或 STATUS 终态，否则要求 `--force-with-reason`）→ ssh 转发节点 `pm-cleanup-worker.sh`（dry-run → --execute，幂等）→ 删 PM 软账。
 - 断线韧性：worker 常驻节点 ORCA terminal/tmux，PM ssh 中断不影响；恢复=凭软账重挂 status。
 
