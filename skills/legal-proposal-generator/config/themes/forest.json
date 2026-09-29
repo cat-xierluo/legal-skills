@@ -1,0 +1,7 @@
+{
+  "extends": "law-firm-brown",
+  "schemaVersion": 1,
+  "id": "forest",
+  "name": "墨绿",
+  "colors": {"primary": "36594C", "deep": "243F35", "soft": "557366", "gold": "84978B", "cream": "EEF3EF", "card": "F6F9F6", "rule": "CCD7CE"}
+}

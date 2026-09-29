@@ -1,0 +1,7 @@
+{
+  "extends": "law-firm-brown",
+  "schemaVersion": 1,
+  "id": "navy",
+  "name": "深蓝",
+  "colors": {"primary": "29465B", "deep": "192F40", "soft": "496779", "gold": "738A99", "cream": "EDF2F5", "card": "F5F8FA", "rule": "C8D3DA"}
+}

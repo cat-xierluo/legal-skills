@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="605" height="205" viewBox="0 0 605 205">
+  <rect width="605" height="205" fill="{{paper}}"/>
+  <g font-family="{{diagramFont}}" font-size="{{fontSize}}" fill="{{text}}">
+    <rect x="5" y="12" width="185" height="142" rx="{{radius}}" fill="{{cream}}" stroke="{{primary}}" stroke-width="{{strokeWidth}}"/>
+    <rect x="210" y="12" width="185" height="142" rx="{{radius}}" fill="{{card}}" stroke="{{gold}}" stroke-width="{{strokeWidth}}"/>
+    <rect x="415" y="12" width="185" height="142" rx="{{radius}}" fill="{{cream}}" stroke="{{primary}}" stroke-width="{{strokeWidth}}"/>
+    <g fill="{{primary}}" font-weight="bold"><text x="21" y="43">01 · 沟通目标</text><text x="226" y="43">02 · 核对资料</text><text x="431" y="43">03 · 确认安排</text></g>
+    <text x="21" y="76">识别拟解决的问题</text><text x="21" y="106">说明现有信息与缺口</text><text x="226" y="76">按来源核对材料</text><text x="226" y="106">保留待核事项</text><text x="431" y="76">协商具体服务范围</text><text x="431" y="106">确定后再推进工作</text>
+    <path d="M192 83H207M202 79L207 83L202 87M397 83H412M407 79L412 83L407 87" fill="none" stroke="{{primary}}" stroke-width="{{strokeWidth}}"/>
+    <text x="5" y="185" fill="{{muted}}">示意说明：实际服务范围、费用及具体安排以双方确认为准。</text>
+  </g>
+</svg>

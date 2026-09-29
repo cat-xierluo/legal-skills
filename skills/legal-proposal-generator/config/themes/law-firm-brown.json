@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "law-firm-brown",
+  "name": "律所棕",
+  "colors": {
+    "primary": "5A4E48", "deep": "3D342F", "soft": "6E5F56", "gold": "927F76",
+    "text": "1A1A1A", "softText": "333333", "muted": "666666",
+    "cream": "F5F0ED", "card": "FAF7F4", "softbg": "FAFAFA", "rule": "CCCCCC",
+    "paper": "FFFFFF", "onPrimary": "FFFFFF",
+    "risk": "9A4141", "warning": "8A641E", "success": "3F6B57"
+  },
+  "fonts": {"eastAsia": "Songti SC", "ascii": "Times New Roman", "diagram": "PingFang SC"},
+  "diagram": {"widthMm": 160, "dpi": 300, "fontPt": 11, "linePt": 0.8, "radiusPx": 4}
+}
