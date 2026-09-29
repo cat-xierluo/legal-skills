@@ -35,14 +35,13 @@
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
+| 2026-09-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.5.0→v1.6.0 | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节与 `{suites}` 占位符；新增 README 覆盖校验（含 latest/download 链接形态修复与更名资产豁免）与套件链接对齐脚本；md2word/git-batch-commit 补齐 MIT LICENSE。 |
 | 2026-09-28 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.1 | 复核反例与独立验收余项修复：多段长录音关闭声纹提取开关不再误标 disabled、认领闭环打通；--save-result 覆盖旧文件强制 0600；摘要重复发言人（含空摘要条目）拒绝注入、缺必需章节时 CLI inject 与 verify/HTTP 质量判定一致非零退出；补齐截图端到端证据。 |
 | 2026-09-24 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.28.0 | Claude Code auto Worker 的普通 Bash 改由原生 auto 和 settings 判断；编排 hook 保留安装、Orca 协议、tracked 删除及受保护 Git 操作门禁。 |
 | 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
 | 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
 | 2026-09-23 | 更新 | [project-init](skills/project-init/) | v1.2.5 | 更新示例配置中的本地 ASR 技能名称。 |
 | 2026-09-23 | 更新 | [skill-lint](skills/skill-lint/) | v2.9.1 | 更新开发与编排参考文档中的本地 ASR 路径。 |
-| 2026-09-23 | 更新 | [transcription-corrector](skills/transcription-corrector/) | v1.0.9 | 更新配置示例中的上游转录技能名称。 |
-| 2026-09-23 | 更新 | [video-compressor](skills/video-compressor/) | v1.5.2 | 更新本地转录技能链接，并对齐前端元数据版本。 |
 </details>
 
 ## 📋 项目概述
