@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.30.1] - 2026-09-29
+
+### 修复（真机 E2E 实测暴露）
+
+- `remote-node-probe.py` 新增节点运行时三道前置门：bash 主版本 ≥4（spawn-worker.sh 依赖 bash5 数组语义——bash 3.2 在 `set -u` 下空数组展开即 unbound variable，Air 实测复现）、登录 shell 下 `git --version` 可用、`python3 --version` 可用；任一不满足 exit 3 并给出修复提示（macOS 上 git/python3/rsync/brew 均可能是 Xcode shim，CLT license 未接受时整体不可用——Air 实测）。
+- bash≥4 门按「登录 shell `command -v bash` → /opt/homebrew/bin/bash → /usr/local/bin/bash」顺序解析**绝对路径**并写入 probe 输出 `runtime.bash_path`（不要求节点改登录 PATH——Air 实测 /opt/homebrew/bin 在登录 PATH 中排在 /usr/bin 之后）；`spawn-worker-remote.sh` 远端调用改用该路径 `exec` spawn-worker.sh。
+- receipt 传输从 rsync 改为 `ssh cat >` 流式写入：macOS 的 rsync 是 Xcode shim 同受 license 状态影响，ssh cat 只依赖 ssh 通道；远端路径整体单引号包裹不踩 shell 词法。
+- `remote_nodes` 机制文档补节点前置要求（bash≥4 / git / python3 / ssh 免密 / ORCA 可选）。
+
+
 ## [2.30.0] - 2026-09-29
 
 ### 新增

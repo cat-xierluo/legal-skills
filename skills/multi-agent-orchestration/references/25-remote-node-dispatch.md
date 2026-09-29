@@ -100,6 +100,13 @@ provision 子命令（节点首次接入）：路径检查 → clone（PM 的 or
 
 NOT_VERIFIED（等真机验收，见 TASKS M0 卡 checklist）：真实节点端到端（真 ssh + 节点本机 spawn + ORCA worktree/terminal + PR 回流 + lease 释放）、supervised 模式跑在远程（worker_done/Delivery 跨机不依赖也不承诺）、远程 429 自动恢复（M2）。
 
+## 10.1 节点前置要求（v2.30.1 起 probe 机械门禁）
+
+- **bash ≥4**（登录 shell 解析到的 `bash`；macOS 自带 3.2 不够——spawn-worker.sh 的 bash5 数组语义在 3.2 + `set -u` 下空数组展开即崩；`brew install bash` 后登录 PATH 生效）
+- **git / python3 在登录 shell 下可执行**（macOS 两者均为 Xcode shim：CLT license 未接受时 `git --version`/`python3 --version` 直接失败，同时 brew/rsync 也不可用——先 `sudo xcodebuild -license accept`）
+- ssh 免密（BatchMode）可达；ORCA 桌面 app 常驻（可选：没有则节点侧退 tmux 模式）
+- receipt 传输走 `ssh cat >`（不依赖 rsync，规避 Xcode shim 同类故障）
+
 ## 11. 配置参考
 
 节点声明在 gitignored `config/orchestration-personal.json` 的 `remote_nodes` 段（模板见 `orchestration-personal.example.json`）：`enabled / ssh_alias / remote_root / skill_root / max_workers / load_threshold / active_session_cap / min_free_disk_gb / min_free_memory_percent / allowed_backends / connect_timeout_seconds`。公开仓只放占位符；真实节点名/别名/路径只进本地 gitignored 文件。

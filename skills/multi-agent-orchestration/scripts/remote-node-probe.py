@@ -72,6 +72,16 @@ if [ -d "$REMOTE_ROOT" ]; then
 else
   field REMOTE_ROOT_EXISTS 0
 fi
+field BASH_MAJOR "$(zsh -lc 'bash --version' 2>/dev/null | head -1 | grep -oE 'version [0-9]+' | grep -oE '[0-9]+')"
+BASH5_PATH=""
+for _b in "$(zsh -lc 'command -v bash' 2>/dev/null)" /opt/homebrew/bin/bash /usr/local/bin/bash; do
+  [ -n "$_b" ] && [ -x "$_b" ] || continue
+  _maj=$("$_b" --version 2>/dev/null | head -1 | grep -oE 'version [0-9]+' | grep -oE '[0-9]+')
+  if [ -n "$_maj" ] && [ "$_maj" -ge 4 ] 2>/dev/null; then BASH5_PATH="$_b"; break; fi
+done
+field BASH5_PATH "${BASH5_PATH:-?}"
+field GIT_OK "$(zsh -lc 'git --version >/dev/null 2>&1 && echo 1 || echo 0')"
+field PY3_OK "$(zsh -lc 'python3 --version >/dev/null 2>&1 && echo 1 || echo 0')"
 CLAUDE_PATH=$(zsh -lc 'command -v claude' 2>/dev/null || true)
 if [ -n "$CLAUDE_PATH" ]; then
   field CLAUDE_PATH "$CLAUDE_PATH"
@@ -358,6 +368,29 @@ def main() -> int:
     if payload["runtime"]["claude_path"] is None:
         return fail("precondition_failed",
                     "REMOTE_NODE_CLAUDE_MISSING: zsh -lc 'command -v claude' 为空",
+                    payload, EXIT_PRECONDITION)
+    # 节点运行时三件套可用性（真机 E2E 实测教训 2026-09-29：macOS 的 git/python3/
+    # rsync 均可能是 Xcode shim，CLT license 未接受时整体不可用；spawn-worker.sh
+    # 依赖 bash≥4 数组语义——bash3.2 在 set -u 下空数组展开即 unbound variable）。
+    payload["runtime"]["bash_major"] = to_int(fields.get("BASH_MAJOR"))
+    payload["runtime"]["bash_path"] = None if fields.get("BASH5_PATH") in ("?", None) else fields.get("BASH5_PATH")
+    payload["runtime"]["git_ok"] = fields.get("GIT_OK") == "1"
+    payload["runtime"]["python3_ok"] = fields.get("PY3_OK") == "1"
+    if payload["runtime"]["bash_path"] is None:
+        return fail("precondition_failed",
+                    f"REMOTE_NODE_BASH_TOO_OLD: 登录 shell bash major={payload['runtime']['bash_major']}, "
+                    "且 /opt/homebrew/bin/bash、/usr/local/bin/bash 均无 >=4（spawn-worker.sh 需要 bash>=4 "
+                    "数组语义；brew install bash 后重试，无需改登录 PATH——探测会直接用绝对路径）",
+                    payload, EXIT_PRECONDITION)
+    if not payload["runtime"]["git_ok"]:
+        return fail("precondition_failed",
+                    "REMOTE_NODE_GIT_UNAVAILABLE: 登录 shell 下 git --version 失败"
+                    "（macOS 检查 Xcode/CLT license；安装 git 后重试）",
+                    payload, EXIT_PRECONDITION)
+    if not payload["runtime"]["python3_ok"]:
+        return fail("precondition_failed",
+                    "REMOTE_NODE_PYTHON_UNAVAILABLE: 登录 shell 下 python3 --version 失败"
+                    "（macOS 检查 Xcode/CLT license；安装 python3 后重试）",
                     payload, EXIT_PRECONDITION)
 
     # 5) 容量门：活跃会话（含用户手开会话，最后判避免被 load 门掩盖根因）

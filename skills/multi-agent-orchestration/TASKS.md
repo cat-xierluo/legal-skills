@@ -30,6 +30,14 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 目标：在真实节点跑通 checklist：probe ok 全字段 → 容量拒绝真机复现（临时调低 load_threshold → rc=4）→ 不可达 rc=65 → 基线门 rc=3（PM 未 push 时）→ receipt 生成/consume/重放拒/过期拒 → ssh 直调节点 spawn-worker.sh 无 receipt 仍 fail-closed → 完整 E2E（spawn-worker-remote spawn → 节点起真实 claude-code worker 读节点自己的 key、METADATA remote_dispatch.key_source_node 留痕、node- 前缀分支 push + PR、PM gh 可见、PR-fingerprint 验收合并、status 拿到 STATUS 演进、cleanup 后节点 lease/worktree/terminal 清干净）→ 降级演练（节点断开 → 65 → 回落本机路径人工走通）。
 - 允许范围：本 Skill references/25 的验收记录、personal config（gitignored）节点参数微调、临时 receipt/probe 参数。禁止：为过门禁改弱 policy。
 - 完成标准：checklist 逐项记录证据（命令 + 输出摘要）；不通过项登记为独立卡。
+- 进展（2026-09-29 晚，v2.30.0 代码侧）：✅ probe ok（load15=3.16/0 会话/版本 2.30.0/基线 f8e2ccde 对齐）✅ 容量拒绝 rc=4（阈值调低复现）✅ 不可达 rc=65 ✅ 基线门 rc=3（错 SHA 复现）✅ receipt 签发+cat 传输+nonce 校验 ✅ fail-closed 不变量触发（暴露 bash3.2 空数组问题→已由 v2.30.1 probe 门拦截）。⏸ 阻塞：Air 的 Xcode license 未接受（git/python3/rsync/brew 全被拦），等用户在 Air 跑 `sudo xcodebuild -license accept` 后继续 Air 侧 consume/重放/完整 spawn。
+
+## TASK-2026-09-29-REMOTE-NODE-AUTODISCOVER — ORCA 配对设备自动发现并登记 remote_nodes
+
+- 状态：`READY`；优先级：`P2`；类型：`feature`；来源：用户 2026-09-29——用户说"派发远程 worker"时，检测本机 ORCA 是否配置了远程设备/服务器（`orca environment list` / `orca host list` 即现成清单），有则登记进 personal config `remote_nodes` 供后续直接复用。
+- 目标：`spawn-worker-remote.sh discover [--write]`——列出 ORCA 已配对 environment（区分 local/ssh/environment 三类 host），对每个候选探测 ssh 可达性 + bash/git/python3 三道门 + 猜测 remote_root（该设备上本仓库 clone 的常见位置），打印登记建议；`--write` 时把确认项写入 gitignored personal config（占位字段留待用户补阈值），绝不覆盖已有条目。
+- 允许范围：spawn-worker-remote.sh 新子命令、remote-node-probe.py 复用、example 文档；不自动 clone、不自动装依赖（那是 provision 的职责且需显式触发）。
+- 验收：mock environment list 单测 + 真机对 Air 跑一次 discover 输出正确建议；已存在条目时幂等跳过。
 
 ## TASK-2026-09-29-SMART-SCHEDULING — 双账号×双机智能调度层
 
