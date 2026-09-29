@@ -1,0 +1,43 @@
+name: Expert Suite Preview
+
+on:
+  pull_request:
+    paths:
+      - "expert-suites/**"
+      - "skills/release-workflow/scripts/build-suite-zips.sh"
+      - "skills/release-workflow/scripts/validate-expert-suites.py"
+      - "skills/release-workflow/scripts/test-build-suite-zips.sh"
+      - "skills/release-workflow/scripts/test_validate_expert_suites.py"
+      - "skills/release-workflow/scripts/update-readme.py"
+      - "skills/release-workflow/scripts/test_update_readme.py"
+      - ".github/workflows/expert-suite-preview.yml"
+      - ".gitattributes"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run validator tests and packaging fixture
+        run: bash skills/release-workflow/scripts/test-build-suite-zips.sh
+
+      - name: Validate repository suites
+        run: python3 skills/release-workflow/scripts/validate-expert-suites.py
+
+      - name: Build preview packages
+        run: bash skills/release-workflow/scripts/build-suite-zips.sh "pr-${{ github.event.pull_request.number || 'manual' }}"
+
+      - name: Upload preview packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: expert-suite-preview
+          path: pack-skills/suite-*.zip
+          if-no-files-found: error
+          retention-days: 7
