@@ -25,6 +25,14 @@
 | brew | 65 leaves、108 过时（2026-09-29 口径） | 升级需用户点名 |
 | bun | 全局仅 ccusage + 用户自写 cc-buddy-roller/show-tokens；缓存 2G 已清 | 少用，装了记账 |
 
+## 漂移基线（2026-09-30 立）
+
+- 基线文件 `~/.config/env-doctor/state`：6 个 shell rc 文件的 SHA-256 + 30 个
+  LaunchAgents 名单，由 `env-doctor.sh snapshot` 生成。
+- 之后每次体检第 8 节自动对照；变更确认合法后重跑 `snapshot` 重立 + `record` 记账。
+- 本基线是「谁动了我的环境」的裁判：Deck/Hermes 式 rc 注入、新增 LaunchAgent 都会
+  在下一次体检现形。
+
 ## 垫片层
 
 - `~/.local/bin` 是全机唯一垫片层（约 47 项：uv tools、claude、zcode、Hermes CLI 等）。
