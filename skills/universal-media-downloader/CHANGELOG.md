@@ -1,5 +1,16 @@
 # 变更日志
 
+## [0.5.2] - 2026-09-30
+
+### 修复
+
+- **`download_douyin_video_nocookie.py` 在 Python 3.9 下函数定义即崩溃**：脚本用了 PEP 604 联合类型注解（`str | None`，需 Python ≥3.10），而 macOS 系统默认 `python3` 是 3.9.6，import 阶段直接抛 `TypeError: unsupported operand type(s) for |`。后果是三级 fallback 的第一环（无登录直连）在这类机器上从未生效过，每次都静默落到第二环游客 cookie。改为 `from typing import Optional` + `Optional[str]`（3 处函数签名），并经系统 python3.9.6 实测：旧版复现崩溃、新版正常走到 video_id 提取步骤（当前上游 SSR 页已停渲染 `play_addr`，见 0.5.0 记录，退出码 1 属预期风控边界，非本 diff 回归）
+- 触发现场：2026-09-30 一次真实抖音视频下载任务，yt-dlp 撞签名墙后第一级 fallback 报此 TypeError，最终靠第二环游客 cookie 下载成功（14 MB；不记录原始链接）
+
+### 技术优化
+
+- 跨 runtime 鲁棒性对齐仓库惯例：类型注解不依赖 3.10+ 语法，兼容系统自带解释器
+
 ## [0.5.1] - 2026-08-30
 
 ### 改进
