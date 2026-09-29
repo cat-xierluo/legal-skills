@@ -1,0 +1,6 @@
+# 四款正式模板属于交付物，覆盖仓库通用 templates/ 忽略规则。
+!templates/
+!templates/*.docx
+
+# 渲染预览为可再生二进制产物，不入库防膨胀（源码+模板已可重建）
+previews/

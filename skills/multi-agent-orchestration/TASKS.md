@@ -23,6 +23,15 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-09-28-ORCA-SETTLEMENT-READBACK — 对齐真实 Orca 回读与外部终端结算
+
+- 状态：`READY`；优先级：`P1`；类型：`runtime-compatibility`；Owner：未领取。来源：Eval Harness 的 P014 主线接入检查；这是该任务短生命周期验证的直接前置，不变更通信波次排序。
+- 已复现事实：现行 `scripts/runtime_settlement.py` SHA-256 `6ca9c93e3394f0013a6bae627eba3d5573de19a8e4299d6daf39dae8d7fab08d` 对已保全真实 `worker-show` 回执报 `IDENTITY_MISMATCH: dispatch.run_id`；原始响应为 `runId` / `processIncarnation` / `runtimeEpoch` 等 camelCase。另一个独立资源谓词检查中，真实 `exited + exactWorker`、无 residual 的 `external/not_requested` 终端仍不能结算，因为当前规则只接受 Orca-owned `released`。
+- 私有证据入口：由 P014 PM 保管的 `eval-harness/evals/ehcg-p014-integration-260928/`。原始退出响应完整哈希 `f79199c81126509135a22cf556086ad72589be3f3d384d857ee210c4aa06ffe6`；不向公开仓复制真实工作树、任务身份、capability 或课程数据。当前复现是历史原件只读重放，不是新 runtime 观察，不补签旧 attempt。
+- 目标：让真实新旧 Orca 响应形状被严格消费，并按实际 owner 证明外部终端已关闭且完成结算；保留 `released` 与 `external closed/accounted` 的区别，不改写上游原始状态、不按 missing/失联推断退出。
+- 允许范围：本 Skill 的 `scripts/runtime_settlement.py`、必要的 `scripts/provider-lease.py` 结算消费者、对应 runtime/provider 测试和短脱敏 fixtures、`references/23-runtime-settlement.md` 及随行版本文档；实现前现查基线并冻结确切文件。禁止改历史证据、私有 provider 配置、通用权限策略、用户全局 settings 或其他 Skill。
+- 可观察验收：真实结构最小脱敏回放可被读取；snake_case/camelCase 双字段出现时必须同值，矛盾、缺项或错绑 Run/Task/Dispatch/runtime/incarnation/terminal 均拒绝。外部终端的正向退出必须与精确 owner、关闭后态、无残留、lease 与 Delivery 证据组合；仅 retained、terminal missing、退出自报或重复旧回执不得完成结算。旧 owned-release、terminal-loss、lease/ack 顺序及递归哈希回归保持。
+- 执行与停止：先用私有原件只读复现，再在隔离短分支实现和独立复验；代码通过后才允许一次新鲜 MiniMax 短 live，经 MAO/Orca 且在首个业务文件前冻结 prepare。首个确定性阻塞即保全，不自动追加长课或重复 claim。P014 本地代码接入不等于本卡完成，本卡也不等于课程质量通过。
 ## TASK-2026-09-29-REMOTE-NODE-M0-E2E — 远程节点派发真机端到端验收
 
 - 状态：`READY`；优先级：`P1`；类型：`verification`；Owner：待领取；来源：DEC-2026-09-29-REMOTE-NODE-DISPATCH（v2.30.0 代码已合，mock 全绿，真机链路未测）。
