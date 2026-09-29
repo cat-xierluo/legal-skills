@@ -22,6 +22,7 @@
 | mock 测试全绿、真实宿主炸 | mock 是否复刻宿主校验 | mock registry 收任意 definition 掩盖必填校验。mock 复刻宿主校验，或宿主核过一次再信 mock | PR #11 |
 | 测试样本行为与宿主不符 | 样本数据形态 | 样本必须贴实物形态（数字 turnId 而非字符串） | PR #11 |
 | 多插件共载时自检链误报 FAIL（单插件时全绿） | 自检断言是否全局独占 | 自检断言了「整个会话/全局恰 1 条记录」——共载时看到别的插件 selftest 记录。**自检只断言自身命名空间（按 businessId/key 过滤），别对全局独占做假设** | PR #37（四插件 snapshotLinks 同修） |
+| mock storageDomain 测试全绿、真实宿主装载即拒 | mock 假体是否复刻后端域名校验 | 域名**仅 `[a-z][a-z0-9_]*`（下划线，连字符非法）**——真实后端 kv.open 强校验（backend.ts UNIT_NAME_RE），mock 假体不校验就漏检。mock 的 open() 应加同款正则校验；命名用下划线形态 | PR #42 发现（star_board_list 裁决）、PR #43 修复 session_pilot_board/suit_agent_read |
 
 ## 隔离实验与进程
 
