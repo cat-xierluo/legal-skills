@@ -91,6 +91,7 @@
       "min_free_disk_gb": 20,
       "min_free_memory_percent": 15,
       "allowed_backends": ["claude-code"],
+      "orca_environment": "<可选：本机 Orca 里该节点的配对名（orca environment list 可查），--prompt-file 跨机任务投递用>",
       "connect_timeout_seconds": 10
     }
   },
