@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # env-doctor · 本机开发环境与全局包体检、账本
-# 覆盖: node/npm/npx 垫片、nvm、pip/pipx、uv、brew、bun、PATH、LaunchAgents
+# 覆盖: node/npm/npx 垫片、nvm、python 解释器版图、pip/pipx、uv、brew、bun、
+#       PATH、cron、brew services、LaunchAgents、shell rc 漂移对照
 # 用法:
 #   env-doctor.sh                 快速体检（本地信息，秒级）
 #   env-doctor.sh full            深度体检（追加 brew outdated，需网络，较慢）
+#   env-doctor.sh snapshot        重立漂移基线（确认 rc/LaunchAgents 变更合法后执行）
 #   env-doctor.sh record "说明"    向账本追加一条记录（自动加时间戳）
 # 退出码: 0=正常  2=检测到运行时垫片漂移  3=无法解析 nvm 默认、未验证
+# 环境变量: ENV_LEDGER 账本路径；ENV_DOCTOR_STATE 漂移基线文件路径（默认 ~/.config/env-doctor/state）
 set -uo pipefail
 
 LEDGER="${ENV_LEDGER:-$HOME/.config/env-ledger.md}"
+STATE_FILE="${ENV_DOCTOR_STATE:-$HOME/.config/env-doctor/state}"
 NVM_HOME="${NVM_DIR:-$HOME/.nvm}"
 LOCAL_BIN="$HOME/.local/bin"
+RC_FILES="$HOME/.zshenv $HOME/.zprofile $HOME/.zshrc $HOME/.zlogin $HOME/.profile $HOME/.bashrc"
 
 say() { printf '   %s\n' "$*"; }
 sec() { printf '\n== %s ==\n' "$*"; }
@@ -72,7 +77,7 @@ audit_shims() {
 }
 
 audit_path() {
-  sec "2. PATH 上的实际解析"
+  sec "2. PATH 实际解析与解释器版图"
   if command -v node >/dev/null 2>&1; then
     say "node: $(command -v node)  ($(node -v 2>/dev/null || echo '?'))"
   else
@@ -82,9 +87,10 @@ audit_path() {
     say "npm -g prefix: $(npm prefix -g 2>/dev/null || echo '?')"
   fi
   if command -v python3 >/dev/null 2>&1; then
-    say "python3: $(command -v python3)  ($(python3 -V 2>&1))"
+    say "python3（默认）: $(command -v python3)  ($(python3 -V 2>&1))"
     say "pip 落点: $(python3 -m pip -V 2>/dev/null || echo '?')"
   fi
+  say "PATH 上全部 node:"
   which -a node 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r p; do
     if [ -x "$p" ]; then
       say "  ${p}  ($("$p" -v 2>/dev/null || echo '版本获取失败'))"
@@ -92,6 +98,14 @@ audit_path() {
       say "  ${p}（不可执行）"
     fi
   done
+  say "PATH 上全部 python3:"
+  which -a python3 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r p; do
+    [ -x "$p" ] && say "  ${p}  ($("$p" -V 2>&1 || echo '版本获取失败'))"
+  done
+  if command -v uv >/dev/null 2>&1; then
+    say "uv python（前 8 行）:"
+    uv python list 2>/dev/null | head -n 8 | sed 's/^/     /'
+  fi
 }
 
 audit_pkg_managers() {
@@ -124,9 +138,13 @@ audit_pkg_managers() {
   fi
   if command -v brew >/dev/null 2>&1; then
     say "brew leaves: $(brew leaves 2>/dev/null | wc -l | tr -d ' ') 个主包（full 模式看过时清单）"
+    say "brew services: $(brew services list 2>/dev/null | tail -n +2 | wc -l | tr -d ' ') 项，其中 started $(brew services list 2>/dev/null | grep -c started) 项"
   else
     say "brew: 未安装"
   fi
+  local cron_n
+  cron_n=$(crontab -l 2>/dev/null | grep -c . || true)
+  say "cron 任务: ${cron_n} 行（明细见第 6 节）"
 }
 
 audit_full_extra() {
@@ -143,8 +161,9 @@ audit_full_extra() {
 }
 
 audit_caches() {
-  sec "4. 缓存体积（可安全清理：npm/bun 缓存与 brew cache）"
-  du -sh "$HOME/.npm" "$HOME/.bun/install/cache" 2>/dev/null | sed 's/^/   /'
+  sec "4. 缓存体积（可安全清理：npm/bun/uv/pip 缓存与 brew cache）"
+  du -sh "$HOME/.npm" "$HOME/.bun/install/cache" \
+        "$HOME/Library/Caches/uv" "$HOME/Library/Caches/pip" 2>/dev/null | sed 's/^/   /'
   local brew_cache
   brew_cache=$(brew --cache 2>/dev/null || true)
   [ -n "$brew_cache" ] && du -sh "$brew_cache" 2>/dev/null | sed 's/^/   /'
@@ -167,11 +186,13 @@ audit_shim_list() {
 }
 
 audit_launchagents() {
-  sec "6. LaunchAgents"
+  sec "6. LaunchAgents 与 cron"
   local n
   n=$(ls "$HOME/Library/LaunchAgents/"*.plist 2>/dev/null | wc -l | tr -d ' ')
-  say "共 ${n} 个:"
+  say "LaunchAgents 共 ${n} 个:"
   ls "$HOME/Library/LaunchAgents/" 2>/dev/null | sed 's/^/   /'
+  say "cron:"
+  crontab -l 2>/dev/null | sed 's/^/     /' || say "（无 crontab）"
 }
 
 audit_ledger() {
@@ -181,6 +202,64 @@ audit_ledger() {
   else
     say "（账本尚未创建，用 record 子命令初始化）"
   fi
+}
+
+hash_file() { shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'; }
+
+current_la_names() { ls "$HOME/Library/LaunchAgents/" 2>/dev/null | sort; }
+stored_la_names() { grep '^la:' "$STATE_FILE" 2>/dev/null | cut -d: -f2-; }
+
+audit_drift() {
+  sec "8. 环境漂移对照（rc 文件与 LaunchAgents，基线: ${STATE_FILE}）"
+  if [ ! -f "$STATE_FILE" ]; then
+    say "（尚无基线，跑一次 snapshot 立基线）"
+    return 0
+  fi
+  local f stored cur diffs=0
+  for f in $RC_FILES; do
+    stored=$(grep -F "rc:$f=" "$STATE_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2)
+    if [ -f "$f" ]; then
+      cur=$(hash_file "$f")
+      if [ -z "$stored" ]; then
+        say "⚠️ ${f} 存在但未入基线（snapshot 未覆盖，重跑 snapshot）"
+      elif [ "$stored" != "$cur" ]; then
+        say "🚨 ${f} 自基线以来内容已变更（确认合法后重跑 snapshot 并记账）"
+        diffs=1
+      fi
+    else
+      if [ -n "$stored" ]; then
+        say "ℹ️ ${f} 已删除（基线里有记录）"
+        diffs=1
+      fi
+    fi
+  done
+  local added removed
+  added=$(comm -13 <(stored_la_names) <(current_la_names))
+  removed=$(comm -23 <(stored_la_names) <(current_la_names))
+  if [ -n "$added" ]; then
+    say "🚨 LaunchAgents 新增: $(echo "$added" | tr '\n' ' ')"
+    diffs=1
+  fi
+  if [ -n "$removed" ]; then
+    say "ℹ️ LaunchAgents 消失: $(echo "$removed" | tr '\n' ' ')"
+    diffs=1
+  fi
+  [ "$diffs" -eq 0 ] && say "✅ rc 文件与 LaunchAgents 均与基线一致"
+}
+
+snapshot() {
+  mkdir -p "$(dirname "$STATE_FILE")"
+  {
+    printf '# env-doctor 漂移基线（%s 由 snapshot 生成；确认变更合法后重跑以重立）\n' "$(date '+%Y-%m-%d %H:%M')"
+    local f
+    for f in $RC_FILES; do
+      [ -f "$f" ] && printf 'rc:%s=%s\n' "$f" "$(hash_file "$f")"
+    done
+    current_la_names | sed 's/^/la:/'
+  } > "$STATE_FILE"
+  say "已立基线 → $STATE_FILE"
+  say "rc 文件 $(grep -c '^rc:' "$STATE_FILE") 个、LaunchAgents $(grep -c '^la:' "$STATE_FILE") 个已入基线"
+  echo "提示: 变更被确认合法后，用 snapshot 重立基线；重大变更建议同时 record 记账。"
 }
 
 run_audit() {
@@ -210,12 +289,13 @@ run_audit() {
   audit_shim_list
   audit_launchagents
   audit_ledger
+  audit_drift
   echo
   if [ "$unverifiable" -eq 1 ]; then
-    echo "结论: ⚠️ 无法解析 nvm 默认版本，本次未验证垫片漂移"
+    echo "结论: ⚠️ 无法解析 nvm 默认版本，本次未验证垫片漂移（第 8 节漂移对照独立生效）"
     exit 3
   elif [ "$drift" -eq 0 ]; then
-    echo "结论: ✅ node 垫片与 nvm 默认一致，未见漂移"
+    echo "结论: ✅ node 垫片与 nvm 默认一致，未见漂移（第 8 节为环境面漂移，不计入退出码）"
     exit 0
   else
     echo "结论: 🚨 检测到运行时垫片漂移——见上方 [🚨] 标记。多为厂商应用更新劫持了 ~/.local/bin；先报告用户，勿擅自改回。"
@@ -240,6 +320,7 @@ record() {
 case "${1:-audit}" in
   audit|"") run_audit fast ;;
   full)     run_audit full ;;
+  snapshot) snapshot ;;
   record)   record "${2:-}" ;;
-  *) echo "用法: env-doctor.sh [audit | full | record \"说明\"]" >&2; exit 1 ;;
+  *) echo "用法: env-doctor.sh [audit | full | snapshot | record \"说明\"]" >&2; exit 1 ;;
 esac

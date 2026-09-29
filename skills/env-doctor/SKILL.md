@@ -2,9 +2,9 @@
 name: env-doctor
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.0"
+version: "0.3.0"
 license: MIT
-description: 本机开发环境与全局包的体检、账本与安装纪律，覆盖所有包管理器（npm/npx、nvm、pip/pipx、uv、brew、bun）与运行时垫片（~/.local/bin、PATH、LaunchAgents、shell rc）。当用户问「node/python 为什么是这个版本」「npm/pip 全局包装到哪了」「环境怎么又乱了」「PATH 被谁改了」，或任何 agent 在执行 npm i -g / uv tool install / pipx install / brew install 等全局安装、修改 shell rc 文件、注册 LaunchAgent/cron、触碰 ~/.local/bin 符号链接、或在厂商应用（Hermes/Deck/Wukong 等）更新后复核环境之前，必须先读本 skill 并遵守其纪律。不要用于：单个项目内的 node_modules / venv 依赖管理、CI 环境、Linux 服务器初始化。仅 macOS。
+description: 本机开发环境与全局包的体检、账本与安装纪律，覆盖所有包管理器（npm/npx、nvm、pip/pipx、uv、brew、bun）与运行时环境面（~/.local/bin 垫片、PATH、python 解释器版图、LaunchAgents、cron、shell rc 漂移对照）。当用户问「node/python 为什么是这个版本」「npm/pip 全局包装到哪了」「环境怎么又乱了」「PATH/rc 被谁改了」「多了个 LaunchAgent」，或任何 agent 在执行 npm i -g / uv tool install / pipx install / brew install 等全局安装、修改 shell rc 文件、注册 LaunchAgent/cron、触碰 ~/.local/bin 符号链接、或在厂商应用（Hermes/Deck/Wukong 等）更新后复核环境之前，必须先读本 skill 并遵守其纪律。不要用于：单个项目内的 node_modules / venv 依赖管理、CI 环境、Linux 服务器初始化。仅 macOS。
 ---
 
 # env-doctor · 环境与全局包体检、账本与安装纪律
@@ -40,14 +40,19 @@ node/python 归谁、全局包装进哪个 prefix、哪个链接死了。本 ski
 ```bash
 bash "<本skill目录>/scripts/env-doctor.sh"               # 快速体检（本地信息，秒级）
 bash "<本skill目录>/scripts/env-doctor.sh" full          # 深度体检（追加 brew outdated，需网络）
+bash "<本skill目录>/scripts/env-doctor.sh" snapshot      # 立漂移基线（rc 哈希 + LaunchAgents 名单）
 bash "<本skill目录>/scripts/env-doctor.sh" record "说明"  # 记账
 ```
 
-输出七段：① node/npm/npx 垫片归属比对（✅/🚨）② PATH 实际解析 ③ 各包管理器与全局
-落点（npm 全局清单 / uv tools / pipx / pip --user / bun / brew leaves）④ 缓存体积
-⑤ `~/.local/bin` 全部符号链接与死链 ⑥ LaunchAgents 清单 ⑦ 账本尾部。
-退出码：`0` 正常；`2` 检测到漂移（见 🚨 标记）；`3` 无法解析 nvm 默认、未验证。
-agent 巡检时以退出码为准；`full` 模式额外报告 brew 过时包清单。
+输出八段：① node/npm/npx 垫片归属比对（✅/🚨）② PATH 实际解析与解释器版图（node
+与 python3 全量清单）③ 各包管理器与全局落点（npm 全局清单 / uv tools / pipx /
+pip --user / bun / brew leaves 与 services / cron 概览）④ 缓存体积（npm/bun/uv/pip/
+brew）⑤ `~/.local/bin` 全部符号链接与死链 ⑥ LaunchAgents 与 cron 明细 ⑦ 账本尾部
+⑧ 环境漂移对照——rc 文件哈希与 LaunchAgents 名单 diff 上次 `snapshot` 基线，报
+🚨新增/变更、ℹ️消失。
+退出码：`0` 正常；`2` 检测到垫片漂移（见 🚨 标记）；`3` 无法解析 nvm 默认、未验证。
+第 8 节环境面漂移只报告不计入退出码（见 DECISIONS D7）。agent 巡检以退出码为准；
+`full` 模式额外报告 brew 过时包清单。变更确认合法后重跑 `snapshot` 重立基线并记账。
 
 ## 记账
 

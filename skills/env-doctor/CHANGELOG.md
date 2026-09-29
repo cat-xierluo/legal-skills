@@ -1,5 +1,21 @@
 # Changelog · env-doctor
 
+## 0.3.0 - 2026-09-30
+
+- **环境漂移对照（第 8 节）+ `snapshot` 子命令**：对 shell rc 文件（zshenv/zprofile/
+  zshrc/zlogin/profile/bashrc）取 SHA-256、对 LaunchAgents 取名单存入
+  `~/.config/env-doctor/state` 基线；此后每次体检自动 diff，报 🚨新增/变更、ℹ️消失。
+  基线只由显式 `snapshot` 重立（体检不自动覆盖，见 DECISIONS D6）；环境面漂移不计入
+  退出码（D7）。基线路径可经 `ENV_DOCTOR_STATE` 覆盖以便测试。
+- **Python 解释器版图**：第 2 节列出 PATH 上全部 python3（逐个版本）+ `uv python list`
+  ——与 node 同构的多解释器问题纳入视野。
+- **审计面补全**：cron 明细（第 6 节）、brew services 运行数（第 3 节）、uv/pip 缓存
+  体积（第 4 节）。
+- **补齐仓库规范内部文档**：DECISIONS.md（D1–D7 设计取舍与重评条件）、TASKS.md
+  （T1–T6 路线图：死链清理、MCP 注册漂移、pip --user 迁移、brew 升级、PATH 快照、
+  --strict 门禁）、LICENSE.txt（MIT）。
+- 脚本头部注释补环境变量说明（ENV_LEDGER / ENV_DOCTOR_STATE）。
+
 ## 0.2.0 - 2026-09-30
 
 - **更名**：`env-hygiene` → `env-doctor`（用户反馈原名不易理解；对齐 `brew doctor` /
