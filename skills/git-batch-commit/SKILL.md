@@ -2,9 +2,9 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.2"
+version: "1.4.3"
 license: MIT
-description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 skill-publish-sync 或 subtree-publish 配置，本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
+description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 skill-publish-sync 或 subtree-publish 配置、或仓库已登记于本技能 config/subtree-repos.yaml（按仓库个性化触发时点与推送命令），本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
 ---
 
 # Git 批量提交工具
@@ -135,7 +135,7 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 3. **审核** - 检查提议的提交分组
 4. **确认** - 创建提交或取消以调整
 5. **ClawHub 同步检查** - 仅当 `skills/skill-publish-sync/` 存在时执行，详见 `references/skill-publish-sync-check.md`。不存在则静默跳过
-6. **Subtree 推送检查** - 仅当 `skills/subtree-publish/config/subtree-skills.json` 存在时执行，详见 `references/subtree-push-check.md`。不存在则静默跳过
+6. **Subtree 推送检查** - 先查本技能 `config/subtree-repos.yaml` 是否登记了当前仓库（按仓库定制配置路径/前缀/触发时点/推送命令；PR 流程仓库登记 `trigger: after-merge-to-main`，合入 main 后才提示）；未登记则回退默认检测 `skills/subtree-publish/config/subtree-skills.json`。均未命中则静默跳过，详见 `references/subtree-push-check.md`
 7. **完成** - 获得清晰历史的聚焦提交
 
 ## 所需权限与能力边界
@@ -151,7 +151,9 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 
 ### 推送 subtree 独立仓库
 
-- 仅当仓库内存在 `skills/subtree-publish/config/subtree-skills.json`、本次提交涉及已注册的 subtree 子目录、且对应 `<name>-standalone` remote 已配置时，才会提示是否推送。
+- 触发检测支持两种来源：①本技能 `config/subtree-repos.yaml` 按仓库登记（`config_path` 定制登记清单路径、`prefix` 定制子目录前缀、`trigger` 定制触发时点、`push_command` 定制推送命令）；②未登记仓库走默认路径 `skills/subtree-publish/config/subtree-skills.json`（提交后即提示）。
+- `trigger: after-merge-to-main`（PR 流程仓库，如 dsh-plugins）：批量提交发生在特性分支时不提示，待 PR 合入 main 后再提示——防止把未合并分支内容派发到独立镜像。
+- 检测命中已注册子目录、且对应 remote 可用（默认 `<name>-standalone`，登记清单可按项覆盖）时才提示。
 - 推送动作需用户确认，不会自动执行。
 
 ### 本地命令执行
@@ -163,7 +165,7 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 - 读取 `git diff`/`git status` 输出、`skills/*/SKILL.md` frontmatter、`skill-publish-sync/config/sync-allowlist.yaml` 与 `sync-records.yaml`。
 - 修改上述 allowlist/records 文件（仅用户确认后）。
 
-> 若你只希望"纯粹提交、绝不触发任何发布/推送提示"，请先移除或重命名仓库中的 `skills/skill-publish-sync/` 与 `skills/subtree-publish/config/subtree-skills.json`，这两个步骤会静默跳过。
+> 若你只希望"纯粹提交、绝不触发任何发布/推送提示"，请先移除或重命名仓库中的 `skills/skill-publish-sync/`、`skills/subtree-publish/config/subtree-skills.json`，并删除本技能 `config/subtree-repos.yaml` 中该仓库的登记——这两个步骤会静默跳过。
 
 ## 资源文件
 

@@ -1,0 +1,19 @@
+# subtree-repos.example.yaml —— git-batch-commit 按仓库个性化登记模板
+# 复制为 subtree-repos.yaml 后按需登记；未登记仓库走默认检测
+# （skills/subtree-publish/config/subtree-skills.json，legal-skills 布局）。
+<repo-dir-name>:
+  # 可选：目标仓库绝对路径，用于校验、防同名仓库误匹配
+  path: /absolute/path/to/repo
+  # 目标仓库内的 subtree 登记清单（触发条件①：该文件存在才继续）
+  config_path: config/subtree-standalone.json
+  # 子目录前缀（默认 skills）
+  prefix: plugins
+  # 触发时点：
+  #   after-commit（默认）——批量提交完成后即检查
+  #   after-merge-to-main —— PR 流程仓库：特性分支提交不提示，
+  #                         PR 合入 main 后才提示，防止把未合并分支派发到镜像
+  trigger: after-merge-to-main
+  # 用户确认后的推送入口；缺省则逐项执行
+  # git subtree push --prefix=<prefix>/<name> <remote> main
+  # （remote 取目标仓登记清单各项的 remote 字段，默认 <name>-standalone）
+  push_command: bash scripts/subtree-push.sh --auto
