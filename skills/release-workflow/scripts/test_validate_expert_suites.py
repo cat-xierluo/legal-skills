@@ -41,7 +41,6 @@ class ExpertSuiteValidatorTest(unittest.TestCase):
             "# 变更日志\n\n## [0.1.0] - 2026-09-13\n",
             encoding="utf-8",
         )
-        (self.suite / "LICENSE.txt").write_text("MIT License\n", encoding="utf-8")
         (self.suite / "README.md").write_text(
             "# Demo\n\n"
             "> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/"

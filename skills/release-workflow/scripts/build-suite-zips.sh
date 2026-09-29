@@ -3,7 +3,7 @@ set -euo pipefail
 
 # build-suite-zips.sh — 校验 expert-suites/ 并把成员符号链接展开为自包含 ZIP
 # 用法: build-suite-zips.sh [REPO_TAG]
-# 输入: expert-suites/<suite>/{README.md,CHANGELOG.md,LICENSE.txt,skills/* symlink}
+# 输入: expert-suites/<suite>/{README.md,CHANGELOG.md,skills/* symlink}
 # 输出: pack-skills/suite-<suite>-<semver>.zip
 
 REPO_TAG="${1:-v$(date +%Y.%m.%d)}"
@@ -69,9 +69,8 @@ for suite_dir in "$EXPERT_SUITES_ROOT"/*; do
     git archive "$SOURCE_REF" --worktree-attributes -- \
         "$suite_dir/README.md" \
         "$suite_dir/CHANGELOG.md" \
-        "$suite_dir/LICENSE.txt" \
         | tar -x -C "$export_dir"
-    for outer_file in README.md CHANGELOG.md LICENSE.txt; do
+    for outer_file in README.md CHANGELOG.md; do
         mv "$export_dir/$suite_dir/$outer_file" "$stage_suite/$outer_file"
     done
 
