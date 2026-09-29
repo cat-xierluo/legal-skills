@@ -81,6 +81,9 @@ case "$cmd" in
   "jq -r '.status // empty' "*)
     target=$(printf '%s' "$cmd" | sed -E "s/.*'([^']*)' 2>.*$/\1/")
     if [ -f "$target" ]; then jq -r '.status // empty' "$target"; else echo ""; fi ;;
+  "python3 - "*)
+    # 模拟信任预置成功（不真跑 python——TRUST_PY 会写 ~/.claude.json，测试必须封闭）
+    printf 'TRUST_PRESET_OK: 3 paths\n' >> "$MOCK_LOG" ;;
   "zsh -lc "*)
     inner=${cmd#zsh -lc }
     case "$inner" in
@@ -128,6 +131,7 @@ expect_rc 64 "节点未配置 → 64" "$rc"
 # ---- 2) spawn 成功：receipt/远端命令构造断言 + 软账落盘 ----
 bash "$REMOTE" spawn --node alpha --branch fix/demo --session rs1 --worker-backend claude-code \
   --verify-cmd 'python3 -m pytest -q' --remote-env SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824 \
+  --trust-worktree \
   --local-project "$CASE_ROOT/pm-project" \
   > "$CASE_ROOT/spawn.out" 2>&1 && rc=$? || rc=$?
 expect_rc 0 "spawn 成功（mock 全链）" "$rc"
@@ -144,6 +148,7 @@ spawn_cmd=$(grep 'SSH: zsh -lc' "$MOCK_LOG" | tail -1)
 [[ "$spawn_cmd" == *"unset\\ ANTHROPIC_AUTH_TOKEN"* ]] && ok "unset 继承 provider env" || bad "unset 继承 provider env"
 grep -qF -- '--verify-cmd\ python3\\\ -m\\\ pytest\\\ -q' "$MOCK_LOG" && ok "verify-cmd 透传" || bad "verify-cmd 透传"
 grep -qF -- 'SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824' "$MOCK_LOG" && ok "--remote-env 注入节点侧 export" || bad "--remote-env 注入节点侧 export"
+grep -q 'TRUST_PRESET_OK' "$MOCK_LOG" && ok "--trust-worktree 预置节点信任" || bad "--trust-worktree 预置节点信任"
 cat_line=$(grep 'SSH: cat > ' "$MOCK_LOG" | tail -1)
 [[ "$cat_line" == *"remote-dispatch-inbox/receipt-"* ]] && ok "receipt 经 ssh cat 传到受限 inbox" || bad "receipt 经 ssh cat 传到受限 inbox"
 

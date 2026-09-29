@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.30.4] - 2026-09-29
+
+### 新增（用户授权产品化）
+
+- `spawn-worker-remote.sh spawn --trust-worktree`（默认关闭）：节点侧预置 Claude Code 工作区信任（`~/.claude.json` projects 段 `hasTrustDialogAccepted=true`，覆盖 remote_root 与可预测的 orca worktree 路径）。背景：headless 远程 worktree 无法弹 trust dialog，未信任时 permissions.allow 整体被忽略、`acceptEdits` 也不放行 git/gh 等 Bash 步骤，worker 能改文件但无法交付（真机 E2E 实测卡点）。写入动作记入 PM 软账 `pm.trust_preinstalled` 供审计。
+
 ## [2.30.3] - 2026-09-29
 
 ### 新增

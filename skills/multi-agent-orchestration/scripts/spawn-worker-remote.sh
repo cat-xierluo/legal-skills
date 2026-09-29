@@ -30,6 +30,7 @@ source "$SCRIPT_DIR/harness-backend-policy.sh"
 source "$SCRIPT_DIR/remote-dispatch-receipt.sh"
 
 PERSONAL_CONFIG_FILE="${MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG:-$SCRIPT_DIR/../config/orchestration-personal.json}"
+HOME_ORCA_WS="$HOME/orca/workspaces"
 LEDGER_SCHEMA="multi-agent-orchestration.remote-dispatch.v1"
 # REMOTE_DISPATCH_SSH_COMMAND：仅测试注入用（mock ssh/rsync）；正式链路固定走 ssh/rsync。
 REMOTE_DISPATCH_SSH_BIN="${REMOTE_DISPATCH_SSH_COMMAND:-ssh}"
@@ -52,7 +53,10 @@ Usage:
       [--provision]
   spawn-worker-remote.sh provision --node NAME [--local-project PATH] [--skip-clone]
   （spawn 另支持 --remote-env KEY=VALUE 可重复：在节点侧 spawn-worker.sh 之前 export，
-    用于按节点调优，如 SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824）
+    用于按节点调优，如 SPAWN_WORKER_MEM_BUDGET_BYTES=1073741824；
+    --trust-worktree：节点侧预置 Claude Code 工作区信任 hasTrustDialogAccepted=true，
+    解决 headless 远程 worktree 无法弹信任对话框导致 permissions.allow 被忽略、
+    git/gh Bash 步骤不可执行的问题。显式 flag 默认关闭，写入动作记入 PM 软账）
   spawn-worker-remote.sh status --node NAME --session NAME
   spawn-worker-remote.sh cleanup --node NAME --session NAME [--force-with-reason R]
 
@@ -118,7 +122,7 @@ remote_ledger_active_count() {
 
 cmd_spawn() {
   local node="" branch="" session="" worker_backend="" command="" local_project=""
-  local receipt_ttl="" require_verification=0 provision=0
+  local receipt_ttl="" require_verification=0 provision=0 trust_worktree=0
   local api_provider="" model="" runtime_profile=""
   local verify_commands=() remote_envs=()
   while [ "$#" -gt 0 ]; do
@@ -136,6 +140,7 @@ cmd_spawn() {
       --local-project) local_project="$2"; shift 2 ;;
       --receipt-ttl-seconds) receipt_ttl="$2"; shift 2 ;;
       --provision) provision=1; shift ;;
+      --trust-worktree) trust_worktree=1; shift ;;
       --remote-env)
         [[ "$2" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || {
           printf 'ERROR: --remote-env expects KEY=VALUE (got: %s)\n' "$2" >&2; return 64; }
@@ -269,6 +274,35 @@ cmd_spawn() {
   $REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes "$REMOTE_NODE_SSH_ALIAS" "chmod 600 '$receipt_remote'" || true
   rm -f "$receipt_local"
 
+  # --trust-worktree（默认关，用户 2026-09-29 授权产品化）：预置节点侧 Claude Code
+  # 工作区信任。headless 远程 worktree 无法弹 trust dialog，未信任时 permissions.allow
+  # 整体被忽略且 acceptEdits 不放行 git/gh 等 Bash 步骤（真机 E2E 实测卡点）。
+  # 写入范围仅 projects[<remote_root>] 与可预测的 orca worktree 路径的
+  # hasTrustDialogAccepted；动作记入 PM 软账 pm.trust_preinstalled。
+  local trust_preinstalled=false
+  if [ "$trust_worktree" -eq 1 ]; then
+    local safe_branch_remote repo_name
+    safe_branch_remote=$(printf '%s' "node-${node}/${branch}" | tr '/[:space:]' '-' | tr -cd 'A-Za-z0-9._-')
+    repo_name=$(basename "$REMOTE_NODE_ROOT")
+    $REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes -o ConnectTimeout=15 "$REMOTE_NODE_SSH_ALIAS" \
+      "python3 - $(printf '%q' "$REMOTE_NODE_ROOT") $(printf '%q' "$HOME_ORCA_WS") $(printf '%q' "$repo_name") $(printf '%q' "$safe_branch_remote")" <<'TRUST_PY'
+import json, os, sys
+root, orca_ws, repo_name, safe_branch = sys.argv[1:5]
+cfg_path = os.path.expanduser("~/.claude.json")
+try:
+    cfg = json.load(open(cfg_path))
+except (OSError, ValueError):
+    cfg = {}
+projects = cfg.setdefault("projects", {})
+paths = [root, os.path.join(orca_ws, repo_name), os.path.join(orca_ws, repo_name, safe_branch)]
+for path in paths:
+    projects.setdefault(path, {})["hasTrustDialogAccepted"] = True
+json.dump(cfg, open(cfg_path, "w"), ensure_ascii=False, indent=2)
+print("TRUST_PRESET_OK:", len(paths), "paths")
+TRUST_PY
+    trust_preinstalled=true
+  fi
+
   # 6) ssh 调节点本机 spawn-worker.sh（zsh -lc 拿登录 PATH；前置 unset provider env；
   #    固定 --base-ref origin/main 防基线漂移）
   local remote_args=(
@@ -335,13 +369,14 @@ cmd_spawn() {
     --arg remote_root "$REMOTE_NODE_ROOT" --arg remote_skill_root "$REMOTE_NODE_SKILL_ROOT" \
     --arg remote_metadata_file "$remote_metadata_file" --arg remote_status_file "$remote_status_file" \
     --arg pm_origin_main_sha "$pm_origin_main_sha" --arg pm_skill_version "$pm_skill_version" \
+    --argjson trust_preinstalled "$trust_worktree" \
     --argjson spawned_at_epoch "$(date +%s)" \
     '{schema: $schema, node: $node, session: $session, branch: $branch, remote_branch: $remote_branch,
       worker_backend: $worker_backend, pm_harness: $pm_harness, pm_harness_source: $pm_harness_source,
       receipt: {inbox_file: $receipt_file, sha256: $receipt_sha256},
       remote: {root: $remote_root, skill_root: $remote_skill_root,
                metadata_file: $remote_metadata_file, status_file: $remote_status_file},
-      pm: {origin_main_sha: $pm_origin_main_sha, skill_version: $pm_skill_version},
+      pm: {origin_main_sha: $pm_origin_main_sha, skill_version: $pm_skill_version, trust_preinstalled: ($trust_preinstalled == 1)},
       spawned_at_epoch: $spawned_at_epoch, last_poll_at_epoch: null, state: "dispatched"}' \
     > "$ledger_dir/$node/$session.json"
   chmod 600 "$ledger_dir/$node/$session.json"
