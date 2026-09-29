@@ -55,7 +55,7 @@
 
 ### #5 持久 KV 存储——`ctx.storageDomain.open`（2026-09-30 核查，0.1.7-rc.2 实物）
 
-- **结论**：Host 侧持久、schema 校验的业务数据走 storageDomain（`inject` 加 `'storageDomain'`）：声明域 `{name, version, tables: {<表名>: {valueSchema}}}`（name 须匹配 `^[a-z][a-z0-9-]*$` 惯例、version 非负整数）→ `const domain = await ctx.storageDomain.open(spec)` → `domain.table('<表名>')` 的 `get`（同步）/`put`/`delete`/`update`（写链上的原子读改写，fn 内 throw 即中止该写）/`entries`（快照迭代）→ `domain.close()`（挂 `ctx.effect` disposer；域声明与 `domainTable(schema) = {valueSchema}` 均可手写，不必 import 包）。
+- **结论**：Host 侧持久、schema 校验的业务数据走 storageDomain（`inject` 加 `'storageDomain'`）：声明域 `{name, version, tables: {<表名>: {valueSchema}}}`（**name 仅匹配 `^[a-z][a-z0-9_]*$`——只允许下划线、不允许连字符**，真实后端 kv.open 强校验（harness `packages/storage/storage/src/backend.ts` 的 UNIT_NAME_RE）；version 非负整数）→ `const domain = await ctx.storageDomain.open(spec)` → `domain.table('<表名>')` 的 `get`（同步）/`put`/`delete`/`update`（写链上的原子读改写，fn 内 throw 即中止该写）/`entries`（快照迭代）→ `domain.close()`（挂 `ctx.effect` disposer；域声明与 `domainTable(schema) = {valueSchema}` 均可手写，不必 import 包）。
 - **schema 调用时机（零依赖姿势的关键）**：表记录 schema **只在 open 的持久读边界被 `valueSchema.parse(raw)` 调用**，写路径不重校验——duck-typed 校验对象 `{parse(v){…真校验…}}` 完全可行；`defineDomain` 的 load-time 检查只针对 `global.schema.safeParse(null)`（**不声明 global 即可绕开**，也就不需要 safeParse 方法）。
 - **语义**：每写先落盘后进内存再发 `domain/changed`（写序）；后端失败内存不动（读写不背离）。错误码：`already-open`/`missing-key`（update 不存在记录）/`invalid-record`（存储记录过不了 schema，open 即拒——真·fail-closed）/`closed`/`backend-not-found`。后端路由由宿主组合的 storage-domain 插件配置决定（GUI/Web 组合有后端；headless 组合可能没有——inject 硬依赖语义下插件会等待不激活，属正确行为）。
 - **迁移模式**（PR #35 P09 实证）：Pi 时代的单 blob settings（如 4 MiB 上限）改为每业务对象一条记录（key = 对象 id），加 per-key 写链串行与总量/体积护栏；损坏数据靠 open 边界 schema 校验 fail-closed，等价 Pi 的损坏 fail-closed。
