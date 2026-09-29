@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# env-hygiene · 运行时环境审计与账本
+# env-doctor · 本机开发环境与全局包体检、账本
+# 覆盖: node/npm/npx 垫片、nvm、pip/pipx、uv、brew、bun、PATH、LaunchAgents
 # 用法:
-#   env-audit.sh                  审计：垫片归属 / PATH 解析 / 缓存 / LaunchAgents / 账本
-#   env-audit.sh record "说明"     向账本追加一条记录（自动加时间戳）
-# 退出码: 0=正常  2=检测到运行时垫片漂移（node/npm/npx 非 nvm 默认或死链）
+#   env-doctor.sh                 快速体检（本地信息，秒级）
+#   env-doctor.sh full            深度体检（追加 brew outdated，需网络，较慢）
+#   env-doctor.sh record "说明"    向账本追加一条记录（自动加时间戳）
+# 退出码: 0=正常  2=检测到运行时垫片漂移  3=无法解析 nvm 默认、未验证
 set -uo pipefail
 
 LEDGER="${ENV_LEDGER:-$HOME/.config/env-ledger.md}"
@@ -12,6 +14,7 @@ LOCAL_BIN="$HOME/.local/bin"
 
 say() { printf '   %s\n' "$*"; }
 sec() { printf '\n== %s ==\n' "$*"; }
+# 注：bash 3.2 下变量名后紧跟全角字符会被吃进名字，变量一律 ${} 包裹
 
 # 解析 nvm default alias（兼容 lts/* 间接指向），成功则输出版本 bin 目录
 resolve_nvm_default_bin() {
@@ -32,10 +35,7 @@ resolve_nvm_default_bin() {
   printf '%s\n' "$NVM_HOME/versions/node/$v/bin"
 }
 
-audit() {
-  local drift=0
-
-  # 注：bash 3.2 下变量名后紧跟全角字符会被吃进名字，此处及下方一律用 ${} 包裹
+audit_shims() {
   sec "1. node/npm/npx 垫片归属（${LOCAL_BIN}）"
   local expected_bin=""
   expected_bin=$(resolve_nvm_default_bin || true)
@@ -54,13 +54,13 @@ audit() {
         if [ -n "$expected_bin" ]; then
           case "$tgt" in
             "$expected_bin"*) mark="✅ nvm 默认" ;;
-            *) mark="🚨 非 nvm 默认"; drift=1 ;;
+            *) mark="🚨 非 nvm 默认" ;;
           esac
         else
           mark="⚠️ 无法比对"
         fi
       else
-        mark="🚨 死链"; drift=1
+        mark="🚨 死链"
       fi
       say "$t → $tgt   [$mark]"
     elif [ -e "$p" ]; then
@@ -69,7 +69,9 @@ audit() {
       say "$t 不存在，PATH 将落到其他 node"
     fi
   done
+}
 
+audit_path() {
   sec "2. PATH 上的实际解析"
   if command -v node >/dev/null 2>&1; then
     say "node: $(command -v node)  ($(node -v 2>/dev/null || echo '?'))"
@@ -81,30 +83,75 @@ audit() {
   fi
   if command -v python3 >/dev/null 2>&1; then
     say "python3: $(command -v python3)  ($(python3 -V 2>&1))"
+    say "pip 落点: $(python3 -m pip -V 2>/dev/null || echo '?')"
   fi
   which -a node 2>/dev/null | awk '!seen[$0]++' | while IFS= read -r p; do
     if [ -x "$p" ]; then
-      say "  $p  ($("$p" -v 2>/dev/null || echo '版本获取失败'))"
+      say "  ${p}  ($("$p" -v 2>/dev/null || echo '版本获取失败'))"
     else
       say "  ${p}（不可执行）"
     fi
   done
+}
 
-  sec "3. node 版本与缓存体积"
-  if [ -d "$NVM_HOME/versions/node" ]; then
-    ls "$NVM_HOME/versions/node" 2>/dev/null | sed 's/^/   nvm: /'
+audit_pkg_managers() {
+  sec "3. 包管理器与全局落点"
+  if command -v npm >/dev/null 2>&1; then
+    say "npm 全局（当前 prefix: $(npm prefix -g 2>/dev/null || echo '?')）:"
+    npm ls -g --depth=0 2>/dev/null | tail -n +2 | sed 's/^/     /'
   else
-    say "（nvm 未安装任何版本）"
+    say "npm: 不可用"
   fi
+  if command -v uv >/dev/null 2>&1; then
+    say "uv tools:"
+    uv tool list 2>/dev/null | sed 's/^/     /'
+  else
+    say "uv: 未安装"
+  fi
+  if command -v pipx >/dev/null 2>&1; then
+    say "pipx:"
+    pipx list --short 2>/dev/null | sed 's/^/     /'
+  else
+    say "pipx: 未安装"
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    local n
+    n=$(python3 -m pip list --user 2>/dev/null | tail -n +3 | wc -l | tr -d ' ')
+    say "pip --user 包数: ${n}（原则上不应手装 CLI，见纪律 1）"
+  fi
+  if [ -d "$HOME/.bun/bin" ]; then
+    say "bun 全局命令: $(ls "$HOME/.bun/bin" 2>/dev/null | tr '\n' ' ')"
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    say "brew leaves: $(brew leaves 2>/dev/null | wc -l | tr -d ' ') 个主包（full 模式看过时清单）"
+  else
+    say "brew: 未安装"
+  fi
+}
+
+audit_full_extra() {
+  sec "3b. brew 过时包（full 模式，需网络）"
+  local out n
+  out=$(HOMEBREW_NO_AUTO_UPDATE=1 brew outdated 2>/dev/null || true)
+  if [ -z "$out" ]; then
+    say "0 个过时"
+  else
+    n=$(printf '%s\n' "$out" | grep -c .)
+    say "${n} 个过时:"
+    printf '%s\n' "$out" | sed 's/^/     /'
+  fi
+}
+
+audit_caches() {
+  sec "4. 缓存体积（可安全清理：npm/bun 缓存与 brew cache）"
   du -sh "$HOME/.npm" "$HOME/.bun/install/cache" 2>/dev/null | sed 's/^/   /'
   local brew_cache
   brew_cache=$(brew --cache 2>/dev/null || true)
   [ -n "$brew_cache" ] && du -sh "$brew_cache" 2>/dev/null | sed 's/^/   /'
-  return 0
 }
 
-audit_rest() {
-  sec "4. $LOCAL_BIN 符号链接清单（死链标 ⚠️）"
+audit_shim_list() {
+  sec "5. ${LOCAL_BIN} 符号链接清单（死链标 ⚠️）"
   local p tgt found=0
   for p in "$LOCAL_BIN"/*; do
     [ -L "$p" ] || continue
@@ -117,14 +164,18 @@ audit_rest() {
     fi
   done
   [ "$found" -eq 0 ] && say "（无符号链接）"
+}
 
-  sec "5. LaunchAgents"
+audit_launchagents() {
+  sec "6. LaunchAgents"
   local n
   n=$(ls "$HOME/Library/LaunchAgents/"*.plist 2>/dev/null | wc -l | tr -d ' ')
   say "共 ${n} 个:"
   ls "$HOME/Library/LaunchAgents/" 2>/dev/null | sed 's/^/   /'
+}
 
-  sec "6. 账本（${LEDGER}）"
+audit_ledger() {
+  sec "7. 账本（${LEDGER}）"
   if [ -f "$LEDGER" ]; then
     tail -n 8 "$LEDGER" | sed 's/^/   /'
   else
@@ -133,8 +184,8 @@ audit_rest() {
 }
 
 run_audit() {
+  local mode="${1:-fast}"
   local drift=0 unverifiable=0
-  # 垫片比对结果决定退出码，单独跑一遍轻量判定
   local expected_bin p t
   expected_bin=$(resolve_nvm_default_bin || true)
   if [ -n "$expected_bin" ]; then
@@ -151,8 +202,14 @@ run_audit() {
   else
     unverifiable=1
   fi
-  audit
-  audit_rest
+  audit_shims
+  audit_path
+  audit_pkg_managers
+  [ "$mode" = "full" ] && audit_full_extra
+  audit_caches
+  audit_shim_list
+  audit_launchagents
+  audit_ledger
   echo
   if [ "$unverifiable" -eq 1 ]; then
     echo "结论: ⚠️ 无法解析 nvm 默认版本，本次未验证垫片漂移"
@@ -169,19 +226,20 @@ run_audit() {
 record() {
   local msg="${1:-}"
   if [ -z "$msg" ]; then
-    echo "用法: env-audit.sh record \"说明（谁/做了什么/如何回滚）\"" >&2
+    echo "用法: env-doctor.sh record \"说明（谁/做了什么/如何回滚）\"" >&2
     exit 1
   fi
   mkdir -p "$(dirname "$LEDGER")"
   if [ ! -f "$LEDGER" ]; then
-    printf '# 环境变更账本（env-hygiene）\n\n格式：- 日期 时间 — 说明（操作者 / 回滚方式）\n\n' > "$LEDGER"
+    printf '# 环境变更账本（env-doctor）\n\n格式：- 日期 时间 — 说明（操作者 / 回滚方式）\n\n' > "$LEDGER"
   fi
   printf -- '- %s — %s\n' "$(date '+%Y-%m-%d %H:%M')" "$msg" >> "$LEDGER"
   echo "已记账 → $LEDGER"
 }
 
 case "${1:-audit}" in
-  audit)  run_audit ;;
-  record) record "${2:-}" ;;
-  *) echo "用法: env-audit.sh [audit | record \"说明\"]" >&2; exit 1 ;;
+  audit|"") run_audit fast ;;
+  full)     run_audit full ;;
+  record)   record "${2:-}" ;;
+  *) echo "用法: env-doctor.sh [audit | full | record \"说明\"]" >&2; exit 1 ;;
 esac
