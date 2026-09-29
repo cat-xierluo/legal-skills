@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.30.2] - 2026-09-29
+
+### 修复
+
+- `spawn-worker.sh` 的 `remote_receipt_consume` 调用改为显式 `--file` 形状（原位置参数传法 consume 解析器不识别，节点侧直接 exit 64——真机 E2E 首次完整 spawn 实测抓到；mock 测试未覆盖节点侧真实执行路径，本条附带调用形状契约测试防回归）。零副作用序保证兑现：该失败发生在 harness 门（任何 worktree/lease/terminal 副作用之前），receipt 由 PM 侧回收。
+
 ## [2.30.1] - 2026-09-29
 
 ### 修复（真机 E2E 实测暴露）

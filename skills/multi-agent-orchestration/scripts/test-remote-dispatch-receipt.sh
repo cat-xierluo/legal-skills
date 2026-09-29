@@ -127,5 +127,13 @@ remote_receipt_consume --file "$R7" --expect-node node-b >/dev/null 2>&1
 [ "$REMOTE_DISPATCH_RECEIPT_PM_HARNESS_CHAIN_JSON" = '["claude-code"]' ] && ok "consume 设置 CHAIN_JSON" || bad "consume 设置 CHAIN_JSON"
 [ "${#REMOTE_DISPATCH_RECEIPT_SHA256}" -eq 64 ] && ok "consume 设置 SHA256" || bad "consume 设置 SHA256"
 
+# 11) 调用形状契约：spawn-worker.sh 的 consume 调用必须带 --file（2026-09-29 真机
+#     E2E 抓到的集成回归：位置参数传法 consume 解析器不识别，直接 64）
+if grep -q 'remote_receipt_consume --file ' "$SCRIPT_DIR/spawn-worker.sh"; then
+  ok "spawn-worker.sh consume 调用形状（--file）"
+else
+  bad "spawn-worker.sh consume 调用形状（--file）"
+fi
+
 printf '\n远程派发回执测试：%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
