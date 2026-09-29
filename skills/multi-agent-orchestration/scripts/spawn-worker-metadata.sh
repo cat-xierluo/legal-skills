@@ -133,6 +133,9 @@ write_metadata() {
     --arg orca_app_version "${ORCA_APP_VERSION:-}" \
     --arg orca_runtime_id "${ORCA_EXPECTED_RUNTIME_ID:-}" \
     --argjson orca_capabilities "${ORCA_CAPABILITIES_JSON:-[]}" \
+    --arg remote_dispatch_node "${REMOTE_DISPATCH_RECEIPT_NODE:-}" \
+    --arg remote_dispatch_receipt_sha256 "${REMOTE_DISPATCH_RECEIPT_SHA256:-}" \
+    --arg remote_dispatch_nonce "${REMOTE_DISPATCH_RECEIPT_NONCE:-}" \
     '{
       schema: $schema,
       created_at: $created_at,
@@ -197,6 +200,13 @@ write_metadata() {
       wave: {
         id: $wave_id,
         worker_id: $wave_worker_id
+      },
+      remote_dispatch: {
+        enabled: ($remote_dispatch_node != ""),
+        node: (if $remote_dispatch_node == "" then null else $remote_dispatch_node end),
+        receipt_sha256: (if $remote_dispatch_receipt_sha256 == "" then null else $remote_dispatch_receipt_sha256 end),
+        receipt_nonce: (if $remote_dispatch_nonce == "" then null else $remote_dispatch_nonce end),
+        key_source_node: (if $remote_dispatch_node == "" then null else $remote_dispatch_node end)
       },
       verification: {
         required: ($verification_required == 1),

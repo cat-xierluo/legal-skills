@@ -33,8 +33,16 @@
       "zcode"
     ]
   },
+  "remote_dispatch": {
+    "enabled": true,
+    "receipt_schema": "multi-agent-orchestration.remote-dispatch-receipt.v1",
+    "max_ttl_seconds": 300,
+    "inbox_dir": "config/remote-dispatch-inbox",
+    "note": "Remote node dispatch (references/25): transports existing PM-harness authority via a one-time receipt consumed by the remote spawn-worker.sh. It does not add a new host key and does not widen any chain intersection; set enabled=false to reject all remote dispatch on this node."
+  },
   "policy_notes": [
     "2026-09-05 zcode PM enabled by explicit user authorization (badminton-lab takeover session): dispatch independent workers, several in parallel.",
-    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir). 2026-09-15 widened to all worker backends (claude-code/codex/codebuddy/qoderwork-cn/zcode) by explicit user authorization: hermes as PM host may dispatch every supported worker backend."
+    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir). 2026-09-15 widened to all worker backends (claude-code/codex/codebuddy/qoderwork-cn/zcode) by explicit user authorization: hermes as PM host may dispatch every supported worker backend.",
+    "2026-09-29 remote_dispatch enabled by explicit user authorization (DEC-2026-09-29-REMOTE-NODE-DISPATCH): a PM verified on its own machine may dispatch workers to this node over ssh with a one-time receipt; the receipt carries the PM harness + chain into the unchanged least-privilege intersection check."
   ]
 }

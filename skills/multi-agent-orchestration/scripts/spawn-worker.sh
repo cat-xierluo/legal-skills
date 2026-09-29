@@ -55,6 +55,10 @@ source "$SCRIPT_DIR/orca-runtime.sh"
 source "$SCRIPT_DIR/orca-coordinator.sh"
 # shellcheck source=harness-backend-policy.sh
 source "$SCRIPT_DIR/harness-backend-policy.sh"
+# v2.30.0：远程节点派发的一次性 receipt 模块（references/25；本地 spawn 不传
+# --remote-dispatch-receipt 时下面的 consume 分支不触发，行为逐字节不变）。
+# shellcheck source=remote-dispatch-receipt.sh
+source "$SCRIPT_DIR/remote-dispatch-receipt.sh"
 # shellcheck source=provider-lease-root.sh
 source "$SCRIPT_DIR/provider-lease-root.sh"
 # shellcheck source=spawn-worker-deps.sh
@@ -70,6 +74,7 @@ COMMAND=""
 DRY_RUN=0
 WORKER_BACKEND=""
 PM_HARNESS_ASSERTION=""
+REMOTE_DISPATCH_RECEIPT=""
 PM_HARNESS=""
 PM_HARNESS_SOURCE=""
 PM_HARNESS_CHAIN_JSON="[]"
@@ -268,8 +273,26 @@ spawn_worker_check_base_ref_is_ref() {
 spawn_worker_check_base_ref_is_ref "$BASE_REF" || exit $?
 
 DETECTED_PM_HARNESS=""
-detect_pm_harness "$PROJECT_DIR" || exit $?
-detected_pm_harness="$DETECTED_PM_HARNESS"
+if [ -n "$REMOTE_DISPATCH_RECEIPT" ]; then
+  # v2.30.0 远程节点派发（references/25）：PM 本机已验证的 harness 事实经一次性
+  # receipt 传输到本节点，替代本机无法证明的 ssh 进程祖先链。authority 不放大：
+  # 载明的 harness/chain 随后仍走原版 enforce_harness_backend_policy_chain 交集。
+  if [ -n "$PM_HARNESS_ASSERTION" ]; then
+    echo "ERROR: --remote-dispatch-receipt and --pm-harness are mutually exclusive (fail-closed)" >&2
+    exit 64
+  fi
+  remote_receipt_consume "$REMOTE_DISPATCH_RECEIPT" \
+    --expect-worker-backend "$WORKER_BACKEND" \
+    --expect-branch "$BRANCH" \
+    --expect-session "$SESSION" || exit $?
+  DETECTED_PM_HARNESS="$REMOTE_DISPATCH_RECEIPT_PM_HARNESS"
+  PM_HARNESS_CHAIN_JSON="$REMOTE_DISPATCH_RECEIPT_PM_HARNESS_CHAIN_JSON"
+  PM_HARNESS_SOURCE="remote_dispatch_receipt"
+  detected_pm_harness="$DETECTED_PM_HARNESS"
+else
+  detect_pm_harness "$PROJECT_DIR" || exit $?
+  detected_pm_harness="$DETECTED_PM_HARNESS"
+fi
 if [ -n "$PM_HARNESS_ASSERTION" ]; then
   asserted_pm_harness=$(canonical_harness_backend "$PM_HARNESS_ASSERTION") || {
     echo "ERROR: unsupported --pm-harness: $PM_HARNESS_ASSERTION (fail-closed)" >&2
