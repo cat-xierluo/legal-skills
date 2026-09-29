@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2] - 2026-09-30
+
+- official-capabilities 新增条目 #2 `ctx.jobs`（会话内长任务注册表：进程内、agent 所有、无定时）与 #3 `packages/schedule`（持久定时调度：六种时序选择器、跨重启持久化、交付=会话内 agent turn、须 Host Web 组合）；待查清单撤销「后台作业/定时能力」项（查证方法第二次实战，dsh-plugins PR #33）。
+
+
+## [0.3.1] - 2026-09-29
+
+- 踩坑表 renderer 行补语义解码：「Unknown client plugin」为插件列表为空时的显示伪影（主进程超时路径构造空报告），真实含义是渲染器 30s 整体静默、与被测插件无关（dsh-plugins renderer 静态归因，PR #32）。
+
 ## [0.3.0] - 2026-09-29
 
 - 用户指示：官方 harness 能发掘的能力直接复用，研究结论沉淀进本 skill——新增 `references/official-capabilities.md`（官方能力复用目录）。
