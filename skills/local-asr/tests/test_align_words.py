@@ -31,36 +31,58 @@ def test_clean_recognition_strips_punctuation():
     ts = [[320, 480], [480, 640], [640, 800], [800, 960], [960, 1120],
           [1120, 1280], [1280, 1440], [1440, 1600], [1600, 1760],
           [1760, 1920]]  # 10 条 = 10 个有效字
-    out_text, out_ts = aw.clean_recognition({"text": text, "timestamp": ts})
+    out_text, out_ts, est = aw.clean_recognition({"text": text, "timestamp": ts})
     assert out_text == "临时想到一个事儿就是", out_text
     assert len(out_ts) == 10
     assert out_ts[0] == (0.32, 0.48)
+    assert est is False  # 全单字组,无估计
 
 
-def test_clean_recognition_english_word_interpolates():
-    """英文词多字符共享一条 ts(如 JI):比例插值,不报错不丢字。"""
+def test_clean_recognition_english_word_group_interpolation():
+    """B2:英文词多字符共享一条 ts(JI 2字符 1 条)→ ASCII 组内插值并标估计;
+    后续非 ASCII 字符不受影响;组数不符返回空(交审,不整句重采样)。"""
+    # JI(1组)+生+成+的 = 4 组 == 4 条 ts
     text = "JI生成的。"
-    ts = [[100, 400], [400, 600], [600, 800], [800, 1000]]  # 4 条 vs 4 有效字符
-    out_text, out_ts = aw.clean_recognition({"text": text, "timestamp": ts})
-    assert out_text == "JI生成的"  # 5 有效字符
-    assert len(out_ts) == 5  # 4 条 ts 比例插值到 5 字符
-    # 长度差场景:ts 多于字符
-    ts2 = [[100, 200], [200, 300], [300, 400]]
-    out_text2, out_ts2 = aw.clean_recognition({"text": "JI成", "timestamp": ts2})
-    assert out_text2 == "JI成"
-    assert len(out_ts2) == 3
-    # ts 少于字符
-    out_text3, out_ts3 = aw.clean_recognition({"text": "JI生成", "timestamp": ts2})
-    assert out_text3 == "JI生成" and len(out_ts3) == 4
-    # 插值时间单调不减
-    assert all(out_ts3[i][1] <= out_ts3[i + 1][0] + 1e-9 or
-               out_ts3[i][1] <= out_ts3[i + 1][1] for i in range(3))
+    ts = [[100, 400], [400, 600], [600, 800], [800, 1000]]
+    out_text, out_ts, est = aw.clean_recognition({"text": text, "timestamp": ts})
+    assert out_text == "JI生成的"
+    assert len(out_ts) == 5 and est is True
+    assert out_ts[0] == (0.1, 0.25) and out_ts[1] == (0.25, 0.4)  # JI 组内均分
+    assert out_ts[2] == (0.4, 0.6)  # 生 不漂移
+    # 审计 B2 反例:ABCDEFGHIJ甲乙 3 组 == 3 条 ts,甲乙取真实 token 时间
+    eff, times, est2 = aw.clean_recognition(
+        {"text": "ABCDEFGHIJ甲乙", "timestamp": [[0, 1000], [1000, 4000], [4000, 5000]]})
+    assert eff == "ABCDEFGHIJ甲乙" and est2 is True
+    assert abs(times[10][0] - 1.0) < 1e-9 and abs(times[10][1] - 4.0) < 1e-9
+    assert abs(times[11][0] - 4.0) < 1e-9 and abs(times[11][1] - 5.0) < 1e-9
+    # 组数不符 → 空(不确定匹配交审)
+    out3 = aw.clean_recognition({"text": "甲乙丙", "timestamp": [[0, 1000], [1000, 2000]]})
+    assert out3 == ("", [], False)
+
+
+def test_align_replace_uses_replaced_block_range():
+    """B1:replace 块的参考字符用识别块真实区间,不挤前置间隙。"""
+    # 参考"不能用" 识别"不难用",识别字时间 [0,.3]/[.3,.6]/[.6,1]
+    words = aw.align_reference_to_recognized(
+        "不能用", "不难用", [(0.0, 0.3), (0.3, 0.6), (0.6, 1.0)], 0.0, 1.0)
+    assert [w["text"] for w in words] == ["不", "能", "用"]
+    assert abs(words[1]["start"] - 0.3) < 0.05 and words[1]["end"] > 0.4
+
+
+def test_align_insert_marks_estimated():
+    """insert 块(识别侧无对应)用邻接间隙并标 estimated=True。"""
+    words = aw.align_reference_to_recognized(
+        "千万不要觉得", "千万觉得", [(0.0, 0.3), (0.3, 0.6), (0.6, 0.9), (0.9, 1.2)],
+        0.0, 1.2)
+    assert "".join(w["text"] for w in words) == "千万不要觉得"
+    est_flags = [w["estimated"] for w in words]
+    assert est_flags[2] is True and est_flags[0] is False  # "不""要"是插入估计
 
 
 def test_clean_recognition_empty_cases():
-    assert aw.clean_recognition({"text": "", "timestamp": []}) == ("", [])
-    assert aw.clean_recognition({"text": "abc"}) == ("", [])
-    assert aw.clean_recognition({"timestamp": [[1, 2]]}) == ("", [])
+    assert aw.clean_recognition({"text": "", "timestamp": []}) == ("", [], False)
+    assert aw.clean_recognition({"text": "abc"}) == ("", [], False)
+    assert aw.clean_recognition({"timestamp": [[1, 2]]}) == ("", [], False)
 
 
 # ---------- align_reference_to_recognized ----------
@@ -77,14 +99,14 @@ def test_align_equal_text_maps_directly():
 
 
 def test_align_correction_maps():
-    """参考有纠正词而识别为原错词:equal 块外的参考字符走邻接内插。"""
+    """参考有纠正词而识别为原错词:replace 映射识别块区间,equal 对齐。"""
     ref = "AI生成"
     rec = "JI生成"  # JI→AI 两字符替换
     ts = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.7), (0.7, 1.0)]
     words = aw.align_reference_to_recognized(ref, rec, ts, 0.0, 1.0)
     assert "".join(w["text"] for w in words) == "AI生成"
-    # 替换块 A/I 在识别前两字符时间附近内插
-    assert 0.0 <= words[0]["start"] <= 0.45
+    # B1:A/I 映射识别块 [0,0.4) 区间
+    assert 0.0 <= words[0]["start"] and words[1]["end"] <= 0.4 + 1e-6
     # 生成 二字与识别后两字符对齐
     assert abs(words[2]["start"] - 0.4) < 1e-6
 
@@ -112,10 +134,11 @@ def test_align_extra_reference_chars_interpolate():
 
 if __name__ == "__main__":
     test_clean_recognition_strips_punctuation()
-    test_clean_recognition_english_word_interpolates()
+    test_clean_recognition_english_word_group_interpolation()
     test_clean_recognition_empty_cases()
     test_align_equal_text_maps_directly()
-    test_align_correction_maps()
+    test_align_replace_uses_replaced_block_range()
+    test_align_insert_marks_estimated()
     test_align_clamps_and_monotonic()
     test_align_extra_reference_chars_interpolate()
-    print(f"✅ {7} tests passed")
+    print(f"✅ {8} tests passed")

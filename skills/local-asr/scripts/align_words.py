@@ -90,17 +90,23 @@ def write_wav_slice(src: array.array, start_s: float, end_s: float, out: Path) -
 
 
 def _iter_segments(transcript: dict):
+    """产出 (raw_index, ordinal, seg, start, end)。
+
+    B4 审计修复:raw_index 是原始数组下标(写回用,无效段跳过不位移后续段);
+    ordinal 仅用于人类可读编号。"""
     raw = transcript.get("segments")
     if raw is None and "result" in transcript:
         raw = transcript["result"].get("utterances")
-    for idx, seg in enumerate(raw or [], start=1):
+    ordinal = 0
+    for raw_idx, seg in enumerate(raw or []):
         st = seg.get("start", seg.get("start_time"))
         en = seg.get("end", seg.get("end_time"))
         try:
             st, en = float(st), float(en)
         except (TypeError, ValueError):
             continue
-        yield idx, seg, st, en
+        ordinal += 1
+        yield raw_idx, ordinal, seg, st, en
 
 
 def align_reference_to_recognized(
@@ -147,30 +153,119 @@ def align_reference_to_recognized(
 _NO_TS_CHARS = set("，。！？；：、,.!?;:…—~·\u3000 \t\n\"'\"'()（）[]【】<>《》「」『』")
 
 
-def clean_recognition(result: dict) -> tuple[str, list]:
-    """剔标点/特殊标记,返回 (有效字符, 对应秒制时间列表)。
+def _ascii_groups(text: str) -> list:
+    """把有效字符切成分组:连续 ASCII 字母数字串=一组(Paraformer 英文词
+    多字符共享一条 timestamp),单个其他字符=一组。返回 [(start, end)] 字符区间。"""
+    groups = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i].isascii() and text[i].isalnum():
+            j = i
+            while j < n and text[j].isascii() and text[j].isalnum():
+                j += 1
+            groups.append((i, j))
+            i = j
+        else:
+            groups.append((i, i + 1))
+            i += 1
+    return groups
 
-    Paraformer 实测:标点无 timestamp;英文词多字符共享一条(如 "JI" 2 字符
-    1 条)。因此不要求一一对应,按字符位置对 ts 序列线性插值取近似时间——
-    误差在字符粒度内,逐字字幕足够;无 ts 或无有效字符返回空。"""
+
+def clean_recognition(result: dict) -> tuple:
+    """剔标点/特殊标记,返回 (有效字符, 每字符秒制时间, 是否含组内估计)。
+
+    B2 审计修复:长度差只允许来自"英文/数字词多字符共享一条 timestamp"
+    (按 ASCII 连续串分组,组数==ts 数时组内线性插值并标 estimate);
+    组数不符直接返回空(不确定匹配交审),不再整句比例重采样制造伪时钟。"""
     text = str(result.get("text") or "")
-    ts = [(s / 1000.0, e / 1000.0) for s, e in (result.get("timestamp") or [])]
+    ts = [(a / 1000.0, b / 1000.0) for a, b in (result.get("timestamp") or [])]
     effective = [ch for ch in text if ch not in _NO_TS_CHARS and not ch.startswith("<|")]
     if not effective or not ts:
-        return "", []
-    n, m = len(effective), len(ts)
+        return "", [], False
+    eff = "".join(effective)
+    groups = _ascii_groups(eff)
+    if len(groups) != len(ts):
+        return "", [], False
     times = []
-    for i in range(n):
-        pos = i * m / n
-        j = min(int(pos), m - 1)
-        if j + 1 < m:
-            frac = pos - j
-            t0 = ts[j][0] + (ts[j + 1][0] - ts[j][0]) * frac
-            t1 = ts[j][1] + (ts[j + 1][1] - ts[j][1]) * frac
-        else:
-            t0, t1 = ts[j]
-        times.append((t0, t1))
-    return "".join(effective), times
+    has_estimate = False
+    for (g_start, g_end), (t0, t1) in zip(groups, ts):
+        n_chars = g_end - g_start
+        for k in range(n_chars):
+            if n_chars == 1:
+                times.append((t0, t1))
+            else:
+                has_estimate = True
+                span = (t1 - t0) / n_chars
+                times.append((t0 + span * k, t0 + span * (k + 1)))
+    return eff, times, has_estimate
+
+
+def align_reference_to_recognized(
+    ref_text: str, rec_text: str, rec_ts: list,
+    seg_start: float, seg_end: float,
+) -> list:
+    """把参考文本字符映射到识别字符的时间戳。
+
+    B1 审计修复:块语义区分——
+    - equal:参考字符直接取识别字符时间;
+    - replace(两侧都有字符):参考字符映射到识别块 [i1,i2) 的真实起止区间
+      (按位置比例),不再挤进前置间隙;
+    - insert(识别侧无对应):新增字符用前置邻接间隙内插,并标记 estimated。
+    返回 [{text,start,end,estimated}](秒,段内相对时间)。"""
+    sm = SequenceMatcher(None, rec_text, ref_text, autojunk=False)
+    words = []
+    n_rec_ts = len(rec_ts)
+
+    def _block_range(i1, i2, j1, j2):
+        """参考字符 j∈[j1,j2) 映射识别区间 [i1,i2) 的时间,按位置比例。"""
+        n_rec = max(1, i2 - i1)
+        n_ref = j2 - j1
+        for k in range(n_ref):
+            frac0 = k / n_ref
+            frac1 = (k + 1) / n_ref
+            lo0 = rec_ts[min(i1 + int(frac0 * n_rec), n_rec_ts - 1)][0]
+            hi1 = rec_ts[min(i1 + max(int(frac1 * n_rec) - 1, 0), n_rec_ts - 1)][1]
+            if n_ref == 1:
+                lo0 = rec_ts[min(i1, n_rec_ts - 1)][0]
+                hi1 = rec_ts[min(max(i2 - 1, i1), n_rec_ts - 1)][1]
+            yield ref_text[j1 + k], lo0, hi1
+
+    def _gap_insert(j1, j2, i1):
+        """insert 块:识别侧无对应字符,用邻接间隙内插。"""
+        left = rec_ts[i1 - 1][1] if i1 > 0 else 0.0
+        right = rec_ts[i1][0] if i1 < n_rec_ts else (seg_end - seg_start)
+        span = max(right - left, 1e-3)
+        n = max(1, j2 - j1)
+        for k, j in enumerate(range(j1, j2)):
+            yield ref_text[j], left + span * k / n, left + span * (k + 1) / n
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for k in range(j2 - j1):
+                rs, re_ = rec_ts[i1 + k]
+                words.append((ref_text[j1 + k], rs, re_, False))
+        elif tag == "replace":
+            if i2 > i1:
+                for text_ch, t0, t1 in _block_range(i1, i2, j1, j2):
+                    words.append((text_ch, t0, t1, False))
+            else:
+                for text_ch, t0, t1 in _gap_insert(j1, j2, i1):
+                    words.append((text_ch, t0, t1, True))
+        elif tag == "insert":
+            for text_ch, t0, t1 in _gap_insert(j1, j2, i1):
+                words.append((text_ch, t0, t1, True))
+        # delete: 识别多出的字符忽略
+    # 夹到段范围并保证单调
+    out = []
+    prev = seg_start
+    for text, t0, t1, est in words:
+        t0 = min(max(seg_start + t0, prev), seg_end)
+        t1 = min(max(seg_start + t1, t0 + 1e-3), seg_end)
+        prev = t1
+        out.append({"text": text, "start": round(t0, 3), "end": round(t1, 3),
+                    "estimated": est})
+    return out
 
 
 def main() -> int:
@@ -209,27 +304,36 @@ def main() -> int:
 
         warnings: list[str] = []
         aligned_count = 0
+        estimated_count = 0
         out_payload = json.loads(json.dumps(transcript))  # 深拷贝
-        # out_payload 与 segments 同构遍历
         raw_out = out_payload.get("segments")
         if raw_out is None and "result" in out_payload:
             raw_out = out_payload["result"].get("utterances")
         out_iter = list(raw_out or [])
+        # B4: 无效段显式记录,不让写回位移
+        valid_raw_indices = {ri for ri, *_ in segments}
+        for ri in range(len(out_iter)):
+            if ri not in valid_raw_indices:
+                warnings.append(f"段{ri + 1}: 缺时间字段,跳过对齐(不位移后续段)")
 
-        for (idx, seg, st, en), target in zip(segments, out_iter):
+        for raw_idx, idx, seg, st, en in segments:
             text = str(seg.get("text") or "").strip()
             if not text:
                 continue
-            chunk = td / f"seg{idx}.wav"
-            write_wav_slice(samples, st - args.pad, en + args.pad, chunk)
+            target = out_iter[raw_idx]  # B4: 按 raw 索引写回
+            # B3: 切片与还原共用实际起点(负起点钳 0 后不再是 st-pad)
+            actual_start = max(0.0, st - args.pad)
+            actual_end = en + args.pad
+            chunk = td / f"seg{raw_idx}.wav"
+            write_wav_slice(samples, actual_start, actual_end, chunk)
             try:
                 results = model.generate(input=str(chunk), batch_size_s=60)
             except Exception as exc:
                 warnings.append(f"段{idx}: 识别失败 {type(exc).__name__}")
                 continue
-            rec_text, rec_ts = clean_recognition(results[0] if results else {})
+            rec_text, rec_ts, has_est = clean_recognition(results[0] if results else {})
             if not rec_text or not rec_ts:
-                warnings.append(f"段{idx}: 识别无有效字符时间戳")
+                warnings.append(f"段{idx}: 识别无有效字符时间戳或字符/时间组数不符(交审)")
                 continue
             sim = SequenceMatcher(None, rec_text, text, autojunk=False).ratio()
             if sim < args.min_similarity:
@@ -237,17 +341,20 @@ def main() -> int:
                     f"段{idx}: 参考与识别相似度 {sim:.2f} < {args.min_similarity},"
                     f"words 缺省(可信才用)")
                 continue
-            # chunk 内时间 → 段绝对时间(归一化轴)
+            # chunk 内时间 → 段绝对时间(归一化轴),seg_start 用 actual_start(B3)
             words = align_reference_to_recognized(
                 text, rec_text, rec_ts,
-                seg_start=st - args.pad, seg_end=en + args.pad)
+                seg_start=actual_start, seg_end=actual_end)
             # 夹回声明段范围(去掉 pad 影响)
             words = [
                 {"text": w["text"],
                  "start": round(min(max(w["start"], st), en), 3),
-                 "end": round(min(max(w["end"], st), en), 3)}
+                 "end": round(min(max(w["end"], st), en), 3),
+                 **({"estimated": True} if w.get("estimated") else {})}
                 for w in words
             ]
+            if has_est or any(w.get("estimated") for w in words):
+                estimated_count += 1
             target["words"] = words
             aligned_count += 1
 
@@ -259,8 +366,14 @@ def main() -> int:
         "unit": "seconds",
         "source": "align_words.py(paraforcer direct AutoModel)",
         "aligned_segments": aligned_count,
+        "segments_with_estimated_chars": estimated_count,
         "total_segments": len(segments),
         "time_base": "normalized-audio",
+        "note": (
+            "ASCII 词多字符共享一条识别 timestamp 时组内时间为线性估计"
+            "(word.estimated=true);对齐失败/相似度不足的段 words 缺省,见 "
+            "word_alignment_warnings——不制造伪精确边界"
+        ),
     }
     meta.setdefault("time_base", "normalized-audio")
     meta.setdefault("time_unit", "seconds")
