@@ -281,7 +281,7 @@ if [ -n "$REMOTE_DISPATCH_RECEIPT" ]; then
     echo "ERROR: --remote-dispatch-receipt and --pm-harness are mutually exclusive (fail-closed)" >&2
     exit 64
   fi
-  remote_receipt_consume "$REMOTE_DISPATCH_RECEIPT" \
+  remote_receipt_consume --file "$REMOTE_DISPATCH_RECEIPT" \
     --expect-worker-backend "$WORKER_BACKEND" \
     --expect-branch "$BRANCH" \
     --expect-session "$SESSION" || exit $?
