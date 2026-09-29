@@ -106,6 +106,7 @@ NOT_VERIFIED（等真机验收，见 TASKS M0 卡 checklist）：真实节点端
 - **git / python3 在登录 shell 下可执行**（macOS 两者均为 Xcode shim：CLT license 未接受时 `git --version`/`python3 --version` 直接失败，同时 brew/rsync 也不可用——先 `sudo xcodebuild -license accept`）
 - ssh 免密（BatchMode）可达；ORCA 桌面 app 常驻（可选：没有则节点侧退 tmux 模式）
 - receipt 传输走 `ssh cat >`（不依赖 rsync，规避 Xcode shim 同类故障）
+- **Claude Code 工作区信任**：headless 远程 worktree 无法弹 trust dialog → 未信任时 permissions.allow 被忽略、acceptEdits 不放行 git/gh Bash 步骤。解法：`spawn --trust-worktree`（默认关，用户 2026-09-29 授权产品化）预置 `hasTrustDialogAccepted`，软账留痕 `pm.trust_preinstalled`
 
 ## 11. 配置参考
 
