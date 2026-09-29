@@ -232,6 +232,13 @@ cmd_spawn() {
     return "$probe_rc"
   fi
   printf 'SPAWN_WORKER_REMOTE_PROBE: node=%s %s\n' "$node" "$(printf '%s' "$probe_json" | jq -c '{status,load,active_sessions:.runtime.active_sessions,origin_main:.git.origin_main_sha}')"
+  local remote_bash_bin
+  remote_bash_bin=$(printf '%s' "$probe_json" | jq -r '.runtime.bash_path')
+  [ -n "$remote_bash_bin" ] && [ -x "$remote_bash_bin" ] || {
+    # probe 放行却拿不到 bash>=4 绝对路径 = 状态不一致，fail-closed
+    echo "ERROR: probe ok but runtime.bash_path missing (fail-closed)" >&2
+    return 64
+  }
 
   # 5) 生成一次性 receipt 并传到节点受限 inbox
   local remote_branch receipt_local receipt_name receipt_remote receipt_sha
@@ -248,9 +255,11 @@ cmd_spawn() {
   $REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes -o ConnectTimeout=15 "$REMOTE_NODE_SSH_ALIAS" \
     "mkdir -p '$REMOTE_NODE_SKILL_ROOT/config/remote-dispatch-inbox' && chmod 700 '$REMOTE_NODE_SKILL_ROOT/config/remote-dispatch-inbox'" || {
     rm -f "$receipt_local"; return 65; }
-  # rsync 而非 scp：remote 路径含空格（"Application Support"）时 rsync 走自有协议不踩 shell 词法
-  rsync -q -e "$REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes -o ConnectTimeout=15" "$receipt_local" \
-    "$REMOTE_NODE_SSH_ALIAS:$receipt_remote" || { rm -f "$receipt_local"; return 65; }
+  # receipt 传输用 ssh cat 流式写入：远端路径整体单引号包裹不踩 shell 词法；
+  # 不用 rsync/scp——macOS 上 rsync 是 Xcode shim，CLT license 未接受时整体不可用
+  # （2026-09-29 真机 E2E 实测），ssh cat 只依赖 ssh 通道本身。
+  $REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes -o ConnectTimeout=15 "$REMOTE_NODE_SSH_ALIAS" \
+    "cat > '$receipt_remote'" < "$receipt_local" || { rm -f "$receipt_local"; return 65; }
   $REMOTE_DISPATCH_SSH_BIN -o BatchMode=yes "$REMOTE_NODE_SSH_ALIAS" "chmod 600 '$receipt_remote'" || true
   rm -f "$receipt_local"
 
@@ -278,7 +287,7 @@ cmd_spawn() {
   for env_key in "${REMOTE_PROVIDER_ENV_KEYS[@]}"; do
     unset_prefix+="unset $env_key; "
   done
-  local remote_command="${unset_prefix}exec '$REMOTE_NODE_SKILL_ROOT/scripts/spawn-worker.sh' "
+  local remote_command="${unset_prefix}exec '$remote_bash_bin' '$REMOTE_NODE_SKILL_ROOT/scripts/spawn-worker.sh' "
   local arg
   for arg in "${remote_args[@]}"; do
     remote_command+=$(printf '%q ' "$arg")
