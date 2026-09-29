@@ -41,6 +41,7 @@ from lib import (
     FFProbeInfo,
     calc_content_quality,
     calc_loading_overlay_score,
+    build_ffmpeg_filter_args,
     content_quality_drop_reason,
     coverage_eligibility_metrics,
     horizontal_mixed_transition_score,
@@ -86,6 +87,7 @@ def parse_args() -> argparse.Namespace:
             "output-protection",
             "transactional-output",
             "archive-metadata",
+            "benchmark",
             "evidence-signals",
             "evidence-package",
             "evidence-review",
@@ -1074,6 +1076,103 @@ def _test_archive_metadata_only() -> None:
         assert meta["review"]["drop_candidates_archived"] is False
 
 
+def _test_benchmark() -> None:
+    _input_args, _vf, output_args = build_ffmpeg_filter_args(
+        "scene", 1.0, 0.10, frame_rate_fps=30.0, sample_interval=2.0
+    )
+    assert output_args[:2] == ["-fps_mode", "vfr"], output_args
+    assert "-vsync" not in output_args, output_args
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-benchmark-") as tmp:
+        root = Path(tmp)
+        video = root / "private-sample-name.mp4"
+        manifest = root / "private-manifest.json"
+        workspace = root / "workspace"
+        _make_tiny_video(video)
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": "video-screenshot-benchmark/v1",
+                    "acceptance": {
+                        "min_distinct_categories": 5,
+                        "required_profiles": ["visual", "ocr"],
+                    },
+                    "cases": [
+                        {
+                            "case_id": "CASE-001",
+                            "category": "short_video",
+                            "video_path": str(video),
+                            "expected_outcome": "success",
+                            "annotations": {
+                                "must_keep": [
+                                    {"id": "K-001", "start_seconds": 0.0, "end_seconds": 2.0}
+                                ],
+                                "transitions": [],
+                                "page_windows": [
+                                    {
+                                        "id": "P-001",
+                                        "start_seconds": 0.0,
+                                        "end_seconds": 2.0,
+                                        "max_selected": 20,
+                                    }
+                                ],
+                            },
+                            "budget": {
+                                "max_frames_per_minute": 1000,
+                                "max_runtime_seconds": 90,
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "benchmark.py"),
+                "run",
+                "--manifest",
+                str(manifest),
+                "--workspace",
+                str(workspace),
+                "--profiles",
+                "visual",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "BENCHMARK_BASELINE_NOT_VERIFIED" in result.stdout
+        summary_path = workspace / "benchmark_summary.json"
+        summary_text = summary_path.read_text(encoding="utf-8")
+        summary = json.loads(summary_text)
+        assert summary["real_baseline_status"] == "not_verified"
+        assert summary["comparative_evaluation_ready"] is False
+        assert summary["accuracy_improvement_claim_allowed"] is False
+        visual = summary["cases"][0]["profiles"]["visual"]
+        assert visual["status"] == "scored" and visual["must_keep_recall"] == 1.0
+        assert str(video) not in summary_text
+        assert video.name not in summary_text
+        assert "start_seconds" not in summary_text and "end_seconds" not in summary_text
+        state_text = (workspace / "benchmark_state.json").read_text(encoding="utf-8")
+        assert str(video) not in state_text and video.name not in state_text
+
+        invalid_manifest = root / "invalid-manifest.json"
+        invalid_manifest.write_text(manifest.read_text(encoding="utf-8").replace("CASE-001", "客户名称"), encoding="utf-8")
+        invalid = subprocess.run(
+            [sys.executable, str(ROOT / "benchmark.py"), "validate", "--manifest", str(invalid_manifest)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert invalid.returncode == 2 and "匿名编号" in invalid.stderr
+
+
 def _test_evidence_signals() -> None:
     taxonomy = _load_taxonomy(ROOT.parent / "config" / "evidence-lead-taxonomy.json")
     samples = {
@@ -1267,6 +1366,7 @@ def main() -> int:
         "output-protection": _test_output_protection,
         "transactional-output": _test_transactional_output,
         "archive-metadata": _test_archive_metadata_only,
+        "benchmark": _test_benchmark,
         "evidence-signals": _test_evidence_signals,
         "evidence-package": _test_evidence_package,
         "evidence-review": _test_evidence_review,
