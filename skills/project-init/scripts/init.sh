@@ -109,6 +109,23 @@ handle_codex() {
     fi
 }
 
+# --- agents: 创建 .agents/ 目录结构 ---
+# 用法: init.sh agents <project_dir>
+handle_agents() {
+    local project_dir="$1"
+
+    # 创建 .agents 目录
+    mkdir -p "$project_dir/.agents"
+
+    # 创建 skills 软链 → ../.claude/skills
+    if [ ! -e "$project_dir/.agents/skills" ]; then
+        ln -s ../.claude/skills "$project_dir/.agents/skills"
+        echo "OK: 创建 .agents/skills → ../.claude/skills"
+    else
+        echo "OK: .agents/skills 已存在，跳过"
+    fi
+}
+
 # --- detect: 输出当前目录的指示文件列表 ---
 # 用法: init.sh detect <project_dir>
 handle_detect() {
@@ -192,6 +209,13 @@ case "$ACTION" in
         fi
         handle_codex "$2"
         ;;
+    agents)
+        if [ -z "$2" ]; then
+            echo "用法: $0 agents <project_dir>"
+            exit 1
+        fi
+        handle_agents "$2"
+        ;;
     *)
         echo "project-init 脚本"
         echo ""
@@ -199,6 +223,7 @@ case "$ACTION" in
         echo "  $0 scaffold <project_dir> [skill_name]   创建 Skill 目录骨架"
         echo "  $0 detect <project_dir>                  检测项目指示文件"
         echo "  $0 codex <project_dir>                   创建 .codex/ 目录结构"
+        echo "  $0 agents <project_dir>                  创建 .agents/ 目录结构（skills → ../.claude/skills）"
         echo ""
         echo "注意: Skill 安装请使用 skill-manager/scripts/install.sh"
         ;;

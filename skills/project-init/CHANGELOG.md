@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.6] - 2026-09-29
+
+### 新增
+
+- 初始化时同步创建项目级 `.agents/` 目录：`skills` 符号链接 → `../.claude/skills`，与 `.codex/skills` 同构，供遵循 `.agents` 目录约定的代理共享同一 Skill 源。新增子命令 `scripts/init.sh agents <project_dir>`，幂等（已存在则跳过）。
+
+### 文档完善
+
+- `SKILL.md` Step 9 更名为「创建 .codex/ 和 .agents/ 目录」，说明目录级软链的单一来源原则：安装或移除 Skill 只操作 `.claude/skills/`，各代理目录自动同步。
+
 ## [1.2.5] - 2026-09-23
 
 ### 文档完善

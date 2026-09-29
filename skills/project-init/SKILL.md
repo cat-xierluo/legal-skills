@@ -2,7 +2,7 @@
 name: project-init
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.2.5"
+version: "1.2.6"
 license: MIT License - 详见 LICENSE.txt
 description: |
   项目初始化工具。读取全局协议 ~/.claude/CLAUDE.md，分析项目实际情况，生成项目特定的 CLAUDE.md 和 docs/ 上下文。本技能应在用户说"初始化项目"、"项目设置"、"配置 Claude Code"、"新建项目配置"时使用，或在进入一个新项目需要快速配置时使用。不要用于：Skill 内容开发或验收（用 skill-lint）、单次 Skill 安装（用 skill-manager）、代码生成。
@@ -82,10 +82,11 @@ mkdir -p .claude/skills/
 
 将 `assets/claude-settings-template.json` 原样复制为项目 `.claude/settings.json`。已有则跳过。
 
-### Step 9: 创建 .codex/ 目录
+### Step 9: 创建 .codex/ 和 .agents/ 目录
 
 ```bash
 bash scripts/init.sh codex "<project_dir>"
+bash scripts/init.sh agents "<project_dir>"
 ```
 
 创建 `.codex/` 目录结构：
@@ -94,7 +95,11 @@ bash scripts/init.sh codex "<project_dir>"
 - `rules/default.rules`：从 `assets/codex-default.rules` 复制
 - `skills`：符号链接 → `../.claude/skills`（与 `.claude/skills/` 共享，不重复安装）
 
-已有则跳过。`.codex/skills` 软链确保 Codex 能直接访问 `.claude/skills/` 中已安装的 Skill。
+创建 `.agents/` 目录结构：
+
+- `skills`：符号链接 → `../.claude/skills`，供遵循 `.agents` 目录约定的代理发现同一批 Skill
+
+两者已有则跳过。目录级软链确保各代理目录与 `.claude/skills/` 共享同一 Skill 源：向 `.claude/skills/` 安装或移除 Skill 时自动同步，不逐 skill 复制或双写链接。`.codex/skills` 软链确保 Codex 能直接访问 `.claude/skills/` 中已安装的 Skill。
 
 ### Step 10: 生成 docs/ 文档
 
