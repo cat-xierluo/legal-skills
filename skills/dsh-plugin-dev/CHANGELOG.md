@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0] - 2026-09-29
+
+- 用户指示：官方 harness 能发掘的能力直接复用，研究结论沉淀进本 skill——新增 `references/official-capabilities.md`（官方能力复用目录）。
+- 目录含查证方法五步（版本锚定 config/dsh-upstream.json、本机 harness 检出 detached worktree 读旧 tag、包 README/subsystems/architecture notes 文档优先、grep 官方消费者找可照抄范例、证据进 dsh-plugins docs/research 与结论进目录的双写回约定）。
+- 首条目录条目：`ctx.llm` 模型调用（DSH-006 核查，0.1.7-rc.2 实物）——唯一受支持入口、request-only 输入、无自动重试、稳定错误码、provider 三形态与 pi-ai 手工网关（第三方自有 key 对应物）；待查清单登记读取回执与后台作业两项。
+- SKILL.md 开发路径第 3 步增「模型调用与公共能力先查官方复用」；参考节挂接；版本 0.3.0。
+
 ## [0.2.0] - 2026-09-29
 
 - 用户指示：skill 迁至公开仓 `skills/dsh-plugin-dev/`；`dsh-plugin-lint` 移除、能力并入（DPD-DEC-001 v2/004）。
