@@ -78,6 +78,22 @@
     "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",
     "overflow_strategy": "配额耗尽时 spawn 退出 75；PM 可等待额度，或在 Harness 白名单内改派另一已配置 backend。"
   },
+  "remote_nodes": {
+    "_comment": "远程 Worker 节点声明（references/25-remote-node-dispatch.md）。PM 用 scripts/spawn-worker-remote.sh 把 Worker 经 ssh 派到节点：门禁/lease/隔离在节点本机原样成立，worker 读节点自己的 env/key。硬限制=节点本机 concurrency；max_workers 只是 PM 侧软账自限。节点名可任取（出现在分支前缀 node-<name>/ 与软账目录）。",
+    "<node-a>": {
+      "enabled": true,
+      "ssh_alias": "<~/.ssh/config 里的主机别名，需免密 BatchMode 可达>",
+      "remote_root": "<节点上项目仓库的绝对路径>",
+      "skill_root": "<节点上本 skill 的绝对路径（通常 remote_root/skills/multi-agent-orchestration）>",
+      "max_workers": 2,
+      "load_threshold": 6.0,
+      "active_session_cap": 4,
+      "min_free_disk_gb": 20,
+      "min_free_memory_percent": 15,
+      "allowed_backends": ["claude-code"],
+      "connect_timeout_seconds": 10
+    }
+  },
   "codex_policy": {
     "_comment": "Codex 路由硬规则。explicit_only = 仅用户明确说'用 Codex'时启用；allowed = 默认可作为 worker backend。",
     "policy": "<explicit_only 或 allowed>",

@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.30.0] - 2026-09-29
+
+### 新增
+
+- 远程节点 Worker 派发（M0：SSH 桥，`references/25-remote-node-dispatch.md`，`DEC-2026-09-29-REMOTE-NODE-DISPATCH`）：PM 用 `scripts/spawn-worker-remote.sh` 把 Worker 经 ssh 派到 personal config `remote_nodes` 声明的远程节点——节点本机的 spawn-worker.sh 原样跑全套门禁，worker 读节点自己的 env/key（双机双 key 池并发 + 本机资源卸载）。配套：
+  - `scripts/remote-dispatch-receipt.sh`：一次性 dispatch receipt（nonce + TTL≤policy 上限 + 绑定 node/harness/chain/backend/branch/session + consumed 不可逆 chmod 400）；`spawn-worker.sh --remote-dispatch-receipt` 在 ps 祖先链不可证明的 ssh 环境以 receipt 载明的 harness/chain 走**原版**最小权限交集（authority 不放大；与 `--pm-harness` 互斥；`harness-backend-policy.json remote_dispatch.enabled=false` 节点侧全局禁用）。无 receipt 时主链行为逐字节不变。
+  - `scripts/remote-node-probe.py`：节点容量/前置条件探测（load15/活跃会话/内存/磁盘容量门；fetch 后 origin/main 双端基线门；skill 副本版本门；claude 登录 shell 可用性；时钟偏差），退出码 0/3/4/65/64 与 spawn-worker-remote 一致。
+  - `spawn-worker-remote.sh spawn|provision|status|cleanup`：spawn（PM harness 预检 + 基线门 + PM 软账自限 max_workers + receipt 传输 + ssh 调节点 spawn，分支强制 `node-<节点>/` 前缀 + `--base-ref origin/main` + 前置 unset provider env 清单）；provision（节点缺项目路径时 clone + skill 随仓库校验 + 节点侧 orca-register-project 注册，`spawn --provision` 自动补装）；status（ssh 读 STATUS.json + gh 查 PR，软账状态回写）；cleanup（PR/STATUS 终态前置 → 转发节点 pm-cleanup-worker → 删软账）。
+  - `config/orchestration-personal.example.json` 新增 `remote_nodes` 模板段（占位符，真实节点只进 gitignored 本地配置）；METADATA 新增 `remote_dispatch` 段（node/receipt_sha256/nonce/key_source_node）。
+- 完成三证合同（远程 worker 完成权威）：STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收；supervised 模式跑在远程节点在 M0 一律 NOT_VERIFIED（跨机 worker_done/Delivery 不依赖也不承诺）。
+
+### 验证
+
+- 新增 `test-remote-dispatch-receipt.sh`（27 断言：issue/consume/重放/过期/字段不匹配/TTL 上限/policy 开关/畸形 JSON/consume 全局变量）、`test-remote-node-probe.sh`（13 断言：ok/不可达 65/未配置 64/禁用 3/load 4/会话 4/基线 3/版本 3/缺 root 3/真实 fetch 通过，mock ssh 零网络）、`test-spawn-worker-remote.sh`（25 断言：mock ssh/rsync/gh 全链 spawn→软账→status→cleanup→provision，含 receipt 传输/远端命令构造/unset 前缀/自限 75/重复 64/非终态 cleanup 64）全绿。
+- 既有回归：test-spawn-worker-flags 41/41、test-spawn-worker-metadata 31/31、test-harness-backend-policy 36/36、test-provider-lease 全过。skill-lint：Security Scan 0 critical / 0 high；Harness Failure Audit hard findings=1（pm-cleanup-worker.sh:305，origin/main 既有，非本次引入）。diff 级泄漏 grep 零命中。
+- 真实节点端到端（真 ssh + 节点 ORCA worktree/terminal + PR 回流 + lease 释放）为 `TASK-2026-09-29-REMOTE-NODE-M0-E2E`，待 PR 合并后执行，当前 NOT_VERIFIED。
+
 ## [2.29.1] - 2026-09-28
 
 ### 新增
