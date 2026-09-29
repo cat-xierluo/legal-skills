@@ -2,7 +2,7 @@
 name: dsh-plugin-dev
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.3.2"
+version: "0.4.0"
 license: MIT
 description: DeepSeek Harness（DSH）插件的设计、开发、装载验证、版本迁移与发布审查指引（版本感知）。在用户要为 DSH Desktop 开发插件、把 Pi/Hermes 插件迁移到 DSH、做隔离装载实验、排查插件在真实宿主的行为、跟进 DSH 版本升级适配，或在发布前做机械审查与验收（dsh.bundle / dsh.client 双面包工件契约、inject/external 对账、主题变量、类型化 locale）时使用。不要用于普通 npm 包审查或与 DSH 无关的 agent 项目。
 ---
@@ -27,7 +27,7 @@ DSH 插件开发指引 Skill（2026-09-29 由 dsh-plugin-lint 并入吸收：开
 
 ## 开发路径
 
-1. **定形态**：插件身份（package.json name + `dsh.bundle.patch` → cordis.patch.yml，insert 行 id/name 均 string）、半体范围（先 Host-only 再 client）、服务依赖（inject——硬依赖缺失插件等待不激活）、零依赖原则（`@deepseek-ai/*` 视为宿主 external）。要点见 [host-plugin-essentials](references/host-plugin-essentials.md)。
+1. **定形态**：插件身份（package.json name + `dsh.bundle.patch` → cordis.patch.yml，insert 行 id/name 均 string）、半体范围（先 Host-only 再 client）、服务依赖（inject——硬依赖缺失插件等待不激活）、零依赖原则（`@deepseek-ai/*` 视为宿主 external）。要点见 [host-plugin-essentials](references/host-plugin-essentials.md)。**Pi 插件 DSH 化起手切片**（PR #37 三插件实证）：新建打包层三件套（package.json/patch/index.mjs，Pi 源码一字不动、不 import）+ bizlink 消费者（owner kind 命名空间）+ 自检链（只断言自身命名空间）——mock 级先行，装载验证批量入用户窗口。
 2. **写 Host 半体**：手写 ESM function plugin（name/inject/apply 命名导出）；同目录有 CJS 遗留源码时**不声明 `type: module`、入口用 `.mjs`**（实测组合回归）；`ctx.provide` + `ctx.logger.info` 启动标记 + `ctx.effect` 返回 disposer。类型查找先搜 `dsh-tool-cordis/lib/types/api-catalog.js` 与各包 README.zh.md——**内嵌树 .d.ts 已剥离，包 lib 导出面查不到 ≠ 全树缺失**。
 3. **接业务**：会话状态用投影（[projection-cookbook](references/session-projection-cookbook.md)：register 必填 `stateVersion`、通知只走 wire、真实 turn id 是数字）；业务对象↔会话关联走共享服务（dsh-bizlink 先例：owner 在 revision 权威处做乐观并发）；**模型调用与一切公共能力先查官方复用**（[official-capabilities](references/official-capabilities.md)：目录 + 查证方法；已核 `ctx.llm` 为唯一受支持模型调用入口，勿自建）。
 4. **隔离装载验证**：按 [desktop-load-and-isolation](references/desktop-load-and-isolation.md) 建实验 profile（GUI profile 必须直接含 `@deepseek-ai/dsh-web-app`；官方 bundle 从安装锚点解析，本地插件放符号链接即可零物化装载）、`DSH_HOME` 隔离启动、宿主日志找激活标记、SIGTERM 分步退出、恢复生产（profile-selection 快照/恢复）。
@@ -64,7 +64,7 @@ harness 根解析优先级：`--harness-root` 参数 → `DSH_HARNESS_ROOT` 环�
 
 ## 参考
 
-- [官方能力复用目录](references/official-capabilities.md)：自建公共层前先查官方的查证方法（源码锚定/包 README/消费者范例）+ 已核条目（`ctx.llm` 模型调用）与待查清单。
+- [官方能力复用目录](references/official-capabilities.md)：自建公共层前先查官方的查证方法（源码锚定/包 README/消费者范例）+ 已核五条目（`ctx.llm` 模型调用、`ctx.jobs` 会话内长任务、`packages/schedule` 持久定时、`ctx.tools` 模型工具注册、`ctx.storageDomain` 持久 KV——后两条含零依赖实现姿势）与待查清单。
 - [Host 插件要领与版本差异](references/host-plugin-essentials.md)：形态、装载解析、零依赖与 schema 策略、api-catalog 类型查找、0.1.2→0.1.7 迁移表。
 - [会话投影 Cookbook](references/session-projection-cookbook.md)：sessionProjections 契约、wire 通知、数字 turnId、水位与 fork。
 - [Desktop 装载与隔离实验](references/desktop-load-and-isolation.md)：profile 工作区、装载实证、DSH_HOME/单例锁/SIGTERM/向导状态/renderer 已知问题。
