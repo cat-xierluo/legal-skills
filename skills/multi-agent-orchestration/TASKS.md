@@ -23,6 +23,27 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-09-29-REMOTE-NODE-M0-E2E — 远程节点派发真机端到端验收
+
+- 状态：`READY`；优先级：`P1`；类型：`verification`；Owner：待领取；来源：DEC-2026-09-29-REMOTE-NODE-DISPATCH（v2.30.0 代码已合，mock 全绿，真机链路未测）。
+- 前置：v2.30.0 已进 origin/main；节点侧 `git pull origin main` 使副本版本门放行；节点 ssh 免密 + rsync + gh 可用。
+- 目标：在真实节点跑通 checklist：probe ok 全字段 → 容量拒绝真机复现（临时调低 load_threshold → rc=4）→ 不可达 rc=65 → 基线门 rc=3（PM 未 push 时）→ receipt 生成/consume/重放拒/过期拒 → ssh 直调节点 spawn-worker.sh 无 receipt 仍 fail-closed → 完整 E2E（spawn-worker-remote spawn → 节点起真实 claude-code worker 读节点自己的 key、METADATA remote_dispatch.key_source_node 留痕、node- 前缀分支 push + PR、PM gh 可见、PR-fingerprint 验收合并、status 拿到 STATUS 演进、cleanup 后节点 lease/worktree/terminal 清干净）→ 降级演练（节点断开 → 65 → 回落本机路径人工走通）。
+- 允许范围：本 Skill references/25 的验收记录、personal config（gitignored）节点参数微调、临时 receipt/probe 参数。禁止：为过门禁改弱 policy。
+- 完成标准：checklist 逐项记录证据（命令 + 输出摘要）；不通过项登记为独立卡。
+
+## TASK-2026-09-29-SMART-SCHEDULING — 双账号×双机智能调度层
+
+- 状态：`BLOCKED`（前置：REMOTE-NODE-M0-E2E）；优先级：`P1`；类型：`feature`；来源：用户 2026-09-29 定稿——两 GLM 账号（数据源=用户 fork 的 cat-xierluo/zcode-cli 项目，可读双账号额度 + 5h/周刷新卡；~/bin/zcode-quota 旧脚本已弃用）× 两机器（probe 容量）→ 动态分流：避开账号并发限制、避开单机终端过载、刷新卡临期优先消耗（token 效率最优）。用户已授权该 epic 开发期额度放心派发，且要求本 epic 本身用 worker 并发推进（M0 远程派发的首战）。
+- 目标：在 spawn 决策前增加调度层——输入任务流，状态=账号侧（以 cat-xierluo/zcode-cli fork 的账号/额度/刷新卡读取为准，评估替换或扩展 quota_summary_zcode 生产方/references/21）× 机器侧（remote-node-probe + 本机 mem budget）× 在途（lease + remote-dispatches 软账），输出=backend×provider×机器 的派发建议；刷新卡临期（5h 窗口）优先吃、账号并发各自限流、机器终端数各自限流。
+- 允许范围：route_suggest.py/quota_preflight.py 扩展、新调度脚本、personal config schema 演进、references 新页；不得绕过现有门禁。
+- 验收：设计卡先行（数据源矩阵 + 调度判据 + 降级矩阵）；实现后 mock 调度单测 + 真机双账号双机实测各一轮。
+
+## TASK-2026-09-29-DROP-CODEBUDDY-QODERWORK — 下线 CodeBuddy 与 QoderWork backend
+
+- 状态：`READY`；优先级：`P2`；类型：`removal`；来源：用户 2026-09-29 指示「QoderWork 这部分不需要了，包括 CodeBuddy，直接通过 PR 删掉」。
+- 目标：独立 PR 从 origin/main 删除两个 backend 全链：harness-backend-policy.json hosts 与候选签名策略位、spawn-worker.sh backend case、render-runtime-profile.sh 分支、qoderclicn-interactive-spawn.sh、config/codebuddy-auth-first-run.sh、references/07/08、example 配置段、SKILL.md 提及、相关测试同步、CHANGELOG。保持 receipt/远程派发等 v2.30.0 新能力不受影响。
+- 注意：与 v2.30.0 同文件（policy/spawn），必须在 v2.30.0 PR 合并后基于新 main 开分支，避免冲突。
+
 ## TASK-2026-09-24-CLAUDE-AUTO-SHELL — 恢复 Claude Code 原生 auto 的普通命令权限
 
 - 状态：`COMPLETE`；优先级：`P1`；类型：`security-policy/usability`；Owner：Codex `/root`；来源：用户反馈 Claude Code auto Worker 的定向 unittest 被编排层 `SHELL_COMMAND_NOT_ALLOWLISTED` 拦截。

@@ -21,6 +21,14 @@ Options:
   --pm-harness NAME
                    Optional assertion for the current PM harness. Runtime evidence remains
                    authoritative: a conflicting assertion fails and can never elevate access.
+  --remote-dispatch-receipt FILE
+                   Remote node dispatch only (references/25): consume this one-time
+                   receipt as the PM-harness authority source instead of local process
+                   ancestry (which cannot be proven over ssh). The receipt carries a
+                   PM-verified harness + chain into the unchanged least-privilege
+                   intersection check; it never widens the chain. Mutually exclusive
+                   with --pm-harness; rejected unless harness-backend-policy.json
+                   sets remote_dispatch.enabled=true.
   --runtime-profile NAME
                    Runtime/settings/profile name used by the worker
   --api-provider NAME
@@ -246,6 +254,10 @@ parse_spawn_worker_args() {
         ;;
       --pm-harness)
         PM_HARNESS_ASSERTION="$2"
+        shift 2
+        ;;
+      --remote-dispatch-receipt)
+        REMOTE_DISPATCH_RECEIPT="$2"
         shift 2
         ;;
       --runtime-profile)

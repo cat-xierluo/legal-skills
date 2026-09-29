@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.29.1"
+  version: "2.30.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -44,6 +44,7 @@ metadata:
 | tmux worktree | Orca 不可用、用户指定 tmux 或兼容性回归 | checkpoint + Git/测试/产物，PM 验收 |
 | tmux lightweight | 用户明确不要 worktree，或非 Git 目标且目录绝不重叠 | checkpoint + 真实产物，PM 验收 |
 | 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
+| 远程节点（SSH 桥） | 需要第二台机器扩并发（独立 key 池）或卸载本机 CPU/内存时，PM 经 `spawn-worker-remote.sh` 派到 personal config `remote_nodes` 声明的节点；节点侧全套门禁本机成立，worker 读节点自己的 env/key（`references/25-remote-node-dispatch.md`） | STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收（完成三证，不依赖跨机 Orca 回执） |
 
 同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
 
@@ -224,6 +225,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | ZCode CLI driver 的启动绑定、配置隔离与安全验证 | `references/24-zcode-driver-safety.md` |
 | sub2api 四条积分 lane（qw/lobster/autoclaw/codebuddy）的生产链路与临期调度 | `references/24-sub2api-quota-producer.md` |
 | 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
+| 远程节点 Worker 派发（SSH 桥 + 一次性 receipt + 容量/基线门） | `references/25-remote-node-dispatch.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
@@ -243,5 +245,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 - worker 启动的服务/监听器没有 owner 与零净增量证据，或按进程名批量 kill。
 - 清理 active/unknown/release pending worker；误删长期分支或 integration target；交付后没有记录三种资源终态之一。
 - 仅凭单一 429 关键词、陈旧 tail 或 idle 状态注入；向身份未绑定、不可写、非 Orca 或仍在 retrying 的 terminal 发送“继续”；把 `WAKE_ACCEPTED` 声称为额度或业务恢复。
+- 远程节点派发时伪造或重放 dispatch receipt、绕过节点侧门禁（receipt 一次性 + TTL + enabled 开关不可绕过），或把节点容量拒绝（`PARKED_FOR_REMOTE_CAPACITY`）擅自回落本机派发；节点不可达（rc=65）回落本机必须是全新本机 spawn 重走全套门禁，不是复用远程上下文。
+- 远程 worker 的完成只凭 ssh 单信号声称：必须集齐完成三证（STATUS.json 终态 + PR 存在 + PR-fingerprint 验收）；supervised 模式跑在远程节点在 M0 一律 NOT_VERIFIED。
 
 修改本 Skill 后，按 `references/19-maintainer-validation.md` 运行受影响测试和完整回归。只有真实启动受支持 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能把该 backend 的 supervised 路径标记为已验证；其他 backend 不得类推。

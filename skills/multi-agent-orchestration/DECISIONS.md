@@ -1,5 +1,16 @@
 # 决策记录
 
+## DEC-2026-09-29-REMOTE-NODE-DISPATCH — 远程节点 Worker 派发走 SSH 桥 + 一次性 receipt
+
+- 日期：2026-09-29
+- 状态：已采纳（用户两项拍板：传输层=SSH 桥+节点本机 ORCA；节奏=mock 全过先行、真机 E2E 等节点负载回落）；真机 E2E NOT_VERIFIED
+- 背景：双机双 GLM key 池（PM 自有 + 节点借用）要并发翻倍并把 worker 的 CPU/内存卸载到第二台机器。ORCA 原生 federation（`worker-start --on`）可用，但 federation 结算链踩已知缺口（TASK-2026-09-28-ORCA-SETTLEMENT-READBACK：真实回执 camelCase 适配失败、external 终端无法结算），且 federation 模式下本 skill 的 quota/mem/lease 门禁不在节点本机执行。
+- 考虑方案：①ORCA federation 先行——监督链原生但结算风险在关键路径；②SSH 桥调节点本机 spawn-worker.sh——全套门禁在节点本机原样成立，lease 本机自治恰好是简单集群的正确抽象；③双轨并行——工作量 1.6 倍。
+- 决策：M0 采用 SSH 桥。节点侧 harness 身份用一次性 dispatch receipt 传输（PM 本机 detect_pm_harness 的结果 + TTL≤300s + nonce + 绑定 backend/branch/session；消费即 chmod 400 不可逆），receipt 不创造新 authority 只传输已验证事实，交集检查复用原函数不放大；policy 新增 `remote_dispatch` 段（enabled 开关 + max_ttl），不新增 host 键。并发两层：节点本机 provider lease 是硬限制权威，PM 软账（remote-dispatches/）只收紧不放宽，不做分布式锁。完成权威=三证（STATUS 终态 + PR 存在 + PR-fingerprint 验收），不依赖跨机 Orca 回执。worker 读节点自己的 env：远程命令前置 unset 全部 provider 路由变量 + ssh 不转发 env + 节点侧 claude-provider-env 注入。
+- 边界：supervised 模式跑远程 NOT_VERIFIED；命令身份不进 receipt（由既有 validate_worker_command 门禁承担）；`--provision` 的 clone 复用 PM 的 origin URL（节点需有对应读取凭证）。
+- 重新评估条件：SETTLEMENT-READBACK 关闭且 worker_done 跨机语义实测通过后，评估 federation lane 转正（TASK-2026-09-29-REMOTE-NODE-M1）；若节点侧出现 receipt inbox 滥用迹象，收紧为节点侧预共享密钥签名。
+
+
 ## DEC-2026-09-24-CLAUDE-AUTO-SHELL — Claude Code auto 接管普通 Shell 决策
 
 - 日期：2026-09-24
