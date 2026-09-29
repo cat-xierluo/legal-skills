@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0] - 2026-09-22
+
+### 新增
+- 新增仓库外私有语料基线工具 `benchmark.py`：用候选外 `must_keep`、`transitions`、`page_windows` 标注，对纯视觉与 RapidOCR 两条路径统一统计必须保留召回、过渡泄漏、重复超额、每分钟帧数和耗时
+- 新增匿名 manifest、workspace 所有权和 manifest SHA256 绑定；中断后按 `CASE/profile` 原子写回，标注变化必须使用新 workspace，避免不同口径结果混算
+- 新增脱敏 `benchmark_summary.json`，不保存源路径、OCR 原文、标注时间点或帧文件名；真实类别或 profile 未跑齐时明确输出 `real_baseline_status=not_verified`
+
+### 修复
+- 修复 FFmpeg 9 移除 `-vsync` 后基础抽帧直接失败的问题，改用与最低支持版本 FFmpeg 5 一致的 `-fps_mode vfr`
+
+### 技术优化
+- `check_pipeline.py` 新增 `benchmark` 真实 CLI 回归：实际生成 2 秒合成视频、运行基础抽帧、校验计分和隐私边界，并阻断非匿名 case ID
+- 评测汇总只代表固定基线是否完整，明确禁止据此单独宣称准确率提升；后续候选算法必须复用同一 manifest 对照
+
+### 文档完善
+- 新增 `references/benchmarking.md`，说明私有语料、候选外标注、双路径运行、指标口径和真实/合成证据边界
+- 多平台真实五类样本尚未恢复，v0.9.0 的真实准确率结论保持 `NOT_VERIFIED`
+
 ## [0.8.2] - 2026-08-30
 
 ### 修复

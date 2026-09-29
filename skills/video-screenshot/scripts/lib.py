@@ -152,7 +152,9 @@ def build_ffmpeg_filter_args(
         )
     else:
         scale = ""
-    vfr_args = ["-vsync", "vfr", "-frame_pts", "1"]
+    # FFmpeg 9 已移除旧的 -vsync；-fps_mode 自 FFmpeg 5 起可用，
+    # 与本 Skill 声明的最低版本一致。
+    vfr_args = ["-fps_mode", "vfr", "-frame_pts", "1"]
 
     fmt = ",format=yuvj420p"
     # 构建 scale 部分的滤镜链（可能为空）
