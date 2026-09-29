@@ -1,5 +1,13 @@
 # 变更日志
 
+## [1.4.3] - 2026-09-29
+
+### 新增
+- **subtree 推送检查支持按仓库个性化配置**：新增 `config/subtree-repos.yaml`（结构参照 release-workflow 的 projects.yaml，模板 `subtree-repos.example.yaml`）。顶层键匹配仓库目录名（`path` 可选做绝对路径校验），可定制登记清单路径（`config_path`）、子目录前缀（`prefix`）、触发时点（`trigger`）与推送命令（`push_command`）。
+- 首例登记 **dsh-plugins**：PR 流程仓库，`trigger: after-merge-to-main`（特性分支提交不提示、PR 合入 main 后才提示，防止把未合并分支派发到独立镜像）；推送走目标仓 `bash scripts/subtree-push.sh --auto`（自带 main/远端一致性/non-FF 守卫）。
+- `references/subtree-push-check.md` 新增「配置解析」步骤与 after-merge-to-main、non-FF 失败处置；SKILL.md 工作流程第 6 步、能力边界与"纯提交"说明同步更新。
+- 未登记仓库行为不变：仍按默认路径 `skills/subtree-publish/config/subtree-skills.json` 检测。
+
 ## [1.4.2] - 2026-08-05
 
 ### 文档完善
