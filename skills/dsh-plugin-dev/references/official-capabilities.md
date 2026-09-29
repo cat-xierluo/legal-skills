@@ -47,6 +47,20 @@
 - **消费者取舍模板**（星标 G06 先例）：定时「agent 任务」用 schedule + 专用会话（得编排/重试，有模型成本）；零模型定时拉取只能插件内 host 存活期 timer（不持久、host 退出即停）。两者语义不同，立项时按需选。
 - 证据：dsh-plugins `docs/research/2026-09-30-dsh003-jobs-schedule-capability.md`（DSH-003 缺口登记第 3 项判定：剩余空档仅「零模型持久定时作业」，出现再立项）。
 
+### #4 模型工具注册——`ctx.tools.register`（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：插件给模型暴露工具走 `ctx.tools.register(definition)`（`inject` 加 `'tools'`；官方范例 `dsh-tool-todo`）。`defineTool()` 只是编译层：属性 map → 标准 JSON Schema + execute 参数校验包装；**registry 只做结构校验**（name 唯一/非保留、`output.render` 为函数、schema 属支持子集）——零依赖插件可手写编译后形态（根级 `required` 数组、属性内不放 required，类型用 type/properties/items/enum/additionalProperties/description），参数校验由 execute 内领域层自证（Pi 原实现同型，dsh-plugins PR #35 P09 实证）。
+- **exec 契约要点**：所属会话取 `exec.agent.session.id`（无 owner 会话即拒，todo 工具同款围栏）；**`exec.signal` 协作式取消是迟写防护的框架级替代**——turn 结束中止工具主体，execute 前置检查 `signal.aborted` 即可，不需要自维护 ended/retiredTurns 簿记（Pi→DSH 移植实证，PR #35）。
+- 取消语义：主体前取消 `ABORTED_BEFORE_DISPATCH`、主体后取消以 `ABORTED` 替换成功结果（dsh-tools README）。
+
+### #5 持久 KV 存储——`ctx.storageDomain.open`（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：Host 侧持久、schema 校验的业务数据走 storageDomain（`inject` 加 `'storageDomain'`）：声明域 `{name, version, tables: {<表名>: {valueSchema}}}`（name 须匹配 `^[a-z][a-z0-9-]*$` 惯例、version 非负整数）→ `const domain = await ctx.storageDomain.open(spec)` → `domain.table('<表名>')` 的 `get`（同步）/`put`/`delete`/`update`（写链上的原子读改写，fn 内 throw 即中止该写）/`entries`（快照迭代）→ `domain.close()`（挂 `ctx.effect` disposer；域声明与 `domainTable(schema) = {valueSchema}` 均可手写，不必 import 包）。
+- **schema 调用时机（零依赖姿势的关键）**：表记录 schema **只在 open 的持久读边界被 `valueSchema.parse(raw)` 调用**，写路径不重校验——duck-typed 校验对象 `{parse(v){…真校验…}}` 完全可行；`defineDomain` 的 load-time 检查只针对 `global.schema.safeParse(null)`（**不声明 global 即可绕开**，也就不需要 safeParse 方法）。
+- **语义**：每写先落盘后进内存再发 `domain/changed`（写序）；后端失败内存不动（读写不背离）。错误码：`already-open`/`missing-key`（update 不存在记录）/`invalid-record`（存储记录过不了 schema，open 即拒——真·fail-closed）/`closed`/`backend-not-found`。后端路由由宿主组合的 storage-domain 插件配置决定（GUI/Web 组合有后端；headless 组合可能没有——inject 硬依赖语义下插件会等待不激活，属正确行为）。
+- **迁移模式**（PR #35 P09 实证）：Pi 时代的单 blob settings（如 4 MiB 上限）改为每业务对象一条记录（key = 对象 id），加 per-key 写链串行与总量/体积护栏；损坏数据靠 open 边界 schema 校验 fail-closed，等价 Pi 的损坏 fail-closed。
+- 证据：dsh-plugins PR #35（`plugins/dsh-session-pilot/lib/dsh/board.mjs` + `boardStore.mjs` + tests/pilot-board.test.cjs）。
+
 ## 待查清单（已登记未核查的能力问号）
 
 - 读取回执类语义（「读过此案」READ_REQUIRED）：bizlink v1 无此概念，划业务 owner 责任，公共化待第二消费者需求（dsh-plugins DSH-003 公共缺口登记第 2 项）。

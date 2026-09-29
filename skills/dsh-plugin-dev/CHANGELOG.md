@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 2026-09-30
+
+- official-capabilities 新增条目 #4 `ctx.tools.register`（defineTool 只是编译层、registry 只做结构校验——零依赖手写编译后形态可行；exec.agent.session.id 所有权围栏；exec.signal 协作式取消 = Pi 迟写簿记的框架级替代）与 #5 `ctx.storageDomain`（表记录 schema 只在 open 边界 .parse()——duck-typed 校验可行；不声明 global 绕开 safeParse 检查；update 原子读改写；单 blob → 每对象一条记录的迁移模式）。证据锚 dsh-plugins PR #35（P09）。
+- pitfalls-log 新增「多插件共载自检误报」条目：自检只断言自身命名空间（PR #37 四插件同修）。
+- SKILL.md 开发路径第 1 步补「Pi 插件 DSH 化起手切片」模式（PR #37 三插件实证）；参考节条目数更新。
+
+
 ## [0.3.2] - 2026-09-30
 
 - official-capabilities 新增条目 #2 `ctx.jobs`（会话内长任务注册表：进程内、agent 所有、无定时）与 #3 `packages/schedule`（持久定时调度：六种时序选择器、跨重启持久化、交付=会话内 agent turn、须 Host Web 组合）；待查清单撤销「后台作业/定时能力」项（查证方法第二次实战，dsh-plugins PR #33）。
