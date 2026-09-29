@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-09-30
+
+- 修条目 #5 域名正则错误：真实约束是 `^[a-z][a-z0-9_]*$`（仅下划线；backend.ts UNIT_NAME_RE 强校验）——此前误写为允许连字符。pitfalls-log 新增「mock storageDomain 全绿、宿主装载即拒」条目（mock 假体须复刻域名校验）。出处 dsh-plugins PR #42 发现/PR #43 修复。
+
+
 ## [0.4.0] - 2026-09-30
 
 - official-capabilities 新增条目 #4 `ctx.tools.register`（defineTool 只是编译层、registry 只做结构校验——零依赖手写编译后形态可行；exec.agent.session.id 所有权围栏；exec.signal 协作式取消 = Pi 迟写簿记的框架级替代）与 #5 `ctx.storageDomain`（表记录 schema 只在 open 边界 .parse()——duck-typed 校验可行；不声明 global 绕开 safeParse 检查；update 原子读改写；单 blob → 每对象一条记录的迁移模式）。证据锚 dsh-plugins PR #35（P09）。
