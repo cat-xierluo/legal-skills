@@ -251,3 +251,6 @@ skills/legal-visualization/export-report.json
 # runtime artifacts
 :memory:.ses
 .video_agent/
+
+# multi-agent-orchestration 远程调度回执（runtime 临时文件，含 nonce/会话名，不入库）
+skills/multi-agent-orchestration/config/remote-dispatch-inbox/
