@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.1] - 2026-09-29
+
+- 踩坑表 renderer 行补语义解码：「Unknown client plugin」为插件列表为空时的显示伪影（主进程超时路径构造空报告），真实含义是渲染器 30s 整体静默、与被测插件无关（dsh-plugins renderer 静态归因，PR #32）。
+
 ## [0.3.0] - 2026-09-29
 
 - 用户指示：官方 harness 能发掘的能力直接复用，研究结论沉淀进本 skill——新增 `references/official-capabilities.md`（官方能力复用目录）。
