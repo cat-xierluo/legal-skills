@@ -206,3 +206,34 @@ blocker_and_recovery:
 ```
 
 交付时补充 immutable head、PR URL、review verdict、真实测试结果、仍为 `NOT_VERIFIED` 的层、资源终态，并把任务改为 `COMPLETE`、`PARKED` 或 `RESTART_REQUIRED`。不要仅写“已完成”或保留失效 Worktree 路径。
+
+## 2026-09-30 独立复核补充
+
+仅登记修复与验收任务，未修改实现；原有执行顺序和其他任务状态保持。测试限隔离合成夹具，真实 SSH/provider/Orca 全链未验。
+
+### TASK-2026-09-30-REMOTE-RECEIPT-ATOMIC-CONSUME — 修复一次性回执并发重复消费
+
+- 状态：`READY`；优先级：`P1`；类型：`security-policy/concurrency`；Owner：未领取；来源：2026-09-30 当前主干只读审计。
+- 基线证据：`8c529516db1a5ad80c525593a0e162ef7a5751ad`，`scripts/remote-dispatch-receipt.sh:214-255`；两个消费者打开同一 receipt 后等待原 inode flock，首次消费以 os.replace 换 inode，第二个仍读旧未消费值。隔离夹具两者均返回0并接受同一 nonce/hash；未启动真实 Worker。
+- 目标：同一 receipt/nonce 并发竞争最多一个消费者成功；后续消费者必须拒绝，不依赖下游 branch/lease 偶然拦截。
+- 允许范围：`scripts/remote-dispatch-receipt.sh`、对应回执测试、必要的 `references/25-remote-node-dispatch.md` 与随行文档；禁止改弱 PM/backend 交集、TTL、字段绑定或覆盖其他会话资源。
+- 可观察验收：固定“两个进程已打开同一原件”的同步屏障反例，断言恰好一个rc0、另一个非0；顺序重放、过期、字段错绑、损坏JSON、崩溃/中断恢复保持fail-closed；锁方案须在原子替换后仍共享同一锁身份。保留原始失败日志，不能仅跑顺序重放。
+- 验证边界：当前证明限回执消费函数；真实SSH/Orca/provider生命周期为`NOT_VERIFIED`。领取时从最新origin/main另开短分支冻结新基线。
+
+### TASK-2026-09-30-REMOTE-CLEANUP-CLI-CONTRACT — 对齐远程收口与真实清理合同
+
+- 状态：`READY`；优先级：`P1`；类型：`integration/resource-settlement`；Owner：未领取；来源：2026-09-30 当前主干只读审计；关联：REMOTE-NODE-M0-E2E、SMART-SCHEDULING。
+- 基线证据：`8c529516db1a5ad80c525593a0e162ef7a5751ad`，`scripts/spawn-worker-remote.sh:567-587` 传 `--project <root> <session>`；`scripts/pm-cleanup-worker.sh:24-78` 不接受位置session且要求完整delivery-bound字段。原样callee解析即rc64；现有mock在匹配脚本名后直接CLEANUP_OK，未验证接口。
+- 目标：远程正常交付与失败回收分别走现有合法合同；资源清理可重入，软账仅在节点精确终态证明后移除。
+- 允许范围：`scripts/spawn-worker-remote.sh`、必要的metadata/ledger字段与对应测试、`references/25-remote-node-dispatch.md`；若需改callee，先冻结明确最小范围。禁止通过移除expected-tip/PR/delivery/lifecycle校验绕过失败；禁止用STATUS自报代替交付权威。
+- 可观察验收：mock SSH传输层后实际执行生产callee参数解析和必要验证；正向包含project/session/worktree/branch/pr/expected-tip/delivery-mode/delivery-commit，dry-run与execute均被核验；错绑、dirty、active、long-lived、PR查询失败保留资源及软账。gh事实查询绑定local-project对应canonical repo，显式覆盖closed/merged状态；从其他cwd调用不串仓。失败后的安全重试不得重放merge/push。
+- 验证边界：当前已复现CLI必败，未执行真实清理。保留既有M0人工恢复证据，不把人工清理成功改写为wrapper E2E通过；SMART-SCHEDULING开局先核此卡与未完成交付腿。
+
+### TASK-2026-09-30-REMOTE-HOST-PATH-BOUNDARY — 分离PM与节点的路径事实
+
+- 状态：`READY`；优先级：`P2`；类型：`runtime-compatibility`；Owner：未领取；来源：2026-09-30 当前主干只读审计。
+- 基线证据：`8c529516db1a5ad80c525593a0e162ef7a5751ad`，`scripts/spawn-worker-remote.sh:258-264` 用PM本地-x复验node bash_path；`:33,299-312` 将PM HOME派生的Orca路径写入node trust配置。实际cmd_spawn在mock probe OK且node-only路径时rc64；原样TRUST_PY在隔离node HOME写出PM路径。
+- 目标：节点可执行文件和HOME/Orca工作区以节点事实或实际创建后METADATA为准，PM不据本地同路径猜测。
+- 允许范围：`scripts/spawn-worker-remote.sh`、必要的`scripts/remote-node-probe.py`字段、对应测试及远程使用文档；不扩大默认trust授权范围。
+- 可观察验收：PM不存在但节点可执行的bash≥4路径能派发；节点不存在/非绝对/版本不足仍拒绝；PM与node用户名和HOME不同的fixture，只信任节点实际工作区，PM路径不写入node配置；无--trust-worktree不写配置。测试调用真实cmd_spawn参数与分支逻辑，不能只字符串断言。
+- 验证边界：当前为隔离fixture与生产片段，未跑真实跨机；真实双主机路径差异验收仍`NOT_VERIFIED`。
