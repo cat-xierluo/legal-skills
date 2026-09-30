@@ -49,6 +49,7 @@ bash scripts/test-post-merge-cleanup.sh
 bash scripts/test-harness-backend-policy.sh
 bash scripts/tests/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
+python3 scripts/test_optional_cli_backends.py -v
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
@@ -92,7 +93,7 @@ bash scripts/smoke-orca-control-plane.sh
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
 - 若 Skill Lint 或 Harness 规则命中已知通用误报，保留原始证据和约束说明，不通过命令变形规避扫描。
-- `scripts/tests/test-harness-backend-policy.sh` 的本机祖先链段只做环境探针：识别为 Hermes 时校验完整链；无可识别宿主（rc=1）或进程祖先不可完整证明（rc=67）时跳过，并由前面的路径签名、白名单交集与 fail-closed 用例承担确定性覆盖。其他退出码仍失败。
+- `scripts/tests/test-harness-backend-policy.sh` 的本机祖先链段只做环境探针：识别为 Hermes 时校验完整链；完整识别为其他宿主、无可识别宿主（rc=1）或进程祖先不可完整证明（rc=67）时跳过，并由前面的路径签名、白名单交集与 fail-closed 用例承担确定性覆盖。其他退出码仍失败。
 - `scripts/test-harness-backend-policy.sh` 的具名祖先链用例在测试私有 `PATH` 中包装 `ps`：真实可读帧原样返回，只把容器/CI 不可见的最外层边界补成中性的 `/bin/sh → PID 1`。这只让合成的 codebuddy/codex/claude/qoderclicn 帧可确定性验收，不改变生产脚本对不完整祖先链 rc=67 的 fail-closed 行为。
 - 阴性断言必须区分预期无匹配与读取/执行错误；测试自身的故障注入也须能得到非零测试结算。后端策略测试使用隔离 fixture，不通过修改正式授权配置凑绿。
 - 锁竞争验收分别观察真实非阻塞锁操作与 CLI 拒绝结果。完整 CLI 的观测/子进程启动耗时不是单独的锁等待；测试防悬挂 timeout 也不是响应性能承诺。

@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import shlex
+import shutil
 import sys
 
 
@@ -16,8 +17,9 @@ BACKENDS = {
     "codex": "codex",
     "codebuddy": "codebuddy",
     "workbuddy": "codebuddy",
-    "qoderclicn": "qoderwork-cn",
+    "qoderclicn": "qoder-cn",
     "zcode": "zcode",
+    "mcode": "minimax-code",
 }
 PYTHON_EXECUTABLES = {"python", "python3"}
 SHELLS = {"bash", "sh", "zsh"}
@@ -108,6 +110,26 @@ def command_backend(
 
     executable = words[0]
     basename = os.path.basename(executable).lower()
+    # qoderclicn is shared by several products. Never reinterpret a retired
+    # QoderWork bundle or a QwenWork bundled runtime as the standalone CN CLI.
+    resolved = os.path.realpath(shutil.which(executable) or executable).lower()
+    if "qoderwork" in resolved:
+        raise ValidationError("QoderWork is retired; install/select the standalone Qoder CN CLI")
+    if basename == "qoderclicn":
+        if "/qwenworkcn.app/contents/resources/bin/qoderclicn" in resolved:
+            if words.count("--config-dir") != 1 or any(word.startswith("--config-dir=") for word in words):
+                raise ValidationError("QwenWork bundled CLI requires one explicit dedicated --config-dir")
+            index = words.index("--config-dir")
+            if index + 1 >= len(words) or not os.path.isabs(words[index + 1]) or not os.path.isdir(words[index + 1]):
+                raise ValidationError("QwenWork config-dir must be an existing absolute directory")
+            config_root = os.path.realpath(words[index + 1])
+            shared_roots = {os.path.realpath(os.path.expanduser(root)) for root in ("~/.qoder", "~/.qodercn", "~/.qwenwork")}
+            if config_root in shared_roots:
+                raise ValidationError("QwenWork config-dir must not reuse a shared native product config root")
+            return "qwenwork-cn"
+        return "qoder-cn"
+    if basename == "zcode" and expected == "zcode-cli":
+        return "zcode-cli"
     actual = BACKENDS.get(basename)
     if actual is not None:
         return actual
@@ -147,7 +169,7 @@ def command_backend(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", required=True, choices=sorted(set(BACKENDS.values())))
+    parser.add_argument("--backend", required=True, choices=sorted(set(BACKENDS.values()) | {"zcode-cli", "qwenwork-cn"}))
     parser.add_argument("--command", required=True)
     parser.add_argument("--trusted-claude-wrapper", required=True)
     parser.add_argument("--trusted-zcode-driver", default="")

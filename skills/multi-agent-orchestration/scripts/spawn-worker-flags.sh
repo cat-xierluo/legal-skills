@@ -16,8 +16,8 @@ Options:
                    long-lived (integration/feature baseline; branch and worktree retained).
   --command CMD     Command to run. Default: the executable for the verified backend
   --worker-backend NAME
-                   Worker backend: claude-code, codex, codebuddy, qoderwork-cn or zcode
-                   (zcode has no TUI — spawn runs the zcode-worker-driver.py wrapper).
+                   Worker backend: claude-code, codex, codebuddy, qoder-cn, qwenwork-cn, zcode, zcode-cli or minimax-code
+                   (zcode is the legacy app-server driver; zcode-cli is the standalone TUI).
   --pm-harness NAME
                    Optional assertion for the current PM harness. Runtime evidence remains
                    authoritative: a conflicting assertion fails and can never elevate access.

@@ -1,5 +1,21 @@
 # 决策记录
 
+## DEC-2026-09-30-ZCODE-CLI-ACCOUNT-CONTRACT — 原生 CLI 与宿主 app-server 分开验证
+
+- 日期：2026-09-30；状态：已采纳，来源为用户要求进一步实测 BigModel Coding Plan。
+- 事实：原生 TUI/prompt 使用 standalone account 凭证关联；app-server 不自动装载该账号。已有个人套餐 secret 但缺新版 identity 时，原生 CLI 无法选中套餐；仅省略 reasoning 的配置还可能静默选择其他模型。
+- 决定：保留 zcode-cli 原生入口与 zcode 历史 driver 的隔离边界；不自动伪造 account entitlement、不把补齐临时关联的实验产品化、不修改共享默认。指导使用官方 login 与原生 /model，并以实际模型状态/请求记录核对选择。
+- 验证：原生 GLM-5.3 与 Flash 各一次 completed，请求个人 Coding Plan /api/anthropic；服务端 Pro 有效及积分限额已读。逐请求精确扣分、认证迁移与 Orca 全生命周期不扩大为已验证。
+- 重新评估条件：官方稳定提供独立 CLI 模型启动 flag/配置隔离契约或账号迁移 API 后，再实现并验证自动选择适配。
+
+## DEC-2026-09-30-OPTIONAL-CLI-BACKENDS — 能力支持与日常派发分离
+
+- 日期：2026-09-30；状态：已采纳，来源为用户当前明确指令。
+- 决定：主要支持独立 ZCode CLI、MiniMax Code CLI；CodeBuddy 保留，QoderWork 移除；独立 Qoder CN CLI 和千问办公单独接入。可选 backend 仅用户指定时派发，不因额度或宿主同名自动选择；日常 Claude Code/Codex/provider 路由保持。
+- 实现边界：新独立 ZCode 用 `zcode-cli`，保留 `zcode` 作为历史 app-server driver，避免把两种启动/配置契约混同。MiniMax 用 `minimax-code`/`mcode`。同名 qoderclicn 按实路径区分独立 Qoder CN 与 QwenWork bundle，拒绝旧 QoderWork。
+- 权限：只增加既有 Claude/Codex/Hermes PM 的可选 worker 能力；不新增 PM 宿主。新 CLI 的编排 hook 未集成，必须显式 prompt-only 降级，不能借旧 QoderWork 的 hook 记录声明新产品已受机械保护。千问 native tools 与 bundled coding 不推断账号/额度共享，配置目录显式提供。
+- 重新评估条件：用户调整默认派发偏好，或新 CLI 的 hook、账号与完整生命周期已独立实测，再变更默认路由/权限等级。
+
 ## DEC-2026-09-29-REMOTE-NODE-DISPATCH — 远程节点 Worker 派发走 SSH 桥 + 一次性 receipt
 
 - 日期：2026-09-29
@@ -49,3 +65,7 @@
 - 理由：现有授权无法绑定或约束 pre-guard Setup 的精确命令、目录与执行结果；复用该授权会把后置权限静默扩大到未受保护阶段。
 - 重新评估条件：只有新增候选绑定的 prelaunch 授权合同，能在创建 worktree 前证明精确 Setup 命令、工作目录、允许路径、执行器和回执，并有独立故障注入验证，才可考虑支持 `inherit/run`。
 - 影响：默认 Orca 派发不再自动执行仓库 Setup；需要依赖变更时，在 Worker 门禁已就位后走精确 `--allow-install-command`，或由具备单独授权的外部流程处理。
+
+## DEC-2026-10-01-PRIVATE-ACCOUNT-SKILL
+
+用户明确要求将账号、额度和刷新卡调度抽为私人 Skill，公开 MAO 只保留默认关闭的本地 Skill 调用合同。这样私人实现不进入公开发行；PM 按安装环境调用，缺失则不能获得该功能。调用不改变日常 backend 池，也不等于 spawn 机械账号绑定。
