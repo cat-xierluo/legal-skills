@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.31.1] - 2026-10-01
+
+### 新增
+- 提供默认关闭的本地账号调度 Skill 调用合同；账号、额度和刷新卡实现保留于独立私人 Skill，公开包仅说明 PM 调用及失败停止边界，不自动执行账号切换。
+
+### 修复
+- 修正 Hermes 环境探针在已识别 Codex 宿主下误报失败，以及 tmux smoke 重建同一 fixture 时截空 policy 的问题；保留生产门禁与隔离 socket。
+
+
+## [2.31.0] - 2026-09-30
+
+### 新增
+- 重点新增独立 ZCode CLI（`zcode-cli`）和 MiniMax Code CLI（`minimax-code`/`mcode`）的交互/batch 命令、身份检查与依赖入口；原生参数按本机帮助核对，不误套 Claude Code flags。
+- 新增独立 Qoder CN（`qoder-cn`）与千问办公 bundled coding（`qwenwork-cn`）按需入口；同名 qoderclicn 按实路径区分，千问配置目录显式绑定，原生办公 tools 单独说明。
+
+### 改进
+- 保留 CodeBuddy，移除 QoderWork backend/别名与旧 helper 的启动能力；拒绝旧 bundle/软链伪装成 Qoder CN。
+- 明确能力支持不等于默认派发：以上可选 backend 不加入日常 Claude Code/Codex 池或 quota 默认链，只在用户指定时选择；新 worker 能力不增加 PM host。
+- 新 CLI 未集成编排 hook，必须显式声明 prompt-only 降级；不自动接受未验证 dialog，模型/权限选项错误明确拒绝。
+
+### 验证
+- 原生 ZCode TUI 的个人 Coding Plan 模型列表与切换、GLM-5.3/Flash 各一次真实请求及服务端 Pro 套餐/额度已核对；记录 CLI 账号关联与 app-server 宿主权限区别、缺 reasoning 导致静默回落的行为。逐请求积分扣分和完整 Orca 生命周期仍未验证，见 ref 28 与 TASKS。
+- CLI 帮助与隔离 argv、正反身份/策略用例及维护回归结果记录在 TASKS 的 OPTIONAL-CLI-BACKENDS 卡。帮助/隔离 stub 不能证明 provider 或 supervised 生命周期；未验证范围保持 `NOT_VERIFIED`。
+
 ## [2.30.5] - 2026-09-29
 
 ### 新增（修正"远程终端没有真实推进"）
