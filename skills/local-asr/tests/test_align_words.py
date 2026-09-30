@@ -34,7 +34,7 @@ def test_clean_recognition_strips_punctuation():
     out_text, out_ts, est = aw.clean_recognition({"text": text, "timestamp": ts})
     assert out_text == "临时想到一个事儿就是", out_text
     assert len(out_ts) == 10
-    assert out_ts[0] == (0.32, 0.48)
+    assert out_ts[0] == (0.32, 0.48, False)
     assert est is False  # 全单字组,无估计
 
 
@@ -47,13 +47,15 @@ def test_clean_recognition_english_word_group_interpolation():
     out_text, out_ts, est = aw.clean_recognition({"text": text, "timestamp": ts})
     assert out_text == "JI生成的"
     assert len(out_ts) == 5 and est is True
-    assert out_ts[0] == (0.1, 0.25) and out_ts[1] == (0.25, 0.4)  # JI 组内均分
-    assert out_ts[2] == (0.4, 0.6)  # 生 不漂移
+    assert out_ts[0] == (0.1, 0.25, True) and out_ts[1] == (0.25, 0.4, True)  # JI 组内均分(F09:逐字 estimated)
+    assert out_ts[2] == (0.4, 0.6, False)  # 生 不漂移
     # 审计 B2 反例:ABCDEFGHIJ甲乙 3 组 == 3 条 ts,甲乙取真实 token 时间
     eff, times, est2 = aw.clean_recognition(
         {"text": "ABCDEFGHIJ甲乙", "timestamp": [[0, 1000], [1000, 4000], [4000, 5000]]})
     assert eff == "ABCDEFGHIJ甲乙" and est2 is True
     assert abs(times[10][0] - 1.0) < 1e-9 and abs(times[10][1] - 4.0) < 1e-9
+    assert times[10][2] is False  # 甲:单字组真实边界
+    assert all(times[k][2] is True for k in range(10))  # F09:A-J 均分为估计
     assert abs(times[11][0] - 4.0) < 1e-9 and abs(times[11][1] - 5.0) < 1e-9
     # 组数不符 → 空(不确定匹配交审)
     out3 = aw.clean_recognition({"text": "甲乙丙", "timestamp": [[0, 1000], [1000, 2000]]})
@@ -132,13 +134,44 @@ def test_align_extra_reference_chars_interpolate():
     assert words[2]["start"] >= words[1]["end"] - 1e-6
 
 
+# ---------- 三轮审计 F09:estimated 逐词标记 ----------
+
+def test_f09_ascii_group_interpolation_all_marked_estimated():
+    """F09 反例:1 秒 token 均分十个字符,全部必须 estimated=true
+    (修复前只增计数,词上无标记,下游 cut 把它当真实边界)。"""
+    eff, times, est = aw.clean_recognition(
+        {"text": "ABCDEFGHIJ", "timestamp": [[0, 1000]]})
+    assert eff == "ABCDEFGHIJ" and est is True
+    assert len(times) == 10 and all(tt[2] is True for tt in times)
+    # 端到端:equal 对齐路径透传 estimated
+    words = aw.align_reference_to_recognized(
+        "ABCDEFGHIJ", "ABCDEFGHIJ", times, 0.0, 1.0)
+    assert all(w["estimated"] is True for w in words)
+
+
+def test_f09_multi_char_replace_marked_estimated():
+    """F09 反例:参考'不可以用'/识别'不难用'的'可以'两字按位置分配
+    '难'的区间——是估计不是真实边界,须 estimated=true(修复前
+    挤出 1ms 伪边界且自称真实)。"""
+    ts = [(0.0, 0.3, False), (0.3, 0.6, False), (0.6, 1.0, False)]
+    words = aw.align_reference_to_recognized("不可以用", "不难用", ts, 0.0, 1.0)
+    assert "".join(w["text"] for w in words) == "不可以用"
+    bytext = {w["text"]: w for w in words}
+    assert bytext["可"]["estimated"] is True
+    assert bytext["以"]["estimated"] is True
+    assert bytext["不"]["estimated"] is False  # equal 块真实对齐
+    assert bytext["用"]["estimated"] is False
+
+
+def test_f09_one_to_one_replace_real_boundary():
+    """等长 replace(如 JI→AI 纠错):一一对应区间为真实边界,不误标。"""
+    ts = [(0.0, 0.2, False), (0.2, 0.4, False), (0.4, 0.7, False), (0.7, 1.0, False)]
+    words = aw.align_reference_to_recognized("AI生成", "JI生成", ts, 0.0, 1.0)
+    assert all(w.get("estimated") is False for w in words)
+
+
 if __name__ == "__main__":
-    test_clean_recognition_strips_punctuation()
-    test_clean_recognition_english_word_group_interpolation()
-    test_clean_recognition_empty_cases()
-    test_align_equal_text_maps_directly()
-    test_align_replace_uses_replaced_block_range()
-    test_align_insert_marks_estimated()
-    test_align_clamps_and_monotonic()
-    test_align_extra_reference_chars_interpolate()
-    print(f"✅ {8} tests passed")
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in tests:
+        fn()
+    print(f"✅ {len(tests)} tests passed")

@@ -109,43 +109,6 @@ def _iter_segments(transcript: dict):
         yield raw_idx, ordinal, seg, st, en
 
 
-def align_reference_to_recognized(
-    ref_text: str, rec_text: str, rec_ts: list,
-    seg_start: float, seg_end: float,
-) -> list:
-    """把参考文本字符映射到识别字符的时间戳。
-
-    rec_ts: Paraformer timestamp [[start_ms,end_ms],...] 与 rec_text 字符一一对应
-    (nosync 等标记须先清除并同步裁剪)。返回 [{text,start,end}](秒,段内绝对时间)。
-    匹配块内:参考字符时间=识别字符时间;参考多出的字符按邻近距离内插。
-    """
-    rec_secs = rec_ts  # clean_recognition 已转秒
-    sm = SequenceMatcher(None, rec_text, ref_text, autojunk=False)
-    words = []
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "equal":
-            for k in range(j2 - j1):
-                rs, re_ = rec_secs[i1 + k]
-                words.append((ref_text[j1 + k], rs, re_))
-        elif tag in ("insert", "replace"):
-            # 参考多出的字符:在识别侧邻接边界内插
-            left = rec_secs[i1 - 1][1] if i1 > 0 else 0.0
-            right = rec_secs[i1][0] if i1 < len(rec_secs) else (seg_end - seg_start)
-            span = max(right - left, 1e-3)
-            for k, j in enumerate(range(j1, j2)):
-                t0 = left + span * (k / max(1, j2 - j1))
-                t1 = left + span * ((k + 1) / max(1, j2 - j1))
-                words.append((ref_text[j], t0, t1))
-        # delete: 识别多出的字符忽略
-    # 夹到段范围并保证单调
-    out = []
-    prev = seg_start
-    for text, t0, t1 in words:
-        t0 = min(max(seg_start + t0, prev), seg_end)
-        t1 = min(max(seg_start + t1, t0 + 1e-3), seg_end)
-        prev = t1
-        out.append({"text": text, "start": round(t0, 3), "end": round(t1, 3)})
-    return out
 
 
 # Paraformer 的 timestamp 只覆盖有效发音字符:标点/空白/特殊标记占 text 位
@@ -187,17 +150,17 @@ def clean_recognition(result: dict) -> tuple:
     groups = _ascii_groups(eff)
     if len(groups) != len(ts):
         return "", [], False
-    times = []
+    times = []  # [(t0, t1, estimated)] —— F09:组内插值逐字符标记
     has_estimate = False
     for (g_start, g_end), (t0, t1) in zip(groups, ts):
         n_chars = g_end - g_start
-        for k in range(n_chars):
-            if n_chars == 1:
-                times.append((t0, t1))
-            else:
-                has_estimate = True
-                span = (t1 - t0) / n_chars
-                times.append((t0 + span * k, t0 + span * (k + 1)))
+        if n_chars == 1:
+            times.append((t0, t1, False))  # 单字组:模型真实边界
+        else:
+            has_estimate = True
+            span = (t1 - t0) / n_chars
+            for k in range(n_chars):
+                times.append((t0 + span * k, t0 + span * (k + 1), True))
     return eff, times, has_estimate
 
 
@@ -207,12 +170,14 @@ def align_reference_to_recognized(
 ) -> list:
     """把参考文本字符映射到识别字符的时间戳。
 
-    B1 审计修复:块语义区分——
-    - equal:参考字符直接取识别字符时间;
+    B1 审计修复:块语义区分;F09(三轮审计)估计标记逐词贯穿——
+    - equal:参考字符直接取识别字符时间(含识别侧插值来源的 estimated);
     - replace(两侧都有字符):参考字符映射到识别块 [i1,i2) 的真实起止区间
-      (按位置比例),不再挤进前置间隙;
+      (按位置比例),不再挤进前置间隙;参考字符数≠识别字符数时按位置分配
+      的时间是估计(estimated=true),不自称真实边界;
     - insert(识别侧无对应):新增字符用前置邻接间隙内插,并标记 estimated。
     返回 [{text,start,end,estimated}](秒,段内相对时间)。"""
+    rec_ts = [(tt[0], tt[1], tt[2] if len(tt) > 2 else False) for tt in rec_ts]
     sm = SequenceMatcher(None, rec_text, ref_text, autojunk=False)
     words = []
     n_rec_ts = len(rec_ts)
@@ -221,6 +186,7 @@ def align_reference_to_recognized(
         """参考字符 j∈[j1,j2) 映射识别区间 [i1,i2) 的时间,按位置比例。"""
         n_rec = max(1, i2 - i1)
         n_ref = j2 - j1
+        one_to_one = (n_ref == n_rec)
         for k in range(n_ref):
             frac0 = k / n_ref
             frac1 = (k + 1) / n_ref
@@ -229,7 +195,9 @@ def align_reference_to_recognized(
             if n_ref == 1:
                 lo0 = rec_ts[min(i1, n_rec_ts - 1)][0]
                 hi1 = rec_ts[min(max(i2 - 1, i1), n_rec_ts - 1)][1]
-            yield ref_text[j1 + k], lo0, hi1
+            # 一一对应:透传识别区间自身的估计标记;多对一/一对多:位置分配=估计
+            est = rec_ts[min(i1 + k, n_rec_ts - 1)][2] if one_to_one else True
+            yield ref_text[j1 + k], lo0, hi1, est
 
     def _gap_insert(j1, j2, i1):
         """insert 块:识别侧无对应字符,用邻接间隙内插。"""
@@ -243,12 +211,12 @@ def align_reference_to_recognized(
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
             for k in range(j2 - j1):
-                rs, re_ = rec_ts[i1 + k]
-                words.append((ref_text[j1 + k], rs, re_, False))
+                rs, re_, est = rec_ts[i1 + k]
+                words.append((ref_text[j1 + k], rs, re_, est))
         elif tag == "replace":
             if i2 > i1:
-                for text_ch, t0, t1 in _block_range(i1, i2, j1, j2):
-                    words.append((text_ch, t0, t1, False))
+                for text_ch, t0, t1, est in _block_range(i1, i2, j1, j2):
+                    words.append((text_ch, t0, t1, est))
             else:
                 for text_ch, t0, t1 in _gap_insert(j1, j2, i1):
                     words.append((text_ch, t0, t1, True))
