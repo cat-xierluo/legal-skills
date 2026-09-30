@@ -312,7 +312,8 @@ orca_terminal_create_and_send() {
   if [ "$DRY_RUN" -eq 1 ]; then
     printf 'ORCA_RUN: orca terminal create --worktree id:%q --title %q --command %q --json\n' \
       "$worktree_id" "$title" "$command"
-    printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json\n'
+    printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json\n'
+    printf 'ORCA_RUN: if unsatisfied, wait once on the same handle with --timeout-ms 60000; send only when satisfied=true\n'
     if [ "$ORCA_SUPERVISED" -ne 1 ]; then
       printf 'ORCA_RUN: orca terminal send --terminal <handle> --text %q --enter --json\n' "$prompt"
     else
@@ -334,9 +335,32 @@ orca_terminal_create_and_send() {
   fi
   ORCA_TERMINAL_HANDLE="$handle"
 
-  orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms 60000 --json >/dev/null 2>&1 || {
-    echo "SPAWN_WORKER_ORCA_TUI_WAIT_TIMEOUT: tui-idle 60s 内未就绪，继续投 prompt（不阻塞）" >&2
-  }
+  # 超时也可能返回 rc=0；只有严格的 readiness 回执才允许后续唯一投递。
+  # stderr 与 JSON 分开，避免 CLI 诊断污染回执；失败保留已创建的资源。
+  local wait_out satisfied timeout_ms
+  for timeout_ms in 30000 60000; do
+    if ! wait_out=$(orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms "$timeout_ms" --json); then
+      echo "SPAWN_WORKER_ORCA_TUI_WAIT_FAILED: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；未投递，资源保留，先只读核查再恢复" >&2
+      exit 64
+    fi
+    if ! satisfied=$(printf '%s' "$wait_out" | jq -er -s --arg handle "$handle" '
+      if length == 1 and (.[0] | type) == "object"
+         and .[0].ok == true and (.[0].result.wait | type) == "object"
+         and (.[0].result.wait.satisfied | type) == "boolean"
+         and (.[0].result.wait | (has("handle") | not) or .handle == $handle)
+         and (.[0].result.wait | (has("condition") | not) or .condition == "tui-idle")
+      then .[0].result.wait.satisfied | tostring
+      else error("invalid terminal wait receipt") end' 2>/dev/null); then
+      echo "SPAWN_WORKER_ORCA_TUI_WAIT_INVALID: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；未投递，资源保留，先只读核查再恢复" >&2
+      exit 64
+    fi
+    [ "$satisfied" != true ] || break
+    echo "SPAWN_WORKER_ORCA_TUI_WAIT_PENDING: terminal=$handle worktree_id=$worktree_id timeout_ms=${timeout_ms}；未投递" >&2
+  done
+  if [ "$satisfied" != true ]; then
+    echo "SPAWN_WORKER_ORCA_TUI_WAIT_TIMEOUT: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；两次有界等待仍未就绪，未投递，资源保留，先只读核查再恢复" >&2
+    exit 64
+  fi
 
   if [ "$ORCA_SUPERVISED" -ne 1 ]; then
     orca_cli terminal send --terminal "$handle" --text "$prompt" --enter --json >/dev/null 2>&1 || {
