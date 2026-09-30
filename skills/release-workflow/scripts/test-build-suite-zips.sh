@@ -56,9 +56,6 @@ cat >"$FIXTURE/expert-suites/demo-suite/CHANGELOG.md" <<'EOF'
 
 ## [0.1.0] - 2026-09-13
 EOF
-cat >"$FIXTURE/expert-suites/demo-suite/LICENSE.txt" <<'EOF'
-MIT License
-EOF
 ln -s ../../../skills/alpha-skill \
     "$FIXTURE/expert-suites/demo-suite/skills/alpha-skill"
 
@@ -83,9 +80,11 @@ mkdir -p "$EXTRACT"
 unzip -q "$ZIP" -d "$EXTRACT"
 [ -f "$EXTRACT/demo-suite/README.md" ]
 [ -f "$EXTRACT/demo-suite/CHANGELOG.md" ]
-[ -f "$EXTRACT/demo-suite/LICENSE.txt" ]
+[ ! -e "$EXTRACT/demo-suite/LICENSE.txt" ]  # DEC-009: no suite-level license
 [ -f "$EXTRACT/demo-suite/skills/alpha-skill/SKILL.md" ]
 [ -f "$EXTRACT/demo-suite/skills/alpha-skill/LICENSE.txt" ]
+cmp "$FIXTURE/skills/alpha-skill/LICENSE.txt" \
+    "$EXTRACT/demo-suite/skills/alpha-skill/LICENSE.txt"
 [ -z "$(find "$EXTRACT/demo-suite" -type l -print -quit)" ]
 grep -q '/releases/download/v2099.01.02/' "$EXTRACT/demo-suite/README.md"
 if OUTPUT_DIR=../escaped-output \
