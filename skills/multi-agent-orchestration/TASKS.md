@@ -23,6 +23,49 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-10-01-LOCAL-ACCOUNT-SKILL — 私人账号调度调用合同
+
+- 状态：`COMPLETE`（本地调用合同已提交 PR，尚未合并）；Owner：Codex `/root`；用户最新决定：账号额度/刷新卡规则抽为独立私有 Skill；本 Skill 仅调用，不影响日常使用，不公开私人实现。
+- 冻结基线：`origin/main` = `6d85291eb3a59d72cf95f9fb0542bd906eb49fbd`；分支 `feat/mao-optional-cli-support`，独立 app-managed worktree。
+- 范围：个人配置模板默认关闭的 `account_routing` 与 ref 29、主入口和版本文档；具体实现与实测在私有 Skill 的 TASKS 维护，不复制账号/卡数据到此处。
+- 验收：无配置不调用；启用且 backend 用户指定时读取本地 Skill；缺失/失败/未知暂停；不绕过任何现有派发门，不宣称 PM 调用是 spawn 机械账号绑定。
+- 清单：调用合同已落地，独立 review 无有证据 P1/P2；私有 Skill 独立实现/安装验证由其任务源闭环；本卡已提交 PR #230（https://github.com/cat-xierluo/legal-skills/pull/230），状态 OPEN/MERGEABLE/CLEAN；未合并。
+- 验证：公开包没有账号 adapter/卡实现或真实账号字段；调用配置 JSON、主入口和 ref 29 可达，默认关闭。实际私有 Skill 缺失时只按合同暂停，不能据此宣称 spawn 机械绑定。
+
+## TASK-2026-09-30-ZCODE-BIGMODEL-LIVE — 独立 CLI 模型选择与 Coding Plan 实测
+
+- 状态：`COMPLETE`（本地研究与有界实测交付；不等于完整 worker 验收）；Owner：Codex `/root`；来源：用户要求继续研究与尝试，重点确认默认 MiniMax 的原因及怎样消费 BigModel Coding Plan。
+- 范围：读取已安装开源 ZCode runtime 的真实配置/模型/认证契约；只用隔离测试工作区和 Session 选择模型；允许有界短模型探针，禁止把真实凭证写入 Git/公开日志，禁止更改共享默认模型或现有会话。必要适配只在本 Skill 内维护，沿用现有改动。
+- 清单：①确认 CLI/v2/provider_config/工作区最近模型的优先级；②定位 BigModel 账号套餐与 API Key 通道及精确 providerId；③回读隔离会话模型后做有界短请求；④检查请求通道/用量与共享配置未变化，补相应回归和文档。
+- 验收：使用实际 provider/model 回读与成功请求证明模型切换，不采信模型自述；区分账户个人Coding Plan、体验/闲时与通用余额，不用模拟测试替代套餐消费证据。未拿到服务端扣费来源证据时明确 `NOT_VERIFIED`。
+- 清单结果：①新版默认实际是 minimax/MiniMax-M3；已有新版配置时旧 CLI 默认不覆盖，新默认缺 reasoning 会回落 registry 首个模型；②个人套餐 provider 精确为 account:bigmodel-individual-coding-plan，原生独立 CLI 与 app-server 的 account source 不同；③原生 TUI /model list 与 GLM-5.3/Flash 切换通过，GLM-5.3 与 Flash 各一次真实请求 completed；④实际请求接口与同一凭证的有效 Pro 套餐/积分限额已核对，共享 config/credentials 哈希不变，临时认证副本已删除。
+- 对照：未修复的原始凭证副本下 TUI 当前为 MiniMax，个人 BigModel 模型不在列表、两次切换未接受，0 推理；隔离副本只补齐既存套餐 secret 对应的缺失 identity 后，可选套餐。app-server 无宿主 accountConfig 时 setModel 被拒绝，无推理。没有改变原件或伪造 entitlement。
+- 模型证据：省略 reasoning 的默认 Flash 请求实际为 GLM-5.3（31,263 total tokens）；增加 max 后请求实际为 GLM-5.3-Flash（31,194 total tokens）。SQLite model_usage 的 provider 都是个人 Coding Plan、status completed、retry 0、tool_call_count 0；原生输出为固定探针文本，0 网页/搜索请求。TUI 两次切换有原生精确反馈，0 model_usage，显式 Ctrl-C 退出130；不把退出130算异常完成或推理成功。
+- 服务端只读：subscription/list 返回 GLM Coding Pro、VALID；quota 返回 pro 和 CREDIT_LIMIT。模型用量返回 hourly 汇总；credit detail HTTP200 但非可解析 JSON，没有逐请求扣分原件或独占前后差，不声称精确积分归因通过。
+- 交付：ref 28 记录原生 /model/provider/认证与 reasoning 合同，ref 26、SKILL 索引、DECISIONS、CHANGELOG、README 已同步。仍拒绝 zcode-cli 的不存在 --model flag，没有新增自动模型注入包装。
+- 私有证据：/tmp/zcode-bigmodel-live-260930/summary.sanitized.json、hashes.json、两份 native 输出/SQLite、TUI 记录；原始认证对照 /tmp/zcode-bigmodel-live-original-260930/；原始请求/账户响应不进仓库。脱敏 summary 可复查模型、用量、退出与配置一致性；临时凭证与含密钥的 personal clone 完成后按精确文件删除。
+- 收口复验：CLI 隔离 argv 回归 11/11，新增文档本地链接、配置 JSON 与 git diff --check 通过；独立 reviewer 直接复核两份 SQLite、TUI反馈、请求日志和四份配置哈希，最终无剩余有证据P1/P2。ref26曾误把ZCode证据赋给MiniMax行，已纠正并复验；MiniMax真实provider仍未测。脱敏实测summary SHA-256：d30afcb8e2f405dbed976eff283e04b19d727699ecfa9588b5d905bc64bfa21e。
+- NOT_VERIFIED：逐请求精确积分扣分；官方 login 的交互登录/原件迁移；worker 自动模型注入、业务文件修改与 scope hook、持续纠偏、完整 Orca supervised/settlement。此次仅关闭用户要求的研究与短实测，不扩大 OPTIONAL-CLI-BACKENDS 的完成线。
+
+
+## TASK-2026-09-30-OPTIONAL-CLI-BACKENDS — 按需支持 CLI 并保留 CodeBuddy
+
+- 状态：`COMPLETE`（本地支持适配交付；PR #230 已提交、未合并/发布）；优先级：`P1`；Owner：Codex `/root`；来源：用户当前明确指令，优先于旧删除卡。
+- 冻结基线：当前共享检出 `main`，起点 `02012092b7d91b2c616c48c6ae028f3a6f4b9022`；仅修改本 Skill 与根 README 的对应索引，不纳入其他既有改动。
+- 目标：重点支持独立 ZCode CLI、MiniMax Code CLI；保留 CodeBuddy；删除 QoderWork backend，新增 Qoder CN CLI 与千问办公入口。新增及保留的可选 backend 不进入日常自动派发池。
+- 清单：①真实入口与授权边界已核对；②renderer/身份/依赖/启动门禁已接入，旧删除目标已替代；③正反例与维护回归已执行；④版本/README/证据已同步。
+- 验收：真实 CLI help 与渲染 argv 一致；QoderWork 明确拒绝；不同产品的同名 qoderclicn 不串绑；无 hook 新 backend 只能显式降级；默认路由不加入可选 backend。新 backend 的真实 provider 与 Orca supervised 生命周期未测时标记 `NOT_VERIFIED`。
+- 设计边界：七层合同沿用既有派发/交付/验收门禁；新增薄 CLI 适配层与独立命令/策略验证，不改结算协议。逃逸反例：旧 QoderWork 软链冒充 Qoder CN、千问 bundled CLI 冒充 Qoder CN、模型选项静默忽略，均须拒绝。
+
+
+- 交付：v2.31.0；新入口说明在 references/26、27。保留 CodeBuddy，移除 QoderWork 的可派 backend/旧别名与 ungated helper 启动能力；保留旧链接迁移说明及历史记录。
+- 本地验证（2026-09-30）：新增实际 argv consumer 11/11；worker command policy 23/23；harness policy 36/36；frame/production policy 23通过、1环境探针跳过；reviewer scope 44/44。完整 references/19 矩阵60条：57条验证通过，smoke-sentinel/smoke-tmux 因 sandbox 不允许隔离socket跳过，smoke-orca-worker 因缺 terminal.multiplex.v1 capability 返回77跳过。最后策略/scope改动另复跑上述受影响套件，Python/Bash语法、JSON、引用与 git diff --check 通过。
+- PR 工作树复验（2026-10-01）：references/19 全部60条已运行，初轮58条退出0、2项失败；定位为环境探针误判及重复 fixture 截空，同轮修复后这两项与新增11项 argv consumer 复跑均通过。隔离 tmux worker 真实 socket smoke 通过，Hermes 专项在完整 Codex 宿主下环境跳过，确定性签名/策略用例通过；保留初轮失败与复跑原件于 /tmp/mao-pr-261001/matrix/ 与 final-targeted-summary.json。并非新 backend 的模型/Orca 全生命周期证明。
+- 独立审查：code-reviewer 发现并复验关闭未授权PM迁移、退休祖先被跳过、QwenWork配置绕过与新CLI祖先漏识别；最终无剩余有证据P1/P2。新增CLI只作worker sentinel，不能嵌套强宿主提权；默认池与可选集合分离。
+- Skill Lint：安全扫描0 critical/0 high，其余能力/fixture命中需按上下文看待。Harness Failure Audit有1项既有HFA-009（pm-cleanup-worker.sh:305），该行在冻结HEAD同样存在：扫描把观测旁路 RESULT.md 文本摘要的 jq -R -s 失败兜底当作配置解析失败；原件在 /tmp/mao-harness-audit.json。未通过变形规避扫描，未改无关清理模块；此项不是本次CLI支持的新权限依据，不宣称全Skill审计零finding。
+- 证据：本次运行日志与summary在 /tmp/mao-maintainer-260930/，最后定向复跑日志在 /tmp/mao-final-*.log，安全扫描在 /tmp/mao-final-security.json；这些为本机会话证据，不打包公开。候选文件SHA-256清单生成于该目录，文档闭环后重新冻结。
+- `NOT_VERIFIED`：除上述 ZCODE-BIGMODEL-LIVE 原生短请求外，其他新backend真实模型执行，以及新backend文件修改/持续纠偏/hook与Orca supervised完整生命周期；独立Qoder CN尚未安装（旧PATH软链指向已消失QoderWork），不自动安装；千问办公原生tools discovery未认证、bundled coding的账号/模型/积分归属未测。支持适配完成不扩大上述证据。
+
 ## TASK-2026-09-28-ORCA-SETTLEMENT-READBACK — 对齐真实 Orca 回读与外部终端结算
 
 - 状态：`READY`；优先级：`P1`；类型：`runtime-compatibility`；Owner：未领取。来源：Eval Harness 的 P014 主线接入检查；这是该任务短生命周期验证的直接前置，不变更通信波次排序。
@@ -63,11 +106,11 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 允许范围：route_suggest.py/quota_preflight.py 扩展、新调度脚本、personal config schema 演进、references 新页；不得绕过现有门禁。
 - 验收：设计卡先行（数据源矩阵 + 调度判据 + 降级矩阵）；实现后 mock 调度单测 + 真机双账号双机实测各一轮。
 
-## TASK-2026-09-29-DROP-CODEBUDDY-QODERWORK — 下线 CodeBuddy 与 QoderWork backend
+## TASK-2026-09-29-DROP-CODEBUDDY-QODERWORK — 旧删除目标已被新指令替代
 
-- 状态：`READY`；优先级：`P2`；类型：`removal`；来源：用户 2026-09-29 指示「QoderWork 这部分不需要了，包括 CodeBuddy，直接通过 PR 删掉」。
-- 目标：独立 PR 从 origin/main 删除两个 backend 全链：harness-backend-policy.json hosts 与候选签名策略位、spawn-worker.sh backend case、render-runtime-profile.sh 分支、qoderclicn-interactive-spawn.sh、config/codebuddy-auth-first-run.sh、references/07/08、example 配置段、SKILL.md 提及、相关测试同步、CHANGELOG。保持 receipt/远程派发等 v2.30.0 新能力不受影响。
-- 注意：与 v2.30.0 同文件（policy/spawn），必须在 v2.30.0 PR 合并后基于新 main 开分支，避免冲突。
+- 状态：`COMPLETE`（范围被用户 2026-09-30 新指令替代）；原类型：`removal`；旧来源：用户 2026-09-29 要求删除两者。
+- 最新决定：只移除 QoderWork，CodeBuddy 保留；独立 Qoder CN 与千问办公是单独按需入口，不继承旧 QoderWork backend。实现及验收统一在 TASK-2026-09-30-OPTIONAL-CLI-BACKENDS。
+- 禁止继续按旧目标删除 CodeBuddy。历史来源保留以供追溯，不作为执行授权。
 
 ## TASK-2026-09-24-CLAUDE-AUTO-SHELL — 恢复 Claude Code 原生 auto 的普通命令权限
 
