@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.9"
+  version: "1.9.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -68,6 +68,38 @@ bash scripts/check-outgoing-identities.sh \
 ```
 
 门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新 integration base，核验当前 HEAD，确认核验期间 HEAD 未变化，再把该 OID 精确推到目标分支，使证据绑定实际 push 对象。
+
+### 提交前身份自检与身份污染排查（v1.9.0，2026-09-30 Hermes 实录新增）
+
+仓库级 `.git/config` 可能被并行会话或 agent 写入他人身份（实录：private-skills 被写入 `Hermes(info-assistant)`，190 个提交作者与全部 PR squash 的 Co-authored-by 尾注被污染）。上面的 push 门禁只核验"传入的期望身份"，期望值若取自被污染 config 则形同虚设；且 Co-authored-by 尾注完全不在门禁检查范围——GitHub squash 合并把分支提交作者自动转成尾注，**尾注问题的根源在分支提交作者，不在 PR 本身**。
+
+每次 commit 前（至少 push 前）跑一次只读自检：
+
+```bash
+bash scripts/identity-audit.sh whoami
+# 可选硬门禁：与期望身份不符即非 0 退出
+bash scripts/identity-audit.sh whoami \
+  --expected-name "<name>" --expected-email "<email>"
+```
+
+覆盖四类风险，任一命中即非 0 退出（先排查再提交）：
+
+1. 仓库级（`--local`）或工作树级（`--worktree`）`user.*` 覆盖——本技能规范 worker 本就禁止写入；
+2. `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env 覆盖——只影响单次提交但会静默压过 config；
+3. 可疑身份模式——邮箱 `*.local`/`*.invalid`/`*.test`/`@example.*`/`noreply@`（`users.noreply.github.com` 的 noreply 不贴着 @，不误伤），姓名 hermes/openclaw/codex/claude/checkpointer/minimax/glm/bot/agent/worker/dashboard/assistant（大小写不敏感；模式据 260930 全仓实测归纳）；
+4. `--expected-name/--expected-email` 不符。
+
+发现属本人身份（自定义域邮箱、本人设置的仓库级覆盖等）时用 `--allow-email`/`--allow-name`/`--allow-local-override` 精确放行，不要放宽模式。
+
+身份问题排查入口：
+
+| 症状 | 动作 |
+|:-----|:-----|
+| PR/合并提交多出陌生 Co-authored-by 尾注 | `bash scripts/identity-audit.sh history --all` 看尾注分布；根源=分支提交作者，清洗须改写分支作者（`git rebase -r --exec 'git commit --amend --reset-author --no-edit'`）后重推，且必须用户授权 |
+| 提交作者不是我 | `whoami` 来源链定位写入层（env → worktree → repo-local → global，`--show-origin` 给出具体文件）；修复用 `git config --local --unset user.name user.email` 类命令回落全局，确认后再提交 |
+| 全仓身份体检（交接/发版/公开化前） | `history --all` 输出 author/committer/尾注三张分布表，可疑项自动标注；大仓用 `--max-commits` 控制上限 |
+
+发现身份污染时**先报告用户**，不得擅自改写历史或 force push（§1 安全协议）。与 `check-outgoing-identities.sh` 的分工：`whoami` 管"提交前我是谁、身份哪来的"，push 门禁管"push 前 range 内每一笔是谁"——两者互补，不可互替。
 
 ## 2. 分支管理
 
@@ -908,7 +940,7 @@ git branch --show-current
 git reflog -3
 ```
 
-**status/log 干净 ≠ 在你以为的分支上。**
+**status/log 干净 ≠ 在你以为的分支上。** 分支对了还要核对人：commit 前跑 §1「提交前身份自检」（`bash scripts/identity-audit.sh whoami`），防共享检出被并行会话写入他人 git 身份（2026-09-30 Hermes 实录）。
 
 误落补救（2026-09-30 private-skills 实录：迁移提交落在并行会话的 `feat/lawyer-video-cut-subtitle-pipeline` 上）：
 
@@ -1028,3 +1060,5 @@ git checkout main
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
 - `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
+- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）与全仓 author/committer/Co-authored-by 尾注审计（history）
+- `scripts/test-identity-audit.sh` — 身份审计故障注入测试
