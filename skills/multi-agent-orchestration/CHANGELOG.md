@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.31.2] - 2026-10-01
+
+### 修复
+- Orca worker 启动仅在明确的 `ok=true` / `wait.satisfied=true` 回执后投递；超时同句柄有界重等一次，异常或仍未就绪则失败并保留精确终端/工作树供恢复，supervised 仍只由 worker-start 注入任务。
+
 ## [2.31.1] - 2026-10-01
 
 ### 新增
