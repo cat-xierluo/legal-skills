@@ -25,11 +25,11 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-10-01-LOCAL-ACCOUNT-SKILL — 私人账号调度调用合同
 
-- 状态：`IN_PROGRESS`；Owner：Codex `/root`；用户最新决定：账号额度/刷新卡规则抽为独立私有 Skill；本 Skill 仅调用，不影响日常使用，不公开私人实现。
+- 状态：`COMPLETE`（本地调用合同已提交 PR，尚未合并）；Owner：Codex `/root`；用户最新决定：账号额度/刷新卡规则抽为独立私有 Skill；本 Skill 仅调用，不影响日常使用，不公开私人实现。
 - 冻结基线：`origin/main` = `6d85291eb3a59d72cf95f9fb0542bd906eb49fbd`；分支 `feat/mao-optional-cli-support`，独立 app-managed worktree。
 - 范围：个人配置模板默认关闭的 `account_routing` 与 ref 29、主入口和版本文档；具体实现与实测在私有 Skill 的 TASKS 维护，不复制账号/卡数据到此处。
 - 验收：无配置不调用；启用且 backend 用户指定时读取本地 Skill；缺失/失败/未知暂停；不绕过任何现有派发门，不宣称 PM 调用是 spawn 机械账号绑定。
-- 清单：调用合同已落地，独立 review 无有证据 P1/P2；私有 Skill 独立实现/安装验证由其任务源闭环；本卡随当前 PR 提交。
+- 清单：调用合同已落地，独立 review 无有证据 P1/P2；私有 Skill 独立实现/安装验证由其任务源闭环；本卡已提交 PR #230（https://github.com/cat-xierluo/legal-skills/pull/230），状态 OPEN/MERGEABLE/CLEAN；未合并。
 - 验证：公开包没有账号 adapter/卡实现或真实账号字段；调用配置 JSON、主入口和 ref 29 可达，默认关闭。实际私有 Skill 缺失时只按合同暂停，不能据此宣称 spawn 机械绑定。
 
 ## TASK-2026-09-30-ZCODE-BIGMODEL-LIVE — 独立 CLI 模型选择与 Coding Plan 实测
@@ -50,7 +50,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-09-30-OPTIONAL-CLI-BACKENDS — 按需支持 CLI 并保留 CodeBuddy
 
-- 状态：`COMPLETE`（本地支持适配交付；未提交/发布）；优先级：`P1`；Owner：Codex `/root`；来源：用户当前明确指令，优先于旧删除卡。
+- 状态：`COMPLETE`（本地支持适配交付；PR #230 已提交、未合并/发布）；优先级：`P1`；Owner：Codex `/root`；来源：用户当前明确指令，优先于旧删除卡。
 - 冻结基线：当前共享检出 `main`，起点 `02012092b7d91b2c616c48c6ae028f3a6f4b9022`；仅修改本 Skill 与根 README 的对应索引，不纳入其他既有改动。
 - 目标：重点支持独立 ZCode CLI、MiniMax Code CLI；保留 CodeBuddy；删除 QoderWork backend，新增 Qoder CN CLI 与千问办公入口。新增及保留的可选 backend 不进入日常自动派发池。
 - 清单：①真实入口与授权边界已核对；②renderer/身份/依赖/启动门禁已接入，旧删除目标已替代；③正反例与维护回归已执行；④版本/README/证据已同步。
