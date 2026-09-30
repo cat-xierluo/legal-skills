@@ -43,6 +43,8 @@
 | 2026-09-30 | 更新 | [universal-media-downloader](skills/universal-media-downloader/) | v0.5.1→v0.5.2 | 修复无登录直连脚本在 Python 3.9 下函数定义即崩溃（PEP 604 `str\|None` 注解需 3.10+，macOS 系统 python3 为 3.9.6），改 `Optional[str]`；旧版实测复现、新版 3.9 实测通过，第一级 fallback 恢复可用。 |
 | 2026-09-30 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.4 | 复核反例与独立验收余项修复：声纹开关误标/认领闭环/摘要注入质量门/截图端到端证据；align_words 词级对齐（v2.3.2-2.3.4）：ASCII 组插值与非等长替换的字符时间逐词标 estimated，估计边界不再自称真实，下游按字删除前强制交审。 |
 
+</details>
+
 ## 📋 项目概述
 
 本项目旨在沉淀并分发面向法律工作者的 AI Agent Skills。法律从业者兼具专业工作者与创作者的双重身份——既要处理法律业务，也需要撰写专业文章、整理资料、分享知识。我们的技能围绕这一特点，构建完整的工作流支持。
