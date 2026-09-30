@@ -1,5 +1,6 @@
 # 模型选择与执行模式矩阵
 
+> 2026-09-30 当前合同：日常 Claude Code/Codex；CodeBuddy、独立 ZCode CLI/MiniMax Code、Qoder CN、千问办公仅用户指定时使用。QoderWork 已移除。按需启动与权限以 `26-optional-cli-backends.md`、`27-qwenwork-cli-worker.md` 为准；本文 QoderWork/旧 ZCode 无 TUI/旧模型等历史条目不作为当前派发配方。
 > 本文档为 SKILL.md 的 Level 2 参考文档，提供模型路由和执行模式选择的完整细节。
 > 读取时机：规划并行任务、为 Agent 分配模型、选择 Subagent / Agent Teams / tmux 时。
 
@@ -7,7 +8,7 @@
 
 ## 1. 模型分级（L0 / L1 / L2）
 
-模型路由只服务 worker，不绑定 PM 所在产品。当前 `spawn-worker.sh` 的机械白名单只有 Claude Code、Codex、CodeBuddy、QoderWork CN；本文中 OpenCode、Hermes、Kimi、Gemini、Rudder、custom 等段落仅保留历史调研价值，不构成派发授权。判断顺序是：任务复杂度 → 当前可用额度 → 白名单 worker backend → 模型/环境变量。
+模型路由只服务 worker，不绑定 PM 所在产品。当前白名单读取 policy 与 ref 26；本文中 OpenCode、Hermes、Kimi、Gemini、Rudder、custom 等段落仅保留历史调研价值，不构成派发授权。判断顺序是：任务复杂度 → 当前可用额度 → 白名单 worker backend → 模型/环境变量。
 
 ### 1.1 能力定义
 
@@ -32,7 +33,7 @@
 
 ### 1.3 额度 Profile
 
-> 当前可派发 Profile 仅限 backend 为 Claude Code、Codex、CodeBuddy、QoderWork CN 的行。其余行是历史候选，不得传给 `spawn-worker.sh`。
+> 旧 QoderWork/custom/其他非白名单 Profile 不可派发。可选 CLI 按 ref 26 单独配置。
 
 | Profile | 目标 | backend | 典型设置 |
 |---------|------|---------|----------|

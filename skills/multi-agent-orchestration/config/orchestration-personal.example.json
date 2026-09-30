@@ -1,11 +1,11 @@
 {
   "_comment": "个人 backend/模型路由偏好【模板】。复制为 config/orchestration-personal.json，按你自己可用的 provider/model/平台额度填。SKILL.md 只定义机制(本 schema)，不写具体模型——模型与框架选型是个人偏好，每人不同。",
-  "_schema_version": "1.2",
+  "_schema_version": "1.3",
   "_read_by": "multi-agent-orchestration skill PM (任意主会话)",
   "_path_user": "config/orchestration-personal.json（在 skill config/ 目录内，但被 .gitignore 排除、不入库；每人按自己偏好改，不 commit）",
   "main_force": {
     "_comment": "PM 主力宿主工具 + 按任务类型选 model（非轮换）。host = 你当前主会话用的 Agent 工具；task_routing = 按任务难度/模态选 model。",
-    "host": "<你的主力 Agent 工具：claude-code / codex / codebuddy / qoderwork-cn>",
+    "host": "<你的主力 Agent 工具；可选 worker 不改变 PM host 授权>",
     "task_routing": {
       "high_end": "<你的常规/高端任务模型>",
       "simple_multimodal": "<你的简单任务+多模态/图片解读模型>",
@@ -71,8 +71,11 @@
     "max_per_provider": 3,
     "per_backend": {
       "codebuddy": 1,
-      "qoderwork-cn": 1,
-      "zcode": 2
+      "qoder-cn": 1,
+      "zcode": 2,
+      "minimax-code": 1,
+      "zcode-cli": 1,
+      "qwenwork-cn": 1
     },
     "prefer_lower": true,
     "reason": "<填你的理由，如：同 provider 并发 ≤3，尽量更少，避限流>。",
@@ -90,7 +93,9 @@
       "active_session_cap": 4,
       "min_free_disk_gb": 20,
       "min_free_memory_percent": 15,
-      "allowed_backends": ["claude-code"],
+      "allowed_backends": [
+        "claude-code"
+      ],
       "orca_environment": "<可选：本机 Orca 里该节点的配对名（orca environment list 可查），--prompt-file 跨机任务投递用>",
       "connect_timeout_seconds": 10
     }
@@ -101,29 +106,48 @@
     "reason": "<填你的理由>"
   },
   "harness_backend_policy": {
-    "_comment": "只读说明镜像；强制规则以已入库的 config/harness-backend-policy.json 为准。宿主身份由进程祖先/Orca working-agent 证明，不能靠个人配置或 CLI 参数提权。",
+    "_comment": "只读镜像；强制白名单以 harness-backend-policy.json 为准；可选 worker 不构成新 PM host。",
     "policy": "deny_by_default",
     "claude-code": [
       "claude-code",
       "codex",
       "codebuddy",
-      "qoderwork-cn"
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ],
     "codex": [
       "claude-code",
       "codex",
       "codebuddy",
-      "qoderwork-cn"
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ],
     "codebuddy": [
       "codebuddy"
     ],
-    "qoderwork-cn": [
-      "qoderwork-cn"
+    "zcode": [
+      "claude-code",
+      "codex"
+    ],
+    "hermes": [
+      "claude-code",
+      "codex",
+      "codebuddy",
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ]
   },
   "backend_model_routing": {
-    "_comment": "已配置 CLI backend 的默认 model + 何时用。Harness 门禁只接受 claude-code、codex、codebuddy、qoderwork-cn；这里的模型偏好不能增加 backend。",
+    "_comment": "只在已授权 backend 内选择模型；可选 backend 需用户明确指定，不加入 quota tier_policy 默认链。模型名从各 CLI 实时列表选择。",
     "codebuddy": {
       "_comment": "WorkBuddy 桌面端 CLI（references/08-codebuddy-cli-worker.md）。2026-08-05 用户偏好：hy3 首选 / deepseek-v4-flash 次选；不用 deepseek-v4-pro 作主。spawn-worker.sh 派 codebuddy worker 时按此顺序选 --model。",
       "default_models": [
@@ -134,24 +158,55 @@
       "use_case": "WorkBuddy 桌面端登录态 + 平台额度（无需 API key）；按首选 → 次选 → 回退 顺序派 worker。",
       "tier_note": "hy3 = WorkBuddy 平台自定义模型（首选）；deepseek-v4-flash = 平台批量模型（次选）；deepseek-v4-pro 仅作回退（用户偏好不用作主）。"
     },
-    "qoderwork-cn": {
-      "_comment": "QoderWork CN CLI（references/07-qoderwork-cli-worker.md，v1.0.45）。2026-08-05 --list-models：Qwen3.8-Max 新旗舰 + GLM-5.2 / Kimi-K2.7-Code / MiniMax-M2.7。推荐具体名（-m Qwen3.8-Max），旧 alias（qmodel_latest 等）兼容但映射过时。",
-      "default_models": [
-        "Qwen3.8-Max",
-        "Qwen3.7-Max",
-        "Qwen3.7-Plus",
-        "DeepSeek-V4-Pro",
-        "GLM-5.2",
-        "Kimi-K2.7-Code"
-      ],
-      "use_case": "QoderWork 桌面端登录态 + 平台额度（无需 API key）；首选 Qwen3.8-Max，references/07 §4/§5.1 推荐具体名 + --permission-mode auto。",
-      "tier_note": "Qwen3.8-Max = 2026-08 新旗舰（首选）；Qwen3.7-Max/Plus = 上一代；DeepSeek-V4-Pro/GLM-5.2/Kimi-K2.7-Code = 备选。旧 alias qmodel_latest 解析 3.7-Max（没跟 3.8），推荐用具体名。"
+    "qoder-cn": {
+      "default_models": [],
+      "use_case": "用户明确指定的独立 Qoder CN CLI；模型按当前 CLI 可用清单选择，不继承旧 QoderWork 模型表。"
+    },
+    "zcode-cli": {
+      "default_models": [],
+      "dispatch": "explicit_only",
+      "use_case": "仅用户明确指定时派发；读取 references/26 或 27，不能从余额或模型名自动选用。"
+    },
+    "minimax-code": {
+      "default_models": [],
+      "dispatch": "explicit_only",
+      "use_case": "仅用户明确指定时派发；读取 references/26 或 27，不能从余额或模型名自动选用。"
+    },
+    "qwenwork-cn": {
+      "default_models": [],
+      "dispatch": "explicit_only",
+      "use_case": "仅用户明确指定时派发；读取 references/26 或 27，不能从余额或模型名自动选用。"
     }
   },
   "notes": [
-    "SKILL.md 与 harness-backend-policy.json 定义四种可用 Harness 及调用层级；本文件只在该集合内选择 host 和 model。",
+    "默认候选是 claude-code/codex；CodeBuddy、Qoder CN、千问办公、ZCode、MiniMax Code 仅按需，hosts 权限不是常规派发优先级。",
     "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 只提示 advisory、不假装硬限额；backend_model_routing 缺失 → 空 dict。",
     "本文件只声明'偏好'，不声明真实 token/key/endpoint——那些在 config/claude-provider-registry.*.json（本地 ignored）。",
     "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。"
-  ]
+  ],
+  "dispatch_selection": {
+    "default_backends": [
+      "claude-code",
+      "codex"
+    ],
+    "explicit_only_backends": [
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "codebuddy",
+      "qoder-cn",
+      "qwenwork-cn"
+    ],
+    "priority_optional_backends": [
+      "zcode-cli",
+      "minimax-code"
+    ],
+    "note": "2026-09-30 用户要求只增加可选支持，平常不派发这些 worker；仅用户明确指定时选择，不因余量或宿主同名自动切换。此段是 PM 选路合同，hosts 仍是机械权限权威。"
+  },
+  "account_routing": {
+    "_comment": "仅 PM 的可选本地 Skill 调用合同；不是 spawn 机械门禁。账号规则由私人 Skill 提供，不分发账号库或凭证。启用且 backend 已由用户指定时读取 skill_path/SKILL.md，按其入口取得新鲜账号调度结果；enabled=false 不调用；启用但缺失/失败则暂停该 backend，不改派可选 backend。",
+    "enabled": false,
+    "skill_path": "",
+    "backends": []
+  }
 }
