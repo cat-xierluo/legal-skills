@@ -83,7 +83,7 @@ assert_frame 'zcode-cli 帧' '/usr/local/bin/zcode-cli' 'zcode'
 assert_frame 'claude 帧' '/usr/local/bin/claude' 'claude-code'
 assert_frame 'codex 帧' '/opt/codex/bin/codex' 'codex'
 assert_frame 'codebuddy 帧' 'codebuddy' 'codebuddy'
-assert_frame 'qoderclicn 帧' 'qoderclicn' 'qoderwork-cn'
+assert_frame 'qoderclicn 帧' 'qoderclicn' 'qoder-cn'
 assert_frame '普通 bash 帧不识别' 'bash' '__none__'
 
 echo '== 2. canonical_harness_backend =='
@@ -95,15 +95,15 @@ echo '== 3. 真实 policy 文件：白名单交集 / deny-by-default =='
 [ -f "$POLICY_JSON" ] || { bad "policy 文件缺失: config/harness-backend-policy.json"; }
 jq -e 'select(.schema == "multi-agent-orchestration.harness-backend-policy.v1")
       | select(.policy == "deny_by_default")
-      | select(.hosts.hermes == ["claude-code", "codex", "codebuddy", "qoderwork-cn", "zcode"])' "$POLICY_JSON" >/dev/null 2>&1 \
+      | select(.hosts.hermes == ["claude-code", "codex", "codebuddy", "qoder-cn", "zcode", "zcode-cli", "minimax-code", "qwenwork-cn"])' "$POLICY_JSON" >/dev/null 2>&1 \
   && ok 'policy JSON：hermes host 条目与全 backend 授权面正确' \
   || bad 'policy JSON：schema/policy/hermes 条目校验失败'
 
-assert_chain 'hermes 单层链' '["hermes"]' 'claude-code codex codebuddy qoderwork-cn zcode'
-assert_chain 'hermes→claude-code 嵌套交集' '["hermes","claude-code"]' 'claude-code codex codebuddy qoderwork-cn'
+assert_chain 'hermes 单层链' '["hermes"]' 'claude-code codex codebuddy qoder-cn zcode zcode-cli minimax-code qwenwork-cn'
+assert_chain 'hermes→claude-code 嵌套交集' '["hermes","claude-code"]' 'claude-code codex codebuddy qoder-cn zcode zcode-cli minimax-code qwenwork-cn'
 assert_chain 'hermes→zcode 嵌套交集' '["hermes","zcode"]' 'claude-code codex'
 assert_chain 'hermes→codebuddy 交集含 codebuddy' '["hermes","codebuddy"]' 'codebuddy'
-assert_chain 'hermes→qoderwork-cn 交集含 qoderwork-cn' '["hermes","qoderwork-cn"]' 'qoderwork-cn'
+assert_chain '未授权 Qoder CN PM 链拒绝' '["hermes","qoder-cn"]' '__fail__'
 assert_chain '未知宿主 fail-closed' '["unknown-host"]' '__fail__'
 assert_chain 'zcode 既有授权不回归' '["zcode"]' 'claude-code codex'
 
@@ -123,6 +123,8 @@ if [ "$frame_rc" -eq 0 ]; then
   if [ "$live_host" = "hermes" ] \
     && printf '%s' "$live_chain" | jq -e 'type == "array" and length > 0 and all(.[]; . == "hermes")' >/dev/null 2>&1; then
     ok "本机祖先链识别为 hermes（chain=${live_chain}）"
+  elif [ "$live_host" != "hermes" ] && printf '%s' "$live_chain" | jq -e --arg host "$live_host" 'type == "array" and length > 0 and .[0] == $host' >/dev/null 2>&1; then
+    skip "当前为已识别的非 Hermes 宿主（host=${live_host}），Hermes 签名由确定性用例覆盖"
   else
     bad "本机祖先链识别异常：host=[$live_host] chain=[$live_chain]"
   fi

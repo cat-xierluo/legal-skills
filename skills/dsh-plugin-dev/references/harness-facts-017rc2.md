@@ -35,6 +35,19 @@
 | dsh-plugin-manager | 装载/组合 | bundleComponentManifests、declaredRows（insert 行校验 :1884） |
 | dsh-package-manifest | manifest 权威 | name/version 必填；manifestVersion 可选不强制 |
 
+## 插件 Config / settings 机制（2026-09-30 核查）
+
+- 模块命名导出 `Config` 即声明（cordis registry 读 `plugin.Config`）；校验走 `~standard.validate` **同步**契约；volatile 字段（meta.volatile）解析为 `{get()}` 活引用 + `Symbol.for('cosmokit.volatile.write')` 写协议；loader `_commitVolatile` 编辑后移植新值免重挂载。
+- 零依赖手写 schema 三暗门：vendor 须声明 `'schemastery'` 方言（loader equalExceptVolatile 唯一 vendor 分支，diff.ts）、volatile **子节点**自身须带 toJSON（plainSchema 调 `new z(child.toJSON())`）、validate 同步。
+- 已知告警：0.1.7 的 settings 服务无 register()（market #677）——宿主侧告警非插件错误。
+- 全链路引证：dsh-plugins `docs/research/2026-09-30-dsh-settings-mechanism.md`。
+
+## 存储域补充事实（2026-09-30/10-01 核查）
+
+- **加表不升 version**：域 descriptor 新增表在旧存储上按空表载入（json 后端 `snapshot.tables[table] ?? {}`），同 version 不触发 version-mismatch——**升 version 反而会把已落盘单元 brick**（PR #59 审查对拍真实后端源码）。
+- **`domain/changed` 事件**：每写耐久后按写序 emit 一次，载荷 `{domain, table, key, operation: 'put'|'deleted', value?}`（携带新快照非旧值）；监听者抛错宿主兜底；**进程内事件**（第二宿主进程不可见）。事件源用官方，不自建存储层事件。
+- 已知宿主侧观察（headless lab，定因中）：经 `configEditor.edit → hmr.runExclusive` 的写路径在 headless 组合抛 `HMR is disposed`；bizlink 条目 disable→enable 的 enable 段偶发 `cannot create effect on inactive context`。写路径宿主级验证归 GUI 组合窗口（dsh-plugins triage-p3-hmr.md）。
+
 ## 观测点
 
 - 宿主日志：`~/Library/Application Support/DSH Desktop/logs/host/dsh-<date>.log`（[I/W] 前缀、logger 名=插件 name）。

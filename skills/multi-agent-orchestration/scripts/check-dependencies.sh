@@ -16,7 +16,7 @@ Usage:
 
 Options:
   --backend NAME             Check backend CLI: claude-code | claude-oauth | codex | opencode |
-                             codebuddy | qoderwork-cn | zcode | custom
+                             codebuddy | qoder-cn | qwenwork-cn | minimax-code | zcode-cli | zcode | custom
                              Repeat for multiple backends.
                              opencode/custom are historical diagnostics only and cannot
                              be dispatched by spawn-worker.sh.
@@ -25,7 +25,7 @@ Options:
   --strict                   Exit non-zero on WARN as well as MISSING.
   --print-bundle-path NAME    Print the .app bundle binary path for the given backend
                              and exit. Use to get the absolute path when 'which codebuddy'
-                             returns not found. Supports: codebuddy | qoderwork-cn | zcode
+                             returns not found. Supports: codebuddy | qoder-cn | zcode
                              (zcode prints the node script path; run it via PATH symlink
                              or the zcode-worker-driver.py wrapper).
                              Example: --print-bundle-path codebuddy
@@ -82,15 +82,27 @@ if [ -n "$PRINT_BUNDLE_PATH_BACKEND" ]; then
         exit 1
       fi
       ;;
-    qoderwork-cn)
-      BIN="/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn"
-      if [ -x "$BIN" ]; then
+    qoder-cn|zcode-cli|minimax-code)
+      case "$PRINT_BUNDLE_PATH_BACKEND" in
+        qoder-cn) cli_name=qoderclicn ;;
+        zcode-cli) cli_name=zcode ;;
+        minimax-code) cli_name=mcode ;;
+      esac
+      BIN=$(command -v "$cli_name" || true)
+      if [ -n "$BIN" ] && [ -x "$BIN" ] && python3 "$SCRIPT_DIR/validate-worker-command.py" \
+          --backend "$PRINT_BUNDLE_PATH_BACKEND" --command "\"$BIN\"" \
+          --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh" >/dev/null; then
         printf '%s\n' "$BIN"
         exit 0
-      else
-        echo "ERROR: qoderclicn binary not found at $BIN" >&2
-        exit 1
       fi
+      echo "ERROR: verified $cli_name not found on PATH; see references/26-optional-cli-backends.md" >&2
+      exit 1
+      ;;
+    qwenwork-cn)
+      BIN="/Applications/QwenWorkCN.app/Contents/Resources/bin/qoderclicn"
+      [ -x "$BIN" ] || { echo "ERROR: QwenWorkCN bundled coding CLI missing" >&2; exit 1; }
+      printf '%s\n' "$BIN"
+      exit 0
       ;;
     zcode)
       BIN="/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs"
@@ -103,7 +115,7 @@ if [ -n "$PRINT_BUNDLE_PATH_BACKEND" ]; then
       fi
       ;;
     *)
-      echo "ERROR: --print-bundle-path supports codebuddy, qoderwork-cn or zcode, got: $PRINT_BUNDLE_PATH_BACKEND" >&2
+      echo "ERROR: --print-bundle-path supports codebuddy, qoder-cn, qwenwork-cn, minimax-code, zcode-cli or zcode, got: $PRINT_BUNDLE_PATH_BACKEND" >&2
       exit 64
       ;;
   esac
@@ -235,14 +247,32 @@ for backend in "${CHECK_BACKENDS[@]}"; do
       check_app_bundle_binary codebuddy \
         "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"
       ;;
-    qoderwork-cn|qoderclicn)
-      echo "DEPENDENCY_CHECK: backend=$backend"
-      check_optional_cmd qoderclicn "QoderWork CN worker backend"
-      # 国际版二进制是 qodercli(不是 qoderclicn), 但用户脚本可能 alias — 同时报
-      # 旧 Qoder 编辑器(已废弃) /usr/local/bin/qoder 不可作为 agent CLI
-      check_app_bundle_binary qoderclicn \
-        "/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn" \
-        "/Applications/QoderWork.app/Contents/Resources/bin/qodercli"
+    qoder-cn|qoderclicn)
+      echo "DEPENDENCY_CHECK: backend=qoder-cn"
+      qoder_bin=$(command -v qoderclicn || true)
+      if [ -n "$qoder_bin" ] && [ -x "$qoder_bin" ] && python3 "$SCRIPT_DIR/validate-worker-command.py" \
+          --backend qoder-cn --command "\"$qoder_bin\"" \
+          --trusted-claude-wrapper "$SCRIPT_DIR/claude-provider-env.sh" >/dev/null; then
+        report_ok "qoderclicn" "$qoder_bin (standalone Qoder CN)"
+      else
+        report_missing "qoderclicn" "standalone Qoder CN CLI required; retired QoderWork links and QwenWork bundles are not this backend"
+      fi
+      ;;
+    minimax-code|mcode)
+      echo "DEPENDENCY_CHECK: backend=minimax-code"
+      check_optional_cmd mcode "MiniMax Code CLI; see references/26-optional-cli-backends.md"
+      ;;
+    zcode-cli)
+      echo "DEPENDENCY_CHECK: backend=zcode-cli"
+      check_optional_cmd zcode "Standalone ZCode CLI with TUI; check --help before dispatch"
+      ;;
+    qwenwork-cn)
+      echo "DEPENDENCY_CHECK: backend=qwenwork-cn"
+      check_app_bundle_binary qoderclicn "/Applications/QwenWorkCN.app/Contents/Resources/bin/qoderclicn"
+      report_warn "qwenwork-auth" "dedicated --config-dir and its login must be verified explicitly; native qwenwork tools are a separate office capability entry"
+      ;;
+    qoderwork|qoderwork-cn)
+      report_missing "retired-backend" "QoderWork is removed; use standalone qoder-cn"
       ;;
     zcode)
       echo "DEPENDENCY_CHECK: backend=zcode"

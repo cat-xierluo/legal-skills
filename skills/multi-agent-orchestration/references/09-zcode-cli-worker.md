@@ -1,5 +1,6 @@
 # ZCode CLI Worker（zcode backend）
 
+> 2026-09-30 当前合同：日常 Claude Code/Codex；CodeBuddy、独立 ZCode CLI/MiniMax Code、Qoder CN、千问办公仅用户指定时使用。QoderWork 已移除。按需启动与权限以 `26-optional-cli-backends.md`、`27-qwenwork-cli-worker.md` 为准；本文 QoderWork/旧 ZCode 无 TUI/旧模型等历史条目不作为当前派发配方。
 > 补充参考：SKILL.md 的 zcode backend 深度说明。研究 2026-08-27（协议全链真机验证），
 > 同日完成 spawn-worker 端到端转正验证（Task-077）。
 
