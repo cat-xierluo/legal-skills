@@ -1,5 +1,22 @@
 # 变更日志
 
+## [1.9.0] - 2026-09-30 - 提交身份自检与身份污染审计：identity-audit.sh（whoami/history）
+
+### 新增
+
+- **scripts/identity-audit.sh**：Git 提交身份只读审计，两个子命令，任一发现非 0 退出（0=无发现/1=有发现/2=用法错误）。
+  - `whoami`（commit 前自检）：当前生效 user.name/email + 来源链（env → worktree → repo-local → global，`--show-origin` 给出具体文件）；四类风险告警——仓库级/工作树级 `user.*` 覆盖、`GIT_AUTHOR_*`/`GIT_COMMITTER_*` env 覆盖、可疑身份模式、`--expected-*` 不符。可疑模式据 260930 全仓实测归纳：邮箱 `*.local`/`*.invalid`/`*.test`/`@example.*`/`noreply@`（`users.noreply.github.com` 不误伤），姓名 hermes/openclaw/codex/claude/checkpointer/minimax/glm/bot/agent/worker/dashboard/assistant（大小写不敏感）；本人身份用 `--allow-email`/`--allow-name`/`--allow-local-override` 精确放行。
+  - `history`（历史审计）：全部分支或 `--range A..B` 内 author/committer/Co-authored-by 尾注三张身份分布表，可疑项自动标注并输出 FINDINGS 计数；`--max-commits` 控制上限。
+- **scripts/test-identity-audit.sh**：16 项故障注入测试（隔离 `GIT_CONFIG_GLOBAL` 夹具）：覆盖层/env/可疑模式/期望不符/worktree 覆盖/尾注标注/精确放行/范围收窄/`users.noreply.github.com` 误伤回归/用法与目录错误。
+
+### 改进
+
+- SKILL.md §1 新增「提交前身份自检与身份污染排查」：whoami 用法、四类风险、与 push 门禁的分工（whoami 管"提交前我是谁、身份哪来的"，门禁管"push 前 range 内每一笔是谁"）、排查入口表（陌生尾注→history 审计，根源在分支作者；作者非我→来源链定位后 unset 回落全局；全仓体检）。§10 共享检出小节补"分支对了还要核对人"交叉引用。frontmatter description 补「提交身份不对」「多出 coauthor」「陌生作者」触发词，版本号 1.9.0。参考资源清单补两脚本。
+
+### 背景
+
+- 260930 private-skills 实录：仓库级 `.git/config` 被写入 `Hermes(info-assistant) <info-assistant@hermes.local>`（不晚于 09-23 生效，190 个提交作者被污染），GitHub squash 合并自动把分支提交作者转成 Co-authored-by 尾注，全部合并 PR 带上陌生署名。既有 push 门禁只核验传入的期望身份，期望值取自被污染 config 时形同虚设，且尾注不在其检查范围——防线需前移到 commit 前，并补全仓审计入口。
+
 ## [1.8.9] - 2026-09-30 - 分支冗余巡检自动化：只读盘点脚本 + 批量删除执行坑入册
 
 ### 新增
