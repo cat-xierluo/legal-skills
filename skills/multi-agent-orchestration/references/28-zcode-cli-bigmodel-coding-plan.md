@@ -4,7 +4,7 @@
 
 本说明针对 `zcode-cli` backend 的原生 `zcode` TUI／`--prompt`。2026-09-30 实测本机安装的 runtime 3.14.3，内置 agent help 版本 0.16.9；两者不是同一个版本号。旧 `zcode` backend 的 app-server driver 继续遵守 ref 24，不能把以下独立 CLI 结果当作其验证结果。
 
-新增支持仍只在用户指定时选用，不进入日常派发池。本次仅研究模型与套餐通道，不自动修改用户共享默认模型、复制认证到 worker 或建立新的派发权限。
+新增支持仍只在用户指定时选用，不进入日常派发池。2026-09-30 的探针仅研究模型与套餐通道；2026-10-01 的文件任务另见下文，不自动修改用户共享默认模型、复制认证到 worker 或建立新的派发权限。
 
 ## 模型与认证契约
 
@@ -67,9 +67,17 @@ zcode tui --mode build --cwd /absolute/path/workspace
 | 逐请求积分明细 | 端点未返回可用 JSON；无独占前后积分差，精确扣分归因 `NOT_VERIFIED` |
 | 原件与隔离 | 共享 provider、CLI/v2 config、credentials 前后 SHA-256 相同；独立 SQLite 真实生成；临时认证副本完成后删除 |
 
-两次短提示仍各有约 3.1 万 input tokens 的 runtime 系统上下文；不能按用户提示长度估计成本。没有读写业务文件、工具调用或子智能体派发。本次成功证明原生模型切换和个人套餐请求通道，不证明完整 worker 生命周期、scope hook、持续纠偏或 Orca supervised 已通过。
+两次短提示仍各有约 3.1 万 input tokens 的 runtime 系统上下文；不能按用户提示长度估计成本。2026-09-30 的两次短探针没有读写业务文件、工具调用或子智能体派发。该次成功证明原生模型切换和个人套餐请求通道，不证明完整 worker 生命周期、scope hook、持续纠偏或 Orca supervised 已通过。
 
 脱敏证据与候选哈希写回 TASKS；私有账户响应、原始认证和日志不放进 Skill。
+
+## 2026-10-01 tmux 文件任务与证据边界
+
+后续按用户具名授权，在隔离工作树以 `zcode-cli` tmux fallback 完成有界 probe 文件任务。产物提交为 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`；PM 执行3项测试通过，diff 仅涉及 probe 任务文件。独立会话 SQLite 的13条 `model_usage` 均为 completed，实际 provider 为 `account:bigmodel-individual-coding-plan`、模型为 `GLM-5.3-Flash`，retry 为0。该次临时研究认证/配置副本已按精确路径删除，tmux 已关闭。独立产物验收为 `PENDING`，以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡更新为准。
+
+Orca 1.4.217 的两次 ZCode 尝试均报 `terminal_handle_stale`，未发送业务 prompt；tmux 任务不证明 Orca terminal-managed、supervised 或 settlement 成功。使用显式 prompt-only 降级，bootstrap 曾运行超出精确 shell allowlist 的 `ls`，不能声称机械 scope/hook 已验证。
+
+私人路由只读观测、预算规划与启动前身份复核用于这一次研究副本；本轮没有真实账号切换、耗卡或产品化自动认证/身份绑定。准备脚本在进程内计算共享文件 before/after 并断言相等，但未持久化本次共享原件 baseline；副本哈希不能替代原件 baseline，因此独立共享 before/after 重放是 `NOT_VERIFIED`。实际模型调用通道也不等于逐请求服务端积分扣分证据，精确计费仍 `NOT_VERIFIED`。不公开账户身份、原始日志、认证副本路径或凭证内容。
 
 ## 官方来源
 
