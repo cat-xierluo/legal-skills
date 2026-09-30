@@ -2,7 +2,7 @@
 name: night-autopilot
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.2.0"
+version: "0.2.1"
 license: MIT
 description: 无人值守自主推进模式（宿主无关、领域无关）——定时触发下，Agent 自动整理任务、查找下一项、完成或派发、监测 subagent/独立 worker、验收推进并记录交接。适用于代码项目（PR/测试验收）与法律项目（文书核对+律师终审门）等任何有任务源和可定义验收判据的领域。在用户说「我要去睡觉了/今晚继续推进/不间断运行/明早给我结果」并要求定时派发验收时使用。不要用于：单次后台任务（直接派发即可）、用户在场的普通编排（用 multi-agent-orchestration）、一次性定时提醒。
 ---
@@ -30,8 +30,8 @@ description: 无人值守自主推进模式（宿主无关、领域无关）—�
 | 宿主 | 定时驱动 | 状态 |
 |---|---|---|
 | ZCode | 内建定时任务（CronCreate/CronUpdate，prompt 注入本循环） | 首战实测 |
-| Claude Code | 无内建定时器为主——hooks / 无头 CLI（`claude -p`）+ 系统调度 | 待实测 |
-| Codex | 无头 CLI（`codex exec`）+ 系统调度 | 待实测 |
+| Claude Code | **原生 `/goal` 模式**（目标驱动自主迭代，progress/audit 双面）优先；次选 headless CLI（`claude -p --continue`）+ 系统调度 | 待实测（映射规范见本地 TASKS NA-D6） |
+| Codex | **goal mode**（迭代下一工作单元直至目标达成）优先；次选无头 CLI（`codex exec`）+ 系统调度 | 待实测 |
 | **OS 级兜底** | cron / launchd 调宿主 CLI 无头入口，参数喂循环 prompt 与锚点路径 | 任何宿主可用 |
 
 兜底路径要点：调度器只负责「到点拉起 Agent + 传参」，循环状态全部落锚点文件（进程无常驻假设）；每轮超时自限（如 15 分钟 kill），防调度堆积。
@@ -91,7 +91,7 @@ description: 无人值守自主推进模式（宿主无关、领域无关）—�
 
 ## 8. 边界与已知限制
 
-- 触发器宿主表中 Claude Code / Codex 两行为待实测——实测后更新本表（这是本 skill 唯一的宿主相关内容）。
+- 触发器宿主表中 Claude Code（`/goal`）/ Codex（goal mode）两行为待实测——实测后更新本表与映射规范（NA-D6）。原生模式只替代循环驱动，不替代锚点、验收判据与人工终审门。
 - 法律域机械可验层是框架不是清单——具体核对项按项目定制，且**永不把人工终审门自动化**。
 - 会话绑定的内建定时器随会话终止而停；跨会话持久调度用 OS 级兜底。
 - 额度共享（宿主 subagent 与主会话）；每轮时长自限，不做无界长任务。
