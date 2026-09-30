@@ -7,6 +7,10 @@
 - `spawn-worker-remote.sh spawn --prompt-file F`：spawn 后把任务书经 `orca terminal send --terminal <handle> --environment <配对名>` 投进节点终端——节点侧 spawn 本就对 TUI 投过通用 preamble（"详细指令将由 PM 后续投递"），本步补上真正的任务书，TUI 实时渲染、双机 Orca UI 可见真实推进。修正 v2.30.0-2.30.4 E2E 用 `claude -p` 内嵌任务的错误模式（`-p` 全程缓冲输出，终端看不到任何推进，且绕开 terminal-managed 的 checkpoint 契约）。
 - 细节：句柄从节点 METADATA `.session.orca.terminal_handle` 经 ssh 读取；需 personal config 节点段新增可选 `orca_environment` 字段（Orca 配对名），缺失时打印手动补投命令而非静默跳过；send 失败重试一次（10s，吸收 TUI 就绪抖动）；投递结果与任务书 sha256 记入 PM 软账 `prompt` 段。任务书要求：用 Edit 工具改文件（绕开 shell 追加白名单坑）、按 checkpoint 契约写 STATUS.json（建议基于 `templates/worker-prompt.md` 生成）。
 
+### 文档完善（2026-09-30 独立审查）
+
+- 在 TASKS.md 登记回执并发消费、远程 cleanup CLI 合同和跨主机路径三项复核任务。仅登记确认问题、证据与正反验收；未修复运行代码、未提升实现版本或声明完整运行通过。
+
 ## [2.30.4] - 2026-09-29
 
 ### 新增（用户授权产品化）
