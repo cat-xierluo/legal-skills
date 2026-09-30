@@ -1,7 +1,7 @@
 ---
 name: release-workflow
 description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"、"专家套件 zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
-version: "1.6.1"
+version: "1.6.2"
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -182,6 +182,8 @@ publish job 失败：
 5. 验证 release 页 assets 数量 = 单 Skill ZIP 数 + 套件 ZIP 数;Release Notes 里的 skill 总数取自产物目录但排除 `suite-*` 前缀,套件数用 `{suites}` 单独渲染
 
 > README 回写不依赖 `on: release` 事件——GITHUB_TOKEN 创建的 Release 受 GitHub 防递归机制限制,不会级联触发其他 workflow(实际从未生效过)。`update-readme.yml` 以 `workflow_run`(Release workflow 成功后)+ `workflow_dispatch` 作兜底,与 release.yml 调用同一份 `scripts/update-readme.py`,不存在第二份逻辑;workflow_run 触发时 checkout 显式 `ref: main`(默认会 checkout 到 tag SHA 的 detached HEAD,push 失败)。
+
+下载链接静态检查必须匹配完整资产路径，不能把 `.zip.bak`、`.zip/other` 或编码后缀当作所需 ZIP；合法查询串、fragment 和固定 tag 链接保持支持。该检查不联网确认资产存在。源码版本尚未发布时保留真实旧版下载并明确标注待发布；当前套件门禁仍要求源码当前版本的资产链接，未对齐前不得宣称整套构建通过。
 
 专家套件成员以 `expert-suites/<id>/skills/*` 的相对符号链接为唯一构建清单，不增加 `suite.yaml`。构建器先校验链接未逃逸、README 成员表一致、成员许可证齐全，再从指定 Git tree 导出真实 Skill 目录；Release ZIP 中不得保留符号链接。
 

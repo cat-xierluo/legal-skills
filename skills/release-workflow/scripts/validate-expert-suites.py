@@ -63,7 +63,11 @@ def _frontmatter_name(path: Path) -> str:
 
 
 def _has_release_asset(text: str, asset_name: str) -> bool:
-    return bool(re.search(rf"{RELEASE_BASE_RE}/{re.escape(asset_name)}", text))
+    return bool(re.search(
+        rf"{RELEASE_BASE_RE}/{re.escape(asset_name)}"
+        r"(?:[?#][^\s<>()\"']*)?(?=$|[\s<>()\"'])",
+        text,
+    ))
 
 
 def _tracked(repo_root: Path, path: Path) -> bool:
