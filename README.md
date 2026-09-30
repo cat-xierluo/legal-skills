@@ -773,15 +773,6 @@
 <td></td>
 </tr>
 <tr>
-<td><a href="skills/dsh-plugin-lint/"><strong>dsh-plugin-lint</strong></a></td>
-<td>工具·质量审查</td>
-<td style="word-break:break-word">DeepSeek Harness（DSH）插件的设计预检、质量审查与发布验收工具（版本感知）</td>
-<td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.0.0</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.21/dsh-plugin-lint-1.0.0.zip">下载</a></td>
-<td></td>
-</tr>
-<tr>
 <td><a href="skills/env-doctor/"><strong>env-doctor</strong></a></td>
 <td>工具·环境体检</td>
 <td style="word-break:break-word">本机开发环境与全局包的体检、账本与安装纪律：覆盖 npm/npx、nvm、pip/pipx、uv、brew、bun 等包管理器与 PATH、Python 解释器版图、LaunchAgents、cron、shell rc 漂移对照，支持 snapshot 漂移基线</td>
@@ -829,6 +820,7 @@
 | 技能                     | 版本   | 说明                                                                                                                                          |
 | ------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | mineru-ocr               | v1.2.0 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 MinerU API Token 才能正常使用 |
+| dsh-plugin-lint          | v1.0.0 | 已合并（2026-09-29，PR #206 收拢）。插件设计预检、质量审查与发布验收能力并入 [dsh-plugin-dev](skills/dsh-plugin-dev/) 统一覆盖，后者 description 已含"发布前机械审查与验收" |
 | paddle-ocr               | v1.1.1 | 已归档（2026-09-04）。OCR 能力由 [legal-ocr](skills/legal-ocr/) 统一覆盖，推荐使用 legal-ocr 作为唯一入口。原 skill 依然可用：需自行配置 PaddleOCR API 才能正常使用 |
 | multi-search             | v1.1.0 | 智能多主题深度研究工具，功能被[multi-agent-orchestration](skills/multi-agent-orchestration/) v1.16+ 内置的并行 Subagent 能力覆盖，停止独立维护 |
 | skill-architect          | v1.6.2 | 已重定位为[skill-lint](skills/skill-lint/) v2.0.0，创建能力不再作为本仓库独立入口维护                                                          |
