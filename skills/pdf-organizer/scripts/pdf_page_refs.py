@@ -32,21 +32,29 @@ def parse_pages_spec(spec: str, total_pages: int | None = None) -> list[int]:
             end = int(end_raw.strip())
             if start > end:
                 raise ValueError(f"Invalid descending page range: {part}")
+            # Validate endpoints before allocating a potentially enormous range.
+            if start < 1:
+                raise ValueError("Pages are 1-based and must be greater than 0.")
+            if total_pages is not None and end > total_pages:
+                raise ValueError(f"Page out of bounds: {end} > {total_pages}")
             pages.extend(range(start, end + 1))
         else:
-            pages.append(int(part))
+            page = int(part)
+            if page < 1:
+                raise ValueError("Pages are 1-based and must be greater than 0.")
+            if total_pages is not None and page > total_pages:
+                raise ValueError(f"Page out of bounds: {page} > {total_pages}")
+            pages.append(page)
     if not pages:
         raise ValueError("Page range is empty.")
-    if any(page < 1 for page in pages):
-        raise ValueError("Pages are 1-based and must be greater than 0.")
-    if total_pages is not None:
-        too_large = [page for page in pages if page > total_pages]
-        if too_large:
-            raise ValueError(f"Page out of bounds: {too_large[0]} > {total_pages}")
     return pages
 
 
 # ---------- 页数缓存 ----------
+
+class RefsCompileError(ValueError):
+    """段无法编译为页引用（字段缺失 / 文件不存在 / 页码越界）。"""
+
 
 class PageCountCache:
     """按路径缓存 PDF 页数，避免重复打开同一文件。"""
@@ -59,15 +67,14 @@ class PageCountCache:
         if key not in self._counts:
             from pypdf import PdfReader
 
-            self._counts[key] = len(PdfReader(str(path)).pages)
+            total = len(PdfReader(str(path)).pages)
+            if total == 0:
+                raise RefsCompileError(f"Input PDF has no pages: {path}")
+            self._counts[key] = total
         return self._counts[key]
 
 
 # ---------- 段编译：manifest segment → 有序页引用 ----------
-
-class RefsCompileError(ValueError):
-    """段无法编译为页引用（字段缺失 / 文件不存在 / 页码越界）。"""
-
 
 class SegmentRefs:
     """一个输出文书的页引用集合及其来源形态。"""
@@ -190,12 +197,11 @@ def compile_segment_refs(
 
 def refs_pages_label(refs: list[tuple[Path, int]]) -> str:
     """人读标签：单源 `P1-3,P5`，跨源 `甲.pdf P1-2 + 乙.pdf P3`。"""
-    by_file: dict[Path, list[int]] = {}
-    for path, page in refs:
-        by_file.setdefault(path, []).append(page)
-    single = len(by_file) == 1
+    groups = refs_to_compact(refs)
+    single = len({path for path, _ in refs}) == 1
     parts: list[str] = []
-    for path, pages in by_file.items():
+    for group in groups:
+        path, pages = Path(group["file"]), group["pages"]
         ranges: list[str] = []
         start = prev = pages[0]
         for page in pages[1:]:
@@ -211,11 +217,15 @@ def refs_pages_label(refs: list[tuple[Path, int]]) -> str:
 
 
 def refs_to_compact(refs: list[tuple[Path, int]]) -> list[dict[str, Any]]:
-    """归一化引用的 JSON 形态：[{file, pages}]（供 resolved/handoff 记录溯源）。"""
-    by_file: dict[Path, list[int]] = {}
+    """按连续来源分组为 [{file, pages}]，保持输出页顺序（同一文件可多次出现）。"""
+    groups: list[dict[str, Any]] = []
     for path, page in refs:
-        by_file.setdefault(path, []).append(page)
-    return [{"file": str(path), "pages": pages} for path, pages in by_file.items()]
+        file = str(path)
+        if groups and groups[-1]["file"] == file:
+            groups[-1]["pages"].append(page)
+        else:
+            groups.append({"file": file, "pages": [page]})
+    return groups
 
 
 # ---------- 覆盖审计 ----------
@@ -237,13 +247,11 @@ def audit_page_coverage(
     per_file: list[dict[str, Any]] = []
     files = sorted({path for path, _ in owners})
     for path in files:
-        try:
-            total = counts.get(path)
-        except Exception:  # noqa: BLE001
-            total = None
+        # Unknown page counts cannot prove complete coverage; let the caller fail closed.
+        total = counts.get(path)
         referenced = sorted({page for p, page in owners if p == path})
-        orphans = ([p for p in range(1, total + 1) if p not in set(referenced)]
-                   if total is not None else [])
+        referenced_set = set(referenced)
+        orphans = [p for p in range(1, total + 1) if p not in referenced_set]
         duplicated = sorted(
             page for p, page in owners if p == path and len(owners[(p, page)]) > 1
         )
