@@ -258,6 +258,7 @@ PYEOF
     python3 -B tests/smoke_layout_all.py --json-output "$EVIDENCE_DIR/layout-all-report.json"
 
   echo "[e2e] ========== 版式门禁最小正反例 =========="
+  run_stage private-lending-content.log python3 -B tests/test_private_lending_content.py
   run_stage layout-gate-cases.log python3 -B tests/test_layout_gate.py
 
   echo "[e2e] ========== 候选件失败关闭 =========="
@@ -287,3 +288,4 @@ PYEOF
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   main
 fi
+
