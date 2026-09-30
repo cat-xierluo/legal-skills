@@ -6,7 +6,7 @@
 
 | 产品 | backend | CLI | 配置与权限 | 验证状态 |
 |---|---|---|---|---|
-| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；默认 `build`，`edit/yolo` 须显式选择 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `PENDING`）；Orca `NOT_VERIFIED` |
+| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；默认 `build`，`edit/yolo` 须显式选择 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；Orca `NOT_VERIFIED` |
 | 独立 MiniMax Code | `minimax-code`（`mcode` 别名） | `mcode` TUI / `mcode exec` | 原生 Session/Run 模型；exec 默认 `smart` | help/argv 与真实 Orca terminal-managed 文件任务已独立验收；实际 minimax / MiniMax-M3.1-Flash-Preview；supervised/settlement `NOT_VERIFIED` |
 | CodeBuddy | `codebuddy` | `codebuddy` | 沿用既有 settings/hook 集成 | 本次保留；未重测 live 生命周期 |
 | 独立 Qoder CN | `qoder-cn`（`qoderclicn` 别名） | 独立安装的 `qoderclicn` | 原生 auto；不继承旧 QoderWork 模型表或 hook 保证 | 官方参数/隔离 argv 已核对；本机独立入口未安装、live `NOT_VERIFIED` |
@@ -56,9 +56,9 @@ MiniMax batch 使用 `exec --permission smart --output-format stream-json --inpu
 
 MiniMax Code 的实际 Orca terminal-managed 任务已独立 `ACCEPT`：产物提交 `5461cc089956c078dccb53f79f69de471f07aa68`，PM 执行3项测试通过，STATUS 为 done，postflight 通过，工作树干净、终端关闭。同一原生会话的15条 assistant 响应元数据与15条 `llm_response_identifiers`（HTTP200）都精确绑定本次任务，provider/model 为 `minimax / MiniMax-M3.1-Flash-Preview`；这是实际响应记录，不只依赖启动 `-m` 或模型自述。
 
-ZCode 的 tmux fallback 文件任务产物提交 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`：3项测试通过，仅修改 probe 任务文件；SQLite 记录13条 completed `model_usage`，全部为个人 Coding Plan provider / `GLM-5.3-Flash`，retry 为0。临时研究认证/配置副本已精确删除，tmux 已关闭；独立验收仍 `PENDING`。Orca 1.4.217 的两次尝试均遇到 `terminal_handle_stale`，业务 prompt 的 send 次数为0，不能把 tmux 成功写成 Orca 成功。
+ZCode 的 tmux fallback 文件任务产物提交 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`：3项测试通过，仅修改 probe 任务文件；SQLite 记录13条 completed `model_usage`，全部为个人 Coding Plan provider / `GLM-5.3-Flash`，retry 为0。临时研究认证/配置副本已精确删除，tmux 已关闭；独立验收为 `ACCEPT`（限tmux实际任务）。Orca 1.4.217 的两次尝试均遇到 `terminal_handle_stale`，业务 prompt 的 send 次数为0，不能把 tmux 成功写成 Orca 成功。
 
-这两项任务均采用显式 prompt-only 降级；ZCode bootstrap 曾执行超出精确 shell allowlist 的 `ls`，不证明机械 scope/hook。terminal-managed 没有 supervised Task/Dispatch，tmux 也不能替代 `worker_done → Delivery → settlement → ack`。本轮无真实账号切换、耗卡或默认自动身份绑定；共享配置/凭证一致性仅有准备进程内断言，未持久化该次共享 before baseline，独立 before/after 重放仍 `NOT_VERIFIED`。精确服务端扣费归属同样 `NOT_VERIFIED`。证据状态与后续独立验收以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡为准。
+这两项任务均采用显式 prompt-only 降级；ZCode bootstrap 曾执行超出精确 shell allowlist 的 `ls`，不证明机械 scope/hook。terminal-managed 没有 supervised Task/Dispatch，tmux 也不能替代 `worker_done → Delivery → settlement → ack`。本轮无真实账号切换、耗卡或默认自动身份绑定；共享配置/凭证一致性仅有准备进程内断言，未持久化该次共享 before baseline，独立 before/after 重放仍 `NOT_VERIFIED`。精确服务端扣费归属同样 `NOT_VERIFIED`。证据状态与独立验收以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡为准。
 
 ## 依赖与来源
 

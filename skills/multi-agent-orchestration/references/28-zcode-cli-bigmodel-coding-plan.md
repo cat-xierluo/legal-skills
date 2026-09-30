@@ -73,7 +73,7 @@ zcode tui --mode build --cwd /absolute/path/workspace
 
 ## 2026-10-01 tmux 文件任务与证据边界
 
-后续按用户具名授权，在隔离工作树以 `zcode-cli` tmux fallback 完成有界 probe 文件任务。产物提交为 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`；PM 执行3项测试通过，diff 仅涉及 probe 任务文件。独立会话 SQLite 的13条 `model_usage` 均为 completed，实际 provider 为 `account:bigmodel-individual-coding-plan`、模型为 `GLM-5.3-Flash`，retry 为0。该次临时研究认证/配置副本已按精确路径删除，tmux 已关闭。独立产物验收为 `PENDING`，以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡更新为准。
+后续按用户具名授权，在隔离工作树以 `zcode-cli` tmux fallback 完成有界 probe 文件任务。产物提交为 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`；PM 执行3项测试通过，diff 仅涉及 probe 任务文件。独立会话 SQLite 的13条 `model_usage` 均为 completed，实际 provider 为 `account:bigmodel-individual-coding-plan`、模型为 `GLM-5.3-Flash`，retry 为0。该次临时研究认证/配置副本已按精确路径删除，tmux 已关闭。独立产物验收为 `ACCEPT`（限tmux实际任务），以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡更新为准。
 
 Orca 1.4.217 的两次 ZCode 尝试均报 `terminal_handle_stale`，未发送业务 prompt；tmux 任务不证明 Orca terminal-managed、supervised 或 settlement 成功。使用显式 prompt-only 降级，bootstrap 曾运行超出精确 shell allowlist 的 `ls`，不能声称机械 scope/hook 已验证。
 
