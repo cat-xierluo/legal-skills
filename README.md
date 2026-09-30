@@ -40,8 +40,8 @@
 | 2026-09-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.5.0→v1.6.1 | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节与 `{suites}` 占位符；新增 README 覆盖校验（含 latest/download 链接形态修复与更名资产豁免）与套件链接对齐脚本；md2word/git-batch-commit 补齐 MIT LICENSE。v1.6.1：专家套件不再设独立许可证（DEC-009），删除套件级 LICENSE.txt 并同步校验/打包清单，成员许可不变。 |
 | 2026-09-30 | 更新 | [universal-media-downloader](skills/universal-media-downloader/) | v0.5.1→v0.5.2 | 修复无登录直连脚本在 Python 3.9 下函数定义即崩溃（PEP 604 `str\|None` 注解需 3.10+，macOS 系统 python3 为 3.9.6），改 `Optional[str]`；旧版实测复现、新版 3.9 实测通过，第一级 fallback 恢复可用。 |
 | 2026-09-30 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.4 | 复核反例与独立验收余项修复：声纹开关误标/认领闭环/摘要注入质量门/截图端到端证据；align_words 词级对齐（v2.3.2-2.3.4）：ASCII 组插值与非等长替换的字符时间逐词标 estimated，估计边界不再自称真实，下游按字删除前强制交审。 |
+| 2026-09-30 | 更新 | [court-sms](skills/court-sms/) | v1.5.1→v1.5.2 | **修复送达时间与上诉期限两处必然出错处**：原文把 zxfw 送达 API 的 `dt_cjsj` 当送达时间首选来源，实测该 API 根本不返回此字段，首选来源必然落空、判决/裁定类送达一律退回"送达时间待确认"导致上诉期限算不出；改为首选解析文书内可解析时间戳（缴费通知书「二维码生成时间」等），并在归档 JSON 增记 `sent_at_source`，明确裁定书落款日只是制作日不得冒充送达日。上诉期限公式更正为「送达日期次日 + 天数 - 1」并顺延休息日（法定期间起算日不计入）——原公式会给出已过期日期。已用一条真实送达（2026-09-30 苏0507民初5011号）实测：原公式算 10-09，正确顺延后为 10-12。另补下载期避免 python heredoc/`-c` 内联写法的审批弹窗提示。 |
 | 2026-09-24 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.28.0 | Claude Code auto Worker 的普通 Bash 改由原生 auto 和 settings 判断；编排 hook 保留安装、Orca 协议、tracked 删除及受保护 Git 操作门禁。 |
-| 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
 </details>
 
 ## 📋 项目概述
