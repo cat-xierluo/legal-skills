@@ -70,6 +70,19 @@ gh pr list --state all --limit 100 \
 git -C <worktree> status --short
 ```
 
+日常巡检可先跑只读盘点脚本生成三档候选表（脚本绝不删除；gh 缺失或未认证时自动降级为 merge-base+日期判定并标注「PR 状态未核对」，squash 分支会漏判为 NEEDS_CONFIRM——宁漏勿错）：
+
+```bash
+scripts/branch-audit.sh [base-ref] [remote]   # 默认 origin/main origin
+```
+
+对单个分支精查其 PR 命运（squash 判死的核心实操）：
+
+```bash
+gh pr list --state merged --head <branch> --json number,mergedAt   # 有 MERGED 记录 = 内容已进 base
+gh pr list --state open   --head <branch>                          # open = 活 PR，保留
+```
+
 ### 3.2 判定
 
 | 信号 | 处理 |
@@ -88,6 +101,17 @@ git push origin --delete <b1> <b2> <b3>
 git branch -d <local-branch>
 git fetch --prune
 ```
+
+### 3.3 批量删除的执行细节与已验证的坑
+
+候选表生成、用户确认、执行删除三者之间，仓库可能被并行会话持续改动（实战：盘点时 7 个 open PR，执行时已多出 4 个新分支、1 个 PR 刚被合并）：
+
+- **执行前重跑 open PR 防护**：删除前重新 `gh pr list --state open` 拉 head 名单与待删名单求交，命中即从名单剔除。
+- **squash 判死不受 merge-base 迷惑**：PR `MERGED` 即内容已进 base，merge-base 显示「未合并」是 squash 的预期，不是风险信号；但判定必须来自 PR 状态而非分支名或日期。
+- **本地复用保护**：远端分支若存在本地同名分支且 ahead（有未推送提交），从删除名单剔除——该分支可能已被新工作复用（实战：某分支 PR 合并后被主工作区改作新任务的开发线，含 7 个未推送提交）。
+- **批量删除遇缺 ref 会整批失败**：`git push origin --delete b1 b2 ...` 中任一 ref 已不存在（如 GitHub 侧已自动删除）会导致整批报错。先 `git fetch --prune`，再对「仍存在」的名单重推补删。
+- **代理环境**：全局 `http.proxy` 可能致 push 失败或挂起，用 `git -c http.proxy= -c https.proxy= push ...` 显式绕过。
+- **只删远端 ref 不影响本地**：远端删除不动本地分支与 Worktree 检出；本地分支删除前对每条重跑 `git merge-base --is-ancestor` 校验，通过才 `-D`。
 
 ## 4. 长期功能线关闭
 
