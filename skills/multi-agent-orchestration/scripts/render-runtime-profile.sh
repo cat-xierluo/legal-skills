@@ -27,6 +27,7 @@ NO_MCP=0
 WITH_MCP=0
 CLAUDE_BARE=0
 BIN=""
+CONFIG_DIR=""
 SKIP_PERMISSIONS=0
 NO_SKIP_PERMISSIONS=0
 ADD_DIRS=()
@@ -42,12 +43,15 @@ Backends:
   codex           Codex CLI
   opencode        Historical standalone renderer only; spawn-worker will reject it
   codebuddy       CodeBuddy CLI (platform额度, 继承桌面端登录态)
-  qoderwork-cn    QoderWork CN CLI (qoderclicn; 自动清除 SDK env 变量)
+  qoder-cn        Standalone Qoder CN CLI (qoderclicn)
+  qwenwork-cn     QwenWork CN bundled coding CLI (explicit --config-dir required)
+  minimax-code    MiniMax Code CLI (mcode; exec for batch)
+  zcode-cli       Standalone ZCode CLI (TUI or --prompt)
   zcode           ZCode CLI worker driver (long-lived app-server; no TUI shipped)
   custom          Historical standalone renderer only; spawn-worker will reject it
 
 Dispatch authority is limited to claude-code/claude-oauth, codex, codebuddy,
-qoderwork-cn and zcode. Rendering a historical backend never expands
+qoder-cn, qwenwork-cn, minimax-code, zcode-cli and zcode. Rendering a historical backend never expands
 spawn-worker policy.
 
 Options:
@@ -70,10 +74,10 @@ Options:
                            injects --strict-mcp-config --mcp-config '{"mcpServers":{}}'.
                            Skips the "new MCP servers found" approval prompt. Use for
                            workers that don't need MCP (e.g. pure text revision).
-                           Note: codebuddy/qoderwork-cn backends default to --no-mcp already
+                           Note: codebuddy/qoder-cn backends default to --no-mcp already
                            (avoid ERR_FR_TOO_MANY_REDIRECTS from connector-proxy MCP under
                            concurrency; DEC-106).
-  --with-mcp               Opt INTO MCP for codebuddy/qoderwork-cn (which default to --no-mcp).
+  --with-mcp               Opt INTO MCP for codebuddy/qoder-cn (which default to --no-mcp).
                            Use only when the worker genuinely needs MCP tools.
   --claude-bare            Opt INTO `claude --bare` for claude-code provider workers
                            (--settings/--provider-registry with provider env isolation only).
@@ -87,15 +91,16 @@ Options:
   --sandbox MODE           Codex sandbox. Default: danger-full-access
   --approval POLICY        Codex approval policy. Default: never
   --command CMD            Custom backend command
-  --bin PATH               Executable path for codebuddy / qoderwork-cn backends.
+  --bin PATH               Explicit CLI executable path.
+  --config-dir PATH        Dedicated config root for qwenwork-cn (required).
                            Defaults to the standard app-bundle binary location.
   --dangerously-skip-permissions
                            Add the skip-permissions flag for the worker.
-                           codebuddy: -y. qoderwork-cn: --dangerously-skip-permissions.
+                           codebuddy: -y. qoder-cn: --dangerously-skip-permissions.
                            警告: 已改为默认行为（交互式也加）。该 flag 仅保留兼容。用 --no-skip-permissions 关闭。
   --no-skip-permissions    Explicitly turn OFF the skip-permissions flag for the worker.
                            罕见场景:人要坐终端跟 codebuddy/qoder 交互调试。
-                           codebuddy: remove -y; qoderwork-cn: remove --dangerously-skip-permissions.
+                           codebuddy: remove -y; qoder-cn: remove --dangerously-skip-permissions.
                            Defaults: ON (skip permissions).
   --add-dir DIR            Add extra directories for codebuddy to access (repeatable).
                            Maps to codebuddy's --add-dir flag. Only used for codebuddy backend.
@@ -188,7 +193,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --with-mcp)
-      # codebuddy/qoderwork-cn 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）；
+      # codebuddy/qoder-cn 默认关 MCP（避 ERR_FR_TOO_MANY_REDIRECTS 启动重定向循环）；
       # 需要 MCP 的 worker 显式 opt-in。
       WITH_MCP=1
       shift
@@ -197,6 +202,10 @@ while [[ $# -gt 0 ]]; do
       # 显式 opt-in：claude-code provider worker 加 --bare（unhooked/degraded）。
       CLAUDE_BARE=1
       shift
+      ;;
+    --config-dir)
+      CONFIG_DIR="$2"
+      shift 2
       ;;
     --bin)
       BIN="$2"
@@ -272,6 +281,11 @@ resolve_settings_path SETTINGS
 resolve_settings_path PROVIDER_REGISTRY
 
 [ -n "$BACKEND" ] || { usage; exit 64; }
+
+if [ -n "$CONFIG_DIR" ] && [ "$BACKEND" != "qwenwork-cn" ]; then
+  echo "ERROR: --config-dir is only supported for qwenwork-cn" >&2
+  exit 64
+fi
 
 case "$MODE" in
   interactive|batch) ;;
@@ -531,35 +545,71 @@ case "$BACKEND" in
     PROVIDER_ENV_ISOLATION="codebuddy-inherited-env"
     [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-codebuddy}"
     ;;
-  qoderwork-cn)
-    # QoderWork CN CLI(qoderclicn)。必须先清 SDK env 变量,否则走 SDK 模式报错(ref 07 §5.1)。
-    # 二进制路径含空格,靠 quote_words 的 %q 保护。
-    if [ -z "$PERMISSION_MODE" ]; then
-      PERMISSION_MODE="auto"
+  qoder-cn|qwenwork-cn)
+    [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="auto"
+    case "$PERMISSION_MODE" in default|accept_edits|bypass_permissions|dont_ask|auto) ;;
+      *) echo "ERROR: unsupported Qoder CN permission mode: $PERMISSION_MODE" >&2; exit 64 ;; esac
+    if [ "$BACKEND" = "qwenwork-cn" ]; then
+      [ -n "$CONFIG_DIR" ] && [ -d "$CONFIG_DIR" ] || {
+        echo "ERROR: qwenwork-cn requires an existing dedicated --config-dir (no inferred Qoder/QwenWork login sharing)" >&2; exit 64;
+      }
+      CONFIG_DIR=$(cd "$CONFIG_DIR" && pwd -P)
+      [ -n "$BIN" ] || BIN="/Applications/QwenWorkCN.app/Contents/Resources/bin/qoderclicn"
+    else
+      [ -n "$BIN" ] || BIN="qoderclicn"
+      [ -z "$CONFIG_DIR" ] || { echo "ERROR: --config-dir is only supported for qwenwork-cn" >&2; exit 64; }
     fi
-    [ -n "$BIN" ] || BIN="/Applications/QoderWork CN.app/Contents/Resources/bin/qoderclicn"
     qr_parts=(env -u QODER_AGENT_SDK_ENTRYPOINT -u QODER_AGENT_SDK_VERSION -u QODER_WORK_INTEGRATION_MODE -u QODERWORK_SOURCE_CHAT_ID -u QODERWORK_AWARENESS_SINK -u QODERWORK_AWARENESS_SINK_MEMORY "$BIN")
+    [ -n "$CONFIG_DIR" ] && qr_parts+=(--config-dir "$CONFIG_DIR")
     [ -n "$COMMAND_MODEL" ] && qr_parts+=(-m "$COMMAND_MODEL")
     qr_parts+=(--permission-mode "$PERMISSION_MODE")
-    [ "$NO_MCP" -eq 1 ] && qr_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
-    # 默认加 --dangerously-skip-permissions（spawn-worker tmux worker 本质 headless）。
-    # 仅 --no-skip-permissions opt-out。
-    if [ "$NO_SKIP_PERMISSIONS" -ne 1 ]; then
-      qr_parts+=(--dangerously-skip-permissions)
-    fi
+    [ "$WITH_MCP" -eq 1 ] || qr_parts+=(--strict-mcp-config --mcp-config '{"mcpServers":{}}')
     if [ "$MODE" = "batch" ]; then
-      qr_parts+=(-p)
+      qr_parts+=(-p --output-format stream-json)
       COMMAND="$(quote_words "${qr_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
       COMMAND=$(shell_wrap "$COMMAND")
     else
-      # 交互模式(detached tmux)需初始 prompt,否则 qoder 纯 detached REPL 检测
-      # "无初始输入"立即 exit 42(2026-07-05 实测根因)。-i(prompt-interactive)给
-      # 占位 prompt 让 qoder 启动 REPL,PM 后续 tmux send-keys 投递真任务。
-      qr_parts+=(-i "ready")
       COMMAND=$(quote_words "${qr_parts[@]}")
     fi
     PROVIDER_ENV_ISOLATION="qoder-sdk-env-cleared"
-    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-qoderwork-cn}"
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-$BACKEND}"
+    ;;
+  minimax-code)
+    [ -n "$BIN" ] || BIN="mcode"
+    mm_parts=("$BIN")
+    if [ "$MODE" = "batch" ]; then
+      [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="smart"
+      case "$PERMISSION_MODE" in smart|full|off) ;;
+        *) echo "ERROR: MiniMax exec --permission accepts smart/full/off" >&2; exit 64 ;; esac
+      mm_parts+=(exec --permission "$PERMISSION_MODE" --output-format stream-json)
+      [ -n "$COMMAND_MODEL" ] && mm_parts+=(--model "$COMMAND_MODEL")
+      mm_parts+=(--input -)
+      COMMAND=$(append_redirection "$(quote_words "${mm_parts[@]}")" "$PROMPT_FILE")
+      COMMAND=$(shell_wrap "$COMMAND")
+    else
+      [ -z "$PERMISSION_MODE" ] || { echo "ERROR: MiniMax TUI has no --permission flag; use batch or its native permission UI" >&2; exit 64; }
+      [ -n "$COMMAND_MODEL" ] && mm_parts+=(-m "$COMMAND_MODEL")
+      COMMAND=$(quote_words "${mm_parts[@]}")
+    fi
+    PROVIDER_ENV_ISOLATION="minimax-native-session-config"
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-minimax-code}"
+    ;;
+  zcode-cli)
+    [ -n "$BIN" ] || BIN="zcode"
+    [ -z "$COMMAND_MODEL" ] || { echo "ERROR: standalone ZCode CLI has no --model startup flag; select the native session model explicitly" >&2; exit 64; }
+    [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="build"
+    case "$PERMISSION_MODE" in build|edit|plan|yolo) ;;
+      *) echo "ERROR: ZCode CLI --mode accepts build/edit/plan/yolo" >&2; exit 64 ;; esac
+    zc_parts=("$BIN" --mode "$PERMISSION_MODE")
+    if [ "$MODE" = "batch" ]; then
+      zc_parts+=(--prompt)
+      COMMAND="$(quote_words "${zc_parts[@]}") \"\$(cat $(printf '%q' "$PROMPT_FILE"))\""
+      COMMAND=$(shell_wrap "$COMMAND")
+    else
+      COMMAND=$(quote_words "${zc_parts[@]}")
+    fi
+    PROVIDER_ENV_ISOLATION="zcode-native-session-config"
+    [ -z "$PROFILE_LABEL" ] && PROFILE_LABEL="${RUNTIME_PROFILE:-zcode-cli}"
     ;;
   custom)
     [ -n "$CUSTOM_COMMAND" ] || { echo "ERROR: --command is required for custom backend" >&2; exit 64; }
