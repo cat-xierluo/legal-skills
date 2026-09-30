@@ -40,10 +40,14 @@ deny() {
   fi
 }
 
-for backend in claude-code codex codebuddy qoderwork-cn zcode; do
-  interactive=$(bash "$RENDERER" --backend "$backend" --mode interactive --output command)
+mkdir -p "$TMP_ROOT/bin"
+ln -s /bin/true "$TMP_ROOT/bin/qoderclicn"
+for backend in claude-code codex codebuddy qoder-cn zcode zcode-cli minimax-code; do
+  bin_args=()
+  [ "$backend" != qoder-cn ] || bin_args=(--bin "$TMP_ROOT/bin/qoderclicn")
+  interactive=$(bash "$RENDERER" --backend "$backend" --mode interactive "${bin_args[@]}" --output command)
   batch=$(bash "$RENDERER" --backend "$backend" --mode batch \
-    --prompt-file "$PROMPT_FILE" --output command)
+    --prompt-file "$PROMPT_FILE" "${bin_args[@]}" --output command)
   allow "$backend" "$interactive" "$backend interactive renderer output"
   allow "$backend" "$batch" "$backend batch renderer output"
 done

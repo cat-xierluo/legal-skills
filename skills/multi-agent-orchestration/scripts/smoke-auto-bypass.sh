@@ -127,9 +127,9 @@ fi
 
 # 9. resolve_backend_defaults 包含 claude-code 家族全关分支（v2.13 收口对齐）：
 #    v1.18.4 建立时分支为 claude-code 单 backend；v1.20.3 Task-026（codebuddy/
-#    qoderwork-cn/qoderclicn）与 zcode 转正（Task-077）后同一 case 分支扩为
+#    qoder-cn/qoderclicn）与 zcode 转正（Task-077）后同一 case 分支扩为
 #    claude-code 家族多 backend 共支（TRUST_AUTO/PERMISSION_AUTO_BG 与 zcode 共支，
-#    PERMISSION_AUTO 另与 codebuddy/qoderwork-cn/qoderclicn 共支）。旧正则钉死
+#    PERMISSION_AUTO 另与 codebuddy/qoder-cn/qoderclicn 共支）。旧正则钉死
 #    "claude_code 紧跟右括号"故必失败。现按变量逐一匹配 claude-code 家族分支 =0
 #    （[^)]* 容忍分支内 backend 扩容），且比旧 any-one-of-three 交替更强：三个
 #    变量必须各自存在 =0 分支才算全关。生产策略不变。

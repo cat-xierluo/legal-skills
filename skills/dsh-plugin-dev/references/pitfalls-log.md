@@ -23,7 +23,24 @@
 | 测试样本行为与宿主不符 | 样本数据形态 | 样本必须贴实物形态（数字 turnId 而非字符串） | PR #11 |
 | 并行分支各自测试数与合并后对不上 | 计数口径 | 同基线并行分支各只见自己的新增（83+11/+15/+18 三分支），合并后 main 为并集（127）——验收数字以**合并后 main 实测**为准 | PR #48 验收实证 |
 | 多插件共载时自检链误报 FAIL（单插件时全绿） | 自检断言是否全局独占 | 自检断言了「整个会话/全局恰 1 条记录」——共载时看到别的插件 selftest 记录。**自检只断言自身命名空间（按 businessId/key 过滤），别对全局独占做假设** | PR #37（四插件 snapshotLinks 同修） |
-| mock storageDomain 测试全绿、真实宿主装载即拒 | mock 假体是否复刻后端域名校验 | 域名**仅 `[a-z][a-z0-9_]*`（下划线，连字符非法）**——真实后端 kv.open 强校验（backend.ts UNIT_NAME_RE），mock 假体不校验就漏检。mock 的 open() 应加同款正则校验；命名用下划线形态 | PR #42 发现（star_board_list 裁决）、PR #43 修复 session_pilot_board/suit_agent_read |
+| mock ctx（普通对象）全绿、真实宿主装载即抛 `cannot get property "X" without inject` | 可选服务的读取方式 | 真实 cordis ctx 是代理——**未声明 inject 的属性读取直接抛**，mock 普通对象不重现该纪律。可选缝必须 `ctx.get('X')`（mock 假体无 get 时回退属性读，两种 ctx 形态均可驱动）；已 grep 全插件排查同类 | PR #55→#58（headless lab V7 实测抓出） |
+| 功能在 mock 全绿、真后端上静默失效（如缓存永不落盘） | 写路径是否过真 schema + 有无 best-effort 吞错 | 域写边界的 `valueSchema.parse` 会拒绝缺字段的记录，而「缓存失败不阻断」的 try/catch 把拒绝**静默吞掉**——两者组合即静默数据丢失。编排器写路径必须有**过真实域校验**的回归用例（不能只用不校验的内存 mock） | PR #62 审查 B1（cachedAt 缺失实测） |
+| 门 A/B 串行流程里断言了 B 的结果，B 实际没被执行 | 前一道门是否先行短路 | 门序断言必须确认**前道门没有先行短路**：如 README 翻译的 already_zh 门（首尾中文检测）在授权门之前——fixture 文案混了中文就会在 already_zh 早退，授权门断言全假。fixture 与门序逐段对齐后再断言 | PR #66（driver 首版实测） |
+| 「零调用/零网络」证据来自运行时计数器，但复核发现计数恒 0 | 计数器是否真注入被测路径 | 构造了包装却没注入任何服务面的计数器是**死计数器**——恒 0 且不可证伪，比没证据更危险。零调用优先用**代码路径论证**（门在调用点之前 return + dump 佐证），计数器必须真注入 | PR #66 审查 B1 |
+| 证据文档说「X 落盘已证」，实际只生成了文件没有写入记录 | 域文件生成 ≠ 记录写入 | storageDomain open 即生成域文件（装载即 open），记录写入是另一回事——门在写入路径之前早退时文件照样在。表述区分「文件级（open）」与「记录级（put/命中读）」 | PR #66 审查 B3 |
+| 证据文档说「真引擎不可达时 fail-closed」，实际没发任何网络连接 | 传输形态叙述先核实 | 注入缝缺失 → 离线桩 → status 0，**根本没有 socket 尝试**——「真引擎 X 未起」是虚构叙述。写证据前先确认传输形态（transportKind 字段/装配日志） | PR #66 审查 B2 |
+| 多轮实验后早期成功轮的产物丢失，引用字段在库里不存在 | dump 是否同名覆盖 | 同路径多轮 dump 会覆盖——先成功的实验轮产物被后失败轮覆盖，引用即断裂。**每轮异名落盘**；driver 与 dump 同 commit 互证（栈帧行号锚定） | PR #58 审查 B1（run1 产物被覆盖） |
+| 投影/记录里的引擎地址与实际转发目标不一致 | 静态 baseUrl vs 动态 currentTarget | 支持动态改址的代理里，`proxy.baseUrl` 是构造期静态值，生效值在 `currentTarget()`——投影/日志落静态值会在 settings 改址后与转发目标错位。记录一律取动态取值器 | PR #66 回归轮暴露、#67 修复 |
+| mock 假体逐 open 隔离记录、真后端同域共享 | 同名域多次 open 的语义 | 真实 storageDomain 同名域多次 open 看到同一存储；mock 假体 per-open 隔离会让「跨代水合/回放」用例测出假象。假体按域名共享记录 | PR #57（star-unstar 装载即回放用例） | 域名**仅 `[a-z][a-z0-9_]*`（下划线，连字符非法）**——真实后端 kv.open 强校验（backend.ts UNIT_NAME_RE），mock 假体不校验就漏检。mock 的 open() 应加同款正则校验；命名用下划线形态 | PR #42 发现（star_board_list 裁决）、PR #43 修复 session_pilot_board/suit_agent_read |
+
+## 宿主验证与证据纪律（headless lab 波实证，PR #58/#66）
+
+| 症状 | 先查 | 纪律 | 出处 |
+|---|---|---|---|
+| 证据文档引用的字段在提交产物里不存在 | 每条声称是否有产物支撑 | 证据文档的每条「已证」必须能在随仓产物（dump/listing）中逐字段对上；引用了不存在的产物 = 证据链断裂，审查按 REQUEST_CHANGES 打回 | PR #58 一轮审查 |
+| 提交的 driver 产不出提交的 dump | 两者是否同源 | driver 与 dump 必须**同一 commit 互证**（错误栈的文件:行号可反向锚定到入库代码）；叙事时序必须从产物反推，不凭记忆写 | PR #58/二轮审查 |
+| headless 组合下 settings 编辑类写路径全抛 `HMR is disposed` | 组合是否含 hmr 条目及其状态 | headless（RunAsNode CLI）组合下经 `configEditor.edit → hmr.runExclusive` 的写路径可能抛宿主侧异常（0.1.7-rc.2 观察，含离线 dump-config 与运行时条目状态矛盾的疑点）——**写路径宿主级验证在 headless 不做，归 GUI 组合窗口**；triage 材料先停盲改 | PR #58（triage-p3-hmr.md） |
+| 补证复跑在 enable 段抛 `cannot create effect on inactive context` | fiber 状态与重载时序 | loader 条目 disable→enable 的重载链在 headless 下有时序脆弱性（run1 成功 run5 失败同组合）——重载 enable 半的宿主级结论须谨慎，失败轮如实降级 NOT_VERIFIED 不冒充 | PR #58 二轮 |
 
 ## 隔离实验与进程
 

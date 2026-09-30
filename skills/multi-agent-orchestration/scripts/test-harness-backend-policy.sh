@@ -17,10 +17,10 @@ cat > "$DEFAULT_POLICY" <<'JSON'
   "schema": "multi-agent-orchestration.harness-backend-policy.v1",
   "policy": "deny_by_default",
   "hosts": {
-    "claude-code": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
-    "codex": ["claude-code", "codex", "codebuddy", "qoderwork-cn"],
+    "claude-code": ["claude-code", "codex", "codebuddy", "qoder-cn"],
+    "codex": ["claude-code", "codex", "codebuddy", "qoder-cn"],
     "codebuddy": ["codebuddy"],
-    "qoderwork-cn": ["qoderwork-cn"],
+    "qoder-cn": ["qoder-cn"],
     "zcode": []
   }
 }
@@ -59,16 +59,16 @@ expect_deny() {
 # 用户明确编辑 harness-backend-policy.json 把 zcode 加回对应 host（可审计的
 # git diff）；canonical 映射保留，策略文件是唯一开关。
 for pm in claude-code codex; do
-  for worker in claude-code codex codebuddy qoderwork-cn; do
+  for worker in claude-code codex codebuddy qoder-cn; do
     expect_allow "$pm" "$worker"
   done
   expect_deny "$pm" zcode
 done
 expect_allow codebuddy codebuddy
-expect_allow qoderwork-cn qoderwork-cn
+expect_allow qoder-cn qoder-cn
 
-for worker in claude-code codex qoderwork-cn zcode; do expect_deny codebuddy "$worker"; done
-for worker in claude-code codex codebuddy zcode; do expect_deny qoderwork-cn "$worker"; done
+for worker in claude-code codex qoder-cn zcode; do expect_deny codebuddy "$worker"; done
+for worker in claude-code codex codebuddy zcode; do expect_deny qoder-cn "$worker"; done
 expect_deny unknown codebuddy
 expect_deny codex custom
 
@@ -79,7 +79,7 @@ HARNESS_BACKEND_POLICY_FILE="$AUTHORIZED_POLICY"
 expect_allow codex zcode
 expect_deny claude-code zcode
 expect_deny codebuddy zcode
-expect_deny qoderwork-cn zcode
+expect_deny qoder-cn zcode
 jq '.hosts["claude-code"] += ["zcode"]' "$AUTHORIZED_POLICY" > "$TMP_ROOT/both-authorized-policy.json"
 HARNESS_BACKEND_POLICY_FILE="$TMP_ROOT/both-authorized-policy.json"
 expect_allow claude-code zcode
@@ -131,7 +131,7 @@ if [ -n "${HARNESS_TEST_CHAIN:-}" ] && [ -n "${HARNESS_TEST_ROOT_PID:-}" ]; then
         claude-code) printf '/opt/claude\n' ;;
         codex) printf '/opt/codex\n' ;;
         codebuddy) printf '/opt/codebuddy\n' ;;
-        qoderwork-cn) printf '/opt/qoderclicn\n' ;;
+        qoder-cn) printf '/opt/qoderclicn\n' ;;
         zcode) printf '/opt/zcode-cli\n' ;;
         hermes) printf '/Applications/Hermes.app/Contents/MacOS/hermes\n' ;;
         *) printf '/bin/sh\n' ;;
@@ -171,12 +171,12 @@ else
   printf 'FAIL ancestry deny: codebuddy escalation exit=%s\n' "$weak_rc" >&2
   fail=$((fail + 1))
 fi
-if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=qoderwork-cn bash "$1" --project "$2" --pm-harness qoderwork-cn --worker-backend qoderwork-cn; rc=$?; :; exit "$rc"' _ \
+if ORCA_CLI_COMMAND=/usr/bin/false "$TMP_ROOT/qoderclicn" -c 'HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=qoder-cn bash "$1" --project "$2" --pm-harness qoder-cn --worker-backend qoder-cn; rc=$?; :; exit "$rc"' _ \
   "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" >/dev/null 2>&1; then
-  printf 'PASS ancestry allow: qoderwork-cn -> qoderwork-cn\n'
+  printf 'PASS ancestry allow: qoder-cn -> qoder-cn\n'
   pass=$((pass + 1))
 else
-  printf 'FAIL ancestry allow: qoderwork-cn -> qoderwork-cn\n' >&2
+  printf 'FAIL ancestry allow: qoder-cn -> qoder-cn\n' >&2
   fail=$((fail + 1))
 fi
 
@@ -200,7 +200,7 @@ if strong_nested_out=$(ORCA_CLI_COMMAND=/usr/bin/false PATH="$TMP_ROOT:$PATH" "$
   codex -c '\''HARNESS_TEST_ROOT_PID="$$" HARNESS_TEST_CHAIN=codex,claude-code bash "$1" --project "$2" --pm-harness codex --worker-backend codebuddy; rc=$?; :; exit "$rc"'\'' _ "$1" "$2"
   rc=$?; :; exit "$rc"
 ' _ "$SCRIPT_DIR/harness-backend-policy.sh" "$TMP_ROOT/non-orca-project" 2>&1) \
-  && printf '%s' "$strong_nested_out" | grep -q 'allowed=claude-code codex codebuddy qoderwork-cn'; then
+  && printf '%s' "$strong_nested_out" | grep -q 'allowed=claude-code codex codebuddy qoder-cn'; then
   printf 'PASS ancestry intersection: strong nested chain keeps the four-backend set\n'
   pass=$((pass + 1))
 else

@@ -6,20 +6,24 @@
       "claude-code",
       "codex",
       "codebuddy",
-      "qoderwork-cn"
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ],
     "codex": [
       "claude-code",
       "codex",
       "codebuddy",
-      "qoderwork-cn",
-      "zcode"
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ],
     "codebuddy": [
       "codebuddy"
-    ],
-    "qoderwork-cn": [
-      "qoderwork-cn"
     ],
     "zcode": [
       "claude-code",
@@ -29,8 +33,11 @@
       "claude-code",
       "codex",
       "codebuddy",
-      "qoderwork-cn",
-      "zcode"
+      "qoder-cn",
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "qwenwork-cn"
     ]
   },
   "remote_dispatch": {
@@ -42,7 +49,27 @@
   },
   "policy_notes": [
     "2026-09-05 zcode PM enabled by explicit user authorization (badminton-lab takeover session): dispatch independent workers, several in parallel.",
-    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir). 2026-09-15 widened to all worker backends (claude-code/codex/codebuddy/qoderwork-cn/zcode) by explicit user authorization: hermes as PM host may dispatch every supported worker backend.",
-    "2026-09-29 remote_dispatch enabled by explicit user authorization (DEC-2026-09-29-REMOTE-NODE-DISPATCH): a PM verified on its own machine may dispatch workers to this node over ssh with a one-time receipt; the receipt carries the PM harness + chain into the unchanged least-privilege intersection check."
-  ]
+    "2026-09-15 hermes PM enabled by explicit user authorization: Hermes agent acts as PM and dispatches local worker CLIs in isolated worktrees, supervising via Orca terminal read. Host signatures are path-based (Hermes.app bundle / .hermes install dir). 2026-09-15 widened to all worker backends (claude-code/codex/codebuddy/qoder-cn/zcode) by explicit user authorization: hermes as PM host may dispatch every supported worker backend.",
+    "2026-09-29 remote_dispatch enabled by explicit user authorization (DEC-2026-09-29-REMOTE-NODE-DISPATCH): a PM verified on its own machine may dispatch workers to this node over ssh with a one-time receipt; the receipt carries the PM harness + chain into the unchanged least-privilege intersection check.",
+    "2026-09-30 explicit user authorization: support standalone ZCode CLI and MiniMax Code CLI as primary optional workers, retain CodeBuddy, remove QoderWork, add distinct Qoder CN CLI and QwenWork CN bundled coding entry. Optional support does not authorize routine dispatch or new PM hosts; existing host privileges are preserved."
+  ],
+  "dispatch_selection": {
+    "default_backends": [
+      "claude-code",
+      "codex"
+    ],
+    "explicit_only_backends": [
+      "zcode",
+      "zcode-cli",
+      "minimax-code",
+      "codebuddy",
+      "qoder-cn",
+      "qwenwork-cn"
+    ],
+    "priority_optional_backends": [
+      "zcode-cli",
+      "minimax-code"
+    ],
+    "note": "2026-09-30 用户要求只增加可选支持，平常不派发这些 worker；仅用户明确指定时选择，不因余量或宿主同名自动切换。此段是 PM 选路合同，hosts 仍是机械权限权威。"
+  }
 }
