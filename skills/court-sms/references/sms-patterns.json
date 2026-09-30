@@ -19,11 +19,10 @@
           "document_name": "data[].c_wsmc",
           "document_id": "data[].c_wsbh",
           "download_url": "data[].wjlj",
-          "file_format": "data[].c_wjgs",
-          "create_time": "data[].dt_cjsj"
+          "file_format": "data[].c_wjgs"
         },
         "download_method": "curl -sL -o \"{filename}\" \"{wjlj}\"",
-        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。dt_cjsj 为送达记录创建时间，可作为 sent_at 使用。"
+        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。实测该响应不含任何送达时间字段（曾记录的 dt_cjsj 并不存在），送达时间须从文书内容另寻来源，见 sent_time_extraction。"
       }
     },
     {
@@ -154,20 +153,29 @@
     "参加诉讼通知书": "参加诉讼通知书"
   },
   "sent_time_extraction": {
-    "_doc": "送达时间提取规则，用于计算上诉期限等关键日期",
-    "api_field": "dt_cjsj",
-    "api_field_description": "送达平台 API 响应中的创建时间字段，即送达记录创建时间（北京时间）",
+    "_doc": "送达时间提取规则，用于计算上诉期限等关键日期。zxfw 送达 API 响应经实测不含送达时间字段，不要指望从 API 响应取到。",
+    "api_field": null,
+    "api_field_description": "不适用：实测 getWsListBySdbhNew 响应字段全集为 code/msg/data/exp/expId/totalRows/success 与 c_sdbh/c_stbh/wjlj/c_wjgs/c_wsbh/c_wsmc/c_fybh/c_fymc，无任何送达时间字段",
+    "preferred_source": "送达文书内可解析的时间戳（首选）",
     "patterns": [
+      {
+        "type": "document_qrcode_time",
+        "description": "人民法院新闻传媒总社缴费通知书内的「二维码生成时间」，当天即签发日，可直接作为送达时间使用（实测：2026-09-30 10:19:19）",
+        "regex": "二维码生成时间[：:]?\\s*(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}(:\\d{2})?)",
+        "format": "yyyy-MM-dd HH:mm:ss"
+      },
       {
         "type": "sms_gateway",
         "description": "短信网关时间（部分手机短信显示）",
         "regex": "(?:发送|时间)[：:]?\\s*(\\d{4}[-/年]\\d{1,2}[-/月]\\d{1,2}[日]?\\s+\\d{1,2}[时:]?\\d{0,2})",
         "format": "yyyy-MM-dd HH:mm"
       }
-    ]
+    ],
+    "pitfall": "裁定书/判决书落款日只是文书制作日，不等于送达日，不得冒充 sent_at；取不到时展示「送达时间待确认」，并在归档 JSON 的 document.sent_at_source 写明实际来源"
   },
   "appeal_calculation": {
     "_doc": "上诉期限计算规则，不同案件类型上诉期限不同",
+    "_counting_rule": "上诉截止日期 = 送达日期 + deadline_days，等价于「送达日期次日 + deadline_days - 1」（法定期间起算日不计入，两种写法结果相同）。唯一易错点是顺延：届满日遇休息日或法定休假日，顺延至其后第一个工作日；调休上班日（周末但经国务院办公厅通知规定为工作日）属工作日，不顺延。举例：2026-09-30 送达的民事裁定（10 日），届满 10-10（周六），但 10-10 依 2026 年国务院节假日安排为调休上班日，依法不顺延，届满日即 10-10。顺延必须依据当年国务院办公厅节假日安排通知的法定休假日与调休上班日两个清单，不能只用工作日/周末粗算——2026 年国庆 10-01 至 10-07 为法定休假日，同期 10-10（周六）为调休上班日。送达日期取 sent_time_extraction 的可追溯来源，不用文书落款日。",
     "first_instance_civil_judgment": {
       "deadline_days": 15,
       "description": "民事一审判决：送达后15天",
