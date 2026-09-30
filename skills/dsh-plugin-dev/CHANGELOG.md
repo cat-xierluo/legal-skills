@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-09-30
+
+- 新增 `references/porting-semantics.md`（移植语义纪律）：flopi-candidate 源码定位规律、行号锚定、平移四原则（语义等价/偏离只许更严/不虚构/读不透保守）、外部 IO 注入缝纪律（三级装配 + 缺省 fail-closed + 凭据零接触）、mock 贴宿主契约与并发分支测试计数。实证锚 dsh-plugins PR #42/#45/#46/#49/#51。
+- SKILL.md 开发路径第 1 步挂接（起手切片 → 领域平移）；pitfalls-log 新增「并行分支测试计数」条目。
+
+
 ## [0.4.1] - 2026-09-30
 
 - 修条目 #5 域名正则错误：真实约束是 `^[a-z][a-z0-9_]*$`（仅下划线；backend.ts UNIT_NAME_RE 强校验）——此前误写为允许连字符。pitfalls-log 新增「mock storageDomain 全绿、宿主装载即拒」条目（mock 假体须复刻域名校验）。出处 dsh-plugins PR #42 发现/PR #43 修复。
