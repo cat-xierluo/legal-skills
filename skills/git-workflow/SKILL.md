@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.7"
+  version: "1.8.8"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -896,6 +896,25 @@ feat(skill-name): 添加批量导出
 一次修改涉及多个独立 Skill 或模块时，应拆成多个 commit。每个 commit 只表达一个目的。
 
 ## 10. 多 worktree 并行与 main worktree 占用
+
+### 共享检出的分支身份核验（提交前必查，2026-09-30 实录新增）
+
+共享主检出可能被并行会话切到**它自己的 feature 分支**；此时 `git status` 干净、`git log` 正常——一切看起来可提交，但提交会落在别人的分支上随其 PR 走。规则：
+
+```bash
+# 在任何共享检出直接 commit 之前，必查当前分支身份
+git branch --show-current
+# 辅助警觉信号：reflog 顶部出现 checkout: moving 记录 = 有会话/操作刚切过分支
+git reflog -3
+```
+
+**status/log 干净 ≠ 在你以为的分支上。**
+
+误落补救（2026-09-30 private-skills 实录：迁移提交落在并行会话的 `feat/lawyer-video-cut-subtitle-pipeline` 上）：
+
+1. **不要** `git branch -f` / `update-ref` 强移并行会话正在检出的分支——会污染它的 status 与工作树。
+2. 开独立 worktree 从 `origin/main` 重做正确提交并推送（内容为准）；原误落提交保留在原分支，其提交信息注明「整理时应丢弃，以 main 为准」。
+3. 并行会话的分支重整（rebase/整理）时自然丢弃该重复提交。
 
 ### 场景
 
