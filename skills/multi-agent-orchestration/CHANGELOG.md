@@ -7,7 +7,7 @@
 
 ### 验证
 - MiniMax Code 的真实 Orca terminal-managed 文件任务已独立验收，PM 的3项测试通过；15条原生响应记录确认实际 minimax / MiniMax-M3.1-Flash-Preview，任务结束后终端关闭。
-- ZCode tmux fallback 的个人 Coding Plan / GLM-5.3-Flash 文件任务已有13条 completed 记录、0 retry和3项测试通过，独立产物验收 `PENDING`；临时研究副本删除、tmux关闭。Orca 两次 terminal_handle_stale 且0业务send，Orca/supervised/settlement及机械scope/hook仍 `NOT_VERIFIED`；共享原件哈希仅进程内断言，独立before/after重放未验证。
+- ZCode tmux fallback 的个人 Coding Plan / GLM-5.3-Flash 文件任务已有13条 completed 记录、0 retry和3项测试通过，独立产物验收 `ACCEPT`（限tmux实际任务）；临时研究副本删除、tmux关闭。Orca 两次 terminal_handle_stale 且0业务send，Orca/supervised/settlement及机械scope/hook仍 `NOT_VERIFIED`；共享原件哈希仅进程内断言，独立before/after重放未验证。
 
 ## [2.31.1] - 2026-10-01
 
