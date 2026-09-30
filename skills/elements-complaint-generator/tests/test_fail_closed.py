@@ -152,6 +152,16 @@ class FailClosedPublishTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(output.exists())
 
+    def test_debug_flag_cannot_bypass_known_unsupported_09_field(self):
+        with tempfile.TemporaryDirectory(prefix="ecg-fail-closed-") as directory:
+            work=Path(directory);output=work/'out.docx'
+            elements=_write_elements(work,'wrong-case-elements.json',
+                mutate=lambda raw: raw['elements']['诉讼请求'].update({'解除婚姻关系': {'具体主张': '合成离婚请求'}}))
+            result=_run_fill(elements,output,'--allow-unknown-fields')
+            self.assertEqual(result.returncode,3,result.stdout+result.stderr)
+            self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

@@ -174,6 +174,15 @@ def build_stress_elements(
             "职务": "执行董事、总经理兼风险控制负责人",
         })
 
+    if seed == "09":
+        # 09专用生产路径不支持法人或通用代理布尔别名，压力输入也不能
+        # 依赖它们被静默丢弃；长自然人/代理字段继续保留。
+        people.pop("法人1", None)
+        people.pop("法人2", None)
+        agent = people["委托诉讼代理人"][0]
+        agent.pop("特别授权", None)
+        agent["代理权限"] = "特别授权"
+
     # 通用规则根据模板结构动态产生填空/唯一标签路径。先探测规则名，再按
     # _get_path 的真实点分语义构造输入，避免把模板差异硬编码成 68 套 fixture。
     candidates: list[str] = []
@@ -709,3 +718,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

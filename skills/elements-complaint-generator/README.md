@@ -45,6 +45,8 @@ python scripts/fill_template.py --batch 目录/ --output 目录/
 | 路由层 | `references/case-routing.md` | 113 棵树索引（案由/册/key/支持状态/关键词） |
 | 案由层 | `references/case-types/NN-*.md` + `skeletons/` | 精调定稿 + 通用级骨架 |
 
+09专用路径仅支持单个自然人原告/被告对象和最多一个代理人；组织、多主体、未知选项不得静默生成。详见 [09字段约定](references/case-types/09-private-lending.md) 和 [本轮验证边界](references/09-content-repair-validation.md)。
+
 ## 回归保障
 
 `bash tests/run_e2e.sh` — 内容断言与失败关闭 + 68 编号冒烟 + 113 棵静态版式矩阵 + 21 类文书家族真实 PDF 渲染矩阵。
