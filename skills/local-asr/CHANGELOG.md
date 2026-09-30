@@ -11,6 +11,10 @@
 - **estimated 全链贯穿**：equal 块透传识别侧估计来源；入参兼容旧二元组（自动补 `estimated=false`）。下游消费（lawyer-video-cut v1.7.0，private-skills PR #293）已同步：estimated 词被切口穿过→整段交审，估计边界不授权按词删除。
 - 清理重复死代码定义（首个被覆盖的 `align_reference_to_recognized`）。测试 8→12 用例。
 
+### 文档完善（2026-09-30 独立审查）
+
+- 新增 [独立审计任务交接](references/audit-task-handoff-2026-09-30.md)，供去重导入本地 TASKS；保留本地任务忽略规则。仅登记确认问题、证据与正反验收；未修复运行代码、未提升实现版本或声明完整运行通过。
+
 ## [2.3.3] - 2026-09-29
 
 ### 修复
