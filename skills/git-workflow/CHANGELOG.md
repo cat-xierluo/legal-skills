@@ -1,5 +1,20 @@
 # 变更日志
 
+## [1.8.9] - 2026-09-30 - 分支冗余巡检自动化：只读盘点脚本 + 批量删除执行坑入册
+
+### 新增
+
+- **scripts/branch-audit.sh**：分支冗余只读盘点——对远端与本地分支输出三档候选表：SAFE_DELETE（PR 已合并/已包含于 base）、NEEDS_CONFIRM（无 PR 未合并或本地同名分支有未推送提交，删=内容丢失）、KEEP（open PR head、worktree 检出、backup·snapshot 存档命名）。gh 缺失或未认证时自动降级为 merge-base+日期判定并显式标注「PR 状态未核对」（squash 分支漏判为 NEEDS_CONFIRM，宁漏勿错）。脚本绝不执行删除。内置三项防护：跳过 base 分支与裸 remote ref；本地复用保护（远端分支存在本地同名 ahead 分支时不列为候选）；输出尾部附执行须知。
+- **references/branch-lifecycle-and-cleanup.md §3.3「批量删除的执行细节与已验证的坑」**：执行前重跑 open PR 防护（并行会话持续开分支）、squash 判死以 PR 状态为准、本地复用保护、批量 push --delete 遇缺 ref 整批失败须 fetch --prune 后补删、代理环境 `-c http.proxy=` 绕过、远端删除不影响本地检出。§3.1 补 `gh pr list --state merged --head` 单分支精查与脚本入口。
+
+### 改进
+
+- SKILL.md §2「分支清理」入口指向 branch-audit.sh 快路径（盘点→展示→确认→执行四步）；frontmatter description 补口语触发词（「分支有点多」「冗余分支」「清理一下分支」）。
+
+### 缘由
+
+- 实战沉淀（private-skills 260930 清理：53 远端+3 本地已合并死分支删除，9 个未合并老分支与 9 个 orca worktree 经确认保留）：技能内已有批量审计框架，但每次仍需用户从零口头发起、执行细节靠临场重踩；固化后「分支有点多」一句话即可触发完整核查清理流程。脚本已在 legal-skills 与 private-skills 双仓实测（三档分类与人工盘点结论一致）。
+
 ## [1.8.7] - 2026-09-19 - 外部 PR 分层审查：必要性 gate 先于代码审查
 
 ### 新增

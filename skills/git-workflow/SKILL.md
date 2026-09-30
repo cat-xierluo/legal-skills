@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并分支审计与清理（branch cleanup，含 squash/rebase merge 校验）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.8.8"
+  version: "1.8.9"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -144,7 +144,7 @@ team-feature-a
 - 单任务收口结果必须是 `CLEANED`、`RETAINED_WITH_REASON` 或 `CLEANUP_PENDING`。交付已确认后的清理失败不得重放 push/merge，也不得被隐去。
 - 批量审计必须组合 PR 状态、最后提交时间、Worktree/dirty 状态和分支身份，向用户展示候选并取得确认；不得仅凭 `--merged`、ahead/behind 或分支名删除。
 
-完整的单 Worker 自动清理、squash/rebase expected-tip 删除、批量 stale 审计、长期功能线关闭与红线统一读取 `references/branch-lifecycle-and-cleanup.md`。
+完整的单 Worker 自动清理、squash/rebase expected-tip 删除、批量 stale 审计、长期功能线关闭与红线统一读取 `references/branch-lifecycle-and-cleanup.md`。日常批量巡检先跑 `scripts/branch-audit.sh`（只读盘点，输出 SAFE_DELETE / NEEDS_CONFIRM / KEEP 三档候选表，绝不自行删除），再按 references §3.2 判定展示候选并取得用户确认，执行细节见其 §3.3。
 
 ### Worktree（工作树）
 
@@ -1019,7 +1019,8 @@ git checkout main
 
 ## 参考资源
 
-- `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计与长期功能线关闭
+- `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计、批量删除执行坑与长期功能线关闭
+- `scripts/branch-audit.sh` — 分支冗余只读盘点（SAFE_DELETE / NEEDS_CONFIRM / KEEP 三档候选表，gh 缺失自动降级，绝不删除）
 - `references/long-lived-integration-branch.md` — 长期集成分支的适用条件、拓扑、同步方向、波次与里程碑门禁
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
