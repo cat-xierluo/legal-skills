@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# identity-audit.sh 故障注入测试：临时仓夹具 + 隔离全局配置，只读断言。
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+AUDIT="$SCRIPT_DIR/identity-audit.sh"
+
+pass=0
+fail=0
+
+ok() {
+  printf 'PASS: %s\n' "$1"
+  pass=$((pass + 1))
+}
+
+not_ok() {
+  printf 'FAIL: %s\n' "$1" >&2
+  fail=$((fail + 1))
+}
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+# 隔离全局/系统配置：全局身份=用户标准样（GitHub noreply），排除本机真实配置干扰
+GLOBAL_CFG="$WORK/global-gitconfig"
+cat > "$GLOBAL_CFG" <<'EOF'
+[user]
+	name = cat-xierluo
+	email = 66555304+cat-xierluo@users.noreply.github.com
+EOF
+export GIT_CONFIG_GLOBAL="$GLOBAL_CFG"
+export GIT_CONFIG_SYSTEM=/dev/null
+
+OUT="$WORK/out.txt"
+ERR="$WORK/err.txt"
+
+run_audit() {
+  "$AUDIT" "$@" >"$OUT" 2>"$ERR"
+}
+
+expect_ok() {
+  local name="$1"
+  shift
+  if run_audit "$@"; then
+    ok "$name"
+  else
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (unexpected exit $?)"
+  fi
+}
+
+expect_exit_1_contains() {
+  local name="$1"
+  local expected="$2"
+  shift 2
+  local rc=0
+  run_audit "$@" || rc=$?
+  if [ "$rc" -ne 1 ]; then
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (expected exit 1, got $rc)"
+    return
+  fi
+  if grep -qF "$expected" "$OUT" "$ERR"; then
+    ok "$name"
+  else
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (missing: $expected)"
+  fi
+}
+
+expect_exit_2_contains() {
+  local name="$1"
+  local expected="$2"
+  shift 2
+  local rc=0
+  run_audit "$@" || rc=$?
+  if [ "$rc" -ne 2 ]; then
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (expected exit 2, got $rc)"
+    return
+  fi
+  if grep -qF "$expected" "$OUT" "$ERR"; then
+    ok "$name"
+  else
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (missing: $expected)"
+  fi
+}
+
+commit_as() {
+  # commit_as <repo> <name> <email> <message>（夹具无工作区内容，必须 --allow-empty）
+  git -C "$1" -c "user.name=$2" -c "user.email=$3" commit -q --allow-empty -m "$4"
+}
+
+# ---- 夹具仓 1：干净仓（全局身份，无覆盖，无尾注）----
+CLEAN="$WORK/clean"
+git init -q "$CLEAN"
+git -C "$CLEAN" commit -q --allow-empty -m "init"
+
+# ---- 夹具仓 2：污染仓（hermes 仓库级覆盖 + 占位邮箱提交 + agent 尾注）----
+DIRTY="$WORK/dirty"
+git init -q "$DIRTY"
+git -C "$DIRTY" -c user.name=cat-xierluo \
+  -c user.email=66555304+cat-xierluo@users.noreply.github.com \
+  commit -q --allow-empty -m "clean baseline"
+git -C "$DIRTY" config user.name "Hermes(info-assistant)"
+git -C "$DIRTY" config user.email "info-assistant@hermes.local"
+commit_as "$DIRTY" "Hermes(info-assistant)" "info-assistant@hermes.local" \
+  "junk author commit"
+git -C "$DIRTY" -c user.name=cat-xierluo \
+  -c user.email=66555304+cat-xierluo@users.noreply.github.com \
+  commit -q --allow-empty -m "with trailer" -m "Co-authored-by: Hermes(info-assistant) <info-assistant@hermes.local>"
+
+# ---- whoami ----
+
+expect_ok "whoami: 干净仓全局身份通过" whoami --repo "$CLEAN"
+
+expect_exit_1_contains "whoami: 仓库级 hermes 覆盖告警" \
+  "IDENTITY_AUDIT_WARN: local 级覆盖" whoami --repo "$DIRTY"
+
+expect_exit_1_contains "whoami: hermes 身份命中可疑模式" \
+  "邮箱命中占位/agent 域模式" whoami --repo "$DIRTY"
+
+expect_exit_1_contains "whoami: --expected-name 不符即 FAIL" \
+  "IDENTITY_AUDIT_FAIL: user.name" whoami --repo "$CLEAN" \
+  --expected-name "someone-else"
+
+expect_ok "whoami: --allow-local-override 抑制覆盖告警" whoami --repo "$DIRTY" \
+  --allow-local-override --allow-name "Hermes(info-assistant)" \
+  --allow-email "info-assistant@hermes.local"
+
+# env 覆盖检测：只改 env 不动 config
+if GIT_AUTHOR_NAME="checkpointer" GIT_AUTHOR_EMAIL="checkpointer@noreply" \
+    run_audit whoami --repo "$CLEAN"; then
+  not_ok "whoami: env 覆盖应告警（unexpected success）"
+else
+  if grep -qF "IDENTITY_AUDIT_WARN: GIT_AUTHOR_NAME=checkpointer" "$OUT"; then
+    ok "whoami: env 覆盖告警"
+  else
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "whoami: env 覆盖告警（缺告警行）"
+  fi
+fi
+
+# worktree 级覆盖检测
+WT="$WORK/dirty-wt"
+git -C "$DIRTY" worktree add -q --detach "$WT" >/dev/null 2>&1
+git -C "$WT" config extensions.worktreeConfig true
+git -C "$WT" config --worktree user.email "bot@openclaw.local"
+expect_exit_1_contains "whoami: worktree 级覆盖告警" \
+  "IDENTITY_AUDIT_WARN: worktree 级覆盖 user.email" whoami --repo "$WT"
+
+# ---- history ----
+
+expect_exit_1_contains "history: 污染仓发现可疑作者/尾注" \
+  "IDENTITY_AUDIT_FINDINGS" history --repo "$DIRTY"
+
+HIST_OUT="$WORK/hist.txt"
+"$AUDIT" history --repo "$DIRTY" >"$HIST_OUT" 2>&1 || true
+# 脚本会剥掉 "Co-authored-by:" 前缀，故按分布表标题断言
+grep -qF "info-assistant@hermes.local" "$HIST_OUT" && \
+  grep -qF "Co-authored-by 尾注分布" "$HIST_OUT" && \
+  grep -qF "[可疑" "$HIST_OUT" \
+  && ok "history: 尾注与作者均被标注" \
+  || { cat "$HIST_OUT" >&2; not_ok "history: 尾注与作者均被标注"; }
+
+expect_exit_1_contains "history: --range 只审指定范围" \
+  "IDENTITY_AUDIT_FINDINGS" history --repo "$DIRTY" \
+  --range "$(git -C "$DIRTY" rev-parse HEAD~2)..HEAD"
+
+# --allow-email 放行后污染仓仍剩仓库级 author=hermes? 放行 hermes 后应全绿
+if run_audit history --repo "$DIRTY" \
+    --allow-name "Hermes(info-assistant)" --allow-email "info-assistant@hermes.local"; then
+  ok "history: --allow 精确放行后转绿"
+else
+  cat "$OUT" "$ERR" >&2 || true
+  not_ok "history: --allow 精确放行后转绿"
+fi
+
+# 干净仓 history 通过
+expect_ok "history: 干净仓通过" history --repo "$CLEAN"
+
+# ---- 用法与环境错误 ----
+
+expect_exit_2_contains "非仓库目录报错" "IDENTITY_AUDIT_NOT_REPOSITORY" \
+  whoami --repo "$WORK"
+expect_exit_2_contains "未知参数报错" "IDENTITY_AUDIT_USAGE" \
+  whoami --frobnicate
+expect_exit_2_contains "非法 --max-commits 报错" "IDENTITY_AUDIT_USAGE" \
+  history --repo "$CLEAN" --max-commits abc
+
+# ---- noreply@ 误伤回归：GitHub noreply 邮箱不得命中 ----
+GH_NOREPLY="$WORK/gh-noreply"
+git init -q "$GH_NOREPLY"
+commit_as "$GH_NOREPLY" "杨卫薪律师" "66555304+cat-xierluo@users.noreply.github.com" \
+  "github noreply must pass"
+expect_ok "history: users.noreply.github.com 不误伤" history --repo "$GH_NOREPLY"
+
+printf '\n== 身份审计测试：%s passed, %s failed ==\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]
