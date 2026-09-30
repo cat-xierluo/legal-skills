@@ -21,7 +21,7 @@
 #     * claude-code 实测 `--permission-mode auto --bare` 不弹 dialog，默认全关
 #       （spawn 秒级返回，避免 trust_auto 30s + permission_auto 60s 共 90s 空等，
 #       见 2026-07-10 某多 worker Wave 实战 follow-up + DEC-112）；
-#     * 其他白名单 backend（codebuddy / qoderwork-cn / codex）仍默认启
+#     * 其他白名单 backend（codebuddy / qoder-cn / codex）仍默认启
 #       （这些 backend 真弹 dialog）。
 #   - 6 个 --*/--no-* flag 均可 force override 默认值，详见 usage 段与 DEC-112。
 #   - v1.20.2（Task-019/020/021，2026-08-05 folia Wave-1 实战）：
@@ -108,7 +108,7 @@ KEEP_TMUX_ON_TERMINAL=0
 # v1.18.4：trust/permission dialog 监控默认值改 backend 分支化（DEC-112）
 # - *_OVERRIDE 标志在 flag 解析时被置 1，由 resolve_backend_defaults() 检查并跳过
 # - claude-code 默认全关：实测 --permission-mode auto + --bare 不弹 dialog，省 90s 空等
-# - 其他白名单 backend 默认全开：codebuddy/qoderwork-cn/codex 真弹 dialog
+# - 其他白名单 backend 默认全开：codebuddy/qoder-cn/codex 真弹 dialog
 TRUST_AUTO_OVERRIDE=0
 TRUST_AUTO=1
 PERMISSION_AUTO_OVERRIDE=0
@@ -305,6 +305,7 @@ if [ -n "$PM_HARNESS_ASSERTION" ]; then
 fi
 enforce_harness_backend_policy_chain \
   "$detected_pm_harness" "$PM_HARNESS_CHAIN_JSON" "$WORKER_BACKEND" || exit $?
+WORKER_BACKEND="$WORKER_BACKEND_CANONICAL"
 PM_HARNESS_SOURCE=${PM_HARNESS_SOURCE:-verified_runtime}
 printf 'SPAWN_WORKER_HARNESS_POLICY: pm=%s worker=%s allowed=%s chain=%s source=%s\n' \
   "$PM_HARNESS" "$WORKER_BACKEND_CANONICAL" "$PM_ALLOWED_WORKER_BACKENDS" \
@@ -344,10 +345,10 @@ if [ "$git_identity_field_count" -ne 0 ] && [ "$git_identity_field_count" -ne 3 
 fi
 
 case "$WORKER_BACKEND" in
-  claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn)
+  claude-code|claude_code|codebuddy)
     INSTALL_GUARD_MODE="hook"
     ;;
-  codex|zcode)
+  codex|zcode|zcode-cli|minimax-code|mcode|qoder-cn|qoderclicn|qwenwork-cn)
     if [ "$ALLOW_PROMPT_ONLY_INSTALL_GUARD" -ne 1 ]; then
       echo "ERROR: backend $WORKER_BACKEND has no configured PreToolUse install guard; explicit --allow-prompt-only-install-guard is required (fail-closed)" >&2
       exit 64
@@ -412,7 +413,12 @@ if [ -z "$COMMAND" ]; then
     claude-code) COMMAND="claude --permission-mode auto" ;;
     codex) COMMAND="codex" ;;
     codebuddy) COMMAND="codebuddy" ;;
-    qoderwork-cn) COMMAND="qoderclicn" ;;
+    qoder-cn) COMMAND="qoderclicn --permission-mode auto" ;;
+    zcode-cli) COMMAND="zcode --mode build" ;;
+    minimax-code) COMMAND="mcode" ;;
+    qwenwork-cn)
+      echo "ERROR: qwenwork-cn requires an explicit rendered --command with a dedicated --config-dir; see references/27-qwenwork-cli-worker.md" >&2
+      exit 64 ;;
     zcode) COMMAND="python3 '$SCRIPT_DIR/zcode-worker-driver.py'" ;;
     *) echo "ERROR: no default command for backend=$WORKER_BACKEND_CANONICAL" >&2; exit 64 ;;
   esac
@@ -726,24 +732,24 @@ array_to_json() {
 resolve_backend_defaults() {
   if [ "$TRUST_AUTO_OVERRIDE" -eq 0 ]; then
     case "$WORKER_BACKEND" in
-      claude-code|claude_code|zcode) TRUST_AUTO=0 ;;
+      claude-code|claude_code|zcode|zcode-cli|minimax-code|qoder-cn|qwenwork-cn) TRUST_AUTO=0 ;;
       *) TRUST_AUTO=1 ;;
     esac
   fi
   if [ "$PERMISSION_AUTO_OVERRIDE" -eq 0 ]; then
-    # v1.20.3 Task-026：codebuddy/qoderwork-cn/qoderclicn 默认 PERMISSION_AUTO=0（只 bg 不 sync）。
+    # v1.20.3 Task-026：codebuddy/qoder-cn/qoderclicn 默认 PERMISSION_AUTO=0（只 bg 不 sync）。
     # acceptEdits 仍弹 dialog（references/08 §14.1），同步监控空等浪费 + spawn-worker 主进程撞 PM Bash 2min timeout
     # （v1.20.2 W2 实战：trust_auto 30s + permission_auto 60s + checkout ~30s ≈ 120s 撞 120s，被 SIGTERM 后
     # bg 段未启 → dialog 卡死）。bg 段（permission_auto_bg setsid）独立处理 dialog，不依赖 sync。
     # zcode：无 TUI 无任何 dialog（driver 渲染纯文本），同步监控必然空等 → 一律关。
     case "$WORKER_BACKEND" in
-      claude-code|claude_code|codebuddy|qoderwork-cn|qoderclicn|zcode) PERMISSION_AUTO=0 ;;
+      claude-code|claude_code|codebuddy|qoder-cn|qoderclicn|zcode|zcode-cli|minimax-code|qwenwork-cn) PERMISSION_AUTO=0 ;;
       *) PERMISSION_AUTO=1 ;;
     esac
   fi
   if [ "$PERMISSION_AUTO_BG_OVERRIDE" -eq 0 ]; then
     case "$WORKER_BACKEND" in
-      claude-code|claude_code|zcode) PERMISSION_AUTO_BG=0 ;;
+      claude-code|claude_code|zcode|zcode-cli|minimax-code|qoder-cn|qwenwork-cn) PERMISSION_AUTO_BG=0 ;;
       *) PERMISSION_AUTO_BG=1 ;;
     esac
   fi
@@ -1053,9 +1059,9 @@ worker_session_send_enter() {
 trust_auto() {
   local session="$1"
   local max_wait=30
-  # v1.20.3 Task-026：codebuddy/qoderwork-cn/qoderclicn 缩短 trust_auto timeout（acceptEdits 不弹 trust dialog，30s 空等浪费）
+  # v1.20.3 Task-026：codebuddy/qoder-cn/qoderclicn 缩短 trust_auto timeout（acceptEdits 不弹 trust dialog，30s 空等浪费）
   case "$WORKER_BACKEND" in
-    codebuddy|qoderwork-cn|qoderclicn) max_wait=15 ;;
+    codebuddy|qoder-cn|qoderclicn) max_wait=15 ;;
   esac
   local poll_interval=1
   local waited=0
@@ -1084,7 +1090,7 @@ trust_auto() {
     # 这里捕获 qoderclicn 等 2 选项 dialog（1=Trust folder / 2=Don't trust and exit，默认高亮 option 2 Don't trust）。
     if echo "$content" | grep -qE "Trust folder|Do you trust" 2>/dev/null; then
       case "$WORKER_BACKEND" in
-        qoderwork-cn|qoderclicn)
+        qoder-cn|qoderclicn)
           # qoderclicn 2 选项 dialog：发数字键 "1" 选 Trust folder（默认高亮 option 2 Don't trust，不能 Enter；与 permission_auto "2" 同数字键模式）
           echo "SPAWN_WORKER_TRUST_AUTO: trust dialog detected (qoder 2-option), selecting option 1 Trust folder (key '1')"
           worker_session_send_choice "$session" "1"
@@ -1269,7 +1275,7 @@ dependency_install_guard_setup() {
   case "$WORKER_BACKEND" in
     claude-code|claude_code) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.claude/settings.local.json" ;;
     codebuddy) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.codebuddy/settings.local.json" ;;
-    qoderwork-cn|qoderclicn) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.qoder/settings.local.json" ;;
+    qoder-cn|qoderclicn) INSTALL_GUARD_SETTINGS_FILE="$WORKTREE/.qoder/settings.local.json" ;;
     *)
       echo "ERROR: backend lost dependency install guard routing: $WORKER_BACKEND" >&2
       return 1
@@ -1310,7 +1316,7 @@ dependency_install_guard_setup() {
     codebuddy)
       merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
       ;;
-    qoderwork-cn|qoderclicn)
+    qoder-cn|qoderclicn)
       merge_pretool_hook "$INSTALL_GUARD_SETTINGS_FILE" "Bash|Shell|Terminal|Edit|Write|NotebookEdit|Update" "$hook_command"
       ;;
     *)
@@ -1350,6 +1356,13 @@ scope_guard_setup() {
   if [ "${#ALLOW_PATHS[@]}" -eq 0 ]; then
     return 0  # no scope guard
   fi
+
+  case "$WORKER_BACKEND" in
+    zcode-cli|minimax-code|qoder-cn|qwenwork-cn)
+      echo "SPAWN_WORKER_SCOPE_GUARD_DEGRADED: backend=$WORKER_BACKEND prompt-only; no verified hook integration" >&2
+      return 0
+      ;;
+  esac
 
   # Find scope-guard-hook.sh (wrapper) + scope-guard.py (in skill scripts dir)
   # wrapper 必需:codebuddy/qoder 直接调 `python3 scope-guard.py` 时 stdin 不传
@@ -1391,12 +1404,6 @@ scope_guard_setup() {
   # Write to codebuddy settings if backend is codebuddy or unspecified
   if [ "$WORKER_BACKEND" = "codebuddy" ] || [ -z "$WORKER_BACKEND" ]; then
     merge_pretool_hook "$WORKTREE/.codebuddy/settings.local.json" \
-      "Edit|Write|NotebookEdit|Update" "$hook_command"
-  fi
-
-  # Write to qoder settings if backend is qoderwork-cn
-  if [ "$WORKER_BACKEND" = "qoderwork-cn" ] || [ "$WORKER_BACKEND" = "qoderclicn" ]; then
-    merge_pretool_hook "$WORKTREE/.qoder/settings.local.json" \
       "Edit|Write|NotebookEdit|Update" "$hook_command"
   fi
 
