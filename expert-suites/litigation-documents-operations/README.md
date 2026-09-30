@@ -1,6 +1,7 @@
 # 诉讼文书与案件推进专家套件
 
-> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-documents-operations-0.1.0.zip)
+> [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-documents-operations-0.1.0.zip)
+> 当前源码套件为 `0.1.1`：[下次 Release 预留下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-litigation-documents-operations-0.1.1.zip)。本次仅对齐成员下载入口，发布前可下载通过 CI 后生成的 PR Preview；上方旧包内容不随源码变化。
 
 用于把已完成的案件研判继续转化为起诉、答辩、裁判分析、上诉再审决策和客户沟通材料，并维持案件目录与法院来文衔接。
 
@@ -27,7 +28,7 @@
 | [legal-case-analysis](../../skills/legal-case-analysis/) | 为文书起草持续提供事实、证据和争点底稿 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 对文书中的法律依据和类案进行复核 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [new-case](../../skills/new-case/) | 维持案件目录、基本信息和期限结构 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/new-case-1.5.0.zip) |
-| [court-sms](../../skills/court-sms/) | 获取法院文书并归档最新程序材料 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |
+| [court-sms](../../skills/court-sms/) | 获取法院文书并归档最新程序材料 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip)；[源码当前版（待发布）](https://github.com/cat-xierluo/legal-skills/releases/latest/download/court-sms-1.5.2.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 制作庭审路线、证据矩阵和客户沟通图 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-visualization-0.8.2.zip) |
 
 ## 建议使用方式
@@ -48,4 +49,4 @@
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。

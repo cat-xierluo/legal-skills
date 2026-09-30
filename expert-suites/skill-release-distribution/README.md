@@ -1,6 +1,7 @@
 # Skill 发布与分发专家套件
 
-> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-release-distribution-0.1.0.zip)
+> [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-skill-release-distribution-0.1.0.zip)
+> 当前源码套件为 `0.1.1`：[下次 Release 预留下载](https://github.com/cat-xierluo/legal-skills/releases/latest/download/suite-skill-release-distribution-0.1.1.zip)。本次仅对齐成员下载入口，发布前可下载通过 CI 后生成的 PR Preview；上方旧包内容不随源码变化。
 
 用于整理提交、管理版本与 GitHub Release、同步多渠道、发布独立子树，并在分发前完成质量和验证门禁。
 
@@ -21,7 +22,7 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [git-batch-commit](../../skills/git-batch-commit/) | 把混合改动拆成聚焦且可追溯的提交 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-batch-commit-1.4.3.zip) |
-| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip) |
+| [git-workflow](../../skills/git-workflow/) | 管理分支、PR、身份门禁、合并和清理 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip)；[源码当前版（待发布）](https://github.com/cat-xierluo/legal-skills/releases/latest/download/git-workflow-1.9.0.zip) |
 | [release-workflow](../../skills/release-workflow/) | 管理版本、批量 ZIP、Release Notes 和发布验证 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/release-workflow-1.6.1.zip) |
 | [skill-publish-sync](../../skills/skill-publish-sync/) | 同步 Skill 到多个发布平台 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-publish-sync-1.7.2.zip) |
 | [subtree-publish](../../skills/subtree-publish/) | 把 monorepo 子目录增量推送到独立仓库 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/subtree-publish-1.7.1.zip) |
@@ -47,4 +48,4 @@ Tag、Release、第三方平台上传和独立仓库推送都会改变外部状�
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
