@@ -23,6 +23,18 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-10-01-LIVE-WORKER-ACCEPTANCE — 两个 Skill 的实际任务验收
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：用户要求自主推进测试，直至 MAO 与私有账号 Skill 可完成实际任务，并向已授权会话交接。候选文档 owner 为 `/root/optional_cli_review`，不改共享 source。
+- 范围：MiniMax Code 与 ZCode CLI 串行执行有界隔离文件任务，PM 实际回读产物、测试、运行时模型与资源收口；私有 Skill 仅重新观测/规划与启动前身份复核。无真实账号切换、耗卡或产品化自动身份绑定；不影响已有 GUI/会话。
+- 候选：`fix/mao-orca-terminal-ready`，代码冻结 `0ed048bfb80373a267c62dca38a48d880abde15e`；基线 `41268aaa91e71158cb4551dce8d757038869af0f`。readiness 源码已独立 `ACCEPT`，本卡的后续提交仅追加文档。
+- MiniMax：真实 Orca terminal-managed 任务产物 HEAD `5461cc089956c078dccb53f79f69de471f07aa68`；PM 测试3/3，STATUS done、postflight通过、工作树干净、终端关闭；已独立 `ACCEPT`。数据库唯一工作区会话与原生 manifest/catalog/history路径精确一致，两轮任务共15条 assistant 元数据及15条 HTTP200 响应事件全部为 minimax / MiniMax-M3.1-Flash-Preview；15个响应ID，不以argv或自述代替实际模型证据。
+- ZCode：tmux fallback 产物 HEAD `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`，PM 测试3/3、仅probe任务文件改变；SQLite 13条 completed model_usage均为 account:bigmodel-individual-coding-plan / GLM-5.3-Flash，retry0。临时研究认证/配置副本已精确删除，tmux关闭；独立产物验收 `PENDING`，待 PM 回报更新，不能预签完成。
+- Orca边界：当前1.4.217具备所需能力；两次 ZCode 尝试均 terminal_handle_stale，0业务send。MiniMax terminal-managed 没有 supervised Task/Dispatch；tmux不替代Orca，完整supervised/settlement、持续纠偏仍 `NOT_VERIFIED`。
+- 权限/身份边界：均为prompt-only降级；ZCode bootstrap的ls超出精确shell allowlist，机械scope/hook未证明。私有路由和研究副本仅本轮使用；共享原件哈希一致性仅准备进程内断言，该次before baseline未持久化，独立before/after重放 `NOT_VERIFIED`；副本哈希不作替代。逐请求精确服务端计费仍 `NOT_VERIFIED`。
+- 脱敏证据：本机 `/tmp/mao-live-acceptance-261001/minimax/tui-model-review/summary.sanitized.json`（SHA256 `87b957aa64cbab0b4272b613c00512141dc7460b7593b60467015617dd116580`）与本轮私有路由的 `prepare-baseline-audit.sanitized.json`；后者由私有Skill任务源管理。原始账号、日志、认证路径和内容不进公开包。
+- 剩余：ZCode独立验收与最终文档head复验、safe-push/对应Skill PR、已授权会话交接由PM收口；未经完成证据不关闭本卡。
+
 ## TASK-2026-10-01-ORCA-TERMINAL-READY — 投递前严格核对就绪回执
 
 - 状态：`IN_PROGRESS`；Owner：Codex `/root/optional_cli_review`（implementer）；来源：本轮真实 CLI 验收发现 terminal wait 的 rc0 超时会继续投递。
@@ -31,7 +43,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 清单：①核对当前 `orca skills get orca-cli` 与 wait help；②严格回执门禁、同 handle 有界重等；③确定性消费者回归；④独立 review 后由 PM 继续真实 CLI 验收。
 - 验收：rc0 但 satisfied=false、畸形/错绑回执、命令失败均零 send；明确 ready 仅一次 send；supervised 不发送普通 prompt。两轮等待分别30s/60s，仍不满足则非0退出并输出精确 terminal/worktree，保留资源供先只读核查后恢复。
 - 交付版本：v2.31.2；新增 patch 记录，不改已交付 v2.31.1 的历史正文。
-- 验证：`bash scripts/test-spawn-worker-orca.sh` 184/184、`bash scripts/test-spawn-worker-launch.sh` 42/42、`python3 scripts/test-mem-budget-probe.py` 58/58；Bash/Python语法与 `git diff --check` 通过。Orca helper 原件 `/tmp/mao-terminal-ready-261001/orca.log`，summary记录定向命令与结果；独立 review 待 PM 另 session 执行。真实 worker/provider、业务完成及完整 supervised/settlement 生命周期 `NOT_VERIFIED`，由 PM 本轮后续实证。
+- 验证：`bash scripts/test-spawn-worker-orca.sh` 184/184、`bash scripts/test-spawn-worker-launch.sh` 42/42、`python3 scripts/test-mem-budget-probe.py` 58/58；Bash/Python语法与 `git diff --check` 通过。Orca helper 原件 `/tmp/mao-terminal-ready-261001/orca.log`，summary记录定向命令与结果；源码 `0ed048bfb80373a267c62dca38a48d880abde15e` 已独立 `ACCEPT`。真实任务结果与剩余范围见 LIVE-WORKER-ACCEPTANCE 卡，不把定向测试扩大为完整 supervised/settlement证明。
 
 ## TASK-2026-10-01-LOCAL-ACCOUNT-SKILL — 私人账号调度调用合同
 
