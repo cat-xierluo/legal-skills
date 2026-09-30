@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.8.9 | **分支冗余巡检自动化 + 身份核验**：v1.8.9 新增 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除），references 入册批量删除执行坑（执行前重跑 open-PR 防护、squash 判死以 PR 状态为准、本地复用保护、缺 ref 整批失败须补删、代理绕过），description 补「分支有点多/冗余分支」口语触发词；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支，误落补救三步）。已在 legal-skills 与 private-skills 双仓实测。 |
 | 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
 | 2026-09-30 | 新上传 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.3.2→v0.4.1 | DeepSeek Harness（DSH）插件开发指引首次公开登记：插件设计、开发、装载验证、版本迁移与发布审查（版本感知），支持 Pi/Hermes 插件迁移与隔离装载实验；0.3.2 新增官方能力复用目录条目 `ctx.jobs`（会话内长任务注册表）与 `packages/schedule`（持久定时调度），踩坑表补 renderer「Unknown client plugin」伪影语义解码；0.4.0 沉淀 `ctx.tools.register` 与 `ctx.storageDomain` 能力条目（零依赖手写编译后形态、update 原子读改写等实现知识，P09）、多插件共载自检误报坑与「Pi 插件 DSH 化起手切片」开发路径；0.4.1 修域名正则（仅下划线，对齐 backend.ts 强校验）并补 mock 假体须复刻校验条目之坑。 |
 | 2026-09-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.5.0→v1.6.1 | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节与 `{suites}` 占位符；新增 README 覆盖校验（含 latest/download 链接形态修复与更名资产豁免）与套件链接对齐脚本；md2word/git-batch-commit 补齐 MIT LICENSE。v1.6.1：专家套件不再设独立许可证（DEC-009），删除套件级 LICENSE.txt 并同步校验/打包清单，成员许可不变。 |
@@ -41,7 +42,6 @@
 | 2026-09-30 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.4 | 复核反例与独立验收余项修复：声纹开关误标/认领闭环/摘要注入质量门/截图端到端证据；align_words 词级对齐（v2.3.2-2.3.4）：ASCII 组插值与非等长替换的字符时间逐词标 estimated，估计边界不再自称真实，下游按字删除前强制交审。 |
 | 2026-09-24 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.28.0 | Claude Code auto Worker 的普通 Bash 改由原生 auto 和 settings 判断；编排 hook 保留安装、Orca 协议、tracked 删除及受保护 Git 操作门禁。 |
 | 2026-09-23 | 更新 | [tingwu-asr](skills/tingwu-asr/) | v0.4.7 | 云端转录后的本地摘要注入改用 local-asr 路径，并同步指引与测试。 |
-| 2026-09-23 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1 | 更新本地转录技能链接为 local-asr。 |
 </details>
 
 ## 📋 项目概述
