@@ -28,12 +28,10 @@
     "api_response": {
       "c_fymc": "苏州工业园区人民法院",
       "c_fybh": "1275",
-      "dt_cjsj": "2026-03-18T07:44:00.000+00:00",
       "documents": [
         {
           "c_wsmc": "传票（东沙湖法庭）",
-          "c_wsbh": "ecb8fe64e4834804b50ea0f9257327e0",
-          "dt_cjsj": "2026-03-18T07:44:00.000+00:00"
+          "c_wsbh": "ecb8fe64e4834804b50ea0f9257327e0"
         }
       ]
     }
@@ -41,6 +39,7 @@
   "document": {
     "type": "一审判决书",
     "sent_at": "2026-04-08T10:00:00+08:00",
+    "sent_at_source": "短信网关时间",
     "received_at": "2026-04-08T14:30:00+08:00",
     "appeal_deadline": "2026-04-23T23:59:59+08:00",
     "appeal_days_remaining": 15
@@ -70,15 +69,14 @@
 | `download.params` | 否 | 从 URL 提取的参数（如 qdbh/sdbh/sdsin） |
 | `download.method` | 否 | 实际使用的下载方式：`curl` / `cli` / `mcp` / `manual` / `null`（无下载链接） |
 | `download.status` | 是 | 下载状态：`success` / `failed` / `manual` / `skipped` |
-| `download.api_response` | 否 | API 完整响应，包含 c_fymc（法院名称）、c_fybh（法院编号）、dt_cjsj（送达时间）、documents 数组（每份文书详情） |
+| `download.api_response` | 否 | API 完整响应，包含 c_fymc（法院名称）、c_fybh（法院编号）、documents 数组（每份文书详情）。实测 zxfw `getWsListBySdbhNew` 响应**不含** `dt_cjsj`，送达时间须另寻来源（见 `document.sent_at_source`） |
 | `download.api_response.c_fymc` | 否 | 法院名称（来自 API） |
 | `download.api_response.c_fybh` | 否 | 法院编号 |
-| `download.api_response.dt_cjsj` | 否 | 送达记录创建时间（ISO 8601），作为 sent_at 来源 |
 | `download.api_response.documents[].c_wsmc` | 否 | 文书名称 |
 | `download.api_response.documents[].c_wsbh` | 否 | 文书编号（UUID） |
-| `download.api_response.documents[].dt_cjsj` | 否 | 单份文书的送达时间 |
 | `document.type` | 否 | 文书类型：判决书/裁定书/调解书等（从 PDF 解析） |
 | `document.sent_at` | 否 | 法院发送时间（送达平台记录） |
+| `document.sent_at_source` | 否 | `sent_at` 的实际来源标识（例：`开庭公告缴费通知 PDF 内二维码生成时间`、`短信网关时间`）。zxfw 送达 API 不返回送达时间字段，此字段用于让时间可追溯，避免用文书落款日冒充送达日 |
 | `document.received_at` | 否 | 用户收到时间（手机短信网关时间） |
 | `document.appeal_deadline` | 否 | 上诉截止日期（根据案件类型计算） |
 | `document.appeal_days_remaining` | 否 | 剩余上诉天数 |
