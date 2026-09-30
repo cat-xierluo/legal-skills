@@ -2,6 +2,15 @@
 
 本项目的所有重要变更都将记录在此文件。
 
+## [2.3.4] - 2026-09-30
+
+### 修复（三轮审计 F09：estimated 逐词标记）
+
+- **ASCII 组插值逐词标记**：`clean_recognition` 的每字符时间从 `(t0,t1)` 升级为 `(t0,t1,estimated)`——组内插值字符（英文/数字词多字符共享一条 timestamp 的均分）不再只增 `segments_with_estimated_chars` 计数而无词级标记；审计反例（1 秒 token 均分十个字符全部无 `estimated`，下游 cut 当真实边界按字删除）关闭。
+- **非等长 replace 标估计**：`align_reference_to_recognized` 的 replace 块在参考字符数≠识别字符数时按位置分配区间——这些时间是估计，逐词 `estimated=true`（审计反例：参考"不可以用"/识别"不难用"的"可以"两字曾以 1ms 伪边界自称真实）；等长 replace（如 JI→AI 纠错）一一对应仍为真实边界不误标。
+- **estimated 全链贯穿**：equal 块透传识别侧估计来源；入参兼容旧二元组（自动补 `estimated=false`）。下游消费（lawyer-video-cut v1.7.0，private-skills PR #293）已同步：estimated 词被切口穿过→整段交审，估计边界不授权按词删除。
+- 清理重复死代码定义（首个被覆盖的 `align_reference_to_recognized`）。测试 8→12 用例。
+
 ## [2.3.3] - 2026-09-29
 
 ### 修复
