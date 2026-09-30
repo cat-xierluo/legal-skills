@@ -2,7 +2,7 @@
 name: git-batch-commit
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.4.3"
+version: "1.5.0"
 license: MIT
 description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"批量提交"、"拆分提交"、"整理提交"，或用户明确要把已暂存变更拆成多个聚焦 commit 时使用。只负责 commit 拆分和提交信息生成；分支、PR、push、merge、Issue 关闭语义以 git-workflow 为准。提交完成后，若仓库内存在 skill-publish-sync 或 subtree-publish 配置、或仓库已登记于本技能 config/subtree-repos.yaml（按仓库个性化触发时点与推送命令），本技能会提示是否将涉及版本更新的技能同步发布到 ClawHub/SkillHub 或推送 subtree 独立仓库——这些发布/推送动作均需用户显式确认。'
 ---
@@ -26,6 +26,16 @@ description: '智能 Git 批量提交快捷按钮。触发词："git 提交"、"
 | 项目本地任务引用 | `cross-agent-collab` 定任务来源，`git-batch-commit` 写引用 | 使用 `--local-ref "project-task Issue #13"` |
 
 当用户只是说“把这些改动提交一下 / 拆分提交”，使用本 Skill；当用户说“合并 PR / 拉 PR 到 main / 推送 / 关闭 issue”，同时遵循 `git-workflow`。
+
+## 隐私预检与依赖
+
+运行脚本需要 Python 3.10+、Git、PyYAML（缺失时运行 `python3 -m pip install PyYAML`），并同时安装同级 `git-workflow` 技能。共享 checker 仅使用 Python 标准库；缺失时失败关闭。
+
+在预览、确认或创建第一笔提交前，检查所有分组最终完整提交说明（含 Markdown 标题/列表提取、Issue 和本地任务引用）、暂存变更路径、完整 blob 和 patch。`--yes` 只跳过交互确认，`--dry-run` 也须检查，均不能跳过隐私门禁。任一组失败不创建任何提交，也不输出敏感原文。
+
+逐组提交使用原始暂存 tree 的临时 index，不取消暂存再重新 `git add` 工作区；部分暂存文件的未暂存改动不会混入。要求已有 HEAD；预检或执行期间 HEAD/index 改变则停止。执行期失败保留已成功本地提交，不自动回滚；发布前仍须 `git-workflow` 全范围检查。
+
+案号是待核对标记，公开裁判/虚构测试须有依据的精确审查，不允许目录整体忽略或以 `--no-verify` 替代审查。规则、Git 目录内本地黑名单、精确例外与二进制处理限制见 [共享隐私预检](../git-workflow/references/privacy-preflight.md)。
 
 ## 使用场景
 
@@ -131,7 +141,7 @@ python3 skills/git-batch-commit/scripts/categorize_changes.py --json
 ## 工作流程
 
 1. **暂存文件** - 使用 `git add` 正常暂存
-2. **运行交互式脚本** - 查看分类结果
+2. **运行交互式脚本** - 全部分组与暂存内容预检通过后查看分类结果
 3. **审核** - 检查提议的提交分组
 4. **确认** - 创建提交或取消以调整
 5. **ClawHub 同步检查** - 仅当 `skills/skill-publish-sync/` 存在时执行，详见 `references/skill-publish-sync-check.md`。不存在则静默跳过
