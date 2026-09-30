@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# 检查 Git 实际准备保存的完整说明，覆盖手写、生成内容与引用。
+set -euo pipefail
+root=$(git rev-parse --show-toplevel)
+exec python3 "$root/skills/git-workflow/scripts/privacy_check.py" --repo "$root" text \
+  --file "$1" --source commit-message
