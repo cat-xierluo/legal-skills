@@ -118,6 +118,19 @@ orca_rollback_created_worktree() {
 
   if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
     actual_common_dir=$(orca_git_common_dir "$worktree_path" 2>/dev/null || true)
+    # A faulty native create receipt may point at a previously borrowed tree.
+    # Its permanent ownership exclusion outranks rollback/force-delete intent.
+    if [ -d "$actual_common_dir/agent-borrowed-worktrees" ] || [ -L "$actual_common_dir/agent-borrowed-worktrees" ]; then
+      local protection actual_branch
+      actual_branch=$(git -C "$worktree_path" branch --show-current) || return 1
+      protection=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" protect --project "$worktree_path" --worktree "$worktree_path" --branch "$actual_branch") || {
+        echo "SPAWN_WORKER_ROLLBACK_BORROWED_UNKNOWN: retain all resources" >&2; return 1;
+      }
+      if [ "$(printf '%s' "$protection" | jq -r '.protected')" = true ]; then
+        echo "SPAWN_WORKER_ROLLBACK_BORROWED_RETAINED: external tree and branch retained" >&2
+        return 1
+      fi
+    fi
     if [ -n "$actual_common_dir" ]; then
       created_branch_oid=$(git --git-dir="$actual_common_dir" show-ref --hash --verify "refs/heads/$name" 2>/dev/null || true)
     fi
@@ -250,6 +263,7 @@ orca_worktree_create() {
 # Orca 一定会后缀化），由 worktree 落盘后的 isolation pre-gate 兜底。
 spawn_worker_existing_worktree_pregate() {
   [ "$ORCA_MODE" = "auto" ] || return 0
+  [ -z "${BORROW_EXISTING_WORKTREE:-}" ] || { spawn_worker_borrowed_recheck; return; }
   [ "$LIGHTWEIGHT_MODE" -eq 0 ] || return 0
   local gate_branch="$safe_branch" occupied_wt wt_common project_common dirty_count
   if [ -z "$gate_branch" ]; then
@@ -369,5 +383,61 @@ orca_terminal_create_and_send() {
       echo "ERROR: orca terminal send 失败（worker 已开但 prompt 没投；PM 需用 pm-orchestrate send 重投）" >&2
       exit 64
     }
+  fi
+}
+
+# Explicit borrowed first-entry path; ordinary occupied-tree pregate stays unchanged.
+spawn_worker_release_borrowed_lock() {
+  [ "${BORROWED_LOCK_ACQUIRED:-0}" -eq 1 ] || return 0
+  python3 "$SCRIPT_DIR/borrowed-worktree.py" release --worktree "$WORKTREE" --session "$SESSION" --owner-pid $$ >/dev/null || {
+    echo "BORROWED_WORKTREE_LOCK_RETAINED: precise manual recovery required; external tree/branch retained" >&2; return 1;
+  }
+  BORROWED_LOCK_ACQUIRED=0
+}
+spawn_worker_borrowed_exit() {
+  local rc=$?
+  trap - EXIT
+  spawn_worker_release_borrowed_lock || true
+  exit "$rc"
+}
+spawn_worker_borrowed_initial() {
+  local mode=acquire result status
+  [ "$DRY_RUN" -eq 0 ] || mode=validate
+  local -a gate_args=("$mode" --contract "$BORROW_EXISTING_WORKTREE" --project "$PROJECT_DIR" --worktree "$WORKTREE" --branch "$BRANCH" --session "$SESSION" --orca-bin "$ORCA_CLI_BIN")
+  [ "$DRY_RUN" -eq 1 ] || gate_args+=(--owner-pid $$)
+  result=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" "${gate_args[@]}") || exit 64
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "BORROWED_WORKTREE_DRY_RUN: validated only; no lock/session/lease/dispatch"
+    : # validate returns the exact checked snapshot; never reread mutable input
+  else
+    BORROWED_LOCK_ACQUIRED=1
+    trap spawn_worker_borrowed_exit EXIT
+  fi
+  BORROWED_CONTRACT_SHA256=$(printf '%s' "$result" | jq -r '.contract_sha256 // empty')
+  borrowed_source=$(printf '%s' "$result" | jq -er '.approved_by') || exit 64
+  [ "$borrowed_source" = "$INSTALL_GUARD_DEGRADATION_SOURCE" ] || { echo "BORROWED_WORKTREE_AUTHORITY_SOURCE_MISMATCH" >&2; exit 64; }
+  BORROWED_HEAD=$(printf '%s' "$result" | jq -er '.head') || exit 64
+  ORCA_WORKTREE_ID=$(printf '%s' "$result" | jq -er '.orca_worktree_id') || exit 64
+  ORCA_EXPECTED_RUNTIME_ID=$(printf '%s' "$result" | jq -er '.runtime_id') || exit 64
+  ORCA_WORKTREE_PATH="$WORKTREE"; ORCA_PROJECT_TOPLEVEL="$PROJECT_DIR"
+  ORCA_EXPECTED_REPO_ID="${ORCA_WORKTREE_ID%%::*}"
+  BRANCH_LIFECYCLE="long-lived"
+  status=$(orca_cli status --json) || exit 64
+  ORCA_APP_VERSION=$(printf '%s' "$status" | jq -er '.result.runtime.appVersion') || exit 64
+  ORCA_CAPABILITIES_JSON=$(printf '%s' "$status" | jq -ec '.result.runtime.capabilities') || exit 64
+  ORCA_MODE="auto"
+}
+spawn_worker_borrowed_recheck() {
+  [ -n "${BORROW_EXISTING_WORKTREE:-}" ] || return 0
+  local -a args=(validate --contract "$BORROW_EXISTING_WORKTREE" --project "$PROJECT_DIR" --worktree "$WORKTREE" --branch "$BRANCH" --session "$SESSION" --orca-bin "$ORCA_CLI_BIN")
+  [ "$DRY_RUN" -eq 1 ] || args+=(--owner-pid $$)
+  python3 "$SCRIPT_DIR/borrowed-worktree.py" "${args[@]}" >/dev/null || exit 64
+}
+
+# MiniMax stays explicit-only; detection must not silently authorize direct tmux.
+spawn_worker_require_backend_orca() {
+  if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ] && [ "${NO_ORCA_MODE:-0}" -ne 1 ] && [ "${ORCA_MODE:-}" != auto ]; then
+    echo "MINIMAX_ORCA_REQUIRED: explicit MiniMax workers default to Orca; use --no-orca-mode to authorize direct tmux" >&2
+    return 64
   fi
 }
