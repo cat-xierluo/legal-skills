@@ -325,3 +325,27 @@ blocker_and_recovery:
 - 权限接续：只读源码及纯renderer消费确认单worker `--permission-mode yolo` 输出原生 `zcode --mode yolo`，由spawn的 `--command` 冻结消费；spawn不接受renderer的permission参数。默认build的逐项审批可用正式CLI单键Allow once接续，不重发Task、不重拉worker；yolo仍有必须交互/alwaysAsk/plan例外，未新增yolo业务真机测试。具体见[原生合同](references/30-zcode-native-orca.md)。
 - 审计：Harness Failure Audit原始两hard（HFA009旁路RESULT归档、HRA001测试grep计数）保留；独立定向消费者确认误报，不声称全Skill零finding。冻结e1独立ACCEPT，ee06文档/真实链及误报复核ACCEPT；最终交付head另经独立审查。证据根为本机 `/tmp/mao-zcode-orca-native-261001/`，包含terminal-close/exit、profile/request-cleanup与retained-evidence；无原始账号凭证入库。
 - `NOT_VERIFIED`：新yolo任务的完整真机行为；coordinator-owned 原生终端的自动关闭；本轮 user_takeover 的实际触发来源；机械 scope/install hook；长期账号身份锁、自动切号/耗卡/持续预算控制；逐请求精确服务端扣分。MiniMax等其他backend的supervised不类推通过。
+
+## TASK-2026-10-01-ZCODE-EXISTING-WORKTREE-ENTRY — 预建工作树首次原生接入合同
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：授权总控将既有工作树首次接入收窄为独立实现/审查任务；当前只在隔离fixture实施，不代派CS004领域任务。
+- 当前事实：已安装2.32.0的Orca spawn明确拒绝已占用branch/path，exit3 `EXISTING_WORKTREE_REQUIRES_RECOVERY`发生在provider lease/Context/terminal/Task副作用前；`--worktree`与`--branch-lifecycle long-lived`均不是reuse开关。当前Orca1.4.218 `worktree create --help`没有import/path/reuse参数，明确创建新checkout。repo注册不等价于允许复用worker工作树。
+- 恢复边界：`pm-orchestrate reauthorize/quota-park`及recover-unconfigured依赖原始Session/METADATA/authority和Dispatch身份；不能为首次接入伪造这些文件、借恢复入口绕过门，不能用raw terminal create代替MAO门禁。Codex PM在backend policy中可选zcode-cli，但仍须真实harness链与当前Orca项目证据。
+- 只读证据：`/tmp/mao-zcode-orca-native-261001/existing-worktree-consumer-contract.sanitized.json`，实际安装helper对本源已占用分支返回exit3；未调用Orca/provider/terminal/Task，未读客户材料。官方help与安装源码已核。准确request root及限制已发送至授权总控转交原PM，前一泛化模板已明确更正。
+- 后续合同：若立项，在原唯一owner授权下设计显式借用已有树的新Session入口，证明canonical repo/path/branch/head、无active writer、范围/预算/authority门及borrowed long-lived保留策略；不能默认复用、另造同卡第二树或自动关闭用户资源。尚未实现/未做该入口真机验收，不影响已完成的新建原生路径验收。
+
+- 执行合同：独立候选 `feat/mao-borrowed-minimax-orca-261001`，base `1002283663cd676ec17ada52da480ed4cb1af30b`；实现 `/root/zswitch_adapter`、独审 `/root/private_skill_forward`、PM `/root`。先隔离入口/失败保留/并发漂移验证，再独审、维护矩阵、真实受控接口验收；两失败episode上限，不因改名/runtime重置。
+- 当前消费者：CS004已由原PM启动唯一MiniMax writer，PID69445在2026-10-01精确只读核为minimax-code。既有工作树/卡/材料保持只读，必须待原owner重新明确无writer才允许将新入口用于该树；当前授权不允许另起第二writer/tree。
+- 验收：缺显式合同仍维持exit3；合法借用形成真实新Session并保留原tree/branch/资产；active writer、身份/HEAD/快照漂移、冲突及未知生命周期全部失败关闭；失败与release不清理借用的long-lived资源。证据 `/tmp/mao-borrowed-minimax-orca-261001/`，未验范围明确NOT_VERIFIED。
+
+- 恢复记录：首轮26个隔离fixture同一setUp因fake ps空库存被process_schema_unknown拒绝，资源副作用0；计episode1，正式acceptance-recovery分类internal_recoverable/repair，保留日志与ledger，不放宽生产未知拒绝。上限2，不重置；当前同episode修复在途。
+
+- 实现冻结：`cec2578be04c2b95985503359bc9f744ae85b9d6`仅14个scripts/tests；借用48个消费者分段PASS、8个受影响套件PASS，日志和14个SHA见implementation/fixed-scoped-evidence.json。首episode保留，scoped修复通过；独审/完整矩阵/有界真机待验，CS004/private未触及。
+
+## TASK-2026-10-01-MINIMAX-ORCA-DEFAULT-CHANNEL — MiniMax Code 默认 Orca 派发
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：本聊天真人明确要求MiniMax通过ORCA派发以查看分支并统一管理，同时保留直连。
+- 范围：显式选minimax-code后默认Orca terminal-managed；Orca不可达时失败关闭，不静默直连；保留显式直连入口。与借用入口共享产品脚本串行实现，独立审查和有界真机验收。
+- 非目标：不将MiniMax加入日常自动backend池、不迁移/重启在途writer、不假称supervised Task/Dispatch已支持、不改认证/付费模型/全局配置。
+- 验收：普通MiniMax派发在Orca具有可核对terminal/worktree/branch；显式直连可达；runtime失败不创建tmux/模型副作用；实际文件任务由PM回读产物验收并精确收口。CS004仍由原PM管理，不能作为本轮测试对象。
+- 清单：派发前合同已过；实现与定向测试进行中；独审、完整维护矩阵、有界Orca真机行为、PR/安装/交接待完成。证据共用 `/tmp/mao-borrowed-minimax-orca-261001/`。
