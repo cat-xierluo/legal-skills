@@ -33,6 +33,10 @@ COORDINATOR_HANDLE=""
 EXPECTED_RUNTIME_ID=""
 AUTHORITY_RECEIPT_FILE=""
 METADATA_FILE=""
+NATIVE_AGENT=""
+LAUNCH_REQUEST_ROOT=""
+TERMINAL_OWNERSHIP="external"
+REPLACEMENT_BIND=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -41,6 +45,9 @@ Usage:
 
 Required:
   --worktree-id ID         Exact Orca worktree id
+  --agent zcode            Opt-in native creation (mutually exclusive with --terminal-handle);
+                           requires --metadata-file and --launch-request-root.
+  --launch-request-root DIR Owner-only preconfigured native launcher request directory
   --terminal-handle HANDLE Existing terminal running an Orca-recognized agent
   --task-spec TEXT         Complete worker task (required unless --task-id is supplied)
   --authority-receipt PATH PM launch-bound authority receipt
@@ -70,6 +77,8 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --worktree-id) WORKTREE_ID="$2"; shift 2 ;;
+    --agent) NATIVE_AGENT="$2"; shift 2 ;;
+    --launch-request-root) LAUNCH_REQUEST_ROOT="$2"; shift 2 ;;
     --terminal-handle) TERMINAL_HANDLE="$2"; shift 2 ;;
     --task-spec) TASK_SPEC="$2"; shift 2 ;;
     --task-title) TASK_TITLE="$2"; shift 2 ;;
@@ -91,7 +100,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 [ -n "$WORKTREE_ID" ] || { echo "ERROR: --worktree-id is required" >&2; exit 64; }
-[ -n "$TERMINAL_HANDLE" ] || { echo "ERROR: --terminal-handle is required" >&2; exit 64; }
+if [ -n "$NATIVE_AGENT" ]; then
+  [ "$NATIVE_AGENT" = "zcode" ] && [ -z "$TERMINAL_HANDLE" ] && [ -n "$METADATA_FILE" ] && [ -n "$LAUNCH_REQUEST_ROOT" ] && [ "$RESET_FAILED" -eq 0 ] || {
+    echo "ERROR: native --agent zcode requires explicit metadata/request root, excludes terminal/reset-failed" >&2; exit 64;
+  }
+  TERMINAL_OWNERSHIP="created"
+else
+  [ -n "$TERMINAL_HANDLE" ] || { echo "ERROR: --terminal-handle or --agent zcode is required" >&2; exit 64; }
+  [ -z "$LAUNCH_REQUEST_ROOT" ] || { echo "ERROR: request root requires native --agent zcode" >&2; exit 64; }
+  REPLACEMENT_BIND="${METADATA_FILE:+1}"
+fi
 [ -n "$TASK_SPEC" ] || [ -n "$TASK_ID" ] || { echo "ERROR: --task-spec or --task-id is required" >&2; exit 64; }
 [ -z "$TASK_ID" ] || [ -n "$RUN_ID" ] || { echo "ERROR: --task-id requires --run-id" >&2; exit 64; }
 [ -z "$TASK_ID" ] || [ -n "$COORDINATOR_HANDLE" ] || { echo "ERROR: --task-id requires --coordinator-handle from the Wave receipt" >&2; exit 64; }
@@ -103,6 +121,14 @@ python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authori
 orca_runtime_init
 if [ -n "$COORDINATOR_HANDLE" ] || [ -n "$EXPECTED_RUNTIME_ID" ]; then
   orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || exit $?
+fi
+
+if [ -n "$NATIVE_AGENT" ]; then
+  native_status=$(orca_cli status --json) || exit 64
+  native_version=$(printf '%s' "$native_status" | jq -er '.result.runtime.appVersion') || exit 64
+  [ -n "$EXPECTED_RUNTIME_ID" ] || EXPECTED_RUNTIME_ID=$(printf '%s' "$native_status" | jq -er '.result.runtime.runtimeId | select(type == "string" and length > 0 and . != "none")') || exit 64
+  orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || exit $?
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$LAUNCH_REQUEST_ROOT" --app-version "$native_version" >/dev/null || exit 64
 fi
 
 patch_supervised_metadata() {
@@ -172,7 +198,14 @@ PY
       echo "ORCAREG_METADATA_EXPLICIT_INVALID: replacement metadata path is not trusted" >&2
       return "$metadata_required"
     fi
-    if jq -e --arg worktree "$WORKTREE_ID" --arg run "$RUN_ID" --arg task "$TASK_ID" \
+    if [ -n "$NATIVE_AGENT" ]; then
+      if jq -e --arg worktree "$WORKTREE_ID" --arg authority "$AUTHORITY_RECEIPT_FILE" \
+        '.session.orca.worktree_id == $worktree and (.session.orca.terminal_handle // "") == ""
+         and .execution_authority.authority_receipt_file == $authority
+         and .runtime.worker_backend == "zcode-cli"' "$candidate" >/dev/null 2>&1; then
+        matches+=("$candidate")
+      fi
+    elif jq -e --arg worktree "$WORKTREE_ID" --arg run "$RUN_ID" --arg task "$TASK_ID" \
       --arg authority "$AUTHORITY_RECEIPT_FILE" \
       '.session.orca.worktree_id == $worktree
        and .session.orca.supervised.run_id == $run
@@ -202,7 +235,7 @@ PY
   if [ "$DISPATCH_BIND" = "ok" ]; then
     if ! orchestration_completion_authority_write \
       "$TASK_ID" "$DISPATCH_ID" "$TERMINAL_HANDLE" "$RUN_ID" "$candidate" \
-      "$AUTHORITY_RECEIPT_FILE" "${METADATA_FILE:+1}"; then
+      "$AUTHORITY_RECEIPT_FILE" "$REPLACEMENT_BIND"; then
       echo "ORCAREG_COMPLETION_AUTHORITY_FAILED: worker 已启动，但 completion transport 未进入实际 hook authority" >&2
       return 1
     fi
@@ -215,12 +248,12 @@ PY
     return "$metadata_required"
   }
   if jq --arg run "$RUN_ID" --arg task "$TASK_ID" --arg disp "$DISPATCH_ID" \
-    --arg terminal "$TERMINAL_HANDLE" \
+    --arg terminal "$TERMINAL_HANDLE" --arg ownership "$TERMINAL_OWNERSHIP" \
     --arg coordinator "$COORDINATOR_HANDLE" --arg bind "$DISPATCH_BIND" \
     --arg completion_file "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}" \
     --arg completion_sha "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}" \
     '.session.orca.terminal_handle = $terminal
-     | .session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: "external"}
+     | .session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: $ownership}
      | if $completion_file != "" then
          .execution_authority.completion_authority_file = $completion_file
          | .execution_authority.completion_authority_sha256 = $completion_sha
@@ -272,13 +305,25 @@ else
   echo "ORCAREG_TASK_REUSED: $TASK_ID" >&2
 fi
 
+if [ -n "$NATIVE_AGENT" ]; then
+  prepare_out=$(python3 "$SCRIPT_DIR/zcode-orca-launcher.py" prepare \
+    --requests-root "$LAUNCH_REQUEST_ROOT" --metadata "$METADATA_FILE" \
+    --authority "$AUTHORITY_RECEIPT_FILE" --orca-bin "$ORCA_CLI_BIN" \
+    --runtime-id "$EXPECTED_RUNTIME_ID" --worktree-id "$WORKTREE_ID" \
+    --run-id "$RUN_ID" --task-id "$TASK_ID" --coordinator-handle "$COORDINATOR_HANDLE") || exit 64
+  REQUEST_FILE=$(printf '%s' "$prepare_out" | jq -er '.request_file') || exit 64
+  echo "ORCAREG_NATIVE_REQUEST: $REQUEST_FILE" >&2
+fi
+
 worker_start_once() {
   if [ -n "$EXPECTED_RUNTIME_ID" ]; then
     orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || return $?
   fi
+  local -a launch_selector=(--terminal "$TERMINAL_HANDLE")
+  [ -z "$NATIVE_AGENT" ] || launch_selector=(--agent "$NATIVE_AGENT")
   orca_cli orchestration worker-start \
     --task "$TASK_ID" \
-    --terminal "$TERMINAL_HANDLE" \
+    "${launch_selector[@]}" \
     --worktree "id:$WORKTREE_ID" \
     --run "$RUN_ID" \
     --from "$COORDINATOR_HANDLE" \
@@ -307,6 +352,18 @@ if ! start_out=$(worker_start_once); then
   fi
 fi
 
+if [ -n "$NATIVE_AGENT" ]; then
+  native_receipt=$(mktemp "$LAUNCH_REQUEST_ROOT/native-receipt.XXXXXX") || exit 1
+  chmod 600 "$native_receipt"
+  printf '%s' "$start_out" > "$native_receipt"
+  if ! bound_out=$(python3 "$SCRIPT_DIR/zcode-orca-launcher.py" bind-receipt --requests-root "$LAUNCH_REQUEST_ROOT" --request-file "$REQUEST_FILE" --receipt "$native_receipt"); then
+    echo "ERROR: native receipt/claim mismatch; receipt=$native_receipt request=$REQUEST_FILE; inspect residualResources; no retry" >&2
+    echo "$start_out" >&2
+    exit 1
+  fi
+  TERMINAL_HANDLE=$(printf '%s' "$bound_out" | jq -er '.terminal_handle') || exit 1
+fi
+
 # Task-106/Task-107：worker-start 成功后的 Dispatch 绑定自检。
 # 实现已抽公共函数 orchestration_dispatch_bind_selfcheck（orca-supervised-protocol.sh），
 # 与 spawn-worker-launch.sh 的 launch 路径共用同一份；此处只做调用与 KV 导出。
@@ -324,3 +381,6 @@ printf 'ORCAREG_DISPATCH_BIND=%s\n' "$DISPATCH_BIND"
 printf 'ORCAREG_COMPLETION_AUTHORITY_FILE=%s\n' "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}"
 printf 'ORCAREG_COMPLETION_AUTHORITY_SHA256=%s\n' "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}"
 printf 'ORCAREG_METADATA_BIND=%s\n' "$ORCAREG_METADATA_BIND"
+
+printf 'ORCAREG_TERMINAL_HANDLE=%s\n' "$TERMINAL_HANDLE"
+printf 'ORCAREG_TERMINAL_OWNERSHIP=%s\n' "$TERMINAL_OWNERSHIP"

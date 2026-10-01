@@ -167,6 +167,7 @@ ORCA_RUN_ID=""
 ORCA_TASK_ID=""
 ORCA_COORDINATOR_HANDLE=""
 ORCA_EXPECTED_RUNTIME_ID=""
+ORCA_ZCODE_NATIVE_REQUESTS=""
 ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
 ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
 ORCA_SUPERVISED_TASK_ID=""   # helper 输出
@@ -473,6 +474,16 @@ source "$SCRIPT_DIR/spawn-worker-orca.sh"
 #   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
 #   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
 #   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+# Native version/root gating must precede detector auto-registration as well.
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: native requests require zcode-cli + supervised" >&2; exit 64;
+  }
+  orca_runtime_init || exit 64
+  native_status=$(orca_cli status --json) || exit 64
+  native_version=$(printf '%s' "$native_status" | jq -er 'select(.ok == true) | .result.runtime | select(.reachable == true) | .appVersion') || exit 64
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$native_version" >/dev/null || exit 64
+fi
 detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
 if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
@@ -495,6 +506,12 @@ if [ "$ORCA_SUPERVISED" -eq 1 ]; then
   [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
   has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
   [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
+fi
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_MODE" = "auto" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: --orca-zcode-native-requests requires zcode-cli + Orca supervised" >&2; exit 64;
+  }
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$ORCA_APP_VERSION" >/dev/null || exit 64
 fi
 if [ "$ORCA_MODE" != "auto" ] && ! command -v tmux >/dev/null 2>&1; then
   echo "ERROR: tmux is required outside Orca terminal mode" >&2
