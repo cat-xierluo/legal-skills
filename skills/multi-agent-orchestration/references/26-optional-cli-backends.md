@@ -6,8 +6,8 @@
 
 | 产品 | backend | CLI | 配置与权限 | 验证状态 |
 |---|---|---|---|---|
-| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；默认 `build`，`edit/yolo` 须显式选择 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起显式 native supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
-| 独立 MiniMax Code | `minimax-code`（`mcode` 别名） | `mcode` TUI / `mcode exec` | 原生 Session/Run 模型；exec 默认 `smart` | help/argv 与真实 Orca terminal-managed 文件任务已独立验收；实际 minimax / MiniMax-M3.1-Flash-Preview；supervised/settlement `NOT_VERIFIED` |
+| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；新worker默认 `yolo`，`build/edit/plan` 可显式收紧 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起显式 native supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
+| 独立 MiniMax Code | `minimax-code`（`mcode` 别名） | `mcode` TUI / `mcode exec` | 原生 Session/Run 模型；exec 默认 `full` | help/argv 与真实 Orca terminal-managed 文件任务已独立验收；实际 minimax / MiniMax-M3.1-Flash-Preview；supervised/settlement `NOT_VERIFIED` |
 | CodeBuddy | `codebuddy` | `codebuddy` | 沿用既有 settings/hook 集成 | 本次保留；未重测 live 生命周期 |
 | 独立 Qoder CN | `qoder-cn`（`qoderclicn` 别名） | 独立安装的 `qoderclicn` | 原生 auto；不继承旧 QoderWork 模型表或 hook 保证 | 官方参数/隔离 argv 已核对；本机独立入口未安装、live `NOT_VERIFIED` |
 | 千问办公 | `qwenwork-cn` | 指定 bundle 的 `qoderclicn`；原生工具是 `qwenwork` | 需显式独立 config-dir；见 ref 27 | help 已核对；账号/provider `NOT_VERIFIED` |
@@ -43,9 +43,9 @@ bash scripts/render-runtime-profile.sh --backend minimax-code --mode batch \
 
 显式选择 `minimax-code`（含 `mcode` 别名）后，`spawn-worker.sh` 默认要求匹配当前项目的 Orca 通道。Orca 缺失、不可达、注册失败、错仓或 lightweight 模式在工作树、provider lease、Session Context、终端与任务创建前失败；不要因失败另起直连。用户明确选择直连时传 `--no-orca-mode`，无需工作树时再加 `--no-worktree`。此默认只决定已选 MiniMax 的管理通道，不改变可选 backend 池。Orca terminal-managed 可见终端、工作树和分支，但没有 supervised Task/Dispatch，也不要求 `worker_done`。
 
-MiniMax batch 使用 `exec --permission smart --output-format stream-json --input -`；stdin 原样读取 prompt。交互模式仅 `-m` 覆盖当前 Session，不能传 headless 的 `--permission`。ZCode 启动帮助未提供 `--model`，renderer 在传模型时拒绝，不能静默忽略或改共享配置；按原生 `/model list` 与 `/model <provider/model>` 明确选择；BigModel 套餐认证、reasoning 必填与静默回落风险读取 [独立 CLI 的 BigModel 实测](28-zcode-cli-bigmodel-coding-plan.md)。ZCode renderer 显式默认 `--mode build`，避免 CLI `--prompt` 的原生 yolo 默认隐式扩大权限。
+MiniMax batch 默认使用 `exec --permission full --output-format stream-json --input -`；显式 `smart/off` 保留，stdin 原样读取prompt。长程任务保持交互TUI，不能传exec的 `--permission`。MiniMax 0.5.10 的TUI从原生配置读取权限；`/permission`只读核对，`/permission full`会写共享配置，不能冒称仅影响当前worker。派发前核实当前模式为full（内部值bypassPermissions）；本机已配置full且已通过官方loader读回，不在启动时改共享设置。其他机器若未full，应由既有原生配置流程处理，不能承诺renderer已强制TUIfull。ZCode 启动帮助未提供 `--model`，renderer 在传模型时拒绝，不能静默忽略或改共享配置；按原生 `/model list` 与 `/model <provider/model>` 明确选择；BigModel 套餐认证、reasoning 必填与静默回落风险读取 [独立 CLI 的 BigModel 实测](28-zcode-cli-bigmodel-coding-plan.md)。ZCode renderer与spawn新任务默认命令为 `--mode yolo`，显式build/edit/plan保留。此默认只影响新worker，原生交互CLI与Orca通道保持。
 
-用渲染后的 WORKER_COMMAND 交给 `spawn-worker.sh --worker-backend ... --command ...`；ZCode CLI、MiniMax Code、Qoder CN 尚无本 Skill 已配置的 PreToolUse 集成，必须显式传 `--allow-prompt-only-install-guard '<授权来源>'`。本次增加支持不授权实际派发、安装、push/PR 或 bypass 模式；按真实任务授权运行。不要自动应答未验证 CLI 的 trust/permission dialog。
+用渲染后的 WORKER_COMMAND 交给 `spawn-worker.sh --worker-backend ... --command ...`；ZCode CLI、MiniMax Code、Qoder CN 尚无本 Skill 已配置的 PreToolUse 集成，必须显式传 `--allow-prompt-only-install-guard '<授权来源>'`。backend支持本身不新增业务派发、安装或push/PR授权；已授权的新隔离任务按用户默认采用原生最高可用执行权限，显式收紧仍生效。不要自动应答未验证 CLI 的 trust/permission dialog。
 
 ## 身份与失败边界
 
