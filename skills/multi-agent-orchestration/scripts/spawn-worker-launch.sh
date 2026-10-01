@@ -3,6 +3,14 @@
 # This file is sourced after spawn-worker.sh prepares Session Context and guards.
 
 launch_worker_session() {
+  local minimax_mode="interactive"
+  if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ]; then
+    minimax_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
+    if [ "$minimax_mode" = "batch" ] && { [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "${ORCA_TASK_ID:-}" ] || [ -n "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ]; }; then
+      echo "MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED: bootstrap cannot receive a second worker-start task" >&2
+      return 64
+    fi
+  fi
   # Launch.sh auto-wrap: COMMAND 含空格时(路径拆词风险,如 qoder BIN
   # /Applications/QoderWork CN.app 含空格),tmux new-session 的 command 解析
   # 会吃掉 %q 反斜杠转义 → env 127(command not found)。
@@ -92,7 +100,7 @@ print(lines[0])') || exit 64
     # terminal-managed 投普通占位 prompt；supervised 由 worker-start 注入 live preamble + TASK，
     # 此处只创建并等待 terminal，禁止双重投递。
     orca_terminal_create_and_send "$ORCA_WORKTREE_ID" "$SESSION" "$COMMAND" \
-      "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/${SESSION}（详细指令将由 PM 后续 orca terminal send 投递）"
+      "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/${SESSION}（详细指令将由 PM 后续 orca terminal send 投递）" "$minimax_mode" || return $?
     # v2.1（DEC-114）：orca_terminal_create_and_send 在 write_metadata 之后跑（设 ORCA_TERMINAL_HANDLE），
     # 补 patch METADATA 的 session.orca.terminal_handle，让 PM 巡检 METADATA 能拿到 handle。
     if [ "$DRY_RUN" -eq 0 ] && [ -n "$ORCA_TERMINAL_HANDLE" ] && [ -f "$METADATA_FILE" ]; then
