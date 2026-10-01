@@ -436,7 +436,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
 
-- 状态：`IN_PROGRESS / ENGINEERING_FROZEN_REVIEW_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
+- 状态：`IN_PROGRESS / VERIFIED_PR_CLOSEOUT_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
 - 输入：冻结诊断3份真实快照及原Fathom第三轮；来源经原总控交接，消费者是Fathom/DSH原memory拒绝证据，不解除各自泊车或重复业务。
 - 通道/资源：同宿主subagent为SKILL§1/2独立合法通道，无独立worker进程/CLIterminal/provider/worktree派发。现liveprobe仍exit3；不能换独立CLI绕门。复用已附着干净managed WT，新分支fix/mao-memory-telemetry-261002，base77b82251b36b270e88253ec2b40f9a43dae9b8a3；原profile分支/evidence保留。
 - 实现写域：scripts/mem_budget_probe.py、scripts/test-mem-budget-probe.py、新scripts/test_memory_telemetry.py及scripts/fixtures/memory-admission-261002/**；根PM只写本卡、SKILL版本、CHANGELOG、DECISIONS、ref22/ref19与README索引。无其他代码/global/账号写域。
@@ -448,3 +448,6 @@ blocker_and_recovery:
 - 证据：/tmp/mao-memory-telemetry-261002/，完整派发价值JSON同处；source内存门前后可比，Fathom/DSH业务结果非本卡交付。
 
 - 工程首轮：新遥测13/13、原内存58/58实际exit0，无失败episode或重跑；三frozen CLI保留exit3/slots0/swap critical与原available_bytes。报告84%解析有效但level/available_percent null；无vm_stat+新百分比仍exit1。冻结工程交独立审查，完整矩阵/发布尚待完成。
+
+- 独立验收：a7a6a81d实现绑定ACCEPT，新13/原58独验0、39 heldout/78次base-candidate CLI原payload去telemetry与退出精确一致；三frozen15raw byte/SHA相同，旧parse84 None→新reported84、无physical fallback。首外置consumer错flag/尾marker解析及唯一纠正复验保留，不归产品failure。
+- PM完整维护矩阵：66/66 exit0，直接复用两个工程字节相同首套件，其他64项各运行一次；无需失败episode。raw diffcheck2仅15原样快照trailing spaces，非fixture0；静态SEC1/HFA1/ISG2原告警保留，非本修范围不签全Skill安全或多轮稳定。最终文档仅修composite使用条件并记录证据，PR exact交付、本地CAS仍待完成。
