@@ -139,7 +139,7 @@ def interactive_command(command, depth=0):
     require(not any(x in ("--prompt","-p","--headless","--print","--output-format","app-server","agent-server")
                     or x.startswith(("--prompt=","--headless=","--print=","--output-format=")) for x in words[1:]), "headless_not_allowed")
 
-def validate(req):
+def validate(req, check_borrowed=True):
     require(req.get("schema") == SCHEMA and isinstance(req.get("nonce"),str)
             and str(uuid.UUID(req["nonce"])) == req["nonce"], "request_schema")
     require(isinstance(req.get("expires_at"), (int, float)) and time.time() <= req["expires_at"]
@@ -169,14 +169,31 @@ def validate(req):
     a, digest = load_authority(req["authority"], req["authority_sha256"])
     require(authority["authority_receipt_sha256"] == digest and a.get("session") == req["session"]
             and Path(a.get("worktree", "")).resolve() == wt and a.get("branch") == m["branch"], "authority_identity_mismatch")
+    # Native Task injection may complete an authorized commit before bind returns.
+    # Keep branch/authority/receipt identity; never replay the borrowed prelaunch
+    # HEAD or dirty snapshot after the worker has begun executing the Task.
     require(git(str(wt), "branch", "--show-current") == req["branch"]
-            and git(str(wt), "rev-parse", "HEAD") == req["head"], "git_identity_changed")
+            and (not check_borrowed and req.get("worktree_ownership") == "borrowed"
+                 or git(str(wt), "rev-parse", "HEAD") == req["head"]), "git_identity_changed")
     launch = read_file(req["launch"])
     require(sha(launch) == req["launch_sha256"] and launch.startswith(b"#!/bin/bash\n")
             and stat.S_IMODE(Path(req["launch"]).stat().st_mode) == 0o700, "launch_changed")
     quoted=subprocess.run(["/bin/bash","--noprofile","--norc","-c",'printf %q "$1"',"_",command],capture_output=True,check=True).stdout
     # PM generated wrapper must execute precisely the frozen full command.
     require(launch.splitlines()[-1] == b"exec bash -c " + quoted, "launch_command_mismatch")
+    if m.get("worktree_ownership") == "borrowed" and check_borrowed:
+        binding=m["borrowed_worktree"]
+        approved=json.loads(read_file(binding["contract_file"]))
+        require(approved["approved_by"] == a.get("degradation_source"), "borrowed_authority_source_mismatch")
+        require(sha(read_file(binding["contract_file"])) == binding["contract_sha256"], "borrowed_contract_changed")
+        import importlib.util
+        spec=importlib.util.spec_from_file_location("mao_borrowed_worktree",Path(__file__).with_name("borrowed-worktree.py"))
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        try:
+            module.validate(binding["contract_file"],m["project"],str(wt),m["branch"],req["orca_bin"],
+                            req["session"],binding["lock_owner_pid"],os.environ.get("ORCA_TERMINAL_HANDLE", ""))
+        except (module.Refused,OSError,ValueError,KeyError,TypeError,AttributeError):
+            raise Rejected("borrowed_late_gate_refused")
     return launch
 
 def manifests(root):
@@ -227,7 +244,7 @@ def prepare(a):
              authority_sha256=digest, worktree=wt, worktree_id=a.worktree_id, runtime_id=a.runtime_id,
              session=m["session"]["id"], branch=m["branch"], head=git(wt,"rev-parse","HEAD"),
              orca_bin=str(Path(a.orca_bin).resolve(strict=True)), run_id=a.run_id, task_id=a.task_id,
-             coordinator_handle=a.coordinator_handle)
+             coordinator_handle=a.coordinator_handle, worktree_ownership=m.get("worktree_ownership","created"))
     require(1 <= a.ttl_seconds <= 120 and all((a.runtime_id,a.worktree_id,a.run_id,a.task_id,a.coordinator_handle)), "request_parameters")
     validate(r)
     live(r)
@@ -285,7 +302,7 @@ def bind(a):
     try:
         r=decode(read_file(str(claimed),private=True))
         require(r.get("state")=="claimed","request_not_claimed")
-        validate(r)
+        validate(r,check_borrowed=False)
         receipt=decode(read_file(a.receipt))
         result=receipt.get("result",{})
         require(result.get("state") == "ready", "native_receipt_not_ready")
@@ -293,6 +310,11 @@ def bind(a):
                 and result.get("runId")==r["run_id"] and result.get("taskId")==r["task_id"]
                 and isinstance(result.get("dispatchId"),str) and result["dispatchId"],"native_receipt_identity")
         effects=result.get("effects",[])
+        require(isinstance(effects,list) and all(isinstance(e,dict) for e in effects),"native_effects_unknown")
+        if r.get("worktree_ownership") == "borrowed":
+            worktrees=[e for e in effects if e.get("kind")=="worktree"]
+            require(len(worktrees)==1 and worktrees[0].get("id")==r["worktree_id"]
+                    and worktrees[0].get("action")=="reused","borrowed_native_worktree_ownership_unknown")
         terminals=[e for e in effects if e.get("kind")=="terminal" and e.get("role")=="agent" and e.get("action")=="created"]
         require(len(terminals)==1 and terminals[0].get("id")==r["terminal_handle"],"native_receipt_terminal_mismatch")
         require(any(e.get("kind")=="worktree" and e.get("id")==r["worktree_id"] and e.get("action")=="reused" for e in effects),"native_receipt_worktree_mismatch")

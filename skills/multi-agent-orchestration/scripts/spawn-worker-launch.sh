@@ -16,6 +16,13 @@ launch_worker_session() {
     else
       mkdir -p "$(dirname "$LAUNCH_SH")"
       printf '#!/bin/bash\n# spawn-worker 自动生成:绕过 tmux command 解析(路径空格/特殊字符)\n# 原始 COMMAND 在 bash -c 下正确解析 %%q 转义(tmux 的 command parser 会吃反斜杠)\nexec bash -c %q\n' "$COMMAND" > "$LAUNCH_SH"
+      if [ -n "${BORROW_EXISTING_WORKTREE:-}" ]; then
+        # Execute the final borrowed gate inside the frozen bytes, even when the
+        # configured Orca bridge is an older installed compatible version.
+        printf -v borrowed_gate 'python3 %q validate --contract %q --project %q --worktree %q --branch %q --session %q --owner-pid %q --orca-bin %q' \
+          "$SCRIPT_DIR/borrowed-worktree.py" "$BORROW_EXISTING_WORKTREE" "$PROJECT_DIR" "$WORKTREE" "$BRANCH" "$SESSION" "$$" "$ORCA_CLI_BIN"
+        printf '#!/bin/bash\n%s --terminal "${ORCA_TERMINAL_HANDLE:?}" >/dev/null || exit 64\nexec bash -c %q\n' "$borrowed_gate" "$COMMAND" > "$LAUNCH_SH"
+      fi
       chmod +x "$LAUNCH_SH"
       [ -z "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ] || chmod 700 "$LAUNCH_SH"
     fi
@@ -32,6 +39,7 @@ launch_worker_session() {
         echo "SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE: worker-start --agent zcode; one frozen launch request; native unique task injection"
         return
       fi
+      if declare -F spawn_worker_borrowed_recheck >/dev/null; then spawn_worker_borrowed_recheck; fi
       reg_args=(--agent zcode --worktree-id "$ORCA_WORKTREE_ID"
         --metadata-file "$METADATA_FILE" --launch-request-root "$ORCA_ZCODE_NATIVE_REQUESTS"
         --task-spec "$TASK_SPEC" --task-title "${TASK_TITLE:-spawn-worker $SESSION}"
