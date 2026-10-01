@@ -17,6 +17,7 @@ launch_worker_session() {
       mkdir -p "$(dirname "$LAUNCH_SH")"
       printf '#!/bin/bash\n# spawn-worker 自动生成:绕过 tmux command 解析(路径空格/特殊字符)\n# 原始 COMMAND 在 bash -c 下正确解析 %%q 转义(tmux 的 command parser 会吃反斜杠)\nexec bash -c %q\n' "$COMMAND" > "$LAUNCH_SH"
       chmod +x "$LAUNCH_SH"
+      [ -z "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ] || chmod 700 "$LAUNCH_SH"
     fi
     COMMAND="bash $(printf '%q' "$LAUNCH_SH")"
   fi
@@ -25,6 +26,37 @@ launch_worker_session() {
     # Repeat immediately before terminal creation: preparation may take time.
     if [ -n "${ORCA_EXPECTED_RUNTIME_ID:-}" ]; then
       orca_runtime_require_identity "$ORCA_EXPECTED_RUNTIME_ID" || exit $?
+    fi
+    if [ -n "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ]; then
+      if [ "$DRY_RUN" -eq 1 ]; then
+        echo "SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE: worker-start --agent zcode; one frozen launch request; native unique task injection"
+        return
+      fi
+      reg_args=(--agent zcode --worktree-id "$ORCA_WORKTREE_ID"
+        --metadata-file "$METADATA_FILE" --launch-request-root "$ORCA_ZCODE_NATIVE_REQUESTS"
+        --task-spec "$TASK_SPEC" --task-title "${TASK_TITLE:-spawn-worker $SESSION}"
+        --authority-receipt "$AUTHORITY_RECEIPT_FILE")
+      [ -z "${ORCA_RUN_ID:-}" ] || reg_args+=(--run-id "$ORCA_RUN_ID")
+      [ -z "${ORCA_TASK_ID:-}" ] || reg_args+=(--task-id "$ORCA_TASK_ID")
+      [ -z "${ORCA_COORDINATOR_HANDLE:-}" ] || reg_args+=(--coordinator-handle "$ORCA_COORDINATOR_HANDLE")
+      [ -z "${ORCA_EXPECTED_RUNTIME_ID:-}" ] || reg_args+=(--runtime-id "$ORCA_EXPECTED_RUNTIME_ID")
+      if ! reg_out=$(bash "$SCRIPT_DIR/orca-supervised-register.sh" "${reg_args[@]}"); then
+        echo "SPAWN_WORKER_NATIVE_ZCODE_FAILED: inspect the exact request/receipt/residualResources; no automatic retry" >&2
+        exit 1
+      fi
+      # Reject duplicate or malformed output fields; never infer an arbitrary handle.
+      ORCA_TERMINAL_HANDLE=$(printf '%s\n' "$reg_out" | python3 -c '
+import re,sys
+lines=[x[len("ORCAREG_TERMINAL_HANDLE="):] for x in sys.stdin.read().splitlines() if x.startswith("ORCAREG_TERMINAL_HANDLE=")]
+if len(lines)!=1 or not re.fullmatch(r"[A-Za-z0-9_.:-]+",lines[0]): raise SystemExit(64)
+print(lines[0])') || exit 64
+      ORCA_SUPERVISED_RUN_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_RUN_ID=//p')
+      ORCA_SUPERVISED_TASK_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_TASK_ID=//p')
+      ORCA_SUPERVISED_DISPATCH_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_ID=//p')
+      ORCA_SUPERVISED_DISPATCH_BIND=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_BIND=//p')
+      ORCA_SUPERVISED_COORDINATOR_HANDLE=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_COORDINATOR_HANDLE=//p')
+      echo "SPAWN_WORKER_ORCA_NATIVE_ZCODE_DONE: terminal=$ORCA_TERMINAL_HANDLE dispatch=$ORCA_SUPERVISED_DISPATCH_ID bind=$ORCA_SUPERVISED_DISPATCH_BIND" >&2
+      return
     fi
     # Task-077 前置校验（terminal 副作用前 fail-closed）：PM 按 Wave receipt 传了
     # --orca-task-id 但漏 --orca-supervised 时，下方 self-check 分支会接手 dispatch 绑定，
