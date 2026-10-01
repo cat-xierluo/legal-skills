@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-01 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.31.1 | 重点增加独立 ZCode CLI、MiniMax Code CLI；保留 CodeBuddy、移除 QoderWork，新增独立 Qoder CN 与千问办公按需入口。同名 CLI 身份分离；这些可选 backend 仅用户指定时派发，不进入日常池；原生 ZCode 的 BigModel 模型切换与套餐通道已实测；支持默认关闭的本地账号调度 Skill 调用合同，私人规则不公开，hook/其他 provider/Orca 未测范围明确标记。 |
+| 2026-10-01 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.31.3 | 修复原生 Orca 未满足退出码消费：严格有效的 false+退出1可同句柄有界重等；异常仍零投递并保留资源，supervised保持唯一注入。 |
 | 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.9.0 | **提交身份自检与身份污染审计 + 分支冗余巡检自动化 + 身份核验**：v1.9.0 新增 scripts/identity-audit.sh（whoami 提交前自检：来源链 env→worktree→repo-local→global，仓库级覆盖/env 覆盖/可疑 agent 身份模式/期望不符四类告警；history 全仓 author/committer/Co-authored-by 尾注分布审计，可疑项自动标注）+16 项故障注入测试，源自 private-skills Hermes 身份污染实录（GitHub squash 把分支提交作者自动转尾注，门禁期望值取自被污染 config 时形同虚设）；v1.8.9 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除）+批量删除执行坑入册；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支）。已在 legal-skills 与 private-skills 双仓实测。 |
 | 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
 | 2026-09-30 | 新上传 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.3.2→v0.4.1 | DeepSeek Harness（DSH）插件开发指引首次公开登记：插件设计、开发、装载验证、版本迁移与发布审查（版本感知），支持 Pi/Hermes 插件迁移与隔离装载实验；0.3.2 新增官方能力复用目录条目 `ctx.jobs`（会话内长任务注册表）与 `packages/schedule`（持久定时调度），踩坑表补 renderer「Unknown client plugin」伪影语义解码；0.4.0 沉淀 `ctx.tools.register` 与 `ctx.storageDomain` 能力条目（零依赖手写编译后形态、update 原子读改写等实现知识，P09）、多插件共载自检误报坑与「Pi 插件 DSH 化起手切片」开发路径；0.4.1 修域名正则（仅下划线，对齐 backend.ts 强校验）并补 mock 假体须复刻校验条目之坑。 |
@@ -723,7 +723,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.31.1</td>
+<td style="text-align:center">v2.31.3</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
 <td></td>
 </tr>

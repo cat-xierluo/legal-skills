@@ -66,6 +66,10 @@ reset_orca_case() {
   RUNTIME_AVAILABLE=1
   CURRENT_MATCH=1
   FAKE_WAIT_FAIL=0
+  TERMINAL_WAIT_RC=0
+  TERMINAL_WAIT_SECOND_RC=0
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":true}}}'
+  TERMINAL_WAIT_SECOND_JSON=""
   ORCA_CURRENT_WORKTREE_PATH="$PROJECT_REPO"
   ORCA_CURRENT_WORKTREE_ID="repo-1::current"
   STATUS_JSON='{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}'
@@ -109,7 +113,14 @@ orca_cli() {
       printf '%s\n' '{"result":{"removed":true}}'
       ;;
     "terminal create") printf '%s\n' "$TERMINAL_CREATE_JSON" ;;
-    "terminal wait") [ "$FAKE_WAIT_FAIL" -eq 0 ] ;;
+    "terminal wait")
+      [ "$FAKE_WAIT_FAIL" -eq 0 ] || return 1
+      if [ -n "$TERMINAL_WAIT_SECOND_JSON" ] && [ "$(grep -c 'terminal wait' "$FAKE_LOG")" -gt 1 ]; then
+        bash -c 'printf "%s\n" "$1"; exit "$2"' wait-consumer "$TERMINAL_WAIT_SECOND_JSON" "$TERMINAL_WAIT_SECOND_RC"
+      else
+        bash -c 'printf "%s\n" "$1"; exit "$2"' wait-consumer "$TERMINAL_WAIT_JSON" "$TERMINAL_WAIT_RC"
+      fi
+      ;;
     "terminal send") return 0 ;;
     *) return 1 ;;
   esac
@@ -380,15 +391,150 @@ else
 fi
 
 reset_orca_case
-FAKE_WAIT_FAIL=1
 orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
 assert_eq "$ORCA_TERMINAL_HANDLE" "term-worker" "terminal helper records exact handle"
-if grep -Fq 'terminal create' "$FAKE_LOG" && grep -Fq 'terminal wait' "$FAKE_LOG" \
-  && grep -Fq 'terminal send' "$FAKE_LOG"; then
-  ok "tui-idle timeout remains non-blocking before prompt send"
+assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "ready terminal is created once"
+assert_eq "$(grep -c 'terminal wait' "$FAKE_LOG")" "1" "ready receipt requires one wait"
+assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "ready receipt sends exactly once"
+
+reset_orca_case
+TERMINAL_WAIT_SECOND_JSON="$TERMINAL_WAIT_JSON"
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":false}}}'
+orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
+assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "retry retains the created terminal"
+assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "retry waits on the same exact handle"
+assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "false then ready sends exactly once"
+if grep -Fq -- '--timeout-ms 30000' "$FAKE_LOG" && grep -Fq -- '--timeout-ms 60000' "$FAKE_LOG"; then
+  ok "readiness retry is longer and each wait is bounded at 60s"
 else
-  bad "tui-idle timeout remains non-blocking before prompt send"
+  bad "readiness retry is longer and each wait is bounded at 60s"
 fi
+
+assert_wait_refused() {
+  local label="$1" expected_waits="$2" rc=0
+  (orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'must not send') \
+    > "$CASE_ROOT/refused.out" 2> "$CASE_ROOT/refused.err" || rc=$?
+  assert_eq "$rc" "64" "$label exits with failure"
+  assert_eq "$(grep -c 'terminal wait' "$FAKE_LOG")" "$expected_waits" "$label has bounded waits"
+  assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "$label does not recreate the terminal"
+  if ! grep -Fq 'terminal send' "$FAKE_LOG" && ! grep -Fq 'worktree rm' "$FAKE_LOG" \
+    && grep -Fq 'terminal=term-worker worktree_id=repo-1::worker' "$CASE_ROOT/refused.err" \
+    && grep -Fq '资源保留' "$CASE_ROOT/refused.err"; then
+    ok "$label sends nothing and retains exact recovery identity"
+  else
+    bad "$label sends nothing and retains exact recovery identity"
+  fi
+}
+
+reset_orca_case
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+assert_wait_refused "rc0 unsatisfied receipt" 2
+
+for invalid_receipt in 'not-json' '' '{"ok":false,"result":{"wait":{"satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":"true"}}}' \
+  '{"ok":true,"result":{"ok":true}}' \
+  '{"ok":true,"result":{"wait":{"handle":"term-other","satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"condition":"exit","satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":true}}}{"ok":true,"result":{"wait":{"satisfied":true}}}'; do
+  reset_orca_case
+  TERMINAL_WAIT_JSON="$invalid_receipt"
+  assert_wait_refused "malformed or mismatched receipt [$invalid_receipt]" 1
+done
+
+# Run the installed native handler with an isolated RPC consumer, never the app/runtime.
+# The portable cases below always exercise actual shell exit status, even without Orca.
+NATIVE_TERMINAL_HANDLER=${ORCA_NATIVE_TERMINAL_HANDLER:-/Applications/Orca.app/Contents/Resources/app.asar.unpacked/out/cli/handlers/terminal.js}
+if command -v node >/dev/null 2>&1 && [ -f "$NATIVE_TERMINAL_HANDLER" ]; then
+  for native_satisfied in false true; do
+    native_rc=0
+    node - "$NATIVE_TERMINAL_HANDLER" "$native_satisfied" > "$CASE_ROOT/native-wait-$native_satisfied.json" <<'NODE' || native_rc=$?
+const handler = require(process.argv[2]).TERMINAL_HANDLERS['terminal wait'];
+const satisfied = process.argv[3] === 'true';
+const flags = new Map([['terminal','term-worker'],['for','tui-idle'],['timeout-ms','30000']]);
+const client = {call: async (method, params, options) => {
+  if (method !== 'terminal.wait' || params.terminal !== 'term-worker' || params.for !== 'tui-idle' || params.timeoutMs !== 30000 || options.timeoutMs !== 35000) throw Error('native contract drift');
+  return {ok:true,result:{wait:{handle:'term-worker',condition:'tui-idle',satisfied}}};
+}};
+handler({flags,client,cwd:process.cwd(),json:true}).catch(() => {process.exitCode=2;});
+NODE
+    expected_native_rc=0
+    [ "$native_satisfied" = true ] || expected_native_rc=1
+    assert_eq "$native_rc" "$expected_native_rc" "native handler $native_satisfied exit contract"
+    if jq -e --argjson expected "$native_satisfied" '.ok == true and .result.wait.satisfied == $expected' "$CASE_ROOT/native-wait-$native_satisfied.json" >/dev/null; then
+      ok "native handler $native_satisfied emits the structured receipt"
+    else
+      bad "native handler $native_satisfied emits the structured receipt"
+    fi
+  done
+  reset_orca_case
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON=$(cat "$CASE_ROOT/native-wait-false.json")
+  TERMINAL_WAIT_SECOND_JSON=$(cat "$CASE_ROOT/native-wait-true.json")
+  orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'native receipt consumer'
+  assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "native false exit1 retries the same handle"
+  assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "native false then ready sends exactly once"
+else
+  printf 'SKIP: installed native Orca handler contract replay (portable exit-status cases still run)\n'
+fi
+
+for supervised in 0 1; do
+  reset_orca_case
+  ORCA_SUPERVISED=$supervised
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_SECOND_JSON="$TERMINAL_WAIT_JSON"
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":false}}}'
+  orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
+  assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "exit1 retry supervised=$supervised creates once"
+  assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "exit1 retry supervised=$supervised uses same handle"
+  expected_sends=1
+  [ "$supervised" -eq 0 ] || expected_sends=0
+  assert_eq "$(grep -c 'terminal send' "$FAKE_LOG" || true)" "$expected_sends" "exit1 retry supervised=$supervised keeps unique injector"
+  reset_orca_case
+  ORCA_SUPERVISED=$supervised
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+  assert_wait_refused "exit1 false twice supervised=$supervised" 2
+ done
+
+for wait_rc in 1 2 127; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=$wait_rc
+  assert_wait_refused "exit$wait_rc with ready receipt" 1
+ done
+for wait_rc in 2 127; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=$wait_rc
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+  assert_wait_refused "exit$wait_rc with false receipt" 1
+ done
+for invalid_receipt in 'not-json' '' '{"ok":false,"error":{"code":"timeout"}}' \
+  '{"ok":false,"error":{"code":"terminal_handle_stale"}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":"false"}}}' \
+  '{"ok":true,"result":{"wait":{"handle":"term-other","satisfied":false}}}' \
+  '{"ok":true,"result":{"wait":{"condition":"exit","satisfied":false}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":false}}}{"ok":true,"result":{"wait":{"satisfied":false}}}'; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON="$invalid_receipt"
+  assert_wait_refused "exit1 invalid receipt [$invalid_receipt]" 1
+ done
+
+reset_orca_case
+FAKE_WAIT_FAIL=1
+assert_wait_refused "wait command failure" 1
+
+reset_orca_case
+ORCA_SUPERVISED=1
+orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'must not send'
+if ! grep -Fq 'terminal send' "$FAKE_LOG"; then
+  ok "ready supervised terminal leaves worker-start as the only injector"
+else
+  bad "ready supervised terminal leaves worker-start as the only injector"
+fi
+reset_orca_case
+ORCA_SUPERVISED=1
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+assert_wait_refused "supervised unsatisfied receipt" 2
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-orca.sh"' "$SCRIPT_DIR/spawn-worker.sh" \
   && ! grep -q '^detect_orca_mode() {' "$SCRIPT_DIR/spawn-worker.sh"; then
@@ -676,7 +822,7 @@ case "$1 $2" in
   "terminal create")
     printf '%s\n' '{"result":{"terminal":{"handle":"term-pregate"}}}' ;;
   "terminal wait")
-    printf '%s\n' '{"result":{"ok":true}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"wait":{"handle":"term-pregate","condition":"tui-idle","satisfied":true}}}' ;;
   "orchestration run-create")
     printf '%s\n' '{"ok":true,"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}},"_meta":{"runtimeId":"runtime-pregate"}}' ;;
   "orchestration run-current")
