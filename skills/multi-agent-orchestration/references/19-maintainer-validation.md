@@ -31,6 +31,7 @@ python3 scripts/test-borrowed-worktree.py
 bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
+python3 scripts/test_memory_telemetry.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-pm-message-contract.sh
