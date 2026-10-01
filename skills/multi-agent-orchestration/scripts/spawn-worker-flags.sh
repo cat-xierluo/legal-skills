@@ -149,6 +149,7 @@ Options:
                    --allow-install-command does not authorize this pre-guard phase.
   --borrow-existing-worktree CONTRACT.json
                    显式首次借用已登记长期 Git worktree，要求native ZCode、新Session与新鲜身份/dirty/writer合同。
+  --dispatch-profile orca-generic  Explicit generic Orca compatibility (ZCode native is default)
   --orca-zcode-native-requests DIR
                    显式启用 Orca >=1.4.218 原生 ZCode launcher；可信请求目录必须预建0700。
   --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
@@ -253,6 +254,7 @@ parse_spawn_worker_args() {
         shift 2
         ;;
       --worker-backend)
+        WORKER_BACKEND_EXPLICIT=1
         WORKER_BACKEND="$2"
         shift 2
         ;;
@@ -405,6 +407,11 @@ parse_spawn_worker_args() {
       --no-orca-mode)  # v2.1（DEC-114）：显式 opt-out ORCA 终端模式，强制走 tmux 路径
         NO_ORCA_MODE=1
         shift
+        ;;
+      --dispatch-profile)
+        [ "${2:-}" = "orca-generic" ] || { echo "ERROR: --dispatch-profile only accepts orca-generic" >&2; exit 64; }
+        DISPATCH_PROFILE_TRANSPORT="orca-generic"
+        shift 2
         ;;
       --orca-setup-mode)
         case "$2" in

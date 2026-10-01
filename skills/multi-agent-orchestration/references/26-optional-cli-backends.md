@@ -6,7 +6,7 @@
 
 | 产品 | backend | CLI | 配置与权限 | 验证状态 |
 |---|---|---|---|---|
-| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；新worker默认 `yolo`，`build/edit/plan` 可显式收紧 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起显式 native supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
+| 独立 ZCode CLI | `zcode-cli` | `zcode` 原生TUI | 原生会话配置；新worker默认 `yolo`，`build/edit/plan` 可显式收紧 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起原生 supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
 | 独立 MiniMax Code | `minimax-code`（`mcode` 别名） | `mcode` TUI / `mcode exec` | 原生 Session/Run 模型；exec 默认 `full` | help/argv 与真实 Orca terminal-managed 文件任务已独立验收；实际 minimax / MiniMax-M3.1-Flash-Preview；supervised/settlement `NOT_VERIFIED` |
 | CodeBuddy | `codebuddy` | `codebuddy` | 沿用既有 settings/hook 集成 | 本次保留；未重测 live 生命周期 |
 | 独立 Qoder CN | `qoder-cn`（`qoderclicn` 别名） | 独立安装的 `qoderclicn` | 原生 auto；不继承旧 QoderWork 模型表或 hook 保证 | 官方参数/隔离 argv 已核对；本机独立入口未安装、live `NOT_VERIFIED` |
@@ -35,8 +35,6 @@ bash scripts/render-runtime-profile.sh --backend qoder-cn --bin /absolute/path/q
 自包含短任务可渲染 batch（原任务仍须通过完整价值/验证合同）：
 
 ```bash
-bash scripts/render-runtime-profile.sh --backend zcode-cli --mode batch \
-  --permission-mode edit --prompt-file /absolute/path/task.md --output shell
 bash scripts/render-runtime-profile.sh --backend minimax-code --mode batch \
   --model '<provider/model>' --prompt-file /absolute/path/task.md --output shell
 ```
@@ -54,7 +52,7 @@ MiniMax `exec` 使用非空绝对路径文件重定向 `--input - < /absolute/pr
 - 移除 QoderWork：旧 backend/别名拒绝；命令实路径含 QoderWork 的软链也拒绝。只改 backend 标签不能把旧产品伪装成新产品。
 - 同名 qoderclicn：千问 bundle 只认 `qwenwork-cn`；独立 Qoder CN 只认 `qoder-cn`。千问 bundle 的配置目录必须显式提供且存在，不能从产品同源推断账号/额度共享。
 - 默认路由：route_suggest 自动 provider 补选仍只处理 Claude Code，新可选 backend 不加入 tier_policy。
-- ZCode CLI 的显式 native Orca 路径读取 [原生启动合同](30-zcode-native-orca.md)；MiniMax 默认 Orca terminal-managed，显式直连用 `--no-orca-mode`；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
+- ZCode CLI 已配置桥时默认 native Orca；配置/显式generic/direct及唯一下一动作读取 [派发profile](32-dispatch-profiles.md)，原生路径读取 [原生启动合同](30-zcode-native-orca.md)；MiniMax 默认 Orca terminal-managed，显式直连用 `--no-orca-mode`；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
 
 ## 2026-10-01 有界文件任务验收
 
