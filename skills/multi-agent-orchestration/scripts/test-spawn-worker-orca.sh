@@ -1202,5 +1202,45 @@ else
   bad "prebuilt Wave verifies its precise coordinator binding"
 fi
 
+# Actual entrypoint consumers keep canonical mcode alias and Orca default policy.
+for backend_alias in minimax-code mcode; do
+  : > "$E2E_ORCA_LOG"
+  minimax_rc=0
+  run_e2e_spawn "minimax-$backend_alias" "minimax-$backend_alias" "$E2E_ROOT/minimax-$backend_alias" \
+    --worker-backend "$backend_alias" --command mcode \
+    --allow-prompt-only-install-guard fixture:user --dry-run || minimax_rc=$?
+  assert_eq "$minimax_rc" 0 "actual MiniMax $backend_alias entrypoint accepts reachable Orca"
+  if grep -Fq 'SPAWN_WORKER_ORCA_AUTO' "$E2E_ROOT/minimax-$backend_alias.err" && ! grep -Fq 'MINIMAX_ORCA_REQUIRED' "$E2E_ROOT/minimax-$backend_alias.err"; then
+    ok "actual MiniMax $backend_alias stays on Orca"
+  else
+    bad "actual MiniMax $backend_alias stays on Orca"
+  fi
+  if grep -Eq 'worktree create|terminal create|task-create|worker-start' "$E2E_ORCA_LOG"; then
+    bad "MiniMax dry-run has zero worker resources"
+  else
+    ok "MiniMax dry-run has zero worker resources"
+  fi
+done
+
+# The backend policy is tested after detection, including light/non-Git fallback.
+for policy_case in default-missing default-lightweight default-force-tmux explicit-direct supervised terminal-managed other-backend; do
+  reset_orca_case
+  WORKER_BACKEND_CANONICAL=minimax-code
+  expected_policy_rc=64
+  case "$policy_case" in
+    default-missing) ORCA_MODE=missing_orca ;;
+    default-lightweight) ORCA_MODE=force_tmux; LIGHTWEIGHT_MODE=1 ;;
+    default-force-tmux) ORCA_MODE=force_tmux ;;
+    explicit-direct) ORCA_MODE=force_tmux; NO_ORCA_MODE=1; expected_policy_rc=0 ;;
+    supervised) ORCA_MODE=auto; ORCA_SUPERVISED=1; expected_policy_rc=0 ;;
+    terminal-managed) ORCA_MODE=auto; ORCA_SUPERVISED=0; expected_policy_rc=0 ;;
+    other-backend) WORKER_BACKEND_CANONICAL=claude-code; ORCA_MODE=force_tmux; expected_policy_rc=0 ;;
+  esac
+  policy_rc=0
+  spawn_worker_require_backend_orca 2>"$CASE_ROOT/policy.err" || policy_rc=$?
+  assert_eq "$policy_rc" "$expected_policy_rc" "MiniMax default Orca policy: $policy_case"
+  [ ! -s "$FAKE_LOG" ] && ok "policy $policy_case creates zero resources" || bad "policy $policy_case creates zero resources"
+done
+
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
