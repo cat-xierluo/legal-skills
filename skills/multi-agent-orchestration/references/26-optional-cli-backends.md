@@ -6,7 +6,7 @@
 
 | 产品 | backend | CLI | 配置与权限 | 验证状态 |
 |---|---|---|---|---|
-| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；默认 `build`，`edit/yolo` 须显式选择 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起显式 native supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
+| 独立 ZCode CLI | `zcode-cli` | `zcode` TUI / `--prompt` | 原生会话配置；新worker默认 `yolo`，`build/edit/plan` 可显式收紧 | help/argv、原生模型切换/短请求与个人 Coding Plan 的 tmux 文件任务已核对（独立验收 `ACCEPT`）；1.4.218 起显式 native supervised 增量见 [原生 Orca 合同](30-zcode-native-orca.md)，验收以当前 TASKS 为准 |
 | 独立 MiniMax Code | `minimax-code`（`mcode` 别名） | `mcode` TUI / `mcode exec` | 原生 Session/Run 模型；exec 默认 `full` | help/argv 与真实 Orca terminal-managed 文件任务已独立验收；实际 minimax / MiniMax-M3.1-Flash-Preview；supervised/settlement `NOT_VERIFIED` |
 | CodeBuddy | `codebuddy` | `codebuddy` | 沿用既有 settings/hook 集成 | 本次保留；未重测 live 生命周期 |
 | 独立 Qoder CN | `qoder-cn`（`qoderclicn` 别名） | 独立安装的 `qoderclicn` | 原生 auto；不继承旧 QoderWork 模型表或 hook 保证 | 官方参数/隔离 argv 已核对；本机独立入口未安装、live `NOT_VERIFIED` |
