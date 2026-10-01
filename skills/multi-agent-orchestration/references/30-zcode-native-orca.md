@@ -28,9 +28,50 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 收到合法 `worker_done` 后先验收真实结果。立即接续时，按当前 Orca 运行时指南把已证明的原终端移交给新 Dispatch；否则执行 worker-release，核对实际回执，再 ack 完整 Delivery。release 对用户接管终端返回 retained 时，记录保留原因；仅在用户明确授权精确终端后另行关闭并保留日志，不能绕过保护。STATUS、idle、commit、输入 accepted 均不能代替这条链。派发失败或结果不确定时保留 native receipt 和 residualResources，按原请求身份恢复，不自动重拉或双投。
 
+## 单 worker 权限与 CLI 接续
+
+启动前按任务选权限模式。renderer 默认明确使用 `build`；其普通workspace写入与有副作用Bash通常要求审批。`edit` 允许普通workspace编辑，Bash仍按build判断；`plan`限制有副作用工具；`yolo`可减少普通写入和Bash确认，但需要用户交互、alwaysAsk与plan状态仍有例外。yolo不能提供机械scope/install保护，也不能把普通项目deny规则当作它的范围护栏。
+
+只对已授权、隔离、唯一writer的新任务显式选择模式。保持Orca全局设置；`--permission-mode`是renderer的参数，spawn没有此参数，ZCode原生拼写为`--mode`：
+
+```bash
+rendered_command=$(bash "$MAO/scripts/render-runtime-profile.sh" \
+  --backend zcode-cli --mode interactive --bin "$APPROVED_ZCODE_BIN" \
+  --permission-mode yolo --output command)
+
+bash "$MAO/scripts/spawn-worker.sh" "${APPROVED_SPAWN_ARGS[@]}" \
+  --worker-backend zcode-cli --command "$rendered_command" \
+  --orca-supervised --orca-zcode-native-requests "$APPROVED_REQUESTS_ROOT" \
+  --task-spec "$(cat "$APPROVED_TASK_SPEC_FILE")" \
+  --allow-prompt-only-install-guard "$APPROVED_PROMPT_ONLY_AUTHORIZATION"
+```
+
+`APPROVED_SPAWN_ARGS`表示原已核对的project/branch/session、scope、verification、认证环境、runtime/coordinator等完整参数数组，不与示例参数重复。复用既有Task时继续提供原run/task/coordinator身份；不新建重复任务或认证副本。匹配请求执行被冻结的launch，Orca附加启动参数不覆盖该command。模型仍按原生 `/model` 合同选择。
+
+已投递任务遇到审批时，用正式CLI读取精确状态，不通过Computer Use推进：
+
+```text
+orca terminal show --terminal EXACT_HANDLE --json
+orca terminal read --terminal EXACT_HANDLE --screen --json
+orca orchestration worker-show --dispatch EXACT_DISPATCH --json
+```
+
+`permission_wait`只是PM标签；正式观测为`agentWait`对象、reason/source及真实screen。null仅表示本次未发现等待，字段缺失表示未知；也可能是问题、信任或更新。核terminal/Dispatch/incarnation、原工具命令与当前选项。仅对已批准的原请求，用独立单键移动并每次重读，确认高亮Allow once再Enter：
+
+```bash
+orca terminal send --terminal "$EXACT_HANDLE" --text $'\e[A' --json
+# 重新读取screen；仅在确实需要再移动时单独发送下一次Up。
+# 确认同一请求且高亮Allow once后：
+orca terminal send --terminal "$EXACT_HANDLE" --enter --json
+```
+
+不要固定发两次Up、盲Enter或选择Always allow。输入accepted仅证明运输，继续读取原请求消失、原调用恢复；身份/命令改变或结果不确定时只读检查。审批不重发业务Task、不创建新worker；续行后重读live ownership，继续唯一worker_done/Delivery/验收/release/ack。若仅因外层sandbox无法访问IPC，应依宿主权限流程运行CLI；不据此重启Orca。
+
+mode合同已核当前安装runtime及纯renderer输出；本轮真实任务使用build并通过CLI逐项审批，新yolo业务任务仍`NOT_VERIFIED`。具体实现边界依本机匹配版本，勿将权限模式当成新的任务授权。
+
 ## 验证状态
 
-Orca 1.4.218 的真实 native 启动与两阶段只读任务已通过：同一 CLI/session/Dispatch 在 Flash 阶段完成35项测试，再经原生 `/model` 切至 GLM-5.3，消费正式指导、完成3项定向反例并发出唯一 `worker_done succeeded`；PM验收 Delivery、执行 release、再 ack。真实 release 返回 `retained/user_takeover`，保护当前 user_owned 终端；coordinator-owned 自动关闭仍 `NOT_VERIFIED`，精确清理尚待收口。启动 created、idle 或静态测试不能扩大此结论。以 TASKS 的 ZCODE-ORCA-NATIVE-INTEGRATION 卡维护最新结果，不类推其他后端。
+Orca 1.4.218 的真实 native 启动与两阶段只读任务已通过：同一 CLI/session/Dispatch 在 Flash 阶段完成35项测试，再经原生 `/model` 切至 GLM-5.3，消费正式指导、完成3项定向反例并发出唯一 `worker_done succeeded`；PM验收 Delivery、执行 release、再 ack。真实 release 返回 `retained/user_takeover`，保护当前 user_owned 终端；coordinator-owned 自动关闭仍 `NOT_VERIFIED`，随后用户具名授权关闭测试终端，真实退出与研究副本清理已确认，日志和绑定归档保留。启动 created、idle 或静态测试不能扩大此结论。以 TASKS 的 ZCODE-ORCA-NATIVE-INTEGRATION 卡维护最新结果，不类推其他后端。
 
 ## 官方依据
 
