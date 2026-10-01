@@ -181,16 +181,17 @@ def validate(req):
 
 def manifests(root):
     files = sorted(root.glob("*.json"))
-    require(len(files) <= 128, "request_inventory_limit")
+    # Bound tombstones retain replay fencing without exhausting the active limit.
+    require(sum(not p.name.endswith(".bound.json") for p in files) <= 128, "request_inventory_limit")
     result = []
     for p in files:
-        if p.name.endswith(".bound.json"):
-            continue
-        require(re.fullmatch(r"[0-9a-f-]{36}\.(?:request|claimed)\.json", p.name) is not None, "unexpected_manifest")
+        require(re.fullmatch(r"[0-9a-f-]{36}\.(?:request|claimed|bound)\.json", p.name) is not None, "unexpected_manifest")
         r = decode(read_file(str(p), private=True))
         require(isinstance(r, dict) and r.get("schema") == SCHEMA
                 and p.name.split(".")[0] == r.get("nonce")
                 and str(uuid.UUID(r["nonce"])) == r["nonce"], "request_schema")
+        expected_state={"request":"pending","claimed":"claimed","bound":"bound"}[p.name.split(".")[1]]
+        require(r.get("state") == expected_state, "request_state_mismatch")
         result.append((p, r))
     return result
 
@@ -232,7 +233,9 @@ def prepare(a):
     live(r)
     fd = lock(root)
     try:
-        require(not any(x[1]["worktree"] == wt for x in manifests(root)), "pending_request_exists")
+        existing=[old for _,old in manifests(root) if old["worktree"] == wt]
+        require(not any(old["state"] != "bound" for old in existing), "pending_request_exists")
+        require(not any(old["session"] == r["session"] for old in existing), "session_already_consumed")
         path = root / (r["nonce"]+".request.json")
         write(path,r,exclusive=True)
     finally:
@@ -245,8 +248,10 @@ def launch(a):
     fd = lock(root)
     try:
         cwd = str(Path.cwd().resolve())
-        candidates = [(p,r) for p,r in manifests(root) if r.get("worktree") == cwd]
+        matching = [(p,r) for p,r in manifests(root) if r.get("worktree") == cwd]
+        candidates = [(p,r) for p,r in matching if r["state"] != "bound"]
         if not candidates:
+            require(not matching, "request_already_consumed")
             require(os.path.isabs(a.default_zcode) and os.access(a.default_zcode,os.X_OK), "default_zcode_invalid")
             os.close(fd)
             fd = -1
@@ -283,6 +288,7 @@ def bind(a):
         validate(r)
         receipt=decode(read_file(a.receipt))
         result=receipt.get("result",{})
+        require(result.get("state") == "ready", "native_receipt_not_ready")
         require(receipt.get("ok") is True and receipt.get("_meta",{}).get("runtimeId")==r["runtime_id"]
                 and result.get("runId")==r["run_id"] and result.get("taskId")==r["task_id"]
                 and isinstance(result.get("dispatchId"),str) and result["dispatchId"],"native_receipt_identity")
