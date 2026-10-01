@@ -30,7 +30,7 @@ profile不扩大日常候选池；ZCode、MiniMax及其他可选backend仍须用
 }
 ```
 
-沿用既有schema版本与其他配置，不复制整个模板覆盖个人文件。不在该节点放凭证、账号、模型或Orca默认参数。目录通过只证明目录，PM仍须核对真实Orca桥。参考 [原生启动合同](30-zcode-native-orca.md)。
+沿用既有schema版本与其他配置，不复制整个模板覆盖个人文件。旧文件缺schema时明确记录legacy_unversioned，不伪称升级；显式未知版本及畸形新profile节点仍拒绝。不在该节点放凭证、账号、模型或Orca默认参数。目录通过只证明目录，PM仍须核对真实Orca桥。参考 [原生启动合同](30-zcode-native-orca.md)。
 
 auto使用已配置桥时，只选`--worker-backend zcode-cli`即可取得native/supervised选择；原参数仍须完整提供task-spec或原run/task、runtime/coordinator、验证合同、scope及prompt-only来源。漏桥或enabled=false明确拒绝，不自动改走generic。
 
