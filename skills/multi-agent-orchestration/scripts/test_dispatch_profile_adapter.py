@@ -215,6 +215,42 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(guide["next_action"]["kind"],action)
             self.assertFalse(guide["completion_verified"])
 
+    def test_actual_adapter_completed_retained_receipt_refuses_spawn_actions(self):
+        expected={"runtime_id":"runtime-fixture","dispatch_id":"ctx-fixture","run_id":"run-fixture","task_id":"task-fixture",
+                  "worktree_id":"repo::/isolated/fixture","terminal_handle":"term-fixture"}
+        raw={"ok":True,"_meta":{"runtimeId":"runtime-fixture"},"result":{
+            "dispatch":{"id":"ctx-fixture","runId":"run-fixture","taskId":"task-fixture","status":"completed"},
+            "worker":{"dispatchId":"ctx-fixture","state":"succeeded","worktreeId":"repo::/isolated/fixture","agentTerminalHandle":"term-fixture"},
+            "projection":{"id":"ctx-fixture","runId":"run-fixture","taskId":"task-fixture",
+                          "evidence":{"durable":True,"liveStatus":"stale"},"nextAction":{"kind":"none"}},
+            "terminalResource":{"originDispatchId":"ctx-fixture","ownerDispatchId":"ctx-fixture","worktreeId":"repo::/isolated/fixture",
+                                "terminalHandle":"term-fixture","ownershipState":"user_owned","releaseState":"retained","retainedReason":"user_takeover"}}}
+        receipt=self.root/"official-receipt.json";identity=self.root/"expected-identity.json"
+        identity.write_text(json.dumps(expected));identity.chmod(0o600)
+        request={"request":{"backend":"zcode-cli","explicit_selection":True,"harness_chain":["codex"]},"command":self.zcode+" --mode yolo"}
+        for kind in ("spawn_supervised_once","spawn_batch_once","spawn_terminal_once","submit_task_once","none"):
+            raw["result"]["projection"]["nextAction"]["kind"]=kind
+            receipt.write_text(json.dumps(raw));receipt.chmod(0o600)
+            result=subprocess.run([sys.executable,"-B",str(self.scripts/"dispatch-profile-adapter.py"),
+                    "--receipt-file",str(receipt),"--expected-identity-file",str(identity)],
+                input=json.dumps(request),capture_output=True,text=True,
+                env={**os.environ,"MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG":str(self.personal)})
+            if kind=="none":
+                value=self.success(result)
+                self.assertEqual(value["next_action"]["kind"],"none")
+                self.assertEqual(self.guidance(value,"terminal_created")["next_action"]["kind"],"none")
+                self.assertFalse(value["official_projection"]["fresh_running_activity_verified"])
+            else:self.denied(result,"receipt_completed_submission_conflict")
+
+    def test_actual_adapter_legacy_personal_accepts_and_unknown_version_refuses(self):
+        self.config={"quota_aware_routing":{"enabled":False}};self.save()
+        value=self.success(self.invoke("codebuddy","codebuddy --permission-mode acceptEdits",transport="direct"))
+        self.assertEqual(value["configuration"]["personal"]["format"],"legacy_unversioned")
+        self.config["_schema_version"]="unknown";self.save()
+        self.denied(self.invoke("codebuddy","codebuddy --permission-mode acceptEdits",transport="direct"),"personal_version_unknown")
+        self.config={"dispatch_profiles":{"zcode-cli":{"native_bridge":{"enabled":"true"}}}};self.save()
+        self.denied(self.invoke("codebuddy","codebuddy --permission-mode acceptEdits",transport="direct"),"native_bridge_enabled_unknown")
+
     def test_unknown_launch_outcome_and_malformed_profile_refuse(self):
         profile=self.success(self.invoke("zcode-cli",self.zcode))
         for data,outcome in ((profile,"worker_done"),({"ok":True,"task_input":{},"next_action":{}},"terminal_created")):

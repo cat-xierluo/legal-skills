@@ -76,6 +76,44 @@ class ProfileTests(unittest.TestCase):
     def minimax(self, mode, **overrides):
         return dict(backend="minimax-code", explicit_selection=True, harness_chain=["codex"], execution_mode=mode, **overrides)
 
+    def test_legacy_unversioned_personal_preserves_existing_readonly_contract(self):
+        self.config={"quota_aware_routing":{"enabled":False}}
+        self.save();before=self.personal.read_bytes()
+        request={"backend":"codex","harness_chain":["codex"],"transport":"direct"}
+        result=self.cli(request)
+        self.assertEqual(result.returncode,0,result.stderr)
+        value=json.loads(result.stdout)
+        self.assertEqual(value["configuration"]["personal"]["format"],"legacy_unversioned")
+        self.assertEqual(self.personal.read_bytes(),before)
+        self.assertIsNone(value["configuration"]["concurrency"]["cap"])
+        self.assertEqual(value["transport"],"direct")
+
+    def test_legacy_unversioned_valid_native_bridge_is_still_strictly_checked(self):
+        self.config.pop("_schema_version");self.save()
+        value=self.resolve()
+        self.assertEqual(value["transport"],"orca-native-supervised")
+        self.assertEqual(value["configuration"]["concurrency"]["cap"],0)
+        self.assertEqual(value["configuration"]["personal"]["format"],"legacy_unversioned")
+
+    def test_explicit_unknown_version_including_null_remains_refused(self):
+        for version in (None,"",False,"9.9",{},[]):
+            self.config["_schema_version"]=version;self.save()
+            result=self.cli()
+            self.assertEqual(result.returncode,64,result.stderr)
+            self.assertIn("personal_version_unknown",result.stderr)
+            self.assertEqual(result.stdout,"")
+
+    def test_unversioned_does_not_bypass_malformed_new_profile_nodes(self):
+        values=[[],{"unknown":{}},{"zcode-cli":[]},{"zcode-cli":{"unknown":True}},
+                {"zcode-cli":{"native_bridge":[]}},{"zcode-cli":{"native_bridge":{"enabled":"true"}}},
+                {"zcode-cli":{"native_bridge":{"enabled":True,"requests_root":""}}}]
+        for profiles in values:
+            self.config={"dispatch_profiles":profiles};self.save()
+            result=self.cli()
+            self.assertEqual(result.returncode,64,result.stderr)
+            self.assertNotIn("personal_version_unknown",result.stderr)
+            self.assertEqual(result.stdout,"")
+
     def test_deterministic_same_inputs_and_unchanged_configuration(self):
         before = self.personal.read_bytes()
         first, second = self.resolve(), self.resolve()
@@ -208,6 +246,17 @@ class ProfileTests(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertEqual(denied.returncode, 64)
         self.assertIn("MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED", denied.stderr)
+
+    def test_actual_cli_completed_receipt_refuses_each_initial_spawn_action(self):
+        for kind in ("spawn_supervised_once","spawn_batch_once","spawn_terminal_once","submit_task_once"):
+            raw=copy.deepcopy(self.receipt);raw["result"]["projection"]["nextAction"]["kind"]=kind
+            result=self.cli(receipt=raw)
+            self.assertEqual(result.returncode,64,result.stderr)
+            self.assertIn("receipt_completed_submission_conflict",result.stderr)
+            self.assertEqual(result.stdout,"")
+        result=self.cli(receipt=self.receipt)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout)["next_action"]["kind"],"none")
 
     def test_official_completed_submission_or_user_owned_close_conflict(self):
         for action, error in (("submit_task_once", "receipt_completed_submission_conflict"),
