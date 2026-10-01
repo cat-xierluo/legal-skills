@@ -186,12 +186,20 @@ def validate(req, check_borrowed=True):
         approved=json.loads(read_file(binding["contract_file"]))
         require(approved["approved_by"] == a.get("degradation_source"), "borrowed_authority_source_mismatch")
         require(sha(read_file(binding["contract_file"])) == binding["contract_sha256"], "borrowed_contract_changed")
-        import importlib.util
-        spec=importlib.util.spec_from_file_location("mao_borrowed_worktree",Path(__file__).with_name("borrowed-worktree.py"))
-        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        # The digest is inside authority-bound frozen launch bytes. Never import
+        # mutable helper code first, or verify one read then execute a second.
+        expected=re.findall(rb"^# borrowed-helper-sha256: ([0-9a-f]{64})$",launch,re.MULTILINE)
+        require(len(expected)==1,"borrowed_helper_binding_missing")
+        helper_path=Path(__file__).with_name("borrowed-worktree.py")
+        helper_buffer=read_file(str(helper_path))
+        require(sha(helper_buffer)==expected[0].decode(),"borrowed_helper_changed")
+        import types
+        module=types.ModuleType("mao_borrowed_worktree");module.__file__=str(helper_path)
+        exec(compile(helper_buffer,str(helper_path),"exec"),module.__dict__)
         try:
             module.validate(binding["contract_file"],m["project"],str(wt),m["branch"],req["orca_bin"],
-                            req["session"],binding["lock_owner_pid"],os.environ.get("ORCA_TERMINAL_HANDLE", ""))
+                            req["session"],binding["lock_owner_pid"],os.environ.get("ORCA_TERMINAL_HANDLE", ""),
+                            launcher_parent_pid=os.getppid() if req.get("state") in ("pending","claimed") and os.environ.get("ORCA_WORKTREE_ID")==req["worktree_id"] else 0)
         except (module.Refused,OSError,ValueError,KeyError,TypeError,AttributeError):
             raise Rejected("borrowed_late_gate_refused")
     return launch

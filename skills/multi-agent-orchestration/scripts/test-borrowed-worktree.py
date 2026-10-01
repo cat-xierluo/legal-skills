@@ -26,7 +26,7 @@ class BorrowedTests(unittest.TestCase):
         self.data={'processes':[], 'cwd':str(self.root),'terminals':[], 'runtime':'runtime-1','branch':'feature/external','truncated':False}
         self.save()
         self.ps=self.bin/'ps';self.ps.write_text('#!/usr/bin/env python3\nimport json,sys,os\ns=json.load(open('+repr(str(self.state))+'))\nif "lstart=" in sys.argv:print("fixture-owner-start")\nelse:print(str(os.getppid())+" 1 python3 borrowed-worktree.py"+"\\n"+"\\n".join(s["processes"]) if s["processes"] else str(os.getppid())+" 1 python3 borrowed-worktree.py")\n');self.ps.chmod(0o700)
-        self.lsof=self.bin/'lsof';self.lsof.write_text('#!/usr/bin/env python3\nimport json\ns=json.load(open('+repr(str(self.state))+'))\nprint("p101\\nfcwd\\nn"+s["cwd"])\n');self.lsof.chmod(0o700)
+        self.lsof=self.bin/'lsof';self.lsof.write_text('#!/usr/bin/env python3\nimport json\ns=json.load(open('+repr(str(self.state))+'))\nimport sys\nprint("p"+sys.argv[sys.argv.index("-p")+1]+"\\nfcwd\\nn"+s["cwd"])\n');self.lsof.chmod(0o700)
         self.orca=self.bin/'orca';self.orca.write_text('#!/usr/bin/env python3\nimport json,sys\ns=json.load(open('+repr(str(self.state))+'))\na=sys.argv[1:]\nif a[0]=="status":r={"runtime":{"runtimeId":s["runtime"],"reachable":True,"appVersion":"1.4.218","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}\nelif a[:2]==["worktree","show"]:r={"worktree":{"id":"repo-1::external","path":'+repr(str(self.wt))+',"branch":s["branch"]}}\nelif a[:2]==["terminal","list"]:r={"terminals":s["terminals"],"truncated":s["truncated"]}\nelse:raise SystemExit(99)\nprint(json.dumps({"ok":True,"_meta":{"runtimeId":s["runtime"]},"result":r}))\n');self.orca.chmod(0o700)
         self.contract=self.root/'approved.json';self.snapshot()
     def tearDown(self):self.tmp.cleanup()
@@ -154,7 +154,7 @@ class BorrowedTests(unittest.TestCase):
           'runtime':{'worker_backend':'zcode-cli','harness_authority':{'worker_backend':'zcode-cli'},'command':self.command},
           'execution_authority':{'authority_receipt_file':str(self.authority),'authority_receipt_sha256':hashlib.sha256(self.authority.read_bytes()).hexdigest()}}
         self.metadata.write_text(json.dumps(self.meta))
-        t=self.orca.read_text().replace('else:raise SystemExit(99)', 'elif a[:2]==["terminal","show"]:r={"terminal":{"handle":"term-new","worktreeId":"repo-1::external"}}\nelse:raise SystemExit(99)')
+        t=self.orca.read_text().replace('else:raise SystemExit(99)', 'elif a[:2]==["terminal","show"]:r={"terminal":{"handle":"term-new","worktreeId":"repo-1::external","connected":True}}\nelse:raise SystemExit(99)')
         self.orca.write_text(t)
         self.native_env=dict(self.env,ORCA_TERMINAL_HANDLE='term-new',ORCA_WORKTREE_ID='repo-1::external')
     def bridge(self,action,*args):
@@ -229,4 +229,47 @@ class BorrowedTests(unittest.TestCase):
     def test_post_merge_missing_known_ledger_refuses(self):
         self.cleanup_fixture(missing=True);p=subprocess.run(['bash',str(SCRIPTS/'post-merge-cleanup.sh'),'--project',str(self.project),'--worktree',str(self.wt),'--branch','feature/external','--session','new-session','--repo','fixture/project','--execute'],capture_output=True,text=True,env=self.env)
         self.assertEqual(p.returncode,2,p.stderr);self.assertIn('borrowed_ownership_unknown',p.stdout+p.stderr);self.assertTrue(self.wt.is_dir())
+    def test_arbitrary_python_node_shell_target_cwd_refused(self):
+        for command in ('python3 /fixture/custom-writer.py','node /fixture/custom-writer.js','bash /fixture/custom-writer.sh'):
+            with self.subTest(command_kind=command.split()[0]):
+                self.data['processes']=['101 1 '+command];self.data['cwd']=str(self.wt);self.save()
+                p=self.cli('acquire','--owner-pid',os.getpid());self.refused(p,'active_native_writer')
+                self.assertFalse((self.project/'.git'/'agent-borrowed-worktrees').exists())
+                self.assertNotIn(command,p.stderr)
+    def test_unrelated_controller_pid_cannot_exempt_target_writer(self):
+        self.data['processes']=['101 1 python3 /fixture/custom-writer.py'];self.data['cwd']=str(self.wt);self.save()
+        self.refused(self.cli('acquire','--owner-pid','101'),'borrow_controller_lineage_unknown')
+    def test_mismatched_lsof_pid_is_unknown(self):
+        self.data['processes']=['101 1 custom-writer'];self.save();self.lsof.write_text('#!/bin/sh\nprintf "p999\\nn/\\n"\n')
+        self.refused(self.cli('validate'),'process_cwd_unknown')
+    def private_script_fixture(self):
+        global SCRIPTS,HELPER
+        original=(SCRIPTS,HELPER);shadow=self.root/'trusted-scripts';shadow.mkdir()
+        for name in ('borrowed-worktree.py','spawn-worker-launch.sh','zcode-orca-launcher.py','completion_authority.py'):
+            shutil.copyfile(SCRIPTS/name,shadow/name)
+        SCRIPTS=shadow;HELPER=shadow/'borrowed-worktree.py'
+        return original
+    def test_frozen_helper_replacement_never_executes_backend(self):
+        global SCRIPTS,HELPER
+        original=self.private_script_fixture()
+        try:
+            self.native_fixture();self.native_prepare()
+            (self.wt/'outside.txt').write_text('late unapproved drift')
+            HELPER.write_text('print("untrusted helper accepted")\n')
+            p=subprocess.run(['bash',str(self.context/'launch.sh')],cwd=self.wt,env=self.native_env,capture_output=True,text=True)
+            self.refused(p,'BORROWED_HELPER_CHANGED');self.assertEqual(p.stdout,'')
+            p=self.native_launch();self.refused(p,'borrowed_helper_changed');self.assertEqual(p.stdout,'')
+        finally:SCRIPTS,HELPER=original
+    def test_verified_buffer_is_not_reread_from_replaced_path(self):
+        global SCRIPTS,HELPER
+        original=self.private_script_fixture()
+        try:
+            self.native_fixture();self.native_prepare();(self.wt/'outside.txt').write_text('late drift')
+            hooks=self.root/'python-hooks';hooks.mkdir()
+            # Replace the file immediately after the verifier reads its bytes.
+            # A hash-then-exec-path implementation would execute the replacement.
+            (hooks/'sitecustomize.py').write_text('from pathlib import Path\noriginal=Path.read_bytes\ndef read(self):\n data=original(self)\n if str(self)=='+repr(str(HELPER))+':self.write_text("print(\\\"replacement executed\\\")\\n")\n return data\nPath.read_bytes=read\n')
+            p=subprocess.run(['bash',str(self.context/'launch.sh')],cwd=self.wt,env=dict(self.native_env,PYTHONPATH=str(hooks)),capture_output=True,text=True)
+            self.refused(p,'dirty_snapshot_drift');self.assertEqual(p.stdout,'');self.assertIn('replacement executed',HELPER.read_text())
+        finally:SCRIPTS,HELPER=original
 if __name__=='__main__':unittest.main()
