@@ -34,7 +34,7 @@ profile不扩大日常候选池；ZCode、MiniMax及其他可选backend仍须用
 
 auto使用已配置桥时，只选`--worker-backend zcode-cli`即可取得native/supervised选择；原参数仍须完整提供task-spec或原run/task、runtime/coordinator、验证合同、scope及prompt-only来源。漏桥或enabled=false明确拒绝，不自动改走generic。
 
-保留旧显式`--orca-supervised --orca-zcode-native-requests /absolute/root`，root来源记录为argument，不要求同时新增个人节点。generic兼容必须显式`--dispatch-profile orca-generic`；直连仍用`--no-orca-mode`（或一致的direct profile）。显式profile与其他flags冲突拒绝；失败后不得重发已注入的原Task。
+保留旧显式`--orca-supervised --orca-zcode-native-requests /absolute/root`，root来源记录为argument，不要求同时新增个人节点。generic兼容必须显式`--dispatch-profile orca-generic`；直连仍用`--no-orca-mode`。显式profile与其他flags冲突拒绝；失败后不得重发已注入的原Task。
 
 ## 权限与并发来源
 

@@ -413,7 +413,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
 
-- 状态：`IN_PROGRESS / PROFILE_IMPLEMENTED_VALUE_MODALITY_AUDIT_PENDING`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 状态：`IN_PROGRESS / PROFILE_ACCEPTED_VALUE_MODALITY_AUDIT_PENDING`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
 - 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
 - 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
 - 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
@@ -431,4 +431,5 @@ blocker_and_recovery:
 
 - profile首轮df6154bd独审REJECT保留两P2：无schema旧个人配置误拒、completed回执漏拒本模块spawn_*_once。修复提交db45f0ad8db5110467a83ac6423b8bfbbb7e736f沿同一impl/session，缺schema明确legacy_unversioned、未知显式version仍拒，新节点仍严校；三个spawn动作纳入完成状态冲突拒绝。首65矩阵前11命令0、第12内存消费者49pass8fail均同根因，原件保留，修后矩阵与独审继续。
 - 首候选新隔离真实链：故意遗漏native/supervised参数，spawn0自动取得已配置原生桥；仅probe.py产物7b5143721566e2a4c2a2b381b216a68b31e2c485，PM2/2。实际SQLite同nativeSID为个人CodingPlan/GLM-5.3/max completed retry0，唯一worker_done/Delivery核验，正式release返回released/closed_agent_terminal/archivecaptured，随后ack0、postshowcompleted/succeeded/released/none。本轮测试root/worker精确终端库存各0；long-lived分支/树保留。该canary绑定df6154bd，不改记修后head新模型执行。新树.video_agent/plugin_root来源NOT_CONFIRMED且早于模型请求，保留不删；tracked diff精确。
+- 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
