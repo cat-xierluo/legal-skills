@@ -398,6 +398,9 @@ blocker_and_recovery:
 - 实施边界：早期spawn入口preflight在route/lease/worktree之前拒绝batch与supervised/预建Task冲突；validator语义解析非空输入；实现者/root/permission_impl拥有spawn入口及启动/metadata/classifier/test最小文件，root负责随行文档。
 - 实现冻结：eca7aad32e8909468c577f03f6b8552ebee5d32f，仅9个owned脚本/测试；startup8、Orca281、metadata33实际通过。原4fb2d3c7负对照同一bootstrap执行一次后wait64并漏句柄，候选0且仅terminalcreate/0wait/0send/准确句柄。首轮Orca267/276（fixture回执缺ok与递归env解析）失败原件保留，修复后281/281；不将fake消费者当真实模型成功。
 
+- 有界原生验收：首轮候选e90经完整spawn启动exit0，仅一次bootstrap；原生Run exec_turn_mupsp045_s4ynyh succeeded/exit0/shutdownComplete，MiniMax-M3.1-Flash-Preview、2次assistant/1次工具，probe.py真实返回指定marker，PM1/1通过、artifact0fb66abb2a2054180d1793c0084c288500e153d1仅probe.py。原生配置SHA前后一致。两精确测试tab正式close，后续官方库存0，long-lived树/分支保留；两次collector断言失败原件保留，没有bulk-close实际发生。runtime_id空为既有metadata边界，不追填历史。
+- 独审首轮e90 REJECT两P2（单引号$(cat)误展开、env exec误builtin），episode1已使用、最多2修复episode；实现者同原会话窄修真实Shell反例，canonicalstdin保留，不重发模型或原业务。最终复审、63项完整矩阵、PR与安装待PM核定。
+
 ## TASK-2026-10-02-ORCA-PARTIAL-WORKTREE-CREATE-RECOVERY — 首次创建回执断线残留续建
 
 - 状态：`PARKED_DEPENDENCY / IMPLEMENTATION_PARTIAL`；Owner：Codex `/root`；来源：原IP PM与Slides核查，MiniMax前置门通过后worktree create runtime_unavailable，实际原分支/树落盘但无Session/authority/terminal。该问题与batch误等TUI分开。
