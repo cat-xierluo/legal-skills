@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.33.0] - 2026-10-01
+
+### 新增
+- 提供显式借用预建 long-lived 工作树的首次原生 ZCode 接入合同，绑定 Git/Orca 身份、快照、唯一 writer 与独占锁；保持默认拒绝已有树，失败和编排清理保留原分支、工作树与批准资产。
+
+### 改进
+- 显式选择 MiniMax Code 后默认通过 Orca terminal-managed 派发，统一显示工作树、分支和终端；Orca 不可用时失败关闭，保留 `--no-orca-mode` 显式直连，不扩张日常 backend 池。
+
+### 验证
+- 冻结候选完成62项维护命令；53个借用fixture与独立消费者关闭旧helper替换、未知writer漏检问题。可信扫描原始high/hard信号保留，以真实消费者及PM限定能力复核说明上下文，正式Harness证据门通过；不声称长期指令稳定性已验。
+- MiniMax默认Orca真实交互CLI完成独立probe文件任务，PM3/3测试与value postflight通过；同一会话16条assistant模型响应与16条HTTP200事件均为MiniMax-M3.1-Flash-Preview。原生usage精确组合绑定、日志同session/turn/model数量组复核，未证明逐responseId的HTTP直连或精确计费。
+- 本轮Mcode/launcher及基线后代确认退出，默认残余shell逐项核对后正式close-all，终端库存为0；long-lived测试树与分支按合同保留证据。MiniMaxsupervised Task/Dispatch仍未支持。
+- 本机借用入口完整cwd库存依赖未满足，真实borrowed-native启动/结算NOT_VERIFIED并泊车；不放宽未知拒绝，不把fixture通过推广到现有业务树。
+
+
 ## [2.32.0] - 2026-10-01
 
 ### 新增

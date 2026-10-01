@@ -28,6 +28,8 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 收到合法 `worker_done` 后先验收真实结果。立即接续时，按当前 Orca 运行时指南把已证明的原终端移交给新 Dispatch；否则执行 worker-release，核对实际回执，再 ack 完整 Delivery。release 对用户接管终端返回 retained 时，记录保留原因；仅在用户明确授权精确终端后另行关闭并保留日志，不能绕过保护。STATUS、idle、commit、输入 accepted 均不能代替这条链。派发失败或结果不确定时保留 native receipt 和 residualResources，按原请求身份恢复，不自动重拉或双投。
 
+已有 long-lived 工作树且没有原 MAO Session 时，仅按 [显式借用入口](31-borrowed-existing-worktree.md) 创建新 Session；普通 `--worktree` 不能复用，恢复命令不适用于首次接入。
+
 ## 单 worker 权限与 CLI 接续
 
 启动前按任务选权限模式。renderer 默认明确使用 `build`；其普通workspace写入与有副作用Bash通常要求审批。`edit` 允许普通workspace编辑，Bash仍按build判断；`plan`限制有副作用工具；`yolo`可减少普通写入和Bash确认，但需要用户交互、alwaysAsk与plan状态仍有例外。yolo不能提供机械scope/install保护，也不能把普通项目deny规则当作它的范围护栏。
