@@ -38,6 +38,7 @@ reset_defaults() {
   COMMAND=""
   DRY_RUN=0
   WORKER_BACKEND=""
+  WORKER_BACKEND_EXPLICIT=0
   PM_HARNESS_ASSERTION=""
   RUNTIME_PROFILE=""
   API_PROVIDER=""
@@ -72,6 +73,7 @@ reset_defaults() {
   LIGHTWEIGHT_OVERRIDE=0
   LIGHTWEIGHT_MODE=0
   NO_ORCA_MODE=0
+  DISPATCH_PROFILE_TRANSPORT="auto"
   ORCA_SETUP_MODE="skip"
   ORCA_SUPERVISED=0
   TASK_SPEC=""
@@ -337,6 +339,13 @@ rm -rf "$main_proj"
 reset_defaults
 parse_spawn_worker_args --borrow-existing-worktree "/tmp/approved contract.json"
 assert_eq "$BORROW_EXISTING_WORKTREE" "/tmp/approved contract.json" "borrowed contract path is explicit and preserves spaces"
+
+reset_defaults
+parse_spawn_worker_args --dispatch-profile orca-generic
+assert_eq "$DISPATCH_PROFILE_TRANSPORT" orca-generic "generic dispatch profile requires explicit flag"
+rc=0
+(parse_spawn_worker_args --dispatch-profile direct) >/dev/null 2>&1 || rc=$?
+assert_eq "$rc" 64 "unknown dispatch profile selection fails closed"
 
 printf 'spawn-worker flags tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

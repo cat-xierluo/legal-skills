@@ -93,6 +93,7 @@ write_metadata() {
     --arg session "$SESSION" \
     --arg session_context "$SESSION_CONTEXT" \
     --arg command "$COMMAND" \
+    --argjson dispatch_profile "${DISPATCH_PROFILE_JSON:-null}" \
     --arg worker_backend "$WORKER_BACKEND" \
     --arg pm_harness "$PM_HARNESS" \
     --arg pm_harness_source "$PM_HARNESS_SOURCE" \
@@ -184,6 +185,7 @@ write_metadata() {
         }
       },
       runtime: {
+        dispatch_profile: $dispatch_profile,
         harness_authority: {
           pm_harness: $pm_harness,
           evidence_source: $pm_harness_source,
