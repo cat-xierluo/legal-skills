@@ -40,11 +40,11 @@ python3 "$MAO/scripts/borrowed-worktree.py" snapshot \
 
 ## 失败与保留
 
-派发前复核 Git/Orca 身份、HEAD、已批准的 tracked/index/untracked 内容和模式、进程与终端库存，取得独占借用锁；在创建 Context/provider/Task 前持久化借用保护账本。原生 request prepare 与实际执行前再次检查，身份或内容漂移、锁冲突、活跃或未知 writer 均拒绝。不把 Orca 列表中没有终端当作本机没有独立 CLI writer。独占锁约束合作的编排入口，现场进程/终端检查和晚期复核不能提供任意非合作外部进程的机械写入沙箱。
+派发前复核 Git/Orca 身份、HEAD、已批准的 tracked/index/untracked 内容和模式、进程与终端库存，取得独占借用锁；在创建 Context/provider/Task 前持久化借用保护账本。原生 request prepare 与实际执行前再次检查，身份或内容漂移、锁冲突、活跃或未知 writer 均拒绝。检查本用户完整 PID/PPID 库存并逐一核对真实 cwd，不读取 argv、不按后端或程序名跳过未知进程；读取失败、库存不完整或 cwd 不可证均拒绝。仅放行已机械证明的本轮 controller 和经精确 runtime/worktree/terminal 核对的新 launcher 祖先，锁绑定 controller 的 PID/start-time 与初始 PID 库存。不把 Orca 列表中没有终端当作本机没有独立 CLI writer。独占锁约束合作的编排入口，现场进程/终端检查和晚期复核不能提供任意非合作外部进程的机械写入沙箱。
 
-只有初始已证不存在、本轮唯一创建的 Session 中三个直接 regular 文件 `METADATA.json`、`INSTALL_AUTHORIZATION.json`、`launch.sh` 可按精确范围排除启动前快照；Session 及祖先符号链接、额外文件/目录不能借此排除，其余原资产不能通过忽略整目录来逃过检查。该启动前门位于冻结 launch 的实际 exec 前；业务启动后的 bind 复核 receipt/身份/effects/authority，不把合法业务写入或 STATUS/RESULT 当作启动前快照漂移。失败时保留原树、原分支和原材料，仅按精确 owner/生命周期结算本轮自建资源；借用账本不随 release 删除，也不能把参数降为 ephemeral 取得删除权限。
+只有初始已证不存在、本轮唯一创建的 Session 中三个直接 regular 文件 `METADATA.json`、`INSTALL_AUTHORIZATION.json`、`launch.sh` 可按精确范围排除启动前快照；Session 及祖先符号链接、额外文件/目录不能借此排除，其余原资产不能通过忽略整目录来逃过检查。冻结 launch 内独立绑定 helper 的 SHA256，读取、验证并 compile/exec 同一字节缓冲，不在校验后重新读取可替换路径；旧版已验证 launch 的 native bridge 也由该门保护。该启动前门位于冻结 launch 的实际 exec 前；业务启动后的 bind 复核 receipt/身份/effects/authority，不把合法业务写入或 STATUS/RESULT 当作启动前快照漂移。失败时保留原树、原分支和原材料，仅按精确 owner/生命周期结算本轮自建资源；借用账本不随 release 删除，也不能把参数降为 ephemeral 取得删除权限。
 
-MAO 的账本只保护读取它的编排清理路径。原生 Orca settlement 必须根据实际 resource/effects 和正式 retain/release 合同另外核对，不能以账本或新终端 created 推断原工作树可删。未知归属或生命周期保留并报告，完整真机行为以 TASKS 当前证据为准。
+MAO 的账本只保护读取它的编排清理路径。原生 Orca settlement 必须根据实际 resource/effects 和正式 retain/release 合同另外核对，不能以账本或新终端 created 推断原工作树可删。未知归属或生命周期保留并报告，完整真机行为以 TASKS 当前证据为准。本轮真实本机只读探测未能完整读取所有本用户进程 cwd，入口依赖门保持拒绝，借用树的原生真机启动/结算为 `NOT_VERIFIED`；隔离 fixture 的通过不能消除该限制。
 
 ## 验收边界
 
