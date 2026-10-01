@@ -14,7 +14,9 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 ## 派发与接续
 
-在原有 spawn 参数中显式加入：
+先按 [派发profile合同](32-dispatch-profiles.md) 核实官方桥并在个人配置启用。已指定 `--worker-backend zcode-cli` 且使用auto时，入口自动取得requests root并选择supervised；仍须完整Task、runtime/coordinator、验证与scope合同。缺失/禁用个人桥配置在资源副作用前拒绝，不静默落入通用入口。
+
+保留旧显式配方；在原有 spawn 参数中加入：
 
 ```text
 --worker-backend zcode-cli --orca-supervised
@@ -22,7 +24,7 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 --allow-prompt-only-install-guard "用户已指定 ZCode CLI，此任务允许 prompt-only 安装边界"
 ```
 
-这三项 native 参数必须作为同一启动配方使用。只传 `--worker-backend zcode-cli` 会选通用终端管理入口，不等于 `worker-start --agent zcode`；通用 `terminal create → tui-idle → worker-start --terminal` 可能在首次 composer 前停在 readiness。长程 ZCode 使用上面的原生桥，不改用 headless。已失败的原 Task 按其 native receipt 和 residualResources 恢复，不为补 native 参数再次注入完整任务。
+旧配方的native参数须成对提供。auto现会选择已配置原生桥；要测试通用兼容入口，必须显式 `--dispatch-profile orca-generic`，不会根据native失败自动回退。通用 `terminal create → tui-idle → worker-start --terminal` 仍可能在首次composer前停在readiness。长程 ZCode 使用上面的原生桥，不改用 headless。已失败的原 Task 按其 native receipt 和 residualResources 恢复，不为补 native 参数再次注入完整任务。
 
 继续提供完整 Task spec、verification contract、精确允许范围与 coordinator/runtime 身份。全部价值、额度、内存、provider lease、工作树隔离与 authority 门通过后才创建单次请求。请求绑定实际工作树、Session Context、启动脚本和 authority 摘要以及 runtime；启动桥原子消费并核对原生 terminal/worktree 身份，native start 回执必须与其相同。启动回执中的 `created` 只证明本轮创建。结算前重读 live ownership；原生用户接管后的 `user_owned/retained` 由 release 保护，不能靠旧 metadata 宣称仍可自动关闭。不得把 terminal close 当作 worker-release 的替代。
 

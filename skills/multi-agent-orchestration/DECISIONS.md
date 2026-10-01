@@ -1,5 +1,14 @@
 # 决策记录
 
+## DEC-2026-10-02-SHARED-DISPATCH-PROFILES
+
+- 背景：漏ZCode native参数会落入通用TUI等待；不同模式统一send提示会诱导重复投递。诊断与视频交接要求现MAO/DSH owner共享执行核心，保留原业务身份。
+- 决策：在实际宿主及命令身份验证后、quota/lease/worktree前解析单一profile，MiniMax复用现command classifier，不再造Shell解析器。个人配置沿用config/orchestration-personal.json；ZCode auto选择原生桥，缺桥拒绝，generic仅显式兼容，旧显式native参数保留。
+- 权威：profile记录意图/来源，不修改opaque command；原生权限observed与requested分开。完成与下一动作优先使用绑定原身份的官方worker-show projection，composer/idle不作为重发证据，不复制第二业务控制器。
+- 并发：per_backend优先，0只表示不申请机械provider slot，不取消资源/额度门；不以文档默认值覆盖真实个人配置。
+- 边界：桥目录验证不证明Orca正式自定义命令生效，PM须现场核实；不追填旧metadata、不换号/耗卡、不解除真实宿主拒绝。业务研究/设计/文档价值门审计仍为本任务后续子项，不能凭profile发布关闭整父卡。
+- 重新评估：上游原生回执、命令语义或配置schema改变时，用实际消费者重新核验。
+
 ## DEC-2026-10-01-NATIVE-WORKER-MAX-PERMISSIONS — 新任务采用原生最高权限
 
 - 日期：2026-10-01

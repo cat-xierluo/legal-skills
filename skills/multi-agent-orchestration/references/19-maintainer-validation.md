@@ -53,6 +53,8 @@ bash scripts/tests/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
 python3 scripts/test_optional_cli_backends.py -v
 python3 scripts/test_minimax_cli_startup.py -v
+python3 scripts/test_dispatch_profile.py
+python3 scripts/test_dispatch_profile_adapter.py
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
@@ -106,3 +108,5 @@ bash scripts/smoke-orca-control-plane.sh
 - 显式借用入口的隔离消费者应验证真实 Git 内容/模式/identity、独立 CLI writer 探测、锁及 late drift；native request/launcher 和所有 MAO cleanup 对借用树的删除调用为零。fake inventory不证明原业务树无writer或原生settlement已经通过。MiniMax默认Orca合同要分别覆盖 canonical/alias、缺runtime/错仓/注册失败/轻量拒绝及显式直连；不扩大日常backend池或supervised结论。
 
 - MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
+
+- 派发profile消费者须从实际spawn入口证明：漏native参数的ZCode自动补原生桥；缺失/禁用配置零资源副作用；旧显式native及generic/direct兼容；MiniMax模式由实际COMMAND取得，batch零wait/send。官方projection的nextAction优先于composer残留，身份冲突拒绝。计划/启动返回保持draft，不能把stub成功扩大为真实输入/业务完成。
