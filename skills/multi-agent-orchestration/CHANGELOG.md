@@ -4,13 +4,13 @@
 
 ### 新增
 - 为用户指定的 ZCode CLI 提供显式原生 Orca supervised 路径：使用 1.4.218 起的首次 composer 等待与唯一 Task 投递，保持交互 CLI 和既有启动环境。
-- 增加 owner-only、短时、单次启动请求桥及原生回执核对，绑定 Session Context、authority、工作树、runtime 与启动脚本；原生创建终端按 created 归属结算。
+- 增加 owner-only、短时、单次启动请求桥及原生回执核对，绑定 Session Context、authority、工作树、runtime 与启动脚本；核对启动 created 与结算时 live ownership，尊重用户接管保护。
 
 ### 文档完善
 - 补充原生启动、默认 ZCode 回退、模型操作、版本与权限边界；保留可选后端不进默认池、账号规则由本地私有 Skill 提供的合同。
 
 ### 验证
-- 当前代码与真实生命周期验收进行中，结果以本版 TASKS 卡为准；不以历史 tmux 验收替代。
+- 完整维护矩阵61/61命令通过，独立审查关闭重放与nonready两个阻塞；真实Orca原生同会话完成Flash阶段35项测试、切换GLM-5.3及3项定向反例、唯一worker_done succeeded与Delivery验收。release返回用户接管保护retained，随后ack通过；精确终端清理与自动关闭证据仍待收口，以TASKS当前卡为准。
 
 ## [2.31.3] - 2026-10-01
 

@@ -22,15 +22,15 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 --allow-prompt-only-install-guard "用户已指定 ZCode CLI，此任务允许 prompt-only 安装边界"
 ```
 
-继续提供完整 Task spec、verification contract、精确允许范围与 coordinator/runtime 身份。全部价值、额度、内存、provider lease、工作树隔离与 authority 门通过后才创建单次请求。请求绑定实际工作树、Session Context、启动脚本和 authority 摘要以及 runtime；启动桥原子消费并核对原生 terminal/worktree 身份，native start 回执必须与其相同。Orca 创建的终端归属为 `created`，不能当作外部终端关闭来代替 release。
+继续提供完整 Task spec、verification contract、精确允许范围与 coordinator/runtime 身份。全部价值、额度、内存、provider lease、工作树隔离与 authority 门通过后才创建单次请求。请求绑定实际工作树、Session Context、启动脚本和 authority 摘要以及 runtime；启动桥原子消费并核对原生 terminal/worktree 身份，native start 回执必须与其相同。启动回执中的 `created` 只证明本轮创建。结算前重读 live ownership；原生用户接管后的 `user_owned/retained` 由 release 保护，不能靠旧 metadata 宣称仍可自动关闭。不得把 terminal close 当作 worker-release 的替代。
 
 模型来自 ZCode 的原生配置；Orca 不接受 ZCode 的 `--model`。按 [BigModel 模型合同](28-zcode-cli-bigmodel-coding-plan.md) 在原生会话操作 `/model`，用真实请求证据确认模型和 provider。账户调度仍依 [本地 Skill 调用合同](29-local-account-routing-skill.md) 获取新鲜结果；启动校验不代表长期身份锁或持续预算控制。
 
-收到合法 `worker_done` 后先验收真实结果。立即接续时，按当前 Orca 运行时指南把已证明的原终端移交给新 Dispatch；否则执行 worker-release，再 ack 完整 Delivery。STATUS、idle、commit、输入 accepted 均不能代替这条链。派发失败或结果不确定时保留 native receipt 和 residualResources，按原请求身份恢复，不自动重拉或双投。
+收到合法 `worker_done` 后先验收真实结果。立即接续时，按当前 Orca 运行时指南把已证明的原终端移交给新 Dispatch；否则执行 worker-release，核对实际回执，再 ack 完整 Delivery。release 对用户接管终端返回 retained 时，记录保留原因；仅在用户明确授权精确终端后另行关闭并保留日志，不能绕过保护。STATUS、idle、commit、输入 accepted 均不能代替这条链。派发失败或结果不确定时保留 native receipt 和 residualResources，按原请求身份恢复，不自动重拉或双投。
 
 ## 验证状态
 
-本次 native bridge 与真实生命周期验收进行中，当前为 `NOT_VERIFIED`；历史 tmux 文件任务不作为 Orca 通过证据。验证结果以 TASKS 的 ZCODE-ORCA-NATIVE-INTEGRATION 卡为准。
+Orca 1.4.218 的真实 native 启动与两阶段只读任务已通过：同一 CLI/session/Dispatch 在 Flash 阶段完成35项测试，再经原生 `/model` 切至 GLM-5.3，消费正式指导、完成3项定向反例并发出唯一 `worker_done succeeded`；PM验收 Delivery、执行 release、再 ack。真实 release 返回 `retained/user_takeover`，保护当前 user_owned 终端；coordinator-owned 自动关闭仍 `NOT_VERIFIED`，精确清理尚待收口。启动 created、idle 或静态测试不能扩大此结论。以 TASKS 的 ZCODE-ORCA-NATIVE-INTEGRATION 卡维护最新结果，不类推其他后端。
 
 ## 官方依据
 

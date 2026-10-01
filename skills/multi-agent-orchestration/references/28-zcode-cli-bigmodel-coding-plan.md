@@ -87,7 +87,7 @@ Orca 1.4.217 的两次 ZCode 尝试均报 `terminal_handle_stale`，未发送业
 
 该旧版本零业务提示的专用启动诊断中，Orca终端已connected/writable、renderer pane已挂载，屏幕出现composer，但 `tui-idle` 仍返回timeout。已安装 ZCode 源码显示新会话的 `SessionStart` hook 在首次turn初始化期间运行；Orca的ZCode ready合成依赖原生状态/title信号，屏幕上的输入提示不能单独证明该信号已产生。这提示首次投递前存在就绪循环，但尚未形成可独立验收的Orca交互兼容修复。聚焦终端、延长等待或已安装hook状态均不足以宣布兼容成功；不得伪造ready或绕过门禁投递。
 
-Orca ZCode TUI、完整长程监督和settlement仍为 `NOT_VERIFIED`。tmux任务的已验范围不扩大为这些层的证明；按[本地账号调度调用合同](29-local-account-routing-skill.md)做现场校验，也不能替代真实TUI就绪或建立持续身份锁。
+上述 1.4.217 历史尝试的 Orca ZCode TUI、完整长程监督和settlement为 `NOT_VERIFIED`。tmux任务的已验范围不扩大为这些层的证明；按[本地账号调度调用合同](29-local-account-routing-skill.md)做现场校验，也不能替代真实TUI就绪或建立持续身份锁。
 
 ## 官方来源
 
@@ -98,3 +98,5 @@ Orca ZCode TUI、完整长程监督和settlement仍为 `NOT_VERIFIED`。tmux任�
 ## 1.4.218 原生接入增量
 
 Orca 1.4.218 已增加 fresh ZCode worker 的 composer 等待。新的显式 native supervised 启动与可信环境桥读取 [原生 Orca 合同](30-zcode-native-orca.md)。旧版 plain `terminal wait --for tui-idle` 的诊断和 tmux 结果仅保留历史范围，不类推为新入口的验收；本轮真实结果以 TASKS 当前卡为准。
+
+2026-10-01 的 1.4.218 native 增量已在同一原生 CLI/session/Dispatch 完成两阶段真实任务与模型切换；实际请求确认个人 Coding Plan 的 Flash 与 GLM-5.3，通过正式 worker_done、Delivery、release与ack。release保护当前用户接管终端，返回retained；自动关闭与精确计费不类推通过。最新范围读取[原生合同](30-zcode-native-orca.md)及TASKS当前卡。
