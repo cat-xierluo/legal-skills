@@ -413,7 +413,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
 
-- 状态：`IN_PROGRESS / PROFILE_RELEASE_VALIDATION`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 状态：`IN_PROGRESS / PROFILE_IMPLEMENTED_VALUE_MODALITY_AUDIT_PENDING`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
 - 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
 - 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
 - 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
@@ -428,3 +428,7 @@ blocker_and_recovery:
 - batch验收继续：最终候选0b4e8576独审ACCEPT、postflight/角色/Harness门0，PEA scoped tested；完整矩阵前57项0，第58控制器25case中24通过、timeout/lost-receipt计数文件缺失失败。原件保留，formal第二episode限额内做candidate/base失败case及一次带子进程记录完整复验，root继续59—63，不提前合并或称首次全绿。
 
 - 接入进度：batch2.33.2已合并安装，依赖解除；profiles pure4files已rebase到cd29976f，23profile/14adapter消费者0，真实Shell模式/权限由共享validator取得，旧显式native参数兼容；入口/metadata/唯一动作由同worker继续，尚未发布或执行新live任务。
+
+- profile首轮df6154bd独审REJECT保留两P2：无schema旧个人配置误拒、completed回执漏拒本模块spawn_*_once。修复提交db45f0ad8db5110467a83ac6423b8bfbbb7e736f沿同一impl/session，缺schema明确legacy_unversioned、未知显式version仍拒，新节点仍严校；三个spawn动作纳入完成状态冲突拒绝。首65矩阵前11命令0、第12内存消费者49pass8fail均同根因，原件保留，修后矩阵与独审继续。
+- 首候选新隔离真实链：故意遗漏native/supervised参数，spawn0自动取得已配置原生桥；仅probe.py产物7b5143721566e2a4c2a2b381b216a68b31e2c485，PM2/2。实际SQLite同nativeSID为个人CodingPlan/GLM-5.3/max completed retry0，唯一worker_done/Delivery核验，正式release返回released/closed_agent_terminal/archivecaptured，随后ack0、postshowcompleted/succeeded/released/none。本轮测试root/worker精确终端库存各0；long-lived分支/树保留。该canary绑定df6154bd，不改记修后head新模型执行。新树.video_agent/plugin_root来源NOT_CONFIRMED且早于模型请求，保留不删；tracked diff精确。
+- 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。

@@ -10,7 +10,7 @@
 - 启动后的指引按模式生成唯一下一动作，不再统一建议发送任务；已校验的官方worker-show projection优先，composer残留、TUI idle和启动返回不冒称已开始或完成。
 
 ### 验证
-- 候选入口、隔离反例、独立审查与真实链以TASKS逐项记录；尚未执行的能力保持NOT_VERIFIED，不把既有原生任务或参数测试记为新默认入口完成。
+- 新隔离默认原生入口实际使用CodingPlan/GLM-5.3/max完成文件任务，PM2/2、唯一worker_done/Delivery、自动release与ack通过；该链绑定首候选，修后head的兼容/回执消费者和独审另行记录。缺schema旧配置误拒与已完成回执遗漏spawn动作两反例沿原session修，原失败保留；完整Skill及长期稳定性仍NOT_VERIFIED。
 
 ## [2.33.2] - 2026-10-02
 
