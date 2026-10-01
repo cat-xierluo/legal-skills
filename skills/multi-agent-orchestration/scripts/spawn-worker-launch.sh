@@ -19,9 +19,21 @@ launch_worker_session() {
       if [ -n "${BORROW_EXISTING_WORKTREE:-}" ]; then
         # Execute the final borrowed gate inside the frozen bytes, even when the
         # configured Orca bridge is an older installed compatible version.
-        printf -v borrowed_gate 'python3 %q validate --contract %q --project %q --worktree %q --branch %q --session %q --owner-pid %q --orca-bin %q' \
-          "$SCRIPT_DIR/borrowed-worktree.py" "$BORROW_EXISTING_WORKTREE" "$PROJECT_DIR" "$WORKTREE" "$BRANCH" "$SESSION" "$$" "$ORCA_CLI_BIN"
-        printf '#!/bin/bash\n%s --terminal "${ORCA_TERMINAL_HANDLE:?}" >/dev/null || exit 64\nexec bash -c %q\n' "$borrowed_gate" "$COMMAND" > "$LAUNCH_SH"
+        local borrowed_helper_sha borrowed_verified_exec
+        borrowed_helper_sha=$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$SCRIPT_DIR/borrowed-worktree.py") || return 64
+        borrowed_verified_exec='import hashlib,os,sys
+from pathlib import Path
+path,expected=sys.argv[1:3]
+try: buffer=Path(path).read_bytes()
+except OSError:
+ print("BORROWED_HELPER_UNAVAILABLE",file=sys.stderr);raise SystemExit(64)
+if hashlib.sha256(buffer).hexdigest()!=expected:
+ print("BORROWED_HELPER_CHANGED",file=sys.stderr);raise SystemExit(64)
+sys.argv=[path,*sys.argv[3:]]
+exec(compile(buffer,path,"exec"),{"__name__":"__main__","__file__":path,"_VERIFIED_FROZEN_LAUNCH_PARENT_PID":os.getppid()})'
+        printf -v borrowed_gate 'python3 -c %q %q %q validate --contract %q --project %q --worktree %q --branch %q --session %q --owner-pid %q --orca-bin %q' \
+          "$borrowed_verified_exec" "$SCRIPT_DIR/borrowed-worktree.py" "$borrowed_helper_sha" "$BORROW_EXISTING_WORKTREE" "$PROJECT_DIR" "$WORKTREE" "$BRANCH" "$SESSION" "$$" "$ORCA_CLI_BIN"
+        printf '#!/bin/bash\n# borrowed-helper-sha256: %s\n%s --terminal "${ORCA_TERMINAL_HANDLE:?}" >/dev/null || exit 64\nexec bash -c %q\n' "$borrowed_helper_sha" "$borrowed_gate" "$COMMAND" > "$LAUNCH_SH"
       fi
       chmod +x "$LAUNCH_SH"
       [ -z "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ] || chmod 700 "$LAUNCH_SH"

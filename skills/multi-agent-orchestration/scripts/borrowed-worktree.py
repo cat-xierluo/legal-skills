@@ -10,8 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
-import shutil
 import stat
 import subprocess
 import sys
@@ -97,40 +95,48 @@ def dirty(wt,session=""):
         h.update(name);h.update(str(stat.S_IMODE(s.st_mode)).encode());h.update(digest(raw).encode())
     return h.hexdigest()
 
-def agent_command(command):
-    try:words=shlex.split(command)
-    except ValueError:raise Refused("process_schema_unknown")
-    if not words:return False
-    name=Path(os.path.realpath(shutil.which(words[0]) or words[0])).name.lower()
-    if name in ("zcode","mcode","minimax-code","claude","codex","codebuddy","qoderclicn","qoder"):return True
-    if name in ("node","nodejs") or re.fullmatch(r"python(?:\d+(?:\.\d+)*)?",name):
-        for word in words[1:3]:
-            path=word.lower();base=Path(path).name
-            if base in ("zcode","mcode","claude","codex","minimax_code.cli","zcode.js","zcode.mjs","zcode.cjs","mcode.js","claude.js","codex.js","zcode-worker-driver.py"):return True
-            if any(x in path for x in ("/zcode-cli/","/.zcode/runtime/","/minimax-code/","/minimax_code/","/zcode.app/")):return True
-    return False
-
-def no_writer(wt):
-    # Include descendants: a detached writer's tools can keep writing after argv changes.
-    raw=run(["ps","-u",str(os.getuid()),"-o","pid=,ppid=,command="]).decode().splitlines()
+def no_writer(wt,controller_pid=0,baseline_pids=None,launcher_parent_pid=0):
+    # Query the entire owner UID inventory. Do not classify writers by argv:
+    # a custom Python/node/shell process at the target cwd is equally unsafe.
+    try:
+        observer=subprocess.Popen(["ps","-u",str(os.getuid()),"-o","pid=,ppid="],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        try:raw,_=observer.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            observer.kill();observer.communicate();raise Refused("dependency_or_read_unavailable")
+    except OSError:raise Refused("dependency_or_read_unavailable")
+    need(observer.returncode==0,"dependency_or_read_failed")
     rows={}
-    for row in raw:
+    for row in raw.decode().splitlines():
         fields=row.strip().split(None,2)
-        need(len(fields)==3 and fields[0].isdigit() and fields[1].isdigit(),"process_schema_unknown")
+        need(len(fields)>=2 and fields[0].isdigit() and fields[1].isdigit(),"process_schema_unknown")
         pid=int(fields[0]);need(pid>0 and pid not in rows,"process_inventory_incomplete")
-        rows[pid]=(int(fields[1]),fields[2])
+        rows[pid]=int(fields[1])
     need(os.getpid() in rows,"process_inventory_incomplete")
-    writers={pid for pid,(_,command) in rows.items() if agent_command(command)}
-    while True:
-        expanded=writers|{pid for pid,(parent,_) in rows.items() if parent in writers}
-        if expanded==writers:break
-        writers=expanded
-    for pid in writers:
-        raw=run(["lsof","-a","-p",str(pid),"-d","cwd","-Fn"]).decode().splitlines()
+    own={os.getpid(),observer.pid}
+    if controller_pid:
+        # On first entry the controller must be an actual caller ancestor.
+        # Subsequent calls have already proved its private lock/start binding.
+        if baseline_pids is None:
+            current=os.getppid();seen=set()
+            while current and current not in seen and current!=controller_pid:
+                seen.add(current);current=rows.get(current,0)
+            need(current==controller_pid,"borrow_controller_lineage_unknown")
+        own.add(controller_pid)
+    if launcher_parent_pid:
+        need(launcher_parent_pid==os.getppid() and isinstance(baseline_pids,list),"launcher_lineage_unknown")
+        current=launcher_parent_pid;seen=set()
+        # Exact live native launcher ancestry, newly created after acquisition.
+        # A baseline process can never become exempt merely by its program name.
+        while current and current not in seen and current not in baseline_pids:
+            own.add(current);seen.add(current);current=rows.get(current,0)
+    for pid in sorted(set(rows)-own):
+        raw=run(["lsof","-a","-p",str(pid),"-d","cwd","-Fpn"]).decode().splitlines()
+        returned=[x[1:] for x in raw if x.startswith("p")]
         cwd=[x[1:] for x in raw if x.startswith("n")]
-        need(len(cwd)==1,"process_cwd_unknown")
+        need(returned==[str(pid)] and len(cwd)==1,"process_cwd_unknown")
         current=canonical(cwd[0]);need(Path(current).is_dir(),"process_cwd_unknown")
         need(current!=wt and not current.startswith(wt+os.sep),"active_native_writer")
+    return sorted(set(rows)|own)
 
 def rpc(binary,*args):
     need(os.path.isabs(binary) and os.access(binary,os.X_OK),"orca_binary_unavailable")
@@ -155,7 +161,7 @@ def runtime(c,binary,terminal=""):
              and isinstance(row.get("connected"),bool),"terminal_inventory_unknown")
         need(not row["connected"] or terminal and row.get("handle")==terminal,"active_orca_terminal")
 
-def validate(path,project,wt,branch,binary,session="",owner_pid=0,terminal="",initial=False):
+def validate(path,project,wt,branch,binary,session="",owner_pid=0,terminal="",initial=False,initial_controller_pid=0,launcher_parent_pid=0,process_observation=None):
     raw=read(path);c=json.loads(raw)
     need(c.get("schema")==SCHEMA and c.get("approved_by") and isinstance(c.get("created_at"),(int,float))
          and 0<=time.time()-c["created_at"]<=120,"contract_schema_or_stale")
@@ -179,21 +185,33 @@ def validate(path,project,wt,branch,binary,session="",owner_pid=0,terminal="",in
     if sessions.exists():
         need(not sessions.is_symlink(),"session_directory_untrusted")
         need(not any(p.name!=session or initial or not owner_pid for p in sessions.iterdir()),"existing_mao_session_requires_recovery")
-    no_writer(wt);runtime(c,binary,terminal)
+    record=None
     if owner_pid:
         _,lock=paths(wt);record=json.loads(read(str(lock/"owner.json")))
         need(record.get("owner_pid")==owner_pid and record.get("session")==session and record.get("contract_sha256")==digest(raw) and record.get("initial_session_absent") is True,"borrow_lock_mismatch")
         need(record.get("owner_started")==run(["ps","-p",str(owner_pid),"-o","lstart="]).decode().strip(),"borrow_lock_owner_gone")
+        need(isinstance(record.get("initial_pids"),list) and all(isinstance(pid,int) and pid>0 for pid in record["initial_pids"]),"borrow_lock_inventory_unknown")
+    runtime(c,binary,terminal)
+    launcher_parent_pid=launcher_parent_pid or globals().get("_VERIFIED_FROZEN_LAUNCH_PARENT_PID",0)
+    if launcher_parent_pid:
+        need(bool(record) and terminal and os.environ.get("ORCA_TERMINAL_HANDLE")==terminal
+             and os.environ.get("ORCA_WORKTREE_ID")==c["orca_worktree_id"],"launcher_identity_unknown")
+        live_terminal=rpc(binary,"terminal","show","--terminal",terminal).get("result",{}).get("terminal",{})
+        need(live_terminal.get("handle")==terminal and live_terminal.get("worktreeId")==c["orca_worktree_id"]
+             and live_terminal.get("connected") is True,"launcher_identity_unknown")
+    observed=no_writer(wt,owner_pid or initial_controller_pid,record["initial_pids"] if record else None,launcher_parent_pid)
+    if process_observation is not None:process_observation["pids"]=observed
     return c
 
 def acquire(a):
     need(a.owner_pid>0 and bool(a.session),"borrow_owner_required")
-    c=validate(a.contract,a.project,a.worktree,a.branch,a.orca_bin,a.session,initial=True)
+    observation={}
+    c=validate(a.contract,a.project,a.worktree,a.branch,a.orca_bin,a.session,initial=True,initial_controller_pid=a.owner_pid,process_observation=observation)
     marker,lock=paths(c["worktree"]);directory(lock.parent);directory(marker.parent)
     try:lock.mkdir(mode=0o700)
     except FileExistsError:raise Refused("borrow_lock_contended")
     try:
-        record={"owner_pid":a.owner_pid,"owner_started":run(["ps","-p",str(a.owner_pid),"-o","lstart="]).decode().strip(),"session":a.session,"contract_sha256":digest(read(a.contract)),"initial_session_absent":True}
+        record={"owner_pid":a.owner_pid,"owner_started":run(["ps","-p",str(a.owner_pid),"-o","lstart="]).decode().strip(),"session":a.session,"contract_sha256":digest(read(a.contract)),"initial_session_absent":True,"initial_pids":observation["pids"]}
         need(record["owner_started"],"borrow_lock_owner_unknown");write(lock/"owner.json",record)
         validate(a.contract,a.project,a.worktree,a.branch,a.orca_bin,a.session,a.owner_pid,initial=True)
         if marker.exists():need(protected(a.project,a.worktree,a.branch),"ownership_unknown_retain")
