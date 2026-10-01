@@ -234,7 +234,7 @@ def next_action(state, obs, supervised, batch):
 def resolve(request, *, skill_root=None, policy_path=None, personal_path=None, validated_startup=None, validated_receipt=None):
     need(isinstance(request, dict), "request_object_required")
     allowed = {"backend", "execution_mode", "transport", "explicit_selection", "harness_chain", "supervised",
-               "startup_mode", "requested_permission", "input_state", "observations"}
+               "startup_mode", "requested_permission", "input_state", "observations", "native_requests_root"}
     need(set(request) <= allowed, "request_field_unknown")
     root = canonical(str(skill_root or HERE.parent))
     policy, policy_source = read_json(str(policy_path or root / "config" / "harness-backend-policy.json"))
@@ -266,14 +266,23 @@ def resolve(request, *, skill_root=None, policy_path=None, personal_path=None, v
     state = request.get("input_state", "draft")
     need(state in STATES, "input_state_unknown")
     obs = observations(request.get("observations", {}))
-    personal, personal_source = personal_config(personal_path or root / "config" / "orchestration-personal.json")
+    personal, personal_source = personal_config(personal_path or os.environ.get("MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG") or root / "config" / "orchestration-personal.json")
     bridge = personal.get("dispatch_profiles", {}).get("zcode-cli", {}).get("native_bridge", {})
     bridge_path = None
+    bridge_source = None
+    override = request.get("native_requests_root")
+    need(override is None or isinstance(override, str) and bool(override), "native_requests_override_invalid")
+    need(override is None or backend == "zcode-cli" and transport in {"auto", "orca-native-supervised"} and supervised, "native_requests_override_requires_supervised")
     native = backend == "zcode-cli" and transport in {"auto", "orca-native-supervised"}
     if native:
         need(mode == "interactive", "zcode_native_requires_interactive")
-        need(bridge.get("enabled") is True and bridge.get("requests_root"), "zcode_native_bridge_config_required")
-        bridge_path = canonical(bridge["requests_root"])
+        if override is not None:
+            bridge_path = canonical(override)
+            bridge_source = "argument"
+        else:
+            need(bridge.get("enabled") is True and bridge.get("requests_root"), "zcode_native_bridge_config_required")
+            bridge_path = canonical(bridge["requests_root"])
+            bridge_source = "personal.dispatch_profiles.zcode-cli.native_bridge.requests_root"
         s = bridge_path.stat()
         need(bridge_path.is_dir() and s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700,
              "native_requests_directory_untrusted")
@@ -315,7 +324,7 @@ def resolve(request, *, skill_root=None, policy_path=None, personal_path=None, v
              "minimax_permission_invalid")
         native_flags = ["exec", "--permission", requested_permission] if mode == "batch" else []
         if mode == "interactive":
-            permission_source = "worker_scoped_configuration_required"
+            permission_source = "native_configuration_observation_required"
     else:
         native_flags = []  # Renderer remains argv authority for other supported backends.
     batch = mode == "batch"
@@ -346,7 +355,8 @@ def resolve(request, *, skill_root=None, policy_path=None, personal_path=None, v
             "selection": {"explicit": explicit, "source": "request" if raw_backend is not None else "policy_default",
                           "policy": policy_source, "harness_chain": chain, "requires_live_harness_preflight": True},
             "configuration": {"personal": personal_source, "concurrency": caps,
-                              "native_requests_directory_verified": native, "orca_launcher_configuration_observed": None},
+                              "native_requests_directory_verified": native, "native_requests_source": bridge_source,
+                              "orca_launcher_configuration_observed": None},
             "startup": startup, "required_spawn_flags": flags, "required_native_flags": native_flags,
             "permission": {"requested": requested_permission, "requested_source": permission_source,
                            "observed": obs.get("permission_mode"), "observed_source": "supplied_observation" if "permission_mode" in obs else None},
