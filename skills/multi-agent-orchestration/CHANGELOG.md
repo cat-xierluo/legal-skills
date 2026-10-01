@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.33.1] - 2026-10-01
+## [2.33.1] - 2026-10-02
 
 ### 改进
 - 新隔离ZCode worker的renderer和无command启动入口默认yolo，显式build/edit/plan保留；MiniMax batch默认原生full，显式smart/off保留。长程MiniMax继续使用交互CLI，权限读取既有原生配置；本机已full，不添加不存在的TUI启动参数或修改全局配置。
