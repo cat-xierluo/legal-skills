@@ -1,5 +1,21 @@
 # 决策记录
 
+## DEC-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 退出码与回执联合校验
+
+- 日期：2026-10-01；状态：已采纳。
+- 背景：已安装 Orca 1.4.217 的 terminal wait handler 输出合法未满足回执后设置退出码1；原 helper 提前按命令失败拒绝，丢失同句柄重等机会。
+- 决定：先捕获退出码，再严格解析单个 JSON。rc0允许布尔型 satisfied；rc1仅允许ok=true且satisfied=false。退出1+true、rc>1、okfalse、畸形或错绑一律失败，绝不把timeout/stale错误提升为pending。false仍只在同句柄30s/60s两轮等待，未就绪不投递、不销毁资源。
+- 影响：恢复原生未满足契约，同时维持唯一投递与supervised边界；不添加focus、不修改Orca、权限或身份规则。原生handler隔离回放没有启动终端或模型。
+- 重新评估条件：上游退出码/回执契约变化或真实ZCode ready信号有独立证据后另行验收。
+
+## DEC-2026-10-01-ORCA-TERMINAL-READY — 就绪回执决定是否投递
+
+- 日期：2026-10-01；状态：已采纳。
+- 背景：原 helper 忽略 wait JSON，只看退出码；Orca 正常超时也返回 rc0，导致未就绪终端被当作可投递。
+- 决定：消费单个 JSON 回执，要求顶层 `ok=true`、`result.wait.satisfied` 为布尔值；若回执带 handle/condition，也必须匹配本轮终端及 `tui-idle`。首次30s未满足，仅在同一 handle 再等60s；异常立即失败，两次仍未满足则失败。两种路径均不投递、不销毁资源，输出精确 terminal/worktree 身份供 PM 先只读核查。
+- 影响：普通 prompt 和 supervised 的唯一 worker-start 投递均须经过 readiness 门禁；ready 仍不是推理开始、业务完成或结算证明。不扩展 CLI batch、权限、provider 或 PM 宿主合同。
+- 重新评估条件：上游回执或新 CLI readiness 能力发生变化时，用真实回执重新验收，不能用退出码或忽略字段绕过门禁。
+
 ## DEC-2026-09-30-ZCODE-CLI-ACCOUNT-CONTRACT — 原生 CLI 与宿主 app-server 分开验证
 
 - 日期：2026-09-30；状态：已采纳，来源为用户要求进一步实测 BigModel Coding Plan。
