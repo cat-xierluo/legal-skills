@@ -235,3 +235,7 @@ Task-097 不消费 GitHub 原生 merge queue：远端 mutation 前必须读到�
 - 普通 terminal worker 没有 `worker_done` 义务；不要用 terminal 文本伪造 Dispatch 完成。
 - 对 external supervised terminal，`release` 后 retained 不必然是错误；文件清理仍须由 `clean-worktree.sh` 验证 settled 状态、external ownership、retained reason 和精确句柄后处理。
 - `pm-orchestrate account release` 的 provider lease 结算同样使用完整分页后的唯一目标行；第一页未命中或 WorkerList 不可证时保留 lease，不把 release 回执单独扩大为 `terminal=released`。
+
+## 派发计划与官方下一动作
+
+[派发profile](32-dispatch-profiles.md) 给出启动方式与唯一初始指引；它不执行Orca或认证，不是第二控制器。正式worker-show projection经原runtime/Run/Task/Dispatch/WT/terminal绑定核对后优先，stale仍保留原标签。composer残留不能证明未投递，completed/succeeded不能再submit，user_owned/retained不能靠启动时ownership自动关闭。terminal-managed须沿同一原生Session/Run核产物与退出；不能补造Task/Dispatch完成回执。
