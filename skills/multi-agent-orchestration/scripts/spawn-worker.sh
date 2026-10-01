@@ -168,6 +168,9 @@ ORCA_TASK_ID=""
 ORCA_COORDINATOR_HANDLE=""
 ORCA_EXPECTED_RUNTIME_ID=""
 ORCA_ZCODE_NATIVE_REQUESTS=""
+BORROW_EXISTING_WORKTREE=""
+BORROWED_LOCK_ACQUIRED=0
+BORROWED_CONTRACT_SHA256=""
 ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
 ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
 ORCA_SUPERVISED_TASK_ID=""   # helper 输出
@@ -484,7 +487,15 @@ if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
   native_version=$(printf '%s' "$native_status" | jq -er 'select(.ok == true) | .result.runtime | select(.reachable == true) | .appVersion') || exit 64
   python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$native_version" >/dev/null || exit 64
 fi
+if [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] && [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ] && [ "$NO_ORCA_MODE" -eq 0 ] && [ "$LIGHTWEIGHT_MODE" -eq 0 ] || {
+    echo "BORROWED_WORKTREE_REQUIRES_NATIVE_ZCODE: explicit native supervised worktree entry only" >&2; exit 64;
+  }
+  spawn_worker_borrowed_initial
+else
 detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
+fi
+spawn_worker_require_backend_orca || exit $?
 if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
 fi
@@ -807,6 +818,11 @@ if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
   # WORKTREE 已指向 PROJECT_DIR（或 --worktree 覆盖的子目录）。
   BASE_SHA=""
   echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
+elif [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  spawn_worker_borrowed_recheck
+  [ "$DRY_RUN" -eq 1 ] || [ -n "$PROVIDER_LEASE_FILE" ] || { echo "BORROWED_WORKTREE_LEASE_REQUIRED: configure a real provider concurrency lease" >&2; exit 64; }
+  BASE_SHA="$BORROWED_HEAD"
+  echo "SPAWN_WORKER_BORROWED_WORKTREE: external tree/branch retained; new MAO Session"
 elif [ "$ORCA_MODE" = "auto" ]; then
   # v2.1（DEC-114）：ORCA 终端模式。每次都新建独立 ORCA worktree（--no-parent），
   # 不复用 git worktree（ORCA worktree 是独立概念，由 ORCA 桌面端跟踪）。
@@ -898,7 +914,7 @@ fi
 # Task-045 / G31：worktree 创建并真实化后，按项目类型补偿依赖。
 # Orca worktree 落在 ~/orca/workspaces/（独立路径树，不在主仓父链）→ Node 项目软链
 # 主仓 node_modules，否则 npm/vitest/tsc 向上解析找不到依赖、worker 无法自验。
-ensure_worktree_deps
+[ -n "$BORROW_EXISTING_WORKTREE" ] || ensure_worktree_deps
 
 run mkdir -p "$SESSION_CONTEXT"
 

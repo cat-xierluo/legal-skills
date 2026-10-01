@@ -27,6 +27,7 @@ python3 scripts/test_provider_lease_runtime.py -v
 python3 scripts/test_pm_runtime_reconcile.py -v
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
+python3 scripts/test-borrowed-worktree.py
 bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
@@ -100,3 +101,5 @@ bash scripts/smoke-orca-control-plane.sh
 - 锁竞争验收分别观察真实非阻塞锁操作与 CLI 拒绝结果。完整 CLI 的观测/子进程启动耗时不是单独的锁等待；测试防悬挂 timeout 也不是响应性能承诺。
 
 - runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
+
+- 显式借用入口的隔离消费者应验证真实 Git 内容/模式/identity、独立 CLI writer 探测、锁及 late drift；native request/launcher 和所有 MAO cleanup 对借用树的删除调用为零。fake inventory不证明原业务树无writer或原生settlement已经通过。MiniMax默认Orca合同要分别覆盖 canonical/alias、缺runtime/错仓/注册失败/轻量拒绝及显式直连；不扩大日常backend池或supervised结论。

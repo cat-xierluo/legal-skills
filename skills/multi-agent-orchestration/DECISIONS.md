@@ -1,5 +1,9 @@
 # 决策记录
 
+## DEC-2026-10-01-MINIMAX-ORCA-DEFAULT
+
+用户明确要求 MiniMax Code 默认在 Orca 中管理分支、工作树和终端，并保留直连。采用显式 backend 选择后的通道约束：未经 `--no-orca-mode` 选择直连，必须匹配有效 Orca 项目，否则在派发副作用前失败；不迁移在途 writer、不扩张日常 backend 池或 MiniMax supervised 能力。
+
 ## DEC-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 退出码与回执联合校验
 
 - 日期：2026-10-01；状态：已采纳。
@@ -89,3 +93,7 @@
 ## DEC-2026-10-01-ZCODE-NATIVE-ORCA-LAUNCH
 
 采用 Orca 1.4.218 起的 `worker-start --agent zcode` 首次 composer 等待，由 Orca 注入唯一 Task spec；既有 `terminal create → tui-idle → worker-start --terminal` 对零提示 ZCode 会遇到就绪循环。通过显式启用的官方自定义 ZCode 启动命令消费 owner-only 单次请求，保留 MAO 门禁之后冻结的启动环境与原生交互 CLI。请求缺失的普通启动沿用 ZCode 参数；不从仓库扫描或执行未知启动脚本。后续复用仅在原 Dispatch 已结算且原生状态证明空闲后进行，资源归属采用 created。私人账号规则仍通过本地 Skill 调用，不进入公开桥或默认派发池。
+
+## DEC-2026-10-01-BORROWED-WORKTREE-ENTRY
+
+预建工作树已有原 owner、分支与批准资产，采用显式短时借用合同而非放宽默认 existing-worktree gate 或伪造恢复 Session。现场绑定 canonical Git/Orca 身份、内容快照和无 writer，持久化保留账本，保持 long-lived；MAO 自建 Session/terminal 的生命周期与借用树的 ownership 分开核对。原 owner 授权仍由 PM 回读可信证据，字段自述不能机械认证授权。当前在飞消费者仅只读，不借本实现另起业务 writer。
