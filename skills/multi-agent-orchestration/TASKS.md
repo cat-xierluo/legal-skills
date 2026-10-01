@@ -433,3 +433,18 @@ blocker_and_recovery:
 - 首候选新隔离真实链：故意遗漏native/supervised参数，spawn0自动取得已配置原生桥；仅probe.py产物7b5143721566e2a4c2a2b381b216a68b31e2c485，PM2/2。实际SQLite同nativeSID为个人CodingPlan/GLM-5.3/max completed retry0，唯一worker_done/Delivery核验，正式release返回released/closed_agent_terminal/archivecaptured，随后ack0、postshowcompleted/succeeded/released/none。本轮测试root/worker精确终端库存各0；long-lived分支/树保留。该canary绑定df6154bd，不改记修后head新模型执行。新树.video_agent/plugin_root来源NOT_CONFIRMED且早于模型请求，保留不删；tracked diff精确。
 - 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
+
+## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
+
+- 状态：`IN_PROGRESS / ENGINEERING_FROZEN_REVIEW_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
+- 输入：冻结诊断3份真实快照及原Fathom第三轮；来源经原总控交接，消费者是Fathom/DSH原memory拒绝证据，不解除各自泊车或重复业务。
+- 通道/资源：同宿主subagent为SKILL§1/2独立合法通道，无独立worker进程/CLIterminal/provider/worktree派发。现liveprobe仍exit3；不能换独立CLI绕门。复用已附着干净managed WT，新分支fix/mao-memory-telemetry-261002，base77b82251b36b270e88253ec2b40f9a43dae9b8a3；原profile分支/evidence保留。
+- 实现写域：scripts/mem_budget_probe.py、scripts/test-mem-budget-probe.py、新scripts/test_memory_telemetry.py及scripts/fixtures/memory-admission-261002/**；根PM只写本卡、SKILL版本、CHANGELOG、DECISIONS、ref22/ref19与README索引。无其他代码/global/账号写域。
+- 实现责任：/root/release_compat；独审/root/permission_review不同原session，不给产品repair grant。单波只一个实现者和一个reviewer，root统一收口；不重做已验诊断/profile/batch、不建第二controller。
+- 行为合同：识别实际System-wide memory free percentage为“报告百分比”与parse-valid，不把84%当available_bytes或安全级别；保留旧关键词/旧available百分比合同。read-success与parse-valid独立结构记录（含缺失/空/未知/畸形）；legacy sources兼容。OS sysctl dispatch通知位1/2/4映射normal/warn/critical，unknown保持unknown；新原生观测只记录来源/值/level，明确used_for_admission=false。算法现level/slots/status/exit/0.95/0.75/default3GiB/reserve/formula不改变，不隐入任何native压力例外策略。
+- 预算：实现<=25分钟，scoped新测试一次及原内存套件一次；原始失败保留，同任务最多2失败episode，未改代码重复验证不充稳定。reviewer只读diff/必要文件、正反例及三frozenraw，环境归因至多一次，不复跑整包。root受影响消费者/发布检查串行；不无限模型/步骤。
+- 验收：三冻结真实快照parse有效、来源准确且原swap拒绝均exit3/slots0；读取成功但parse无效、缺失/空/非法/多行nativeflag、合法1/2/4、native与composite不混淆、无vm_stat时新84%不能成为物理可用兜底、原schema/正常与低内存/E2E副作用边界回归。独审绑定immutablehead、postflight/role/Harness/PEA scoped、PR exactmerge后CAS同步保主sourceindex与并发改动。
+- 非目标：不改0.95、预算、global或例外放行；不purge/reboot/kill其他owner；动态swap/磁盘底仓、新压力准入策略及任何例外仅留单独受审设计。独审与发布仍待完成，NOT_VERIFIED。
+- 证据：/tmp/mao-memory-telemetry-261002/，完整派发价值JSON同处；source内存门前后可比，Fathom/DSH业务结果非本卡交付。
+
+- 工程首轮：新遥测13/13、原内存58/58实际exit0，无失败episode或重跑；三frozen CLI保留exit3/slots0/swap critical与原available_bytes。报告84%解析有效但level/available_percent null；无vm_stat+新百分比仍exit1。冻结工程交独立审查，完整矩阵/发布尚待完成。
