@@ -25,23 +25,26 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-10-01-INTERACTIVE-DISPATCH-CONTRACT — 交互CLI与派发前校验说明
 
-- 状态：`IN_PROGRESS`（文档实现，待独立review）；Owner：Codex `/root/optional_cli_review`；来源：用户明确要求交互CLI长程，禁止新增headless/--prompt方案；root要求同步私有派发前校验调用合同。
+- 状态：`COMPLETE`（限定说明文档与两阶段同session实际任务；最终文档review及PR合并由root执行）；Owner：Codex `/root/optional_cli_review`；来源：用户明确要求交互CLI长程，禁止新增headless/--prompt方案；root要求同步私有派发前校验调用合同。
 - 冻结起点：`60e58b29ad2304bf0bd97bde91c7a8ebca3c25b9`（已独立ACCEPT并push至PR #233）；候选分支 `fix/mao-orca-terminal-ready`、隔离worktree `mao-live-cli-acceptance`；本卡仅文档，不改变已接受产品代码。
 - 范围：ref28、ref29、本卡及CHANGELOG v2.31.3。保留已验tmux交互CLI正式工作路径，记录Orca TUI前提示就绪边界；私有校验仅版本感知调用，不复制私人规则、账号或路径。无新增batch配方、runner、spawn模式、默认池变化或权限扩张。
-- 验收：按私有Skill当前版本说明/help调用其提供的 `validate-dispatch --observation PRIVATE_OBSERVATION --plan PRIVATE_PLAN`；具名两文件、现场重读，失败不投递；瞬时通过不当持续身份锁。当前安装1.0不假定拥有候选1.1接口，缺少接口时不能宣称校验通过。
-- 清单：①候选私有接口小节已只读核对；②交互CLI/校验合同已同步；③文档链接/diff/隐私检查后提交固定HEAD；④root安排精确HEAD独立review。
-- 证据：只读对照私有候选SKILL步骤4及CLI argparse，公开文档仅引用接口；Orca原生就绪与ZCode启动源码诊断留于本机脱敏报告。业务脚本保持冻结源码哈希，本轮未运行真实私有接口或用户hook。
-- `NOT_VERIFIED`：私有1.1候选尚待独立review/安装，公开文档不证明真实validate-dispatch成功；Orca ZCode TUI/长程监督/settlement仍未验。本轮不调用真实模型、切号、耗卡或用户hook，保留既有研究记录但不推荐无头替代。
+- 验收：按私有Skill当前版本说明/help调用其提供的 `validate-dispatch --observation PRIVATE_OBSERVATION --plan PRIVATE_PLAN`；具名两文件、现场重读，失败不投递；瞬时通过不当持续身份锁。须按实际安装版本核对是否提供该接口，缺少接口时不能宣称校验通过。
+- 清单：①私有接口小节已只读核对；②交互CLI/校验合同已同步；③文档候选 `d902387bce5693e4ded1db7eeb5962fccaafd753` 已固定，保留版本2.31.3；④两阶段实际证据已由root回读，最终文档固定HEAD另交独立review，PR #233尚未合并。
+- 证据职责：公开文档仅维护版本感知调用合同，真实私有运行与安装证据由私有Skill维护，不在公开任务卡承载。接口说明与私有规则实现分开，业务脚本保持冻结源码哈希。
+- 同session实际任务：通过原生交互CLI、显式 `--no-orca-mode` tmux路径，第一阶段代码审查及256/256回归、第二阶段refs合同审查均收口；最终RESULT v1.2为 `ACCEPT`（审查候选 `d902387bce5693e4ded1db7eeb5962fccaafd753`），STATUS done、tracked diff为0、value postflight PASS。独立reviewer已核业务证据，stop/cleanup最后复核仍由root跟进，不将本卡范围扩大为Orca兼容。
+- 实际模型：同一原生交互会话实际验证 `GLM-5.3-Flash`，并经原生 `/model` 切换后验证 `GLM-5.3 / max`；原生记录确认请求完成，重试无异常，不以argv或模型自述替代，也不代表逐请求精确计费证明。
+- 范围与资源：PM补落盘具名初始worker提示；过程存在只读目录枚举超出精确scope，仍为prompt-only降级，不能宣称机械scope/hook通过。本轮tmux会话与执行资源由PM精确收口；公开记录只承载任务验收，不包含私人运行环境、账户用量、私有路径或原始日志。
+- `NOT_VERIFIED`：通用调用合同不等于持续身份锁、自动机械绑定或已有worker账号归属证明；Orca ZCode TUI/长程监督/settlement、机械scope与逐请求精确计费仍未验。保留既有研究记录但不推荐无头替代，私人证据由私有Skill单独维护。
 
 ## TASK-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 消费原生未满足退出码
 
-- 状态：`IN_PROGRESS`；Owner：Codex `/root/optional_cli_review`（implementer）；来源：用户要求继续验证，原生 Orca 1.4.217 对合法 `satisfied=false` 回执退出1，现 helper 提前拒绝，未执行同句柄重等。
+- 状态：`COMPLETE`（代码及定向回归已独立ACCEPT，PR #233尚未合并）；Owner：Codex `/root/optional_cli_review`（implementer）；来源：用户要求继续验证，原生 Orca 1.4.217 对合法 `satisfied=false` 回执退出1，修复前 helper 提前拒绝，未执行同句柄重等。
 - 冻结起点：`a2dc75ef612731e23dec1678dc36fcbbf000a402`；base `origin/main` = `41268aaa91e71158cb4551dce8d757038869af0f`；复用本轮已授权隔离 worktree `mao-live-cli-acceptance`、分支 `fix/mao-orca-terminal-ready`；PR #233 OPEN，由root发布。
 - 范围：仅 Orca spawn helper、定向 Orca 测试及必要 launch/mem fixture、SKILL版本、TASKS、DECISIONS、CHANGELOG、ref13、README MAO索引；交付 v2.31.3。不改Orca源码、focus、权限、宿主、provider、身份/资源合同或共享source。
 - 验收：捕获真实退出码后严格解析单个回执；仅rc0布尔回执、rc1且false有效。rc1+true、rc>1、okfalse、畸形、错绑、多JSON均零send；false同一handle仅30s/60s两轮，supervised不双投。运行原生CLI handler的隔离消费者契约回放及真实shell退出码回归，无真实终端或模型请求。
-- 清单：①登记任务已完成；②窄修复与定向测试已完成；③原生源码消费者回放与文档同步已完成，提交待固定HEAD；④root安排独立review与实际兼容验证。
-- 验证：`bash scripts/test-spawn-worker-orca.sh` 256/256（包含已安装原生handler输出false退出1/true退出0的无RPC消费者回放，以及其回执经真实shell退出码供helper消费）、launch42/42、mem58/58；本轮未修改launch/mem模块或fixture。日志为本机 `/tmp/mao-orca-wait-{exit,launch,mem}-test.log`。独立review和真实ZCode Orca兼容仍待验收，PR #233尚未合并。
-- `NOT_VERIFIED`：ZCode Orca ready合成、真实模型请求、supervised/settlement不以本轮隔离测试补证；错误/timeout/stale不作pending成功。
+- 清单：①登记任务已完成；②窄修复与定向测试已完成；③原生源码消费者回放与文档同步已完成；④源码 `60e58b29ad2304bf0bd97bde91c7a8ebca3c25b9` 已独立ACCEPT并push至PR #233。该代码任务已闭合，发布/合并由root执行，ZCode实际交互验收独立记录。
+- 验证：`bash scripts/test-spawn-worker-orca.sh` 256/256（包含已安装原生handler输出false退出1/true退出0的无RPC消费者回放，以及其回执经真实shell退出码供helper消费）、launch42/42、mem58/58；本轮未修改launch/mem模块或fixture。日志为本机 `/tmp/mao-orca-wait-{exit,launch,mem}-test.log`。独立review已接受上述源码与定向回归；真实ZCode Orca兼容仍未验，PR #233尚未合并。
+- `NOT_VERIFIED`：ZCode Orca ready合成及该路径的真实模型请求、supervised/settlement不以本轮隔离测试补证；错误/timeout/stale不作pending成功。
 
 ## TASK-2026-10-01-LIVE-WORKER-ACCEPTANCE — 两个 Skill 的实际任务验收
 

@@ -7,6 +7,8 @@
 
 ### 验证
 - 增加原生 CLI handler 的隔离契约回放及真实 shell 退出码消费者回归，覆盖普通/supervised、错绑、多JSON、timeout/stale错误；不扩大为 ZCode Orca 或完整生命周期的真机验收。
+- 公开文档仅维护私有账号 Skill 的版本感知调用合同；真实私有运行与安装证据由私有Skill维护，不在公开任务卡承载。
+- ZCode同一原生tmux交互会话完成代码/256项回归及refs合同两阶段，RESULT ACCEPT、STATUS done、tracked diff为0、value postflight通过；原生记录确认实际 `GLM-5.3-Flash` 与切换后的 `GLM-5.3` 请求完成、重试无异常。仍为prompt-only，目录枚举越scope已记录，机械scope、Orca TUI及精确计费未验证。
 
 ### 文档完善
 - 补充私有账号 Skill 的版本感知派发前校验调用：具名观测/计划、现场重读、失败停止，瞬时通过不当持续身份锁；保留公开包仅由PM调用的边界。
