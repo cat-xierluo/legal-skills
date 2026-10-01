@@ -69,6 +69,67 @@ def emit_saved_path(out: str, out_dir: Path) -> None:
     sys.stdout.write(f"\nSAVED_FILEPATH={saved}\n")
 
 
+DOUYIN_SHARE_RE = None  # 延迟编译（见 normalize_douyin_url）
+
+
+def normalize_douyin_url(url: str, timeout: int = 20) -> tuple[str, str]:
+    """把抖音分享链接规范化为 yt-dlp 能识别的 canonical 形态。
+
+    Cubox/微信/App「复制链接」拿到的多半是 `https://v.douyin.com/<code>/` 短链，
+    302 后落到 `https://www.iesdouyin.com/share/{video,note}/<id>?<40+ tracking 参数>`。
+    yt-dlp 两条都不认：短链解析后的 share 路径报 `Unsupported URL`，那一长串
+    tracking 参数也会让它的 URL 正则失配（2026-10-01 实测，纯 cookie 无关）。
+
+    这里：跟随跳转 → 抽出 numeric id 与类型 → 重建 `https://www.douyin.com/<type>/<id>`。
+    已验证 canonical URL + 浏览器游客 cookie 可正常下载视频。
+
+    Returns:
+        (normalized_url, media_type) —— media_type ∈ {'video','note','slides',''}，
+        'note' 表示图文帖（无视频流，yt-dlp 无 extractor），调用方据此走图文分支。
+        非抖音链接或解析失败时原样返回 (url, '')。
+    """
+    global DOUYIN_SHARE_RE
+    import re
+    from urllib.parse import urlparse
+
+    if DOUYIN_SHARE_RE is None:
+        DOUYIN_SHARE_RE = re.compile(r'/(?:share/)?(video|note|slides)/(\d{15,})')
+
+    host = (urlparse(url).hostname or "").lower()
+    if not any(d in host for d in ("douyin.com", "iesdouyin.com")):
+        return url, ""
+
+    def _canonical(text: str) -> tuple[str, str]:
+        m = DOUYIN_SHARE_RE.search(text)
+        if not m:
+            return "", ""
+        kind, vid = m.group(1), m.group(2)
+        return f"https://www.douyin.com/{kind}/{vid}", kind
+
+    # 已是 canonical 且无查询参数 → 直接用，省一次网络往返
+    p = urlparse(url)
+    if not p.query and p.hostname and p.hostname.lower() == "www.douyin.com":
+        canon, kind = _canonical(p.path)
+        if canon:
+            return canon, kind
+
+    # 短链或带 tracking 参数的分享链接 → 跟随跳转取 effective URL
+    try:
+        proc = subprocess.run(
+            ["curl", "-sL", "-o", "/dev/null", "-w", "%{url_effective}",
+             "--max-time", str(timeout), url],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        final = (proc.stdout or "").strip()
+    except Exception:
+        return url, ""
+
+    canon, kind = _canonical(final)
+    if canon:
+        return canon, kind
+    return url, ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download video/audio by URL using yt-dlp")
     parser.add_argument("url", help="Video or podcast episode URL")
@@ -119,6 +180,38 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    # 抖音短链/分享链接先规范化（canonical www.douyin.com/<type>/<id>），
+    # 否则 yt-dlp 对 iesdouyin share 路径 + tracking 参数一律报 Unsupported URL。
+    media_type = ""
+    normalized, media_type = normalize_douyin_url(args.url)
+    if normalized != args.url:
+        sys.stdout.write(f"[download_media] 链接规范化: {args.url}\n         → {normalized}\n")
+        args.url = normalized
+
+    if media_type == "note":
+        # 抖音图文帖：yt-dlp 无 extractor，改派给专门的图文下载器（抓图片）。
+        # 2026-10-01 实测：抖音 SSR share/note 页已上签名墙，无有效登录态时不再渲染
+        # 图片列表，此路通常失败——失败时给出可执行的手动建议，并以 3 号退出码告知
+        # 调用方「这是图文帖，不是错误」。
+        note_script = Path(__file__).parent / "download_douyin_note.py"
+        if note_script.exists():
+            sys.stdout.write("[download_media] 抖音图文帖，改派 download_douyin_note.py 抓图片...\n")
+            note_rc, note_out = run([
+                sys.executable, str(note_script), args.url, "--out-dir", str(args.out_dir),
+            ])
+            sys.stdout.write(note_out)
+            if note_rc == 0:
+                for ln in reversed([l.strip() for l in note_out.splitlines() if l.strip()]):
+                    if ln.startswith("SAVED_FILEPATH="):
+                        sys.stdout.write(f"MEDIA_TYPE=note\n\nSAVED_FILEPATH={ln.split('=', 1)[1].strip()}\n")
+                        return 3
+        sys.stdout.write(
+            "[download_media] 图文帖未能提取图片（抖音 SSR 页需登录态才渲染图片列表）。\n"
+            "  建议：在抖音 App / Cubox 里直接查看该图文帖；或登录后用浏览器开发者工具另存图片。\n"
+            "MEDIA_TYPE=note\n"
+        )
+        return 3
 
     out_dir = Path(args.out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
