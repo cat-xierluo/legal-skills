@@ -62,6 +62,12 @@ ZCode 的 tmux fallback 文件任务产物提交 `08230b664fcaee9e6a2ee5f3257ec9
 
 这两项任务均采用显式 prompt-only 降级；ZCode bootstrap 曾执行超出精确 shell allowlist 的 `ls`，不证明机械 scope/hook。terminal-managed 没有 supervised Task/Dispatch，tmux 也不能替代 `worker_done → Delivery → settlement → ack`。本轮无真实账号切换、耗卡或默认自动身份绑定；共享配置/凭证一致性仅有准备进程内断言，未持久化该次共享 before baseline，独立 before/after 重放仍 `NOT_VERIFIED`。精确服务端扣费归属同样 `NOT_VERIFIED`。证据状态与独立验收以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡为准。
 
+## 默认Orca渠道的增量验收
+
+2.33.0默认入口另以新的MiniMax交互会话完成文件任务：产物`1f0c1513b09351542e5ce51411922c27b7079d63`仅probe.py，PM3/3与postflight通过；实际16条assistant响应、16条HTTP200事件均为`minimax / MiniMax-M3.1-Flash-Preview`。原生历史与usage按精确session/turn/timestamp/rawusage唯一消费，日志按同session/turn/provider/model核数量组；逐responseId的HTTP直接join与精确计费仍NOT_VERIFIED。测试CLI/launcher及已记录后代退出，默认空shell核后正式close-all，最终终端库存0；long-lived树/分支保留证据。
+
+启动bootstrap可能已消费完整本轮授权合同并开始或完成工作。PM先读精确终端与产物再决定后续输入，已有业务不能再次派发；本次只发送一次现有结果的验收指导。MiniMax的Orca receipt可能仅报告input_accepted且provider unsupported：不重发，不把运输成功当作业务已启动，通过该原生会话及实际结果核消费。terminal-managed仍没有supervised Task/Dispatch/worker_done闭环。
+
 ## 依赖与来源
 
 现有依赖之外，只需用户自行安装对应 CLI；Qoder CN 独立安装文档为 [官方安装与升级](https://docs.qoder.cn/cli/installation)，常规 npm 入口是 `@qodercn-ai/qoderclicn`，安装先遵循本机依赖纪律。本 Skill 不执行安装。MiniMax Code 的运行时依赖和安装方式以 [官方仓库](https://github.com/MiniMax-AI/minimax-code) 为准。Qoder 参数以 [官方 CLI 参考](https://docs.qoder.cn/cli/cli-reference) 与运行中 help 为准。
