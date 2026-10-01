@@ -174,6 +174,55 @@ class AdapterTests(unittest.TestCase):
         result = self.invoke("zcode-cli", "unknown_binary --mode yolo")
         self.denied(result, "existing_command_validator_refused")
 
+    def guidance(self, profile, outcome):
+        result = subprocess.run([sys.executable, "-B", str(self.scripts / "dispatch-profile-adapter.py"), "--launch-outcome", outcome],
+            input=json.dumps(profile),capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        value=json.loads(result.stdout)
+        self.assertEqual(value["input_state"],"draft")
+        for key in ("input_accepted_verified","turn_started_verified","completion_verified"): self.assertFalse(value[key])
+        return value
+
+    def test_unique_initial_guidance_supervised_no_second_send(self):
+        profile=self.success(self.invoke("zcode-cli",self.zcode+" --mode build"))
+        guide=self.guidance(profile,"supervised_registration_returned")
+        self.assertEqual(guide["next_action"]["kind"],"inspect_dispatch_submission")
+        self.assertEqual(self.guidance(profile,"planned")["next_action"]["kind"],"spawn_supervised_once")
+
+    def test_batch_and_terminal_created_do_not_claim_accepted(self):
+        self.require_classifier()
+        profile=self.success(self.invoke("minimax-code",self.batch()))
+        self.assertEqual(self.guidance(profile,"batch_launch_returned")["next_action"]["kind"],"inspect_batch_start")
+        generic=self.success(self.invoke("zcode-cli",self.zcode,transport="orca-generic"))
+        self.assertEqual(self.guidance(generic,"terminal_created")["next_action"]["kind"],"wait_input_ready")
+
+    def test_official_projection_keeps_none_after_local_launch_observation(self):
+        profile=self.success(self.invoke("zcode-cli",self.zcode))
+        # The original receipt validation is covered by profile tests. Guidance
+        # preserves its already validated action rather than manufacturing send.
+        profile["official_projection"]={"source":"supplied_validated_official_receipt"}
+        profile["next_action"]={"kind":"none","authority":"orca_projection"}
+        self.assertEqual(self.guidance(profile,"terminal_created")["next_action"]["kind"],"none")
+
+    def test_worker_done_or_existing_composer_cannot_become_submit_again(self):
+        for fields, action in (({"input_state":"worker_done"},"pm_verify_result"),
+                               ({"observations":{"composer_text_present":True}},"inspect_existing_input")):
+            profile=self.success(self.invoke("zcode-cli",self.zcode,transport="orca-generic",**fields))
+            result=subprocess.run([sys.executable,"-B",str(self.scripts/"dispatch-profile-adapter.py"),"--launch-outcome","terminal_created"],
+                input=json.dumps(profile),capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            guide=json.loads(result.stdout)
+            self.assertEqual(guide["next_action"]["kind"],action)
+            self.assertFalse(guide["completion_verified"])
+
+    def test_unknown_launch_outcome_and_malformed_profile_refuse(self):
+        profile=self.success(self.invoke("zcode-cli",self.zcode))
+        for data,outcome in ((profile,"worker_done"),({"ok":True,"task_input":{},"next_action":{}},"terminal_created")):
+            result=subprocess.run([sys.executable,"-B",str(self.scripts/"dispatch-profile-adapter.py"),"--launch-outcome",outcome],
+                input=json.dumps(data),capture_output=True,text=True)
+            self.assertEqual(result.returncode,64)
+            self.assertEqual(result.stdout,"")
+
 
 if __name__ == "__main__":
     unittest.main()

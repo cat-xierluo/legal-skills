@@ -134,9 +134,40 @@ def adapt(request, command, *, skill_root=None, policy_path=None, personal_path=
     return result
 
 
+def launch_guidance(profile, outcome):
+    """Initial guidance from a returned launch boundary, never completion."""
+    need(isinstance(profile, dict) and profile.get("ok") is True, "launch_profile_invalid")
+    need(outcome in {"planned", "terminal_created", "batch_launch_returned", "supervised_registration_returned"},
+         "launch_outcome_unknown")
+    need(isinstance(profile.get("task_input"), dict) and isinstance(profile.get("next_action"), dict), "launch_profile_invalid")
+    batch = profile.get("execution_mode") == "batch"
+    supervised = profile["task_input"].get("source") == "supervised_task_spec"
+    need(outcome != "batch_launch_returned" or batch and not supervised, "launch_outcome_profile_conflict")
+    need(outcome != "supervised_registration_returned" or supervised and not batch, "launch_outcome_profile_conflict")
+    module, _ = module_from_source(HERE / "dispatch-profile.py", "mao_guidance_profile")
+    need(profile.get("schema") == module.SCHEMA and profile["task_input"].get("state") in module.STATES
+         and profile.get("execution_mode") in {"interactive", "batch"}, "launch_profile_invalid")
+    obs = {}
+    if outcome != "planned": obs["terminal_created"] = True
+    if outcome == "supervised_registration_returned": obs["supervised_spec_injected"] = True
+    # Never downgrade durable/supplied state or an existing composer safeguard
+    # into a new task submission merely because a launch returned later.
+    preserve = profile.get("official_projection") is not None or profile["next_action"].get("kind") not in {
+        "spawn_supervised_once", "spawn_batch_once", "spawn_terminal_once"}
+    action = (profile["next_action"] if preserve else
+              {"kind":module.next_action("draft", obs, supervised, batch), "authority":"initial_launch_guidance",
+               "requires_live_receipt_validation":True})
+    return {"outcome":outcome, "input_state":profile["task_input"].get("state"),
+            "input_state_source":"supplied_profile", "original_receipt_revalidated":False, "input_accepted_verified":False,
+            "turn_started_verified":False, "completion_verified":False,
+            "supervised_registration_returned":outcome == "supervised_registration_returned",
+            "next_action":action}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-file")
+    parser.add_argument("--launch-outcome")
     parser.add_argument("--skill-root")
     parser.add_argument("--policy")
     parser.add_argument("--personal-config")
@@ -146,6 +177,10 @@ def main():
     try:
         profile, _ = module_from_source(HERE / "dispatch-profile.py", "mao_adapter_input")
         value = profile.read_json(args.input_file)[0] if args.input_file else json.load(sys.stdin)
+        if args.launch_outcome:
+            need(not any((args.skill_root, args.policy, args.personal_config, args.receipt_file, args.expected_identity_file)), "launch_guidance_arguments_conflict")
+            print(json.dumps(launch_guidance(value, args.launch_outcome), sort_keys=True))
+            return 0
         need(isinstance(value, dict) and set(value) == {"request", "command"}, "adapter_input_unknown")
         need(bool(args.receipt_file) == bool(args.expected_identity_file), "adapter_receipt_identity_pair_required")
         raw = profile.read_json(args.receipt_file)[0] if args.receipt_file else None
