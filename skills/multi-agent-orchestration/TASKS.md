@@ -23,6 +23,16 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-10-01-INTERACTIVE-DISPATCH-CONTRACT — 交互CLI与派发前校验说明
+
+- 状态：`IN_PROGRESS`（文档实现，待独立review）；Owner：Codex `/root/optional_cli_review`；来源：用户明确要求交互CLI长程，禁止新增headless/--prompt方案；root要求同步私有派发前校验调用合同。
+- 冻结起点：`60e58b29ad2304bf0bd97bde91c7a8ebca3c25b9`（已独立ACCEPT并push至PR #233）；候选分支 `fix/mao-orca-terminal-ready`、隔离worktree `mao-live-cli-acceptance`；本卡仅文档，不改变已接受产品代码。
+- 范围：ref28、ref29、本卡及CHANGELOG v2.31.3。保留已验tmux交互CLI正式工作路径，记录Orca TUI前提示就绪边界；私有校验仅版本感知调用，不复制私人规则、账号或路径。无新增batch配方、runner、spawn模式、默认池变化或权限扩张。
+- 验收：按私有Skill当前版本说明/help调用其提供的 `validate-dispatch --observation PRIVATE_OBSERVATION --plan PRIVATE_PLAN`；具名两文件、现场重读，失败不投递；瞬时通过不当持续身份锁。当前安装1.0不假定拥有候选1.1接口，缺少接口时不能宣称校验通过。
+- 清单：①候选私有接口小节已只读核对；②交互CLI/校验合同已同步；③文档链接/diff/隐私检查后提交固定HEAD；④root安排精确HEAD独立review。
+- 证据：只读对照私有候选SKILL步骤4及CLI argparse，公开文档仅引用接口；Orca原生就绪与ZCode启动源码诊断留于本机脱敏报告。业务脚本保持冻结源码哈希，本轮未运行真实私有接口或用户hook。
+- `NOT_VERIFIED`：私有1.1候选尚待独立review/安装，公开文档不证明真实validate-dispatch成功；Orca ZCode TUI/长程监督/settlement仍未验。本轮不调用真实模型、切号、耗卡或用户hook，保留既有研究记录但不推荐无头替代。
+
 ## TASK-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 消费原生未满足退出码
 
 - 状态：`IN_PROGRESS`；Owner：Codex `/root/optional_cli_review`（implementer）；来源：用户要求继续验证，原生 Orca 1.4.217 对合法 `satisfied=false` 回执退出1，现 helper 提前拒绝，未执行同句柄重等。
