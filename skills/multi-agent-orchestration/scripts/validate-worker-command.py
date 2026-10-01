@@ -97,6 +97,14 @@ def command_backend(
 ) -> str:
     if depth > 3:
         raise ValidationError("nested shell launch depth exceeds the supported limit")
+    # exec is a builtin only at the real Shell body head. Do this before env
+    # unwrapping: an env target is an external executable, never a builtin.
+    # Do not infer a head after assignment-like tokens; shlex loses whether an
+    # assignment name was quoted, which can make it an executable instead.
+    if shell_body and words and words[0] == "exec":
+        words = words[1:]
+        if not words or words[0].startswith("-"):
+            raise ValidationError("unsupported shell exec launcher")
     # Spawn adds separate native env wrappers for Session Context and Node cap.
     for _ in range(8):
         stripped = strip_environment(words)
@@ -118,10 +126,6 @@ def command_backend(
             stdin_redirect.append(redirect_target)
         words = words[: redirect_indices[0]]
 
-    if shell_body and words[0] == "exec":
-        words = strip_environment(words[1:])
-        if not words or words[0].startswith("-"):
-            raise ValidationError("unsupported shell exec launcher")
     if resolved_argv is not None:
         resolved_argv[:] = words
     executable = words[0]
@@ -267,14 +271,11 @@ def validate_minimax_bootstrap(argv: list[str], redirects: list[str], exec_index
         raise ValidationError("MiniMax exec requires one nonempty bootstrap prompt or redirected --input -")
     else:
         prompt = prompts[0]
-    if not inputs and "$" in prompt and "$(" not in prompt:
+    # shlex intentionally removes quote delimiters and cannot prove whether a
+    # positional $(cat ...) expands or remains a single-quoted literal. Do not
+    # infer task bytes from that syntax; use the canonical stdin/file contract.
+    if not inputs and "$" in prompt:
         raise ValidationError("MiniMax bootstrap prompt cannot depend on unproven shell expansion")
-    if not inputs and "$(" in prompt:
-        match = re.fullmatch(r"\$\((.*)\)", prompts[0])
-        words = split_words(match.group(1)) if match else []
-        if len(words) != 2 or os.path.basename(words[0]) != "cat" or not os.path.isabs(words[1]) or not os.path.isfile(words[1]) or not os.path.getsize(words[1]):
-            raise ValidationError("MiniMax cat bootstrap requires an existing nonempty absolute prompt file")
-        prompt = read_minimax_bootstrap_file(words[1])
     if input_format == "json":
         try:
             value = json.loads(prompt)

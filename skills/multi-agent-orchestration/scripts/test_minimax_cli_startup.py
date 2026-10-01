@@ -59,6 +59,53 @@ class MiniMaxStartup(unittest.TestCase):
         self.prompt.write_text('  \n')
         self.assertEqual(self.classify('mcode exec --input - < '+shlex.quote(str(self.prompt))).returncode,64)
 
+    def test_positional_substitution_quote_semantics_use_actual_argv(self):
+        self.prompt.write_text(json.dumps({'prompt':'fixture JSON task'}))
+        self.bin.write_text("#!/usr/bin/env python3\nimport json,sys\nargs=sys.argv[1:]\nraw=sys.stdin.read() if '--input' in args else args[-1]\nprint(json.dumps({'argv':args,'raw_input':raw}))\ntry:\n value=json.loads(raw)\n prompt=value if isinstance(value,str) else value.get('prompt') if isinstance(value,dict) else None\nexcept ValueError:prompt=None\nraise SystemExit(0 if isinstance(prompt,str) and prompt.strip() else 64)\n")
+        prefix=shlex.quote(str(self.bin))+' exec --input-format json '
+        substitution='$(cat '+shlex.quote(str(self.prompt))+')'
+        single_quoted=prefix+shlex.quote(substitution)
+        double_quoted=prefix+'"'+substitution+'"'
+        stdin=prefix+'--input - < '+shlex.quote(str(self.prompt))
+        for command, classifier_rc, consumer_rc in (
+            (single_quoted,64,64), (double_quoted,64,0),
+            ('bash -lc '+shlex.quote(single_quoted),64,64),
+            ('bash -lc '+shlex.quote(double_quoted),64,0),
+            (stdin,0,0), ('bash -lc '+shlex.quote(stdin),0,0),
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.classify(command).returncode,classifier_rc)
+                actual=subprocess.run(['bash','-c',command],text=True,capture_output=True)
+                self.assertEqual(actual.returncode,consumer_rc,actual.stderr)
+                result=json.loads(actual.stdout)
+                if consumer_rc:
+                    self.assertEqual(result['argv'][-1],substitution)
+                    self.assertEqual(result['raw_input'],substitution)
+                else:
+                    self.assertEqual(json.loads(result['raw_input']),{'prompt':'fixture JSON task'})
+
+    def test_env_exec_target_is_not_a_shell_builtin(self):
+        backend=shlex.quote(str(self.bin))
+        for command in ('env exec '+backend+" exec 'fixture'",
+            'env FIXTURE=1 env exec '+backend+" exec 'fixture'",
+            "'FIXTURE=1' exec env "+backend+" exec 'fixture'",
+            'bash -lc '+shlex.quote('env exec '+backend+" exec 'fixture'")):
+            with self.subTest(command=command):
+                self.assertEqual(self.classify(command).returncode,64)
+                actual=subprocess.run(['bash','-c',command],env=dict(os.environ,FIXTURE_ROOT=str(self.root)),text=True,capture_output=True)
+                self.assertEqual(actual.returncode,127,actual.stderr)
+                self.assertFalse((self.root/'bootstrap.jsonl').exists())
+        for command in ('exec env '+backend+" exec 'fixture'",
+            'exec env FIXTURE=1 env '+backend+" exec 'fixture'",
+            'env FIXTURE=1 bash -lc '+shlex.quote('exec env '+backend+" exec 'fixture'")):
+            with self.subTest(command=command):
+                self.assertEqual(self.classify(command).returncode,0)
+                actual=subprocess.run(['bash','-c',command],env=dict(os.environ,FIXTURE_ROOT=str(self.root)),text=True,capture_output=True)
+                self.assertEqual(actual.returncode,0,actual.stderr)
+        entries=[json.loads(x) for x in (self.root/'bootstrap.jsonl').read_text().splitlines()]
+        self.assertEqual(len(entries),3)
+        self.assertTrue(all(entry['argv']==['exec','fixture'] for entry in entries))
+
     def controller(self, command, wait_valid=True, create_valid=True, child_exit=0, orca_helper=None):
         metadata=self.root/'metadata.json'
         metadata.write_text(json.dumps({'session':{'orca':{'terminal_handle':''}},'runtime':{'worker_backend':'minimax-code','startup':{'observation':'not_observed'}}}))
