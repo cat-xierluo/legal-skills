@@ -49,8 +49,8 @@ class BridgeTests(unittest.TestCase):
     def launch_cli(self,*argv,env=None,cwd=None):return self.run_cli("launch","--requests-root",self.requests,"--default-zcode",self.zcode,"--",*argv,env=env,cwd=cwd)
     def alter(self,**values):
         r=json.loads(self.request.read_text());r.update(values);self.request.write_text(json.dumps(r))
-    def receipt(self,handle="term-native"):
-        p=self.root/"receipt.json";p.write_text(json.dumps({"ok":True,"_meta":{"runtimeId":"runtime-1"},"result":{"runId":"run-1","taskId":"task-1","dispatchId":"disp-1","effects":[{"kind":"worktree","action":"reused","id":"wt-1"},{"kind":"terminal","role":"agent","action":"created","id":handle}]}}));return p
+    def receipt(self,handle="term-native",state="ready"):
+        p=self.root/"receipt.json";p.write_text(json.dumps({"ok":True,"_meta":{"runtimeId":"runtime-1"},"result":{"state":state,"runId":"run-1","taskId":"task-1","dispatchId":"disp-1","effects":[{"kind":"worktree","action":"reused","id":"wt-1"},{"kind":"terminal","role":"agent","action":"created","id":handle}]}}));return p
     def test_real_consumer_preserves_wrapper_and_binds_created(self):
         self.prepare();p=self.launch_cli("--mode","yolo")
         self.assertEqual(p.returncode,0,p.stderr);out=json.loads(p.stdout)
@@ -107,7 +107,41 @@ class BridgeTests(unittest.TestCase):
         self.launch.write_text('#!/bin/bash\necho unrelated\n');self.launch.chmod(0o700)
         p=self.run_cli('prepare','--requests-root',self.requests,'--metadata',self.metadata,'--authority',self.authority,'--orca-bin',self.orca,'--runtime-id','runtime-1','--worktree-id','wt-1','--run-id','run-1','--task-id','task-1','--coordinator-handle','term-pm')
         self.assertEqual(p.returncode,64);self.assertEqual(list(self.requests.iterdir()),[])
-    def register_fixture(self,fail=False):
+    def bind_ready(self):
+        return self.run_cli('bind-receipt','--requests-root',self.requests,'--request-file',self.request,'--receipt',self.receipt())
+    def test_bound_replay_is_refused_instead_of_ordinary_fallback(self):
+        self.prepare();self.assertEqual(self.launch_cli().returncode,0);self.assertEqual(self.bind_ready().returncode,0)
+        p=self.launch_cli('--mode','yolo');self.assertEqual(p.returncode,64);self.assertEqual(p.stdout,'');self.assertIn('request_already_consumed',p.stderr)
+    def test_expired_bound_tombstone_still_refuses_replay(self):
+        self.prepare();self.assertEqual(self.launch_cli().returncode,0);self.assertEqual(self.bind_ready().returncode,0)
+        bound=next(self.requests.glob('*.bound.json'));r=json.loads(bound.read_text());r['expires_at']=time.time()-1;bound.write_text(json.dumps(r))
+        self.assertEqual(self.launch_cli().returncode,64)
+    def test_pending_receipt_refused_without_metadata_or_completion(self):
+        self.prepare();self.assertEqual(self.launch_cli().returncode,0)
+        p=self.run_cli('bind-receipt','--requests-root',self.requests,'--request-file',self.request,'--receipt',self.receipt(state='pending'))
+        self.assertEqual(p.returncode,64);self.assertEqual(json.loads(self.metadata.read_text())['session']['orca']['terminal_handle'],'')
+        self.assertFalse(self.authority.with_suffix('.completion.json').exists());self.assertEqual(len(list(self.requests.glob('*.claimed.json'))),1)
+    def test_missing_receipt_state_refused(self):
+        self.prepare();self.assertEqual(self.launch_cli().returncode,0)
+        receipt=self.receipt();r=json.loads(receipt.read_text());r['result'].pop('state');receipt.write_text(json.dumps(r))
+        p=self.run_cli('bind-receipt','--requests-root',self.requests,'--request-file',self.request,'--receipt',receipt)
+        self.assertEqual(p.returncode,64)
+    def test_explicit_new_session_can_follow_bound_same_worktree(self):
+        self.prepare();self.assertEqual(self.launch_cli().returncode,0);self.assertEqual(self.bind_ready().returncode,0)
+        old=json.loads(next(self.requests.glob('*.bound.json')).read_text())
+        # 129 distinct archived sessions must not exhaust the active-request budget.
+        import uuid
+        for n in range(128):
+            archived=dict(old,nonce=str(uuid.uuid4()),session='archive-'+str(n))
+            path=self.requests/(archived['nonce']+'.bound.json');path.write_text(json.dumps(archived));path.chmod(0o600)
+        context=self.metadata.parent.with_name('session-2');context.mkdir()
+        self.metadata=context/'METADATA.json';self.launch=context/'launch.sh'
+        self.meta['session']['id']='session-2';self.meta['session']['context']=str(context)
+        self.command=self.command.replace('session-1','session-2')
+        a=json.loads(self.authority.read_text());a['session']='session-2';self.authority=self.authority.with_name('new-launch.json');self.authority.write_text(json.dumps(a));self.authority.chmod(0o600)
+        self.meta['execution_authority']['authority_receipt_file']=str(self.authority);self.meta['execution_authority']['authority_receipt_sha256']=hashlib.sha256(self.authority.read_bytes()).hexdigest()
+        self.save();self.prepare();p=self.launch_cli();self.assertEqual(p.returncode,0,p.stderr);self.assertEqual(json.loads(p.stdout)['context'],str(context))
+    def register_fixture(self,fail=False,state="ready"):
         log=self.root/"rpc-log.jsonl"
         self.orca.write_text("""#!/usr/bin/env python3
 import json,sys,subprocess,os
@@ -123,11 +157,11 @@ elif a[:2]==['orchestration','worker-start']:
  assert '--agent' in a and a[a.index('--agent')+1]=='zcode' and '--terminal' not in a
  p=subprocess.run([sys.executable,BRIDGE,'launch','--requests-root',REQUESTS,'--default-zcode',ZCODE,'--','--mode','yolo'],cwd=WT,env=dict(os.environ,ORCA_TERMINAL_HANDLE='term-native',ORCA_WORKTREE_ID='wt-1'),capture_output=True)
  if p.returncode:sys.stderr.buffer.write(p.stderr);raise SystemExit(p.returncode)
- r={'runId':'run-1','taskId':'task-1','dispatchId':'disp-1','effects':[{'kind':'worktree','action':'reused','id':'wt-1'},{'kind':'terminal','role':'agent','action':'created','id':'term-native'}]}
+ r={'state':RECEIPT_STATE,'runId':'run-1','taskId':'task-1','dispatchId':'disp-1','effects':[{'kind':'worktree','action':'reused','id':'wt-1'},{'kind':'terminal','role':'agent','action':'created','id':'term-native'}]}
 elif a[:2]==['orchestration','dispatch-show']:r={'dispatch':{'id':'disp-1','task_id':'task-1','assignee_handle':'term-native','run_id':'run-1','capability_hash':'a'*64,'process_incarnation':'process-1'}}
 else:raise SystemExit(90)
 print(json.dumps({'ok':True,'_meta':{'runtimeId':'runtime-1'},'result':r}))
-""".replace('LOG',repr(str(log))).replace('WT',repr(str(self.wt))).replace('BRIDGE',repr(str(BRIDGE))).replace('REQUESTS',repr(str(self.requests))).replace('ZCODE',repr(str(self.zcode))).replace('FAIL',repr(fail)))
+""".replace('LOG',repr(str(log))).replace('WT',repr(str(self.wt))).replace('BRIDGE',repr(str(BRIDGE))).replace('REQUESTS',repr(str(self.requests))).replace('ZCODE',repr(str(self.zcode))).replace('FAIL',repr(fail)).replace('RECEIPT_STATE',repr(state)))
         return log
     def run_register(self,*args):
         return subprocess.run(['bash',str(BRIDGE.with_name('orca-supervised-register.sh')),'--agent','zcode','--worktree-id','wt-1','--metadata-file',str(self.metadata),'--launch-request-root',str(self.requests),'--authority-receipt',str(self.authority),'--task-id','task-1','--run-id','run-1','--coordinator-handle','term-pm','--runtime-id','runtime-1',*args],env=dict(self.env,ORCA_CLI_COMMAND=str(self.orca)),capture_output=True,text=True)
@@ -136,10 +170,19 @@ print(json.dumps({'ok':True,'_meta':{'runtimeId':'runtime-1'},'result':r}))
         self.assertEqual(p.returncode,0,p.stderr)
         m=json.loads(self.metadata.read_text());self.assertEqual(m['session']['orca']['terminal_handle'],'term-native');self.assertEqual(m['session']['orca']['supervised']['terminal_ownership'],'created')
         self.assertEqual(m['session']['orca']['supervised']['dispatch_bind'],'ok')
+        self.assertEqual(m['session']['orca']['tui_ready_method'],'orca_native_worker_start_fresh_composer')
         completion=json.loads(Path(m['execution_authority']['completion_authority_file']).read_text());self.assertEqual(completion['terminal_handle'],'term-native')
         calls=[json.loads(x) for x in log.read_text().splitlines()]
         self.assertEqual(sum(x[:2]==['orchestration','worker-start'] for x in calls),1)
         self.assertFalse(any(x[:2]==['terminal','create'] or x[:2]==['terminal','send'] for x in calls))
+    def test_native_register_pending_receipt_never_writes_completion(self):
+        log=self.register_fixture(state='pending');p=self.run_register();self.assertNotEqual(p.returncode,0)
+        self.assertFalse(self.authority.with_suffix('.completion.json').exists())
+        self.assertEqual(json.loads(self.metadata.read_text())['session']['orca']['terminal_handle'],'')
+        self.assertNotIn('ORCAREG_WORKER_REGISTERED',p.stderr)
+        calls=[json.loads(x) for x in log.read_text().splitlines()]
+        self.assertEqual(sum(x[:2]==['orchestration','worker-start'] for x in calls),1)
+        self.assertFalse(any(x[:2]==['orchestration','dispatch-show'] for x in calls))
     def test_native_failure_no_automatic_worker_retry(self):
         log=self.register_fixture(fail=True);p=self.run_register();self.assertNotEqual(p.returncode,0)
         calls=[json.loads(x) for x in log.read_text().splitlines()];self.assertEqual(sum(x[:2]==['orchestration','worker-start'] for x in calls),1)

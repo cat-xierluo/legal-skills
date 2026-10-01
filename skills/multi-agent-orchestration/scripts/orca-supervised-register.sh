@@ -249,10 +249,12 @@ PY
   }
   if jq --arg run "$RUN_ID" --arg task "$TASK_ID" --arg disp "$DISPATCH_ID" \
     --arg terminal "$TERMINAL_HANDLE" --arg ownership "$TERMINAL_OWNERSHIP" \
+    --arg native_agent "$NATIVE_AGENT" \
     --arg coordinator "$COORDINATOR_HANDLE" --arg bind "$DISPATCH_BIND" \
     --arg completion_file "${ORCAREG_COMPLETION_AUTHORITY_FILE:-}" \
     --arg completion_sha "${ORCAREG_COMPLETION_AUTHORITY_SHA256:-}" \
     '.session.orca.terminal_handle = $terminal
+     | if $native_agent != "" then .session.orca.tui_ready_method = "orca_native_worker_start_fresh_composer" else . end
      | .session.orca.supervised = {run_id: $run, coordinator_handle: $coordinator, task_id: $task, dispatch_id: $disp, dispatch_bind: $bind, contract: "orca.orchestration.contract.v1", completion_authority: "worker_done", terminal_ownership: $ownership}
      | if $completion_file != "" then
          .execution_authority.completion_authority_file = $completion_file
