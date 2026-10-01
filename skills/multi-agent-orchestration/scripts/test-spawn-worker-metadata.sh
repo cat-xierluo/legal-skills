@@ -221,5 +221,23 @@ else
   bad "entrypoint delegates metadata writing without retaining definition"
 fi
 
+reset_metadata_case
+WORKER_BACKEND=minimax-code
+WORKER_BACKEND_CANONICAL=minimax-code
+COMMAND="mcode exec 'fixture-only task'"
+METADATA_FILE="$CASE_ROOT/minimax-batch.json"
+write_metadata > "$CASE_ROOT/minimax-batch.out"
+assert_jq "$METADATA_FILE" '.runtime.startup.mode == "batch" and .runtime.startup.task_input_source == "command_bootstrap" and .runtime.startup.observation == "not_observed" and .runtime.startup.completion_authority == "checkpoint_and_pm_acceptance" and .session.orca.tui_ready_method == "command_bootstrap_no_tui_wait"' \
+  "MiniMax batch metadata records bootstrap source without claiming completion"
+
+reset_metadata_case
+WORKER_BACKEND=minimax-code
+WORKER_BACKEND_CANONICAL=minimax-code
+COMMAND="mcode --model exec"
+METADATA_FILE="$CASE_ROOT/minimax-interactive.json"
+write_metadata > "$CASE_ROOT/minimax-interactive.out"
+assert_jq "$METADATA_FILE" '.runtime.startup.mode == "interactive" and .runtime.startup.task_input_source == "native_interactive" and .session.orca.tui_ready_method == "orca_terminal_wait_tui-idle"' \
+  "MiniMax model named exec remains native interactive metadata"
+
 printf 'spawn-worker metadata tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
