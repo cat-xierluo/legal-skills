@@ -15,12 +15,21 @@
 |---|---|---|---|
 | hw.memsize | `/usr/sbin/sysctl -n hw.memsize` | 物理总量，保留比例基数 | exit 1（无总量不可判） |
 | vm_stat | `/usr/bin/vm_stat` | 可用页 × page size（可用性基准优先源） | 降级用 memory_pressure 百分比 |
-| memory_pressure | `/usr/bin/memory_pressure`（无参数只读形态） | 官方压力分级 + 可用百分比 | 该源无信号，不参与收紧 |
+| memory_pressure | `/usr/bin/memory_pressure`（无参数只读形态） | 旧关键词/旧 available 百分比参与既有算法；System-wide free 百分比仅观测 | 该源无有效算法信号，不参与收紧 |
+| kern.memorystatus_vm_pressure_level | `/usr/sbin/sysctl -n kern.memorystatus_vm_pressure_level` | 原生 dispatch 通知位 1/2/4，分别 normal/warn/critical，仅观测 | 未知/缺失/畸形保持无有效级别 |
 | vm.swapusage | `/usr/sbin/sysctl -n vm.swapusage` | swap used/total 比例（压力信号） | 无 swap 信号 |
 
 - 任一源失败只降级该源信号；物理总量与可用性基准（vm_stat 或 memory_pressure 百分比）都确立不了 → exit 1 且输出不含任何额度字段（fail-closed，绝不编造）。
 - macOS 之外的系统（源路径不存在）同样表现为读取失败 → fail-closed。
-- 测试/离线诊断注入：`--fixture-dir`（或 `MEM_BUDGET_FIXTURE_DIR`）目录下 `hw_memsize.txt` / `vm_stat.txt` / `memory_pressure.txt` / `vm_swapusage.txt`，文件缺席 = 该源读取失败，与真实失败同语义。
+- 测试/离线诊断注入：`--fixture-dir`（或 `MEM_BUDGET_FIXTURE_DIR`）目录下 `hw_memsize.txt` / `vm_stat.txt` / `memory_pressure.txt` / `vm_swapusage.txt` / `kernel_pressure.txt`，文件缺席 = 该源读取失败，与真实失败同语义。
+
+### 2.1 遥测与准入来源
+
+- 保留 `memory-budget.summary.v1` 及 legacy `sources`/`pressure` 消费者合同；新增 `telemetry` 区分每源的读取成功、解析有效与解析状态。空输出可读取成功但解析无效，不把 `sources=ok` 当成信号有效。
+- `System-wide memory free percentage: 84%` 只保存为 `reported_free_percent`，不当作旧 `available_percent`、available_bytes 兜底或压力级别；缺少 vm_stat 且只有该新百分比时仍不可探测。
+- `telemetry.kernel_pressure` 标明原生来源，`used_for_admission=false`；严格单个 1/2/4 映射 normal/warn/critical，未知、多行与非法值不虚造级别。`telemetry.composite_pressure` 标明既有算法来源及 `used_for_admission=true`。native normal 不抵消 swap critical。
+- Swap Used 是当前占用空间，vm_stat Swapouts/Pageouts 是累计计数；有限观测窗不能证明冷页归属、swap 可增长性或放行安全。Apple 的[内存压力说明](https://support.apple.com/en-euro/guide/activity-monitor/actmntr1004/mac)说明压力综合多个信号，不能用单一空闲百分比替代。
+- 固定样本见 `scripts/fixtures/memory-admission-261002/` 与 SHA 清单；三份实际均报告 84%、kernel=1，原 swap≥0.95 拒绝语义保持。原诊断和窄修沿原任务，不恢复已经泊车的业务。
 
 ## 3. 预算推导与压力收紧
 
@@ -75,7 +84,7 @@ slots            = floor(safe_available × tighten / budget_bytes)
 
 | 变更 | 必跑 |
 |---|---|
-| probe 判定 / 解析 / schema | `python3 scripts/test-mem-budget-probe.py`；动了解析先在测试里钉住新形态再改 parser |
+| probe 判定 / 解析 / schema | `python3 scripts/test-mem-budget-probe.py` 与 `python3 scripts/test_memory_telemetry.py`；动了解析先在测试里钉住新形态再改 parser |
 | spawn 门位置 / 退出码 / 输出行 | 同上，另 `bash -n scripts/spawn-worker.sh`、`bash scripts/test-spawn-worker-orca.sh`（E2E 成功路径会过真实门） |
 | 预算默认值 / 保留公式 / 收紧档位 | 更新本文件 §3 与 SKILL §5 段落；测试 fixture 期望值同步（fixture 数值即推导文档） |
 | macOS 源输出形态变化 | 在 test-mem-budget-probe.py 增补该形态用例后复跑全套 |
