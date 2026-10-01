@@ -1,5 +1,12 @@
 # 决策记录
 
+## DEC-2026-10-02-MEMORY-TELEMETRY-PROVENANCE
+
+- 背景：原门实际拒绝来自 swap 比例；macOS 当前百分比输出未被旧解析器识别，且 raw-read 成功无法说明解析有效。内核通知位与算法合成压力必须分别解释。
+- 决策：在兼容 summary schema 内新增 telemetry，分别暴露 read_success、parse_valid 与来源；报告百分比不参与物理量兜底或压力推导。内核 dispatch 通知位 1/2/4 仅作观测，不改准入。
+- 理由：修正证据可读性，同时保留既有安全合同。动态 swap、磁盘底仓或任何放行例外需要单独受审设计，不能借解析修复隐入。
+- 验证边界：三个冻结现场样本和合法/畸形反例验证解析与原拒绝语义；不据此宣称长期压力安全或恢复 Fathom/DSH 原业务。
+
 ## DEC-2026-10-02-SHARED-DISPATCH-PROFILES
 
 - 背景：漏ZCode native参数会落入通用TUI等待；不同模式统一send提示会诱导重复投递。诊断与视频交接要求现MAO/DSH owner共享执行核心，保留原业务身份。
