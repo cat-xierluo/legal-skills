@@ -4,7 +4,7 @@
 
 本说明针对 `zcode-cli` backend 的原生 `zcode` TUI／`--prompt`。2026-09-30 实测本机安装的 runtime 3.14.3，内置 agent help 版本 0.16.9；两者不是同一个版本号。旧 `zcode` backend 的 app-server driver 继续遵守 ref 24，不能把以下独立 CLI 结果当作其验证结果。
 
-新增支持仍只在用户指定时选用，不进入日常派发池。本次仅研究模型与套餐通道，不自动修改用户共享默认模型、复制认证到 worker 或建立新的派发权限。
+新增支持仍只在用户指定时选用，不进入日常派发池。2026-09-30 的探针仅研究模型与套餐通道；2026-10-01 的文件任务另见下文，不自动修改用户共享默认模型、复制认证到 worker 或建立新的派发权限。
 
 ## 模型与认证契约
 
@@ -67,9 +67,27 @@ zcode tui --mode build --cwd /absolute/path/workspace
 | 逐请求积分明细 | 端点未返回可用 JSON；无独占前后积分差，精确扣分归因 `NOT_VERIFIED` |
 | 原件与隔离 | 共享 provider、CLI/v2 config、credentials 前后 SHA-256 相同；独立 SQLite 真实生成；临时认证副本完成后删除 |
 
-两次短提示仍各有约 3.1 万 input tokens 的 runtime 系统上下文；不能按用户提示长度估计成本。没有读写业务文件、工具调用或子智能体派发。本次成功证明原生模型切换和个人套餐请求通道，不证明完整 worker 生命周期、scope hook、持续纠偏或 Orca supervised 已通过。
+两次短提示仍各有约 3.1 万 input tokens 的 runtime 系统上下文；不能按用户提示长度估计成本。2026-09-30 的两次短探针没有读写业务文件、工具调用或子智能体派发。该次成功证明原生模型切换和个人套餐请求通道，不证明完整 worker 生命周期、scope hook、持续纠偏或 Orca supervised 已通过。
 
 脱敏证据与候选哈希写回 TASKS；私有账户响应、原始认证和日志不放进 Skill。
+
+## 2026-10-01 tmux 文件任务与证据边界
+
+后续按用户具名授权，在隔离工作树以 `zcode-cli` tmux fallback 完成有界 probe 文件任务。产物提交为 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`；PM 执行3项测试通过，diff 仅涉及 probe 任务文件。独立会话 SQLite 的13条 `model_usage` 均为 completed，实际 provider 为 `account:bigmodel-individual-coding-plan`、模型为 `GLM-5.3-Flash`，retry 为0。该次临时研究认证/配置副本已按精确路径删除，tmux 已关闭。独立产物验收为 `ACCEPT`（限tmux实际任务），以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡更新为准。
+
+Orca 1.4.217 的两次 ZCode 尝试均报 `terminal_handle_stale`，未发送业务 prompt；tmux 任务不证明 Orca terminal-managed、supervised 或 settlement 成功。使用显式 prompt-only 降级，bootstrap 曾运行超出精确 shell allowlist 的 `ls`，不能声称机械 scope/hook 已验证。
+
+私人路由只读观测、预算规划与启动前身份复核用于这一次研究副本；本轮没有真实账号切换、耗卡或产品化自动认证/身份绑定。准备脚本在进程内计算共享文件 before/after 并断言相等，但未持久化本次共享原件 baseline；副本哈希不能替代原件 baseline，因此独立共享 before/after 重放是 `NOT_VERIFIED`。实际模型调用通道也不等于逐请求服务端积分扣分证据，精确计费仍 `NOT_VERIFIED`。不公开账户身份、原始日志、认证副本路径或凭证内容。
+
+## 交互CLI长程与Orca TUI边界
+
+用户当前要求保留交互CLI长程工作。已实测的 ZCode worker 路径为上述 tmux 原生交互会话：保留同一会话完成具名任务，并由PM回读产物、原生模型记录和会话收口证据。当前 MAO Orca spawn 仍采用创建TUI、等待真实就绪、再投递的合同；本轮没有新增无头替代配方、runner或其他启动模式。
+
+对于当前实测的 Orca 1.4.217、ZCode CLI 0.16.9 / runtime 3.14.3 组合，用户已指定 `zcode-cli` 时，按现有 spawn 门禁显式传入 `--no-orca-mode`，选择已验的 tmux 交互路径，并保留同一 session 接续任务。这是既有兼容选择；无需先创建 Orca 终端试探或伪造 ready，不改变默认 worker 池、backend 或其他门禁。升级 Orca 后的自动 TUI 路径须重新验收，不能沿用上述 tmux 或旧版本诊断作为就绪证明。
+
+后续零业务提示的专用启动诊断中，Orca终端已connected/writable、renderer pane已挂载，屏幕出现composer，但 `tui-idle` 仍返回timeout。已安装 ZCode 源码显示新会话的 `SessionStart` hook 在首次turn初始化期间运行；Orca的ZCode ready合成依赖原生状态/title信号，屏幕上的输入提示不能单独证明该信号已产生。这提示首次投递前存在就绪循环，但尚未形成可独立验收的Orca交互兼容修复。聚焦终端、延长等待或已安装hook状态均不足以宣布兼容成功；不得伪造ready或绕过门禁投递。
+
+Orca ZCode TUI、完整长程监督和settlement仍为 `NOT_VERIFIED`。tmux任务的已验范围不扩大为这些层的证明；按[本地账号调度调用合同](29-local-account-routing-skill.md)做现场校验，也不能替代真实TUI就绪或建立持续身份锁。
 
 ## 官方来源
 
