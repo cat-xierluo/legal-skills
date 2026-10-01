@@ -45,6 +45,8 @@ bash scripts/render-runtime-profile.sh --backend minimax-code --mode batch \
 
 MiniMax batch 默认使用 `exec --permission full --output-format stream-json --input -`；显式 `smart/off` 保留，stdin 原样读取prompt。长程任务保持交互TUI，不能传exec的 `--permission`。MiniMax 0.5.10 的TUI从原生配置读取权限；`/permission`只读核对，`/permission full`会写共享配置，不能冒称仅影响当前worker。派发前核实当前模式为full（内部值bypassPermissions）；本机已配置full且已通过官方loader读回，不在启动时改共享设置。其他机器若未full，应由既有原生配置流程处理，不能承诺renderer已强制TUIfull。ZCode 启动帮助未提供 `--model`，renderer 在传模型时拒绝，不能静默忽略或改共享配置；按原生 `/model list` 与 `/model <provider/model>` 明确选择；BigModel 套餐认证、reasoning 必填与静默回落风险读取 [独立 CLI 的 BigModel 实测](28-zcode-cli-bigmodel-coding-plan.md)。ZCode renderer与spawn新任务默认命令为 `--mode yolo`，显式build/edit/plan保留。此默认只影响新worker，原生交互CLI与Orca通道保持。
 
+MiniMax `exec` 的启动命令已从 prompt 文件或 stdin 读取完整任务。在 Orca terminal-managed 中保存准确终端句柄后，不等待 `tui-idle`、不再发送 placeholder 或业务 prompt；spawn 成功只证明启动，PM 仍须回读同一原生 Session/Run、真实产物和退出事实。不要给 batch 组合 supervised 或预建 Task；长程任务继续选交互 CLI。启动报错但原生 Run 已执行时保留原会话，读取 diagnostics/产物后接续，不通过重跑 spawn 纠错。
+
 用渲染后的 WORKER_COMMAND 交给 `spawn-worker.sh --worker-backend ... --command ...`；ZCode CLI、MiniMax Code、Qoder CN 尚无本 Skill 已配置的 PreToolUse 集成，必须显式传 `--allow-prompt-only-install-guard '<授权来源>'`。backend支持本身不新增业务派发、安装或push/PR授权；已授权的新隔离任务按用户默认采用原生最高可用执行权限，显式收紧仍生效。不要自动应答未验证 CLI 的 trust/permission dialog。
 
 ## 身份与失败边界

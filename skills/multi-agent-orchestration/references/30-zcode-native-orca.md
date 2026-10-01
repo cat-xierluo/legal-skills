@@ -22,6 +22,8 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 --allow-prompt-only-install-guard "用户已指定 ZCode CLI，此任务允许 prompt-only 安装边界"
 ```
 
+这三项 native 参数必须作为同一启动配方使用。只传 `--worker-backend zcode-cli` 会选通用终端管理入口，不等于 `worker-start --agent zcode`；通用 `terminal create → tui-idle → worker-start --terminal` 可能在首次 composer 前停在 readiness。长程 ZCode 使用上面的原生桥，不改用 headless。已失败的原 Task 按其 native receipt 和 residualResources 恢复，不为补 native 参数再次注入完整任务。
+
 继续提供完整 Task spec、verification contract、精确允许范围与 coordinator/runtime 身份。全部价值、额度、内存、provider lease、工作树隔离与 authority 门通过后才创建单次请求。请求绑定实际工作树、Session Context、启动脚本和 authority 摘要以及 runtime；启动桥原子消费并核对原生 terminal/worktree 身份，native start 回执必须与其相同。启动回执中的 `created` 只证明本轮创建。结算前重读 live ownership；原生用户接管后的 `user_owned/retained` 由 release 保护，不能靠旧 metadata 宣称仍可自动关闭。不得把 terminal close 当作 worker-release 的替代。
 
 模型来自 ZCode 的原生配置；Orca 不接受 ZCode 的 `--model`。按 [BigModel 模型合同](28-zcode-cli-bigmodel-coding-plan.md) 在原生会话操作 `/model`，用真实请求证据确认模型和 provider。账户调度仍依 [本地 Skill 调用合同](29-local-account-routing-skill.md) 获取新鲜结果；启动校验不代表长期身份锁或持续预算控制。
