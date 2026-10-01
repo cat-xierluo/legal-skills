@@ -1268,6 +1268,38 @@ for backend_alias in minimax-code mcode; do
   fi
 done
 
+# Preserve the pre-profile real spawn contract for legacy personal files.
+# These files intentionally omit _schema_version; upgrading the fixture would
+# hide the baseline compatibility regression caught by the memory consumer.
+cp "$E2E_PERSONAL_CONFIG" "$E2E_ROOT/personal-before-legacy.json"
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+: > "$E2E_ORCA_LOG"
+legacy_rc=0
+run_e2e_spawn legacy-personal legacy-personal "$E2E_ROOT/legacy-personal" --dry-run || legacy_rc=$?
+assert_eq "$legacy_rc" 0 "actual spawn legacy unversioned personal retains baseline acceptance"
+if grep -Fq 'SPAWN_WORKER_DISPATCH_PROFILE: codebuddy:interactive:orca-generic' "$E2E_ROOT/legacy-personal.out"; then
+  ok "legacy actual spawn consumes profile without claiming a schema version"
+else bad "legacy actual spawn consumes profile without claiming a schema version"; fi
+for legacy_case in unknown-version malformed-profile; do
+  case "$legacy_case" in
+    unknown-version) printf '%s\n' '{"_schema_version":"unknown","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG" ;;
+    malformed-profile) printf '%s\n' '{"quota_aware_routing":{"enabled":false},"dispatch_profiles":{"zcode-cli":{"native_bridge":{"enabled":"true"}}}}' > "$E2E_PERSONAL_CONFIG" ;;
+  esac
+  : > "$E2E_ORCA_LOG"
+  legacy_rc=0
+  run_e2e_spawn "legacy-$legacy_case" "legacy-$legacy_case" "$E2E_ROOT/legacy-$legacy_case" --dry-run || legacy_rc=$?
+  assert_eq "$legacy_rc" 64 "actual spawn legacy $legacy_case retains strict rejection"
+  if grep -Eq 'worktree create|terminal create|terminal send|run-create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || [ -e "$E2E_WS/legacy-$legacy_case" ]; then
+    bad "legacy $legacy_case rejects before resources"
+  else ok "legacy $legacy_case rejects before resources"; fi
+done
+cp "$E2E_ROOT/personal-before-legacy.json" "$E2E_PERSONAL_CONFIG"
+if [ -n "${MAO_PROFILE_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$MAO_PROFILE_EVIDENCE_DIR"
+  cp "$E2E_ROOT"/legacy-*.out "$E2E_ROOT"/legacy-*.err "$MAO_PROFILE_EVIDENCE_DIR/"
+fi
+
 # Profile consumers execute the actual controller, using only fixture Orca
 # reads/dry-run plans. No model or native request is launched by these cases.
 PROFILE_REQUESTS="$E2E_ROOT/native-requests"

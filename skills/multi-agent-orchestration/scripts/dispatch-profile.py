@@ -132,7 +132,8 @@ def validate_receipt(raw, expected):
     for value in (dispatch.get("status"), worker.get("state"), resource.get("releaseState"), resource.get("ownershipState")):
         need(isinstance(value, str) and bool(value), "receipt_state_unknown")
     if dispatch["status"] == "completed" or worker["state"] in {"succeeded", "failed", "cancelled"}:
-        need(action["kind"] not in {"send_task", "submit_task", "submit_task_once", "spawn", "spawn_worker", "restart_worker"},
+        need(action["kind"] not in {"send_task", "submit_task", "submit_task_once", "spawn", "spawn_worker", "restart_worker",
+                                   "spawn_supervised_once", "spawn_batch_once", "spawn_terminal_once"},
              "receipt_completed_submission_conflict")
     if resource["ownershipState"] == "user_owned" or resource["releaseState"] == "retained":
         need(action["kind"] not in {"close_terminal", "auto_close", "terminal_close", "force_release"},
@@ -168,7 +169,12 @@ def personal_config(path):
     if not resolved.exists():
         return {}, {"path": str(resolved), "sha256": None, "status": "absent"}
     config, source = read_json(str(resolved))
-    need(str(config.get("_schema_version")) in {"1.0", "1.1", "1.2", "1.3"}, "personal_version_unknown")
+    # Existing MAO consumers accept unversioned personal files. Absence is
+    # legacy compatibility, not a claimed version; explicit unknown versions
+    # and every supplied dispatch_profiles node still fail closed below.
+    need("_schema_version" not in config or str(config["_schema_version"]) in {"1.0", "1.1", "1.2", "1.3"},
+         "personal_version_unknown")
+    source["format"] = "versioned" if "_schema_version" in config else "legacy_unversioned"
     profiles = config.get("dispatch_profiles", {})
     need(isinstance(profiles, dict) and set(profiles) <= {"zcode-cli"}, "personal_profile_unknown")
     zcode = profiles.get("zcode-cli", {})
