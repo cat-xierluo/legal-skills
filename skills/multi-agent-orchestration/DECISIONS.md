@@ -1,5 +1,13 @@
 # 决策记录
 
+## DEC-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 退出码与回执联合校验
+
+- 日期：2026-10-01；状态：已采纳。
+- 背景：已安装 Orca 1.4.217 的 terminal wait handler 输出合法未满足回执后设置退出码1；原 helper 提前按命令失败拒绝，丢失同句柄重等机会。
+- 决定：先捕获退出码，再严格解析单个 JSON。rc0允许布尔型 satisfied；rc1仅允许ok=true且satisfied=false。退出1+true、rc>1、okfalse、畸形或错绑一律失败，绝不把timeout/stale错误提升为pending。false仍只在同句柄30s/60s两轮等待，未就绪不投递、不销毁资源。
+- 影响：恢复原生未满足契约，同时维持唯一投递与supervised边界；不添加focus、不修改Orca、权限或身份规则。原生handler隔离回放没有启动终端或模型。
+- 重新评估条件：上游退出码/回执契约变化或真实ZCode ready信号有独立证据后另行验收。
+
 ## DEC-2026-10-01-ORCA-TERMINAL-READY — 就绪回执决定是否投递
 
 - 日期：2026-10-01；状态：已采纳。

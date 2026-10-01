@@ -335,14 +335,12 @@ orca_terminal_create_and_send() {
   fi
   ORCA_TERMINAL_HANDLE="$handle"
 
-  # 超时也可能返回 rc=0；只有严格的 readiness 回执才允许后续唯一投递。
+  # 原生未满足回执可退出1；先保存退出码，再严格核对回执与退出码组合。
   # stderr 与 JSON 分开，避免 CLI 诊断污染回执；失败保留已创建的资源。
-  local wait_out satisfied timeout_ms
+  local wait_out satisfied timeout_ms wait_rc
   for timeout_ms in 30000 60000; do
-    if ! wait_out=$(orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms "$timeout_ms" --json); then
-      echo "SPAWN_WORKER_ORCA_TUI_WAIT_FAILED: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；未投递，资源保留，先只读核查再恢复" >&2
-      exit 64
-    fi
+    wait_rc=0
+    wait_out=$(orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms "$timeout_ms" --json) || wait_rc=$?
     if ! satisfied=$(printf '%s' "$wait_out" | jq -er -s --arg handle "$handle" '
       if length == 1 and (.[0] | type) == "object"
          and .[0].ok == true and (.[0].result.wait | type) == "object"
@@ -352,6 +350,10 @@ orca_terminal_create_and_send() {
       then .[0].result.wait.satisfied | tostring
       else error("invalid terminal wait receipt") end' 2>/dev/null); then
       echo "SPAWN_WORKER_ORCA_TUI_WAIT_INVALID: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；未投递，资源保留，先只读核查再恢复" >&2
+      exit 64
+    fi
+    if [ "$wait_rc" -gt 1 ] || { [ "$wait_rc" -eq 1 ] && [ "$satisfied" != false ]; }; then
+      echo "SPAWN_WORKER_ORCA_TUI_WAIT_FAILED: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}} exit_code=${wait_rc}；未投递，资源保留，先只读核查再恢复" >&2
       exit 64
     fi
     [ "$satisfied" != true ] || break
