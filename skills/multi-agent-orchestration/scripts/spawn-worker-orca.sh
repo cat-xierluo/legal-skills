@@ -322,10 +322,25 @@ spawn_worker_existing_worktree_pregate() {
 orca_terminal_create_and_send() {
   local worktree_id="$1" title="$2" command="$3"
   local prompt="${4:-请按你的任务开始工作}"
+  local startup_mode="${5:-interactive}"
+  case "$startup_mode" in
+    interactive) ;;
+    batch)
+      if [ "${WORKER_BACKEND_CANONICAL:-}" != "minimax-code" ] || [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "${ORCA_TASK_ID:-}" ] || [ -n "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ]; then
+        echo "MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED" >&2; return 64
+      fi
+      ;;
+    *) echo "ERROR: unknown Orca startup mode" >&2; return 64 ;;
+  esac
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf 'ORCA_RUN: orca terminal create --worktree id:%q --title %q --command %q --json\n' \
       "$worktree_id" "$title" "$command"
+    if [ "$startup_mode" = "batch" ]; then
+      printf 'ORCA_RUN: MiniMax batch bootstrap owns task input; no TUI wait or terminal send; completion remains unverified\n'
+      ORCA_TERMINAL_HANDLE="orca_terminal_handle_placeholder"
+      return 0
+    fi
     printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json\n'
     printf 'ORCA_RUN: if unsatisfied, wait once on the same handle with --timeout-ms 60000; send only when satisfied=true\n'
     if [ "$ORCA_SUPERVISED" -ne 1 ]; then
@@ -342,12 +357,40 @@ orca_terminal_create_and_send() {
     echo "ERROR: orca terminal create 失败: $out" >&2
     exit 64
   }
-  handle=$(printf '%s' "$out" | jq -r '.result.terminal.handle // empty')
+  handle=$(printf '%s' "$out" | jq -er -s '
+    if length == 1 and .[0].ok == true
+      and (.[0].result.terminal.handle | type) == "string"
+      and (.[0].result.terminal.handle | test("^[A-Za-z0-9_.:-]+$"))
+    then .[0].result.terminal.handle else error("invalid terminal create receipt") end' 2>/dev/null) || {
+      echo "SPAWN_WORKER_ORCA_TERMINAL_CREATE_INVALID: resources may exist; no retry or prompt injection" >&2
+      return 64
+    }
   if [ -z "$handle" ]; then
     echo "ERROR: orca terminal create 响应缺 handle: $out" >&2
     exit 64
   fi
   ORCA_TERMINAL_HANDLE="$handle"
+  # Persist identity before any late wait/send failure. Never treat create as completion.
+  if [ -n "${METADATA_FILE:-}" ] && [ -f "$METADATA_FILE" ]; then
+    local identity_meta
+    identity_meta=$(mktemp "${METADATA_FILE}.startup.XXXXXX") || return 64
+    if ! jq --arg handle "$handle" --arg mode "$startup_mode" '
+      .session.orca.terminal_handle = $handle
+      | if (.runtime.harness_authority.worker_backend // .runtime.worker_backend) == "minimax-code" or .runtime.worker_backend == "mcode" then
+          .runtime.startup.observation = "terminal_created_execution_unverified"
+          | .session.orca.tui_ready_method = (if $mode == "batch" then "command_bootstrap_no_tui_wait" else "orca_terminal_wait_tui-idle" end)
+        else . end' "$METADATA_FILE" > "$identity_meta"; then
+      rm -f "$identity_meta"
+      echo "SPAWN_WORKER_ORCA_TERMINAL_IDENTITY_WRITE_FAILED: terminal=$handle; retain resources without retry" >&2
+      return 64
+    fi
+    mv "$identity_meta" "$METADATA_FILE" || return 64
+  fi
+  if [ "$startup_mode" = "batch" ]; then
+    ORCA_TUI_READY_METHOD="command_bootstrap_no_tui_wait"
+    echo "SPAWN_WORKER_ORCA_BATCH_BOOTSTRAP: terminal=$handle; terminal created, execution/completion unverified; zero TUI wait/send"
+    return 0
+  fi
 
   # 原生未满足回执可退出1；先保存退出码，再严格核对回执与退出码组合。
   # stderr 与 JSON 分开，避免 CLI 诊断污染回执；失败保留已创建的资源。
