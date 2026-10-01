@@ -27,7 +27,7 @@
 
 - 保留 `memory-budget.summary.v1` 及 legacy `sources`/`pressure` 消费者合同；新增 `telemetry` 区分每源的读取成功、解析有效与解析状态。空输出可读取成功但解析无效，不把 `sources=ok` 当成信号有效。
 - `System-wide memory free percentage: 84%` 只保存为 `reported_free_percent`，不当作旧 `available_percent`、available_bytes 兜底或压力级别；缺少 vm_stat 且只有该新百分比时仍不可探测。
-- `telemetry.kernel_pressure` 标明原生来源，`used_for_admission=false`；严格单个 1/2/4 映射 normal/warn/critical，未知、多行与非法值不虚造级别。`telemetry.composite_pressure` 标明既有算法来源及 `used_for_admission=true`。native normal 不抵消 swap critical。
+- `telemetry.kernel_pressure` 标明原生来源，`used_for_admission=false`；严格单个 1/2/4 映射 normal/warn/critical，未知、多行与非法值不虚造级别。`telemetry.composite_pressure` 标明既有算法来源；实际参与准入计算时 `used_for_admission=true`，disabled/unprobeable 时为 false。native normal 不抵消 swap critical。
 - Swap Used 是当前占用空间，vm_stat Swapouts/Pageouts 是累计计数；有限观测窗不能证明冷页归属、swap 可增长性或放行安全。Apple 的[内存压力说明](https://support.apple.com/en-euro/guide/activity-monitor/actmntr1004/mac)说明压力综合多个信号，不能用单一空闲百分比替代。
 - 固定样本见 `scripts/fixtures/memory-admission-261002/` 与 SHA 清单；三份实际均报告 84%、kernel=1，原 swap≥0.95 拒绝语义保持。原诊断和窄修沿原任务，不恢复已经泊车的业务。
 
