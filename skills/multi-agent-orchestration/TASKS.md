@@ -410,3 +410,21 @@ blocker_and_recovery:
 - 非目标：不直接操作原业务工作树/lease/terminal、不代派业务、不伪metadata、不复用陈旧准入、不重建认证；原PM保留writer与验收责任。
 - 验收：隔离fake/真实Git证明原身份一次续建、并发/漂移/未知/重复拒绝、零重复worktree create/任务投递；独审及原PM按新入口接续才可声明原消费者恢复。当前入口和原消费者恢复`NOT_VERIFIED`。
 - 当前依赖：danger-full-access不等于完整全UID cwd可证；实现者只读库存732条，至少一条cwd读取失败，whole_uid_cwd_provable=false。新helper仅隔离受审实现/intake方案，不是标准spawn续建入口；原消费者无writer及真实恢复仍NOT_VERIFIED。旧borrowed2/2泊车保持，原任务/资源保留，不重启。
+
+## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
+
+- 状态：`IN_PROGRESS / PROFILE_RELEASE_VALIDATION`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
+- 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
+- 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
+- 额外明确需求：审计现value门对合法研究/设计/文档业务任务的误拒，给匹配实质产物与验证模态的合同；维护docs/纯调查独立worker仍不得无价值扩波，不以放开字符串绕门替代证据。
+- 非目标：不让每层自建运行JSON、不与DSH已管理项目争owner、不重做认证/账号或耗卡，不通过文案伪解除宿主拒绝。优先复用L2 state/events/lease/lock/pending_intent及现消息/authority接口。
+- 验收：真实旧失败argv漏native flags、合法兼容、无重复投递、按模式唯一next_action；无旧上下文前向消费及一条有界真实链；身份/权限/config/未知残留错误先副作用前拒绝。完整完成→独审→原session返修→TASKS回写→下一项及长期稳定性须真实证据，未做则NOT_VERIFIED，不用参数测试冒签。
+- 证据：原诊断报告及原件索引保留在原会话控制目录；本卡候选/价值合同/独审由root继续创建。此状态只为具名接手，不宣称profile/共同入口已可用。
+
+- 本轮执行：dispatch-value-gate对 `/tmp/mao-dispatch-profiles-261002/dispatch-spec.json` exit0；release_compat仅拥有独立profile解析器及测试，原partial08候选保留、不继续原业务；batch实现者修两项独审P2，冻结新head后复审与完整63回归，入口文件串行集成。
+- 新状态反例：Legal Skills总控报告ZCode任务completed/succeeded与worker_done已存在，composer却保留原任务文字；另有鼠标转义残留。仅screen草稿不推断未投递，原任务不补Enter、不重发、不重启。源码launch桥只exec冻结交互命令，Task注入由官方worker-start负责，PTY渲染根因尚NOT_VERIFIED；统一回执合同需区分draft/input_accepted/turn_started/worker_done/PM验收与retained终端。
+- 涌现既有技术债：独审真实Shell消费者证明quoted assignment token（例如单引号包住NAME=value后再启动CLI）在通用validator中仍可误判身份，固定base已有同样行为；新batch修复已拒绝相关exec变体，不因此抹除既有盲区或扩大解析正确性声明。保留原反例，后续共享command语义入口单独根因治理，当前profile模块不再自造Shell解析器。
+- batch验收继续：最终候选0b4e8576独审ACCEPT、postflight/角色/Harness门0，PEA scoped tested；完整矩阵前57项0，第58控制器25case中24通过、timeout/lost-receipt计数文件缺失失败。原件保留，formal第二episode限额内做candidate/base失败case及一次带子进程记录完整复验，root继续59—63，不提前合并或称首次全绿。
+
+- 接入进度：batch2.33.2已合并安装，依赖解除；profiles pure4files已rebase到cd29976f，23profile/14adapter消费者0，真实Shell模式/权限由共享validator取得，旧显式native参数兼容；入口/metadata/唯一动作由同worker继续，尚未发布或执行新live任务。
