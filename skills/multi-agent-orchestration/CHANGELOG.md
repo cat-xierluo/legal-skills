@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.32.0] - 2026-10-01
+
+### 新增
+- 为用户指定的 ZCode CLI 提供显式原生 Orca supervised 路径：使用 1.4.218 起的首次 composer 等待与唯一 Task 投递，保持交互 CLI 和既有启动环境。
+- 增加 owner-only、短时、单次启动请求桥及原生回执核对，绑定 Session Context、authority、工作树、runtime 与启动脚本；核对启动 created 与结算时 live ownership，尊重用户接管保护。
+
+### 文档完善
+- 补充原生启动、默认 ZCode 回退、模型操作、版本与权限边界；保留可选后端不进默认池、账号规则由本地私有 Skill 提供的合同。明确单worker的build/edit/plan/yolo配置与CLI审批接续，不改全局权限、不重发已投递Task。
+
+### 验证
+- 完整维护矩阵61/61命令通过，独立审查关闭重放与nonready两个阻塞；真实Orca原生同会话完成Flash阶段35项测试、切换GLM-5.3及3项定向反例、唯一worker_done succeeded与Delivery验收。release返回用户接管保护retained，随后ack通过；用户明确授权后两条测试终端关闭与退出确认，研究认证副本精确删除、日志与证据保留，本轮临时资源已收口。coordinator-owned自动关闭仍未验证；不将人工关闭当作自动release。
+
 ## [2.31.3] - 2026-10-01
 
 ### 修复

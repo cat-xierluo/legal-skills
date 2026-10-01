@@ -147,6 +147,8 @@ Options:
                    skip|inherit|run, MAO currently rejects inherit/run before resource
                    creation because repo Setup executes before Session Context and guards.
                    --allow-install-command does not authorize this pre-guard phase.
+  --orca-zcode-native-requests DIR
+                   显式启用 Orca >=1.4.218 原生 ZCode launcher；可信请求目录必须预建0700。
   --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
                    或同时传 --orca-run-id + --orca-task-id 复用 Wave 预创建 Task；
                    worker-start 是该路径唯一的任务注入器，worker 必须发送一次 worker_done。
@@ -413,6 +415,10 @@ parse_spawn_worker_args() {
         esac
         shift 2
         ;;
+      --orca-zcode-native-requests)
+        ORCA_ZCODE_NATIVE_REQUESTS="$2"
+        [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ] || { echo "ERROR: native requests root cannot be empty" >&2; exit 64; }
+        shift 2 ;;
       --orca-supervised)  # ORCA 模式 spawn 后纳入原生 Run/Task/Dispatch 生命周期
         ORCA_SUPERVISED=1
         shift
