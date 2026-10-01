@@ -492,7 +492,7 @@ case "$1 $2" in
   "terminal create")
     printf '%s\\n' '{"ok":true,"result":{"terminal":{"handle":"term-membudget"}}}' ;;
   "terminal wait")
-    printf '%s\\n' '{"ok":true,"result":{"ok":true}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"wait":{"handle":"term-membudget","condition":"tui-idle","satisfied":true}}}' ;;
   "orchestration run-create"|"orchestration run-current")
     printf '%s\\n' '{"ok":true,"_meta":{"runtimeId":"runtime-membudget"},"result":{"run":{"id":"run-membudget","coordinator_handle":"term-pm-membudget"}}}' ;;
   "orchestration task-create")
