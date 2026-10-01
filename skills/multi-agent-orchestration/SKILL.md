@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.33.2"
+  version: "2.34.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -46,7 +46,9 @@ metadata:
 | 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
 | 远程节点（SSH 桥） | 需要第二台机器扩并发（独立 key 池）或卸载本机 CPU/内存时，PM 经 `spawn-worker-remote.sh` 派到 personal config `remote_nodes` 声明的节点；节点侧全套门禁本机成立，worker 读节点自己的 env/key（`references/25-remote-node-dispatch.md`） | STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收（完成三证，不依赖跨机 Orca 回执） |
 
-MiniMax 的短任务 `exec` 在 terminal-managed 中由启动命令读取完整输入，不等待 TUI、不再发送任务；长程任务仍使用交互 CLI。ZCode 长程任务使用显式原生 supervised 启动桥，见 [原生 Orca 合同](references/30-zcode-native-orca.md)。
+MiniMax 的短任务 `exec` 在 terminal-managed 中由启动命令读取完整输入，不等待 TUI、不再发送任务；长程任务仍使用交互 CLI。已选择 ZCode 的长程任务默认使用已配置的原生 supervised 启动桥，见 [原生 Orca 合同](references/30-zcode-native-orca.md)。
+
+backend 与模式选择、配置来源及唯一后续动作统一由 [派发 profile 合同](references/32-dispatch-profiles.md) 定义。ZCode auto 缺桥配置时在资源副作用前拒绝；旧显式 native 参数保留，通用兼容入口须传 `--dispatch-profile orca-generic`，直连仍为 `--no-orca-mode`。profile 是派发计划；真实权限、开始、完成与资源状态继续来自原生回执。
 
 同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
 

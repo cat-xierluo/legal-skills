@@ -3,6 +3,7 @@
 # This file is sourced after spawn-worker.sh prepares Session Context and guards.
 
 launch_worker_session() {
+  DISPATCH_LAUNCH_OUTCOME="planned"
   local minimax_mode="interactive"
   if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ]; then
     minimax_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
@@ -83,6 +84,7 @@ print(lines[0])') || exit 64
       ORCA_SUPERVISED_DISPATCH_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_ID=//p')
       ORCA_SUPERVISED_DISPATCH_BIND=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_DISPATCH_BIND=//p')
       ORCA_SUPERVISED_COORDINATOR_HANDLE=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_COORDINATOR_HANDLE=//p')
+      DISPATCH_LAUNCH_OUTCOME="supervised_registration_returned"
       echo "SPAWN_WORKER_ORCA_NATIVE_ZCODE_DONE: terminal=$ORCA_TERMINAL_HANDLE dispatch=$ORCA_SUPERVISED_DISPATCH_ID bind=$ORCA_SUPERVISED_DISPATCH_BIND" >&2
       return
     fi
@@ -101,6 +103,10 @@ print(lines[0])') || exit 64
     # 此处只创建并等待 terminal，禁止双重投递。
     orca_terminal_create_and_send "$ORCA_WORKTREE_ID" "$SESSION" "$COMMAND" \
       "请按你的任务开始工作。Session 上下文: .claude/agent-sessions/${SESSION}（详细指令将由 PM 后续 orca terminal send 投递）" "$minimax_mode" || return $?
+    if [ "$DRY_RUN" -eq 0 ]; then
+      DISPATCH_LAUNCH_OUTCOME="terminal_created"
+      [ "$minimax_mode" != "batch" ] || DISPATCH_LAUNCH_OUTCOME="batch_launch_returned"
+    fi
     # v2.1（DEC-114）：orca_terminal_create_and_send 在 write_metadata 之后跑（设 ORCA_TERMINAL_HANDLE），
     # 补 patch METADATA 的 session.orca.terminal_handle，让 PM 巡检 METADATA 能拿到 handle。
     if [ "$DRY_RUN" -eq 0 ] && [ -n "$ORCA_TERMINAL_HANDLE" ] && [ -f "$METADATA_FILE" ]; then
@@ -144,6 +150,7 @@ print(lines[0])') || exit 64
             reg_args+=(--runtime-id "$ORCA_EXPECTED_RUNTIME_ID")
           fi
           if reg_out=$(bash "$reg_helper" "${reg_args[@]}" 2>&1); then
+            DISPATCH_LAUNCH_OUTCOME="supervised_registration_returned"
             # 从 stdout KV 提取（stderr 是日志，reg_out 含两者，grep stdout KV）
             ORCA_SUPERVISED_RUN_ID=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_RUN_ID=//p')
             ORCA_SUPERVISED_COORDINATOR_HANDLE=$(printf '%s\n' "$reg_out" | sed -n 's/^ORCAREG_COORDINATOR_HANDLE=//p')
@@ -233,5 +240,9 @@ print(lines[0])') || exit 64
     fi
   else
     run tmux new-session -d -s "$SESSION" -c "$WORKTREE" "$COMMAND"
+    if [ "$DRY_RUN" -eq 0 ]; then
+      DISPATCH_LAUNCH_OUTCOME="terminal_created"
+      [ "$minimax_mode" != "batch" ] || DISPATCH_LAUNCH_OUTCOME="batch_launch_returned"
+    fi
   fi
 }

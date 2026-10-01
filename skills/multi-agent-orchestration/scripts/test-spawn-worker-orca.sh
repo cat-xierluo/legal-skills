@@ -775,7 +775,7 @@ git -C "$E2E_PROJECT" init -q
 git -C "$E2E_PROJECT" config user.email "spawn-orca@test.local"
 git -C "$E2E_PROJECT" config user.name "spawn-orca-test"
 git -C "$E2E_PROJECT" commit -q --allow-empty -m init
-printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+printf '%s\n' '{"_schema_version":"1.3","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
 cat > "$E2E_ORCA_BIN" <<'SH'
 #!/usr/bin/env bash
 # fake Orca CLI：$E2E_ORCA_STATE 状态文件驱动；每次调用原文追加进 $E2E_ORCA_LOG。
@@ -790,7 +790,10 @@ case "$1 $2" in
   "worktree current")
     resp_worktree "$E2E_ORCA_PROJECT" ;;
   "status --json")
-    printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-pregate","appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+    if [ -f "$state/profile-runtime-missing" ]; then printf '%s\n' '{"ok":false,"result":{"runtime":{"reachable":false}}}'; exit 0; fi
+    version=1.4.9
+    [ ! -f "$state/native-version" ] || version=1.4.218
+    jq -cn --arg version "$version" '{ok:true,result:{runtime:{reachable:true,runtimeId:"runtime-pregate",appVersion:$version,capabilities:["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
   "terminal show")
     sender="$4"
     live=true
@@ -1240,7 +1243,7 @@ else ok "full batch spawn never runs UI watchers, wait, send, or worker-start"; 
 if cmp -s "$E2E_STATE/prompt.md" "$E2E_STATE/bootstrap-input.txt" && [ -f "$E2E_STATE/nonce.txt" ]; then
   ok "full batch spawn executes its original bootstrap input"
 else bad "full batch spawn executes its original bootstrap input"; fi
-if grep -Fq 'batch bootstrap input bound; do not resend' "$E2E_ROOT/minimax-batch.out" && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/minimax-batch.out"; then
+if grep -Fq 'SPAWN_WORKER_NEXT: inspect_batch_start; input_state=draft' "$E2E_ROOT/minimax-batch.out" && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/minimax-batch.out"; then
   ok "batch next-step output never invites a duplicate task"
 else bad "batch next-step output never invites a duplicate task"; fi
 rm -f "$E2E_STATE/execute-bootstrap"
@@ -1264,6 +1267,106 @@ for backend_alias in minimax-code mcode; do
     ok "MiniMax dry-run has zero worker resources"
   fi
 done
+
+# Preserve the pre-profile real spawn contract for legacy personal files.
+# These files intentionally omit _schema_version; upgrading the fixture would
+# hide the baseline compatibility regression caught by the memory consumer.
+cp "$E2E_PERSONAL_CONFIG" "$E2E_ROOT/personal-before-legacy.json"
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+: > "$E2E_ORCA_LOG"
+legacy_rc=0
+run_e2e_spawn legacy-personal legacy-personal "$E2E_ROOT/legacy-personal" --dry-run || legacy_rc=$?
+assert_eq "$legacy_rc" 0 "actual spawn legacy unversioned personal retains baseline acceptance"
+if grep -Fq 'SPAWN_WORKER_DISPATCH_PROFILE: codebuddy:interactive:orca-generic' "$E2E_ROOT/legacy-personal.out"; then
+  ok "legacy actual spawn consumes profile without claiming a schema version"
+else bad "legacy actual spawn consumes profile without claiming a schema version"; fi
+for legacy_case in unknown-version malformed-profile; do
+  case "$legacy_case" in
+    unknown-version) printf '%s\n' '{"_schema_version":"unknown","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG" ;;
+    malformed-profile) printf '%s\n' '{"quota_aware_routing":{"enabled":false},"dispatch_profiles":{"zcode-cli":{"native_bridge":{"enabled":"true"}}}}' > "$E2E_PERSONAL_CONFIG" ;;
+  esac
+  : > "$E2E_ORCA_LOG"
+  legacy_rc=0
+  run_e2e_spawn "legacy-$legacy_case" "legacy-$legacy_case" "$E2E_ROOT/legacy-$legacy_case" --dry-run || legacy_rc=$?
+  assert_eq "$legacy_rc" 64 "actual spawn legacy $legacy_case retains strict rejection"
+  if grep -Eq 'worktree create|terminal create|terminal send|run-create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || [ -e "$E2E_WS/legacy-$legacy_case" ]; then
+    bad "legacy $legacy_case rejects before resources"
+  else ok "legacy $legacy_case rejects before resources"; fi
+done
+cp "$E2E_ROOT/personal-before-legacy.json" "$E2E_PERSONAL_CONFIG"
+if [ -n "${MAO_PROFILE_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$MAO_PROFILE_EVIDENCE_DIR"
+  cp "$E2E_ROOT"/legacy-*.out "$E2E_ROOT"/legacy-*.err "$MAO_PROFILE_EVIDENCE_DIR/"
+fi
+
+# Profile consumers execute the actual controller, using only fixture Orca
+# reads/dry-run plans. No model or native request is launched by these cases.
+PROFILE_REQUESTS="$E2E_ROOT/native-requests"
+mkdir -m 700 "$PROFILE_REQUESTS"
+cp "$E2E_PERSONAL_CONFIG" "$E2E_ROOT/personal-original.json"
+run_profile_spawn() {
+  local name="$1"; shift
+  : > "$E2E_ORCA_LOG"
+  ORCA_CLI_COMMAND="$E2E_ORCA_BIN" ORCA_TERMINAL_HANDLE=term-pm-pregate \
+    SPAWN_WORKER_MEM_BUDGET_BYTES=0 E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
+    E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
+    MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" PATH="$E2E_FAKE_BIN:$PATH" \
+    bash "$SCRIPT_DIR/spawn-worker.sh" --project "$E2E_PROJECT" --branch "profile-$name" --session "profile-$name" \
+      --worker-backend zcode-cli --command 'zcode --mode build' --task-spec 'fixture-only profile spec' \
+      --allow-prompt-only-install-guard fixture:user --dry-run "$@" \
+      > "$E2E_ROOT/profile-$name.out" 2> "$E2E_ROOT/profile-$name.err"
+}
+profile_zero_resources() {
+  if grep -Eq 'worktree create|terminal create|terminal send|run-create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || [ -e "$E2E_WS/profile-$1" ] || [ -n "$(find "$PROFILE_REQUESTS" -type f -print -quit)" ]; then
+    bad "profile $1 leaves zero resources"
+  else ok "profile $1 leaves zero resources"; fi
+}
+for name in missing disabled; do
+  cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+  if [ "$name" = disabled ]; then
+    jq '.dispatch_profiles={"zcode-cli":{native_bridge:{enabled:false}}}' "$E2E_PERSONAL_CONFIG" > "$E2E_ROOT/personal.tmp"
+    mv "$E2E_ROOT/personal.tmp" "$E2E_PERSONAL_CONFIG"
+  fi
+  rc=0; run_profile_spawn "$name" || rc=$?
+  assert_eq "$rc" 64 "profile $name bridge refuses before resources"
+  if grep -Fq zcode_native_bridge_config_required "$E2E_ROOT/profile-$name.err"; then ok "profile $name has explicit bridge diagnostic"; else bad "profile $name has explicit bridge diagnostic"; fi
+  profile_zero_resources "$name"
+done
+cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+touch "$E2E_STATE/native-version"
+rc=0; run_profile_spawn old-explicit --orca-supervised --orca-zcode-native-requests "$PROFILE_REQUESTS" || rc=$?
+assert_eq "$rc" 0 "old explicit native override accepts absent personal bridge"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-old-explicit.out"; then ok "old explicit native keeps unique injection path"; else bad "old explicit native keeps unique injection path"; fi
+profile_zero_resources old-explicit
+jq --arg root "$PROFILE_REQUESTS" '.dispatch_profiles={"zcode-cli":{native_bridge:{enabled:true,requests_root:$root}}}' "$E2E_PERSONAL_CONFIG" > "$E2E_ROOT/personal.tmp"
+mv "$E2E_ROOT/personal.tmp" "$E2E_PERSONAL_CONFIG"
+rc=0; run_profile_spawn backend-only || rc=$?
+assert_eq "$rc" 0 "backend-only ZCode automatically selects configured native supervised"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-backend-only.out" \
+  && grep -Fq 'SPAWN_WORKER_NEXT: spawn_supervised_once; input_state=draft' "$E2E_ROOT/profile-backend-only.out" \
+  && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/profile-backend-only.out"; then
+  ok "configured default keeps unique native dry-run action and no second send"
+else bad "configured default keeps unique native dry-run action and no second send"; fi
+profile_zero_resources backend-only
+rc=0; run_profile_spawn generic --dispatch-profile orca-generic || rc=$?
+assert_eq "$rc" 0 "explicit generic profile retains old compatible route"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-generic.out"; then bad "generic opt-in never silently native launches"; else ok "generic opt-in never silently native launches"; fi
+profile_zero_resources generic
+touch "$E2E_STATE/profile-runtime-missing"
+rc=0; run_profile_spawn generic-missing --dispatch-profile orca-generic || rc=$?
+assert_eq "$rc" 64 "explicit generic profile cannot silently fall back to direct"
+profile_zero_resources generic-missing
+rm -f "$E2E_STATE/profile-runtime-missing"
+cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+rm -f "$E2E_STATE/native-version"
+if [ -n "${MAO_PROFILE_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$MAO_PROFILE_EVIDENCE_DIR"
+  cp "$E2E_ROOT"/profile-*.out "$E2E_ROOT"/profile-*.err "$MAO_PROFILE_EVIDENCE_DIR/"
+  cp "$E2E_ROOT/minimax-batch.out" "$E2E_ROOT/minimax-batch.err" "$MAO_PROFILE_EVIDENCE_DIR/"
+  cp "$E2E_WS/minimax-batch-fixture/.claude/agent-sessions/minimax-batch-fixture/METADATA.json" "$MAO_PROFILE_EVIDENCE_DIR/minimax-batch-metadata.json"
+fi
 
 # The backend policy is tested after detection, including light/non-Git fallback.
 for policy_case in default-missing default-lightweight default-force-tmux explicit-direct supervised terminal-managed other-backend; do
