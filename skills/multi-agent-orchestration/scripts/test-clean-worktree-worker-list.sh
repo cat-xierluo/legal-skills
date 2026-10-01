@@ -75,6 +75,21 @@ if [ "$1 $2" = "orchestration worker-list" ]; then
     first-page|released|retained-exact|retained-mismatch|retained-show-fail|retained-show-invalid|retained-show-live|retained-show-mismatch)
       page "[$target]" false null 1
       ;;
+    official-scope-run|legacy-scope-run-id|scope-all-agree|scope-run-conflict|scope-run-empty|scope-run-null|scope-alias-null|scope-alias-empty|scope-run-number|scope-no-run)
+      receipt=$(page "[$target]" false null 1)
+      case "$mode" in
+        official-scope-run) jq '.result.scope |= {source:.source,run:.runId}' <<< "$receipt" ;;
+        legacy-scope-run-id) jq '.result.scope |= {source:.source,run_id:.runId}' <<< "$receipt" ;;
+        scope-all-agree) jq '.result.scope |= (. + {run:.runId,run_id:.runId})' <<< "$receipt" ;;
+        scope-run-conflict) jq '.result.scope.run = "run-other"' <<< "$receipt" ;;
+        scope-run-empty) jq '.result.scope |= {source:.source,run:""}' <<< "$receipt" ;;
+        scope-run-null) jq '.result.scope |= {source:.source,run:null}' <<< "$receipt" ;;
+        scope-alias-null) jq '.result.scope |= {source:.source,run:.runId,runId:null}' <<< "$receipt" ;;
+        scope-alias-empty) jq '.result.scope |= {source:.source,run:.runId,runId:""}' <<< "$receipt" ;;
+        scope-run-number) jq '.result.scope |= {source:.source,run:7}' <<< "$receipt" ;;
+        scope-no-run) jq '.result.scope |= {source:.source}' <<< "$receipt" ;;
+      esac
+      ;;
     active)
       target=$(row "$dispatch_id" "$run_id" active)
       page "[$target]" false null 1
@@ -301,7 +316,18 @@ if [ "$CLEAN_RC" -eq 0 ]; then ok 'later-page exact row cleans successfully'; el
 assert_log_contains 'orchestration worker-list --run run-target --limit 100 --cursor cursor-2 --json' 'pagination follows opaque nextCursor'
 assert_count 'orchestration worker-list' 2 'later-page query reads both pages'
 
+for scope_mode in official-scope-run legacy-scope-run-id scope-all-agree; do
+  make_fixture "$scope_mode"
+  run_cleanup "$scope_mode"
+  if [ "$CLEAN_RC" -eq 0 ]; then ok "$scope_mode exact released row cleans successfully"; else bad "$scope_mode exact released row cleans successfully (rc=$CLEAN_RC)"; fi
+  assert_log_not_contains 'orchestration worker-release' "$scope_mode does not release an already released row again"
+  assert_log_contains 'worktree rm --worktree id:repo::worker --force --json' "$scope_mode permits exact worktree removal"
+done
+
 echo '=== malformed, ambiguous and missing WorkerList paths fail before mutation ==='
+for scope_mode in scope-run-conflict scope-run-empty scope-run-null scope-alias-null scope-alias-empty scope-run-number scope-no-run; do
+  run_preflight_refusal "$scope_mode" "$scope_mode"
+done
 run_preflight_refusal missing missing-row
 run_preflight_refusal duplicate-same duplicate-same-page
 run_preflight_refusal duplicate-cross duplicate-cross-page

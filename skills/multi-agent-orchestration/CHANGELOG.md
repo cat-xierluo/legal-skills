@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.33.1] - 2026-10-02
+
+### 改进
+- 新隔离ZCode worker的renderer和无command启动入口默认yolo，显式build/edit/plan保留；MiniMax batch默认原生full，显式smart/off保留。长程MiniMax继续使用交互CLI，权限读取既有原生配置；本机已full，不添加不存在的TUI启动参数或修改全局配置。
+
+### 修复
+- 兼容Orca官方worker-list的scope.run，避免已释放worker被误报为malformed page而保留provider lease。所有run/runId/run_id别名仍需一致、非空且匹配请求，分页和Dispatch唯一性继续失败关闭。
+
+### 验证
+- 实际ZCode交互CLI通过renderer默认命令启动，原生/mode明确读回yolo；无模型请求。MiniMax本机官方配置loader读回bypassPermissions，实际原生TUI的/permission显示Current · Full access且配置字节未变。参数消费者覆盖默认与显式收紧，Orca两个已释放worker的真实只读库存消费者通过，旧版对同库存复现拒绝。
+- 原业务provider lease未由本轮直接结算；不得把只读库存兼容证明扩大为实际release已完成。不把历史build业务验收改记为yolo长程业务验证，不声称所有可选backend或长期指令稳定性已验。
+
 ## [2.33.0] - 2026-10-01
 
 ### 新增

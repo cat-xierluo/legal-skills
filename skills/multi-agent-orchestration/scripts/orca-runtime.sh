@@ -105,7 +105,13 @@ orca_runtime_worker_row_exact() {
       and (.result.workers | length <= 100)
       and (.result.scope | type == "object")
       and .result.scope.source == "flag"
-      and ((.result.scope.runId // .result.scope.run_id // "") == $run)
+      # Current Orca uses scope.run; retain older runId/run_id receipts.
+      # Every present alias must agree: never let coalescing hide null,
+      # malformed, empty, or contradictory identity fields.
+      and (.result.scope | [.run?, .runId?, .run_id?] | any(. == $run))
+      and (.result.scope | to_entries
+        | map(select(.key == "run" or .key == "runId" or .key == "run_id"))
+        | all(.[]; (.value | type == "string") and .value == $run))
       and all(.result.workers[]?;
         ((.dispatchId? | type) == "string")
         and (.dispatchId | length > 0)
