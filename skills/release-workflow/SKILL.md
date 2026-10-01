@@ -183,7 +183,13 @@ publish job 失败：
 
 > README 回写不依赖 `on: release` 事件——GITHUB_TOKEN 创建的 Release 受 GitHub 防递归机制限制,不会级联触发其他 workflow(实际从未生效过)。`update-readme.yml` 以 `workflow_run`(Release workflow 成功后)+ `workflow_dispatch` 作兜底,与 release.yml 调用同一份 `scripts/update-readme.py`,不存在第二份逻辑;workflow_run 触发时 checkout 显式 `ref: main`(默认会 checkout 到 tag SHA 的 detached HEAD,push 失败)。
 
-下载链接静态检查必须匹配完整资产路径，不能把 `.zip.bak`、`.zip/other` 或编码后缀当作所需 ZIP；合法查询串、fragment 和固定 tag 链接保持支持。该检查不联网确认资产存在。源码版本尚未发布时保留真实旧版下载并明确标注待发布；当前套件门禁仍要求源码当前版本的资产链接，未对齐前不得宣称整套构建通过。
+下载链接检查必须匹配实际下载列 href 的完整资产路径，不能用正文里的正确 URL 掩盖错误链接。源码检查不联网证明资产存在；保留的公开链接应先对照真实 Release 资产核实，不要用 `align-suite-links.py` 把源码 README 改成尚不存在的新版本下载。
+
+- **严格默认**：`validate-expert-suites.py` 不带模式仍要求当前版本下载入口；`--mode release` 为相同严格检查。
+- **源码/prebuild**：显式 `--mode source` 允许真实旧版入口，但成员作用列须准确写 `；源码 v<当前版本> 待发布`；尚无公开成员包时，下载列写 `尚无公开下载`。已有整套旧包使用独立行 `> 整套源码 v<当前版本> 待发布`；首次未发布套件使用 `> 整套源码 v<当前版本> 待首次发布（尚无公开下载）`，不得另加未来 ZIP 占位 URL。成员、许可证、Git 跟踪、name、版本和链接边界检查不降级。
+- **Preview**：`SUITE_BUILD_MODE=preview bash scripts/build-suite-zips.sh pr-<编号>`，展开同一源码快照并保留真实公开链接/待发布说明；不把 PR 预览说成 GitHub Release 下载。
+- **本地 Release staging**：先生成当前成员 ZIP，再以默认 `release` 模式构建套件。staging renderer 核对成员 ZIP 的完整文件集合及逐文件字节、拒绝 symlink/重复文件，随后只在临时目录重写本次 tag 和实际成员版本。源码工作树及 `.gitattributes` 必须与 `SOURCE_REF` 一致；失败不覆盖上一批套件包。此本地构建不执行上传或发布，正式发布仍按原授权门禁。
+
 
 专家套件成员以 `expert-suites/<id>/skills/*` 的相对符号链接为唯一构建清单，不增加 `suite.yaml`。构建器先校验链接未逃逸、README 成员表一致、成员许可证齐全，再从指定 Git tree 导出真实 Skill 目录；Release ZIP 中不得保留符号链接。
 

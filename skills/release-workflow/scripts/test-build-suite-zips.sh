@@ -6,6 +6,7 @@ cd "$ROOT"
 
 python3 skills/release-workflow/scripts/test_validate_expert_suites.py
 python3 skills/release-workflow/scripts/test_update_readme.py
+python3 skills/release-workflow/scripts/test_suite_stages.py
 
 FIXTURE="$(mktemp -d /tmp/legal-skills-suite-test.XXXXXX)"
 cleanup() {
@@ -22,6 +23,7 @@ mkdir -p \
     "$FIXTURE/expert-suites/demo-suite/skills"
 cp skills/release-workflow/scripts/validate-expert-suites.py \
     skills/release-workflow/scripts/build-suite-zips.sh \
+    skills/release-workflow/scripts/stage-suite-readme.py \
     "$FIXTURE/skills/release-workflow/scripts/"
 
 cat >"$FIXTURE/skills/alpha-skill/SKILL.md" <<'EOF'
@@ -68,6 +70,9 @@ git -C "$FIXTURE" \
     -c user.name='Expert Suite Test' \
     -c user.email='expert-suite-test@example.invalid' \
     commit -qm 'test: fixture'
+
+mkdir -p "$FIXTURE/pack-skills"
+(cd "$FIXTURE/skills" && zip -rq "$FIXTURE/pack-skills/alpha-skill-1.2.3.zip" alpha-skill)
 
 OUTPUT_DIR=pack-skills \
     bash "$FIXTURE/skills/release-workflow/scripts/build-suite-zips.sh" v2099.01.02
