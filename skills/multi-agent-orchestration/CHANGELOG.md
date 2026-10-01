@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.33.2] - 2026-10-02
+
+### 修复
+- MiniMax terminal-managed 的原生 `exec` 按实际 CLI 参数识别批处理启动，保存准确终端身份后跳过 TUI 等待和重复任务输入；交互 CLI 保持就绪检查与唯一输入，批处理不能充当 supervised Task/Dispatch。
+
+### 验证
+- 真实执行bootstrap的控制器消费者证明旧实现执行一次后仍wait64、候选0且零二次send；startup8、Orca281、metadata33通过。首轮失败保留，完整回归和原生canary由PM继续核对，不将启动成功当任务完成。
+
+### 文档完善
+- 明确 ZCode 原生 Orca 启动桥与通用终端入口的区别；保留原 Task、启动回执和残余资源，失败后先读取实际进度再恢复，不重发已有业务。
+
 ## [2.33.1] - 2026-10-02
 
 ### 改进
