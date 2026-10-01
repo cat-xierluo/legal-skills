@@ -41,6 +41,7 @@ reset_launch_case() {
   ORCA_WORKTREE_ID="repo-1::worker"
   ORCA_TERMINAL_HANDLE=""
   ORCA_SUPERVISED=0
+  ORCA_ZCODE_NATIVE_REQUESTS=""
   ORCA_RUN_ID=""
   ORCA_COORDINATOR_HANDLE=""
   ORCA_TASK_ID=""
@@ -474,6 +475,28 @@ if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-launch.sh"' "$REAL_SCRIPT_DIR/spaw
 else
   bad "entrypoint delegates the shared launch boundary"
 fi
+
+# Native opt-in bypasses terminal-create/wait; native helper owns one injection.
+reset_launch_case
+ORCA_MODE="auto"
+ORCA_SUPERVISED=1
+ORCA_ZCODE_NATIVE_REQUESTS="$CASE_ROOT/requests"
+COMMAND="env WORKER_SESSION_CONTEXT=$WORKTREE/.claude/agent-sessions/$SESSION zcode --mode build"
+SCRIPT_DIR="$CASE_ROOT/native-register"
+mkdir -p "$SCRIPT_DIR"
+cat > "$SCRIPT_DIR/orca-supervised-register.sh" <<'NATIVE'
+#!/usr/bin/env bash
+[ "$1" = "--agent" ] && [ "$2" = "zcode" ] || exit 64
+printf 'ORCAREG_TERMINAL_HANDLE=term-native\nORCAREG_RUN_ID=run-native\nORCAREG_TASK_ID=task-native\nORCAREG_DISPATCH_ID=dispatch-native\nORCAREG_DISPATCH_BIND=ok\nORCAREG_COORDINATOR_HANDLE=term-pm\n'
+NATIVE
+launch_worker_session
+assert_eq "$ORCA_TERMINAL_HANDLE:$ORCA_SUPERVISED_TASK_ID" "term-native:task-native" "native route exports exact created terminal and task"
+assert_eq "$(wc -c < "$FAKE_LOG" | tr -d ' ')" "0" "native route does not create terminal or send bootstrap prompt"
+assert_eq "$(stat -f '%Lp' "$LAUNCH_SH" 2>/dev/null || stat -c '%a' "$LAUNCH_SH")" "700" "native frozen launch wrapper is owner-only"
+reset_launch_case
+ORCA_MODE="auto"; ORCA_SUPERVISED=1; ORCA_ZCODE_NATIVE_REQUESTS="$CASE_ROOT/requests"; DRY_RUN=1
+native_plan=$(launch_worker_session)
+if printf '%s' "$native_plan" | grep -Fq 'worker-start --agent zcode'; then ok "native dry-run reports single agent creation"; else bad "native dry-run reports single agent creation"; fi
 
 printf 'spawn-worker launch tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
