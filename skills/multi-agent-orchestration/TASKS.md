@@ -312,9 +312,14 @@ blocker_and_recovery:
 
 ## TASK-2026-10-01-ZCODE-ORCA-NATIVE-INTEGRATION
 
-- 状态：`IN_PROGRESS`；用户要求 ZCode 原生交互 CLI 接入 Orca，保持同一会话接续。
-- 范围：显式可选 native ZCode supervised 启动、可信单次启动环境桥、派发身份与 created terminal 所有权；保留既有启动门禁、默认 worker 池与私人账号调用边界。
-- 实现责任：独立 implementer 修改启动桥及受影响脚本和回归；PM 维护随行文档与真实验收；独立 reviewer 验收冻结 head。
-- 验收：就绪后唯一原生任务投递，真实任务产物/验证与 `worker_done → Delivery`；同一交互会话接续及模型核验；release、ack、provider lease 与终端收口。fake tests 不替代原生生命周期。
-- 已确认：Orca 官方 1.4.218 包含首次 ZCode composer 等待修复；native worker-start 不支持逐次环境变量，须通过官方自定义启动命令保持既有环境绑定。
-- 当前：实现与真实验收进行中；Orca 接入结果仍 `NOT_VERIFIED`，不得用历史 tmux 证据关闭本卡。
+- 状态：`IN_PROGRESS`；原生任务与交付链已通过，精确测试终端的保留/清理尚待收口。
+- 范围：用户指定的 ZCode 原生交互 CLI、同一会话接续、显式 native supervised 启动、可信单次启动环境桥；保留既有门禁、默认 worker 池与私人账号调用边界。
+- 实现责任：独立 implementer 修改脚本；PM 维护文档、真机与收口；不同会话 reviewer 验收冻结 head。
+- 交付：PR [#239](https://github.com/cat-xierluo/legal-skills/pull/239)；代码 head `e1fad17d1757aaec68e868a40d112914c452f522`。原始独立审查拒绝的重放和 nonready 回执问题已修复；独立增量审查 ACCEPT，无 P1/P2。
+- 回归：本版完整维护矩阵 61/61 命令退出0；bridge 35项、launch 46项、completion 8项通过；安全扫描0 critical/high，quick validate通过。
+- 真机：Orca 1.4.218 / ZCode CLI 0.16.9 / runtime 3.14.3，真实 fresh composer、唯一 Task 投递和 native authority 绑定通过。固定代码 head 的只读评审：阶段1实际35项测试通过；同一原生 session / terminal / Dispatch 经 `/model` 从 Flash 切至 GLM-5.3 后，消费/ack 正式 guidance，完成3个定向反例与最终证据，tracked diff为空；PM value postflight通过。
+- 模型：SQLite 与请求日志确认同一个 interactive session 的个人 Coding Plan / GLM-5.3-Flash、GLM-5.3 成功请求，实际 Anthropic endpoint，无 MiniMax/体验套餐回落；不以模型自报或配置值替代此证据。
+- 完成权威：唯一真实 `worker_done succeeded → Delivery`，Orca Task/Dispatch 自动成功结算；PM验收后 `worker-release` 返回 `retained / user_takeover / processAction=none`，随后 ack 完整 Delivery、收件箱为空。启动回执 created 不覆盖当前 user_owned；不得声称自动关闭已验。
+- 失败记录：较早尝试在 provider 额度拒绝后未发 worker_done，按失败尝试保留日志并单独结算，不转记成功。上述成功来自修复版的新尝试，不复用旧认证或旧句柄。
+- 资源状态：`RETAINED_WITH_REASON`，当前测试终端受用户接管保护；精确人工授权关闭与研究副本清理未完成，不批量清理其他工作区。运行期精确身份、日志和哈希保存在本地脱敏验收载体，不公开账户数据或凭证路径。
+- `NOT_VERIFIED`：coordinator-owned 原生终端的自动关闭；本轮 user_takeover 的实际触发来源；机械 scope/install hook；长期账号身份锁、自动切号/耗卡/持续预算控制；逐请求精确服务端扣分。MiniMax等其他backend的supervised不类推通过。
