@@ -23,6 +23,16 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 消费原生未满足退出码
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root/optional_cli_review`（implementer）；来源：用户要求继续验证，原生 Orca 1.4.217 对合法 `satisfied=false` 回执退出1，现 helper 提前拒绝，未执行同句柄重等。
+- 冻结起点：`a2dc75ef612731e23dec1678dc36fcbbf000a402`；base `origin/main` = `41268aaa91e71158cb4551dce8d757038869af0f`；复用本轮已授权隔离 worktree `mao-live-cli-acceptance`、分支 `fix/mao-orca-terminal-ready`；PR #233 OPEN，由root发布。
+- 范围：仅 Orca spawn helper、定向 Orca 测试及必要 launch/mem fixture、SKILL版本、TASKS、DECISIONS、CHANGELOG、ref13、README MAO索引；交付 v2.31.3。不改Orca源码、focus、权限、宿主、provider、身份/资源合同或共享source。
+- 验收：捕获真实退出码后严格解析单个回执；仅rc0布尔回执、rc1且false有效。rc1+true、rc>1、okfalse、畸形、错绑、多JSON均零send；false同一handle仅30s/60s两轮，supervised不双投。运行原生CLI handler的隔离消费者契约回放及真实shell退出码回归，无真实终端或模型请求。
+- 清单：①登记任务已完成；②窄修复与定向测试已完成；③原生源码消费者回放与文档同步已完成，提交待固定HEAD；④root安排独立review与实际兼容验证。
+- 验证：`bash scripts/test-spawn-worker-orca.sh` 256/256（包含已安装原生handler输出false退出1/true退出0的无RPC消费者回放，以及其回执经真实shell退出码供helper消费）、launch42/42、mem58/58；本轮未修改launch/mem模块或fixture。日志为本机 `/tmp/mao-orca-wait-{exit,launch,mem}-test.log`。独立review和真实ZCode Orca兼容仍待验收，PR #233尚未合并。
+- `NOT_VERIFIED`：ZCode Orca ready合成、真实模型请求、supervised/settlement不以本轮隔离测试补证；错误/timeout/stale不作pending成功。
+
 ## TASK-2026-10-01-LIVE-WORKER-ACCEPTANCE — 两个 Skill 的实际任务验收
 
 - 状态：`COMPLETE`（限定两项真实任务、私有fresh gate与已授权交接）；Owner：Codex `/root`；来源：用户要求自主推进测试，直至 MAO 与私有账号 Skill 可完成实际任务，并向已授权会话交接。候选文档 owner 为 `/root/optional_cli_review`，不改共享 source。
