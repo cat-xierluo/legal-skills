@@ -83,6 +83,8 @@ Orca 1.4.217 的两次 ZCode 尝试均报 `terminal_handle_stale`，未发送业
 
 用户当前要求保留交互CLI长程工作。已实测的 ZCode worker 路径为上述 tmux 原生交互会话：保留同一会话完成具名任务，并由PM回读产物、原生模型记录和会话收口证据。当前 MAO Orca spawn 仍采用创建TUI、等待真实就绪、再投递的合同；本轮没有新增无头替代配方、runner或其他启动模式。
 
+对于当前实测的 Orca 1.4.217、ZCode CLI 0.16.9 / runtime 3.14.3 组合，用户已指定 `zcode-cli` 时，按现有 spawn 门禁显式传入 `--no-orca-mode`，选择已验的 tmux 交互路径，并保留同一 session 接续任务。这是既有兼容选择；无需先创建 Orca 终端试探或伪造 ready，不改变默认 worker 池、backend 或其他门禁。升级 Orca 后的自动 TUI 路径须重新验收，不能沿用上述 tmux 或旧版本诊断作为就绪证明。
+
 后续零业务提示的专用启动诊断中，Orca终端已connected/writable、renderer pane已挂载，屏幕出现composer，但 `tui-idle` 仍返回timeout。已安装 ZCode 源码显示新会话的 `SessionStart` hook 在首次turn初始化期间运行；Orca的ZCode ready合成依赖原生状态/title信号，屏幕上的输入提示不能单独证明该信号已产生。这提示首次投递前存在就绪循环，但尚未形成可独立验收的Orca交互兼容修复。聚焦终端、延长等待或已安装hook状态均不足以宣布兼容成功；不得伪造ready或绕过门禁投递。
 
 Orca ZCode TUI、完整长程监督和settlement仍为 `NOT_VERIFIED`。tmux任务的已验范围不扩大为这些层的证明；按[本地账号调度调用合同](29-local-account-routing-skill.md)做现场校验，也不能替代真实TUI就绪或建立持续身份锁。
