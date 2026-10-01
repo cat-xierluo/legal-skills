@@ -32,9 +32,9 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 ## 单 worker 权限与 CLI 接续
 
-启动前按任务选权限模式。renderer 默认明确使用 `build`；其普通workspace写入与有副作用Bash通常要求审批。`edit` 允许普通workspace编辑，Bash仍按build判断；`plan`限制有副作用工具；`yolo`可减少普通写入和Bash确认，但需要用户交互、alwaysAsk与plan状态仍有例外。yolo不能提供机械scope/install保护，也不能把普通项目deny规则当作它的范围护栏。
+启动前按任务选权限模式。新隔离worker的renderer与spawn默认命令均明确使用 `yolo`；需要收紧时显式选择 `build/edit/plan`。`build`的普通workspace写入与有副作用Bash通常要求审批。`edit` 允许普通workspace编辑，Bash仍按build判断；`plan`限制有副作用工具；`yolo`可减少普通写入和Bash确认，但需要用户交互、alwaysAsk与plan状态仍有例外。yolo不能提供机械scope/install保护，也不能把普通项目deny规则当作它的范围护栏。
 
-只对已授权、隔离、唯一writer的新任务显式选择模式。保持Orca全局设置；`--permission-mode`是renderer的参数，spawn没有此参数，ZCode原生拼写为`--mode`：
+只对已授权、隔离、唯一writer的新任务应用默认模式或显式收紧。保持Orca全局设置；`--permission-mode`是renderer的参数，spawn没有此参数，ZCode原生拼写为`--mode`：
 
 ```bash
 rendered_command=$(bash "$MAO/scripts/render-runtime-profile.sh" \
@@ -69,7 +69,7 @@ orca terminal send --terminal "$EXACT_HANDLE" --enter --json
 
 不要固定发两次Up、盲Enter或选择Always allow。输入accepted仅证明运输，继续读取原请求消失、原调用恢复；身份/命令改变或结果不确定时只读检查。审批不重发业务Task、不创建新worker；续行后重读live ownership，继续唯一worker_done/Delivery/验收/release/ack。若仅因外层sandbox无法访问IPC，应依宿主权限流程运行CLI；不据此重启Orca。
 
-mode合同已核当前安装runtime及纯renderer输出；本轮真实任务使用build并通过CLI逐项审批，新yolo业务任务仍`NOT_VERIFIED`。具体实现边界依本机匹配版本，勿将权限模式当成新的任务授权。
+历史2.32.0真实任务使用build并通过CLI逐项审批。2.33.1默认改为yolo，参数消费者与本机原生权限验证以当前TASKS验收记录为准；不得把历史build验收改记为yolo任务成功。具体实现边界依本机匹配版本，勿将权限模式当成新的任务授权。
 
 ## 验证状态
 
