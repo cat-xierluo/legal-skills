@@ -106,3 +106,7 @@
 ## DEC-2026-10-01-BORROWED-WORKTREE-ENTRY
 
 预建工作树已有原 owner、分支与批准资产，采用显式短时借用合同而非放宽默认 existing-worktree gate 或伪造恢复 Session。现场绑定 canonical Git/Orca 身份、内容快照和无 writer，持久化保留账本，保持 long-lived；MAO 自建 Session/terminal 的生命周期与借用树的 ownership 分开核对。原 owner 授权仍由 PM 回读可信证据，字段自述不能机械认证授权。当前在飞消费者仅只读，不借本实现另起业务 writer。
+
+## DEC-2026-10-02-MINIMAX-EXEC-STARTUP
+
+MiniMax `exec` 是已读取完整输入的非交互运行，不存在待输入的 composer。基于复用命令验证器解析的真实 CLI argv 分类，仅 terminal-managed batch 跳过 TUI 等待和第二次任务发送；不是按命令字符串包含 exec 判定。严格核对 terminal-create 回执并及早保存身份，启动成功只证明已启动，不代表任务完成。交互模式和 ZCode 原生 supervised 保持各自合同，batch 与 supervised/precreated Task 的冲突在资源副作用前拒绝。原消费任务由原 PM 接续，不用本修复重启或重造。
