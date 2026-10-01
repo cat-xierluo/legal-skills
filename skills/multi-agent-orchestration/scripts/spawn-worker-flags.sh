@@ -147,6 +147,8 @@ Options:
                    skip|inherit|run, MAO currently rejects inherit/run before resource
                    creation because repo Setup executes before Session Context and guards.
                    --allow-install-command does not authorize this pre-guard phase.
+  --borrow-existing-worktree CONTRACT.json
+                   显式首次借用已登记长期 Git worktree，要求native ZCode、新Session与新鲜身份/dirty/writer合同。
   --orca-zcode-native-requests DIR
                    显式启用 Orca >=1.4.218 原生 ZCode launcher；可信请求目录必须预建0700。
   --orca-supervised 建立 Orca 原生 Run/Task/Dispatch。传 --task-spec 创建单 Task，
@@ -415,6 +417,10 @@ parse_spawn_worker_args() {
         esac
         shift 2
         ;;
+      --borrow-existing-worktree)
+        BORROW_EXISTING_WORKTREE="$2"
+        [ -n "$BORROW_EXISTING_WORKTREE" ] || { echo "ERROR: borrowed contract cannot be empty" >&2; exit 64; }
+        shift 2 ;;
       --orca-zcode-native-requests)
         ORCA_ZCODE_NATIVE_REQUESTS="$2"
         [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ] || { echo "ERROR: native requests root cannot be empty" >&2; exit 64; }

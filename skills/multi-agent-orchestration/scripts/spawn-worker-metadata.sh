@@ -63,6 +63,9 @@ write_metadata() {
   fi
 
   jq -n \
+    --arg borrowed_contract "${BORROW_EXISTING_WORKTREE:-}" \
+    --arg borrowed_sha "${BORROWED_CONTRACT_SHA256:-}" \
+    --argjson borrowed_owner_pid "$$" \
     --arg schema "multi-agent-orchestration.worktree-metadata.v1" \
     --arg created_at "$created_at" \
     --arg project "$PROJECT_DIR" \
@@ -247,5 +250,8 @@ write_metadata() {
         url: "",
         state: ""
       }
-    }' > "$METADATA_FILE"
+    } | if $borrowed_contract != "" then
+      .worktree_ownership = "borrowed"
+      | .borrowed_worktree = {contract_file:$borrowed_contract,contract_sha256:$borrowed_sha,lock_owner_pid:$borrowed_owner_pid}
+      else . end' > "$METADATA_FILE"
 }
