@@ -84,6 +84,15 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(first["configuration"]["personal"]["path"], str(self.personal))
         self.assertEqual(first["configuration"]["personal"]["sha256"], hashlib.sha256(before).hexdigest())
 
+    def test_actual_cli_personal_environment_source_reused(self):
+        result = subprocess.run([sys.executable, "-B", str(HERE / "dispatch-profile.py")],
+            input=json.dumps(self.request), capture_output=True, text=True,
+            env={**os.environ, "MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG": str(self.personal)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["configuration"]["personal"]["path"], str(self.personal))
+        self.assertEqual(value["configuration"]["concurrency"]["cap"], 0)
+
     def test_actual_cli_restores_missing_native_flags(self):
         before = hashlib.sha256(self.personal.read_bytes()).hexdigest()
         result = self.cli()  # Old caller intentionally omits --orca-supervised/native requests.
@@ -109,6 +118,16 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(profile["transport"], transport)
             self.assertNotIn("--orca-supervised", profile["required_spawn_flags"])
             if transport == "direct":self.assertIn("--no-orca-mode", profile["required_spawn_flags"])
+
+    def test_explicit_old_native_flags_override_without_new_personal_key(self):
+        self.config.pop("dispatch_profiles");self.save()
+        request = dict(self.request, supervised=True, native_requests_root=str(self.requests))
+        result = self.resolve(request)
+        self.assertEqual(result["transport"], "orca-native-supervised")
+        self.assertEqual(result["configuration"]["native_requests_source"], "argument")
+        self.assertIn("--orca-supervised", result["required_spawn_flags"])
+        self.refused(lambda: self.resolve(dict(request, supervised=False)), "native_requests_override_requires_supervised")
+        self.refused(lambda: self.resolve(dict(request, transport="orca-generic")), "native_requests_override_requires_supervised")
 
     def test_legacy_personal_and_zero_cap_semantics(self):
         self.config["_schema_version"] = "1.1";self.save()
@@ -210,6 +229,7 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(result["permission"]["requested"], "full")
         self.assertEqual(result["permission"]["observed"], "auto")
         self.assertEqual(result["permission"]["observed_source"], "supplied_observation")
+        self.assertEqual(result["permission"]["requested_source"], "native_configuration_observation_required")
         self.assertEqual(result["required_native_flags"], [])
         self.assertIn("--no-orca-mode", result["required_spawn_flags"])
 
