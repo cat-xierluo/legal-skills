@@ -10,6 +10,20 @@ PM 读取该目录的 `SKILL.md`，按其工作流运行账号观测和调度规
 
 此配置不会被 `route_suggest.py` 或 `spawn-worker.sh` 自动执行；它是宿主 Agent 的 Skill 调用路由。私人 Skill 的建议不得绕过本 Skill 的价值、harness、provider lease、内存、scope 与安装门禁，也不得把可选 backend 加入默认派发链。
 
+## 派发前现场校验
+
+先读取实际安装的私有 Skill 的 `SKILL.md`，核对该版本的帮助。若该版本提供 `validate-dispatch`，将本轮 observation 与 plan 分别保存为具名的私有文件，在实际派发前按其合同调用：
+
+```text
+scripts/zcode_account_router.py validate-dispatch --observation PRIVATE_OBSERVATION --plan PRIVATE_PLAN
+```
+
+上述相对入口属于私有 Skill，两个大写参数是本轮文件占位符；公开包不提供该脚本，也不填入真实私有安装路径。按私有 Skill 的当前版本帮助确定可接受计划、输入格式、时效与返回回执，不复制或另行维护它的账号和预算规则。
+
+该校验应现场重新读取原生状态与预算，复核本轮观测/计划仍可用于当前账号。退出失败、结构化回执拒绝或未知、身份/预算变化均停止投递，重新观测与规划；不编辑旧计划绕过拒绝。未安装相应版本、接口缺失或无法确认返回合同，也不能声称此校验已通过。私有文件与回执留在本地，按私有 Skill 的权限要求保存，不进入业务任务prompt、Git或公开证据。
+
+通过只证明校验那一刻，不是持续身份锁；启动发生延迟或用户再次切换时重新校验。当前 `account_routing` 仍是 PM 调用路由，`spawn-worker.sh` 不自动执行该接口，也不建立机械账号绑定。有效校验不能替代既有价值、harness、provider lease、内存、scope、安装和工作树门禁；不因建议切换或用卡就自动执行这些动作。
+
 ## 停止与身份
 
 - 关闭或未配置：沿用既有工作流，不推断账号能力。
