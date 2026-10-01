@@ -41,6 +41,8 @@ bash scripts/render-runtime-profile.sh --backend minimax-code --mode batch \
   --model '<provider/model>' --prompt-file /absolute/path/task.md --output shell
 ```
 
+显式选择 `minimax-code`（含 `mcode` 别名）后，`spawn-worker.sh` 默认要求匹配当前项目的 Orca 通道。Orca 缺失、不可达、注册失败、错仓或 lightweight 模式在工作树、provider lease、Session Context、终端与任务创建前失败；不要因失败另起直连。用户明确选择直连时传 `--no-orca-mode`，无需工作树时再加 `--no-worktree`。此默认只决定已选 MiniMax 的管理通道，不改变可选 backend 池。Orca terminal-managed 可见终端、工作树和分支，但没有 supervised Task/Dispatch，也不要求 `worker_done`。
+
 MiniMax batch 使用 `exec --permission smart --output-format stream-json --input -`；stdin 原样读取 prompt。交互模式仅 `-m` 覆盖当前 Session，不能传 headless 的 `--permission`。ZCode 启动帮助未提供 `--model`，renderer 在传模型时拒绝，不能静默忽略或改共享配置；按原生 `/model list` 与 `/model <provider/model>` 明确选择；BigModel 套餐认证、reasoning 必填与静默回落风险读取 [独立 CLI 的 BigModel 实测](28-zcode-cli-bigmodel-coding-plan.md)。ZCode renderer 显式默认 `--mode build`，避免 CLI `--prompt` 的原生 yolo 默认隐式扩大权限。
 
 用渲染后的 WORKER_COMMAND 交给 `spawn-worker.sh --worker-backend ... --command ...`；ZCode CLI、MiniMax Code、Qoder CN 尚无本 Skill 已配置的 PreToolUse 集成，必须显式传 `--allow-prompt-only-install-guard '<授权来源>'`。本次增加支持不授权实际派发、安装、push/PR 或 bypass 模式；按真实任务授权运行。不要自动应答未验证 CLI 的 trust/permission dialog。
@@ -50,7 +52,7 @@ MiniMax batch 使用 `exec --permission smart --output-format stream-json --inpu
 - 移除 QoderWork：旧 backend/别名拒绝；命令实路径含 QoderWork 的软链也拒绝。只改 backend 标签不能把旧产品伪装成新产品。
 - 同名 qoderclicn：千问 bundle 只认 `qwenwork-cn`；独立 Qoder CN 只认 `qoder-cn`。千问 bundle 的配置目录必须显式提供且存在，不能从产品同源推断账号/额度共享。
 - 默认路由：route_suggest 自动 provider 补选仍只处理 Claude Code，新可选 backend 不加入 tier_policy。
-- ZCode CLI 的显式 native Orca 路径读取 [原生启动合同](30-zcode-native-orca.md)；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
+- ZCode CLI 的显式 native Orca 路径读取 [原生启动合同](30-zcode-native-orca.md)；MiniMax 默认 Orca terminal-managed，显式直连用 `--no-orca-mode`；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
 
 ## 2026-10-01 有界文件任务验收
 
@@ -59,6 +61,12 @@ MiniMax Code 的实际 Orca terminal-managed 任务已独立 `ACCEPT`：产物�
 ZCode 的 tmux fallback 文件任务产物提交 `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`：3项测试通过，仅修改 probe 任务文件；SQLite 记录13条 completed `model_usage`，全部为个人 Coding Plan provider / `GLM-5.3-Flash`，retry 为0。临时研究认证/配置副本已精确删除，tmux 已关闭；独立验收为 `ACCEPT`（限tmux实际任务）。Orca 1.4.217 的两次尝试均遇到 `terminal_handle_stale`，业务 prompt 的 send 次数为0，不能把 tmux 成功写成 Orca 成功。
 
 这两项任务均采用显式 prompt-only 降级；ZCode bootstrap 曾执行超出精确 shell allowlist 的 `ls`，不证明机械 scope/hook。terminal-managed 没有 supervised Task/Dispatch，tmux 也不能替代 `worker_done → Delivery → settlement → ack`。本轮无真实账号切换、耗卡或默认自动身份绑定；共享配置/凭证一致性仅有准备进程内断言，未持久化该次共享 before baseline，独立 before/after 重放仍 `NOT_VERIFIED`。精确服务端扣费归属同样 `NOT_VERIFIED`。证据状态与独立验收以 TASKS 的 LIVE-WORKER-ACCEPTANCE 卡为准。
+
+## 默认Orca渠道的增量验收
+
+2.33.0默认入口另以新的MiniMax交互会话完成文件任务：产物`1f0c1513b09351542e5ce51411922c27b7079d63`仅probe.py，PM3/3与postflight通过；实际16条assistant响应、16条HTTP200事件均为`minimax / MiniMax-M3.1-Flash-Preview`。原生历史与usage按精确session/turn/timestamp/rawusage唯一消费，日志按同session/turn/provider/model核数量组；逐responseId的HTTP直接join与精确计费仍NOT_VERIFIED。测试CLI/launcher及已记录后代退出，默认空shell核后正式close-all，最终终端库存0；long-lived树/分支保留证据。
+
+启动bootstrap可能已消费完整本轮授权合同并开始或完成工作。PM先读精确终端与产物再决定后续输入，已有业务不能再次派发；本次只发送一次现有结果的验收指导。MiniMax的Orca receipt可能仅报告input_accepted且provider unsupported：不重发，不把运输成功当作业务已启动，通过该原生会话及实际结果核消费。terminal-managed仍没有supervised Task/Dispatch/worker_done闭环。
 
 ## 依赖与来源
 

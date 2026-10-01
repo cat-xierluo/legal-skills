@@ -28,6 +28,7 @@ assert_eq() {
 }
 
 reset_defaults() {
+  BORROW_EXISTING_WORKTREE=""
   PROJECT_DIR=""
   BRANCH=""
   WORKTREE=""
@@ -332,6 +333,10 @@ else
   ok "--base-ref main proceeds past base-ref gate"
 fi
 rm -rf "$main_proj"
+
+reset_defaults
+parse_spawn_worker_args --borrow-existing-worktree "/tmp/approved contract.json"
+assert_eq "$BORROW_EXISTING_WORKTREE" "/tmp/approved contract.json" "borrowed contract path is explicit and preserves spaces"
 
 printf 'spawn-worker flags tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
