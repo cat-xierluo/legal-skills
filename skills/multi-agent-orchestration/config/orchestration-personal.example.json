@@ -182,7 +182,8 @@
     "默认候选是 claude-code/codex；CodeBuddy、Qoder CN、千问办公、ZCode、MiniMax Code 仅按需，hosts 权限不是常规派发优先级。",
     "缺省策略：main_force.host 只表达模型偏好，不能证明当前宿主身份；身份无法由运行时证明时 spawn 失败关闭。task_routing 缺失 → 交 §2.2 表回退；codex_policy.policy 缺失 → allowed；concurrency 缺失 → 只提示 advisory、不假装硬限额；backend_model_routing 缺失 → 空 dict。",
     "本文件只声明'偏好'，不声明真实 token/key/endpoint——那些在 config/claude-provider-registry.*.json（本地 ignored）。",
-    "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。"
+    "改本 schema 字段时，同步更新 SKILL.md §2.4 字段定义。",
+    "dispatch_profiles.zcode-cli.native_bridge只声明既有Orca正式启动桥；不修改Orca全局配置。先核真实bridge命令与owner-only0700目录，再enabled=true。auto缺失/禁用副作用前拒绝，generic需显式--dispatch-profile orca-generic。"
   ],
   "dispatch_selection": {
     "default_backends": [
@@ -208,5 +209,13 @@
     "enabled": false,
     "skill_path": "",
     "backends": []
+  },
+  "dispatch_profiles": {
+    "zcode-cli": {
+      "native_bridge": {
+        "enabled": false,
+        "requests_root": "/absolute/owner-only-0700/launch-requests"
+      }
+    }
   }
 }
