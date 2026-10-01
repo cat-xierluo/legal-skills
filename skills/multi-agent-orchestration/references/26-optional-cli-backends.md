@@ -41,6 +41,8 @@ bash scripts/render-runtime-profile.sh --backend minimax-code --mode batch \
   --model '<provider/model>' --prompt-file /absolute/path/task.md --output shell
 ```
 
+显式选择 `minimax-code`（含 `mcode` 别名）后，`spawn-worker.sh` 默认要求匹配当前项目的 Orca 通道。Orca 缺失、不可达、注册失败、错仓或 lightweight 模式在工作树、provider lease、Session Context、终端与任务创建前失败；不要因失败另起直连。用户明确选择直连时传 `--no-orca-mode`，无需工作树时再加 `--no-worktree`。此默认只决定已选 MiniMax 的管理通道，不改变可选 backend 池。Orca terminal-managed 可见终端、工作树和分支，但没有 supervised Task/Dispatch，也不要求 `worker_done`。
+
 MiniMax batch 使用 `exec --permission smart --output-format stream-json --input -`；stdin 原样读取 prompt。交互模式仅 `-m` 覆盖当前 Session，不能传 headless 的 `--permission`。ZCode 启动帮助未提供 `--model`，renderer 在传模型时拒绝，不能静默忽略或改共享配置；按原生 `/model list` 与 `/model <provider/model>` 明确选择；BigModel 套餐认证、reasoning 必填与静默回落风险读取 [独立 CLI 的 BigModel 实测](28-zcode-cli-bigmodel-coding-plan.md)。ZCode renderer 显式默认 `--mode build`，避免 CLI `--prompt` 的原生 yolo 默认隐式扩大权限。
 
 用渲染后的 WORKER_COMMAND 交给 `spawn-worker.sh --worker-backend ... --command ...`；ZCode CLI、MiniMax Code、Qoder CN 尚无本 Skill 已配置的 PreToolUse 集成，必须显式传 `--allow-prompt-only-install-guard '<授权来源>'`。本次增加支持不授权实际派发、安装、push/PR 或 bypass 模式；按真实任务授权运行。不要自动应答未验证 CLI 的 trust/permission dialog。
@@ -50,7 +52,7 @@ MiniMax batch 使用 `exec --permission smart --output-format stream-json --inpu
 - 移除 QoderWork：旧 backend/别名拒绝；命令实路径含 QoderWork 的软链也拒绝。只改 backend 标签不能把旧产品伪装成新产品。
 - 同名 qoderclicn：千问 bundle 只认 `qwenwork-cn`；独立 Qoder CN 只认 `qoder-cn`。千问 bundle 的配置目录必须显式提供且存在，不能从产品同源推断账号/额度共享。
 - 默认路由：route_suggest 自动 provider 补选仍只处理 Claude Code，新可选 backend 不加入 tier_policy。
-- ZCode CLI 的显式 native Orca 路径读取 [原生启动合同](30-zcode-native-orca.md)；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
+- ZCode CLI 的显式 native Orca 路径读取 [原生启动合同](30-zcode-native-orca.md)；MiniMax 默认 Orca terminal-managed，显式直连用 `--no-orca-mode`；其余新 backend 优先 terminal-managed/tmux。仅帮助和隔离 stub argv 通过不证明真实模型写文件、持续交互、hook 或 supervised 成功；真实 `worker_done → Delivery → settlement → ack` 缺失则 `NOT_VERIFIED`。
 
 ## 2026-10-01 有界文件任务验收
 
