@@ -578,7 +578,7 @@ case "$BACKEND" in
     [ -n "$BIN" ] || BIN="mcode"
     mm_parts=("$BIN")
     if [ "$MODE" = "batch" ]; then
-      [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="smart"
+      [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="full"
       case "$PERMISSION_MODE" in smart|full|off) ;;
         *) echo "ERROR: MiniMax exec --permission accepts smart/full/off" >&2; exit 64 ;; esac
       mm_parts+=(exec --permission "$PERMISSION_MODE" --output-format stream-json)
@@ -597,7 +597,7 @@ case "$BACKEND" in
   zcode-cli)
     [ -n "$BIN" ] || BIN="zcode"
     [ -z "$COMMAND_MODEL" ] || { echo "ERROR: standalone ZCode CLI has no --model startup flag; select the native session model explicitly" >&2; exit 64; }
-    [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="build"
+    [ -n "$PERMISSION_MODE" ] || PERMISSION_MODE="yolo"
     case "$PERMISSION_MODE" in build|edit|plan|yolo) ;;
       *) echo "ERROR: ZCode CLI --mode accepts build/edit/plan/yolo" >&2; exit 64 ;; esac
     zc_parts=("$BIN" --mode "$PERMISSION_MODE")

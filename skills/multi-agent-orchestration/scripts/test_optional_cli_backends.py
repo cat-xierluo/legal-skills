@@ -63,7 +63,7 @@ class OptionalBackends(unittest.TestCase):
     def test_minimax_batch_stdin_and_model(self):
         result = self.execute('minimax-code', 'batch', '--model', 'custom_provider:work/model-id')
         self.assertEqual(result['stdin'], self.prompt.read_text())
-        self.assertEqual(result['argv'], ['exec','--permission','smart','--output-format','stream-json',
+        self.assertEqual(result['argv'], ['exec','--permission','full','--output-format','stream-json',
             '--model','custom_provider:work/model-id','--input','-'])
 
     def test_minimax_tui_model_only(self):
@@ -71,10 +71,25 @@ class OptionalBackends(unittest.TestCase):
             ['-m','provider/model'])
         self.assertEqual(self.render('minimax-code', '--permission-mode', 'full').returncode, 64)
 
-    def test_zcode_safe_default_and_prompt(self):
-        self.assertEqual(self.execute('zcode-cli')['argv'], ['--mode','build','--prompt',self.prompt.read_text().rstrip('\n')])
-        self.assertEqual(self.execute('zcode-cli','interactive')['argv'], ['--mode','build'])
+    def test_zcode_yolo_default_and_prompt(self):
+        self.assertEqual(self.execute('zcode-cli')['argv'], ['--mode','yolo','--prompt',self.prompt.read_text().rstrip('\n')])
+        self.assertEqual(self.execute('zcode-cli','interactive')['argv'], ['--mode','yolo'])
         self.assertEqual(self.render('zcode-cli','--model','guessed-model').returncode, 64)
+
+    def test_minimax_explicit_permissions_are_preserved(self):
+        for permission in ('smart', 'full', 'off'):
+            with self.subTest(permission=permission):
+                argv = self.execute('minimax-code', 'batch', '--permission-mode', permission)['argv']
+                self.assertEqual(argv[argv.index('--permission') + 1], permission)
+        self.assertEqual(self.render('minimax-code', '--mode', 'batch', '--prompt-file',
+            str(self.prompt), '--permission-mode', 'guessed-mode').returncode, 64)
+
+    def test_zcode_explicit_modes_are_preserved(self):
+        for mode in ('build', 'edit', 'plan', 'yolo'):
+            with self.subTest(mode=mode):
+                self.assertEqual(self.execute('zcode-cli', 'interactive',
+                    '--permission-mode', mode)['argv'], ['--mode', mode])
+        self.assertEqual(self.render('zcode-cli', '--permission-mode', 'full').returncode, 64)
 
     def test_qoder_batch_and_permission(self):
         result = self.execute('qoder-cn','batch','--model','test-model')['argv']
