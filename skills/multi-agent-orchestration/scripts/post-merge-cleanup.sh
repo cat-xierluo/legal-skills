@@ -211,6 +211,19 @@ CHILD_COUNT=$(printf '%s' "$CHILD_JSON" | jq 'length')
   defer "open_child_pr" "children=$(printf '%s' "$CHILD_JSON" | jq -c '[.[].number]') use $BRANCH as base"
 echo "POST_MERGE_CLEANUP_CHILD_PRS: zero"
 
+borrowed_target="$WORKTREE"
+if [ -z "$borrowed_target" ]; then
+  borrowed_target=$(git -C "$PROJECT_DIR" worktree list --porcelain | awk -v branch="refs/heads/$BRANCH" '/^worktree /{wt=substr($0,10)} /^branch /{if(substr($0,8)==branch){print wt;exit}}')
+fi
+borrow_common=$(git -C "$PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$borrowed_target" ] && [ -d "$borrowed_target" ] && { [ -d "$borrow_common/agent-borrowed-worktrees" ] || [ -L "$borrow_common/agent-borrowed-worktrees" ] || { [ -f "$borrowed_target/.claude/agent-sessions/$SESSION/METADATA.json" ] && [ "$(jq -r '.worktree_ownership // ""' "$borrowed_target/.claude/agent-sessions/$SESSION/METADATA.json")" = borrowed ]; }; }; then
+  protection=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" protect --project "$PROJECT_DIR" --worktree "$borrowed_target" --branch "$BRANCH") || defer "borrowed_ownership_unknown" "retain external resources"
+  [ "$(printf '%s' "$protection" | jq -r '.protected')" != true ] || defer "borrowed_external_worktree" "worktree and all branches retained"
+  if [ -f "$borrowed_target/.claude/agent-sessions/$SESSION/METADATA.json" ] && [ "$(jq -r '.worktree_ownership // ""' "$borrowed_target/.claude/agent-sessions/$SESSION/METADATA.json")" = borrowed ]; then
+    defer "borrowed_ownership_unknown" "borrowed metadata lacks ownership ledger; retain all resources"
+  fi
+fi
+
 # ---- Gate 4: worktree 干净（未提交工作永不清）------------------------------------
 if [ -z "$WORKTREE" ]; then
   WORKTREE=$(git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | awk -v target="refs/heads/$BRANCH" '
