@@ -309,3 +309,19 @@ blocker_and_recovery:
 ```
 
 交付时补充 immutable head、PR URL、review verdict、真实测试结果、仍为 `NOT_VERIFIED` 的层、资源终态，并把任务改为 `COMPLETE`、`PARKED` 或 `RESTART_REQUIRED`。不要仅写“已完成”或保留失效 Worktree 路径。
+
+## TASK-2026-10-01-ZCODE-ORCA-NATIVE-INTEGRATION
+
+- 状态：`COMPLETE`（实现、真实任务与精确资源清理验收；PR合并和本机安装由PM完成交付门）。
+- 范围：用户指定的 ZCode 原生交互 CLI、同一会话接续、显式 native supervised 启动、可信单次启动环境桥；保留既有门禁、默认 worker 池与私人账号调用边界。
+- 实现责任：独立 implementer 修改脚本；PM 维护文档、真机与收口；不同会话 reviewer 验收冻结 head。
+- 交付：PR [#239](https://github.com/cat-xierluo/legal-skills/pull/239)；代码 head `e1fad17d1757aaec68e868a40d112914c452f522`。原始独立审查拒绝的重放和 nonready 回执问题已修复；独立增量审查 ACCEPT，无 P1/P2。
+- 回归：本版完整维护矩阵 61/61 命令退出0；bridge 35项、launch 46项、completion 8项通过；安全扫描0 critical/high，quick validate通过。
+- 真机：Orca 1.4.218 / ZCode CLI 0.16.9 / runtime 3.14.3，真实 fresh composer、唯一 Task 投递和 native authority 绑定通过。固定代码 head 的只读评审：阶段1实际35项测试通过；同一原生 session / terminal / Dispatch 经 `/model` 从 Flash 切至 GLM-5.3 后，消费/ack 正式 guidance，完成3个定向反例与最终证据，tracked diff为空；PM value postflight通过。
+- 模型：SQLite 与请求日志确认同一个 interactive session 的个人 Coding Plan / GLM-5.3-Flash、GLM-5.3 成功请求，实际 Anthropic endpoint，无 MiniMax/体验套餐回落；不以模型自报或配置值替代此证据。
+- 完成权威：唯一真实 `worker_done succeeded → Delivery`，Orca Task/Dispatch 自动成功结算；PM验收后 `worker-release` 返回 `retained / user_takeover / processAction=none`，随后 ack 完整 Delivery、收件箱为空。启动回执 created 不覆盖当前 user_owned；不得声称自动关闭已验。
+- 失败记录：较早尝试在 provider 额度拒绝后未发 worker_done，按失败尝试保留日志并单独结算，不转记成功。上述成功来自修复版的新尝试，不复用旧认证或旧句柄。
+- 资源：正式release的历史终态保持 `retained/user_takeover`。用户随后分别授权两条精确测试终端关闭，实际close与exit均确认；认证/配置研究副本在进程退出后按哈希核对删除，日志、SQLite、Task产物和启动绑定私有归档。两条测试工作树无tracked/untracked变更、终端为空后非强制移除；本轮备用shell与PM shell关闭，两个nonce及receipt精确归档删除，共享请求目录和锁保留。不得把人工关闭改写为coordinator-owned自动release。
+- 权限接续：只读源码及纯renderer消费确认单worker `--permission-mode yolo` 输出原生 `zcode --mode yolo`，由spawn的 `--command` 冻结消费；spawn不接受renderer的permission参数。默认build的逐项审批可用正式CLI单键Allow once接续，不重发Task、不重拉worker；yolo仍有必须交互/alwaysAsk/plan例外，未新增yolo业务真机测试。具体见[原生合同](references/30-zcode-native-orca.md)。
+- 审计：Harness Failure Audit原始两hard（HFA009旁路RESULT归档、HRA001测试grep计数）保留；独立定向消费者确认误报，不声称全Skill零finding。冻结e1独立ACCEPT，ee06文档/真实链及误报复核ACCEPT；最终交付head另经独立审查。证据根为本机 `/tmp/mao-zcode-orca-native-261001/`，包含terminal-close/exit、profile/request-cleanup与retained-evidence；无原始账号凭证入库。
+- `NOT_VERIFIED`：新yolo任务的完整真机行为；coordinator-owned 原生终端的自动关闭；本轮 user_takeover 的实际触发来源；机械 scope/install hook；长期账号身份锁、自动切号/耗卡/持续预算控制；逐请求精确服务端扣分。MiniMax等其他backend的supervised不类推通过。
