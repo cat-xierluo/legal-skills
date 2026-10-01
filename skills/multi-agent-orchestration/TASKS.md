@@ -309,3 +309,12 @@ blocker_and_recovery:
 ```
 
 交付时补充 immutable head、PR URL、review verdict、真实测试结果、仍为 `NOT_VERIFIED` 的层、资源终态，并把任务改为 `COMPLETE`、`PARKED` 或 `RESTART_REQUIRED`。不要仅写“已完成”或保留失效 Worktree 路径。
+
+## TASK-2026-10-01-ZCODE-ORCA-NATIVE-INTEGRATION
+
+- 状态：`IN_PROGRESS`；用户要求 ZCode 原生交互 CLI 接入 Orca，保持同一会话接续。
+- 范围：显式可选 native ZCode supervised 启动、可信单次启动环境桥、派发身份与 created terminal 所有权；保留既有启动门禁、默认 worker 池与私人账号调用边界。
+- 实现责任：独立 implementer 修改启动桥及受影响脚本和回归；PM 维护随行文档与真实验收；独立 reviewer 验收冻结 head。
+- 验收：就绪后唯一原生任务投递，真实任务产物/验证与 `worker_done → Delivery`；同一交互会话接续及模型核验；release、ack、provider lease 与终端收口。fake tests 不替代原生生命周期。
+- 已确认：Orca 官方 1.4.218 包含首次 ZCode composer 等待修复；native worker-start 不支持逐次环境变量，须通过官方自定义启动命令保持既有环境绑定。
+- 当前：实现与真实验收进行中；Orca 接入结果仍 `NOT_VERIFIED`，不得用历史 tmux 证据关闭本卡。

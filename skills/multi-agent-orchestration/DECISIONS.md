@@ -85,3 +85,7 @@
 ## DEC-2026-10-01-PRIVATE-ACCOUNT-SKILL
 
 用户明确要求将账号、额度和刷新卡调度抽为私人 Skill，公开 MAO 只保留默认关闭的本地 Skill 调用合同。这样私人实现不进入公开发行；PM 按安装环境调用，缺失则不能获得该功能。调用不改变日常 backend 池，也不等于 spawn 机械账号绑定。
+
+## DEC-2026-10-01-ZCODE-NATIVE-ORCA-LAUNCH
+
+采用 Orca 1.4.218 起的 `worker-start --agent zcode` 首次 composer 等待，由 Orca 注入唯一 Task spec；既有 `terminal create → tui-idle → worker-start --terminal` 对零提示 ZCode 会遇到就绪循环。通过显式启用的官方自定义 ZCode 启动命令消费 owner-only 单次请求，保留 MAO 门禁之后冻结的启动环境与原生交互 CLI。请求缺失的普通启动沿用 ZCode 参数；不从仓库扫描或执行未知启动脚本。后续复用仅在原 Dispatch 已结算且原生状态证明空闲后进行，资源归属采用 created。私人账号规则仍通过本地 Skill 调用，不进入公开桥或默认派发池。
