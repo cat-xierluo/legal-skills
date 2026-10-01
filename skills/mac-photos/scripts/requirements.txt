@@ -1,0 +1,1 @@
+osxphotos>=0.77

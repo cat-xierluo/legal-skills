@@ -15,6 +15,7 @@
 
 | 许可证             | 说明                                                         | 示例技能                                                          |
 | :----------------- | :----------------------------------------------------------- | :---------------------------------------------------------------- |
+| 2026-10-01 | 新增 | [mac-photos](skills/mac-photos/) | v1.0.0 | Mac 照片图库读取与截图内容检索：osxphotos 筛选导出（默认截图/日期/相簿，增量+ iCloud 补下载）+ Apple Vision 本地 OCR 全文索引，按内容关键词定位照片并批量导出；doctor 五项自检，中文识别零误差冒烟、检索/导出链路实测。 |
 | **MIT**      | 可自由使用，包括商用，但需保留署名                           | wechat-article-fetch、mineru-ocr、md2word 等                      |
 | **CC-BY-NC** | 可自由使用，但**不可商用**，且需保留署名             | litigation-analysis、patent-analysis、legal-proposal-generator 等 |
 
@@ -41,7 +42,6 @@
 | 2026-09-30 | 更新 | [release-workflow](skills/release-workflow/) | v1.5.0→v1.6.1 | **专家套件发布链路 + Release Notes 适配**：`expert-suites/<id>/` 以相对符号链接定义成员（无 suite.yaml），静态校验 + Git tree 展开生成自包含 `suite-<id>-<semver>.zip`；Release Notes 新增「专家套件」清单节与 `{suites}` 占位符；新增 README 覆盖校验（含 latest/download 链接形态修复与更名资产豁免）与套件链接对齐脚本；md2word/git-batch-commit 补齐 MIT LICENSE。v1.6.1：专家套件不再设独立许可证（DEC-009），删除套件级 LICENSE.txt 并同步校验/打包清单，成员许可不变。 |
 | 2026-09-30 | 更新 | [universal-media-downloader](skills/universal-media-downloader/) | v0.5.1→v0.5.2 | 修复无登录直连脚本在 Python 3.9 下函数定义即崩溃（PEP 604 `str\|None` 注解需 3.10+，macOS 系统 python3 为 3.9.6），改 `Optional[str]`；旧版实测复现、新版 3.9 实测通过，第一级 fallback 恢复可用。 |
 | 2026-09-30 | 更新 | [local-asr](skills/local-asr/) | v2.2.1→v2.3.4 | 复核反例与独立验收余项修复：声纹开关误标/认领闭环/摘要注入质量门/截图端到端证据；align_words 词级对齐（v2.3.2-2.3.4）：ASCII 组插值与非等长替换的字符时间逐词标 estimated，估计边界不再自称真实，下游按字删除前强制交审。 |
-| 2026-09-30 | 更新 | [court-sms](skills/court-sms/) | v1.5.1→v1.5.2 | **修复送达时间首选来源落空 + 补全上诉期限顺延规则**：原文把 zxfw 送达 API 的 `dt_cjsj` 当送达时间首选来源，实测该 API 根本不返回此字段，首选来源必然落空、判决/裁定类送达一律退回"送达时间待确认"导致上诉期限算不出；改为首选解析文书内可解析时间戳（缴费通知书「二维码生成时间」等），归档 JSON 增记 `sent_at_source`，并明确文书落款日只是制作日不得冒充送达日。上诉期限补明顺延依据民诉法85条第4款，并写清**调休上班日属工作日、不顺延**——只按工作日/周末粗算会多算天数。已用一条真实民事裁定送达（2026-09-30 签发）实测：届满日 10-10 虽为周六但系当年调休上班日，依法不顺延。另补下载期避免 python heredoc/`-c` 内联写法的审批弹窗提示。 |
 </details>
 
 ## 📋 项目概述
@@ -122,6 +122,15 @@
 <td style="text-align:center">v1.4.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/wechat-article-fetch-1.4.0.zip">下载</a></td>
 <td></td>
+</tr>
+<tr>
+<td><a href="skills/mac-photos/"><strong>mac-photos</strong></a></td>
+<td>工具·照片</td>
+<td style="word-break:break-word">Mac 照片图库读取与检索：按截图/日期/相簿筛选导出（增量、iCloud 补下载），Apple Vision 本地 OCR 全文索引，按内容关键词定位照片并批量导出，全程本地运行</td>
+<td style="text-align:center">MIT</td>
+<td style="text-align:center">v1.0.0</td>
+<td style="text-align:center">待打包</td>
+<td>v1.0.0 新增；下载链接随下个 release 提供</td>
 </tr>
 <tr>
 <td><a href="skills/legal-ocr/"><strong>legal-ocr</strong></a></td>
