@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.34.0] - 2026-10-02
+
+### 新增
+- backend、真实命令启动模式与Orca/direct通道统一解析为派发profile，实际spawn消费同一合同；从个人配置与命令参数记录并发、请求权限和来源，观测权限单独保留未知。
+
+### 改进
+- 已指定ZCode时，auto默认采用已配置的原生Orca supervised桥；缺失/禁用配置在资源副作用前拒绝，旧显式native参数保留，generic兼容须显式选择。MiniMax按原验证器区分batch与交互，不改命令或共享配置。
+- 启动后的指引按模式生成唯一下一动作，不再统一建议发送任务；已校验的官方worker-show projection优先，composer残留、TUI idle和启动返回不冒称已开始或完成。
+
+### 验证
+- 新隔离默认原生入口实际使用CodingPlan/GLM-5.3/max完成文件任务，PM2/2、唯一worker_done/Delivery、自动release与ack通过；该链绑定首候选，修后head的兼容/回执消费者和独审另行记录。缺schema旧配置误拒与已完成回执遗漏spawn动作两反例沿原session修，原失败保留；完整Skill及长期稳定性仍NOT_VERIFIED。
+
 ## [2.33.2] - 2026-10-02
 
 ### 修复
