@@ -451,6 +451,22 @@ fi
 printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
   "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
 
+# MiniMax batch owns its original input; reject incompatible lifecycle before
+# route/provider/worktree/Session Context/terminal side effects.
+if [ "$WORKER_BACKEND_CANONICAL" = "minimax-code" ]; then
+  MINIMAX_STARTUP_MODE=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input \
+    --supervised "$ORCA_SUPERVISED" --task-id "${ORCA_TASK_ID:-}") || exit 64
+  if [ "$MINIMAX_STARTUP_MODE" = "batch" ]; then
+    # Native exec has no TUI input channel; even explicitly requested UI-auto
+    # watchers must not send keys or a second task into its bootstrap stream.
+    TRUST_AUTO=0; TRUST_AUTO_OVERRIDE=1
+    PERMISSION_AUTO=0; PERMISSION_AUTO_OVERRIDE=1
+    PERMISSION_AUTO_BG=0; PERMISSION_AUTO_BG_OVERRIDE=1
+    EXTERNAL_IMPORTS_AUTO=0; EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
+    echo "SPAWN_WORKER_MINIMAX_BATCH_UI_INPUT_DISABLED: native bootstrap owns task input"
+  fi
+fi
+
 # shellcheck source=spawn-worker-route-suggest.sh
 source "$SCRIPT_DIR/spawn-worker-route-suggest.sh"
 
@@ -1556,7 +1572,11 @@ if [ "$DRY_RUN" -eq 0 ]; then
   fi
 fi
 
-echo "SPAWN_WORKER_NEXT: send worker prompt, then wait for $SESSION_CONTEXT/STATUS.json"
+if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ] && [ "${MINIMAX_STARTUP_MODE:-}" = "batch" ]; then
+  echo "SPAWN_WORKER_NEXT: batch bootstrap input bound; do not resend; inspect actual result and $SESSION_CONTEXT/STATUS.json (execution/completion unverified)"
+else
+  echo "SPAWN_WORKER_NEXT: send worker prompt, then wait for $SESSION_CONTEXT/STATUS.json"
+fi
 
 if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
   SENTINEL_SCRIPT="$SCRIPT_DIR/sentinel.sh"

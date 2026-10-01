@@ -31,6 +31,20 @@ metadata_array_to_json() {
 
 write_metadata() {
   local enforcement_source worker_mirror_authoritative orca_setup_mode_value
+  local minimax_startup_mode="" minimax_input_source=""
+  if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ]; then
+    minimax_startup_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
+    if [ "$minimax_startup_mode" = "batch" ]; then
+      minimax_input_source="command_bootstrap"
+      ORCA_TUI_READY_METHOD="command_bootstrap_no_tui_wait"
+      if [ "${ORCA_SUPERVISED:-0}" -eq 1 ] || [ -n "${ORCA_TASK_ID:-}" ]; then
+        echo "MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED" >&2; return 64
+      fi
+    else
+      minimax_input_source="native_interactive"
+      ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
+    fi
+  fi
   created_at=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
   if [ "${#VERIFY_COMMANDS[@]}" -gt 0 ]; then
     verify_json=$(printf '%s\n' "${VERIFY_COMMANDS[@]}" | jq -R . | jq -s .)
@@ -66,6 +80,8 @@ write_metadata() {
     --arg borrowed_contract "${BORROW_EXISTING_WORKTREE:-}" \
     --arg borrowed_sha "${BORROWED_CONTRACT_SHA256:-}" \
     --argjson borrowed_owner_pid "$$" \
+    --arg minimax_startup_mode "$minimax_startup_mode" \
+    --arg minimax_input_source "$minimax_input_source" \
     --arg schema "multi-agent-orchestration.worktree-metadata.v1" \
     --arg created_at "$created_at" \
     --arg project "$PROJECT_DIR" \
@@ -250,7 +266,10 @@ write_metadata() {
         url: "",
         state: ""
       }
-    } | if $borrowed_contract != "" then
+    } | if $minimax_startup_mode != "" then
+      .runtime.startup = {mode:$minimax_startup_mode,task_input_source:$minimax_input_source,observation:"not_observed",completion_authority:"checkpoint_and_pm_acceptance"}
+      else . end
+      | if $borrowed_contract != "" then
       .worktree_ownership = "borrowed"
       | .borrowed_worktree = {contract_file:$borrowed_contract,contract_sha256:$borrowed_sha,lock_owner_pid:$borrowed_owner_pid}
       else . end' > "$METADATA_FILE"

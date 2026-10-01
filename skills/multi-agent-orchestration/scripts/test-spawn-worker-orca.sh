@@ -74,7 +74,7 @@ reset_orca_case() {
   ORCA_CURRENT_WORKTREE_ID="repo-1::current"
   STATUS_JSON='{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}'
   WORKTREE_CREATE_JSON='{"result":{"worktree":{"id":"repo-1::worker"}}}'
-  TERMINAL_CREATE_JSON='{"result":{"terminal":{"handle":"term-worker"}}}'
+  TERMINAL_CREATE_JSON='{"ok":true,"result":{"terminal":{"handle":"term-worker"}}}'
   WORKTREE_RM_FAIL=0
   WORKTREE_RM_REPO=""
   WORKTREE_RM_PATH=""
@@ -820,7 +820,17 @@ case "$1 $2" in
     case "$wt" in *::*) wt="${wt#*::}" ;; esac
     resp_worktree "$wt" ;;
   "terminal create")
-    printf '%s\n' '{"result":{"terminal":{"handle":"term-pregate"}}}' ;;
+    if [ -f "$state/execute-bootstrap" ]; then
+      shift 2
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = --command ]; then
+          bash -c "$2" > "$state/bootstrap.log" 2>&1 || exit 1
+          break
+        fi
+        shift
+      done
+    fi
+    printf '%s\n' '{"ok":true,"result":{"terminal":{"handle":"term-pregate"}}}' ;;
   "terminal wait")
     printf '%s\n' '{"ok":true,"result":{"wait":{"handle":"term-pregate","condition":"tui-idle","satisfied":true}}}' ;;
   "orchestration run-create")
@@ -1201,6 +1211,39 @@ if grep -Fq 'run-current --from term-pm-pregate' "$E2E_ORCA_LOG"; then
 else
   bad "prebuilt Wave verifies its precise coordinator binding"
 fi
+
+# Full spawn controller: the terminal executes one isolated bootstrap; all
+# explicitly requested UI watchers must still remain disabled for native exec.
+cat > "$E2E_FAKE_BIN/mcode" <<'SH'
+#!/usr/bin/env bash
+cat > "${E2E_ORCA_STATE:?}/bootstrap-input.txt"
+printf '%s\n' fixture-nonce > "${E2E_ORCA_STATE:?}/nonce.txt"
+SH
+chmod +x "$E2E_FAKE_BIN/mcode"
+printf '%s\n' 'fixture-only task' > "$E2E_STATE/prompt.md"
+touch "$E2E_STATE/execute-bootstrap"
+: > "$E2E_ORCA_LOG"
+batch_command=$(printf 'bash -lc %q' "$(printf '%q' "$E2E_FAKE_BIN/mcode") exec --permission full --input - < $(printf '%q' "$E2E_STATE/prompt.md")")
+batch_rc=0
+ORCA_CLI_COMMAND="$E2E_ORCA_BIN" SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
+  E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
+  MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" PATH="$E2E_FAKE_BIN:$PATH" \
+  bash "$SCRIPT_DIR/spawn-worker.sh" --project "$E2E_PROJECT" --branch minimax-batch-fixture --session minimax-batch-fixture \
+    --worker-backend minimax-code --command "$batch_command" --allow-prompt-only-install-guard fixture:user \
+    --trust-auto --permission-auto --permission-auto-bg --external-imports-auto \
+    > "$E2E_ROOT/minimax-batch.out" 2> "$E2E_ROOT/minimax-batch.err" || batch_rc=$?
+assert_eq "$batch_rc" 0 "actual MiniMax batch spawn creates terminal without TUI handshake"
+assert_eq "$(grep -c 'terminal create' "$E2E_ORCA_LOG")" 1 "full batch spawn creates exactly one terminal"
+if grep -Eq 'terminal wait|terminal send|terminal read|worker-start' "$E2E_ORCA_LOG"; then
+  bad "full batch spawn never runs UI watchers, wait, send, or worker-start"
+else ok "full batch spawn never runs UI watchers, wait, send, or worker-start"; fi
+if cmp -s "$E2E_STATE/prompt.md" "$E2E_STATE/bootstrap-input.txt" && [ -f "$E2E_STATE/nonce.txt" ]; then
+  ok "full batch spawn executes its original bootstrap input"
+else bad "full batch spawn executes its original bootstrap input"; fi
+if grep -Fq 'batch bootstrap input bound; do not resend' "$E2E_ROOT/minimax-batch.out" && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/minimax-batch.out"; then
+  ok "batch next-step output never invites a duplicate task"
+else bad "batch next-step output never invites a duplicate task"; fi
+rm -f "$E2E_STATE/execute-bootstrap"
 
 # Actual entrypoint consumers keep canonical mcode alias and Orca default policy.
 for backend_alias in minimax-code mcode; do
