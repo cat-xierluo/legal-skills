@@ -48,17 +48,27 @@ except Exception:
     parse_list_payload = None
 
 
+_DWS_FAILED = False  # 任一 dws 调用失败（非零退出/超时）即置位，main 据此显式失败
+
+
 def run_dws(args: List[str], dry_run: bool = False) -> Optional[Any]:
+    global _DWS_FAILED
     cmd = ["dws"] + args
     if dry_run:
         print(f"  [dry-run] {' '.join(cmd)}")
         return None
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        _DWS_FAILED = True
+        print(f"  [dws error] 找不到 dws 命令（PATH 问题？）: {' '.join(cmd)}", file=sys.stderr)
+        return None
     except subprocess.TimeoutExpired:
+        _DWS_FAILED = True
         print(f"  [timeout] {' '.join(cmd)}", file=sys.stderr)
         return None
     if proc.returncode != 0:
+        _DWS_FAILED = True
         print(f"  [dws error] {proc.stderr.strip()}", file=sys.stderr)
         return None
     try:
@@ -285,6 +295,13 @@ def main() -> int:
                 pass
 
     if not new_uuids:
+        if _DWS_FAILED:
+            print(
+                "❌ dws 调用失败（见上方 [dws error]），本次结果不可信，"
+                "不更新 last_sync。请先修复 dws（如 dws auth login）后重跑。",
+                file=sys.stderr,
+            )
+            return 1
         print("✅ 没有新增听记，本地存档已是最新。")
         if not args.dry_run:
             index["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -407,6 +424,17 @@ def main() -> int:
         print(f"   ✅ 已存档: {it.get('title')}  ({len(paras)} 段{extra})")
 
     if not args.dry_run:
+        if _DWS_FAILED:
+            print(
+                "⚠️  本次有 dws 调用失败（见上方 [dws error]）。"
+                "已存档的内容保留，但 last_sync 不推进，下次重跑会重新扫描。",
+                file=sys.stderr,
+            )
+            index["updated_at"] = datetime.now(timezone.utc).isoformat()
+            index["synced_uuids"] = sorted(synced)
+            index["uuid_to_dir"] = uuid_to_dir
+            save_index(archive_dir, index)
+            return 1
         index["last_sync"] = max_time or last_sync
         index["synced_uuids"] = sorted(synced)
         index["uuid_to_dir"] = uuid_to_dir
