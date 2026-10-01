@@ -361,3 +361,21 @@ blocker_and_recovery:
 - 唯一接续：bootstrap已从本轮授权合同读取任务并完成业务；PM未重发业务，只发送一次已有成果验收指导。正式receipt accepted=true但provider unsupported仅证明运输，实际RESULT/STATUS及第二native ingress完成另行证明消费。原生16assistant/16HTTP200同minimax/MiniMax-M3.1-Flash-Preview、2completed ingress；按官方canonical catalog和session/turn/timestamp/rawusage复核，取证consumer两次假设错误及原生schema归因保留，不改产品取绿。
 - 资源终态：`RETAINED_WITH_REASON`（long-lived测试树/分支保留）；Mcode/launcher/已记录后代全部退出，活动登记消失；精确测试CLI关闭、未用默认shell核后官方close-all(1stopped/retiredSurfaces)，最终终端库存0。没有其他业务worker被触及。
 - `NOT_VERIFIED`：MiniMaxsupervised Task/Dispatch/worker_done/Delivery；逐responseId→HTTP事件直接join与精确计费；机械scope/install hook、长期连续性/身份锁。借用native限制不转记为MiniMax默认新建树失败或通过。
+
+## TASK-2026-10-01-WORKER-PERMISSION-DEFAULTS — 隔离worker默认原生全权限
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：本聊天真人要求默认权限开大，避免Orca worker阻塞审批，可用YOLO。
+- 范围：ZCode CLI renderer默认yolo，显式build/edit/plan保留；MiniMax batch原生full，交互模式遵循实际支持接口，不伪造permission flag或改用headless。仅后续新worker，保持原工作范围/安装/Orca准入/验收，不影响在途会话。
+- 非目标：不通过Skill修改Codex宿主审批机制，不将CLI YOLO等同跨聊天发送授权，不自动批准真实交互问题/账号登录。
+- 清单：核本地安装；官方权限模式消费者；隔离实现与独立审查；定向argv/默认覆盖与显式收紧验证；PR/本地同步。证据 /tmp/mao-permission-defaults-261001/。
+
+- 本轮实际验证：ZCode renderer默认命令启动无任务交互CLI，/mode回报Current mode: yolo；MiniMax原生TUI的/permission显示Current · Full access，配置字节未变，无模型请求，两probe精确退出。参数/默认spawn消费者与独立库存回归通过，PR、本地同步与最终独审继续收口。首轮采集器字节偏移/EIO及缺prompt-only合同的dry-run失败原件保留，未改产品取绿。
+
+## TASK-2026-10-01-ORCA-RELEASE-PAGE-COMPAT — 原生已结算worker库存分页兼容
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：现有Orca消费者报告真实release后MAO重复收口拒绝合法worker-list页。
+- 范围：只读核官方当前页schema；窄修adapter和回归，保留分页/身份冲突/未知拒绝。不重开业务卡、不手改lease、不重做认证、不直接操作原业务资源。
+- 原件：CS006修复波run_78c2835a1f6b，两Context ctx_32ebcdb1ca3b/ctx_1faef4251e36；原生已release并归档，MAO exit2 malformed worker-list page0，剩lease保留。
+- 清单：真实只读schema消费、合法页与冲突反例、独立复验、PR与本地同步。证据 `/tmp/mao-permission-defaults-261001/release-compat/`。
+
+- 窄修验证：269个cleanup消费者与15个sender用例通过；真实两具名row均精确匹配并为released/archive captured，旧4df2de30 helper对同库存均exit2，候选均exit0。仅只读，不操作原provider lease；实际业务结算仍由原PM使用正式入口完成。

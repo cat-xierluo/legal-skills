@@ -418,7 +418,7 @@ if [ -z "$COMMAND" ]; then
     codex) COMMAND="codex" ;;
     codebuddy) COMMAND="codebuddy" ;;
     qoder-cn) COMMAND="qoderclicn --permission-mode auto" ;;
-    zcode-cli) COMMAND="zcode --mode build" ;;
+    zcode-cli) COMMAND="zcode --mode yolo" ;;
     minimax-code) COMMAND="mcode" ;;
     qwenwork-cn)
       echo "ERROR: qwenwork-cn requires an explicit rendered --command with a dedicated --config-dir; see references/27-qwenwork-cli-worker.md" >&2
