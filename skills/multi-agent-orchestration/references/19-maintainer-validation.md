@@ -52,6 +52,7 @@ bash scripts/test-harness-backend-policy.sh
 bash scripts/tests/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
 python3 scripts/test_optional_cli_backends.py -v
+python3 scripts/test_minimax_cli_startup.py -v
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
@@ -103,3 +104,5 @@ bash scripts/smoke-orca-control-plane.sh
 - runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
 
 - 显式借用入口的隔离消费者应验证真实 Git 内容/模式/identity、独立 CLI writer 探测、锁及 late drift；native request/launcher 和所有 MAO cleanup 对借用树的删除调用为零。fake inventory不证明原业务树无writer或原生settlement已经通过。MiniMax默认Orca合同要分别覆盖 canonical/alias、缺runtime/错仓/注册失败/轻量拒绝及显式直连；不扩大日常backend池或supervised结论。
+
+- MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
