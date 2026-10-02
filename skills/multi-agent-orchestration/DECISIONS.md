@@ -126,3 +126,10 @@
 ## DEC-2026-10-02-MINIMAX-EXEC-STARTUP
 
 MiniMax `exec` 是已读取完整输入的非交互运行，不存在待输入的 composer。基于复用命令验证器解析的真实 CLI argv 分类，仅 terminal-managed batch 跳过 TUI 等待和第二次任务发送；不是按命令字符串包含 exec 判定。严格核对 terminal-create 回执并及早保存身份，启动成功只证明已启动，不代表任务完成。交互模式和 ZCode 原生 supervised 保持各自合同，batch 与 supervised/precreated Task 的冲突在资源副作用前拒绝。原消费任务由原 PM 接续，不用本修复重启或重造。
+
+## DEC-2026-10-02-REFERENCE-CONTENT-OWNERSHIP
+
+- 来源：真人指出references膨胀与任务规划归属错误；本轮全量审计发现任务队列、实验过程和验收数字混入按需运行知识。
+- 决定：references维护可复用操作与接口的权威说明；计划、待办、逐轮验证与现场证据索引统一归原TASK，设计取舍归DECISIONS，原始日志留本地archive。不为每轮研究或问题新建reference，也不把历史事故原件全量倒入TASKS制造第二日志库。
+- 影响：完整名称迁移计划归原迁移卡，持久化/额度待办与CLI实测历史各归原卡；06/08/09/10等历史与重复主题沿REFERENCE-CONTENT-AUDIT的R1–R4逐域收敛，现有安全合同与私人边界保留。
+- 重新评估条件：确有新的独立运行接口、读取时机与责任边界，且现有页无法承载时才新增运行参考；新页不是任务完成证据。文档搬移不改变功能验证或生产部署状态。

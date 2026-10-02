@@ -451,3 +451,140 @@ blocker_and_recovery:
 
 - 独立验收：a7a6a81d实现绑定ACCEPT，新13/原58独验0、39 heldout/78次base-candidate CLI原payload去telemetry与退出精确一致；三frozen15raw byte/SHA相同，旧parse84 None→新reported84、无physical fallback。首外置consumer错flag/尾marker解析及唯一纠正复验保留，不归产品failure。
 - PM完整维护矩阵：66/66 exit0，直接复用两个工程字节相同首套件，其他64项各运行一次；无需失败episode。raw diffcheck2仅15原样快照trailing spaces，非fixture0；静态SEC1/HFA1/ISG2原告警保留，非本修范围不签全Skill安全或多轮稳定。最终文档仅修composite使用条件并记录证据，PR exact交付、本地CAS仍待完成。
+
+## TASK-2026-10-02-REFERENCE-CONTENT-AUDIT — 参考文档职责与膨胀治理
+
+> 提交范围说明：本卡记录本机当前开发基线上的文档验收。此次独立提交只包含五份大文档、读取地图与本卡/决策/变更说明；其他后续功能和指南尚未随本次提交集成，不能把该检查点当作完整可发布版本。版本号与README发布动态留待功能基线一并提交。
+
+- 状态：`IN_PROGRESS`（全量审计、首批归属修正及R1大文件整理完成；R2剩余/R3/R4继续按下列队列管理）；Owner：本聊天Codex PM。来源：真人指出reference膨胀、名称迁移规划应归TASKS，要求整体检查。
+- 范围：本Skill references全部Markdown、SKILL读取地图、对应原TASK及文档变更记录；只做文档归属修正、逐项审计与后续任务登记，不改脚本/配置/派发权限，不实施名称迁移，不接管其他会话运行资源。
+- 基线：审计起点38份、550754字节（首次读取，约538KiB）；备份时并行文档增加501字节至551255字节；08与10合计136606字节，占24.8%；06/08/09/10合计193295字节，占35.1%。最大08为858行、10为791行，06为796行。编号不是数量上限（存在00与两份24），不以重编号掩盖内容成本。
+- 判定：references仅承载按场景读取的可复用操作、数据格式、接口合同与当前能力边界；任务计划/排期/待实现项/逐轮验收/测试数字/冻结SHA归原TASK；真实取舍归DECISIONS，发布变化归CHANGELOG，原始日志/现场快照归本地archive。实验接口已有脚本与消费方式时可留短指南，实验计划和历史结果不能混入。
+- 清单：①全38份职责/尺寸/重叠审计；②36计划完整移回原迁移卡；③16/21待办与26/28验收历史移回原卡并留最小能力边界；④修正10旧backend声明；⑤链接/旧引用/迁移内容完整性/范围检查；⑥登记剩余合并与历史收敛单元。
+- 并行保护：其他会话WORKER-RESOURCE-CLOSEOUT卡正在维护14/23及拟新增37；本轮不编辑14/23、不抢版本号或root README，新增文件需该owner自行遵守同一文档职责。38为开始快照，不宣称目录未来数量已冻结。
+- 验收：明确每份文档保留/收敛/合并/移出的依据；36不存在于运行参考地图，原计划步骤/验收/回滚完整保留；当前必需指南和能力限制不丢、引用可达；不以纯文档检查声称backend功能、长期自治或整Skill稳定性通过。
+- 本机证据：gitignored archive/20261002_reference_audit 保存修改前快照、全量尺寸/SHA、迁移清单与检查结果；其内容不加入公开包。
+
+### 全量职责审计（38份起点快照）
+
+| 文件 | 原行数 / KiB | 处理结论 |
+|---|---:|---|
+| `00-fast-dispatch-runbook.md` | 77 / 4.3 | 保留：标准派发短配方 |
+| `01-model-selection-matrix.md` | 321 / 16.5 | 保留：任务与模式路由；与17重复画像后续收敛 |
+| `02-runtime-dependencies.md` | 123 / 11.3 | 保留：依赖与验证命令合同 |
+| `03-checkpoint-files.md` | 79 / 5.7 | 保留：checkpoint数据格式 |
+| `04-sentinel-design.md` | 169 / 8.8 | 收敛：运行/排障留下，设计取舍归DECISIONS |
+| `05-legal-domain-patterns.md` | 231 / 12.8 | 保留：法律场景按需示例，不作为默认加载 |
+| `06-agent-cli-reference.md` | 796 / 36.2 | 收敛：多backend总册与08/09/26/27重复；仅留总览并路由专页 |
+| `07-qoderwork-cli-worker.md` | 5 / 0.6 | 保留短兼容指路：已移除backend，不恢复支持 |
+| `08-codebuddy-cli-worker.md` | 858 / 64.2 | 优先收敛：858行研究/事故/MCP/captcha混杂；提炼当前CodeBuddy配方，其余归原任务/证据 |
+| `09-zcode-cli-worker.md` | 322 / 19.1 | 优先收敛：旧bundle/headless/无独立CLI研究与当前28/30冲突；历史归原任务，保留legacy adapter边界 |
+| `10-parallel-lessons.md` | 791 / 69.2 | 优先收敛：791行项目事故与通用工具知识混杂；本轮纠正旧backend说明，后续只留适用排障索引 |
+| `11-agent-teams-troubleshooting.md` | 78 / 3.9 | 保留：Agent Teams排障 |
+| `12-issue-grouping.md` | 180 / 10.5 | 保留：Issue拆分判断；具名项目实测改为短匿名示例 |
+| `13-orca-cli-worker.md` | 281 / 26.1 | 保留：Orca worker合同；与14保持worker/PM责任边界 |
+| `14-pm-orchestrate.md` | 241 / 28.4 | 保留：PM操作；当前并行owner维护，本轮不写 |
+| `15-wave-autopilot.md` | 135 / 17.6 | 收敛：保持波次推进SOP，与16/33用路由避免重复 |
+| `16-autopilot-durability.md` | 295 / 18.5 | 已移出实施任务：留下持久控制器合同，Task063–068归TASKS |
+| `17-model-capability-profile.md` | 66 / 7.9 | 合并候选：画像与01主题重叠；无来源/过期模型判断先剔除，不能机械保留为当前推荐 |
+| `18-dispatch-acceptance-contracts.md` | 124 / 7.3 | 保留：派发/验收协议 |
+| `19-maintainer-validation.md` | 115 / 11.5 | 保留：维护者验证矩阵，日常派发不读 |
+| `20-orca-rate-limit-recovery.md` | 85 / 6.2 | 保留：限流恢复接口 |
+| `21-zcode-quota-producer.md` | 75 / 4.9 | 已移出第二期待办：留下quota producer合同与能力限制 |
+| `22-mem-budget-lane.md` | 90 / 8.4 | 保留：memory准入合同；资源工程仍在途，本轮不改 |
+| `23-runtime-settlement.md` | 86 / 7.2 | 收敛候选：逐轮测试数字/SHA归原验收任务；并行closeout owner当前维护，本轮不写 |
+| `24-sub2api-quota-producer.md` | 95 / 8.0 | 保留：sub2api quota producer与数据合同 |
+| `24-zcode-driver-safety.md` | 143 / 7.9 | 保留：legacy driver安全合同；不能冒充原生CLI默认方案 |
+| `25-remote-node-dispatch.md` | 118 / 11.1 | 收敛候选：M1/M2分期归原TASK，保留当前SSH/receipt接口 |
+| `26-optional-cli-backends.md` | 77 / 10.6 | 已移出两段验收历史：保留按需backend选择/启动与实际能力边界 |
+| `27-qwenwork-cli-worker.md` | 30 / 2.6 | 合并候选：30行QwenWork说明可归26对应节，先核所有调用方 |
+| `28-zcode-cli-bigmodel-coding-plan.md` | 104 / 10.9 | 已移出探针/tmux/原生增量历史：保留模型/认证操作与当前接口 |
+| `29-local-account-routing-skill.md` | 35 / 3.5 | 保留：公私账号Skill调用边界，不能复制私人路由规则 |
+| `30-zcode-native-orca.md` | 86 / 8.7 | 保留：原生ZCode/Orca启动；历史验收细节进一步回原卡 |
+| `31-borrowed-existing-worktree.md` | 51 / 5.8 | 保留：借用worktree合同 |
+| `32-dispatch-profiles.md` | 57 / 5.3 | 保留：真实dispatch profile入口与回执 |
+| `33-pm-continuation-readiness.md` | 59 / 5.7 | 保留：continuous准备门；15/16指向此处，不重复机制 |
+| `34-zcode-desktop-remote.md` | 125 / 16.0 | 收敛：GUI人工/浏览器操作合同保留，dated验收与研究移回GUI原卡 |
+| `35-zcode-browser-automation.md` | 117 / 13.4 | 收敛：GUI脚本消费合同保留，待实现Orca方案与逐轮结果归原卡 |
+| `36-skill-name-migration-plan.md` | 183 / 21.5 | 已完整移入原迁移TASK，删除运行参考与读取地图项 |
+
+### 剩余收敛单元（沿本卡推进，不新增reference）
+
+- R1 `COMPLETE`（2026-10-02，06/08/09/24/10已接回，证据见本卡实施验收）：08/09/10先做逐段现行/历史分类，核当前renderer/policy/adapter实际合同；保留正反例与历史来源，将项目事故原件归本地archive、结论写原TASK/DECISIONS，运行页只留当前调用与排障。主入口不得再用06—11范围暗示都可派发；验收是当前无QoderWork/OpenCode许可、无headless替代原生长程ZCode，不以机械行数上限删合同。
+- R2 `PARTIAL`（06单一权威与路由已完成；01/17、26/27及07退役保持待办）：06与26/27、01与17分别确定单一权威；合并前枚举仓内/安装侧调用与锚点，更新路由并核删除对象无在途读者。07兼容说明只在无旧调用证据后退役，重复24编号不为形式整齐重命名。
+- R3 `READY`：04的设计理由、25分期、30/34/35历史验收与待实现计划转原任务/决策；保留已有实验脚本的合法消费步骤和未验限制。14/23由资源收口原owner完成后再接，37新操作合同需另核，不把文件数量增长直接判为违规。
+- R4 `READY`：15/16/33统一波次执行、持久控制面与continuous准备检查的读取路由；只在调用/格式/行为确实重复时合并，不将独立安全合同合为一份大百科。
+- 后续单元只允许具名文件域与原文备份后修改；参考页新增条件为“现有页无法承载的独立可复用接口/操作”，必须给读取时机与权威归属。任务进展、调研下一步、测试数字和一次性计划默认写原TASK；refs数量/大小与重复内容随每次维护检查，不以新编号代表工作完成。
+- 审查级别：文档职责/静态语义审计；未运行动态Harness/新上下文Agent/模型任务，整Skill运行行为与稳定性均NOT_VERIFIED。
+
+- 本轮实测收口：完整移出36；七段迁移正文逐段SHA验证、归属原Task父标题校验通过，ref16原实施任务正文与快照一致；新增断链0、单换行与scoped git diff --check通过。旧38份集合净减少34263字节（约33.5KiB），同时另一owner新增37资源回收操作合同，因此当前实际仍38份/526409字节；不能把并行新增算作本轮删除未生效。运行脚本/配置与名称/安装链接未改，未运行模型或整维护矩阵。
+
+### 大文件拆分方案（设计基线；下方实施验收已完成）
+
+真人追加要求看大文件如何拆；本轮细化原R1/R2，不新建reference或另一套任务源。以现有页面合并与精简为主，接口和权限权威不随拆文档变化。下列行数是编辑目标区间，不是删合同的硬上限；行号为本次2.36.5源码快照定位，实施时按标题与文件SHA复核。
+
+| 原文件 | 当前规模 | 收敛后职责/目标 | 新增文件 |
+|---|---:|---|---|
+| `06-agent-cli-reference.md` | 796行 / 36.2KiB | Claude/Codex常用参数与renderer消费、其他受支持入口的短路由；约160–220行 | 0 |
+| `08-codebuddy-cli-worker.md` | 858行 / 64.2KiB | CodeBuddy唯一操作页：检测/启动/模型/权限/会话/排障；约140–220行 | 0 |
+| `09-zcode-cli-worker.md` | 322行 / 19.1KiB | legacy入口的短兼容指路，实质driver合同并入现有24；约15–30行，旧调用退役后可移除 | 0 |
+| `10-parallel-lessons.md` | 791行 / 69.2KiB | 症状→最小观测→合法动作→当前权威页的排障索引；约80–140行 | 0 |
+
+四文件目前2767行/约188.8KiB，期望收敛为约395–610行的索引及运行资料，加上现有目标页确需保留的独有合同；不能只报源页缩短而隐瞒目标页变大。目标是总有效内容减重、重复定义归零，不追求机械文件数或行数。无需为Claude/Codex/每次事故各添一个文件。
+
+#### 06：从全CLI百科改成主力速查与backend索引
+
+- §0（11–31行）去掉个人本机安装/版本/默认model快照，只保留当前policy允许的worker入口及读取路由；机械hosts与日常/explicit-only选择仍由policy和SKILL管，不在06维护另一份白名单。Hermes是现有PM host，不据本页推断可派Hermes worker。
+- §1 Claude（32–129）与§2 Codex（130–230）只留本Skill实际消费的模型、权限、cwd、resume、输出与renderer参数；一份renderer配方配完整参数说明，Orca/spawn门与生命周期分别链接13/14/32，不复写tmux/worktree创建模板。历史Spark版本、个人launcher实测和额度池记录归原TASK；当前launcher重复flag边界可留一句并指脚本/原卡。
+- §5A CodeBuddy（477–554）改成指向08，不再维护第二模型表、命令表或权限默认值；§7 QoderWork（629–694）去可执行配方，仅保留已移除和独立Qoder/QwenWork不得混认的路由，指26/27与短兼容07。
+- §3 OpenCode、§4 Hermes worker、§5 Kimi、§6 Gemini、§8 Rudder仅为历史CLI研究，不是当前可派worker；原文归gitignored档案，确有未完成接入任务时才把输入/结论写该原TASK。其PM能力或其他Skill用途不在本次被删除或禁用，只不放进本Skill的worker操作手册。
+- §9跨CLI矩阵与模板、§10选用建议同01/26/SKILL重复；留下backend→指南路由，移除重复命令和失效推荐。不会因文档曾列某CLI而扩policy。
+
+#### 08：CodeBuddy操作和历史研究分离，但不新增大册
+
+- 合并§1/§2/§3/§7/§9中当前必需内容为六段：入口检测→renderer/spawn→模型/provider→任务权限/scope→精确会话接续→异常排查。版本号不冒充当前值；读本机help/已配置入口而非静态个人表。
+- §4模型/环境变量与§5MCP只留下本Skill实际消费字段、显式MCP opt-in与身份隔离边界；文生图、HTTP serve/daemon、整套CLI选项和产品介绍移出本Skill运行知识。模型能力推荐归01的单一来源，不在08另写成本/免费判断。
+- §2.3–2.6、§10、§11浓缩成“未找到bin/权限等待/未消费输入/跨目录/未commit”五类排障，需核实际身份、原请求和新鲜screen，不保留固定按2、盲补Enter、重发原prompt或重spawn的通用处方。全局删hooks的旧修复只留历史原件，不当默认操作；当前处理不自动修改用户共享配置。
+- §12仅保留当前scope/install机制、真实支持边界及安全配置的必要字段；历史PR与原始越界事故归原卡/档案，待实现段落写任务。不能把“作者旧实测”或fork推断当作当前版本hook优先级证明。
+- §13 captcha/gov-info-query是项目专项案例，原文归档；必要的“复用项目已有领域工具”原则已在通用任务授权里，删除强制依赖私人sibling skill的普适声明。具体项目材料/实验成本不进入通用backend页。
+- 已核静态冲突：页首称batch/-p已移除，§7.1却标推荐，当前renderer的CodeBuddy分支仍生成batch命令；§10.1称renderer不支持bypassPermissions，但当前分支接收PERMISSION_MODE。先原卡明确当前产品意图、受影响测试与未验范围，再写新的唯一配方。拆分不擅自启用/删除batch，也不把静态支持当live任务验收。
+
+#### 09：区分legacy app-server与独立原生CLI
+
+- `zcode` legacy backend仍在当前policy/renderer中；不能因为独立CLI已验就将旧adapter接口或安全限制删除。§3参数、§4 session/setModel、§6 driver启动、§8/§9支持/权限边界中确有独有内容的，合并到现有[driver安全合同](references/24-zcode-driver-safety.md)，标清仅legacy适用；重复readiness/配置隔离/关闭/脱敏规则只留24权威定义。
+- 独立CLI的认证/provider/模型选择统一留[28](references/28-zcode-cli-bigmodel-coding-plan.md)，原生Orca派发与接续留[30](references/30-zcode-native-orca.md)，backend×mode选路留[32](references/32-dispatch-profiles.md)。09不再写一份native配方或“官方无独立CLI”总断言，不使用headless替代真人要求的长程交互路径。
+- §1/§2旧本机路径与凭证同步实验、§5旧TUI缺件、§10旧事故、§11未合并上游PR/社区客户端研究、版本流水归相应原TASK与档案；共享凭证复制不是默认操作。已被当前driver实际依赖的前置条件须从代码复核后保留，不因历史日期一律删。
+- 09暂留短指路是兼容需要：`check-dependencies.sh`的两条诊断仍指09§2，`zcode-worker-driver.py`与renderer注释也指09，24仍指09上游背景。更新这些指路/锚点需纳入具名写域与相应检查；旧launch/完整references目录digest在途时保留原冻结版本，不手改旧回执或强迁原任务。
+
+#### 10：从事故年鉴改成排障导航
+
+- A1–A3官方Teams/inbox/context归[11](references/11-agent-teams-troubleshooting.md)；T1/T2输入未消费可保留两条症状入口；T3权限归各backend，T4历史速度比较归原任务，T5/T6及G9环境/MCP归06/08或现有依赖合同，不复制启动命令。
+- G1/G4/G17/G19/G20属于Git、任务编号、测试工具、文档写入规范：引用当前项目规则或已有相应Skill，10不维护通用Git/Node教材，更不以旧lesson授权直接merge feature分支。
+- G2/G7/G10/G11/G12/G16/G25/G30/G32/G33/G35/G36/G38/G39/G40保留适用症状与失效信号；实际处理分别指03、13、14、18、20、31、32以及现有恢复脚本。STATUS/idle/accepted不能替代真实消费或settlement；直接重派、改旧身份、盲键盘注入等历史处方不得迁为通用当前规则。
+- G3/G6/G13/G14/G18/G21/G22/G23/G41属于拆解、纠偏、模型选择、独审及证据预算；稳定且仍成立的独有一句规则归SKILL/01/12/18，已有则不重复；并发数量以现场预算/policy，不把旧3–4经验写成全平台上限。G24旧“GUI不能做PM”判断需按当前host policy和GUI合同校正，不能只搬标题。
+- G5 Warp专例、G8 OpenCode、G15 FaroPDF、G26–G29及两组具名Wave复盘、G31/G34等项目依赖事故：原文归档，项目-specific事实沿原项目/原任务，不填进未来worker必读参考。通用worktree依赖/验证边界只留链接到02/14，避免复制整个案例。
+- 保留必要旧锚点兼容索引：`claude-provider-env.sh`和spawn注释仍指T6，`spawn-worker-deps.sh`仍指G28/G31；盘点文档/脚本注释/日志诊断中的全部调用，再决定短锚点跳转或同步更新。不能靠删除文件让关键词搜索归零。
+
+#### 实施顺序与验收
+
+1. 原R1接续冻结四文件、目标页、当前renderer/policy/依赖脚本及全部入链；逐段标记KEEP_CURRENT/MERGE_EXISTING/TASK_RECORD/ARCHIVE_ONLY/CONFLICT，不把整篇事故日志再复制进TASKS。
+2. 先收敛06/08的重复与冲突，再迁09到24并修兼容指路，最后收敛10及关联短入口；同一文件域串行，先避开14/23/37当前owner，保留别人未提交改动。每个单元记录真实正文总大小与索引变化。
+3. 文档改动检查链接、锚点、标题、当前参数与源代码一致、history/任务归属和敏感字段；若确需改脚本帮助/注释，只纳入该单元的明确范围。发现行为冲突先记录原任务与验证计划，不能以文档整理顺带更改执行策略。
+4. 通过五个场景验证读取路由：Claude/Codex正常派发、CodeBuddy权限等待、独立ZCode指定BigModel模型、legacy driver就绪失败、Orca输入accepted但未消费。每例只需命中明确权威页，不能命中旧batch推荐/失效backend/复制认证/重派原任务的历史配方。实际前向执行与功能测试未做则NOT_VERIFIED，不将静态场景推演签为Agent行为实测。
+5. 旧内容原文与哈希留本地归档；备份不得命名为嵌套`SKILL.md`导致第二Skill发现。上轮本聊天备份已实际改名为`SKILL.md.snapshot`，原字节保留；不能将忽略Git等同于宿主不扫描。
+
+设计阶段当时仅完成上述静态调用事实核查，未重写正文；其后真人授权顺序实施，结果见下方验收。
+
+- 真人顺序实施授权：本轮沿R1/R2执行06→08→09/24→10，状态`IN_PROGRESS`（文档收敛）。唯一writer为本聊天PM；范围为上述5个reference、SKILL读取地图及本Skill任务/决策/变更记录、README版本动态。先隔离候选后逐文件CAS接回；脚本/配置/权限/backend和业务worker行为不改，不做名称迁移。所有历史原文与SHA保存在archive/20261002_reference_cleanup，备份后缀.snapshot避免独立Skill发现。校验重点是独有当前合同、旧诊断指路、五场景路由与无模型请求的renderer参数消费；不以缩短行数代替功能保留。
+
+
+### 大文件整理实施验收（2026-10-02，v2.36.6）
+
+- 顺序清单：06常用参数与backend路由 → 08 CodeBuddy操作 → 09兼容入口/24 driver接口 → 10症状排障索引 → 读取地图、引用与参数核验，均完成；脚本/配置/权限/backend/名称与安装链接未修改。已安装Codex入口解析到当前源目录，无需再复制一套。
+- 规模：06为796→114行、08为858→87行、09为322→25行、10为791→73行；24为143→168行。合计2910→467行、201560→34811字节，净减166749字节（82.7%），包含24合入增量，references数量本轮增量0。
+- 内容去向：06仅维护Claude/Codex当前参数，其余backend路由08/26–30/34–35；08保留检测、两模式、权限/MCP/范围、观察及收口；09独有的create/setModel/read、stdin控制与参数合入24，09保留旧诊断§2/§6；10保留症状入口与T6/G28/G31旧指路，恢复/结算权威仍在13/14/18/20/23/33/37。旧价格/型号表、产品百科、具名项目事故和过时处方归原文快照，不扩写成新的运行参考或另一任务队列。
+- 纠正事实：CodeBuddy renderer仍有batch与显式bypassPermissions；legacy默认命令未补settings先报64，官方0.16.5显式settings拒绝才走68；独立ZCode仍走原生CLI/Orca。仅改说明，不借文档整理改执行策略；实际源码中尚存的旧诊断通过09兼容页承接。
+- 验证：现有test-render-runtime-profile.sh输出SUMMARY pass=86 fail=0；9项无模型参数/帮助检查通过；77个本地Markdown链接可达；仓内活跃文档未检出这五文件的精确#锚点入链。五场景（Claude/Codex、CodeBuddy权限、BigModel选择、legacy失败、accepted未消费）静态路由通过。Codex首轮测试断言误要求重复权限flag，已按既有launcher去重合同纠正并新增显式窄权限反例，首轮原件保留；没有改实现迎合测试。
+- 证据：archive/20261002_reference_cleanup下before/*.snapshot、baseline.json、candidate/、renderer-suite.log、parameter-checks-first.json、parameter-checks.json、validation.json；五源文件CAS核对后接回。SKILL备份只用.snapshot，不产生重复Skill入口；原文SHA与逐文件尺寸在validation.json。脚本/配置与冻结基线SHA全部一致。
+- skill-lint限定结论：局部文档结构、渐进读取、单一权威与源代码一致性审查通过；新上下文Agent前向执行、完整模型请求、全部backend长期运行均`NOT_VERIFIED`，不以文档精简签全Skill功能验收。未重新派发业务worker，未触碰14/23/37另一owner文件域。
+- 剩余：R2的01/17及26/27、R3历史归属、R4持久控制面路由仍待其具名范围核对后推进；本轮五份大文件优化完成，不追认整个治理队列完成。
