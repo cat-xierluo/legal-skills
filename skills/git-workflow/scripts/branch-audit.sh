@@ -7,12 +7,16 @@
 #   base-ref 默认 origin/main；remote 默认 origin
 #
 # 判定规则（与 references/branch-lifecycle-and-cleanup.md §3 一致）：
-#   SAFE_DELETE    PR 已合并（squash/rebase 内容已进 base）或分支已包含于 base
-#   NEEDS_CONFIRM  无 PR 且未合并——删=内容真丢，必须逐个问用户
+#   SAFE_DELETE    PR 已合并（squash/rebase 内容已进 base）、分支已包含于 base、
+#                  或 patch-id 判死（git cherry 补丁等价已全部在 base——squash 后
+#                  commit 对 base 不可达但内容已在，merge-base 判不出）
+#   NEEDS_CONFIRM  无 PR 且有补丁不在 base——删=内容真丢，必须逐个问用户
 #   KEEP           open PR head / 被任一 worktree 检出 / backup·snapshot 存档命名
 #
 # 降级：gh 缺失或未认证时按 merge-base+日期判定，并显式标注「PR 状态未核对」；
 # squash 合并的分支会漏判为 NEEDS_CONFIRM——宁漏勿错，方向安全。
+# patch-id 边界：多 commit 被 squash 成单个时 patch-id 不匹配，仍归 NEEDS_CONFIRM；
+# 有 MERGED PR 记录时以 PR 状态为准（优先于 patch-id）。
 
 set -u
 
@@ -104,7 +108,13 @@ while IFS='|' read -r full date; do
     printf 'KEEP          %-55s %s  存档分支\n' "$short" "$date"
   else
     n=$(git rev-list --count "$BASE_SHA..$full" 2>/dev/null || echo '?')
-    printf 'NEEDS_CONFIRM %-55s %s  无 PR 未合并（%s commits，删=内容丢失）\n' "$short" "$date" "$n"
+    # patch-id 判死：远端分支补丁等价已全部在 base（多 commit squash 后 merge-base 不可见）
+    new=$(git cherry "$BASE_SHA" "$full" 2>/dev/null | grep -c '^+')
+    if [ "${new:-1}" -eq 0 ] 2>/dev/null; then
+      printf 'SAFE_DELETE   %-55s %s  补丁等价已全在 %s（%s commits，patch-id 0）\n' "$short" "$date" "$BASE_REF" "$n"
+    else
+      printf 'NEEDS_CONFIRM %-55s %s  无 PR 未合并（%s commits，其中 %s 个补丁不在 base）\n' "$short" "$date" "$n" "$new"
+    fi
   fi
 done
 
@@ -123,7 +133,18 @@ while IFS='|' read -r short date; do
     printf 'KEEP          %-55s %s  存档分支\n' "$short" "$date"
   else
     n=$(git rev-list --count "$BASE_SHA..$short" 2>/dev/null || echo '?')
-    printf 'NEEDS_CONFIRM %-55s %s  未合并（%s commits）\n' "$short" "$date" "$n"
+    pr=$(merged_pr_of "$short")
+    if [ -n "$pr" ]; then
+      printf 'SAFE_DELETE   %-55s %s  PR %s 已合并（squash 后 commit 不可达属预期）\n' "$short" "$date" "$pr"
+    else
+      # patch-id 判死：补丁等价已全部在 base（squash/cherry-pick 合并的常见形态）
+      new=$(git cherry "$BASE_SHA" "$short" 2>/dev/null | grep -c '^+')
+      if [ "${new:-1}" -eq 0 ] 2>/dev/null; then
+        printf 'SAFE_DELETE   %-55s %s  补丁等价已全在 %s（%s commits，patch-id 0）\n' "$short" "$date" "$BASE_REF" "$n"
+      else
+        printf 'NEEDS_CONFIRM %-55s %s  未合并（%s commits，其中 %s 个补丁不在 base）\n' "$short" "$date" "$n" "$new"
+      fi
+    fi
   fi
 done
 
