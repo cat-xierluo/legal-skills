@@ -1,7 +1,7 @@
 ---
 name: moot-court
 description: 基于案卷自动组织多角色模拟庭审。本技能应在用户需要模拟法庭、庭审攻防、质证预演或庭前压力测试时使用：分派法官与民事原被告或刑事控辩角色，通过书记员记录交换发言，形成模拟庭审笔录、争点复盘和补强清单。支持用户加入指定角色。不要用于：裁判结果预测、正式法律意见或无案卷依据的戏剧创作。
-version: "1.2.3"
+version: "1.2.4"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: CC-BY-NC
@@ -101,4 +101,4 @@ python3 /path/to/moot-court/scripts/clerk.py --run /path/to/case/hearing-001 ini
 
 脚本无第三方包、无网络请求、无自动安装，只读指定输入并写入指定演练目录；输出可能包含案卷和策略，按案件材料管理，不纳入公开发布。模型处理材料仍遵循所用宿主的数据策略，“记录脚本离线”不等于模型离线。
 
-开发验证命令：`python3 scripts/test_clerk.py`。合成案例与前向评估入口见 [验证样例](references/evaluation.md)；需要验证角色输入不含预期答案时，用[盲评探针](references/blind-probe.md)及其回归 `python3 scripts/test_prepare_probe.py`。CLI 校验只覆盖协议与引用编号，语义判断和各 Runtime 行为需要分别实测。
+开发验证命令：`python3 scripts/test_clerk.py`。核对宿主真实子代理调用时，用被动索引器 `python3 scripts/index_claude_trace.py --trace <stream-json原件> --output <索引>`（标准库、只读本地 trace，不启动 Agent/CLI）及其回归 `python3 scripts/test_index_claude_trace.py`；索引仅绑定 trace 内可观察的 Agent/Task tool_use 与 tool_result，不单独证明 G5 或领域正确性。合成案例与前向评估入口见 [验证样例](references/evaluation.md)；需要验证角色输入不含预期答案时，用[盲评探针](references/blind-probe.md)及其回归 `python3 scripts/test_prepare_probe.py`。CLI 校验只覆盖协议与引用编号，语义判断和各 Runtime 行为需要分别实测。

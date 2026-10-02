@@ -10,6 +10,14 @@ python3 scripts/test_clerk.py
 
 测试通过真实 CLI 子进程检查：民刑三角色、发言关联、重复提交不重复入卷、不同内容冲突、错身份／旧版本／缺少必答拒绝、私有引用拒绝与材料包过滤、半写 JSON、材料更新、取消重派、运行关闭、事件损坏检测和派生状态重建；`ClerkTest.test_correction_and_cross_run_regression` 可单独运行，覆盖已入卷发言不覆盖旧稿、更正回合引用原发言后对方可见新旧完整记录、close 后拒绝派发、新运行旧编号不能作为 respond_to、反复 packet 读取不增加派发次数。它不测试法律正确性或模型语义，也不自动执行主控的语义修稿次数与时间预算。
 
+## 子代理调用索引回归
+
+```bash
+python3 scripts/test_index_claude_trace.py
+```
+
+覆盖 `scripts/index_claude_trace.py` 对 Claude `--output-format stream-json --verbose` 原件的被动解析：真实事件结构、同一消息多事件与重复流事件去重、同 ID 内容冲突拒绝、未完成调用不计 completed、坏 JSON 行如实标注、普通 Bash/计划类工具不误计为派发、tool_use 与 tool_result 按行号与 sha256 绑定原始 trace、拒绝覆盖既有输出；本机归档存在真实 CLI 产物时附带实测，缺失时显式跳过。索引只证明 trace 中可观察的调用，不验证法律语义，也不单独构成 G5 通过。
+
 ## 无旧上下文的前向评估
 
 向独立评估 Agent 提供本 Skill 路径、下列任务及对应原始合成材料，不提供预期答案或已发现缺陷：
