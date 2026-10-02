@@ -212,14 +212,16 @@ case "$1 $2" in
       echo "ERROR: unknown command: worker-show" >&2
       exit 1
     fi
-    if [ -e "$S/dispatch-settled" ]; then
+    if [ -e "$S/dispatch-failed-proof" ]; then
+      echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"failed"},"worker":{"state":"failed","stage":"process_exited"},"projection":{"liveness":{"verdict":"exited","source":"execution_host"}},"observation":{"exactWorker":true,"status":"exited"},"terminalResource":{"releaseState":"not_requested"}}}'
+    elif [ -e "$S/dispatch-settled" ]; then
       echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"settled"},"worker":{"state":"succeeded"},"terminalResource":{"releaseState":"released"}}}'
     elif [ -e "$S/dispatch-acked" ]; then
       echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"completed"},"worker":{"state":"succeeded"},"terminalResource":{"releaseState":"released_retained"}}}'
     elif [ -e "$S/dispatch-released" ]; then
       echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"completed"},"worker":{"state":"stopped"},"terminalResource":{"releaseState":"released"}}}'
     else
-      echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"dispatched"},"worker":{"state":"active"},"terminalResource":{"releaseState":"not_requested"}}}'
+      echo '{"ok":true,"result":{"dispatch":{"id":"ctx-old","status":"dispatched"},"worker":{"state":"active","stage":"active"},"projection":{"liveness":{"verdict":"live","source":"execution_host"}},"observation":{"exactWorker":true,"status":"live"},"terminalResource":{"releaseState":"not_requested"}}}' | jq --arg dispatch "$4" '.result.dispatch.id = $dispatch'
     fi
     ;;
   "orchestration dispatch-show")
@@ -328,7 +330,7 @@ make_fixture() {
         "$SD/last-terminal-send.txt" "$SD/last-worker-terminal.txt" "$SD/terminal-create-fail" "$SD/task-list-unavailable" \
         "$SD/task-status" "$SD/task-status-next" "$SD/worker-start-result" "$SD/pending-message.json" \
         "$SD/dispatch-settled" "$SD/dispatch-released" "$SD/dispatch-acked" \
-        "$SD/worker-show-unavailable"
+        "$SD/worker-show-unavailable" "$SD/dispatch-failed-proof"
   printf 'term-old\n' > "$SD/terminals.live"
 }
 
@@ -658,5 +660,18 @@ assert "旧 worker 终端仍是唯一活终端" 'live_is_solely term-new-1'
 check "METADATA 仍指向旧 worker 终端" test "$(jq -r '.session.orca.terminal_handle' "$METADATA")" = "term-new-1"
 
 echo ""
+echo "Case CLOSED: failed/process_exited/not_requested is never live"
+make_fixture CLOSED
+touch "$SD/dispatch-failed-proof"
+cp "$SC/launch.sh" "$TMP_ROOT/closed-launch.before"
+cp "$METADATA" "$TMP_ROOT/closed-metadata.before"
+run_reauth --allow-cmd "echo must-not-merge"
+check "closed worker denied" test "$RC" -ne 0
+check "closed stable diagnostic" grep -q REAUTHORIZE_NOT_LIVE <<<"$OUT"
+check "closed launch unchanged" cmp -s "$SC/launch.sh" "$TMP_ROOT/closed-launch.before"
+check "closed metadata unchanged" cmp -s "$METADATA" "$TMP_ROOT/closed-metadata.before"
+check "closed zero terminal creates" test "$(log_count 'terminal create')" -eq 0
+check "closed zero worker starts" test "$(log_count 'orchestration worker-start')" -eq 0
+
 echo "Result: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]
