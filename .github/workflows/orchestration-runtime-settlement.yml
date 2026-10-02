@@ -26,6 +26,45 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Prepare a private verified Node executable
+        shell: bash
+        run: |
+          python3 - <<'PY_NODE'
+          import hashlib
+          import os
+          from pathlib import Path
+          import shutil
+          import stat
+          import tempfile
+
+          def digest(path):
+              value = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b""):
+                      value.update(block)
+              return value.hexdigest()
+
+          source = Path(shutil.which("node")).resolve(strict=True)
+          source_info = source.stat()
+          if not stat.S_ISREG(source_info.st_mode):
+              raise SystemExit("setup-node executable must be a regular file")
+          before = digest(source)
+          private_bin = Path(tempfile.mkdtemp(prefix="mao-node-", dir=os.environ["RUNNER_TEMP"]))
+          private_bin.chmod(0o700)
+          target = private_bin / "node"
+          shutil.copyfile(source, target)
+          target.chmod(0o700)
+          copied = digest(target)
+          if before != copied or before != digest(source):
+              raise SystemExit("Node copy/source SHA256 mismatch")
+          target_info = target.lstat()
+          if (not stat.S_ISREG(target_info.st_mode) or target_info.st_uid != os.getuid()
+                  or target_info.st_mode & 0o022):
+              raise SystemExit("private Node executable permissions refused")
+          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as stream:
+              stream.write(str(private_bin) + "\n")
+          print(f"Node source mode={stat.S_IMODE(source_info.st_mode):04o}; private mode=0700; SHA256={copied}")
+          PY_NODE
       - name: Validate runtime and lease evidence with isolated fixtures
         working-directory: skills/multi-agent-orchestration
         run: |
@@ -59,9 +98,10 @@ jobs:
       - name: Check task memory profiles through the complete isolated spawn
         working-directory: skills/multi-agent-orchestration
         run: |
+          env -u LD_LIBRARY_PATH python3 -c 'import sys; print(sys.version)'
           bash -n scripts/spawn-worker.sh
           bash -n scripts/spawn-worker-metadata.sh
           bash -n scripts/spawn-worker-launch.sh
-          python3 scripts/test_memory_task_admission.py
-          python3 scripts/test_minimax_memory_admission.py
-          python3 scripts/test_minimax_spawn_integration.py
+          env -u LD_LIBRARY_PATH python3 scripts/test_memory_task_admission.py
+          env -u LD_LIBRARY_PATH python3 scripts/test_minimax_memory_admission.py
+          env -u LD_LIBRARY_PATH python3 scripts/test_minimax_spawn_integration.py
