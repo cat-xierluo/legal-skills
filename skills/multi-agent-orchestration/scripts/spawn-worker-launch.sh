@@ -6,7 +6,15 @@ launch_worker_session() {
   DISPATCH_LAUNCH_OUTCOME="planned"
   local minimax_mode="interactive"
   if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ]; then
-    minimax_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
+    if [ -n "${MEMORY_TASK_PROFILE:-}" ]; then
+      if ! declare -F minimax_verified_startup_mode >/dev/null; then
+        echo "MINIMAX_MEMORY_LAUNCH_HELPER_MISSING: profile guard verification unavailable" >&2
+        return 64
+      fi
+      minimax_mode=$(minimax_verified_startup_mode) || return 64
+    else
+      minimax_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
+    fi
     if [ "$minimax_mode" = "batch" ] && { [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "${ORCA_TASK_ID:-}" ] || [ -n "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ]; }; then
       echo "MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED: bootstrap cannot receive a second worker-start task" >&2
       return 64

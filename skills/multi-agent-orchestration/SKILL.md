@@ -171,6 +171,8 @@ Worker返回后由原PM固定产物/head、不同上下文独审、同次原Task
 
 **物理内存预算排队（mem budget lane）**：`spawn-worker.sh` 在任何 worktree/terminal/lease/dispatch 副作用之前运行 `scripts/mem_budget_probe.py`，按 per-worker 预算（默认 3 GiB；`SPAWN_WORKER_MEM_BUDGET_BYTES` 可调，`=0` 显式关闭整道门）把现场可用物理内存折算成可派发额度。额度不足或探测不可读时 spawn 以专用退出码 4 拒绝，输出 `SPAWN_WORKER_MEM_BUDGET_DENIED` 与 可用/预算/缺口 诊断；放行则在 PM 日志留下 `SPAWN_WORKER_MEM_BUDGET: available=… budget=… slots=…` 账本行。PM 收到该拒绝不得忙等、不得改走手动 spawn：本轮巡检把任务记 `PARKED_FOR_MEMORY` 并留存 probe 输出，下一轮巡检重试；同一任务连续 3 轮额度不足则正式泊车并向用户报告（附 probe JSON）。单进程堆顶（v2.20.0）管单个 worker 的失血点，本门管总量叠加承诺，也覆盖无堆顶可依赖的非 node runtime。数据源、预算推导、压力收紧与排队状态机读取 `references/22-mem-budget-lane.md`。
 
+**具名任务资源 profile**：确有任务测量/范围与原 PM 串行合同的受控任务，可显式设置 `SPAWN_WORKER_MEMORY_TASK_PROFILE`。轻 Node、既有 Codex 宿主 followup 与限定 MiniMax CLI 使用同一多信号观察门；MiniMax 整 worker 仍至少 3 GiB、单 writer、20 秒稳定窗，实际 Node 堆顶不等于 RSS 上限。没有 profile 时保留旧默认；profile 不能用预算 0 或旧快照放行。字段与独立来源/身份复核见 [资源合同](references/22-mem-budget-lane.md)。
+
 **验证负载纪律（verification lane）**：约束验证类别，不约束 worker 数量。worker 自验默认 scoped（单 spec / 定向用例 / `--bail 1`）；全量套件单一在飞、跨项目互斥——确需 worker 现场跑全量时，先探测既有全量测试进程（如 `pgrep -fl 'vitest|pytest|jest|go test'`），无法确认独占就退避等待或改 scoped。探测是尽力而为的现场信号，不建跨项目锁文件，宁可少并发不可误并发；PM 收口时的全量复跑天然串行，是全量验证的默认归宿。验证输出一律重定向日志文件、只把有界尾部（如 `tail -50`）带回 terminal/session——长输出无界刷屏正是会话侧 node 运行时 OOM 的喂食管。PM 巡检发现系统负载飙升且多个 worker 同时在跑验证时，纠偏为错峰排队（等在飞验证收尾再放下一批），不砍 worker 数量。本纪律与单进程堆顶、物理内存 lane 互补：堆顶管单进程失血点，mem lane 管总量承诺，本纪律管验证执行的并发类别与输出体量（2026-09-05/06 事故中三者缺最后一环：并发全量自验同时制造了负载尖峰与超长输出）。
 
 ## 6. 验收、Git 交付与资源收口
@@ -217,7 +219,7 @@ Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分�
 
 独立 CLI 的标准启动参数、版本检查与权限边界读取 `references/26-optional-cli-backends.md`；千问办公的原生工具入口与 bundled coding 入口读取 `references/27-qwenwork-cli-worker.md`。ZCode CLI 原生 Orca supervised 启动的版本、可信环境桥、显式启用与接续合同读取 `references/30-zcode-native-orca.md`；显式选择 MiniMax Code 时默认要求 Orca terminal-managed；只有同时传 `--no-orca-mode` 才走直连 tmux，Orca 不可达或 lightweight 不得隐式回退。其余可选 backend 暂走 terminal-managed 或 tmux，未经真实生命周期验收不声明 supervised 已验证。ZCode CLI/MiniMax Code/Qoder CN/千问 bundled coding 的编排 hook 暂未集成，派发必须显式 `--allow-prompt-only-install-guard "<授权来源>"`；prompt-only 不是机械 scope/安装保护，不自动扩大安装或 Git 权限。
 
-系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI。检查命令：
+系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI；显式任务内存 profile 另需已安装的原生 Node 与相应 CLI，缺失时拒绝并报告依赖，不自动安装。检查命令：
 
 ```bash
 bash scripts/check-dependencies.sh --backend claude-code --backend codex --check-gh
