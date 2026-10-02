@@ -14,9 +14,15 @@
       "problem_target": "scripts/provider-retry.py 在 429 重试时重复扣减配额",
       "consumer": "TASK-CONSUMER 集成波次",
       "decision_or_gate_changed": "重试路径不再重复扣减配额，恢复命令可复跑",
-      "engineering_assets": ["skills/foo/scripts/provider-retry.py"],
-      "doc_assets": ["skills/foo/CHANGELOG.md"],
-      "verification_commands": ["bash skills/foo/scripts/test-provider-retry.sh"],
+      "engineering_assets": [
+        "skills/foo/scripts/provider-retry.py"
+      ],
+      "doc_assets": [
+        "skills/foo/CHANGELOG.md"
+      ],
+      "verification_commands": [
+        "bash skills/foo/scripts/test-provider-retry.sh"
+      ],
       "worker_pr_policy": "integration_pr",
       "integration_target": "integration/wave-2026-09-01",
       "consume_by": "current wave",
@@ -49,6 +55,56 @@
       "starts_external_resources": false,
       "resource_owner": "none",
       "state_transition": ""
+    },
+    {
+      "task_id": "REPORT-1",
+      "status": "READY",
+      "kind": "research",
+      "value_kind": "business_artifact",
+      "value_identity": "source-backed-business-report",
+      "problem_target": "Client's concrete workflow design question",
+      "consumer": "Named project decision owner",
+      "decision_or_gate_changed": "Choose the documented workflow from a source-backed comparison",
+      "engineering_assets": [],
+      "doc_assets": [],
+      "verification_commands": [],
+      "worker_pr_policy": "no_worker_pr",
+      "consume_by": "Current decision meeting",
+      "expiry": "Archive if the original request is cancelled",
+      "observable_acceptance": "Independent source and criteria review accepts the actual report",
+      "starts_external_resources": false,
+      "resource_owner": "none",
+      "business_artifact": {
+        "purpose_type": "research_report",
+        "purpose": "Deliver the requested workflow comparison",
+        "request_ref": "TASK-CUSTOMER-42 original request",
+        "acceptance_mode": "content_review",
+        "sources": [
+          {
+            "source_id": "source-a",
+            "reference": "Named supplied workflow memo, section 2"
+          }
+        ],
+        "artifacts": [
+          {
+            "path": "report.md",
+            "modality": "text",
+            "media_type": "text/markdown"
+          }
+        ],
+        "acceptance_criteria": [
+          {
+            "criterion_id": "source-comparison",
+            "standard": "State the comparison and its uncertainty with traceable support",
+            "artifact_paths": [
+              "report.md"
+            ],
+            "source_ids": [
+              "source-a"
+            ]
+          }
+        ]
+      }
     }
   ]
 }
