@@ -53,9 +53,11 @@ bash skills/multi-agent-orchestration/scripts/recover-unconfigured-worker.sh \
 | 3 | manual-required（METADATA 缺路由段 / authority receipt 缺失或错配） | authority-receipt-invalid |
 | 64 | usage | none |
 
-不变量：任何路径零 `terminal create`；terminal_handle 全程不变；已注入后坏读
-（poison-after-send）时注入恰好发生一次但绝不 register；失败路径零 `terminal send`、
-零 `worker-start`。
+不变量：任何路径零 `terminal create`；terminal_handle 全程不变。`terminal send`
+副作用按阶段区分：注入前拒绝（terminal/dispatch 探针失败、unknown、authority
+拒绝等失败路径）零 `terminal send`、零 `worker-start`；已注入后坏读
+（poison-after-send）`terminal send` 恰好 1（注入已发生，不重复注入）但立即
+停止，零 `worker-start`（绝不 register）。
 
 ## 验证
 
