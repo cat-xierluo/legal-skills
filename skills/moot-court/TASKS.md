@@ -254,13 +254,13 @@
 
 ### Task-022 · 合法推断与事实失真边界
 
-- 状态：DONE（2026-10-02，证据待 PM 独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 状态：IN_REVIEW（2026-10-02，等待独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
 - 输入：v1.2.2 候选与四类对照：无源确定断言、仅贴推断标签、带材料和桥梁的条件推断、当前无记录。
 - 验收：允许有桥梁的条件论证；标签不豁免无源断言；书记员不能裁决证明力或代角色改观点；模板、主文、rubric一致。
 
 ### Task-023 · 有界修稿与入卷后更正
 
-- 状态：DONE（2026-10-02，证据待 PM 独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 状态：IN_REVIEW（2026-10-02，等待独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
 - 范围：同一派发语义修稿的次数/时间边界；入卷后以新回合保留旧发言并给受影响双方回应机会；关闭后只能新建 run 并维护来源映射。
 - 验收：真实 CLI 回归验证旧记录不覆盖、close 后禁止 dispatch、新run不能把旧seq填respond_to；反复packet读取不消耗技术派发次数，说明主控另行限时。
 - 非目标：用脚本声称自动判定法律语义或执行主控语义预算。
@@ -301,3 +301,5 @@
 - MiniMax实际原生Run成功结束，冻结提交bcbe700b，7项CLI测试经PM复跑通过、postflight范围门通过；ZCode唯一worker_done succeeded、冻结提交dfaee2d9，新增CLI回归经PM复跑通过、postflight范围门通过。ZCode已通过正式release并确认完整Delivery；两项修复进入独立验收，当前不将其自验扩大为领域正确性。
 - 实际PR汇总分支使用 `fix/moot-court-recovery-probes`，从最新origin/main建立；原 `codex/moot-court-v123-integration` 保留本地计划检查点，不重写或推送该历史分支。这里只按目标文件提取产物，未合并整个worker分支。
 - 一次ZCode检查点指导在消息wrapper的worker.state校验处被拒绝（native ready、projection working，wrapper仅接受active），未发送。原worker仍独立完成，未绕过门。后续评估该状态兼容性，当前不声称协调消息链全面验收。
+
+- PR入口：[PR #247](https://github.com/cat-xierluo/legal-skills/pull/247)，当前草稿，等待不同会话的独立审查。Task-022/023的生产者自报DONE已改为IN_REVIEW，避免把自验当完成。
