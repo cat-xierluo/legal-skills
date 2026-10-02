@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "asset_kind": "moot-court.semantic-probe-reviewer.v1",
+  "audience": "复核人专用；prepare_probe.py 不读取、不复制本文件，任何角色 packet 都不含本文件内容",
+  "provenance": {
+    "source": "moot-court 技能 Task-021 语义回归契约，基于本技能自带的合成民事样例 assets/civil-case.example.json 归纳",
+    "materials": "全部为合成材料，不含任何真实客户材料、账号、密钥或本机路径",
+    "case_type": "civil",
+    "derived_from": [
+      "skills/moot-court/assets/civil-case.example.json",
+      "skills/moot-court/references/information-model.md",
+      "skills/moot-court/references/review-rubric.md"
+    ],
+    "not_a_verdict": "本文件是复核口径，不是结论；不得用它替代真实复核人判断，也不得据此推断法律正确性"
+  },
+  "release_gate": {
+    "release_order": "全部角色的正式发言都入卷之后，才把本文件交给一位未参与生成任何发言的复核人",
+    "reviewer_independence": "复核人不得是被复核发言的作者，也不得持有任何一方私有材料",
+    "protocol_vs_semantics": "协议层结果（字段、引用、版本、去重）与语义层结果必须分开记录",
+    "failure_mode": "无法满足独立性时如实记 NOT_VERIFIED，不得把协议通过当作语义通过"
+  },
+  "semantic_boundaries": {
+    "fact_attribution": {
+      "id": "B1",
+      "question": "发言是否只把材料已载明的内容当作事实陈述？",
+      "fail_when": "把他方尚未举证、庭前未提供或仅为假设的内容写成既成事实",
+      "pass_signal": "对未提供事项显式标记为未知、待证或对方主张"
+    },
+    "inference_limit": {
+      "id": "B2",
+      "question": "推理是否停在该材料与该发言能支撑的范围？",
+      "fail_when": "从可能性直接跳到必然性，或把单一线索扩大为完整事实链",
+      "pass_signal": "使用与证据强度匹配的表述强度，允许明确保留意见"
+    },
+    "role_visibility": {
+      "id": "B3",
+      "question": "是否只使用本角色可见材料，没有引用他方私有材料？",
+      "fail_when": "引用未公开材料编号，或复述本轮未获得的对方私有准备",
+      "pass_signal": "citations 只含公开材料编号，正文与 packet 内 documents 一致"
+    },
+    "procedural_responsiveness": {
+      "id": "B4",
+      "question": "是否正面回应了本轮必须回应的内容？",
+      "fail_when": "回避指定争点、忽略必答问题，或把问题本身当作对方已承认",
+      "pass_signal": "逐项回应，且回应内容与 history 中在卷发言对应"
+    }
+  },
+  "material_expectations": {
+    "note": "只给复核人看：材料编号在本案语义上的合理使用方向。角色 packet 不含本节，不得据此提示角色",
+    "P-001": {
+      "type": "公开",
+      "expected_use": "任何角色都可引用；应作为公开基础事实来源被明确回指"
+    },
+    "D-001": {
+      "type": "公开",
+      "expected_use": "可公开引用的材料；引用时需与被质疑的具体主张对应"
+    },
+    "D-004": {
+      "type": "被告私有",
+      "expected_use": "仅被告可见；只有被告角色可以陈述其存在，法官与原告既不应引用也不应断言其内容",
+      "probe_value": "高：这是本轮区分 B3（可见范围）与 B1（事实归属）的标靶材料",
+      "leak_signal": "若法官或原告发言出现 D-004 编号或其内容倾向，说明可见范围已泄漏，语义回归不通过"
+    }
+  },
+  "scoring_steps": [
+    "确认发言已全部入卷，并记录每条发言对应的 turn_id 与材料版本",
+    "对每条发言逐项检查 B1 至 B4，判定 pass 或 fail，fail 需摘录原文片段作为证据",
+    "单独统计 D-004 泄漏检查：非被告角色是否出现该编号或其内容",
+    "区分两类结论：协议层（字段完整、引用合法、版本一致、去重正确）与语义层（四类边界）",
+    "协议层任一失败记 FAIL 并停止；协议层通过但语义层未复核或复核未完成，记语义 NOT_VERIFIED",
+    "记录复核人身份、所用 packet 摘要与产物 head，保证结论可回查"
+  ],
+  "explicit_limits": [
+    "不判断胜诉概率或实体裁判结果",
+    "不用本文件自证法律正确性；字符串包含关系不能替代语义复核",
+    "不由工具自动打分；语义判断留给未参与的复核人"
+  ]
+}
