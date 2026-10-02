@@ -89,6 +89,9 @@ class RecoveryTests(unittest.TestCase):
         self.runner();out=r.load_intent(self.intent);self.assertEqual(out['runner_pid'],self.proc.pid)
         command=['bash',str(ROOT/'orca-supervised-register.sh'),'--worktree-id','wt_one','--terminal-handle','term_new','--task-id','task_later','--run-id','run_one','--coordinator-handle','term_pm','--runtime-id','runtime_one','--metadata-file',str(self.metadata),'--authority-receipt',str(self.authority),'--retry-of','ctx_failed','--closed-recovery',self.intent]
         p=subprocess.run(command,env={**os.environ,'ORCA_CLI_BIN':str(self.orca)},capture_output=True,text=True,timeout=20);self.assertEqual(p.returncode,0,p.stderr)
+        self.assertTrue(all(line.startswith("ORCAREG_") and "=" in line for line in p.stdout.splitlines()),p.stdout)
+        self.assertIn("ORCAREG_TERMINAL_HANDLE=term_new",p.stdout)
+        self.assertIn("ORCAREG_COORDINATOR_HANDLE=term_pm",p.stdout)
         m=json.loads(self.metadata.read_text());self.assertEqual(m['session']['orca']['supervised']['task_id'],'task_later');self.assertEqual(json.loads(self.cp.read_text())['dispatch_id'],'ctx_new');self.assertEqual(m['session']['orca']['supervised']['terminal_ownership'],'external');self.assertEqual(m['recovery']['closed_session']['previous_terminal_ownership'],'created')
         calls=[json.loads(x) for x in self.log.read_text().splitlines()];self.assertEqual(sum(x[:2]==['orchestration','worker-start'] for x in calls),1)
         self.assertFalse(any(x[:2] in (['orchestration','task-create'],['orchestration','task-update'],['terminal','send']) for x in calls))

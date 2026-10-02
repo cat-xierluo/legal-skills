@@ -393,10 +393,14 @@ if [ -n "$CLOSED_RECOVERY" ]; then
   DISPATCH_ID=$(printf '%s' "$start_out" | jq -er '.result | select(.state == "ready") | .dispatchId | select(type == "string" and length > 0)') || {
     echo "ERROR: retry response unknown; intent consumed; inspect native operation, never repeat business" >&2; exit 1;
   }
-  if ! orchestration_closed_recovery_adopt "$CLOSED_RECOVERY" "$DISPATCH_ID"; then
+  if ! orchestration_closed_recovery_adopt "$CLOSED_RECOVERY" "$DISPATCH_ID" >/dev/null; then
     echo "ERROR: native retry started but adoption refused; exact dispatch=$DISPATCH_ID terminal=$TERMINAL_HANDLE intent=$CLOSED_RECOVERY; do not repeat business" >&2; exit 1
   fi
   printf 'ORCAREG_RUN_ID=%s\nORCAREG_TASK_ID=%s\nORCAREG_DISPATCH_ID=%s\nORCAREG_DISPATCH_BIND=ok\nORCAREG_METADATA_BIND=ok\n' "$RUN_ID" "$TASK_ID" "$DISPATCH_ID"
+  printf 'ORCAREG_COORDINATOR_HANDLE=%s\nORCAREG_TERMINAL_HANDLE=%s\nORCAREG_TERMINAL_OWNERSHIP=external\n' "$COORDINATOR_HANDLE" "$TERMINAL_HANDLE"
+  printf 'ORCAREG_COMPLETION_AUTHORITY_FILE=%s\nORCAREG_COMPLETION_AUTHORITY_SHA256=%s\n' \
+    "$(jq -er '.execution_authority.completion_authority_file' "$METADATA_FILE")" \
+    "$(jq -er '.execution_authority.completion_authority_sha256' "$METADATA_FILE")"
   exit 0
 fi
 
