@@ -55,4 +55,4 @@ G4只证明该Runtime具备顺序多Agent编排与结果持久化能力，不证
 
 保存每宿主各阶段结果、执行模式、实际文件和独立复核；最后汇总到TASKS Task-011。只看过帮助、完成短探针或让模型评议Skill，不算该Runtime执行过完整庭审。
 
-当前Codex的历史实测见Task-008／016／018，可作流程对照；2026-09-20的Claude Code与Gemini CLI分级实测见Task-011。源码或方法变动后按受影响范围重新验证，不沿用旧候选签名。其他Runtime未有实际产物前保持NOT_VERIFIED。
+当前Codex的历史实测见Task-008／016／018，可作流程对照；2026-09-20的Claude Code与Gemini CLI分级实测见Task-011。2026-10-02在Claude Code 2.1.237的新一轮G0—G5分级复测记录见Task-027，配套被动调用索引器`scripts/index_claude_trace.py`；旧实测与入口阻塞记录保持原样，不以新结果改写历史。源码或方法变动后按受影响范围重新验证，不沿用旧候选签名。其他Runtime未有实际产物前保持NOT_VERIFIED。

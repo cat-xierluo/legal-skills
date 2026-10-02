@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.3 | 允许有来源和推理桥梁的条件推断，限定语义修稿预算并保留更正链；增加真实CLI回归与不泄露预期答案的角色分包验证工具。 |
+| 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
 | 2026-10-02 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.34.2 | 补显式持续Wave派发前的原PM/任务源/真实heartbeat准备检查；修正单链泊车停止项目监测的文案，区分人工恢复与自动闭环证据。 |
 | 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.9.0 | **提交身份自检与身份污染审计 + 分支冗余巡检自动化 + 身份核验**：v1.9.0 新增 scripts/identity-audit.sh（whoami 提交前自检：来源链 env→worktree→repo-local→global，仓库级覆盖/env 覆盖/可疑 agent 身份模式/期望不符四类告警；history 全仓 author/committer/Co-authored-by 尾注分布审计，可疑项自动标注）+16 项故障注入测试，源自 private-skills Hermes 身份污染实录（GitHub squash 把分支提交作者自动转尾注，门禁期望值取自被污染 config 时形同虚设）；v1.8.9 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除）+批量删除执行坑入册；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支）。已在 legal-skills 与 private-skills 双仓实测。 |
 | 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
@@ -238,7 +238,7 @@
 <td>通用·诉讼</td>
 <td style="word-break:break-word">基于案卷自动组织多角色模拟庭审：法官与民事原被告／刑事控辩通过书记员记录交换发言；支持版本化材料、取消重派与进度恢复，交付庭审笔录、争点复盘和庭前补强清单</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v1.2.3</td>
+<td style="text-align:center">v1.2.4</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/moot-court-1.2.1.zip">已发布包 v1.2.1</a></td>
 <td></td>
 </tr>
