@@ -38,3 +38,10 @@ jobs:
         run: |
           bash -n scripts/pm-orchestrate.sh
           python3 -m py_compile scripts/runtime_settlement.py scripts/runtime-reconcile.py scripts/provider-lease.py
+      - name: Check continuous Wave readiness before resource creation
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          bash -n scripts/orca-wave-prepare.sh
+          python3 -B scripts/test_continuation_readiness.py -v
+          bash scripts/test-orca-wave-lifecycle.sh
+          bash scripts/test-pm-monitor.sh
