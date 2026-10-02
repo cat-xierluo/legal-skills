@@ -149,7 +149,10 @@ m=json.loads(open(r['metadata']).read())
 from zcode_closed_recovery import run_owner
 require(run_owner(r['orca_bin'],r['failed']['run_id'],r['runtime_id'])==r['owner'] and r['owner']['handle']==sys.argv[7],'current official Run coordinator mismatch')
 PY_RECOVERY
-  python3 "$SCRIPT_DIR/zcode_closed_recovery.py" admit-retry --intent "$CLOSED_RECOVERY"     --task "$TASK_ID" --dispatch "$RETRY_OF" --terminal "$TERMINAL_HANDLE" --run "$RUN_ID" >/dev/null || exit 64
+  retry_admission=$(python3 "$SCRIPT_DIR/zcode_closed_recovery.py" admit-retry --intent "$CLOSED_RECOVERY" \
+    --task "$TASK_ID" --dispatch "$RETRY_OF" --terminal "$TERMINAL_HANDLE" --run "$RUN_ID") || exit 64
+  RETRY_REQUEST=$(printf '%s' "$retry_admission" | python3 -c 'import json,sys,uuid; value=json.load(sys.stdin)["retry_request"]; assert isinstance(value,str) and str(uuid.UUID(value))==value; print(value)') || exit 64
+  [ -n "$RETRY_REQUEST" ] || { echo "ERROR: empty retry operation identity" >&2; exit 64; }
 fi
 
 if [ -n "$NATIVE_AGENT" ]; then
