@@ -514,4 +514,3 @@ blocker_and_recovery:
 - 2026-10-02限定修复与证据：只读smoke用每轮私有nonce及生产safe_branch规则派生branch/session/WT/CTX；不改生产occupied保护。隔离原smoke+真实spawn dry-run最终4/4 exit0：连续两轮不冲突、占用拒绝且marker保留、readonly mutation95、路径映射一致。先前三次fixture失败（Bash3.2、非canonical worktree ID、缺runtimeId）原件保留；最后只补真实runtimeId协议字段，不弱化断言。没有真实Orca mutation/模型调用，完整生命周期仍NOT_VERIFIED。 本轮证据冻结于维护者archive/20261002_gate_stabilization/，包括实际命令、退出码、候选SHA与所有失败原件；独立审查按本PR最终不可变head绑定，长期稳定性另验。
 
 - 独审补充：作者4/4之后，不同session首跑2/4，真实祖先身份前门早于smoke目标断言拒绝；该测试仍依赖宿主环境，返修仅补私有ps完整合成祖先链，不改生产门；定向suite一次4/4 exit0（18.508秒），其余三源码SHA不变，Facts不重复执行。原失败报告按6058e6d固定并保留，合成输入仅用于隔离测试，不是实机宿主身份的证明。
-

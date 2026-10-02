@@ -13,6 +13,7 @@
 - 显式continuous Wave在任何Orca调用前只读核验现有Codex heartbeat的原PM、精确任务源、启用状态和周期；不就绪时拒绝创建资源。旧单波入口保留兼容。
 
 ### 验证边界
+- 新smoke回归使用私有Orca与进程祖先输入来隔离环境，仍执行真实spawn；定向通过不等于实机宿主身份或Orca完整生命周期通过。
 - 配置准备通过只表示CONFIGURED_NOT_PROVEN_AUTONOMOUS；不产生授权、不创建定时任务，不证明实际自动独审/写回/续派或跨会话稳定性。验证证据与剩余Task-067/068见TASKS中的CONTINUATION-READINESS卡。
 
 ## [2.34.1] - 2026-10-02
