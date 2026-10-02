@@ -347,6 +347,7 @@
   - G4 PASS：法官提问→原告回答→被告质证→法官归纳，4 个不同冷启动会话顺序完成（会话标识四者互异），后发言引用前文原文，第 4 次由法官经 Write 真实落盘 `g4-result.json`；原告“D-004 亦显示设备已入仓”的强度问题留给未参与的独立 reviewer，本轮不作语义结论。
   - G5 `BLOCKED_OR_STOPPED_AT_BUDGET`（完整闭环 NOT_VERIFIED）：Claude 主控在 Claude 内担任书记员，经 clerk.py init（run `315458d3…`，max_turns 16）入卷；终止前真实完成 7 次 Agent 派发（2 次庭前准备 + 5 次正式）、4 次正式发言（开庭请求答辩、争点整理 I-001~I-003 合并于第四次发言）；举证质证 T-0005 已派发未交稿即到 780 秒硬界，追问辩论、总结归纳、close 与三份交付未运行。技术超时不计实体败诉；候选快照起终 sha256 一致，测试进程未修改技能文件。
 - 索引消费：`index_claude_trace.py` 对 G5 真实流（10356 行、0 坏 JSON）运行 exit 0：7 次派发、6 完成、1 未完成——与 clerk 事件“T-0005 已派发未入卷”精确互证；G1/G2/G4 流均已归档可复算。
+- 快照与盲测边界：G5 候选快照=复制时点未提交工作区（v1.2.3 已合并文档 + 本轮 3 个新工程文件；v1.2.4 文档修订在 G5 启动后才编辑、不在快照内），其实测结果不签出最终 v1.2.4 候选 PASS。整棵技能树被复制，TASKS/CHANGELOG/semantic-probe-reviewer.json 物理可达，不构成强隔离或洁净盲测；统一任务未引导读取，流内核实主控内容 Read 仅 SKILL.md、合成案卷与 9 份 references，TASKS/CHANGELOG 仅出现在一次 find 列表输出。
 - 证据边界：本条为生产者自报，工程 PASS 与 Runtime 分级结论分开；领域语义由未参与的独立 reviewer 判定，索引成功不单独签出 G5 或 `DOMAIN_VERIFIED`。全部原始流、hearing-run、索引与 candidate hash 快照保存在忽略档案 `.claude/agent-sessions/mc-z-claude-g5-261002/runtime-261002/`（含 runtime-evidence.json）。
 - 遗留：G5 需更长预算重跑收尾（七环节中后三环节未运行）；Task-011 维持 IN_PROGRESS（尚未有两个 Runtime 完整闭环）；异常恢复未测；Task-005/019 维持原状态。
 
