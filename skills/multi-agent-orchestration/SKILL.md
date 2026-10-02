@@ -62,7 +62,7 @@ PM 在任何 worker 副作用前完成：
 2. 按根因、依赖链和文件范围分组；只有范围正交、验收独立、无共享锁文件/schema/迁移时才并行。
 3. 为每个 worker 指定 branch、`branch_lifecycle`、integration target/base、worktree、session、角色、backend/profile/model、provider slot 和资源 owner。
 4. 普通 worker 默认为 `ephemeral-worker`；只有项目任务合同明确声明的长期功能/集成基线才使用 `--branch-lifecycle long-lived`。源分支生命周期与合并目标是两个字段，不得混同。
-5. 默认每波及全局活跃 worker 不超过 3；PM 待验收交付超过 2 个时停止扩波。项目可以收紧，只有用户明确、限期的探索窗口才可放宽。
+5. 从 `python3 scripts/dispatch-value-gate.py --describe-policy` 读取并发与待验收 PR 背压的当前默认值；项目可以收紧，探索窗口须明确授权并限期。派发合同用 `capacity` 绑定 PM 已盘点的共享活跃库存、证据及较小项目上限；已有 worker 与本波候选相加判断。旧合同未提供库存时只证明本波数量合法，不能据此声称全机还有槽位。机器内存 slots 是另一道门，不能替代 worker 库存或覆盖跨项目约定。
 6. 验证命令默认写 scoped：单 spec / 定向用例 / `--bail 1` 早停；整包全量套件（全量 test/build 链）不进 worker 自验合同，全量验证单一在飞（跨项目互斥），默认归宿是 PM 收口时串行复跑。本条约束验证类别，不约束 worker 数量（见 §5 验证负载纪律）。
 7. 固定 `one_wave` 或 `continuous`：真人要求持续派发/返回后review再推进/不要每轮催促时，不默认单波。持续模式派发前核唯一监测的原PM、原任务源、正式配置及周期，读取 [PM接续合同](references/33-pm-continuation-readiness.md)；显式continuous的Wave入口机械检查，其他模式由PM显式检查。只有总控心跳、承诺稍后设置或人工催促后恢复均不证明自动闭环。
 

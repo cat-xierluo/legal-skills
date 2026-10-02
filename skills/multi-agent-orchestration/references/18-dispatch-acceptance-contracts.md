@@ -35,6 +35,12 @@ bash scripts/spawn-worker.sh ... \
 
 脚本要求 task_id 恰好匹配一次，并把 `verification_commands` 每项作为完整字符串写入精确 Shell allowlist；`implementation` / `reusable_verification` 解析为空时在派发副作用前拒绝。不要同时传 `--verify-cmd` 制造两个权威来源。
 
+### 并发计数与项目收紧
+
+用 `python3 scripts/dispatch-value-gate.py --describe-policy` 只读查看同一代码常量的默认值。它不读取运行库存、不创建资源，也不是派发成功回执。
+
+v2 的可选 `capacity` 块包含 `active_workers`（现有活跃数，不含本波）、`worker_limit`（项目上限，只可收紧当前模式默认值，0 表示暂停新派）、具名 `scope` 与库存证据 `inventory_ref`。提供时四项须完整，布尔、负数、非整数或扩大上限均拒绝；门以 `active_workers + len(tasks)` 核总量。未提供时旧合同仍只核 `len(tasks)`，输出 `candidate_only`，不能当成全机可用性证明。快照的真实性和跨 PM 协调由原 owner 核实；合同回放不重新声明当前库存，内存 slots 和 provider lease 仍分别检查。
+
 ### 业务产物合同
 
 显式选择 `value_kind: business_artifact`，仍须满足 READY、波次去重、消费期限及资源归属。`business_artifact` 块声明：

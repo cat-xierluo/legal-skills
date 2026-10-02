@@ -106,5 +106,11 @@
         ]
       }
     }
-  ]
+  ],
+  "capacity": {
+    "active_workers": 0,
+    "worker_limit": 8,
+    "scope": "TEMPLATE ONLY: replace with the named shared PM inventory scope",
+    "inventory_ref": "TEMPLATE ONLY: illustrative counts are not observed inventory; replace with the actual inventory evidence reference"
+  }
 }

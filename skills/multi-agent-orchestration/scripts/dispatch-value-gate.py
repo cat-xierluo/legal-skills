@@ -30,7 +30,9 @@ DOC_EXTENSIONS = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 DOC_DIR = "docs/"
 HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 # Concurrency policy (Task-117): the user authorized on 2026-09-05 widening the
-# global active-worker cap from 3 into the 5-10 band. Converge stays the
+# worker policy from 3 into the 5-10 band. This gate counts candidates unless
+# an explicit PM-declared shared inventory is supplied; it neither observes
+# global runtime inventory nor atomically reserves capacity. Converge stays the
 # conservative default (8); only an explicit, unexpired explore window may
 # reach 10. Acceptance backpressure moves from >2 to >4. All other gates
 # (provider lease, research/docs <= 1, READY contract, dedupe, file ownership,
@@ -38,6 +40,96 @@ HEAD_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONVERGE_MAX_WORKERS = 8
 EXPLORE_MAX_WORKERS = 10
 MAX_PENDING_ACCEPTANCE_PRS = 4
+
+
+
+def _mode_limit(mode: Any) -> int | None:
+    return {"converge": CONVERGE_MAX_WORKERS, "explore": EXPLORE_MAX_WORKERS}.get(mode) if isinstance(mode, str) else None
+
+
+def describe_policy() -> dict[str, Any]:
+    """Read-only policy description; no config, inventory, or resource access."""
+    return {
+        "schema_version": SCHEMA,
+        "worker_limits": {mode: _mode_limit(mode) for mode in ("converge", "explore")},
+        "max_pending_acceptance_prs": MAX_PENDING_ACCEPTANCE_PRS,
+        "explore_requires": ["explore_authorized_by", "unexpired explore_expires_at"],
+        "count_scopes": {
+            "candidate_only": "Without capacity, only len(tasks) in this candidate wave is counted.",
+            "pm_declared_shared_inventory": "With capacity, planned_total = active_workers + len(tasks); active_workers excludes this wave.",
+        },
+        "capacity_fields": ["active_workers", "worker_limit", "scope", "inventory_ref"],
+        "worker_limit_rule": "Project worker_limit may only tighten the current mode default, including zero.",
+        "inventory_verified": False,
+        "atomic_reservation": False,
+        "limitations": [
+            "Inventory and its evidence reference are PM declarations, not runtime observations.",
+            "No global atomic reservation, real-time cross-PM inventory validation, or scheduling service is provided.",
+            "Pending acceptance count is also declared by the PM; stricter project and resource rules still apply.",
+        ],
+    }
+
+
+def _capacity_assessment(spec: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    """Validate the optional declaration and report exactly what was counted."""
+    errors: list[str] = []
+    mode = spec.get("mode")
+    default_limit = _mode_limit(mode)
+    tasks = spec.get("tasks")
+    candidates = len(tasks) if isinstance(tasks, list) else None
+    receipt: dict[str, Any] = {
+        "count_scope": "candidate_only",
+        "candidate_workers": candidates,
+        "active_workers": None,
+        "planned_total": candidates,
+        "default_worker_limit": default_limit,
+        "effective_worker_limit": default_limit,
+        "inventory_verified": False,
+        "atomic_reservation": False,
+    }
+    if "capacity" not in spec:
+        if default_limit is not None and candidates is not None and candidates > default_limit:
+            errors.append(f"{mode} mode permits at most {default_limit} candidate workers in this wave")
+        return errors, receipt
+
+    receipt.update({"count_scope": "invalid_capacity", "planned_total": None, "effective_worker_limit": None})
+    capacity = spec["capacity"]
+    required = {"active_workers", "worker_limit", "scope", "inventory_ref"}
+    if not isinstance(capacity, dict):
+        return ["capacity must be an object with active_workers, worker_limit, scope, inventory_ref"], receipt
+    missing = required - capacity.keys()
+    extra = capacity.keys() - required
+    if missing:
+        errors.append("capacity missing fields: " + ", ".join(sorted(missing)))
+    if extra:
+        errors.append("capacity has unsupported fields: " + ", ".join(sorted(extra)))
+    active = capacity.get("active_workers")
+    limit = capacity.get("worker_limit")
+    if type(active) is not int or active < 0:
+        errors.append("capacity.active_workers must be a non-negative integer excluding this candidate wave")
+    if type(limit) is not int or limit < 0:
+        errors.append("capacity.worker_limit must be a non-negative integer")
+    elif default_limit is not None and limit > default_limit:
+        errors.append(f"capacity.worker_limit cannot exceed the {mode} default {default_limit}")
+    for field in ("scope", "inventory_ref"):
+        value = capacity.get(field)
+        if _missing(value) or any(ord(char) < 32 or ord(char) == 127 for char in value):
+            errors.append(f"capacity.{field} must name the shared inventory scope/evidence, not a placeholder or control text")
+    if errors:
+        return errors, receipt
+    effective = min(limit, default_limit) if default_limit is not None else limit
+    total = active + candidates if candidates is not None else None
+    receipt.update({
+        "count_scope": "pm_declared_shared_inventory",
+        "active_workers": active,
+        "planned_total": total,
+        "effective_worker_limit": effective,
+        "scope": capacity["scope"].strip(),
+        "inventory_ref": capacity["inventory_ref"].strip(),
+    })
+    if total is not None and total > effective:
+        errors.append(f"{mode} declared total {total} workers exceeds effective limit {effective} (active {active} + candidates {candidates})")
+    return errors, receipt
 
 
 def _parse_time(value: str) -> datetime:
@@ -208,15 +300,13 @@ def validate(spec: Any, now: datetime) -> list[str]:
         elif expiry_time <= now:
             errors.append("explore window is expired")
 
+    capacity_errors, _ = _capacity_assessment(spec)
+    errors.extend(capacity_errors)
     tasks = spec.get("tasks")
     if not isinstance(tasks, list) or not tasks:
         errors.append("tasks must be a non-empty array")
         return errors
 
-    if mode == "converge" and len(tasks) > CONVERGE_MAX_WORKERS:
-        errors.append(f"converge mode permits at most {CONVERGE_MAX_WORKERS} active workers")
-    elif mode == "explore" and len(tasks) > EXPLORE_MAX_WORKERS:
-        errors.append(f"explore mode permits at most {EXPLORE_MAX_WORKERS} active workers")
     doc_count = sum(
         1 for item in tasks if isinstance(item, dict) and item.get("kind") in DOC_KINDS
         and item.get("value_kind") != "business_artifact"
@@ -270,13 +360,22 @@ def validate(spec: Any, now: datetime) -> list[str]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("spec", type=Path)
+    parser.add_argument("spec", type=Path, nargs="?")
+    parser.add_argument("--describe-policy", action="store_true", help="describe constants and count scope without reading a spec or configuration")
     parser.add_argument("--now", help="RFC3339 evaluation time for deterministic tests")
     return parser
 
 
 def main() -> int:
-    args = _parser().parse_args()
+    parser = _parser()
+    args = parser.parse_args()
+    if args.describe_policy:
+        if args.spec is not None or args.now is not None:
+            parser.error("--describe-policy cannot be combined with spec or --now; it does not evaluate a dispatch contract")
+        print(json.dumps({"ok": True, "status": "policy_description", "contract_evaluated": False, "accepted": False, "policy": describe_policy()}, ensure_ascii=False))
+        return 0
+    if args.spec is None:
+        parser.error("the following arguments are required: spec")
     try:
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
         now = _parse_time(args.now) if args.now else datetime.now(timezone.utc)
@@ -284,7 +383,8 @@ def main() -> int:
         print(json.dumps({"ok": False, "errors": [str(exc)]}, ensure_ascii=False))
         return 2
     errors = validate(spec, now)
-    print(json.dumps({"ok": not errors, "errors": errors}, ensure_ascii=False))
+    _, capacity = _capacity_assessment(spec) if isinstance(spec, dict) else ([], None)
+    print(json.dumps({"ok": not errors, "errors": errors, "capacity": capacity}, ensure_ascii=False))
     return 0 if not errors else 2
 
 
