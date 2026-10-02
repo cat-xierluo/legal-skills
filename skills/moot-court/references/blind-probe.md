@@ -4,18 +4,20 @@
 
 ## 工具做什么与不做什么
 
-`prepare_probe.py --run <绝对路径> --output <绝对路径>` 实际调用既有 `clerk.py packet`，只把当前派发转成该角色可读的冷启动输入：
+`prepare_probe.py --run <路径> --output <路径>` 实际调用既有 `clerk.py packet`，只把当前派发转成该角色可读的冷启动输入。`--run` 与 `--output` 都接受绝对路径或相对路径（相对路径按调用方当前工作目录解析，与 `clerk.py` 行为一致）；`--output` 已存在一律拒绝。
 
 - 只输出书记员 packet 的白名单字段（`instruction`、`assignment`、`documents`、`history`、`submission_template`），其余字段一律丢弃。
 - `submission_template` 保留原 `schema_version`、`run_id`、`turn_id`、`role`、`material_version`、`read_through`、`responds_to`；宿主读到 output 即可按此结构生成提交。
 - 不再次 `dispatch`、不 `commit`、不修改 run，不生成 `transcript.md` 或 `state.json`。
 - 不加载、不拷贝 `assets/semantic-probe-reviewer.json`；正文不含预期结论、评分口径、他方私有材料或材料清单路径。
 - 通用角色任务文本只说明纪律（用哪些材料、怎么引用、怎么保留提交字段），不含任何针对具体案件的结论。
+- 角色任务允许角色引用本轮 packet 内**本角色可见**的全部材料编号（含本方私有材料），但提交字段 `citations` 由书记员机械校验，只接受 `visible_to` 为 `[all]` 的公开编号；私有编号填入 `citations` 会被拒绝入卷。他方私有材料不在 packet 内，提示明确禁止引用、复述或推测其内容，也不引导角色去读材料清单、事件流或其他角色目录。
 
 拒绝条件（一律非零退出并给出单行中文原因，不打印 Traceback）：
 
 - `--run` 不存在、不是目录，或当前没有待交稿派发。
-- `--output` 已存在：原子创建、绝不覆盖；出错时只清理本次自己创建的文件。
+- 书记员 CLI 超过 60 秒未返回（`subprocess.TimeoutExpired`）：转成单行中文原因，不打印 Traceback。
+- `--output` 已存在：以 `O_EXCL` 独占创建、绝不覆盖、绝不删除调用方原有文件；写入或 `fsync` 失败时只删除本次自己创建的那一个半成品。工具不承诺「要么完整发布、要么目录完全不变」：创建与写入之间存在窗口，进程被强杀仍可能留下残留，需人工确认。
 - `--output` 的父目录不存在。
 - packet 缺字段、提交模板与派发不匹配，或含非本角色的私有材料。
 - packet 命中禁止标记（复核答案资产名、参考答案、评分步骤、材料清单文件名、事件流路径）：宁可报错也不产出。

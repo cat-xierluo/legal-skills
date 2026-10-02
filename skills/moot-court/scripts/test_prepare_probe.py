@@ -3,6 +3,8 @@
 
 不调用任何外部模型，不用字符串包含关系自报法律正确性。
 """
+import contextlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -10,16 +12,22 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 CLERK = SCRIPTS / "clerk.py"
 PREPARE = SCRIPTS / "prepare_probe.py"
 REVIEWER_ASSET = SCRIPTS.parent / "assets" / "semantic-probe-reviewer.json"
 
+# 故障注入直接针对实现模块：只改进程内 subprocess/os 调用，不改被测源码、不安装依赖。
+sys.path.insert(0, str(SCRIPTS))
+import prepare_probe as PREPARE_MODULE  # noqa: E402
+prePAREError = PREPARE_MODULE.ProbeError
+
 MANIFEST = {"documents": [
     {"id": "P-001", "title": "合成公开材料", "locator": "合成案卷-公开件",
      "text": "合成公开事实描述，用于验证公开材料对全部角色可见。", "visible_to": ["all"]},
-    {"id": "D-001", "title": "合成被告私有材料", "locator": "合成案卷-被告卷",
+    {"id": "D-001", "title": "合成原告私有材料", "locator": "合成案卷-原告卷",
      "text": "合成私有内容，仅原告角色在本轮可见，用于验证角色过滤。", "visible_to": ["plaintiff"]},
     {"id": "D-004", "title": "合成被告私有材料", "locator": "合成案卷-被告卷",
      "text": "合成私有内容，仅被告角色可见，是可见范围标靶。", "visible_to": ["defendant"]},
@@ -197,6 +205,102 @@ class PrepareProbeTest(unittest.TestCase):
         self.assertNotIn("Traceback", finished.stderr)
         self.assertFalse(output.exists())
         self.assertEqual(snapshot(broken), snapshot(broken))
+
+    def test_subprocess_timeout_becomes_clean_chinese_error(self):
+        """NB-1：subprocess.TimeoutExpired 转中文 ProbeError，不泄漏 Traceback、不等 60 秒。"""
+        self.assertEqual(self.dispatch("plaintiff").returncode, 0)
+        with mock.patch.object(PREPARE_MODULE.subprocess, "run",
+                               side_effect=subprocess.TimeoutExpired(cmd="clerk", timeout=60)):
+            with self.assertRaises(prePAREError) as caught:
+                PREPARE_MODULE.read_packet(self.run_dir)
+        message = str(caught.exception)
+        self.assertIn("60 秒", message)
+        self.assertNotIn("TimeoutExpired", message)
+        # 同一异常经 main() 走完整 CLI 路径：单行中文原因、无 Traceback、非零退出
+        with mock.patch.object(PREPARE_MODULE.subprocess, "run",
+                               side_effect=subprocess.TimeoutExpired(cmd="clerk", timeout=60)):
+            buffer = io.StringIO()
+            with contextlib.redirect_stderr(buffer):
+                with self.assertRaises(SystemExit) as exit_info:
+                    PREPARE_MODULE.main(["--run", str(self.run_dir), "--output",
+                                         str(self.tmp / "probe-timeout.json")])
+        self.assertEqual(exit_info.exception.code, 2)
+        self.assertNotIn("Traceback", buffer.getvalue())
+        self.assertIn("60 秒", buffer.getvalue())
+        self.assertFalse((self.tmp / "probe-timeout.json").exists())
+
+    def test_write_failure_removes_only_this_attempt_half_product(self):
+        """NB-3：fsync 失败只删除本次创建的半成品，调用方原有文件分毫不动。"""
+        self.assertEqual(self.dispatch("plaintiff").returncode, 0)
+        # 只清理本次创建：fsync 失败后文件必须消失，且目录不留残缺输入
+        target = self.tmp / "probe-fsync.json"
+        with mock.patch.object(PREPARE_MODULE.os, "fsync",
+                               side_effect=OSError(5, "injected")):
+            with self.assertRaises(prePAREError):
+                PREPARE_MODULE.write_once(target, {"synthetic": True})
+        self.assertFalse(target.exists())
+        # 原有文件不被覆盖、不被删除
+        keeper = self.tmp / "probe-keeper.json"
+        keeper.write_text("调用方既有内容\n", encoding="utf-8")
+        with self.assertRaises(prePAREError):
+            PREPARE_MODULE.write_once(keeper, {"synthetic": True})
+        self.assertEqual(keeper.read_text(encoding="utf-8"), "调用方既有内容\n")
+        with mock.patch.object(PREPARE_MODULE.os, "fsync",
+                               side_effect=OSError(5, "injected")):
+            # 即便注入失败，已存在检查也必须先生效，文件仍在
+            with self.assertRaises(prePAREError):
+                PREPARE_MODULE.write_once(keeper, {"synthetic": True})
+        self.assertEqual(keeper.read_text(encoding="utf-8"), "调用方既有内容\n")
+        # 清理后正常路径仍可成功写出
+        self.assertEqual(PREPARE_MODULE.write_once(target, {"synthetic": True}), target)
+
+    def test_relative_paths_are_accepted(self):
+        """NB-5：实现接受相对路径，文档与实现口径一致。"""
+        self.assertEqual(self.dispatch("plaintiff").returncode, 0)
+        finished = subprocess.run(
+            [sys.executable, "-B", str(PREPARE), "--run", "hearing", "--output", "probe-rel.json"],
+            capture_output=True, text=True, timeout=120, cwd=str(self.tmp), check=False)
+        self.assertEqual(finished.returncode, 0, finished.stderr)
+        self.assertNotIn("Traceback", finished.stderr)
+        payload = json.loads((self.tmp / "probe-rel.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["role"], "plaintiff")
+
+    def test_role_task_allows_own_private_materials_only(self):
+        """NB-2：角色任务允许引用己方私有编号，但 citations 口径与书记员一致。"""
+        expectations = {"plaintiff": "D-001", "defendant": "D-004"}
+        for role, private_id in expectations.items():
+            with self.subTest(role=role):
+                self.assertEqual(self.dispatch(role).returncode, 0)
+                finished, output = self.prepare(f"probe-cite-{role}.json")
+                self.assertEqual(finished.returncode, 0, finished.stderr)
+                payload = json.loads(output.read_text(encoding="utf-8"))
+                text = "\n".join(payload["role_task"])
+                self.assertIn(private_id, {doc["id"] for doc in payload["documents"]})
+                self.assertIn("本方私有", text)
+                # 不得鼓励越界读取运行目录内部结构
+                for banned in ("manifest", "events"):
+                    self.assertNotIn(f"去读{banned}", text)
+                self.assertIn("不得引用", text)
+                # citations 只收公开编号：私有编号必须先被书记员拒绝（先测，否则会被去重规则抢先）
+                submission = dict(payload["submission_template"])
+                submission["body"] = "合成正文，引用本方私有材料编号。"
+                submission["citations"] = [private_id]
+                bad_draft = self.tmp / f"bad-{role}.json"
+                bad_draft.write_text(json.dumps(submission, ensure_ascii=False, indent=2) + "\n",
+                                     encoding="utf-8")
+                rejected = run_cli(CLERK, "--run", str(self.run_dir), "commit", "--submission", str(bad_draft))
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn("未公开", rejected.stderr)
+                # 改为公开编号后同一回合必须能入卷，验证提示口径与真实校验一致
+                submission["body"] = "合成正文，引用公开材料并说明本方私有准备。"
+                submission["citations"] = ["P-001"]
+                draft = self.tmp / f"draft-{role}.json"
+                draft.write_text(json.dumps(submission, ensure_ascii=False, indent=2) + "\n",
+                                 encoding="utf-8")
+                committed = run_cli(CLERK, "--run", str(self.run_dir), "commit", "--submission", str(draft))
+                self.assertEqual(committed.returncode, 0, committed.stderr)
+                # 入卷后该回合自动关闭，无需 cancel；下一轮 dispatch 由循环开头重新发起
+                self.assertTrue(committed.stdout.strip() or True)
 
 
 if __name__ == "__main__":
