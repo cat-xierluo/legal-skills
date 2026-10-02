@@ -210,7 +210,10 @@ def _observe(root: Path, artifact: dict[str, Any]) -> dict[str, Any]:
                     raise ArtifactError("text artifact contains binary NUL")
                 substantive = substantive or bool(text.strip())
         if decoder is not None:
-            substantive = substantive or bool(decoder.decode(b"", final=True).strip())
+            # Final validation must run even after nonempty text was decoded:
+            # the incremental decoder can still hold a truncated UTF-8 tail.
+            final_text = decoder.decode(b"", final=True)
+            substantive = substantive or bool(final_text.strip())
             if not substantive:
                 raise ArtifactError("text artifact is empty or whitespace only")
         signatures = {"application/pdf": b"%PDF-", "image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}

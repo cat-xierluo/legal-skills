@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from business_artifact_contract import ArtifactError, MAX_FILE_BYTES, observe_delivery
+from business_artifact_contract import ArtifactError, MAX_FILE_BYTES, digest_json, observe_delivery
 
 
 def business_task() -> dict:
@@ -190,6 +191,38 @@ class BusinessArtifactTests(unittest.TestCase):
             with self.assertRaises(ArtifactError): observe_delivery(self.task, self.root)
         with report.open("wb") as stream: stream.truncate(MAX_FILE_BYTES + 1)
         with self.assertRaises(ArtifactError): observe_delivery(self.task, self.root)
+
+    def test_valid_prefix_truncated_utf8_tail_rejected_by_three_consumers(self) -> None:
+        report = self.root / "report.md"
+        spec = self.root / "utf8-spec.json"; spec.write_text(json.dumps(self.spec()))
+        observer_argv = [sys.executable, str(HERE / "business_artifact_contract.py"), "--spec", str(spec),
+                         "--task-id", self.task["task_id"], "--artifact-root", str(self.root)]
+        valid = b"# Valid prefix\n" + "中".encode("utf-8")
+        report.write_bytes(valid)
+        evidence = self.evidence()
+        positive = subprocess.run(observer_argv, capture_output=True, text=True, timeout=20)
+        self.assertEqual(positive.returncode, 0, positive.stdout + positive.stderr)
+        self.postflight(evidence)
+        self.assertEqual(self.call("review-acceptance-gate.py", self.review(evidence)).returncode, 0)
+
+        invalid = b"# Valid prefix\n" + b"\xe4"
+        report.write_bytes(invalid)
+        # Bind the actual invalid bytes, not a stale positive manifest. The
+        # three consumers must reject decoding itself despite a matching hash.
+        delivery = evidence["delivery"]
+        delivery["artifacts"][0].update(sha256=hashlib.sha256(invalid).hexdigest(), bytes=len(invalid))
+        delivery.pop("identity")
+        delivery["identity"] = "artifact-sha256:" + digest_json(delivery)
+        evidence["content_review"]["delivery_identity"] = delivery["identity"]
+        with self.assertRaises(ArtifactError): observe_delivery(self.task, self.root)
+        negative = subprocess.run(observer_argv, capture_output=True, text=True, timeout=20)
+        self.assertEqual(negative.returncode, 2, negative.stdout + negative.stderr)
+        self.assertIs(json.loads(negative.stdout)["accepted"], False)
+        postflight = self.postflight(evidence, 2)
+        self.assertTrue(any("modality" in error for error in postflight["errors"]), postflight)
+        review = self.call("review-acceptance-gate.py", self.review(evidence))
+        self.assertEqual(review.returncode, 2, review.stdout + review.stderr)
+        self.assertTrue(any("modality" in error for error in json.loads(review.stdout)["errors"]))
         report.unlink()
         with self.assertRaises(ArtifactError): observe_delivery(self.task, self.root)
 

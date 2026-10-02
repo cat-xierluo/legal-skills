@@ -435,6 +435,7 @@ blocker_and_recovery:
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
 
 - 2026-10-03 顺序推进：用户确认先修合法业务产物准入，再统一并发口径，最后验 MiniMax 完整 spawn。沿原卡和 PR #248 的隔离树推进；本平台实现/独审串行，原业务 owner 不变。业务合同采用 `business_artifact`、真实文件指纹、来源与逐项独审；工程原 head/diff/commands 合同保留。证据目录 `/tmp/mao-sequential-gates-261003/`；当前工程候选尚待独审、完整矩阵与安装，不先记完成。
+- 业务模态首候选 `2648f988`：作者五套件共117项通过，但独审真实反例发现 UTF-8 final flush 被短路，截断末尾可误过观察/postflight/review 三门，判定 REJECT；原失败保留于 `/tmp/mao-sequential-gates-261003/business-review/`，同作者窄修后重新独审，不能以首轮自测覆盖独审失败。
 - 并发基线事实：历史提交 `c8a77da677b71091056d3c9d9058e1d089d90c86` 已将 converge/explore/待验收 PR 上限发布为 8/10/4；SKILL 的 3/2 是残留。下一单元保留既有数字，区分本波候选数、PM 跨项目活跃库存与机器内存 slots，项目已声明的较小 cap 优先。当前门仅数 `spec.tasks`，不能声称实现全局原子并发预留。
 
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
