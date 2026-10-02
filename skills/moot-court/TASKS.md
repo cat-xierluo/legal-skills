@@ -157,6 +157,13 @@
 - Gemini CLI：实际CLI自报0.25.2，顶层包文件为0.29.0，保留版本来源差异。参数解析和帮助可用；最小模型请求在默认模式持续90秒无输出，调试重试超过60秒仍无输出，均主动中止。结果为`argument_parser=PASS`、`model_entry=BLOCKED_OR_STALLED`、`agent=NOT_RUN`、`full_skill=NOT_RUN`；未创建项目代理配置。
 - 状态：Task保持`IN_PROGRESS`。当前只有Codex宿主完成既有完整民事记录；Claude Code停在短闭环，Gemini已有结果停在模型入口，尚未满足“至少两个实际Runtime完整闭环”、异常恢复与三项交付验收。下一次优先按分级门禁续测Claude Code，不再推进Gemini。
 
+#### 续测与语义门禁修订（2026-09-22）
+
+- Claude Code 2.1.237按G1固定短答重新测试；默认安全模式下连续出现连接错误，运行结束时输入／输出token均为0、无权限拒绝、无模型正文。按有界等待停止，没有继续消耗G2—G5预算。该结果记为`model_entry=BLOCKED_OR_STALLED`，不证明本Skill不兼容，也不覆盖2026-09-20已经取得的历史能力证据。
+- 针对2026-09-20四发言短闭环留下的两处语义发现，本候选增加事实强度门禁：角色和主控逐项核对主体、对象、时间、数量；模糊指代不得擅自绑定具体对象；“未见记录”不得扩大为“未发生”。发现越界时退回原角色修正并重跑受影响链路，书记员不承担实体判断。
+- 当前Codex宿主以v1.2.2候选做无旧上下文语义烟测：独立法官、原告、被告依次完成提问、回应、针对回应和法官归纳。原告将D-004作为关联待核实的辅助线索，被告明确不从材料缺失推断事件从未发生；法官复核两类越界均未出现。该次只验证四发言中的事实强度规则，没有使用书记员正式事件或完成七环节与三项交付，不能记作Claude G4或任何Runtime的G5。
+- 验收材料同步增加关键争议命题状态审计和两个最小反例。该修订是规则与评测补强，未取得新的Claude G5产物，Task继续保持`IN_PROGRESS`；下次入口恢复后从G1重测，G5仍须绑定当时候选重新执行。
+
 ### Task-019 · 办公类 Agent Runtime 实测
 
 - 状态：DRAFT；优先级：P2。候选包括WorkBuddy、千问办公等带文档／任务能力的办公类Agent，具体产品名称与版本在执行前确认。
@@ -227,3 +234,70 @@
 
 - Task-006（DONE，2026-09-18）：完成定位与撰写规划；用户确认基于现有材料自动分派法官、原被告或控辩。实现随后由 Task-008 承接。
 - Task-007（DONE，2026-09-18）：完成书记员中转规划，区分记录持久化和宿主唤醒；通过限定材料包、提交稿及单写者事件衔接角色。架构取舍见 DEC-005，实现由 Task-008 承接。
+## 2026-10-02 审计修复波次
+
+本轮用户指定 `multi-agent-orchestration`，由 ZCode CLI、MiniMax Code worker 修复，PM 协调验收并推进集成 PR。候选 `2c727a3b` 可从 Git 恢复；当前主线仍为 v1.2.1，旧调试日志未全部找回，源码恢复不等于 Runtime 证据恢复。上一轮新增 Task-020—024 未出现在当前文件，以下按已有审计结论重新登记，不能据此补记运行成功。
+
+### Task-020 · 前序修改审计
+
+- 状态：DONE（审计登记，不代表缺陷修复）；依据：候选提交及此前审计结论。
+- 发现：语义烟测曾直接给答案、角色可读全量 manifest、末轮法官自查；四次发言不等于四次冷启动。书记员 packet 实際过滤与模型读入范围须分开。
+- 静态/CLI历史结果只支持协议能力，Claude完整闭环和多轮稳定性仍为 NOT_VERIFIED。
+
+### Task-021 · 不泄露预期答案的角色分包验证资产
+
+- 状态：IN_REVIEW；优先级：P1；归属：MiniMax Code，`MC-021`。
+- 输入：合成民事材料、现有 clerk packet；不读取客户案卷。
+- 范围：prepare_probe.py、test_prepare_probe.py、独立 reviewer 合同、blind-probe.md；与 ZCode 修改范围正交。
+- 验收：角色输入无答案和全量 manifest 路径；私有材料按角色过滤；独立复核答案单独保存；运行实际 CLI 并拒绝覆盖输出。
+- 本轮交付是验证资产，实际冷启动角色攻防和独立领域复核继续由 Task-011/005 验收，不提前标完成。
+
+### Task-022 · 合法推断与事实失真边界
+
+- 状态：DONE（2026-10-02，证据待 PM 独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 输入：v1.2.2 候选与四类对照：无源确定断言、仅贴推断标签、带材料和桥梁的条件推断、当前无记录。
+- 验收：允许有桥梁的条件论证；标签不豁免无源断言；书记员不能裁决证明力或代角色改观点；模板、主文、rubric一致。
+
+### Task-023 · 有界修稿与入卷后更正
+
+- 状态：DONE（2026-10-02，证据待 PM 独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 范围：同一派发语义修稿的次数/时间边界；入卷后以新回合保留旧发言并给受影响双方回应机会；关闭后只能新建 run 并维护来源映射。
+- 验收：真实 CLI 回归验证旧记录不覆盖、close 后禁止 dispatch、新run不能把旧seq填respond_to；反复packet读取不消耗技术派发次数，说明主控另行限时。
+- 非目标：用脚本声称自动判定法律语义或执行主控语义预算。
+
+### Task-024 · 持续候选、集成与证据恢复
+
+- 状态：IN_PROGRESS；优先级：P1；归属：PM 集成，ZCode 随行同步技能文档。
+- 范围：从旧候选恢复已实现修订；本波次按最新 origin/main 独立工作树、冻结提交、独立复核、验收后集成 PR；更新技能版本/README 动态，忽略 Runtime 日志。
+- 验收：PR只包含 moot-court 与必要 README 行；安全与链接/格式检查通过；真实worker产物及精确head记录到本地忽略档案。
+- 未找到的历史调试日志保持 NOT_VERIFIED；不恢复其他技能、不覆盖主目录无关改动。
+- 后续：Task-011 Claude Code G5 → Task-005 多轮稳定性 → Task-019 WorkBuddy/千问办公；Task-017 继续暂缓。
+
+#### 本轮验收与阻塞（2026-10-02）
+
+- 派发价值门：`dispatch-value-gate.v2` 通过，任务/范围/验证命令已绑定；Orca 1.4.218、ZCode CLI 0.16.9、MiniMax Code 0.5.10入口可用；GitHub认证和origin/main身份已核对。两backend均采用用户明确选择，未切换模型/账号或安装依赖。
+- 三轮现场派发预检：两个backend均在内存门拒绝，未创建worker工作树/终端/Task/Dispatch，业务注入为0。依MAO规则正式记 `PARKED_FOR_MEMORY`；不能称为worker失败或已修复。
+- 首轮折算可派发内存约2.6—2.9GiB，低于3GiB预算；后续swap使用比例约0.97—0.99触发critical、slots=0。末轮ZCode曾报告safe_available=30.81GiB仍因swap比例拒绝：仅记录门判定与现场事实，不据此认定系统立即OOM或门实现有缺陷；预算与压力信号如需调整，须另行评估，当前不得放宽。
+- ZCode每轮派发前只读预算计划与validate-dispatch通过；只证明校验时点，不证明worker已使用某provider或持续账号锁。私人观测和完整启动信息留在忽略目录，不进入PR。
+- 基线验证：`python3 -B skills/moot-court/scripts/test_clerk.py`，17/17通过；当前v1.2.1静态安全扫描0 critical/high，2项测试subprocess medium和临时文件清理info不作为新缺陷。没有生成新候选，因此未执行本波交付后门/独立review门或新候选领域验证。
+- 本地证据：`archive/2026-10-02-worker-wave/` 中dispatch合同、任务输入、候选变更hash、queue.json、三轮启动日志、真实memory-cycle3.json、baseline-test.log和baseline-security.json，全部忽略。早期非提权probe的unprobeable不是宿主内存结论，真实宿主结论以上述cycle3为准。
+- 停止条件：按 `multi-agent-orchestration/references/22-mem-budget-lane.md` 连续3轮不足正式泊车。不手动启动、不关闭其他用户进程、不放宽预算、不用PM实现绕过所选worker。当前无修复PR；恢复后使用原Task/波次合同重新现场观测，再派发一次，验收冻结head并独立review后推进集成PR。
+- 本轮仅更新任务/执行证据，未改变Skill行为，故不递增技能版本、不新增CHANGELOG或虚构DECISIONS。计划集成分支 `codex/moot-court-v123-integration` 按long-lived保留本地任务检查点，尚未推送。
+
+#### 用户恢复派发（2026-10-02）
+
+- 用户要求继续派发；新现场内存probe通过（slots=2，warn）。MiniMax batch已通过全部门并创建隔离工作树与精确终端，启动命令唯一消费任务；创建回执尚不代表验收完成。ZCode继续准备原生监督派发。
+
+#### MC-022-023 修复与恢复记录（2026-10-02）
+
+- 恢复：以 `git show 2c727a3b -- skills/moot-court` 逐文件恢复 v1.2.2 事实强度门禁修订（SKILL.md、role-profiles、review-rubric、evaluation、templates、runtime-validation、runtime-adapters、CHANGELOG、DECISIONS）；README 不在授权范围未恢复，TASKS 以任务源快照为新基准并插回 2026-09-22 历史小节。恢复的是源码修订，不等于旧调试日志或 Runtime 证据找回。
+- Task-022 交付：四类断言边界（无源确定断言退回；只贴推断标签不豁免；基于材料、明确桥梁与不确定性的条件推断可入卷，证明力由对方和法官评断；当前无记录只能写“当前材料未显示”，不得写成现实未发生）贯通 SKILL.md、role-profiles、review-rubric、evaluation 并各附正反例；书记员只做可见范围与机械校验、不裁证明力、不代改观点、不因不认同立场禁止合理对抗，同一语义在四处一致。
+- Task-023 交付：同一派发语义修稿首稿外至多两次并受用户时间预算约束，到限保留失败记录并 cancel 或 `close --incomplete`，不把修稿失败归实体败诉；packet 重读只读、不增派发次数，主控另行限时；入卷后更正以新回合引用原发言编号并给受影响双方回应机会，不覆盖旧稿；close 后只能新建运行，旧运行编号仅作公开来源说明、不得填 respond_to。语义预算由主控执行并记录，不声称 clerk 机械执行；未新造法律判定器，协议 schema 与 clerk.py 未改动。
+- 验证：`python3 -B skills/moot-court/scripts/test_clerk.py ClerkTest.test_correction_and_cross_run_regression` 真实 CLI 子进程回归通过（exit 0），覆盖不覆盖旧稿、更正链对方可见、close 后拒绝派发、新 run 旧编号拒绝与来源映射仅公开说明、packet 只读。按合同只跑该单测，未跑全量套件。
+- 版本与取舍：统一 v1.2.3（2026-10-02），取舍见 DEC-013。MiniMax 分包工具（Task-021）暂以待集成记载。Task-011 完整 Runtime 闭环与 Task-005 多轮稳定性维持 NOT_VERIFIED，本记录不替代其独立验收。
+
+#### 修复产物汇总（2026-10-02）
+
+- MiniMax实际原生Run成功结束，冻结提交bcbe700b，7项CLI测试经PM复跑通过、postflight范围门通过；ZCode唯一worker_done succeeded、冻结提交dfaee2d9，新增CLI回归经PM复跑通过、postflight范围门通过。ZCode已通过正式release并确认完整Delivery；两项修复进入独立验收，当前不将其自验扩大为领域正确性。
+- 实际PR汇总分支使用 `fix/moot-court-recovery-probes`，从最新origin/main建立；原 `codex/moot-court-v123-integration` 保留本地计划检查点，不重写或推送该历史分支。这里只按目标文件提取产物，未合并整个worker分支。
+- 一次ZCode检查点指导在消息wrapper的worker.state校验处被拒绝（native ready、projection working，wrapper仅接受active），未发送。原worker仍独立完成，未绕过门。后续评估该状态兼容性，当前不声称协调消息链全面验收。
