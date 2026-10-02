@@ -413,7 +413,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
 
-- 状态：`IN_PROGRESS / PROFILE_ACCEPTED_VALUE_MODALITY_AUDIT_PENDING`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 状态：`IN_PROGRESS / BUSINESS_SCOPED_ACCEPTED_CAPACITY_IN_PROGRESS`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
 - 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
 - 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
 - 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
@@ -436,6 +436,7 @@ blocker_and_recovery:
 
 - 2026-10-03 顺序推进：用户确认先修合法业务产物准入，再统一并发口径，最后验 MiniMax 完整 spawn。沿原卡和 PR #248 的隔离树推进；本平台实现/独审串行，原业务 owner 不变。业务合同采用 `business_artifact`、真实文件指纹、来源与逐项独审；工程原 head/diff/commands 合同保留。证据目录 `/tmp/mao-sequential-gates-261003/`；当前工程候选尚待独审、完整矩阵与安装，不先记完成。
 - 业务模态首候选 `2648f988`：作者五套件共117项通过，但独审真实反例发现 UTF-8 final flush 被短路，截断末尾可误过观察/postflight/review 三门，判定 REJECT；原失败保留于 `/tmp/mao-sequential-gates-261003/business-review/`，同作者窄修后重新独审，不能以首轮自测覆盖独审失败。
+- 业务窄修 `08c1af90`：作者business14一次exit0；独审原坏字节重绑真实清单后观察/postflight/review均2，合法中文近似样例均0，限定ACCEPT、无blocker。原15个消费者与未变SHA复用，旧REJECT完整保留；尚未安装、完整矩阵和真实Orca/model不在该结论内。
 - 并发基线事实：历史提交 `c8a77da677b71091056d3c9d9058e1d089d90c86` 已将 converge/explore/待验收 PR 上限发布为 8/10/4；SKILL 的 3/2 是残留。下一单元保留既有数字，区分本波候选数、PM 跨项目活跃库存与机器内存 slots，项目已声明的较小 cap 优先。当前门仅数 `spec.tasks`，不能声称实现全局原子并发预留。
 
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
