@@ -170,3 +170,13 @@
 **理由与影响**：语义裁决需要案件语境与专业复核，写进脚本会产生不可审计的隐式法律判断；schema保持不变使v1.2.0以来的事件、Runtime适配与旧记录全部兼容。代价是主控执行偏差只能靠复核rubric和独立复核发现，CLI回归不覆盖语义合规本身。
 
 **重新评估条件**：出现可复算且误报漏报已验证的领域checker时，可把明确的对象错绑或否定推断降级为脚本提示；在此之前不把自然语言规则伪装成确定性检测。
+
+## [DEC-014] - 2026-10-02 - 被动索引器只绑定可观察调用，子代理工具名以实测为准
+
+**背景**：Task-011/027 的核心争议是“角色调用与入卷只能靠手工自述”。Claude Code 2.1.237 的真实 stream-json 显示：同一 assistant message 会拆成多个事件（thinking/text/tool_use 各自成事件），子代理派发工具在本机实际名为 `Agent`（G2 实测 tool_use id `call_*` 与 user 事件 tool_result 配对），而同版本还暴露 `TaskCreate` 等计划清单工具（无 prompt、无子代理返回），不能按名称前缀想当然计为派发。
+
+**决策**：`scripts/index_claude_trace.py` 只做被动消费本地 `--output-format stream-json --verbose` 原件：按 tool_use_id 关联 Agent/Task（以所用版本实测工具名为准，可用 `--subagent-tools` 覆盖）的 tool_use 与 tool_result；同 ID 重复相同事件去重、内容冲突整体拒绝；无配对结果的调用记 unfinished 不计 completed；prompt 只存 sha256 与长度，不整段写入公开产物。索引 verdict 最高为 VERIFIED_CALLS，明确不单独签出 G5 或 DOMAIN_VERIFIED。
+
+**理由与影响**：来源自述和 JSON 声明都不是防伪证明，只有原始事件配对可回查；把计划类工具误计为派发会虚增独立角色数，把未完成调用计为完成会掩盖中断。代价是索引无法区分“子代理内部又派发”等嵌套细节，也不验证语义正确性，这些仍归独立复核。
+
+**重新评估条件**：所用 Claude 版本的子代理工具名或事件结构变化时，先用最小探针实测再更新 `--subagent-tools` 与解析；出现伪造 trace 的对抗需求时另行评估签名链，不在本索引器内实现。
