@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.34.2"
+  version: "2.34.3"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -72,9 +72,9 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 
 以下四道门按阶段执行，任一非零退出均不得跳过：
 
-1. **派发价值门**：候选波次采用 `templates/dispatch-value-gate.example.json` 同构合同，运行 `python3 scripts/dispatch-value-gate.py <spec.json>`。只接受 `implementation`、`reusable_verification` 或绑定具名 PR/head 的 `merge_gate`；docs/research/纯调查/纯格式工作不可独立派发。
-2. **交付价值后门**：使用同一 spec 运行 `worker-value-postflight.py`，以真实 diff、声明资产、验证命令和 40 位 immutable head 证明交付。
-3. **角色分离验收门**：非平凡实现由不同 dispatch/session 的 implementer 与 reviewer 完成，运行 `review-acceptance-gate.py`。自审、head 漂移、纯叙述证据、失败验证或未清 blocker 均拒绝。
+1. **派发价值门**：候选波次采用 `templates/dispatch-value-gate.example.json` 同构合同，运行 `python3 scripts/dispatch-value-gate.py <spec.json>`。接受 `implementation`、`reusable_verification`、绑定具名 PR/head 的 `merge_gate`，以及有业务目的、来源、精确产物和逐项标准的 `business_artifact`。研究、设计、文书和报告按业务产物验收；无明确消费的维护文档、占位调查与纯格式扩波仍拒绝。
+2. **交付价值后门**：使用同一 spec 运行 `worker-value-postflight.py`，工程交付核真实 diff、声明资产、验证命令和 40 位 immutable head；业务交付读取 Git 或非 Git 目录的真实文件，将合同、来源和文件指纹绑定为同一交付身份。
+3. **角色分离验收门**：非平凡实现由不同 dispatch/session 的 implementer 与 reviewer 完成，运行 `review-acceptance-gate.py`。自审、交付身份漂移、缺失绑定证据、失败验证或未清 blocker 均拒绝；业务产物还须由不同作者逐项核查内容及来源，不以文件哈希证明内容正确。
 4. **失败恢复门**：先用 `acceptance-recovery.py` 分类。`internal_recoverable` 在预算内修复并重新独立审查；`external_dependency`、`safety_unknown` 或预算耗尽才泊车。已具名 PR 的 docs-only 验收修复只能走 `acceptance-repair-gate.py` 的极窄 preflight/postflight 通道。
 
 字段、命令、例外枚举、reviewer 证据预算与恢复语义统一读取 `references/18-dispatch-acceptance-contracts.md`；不要在项目 prompt 或别的脚本另造一套分类表。
@@ -92,7 +92,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
 - tracked 文件删除是独立高风险类，先于普通 Shell allowlist 判定。只有 hook-enabled worker 可从 receipt 绑定的 worktree 根运行 `git rm -- <一个 canonical repo-relative tracked file>`，且该精确路径必须在 spawn 时写入不可变 `allowed_write_paths`；scope glob、后续 `reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开和复合命令均不能扩大权限。Codex/ZCode 的 `prompt_only_degraded` 只提供提示，不能声称机械删除保护；详见 `references/02-runtime-dependencies.md` §6。
 - 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。在 Claude auto 策略下，该列表仍是交付验收的必跑命令，不是普通 Bash 的唯一执行权限来源。
-- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。
+- 要求 Worker 自验时传 `--require-verification`，或在项目 `.claude/orchestration.config.json` 设置 `verification.required: true`。命令解析为空、合同 task 不唯一、worker type 未声明、配置畸形、重复/空白、U+0000 或安装型命令时，必须在 terminal/Task/Dispatch/任务注入前失败。业务合同显式 `acceptance_mode: content_review` 时使用空命令数组并进行内容独审，不自动发现无关测试；与显式 `--require-verification` 冲突则拒绝。需要真实命令验证的业务使用 `verifier`。
 - 验证命令只接受一个权威来源：无文件合同时使用 `--verify-cmd`，否则使用派发价值合同；两者互斥。都未提供时才读取项目配置，再回退根目录有界发现。Node/Make 既有发现不变；Python 只在根 manifest 与根 `tests/` 同时存在时注入 `python3 -m unittest discover -s tests -v`。嵌套 Python/其他子项目必须在项目配置 `verification.by_worker_type` 显式写完整命令，不递归猜测。依赖行为读取 `references/02-runtime-dependencies.md`。
 
 ## 4. Orca-first 执行

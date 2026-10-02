@@ -434,6 +434,9 @@ blocker_and_recovery:
 - 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
 
+- 2026-10-03 顺序推进：用户确认先修合法业务产物准入，再统一并发口径，最后验 MiniMax 完整 spawn。沿原卡和 PR #248 的隔离树推进；本平台实现/独审串行，原业务 owner 不变。业务合同采用 `business_artifact`、真实文件指纹、来源与逐项独审；工程原 head/diff/commands 合同保留。证据目录 `/tmp/mao-sequential-gates-261003/`；当前工程候选尚待独审、完整矩阵与安装，不先记完成。
+- 并发基线事实：历史提交 `c8a77da677b71091056d3c9d9058e1d089d90c86` 已将 converge/explore/待验收 PR 上限发布为 8/10/4；SKILL 的 3/2 是残留。下一单元保留既有数字，区分本波候选数、PM 跨项目活跃库存与机器内存 slots，项目已声明的较小 cap 优先。当前门仅数 `spec.tasks`，不能声称实现全局原子并发预留。
+
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
 
 - 状态：`IN_PROGRESS / VERIFIED_PR_CLOSEOUT_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。

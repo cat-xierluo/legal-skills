@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import sys
 from typing import Any
+from business_artifact_contract import validate_task as validate_business_task
 
 
 SCHEMA = "dispatch-value-gate.v2"
@@ -23,7 +24,7 @@ REQUIRED_VALUE_FIELDS = (
 )
 PLACEHOLDERS = {"", "tbd", "todo", "unknown", "n/a", "na", "-", "*", "**", "none"}
 DOC_KINDS = {"docs", "research"}
-VALUE_KINDS = {"implementation", "reusable_verification", "merge_gate"}
+VALUE_KINDS = {"implementation", "reusable_verification", "merge_gate", "business_artifact"}
 PR_POLICIES = {"worker_pr", "integration_pr", "no_worker_pr"}
 DOC_EXTENSIONS = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 DOC_DIR = "docs/"
@@ -97,7 +98,7 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
         errors.append(f"{prefix}.resource_owner must name the external resource owner")
 
     kind = task.get("kind")
-    if kind in DOC_KINDS:
+    if kind in DOC_KINDS and task.get("value_kind") != "business_artifact":
         errors.append(
             f"{prefix}.kind '{kind}' is not a dispatchable value task; "
             "declare value_kind implementation/reusable_verification/merge_gate instead"
@@ -134,7 +135,11 @@ def _validate_task(task: dict[str, Any], prefix: str, errors: list[str]) -> None
         errors.append(f"{prefix}.worker_pr_policy must be one of {allowed}")
         policy = None
 
-    if value_kind == "merge_gate":
+    if value_kind == "business_artifact":
+        errors.extend(validate_business_task(task, prefix))
+        if policy == "integration_pr" and _missing(task.get("integration_target")):
+            errors.append(f"{prefix}.integration_target is required for integration_pr")
+    elif value_kind == "merge_gate":
         if engineering_assets:
             errors.append(f"{prefix}.merge_gate declares no_worker_pr and must not declare engineering_assets")
         if doc_assets:
@@ -214,6 +219,7 @@ def validate(spec: Any, now: datetime) -> list[str]:
         errors.append(f"explore mode permits at most {EXPLORE_MAX_WORKERS} active workers")
     doc_count = sum(
         1 for item in tasks if isinstance(item, dict) and item.get("kind") in DOC_KINDS
+        and item.get("value_kind") != "business_artifact"
     )
     if mode == "converge" and doc_count > 1:
         errors.append("converge mode permits at most 1 research/docs task")

@@ -64,6 +64,7 @@ bash scripts/test-spawn-worker-verification.sh
 bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh
+python3 scripts/test_business_artifact.py
 bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
 python3 -B scripts/test_continuation_readiness.py -v
