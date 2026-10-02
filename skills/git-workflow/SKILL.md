@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.10.0"
+  version: "1.10.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -312,6 +312,8 @@ git checkout <feature-branch>
 git rebase origin/main
 git push --force-with-lease  # rebase 后需要 force push
 ```
+
+**批量验收合并与取代关闭**（用户拍板「把这些 PR 合并」「合并新 PR、关闭旧 PR」后执行；含合并前复核、同族窄采用 PR 串行合并与连锁文档冲突解法、关闭评论四要素、收尾清理）统一读取 `references/branch-lifecycle-and-cleanup.md` §3.5。单 PR 日常合并同样适用其复核与确认要求。
 
 ### Rebase 冲突时的恢复
 
