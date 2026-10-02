@@ -459,6 +459,7 @@ blocker_and_recovery:
 - 范围：核正式宿主入口及已授权原PM目标；不更改全局审批/allowlist，不改旧暂停job，不造第二PM或shell定时，不将worker原生full权限扩大解释成PM工具审批已开放。实际支持入口成功时核job唯一身份/原PM/原卡并只记配置就绪；失败保留原拒绝，不能说缺真人授权。
 - 验收：准确拒绝原件和两层策略事实可回查，原业务会话与成果保全；合法解锁路径不绕过审批，不自签自动闭环。宿主根因及首次真实tick/返回独审续派不具备时NOT_VERIFIED。
 - 本轮可执行处置已完成：回读原真人周期授权后核当前原PM没有job；本支持上下文正式automation_update create成功，新job fathom-pm-worker ACTIVE/20分钟，target精确原PM。真实配置经新准备门exit0且autonomous=false；原旧PAUSED job未改、原worker未重发、无第二PM。这只解除本案例“没有job”的缺口，不证明原聊天MCP审批传播已修、首次自动tick或业务闭环；原拒绝/本成功及on-request对never差异保留在私有证据。
+- 收口增量实证：官方原线程回读到fathom-pm-worker的heartbeat消息（2026-10-02T05:02:59.871Z），原PM自动消费ZCode固定head独审与角色门，真实GUI验收失败后写回ISS-141/累计3/3，并正式暂停同job。root独立只读核原role receipt、GUI FAIL、原Task写回与实际PAUSED/精确目标一致；这是一次自动返回验收→写回→预算泊车周期，不是长期稳定/成功交付/新的下一卡派发。此前人工恢复归因保留，原MCP create审批传播根因仍未确认。
 
 ## TASK-2026-10-02-CONTINUATION-READINESS — 持续推进入口与人工介入归因修复
 
@@ -473,6 +474,7 @@ blocker_and_recovery:
 - 限定验收：新准备门10项与独立3组反例通过，真实既有job只读消费与错PM拒绝通过；无旧上下文两情景能区分宏观心跳和真人恢复。核心8文件及监测/CI/ref16四对象独审摘要绑定一致。CI定义增加准备门、Wave与监测fixture；尚未以CI结果签通过。
 - 完整矩阵首轮67项：61 exit0，6项非零/超时/跳过；两个exit0的tmux smoke也实际为sandbox环境SKIP。原件全部保留。只做有限第二次：借用树53/53、closeout、controller在生产及测试字节不变下exit0（仅外层上限180→600秒）；monitor修后独审26/26；facts仍20/21，剩余超时/身份诊断归新验证欠账卡。此证据不代表首次全绿、全Skill稳定或真实自动独审续派。
 - 发布隔离：主source有其他会话GUI文档2.35.1未提交改动，保持其成果；隔离候选本修2.34.2基于远端MAO2.34.1，不回滚共享源码、Git index或个人配置。候选与源码新脚本/参考同字节，版本部署总验收仍归Task-068。
+- 单次真实业务接续补证：Fathom原正式job一次HOST_HEARTBEAT已触发，原PM消费独审/真实验收并写回预算泊车，job已正式PAUSED；详见HOST-AUTOMATION-APPROVAL卡。此实证不追认先前人工恢复，也不关闭长期/丢推送/重启及下一合法卡续派的Task-067。
 
 ## TASK-2026-10-02-ACTIVE-CONVERSATION-USAGE-AUDIT — 活跃对话派发与持续监测现场审计
 
