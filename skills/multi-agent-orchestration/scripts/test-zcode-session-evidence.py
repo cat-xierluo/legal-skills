@@ -520,6 +520,109 @@ class ZcodeSessionEvidenceTest(unittest.TestCase):
         self.assertNotEqual(run_cli(db, SESSION_B, INPUT_OK).returncode, 0)
         self.assertEqual(before, sha256_file(db))
 
+    # ------------------------------------------------------------------
+    # R1 review repairs: F1 status_reason surface, F2 sequence ambiguity
+    # ------------------------------------------------------------------
+
+    def test_status_reason_surface_is_boolean_only(self):
+        adversarial = "TOPSECRET-REASON-R1 /Users/somebody/secret-dir/file.txt"
+        base_msgs = [
+            message_row("msg-u1", role="user", seq=0),
+            message_row("msg-a1", parent="msg-u1", seq=1),
+        ]
+        base_parts = [part_row("p1", "msg-a1", text="done")]
+
+        db = self.db_path("reason-adversarial.db")
+        make_db(db, inputs=[input_row(reason=adversarial)], turns=[turn_row()],
+                messages=base_msgs, parts=base_parts)
+        proc = run_cli(db, SESSION_A, INPUT_OK)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        body = json.loads(proc.stdout)
+        self.assertTrue(body["input"]["reasonPresent"])
+        self.assertNotIn("statusReason", body["input"])
+        self.assertNotIn("TOPSECRET-REASON-R1", proc.stdout + proc.stderr)
+        self.assertNotIn("secret-dir", proc.stdout + proc.stderr)
+
+        db = self.db_path("reason-absent.db")
+        make_db(db, inputs=[input_row(reason=None)], turns=[turn_row()],
+                messages=base_msgs, parts=base_parts)
+        proc = run_cli(db, SESSION_A, INPUT_OK)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(json.loads(proc.stdout)["input"]["reasonPresent"])
+
+        db = self.db_path("reason-blank.db")
+        make_db(db, inputs=[input_row(reason="   ")], turns=[turn_row()],
+                messages=base_msgs, parts=base_parts)
+        proc = run_cli(db, SESSION_A, INPUT_OK)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(json.loads(proc.stdout)["input"]["reasonPresent"])
+
+    def test_assistant_sequence_tie_rejected_both_orders(self):
+        # Same maximum sequence: neither an earlier success nor a newer failure
+        # may win by row order — both insertion orders are rejected.
+        for name, tail in (
+            ("tie-success-first", (
+                message_row("msg-a1", parent="msg-u1", seq=2),
+                message_row("msg-a2", parent="msg-u1", seq=2, error={"message": "boom"}),
+            )),
+            ("tie-error-first", (
+                message_row("msg-a2", parent="msg-u1", seq=2, error={"message": "boom"}),
+                message_row("msg-a1", parent="msg-u1", seq=2),
+            )),
+        ):
+            db = self.db_path(name + ".db")
+            make_db(
+                db,
+                inputs=[input_row()],
+                turns=[turn_row()],
+                messages=[message_row("msg-u1", role="user", seq=0)] + list(tail),
+                parts=[part_row("p1", "msg-a1", text="earlier success")],
+            )
+            proc = run_cli(db, SESSION_A, INPUT_OK)
+            self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertEqual(json.loads(proc.stdout)["error"]["code"], "ASSISTANT_AMBIGUOUS")
+
+    def test_assistant_sequence_null_rejected(self):
+        for name, tail in (
+            ("null-single", (
+                message_row("msg-a1", parent="msg-u1", seq=None, completed=False),
+            )),
+            ("null-all", (
+                message_row("msg-a1", parent="msg-u1", seq=None, completed=False),
+                message_row("msg-a2", parent="msg-u1", seq=None, completed=False),
+            )),
+        ):
+            db = self.db_path(name + ".db")
+            make_db(
+                db,
+                inputs=[input_row()],
+                turns=[turn_row()],
+                messages=[message_row("msg-u1", role="user", seq=0)] + list(tail),
+                parts=[part_row("p1", "msg-a1", text="ok")],
+            )
+            proc = run_cli(db, SESSION_A, INPUT_OK)
+            self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertEqual(json.loads(proc.stdout)["error"]["code"], "ASSISTANT_AMBIGUOUS")
+
+    def test_assistant_sequence_non_numeric_rejected(self):
+        db = self.db_path()
+        make_db(
+            db,
+            inputs=[input_row()],
+            turns=[turn_row()],
+            messages=[
+                message_row("msg-u1", role="user", seq=0),
+                ("msg-a1", SESSION_A, "t", "t",
+                 json.dumps({"id": "msg-a1", "role": "assistant", "parentID": "msg-u1",
+                             "time": {"completed": "2026-10-02T00:00:02Z"}}),
+                 "not-a-number"),
+            ],
+            parts=[part_row("p1", "msg-a1", text="ok")],
+        )
+        proc = run_cli(db, SESSION_A, INPUT_OK)
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["error"]["code"], "ASSISTANT_AMBIGUOUS")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

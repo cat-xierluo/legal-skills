@@ -454,9 +454,9 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-ZCODE-GUI-EVIDENCE-PR — 只读 ZCode 会话证据采集器
 
-- 状态：`COMPLETE`（限定采集器、fixture 回归与文档；PR 创建/发布由 PM 用本机已授权 GitHub 登录执行，本会话不登录 gh、不裸 push）；Owner：远端 ZCode GUI worker（PM：Codex）；候选分支 `feat/zcode-gui-session-evidence`，冻结起点 `62034182d118f224d7f7713ac04748356fd8f722`。
+- 状态：`IN_REVIEW`（实现已完成但 PM 审查/PR 验收尚待；R1 独审 REJECT 的 F1/F2/C1/C2 已修复，等新 head 独审；PR 创建/发布由 PM 用本机已授权 GitHub 登录执行，本会话不登录 gh、不裸 push）；Owner：远端 ZCode GUI worker（PM：Codex）；候选分支 `feat/zcode-gui-session-evidence`，冻结起点 `62034182d118f224d7f7713ac04748356fd8f722`。
 - 范围（7 路径）：`scripts/zcode-session-evidence.py`、`scripts/test-zcode-session-evidence.py`、`references/zcode-session-evidence.md`、本卡、`CHANGELOG.md`（v2.36.6）、`SKILL.md`（版本号 + §8 用法链接）、根 `README.md` 最近动态中本 Skill 行；不复制本机未提交 2.35/2.36 其他功能。
 - 行为合同：CLI 必填 `--db/--session-id/--input-id`，可选 `--include-final-text`；mode=ro + query_only + 单事务读快照打开既有 DB，绝不创建或写原生 DB；精确绑定 session_input 并经 `promoted_message_id` 关联 `turn_usage.user_message_id`，多匹配拒歧义；完成证据 = 精确 turn completed + 最新 assistant（原生 `parentID` 绑定）completed/无 error/含 text，不从较早成功 assistant 拾取；providerId/modelId/mode 缺项显式 unknown，不回落；默认仅元数据与文本长度，显式开关才带最终文本；任何模式不输出 reasoning、tool 输入/输出、payload、认证参数、DB 路径或其他会话数据；错误输出清楚 JSON 且非零，不泄 traceback。
 - 边界与非目标：不实现 Orca 监督适配；冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成；不证明实时活性、计费优惠或 PM 验收；不扫描其他会话正文。
-- 验证：`python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py` 实际 CLI 子进程回归 23/23 exit 0（两身份错绑、多 turn 拒歧义、admitted/failed/缺 turn、最后 assistant error/未完成/无 text、provider 缺项、schema/JSON 错误、text 开关、敏感不泄露、缺 DB 不创建、原 DB 字节不变）。
+- 验证：`python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py` 实际 CLI 子进程回归 27/27 exit 0（两身份错绑、多 turn 拒歧义、admitted/failed/缺 turn、最后 assistant error/未完成/无 text、provider 缺项、schema/JSON 错误、text 开关、敏感不泄露、status_reason 仅布尔不外发、assistant sequence 并列/NULL/非数值拒歧义、缺 DB 不创建、原 DB 字节不变）。
 - 长期稳定性与真实大库性能 `NOT_VERIFIED`，沿 GUI 任务监控方向后续评估。

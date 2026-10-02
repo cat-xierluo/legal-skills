@@ -36,7 +36,7 @@ python3 scripts/zcode-session-evidence.py \
 1. 以 `mode=ro` URI + `PRAGMA query_only` + 单个 deferred 读事务打开既有 DB，全程一致读快照；任何路径都不会创建或写原生 DB。
 2. 精确绑定 `session_input.id + session_id`；无匹配或多余匹配均报错（`INPUT_NOT_FOUND` / `INPUT_AMBIGUOUS`），绝不猜测。
 3. 由 `session_input.promoted_message_id` 关联 `turn_usage.user_message_id`；多条匹配报 `TURN_AMBIGUOUS`，零条报 turn 缺失。
-4. 最终 assistant = 本会话内 `role=assistant` 且原生 `data.parentID == promoted_message_id` 的 **sequence 最新一条**；只判它，不从较早成功 assistant 拾取去覆盖最新 error/未完成/无 text。
+4. 最终 assistant = 本会话内 `role=assistant` 且原生 `data.parentID == promoted_message_id` 的 **sequence 最大一条**；候选的最大 sequence **并列、缺失（NULL）或非数值**时报 `ASSISTANT_AMBIGUOUS`，绝不按行序任意挑选；只判选中一条，不从较早成功 assistant 拾取去覆盖最新 error/未完成/无 text。
 5. 完成证据（`completionEvidence.complete`）同时要求：turn 原生 `status=completed`、该 assistant `time.completed` 非空、无 `error`、含非空 text part。
 6. `providerId`/`modelId`/`mode` 只取自该 assistant 原生 message data；缺项显式 `unknown`，不回落其他会话或默认套餐。
 7. turn 状态只用 `turn_usage.status` 原生值归类（`running/completed/error/cancelled`）；缺失或未知值输出 `unknown`，绝不由其他字段推导。
@@ -48,7 +48,7 @@ python3 scripts/zcode-session-evidence.py \
   "ok": true,
   "schemaVersion": 1,
   "sessionId": "...", "inputId": "...",
-  "input": {"status": "admitted|promoted|failed|unknown", "statusReason": null, "promotedMessageId": "..."},
+  "input": {"status": "admitted|promoted|failed|unknown", "reasonPresent": false, "promotedMessageId": "..."},
   "turn": {"found": true, "turnId": "...", "status": "running|completed|error|cancelled|unknown"},
   "finalAssistant": {"found": true, "messageId": "...", "completed": true, "errorFree": true,
                      "textAvailable": true, "textLength": 123,
@@ -59,7 +59,7 @@ python3 scripts/zcode-session-evidence.py \
 }
 ```
 
-`--include-final-text` 时 `finalAssistant` 才增加 `text` 字段（无可用文本时为 `null`）。
+`input.reasonPresent` 只是 `session_input.status_reason` 非空的布尔指示；该列为原生自由文本（可能嵌入路径/凭证），其内容永不输出。`--include-final-text` 时 `finalAssistant` 才增加 `text` 字段（无可用文本时为 `null`）。
 
 ## 错误输出
 
@@ -73,13 +73,14 @@ python3 scripts/zcode-session-evidence.py \
 | `INPUT_NOT_FOUND` | (session_id, input_id) 绑定无匹配 |
 | `INPUT_AMBIGUOUS` | 绑定多匹配，拒绝歧义 |
 | `TURN_AMBIGUOUS` | 同一 promoted message 关联多条 turn_usage，拒绝歧义 |
+| `ASSISTANT_AMBIGUOUS` | 候选 assistant 的最大 sequence 并列、缺失或非数值，拒绝按行序任意挑选 |
 | `JSON_MALFORMED` | message/part 的 data 列不是合法 JSON |
 | `READ_ERROR` | 读库失败 |
 | `INTERNAL_ERROR` | 未预期内部错误（细节隐去） |
 
 ## 脱敏保证（任何模式）
 
-绝不输出：reasoning、tool 输入/输出、`session_input.payload`、认证参数、完整 DB 路径、其他会话数据。错误信息也不含 DB 路径。合成与真实库均应满足；回归见 `scripts/test-zcode-session-evidence.py`。
+绝不输出：reasoning、tool 输入/输出、`session_input.payload`、`session_input.status_reason` 自由文本（仅 `reasonPresent` 布尔）、认证参数、完整 DB 路径、其他会话数据。错误信息也不含 DB 路径。合成与真实库均应满足；回归见 `scripts/test-zcode-session-evidence.py`。
 
 ## 回归测试
 
@@ -87,4 +88,4 @@ python3 scripts/zcode-session-evidence.py \
 python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py
 ```
 
-覆盖：两身份错绑、同 input 多 turn 拒歧义、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含"较早成功不得覆盖最新"）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、缺 DB 不创建、原 DB 字节不变。
+27 项真实 CLI 子进程回归，覆盖：两身份错绑、同 input 多 turn 拒歧义、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含"较早成功不得覆盖最新"）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、对抗性 `status_reason`（路径/凭证样例仅出 `reasonPresent` 布尔）、assistant sequence 并列（旧失败/新成功双向插入序均拒绝）/NULL/非数值拒歧义、缺 DB 不创建、原 DB 字节不变。

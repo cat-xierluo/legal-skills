@@ -11,9 +11,9 @@ Guarantees:
 - The database is opened with SQLite URI mode=ro plus PRAGMA query_only and a
   single deferred read transaction. The collector never creates or writes the
   native database.
-- Reasoning, tool input/output, session_input.payload, credentials, the full
-  database path and data from any other session are never emitted, with or
-  without --include-final-text.
+- Reasoning, tool input/output, session_input.payload, session_input free-text
+  status_reason, credentials, the full database path and data from any other
+  session are never emitted, with or without --include-final-text.
 - A cold snapshot is not a real-time liveness authority: missing fields are
   never inferred as idle or completed.
 
@@ -163,7 +163,11 @@ def collect(conn, session_id, input_id, include_final_text):
         "inputId": input_id,
         "input": {
             "status": normalize_input_status(bound["status"]),
-            "statusReason": bound["status_reason"],
+            # status_reason is native free text and may embed paths or
+            # credentials, so only its presence is reported, never its content.
+            "reasonPresent": bool(
+                bound["status_reason"] is not None and str(bound["status_reason"]).strip()
+            ),
             "promotedMessageId": bound["promoted_message_id"],
         },
         "turn": {"found": False, "turnId": None, "status": None},
@@ -214,8 +218,7 @@ def collect(conn, session_id, input_id, include_final_text):
             turn_status = normalize_turn_status(turns[0]["status"])
             result["turn"] = {"found": True, "turnId": turn_id, "status": turn_status}
 
-    assistant = None
-    assistant_data = None
+    candidates = []
     if promoted:
         try:
             messages = conn.execute(
@@ -233,8 +236,31 @@ def collect(conn, session_id, input_id, include_final_text):
             parent = data.get("parentID", data.get("parentId"))
             if parent != promoted:
                 continue
-            assistant = row
-            assistant_data = data  # keep the latest match by sequence
+            candidates.append((row, data))
+
+    sequences = []
+    for row, _data in candidates:
+        seq = row["sequence"]
+        # Without a unique numeric sequence there is no defensible "latest";
+        # ties, NULL or non-numeric values must never be resolved by row order.
+        if seq is None or isinstance(seq, bool) or not isinstance(seq, (int, float)):
+            raise EvidenceError(
+                "ASSISTANT_AMBIGUOUS",
+                "assistant candidates for the promoted message have a missing or"
+                " non-numeric sequence; refusing to pick one arbitrarily",
+            )
+        sequences.append(seq)
+    if len(candidates) > 1:
+        top = max(sequences)
+        if sequences.count(top) > 1:
+            raise EvidenceError(
+                "ASSISTANT_AMBIGUOUS",
+                "multiple assistant messages share the maximum sequence for the"
+                " promoted message; refusing to pick one arbitrarily",
+            )
+
+    assistant = candidates[-1][0] if candidates else None
+    assistant_data = candidates[-1][1] if candidates else None
 
     final_text = ""
     if assistant is not None:

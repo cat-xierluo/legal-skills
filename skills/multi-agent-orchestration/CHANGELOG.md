@@ -8,8 +8,11 @@
 - 新增回归 `scripts/test-zcode-session-evidence.py`：合成 SQLite fixture 走真实 CLI 子进程，覆盖两身份错绑、同 input 多 turn、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含较早成功不得覆盖）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、缺 DB 不创建与原 DB 字节不变。
 - 新增用法与合同说明 `references/zcode-session-evidence.md`，并在 SKILL.md 按需读取地图挂链接。
 
+### 修复
+- 独审 REJECT R1（F1/F2）：`session_input.status_reason` 原生自由文本不再进入输出，仅输出 `reasonPresent` 布尔（内容永不外发）；同一 promoted 消息下候选 assistant 的最大 sequence 并列、缺失（NULL）或非数值时输出 `ASSISTANT_AMBIGUOUS` 拒歧义，绝不按行序任意挑选。补对抗性 status_reason（路径/凭证样例）与 sequence 并列（旧失败/新成功双向插入序）、NULL、非数值真实 CLI 回归，回归 23→27 项。
+
 ### 待办事项
-- 本 PR 不实现 Orca 监督适配；真实大库性能与长期稳定性 NOT_VERIFIED，沿 GUI 任务监控方向另行立项。
+- 本 PR 不实现 Orca 监督适配；真实大库性能与长期稳定性 NOT_VERIFIED，沿 GUI 任务监控方向另行立项。R1 修复后实现完成但 PM 审查/PR 验收尚待（IN_REVIEW）。
 
 ## [2.34.1] - 2026-10-02
 
