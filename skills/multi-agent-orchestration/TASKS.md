@@ -413,7 +413,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
 
-- 状态：`IN_PROGRESS / BUSINESS_SCOPED_ACCEPTED_CAPACITY_IN_PROGRESS`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 状态：`SCOPED_ACCEPTED / LOCAL_SYNCED / ORIGINAL_BUSINESS_NOT_VERIFIED`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
 - 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
 - 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
 - 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
@@ -438,6 +438,9 @@ blocker_and_recovery:
 - 业务模态首候选 `2648f988`：作者五套件共117项通过，但独审真实反例发现 UTF-8 final flush 被短路，截断末尾可误过观察/postflight/review 三门，判定 REJECT；原失败保留于 `/tmp/mao-sequential-gates-261003/business-review/`，同作者窄修后重新独审，不能以首轮自测覆盖独审失败。
 - 业务窄修 `08c1af90`：作者business14一次exit0；独审原坏字节重绑真实清单后观察/postflight/review均2，合法中文近似样例均0，限定ACCEPT、无blocker。原15个消费者与未变SHA复用，旧REJECT完整保留；尚未安装、完整矩阵和真实Orca/model不在该结论内。
 - 并发基线事实：历史提交 `c8a77da677b71091056d3c9d9058e1d089d90c86` 已将 converge/explore/待验收 PR 上限发布为 8/10/4；SKILL 的 3/2 是残留。下一单元保留既有数字，区分本波候选数、PM 跨项目活跃库存与机器内存 slots，项目已声明的较小 cap 优先。当前门仅数 `spec.tasks`，不能声称实现全局原子并发预留。
+
+- 2026-10-03 本轮限定交付：业务产物修后08c1af90独审ACCEPT，截断UTF-8反例三门拒绝，合法中文近似正例通过；并发0abbe330独审17项ACCEPT，沿已发布8/10/4默认值读取当前政策，capacity计已有库存+新候选并优先较小项目上限。库存为PM声明，无全局原子预留。原失败保留，原更广父卡及长期指令稳定性不冒签完成。
+- 共用完整矩阵、首次超时、有限复验与安装记录见本文件 `TASK-2026-10-02-MINIMAX-ORCA-MEMORY-CONSUMER`，不重复维护证据。
 
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
 
@@ -522,10 +525,16 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-MINIMAX-ORCA-MEMORY-CONSUMER — 完整派发入口资源合同验收
 
-- 状态：`IN_PROGRESS / WHOLE_SPAWN_INTEGRATION`；沿原 MiniMax 资源候选与原平台 PM，业务任务仍由原业务 PM 管理。本轮不新派原业务，也不改变模型账户、默认 lane 或权限范围。
+- 状态：`WHOLE_SPAWN_SCOPED_ACCEPTED / LOCAL_SYNCED / LIVE_MODEL_NOT_VERIFIED`；沿原 MiniMax 资源候选与原平台 PM，业务任务仍由原业务 PM 管理。本轮不新派原业务，也不改变模型账户、默认 lane 或权限范围。
 - 来源与依赖：用户确认业务产物准入→并发口径→MiniMax 完整 spawn 的顺序；前两项固定 head `08c1af90`、`0abbe330` 已分别限定独审 ACCEPT。资源核心与宿主适配沿原 `RESOURCE-GATE-CALIBRATION`、`CODEX-HOST-MEMORY-PROFILE`，此前候选冻结 `b3e9e849…6160382` 限定独审通过但未安装，旧失败与维护矩阵超时不被抹除。
 - 唯一实现者 `/root/release_compat`，之后 `/root/permission_review` 独审。限定移植八个资源生产/测试文件并新增完整入口消费者，禁止复制旧候选整树覆盖新业务门/facts/smoke；其他文档与CI由PM持有。
 - 验收：从真实 `spawn-worker.sh` 贯穿早期命令/安装绑定、同一内存探测、late Git/cwd/HEAD/stdin绑定与最终启动；前置拒绝零资源副作用，晚期拒绝零Agent注入并记录已有owned资源。保留旧默认策略；新profile明确≥3GiB、单writer、20秒稳定窗、未测整worker RSS及非全局原子预留。隔离假Orca/采集器成功不能代替真实模型业务。
 - 涌现接线缺口：`node_mem_cap_setup` 将 MiniMax COMMAND 包装为固定 `exec-bound` 后，`spawn-worker-launch.sh` 仍按裸CLI重新分类，可能把合法guard误拒为exit64。已授权同作者扩展这一个模块，先用完整入口复现再窄修；必须验证最终COMMAND确为本次可信render产物并重验原命令/binding，不能泛放Python wrapper或只凭profile存在跳过检查。
 - 预算：本单元2026-10-02 17:11 UTC开始，截止17:35 UTC，最多2失败episode。新完整入口与原MiniMax定向套件各一轮；必要的launch邻接回归另一次，PM最后串行完整矩阵。证据 `/tmp/mao-sequential-gates-261003/minimax/`，目前未安装、未签原业务恢复。
 - 完整入口首轮fixture导入失真首红保留；第二轮10项中9通过、正例1失败，定位到更早的 `spawn-worker-metadata.sh` 也把可信guard当裸CLI误拒，尚未抵达已窄修launch。不是资源不足或授权拒绝。PM据具体第二消费点授权同作者在原17:35截止内最后一次有界纠错，追加metadata唯一写域，与launch共用已核guard/native argv的验证逻辑，禁止只取缓存mode；原两失败原件保留，不重置成首绿。
+
+- 2026-10-03 完整spawn缺口已窄修：metadata/launch共同验证本次fresh render的精确guard后才分类原native命令。作者11/23/33/49项各一次通过；不同会话独审7495e1b4、8个实际消费者ACCEPT，早拒零资源、晚拒保留owned工作树/Context/authority且零终端注入。最初两红和最终有限纠错保留。真实模型/业务、wholeworker RSS/长程峰值、跨PM全局原子资源预留仍NOT_VERIFIED，不替律师IP原PM重派或解除业务泊车。
+- 本轮共用验证与安装证据：archive/20261003_sequential_gates/ 保存作者失败、修复、独审、矩阵和CAS记录。维护矩阵72条：71条首次0；第59消息套件一次20s超时，原代码单例及9项整套有限复验0，不同会话核30次调用无改参数，首因NOT_CONFIRMED。其余只续跑，不称首次全绿或长期稳定。安装后由原业务PM重读当前Skill并重新消费当前任务，不能把安装等同业务解除。
+- 现场只读证据：真实已安装MiniMax/原生Node/原命令bind-spawn exit0；具名资源profile真实3样本约31秒采集exit3/slots0，reason=swapouts/pageouts growth or counter rollback。kernel normal与约14.34GiB safe_available不能覆盖该稳定窗口拒绝；没有模型、终端、worktree或账号副作用。此观察不是首测试超时因果证明，也不据此改默认政策。
+
+- 安装收口：本地既有更新上增量同步为2.36.8，20个脚本/模板与工程7495e1b4逐字节一致，保留另一原PM远端GUI三卡的并发记录和既有文档整理。Codex/Claude/.agents入口均解析同一源。公共PR仍只含本支2.34.3范围，未将本地其它版本混入。
