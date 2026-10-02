@@ -66,6 +66,7 @@ bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh
 bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
+python3 -B scripts/test_continuation_readiness.py -v
 bash scripts/test-orca-runtime-identity.sh
 bash scripts/test-orca-auto-register.sh
 python3 scripts/test_orca_registration_concurrency.py
@@ -89,6 +90,7 @@ bash scripts/smoke-orca-control-plane.sh
 
 ## 3. 证据边界
 
+- 接续准备门测试消费真实Wave入口和隔离automation配置，阴性路径必须在首次Orca调用前拒绝；合法配置与真实宿主只读消费均不证明定时触发、自动独审/写回/续派。one_wave不要求TOML运行库，continuous需要Python3.11+；首次失败与修后反例均保留，人工恢复不得归因为自动闭环。
 - `smoke-orca-worker.sh` 通过严格只读代理验证真实 runtime 检测和无/错 sender 的前置拒绝，不启动 Agent 或创建 Run。正向单一任务注入与 Wave 复用由隔离套件验证，不使用虚构 handle 作为真实成功证据。
 - `smoke-orca-control-plane.sh` 使用 fake CLI 验证命令路由、cursor 与 external terminal accounting。
 - `test_worker_delivery_prompt.py` 检查实际 Task spec/启动命令与真实 guard hook 的准入/拒绝，不启动 provider；`smoke-sentinel.sh` 与 `smoke-tmux-worker.sh` 使用独立 tmux socket，后者另用固定本地脚本与无转发 Orca stub，按真实记录区分 fake 只读探测和 live 调用。若 sandbox 明确禁止创建隔离 tmux socket，smoke 必须输出环境跳过并退出成功；这不构成 tmux 行为通过证据，确定性合同仍由不依赖真实 socket 的测试承担。

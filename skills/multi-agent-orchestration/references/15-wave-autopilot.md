@@ -4,6 +4,8 @@
 
 ## 1. 授权合同（先决条件）
 
+持续推进先消费 [原PM接续准备门](33-pm-continuation-readiness.md)，明确one_wave/continuous和唯一真实监测，不将真人手动恢复当自动自愈。Codex已有正式heartbeat优先复用；session cron与跨会话scheduler的能力不同，下面三通道不能代替宿主正式绑定/触发证据。
+
 - 必须有用户**显式授权**，并记录在**项目上下文**（项目 AGENTS.md/CLAUDE.md 一节 + 指向项目任务源的策略章节）；本 skill 不承载任何项目授权。
 - 授权至少固定：授权范围（哪些任务类型可自动派）、泊车条件、撤销方式（用户一句话）、回退条件（发生一次泊车外失误即回退逐波确认）。
 - **策略权威 = 项目任务源**（如 docs/TASKS.md 的策略节）：组波规则、泳道、晋级门禁、泊车清单全部落在项目文档里，PM 查表执行、不做自由判断。查表查不到合法组合本身就是泊车条件——这是 Autopilot 能 fail-closed 的根本。
@@ -16,21 +18,21 @@
   → PM 独立验收（diff 范围对 fork point + 身份 + 门禁在最终树复跑）
   → safe-push → 唯一 PR → 本地集成候选 → 本地推入或 GitHub merge
   → 资源清理（lease/worktree/分支，远端结果证据）
-  → 任务源写回 → 查表组下一波 or 泊车（完整报告后停止）
+  → 任务源写回 → 查表组下一波 or 暂停受阻依赖链（其他合法READY继续；全目标停止条件另核）
 ```
 
 不变量：
 
 1. **验收路径不因自动化放宽**：门禁复跑（sync-merge 后最终树为准，G37）→ safe-push 全 range 身份核验 → 唯一 PR → 冻结精确 head/diff/checks → 最新 main 本地候选复验。只有用户/项目已授权且 main 无保护阻断时，才按 `git-workflow` 本地集成并安全推入 main；否则由 GitHub PR squash/merge。禁止绕过 PR 直推 main，禁止以 worker 自报代替复跑。
-2. **透明不阻断**：每波收口向用户发波次摘要（交付/PR/验证证据/下一波构成），不要求确认；泊车必须完整报告并停止，不静默重试。
-3. **泊车 fail-closed**：任务开工需用户资产/环境/授权、PM 复跑门禁失败且纠偏路径用尽、同一 worker 连续两次不达标、合并冲突超出项目已固定冲突模式、队列无合法可派组合、用户显式喊停。
+2. **透明不阻断**：每波收口向用户发波次摘要（交付/PR/验证证据/下一波构成），不要求确认；泊车报告受阻对象、恢复条件和下一owner，不静默重试，也不把单依赖链停止扩大成整个目标停止。
+3. **泊车 fail-closed**：单任务开工缺用户资产/环境/授权、PM复跑门禁失败且纠偏路径用尽、合并冲突超出固定策略时暂停该依赖链；无合法READY组合时低成本等待。全目标完成、真人暂停或原任务源明确全局停止条件才停对应项目监测。
 
 ## 3. 监控可靠性：三通道并用（实战核心教训）
 
 单一推送通道会丢。Autopilot 活跃期间必须同时具备三条通道：
 
 1. **Orca 推送唤醒**（主通道）：快，但**不可靠**——实测 worker_done 消息在队列里存在、对应系统唤醒从未送达，PM 停摆 6.6 小时直到用户人工戳。
-2. **recurring cron 看门狗**（强制）：session 级 recurring cron（建议 `4-59/20 * * * *` 这类避开整点/半点的间隔），每跳执行 §4 清单；泊车时删除自身。它是 live PM session 的低延迟 fast path，**不是跨会话持久性证明**；任务源保存策略/意图，不保存当前 Wave 的完整运行态。跨会话接管或无人值守要求读取 `references/16-autopilot-durability.md`。
+2. **正式看门狗**（强制）：优先复用绑定原PM的正式宿主heartbeat，每跳执行§4。session级recurring cron只作可选低延迟fast path，不是跨会话持久性证明；停止该fast path前须确认正式heartbeat继续覆盖恢复。单卡泊车或暂时无READY不删除项目监测，全目标停止条件按接续合同执行。任务源保存策略/意图，不保存完整运行态；跨会话无人值守仍读取 `references/16-autopilot-durability.md`。
 3. **Dispatch 状态轮询是完成权威**：`worker_done` 的 Delivery 可能不进 PM 待查队列（消息路由与 Dispatch 结算是两条路径）；`pm-orchestrate show` 的 `dispatch.status=completed` + `worker.state=succeeded/settled` 是可查证的完成事实。**队列无消息 ≠ 未完成；状态停滞 ≠ 完成**——两边都要主动查。
 
 ## 4. 看门狗每跳清单
@@ -39,10 +41,10 @@
    - 报 `This coordinator terminal is bound to run_X` 时：先 `orca orchestration run-use --id <run> --from <PM terminal handle>` 重绑——fix 派发等新建 run 后 PM 终端绑定会漂移。
 2. 逐活跃 worker 执行 `pm-orchestrate show --worktree WT --session S`：`completed/succeeded/settled` → 走验收（**即使 check 队列为空**）。
 3. 判活：`pm-orchestrate peek` 返回的 transcript `timestamp`（epoch ms）与当前差值 > 30 分钟且非已知长任务 → 处置矩阵：
-   - TUI idle（worker ready）且工作未完 → 按 G39 键盘注入唤醒：`orca terminal send --terminal <handle> --text "..." --enter`（supervised 的 `pm-orchestrate send` 走 Dispatch inbox，idle worker 不拉取，`ok:true` ≠ 被消费）；
+   - TUI idle或陈旧状态且工作未完 → 先核原Dispatch/native Session、任务是否已投递及业务进展；idle、composer残留或input_accepted不足以授权补Enter/重发。只有明确的原任务窄接续且身份/实际idle/消费通道已核才唤醒；supervised send入队仍不证明消费。额度恢复按reference20的高置信精确合同执行，不用通用探针伪造进展；
    - 429 限流重试循环（同账号多 worker **同时**触发）→ 记录并等重置点，CLI 会自动恢复；turn 被打断停 idle 才需要注入；
    - 进程死且 dispatch 卡 `dispatched` → `pm-orchestrate settle`（身份/审计/liveness 门禁见 SKILL §4.5）。
-4. 全部 wave 收口 + 队列查表无可派 → CronDelete 看门狗 → 发泊车报告。
+4. 全部 wave 收口后查原任务源：暂时无合法READY时记录受阻依赖、恢复条件和下一owner，保持项目监测低成本等待；只有全目标完成、真人暂停或明确全局停止条件才停止项目看门狗。停止session fast path前确认正式heartbeat继续覆盖接续。
 
 ### 4.1 守夜 v2：脱链、核活与恢复分流
 
@@ -89,7 +91,7 @@
 **先分类再处置（v2.14.0）**：任何验收失败先过 `scripts/acceptance-recovery.py` 的单一机械分类（`classify` 子命令或 module API），不得按「任何门禁失败 => park」直接泊车：
 
 - `internal_recoverable`（PR checks 确定性失败、交付越界、验证证据缺失、review blockers、docs-only 验收修复）：修复预算内动作必须是 `repair`（首次）或 `re_review`（之后），默认预算 **2 次**，耗尽才泊车。预算按「失败 episode」计数，修复在途的重复 reconcile 不重复计数。autopilot runtime 据此规划 `repair_acceptance`（不泊车，state 保持 RUNNING），heartbeat 适配器输出 `decision=review` 且心跳继续。
-- `external_dependency`（配额耗尽、上游不可用、缺用户资产/授权）与 `safety_unknown`（事实歧义、身份/head 漂移不可证、安全高风险、runtime 损坏；表外信号一律归此类）：立即泊车，等人工。
+- `external_dependency`（配额耗尽、上游不可用、缺用户资产/授权）与 `safety_unknown`（事实歧义、身份/head 漂移不可证、安全高风险、runtime 损坏；表外信号一律归此类）：立即泊车受阻依赖链，记录下一owner/可核恢复条件；其他独立合法READY继续，不能仅因一个worker被拒收而停整个目标或关闭项目监测。无合法恢复条件不盲重试。
 
 PM 复跑门禁**确定性失败**（≥2 次同点，先排除 flake，分类为 internal_recoverable）→ 不放宽门禁、PM 不改业务代码：
 

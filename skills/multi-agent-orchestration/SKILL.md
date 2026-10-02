@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.34.1"
+  version: "2.34.2"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -64,6 +64,7 @@ PM 在任何 worker 副作用前完成：
 4. 普通 worker 默认为 `ephemeral-worker`；只有项目任务合同明确声明的长期功能/集成基线才使用 `--branch-lifecycle long-lived`。源分支生命周期与合并目标是两个字段，不得混同。
 5. 默认每波及全局活跃 worker 不超过 3；PM 待验收交付超过 2 个时停止扩波。项目可以收紧，只有用户明确、限期的探索窗口才可放宽。
 6. 验证命令默认写 scoped：单 spec / 定向用例 / `--bail 1` 早停；整包全量套件（全量 test/build 链）不进 worker 自验合同，全量验证单一在飞（跨项目互斥），默认归宿是 PM 收口时串行复跑。本条约束验证类别，不约束 worker 数量（见 §5 验证负载纪律）。
+7. 固定 `one_wave` 或 `continuous`：真人要求持续派发/返回后review再推进/不要每轮催促时，不默认单波。持续模式派发前核唯一监测的原PM、原任务源、正式配置及周期，读取 [PM接续合同](references/33-pm-continuation-readiness.md)；显式continuous的Wave入口机械检查，其他模式由PM显式检查。只有总控心跳、承诺稍后设置或人工催促后恢复均不证明自动闭环。
 
 Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事故读取 `references/10-parallel-lessons.md`。
 
@@ -161,6 +162,8 @@ Worker 需要 PM 回答时使用 live preamble 的 `ask`；timeout、cancel 或�
 发现偏题、阻塞、越界或验证失败时，优先给原 worker 发送窄纠偏；需要独立审阅时另派 reviewer。运行时活性与业务进展必须分开判断：输出/cursor/CPU 前进只证明活性，文件、commit、测试和产物才证明业务进展。观察不确定时不得自动 Esc、Ctrl+C、stop、release 或按进程名批量 kill。
 
 Wave Autopilot 只有用户明确授权并在项目任务源固定策略后才启用。L1 当前会话推进读取 `references/15-wave-autopilot.md`；跨会话 L2 controller 与尚未实现的 L3 scheduler 边界读取 `references/16-autopilot-durability.md`。不要把 session cron、Markdown 任务源或 provider lease 单独描述成持久控制器。
+
+Worker返回后由原PM固定产物/head、不同上下文独审、同次原Task写回，再沿原问题修复或推进具名合法下一项；不能在“已派发/作者done/已交接”处结束本波责任。单卡预算/依赖泊车不停止其他独立READY。记录人工催促/恢复的来源，区分监测配置、正式自动触发与完整自动业务周期；检查配置通过不签出自动自愈，详见 [接续证据等级](references/33-pm-continuation-readiness.md)。
 
 跨项目检查 Orca Worker 是否因 429/usage limit 停在 idle 时，运行 `scripts/orca_rate_limit_recovery.py --manifest <私有清单>`；默认只读，只有显式 `--execute` 才对高置信 `RATE_LIMIT_IDLE` 通过 terminal 输入通道发送一次固定“继续”。tmux、单关键词/陈旧 tail、未分组身份和状态不确定一律不处置；`WAKE_ACCEPTED` 不等于额度恢复或业务继续。完整 manifest、状态机、错峰、幂等、TOCTOU 与退出码读取 `references/20-orca-rate-limit-recovery.md`。
 
