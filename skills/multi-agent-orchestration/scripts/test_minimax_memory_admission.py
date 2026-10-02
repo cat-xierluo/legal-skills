@@ -180,6 +180,9 @@ class MiniMaxTests(unittest.TestCase):
         proc=subprocess.run(['bash','-c',function+'\nnode_mem_cap_setup\n'],env=env,capture_output=True,text=True,timeout=15)
         self.assertEqual(proc.returncode,0,proc.stderr);self.assertIn('old-space=2048MB semi-space=1MB',proc.stdout);self.assertIn('whole-worker budget>=3GiB; RSS not_measured',proc.stdout);self.assertNotIn('total<=512MiB',proc.stdout)
     def test_installed_readonly_chain_heap_no_model(self):
-        actual=mm.installation(shutil.which('mcode'),self.env);self.assertGreater(actual['closure_count'],1000);self.assertEqual(actual['node']['heap'],2150629376)
+        installed_mcode=shutil.which('mcode')
+        if installed_mcode is None:
+            self.skipTest('LIVE_INSTALLED_MINIMAX_NOT_VERIFIED: mcode is not installed; genuine fixture and spawn tests remain required')
+        actual=mm.installation(installed_mcode,self.env);self.assertGreater(actual['closure_count'],1000);self.assertEqual(actual['node']['heap'],2150629376)
 
 if __name__=='__main__':unittest.main()

@@ -538,3 +538,7 @@ blocker_and_recovery:
 - 现场只读证据：真实已安装MiniMax/原生Node/原命令bind-spawn exit0；具名资源profile真实3样本约31秒采集exit3/slots0，reason=swapouts/pageouts growth or counter rollback。kernel normal与约14.34GiB safe_available不能覆盖该稳定窗口拒绝；没有模型、终端、worktree或账号副作用。此观察不是首测试超时因果证明，也不据此改默认政策。
 
 - 安装收口：本地既有更新上增量同步为2.36.8，20个脚本/模板与工程7495e1b4逐字节一致，保留另一原PM远端GUI三卡的并发记录和既有文档整理。Codex/Claude/.agents入口均解析同一源。公共PR仍只含本支2.34.3范围，未将本地其它版本混入。
+
+- CI涌现项：公开head aadf04c8 的 Linux runtime-settlement 在新资源测试 step 失败，26项4fail/2error，实际理由是解释器非安全常规文件校验拒绝；本地矩阵不能替代Linux结果。沿原MiniMax卡由原作者只修CI私有Node输入，保留生产0o022拒绝，禁止chmod共享toolcache/skip测试。实际cache权限尚待现场证据，不把推断写成事实；修后独审与远端CI待。原失败run37047228045保留。
+
+- 同一CI窄修另核现机smoke依赖：test_installed_readonly_chain_heap_no_model原来无条件读取mcode，公共runner未安装。明确仅此现场只读项在CLI缺失时报告LIVE_INSTALLED_MINIMAX_NOT_VERIFIED/skip，存在时仍严格验完整安装，畸形安装不得skip；其余22资源fixture及11完整入口照常执行。本机该项及实际绑定已通过，不自动安装CLI或登录账号。
