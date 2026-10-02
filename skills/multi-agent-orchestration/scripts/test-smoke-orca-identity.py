@@ -39,6 +39,51 @@ class SmokeIdentityTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
                         SMOKE_FIXTURE_REPO=str(self.repo), SMOKE_FIXTURE_LOG=str(self.log),
                         SMOKE_FIXTURE_SPAWN_LOG=str(self.spawn_log))
+        self.env.pop("HARNESS_TEST_ROOT_PID", None)
+        self.env.pop("HARNESS_TEST_CHAIN", None)
+        self.env["REAL_PS_BIN"] = shutil.which("ps") or "/bin/ps"
+        # Match test-harness-backend-policy.sh's complete, private ps fixture.
+        # This is synthetic test input, not proof of the actual host identity.
+        # Each real spawn is bound below to its actual parent PID, followed by
+        # a neutral 900001 outer frame and PID 1 termination.
+        executable(self.bin / "ps", r'''#!/usr/bin/env bash
+if [ -n "${HARNESS_TEST_CHAIN:-}" ] && [ -n "${HARNESS_TEST_ROOT_PID:-}" ]; then
+  pid=""
+  format=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -p) pid="$2"; shift 2 ;;
+      -o) format="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  IFS=',' read -r -a frames <<< "$HARNESS_TEST_CHAIN"
+  if [ "$pid" = "$HARNESS_TEST_ROOT_PID" ]; then
+    index=0
+  elif [ "$pid" -ge 900001 ] 2>/dev/null; then
+    index=$((pid - 900000))
+  else
+    exit 1
+  fi
+  [ "$index" -lt "${#frames[@]}" ] || exit 1
+  case "$format" in
+    ppid=)
+      if [ $((index + 1)) -lt "${#frames[@]}" ]; then
+        printf '%s\n' $((900000 + index + 1))
+      else
+        printf '1\n'
+      fi ;;
+    comm=|args=)
+      case "${frames[$index]}" in
+        codex) printf '/opt/codex\n' ;;
+        *) printf '/bin/sh\n' ;;
+      esac ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+exec "$REAL_PS_BIN" "$@"
+''')
         # The real smoke's readonly proxy calls only this isolated fixture CLI.
         executable(self.bin / "orca", "#!" + sys.executable + "\n" + r'''
 import json, os, pathlib, sys
@@ -68,6 +113,8 @@ print(json.dumps(payload))
         executable(self.scripts / "spawn-worker.sh", "#!" + sys.executable + "\n" +
                    "import json, os, pathlib, re, sys\n"
                    "args=sys.argv[1:]\n"
+                   "os.environ['HARNESS_TEST_ROOT_PID']=str(os.getppid())\n"
+                   "os.environ['HARNESS_TEST_CHAIN']='codex,neutral'\n"
                    "with pathlib.Path(os.environ['SMOKE_FIXTURE_SPAWN_LOG']).open('a') as f: f.write(json.dumps(args)+'\\n')\n"
                    "if os.environ.get('SMOKE_FIXTURE_COLLISION') and not pathlib.Path(os.environ['SMOKE_FIXTURE_SPAWN_LOG']).read_text().count('\\n') > 1:\n"
                    "  branch=args[args.index('--branch')+1]\n"
