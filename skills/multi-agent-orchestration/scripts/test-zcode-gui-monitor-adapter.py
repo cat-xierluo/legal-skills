@@ -7,32 +7,38 @@
   - 固定状态全量映射：INPUT_ACCEPTED / INPUT_FAILED、TURN_UNKNOWN /
     TURN_RUNNING / TURN_ERROR / TURN_CANCELLED、DELIVERY_PENDING /
     DELIVERY_ERROR、READY_FOR_PM_REVIEW、EVIDENCE_CONFLICT；
+  - 采集器合法 nullable 形态：无 turn 时 {found:false,turnId:null,status:null}
+    可达 INPUT_ACCEPTED / TURN_UNKNOWN；非 null 非字符串才类型拒绝；
+  - completionEvidence 双向一致：过度声明与欠声明（任一方向矛盾）均
+    EVIDENCE_CONFLICT；READY 需显式 complete=true，缺项保持未知不补全；
+  - input/turn 矛盾：admitted/failed 携带 concrete turn/final → 冲突；
+    input 缺失/unknown 即使观测全 true 也只 TURN_UNKNOWN，不得 READY；
   - fail-closed 校验：坏 UTF-8/JSON/schema/类型、绑定不一致、摘要不匹配、
-    期待 provider/model 不一致（provider 缺失不回落）、缺文件不创建、
-    超 1MiB 上限；
-  - completionEvidence 逐项一致：伪 complete=true、矛盾字段、无 turn 却有
-    最终 assistant、turn 自身矛盾；旧成功不被最新 error 掩盖；
-  - 泄露防线：未知字段、路径、敏感正文均不出现在任何输出；
-  - 只读不变：重跑摘要一致、文件内容与目录条目不变；
-  - 真实采集样例（存在时）：绑定实施者 session/input 应 READY_FOR_PM_REVIEW。
+    期待 provider/model 不一致（缺失不回落）、缺文件不创建、超 1MiB；
+  - 泄露防线、只读不变（摘要一致、内容与目录条目不变）；
+  - 真实采集样例：仅当环境变量 ZCODE_GUI_MONITOR_REAL_EVIDENCE /
+    _REAL_SESSION / _REAL_INPUT 提供且文件存在时运行，否则明确 SKIP，
+    默认前置不绑定任何远端路径或真实会话。
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent / "zcode-gui-monitor-adapter.py"
-REAL_EVIDENCE = Path(
-    "/private/tmp/zcode-gui-evidence-pr-20261002/review/collector-real-binding-r2.json"
-)
-REAL_SHA256 = "c454d6f4b962727bf2a77011e45eacfcdb360bb07a53a4e9bc35482f5b0fad7e"
-REAL_SESSION = "sess_d9fe1217-0629-452a-ac22-882a9f80f32d"
-REAL_INPUT = "queue_01a0fcbd-14f6-787c-8c0d-51e076f351d7"
+
+REAL_EVIDENCE = os.environ.get("ZCODE_GUI_MONITOR_REAL_EVIDENCE", "")
+REAL_SESSION = os.environ.get("ZCODE_GUI_MONITOR_REAL_SESSION", "")
+REAL_INPUT = os.environ.get("ZCODE_GUI_MONITOR_REAL_INPUT", "")
+REAL_SHA256 = os.environ.get("ZCODE_GUI_MONITOR_REAL_SHA256", "")
+REAL_PROVIDER = os.environ.get("ZCODE_GUI_MONITOR_REAL_PROVIDER", "")
+REAL_MODEL = os.environ.get("ZCODE_GUI_MONITOR_REAL_MODEL", "")
 
 FIXTURE_SESSION = "sess_fixture"
 FIXTURE_INPUT = "input_fixture"
@@ -53,6 +59,27 @@ SUCCESS_KEYS = {
 }
 ERROR_KEYS = {"adapter", "schemaVersion", "error", "flags"}
 FALSE_FLAGS = {"pmAccepted": False, "orcaSupervised": False, "livenessAuthoritative": False}
+
+# 采集器真实无 turn 形态（PR250-R2）：found:false + null 字段。
+NO_TURN_COLLECTOR = {"found": False, "turnId": None, "status": None}
+FULL_FINAL = {
+    "found": True,
+    "completed": True,
+    "errorFree": True,
+    "textAvailable": True,
+    "providerId": FIXTURE_PROVIDER,
+    "modelId": FIXTURE_MODEL,
+    "messageId": "msg_final",
+    "textLength": 42,
+    "mode": "yolo",
+}
+FULL_COMPLETION = {
+    "complete": True,
+    "turnCompleted": True,
+    "finalAssistantCompleted": True,
+    "finalAssistantErrorFree": True,
+    "finalTextAvailable": True,
+}
 CLEAN_COMPLETION = {
     "complete": False,
     "turnCompleted": False,
@@ -81,28 +108,25 @@ def ready_payload():
         "inputId": FIXTURE_INPUT,
         "input": {"status": "promoted", "promotedMessageId": "msg_promoted"},
         "turn": {"found": True, "status": "completed", "turnId": "turn_fixture"},
-        "finalAssistant": {
-            "found": True,
-            "completed": True,
-            "errorFree": True,
-            "textAvailable": True,
-            "providerId": FIXTURE_PROVIDER,
-            "modelId": FIXTURE_MODEL,
-            "messageId": "msg_final",
-            "textLength": 42,
-            "mode": "yolo",
-        },
-        "completionEvidence": {
-            "complete": True,
-            "turnCompleted": True,
-            "finalAssistantCompleted": True,
-            "finalAssistantErrorFree": True,
-            "finalTextAvailable": True,
-        },
+        "finalAssistant": dict(FULL_FINAL),
+        "completionEvidence": dict(FULL_COMPLETION),
         "liveness": {
             "authoritative": False,
             "note": "Cold read-only snapshot; missing fields are never inferred.",
         },
+        "ok": True,
+    }
+
+
+def collector_admitted():
+    """采集器真实合法快照：admitted 且尚无 turn（null 字段为合法默认值）。"""
+    return {
+        "schemaVersion": 1,
+        "sessionId": FIXTURE_SESSION,
+        "inputId": FIXTURE_INPUT,
+        "input": {"status": "admitted"},
+        "turn": dict(NO_TURN_COLLECTOR),
+        "liveness": {"authoritative": False},
         "ok": True,
     }
 
@@ -191,37 +215,95 @@ def main():
             )
             check("ready: 未知字段丢弃", "liveness" not in result and "ok" not in result)
 
-        # --- 输入两态（按任务顺序短路）---
-        admitted = ready_payload()
-        admitted["input"] = {"status": "admitted"}
-        admitted["turn"] = {"found": True, "status": "running", "turnId": "turn_fixture"}
-        admitted.pop("finalAssistant")
-        admitted["completionEvidence"] = dict(CLEAN_COMPLETION)
-        path = write_fixture(root, admitted, "admitted.json")
-        expect_success("admitted", run_adapter(path), "INPUT_ACCEPTED")
+        # READY 需显式 complete=true：缺项/null 保持未知不补全 → DELIVERY_PENDING
+        missing_complete = ready_payload()
+        missing_complete["completionEvidence"].pop("complete")
+        path = write_fixture(root, missing_complete, "missing-complete.json")
+        expect_success("complete缺失不补全", run_adapter(path), "DELIVERY_PENDING")
 
-        stale_success = ready_payload()
-        stale_success["input"] = {"status": "failed"}
-        path = write_fixture(root, stale_success, "failed.json")
-        expect_success("failed掩盖旧成功", run_adapter(path), "INPUT_FAILED")
+        null_complete = ready_payload()
+        null_complete["completionEvidence"]["complete"] = None
+        path = write_fixture(root, null_complete, "null-complete.json")
+        expect_success("complete=null不补全", run_adapter(path), "DELIVERY_PENDING")
 
-        # --- promoted 后的 turn 各态 ---
-        no_turn = ready_payload()
-        no_turn["turn"] = {"found": False}
-        no_turn.pop("finalAssistant")
-        no_turn["completionEvidence"] = dict(CLEAN_COMPLETION)
-        path = write_fixture(root, no_turn, "no-turn.json")
-        expect_success("promoted无turn", run_adapter(path), "TURN_UNKNOWN")
+        # --- 采集器合法 nullable 形态（F3 回归）---
+        path = write_fixture(root, collector_admitted(), "collector-admitted.json")
+        result = expect_success("采集器admitted无turn", run_adapter(path), "INPUT_ACCEPTED")
+        if result:
+            check("采集器admitted: turnId=null", result["turnId"] is None, result["turnId"])
 
+        promoted_no_turn = collector_admitted()
+        promoted_no_turn["input"] = {"status": "promoted"}
+        path = write_fixture(root, promoted_no_turn, "collector-promoted.json")
+        expect_success("采集器promoted无turn", run_adapter(path), "TURN_UNKNOWN")
+
+        found_no_status = ready_payload()
+        found_no_status["turn"] = {"found": True, "status": None, "turnId": None}
+        found_no_status.pop("finalAssistant")
+        found_no_status["completionEvidence"] = dict(CLEAN_COMPLETION)
+        path = write_fixture(root, found_no_status, "found-null-status.json")
+        expect_success("found=true但status=null", run_adapter(path), "TURN_UNKNOWN")
+
+        # --- 输入两态（无 concrete turn 时正常映射）---
+        failed_no_turn = collector_admitted()
+        failed_no_turn["input"] = {"status": "failed"}
+        path = write_fixture(root, failed_no_turn, "failed-no-turn.json")
+        expect_success("failed无concrete turn", run_adapter(path), "INPUT_FAILED")
+
+        # --- input/turn 矛盾（F1 回归）：已证非 promoted 携带 concrete turn/final ---
+        admitted_turn = ready_payload()
+        admitted_turn["input"] = {"status": "admitted"}
+        path = write_fixture(root, admitted_turn, "admitted-turn.json")
+        expect_success("admitted+completed turn", run_adapter(path), "EVIDENCE_CONFLICT")
+
+        failed_turn = ready_payload()
+        failed_turn["input"] = {"status": "failed"}
+        path = write_fixture(root, failed_turn, "failed-turn.json")
+        expect_success("failed+completed turn", run_adapter(path), "EVIDENCE_CONFLICT")
+
+        admitted_final = collector_admitted()
+        admitted_final["finalAssistant"] = dict(FULL_FINAL)
+        path = write_fixture(root, admitted_final, "admitted-final.json")
+        expect_success("admitted+concrete final", run_adapter(path), "EVIDENCE_CONFLICT")
+
+        failed_final = collector_admitted()
+        failed_final["input"] = {"status": "failed"}
+        failed_final["finalAssistant"] = dict(FULL_FINAL)
+        path = write_fixture(root, failed_final, "failed-final.json")
+        expect_success("failed+concrete final", run_adapter(path), "EVIDENCE_CONFLICT")
+
+        # --- input 缺失/unknown（N3 回归）：即使观测全 true 也不得 READY ---
+        missing_input = ready_payload()
+        missing_input.pop("input")
+        path = write_fixture(root, missing_input, "missing-input.json")
+        expect_success("input缺失+completed turn", run_adapter(path), "TURN_UNKNOWN")
+
+        unknown_input = ready_payload()
+        unknown_input["input"] = {"status": "queued"}
+        path = write_fixture(root, unknown_input, "unknown-input.json")
+        expect_success("input未知值+completed turn", run_adapter(path), "TURN_UNKNOWN")
+
+        null_input = ready_payload()
+        null_input["input"] = {"status": None}
+        path = write_fixture(root, null_input, "null-input.json")
+        expect_success("input=null+completed turn", run_adapter(path), "TURN_UNKNOWN")
+
+        # --- promoted 后的 turn 各态（ce clean，正常进行中快照不误拒）---
         path = write_fixture(root, turn_state_payload("running"), "running.json")
-        expect_success("running", run_adapter(path), "TURN_RUNNING")
+        result = expect_success("running", run_adapter(path), "TURN_RUNNING")
+        if result:
+            check(
+                "running: ce全false不误拒冲突",
+                result["state"] == "TURN_RUNNING",
+                result["state"],
+            )
         path = write_fixture(root, turn_state_payload("cancelled"), "cancelled.json")
         expect_success("cancelled", run_adapter(path), "TURN_CANCELLED")
         path = write_fixture(root, turn_state_payload("queued"), "queued.json")
         expect_success("未知turn保留UNKNOWN", run_adapter(path), "TURN_UNKNOWN")
 
         old_success = turn_state_payload("error")
-        old_success["finalAssistant"] = ready_payload()["finalAssistant"]
+        old_success["finalAssistant"] = dict(FULL_FINAL)
         old_success["completionEvidence"].update(
             {
                 "finalAssistantCompleted": True,
@@ -252,7 +334,7 @@ def main():
         not_found["completionEvidence"] = dict(CLEAN_COMPLETION)
         not_found["completionEvidence"]["turnCompleted"] = True
         path = write_fixture(root, not_found, "final-not-found.json")
-        expect_success("final未found", run_adapter(path), "DELIVERY_PENDING")
+        expect_success("final未found全false", run_adapter(path), "DELIVERY_PENDING")
 
         latest_error = ready_payload()
         latest_error["finalAssistant"]["errorFree"] = False
@@ -261,7 +343,20 @@ def main():
         path = write_fixture(root, latest_error, "delivery-error.json")
         expect_success("最新error", run_adapter(path), "DELIVERY_ERROR")
 
-        # --- 伪完成 / 矛盾字段 → EVIDENCE_CONFLICT ---
+        # --- completionEvidence 双向一致（F2 回归）：欠声明方向 ---
+        for ce_key in (
+            "complete",
+            "turnCompleted",
+            "finalAssistantCompleted",
+            "finalAssistantErrorFree",
+            "finalTextAvailable",
+        ):
+            under = ready_payload()
+            under["completionEvidence"][ce_key] = False
+            path = write_fixture(root, under, f"under-{ce_key}.json")
+            expect_success(f"欠声明{ce_key}=false", run_adapter(path), "EVIDENCE_CONFLICT")
+
+        # --- 过度声明方向 ---
         fake = ready_payload()
         fake["finalAssistant"]["errorFree"] = False
         fake["completionEvidence"]["finalAssistantErrorFree"] = False
@@ -279,27 +374,44 @@ def main():
         path = write_fixture(root, over_text, "over-text.json")
         expect_success("ce与final字段矛盾", run_adapter(path), "EVIDENCE_CONFLICT")
 
-        ghost = ready_payload()
-        ghost["turn"] = {"found": False}
-        ghost["completionEvidence"] = dict(CLEAN_COMPLETION)
-        path = write_fixture(root, ghost, "ghost-final.json")
-        expect_success("无turn却有final", run_adapter(path), "EVIDENCE_CONFLICT")
+        # --- finalAssistant 内部矛盾：found=false 却声明具体布尔 ---
+        for key in ("completed", "errorFree", "textAvailable"):
+            ghost_final = ready_payload()
+            ghost_final["finalAssistant"]["found"] = False
+            ghost_final["completionEvidence"] = dict(CLEAN_COMPLETION)
+            ghost_final["completionEvidence"]["turnCompleted"] = True
+            ce_key = "finalAssistant" + key[0].upper() + key[1:]
+            ghost_final["completionEvidence"][ce_key] = True
+            ghost_final["finalAssistant"][key] = True
+            path = write_fixture(root, ghost_final, f"ghost-final-{key}.json")
+            expect_success(f"final未found却{key}=true", run_adapter(path), "EVIDENCE_CONFLICT")
 
+        # --- turn 自身矛盾 ---
         self_contra = turn_state_payload("completed")
         self_contra["turn"]["found"] = False
         path = write_fixture(root, self_contra, "self-contradiction.json")
         expect_success("turn自身矛盾", run_adapter(path), "EVIDENCE_CONFLICT")
 
-        # --- 坏类型 / 坏 schema ---
+        # --- 坏类型 / 坏 schema（非 null 非合法类型才拒绝）---
         bad_type = ready_payload()
         bad_type["finalAssistant"]["completed"] = "true"
         path = write_fixture(root, bad_type, "bad-type.json")
         expect_error("布尔伪装字符串", run_adapter(path), "EVIDENCE_TYPE_INVALID")
 
-        bad_ce = ready_payload()
-        bad_ce["completionEvidence"]["complete"] = "true"
-        path = write_fixture(root, bad_ce, "bad-ce-type.json")
-        expect_error("ce布尔伪装字符串", run_adapter(path), "EVIDENCE_TYPE_INVALID")
+        bad_turn_status = ready_payload()
+        bad_turn_status["turn"]["status"] = 123
+        path = write_fixture(root, bad_turn_status, "bad-turn-status.json")
+        expect_error("turn.status=123", run_adapter(path), "EVIDENCE_TYPE_INVALID")
+
+        bad_turn_id = ready_payload()
+        bad_turn_id["turn"]["turnId"] = ["turn_x"]
+        path = write_fixture(root, bad_turn_id, "bad-turn-id.json")
+        expect_error("turnId=数组", run_adapter(path), "EVIDENCE_TYPE_INVALID")
+
+        bad_input_status = collector_admitted()
+        bad_input_status["input"] = {"status": 7}
+        path = write_fixture(root, bad_input_status, "bad-input-status.json")
+        expect_error("input.status=7", run_adapter(path), "EVIDENCE_TYPE_INVALID")
 
         bad_session = ready_payload()
         bad_session["sessionId"] = 123
@@ -383,7 +495,6 @@ def main():
 
         no_provider = ready_payload()
         del no_provider["finalAssistant"]["providerId"]
-        no_provider["completionEvidence"]["complete"] = False
         path = write_fixture(root, no_provider, "no-provider.json")
         result = expect_success("provider缺失仍unknown", run_adapter(path), "READY_FOR_PM_REVIEW")
         if result:
@@ -420,38 +531,45 @@ def main():
         check("只读: 文件内容不变", hashlib.sha256(path.read_bytes()).hexdigest() == before_digest)
         check("只读: 目录条目不变", sorted(p.name for p in sensitive_dir.iterdir()) == before_entries)
 
-        # --- 真实采集样例（存在时）---
-        if REAL_EVIDENCE.is_file():
-            proc = run_adapter(REAL_EVIDENCE, session=REAL_SESSION, input_id=REAL_INPUT)
+        # --- 真实采集样例：仅由环境变量显式传入，缺省明确 SKIP ---
+        real_path = Path(REAL_EVIDENCE) if REAL_EVIDENCE else None
+        env_ready = bool(REAL_SESSION and REAL_INPUT and real_path and real_path.is_file())
+        if env_ready:
+            extra_env = []
+            if REAL_SHA256:
+                extra_env = ["--expected-evidence-sha256", REAL_SHA256]
+            proc = run_adapter(real_path, session=REAL_SESSION, input_id=REAL_INPUT)
             result = expect_success("真实样例", proc, "READY_FOR_PM_REVIEW")
-            if result:
-                check(
-                    "真实样例: 摘要固定",
-                    result["evidenceSha256"] == REAL_SHA256,
-                    result["evidenceSha256"],
-                )
-                check(
-                    "真实样例: provider/model回显",
-                    result["provider"] == FIXTURE_PROVIDER and result["model"] == FIXTURE_MODEL,
-                    (result["provider"], result["model"]),
-                )
+            if result and REAL_SHA256:
+                check("真实样例: 摘要固定", result["evidenceSha256"] == REAL_SHA256, result["evidenceSha256"])
+            if result and REAL_PROVIDER:
+                check("真实样例: provider回显", result["provider"] == REAL_PROVIDER, result["provider"])
+            if result and REAL_MODEL:
+                check("真实样例: model回显", result["model"] == REAL_MODEL, result["model"])
             expect_success(
-                "真实样例+摘要校验",
+                "真实样例+期待校验",
                 run_adapter(
-                    REAL_EVIDENCE,
+                    real_path,
                     session=REAL_SESSION,
                     input_id=REAL_INPUT,
-                    extra=["--expected-evidence-sha256", REAL_SHA256],
+                    extra=[
+                        *extra_env,
+                        *(["--expected-provider", REAL_PROVIDER] if REAL_PROVIDER else []),
+                        *(["--expected-model", REAL_MODEL] if REAL_MODEL else []),
+                    ],
                 ),
                 "READY_FOR_PM_REVIEW",
             )
             expect_error(
                 "真实样例+错误绑定",
-                run_adapter(REAL_EVIDENCE, session="sess_other", input_id=REAL_INPUT),
+                run_adapter(real_path, session="sess_other", input_id=REAL_INPUT),
                 "BINDING_MISMATCH",
             )
         else:
-            print("SKIP 真实采集样例不存在（离线环境）")
+            print(
+                "SKIP 真实采集样例：需环境变量 ZCODE_GUI_MONITOR_REAL_EVIDENCE/"
+                "_REAL_SESSION/_REAL_INPUT 且文件存在（默认前置不绑定远端路径）"
+            )
 
     print(f"passed={passed} failed={failed}")
     return 1 if failed else 0

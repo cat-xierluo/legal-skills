@@ -3,9 +3,14 @@
 
 Read-only cold-snapshot adapter: a single byte read (1 MiB cap), one SHA-256
 digest, strict UTF-8/JSON/schema/type/binding/digest validation, then a fixed
-state vocabulary. Unknown fields are dropped; output carries binding IDs,
-digest, fixed states and constant-false flags only. Never dispatches,
-supervises or claims live liveness. Stdlib only, Python 3.9+.
+state vocabulary. Collector-legal nullable scalars (turn.status/turnId null
+when no turn exists) are accepted as "missing"; unknown fields are dropped.
+completionEvidence is checked for consistency in BOTH directions against the
+observed turn/final booleans, and READY_FOR_PM_REVIEW additionally requires a
+promoted input plus an explicit complete=true. Conflicting input/turn/final
+observations and fabricated completion collapse to EVIDENCE_CONFLICT. Output
+carries binding IDs, digest, fixed states and constant-false flags only.
+Never dispatches, supervises or claims live liveness. Stdlib only, 3.9+.
 """
 from __future__ import annotations
 
@@ -131,25 +136,27 @@ def parse_metadata(raw):
         require_type(isinstance(value, dict))
         return value
 
-    def bool_field(obj, key):
-        if key in obj:
+    def nullable_bool(obj, key):
+        # Collector-legal null means "not observed"; only wrong non-null
+        # types are rejected.
+        if obj.get(key) is not None:
             require_type(is_bool(obj[key]))
 
+    def nullable_text(obj, key):
+        if obj.get(key) is not None:
+            require_type(is_text(obj[key]))
+
     input_obj = optional_object("input")
-    if "status" in input_obj:
-        require_type(is_text(input_obj["status"]))
+    nullable_text(input_obj, "status")
     turn = optional_object("turn")
-    bool_field(turn, "found")
-    if "status" in turn:
-        require_type(is_text(turn["status"]))
-    if "turnId" in turn:
-        require_type(is_text(turn["turnId"]))
+    nullable_bool(turn, "found")
+    nullable_text(turn, "status")
+    nullable_text(turn, "turnId")
     final = optional_object("finalAssistant")
     for key in ("found", "completed", "errorFree", "textAvailable"):
-        bool_field(final, key)
+        nullable_bool(final, key)
     for key in ("providerId", "modelId"):
-        if key in final:
-            require_type(is_text(final[key]))
+        nullable_text(final, key)
     completion = optional_object("completionEvidence")
     for key in (
         "complete",
@@ -158,48 +165,74 @@ def parse_metadata(raw):
         "finalAssistantErrorFree",
         "finalTextAvailable",
     ):
-        bool_field(completion, key)
+        nullable_bool(completion, key)
     return metadata, input_obj, turn, final, completion
 
 
-def has_conflict(turn, final, completion):
-    """Over-claim detection only; missing fields are never a conflict."""
+def final_all_good(final):
+    return (
+        final.get("found") is True
+        and final.get("completed") is True
+        and final.get("errorFree") is True
+        and final.get("textAvailable") is True
+    )
+
+
+def has_conflict(input_obj, turn, final, completion):
+    """Bidirectional mismatch between stated and observed booleans.
+
+    A key that is present (non-null) on both sides must agree in either
+    direction; missing/null keys stay unknown and are never a conflict.
+    """
     turn_found = turn.get("found") is True
     turn_status = turn.get("status")
     turn_done = turn_found and turn_status == "completed"
-    final_found = final.get("found") is True
-    final_completed = final.get("completed") is True
-    final_error_free = final.get("errorFree") is True
-    final_text = final.get("textAvailable") is True
-    final_all_good = final_found and final_completed and final_error_free and final_text
-    observed_complete = turn_done and final_all_good
+    final_good = final_all_good(final)
+    observed_complete = turn_done and final_good
 
-    def over_claims(key, observed):
-        return completion.get(key) is True and not observed
+    # completionEvidence vs observation, both directions.
+    stated_complete = completion.get("complete")
+    if is_bool(stated_complete) and stated_complete is not observed_complete:
+        return True
+    stated_turn_done = completion.get("turnCompleted")
+    if is_bool(stated_turn_done) and stated_turn_done is not turn_done:
+        return True
+    for ce_key, final_key in (
+        ("finalAssistantCompleted", "completed"),
+        ("finalAssistantErrorFree", "errorFree"),
+        ("finalTextAvailable", "textAvailable"),
+    ):
+        stated = completion.get(ce_key)
+        if is_bool(stated) and stated is not (final.get(final_key) is True):
+            return True
 
-    if over_claims("complete", observed_complete):
+    # finalAssistant cannot be not-found while claiming concrete booleans.
+    if final.get("found") is False and any(
+        final.get(key) is True for key in ("completed", "errorFree", "textAvailable")
+    ):
         return True
-    if over_claims("turnCompleted", turn_done):
-        return True
-    if over_claims("finalAssistantCompleted", final_completed):
-        return True
-    if over_claims("finalAssistantErrorFree", final_error_free):
-        return True
-    if over_claims("finalTextAvailable", final_text):
-        return True
-    if final_found and not turn_found:
-        return True
+
+    # turn cannot be absent while claiming a concrete status.
     if turn.get("found") is False and turn_status in TURN_CONCRETE_STATUSES:
+        return True
+
+    # A non-promoted input contradicts any concrete turn or final assistant.
+    input_status = input_obj.get("status")
+    if input_status in ("admitted", "failed") and (turn_found or final.get("found") is True):
         return True
     return False
 
 
-def map_state(input_obj, turn, final):
+def map_state(input_obj, turn, final, completion):
     input_status = input_obj.get("status")
     if input_status == "admitted":
         return STATE_INPUT_ACCEPTED
     if input_status == "failed":
         return STATE_INPUT_FAILED
+    # Only a proven promoted input may reach the delivery gate; missing,
+    # null or unknown statuses keep the whole snapshot TURN_UNKNOWN.
+    if input_status != "promoted":
+        return STATE_TURN_UNKNOWN
     if turn.get("found") is not True:
         return STATE_TURN_UNKNOWN
     turn_status = turn.get("status")
@@ -210,13 +243,12 @@ def map_state(input_obj, turn, final):
     if turn_status == "cancelled":
         return STATE_TURN_CANCELLED
     if turn_status == "completed":
-        final_completed = final.get("completed") is True
-        final_error_free = final.get("errorFree") is True
-        final_text = final.get("textAvailable") is True
-        if final.get("found") is True and final_completed and final_error_free and final_text:
-            return STATE_READY_FOR_PM_REVIEW
         if final.get("found") is True and final.get("errorFree") is False:
             return STATE_DELIVERY_ERROR
+        # The review gate needs every observed boolean plus an explicit,
+        # non-contradicted complete=true; missing pieces stay pending.
+        if final_all_good(final) and completion.get("complete") is True:
+            return STATE_READY_FOR_PM_REVIEW
         return STATE_DELIVERY_PENDING
     return STATE_TURN_UNKNOWN
 
@@ -275,10 +307,10 @@ def main(argv):
     if args.expected_model is not None and model != args.expected_model:
         fail(ERR_MODEL_MISMATCH)
 
-    if has_conflict(turn, final, completion):
+    if has_conflict(input_obj, turn, final, completion):
         state = STATE_EVIDENCE_CONFLICT
     else:
-        state = map_state(input_obj, turn, final)
+        state = map_state(input_obj, turn, final, completion)
 
     turn_id = turn.get("turnId")
     emit(
