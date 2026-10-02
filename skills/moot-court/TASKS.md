@@ -303,3 +303,17 @@
 - 一次ZCode检查点指导在消息wrapper的worker.state校验处被拒绝（native ready、projection working，wrapper仅接受active），未发送。原worker仍独立完成，未绕过门。后续评估该状态兼容性，当前不声称协调消息链全面验收。
 
 - PR入口：[PR #247](https://github.com/cat-xierluo/legal-skills/pull/247)，当前草稿，等待不同会话的独立审查。Task-022/023的生产者自报DONE已改为IN_REVIEW，避免把自验当完成。
+
+### Task-025 · 独立审查发现的 probe 错误路径与口径修复
+
+- 状态：IN_PROGRESS；优先级：P2；归属：MiniMax Code 实现，独立 ZCode 验收。
+- 来源：PR #247 的独立 reviewer（新 Dispatch/Session）于冻结提交 `8c1281c88310ca19013b1e9f750aa2e71ae3be43` 给出 ACCEPT、无阻塞；两条指定验证命令通过，五项非阻塞发现如下，旧审查随 head 改变失效。
+- NB-1：prepare_probe 的 subprocess 超时未捕获，需清晰 CLI 错误和确定性超时测试。
+- NB-2：角色提示只允许公开编号，比 clerk 允许本角色可见材料更严；统一提示、复核资产与协议口径，不扩大可见范围。
+- NB-3：write/fsync 失败会残留本次半成品；只清理本次创建文件，保留原有文件，覆盖失败路径测试。
+- NB-4：测试材料 D-001 的标题与原告可见范围不一致，修正标题。
+- NB-5：文档要求绝对路径而脚本接受相对路径；统一实际支持与说明，并验证选定行为。
+- 范围：prepare_probe.py、test_prepare_probe.py、blind-probe.md，必要的 SKILL/evaluation 使用入口和技能 TASKS/CHANGELOG 随行说明；不改 clerk 协议、不读取客户材料。
+- 验收：实际 CLI 正常与拒绝覆盖路径通过；超时与写失败可复现且无污染；角色任务允许己方可见材料、仍拒绝他方私有材料；独立审查绑定最终 40 位 head。
+- 证据：本地忽略档案 `archive/2026-10-02-worker-wave/review-acceptance.json` 保存旧候选通过的角色分离验收；负向 CLI 的 exit 2 是预期拒绝证据，不计作成功验证命令。
+- 非目标：不把局部协议或探针修复宣称为 Task-011/005 的完整 Runtime/领域验收。
