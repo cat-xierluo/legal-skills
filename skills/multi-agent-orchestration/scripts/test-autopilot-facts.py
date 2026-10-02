@@ -77,6 +77,7 @@ class Fixture:
         self.project_probe = self.root / "fake-project.py"
         self.provider_probe = self.root / "fake-provider.py"
         real_git = Path(shutil.which("git") or "").resolve()
+        self.real_git = real_git
         write_executable(
             self.git_wrapper,
             "#!/usr/bin/env python3\n"
@@ -243,6 +244,13 @@ class Fixture:
             cwd=self.repo, check=False,
         )
 
+    def use_native_git(self) -> None:
+        # Keep real Git identity checks, without an unrelated Python-wrapper
+        # startup consuming a short project-probe timeout.
+        self.manifest["tools"]["git"] = {"argv": [str(self.real_git)],
+                                          "sha256": digest(self.real_git), "read_only": True}
+        self.write_manifest()
+
     def close(self) -> None:
         self.temp.cleanup()
 
@@ -324,6 +332,7 @@ def case_duplicate_pr(f: Fixture) -> None:
 
 
 def case_timeout(f: Fixture) -> None:
+    f.use_native_git()
     config = json.loads(f.project_config.read_text())
     config["sleep"] = 3
     f._write_json(f.project_config, config)
@@ -333,6 +342,74 @@ def case_timeout(f: Fixture) -> None:
     payload = json.loads(result.stdout)
     assert payload["items"][0]["project"]["status"] == "unknown"
     assert any(source["source"] == "project:Task-X" and source["status"] == "timeout" for source in payload["sources"])
+    identity_sources = [source for source in payload["sources"] if source["source"] == "git:identity"]
+    assert len(identity_sources) == 3 and all(source["status"] == "ok" for source in identity_sources)
+
+
+def case_identity_observation_failures(f: Fixture) -> None:
+    original = f.git_wrapper.read_text()
+    needle = "os.execv("
+    # Every fault is a real child behavior, not a forged successful identity.
+    faults = [
+        ("repository_root", ["rev-parse", "--show-toplevel"], "import time; time.sleep(2)", 69, "timeout"),
+        ("git_common_dir", ["rev-parse", "--git-common-dir"], "import time; time.sleep(2)", 69, "timeout"),
+        ("policy_commit", ["cat-file", "-e"], "import time; time.sleep(2)", 69, "timeout"),
+        ("policy_commit", ["cat-file", "-e"], "raise SystemExit(128)", 69, "nonzero"),
+        ("repository_root", ["rev-parse", "--show-toplevel"], "sys.stdout.buffer.write(b'X'*(2*1024*1024)); sys.stdout.flush(); raise SystemExit(0)", 65, "output_limit"),
+        ("repository_root", ["rev-parse", "--show-toplevel"], "sys.stdout.buffer.write(b'\\xff'); raise SystemExit(0)", 65, "invalid_data"),
+        ("repository_root", ["rev-parse", "--show-toplevel"], "print(''); raise SystemExit(0)", 65, "invalid_data"),
+    ]
+    for operation, argv, action, code, status in faults:
+        prefix = f"if sys.argv[3:5] == {argv!r}:\n  {action}\n"
+        write_executable(f.git_wrapper, original.replace(needle, prefix + needle, 1))
+        f.manifest["tools"]["git"]["sha256"] = digest(f.git_wrapper)
+        f.write_manifest()
+        f.log.unlink(missing_ok=True)
+        result = f.invoke(timeout=1.0)
+        assert result.returncode == code and result.stdout == "", result.stderr
+        error = json.loads(result.stderr)
+        observation = error["identity_observation"]
+        assert observation["operation"] == operation and observation["status"] == status, error
+        assert len(result.stderr) < 512 and str(f.repo) not in result.stderr and f.oid not in result.stderr
+        calls = [json.loads(line) for line in f.log.read_text().splitlines()]
+        assert all(call["tool"] == "git" for call in calls), calls
+        assert len(calls) == {"repository_root": 1, "git_common_dir": 2, "policy_commit": 3}[operation]
+    # An executable with a missing interpreter is unavailable; an invalid
+    # executable format causes a real Popen OSError and is an IO failure.
+    for content, code, status in [("#!/nonexistent/facts-interpreter\n", 69, "unavailable"),
+                                  ("invalid executable format\n", 74, "io_error")]:
+        write_executable(f.git_wrapper, content)
+        f.manifest["tools"]["git"]["sha256"] = digest(f.git_wrapper)
+        f.write_manifest()
+        f.log.unlink(missing_ok=True)
+        result = f.invoke()
+        assert result.returncode == code and result.stdout == "", result.stderr
+        assert json.loads(result.stderr)["identity_observation"]["status"] == status
+        assert not f.log.exists()
+
+
+def case_observed_repository_mismatch(f: Fixture) -> None:
+    original = f.git_wrapper.read_text()
+    for operation, argv in [("repository_root", ["rev-parse", "--show-toplevel"]),
+                            ("git_common_dir", ["rev-parse", "--git-common-dir"])]:
+        prefix = f"if sys.argv[3:5] == {argv!r}:\n  print({str(f.root)!r}); raise SystemExit(0)\n"
+        write_executable(f.git_wrapper, original.replace("os.execv(", prefix + "os.execv(", 1))
+        f.manifest["tools"]["git"]["sha256"] = digest(f.git_wrapper)
+        f.write_manifest()
+        f.log.unlink(missing_ok=True)
+        result = f.invoke()
+        assert result.returncode == 66 and result.stdout == "", result.stderr
+        observation = json.loads(result.stderr)["identity_observation"]
+        assert observation["operation"] == operation and observation["status"] == "mismatch"
+        assert all(json.loads(line)["tool"] == "git" for line in f.log.read_text().splitlines())
+    f.use_native_git()
+    f.manifest["repo_identity"] = "0" * 64
+    f.request["repo"]["identity"] = "0" * 64
+    f.write_manifest()
+    f.log.unlink(missing_ok=True)
+    result = f.invoke()
+    assert result.returncode == 66 and not f.log.exists(), result.stderr
+    assert json.loads(result.stderr)["identity_observation"]["operation"] == "repository_hash"
 
 
 def case_malformed_external_and_input(f: Fixture) -> None:
@@ -513,6 +590,7 @@ def case_pr_adopt_by_exact_identity(f: Fixture) -> None:
 
 
 def case_freshness_retry_and_process_group(f: Fixture) -> None:
+    f.use_native_git()
     expired = json.loads(json.dumps(f.request))
     expired["issued_at"] = "2026-01-01T00:00:00Z"
     expired["deadline"] = "2026-01-01T00:01:00Z"
@@ -626,6 +704,8 @@ CASES: list[tuple[str, Callable[[Fixture], None]]] = [
     ("PR identity drift fails closed", case_identity_drift),
     ("duplicate PR is ambiguous", case_duplicate_pr),
     ("probe timeout is bounded", case_timeout),
+    ("identity observation failures remain unverified and stop probes", case_identity_observation_failures),
+    ("observed repository mismatch remains identity rejection", case_observed_repository_mismatch),
     ("malformed external/input JSON fails closed", case_malformed_external_and_input),
     ("symlink bindings/evidence rejected", case_symlink_rejected),
     ("missing command has stable exit", case_command_missing),

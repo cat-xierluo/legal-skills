@@ -496,15 +496,19 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-FACTS-VALIDATION-TIMEOUT — 事实采集器超时测试的身份失败诊断
 
-- 状态：READY / REGRESSION_NOT_PASSED；Owner：MAO维护PM。来源：本轮完整矩阵首轮facts受180秒外层上限中断，未改字节有限第二次在600秒内退出1，20/21通过，probe timeout is bounded返回repository or policy identity drift/66。
+- 状态：IMPLEMENTED_SCOPED_TESTED / PR_PENDING；Owner：MAO维护PM。来源：本轮完整矩阵首轮facts受180秒外层上限中断，未改字节有限第二次在600秒内退出1，20/21通过，probe timeout is bounded返回repository or policy identity drift/66。
 - 已核边界：生产autopilot-facts.py及测试与已发布基线逐字节相同；case_timeout把项目probe sleep3秒与全collector timeout1秒组合，身份Git探测也使用同timeout。实际哪个子命令导致66尚NOT_CONFIRMED，不能用高主机负载或同字节单独归因；不把失败改成预期通过。
 - 范围：沿原collector/测试精确记录各子进程退出/耗时，核身份真实漂移与身份探测超时分类；保留所有失败原件。若改产品或测试，先补明确合同、对应正反例和独立审查，不扩大productiondeadline以取绿，不第三次盲跑整包。
 - 验收：实际失败具名根因及可复查最小反例，正确身份漂移继续拒绝，项目probe timeout在身份已证明的条件下有准确unknown/timeout事实；新修后运行同一相关消费者并独审。完整回归与跨会话闭环目前NOT_VERIFIED。
 - 证据：本机/private/tmp/mao-continuation-matrix/63.log、facts-bounded-second.log、bounded-second-journal.json及remaining-failures-byte-comparison.json；首失败及有限复验均保留在本聊天私有证据包，不进入公共fixture。
 
+- 2026-10-02限定修复与证据：身份探测现在逐项保留状态：timeout/unavailable/非零观测69、IO74、坏数据或超量65，成功观测到真实不符仍66；所有失败立即停止下游probe，不扩大生产deadline。修后23/23 exit0，真实caller对子进程69/74/65/66均拒绝，即使stdout伪装facts也不返回。受控真实Git超时反例已复现分类缺陷，原现场具体失败子命令仍未确认；不以新反例追认负载根因。 本轮证据冻结于维护者archive/20261002_gate_stabilization/，包括实际命令、退出码、候选SHA与所有失败原件；独立审查按本PR最终不可变head绑定，长期稳定性另验。
+
 ## TASK-2026-10-02-READONLY-SMOKE-BRANCH-COLLISION — 只读原生smoke固定分支与已有树冲突
 
-- 状态：READY / LIVE_SMOKE_NOT_PASSED；Owner：MAO维护PM。来源：本轮sandbox首smoke exit77，受审只读代理复核真实Orca1.4.218后到达auto检测，但dry-run exit1，固定feat/smoke-orca映射到已有同repo工作树（dirty86）。
+- 状态：IMPLEMENTED_OFFLINE_SCOPED_TESTED / LIVE_NOT_VERIFIED；Owner：MAO维护PM。来源：本轮sandbox首smoke exit77，受审只读代理复核真实Orca1.4.218后到达auto检测，但dry-run exit1，固定feat/smoke-orca映射到已有同repo工作树（dirty86）。
 - 已核：runtime实际有terminal.multiplex.v1，不能将首次sandbox的capability缺证当作产品缺能力。原smoke固定BRANCH，当前真实环境已有对应树；这是现场冲突，非新准备门验证失败。
 - 范围与验收：治理测试私有身份的唯一性及冲突诊断，保留生产occupied-worktree拒绝。先核既有树owner；不删除/强制复用原树，不以重跑或换身份解锁业务。新只读smoke须仍经严格Orca读代理，不启动真实Agent/Run；原失败留存。
 - 证据：本机/private/tmp/mao-continuation-real-orca-status.json与mao-continuation-real-orca-readonly-smoke.log；当前原生smoke非通过，完整生命周期NOT_VERIFIED。
+
+- 2026-10-02限定修复与证据：只读smoke用每轮私有nonce及生产safe_branch规则派生branch/session/WT/CTX；不改生产occupied保护。隔离原smoke+真实spawn dry-run最终4/4 exit0：连续两轮不冲突、占用拒绝且marker保留、readonly mutation95、路径映射一致。先前三次fixture失败（Bash3.2、非canonical worktree ID、缺runtimeId）原件保留；最后只补真实runtimeId协议字段，不弱化断言。没有真实Orca mutation/模型调用，完整生命周期仍NOT_VERIFIED。 本轮证据冻结于维护者archive/20261002_gate_stabilization/，包括实际命令、退出码、候选SHA与所有失败原件；独立审查按本PR最终不可变head绑定，长期稳定性另验。
