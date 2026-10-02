@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.36.6] - 2026-10-02
+
+### 新增
+- 新增只读 ZCode 会话证据采集器 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库，零依赖）：以 mode=ro URI + query_only + 单事务快照打开既有 SQLite，绝不创建或写原生 DB；必填 `--db/--session-id/--input-id`，可选 `--include-final-text`；精确绑定 `session_input.id + session_id` 并经 `promoted_message_id` 关联 `turn_usage.user_message_id`，绑定或 turn 多匹配一律拒歧义；输出稳定 JSON，区分 input admitted/promoted/failed、turn 缺失/running/completed/error/cancelled 与完成证据——精确 turn completed 加 sequence 最新 assistant（原生 `parentID` 绑定）`time.completed` 非空、无 error 且含非空 text，不从较早成功 assistant 拾取覆盖最新 error/未完成/无 text；providerId/modelId/mode 只取该 assistant 原生 message，缺项显式 unknown，不回落其他会话或默认套餐。
+- 默认仅输出元数据与最终文本长度，只有 `--include-final-text` 才携带最终 assistant 文本；任何模式下不输出 reasoning、tool 输入/输出、`session_input.payload`、认证参数、完整 DB 路径或其他会话数据，错误输出清楚 JSON 且非零退出，不抛泄密 traceback。冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成。
+- 新增回归 `scripts/test-zcode-session-evidence.py`：合成 SQLite fixture 走真实 CLI 子进程，覆盖两身份错绑、同 input 多 turn、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含较早成功不得覆盖）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、缺 DB 不创建与原 DB 字节不变。
+- 新增用法与合同说明 `references/zcode-session-evidence.md`，并在 SKILL.md 按需读取地图挂链接。
+
+### 待办事项
+- 本 PR 不实现 Orca 监督适配；真实大库性能与长期稳定性 NOT_VERIFIED，沿 GUI 任务监控方向另行立项。
+
 ## [2.34.1] - 2026-10-02
 
 ### 修复
