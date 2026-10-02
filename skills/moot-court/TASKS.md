@@ -336,7 +336,7 @@
 
 ### Task-027 · Claude 原生调用索引与当前候选 G5 复测
 
-- 状态：IN_REVIEW（2026-10-02，生产者本轮工程与实测完成，待独立 review 绑定最终 head；承接 Task-011）；优先级：P1；归属：ZCode CLI 实现与实际复测，MiniMax Code 独立 review，原 PM 验收。
+- 状态：DONE（局部工程验收：2026-10-02，MiniMax独立ACCEPT绑定`f9afefa4d7034d5f377a04828e0057d7e193cb68`；本轮文档收口另按最终PR head复核。完整G5及稳定性仍承接Task-011/005）；优先级：P1；归属：ZCode CLI 实现与实际复测，MiniMax Code 独立 review，原 PM 验收。
 - 输入：PR #247 已合并候选（mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`）、`assets/civil-case.example.json` 合成案卷、本机 Claude CLI 真实帮助与 G0—G5 合同；未读取客户资料或旧角色答案。
 - 工程交付：`scripts/index_claude_trace.py`、`scripts/test_index_claude_trace.py`（合同命令 `python3 -B skills/moot-court/scripts/test_index_claude_trace.py` 实测 14/14 通过、exit 0）、`assets/claude-stream.example.jsonl` 最小合成 fixture。索引器标准库、只被动消费 stream-json 原件、不启动 Agent/CLI、不读凭证配置；先经真实 G2 探针确认事件结构（同 message 拆多事件、tool_result 内容块数组、实际派发工具名 `Agent`）再实现解析；取舍见 DEC-014。
 - 实测记录（2026-10-02，Claude Code 2.1.237、全新临时目录、原生 `--permission-mode bypassPermissions` 等本机 help 参数，未改全局配置）：
@@ -354,3 +354,24 @@
 - PM证据边界补充（2026-10-02）：G5生产者快照取自PR247的v1.2.3流程与本轮尚未提交的索引工程，随后新增的v1.2.4文档不在原快照内；起终摘要一致只证明测试进程未修改该快照，不证明最终v1.2.4完成G5。本次780秒终止前仍有连续调用与入卷进展，归为预算停止下的完整闭环NOT_VERIFIED，不能据此称宿主卡死或不兼容。
 - PM协调记录：正式消息包装脚本与原生ZCode的ready/working状态不兼容，本轮只在忽略档案中用具名control_plane_recovery副本修复兼容判断，保留原runtime/run/task/dispatch/terminal身份门及live/fresh/owned状态校验，未修改共享编排源码。发送回执解析失败后用只读原生收件箱确认同一消息已入队，未重复发送，也未改用终端注入。实际消费及交付结论另按正式Delivery核验。
 - 后续继续Task-011：先提供仅含生产Skill与原始合成材料的最小候选目录，排除TASKS、评测答案和旧产物；本轮这些文件在候选中可达，是否被角色实际读取由独立review核对，不能宣称强隔离或洁净盲测。根据本轮真实阶段耗时安排完整七环节与三交付的复测预算，不能把预算耗尽当兼容性失败；基本闭环完成后再测取消重派/恢复。Task-005多轮稳定性及办公宿主验证继续保留原状态。
+
+
+- PM独立验收（PR #249）：MiniMax原生exec已succeeded，独立ACCEPT且无blocking finding；PM定向14项实际通过，独立review亦用本轮G2日志完成14项、0 skipped，并实际验证错误返回不计completed、拒绝覆盖、错误ID与非子代理工具等反例。审查工作树无源修改，索引、合成fixture和能力边界可接受；G4只记带证据发现的编排/落盘通过，初始prompt未归档，逐字传入前文不能直接复算。原告“D-004亦显示设备已入仓”超过材料，被告与法官已识别并未采纳；该观察不签领域正确性或完整Skill稳定性。G5与Task-005保持NOT_VERIFIED。
+- 新发现去向：消息ID参与重复签名、早到结果丢弃、真实日志测试缺失时skip但整体exit 0，以及原生输入未归档，分别进入下列Task-028/029。当前CI绿色只证明其已配置作业通过，不外推本索引真实日志覆盖。
+
+## Task-028 · 索引边界与真实日志覆盖状态
+
+- 状态：DRAFT；优先级：P2；来源：PR249独立review NB-1/2/3；消费者：索引调用方及后续Runtime复测的验收者。
+- 已确认观察：同call内容但message_id不同会保守拒绝；早于call的result会留下unfinished，当前正常Claude原生时序未出现此路径；缺本机归档时真实日志用例skip而suite仍exit 0。均未发现虚报完成，不能把合成反例冒称已复现的原生故障。
+- 待确认范围：先冻结重复事件和时序的支持合同，再决定是否扩展聚合/乱序消费；为真实日志回归提供显式覆盖状态或调用方可选的严格模式，区分合成回归通过与真实日志未跑。
+- 就绪条件：明确消费者所需时序/身份规则及缺失归档时的退出合同后转READY；不因待办存在直接扩大默认解析接受范围。
+- 预计工程范围：scripts/index_claude_trace.py与scripts/test_index_claude_trace.py，以及对应消费说明；用真实G2/G5日志与最小合成正反例验证，不改书记员schema，不自动启动宿主。
+
+## Task-029 · 完整Runtime复测的最小候选与原始输入准备
+
+- 状态：READY；优先级：P1；承接Task-011，来源：本轮G5候选夹带可达评测资料、G4初始输入未保存；消费者：下一次Claude完整七环节冷启动复测及独立验收。
+- 输入：本候选生产Skill、合成民事manifest、runtime-validation统一任务、现有书记员协议与本轮实测的阶段耗时；不输入旧角色答案、旧庭审结果或reviewer预期。
+- 工程范围：新增标准库scripts/prepare_runtime_candidate.py与scripts/test_prepare_runtime_candidate.py，只准备全新候选目录和明确的任务输入文件/摘要；保留SKILL的必要规范引用与生产脚本，排除TASKS/CHANGELOG/DECISIONS、archive、测试脚本、评测答案和旧产物。引用依赖先核对，不能按目录名盲删或让生产Skill断链。
+- 行为边界：不启动宿主、不安装/登录、不修改调用方已有文件或源Skill，不承诺仅靠目录筛选实现工具权限隔离，不签G5或DOMAIN_VERIFIED。角色正式packet、输入prompt与原生调用的对应由后续生产者按协议真实保存，本脚本不代写角色。
+- 验证与验收：在临时合成目录实际运行CLI，检查允许集、排除集、规范引用可达、源文件未变、输入与摘要可复算；既有输出、越界路径和缺引用必须清晰拒绝。工程独立review绑定最终head后，Task-011再用该准备物与按实测耗时设定的有界预算执行完整七环节/三交付；准备工具通过不等于Runtime闭环通过。
+- 非目标：泛化宿主启动器、伪造原生调用、伪造角色历史、继续Gemini、增加证人鉴定人或直接派发办公宿主。WorkBuddy/千问办公仍按Task-019作为后续方向。
