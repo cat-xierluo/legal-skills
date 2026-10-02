@@ -246,7 +246,7 @@
 
 ### Task-021 · 不泄露预期答案的角色分包验证资产
 
-- 状态：IN_REVIEW；优先级：P1；归属：MiniMax Code，`MC-021`。
+- 状态：DONE（2026-10-02 集成收口：[PR #247](https://github.com/cat-xierluo/legal-skills/pull/247) 经 GitHub 实际查询 state=MERGED，mergedAt=2026-10-02T04:48:46Z，mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`）；优先级：P1；归属：MiniMax Code，`MC-021`。
 - 输入：合成民事材料、现有 clerk packet；不读取客户案卷。
 - 范围：prepare_probe.py、test_prepare_probe.py、独立 reviewer 合同、blind-probe.md；与 ZCode 修改范围正交。
 - 验收：角色输入无答案和全量 manifest 路径；私有材料按角色过滤；独立复核答案单独保存；运行实际 CLI 并拒绝覆盖输出。
@@ -254,20 +254,20 @@
 
 ### Task-022 · 合法推断与事实失真边界
 
-- 状态：IN_REVIEW（2026-10-02，等待独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 状态：DONE（2026-10-02 随 PR #247 MERGED 集成，mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
 - 输入：v1.2.2 候选与四类对照：无源确定断言、仅贴推断标签、带材料和桥梁的条件推断、当前无记录。
 - 验收：允许有桥梁的条件论证；标签不豁免无源断言；书记员不能裁决证明力或代角色改观点；模板、主文、rubric一致。
 
 ### Task-023 · 有界修稿与入卷后更正
 
-- 状态：IN_REVIEW（2026-10-02，等待独立验收）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
+- 状态：DONE（2026-10-02 随 PR #247 MERGED 集成，mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`）；优先级：P1；归属：ZCode CLI，`MC-022-023`。
 - 范围：同一派发语义修稿的次数/时间边界；入卷后以新回合保留旧发言并给受影响双方回应机会；关闭后只能新建 run 并维护来源映射。
 - 验收：真实 CLI 回归验证旧记录不覆盖、close 后禁止 dispatch、新run不能把旧seq填respond_to；反复packet读取不消耗技术派发次数，说明主控另行限时。
 - 非目标：用脚本声称自动判定法律语义或执行主控语义预算。
 
 ### Task-024 · 持续候选、集成与证据恢复
 
-- 状态：IN_PROGRESS；优先级：P1；归属：PM 集成，ZCode 随行同步技能文档。
+- 状态：DONE（2026-10-02 集成收口：PR #247 已 MERGED，mergedAt=2026-10-02T04:48:46Z，mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`，源 head `09ffb09a46c5c29ded2c28284970527afe74958a`；隔离候选 tree、merge 父提交与 tree、远端 main 已由收口脚本核对）；优先级：P1；归属：PM 集成，ZCode 随行同步技能文档。
 - 范围：从旧候选恢复已实现修订；本波次按最新 origin/main 独立工作树、冻结提交、独立复核、验收后集成 PR；更新技能版本/README 动态，忽略 Runtime 日志。
 - 验收：PR只包含 moot-court 与必要 README 行；安全与链接/格式检查通过；真实worker产物及精确head记录到本地忽略档案。
 - 未找到的历史调试日志保持 NOT_VERIFIED；不恢复其他技能、不覆盖主目录无关改动。
@@ -306,7 +306,7 @@
 
 ### Task-025 · 独立审查发现的 probe 错误路径与口径修复
 
-- 状态：IN_REVIEW（2026-10-02，实现完成，等待 PM 与独立验收）；优先级：P2；归属：MiniMax Code 实现，独立 ZCode 验收。
+- 状态：DONE（2026-10-02 随 PR #247 MERGED 集成，mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`；五项修复经最终独立 ZCode 验收 ACCEPT 后合并）；优先级：P2；归属：MiniMax Code 实现，独立 ZCode 验收。
 - 来源：PR #247 的独立 reviewer（新 Dispatch/Session）于冻结提交 `8c1281c88310ca19013b1e9f750aa2e71ae3be43` 给出 ACCEPT、无阻塞；两条指定验证命令通过，五项非阻塞发现如下，旧审查随 head 改变失效。
 - NB-1：prepare_probe 的 subprocess 超时未捕获，需清晰 CLI 错误和确定性超时测试。
 - NB-2：角色提示只允许公开编号，比 clerk 允许本角色可见材料更严；统一提示、复核资产与协议口径，不扩大可见范围。
@@ -320,3 +320,36 @@
 - 本轮交付（生产者自报，待独立验收）：NB-1 捕获 `subprocess.TimeoutExpired` 并给单行中文原因（退出 2、无 Traceback），用 `unittest.mock` 注入超时，不等 60 秒；NB-2 角色任务允许引用本角色可见编号（含己方私有），`citations` 仍限公开编号，核对 `clerk.py` 只接受 `visible_to == ["all"]` 且复核资产 B3 同口径，并新增私有编号被拒、公开编号可入卷的端到端回归；NB-3 `O_EXCL` 独占创建，新增 `completed` 标志，仅在未写完时删除本次创建的半成品，原有文件不覆盖不删除（原实现的 `not path.exists()` 条件在写入失败时反而保留残缺文件），注入 `os.fsync` 失败验证；NB-4 D-001 标题改为「合成原告私有材料」；NB-5 实现本就接受相对路径，文档与 CLI 帮助统一为「绝对或相对皆可」并新增相对路径回归。SKILL.md 与 evaluation.md 增加 blind-probe 使用入口。
 - 版本：仍为 v1.2.3 未发布 PR，未新增 DECISIONS（无真实架构取舍）。
 - 本轮未执行：`test_clerk.py`、全仓测试、任何安装与配置改动、真实客户案卷。
+
+#### PM 验收与收口（2026-10-02）
+
+- PM 验收 PR #247：GitHub 实际查询 state=MERGED、mergedAt=2026-10-02T04:48:46Z、mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`，源 head `09ffb09a46c5c29ded2c28284970527afe74958a`；冻结 head 与独立审查/CI 一致，PM 接受交付，PR 唯一性审计 adopt、exact=1、suspected=0。
+- 主目录存在其他会话未提交及本地分支工作，未强行同步或覆盖；下一轮（Task-027）从刷新后的 origin/main 隔离分支出发。旧记录中“待合并”表述均为历史时点。
+
+### Task-026 · probe 残留提示与遗留测试别名
+
+- 状态：DRAFT；优先级：P3；来源：最终独立 review 的非阻塞建议，不影响 PR #247 的 ACCEPT。
+- 输入：prepare_probe.py 创建与完整写入之间的崩溃窗口说明，以及 test_prepare_probe.py 未使用的 prePAREError 别名。
+- 待确认范围：评估是否需要提示陈旧半成品并引导人工核对；清理测试别名。不得凭文件名自动删除调用方既有文件，不把已说明的崩溃窗口伪装成已修复。
+- 就绪条件：确认残留识别依据和消费场景后再转 READY；当前优先 Task-011 Claude Code 闭环和 Task-005 多轮稳定性。
+- 验收方向：只用合成临时目录验证提示、既有输出不被误删及正常探针行为；完成后独立 review，保留系统级强杀测试的实际证据或 NOT_VERIFIED。
+
+### Task-027 · Claude 原生调用索引与当前候选 G5 复测
+
+- 状态：IN_REVIEW（2026-10-02，生产者本轮工程与实测完成，待独立 review 绑定最终 head；承接 Task-011）；优先级：P1；归属：ZCode CLI 实现与实际复测，MiniMax Code 独立 review，原 PM 验收。
+- 输入：PR #247 已合并候选（mergeCommit `3891f7683cd2133b40623d5f7ee78a302f3422d7`）、`assets/civil-case.example.json` 合成案卷、本机 Claude CLI 真实帮助与 G0—G5 合同；未读取客户资料或旧角色答案。
+- 工程交付：`scripts/index_claude_trace.py`、`scripts/test_index_claude_trace.py`（合同命令 `python3 -B skills/moot-court/scripts/test_index_claude_trace.py` 实测 14/14 通过、exit 0）、`assets/claude-stream.example.jsonl` 最小合成 fixture。索引器标准库、只被动消费 stream-json 原件、不启动 Agent/CLI、不读凭证配置；先经真实 G2 探针确认事件结构（同 message 拆多事件、tool_result 内容块数组、实际派发工具名 `Agent`）再实现解析；取舍见 DEC-014。
+- 实测记录（2026-10-02，Claude Code 2.1.237、全新临时目录、原生 `--permission-mode bypassPermissions` 等本机 help 参数，未改全局配置）：
+  - G0 PASS：`--version`/`--help` 真实返回。
+  - G1 PASS：固定短答 `MOOT_G1_OK`，result subtype=success，会话标识可回查；stderr 有宿主路由标签与私有 hook 缺文件的噪音，如实保留。
+  - G2 PASS：真实 `Agent` tool_use（`call_f164159d…`）与 tool_result 配对，子代理返回 `MOOT_G2_SUB_OK`。
+  - G3 PASS：Write 工具落盘小文件与期望内容 `cmp` 逐字节一致。
+  - G4 PASS：法官提问→原告回答→被告质证→法官归纳，4 个不同冷启动会话顺序完成（会话标识四者互异），后发言引用前文原文，第 4 次由法官经 Write 真实落盘 `g4-result.json`；原告“D-004 亦显示设备已入仓”的强度问题留给未参与的独立 reviewer，本轮不作语义结论。
+  - G5 `BLOCKED_OR_STOPPED_AT_BUDGET`（完整闭环 NOT_VERIFIED）：Claude 主控在 Claude 内担任书记员，经 clerk.py init（run `315458d3…`，max_turns 16）入卷；终止前真实完成 7 次 Agent 派发（2 次庭前准备 + 5 次正式）、4 次正式发言（开庭请求答辩、争点整理 I-001~I-003 合并于第四次发言）；举证质证 T-0005 已派发未交稿即到 780 秒硬界，追问辩论、总结归纳、close 与三份交付未运行。技术超时不计实体败诉；候选快照起终 sha256 一致，测试进程未修改技能文件。
+- 索引消费：`index_claude_trace.py` 对 G5 真实流（10356 行、0 坏 JSON）运行 exit 0：7 次派发、6 完成、1 未完成——与 clerk 事件“T-0005 已派发未入卷”精确互证；G1/G2/G4 流均已归档可复算。
+- 证据边界：本条为生产者自报，工程 PASS 与 Runtime 分级结论分开；领域语义由未参与的独立 reviewer 判定，索引成功不单独签出 G5 或 `DOMAIN_VERIFIED`。全部原始流、hearing-run、索引与 candidate hash 快照保存在忽略档案 `.claude/agent-sessions/mc-z-claude-g5-261002/runtime-261002/`（含 runtime-evidence.json）。
+- 遗留：G5 需更长预算重跑收尾（七环节中后三环节未运行）；Task-011 维持 IN_PROGRESS（尚未有两个 Runtime 完整闭环）；异常恢复未测；Task-005/019 维持原状态。
+
+- PM证据边界补充（2026-10-02）：G5生产者快照取自PR247的v1.2.3流程与本轮尚未提交的索引工程，随后新增的v1.2.4文档不在原快照内；起终摘要一致只证明测试进程未修改该快照，不证明最终v1.2.4完成G5。本次780秒终止前仍有连续调用与入卷进展，归为预算停止下的完整闭环NOT_VERIFIED，不能据此称宿主卡死或不兼容。
+- PM协调记录：正式消息包装脚本与原生ZCode的ready/working状态不兼容，本轮只在忽略档案中用具名control_plane_recovery副本修复兼容判断，保留原runtime/run/task/dispatch/terminal身份门及live/fresh/owned状态校验，未修改共享编排源码。发送回执解析失败后用只读原生收件箱确认同一消息已入队，未重复发送，也未改用终端注入。实际消费及交付结论另按正式Delivery核验。
+- 后续继续Task-011：先提供仅含生产Skill与原始合成材料的最小候选目录，排除TASKS、评测答案和旧产物；本轮这些文件在候选中可达，是否被角色实际读取由独立review核对，不能宣称强隔离或洁净盲测。根据本轮真实阶段耗时安排完整七环节与三交付的复测预算，不能把预算耗尽当兼容性失败；基本闭环完成后再测取消重派/恢复。Task-005多轮稳定性及办公宿主验证继续保留原状态。

@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.2.4] - 2026-10-02
+
+### 新增
+
+- 被动子代理调用索引器 `scripts/index_claude_trace.py` 及回归 `scripts/test_index_claude_trace.py`（14项，含本机真实 CLI 产物实测、归档缺失时显式跳过）与最小合成结构样例 `assets/claude-stream.example.jsonl`：只消费本地 Claude `--output-format stream-json --verbose` 原件，按 tool_use_id 关联 Agent/Task tool_use 与 tool_result（实际工具名以所用版本实测为准，本机 2.1.237 实测为 `Agent`，同版本 `TaskCreate` 为计划清单工具不计为派发）；同 ID 重复相同事件去重、内容冲突整体拒绝、无配对结果的调用记 unfinished 不计 completed、坏 JSON 行如实标注；prompt 只存 sha256 与长度；输出绑定 trace 行号与 sha256，拒绝覆盖既有输出；verdict 最高为 `VERIFIED_CALLS`，明确不单独签出 G5 或 `DOMAIN_VERIFIED`。
+- Claude Code 2.1.237 分级复测（Task-027，2026-10-02）：G0 入口、G1 固定短答、G2 真实 Agent 子任务、G3 Write 逐字节落盘、G4 四发言四冷启动顺序闭环均通过；G5 完整民事闭环由 Claude 主控在 Claude 内担任书记员并调用独立角色，780 秒硬界终止时已真实完成 7 次 Agent 派发、4 次正式发言入卷（开庭请求答辩与争点整理 I-001~I-003），举证质证刚起步（T-0005 已派发未交稿），追问辩论、总结归纳与三项交付未运行——完整闭环维持 `NOT_VERIFIED`，不写实体败诉；候选快照起终 hash 一致（技能文件未被测试进程修改）。
+
+### 改进
+
+- SKILL.md 依赖节就近增加索引器使用入口；evaluation.md 新增“子代理调用索引回归”小节；runtime-validation.md 与 runtime-adapters.md 增补 2026-10-02 复测指针与实测行，2026-09-20/22 旧实测与入口阻塞记录原样保留。
+
+### 待办事项
+
+- G5 完整闭环与 Task-011“至少两个 Runtime 完整闭环”维持 NOT_VERIFIED：本轮有界停止只证明该版本编排与入卷路径真实可用，需更长预算重跑收尾；异常恢复、Task-005 多轮稳定性与办公类 Runtime 仍未验证。
+
 ## [1.2.3] - 2026-10-02
 
 ### 新增
