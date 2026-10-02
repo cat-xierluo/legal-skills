@@ -71,6 +71,11 @@ def alias(d,*names):
     require(values and all(isinstance(v,str) and v for v in values) and len(set(values))==1,'missing or conflicting identity aliases')
     return values[0]
 
+def value_alias(d,*names):
+    values=[d[n] for n in names if n in d]
+    require(values and all(type(v) is type(values[0]) and v==values[0] for v in values),'missing or conflicting explicit aliases')
+    return values[0]
+
 def historical(payload):
     require(payload.get('ok') is True,'invalid worker read')
     d=payload['result']['dispatch']
@@ -84,7 +89,7 @@ def closed_chain(initial,failed,old,worktree_id):
         require(first[key]==last[key],'initial to failed process chain mismatch')
     r=failed['result'];d=r['dispatch'];obs=r.get('observation',{});live=r.get('projection',{}).get('liveness',{});t=r.get('terminal',{})
     require(d.get('status') in ('failed','stopped') and r.get('worker',{}).get('stage')=='process_exited','failed exited worker required')
-    revoked=d.get('capabilityRevokedAt',d.get('capability_revoked_at'))
+    revoked=value_alias(d,'capabilityRevokedAt','capability_revoked_at')
     require(isinstance(revoked,str) and re.fullmatch(r'\d{4}-\d\d-\d\d[T ][0-9:.]+(?:Z|[+-][0-9:]+)?',revoked),'old capability revocation must be positively recorded')
     require(live.get('verdict')=='exited' and live.get('source')=='execution_host' and obs.get('exactWorker') is True and obs.get('status')=='exited','positive exact exit required')
     require(t.get('handle')==last['terminal_handle'] and t.get('worktreeId')==worktree_id and t.get('connected') is False and t.get('writable') is False,'exact closed terminal required')
@@ -137,7 +142,7 @@ def run_owner(binary,run,runtime):
     row=out['result']['run']
     require(out['_meta']['runtimeId']==runtime and row.get('id')==run,'run owner scope drift')
     handle=alias(row,'coordinator_handle','coordinatorHandle')
-    generation=row.get('consumer_generation',row.get('consumerGeneration'))
+    generation=value_alias(row,'consumer_generation','consumerGeneration')
     require(type(generation) is int and generation>=0,'unknown coordinator generation')
     return {'handle':handle,'generation':generation}
 
@@ -233,7 +238,7 @@ def resume_exec(path):
     os.execve('/bin/bash',['/bin/bash','-c',code],dict(os.environ))
 
 def _verify(path,post_start=False):
-    r=load_intent(path);require(r['state']=='launched','runner not proven')
+    r=load_intent(path);require(r['state']=='launched' or post_start and r['state']=='adoption_failed_rolled_back' and r.get('new_dispatch') and r.get('retry_reserved') is True,'runner not proven')
     recheck(r,post_start=post_start)
     t=call(r['orca_bin'],'terminal','show','--terminal',r['terminal_handle'])['result']['terminal']
     require(t.get('handle')==r['terminal_handle'] and t.get('worktreeId')==r['worktree_id'] and t.get('connected') is True and t.get('writable') is True and t.get('agentIdentity')=='zcode' and isinstance(t.get('incarnationId'),str) and t['incarnationId'],'fresh native terminal identity required')
@@ -253,10 +258,10 @@ def _admit_retry(path,task,dispatch,terminal,run):
     return r
 
 def _adopt(path,new_dispatch):
-    r=load_intent(path);require(r.get('retry_reserved') is True and r['state']=='launched','retry reservation required')
+    r=load_intent(path);require(r.get('retry_reserved') is True and (r['state']=='launched' or r['state']=='adoption_failed_rolled_back' and r.get('new_dispatch',{}).get('dispatch_id')==new_dispatch),'retry reservation or exact recorded adoption retry required')
     _verify(path,post_start=True);recheck(r,post_start=True);payload=call(r['orca_bin'],'orchestration','dispatch-show','--task',r['failed']['task_id']);d=payload['result']['dispatch'];new=dispatch_identity(d)
     require(payload['_meta']['runtimeId']==r['runtime_id'] and new['dispatch_id']==new_dispatch and new['task_id']==r['failed']['task_id'] and new['run_id']==r['failed']['run_id'] and new['terminal_handle']==r['terminal_handle'],'new dispatch identity mismatch')
-    require(alias(d,'retryOfDispatchId','retry_of_dispatch_id')==r['failed']['dispatch_id'] and new['dispatch_id'] not in (r['initial']['dispatch_id'],r['failed']['dispatch_id']) and new['process_incarnation']!=r['initial']['process_incarnation'] and re.fullmatch('[0-9a-f]{64}',new['capability_hash']) and not (d.get('capabilityRevokedAt') or d.get('capability_revoked_at')) and d.get('status') in ('active','dispatched'),'new live retry authority required')
+    require(alias(d,'retryOfDispatchId','retry_of_dispatch_id')==r['failed']['dispatch_id'] and new['dispatch_id'] not in (r['initial']['dispatch_id'],r['failed']['dispatch_id']) and new['process_incarnation']!=r['initial']['process_incarnation'] and re.fullmatch('[0-9a-f]{64}',new['capability_hash']) and value_alias(d,'capabilityRevokedAt','capability_revoked_at') is None and d.get('status') in ('active','dispatched'),'new live retry authority required')
     live=call(r['orca_bin'],'orchestration','worker-show','--dispatch',new_dispatch)
     shown=historical(live)
     require(all(shown[k]==new[k] for k in shown if k!='runtime_id') and shown['runtime_id']==r['runtime_id'],'new worker-show identity mismatch')
@@ -264,8 +269,10 @@ def _adopt(path,new_dispatch):
     require(live['result'].get('terminal',{}).get('incarnationId')==r['terminal_incarnation'] and live['result'].get('terminalResource',{}).get('endpointIncarnation')==new['process_incarnation'] and live['result'].get('terminalResource',{}).get('terminalHandle')==new['terminal_handle'],'new terminal/process incarnation drift')
     m=json.loads(read(r['metadata']));oldmeta=read(r['metadata']);cp=completion_path(r['authority']);oldcompletion=read(cp)
     receipt={'schema':'multi-agent-orchestration.completion-authority.v1','state':'active',**new,'runtime_id':r['runtime_id'],'authority_receipt_file':r['authority'],'authority_receipt_sha256':r['authority_sha256'],'recovery_intent':path}
-    supervised=m['session']['orca']['supervised'];supervised.update(task_id=new['task_id'],dispatch_id=new['dispatch_id'],coordinator_handle=r['owner']['handle']);m['session']['orca']['terminal_handle']=new['terminal_handle']
-    m.setdefault('recovery',{})['closed_session']={'intent':path,'initial_task_id':r['initial']['task_id'],'initial_dispatch_id':r['initial']['dispatch_id'],'failed_task_id':r['failed']['task_id'],'failed_dispatch_id':r['failed']['dispatch_id'],'new_dispatch_id':new['dispatch_id']}
+    public_ownership=live['result']['terminalResource'].get('ownershipState')
+    require(public_ownership=='external','exact reused terminal external ownership required')
+    supervised=m['session']['orca']['supervised'];previous_ownership=supervised.get('terminal_ownership');supervised['terminal_ownership']=public_ownership;supervised.update(task_id=new['task_id'],dispatch_id=new['dispatch_id'],coordinator_handle=r['owner']['handle']);m['session']['orca']['terminal_handle']=new['terminal_handle']
+    m.setdefault('recovery',{})['closed_session']={'intent':path,'initial_task_id':r['initial']['task_id'],'initial_dispatch_id':r['initial']['dispatch_id'],'failed_task_id':r['failed']['task_id'],'failed_dispatch_id':r['failed']['dispatch_id'],'new_dispatch_id':new['dispatch_id'],'previous_terminal_ownership':previous_ownership,'terminal_ownership':public_ownership}
     receiptbytes=(json.dumps(receipt,sort_keys=True)+'\n').encode();m['execution_authority'].update(completion_authority_file=cp,completion_authority_sha256=digest(receiptbytes))
     r['post_start_observation']={'head':subprocess.check_output(['git','-C',r['worktree'],'rev-parse','HEAD'],text=True).strip(),'native_selection':native_selection(r['native_db'],r['provider_session'],r['worktree'],None)}
     r.update(state='adopting',old_metadata=oldmeta.decode(),old_completion=oldcompletion.decode(),new_dispatch=new,new_metadata_sha256=digest((json.dumps(m,sort_keys=True)+'\n').encode()),new_completion_sha256=digest(receiptbytes));save(path,r)

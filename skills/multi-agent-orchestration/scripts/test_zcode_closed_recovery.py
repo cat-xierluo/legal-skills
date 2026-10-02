@@ -32,7 +32,7 @@ class RecoveryTests(unittest.TestCase):
         self.node=str(Path(shutil.which('node')).resolve());self.entry=self.root/'entry.mjs';self.entry.write_text('console.log("isolated-resume-nonce");setInterval(()=>{},1000);');self.entry.chmod(0o700)
         self.zcode=self.root/'zcode';self.zcode.write_text('#!/bin/sh\nexec '+r.shlex.join([self.node,str(self.entry)])+' "$@"\n');self.zcode.chmod(0o700)
         command=r.shlex.join(['env','WORKER_SESSION_CONTEXT='+str(self.context),str(self.zcode),'--mode','yolo'])
-        self.metadata=self.context/'METADATA.json';self.meta={'schema':'multi-agent-orchestration.worktree-metadata.v1','worktree':str(self.wt),'branch':'worker','runtime':{'worker_backend':'zcode-cli','command':command},'session':{'id':'session','context':str(self.context),'orca':{'worktree_id':'wt_one','runtime_id':'runtime_one','terminal_handle':'term_old','supervised':{'task_id':'task_initial','dispatch_id':'ctx_initial','run_id':'run_one','coordinator_handle':'term_pm'}}},'execution_authority':{'authority_receipt_file':str(self.authority),'authority_receipt_sha256':ah}}
+        self.metadata=self.context/'METADATA.json';self.meta={'schema':'multi-agent-orchestration.worktree-metadata.v1','worktree':str(self.wt),'branch':'worker','runtime':{'worker_backend':'zcode-cli','command':command},'session':{'id':'session','context':str(self.context),'orca':{'worktree_id':'wt_one','runtime_id':'runtime_one','terminal_handle':'term_old','supervised':{'task_id':'task_initial','dispatch_id':'ctx_initial','run_id':'run_one','coordinator_handle':'term_pm','terminal_ownership':'created'}}},'execution_authority':{'authority_receipt_file':str(self.authority),'authority_receipt_sha256':ah}}
         self.json(self.metadata,self.meta)
         quote=subprocess.check_output(['/bin/bash','-c','printf %q "$1"','_',command]);self.launch=self.context/'launch.sh';self.launch.write_bytes(b'#!/bin/bash\n# original wrapper\nexec bash -c '+quote+b'\n');self.launch.chmod(0o700)
         self.db=self.root/'native.sqlite';c=sqlite3.connect(self.db);c.executescript('CREATE TABLE session(id,directory,path,parent_id,permission,version);CREATE TABLE session_entry(session_id,type,data,time_updated);')
@@ -42,11 +42,11 @@ class RecoveryTests(unittest.TestCase):
         self.payloads={'ctx_initial':self.worker('ctx_initial','task_initial','term_old','proc_old','completed'),'ctx_failed':self.worker('ctx_failed','task_later','term_old','proc_old','failed'),'ctx_new':self.worker('ctx_new','task_later','term_new','proc_new','dispatched')}
         self.payloads['ctx_new']['result']['dispatch'].update(retryOfDispatchId='ctx_failed',capability_hash='b'*64,capabilityRevokedAt=None)
         self.save_responses();self.orca=self.root/'orca'
-        self.orca.write_text('#!'+sys.executable+'\nimport json,sys\nfrom pathlib import Path\na=sys.argv[1:]\np=Path('+repr(str(self.responses))+')\nwith open('+repr(str(self.log))+',"a") as f:f.write(json.dumps(a)+"\\n")\nd=json.loads(p.read_text())\nif a[0]=="status":out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"runtime":{"reachable":True,"runtimeId":"runtime_one","appVersion":"1.4.218"}}}\nelif a[:2]==["orchestration","run-show"]:out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"run":{"id":"run_one","coordinator_handle":"term_pm","consumer_generation":4}}}\nelif a[:2]==["orchestration","worker-show"]:out=d[a[a.index("--dispatch")+1]]\nelif a[:2]==["terminal","show"]:out={"ok":True,"result":{"terminal":d["ctx_new"]["result"]["terminal"]}}\nelif a[:2]==["orchestration","dispatch-show"]:out=d["ctx_new"]\nelif a[:2]==["orchestration","worker-start"]:\n assert "--retry-of" in a and a[a.index("--retry-of")+1]=="ctx_failed" and "--retry-request" in a\n out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"state":"ready","dispatchId":"ctx_new","taskId":"task_later","runId":"run_one"}}\nelse:raise SystemExit(91)\nprint(json.dumps(out))\n');self.orca.chmod(0o700)
+        self.orca.write_text('#!'+sys.executable+'\nimport json,sys\nfrom pathlib import Path\na=sys.argv[1:]\np=Path('+repr(str(self.responses))+')\nwith open('+repr(str(self.log))+',"a") as f:f.write(json.dumps(a)+"\\n")\nd=json.loads(p.read_text())\nif a[0]=="status":out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"runtime":{"reachable":True,"runtimeId":"runtime_one","appVersion":"1.4.218"}}}\nelif a[:2]==["orchestration","run-show"]:out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"run":{"id":"run_one","coordinator_handle":"term_pm","consumer_generation":4}}}\nelif a[:2]==["orchestration","worker-show"]:out=d[a[a.index("--dispatch")+1]]\nelif a[:2]==["terminal","show"]:out={"ok":True,"result":{"terminal":d["ctx_new"]["result"]["terminal"]}}\nelif a[:2]==["orchestration","dispatch-show"]:out=d["ctx_new"]\nelif a[:2]==["orchestration","worker-start"]:\n assert "--retry-of" in a and a[a.index("--retry-of")+1]=="ctx_failed" and "--retry-request" in a\n request=a[a.index("--retry-request")+1]\n import uuid\n assert request and str(uuid.UUID(request))==request\n intents=list(p.parent.glob("agent-authority/session.recovery-*.json"))\n assert len(intents)==1 and json.loads(intents[0].read_text())["retry_request"]==request\n out={"ok":True,"_meta":{"runtimeId":"runtime_one"},"result":{"state":"ready","dispatchId":"ctx_new","taskId":"task_later","runId":"run_one"}}\nelse:raise SystemExit(91)\nprint(json.dumps(out))\n');self.orca.chmod(0o700)
         self.args=argparse.Namespace(metadata=str(self.metadata),authority=str(self.authority),failed_dispatch='ctx_failed',provider_session='sess_fixture',provider='account:fixture',model='GLM-fixture',effort='max',orca_bin=str(self.orca),zcode_bin=str(self.zcode),zcode_entry=str(self.entry),zcode_node=self.node,native_db=str(self.db))
     def json(self,p,v):p.write_text(json.dumps(v));p.chmod(0o600)
     def worker(self,did,task,term,process,status):
-        active=status=='dispatched';return {'ok':True,'_meta':{'runtimeId':'runtime_one'},'result':{'dispatch':{'id':did,'taskId':task,'task_id':task,'runId':'run_one','assigneeHandle':term,'processIncarnation':process,'status':status,'capabilityRevokedAt':None if active else '2026-10-02T12:00:00Z'},'worker':{'stage':'running' if active else 'process_exited','state':'ready' if active else 'failed'},'terminal':{'handle':term,'worktreeId':'wt_one','connected':active,'writable':active,'agentIdentity':'zcode','incarnationId':'inc_new' if active else 'inc_old'},'terminalResource':{'endpointIncarnation':process,'terminalHandle':term},'projection':{'liveness':{'verdict':'live' if active else 'exited','source':'execution_host'}},'observation':{'exactWorker':True,'status':'live' if active else 'exited'}}}
+        active=status=='dispatched';return {'ok':True,'_meta':{'runtimeId':'runtime_one'},'result':{'dispatch':{'id':did,'taskId':task,'task_id':task,'runId':'run_one','assigneeHandle':term,'processIncarnation':process,'status':status,'capabilityRevokedAt':None if active else '2026-10-02T12:00:00Z'},'worker':{'stage':'running' if active else 'process_exited','state':'ready' if active else 'failed'},'terminal':{'handle':term,'worktreeId':'wt_one','connected':active,'writable':active,'agentIdentity':'zcode','incarnationId':'inc_new' if active else 'inc_old'},'terminalResource':{'endpointIncarnation':process,'terminalHandle':term,'ownershipState':'external'},'projection':{'liveness':{'verdict':'live' if active else 'exited','source':'execution_host'}},'observation':{'exactWorker':True,'status':'live' if active else 'exited'}}}
     def save_responses(self):self.json(self.responses,self.payloads)
     def prepare(self):self.intent=r.prepare(self.args)['intent'];return self.intent
     def runner(self):
@@ -89,7 +89,7 @@ class RecoveryTests(unittest.TestCase):
         self.runner();out=r.load_intent(self.intent);self.assertEqual(out['runner_pid'],self.proc.pid)
         command=['bash',str(ROOT/'orca-supervised-register.sh'),'--worktree-id','wt_one','--terminal-handle','term_new','--task-id','task_later','--run-id','run_one','--coordinator-handle','term_pm','--runtime-id','runtime_one','--metadata-file',str(self.metadata),'--authority-receipt',str(self.authority),'--retry-of','ctx_failed','--closed-recovery',self.intent]
         p=subprocess.run(command,env={**os.environ,'ORCA_CLI_BIN':str(self.orca)},capture_output=True,text=True,timeout=20);self.assertEqual(p.returncode,0,p.stderr)
-        m=json.loads(self.metadata.read_text());self.assertEqual(m['session']['orca']['supervised']['task_id'],'task_later');self.assertEqual(json.loads(self.cp.read_text())['dispatch_id'],'ctx_new')
+        m=json.loads(self.metadata.read_text());self.assertEqual(m['session']['orca']['supervised']['task_id'],'task_later');self.assertEqual(json.loads(self.cp.read_text())['dispatch_id'],'ctx_new');self.assertEqual(m['session']['orca']['supervised']['terminal_ownership'],'external');self.assertEqual(m['recovery']['closed_session']['previous_terminal_ownership'],'created')
         calls=[json.loads(x) for x in self.log.read_text().splitlines()];self.assertEqual(sum(x[:2]==['orchestration','worker-start'] for x in calls),1)
         self.assertFalse(any(x[:2] in (['orchestration','task-create'],['orchestration','task-update'],['terminal','send']) for x in calls))
         p=subprocess.run(command,env={**os.environ,'ORCA_CLI_BIN':str(self.orca)},capture_output=True,text=True,timeout=20);self.assertNotEqual(p.returncode,0)
@@ -111,6 +111,9 @@ class RecoveryTests(unittest.TestCase):
         with patch.object(r,'atomic',interrupted):
             with self.assertRaises(OSError):r.adopt(self.intent,'ctx_new')
         self.assertEqual(before,(self.metadata.read_bytes(),self.cp.read_bytes()));self.assertEqual(r.load_intent(self.intent)['state'],'adoption_failed_rolled_back')
+        with self.assertRaises(ValueError):r.adopt(self.intent,'ctx_old_or_different')
+        self.assertTrue(r.adopt(self.intent,'ctx_new')['ok'])
+        with self.assertRaises(ValueError):r.adopt(self.intent,'ctx_new')
     def test_new_attempt_wrong_retry_runtime_incarnation_refuse(self):
         self.runner();r.admit_retry(self.intent,'task_later','ctx_failed','term_new','run_one')
         for key in ('retryOfDispatchId','processIncarnation','taskId','runId'):
@@ -143,6 +146,16 @@ class RecoveryTests(unittest.TestCase):
         subprocess.run(['git','-C',str(self.wt),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','authorized'],check=True,capture_output=True)
         self.assertTrue(r.adopt(self.intent,'ctx_new')['ok'])
         o=r.load_intent(self.intent);self.assertNotEqual(o['head'],o['post_start_observation']['head'])
+
+    def test_conflicting_revocation_and_generation_aliases_refuse(self):
+        self.payloads['ctx_failed']['result']['dispatch']['capability_revoked_at']=None;self.save_responses()
+        with self.assertRaises(ValueError):r.prepare(self.args)
+        owner={'ok':True,'_meta':{'runtimeId':'runtime_one'},'result':{'run':{'id':'run_one','coordinator_handle':'term_pm','consumer_generation':4,'consumerGeneration':5}}}
+        with patch.object(r,'call',return_value=owner):
+            with self.assertRaises(ValueError):r.run_owner(str(self.orca),'run_one','runtime_one')
+        owner['result']['run']['consumerGeneration']=None
+        with patch.object(r,'call',return_value=owner):
+            with self.assertRaises(ValueError):r.run_owner(str(self.orca),'run_one','runtime_one')
 
     def test_known_live_unknown_status_alias_and_revoked_completion(self):
         d={'id':'ctx','taskId':'task','task_id':'other','assigneeHandle':'term','runId':'run','processIncarnation':'proc','capability_hash':'a'*64}
