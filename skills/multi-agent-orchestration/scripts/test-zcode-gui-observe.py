@@ -561,5 +561,98 @@ class StubFaultTests(ObserveTestCase):
         self.assert_error_payload(proc, "OBS_INVALID_ARGS", secrets=(db,))
 
 
+class ExitCodeGateTests(ObserveTestCase):
+    """R1-repair faults: dependency exit codes, code allowlist, echo bounds."""
+
+    def observe_with_stubs(self, db_name, collector_stub, adapter_stub):
+        db = self.build_db(db_name)
+        return self.run_observe(
+            ["--db", db, "--session-id", SID, "--input-id", IID,
+             "--collector", collector_stub, "--adapter", adapter_stub],
+            {},
+        )
+
+    def test_collector_nonzero_exit_with_legal_ok_payload_fails(self):
+        stub_c = self.write_stub(
+            "c-exit9-legal-ok.py", payload=collector_ok_payload(), exit_code=9,
+        )
+        stub_a = self.write_stub("a-unused-g1.py", payload=adapter_ok_payload())
+        proc = self.observe_with_stubs("gate-c.db", stub_c, stub_a)
+        self.assert_error_payload(proc, "OBS_COLLECTOR_FAILED", secrets=(stub_c,))
+
+    def test_adapter_nonzero_exit_with_legal_ready_payload_fails(self):
+        stub_c = self.write_stub("c-ok-g2.py", payload=collector_ok_payload())
+        stub_a = self.write_stub(
+            "a-exit7-legal-ready.py",
+            payload=adapter_ok_payload(state="READY_FOR_PM_REVIEW"),
+            exit_code=7,
+        )
+        proc = self.observe_with_stubs("gate-a.db", stub_c, stub_a)
+        self.assert_error_payload(proc, "OBS_ADAPTER_FAILED", secrets=(stub_a,))
+
+    def test_collector_synthetic_error_code_not_echoed(self):
+        payload = {
+            "ok": False,
+            "error": {"code": "SYNTHETIC_PRIVATE_CANARY_123", "message": "boom"},
+        }
+        stub_c = self.write_stub("c-synthetic-code.py", payload=payload, exit_code=1)
+        proc = self.observe_with_stubs(
+            "gate-syn-c.db", stub_c, self.write_stub("a-unused-g3.py"),
+        )
+        self.assert_error_payload(
+            proc, "OBS_COLLECTOR_FAILED",
+            secrets=("SYNTHETIC_PRIVATE_CANARY_123", stub_c),
+        )
+
+    def test_adapter_synthetic_error_code_not_echoed(self):
+        payload = {
+            "adapter": "stub", "schemaVersion": 1,
+            "error": "SYNTHETIC_PRIVATE_CANARY_123",
+            "flags": dict(FALSE_FLAGS),
+        }
+        stub_c = self.write_stub("c-ok-g4.py", payload=collector_ok_payload())
+        stub_a = self.write_stub("a-synthetic-code.py", payload=payload, exit_code=2)
+        proc = self.observe_with_stubs("gate-syn-a.db", stub_c, stub_a)
+        self.assert_error_payload(
+            proc, "OBS_ADAPTER_FAILED",
+            secrets=("SYNTHETIC_PRIVATE_CANARY_123", stub_a),
+        )
+
+    def test_allowlisted_dependency_codes_still_surface(self):
+        stub_c = self.write_stub(
+            "c-allowlisted.py",
+            payload={"ok": False, "error": {"code": "INPUT_NOT_FOUND", "message": "boom"}},
+            exit_code=1,
+        )
+        proc = self.observe_with_stubs(
+            "gate-allow-c.db", stub_c, self.write_stub("a-unused-g5.py"),
+        )
+        self.assert_error_payload(proc, "INPUT_NOT_FOUND", secrets=(stub_c,))
+
+        stub_c2 = self.write_stub("c-ok-g6.py", payload=collector_ok_payload())
+        stub_a = self.write_stub(
+            "a-allowlisted.py",
+            payload={"adapter": "stub", "schemaVersion": 1,
+                     "error": "MODEL_MISMATCH", "flags": dict(FALSE_FLAGS)},
+            exit_code=2,
+        )
+        proc = self.observe_with_stubs("gate-allow-a.db", stub_c2, stub_a)
+        self.assert_error_payload(proc, "MODEL_MISMATCH", secrets=(stub_a,))
+
+    def test_summary_echo_fields_are_bounded(self):
+        marker = "ECHO-MARKER-" + "A" * 300
+        stub_c = self.write_stub("c-ok-g7.py", payload=collector_ok_payload())
+        stub_a = self.write_stub(
+            "a-echo-junk.py",
+            payload=adapter_ok_payload(provider=marker + "\x01tail", turnId="turn\x02id"),
+        )
+        proc = self.observe_with_stubs("gate-echo.db", stub_c, stub_a)
+        payload = self.assert_ok_payload(proc, "TURN_UNKNOWN")
+        self.assertEqual(payload["summary"]["provider"], "unknown")
+        self.assertEqual(payload["summary"]["model"], "unknown")
+        self.assertIsNone(payload["summary"]["turnId"])
+        self.assert_no_echo(proc, "ECHO-MARKER")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

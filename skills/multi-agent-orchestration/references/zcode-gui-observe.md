@@ -14,7 +14,8 @@
 | adapter `zcode-gui-monitor-adapter.py` | PR253（未合并） | `9f77ef0d51cd7b240f512da5c7bfc8257490f98b` | `e596a5add9ee86198c651ef5e7a431d41c4e66bca7d3ebf49318e22021325489` |
 
 - 标准库实现，Python 3.9+，无第三方依赖，无需安装任何包。
-- 两个依赖脚本仅以**当前 Python 解释器的子进程**方式运行（无 `shell=True`），每个子进程超时有界（默认 10 秒，最小 1 秒，最大 60 秒）。
+- 依赖以当前 Python 解释器的子进程方式运行（无 `shell=True`），每个子进程超时有界（默认 10 秒，最小 1 秒，最大 60 秒）。
+- **退出码门（R1-B1）**：先校验依赖子进程 `returncode == 0` 再解释其 stdout；任何依赖非零退出（即使 stdout 是合法 ok/READY 载荷）一律映射为失败，绝不产生 `OK`/`READY_FOR_PM_REVIEW`。
 - 可用 `--collector-sha256` / `--adapter-sha256` 固定期望的依赖脚本 SHA-256（不匹配则报 `OBS_DEP_SHA_MISMATCH`），用于消费冻结副本时的完整性核验。
 
 ## 用法
@@ -79,7 +80,12 @@ python3 skills/multi-agent-orchestration/scripts/zcode-gui-observe.py \
 | `OBS_BINDING_MISMATCH` | adapter 返回的绑定与请求不符（包装器侧核验） |
 | `OBS_INTERNAL_ERROR` | 未预期内部错误（不回显 traceback） |
 
-依赖自身的**固定错误码**（如 collector 的 `DB_NOT_FOUND`、`DB_SCHEMA_INVALID`、`INPUT_NOT_FOUND`，adapter 的 `BINDING_MISMATCH`、`PROVIDER_MISMATCH`、`MODEL_MISMATCH` 等）若匹配 `^[A-Z][A-Z0-9_]{0,63}$` 将原样透出，便于区分"错 SID/input"、"非法 DB"等情形；依赖的 stdout/stderr 全文、路径与 traceback **任何情况下都不回显**。
+依赖自身的**已发布固定错误码**按 allowlist 核验后原样透出（便于区分"错 SID/input"、"非法 DB"等情形）：
+
+- collector 白名单：`DB_NOT_FOUND`、`DB_OPEN_FAILED`、`DB_SCHEMA_INVALID`、`READ_ERROR`、`JSON_MALFORMED`、`INPUT_NOT_FOUND`、`INPUT_AMBIGUOUS`、`TURN_AMBIGUOUS`、`ASSISTANT_AMBIGUOUS`、`INTERNAL_ERROR`；
+- adapter 白名单：`EVIDENCE_UNREADABLE`、`EVIDENCE_TOO_LARGE`、`EVIDENCE_NOT_UTF8`、`EVIDENCE_NOT_JSON`、`EVIDENCE_SCHEMA_UNSUPPORTED`、`EVIDENCE_TYPE_INVALID`、`EVIDENCE_DIGEST_MISMATCH`、`BINDING_MISMATCH`、`PROVIDER_MISMATCH`、`MODEL_MISMATCH`。
+
+白名单之外的任意文本（R1-B2，如合成标记 `SYNTHETIC_PRIVATE_CANARY_123`）一律映射为 `OBS_COLLECTOR_FAILED` / `OBS_ADAPTER_FAILED`，**不回显**。依赖的 stdout/stderr 全文、路径与 traceback **任何情况下都不回显**。`summary` 中的自由字符串回显字段（provider/model/turnId/inputStatus/turnStatus）限可打印且 ≤256 字符，越界值折叠为 `"unknown"`/`null` 哨兵。
 
 ## 安全与只读保证
 
@@ -99,7 +105,7 @@ python3 skills/multi-agent-orchestration/scripts/test-zcode-gui-observe.py
 python3 skills/multi-agent-orchestration/scripts/test-zcode-gui-observe.py
 ```
 
-覆盖面：真实合成 DB 走冻结 collector+adapter（READY/无 turn/running/error/cancelled/DELIVERY_ERROR/DELIVERY_PENDING、错 SID/input、非法 DB、缺 DB、provider 期望不符、SHA 校验、敏感载荷不泄露、DB 哈希不变、临时文件净增量 0）；包装故障以小型 stub 实测（异常 stdout、业务错误码透传与清洗、超时、绑定不符、flags 篡改、timeout 边界）。测试临时目录可用 `ZCODE_GUI_OBSERVE_SCRATCH` 指定。
+覆盖面：真实合成 DB 走冻结 collector+adapter（READY/无 turn/running/error/cancelled/DELIVERY_ERROR/DELIVERY_PENDING、错 SID/input、非法 DB、缺 DB、provider 期望不符、SHA 校验、敏感载荷不泄露、DB 哈希不变、临时文件净增量 0）；包装故障以小型 stub 实测（异常 stdout、业务错误码透传与清洗、**依赖非零退出但输出合法载荷（exit 9/7）必须失败**、**任意合成大写错误码不回显**、**白名单码仍可诊断**、超时、绑定不符、flags 篡改、timeout 边界、**summary 回显越界折叠**）。测试临时目录可用 `ZCODE_GUI_OBSERVE_SCRATCH` 指定。
 
 ## 边界
 

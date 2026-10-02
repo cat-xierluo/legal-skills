@@ -14,6 +14,16 @@ Hard guarantees:
 - One shot only: no polling, no background work, no watch mode, no network,
   no dispatch, no model or Orca invocation. READY_FOR_PM_REVIEW means exactly
   "awaiting PM review"; nothing is ever delivered or accepted.
+- Exit-code gate: each dependency's return code is checked before its stdout
+  is interpreted. A non-zero dependency exit is always a failed observation —
+  legal-looking payloads from a failed dependency never produce OK/READY
+  (R1 blocker B1).
+- Fixed error-code allowlists: dependency error codes are accepted only when
+  they match the published fixed vocabulary of that dependency; anything
+  else maps to OBS_COLLECTOR_FAILED / OBS_ADAPTER_FAILED and is never
+  echoed verbatim (R1 blocker B2). Summary echo scalars are printable and
+  length-capped; out-of-bounds values collapse to the "not observed"
+  sentinel instead of being echoed.
 - The native database is never opened or written by this wrapper. Only the
   collector touches it, via SQLite URI mode=ro plus PRAGMA query_only.
 - Dependencies run as subprocesses of the current interpreter without
@@ -23,7 +33,7 @@ Hard guarantees:
   digest is pinned via --expected-evidence-sha256.
 - Output discipline: exactly one JSON object on stdout. Dependency stdout,
   stderr, paths and tracebacks are never echoed; every failure maps to a
-  fixed error code.
+  fixed error code. The three flags stay false in every emission.
 
 Dependency resolution order for --collector / --adapter: explicit flag, then
 ZCODE_GUI_COLLECTOR / ZCODE_GUI_ADAPTER, then the sibling script next to this
@@ -81,6 +91,36 @@ ADAPTER_STATES = frozenset({
     "EVIDENCE_CONFLICT",
 })
 
+# Fixed allowlists of the published error codes of the frozen dependencies.
+# A code outside the respective set maps to OBS_COLLECTOR_FAILED /
+# OBS_ADAPTER_FAILED and is never echoed verbatim (R1 blocker B2).
+COLLECTOR_ERROR_CODES = frozenset({
+    "DB_NOT_FOUND",
+    "DB_OPEN_FAILED",
+    "DB_SCHEMA_INVALID",
+    "READ_ERROR",
+    "JSON_MALFORMED",
+    "INPUT_NOT_FOUND",
+    "INPUT_AMBIGUOUS",
+    "TURN_AMBIGUOUS",
+    "ASSISTANT_AMBIGUOUS",
+    "INTERNAL_ERROR",
+})
+ADAPTER_ERROR_CODES = frozenset({
+    "EVIDENCE_UNREADABLE",
+    "EVIDENCE_TOO_LARGE",
+    "EVIDENCE_NOT_UTF8",
+    "EVIDENCE_NOT_JSON",
+    "EVIDENCE_SCHEMA_UNSUPPORTED",
+    "EVIDENCE_TYPE_INVALID",
+    "EVIDENCE_DIGEST_MISMATCH",
+    "BINDING_MISMATCH",
+    "PROVIDER_MISMATCH",
+    "MODEL_MISMATCH",
+})
+
+MAX_ECHO_TEXT_CHARS = 256
+
 ERR_INVALID_ARGS = "OBS_INVALID_ARGS"
 ERR_DEP_MISSING = "OBS_DEP_MISSING"
 ERR_DEP_SHA_MISMATCH = "OBS_DEP_SHA_MISMATCH"
@@ -92,7 +132,6 @@ ERR_ADAPTER_BAD_OUTPUT = "OBS_ADAPTER_BAD_OUTPUT"
 ERR_BINDING_MISMATCH = "OBS_BINDING_MISMATCH"
 ERR_INTERNAL = "OBS_INTERNAL_ERROR"
 
-_SAFE_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -123,10 +162,19 @@ def error_payload(session_id, input_id, code):
     }
 
 
-def safe_code(value):
-    if isinstance(value, str) and _SAFE_CODE.fullmatch(value):
+def allowlisted_code(value, allowlist):
+    if isinstance(value, str) and value in allowlist:
         return value
     return None
+
+
+def bounded_text(value, fallback):
+    """Echo-bound a dependency-provided scalar (printable, length-capped)."""
+    if not isinstance(value, str) or not value or len(value) > MAX_ECHO_TEXT_CHARS:
+        return fallback
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return fallback
+    return value
 
 
 def is_int(value):
@@ -194,6 +242,15 @@ def load_json_object(raw):
     return data if isinstance(data, dict) else None
 
 
+def collector_failure_code(meta):
+    """Allowlisted business code from a collector error payload, else fixed."""
+    if meta is not None and meta.get("ok") is not True:
+        err = meta.get("error")
+        code = err.get("code") if isinstance(err, dict) else None
+        return allowlisted_code(code, COLLECTOR_ERROR_CODES) or ERR_COLLECTOR_FAILED
+    return ERR_COLLECTOR_FAILED
+
+
 def run_collector_stage(collector, args):
     proc = run_dependency(
         [
@@ -205,12 +262,15 @@ def run_collector_stage(collector, args):
         args.timeout,
     )
     meta = load_json_object(proc.stdout)
+    # Exit-code gate (R1 blocker B1): a failed dependency is a failed
+    # observation regardless of how legal its stdout looks; partial output
+    # is never promoted to a success path.
+    if proc.returncode != 0:
+        raise ObservationError(collector_failure_code(meta))
     if meta is None:
         raise ObservationError(ERR_COLLECTOR_BAD_OUTPUT)
     if meta.get("ok") is not True:
-        err = meta.get("error")
-        code = err.get("code") if isinstance(err, dict) else None
-        raise ObservationError(safe_code(code) or ERR_COLLECTOR_FAILED)
+        raise ObservationError(collector_failure_code(meta))
     if not (is_int(meta.get("schemaVersion")) and meta["schemaVersion"] == SCHEMA_VERSION):
         raise ObservationError(ERR_COLLECTOR_BAD_OUTPUT)
     if meta.get("sessionId") != args.session_id or meta.get("inputId") != args.input_id:
@@ -246,10 +306,15 @@ def run_adapter_stage(adapter, args, raw_evidence):
             pass
 
     data = load_json_object(proc.stdout)
+    # Exit-code gate (R1 blocker B1): a failed adapter never yields OK/READY,
+    # even when its stdout looks like a legal success payload.
+    if proc.returncode != 0:
+        code = data.get("error") if data is not None else None
+        raise ObservationError(allowlisted_code(code, ADAPTER_ERROR_CODES) or ERR_ADAPTER_FAILED)
     if data is None:
         raise ObservationError(ERR_ADAPTER_BAD_OUTPUT)
     if "error" in data:
-        raise ObservationError(safe_code(data.get("error")) or ERR_ADAPTER_FAILED)
+        raise ObservationError(allowlisted_code(data.get("error"), ADAPTER_ERROR_CODES) or ERR_ADAPTER_FAILED)
     if not (is_int(data.get("schemaVersion")) and data["schemaVersion"] == SCHEMA_VERSION):
         raise ObservationError(ERR_ADAPTER_BAD_OUTPUT)
     if data.get("sessionId") != args.session_id or data.get("inputId") != args.input_id:
@@ -297,16 +362,13 @@ def observe(args):
     input_obj = meta["input"]
     turn_obj = meta["turn"]
     final_obj = meta["finalAssistant"]
-    input_status = input_obj.get("status")
-    turn_status = turn_obj.get("status")
-    turn_id = result.get("turnId")
     summary = {
-        "provider": result["provider"],
-        "model": result["model"],
-        "turnId": turn_id if isinstance(turn_id, str) and turn_id else None,
+        "provider": bounded_text(result["provider"], "unknown"),
+        "model": bounded_text(result["model"], "unknown"),
+        "turnId": bounded_text(result.get("turnId"), None),
         "evidenceSha256": digest,
-        "inputStatus": input_status if isinstance(input_status, str) else None,
-        "turnStatus": turn_status if isinstance(turn_status, str) else None,
+        "inputStatus": bounded_text(input_obj.get("status"), None),
+        "turnStatus": bounded_text(turn_obj.get("status"), None),
         "finalAssistantFound": final_obj.get("found") is True,
     }
     return {
