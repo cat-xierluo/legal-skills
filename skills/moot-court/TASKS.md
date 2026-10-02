@@ -306,7 +306,7 @@
 
 ### Task-025 · 独立审查发现的 probe 错误路径与口径修复
 
-- 状态：IN_PROGRESS；优先级：P2；归属：MiniMax Code 实现，独立 ZCode 验收。
+- 状态：IN_REVIEW（2026-10-02，实现完成，等待 PM 与独立验收）；优先级：P2；归属：MiniMax Code 实现，独立 ZCode 验收。
 - 来源：PR #247 的独立 reviewer（新 Dispatch/Session）于冻结提交 `8c1281c88310ca19013b1e9f750aa2e71ae3be43` 给出 ACCEPT、无阻塞；两条指定验证命令通过，五项非阻塞发现如下，旧审查随 head 改变失效。
 - NB-1：prepare_probe 的 subprocess 超时未捕获，需清晰 CLI 错误和确定性超时测试。
 - NB-2：角色提示只允许公开编号，比 clerk 允许本角色可见材料更严；统一提示、复核资产与协议口径，不扩大可见范围。
@@ -317,3 +317,6 @@
 - 验收：实际 CLI 正常与拒绝覆盖路径通过；超时与写失败可复现且无污染；角色任务允许己方可见材料、仍拒绝他方私有材料；独立审查绑定最终 40 位 head。
 - 证据：本地忽略档案 `archive/2026-10-02-worker-wave/review-acceptance.json` 保存旧候选通过的角色分离验收；负向 CLI 的 exit 2 是预期拒绝证据，不计作成功验证命令。
 - 非目标：不把局部协议或探针修复宣称为 Task-011/005 的完整 Runtime/领域验收。
+- 本轮交付（生产者自报，待独立验收）：NB-1 捕获 `subprocess.TimeoutExpired` 并给单行中文原因（退出 2、无 Traceback），用 `unittest.mock` 注入超时，不等 60 秒；NB-2 角色任务允许引用本角色可见编号（含己方私有），`citations` 仍限公开编号，核对 `clerk.py` 只接受 `visible_to == ["all"]` 且复核资产 B3 同口径，并新增私有编号被拒、公开编号可入卷的端到端回归；NB-3 `O_EXCL` 独占创建，新增 `completed` 标志，仅在未写完时删除本次创建的半成品，原有文件不覆盖不删除（原实现的 `not path.exists()` 条件在写入失败时反而保留残缺文件），注入 `os.fsync` 失败验证；NB-4 D-001 标题改为「合成原告私有材料」；NB-5 实现本就接受相对路径，文档与 CLI 帮助统一为「绝对或相对皆可」并新增相对路径回归。SKILL.md 与 evaluation.md 增加 blind-probe 使用入口。
+- 版本：仍为 v1.2.3 未发布 PR，未新增 DECISIONS（无真实架构取舍）。
+- 本轮未执行：`test_clerk.py`、全仓测试、任何安装与配置改动、真实客户案卷。

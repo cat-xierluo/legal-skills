@@ -46,6 +46,10 @@ def read_packet(run):
         finished = subprocess.run(
             [sys.executable, "-B", str(CLERK), "--run", str(run), "packet"],
             capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired as exc:
+        # 60 秒到点属于运行故障，不是角色或材料问题；转成可读中文，不让 Traceback 泄漏到宿主。
+        raise ProbeError(
+            "书记员 CLI 超过 60 秒未返回，已中止；请确认运行目录可读、无并发占用后重试") from exc
     except OSError as exc:
         raise ProbeError(f"无法执行书记员 CLI：{type(exc).__name__}") from exc
     if finished.returncode != 0:
@@ -91,10 +95,14 @@ def role_task(assignment):
         "通用角色任务（不含任何标准答案或评分信息）：",
         f"1. 你本轮只担任 assignment.role，任务范围以 assignment.issue、assignment.stage、"
         "assignment.prompt 为准。",
-        "2. 可读材料仅限本文件 documents 已列条目；不臆造未提供的材料或对方主张。",
+        "2. 可读材料仅限本文件 documents 已列条目；其中包含只对你可见的本方私有材料，"
+        "可正常阅读和用于本方论证；不臆造未提供的材料或对方主张。",
         "3. 只依据 documents 与 history 推理；history 是已入卷的公开发言，不是本轮答案。",
         "4. 分开陈述已提供的事实、你的主张与假设；证据不足时直接说明不足。",
-        "5. 引用材料只能用 documents 中 visible_to 为 [all] 的编号，填入 citations。",
+        "5. 正文可以引用你本轮可见的任何材料编号（含本方私有材料），但须标明其为本方私有准备；"
+        "提交字段 citations 由书记员机械校验，只接受 documents 中 visible_to 为 [all] 的编号，"
+        "填入本方私有编号会被拒绝入卷。",
+        "5b. 他方私有材料未出现在本文件，不得引用、复述或推测其内容。",
         "6. 严格按 submission_template 的字段提交；除 body 外不要新增或删除字段，"
         "schema_version、run_id、turn_id、role、material_version、read_through、responds_to 原样保留。",
         "7. 本文件已含你本轮全部输入；不要去寻找本运行的清单、事件流或其他角色文件。",
@@ -120,7 +128,13 @@ def build(packet):
 
 
 def write_once(path, payload):
-    """原子创建；目标已存在则拒绝，绝不覆盖。出错时只清理自己这次创建的文件。"""
+    """以 O_EXCL 独占创建：目标已存在则拒绝，绝不覆盖、绝不删除原有文件。
+
+    清理只针对本次调用自己创建的文件（os.open 成功即证明此前不存在）。
+    写入或 fsync 失败时删除该半成品，避免留下被误当成完整输入的残缺文件；
+    但不承诺"要么完整发布、要么目录完全不变"：创建与写入之间存在窗口，
+    崩溃仍可能留下已清理前的残留，需人工确认。
+    """
     if path.exists() or path.is_symlink():
         raise ProbeError("输出文件已存在；拒绝覆盖，请换一个 --output 路径")
     if not path.parent.is_dir():
@@ -128,6 +142,7 @@ def write_once(path, payload):
     text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     handle = None
     created = False
+    completed = False
     try:
         handle = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         created = True
@@ -136,6 +151,7 @@ def write_once(path, payload):
             stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
+        completed = True
     except FileExistsError as exc:
         raise ProbeError("输出文件已存在；拒绝覆盖，请换一个 --output 路径") from exc
     except OSError as exc:
@@ -143,17 +159,25 @@ def write_once(path, payload):
     finally:
         if handle is not None:
             os.close(handle)
-        if created and not path.exists():
-            path.unlink(missing_ok=True)
+        # created 为真只可能是本次 os.open 独占成功，故删除不会碰到调用方原有文件；
+        # 只在未写完时清理半成品，成功写完则保留。
+        if created and not completed:
+            try:
+                path.unlink()
+            except OSError:
+                pass
     return path
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run", required=True, help="已 init 且当前有待交稿派发的庭审目录绝对路径")
-    parser.add_argument("--output", required=True, help="本轮角色冷启动输入的写出路径；已存在则拒绝")
+    parser.add_argument("--run", required=True,
+                        help="已 init 且当前有待交稿派发的庭审目录；接受绝对路径或相对路径")
+    parser.add_argument("--output", required=True,
+                        help="本轮角色冷启动输入的写出路径（绝对或相对皆可）；已存在则拒绝")
     args = parser.parse_args(argv)
     try:
+        # 不强制绝对路径：.expanduser() 相对路径按调用方 cwd 解析，与 clerk.py 行为一致。
         run = Path(args.run).expanduser()
         output = Path(args.output).expanduser()
         packet = read_packet(run)

@@ -101,4 +101,4 @@ python3 /path/to/moot-court/scripts/clerk.py --run /path/to/case/hearing-001 ini
 
 脚本无第三方包、无网络请求、无自动安装，只读指定输入并写入指定演练目录；输出可能包含案卷和策略，按案件材料管理，不纳入公开发布。模型处理材料仍遵循所用宿主的数据策略，“记录脚本离线”不等于模型离线。
 
-开发验证命令：`python3 scripts/test_clerk.py`。合成案例与前向评估入口见 [验证样例](references/evaluation.md)；CLI 校验只覆盖协议与引用编号，语义判断和各 Runtime 行为需要分别实测。
+开发验证命令：`python3 scripts/test_clerk.py`。合成案例与前向评估入口见 [验证样例](references/evaluation.md)；需要验证角色输入不含预期答案时，用[盲评探针](references/blind-probe.md)及其回归 `python3 scripts/test_prepare_probe.py`。CLI 校验只覆盖协议与引用编号，语义判断和各 Runtime 行为需要分别实测。
