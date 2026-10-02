@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - name: Validate runtime and lease evidence with isolated fixtures
         working-directory: skills/multi-agent-orchestration
         run: |
@@ -53,3 +56,12 @@ jobs:
           bash scripts/test-worker-value-postflight.sh
           bash scripts/test-review-acceptance-gate.sh
           bash scripts/test-spawn-worker-verification.sh
+      - name: Check task memory profiles through the complete isolated spawn
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          bash -n scripts/spawn-worker.sh
+          bash -n scripts/spawn-worker-metadata.sh
+          bash -n scripts/spawn-worker-launch.sh
+          python3 scripts/test_memory_task_admission.py
+          python3 scripts/test_minimax_memory_admission.py
+          python3 scripts/test_minimax_spawn_integration.py

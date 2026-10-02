@@ -32,6 +32,10 @@ bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
 python3 scripts/test_memory_telemetry.py
+python3 scripts/test_memory_task_admission.py
+python3 scripts/test_host_memory_admission.py
+python3 scripts/test_minimax_memory_admission.py
+python3 scripts/test_minimax_spawn_integration.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-pm-message-contract.sh
@@ -114,3 +118,5 @@ bash scripts/smoke-orca-control-plane.sh
 - MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
 
 - 派发profile消费者须从实际spawn入口证明：漏native参数的ZCode自动补原生桥；缺失/禁用配置零资源副作用；旧显式native及generic/direct兼容；MiniMax模式由实际COMMAND取得，batch零wait/send。官方projection的nextAction优先于composer残留，身份冲突拒绝。计划/启动返回保持draft，不能把stub成功扩大为真实输入/业务完成。
+
+- 任务资源 profile 的隔离消费者使用真实 Node 和私有文件；宿主 suite 需要当前真实 `CODEX_THREAD_ID`，无宿主时记该项 NOT_VERIFIED，不填虚构线程冒充本机证据。完整 MiniMax spawn 使用隔离 Orca/采集/祖先输入，须核前置零资源、晚期零启动及已建资源账目；不据此声明真实模型、Orca业务、整worker RSS或跨PM原子预留通过。

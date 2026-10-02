@@ -519,3 +519,13 @@ blocker_and_recovery:
 - 2026-10-02限定修复与证据：只读smoke用每轮私有nonce及生产safe_branch规则派生branch/session/WT/CTX；不改生产occupied保护。隔离原smoke+真实spawn dry-run最终4/4 exit0：连续两轮不冲突、占用拒绝且marker保留、readonly mutation95、路径映射一致。先前三次fixture失败（Bash3.2、非canonical worktree ID、缺runtimeId）原件保留；最后只补真实runtimeId协议字段，不弱化断言。没有真实Orca mutation/模型调用，完整生命周期仍NOT_VERIFIED。 本轮证据冻结于维护者archive/20261002_gate_stabilization/，包括实际命令、退出码、候选SHA与所有失败原件；独立审查按本PR最终不可变head绑定，长期稳定性另验。
 
 - 独审补充：作者4/4之后，不同session首跑2/4，真实祖先身份前门早于smoke目标断言拒绝；该测试仍依赖宿主环境，返修仅补私有ps完整合成祖先链，不改生产门；定向suite一次4/4 exit0（18.508秒），其余三源码SHA不变，Facts不重复执行。原失败报告按6058e6d固定并保留，合成输入仅用于隔离测试，不是实机宿主身份的证明。
+
+## TASK-2026-10-02-MINIMAX-ORCA-MEMORY-CONSUMER — 完整派发入口资源合同验收
+
+- 状态：`IN_PROGRESS / WHOLE_SPAWN_INTEGRATION`；沿原 MiniMax 资源候选与原平台 PM，业务任务仍由原业务 PM 管理。本轮不新派原业务，也不改变模型账户、默认 lane 或权限范围。
+- 来源与依赖：用户确认业务产物准入→并发口径→MiniMax 完整 spawn 的顺序；前两项固定 head `08c1af90`、`0abbe330` 已分别限定独审 ACCEPT。资源核心与宿主适配沿原 `RESOURCE-GATE-CALIBRATION`、`CODEX-HOST-MEMORY-PROFILE`，此前候选冻结 `b3e9e849…6160382` 限定独审通过但未安装，旧失败与维护矩阵超时不被抹除。
+- 唯一实现者 `/root/release_compat`，之后 `/root/permission_review` 独审。限定移植八个资源生产/测试文件并新增完整入口消费者，禁止复制旧候选整树覆盖新业务门/facts/smoke；其他文档与CI由PM持有。
+- 验收：从真实 `spawn-worker.sh` 贯穿早期命令/安装绑定、同一内存探测、late Git/cwd/HEAD/stdin绑定与最终启动；前置拒绝零资源副作用，晚期拒绝零Agent注入并记录已有owned资源。保留旧默认策略；新profile明确≥3GiB、单writer、20秒稳定窗、未测整worker RSS及非全局原子预留。隔离假Orca/采集器成功不能代替真实模型业务。
+- 涌现接线缺口：`node_mem_cap_setup` 将 MiniMax COMMAND 包装为固定 `exec-bound` 后，`spawn-worker-launch.sh` 仍按裸CLI重新分类，可能把合法guard误拒为exit64。已授权同作者扩展这一个模块，先用完整入口复现再窄修；必须验证最终COMMAND确为本次可信render产物并重验原命令/binding，不能泛放Python wrapper或只凭profile存在跳过检查。
+- 预算：本单元2026-10-02 17:11 UTC开始，截止17:35 UTC，最多2失败episode。新完整入口与原MiniMax定向套件各一轮；必要的launch邻接回归另一次，PM最后串行完整矩阵。证据 `/tmp/mao-sequential-gates-261003/minimax/`，目前未安装、未签原业务恢复。
+- 完整入口首轮fixture导入失真首红保留；第二轮10项中9通过、正例1失败，定位到更早的 `spawn-worker-metadata.sh` 也把可信guard当裸CLI误拒，尚未抵达已窄修launch。不是资源不足或授权拒绝。PM据具体第二消费点授权同作者在原17:35截止内最后一次有界纠错，追加metadata唯一写域，与launch共用已核guard/native argv的验证逻辑，禁止只取缓存mode；原两失败原件保留，不重置成首绿。

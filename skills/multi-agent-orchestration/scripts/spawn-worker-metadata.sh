@@ -1,3 +1,33 @@
+# Shared native classifier for metadata and launch. A memory profile only
+# permits the exact late guard, freshly reproduced from the frozen binding.
+minimax_verified_startup_mode() {
+    local minimax_native_command="$COMMAND"
+    if [ -n "${MEMORY_TASK_PROFILE:-}" ]; then
+      # A memory profile alone never proves an arbitrary Python wrapper. Only
+      # the exact late render output is accepted, then freshly reproduce it
+      # from the same original native argv, outer env, binding and Git pregate.
+      if [ -z "${MEMORY_TASK_RENDERED_COMMAND:-}" ] || [ "$COMMAND" != "$MEMORY_TASK_RENDERED_COMMAND" ] \
+          || [ -z "${MEMORY_TASK_RENDER_OUTER_COMMAND:-}" ] || [ -z "${MEMORY_TASK_BINDING_B64:-}" ] \
+          || [ -z "${MEMORY_TASK_ORIGINAL_COMMAND:-}" ]; then
+        echo "MINIMAX_MEMORY_LAUNCH_GUARD_MISMATCH: final command is not the bound late render" >&2
+        return 64
+      fi
+      local reproduced_guard
+      reproduced_guard=$(python3 "$SCRIPT_DIR/memory_task_admission.py" render-launch \
+        --profile "$MEMORY_TASK_PROFILE" --command "$MEMORY_TASK_ORIGINAL_COMMAND" \
+        --backend "$WORKER_BACKEND_CANONICAL" --binding-b64 "$MEMORY_TASK_BINDING_B64" \
+        --outer-command "$MEMORY_TASK_RENDER_OUTER_COMMAND" --execution-cwd "$WORKTREE" \
+        --pregate-branch "${pregate_branch:-}" --pregate-head "${pregate_head:-}" \
+        --pregate-common "${pregate_common:-}") || return 64
+      if [ "$reproduced_guard" != "$COMMAND" ]; then
+        echo "MINIMAX_MEMORY_LAUNCH_GUARD_MISMATCH: fresh binding/render differs" >&2
+        return 64
+      fi
+      minimax_native_command="$MEMORY_TASK_ORIGINAL_COMMAND"
+    fi
+    python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$minimax_native_command" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}"
+}
+
 #!/usr/bin/env bash
 # spawn-worker-metadata.sh — Session Context metadata writer for spawn-worker.sh.
 # This file is sourced after spawn-worker.sh initializes runtime and authority globals.
@@ -33,7 +63,7 @@ write_metadata() {
   local enforcement_source worker_mirror_authoritative orca_setup_mode_value
   local minimax_startup_mode="" minimax_input_source=""
   if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ]; then
-    minimax_startup_mode=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input --supervised "${ORCA_SUPERVISED:-0}" --task-id "${ORCA_TASK_ID:-}") || return 64
+    minimax_startup_mode=$(minimax_verified_startup_mode) || return 64
     if [ "$minimax_startup_mode" = "batch" ]; then
       minimax_input_source="command_bootstrap"
       ORCA_TUI_READY_METHOD="command_bootstrap_no_tui_wait"
