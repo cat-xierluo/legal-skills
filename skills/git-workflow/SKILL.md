@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable；先跑 scripts/pre-worktree-check.sh 只读判读 IN_SYNC/AHEAD/BEHIND/DIVERGED，--pre-pr 模式以 merge-tree 做提 PR 前本地冲突模拟）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）、常见 Git 事故恢复（accident recovery；用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时同样适用——先 reflog/fsck 只读定位，恢复优先新建引用而非改写现态，reset/force 类补救仍须明确授权，详见 references/accident-recovery.md）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.11.2"
+  version: "1.12.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -185,6 +185,8 @@ team-feature-a
 本地隔离 Worktree→验证→身份/隐私→PR→合并→增量安装→清理的当前通用 SOP，见 `references/local-worktree-sop.md`。原空文件已按当前规则补齐；未知的旧 Node/Raycast 步骤不推断补全，宿主构建/发布沿项目既有规则。
 
 #### 开 worktree 前的必做 3 查（防止 base 过期导致 PR 报 not mergeable）
+
+先跑 `scripts/pre-worktree-check.sh`（只读：fetch 后自动按下方判读表输出 `IN_SYNC` / `AHEAD` / `BEHIND` / `DIVERGED` 四态判定与对应处理路径，绝不创建/删除/重置任何东西；退出码 0=可开，1=先处理再开，2=用法/环境错误）。下列命令与判读表保留为透明判读依据，也是脚本降级（离线 fetch 失败）时的手动路径。
 
 **核心陷阱**：本地 `main` 可能落后于 `origin/main`（本地独有未 push 的 commit / fetch 滞后 / 别的 session 在 origin 推了新内容）。基于这种"过期 main"开的新 worktree 提 PR 时，GitHub 会报 `not mergeable: the merge commit cannot be cleanly created`，且 PR 的 base 不包含 origin/main 已合的内容——你不知道原来已经合了什么，DECISIONS 编号可能撞车、TASKS 已勾的项要重做。
 
@@ -542,6 +544,8 @@ gh pr list --state open
 
 ### PR 创建后立即跑 mergeable 检查（强制）
 
+更早的前置：PR 创建后的 mergeable 检查无法搬到「开 worktree 前」——PR 对象那时还不存在。能前置的是「提 PR 前」：`bash scripts/pre-worktree-check.sh --pre-pr <branch>` 用 `git merge-tree --write-tree` 在本地模拟 base+head 合并，不创建 PR、不触碰工作区与 index、不耗 GitHub API，把冲突提前到 push 前暴露（需 Git 2.38+）。本地模拟干净不豁免本节的 PR 后验——GitHub 侧 mergeable 仍以创建后检查为准。
+
 Agent 在 `gh pr create` 返回 PR URL 后，**不要等用户/PM 拍板合并**，立即跑一次完整状态检查，捕获 base 落后或 mergeable 冲突：
 
 ```bash
@@ -764,6 +768,10 @@ git tag -d v1.0.0        # 删除本地 tag
 git push origin --delete v1.0.0  # 删除远程 tag
 ```
 
+### 常见事故恢复（误 amend / 误 stash / 误删分支 / 误 reset）
+
+用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是 reflog 与分支自身 reflog（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
+
 ## 7. Issue 与 PR 命名规范
 
 详细规范见 `references/issue-pr-format.md`，此处为速查。
@@ -981,3 +989,6 @@ git worktree list
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
 - `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）与全仓 author/committer/Co-authored-by 尾注审计（history）
 - `scripts/test-identity-audit.sh` — 身份审计故障注入测试
+- `scripts/pre-worktree-check.sh` — 开 worktree 前 3 查只读判读（IN_SYNC/AHEAD/BEHIND/DIVERGED 四态+处理路径）；`--pre-pr <branch>` 模式以 merge-tree 做提 PR 前本地合并模拟
+- `scripts/test-pre-worktree-check.sh` — 3 查判读与合并模拟的故障注入测试
+- `references/accident-recovery.md` — 误 amend/误 stash/误删本地/远端分支/误 reset 的恢复路径：reflog/fsck 只读定位，恢复优先新建引用
