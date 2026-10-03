@@ -18,6 +18,7 @@ description: 案件进度与状态台账管理。案件 case.yaml 的唯一写�
 | 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
 | 视图渲染 | `render <短码>`：生成 `案件视图.md` + `案件视图.html`（00 目录，一页纸派生视图，勿手改）；**每次写入自动刷新已存在的视图文件**——无需 hooks 即保持新鲜 |
 | 会话契约 | `references/contract.md`：Agent 会话开始 `show` 加载状态 + 按 context 指针读叙事文档；结束经 CLI 写回，**禁止手改 yaml** |
+| **列表写入陷阱（set-fields）** | `set-fields` 的**列表是整体替换而非追加**：传 `{"任务": [新增一条]}` 会把该列表原有的全部条目冲掉。schema 校验（每行需 `source`）拦不住"漏传其余条目"——新条目若恰好带合法 `source`，校验直接通过、数据已被清空。**追加一条前必须先 `show`/读出该列表全量，把原条目 + 新条目一起传入**；写入后立刻复核条数与关键 id，异常从备份恢复 |
 | 项目管理 | `/progress` 命令：自然语言驱动任务/期限/阶段操作，明确操作直路由本 CLI，语义复杂转入下方"工作流收尾状态同步"流程 |
 | 数据契约 | `references/schema.md`：case.yaml v4.0 字段字典——**唯一权威版本**，其他 skill 只引用不复制 |
 | 监控对账 | M6（远期）：audit 子命令 + hooks 挂点（PostToolUse 记账 / Stop·SubagentStop 结账 / SessionStart 预警） |
@@ -29,6 +30,7 @@ description: 案件进度与状态台账管理。案件 case.yaml 的唯一写�
 3. **schema 唯一权威**：字段字典只在本 skill 维护；case-dashboard 等消费方引用版本号，不复制内容。
 4. **运行时数据绝不入 skill 目录**（本仓库公开）：case.yaml、`.audit.jsonl` 等全部落消费项目案件目录。
 5. **被调方式**：其他 skill（如 case-dashboard 的 server）经 **subprocess 调用本 CLI**，禁止跨 skill Python import。
+6. **统计 yaml 列表条数必须按顶级键切片**：case.yaml 里 `案件时间线` 之外还有 `法定期限`、`开庭与听证`、`工时记录` 等多个日期列表，跨列表 `grep -c "^- 日期: "` 得到的数字与目标列表无关（曾把"没丢数据"误判成"丢了 40 多条"，又靠它掩盖了真丢 7 条）。用 `case_store.py show <短码>` 或从顶级键截到下一个非缩进行统计。写入前 `cp case.yaml /tmp/case.yaml.bak` 留底，可一键回滚。
 
 ## 目录结构
 

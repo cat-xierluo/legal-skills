@@ -1,5 +1,102 @@
 # Changelog
 
+## [2.34.1] - 2026-10-02
+
+### 修复
+- 识别 macOS 实际 `System-wide memory free percentage` 输出，作为独立报告百分比；区分读取成功与解析有效，不将该百分比推成可用物理内存或压力级别。
+
+### 改进
+- 分开记录内核原生压力通知位和既有算法的合成压力来源。内核信号仅供观测，原 swap 阈值、预算、保留公式、slots 与退出语义保持。
+
+### 验证
+- 新遥测13项与原内存58项首轮通过；三个冻结现场样本解析成功且仍exit3/slots0，无vm_stat与只有新百分比时仍exit1。独立39组/78次CLI对照保持旧输出与退出语义，维护矩阵66项通过（两同字节套件复用首轮证据）。原始采集器错误、快照空格例外与旧静态告警保留；长期稳定性未验证。
+
+## [2.34.0] - 2026-10-02
+
+### 新增
+- backend、真实命令启动模式与Orca/direct通道统一解析为派发profile，实际spawn消费同一合同；从个人配置与命令参数记录并发、请求权限和来源，观测权限单独保留未知。
+
+### 改进
+- 已指定ZCode时，auto默认采用已配置的原生Orca supervised桥；缺失/禁用配置在资源副作用前拒绝，旧显式native参数保留，generic兼容须显式选择。MiniMax按原验证器区分batch与交互，不改命令或共享配置。
+- 启动后的指引按模式生成唯一下一动作，不再统一建议发送任务；已校验的官方worker-show projection优先，composer残留、TUI idle和启动返回不冒称已开始或完成。
+
+### 验证
+- 新隔离默认原生入口实际使用CodingPlan/GLM-5.3/max完成文件任务，PM2/2、唯一worker_done/Delivery、自动release与ack通过；该链绑定首候选，修后head的兼容/回执消费者和独审另行记录。缺schema旧配置误拒与已完成回执遗漏spawn动作两反例沿原session修，原失败保留；完整Skill及长期稳定性仍NOT_VERIFIED。
+
+## [2.33.2] - 2026-10-02
+
+### 修复
+- MiniMax terminal-managed 的原生 `exec` 按实际 CLI 参数识别批处理启动，保存准确终端身份后跳过 TUI 等待和重复任务输入；交互 CLI 保持就绪检查与唯一输入，批处理不能充当 supervised Task/Dispatch。
+
+### 验证
+- 真实执行bootstrap的控制器消费者证明旧实现执行一次后仍wait64、候选0且零二次send；Orca281、metadata33通过。独审另发现单引号展开与env exec误判，按真实Shell参数和退出码返修，原拒绝证据保留；完整回归及修复后独审由PM继续核对。
+- 独立Orca原生MiniMax canary仅一次bootstrap，Run succeeded/exit0/shutdownComplete，实际M3.1Flash与probe.py一致，PM1/1通过、原生配置SHA未变、最终测试终端库存0。该canary运行在首轮候选，不能替代修复后命令语义复验或长期稳定性证明。
+
+### 文档完善
+- 明确 ZCode 原生 Orca 启动桥与通用终端入口的区别；保留原 Task、启动回执和残余资源，失败后先读取实际进度再恢复，不重发已有业务。
+
+## [2.33.1] - 2026-10-02
+
+### 改进
+- 新隔离ZCode worker的renderer和无command启动入口默认yolo，显式build/edit/plan保留；MiniMax batch默认原生full，显式smart/off保留。长程MiniMax继续使用交互CLI，权限读取既有原生配置；本机已full，不添加不存在的TUI启动参数或修改全局配置。
+
+### 修复
+- 兼容Orca官方worker-list的scope.run，避免已释放worker被误报为malformed page而保留provider lease。所有run/runId/run_id别名仍需一致、非空且匹配请求，分页和Dispatch唯一性继续失败关闭。
+
+### 验证
+- 实际ZCode交互CLI通过renderer默认命令启动，原生/mode明确读回yolo；无模型请求。MiniMax本机官方配置loader读回bypassPermissions，实际原生TUI的/permission显示Current · Full access且配置字节未变。参数消费者覆盖默认与显式收紧，Orca两个已释放worker的真实只读库存消费者通过，旧版对同库存复现拒绝。
+- 原业务provider lease未由本轮直接结算；不得把只读库存兼容证明扩大为实际release已完成。不把历史build业务验收改记为yolo长程业务验证，不声称所有可选backend或长期指令稳定性已验。
+
+## [2.33.0] - 2026-10-01
+
+### 新增
+- 提供显式借用预建 long-lived 工作树的首次原生 ZCode 接入合同，绑定 Git/Orca 身份、快照、唯一 writer 与独占锁；保持默认拒绝已有树，失败和编排清理保留原分支、工作树与批准资产。
+
+### 改进
+- 显式选择 MiniMax Code 后默认通过 Orca terminal-managed 派发，统一显示工作树、分支和终端；Orca 不可用时失败关闭，保留 `--no-orca-mode` 显式直连，不扩张日常 backend 池。
+
+### 验证
+- 冻结候选完成62项维护命令；53个借用fixture与独立消费者关闭旧helper替换、未知writer漏检问题。可信扫描原始high/hard信号保留，以真实消费者及PM限定能力复核说明上下文，正式Harness证据门通过；不声称长期指令稳定性已验。
+- MiniMax默认Orca真实交互CLI完成独立probe文件任务，PM3/3测试与value postflight通过；同一会话16条assistant模型响应与16条HTTP200事件均为MiniMax-M3.1-Flash-Preview。原生usage精确组合绑定、日志同session/turn/model数量组复核，未证明逐responseId的HTTP直连或精确计费。
+- 本轮Mcode/launcher及基线后代确认退出，默认残余shell逐项核对后正式close-all，终端库存为0；long-lived测试树与分支按合同保留证据。MiniMaxsupervised Task/Dispatch仍未支持。
+- 本机借用入口完整cwd库存依赖未满足，真实borrowed-native启动/结算NOT_VERIFIED并泊车；不放宽未知拒绝，不把fixture通过推广到现有业务树。
+
+
+## [2.32.0] - 2026-10-01
+
+### 新增
+- 为用户指定的 ZCode CLI 提供显式原生 Orca supervised 路径：使用 1.4.218 起的首次 composer 等待与唯一 Task 投递，保持交互 CLI 和既有启动环境。
+- 增加 owner-only、短时、单次启动请求桥及原生回执核对，绑定 Session Context、authority、工作树、runtime 与启动脚本；核对启动 created 与结算时 live ownership，尊重用户接管保护。
+
+### 文档完善
+- 补充原生启动、默认 ZCode 回退、模型操作、版本与权限边界；保留可选后端不进默认池、账号规则由本地私有 Skill 提供的合同。明确单worker的build/edit/plan/yolo配置与CLI审批接续，不改全局权限、不重发已投递Task。
+
+### 验证
+- 完整维护矩阵61/61命令通过，独立审查关闭重放与nonready两个阻塞；真实Orca原生同会话完成Flash阶段35项测试、切换GLM-5.3及3项定向反例、唯一worker_done succeeded与Delivery验收。release返回用户接管保护retained，随后ack通过；用户明确授权后两条测试终端关闭与退出确认，研究认证副本精确删除、日志与证据保留，本轮临时资源已收口。coordinator-owned自动关闭仍未验证；不将人工关闭当作自动release。
+
+## [2.31.3] - 2026-10-01
+
+### 修复
+- 正确消费原生 Orca 的未满足退出码：仅严格有效的 `ok=true / satisfied=false` 配合退出1可同句柄有界重等；退出1却宣称就绪、其他非0退出及异常回执均停止，保留资源并保持零投递。
+
+### 验证
+- 增加原生 CLI handler 的隔离契约回放及真实 shell 退出码消费者回归，覆盖普通/supervised、错绑、多JSON、timeout/stale错误；不扩大为 ZCode Orca 或完整生命周期的真机验收。
+- 公开文档仅维护私有账号 Skill 的版本感知调用合同；真实私有运行与安装证据由私有Skill维护，不在公开任务卡承载。
+- ZCode同一原生tmux交互会话完成代码/256项回归及refs合同两阶段，RESULT ACCEPT、STATUS done、tracked diff为0、value postflight通过；原生记录确认实际 `GLM-5.3-Flash` 与切换后的 `GLM-5.3` 请求完成、重试无异常。仍为prompt-only，目录枚举越scope已记录，机械scope、Orca TUI及精确计费未验证。
+
+### 文档完善
+- 补充私有账号 Skill 的版本感知派发前校验调用：具名观测/计划、现场重读、失败停止，瞬时通过不当持续身份锁；保留公开包仅由PM调用的边界。
+- 明确已验ZCode tmux交互路径与尚未验证的Orca TUI就绪边界，避免将终端可写、composer或hook安装状态扩大为兼容成功。
+
+## [2.31.2] - 2026-10-01
+
+### 修复
+- Orca worker 启动仅在明确的 `ok=true` / `wait.satisfied=true` 回执后投递；超时同句柄有界重等一次，异常或仍未就绪则失败并保留精确终端/工作树供恢复，supervised 仍只由 worker-start 注入任务。
+
+### 验证
+- MiniMax Code 的真实 Orca terminal-managed 文件任务已独立验收，PM 的3项测试通过；15条原生响应记录确认实际 minimax / MiniMax-M3.1-Flash-Preview，任务结束后终端关闭。
+- ZCode tmux fallback 的个人 Coding Plan / GLM-5.3-Flash 文件任务已有13条 completed 记录、0 retry和3项测试通过，独立产物验收 `ACCEPT`（限tmux实际任务）；临时研究副本删除、tmux关闭。Orca 两次 terminal_handle_stale 且0业务send，Orca/supervised/settlement及机械scope/hook仍 `NOT_VERIFIED`；共享原件哈希仅进程内断言，独立before/after重放未验证。
+
 ## [2.31.1] - 2026-10-01
 
 ### 新增

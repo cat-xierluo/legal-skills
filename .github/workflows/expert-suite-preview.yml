@@ -5,6 +5,8 @@ on:
     paths:
       - "expert-suites/**"
       - "skills/release-workflow/scripts/build-suite-zips.sh"
+      - "skills/release-workflow/scripts/stage-suite-readme.py"
+      - "skills/release-workflow/scripts/test_suite_stages.py"
       - "skills/release-workflow/scripts/validate-expert-suites.py"
       - "skills/release-workflow/scripts/test-build-suite-zips.sh"
       - "skills/release-workflow/scripts/test_validate_expert_suites.py"
@@ -29,10 +31,10 @@ jobs:
         run: bash skills/release-workflow/scripts/test-build-suite-zips.sh
 
       - name: Validate repository suites
-        run: python3 skills/release-workflow/scripts/validate-expert-suites.py
+        run: python3 skills/release-workflow/scripts/validate-expert-suites.py --mode source
 
       - name: Build preview packages
-        run: bash skills/release-workflow/scripts/build-suite-zips.sh "pr-${{ github.event.pull_request.number || 'manual' }}"
+        run: SUITE_BUILD_MODE=preview bash skills/release-workflow/scripts/build-suite-zips.sh "pr-${{ github.event.pull_request.number || 'manual' }}"
 
       - name: Upload preview packages
         uses: actions/upload-artifact@v4

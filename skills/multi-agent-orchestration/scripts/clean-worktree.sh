@@ -297,6 +297,18 @@ settle_supervised_cleanup() {
   fi
 }
 
+borrowed_resource=0
+borrow_common=$(git -C "$PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$WORKTREE" ] && [ -d "$WORKTREE" ] && { [ -d "$borrow_common/agent-borrowed-worktrees" ] || [ -L "$borrow_common/agent-borrowed-worktrees" ] || { [ -n "${metadata_file:-}" ] && [ "$(jq -r '.worktree_ownership // ""' "$metadata_file")" = borrowed ]; }; }; then
+  borrow_protection=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" protect --project "$PROJECT_DIR" --worktree "$WORKTREE" --branch "$BRANCH") || { echo "CLEAN_WORKTREE_BORROWED_UNKNOWN: retain all resources" >&2; exit 2; }
+  if [ -n "${metadata_file:-}" ] && [ "$(jq -r '.worktree_ownership // ""' "$metadata_file")" = borrowed ] && [ "$(printf '%s' "$borrow_protection" | jq -r '.protected')" != true ]; then
+    echo "CLEAN_WORKTREE_BORROWED_LEDGER_MISSING: retain all resources" >&2; exit 2
+  fi
+  if [ "$(printf '%s' "$borrow_protection" | jq -r '.protected')" = true ]; then
+    borrowed_resource=1; KEEP_WORKTREE=1; DELETE_BRANCH=0; FORCE_DELETE_BRANCH=0
+    echo "CLEAN_WORKTREE_BORROWED_RETAINED: external tree and branch are permanent cleanup exclusions"
+  fi
+fi
 settle_supervised_cleanup || exit 2
 
 if [ "$KEEP_SESSION" -eq 0 ]; then
@@ -337,7 +349,7 @@ fi
 
 # Task-045 / G31：worktree 删除前安全 unlink node_modules 软链（spawn-worker-deps 注入）。
 # -L 确认是软链、rm -f 不带尾斜杠——绝不跟随软链误删主仓 node_modules。
-if [ -n "$WORKTREE" ] && [ -L "$WORKTREE/node_modules" ]; then
+if [ "$borrowed_resource" -eq 0 ] && [ -n "$WORKTREE" ] && [ -L "$WORKTREE/node_modules" ]; then
   if [ "$EXECUTE" -eq 0 ]; then
     echo "CLEAN_WORKTREE_RUN: rm -f $WORKTREE/node_modules (symlink unlink)"
   else
@@ -349,7 +361,7 @@ fi
 # Task-061：同模式安全 unlink .runtime 软链（--python-runtime-symlink 注入）。
 # git worktree remove 视 untracked 内容为脏；不先 unlink 会让 tmux 路径的清理
 # 被拒或需要 --force。绝不跟随软链触碰主仓 .runtime（venv/models 所在）。
-if [ -n "$WORKTREE" ] && [ -L "$WORKTREE/.runtime" ]; then
+if [ "$borrowed_resource" -eq 0 ] && [ -n "$WORKTREE" ] && [ -L "$WORKTREE/.runtime" ]; then
   if [ "$EXECUTE" -eq 0 ]; then
     echo "CLEAN_WORKTREE_RUN: rm -f $WORKTREE/.runtime (symlink unlink)"
   else

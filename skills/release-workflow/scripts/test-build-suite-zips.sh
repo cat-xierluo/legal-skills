@@ -6,6 +6,7 @@ cd "$ROOT"
 
 python3 skills/release-workflow/scripts/test_validate_expert_suites.py
 python3 skills/release-workflow/scripts/test_update_readme.py
+python3 skills/release-workflow/scripts/test_suite_stages.py
 
 FIXTURE="$(mktemp -d /tmp/legal-skills-suite-test.XXXXXX)"
 cleanup() {
@@ -22,6 +23,7 @@ mkdir -p \
     "$FIXTURE/expert-suites/demo-suite/skills"
 cp skills/release-workflow/scripts/validate-expert-suites.py \
     skills/release-workflow/scripts/build-suite-zips.sh \
+    skills/release-workflow/scripts/stage-suite-readme.py \
     "$FIXTURE/skills/release-workflow/scripts/"
 
 cat >"$FIXTURE/skills/alpha-skill/SKILL.md" <<'EOF'
@@ -56,9 +58,6 @@ cat >"$FIXTURE/expert-suites/demo-suite/CHANGELOG.md" <<'EOF'
 
 ## [0.1.0] - 2026-09-13
 EOF
-cat >"$FIXTURE/expert-suites/demo-suite/LICENSE.txt" <<'EOF'
-MIT License
-EOF
 ln -s ../../../skills/alpha-skill \
     "$FIXTURE/expert-suites/demo-suite/skills/alpha-skill"
 
@@ -72,6 +71,9 @@ git -C "$FIXTURE" \
     -c user.email='expert-suite-test@example.invalid' \
     commit -qm 'test: fixture'
 
+mkdir -p "$FIXTURE/pack-skills"
+(cd "$FIXTURE/skills" && zip -rq "$FIXTURE/pack-skills/alpha-skill-1.2.3.zip" alpha-skill)
+
 OUTPUT_DIR=pack-skills \
     bash "$FIXTURE/skills/release-workflow/scripts/build-suite-zips.sh" v2099.01.02
 ZIP="$FIXTURE/pack-skills/suite-demo-suite-0.1.0.zip"
@@ -83,9 +85,11 @@ mkdir -p "$EXTRACT"
 unzip -q "$ZIP" -d "$EXTRACT"
 [ -f "$EXTRACT/demo-suite/README.md" ]
 [ -f "$EXTRACT/demo-suite/CHANGELOG.md" ]
-[ -f "$EXTRACT/demo-suite/LICENSE.txt" ]
+[ ! -e "$EXTRACT/demo-suite/LICENSE.txt" ]  # DEC-009: no suite-level license
 [ -f "$EXTRACT/demo-suite/skills/alpha-skill/SKILL.md" ]
 [ -f "$EXTRACT/demo-suite/skills/alpha-skill/LICENSE.txt" ]
+cmp "$FIXTURE/skills/alpha-skill/LICENSE.txt" \
+    "$EXTRACT/demo-suite/skills/alpha-skill/LICENSE.txt"
 [ -z "$(find "$EXTRACT/demo-suite" -type l -print -quit)" ]
 grep -q '/releases/download/v2099.01.02/' "$EXTRACT/demo-suite/README.md"
 if OUTPUT_DIR=../escaped-output \

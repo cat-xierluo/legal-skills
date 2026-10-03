@@ -1,5 +1,44 @@
 # 变更日志
 
+## [1.10.1] - 2026-10-02 - PR 验收合并与取代关闭执行 SOP 详细入册
+
+### 文档完善
+
+- **references/branch-lifecycle-and-cleanup.md 新增 §3.5「PR 验收合并与取代关闭的执行 SOP」**（六步详细流程，261002 六 PR 合并+两 PR 取代关闭实战全量沉淀）：
+  - 第 1 步合并前复核（盘点→执行漂移；UNKNOWN 为 GitHub 重算暂态，等 10–15 秒重查勿当坏状态；对照型 PR「不合并供 PM 对照」即使 CLEAN 也不进名单）；
+  - 第 2 步合并顺序（独立 PR 任意；同族窄采用 PR 必须逐个合并、每合一个重查下一个——前者合并会把后者甩成 CONFLICTING，实例 #339→#346）；
+  - 第 3 步 squash 合并（--delete-branch 自动清双端 head；本地删除失败不影响合并；连续合并时 gh 偶发静默，以 state=MERGED 复核为准）；
+  - 第 4 步连锁冲突处理（隔离 worktree 把 main **merge** 进 PR 分支而非 rebase（保留 PM 回写历史）；追加型文档冲突三原则——两侧记录全保留/按合并先后重排/语义重叠停下交用户；文档追加冲突可代解、语义冲突不能）；
+  - 第 5 步关闭被取代旧 PR（close 不删分支须手动补；关闭评论四要素——取代者号与标题/已进 main 的内容范围/未采用部分的处置/决策依据与日期）；
+  - 第 6 步收尾核对（fetch --prune、临时 worktree 清理、三段式汇报：合并清单+关闭清单+清理清单附盘点数与未处理项）。
+- §3.4「PR 取代关系」小节补执行动作交叉引用（→ §3.5）。
+- SKILL.md「GitHub PR 合并」段补批量验收合并与取代关闭入口指向 §3.5；版本号 1.10.1。
+
+### 背景
+
+- 261002 用户拍板「直接合并的帮我合并；合并新 PR 关闭旧 PR 也帮我操作」后的执行实录：#243/#275/#343/#349/#339/#346 六个 squash 合并、#290/#289 取代关闭、#346 连锁文档冲突隔离解冲突后合并。用户要求把该部分尽量详细地沉淀进 skill。
+
+## [1.10.0] - 2026-10-02 - 过期/失效 worktree 审计与 patch-id 判死：worktree-audit.sh + branch-audit.sh 增强
+
+### 新增
+
+- **scripts/worktree-audit.sh**：worktree 冗余只读盘点——对每个挂载按四维（进程占用 lsof / dirty / 分支补丁 patch-id / PR 状态）输出 GONE、KEEP_ACTIVE、KEEP_DIRTY、KEEP_OPEN_PR、REMOVE_ALL、SKIP 分类。硬保护内置：有进程 cwd 占用绝不列删（lsof 用 `-F n` 全路径输出规避列宽截断，awk `index==1` 前缀匹配防路径空格/正则元字符）；dirty 需人工确认（untracked 可能是无备份的研究材料）；分支为 open PR head 或有补丁未交付时只删 worktree 保分支。gh/lsof 缺失自动降级并显式标注「未核对」，方向保守。脚本绝不执行删除。
+- **references/branch-lifecycle-and-cleanup.md §3.4「patch-id 判死与 worktree 批量清理」**：git cherry patch-id 判死法（squash/cherry-pick 后 commit 不可达但补丁在 base；判定优先级 MERGED PR > patch-id > merge-base）；worktree 批量清理五步（prune 悬空 → 查占用 → dirty 分类 → 按分支死活定删除范围 → 逐个删）；已验证坑四条（orca 目录 Permission denied 留空壳勿重试、detached 先确认非工具自管、/tmp worktree、盘点-执行间仓库漂移）；PR 取代关系「窄采用入口」模式（新 PR 声明覆盖旧研究树+独立审计指纹时，合并新关旧是安全动作）；无 PR 有补丁分支的三选一处置（验收开 PR/过时删/归档，交用户不代决）。
+
+### 改进
+
+- **scripts/branch-audit.sh**：本地与远端分支判定链新增 patch-id 判死——原「未合并（N commits）」的 NEEDS_CONFIRM 中，`git cherry` 补丁计数为 0 的升级为 SAFE_DELETE（标注 patch-id 0），ahead 计数同步展示「其中 M 个补丁不在 base」；本地段补 MERGED PR 直接判死（与远端段对齐）。patch-id 边界写明：多 commit squash 成单个时不匹配仍归 NEEDS_CONFIRM（宁漏勿错）。
+- SKILL.md §2「分支清理」补 patch-id 判死与优先级、「过期/失效 worktree 清理」入口段（worktree-audit.sh + references §3.4 五步 + 三条硬保护）；frontmatter description 补触发词（「清理 worktree」「过期 worktree」「失效 worktree」），版本号 1.10.0。
+- §5 红线新增三条：不删有进程占用/占用未知的 worktree、不删 untracked 无备份未确认的 dirty worktree、不替用户处置无 PR 有补丁分支。
+
+### 背景
+
+- 261002 private-skills 实录（承接 260930 那轮）：多 Agent 派发沉淀 55 个 worktree、109 个本地分支、32 个 open PR。实战判死 22 个 worktree + 37 个本地分支 + 3 个远端分支，核心手法正是 patch-id（约半数死分支 merge-base 完全不可见）+ lsof 占用防护（7 个活跃 orca 会话靠它保住）+ PR 取代关系（#339/#346 窄采用 #290/#289）。用户要求把方法固化为可复用流程。
+
+### 待办事项
+
+- `references/local-worktree-sop.md` 为 0 字节空文件（历史版本亦空，2026-09-20 并入时内容未迁移成功），SKILL.md §「Worktree（工作树）」引用悬空——需按原独立 skill 语义重写或改引用，已登记 TASKS.md。
+
 ## [1.9.0] - 2026-09-30 - 提交身份自检与身份污染审计：identity-audit.sh（whoami/history）
 
 ### 新增
