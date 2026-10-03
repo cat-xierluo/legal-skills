@@ -66,11 +66,15 @@ reset_orca_case() {
   RUNTIME_AVAILABLE=1
   CURRENT_MATCH=1
   FAKE_WAIT_FAIL=0
+  TERMINAL_WAIT_RC=0
+  TERMINAL_WAIT_SECOND_RC=0
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":true}}}'
+  TERMINAL_WAIT_SECOND_JSON=""
   ORCA_CURRENT_WORKTREE_PATH="$PROJECT_REPO"
   ORCA_CURRENT_WORKTREE_ID="repo-1::current"
   STATUS_JSON='{"result":{"runtime":{"appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}'
   WORKTREE_CREATE_JSON='{"result":{"worktree":{"id":"repo-1::worker"}}}'
-  TERMINAL_CREATE_JSON='{"result":{"terminal":{"handle":"term-worker"}}}'
+  TERMINAL_CREATE_JSON='{"ok":true,"result":{"terminal":{"handle":"term-worker"}}}'
   WORKTREE_RM_FAIL=0
   WORKTREE_RM_REPO=""
   WORKTREE_RM_PATH=""
@@ -109,7 +113,14 @@ orca_cli() {
       printf '%s\n' '{"result":{"removed":true}}'
       ;;
     "terminal create") printf '%s\n' "$TERMINAL_CREATE_JSON" ;;
-    "terminal wait") [ "$FAKE_WAIT_FAIL" -eq 0 ] ;;
+    "terminal wait")
+      [ "$FAKE_WAIT_FAIL" -eq 0 ] || return 1
+      if [ -n "$TERMINAL_WAIT_SECOND_JSON" ] && [ "$(grep -c 'terminal wait' "$FAKE_LOG")" -gt 1 ]; then
+        bash -c 'printf "%s\n" "$1"; exit "$2"' wait-consumer "$TERMINAL_WAIT_SECOND_JSON" "$TERMINAL_WAIT_SECOND_RC"
+      else
+        bash -c 'printf "%s\n" "$1"; exit "$2"' wait-consumer "$TERMINAL_WAIT_JSON" "$TERMINAL_WAIT_RC"
+      fi
+      ;;
     "terminal send") return 0 ;;
     *) return 1 ;;
   esac
@@ -380,15 +391,150 @@ else
 fi
 
 reset_orca_case
-FAKE_WAIT_FAIL=1
 orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
 assert_eq "$ORCA_TERMINAL_HANDLE" "term-worker" "terminal helper records exact handle"
-if grep -Fq 'terminal create' "$FAKE_LOG" && grep -Fq 'terminal wait' "$FAKE_LOG" \
-  && grep -Fq 'terminal send' "$FAKE_LOG"; then
-  ok "tui-idle timeout remains non-blocking before prompt send"
+assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "ready terminal is created once"
+assert_eq "$(grep -c 'terminal wait' "$FAKE_LOG")" "1" "ready receipt requires one wait"
+assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "ready receipt sends exactly once"
+
+reset_orca_case
+TERMINAL_WAIT_SECOND_JSON="$TERMINAL_WAIT_JSON"
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":false}}}'
+orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
+assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "retry retains the created terminal"
+assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "retry waits on the same exact handle"
+assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "false then ready sends exactly once"
+if grep -Fq -- '--timeout-ms 30000' "$FAKE_LOG" && grep -Fq -- '--timeout-ms 60000' "$FAKE_LOG"; then
+  ok "readiness retry is longer and each wait is bounded at 60s"
 else
-  bad "tui-idle timeout remains non-blocking before prompt send"
+  bad "readiness retry is longer and each wait is bounded at 60s"
 fi
+
+assert_wait_refused() {
+  local label="$1" expected_waits="$2" rc=0
+  (orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'must not send') \
+    > "$CASE_ROOT/refused.out" 2> "$CASE_ROOT/refused.err" || rc=$?
+  assert_eq "$rc" "64" "$label exits with failure"
+  assert_eq "$(grep -c 'terminal wait' "$FAKE_LOG")" "$expected_waits" "$label has bounded waits"
+  assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "$label does not recreate the terminal"
+  if ! grep -Fq 'terminal send' "$FAKE_LOG" && ! grep -Fq 'worktree rm' "$FAKE_LOG" \
+    && grep -Fq 'terminal=term-worker worktree_id=repo-1::worker' "$CASE_ROOT/refused.err" \
+    && grep -Fq '资源保留' "$CASE_ROOT/refused.err"; then
+    ok "$label sends nothing and retains exact recovery identity"
+  else
+    bad "$label sends nothing and retains exact recovery identity"
+  fi
+}
+
+reset_orca_case
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+assert_wait_refused "rc0 unsatisfied receipt" 2
+
+for invalid_receipt in 'not-json' '' '{"ok":false,"result":{"wait":{"satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":"true"}}}' \
+  '{"ok":true,"result":{"ok":true}}' \
+  '{"ok":true,"result":{"wait":{"handle":"term-other","satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"condition":"exit","satisfied":true}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":true}}}{"ok":true,"result":{"wait":{"satisfied":true}}}'; do
+  reset_orca_case
+  TERMINAL_WAIT_JSON="$invalid_receipt"
+  assert_wait_refused "malformed or mismatched receipt [$invalid_receipt]" 1
+done
+
+# Run the installed native handler with an isolated RPC consumer, never the app/runtime.
+# The portable cases below always exercise actual shell exit status, even without Orca.
+NATIVE_TERMINAL_HANDLER=${ORCA_NATIVE_TERMINAL_HANDLER:-/Applications/Orca.app/Contents/Resources/app.asar.unpacked/out/cli/handlers/terminal.js}
+if command -v node >/dev/null 2>&1 && [ -f "$NATIVE_TERMINAL_HANDLER" ]; then
+  for native_satisfied in false true; do
+    native_rc=0
+    node - "$NATIVE_TERMINAL_HANDLER" "$native_satisfied" > "$CASE_ROOT/native-wait-$native_satisfied.json" <<'NODE' || native_rc=$?
+const handler = require(process.argv[2]).TERMINAL_HANDLERS['terminal wait'];
+const satisfied = process.argv[3] === 'true';
+const flags = new Map([['terminal','term-worker'],['for','tui-idle'],['timeout-ms','30000']]);
+const client = {call: async (method, params, options) => {
+  if (method !== 'terminal.wait' || params.terminal !== 'term-worker' || params.for !== 'tui-idle' || params.timeoutMs !== 30000 || options.timeoutMs !== 35000) throw Error('native contract drift');
+  return {ok:true,result:{wait:{handle:'term-worker',condition:'tui-idle',satisfied}}};
+}};
+handler({flags,client,cwd:process.cwd(),json:true}).catch(() => {process.exitCode=2;});
+NODE
+    expected_native_rc=0
+    [ "$native_satisfied" = true ] || expected_native_rc=1
+    assert_eq "$native_rc" "$expected_native_rc" "native handler $native_satisfied exit contract"
+    if jq -e --argjson expected "$native_satisfied" '.ok == true and .result.wait.satisfied == $expected' "$CASE_ROOT/native-wait-$native_satisfied.json" >/dev/null; then
+      ok "native handler $native_satisfied emits the structured receipt"
+    else
+      bad "native handler $native_satisfied emits the structured receipt"
+    fi
+  done
+  reset_orca_case
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON=$(cat "$CASE_ROOT/native-wait-false.json")
+  TERMINAL_WAIT_SECOND_JSON=$(cat "$CASE_ROOT/native-wait-true.json")
+  orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'native receipt consumer'
+  assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "native false exit1 retries the same handle"
+  assert_eq "$(grep -c 'terminal send' "$FAKE_LOG")" "1" "native false then ready sends exactly once"
+else
+  printf 'SKIP: installed native Orca handler contract replay (portable exit-status cases still run)\n'
+fi
+
+for supervised in 0 1; do
+  reset_orca_case
+  ORCA_SUPERVISED=$supervised
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_SECOND_JSON="$TERMINAL_WAIT_JSON"
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"handle":"term-worker","condition":"tui-idle","satisfied":false}}}'
+  orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'start task'
+  assert_eq "$(grep -c 'terminal create' "$FAKE_LOG")" "1" "exit1 retry supervised=$supervised creates once"
+  assert_eq "$(grep -c 'terminal wait --terminal term-worker' "$FAKE_LOG")" "2" "exit1 retry supervised=$supervised uses same handle"
+  expected_sends=1
+  [ "$supervised" -eq 0 ] || expected_sends=0
+  assert_eq "$(grep -c 'terminal send' "$FAKE_LOG" || true)" "$expected_sends" "exit1 retry supervised=$supervised keeps unique injector"
+  reset_orca_case
+  ORCA_SUPERVISED=$supervised
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+  assert_wait_refused "exit1 false twice supervised=$supervised" 2
+ done
+
+for wait_rc in 1 2 127; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=$wait_rc
+  assert_wait_refused "exit$wait_rc with ready receipt" 1
+ done
+for wait_rc in 2 127; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=$wait_rc
+  TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+  assert_wait_refused "exit$wait_rc with false receipt" 1
+ done
+for invalid_receipt in 'not-json' '' '{"ok":false,"error":{"code":"timeout"}}' \
+  '{"ok":false,"error":{"code":"terminal_handle_stale"}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":"false"}}}' \
+  '{"ok":true,"result":{"wait":{"handle":"term-other","satisfied":false}}}' \
+  '{"ok":true,"result":{"wait":{"condition":"exit","satisfied":false}}}' \
+  '{"ok":true,"result":{"wait":{"satisfied":false}}}{"ok":true,"result":{"wait":{"satisfied":false}}}'; do
+  reset_orca_case
+  TERMINAL_WAIT_RC=1
+  TERMINAL_WAIT_JSON="$invalid_receipt"
+  assert_wait_refused "exit1 invalid receipt [$invalid_receipt]" 1
+ done
+
+reset_orca_case
+FAKE_WAIT_FAIL=1
+assert_wait_refused "wait command failure" 1
+
+reset_orca_case
+ORCA_SUPERVISED=1
+orca_terminal_create_and_send 'repo-1::worker' worker 'codex' 'must not send'
+if ! grep -Fq 'terminal send' "$FAKE_LOG"; then
+  ok "ready supervised terminal leaves worker-start as the only injector"
+else
+  bad "ready supervised terminal leaves worker-start as the only injector"
+fi
+reset_orca_case
+ORCA_SUPERVISED=1
+TERMINAL_WAIT_JSON='{"ok":true,"result":{"wait":{"satisfied":false}}}'
+assert_wait_refused "supervised unsatisfied receipt" 2
 
 if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-orca.sh"' "$SCRIPT_DIR/spawn-worker.sh" \
   && ! grep -q '^detect_orca_mode() {' "$SCRIPT_DIR/spawn-worker.sh"; then
@@ -629,7 +775,7 @@ git -C "$E2E_PROJECT" init -q
 git -C "$E2E_PROJECT" config user.email "spawn-orca@test.local"
 git -C "$E2E_PROJECT" config user.name "spawn-orca-test"
 git -C "$E2E_PROJECT" commit -q --allow-empty -m init
-printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+printf '%s\n' '{"_schema_version":"1.3","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
 cat > "$E2E_ORCA_BIN" <<'SH'
 #!/usr/bin/env bash
 # fake Orca CLI：$E2E_ORCA_STATE 状态文件驱动；每次调用原文追加进 $E2E_ORCA_LOG。
@@ -644,7 +790,10 @@ case "$1 $2" in
   "worktree current")
     resp_worktree "$E2E_ORCA_PROJECT" ;;
   "status --json")
-    printf '%s\n' '{"ok":true,"result":{"runtime":{"reachable":true,"runtimeId":"runtime-pregate","appVersion":"1.4.9","capabilities":["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
+    if [ -f "$state/profile-runtime-missing" ]; then printf '%s\n' '{"ok":false,"result":{"runtime":{"reachable":false}}}'; exit 0; fi
+    version=1.4.9
+    [ ! -f "$state/native-version" ] || version=1.4.218
+    jq -cn --arg version "$version" '{ok:true,result:{runtime:{reachable:true,runtimeId:"runtime-pregate",appVersion:$version,capabilities:["terminal.multiplex.v1","orchestration.contract.v1"]}}}' ;;
   "terminal show")
     sender="$4"
     live=true
@@ -674,9 +823,19 @@ case "$1 $2" in
     case "$wt" in *::*) wt="${wt#*::}" ;; esac
     resp_worktree "$wt" ;;
   "terminal create")
-    printf '%s\n' '{"result":{"terminal":{"handle":"term-pregate"}}}' ;;
+    if [ -f "$state/execute-bootstrap" ]; then
+      shift 2
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = --command ]; then
+          bash -c "$2" > "$state/bootstrap.log" 2>&1 || exit 1
+          break
+        fi
+        shift
+      done
+    fi
+    printf '%s\n' '{"ok":true,"result":{"terminal":{"handle":"term-pregate"}}}' ;;
   "terminal wait")
-    printf '%s\n' '{"result":{"ok":true}}' ;;
+    printf '%s\n' '{"ok":true,"result":{"wait":{"handle":"term-pregate","condition":"tui-idle","satisfied":true}}}' ;;
   "orchestration run-create")
     printf '%s\n' '{"ok":true,"result":{"run":{"id":"run-pregate","coordinator_handle":"term-pm-pregate"}},"_meta":{"runtimeId":"runtime-pregate"}}' ;;
   "orchestration run-current")
@@ -1055,6 +1214,179 @@ if grep -Fq 'run-current --from term-pm-pregate' "$E2E_ORCA_LOG"; then
 else
   bad "prebuilt Wave verifies its precise coordinator binding"
 fi
+
+# Full spawn controller: the terminal executes one isolated bootstrap; all
+# explicitly requested UI watchers must still remain disabled for native exec.
+cat > "$E2E_FAKE_BIN/mcode" <<'SH'
+#!/usr/bin/env bash
+cat > "${E2E_ORCA_STATE:?}/bootstrap-input.txt"
+printf '%s\n' fixture-nonce > "${E2E_ORCA_STATE:?}/nonce.txt"
+SH
+chmod +x "$E2E_FAKE_BIN/mcode"
+printf '%s\n' 'fixture-only task' > "$E2E_STATE/prompt.md"
+touch "$E2E_STATE/execute-bootstrap"
+: > "$E2E_ORCA_LOG"
+batch_command=$(printf 'bash -lc %q' "$(printf '%q' "$E2E_FAKE_BIN/mcode") exec --permission full --input - < $(printf '%q' "$E2E_STATE/prompt.md")")
+batch_rc=0
+ORCA_CLI_COMMAND="$E2E_ORCA_BIN" SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
+  E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
+  MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" PATH="$E2E_FAKE_BIN:$PATH" \
+  bash "$SCRIPT_DIR/spawn-worker.sh" --project "$E2E_PROJECT" --branch minimax-batch-fixture --session minimax-batch-fixture \
+    --worker-backend minimax-code --command "$batch_command" --allow-prompt-only-install-guard fixture:user \
+    --trust-auto --permission-auto --permission-auto-bg --external-imports-auto \
+    > "$E2E_ROOT/minimax-batch.out" 2> "$E2E_ROOT/minimax-batch.err" || batch_rc=$?
+assert_eq "$batch_rc" 0 "actual MiniMax batch spawn creates terminal without TUI handshake"
+assert_eq "$(grep -c 'terminal create' "$E2E_ORCA_LOG")" 1 "full batch spawn creates exactly one terminal"
+if grep -Eq 'terminal wait|terminal send|terminal read|worker-start' "$E2E_ORCA_LOG"; then
+  bad "full batch spawn never runs UI watchers, wait, send, or worker-start"
+else ok "full batch spawn never runs UI watchers, wait, send, or worker-start"; fi
+if cmp -s "$E2E_STATE/prompt.md" "$E2E_STATE/bootstrap-input.txt" && [ -f "$E2E_STATE/nonce.txt" ]; then
+  ok "full batch spawn executes its original bootstrap input"
+else bad "full batch spawn executes its original bootstrap input"; fi
+if grep -Fq 'SPAWN_WORKER_NEXT: inspect_batch_start; input_state=draft' "$E2E_ROOT/minimax-batch.out" && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/minimax-batch.out"; then
+  ok "batch next-step output never invites a duplicate task"
+else bad "batch next-step output never invites a duplicate task"; fi
+rm -f "$E2E_STATE/execute-bootstrap"
+
+# Actual entrypoint consumers keep canonical mcode alias and Orca default policy.
+for backend_alias in minimax-code mcode; do
+  : > "$E2E_ORCA_LOG"
+  minimax_rc=0
+  run_e2e_spawn "minimax-$backend_alias" "minimax-$backend_alias" "$E2E_ROOT/minimax-$backend_alias" \
+    --worker-backend "$backend_alias" --command mcode \
+    --allow-prompt-only-install-guard fixture:user --dry-run || minimax_rc=$?
+  assert_eq "$minimax_rc" 0 "actual MiniMax $backend_alias entrypoint accepts reachable Orca"
+  if grep -Fq 'SPAWN_WORKER_ORCA_AUTO' "$E2E_ROOT/minimax-$backend_alias.err" && ! grep -Fq 'MINIMAX_ORCA_REQUIRED' "$E2E_ROOT/minimax-$backend_alias.err"; then
+    ok "actual MiniMax $backend_alias stays on Orca"
+  else
+    bad "actual MiniMax $backend_alias stays on Orca"
+  fi
+  if grep -Eq 'worktree create|terminal create|task-create|worker-start' "$E2E_ORCA_LOG"; then
+    bad "MiniMax dry-run has zero worker resources"
+  else
+    ok "MiniMax dry-run has zero worker resources"
+  fi
+done
+
+# Preserve the pre-profile real spawn contract for legacy personal files.
+# These files intentionally omit _schema_version; upgrading the fixture would
+# hide the baseline compatibility regression caught by the memory consumer.
+cp "$E2E_PERSONAL_CONFIG" "$E2E_ROOT/personal-before-legacy.json"
+printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+: > "$E2E_ORCA_LOG"
+legacy_rc=0
+run_e2e_spawn legacy-personal legacy-personal "$E2E_ROOT/legacy-personal" --dry-run || legacy_rc=$?
+assert_eq "$legacy_rc" 0 "actual spawn legacy unversioned personal retains baseline acceptance"
+if grep -Fq 'SPAWN_WORKER_DISPATCH_PROFILE: codebuddy:interactive:orca-generic' "$E2E_ROOT/legacy-personal.out"; then
+  ok "legacy actual spawn consumes profile without claiming a schema version"
+else bad "legacy actual spawn consumes profile without claiming a schema version"; fi
+for legacy_case in unknown-version malformed-profile; do
+  case "$legacy_case" in
+    unknown-version) printf '%s\n' '{"_schema_version":"unknown","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG" ;;
+    malformed-profile) printf '%s\n' '{"quota_aware_routing":{"enabled":false},"dispatch_profiles":{"zcode-cli":{"native_bridge":{"enabled":"true"}}}}' > "$E2E_PERSONAL_CONFIG" ;;
+  esac
+  : > "$E2E_ORCA_LOG"
+  legacy_rc=0
+  run_e2e_spawn "legacy-$legacy_case" "legacy-$legacy_case" "$E2E_ROOT/legacy-$legacy_case" --dry-run || legacy_rc=$?
+  assert_eq "$legacy_rc" 64 "actual spawn legacy $legacy_case retains strict rejection"
+  if grep -Eq 'worktree create|terminal create|terminal send|run-create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || [ -e "$E2E_WS/legacy-$legacy_case" ]; then
+    bad "legacy $legacy_case rejects before resources"
+  else ok "legacy $legacy_case rejects before resources"; fi
+done
+cp "$E2E_ROOT/personal-before-legacy.json" "$E2E_PERSONAL_CONFIG"
+if [ -n "${MAO_PROFILE_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$MAO_PROFILE_EVIDENCE_DIR"
+  cp "$E2E_ROOT"/legacy-*.out "$E2E_ROOT"/legacy-*.err "$MAO_PROFILE_EVIDENCE_DIR/"
+fi
+
+# Profile consumers execute the actual controller, using only fixture Orca
+# reads/dry-run plans. No model or native request is launched by these cases.
+PROFILE_REQUESTS="$E2E_ROOT/native-requests"
+mkdir -m 700 "$PROFILE_REQUESTS"
+cp "$E2E_PERSONAL_CONFIG" "$E2E_ROOT/personal-original.json"
+run_profile_spawn() {
+  local name="$1"; shift
+  : > "$E2E_ORCA_LOG"
+  ORCA_CLI_COMMAND="$E2E_ORCA_BIN" ORCA_TERMINAL_HANDLE=term-pm-pregate \
+    SPAWN_WORKER_MEM_BUDGET_BYTES=0 E2E_ORCA_STATE="$E2E_STATE" E2E_ORCA_LOG="$E2E_ORCA_LOG" \
+    E2E_ORCA_PROJECT="$E2E_PROJECT" E2E_ORCA_WS="$E2E_WS" \
+    MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" PATH="$E2E_FAKE_BIN:$PATH" \
+    bash "$SCRIPT_DIR/spawn-worker.sh" --project "$E2E_PROJECT" --branch "profile-$name" --session "profile-$name" \
+      --worker-backend zcode-cli --command 'zcode --mode build' --task-spec 'fixture-only profile spec' \
+      --allow-prompt-only-install-guard fixture:user --dry-run "$@" \
+      > "$E2E_ROOT/profile-$name.out" 2> "$E2E_ROOT/profile-$name.err"
+}
+profile_zero_resources() {
+  if grep -Eq 'worktree create|terminal create|terminal send|run-create|task-create|worker-start' "$E2E_ORCA_LOG" \
+    || [ -e "$E2E_WS/profile-$1" ] || [ -n "$(find "$PROFILE_REQUESTS" -type f -print -quit)" ]; then
+    bad "profile $1 leaves zero resources"
+  else ok "profile $1 leaves zero resources"; fi
+}
+for name in missing disabled; do
+  cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+  if [ "$name" = disabled ]; then
+    jq '.dispatch_profiles={"zcode-cli":{native_bridge:{enabled:false}}}' "$E2E_PERSONAL_CONFIG" > "$E2E_ROOT/personal.tmp"
+    mv "$E2E_ROOT/personal.tmp" "$E2E_PERSONAL_CONFIG"
+  fi
+  rc=0; run_profile_spawn "$name" || rc=$?
+  assert_eq "$rc" 64 "profile $name bridge refuses before resources"
+  if grep -Fq zcode_native_bridge_config_required "$E2E_ROOT/profile-$name.err"; then ok "profile $name has explicit bridge diagnostic"; else bad "profile $name has explicit bridge diagnostic"; fi
+  profile_zero_resources "$name"
+done
+cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+touch "$E2E_STATE/native-version"
+rc=0; run_profile_spawn old-explicit --orca-supervised --orca-zcode-native-requests "$PROFILE_REQUESTS" || rc=$?
+assert_eq "$rc" 0 "old explicit native override accepts absent personal bridge"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-old-explicit.out"; then ok "old explicit native keeps unique injection path"; else bad "old explicit native keeps unique injection path"; fi
+profile_zero_resources old-explicit
+jq --arg root "$PROFILE_REQUESTS" '.dispatch_profiles={"zcode-cli":{native_bridge:{enabled:true,requests_root:$root}}}' "$E2E_PERSONAL_CONFIG" > "$E2E_ROOT/personal.tmp"
+mv "$E2E_ROOT/personal.tmp" "$E2E_PERSONAL_CONFIG"
+rc=0; run_profile_spawn backend-only || rc=$?
+assert_eq "$rc" 0 "backend-only ZCode automatically selects configured native supervised"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-backend-only.out" \
+  && grep -Fq 'SPAWN_WORKER_NEXT: spawn_supervised_once; input_state=draft' "$E2E_ROOT/profile-backend-only.out" \
+  && ! grep -Fq 'NEXT: send worker prompt' "$E2E_ROOT/profile-backend-only.out"; then
+  ok "configured default keeps unique native dry-run action and no second send"
+else bad "configured default keeps unique native dry-run action and no second send"; fi
+profile_zero_resources backend-only
+rc=0; run_profile_spawn generic --dispatch-profile orca-generic || rc=$?
+assert_eq "$rc" 0 "explicit generic profile retains old compatible route"
+if grep -Fq SPAWN_WORKER_DRY_RUN_NATIVE_ZCODE "$E2E_ROOT/profile-generic.out"; then bad "generic opt-in never silently native launches"; else ok "generic opt-in never silently native launches"; fi
+profile_zero_resources generic
+touch "$E2E_STATE/profile-runtime-missing"
+rc=0; run_profile_spawn generic-missing --dispatch-profile orca-generic || rc=$?
+assert_eq "$rc" 64 "explicit generic profile cannot silently fall back to direct"
+profile_zero_resources generic-missing
+rm -f "$E2E_STATE/profile-runtime-missing"
+cp "$E2E_ROOT/personal-original.json" "$E2E_PERSONAL_CONFIG"
+rm -f "$E2E_STATE/native-version"
+if [ -n "${MAO_PROFILE_EVIDENCE_DIR:-}" ]; then
+  mkdir -p "$MAO_PROFILE_EVIDENCE_DIR"
+  cp "$E2E_ROOT"/profile-*.out "$E2E_ROOT"/profile-*.err "$MAO_PROFILE_EVIDENCE_DIR/"
+  cp "$E2E_ROOT/minimax-batch.out" "$E2E_ROOT/minimax-batch.err" "$MAO_PROFILE_EVIDENCE_DIR/"
+  cp "$E2E_WS/minimax-batch-fixture/.claude/agent-sessions/minimax-batch-fixture/METADATA.json" "$MAO_PROFILE_EVIDENCE_DIR/minimax-batch-metadata.json"
+fi
+
+# The backend policy is tested after detection, including light/non-Git fallback.
+for policy_case in default-missing default-lightweight default-force-tmux explicit-direct supervised terminal-managed other-backend; do
+  reset_orca_case
+  WORKER_BACKEND_CANONICAL=minimax-code
+  expected_policy_rc=64
+  case "$policy_case" in
+    default-missing) ORCA_MODE=missing_orca ;;
+    default-lightweight) ORCA_MODE=force_tmux; LIGHTWEIGHT_MODE=1 ;;
+    default-force-tmux) ORCA_MODE=force_tmux ;;
+    explicit-direct) ORCA_MODE=force_tmux; NO_ORCA_MODE=1; expected_policy_rc=0 ;;
+    supervised) ORCA_MODE=auto; ORCA_SUPERVISED=1; expected_policy_rc=0 ;;
+    terminal-managed) ORCA_MODE=auto; ORCA_SUPERVISED=0; expected_policy_rc=0 ;;
+    other-backend) WORKER_BACKEND_CANONICAL=claude-code; ORCA_MODE=force_tmux; expected_policy_rc=0 ;;
+  esac
+  policy_rc=0
+  spawn_worker_require_backend_orca 2>"$CASE_ROOT/policy.err" || policy_rc=$?
+  assert_eq "$policy_rc" "$expected_policy_rc" "MiniMax default Orca policy: $policy_case"
+  [ ! -s "$FAKE_LOG" ] && ok "policy $policy_case creates zero resources" || bad "policy $policy_case creates zero resources"
+done
 
 printf 'spawn-worker Orca helper tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

@@ -245,7 +245,7 @@ pctclamp_fx = fixture("pctclamp", hw_memsize="34359738368\n",
 
 # 正常放行：健康快照 + 默认预算 → slots >= 1，schema 字段稳定。
 code, out = run_probe(["--fixture-dir", healthy_fx])
-OK_KEYS = {"schema", "status", "reason", "sources", "budget_bytes", "budget_source",
+OK_KEYS = {"schema", "status", "reason", "sources", "telemetry", "budget_bytes", "budget_source",
            "total_bytes", "page_size", "availability_basis", "available_bytes",
            "reserve_bytes", "safe_available_bytes", "pressure", "swap", "slots",
            "effective_available_bytes"}
@@ -492,7 +492,7 @@ case "$1 $2" in
   "terminal create")
     printf '%s\\n' '{"ok":true,"result":{"terminal":{"handle":"term-membudget"}}}' ;;
   "terminal wait")
-    printf '%s\\n' '{"ok":true,"result":{"ok":true}}' ;;
+    printf '%s\\n' '{"ok":true,"result":{"wait":{"handle":"term-membudget","condition":"tui-idle","satisfied":true}}}' ;;
   "orchestration run-create"|"orchestration run-current")
     printf '%s\\n' '{"ok":true,"_meta":{"runtimeId":"runtime-membudget"},"result":{"run":{"id":"run-membudget","coordinator_handle":"term-pm-membudget"}}}' ;;
   "orchestration task-create")

@@ -10,6 +10,8 @@ REPO_TAG="${1:-v$(date +%Y.%m.%d)}"
 EXPERT_SUITES_ROOT="${EXPERT_SUITES_ROOT:-expert-suites}"
 OUTPUT_DIR="${OUTPUT_DIR:-pack-skills}"
 SOURCE_REF="${SOURCE_REF:-HEAD}"
+SUITE_BUILD_MODE="${SUITE_BUILD_MODE:-release}"
+case "$SUITE_BUILD_MODE" in preview|release) ;; *) echo "ERROR: invalid SUITE_BUILD_MODE" >&2; exit 1;; esac
 
 if [[ ! "$REPO_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "ERROR: 非法 release tag: $REPO_TAG" >&2
@@ -37,9 +39,15 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
 git rev-parse --verify "${SOURCE_REF}^{tree}" >/dev/null
+# The validated working tree and archived source must be the same candidate.
+git diff --quiet "$SOURCE_REF" -- "$EXPERT_SUITES_ROOT" skills .gitattributes || {
+    echo "ERROR: source files differ from SOURCE_REF; commit the selected candidate first" >&2
+    exit 1
+}
 python3 skills/release-workflow/scripts/validate-expert-suites.py \
     --repo-root "$ROOT" \
-    --suite-root "$ROOT/$EXPERT_SUITES_ROOT"
+    --suite-root "$ROOT/$EXPERT_SUITES_ROOT" \
+    --mode source
 
 BATCH_DIR="$(mktemp -d /tmp/legal-skills-suite-build.XXXXXX)"
 cleanup() {
@@ -90,20 +98,19 @@ for suite_dir in "$EXPERT_SUITES_ROOT"/*; do
             exit 1
         }
         mv "$member_export/skills/$skill_id" "$stage_suite/skills/$skill_id"
+        for required in SKILL.md CHANGELOG.md LICENSE.txt; do
+            [ -f "$stage_suite/skills/$skill_id/$required" ] && [ ! -L "$stage_suite/skills/$skill_id/$required" ] || {
+                echo "ERROR: exported member lacks real $required: $skill_id" >&2
+                exit 1
+            }
+        done
         member_count=$((member_count + 1))
     done
 
-    # ZIP 内使用本次 tag 的精确下载链接；仓库源码继续保留 releases/latest 占位。
-    python3 - "$stage_suite/README.md" "$REPO_TAG" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-tag = sys.argv[2]
-text = path.read_text(encoding="utf-8")
-text = text.replace("/releases/latest/download/", f"/releases/download/{tag}/")
-path.write_text(text, encoding="utf-8")
-PY
+    if [ "$SUITE_BUILD_MODE" = release ]; then
+        python3 skills/release-workflow/scripts/stage-suite-readme.py \
+            --suite "$stage_suite" --tag "$REPO_TAG" --assets "$ROOT/$OUTPUT_DIR"
+    fi
 
     if find "$stage_suite" -type l -print -quit | grep -q .; then
         echo "ERROR: staging 中仍存在符号链接: $suite_id" >&2

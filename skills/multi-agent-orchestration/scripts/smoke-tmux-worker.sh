@@ -26,7 +26,7 @@ cleanup() {
       [ "$rc" -ne 0 ] || rc=1
     fi
   fi
-  if [ -d "$REPO" ]; then
+  if [ -d "$WT" ]; then
     cleanup_rc=0
     cleanup_out=$(git -C "$REPO" worktree remove --force "$WT" 2>&1) || cleanup_rc=$?
     if [ "$cleanup_rc" -ne 0 ]; then
@@ -80,8 +80,8 @@ FIXTURE_SKILL="$TMP_ROOT/fixture-skill"
 mkdir -p "$FIXTURE_SKILL/config" "$TMP_ROOT/isolated-bin"
 cp -R "$REAL_SCRIPT_DIR" "$FIXTURE_SKILL/scripts"
 cp "$REAL_SCRIPT_DIR/../config/claude-provider-settings.example.json" "$FIXTURE_SKILL/config/"
-jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]
-    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]' \
+jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoder-cn"]
+    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoder-cn"]' \
   "$REAL_SCRIPT_DIR/../config/harness-backend-policy.json" > "$FIXTURE_SKILL/config/harness-backend-policy.json"
 SCRIPT_DIR="$FIXTURE_SKILL/scripts"
 export SMOKE_ORCA_LOG="$TMP_ROOT/orca-probes.log"
@@ -236,14 +236,8 @@ git -C "$REPO" add README.md
 git -C "$REPO" commit -q -m "init"
 git -C "$REPO" branch -M main
 
-# Exercise the historical four-backend contract using a private policy copy;
-# the production policy may explicitly enable additional backends for the user.
-FIXTURE_SKILL="$TMP_ROOT/fixture-skill"
-mkdir -p "$FIXTURE_SKILL/config"
-cp -R "$SCRIPT_DIR" "$FIXTURE_SKILL/scripts"
-jq '.hosts.codex = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]
-    | .hosts["claude-code"] = ["claude-code", "codex", "codebuddy", "qoderwork-cn"]' \
-  "$SCRIPT_DIR/../config/harness-backend-policy.json" > "$FIXTURE_SKILL/config/harness-backend-policy.json"
+# The private fixture above already contains the historical four-backend policy.
+# Recreating it here would truncate the policy while jq reads the same file.
 
 spawn_out=$("$FIXTURE_SKILL/scripts/spawn-worker.sh" \
   --project "$REPO" \
@@ -270,11 +264,11 @@ assert_contains "$spawn_out" "SPAWN_WORKER_METADATA: $CTX/METADATA.json"
 assert_contains "$spawn_out" "SPAWN_WORKER_GATE:"
 # pm_harness 仍由真实 ancestry 判定；allowed 集合使用上方隔离 policy fixture。
 assert_contains "$spawn_out" "SPAWN_WORKER_HARNESS_POLICY: "
-assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoderwork-cn chain="
+assert_contains "$spawn_out" " worker=codex allowed=claude-code codex codebuddy qoder-cn chain="
 if ! jq -e '
   (.runtime.harness_authority.pm_harness == "codex" or .runtime.harness_authority.pm_harness == "claude-code")
   and .runtime.harness_authority.worker_backend == "codex"
-  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoderwork-cn"])
+  and (.runtime.harness_authority.allowed_worker_backends == ["claude-code", "codex", "codebuddy", "qoder-cn"])
   and (.runtime.harness_authority.evidence_source != "")
 ' "$CTX/METADATA.json" >/dev/null; then
   echo "ASSERTION FAILED: METADATA missing verified Harness authority" >&2
