@@ -126,3 +126,9 @@
 ## DEC-2026-10-02-MINIMAX-EXEC-STARTUP
 
 MiniMax `exec` 是已读取完整输入的非交互运行，不存在待输入的 composer。基于复用命令验证器解析的真实 CLI argv 分类，仅 terminal-managed batch 跳过 TUI 等待和第二次任务发送；不是按命令字符串包含 exec 判定。严格核对 terminal-create 回执并及早保存身份，启动成功只证明已启动，不代表任务完成。交互模式和 ZCode 原生 supervised 保持各自合同，batch 与 supervised/precreated Task 的冲突在资源副作用前拒绝。原消费任务由原 PM 接续，不用本修复重启或重造。
+
+## 2026-10-03 — MAO采用 main 加单一 GUI 长期功能线
+
+云端11个MAO草稿PR中，7个组成GUI证据与交接链，两个通用修复独立可验，另两个有共享文档冲突/未发布依赖。为保留子任务审查、减少依赖PR直接堆在main并避免多个共享核心分支长期分叉，采用 `main` + `integration/mao-zcode-gui`。短fix/feat/test分支继续作为可独立验收的worker交付；长期线接子PR，满足具名里程碑后再提main集成PR。owner、固定worktree、GUI-M1及波次同步合同以 TASK-2026-10-03-CLOUD-PR-INTEGRATION-AUDIT 为唯一任务权威。
+
+不建立第二个全Skill develop 分支，不把本机dirty开发源或未知WIP整体导入长期线。日常稳定安装入口仍指本机受验源，不自动切换symlink到集成线；长期线保留独立worktree，默认安装只消费已验里程碑。若GUI线与通用核心持续发生实质语义冲突、长期线无法保持可运行或缺少唯一owner，应重新评估并拆小任务边界，而非增加更多永久分支。
