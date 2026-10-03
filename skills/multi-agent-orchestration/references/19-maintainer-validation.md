@@ -27,9 +27,11 @@ python3 scripts/test_provider_lease_runtime.py -v
 python3 scripts/test_pm_runtime_reconcile.py -v
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
+python3 scripts/test-borrowed-worktree.py
 bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
+python3 scripts/test_memory_telemetry.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-pm-message-contract.sh
@@ -38,6 +40,7 @@ bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
+python3 scripts/test-zcode-orca-launcher.py
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-completion-authority.sh
@@ -50,6 +53,9 @@ bash scripts/test-harness-backend-policy.sh
 bash scripts/tests/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
 python3 scripts/test_optional_cli_backends.py -v
+python3 scripts/test_minimax_cli_startup.py -v
+python3 scripts/test_dispatch_profile.py
+python3 scripts/test_dispatch_profile_adapter.py
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
@@ -99,3 +105,9 @@ bash scripts/smoke-orca-control-plane.sh
 - 锁竞争验收分别观察真实非阻塞锁操作与 CLI 拒绝结果。完整 CLI 的观测/子进程启动耗时不是单独的锁等待；测试防悬挂 timeout 也不是响应性能承诺。
 
 - runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
+
+- 显式借用入口的隔离消费者应验证真实 Git 内容/模式/identity、独立 CLI writer 探测、锁及 late drift；native request/launcher 和所有 MAO cleanup 对借用树的删除调用为零。fake inventory不证明原业务树无writer或原生settlement已经通过。MiniMax默认Orca合同要分别覆盖 canonical/alias、缺runtime/错仓/注册失败/轻量拒绝及显式直连；不扩大日常backend池或supervised结论。
+
+- MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
+
+- 派发profile消费者须从实际spawn入口证明：漏native参数的ZCode自动补原生桥；缺失/禁用配置零资源副作用；旧显式native及generic/direct兼容；MiniMax模式由实际COMMAND取得，batch零wait/send。官方projection的nextAction优先于composer残留，身份冲突拒绝。计划/启动返回保持draft，不能把stub成功扩大为真实输入/业务完成。

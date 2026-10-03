@@ -23,13 +23,72 @@
 
 Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `READY` 且 owner 明确后才进入执行队列。
 
+## TASK-2026-10-01-INTERACTIVE-DISPATCH-CONTRACT — 交互CLI与派发前校验说明
+
+- 状态：`COMPLETE`（限定说明文档与两阶段同session实际任务；最终文档review及PR合并由root执行）；Owner：Codex `/root/optional_cli_review`；来源：用户明确要求交互CLI长程，禁止新增headless/--prompt方案；root要求同步私有派发前校验调用合同。
+- 冻结起点：`60e58b29ad2304bf0bd97bde91c7a8ebca3c25b9`（已独立ACCEPT并push至PR #233）；候选分支 `fix/mao-orca-terminal-ready`、隔离worktree `mao-live-cli-acceptance`；本卡仅文档，不改变已接受产品代码。
+- 范围：ref28、ref29、本卡及CHANGELOG v2.31.3。保留已验tmux交互CLI正式工作路径，记录Orca TUI前提示就绪边界；私有校验仅版本感知调用，不复制私人规则、账号或路径。无新增batch配方、runner、spawn模式、默认池变化或权限扩张。
+- 验收：按私有Skill当前版本说明/help调用其提供的 `validate-dispatch --observation PRIVATE_OBSERVATION --plan PRIVATE_PLAN`；具名两文件、现场重读，失败不投递；瞬时通过不当持续身份锁。须按实际安装版本核对是否提供该接口，缺少接口时不能宣称校验通过。
+- 清单：①私有接口小节已只读核对；②交互CLI/校验合同已同步；③文档候选 `d902387bce5693e4ded1db7eeb5962fccaafd753` 已固定，保留版本2.31.3；④两阶段实际证据已由root回读，最终文档固定HEAD另交独立review，PR #233尚未合并。
+- 证据职责：公开文档仅维护版本感知调用合同，真实私有运行与安装证据由私有Skill维护，不在公开任务卡承载。接口说明与私有规则实现分开，业务脚本保持冻结源码哈希。
+- 同session实际任务：通过原生交互CLI、显式 `--no-orca-mode` tmux路径，第一阶段代码审查及256/256回归、第二阶段refs合同审查均收口；最终RESULT v1.2为 `ACCEPT`（审查候选 `d902387bce5693e4ded1db7eeb5962fccaafd753`），STATUS done、tracked diff为0、value postflight PASS。独立reviewer已核业务证据，stop/cleanup最后复核仍由root跟进，不将本卡范围扩大为Orca兼容。
+- 实际模型：同一原生交互会话实际验证 `GLM-5.3-Flash`，并经原生 `/model` 切换后验证 `GLM-5.3 / max`；原生记录确认请求完成，重试无异常，不以argv或模型自述替代，也不代表逐请求精确计费证明。
+- 范围与资源：PM补落盘具名初始worker提示；过程存在只读目录枚举超出精确scope，仍为prompt-only降级，不能宣称机械scope/hook通过。本轮tmux会话与执行资源由PM精确收口；公开记录只承载任务验收，不包含私人运行环境、账户用量、私有路径或原始日志。
+- `NOT_VERIFIED`：通用调用合同不等于持续身份锁、自动机械绑定或已有worker账号归属证明；Orca ZCode TUI/长程监督/settlement、机械scope与逐请求精确计费仍未验。保留既有研究记录但不推荐无头替代，私人证据由私有Skill单独维护。
+
+## TASK-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 消费原生未满足退出码
+
+- 状态：`COMPLETE`（代码及定向回归已独立ACCEPT，PR #233尚未合并）；Owner：Codex `/root/optional_cli_review`（implementer）；来源：用户要求继续验证，原生 Orca 1.4.217 对合法 `satisfied=false` 回执退出1，修复前 helper 提前拒绝，未执行同句柄重等。
+- 冻结起点：`a2dc75ef612731e23dec1678dc36fcbbf000a402`；base `origin/main` = `41268aaa91e71158cb4551dce8d757038869af0f`；复用本轮已授权隔离 worktree `mao-live-cli-acceptance`、分支 `fix/mao-orca-terminal-ready`；PR #233 OPEN，由root发布。
+- 范围：仅 Orca spawn helper、定向 Orca 测试及必要 launch/mem fixture、SKILL版本、TASKS、DECISIONS、CHANGELOG、ref13、README MAO索引；交付 v2.31.3。不改Orca源码、focus、权限、宿主、provider、身份/资源合同或共享source。
+- 验收：捕获真实退出码后严格解析单个回执；仅rc0布尔回执、rc1且false有效。rc1+true、rc>1、okfalse、畸形、错绑、多JSON均零send；false同一handle仅30s/60s两轮，supervised不双投。运行原生CLI handler的隔离消费者契约回放及真实shell退出码回归，无真实终端或模型请求。
+- 清单：①登记任务已完成；②窄修复与定向测试已完成；③原生源码消费者回放与文档同步已完成；④源码 `60e58b29ad2304bf0bd97bde91c7a8ebca3c25b9` 已独立ACCEPT并push至PR #233。该代码任务已闭合，发布/合并由root执行，ZCode实际交互验收独立记录。
+- 验证：`bash scripts/test-spawn-worker-orca.sh` 256/256（包含已安装原生handler输出false退出1/true退出0的无RPC消费者回放，以及其回执经真实shell退出码供helper消费）、launch42/42、mem58/58；本轮未修改launch/mem模块或fixture。日志为本机 `/tmp/mao-orca-wait-{exit,launch,mem}-test.log`。独立review已接受上述源码与定向回归；真实ZCode Orca兼容仍未验，PR #233尚未合并。
+- `NOT_VERIFIED`：ZCode Orca ready合成及该路径的真实模型请求、supervised/settlement不以本轮隔离测试补证；错误/timeout/stale不作pending成功。
+
+## TASK-2026-10-01-LIVE-WORKER-ACCEPTANCE — 两个 Skill 的实际任务验收
+
+- 状态：`COMPLETE`（限定两项真实任务、私有fresh gate与已授权交接）；Owner：Codex `/root`；来源：用户要求自主推进测试，直至 MAO 与私有账号 Skill 可完成实际任务，并向已授权会话交接。候选文档 owner 为 `/root/optional_cli_review`，不改共享 source。
+- 范围：MiniMax Code 与 ZCode CLI 串行执行有界隔离文件任务，PM 实际回读产物、测试、运行时模型与资源收口；私有 Skill 仅重新观测/规划与启动前身份复核。无真实账号切换、耗卡或产品化自动身份绑定；不影响已有 GUI/会话。
+- 候选：`fix/mao-orca-terminal-ready`，代码冻结 `0ed048bfb80373a267c62dca38a48d880abde15e`；基线 `41268aaa91e71158cb4551dce8d757038869af0f`。readiness 源码已独立 `ACCEPT`，本卡的后续提交仅追加文档。
+- MiniMax：真实 Orca terminal-managed 任务产物 HEAD `5461cc089956c078dccb53f79f69de471f07aa68`；PM 测试3/3，STATUS done、postflight通过、工作树干净、终端关闭；已独立 `ACCEPT`。数据库唯一工作区会话与原生 manifest/catalog/history路径精确一致，两轮 ingress（READY bootstrap + 具名业务任务）共15条 assistant 元数据及15条 HTTP200 响应事件全部为 minimax / MiniMax-M3.1-Flash-Preview；15个响应ID，不以argv或自述代替实际模型证据。
+- ZCode：tmux fallback 产物 HEAD `08230b664fcaee9e6a2ee5f3257ec977073ffc9d`，PM 测试3/3、仅probe任务文件改变；SQLite 13条 completed model_usage均为 account:bigmodel-individual-coding-plan / GLM-5.3-Flash，retry0。临时研究认证/配置副本已精确删除，tmux关闭；独立产物验收 `ACCEPT`（限tmux实际任务），独立复跑3项测试及检查产物、原生模型记录、关闭/清理证据。
+- Orca边界：当前1.4.217具备所需能力；两次 ZCode 尝试均 terminal_handle_stale，0业务send。MiniMax terminal-managed 没有 supervised Task/Dispatch；tmux不替代Orca，完整supervised/settlement、持续纠偏仍 `NOT_VERIFIED`。
+- 权限/身份边界：均为prompt-only降级；ZCode bootstrap的ls超出精确shell allowlist，机械scope/hook未证明。私有路由和研究副本仅本轮使用；共享原件哈希一致性仅准备进程内断言，该次before baseline未持久化，独立before/after重放 `NOT_VERIFIED`；副本哈希不作替代。逐请求精确服务端计费仍 `NOT_VERIFIED`。
+- 脱敏证据：本机 `/tmp/mao-live-acceptance-261001/minimax/tui-model-review/summary.sanitized.json`（SHA256 `87b957aa64cbab0b4272b613c00512141dc7460b7593b60467015617dd116580`）与本轮私有路由的 `prepare-baseline-audit.sanitized.json`；后者由私有Skill任务源管理。原始账号、日志、认证路径和内容不进公开包。
+- 私有fresh gate：独立复核本轮observe/plan均ok，keep计划与观测active身份一致，观测至METADATA创建约2.496秒，小于120秒门限；仅本次研究副本绑定验证，不扩大为产品默认账号绑定。
+- 交接：研究成果已通过工具实际发送至“Legal Skills｜总控入口”和“DSH 总控入口 插件”，包括两项真实任务及未验证边界，不含账号身份或凭证。
+- 独立证据：本机 `independent-review/zcode-delivery-review.md` 对ZCode tmux交付为ACCEPT；`zcode/task-proof.sanitized.json` SHA256 `334d8f98a50895adf1d2a4aadb120e64d9b1f59d64d0b10c9313c39defc25926` 已核对原文件。本卡只关闭两项实际任务、fresh gate与交接；最终文档head复验及本修复PR的safe-push/发布由root负责，PR尚未合并。
+
+## TASK-2026-10-01-ORCA-TERMINAL-READY — 投递前严格核对就绪回执
+
+- 状态：`COMPLETE`（代码与定向回归已独立ACCEPT；本修复PR尚未合并，由root发布）；Owner：Codex `/root/optional_cli_review`（implementer）；来源：本轮真实 CLI 验收发现 terminal wait 的 rc0 超时会继续投递。
+- 冻结基线：`origin/main` / immutable start `41268aaa91e71158cb4551dce8d757038869af0f`；已 fetch；分支 `fix/mao-orca-terminal-ready`，隔离 managed worktree `mao-live-cli-acceptance`。
+- 范围：`scripts/spawn-worker-orca.sh`、定向 Orca 测试、mem-budget 测试的一行 wait fixture，以及本卡、CHANGELOG、DECISIONS、ref 13 和版本字段/README MAO索引；不改权限、宿主、provider、metadata 模块或 batch 启动机制。
+- 清单：①核对当前 `orca skills get orca-cli` 与 wait help；②严格回执门禁、同 handle 有界重等；③确定性消费者回归；④独立 review 后由 PM 继续真实 CLI 验收。
+- 验收：rc0 但 satisfied=false、畸形回执、命令失败均零 send；回执出现的handle/condition与本轮终端/tui-idle不匹配时也拒绝；明确 ready 仅一次 send；supervised 不发送普通 prompt。两轮等待分别30s/60s，仍不满足则非0退出并输出精确 terminal/worktree，保留资源供先只读核查后恢复。
+- 交付版本：v2.31.2；新增 patch 记录，不改已交付 v2.31.1 的历史正文。
+- 验证：`bash scripts/test-spawn-worker-orca.sh` 184/184、`bash scripts/test-spawn-worker-launch.sh` 42/42、`python3 scripts/test-mem-budget-probe.py` 58/58；Bash/Python语法与 `git diff --check` 通过。Orca helper 原件 `/tmp/mao-terminal-ready-261001/orca.log`，summary记录定向命令与结果；源码 `0ed048bfb80373a267c62dca38a48d880abde15e` 已独立 `ACCEPT`。真实任务结果与剩余范围见 LIVE-WORKER-ACCEPTANCE 卡，不把定向测试扩大为完整 supervised/settlement证明。
+
+## TASK-2026-10-01-POSTMERGE-BACKEND-VERIFY — 合并与真实后端验证
+
+- 状态：`COMPLETE`（合并、定向回归及有界真机验证）；Owner：Codex `/root`；来源：用户明确授权合并 PR #230/#320，验证功能并确认独立 MiniMax Code 后端。
+- 范围：合并已独立接受的精确 HEAD，干净合并版本上的定向回归、私有只读账号观测、实际本地调用及 MiniMax 原生短请求；验证工作区/诊断均在候选外临时目录。不修改认证、共享默认模型或用户会话，不消费真实卡，不合并其他 PR。
+- 验收：两个 PR 状态 MERGED 与 merge commit 可回读；合并版本定向测试通过、账号数据不扩散；MiniMax 完成模型请求才可声明后端接通，失败保留真实退出码和原因，CLI参数通过不可代替provider证据。
+- 合并：公开 PR #230 与私有 PR #320 均为 MERGED；分别锁定独立 ACCEPT 的 HEAD `850b1d99b1bb18a7248d9a1a6a214d17151591ab`、`25c69fef1f01773c178782c60a9973af2e661d2f` 后 squash 合并。merge commit 分别为 `41268aaa91e71158cb4551dce8d757038869af0f`、`649fc0574daf402a72d303bf6c26b0a5d1b4fd6b`。公侧两项线上 CI 成功；私有仓库无在线 checks，已有25/25本地与独立 ACCEPT，用户本轮明确授权合并。
+- 合并版本验证：干净工作树检出上述 merge commit，optional CLI 11/11、harness policy 36/36、worker command policy 23/23、私有 router 25/25 全部通过。已安装 router 与合并版本脚本哈希相同。
+- 私有实际调用：按真实 ignored 个人配置找到已安装 Skill，原生 observe/plan 均退出0，账号映射与卡读取正常，未知额度保持拒绝。无 `--execute` 的切换预检退出64、`switch_target_quota_unknown_or_reserved`，拒绝额度信息不完整的候选账号；未切换账号或消费卡。额度建议仍受现有 worker 派发/并发门禁限制。
+- MiniMax 真机：本机独立 `mcode` 0.5.10，经本 Skill renderer 的真实 batch 命令完成短请求；权威 `exec.completed` 状态 succeeded、退出0，模型回读 `minimax/MiniMax-M3.1-Flash-Preview`，providerKind 为 minimax-managed，用量回读完整。再显式传同一模型，在唯一临时文件中将减法改为加法，原生工具修改成功，文件字节与 `add(2,3)==5` 均符合预期，返回预期标记；未修改共享默认模型或认证。
+- 证据：`/tmp/mao-postmerge-261001/` 下四套测试日志、私有只读 summary、切换预检 summary、`minimax/backend-proof.sanitized.json` 与 `minimax/edit-summary.sanitized.json`。短请求原始 stdout SHA256 `6d4d2bb061459ca9a057bcd1a5f7f80859c3155d5312afe1f024281f28ce3f5d`；编辑后 probe.py SHA256 `ba1a531f581d2e6094e978ed6f7aca7a8d92eeb62c6e7ad73ee692f7f18bc772`。原始输出和账号观测限本机私有临时目录，不进入仓库。
+- `NOT_VERIFIED`：真实账号切换/耗卡、逐请求精确套餐扣分，以及新增 CLI 的完整 Orca 派发/交付/settlement 生命周期、持续纠偏与 scope hook；不把上述短请求/单文件修改扩大为这些层的证明。
+
 ## TASK-2026-10-01-LOCAL-ACCOUNT-SKILL — 私人账号调度调用合同
 
-- 状态：`COMPLETE`（本地调用合同已提交 PR，尚未合并）；Owner：Codex `/root`；用户最新决定：账号额度/刷新卡规则抽为独立私有 Skill；本 Skill 仅调用，不影响日常使用，不公开私人实现。
+- 状态：`COMPLETE`（PR #230 已合并，实际本地调用通过）；Owner：Codex `/root`；用户最新决定：账号额度/刷新卡规则抽为独立私有 Skill；本 Skill 仅调用，不影响日常使用，不公开私人实现。
 - 冻结基线：`origin/main` = `6d85291eb3a59d72cf95f9fb0542bd906eb49fbd`；分支 `feat/mao-optional-cli-support`，独立 app-managed worktree。
 - 范围：个人配置模板默认关闭的 `account_routing` 与 ref 29、主入口和版本文档；具体实现与实测在私有 Skill 的 TASKS 维护，不复制账号/卡数据到此处。
 - 验收：无配置不调用；启用且 backend 用户指定时读取本地 Skill；缺失/失败/未知暂停；不绕过任何现有派发门，不宣称 PM 调用是 spawn 机械账号绑定。
-- 清单：调用合同已落地，独立 review 无有证据 P1/P2；私有 Skill 独立实现/安装验证由其任务源闭环；本卡已提交 PR #230（https://github.com/cat-xierluo/legal-skills/pull/230），状态 OPEN/MERGEABLE/CLEAN；未合并。
+- 清单：调用合同已落地，独立 review 无有证据 P1/P2；私有 Skill 独立实现/安装验证由其任务源闭环；PR #230（https://github.com/cat-xierluo/legal-skills/pull/230）已合并，合并版本验证见 POSTMERGE-BACKEND-VERIFY。
 - 验证：公开包没有账号 adapter/卡实现或真实账号字段；调用配置 JSON、主入口和 ref 29 可达，默认关闭。实际私有 Skill 缺失时只按合同暂停，不能据此宣称 spawn 机械绑定。
 
 ## TASK-2026-09-30-ZCODE-BIGMODEL-LIVE — 独立 CLI 模型选择与 Coding Plan 实测
@@ -50,7 +109,7 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 
 ## TASK-2026-09-30-OPTIONAL-CLI-BACKENDS — 按需支持 CLI 并保留 CodeBuddy
 
-- 状态：`COMPLETE`（本地支持适配交付；PR #230 已提交、未合并/发布）；优先级：`P1`；Owner：Codex `/root`；来源：用户当前明确指令，优先于旧删除卡。
+- 状态：`COMPLETE`（支持适配交付；PR #230 已合并，未执行平台发布）；优先级：`P1`；Owner：Codex `/root`；来源：用户当前明确指令，优先于旧删除卡。
 - 冻结基线：当前共享检出 `main`，起点 `02012092b7d91b2c616c48c6ae028f3a6f4b9022`；仅修改本 Skill 与根 README 的对应索引，不纳入其他既有改动。
 - 目标：重点支持独立 ZCode CLI、MiniMax Code CLI；保留 CodeBuddy；删除 QoderWork backend，新增 Qoder CN CLI 与千问办公入口。新增及保留的可选 backend 不进入日常自动派发池。
 - 清单：①真实入口与授权边界已核对；②renderer/身份/依赖/启动门禁已接入，旧删除目标已替代；③正反例与维护回归已执行；④版本/README/证据已同步。
@@ -64,7 +123,8 @@ Hermes 专项和 ZCode 专项不插入上述顺序；只有卡片状态转为 `R
 - 独立审查：code-reviewer 发现并复验关闭未授权PM迁移、退休祖先被跳过、QwenWork配置绕过与新CLI祖先漏识别；最终无剩余有证据P1/P2。新增CLI只作worker sentinel，不能嵌套强宿主提权；默认池与可选集合分离。
 - Skill Lint：安全扫描0 critical/0 high，其余能力/fixture命中需按上下文看待。Harness Failure Audit有1项既有HFA-009（pm-cleanup-worker.sh:305），该行在冻结HEAD同样存在：扫描把观测旁路 RESULT.md 文本摘要的 jq -R -s 失败兜底当作配置解析失败；原件在 /tmp/mao-harness-audit.json。未通过变形规避扫描，未改无关清理模块；此项不是本次CLI支持的新权限依据，不宣称全Skill审计零finding。
 - 证据：本次运行日志与summary在 /tmp/mao-maintainer-260930/，最后定向复跑日志在 /tmp/mao-final-*.log，安全扫描在 /tmp/mao-final-security.json；这些为本机会话证据，不打包公开。候选文件SHA-256清单生成于该目录，文档闭环后重新冻结。
-- `NOT_VERIFIED`：除上述 ZCODE-BIGMODEL-LIVE 原生短请求外，其他新backend真实模型执行，以及新backend文件修改/持续纠偏/hook与Orca supervised完整生命周期；独立Qoder CN尚未安装（旧PATH软链指向已消失QoderWork），不自动安装；千问办公原生tools discovery未认证、bundled coding的账号/模型/积分归属未测。支持适配完成不扩大上述证据。
+- 后续真机验证：MiniMax 原生短请求、显式模型与临时文件修改已通过，见 POSTMERGE-BACKEND-VERIFY；上述初次验收时间点的未测状态不代表当前仍未接通。
+- `NOT_VERIFIED`：新backend持续纠偏/hook与Orca supervised完整生命周期；独立Qoder CN尚未安装（旧PATH软链指向已消失QoderWork），不自动安装；千问办公原生tools discovery未认证、bundled coding的账号/模型/积分归属未测。支持适配完成不扩大上述证据。
 
 ## TASK-2026-09-28-ORCA-SETTLEMENT-READBACK — 对齐真实 Orca 回读与外部终端结算
 
@@ -249,3 +309,145 @@ blocker_and_recovery:
 ```
 
 交付时补充 immutable head、PR URL、review verdict、真实测试结果、仍为 `NOT_VERIFIED` 的层、资源终态，并把任务改为 `COMPLETE`、`PARKED` 或 `RESTART_REQUIRED`。不要仅写“已完成”或保留失效 Worktree 路径。
+
+## TASK-2026-10-01-ZCODE-ORCA-NATIVE-INTEGRATION
+
+- 状态：`COMPLETE`（实现、真实任务与精确资源清理验收；PR合并和本机安装由PM完成交付门）。
+- 范围：用户指定的 ZCode 原生交互 CLI、同一会话接续、显式 native supervised 启动、可信单次启动环境桥；保留既有门禁、默认 worker 池与私人账号调用边界。
+- 实现责任：独立 implementer 修改脚本；PM 维护文档、真机与收口；不同会话 reviewer 验收冻结 head。
+- 交付：PR [#239](https://github.com/cat-xierluo/legal-skills/pull/239)；代码 head `e1fad17d1757aaec68e868a40d112914c452f522`。原始独立审查拒绝的重放和 nonready 回执问题已修复；独立增量审查 ACCEPT，无 P1/P2。
+- 回归：本版完整维护矩阵 61/61 命令退出0；bridge 35项、launch 46项、completion 8项通过；安全扫描0 critical/high，quick validate通过。
+- 真机：Orca 1.4.218 / ZCode CLI 0.16.9 / runtime 3.14.3，真实 fresh composer、唯一 Task 投递和 native authority 绑定通过。固定代码 head 的只读评审：阶段1实际35项测试通过；同一原生 session / terminal / Dispatch 经 `/model` 从 Flash 切至 GLM-5.3 后，消费/ack 正式 guidance，完成3个定向反例与最终证据，tracked diff为空；PM value postflight通过。
+- 模型：SQLite 与请求日志确认同一个 interactive session 的个人 Coding Plan / GLM-5.3-Flash、GLM-5.3 成功请求，实际 Anthropic endpoint，无 MiniMax/体验套餐回落；不以模型自报或配置值替代此证据。
+- 完成权威：唯一真实 `worker_done succeeded → Delivery`，Orca Task/Dispatch 自动成功结算；PM验收后 `worker-release` 返回 `retained / user_takeover / processAction=none`，随后 ack 完整 Delivery、收件箱为空。启动回执 created 不覆盖当前 user_owned；不得声称自动关闭已验。
+- 失败记录：较早尝试在 provider 额度拒绝后未发 worker_done，按失败尝试保留日志并单独结算，不转记成功。上述成功来自修复版的新尝试，不复用旧认证或旧句柄。
+- 资源：正式release的历史终态保持 `retained/user_takeover`。用户随后分别授权两条精确测试终端关闭，实际close与exit均确认；认证/配置研究副本在进程退出后按哈希核对删除，日志、SQLite、Task产物和启动绑定私有归档。两条测试工作树无tracked/untracked变更、终端为空后非强制移除；本轮备用shell与PM shell关闭，两个nonce及receipt精确归档删除，共享请求目录和锁保留。不得把人工关闭改写为coordinator-owned自动release。
+- 权限接续：只读源码及纯renderer消费确认单worker `--permission-mode yolo` 输出原生 `zcode --mode yolo`，由spawn的 `--command` 冻结消费；spawn不接受renderer的permission参数。默认build的逐项审批可用正式CLI单键Allow once接续，不重发Task、不重拉worker；yolo仍有必须交互/alwaysAsk/plan例外，未新增yolo业务真机测试。具体见[原生合同](references/30-zcode-native-orca.md)。
+- 审计：Harness Failure Audit原始两hard（HFA009旁路RESULT归档、HRA001测试grep计数）保留；独立定向消费者确认误报，不声称全Skill零finding。冻结e1独立ACCEPT，ee06文档/真实链及误报复核ACCEPT；最终交付head另经独立审查。证据根为本机 `/tmp/mao-zcode-orca-native-261001/`，包含terminal-close/exit、profile/request-cleanup与retained-evidence；无原始账号凭证入库。
+- `NOT_VERIFIED`：新yolo任务的完整真机行为；coordinator-owned 原生终端的自动关闭；本轮 user_takeover 的实际触发来源；机械 scope/install hook；长期账号身份锁、自动切号/耗卡/持续预算控制；逐请求精确服务端扣分。MiniMax等其他backend的supervised不类推通过。
+
+## TASK-2026-10-01-ZCODE-EXISTING-WORKTREE-ENTRY — 预建工作树首次原生接入合同
+
+- 状态：`PARKED_SAFETY_UNKNOWN`；Owner：Codex `/root`；来源：授权总控将既有工作树首次接入收窄为独立实现/审查任务；当前只在隔离fixture实施，不代派原消费卡领域任务。
+- 当前事实：已安装2.32.0的Orca spawn明确拒绝已占用branch/path，exit3 `EXISTING_WORKTREE_REQUIRES_RECOVERY`发生在provider lease/Context/terminal/Task副作用前；`--worktree`与`--branch-lifecycle long-lived`均不是reuse开关。当前Orca1.4.218 `worktree create --help`没有import/path/reuse参数，明确创建新checkout。repo注册不等价于允许复用worker工作树。
+- 恢复边界：`pm-orchestrate reauthorize/quota-park`及recover-unconfigured依赖原始Session/METADATA/authority和Dispatch身份；不能为首次接入伪造这些文件、借恢复入口绕过门，不能用raw terminal create代替MAO门禁。Codex PM在backend policy中可选zcode-cli，但仍须真实harness链与当前Orca项目证据。
+- 只读证据：`/tmp/mao-zcode-orca-native-261001/existing-worktree-consumer-contract.sanitized.json`，实际安装helper对本源已占用分支返回exit3；未调用Orca/provider/terminal/Task，未读客户材料。官方help与安装源码已核。准确request root及限制已发送至授权总控转交原PM，前一泛化模板已明确更正。
+- 后续合同：若立项，在原唯一owner授权下设计显式借用已有树的新Session入口，证明canonical repo/path/branch/head、无active writer、范围/预算/authority门及borrowed long-lived保留策略；不能默认复用、另造同卡第二树或自动关闭用户资源。该行记录2.32诊断时尚未实现的边界；本轮代码/fixture实现见下，真实借用native仍未验，不影响已完成的新建原生路径。
+
+- 执行合同：独立候选 `feat/mao-borrowed-minimax-orca-261001`，base `1002283663cd676ec17ada52da480ed4cb1af30b`；实现 `/root/zswitch_adapter`、独审 `/root/private_skill_forward`、PM `/root`。先隔离入口/失败保留/并发漂移验证，再独审、维护矩阵、真实受控接口验收；两失败episode上限，不因改名/runtime重置。
+- 当前消费者：原消费卡已由原PM启动唯一MiniMax writer，进程身份已在2026-10-01精确只读核为minimax-code。既有工作树/卡/材料保持只读，必须待原owner重新明确无writer才允许将新入口用于该树；当前授权不允许另起第二writer/tree。
+- 验收：缺显式合同仍维持exit3；合法借用形成真实新Session并保留原tree/branch/资产；active writer、身份/HEAD/快照漂移、冲突及未知生命周期全部失败关闭；失败与release不清理借用的long-lived资源。证据 `/tmp/mao-borrowed-minimax-orca-261001/`，未验范围明确NOT_VERIFIED。
+
+- 恢复记录：首轮26个隔离fixture同一setUp因fake ps空库存被process_schema_unknown拒绝，资源副作用0；计episode1，正式acceptance-recovery分类internal_recoverable/repair，保留日志与ledger，不放宽生产未知拒绝。上限2，不重置；该episode修复已完成，原失败仍保留。
+
+- 实现冻结：`cec2578be04c2b95985503359bc9f744ae85b9d6`仅14个scripts/tests；借用48个消费者分段PASS、8个受影响套件PASS，日志和14个SHA见implementation/fixed-scoped-evidence.json。首episode保留，scoped修复通过；独审/完整矩阵/有界真机待验，原消费卡/private未触及。
+
+- 独审episode2：完整候选 `0101a044dd9c9f9dd97ea7a4ad01546fd4713ace`被REJECT（P1=0/P2=2）：可替换helper绕过旧bridge晚期门、可观测自定义Python writer被名单漏检。实际heldout已保全，live零启动。统一classification内部可恢复/re_review，连续episodes_used2，最后允许修复，下一新失败预算耗尽；产品源码与矩阵分别保持已拒head和原失败日志。
+
+- 第2episode修复冻结：`ed53a4ffbcfe98ad6eb4b81c71fd6672a29a1c40`仅4个scripts/tests，产品clean；53个借用用例、原4个heldout消费者通过；旧2.32真实bridge合法请求exit0、晚期dirty/helper替换均exit64且backend零调用，未知Python writer拒绝且零账本。完整0f82候选独立功能复验关闭两P2，P1/P2=0；62项维护命令全部退出0，不继承实现者自报。
+- 真实依赖边界：本机当前UID完整PID/cwd只读探测未完成（sandbox内read_unavailable、归因到sandbox外仍read_failed），0acquire/Task/terminal；不放宽未知拒绝、不补名单。本轮borrowed-native真机入口及结算 `NOT_VERIFIED`，原消费卡不得接入。MiniMax新建树默认Orca真机另行验收。
+
+- 当前门禁：0f82独立普通功能ACCEPT；scanner原始SEC-DYNAMIC_IMPORT high保留，PM按明确例外只复核受信SHA绑定同buffer模块能力（ordinary_delivery=false），Harness snapshot/verify实际通过；原HFA/HRA两hard消费者归因保留。完整cwd不可证按acceptance-recovery facts_unknown_or_ambiguous→park，预算仍2/2，借用真机及原消费卡业务不派发。
+
+## TASK-2026-10-01-MINIMAX-ORCA-DEFAULT-CHANNEL — MiniMax Code 默认 Orca 派发
+
+- 状态：`VERIFIED / GIT_DELIVERY_PENDING`；Owner：Codex `/root`；来源：本聊天真人明确要求MiniMax通过ORCA派发以查看分支并统一管理，同时保留直连。
+- 范围：显式选minimax-code后默认Orca terminal-managed；Orca不可达时失败关闭，不静默直连；保留显式直连入口。与借用入口共享产品脚本串行实现，独立审查和有界真机验收。
+- 非目标：不将MiniMax加入日常自动backend池、不迁移/重启在途writer、不假称supervised Task/Dispatch已支持、不改认证/付费模型/全局配置。
+- 验收：普通MiniMax派发在Orca具有可核对terminal/worktree/branch；显式直连可达；runtime失败不创建tmux/模型副作用；实际文件任务由PM回读产物验收并精确收口。原消费卡仍由原PM管理，不能作为本轮测试对象。
+- 清单：价值合同、独立功能复验、完整62项维护命令、正式Harness门与本轮MiniMax真实文件/模型/资源验收均已过；PR/安装/交接由PM继续收口。证据共用 `/tmp/mao-borrowed-minimax-orca-261001/`。
+
+- 真机：默认auto Orca1.4.218 / Mcode0.5.10，显式模型M3.1-Flash-Preview；产物`1f0c1513b09351542e5ce51411922c27b7079d63`仅probe.py，PM测试3/3、身份正确、工作树clean、postflight通过。新树/分支/终端由正式Orca inventory核对。
+- 唯一接续：bootstrap已从本轮授权合同读取任务并完成业务；PM未重发业务，只发送一次已有成果验收指导。正式receipt accepted=true但provider unsupported仅证明运输，实际RESULT/STATUS及第二native ingress完成另行证明消费。原生16assistant/16HTTP200同minimax/MiniMax-M3.1-Flash-Preview、2completed ingress；按官方canonical catalog和session/turn/timestamp/rawusage复核，取证consumer两次假设错误及原生schema归因保留，不改产品取绿。
+- 资源终态：`RETAINED_WITH_REASON`（long-lived测试树/分支保留）；Mcode/launcher/已记录后代全部退出，活动登记消失；精确测试CLI关闭、未用默认shell核后官方close-all(1stopped/retiredSurfaces)，最终终端库存0。没有其他业务worker被触及。
+- `NOT_VERIFIED`：MiniMaxsupervised Task/Dispatch/worker_done/Delivery；逐responseId→HTTP事件直接join与精确计费；机械scope/install hook、长期连续性/身份锁。借用native限制不转记为MiniMax默认新建树失败或通过。
+
+## TASK-2026-10-01-WORKER-PERMISSION-DEFAULTS — 隔离worker默认原生全权限
+
+- 状态：`COMPLETE`；Owner：Codex `/root`；来源：本聊天真人要求默认权限开大，避免Orca worker阻塞审批，可用YOLO。
+- 范围：ZCode CLI renderer默认yolo，显式build/edit/plan保留；MiniMax batch原生full，交互模式遵循实际支持接口，不伪造permission flag或改用headless。仅后续新worker，保持原工作范围/安装/Orca准入/验收，不影响在途会话。
+- 非目标：不通过Skill修改Codex宿主审批机制，不将CLI YOLO等同跨聊天发送授权，不自动批准真实交互问题/账号登录。
+- 清单：核本地安装；官方权限模式消费者；隔离实现与独立审查；定向argv/默认覆盖与显式收紧验证；PR/本地同步。证据 /tmp/mao-permission-defaults-261001/。
+
+- 本轮实际验证：ZCode renderer默认命令启动无任务交互CLI，/mode回报Current mode: yolo；MiniMax原生TUI的/permission显示Current · Full access，配置字节未变，无模型请求，两probe精确退出。参数/默认spawn消费者与独立库存回归通过，PR、本地同步与最终独审继续收口。首轮采集器字节偏移/EIO及缺prompt-only合同的dry-run失败原件保留，未改产品取绿。
+
+
+- 发布/安装收口：PR #243已合并（https://github.com/cat-xierluo/legal-skills/pull/243），审查head7b9a199a922ff5eba663146383e1adb93b13efdb，merge4fb2d3c77dfad95356c46f7eebeed2e199b9ad96，两CI SUCCESS。13文件CAS安装2.33.1，Git HEAD/branch/index/staged未变，5脚本SHA等候选；安装后默认yolo/显式build、batchfull/TUI无exec和真实两row只读消费者均通过。
+- 验证边界：完整矩阵61项首0；58首次20/21 JSONDecodeError未知，候选/基线同case均0，一次带子进程记录的完整21/21复验0，原失败保留。最终独审ACCEPT，postflight/role/Harness门通过；PEA对定向证据裁定tested，不冒签全Skill新业务E2E。首probe/配置门/安装消费者setup故障原件均保留。
+
+## TASK-2026-10-01-ORCA-RELEASE-PAGE-COMPAT — 原生已结算worker库存分页兼容
+
+- 状态：`COMPLETE`；Owner：Codex `/root`；来源：现有Orca消费者报告真实release后MAO重复收口拒绝合法worker-list页。
+- 范围：只读核官方当前页schema；窄修adapter和回归，保留分页/身份冲突/未知拒绝。不重开业务卡、不手改lease、不重做认证、不直接操作原业务资源。
+- 原件：CS006修复波run_78c2835a1f6b，两Context ctx_32ebcdb1ca3b/ctx_1faef4251e36；原生已release并归档，MAO exit2 malformed worker-list page0，剩lease保留。
+- 清单：真实只读schema消费、合法页与冲突反例、独立复验、PR与本地同步。证据 `/tmp/mao-permission-defaults-261001/release-compat/`。
+
+- 窄修验证：269个cleanup消费者与15个sender用例通过；真实两具名row均精确匹配并为released/archive captured，旧4df2de30 helper对同库存均exit2，候选均exit0。仅只读，不操作原provider lease；实际业务结算仍由原PM使用正式入口完成。
+
+- 发布/安装收口：PR #243已合并（https://github.com/cat-xierluo/legal-skills/pull/243），审查head7b9a199a922ff5eba663146383e1adb93b13efdb，merge4fb2d3c77dfad95356c46f7eebeed2e199b9ad96，两CI SUCCESS。13文件CAS安装2.33.1，Git HEAD/branch/index/staged未变，5脚本SHA等候选；安装后默认yolo/显式build、batchfull/TUI无exec和真实两row只读消费者均通过。
+- 验证边界：完整矩阵61项首0；58首次20/21 JSONDecodeError未知，候选/基线同case均0，一次带子进程记录的完整21/21复验0，原失败保留。最终独审ACCEPT，postflight/role/Harness门通过；PEA对定向证据裁定tested，不冒签全Skill新业务E2E。首probe/配置门/安装消费者setup故障原件均保留。
+- 原业务PM已用正式release执行两原Session，原件read_thread独立抽查：各already_released、processAction none、archive captured，且各PROVIDER_LEASE_RELEASED；命令exit0。此为原PM业务结算，不是root直接操作。
+
+## TASK-2026-10-02-MINIMAX-ORCA-BATCH-STARTUP — 批处理启动与TUI就绪分开
+
+- 状态：`IN_PROGRESS`；Owner：Codex `/root`；来源：真实消费者选择MiniMax exec/full，经Orca terminal-managed已启动原生Run，却被spawn的TUI wait误拒。
+- 范围：仅MiniMax非交互启动合同，语义解析真实command而非字符串猜测；command本身已bootstrap输入时不等待TUI、不再次投递任务。交互CLI/其他backend/supervised路径保持原合同，记录准确启动模式与terminal身份。
+- 非目标：不碰原CS006业务树/进程/认证/lease、不重发prompt、不另造该业务Task、不代替原PM收口。原scope2.33.1权限/库存发布已完成，不重开借用2/2预算。
+- 原件：原nativeRun/SID及启动exit64 SPAWN_WORKER_ORCA_TUI_WAIT_INVALID，完整argv/diagnostics位于原PM cs006-mixed-orca-wave-20261002控制目录。业务由原PM继续，原生产模型已开始工具工作不等于本卡修复已验。
+- 清单：具名新卡/价值合同；隔离最小实现；负例及无二次投递回归；独审；有界无客户材料原生exec启动/精确回收；PR与本地同步。证据 `/tmp/mao-minimax-batch-startup-261002/`。
+- 实施边界：早期spawn入口preflight在route/lease/worktree之前拒绝batch与supervised/预建Task冲突；validator语义解析非空输入；实现者/root/permission_impl拥有spawn入口及启动/metadata/classifier/test最小文件，root负责随行文档。
+- 实现冻结：eca7aad32e8909468c577f03f6b8552ebee5d32f，仅9个owned脚本/测试；startup8、Orca281、metadata33实际通过。原4fb2d3c7负对照同一bootstrap执行一次后wait64并漏句柄，候选0且仅terminalcreate/0wait/0send/准确句柄。首轮Orca267/276（fixture回执缺ok与递归env解析）失败原件保留，修复后281/281；不将fake消费者当真实模型成功。
+
+- 有界原生验收：首轮候选e90经完整spawn启动exit0，仅一次bootstrap；原生Run exec_turn_mupsp045_s4ynyh succeeded/exit0/shutdownComplete，MiniMax-M3.1-Flash-Preview、2次assistant/1次工具，probe.py真实返回指定marker，PM1/1通过、artifact0fb66abb2a2054180d1793c0084c288500e153d1仅probe.py。原生配置SHA前后一致。两精确测试tab正式close，后续官方库存0，long-lived树/分支保留；两次collector断言失败原件保留，没有bulk-close实际发生。runtime_id空为既有metadata边界，不追填历史。
+- 独审首轮e90 REJECT两P2（单引号$(cat)误展开、env exec误builtin），episode1已使用、最多2修复episode；实现者同原会话窄修真实Shell反例，canonicalstdin保留，不重发模型或原业务。最终复审、63项完整矩阵、PR与安装待PM核定。
+
+## TASK-2026-10-02-ORCA-PARTIAL-WORKTREE-CREATE-RECOVERY — 首次创建回执断线残留续建
+
+- 状态：`PARKED_DEPENDENCY / IMPLEMENTATION_PARTIAL`；Owner：Codex `/root`；来源：原IP PM与Slides核查，MiniMax前置门通过后worktree create runtime_unavailable，实际原分支/树落盘但无Session/authority/terminal。该问题与batch误等TUI分开。
+- 原事实待独核：原分支feat-ip-timeline-map-261002、HEAD147cc3d476532b57615d0000efcde897446af02c、planned session ip-timeline-map-261002；同runtime恢复、Git clean由原PM报告。不是完整无writer证明，不能据此执行启动。
+- 输入：原PM orca-consumers-20261002中的minimax-spawn-argv.json、minimax-spawn.log、minimax-partial-worktree.json、dispatch-spec.json、map-prompt.md、runtime-summary.json；仅本机读取，身份/原准入事实均须独核，不进入公开Git。
+- 范围：受审显式partial-create恢复合同，仅原失败attempt精确资源；复核Git common-dir/path/branch/head、无writer、Orca repo/worktree/runtime、原scope/verification/value及预算门后首次创建标准Session/authority。已有Context/未知或活跃writer/dirty/漂移全部拒绝。不借recover-unconfigured/borrowed参数伪装完成，不改名重造原卡。
+- 非目标：不直接操作原业务工作树/lease/terminal、不代派业务、不伪metadata、不复用陈旧准入、不重建认证；原PM保留writer与验收责任。
+- 验收：隔离fake/真实Git证明原身份一次续建、并发/漂移/未知/重复拒绝、零重复worktree create/任务投递；独审及原PM按新入口接续才可声明原消费者恢复。当前入口和原消费者恢复`NOT_VERIFIED`。
+- 当前依赖：danger-full-access不等于完整全UID cwd可证；实现者只读库存732条，至少一条cwd读取失败，whole_uid_cwd_provable=false。新helper仅隔离受审实现/intake方案，不是标准spawn续建入口；原消费者无writer及真实恢复仍NOT_VERIFIED。旧borrowed2/2泊车保持，原任务/资源保留，不重启。
+
+## TASK-2026-10-02-DISPATCH-PROFILES-AND-RECEIPTS — backend×mode统一决策与唯一下一动作
+
+- 状态：`IN_PROGRESS / PROFILE_ACCEPTED_VALUE_MODALITY_AUDIT_PENDING`；Owner：Codex `/root`，共享核心由MAO维护，DSH原owner消费，不开第二业务控制器。
+- 来源：真人在「诊断多Agent调度瓶颈」2026-10-02明确授权既有MAO/DSH会话接手；root read_thread独核原人消息。报告SHA7e40f27adaf1470666c29e5f1095d60eda62c02677188e25befa5a82a59dab59，第9节为范围输入，方案尚非已实现命令。
+- 原卡连续性：MiniMax batch由当前卡返修/复审，partial-create原消费者PARKED_DEPENDENCY，不重复立同题卡、不重启业务writer、不将intake候选当完整续建入口。
+- 主范围：确定性backend×execution_mode/profile选择；已配置桥的ZCode默认原生Orca、generic仅显式兼容；MiniMaxbatch/interactive分路；结构化真实task_input/完成权威/唯一next_action，杜绝统一send提示；从实际配置和门回执显示并发/权限来源，收拢旧配方。共享schema/启动运行接口与DSH一份权威，保留MAO项目PM核心，先逻辑分层，暂不增加大模型传话层或物理拆Skill。
+- 额外明确需求：审计现value门对合法研究/设计/文档业务任务的误拒，给匹配实质产物与验证模态的合同；维护docs/纯调查独立worker仍不得无价值扩波，不以放开字符串绕门替代证据。
+- 非目标：不让每层自建运行JSON、不与DSH已管理项目争owner、不重做认证/账号或耗卡，不通过文案伪解除宿主拒绝。优先复用L2 state/events/lease/lock/pending_intent及现消息/authority接口。
+- 验收：真实旧失败argv漏native flags、合法兼容、无重复投递、按模式唯一next_action；无旧上下文前向消费及一条有界真实链；身份/权限/config/未知残留错误先副作用前拒绝。完整完成→独审→原session返修→TASKS回写→下一项及长期稳定性须真实证据，未做则NOT_VERIFIED，不用参数测试冒签。
+- 证据：原诊断报告及原件索引保留在原会话控制目录；本卡候选/价值合同/独审由root继续创建。此状态只为具名接手，不宣称profile/共同入口已可用。
+
+- 本轮执行：dispatch-value-gate对 `/tmp/mao-dispatch-profiles-261002/dispatch-spec.json` exit0；release_compat仅拥有独立profile解析器及测试，原partial08候选保留、不继续原业务；batch实现者修两项独审P2，冻结新head后复审与完整63回归，入口文件串行集成。
+- 新状态反例：Legal Skills总控报告ZCode任务completed/succeeded与worker_done已存在，composer却保留原任务文字；另有鼠标转义残留。仅screen草稿不推断未投递，原任务不补Enter、不重发、不重启。源码launch桥只exec冻结交互命令，Task注入由官方worker-start负责，PTY渲染根因尚NOT_VERIFIED；统一回执合同需区分draft/input_accepted/turn_started/worker_done/PM验收与retained终端。
+- 涌现既有技术债：独审真实Shell消费者证明quoted assignment token（例如单引号包住NAME=value后再启动CLI）在通用validator中仍可误判身份，固定base已有同样行为；新batch修复已拒绝相关exec变体，不因此抹除既有盲区或扩大解析正确性声明。保留原反例，后续共享command语义入口单独根因治理，当前profile模块不再自造Shell解析器。
+- batch验收继续：最终候选0b4e8576独审ACCEPT、postflight/角色/Harness门0，PEA scoped tested；完整矩阵前57项0，第58控制器25case中24通过、timeout/lost-receipt计数文件缺失失败。原件保留，formal第二episode限额内做candidate/base失败case及一次带子进程记录完整复验，root继续59—63，不提前合并或称首次全绿。
+
+- 接入进度：batch2.33.2已合并安装，依赖解除；profiles pure4files已rebase到cd29976f，23profile/14adapter消费者0，真实Shell模式/权限由共享validator取得，旧显式native参数兼容；入口/metadata/唯一动作由同worker继续，尚未发布或执行新live任务。
+
+- profile首轮df6154bd独审REJECT保留两P2：无schema旧个人配置误拒、completed回执漏拒本模块spawn_*_once。修复提交db45f0ad8db5110467a83ac6423b8bfbbb7e736f沿同一impl/session，缺schema明确legacy_unversioned、未知显式version仍拒，新节点仍严校；三个spawn动作纳入完成状态冲突拒绝。首65矩阵前11命令0、第12内存消费者49pass8fail均同根因，原件保留，修后矩阵与独审继续。
+- 首候选新隔离真实链：故意遗漏native/supervised参数，spawn0自动取得已配置原生桥；仅probe.py产物7b5143721566e2a4c2a2b381b216a68b31e2c485，PM2/2。实际SQLite同nativeSID为个人CodingPlan/GLM-5.3/max completed retry0，唯一worker_done/Delivery核验，正式release返回released/closed_agent_terminal/archivecaptured，随后ack0、postshowcompleted/succeeded/released/none。本轮测试root/worker精确终端库存各0；long-lived分支/树保留。该canary绑定df6154bd，不改记修后head新模型执行。新树.video_agent/plugin_root来源NOT_CONFIRMED且早于模型请求，保留不删；tracked diff精确。
+- 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
+- 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
+
+## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
+
+- 状态：`IN_PROGRESS / VERIFIED_PR_CLOSEOUT_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
+- 输入：冻结诊断3份真实快照及原Fathom第三轮；来源经原总控交接，消费者是Fathom/DSH原memory拒绝证据，不解除各自泊车或重复业务。
+- 通道/资源：同宿主subagent为SKILL§1/2独立合法通道，无独立worker进程/CLIterminal/provider/worktree派发。现liveprobe仍exit3；不能换独立CLI绕门。复用已附着干净managed WT，新分支fix/mao-memory-telemetry-261002，base77b82251b36b270e88253ec2b40f9a43dae9b8a3；原profile分支/evidence保留。
+- 实现写域：scripts/mem_budget_probe.py、scripts/test-mem-budget-probe.py、新scripts/test_memory_telemetry.py及scripts/fixtures/memory-admission-261002/**；根PM只写本卡、SKILL版本、CHANGELOG、DECISIONS、ref22/ref19与README索引。无其他代码/global/账号写域。
+- 实现责任：/root/release_compat；独审/root/permission_review不同原session，不给产品repair grant。单波只一个实现者和一个reviewer，root统一收口；不重做已验诊断/profile/batch、不建第二controller。
+- 行为合同：识别实际System-wide memory free percentage为“报告百分比”与parse-valid，不把84%当available_bytes或安全级别；保留旧关键词/旧available百分比合同。read-success与parse-valid独立结构记录（含缺失/空/未知/畸形）；legacy sources兼容。OS sysctl dispatch通知位1/2/4映射normal/warn/critical，unknown保持unknown；新原生观测只记录来源/值/level，明确used_for_admission=false。算法现level/slots/status/exit/0.95/0.75/default3GiB/reserve/formula不改变，不隐入任何native压力例外策略。
+- 预算：实现<=25分钟，scoped新测试一次及原内存套件一次；原始失败保留，同任务最多2失败episode，未改代码重复验证不充稳定。reviewer只读diff/必要文件、正反例及三frozenraw，环境归因至多一次，不复跑整包。root受影响消费者/发布检查串行；不无限模型/步骤。
+- 验收：三冻结真实快照parse有效、来源准确且原swap拒绝均exit3/slots0；读取成功但parse无效、缺失/空/非法/多行nativeflag、合法1/2/4、native与composite不混淆、无vm_stat时新84%不能成为物理可用兜底、原schema/正常与低内存/E2E副作用边界回归。独审绑定immutablehead、postflight/role/Harness/PEA scoped、PR exactmerge后CAS同步保主sourceindex与并发改动。
+- 非目标：不改0.95、预算、global或例外放行；不purge/reboot/kill其他owner；动态swap/磁盘底仓、新压力准入策略及任何例外仅留单独受审设计。独审与发布仍待完成，NOT_VERIFIED。
+- 证据：/tmp/mao-memory-telemetry-261002/，完整派发价值JSON同处；source内存门前后可比，Fathom/DSH业务结果非本卡交付。
+
+- 工程首轮：新遥测13/13、原内存58/58实际exit0，无失败episode或重跑；三frozen CLI保留exit3/slots0/swap critical与原available_bytes。报告84%解析有效但level/available_percent null；无vm_stat+新百分比仍exit1。冻结工程交独立审查，完整矩阵/发布尚待完成。
+
+- 独立验收：a7a6a81d实现绑定ACCEPT，新13/原58独验0、39 heldout/78次base-candidate CLI原payload去telemetry与退出精确一致；三frozen15raw byte/SHA相同，旧parse84 None→新reported84、无physical fallback。首外置consumer错flag/尾marker解析及唯一纠正复验保留，不归产品failure。
+- PM完整维护矩阵：66/66 exit0，直接复用两个工程字节相同首套件，其他64项各运行一次；无需失败episode。raw diffcheck2仅15原样快照trailing spaces，非fixture0；静态SEC1/HFA1/ISG2原告警保留，非本修范围不签全Skill安全或多轮稳定。最终文档仅修composite使用条件并记录证据，PR exact交付、本地CAS仍待完成。
