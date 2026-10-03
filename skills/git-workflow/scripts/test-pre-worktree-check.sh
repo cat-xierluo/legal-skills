@@ -125,6 +125,16 @@ rm "$C1/scratch.txt"
 # ---- 2. base ref 不存在 ----
 expect_exit_2_contains "用法: 远端 base 不存在报 exit 2" "远端 base ref 不存在" nosuchbase
 
+# 独立 ahead base：不改变后续 main 的 BEHIND/DIVERGED 夹具。
+git -C "$C1" switch -q -c ahead-base origin/main
+git -C "$C1" push -q origin ahead-base
+commit_in "$C1" ahead.txt "ahead-only" "local: ahead base"
+ahead_before=$(git -C "$C1" rev-parse ahead-base)
+expect_ok_contains "AHEAD: 本地领先 GO_WITH_NOTE" "GO_WITH_NOTE" ahead-base
+[ "$(git -C "$C1" rev-parse ahead-base)" = "$ahead_before" ] && \
+  ok "AHEAD: 保留本地独有提交" || not_ok "AHEAD: 保留本地独有提交"
+git -C "$C1" switch -q main
+
 # ---- 3. --pre-pr 干净合并 ----
 git -C "$C1" switch -q -c feat/clean origin/main
 commit_in "$C1" newfile.txt "new" "feat: new file"
