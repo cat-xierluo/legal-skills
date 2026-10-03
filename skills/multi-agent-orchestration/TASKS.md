@@ -560,3 +560,11 @@ blocker_and_recovery:
 - 增量复审收尾（2026-10-03）：最终工程`908393338da5da8f7d90dcbbeda8135e3002363f`获不同上下文限定ACCEPT；12个原heldout消费者合同不符0、4个journal消费者通过，9 owned+4 readset前后SHA一致。严格UUID透传、双别名冲突拒绝、新external归属及旧history、同新Dispatch rollback/readopt、全ORCAREG KV已独验。宿主中断前复审未落盘，接续窗口仍限5分钟；复审首KV正则漏SHA256数字的失败原件保留，仅审查正则修复后同工程复跑。
 - 当前交付边界：工程与入口合同已实现、原首次bridge35/completion19+8/reauthorize200及作者修复16项通过；原022公开退出链、current owner与native BigModel/GLM-5.3/max在最终工程reader只读实测通过，零intent/terminal/业务mutation。真实原022恢复、请求计费与业务完成仍`NOT_VERIFIED`，由原DSH PM接续同Task/Session及既有预算；本卡保留IN_PROGRESS待消费者验收。证据归`archive/20261003_zcode_closed_recovery`，首失败/REJECT不覆盖。
 - 静态范围：15个本地链接可达、Shell入口语法及diff格式通过；security仍基线high2/critical0，harness仍基线hard2，本次无新增该等级，不能签全Skill静态通过。
+
+## TASK-2026-10-03-ZCODE-LINUX-SYSTEM-ALIAS — 首次启动桥的跨平台路径兼容
+
+- 状态：IN_PROGRESS。来源：PR248提交d92c241f的Linux CI 37095578596；新关闭恢复16项通过，旧首次bridge35项中28项报requests_root_missing，后续验证未运行。旧trusted_path无平台判断将/tmp和/var转换为/private，对Linux错误。
+- 范围：仅zcode-orca-launcher.py的macOS系统别名判断与test-zcode-orca-launcher.py定向平台反例；不放宽符号链接/owner/mode/anti-replay检查，不重置关闭恢复原2-episode或DSH业务预算。
+- 预算与验收：作者5分钟、不同上下文增量独审5分钟；只跑路径定向与既有bridge35，Linux公开CI原失败必须保留，最终工程语义独审及新提交CI证明。真实DSH业务仍由原PM。
+
+- 实施冻结`bd642c8bfa3ee60c612dcd6946cac6db8a46b36d`，只改2文件：1个平台条件及3个新进程平台反例；原bridge35+新增3共38项通过，新增3项首红保留。不同上下文独审ACCEPT：18个路径消费者（16个明确模拟拓扑+2个真实macOS私有文件/symlink）与4个定向anti-replay通过，两文件首末SHA一致，关闭恢复其他12工程/依赖不变。实际Linux CI待本提交执行，未签DSH真实业务。
