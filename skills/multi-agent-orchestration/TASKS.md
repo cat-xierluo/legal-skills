@@ -561,6 +561,17 @@ blocker_and_recovery:
 - 当前交付边界：工程与入口合同已实现、原首次bridge35/completion19+8/reauthorize200及作者修复16项通过；原022公开退出链、current owner与native BigModel/GLM-5.3/max在最终工程reader只读实测通过，零intent/terminal/业务mutation。真实原022恢复、请求计费与业务完成仍`NOT_VERIFIED`，由原DSH PM接续同Task/Session及既有预算；本卡保留IN_PROGRESS待消费者验收。证据归`archive/20261003_zcode_closed_recovery`，首失败/REJECT不覆盖。
 - 静态范围：15个本地链接可达、Shell入口语法及diff格式通过；security仍基线high2/critical0，harness仍基线hard2，本次无新增该等级，不能签全Skill静态通过。
 
+
+- 真实消费者异常接手（2026-10-03）：原DSH PM已实际消费2.36.9/30cd1d0。prepare与空输入open成功、verify exit64：公开terminal.agentIdentity=null，同runner PID的ps argv被原生改写为zcode-cli，原六argv身份门无法证明；无register/业务输入，原022预算仍1/2。读取当前consumer SHA d848ca4ea1b42c0d939a6a41fd829d1be328d37b8a2d8662cb8d72b2f3b7b889，原PM已精确关闭该空输入terminal且known PID absent，detach余证据仍NOT_VERIFIED。原2个技术failure episode和本次新真实失败累计保留，不另建卡/聊天或重置预算。
+- 本次有限重估：先追加8分钟只读定因窗口，未授权工程/恢复mutation；审现有原生进程/Session/public runtime身份能否合法证明，不能把标题当身份、取消门禁或重放同intent。存在可审公共/原生primitive后才固定具名修复范围、不同执行者独审及原PM业务验收；不可证明时记录依赖缺口。独立032D和其他原业务不受本技术诊断占用。
+
+
+- 只读定因结论：真实3.14.3 entry改写argv[1]，Agent主启动设置process.title=zcode-cli；原ps六argv假设不可用于当前原生持续身份。Orca1.4.218公开terminal create无typed identity参数/既有setter，当前空输入term已closed、PIDabsent，同intent不可重open。现有Session日志有SID/WT/trace但无PID，SQLite无PID绑定；内核exe/start/UID/cwd/PTY也不能单独证明具体Agent/SID。确认消费者失败仍未就绪，独立复核进行中。
+- 有限返修重估：原累计2技术episode加本次真实consumer失败仍保留；追加5分钟作者/5分钟不同执行者复审，仅增加现有helper的只读diagnose和零副作用反例，使未知/关闭/原生标题改写原因可对账。原verify的typed identity与精确argv、模型、防重放均不放宽，不重open/register或修改原intent，不增加业务预算；完整恢复仍依合法runtime身份支持。
+
+- 定因与诊断独审：只读事实复核`ACCEPT_DIAGNOSIS`，确认为原生title/entry改写及当前公开runtime身份缺口；四分钟事实复核收口超时36.5秒，时间约束未满足已保留。候选`ef8bd980a275296efa563317b0b6eb10e65a11aa`只增diagnose，作者3项首红保留、修后4项通过；不同执行者重新绑定HEAD/hash，165.327秒内独审`ACCEPT_DIAGNOSTIC`：3项诊断消费者与3个owner/nonce/观察中intent漂移反例通过，原5门AST不变、固定不可retry、无intent或路由写入，自有进程回收。此接受不等于真实恢复。
+- 当前外部依赖：取得Orca正式ZCode typed识别及持续原生JS/Session/PID绑定的受审支持后，原DSH PM才能沿本卡重估有限恢复；当前组合不新prepare/open/register，不重放关闭意图、不造cap或reset预算。原022仍`CONTINUATION_NOT_READY`，032D及其他业务保持原owner。静态增量11链接可达、5个原门AST一致、无新增密钥值或high/critical/hard；既有high2/hard2仍在，不能签全Skill通过。证据归既有archive子目录native-identity。
+
 ## TASK-2026-10-03-ZCODE-LINUX-SYSTEM-ALIAS — 首次启动桥的跨平台路径兼容
 
 - 状态：DONE（跨平台入口与权限断言修复，真实Linux CI通过）。来源：PR248提交d92c241f的Linux CI 37095578596；新关闭恢复16项通过，旧首次bridge35项中28项报requests_root_missing，后续验证未运行。旧trusted_path无平台判断将/tmp和/var转换为/private，对Linux错误。
