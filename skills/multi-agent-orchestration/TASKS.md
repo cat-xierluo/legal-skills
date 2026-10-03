@@ -434,6 +434,9 @@ blocker_and_recovery:
 - 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
 
+- A阶段窄修独验（2026-10-03）：工程HEAD `91867b44b4f419a707c04e888cd6ad810c23fd27` 获不同执行者`ACCEPT_STAGE_A`；四原P1及合法旧postflight消费全部独测通过，13条CLI/进程记录均符合预期，249.852秒内冻结。作者仅两文件，首末SHA一致；原REJECT/2个工程episode及独审夹具首TypeError保留，夹具仅在原窗内更正一次、不重置预算。限定具名argv文件、已知注入env及本次专用PG，不签全部导入依赖或hermetic隔离。原四验收脚本与主线逐字节一致；CI调用已核，远端执行、PR与本地安装待PM验收。
+- 发布审计子步：PM仅补本段事实及ref18适用边界，工程SHA冻结；不同原reviewer在<=60秒只读核最终发布HEAD/两工程SHA/随行文档与CI定义，不重跑产品用例、不续开修复预算。原20分钟实现和两次失败事实不变；若发布身份或文档有新阻断，保留partial，不自签全卡完成。
+
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
 
 - 状态：`IN_PROGRESS / VERIFIED_PR_CLOSEOUT_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
@@ -469,6 +472,6 @@ blocker_and_recovery:
 
 - 独立交付边界：旧PR248仍有原生身份依赖且最新main已前进；本A阶段复用干净managed permission worktree，从origin/main开feat/mao-verification-evidence-261003，只携带两新脚本及本卡文档，原PR/分支完整保留。作者仍在原隔离树冻结同一两文件，随后字节搬入主线基底由不同执行者验收；不对旧分支force/rebase/reset，不把本新PR称原关闭恢复完成。价值合同原件保留，更新integration target后重核，预算不重置。
 
-- A阶段第二failure episode：新上下文独审固定d1b795c4发现版本化Python inline绕过、源码写后恢复、checkout外verifier改变及parent exit0遗留活子进程四个阻断，候选拒绝/不安装。原首bash组合选项缺陷和consumer canonical路径拒绝保留；累计工程episode2/2。允许具名5分钟作者/5分钟不同执行者增量窄修这4项，原20分钟停止事实不覆盖，未解决则保留partial/泊车而不第三次盲试。实际命令exe+直接文件输入须绑定，源码瞬态变更须可观测，专属验证进程组须收口并不得以父exit0扩大成完成。CI新增仅本9项scoped调用，公共默认资源/权限/原Orca业务不改。
+- A阶段第二failure episode：新上下文独审固定d1b795c4发现版本化Python inline绕过、源码写后恢复、checkout外verifier改变及parent exit0遗留活子进程四个阻断，候选拒绝/不安装。原首bash组合选项缺陷和consumer canonical路径拒绝保留；累计工程episode2/2。允许具名5分钟作者/5分钟不同执行者增量窄修这4项，原20分钟停止事实不覆盖，未解决则保留partial/泊车而不第三次盲试。实际命令exe+直接文件输入须绑定，源码瞬态变更须可观测，专属验证进程组须收口并不得以父exit0扩大成完成。CI新增仅新脚本的定向调用，公共默认资源/权限/原Orca业务不改。
 
 - A阶段适用边界与后续：当前helper拒绝所有ignored内容，因此含Session Context、依赖或缓存的真实worker工作树并未纳入本阶段消费者验收；只作可选清潔工程入口，不绑到默认spawn/完成链。后续沿本卡具名设计受控SC/依赖输入绑定，再验真实原worker，不能把空Git夹具通过扩大为正常所有worker都已可用。PR-only与空handle原恢复另按原输入有限推进，原业务不重投。
