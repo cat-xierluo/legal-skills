@@ -25,7 +25,7 @@
 | :--- | :--- | :--- |
 | [patent-download](../../skills/patent-download/) | 按专利号获取专利全文与基础材料 | [已发布 v2.7.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/patent-download-2.7.1.zip) |
 | [patent-analysis](../../skills/patent-analysis/) | 对中国发明和实用新型进行权利要求、产品比对及风险初步分析 | [已发布 v2.2.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/patent-analysis-2.2.0.zip) |
-| [trademark-assistant](../../skills/trademark-assistant/) | 中国商标申请的类别规划、可注册性初筛和申请材料准备 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/trademark-assistant-1.7.2.zip) |
+| [trademark-assistant](../../skills/trademark-assistant/) | 中国商标申请的类别规划、可注册性初筛和申请材料准备；源码 v1.7.3 待发布 | [已发布 v1.7.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/trademark-assistant-1.7.2.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 按基准日核验相关法源、规则与案例 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 把已核验的技术特征、权利关系或申请安排转成沟通图解 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-visualization-0.8.2.zip) |
 
