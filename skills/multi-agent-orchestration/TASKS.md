@@ -544,3 +544,19 @@ blocker_and_recovery:
 - 同一CI窄修另核现机smoke依赖：test_installed_readonly_chain_heap_no_model原来无条件读取mcode，公共runner未安装。明确仅此现场只读项在CLI缺失时报告LIVE_INSTALLED_MINIMAX_NOT_VERIFIED/skip，存在时仍严格验完整安装，畸形安装不得skip；其余22资源fixture及11完整入口照常执行。本机该项及实际绑定已通过，不自动安装CLI或登录账号。
 
 - CI与交付闭环：工程39b1603c6420a94a09f43b474bb31e02ac3a65cf不同会话限定独审ACCEPT，runtime-settlement（37049375384）及harness-regression（37049375401）均SUCCESS。实际Linux后续运行记录Node源mode0777、私有副本0700、SHA一致，Python去父LD启动成功；26资源全执行，MiniMax23仅现场缺安装skip1，其余22及完整spawn11通过。本机26/23/11均实际执行通过。原CI失败37047228045及矩阵59首红保留。该CI补项已完成，当前状态LOCAL_SYNCED/SCOPED_ACCEPTED，原业务模型、整workerRSS和全局原子预留未验边界不变；最终文档头的自动检查以PR248当前head checks为权威，不重复维护运行状态。
+
+## TASK-2026-10-03-ZCODE-CLOSED-SESSION-RECOVERY — 原失败Task的关闭Session恢复与回执采用
+
+- 状态：IN_PROGRESS；唯一技术owner为本原MAO PM；实现与独审分离，沿隔离候选`fix/mao-continuation-readiness-261002`，冻结起点`fa442feea3ce0df831a1513c732111f754509ebd`。
+- 来源与去重：DSH原022的`022-closed-resume-dependency-20261003.json`已由原插件PM登记；MAO现有卡未发现同一关闭Session入口合同。本卡只补公共生命周期依赖，DSH原022预算1/2、原失败Task/Session/工程成果及独立032D不变；不另建聊天或第二配置writer。
+- 目标：增加原生`--retry-of`透传；关闭原Session的精确恢复入口与真实后继回执采用；收紧reauthorize只允许可证明live的目标。先证退出及旧cap撤销，再以原provider Session的`--resume`和yolo启动空业务输入会话，核具名目标模型/effort后才由原业务PM单次同failed Task retry。
+- 不变量：首次启动anti-replay保持；不reset-ready、不新Task、不修改global/provider账号、不手工造capability；原始authority与初始/后继attempt历史保留，采用新回执需真实runtime/run/task/terminal/process/cap摘要核对与防重放、原子路由/完成替换及失败回滚；未知/live/身份漂移零副作用拒绝。
+- 实现范围：register/protocol/completion、zcode launcher、pm-orchestrate的live预门及必要新恢复helper和定向测试。文档只更新既有ref13/14/30、TASKS/CHANGELOG/SKILL，不新增reference。
+- 有界合同：技术修复最多2个失败episode、作者单窗口30分钟、独审10分钟；只跑定向套件，保留首次失败。先实现和模拟公共CLI入口正反例；真实DSH恢复/业务输入仅由其原PM执行，不由MAO抢业务。不可证明公开primitive时记录缺口而非制造能力。
+- 验收：同failed Task/原Session/真实后继attempt；模型门前零业务输入；完成新绑定只认新live receipt；live/unknown、错run/task/session/model/process、旧回执重放、写入中断均拒绝；原首次启动与reauthorize相关回归通过、独立审查接受。实际DSH整链保持NOT_VERIFIED直至原PM验收。
+- 首轮实施与审查（2026-10-03）：作者原30分钟窗口内冻结`cd9a6d5c33f5c2718f9cc1170b6e2dd0e7c79c5e`，新恢复15项、旧bridge35/completion19+8/reauthorize200通过；首11项中process incarnation误接纳及一次错误unittest入口ImportError完整保留。PM最终reader实际读取原022公开退出链/current owner及native SQLite模型PASS，零intent/terminal/业务mutation；不签真实恢复。
+- 第二failure episode限定返修：独立12个heldout消费者确认原生retry_request空串、revoked双别名及owner generation双别名冲突3处合同不符，冻结REJECT后由原作者5分钟只修这些绑定与旧归属声明、原reviewer5分钟增量复核；保原30分钟结束事实，不另开实现队列、不重置2-episode预算。旧metadata.created归属叶目前未被cleanup直接消费，不宣称发生误删；仍需投影真实新resource来源。当前候选未安装，真实原022恢复/业务链NOT_VERIFIED。
+
+- 增量复审收尾（2026-10-03）：最终工程`908393338da5da8f7d90dcbbeda8135e3002363f`获不同上下文限定ACCEPT；12个原heldout消费者合同不符0、4个journal消费者通过，9 owned+4 readset前后SHA一致。严格UUID透传、双别名冲突拒绝、新external归属及旧history、同新Dispatch rollback/readopt、全ORCAREG KV已独验。宿主中断前复审未落盘，接续窗口仍限5分钟；复审首KV正则漏SHA256数字的失败原件保留，仅审查正则修复后同工程复跑。
+- 当前交付边界：工程与入口合同已实现、原首次bridge35/completion19+8/reauthorize200及作者修复16项通过；原022公开退出链、current owner与native BigModel/GLM-5.3/max在最终工程reader只读实测通过，零intent/terminal/业务mutation。真实原022恢复、请求计费与业务完成仍`NOT_VERIFIED`，由原DSH PM接续同Task/Session及既有预算；本卡保留IN_PROGRESS待消费者验收。证据归`archive/20261003_zcode_closed_recovery`，首失败/REJECT不覆盖。
+- 静态范围：15个本地链接可达、Shell入口语法及diff格式通过；security仍基线high2/critical0，harness仍基线hard2，本次无新增该等级，不能签全Skill静态通过。

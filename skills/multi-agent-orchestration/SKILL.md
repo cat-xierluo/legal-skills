@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.34.3"
+  version: "2.34.4"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -87,6 +87,7 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 按后端和启动模式执行两种策略：Claude Code 的本地 hook 生效且启动命令显式使用 `--permission-mode auto` 时，普通 Bash 交给 Claude Code 的 auto 分类器和用户 settings；编排 hook 继续拦识别出的安装命令、直接及常见 Shell 包装的受保护 Git 操作、Orca 协议和受限 tracked 删除。其他后端与 Claude Code 非 auto 模式继续使用精确 `allowed_shell_commands`。`execution_authority.shell_policy` 固定所选策略；Claude auto 不是 Shell 文件写范围或任意程序副作用的机械沙箱，PM 仍须核对真实 diff 与外部副作用。验证命令不等于安装授权；安装类命令只有精确 `--allow-install-command` 和可审计授权来源才可通过编排门禁。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。
+- 已关闭ZCode原Session的失败接续使用[具名恢复入口](references/30-zcode-native-orca.md#已关闭原-session-的具名恢复)：先证退出/旧cap撤销，空输入恢复精确Session并核模型，再单次同failed Task retry与真实回执采用；`reauthorize`只用于可证明live的目标，不以ready-reset恢复失败历史。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
 - 新隔离 worker 按已授权任务使用原生最高可用执行权限：ZCode CLI 默认 `--mode yolo`，MiniMax batch 默认 `--permission full`；显式较窄模式保持生效。MiniMax 长程任务保持交互 CLI，权限按 [可选 CLI 合同](references/26-optional-cli-backends.md) 配置并核实，不借 batch 参数替代。宿主审批、业务范围、账号登录与编排准入是独立边界，不因 worker 模式而取消。
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。

@@ -239,3 +239,7 @@ Task-097 不消费 GitHub 原生 merge queue：远端 mutation 前必须读到�
 ## 派发计划与官方下一动作
 
 [派发profile](32-dispatch-profiles.md) 给出启动方式与唯一初始指引；它不执行Orca或认证，不是第二控制器。正式worker-show projection经原runtime/Run/Task/Dispatch/WT/terminal绑定核对后优先，stale仍保留原标签。composer残留不能证明未投递，completed/succeeded不能再submit，user_owned/retained不能靠启动时ownership自动关闭。terminal-managed须沿同一原生Session/Run核产物与退出；不能补造Task/Dispatch完成回执。
+
+### 关闭会话恢复边界
+
+`reauthorize`只接受精确目标的execution-host live证明、未撤销cap和未进入release的活跃状态；failed/process_exited/unknown零副作用拒绝。已关闭ZCode会话按[原Session具名恢复](30-zcode-native-orca.md#已关闭原-session-的具名恢复)处理，沿原失败Task和预算；不使用旧launch裸重启或ready-reset。
