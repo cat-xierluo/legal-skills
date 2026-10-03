@@ -1,11 +1,24 @@
 # Legal Skills 专家套件设计与发布方案
 
-- 状态：`IMPLEMENTED — FIRST BATCH（待 PR 审查与合并）`
+- 状态：`IMPLEMENTED — 9 SUITES（第二批待 PR 审查，未发布）`
 - 初稿日期：2026-09-03
 - 首批实现日期：2026-09-13
 - 适用仓库：`cat-xierluo/legal-skills`
 
-首批实现已经打通 5 个套件的仓库目录、静态校验、自包含 ZIP、Pull Request Preview、正式 Release 上传和下载链接回写。剩余 4 个套件继续作为第二批候选，不影响首批分发合同。
+首批 5 套已打通分发链路；2026-09-30 新增合同顾问、研究洞察、知识产权实务、法律 Skill 对齐与评测四套（均为 0.1.0，未发布）。当前成员以各套 README 和 `skills/` 符号链接为准。
+
+> **现行规则优先**：DEC-009 已取消套件独立 `LICENSE.txt`。套件只维护 README、CHANGELOG 和成员相对符号链接，成员原始许可证保留。本文以下首批设计中的外层 LICENSE 方案、九套候选版图和阶段状态属于历史规划，不再作为现行许可证或成员清单；实现以校验器及实际目录为准。
+
+### 第二批实际范围（2026-09-30）
+
+| ID | 定位 | 成员数 | 边界 |
+| :--- | :--- | :--- | :--- |
+| `contract-business-counsel` | 合同审查与小微企业顾问专家套件 | 6 | OPC / 小微企业分诊；合同 DOCX 沿用自身交付链路 |
+| `legal-research-client-insight` | 法律研究与客户洞察专家套件 | 5 | DRAFT / PUBLIC_REVIEW，不自动发送 |
+| `intellectual-property-practice` | 知识产权实务专家套件 | 5 | 专利、商标双入口；不覆盖外观设计比对和全部知识产权领域 |
+| `legal-skill-design-evaluation` | 法律 Skill 对齐与评测专家套件 | 3 | Brief + 通用质量 + 法律产出评测；外部 skill-creator 不打包 |
+
+本批不纳入仍缺少 LICENSE 的候选成员，不改变任何成员许可。律师知识生产继续保留为后续候选；法律 Skill 对齐与评测是本批新增入口，并非通用工程套件的替代。
 
 ## 1. 核心定义
 
