@@ -34,6 +34,8 @@ jobs:
           python3 -m unittest discover -s skills/git-workflow/scripts -p test_privacy_check.py -v
           bash skills/git-workflow/scripts/test-check-outgoing-identities.sh
           bash skills/git-workflow/scripts/test-identity-audit.sh
+          bash skills/git-workflow/scripts/test-pre-worktree-check.sh
+          bash skills/git-workflow/scripts/test-accident-recovery.sh
       - name: Compile and validate shell syntax
         run: |
           python3 -m py_compile skills/git-workflow/scripts/privacy_check.py skills/git-workflow/scripts/safe-pr.py skills/git-batch-commit/scripts/interactive_commit.py

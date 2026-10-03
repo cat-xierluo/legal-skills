@@ -6,12 +6,18 @@
 
 - **scripts/pre-worktree-check.sh（新脚本，Task-001 落地）**——开 worktree 前 3 查只读判读：fetch 后把 §2 判读表机械化为四态输出——`IN_SYNC`（GO，直接以远端 ref 起点开）/ `AHEAD`（GO_WITH_NOTE，可开 worktree，独有提交按三选一另行处理，禁止 reset 丢弃）/ `BEHIND`（FIX_FIRST，先 `pull --no-rebase` 再开）/ `DIVERGED`（FIX_FIRST，隔离候选内对账，不重置共享主源）；附独有/已合 commit 清单与工作区现场简报（不参与判定）。绝不创建/删除/重置任何东西；fetch 失败降级按本地已有引用判定并显式标注；本地 base 分支缺失时提示直接以远端 ref 为显式起点。退出码 0=可开 / 1=先处理 / 2=用法或环境错误。
 - **`--pre-pr <branch>` 模式（Task-002 评估结论的落地）**——「PR mergeable 前置」的原表述不可行：PR 创建后的 mergeable 检查搬不到开 worktree 前（PR 对象尚不存在）；能前置的是**提 PR 前**——用 `git merge-tree --write-tree` 在本地模拟 base+head 合并，不创建 PR、不触碰工作区与 index、不耗 GitHub API，冲突提前到 push 前暴露并直连 §4「base 落后 / 冲突处理决策表」。需 Git 2.38+；旧版本报错并给手动等价路径说明，不自动执行（手动路径触碰工作区，超出本脚本只读范畴）。
-- **references/accident-recovery.md（新文档，Task-003 落地）**——六类常见事故恢复路径：误 amend（reflog 找 `commit (amend)` 上一条，`reset --soft` 回退；已 push=历史重写走授权边界）、误 stash（关键事实：`pop` 有冲突**不删条目**、`apply` 永不删、`-u` 的 untracked 在 `stash^3`；误 drop 用 fsck 找悬空提交 + `git stash store` 重登记）、误删本地分支（分支自身 reflog 删后仍可读，`git branch <name> <tip>` 新建引用恢复）、误删远端分支（本地重推 / PR 页 Restore branch / 无副本时如实报告）、误 reset --hard（已提交走 reflog；未提交 Git 层不可恢复，指向 IDE 本地历史与三层备份纪律）、误 commit 到错分支（交叉引用 §10 既定处理）。总纪律：先只读定位后恢复、恢复优先新建引用、事故后先不要 `git gc --prune=now`。
-- **scripts/test-pre-worktree-check.sh**——bare + 双 clone 真实 Git 夹具，10 项故障注入测试（四态判定、pre-pr 干净/冲突+冲突文件清单、远端 base 不存在、待检分支不存在、本地 base 缺失），隔离全局配置，全绿。
+- **references/accident-recovery.md（新文档，Task-003 落地）**——六类常见事故恢复路径：误 amend（reflog 找 `commit (amend)` 上一条，`reset --soft` 回退；已 push=历史重写走授权边界）、误 stash（关键事实：`pop` 有冲突**不删条目**、`apply` 永不删、`-u` 的 untracked 在 `stash^3`；误 drop 用 fsck 找悬空提交 + `git stash store` 重登记）、误删本地分支（删除输出 / HEAD reflog / 其他引用 / fsck 找回 tip，`git branch <name> <tip>` 新建引用恢复）、误删远端分支（本地重推 / PR 页 Restore branch / 无副本时如实报告）、误 reset --hard（已提交走 reflog；曾暂存内容尝试 fsck+cat-file 恢复 blob；从未被 Git 收录的内容尝试 IDE 本地历史与三层备份）、误 commit 到错分支（交叉引用 §10 既定处理）。总纪律：先只读定位后恢复、恢复优先新建引用、事故后先不要 `git gc --prune=now`。
+- **scripts/test-pre-worktree-check.sh**——bare + 双 clone 真实 Git 夹具，12 项故障注入测试（完整四态判定、pre-pr 干净/冲突+冲突文件清单、远端 base 不存在、待检分支不存在、本地 base 缺失），隔离全局配置，全绿。
 
 ### 改进
 
 - SKILL.md §2 3 查节接入脚本入口，原有命令与判读表保留为透明判读依据与离线降级手动路径；§4 mergeable 检查节开头补前置边界说明（本地模拟干净不豁免 PR 创建后的 mergeable 后验）；§6 新增「常见事故恢复」小节与触发词；description 追加「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」口语触发场景；参考资源清单补三个入口。
+
+### 修复
+
+- 纠正误删分支恢复路径：删分支同时删除其 reflog，改从删除输出、HEAD reflog、其他引用或 fsck 定位 tip，核内容后新建引用恢复。
+- 区分未提交内容的对象库边界：曾暂存 blob 可能尚可恢复，但文件名及暂存后的编辑未必可找回；从未被 Git 收录的内容交备份与本地历史，不承诺完整恢复。
+- 新增 `test-accident-recovery.sh` 独立 Git 夹具，覆盖已检出/未检出分支删除恢复、main 不移动、暂存 blob 找回及更晚编辑未找回；补 AHEAD 与独有提交保留测试。新增预检与恢复回归接入现有 CI。
 
 ### 技术优化
 

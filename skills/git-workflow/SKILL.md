@@ -770,7 +770,7 @@ git push origin --delete v1.0.0  # 删除远程 tag
 
 ### 常见事故恢复（误 amend / 误 stash / 误删分支 / 误 reset）
 
-用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是 reflog 与分支自身 reflog（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
+用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是删除输出、HEAD reflog、仍存在的引用与对象库（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
 
 ## 7. Issue 与 PR 命名规范
 
@@ -991,4 +991,5 @@ git worktree list
 - `scripts/test-identity-audit.sh` — 身份审计故障注入测试
 - `scripts/pre-worktree-check.sh` — 开 worktree 前 3 查只读判读（IN_SYNC/AHEAD/BEHIND/DIVERGED 四态+处理路径）；`--pre-pr <branch>` 模式以 merge-tree 做提 PR 前本地合并模拟
 - `scripts/test-pre-worktree-check.sh` — 3 查判读与合并模拟的故障注入测试
+- `scripts/test-accident-recovery.sh` — 只用 Bash/Git 的离线恢复回归，在临时仓覆盖删除分支与曾暂存 blob 的真实恢复边界；不修改调用者仓库
 - `references/accident-recovery.md` — 误 amend/误 stash/误删本地/远端分支/误 reset 的恢复路径：reflog/fsck 只读定位，恢复优先新建引用
