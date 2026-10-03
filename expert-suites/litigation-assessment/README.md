@@ -1,6 +1,8 @@
 # 诉讼案件前期研判专家套件
 
-> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-assessment-0.1.0.zip)
+> [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-assessment-0.1.0.zip)
+> 整套源码 v0.1.1 待发布
+> 上方旧包内容不随源码变化。
 
 用于从新案接收、材料整理和事实证据分析，一路推进到法律检索、风险判断、策略方案和客户可读交付。
 
@@ -48,4 +50,4 @@
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
