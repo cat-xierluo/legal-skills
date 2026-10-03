@@ -169,4 +169,37 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):r.open_terminal(self.intent)
         self.assertNotIn('terminal", "create',self.log.read_text())
 
+    def diagnose_consumer(self):
+        return subprocess.run([sys.executable,str(ROOT/'zcode_closed_recovery.py'),'diagnose','--intent',self.intent],capture_output=True,text=True,timeout=15)
+    def diagnostic_bytes(self):
+        return tuple(p.read_bytes() for p in (Path(self.intent),self.metadata,self.cp,self.authority))
+    def test_diagnose_title_rewrite_and_null_identity_is_readonly(self):
+        self.entry.write_text('process.on("SIGUSR1",()=>{process.title="zcode-cli"});setInterval(()=>{},1000);')
+        self.runner();self.proc.send_signal(__import__('signal').SIGUSR1)
+        for _ in range(100):
+            command=subprocess.check_output(['/bin/ps','-ww','-p',str(self.proc.pid),'-o','command='],text=True).strip()
+            if command=='zcode-cli':break
+            time.sleep(.02)
+        self.assertEqual(command,'zcode-cli')
+        self.payloads['ctx_new']['result']['terminal']['agentIdentity']=None;self.save_responses();before=self.diagnostic_bytes()
+        p=self.diagnose_consumer();self.assertEqual(p.returncode,0,p.stderr);out=json.loads(p.stdout)
+        self.assertTrue(out['diagnostic_only']);self.assertFalse(out['ready_for_retry'])
+        self.assertTrue({'missing_agentIdentity','title_rewritten','argv_not_proven'}<=set(out['statuses']))
+        with self.assertRaises(ValueError):r.verify(self.intent)
+        self.assertEqual(before,self.diagnostic_bytes())
+    def test_diagnose_closed_process_remains_refused_and_readonly(self):
+        self.runner();self.proc.terminate();self.proc.communicate(timeout=5)
+        self.payloads['ctx_new']['result']['terminal'].update(connected=False,writable=False,agentIdentity=None);self.save_responses();before=self.diagnostic_bytes()
+        p=self.diagnose_consumer();self.assertEqual(p.returncode,0,p.stderr);out=json.loads(p.stdout)
+        self.assertTrue({'closed','runner_absent','argv_not_proven'}<=set(out['statuses']))
+        self.assertTrue(out['diagnostic_only']);self.assertFalse(out['ready_for_retry'])
+        with self.assertRaises(ValueError):r.verify(self.intent)
+        self.assertEqual(before,self.diagnostic_bytes())
+    def test_diagnose_known_live_still_not_retry_admission_and_model_guarded(self):
+        self.runner();before=self.diagnostic_bytes();p=self.diagnose_consumer();self.assertEqual(p.returncode,0,p.stderr)
+        out=json.loads(p.stdout);self.assertTrue(out['exact_argv_observed']);self.assertFalse(out['ready_for_retry']);self.assertEqual(before,self.diagnostic_bytes())
+        c=sqlite3.connect(self.db);c.execute('UPDATE session_entry SET data=?',(json.dumps({'modelSelection':{'providerId':'wrong','modelId':'wrong','options':{'reasoningLevel':'max'}}}),));c.commit();c.close()
+        self.assertEqual(self.diagnose_consumer().returncode,64);self.assertEqual(before,self.diagnostic_bytes())
+        self.assertNotIn('worker-start',self.log.read_text())
+
 if __name__=='__main__':unittest.main(verbosity=2)
