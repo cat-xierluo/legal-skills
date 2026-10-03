@@ -36,6 +36,16 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 ## 已关闭原 Session 的具名恢复
 
+当前实测边界（2026-10-03）：Orca 1.4.218 / ZCode CLI 0.16.9（runtime 3.14.3）的空输入恢复可启动，但原生CLI会改写进程title与argv，公开terminal的agentIdentity仍null，现有身份门无法证明它。此组合保持`CONTINUATION_NOT_READY`；不执行新的prepare/open/register，先取得正式runtime识别与原生进程身份的受审支持。以下命令保留为受限恢复合同，不能据模拟通过宣称真实已接通。
+
+已有状态为`launched`、绑定确切terminal与runner PID的意图只做只读诊断：
+
+```bash
+python3 scripts/zcode_closed_recovery.py diagnose --intent "$RECOVERY_INTENT"
+```
+
+报告固定`diagnostic_only=true`、`ready_for_retry=false`，核原绑定、当前owner和持久模型，指出closed、缺失agentIdentity、title改写或argv不符。它不修改intent、路由或业务状态。已关闭的单次意图不能重open；日志/SID、进程标题和Node内核路径均不能单独替代真实Agent/Session归属。后续恢复由原PM沿原卡和累计失败预算验收，真实请求/计费仍待证。
+
 首次启动桥不接纳已消费Session或旧terminal。原失败Task的关闭恢复单独使用`zcode_closed_recovery.py`，不走`reauthorize`或`reset-failed`。原PM先核原任务卡、剩余episode预算和具名providerSession来源；恢复只创建空业务输入的原生`--resume sess_… --mode yolo`会话，不新建Task。
 
 按原PM冻结的真实绝对路径和目标模型执行：
