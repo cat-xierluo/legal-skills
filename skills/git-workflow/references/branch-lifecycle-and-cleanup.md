@@ -61,7 +61,7 @@ git for-each-ref --sort=committerdate refs/remotes/origin/ \
   --format='%(committerdate:short) %(refname:short)'
 
 gh pr list --state all --limit 100 \
-  --json number,state,headRefName,baseRefName,mergedAt,closedAt
+  --json number,state,headRefName,headRefOid,baseRefName,mergedAt,closedAt,mergeCommit
 ```
 
 默认最后提交不足 24 小时的分支一律视为活跃并保留；项目可以把阈值调大。对每个候选检查对应 Worktree：
@@ -79,39 +79,48 @@ scripts/branch-audit.sh [base-ref] [remote]   # 默认 origin/main origin
 对单个分支精查其 PR 命运（squash 判死的核心实操）：
 
 ```bash
-gh pr list --state merged --head <branch> --json number,mergedAt   # 有 MERGED 记录 = 内容已进 base
+gh pr list --state merged --head <branch> --json number,headRefOid,baseRefName,mergedAt,mergeCommit
+# MERGED只证明该PR当时交付；核声明目标与当前tip，不能凭任意旧记录判当前分支已交付
 gh pr list --state open   --head <branch>                          # open = 活 PR，保留
 ```
+
+冻结声明 integration_target、其当前远端完整OID、候选远端/本地完整tip及Worktree/生命周期。PR base必须等于声明目标；受审head及交付树须覆盖当前待删tip。旧MERGED PR的head与当前tip不同、仅合入另一功能线、当前head含未采用成果或采用映射不完整时保留。列表需完整分页，读取失败/范围不全不能当作无open PR或无远端ref。
 
 ### 3.2 判定
 
 | 信号 | 处理 |
 |---|---|
-| PR 为 `MERGED`，身份一致，超过活跃阈值，无 dirty Worktree | 可列为删除候选 |
+| PR 为 `MERGED`，真实目标、当前完整tip及交付/采用证据一致，超过活跃阈值，无 dirty/active Worktree | 可列为删除候选 |
 | PR 为 `CLOSED` 且非 `MERGED` | 询问用户；废弃不等于允许删除 |
 | 无远端 PR、仅本地存在或有未推送 commit | 询问用户；可能是 WIP |
 | metadata 为 `long-lived` 或分支是 integration target | 排除，不进入常规 stale 清理 |
 | 远端已无该 ref，只剩 remote-tracking ref | `git fetch --prune` 清理本地引用 |
 | 最后提交不足阈值，或 Worktree dirty/状态未知 | 保留 |
 
-候选表至少展示分支、本地/远端存在性、PR、最后提交时间、Worktree/dirty 状态、生命周期和判定。取得用户确认后才执行远端批量删除：
+候选表至少展示分支、声明目标/完整OID、本地/远端完整tip、PR及采用证据、最后提交时间、Worktree/dirty/占用、生命周期和判定。删除授权绑定该快照，不覆盖确认后前进或复用的新tip。取得确认后逐笔重核目标、open PR、归属和tip，再使用 expected-tip 条件；禁止裸批量按分支名删除。
 
 ```bash
-git push origin --delete <b1> <b2> <b3>
-git branch -d <local-branch>
-git fetch --prune
+# 此处仅为已授权的精确ref删除，不发表新提交或重写历史；变量来自候选快照
+# 每条命令单独核exit，失败保留并停止该对象后续删除，不盲目重试
+# remote lease把删除绑定到已核tip；不加无条件--force
+git push --force-with-lease="refs/heads/$branch:$expected_remote_tip" \
+  "$remote" ":refs/heads/$branch"
+# 远端结果已核、无Worktree检出且本地tip仍匹配时，精确删除本地ref
+git update-ref -d "refs/heads/$branch" "$expected_local_tip"
 ```
+
+远端已不存在时核查询exit和结果，按实际状态记录，不把未知当缺失。事后核目标ref和交付树保留、被删ref确实不存在；`git fetch --prune`只清本地远端跟踪信息，不代替远端后验。
 
 ### 3.3 批量删除的执行细节与已验证的坑
 
-候选表生成、用户确认、执行删除三者之间，仓库可能被并行会话持续改动（实战：盘点时 7 个 open PR，执行时已多出 4 个新分支、1 个 PR 刚被合并）：
+盘点、确认、执行之间可能有并发写入；每个对象按同一合同处理：
 
-- **执行前重跑 open PR 防护**：删除前重新 `gh pr list --state open` 拉 head 名单与待删名单求交，命中即从名单剔除。
-- **squash 判死不受 merge-base 迷惑**：PR `MERGED` 即内容已进 base，merge-base 显示「未合并」是 squash 的预期，不是风险信号；但判定必须来自 PR 状态而非分支名或日期。
-- **本地复用保护**：远端分支若存在本地同名分支且 ahead（有未推送提交），从删除名单剔除——该分支可能已被新工作复用（实战：某分支 PR 合并后被主工作区改作新任务的开发线，含 7 个未推送提交）。
-- **批量删除遇缺 ref 会整批失败**：`git push origin --delete b1 b2 ...` 中任一 ref 已不存在（如 GitHub 侧已自动删除）会导致整批报错。先 `git fetch --prune`，再对「仍存在」的名单重推补删。
-- **代理环境**：全局 `http.proxy` 可能致 push 失败或挂起，用 `git -c http.proxy= -c https.proxy= push ...` 显式绕过。
-- **只删远端 ref 不影响本地**：远端删除不动本地分支与 Worktree 检出；本地分支删除前对每条重跑 `git merge-base --is-ancestor` 校验，通过才 `-D`。
+- 重新读取全部open PR head，命中候选即保留；目标/base/head或归属漂移使旧快照失效。
+- squash的原tip不可达不表示未交付，但任一历史MERGED记录也不表示当前tip已交付。核真实目标、原受审head与最终采用关系；patch-id/祖先/日期均不能单独授权删除。
+- 本地同名分支ahead、有未推送内容、dirty/active Worktree或被新任务复用时保留；远端删除不授权本地删除。
+- 逐笔expected-tip remote lease及本地update-ref阻止tip在复核后前进；失败保留实际原因，重新盘点取得新tip的授权后再考虑，不补发无条件删除或-D。
+- 缺ref、权限或网络异常先只读对账；不批量重试、不sudo绕过、不默认改代理配置。单对象失败不继续删除其关联ref/Worktree。
+- 不把guarded ref删除当作history force-push权限；新提交发表仍必须走safe-push/safe-pr，长期线和integration target继续硬保留。
 
 ### 3.4 patch-id 判死与 worktree 批量清理（261002 实战）
 
