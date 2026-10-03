@@ -24,7 +24,7 @@
 | :--- | :--- | :--- |
 | [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
 | [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [已发布 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-processor-2.13.0.zip) |
-| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
+| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名；源码 v0.6.1 待发布 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
 | [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip) |
 | [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人；源码 v2.3.4 待发布 | [已发布 v2.3.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/local-asr-2.3.3.zip) |
 | [transcription-corrector](../../skills/transcription-corrector/) | 纠正同音字、专有名词和 ASR 漂移 | [已发布 v1.0.9](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/transcription-corrector-1.0.9.zip) |

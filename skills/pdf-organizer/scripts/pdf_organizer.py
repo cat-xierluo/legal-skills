@@ -868,6 +868,21 @@ def build_report_header(
     return lines
 
 
+def segment_id_errors(segments: list[Any]) -> list[str]:
+    """Reject collisions after applying the same default/string conversion as execution."""
+    seen: dict[str, int] = {}
+    errors: list[str] = []
+    for index, segment in enumerate(segments, start=1):
+        if not isinstance(segment, dict):
+            continue
+        seg_id = str(segment.get("id") or f"D{index:03d}")
+        if seg_id in seen:
+            errors.append(f"Duplicate segment id {seg_id!r}: segments {seen[seg_id]} and {index}.")
+        else:
+            seen[seg_id] = index
+    return errors
+
+
 def process_manifest(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest).expanduser().resolve()
     manifest_dir = manifest_path.parent
@@ -885,6 +900,9 @@ def process_manifest(args: argparse.Namespace) -> int:
     segments = manifest.get("segments")
     if not isinstance(segments, list) or not segments:
         raise SystemExit("Manifest must contain a non-empty segments array.")
+    id_errors = segment_id_errors(segments)
+    if id_errors:
+        raise SystemExit("\n".join(id_errors))
 
     if source_pdf and not source_pdf.exists():
         raise SystemExit(f"Source PDF does not exist: {source_pdf}")
@@ -950,6 +968,10 @@ def process_manifest(args: argparse.Namespace) -> int:
         raise SystemExit("coverage_check must be one of: off, warn, strict.")
     coverage: dict[str, Any] | None = None
     coverage_findings: list[str] = []
+    if coverage_mode == "strict":
+        coverage_findings.extend(
+            f"Segment {index} did not compile: {error}" for index, error in compile_errors.items()
+        )
     if coverage_mode != "off" and compiled:
         segments_refs = {
             str(segments[i - 1].get("id") or f"D{i:03d}"): seg_refs.refs
@@ -1233,6 +1255,18 @@ def validate_manifest_command(manifest_path: str, coverage_override: str | None)
         print("\n".join(lines))
         return 1
 
+    id_errors = segment_id_errors(segments)
+    if id_errors:
+        lines.extend(id_errors)
+        print("\n".join(lines))
+        return 1
+
+    coverage_mode = coverage_override or str(manifest.get("coverage_check") or "warn").lower()
+    if coverage_mode not in {"off", "warn", "strict"}:
+        lines.append("coverage_check must be one of: off, warn, strict.")
+        print("\n".join(lines))
+        return 1
+
     counts = PageCountCache()
     compiled: dict[int, SegmentRefs] = {}
     errors: list[str] = []
@@ -1250,7 +1284,6 @@ def validate_manifest_command(manifest_path: str, coverage_override: str | None)
         except RefsCompileError as exc:
             errors.append(f"{seg_id}: {exc}")
 
-    coverage_mode = coverage_override or str(manifest.get("coverage_check") or "warn").lower()
     failed = bool(errors)
     if compiled and coverage_mode != "off":
         segments_refs = {
@@ -1265,6 +1298,7 @@ def validate_manifest_command(manifest_path: str, coverage_override: str | None)
                 failed = True
         except Exception as exc:  # noqa: BLE001
             lines.append(f"覆盖审计失败：{exc}")
+            failed = True
 
     if errors:
         lines.extend(["", "## Errors", ""])
