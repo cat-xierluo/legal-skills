@@ -455,7 +455,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-02-EVIDENCE-AND-PR-CLOSEOUT — 自动证据适配与仅PR交付终态
 
-- 状态：`IN_PROGRESS / STAGE_A_ONLY`；Owner：Codex `/root`，DSH原owner只消费同一公共合同。来源：真人在Code Video协同推进明确授权现MAO/DSH会话沉淀与安排优化，root已回读原userMessage；交接说明SHA29e26c452d51c352b233f77d29178a0a768f390183c6aca04ceed40304701029，原路径保留，不重开已完成视频任务。
+- 状态：`PARTIAL / STAGE_A_ENGINEERING_ACCEPTED / PUBLICATION_NOT_VERIFIED`；Owner：Codex `/root`，DSH原owner只消费同一公共合同。来源：真人在Code Video协同推进明确授权现MAO/DSH会话沉淀与安排优化，root已回读原userMessage；交接说明SHA29e26c452d51c352b233f77d29178a0a768f390183c6aca04ceed40304701029，原路径保留，不重开已完成视频任务。
 - 去重：backend×mode、副作用前配置核验、唯一输入与完成状态由DISPATCH-PROFILES-AND-RECEIPTS原卡承担，MiniMaxbatch由在飞原卡收口；共享源码入口串行，不另起第二控制器。
 - 新同源随行反馈：Code Video PM-LOOP-FEEDBACK.md SHA8535b63215bddb84273d9171de126b070006a847ef49b5413990e4bb3e4ac0ec。报告MiniMax batch11m21s/作者重复定向10次、branch_name与lifecycle混淆、原Sessionlimit_exceeded接续、两轮P2及真实GUI回填重复，均为来源报告，不把统计/hash或计数当质量。并入本卡：派发预算与精确branch/生命周期字段、真实native result落原SC、sameepisode step limit与新业务失败分开、terminal-managed源配置/.git/info/exclude等Git外副作用证据、exacthandle/incarnation与现场Orca CLI release。重复反馈不重造controller/docs worker，已发布profile/batch未据此重开业务；PR351仅参考，不操作。
 - 后续工程范围：从真实命令/回执/产物/immutable head和独立reviewer身份机械生成postflight与review门输入；显式源码/行为变更失效规则；正常push+PR交付返回PR_DELIVERED及真实资源终态，保留仅验证/合并目标独立状态；Gitauthor/committer首次提交前暴露身份问题，按原Gitworkflow身份合同处理。
@@ -477,3 +477,4 @@ blocker_and_recovery:
 - A阶段窄修独验（2026-10-03）：工程HEAD `91867b44b4f419a707c04e888cd6ad810c23fd27` 获不同执行者`ACCEPT_STAGE_A`；四原P1及合法旧postflight消费全部独测通过，11条CLI/进程记录均符合预期，249.852秒内冻结。作者仅两文件，首末SHA一致；原REJECT/2个工程episode及独审夹具首TypeError保留，夹具仅在原窗内更正一次、不重置预算。限定具名argv文件、已知注入env及本次专用PG，不签全部导入依赖或hermetic隔离。原四验收脚本与主线逐字节一致；CI调用已核，远端执行、PR与本地安装待PM验收。
 - 发布审计子步：PM仅补本段事实及ref18适用边界，工程SHA冻结；不同原reviewer在<=60秒只读核最终发布HEAD/两工程SHA/随行文档与CI定义，不重跑产品用例、不续开修复预算。原20分钟实现和两次失败事实不变；若发布身份或文档有新阻断，保留partial，不自签全卡完成。
 - 发布文档首审拒绝：`d440fa05`的两段A阶段记录误归相邻profile卡，独审59.234秒内REJECT；两工程SHA及ref18未变，拒绝原件保留。PM仅将两原段移回本卡，以一次<=60秒归属/HEAD只读复核验收此机械纠正，不重跑产品、不清空工程2/2预算；再失败则本阶段保留partial。
+- 发布复核实际结果：最终工程与段归属核对符合预期，但报告冻结65.535秒超过60秒，独审最终`NOT_VERIFIED`/AUDIT-TIME-BUDGET；literal ACCEPT未签，原角色门实际exit2。保留工程91867b44的限定独验，最终整包不安装、不合并。此分支只可作为草稿受审候选，不计本卡完成。原两产品episode及作者/审查停止事实继续保留，当前没有新的产品返修窗口。
