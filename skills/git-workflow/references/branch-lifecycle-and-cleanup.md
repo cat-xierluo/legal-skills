@@ -132,20 +132,20 @@ git cherry origin/main <branch> | grep -c '^+'                # 补丁不在 bas
 
 1. **prune 悬空记录**：`git worktree prune` 先清掉目录已不存在的挂载（worktree list 仍显示但 remove 报 "not a working tree" 的都是这类）。
 2. **查进程占用（硬保护）**：`lsof -w -d cwd -F n | sed -n 's/^n//p'` 拿全量 cwd 路径，与 worktree 路径前缀匹配。有占用的（活跃 PM/agent 会话）**绝不删**——lsof 列宽截断用 `-F n` 全路径输出规避，路径匹配用 awk `index($0,p)==1`（防空格/正则元字符）。日常巡检直接跑 `scripts/worktree-audit.sh`（只读，含占用/dirty/patch/PR 四维分类）。
-3. **dirty 分类**：`git -C <wt> status --porcelain`——modified/untracked 是**会话工作现场**：已终结会话的实验残留可 `--force` 删（正式交付已在 main），但 untracked 可能是无备份的研究材料（实战：R15 研究脚本只存在于 worktree 未提交区）——删除前确认正式版已入库，必要时拷出归档。
+3. **dirty 分类**：`git -C <wt> status --porcelain`——modified/untracked 是**会话工作现场**：已终结会话仍须核完整已交付成果和精确删除授权；dirty/untracked须先保留备份并解决归属，不默认force删；untracked可能是无备份的研究材料（实战：R15 研究脚本只存在于 worktree 未提交区）——删除前确认正式版已入库，必要时拷出归档。
 4. **按分支死活定删除范围**：补丁全在 base/PR 已合并 → worktree+本地分支一起删；分支是 open PR head 或有补丁未交付 → **只删 worktree 保分支**（内容在分支/远端，返修时重新 checkout）。
-5. **执行**：`git worktree remove [--force] <wt>` → `git branch -D <branch>`（patch0/PR merged 已验证）→ 远端 `git -c http.proxy= push origin --delete <b>` 逐个删（勿批量，见 §3.3）。
+5. **执行**：只对已授权、无占用且已处理dirty的精确Worktree执行普通remove；按§3.1/§3.3绑定expected tip删除允许的ref。不默认force、-D或扩大到integration target，失败记录CLEANUP_PENDING并保留现场。
 
 #### 已验证的坑
 
-- **orca 工作区目录 Permission denied**：worktree remove 删目录失败但分支照删，空壳目录留给用户手动 `sudo rm`，勿反复重试。
+- **orca 工作区目录 Permission denied**：worktree remove失败时停止后续关联删除，保留具名现场与错误；不得因目录权限失败继续删ref或用sudo绕过。
 - **detached HEAD worktree**：先确认不是其他工具自管目录（eval-harness sources 等）再处置。
 - **/tmp 下的 worktree**：系统清理可能已删目录，prune 后再处理。
 - **删除与盘点间仓库在变**：并行会话持续新开分支/推 PR，执行前重跑 open PR 名单求交（§3.3 同款防护）。
 
 #### PR 取代关系（窄采用入口模式）
 
-研究/返修型工作常见结构：旧 PR（研究基线，head 停在旧 main）→ 新 PR（「固定已验候选窄采用入口」，基于最新 main 只导入已验部分，body 注明「不自动关闭旧 PR」）。判定：新 PR 的 body 明确声明覆盖旧 PR 的研究树、且带独立审计指纹/PM 签收时，**合并新 PR 后关闭旧 PR**是安全动作；「不自动关闭」是流程礼貌而非保留理由。反向坑：旧 PR 被 main 甩出冲突（CONFLICTING）不等于过时——先读 body 看它是否在等用户创意决策（实战：#273 等样张择优）。执行动作见 §3.5。
+研究/返修型工作常见结构：旧 PR（研究基线，head 停在旧 main）→ 新 PR（「固定已验候选窄采用入口」，基于最新 main 只导入已验部分，body 注明「不自动关闭旧 PR」）。判定：核新PR已合入声明目标、旧PR当前head逐文件覆盖关系及未采用处置，并有独立审计与关闭授权后，**关闭被完整取代旧PR**才是安全动作；「不自动关闭」是流程礼貌而非保留理由。反向坑：旧 PR 被 main 甩出冲突（CONFLICTING）不等于过时——先读 body 看它是否在等用户创意决策（实战：#273 等样张择优）。执行动作见 §3.5。
 
 #### 无 PR、有补丁分支的分组处置
 
@@ -172,16 +172,11 @@ gh pr view <n> --json mergeable,mergeStateStatus   # 期望 MERGEABLE + CLEAN
 - **独立 PR**（改动互不触碰）：顺序无所谓，可连续合并。
 - **同族窄采用 PR**（同一 skill 的多个研究树导入，共享 CHANGELOG.md / TASKS.md 等追加型文档）：**逐个合并，每合一个重查下一个**。前一个进 main 后，GitHub 会把后一个甩成 CONFLICTING（实例：#339 合并后 #346 立即从 CLEAN 变 CONFLICTING，冲突仅在 code-video 的 CHANGELOG/TASKS 两文件）。此时走第 4 步解冲突，不要跳过或强行合并。
 
-#### 第 3 步：squash 合并 + 自动清分支
+#### 第 3 步：绑定 head 的 squash 与独立清理
 
-```bash
-gh pr merge <n> --squash --delete-branch
-gh pr view <n> --json state,mergedAt    # 复核 MERGED + 时间戳，别只信命令退出码
-```
+核当前state/draft、head/base、独立review、实际checks及范围，完成授权与验收后转ready。按主Skill使用 safe-pr.py squash，提供完整已审head OID及明确最终标题/正文文件；当前PR文本与每笔历史也需隐私复核。
 
-- `--delete-branch` 在合并成功后自动删远端 head 分支和本地同名分支；本地删除失败（分支被 worktree 检出等）不影响合并结果，残留的本地分支进第 6 步统一清。
-- 快速连续合并多个 PR 时，gh 偶发输出为空但实际成功——以 `state=MERGED` 复核为准。
-- 合并产生的死分支（squash 后本地分支的 patch 已在 main，`-d` 会拒绝）用 `git branch -D` 删，判定依据见 §3.4 patch-id。
+事后读取 state=MERGED、mergedAt、mergeCommit 并核实际交付树；不只信命令exit或静默输出。合并默认不附 --delete-branch，后续清理按生命周期、精确tip、归属/占用及删除授权执行；长期线与固定Worktree保留。关闭旧PR、合并新PR的授权不自动包含删除所有相关分支。
 
 #### 第 4 步：连锁冲突处理（同族 PR 的追加型文档冲突）
 
@@ -195,29 +190,30 @@ cd /tmp/<pr>-fix && git merge origin/main            # 冲突文件清单在此�
 
 解冲突三原则：
 
-1. **两侧记录全部保留**——追加型冲突没有"选一边"，丢任何一侧都是丢别人的验收记录。
-2. **按时间线/合并先后重排**：已进 main 的条目在前（更早合并），本 PR 的条目在后；CHANGELOG 同一版本号下多条 bullet 并列即可。
+1. **保留双边有效记录**——逐段辨明来源与当前状态，不整文件选一侧。过时或被取代内容保留追溯，当前事实和版本保持单一权威。
+2. **依文件合同排序**：CHANGELOG最新版本/日期在前，任务按其当前权威顺序；版本冲突由集成者分配并同步SKILL/索引，不把不同版本历史机械拼到同一版本。
 3. **先看清两侧内容再动手**：逐段确认两侧确实是不同主题的追加（实例：一侧是 R15 线全程记录、一侧是 R16 闭环），若发现真正的语义重叠（同一任务卡两边各写一版），停下来交用户/PM 判断——**文档追加冲突可以放心代解，语义冲突不能**。
 
 ```bash
 # 解完（文件中无 <<<<<<< 残留）：
 git add <冲突文件> && git commit -m "merge: 解 <PR#> 与 main 的 <文件> 追加冲突，两侧记录全保留"
-git -c http.proxy= -c https.proxy= push origin <pr-branch>
+bash "$git_workflow_dir/scripts/safe-push.sh" --base "origin/$actual_base" --branch "$pr_branch" \
+  --expected-name "$expected_name" --expected-email "$expected_email"
 ```
 
-push 后 GitHub 需要约 10 秒重算，PR 恢复 `MERGEABLE CLEAN` 再回第 3 步合并。解冲突的临时 worktree 用完即删（`git worktree remove`）。
+push 后有界重查精确head、CI和MERGEABLE/CLEAN，再回第3步；任一依赖命令失败即停止后续Git步骤。临时Worktree保留/清理按归属、dirty/占用与精确授权核对，不因命令结束直接删除。
 
 #### 第 5 步：关闭被取代的旧 PR
 
-`gh pr close` **不会**自动删 head 分支（`--delete-branch` 只在 merge 时生效），分支清理要手动补。关闭必须留取代评论，四要素齐全：
+默认 `gh pr close` 不删除 head 分支；本合同不附带删除参数，清理按精确授权另行执行。关闭必须留取代评论，四要素齐全：
 
 ```bash
-gh pr close <old-n> --comment "已被 #<new-n>（<新 PR 标题>，窄采用入口）取代并已合并 main——<哪些内容已随新 PR 进入 main>。<旧 head 上未被采用的后续提交的处置，如有>。研究基线可经本 PR 历史追溯。关闭属清理决策（<日期> 用户拍板：合并新 PR、关闭旧 PR）。"
+gh pr close <old-n> --comment "已被 #<new-n>（<新 PR 标题>，窄采用入口）取代，已合入 <实际目标分支>——<哪些旧head内容已实际采用及其证据>。<旧 head 上未被采用的后续提交的处置，如有>。研究基线可经本 PR 历史追溯。关闭属清理决策（<日期> 用户拍板：合并新 PR、关闭旧 PR）。"
 ```
 
-四要素：① 取代者 PR 号与标题；② 旧 PR 的哪些内容已进 main（对应新 PR 采用的范围声明）；③ 旧 head 上新 PR 未采用的部分如何处置（实例：#290 head 后来自行更新到新 commit，#339 验收记录明确"不属于本固定候选验收"——评论如实写明不整包采用）；④ 关闭的决策依据与日期（可溯）。
+四要素：① 取代者 PR 号与标题；② 旧PR当前head中哪些内容已进入实际目标（对应采用范围、文件/工程等价或差异证据）；③ 旧 head 上新 PR 未采用的部分如何处置（实例：#290 head 后来自行更新到新 commit，#339 验收记录明确"不属于本固定候选验收"——评论如实写明不整包采用）；④ 关闭的决策依据与日期（可溯）。
 
-随后删旧 PR 的分支：`git push origin --delete <branch>`（远端）+ `git branch -D`（本地，若存在）。删前确认其内容已随窄采用 PR 进 main（§3.4 判定）。
+关闭后保留或清理旧分支另行核授权。只合功能线时不能声称已进默认主干；未采用部分明确后续处置。删除按§3.1/§3.3的精确tip与生命周期合同，不使用无条件-D；无授权时记录RETAINED_WITH_REASON。
 
 #### 第 6 步：收尾核对与汇报
 
@@ -232,7 +228,7 @@ git worktree list               # 确认临时 worktree 已清
 
 - **合并顺序敏感**：同族 PR 一次性连续合并，必然有一个被甩冲突；先合一个、重查下一个。
 - **UNKNOWN 暂态**：新提交进 main 后所有 open PR 的 mergeability 会被 GitHub 异步重算，立即查询显示 UNKNOWN，等 10 秒重查。
-- **close 不删分支**：被取代 PR 的 head 分支必须手动删，否则下轮分支审计又是一批"无 PR 有补丁"残留。
+- **close与删除独立**：旧分支是否保留按实际采用范围、归属及删除授权决定；CLOSED不等于MERGED，也不自动成为可删候选。
 - **gh 输出不可全信**：连续合并时命令静默但成功，`state=MERGED` 复核为准。
 - **解冲突方向**：把 main merge 进 PR 分支（PR head 前进、包含 main），不要把 PR 分支 rebase 到 main（PM 回写历史会被重写）。
 
