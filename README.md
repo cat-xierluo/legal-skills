@@ -39,9 +39,9 @@
 | 2026-10-01 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.2 | 修复 ZIP 资产路径假通过；显式区分源码待发布、Preview 和本地 Release staging，保留真实公开链接，按实际成员 ZIP 全量字节核验。自身5套本地构建通过，9套仅本地合成验证；源码1.6.2尚未发布，下载保留1.6.0。 |
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
 | 2026-09-30 | 更新 | [pdf-organizer](skills/pdf-organizer/) | v0.6.1 | 修复重复清单编号掩盖覆盖异常、严格模式不完整编译/审计失败未阻断、交错来源溯源顺序丢失；页码范围展开前检查边界，补合成 PDF 回归与执行非事务边界。 |
+| 2026-09-30 | 更新 | [trademark-assistant](skills/trademark-assistant/) | v1.7.3 | 商品名称以明确文字单元格保存，精确保留前缀与首尾空白；超长名称拒绝，新增真实 XLSX/XML 回归。不证明分类正确或官方系统接收。 |
 | 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.9.0 | **提交身份自检与身份污染审计 + 分支冗余巡检自动化 + 身份核验**：v1.9.0 新增 scripts/identity-audit.sh（whoami 提交前自检：来源链 env→worktree→repo-local→global，仓库级覆盖/env 覆盖/可疑 agent 身份模式/期望不符四类告警；history 全仓 author/committer/Co-authored-by 尾注分布审计，可疑项自动标注）+16 项故障注入测试，源自 private-skills Hermes 身份污染实录（GitHub squash 把分支提交作者自动转尾注，门禁期望值取自被污染 config 时形同虚设）；v1.8.9 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除）+批量删除执行坑入册；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支）。已在 legal-skills 与 private-skills 双仓实测。 |
 | 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
-| 2026-09-30 | 新上传 | [dsh-plugin-dev](skills/dsh-plugin-dev/) | v0.3.2→v0.4.1 | DeepSeek Harness（DSH）插件开发指引首次公开登记：插件设计、开发、装载验证、版本迁移与发布审查（版本感知），支持 Pi/Hermes 插件迁移与隔离装载实验；0.3.2 新增官方能力复用目录条目 `ctx.jobs`（会话内长任务注册表）与 `packages/schedule`（持久定时调度），踩坑表补 renderer「Unknown client plugin」伪影语义解码；0.4.0 沉淀 `ctx.tools.register` 与 `ctx.storageDomain` 能力条目（零依赖手写编译后形态、update 原子读改写等实现知识，P09）、多插件共载自检误报坑与「Pi 插件 DSH 化起手切片」开发路径；0.4.1 修域名正则（仅下划线，对齐 backend.ts 强校验）并补 mock 假体须复刻校验条目之坑。 |
 </details>
 
 ## 📋 项目概述

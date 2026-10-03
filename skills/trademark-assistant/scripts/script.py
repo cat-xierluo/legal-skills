@@ -96,9 +96,11 @@ def normalize_item(idx: int, item):
         name = ""
         errs.append(f"第 {idx} 项 商品名称必须是字符串")
     else:
-        name = name_value.strip()
-        if not name:
+        name = name_value
+        if not name.strip():
             errs.append(f"第 {idx} 项 商品名称为空")
+        elif len(name) > 32767:
+            errs.append(f"第 {idx} 项 商品名称超过 Excel 单元格 32767 字符限制")
 
     if errs:
         return None, errs
@@ -171,7 +173,9 @@ def main() -> None:
         ws.cell(row=i + 1, column=1, value=i)
         ws.cell(row=i + 1, column=2, value=it["类别"])
         ws.cell(row=i + 1, column=3, value=it["类似群"])
-        ws.cell(row=i + 1, column=4, value=it["商品名称"])
+        cell = ws.cell(row=i + 1, column=4, value=it["商品名称"])
+        # 名称是数据而不是公式；保留 = 等前缀和全部原始字符。
+        cell.data_type = "s"
 
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out)
