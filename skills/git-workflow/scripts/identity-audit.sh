@@ -42,7 +42,7 @@ usage() {
     [--expected-email EMAIL] [--allow-local-override]
   identity-audit.sh history [--repo PATH] [--range A..B | --all]
     [--max-commits N] [--allow-email EMAIL]... [--allow-name NAME]...
-  identity-audit.sh receipt [--repo PATH] <oid>...
+  identity-audit.sh receipt [--repo PATH] <oid>... [--merged-limit N]
   identity-audit.sh receipt [--repo PATH] --range A..B [--merged-limit N]
 
 子命令：
@@ -81,6 +81,7 @@ while [ "$#" -gt 0 ]; do
       case "$2" in
         ''|*[!0-9]*) die "IDENTITY_AUDIT_USAGE" "--merged-limit 必须是正整数" ;;
       esac
+      [ "$2" -gt 0 ] 2>/dev/null || die "IDENTITY_AUDIT_USAGE" "--merged-limit 必须是正整数"
       MERGED_LIMIT="$2"
       shift 2
       ;;
@@ -336,9 +337,12 @@ cmd_history() {
 cmd_receipt() {
   local oids=() oid full finds=0
   if [ "$RECEIPT_GAVE_RANGE" = "1" ]; then
+    local range_oids
+    range_oids=$(git -C "$REPO" rev-list "${RANGE_ARGS[0]}" 2>/dev/null) || \
+      die "IDENTITY_AUDIT_USAGE" "无效提交范围：${RANGE_ARGS[0]}"
     while IFS= read -r oid; do
       [ -n "$oid" ] && oids+=("$oid")
-    done < <(git -C "$REPO" rev-list "${RANGE_ARGS[0]}" 2>/dev/null || true)
+    done <<<"$range_oids"
   else
     oids=("${RECEIPT_OIDS[@]}")
   fi
@@ -392,14 +396,28 @@ cmd_receipt() {
     exit 1
   fi
 
-  # 一次拉取已合并回执清单（mergeCommit.oid → PR 五元组），逐 OID 本地匹配
-  receipts=$(gh pr list -R "$slug" --state merged --limit "$MERGED_LIMIT" \
+  # 同时保留原始 PR 数量；先过滤 null mergeCommit 会丢失查询截断信息。
+  # 数量达到上限时未命中只能 UNKNOWN；只有未达到上限才可判断无绑定。
+  local raw_receipts="" header="" receipt_count="" query_ok=1
+  raw_receipts=$(gh pr list -R "$slug" --state merged --limit "$MERGED_LIMIT" \
     --json number,mergeCommit,mergedAt,headRefOid \
-    --jq '.[] | select(.mergeCommit != null) | "\(.mergeCommit.oid)\t#\(.number)\t\(.mergedAt)\t\(.headRefOid)"' \
-    2>/dev/null) || receipts=""
-  if [ -z "$receipts" ]; then
+    --jq '(["COUNT", length] | @tsv), (.[] | select(.mergeCommit != null) | "\(.mergeCommit.oid)\t#\(.number)\t\(.mergedAt)\t\(.headRefOid)")' \
+    2>/dev/null) || query_ok=0
+  header="${raw_receipts%%$'\n'*}"
+  case "$header" in
+    COUNT$'\t'*) receipt_count="${header#*$'\t'}" ;;
+    *) query_ok=0 ;;
+  esac
+  case "$receipt_count" in ''|*[!0-9]*) query_ok=0 ;; esac
+  if [ "$query_ok" = 1 ]; then
+    if ! { [ "$receipt_count" -ge 0 ] 2>/dev/null && [ "$receipt_count" -le "$MERGED_LIMIT" ]; }; then
+      query_ok=0
+    fi
+  fi
+  receipts=$(printf '%s\n' "$raw_receipts" | sed '1d')
+  if [ "$query_ok" = 0 ]; then
     for full in "${server_oids[@]}"; do
-      printf 'UNKNOWN       %s  回执查询失败/为空（%s merged ≤%s）——fail-closed\n' \
+      printf 'UNKNOWN       %s  回执查询失败/格式异常（%s merged ≤%s）——fail-closed\n' \
         "${full:0:12}" "$slug" "$MERGED_LIMIT"
       finds=$((finds + 1))
     done
@@ -407,7 +425,7 @@ cmd_receipt() {
     exit 1
   fi
 
-  local accept=0 line mo pr merged_at head
+  local accept=0 line mo pr merged_at head rest
   for full in "${server_oids[@]}"; do
     line=$(printf '%s\n' "$receipts" | awk -F'\t' -v oid="$full" '$1==oid' | head -1)
     if [ -n "$line" ]; then
@@ -416,6 +434,10 @@ cmd_receipt() {
       merged_at="${rest%%$'\t'*}"; head="${rest##*$'\t'}"
       printf 'ACCEPT        %s  %s mergedAt=%s head=%s\n' "${full:0:12}" "$pr" "$merged_at" "$head"
       accept=$((accept + 1))
+    elif [ "$receipt_count" -ge "$MERGED_LIMIT" ]; then
+      printf 'UNKNOWN       %s  未命中且查询达到上限（%s merged ≥%s）；证据不足，增大 --merged-limit 后重跑——fail-closed\n' \
+        "${full:0:12}" "$slug" "$MERGED_LIMIT"
+      finds=$((finds + 1))
     else
       printf 'DENY_FORGED  %s  服务端合成签名但无 %s 的 MERGED 回执绑定（伪造或外部仓库提交）\n' \
         "${full:0:12}" "$slug"
@@ -424,7 +446,7 @@ cmd_receipt() {
   done
 
   if [ "$finds" -gt 0 ]; then
-    printf '\nIDENTITY_AUDIT_FINDINGS: accept=%s deny/unknown=%s——DENY 项按伪造处理，不进入对账基线\n' \
+    printf '\nIDENTITY_AUDIT_FINDINGS: accept=%s deny/unknown=%s——未核验项不进入对账基线；UNKNOWN 是证据不足，不能判为伪造\n' \
       "$accept" "$finds"
     exit 1
   fi

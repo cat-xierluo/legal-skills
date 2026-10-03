@@ -245,5 +245,48 @@ commit_as "$CLEAN" "cat-xierluo" "66555304+cat-xierluo@users.noreply.github.com"
 expect_ok_contains "receipt: --range 全普通提交全 SKIP" "IDENTITY_AUDIT_OK" \
   receipt --repo "$CLEAN" --range HEAD~1..HEAD
 
+# 离线 gh 夹具：仅这组测试替换 PATH，不访问真实账号或网络。
+BIN="$WORK/bin"
+mkdir "$BIN"
+cat > "$BIN/gh" <<'GH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  'repo view') printf 'fixture-owner/fixture-repo\n' ;;
+  'pr list')
+    [ "$RECEIPT_TEST_MODE" != failed ] || exit 1
+    if [ "$RECEIPT_TEST_MODE" = malformed ]; then printf 'bad response\n'; exit 0; fi
+    # 从脚本真正传给gh的jq表达式判断格式，确保旧候选反例也可运行。
+    count_format=0
+    for arg in "$@"; do case "$arg" in *COUNT*) count_format=1 ;; esac; done
+    if [ "$count_format" = 1 ]; then printf 'COUNT\t%s\n' "$RECEIPT_TEST_COUNT"; fi
+    [ "$RECEIPT_TEST_MODE" != empty ] || exit 0
+    printf '%s\t#1\t2026-10-03T00:00:00Z\t%s\n' "$RECEIPT_TEST_OID" "$RECEIPT_TEST_OID"
+    ;;
+  *) exit 2 ;;
+esac
+GH
+chmod +x "$BIN/gh"
+export PATH="$BIN:$PATH"
+server_oid=$(git -C "$FORGE" rev-parse HEAD)
+normal_oid=$(git -C "$FORGE" rev-parse HEAD~1)
+export RECEIPT_TEST_MODE=rows RECEIPT_TEST_COUNT=1 RECEIPT_TEST_OID="$server_oid"
+expect_ok_contains "receipt: 精确绑定MERGED回执ACCEPT" "ACCEPT" receipt --repo "$FORGE" HEAD --merged-limit 2
+expect_ok_contains "receipt: 达到上限但已精确匹配仍ACCEPT" "ACCEPT" receipt --repo "$FORGE" HEAD --merged-limit 1
+export RECEIPT_TEST_OID="$normal_oid"
+expect_exit_1_contains "receipt: 完整查询无绑定DENY_FORGED" "DENY_FORGED" receipt --repo "$FORGE" HEAD --merged-limit 2
+expect_exit_1_contains "receipt: 截断查询未命中UNKNOWN" "UNKNOWN" receipt --repo "$FORGE" HEAD --merged-limit 1
+if grep -qF DENY_FORGED "$OUT"; then not_ok "receipt: 截断不贴伪造标签"; else ok "receipt: 截断不贴伪造标签"; fi
+export RECEIPT_TEST_MODE=empty RECEIPT_TEST_COUNT=1
+expect_exit_1_contains "receipt: 过滤null回执后仍保留截断证据" "UNKNOWN" receipt --repo "$FORGE" HEAD --merged-limit 1
+export RECEIPT_TEST_COUNT=0
+expect_exit_1_contains "receipt: 完整空列表无绑定DENY_FORGED" "DENY_FORGED" receipt --repo "$FORGE" HEAD --merged-limit 2
+export RECEIPT_TEST_MODE=failed
+expect_exit_1_contains "receipt: 网络查询失败UNKNOWN" "UNKNOWN" receipt --repo "$FORGE" HEAD
+export RECEIPT_TEST_MODE=malformed
+expect_exit_1_contains "receipt: 查询格式异常UNKNOWN" "UNKNOWN" receipt --repo "$FORGE" HEAD
+expect_exit_2_contains "receipt: limit零值拒绝" "IDENTITY_AUDIT_USAGE" receipt --repo "$FORGE" HEAD --merged-limit 0
+expect_exit_2_contains "receipt: 无效范围明确拒绝" "无效提交范围" receipt --repo "$FORGE" --range invalid..HEAD
+
 printf '\n== 身份审计测试：%s passed, %s failed ==\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

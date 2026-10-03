@@ -98,7 +98,7 @@ bash scripts/identity-audit.sh whoami \
 | PR/合并提交多出陌生 Co-authored-by 尾注 | `bash scripts/identity-audit.sh history --all` 看尾注分布；根源=分支提交作者，清洗须改写分支作者（`git rebase -r --exec 'git commit --amend --reset-author --no-edit'`）后重推，且必须用户授权 |
 | 提交作者不是我 | `whoami` 来源链定位写入层（env → worktree → repo-local → global，`--show-origin` 给出具体文件）；修复用 `git config --local --unset user.name user.email` 类命令回落全局，确认后再提交 |
 | 全仓身份体检（交接/发版/公开化前） | `history --all` 输出 author/committer/尾注三张分布表，可疑项自动标注；大仓用 `--max-commits` 控制上限 |
-| 核对已合并历史/本地同步对账，range 内出现 `GitHub <noreply@github.com>` 提交 | `bash scripts/identity-audit.sh receipt --range <base>..<head>`（或对单个提交传 `<oid>`）：服务端合成签名的提交按 gh 查询的本仓 MERGED PR 回执（`mergeCommit.oid` 精确绑定）判 `ACCEPT` / `DENY_FORGED`；回执由脚本经 gh 认证通道自查、不接受传参伪造，gh 不可用/查询失败一律 UNKNOWN fail-closed。只用于已合并历史核对，不改变 push 门禁（要 push 的是本地新提交，永远不该有服务端 committer） |
+| 已合并历史对账出现 `GitHub <noreply@github.com>` 提交 | `bash scripts/identity-audit.sh receipt --range <base>..<head>`（单个提交也可传 `<oid>`）：gh 自查本仓 MERGED 回执，完整 OID 精确绑定才 ACCEPT；完整查询无绑定才 DENY_FORGED。网络/格式失败或达到 `--merged-limit` 上限且未命中为 UNKNOWN、非零退出，不放行也不判为伪造；显式扩大上限后重跑。仅核已合并历史，不改变 push 门禁 |
 
 发现身份污染时**先报告用户**，不得擅自改写历史或 force push（§1 安全协议）。与 `check-outgoing-identities.sh` 的分工：`whoami` 管"提交前我是谁、身份哪来的"，push 门禁管"push 前 range 内每一笔是谁"——两者互补，不可互替。
 
@@ -771,7 +771,7 @@ git push origin --delete v1.0.0  # 删除远程 tag
 
 ### 常见事故恢复（误 amend / 误 stash / 误删分支 / 误 reset）
 
-用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是 reflog 与分支自身 reflog（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
+用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是删除输出、HEAD reflog、仍存在的引用与对象库（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
 
 ## 7. Issue 与 PR 命名规范
 
@@ -988,8 +988,9 @@ git worktree list
 - `scripts/test_privacy_check.py` — 隔离隐私故障回归
 - `references/privacy-preflight.md` — 精确审查、调用方法和能力边界
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
-- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）、全仓 author/committer/Co-authored-by 尾注审计（history）、服务端合并回执核验（receipt：MERGED PR 回执绑定判 ACCEPT/DENY_FORGED，gh 不可查 fail-closed）
-- `scripts/test-identity-audit.sh` — 身份审计故障注入测试（whoami/history/receipt）
+- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）、全仓 author/committer/Co-authored-by 尾注审计（history）与服务端合并回执核验（receipt）
+- `scripts/test-identity-audit.sh` — 身份审计故障注入测试，含离线 gh 夹具的精确绑定、完整无绑定、截断与错误路径
 - `scripts/pre-worktree-check.sh` — 开 worktree 前 3 查只读判读（IN_SYNC/AHEAD/BEHIND/DIVERGED 四态+处理路径）；`--pre-pr <branch>` 模式以 merge-tree 做提 PR 前本地合并模拟
 - `scripts/test-pre-worktree-check.sh` — 3 查判读与合并模拟的故障注入测试
+- `scripts/test-accident-recovery.sh` — 只用 Bash/Git 的离线恢复回归，在临时仓覆盖删除分支与曾暂存 blob 的真实恢复边界；不修改调用者仓库
 - `references/accident-recovery.md` — 误 amend/误 stash/误删本地/远端分支/误 reset 的恢复路径：reflog/fsck 只读定位，恢复优先新建引用

@@ -1,11 +1,11 @@
 # 常见事故恢复路径（误 amend / 误 stash / 误删分支）
 
-覆盖四类高频 Git 事故的只读定位与安全恢复。全部恢复动作遵守两条总纪律：**先只读定位、后恢复**（reflog / fsck / show 核实内容再动引用）；**恢复优先新建、不改写**（新建分支或引用不动任何现态，天然可逆；reset / force 类操作必须用户明确指示）。
+覆盖六类高频 Git 事故的只读定位与安全恢复。全部恢复动作遵守两条总纪律：**先只读定位、后恢复**（reflog / fsck / show 核实内容再动引用）；**恢复优先新建、不改写**（新建分支或引用不动任何现态，天然可逆；reset / force 类操作必须用户明确指示）。
 
 ## 0. 第一现场：reflog 与 fsck
 
 - `git reflog` 默认保留 90 天（`gc.reflogExpire`），不可达条目 30 天（`gc.reflogExpireUnreachable`）。事故后**先不要跑 `git gc --prune=now`**——那会真的清掉待恢复对象。
-- 误删的分支有自己的 reflog：`git reflog show <branch>` 在删除后仍可读（reflog 文件 `logs/refs/heads/<name>` 保留到过期）。
+- `git branch -d/-D` 会同时删除该分支的 reflog；不能再依赖 `git reflog show <deleted-branch>`。先查删除输出中的 tip、当前及其他 worktree 的 HEAD reflog、仍存在的引用与备份，必要时再用 fsck 找不可达对象。
 - 找无引用指向的悬空提交：`git fsck --no-reflogs --unreachable | grep commit`；确认内容再用：`git show <sha> --stat` / `git log --oneline <sha>`。
 
 ## 1. 误 amend（改错内容 / 丢了原提交信息，且未 push）
@@ -55,11 +55,13 @@ git stash show -p 'stash@{0}'     # 核内容再决定 apply
 
 ## 3. 误删本地分支（branch -d / -D 后）
 
-原理：删分支只删引用；提交仍通过分支自己的 reflog 与对象库可达（§0）。
+原理：删分支会同时删除引用与该分支的 reflog，提交对象可能仍在对象库；曾检出该分支的 worktree 的 HEAD reflog、其他引用或备份可能保存其 tip（§0）。没有引用或 reflog 保护的对象可能被 GC 回收，不能保证恢复。
 
 ```bash
-# 1. 读被删分支自己的 reflog，最后一条就是删除前的 tip
-git reflog show <deleted-branch> | head -3
+# 1. 从删除命令输出的 SHA 或 HEAD reflog 定位候选 tip
+git reflog show HEAD
+# 多 worktree：在曾检出该分支的工作区查看其 HEAD reflog
+git -C <worktree-path> reflog show HEAD
 
 # 2. 核内容
 git log --oneline <tip> -5
@@ -68,7 +70,7 @@ git log --oneline <tip> -5
 git branch <deleted-branch> <tip>
 ```
 
-找不到 reflog 时（关了 reflog / 已被 gc）：按 §0 fsck 找悬空提交，逐个 `git show` 认领。
+HEAD reflog 中没有候选时（例如分支从未检出），先核备份、其他引用与远端，再按 §0 fsck 找不可达提交，逐个 `git show` 核内容；确认 tip 后新建分支恢复。不要把 reflog 中最近一条不相关提交直接当作旧 tip。
 
 预防（与 [branch-lifecycle-and-cleanup.md](branch-lifecycle-and-cleanup.md) 一致）：删除前先跑 `scripts/branch-audit.sh` 只读盘点，squash/rebase 合并的分支用 MERGED PR 记录与 patch-id 双核对判死，不凭 `-D` 强删。
 
@@ -81,7 +83,8 @@ git branch <deleted-branch> <tip>
 ## 5. 误 reset --hard / checkout . / clean -f（丢弃工作区未提交内容）
 
 - **已提交**的内容：按 §0 reflog 找回 tip，`git branch backup/<desc> <tip>` 新建引用恢复。
-- **未提交**的内容：Git 层面无法恢复——这正是主 Skill §1 把这些操作列为禁止项的原因。可尝试的非 Git 途径：IDE 本地历史（JetBrains Local History / VS Code Timeline）、Time Machine、项目的整目录 rsync 备份纪律（见 [history-rewrite-and-removal.md](history-rewrite-and-removal.md) 的三层备份——untracked 的本地特有文件 git 备份盖不住）。
+- **曾暂存但未提交**的内容：`git add` 已把当时内容写入 blob，对象尚未被回收时可尝试 `git fsck --no-reflogs --unreachable` 找候选 blob，先用 `git cat-file -p <blob-oid>` 只读核内容，确认后导出到独立恢复目录。blob 本身不保存文件名/目录；只能找回曾写入对象库的字节，暂存后继续编辑的部分未必可恢复。
+- **从未被 Git 收录**的工作区内容或 untracked 文件：不能指望 Git 对象库恢复。可尝试 IDE 本地历史（JetBrains Local History / VS Code Timeline）、Time Machine、整目录 rsync 备份（见 [history-rewrite-and-removal.md](history-rewrite-and-removal.md) 的三层备份）。不因 fsck 找到某个 blob 就承诺全部内容已找回，也不因“未提交”就跳过对象库检查。
 
 ## 6. 误 commit 到错分支（落到并行会话的分支上）
 
