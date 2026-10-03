@@ -301,12 +301,41 @@ def verify(path):return locked_operation(path,_verify)
 def admit_retry(path,*args):return locked_operation(path,_admit_retry,*args)
 def adopt(path,*args):return locked_operation(path,_adopt,*args)
 
+def diagnose(path):
+    """Observe a reserved intent without locking, saving or granting admission."""
+    before=read(path);r=load_intent(path)
+    require(r.get('state')=='launched' and isinstance(r.get('terminal_handle'),str) and r['terminal_handle'] and type(r.get('runner_pid')) is int and r['runner_pid']>0,'launched intent with exact runner required')
+    recheck(r)
+    t=call(r['orca_bin'],'terminal','show','--terminal',r['terminal_handle'])['result']['terminal']
+    require(t.get('handle')==r['terminal_handle'] and t.get('worktreeId')==r['worktree_id'],'diagnostic terminal scope drift')
+    statuses=[]
+    if t.get('connected') is False and t.get('writable') is False:statuses.append('closed')
+    elif t.get('connected') is not True or t.get('writable') is not True:statuses.append('terminal_liveness_unproven')
+    if t.get('agentIdentity') is None:statuses.append('missing_agentIdentity')
+    elif t.get('agentIdentity')!='zcode':statuses.append('agentIdentity_mismatch')
+    if not isinstance(t.get('incarnationId'),str) or not t['incarnationId']:statuses.append('terminal_incarnation_unproven')
+    start=subprocess.run(['/bin/ps','-p',str(r['runner_pid']),'-o','lstart='],capture_output=True,text=True,timeout=5)
+    command=subprocess.run(['/bin/ps','-ww','-p',str(r['runner_pid']),'-o','command='],capture_output=True,text=True,timeout=5)
+    same_start=start.returncode==0 and start.stdout.strip()==r['runner_start']
+    if start.returncode!=0 or not start.stdout.strip():statuses.append('runner_absent')
+    elif not same_start:statuses.append('runner_start_mismatch')
+    title_rewritten=command.returncode==0 and command.stdout.strip()=='zcode-cli'
+    if title_rewritten:statuses.append('title_rewritten')
+    exact=False
+    try:
+        argv=shlex.split(command.stdout.strip())
+        exact=command.returncode==0 and same_start and len(argv)==6 and str(Path(argv[0]).resolve(strict=True))==r['native_node']['path'] and str(Path(argv[1]).resolve(strict=True))==r['zcode_entry'] and argv[-4:]==['--mode','yolo','--resume',r['provider_session']]
+    except (ValueError,OSError):pass
+    if not exact:statuses.append('argv_not_proven')
+    require(read(path)==before,'intent changed during diagnostic observation')
+    return {'ok':True,'diagnostic_only':True,'ready_for_retry':False,'business_input':False,'intent':path,'terminal_handle':r['terminal_handle'],'runner_pid':r['runner_pid'],'statuses':statuses,'same_runner_start_observed':same_start,'exact_argv_observed':exact,'original_recheck':'passed','provider_provenance':'NOT_ORCA_PROVIDER_PROVENANCE'}
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);sp=p.add_subparsers(dest='action',required=True)
     prep=sp.add_parser('prepare')
     for key in ('metadata','authority','failed-dispatch','provider-session','provider','model','effort','orca-bin','zcode-bin','zcode-entry','zcode-node'):prep.add_argument('--'+key,required=True)
     prep.add_argument('--native-db',default=str(Path.home()/'.zcode/cli/db/db.sqlite'))
-    for name in ('open','verify','resume-exec','rollback'):
+    for name in ('open','verify','diagnose','resume-exec','rollback'):
         q=sp.add_parser(name);q.add_argument('--intent',required=True)
     q=sp.add_parser('admit-retry');q.add_argument('--intent',required=True)
     for key in ('task','dispatch','terminal','run'):q.add_argument('--'+key,required=True)
@@ -316,6 +345,7 @@ def main():
         if a.action=='prepare':out=prepare(a)
         elif a.action=='open':out=open_terminal(a.intent)
         elif a.action=='verify':out=verify(a.intent)
+        elif a.action=='diagnose':out=diagnose(a.intent)
         elif a.action=='resume-exec':resume_exec(a.intent);return
         elif a.action=='rollback':out=locked_operation(a.intent,_rollback)
         elif a.action=='admit-retry':out=admit_retry(a.intent,a.task,a.dispatch,a.terminal,a.run);out={'ok':True,'retry_request':out['retry_request']}
