@@ -41,7 +41,8 @@
 | 2026-09-30 | 更新 | [pdf-organizer](skills/pdf-organizer/) | v0.6.1 | 修复重复清单编号掩盖覆盖异常、严格模式不完整编译/审计失败未阻断、交错来源溯源顺序丢失；页码范围展开前检查边界，补合成 PDF 回归与执行非事务边界。 |
 | 2026-09-30 | 更新 | [trademark-assistant](skills/trademark-assistant/) | v1.7.3 | 商品名称以明确文字单元格保存，精确保留前缀与首尾空白；超长名称拒绝，新增真实 XLSX/XML 回归。不证明分类正确或官方系统接收。 |
 | 2026-09-30 | 更新 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.13 | 修复原始 hard finding 被静默丢弃、语义断言 ID/类型假通过及多操作 hint 仅判第一项；新增9项合成回归。完整54项中2项既有候选快照失配仍明确保留。 |
-| 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.9.0 | **提交身份自检与身份污染审计 + 分支冗余巡检自动化 + 身份核验**：v1.9.0 新增 scripts/identity-audit.sh（whoami 提交前自检：来源链 env→worktree→repo-local→global，仓库级覆盖/env 覆盖/可疑 agent 身份模式/期望不符四类告警；history 全仓 author/committer/Co-authored-by 尾注分布审计，可疑项自动标注）+16 项故障注入测试，源自 private-skills Hermes 身份污染实录（GitHub squash 把分支提交作者自动转尾注，门禁期望值取自被污染 config 时形同虚设）；v1.8.9 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除）+批量删除执行坑入册；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支）。已在 legal-skills 与 private-skills 双仓实测。 |
+| 2026-09-30 | 更新 | [court-sms](skills/court-sms/) | v1.5.2→v1.5.3 | 修正送达证据判断：二维码/签发/普通短信时间仅作线索，逐文书与受送达人核对凭证；缺证或冲突不输出确定期限。新增证据契约检查与合成回归，核对可上诉性、特殊期间及调休日历，原件与真实案件期限仍须核验。 |
+
 </details>
 
 ## 📋 项目概述

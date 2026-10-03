@@ -30,7 +30,7 @@
 | [pdf-organizer](../../skills/pdf-organizer/) | 建立页码索引并按材料内容整理 PDF；源码 v0.6.1 待发布 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
 | [legal-visualization](../../skills/legal-visualization/) | 生成时间线、主体关系、争点证据矩阵等图解 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-visualization-0.8.2.zip) |
 | [md2word](../../skills/md2word/) | 把审定后的 Markdown 转成正式 Word 文档 | [已发布 v1.3.8](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/md2word-1.3.8.zip) |
-| [court-sms](../../skills/court-sms/) | 解析法院通知、获取文书并回填案件材料；源码 v1.5.2 待发布 | [已发布 v1.5.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |
+| [court-sms](../../skills/court-sms/) | 解析法院通知、获取文书并回填案件材料；源码 v1.5.3 待发布 | [已发布 v1.5.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |
 
 ## 建议使用方式
 
