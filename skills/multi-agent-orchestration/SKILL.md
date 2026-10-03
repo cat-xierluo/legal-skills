@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.34.6"
+  version: "2.36.7"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -246,6 +246,9 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 物理内存预算 lane 与派发排队 | `references/22-mem-budget-lane.md` |
 | 远程节点 Worker 派发（SSH 桥 + 一次性 receipt + 容量/基线门） | `references/25-remote-node-dispatch.md` |
 | 可选本地账号调度 Skill 的调用边界 | `references/29-local-account-routing-skill.md` |
+| 只读核查 ZCode 会话/turn/最终 assistant 完成证据（GUI 任务监控方向，非实时活性权威） | `references/zcode-session-evidence.md`；运行 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库） |
+| 只读GUI监控状态及一次性观察（READY仍需PM验收，无正式Orca监督） | `references/zcode-gui-monitor-adapter.md`、`references/zcode-gui-observe.md`；组合验证见 `references/zcode-gui-evidence-pipeline.md` |
+| GUI交付三件套的校验分块传输及Git bundle消费者 | `references/zcode-gui-artifacts.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
 不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
