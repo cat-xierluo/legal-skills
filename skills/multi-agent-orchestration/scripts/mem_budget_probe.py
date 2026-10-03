@@ -33,6 +33,7 @@ MEM_BUDGET_FIXTURE_DIR）注入快照文件，文件缺席 = 该源读取失败�
 from __future__ import annotations
 
 import argparse
+import time
 import json
 import os
 import re
@@ -493,6 +494,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixture-dir", default=None,
                         help=("测试/离线诊断快照目录（%s 同名）；文件缺席=该源读取失败"
                               % FIXTURE_ENV))
+    parser.add_argument("--task-profile", default=None, help="显式实验任务 profile；缺省保持原 lane")
+    parser.add_argument("--task-command", default=None)
+    parser.add_argument("--task-backend", default=None)
+    parser.add_argument("--task-binding-b64", default=None)
     args = parser.parse_args(argv)
 
     budget_bytes, budget_source = resolve_budget(args.budget, dict(os.environ))
@@ -508,6 +513,25 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write("\n")
         return EXIT_FAIL_CLOSED
 
+    profile = None
+    if args.task_profile:
+        try:
+            import memory_task_admission as mta
+            profile = mta.load_profile(args.task_profile)
+            if args.budget is None and BUDGET_ENV not in os.environ:
+                budget_bytes, budget_source = profile['_budget_floor'], 'task_profile'
+            mta.number(budget_bytes, 'budget', True, profile['_budget_floor'])
+            host_binding = mta.bind_host_profile(profile) if profile['execution'] == 'codex_host_followup' else None
+            if args.task_binding_b64:
+                profile, task_binding = mta.verify_binding(args.task_profile,args.task_command,args.task_backend,os.path.dirname(os.path.abspath(__file__)),args.task_binding_b64)
+            if profile['execution'] == 'new_spawn' and profile['kind'] in {'light_node','bounded_minimax_unmeasured'}:
+                if not args.task_command or not args.task_backend:
+                    raise ValueError('new light Node probe needs actual command/backend binding')
+                mta.bind_spawn(profile, args.task_command, args.task_backend, os.path.dirname(os.path.abspath(__file__)))
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            print(json.dumps({'schema': SCHEMA, 'status': 'config_invalid', 'slots': 0,
+                              'reason': 'task profile refused: ' + str(exc)}, ensure_ascii=False))
+            return EXIT_FAIL_CLOSED
     fixture_dir = args.fixture_dir or os.environ.get(FIXTURE_ENV, "").strip() or None
     if fixture_dir is not None:
         snapshots = collect_fixture(fixture_dir)
@@ -515,6 +539,26 @@ def main(argv: list[str] | None = None) -> int:
         snapshots = collect_real()
 
     payload = evaluate(snapshots, budget_bytes, budget_source)
+    if profile is not None:
+        try:
+            samples = [{'at_monotonic': time.monotonic(), 'raw': snapshots}]
+            # Offline fixtures cannot simulate elapsed live time. Pure API tests
+            # carry explicit synthetic timestamps, identified as supplied data.
+            if not fixture_dir and profile['kind'] in {'light_node','bounded_minimax_unmeasured'} and (profile['kind'] == 'bounded_minimax_unmeasured' or payload.get('pressure', {}).get('level') in {'warn', 'critical'}):
+                start = samples[0]['at_monotonic']
+                for offset in (10, 20):
+                    time.sleep(max(0, start + offset - time.monotonic()))
+                    samples.append({'at_monotonic': time.monotonic(), 'raw': collect_real()})
+            if args.task_binding_b64:
+                profile, task_binding = mta.verify_binding(args.task_profile,args.task_command,args.task_backend,os.path.dirname(os.path.abspath(__file__)),args.task_binding_b64)
+            if host_binding is not None:
+                profile = mta.load_profile(args.task_profile)
+                if mta.bind_host_profile(profile) != host_binding:
+                    raise ValueError('host profile/projection/Node plan drift across observation')
+            payload = mta.apply_profile(profile, samples, budget_bytes, evaluate)
+            payload['task_admission']['spawn_binding_verified'] = bool(args.task_binding_b64)
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            payload.update(status='denied', slots=0, reason='task observation refused: ' + str(exc))
     payload["telemetry"]["collection_mode"] = "fixture_files" if fixture_dir else "live_readonly"
     if args.json:
         json.dump(payload, sys.stdout, ensure_ascii=False)

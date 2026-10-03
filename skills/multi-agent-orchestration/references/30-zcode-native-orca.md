@@ -34,6 +34,45 @@ python3 /absolute/skill/scripts/zcode-orca-launcher.py launch --requests-root /p
 
 已有 long-lived 工作树且没有原 MAO Session 时，仅按 [显式借用入口](31-borrowed-existing-worktree.md) 创建新 Session；普通 `--worktree` 不能复用，恢复命令不适用于首次接入。
 
+## 已关闭原 Session 的具名恢复
+
+当前实测边界（2026-10-03）：Orca 1.4.218 / ZCode CLI 0.16.9（runtime 3.14.3）的空输入恢复可启动，但原生CLI会改写进程title与argv，公开terminal的agentIdentity仍null，现有身份门无法证明它。此组合保持`CONTINUATION_NOT_READY`；不执行新的prepare/open/register，先取得正式runtime识别与原生进程身份的受审支持。以下命令保留为受限恢复合同，不能据模拟通过宣称真实已接通。
+
+已有状态为`launched`、绑定确切terminal与runner PID的意图只做只读诊断：
+
+```bash
+python3 scripts/zcode_closed_recovery.py diagnose --intent "$RECOVERY_INTENT"
+```
+
+报告固定`diagnostic_only=true`、`ready_for_retry=false`，核原绑定、当前owner和持久模型，指出closed、缺失agentIdentity、title改写或argv不符。它不修改intent、路由或业务状态。已关闭的单次意图不能重open；日志/SID、进程标题和Node内核路径均不能单独替代真实Agent/Session归属。后续恢复由原PM沿原卡和累计失败预算验收，真实请求/计费仍待证。
+
+首次启动桥不接纳已消费Session或旧terminal。原失败Task的关闭恢复单独使用`zcode_closed_recovery.py`，不走`reauthorize`或`reset-failed`。原PM先核原任务卡、剩余episode预算和具名providerSession来源；恢复只创建空业务输入的原生`--resume sess_… --mode yolo`会话，不新建Task。
+
+按原PM冻结的真实绝对路径和目标模型执行：
+
+```bash
+python3 scripts/zcode_closed_recovery.py prepare \
+  --metadata "$ORIGINAL_METADATA" --authority "$ORIGINAL_AUTHORITY" \
+  --failed-dispatch "$FAILED_DISPATCH" --provider-session "$ORIGINAL_PROVIDER_SESSION" \
+  --provider "$EXPECTED_PROVIDER" --model "$EXPECTED_MODEL" --effort "$EXPECTED_EFFORT" \
+  --orca-bin "$ORCA_BIN" --zcode-bin "$ZCODE_BIN" --zcode-entry "$ZCODE_ENTRY" \
+  --zcode-node "$ZCODE_NODE"
+python3 scripts/zcode_closed_recovery.py open --intent "$RECOVERY_INTENT"
+python3 scripts/zcode_closed_recovery.py verify --intent "$RECOVERY_INTENT"
+```
+
+`prepare`核原authority/completion与初始→后继失败attempt同runtime/run/旧terminal/process的公开链；只接受正向退出与旧cap撤销证明。`RECOVERY_INTENT`必须取本次真实输出，不自行拼接。`open`在新鲜内存准入后只恢复精确Session；`verify`核新terminal/incarnation、实际native进程argv和只读SQLite里的唯一主Session、worktree、yolo、provider/model/effort。数据库缺失、模型不符、未知/live旧目标或身份漂移均拒绝。持久化模型选择不证明实际请求或计费；Orca尚未报告providerSession时明确记录`NOT_ORCA_PROVIDER_PROVENANCE`，不伪造其字段。
+
+通过后由原业务PM将原已核完整register参数与以下参数合用，单次调用：
+
+```text
+--task-id FAILED_TASK --terminal-handle RECOVERED_TERMINAL
+--metadata-file ORIGINAL_METADATA --authority-receipt ORIGINAL_AUTHORITY
+--retry-of FAILED_DISPATCH --closed-recovery RECOVERY_INTENT
+```
+
+继续传原run、当前合法coordinator、runtime与worktree身份；不传旧完整输入，不以`--task-spec`造新Task。该入口核模型后采用公开同failed Task `worker-start --retry-of`，将真实新Dispatch的process/cap摘要绑定到原完成路径并更新路由，保留原authority及attempt历史。恢复意图一次消费；不确定或post-start采用失败时保留真实回执与资源，只对账，不重发业务。原PM负责业务独验及预算记账；模拟通过不能代签DSH原022实际恢复。 业务已接受而本地采用被中断时，读取同意图状态：处于`adopting`时用`rollback --intent`复核并恢复原路由；已经`adoption_failed_rolled_back`时直接用`adopt --intent ... --new-dispatch ...`采用意图中记录的同一个新Dispatch。实时身份或当前文件状态未知时拒绝，禁止再次register。本地文件事务与跨系统业务完成分别验收。
+
 ## 单 worker 权限与 CLI 接续
 
 启动前按任务选权限模式。新隔离worker的renderer与spawn默认命令均明确使用 `yolo`；需要收紧时显式选择 `build/edit/plan`。`build`的普通workspace写入与有副作用Bash通常要求审批。`edit` 允许普通workspace编辑，Bash仍按build判断；`plan`限制有副作用工具；`yolo`可减少普通写入和Bash确认，但需要用户交互、alwaysAsk与plan状态仍有例外。yolo不能提供机械scope/install保护，也不能把普通项目deny规则当作它的范围护栏。

@@ -37,6 +37,9 @@ NATIVE_AGENT=""
 LAUNCH_REQUEST_ROOT=""
 TERMINAL_OWNERSHIP="external"
 REPLACEMENT_BIND=""
+RETRY_OF=""
+CLOSED_RECOVERY=""
+RETRY_REQUEST=""
 
 usage() {
   cat >&2 <<'USAGE'
@@ -65,6 +68,8 @@ Optional:
                            successful replacement registration. The path,
                            worktree, Run, Task and authority receipt are verified.
   --timeout-ms N           worker-start readiness timeout (default: 60000)
+  --retry-of ID            Exact failed Dispatch; requires --closed-recovery intent.
+  --closed-recovery PATH   Verified closed-provider intent, single-use retry/adoption.
   --reset-failed           When worker-start is rejected with task_not_startable
                            (Task flipped to failed/blocked by a prior worker's ask
                            or abort), reset that Task to ready once and retry
@@ -93,12 +98,21 @@ while [[ $# -gt 0 ]]; do
     --metadata-file) METADATA_FILE="$2"; shift 2 ;;
     --objective) OBJECTIVE="$2"; shift 2 ;;
     --timeout-ms) TIMEOUT_MS="$2"; shift 2 ;;
+    --retry-of) RETRY_OF="$2"; shift 2 ;;
+    --closed-recovery) CLOSED_RECOVERY="$2"; shift 2 ;;
     --reset-failed) RESET_FAILED=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 64 ;;
   esac
 done
 
+if [ -n "$RETRY_OF" ] || [ -n "$CLOSED_RECOVERY" ]; then
+  [ -n "$RETRY_OF" ] && [ -n "$CLOSED_RECOVERY" ] && [ -n "$TASK_ID" ] && [ -n "$RUN_ID" ] &&
+    [ -n "$EXPECTED_RUNTIME_ID" ] && [ -n "$TERMINAL_HANDLE" ] && [ -n "$METADATA_FILE" ] &&
+    [ -z "$NATIVE_AGENT" ] && [ "$RESET_FAILED" -eq 0 ] || {
+      echo "ERROR: closed retry requires exact intent/task/run/runtime/terminal/metadata; excludes reset/native-first" >&2; exit 64;
+    }
+fi
 [ -n "$WORKTREE_ID" ] || { echo "ERROR: --worktree-id is required" >&2; exit 64; }
 if [ -n "$NATIVE_AGENT" ]; then
   [ "$NATIVE_AGENT" = "zcode" ] && [ -z "$TERMINAL_HANDLE" ] && [ -n "$METADATA_FILE" ] && [ -n "$LAUNCH_REQUEST_ROOT" ] && [ "$RESET_FAILED" -eq 0 ] || {
@@ -121,6 +135,24 @@ python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from completion_authori
 orca_runtime_init
 if [ -n "$COORDINATOR_HANDLE" ] || [ -n "$EXPECTED_RUNTIME_ID" ]; then
   orca_runtime_require_identity "$EXPECTED_RUNTIME_ID" || exit $?
+fi
+
+if [ -n "$CLOSED_RECOVERY" ]; then
+  python3 - "$SCRIPT_DIR" "$CLOSED_RECOVERY" "$METADATA_FILE" "$AUTHORITY_RECEIPT_FILE" "$EXPECTED_RUNTIME_ID" "$WORKTREE_ID" "$COORDINATOR_HANDLE" "$ORCA_CLI_BIN" <<'PY_RECOVERY'
+import sys
+sys.path.insert(0,sys.argv[1])
+from zcode_closed_recovery import load_intent,require
+r=load_intent(sys.argv[2])
+require((r['metadata'],r['authority'],r['runtime_id'],r['worktree_id'],r['orca_bin'])==tuple(sys.argv[3:7]+[sys.argv[8]]),'register intent identity mismatch')
+import json
+m=json.loads(open(r['metadata']).read())
+from zcode_closed_recovery import run_owner
+require(run_owner(r['orca_bin'],r['failed']['run_id'],r['runtime_id'])==r['owner'] and r['owner']['handle']==sys.argv[7],'current official Run coordinator mismatch')
+PY_RECOVERY
+  retry_admission=$(python3 "$SCRIPT_DIR/zcode_closed_recovery.py" admit-retry --intent "$CLOSED_RECOVERY" \
+    --task "$TASK_ID" --dispatch "$RETRY_OF" --terminal "$TERMINAL_HANDLE" --run "$RUN_ID") || exit 64
+  RETRY_REQUEST=$(printf '%s' "$retry_admission" | python3 -c 'import json,sys,uuid; value=json.load(sys.stdin)["retry_request"]; assert isinstance(value,str) and str(uuid.UUID(value))==value; print(value)') || exit 64
+  [ -n "$RETRY_REQUEST" ] || { echo "ERROR: empty retry operation identity" >&2; exit 64; }
 fi
 
 if [ -n "$NATIVE_AGENT" ]; then
@@ -323,7 +355,10 @@ worker_start_once() {
   fi
   local -a launch_selector=(--terminal "$TERMINAL_HANDLE")
   [ -z "$NATIVE_AGENT" ] || launch_selector=(--agent "$NATIVE_AGENT")
+  local -a retry_selector=()
+  [ -z "$RETRY_OF" ] || retry_selector=(--retry-of "$RETRY_OF" --retry-request "$RETRY_REQUEST")
   orca_cli orchestration worker-start \
+    "${retry_selector[@]}" \
     --task "$TASK_ID" \
     "${launch_selector[@]}" \
     --worktree "id:$WORKTREE_ID" \
@@ -352,6 +387,21 @@ if ! start_out=$(worker_start_once); then
     echo "ERROR: worker-start failed; inspect this exact receipt and residualResources before retrying: $start_out" >&2
     exit 1
   fi
+fi
+
+if [ -n "$CLOSED_RECOVERY" ]; then
+  DISPATCH_ID=$(printf '%s' "$start_out" | jq -er '.result | select(.state == "ready") | .dispatchId | select(type == "string" and length > 0)') || {
+    echo "ERROR: retry response unknown; intent consumed; inspect native operation, never repeat business" >&2; exit 1;
+  }
+  if ! orchestration_closed_recovery_adopt "$CLOSED_RECOVERY" "$DISPATCH_ID" >/dev/null; then
+    echo "ERROR: native retry started but adoption refused; exact dispatch=$DISPATCH_ID terminal=$TERMINAL_HANDLE intent=$CLOSED_RECOVERY; do not repeat business" >&2; exit 1
+  fi
+  printf 'ORCAREG_RUN_ID=%s\nORCAREG_TASK_ID=%s\nORCAREG_DISPATCH_ID=%s\nORCAREG_DISPATCH_BIND=ok\nORCAREG_METADATA_BIND=ok\n' "$RUN_ID" "$TASK_ID" "$DISPATCH_ID"
+  printf 'ORCAREG_COORDINATOR_HANDLE=%s\nORCAREG_TERMINAL_HANDLE=%s\nORCAREG_TERMINAL_OWNERSHIP=external\n' "$COORDINATOR_HANDLE" "$TERMINAL_HANDLE"
+  printf 'ORCAREG_COMPLETION_AUTHORITY_FILE=%s\nORCAREG_COMPLETION_AUTHORITY_SHA256=%s\n' \
+    "$(jq -er '.execution_authority.completion_authority_file' "$METADATA_FILE")" \
+    "$(jq -er '.execution_authority.completion_authority_sha256' "$METADATA_FILE")"
+  exit 0
 fi
 
 if [ -n "$NATIVE_AGENT" ]; then

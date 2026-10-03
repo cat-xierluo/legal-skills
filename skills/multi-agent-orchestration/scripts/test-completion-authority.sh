@@ -64,7 +64,7 @@ if grep -R -Fq "$CAPABILITY" "$CASE_ROOT"; then
 else
   ok "runtime capability plaintext never enters receipt or metadata"
 fi
-mode=$(stat -f '%Lp' "$completion_file" 2>/dev/null || stat -c '%a' "$completion_file")
+mode=$(python3 -c 'import os, stat, sys; print(format(stat.S_IMODE(os.stat(sys.argv[1]).st_mode), "o"))' "$completion_file")
 if [ "$mode" = "600" ]; then ok "completion receipt is owner-only"; else bad "completion receipt is owner-only"; fi
 
 first_sha=$(shasum -a 256 "$completion_file" | awk '{print $1}')

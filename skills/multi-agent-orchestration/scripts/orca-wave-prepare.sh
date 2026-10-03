@@ -29,6 +29,12 @@ Manifest schema:
     ]
   }
 
+For authorized continuous operation, add execution_policy="continuous" and
+continuation_contract="/absolute/path/to/existing-project-contract.json".
+The existing PM heartbeat is checked read-only before any Orca call. Success
+proves configuration readiness, not automatic firing or business completion.
+Omitted execution_policy retains one-wave compatibility.
+
 All tasks must be independent and have unique non-empty keys/specs. The command creates
 or binds one Run, creates every Task serially, then emits one JSON receipt. Only after this
 command succeeds may callers start workers in parallel with the receipt's run_id,
@@ -81,6 +87,13 @@ if [ -n "$slash_specs" ]; then
     printf '  - %s\n' "$task_key" >&2
   done <<< "$slash_specs"
   exit 64
+fi
+
+# Continuous intent must not silently become a single unmonitored Wave.
+# Legacy manifests stay on the one-wave path; no jobs are created by this gate.
+if jq -e 'has("execution_policy") or has("continuation_contract")' "$MANIFEST" >/dev/null; then
+  command -v python3 >/dev/null 2>&1 || { echo "CONTINUATION_PYTHON_REQUIRED: Python is required; continuous mode needs 3.11+" >&2; exit 64; }
+  python3 -B "$SCRIPT_DIR/continuation-readiness.py" --wave-manifest "$MANIFEST" >&2 || exit $?
 fi
 
 OBJECTIVE=$(jq -r '.objective' "$MANIFEST")

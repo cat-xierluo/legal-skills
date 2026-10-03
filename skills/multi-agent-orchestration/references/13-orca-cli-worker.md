@@ -136,6 +136,8 @@ PM create/bind Run
 - PM 的 mutation/wait/accounting 命令会先 `run-use --id` 把调用终端重新绑定为 coordinator，并刷新 METADATA 中的 handle；后续 `check` 消费当前绑定 Run，不再传陈旧 `--run`。
 - `pm-run-bind.sh` 将 handle probe/run-use 畸形响应视为失败（exit 1），run-current 不可验证或身份不匹配返回 exit 2；绑定未知时先检查原始响应，不盲目重试。远端分支清理绑定预期 OID 做原子比较删除，较新 tip 不会被删除；远端失败可能发生在本地资源已回收之后，须保留并处理 remote-pending 结果，不能声称整组资源均已保留或清空。
 
+已关闭ZCode原Session且原metadata仍绑定初始attempt时，采用[具名关闭恢复入口](30-zcode-native-orca.md#已关闭原-session-的具名恢复)。`--retry-of`须与`--closed-recovery`的单次意图合用；不可用`--reset-failed`替代原失败历史，也不可手改capability或completion字段。
+
 ### 5.1 Worker 问答与跟进收件
 
 阻塞问题必须从 live preamble 复制 Orca executable、worker handle 与 Dispatch capability：

@@ -32,6 +32,10 @@ bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
 python3 scripts/test_memory_telemetry.py
+python3 scripts/test_memory_task_admission.py
+python3 scripts/test_host_memory_admission.py
+python3 scripts/test_minimax_memory_admission.py
+python3 scripts/test_minimax_spawn_integration.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-pm-message-contract.sh
@@ -41,6 +45,7 @@ bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
 python3 scripts/test-zcode-orca-launcher.py
+python3 scripts/test_zcode_closed_recovery.py -v
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-completion-authority.sh
@@ -64,8 +69,10 @@ bash scripts/test-spawn-worker-verification.sh
 bash scripts/test-dispatch-value-gate.sh
 bash scripts/test-worker-value-postflight.sh
 bash scripts/test-review-acceptance-gate.sh
+python3 scripts/test_business_artifact.py
 bash scripts/test-blocker-recovery.sh
 bash scripts/test-orca-wave-lifecycle.sh
+python3 -B scripts/test_continuation_readiness.py -v
 bash scripts/test-orca-runtime-identity.sh
 bash scripts/test-orca-auto-register.sh
 python3 scripts/test_orca_registration_concurrency.py
@@ -89,6 +96,7 @@ bash scripts/smoke-orca-control-plane.sh
 
 ## 3. 证据边界
 
+- 接续准备门测试消费真实Wave入口和隔离automation配置，阴性路径必须在首次Orca调用前拒绝；合法配置与真实宿主只读消费均不证明定时触发、自动独审/写回/续派。one_wave不要求TOML运行库，continuous需要Python3.11+；首次失败与修后反例均保留，人工恢复不得归因为自动闭环。
 - `smoke-orca-worker.sh` 通过严格只读代理验证真实 runtime 检测和无/错 sender 的前置拒绝，不启动 Agent 或创建 Run。正向单一任务注入与 Wave 复用由隔离套件验证，不使用虚构 handle 作为真实成功证据。
 - `smoke-orca-control-plane.sh` 使用 fake CLI 验证命令路由、cursor 与 external terminal accounting。
 - `test_worker_delivery_prompt.py` 检查实际 Task spec/启动命令与真实 guard hook 的准入/拒绝，不启动 provider；`smoke-sentinel.sh` 与 `smoke-tmux-worker.sh` 使用独立 tmux socket，后者另用固定本地脚本与无转发 Orca stub，按真实记录区分 fake 只读探测和 live 调用。若 sandbox 明确禁止创建隔离 tmux socket，smoke 必须输出环境跳过并退出成功；这不构成 tmux 行为通过证据，确定性合同仍由不依赖真实 socket 的测试承担。
@@ -111,3 +119,5 @@ bash scripts/smoke-orca-control-plane.sh
 - MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
 
 - 派发profile消费者须从实际spawn入口证明：漏native参数的ZCode自动补原生桥；缺失/禁用配置零资源副作用；旧显式native及generic/direct兼容；MiniMax模式由实际COMMAND取得，batch零wait/send。官方projection的nextAction优先于composer残留，身份冲突拒绝。计划/启动返回保持draft，不能把stub成功扩大为真实输入/业务完成。
+
+- 任务资源 profile 的隔离消费者使用真实 Node 和私有文件；宿主 suite 需要当前真实 `CODEX_THREAD_ID`，无宿主时记该项 NOT_VERIFIED，不填虚构线程冒充本机证据。完整 MiniMax spawn 使用隔离 Orca/采集/祖先输入，须核前置零资源、晚期零启动及已建资源账目；不据此声明真实模型、Orca业务、整worker RSS或跨PM原子预留通过。

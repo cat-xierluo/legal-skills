@@ -290,6 +290,19 @@ resolve_verification_commands() {
     VERIFY_COMMAND_SOURCE="dispatch-contract:$VERIFICATION_TASK_ID"
     case "$value_kind" in
       implementation|reusable_verification) REQUIRE_VERIFICATION=1 ;;
+      business_artifact)
+        local acceptance_mode
+        acceptance_mode=$(printf '%s' "$config_json" | jq -r '.[0].business_artifact.acceptance_mode')
+        if [ "$acceptance_mode" = content_review ]; then
+          [ "${REQUIRE_VERIFICATION:-0}" -eq 0 ] \
+            || verification_fail "content_review cannot be combined with required command self-verification" || return $?
+          VERIFY_COMMAND_SOURCE="dispatch-contract:$VERIFICATION_TASK_ID:content_review"
+        else
+          REQUIRE_VERIFICATION=1
+          VERIFY_COMMAND_SOURCE="dispatch-contract:$VERIFICATION_TASK_ID:verifier"
+        fi
+        printf 'SPAWN_WORKER_VERIFY_ACCEPTANCE: mode=%s; independent artifact/source review required\n' "$acceptance_mode"
+        ;;
       merge_gate) ;;
       *) verification_fail "selected task has unsupported value_kind '$value_kind'" || return $? ;;
     esac

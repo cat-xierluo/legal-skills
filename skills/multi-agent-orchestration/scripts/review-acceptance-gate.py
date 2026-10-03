@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import importlib.util
 import json
 from pathlib import Path
 import re
 from typing import Any
+from business_artifact_contract import ArtifactError, observe_delivery, validate_evidence, validate_task as validate_business_task
 
 
 SCHEMA = "review-acceptance-gate.v1"
@@ -53,17 +56,46 @@ def validate(contract: Any) -> tuple[list[str], dict[str, Any]]:
     if contract.get("schema_version") != SCHEMA:
         errors.append(f"schema_version must equal {SCHEMA}")
 
-    delivery_head = _head(contract.get("delivery_head"))
-    if delivery_head is None:
-        errors.append("delivery_head must be an immutable 40-hex commit")
-    reviewed_head = _head(contract.get("reviewed_head"))
-    if reviewed_head is None:
-        errors.append("reviewed_head must be an immutable 40-hex commit")
-    elif delivery_head is not None and reviewed_head != delivery_head:
-        errors.append(
-            "reviewed_head must equal delivery_head: the reviewer attests the same "
-            "immutable commit that is delivered"
-        )
+    business = contract.get("value_kind") == "business_artifact"
+    if business:
+        task = contract.get("business_task")
+        if not isinstance(task, dict) or task.get("value_kind") != "business_artifact":
+            errors.append("business review requires the exact business_task contract")
+        else:
+            gate_spec = importlib.util.spec_from_file_location("business_dispatch_gate", Path(__file__).with_name("dispatch-value-gate.py"))
+            gate = importlib.util.module_from_spec(gate_spec)
+            gate_spec.loader.exec_module(gate)
+            errors.extend(gate.validate({"schema_version": gate.SCHEMA, "mode": "converge",
+                                         "pending_acceptance_prs": 0, "tasks": [task]}, datetime.now(timezone.utc)))
+            evidence = contract.get("business_evidence")
+            root = contract.get("artifact_root")
+            if not isinstance(root, str) or not root:
+                errors.append("business review requires artifact_root for actual file read-back")
+            elif not errors:
+                try:
+                    observed = observe_delivery(task, Path(root))
+                    errors.extend(validate_evidence(task, evidence, observed))
+                    report["delivery_identity"] = observed["identity"]
+                    if contract.get("delivery_identity") != observed["identity"] or contract.get("reviewed_identity") != observed["identity"]:
+                        errors.append("business delivery_identity/reviewed_identity must equal the actual artifact identity")
+                    if isinstance(evidence, dict):
+                        if contract.get("implementation") != evidence.get("implementation") or contract.get("reviewer") != (evidence.get("content_review") or {}).get("reviewer"):
+                            errors.append("business review role identities must match bound evidence")
+                except (ArtifactError, ValueError, TypeError, KeyError) as exc:
+                    errors.append(str(exc))
+        report["semantic_quality"] = "independent reviewer attestation; not mechanically proved"
+    else:
+        delivery_head = _head(contract.get("delivery_head"))
+        if delivery_head is None:
+            errors.append("delivery_head must be an immutable 40-hex commit")
+        reviewed_head = _head(contract.get("reviewed_head"))
+        if reviewed_head is None:
+            errors.append("reviewed_head must be an immutable 40-hex commit")
+        elif delivery_head is not None and reviewed_head != delivery_head:
+            errors.append(
+                "reviewed_head must equal delivery_head: the reviewer attests the same "
+                "immutable commit that is delivered"
+            )
 
     identities: dict[str, dict[str, str]] = {}
     for role in ("implementation", "reviewer"):
@@ -91,7 +123,11 @@ def validate(contract: Any) -> tuple[list[str], dict[str, Any]]:
         errors.append('verdict must be the literal "ACCEPT" from the independent reviewer')
 
     evidence = contract.get("verification_evidence")
-    if not isinstance(evidence, list) or not evidence:
+    if business:
+        # Content criteria and source checks were validated against real files
+        # above; no fabricated command is required for a non-coding artifact.
+        evidence = []
+    elif not isinstance(evidence, list) or not evidence:
         errors.append(
             "verification_evidence must be a non-empty array of {command, exit_code} records; "
             "prose-only narratives are rejected"

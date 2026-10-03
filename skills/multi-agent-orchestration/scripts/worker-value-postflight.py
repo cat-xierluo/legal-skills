@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 from typing import Any
+from business_artifact_contract import ArtifactError, observe_delivery, validate_evidence
 
 
 EXIT_REJECTED = 2
@@ -210,6 +211,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--spec", type=Path, required=True, help="dispatch-value-gate spec JSON")
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--repo", help="Git repository for base/head diff inspection")
+    parser.add_argument("--artifact-root", type=Path, help="canonical Git or non-Git business artifact directory")
     parser.add_argument("--base", help="base revision (with --repo/--head)")
     parser.add_argument("--head", help="head revision (with --repo/--base)")
     parser.add_argument("--diff", type=Path, help="unified diff / patch file to inspect instead")
@@ -230,8 +232,10 @@ def main() -> int:
         errors.append("--repo, --base and --head must be supplied together")
     if args.diff and any(diff_sources):
         errors.append("use either --diff or --repo/--base/--head, not both")
-    if not args.diff and not all(diff_sources):
+    if not args.diff and not all(diff_sources) and args.artifact_root is None:
         errors.append("a diff source is required: --diff or --repo/--base/--head")
+    if args.artifact_root is not None and (args.diff or any(diff_sources) or args.delivery_head):
+        errors.append("business --artifact-root cannot be mixed with Git/patch delivery arguments")
 
     spec_data = _load_json(args.spec, "spec", errors)
     evidence_data = _load_json(args.evidence, "evidence", errors)
@@ -244,6 +248,23 @@ def main() -> int:
             task = next((item for item in tasks if isinstance(item, dict) and item.get("task_id") == args.task_id), None)
         if task is None:
             errors.append(f"task_id '{args.task_id}' not found in spec tasks")
+
+    if task is not None and task.get("value_kind") == "business_artifact":
+        if args.artifact_root is None:
+            errors.append("business_artifact requires --artifact-root and actual file evidence")
+        report = {"task_id": args.task_id, "value_kind": "business_artifact",
+                  "semantic_quality": "independent reviewer attestation; not mechanically proved"}
+        if not errors:
+            try:
+                observed = observe_delivery(task, args.artifact_root)
+                errors.extend(validate_evidence(task, evidence_data, observed))
+                report["delivery"] = observed
+            except (ArtifactError, ValueError, TypeError) as exc:
+                errors.append(str(exc))
+        print(json.dumps({"ok": not errors, "errors": errors, "report": report}, ensure_ascii=False))
+        return 0 if not errors else EXIT_REJECTED
+    if args.artifact_root is not None:
+        errors.append("--artifact-root is only valid for business_artifact; engineering still requires immutable Git head")
 
     changed: list[str] = []
     resolved_head: str | None = None

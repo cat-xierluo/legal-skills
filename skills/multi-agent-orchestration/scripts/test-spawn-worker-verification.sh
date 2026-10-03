@@ -195,5 +195,58 @@ else
   bad "contract U+0000 rejection was not fail-closed"
 fi
 
+echo "Case 14: business content review is explicit and never auto-discovers unrelated tests"
+reset_case
+python3 - "$SCRIPT_DIR" "$CASE_ROOT/business.json" <<'PY'
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from test_business_artifact import business_task
+with open(sys.argv[2], 'w') as stream:
+    json.dump({'schema_version':'dispatch-value-gate.v2', 'mode':'converge', 'pending_acceptance_prs':0, 'tasks':[business_task()]}, stream)
+PY
+VERIFICATION_CONTRACT="$CASE_ROOT/business.json"
+VERIFICATION_TASK_ID="REPORT-1"
+if resolve_verification_commands >/dev/null && validate_verification_commands \
+  && [ "${#VERIFY_COMMANDS[@]}" -eq 0 ] \
+  && [ "$VERIFY_COMMAND_SOURCE" = 'dispatch-contract:REPORT-1:content_review' ]; then
+  ok "content review consumes zero commands despite existing root Python tests"
+else
+  bad "content review was replaced by unrelated automatic verification"
+fi
+
+echo "Case 15: business verifier retains exact declared command authority"
+reset_case
+python3 - "$CASE_ROOT/business.json" <<'PY'
+import json, sys
+path=sys.argv[1]; data=json.load(open(path)); task=data['tasks'][0]
+task['business_artifact']['acceptance_mode']='verifier'
+task['verification_commands']=['python3 -c "print(42)"']
+with open(path,'w') as stream: json.dump(data,stream)
+PY
+VERIFICATION_CONTRACT="$CASE_ROOT/business.json"
+VERIFICATION_TASK_ID="REPORT-1"
+if resolve_verification_commands >/dev/null && validate_verification_commands \
+  && [ "$REQUIRE_VERIFICATION" -eq 1 ] \
+  && [ "${VERIFY_COMMANDS[0]}" = 'python3 -c "print(42)"' ]; then
+  ok "business verifier command and required flag remain exact"
+else
+  bad "business verifier authority drifted"
+fi
+
+echo "Case 16: business standards cannot be omitted to bypass verification"
+reset_case
+python3 - "$CASE_ROOT/business.json" <<'PY'
+import json, sys
+path=sys.argv[1]; data=json.load(open(path)); data['tasks'][0]['business_artifact']['acceptance_criteria']=[]
+with open(path,'w') as stream: json.dump(data,stream)
+PY
+VERIFICATION_CONTRACT="$CASE_ROOT/business.json"
+VERIFICATION_TASK_ID="REPORT-1"
+if resolve_verification_commands >/dev/null 2>&1; then
+  bad "business task without standards passed spawn verification preflight"
+else
+  ok "business task without standards fails before commands/launch"
+fi
+
 printf 'spawn-worker verification tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

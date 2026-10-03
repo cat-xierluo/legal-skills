@@ -84,6 +84,23 @@ esac
 FAKE
 chmod +x "$FAKE_TMUX"
 
+# Fixture-only completion evidence: pm-monitor sleeps after its whole loop body.
+# This PATH shim neither changes production timing nor creates a real tmux server.
+cat > "$FAKE_BIN/sleep" <<'TICK_SLEEP'
+#!/bin/sh
+if [ -n "${PM_MONITOR_TEST_TICKS:-}" ]; then
+  n=0
+  if [ -f "$PM_MONITOR_TEST_TICKS" ]; then
+    n=$(cat "$PM_MONITOR_TEST_TICKS") || exit 99
+  fi
+  case "$n" in ''|*[!0-9]*) exit 99 ;; esac
+  printf '%s\n' "$((n + 1))" > "${PM_MONITOR_TEST_TICKS}.tmp" || exit 99
+  mv "${PM_MONITOR_TEST_TICKS}.tmp" "$PM_MONITOR_TEST_TICKS" || exit 99
+fi
+exec /bin/sleep "$@"
+TICK_SLEEP
+chmod +x "$FAKE_BIN/sleep"
+
 # 构造“tmux 命令不可用”的 PATH：把当前 PATH 内除 tmux 外的全部可执行文件
 # symlink 进独立目录（忠实模拟 Monitor/受限环境缺 tmux 的形态）。
 STRIPPED_BIN="$TMP_ROOT/bin-stripped"
@@ -153,11 +170,13 @@ run_once() {
 run_loop() {
   # $1=FAKE_TMUX_MODE $2=FAKE_TMUX_SEQUENCE(可选) $3=输出文件 $4=PATH
   local mode="$1" seq="$2" outfile="$3" path="$4" pid
+  local ticks_file="${outfile}.completed-ticks" completed=0 deadline
   set +e
   (
     cd "$TMP_ROOT" || exit 99
     export PATH="$path"
     export FAKE_TMUX_MODE="$mode"
+    export PM_MONITOR_TEST_TICKS="$ticks_file"
     if [ -n "$seq" ]; then
       export FAKE_TMUX_SEQUENCE="$seq"
     else
@@ -170,11 +189,22 @@ run_loop() {
       --interval 1
   ) >"$outfile" 2>&1 &
   pid=$!
-  # 3 个迭代足够（t≈0/1/2s）；判活每迭代消费 2 次 tmux 调用（check_tmux_session + staleness）
-  sleep 2.6
+  # The private sleep shim records the actual end of each loop body. A fixed
+  # wall-clock sleep cannot prove three iterations under host load.
+  deadline=$((SECONDS + 60))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ -f "$ticks_file" ]; then
+      completed=$(cat "$ticks_file") || { bad "无法读取巡检轮次证据"; break; }
+      case "$completed" in ''|*[!0-9]*) bad "巡检轮次证据非法"; completed=0; break ;; esac
+      [ "$completed" -ge 3 ] && break
+    fi
+    kill -0 "$pid" 2>/dev/null || break
+    /bin/sleep 0.1
+  done
   kill "$pid" 2>/dev/null
   wait "$pid" 2>/dev/null
   set -e
+  [ "$completed" -ge 3 ] || bad "监测未在60秒上限内完成三轮（实际 ${completed}）"
 }
 
 count_lines() { # 只有 grep exit 1 表示无匹配，读错必须保留非零退出。
