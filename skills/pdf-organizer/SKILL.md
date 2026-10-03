@@ -2,7 +2,7 @@
 name: pdf-organizer
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.0"
+version: "0.6.1"
 description: 当需要整理法律 PDF 时使用：检测文字层，生成页面索引、整理草稿和下游交接文件，按内容拆分、合并或直接重命名 OCR 后双层扫描件并规范命名；支持跨源页引用拼合与页覆盖审计（孤儿页/重复引用）；可做旋转与倾斜校正，不做 OCR 或压缩。
 license: MIT
 ---
@@ -217,7 +217,7 @@ archive 默认包含：
 }
 ```
 
-`refs` 按数组顺序拼合；每项 `pages` 可省略（默认整份）。
+`refs` 按数组顺序拼合；每项 `pages` 可省略（默认整份）。segment 的有效 `id` 必须唯一；省略时生成 `D001`、`D002` 等，显式编号也不能与这些默认值冲突。
 
 ### 方向处理示例
 
@@ -295,7 +295,9 @@ python3 scripts/pdf_organizer.py --validate-manifest organize_manifest.json
 python3 scripts/pdf_organizer.py --manifest organize_manifest.json --coverage-check strict
 ```
 
-拆分整份扫描件时推荐 `strict`：它保证每一页都被且仅被一份输出文书引用，避免漏页或多切。
+拆分整份扫描件时推荐 `strict`：它在完整引用表编译成功后，检查已引用来源的每一页是否被且仅被引用一次，避免漏页或多切。重复有效 ID、段编译失败、覆盖异常或审计异常均在写 PDF 前阻断；单独验证遇到审计异常也返回非零退出码。
+
+这是执行前检查，不是整批事务：`warn` / `off` 模式保留逐段处理，某段失败时此前成功文件可能已写出；所有模式在后续写入、旋转或倾斜校正失败时也可能留下文件，退出码非零不代表输出目录为空。交付前必须核对 resolved manifest 的逐段 `status`、实际文件和报告，失败段不得当作完成。详见 [清单契约与回归边界](references/manifest-contract.md)。
 
 只检测 PDF 是否有可检索文字层：
 
@@ -357,6 +359,8 @@ python3 scripts/pdf_organizer.py \
 ## 下游交接
 
 每次正式执行都会在 archive 中生成 `handoff.json`。下游 Skill 优先读取该文件，而不是重新猜测文件名和文书类型。
+
+来源数组按输出页顺序排列，仅合并连续的同源页组；同一个 `file` 可以在列表里重复出现，下游不得按文件名重新分组、排序或去重。`pages` 保持整数数组类型，包含原始顺序和重复页。
 
 每份输出文书都带页级溯源：`source_refs`（归一化页引用 `[{file, pages}]`）和 `source_refs_label`（人读标签如 `起诉状.pdf P5 + 证据卷.pdf P1-3`），下游引用任何关键信息时可回溯到具体来源页。
 
