@@ -572,6 +572,8 @@ blocker_and_recovery:
 - 定因与诊断独审：只读事实复核`ACCEPT_DIAGNOSIS`，确认为原生title/entry改写及当前公开runtime身份缺口；四分钟事实复核收口超时36.5秒，时间约束未满足已保留。候选`ef8bd980a275296efa563317b0b6eb10e65a11aa`只增diagnose，作者3项首红保留、修后4项通过；不同执行者重新绑定HEAD/hash，165.327秒内独审`ACCEPT_DIAGNOSTIC`：3项诊断消费者与3个owner/nonce/观察中intent漂移反例通过，原5门AST不变、固定不可retry、无intent或路由写入，自有进程回收。此接受不等于真实恢复。
 - 当前外部依赖：取得Orca正式ZCode typed识别及持续原生JS/Session/PID绑定的受审支持后，原DSH PM才能沿本卡重估有限恢复；当前组合不新prepare/open/register，不重放关闭意图、不造cap或reset预算。原022仍`CONTINUATION_NOT_READY`，032D及其他业务保持原owner。静态增量11链接可达、5个原门AST一致、无新增密钥值或high/critical/hard；既有high2/hard2仍在，不能签全Skill通过。证据归既有archive子目录native-identity。
 
+- 安装与真实只读消费：工程`ef8bd980`/文档`022135c247a2cd4c295113374d4b8ff1bd758976`的Runtime CI 37098676495及Harness CI 37098676479均SUCCESS，新增诊断3例在Linux实际执行。仅2脚本及增量文档CAS同步本地2.36.10，Codex/Claude/Agents三入口同源且字节核对，其他源文件保留。实际消费原DSH022保留的launched意图diagnose exit0，原绑定/current owner/模型recheck通过，报告closed/missing_agentIdentity/runner_absent/argv_not_proven、ready_for_retry=false；intent/metadata/completion/authority前后SHA一致，零新terminal/Task/业务输入。当前consumer SHA仍d848ca4ea1b42c0d939a6a41fd829d1be328d37b8a2d8662cb8d72b2f3b7b889，原1/2预算不动；完整恢复与计费/业务仍未验收。最终文档HEAD检查以PR248 checks为准。
+
 ## TASK-2026-10-03-ZCODE-LINUX-SYSTEM-ALIAS — 首次启动桥的跨平台路径兼容
 
 - 状态：DONE（跨平台入口与权限断言修复，真实Linux CI通过）。来源：PR248提交d92c241f的Linux CI 37095578596；新关闭恢复16项通过，旧首次bridge35项中28项报requests_root_missing，后续验证未运行。旧trusted_path无平台判断将/tmp和/var转换为/private，对Linux错误。
