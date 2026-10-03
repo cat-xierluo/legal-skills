@@ -478,3 +478,40 @@ blocker_and_recovery:
 - 发布审计子步：PM仅补本段事实及ref18适用边界，工程SHA冻结；不同原reviewer在<=60秒只读核最终发布HEAD/两工程SHA/随行文档与CI定义，不重跑产品用例、不续开修复预算。原20分钟实现和两次失败事实不变；若发布身份或文档有新阻断，保留partial，不自签全卡完成。
 - 发布文档首审拒绝：`d440fa05`的两段A阶段记录误归相邻profile卡，独审59.234秒内REJECT；两工程SHA及ref18未变，拒绝原件保留。PM仅将两原段移回本卡，以一次<=60秒归属/HEAD只读复核验收此机械纠正，不重跑产品、不清空工程2/2预算；再失败则本阶段保留partial。
 - 发布复核实际结果：最终工程与段归属核对符合预期，但报告冻结65.535秒超过60秒，独审最终`NOT_VERIFIED`/AUDIT-TIME-BUDGET；literal ACCEPT未签，原角色门实际exit2。保留工程91867b44的限定独验，最终整包不安装、不合并。此分支只可作为草稿受审候选，不计本卡完成。原两产品episode及作者/审查停止事实继续保留，当前没有新的产品返修窗口。
+
+## TASK-2026-10-02-ZCODE-GUI-EVIDENCE-PR — 只读 ZCode 会话证据采集器
+
+- 状态：`IN_REVIEW`（实现已完成但 PM 审查/PR 验收尚待；R1 独审 REJECT 的 F1/F2/C1/C2 已修复，等新 head 独审；PR 创建/发布由 PM 用本机已授权 GitHub 登录执行，本会话不登录 gh、不裸 push）；Owner：远端 ZCode GUI worker（PM：Codex）；候选分支 `feat/zcode-gui-session-evidence`，冻结起点 `62034182d118f224d7f7713ac04748356fd8f722`。
+- 范围（7 路径）：`scripts/zcode-session-evidence.py`、`scripts/test-zcode-session-evidence.py`、`references/zcode-session-evidence.md`、本卡、`CHANGELOG.md`（v2.36.6）、`SKILL.md`（版本号 + §8 用法链接）、根 `README.md` 最近动态中本 Skill 行；不复制本机未提交 2.35/2.36 其他功能。
+- 行为合同：CLI 必填 `--db/--session-id/--input-id`，可选 `--include-final-text`；mode=ro + query_only + 单事务读快照打开既有 DB，绝不创建或写原生 DB；精确绑定 session_input 并经 `promoted_message_id` 关联 `turn_usage.user_message_id`，多匹配拒歧义；完成证据 = 精确 turn completed + 最新 assistant（原生 `parentID` 绑定）completed/无 error/含 text，不从较早成功 assistant 拾取；providerId/modelId/mode 缺项显式 unknown，不回落；默认仅元数据与文本长度，显式开关才带最终文本；任何模式不输出 reasoning、tool 输入/输出、payload、认证参数、DB 路径或其他会话数据；错误输出清楚 JSON 且非零，不泄 traceback。
+- 边界与非目标：不实现 Orca 监督适配；冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成；不证明实时活性、计费优惠或 PM 验收；不扫描其他会话正文。
+- 验证：`python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py` 实际 CLI 子进程回归 27/27 exit 0（两身份错绑、多 turn 拒歧义、admitted/failed/缺 turn、最后 assistant error/未完成/无 text、provider 缺项、schema/JSON 错误、text 开关、敏感不泄露、status_reason 仅布尔不外发、assistant sequence 并列/NULL/非数值拒歧义、缺 DB 不创建、原 DB 字节不变）。
+- 长期稳定性与真实大库性能 `NOT_VERIFIED`，沿 GUI 任务监控方向后续评估。
+
+- 2026-10-03集成复核：原R2已限定ACCEPT（见PR250评论），当前受审三份collector/test/reference与旧受审head554a60c1逐字节一致；本轮27项真实CLI回归再次通过。合并main到原PR分支，只串行保留双方四份共享文档、更新版本/索引，工程字节未改。交付目标已按真人功能线要求改为integration/mao-zcode-gui；新精确head及CI仍待核，尚未签里程碑/正式GUI监督。
+
+## TASK-2026-10-03-CLOUD-PR-INTEGRATION-AUDIT — 云端 PR 池与功能主线审计
+
+- 状态：DONE（云端审计及GUI-M1主干交付；后续原业务卡保持各自状态）；Owner：本 MAO PM Codex /root；来源：真人要求审计云端多 PR、推进已具备验收条件的主干集成，并评估长期功能主线。
+- 输入：GitHub 当前开放 MAO PR248、250—259 的不可变 head、正文/评论/检查/变更范围；main 冻结 b00c278841b1d5e9314ec4369f30ab18ac0d7403；git-workflow 长期集成与逐 PR 验收合同。
+- 范围：核依赖、共享文件冲突、旧验收与当前 tree 的对应、代表性消费者/引用可达；具备完整证据的独立 PR 按精确 head 串行合并；必要时明确单一功能线的 owner、固定 worktree、显式 base、里程碑和同步政策。
+- 非目标：不批量转 ready/合并未知候选；不删除分支/工作树、不重写已发表历史；不覆盖共享源 dirty/index，不改账户/刷新卡，不重派原业务任务；不将 GUI 的证据辅助能力误记成 Orca 监督或长期自治。
+- 验收：逐 PR 形成合并/待依赖/待独审/冲突的具名结论；真实 merge SHA 与 MERGED 状态对应冻结 head；长期线仅在合同完整后建立；结果、未验证边界和后续动作写回本卡，重要分支策略写 DECISIONS，不增 reference。
+- 清单：①云端快照与依赖图；②定向实跑/树等价与引用核验；③具名候选主干集成；④功能线合同/实际分支核验；⑤回写与已授权原总控交接。
+- 证据：本轮只读原件暂存 /tmp/mao-pr-audit-261003，收口归既有 archive；所有候选维持其原预算/历史，不追认旧验收为新 head 验收。
+
+- 功能线合同（2026-10-03）：integration_branch/integration_target=`integration/mao-zcode-gui`，default_branch=`main`，integration_owner=本 MAO PM Codex /root；固定 worktree `~/.codex/worktrees/mao-worker-permission-defaults/legal-skills`（PR259已合并、tracked clean后复用；旧branch与archive保留）。生命周期 long-lived；子 worker/修复分支 ephemeral-worker，显式从 `origin/integration/mao-zcode-gui` 派发/提PR，不按分支名前缀推断生命周期。
+- 里程碑 GUI-M1：只读会话collector→adapter→observe及校验分块产物/Git bundle消费者可按仓内真实依赖复用。退出条件：PR250/253—258各自的独审与当前源码字节对应、定向正反路径/旧稿负控、缺省同目录consumer实际执行、完整GUI链CI有实际执行而非默认SKIP；所有子PR处理完，吸收最新main后最终树复验，再建立唯一里程碑PR到main。正式Orca监督、GUI投递、轮询/连续闭环与权益计费不在GUI-M1，不追认为已完成。
+- 同步政策：波次期间冻结default_base_sha/integration_head_sha，不在未决子PR下移动base；波次结束且无未决子PR才 merge 最新main入长期线，不 rebase/force/reset。通用修复先main（本轮259/252），长期线通过里程碑PR进入main后保留，再在无子PR边界吸收main。共享SKILL/version/TASKS/CHANGELOG/README和CI由唯一集成者串行处理。
+- PR248继续按核心派发/恢复卡推进，当前与main有5个共享文档冲突；PR251依赖33/34/35/37等未发布入口，不纳入GUI-M1、不凭可合并状态转ready。后续先补齐实际合同/前向验证再采用；不为每个fix/test建立长期线。
+
+- 云端main已验收合并259@20c16f92→4550b712及252@38681927→2f12a1de，原分支保留。GUI-M1窄采用来自250@ad172543、253@74994d95、254@86ea7be8、255@d25eb031、256@806b0abb、257@748fa560、258@962c985b；17份工程/参考文件保持原受审字节，只由集成者合并4份共享文档、增加缺省消费者和CI。
+- 发布故障历史保留：共享README索引校验失败后，后续Git步骤未停，草稿250@1e46ba5c含冲突标记；8b39e993已本地修正但新版隐私门拒绝历史merge补丁，因此未推送。转用最新基线的窄采用候选，不force/rebase、不跳过门、不伪造synthetic例外；旧候选只作追溯，不纳入新分支祖先。旧隐私命中原件保留私有archive，后续阻断式步骤逐项检查真实exit后才mutation。
+
+- 最终云端交付：PR259（20c16f92）已合主干4550b712，PR252（38681927）已合主干2f12a1de；GUI子PR260（c0098ca6）合功能线17f857dc，里程碑PR262（17f857dc）于2026-10-03T07:50:43Z合主干1d9f3a48。17个原子工程/参考文件逐字节保留，260受审树、功能线树与262主干树完全相同。旧250/253/254/255/256/257/258逐一重核已完整采用后CLOSED取代，保留全部原分支、预算与失败历史。
+- 集成验收：首轮363.527/300秒审查及精确来源映射断言失败保留NOT_VERIFIED；同工程后续发布身份/三真实隐私来源与精确CI限定复核150.375/180秒获不同角色ACCEPT，不改判旧报告、不重开产品预算。17份既有独审工程等价、作者/集成者与真实宿主reviewer分离；不伪造Orca身份或whole Skill接受。
+- 实跑证据：本地collector27、adapter317、artifacts40、pipeline18含旧稿负控、observe34通过/1不适用skip、smoke11含旧稿负控、handoff8与新增缺省consumer3均真实执行。PR262 Runtime37107244952/Harness37107244939均SUCCESS，已读真实Linux日志：核心链与缺省3例执行，私有样例、可选旧稿负控及不适用缺依赖场景skip分计，smoke为9通过/2可选skip，不冒称11项CI通过。
+- 波次同步：无未决GUI子PR后，main1d9f3a48经GitHub正式merge进入长期线c94e4d6c；保留本机先前同步尝试078df5cd，再普通merge两端历史并经完整新本机range身份/隐私门safe-push发布f4bb313d。下一波default_base_sha=1d9f3a4808c699aa517eaeafbc0e370c5cf4f105、integration_head_sha=f4bb313d94bf0d8c0f2290ec46767f57dbbf66f9，远端/固定worktree树与main相同。没有force/reset/rebase/删除ref；本任务记录PR仅更新文档，后续main前进仍按零未决子PR边界吸收并冻结，不固定使用旧快照。
+- 工具兼容发现：首次safe-push以main为base时，已发布GitHub squash17f857dc的author/committer与本机期望身份不同而拒绝；拒绝真实保留，未关闭门或重写署名。替代路径只由GitHub合并两个已发布且已审的精确head，核commit message/两parent/tree和远端实际OID；后续本机range以真实integration target为base，所有未发布提交完整检查。通用门禁与长期线历史交互的改进归git-workflow具名后续任务，不把此路径说成工具缺口已修复。
+- 后续队列：①PR248保留draft，5份共享文档冲突及大包范围先逐项对账/窄拆，再独审、最终CI与原消费者验收；原ZCode022仍CONTINUATION_NOT_READY，不重派、不重置1/2预算。②PR251保留draft，先补齐33/34/35/37公开依赖与新上下文前向验收，禁止只凭green合并。③本轮期间新PR261@1312e686进入队列，继续由原owner处理main漂移、版本/共享文档与最终独审对账；已保留本机2.36.12合同，不抢占作者或合并未知候选。
+- 完成边界：原11个MAO草稿中9个已具名主干合并或完整采用关闭，原248/251待办及新261仍OPEN/DRAFT；其他Skill的225/235未操作。main加单一GUI长期线与worker短分支两层继续并存，未建立全局develop或每个fix/test的永久线。只读证据、校验交接与本次云端集成交付已验；正式GUI监督/自动投递/长期闭环、实时活性与计费、原业务恢复及whole Skill仍NOT_VERIFIED。原件归本Skill ignored archive的20261003_cloud_pr_integration；本机增量安装和授权交接另保留实际随行回执，不整树替换安装入口。

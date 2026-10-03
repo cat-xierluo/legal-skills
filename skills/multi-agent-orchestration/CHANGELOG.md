@@ -1,24 +1,33 @@
 # Changelog
 
-## [2.36.12] - 2026-10-03
-
-### 改进
-- 适配远端 main 前进（rebase 到 #227–#238 后基线，发布链与合同内容不变）：`references/38-zcode-gui-remote-pr.md` 逐字不变；本机并发维护已占用 2.36.11，本 Skill 的 Git 与本机版本统一调整为 2.36.12（main 基础 2.34.1 与本机 2.36.x 双基线分开计数）；README 最近更新表保留 main 最新其他技能行与下载链接。
-
-### 验证
-- 仅 scoped 文档核验：4 路径白名单、`git diff --check`、frontmatter/CHANGELOG/README 版本一致（2.36.12）、外部链接可达、origin/main..HEAD 完整 author/committer 身份；新 head 由不同 SID 重新独审（R3），不复用既有审查结论。
-
-## [2.36.11] - 2026-10-03
+## [2.36.7] - 2026-10-03
 
 ### 新增
-- 新增 ZCode GUI 远端作者直发 PR 合同（`references/38-zcode-gui-remote-pr.md`）：官方 GUI 模型内核与开源 CLI 分离、localhost 优先与官方远控跨机同页面操作逻辑、Start Plan/150% 权益的真人确认与 provider 实测分列；固化"作者自测→固定 head→不同 SID 独审→原 session 返修→fresh 身份/唯一性→safe-push→唯一 draft PR→PM 从 GitHub 只读核验"发布链，含通道故障 fresh 核查、禁传凭证/禁改账号/禁关 TLS 验证与官方登录真人依赖标注。
-- 已验来源具名为 PR257/PR258（两作者不同 GUI SID 交叉独审 R1 ACCEPT、PM 定向 11/11 与 8/8 及负例、OPEN/DRAFT/base=main、runtime-settlement SUCCESS、未 merge、发布由作者自己的 safe-push 与 `gh pr create` 完成）；浏览器 driver 脚本自动新投递与长时全自动稳定仍 NOT_VERIFIED，正式证据权威保留在原技能 TASKS 完整卡。
+- 集成只读 GUI collector→adapter→observe、校验分块产物与 Git bundle 消费者七个既有已独审候选；保持默认投递/监督/权限与资源规则，READY仅是待PM审查证据。
+- 新增三项缺省同目录消费者，核无依赖环境变量/显式路径时的完成、末条错误、错绑拒绝、DB字节不变与元数据无泄漏；CI串行真实执行GUI组件与消费者，明确保留可选旧稿负控及不适用缺依赖场景的跳过。
+- 沿 PR261 收录 ZCode GUI 远端作者直发 PR 合同（`references/38-zcode-gui-remote-pr.md`）：官方 GUI 模型内核与开源 CLI 分离、localhost 优先与官方远控跨机同页面操作逻辑、Start Plan/150% 权益真人确认与 provider 实测分列；固化“作者自测→固定 head→不同 SID 独审→原 session 返修→fresh 身份/唯一性→safe-push→唯一 draft PR→PM 从 GitHub 只读核验”发布链，含通道故障 fresh 核查、禁传凭证/禁改账号/禁关 TLS 验证与官方登录真人依赖标注；已验来源具名 PR257/PR258（两作者不同 GUI SID 交叉独审 ACCEPT、未 merge），SKILL 按需读取地图挂最小入口。
 
 ### 文档完善
-- SKILL.md 按需读取地图增加该合同的最小入口并升级版本号；README 最近更新与技能列表同步本版本。
+- 按需读取地图补齐已采用的操作合同；云端PR池与main加GUI长期功能线的任务/决策记录归TASKS和DECISIONS，不新增规划reference。
 
-### 验证
-- 仅 scoped 文档核验：diff 白名单（4 路径）、`git diff --check`、外部链接可达、新增页独立可读（不链接 main 上尚不存在的文件）、frontmatter/CHANGELOG/README 版本一致与敏感串检查；内容语义由 PM 后续不同 SID 独审，候选无旧上下文前向运行未做，均如实记录。
+### 待办事项
+- 原生ZCode恢复、GUI自动投递/持续监测/Orca正式监督及长期稳定性仍未验收；核心PR248与参考精简PR251分别处理冲突和未发布依赖。
+- 浏览器 driver 脚本自动新投递与长时全自动稳定仍 NOT_VERIFIED（PR261 维护记录保留）。
+
+## [2.36.6] - 2026-10-02
+
+### 新增
+- 新增只读 ZCode 会话证据采集器 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库，零依赖）：以 mode=ro URI + query_only + 单事务快照打开既有 SQLite，绝不创建或写原生 DB；必填 `--db/--session-id/--input-id`，可选 `--include-final-text`；精确绑定 `session_input.id + session_id` 并经 `promoted_message_id` 关联 `turn_usage.user_message_id`，绑定或 turn 多匹配一律拒歧义；输出稳定 JSON，区分 input admitted/promoted/failed、turn 缺失/running/completed/error/cancelled 与完成证据——精确 turn completed 加 sequence 最新 assistant（原生 `parentID` 绑定）`time.completed` 非空、无 error 且含非空 text，不从较早成功 assistant 拾取覆盖最新 error/未完成/无 text；providerId/modelId/mode 只取该 assistant 原生 message，缺项显式 unknown，不回落其他会话或默认套餐。
+- 默认仅输出元数据与最终文本长度，只有 `--include-final-text` 才携带最终 assistant 文本；任何模式下不输出 reasoning、tool 输入/输出、`session_input.payload`、认证参数、完整 DB 路径或其他会话数据，错误输出清楚 JSON 且非零退出，不抛泄密 traceback。冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成。
+- 新增回归 `scripts/test-zcode-session-evidence.py`：合成 SQLite fixture 走真实 CLI 子进程，覆盖两身份错绑、同 input 多 turn、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含较早成功不得覆盖）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、缺 DB 不创建与原 DB 字节不变。
+- 新增用法与合同说明 `references/zcode-session-evidence.md`，并在 SKILL.md 按需读取地图挂链接。
+
+### 修复
+- 独审 REJECT R1（F1/F2）：`session_input.status_reason` 原生自由文本不再进入输出，仅输出 `reasonPresent` 布尔（内容永不外发）；同一 promoted 消息下候选 assistant 的最大 sequence 并列、缺失（NULL）或非数值时输出 `ASSISTANT_AMBIGUOUS` 拒歧义，绝不按行序任意挑选。补对抗性 status_reason（路径/凭证样例）与 sequence 并列（旧失败/新成功双向插入序）、NULL、非数值真实 CLI 回归，回归 23→27 项。
+
+### 待办事项
+- 本 PR 不实现 Orca 监督适配；真实大库性能与长期稳定性 NOT_VERIFIED，沿 GUI 任务监控方向另行立项。R1 修复后实现完成但 PM 审查/PR 验收尚待（IN_REVIEW）。
+
 ## [2.34.6] - 2026-10-03
 
 ### 新增
