@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.36.11] - 2026-10-03
+
+### 新增
+- 新增 ZCode GUI 远端作者直发 PR 合同（`references/38-zcode-gui-remote-pr.md`）：官方 GUI 模型内核与开源 CLI 分离、localhost 优先与官方远控跨机同页面操作逻辑、Start Plan/150% 权益的真人确认与 provider 实测分列；固化"作者自测→固定 head→不同 SID 独审→原 session 返修→fresh 身份/唯一性→safe-push→唯一 draft PR→PM 从 GitHub 只读核验"发布链，含通道故障 fresh 核查、禁传凭证/禁改账号/禁关 TLS 验证与官方登录真人依赖标注。
+- 已验来源具名为 PR257/PR258（两作者不同 GUI SID 交叉独审 R1 ACCEPT、PM 定向 11/11 与 8/8 及负例、OPEN/DRAFT/base=main、runtime-settlement SUCCESS、未 merge、发布由作者自己的 safe-push 与 `gh pr create` 完成）；浏览器 driver 脚本自动新投递与长时全自动稳定仍 NOT_VERIFIED，正式证据权威保留在原技能 TASKS 完整卡。
+
+### 文档完善
+- SKILL.md 按需读取地图增加该合同的最小入口并升级版本号；README 最近更新与技能列表同步本版本。
+
+### 验证
+- 仅 scoped 文档核验：diff 白名单（4 路径）、`git diff --check`、外部链接可达、新增页独立可读（不链接 main 上尚不存在的文件）、frontmatter/CHANGELOG/README 版本一致与敏感串检查；内容语义由 PM 后续不同 SID 独审，候选无旧上下文前向运行未做，均如实记录。
 ## [2.34.6] - 2026-10-03
 
 ### 新增

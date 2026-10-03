@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.34.6"
+  version: "2.36.11"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -226,6 +226,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 | 当前问题 | 读取 |
 |---|---|
+| 用户指定远端 ZCode GUI 作者直发文档/工程 PR（作者 safe-push + 唯一 draft PR，PM 只读核验） | `references/38-zcode-gui-remote-pr.md` |
 | 标准快速派发（Claude Code + GLM/MiniMax + Orca，常规 worker 三步） | `references/00-fast-dispatch-runbook.md` |
 | 模型、provider、执行模式 | `references/01-model-selection-matrix.md`、`references/17-model-capability-profile.md` |
 | 依赖、checkpoint、Sentinel | `references/02-runtime-dependencies.md`、`03-checkpoint-files.md`、`04-sentinel-design.md` |
