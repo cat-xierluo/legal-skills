@@ -40,8 +40,8 @@
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
 | 2026-09-30 | 更新 | [pdf-organizer](skills/pdf-organizer/) | v0.6.1 | 修复重复清单编号掩盖覆盖异常、严格模式不完整编译/审计失败未阻断、交错来源溯源顺序丢失；页码范围展开前检查边界，补合成 PDF 回归与执行非事务边界。 |
 | 2026-09-30 | 更新 | [trademark-assistant](skills/trademark-assistant/) | v1.7.3 | 商品名称以明确文字单元格保存，精确保留前缀与首尾空白；超长名称拒绝，新增真实 XLSX/XML 回归。不证明分类正确或官方系统接收。 |
+| 2026-09-30 | 更新 | [legal-skill-evaluation](skills/legal-skill-evaluation/) | v0.8.13 | 修复原始 hard finding 被静默丢弃、语义断言 ID/类型假通过及多操作 hint 仅判第一项；新增9项合成回归。完整54项中2项既有候选快照失配仍明确保留。 |
 | 2026-09-30 | 更新 | [git-workflow](skills/git-workflow/) | v1.8.7→v1.9.0 | **提交身份自检与身份污染审计 + 分支冗余巡检自动化 + 身份核验**：v1.9.0 新增 scripts/identity-audit.sh（whoami 提交前自检：来源链 env→worktree→repo-local→global，仓库级覆盖/env 覆盖/可疑 agent 身份模式/期望不符四类告警；history 全仓 author/committer/Co-authored-by 尾注分布审计，可疑项自动标注）+16 项故障注入测试，源自 private-skills Hermes 身份污染实录（GitHub squash 把分支提交作者自动转尾注，门禁期望值取自被污染 config 时形同虚设）；v1.8.9 scripts/branch-audit.sh 只读盘点（SAFE_DELETE/NEEDS_CONFIRM/KEEP 三档候选表，gh 缺失自动降级宁漏勿错，绝不自行删除）+批量删除执行坑入册；v1.8.8 共享检出提交前分支身份核验（status/log 干净 ≠ 在预期分支）。已在 legal-skills 与 private-skills 双仓实测。 |
-| 2026-09-30 | 新增 | [env-doctor](skills/env-doctor/) | v0.3.0 | 本机环境与全局包体检、账本与安装纪律（对齐 brew doctor 心智模型）：env-doctor.sh 八段体检覆盖全部包管理器与运行时环境面（node/npm 垫片归属比对/PATH 与 Python 解释器版图/npm·uv·pipx·pip·bun·brew 全局落点/缓存/符号链接死链/LaunchAgents 与 cron/账本/rc·LaunchAgents 漂移对照，退出码 0/2/3，full 模式附 brew 过时清单）+ snapshot 漂移基线子命令 + 五条硬纪律（全局安装白名单落点且记账、rc/LaunchAgent/垫片默认禁改、~/.local/bin 唯一垫片层、厂商升级后先体检、归属判断看链接与 prefix）。沉淀自 Hermes 经垫片遮蔽全 shell node 的排查修复。 |
 </details>
 
 ## 📋 项目概述
@@ -379,9 +379,9 @@
 <td>专业·Skill开发</td>
 <td style="word-break:break-word">法律 Skill 分层质量评测：消费 skill-lint 通用质量结论，再用三份测试材料、通用六维度、场景微调与律师 taste 评估法律产出并定位最小修复单元；含评测包结构化契约、运行收据门禁与指令稳定性边界</td>
 <td style="text-align:center">CC-BY-NC</td>
-<td style="text-align:center">v0.8.12</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-skill-evaluation-0.8.12.zip">下载</a></td>
-<td></td>
+<td style="text-align:center">v0.8.13</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-skill-evaluation-0.8.12.zip">下载 v0.8.12</a></td>
+<td>源码 v0.8.13 待发布；下载为已发布 v0.8.12</td>
 </tr>
 <tr>
 <td><a href="skills/case-dashboard/"><strong>case-dashboard</strong></a></td>

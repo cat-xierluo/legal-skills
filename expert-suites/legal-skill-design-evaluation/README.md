@@ -24,7 +24,7 @@
 | :--- | :--- | :--- |
 | [legal-skill-alignment](../../skills/legal-skill-alignment/) | 把法律经验、文书和 SOP 对齐成 Legal Skill Brief，明确输入输出与交接阻断项 | [已发布 v1.0.7](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-skill-alignment-1.0.7.zip) |
 | [skill-lint](../../skills/skill-lint/) | 审查通用结构、设计、Harness 与候选绑定质量证据 | [已发布 v2.9.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/skill-lint-2.9.1.zip) |
-| [legal-skill-evaluation](../../skills/legal-skill-evaluation/) | 消费通用质量结论，评测指定法律场景产出并定位最小修复单元 | [已发布 v0.8.12](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-skill-evaluation-0.8.12.zip) |
+| [legal-skill-evaluation](../../skills/legal-skill-evaluation/) | 消费通用质量结论，评测指定法律场景产出并定位最小修复单元；源码 v0.8.13 待发布 | [已发布 v0.8.12](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-skill-evaluation-0.8.12.zip) |
 
 ## 建议使用方式
 
