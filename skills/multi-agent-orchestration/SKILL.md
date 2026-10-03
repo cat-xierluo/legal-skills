@@ -76,6 +76,8 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 3. **角色分离验收门**：非平凡实现由不同 dispatch/session 的 implementer 与 reviewer 完成，运行 `review-acceptance-gate.py`。自审、head 漂移、纯叙述证据、失败验证或未清 blocker 均拒绝。
 4. **失败恢复门**：先用 `acceptance-recovery.py` 分类。`internal_recoverable` 在预算内修复并重新独立审查；`external_dependency`、`safety_unknown` 或预算耗尽才泊车。已具名 PR 的 docs-only 验收修复只能走 `acceptance-repair-gate.py` 的极窄 preflight/postflight 通道。
 
+需要自动记录已提交工程验证时，可按[工程证据采集合同](references/18-dispatch-acceptance-contracts.md#可选工程验证证据采集)使用可选采集/check入口；它只生成原交付后门证据，继续保留独立审查与真实完成核验。
+
 字段、命令、例外枚举、reviewer 证据预算与恢复语义统一读取 `references/18-dispatch-acceptance-contracts.md`；不要在项目 prompt 或别的脚本另造一套分类表。
 
 ### 3.3 运行时安全门

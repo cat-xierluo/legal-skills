@@ -243,26 +243,45 @@ def judge_generic_assertion(assertion: dict[str, Any], text: str) -> tuple[bool,
       - {"contains_any": ["..."]}  文本须出现任一短语
       - {"not_contains": ["..."]}  文本不得出现任一短语
       - {"regex": "..."}           文本须匹配正则
+    同时声明多个操作时必须全部满足；可选描述字段不参与判定。
     """
     hint = assertion.get("judge_hint")
     if not isinstance(hint, dict):
-        return False, "assertion 缺少 judge_hint 或未声明通用判定协议"
+        raise ValueError("assertion 缺少 judge_hint 或未声明通用判定协议")
+    operators = {"contains_any", "not_contains", "regex"} & hint.keys()
+    if not operators:
+        raise ValueError("judge_hint 缺少支持的判定操作")
+    for key in ("contains_any", "not_contains"):
+        if key in hint and (
+            not isinstance(hint[key], list)
+            or not hint[key]
+            or not all(isinstance(item, str) and item.strip() for item in hint[key])
+        ):
+            raise ValueError(f"judge_hint.{key} 必须是非空字符串数组")
+    if "regex" in hint:
+        if not isinstance(hint["regex"], str) or not hint["regex"].strip():
+            raise ValueError("judge_hint.regex 必须是非空字符串")
+        try:
+            re.compile(hint["regex"])
+        except re.error as exc:
+            raise ValueError(f"judge_hint.regex 无效：{exc}") from exc
+    evidence = []
     if "contains_any" in hint:
         phrases = hint["contains_any"]
         if not any(phrase in text for phrase in phrases):
             return False, f"未出现任一期望表述：{phrases}"
-        return True, f"出现期望表述之一：{phrases}"
+        evidence.append(f"出现期望表述之一：{phrases}")
     if "not_contains" in hint:
         phrases = hint["not_contains"]
         hit = [p for p in phrases if p in text]
         if hit:
             return False, f"出现不应出现的表述：{hit}"
-        return True, "未出现禁止表述"
+        evidence.append("未出现禁止表述")
     if "regex" in hint:
-        if re.search(hint["regex"], text):
-            return True, f"匹配正则：{hint['regex']}"
-        return False, f"未匹配正则：{hint['regex']}"
-    return False, f"不支持的 judge_hint：{list(hint.keys())}"
+        if not re.search(hint["regex"], text):
+            return False, f"未匹配正则：{hint['regex']}"
+        evidence.append(f"匹配正则：{hint['regex']}")
+    return True, "；".join(evidence)
 
 
 def validate(input_path: Path, output_path: Path) -> tuple[int, dict[str, Any]]:
@@ -274,6 +293,8 @@ def validate(input_path: Path, output_path: Path) -> tuple[int, dict[str, Any]]:
         return 2, {"status": "error", "errors": [str(exc)]}
 
     case_id = payload.get("case_id")
+    if not isinstance(case_id, str):
+        return 2, {"status": "error", "errors": ["case_id 必须是字符串"]}
     assertion_id = CASE_ASSERTIONS.get(case_id) or CLAUSE_BOUNDARY_ASSERTIONS.get(case_id)
     if assertion_id is None:
         # 通用指令型语义 case（CASE- 前缀）：走 judge_hint 协议，不依赖合同逻辑。
@@ -283,9 +304,18 @@ def validate(input_path: Path, output_path: Path) -> tuple[int, dict[str, Any]]:
                 return 2, {"status": "error", "errors": ["instruction-type case 缺少 assertions 列表"]}
             assertion_results = []
             all_passed = True
+            assertion_ids = set()
             for assertion in assertions:
+                if not isinstance(assertion, dict):
+                    return 2, {"status": "error", "errors": ["assertion 必须是对象"]}
                 aid = assertion.get("id")
-                ok, ev = judge_generic_assertion(assertion, output_text)
+                if not isinstance(aid, str) or not aid.strip() or aid in assertion_ids:
+                    return 2, {"status": "error", "errors": ["assertion.id 必须是非空且不重复的字符串"]}
+                assertion_ids.add(aid)
+                try:
+                    ok, ev = judge_generic_assertion(assertion, output_text)
+                except ValueError as exc:
+                    return 2, {"status": "error", "errors": [str(exc)]}
                 if not ok:
                     all_passed = False
                 assertion_results.append({

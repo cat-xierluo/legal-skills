@@ -8,67 +8,74 @@ instead of one large mixed commit.
 
 import subprocess
 import sys
-import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, List
 
 # Import sibling scripts
 sys.path.insert(0, str(Path(__file__).parent))
-from categorize_changes import get_staged_files, group_changes
+from categorize_changes import group_changes
 from generate_commit_message import add_issue_reference, generate_commit_messages
 
-
-def stage_files(files: List[str]) -> bool:
-    """Stage files for commit."""
-    if not files:
-        return True
-    try:
-        subprocess.run(
-            ['git', 'add'] + files,
-            capture_output=True,
-            check=True
-        )
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"暂存文件时出错: {e}", file=sys.stderr)
-        return False
+# One shared implementation; an incomplete standalone installation fails closed.
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'git-workflow' / 'scripts'))
+    from privacy_check import Checker, PrivacyError
+except ImportError:
+    print('PRIVACY_CHECKER_MISSING: 请同时安装同级 git-workflow 技能', file=sys.stderr)
+    raise SystemExit(1)
 
 
-def unstage_files(files: List[str]) -> bool:
-    """Unstage files to reorganize commits."""
-    if not files:
-        return True
-    try:
-        subprocess.run(
-            ['git', 'reset', 'HEAD'] + files,
-            capture_output=True,
-            check=True
-        )
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"取消暂存文件时出错: {e}", file=sys.stderr)
-        return False
+def current_head(checker):
+    refs = checker.git('rev-parse', '--verify', 'HEAD^{commit}').decode('ascii').strip()
+    return refs
 
 
-def create_commit(message: str) -> bool:
-    """Create a git commit with the given message (supports multi-line)."""
-    try:
-        # Use -m multiple times for multi-line commit message
-        # First line is the subject, subsequent lines are the body
-        lines = message.split('\n')
-        cmd = ['git', 'commit']
-        for line in lines:
-            cmd.extend(['-m', line])
-        subprocess.run(
-            cmd,
-            capture_output=True,
-            check=True
-        )
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"创建提交时出错: {e}", file=sys.stderr)
-        print(f"stderr: {e.stderr.decode()}", file=sys.stderr)
-        return False
+def create_commit(checker, snapshot, files, message, expected_head):
+    """Commit only snapshot bytes through a temporary index, never git-add worktree."""
+    if current_head(checker) != expected_head or checker.git('write-tree').decode().strip() != snapshot:
+        raise PrivacyError('PRIVACY_SNAPSHOT_CHANGED: HEAD 或暂存区变化，请重新预检')
+    with tempfile.TemporaryDirectory(prefix='batch-commit-') as tmp:
+        env = dict(os.environ, GIT_INDEX_FILE=str(Path(tmp) / 'index'), GIT_LITERAL_PATHSPECS='1')
+        checker.git('read-tree', expected_head, env=env)
+        checker.git('restore', '--staged', '--source=' + snapshot,
+                    '--pathspec-from-file=-', '--pathspec-file-nul',
+                    input=b''.join(os.fsencode(path) + b'\0' for path in files), env=env)
+        expected_tree = checker.git('write-tree', env=env).decode().strip()
+        # --cleanup=verbatim and stdin bind the checked full message to the command.
+        checker.git('commit', '--cleanup=verbatim', '-F', '-', input=message.encode('utf-8'), env=env)
+        new_head = current_head(checker)
+        if checker.git('show', '-s', '--format=%T', new_head).decode().strip() != expected_tree:
+            raise PrivacyError('PRIVACY_COMMIT_CHANGED: hook 改变提交树，已停止；不得发布')
+        actual = checker.git('show', '-s', '--format=%B', new_head).decode('utf-8')
+        if actual.rstrip('\n') != message.rstrip('\n'):
+            raise PrivacyError('PRIVACY_COMMIT_CHANGED: hook 改变提交说明，已停止；不得发布')
+        return new_head
+
+
+def prepare(issue=None, local_ref=None):
+    checker = Checker()
+    # Require an existing base so ambiguous unborn history cannot partially commit.
+    head = current_head(checker)
+    snapshot = checker.scan_staged()
+    staged = [os.fsdecode(path) for path in checker.git(
+        'diff', '--cached', '--no-renames', '--name-only', '-z').split(b'\0') if path]
+    if not staged:
+        return checker, head, snapshot, {}, {}
+    groups = group_changes(staged, staged=True)
+    if sorted(path for files in groups.values() for path in files) != sorted(staged):
+        raise PrivacyError('PRIVACY_GROUP_MISMATCH: 分组未精确覆盖暂存文件')
+    messages = decorate_messages(groups, generate_commit_messages(groups), issue, local_ref)
+    for index, category in enumerate(sorted(groups), 1):
+        if category not in messages:
+            raise PrivacyError('PRIVACY_MESSAGE_MISSING: 缺少最终完整提交说明')
+        checker.scan_text(messages[category], f'commit-message:{index}')
+    # ALL groups and references pass before any preview, index edits or commits.
+    checker.finish()
+    if current_head(checker) != head or checker.git('write-tree').decode().strip() != snapshot:
+        raise PrivacyError('PRIVACY_SNAPSHOT_CHANGED: 预检期间 HEAD 或暂存区变化')
+    return checker, head, snapshot, groups, messages
 
 
 def display_groups(groups: Dict[str, List[str]], messages: Dict[str, str]):
@@ -155,68 +162,25 @@ def batch_commit(
     print("Git 批量提交工具")
     print("=" * 60)
 
-    # Get currently staged files
-    staged = get_staged_files()
-
-    if not staged:
-        print("未发现已暂存的变更。")
-        print("请先使用 git add <files> 暂存一些变更")
-        return 1
-
-    print(f"发现 {len(staged)} 个已暂存文件")
-
-    # Group changes by category (using already staged files)
-    groups = group_changes(staged, staged=True)
-
-    # Generate commit messages for each group (files are already staged)
-    messages = generate_commit_messages(groups)
-    messages = decorate_messages(
-        groups,
-        messages,
-        issue=issue,
-        local_ref=local_ref,
-    )
-
-    # Display proposed groups
-    display_groups(groups, messages)
-
-    # Confirm with user
-    if not confirm_groups(skip_confirm=skip_confirm):
-        print("\n已取消。")
+    try:
+        checker, head, snapshot, groups, messages = prepare(issue, local_ref)
+        if not groups:
+            print('未发现已暂存的变更。')
+            return 1
+        display_groups(groups, messages)
+        if not confirm_groups(skip_confirm=skip_confirm):
+            print('已取消。')
+            return 0
+        for category, files in sorted(groups.items()):
+            head = create_commit(checker, snapshot, files, messages[category], head)
+        print(f'批量提交完成：{len(groups)} 个提交已创建，原暂存快照与工作区内容保留')
         return 0
-
-    # Unstage everything first to regroup
-    if not unstage_files(staged):
-        print("错误：无法取消暂存文件。")
+    except (PrivacyError, UnicodeError, subprocess.CalledProcessError, OSError):
+        # Do not print command arguments, stderr, filenames, or generated messages.
+        error = sys.exc_info()[1]
+        print(str(error) if isinstance(error, PrivacyError) else
+              'PRIVACY_PREFLIGHT_FAILED: 未完整读取提交输入，已停止', file=sys.stderr)
         return 1
-
-    # Create commits for each group
-    print("\n正在创建提交...")
-    success_count = 0
-    total_count = len(groups)
-
-    for category, files in sorted(groups.items()):
-        msg = messages.get(category, f"{category.title()}: 更新文件")
-
-        # Stage files for this commit
-        print(f"\n  → {msg}")
-        if not stage_files(files):
-            print(f"    无法为 {category} 暂存文件")
-            continue
-
-        # Create commit
-        if create_commit(msg):
-            print(f"    ✓ 已提交 {len(files)} 个文件")
-            success_count += 1
-        else:
-            print(f"    ✗ 提交失败")
-
-    # Summary
-    print("\n" + "=" * 60)
-    print(f"批量提交完成：{success_count}/{total_count} 个提交已创建")
-    print("=" * 60)
-
-    return 0 if success_count == total_count else 1
 
 
 def main():
@@ -251,22 +215,14 @@ def main():
     args = parser.parse_args()
 
     if args.dry_run:
-        # Just show grouping without committing
-        staged = get_staged_files()
-        if not staged:
-            print("未发现已暂存的变更。")
+        try:
+            _, _, _, groups, messages = prepare(args.issue, args.local_ref)
+            display_groups(groups, messages)
             return 0
-
-        groups = group_changes(staged, staged=True)
-        messages = generate_commit_messages(groups)
-        messages = decorate_messages(
-            groups,
-            messages,
-            issue=args.issue,
-            local_ref=args.local_ref,
-        )
-        display_groups(groups, messages)
-        return 0
+        except (PrivacyError, UnicodeError, subprocess.CalledProcessError, OSError) as error:
+            print(str(error) if isinstance(error, PrivacyError) else
+                  'PRIVACY_PREFLIGHT_FAILED: 未完整读取提交输入，已停止', file=sys.stderr)
+            return 1
     else:
         return batch_commit(
             skip_confirm=args.yes,

@@ -27,7 +27,7 @@
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| `id` | 建议 | 稳定编号，如 `D001` |
+| `id` | 建议 | 稳定且唯一的编号，如 `D001`；省略/空值生成位置编号，显式编号不得与默认编号冲突。按执行时字符串化后的有效值检查唯一性 |
 | `refs` | 条件必填 | 跨源页引用数组，按序拼合：`[{"file": "...", "pages": "1-3"}, ...]`，`pages` 可省略（默认整份）。用于从多份 PDF 各取若干页拼成一份新材料 |
 | `pages` | 条件必填 | 页码范围，如 `1-2`、`5`、`7-8,10`。从 `source_pdf` 拆分时使用 |
 | `input_file` | 条件必填 | 单个 PDF 路径。对现成 PDF 复制、重命名或旋转时使用 |
@@ -172,8 +172,15 @@
 | `file` / `filename` | 最终 PDF 路径和文件名 |
 | `document_type` / `title` | 文书类型和标题 |
 | `source_pages` | 来源页码或来源片段 |
-| `source_refs` | 归一化页引用 `[{file, pages}]`，页级溯源 |
+| `source_refs` | 有序页引用 `[{file, pages}]`，`pages` 为整数数组；只合并连续同源组，同一 `file` 可重复出现，不得按文件再次聚合 |
 | `source_refs_label` | 人读来源标签，如 `起诉状.pdf P5 + 证据卷.pdf P1-3` |
 | `parties` / `date` / `document_no` | 主体、日期、案号/函号等命名要素 |
 | `confidence` / `needs_review` | 置信度和复核状态 |
 | `suggested_downstream` | 按文书类别的路由标签，如 `合同审查`、`诉讼分析`、`材料整理`、`复核`；不绑定具体 Skill 名称 |
+
+## 执行与兼容边界
+
+- 页码范围在展开前检查 1-based 下界与真实 PDF 页数上界，避免越界的大范围先消耗内存。此检查不是对总页数、重复引用或输入体积的通用资源配额。
+- 所有模式拒绝重复有效 ID；`strict` 还在任何 PDF 写入前拒绝不完整编译结果和覆盖审计失败。`--validate-manifest` 不写 PDF，未知覆盖模式或审计失败返回非零。
+- `warn` / `off` 可以保留成功段的输出；执行阶段失败也不承诺回滚。应结合退出码、resolved `status` 和文件内容复核，详见 [清单契约与回归边界](manifest-contract.md)。
+- resolved `page_refs` 与 handoff `source_refs` 类型保持不变，但保留交错来源的次序。例如输出 A1、B1、A2 对应 `[{"file":"A.pdf","pages":[1]},{"file":"B.pdf","pages":[1]},{"file":"A.pdf","pages":[2]}]`。按列表次序再按每项 `pages` 次序展开，才能恢复输出页序。它是溯源结构，不是可直接替代输入 `refs` 页码字符串的清单。

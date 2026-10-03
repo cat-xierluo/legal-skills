@@ -1,0 +1,31 @@
+name: Trademark Goods Regression
+
+on:
+  pull_request:
+    paths:
+      - "skills/trademark-assistant/**"
+      - ".github/workflows/trademark-goods-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/trademark-assistant/**"
+      - ".github/workflows/trademark-goods-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  literal-xlsx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install existing business engine dependency in isolated CI
+        run: python -m pip install openpyxl==3.1.5
+      - name: Require dependency and run actual XLSX and input regressions
+        run: |
+          python -c 'import openpyxl; assert openpyxl.__version__ == "3.1.5"'
+          python -B -m unittest discover -s skills/trademark-assistant/scripts -p 'test*.py' -v

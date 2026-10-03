@@ -1,5 +1,32 @@
 # 变更日志
 
+## [1.11.1] - 2026-10-03（重编号：分支原编 1.10.0 与 main 已合并的 worktree 审计版冲突）
+
+### 新增
+
+- 共享 `privacy_check.py`：暂存内容、完整提交说明、逐笔历史 message/patch/变更 blob 共用规则；案号待核对、带来源的精确人工审查、原始字节绑定的二进制审查凭据、本地黑名单不外传，诊断不回显敏感原文。
+- `safe-pr.py`：创建 draft PR 和 squash 时检查最终标题/正文与完整范围；squash 使用服务端 head OID 条件；明确披露 PR 创建接口的非原子竞态与后验核对。
+- 版本化 `commit-msg` 与 `pre-commit` 复用同一检查器；不自动安装 hook 或修改安全配置。新增隔离集成回归和专用 CI。
+
+### 修复
+
+- `safe-push.sh` 显式刷新 integration base ref，身份与隐私门禁绑定同一 base/head OID，逐笔检查而非只看净 diff；浅历史、缺对象、读失败和范围异常均停止。
+
+### 验证
+
+- 覆盖仅提交说明泄露、中间写入后删除、PR/squash 正文、所有分组预检、`--yes`、部分暂存、精确例外、普通 PR 编号、hook 改写和 HEAD 竞态；真实合并未执行。
+## [1.11.0] - 2026-10-03 - 敏感文件历史重写与全量撤回 SOP 入册
+
+### 新增
+
+- **references/history-rewrite-and-removal.md（新文档，261003 legal-skills star 数据撤回实战全量沉淀）**——敏感/私有文件被误提交到远端后的全历史撤回完整 SOP，SKILL.md 同步新增 §12 触发节与路由，description 追加「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语触发场景：
+  - **§0-1 判定与只读排查**：revert ≠ 撤回（历史仍可访问）；凭证类先撤销平台侧 Key 再重写；泄露范围（`git log --all -- 路径`）、凭证是否曾入库、受影响分支面（`git branch -r --contains`）、fork 副本（gh api contents）、`git log --all` 未覆盖未 fetch 分支需 API 交叉验证；
+  - **§2-3 隔离重写与推送**：全新 clone 绝不在主工作区跑、为全部远端分支建本地分支、`filter-repo --invert-paths`（会移除 origin、remotes 转本地分支、空提交被剪）、防复发 `.gitignore` 规则作为重写后 main 顶部提交、先 main 后逐分支 force push、三件套验证（SHA 对齐/API 404/分支抽查）；
+  - **§4 残留边界**：GitHub dangling 提交仍可按 SHA 访问、fork 不跟随上游重写、其他本地分支各自 rebase、公开窗口时长——如实告知不催办，处置归用户；
+  - **§5 主工作区深度分叉对齐剧本**（全量重写后 patch-id 失效不能常规 rebase）：三层备份（backup 分支 + **整个文件夹 rsync 全量备份**——.gitignore 排除的 untracked 本地特有文件 git 备份盖不住 + 反向 diff patch）；**实测坑：`git rm --cached` 的 staged deletion 会在 reset --hard + stash pop 时把磁盘数据文件删掉，reset 前必须单独 cp 出仓**；甄别 cherry-pick 必要性（提交涉及文件两侧树 diff 为 0 行 = 内容已在远端，零回放直接对齐）；stash 不带 -u；冲突语义表（Updated upstream=新 HEAD / Stashed changes=本地；单侧空批量解、不同条目两侧全保留、配套脚本改动必须同侧）；收尾五项验证；
+  - **§6 源头排查**：定时任务 → skill 脚本 git 命令 → 三家会话记录按文件名 grep → 提交元数据指纹（**直推 main 无 PR 号 + 凌晨时段** = 自动任务典型特征），无果存档不猜；
+  - **zsh refspec 大坑（实战返工一次）**：`"refs/heads/$b:refs/heads/$b"` 的 `$b:r` 被 zsh 解析为变量修饰符致 refspec 静默损坏，批量推分支一律用 `git push origin "$b"` 简单形式。
+
 ## [1.10.1] - 2026-10-02 - PR 验收合并与取代关闭执行 SOP 详细入册
 
 ### 文档完善
@@ -38,7 +65,6 @@
 ### 待办事项
 
 - `references/local-worktree-sop.md` 为 0 字节空文件（历史版本亦空，2026-09-20 并入时内容未迁移成功），SKILL.md §「Worktree（工作树）」引用悬空——需按原独立 skill 语义重写或改引用，已登记 TASKS.md。
-
 ## [1.9.0] - 2026-09-30 - 提交身份自检与身份污染审计：identity-audit.sh（whoami/history）
 
 ### 新增

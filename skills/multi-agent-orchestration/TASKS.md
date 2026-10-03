@@ -434,6 +434,7 @@ blocker_and_recovery:
 - 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
 
+
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
 
 - 状态：`IN_PROGRESS / VERIFIED_PR_CLOSEOUT_PENDING`；Owner：原PM Codex `/root`。原实现ID由test-mem-budget-probe.py钉扎为TASK-2026-09-06-MEM-BUDGET；上一诊断卡不再猜该ID，沿相同TASKS/ref22维护源接续。
@@ -452,6 +453,32 @@ blocker_and_recovery:
 - 独立验收：a7a6a81d实现绑定ACCEPT，新13/原58独验0、39 heldout/78次base-candidate CLI原payload去telemetry与退出精确一致；三frozen15raw byte/SHA相同，旧parse84 None→新reported84、无physical fallback。首外置consumer错flag/尾marker解析及唯一纠正复验保留，不归产品failure。
 - PM完整维护矩阵：66/66 exit0，直接复用两个工程字节相同首套件，其他64项各运行一次；无需失败episode。raw diffcheck2仅15原样快照trailing spaces，非fixture0；静态SEC1/HFA1/ISG2原告警保留，非本修范围不签全Skill安全或多轮稳定。最终文档仅修composite使用条件并记录证据，PR exact交付、本地CAS仍待完成。
 
+## TASK-2026-10-02-EVIDENCE-AND-PR-CLOSEOUT — 自动证据适配与仅PR交付终态
+
+- 状态：`PARTIAL / STAGE_A_ENGINEERING_ACCEPTED / PUBLICATION_NOT_VERIFIED`；Owner：Codex `/root`，DSH原owner只消费同一公共合同。来源：真人在Code Video协同推进明确授权现MAO/DSH会话沉淀与安排优化，root已回读原userMessage；交接说明SHA29e26c452d51c352b233f77d29178a0a768f390183c6aca04ceed40304701029，原路径保留，不重开已完成视频任务。
+- 去重：backend×mode、副作用前配置核验、唯一输入与完成状态由DISPATCH-PROFILES-AND-RECEIPTS原卡承担，MiniMaxbatch由在飞原卡收口；共享源码入口串行，不另起第二控制器。
+- 新同源随行反馈：Code Video PM-LOOP-FEEDBACK.md SHA8535b63215bddb84273d9171de126b070006a847ef49b5413990e4bb3e4ac0ec。报告MiniMax batch11m21s/作者重复定向10次、branch_name与lifecycle混淆、原Sessionlimit_exceeded接续、两轮P2及真实GUI回填重复，均为来源报告，不把统计/hash或计数当质量。并入本卡：派发预算与精确branch/生命周期字段、真实native result落原SC、sameepisode step limit与新业务失败分开、terminal-managed源配置/.git/info/exclude等Git外副作用证据、exacthandle/incarnation与现场Orca CLI release。重复反馈不重造controller/docs worker，已发布profile/batch未据此重开业务；PR351仅参考，不操作。
+- 后续工程范围：从真实命令/回执/产物/immutable head和独立reviewer身份机械生成postflight与review门输入；显式源码/行为变更失效规则；正常push+PR交付返回PR_DELIVERED及真实资源终态，保留仅验证/合并目标独立状态；Gitauthor/committer首次提交前暴露身份问题，按原Gitworkflow身份合同处理。
+- 收口读成本：在保留PR唯一性、同内容异分支、head/base及竞态反例下减少无关PR反复枚举；terminal/lease结算由原owner证明，不靠PM记忆，不将idle或pipeline尾命令exit0当完成。
+- 非目标：不扩默认backend/权限、不降角色分离与预算、不虚构测量百分比或速度排名，不复制DSH控制器或账户规则。阶段token/耗时无法观测写NOT_CAPTURED。
+- 新原身份恢复输入：Code Slides PM报告已完成的MiniMax batch与后续交互终端在spawn就绪失败后metadata handle/runtime为空、provider lease provisional，原业务已停写但不能据此释放资源。本owner已登记共享入口缺口；recover-unconfigured要求原handle存在，不能用于补空字段，不能手写receipt追认。需受核原bootstrap/create receipt + 精确livehandle/incarnation/runtime/WT/Session及原生SID绑定的正式恢复/结算入口；现仅读取和工程接手，不重投业务或关闭原终端。该子项归本卡生命周期证据适配，不与profile或partial-create另造控制器。
+- 验收：旧head/无产物exit0/重复业务输入/未知资源/仅PR被计失败/失败方向阻断独立任务等定向反例；同类有界真实消费者记录前后PM介入次数与各阶段实际可观测耗时，独立验收后PR。尚未建价值合同、未派worker或实现，NOT_VERIFIED。
+
+- 2026-10-03 顺序接续：原profile/batch/资源三项已限定交付，进入本卡A阶段自动工程验证证据适配；本卡总体IN_PROGRESS，PR-only终态与空handle原会话恢复留后续具名单元，不追认本阶段完成全卡。真实ZCode关闭恢复仍依runtime正式身份支持泊车，不消耗原022预算；宏观总控已实际读取2.36.10并核脚本/三入口，原DSH聊天接收正在处理中。
+- A阶段范围：仅新增工程验证证据采集/复核脚本与定向测试，兼容原postflight/role门输入；真实执行原spec具名scoped验证命令，捕获实际退出码/有界日志/耗时并绑定完整原spec与immutable HEAD/真实工作树。复用既有门，不生成独审ACCEPT、不自造Orca身份、不把采集exit0当任务完成；源码、HEAD、spec或日志变化使旧证据失效。至少覆盖合法近似正例、失败命令、旧head、未提交源码变更、修改日志/spec、复杂Shell命令拒绝。只支持原合同可证明的工程implementation/reusable_verification，其他种类明确拒绝而非编造验证。
+- A阶段预算与归属：原本卡未实施，首实现单窗口20分钟，不同执行者独审10分钟；最多2个工程failure episode，超时/缺公共primitive保留partial或泊车，不重置时间。作者只负责新scripts/verification-evidence.py及scripts/test_verification_evidence.py，PM维护现有SKILL/ref18/TASKS/CHANGELOG/README。独立夹具只用Git/Python，无Orca/模型/业务资源创建，无新参考文件、账号或配置writer。文档/脚本静态复核、真实独立消费者及受影响既有gate定向回归通过后才安装/PR；用户持续指令不是无限重试预算。
+
+- 独立交付边界：旧PR248仍有原生身份依赖且最新main已前进；本A阶段复用干净managed permission worktree，从origin/main开feat/mao-verification-evidence-261003，只携带两新脚本及本卡文档，原PR/分支完整保留。作者仍在原隔离树冻结同一两文件，随后字节搬入主线基底由不同执行者验收；不对旧分支force/rebase/reset，不把本新PR称原关闭恢复完成。价值合同原件保留，更新integration target后重核，预算不重置。
+
+- A阶段第二failure episode：新上下文独审固定d1b795c4发现版本化Python inline绕过、源码写后恢复、checkout外verifier改变及parent exit0遗留活子进程四个阻断，候选拒绝/不安装。原首bash组合选项缺陷和consumer canonical路径拒绝保留；累计工程episode2/2。允许具名5分钟作者/5分钟不同执行者增量窄修这4项，原20分钟停止事实不覆盖，未解决则保留partial/泊车而不第三次盲试。实际命令exe+直接文件输入须绑定，源码瞬态变更须可观测，专属验证进程组须收口并不得以父exit0扩大成完成。CI新增仅新脚本的定向调用，公共默认资源/权限/原Orca业务不改。
+
+- A阶段适用边界与后续：当前helper拒绝所有ignored内容，因此含Session Context、依赖或缓存的真实worker工作树并未纳入本阶段消费者验收；只作可选清潔工程入口，不绑到默认spawn/完成链。后续沿本卡具名设计受控SC/依赖输入绑定，再验真实原worker，不能把空Git夹具通过扩大为正常所有worker都已可用。PR-only与空handle原恢复另按原输入有限推进，原业务不重投。
+
+- A阶段窄修独验（2026-10-03）：工程HEAD `91867b44b4f419a707c04e888cd6ad810c23fd27` 获不同执行者`ACCEPT_STAGE_A`；四原P1及合法旧postflight消费全部独测通过，11条CLI/进程记录均符合预期，249.852秒内冻结。作者仅两文件，首末SHA一致；原REJECT/2个工程episode及独审夹具首TypeError保留，夹具仅在原窗内更正一次、不重置预算。限定具名argv文件、已知注入env及本次专用PG，不签全部导入依赖或hermetic隔离。原四验收脚本与主线逐字节一致；CI调用已核，远端执行、PR与本地安装待PM验收。
+- 发布审计子步：PM仅补本段事实及ref18适用边界，工程SHA冻结；不同原reviewer在<=60秒只读核最终发布HEAD/两工程SHA/随行文档与CI定义，不重跑产品用例、不续开修复预算。原20分钟实现和两次失败事实不变；若发布身份或文档有新阻断，保留partial，不自签全卡完成。
+- 发布文档首审拒绝：`d440fa05`的两段A阶段记录误归相邻profile卡，独审59.234秒内REJECT；两工程SHA及ref18未变，拒绝原件保留。PM仅将两原段移回本卡，以一次<=60秒归属/HEAD只读复核验收此机械纠正，不重跑产品、不清空工程2/2预算；再失败则本阶段保留partial。
+- 发布复核实际结果：最终工程与段归属核对符合预期，但报告冻结65.535秒超过60秒，独审最终`NOT_VERIFIED`/AUDIT-TIME-BUDGET；literal ACCEPT未签，原角色门实际exit2。保留工程91867b44的限定独验，最终整包不安装、不合并。此分支只可作为草稿受审候选，不计本卡完成。原两产品episode及作者/审查停止事实继续保留，当前没有新的产品返修窗口。
+
 ## TASK-2026-10-02-ZCODE-GUI-EVIDENCE-PR — 只读 ZCode 会话证据采集器
 
 - 状态：`IN_REVIEW`（实现已完成但 PM 审查/PR 验收尚待；R1 独审 REJECT 的 F1/F2/C1/C2 已修复，等新 head 独审；PR 创建/发布由 PM 用本机已授权 GitHub 登录执行，本会话不登录 gh、不裸 push）；Owner：远端 ZCode GUI worker（PM：Codex）；候选分支 `feat/zcode-gui-session-evidence`，冻结起点 `62034182d118f224d7f7713ac04748356fd8f722`。
@@ -460,3 +487,5 @@ blocker_and_recovery:
 - 边界与非目标：不实现 Orca 监督适配；冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成；不证明实时活性、计费优惠或 PM 验收；不扫描其他会话正文。
 - 验证：`python3 skills/multi-agent-orchestration/scripts/test-zcode-session-evidence.py` 实际 CLI 子进程回归 27/27 exit 0（两身份错绑、多 turn 拒歧义、admitted/failed/缺 turn、最后 assistant error/未完成/无 text、provider 缺项、schema/JSON 错误、text 开关、敏感不泄露、status_reason 仅布尔不外发、assistant sequence 并列/NULL/非数值拒歧义、缺 DB 不创建、原 DB 字节不变）。
 - 长期稳定性与真实大库性能 `NOT_VERIFIED`，沿 GUI 任务监控方向后续评估。
+
+- 2026-10-03集成复核：原R2已限定ACCEPT（见PR250评论），当前受审三份collector/test/reference与旧受审head554a60c1逐字节一致；本轮27项真实CLI回归再次通过。合并main到原PR分支，只串行保留双方四份共享文档、更新版本/索引，工程字节未改。交付目标已按真人功能线要求改为integration/mao-zcode-gui；新精确head及CI仍待核，尚未签里程碑/正式GUI监督。
