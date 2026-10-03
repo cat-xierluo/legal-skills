@@ -235,6 +235,43 @@ class ClerkTest(unittest.TestCase):
             self.cli("materials", "--manifest", self.save(manifest), fails=True)
         self.assertEqual(self.cli("status")["material_version"], 1)
 
+    def test_correction_and_cross_run_regression(self):
+        original = self.submission(self.dispatch())
+        original_seq = self.commit(original)["accepted_seq"]
+        rewritten = dict(original, body=original["body"] + "补充：签收人已当场核实。")
+        self.assertIn("新开更正回合", self.commit(rewritten, fails=True)["error"])
+        correction = self.submission(self.dispatch(responds=[original_seq]))
+        correction["body"] = "更正 E-000003：撤回签收人已核实的表述；当前材料未显示签收人身份，列待核验。"
+        correction_seq = self.commit(correction)["accepted_seq"]
+        reply = self.dispatch("defendant", [original_seq, correction_seq])
+        history = {item["seq"]: item for item in reply["history"]}
+        self.assertEqual(set(history), {original_seq, correction_seq})
+        self.assertEqual(history[original_seq]["speech"]["body"], original["body"])
+        self.assertEqual(history[correction_seq]["speech"]["responds_to"], [original_seq])
+        turns = self.cli("status")["turns"]
+        for _ in range(3):
+            self.assertEqual(self.cli("packet"), reply)
+        self.assertEqual(self.cli("status")["turns"], turns)
+        self.commit(self.submission(reply))
+        self.commit(self.submission(self.dispatch("judge", [original_seq, correction_seq])))
+        self.cli("close", "--reason", "更正链回归样例结束")
+        self.assertIn("庭审已关闭", self.cli(
+            "dispatch", "--role", "judge", "--issue", "I-001", "--stage", "closing",
+            "--prompt", "继续", fails=True)["error"])
+        self.run = self.base / "hearing-after-close"
+        self.cli("init", "--case-type", "civil", "--manifest", ASSETS / "civil-case.example.json")
+        self.assertIn("已有正式发言编号", self.cli(
+            "dispatch", "--role", "plaintiff", "--stage", "opening", "--issue", "I-001",
+            "--prompt", "承接旧运行", "--respond-to", original_seq, fails=True)["error"])
+        mapping = self.cli("dispatch", "--role", "plaintiff", "--stage", "opening",
+                           "--issue", "I-001：来源映射=旧运行 E-000003（公开说明）",
+                           "--prompt", "旧运行编号仅作来源说明，不构成本轮必答")
+        self.assertEqual(mapping["assignment"]["responds_to"], [])
+        mapping_seq = self.commit(self.submission(mapping))["accepted_seq"]
+        self.assertEqual(mapping_seq, 3)
+        following = self.dispatch("defendant", [mapping_seq])
+        self.assertEqual(following["assignment"]["responds_to"], [mapping_seq])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

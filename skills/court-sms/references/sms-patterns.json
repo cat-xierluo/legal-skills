@@ -22,7 +22,7 @@
           "file_format": "data[].c_wjgs"
         },
         "download_method": "curl -sL -o \"{filename}\" \"{wjlj}\"",
-        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。实测该响应不含任何送达时间字段（曾记录的 dt_cjsj 并不存在），送达时间须从文书内容另寻来源，见 sent_time_extraction。"
+        "notes": "OSS 签名 URL 有过期时间（约1小时），获取后应尽快下载。无需浏览器，直接 curl 即可。实测该响应不含任何送达时间字段（曾记录的 dt_cjsj 并不存在），须核对与目标文书及受送达人绑定的送达凭证，不能用文书生成时间替代，见 sent_time_extraction。"
       }
     },
     {
@@ -138,7 +138,7 @@
     "开庭传票": "传票",
     "举证通知书": "举证通知书",
     "判决书": "判决书",
-    "民事判决书": "一审判决书",
+    "民事判决书": "民事判决书",
     "裁定书": "裁定书",
     "调解书": "调解书",
     "执行通知书": "执行通知书",
@@ -153,53 +153,90 @@
     "参加诉讼通知书": "参加诉讼通知书"
   },
   "sent_time_extraction": {
-    "_doc": "送达时间提取规则，用于计算上诉期限等关键日期。zxfw 送达 API 响应经实测不含送达时间字段，不要指望从 API 响应取到。",
+    "_doc": "发送/收到/生成时间的线索提取；不等同法律送达日期。送达证据按 references/service-and-deadlines.md 核对。",
     "api_field": null,
     "api_field_description": "不适用：实测 getWsListBySdbhNew 响应字段全集为 code/msg/data/exp/expId/totalRows/success 与 c_sdbh/c_stbh/wjlj/c_wjgs/c_wsbh/c_wsmc/c_fybh/c_fymc，无任何送达时间字段",
-    "preferred_source": "送达文书内可解析的时间戳（首选）",
+    "preferred_source": "对应文书和受送达人的已核对送达凭证/法院系统发送成功或到达记录",
     "patterns": [
       {
         "type": "document_qrcode_time",
-        "description": "人民法院新闻传媒总社缴费通知书内的「二维码生成时间」，当天即签发日，可直接作为送达时间使用（实测：2026-09-30 10:19:19）",
+        "description": "二维码生成时间，仅记为线索，不能据此认定该文书或同批其他文书已送达",
         "regex": "二维码生成时间[：:]?\\s*(\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}(:\\d{2})?)",
-        "format": "yyyy-MM-dd HH:mm:ss"
+        "format": "yyyy-MM-dd HH:mm:ss",
+        "establishes_service": false,
+        "target": "time_clues"
       },
       {
         "type": "sms_gateway",
         "description": "短信网关时间（部分手机短信显示）",
         "regex": "(?:发送|时间)[：:]?\\s*(\\d{4}[-/年]\\d{1,2}[-/月]\\d{1,2}[日]?\\s+\\d{1,2}[时:]?\\d{0,2})",
-        "format": "yyyy-MM-dd HH:mm"
+        "format": "yyyy-MM-dd HH:mm",
+        "establishes_service": false,
+        "target": "time_clues"
       }
     ],
-    "pitfall": "裁定书/判决书落款日只是文书制作日，不等于送达日，不得冒充 sent_at；取不到时展示「送达时间待确认」，并在归档 JSON 的 document.sent_at_source 写明实际来源"
+    "pitfall": "生成日、签发日、下载日、普通短信时间不得自动写入 service.served_on。必须逐文书/受送达人核验，证据不足或冲突保持 pending。",
+    "confirmation_required": true,
+    "unknown_status": "pending"
   },
   "appeal_calculation": {
-    "_doc": "上诉期限计算规则，不同案件类型上诉期限不同",
-    "_counting_rule": "上诉截止日期 = 送达日期 + deadline_days，等价于「送达日期次日 + deadline_days - 1」（法定期间起算日不计入，两种写法结果相同）。唯一易错点是顺延：届满日遇休息日或法定休假日，顺延至其后第一个工作日；调休上班日（周末但经国务院办公厅通知规定为工作日）属工作日，不顺延。举例：2026-09-30 送达的民事裁定（10 日），届满 10-10（周六），但 10-10 依 2026 年国务院节假日安排为调休上班日，依法不顺延，届满日即 10-10。顺延必须依据当年国务院办公厅节假日安排通知的法定休假日与调休上班日两个清单，不能只用工作日/周末粗算——2026 年国庆 10-01 至 10-07 为法定休假日，同期 10-10（周六）为调休上班日。送达日期取 sent_time_extraction 的可追溯来源，不用文书落款日。",
+    "_doc": "普通一审可上诉文书的候选期间；标题匹配不确认审级、可上诉性或特殊规则。先核对完整救济告知。",
+    "_counting_rule": "仅以已核对的 service.served_on 起算。按日通常不计起算日，期间内节假日照计；末日顺延按适用程序法和当年官方放假调休安排核对，调休上班日不按普通周末处理。民事诉讼法第85条第3款规定末日顺延。特殊程序、期间或日历不明时不得给出确定期限。详见 service-and-deadlines.md。",
     "first_instance_civil_judgment": {
       "deadline_days": 15,
       "description": "民事一审判决：送达后15天",
-      "document_types": ["一审判决书", "民事判决书", "判决书"]
+      "document_types": [
+        "一审判决书",
+        "民事判决书"
+      ],
+      "requires_applicability_review": true
     },
     "first_instance_civil_ruling": {
       "deadline_days": 10,
-      "description": "民事裁定：送达后10天",
-      "document_types": ["裁定书"]
+      "description": "依法可上诉的民事一审裁定：送达后10天",
+      "document_types": [
+        "民事裁定书"
+      ],
+      "requires_applicability_review": true
     },
     "first_instance_administrative": {
       "deadline_days": 15,
-      "description": "行政判决：送达后15天",
-      "document_types": ["行政判决书"]
+      "description": "可上诉的行政一审判决：送达后15天",
+      "document_types": [
+        "行政判决书"
+      ],
+      "requires_applicability_review": true
     },
     "first_instance_criminal_judgment": {
       "deadline_days": 10,
-      "description": "刑事判决：送达后10天",
-      "document_types": ["刑事判决书"]
+      "description": "可上诉的刑事一审判决：送达后10天",
+      "document_types": [
+        "刑事判决书"
+      ],
+      "requires_applicability_review": true
     },
     "first_instance_criminal_ruling": {
       "deadline_days": 5,
-      "description": "刑事裁定：送达后5天",
-      "document_types": ["刑事裁定书"]
+      "description": "可上诉的刑事一审裁定：送达后5天",
+      "document_types": [
+        "刑事裁定书"
+      ],
+      "requires_applicability_review": true
+    },
+    "_requires": [
+      "confirmed_service",
+      "confirmed_appeal_applicability",
+      "verified_current_law",
+      "verified_official_calendar"
+    ],
+    "_unknown_action": "deadline_status=pending; appeal_deadline=null; appeal_days_remaining=null; 展示缺口，不隐去提醒",
+    "first_instance_administrative_ruling": {
+      "deadline_days": 10,
+      "description": "依法可上诉的行政一审裁定：送达后10天",
+      "document_types": [
+        "行政裁定书"
+      ],
+      "requires_applicability_review": true
     }
   },
   "party_extraction": {

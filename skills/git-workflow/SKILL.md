@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.10.0"
+  version: "1.11.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -174,9 +174,11 @@ team-feature-a
 - 一次性 `ephemeral-worker` 在交付、PR/head、expected tip、干净 Worktree 与 lifecycle settlement 全部绑定后，默认随单任务收口清理。
 - `long-lived` 功能/集成分支及固定 Worktree 不进入单任务自动清理，也不进入常规 stale 批量候选；短 Worker 合入长期分支时只清理 head，绝不触碰 `integration_target`。
 - 单任务收口结果必须是 `CLEANED`、`RETAINED_WITH_REASON` 或 `CLEANUP_PENDING`。交付已确认后的清理失败不得重放 push/merge，也不得被隐去。
-- 批量审计必须组合 PR 状态、最后提交时间、Worktree/dirty 状态和分支身份，向用户展示候选并取得确认；不得仅凭 `--merged`、ahead/behind 或分支名删除。
+- 批量审计必须组合 PR 状态、最后提交时间、Worktree/dirty 状态和分支身份，向用户展示候选并取得确认；不得仅凭 `--merged`、ahead/behind 或分支名删除。squash/cherry-pick 合并后 commit 对 base 不可达但补丁已在 base——用 patch-id 判死（`git cherry <base> <branch>` 的 `+` 计数为 0 = 补丁等价已全部在 base）；判定优先级为 MERGED PR 记录 > patch-id > merge-base。
 
-完整的单 Worker 自动清理、squash/rebase expected-tip 删除、批量 stale 审计、长期功能线关闭与红线统一读取 `references/branch-lifecycle-and-cleanup.md`。日常批量巡检先跑 `scripts/branch-audit.sh`（只读盘点，输出 SAFE_DELETE / NEEDS_CONFIRM / KEEP 三档候选表，绝不自行删除），再按 references §3.2 判定展示候选并取得用户确认，执行细节见其 §3.3。
+完整的单 Worker 自动清理、squash/rebase expected-tip 删除、批量 stale 审计、长期功能线关闭与红线统一读取 `references/branch-lifecycle-and-cleanup.md`。日常批量巡检先跑 `scripts/branch-audit.sh`（只读盘点，输出 SAFE_DELETE / NEEDS_CONFIRM / KEEP 三档候选表，含 patch-id 判死，绝不自行删除），再按 references §3.2 判定展示候选并取得用户确认，执行细节见其 §3.3。
+
+**过期/失效 worktree 清理**（多 Agent 派发沉淀的一次性 worktree；用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用）：先跑 `scripts/worktree-audit.sh`（只读盘点，按进程占用 lsof / dirty / 分支补丁 / PR 状态四维输出 GONE、KEEP_ACTIVE、KEEP_DIRTY、KEEP_OPEN_PR、REMOVE_ALL 分类，绝不自行删除），再按 references §3.4 五步执行（prune 悬空记录 → 查进程占用 → dirty 分类 → 按分支死活定删除范围 → 逐个删）。硬保护：有进程 cwd 占用的绝不删；untracked 材料无入库备份的不删；分支是 open PR head 或有未交付补丁时只删 worktree 保分支。
 
 ### Worktree（工作树）
 
@@ -310,6 +312,8 @@ git checkout <feature-branch>
 git rebase origin/main
 git push --force-with-lease  # rebase 后需要 force push
 ```
+
+**批量验收合并与取代关闭**（用户拍板「把这些 PR 合并」「合并新 PR、关闭旧 PR」后执行；含合并前复核、同族窄采用 PR 串行合并与连锁文档冲突解法、关闭评论四要素、收尾清理）统一读取 `references/branch-lifecycle-and-cleanup.md` §3.5。单 PR 日常合并同样适用其复核与确认要求。
 
 ### Rebase 冲突时的恢复
 
@@ -1041,6 +1045,18 @@ git checkout main
 
 完整诊断脚本、`on:` 块改写模板、验证与事故备忘见 `references/github-actions-quota-guard.md`。
 
+## 12. 敏感文件历史重写与全量撤回
+
+**触发**：敏感/私有文件（数据导出、个人材料、凭证）已被 commit 并 push 到远端，用户要求"从历史里删掉/撤回提交/私有数据被上传了"。
+
+核心纪律（详见 `references/history-rewrite-and-removal.md`）：
+
+- **revert 不等于撤回**——历史里仍可访问；真撤回 = filter-repo 重写 + 全分支 force push。凭证类先撤销平台侧 Key，再做重写。
+- **先只读排查**：泄露范围（`git log --all -- 路径`）、凭证是否曾入库、受影响远端分支面（`git branch -r --contains`）、fork 副本（`gh api` contents 查）。
+- **重写绝不在主工作区跑**：全新 clone 到 /tmp → 为全部远端分支建本地分支 → `git filter-repo --invert-paths` → 验证全历史为空 → 防复发 `.gitignore` 规则作为重写后 main 的顶部提交 → force push main + 逐分支推送（zsh 下禁用 `$b:refs/...` 冒号 refspec，`$b:r` 会被解析成修饰符）→ 三件套验证（SHA 对齐 / API 404 / 分支抽查）。
+- **主工作区对齐走深度分叉剧本**（全量重写后 patch-id 失效，不能常规 rebase）：三层备份（backup 分支 + **整个文件夹 rsync 全量备份**——untracked 的本地特有文件 git 备份盖不住 + 反向 diff patch）→ 敏感数据文件单独 cp 出仓（`rm --cached` 的 staged deletion 会在 reset+pop 时删掉磁盘文件）→ 甄别本地提交是否需 cherry-pick（涉及文件两侧树 diff 为 0 = 内容已在远端）→ stash（不带 -u）→ `reset --hard origin/main` → pop 解冲突 → 数据文件放回原位。
+- **残留如实告知不催办**：GitHub dangling 提交仍可按 SHA 访问、fork 不跟随重写、其他本地分支/worktree 需各自 rebase、公开窗口时长——由用户评估，AI 只给事实。
+
 ## 参考资源
 
 - `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计、批量删除执行坑与长期功能线关闭
@@ -1049,6 +1065,7 @@ git checkout main
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
 - `references/github-actions-quota-guard.md` — Actions 额度诊断、停挂配方（workflow_dispatch 化）、仓级总闸、恢复与红线
+- `references/history-rewrite-and-removal.md` — 敏感文件全历史撤回 SOP：只读排查、隔离 filter-repo 重写、全分支 force push、主工作区深度分叉对齐（含 stash 冲突语义与 zsh refspec 坑）、残留边界
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
 - `scripts/safe-push.sh` — 把身份与隐私核验绑定实际 immutable OID push
 - `scripts/privacy_check.py` — staged/message/完整历史共用隐私检查器

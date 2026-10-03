@@ -39,10 +39,15 @@
   "document": {
     "type": "一审判决书",
     "sent_at": "2026-04-08T10:00:00+08:00",
-    "sent_at_source": "短信网关时间",
+    "sent_at_source": "短信网关时间（仅发送线索）",
     "received_at": "2026-04-08T14:30:00+08:00",
-    "appeal_deadline": "2026-04-23T23:59:59+08:00",
-    "appeal_days_remaining": 15
+    "document_id": "DEMO-DOC",
+    "recipient_id": "DEMO-RECIPIENT",
+    "service": {"status": "pending", "served_on": null, "evidence_refs": [], "reason": "未取得该文书送达凭证"},
+    "deadline_status": "pending",
+    "deadline_basis": null,
+    "appeal_deadline": null,
+    "appeal_days_remaining": null
   },
   "archive": {
     "matched_case": "260101 张三与李四合同纠纷",
@@ -75,10 +80,26 @@
 | `download.api_response.documents[].c_wsmc` | 否 | 文书名称 |
 | `download.api_response.documents[].c_wsbh` | 否 | 文书编号（UUID） |
 | `document.type` | 否 | 文书类型：判决书/裁定书/调解书等（从 PDF 解析） |
-| `document.sent_at` | 否 | 法院发送时间（送达平台记录） |
-| `document.sent_at_source` | 否 | `sent_at` 的实际来源标识（例：`开庭公告缴费通知 PDF 内二维码生成时间`、`短信网关时间`）。zxfw 送达 API 不返回送达时间字段，此字段用于让时间可追溯，避免用文书落款日冒充送达日 |
+| `document.sent_at` | 否 | 仅指实际发送事件时间，未知为 null；不作为法律送达日起算字段 |
+| `document.sent_at_source` | 否 | 发送事件来源，不等于送达证明；二维码/落款时间另存 time_clues，不能填入 sent_at |
 | `document.received_at` | 否 | 用户收到时间（手机短信网关时间） |
-| `document.appeal_deadline` | 否 | 上诉截止日期（根据案件类型计算） |
-| `document.appeal_days_remaining` | 否 | 剩余上诉天数 |
+| `document.appeal_deadline` | 否 | 仅 deadline_status=confirmed 时填写；否则 null |
+| `document.appeal_days_remaining` | 否 | 仅 confirmed 时填写；按办案适用本地日期计算，其他状态为 null |
 | `archive.matched_case` | 否 | 匹配到的案件目录名 |
 | `archive.target_path` | 否 | 文书最终归档的相对路径 |
+
+## v1.5.3 送达与期限字段
+
+按 [送达与期限规则](service-and-deadlines.md) 核对证据，证据检查输入单独保存于私有本地文件。
+
+| 字段 | 说明 |
+|------|------|
+| `document.document_id` / `recipient_id` | 文书和受送达人的稳定标识；不得将整批默认绑定到同一人 |
+| `document.time_clues` | 二维码生成、签发、下载等线索数组，含类型、时间和原件定位；不能直接推定送达 |
+| `document.service` | 检查器输出：status、served_on（YYYY-MM-DD）、evidence_refs、reason |
+| `document.deadline_status` | pending / confirmed / not_applicable；缺省按 pending |
+| `document.deadline_basis` | 救济告知定位、适用法条、期间日数、日历来源、核对日期和受送达人；不以类型表替代 |
+
+多份文书/多个受送达人使用 `documents[]` 分别保存上述单文书结构；旧 `document` 仅用于一个文书/受送达人组合，不同时维护两套互相矛盾的结果。未知送达不阻碍归档，必须显式保留待核验提醒。
+
+旧记录没有 service 时不得默认 confirmed；再次处理时保留旧值的更正历史，撤下未核实的当前期限/倒计时。只更新本次授权范围内的档案，不批量改写其他案件。

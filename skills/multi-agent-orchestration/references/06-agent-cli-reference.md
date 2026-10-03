@@ -1,6 +1,7 @@
 # Agent CLI 完整参考手册
 
-> 当前运行合同只允许 Claude Code、Codex、CodeBuddy、QoderWork CN。OpenCode、Hermes、Kimi、Gemini、Rudder 等章节是历史调研资料，不得据此扩张 `spawn-worker.sh` 白名单。
+> 2026-09-30 当前合同：日常 Claude Code/Codex；CodeBuddy、独立 ZCode CLI/MiniMax Code、Qoder CN、千问办公仅用户指定时使用。QoderWork 已移除。按需启动与权限以 `26-optional-cli-backends.md`、`27-qwenwork-cli-worker.md` 为准；本文 QoderWork/旧 ZCode 无 TUI/旧模型等历史条目不作为当前派发配方。
+> 以下保留历史 CLI 研究；非当前 backend 不得据此扩张白名单。
 
 > 本文档为 SKILL.md 的补充参考文档，汇总本机已安装的所有 Agent CLI 的命令规范。
 > 更新日期：2026-08-12

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2026-10-01
+
+- official-capabilities 新增条目 #6（插件 Config 与 settings 表单机制：Config 命名导出/~standard 同步契约/volatile 活引用与写协议/vendor 方言门/子节点 toJSON——零依赖 duck-typed 三暗门，dsh-plugins PR #55）与 #7（`domain/changed` 存储域变更事件：耐久后写序 emit/新快照/进程内边界，PR #68）；待查清单收口「读取回执」项（bizlink v1 固化时评估维持业务侧）。
+- porting-semantics 新增「Python→JS 跨语言平移」六条：零宽后顾断言不可降级为消耗式前缀（PR #69 相邻链接漏改写 ~20% 实测）、URL 编码差分对照（quotePath 106 输入零分歧）、内容哈希当不了修订号（PR #68 自查）、round/日期/排序三件套（PR #61）、替换串捕获组即语义、差异申报或消除。
+- pitfalls-log 新增九条症状（mock ctx 代理纪律/valueSchema×best-effort 静默丢失/门序短路/死计数器/文件级≠记录级/离线桩≠网络失败/dump 同名覆盖/静态 baseUrl 错位/mock 假体 per-open 隔离）+ 新节「宿主验证与证据纪律」（四条 headless lab 实证）。
+- harness-facts 增补：插件 Config/settings 机制摘要与 `domain/changed`/加表不升 version/两处宿主侧观察（HMR disposed/inactive context，定因中）。
+- SKILL.md 开发路径新增第 5 步「宿主级验证」（mock 全绿 ≠ 宿主可用）；参考节描述同步。证据锚：dsh-plugins PR #55/#57/#58/#59/#61/#62/#66/#67/#68/#69。
+
+
 ## [0.5.0] - 2026-09-30
 
 - 新增 `references/porting-semantics.md`（移植语义纪律）：flopi-candidate 源码定位规律、行号锚定、平移四原则（语义等价/偏离只许更严/不虚构/读不透保守）、外部 IO 注入缝纪律（三级装配 + 缺省 fail-closed + 凭据零接触）、mock 贴宿主契约与并发分支测试计数。实证锚 dsh-plugins PR #42/#45/#46/#49/#51。

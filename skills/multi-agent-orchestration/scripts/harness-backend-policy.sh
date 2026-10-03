@@ -14,7 +14,10 @@ canonical_harness_backend() {
     claude|claude-code|claude_code) printf '%s\n' "claude-code" ;;
     codex) printf '%s\n' "codex" ;;
     codebuddy|workbuddy) printf '%s\n' "codebuddy" ;;
-    qoder|qoderwork|qoderwork-cn|qoderclicn) printf '%s\n' "qoderwork-cn" ;;
+    qoder-cn|qoderclicn) printf '%s\n' "qoder-cn" ;;
+    zcode-cli) printf '%s\n' "zcode-cli" ;;
+    minimax-code|mcode) printf '%s\n' "minimax-code" ;;
+    qwenwork-cn) printf '%s\n' "qwenwork-cn" ;;
     zcode) printf '%s\n' "zcode" ;;
     hermes) printf '%s\n' "hermes" ;;
     *) return 1 ;;
@@ -27,14 +30,22 @@ canonical_harness_backend() {
 pm_harness_candidate_for_frame() {
   local normalized="$1"
   case "$normalized" in
-    *"qoderclicn"*|*"qoderwork cn"*) printf '%s\n' "qoderwork-cn" ;;
+    # A retired host is still an ancestry constraint. Do not skip it and let
+    # a nested Codex/Claude frame recover broader dispatch authority.
+    *"qoderwork"*) printf '%s\n' "qoderwork-cn" ;;
+    *"qwenworkcn.app"*) printf '%s\n' "qwenwork-cn" ;;
+    *"qoderclicn"*|*"/qoder cn.app/"*|*"/qoder-cn-agent-sdk/"*) printf '%s\n' "qoder-cn" ;;
+    # These are worker-only identities. Keep them in a nested ancestry even
+    # though they have no authorized PM host entry in the policy.
+    *"/.minimax-code/"*|*"/@minimax-ai/code/cli.js"*|*"/minimax code.app/"*|*/mcode|mcode) printf '%s\n' "minimax-code" ;;
+    *"/zcode.mjs"*|*"/zcode.js"*|*"/zcode-cli/"*|*"/.zcode/runtime/"*|*/zcode|zcode) printf '%s\n' "zcode-cli" ;;
     *"codebuddy"*|*"workbuddy"*) printf '%s\n' "codebuddy" ;;
     *"/codex"*|codex) printf '%s\n' "codex" ;;
     *"/claude"*|claude) printf '%s\n' "claude-code" ;;
     # 2026-09-05: zcode PM host signatures (zcode-cli / zcode-host-local-N / ZCode).
     # Host policy for zcode is deny-by-default in config/harness-backend-policy.json;
     # enabling it requires explicit user authorization recorded in policy_notes.
-    *zcode-cli*|*zcode-host-local*|zcode) printf '%s\n' "zcode" ;;
+    */zcode-cli|zcode-cli|*zcode-host-local*) printf '%s\n' "zcode" ;;
     # 2026-09-15: hermes PM host signatures (Hermes.app bundle / .hermes install
     # dir). Path-based on purpose: a bare "hermes" basename would false-positive
     # on unrelated user paths. Host policy for hermes is deny-by-default in
