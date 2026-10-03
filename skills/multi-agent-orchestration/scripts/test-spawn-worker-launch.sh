@@ -41,6 +41,7 @@ reset_launch_case() {
   ORCA_WORKTREE_ID="repo-1::worker"
   ORCA_TERMINAL_HANDLE=""
   ORCA_SUPERVISED=0
+  ORCA_ZCODE_NATIVE_REQUESTS=""
   ORCA_RUN_ID=""
   ORCA_COORDINATOR_HANDLE=""
   ORCA_TASK_ID=""
@@ -442,7 +443,7 @@ chmod +x "$E2E_BIN/tmux" "$E2E_BIN/ps"
 # MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG / skill config 的真实内容
 # （quota_aware_routing 启用且无 summary 时预检会按设计 fail-closed exit 3）。
 E2E_PERSONAL_CONFIG="$CASE_ROOT/personal-quota-disabled.json"
-printf '%s\n' '{"quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
+printf '%s\n' '{"_schema_version":"1.3","quota_aware_routing":{"enabled":false}}' > "$E2E_PERSONAL_CONFIG"
 set +e
 e2e_output=$(PATH="$E2E_BIN:$PATH" MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
   SPAWN_WORKER_MEM_BUDGET_BYTES=0 \
@@ -456,6 +457,7 @@ e2e_output=$(PATH="$E2E_BIN:$PATH" MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E
   --dry-run 2>&1)
 e2e_rc=$?
 set -e
+[ "$e2e_rc" -eq 0 ] || printf "%s\n" "$e2e_output" >&2
 assert_eq "$e2e_rc" "0" "entrypoint accepts a dry-run spaced command"
 if [ ! -e "$E2E_PROJECT/.claude/agent-sessions/$E2E_SESSION" ]; then
   ok "entrypoint dry-run leaves Session Context absent"
@@ -474,6 +476,44 @@ if grep -Fq 'source "$SCRIPT_DIR/spawn-worker-launch.sh"' "$REAL_SCRIPT_DIR/spaw
 else
   bad "entrypoint delegates the shared launch boundary"
 fi
+
+# The installed skill is a directory symlink. Its actual entry must resolve
+# product/default configuration paths physically, not fail the canonical gate.
+ln -s "$REAL_SCRIPT_DIR" "$CASE_ROOT/installed-scripts-alias"
+alias_rc=0
+alias_out=$(PATH="$E2E_BIN:$PATH" MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG="$E2E_PERSONAL_CONFIG" \
+  SPAWN_WORKER_MEM_BUDGET_BYTES=0 bash "$CASE_ROOT/installed-scripts-alias/spawn-worker.sh" \
+  --project "$E2E_PROJECT" --no-worktree --no-orca-mode --session installed-alias-fixture \
+  --worker-backend codebuddy --command 'codebuddy --permission-mode acceptEdits' --dry-run 2>&1) || alias_rc=$?
+assert_eq "$alias_rc" 0 "installed directory alias invokes actual entry canonical sources"
+if printf '%s' "$alias_out" | grep -Fq 'SPAWN_WORKER_DISPATCH_PROFILE: codebuddy:interactive:direct'; then
+  ok "installed alias retains explicit direct profile"
+else bad "installed alias retains explicit direct profile"; fi
+if [ -e "$E2E_PROJECT/.claude/agent-sessions/installed-alias-fixture" ]; then
+  bad "installed alias dry-run has zero session resources"
+else ok "installed alias dry-run has zero session resources"; fi
+
+# Native opt-in bypasses terminal-create/wait; native helper owns one injection.
+reset_launch_case
+ORCA_MODE="auto"
+ORCA_SUPERVISED=1
+ORCA_ZCODE_NATIVE_REQUESTS="$CASE_ROOT/requests"
+COMMAND="env WORKER_SESSION_CONTEXT=$WORKTREE/.claude/agent-sessions/$SESSION zcode --mode build"
+SCRIPT_DIR="$CASE_ROOT/native-register"
+mkdir -p "$SCRIPT_DIR"
+cat > "$SCRIPT_DIR/orca-supervised-register.sh" <<'NATIVE'
+#!/usr/bin/env bash
+[ "$1" = "--agent" ] && [ "$2" = "zcode" ] || exit 64
+printf 'ORCAREG_TERMINAL_HANDLE=term-native\nORCAREG_RUN_ID=run-native\nORCAREG_TASK_ID=task-native\nORCAREG_DISPATCH_ID=dispatch-native\nORCAREG_DISPATCH_BIND=ok\nORCAREG_COORDINATOR_HANDLE=term-pm\n'
+NATIVE
+launch_worker_session
+assert_eq "$ORCA_TERMINAL_HANDLE:$ORCA_SUPERVISED_TASK_ID" "term-native:task-native" "native route exports exact created terminal and task"
+assert_eq "$(wc -c < "$FAKE_LOG" | tr -d ' ')" "0" "native route does not create terminal or send bootstrap prompt"
+assert_eq "$(stat -f '%Lp' "$LAUNCH_SH" 2>/dev/null || stat -c '%a' "$LAUNCH_SH")" "700" "native frozen launch wrapper is owner-only"
+reset_launch_case
+ORCA_MODE="auto"; ORCA_SUPERVISED=1; ORCA_ZCODE_NATIVE_REQUESTS="$CASE_ROOT/requests"; DRY_RUN=1
+native_plan=$(launch_worker_session)
+if printf '%s' "$native_plan" | grep -Fq 'worker-start --agent zcode'; then ok "native dry-run reports single agent creation"; else bad "native dry-run reports single agent creation"; fi
 
 printf 'spawn-worker launch tests: %s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

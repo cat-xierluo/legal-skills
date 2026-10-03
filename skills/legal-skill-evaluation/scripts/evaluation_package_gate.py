@@ -577,6 +577,16 @@ def validate(package: dict[str, Any], candidate_root: Path | None) -> dict[str, 
             "schema 1.1 requires generic_gate.finding_adjudications to be an array",
         )
     raw_ids = finding_ids(raw_findings) if isinstance(raw_findings, list) else set()
+    if strict_provenance:
+        for index, finding in enumerate(raw_findings):
+            finding_id = finding.get("id") if isinstance(finding, dict) else finding
+            if not isinstance(finding_id, str) or not finding_id.strip():
+                add_error(
+                    errors,
+                    CONSTRAINT_BINDING,
+                    "BIND-034",
+                    f"generic_gate.raw_hard_findings[{index}] must be a non-empty ID or an object with a non-empty id",
+                )
     unresolved_ids = finding_ids(generic_findings)
     adjudicated_ids: set[str] = set()
     out_of_scope_finding_count = 0

@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import shlex
+import shutil
 import sys
 
 
@@ -16,8 +18,9 @@ BACKENDS = {
     "codex": "codex",
     "codebuddy": "codebuddy",
     "workbuddy": "codebuddy",
-    "qoderclicn": "qoderwork-cn",
+    "qoderclicn": "qoder-cn",
     "zcode": "zcode",
+    "mcode": "minimax-code",
 }
 PYTHON_EXECUTABLES = {"python", "python3"}
 SHELLS = {"bash", "sh", "zsh"}
@@ -89,10 +92,25 @@ def command_backend(
     trusted_zcode_driver: str = "",
     depth: int = 0,
     shell_body: bool = False,
+    resolved_argv: list[str] | None = None,
+    stdin_redirect: list[str] | None = None,
 ) -> str:
     if depth > 3:
         raise ValidationError("nested shell launch depth exceeds the supported limit")
-    words = strip_environment(words)
+    # exec is a builtin only at the real Shell body head. Do this before env
+    # unwrapping: an env target is an external executable, never a builtin.
+    # Do not infer a head after assignment-like tokens; shlex loses whether an
+    # assignment name was quoted, which can make it an executable instead.
+    if shell_body and words and words[0] == "exec":
+        words = words[1:]
+        if not words or words[0].startswith("-"):
+            raise ValidationError("unsupported shell exec launcher")
+    # Spawn adds separate native env wrappers for Session Context and Node cap.
+    for _ in range(8):
+        stripped = strip_environment(words)
+        if stripped == words:
+            break
+        words = stripped
     if not words:
         raise ValidationError("command has no executable")
     if shell_body and CHAIN_TOKENS.intersection(words):
@@ -104,10 +122,34 @@ def command_backend(
         redirect_target = words[-1]
         if not os.path.isabs(redirect_target):
             raise ValidationError("renderer stdin redirect must use an absolute prompt file")
+        if stdin_redirect is not None:
+            stdin_redirect.append(redirect_target)
         words = words[: redirect_indices[0]]
 
+    if resolved_argv is not None:
+        resolved_argv[:] = words
     executable = words[0]
     basename = os.path.basename(executable).lower()
+    # qoderclicn is shared by several products. Never reinterpret a retired
+    # QoderWork bundle or a QwenWork bundled runtime as the standalone CN CLI.
+    resolved = os.path.realpath(shutil.which(executable) or executable).lower()
+    if "qoderwork" in resolved:
+        raise ValidationError("QoderWork is retired; install/select the standalone Qoder CN CLI")
+    if basename == "qoderclicn":
+        if "/qwenworkcn.app/contents/resources/bin/qoderclicn" in resolved:
+            if words.count("--config-dir") != 1 or any(word.startswith("--config-dir=") for word in words):
+                raise ValidationError("QwenWork bundled CLI requires one explicit dedicated --config-dir")
+            index = words.index("--config-dir")
+            if index + 1 >= len(words) or not os.path.isabs(words[index + 1]) or not os.path.isdir(words[index + 1]):
+                raise ValidationError("QwenWork config-dir must be an existing absolute directory")
+            config_root = os.path.realpath(words[index + 1])
+            shared_roots = {os.path.realpath(os.path.expanduser(root)) for root in ("~/.qoder", "~/.qodercn", "~/.qwenwork")}
+            if config_root in shared_roots:
+                raise ValidationError("QwenWork config-dir must not reuse a shared native product config root")
+            return "qwenwork-cn"
+        return "qoder-cn"
+    if basename == "zcode" and expected == "zcode-cli":
+        return "zcode-cli"
     actual = BACKENDS.get(basename)
     if actual is not None:
         return actual
@@ -128,6 +170,8 @@ def command_backend(
                 trusted_zcode_driver=trusted_zcode_driver,
                 depth=depth + 1,
                 shell_body=True,
+                resolved_argv=resolved_argv,
+                stdin_redirect=stdin_redirect,
             )
         if expected == "claude-code" and len(words) >= 2:
             wrapper = os.path.realpath(words[1])
@@ -139,15 +183,136 @@ def command_backend(
                     trusted_claude_wrapper=trusted_claude_wrapper,
                     trusted_zcode_driver=trusted_zcode_driver,
                     depth=depth + 1,
+                    resolved_argv=resolved_argv,
+                stdin_redirect=stdin_redirect,
                 )
         raise ValidationError(f"untrusted or opaque shell wrapper cannot prove backend identity: {executable}")
 
     raise ValidationError(f"executable is not a configured worker backend: {executable}")
 
 
+
+def minimax_startup_mode(argv: list[str], subcommand_index: list[int] | None = None) -> str:
+    """Classify the native top-level CLI, preserving option values and prompts."""
+    i = 1
+    value_options = {"-m", "--model", "--lane", "--tui-mode"}
+    controls = {"init", "acp", "login", "logout", "update", "provider", "plugin"}
+    while i < len(argv):
+        word = argv[i]
+        if word == "--":
+            return "interactive"
+        if word in value_options:
+            if i + 1 >= len(argv):
+                raise ValidationError(f"MiniMax option {word} requires a value")
+            i += 2
+            continue
+        if any(word.startswith(option + "=") for option in value_options if option.startswith("--")):
+            i += 1
+            continue
+        if word == "--session":
+            i += 1
+            if i < len(argv) and not argv[i].startswith("-"):
+                i += 1
+            continue
+        if (word.startswith("-m") and len(word) > 2) or word.startswith("--session=") or word in {"-c", "--continue"}:
+            i += 1
+            continue
+        if word == "exec":
+            if subcommand_index is not None:
+                subcommand_index.append(i)
+            return "batch"
+        if word in controls or word.startswith("-"):
+            raise ValidationError("MiniMax worker requires native interactive or exec entrypoint")
+        return "interactive"  # Native positional task prompt, not a subcommand.
+    return "interactive"
+
+
+
+def validate_minimax_bootstrap(argv: list[str], redirects: list[str], exec_index: int) -> None:
+    options = {"--input", "--input-format", "--cwd", "--file", "--model", "--effort",
+        "--prompt-mode", "--session", "--config", "--permission", "--timeout", "--max-steps",
+        "--output-format", "--diagnostics-dir", "--output-schema", "-o", "--output-last-message"}
+    i = exec_index + 1
+    inputs, prompts = [], []
+    input_format = "text"
+    while i < len(argv):
+        word = argv[i]
+        if word == "--":
+            prompts.extend(argv[i + 1:]); break
+        key, sep, value = word.partition("=")
+        if key in options:
+            if not sep:
+                if i + 1 >= len(argv):
+                    raise ValidationError(f"MiniMax exec option {key} requires a value")
+                value = argv[i + 1]; i += 1
+            if key == "--input":
+                inputs.append(value)
+            if key == "--input-format":
+                if value not in {"text", "json"}:
+                    raise ValidationError("unknown MiniMax bootstrap input format")
+                input_format = value
+        elif word.startswith("-o") and len(word) > 2:
+            pass
+        elif word == "--continue":
+            pass
+        elif word.startswith("-") or word == "review":
+            raise ValidationError("unknown MiniMax bootstrap entrypoint/options")
+        else:
+            prompts.append(word)
+        i += 1
+    if inputs:
+        if inputs != ["-"] or prompts or len(redirects) != 1:
+            raise ValidationError("MiniMax stdin bootstrap requires one explicit file and no second prompt")
+        prompt_file = redirects[0]
+        if not os.path.isfile(prompt_file):
+            raise ValidationError("MiniMax bootstrap prompt file must exist")
+        prompt = read_minimax_bootstrap_file(prompt_file)
+    elif len(prompts) != 1 or not prompts[0].strip() or redirects:
+        raise ValidationError("MiniMax exec requires one nonempty bootstrap prompt or redirected --input -")
+    else:
+        prompt = prompts[0]
+    # shlex intentionally removes quote delimiters and cannot prove whether a
+    # positional $(cat ...) expands or remains a single-quoted literal. Do not
+    # infer task bytes from that syntax; use the canonical stdin/file contract.
+    if not inputs and "$" in prompt:
+        raise ValidationError("MiniMax bootstrap prompt cannot depend on unproven shell expansion")
+    if input_format == "json":
+        try:
+            value = json.loads(prompt)
+        except ValueError as exc:
+            raise ValidationError("MiniMax JSON bootstrap requires valid JSON") from exc
+        prompt = value if isinstance(value, str) else value.get("prompt") if isinstance(value, dict) else None
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValidationError("MiniMax bootstrap requires a nonempty task prompt")
+
+
+
+def read_minimax_bootstrap_file(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as source:
+            return source.read()
+    except (OSError, UnicodeError) as exc:
+        raise ValidationError("MiniMax bootstrap file must be readable UTF-8 text") from exc
+
+
+def resolve_minimax_startup(command: str, *, require_input: bool = False) -> str:
+    validate_safe_command_substitutions(command)
+    argv: list[str] = []
+    redirects: list[str] = []
+    actual = command_backend(split_words(command, shell_body=True), expected="minimax-code",
+        trusted_claude_wrapper="", shell_body=True, resolved_argv=argv, stdin_redirect=redirects)
+    if actual != "minimax-code":
+        raise ValidationError("MiniMax startup command does not launch mcode")
+    index: list[int] = []
+    mode = minimax_startup_mode(argv, index)
+    if mode == "batch" and require_input:
+        validate_minimax_bootstrap(argv, redirects, index[0])
+    return mode
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", required=True, choices=sorted(set(BACKENDS.values())))
+    parser.add_argument("--backend", required=True, choices=sorted(set(BACKENDS.values()) | {"zcode-cli", "qwenwork-cn"}))
     parser.add_argument("--command", required=True)
     parser.add_argument("--trusted-claude-wrapper", required=True)
     parser.add_argument("--trusted-zcode-driver", default="")
@@ -155,17 +320,21 @@ def main() -> int:
 
     try:
         validate_safe_command_substitutions(args.command)
+        argv: list[str] = []
         actual = command_backend(
             split_words(args.command, shell_body=True),
             expected=args.backend,
             trusted_claude_wrapper=args.trusted_claude_wrapper,
             trusted_zcode_driver=args.trusted_zcode_driver,
             shell_body=True,
+            resolved_argv=argv,
         )
         if actual != args.backend:
             raise ValidationError(
                 f"declared backend {args.backend} does not match executable backend {actual}"
             )
+        if args.backend == "minimax-code":
+            minimax_startup_mode(argv)
     except ValidationError as exc:
         print(str(exc))
         return 64

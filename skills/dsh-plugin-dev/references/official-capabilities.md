@@ -61,6 +61,22 @@
 - **迁移模式**（PR #35 P09 实证）：Pi 时代的单 blob settings（如 4 MiB 上限）改为每业务对象一条记录（key = 对象 id），加 per-key 写链串行与总量/体积护栏；损坏数据靠 open 边界 schema 校验 fail-closed，等价 Pi 的损坏 fail-closed。
 - 证据：dsh-plugins PR #35（`plugins/dsh-session-pilot/lib/dsh/board.mjs` + `boardStore.mjs` + tests/pilot-board.test.cjs）。
 
+### #6 插件 Config 与 settings 表单机制（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：插件设置项 = 模块**命名导出 `Config`**（cordis registry 读 `plugin.Config`；ESM function plugin `export const Config` 即可，与 `inject`/`name` 同型）。机制全链路：`resolveConfig` 走 `Config['~standard'].validate`（standard-schema v1 **同步**契约，异步结果直接抛 TypeError）→ 校验值为 fiber config → `apply(ctx, config)`。volatile 字段（schema `meta.volatile`）解析为 `{get()}` 活引用 + 注册符号 `Symbol.for('cosmokit.volatile.write')` 写协议；loader settings 编辑后 `_commitVolatile` 重跑 validate、把新值移植进旧引用并 emit `loader/volatile-update`——**编辑免重挂载**。
+- **零依赖 duck-typed 可行，但有三个暗门**（dsh-plugins PR #55 审查实证）：① loader `equalExceptVolatile` 按 `~standard.vendor === 'schemastery'` 门控免重挂载路径（0.1.7-rc.2 全 harness 唯一 vendor 分支）——手写 schema 须声明 `'schemastery'` **方言**（门后走树消费面 meta.volatile/type/dict/meta.default 全部供给），声明诚实 vendor 则编辑必走重挂载；② settings `volatileForm` 对 volatile **子节点**调 `plainSchema(child)` = `new z(child.toJSON())`——**子节点自身必须带 toJSON**（只有根级会令宿主 describe()/update() 当场 TypeError）；③ validate 需同步、缺省补 default、未知键丢弃。
+- **消费面**：dsh-settings 服务（ctx 键 `settings`）`describe()/update()` 的表单 ns = cordis.patch.yml 条目 id；活值经 cosmokit `isVolatile`（注册符号 in 判定）解包——duck-typed 引用跨副本互认。0.1.7 无已发布的 schema 自动设置页客户端（编辑面=原生配置编辑器）。
+- 证据：dsh-plugins `docs/research/2026-09-30-dsh-settings-mechanism.md`（全链路引证）+ PR #55（超能 engineUrl 接线，宿主级装载半已证）。
+
+### #7 存储域变更事件——`domain/changed`（2026-09-30 核查，0.1.7-rc.2 实物）
+
+- **结论**：storageDomain 每次耐久写后按写序 emit 一次 `domain/changed`（cordis 事件，`ctx.on('domain/changed', fn)`），载荷 `{domain, table, key, operation: 'put'|'deleted', value?}`——**携带新快照而非旧值**（差异化消费方自持前值）；监听者抛错被宿主兜底记 warn 不拒绝已耐久写。**进程内事件**：第二宿主进程不可见（跨进程推送是官方后续阶段）。
+- **用途**：把「轮询 + 手动 refresh」平移为事件驱动（dsh-plugins PR #68 SuitAgent S09 实证：订阅案件写域的 domain/changed 翻译为案件维度事件，人工/Agent/扫描/删除四类写入自动覆盖——不在 owner 侧另埋通知，不引入第三套事件真值）。
+- **坑**：表记录的 `revision` 若是内容哈希（canonical JSON 哈希），它**无先后序**——不能当递增修订号判陈旧；事件只作唤醒信号，消费方凭权威面重建，内容身份相同即跳过重拉（PR #68 实现期自查纠正）。
+- 证据：dsh-plugins PR #68（`plugins/dsh-suitagent/lib/dsh/caseChanges.mjs` + tests/suitagent-changes.test.cjs）。
+
 ## 待查清单（已登记未核查的能力问号）
+
+- ~~读取回执类语义~~（已收口 2026-09-30：SuitAgent 按业务 owner 责任自有实现 `suit_agent_read` 域；bizlink v1 固化时评估维持不公共化——单一消费者实例，第二消费者出现时重评，见 dsh-plugins docs/ARCHITECTURE.md 固化声明）。
 
 - 读取回执类语义（「读过此案」READ_REQUIRED）：bizlink v1 无此概念，划业务 owner 责任，公共化待第二消费者需求（dsh-plugins DSH-003 公共缺口登记第 2 项）。

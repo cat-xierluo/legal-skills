@@ -27,9 +27,11 @@ python3 scripts/test_provider_lease_runtime.py -v
 python3 scripts/test_pm_runtime_reconcile.py -v
 bash scripts/test-spawn-worker-flags.sh
 bash scripts/test-spawn-worker-orca.sh
+python3 scripts/test-borrowed-worktree.py
 bash scripts/test-pm-quota-stall.sh
 python3 scripts/test-quota-preflight.py
 python3 scripts/test-mem-budget-probe.py
+python3 scripts/test_memory_telemetry.py
 python3 scripts/test-quota-summary-zcode.py
 bash scripts/test-pm-orchestrate-handoff.sh
 bash scripts/test-pm-message-contract.sh
@@ -38,6 +40,7 @@ bash scripts/test-night-watch.sh
 bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
+python3 scripts/test-zcode-orca-launcher.py
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-completion-authority.sh
@@ -49,6 +52,10 @@ bash scripts/test-post-merge-cleanup.sh
 bash scripts/test-harness-backend-policy.sh
 bash scripts/tests/test-harness-backend-policy.sh
 bash scripts/test-render-runtime-profile.sh
+python3 scripts/test_optional_cli_backends.py -v
+python3 scripts/test_minimax_cli_startup.py -v
+python3 scripts/test_dispatch_profile.py
+python3 scripts/test_dispatch_profile_adapter.py
 bash scripts/test-worker-command-policy.sh
 bash scripts/test-zcode-driver.sh
 bash scripts/test-provider-lease.sh
@@ -92,9 +99,15 @@ bash scripts/smoke-orca-control-plane.sh
 - 只有实际启动 Orca 支持的 Agent 并观察 `worker_done → Delivery → release/精确外部终端结算 → ack`，才能声明该 backend 的 supervised 路径已验证。
 - fake-gh、临时 Git 仓和静态审计不能替代真实 GitHub mutation 证据；缺失时标记 `NOT_VERIFIED`。
 - 若 Skill Lint 或 Harness 规则命中已知通用误报，保留原始证据和约束说明，不通过命令变形规避扫描。
-- `scripts/tests/test-harness-backend-policy.sh` 的本机祖先链段只做环境探针：识别为 Hermes 时校验完整链；无可识别宿主（rc=1）或进程祖先不可完整证明（rc=67）时跳过，并由前面的路径签名、白名单交集与 fail-closed 用例承担确定性覆盖。其他退出码仍失败。
+- `scripts/tests/test-harness-backend-policy.sh` 的本机祖先链段只做环境探针：识别为 Hermes 时校验完整链；完整识别为其他宿主、无可识别宿主（rc=1）或进程祖先不可完整证明（rc=67）时跳过，并由前面的路径签名、白名单交集与 fail-closed 用例承担确定性覆盖。其他退出码仍失败。
 - `scripts/test-harness-backend-policy.sh` 的具名祖先链用例在测试私有 `PATH` 中包装 `ps`：真实可读帧原样返回，只把容器/CI 不可见的最外层边界补成中性的 `/bin/sh → PID 1`。这只让合成的 codebuddy/codex/claude/qoderclicn 帧可确定性验收，不改变生产脚本对不完整祖先链 rc=67 的 fail-closed 行为。
 - 阴性断言必须区分预期无匹配与读取/执行错误；测试自身的故障注入也须能得到非零测试结算。后端策略测试使用隔离 fixture，不通过修改正式授权配置凑绿。
 - 锁竞争验收分别观察真实非阻塞锁操作与 CLI 拒绝结果。完整 CLI 的观测/子进程启动耗时不是单独的锁等待；测试防悬挂 timeout 也不是响应性能承诺。
 
 - runtime-settlement 专项 CI 运行只读适配器、绑定 lease 生产方和 PM wrapper 测试，并复跑既有 provider/settle 邻接回归；仅使用隔离合成 RPC，不调用真实 provider 或生产生命周期。
+
+- 显式借用入口的隔离消费者应验证真实 Git 内容/模式/identity、独立 CLI writer 探测、锁及 late drift；native request/launcher 和所有 MAO cleanup 对借用树的删除调用为零。fake inventory不证明原业务树无writer或原生settlement已经通过。MiniMax默认Orca合同要分别覆盖 canonical/alias、缺runtime/错仓/注册失败/轻量拒绝及显式直连；不扩大日常backend池或supervised结论。
+
+- MiniMax batch 启动消费者须证明真实 `exec` argv 与 env/bash 包装被识别、quoted exec/echo 不被误判、Orca create 后无 TUI wait 或二次 send；interactive 仍走原就绪/唯一输入，batch 与 supervised/precreated Task 冲突在副作用前拒绝。late failure 保留精确 terminal 身份；fake 启动不证明真实模型已完成任务。
+
+- 派发profile消费者须从实际spawn入口证明：漏native参数的ZCode自动补原生桥；缺失/禁用配置零资源副作用；旧显式native及generic/direct兼容；MiniMax模式由实际COMMAND取得，batch零wait/send。官方projection的nextAction优先于composer残留，身份冲突拒绝。计划/启动返回保持draft，不能把stub成功扩大为真实输入/业务完成。
