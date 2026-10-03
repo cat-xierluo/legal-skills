@@ -39,7 +39,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 
 # v2.0：PATH 注入 helper（2026-07-12 实战坑：claude 在 ~/.local/bin，wrapper 后
 # which 不到）。在 flag 解析之前注入，确保后续 tmux 内 wrapper 派 Claude Code
@@ -73,6 +73,7 @@ BRANCH_LIFECYCLE="ephemeral-worker"
 COMMAND=""
 DRY_RUN=0
 WORKER_BACKEND=""
+WORKER_BACKEND_EXPLICIT=0
 PM_HARNESS_ASSERTION=""
 REMOTE_DISPATCH_RECEIPT=""
 PM_HARNESS=""
@@ -90,7 +91,7 @@ PROVIDER_LEASE_ROOT=""
 PROVIDER_LEASE_LIMIT=""
 PROVIDER_LEASE_KEY=""
 PROVIDER_LEASE_ACQUIRED=0
-PERSONAL_CONFIG_FILE="${MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG:-$SCRIPT_DIR/../config/orchestration-personal.json}"
+PERSONAL_CONFIG_FILE="${MULTI_AGENT_ORCHESTRATION_PERSONAL_CONFIG:-$(cd "$SCRIPT_DIR/.." && pwd -P)/config/orchestration-personal.json}"
 ENV_ISOLATION=""
 WAVE_ID=""
 WAVE_WORKER_ID=""
@@ -157,6 +158,9 @@ ORCA_CAPABILITIES_JSON=""  # 来自 orca status --json capabilities 数组
 ORCA_TUI_READY_METHOD="orca_terminal_wait_tui-idle"
 ORCA_SETUP_MODE="skip"  # Repo Setup runs before MAO can install Session Context/guards.
 NO_ORCA_MODE=0
+DISPATCH_PROFILE_TRANSPORT="auto"
+DISPATCH_PROFILE_JSON="null"
+DISPATCH_LAUNCH_OUTCOME="planned"
 # v2.1.1（Task-033）：ORCA supervised 注册（run-create + task-create + worker-start --terminal）。
 # --orca-supervised 启用时，ORCA 模式 spawn 后把 worker terminal 纳入 supervised 体系。
 # worker 出现在 worker-list，绑定 task + worktree resource，可被 send/reply/inbox + gate 管理。
@@ -167,6 +171,10 @@ ORCA_RUN_ID=""
 ORCA_TASK_ID=""
 ORCA_COORDINATOR_HANDLE=""
 ORCA_EXPECTED_RUNTIME_ID=""
+ORCA_ZCODE_NATIVE_REQUESTS=""
+BORROW_EXISTING_WORKTREE=""
+BORROWED_LOCK_ACQUIRED=0
+BORROWED_CONTRACT_SHA256=""
 ORCA_SUPERVISED_RUN_ID=""    # helper 输出，仅 --orca-supervised 时填
 ORCA_SUPERVISED_COORDINATOR_HANDLE=""  # Run 绑定的 PM terminal，用于 consumer fencing
 ORCA_SUPERVISED_TASK_ID=""   # helper 输出
@@ -414,7 +422,7 @@ if [ -z "$COMMAND" ]; then
     codex) COMMAND="codex" ;;
     codebuddy) COMMAND="codebuddy" ;;
     qoder-cn) COMMAND="qoderclicn --permission-mode auto" ;;
-    zcode-cli) COMMAND="zcode --mode build" ;;
+    zcode-cli) COMMAND="zcode --mode yolo" ;;
     minimax-code) COMMAND="mcode" ;;
     qwenwork-cn)
       echo "ERROR: qwenwork-cn requires an explicit rendered --command with a dedicated --config-dir; see references/27-qwenwork-cli-worker.md" >&2
@@ -447,6 +455,47 @@ fi
 printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
   "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
 
+# Resolve the actual COMMAND only after the verified PM policy chain. This
+# plans dispatch; it does not replace any quota, authority or runtime gate.
+if [ "$NO_ORCA_MODE" -eq 1 ]; then
+  [ "$DISPATCH_PROFILE_TRANSPORT" = "auto" ] || { echo "ERROR: dispatch profile conflicts with --no-orca-mode" >&2; exit 64; }
+  DISPATCH_PROFILE_TRANSPORT="direct"
+fi
+profile_input=$(python3 - "$WORKER_BACKEND_CANONICAL" "$PM_HARNESS_CHAIN_JSON" "$DISPATCH_PROFILE_TRANSPORT" "$ORCA_SUPERVISED" "$ORCA_ZCODE_NATIVE_REQUESTS" "$COMMAND" "$WORKER_BACKEND_EXPLICIT" <<'PROFILE_REQUEST'
+import json,sys
+backend,chain,transport,supervised,root,command,explicit=sys.argv[1:]
+request={"backend":backend,"harness_chain":json.loads(chain),"transport":transport,
+         "explicit_selection":explicit=="1","supervised":supervised=="1"}
+if root: request["native_requests_root"]=root
+print(json.dumps({"request":request,"command":command}))
+PROFILE_REQUEST
+) || exit 64
+DISPATCH_PROFILE_JSON=$(printf '%s' "$profile_input" | python3 "$SCRIPT_DIR/dispatch-profile-adapter.py" \
+  --skill-root "$(cd "$SCRIPT_DIR/.." && pwd -P)" --personal-config "$PERSONAL_CONFIG_FILE") || exit 64
+if [ "$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -r '.transport')" = "orca-native-supervised" ]; then
+  ORCA_SUPERVISED=1
+  ORCA_ZCODE_NATIVE_REQUESTS=$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -er '.required_spawn_flags | index("--orca-zcode-native-requests") as $i | .[$i+1]') || exit 64
+  [ "$LIGHTWEIGHT_MODE" -eq 0 ] || { echo "ERROR: native dispatch requires isolated Orca worktree mode" >&2; exit 64; }
+  [ -n "$TASK_SPEC" ] || [ -n "$ORCA_TASK_ID" ] || { echo "ERROR: native dispatch requires --task-spec or --orca-task-id" >&2; exit 64; }
+fi
+printf 'SPAWN_WORKER_DISPATCH_PROFILE: %s\n' "$(printf '%s' "$DISPATCH_PROFILE_JSON" | jq -r '.profile')"
+
+# MiniMax batch owns its original input; reject incompatible lifecycle before
+# route/provider/worktree/Session Context/terminal side effects.
+if [ "$WORKER_BACKEND_CANONICAL" = "minimax-code" ]; then
+  MINIMAX_STARTUP_MODE=$(python3 "$SCRIPT_DIR/minimax-cli-startup.py" --command "$COMMAND" --require-input \
+    --supervised "$ORCA_SUPERVISED" --task-id "${ORCA_TASK_ID:-}") || exit 64
+  if [ "$MINIMAX_STARTUP_MODE" = "batch" ]; then
+    # Native exec has no TUI input channel; even explicitly requested UI-auto
+    # watchers must not send keys or a second task into its bootstrap stream.
+    TRUST_AUTO=0; TRUST_AUTO_OVERRIDE=1
+    PERMISSION_AUTO=0; PERMISSION_AUTO_OVERRIDE=1
+    PERMISSION_AUTO_BG=0; PERMISSION_AUTO_BG_OVERRIDE=1
+    EXTERNAL_IMPORTS_AUTO=0; EXTERNAL_IMPORTS_AUTO_OVERRIDE=1
+    echo "SPAWN_WORKER_MINIMAX_BATCH_UI_INPUT_DISABLED: native bootstrap owns task input"
+  fi
+fi
+
 # shellcheck source=spawn-worker-route-suggest.sh
 source "$SCRIPT_DIR/spawn-worker-route-suggest.sh"
 
@@ -473,7 +522,29 @@ source "$SCRIPT_DIR/spawn-worker-orca.sh"
 #   - ORCA_WORKTREE_ID 待 orca_worktree_create() 填充（worktree 创建阶段）
 #   - ORCA_TERMINAL_HANDLE 待 orca_terminal_create_and_send() 填充（tmux 启动阶段）
 #   - ORCA_APP_VERSION / ORCA_CAPABILITIES_JSON 已从 `orca status --json` 抓取
+# Native version/root gating must precede detector auto-registration as well.
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: native requests require zcode-cli + supervised" >&2; exit 64;
+  }
+  orca_runtime_init || exit 64
+  native_status=$(orca_cli status --json) || exit 64
+  native_version=$(printf '%s' "$native_status" | jq -er 'select(.ok == true) | .result.runtime | select(.reachable == true) | .appVersion') || exit 64
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$native_version" >/dev/null || exit 64
+fi
+if [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_SUPERVISED" -eq 1 ] && [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ] && [ "$NO_ORCA_MODE" -eq 0 ] && [ "$LIGHTWEIGHT_MODE" -eq 0 ] || {
+    echo "BORROWED_WORKTREE_REQUIRES_NATIVE_ZCODE: explicit native supervised worktree entry only" >&2; exit 64;
+  }
+  spawn_worker_borrowed_initial
+else
 detect_orca_mode  # 直接调，设全局 ORCA_MODE + ORCA_APP_VERSION/CAPABILITIES_JSON/WORKTREE_PATH（不用 $() 子 shell）
+fi
+spawn_worker_require_backend_orca || exit $?
+if [ "$DISPATCH_PROFILE_TRANSPORT" = "orca-generic" ] && [ "$ORCA_MODE" != "auto" ]; then
+  echo "ERROR: explicit orca-generic dispatch profile requires current Orca mode" >&2
+  exit 64
+fi
 if [ "$ORCA_MODE" = "missing_orca" ]; then
   exit 64
 fi
@@ -495,6 +566,12 @@ if [ "$ORCA_SUPERVISED" -eq 1 ]; then
   [ "$ORCA_MODE" = "auto" ] || { echo "ERROR: --orca-supervised requires a current Orca-managed project" >&2; exit 64; }
   has_orchestration=$(printf '%s' "$ORCA_CAPABILITIES_JSON" | jq -r 'any(. == "orchestration.contract.v1")' 2>/dev/null)
   [ "$has_orchestration" = "true" ] || { echo "ERROR: Orca runtime lacks orchestration.contract.v1" >&2; exit 64; }
+fi
+if [ -n "$ORCA_ZCODE_NATIVE_REQUESTS" ]; then
+  [ "$WORKER_BACKEND_CANONICAL" = "zcode-cli" ] && [ "$ORCA_MODE" = "auto" ] && [ "$ORCA_SUPERVISED" -eq 1 ] || {
+    echo "ERROR: --orca-zcode-native-requests requires zcode-cli + Orca supervised" >&2; exit 64;
+  }
+  python3 "$SCRIPT_DIR/zcode-orca-launcher.py" preflight --requests-root "$ORCA_ZCODE_NATIVE_REQUESTS" --app-version "$ORCA_APP_VERSION" >/dev/null || exit 64
 fi
 if [ "$ORCA_MODE" != "auto" ] && ! command -v tmux >/dev/null 2>&1; then
   echo "ERROR: tmux is required outside Orca terminal mode" >&2
@@ -790,6 +867,11 @@ if [ "$LIGHTWEIGHT_MODE" -eq 1 ]; then
   # WORKTREE 已指向 PROJECT_DIR（或 --worktree 覆盖的子目录）。
   BASE_SHA=""
   echo "SPAWN_WORKER_LIGHTWEIGHT: skip git worktree setup, worker cwd=$WORKTREE"
+elif [ -n "$BORROW_EXISTING_WORKTREE" ]; then
+  spawn_worker_borrowed_recheck
+  [ "$DRY_RUN" -eq 1 ] || [ -n "$PROVIDER_LEASE_FILE" ] || { echo "BORROWED_WORKTREE_LEASE_REQUIRED: configure a real provider concurrency lease" >&2; exit 64; }
+  BASE_SHA="$BORROWED_HEAD"
+  echo "SPAWN_WORKER_BORROWED_WORKTREE: external tree/branch retained; new MAO Session"
 elif [ "$ORCA_MODE" = "auto" ]; then
   # v2.1（DEC-114）：ORCA 终端模式。每次都新建独立 ORCA worktree（--no-parent），
   # 不复用 git worktree（ORCA worktree 是独立概念，由 ORCA 桌面端跟踪）。
@@ -881,7 +963,7 @@ fi
 # Task-045 / G31：worktree 创建并真实化后，按项目类型补偿依赖。
 # Orca worktree 落在 ~/orca/workspaces/（独立路径树，不在主仓父链）→ Node 项目软链
 # 主仓 node_modules，否则 npm/vitest/tsc 向上解析找不到依赖、worker 无法自验。
-ensure_worktree_deps
+[ -n "$BORROW_EXISTING_WORKTREE" ] || ensure_worktree_deps
 
 run mkdir -p "$SESSION_CONTEXT"
 
@@ -1523,7 +1605,19 @@ if [ "$DRY_RUN" -eq 0 ]; then
   fi
 fi
 
-echo "SPAWN_WORKER_NEXT: send worker prompt, then wait for $SESSION_CONTEXT/STATUS.json"
+# One initial instruction, derived from the actual launch boundary outcome.
+# This cannot upgrade input to accepted/started/done; official Orca projection
+# remains the later lifecycle authority.
+DISPATCH_LAUNCH_GUIDANCE=$(printf '%s' "$DISPATCH_PROFILE_JSON" | python3 "$SCRIPT_DIR/dispatch-profile-adapter.py" \
+  --launch-outcome "$DISPATCH_LAUNCH_OUTCOME") || exit 64
+if [ "$DRY_RUN" -eq 0 ] && [ -f "$METADATA_FILE" ]; then
+  tmp_profile_meta=$(mktemp)
+  jq --argjson launch "$DISPATCH_LAUNCH_GUIDANCE" --arg mode "$ORCA_MODE" \
+    '.runtime.dispatch_profile.launch = $launch | .runtime.dispatch_profile.transport_runtime_mode = $mode' \
+    "$METADATA_FILE" > "$tmp_profile_meta" && mv "$tmp_profile_meta" "$METADATA_FILE"
+fi
+printf 'SPAWN_WORKER_NEXT: %s; input_state=draft; acceptance/completion unverified; inspect %s/STATUS.json\n' \
+  "$(printf '%s' "$DISPATCH_LAUNCH_GUIDANCE" | jq -r '.next_action.kind')" "$SESSION_CONTEXT"
 
 if [ "$WITH_SENTINEL" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
   SENTINEL_SCRIPT="$SCRIPT_DIR/sentinel.sh"

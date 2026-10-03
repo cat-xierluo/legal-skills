@@ -6,6 +6,122 @@ import re
 import sys
 import os
 
+
+# Conservative suffix grammar: unknown lines remain part of the case. In
+# particular, a quoted/contact/source keyword inside prose is never a boundary.
+_SOURCE_LINE = re.compile(
+    r'^来源\s*[:：]\s*(?:上海市高级人民法院|天津高院|青岛中院|湖南高院|'
+    r'宁波中院|江苏高院|南京中院)\s*$'
+)
+_FRESHRSS_LINE = re.compile(r'^\*(?:\[)?由 FreshRSS[^*\n]*\*$')
+_PROMO_LINE = re.compile(r'^(?:扫码获取|浏览知产财经|联系我们|知产财经官网|'
+                        r'订阅我们|点分享|点收藏|点在看|点点赞|往期热文)\s*$')
+
+
+def _trim_trailing_footer(text):
+    lines = text.splitlines(keepends=True)
+    fence = None
+    literal_lines = set()
+    for index, raw in enumerate(lines):
+        marker = re.match(r'^\s*(`{3,}|~{3,})', raw)
+        if fence:
+            literal_lines.add(index)
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not raw[marker.end():].strip():
+                fence = None
+        elif marker:
+            fence = marker[1]
+            literal_lines.add(index)
+    end = len(lines)
+    while end and not lines[end - 1].strip():
+        end -= 1
+    # A promotional-looking line alone is ambiguous; require attribution,
+    # FreshRSS signature, or END, and only a wholly recognized suffix.
+    for i in range(end - 1, -1, -1):
+        if i in literal_lines or lines[i].startswith((' ', '\t', '>')):
+            break
+        line = lines[i].strip()
+        if not line or _PROMO_LINE.fullmatch(line) or line == '---':
+            continue
+        if _SOURCE_LINE.fullmatch(line) or _FRESHRSS_LINE.fullmatch(line) or (line == 'END' and any(_PROMO_LINE.fullmatch(item.strip()) for item in lines[i + 1:end])):
+            return ''.join(lines[:i]).rstrip('\r\n')
+        break
+    return text
+
+
+def _normalize_punctuation(text):
+    # Preserve fenced exhibits verbatim, including incomplete fences.
+    result = []
+    fence = None
+    for line in text.splitlines(keepends=True):
+        marker = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if fence:
+            result.append(line)
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not line[marker.end():].strip():
+                fence = None
+        elif marker:
+            fence = marker[1]
+            result.append(line)
+        else:
+            result.append(_normalize_prose_punctuation(line))
+    return ''.join(result)
+
+
+def _normalize_prose_punctuation(text):
+    """Normalize prose without corrupting numbers, URLs or Markdown syntax."""
+    protected = re.compile(
+        r'(?m:^\s*(?:[０-９0-9]+|[一二三四五六七八九十]+)[.、])'
+        r'|`+[^`\n]*`+'
+        r'|!?\[[^\]\n]*\]\((?:[^()\n]|\([^()\n]*\))*\)'
+        r'|[A-Za-z0-9.!#$%&\'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}'
+        r'|(?:https?://|mailto:|www\.)[^\s<>“”‘’，。；！？（）【】]+'
+        r'|[０-９0-9]+(?:[.,][０-９0-9]+)+'
+    )
+    replacements = str.maketrans({'(': '（', ')': '）', ',': '，', '.': '。',
+                                  ':': '：', ';': '；', '!': '！', '?': '？'})
+
+    digits = str.maketrans('０１２３４５６７８９', '0123456789')
+
+    def prose(value):
+        value = value.translate(replacements).translate(digits)
+        value = re.sub(r'"([^"\n]+)"', r'“\1”', value)
+        return re.sub(r"'([^'\n]+)'", r'‘\1’', value)
+
+    result = []
+    cursor = 0
+    for match in protected.finditer(text):
+        value = match.group()
+        if re.fullmatch(r'[０-９0-9一二三四五六七八九十\s.,、]+', value):
+            value = value.translate(digits)
+        result.extend((prose(text[cursor:match.start()]), value))
+        cursor = match.end()
+    result.append(prose(text[cursor:]))
+    return ''.join(result)
+
+
+def _collapse_blank_lines(text):
+    result = []
+    fence = None
+    previous_blank = False
+    for line in text.split('\n'):
+        marker = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if fence:
+            result.append(line)
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not line[marker.end():].strip():
+                fence = None
+            previous_blank = False
+        elif marker:
+            fence = marker[1]
+            result.append(line)
+            previous_blank = False
+        elif line.strip():
+            result.append(line)
+            previous_blank = False
+        elif not previous_blank:
+            result.append('')
+            previous_blank = True
+    return '\n'.join(result)
+
+
 def format_text(text, court_name, source_url, title, keep_from_marker=None):
     """
     Format legal text according to skill rules:
@@ -13,164 +129,24 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
     - Add ## for case titles, ### for case sections
     - Clean up excessive blank lines (max 1 consecutive)
     - Convert numbers to half-width
-    - Remove content scope (intro/QR codes/promotion)
-    - Keep case content intro paragraph
+    - Trim only recognized trailing footer blocks
+    - Preserve ambiguous content and literal evidence blocks
     """
     
-    # Find where actual cases start (look for first case marker)
-    # Cases typically start with patterns like "案例1", "案例一", "/** 案例", etc.
-    
-    # If keep_from_marker specified, start from there
+    # Prefix boundaries must be supplied explicitly. Dates and case-like
+    # phrases may also occur in substantive text, so do not guess a cutoff.
     if keep_from_marker:
         idx = text.find(keep_from_marker)
         if idx != -1:
             text = text[idx:]
-    
-    # Remove top matter (frontmatter, headers with source info, etc.)
-    # Keep the first meaningful paragraph about the announcement
-    
-    # Find first case indicator
-    case_patterns = [
-        r'案例\s*\d+',  # 案例1, 案例 1
-        r'案例一', r'案例二', r'案例三',
-        r'/\*\*/\s*案例',  # /** 案例 **/
-        r'^\d+、',  # 1、 at line start
-        r'^\[案例',  # [案例
-    ]
-    
-    first_case_pos = len(text)
-    for pattern in case_patterns:
-        matches = list(re.finditer(pattern, text, re.MULTILINE))
-        if matches:
-            # Find earliest match that's likely a case header (not in middle of text)
-            for m in matches:
-                # Check if this looks like a case header (line start, or has context)
-                start_line = text[:m.start()].count('\n')
-                # Get the line containing this match
-                line_start = text.rfind('\n', 0, m.start()) + 1
-                line_end = text.find('\n', m.start())
-                line = text[line_start:line_end].strip()
-                if line.startswith(('案例', '/**', '[案例', '1、', '2、', '3、')) or \
-                   re.match(r'案例\s*\d+', line):
-                    if m.start() < first_case_pos:
-                        first_case_pos = m.start()
-                        break
-    
-    # Also look for case names like "涉...案" or "XXX与XXX...案"
-    case_name_pattern = r'(?:涉|侵害|侵害|假冒|确认|某.*与某.*)\S{0,30}?(?:纠纷案|侵权案|不正当竞争案|发明专利侵权案|实用新型专利侵权案|外观设计专利侵权案)'
-    name_matches = list(re.finditer(case_name_pattern, text))
-    for m in name_matches:
-        # Check context - should be near start
-        if m.start() < first_case_pos and m.start() < 5000:
-            # Verify it's a case header (preceded by newlines)
-            before = text[max(0, m.start()-100):m.start()]
-            if '\n\n' in before or before.strip() == '':
-                first_case_pos = m.start()
-                break
-    
-    # Find intro paragraph (e.g., "4月23日...")
-    intro_marker = None
-    for marker in ['4月23日', '4月24日', '4月22日']:
-        idx = text.find(marker)
-        if idx != -1 and idx < first_case_pos:
-            intro_marker = marker
-            # Find start of that line
-            line_start = text.rfind('\n', 0, idx) + 1
-            intro_marker = text[line_start:idx]
-            first_case_pos = line_start
-            break
-    
-    if first_case_pos == len(text):
-        first_case_pos = 0
-    
-    text = text[first_case_pos:]
-    
-    # Now find where cases END (before footer "来源", QR codes, etc.)
-    end_patterns = [
-        r'来源\s*[:：]\s*上海市高级人民法院',
-        r'来源\s*[:：]\s*天津高院',
-        r'来源\s*[:：]\s*青岛中院',
-        r'来源\s*[:：]\s*湖南高院',
-        r'来源\s*[:：]\s*宁波中院',
-        r'来源\s*[:：]\s*江苏高院',
-        r'来源\s*[:：]\s*南京中院',
-        r'扫码获取',
-        r'查看.*专题',
-        r'浏览知产财经',
-        r'联系我们',
-        r'知产财经官网',
-        r'^\s*END\s*$',
-    ]
-    
-    last_case_pos = len(text)
-    for pattern in end_patterns:
-        matches = list(re.finditer(pattern, text, re.IGNORECASE))
-        if matches:
-            for m in matches:
-                if m.start() < last_case_pos:
-                    # Go back to find a good break point
-                    last_case_pos = m.start()
-    
-    # Find a good paragraph break before the footer
-    scan_start = min(last_case_pos, len(text) - 1)
-    for i in range(scan_start, max(0, scan_start - 2000), -1):
-        if text[i] == '\n' and text[i-1] == '\n':
-            # Check if we're in a case section or footer
-            snippet = text[max(0, i-200):i]
-            if not re.search(r'典型意义|裁判结果|案情摘要|基本案情|裁判内容', snippet):
-                last_case_pos = i
-                break
-            # If we are in a case section, keep going back to find end of that section
-            if re.search(r'典型意义', snippet):
-                # Find end of this case
-                end_match = re.search(r'(?:▴|典型意义)', text[i:])
-                if end_match:
-                    last_case_pos = i + end_match.end()
-                    break
-    
-    # Find the actual last "典型意义" section
-    all_meanings = list(re.finditer(r'典型意义', text))
-    if all_meanings:
-        last_meaning = all_meanings[-1]
-        # Find end of that section
-        end_search = text[last_meaning.end():last_meaning.end()+500]
-        # Find next case or footer
-        next_case = re.search(r'(?:/\*\*|案例\s*\d+|案例[一二三四五六七八九十]+|来源|扫码|END)', end_search)
-        if next_case:
-            last_case_pos = last_meaning.end() + next_case.start()
-        else:
-            last_case_pos = last_meaning.end() + 300
-    
-    text = text[:last_case_pos]
-    
-    # Convert English punctuation to Chinese
-    replacements = [
-        (r'\(', '（'), (r'\)', '）'),
-        (r',', '，'), (r'\.', '。'), (r':', '：'), (r';', '；'),
-        (r'!', '！'), (r'\?', '？'),
-    ]
-    
-    for pattern, repl in replacements:
-        text = re.sub(pattern, repl, text)
 
-    # Convert balanced straight quotes without changing unmatched quotes or
-    # apostrophes. A single regex replacement cannot distinguish opening and
-    # closing quote characters.
-    text = re.sub(r'"([^"\n]+)"', r'“\1”', text)
-    text = re.sub(r"'([^'\n]+)'", r'‘\1’', text)
-    
-    # Convert numbers to half-width (already mostly half-width, but ensure)
-    # Full-width digits: ０１２３４５６７８９ -> 0123456789
-    fw_digits = '０１２３４５６７８９'
-    hw_digits = '0123456789'
-    for i, fd in enumerate(fw_digits):
-        text = text.replace(fd, hw_digits[i])
-    
+    # Only remove an explicitly recognized trailing attribution/footer block.
+    # Body keywords and paragraph lengths are not evidence that a case ended.
+    text = _trim_trailing_footer(text)
+    text = _normalize_punctuation(text)
+
     # Clean up excessive blank lines (max 1 consecutive)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    
-    # Remove image/QR code references that are just placeholders
-    text = re.sub(r'!\[.*?\]\(.*?(?:qr|QR|二维码|扫码).*?\)', '', text)
+    text = _collapse_blank_lines(text)
     
     # Build output with metadata header
     output = f"""# {title}
@@ -184,25 +160,36 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
     lines = text.split('\n')
     result_lines = []
     i = 0
-    in_case = False
-    in_section = False
     
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
         
-        # Skip obviously promotional/footer content
-        if any(kw in stripped for kw in ['扫码获取', '知产财经', '联系我们', '订阅我们', '点分享', '点收藏', '点在看', '点点赞', '浏览知产财经', '查看.*专题', '往期热文', '文章原文']):
+        # Fenced source/exhibit blocks remain literal, even without a closing
+        # fence. Do not interpret their labels as cases or section headings.
+        fence_match = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if fence_match:
+            fence = fence_match[1]
+            result_lines.append(line)
             i += 1
+            while i < len(lines):
+                result_lines.append(lines[i])
+                closing = re.match(r'^\s*(`{3,}|~{3,})\s*$', lines[i])
+                i += 1
+                if closing and closing[1][0] == fence[0] and len(closing[1]) >= len(fence):
+                    break
             continue
-        
+
+        # Every detection branch must retain its line if formatting does not
+        # apply; a tentative match alone is never permission to drop text.
+        result_count = len(result_lines)
         # Case title detection - various formats
         is_case_title = False
         
         # Pattern: /** 案例1 **/ or /** 案例 **/
         if re.match(r'/\*\*\s*案例', stripped) or re.match(r'\*\*\s*案例', stripped):
             # Clean up and add as case header
-            case_name = re.sub(r'/\*\*|\*\*|案例\s*\d+\s*[/\*]*|/', '', stripped).strip()
+            case_name = re.sub(r'^/?\*\*\s*|\s*\*\*/?$', '', stripped).strip()
             result_lines.append(f'\n## {case_name}\n')
             is_case_title = True
         
@@ -211,8 +198,9 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
             # Look ahead for the actual case name
             if i + 1 < len(lines):
                 next_line = lines[i + 1].strip()
-                if next_line and not next_line.startswith('#'):
-                    result_lines.append(f'\n## {next_line}\n')
+                if (next_line.endswith('案')
+                        and not re.match(r'^(?:[#>`~!\[\-*+]|案例|[０-９0-9一二三四五六七八九十]+[.、])', next_line)):
+                    result_lines.append(f'\n## {stripped} {next_line}\n')
                     i += 1
                     is_case_title = True
                 else:
@@ -231,9 +219,9 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
                     is_case_title = True
         
         # Pattern: numbered case like "1." or "一、" at start
-        elif re.match(r'^\d+[.、]', stripped) or re.match(r'^[一二三四五六七八九十]+[.、]', stripped):
+        elif re.match(r'^\d+[.。、]', stripped) or re.match(r'^[一二三四五六七八九十]+[.。、]', stripped):
             # Clean up and add
-            case_name = re.sub(r'^\d+[.、]\s*', '', stripped)
+            case_name = stripped
             if case_name and len(case_name) > 2:
                 result_lines.append(f'\n## {case_name}\n')
                 is_case_title = True
@@ -252,70 +240,17 @@ def format_text(text, court_name, source_url, title, keep_from_marker=None):
             else:
                 result_lines.append(line)
         
-        # Skip page navigation markers
-        elif '▴ 向上滑动查看更多 ▴' in stripped or '▴' in stripped:
-            i += 1
-            continue
-        
-        # Skip lines that are just decorative
-        elif re.match(r'^[*\s\-—–|]+$', stripped):
-            i += 1
-            continue
-        
-        # Skip image tags
-        elif stripped.startswith('![') or stripped.startswith('![](http'):
-            i += 1
-            continue
-        
-        # Skip lines with just source attribution
-        elif re.match(r'^来源\s*[:：]', stripped):
-            i += 1
-            continue
-        
-        # Skip "来源：|上海市高级人民法院" style lines
-        elif re.match(r'^\s*来源\s*\|?\s*上海', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*天津', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*青岛', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*湖南', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*宁波', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*江苏', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*南京', stripped):
-            i += 1
-            continue
-        elif re.match(r'^\s*来源\s*\|?\s*最高', stripped):
-            i += 1
-            continue
-        
         else:
             result_lines.append(line)
         
+        if len(result_lines) == result_count:
+            result_lines.append(line)
         i += 1
     
     # Clean up excessive blank lines again
     formatted_content = '\n'.join(result_lines)
-    formatted_content = re.sub(r'\n{3,}', '\n\n', formatted_content)
+    formatted_content = _collapse_blank_lines(formatted_content)
     
-    # Clean up lines that are just whitespace
-    lines = formatted_content.split('\n')
-    lines = [l for l in lines if l.strip() != '' or l == '']
-    
-    # Remove trailing blank lines from content
-    while lines and lines[-1].strip() == '':
-        lines.pop()
-    
-    formatted_content = '\n'.join(lines)
     output += formatted_content
     
     return output
@@ -335,32 +270,10 @@ if __name__ == '__main__':
     with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # Extract just the body content (after the FreshRSS metadata block)
-    # Find where the actual content starts (after the --- frontmatter)
-    parts = content.split('---')
-    body_start = 0
-    for i, part in enumerate(parts):
-        if '4月' in part and ('日，' in part or '上午' in part or '下午' in part):
-            body_start = content.find(part)
-            break
-    else:
-        # Try to find first meaningful content
-        for marker in ['4月23日', '4月24日', '4月22日']:
-            idx = content.find(marker)
-            if idx != -1:
-                body_start = idx
-                break
-    
-    body = content[body_start:]
-    
-    # Remove trailing content
-    end_markers = ['---', '*由 FreshRSS', '*[由 FreshRSS']
-    for marker in end_markers:
-        idx = body.rfind(marker)
-        if idx > len(body) - 500:
-            body = body[:idx]
-            break
-    
+    # The function owns formatting and conservative suffix cleanup. Passing
+    # the complete input avoids date-based cuts and missing-marker -1 slices.
+    body = content
+
     formatted = format_text(body, court_name, source_url, title)
     
     output_dir = os.path.dirname(output_file)

@@ -94,6 +94,8 @@ bash scripts/spawn-worker.sh \
 
 `orca-wave-prepare.sh` 给每个 Task spec 的第一段前置强制完成协议，并把 `run_id/coordinator_handle/task_id` 写入 receipt。`spawn-worker.sh` 使用 `worktree create --setup skip`：repo Setup 会早于 Session Context、安装门禁和 scope hook，因此不能继承或强制执行。显式 `--orca-setup-mode inherit|run` 会在任何 worktree/provider/terminal/Dispatch 副作用前以 `ORCA_SETUP_REQUIRES_PRELAUNCH_AUTH_CONTRACT` 拒绝；即使同时提供 `--allow-install-command` 也不放行，因为后者只约束门禁已就位后的 worker 阶段。之后再写入 Session Context 与机械门禁，用 `terminal create` 启动 Agent 并等待 TUI ready，随后让 `orca-supervised-register.sh` 直接执行 `worker-start --terminal`。预建 Task 路径不再调用 `run-use/task-create`，因此可安全并行启动；supervised 路径也不发送普通 prompt，避免同一任务被执行两次。
 
+`terminal wait` 的退出码0不保证就绪。启动 helper 要求单个 JSON 回执的顶层 `ok=true`，以及布尔型 `result.wait.satisfied=true`；回执出现的 handle/condition 必须匹配本轮终端及 `tui-idle`。先捕获退出码再解析：退出0允许有效布尔回执，原生退出1仅允许 `ok=true / satisfied=false`；退出1却返回true或退出码大于1均拒绝。首次等待30s返回 false 时（退出0或合法退出1），仅在同一 handle 再等待60s；畸形/失败回执立即停止，两次仍未就绪则非0退出，不投递、不宣布启动完成，保留终端与工作树并打印精确身份。恢复或清理前先只读核查该终端，不能因 metadata 尚未写入 handle 推断终端未创建。经已有 terminal 注册的 supervised 也必须通过此门禁后才能执行唯一的 worker-start。显式 ZCode native 路径不先创建 terminal：全部 MAO 门禁通过后直接由 `worker-start --agent zcode` 创建并等待首次 composer，然后注入唯一 Task；版本、可信环境桥和回执核对见 [原生 ZCode Orca](30-zcode-native-orca.md)。
+
 当前不采用 `worktree create --agent`。该命令会在原子创建时立即启动 Agent，早于本 Skill 写入机械门禁，形成未受保护的启动窗口。只有 Orca 支持预置文件或延迟 Agent 启动后，才能安全切换 agent-first；这项取舍优先保证权限顺序，而不是仅减少 fallback terminal。
 
 Run receipt 中的 coordinator handle 是 consumer fencing 身份，不等同于 Run ID。Wave prepare 使用 `--from <本轮PM终端>`；没有显式 sender、也没有 session 绑定的新 Run 才可把宿主 `ORCA_TERMINAL_HANDLE` 作为待核 selector。统一 helper 核对 `status`、`terminal show` 与 `run-current` 的同一 runtime、精确 handle/Run/coordinator，以及终端 connected/writable/非 orphaned/无 exitCause。环境值和 runtime 相同都不是活性证明，不从当前焦点选择别人终端。
@@ -122,7 +124,7 @@ PM create/bind Run
 硬边界：
 
 - Worker 必须使用 preamble 注入的 task/dispatch ID；不得猜 ID。
-- `spawn-worker.sh` 自动向 register 传 PM 冻结的 `--authority-receipt`；直接调用 `orca-supervised-register.sh` 时该参数现在必填，且须使用该次启动真实生成的 authority receipt，不可从可写 METADATA 临时换一个路径。缺失或非法时在 worker-start 前拒绝。内部 `--metadata-file` 只供 `pm-orchestrate reauthorize` 在已核对原始 receipt、runtime、session、worktree、branch 与目标文件无软链后轮换既有 registration；它不是普通手动 register 的替代入口。
+- `spawn-worker.sh` 自动向 register 传 PM 冻结的 `--authority-receipt`；直接调用 `orca-supervised-register.sh` 时该参数现在必填，且须使用该次启动真实生成的 authority receipt，不可从可写 METADATA 临时换一个路径。缺失或非法时在 worker-start 前拒绝。内部 `--metadata-file` 只供 `pm-orchestrate reauthorize` 在已核对原始 receipt、runtime、session、worktree、branch 与目标文件无软链后轮换既有 registration；它不是普通手动 register 的替代入口。显式 `--agent zcode` 新建路径另外使用 `--metadata-file` 定位尚无 terminal 的本次 Session Context，并绑定可信请求与原生 created 回执；不能借此放宽既有 replacement 的身份校验。
 - `recover-unconfigured-worker.sh` 从真实 Git common-dir 和已校验 session 推导该次既有 receipt，核对身份后才允许注入/重绑；缺失、软链、metadata 改址或身份错配时要求人工处理，不新建 receipt 冒充旧启动授权。
 - worker-start 后的 completion receipt 位于相同 `agent-authority` 目录，绑定 authority 路径与 SHA-256、task/dispatch/terminal/run/runtime、process incarnation 及 capability SHA-256，不保存 capability 明文。发送时以启动快照读取 receipt，并通过只读 dispatch-show 复核当前身份；元数据不能成为新权威，精确 Shell allowlist 也不能覆盖完成校验失败。`reauthorize` 轮换既有 receipt 时先保留私有回滚副本，只有 METADATA 原子写回成功才提交替换；写回失败必须恢复旧 receipt，让仍存活的旧 Worker 保持原完成权限。这是 hook 权限边界，不是同一 OS 用户之间的安全沙箱，最终 mutation 仍由 Orca 验证。
 - preamble 中反斜杠续行的 worker_done 是合法命令形态，应原样执行。首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 后停止并报告协议阻塞，不换引号、编码、子进程或 wrapper/helper 重试；PM 按精确 Dispatch 检查，不根据 STATUS 强行结算。
