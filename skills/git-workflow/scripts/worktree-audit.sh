@@ -121,9 +121,10 @@ cat <<'EOF'
    worktree 未提交区）——删除前先确认正式版已入库，必要时拷出归档。
 4. REMOVE_ALL 同时覆盖 worktree 与本地分支；KEEP_OPEN_PR 只可「删 worktree 保分支」
    （内容仍在分支/远端）。带 * 的行有附加条件，删前逐条核对。
-5. detached worktree 先确认不是其他工具自管目录（eval-harness sources 等）再处置。
+5. detached worktree 先确认不是其他工具自管目录（评测/harness 类 sources 目录等）再处置。
 6. 删除顺序：先 git worktree prune 清悬空记录，再逐个 remove（dirty 需 --force，须用户
    确认放弃未提交内容）；本地分支删除前对每条重跑 git cherry 校验。
-7. 执行中可能遇到目录权限拒绝（实战：orca 工作区 Permission denied）——分支照删，
-   空壳目录留给用户手动 sudo rm，勿反复重试。
+7. 执行中可能遇到目录权限拒绝（实战：orca 工作区 Permission denied）——权限失败
+   不继续删该 worktree 的关联分支，整项保留并按 CLEANUP_PENDING 如实报告；空壳目录
+   由用户自行处置（如需提权删除须用户亲手执行，Agent 不代跑），勿反复重试。
 EOF

@@ -56,6 +56,25 @@ python3 scripts/worker-value-postflight.py \
 
 大 diff、绿色自测或 worker 自报不能挽救越界、无消费或未绑定 head 的交付。
 
+### 可选工程验证证据采集
+
+已提交的`implementation` / `reusable_verification`可用`verification-evidence.py`减少手工转抄。只消费派发时同一可信spec和精确task，实际执行其简单argv验证命令；明确拒绝复杂Shell、inline执行、脏源码和未跟踪/忽略内容。当前只适用于能够证明完整源码的清洁工程，依赖或生成物在忽略目录时不能假称已覆盖；保留现有人工证据流程。
+
+```bash
+python3 scripts/verification-evidence.py collect \
+  --spec "$SPEC" --task-id "$TASK" --repo "$REPO" --head "$HEAD" \
+  --output-dir "$PRIVATE_EVIDENCE_DIR" --timeout-seconds 120
+python3 scripts/verification-evidence.py check \
+  --spec "$SPEC" --task-id "$TASK" --repo "$REPO" --head "$HEAD" \
+  --evidence "$PRIVATE_EVIDENCE_DIR/postflight-evidence.json"
+```
+
+指定工作树外、尚不存在的私有输出目录；验证日志留在该目录，不提交凭证或原生配置。失败保留attempt与有界日志，不能复用或覆盖原目录重跑；超时、非零退出、截断、源码或合同漂移不产可用postflight证据。将成功生成的`postflight-evidence.json`传给上一节原交付后门；使用前重新check，HEAD、真实源码、整个spec、采集器或日志变化均使旧证据失效。
+
+复核同时绑定解析后的可执行文件和argv直接具名文件；拒绝`PYTHONPATH`等已知运行环境注入。验证父进程退出后，本次专用进程组仍有活子进程时，回收该组并拒绝可用证据；不据此证明完整导入依赖隔离、逃逸进程已回收或全机资源结算。
+
+采集/check成功只证明工程验证记录与当前输入一致，不证明业务完成、运行资源退出或审查通过。独立reviewer仍亲自审查相同提交并填写原角色合同；不得由采集器制造`ACCEPT`或Orca身份。业务产物、merge gate及PR-only生命周期暂不由此入口适配。
+
 ## 3. 角色分离验收（`review-acceptance-gate.v1`）
 
 非平凡 `implementation` / `reusable_verification` 默认由不同 dispatch/session 的 implementer 与 reviewer 收口。PM 负责方向、合同、粗粒度巡检、风险升级、immutable-head 记账与最终收口，不在独立证据一致时重复逐行审查或补丁实现。

@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable；先跑 scripts/pre-worktree-check.sh 只读判读 IN_SYNC/AHEAD/BEHIND/DIVERGED，--pre-pr 模式以 merge-tree 做提 PR 前本地冲突模拟）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）、常见 Git 事故恢复（accident recovery；用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时同样适用——先 reflog/fsck 只读定位，恢复优先新建引用而非改写现态，reset/force 类补救仍须明确授权，详见 references/accident-recovery.md）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.10.1"
+  version: "1.13.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -49,7 +49,7 @@ GIT_COMMITTER_NAME="<name>" GIT_COMMITTER_EMAIL="<email>" \
   git commit -m "<title>" -m "<body>"
 ```
 
-push 必须走身份绑定的 `safe-push.sh`，核验**完整 PR range**后只 push 已核验的 immutable OID；不得直接 `git push`，也不得只看 `git log -1` 或 HEAD：
+push 必须走身份与隐私绑定的 `safe-push.sh`，核验**完整 PR range**后只 push 已核验的 immutable OID；不得直接 `git push`，也不得只看 `git log -1` 或 HEAD：
 
 ```bash
 # integration base 必须显式是远端跟踪 ref；不要用 HEAD~1 缩窄范围
@@ -67,7 +67,7 @@ bash scripts/check-outgoing-identities.sh \
   --expected-email "<email>"
 ```
 
-门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新 integration base，核验当前 HEAD，确认核验期间 HEAD 未变化，再把该 OID 精确推到目标分支，使证据绑定实际 push 对象。
+门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新明确的 integration base ref，固定 base/head OID；身份门禁与共享隐私 checker 核验相同范围。隐私 checker 逐笔读取 message、patch、变更 blob，覆盖中间提交泄露后删除；浅克隆、缺对象、不可读历史或内容均停止。核验期间 HEAD/base 改变即拒绝，再把该 OID 精确推到目标分支。
 
 ### 提交前身份自检与身份污染排查（v1.9.0，2026-09-30 Hermes 实录新增）
 
@@ -98,6 +98,7 @@ bash scripts/identity-audit.sh whoami \
 | PR/合并提交多出陌生 Co-authored-by 尾注 | `bash scripts/identity-audit.sh history --all` 看尾注分布；根源=分支提交作者，清洗须改写分支作者（`git rebase -r --exec 'git commit --amend --reset-author --no-edit'`）后重推，且必须用户授权 |
 | 提交作者不是我 | `whoami` 来源链定位写入层（env → worktree → repo-local → global，`--show-origin` 给出具体文件）；修复用 `git config --local --unset user.name user.email` 类命令回落全局，确认后再提交 |
 | 全仓身份体检（交接/发版/公开化前） | `history --all` 输出 author/committer/尾注三张分布表，可疑项自动标注；大仓用 `--max-commits` 控制上限 |
+| 已合并历史对账出现 `GitHub <noreply@github.com>` 提交 | `bash scripts/identity-audit.sh receipt --range <base>..<head>`（单个提交也可传 `<oid>`）：gh 自查本仓 MERGED 回执，完整 OID 精确绑定才 ACCEPT；完整查询无绑定才 DENY_FORGED。网络/格式失败或达到 `--merged-limit` 上限且未命中为 UNKNOWN、非零退出，不放行也不判为伪造；显式扩大上限后重跑。仅核已合并历史，不改变 push 门禁 |
 
 发现身份污染时**先报告用户**，不得擅自改写历史或 force push（§1 安全协议）。与 `check-outgoing-identities.sh` 的分工：`whoami` 管"提交前我是谁、身份哪来的"，push 门禁管"push 前 range 内每一笔是谁"——两者互补，不可互替。
 
@@ -108,9 +109,9 @@ bash scripts/identity-audit.sh whoami \
 普通短分支从最新默认主干创建；项目若已显式声明长期集成目标，则 worker 短分支必须从最新远端集成目标创建，不能仍默认从 `main` 起步。
 
 ```bash
-# 从最新 main 创建
-git checkout main && git pull origin main
-git checkout -b <type>/<short-description>
+# 在干净隔离检出从最新远端 main 创建；不切换共享主工作区
+git fetch origin
+git switch -c <type>/<short-description> origin/main
 
 # 从长期集成目标创建 worker 短分支
 git fetch origin
@@ -163,7 +164,7 @@ team-feature-a
 - 子 PR 经独立验收后 squash merge 到长期分支；达到预先命名且有退出条件的里程碑后，才由长期分支向默认主干提集成 PR。
 - 默认主干的通用修复先进入默认主干，再在无待合并子 PR 的波次边界 merge 到长期分支；同步后冻结本波 base，避免 worker 基线漂移。
 - 长期分支禁止 rebase、force-push 或随子 PR 删除；里程碑合入默认主干后也继续保留，直到功能线被明确关闭。
-- 集成 PR（base=默认主干）只在里程碑达成时开；功能线推进期只开子 PR（base=长期分支）。head 分支被重置致 PR 自动 CLOSED、squash 重做的 CONFLICTING 与树等价验证，详见 references/long-lived-integration-branch.md 第 4/7 节。
+- 功能线推进期只开子 PR，里程碑达成后再提默认主干 PR。Monorepo 按具名功能边界建最少必要功能线；PR池审计/窄采用、最终工程与独审证据关系、核心CI的SKIP分计、波次同步和已发布GitHub身份差异，统一读取 references/long-lived-integration-branch.md。
 
 执行建线、同步、PR、里程碑和清理时，读取 `references/long-lived-integration-branch.md`。项目专属的分支名、固定 Worktree 路径、任务字段和里程碑门禁留在项目规则中，不写入本通用 Skill。
 
@@ -182,9 +183,11 @@ team-feature-a
 
 ### Worktree（工作树）
 
-本地仓库（maoscripts 等）的 worktree→PR→merge 标准全流程 SOP——含 Node/Raycast 扩展附加步骤与「不跳步」硬约束——见 `references/local-worktree-sop.md`（原独立 skill local-worktree-pr-workflow，2026-09-20 并入）。
+本地隔离 Worktree→验证→身份/隐私→PR→合并→增量安装→清理的当前通用 SOP，见 `references/local-worktree-sop.md`。原空文件已按当前规则补齐；未知的旧 Node/Raycast 步骤不推断补全，宿主构建/发布沿项目既有规则。
 
 #### 开 worktree 前的必做 3 查（防止 base 过期导致 PR 报 not mergeable）
+
+先跑 `scripts/pre-worktree-check.sh`（只读：fetch 后自动按下方判读表输出 `IN_SYNC` / `AHEAD` / `BEHIND` / `DIVERGED` 四态判定与对应处理路径，绝不创建/删除/重置任何东西；退出码 0=可开，1=先处理再开，2=用法/环境错误）。下列命令与判读表保留为透明判读依据，也是脚本降级（离线 fetch 失败）时的手动路径。
 
 **核心陷阱**：本地 `main` 可能落后于 `origin/main`（本地独有未 push 的 commit / fetch 滞后 / 别的 session 在 origin 推了新内容）。基于这种"过期 main"开的新 worktree 提 PR 时，GitHub 会报 `not mergeable: the merge commit cannot be cleanly created`，且 PR 的 base 不包含 origin/main 已合的内容——你不知道原来已经合了什么，DECISIONS 编号可能撞车、TASKS 已勾的项要重做。
 
@@ -209,9 +212,9 @@ git log --oneline origin/main..main   # 本地 main 独有、未 push 的 commit
 | 情况 | 现象 | 处理 |
 |---|---|---|
 | 本地 main = origin/main（无分叉） | merge-base = main = origin/main | 直接开 worktree，放心 |
-| 本地 main 领先 origin/main | `git log origin/main..main` 有 commit（本地独有未 push） | **先 push 或 merge origin/main**，决定见下方"本地独有 commit 处理" |
+| 本地 main 领先 origin/main | `git log origin/main..main` 有 commit（本地独有未 push） | 保留独有成果，以最新远端目标开隔离候选；处理见下表 |
 | 本地 main 落后 origin/main | `git log main..origin/main` 有 commit（origin 已合，本地没 fetch） | **先 `git pull --no-rebase`（merge origin/main）再开 worktree** |
-| 本地与 origin/main 双向分叉 | 双方各有独有 commit | **先 rebase 或 merge**，避免 PR 冲突 + 重新编号 |
+| 本地与 origin/main 双向分叉 | 双方各有独有 commit | 保留双方成果，在隔离候选内对账；不重置共享主源 |
 
 **禁止** 基于"过期 main"开 worktree 后再补救。会引发：PR 报 not mergeable → 本地 rebase 解决 → 决策编号撞车（如 DECISIONS.md 在 main 与 PR 都有新增）→ 重新编号 + push `--force-with-lease`。一次性 3 查可避免。
 
@@ -221,7 +224,7 @@ git log --oneline origin/main..main   # 本地 main 独有、未 push 的 commit
 
 | 选项 | 适用场景 | 操作 |
 |---|---|---|
-| **A. Push 到 origin** | 独有 commit 是想让 origin 看的（如 docs 标记、版本号） | `git push origin main`（**禁止**直接 push main，先确认无保护规则；如保护则改 PR 流程） |
+| **A. 经 PR 交付** | 独有 commit 需要发布（如 docs 标记、版本号） | 从最新远端目标开隔离短分支，窄采用有效差异，验收后走 safe-push / safe-pr；不直接 push main |
 | **B. Merge origin/main 保留**（推荐） | 独有 commit 是本地工作，希望下次 main 上有 | `git merge origin/main --no-ff -m "merge: bring origin/main into local main + preserve <描述>"` |
 | **C. 放弃独有 commit** | 独有 commit 已不需要或重复 | `git reset --hard origin/main`（**破坏性**，必须用户明确指示） |
 
@@ -263,9 +266,11 @@ git worktree list
 
 ### 核心规则
 
-**禁止 `git merge` 直接合并 feature 分支到 main。** Feature 分支若从旧 commit 创建，直接合并会误删所有不在分支里的文件。
+**禁止本地 `git merge` 直接将 feature 分支合入 main。** 旧基线、整目录替换和错误的冲突取舍可能带入跨模块变化或删除；按明确范围保留当前全仓基线。默认主干 merge 到长期功能线属于另一同步方向，按功能线专页核验。
 
-### 正确做法：目录级 checkout
+### 目录级采用
+
+先核隔离目标现场干净、用户授权与实际文件清单。以下目录级 checkout 只适用于该目录整树已验、与当前目标差异完整对账的候选；旧目录含未验或过时内容时按精确文件/增量 patch 窄采用，共享文档保留双边当前内容，不在 dirty 主源暂存或覆盖。
 
 ```bash
 git checkout main && git pull origin main
@@ -302,16 +307,9 @@ ls .gitignore .env 2>/dev/null  # 确认关键文件还在
 
 > 下列 rebase 流程只适用于普通短分支。已声明为长期集成分支的阶段主干禁止 rebase/force-push，改为按 `references/long-lived-integration-branch.md` 在波次边界 merge 最新默认主干；其 worker 短分支仍按项目策略处理。
 
-1. **先 rebase** feature 分支到最新 main，确保 base commit 包含所有文件
-2. 确认 PR diff 只涉及目标 Skill 目录
-3. 使用 squash merge，commit 标题包含模块名和 PR 编号
-
-```bash
-# rebase feature 分支
-git checkout <feature-branch>
-git rebase origin/main
-git push --force-with-lease  # rebase 后需要 force push
-```
+1. 在干净隔离现场刷新真实 PR 目标。未发表短分支可按项目策略 rebase；已发表分支须核 owner 和历史重写授权，不能以冲突自动授权 force。
+2. 确认最终 PR diff 只涉及允许范围，并保留目标侧其他模块与共享记录；改 base/head 后重新验收。
+3. 用 safe-push / safe-pr 创建与 squash，提交标题包含模块名和 PR 编号。safe-push 当前不支持 force；拒绝非快进时保留原成果，优先按授权窄采用到新短分支，不能退回裸 push 绕门。
 
 **批量验收合并与取代关闭**（用户拍板「把这些 PR 合并」「合并新 PR、关闭旧 PR」后执行；含合并前复核、同族窄采用 PR 串行合并与连锁文档冲突解法、关闭评论四要素、收尾清理）统一读取 `references/branch-lifecycle-and-cleanup.md` §3.5。单 PR 日常合并同样适用其复核与确认要求。
 
@@ -333,41 +331,35 @@ git rebase --abort
 # 2. 获取 rebase 前的本地提交（通过 reflog）
 git reflog | head -10
 
-# 3. 从本地提交恢复被误删的目录
-git checkout <本地commit-hash> -- <skill-directory>/
+# 3. 在干净隔离候选中，从最新远端目标逐文件恢复实际误删内容
+# 不用旧整目录覆盖目标侧的新成果
+git restore --source=<本地commit-hash> -- <已核误删文件>
 
-# 4. 单独提交恢复的文件
-git diff --cached --stat   # 确认恢复的文件
-git commit -m "feat(<skill>): 恢复被误删的文件"
-git push origin main
+# 4. 核范围、精确暂存并验证，按 §1 身份协议提交含正文的恢复提交
+# 再走 safe-push / safe-pr；不直接向 main push
 ```
 
 **关键**：`git reflog` 保存了所有操作历史，即使 rebase 后本地提交也不会真正丢失。
 
 ## 4. PR 工作流
 
+### 隐私预检与依赖
+
+共享 `scripts/privacy_check.py` 需要 Python 3.10+ 和 Git，无第三方 Python 包；`scripts/safe-pr.py` 还需已认证的 gh CLI。未安装时先按本技能依赖要求准备，不能绕过检查。
+
+案号仅为待核对项：公开裁判和虚构测试可以带来源的精确审查记录放行，不允许目录忽略；本地黑名单不得发布。诊断不打印敏感原文。使用、策略格式、失败关闭条件与能力边界见 [隐私预检](references/privacy-preflight.md)。人工审查、身份、授权和 CI 门禁仍须独立满足。
+
 ### 创建 PR
 
+先通过 `scripts/safe-push.sh` 推送核验的不可变 OID，再准备最终单行标题文件和完整正文文件（建议放在 Git 目录或仓库外）：
+
 ```bash
-# 推送分支
-git push -u origin <branch-name>
-
-# 创建 PR（cwd 不在目标分支的 worktree 时必须显式 --head，否则 gh 以当前
-# 分支为 head——在 main 仓库根目录执行会报 "No commits between main and main"）
-gh pr create \
-  --head <branch-name> \
-  --title "feat(module): 简短描述" \
-  --body "$(cat <<'EOF'
-## 摘要
-- 关键变更 1
-- 关键变更 2
-
-## 测试计划
-- [ ] 验证项 1
-- [ ] 验证项 2
-EOF
-)"
+python3 scripts/safe-pr.py create \
+  --base main --head <branch-name> --expected-head <完整已核验head-OID> \
+  --title-file <最终标题文件> --body-file <最终正文文件>
 ```
+
+默认创建 draft。helper 读取一次最终文本并直接传给 gh，重新检查远端完整 PR range，创建后核对 head/base/title/body。禁止 `--fill` 或自动拼接未经检查的提交说明。GitHub 创建接口不支持原子 head 条件，使用独占分支并检查后验结果；失败先只读确认远端状态，不能盲目重试。
 
 ### PR 正文最低要求
 
@@ -487,17 +479,14 @@ gh pr diff <number> --stat
 处理方式：要求拆 PR、缩小 diff、补说明或补测试。不要用“看起来问题不大”替代文件级检查。
 
 ```bash
-# Squash merge（推荐）
-gh pr merge <number> --squash \
-  --subject "feat(module): 描述 (#<number>)" \
-  --body "关键变更说明"
-
-# Merge commit
-gh pr merge <number> --merge
-
-# Rebase merge
-gh pr merge <number> --rebase
+# Squash merge：上面的 review/CI/授权门禁已全部通过后
+# 最终标题须包含 (#PR编号)，正文须明确写入，不用 GitHub 自动汇总
+python3 scripts/safe-pr.py squash --number <number> \
+  --expected-head <完整已审核head-OID> \
+  --title-file <最终squash标题文件> --body-file <最终squash正文文件>
 ```
+
+合并前同时检查当前 PR 标题/正文与最终 squash 标题/正文，helper 会检查每笔历史并用 `--match-head-commit` 绑定 head。其他合并方法或 API 也必须检查最终确切说明和完整提交范围，不得依赖自动生成文本。
 
 **重要**：通过 API 执行 squash merge 时，`commit_title` 不会自动追加 `(#N)`，必须手动写入。
 
@@ -510,45 +499,15 @@ gh pr review <N> --approve
 # → failed to create review: GraphQL: Review Can not approve your own pull request (addPullRequestReview)
 ```
 
-这是 GitHub 设计，无法绕过。但 **`gh pr merge --squash --delete-branch` 不需要 review approval**（前提：仓库无强制 review 的 branch protection）。常见场景：
+GitHub 的自 approve 限制不改变本技能的独立 review/CI/身份/隐私要求。无强制 GitHub approval 的仓库可采用实际不同角色、绑定当前候选的外部审查证据；保护要求他人 approval 时满足该规则，不因自 PR 使用 admin override。完成门禁后使用 safe-pr.py squash，合并与删除分别核授权。
 
-| 场景 | 处理 |
-|---|---|
-| 无 branch protection 或不要求 review | `gh pr merge <N> --squash --delete-branch` 直接合 |
-| 要求 ≥ 1 个 review | 找他人 review；或 admin override `gh pr merge <N> --squash --admin`（谨慎，记录原因） |
-| 自 PR 自 review 完全禁止 | 用其他账号 review；或拆 PR 让别人创建 |
-
-**常见坑**：`gh pr merge --delete-branch` 在 cleanup 阶段可能报 `'main' 已经被工作区 '<主仓库路径>' 使用`（多 worktree 场景，见 §10），这是 warning，不影响合并本身——`mergedAt` 时间戳写入 GitHub 即代表合并成功。
+多 Worktree 的清理命令报错时，先读取实际 MERGED/mergedAt/mergeCommit，再登记残留资源；清理失败不重放合并，长期功能线不随子 PR 删除。
 
 ### 本地拉取 PR 到 main 的提交格式
 
 当用户要求“拉取 PR 到主分支 / 把 PR 拉进 main / 合入这个 PR”时，默认目标是让 `main` 历史中能直接看出来源 PR。不要用 `git pull --ff-only origin pull/<N>/head` 作为最终合入方式，因为 fast-forward 会保留 PR 原提交标题，通常不会显示 `(#N)`。
 
-默认使用 squash commit 方式在 `main` 上生成一个带 PR 编号的提交：
-
-```bash
-# 1. 更新 main
-git checkout main
-git pull --ff-only origin main
-
-# 2. 检查 PR 状态与 diff
-gh pr view <N> --json title,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,url
-gh pr diff <N> --name-only
-gh pr checks <N>
-
-# 3. 拉取 PR head 并 squash 到暂存区
-git fetch origin pull/<N>/head
-git merge --squash FETCH_HEAD
-git diff --cached --stat
-
-# 4. 使用 PR 标题 + PR 编号提交
-git commit -m "<PR 标题> (#<N>)" \
-  -m "PR: <PR URL>"
-
-# 5. 推送 main，并关闭原 PR（若 GitHub 未自动标记 merged）
-git push origin main
-gh pr close <N> --comment "已通过提交 <sha> 合入 main。"
-```
+默认通过已验正式 PR 的 safe-pr.py squash 生成带 PR 编号的主干提交，后验真实合并回执。本地采用不得绕开 Monorepo 范围门或直接 push main：在最新主干的干净隔离短分支窄采用目标范围，核验后提出 PR；确有项目授权的本地 squash 流程也要满足完整范围、精确文本与身份/隐私门，不能将 CLOSED 冒称为 GitHub MERGED。
 
 提交标题示例：
 
@@ -586,6 +545,8 @@ gh pr list --state open
 
 ### PR 创建后立即跑 mergeable 检查（强制）
 
+更早的前置：PR 创建后的 mergeable 检查无法搬到「开 worktree 前」——PR 对象那时还不存在。能前置的是「提 PR 前」：`bash scripts/pre-worktree-check.sh --pre-pr <branch>` 用 `git merge-tree --write-tree` 在本地模拟 base+head 合并，不创建 PR、不触碰工作区与 index、不耗 GitHub API，把冲突提前到 push 前暴露（需 Git 2.38+）。本地模拟干净不豁免本节的 PR 后验——GitHub 侧 mergeable 仍以创建后检查为准。
+
 Agent 在 `gh pr create` 返回 PR URL 后，**不要等用户/PM 拍板合并**，立即跑一次完整状态检查，捕获 base 落后或 mergeable 冲突：
 
 ```bash
@@ -607,11 +568,11 @@ gh pr view <N> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,f
 
 | 情况 | 现象 | 推荐方案 |
 |---|---|---|
-| 冲突仅在 docs 同步文件（CHANGELOG / DECISIONS / TASKS） | `git diff main..HEAD -- docs/` 显示 diff 是 docs 同步段（版本号、DEC 编号、ISS 任务卡进度） | **方案 A：本地 rebase + 解决冲突**。接受 base 新内容，把 head 的 docs 段重新编号（如 DEC-026 → DEC-030）后 `git rebase --continue`；push 用 `--force-with-lease`。 |
-| 冲突在共享代码 / 实质代码 | `git diff main..HEAD` 涉及 src/ src-tauri/ src/shared/ 等多文件 | **方案 B：关掉 PR + 重建**。`gh pr close <N> --delete-branch`；`git switch -C <branch> origin/main`；cherry-pick 实质代码 commit（跳过 docs 同步 commit）；重新写 docs 同步（使用最新 main 已占用的编号 +1）；push + new PR。 |
-| 冲突极少 / 1-2 个文件 | `git diff main..HEAD` 改动小且冲突集中 | **方案 C：GitHub PR UI 手动解决**。在 PR 页面 "Resolve conflicts" → 编辑 → commit。 |
+| 冲突仅在 docs 同步文件（CHANGELOG / DECISIONS / TASKS） | 实际差异为版本、决策编号、任务状态等共享记录 | 保留双方有效记录，串行分配版本/编号并按文件解决；未发表短分支可 rebase，已发表历史按单独授权处理。 |
+| 冲突在共享代码 / 实质代码 | 实际允许范围含多文件实现或组合依赖 | 在最新目标基线上开隔离窄采用候选，保留原 PR/分支及来源映射；新候选实际合入目标、采用/未采用项处置完成后才按取代合同关闭旧 PR。 |
+| 冲突极少 / 1-2 个文件 | 改动小且冲突集中 | 本地按文件解决并检查最终 message/patch/blob；如经 GitHub UI 处理，也要核完整发布文本/范围和实际服务端结果，不能绕身份/隐私门。 |
 
-**禁止** `git push --force`（不带 `--force-with-lease`），可能在远端已有他人 push 时覆盖。
+功能线始终普通 merge 主干，不 rebase/reset；不因冲突自动关 PR、删除分支或 `switch -C` 重建同名 head。每项核真实 exit，候选变化后重跑受影响验证和最终 CI。历史重写需精确授权，当前 safe-push 不支持 force，不能改用裸 push 绕过。
 
 ### PR 创建后：可选文档体检扩展
 
@@ -808,6 +769,10 @@ git tag -d v1.0.0        # 删除本地 tag
 git push origin --delete v1.0.0  # 删除远程 tag
 ```
 
+### 常见事故恢复（误 amend / 误 stash / 误删分支 / 误 reset）
+
+用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时，读 `references/accident-recovery.md`。纪律：第一现场是删除输出、HEAD reflog、仍存在的引用与对象库（事故后**先不要 `git gc --prune=now`**，那会清掉待恢复对象）；恢复优先新建引用（`git branch <name> <tip>`、`git stash store <sha>`）而非改写现态，天然可逆；已 push 的事故进入历史重写授权边界（§12），`reset --hard` / force 类补救仍须用户明确指示（§1）。
+
 ## 7. Issue 与 PR 命名规范
 
 详细规范见 `references/issue-pr-format.md`，此处为速查。
@@ -967,71 +932,13 @@ git worktree list
 # /path/to/main-worktree       9990000 [main]              ← 另一个 worktree 也 attach 到 main
 ```
 
-### 解决方案三选一
+### 在当前任务内处理占用
 
-#### 方案 A：主仓库不 attach 到 main（推荐）
+先读取 `gh pr view <N> --json state,mergedAt,mergeCommit,headRefOid,baseRefName`，核服务器实际状态。`MERGED`、时间戳和 merge OID 均存在后，检查真实交付树；本机 dirty/clean 不能证明远端是否合并。UNKNOWN、网络失败或清理报错先只读对账，不盲目重放合并。
 
-让主仓库 attach 到一个长期开发分支（如 `develop`）或 detached，避免占用 main：
+正式合并走 safe-pr.py 的完整 range/文本预检与精确 head 绑定，默认不附删除参数。main 被其他 Worktree 检出时保持其归属和现场，不为解除提示切换共享源、不重建未声明的 develop 功能线，也不删除占用 Worktree。
 
-```bash
-# 主仓库切到 develop
-git checkout develop
-
-# gh pr merge 在任意位置跑都不再受 main 占用影响
-gh pr merge <N> --squash --delete-branch
-```
-
-**适用**：日常开发主仓库不直接在 main 上工作。
-
-#### 方案 B：用 `git worktree add` 给 main 单独一个 worktree
-
-主仓库 detached，专门开一个 `main` worktree：
-
-```bash
-# 主仓库 detached（不 attach 任何分支）
-git checkout --detach HEAD
-
-# main 用专门 worktree
-git worktree add ~/.config/superpowers/worktrees/main main
-
-# gh pr merge 在主仓库跑：main reference 现在属于独立 worktree，不冲突
-gh pr merge <N> --squash --delete-branch
-```
-
-**适用**：希望保留 main 在本地随时可见，但要避免主仓库占用。
-
-#### 方案 C：先释放 main 再合并
-
-临时操作，merge 完恢复：
-
-```bash
-# 主仓库暂时切到其他分支（或 detached）
-git checkout --detach HEAD
-
-# 合并 PR
-gh pr merge <N> --squash --delete-branch
-
-# merge 完成后回到 main（如需要）
-git checkout main
-```
-
-**适用**：一次性操作，不愿长期改动主仓库 attach 状态。
-
-### 推荐
-
-**方案 A 最简单**：让主仓库 attach 到长期分支（`develop` / `main-next` 等），`gh pr merge` 不再受 main 占用影响。`git worktree list` 命令随时可查 worktree 占用情况。
-
-`gh pr merge` cleanup warning 时的快速判断流程：
-
-```
-1. 看 gh pr view <N> --json state,mergedAt,mergeCommit
-   - state == "MERGED" + mergedAt 有值 + mergeCommit 有 oid → 合并成功，warning 可忽略
-   - state != "MERGED" → 合并真失败，需重新执行
-
-2. 看主仓库 git status --short
-   - 干净 → 真合了
-   - 有冲突标记 → 合并中途退出，需手工恢复
-```
+确有本机同步需求时，在已有授权、归属明确的干净检出内 ff/merge；涉及长期功能线时读取其波次合同。无法同步则记录本机待同步，与已确认的云端交付分别报告。清理按独立合同进行，失败保留 CLEANUP_PENDING，不能重放已完成的 push/merge。
 
 ## 11. GitHub Actions 额度治理（CI 停挂止血）
 
@@ -1053,6 +960,18 @@ git checkout main
 
 完整诊断脚本、`on:` 块改写模板、验证与事故备忘见 `references/github-actions-quota-guard.md`。
 
+## 12. 敏感文件历史重写与全量撤回
+
+**触发**：敏感/私有文件（数据导出、个人材料、凭证）已被 commit 并 push 到远端，用户要求"从历史里删掉/撤回提交/私有数据被上传了"。
+
+核心纪律（详见 `references/history-rewrite-and-removal.md`）：
+
+- **revert 不等于撤回**——历史里仍可访问；真撤回 = filter-repo 重写 + 全分支 force push。凭证类先撤销平台侧 Key，再做重写。
+- **先只读排查**：泄露范围（`git log --all -- 路径`）、凭证是否曾入库、受影响远端分支面（`git branch -r --contains`）、fork 副本（`gh api` contents 查）。
+- **重写绝不在主工作区跑**：全新 clone 到 /tmp → 为全部远端分支建本地分支 → `git filter-repo --invert-paths` → 验证全历史为空 → 防复发 `.gitignore` 规则作为重写后 main 的顶部提交 → force push main + 逐分支推送（zsh 下禁用 `$b:refs/...` 冒号 refspec，`$b:r` 会被解析成修饰符）→ 三件套验证（SHA 对齐 / API 404 / 分支抽查）。
+- **主工作区对齐走深度分叉剧本**（全量重写后 patch-id 失效，不能常规 rebase）：三层备份（backup 分支 + **整个文件夹 rsync 全量备份**——untracked 的本地特有文件 git 备份盖不住 + 反向 diff patch）→ 敏感数据文件单独 cp 出仓（`rm --cached` 的 staged deletion 会在 reset+pop 时删掉磁盘文件）→ 甄别本地提交是否需 cherry-pick（涉及文件两侧树 diff 为 0 = 内容已在远端）→ stash（不带 -u）→ `reset --hard origin/main` → pop 解冲突 → 数据文件放回原位。
+- **残留如实告知不催办**：GitHub dangling 提交仍可按 SHA 访问、fork 不跟随重写、其他本地分支/worktree 需各自 rebase、公开窗口时长——由用户评估，AI 只给事实。
+
 ## 参考资源
 
 - `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计、批量删除执行坑与长期功能线关闭
@@ -1061,8 +980,17 @@ git checkout main
 - `references/issue-pr-format.md` — Issue 与 PR 命名详细规范
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
 - `references/github-actions-quota-guard.md` — Actions 额度诊断、停挂配方（workflow_dispatch 化）、仓级总闸、恢复与红线
+- `references/history-rewrite-and-removal.md` — 敏感文件全历史撤回 SOP：只读排查、隔离 filter-repo 重写、全分支 force push、主工作区深度分叉对齐（含 stash 冲突语义与 zsh refspec 坑）、残留边界
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
-- `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
+- `scripts/safe-push.sh` — 把身份与隐私核验绑定实际 immutable OID push
+- `scripts/privacy_check.py` — staged/message/完整历史共用隐私检查器
+- `scripts/safe-pr.py` — 检查最终 PR/squash 文本并绑定已审核 head
+- `scripts/test_privacy_check.py` — 隔离隐私故障回归
+- `references/privacy-preflight.md` — 精确审查、调用方法和能力边界
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
-- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）与全仓 author/committer/Co-authored-by 尾注审计（history）
-- `scripts/test-identity-audit.sh` — 身份审计故障注入测试
+- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）、全仓 author/committer/Co-authored-by 尾注审计（history）与服务端合并回执核验（receipt）
+- `scripts/test-identity-audit.sh` — 身份审计故障注入测试，含离线 gh 夹具的精确绑定、完整无绑定、截断与错误路径
+- `scripts/pre-worktree-check.sh` — 开 worktree 前 3 查只读判读（IN_SYNC/AHEAD/BEHIND/DIVERGED 四态+处理路径）；`--pre-pr <branch>` 模式以 merge-tree 做提 PR 前本地合并模拟
+- `scripts/test-pre-worktree-check.sh` — 3 查判读与合并模拟的故障注入测试
+- `scripts/test-accident-recovery.sh` — 只用 Bash/Git 的离线恢复回归，在临时仓覆盖删除分支与曾暂存 blob 的真实恢复边界；不修改调用者仓库
+- `references/accident-recovery.md` — 误 amend/误 stash/误删本地/远端分支/误 reset 的恢复路径：reflog/fsck 只读定位，恢复优先新建引用
