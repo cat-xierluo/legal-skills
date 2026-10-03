@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.36.12] - 2026-10-03
+
+### 改进
+- 适配远端 main 前进（rebase 到 #227–#238 后基线，发布链与合同内容不变）：`references/38-zcode-gui-remote-pr.md` 逐字不变；本机并发维护已占用 2.36.11，本 Skill 的 Git 与本机版本统一调整为 2.36.12（main 基础 2.34.1 与本机 2.36.x 双基线分开计数）；README 最近更新表保留 main 最新其他技能行与下载链接。
+
+### 验证
+- 仅 scoped 文档核验：4 路径白名单、`git diff --check`、frontmatter/CHANGELOG/README 版本一致（2.36.12）、外部链接可达、origin/main..HEAD 完整 author/committer 身份；新 head 由不同 SID 重新独审（R3），不复用既有审查结论。
+
 ## [2.36.11] - 2026-10-03
 
 ### 新增
