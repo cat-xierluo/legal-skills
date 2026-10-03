@@ -34,7 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2→v1.12.1 | 新增 pre-worktree-check.sh 只读四态判读（IN_SYNC/AHEAD/BEHIND/DIVERGED）与 --pre-pr merge-tree 提 PR 前冲突模拟；入册误 amend/误 stash/误删分支/误 reset 事故恢复路径；修 worktree-audit 执行须知与迭代合同冲突；静态扫描 high 清零。 |
+| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2→v1.13.0 | 新增 pre-worktree-check.sh 只读四态判读与 --pre-pr merge-tree 提 PR 前冲突模拟；入册误 amend/误 stash/误删分支事故恢复路径；identity-audit 新增 receipt 子命令机械核验服务端合并回执（ACCEPT/DENY_FORGED/UNKNOWN fail-closed）；修 worktree-audit 执行须知与合同冲突，静态扫描 high 清零。 |
 | 2026-10-03 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.7 | 集成只读GUI证据观察与校验分块交接，新增缺省同目录消费者及GUI真实CI；READY仍需PM验收，正式GUI监督/持续闭环未验收。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
 | 2026-10-01 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.2 | 修复 ZIP 资产路径假通过；显式区分源码待发布、Preview 和本地 Release staging，保留真实公开链接，按实际成员 ZIP 全量字节核验。自身5套本地构建通过，9套仅本地合成验证；源码1.6.2尚未发布，下载保留1.6.0。 |
@@ -711,7 +711,7 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push、提交身份自检/污染审计、worktree 前 3 查判读与常见事故恢复</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.12.1</td>
+<td style="text-align:center">v1.13.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip">旧版ZIP（内容版本待核）</a></td>
 <td></td>
 </tr>

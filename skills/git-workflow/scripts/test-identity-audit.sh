@@ -87,6 +87,23 @@ expect_exit_2_contains() {
   fi
 }
 
+expect_ok_contains() {
+  local name="$1"
+  local expected="$2"
+  shift 2
+  if run_audit "$@"; then
+    if grep -qF "$expected" "$OUT" "$ERR"; then
+      ok "$name"
+    else
+      cat "$OUT" "$ERR" >&2 || true
+      not_ok "$name (missing: $expected)"
+    fi
+  else
+    cat "$OUT" "$ERR" >&2 || true
+    not_ok "$name (unexpected exit $?)"
+  fi
+}
+
 commit_as() {
   # commit_as <repo> <name> <email> <message>（夹具无工作区内容，必须 --allow-empty）
   git -C "$1" -c "user.name=$2" -c "user.email=$3" commit -q --allow-empty -m "$4"
@@ -195,6 +212,38 @@ git init -q "$GH_NOREPLY"
 commit_as "$GH_NOREPLY" "杨卫薪律师" "66555304+cat-xierluo@users.noreply.github.com" \
   "github noreply must pass"
 expect_ok "history: users.noreply.github.com 不误伤" history --repo "$GH_NOREPLY"
+
+# ---- receipt：服务端合并回执核验（Task-012）----
+# 夹具：普通提交 + 伪造服务端合成签名提交（GitHub<noreply>）
+FORGE="$WORK/forge"
+git init -q "$FORGE"
+commit_as "$FORGE" "cat-xierluo" "66555304+cat-xierluo@users.noreply.github.com" "normal commit"
+commit_as "$FORGE" "GitHub" "noreply@github.com" "forged server-style commit"
+
+# 伪造服务端提交：夹具仓无 origin remote → gh 无法定位 → UNKNOWN fail-closed
+expect_exit_1_contains "receipt: 伪造服务端提交无回执 UNKNOWN（fail-closed）" \
+  "UNKNOWN" receipt --repo "$FORGE" HEAD
+if grep -qF "fail-closed" "$OUT" "$ERR"; then
+  ok "receipt: UNKNOWN 输出含 fail-closed 提示"
+else
+  not_ok "receipt: UNKNOWN 输出含 fail-closed 提示"
+fi
+
+# 普通提交：SKIP 不计发现、exit 0（不触发任何 gh 调用）
+expect_ok_contains "receipt: 普通提交 SKIP 不计" "SKIP" \
+  receipt --repo "$FORGE" HEAD~1
+
+# 无效提交引用 / 缺参数 → 用法错误 exit 2
+expect_exit_2_contains "receipt: 无效提交引用 exit 2" "无效提交引用" \
+  receipt --repo "$FORGE" deadbeefdeadbeef
+expect_exit_2_contains "receipt: 缺 OID 与 range exit 2" "IDENTITY_AUDIT_USAGE" \
+  receipt --repo "$FORGE"
+
+# --range 模式：范围全为普通提交 → 全 SKIP、exit 0（本地同步对账路径）
+commit_as "$CLEAN" "cat-xierluo" "66555304+cat-xierluo@users.noreply.github.com" \
+  "second normal commit on clean"
+expect_ok_contains "receipt: --range 全普通提交全 SKIP" "IDENTITY_AUDIT_OK" \
+  receipt --repo "$CLEAN" --range HEAD~1..HEAD
 
 printf '\n== 身份审计测试：%s passed, %s failed ==\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

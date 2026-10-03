@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable；先跑 scripts/pre-worktree-check.sh 只读判读 IN_SYNC/AHEAD/BEHIND/DIVERGED，--pre-pr 模式以 merge-tree 做提 PR 前本地冲突模拟）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）、常见 Git 事故恢复（accident recovery；用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时同样适用——先 reflog/fsck 只读定位，恢复优先新建引用而非改写现态，reset/force 类补救仍须明确授权，详见 references/accident-recovery.md）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.12.1"
+  version: "1.13.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -98,6 +98,7 @@ bash scripts/identity-audit.sh whoami \
 | PR/合并提交多出陌生 Co-authored-by 尾注 | `bash scripts/identity-audit.sh history --all` 看尾注分布；根源=分支提交作者，清洗须改写分支作者（`git rebase -r --exec 'git commit --amend --reset-author --no-edit'`）后重推，且必须用户授权 |
 | 提交作者不是我 | `whoami` 来源链定位写入层（env → worktree → repo-local → global，`--show-origin` 给出具体文件）；修复用 `git config --local --unset user.name user.email` 类命令回落全局，确认后再提交 |
 | 全仓身份体检（交接/发版/公开化前） | `history --all` 输出 author/committer/尾注三张分布表，可疑项自动标注；大仓用 `--max-commits` 控制上限 |
+| 核对已合并历史/本地同步对账，range 内出现 `GitHub <noreply@github.com>` 提交 | `bash scripts/identity-audit.sh receipt --range <base>..<head>`（或对单个提交传 `<oid>`）：服务端合成签名的提交按 gh 查询的本仓 MERGED PR 回执（`mergeCommit.oid` 精确绑定）判 `ACCEPT` / `DENY_FORGED`；回执由脚本经 gh 认证通道自查、不接受传参伪造，gh 不可用/查询失败一律 UNKNOWN fail-closed。只用于已合并历史核对，不改变 push 门禁（要 push 的是本地新提交，永远不该有服务端 committer） |
 
 发现身份污染时**先报告用户**，不得擅自改写历史或 force push（§1 安全协议）。与 `check-outgoing-identities.sh` 的分工：`whoami` 管"提交前我是谁、身份哪来的"，push 门禁管"push 前 range 内每一笔是谁"——两者互补，不可互替。
 
@@ -987,8 +988,8 @@ git worktree list
 - `scripts/test_privacy_check.py` — 隔离隐私故障回归
 - `references/privacy-preflight.md` — 精确审查、调用方法和能力边界
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
-- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）与全仓 author/committer/Co-authored-by 尾注审计（history）
-- `scripts/test-identity-audit.sh` — 身份审计故障注入测试
+- `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）、全仓 author/committer/Co-authored-by 尾注审计（history）、服务端合并回执核验（receipt：MERGED PR 回执绑定判 ACCEPT/DENY_FORGED，gh 不可查 fail-closed）
+- `scripts/test-identity-audit.sh` — 身份审计故障注入测试（whoami/history/receipt）
 - `scripts/pre-worktree-check.sh` — 开 worktree 前 3 查只读判读（IN_SYNC/AHEAD/BEHIND/DIVERGED 四态+处理路径）；`--pre-pr <branch>` 模式以 merge-tree 做提 PR 前本地合并模拟
 - `scripts/test-pre-worktree-check.sh` — 3 查判读与合并模拟的故障注入测试
 - `references/accident-recovery.md` — 误 amend/误 stash/误删本地/远端分支/误 reset 的恢复路径：reflog/fsck 只读定位，恢复优先新建引用

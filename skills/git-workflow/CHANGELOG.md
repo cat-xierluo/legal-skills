@@ -1,5 +1,20 @@
 # 变更日志
 
+## [1.13.0] - 2026-10-03 - 服务端合并身份回执的机械支持（Task-012）
+
+### 新增
+
+- **`identity-audit.sh` 新增 `receipt` 子命令**——把「GitHub squash/merge 产物 committer=`GitHub <noreply@github.com>` 与本地提交的身份差异」从人工放行变成机械核验（1.11.2 固化合法同步路径、DEC-022 保留实际拒绝后的既定后续）：
+  - 判定：`ACCEPT`（gh 查询的本仓 MERGED PR 回执 `mergeCommit.oid` 与提交 OID 精确绑定，输出 PR 号/mergedAt/head 五元组）/ `DENY_FORGED`（服务端合成签名但无回执绑定=伪造或外部仓库提交）/ `UNKNOWN`（gh 未安装、无 origin remote、未认证、查询失败/为空——一律 fail-closed 不放行）/ `SKIP`（非服务端提交，不计发现，走 whoami/history）。
+  - 防伪造：回执只能由脚本经 gh 认证通道自查，不接受任何传参回执；OID 先经 `rev-parse` 解析为 40 位 hex 再本地匹配（无 jq 内插注入面）；回执清单一次拉取逐 OID 本地比对（`--merged-limit` 默认 500）。
+  - 边界：只用于已合并历史核对与本地同步对账（`--range <base>..<head>`），不改变 push 门禁——要 push 的本地新提交永远不该有服务端 committer。
+- `test-identity-audit.sh` 新增 6 项 receipt 用例：伪造服务端提交无回执 UNKNOWN fail-closed、普通提交 SKIP、无效提交引用/缺参数 exit 2、--range 全普通提交全 SKIP。
+
+### 验证
+
+- 真实仓双向实战：`receipt 2d979c7e`（PR #264 mergeCommit）→ ACCEPT（#264 mergedAt=2026-10-03T10:53:42Z head=b517175a）；普通提交 → SKIP exit 0。
+- identity-audit 回归 22/22（原 16 + 新 6）；`bash -n` 通过；bash 3.2 兼容（无关联数组）。
+
 ## [1.12.1] - 2026-10-03 - worktree-audit 执行须知与迭代合同对齐（Task-013 定向修复）
 
 ### 修复

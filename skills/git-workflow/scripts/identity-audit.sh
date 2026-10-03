@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# 只读审计：提交身份自检（whoami）与历史身份/Co-authored-by 尾注审计（history）。
+# 只读审计：提交身份自检（whoami）、历史身份/尾注审计（history）与服务端合并回执核验（receipt）。
 #
 # 2026-09-30 实录背景：private-skills 仓库级 .git/config 被写入
 # Hermes(info-assistant) 身份——190 个提交作者被污染，且每次 PR squash 合并
 # GitHub 自动把分支提交作者转成 Co-authored-by 尾注。既有门禁
 # check-outgoing-identities.sh 在 push 时核验"传入的期望身份"，但期望值取自
-# 被污染 config 时形同虚设，尾注也不在其检查范围。本脚本补齐两件事：
+# 被污染 config 时形同虚设，尾注也不在其检查范围。本脚本补齐三件事：
 #   whoami  — commit 前自检：当前生效 user.name/email、来源链
 #             （env → worktree → repo-local → global）、可疑身份模式、
 #             仓库级/工作树级覆盖与 env 覆盖告警
 #   history — 历史审计：全部分支（或指定 range）内 author/committer/
 #             Co-authored-by 尾注身份分布，可疑项自动标注
+#   receipt — 服务端合并回执核验（2026-10-03，Task-012）：对 committer 为
+#             GitHub 服务端合成签名（GitHub <noreply@github.com>）的提交，
+#             用 gh 认证通道查询本仓 MERGED PR 回执绑定 mergeCommit.oid，
+#             机械区分「合法服务端 squash 产物」与「本地伪造」。回执必须
+#             脚本自查，不接受任何传参回执；gh 不可用/查询失败一律
+#             fail-closed（UNKNOWN）。只影响已合并历史的核对/本地同步对账
+#             场景，不改变 push 门禁（safe-push/check-outgoing-identities）。
 # 只读：不修改任何 Git 配置、refs、工作树或提交。非 0 退出 = 有发现。
 
 set -euo pipefail
@@ -21,6 +28,9 @@ EXPECTED_NAME=""
 EXPECTED_EMAIL=""
 ALLOW_LOCAL_OVERRIDE=0
 RANGE_ARGS=(--all)
+RECEIPT_GAVE_RANGE=0
+RECEIPT_OIDS=()
+MERGED_LIMIT=500
 MAX_COMMITS=50000
 ALLOW_EMAILS=()
 ALLOW_NAMES=()
@@ -32,12 +42,18 @@ usage() {
     [--expected-email EMAIL] [--allow-local-override]
   identity-audit.sh history [--repo PATH] [--range A..B | --all]
     [--max-commits N] [--allow-email EMAIL]... [--allow-name NAME]...
+  identity-audit.sh receipt [--repo PATH] <oid>...
+  identity-audit.sh receipt [--repo PATH] --range A..B [--merged-limit N]
 
 子命令：
   whoami   提交前自检（默认）：当前生效身份 + 来源链 + 可疑模式 + 覆盖告警
   history  历史审计：author/committer/Co-authored-by 尾注身份分布，可疑项标注
+  receipt  服务端合并回执核验：committer=GitHub<noreply> 的提交按 gh 查询的
+           MERGED PR 回执（mergeCommit.oid 绑定）判 ACCEPT / DENY_FORGED /
+           UNKNOWN；非服务端提交 SKIP 不计。--range 适合本地同步对账前
+           核 range 内服务端提交。
 
-退出码：0 = 无发现；1 = 有发现（WARN/FAIL）；2 = 用法或环境错误。
+退出码：0 = 无发现；1 = 有发现（WARN/FAIL/DENY/UNKNOWN）；2 = 用法或环境错误。
 门禁只读，不修改 Git 配置、refs、工作树或提交。
 USAGE
 }
@@ -51,13 +67,21 @@ die() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    whoami|history)
+    whoami|history|receipt)
       MODE="$1"
       shift
       ;;
     --repo)
       [ "$#" -ge 2 ] || die "IDENTITY_AUDIT_USAGE" "--repo 缺少参数"
       REPO="$2"
+      shift 2
+      ;;
+    --merged-limit)
+      [ "$#" -ge 2 ] || die "IDENTITY_AUDIT_USAGE" "--merged-limit 缺少参数"
+      case "$2" in
+        ''|*[!0-9]*) die "IDENTITY_AUDIT_USAGE" "--merged-limit 必须是正整数" ;;
+      esac
+      MERGED_LIMIT="$2"
       shift 2
       ;;
     --expected-name)
@@ -77,6 +101,7 @@ while [ "$#" -gt 0 ]; do
     --range)
       [ "$#" -ge 2 ] || die "IDENTITY_AUDIT_USAGE" "--range 缺少参数"
       RANGE_ARGS=("$2")
+      RECEIPT_GAVE_RANGE=1
       shift 2
       ;;
     --all)
@@ -105,9 +130,19 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    *)
+    --*)
       usage
       die "IDENTITY_AUDIT_USAGE" "未知参数：$1"
+      ;;
+    *)
+      # 位置参数：仅 receipt 子命令接受提交 OID
+      if [ "$MODE" = "receipt" ]; then
+        RECEIPT_OIDS+=("$1")
+        shift
+      else
+        usage
+        die "IDENTITY_AUDIT_USAGE" "未知参数：$1"
+      fi
       ;;
   esac
 done
@@ -293,7 +328,112 @@ cmd_history() {
   exit 0
 }
 
+# 服务端合并回执核验（2026-10-03，Task-012）：
+#   committer = GitHub <noreply@github.com> 的提交 → gh 查本仓 MERGED PR 回执，
+#   mergeCommit.oid 精确绑定判 ACCEPT / DENY_FORGED；gh 不可查一律 UNKNOWN
+#   （fail-closed）。普通提交 SKIP。回执只能由本函数经 gh 认证通道自查，
+#   不接受任何外部传入的回执数据（防伪造）。
+cmd_receipt() {
+  local oids=() oid full finds=0
+  if [ "$RECEIPT_GAVE_RANGE" = "1" ]; then
+    while IFS= read -r oid; do
+      [ -n "$oid" ] && oids+=("$oid")
+    done < <(git -C "$REPO" rev-list "${RANGE_ARGS[0]}" 2>/dev/null || true)
+  else
+    oids=("${RECEIPT_OIDS[@]}")
+  fi
+  [ "${#oids[@]}" -gt 0 ] || die "IDENTITY_AUDIT_USAGE" \
+    "receipt 需要至少一个 <oid> 或 --range A..B"
+
+  printf '== 服务端合并回执核验（receipt）==\n'
+  printf 'repo=%s 模式=%s\n' "$REPO" "$([ "$RECEIPT_GAVE_RANGE" = "1" ] && printf 'range=%s' "${RANGE_ARGS[0]}" || printf '显式 OID ×%s' "${#oids[@]}")"
+
+  # 解析为完整 40 位 hex（rev-parse 保证输出形态，杜绝 jq 内插注入面）
+  local full_oids=()
+  for oid in "${oids[@]}"; do
+    full=$(git -C "$REPO" rev-parse --verify --quiet "$oid^{commit}") || \
+      die "IDENTITY_AUDIT_USAGE" "无效提交引用：$oid"
+    full_oids+=("$full")
+  done
+
+  # 先扫 committer：普通提交直接 SKIP 打印，只收集服务端提交（后者才触发 gh）
+  local server_oids=() info ce cn
+  for full in "${full_oids[@]}"; do
+    info=$(git -C "$REPO" show -s --format='%cn|%ce' "$full")
+    cn="${info%%|*}"; ce="${info##*|}"
+    if [ "$cn" = "GitHub" ] && [ "$ce" = "noreply@github.com" ]; then
+      server_oids+=("$full")
+    else
+      printf 'SKIP          %s  非服务端提交（committer=%s <%s>）；正常提交走 whoami/history\n' \
+        "${full:0:12}" "$cn" "$ce"
+    fi
+  done
+
+  if [ "${#server_oids[@]}" -eq 0 ]; then
+    printf '\nIDENTITY_AUDIT_OK: 无服务端合成提交需要核验（%s 个全 SKIP）\n' "${#full_oids[@]}"
+    exit 0
+  fi
+
+  # gh 定位本仓（无 gh/无 remote/未认证 → UNKNOWN fail-closed，绝不猜）
+  local slug="" receipts="" reason=""
+  if ! command -v gh >/dev/null 2>&1; then
+    reason="gh 未安装"
+  else
+    slug=$(cd "$REPO" && gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
+      slug=""; reason="gh 无法定位仓库（无 origin remote 或未认证）"
+    }
+  fi
+  if [ -z "$slug" ]; then
+    for full in "${server_oids[@]}"; do
+      printf 'UNKNOWN       %s  回执不可查（%s）——fail-closed 不放行\n' "${full:0:12}" "$reason"
+      finds=$((finds + 1))
+    done
+    printf '\nIDENTITY_AUDIT_FINDINGS: %s 个服务端提交无法核验回执；安装/认证 gh 后重跑，勿手工放行\n' "$finds"
+    exit 1
+  fi
+
+  # 一次拉取已合并回执清单（mergeCommit.oid → PR 五元组），逐 OID 本地匹配
+  receipts=$(gh pr list -R "$slug" --state merged --limit "$MERGED_LIMIT" \
+    --json number,mergeCommit,mergedAt,headRefOid \
+    --jq '.[] | select(.mergeCommit != null) | "\(.mergeCommit.oid)\t#\(.number)\t\(.mergedAt)\t\(.headRefOid)"' \
+    2>/dev/null) || receipts=""
+  if [ -z "$receipts" ]; then
+    for full in "${server_oids[@]}"; do
+      printf 'UNKNOWN       %s  回执查询失败/为空（%s merged ≤%s）——fail-closed\n' \
+        "${full:0:12}" "$slug" "$MERGED_LIMIT"
+      finds=$((finds + 1))
+    done
+    printf '\nIDENTITY_AUDIT_FINDINGS: %s 个服务端提交回执不可核；检查网络/权限后重跑\n' "$finds"
+    exit 1
+  fi
+
+  local accept=0 line mo pr merged_at head
+  for full in "${server_oids[@]}"; do
+    line=$(printf '%s\n' "$receipts" | awk -F'\t' -v oid="$full" '$1==oid' | head -1)
+    if [ -n "$line" ]; then
+      mo="${line%%$'\t'*}"; rest="${line#*$'\t'}"
+      pr="${rest%%$'\t'*}"; rest="${rest#*$'\t'}"
+      merged_at="${rest%%$'\t'*}"; head="${rest##*$'\t'}"
+      printf 'ACCEPT        %s  %s mergedAt=%s head=%s\n' "${full:0:12}" "$pr" "$merged_at" "$head"
+      accept=$((accept + 1))
+    else
+      printf 'DENY_FORGED  %s  服务端合成签名但无 %s 的 MERGED 回执绑定（伪造或外部仓库提交）\n' \
+        "${full:0:12}" "$slug"
+      finds=$((finds + 1))
+    fi
+  done
+
+  if [ "$finds" -gt 0 ]; then
+    printf '\nIDENTITY_AUDIT_FINDINGS: accept=%s deny/unknown=%s——DENY 项按伪造处理，不进入对账基线\n' \
+      "$accept" "$finds"
+    exit 1
+  fi
+  printf '\nIDENTITY_AUDIT_OK: %s 个服务端提交全部有 MERGED 回执绑定\n' "$accept"
+  exit 0
+}
+
 case "$MODE" in
   whoami) cmd_whoami ;;
   history) cmd_history ;;
+  receipt) cmd_receipt ;;
 esac
