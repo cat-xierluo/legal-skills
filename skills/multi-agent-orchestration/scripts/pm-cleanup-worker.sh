@@ -181,6 +181,18 @@ actual_tip=$(git -C "$WORKTREE" rev-parse 'HEAD^{commit}')
   exit 2
 }
 
+if [ -d "$project_common/agent-borrowed-worktrees" ] || [ -L "$project_common/agent-borrowed-worktrees" ] || { [ "${#metadata_matches[@]}" -eq 1 ] && [ "$(jq -r '.worktree_ownership // ""' "${metadata_matches[0]}")" = borrowed ]; }; then
+protection=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" protect --project "$PROJECT" --worktree "$WORKTREE" --branch "$BRANCH") || { echo "PM_CLEANUP_BORROWED_UNKNOWN: retain all resources" >&2; exit 2; }
+if [ "$(printf '%s' "$protection" | jq -r '.protected')" = true ]; then
+  echo "PM_CLEANUP_RESULT: RETAINED_WITH_REASON remote=retained worktree=retained local=retained reason=borrowed-external-worktree"
+  exit 11
+fi
+if [ "${#metadata_matches[@]}" -eq 1 ] && [ "$(jq -r '.worktree_ownership // ""' "${metadata_matches[0]}")" = borrowed ]; then
+  echo "PM_CLEANUP_BORROWED_LEDGER_MISSING: retain all resources" >&2
+  exit 2
+fi
+fi
+
 # Long-lived feature/integration baselines are not worker cleanup targets.  The
 # default branch names remain protected even if legacy metadata is missing.
 case "$BRANCH" in main|master|trunk) BRANCH_LIFECYCLE="long-lived" ;; esac

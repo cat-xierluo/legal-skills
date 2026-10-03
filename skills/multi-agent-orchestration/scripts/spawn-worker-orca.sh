@@ -118,6 +118,19 @@ orca_rollback_created_worktree() {
 
   if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
     actual_common_dir=$(orca_git_common_dir "$worktree_path" 2>/dev/null || true)
+    # A faulty native create receipt may point at a previously borrowed tree.
+    # Its permanent ownership exclusion outranks rollback/force-delete intent.
+    if [ -d "$actual_common_dir/agent-borrowed-worktrees" ] || [ -L "$actual_common_dir/agent-borrowed-worktrees" ]; then
+      local protection actual_branch
+      actual_branch=$(git -C "$worktree_path" branch --show-current) || return 1
+      protection=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" protect --project "$worktree_path" --worktree "$worktree_path" --branch "$actual_branch") || {
+        echo "SPAWN_WORKER_ROLLBACK_BORROWED_UNKNOWN: retain all resources" >&2; return 1;
+      }
+      if [ "$(printf '%s' "$protection" | jq -r '.protected')" = true ]; then
+        echo "SPAWN_WORKER_ROLLBACK_BORROWED_RETAINED: external tree and branch retained" >&2
+        return 1
+      fi
+    fi
     if [ -n "$actual_common_dir" ]; then
       created_branch_oid=$(git --git-dir="$actual_common_dir" show-ref --hash --verify "refs/heads/$name" 2>/dev/null || true)
     fi
@@ -250,6 +263,7 @@ orca_worktree_create() {
 # Orca 一定会后缀化），由 worktree 落盘后的 isolation pre-gate 兜底。
 spawn_worker_existing_worktree_pregate() {
   [ "$ORCA_MODE" = "auto" ] || return 0
+  [ -z "${BORROW_EXISTING_WORKTREE:-}" ] || { spawn_worker_borrowed_recheck; return; }
   [ "$LIGHTWEIGHT_MODE" -eq 0 ] || return 0
   local gate_branch="$safe_branch" occupied_wt wt_common project_common dirty_count
   if [ -z "$gate_branch" ]; then
@@ -308,11 +322,27 @@ spawn_worker_existing_worktree_pregate() {
 orca_terminal_create_and_send() {
   local worktree_id="$1" title="$2" command="$3"
   local prompt="${4:-请按你的任务开始工作}"
+  local startup_mode="${5:-interactive}"
+  case "$startup_mode" in
+    interactive) ;;
+    batch)
+      if [ "${WORKER_BACKEND_CANONICAL:-}" != "minimax-code" ] || [ "$ORCA_SUPERVISED" -eq 1 ] || [ -n "${ORCA_TASK_ID:-}" ] || [ -n "${ORCA_ZCODE_NATIVE_REQUESTS:-}" ]; then
+        echo "MINIMAX_BATCH_REQUIRES_TERMINAL_MANAGED" >&2; return 64
+      fi
+      ;;
+    *) echo "ERROR: unknown Orca startup mode" >&2; return 64 ;;
+  esac
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf 'ORCA_RUN: orca terminal create --worktree id:%q --title %q --command %q --json\n' \
       "$worktree_id" "$title" "$command"
-    printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json\n'
+    if [ "$startup_mode" = "batch" ]; then
+      printf 'ORCA_RUN: MiniMax batch bootstrap owns task input; no TUI wait or terminal send; completion remains unverified\n'
+      ORCA_TERMINAL_HANDLE="orca_terminal_handle_placeholder"
+      return 0
+    fi
+    printf 'ORCA_RUN: orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json\n'
+    printf 'ORCA_RUN: if unsatisfied, wait once on the same handle with --timeout-ms 60000; send only when satisfied=true\n'
     if [ "$ORCA_SUPERVISED" -ne 1 ]; then
       printf 'ORCA_RUN: orca terminal send --terminal <handle> --text %q --enter --json\n' "$prompt"
     else
@@ -327,21 +357,130 @@ orca_terminal_create_and_send() {
     echo "ERROR: orca terminal create 失败: $out" >&2
     exit 64
   }
-  handle=$(printf '%s' "$out" | jq -r '.result.terminal.handle // empty')
+  handle=$(printf '%s' "$out" | jq -er -s '
+    if length == 1 and .[0].ok == true
+      and (.[0].result.terminal.handle | type) == "string"
+      and (.[0].result.terminal.handle | test("^[A-Za-z0-9_.:-]+$"))
+    then .[0].result.terminal.handle else error("invalid terminal create receipt") end' 2>/dev/null) || {
+      echo "SPAWN_WORKER_ORCA_TERMINAL_CREATE_INVALID: resources may exist; no retry or prompt injection" >&2
+      return 64
+    }
   if [ -z "$handle" ]; then
     echo "ERROR: orca terminal create 响应缺 handle: $out" >&2
     exit 64
   fi
   ORCA_TERMINAL_HANDLE="$handle"
+  # Persist identity before any late wait/send failure. Never treat create as completion.
+  if [ -n "${METADATA_FILE:-}" ] && [ -f "$METADATA_FILE" ]; then
+    local identity_meta
+    identity_meta=$(mktemp "${METADATA_FILE}.startup.XXXXXX") || return 64
+    if ! jq --arg handle "$handle" --arg mode "$startup_mode" '
+      .session.orca.terminal_handle = $handle
+      | if (.runtime.harness_authority.worker_backend // .runtime.worker_backend) == "minimax-code" or .runtime.worker_backend == "mcode" then
+          .runtime.startup.observation = "terminal_created_execution_unverified"
+          | .session.orca.tui_ready_method = (if $mode == "batch" then "command_bootstrap_no_tui_wait" else "orca_terminal_wait_tui-idle" end)
+        else . end' "$METADATA_FILE" > "$identity_meta"; then
+      rm -f "$identity_meta"
+      echo "SPAWN_WORKER_ORCA_TERMINAL_IDENTITY_WRITE_FAILED: terminal=$handle; retain resources without retry" >&2
+      return 64
+    fi
+    mv "$identity_meta" "$METADATA_FILE" || return 64
+  fi
+  if [ "$startup_mode" = "batch" ]; then
+    ORCA_TUI_READY_METHOD="command_bootstrap_no_tui_wait"
+    echo "SPAWN_WORKER_ORCA_BATCH_BOOTSTRAP: terminal=$handle; terminal created, execution/completion unverified; zero TUI wait/send"
+    return 0
+  fi
 
-  orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms 60000 --json >/dev/null 2>&1 || {
-    echo "SPAWN_WORKER_ORCA_TUI_WAIT_TIMEOUT: tui-idle 60s 内未就绪，继续投 prompt（不阻塞）" >&2
-  }
+  # 原生未满足回执可退出1；先保存退出码，再严格核对回执与退出码组合。
+  # stderr 与 JSON 分开，避免 CLI 诊断污染回执；失败保留已创建的资源。
+  local wait_out satisfied timeout_ms wait_rc
+  for timeout_ms in 30000 60000; do
+    wait_rc=0
+    wait_out=$(orca_cli terminal wait --terminal "$handle" --for tui-idle --timeout-ms "$timeout_ms" --json) || wait_rc=$?
+    if ! satisfied=$(printf '%s' "$wait_out" | jq -er -s --arg handle "$handle" '
+      if length == 1 and (.[0] | type) == "object"
+         and .[0].ok == true and (.[0].result.wait | type) == "object"
+         and (.[0].result.wait.satisfied | type) == "boolean"
+         and (.[0].result.wait | (has("handle") | not) or .handle == $handle)
+         and (.[0].result.wait | (has("condition") | not) or .condition == "tui-idle")
+      then .[0].result.wait.satisfied | tostring
+      else error("invalid terminal wait receipt") end' 2>/dev/null); then
+      echo "SPAWN_WORKER_ORCA_TUI_WAIT_INVALID: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；未投递，资源保留，先只读核查再恢复" >&2
+      exit 64
+    fi
+    if [ "$wait_rc" -gt 1 ] || { [ "$wait_rc" -eq 1 ] && [ "$satisfied" != false ]; }; then
+      echo "SPAWN_WORKER_ORCA_TUI_WAIT_FAILED: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}} exit_code=${wait_rc}；未投递，资源保留，先只读核查再恢复" >&2
+      exit 64
+    fi
+    [ "$satisfied" != true ] || break
+    echo "SPAWN_WORKER_ORCA_TUI_WAIT_PENDING: terminal=$handle worktree_id=$worktree_id timeout_ms=${timeout_ms}；未投递" >&2
+  done
+  if [ "$satisfied" != true ]; then
+    echo "SPAWN_WORKER_ORCA_TUI_WAIT_TIMEOUT: terminal=$handle worktree_id=$worktree_id worktree_path=${ORCA_WORKTREE_PATH:-${WORKTREE:-unknown}}；两次有界等待仍未就绪，未投递，资源保留，先只读核查再恢复" >&2
+    exit 64
+  fi
 
   if [ "$ORCA_SUPERVISED" -ne 1 ]; then
     orca_cli terminal send --terminal "$handle" --text "$prompt" --enter --json >/dev/null 2>&1 || {
       echo "ERROR: orca terminal send 失败（worker 已开但 prompt 没投；PM 需用 pm-orchestrate send 重投）" >&2
       exit 64
     }
+  fi
+}
+
+# Explicit borrowed first-entry path; ordinary occupied-tree pregate stays unchanged.
+spawn_worker_release_borrowed_lock() {
+  [ "${BORROWED_LOCK_ACQUIRED:-0}" -eq 1 ] || return 0
+  python3 "$SCRIPT_DIR/borrowed-worktree.py" release --worktree "$WORKTREE" --session "$SESSION" --owner-pid $$ >/dev/null || {
+    echo "BORROWED_WORKTREE_LOCK_RETAINED: precise manual recovery required; external tree/branch retained" >&2; return 1;
+  }
+  BORROWED_LOCK_ACQUIRED=0
+}
+spawn_worker_borrowed_exit() {
+  local rc=$?
+  trap - EXIT
+  spawn_worker_release_borrowed_lock || true
+  exit "$rc"
+}
+spawn_worker_borrowed_initial() {
+  local mode=acquire result status
+  [ "$DRY_RUN" -eq 0 ] || mode=validate
+  local -a gate_args=("$mode" --contract "$BORROW_EXISTING_WORKTREE" --project "$PROJECT_DIR" --worktree "$WORKTREE" --branch "$BRANCH" --session "$SESSION" --orca-bin "$ORCA_CLI_BIN")
+  [ "$DRY_RUN" -eq 1 ] || gate_args+=(--owner-pid $$)
+  result=$(python3 "$SCRIPT_DIR/borrowed-worktree.py" "${gate_args[@]}") || exit 64
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "BORROWED_WORKTREE_DRY_RUN: validated only; no lock/session/lease/dispatch"
+    : # validate returns the exact checked snapshot; never reread mutable input
+  else
+    BORROWED_LOCK_ACQUIRED=1
+    trap spawn_worker_borrowed_exit EXIT
+  fi
+  BORROWED_CONTRACT_SHA256=$(printf '%s' "$result" | jq -r '.contract_sha256 // empty')
+  borrowed_source=$(printf '%s' "$result" | jq -er '.approved_by') || exit 64
+  [ "$borrowed_source" = "$INSTALL_GUARD_DEGRADATION_SOURCE" ] || { echo "BORROWED_WORKTREE_AUTHORITY_SOURCE_MISMATCH" >&2; exit 64; }
+  BORROWED_HEAD=$(printf '%s' "$result" | jq -er '.head') || exit 64
+  ORCA_WORKTREE_ID=$(printf '%s' "$result" | jq -er '.orca_worktree_id') || exit 64
+  ORCA_EXPECTED_RUNTIME_ID=$(printf '%s' "$result" | jq -er '.runtime_id') || exit 64
+  ORCA_WORKTREE_PATH="$WORKTREE"; ORCA_PROJECT_TOPLEVEL="$PROJECT_DIR"
+  ORCA_EXPECTED_REPO_ID="${ORCA_WORKTREE_ID%%::*}"
+  BRANCH_LIFECYCLE="long-lived"
+  status=$(orca_cli status --json) || exit 64
+  ORCA_APP_VERSION=$(printf '%s' "$status" | jq -er '.result.runtime.appVersion') || exit 64
+  ORCA_CAPABILITIES_JSON=$(printf '%s' "$status" | jq -ec '.result.runtime.capabilities') || exit 64
+  ORCA_MODE="auto"
+}
+spawn_worker_borrowed_recheck() {
+  [ -n "${BORROW_EXISTING_WORKTREE:-}" ] || return 0
+  local -a args=(validate --contract "$BORROW_EXISTING_WORKTREE" --project "$PROJECT_DIR" --worktree "$WORKTREE" --branch "$BRANCH" --session "$SESSION" --orca-bin "$ORCA_CLI_BIN")
+  [ "$DRY_RUN" -eq 1 ] || args+=(--owner-pid $$)
+  python3 "$SCRIPT_DIR/borrowed-worktree.py" "${args[@]}" >/dev/null || exit 64
+}
+
+# MiniMax stays explicit-only; detection must not silently authorize direct tmux.
+spawn_worker_require_backend_orca() {
+  if [ "${WORKER_BACKEND_CANONICAL:-}" = "minimax-code" ] && [ "${NO_ORCA_MODE:-0}" -ne 1 ] && [ "${ORCA_MODE:-}" != auto ]; then
+    echo "MINIMAX_ORCA_REQUIRED: explicit MiniMax workers default to Orca; use --no-orca-mode to authorize direct tmux" >&2
+    return 64
   fi
 }

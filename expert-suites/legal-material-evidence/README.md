@@ -1,6 +1,8 @@
 # 法律材料与证据处理专家套件
 
-> [下载完整专家套件](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-legal-material-evidence-0.1.0.zip)
+> [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-legal-material-evidence-0.1.0.zip)
+> 整套源码 v0.1.1 待发布
+> 上方旧包内容不随源码变化。
 
 把法院文书、扫描件、PDF、图片、录音、视频和会议记录整理成可归档、可检索、可继续分析的数字化材料。
 
@@ -20,15 +22,15 @@
 
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
-| [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
-| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-processor-2.13.0.zip) |
-| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
-| [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip) |
-| [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/local-asr-2.3.3.zip) |
-| [transcription-corrector](../../skills/transcription-corrector/) | 纠正同音字、专有名词和 ASR 漂移 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/transcription-corrector-1.0.9.zip) |
-| [tingwu-asr](../../skills/tingwu-asr/) | 使用通义听悟完成云端长音视频转录 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/tingwu-asr-0.4.7.zip) |
-| [court-sms](../../skills/court-sms/) | 解析法院短信、下载文书并归档到案件目录 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |
-| [dingtalk-minutes](../../skills/dingtalk-minutes/) | 读取钉钉 AI 听记摘要、逐字稿和待办 | [下载](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/dingtalk-minutes-1.1.0.zip) |
+| [legal-ocr](../../skills/legal-ocr/) | 统一路由 PDF、图片、Office 和网页内容识别 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
+| [pdf-processor](../../skills/pdf-processor/) | 预处理、OCR 双层化、合并、页码和压缩 PDF | [已发布 v2.13.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-processor-2.13.0.zip) |
+| [pdf-organizer](../../skills/pdf-organizer/) | 建立页面索引并按内容拆分、合并和规范命名 | [已发布 v0.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/pdf-organizer-0.6.0.zip) |
+| [video-screenshot](../../skills/video-screenshot/) | 从录屏或视频中筛选关键帧和证据线索 | [已发布 v0.8.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip) |
+| [local-asr](../../skills/local-asr/) | 本地语音识别转写音视频，保留时间戳与说话人；源码 v2.3.4 待发布 | [已发布 v2.3.3](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/local-asr-2.3.3.zip) |
+| [transcription-corrector](../../skills/transcription-corrector/) | 纠正同音字、专有名词和 ASR 漂移 | [已发布 v1.0.9](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/transcription-corrector-1.0.9.zip) |
+| [tingwu-asr](../../skills/tingwu-asr/) | 使用通义听悟完成云端长音视频转录 | [已发布 v0.4.7](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/tingwu-asr-0.4.7.zip) |
+| [court-sms](../../skills/court-sms/) | 解析法院短信、下载文书并归档到案件目录；源码 v1.5.2 待发布 | [已发布 v1.5.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/court-sms-1.5.1.zip) |
+| [dingtalk-minutes](../../skills/dingtalk-minutes/) | 读取钉钉 AI 听记摘要、逐字稿和待办；源码 v1.1.1 待发布 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/dingtalk-minutes-1.1.0.zip) |
 
 ## 建议使用方式
 
@@ -53,4 +55,4 @@ OCR 和语音识别结果必须与原件抽样核对。涉及证据提交、期�
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.0`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。

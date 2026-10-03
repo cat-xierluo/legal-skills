@@ -44,6 +44,9 @@ acquire_provider_lease() {
 release_provisional_provider_lease() {
   local exit_code=$?
   trap - EXIT
+  if declare -F spawn_worker_release_borrowed_lock >/dev/null; then
+    spawn_worker_release_borrowed_lock || true
+  fi
   if [ "$PROVIDER_LEASE_ACQUIRED" -eq 1 ] && [ -n "$PROVIDER_LEASE_FILE" ]; then
     python3 "$SCRIPT_DIR/provider-lease.py" release --root "$PROVIDER_LEASE_ROOT" \
       --lease-file "$PROVIDER_LEASE_FILE" \
