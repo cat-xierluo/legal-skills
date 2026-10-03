@@ -492,7 +492,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-03-CLOUD-PR-INTEGRATION-AUDIT — 云端 PR 池与功能主线审计
 
-- 状态：IN_PROGRESS；Owner：本 MAO PM Codex /root；来源：真人要求审计云端多 PR、推进已具备验收条件的主干集成，并评估长期功能主线。
+- 状态：DONE（云端审计及GUI-M1主干交付；后续原业务卡保持各自状态）；Owner：本 MAO PM Codex /root；来源：真人要求审计云端多 PR、推进已具备验收条件的主干集成，并评估长期功能主线。
 - 输入：GitHub 当前开放 MAO PR248、250—259 的不可变 head、正文/评论/检查/变更范围；main 冻结 b00c278841b1d5e9314ec4369f30ab18ac0d7403；git-workflow 长期集成与逐 PR 验收合同。
 - 范围：核依赖、共享文件冲突、旧验收与当前 tree 的对应、代表性消费者/引用可达；具备完整证据的独立 PR 按精确 head 串行合并；必要时明确单一功能线的 owner、固定 worktree、显式 base、里程碑和同步政策。
 - 非目标：不批量转 ready/合并未知候选；不删除分支/工作树、不重写已发表历史；不覆盖共享源 dirty/index，不改账户/刷新卡，不重派原业务任务；不将 GUI 的证据辅助能力误记成 Orca 监督或长期自治。
@@ -507,3 +507,11 @@ blocker_and_recovery:
 
 - 云端main已验收合并259@20c16f92→4550b712及252@38681927→2f12a1de，原分支保留。GUI-M1窄采用来自250@ad172543、253@74994d95、254@86ea7be8、255@d25eb031、256@806b0abb、257@748fa560、258@962c985b；17份工程/参考文件保持原受审字节，只由集成者合并4份共享文档、增加缺省消费者和CI。
 - 发布故障历史保留：共享README索引校验失败后，后续Git步骤未停，草稿250@1e46ba5c含冲突标记；8b39e993已本地修正但新版隐私门拒绝历史merge补丁，因此未推送。转用最新基线的窄采用候选，不force/rebase、不跳过门、不伪造synthetic例外；旧候选只作追溯，不纳入新分支祖先。旧隐私命中原件保留私有archive，后续阻断式步骤逐项检查真实exit后才mutation。
+
+- 最终云端交付：PR259（20c16f92）已合主干4550b712，PR252（38681927）已合主干2f12a1de；GUI子PR260（c0098ca6）合功能线17f857dc，里程碑PR262（17f857dc）于2026-10-03T07:50:43Z合主干1d9f3a48。17个原子工程/参考文件逐字节保留，260受审树、功能线树与262主干树完全相同。旧250/253/254/255/256/257/258逐一重核已完整采用后CLOSED取代，保留全部原分支、预算与失败历史。
+- 集成验收：首轮363.527/300秒审查及精确来源映射断言失败保留NOT_VERIFIED；同工程后续发布身份/三真实隐私来源与精确CI限定复核150.375/180秒获不同角色ACCEPT，不改判旧报告、不重开产品预算。17份既有独审工程等价、作者/集成者与真实宿主reviewer分离；不伪造Orca身份或whole Skill接受。
+- 实跑证据：本地collector27、adapter317、artifacts40、pipeline18含旧稿负控、observe34通过/1不适用skip、smoke11含旧稿负控、handoff8与新增缺省consumer3均真实执行。PR262 Runtime37107244952/Harness37107244939均SUCCESS，已读真实Linux日志：核心链与缺省3例执行，私有样例、可选旧稿负控及不适用缺依赖场景skip分计，smoke为9通过/2可选skip，不冒称11项CI通过。
+- 波次同步：无未决GUI子PR后，main1d9f3a48经GitHub正式merge进入长期线c94e4d6c；保留本机先前同步尝试078df5cd，再普通merge两端历史并经完整新本机range身份/隐私门safe-push发布f4bb313d。下一波default_base_sha=1d9f3a4808c699aa517eaeafbc0e370c5cf4f105、integration_head_sha=f4bb313d94bf0d8c0f2290ec46767f57dbbf66f9，远端/固定worktree树与main相同。没有force/reset/rebase/删除ref；本任务记录PR仅更新文档，后续main前进仍按零未决子PR边界吸收并冻结，不固定使用旧快照。
+- 工具兼容发现：首次safe-push以main为base时，已发布GitHub squash17f857dc的author/committer与本机期望身份不同而拒绝；拒绝真实保留，未关闭门或重写署名。替代路径只由GitHub合并两个已发布且已审的精确head，核commit message/两parent/tree和远端实际OID；后续本机range以真实integration target为base，所有未发布提交完整检查。通用门禁与长期线历史交互的改进归git-workflow具名后续任务，不把此路径说成工具缺口已修复。
+- 后续队列：①PR248保留draft，5份共享文档冲突及大包范围先逐项对账/窄拆，再独审、最终CI与原消费者验收；原ZCode022仍CONTINUATION_NOT_READY，不重派、不重置1/2预算。②PR251保留draft，先补齐33/34/35/37公开依赖与新上下文前向验收，禁止只凭green合并。③本轮期间新PR261@1312e686进入队列，继续由原owner处理main漂移、版本/共享文档与最终独审对账；已保留本机2.36.12合同，不抢占作者或合并未知候选。
+- 完成边界：原11个MAO草稿中9个已具名主干合并或完整采用关闭，原248/251待办及新261仍OPEN/DRAFT；其他Skill的225/235未操作。main加单一GUI长期线与worker短分支两层继续并存，未建立全局develop或每个fix/test的永久线。只读证据、校验交接与本次云端集成交付已验；正式GUI监督/自动投递/长期闭环、实时活性与计费、原业务恢复及whole Skill仍NOT_VERIFIED。原件归本Skill ignored archive的20261003_cloud_pr_integration；本机增量安装和授权交接另保留实际随行回执，不整树替换安装入口。
