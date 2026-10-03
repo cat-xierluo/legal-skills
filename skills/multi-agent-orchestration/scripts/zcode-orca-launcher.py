@@ -47,7 +47,7 @@ def trusted_path(text):
     p = Path(text)
     require(p.is_absolute() and ".." not in p.parts, "absolute_path_required")
     # /tmp and /var are macOS system aliases; no user-controlled ancestor alias.
-    if p.parts[1:2] in (("tmp",), ("var",)):
+    if sys.platform == "darwin" and p.parts[1:2] in (("tmp",), ("var",)):
         p = Path("/private") / p.relative_to("/")
     current = Path("/")
     for part in p.parts[1:]:

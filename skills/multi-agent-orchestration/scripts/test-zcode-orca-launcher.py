@@ -11,6 +11,39 @@ import time
 import unittest
 
 BRIDGE=Path(__file__).with_name("zcode-orca-launcher.py")
+class TrustedPathPlatformTests(unittest.TestCase):
+    def consume(self, platform, path, symlink=""):
+        # Run the actual consumer in a fresh process; emulate only OS identity
+        # and system-root topology, so this also runs on macOS CI/dev machines.
+        code = """import json,runpy,sys
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0,str(Path(sys.argv[1]).parent))
+bridge=runpy.run_path(sys.argv[1])
+with patch('sys.platform',sys.argv[2]),patch.object(Path,'is_symlink',lambda p:str(p)==sys.argv[4]):
+ try: print(json.dumps(str(bridge['trusted_path'](sys.argv[3]))))
+ except bridge['Rejected'] as e: print(str(e),file=sys.stderr);raise SystemExit(64)
+"""
+        return subprocess.run([sys.executable,"-c",code,str(BRIDGE),platform,path,symlink],capture_output=True,text=True)
+    def test_linux_system_paths_keep_real_roots(self):
+        for path in ("/tmp/requests/receipt.json","/var/lib/worker/receipt.json"):
+            with self.subTest(path=path):
+                p=self.consume("linux",path)
+                self.assertEqual(p.returncode,0,p.stderr)
+                self.assertEqual(json.loads(p.stdout),path)
+    def test_macos_system_aliases_are_canonicalized(self):
+        for path in ("/tmp/requests/receipt.json","/var/folders/worker/receipt.json"):
+            with self.subTest(path=path):
+                p=self.consume("darwin",path)
+                self.assertEqual(p.returncode,0,p.stderr)
+                self.assertEqual(json.loads(p.stdout),"/private"+path)
+    def test_user_symlink_ancestors_still_refused_on_both_platforms(self):
+        for platform,alias in (("linux","/tmp/requests"),("darwin","/private/tmp/requests")):
+            with self.subTest(platform=platform):
+                p=self.consume(platform,"/tmp/requests/receipt.json",alias)
+                self.assertEqual(p.returncode,64)
+                self.assertIn("symlink_path",p.stderr)
+
 class BridgeTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
