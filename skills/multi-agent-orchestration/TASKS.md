@@ -563,7 +563,7 @@ blocker_and_recovery:
 
 ## TASK-2026-10-03-ZCODE-LINUX-SYSTEM-ALIAS — 首次启动桥的跨平台路径兼容
 
-- 状态：IN_PROGRESS。来源：PR248提交d92c241f的Linux CI 37095578596；新关闭恢复16项通过，旧首次bridge35项中28项报requests_root_missing，后续验证未运行。旧trusted_path无平台判断将/tmp和/var转换为/private，对Linux错误。
+- 状态：DONE（跨平台入口与权限断言修复，真实Linux CI通过）。来源：PR248提交d92c241f的Linux CI 37095578596；新关闭恢复16项通过，旧首次bridge35项中28项报requests_root_missing，后续验证未运行。旧trusted_path无平台判断将/tmp和/var转换为/private，对Linux错误。
 - 范围：仅zcode-orca-launcher.py的macOS系统别名判断与test-zcode-orca-launcher.py定向平台反例；不放宽符号链接/owner/mode/anti-replay检查，不重置关闭恢复原2-episode或DSH业务预算。
 - 预算与验收：作者5分钟、不同上下文增量独审5分钟；只跑路径定向与既有bridge35，Linux公开CI原失败必须保留，最终工程语义独审及新提交CI证明。真实DSH业务仍由原PM。
 
@@ -572,3 +572,5 @@ blocker_and_recovery:
 - 第二轮Linux CI 37096070166：恢复16、bridge38、completion Python19均通过；Shell completion的mode断言因BSD/GNU stat混合输出误报，实际生产权限实现未变。范围追加仅test-completion-authority.sh该权限读数的跨平台消费者；原作者/独审各3分钟限定返修，保600断言，不改生产权限、不skip，第二次Actions失败保留。
 
 - 权限读数返修冻结`fd1edcd4f0d56297aedf83ce4ac09ed9ae4482c7`，仅测试mode读取一行。作者Shell8项通过；不同上下文限定ACCEPT，实际含空格路径的600退出0、644/640退出1，原严格断言保持。生产launcher与其余12工程/依赖SHA不变。首轮、第二轮CI失败日志完整保留，最终Linux Actions待本提交验证；本机尚未安装此候选。
+
+- Linux实施验收（2026-10-03）：同工程提交`185f2efe9c0f20d7e77ff826e6e7087571d7a475`的[Runtime CI](https://github.com/cat-xierluo/legal-skills/actions/runs/37096479917)与[Harness CI](https://github.com/cat-xierluo/legal-skills/actions/runs/37096479903)均SUCCESS，闭合本跨平台卡；恢复16/bridge38/completion19+8/reauthorize及业务/资源入口均执行通过。保留前两轮失败，不skip失败用例。真实原DSH恢复、请求计费与长期运行继续依原卡NOT_VERIFIED，不扩大本卡验收。
