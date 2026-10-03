@@ -42,6 +42,27 @@ def file_sha(path):
         for block in iter(lambda: f.read(1024 * 1024), b""): h.update(block)
     return h.hexdigest()
 
+def file_identity(path):
+    p = Path(path); st = p.stat()
+    return {"path": str(p), "sha256": file_sha(p), "device": st.st_dev,
+            "inode": st.st_ino, "mtime_ns": st.st_mtime_ns, "ctime_ns": st.st_ctime_ns,
+            "size": st.st_size, "mode": st.st_mode}
+
+def resolved_binary(argv):
+    binary = shutil.which(argv[0]) if not Path(argv[0]).is_absolute() else argv[0]
+    require(binary is not None, "verification_executable_missing")
+    return Path(binary).resolve(strict=True)
+
+def command_inputs(command, repo):
+    argv = command_argv(command); inputs = []
+    require(not any(os.environ.get(k) for k in ("PYTHONPATH", "PYTHONHOME", "BASH_ENV", "ENV", "NODE_OPTIONS", "RUBYOPT", "PERL5OPT", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES")), "injected_runtime_environment_refused")
+    for arg in argv[1:]:
+        candidate = Path(arg) if Path(arg).is_absolute() else repo / arg
+        if candidate.is_file():
+            require(not candidate.is_symlink(), "input_alias_refused")
+            inputs.append(file_identity(candidate.resolve(strict=True)))
+    return inputs
+
 def read_json(path):
     p = Path(path)
     require(not p.is_symlink() and p.is_file() and p.stat().st_size <= MAX_JSON, "json_path_refused")
@@ -86,6 +107,7 @@ def source_binding(repo, head):
         actual_blob = git(repo, "hash-object", "--no-filters", "--", relative).strip()
         require(actual_blob == blob, "source_bytes_differ_from_index")
         digest.update(row + b"\0")
+        digest.update(json.dumps(file_identity(p), sort_keys=True).encode() + b"\0")
         with p.open("rb") as f:
             for block in iter(lambda: f.read(1024 * 1024), b""): digest.update(block)
         digest.update(b"\0")
@@ -96,9 +118,10 @@ def command_argv(command):
     require(not any(c in command for c in "\r\n;$`|&<>"), "complex_shell_refused")
     argv = shlex.split(command)
     require(argv and not any(re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", v) for v in argv), "environment_assignment_refused")
-    name = Path(argv[0]).name
+    name = resolved_binary(argv).name
+    is_python = re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name) is not None
     require(name not in ("env", "eval", "exec", "source", ".", "sudo"), "command_wrapper_refused")
-    if name in ("sh", "bash", "zsh", "dash", "fish", "python", "python3", "node", "perl", "ruby"):
+    if is_python or name in ("sh", "bash", "zsh", "dash", "fish", "node", "perl", "ruby"):
         require(not any(v in ("-c", "-e", "--eval", "--command") or v.startswith(("--eval=", "--command=", "-c", "-e")) for v in argv[1:]), "inline_interpreter_refused")
     if name in ("sh", "bash", "zsh", "dash", "fish"):
         require(not any(v.startswith("-") and not v.startswith("--") and "c" in v[1:] for v in argv[1:]), "inline_shell_refused")
@@ -115,10 +138,15 @@ def binding(spec, task_id, repo, head):
     require(task.get("starts_external_resources") is False, "external_resources_not_supported")
     commands = task.get("verification_commands")
     require(isinstance(commands, list) and 0 < len(commands) <= 16 and len(set(commands)) == len(commands), "scoped_commands_required")
-    for command in commands: command_argv(command)
+    inputs = {command: command_inputs(command, repo) for command in commands}
     return {"spec_path": str(spec), "spec_sha256": spec_sha, "task_id": task_id,
             "value_kind": task["value_kind"], "repo": str(repo), "verified_head": head,
-            "source": source_binding(repo, head)}, commands
+            "source": source_binding(repo, head), "command_inputs": inputs}, commands
+
+def group_members(pgid):
+    p = subprocess.run(['/bin/ps', '-axo', 'pid=,pgid=,stat='], capture_output=True, text=True, timeout=5)
+    require(p.returncode == 0 and len(p.stdout) <= MAX_JSON, 'group_observation_failed')
+    return [int(fields[0]) for line in p.stdout.splitlines() if len(fields := line.split()) == 3 and fields[1] == str(pgid) and not fields[2].startswith('Z')]
 
 def private_root(root, repo, create=False):
     require(root.is_absolute() and root.parent.resolve(strict=True) == root.parent and not root.is_symlink(), "output_alias_refused")
@@ -136,9 +164,7 @@ def run_command(command, repo, root, index, timeout, limit):
     try:
         # No shell, injected argv, caller exit codes, or result self-report.
         argv = command_argv(command)
-        binary = shutil.which(argv[0]) if not Path(argv[0]).is_absolute() else argv[0]
-        require(binary is not None, "verification_executable_missing")
-        binary_path = Path(binary).resolve(strict=True)
+        binary_path = resolved_binary(argv)
         executable = {"path": str(binary_path), "sha256": file_sha(binary_path)}
         proc = subprocess.Popen(argv, executable=str(binary_path), cwd=repo, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
@@ -165,6 +191,18 @@ def run_command(command, repo, root, index, timeout, limit):
         if proc is not None:
             if proc.poll() is None:
                 os.killpg(proc.pid, signal.SIGKILL); proc.wait(timeout=5)
+            try:
+                if group_members(proc.pid):
+                    incomplete = incomplete or "background_processes"
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    for _ in range(10):
+                        if not group_members(proc.pid): break
+                        time.sleep(.05)
+                    else: incomplete = "cleanup_unknown"
+            except (ValueError, OSError, subprocess.SubprocessError):
+                incomplete = "cleanup_unknown"
+                try: os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
             for pipe in (proc.stdout, proc.stderr): pipe.close()
         selector.close()
         for f in streams: f.flush(); os.fsync(f.fileno()); f.close()

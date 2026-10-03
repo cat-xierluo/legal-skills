@@ -110,4 +110,27 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(self.cli("collect").returncode,2);attempt=json.loads((self.output/"attempt.json").read_text())
         self.assertEqual(attempt["executed"][0]["exit_code"],0);self.assertEqual(attempt["failure"],"binding_changed");self.assertFalse((self.output/"postflight-evidence.json").exists())
 
+    def test_versioned_actual_python_inline_refused(self):
+        self.task['verification_commands']=[f"{sys.executable} -c 'print(123)'"];self.save_spec()
+        self.assertEqual(self.cli('collect').returncode,2);self.assertFalse(self.output.exists())
+    def test_source_changed_then_restored_is_not_accepted(self):
+        (self.repo/'restore.py').write_text("from pathlib import Path\np=Path('app.py');old=p.read_bytes();p.write_text('VALUE=999\\n');p.write_bytes(old)\n")
+        self.git('add','restore.py');self.git('commit','-q','-m','restore fixture');self.head=self.git('rev-parse','HEAD')
+        self.task['verification_commands']=['python3 -B restore.py'];self.save_spec()
+        self.assertEqual(self.cli('collect').returncode,2);self.assertFalse((self.output/'postflight-evidence.json').exists())
+        self.assertEqual((self.repo/'app.py').read_text(),'VALUE = 2\n')
+    def test_external_direct_input_and_injection_are_bound(self):
+        external=self.root/'external.py';external.write_text('print("external verified")\n')
+        self.task['verification_commands']=[f'python3 -B {external}'];self.save_spec();self.collect_ok()
+        external.write_text('raise SystemExit(8)\n');self.assertEqual(self.cli('check').returncode,2)
+        self.output=self.root/'injected';self.env['PYTHONPATH']=str(self.root)
+        self.assertEqual(self.cli('collect').returncode,2);self.assertFalse(self.output.exists())
+    def test_exit_zero_background_group_is_rejected_and_reclaimed(self):
+        (self.repo/'background.py').write_text("import subprocess,sys\np=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nprint(p.pid)\n")
+        self.git('add','background.py');self.git('commit','-q','-m','background fixture');self.head=self.git('rev-parse','HEAD')
+        self.task['verification_commands']=['python3 -B background.py'];self.save_spec();self.assertEqual(self.cli('collect').returncode,2)
+        attempt=json.loads((self.output/'attempt.json').read_text());self.assertIn(attempt['failure'],('background_processes','cleanup_unknown'));self.assertFalse((self.output/'postflight-evidence.json').exists())
+        pid=int((self.output/'00.stdout.log').read_text().strip());p=subprocess.run(['/bin/ps','-p',str(pid),'-o','stat='],capture_output=True,text=True)
+        self.assertTrue(p.returncode!=0 or not p.stdout.strip() or p.stdout.strip().startswith('Z'))
+
 if __name__ == "__main__": unittest.main()
