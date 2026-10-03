@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 身份门禁绑定 push：核验当前 HEAD 的完整 PR range，然后只 push 已核验的 immutable OID。
+# 身份及隐私门禁绑定 push：核验完整 PR range，只 push 已核验的 immutable OID。
 
 set -euo pipefail
 
@@ -19,6 +19,7 @@ die() {
 }
 
 while [ "$#" -gt 0 ]; do
+  [ "$#" -ge 2 ] || die "SAFE_PUSH_USAGE" "参数不完整"
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --base) BASE_REF="$2"; shift 2 ;;
@@ -33,7 +34,7 @@ done
 [ -n "$BASE_REF" ] || die "SAFE_PUSH_BASE_MISSING" "必须显式提供 PR integration base（例如 origin/main）"
 [ -n "$EXPECTED_NAME" ] || die "SAFE_PUSH_IDENTITY_MISSING" "必须提供 expected name"
 [ -n "$EXPECTED_EMAIL" ] || die "SAFE_PUSH_IDENTITY_MISSING" "必须提供 expected email"
-current_branch=$(git -C "$REPO" branch --show-current 2>/dev/null) || \
+current_branch=$(git --no-replace-objects -C "$REPO" branch --show-current 2>/dev/null) || \
   die "SAFE_PUSH_NOT_REPOSITORY" "无法读取当前分支：$REPO"
 [ -n "$current_branch" ] || die "SAFE_PUSH_DETACHED_HEAD" "detached HEAD 不允许 push"
 [ -n "$BRANCH" ] || BRANCH="$current_branch"
@@ -55,17 +56,23 @@ case "$BASE_REF" in
 esac
 
 base_branch=${BASE_REF#"$REMOTE"/}
-git -C "$REPO" fetch -- "$REMOTE" "$base_branch" >/dev/null || \
+git --no-replace-objects -C "$REPO" fetch -- "$REMOTE" "+refs/heads/$base_branch:refs/remotes/$REMOTE/$base_branch" >/dev/null || \
   die "SAFE_PUSH_FETCH_FAILED" "无法刷新 integration base：$BASE_REF"
 
-verified_oid=$(git -C "$REPO" rev-parse --verify 'HEAD^{commit}') || \
+verified_base=$(git --no-replace-objects -C "$REPO" rev-parse --verify "$BASE_REF^{commit}") || \
+  die "SAFE_PUSH_BAD_BASE" "无法解析已刷新的 integration base"
+verified_oid=$(git --no-replace-objects -C "$REPO" rev-parse --verify 'HEAD^{commit}') || \
   die "SAFE_PUSH_BAD_HEAD" "无法解析当前 HEAD"
 "$SCRIPT_DIR/check-outgoing-identities.sh" \
-  --repo "$REPO" --base "$BASE_REF" \
+  --repo "$REPO" --base "$BASE_REF" --head "$verified_oid" --expected-base-oid "$verified_base" \
   --expected-name "$EXPECTED_NAME" --expected-email "$EXPECTED_EMAIL"
-[ "$(git -C "$REPO" rev-parse --verify 'HEAD^{commit}')" = "$verified_oid" ] || \
-  die "SAFE_PUSH_HEAD_CHANGED" "身份核验期间 HEAD 已变化；拒绝 push"
+python3 "$SCRIPT_DIR/privacy_check.py" --repo "$REPO" range \
+  --base-oid "$verified_base" --head-oid "$verified_oid"
+[ "$(git --no-replace-objects -C "$REPO" rev-parse --verify "$BASE_REF^{commit}")" = "$verified_base" ] || \
+  die "SAFE_PUSH_BASE_CHANGED" "隐私/身份核验期间 integration base 已变化"
+[ "$(git --no-replace-objects -C "$REPO" rev-parse --verify 'HEAD^{commit}')" = "$verified_oid" ] || \
+  die "SAFE_PUSH_HEAD_CHANGED" "隐私/身份核验期间 HEAD 已变化；拒绝 push"
 
-git -C "$REPO" push -- "$REMOTE" "$verified_oid:refs/heads/$BRANCH"
+git --no-replace-objects -C "$REPO" push -- "$REMOTE" "$verified_oid:refs/heads/$BRANCH"
 printf 'SAFE_PUSH_OK: remote=%s branch=%s oid=%s base=%s\n' \
   "$REMOTE" "$BRANCH" "$verified_oid" "$BASE_REF"

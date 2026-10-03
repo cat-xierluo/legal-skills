@@ -1,5 +1,20 @@
 # 变更日志
 
+## [1.11.1] - 2026-10-03（重编号：分支原编 1.10.0 与 main 已合并的 worktree 审计版冲突）
+
+### 新增
+
+- 共享 `privacy_check.py`：暂存内容、完整提交说明、逐笔历史 message/patch/变更 blob 共用规则；案号待核对、带来源的精确人工审查、原始字节绑定的二进制审查凭据、本地黑名单不外传，诊断不回显敏感原文。
+- `safe-pr.py`：创建 draft PR 和 squash 时检查最终标题/正文与完整范围；squash 使用服务端 head OID 条件；明确披露 PR 创建接口的非原子竞态与后验核对。
+- 版本化 `commit-msg` 与 `pre-commit` 复用同一检查器；不自动安装 hook 或修改安全配置。新增隔离集成回归和专用 CI。
+
+### 修复
+
+- `safe-push.sh` 显式刷新 integration base ref，身份与隐私门禁绑定同一 base/head OID，逐笔检查而非只看净 diff；浅历史、缺对象、读失败和范围异常均停止。
+
+### 验证
+
+- 覆盖仅提交说明泄露、中间写入后删除、PR/squash 正文、所有分组预检、`--yes`、部分暂存、精确例外、普通 PR 编号、hook 改写和 HEAD 竞态；真实合并未执行。
 ## [1.11.0] - 2026-10-03 - 敏感文件历史重写与全量撤回 SOP 入册
 
 ### 新增
@@ -50,7 +65,6 @@
 ### 待办事项
 
 - `references/local-worktree-sop.md` 为 0 字节空文件（历史版本亦空，2026-09-20 并入时内容未迁移成功），SKILL.md §「Worktree（工作树）」引用悬空——需按原独立 skill 语义重写或改引用，已登记 TASKS.md。
-
 ## [1.9.0] - 2026-09-30 - 提交身份自检与身份污染审计：identity-audit.sh（whoami/history）
 
 ### 新增

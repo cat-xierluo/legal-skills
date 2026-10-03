@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.11.0"
+  version: "1.11.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -49,7 +49,7 @@ GIT_COMMITTER_NAME="<name>" GIT_COMMITTER_EMAIL="<email>" \
   git commit -m "<title>" -m "<body>"
 ```
 
-push 必须走身份绑定的 `safe-push.sh`，核验**完整 PR range**后只 push 已核验的 immutable OID；不得直接 `git push`，也不得只看 `git log -1` 或 HEAD：
+push 必须走身份与隐私绑定的 `safe-push.sh`，核验**完整 PR range**后只 push 已核验的 immutable OID；不得直接 `git push`，也不得只看 `git log -1` 或 HEAD：
 
 ```bash
 # integration base 必须显式是远端跟踪 ref；不要用 HEAD~1 缩窄范围
@@ -67,7 +67,7 @@ bash scripts/check-outgoing-identities.sh \
   --expected-email "<email>"
 ```
 
-门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新 integration base，核验当前 HEAD，确认核验期间 HEAD 未变化，再把该 OID 精确推到目标分支，使证据绑定实际 push 对象。
+门禁逐 commit 比较 author name/email 与 committer name/email，只接受当前 worktree HEAD 与远端跟踪 base。当前 feature branch 若已跟踪同名 `origin/feat/...`，自动 upstream 会隐藏已 push 的早期 commit，因此判为 ambiguous，必须显式传 PR base。以下任一情况均 fail-closed：base 不明或不是远端跟踪 ref、用 `HEAD~1`/本地 ref 任意缩窄范围、bad revision、base 不是 HEAD 祖先、range 为空、Git 命令出错、身份字段为空或任一 commit 身份不一致。`safe-push.sh` 刷新明确的 integration base ref，固定 base/head OID；身份门禁与共享隐私 checker 核验相同范围。隐私 checker 逐笔读取 message、patch、变更 blob，覆盖中间提交泄露后删除；浅克隆、缺对象、不可读历史或内容均停止。核验期间 HEAD/base 改变即拒绝，再把该 OID 精确推到目标分支。
 
 ### 提交前身份自检与身份污染排查（v1.9.0，2026-09-30 Hermes 实录新增）
 
@@ -346,28 +346,23 @@ git push origin main
 
 ## 4. PR 工作流
 
+### 隐私预检与依赖
+
+共享 `scripts/privacy_check.py` 需要 Python 3.10+ 和 Git，无第三方 Python 包；`scripts/safe-pr.py` 还需已认证的 gh CLI。未安装时先按本技能依赖要求准备，不能绕过检查。
+
+案号仅为待核对项：公开裁判和虚构测试可以带来源的精确审查记录放行，不允许目录忽略；本地黑名单不得发布。诊断不打印敏感原文。使用、策略格式、失败关闭条件与能力边界见 [隐私预检](references/privacy-preflight.md)。人工审查、身份、授权和 CI 门禁仍须独立满足。
+
 ### 创建 PR
 
+先通过 `scripts/safe-push.sh` 推送核验的不可变 OID，再准备最终单行标题文件和完整正文文件（建议放在 Git 目录或仓库外）：
+
 ```bash
-# 推送分支
-git push -u origin <branch-name>
-
-# 创建 PR（cwd 不在目标分支的 worktree 时必须显式 --head，否则 gh 以当前
-# 分支为 head——在 main 仓库根目录执行会报 "No commits between main and main"）
-gh pr create \
-  --head <branch-name> \
-  --title "feat(module): 简短描述" \
-  --body "$(cat <<'EOF'
-## 摘要
-- 关键变更 1
-- 关键变更 2
-
-## 测试计划
-- [ ] 验证项 1
-- [ ] 验证项 2
-EOF
-)"
+python3 scripts/safe-pr.py create \
+  --base main --head <branch-name> --expected-head <完整已核验head-OID> \
+  --title-file <最终标题文件> --body-file <最终正文文件>
 ```
+
+默认创建 draft。helper 读取一次最终文本并直接传给 gh，重新检查远端完整 PR range，创建后核对 head/base/title/body。禁止 `--fill` 或自动拼接未经检查的提交说明。GitHub 创建接口不支持原子 head 条件，使用独占分支并检查后验结果；失败先只读确认远端状态，不能盲目重试。
 
 ### PR 正文最低要求
 
@@ -487,17 +482,14 @@ gh pr diff <number> --stat
 处理方式：要求拆 PR、缩小 diff、补说明或补测试。不要用“看起来问题不大”替代文件级检查。
 
 ```bash
-# Squash merge（推荐）
-gh pr merge <number> --squash \
-  --subject "feat(module): 描述 (#<number>)" \
-  --body "关键变更说明"
-
-# Merge commit
-gh pr merge <number> --merge
-
-# Rebase merge
-gh pr merge <number> --rebase
+# Squash merge：上面的 review/CI/授权门禁已全部通过后
+# 最终标题须包含 (#PR编号)，正文须明确写入，不用 GitHub 自动汇总
+python3 scripts/safe-pr.py squash --number <number> \
+  --expected-head <完整已审核head-OID> \
+  --title-file <最终squash标题文件> --body-file <最终squash正文文件>
 ```
+
+合并前同时检查当前 PR 标题/正文与最终 squash 标题/正文，helper 会检查每笔历史并用 `--match-head-commit` 绑定 head。其他合并方法或 API 也必须检查最终确切说明和完整提交范围，不得依赖自动生成文本。
 
 **重要**：通过 API 执行 squash merge 时，`commit_title` 不会自动追加 `(#N)`，必须手动写入。
 
@@ -1075,7 +1067,11 @@ git checkout main
 - `references/github-actions-quota-guard.md` — Actions 额度诊断、停挂配方（workflow_dispatch 化）、仓级总闸、恢复与红线
 - `references/history-rewrite-and-removal.md` — 敏感文件全历史撤回 SOP：只读排查、隔离 filter-repo 重写、全分支 force push、主工作区深度分叉对齐（含 stash 冲突语义与 zsh refspec 坑）、残留边界
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
-- `scripts/safe-push.sh` — 把身份核验绑定实际 immutable OID push
+- `scripts/safe-push.sh` — 把身份与隐私核验绑定实际 immutable OID push
+- `scripts/privacy_check.py` — staged/message/完整历史共用隐私检查器
+- `scripts/safe-pr.py` — 检查最终 PR/squash 文本并绑定已审核 head
+- `scripts/test_privacy_check.py` — 隔离隐私故障回归
+- `references/privacy-preflight.md` — 精确审查、调用方法和能力边界
 - `scripts/test-check-outgoing-identities.sh` — 身份门禁故障注入测试
 - `scripts/identity-audit.sh` — 提交前身份自检（whoami：来源链/覆盖/env/可疑模式）与全仓 author/committer/Co-authored-by 尾注审计（history）
 - `scripts/test-identity-audit.sh` — 身份审计故障注入测试
