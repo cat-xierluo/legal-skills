@@ -63,7 +63,22 @@ def _frontmatter_name(path: Path) -> str:
 
 
 def _has_release_asset(text: str, asset_name: str) -> bool:
-    return bool(re.search(rf"{RELEASE_BASE_RE}/{re.escape(asset_name)}", text))
+    return bool(re.search(
+        rf"{RELEASE_BASE_RE}/{re.escape(asset_name)}"
+        r"(?:[?#][^\s<>()\"']*)?(?=$|[\s<>()\"'])",
+        text,
+    ))
+
+
+def _source_download_version(cell: str, asset_id: str) -> str | None:
+    link = re.fullmatch(r"\[[^\]\n]+\]\(([^\s()]+)\)", cell.strip())
+    if not link:
+        return None
+    asset = re.fullmatch(
+        rf"{RELEASE_BASE_RE}/{re.escape(asset_id)}-(\d+\.\d+\.\d+)\.zip(?:[?#][^\s()]+)?",
+        link[1],
+    )
+    return asset[1] if asset else None
 
 
 def _tracked(repo_root: Path, path: Path) -> bool:
@@ -78,16 +93,17 @@ def _tracked(repo_root: Path, path: Path) -> bool:
     return result.returncode == 0
 
 
-def _members_from_readme(readme: Path) -> tuple[str, ...]:
-    text = _read(readme)
-    marker = "## 包含的 Skills"
-    start = text.find(marker)
-    if start == -1:
-        raise ValidationError(f"{readme} 缺少“{marker}”章节")
-    section = text[start + len(marker) :]
+def _member_section(text: str, readme: Path) -> str:
+    headings = list(re.finditer(r"^## 包含的 Skills[ \t]*$", text, re.MULTILINE))
+    if len(headings) != 1:
+        raise ValidationError(f"{readme} 必须有唯一的“## 包含的 Skills”章节")
+    section = text[headings[0].end():]
     next_heading = re.search(r"^##\s+", section, re.MULTILINE)
-    if next_heading:
-        section = section[: next_heading.start()]
+    return section[:next_heading.start()] if next_heading else section
+
+
+def _members_from_readme(readme: Path) -> tuple[str, ...]:
+    section = _member_section(_read(readme), readme)
     members = tuple(SOURCE_LINK_RE.findall(section))
     if not members:
         raise ValidationError(f"{readme} 的成员表没有标准 Skill 源码链接")
@@ -102,7 +118,10 @@ def validate_suite(
     suite_dir: Path,
     *,
     check_git: bool = True,
+    mode: str = "release",
 ) -> SuiteSummary:
+    if mode not in {"source", "release"}:
+        raise ValidationError(f"非法校验模式: {mode}")
     suite_id = suite_dir.name
     if not SUITE_ID_RE.fullmatch(suite_id):
         raise ValidationError(f"非法套件目录名: {suite_id}")
@@ -121,7 +140,25 @@ def validate_suite(
     readme = suite_dir / "README.md"
     readme_text = _read(readme)
     expected_suite_asset = f"suite-{suite_id}-{version}.zip"
-    if not _has_release_asset(readme_text, expected_suite_asset):
+    suite_download_valid = _has_release_asset(readme_text, expected_suite_asset)
+    if mode == "source":
+        header = re.split(r"^## 包含的 Skills[ \t]*$", readme_text, maxsplit=1, flags=re.MULTILINE)[0]
+        download_lines = [line[2:].strip() for line in header.splitlines()
+                          if line.startswith("> ") and re.search(RELEASE_BASE_RE, line)]
+        pending_line = f"> 整套源码 v{version} 待发布"
+        first_line = f"> 整套源码 v{version} 待首次发布（尚无公开下载）"
+        pending_lines = [line for line in header.splitlines() if "整套源码" in line]
+        public_version = _source_download_version(download_lines[0], f"suite-{suite_id}") if len(download_lines) == 1 else None
+        suite_download_valid = (
+            public_version == version and not pending_lines
+        ) or (
+            public_version is not None and pending_lines == [pending_line]
+            and tuple(map(int, public_version.split("."))) < tuple(map(int, version.split(".")))
+        ) or (
+            pending_lines == [first_line] and not download_lines
+            and not re.search(RELEASE_BASE_RE, header)
+        )
+    if not suite_download_valid:
         raise ValidationError(
             f"{readme} 缺少与 CHANGELOG 对齐的整套下载链接 {expected_suite_asset}"
         )
@@ -180,6 +217,22 @@ def validate_suite(
             repo_root / "skills" / skill_id / "CHANGELOG.md"
         )
         expected_asset = f"{skill_id}-{member_version}.zip"
+        if mode == "source":
+            row = next(line for line in _member_section(readme_text, readme).splitlines() if f"[{skill_id}](../../skills/{skill_id}/)" in line)
+            cells = [cell.strip() for cell in row.split("|")]
+            if len(cells) != 5 or not row.startswith("|"):
+                raise ValidationError(f"{skill_id} 需要标准三列成员表行")
+            public_version = _source_download_version(cells[3], skill_id)
+            if public_version == member_version:
+                continue
+            pending_versions = re.findall(r"(?:^|；)\s*源码 v(\d+\.\d+\.\d+) 待发布\s*(?=；|$)", cells[2])
+            pending = pending_versions == [member_version] and row.count("待发布") == 1
+            if public_version and pending and tuple(map(int, public_version.split("."))) < tuple(map(int, member_version.split("."))):
+                continue
+            if pending and cells[3] == "尚无公开下载" and not re.search(RELEASE_BASE_RE, row):
+                continue
+            raise ValidationError(f"{readme} 的 {skill_id} 下载链接与源码版本不符；须明确当前源码待发布并保留合法旧版入口")
+
         if not _has_release_asset(readme_text, expected_asset):
             raise ValidationError(
                 f"{readme} 缺少 {skill_id} 当前版本的单独下载链接 {expected_asset}"
@@ -193,6 +246,7 @@ def validate_repository(
     suite_root: Path | None = None,
     *,
     check_git: bool = True,
+    mode: str = "release",
 ) -> list[SuiteSummary]:
     repo_root = repo_root.resolve()
     suite_root = (suite_root or repo_root / "expert-suites").resolve()
@@ -205,7 +259,7 @@ def validate_repository(
     if not suite_dirs:
         raise ValidationError(f"专家套件根目录为空: {suite_root}")
     return [
-        validate_suite(repo_root, suite_dir, check_git=check_git)
+        validate_suite(repo_root, suite_dir, check_git=check_git, mode=mode)
         for suite_dir in suite_dirs
     ]
 
@@ -215,6 +269,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     default_root = Path(__file__).resolve().parents[3]
     parser.add_argument("--repo-root", type=Path, default=default_root)
     parser.add_argument("--suite-root", type=Path)
+    parser.add_argument("--mode", choices=("source", "release"), default="release")
     parser.add_argument(
         "--skip-git-check",
         action="store_true",
@@ -230,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
             args.repo_root,
             args.suite_root,
             check_git=not args.skip_git_check,
+            mode=args.mode,
         )
     except ValidationError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
