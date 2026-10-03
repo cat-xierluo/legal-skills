@@ -434,7 +434,7 @@ blocker_and_recovery:
 - 修后工程f71fd034独立限定ACCEPT，两P2 actual heldout关闭；65维护命令64首次exit0，第17夜巡28pass3fail原15探测超时保留。五调用源与base逐字节相同，唯一未改31/31复验exit0，首调度根因NOT_CONFIRMED；独审接受限定归因，不改产品期限、不称首次全绿。其余18—65续跑全0，无第三次盲试。当前Harness实际profile/adapter检查0与畸形输入64已核；直连CLI文案机械修正仅--no-orca-mode，最终文档head门与PR/安装待PM执行。证据本机/tmp/mao-dispatch-profiles-261002/，父业务模态合同仍待。
 - 此profile发布子项不关闭父卡：研究/设计/文档实质业务的value门模态审计仍待；完整Skill指令稳定性、全backend、原partial/borrowed业务恢复以及账户持续控制未验证。
 
-- A阶段窄修独验（2026-10-03）：工程HEAD `91867b44b4f419a707c04e888cd6ad810c23fd27` 获不同执行者`ACCEPT_STAGE_A`；四原P1及合法旧postflight消费全部独测通过，13条CLI/进程记录均符合预期，249.852秒内冻结。作者仅两文件，首末SHA一致；原REJECT/2个工程episode及独审夹具首TypeError保留，夹具仅在原窗内更正一次、不重置预算。限定具名argv文件、已知注入env及本次专用PG，不签全部导入依赖或hermetic隔离。原四验收脚本与主线逐字节一致；CI调用已核，远端执行、PR与本地安装待PM验收。
+- A阶段窄修独验（2026-10-03）：工程HEAD `91867b44b4f419a707c04e888cd6ad810c23fd27` 获不同执行者`ACCEPT_STAGE_A`；四原P1及合法旧postflight消费全部独测通过，11条CLI/进程记录均符合预期，249.852秒内冻结。作者仅两文件，首末SHA一致；原REJECT/2个工程episode及独审夹具首TypeError保留，夹具仅在原窗内更正一次、不重置预算。限定具名argv文件、已知注入env及本次专用PG，不签全部导入依赖或hermetic隔离。原四验收脚本与主线逐字节一致；CI调用已核，远端执行、PR与本地安装待PM验收。
 - 发布审计子步：PM仅补本段事实及ref18适用边界，工程SHA冻结；不同原reviewer在<=60秒只读核最终发布HEAD/两工程SHA/随行文档与CI定义，不重跑产品用例、不续开修复预算。原20分钟实现和两次失败事实不变；若发布身份或文档有新阻断，保留partial，不自签全卡完成。
 
 ## TASK-2026-10-02-MEMORY-TELEMETRY-NARROW-REPAIR — 原内存准入的解析与证据来源窄修
