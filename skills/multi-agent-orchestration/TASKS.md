@@ -468,3 +468,7 @@ blocker_and_recovery:
 - A阶段预算与归属：原本卡未实施，首实现单窗口20分钟，不同执行者独审10分钟；最多2个工程failure episode，超时/缺公共primitive保留partial或泊车，不重置时间。作者只负责新scripts/verification-evidence.py及scripts/test_verification_evidence.py，PM维护现有SKILL/ref18/TASKS/CHANGELOG/README。独立夹具只用Git/Python，无Orca/模型/业务资源创建，无新参考文件、账号或配置writer。文档/脚本静态复核、真实独立消费者及受影响既有gate定向回归通过后才安装/PR；用户持续指令不是无限重试预算。
 
 - 独立交付边界：旧PR248仍有原生身份依赖且最新main已前进；本A阶段复用干净managed permission worktree，从origin/main开feat/mao-verification-evidence-261003，只携带两新脚本及本卡文档，原PR/分支完整保留。作者仍在原隔离树冻结同一两文件，随后字节搬入主线基底由不同执行者验收；不对旧分支force/rebase/reset，不把本新PR称原关闭恢复完成。价值合同原件保留，更新integration target后重核，预算不重置。
+
+- A阶段第二failure episode：新上下文独审固定d1b795c4发现版本化Python inline绕过、源码写后恢复、checkout外verifier改变及parent exit0遗留活子进程四个阻断，候选拒绝/不安装。原首bash组合选项缺陷和consumer canonical路径拒绝保留；累计工程episode2/2。允许具名5分钟作者/5分钟不同执行者增量窄修这4项，原20分钟停止事实不覆盖，未解决则保留partial/泊车而不第三次盲试。实际命令exe+直接文件输入须绑定，源码瞬态变更须可观测，专属验证进程组须收口并不得以父exit0扩大成完成。CI新增仅本9项scoped调用，公共默认资源/权限/原Orca业务不改。
+
+- A阶段适用边界与后续：当前helper拒绝所有ignored内容，因此含Session Context、依赖或缓存的真实worker工作树并未纳入本阶段消费者验收；只作可选清潔工程入口，不绑到默认spawn/完成链。后续沿本卡具名设计受控SC/依赖输入绑定，再验真实原worker，不能把空Git夹具通过扩大为正常所有worker都已可用。PR-only与空handle原恢复另按原输入有限推进，原业务不重投。
