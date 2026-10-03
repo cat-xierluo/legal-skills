@@ -1,5 +1,50 @@
 # 决策记录
 
+## DEC-2026-10-02-MEMORY-TELEMETRY-PROVENANCE
+
+- 背景：原门实际拒绝来自 swap 比例；macOS 当前百分比输出未被旧解析器识别，且 raw-read 成功无法说明解析有效。内核通知位与算法合成压力必须分别解释。
+- 决策：在兼容 summary schema 内新增 telemetry，分别暴露 read_success、parse_valid 与来源；报告百分比不参与物理量兜底或压力推导。内核 dispatch 通知位 1/2/4 仅作观测，不改准入。
+- 理由：修正证据可读性，同时保留既有安全合同。动态 swap、磁盘底仓或任何放行例外需要单独受审设计，不能借解析修复隐入。
+- 验证边界：三个冻结现场样本和合法/畸形反例验证解析与原拒绝语义；不据此宣称长期压力安全或恢复 Fathom/DSH 原业务。
+
+## DEC-2026-10-02-SHARED-DISPATCH-PROFILES
+
+- 背景：漏ZCode native参数会落入通用TUI等待；不同模式统一send提示会诱导重复投递。诊断与视频交接要求现MAO/DSH owner共享执行核心，保留原业务身份。
+- 决策：在实际宿主及命令身份验证后、quota/lease/worktree前解析单一profile，MiniMax复用现command classifier，不再造Shell解析器。个人配置沿用config/orchestration-personal.json；ZCode auto选择原生桥，缺桥拒绝，generic仅显式兼容，旧显式native参数保留。
+- 权威：profile记录意图/来源，不修改opaque command；原生权限observed与requested分开。完成与下一动作优先使用绑定原身份的官方worker-show projection，composer/idle不作为重发证据，不复制第二业务控制器。
+- 并发：per_backend优先，0只表示不申请机械provider slot，不取消资源/额度门；不以文档默认值覆盖真实个人配置。
+- 边界：桥目录验证不证明Orca正式自定义命令生效，PM须现场核实；不追填旧metadata、不换号/耗卡、不解除真实宿主拒绝。业务研究/设计/文档价值门审计仍为本任务后续子项，不能凭profile发布关闭整父卡。
+- 重新评估：上游原生回执、命令语义或配置schema改变时，用实际消费者重新核验。
+
+## DEC-2026-10-01-NATIVE-WORKER-MAX-PERMISSIONS — 新任务采用原生最高权限
+
+- 日期：2026-10-01
+- 状态：已采纳；以当前任务验收证据记录实际生效范围。
+- 背景：用户要求已授权任务会话默认采用最高可用执行权限，避免派发后普通文件与Shell操作反复等待审批。
+- 决策：新ZCode交互CLI默认yolo；MiniMax batch默认full，交互CLI只使用其真实支持的原生权限机制并读回。显式较窄模式仍保留；不修改全局设置或在途worker，不以headless代替长程会话。
+- 边界：CLI权限不创造业务授权，不替代范围、安装、认证、Orca身份、交付验收或用户接管保护。Codex宿主权限由当前会话配置控制，Skill不声称改写其审批策略；实际工具拒绝仍按原任务身份处理。
+- 重新评估条件：原生CLI权限接口变化，或任务明确要求收紧权限时，更新当前消费者合同。
+
+## DEC-2026-10-01-MINIMAX-ORCA-DEFAULT
+
+用户明确要求 MiniMax Code 默认在 Orca 中管理分支、工作树和终端，并保留直连。采用显式 backend 选择后的通道约束：未经 `--no-orca-mode` 选择直连，必须匹配有效 Orca 项目，否则在派发副作用前失败；不迁移在途 writer、不扩张日常 backend 池或 MiniMax supervised 能力。
+
+## DEC-2026-10-01-ORCA-WAIT-EXIT-CONTRACT — 退出码与回执联合校验
+
+- 日期：2026-10-01；状态：已采纳。
+- 背景：已安装 Orca 1.4.217 的 terminal wait handler 输出合法未满足回执后设置退出码1；原 helper 提前按命令失败拒绝，丢失同句柄重等机会。
+- 决定：先捕获退出码，再严格解析单个 JSON。rc0允许布尔型 satisfied；rc1仅允许ok=true且satisfied=false。退出1+true、rc>1、okfalse、畸形或错绑一律失败，绝不把timeout/stale错误提升为pending。false仍只在同句柄30s/60s两轮等待，未就绪不投递、不销毁资源。
+- 影响：恢复原生未满足契约，同时维持唯一投递与supervised边界；不添加focus、不修改Orca、权限或身份规则。原生handler隔离回放没有启动终端或模型。
+- 重新评估条件：上游退出码/回执契约变化或真实ZCode ready信号有独立证据后另行验收。
+
+## DEC-2026-10-01-ORCA-TERMINAL-READY — 就绪回执决定是否投递
+
+- 日期：2026-10-01；状态：已采纳。
+- 背景：原 helper 忽略 wait JSON，只看退出码；Orca 正常超时也返回 rc0，导致未就绪终端被当作可投递。
+- 决定：消费单个 JSON 回执，要求顶层 `ok=true`、`result.wait.satisfied` 为布尔值；若回执带 handle/condition，也必须匹配本轮终端及 `tui-idle`。首次30s未满足，仅在同一 handle 再等60s；异常立即失败，两次仍未满足则失败。两种路径均不投递、不销毁资源，输出精确 terminal/worktree 身份供 PM 先只读核查。
+- 影响：普通 prompt 和 supervised 的唯一 worker-start 投递均须经过 readiness 门禁；ready 仍不是推理开始、业务完成或结算证明。不扩展 CLI batch、权限、provider 或 PM 宿主合同。
+- 重新评估条件：上游回执或新 CLI readiness 能力发生变化时，用真实回执重新验收，不能用退出码或忽略字段绕过门禁。
+
 ## DEC-2026-09-30-ZCODE-CLI-ACCOUNT-CONTRACT — 原生 CLI 与宿主 app-server 分开验证
 
 - 日期：2026-09-30；状态：已采纳，来源为用户要求进一步实测 BigModel Coding Plan。
@@ -69,3 +114,15 @@
 ## DEC-2026-10-01-PRIVATE-ACCOUNT-SKILL
 
 用户明确要求将账号、额度和刷新卡调度抽为私人 Skill，公开 MAO 只保留默认关闭的本地 Skill 调用合同。这样私人实现不进入公开发行；PM 按安装环境调用，缺失则不能获得该功能。调用不改变日常 backend 池，也不等于 spawn 机械账号绑定。
+
+## DEC-2026-10-01-ZCODE-NATIVE-ORCA-LAUNCH
+
+采用 Orca 1.4.218 起的 `worker-start --agent zcode` 首次 composer 等待，由 Orca 注入唯一 Task spec；既有 `terminal create → tui-idle → worker-start --terminal` 对零提示 ZCode 会遇到就绪循环。通过显式启用的官方自定义 ZCode 启动命令消费 owner-only 单次请求，保留 MAO 门禁之后冻结的启动环境与原生交互 CLI。请求缺失的普通启动沿用 ZCode 参数；不从仓库扫描或执行未知启动脚本。后续复用仅在原 Dispatch 已结算且原生状态证明空闲后进行，资源归属采用 created。私人账号规则仍通过本地 Skill 调用，不进入公开桥或默认派发池。
+
+## DEC-2026-10-01-BORROWED-WORKTREE-ENTRY
+
+预建工作树已有原 owner、分支与批准资产，采用显式短时借用合同而非放宽默认 existing-worktree gate 或伪造恢复 Session。现场绑定 canonical Git/Orca 身份、内容快照和无 writer，持久化保留账本，保持 long-lived；MAO 自建 Session/terminal 的生命周期与借用树的 ownership 分开核对。原 owner 授权仍由 PM 回读可信证据，字段自述不能机械认证授权。当前在飞消费者仅只读，不借本实现另起业务 writer。
+
+## DEC-2026-10-02-MINIMAX-EXEC-STARTUP
+
+MiniMax `exec` 是已读取完整输入的非交互运行，不存在待输入的 composer。基于复用命令验证器解析的真实 CLI argv 分类，仅 terminal-managed batch 跳过 TUI 等待和第二次任务发送；不是按命令字符串包含 exec 判定。严格核对 terminal-create 回执并及早保存身份，启动成功只证明已启动，不代表任务完成。交互模式和 ZCode 原生 supervised 保持各自合同，batch 与 supervised/precreated Task 的冲突在资源副作用前拒绝。原消费任务由原 PM 接续，不用本修复重启或重造。

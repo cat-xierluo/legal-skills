@@ -65,6 +65,7 @@ FIXTURE_FILES = {
     "vm_swapusage": "vm_swapusage.txt",
     "vm_stat": "vm_stat.txt",
     "memory_pressure": "memory_pressure.txt",
+    "kernel_pressure": "kernel_pressure.txt",
 }
 
 BUDGET_ENV = "SPAWN_WORKER_MEM_BUDGET_BYTES"
@@ -178,7 +179,8 @@ def parse_memory_pressure(text: str) -> dict[str, Any] | None:
     兼容两类输出形态：关键词句式（"The system has sufficient space." /
     "is under increasing pressure" / "critical memory situation"）与
     百分比句式（"X% of memory in use by apps, Y% available"）。
-    关键词是操作系统自己的分级，优先于百分比推导；两者都没有 → None。
+    保留旧关键词/available 百分比推导。System-wide memory free percentage
+    另记为报告值，不等于物理可用量或分级；没有任一可识别字段 → None。
     """
     if not text:
         return None
@@ -198,7 +200,9 @@ def parse_memory_pressure(text: str) -> dict[str, Any] | None:
     match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*available", lowered)
     if match:
         available_percent = float(match.group(1))
+    level_source = "keyword" if level is not None else None
     if level is None and available_percent is not None:
+        level_source = "legacy_available_percent"
         # 无关键词但有官方可用百分比：按阈值推导分级。
         if available_percent <= PRESSURE_CRITICAL_AVAILABLE_PERCENT:
             level = "critical"
@@ -206,10 +210,31 @@ def parse_memory_pressure(text: str) -> dict[str, Any] | None:
             level = "warn"
         else:
             level = "normal"
-    if level is None:
+    # macOS also reports System-wide memory free percentage. This is a
+    # report, not the legacy available-percent contract or a pressure level.
+    reported = re.findall(r"^system-wide memory free percentage:[ \t]*(\d+(?:\.\d+)?)%[ \t]*$",
+                          lowered, re.MULTILINE)
+    reported_free_percent = None
+    if len(reported) == 1 and 0 <= float(reported[0]) <= 100:
+        reported_free_percent = float(reported[0])
+    if level is None and reported_free_percent is None:
         return None
-    return {"level": level, "used_percent": used_percent,
-            "available_percent": available_percent}
+    return {"level": level, "level_source": level_source,
+            "used_percent": used_percent, "available_percent": available_percent,
+            "reported_free_percent": reported_free_percent}
+
+
+def parse_kernel_pressure(text: str) -> dict[str, Any] | None:
+    """Parse one sysctl dispatch notification value; not XNU internal enum.
+
+    A single trailing newline is allowed. Unknown flags retain their numeric
+    value without inventing a normal level; multiline/invalid text is unusable.
+    """
+    match = re.fullmatch(r"[ \t]*(0|[1-9][0-9]{0,9})[ \t]*(?:\r?\n)?", text)
+    if not match:
+        return None
+    value = int(match.group(1))
+    return {"value": value, "level": {1: "normal", 2: "warn", 4: "critical"}.get(value)}
 
 
 _LEVEL_ORDER = {"normal": 0, "warn": 1, "critical": 2}
@@ -221,7 +246,7 @@ def aggregate_pressure(memory_pressure: dict[str, Any] | None,
     """汇成单一 level + 收紧因子 + 命中信号列表；无任何信号时按 normal 不收紧。"""
     signals: list[str] = []
     level = "normal"
-    if memory_pressure is not None:
+    if memory_pressure is not None and memory_pressure["level"] in _LEVEL_ORDER:
         mp_level = memory_pressure["level"]
         if _LEVEL_ORDER[mp_level] > _LEVEL_ORDER[level]:
             level = mp_level
@@ -265,13 +290,15 @@ def collect_real() -> dict[str, str | None]:
             return None
         if proc.returncode != 0:
             return None
-        return proc.stdout or None
+        # A successful empty read is distinct from a failed read.
+        return proc.stdout
 
     return {
         "hw_memsize": run([SYSCTL, "-n", "hw.memsize"]),
         "vm_swapusage": run([SYSCTL, "-n", "vm.swapusage"]),
         "vm_stat": run([VM_STAT]),
         "memory_pressure": run([MEMORY_PRESSURE]),
+        "kernel_pressure": run([SYSCTL, "-n", "kern.memorystatus_vm_pressure_level"]),
     }
 
 
@@ -300,11 +327,39 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
     memory_pressure = parse_memory_pressure(snapshots.get("memory_pressure") or "")
     swap = parse_swap_usage(snapshots.get("vm_swapusage") or "")
 
+    native = parse_kernel_pressure(snapshots.get("kernel_pressure") or "")
+    parsed = {"hw_memsize": total_bytes is not None, "vm_stat": vm_stat is not None,
+              "memory_pressure": memory_pressure is not None, "vm_swapusage": swap is not None,
+              "kernel_pressure": native is not None and native["level"] is not None}
+    commands = {"hw_memsize": [SYSCTL, "-n", "hw.memsize"], "vm_stat": [VM_STAT],
+                "memory_pressure": [MEMORY_PRESSURE], "vm_swapusage": [SYSCTL, "-n", "vm.swapusage"],
+                "kernel_pressure": [SYSCTL, "-n", "kern.memorystatus_vm_pressure_level"]}
+    evidence = {}
+    for name in FIXTURE_FILES:
+        raw = snapshots.get(name)
+        evidence[name] = {"source_command": commands[name], "read_success": raw is not None,
+                          "parse_valid": parsed[name],
+                          "parse_status": "read_failed" if raw is None else "empty" if not raw.strip()
+                                          else "valid" if parsed[name] else "unrecognized"}
+    composite = aggregate_pressure(memory_pressure, swap)
+    telemetry = {"collection_mode": "supplied_snapshots", "sources": evidence,
+                 "memory_pressure": {key: memory_pressure.get(key) if memory_pressure else None
+                                     for key in ("reported_free_percent", "used_percent", "available_percent", "level", "level_source")},
+                 "kernel_pressure": {"source": "kern.memorystatus_vm_pressure_level",
+                                     "value_domain": "dispatch_notification_bits",
+                                     "value": native["value"] if native else None,
+                                     "level": native["level"] if native else None,
+                                     "used_for_admission": False},
+                 "composite_pressure": {"source": "legacy_memory_pressure_and_swap_ratio_policy",
+                                        "level": composite["level"], "signals": composite["signals"],
+                                        "used_for_admission": False}}
+
     payload: dict[str, Any] = {
         "schema": SCHEMA,
         "budget_bytes": budget_bytes,
         "budget_source": budget_source,
         "sources": sources,
+        "telemetry": telemetry,
     }
 
     # Explicit opt-out is a control decision, not a claim that host telemetry is
@@ -388,6 +443,7 @@ def evaluate(snapshots: dict[str, str | None], budget_bytes: int,
         payload["swap"] = {key: swap[key] for key in
                            ("total_bytes", "used_bytes", "free_bytes", "used_ratio")}
 
+    telemetry["composite_pressure"]["used_for_admission"] = True
     effective = int(safe_available * pressure["tighten_factor"])
     slots = effective // budget_bytes
     payload["slots"] = slots
@@ -459,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
         snapshots = collect_real()
 
     payload = evaluate(snapshots, budget_bytes, budget_source)
+    payload["telemetry"]["collection_mode"] = "fixture_files" if fixture_dir else "live_readonly"
     if args.json:
         json.dump(payload, sys.stdout, ensure_ascii=False)
         sys.stdout.write("\n")

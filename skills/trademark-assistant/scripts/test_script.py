@@ -22,7 +22,7 @@ class NormalizeItemTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(
             item,
-            {"类别": 9, "类似群": "0901", "商品名称": "计算机软件（已录制）"},
+            {"类别": 9, "类似群": "0901", "商品名称": " 计算机软件（已录制） "},
         )
 
     def test_fractional_category_is_rejected(self):

@@ -3,7 +3,7 @@ name: multi-agent-orchestration
 description: 编排两个以上边界独立的本地 worker，使用 Orca Run/Task/Dispatch、独立 worktree/session 或 tmux 回退，由 PM 负责拆解、派发、巡检、429 停滞恢复、独立验收、PR 收口与临时资源清理；也用于用户明确要求“并行推进”“多个 worker”“PM 总控”“Wave Autopilot”或防止 PM 直接实现逃逸。不要用于单个短任务、纯状态同步，或仅需 Git 分支、提交、PR、merge 规则的工作。
 license: MIT
 metadata:
-  version: "2.31.1"
+  version: "2.34.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -46,6 +46,10 @@ metadata:
 | 同宿主 subagent | 中小型质量敏感卡、快速迭代轮次、额度充裕时优先于独立 worker（见上方通道选择判据）；无独立进程/分支开销 | 宿主决定（建议 RESULT 四段自陈） |
 | 远程节点（SSH 桥） | 需要第二台机器扩并发（独立 key 池）或卸载本机 CPU/内存时，PM 经 `spawn-worker-remote.sh` 派到 personal config `remote_nodes` 声明的节点；节点侧全套门禁本机成立，worker 读节点自己的 env/key（`references/25-remote-node-dispatch.md`） | STATUS.json 终态 + 分支 push/PR 存在 + PM 侧 PR-fingerprint 验收（完成三证，不依赖跨机 Orca 回执） |
 
+MiniMax 的短任务 `exec` 在 terminal-managed 中由启动命令读取完整输入，不等待 TUI、不再发送任务；长程任务仍使用交互 CLI。已选择 ZCode 的长程任务默认使用已配置的原生 supervised 启动桥，见 [原生 Orca 合同](references/30-zcode-native-orca.md)。
+
+backend 与模式选择、配置来源及唯一后续动作统一由 [派发 profile 合同](references/32-dispatch-profiles.md) 定义。ZCode auto 缺桥配置时在资源副作用前拒绝；旧显式 native 参数保留，通用兼容入口须传 `--dispatch-profile orca-generic`，直连仍为 `--no-orca-mode`。profile 是派发计划；真实权限、开始、完成与资源状态继续来自原生回执。
+
 同一 worker 只能有一个控制模式。terminal-managed 没有 Task/Dispatch，不得要求 `worker_done`；supervised 必须有 live Task/Dispatch，不得用 STATUS、UI 卡片、TUI idle、heartbeat 或 timeout 冒充完成。
 
 ## 3. 派发前合同与门禁
@@ -78,10 +82,12 @@ Issue 分组读取 `references/12-issue-grouping.md`；并发边界与真实事�
 
 - `spawn-worker.sh` 从完整进程祖先链识别真实 PM harness，并对嵌套层白名单取交集。未知、冲突或不可证明的宿主失败关闭；`--pm-harness` 只做一致性声明，不能提权。`--base-ref` 只接受引用名（`main`、`origin/main`、`refs/heads/x` 等），不接受裸 sha——40-hex（以及 7—40 位纯十六进制且 git 解析为 commit 而非引用名）会在任何 worktree/provider/terminal 副作用前以 `SPAWN_WORKER_BASE_REF_MUST_BE_REF: <值>` 拒绝并退出，避免后续 pm-cleanup-worker 在 `INTEGRATION_TARGET_MISMATCH`（argument=main vs metadata=sha）与 `PR_BASE_MISMATCH`（expected=sha vs actual=main）之间死锁。**字符类大小写敏感**：守卫同时识别 `[0-9a-fA-F]`，大写 sha（如 `96A304DF…`）与大小写混合 sha 一律按 sha 路径拒绝；分支名恰为大写 hex 形态且真实存在时（`refs/heads/<v>` 大小写敏感查找），仍按真实 ref 放行。
 - Claude Code/Codex/Hermes PM 的 worker 能力白名单由 `config/harness-backend-policy.json` 决定：支持 Claude Code、Codex、CodeBuddy、独立 Qoder CN CLI（`qoder-cn`）、千问办公 bundled coding CLI（`qwenwork-cn`）、独立 ZCode CLI（`zcode-cli`）、MiniMax Code CLI（`minimax-code`）及兼容的 ZCode app-server driver（`zcode`）。CodeBuddy PM 仍只可派自身，ZCode PM 的既有授权仍只含 Claude/Codex；新增 worker 支持不新增 PM 宿主。QoderWork backend 与旧别名已移除，不能把旧 bundled CLI 软链当作 Qoder CN。Hermes 宿主仍以安装路径签名识别，裸词不作证据。
+- 预建工作树首次接入只接受显式借用合同、新 Session、原 owner 授权与现场无 writer 证明；默认 occupied branch/path 门保持拒绝，借用 long-lived 树与分支不能被失败/收口删除。读取 `references/31-borrowed-existing-worktree.md`，不伪造恢复 metadata。
 - worktree 落盘后、任何 terminal/Task/worker-start/任务注入前，必须证明目录、预期分支和 HEAD 一致；Orca repoId 必须与已验证项目一致。失败只清理可精确证明归属的资源，PM 不得借机直接实现业务。
 - Worker 只修改 allowed paths。reviewer 默认只可写自身 Session Context；修复被审分支必须显式 `--review-repair-grant <授权来源>`，且任何 `config/*.local.yaml` 都不可写。
 - Shell 按后端和启动模式执行两种策略：Claude Code 的本地 hook 生效且启动命令显式使用 `--permission-mode auto` 时，普通 Bash 交给 Claude Code 的 auto 分类器和用户 settings；编排 hook 继续拦识别出的安装命令、直接及常见 Shell 包装的受保护 Git 操作、Orca 协议和受限 tracked 删除。其他后端与 Claude Code 非 auto 模式继续使用精确 `allowed_shell_commands`。`execution_authority.shell_policy` 固定所选策略；Claude auto 不是 Shell 文件写范围或任意程序副作用的机械沙箱，PM 仍须核对真实 diff 与外部副作用。验证命令不等于安装授权；安装类命令只有精确 `--allow-install-command` 和可审计授权来源才可通过编排门禁。Orca repo Setup 是更早的独立阶段，默认跳过，不能复用该授权。
 - Supervised 完成通道绑定 PM 启动时的 authority receipt，在 `worker-start` 后冻结 Dispatch 身份与 capability 摘要；发送 `worker_done` 前复核 live runtime/process/run。不要改写 receipt 或用 Shell allowlist 绕过完成校验；首次 `ORCA_COMPLETION_AUTHORITY_INVALID` 即停止并向 PM 上报。字段与手动 register 迁移见 `references/13-orca-cli-worker.md` §5。
+- 新隔离 worker 按已授权任务使用原生最高可用执行权限：ZCode CLI 默认 `--mode yolo`，MiniMax batch 默认 `--permission full`；显式较窄模式保持生效。MiniMax 长程任务保持交互 CLI，权限按 [可选 CLI 合同](references/26-optional-cli-backends.md) 配置并核实，不借 batch 参数替代。宿主审批、业务范围、账号登录与编排准入是独立边界，不因 worker 模式而取消。
 - Worker 默认执行权限（v2.22.0，用户决策 2026-09-06）：worker 隔离在专属分支 worktree 内，push+PR 是必要交付路径，安全类按「分段校验」放宽——管道/`;`/`&&` 复合命令在每段都是安全读或安全交付命令时整体放行（git status/diff/log/show/fetch/add/commit/push/rebase、gh pr create/view、ls/grep/cat/jq/sort 等过滤器、`node --version` 类版本查询）；重定向仅限 `/dev/null` 与临时目录（拒绝 `..` 穿越）。仍然 fail-closed：force push（`--force`/`-f`/`--force-with-lease`）、push 到 `main`/`master`、远端删除（`git push origin :branch`）、`--mirror`/`--tags`、子 shell、输入重定向、命令替换、`gh api`/`gh repo sync`、安装类命令。identity 四件套（`--git-expected-name/--git-expected-email/--git-integration-base/--git-push-remote`）仍推荐用于 PR 交付任务：绑定的 safe-push 会校验从远端 PR base 到 HEAD 的完整提交链后按不可变 OID 推送，是裸 push 的强化替代而非唯一通路。
 - tracked 文件删除是独立高风险类，先于普通 Shell allowlist 判定。只有 hook-enabled worker 可从 receipt 绑定的 worktree 根运行 `git rm -- <一个 canonical repo-relative tracked file>`，且该精确路径必须在 spawn 时写入不可变 `allowed_write_paths`；scope glob、后续 `reauthorize --allow-cmd`、`-r/-f/--cached`、多路径、目录/gitlink、pathspec、Shell 展开和复合命令均不能扩大权限。Codex/ZCode 的 `prompt_only_degraded` 只提供提示，不能声称机械删除保护；详见 `references/02-runtime-dependencies.md` §6。
 - 派发价值合同已经声明 `verification_commands` 时，调用 spawn 必须同时传 `--verification-contract <spec.json> --verification-task-id <ID>`；无文件合同时逐条传 `--verify-cmd`。命令作为完整字符串原样进入 authority receipt、METADATA 与 `allowed_shell_commands`，不得拆开 `cd <subdir> && <verify>`。在 Claude auto 策略下，该列表仍是交付验收的必跑命令，不是普通 Bash 的唯一执行权限来源。
@@ -206,7 +212,7 @@ Git 生命周期与批量 stale 分支清理由 `git-workflow` Skill 的“分�
 
 需要账号级调度时，读取个人配置 `account_routing`。仅在 `enabled=true`、所选 backend 已获用户明确指定且包含在 `backends` 中时，读取本地 `skill_path/SKILL.md` 并依其入口取得新鲜账号与调度结果。未启用时不调用；启用但 Skill 缺失、观测失败或要求等待时，暂停该 backend。调用与停止边界见 `references/29-local-account-routing-skill.md`。公开 Skill 只提供调用合同，账号/卡规则及私人数据保留在本地 Skill；此调用是 PM 工作流，不能声称 spawn 已机械绑定账号。
 
-独立 CLI 的标准启动参数、版本检查与权限边界读取 `references/26-optional-cli-backends.md`；千问办公的原生工具入口与 bundled coding 入口读取 `references/27-qwenwork-cli-worker.md`。新 backend 暂走 terminal-managed 或 tmux，未经真实生命周期验收，不声明 Orca supervised 已验证。ZCode CLI/MiniMax Code/Qoder CN/千问 bundled coding 的编排 hook 暂未集成，派发必须显式 `--allow-prompt-only-install-guard "<授权来源>"`；prompt-only 不是机械 scope/安装保护，不自动扩大安装或 Git 权限。
+独立 CLI 的标准启动参数、版本检查与权限边界读取 `references/26-optional-cli-backends.md`；千问办公的原生工具入口与 bundled coding 入口读取 `references/27-qwenwork-cli-worker.md`。ZCode CLI 原生 Orca supervised 启动的版本、可信环境桥、显式启用与接续合同读取 `references/30-zcode-native-orca.md`；显式选择 MiniMax Code 时默认要求 Orca terminal-managed；只有同时传 `--no-orca-mode` 才走直连 tmux，Orca 不可达或 lightweight 不得隐式回退。其余可选 backend 暂走 terminal-managed 或 tmux，未经真实生命周期验收不声明 supervised 已验证。ZCode CLI/MiniMax Code/Qoder CN/千问 bundled coding 的编排 hook 暂未集成，派发必须显式 `--allow-prompt-only-install-guard "<授权来源>"`；prompt-only 不是机械 scope/安装保护，不自动扩大安装或 Git 权限。
 
 系统依赖：Bash 4+、Git、jq、Python 3；PR 审计/收口需要 `gh`；tmux 仅回退路径需要；Orca 路径需要运行中的 Orca runtime 与版本匹配 CLI。按 backend 还需对应本地 CLI。检查命令：
 
@@ -229,6 +235,8 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | Orca Worker 429 批量巡检与错峰唤醒 | `references/20-orca-rate-limit-recovery.md` |
 | zcode 额度 lane 的 summary 生产链路 | `references/21-zcode-quota-producer.md` |
 | 独立 ZCode CLI、MiniMax Code、Qoder CN 与按需派发 | `references/26-optional-cli-backends.md` |
+| 预建 long-lived 工作树首次接入、唯一 writer 与借用保留 | `references/31-borrowed-existing-worktree.md` |
+| ZCode CLI 原生 Orca supervised、可信单次环境桥与交互接续 | `references/30-zcode-native-orca.md` |
 | 独立 ZCode CLI 的 BigModel 套餐认证、模型切换与实测边界 | `references/28-zcode-cli-bigmodel-coding-plan.md` |
 | 千问办公原生工具与 bundled coding CLI、账号边界 | `references/27-qwenwork-cli-worker.md` |
 | ZCode CLI driver 的启动绑定、配置隔离与安全验证 | `references/24-zcode-driver-safety.md` |
