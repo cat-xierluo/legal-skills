@@ -34,14 +34,13 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2 | 完善主干/功能线/worker两层PR、窄采用与最终证据、波次冻结及GitHub身份差异同步；修冲突覆盖/清理旧示例并补空白worktree SOP，既有身份/隐私脚本不变。 |
+| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2→v1.12.0 | 新增 pre-worktree-check.sh 只读四态判读（IN_SYNC/AHEAD/BEHIND/DIVERGED）与 --pre-pr merge-tree 提 PR 前冲突模拟；入册误 amend/误 stash/误删分支/误 reset 事故恢复路径；纠正删除分支 reflog 与未提交内容恢复边界，增加真实 Git 回归。 |
 | 2026-10-03 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.7 | 集成只读GUI证据观察与校验分块交接，新增缺省同目录消费者及GUI真实CI；READY仍需PM验收，正式GUI监督/持续闭环未验收。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
 | 2026-10-01 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.2 | 修复 ZIP 资产路径假通过；显式区分源码待发布、Preview 和本地 Release staging，保留真实公开链接，按实际成员 ZIP 全量字节核验。自身5套本地构建通过，9套仅本地合成验证；源码1.6.2尚未发布，下载保留1.6.0。 |
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
 | 2026-09-30 | 更新 | [pdf-organizer](skills/pdf-organizer/) | v0.6.1 | 修复重复清单编号掩盖覆盖异常、严格模式不完整编译/审计失败未阻断、交错来源溯源顺序丢失；页码范围展开前检查边界，补合成 PDF 回归与执行非事务边界。 |
 | 2026-09-30 | 更新 | [trademark-assistant](skills/trademark-assistant/) | v1.7.3 | 商品名称以明确文字单元格保存，精确保留前缀与首尾空白；超长名称拒绝，新增真实 XLSX/XML 回归。不证明分类正确或官方系统接收。 |
-| 2026-09-30 | 更新 | [git-batch-commit](skills/git-batch-commit/) | v1.5.0 | 全部分组和最终完整说明先预检；`--yes` 不可跳过；使用原暂存快照与临时 index，防止未暂存内容混入。 |
 
 </details>
 
@@ -710,9 +709,9 @@
 <tr>
 <td><a href="skills/git-workflow/"><strong>git-workflow</strong></a></td>
 <td>工具·Git</td>
-<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push 与提交身份自检/污染审计</td>
+<td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push、提交身份自检/污染审计、worktree 前 3 查判读与常见事故恢复</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.11.2</td>
+<td style="text-align:center">v1.12.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip">旧版ZIP（内容版本待核）</a></td>
 <td></td>
 </tr>
