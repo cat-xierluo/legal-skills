@@ -115,6 +115,27 @@ class ExpertSuiteValidatorTest(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ValidationError, "整套下载链接"):
             self.validate()
 
+    def test_rejects_asset_path_prefix_matches(self) -> None:
+        readme = self.suite / "README.md"
+        original = readme.read_text(encoding="utf-8")
+        for asset in ("suite-demo-suite-0.1.0.zip", "alpha-skill-1.2.3.zip"):
+            for suffix in (".bak", ".NOT-A-ZIP", "/other", "%2Ebak", "x"):
+                with self.subTest(asset=asset, suffix=suffix):
+                    readme.write_text(original.replace(asset, asset + suffix), encoding="utf-8")
+                    with self.assertRaises(MODULE.ValidationError):
+                        self.validate()
+
+    def test_accepts_exact_assets_with_query_fragment_and_pinned_tag(self) -> None:
+        readme = self.suite / "README.md"
+        original = readme.read_text(encoding="utf-8")
+        for suffix in ("", "?download=1", "#asset", "?download=1#asset"):
+            with self.subTest(suffix=suffix):
+                readme.write_text(
+                    original.replace("latest/download", "download/v2026.09.13").replace(".zip)", ".zip" + suffix + ")"),
+                    encoding="utf-8",
+                )
+                self.validate()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
