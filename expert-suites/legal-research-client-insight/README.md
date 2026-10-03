@@ -26,7 +26,7 @@
 | [legal-industry-report](../../skills/legal-industry-report/) | 面向月度、季度研究形成正式行业报告待复核稿 | [已发布 v1.1.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-industry-report-1.1.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 核验法规、政策与案例，形成可追溯研究依据 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [wechat-article-fetch](../../skills/wechat-article-fetch/) | 获取用户选定的公众号文章作为研究线索与材料 | [已发布 v1.4.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/wechat-article-fetch-1.4.0.zip) |
-| [legal-text-format](../../skills/legal-text-format/) | 规范法律文本的标点、层级和表达格式 | [已发布 v1.2.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-text-format-1.2.2.zip) |
+| [legal-text-format](../../skills/legal-text-format/) | 规范法律文本的标点、层级和表达格式；源码 v1.2.3 待发布 | [已发布 v1.2.2](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-text-format-1.2.2.zip) |
 
 ## 建议使用方式
 
