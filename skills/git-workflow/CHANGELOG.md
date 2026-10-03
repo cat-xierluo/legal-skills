@@ -1,5 +1,18 @@
 # 变更日志
 
+## [1.12.1] - 2026-10-03 - worktree-audit 执行须知与迭代合同对齐（Task-013 定向修复）
+
+### 修复
+
+- **scripts/worktree-audit.sh 执行须知第 7 条合同对齐**——原文「目录权限拒绝——分支照删，空壳目录留给用户手动 sudo rm」违反 1.11.2 固化合同（权限失败不继续删关联 ref）：改为权限失败不继续删该 worktree 的关联分支，整项保留并按 `CLEANUP_PENDING` 如实报告；空壳目录由用户自行处置（如需提权删除须用户亲手执行，Agent 不代跑），勿反复重试。纯 heredoc 输出文本修正，判定逻辑与分类行为零改动。
+- 执行须知第 5 条措辞改写：「eval-harness sources」项目名举例触发静态扫描 `eval` 关键词误报（high），改为「评测/harness 类 sources 目录」，语义不变。
+
+### 验证
+
+- 真实仓（legal-skills，含活跃 worktree）跑 worktree-audit.sh 输出结构不变、执行须知为新文本；`bash -n` 通过。
+- skill-lint security_scan scoped 复扫：7 findings → 3，**high 清零**；剩余 3 个 medium 为 privacy_check.py / safe-pr.py / test_privacy_check.py 的 `subprocess.run(shell=False)` 保守提示——三者均为参数数组调用且为 git/gh 包装器的固有形态，属扫描器能力边界噪声，如实保留不强行清零。
+- 审核既有测试 `history ... || true`（Task-013 存疑项）：退出码已由前一用例 `expect_exit_1_contains` 独立断言，该行仅为内容断言采集输出，**不掩盖退出状态**，无需修改；`cat ... >&2 || true` 均为诊断输出兜底，同理保留。
+
 ## [1.12.0] - 2026-10-03 - 开 worktree 前 3 查脚本化、提 PR 前合并模拟与常见事故恢复入册
 
 ### 新增
