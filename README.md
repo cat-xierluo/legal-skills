@@ -34,8 +34,8 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2 | 完善主干/功能线/worker两层PR、窄采用与最终证据、波次冻结及GitHub身份差异同步；修冲突覆盖/清理旧示例并补空白worktree SOP，既有身份/隐私脚本不变。 |
 | 2026-10-03 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.7 | 集成只读GUI证据观察与校验分块交接，新增缺省同目录消费者及GUI真实CI；READY仍需PM验收，正式GUI监督/持续闭环未验收。 |
-| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.1 | 共享隐私预检逐笔检查提交说明、补丁与变更对象；推送绑定 base/head OID；PR/squash 最终文本门禁、精确人工审查与隔离回归，不自动安装 hooks。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
 | 2026-10-01 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.2 | 修复 ZIP 资产路径假通过；显式区分源码待发布、Preview 和本地 Release staging，保留真实公开链接，按实际成员 ZIP 全量字节核验。自身5套本地构建通过，9套仅本地合成验证；源码1.6.2尚未发布，下载保留1.6.0。 |
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
@@ -712,8 +712,8 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push 与提交身份自检/污染审计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.8.7</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip">下载 v1.6.0</a></td>
+<td style="text-align:center">v1.11.2</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip">旧版ZIP（内容版本待核）</a></td>
 <td></td>
 </tr>
 <tr>
