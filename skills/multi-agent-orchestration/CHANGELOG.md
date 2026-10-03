@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.36.7] - 2026-10-03
+
+### 新增
+- 集成只读 GUI collector→adapter→observe、校验分块产物与 Git bundle 消费者七个既有已独审候选；保持默认投递/监督/权限与资源规则，READY仅是待PM审查证据。
+- 新增三项缺省同目录消费者，核无依赖环境变量/显式路径时的完成、末条错误、错绑拒绝、DB字节不变与元数据无泄漏；CI串行真实执行GUI组件与消费者，明确保留可选旧稿负控及不适用缺依赖场景的跳过。
+
+### 文档完善
+- 按需读取地图补齐已采用的操作合同；云端PR池与main加GUI长期功能线的任务/决策记录归TASKS和DECISIONS，不新增规划reference。
+
+### 待办事项
+- 原生ZCode恢复、GUI自动投递/持续监测/Orca正式监督及长期稳定性仍未验收；核心PR248与参考精简PR251分别处理冲突和未发布依赖。
+
+## [2.36.6] - 2026-10-02
+
+### 新增
+- 新增只读 ZCode 会话证据采集器 `scripts/zcode-session-evidence.py`（Python 3.9+ 标准库，零依赖）：以 mode=ro URI + query_only + 单事务快照打开既有 SQLite，绝不创建或写原生 DB；必填 `--db/--session-id/--input-id`，可选 `--include-final-text`；精确绑定 `session_input.id + session_id` 并经 `promoted_message_id` 关联 `turn_usage.user_message_id`，绑定或 turn 多匹配一律拒歧义；输出稳定 JSON，区分 input admitted/promoted/failed、turn 缺失/running/completed/error/cancelled 与完成证据——精确 turn completed 加 sequence 最新 assistant（原生 `parentID` 绑定）`time.completed` 非空、无 error 且含非空 text，不从较早成功 assistant 拾取覆盖最新 error/未完成/无 text；providerId/modelId/mode 只取该 assistant 原生 message，缺项显式 unknown，不回落其他会话或默认套餐。
+- 默认仅输出元数据与最终文本长度，只有 `--include-final-text` 才携带最终 assistant 文本；任何模式下不输出 reasoning、tool 输入/输出、`session_input.payload`、认证参数、完整 DB 路径或其他会话数据，错误输出清楚 JSON 且非零退出，不抛泄密 traceback。冷 DB 不是实时活性权威，缺项绝不推导 idle 或完成。
+- 新增回归 `scripts/test-zcode-session-evidence.py`：合成 SQLite fixture 走真实 CLI 子进程，覆盖两身份错绑、同 input 多 turn、admitted/failed/缺 turn、completed/最后 assistant error/未完成/无 text（含较早成功不得覆盖）、provider 缺项、schema/JSON 错误、text 显式开关、敏感内容不泄露、缺 DB 不创建与原 DB 字节不变。
+- 新增用法与合同说明 `references/zcode-session-evidence.md`，并在 SKILL.md 按需读取地图挂链接。
+
+### 修复
+- 独审 REJECT R1（F1/F2）：`session_input.status_reason` 原生自由文本不再进入输出，仅输出 `reasonPresent` 布尔（内容永不外发）；同一 promoted 消息下候选 assistant 的最大 sequence 并列、缺失（NULL）或非数值时输出 `ASSISTANT_AMBIGUOUS` 拒歧义，绝不按行序任意挑选。补对抗性 status_reason（路径/凭证样例）与 sequence 并列（旧失败/新成功双向插入序）、NULL、非数值真实 CLI 回归，回归 23→27 项。
+
+### 待办事项
+- 本 PR 不实现 Orca 监督适配；真实大库性能与长期稳定性 NOT_VERIFIED，沿 GUI 任务监控方向另行立项。R1 修复后实现完成但 PM 审查/PR 验收尚待（IN_REVIEW）。
+
+## [2.34.6] - 2026-10-03
+
+### 新增
+- 工程验证证据的可选采集与复核入口，实际执行原任务合同的简单验证命令，记录退出码、有界日志与耗时；绑定原合同、提交和实际源码，变化后拒绝复用旧证据。
+
+### 改进
+- 复用现有交付后门的证据格式，减少手工转抄；采集结果继续由原独立审查和验收门消费，不生成审查通过或任务完成结论。
+
 ## [2.34.1] - 2026-10-02
 
 ### 修复

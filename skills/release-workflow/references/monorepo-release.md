@@ -72,20 +72,25 @@ bash <path-to-release-workflow>/scripts/release-monorepo.sh <YYYY.MM.DD-tag>
 
 ### 4b. 已知摩擦与处置（长期 PR 的两条规律）
 
-**摩擦一：main 上 Skill 升版本 → 套件成员链接过时。**
-长期 feature PR 每次 merge main 时，若 main 期间有 Skill 升版本（CHANGELOG 头部变化），
-分支里的 `expert-suites/*/README.md` 成员下载链接就会落后于当前版本，被
-`validate-expert-suites.py` 拦截（它按 CHANGELOG 当前 semver 校验——这是设计行为，
-不是误报）。处置：在 PR 分支跑
-`python3 skills/release-workflow/scripts/align-suite-links.py`（`--dry-run` 可预览），
-然后重跑 validate 确认 `PASS`。链接版本短暂超前于已发布 zip 属预期：
-`latest/download` 占位在下次发版后生效。
+**摩擦一：源码版本先于已发布资产。**
+不要为让源码检查通过而把真实旧版下载改成尚不存在的未来资产 URL。
+源码 README 保留核实过的公开下载；成员作用列用 `；源码 v<当前版本> 待发布`
+准确说明差异，首次未发布成员的下载列写 `尚无公开下载`。套件本身的旧包/首次发布
+声明遵循 SKILL.md 的整套源码格式，不能再放预留的未来下载 URL。
 
-**摩擦二：merge main 时 README 版本列冲突，一律取 PR 侧。**
-main 侧版本列是**已发布快照**（对齐最近一次 Release 的实际 zip 版本，由
-`update-readme.py` 自动回写）；PR 侧是**待发版时态**（新版本号 + `latest/download`
-占位链接，等本 PR 合入后的下次发版回写）。两者必然不同值，冲突时取 PR 侧——
-这是"版本列=下载版本"约定的时态推论，不是偏好。
+- 源码和 Preview：显式运行 `validate-expert-suites.py --mode source`；Preview 用
+  `SUITE_BUILD_MODE=preview`，保留公开链接和待发布说明，不冒充 Release 资产。
+- 严格默认仍为 release 版本匹配，未带模式不会自动降级。
+- 本地 Release staging：先构建当前成员 ZIP，再运行默认 release 模式的
+  `build-suite-zips.sh <tag>`；它确认工作树及 `.gitattributes` 与 `SOURCE_REF` 一致，
+  对本地成员 ZIP 的完整文件集合和字节复核后，仅在 staging 渲染本次 tag/当前版本。
+- `align-suite-links.py` 的旧批量版本改写行为不变，但不适合修复尚未发布的源码 README；
+  不要用它生成虚假公开下载入口。正式公开链接在真实资产发布后再核验和回写。
+
+**摩擦二：README 冲突逐列核对，不自动取任一侧。**
+源码当前版本与已发布下载版本允许不同。冲突时分别对照候选 CHANGELOG 和真实 Release
+资产，保留当前源码版本、正确的已发布链接及必要的待发布说明；最近更新区保留所选改动
+后统一按日期整理至 8 条。不再一律取 PR 侧，也不把旧资产改成未来 URL。
 
 **摩擦三：新技能未同步 README 表格行——回写无法自愈。**
 `update-readme.py` 只能改写已有表行，不能补行：新技能上传时若漏维护 README

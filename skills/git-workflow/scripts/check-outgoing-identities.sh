@@ -6,6 +6,7 @@ set -euo pipefail
 REPO="."
 BASE_REF=""
 HEAD_REF="HEAD"
+EXPECTED_BASE_OID=""
 EXPECTED_NAME="${EXPECTED_GIT_NAME:-}"
 EXPECTED_EMAIL="${EXPECTED_GIT_EMAIL:-}"
 
@@ -43,6 +44,9 @@ while [ "$#" -gt 0 ]; do
       BASE_REF="$2"
       shift 2
       ;;
+    --expected-base-oid)
+      [ "$#" -ge 2 ] || die "IDENTITY_GATE_USAGE" "缺少 base OID"
+      EXPECTED_BASE_OID="$2"; shift 2 ;;
     --head)
       [ "$#" -ge 2 ] || die "IDENTITY_GATE_USAGE" "--head 缺少参数"
       HEAD_REF="$2"
@@ -71,8 +75,11 @@ done
 
 [ -n "$EXPECTED_NAME" ] || die "IDENTITY_GATE_EXPECTATION_MISSING" "必须提供 expected name"
 [ -n "$EXPECTED_EMAIL" ] || die "IDENTITY_GATE_EXPECTATION_MISSING" "必须提供 expected email"
-[ "$HEAD_REF" = "HEAD" ] || \
-  die "IDENTITY_GATE_HEAD_NOT_CURRENT" "身份门禁只能核验当前 worktree HEAD；拒绝用其他干净 ref 代替待 push HEAD"
+current_oid=$(git --no-replace-objects -C "$REPO" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || \
+  die "IDENTITY_GATE_BAD_HEAD" "无法解析当前 HEAD"
+[ "$HEAD_REF" = "HEAD" ] || [ "$HEAD_REF" = "$current_oid" ] || \
+  die "IDENTITY_GATE_HEAD_NOT_CURRENT" "仅接受 HEAD 或当前 HEAD 的完整 OID"
+HEAD_REF="$current_oid"
 case "$EXPECTED_NAME" in
   *$'\n'*|*$'\r'*|*$'\t'*) die "IDENTITY_GATE_EXPECTATION_INVALID" "expected name 含控制字符" ;;
 esac
@@ -83,28 +90,26 @@ case "$EXPECTED_EMAIL" in
 esac
 
 [ -d "$REPO" ] || die "IDENTITY_GATE_NOT_REPOSITORY" "目录不存在：$REPO"
-git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
+git --no-replace-objects -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
   die "IDENTITY_GATE_NOT_REPOSITORY" "不是 Git worktree：$REPO"
 
-branch_ref=$(git -C "$REPO" symbolic-ref -q HEAD 2>/dev/null) || \
+branch_ref=$(git --no-replace-objects -C "$REPO" symbolic-ref -q HEAD 2>/dev/null) || \
   die "IDENTITY_GATE_BASE_UNKNOWN" "detached HEAD 无法确认 PR 分支与 base；请在分支 worktree 中运行"
 branch_name=${branch_ref#refs/heads/}
 
 if [ -z "$BASE_REF" ]; then
-  [ "$HEAD_REF" = "HEAD" ] || \
-    die "IDENTITY_GATE_BASE_UNKNOWN" "--head 非 HEAD 时必须显式提供 --base"
-  BASE_REF=$(git -C "$REPO" for-each-ref --format='%(upstream:short)' "$branch_ref") || \
+  BASE_REF=$(git --no-replace-objects -C "$REPO" for-each-ref --format='%(upstream:short)' "$branch_ref") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 upstream 失败"
   [ -n "$BASE_REF" ] || \
     die "IDENTITY_GATE_BASE_UNKNOWN" "当前分支没有 upstream；请显式提供 --base"
-  upstream_merge_ref=$(git -C "$REPO" for-each-ref --format='%(upstream:remoteref)' "$branch_ref") || \
+  upstream_merge_ref=$(git --no-replace-objects -C "$REPO" for-each-ref --format='%(upstream:remoteref)' "$branch_ref") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 upstream remote ref 失败"
   [ "$upstream_merge_ref" != "refs/heads/$branch_name" ] || \
     die "IDENTITY_GATE_BASE_AMBIGUOUS" \
       "upstream=$BASE_REF 是当前分支自身，可能隐藏已 push 的早期污染；请显式传 PR base（例如 origin/main）"
 fi
 
-BASE_FULL_REF=$(git -C "$REPO" rev-parse --symbolic-full-name "$BASE_REF" 2>/dev/null) || \
+BASE_FULL_REF=$(git --no-replace-objects -C "$REPO" rev-parse --symbolic-full-name "$BASE_REF" 2>/dev/null) || \
   die "IDENTITY_GATE_BAD_BASE" "无法解析 base：$BASE_REF"
 case "$BASE_FULL_REF" in
   refs/remotes/*) ;;
@@ -112,15 +117,17 @@ case "$BASE_FULL_REF" in
        "base 必须是远端跟踪引用，拒绝可任意缩窄范围的本地 commit-ish：$BASE_REF" ;;
 esac
 
-BASE_SHA=$(git -C "$REPO" rev-parse --verify "$BASE_FULL_REF^{commit}" 2>/dev/null) || \
+BASE_SHA=$(git --no-replace-objects -C "$REPO" rev-parse --verify "$BASE_FULL_REF^{commit}" 2>/dev/null) || \
   die "IDENTITY_GATE_BAD_BASE" "无法解析 base：$BASE_REF"
-HEAD_SHA=$(git -C "$REPO" rev-parse --verify "$HEAD_REF^{commit}" 2>/dev/null) || \
+[ -z "$EXPECTED_BASE_OID" ] || [ "$BASE_SHA" = "$EXPECTED_BASE_OID" ] || \
+  die "IDENTITY_GATE_BASE_CHANGED" "integration base 在核验前已变化"
+HEAD_SHA=$(git --no-replace-objects -C "$REPO" rev-parse --verify "$HEAD_REF^{commit}" 2>/dev/null) || \
   die "IDENTITY_GATE_BAD_HEAD" "无法解析 head：$HEAD_REF"
 
-git -C "$REPO" merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1 || \
+git --no-replace-objects -C "$REPO" merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1 || \
   die "IDENTITY_GATE_NON_ANCESTOR_BASE" "base 不是 head 的祖先，outgoing range 不可靠：$BASE_REF..$HEAD_REF"
 
-commit_list=$(git -C "$REPO" rev-list --reverse "$BASE_SHA..$HEAD_SHA") || \
+commit_list=$(git --no-replace-objects -C "$REPO" rev-list --reverse "$BASE_SHA..$HEAD_SHA") || \
   die "IDENTITY_GATE_GIT_ERROR" "无法枚举 outgoing range：$BASE_REF..$HEAD_REF"
 [ -n "$commit_list" ] || \
   die "IDENTITY_GATE_EMPTY_RANGE" "outgoing range 为空：$BASE_REF..$HEAD_REF"
@@ -133,13 +140,13 @@ while IFS= read -r sha; do
   esac
   [ "${#sha}" -ge 40 ] || die "IDENTITY_GATE_BAD_COMMIT" "commit id 过短：$sha"
 
-  author_name=$(git -C "$REPO" show -s --format='%an' "$sha") || \
+  author_name=$(git --no-replace-objects -C "$REPO" show -s --format='%an' "$sha") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 author_name 失败：$sha"
-  author_email=$(git -C "$REPO" show -s --format='%ae' "$sha") || \
+  author_email=$(git --no-replace-objects -C "$REPO" show -s --format='%ae' "$sha") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 author_email 失败：$sha"
-  committer_name=$(git -C "$REPO" show -s --format='%cn' "$sha") || \
+  committer_name=$(git --no-replace-objects -C "$REPO" show -s --format='%cn' "$sha") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 committer_name 失败：$sha"
-  committer_email=$(git -C "$REPO" show -s --format='%ce' "$sha") || \
+  committer_email=$(git --no-replace-objects -C "$REPO" show -s --format='%ce' "$sha") || \
     die "IDENTITY_GATE_GIT_ERROR" "读取 committer_email 失败：$sha"
 
   [ -n "$author_name" ] || die "IDENTITY_GATE_EMPTY_IDENTITY" "sha=$sha field=author_name"
