@@ -45,6 +45,7 @@ bash scripts/test-spawn-worker-metadata.sh
 bash scripts/test-spawn-worker-provider-lease.sh
 bash scripts/test-spawn-worker-launch.sh
 python3 scripts/test-zcode-orca-launcher.py
+python3 scripts/test_zcode_closed_recovery.py -v
 bash scripts/lint-wait-script.sh
 bash scripts/test-dependency-install-guard.sh
 bash scripts/test-completion-authority.sh

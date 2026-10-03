@@ -87,6 +87,14 @@ jobs:
           python3 -B scripts/test_continuation_readiness.py -v
           bash scripts/test-orca-wave-lifecycle.sh
           bash scripts/test-pm-monitor.sh
+      - name: Check closed ZCode recovery and exact failed-attempt adoption
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          env -u LD_LIBRARY_PATH python3 -B scripts/test_zcode_closed_recovery.py -v
+          python3 -B scripts/test-zcode-orca-launcher.py
+          python3 -B scripts/test_completion_authority.py
+          bash scripts/test-completion-authority.sh
+          bash scripts/test-pm-reauthorize.sh
       - name: Check business artifact admission and actual file acceptance
         working-directory: skills/multi-agent-orchestration
         run: |
