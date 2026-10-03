@@ -227,8 +227,12 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 标准快速派发（Claude Code + GLM/MiniMax + Orca，常规 worker 三步） | `references/00-fast-dispatch-runbook.md` |
 | 模型、provider、执行模式 | `references/01-model-selection-matrix.md`、`references/17-model-capability-profile.md` |
 | 依赖、checkpoint、Sentinel | `references/02-runtime-dependencies.md`、`03-checkpoint-files.md`、`04-sentinel-design.md` |
-| 法律任务拆分、Issue 分组、并发事故 | `references/05-legal-domain-patterns.md`、`10-parallel-lessons.md`、`12-issue-grouping.md` |
-| Agent Teams 排障、CLI backend | `references/06-agent-cli-reference.md`—`11-agent-teams-troubleshooting.md` 中对应 backend |
+| 法律任务拆分、Issue 分组 | `references/05-legal-domain-patterns.md`、`12-issue-grouping.md` |
+| 并发异常：症状、事实与恢复入口 | `references/10-parallel-lessons.md` |
+| Claude/Codex常用参数与其他backend指南路由 | `references/06-agent-cli-reference.md` |
+| CodeBuddy启动、权限等待与会话接续 | `references/08-codebuddy-cli-worker.md` |
+| legacy ZCode旧诊断指路 | `references/09-zcode-cli-worker.md` |
+| Agent Teams 排障 | `references/11-agent-teams-troubleshooting.md` |
 | Orca worker 与 PM 操作 | `references/13-orca-cli-worker.md`、`14-pm-orchestrate.md` |
 | Autopilot | `references/15-wave-autopilot.md`、`16-autopilot-durability.md` |
 | 派发、交付、review 与修复合同 | `references/18-dispatch-acceptance-contracts.md` |
@@ -246,7 +250,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 | 可选本地账号调度 Skill 的调用边界 | `references/29-local-account-routing-skill.md` |
 | 修改本 Skill 后的验证 | `references/19-maintainer-validation.md` |
 
-不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。
+不要一次加载全部 references；只读取当前阶段与 backend 所需的文件。references只保留可复用操作与当前接口合同；任务计划、待办、逐轮验收和现场证据索引写回原TASKS卡，重要取舍写DECISIONS，不为一次任务新增运行参考。
 
 ## 9. Hard Fail
 
