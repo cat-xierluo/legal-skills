@@ -260,10 +260,10 @@ read_terminal_tail() {
        elif (.result | has("tail")) then .result.tail
        else null
        end) as $candidate
-      | if $candidate == null then []
+      | (if $candidate == null then []
         elif ($candidate | type) != "array" then error("terminal tail is not an array")
         else $candidate
-        end as $tail
+        end) as $tail
       | if ($tail | any(.[]; type != "string")) then error("terminal tail contains non-string values")
         else ($tail | join("\n"))
         end
