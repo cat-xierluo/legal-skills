@@ -568,3 +568,7 @@ blocker_and_recovery:
 - 预算与验收：作者5分钟、不同上下文增量独审5分钟；只跑路径定向与既有bridge35，Linux公开CI原失败必须保留，最终工程语义独审及新提交CI证明。真实DSH业务仍由原PM。
 
 - 实施冻结`bd642c8bfa3ee60c612dcd6946cac6db8a46b36d`，只改2文件：1个平台条件及3个新进程平台反例；原bridge35+新增3共38项通过，新增3项首红保留。不同上下文独审ACCEPT：18个路径消费者（16个明确模拟拓扑+2个真实macOS私有文件/symlink）与4个定向anti-replay通过，两文件首末SHA一致，关闭恢复其他12工程/依赖不变。实际Linux CI待本提交执行，未签DSH真实业务。
+
+- 第二轮Linux CI 37096070166：恢复16、bridge38、completion Python19均通过；Shell completion的mode断言因BSD/GNU stat混合输出误报，实际生产权限实现未变。范围追加仅test-completion-authority.sh该权限读数的跨平台消费者；原作者/独审各3分钟限定返修，保600断言，不改生产权限、不skip，第二次Actions失败保留。
+
+- 权限读数返修冻结`fd1edcd4f0d56297aedf83ce4ac09ed9ae4482c7`，仅测试mode读取一行。作者Shell8项通过；不同上下文限定ACCEPT，实际含空格路径的600退出0、644/640退出1，原严格断言保持。生产launcher与其余12工程/依赖SHA不变。首轮、第二轮CI失败日志完整保留，最终Linux Actions待本提交验证；本机尚未安装此候选。
