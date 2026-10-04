@@ -58,6 +58,27 @@ case "$1 $2" in
       invalid-shape)
         echo '{"ok":true,"result":{"terminal":{"tail":"not-an-array"}}}'
         ;;
+      poison-after-send)
+        echo '{"ok":true,"result":{"terminal":{"handle":"term-worker","tail":["Last login: Sun Aug 30 20:05:00 on ttys002","worker@mac skill-agent-unconfigured-recovery %"]}}}'
+        ;;
+      tail-top)
+        echo '{"ok":true,"result":{"tail":["legacy buffer line","worker@mac skill-agent-unconfigured-recovery %"]}}'
+        ;;
+      tail-null)
+        echo '{"ok":true,"result":{"terminal":{"tail":null}}}'
+        ;;
+      tail-num)
+        echo '{"ok":true,"result":{"terminal":{"tail":["$ ",42]}}}'
+        ;;
+      tail-obj)
+        echo '{"ok":true,"result":{"terminal":{"tail":["$ ",{"x":1}]}}}'
+        ;;
+      tail-null-item)
+        echo '{"ok":true,"result":{"terminal":{"tail":["$ ",null]}}}'
+        ;;
+      envelope-bad)
+        echo '{"ok":false,"error":{"code":"boom"},"result":{"terminal":{"tail":["worker@mac skill-agent-unconfigured-recovery %"]}}}'
+        ;;
       *)
         echo '{"ok":true,"result":{"terminal":{"tail":[]}}}'
         ;;
@@ -69,9 +90,15 @@ case "$1 $2" in
       if [ "$1" = "--text" ]; then text="$2"; break; fi
       shift
     done
-    # 注入启动命令（bash launch.sh）→ 模拟 agent 拉起，tail 翻成 TUI。
+    # 注入启动命令（bash launch.sh）→ 模拟 agent 拉起，tail 翻成 TUI；
+    # poison-after-send 模拟注入后读取契约劣化（轮询期坏读）。
     case "$text" in
-      bash\ *) [ "$(cat "$STATE_DIR/terminal" 2>/dev/null)" = "shell" ] && printf 'tui' > "$STATE_DIR/terminal" ;;
+      bash\ *)
+        case "$(cat "$STATE_DIR/terminal" 2>/dev/null)" in
+          shell|tail-top) printf 'tui' > "$STATE_DIR/terminal" ;;
+          poison-after-send) printf 'malformed' > "$STATE_DIR/terminal" ;;
+        esac
+        ;;
     esac
     echo '{"ok":true,"result":{"terminal":{"handle":"term-worker"}}}'
     ;;
@@ -275,8 +302,49 @@ run_recover --worktree "$WT8" --session recover-test --poll-interval 0.05 --time
 [ "$RECOVER_RC" -eq 2 ] && ok "合法空 tail 退出 2" || bad "态8 应退出 2，实得 $RECOVER_RC"
 printf '%s\n' "$RECOVER_OUT" | grep -q 'TUI_STATE=unknown\|无法安全判定' \
   && ok "合法空 tail 仍归类 unknown" || bad "态8 未保持 unknown 语义"
+printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=manual-required$' \
+  && ok "合法空 tail 走 unknown 而非 terminal-probe-invalid" || bad "态8 空 tail 被误判非法探针（RECOVER_REASON=$(printf '%s\n' "$RECOVER_OUT" | sed -n 's/^RECOVER_REASON=//p' | head -1)）"
 [ "$(terminal_send_count)" -eq 0 ] && ok "合法空 tail 零 terminal send" || bad "态8 不应 send"
 [ "$(worker_start_count)" -eq 0 ] && ok "合法空 tail 零 worker-start" || bad "态8 不应 worker-start"
+
+echo ""
+echo "态10: terminal tail JSON 合同回归（反例覆盖旧解析器 jq 编译缺陷）"
+WT10=$(make_fixture case10 full)
+# 10a 顶层 tail（原合同 .result.tail）合法：走 shell 注入直至恢复
+reset_state tail-top ""
+run_recover --worktree "$WT10" --session recover-test --poll-interval 0.05 --timeout 5
+[ "$RECOVER_RC" -eq 0 ] && ok "顶层 tail 合法退出 0" || bad "态10a 应退出 0，实得 ${RECOVER_RC}（输出: ${RECOVER_OUT}）"
+printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_STATUS=recovered$' && ok "顶层 tail receipt=recovered" || bad "态10a receipt 缺 recovered"
+[ "$(create_count)" -eq 0 ] && ok "顶层 tail 零 terminal create" || bad "态10a 出现 terminal create"
+[ "$(jq -r '.session.orca.terminal_handle' "$WT10/.claude/agent-sessions/recover-test/METADATA.json")" = "term-worker" ] \
+  && ok "顶层 tail terminal_handle 不变" || bad "态10a terminal_handle 被改写"
+# 10b null tail 视同空 tail：unknown 语义，不是非法探针
+reset_state tail-null ""
+run_recover --worktree "$WT10" --session recover-test --poll-interval 0.05 --timeout 5
+[ "$RECOVER_RC" -eq 2 ] && ok "null tail 退出 2" || bad "态10b 应退出 2，实得 $RECOVER_RC"
+printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=manual-required$' \
+  && ok "null tail 归类 unknown 而非 terminal-probe-invalid" || bad "态10b null tail 被误判非法探针"
+[ "$(terminal_send_count)" -eq 0 ] && ok "null tail 零 terminal send" || bad "态10b 不应 send"
+# 10c 注入后坏读：注入必须已发生，但坏读后不得 register
+reset_state poison-after-send ""
+run_recover --worktree "$WT10" --session recover-test --poll-interval 0.05 --timeout 5
+[ "$RECOVER_RC" -eq 2 ] && ok "注入后坏读退出 2" || bad "态10c 应退出 2，实得 $RECOVER_RC"
+printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=terminal-probe-invalid$' \
+  && ok "注入后坏读 receipt 明确非法探针" || bad "态10c receipt reason 错误"
+[ "$(terminal_send_count)" -eq 1 ] && ok "注入恰好发生一次（旧解析器在首轮即拒绝、零注入）" || bad "态10c 注入次数=$(terminal_send_count)，应为 1"
+[ "$(worker_start_count)" -eq 0 ] && ok "注入后坏读零 worker-start（不 register）" || bad "态10c 不应 register"
+[ "$(create_count)" -eq 0 ] && ok "注入后坏读零 terminal create" || bad "态10c 不应 create"
+# 10d 非法尾项/wrong envelope 拒绝矩阵：修复不得放松既有拒绝
+for tail_fault in tail-num tail-obj tail-null-item envelope-bad; do
+  reset_state "$tail_fault" ""
+  run_recover --worktree "$WT10" --session recover-test --poll-interval 0.05 --timeout 5
+  [ "$RECOVER_RC" -eq 2 ] && ok "tail fault=${tail_fault} 退出 2" || bad "tail fault=${tail_fault} 应退出 2，实得 $RECOVER_RC"
+  printf '%s\n' "$RECOVER_OUT" | grep -q '^RECOVER_REASON=terminal-probe-invalid$' \
+    && ok "tail fault=${tail_fault} receipt 明确非法探针" || bad "tail fault=${tail_fault} receipt reason 错误"
+  [ "$(terminal_send_count)" -eq 0 ] && ok "tail fault=${tail_fault} 零 terminal send" || bad "tail fault=${tail_fault} 不应 send"
+  [ "$(worker_start_count)" -eq 0 ] && ok "tail fault=${tail_fault} 零 worker-start" || bad "tail fault=${tail_fault} 不应 register"
+  [ "$(create_count)" -eq 0 ] && ok "tail fault=${tail_fault} 零 terminal create" || bad "tail fault=${tail_fault} 不应 create"
+done
 
 echo ""
 echo "态9: 既有 PM receipt 缺失/错配/软链时，在所有 Orca 副作用前拒绝"

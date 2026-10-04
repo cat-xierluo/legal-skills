@@ -13,10 +13,7 @@ gh auth status         # 查看认证状态
 
 ### 创建
 
-```bash
-gh pr create --title "feat(module): 描述" --body "正文"
-gh pr create --draft   # 创建为草稿
-```
+发布按主Skill身份/隐私门执行；先 safe-push.sh，再 safe-pr.py create，提供实际base/head、完整expected-head及最终标题/正文文件。默认draft，创建后核真实元数据。不要用裸gh pr create或--fill替代发表预检，完整命令见[隐私预检](privacy-preflight.md)。
 
 ### 查看
 
@@ -53,10 +50,11 @@ diff 不可读、checks 未知、review 不明确、PR 是 draft、mergeable 不
 PR 正文缺少 Summary、Test plan、Agent Attribution 或 Issue/Task 关联时，先要求补齐。Monorepo PR 如果出现跨目录污染、大量删除、敏感配置或版本清单不一致，不要 merge。
 
 ```bash
-gh pr merge <number> --squash        # Squash merge
-gh pr merge <number> --merge         # Merge commit
-gh pr merge <number> --rebase        # Rebase merge
+python3 "$git_workflow_dir/scripts/safe-pr.py" squash --number "$pr_number" \
+  --expected-head "$verified_head" --title-file "$title_file" --body-file "$body_file"
 ```
+
+其它合并方式/API仍须绑定完整范围、精确最终文本与真实head；长期线保护、波次同步及已发布GitHub身份差异读取[功能线合同](long-lived-integration-branch.md)。合并与删除分开核授权，不能绕过仓库保护。
 
 ### 其他
 

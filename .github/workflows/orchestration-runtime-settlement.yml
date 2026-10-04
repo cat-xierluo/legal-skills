@@ -75,6 +75,25 @@ jobs:
           bash scripts/test-spawn-worker-provider-lease.sh
           bash scripts/test-settle-liveness.sh
           bash scripts/test-settle-command.sh
+      - name: Capture and invalidate verification evidence with isolated fixtures
+        working-directory: skills/multi-agent-orchestration
+        run: python3 -B scripts/test_verification_evidence.py -v
+      - name: Exercise GUI evidence and handoff consumers with real sibling dependencies
+        working-directory: skills/multi-agent-orchestration
+        run: |
+          set -euo pipefail
+          export ZCODE_GUI_COLLECTOR="$PWD/scripts/zcode-session-evidence.py"
+          export ZCODE_GUI_ADAPTER="$PWD/scripts/zcode-gui-monitor-adapter.py"
+          export ZCODE_GUI_OBSERVE="$PWD/scripts/zcode-gui-observe.py"
+          export ZCODE_GUI_ARTIFACTS="$PWD/scripts/zcode-gui-artifacts.py"
+          python3 -B scripts/test-zcode-session-evidence.py
+          python3 -B scripts/test-zcode-gui-monitor-adapter.py
+          python3 -B scripts/test-zcode-gui-artifacts.py
+          python3 -B scripts/test-zcode-gui-evidence-pipeline.py
+          python3 -B scripts/test-zcode-gui-observe.py
+          python3 -B scripts/test-zcode-gui-consumer-smoke.py
+          python3 -B scripts/test-zcode-gui-artifacts-consumer.py
+          python3 -B scripts/test-zcode-gui-default-consumer.py
       - name: Check changed entrypoint syntax
         working-directory: skills/multi-agent-orchestration
         run: |
