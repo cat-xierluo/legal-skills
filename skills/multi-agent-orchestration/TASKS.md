@@ -656,4 +656,5 @@ blocker_and_recovery:
 - 当前候选沿 PR248 原分支普通合入最新 main，逐文件整合双方文档，工程脚本保持原受审字节；既有 GUI 和工程验证证据 CI 均保留，原恢复身份不足、DSH 原业务失败预算及外部依赖不因发布整合重置。零业务 prepare/open/register，不重派原工作。
 - PR251 的 33 引用由 PR248 提供；34/35/37 仍未进入本轮 main，继续 DRAFT，待原 GUI owner 发布。参考精简的实际消费者和冷上下文前向须在依赖就绪后独立验收。
 - 发布组合首矩阵原件保留：80项命令中前24项exit0，第25关闭恢复suite的19例中18过、标题改写诊断fixture失败（`<defunct>`）；首失败不改判。核查发现exec/argv校验先于Node模块初始化，test-only在发送SIGUSR1前等待私有ready标记及活子进程，3秒有界，不扩大生产timeout或恢复预算；定向标题改写消费者1/1 exit0。随后仅复验受影响suite并继续尚未执行的矩阵。原生实际业务仍CONTINUATION_NOT_READY。
-- 原48 PR-only blob中47项不变，唯一增量为上述测试fixture；全部生产工程保持原受审字节。限定独审86dd0b95接受共享组合/4真实消费者，另发现README源码版本表残留2.36.7，已机械同步2.36.8；最终增量另行绑定，不把旧独审自动扩大到新head。
+- 原48 PR-only blob中47项不变，唯一增量为上述诊断测试fixture；全部生产工程保持原受审字节。另对原main的旧dependency guard fixture补当前Dispatch状态及failed/unknown阴性消费者，发布净范围56路径。限定独审86dd0b95接受共享组合/4真实消费者，另发现README源码版本表残留2.36.7，已机械同步2.36.8；最终增量另行绑定，不把旧独审自动扩大到新head。
+- 矩阵续跑第27旧dependency guard首次189过/1失败，合法fake回执漏status而被当前live completion门拒绝；补dispatched与failed/unknown拒绝后192/192 exit0（25.084秒）。原生产status要求保持，原失败日志保留。推送门刷新main至b427dcec后拒绝NON_ANCESTOR，未推送；串行接回主干新增38合同及Git Workflow269/270，其原owner不变。
