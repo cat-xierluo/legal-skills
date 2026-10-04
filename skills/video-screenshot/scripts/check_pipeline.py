@@ -39,6 +39,7 @@ from lib import (
     DedupState,
     ExtractParams,
     FFProbeInfo,
+    calc_capture_time,
     calc_content_quality,
     calc_loading_overlay_score,
     build_ffmpeg_filter_args,
@@ -47,6 +48,7 @@ from lib import (
     horizontal_mixed_transition_score,
     ocr_content_delta,
     ocr_extract_text,
+    probe_video,
     regional_mixed_transition_score,
     select_temporal_representatives,
     temporal_completion_metrics,
@@ -87,6 +89,7 @@ def parse_args() -> argparse.Namespace:
             "output-protection",
             "transactional-output",
             "archive-metadata",
+            "vfr-timestamps",
             "benchmark",
             "benchmark-contract",
             "benchmark-ocr",
@@ -1078,6 +1081,86 @@ def _test_archive_metadata_only() -> None:
         assert meta["review"]["drop_candidates_archived"] is False
 
 
+def _make_vfr_video(path: Path) -> None:
+    """构造 r_frame_rate=60、有效帧率更低的 VFR 录屏夹具（中部抽掉一段帧）。"""
+    ffmpeg = find_tool("ffmpeg")
+    assert ffmpeg, "VFR 时间戳回归需要 ffmpeg"
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x480:rate=60:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=320x480:rate=60:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=320x480:rate=60:duration=2",
+            "-filter_complex",
+            "[0:v][1:v][2:v]concat=n=3:v=1:a=0,"
+            "negate=enable='between(t,6,8)',"
+            "select='not(between(t,3.5,5.5))',format=yuv420p",
+            "-fps_mode",
+            "vfr",
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "3",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0 and path.is_file(), result.stderr
+
+
+def _test_vfr_timestamps() -> None:
+    # VFR 录屏的 frame_pts 文件名序号必须按输出时基 1/r_frame_rate 换算；
+    # 用 avg_frame_rate 会在尾部产生超过视频时长的时间戳并破坏时序算法。
+    info = FFProbeInfo(
+        duration_seconds=8.0,
+        time_base_seconds=1.0 / 15360.0,
+        frame_rate_fps=45.0,
+        real_frame_rate_fps=60.0,
+    )
+    params = ExtractParams(strategy="scene", interval_seconds=1.0)
+    converted = calc_capture_time("frame_0000000474.jpg", 1, params, info)
+    assert converted is not None and abs(converted - 7.9) < 0.01, converted
+
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-vfr-") as tmp:
+        root = Path(tmp)
+        video = root / "vfr.mp4"
+        _make_vfr_video(video)
+
+        probe = probe_video(str(video))
+        assert probe.real_frame_rate_fps and probe.real_frame_rate_fps > 0, probe
+        assert probe.frame_rate_fps and probe.frame_rate_fps > 0, probe
+        assert probe.frame_rate_fps < probe.real_frame_rate_fps - 5.0, (
+            probe.frame_rate_fps,
+            probe.real_frame_rate_fps,
+        )
+
+        result = _run_extract(video, root / "out")
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads((root / "out" / "_report.json").read_text(encoding="utf-8"))
+        times = [float(item["capture_time_seconds"]) for item in report["frames"]]
+        duration = float(report["duration_seconds"])
+        assert times, "VFR 夹具必须产生保留帧"
+        assert all(item >= 0 for item in times), times
+        assert all(b >= a for a, b in zip(times, times[1:])), f"时间戳必须单调: {times}"
+        assert times[-1] <= duration + 0.1, f"末帧时间戳 {times[-1]} 超过时长 {duration}"
+        assert any(item >= 5.5 for item in times), f"缺少末段内容帧: {times}"
+
+
 def _test_benchmark(profiles: str = "visual") -> None:
     _input_args, _vf, output_args = build_ffmpeg_filter_args(
         "scene", 1.0, 0.10, frame_rate_fps=30.0, sample_interval=2.0
@@ -1502,6 +1585,7 @@ def main() -> int:
         "output-protection": _test_output_protection,
         "transactional-output": _test_transactional_output,
         "archive-metadata": _test_archive_metadata_only,
+        "vfr-timestamps": _test_vfr_timestamps,
         "benchmark": _test_benchmark,
         "benchmark-contract": _test_benchmark_contract,
         "evidence-signals": _test_evidence_signals,
