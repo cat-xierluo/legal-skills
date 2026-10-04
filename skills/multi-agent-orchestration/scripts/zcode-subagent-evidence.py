@@ -295,6 +295,43 @@ def main(argv=None):
         else:
             attribution = "ambiguous_multiple_promoted_inputs"
 
+        # selected turn：按 session_id + turn_usage.user_message_id 精确绑定本次 root input。
+        # 无表/无绑定列/0 行/多行一律 UNKNOWN，绝不借会话最新 turn；ordinal 不是 native turn 身份。
+        selected_turn = {
+            "turn_id": "UNKNOWN", "status": "UNKNOWN", "terminal": "UNKNOWN",
+            "tool_call_count": "UNKNOWN", "duration_ms": "UNKNOWN",
+        }
+        if not sources["turn_usage"]:
+            turn_binding_status = "source_table_missing"
+        elif "user_message_id" not in table_columns(conn, "turn_usage"):
+            turn_binding_status = "binding_column_missing"
+        else:
+            hits = conn.execute(
+                "SELECT turn_id, status, started_at, completed_at, tool_call_count "
+                "FROM turn_usage WHERE session_id=? AND user_message_id=? ORDER BY turn_id",
+                (args.root_session, args.root_input),
+            ).fetchall()
+            if len(hits) == 1:
+                turn_binding_status = "bound_unique"
+                h_tid, h_status, h_start, h_end, h_tools = hits[0]
+                tok = safe_token(h_tid)
+                if tok:
+                    selected_turn["turn_id"] = tok
+                st = safe_token(h_status)
+                if st:
+                    selected_turn["status"] = st
+                    selected_turn["terminal"] = st in TERMINAL_STATUSES
+                htc = safe_int(h_tools, hi=10 ** 9)
+                if htc is not None:
+                    selected_turn["tool_call_count"] = htc
+                s0, s1 = safe_int(h_start), safe_int(h_end)
+                if s0 is not None and s1 is not None and s1 >= s0:
+                    selected_turn["duration_ms"] = s1 - s0
+            elif len(hits) == 0:
+                turn_binding_status = "no_matching_turn"
+            else:
+                turn_binding_status = "ambiguous_multiple_matching_turns"
+
         # 只沿 parent_id 枚举真实后代（BFS，有界，环安全）
         nodes = []
         visited = {args.root_session}
@@ -362,6 +399,8 @@ def main(argv=None):
                 "root_input_promoted_message_id": args.root_input,
                 "turn": turn,
                 "turn_source": turn_source,
+                "turn_binding_status": turn_binding_status,
+                "selected_turn": selected_turn,
                 "promoted_input_count": promoted_input_count,
                 "parent_exists": root_parent_exists,
             },
@@ -378,6 +417,13 @@ def main(argv=None):
             "attribution_note": (
                 "session.parent_id 仅证明 session 级父子归属；当根会话存在多个 promoted input 时，"
                 "无法证明后代属于本次 --root-input（歧义必须保留，不做时间/标题猜测）。"
+            ),
+            "session_aggregation_note": (
+                "nodes[] 的 status/terminal/tool_call_count/duration_ms/turn_count 均为 session 维度"
+                "聚合（root 节点含该会话全部 input 的 turns，其 status 取会话最新 turn）；"
+                "本次 --root-input 的真实选中 turn 见 root.selected_turn"
+                "（turn_usage.user_message_id 精确绑定，唯一命中才给值）；"
+                "root.turn 仅为 session_input 序数（ordinal），不是 native turn 身份。"
             ),
         }
         conn.execute("ROLLBACK")

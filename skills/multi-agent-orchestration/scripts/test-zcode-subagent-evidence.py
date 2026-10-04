@@ -76,6 +76,7 @@ EXPECTED_NODE_KEYS = {
 }
 EXPECTED_ROOT_KEYS = {
     "session_id", "root_input_promoted_message_id", "turn", "turn_source",
+    "turn_binding_status", "selected_turn",
     "promoted_input_count", "parent_exists",
 }
 EXPECTED_TREE_KEYS = {
@@ -317,6 +318,9 @@ class TestOutputContract(unittest.TestCase):
             self.assertEqual(root["turn_source"], "promoted_sequence")
             self.assertEqual(root["promoted_input_count"], 1)
             self.assertEqual(root["parent_exists"], "UNKNOWN")  # 根无 parent_id
+            # 本 fixture 的 turn_usage 无 user_message_id 列 → selected_turn 降级 UNKNOWN
+            self.assertEqual(root["turn_binding_status"], "binding_column_missing")
+            self.assertEqual(root["selected_turn"]["status"], "UNKNOWN")
             tree = obj["tree"]
             self.assertEqual(set(tree), EXPECTED_TREE_KEYS)
             self.assertEqual(tree["node_count"], 2)
@@ -761,6 +765,118 @@ class TestUsageErrors(unittest.TestCase):
             db = db_path(tmp)
             create_db(db, sessions=[S("s_root")], inputs=[IN("s_root", "msg_root")])
             run_failure(db, "s_root", "msg_root", 2, "invalid_limit", max_nodes=0)
+
+
+class TestSelectedTurnBinding(unittest.TestCase):
+    """R1 返修：root input 的 turn 身份必须按 turn_usage.user_message_id 精确绑定。
+
+    覆盖：双 input 逆序状态各自正确且互不相同、缺绑定列、0 行命中、多行命中——
+    任何无法唯一证明的情形都输出 UNKNOWN，绝不借会话最新 turn。
+    fixture 自建（含/不含 user_message_id 列两种 schema），不依赖 create_db。
+    """
+
+    UNKNOWN_TURN = {"turn_id": "UNKNOWN", "status": "UNKNOWN", "terminal": "UNKNOWN",
+                    "tool_call_count": "UNKNOWN", "duration_ms": "UNKNOWN"}
+
+    def _build(self, with_umid=True, turns=(), inputs=()):
+        d = tempfile.TemporaryDirectory(prefix="zsel-")
+        self.addCleanup(d.cleanup)
+        db = os.path.join(d.name, "fx.db")
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "CREATE TABLE session (id TEXT PRIMARY KEY, parent_id TEXT, permission TEXT, "
+            "time_created INTEGER, time_updated INTEGER, title TEXT)")
+        conn.execute("INSERT INTO session VALUES ('sess_root', NULL, 'yolo', 1000, 4500, ?)",
+                     (CANARY,))
+        conn.execute(
+            "CREATE TABLE session_input (id INTEGER PRIMARY KEY, session_id TEXT, payload TEXT, "
+            "promoted_sequence INTEGER, admitted_sequence INTEGER, promoted_message_id TEXT, "
+            "status TEXT)")
+        for i, r in enumerate(inputs, start=1):
+            conn.execute(
+                "INSERT INTO session_input VALUES (?,?,?,?,?,?,?)",
+                (i, r["sid"], r.get("payload", CANARY), r["seq"], r["seq"],
+                 r["pmid"], "promoted"))
+        cols = ("session_id TEXT, turn_id TEXT, user_message_id TEXT, status TEXT, "
+                "started_at INTEGER, completed_at INTEGER, tool_call_count INTEGER")
+        if not with_umid:
+            cols = ("session_id TEXT, turn_id TEXT, status TEXT, started_at INTEGER, "
+                    "completed_at INTEGER, tool_call_count INTEGER")
+        conn.execute("CREATE TABLE turn_usage (%s)" % cols)
+        for t in turns:
+            if with_umid:
+                conn.execute("INSERT INTO turn_usage VALUES (?,?,?,?,?,?,?)",
+                             (t["sid"], t["tid"], t.get("umid"), t["status"],
+                              t["s"], t["e"], t["tools"]))
+            else:
+                conn.execute("INSERT INTO turn_usage VALUES (?,?,?,?,?,?)",
+                             (t["sid"], t["tid"], t["status"], t["s"], t["e"], t["tools"]))
+        conn.commit()
+        conn.close()
+        return db
+
+    def test_two_inputs_selected_turns_distinct(self):
+        """双 input：选 A 得 turn_A(completed/1/1000)，选 B 得 turn_B(error/8/1000)，
+        session 聚合（最新 error/9/3000/2）保留但与 selected_turn 分离。"""
+        turns = [
+            {"sid": "sess_root", "tid": "turn_A", "umid": "msg_a",
+             "status": "completed", "s": 1000, "e": 2000, "tools": 1},
+            {"sid": "sess_root", "tid": "turn_B", "umid": "msg_b",
+             "status": "error", "s": 3000, "e": 4000, "tools": 8},
+        ]
+        inputs = [{"sid": "sess_root", "pmid": "msg_a", "seq": 0},
+                  {"sid": "sess_root", "pmid": "msg_b", "seq": 1}]
+        db = self._build(turns=turns, inputs=inputs)
+        a = run_success(db, "sess_root", "msg_a")
+        self.assertEqual(a["root"]["turn_binding_status"], "bound_unique")
+        self.assertEqual(a["root"]["selected_turn"], {
+            "turn_id": "turn_A", "status": "completed", "terminal": True,
+            "tool_call_count": 1, "duration_ms": 1000})
+        rn = a["tree"]["nodes"][0]
+        self.assertEqual((rn["status"], rn["tool_call_count"], rn["duration_ms"],
+                          rn["turn_count"]), ("error", 9, 3000, 2))
+        b = run_success(db, "sess_root", "msg_b")
+        self.assertEqual(b["root"]["turn_binding_status"], "bound_unique")
+        self.assertEqual(b["root"]["selected_turn"], {
+            "turn_id": "turn_B", "status": "error", "terminal": True,
+            "tool_call_count": 8, "duration_ms": 1000})
+        self.assertNotEqual(a["root"]["selected_turn"], b["root"]["selected_turn"])
+        self.assertEqual(a["root"]["promoted_input_count"], 2)
+
+    def test_binding_column_missing(self):
+        """turn_usage 缺 user_message_id 列 → binding_column_missing，selected 全 UNKNOWN。"""
+        turns = [{"sid": "sess_root", "tid": "t1", "status": "error",
+                  "s": 1000, "e": 2000, "tools": 5}]
+        db = self._build(with_umid=False, turns=turns,
+                         inputs=[{"sid": "sess_root", "pmid": "msg_a", "seq": 0}])
+        obj = run_success(db, "sess_root", "msg_a")
+        self.assertEqual(obj["root"]["turn_binding_status"], "binding_column_missing")
+        self.assertEqual(obj["root"]["selected_turn"], self.UNKNOWN_TURN)
+
+    def test_no_matching_turn_not_borrowing_latest(self):
+        """0 行命中 → no_matching_turn，不借会话最新 error turn。"""
+        turns = [{"sid": "sess_root", "tid": "t_other", "umid": "msg_other",
+                  "status": "error", "s": 1000, "e": 2000, "tools": 5}]
+        db = self._build(turns=turns,
+                         inputs=[{"sid": "sess_root", "pmid": "msg_a", "seq": 0}])
+        obj = run_success(db, "sess_root", "msg_a")
+        self.assertEqual(obj["root"]["turn_binding_status"], "no_matching_turn")
+        self.assertEqual(obj["root"]["selected_turn"], self.UNKNOWN_TURN)
+
+    def test_multiple_matching_rows_unknown(self):
+        """同 user_message_id 多行 → ambiguous_multiple_matching_turns，全 UNKNOWN。"""
+        turns = [
+            {"sid": "sess_root", "tid": "t1", "umid": "msg_a",
+             "status": "completed", "s": 1000, "e": 2000, "tools": 1},
+            {"sid": "sess_root", "tid": "t2", "umid": "msg_a",
+             "status": "running", "s": 3000, "e": None, "tools": 2},
+        ]
+        db = self._build(turns=turns,
+                         inputs=[{"sid": "sess_root", "pmid": "msg_a", "seq": 0}])
+        obj = run_success(db, "sess_root", "msg_a")
+        self.assertEqual(obj["root"]["turn_binding_status"],
+                         "ambiguous_multiple_matching_turns")
+        self.assertEqual(obj["root"]["selected_turn"], self.UNKNOWN_TURN)
 
 
 if __name__ == "__main__":

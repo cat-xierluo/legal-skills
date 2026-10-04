@@ -23,6 +23,7 @@ python3 skills/multi-agent-orchestration/scripts/zcode-subagent-evidence.py \
 ## 绑定与枚举语义（安全核心）
 
 1. **显式绑定**：`--root-session` + `--root-input` 必须命中同一行 `session_input`（`session_id` 匹配且 `promoted_message_id` 相等）。绑定成功后取该行 `promoted_sequence` 作为精确 turn（列缺失**或值不可解析**时回退 `admitted_sequence`，再不可得标 `UNKNOWN`）。不做绑定就无从谈"本次输入的后代"。
+1a. **selected turn（R1 返修）**：`promoted_sequence`/`admitted_sequence` 只是 session_input 序数（ordinal），**不是 native turn 身份**。本次 root input 的真实选中 turn 必须且只能按 `turn_usage.session_id + turn_usage.user_message_id = promoted_message_id` 唯一命中，输出在 `root.selected_turn`（`turn_id/status/terminal/tool_call_count/duration_ms`）与 `root.turn_binding_status`：唯一命中 `bound_unique` 给真实值；`turn_usage` 缺表（`source_table_missing`）、缺 `user_message_id` 列（`binding_column_missing`）、0 行命中（`no_matching_turn`）、多行命中（`ambiguous_multiple_matching_turns`）一律全 `UNKNOWN`，**绝不借会话最新 turn**。节点级 `status/tool_call_count/duration_ms/turn_count` 是 session 维度聚合（root 节点含全部 input 的 turns、status 取会话最新 turn），与 `selected_turn` 分离（见输出顶层 `session_aggregation_note`）。
 2. **只认 parent_id**：仅沿 `session.parent_id` 做 BFS 枚举真实后代（含根节点自身，depth=0）。**禁止**按标题、时间邻近或其他启发式猜子任务。
 3. **有界与环安全**：`visited` 集合防环（重复边计入 `cycle_edges`，不展开）；`--max-nodes/--max-depth` 触发时 `truncated=true` 并给出 `truncation_reasons`（SQLite 资源边界）。
 4. **歧义必须保留**：根会话存在多个 promoted input 时，`root_input_attribution=ambiguous_multiple_promoted_inputs`——`parent_id` 只证明 session 级归属，**不证明**后代属于本次 `--root-input`；唯一 promoted input 时标 `unique_promoted_input_in_root_session`（仍属 session 级证明）。
@@ -44,7 +45,7 @@ python3 skills/multi-agent-orchestration/scripts/zcode-subagent-evidence.py \
 - 明确存在的模型/provider/mode：`models`/`providers`（`model_usage.model_id/provider_id` 去重）、`modes`（`model_usage.mode`）、`permission_mode`（`session.permission`）；无行则 `UNKNOWN`；
 - 运行时间：`duration_ms` + `duration_source`（优先 `turn_usage` 跨度，回退 `session.time_updated-time_created`）；
 - 工具数量：`tool_call_count`（优先 `COUNT(tool_usage)`，回退 `SUM(turn_usage.tool_call_count)`）；
-- 绑定：`turn`/`turn_source`/`promoted_input_count`/`root_input_attribution`/`attribution_note`。
+- 绑定：`turn`/`turn_source`（session_input 序数 ordinal，非 turn 身份）、`turn_binding_status`、`selected_turn`（user_message_id 精确绑定的真实选中 turn，无法唯一证明则全 UNKNOWN）、`promoted_input_count`/`root_input_attribution`/`attribution_note`/`session_aggregation_note`。
 
 **禁止输出**：payload、reasoning、工具参数/结果、标题（`title`）、目录（`directory`/`path`）、账号、凭据；所有值先过紧凑 token 白名单正则（`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`），不匹配即 `UNKNOWN`。JSON 编码字段只提取同名键的标量，坏 JSON 一律 `UNKNOWN`。
 
