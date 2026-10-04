@@ -640,7 +640,8 @@ set -euo pipefail
 [ "$*" = 'orchestration dispatch-show --task task_123 --json' ] || exit 64
 jq --arg runtime "${FAKE_COMPLETION_RUNTIME:-runtime-fixture}" \
   --arg process "${FAKE_COMPLETION_PROCESS:-fixture-process-incarnation}" \
-  '{ok:true,_meta:{runtimeId:$runtime},result:{dispatch:{id:.dispatch_id,task_id:.task_id,
+  --arg status "${FAKE_COMPLETION_STATUS:-dispatched}" \
+  '{ok:true,_meta:{runtimeId:$runtime},result:{dispatch:{status:$status,id:.dispatch_id,task_id:.task_id,
     assignee_handle:.terminal_handle,run_id:.run_id,capability_hash:.capability_hash,process_incarnation:$process}}}' \
   "$WORKER_COMPLETION_AUTHORITY_FILE"
 SH
@@ -669,6 +670,11 @@ EOF
 )
 expect_allow "native multiline worker_done is allowed by the bound completion receipt" \
   hook "$deny_auth" "$native_worker_done" "$completion_authority"
+for completion_status in failed unknown; do
+  FAKE_COMPLETION_STATUS="$completion_status" expect_block \
+    "worker_done rejects $completion_status Dispatch despite matching identity" "ORCA_COMPLETION_AUTHORITY_INVALID" \
+    hook "$deny_auth" "$native_worker_done" "$completion_authority"
+done
 expect_block "worker_done without a runtime receipt fails closed" "ORCA_COMPLETION_AUTHORITY_INVALID" \
   hook "$deny_auth" 'orca orchestration send --from term_789 --dispatch-capability missing --type worker_done --subject "done" --body "summary" --task-id task_123 --dispatch-id ctx_456 --outcome succeeded --json'
 expect_block "wrong completion task has zero authority" "ORCA_COMPLETION_AUTHORITY_INVALID" \
