@@ -1932,19 +1932,22 @@ reauthorize_liveness_pregate() {
     echo "REAUTHORIZE_NOT_LIVE: worker-show 无 Dispatch 记录（已 GC 或契约不完整），无法证明仍 live；零副作用拒绝" >&2
     exit 2
   fi
-  release_state=$(printf '%s' "$show_json" | jq -r '.result.terminalResource.releaseState // .result.terminal_resource.releaseState // empty' 2>/dev/null)
-  dispatch_status=$(printf '%s' "$show_json" | jq -r '.result.dispatch.status // empty' 2>/dev/null)
-  case "$release_state" in
-    ""|null|"not_requested") ;;
-    *)
-      echo "REAUTHORIZE_NOT_LIVE: Dispatch 已进入结算链（releaseState=${release_state}），worker_done 已被 release/ack/settled；请按正常收口处理或走明确恢复入口，reauthorize 零副作用拒绝" >&2
-      exit 2
-      ;;
-  esac
-  if [ "$dispatch_status" = "settled" ]; then
-    echo "REAUTHORIZE_NOT_LIVE: Dispatch status=settled（worker_done 已结算），reauthorize 零副作用拒绝" >&2
+  if ! printf '%s' "$show_json" | jq -e --arg dispatch "$ORCA_DISPATCH_ID" '
+    .ok == true and .result.dispatch.id == $dispatch
+    and (.result.dispatch.status == "dispatched" or .result.dispatch.status == "active")
+    and (.result.worker.state == "active" or .result.worker.state == "ready")
+    and (.result.worker.stage == "ready" or .result.worker.stage == "running" or .result.worker.stage == "active")
+    and .result.projection.liveness.verdict == "live"
+    and .result.projection.liveness.source == "execution_host"
+    and .result.observation.exactWorker == true and .result.observation.status == "live"
+    and .result.terminalResource.releaseState == "not_requested"
+    and (.result.dispatch.capabilityRevokedAt // .result.dispatch.capability_revoked_at // null) == null
+  ' >/dev/null 2>&1; then
+    echo "REAUTHORIZE_NOT_LIVE: positive exact execution-host live proof is required; failed/exited/unknown targets need closed recovery; zero mutation" >&2
     exit 2
   fi
+  release_state="not_requested"
+  dispatch_status=$(printf '%s' "$show_json" | jq -r '.result.dispatch.status')
   echo "PM_REAUTHORIZE_LIVENESS_OK: dispatch=$ORCA_DISPATCH_ID releaseState=${release_state:-not_requested} status=${dispatch_status:-unknown}"
 }
 

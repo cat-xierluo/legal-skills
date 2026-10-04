@@ -47,7 +47,7 @@ def trusted_path(text):
     p = Path(text)
     require(p.is_absolute() and ".." not in p.parts, "absolute_path_required")
     # /tmp and /var are macOS system aliases; no user-controlled ancestor alias.
-    if p.parts[1:2] in (("tmp",), ("var",)):
+    if sys.platform == "darwin" and p.parts[1:2] in (("tmp",), ("var",)):
         p = Path("/private") / p.relative_to("/")
     current = Path("/")
     for part in p.parts[1:]:
@@ -346,8 +346,14 @@ def main():
     la=subs.add_parser("launch"); la.add_argument("--requests-root",required=True); la.add_argument("--default-zcode",required=True); la.add_argument("native_args",nargs=argparse.REMAINDER)
     bi=subs.add_parser("bind-receipt")
     for key in ("requests-root","request-file","receipt"): bi.add_argument("--"+key,required=True)
+    resume=subs.add_parser("resume-exec", help="Explicit closed recovery runner; first-start request path is unchanged")
+    resume.add_argument("--intent",required=True)
     a=p.parse_args()
     try:
+        if a.action=="resume-exec":
+            from zcode_closed_recovery import resume_exec
+            resume_exec(a.intent)
+            return
         if a.action=="preflight": request_root(a.requests_root); version_ok(a.app_version); out={"ok":True}
         elif a.action=="prepare": out=prepare(a)
         elif a.action=="launch": launch(a); return

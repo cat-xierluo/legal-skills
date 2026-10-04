@@ -71,6 +71,24 @@ def load_completion(path_text: str, authority_path: str, authority_sha: str) -> 
     return value
 
 
+
+def dispatch_identity(dispatch: dict) -> dict:
+    """Normalize official aliases; contradictory/empty explicit aliases refuse."""
+    if not isinstance(dispatch, dict):
+        raise ValueError("dispatch object required")
+    aliases = {"dispatch_id": ("id",), "task_id": ("task_id", "taskId"),
+               "terminal_handle": ("assignee_handle", "assigneeHandle"),
+               "run_id": ("run_id", "runId"),
+               "process_incarnation": ("process_incarnation", "processIncarnation"),
+               "capability_hash": ("capability_hash", "capabilityHash")}
+    result = {}
+    for field, names in aliases.items():
+        values = [dispatch[name] for name in names if name in dispatch]
+        if not values or any(not isinstance(v, str) or not v for v in values) or len(set(values)) != 1:
+            raise ValueError("dispatch identity alias missing/conflicting: " + field)
+        result[field] = values[0]
+    return result
+
 def live_dispatch_matches(receipt: dict, cli_path: str) -> bool:
     if not cli_path or not os.path.isabs(cli_path):
         return False
@@ -85,8 +103,11 @@ def live_dispatch_matches(receipt: dict, cli_path: str) -> bool:
         if payload.get("_meta", {}).get("runtimeId") != receipt.get("runtime_id"):
             return False
         dispatch = payload["result"]["dispatch"]
-        mapping = {"id": "dispatch_id", "task_id": "task_id", "assignee_handle": "terminal_handle",
-                   "run_id": "run_id", "process_incarnation": "process_incarnation", "capability_hash": "capability_hash"}
-        return isinstance(dispatch, dict) and all(dispatch.get(key) == receipt.get(field) for key, field in mapping.items())
+        identity = dispatch_identity(dispatch)
+        if dispatch.get("status") not in {"dispatched", "active"}:
+            return False
+        if dispatch.get("capabilityRevokedAt") or dispatch.get("capability_revoked_at"):
+            return False
+        return all(identity[field] == receipt.get(field) for field in identity)
     except (AttributeError, KeyError, TypeError, ValueError, OSError, subprocess.SubprocessError):
         return False

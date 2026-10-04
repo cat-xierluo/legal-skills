@@ -284,8 +284,12 @@ python3 scripts/test-autopilot-facts.py
 
 ### Task-067 — durable scheduler 与 soft park（DRAFT）
 
+2026-10-02现场缺口：部分消费者只有宏观总控心跳、未启用或缺专属监测，后由真人催促才恢复；这不是自动自愈。CONTINUATION-READINESS卡只交付显式Wave的只读准备检查，不完成本卡。后续沿原PM/原Task验收真实宿主job管理、丢推送后读取完成事实、不同上下文独审/写回/下一合法动作，以及退出/到期恢复；保留trigger_origin与manual_interventions，无人工介入的证据链不足时仍NOT_VERIFIED。
+
 依赖 Task-066、Task-064 的 live-session 额度窗口/再唤醒结论和至少一个宿主正式调度合同。实现外部定时唤醒、job identity、暂停/删除、通知、provider `retry_at`/fallback/soft park/resume；宿主无法无会话执行时必须降级声明 L2。Task-064 解决当前会话内的判活与 one-shot 再唤醒，Task-067 只负责把它提升为可跨会话恢复的持久状态，不重复实现同一 playbook。
 
 ### Task-068 — 跨会话协议收敛与可移植性回归（DRAFT）
+
+2026-10-02现场缺口：Fathom内嵌副本2.28.0与全局2.34.1漂移已确认，尚未证明它导致本轮就绪失败。后续盘点每个消费者实际读取的Skill路径、版本和digest，在原owner下做副本更新及原任务回归；不把全局别名已更新扩大为所有在途聊天重新读取。Orca orphaned/readiness和partial-create按各自原卡处理，不因文案更新结案。
 
 等待 Task-063 的 live-session 判活信号分级与 Task-065 的 shared-doc 冲突工具边界固定后，把 cron 模板与 supervised Dispatch-first 完成权威对齐；增加静态 lint 防 `STATUS/Sentinel` 冒充结算、防“session-only 即 durable”声明；验证 Skill 固定版本可在新 clone/新 worktree 被发现，公开 reference 不依赖 ignored-only 决策或本机绝对链接。Task-065 若继续实现，只能作为历史并发写回的恢复/拼装工具，不能放宽本文的 PM 单写者默认。

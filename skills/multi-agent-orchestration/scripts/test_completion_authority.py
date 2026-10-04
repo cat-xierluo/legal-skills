@@ -38,7 +38,7 @@ class CompletionAuthorityTests(unittest.TestCase):
         }
         self.write_json(self.receipt, self.data)
         self.live = {"ok": True, "_meta": {"runtimeId": "runtime_test"}, "result": {"dispatch": {
-            "id": "ctx_test", "task_id": "task_test", "assignee_handle": "term_test",
+            "id": "ctx_test", "status": "dispatched", "task_id": "task_test", "assignee_handle": "term_test",
             "run_id": "run_test", "process_incarnation": "process_test",
             "capability_hash": self.data["capability_hash"],
         }}}
@@ -188,6 +188,22 @@ class CompletionAuthorityTests(unittest.TestCase):
 
     def test_arbitrary_executable_named_orca_is_denied(self):
         self.assert_denied(self.command.replace("orca orchestration", "/tmp/untrusted/orca orchestration"))
+
+    def test_unknown_missing_and_failed_dispatch_states_are_denied(self):
+        for state in (None, "unknown", "failed", "completed", "stopped"):
+            self.live["result"]["dispatch"]["status"] = state
+            self.write_json(self.live_file, self.live)
+            self.assert_denied()
+
+    def test_official_camel_aliases_and_conflicts(self):
+        dispatch = self.live["result"]["dispatch"]
+        for snake, camel in (("task_id", "taskId"), ("assignee_handle", "assigneeHandle"), ("run_id", "runId"), ("process_incarnation", "processIncarnation"), ("capability_hash", "capabilityHash")):
+            dispatch[camel] = dispatch.pop(snake)
+        self.write_json(self.live_file, self.live)
+        self.assertEqual(self.hook(), "")
+        dispatch["task_id"] = "task_conflict"
+        self.write_json(self.live_file, self.live)
+        self.assert_denied()
 
     def test_group_writable_receipt_is_denied(self):
         self.receipt.chmod(0o660)

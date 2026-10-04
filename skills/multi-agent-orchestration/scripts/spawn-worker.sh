@@ -455,6 +455,22 @@ fi
 printf 'SPAWN_WORKER_COMMAND_POLICY: backend=%s command_sha256=%s\n' \
   "$WORKER_BACKEND_CANONICAL" "$WORKER_COMMAND_SHA256"
 
+# Explicit opt-in only. Bind actual launcher before quota/lease/worktree effects;
+# this never grants existing-session reuse or a zero incremental budget.
+MEMORY_TASK_PROFILE="${SPAWN_WORKER_MEMORY_TASK_PROFILE:-}"
+MEMORY_TASK_HEAP_MB=""
+MEMORY_TASK_ORIGINAL_COMMAND="$COMMAND"
+MEMORY_TASK_BINDING_B64=""
+if [ -n "$MEMORY_TASK_PROFILE" ]; then
+  if ! memory_task_binding=$(python3 "$SCRIPT_DIR/memory_task_admission.py" bind-spawn \
+      --profile "$MEMORY_TASK_PROFILE" --command "$COMMAND" --backend "$WORKER_BACKEND_CANONICAL"); then
+    echo "ERROR: task memory profile/actual Node binding refused before resources" >&2
+    exit 64
+  fi
+  MEMORY_TASK_HEAP_MB=$(printf '%s' "$memory_task_binding" | jq -r '.heap_mb // empty')
+  MEMORY_TASK_BINDING_B64=$(printf '%s' "$memory_task_binding" | python3 -c 'import sys,json,base64; print(base64.urlsafe_b64encode(json.dumps(json.load(sys.stdin),sort_keys=True,separators=(",",":")).encode()).decode())')
+fi
+
 # Resolve the actual COMMAND only after the verified PM policy chain. This
 # plans dispatch; it does not replace any quota, authority or runtime gate.
 if [ "$NO_ORCA_MODE" -eq 1 ]; then
@@ -637,7 +653,15 @@ quota_preflight_run
 mem_budget_gate_run() {
   local probe_out probe_rc probe_status probe_reason
   set +e
-  probe_out=$(python3 "$SCRIPT_DIR/mem_budget_probe.py" --json)
+  local memory_profile_args=()
+  if [ -n "$MEMORY_TASK_PROFILE" ]; then
+    if [ "$COMMAND" != "$MEMORY_TASK_ORIGINAL_COMMAND" ]; then
+      echo "ERROR: memory profile cannot prove provider shell wrapper; refusing before resources" >&2
+      exit 4
+    fi
+    memory_profile_args=(--task-profile "$MEMORY_TASK_PROFILE" --task-command "$MEMORY_TASK_ORIGINAL_COMMAND" --task-backend "$WORKER_BACKEND_CANONICAL" --task-binding-b64 "$MEMORY_TASK_BINDING_B64")
+  fi
+  probe_out=$(python3 "$SCRIPT_DIR/mem_budget_probe.py" --json "${memory_profile_args[@]}")
   probe_rc=$?
   set -e
   probe_status=$(printf '%s' "$probe_out" | jq -r '.status // "unprobeable"' 2>/dev/null) || probe_status="unprobeable"
@@ -952,6 +976,7 @@ fi
 if [ "$DRY_RUN" -eq 0 ] && [ "$LIGHTWEIGHT_MODE" -eq 0 ]; then
   pregate_branch=$(git -C "$WORKTREE" branch --show-current 2>/dev/null || echo "")
   pregate_head=$(git -C "$WORKTREE" rev-parse HEAD 2>/dev/null || echo "")
+  pregate_common=$(git -C "$WORKTREE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "")
   echo "SPAWN_WORKER_ISOLATION_PREGATE: cwd=$WORKTREE branch=$pregate_branch expected_branch=$BRANCH head=${pregate_head:-unresolvable}"
   if [ ! -d "$WORKTREE" ] || [ -z "$pregate_head" ] || [ "$pregate_branch" != "$BRANCH" ]; then
     echo "ERROR: isolation pre-gate failed before any terminal/worker-start/dispatch side effect: actual_branch=$pregate_branch expected_branch=$BRANCH head=${pregate_head:-unresolvable}（实测：复用已有 worktree/branch 时 Orca 可能已自动改用 -2 后缀分支；worktree 保留供 PM 清理，本次未注入任何任务）" >&2
@@ -1502,6 +1527,34 @@ scope_guard_setup() {
 # 时跳过（不覆盖用户显式配置，只打印提示）。
 node_mem_cap_setup() {
   local cap_mb="${SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB:-2048}"
+  if [ -n "${MEMORY_TASK_PROFILE:-}" ]; then
+    # Recheck the same complete early binding, even for heavy profiles. Never
+    # infer late authorization from a cached heap/kind field.
+    if [ -z "${MEMORY_TASK_BINDING_B64:-}" ] || [ -z "${MEMORY_TASK_ORIGINAL_COMMAND:-}" ]; then
+      echo "ERROR: task memory launch missing early binding" >&2
+      exit 64
+    fi
+    MEMORY_TASK_RENDER_OUTER_COMMAND="$COMMAND"
+    if ! COMMAND=$(python3 "$SCRIPT_DIR/memory_task_admission.py" render-launch \
+        --profile "$MEMORY_TASK_PROFILE" --command "$MEMORY_TASK_ORIGINAL_COMMAND" \
+        --backend "$WORKER_BACKEND_CANONICAL" --binding-b64 "$MEMORY_TASK_BINDING_B64" \
+        --outer-command "$COMMAND" --execution-cwd "$WORKTREE" --pregate-branch "${pregate_branch:-}" \
+        --pregate-head "${pregate_head:-}" --pregate-common "${pregate_common:-}"); then
+      echo "ERROR: task memory profile/entry/interpreter drift at late launch boundary" >&2
+      exit 64
+    fi
+    MEMORY_TASK_RENDERED_COMMAND="$COMMAND"
+    local verified_memory_kind
+    # render-launch has just compared the complete binding against the live
+    # profile. This label consumes that verified kind; it grants no permission.
+    verified_memory_kind=$(printf '%s' "$MEMORY_TASK_BINDING_B64" | python3 -c 'import sys,json,base64; print(json.loads(base64.urlsafe_b64decode(sys.stdin.read()))["kind"])')
+    case "$verified_memory_kind" in
+      light_node) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical execution guard; light total<=512MiB old-space=480MB semi-space=1MB" ;;
+      bounded_minimax_unmeasured) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical MiniMax old-space=2048MB semi-space=1MB; whole-worker budget>=3GiB; RSS not_measured, not a hard RSS cap" ;;
+      *) echo "SPAWN_WORKER_NODE_MEM_CAP: bound canonical execution guard; workload-specific heap and whole-worker budget in binding receipt" ;;
+    esac
+    return 0
+  fi
   if [ "$cap_mb" = "0" ]; then
     echo "SPAWN_WORKER_NODE_MEM_CAP: disabled (SPAWN_WORKER_NODE_MAX_OLD_SPACE_MB=0)"
     return 0

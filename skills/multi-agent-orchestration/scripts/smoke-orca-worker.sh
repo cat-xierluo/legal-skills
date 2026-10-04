@@ -19,10 +19,16 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TMP_ROOT=$(mktemp -d)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
-SESSION="smoke-orca-$$"
+# One private identity for this test invocation; a collision remains a failure.
+# This does not change or recover any production worker identity.
+SMOKE_NONCE="$(basename "$TMP_ROOT" | tr -cd 'A-Za-z0-9')-$$"
+SESSION="smoke-orca-$SMOKE_NONCE"
 REPO="$TMP_ROOT/repo"
-BRANCH="feat/smoke-orca"
-WT="$REPO/.claude/worktrees/tmux-smoke-orca"
+BRANCH="feat/smoke-orca-$SMOKE_NONCE"
+SUPERVISED_BRANCH="$BRANCH-supervised"
+WAVE_BRANCH="$BRANCH-wave"
+safe_branch=$(printf '%s' "$BRANCH" | tr '/[:space:]' '-' | tr -cd 'A-Za-z0-9._-')
+WT="$REPO/.claude/worktrees/tmux-$safe_branch"
 CTX="$WT/.claude/agent-sessions/$SESSION"
 
 assert_contains() {
@@ -169,7 +175,7 @@ echo "=== Step 5: 无 sender 的 supervised dry-run 在资源计划前拒绝 ===
 supervised_rc=0
 supervised_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID -u ORCA_TERMINAL_HANDLE bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$current_path" \
-  --branch "feat/smoke-orca-supervised" \
+  --branch "$SUPERVISED_BRANCH" \
   --session "$SESSION-supervised" \
   --command 'codex' \
   --worker-backend codex \
@@ -193,7 +199,7 @@ wave_rc=0
 invalid_sender="term-smoke-pm-$SESSION"
 wave_out=$(env -u TERM_PROGRAM -u ORCA_WORKTREE_ID -u ORCA_TERMINAL_HANDLE bash "$SCRIPT_DIR/spawn-worker.sh" \
   --project "$current_path" \
-  --branch "feat/smoke-orca-wave" \
+  --branch "$WAVE_BRANCH" \
   --session "$SESSION-wave" \
   --command 'codex' \
   --worker-backend codex \

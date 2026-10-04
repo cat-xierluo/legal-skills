@@ -407,3 +407,11 @@ raise SystemExit(1)
   ORCAREG_BIND_DISPATCH_ID="$dispatch_id"
   ORCAREG_BIND_STATUS="$dispatch_bind"
 }
+
+# Explicit closed recovery uses its full receipt chain transaction, never the
+# same-task legacy replacement check or automatic dispatch supplementation.
+orchestration_closed_recovery_adopt() {
+  local script_dir
+  script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  python3 "$script_dir/zcode_closed_recovery.py" adopt --intent "$1" --new-dispatch "$2"
+}

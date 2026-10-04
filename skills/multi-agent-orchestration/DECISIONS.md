@@ -127,6 +127,13 @@
 
 MiniMax `exec` 是已读取完整输入的非交互运行，不存在待输入的 composer。基于复用命令验证器解析的真实 CLI argv 分类，仅 terminal-managed batch 跳过 TUI 等待和第二次任务发送；不是按命令字符串包含 exec 判定。严格核对 terminal-create 回执并及早保存身份，启动成功只证明已启动，不代表任务完成。交互模式和 ZCode 原生 supervised 保持各自合同，batch 与 supervised/precreated Task 的冲突在资源副作用前拒绝。原消费任务由原 PM 接续，不用本修复重启或重造。
 
+## DEC-2026-10-02-CONTINUATION-READINESS
+
+- 背景：现场审计中部分心跳是由真人催促才恢复，之前只读状态变化不足以证明自动自愈；持续监测要求停留在PM文案，Wave准备入口没有机械核验，单卡泊车的旧CronDelete句又可能误停项目监测。
+- 决策：显式one_wave/continuous分流；continuous在资源副作用前只读核验现有正式宿主配置与原PM/原卡绑定。配置准备、实际触发、自动业务接续分别记证据，保留人工介入。旧无字段入口兼容，持续调度、其他宿主和版本部署继续原Task-067/068。
+- 理由与边界：先消除可确定性复现的准备遗漏和文案冲突，不以配置文件存在替代真正执行，也不为修复另造controller或重派在途任务。只暂停受阻依赖链；暂时无READY低成本等待，全局停止须原合同成立。
+- 重新评估条件：正式宿主提供事件/绑定schema和完整返回→独审→写回→续派证据后扩展执行适配；不能靠增加自述字段提升自动化等级。
+
 ## 2026-10-03 — MAO采用 main 加单一 GUI 长期功能线
 
 云端11个MAO草稿PR中，7个组成GUI证据与交接链，两个通用修复独立可验，另两个有共享文档冲突/未发布依赖。为保留子任务审查、减少依赖PR直接堆在main并避免多个共享核心分支长期分叉，采用 `main` + `integration/mao-zcode-gui`。短fix/feat/test分支继续作为可独立验收的worker交付；长期线接子PR，满足具名里程碑后再提main集成PR。owner、固定worktree、GUI-M1及波次同步合同以 TASK-2026-10-03-CLOUD-PR-INTEGRATION-AUDIT 为唯一任务权威。

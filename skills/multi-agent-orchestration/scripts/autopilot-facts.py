@@ -60,10 +60,11 @@ SOURCE_ENV = {
 
 
 class FactsError(Exception):
-    def __init__(self, code: int, message: str):
+    def __init__(self, code: int, message: str, *, identity_observation: dict[str, Any] | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.identity_observation = identity_observation
 
 
 class Parser(argparse.ArgumentParser):
@@ -406,6 +407,42 @@ def _git_text(
         return 0, raw.decode("utf-8")
     except UnicodeDecodeError:
         return EXIT_DATA, ""
+
+
+def _identity_error(code: int, operation: str, status: str, observation: dict[str, Any]) -> FactsError:
+    # These fixed labels and scalar fields are deliberately independent of child
+    # output, argv paths, policy OIDs and environment values.
+    return FactsError(code, "repository identity unverified" if code != EXIT_IDENTITY else
+                      "repository or policy identity drift", identity_observation={
+        "operation": operation, "status": status,
+        "exit_code": observation["exit_code"], "elapsed_ms": observation["elapsed_ms"],
+    })
+
+
+def _identity_git_text(
+    git_spec: dict[str, Any], repo: Path, args: list[str], *, operation: str,
+    timeout: float, max_output: int, evidence: list[dict[str, Any]],
+) -> tuple[str, dict[str, Any]]:
+    rc, raw, status = _run(
+        git_spec, ["-C", str(repo)] + args, stdin_value=None, cwd=repo,
+        timeout=timeout, max_output=max_output, source="git:identity", evidence=evidence,
+    )
+    observation = evidence[-1]
+    failure_codes = {"timeout": EXIT_UNAVAILABLE, "unavailable": EXIT_UNAVAILABLE,
+                     "io_error": EXIT_IO, "output_limit": EXIT_DATA}
+    if status in failure_codes:
+        raise _identity_error(failure_codes[status], operation, status, observation)
+    if rc != 0 or status != "ok":
+        # Nonzero alone cannot distinguish a missing object from permissions or
+        # object-store failure. It does not establish an identity mismatch.
+        raise _identity_error(EXIT_UNAVAILABLE, operation, status, observation)
+    try:
+        text = raw.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise _identity_error(EXIT_DATA, operation, "invalid_data", observation) from exc
+    if operation != "policy_commit" and (not text or any(ord(char) < 32 or ord(char) == 127 for char in text)):
+        raise _identity_error(EXIT_DATA, operation, "invalid_data", observation)
+    return text, observation
 
 
 def _parse_worktrees(raw: str) -> list[dict[str, str]] | None:
@@ -1121,20 +1158,35 @@ def collect(
     git_spec = identity["tools"]["git"]
     repo = identity["repo"]
     common = identity["common_dir"]
-    rc, top = _git_text(git_spec, repo, ["rev-parse", "--show-toplevel"], timeout=timeout,
-                        max_output=max_output, evidence=evidence, source="git:repo")
-    rc2, common_raw = _git_text(git_spec, repo, ["rev-parse", "--git-common-dir"], timeout=timeout,
-                                max_output=max_output, evidence=evidence, source="git:repo")
-    rc3, _ = _git_text(git_spec, repo, ["cat-file", "-e", f"{identity['policy_commit']}^{{commit}}"],
-                       timeout=timeout, max_output=max_output, evidence=evidence, source="git:policy")
+    top, observation = _identity_git_text(
+        git_spec, repo, ["rev-parse", "--show-toplevel"], operation="repository_root",
+        timeout=timeout, max_output=max_output, evidence=evidence,
+    )
+    if not Path(top).is_absolute():
+        raise _identity_error(EXIT_DATA, "repository_root", "invalid_data", observation)
     try:
-        actual_common = _resolve_git_common(common_raw, repo) if rc2 == 0 else None
-        actual_top = Path(top.strip()).resolve(strict=True) if rc == 0 else None
-    except OSError:
-        actual_common = actual_top = None
+        actual_top = Path(top).resolve(strict=True)
+    except OSError as exc:
+        raise _identity_error(EXIT_IO, "repository_root", "io_error", observation) from exc
+    if actual_top != repo:
+        raise _identity_error(EXIT_IDENTITY, "repository_root", "mismatch", observation)
+    common_raw, observation = _identity_git_text(
+        git_spec, repo, ["rev-parse", "--git-common-dir"], operation="git_common_dir",
+        timeout=timeout, max_output=max_output, evidence=evidence,
+    )
+    try:
+        actual_common = _resolve_git_common(common_raw, repo)
+    except OSError as exc:
+        raise _identity_error(EXIT_IO, "git_common_dir", "io_error", observation) from exc
+    if actual_common != common:
+        raise _identity_error(EXIT_IDENTITY, "git_common_dir", "mismatch", observation)
     calculated_identity = hashlib.sha256(str(common).encode("utf-8")).hexdigest()
-    if rc != 0 or rc2 != 0 or rc3 != 0 or actual_top != repo or actual_common != common or calculated_identity != identity["repo_identity"]:
-        raise FactsError(EXIT_IDENTITY, "repository or policy identity drift")
+    if calculated_identity != identity["repo_identity"]:
+        raise _identity_error(EXIT_IDENTITY, "repository_hash", "mismatch", observation)
+    _identity_git_text(
+        git_spec, repo, ["cat-file", "-e", f"{identity['policy_commit']}^{{commit}}"], operation="policy_commit",
+        timeout=timeout, max_output=max_output, evidence=evidence,
+    )
     observed_items: list[dict[str, Any]] = []
     for item in items:
         rc_branch, _ = _git_text(
@@ -1251,7 +1303,10 @@ def main() -> int:
         print(encoded)
         return 0
     except FactsError as exc:
-        print(json.dumps({"error": exc.message, "exit_code": exc.code}, ensure_ascii=False), file=sys.stderr)
+        error = {"error": exc.message, "exit_code": exc.code}
+        if exc.identity_observation is not None:
+            error["identity_observation"] = exc.identity_observation
+        print(json.dumps(error, ensure_ascii=False), file=sys.stderr)
         return exc.code
     except KeyboardInterrupt:
         print(json.dumps({"error": "interrupted", "exit_code": 75}), file=sys.stderr)
