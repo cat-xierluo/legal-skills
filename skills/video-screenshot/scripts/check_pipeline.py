@@ -88,6 +88,8 @@ def parse_args() -> argparse.Namespace:
             "transactional-output",
             "archive-metadata",
             "benchmark",
+            "benchmark-contract",
+            "benchmark-ocr",
             "evidence-signals",
             "evidence-package",
             "evidence-review",
@@ -1076,7 +1078,7 @@ def _test_archive_metadata_only() -> None:
         assert meta["review"]["drop_candidates_archived"] is False
 
 
-def _test_benchmark() -> None:
+def _test_benchmark(profiles: str = "visual") -> None:
     _input_args, _vf, output_args = build_ffmpeg_filter_args(
         "scene", 1.0, 0.10, frame_rate_fps=30.0, sample_interval=2.0
     )
@@ -1092,6 +1094,7 @@ def _test_benchmark() -> None:
             json.dumps(
                 {
                     "schema_version": "video-screenshot-benchmark/v1",
+                    "corpus_kind": "synthetic",
                     "acceptance": {
                         "min_distinct_categories": 5,
                         "required_profiles": ["visual", "ocr"],
@@ -1139,7 +1142,7 @@ def _test_benchmark() -> None:
                 "--workspace",
                 str(workspace),
                 "--profiles",
-                "visual",
+                profiles,
             ],
             capture_output=True,
             text=True,
@@ -1156,11 +1159,16 @@ def _test_benchmark() -> None:
         assert summary["accuracy_improvement_claim_allowed"] is False
         visual = summary["cases"][0]["profiles"]["visual"]
         assert visual["status"] == "scored" and visual["must_keep_recall"] == 1.0
+        if "ocr" in profiles:
+            assert summary["cases"][0]["profiles"]["ocr"]["status"] == "scored"
+            assert summary["profile_comparison"]["paired_case_count"] == 1
         assert str(video) not in summary_text
         assert video.name not in summary_text
         assert "start_seconds" not in summary_text and "end_seconds" not in summary_text
         state_text = (workspace / "benchmark_state.json").read_text(encoding="utf-8")
         assert str(video) not in state_text and video.name not in state_text
+        checked = subprocess.run([sys.executable, str(ROOT / "check_benchmark_summary.py"), "--input", str(summary_path)], capture_output=True, text=True)
+        assert checked.returncode == 0, checked.stdout + checked.stderr
 
         invalid_manifest = root / "invalid-manifest.json"
         invalid_manifest.write_text(manifest.read_text(encoding="utf-8").replace("CASE-001", "客户名称"), encoding="utf-8")
@@ -1171,6 +1179,126 @@ def _test_benchmark() -> None:
             check=False,
         )
         assert invalid.returncode == 2 and "匿名编号" in invalid.stderr
+
+        def score(extra: list[str] | None = None) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, str(ROOT / "benchmark.py"), "score", "--manifest", str(manifest), "--workspace", str(workspace), *(extra or [])], capture_output=True, text=True, timeout=30)
+
+        assert score().returncode == 0
+        # 指定报告只新建；不能把原视频、manifest 或任意既有文件覆盖成汇总。
+        before_video = _sha(video)
+        assert score(["--public-report", str(video)]).returncode == 2
+        assert _sha(video) == before_video
+        published = root / "new-public-summary.json"
+        assert score(["--public-report", str(published)]).returncode == 0
+        assert json.loads(published.read_text()) == summary
+        assert score(["--public-report", str(published)]).returncode == 2
+        link = root / "workspace-link"
+        link.symlink_to(workspace, target_is_directory=True)
+        linked = subprocess.run([sys.executable, str(ROOT / "benchmark.py"), "score", "--manifest", str(manifest), "--workspace", str(link)], capture_output=True, text=True)
+        assert linked.returncode == 2
+        # 真实产物被改动，旧分数不能继续通过；失败时已有汇总不变。
+        state = json.loads(state_text)
+        output = workspace / state["runs"]["CASE-001:visual"]["output_relative"]
+        frame = next(output.glob("frame_*.jpg"))
+        frame.write_bytes(frame.read_bytes() + b"tampered")
+        assert score().returncode == 2
+        assert summary_path.read_text(encoding="utf-8") == summary_text
+        # 损坏媒体应被识别，不能将依赖错误误记成媒体失败合同通过。
+        import benchmark as bench
+        broken = root / "private-broken.mp4"
+        broken.write_bytes(b"not-a-video")
+        failure_case = {"video_path": str(broken), "expected_outcome": "failure", "budget": {"max_runtime_seconds": 90}}
+        failure_run = bench._execute_case(failure_case, "visual", workspace / "runs" / "CASE-002" / "failure")
+        assert failure_run["status"] == "expected_failure_observed", failure_run
+        # 原视频换成另一份后，run 也不能覆盖旧状态并复用同一个评测身份。
+        video.write_bytes(video.read_bytes() + b"source-changed")
+        state_before = (workspace / "benchmark_state.json").read_bytes()
+        rerun = subprocess.run([sys.executable, str(ROOT / "benchmark.py"), "run", "--manifest", str(manifest), "--workspace", str(workspace), "--profiles", "visual"], capture_output=True, text=True, timeout=30)
+        assert rerun.returncode == 2 and "源视频已变化" in rerun.stderr
+        assert (workspace / "benchmark_state.json").read_bytes() == state_before
+
+
+def _test_benchmark_contract() -> None:
+    import copy
+    import benchmark as bench
+
+    def blocked(callable_) -> None:
+        try:
+            callable_()
+        except bench.BenchmarkError:
+            return
+        raise AssertionError("预期失败关闭，但函数返回成功")
+
+    with tempfile.TemporaryDirectory(prefix="video-screenshot-benchmark-contract-") as tmp:
+        root = Path(tmp).resolve()
+        video = root / "sample.mp4"
+        video.write_bytes(b"synthetic-source")
+        raw = bench._template()
+        raw["corpus_kind"] = "synthetic"
+        case = raw["cases"][0]
+        case["video_path"] = str(video)
+        case["annotations"] = {
+            "must_keep": [{"id": "K-001", "start_seconds": 0, "end_seconds": 1}, {"id": "K-002", "start_seconds": 9, "end_seconds": 10}],
+            "transitions": [{"id": "T-001", "start_seconds": 2, "end_seconds": 3}],
+            "page_windows": [{"id": "P-001", "start_seconds": 0, "end_seconds": 1, "max_selected": 1}],
+        }
+        normalized = bench._validate_manifest(raw, check_files=True)
+        case = normalized["cases"][0]
+        output = root / "runs" / "CASE-001" / ("visual-" + "a" * 32)
+        output.mkdir(parents=True)
+        report = {"duration_seconds": 10, "options": {"content_delta_mode": "visual_only"}, "frames": []}
+        for index, timestamp in enumerate([0.5, 0.8, 2.5, 5.0], 1):
+            name = f"frame_{index:03d}_synthetic.jpg"
+            Image.new("RGB", (16, 16), (index, 20, 40)).save(output / name)
+            report["frames"].append({"filename": name, "sha256": _sha(output / name), "capture_time_seconds": timestamp})
+        report_path = output / "_report.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        run = {"status": "completed", "runtime_seconds": 2, "video_sha256": bench._file_sha(video), "output_relative": str(output.relative_to(root)), "report_sha256": bench._file_sha(report_path), "frame_payload_sha256": bench._verified_frames_sha(report, output)}
+        metrics = bench._score_case(case, run, root, "visual")
+        # 人工固定预期，而非调用生产公式生成期望值。
+        assert metrics["must_keep_recall"] == 0.5
+        assert metrics["transition_leakage_rate"] == 0.25
+        assert metrics["duplicate_excess_rate"] == 0.25
+        assert metrics["frames_per_minute"] == 24
+        duplicate = copy.deepcopy(raw)
+        duplicate["cases"][0]["annotations"]["page_windows"].append({"id": "P-002", "start_seconds": 0.5, "end_seconds": 1.5, "max_selected": 1})
+        blocked(lambda: bench._validate_manifest(duplicate, check_files=True))
+        video.write_bytes(b"source-changed")
+        blocked(lambda: bench._score_case(case, run, root, "visual"))
+        video.write_bytes(b"synthetic-source")
+        altered_run = {**run, "output_relative": "../escape"}
+        blocked(lambda: bench._score_case(case, altered_run, root, "visual"))
+        with patch.object(bench, "_run_extractor", side_effect=subprocess.TimeoutExpired("extract", 1)):
+            assert bench._execute_case(case, "visual", root / "runs" / "CASE-001" / "timeout")["status"] == "failed_timeout"
+        try:
+            bench._run_extractor([sys.executable, "-c", "import time; time.sleep(10)"], 0.1)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            raise AssertionError("真实子进程未被超时终止")
+        with patch.object(bench, "_run_extractor", return_value=subprocess.CompletedProcess([], 0, "", "")):
+            assert bench._execute_case(case, "ocr", output)["status"] == "failed_profile_downgrade"
+        failure = {**case, "expected_outcome": "failure"}
+        with patch.object(bench, "_run_extractor", return_value=subprocess.CompletedProcess([], 1, "", "Traceback: missing dependency")), patch.object(bench.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "")):
+            assert bench._execute_case(failure, "visual", output)["status"] == "failure_contract_not_verified"
+        # 两种 profile 没有共同成功样本，不能相减不同样本集的召回。
+        second = copy.deepcopy(case)
+        second["case_id"] = "CASE-002"
+        normalized["cases"].append(second)
+        state = {"runs": {"CASE-001:visual": {}, "CASE-002:ocr": {}}}
+        def result(case_, run_, workspace_, profile_):
+            return metrics if (case_["case_id"], profile_) in {("CASE-001", "visual"), ("CASE-002", "ocr")} else {"status": "not_run"}
+        with patch.object(bench, "_score_case", side_effect=result):
+            summary = bench._build_summary(normalized, "synthetic", state, root)
+        assert summary["profile_comparison"]["status"] == "not_available"
+        # 即使合成的五类双路径跑齐，也不能获得真实验收或准确率提升声明。
+        normalized["cases"] = [{**case, "case_id": f"CASE-{index:03d}", "category": category} for index, category in enumerate(["xiaohongshu", "wechat_chat", "product_work", "qualification_document", "long_scroll"], 1)]
+        with patch.object(bench, "_score_case", return_value=metrics):
+            summary = bench._build_summary(normalized, "synthetic", state, root)
+        assert summary["baseline_complete"] is True
+        assert summary["real_baseline_status"] == "not_verified"
+        assert summary["comparative_evaluation_ready"] is False
+        assert summary["accuracy_improvement_claim_allowed"] is False
 
 
 def _test_evidence_signals() -> None:
@@ -1330,6 +1458,14 @@ def _test_evidence_review_boundary() -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.case == "benchmark-ocr":
+        try:
+            _test_benchmark("visual,ocr")
+            print("PASS benchmark-ocr\nDOMAIN_CHECKS_PASSED")
+            return 0
+        except Exception as exc:
+            print(f"FAIL benchmark-ocr: {exc}", file=sys.stderr)
+            return 1
     if args.case == "fault-invalid-review":
         returncode, output, curated_exists = _run_invalid_review_fault()
         if output.strip():
@@ -1367,6 +1503,7 @@ def main() -> int:
         "transactional-output": _test_transactional_output,
         "archive-metadata": _test_archive_metadata_only,
         "benchmark": _test_benchmark,
+        "benchmark-contract": _test_benchmark_contract,
         "evidence-signals": _test_evidence_signals,
         "evidence-package": _test_evidence_package,
         "evidence-review": _test_evidence_review,

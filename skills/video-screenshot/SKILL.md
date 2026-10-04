@@ -70,7 +70,7 @@ uv run --with rapidocr-onnxruntime scripts/benchmark.py run \
   --profiles visual,ocr
 ```
 
-manifest 只使用 `CASE-001` 这类匿名编号；workspace、视频、基础报告与标注不得进入仓库。脱敏汇总不保存源路径、OCR 原文、标注时间点或帧名。少于五类真实页面、缺少候选外标注或双路径未跑齐时，必须保持 `real_baseline_status=not_verified`；合成回归不得替代真实准确率结论。完整协议见 `references/benchmarking.md`。
+manifest 只使用 `CASE-001` 这类匿名编号；workspace、视频、基础报告与标注不得进入仓库。脱敏汇总不保存源路径、OCR 原文、标注时间点或帧名。少于指定五类真实页面、缺少候选外标注或双路径未跑齐时，必须保持 `real_baseline_status=not_verified`；合成回归不得替代真实准确率结论。全部跑齐也只标记 `recorded_requires_human_review`，真实来源和标注语义仍由人工确认。完整协议见 `references/benchmarking.md`。
 
 ### 5. 生成高价值证据线索包
 

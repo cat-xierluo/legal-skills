@@ -8,12 +8,13 @@
       "scripts/prepare_vision_audit.py",
       "scripts/apply_vision_review.py",
       "scripts/prepare_evidence_leads.py",
-      "scripts/apply_evidence_review.py"
-      ,"scripts/benchmark.py"
+      "scripts/apply_evidence_review.py",
+      "scripts/benchmark.py"
     ]
   },
   "artifacts": [
-    {"id": "pipeline-validation", "stage": "final", "required": true}
+    {"id": "pipeline-validation", "stage": "final", "required": true},
+    {"id": "benchmark-summary", "stage": "final", "required": true}
   ],
   "checkers": [
     {
@@ -26,9 +27,30 @@
       "implementation": "scripts/check_stability_artifact.py",
       "args": ["--input", "{artifact:pipeline-validation}"],
       "timeout_seconds": 30
+    },
+    {
+      "id": "benchmark-invariants",
+      "kind": "active",
+      "modality": "schema",
+      "artifact_stages": ["final"],
+      "independent_from_producer": true,
+      "runtime": "python3",
+      "implementation": "scripts/check_benchmark_summary.py",
+      "args": ["--input", "{artifact:benchmark-summary}"],
+      "timeout_seconds": 30
     }
   ],
   "constraints": [
+    {
+      "id": "PRIVATE-BENCHMARK-NO-OVERCLAIM",
+      "severity": "hard",
+      "requirement_type": "schema",
+      "stage": "final",
+      "source_refs": ["SKILL.md#PRIVATE-BENCHMARK-NO-OVERCLAIM"],
+      "checker_ids": ["benchmark-invariants"],
+      "case_ids": ["benchmark-valid", "benchmark-overclaim"],
+      "historical_failure_known": false
+    },
     {
       "id": "BASE-HIGH-RECALL",
       "severity": "hard",
@@ -85,6 +107,24 @@
     }
   ],
   "cases": [
+    {
+      "id": "benchmark-valid",
+      "kind": "positive",
+      "constraint_ids": ["PRIVATE-BENCHMARK-NO-OVERCLAIM"],
+      "checker_ids": ["benchmark-invariants"],
+      "artifacts": [{"artifact_id": "benchmark-summary", "path": "assets/stability/benchmark-valid.json"}],
+      "expected": "pass",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "benchmark-overclaim",
+      "kind": "mutation",
+      "constraint_ids": ["PRIVATE-BENCHMARK-NO-OVERCLAIM"],
+      "checker_ids": ["benchmark-invariants"],
+      "artifacts": [{"artifact_id": "benchmark-summary", "path": "assets/stability/benchmark-overclaim.json"}],
+      "expected": "blocked",
+      "expected_exit_code": 3
+    },
     {
       "id": "pipeline-valid",
       "kind": "positive",
@@ -173,6 +213,14 @@
     "minimum_runs": 3,
     "measurements": [
       {
+        "id": "private-benchmark-no-overclaim-passed",
+        "checker_id": "benchmark-invariants",
+        "constraint_id": "PRIVATE-BENCHMARK-NO-OVERCLAIM",
+        "value_type": "boolean",
+        "condition": "equals",
+        "expected": true
+      },
+      {
         "id": "base-high-recall-passed",
         "checker_id": "pipeline-invariants",
         "constraint_id": "BASE-HIGH-RECALL",
@@ -214,6 +262,14 @@
       }
     ],
     "observables": [
+      {
+        "id": "benchmark-conclusion-status",
+        "checker_id": "benchmark-invariants",
+        "constraint_ids": ["PRIVATE-BENCHMARK-NO-OVERCLAIM"],
+        "comparison": "set_equal",
+        "required": true,
+        "tolerance": null
+      },
       {
         "id": "preserved-short-motion-groups",
         "checker_id": "pipeline-invariants",
