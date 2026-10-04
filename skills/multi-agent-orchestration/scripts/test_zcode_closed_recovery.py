@@ -174,8 +174,18 @@ class RecoveryTests(unittest.TestCase):
     def diagnostic_bytes(self):
         return tuple(p.read_bytes() for p in (Path(self.intent),self.metadata,self.cp,self.authority))
     def test_diagnose_title_rewrite_and_null_identity_is_readonly(self):
-        self.entry.write_text('process.on("SIGUSR1",()=>{process.title="zcode-cli"});setInterval(()=>{},1000);')
-        self.runner();self.proc.send_signal(__import__('signal').SIGUSR1)
+        # exec/argv verification can precede Node's module initialization. Wait
+        # for the owned fixture to install its handler before sending SIGUSR1.
+        signal_ready=self.root/'signal-handler-ready'
+        self.entry.write_text('import fs from "node:fs";process.on("SIGUSR1",()=>{process.title="zcode-cli"});'
+                              + 'fs.writeFileSync(' + json.dumps(str(signal_ready)) + ',"ready");setInterval(()=>{},1000);')
+        self.runner()
+        deadline=time.monotonic()+3
+        while not signal_ready.is_file() and self.proc.poll() is None and time.monotonic()<deadline:
+            time.sleep(.02)
+        self.assertTrue(signal_ready.is_file(),'owned Node fixture did not install its signal handler')
+        self.assertIsNone(self.proc.poll(),'owned Node fixture exited before the signal')
+        self.proc.send_signal(__import__('signal').SIGUSR1)
         for _ in range(100):
             command=subprocess.check_output(['/bin/ps','-ww','-p',str(self.proc.pid),'-o','command='],text=True).strip()
             if command=='zcode-cli':break
