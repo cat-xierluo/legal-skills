@@ -34,7 +34,6 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-04 | 更新 | [video-screenshot](skills/video-screenshot/) | v0.9.0→v0.9.1 | 录制五类真实录屏（小红书/聊天/商品作品/资质文书/长滚动）候选外标注与纯视觉/OCR 双路径基线，状态 recorded_requires_human_review、不构成准确率宣称；修复 VFR 录屏 frame_pts 时间戳拉长缺陷（改按 r_frame_rate 换算）并新增回归。源码 v0.9.1 尚未发布，下载保留 v0.8.2。 |
 | 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2→v1.13.0 | 新增 pre-worktree-check.sh 只读四态判读（IN_SYNC/AHEAD/BEHIND/DIVERGED）与 --pre-pr merge-tree 提 PR 前冲突模拟；入册误 amend/误 stash/误删分支/误 reset 事故恢复路径；纠正删除分支 reflog 与未提交内容恢复边界，增加真实 Git 回归；修正 worktree-audit 清理须知；新增 receipt 精确回执核验，查询截断时 UNKNOWN、不误判伪造。 |
 | 2026-10-03 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.7 | 新增 ZCode GUI 远端作者直发 PR 合同（references/38）：作者自测→固定 head→不同 SID 独审→原 session 返修→fresh 身份/唯一性→safe-push→唯一 draft PR→PM 从 GitHub 只读核验；PR257/PR258 具名已验，driver 自动新投递与长时全自动稳定仍 NOT_VERIFIED。集成只读GUI证据观察与校验分块交接，新增缺省同目录消费者及GUI真实CI；READY仍需PM验收，正式GUI监督/持续闭环未验收。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
@@ -490,9 +489,9 @@
 <td>工具·视频处理</td>
 <td style="word-break:break-word">从录屏视频中以有界高召回抽取证据截图并过滤切换中间态；可用本地 OCR 多锚点与无文字图像主体生成不保存原文的证据线索包，再为普通或较弱多模态模型提供封闭分类/概括及只做减法的去重审计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.9.1</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip">下载 v0.8.2</a></td>
-<td>源码 v0.9.1 待发布；下载为已发布 v0.8.2</td>
+<td style="text-align:center">v0.8.2</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip">下载</a></td>
+<td></td>
 </tr>
 <tr>
 <td><a href="skills/article2book/"><strong>article2book</strong></a></td>
