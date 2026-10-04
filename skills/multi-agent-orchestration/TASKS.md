@@ -655,3 +655,5 @@ blocker_and_recovery:
 - 2026-10-04 原 PR 收口接续：本原 MAO PM 按真人定向任务接手 PR248/251；先核实际 main `520f8574eccd767ec6707e793593ab8fcd39aba0`、PR248 原 head `6cd4752fc1a5bacbd688d4d914ce8dc37419e289` 和 PR251 原 head `e0afae218d103947ac5983bdea52977f8b4419b8`。保留此前云端审计 DONE 和各业务原状态，本次发布整合为 IN_PROGRESS；PR261/268 原 GUI owner 不变，不领取其未发布引用。
 - 当前候选沿 PR248 原分支普通合入最新 main，逐文件整合双方文档，工程脚本保持原受审字节；既有 GUI 和工程验证证据 CI 均保留，原恢复身份不足、DSH 原业务失败预算及外部依赖不因发布整合重置。零业务 prepare/open/register，不重派原工作。
 - PR251 的 33 引用由 PR248 提供；34/35/37 仍未进入本轮 main，继续 DRAFT，待原 GUI owner 发布。参考精简的实际消费者和冷上下文前向须在依赖就绪后独立验收。
+- 发布组合首矩阵原件保留：80项命令中前24项exit0，第25关闭恢复suite的19例中18过、标题改写诊断fixture失败（`<defunct>`）；首失败不改判。核查发现exec/argv校验先于Node模块初始化，test-only在发送SIGUSR1前等待私有ready标记及活子进程，3秒有界，不扩大生产timeout或恢复预算；定向标题改写消费者1/1 exit0。随后仅复验受影响suite并继续尚未执行的矩阵。原生实际业务仍CONTINUATION_NOT_READY。
+- 原48 PR-only blob中47项不变，唯一增量为上述测试fixture；全部生产工程保持原受审字节。限定独审86dd0b95接受共享组合/4真实消费者，另发现README源码版本表残留2.36.7，已机械同步2.36.8；最终增量另行绑定，不把旧独审自动扩大到新head。

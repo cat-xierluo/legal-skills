@@ -729,7 +729,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.36.7</td>
+<td style="text-align:center">v2.36.8</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
 <td></td>
 </tr>
