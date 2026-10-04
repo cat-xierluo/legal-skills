@@ -19,7 +19,10 @@ Generate conventional commit messages based on change type and content.
 import subprocess
 import re
 import argparse
-import yaml
+try:
+    import yaml
+except ImportError:
+    raise SystemExit('缺少依赖 PyYAML，请运行 python3 -m pip install PyYAML')
 from pathlib import Path
 from typing import List, Dict
 
