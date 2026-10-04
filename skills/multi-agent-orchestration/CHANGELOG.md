@@ -5,12 +5,14 @@
 ### 新增
 - 集成只读 GUI collector→adapter→observe、校验分块产物与 Git bundle 消费者七个既有已独审候选；保持默认投递/监督/权限与资源规则，READY仅是待PM审查证据。
 - 新增三项缺省同目录消费者，核无依赖环境变量/显式路径时的完成、末条错误、错绑拒绝、DB字节不变与元数据无泄漏；CI串行真实执行GUI组件与消费者，明确保留可选旧稿负控及不适用缺依赖场景的跳过。
+- 沿 PR261 收录 ZCode GUI 远端作者直发 PR 合同（`references/38-zcode-gui-remote-pr.md`）：官方 GUI 模型内核与开源 CLI 分离、localhost 优先与官方远控跨机同页面操作逻辑、Start Plan/150% 权益真人确认与 provider 实测分列；固化“作者自测→固定 head→不同 SID 独审→原 session 返修→fresh 身份/唯一性→safe-push→唯一 draft PR→PM 从 GitHub 只读核验”发布链，含通道故障 fresh 核查、禁传凭证/禁改账号/禁关 TLS 验证与官方登录真人依赖标注；已验来源具名 PR257/PR258（两作者不同 GUI SID 交叉独审 ACCEPT、未 merge），SKILL 按需读取地图挂最小入口。
 
 ### 文档完善
 - 按需读取地图补齐已采用的操作合同；云端PR池与main加GUI长期功能线的任务/决策记录归TASKS和DECISIONS，不新增规划reference。
 
 ### 待办事项
 - 原生ZCode恢复、GUI自动投递/持续监测/Orca正式监督及长期稳定性仍未验收；核心PR248与参考精简PR251分别处理冲突和未发布依赖。
+- 浏览器 driver 脚本自动新投递与长时全自动稳定仍 NOT_VERIFIED（PR261 维护记录保留）。
 
 ## [2.36.6] - 2026-10-02
 
