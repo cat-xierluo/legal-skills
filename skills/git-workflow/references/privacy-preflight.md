@@ -45,7 +45,7 @@ python3 skills/git-workflow/scripts/safe-pr.py squash --number 227 \
 
 创建 PR 的 GitHub API 没有原子 head-OID 条件参数：helper 在发送前后均核对，但并行写同一远端分支仍有极短竞态窗口。使用独占 feature 分支；若后验失败，先查看已创建 PR，不得盲目再次创建。squash 使用服务端 head 条件，仍需事后查看 mergedAt / mergeCommit；本地成功退出不替代合并结果核对。网络失败可能已经产生远端效果，不自动重试。
 
-直接使用 GitHub connector/API 时也必须检查同一组完整文本与准确提交范围，并将已检查的字符串/OID原样作为 API 参数；不得改成自动生成正文或只检查净 diff。普通 `git push`、`gh pr create --fill` 与自动 squash message 均不替代此流程。
+直接使用 GitHub connector/API 时也必须检查同一组完整文本与准确提交范围，并将已检查的字符串/OID原样作为 API 参数；不得改成自动生成正文或只检查净 diff。普通提交的裸 `git push`、`gh pr create --fill` 与自动 squash message 均不替代此流程。历史重写与精确 ref 删除是专页限定的已授权维护路径，不属于普通提交发表，也不构成任意 force 的例外。
 
 ## 待核对项与精确例外
 

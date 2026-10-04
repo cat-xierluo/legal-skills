@@ -1,159 +1,81 @@
 #!/usr/bin/env bash
-# 分支冗余只读盘点：对远端与本地分支输出三档候选表（SAFE_DELETE / NEEDS_CONFIRM / KEEP）。
-# 本脚本绝不执行任何删除；删除必须按 references/branch-lifecycle-and-cleanup.md
-# 展示候选并取得用户确认后，由会话/人工执行。
-#
-# 用法: branch-audit.sh [base-ref] [remote]
-#   base-ref 默认 origin/main；remote 默认 origin
-#
-# 判定规则（与 references/branch-lifecycle-and-cleanup.md §3 一致）：
-#   SAFE_DELETE    PR 已合并（squash/rebase 内容已进 base）、分支已包含于 base、
-#                  或 patch-id 判死（git cherry 补丁等价已全部在 base——squash 后
-#                  commit 对 base 不可达但内容已在，merge-base 判不出）
-#   NEEDS_CONFIRM  无 PR 且有补丁不在 base——删=内容真丢，必须逐个问用户
-#   KEEP           open PR head / 被任一 worktree 检出 / backup·snapshot 存档命名
-#
-# 降级：gh 缺失或未认证时按 merge-base+日期判定，并显式标注「PR 状态未核对」；
-# squash 合并的分支会漏判为 NEEDS_CONFIRM——宁漏勿错，方向安全。
-# patch-id 边界：多 commit 被 squash 成单个时 patch-id 不匹配，仍归 NEEDS_CONFIRM；
-# 有 MERGED PR 记录时以 PR 状态为准（优先于 patch-id）。
-
+# 只读候选盘点；不 fetch/prune，不删除。SAFE_DELETE 仍须生命周期/当前 tip/授权复核。
 set -u
-
 BASE_REF="${1:-origin/main}"
 REMOTE="${2:-origin}"
-
-command -v git >/dev/null 2>&1 || {
-  echo "❌ 缺少依赖: git"
-  echo "   macOS: xcode-select --install 或 brew install git"
-  exit 1
-}
-
+for key in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_NAMESPACE; do
+  if [ -n "${!key:-}" ]; then echo '拒绝 Git 仓库/索引环境覆盖' >&2; exit 2; fi
+done
+git_read() { GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false "$@"; }
+command -v git >/dev/null 2>&1 || { echo '缺少依赖: git' >&2; exit 2; }
+BASE_SHA=$(git_read rev-parse --verify "$BASE_REF^{commit}" 2>/dev/null) || { echo 'base-ref 不可读' >&2; exit 2; }
+HEAD_BRANCH=$(git_read branch --show-current) || exit 2
+WT_INFO=$(git_read worktree list --porcelain) || exit 2
+WT_BRANCHES=$(printf '%s\n' "$WT_INFO" | sed -n 's|^branch refs/heads/||p')
+in_set() { printf '%s\n' "$1" | grep -Fxq -- "$2"; }
+is_archive() { case "$1" in backup/*|*snapshot*|archive/*) return 0;; *) return 1;; esac; }
 HAS_GH=0
-REPO_SLUG=""
-MERGED_PRS=""
-OPEN_PRS=""
-DEGRADE_NOTE=""
+OPEN_PRS=''
 if command -v gh >/dev/null 2>&1; then
-  HAS_GH=1
-  REPO_SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || REPO_SLUG=""
-  if [ -n "$REPO_SLUG" ]; then
-    MERGED_PRS=$(gh pr list --repo "$REPO_SLUG" --state merged --limit 200 \
-      --json number,headRefName --jq '.[] | "\(.headRefName) #\(.number)"' 2>/dev/null) || MERGED_PRS=""
-    OPEN_PRS=$(gh pr list --repo "$REPO_SLUG" --state open --limit 200 \
-      --json headRefName --jq '.[].headRefName' 2>/dev/null) || OPEN_PRS=""
-  fi
-fi
-if [ "$HAS_GH" != 1 ] || [ -z "$REPO_SLUG" ]; then
-  DEGRADE_NOTE="⚠️ gh 不可用或未认证：PR 状态未核对，squash 合并的分支会漏判为 NEEDS_CONFIRM（宁漏勿错）"
-fi
-
-echo "== 分支冗余盘点（只读，不删除） =="
-echo "base=$BASE_REF remote=$REMOTE repo=${REPO_SLUG:-未知}"
-[ -n "$DEGRADE_NOTE" ] && echo "$DEGRADE_NOTE"
-echo
-
-git fetch --prune "$REMOTE" >/dev/null 2>&1 || echo "⚠️ git fetch --prune 失败（离线？），按本地已有引用盘点"
-
-BASE_SHA=$(git rev-parse --verify --quiet "$BASE_REF")
-if [ -z "$BASE_SHA" ]; then
-  echo "❌ base-ref 不存在: $BASE_REF（先 git fetch，或显式传入，如: branch-audit.sh origin/master）"
-  exit 1
-fi
-
-BASE_SHORT="${BASE_REF#"$REMOTE"/}"
-HEAD_BRANCH=$(git branch --show-current 2>/dev/null)
-WT_BRANCHES=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^branch //p' | sed 's|refs/heads/||')
-
-in_set() { # $1=set(换行分隔)  $2=item
-  printf '%s\n' "$1" | grep -Fxq -- "$2"
-}
-
-merged_pr_of() { # $1=headRefName → 输出 "#n" 或空
-  [ -n "$MERGED_PRS" ] || return 0
-  printf '%s\n' "$MERGED_PRS" | awk -v x="$1" '$1==x {print $2; exit}'
-}
-
-is_archive_name() { # backup/snapshot 类存档命名 → 存档分支默认保留
-  case "$1" in
-    backup/*|*snapshot*|archive/*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-echo "---- 远端分支（$REMOTE/*，除 base） ----"
-git for-each-ref "refs/remotes/$REMOTE" --format='%(refname:short)|%(committerdate:short)' |
-while IFS='|' read -r full date; do
-  short="${full#"$REMOTE"/}"
-  case "$full" in "$REMOTE"/*) ;; *) continue ;; esac  # 跳过裸 remote ref（refs/remotes/origin 本身）
-  [ "$short" = "HEAD" ] && continue
-  [ "$full" = "$BASE_REF" ] && continue
-  if in_set "$OPEN_PRS" "$short"; then
-    printf 'KEEP          %-55s %s  open PR head\n' "$short" "$date"; continue
-  fi
-  pr=$(merged_pr_of "$short")
-  # 方向性保护：本地同名分支若有未推送提交，说明分支被复用，远端 ref 不可列为删除候选
-  if git show-ref --verify -q "refs/heads/$short" 2>/dev/null; then
-    a=$(git rev-list --count "$full..refs/heads/$short" 2>/dev/null || echo 0)
-    if [ "${a:-0}" -gt 0 ] 2>/dev/null; then
-      printf 'NEEDS_CONFIRM %-55s %s  本地同名分支有 %s 个未推送提交（分支被复用）\n' "$short" "$date" "$a"
-      continue
+  if REPO_SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) && [ -n "$REPO_SLUG" ]; then
+    if OPEN_PRS=$(gh pr list --repo "$REPO_SLUG" --state open --limit 201 --json headRefName --jq '.[].headRefName' 2>/dev/null); then
+      count=$(printf '%s\n' "$OPEN_PRS" | awk 'NF {n++} END {print n+0}')
+      [ "$count" -lt 201 ] && HAS_GH=1
     fi
   fi
-  if [ -n "$pr" ]; then
-    printf 'SAFE_DELETE   %-55s %s  PR %s 已合并（内容已进 base）\n' "$short" "$date" "$pr"
-  elif git merge-base --is-ancestor "$full" "$BASE_SHA" 2>/dev/null; then
-    printf 'SAFE_DELETE   %-55s %s  已包含于 %s\n' "$short" "$date" "$BASE_REF"
-  elif is_archive_name "$short"; then
-    printf 'KEEP          %-55s %s  存档分支\n' "$short" "$date"
-  else
-    n=$(git rev-list --count "$BASE_SHA..$full" 2>/dev/null || echo '?')
-    # patch-id 判死：远端分支补丁等价已全部在 base（多 commit squash 后 merge-base 不可见）
-    new=$(git cherry "$BASE_SHA" "$full" 2>/dev/null | grep -c '^+')
-    if [ "${new:-1}" -eq 0 ] 2>/dev/null; then
-      printf 'SAFE_DELETE   %-55s %s  补丁等价已全在 %s（%s commits，patch-id 0）\n' "$short" "$date" "$BASE_REF" "$n"
+fi
+printf '== 分支候选盘点（本地只读，无 fetch/prune/删除） ==\nbase=%s remote=%s\n' "$BASE_REF" "$REMOTE"
+[ "$HAS_GH" = 1 ] || echo 'PR 查询缺失、失败或截断：保守保留；缓存远端 ref 可能陈旧。'
+classify() {
+  local ref="$1" short="$2" date="$3" kind="$4" ahead patch count code
+  if is_archive "$short" || in_set "$WT_BRANCHES" "$short"; then
+    printf 'KEEP          %-55s %s  存档或已检出分支\n' "$short" "$date"; return
+  fi
+  if [ "$HAS_GH" != 1 ] || in_set "$OPEN_PRS" "$short"; then
+    printf 'KEEP          %-55s %s  PR 未核完整或为 open head\n' "$short" "$date"; return
+  fi
+  if [ "$kind" = remote ]; then
+    if git_read show-ref --verify -q "refs/heads/$short"; then
+      ahead=$(git_read rev-list --count "$ref..refs/heads/$short" 2>/dev/null) || {
+        printf 'KEEP          %s 同名本地增量不可读\n' "$short"; return; }
+      if [ "$ahead" -gt 0 ]; then printf 'NEEDS_CONFIRM %s 同名本地分支有未发表成果\n' "$short"; return; fi
     else
-      printf 'NEEDS_CONFIRM %-55s %s  无 PR 未合并（%s commits，其中 %s 个补丁不在 base）\n' "$short" "$date" "$n" "$new"
+      code=$?
+      if [ "$code" -ne 1 ]; then printf 'KEEP          %s 同名本地分支查询失败\n' "$short"; return; fi
     fi
   fi
-done
-
-echo
-echo "---- 本地分支（refs/heads/*，除当前 HEAD） ----"
-git for-each-ref refs/heads --format='%(refname:short)|%(committerdate:short)' |
-while IFS='|' read -r short date; do
+  if git_read merge-base --is-ancestor "$ref" "$BASE_SHA"; then
+    printf 'SAFE_DELETE   %-55s %s  当前 tip 已包含于 base，仅为待复核候选\n' "$short" "$date"; return
+  else
+    code=$?
+    if [ "$code" -ne 1 ]; then printf 'KEEP          %s 祖先查询失败\n' "$short"; return; fi
+  fi
+  if patch=$(git_read cherry "$BASE_SHA" "$ref" 2>/dev/null); then
+    count=$(printf '%s\n' "$patch" | awk '/^\+/ {n++} END {print n+0}')
+    printf 'NEEDS_CONFIRM %-55s %s  %s 个补丁未匹配；patch-id/历史 MERGED 不证明当前 tip 已交付\n' "$short" "$date" "$count"
+  else
+    printf 'KEEP          %s 补丁查询失败\n' "$short"
+  fi
+}
+REMOTE_REFS=$(git_read for-each-ref "refs/remotes/$REMOTE/" --format='%(refname)|%(committerdate:short)') || exit 2
+while IFS='|' read -r ref date; do
+  [ -n "$ref" ] || continue
+  short="${ref#"refs/remotes/$REMOTE/"}"
+  [ "$short" = HEAD ] && continue
+  [ "$ref" = "refs/remotes/$BASE_REF" ] && continue
+  classify "$ref" "$short" "$date" remote
+done <<< "$REMOTE_REFS"
+LOCAL_REFS=$(git_read for-each-ref refs/heads/ --format='%(refname)|%(committerdate:short)') || exit 2
+while IFS='|' read -r ref date; do
+  [ -n "$ref" ] || continue
+  short="${ref#refs/heads/}"
   [ "$short" = "$HEAD_BRANCH" ] && continue
-  [ "$short" = "$BASE_SHORT" ] && continue  # 永不把 base 的本地分支（如 main）列为候选
-  if in_set "$WT_BRANCHES" "$short"; then
-    printf 'KEEP          %-55s %s  被 worktree 检出\n' "$short" "$date"; continue
-  fi
-  if git merge-base --is-ancestor "$short" "$BASE_SHA" 2>/dev/null; then
-    printf 'SAFE_DELETE   %-55s %s  已包含于 %s\n' "$short" "$date" "$BASE_REF"
-  elif is_archive_name "$short"; then
-    printf 'KEEP          %-55s %s  存档分支\n' "$short" "$date"
-  else
-    n=$(git rev-list --count "$BASE_SHA..$short" 2>/dev/null || echo '?')
-    pr=$(merged_pr_of "$short")
-    if [ -n "$pr" ]; then
-      printf 'SAFE_DELETE   %-55s %s  PR %s 已合并（squash 后 commit 不可达属预期）\n' "$short" "$date" "$pr"
-    else
-      # patch-id 判死：补丁等价已全部在 base（squash/cherry-pick 合并的常见形态）
-      new=$(git cherry "$BASE_SHA" "$short" 2>/dev/null | grep -c '^+')
-      if [ "${new:-1}" -eq 0 ] 2>/dev/null; then
-        printf 'SAFE_DELETE   %-55s %s  补丁等价已全在 %s（%s commits，patch-id 0）\n' "$short" "$date" "$BASE_REF" "$n"
-      else
-        printf 'NEEDS_CONFIRM %-55s %s  未合并（%s commits，其中 %s 个补丁不在 base）\n' "$short" "$date" "$n" "$new"
-      fi
-    fi
-  fi
-done
+  [ "$short" = "${BASE_REF#"$REMOTE"/}" ] && continue
+  classify "$ref" "$short" "$date" local
+done <<< "$LOCAL_REFS"
+cat <<'NOTICE'
 
-cat <<'EOF'
-
----- 执行须知（删除前必读） ----
-1. SAFE_DELETE 也只是「候选」：批量删除前必须把候选表展示给用户并取得确认（红线，见 references §5）。
-2. 确认到执行之间并行会话可能新开/推送分支：执行删除前重跑 open PR head 核对（gh pr list --state open）。
-3. git push origin --delete b1 b2 ... 遇任一 ref 已不存在会整批失败：先 git fetch --prune，再对仍存在的名单补删。
-4. 代理环境 push 被全局 http.proxy 干扰时：git -c http.proxy= -c https.proxy= push ...
-5. 删除远端 ref 不影响本地分支与 worktree 检出；本地分支删除前对每条重跑 merge-base 校验。
-EOF
+候选不构成删除授权；执行前重新核当前 tip、真实目标、生命周期、归属/占用、全部任务材料与完整 PR 状态。
+历史 MERGED、patch-id、日期与祖先关系不能单独授权删除；长期线及未交付成果保留。
+删除按 references/branch-lifecycle-and-cleanup.md 的精确 tip/lease 合同；失败保留现场和 CLEANUP_PENDING，不删关联 ref、不绕权限或代理、不盲目重试。
+NOTICE
