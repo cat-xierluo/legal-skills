@@ -226,6 +226,7 @@ bash scripts/check-dependencies.sh --backend claude-code --backend codex --check
 
 | 当前问题 | 读取 |
 |---|---|
+| 批量收口后向上游/更强侧发交叉审计（跨 runtime 对等会话唤醒与结论回流） | `../multi-agent-peer-session/SKILL.md` |
 | 用户指定远端 ZCode GUI 作者直发文档/工程 PR（作者 safe-push + 唯一 draft PR，PM 只读核验） | `references/38-zcode-gui-remote-pr.md` |
 | 标准快速派发（Claude Code + GLM/MiniMax + Orca，常规 worker 三步） | `references/00-fast-dispatch-runbook.md` |
 | 模型、provider、执行模式 | `references/01-model-selection-matrix.md`、`references/17-model-capability-profile.md` |
