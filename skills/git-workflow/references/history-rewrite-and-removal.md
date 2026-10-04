@@ -7,8 +7,8 @@
 ## 0. 判定与红线
 
 - **revert 不等于撤回**：revert 只让最新树不含该文件，任何人都还能从历史提交读到。真撤回必须重写历史 + force push。
-- **凭证类（token/key/密码）先撤销再重写**：平台侧撤销 Key 优先级最高——历史重写不解决"已被复制"的问题。确认凭证是否曾入库：`git log --all --oneline -- <路径>`（输出为空 = 从未提交过，只需处理现存数据）+ 全历史内容扫描。
-- **破坏性等级最高**：force push 重写远端 + reset 主工作区。每一步都要用户明确授权；本 SOP 的命令清单不构成免授权。
+- **凭证类（token/key/密码）先撤销再重写**：平台侧撤销 Key 优先级最高——历史重写不解决"已被复制"的问题。确认凭证是否曾入库：`git log --all --oneline -- <路径>`（空结果仅覆盖当前已取回 refs 和路径，不证明从未泄露）并核全历史内容及其他路径/副本。
+- **破坏性等级最高**：force push 重写远端 + reset 主工作区。核已有授权覆盖的精确路径、refs、备份和维护窗口；不足时先补范围，授权已成立不重复问。命令清单不构成授权。普通 safe-push 不支持 force，已授权维护按下述独立路径执行，不能用于发表未验功能。
 
 ## 1. 前置排查（全部只读，不动任何东西）
 
@@ -18,7 +18,7 @@ git ls-files | grep <关键词>
 git log --all --oneline -- <敏感路径>
 
 # b. 凭证是否曾入库（.env 类）
-git log --all --oneline -- <env路径>          # 空 = 从未提交
+git log --all --oneline -- <env路径>          # 空仅表示当前已取回历史无此路径
 git ls-files <env路径>                         # 空 = 当前未追踪
 
 # c. 受影响分支面：泄露提交在多少远端分支上
@@ -34,6 +34,8 @@ git rev-list --left-right --count main...origin/main
 注意：`git log --all` 只覆盖本地 fetch 到的 refs；GitHub 上可能有本地未 fetch 的分支提交（用 `gh api repos/<owner>/<repo>/commits?path=<路径>` 交叉验证）。
 
 ## 2. 隔离重写（绝不在主工作区跑 filter-repo）
+
+在执行前冻结全部受影响远端 refs/OID、当前服务端状态及回滚方案；保存原对象与文件、index、dirty/untracked/ignored 的仓外备份，核可恢复。备份可能含敏感内容，私有保存、不公开提交。暂停同一目标的并发写入须已有明确授权；无法取得安全窗口时停。分支以外的 tag/其他 refs 亦须纳入泄露范围，不自动删除未核对象。filter-repo 的 --force 只用于已授权隔离副本，不能搬到共享源。
 
 ```bash
 # a. 全新 clone（与主工作区完全隔离，不受未提交改动影响）
@@ -62,28 +64,29 @@ cat >> .gitignore << 'EOF'
 # <skill> 运行导出产物含私有数据，仅限本地
 <敏感目录>/
 EOF
-git add .gitignore && git commit -m "chore(<模块>): 忽略 <产物> 目录，防止私有数据入库"
+git add -- .gitignore
+# 先按身份/隐私合同核实际身份及最终说明
+git commit -m "chore(<模块>): 忽略私有运行产物" -m "增加已核范围的防复发规则，记录验证结果。"
 ```
 
-推送（先 main 后分支，逐个推，别批量拼 refspec——见下方坑）：
+推送是已授权历史维护例外：核重写后的完整历史、message/patch/blob、正确树构成和泄露移除，核原作者归属、防复发提交的实际身份及最终说明。先完整验证所有候选，再逐 ref 对冻结远端 tip 进行精确 lease；远端漂移、保护不允许或任一步失败时停止，保存已成功/未执行列表，不自动解除保护或重放。
 
 ```bash
-git remote add origin <url>
-git -c http.proxy= push --force origin main
-for b in $(git branch --format='%(refname:short)' | grep -v '^main$'); do
-  git -c http.proxy= push --force origin "$b"
-done
+# 在隔离重写副本中；变量来自具名授权及已核清单
+git remote add origin '<已核原远端 URL>'
+git push --force-with-lease="refs/heads/${branch}:${expected_remote_tip}" \
+  origin "${verified_rewritten_oid}:refs/heads/${branch}"
 ```
 
-**zsh 大坑（实测）**：`git push origin "refs/heads/$b:refs/heads/$b"` 里的 `$b:r` 被 zsh 解析为变量修饰符（去扩展名），refspec 静默损坏成 `...readiness-261002efs/heads/...`，推送全部失败且易被输出过滤吞掉。**批量推分支一律用 `git push origin "$b"` 简单形式**。
+不无条件 --force，不推未列明分支。zsh refspec 中用 `${变量}` 边界，避免 `$b:r` 被解析为变量修饰符。网络异常先读取真实远端 refs，核此次是否已生效，再决定后续；不默认改代理或绕过通道直推。
 
 推送后验证三件套：
 
 ```bash
-# 1. SHA 对齐：本地每个分支 == 远端对应分支（fetch 后逐个 rev-parse 对比，0 不一致）
+# 1. refs 对齐：对授权清单全部 branch/tag/其他受影响 refs 逐项核远端 OID、预期存在状态及内容；不只核 main
 # 2. API 验证：gh api repos/<o>/<r>/contents/<敏感路径>            → 404
 #              gh api "repos/<o>/<r>/commits?path=<敏感路径>" --jq 'length' → 0
-# 3. 分支抽查：gh api "repos/<o>/<r>/contents/<敏感路径>?ref=<分支>" → 404（抽 3+ 个）
+# 3. 内容后验：全部受影响 refs 检查路径和泄露内容移除；API 分支抽查仅作辅助，不替代完整 ref 清单与内容核验
 ```
 
 ## 4. 残留与边界（必须如实告知用户，不催办不隐瞒）
@@ -92,12 +95,12 @@ done
 |---|---|---|
 | GitHub dangling 提交（旧 SHA 仍可直接访问） | force push 后 GitHub 不立即物理删除 | 彻底清除需联系 GitHub 支持；用户可自行评估接受与否 |
 | fork 上的副本 | fork **不跟随**上游重写 | 同上；实例中 fork 副本与泄露内容敏感度相同时一并列出 |
-| 其他本地分支/worktree 仍指旧历史 | 重写必然结果 | 各自会话 push 时遇 non-fast-forward，自行 rebase；不代劳 |
+| 其他本地分支/worktree 仍指旧历史 | 重写必然结果 | 保留旧成果，按归属与范围对账；不能盲目 rebase 或重新发表泄露历史 |
 | 公开窗口时长 | 数据已暴露的时间 | 由用户评估实际风险，AI 只给事实（起止时间、内容类型、条数） |
 
 ## 5. 主工作区对齐（深度分叉剧本）
 
-远端全量重写后，泄露提交**之后**的所有提交 SHA 全变，本地 main 与新远端的共同祖先退到泄露点之前——`git cherry`/patch-id 全部失效，不能按常规 rebase 处理。
+远端全量重写后，泄露提交**之后**的所有提交 SHA 全变，本地 main 与新远端的共同祖先退到泄露点之前——祖先与逐提交 patch-id 未必能反映真实采用关系；先比较最终内容、来源与授权，不盲目 rebase。
 
 ### 5.1 备份三层（动手前全部完成）
 
@@ -125,12 +128,13 @@ files=$(git show --name-only --format="" <SHA> | tr '\n' ' ')
 git diff origin/main main -- $files | wc -l
 ```
 
-全部为 0 → 直接 reset 对齐，不 cherry-pick 任何东西。注意甄别结论与全仓 diff 不矛盾：全仓反向 diff 仍会有"本地比远端旧"的旧侧差异（远端三个月演进的另一面），那是预期噪声。
+全部为 0 只是指定文件当前内容等价，不证明所有本地成果可丢弃。核完整本地提交/范围、后续改动、备份和具体 reset 授权后才选择对齐，不自动 reset 或回放。注意甄别结论与全仓 diff 不矛盾：全仓反向 diff 仍会有"本地比远端旧"的旧侧差异（远端三个月演进的另一面），那是预期噪声。
 
 ### 5.3 对齐执行
 
 ```bash
-# 1. stash（不带 -u：untracked 留在磁盘且不受 reset 影响）
+# 以下仅限归属明确、已完成全部材料备份且已授权具体 reset 的独占现场
+# 1. stash（不带 -u；不能当作 untracked/ignored 的完整备份）
 git stash push -m "pre-align-<日期>-同步前保底"
 
 # 2. reset 到新历史
@@ -151,11 +155,11 @@ cp <备份>/<文件> <原路径>/
 |---|---|---|
 | 远端侧空、本地有 | 本地未提交的新工作（版本演进、新段落） | 取本地 |
 | 本地侧空、远端有 | 远端已合并内容 | 取远端 |
-| 两侧都有，且一侧是另一侧的演进（版本号更新、内容超集） | 本地通常是 PR 合并后的继续演进 | 取本地 |
+| 两侧都有，且一侧是另一侧的演进（版本号更新、内容超集） | 须核两侧真实来源及最新有效状态 | 保留已核有效变化，不默认选本地 |
 | 两侧是**不同条目**（任务台账 TASKS 各自新增任务卡、CHANGELOG 各自版本号） | 谁都不能丢 | 两侧全保留拼接 |
 | 同一文件的同一功能两侧各写一半（如两个脚本配套改动） | 必须同侧一致 | 同取本地或同取远端，禁止各取一半 |
 
-批量技巧：先用脚本按"单侧为空"批量解（只动冲突块、不动已自动合并的非冲突区），剩余"两侧都有"逐块人工判断：
+下表和单侧为空只能定位候选，不能证明删除/新增意图。逐块核两侧当前来源、任务和有效内容，不自动运行正则批量消除冲突；旧示例仅供理解 marker，不作为执行器：
 
 ```python
 import re
@@ -177,7 +181,7 @@ ls <敏感路径> && git check-ignore <敏感文件>   # 数据文件在 + 已�
 git worktree list                          # worktree 正常、基于新历史
 ```
 
-untracked 的本地特有文件（DECISIONS/TASKS 等）不受 reset 影响，抽查确认即可；数量变化只是新版 `.gitignore` 规则改变了 status 显示，不是文件消失（`git status --ignored` 可复核）。
+reset 可能删除阻挡目标跟踪路径的 untracked 文件，不能承诺本地特有文件不受影响。按备份逐项核字节、权限、index/原 dirty 与 Session 材料；status 显示变化不能代替材料守恒。存在并发或持锁时停，完成后不影响其他树/分支。
 
 ## 6. 源头排查要点（泄露怎么进来的）
 

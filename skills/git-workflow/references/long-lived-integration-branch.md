@@ -93,11 +93,11 @@ squash后相同树可能有不同提交身份与祖先，使再次集成冲突�
 
 1. 核两tip的真实远端ref、merge回执或独立发布记录、可读历史、共同基线及零未决子PR；核原工程接受范围，不仅看GitHub用户名。
 2. 对共同基线→每个tip的全部message/patch/blob及精确最终合并message做身份归属与隐私复核，不仅看净diff。两侧非祖先不能硬塞给safe-pr.py，后者会拒绝；分别复核两条真实可枚举范围并保存读集/结果。
-3. 用git merge-tree --write-tree只读计算预期树；冲突、缺历史或身份不能绑定时保留SYNC_PENDING。[GitHub merge API](https://docs.github.com/en/rest/branches/branches#merge-a-branch)的base为目标分支、head为已验完整主干OID、message为已检字符串；没有expected-base原子条件，依靠独占writer、发送前重核及后验，不能声称消除竞态。保护要求PR、禁止该路径或工具拒绝时，不解除保护或admin绕过。
+3. 在隔离候选用 git merge-tree --write-tree 预演预期树（可写对象但不改检出或 index）；冲突、缺历史或身份不能绑定时保留SYNC_PENDING。[GitHub merge API](https://docs.github.com/en/rest/branches/branches#merge-a-branch)的base为目标分支、head为已验完整主干OID、message为已检字符串；没有expected-base原子条件，依靠独占writer、发送前重核及后验，不能声称消除竞态。保护要求PR、禁止该路径或工具拒绝时，不解除保护或admin绕过。
 4. 成功后核真实ref/OID、parents、message与预期树。204表示已合并，仍核真实祖先/树；异常或回执不符先只读对账，不盲目重试。一轮真实merge只证明本次同步，不签所有场景或长期稳定。
 5. 固定Worktree普通merge或ff接收真实结果，保留先前未发表尝试；仍有本机新增提交时，以已核且已发表的真实目标tip检查完整本机增量后safe-push，不能用自建ref、同名feature upstream或未验提交缩窄范围。最后重新冻结波次。
 
-此路径只同步已发表历史，新功能仍经子PR进入功能线。通用服务端身份回执机械支持尚未实现，不得称helper自动识别GitHub提交。[git-merge-tree官方说明](https://git-scm.com/docs/git-merge-tree)支持只读预演，不替代行为验收。
+此路径只同步已发表历史，新功能仍经子PR进入功能线。服务端合并提交可按[身份与推送](identity-and-push.md#已合并历史的服务端回执)运行 identity-audit.sh receipt 精确核本仓回执；不替代整波同步、保护与等价门禁。[git-merge-tree官方说明](https://git-scm.com/docs/git-merge-tree)支持合并预演（可写对象但不改检出或 index），不替代行为验收。
 
 ## 7. 里程碑 PR 与证据
 
