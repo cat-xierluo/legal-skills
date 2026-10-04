@@ -43,6 +43,10 @@ class FFProbeInfo:
     duration_seconds: float
     time_base_seconds: float | None = None
     frame_rate_fps: float | None = None
+    # r_frame_rate：-frame_pts 文件名序号所处输出时基的分母（FFmpeg 对
+    # vfr 图像序列取 1/r_frame_rate）；avg_frame_rate 在 VFR 录屏上偏低，
+    # 用它换算会把时间戳系统性放大（实测 iPhone 录屏误差可达 17%）。
+    real_frame_rate_fps: float | None = None
 
 
 def _parse_rate(value: Any) -> float | None:
@@ -78,6 +82,7 @@ def probe_video(video_path: str) -> FFProbeInfo:
     duration = 0.0
     time_base_seconds: float | None = None
     frame_rate_fps: float | None = None
+    real_frame_rate_fps: float | None = None
     ffprobe = find_tool("ffprobe")
     if ffprobe:
         cmd = [
@@ -97,17 +102,19 @@ def probe_video(video_path: str) -> FFProbeInfo:
                 if "/" in tb:
                     n, d = tb.split("/", 1)
                     time_base_seconds = float(n) / float(d) if float(d) else None
-                frame_rate_fps = (
-                    _parse_rate((streams[0] or {}).get("avg_frame_rate"))
-                    or _parse_rate((streams[0] or {}).get("r_frame_rate"))
+                frame_rate_fps = _parse_rate((streams[0] or {}).get("avg_frame_rate")) or _parse_rate(
+                    (streams[0] or {}).get("r_frame_rate")
                 )
+                real_frame_rate_fps = _parse_rate((streams[0] or {}).get("r_frame_rate"))
         except Exception:
             logger.exception("ffprobe 解析失败: %s", video_path)
             duration = 0.0
             frame_rate_fps = None
+            real_frame_rate_fps = None
     else:
         duration = _probe_duration_by_ffmpeg(video_path)
         frame_rate_fps = None
+        real_frame_rate_fps = None
 
     if duration <= 0:
         raise RuntimeError(f"无法解析视频时长: {video_path}")
@@ -116,6 +123,7 @@ def probe_video(video_path: str) -> FFProbeInfo:
         duration_seconds=duration,
         time_base_seconds=time_base_seconds,
         frame_rate_fps=frame_rate_fps,
+        real_frame_rate_fps=real_frame_rate_fps,
     )
 
 
@@ -152,7 +160,9 @@ def build_ffmpeg_filter_args(
         )
     else:
         scale = ""
-    vfr_args = ["-vsync", "vfr", "-frame_pts", "1"]
+    # FFmpeg 9 已移除旧的 -vsync；-fps_mode 自 FFmpeg 5 起可用，
+    # 与本 Skill 声明的最低版本一致。
+    vfr_args = ["-fps_mode", "vfr", "-frame_pts", "1"]
 
     fmt = ",format=yuvj420p"
     # 构建 scale 部分的滤镜链（可能为空）
@@ -1879,13 +1889,19 @@ def calc_capture_time(
     info: FFProbeInfo,
 ) -> float | None:
     interval_based = params.strategy in ("interval",)
-    if not interval_based and (info.time_base_seconds or info.frame_rate_fps):
+    if not interval_based and (
+        info.time_base_seconds or info.frame_rate_fps or info.real_frame_rate_fps
+    ):
         m = re.search(r"(\d+)", Path(path).name)
         if not m:
             return None
         pts = int(m.group(1))
-        if info.frame_rate_fps and info.frame_rate_fps > 0:
-            fps_time = float(pts) / float(info.frame_rate_fps)
+        # 序号 ÷ r_frame_rate 是实测正确的输出时基换算；avg_frame_rate 仅作
+        # r_frame_rate 缺失时的后备，最后才退回输入流 time_base。
+        for rate in (info.real_frame_rate_fps, info.frame_rate_fps):
+            if not rate or rate <= 0:
+                continue
+            fps_time = float(pts) / float(rate)
             if 0 <= fps_time <= info.duration_seconds * 1.1:
                 return fps_time
         return float(pts * float(info.time_base_seconds)) if info.time_base_seconds else None

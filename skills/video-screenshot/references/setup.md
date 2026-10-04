@@ -18,7 +18,7 @@ ffmpeg -version
 ffprobe -version
 ```
 
-要求版本 ≥ 5.0，推荐 ≥ 7.0。本 Skill 使用 ffmpeg 的 `-progress pipe:1`、`select` 场景检测滤镜和 `mpdecimate` 去重滤镜。
+要求版本 ≥ 5.0，推荐 ≥ 7.0。本 Skill 使用 ffmpeg 的 `-progress pipe:1`、`-fps_mode vfr`、`select` 场景检测滤镜和 `mpdecimate` 去重滤镜；不再使用 FFmpeg 9 已移除的 `-vsync`。
 
 ### Python（必需）
 
@@ -58,6 +58,12 @@ python3 scripts/extract.py -i <视频文件路径> --ocr-dedup
 # 对基础帧生成不保存 OCR 原文的证据线索索引
 uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py \
   -i <基础输出目录>
+
+# 运行纯视觉 + OCR 私有语料基线（manifest/workspace 必须在仓库外）
+uv run --with rapidocr-onnxruntime scripts/benchmark.py run \
+  --manifest /绝对路径/私有评测/manifest.json \
+  --workspace /绝对路径/私有评测/workspace \
+  --profiles visual,ocr
 ```
 
 如果未安装，`--ocr-dedup` 会跳过 OCR 内容增量与文本去重；`prepare_evidence_leads.py` 会降级为视觉主体和时序排序，不影响基础抽帧。
@@ -100,4 +106,7 @@ uv run --with rapidocr-onnxruntime scripts/prepare_evidence_leads.py \
 # 7. 只有需要进一步去重且当前模型能读图时，才准备减法审计包
 uv run scripts/prepare_vision_audit.py \
   -i <实际基础输出目录> --profile weak
+
+# 8. 只有做算法/参数迭代时，才建立仓库外真实语料基线
+# 详见 references/benchmarking.md
 ```
