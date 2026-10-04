@@ -28,7 +28,7 @@ git log -1 --format=%B <old-tip>
 
 红线：
 
-- 已 push 的 amend = 历史重写，回到主 Skill §1 授权边界；本技能 safe-push 不支持 force，不退回裸 push。
+- 已 push 的 amend = 历史重写，读取[共同约束](../SKILL.md#共同约束)与[历史撤回](history-rewrite-and-removal.md)的具名授权边界；本技能 safe-push 不支持 force，不退回裸 push。
 - `reset --soft` 在误 amend 的分支上是撤销 amend（新提交仍留在 reflog 可再找回），但执行前确认没有并行会话已基于 amend 后的提交工作。
 
 ## 2. 误 stash（pop 冲突以为丢了 / drop 错了）
@@ -72,12 +72,12 @@ git branch <deleted-branch> <tip>
 
 HEAD reflog 中没有候选时（例如分支从未检出），先核备份、其他引用与远端，再按 §0 fsck 找不可达提交，逐个 `git show` 核内容；确认 tip 后新建分支恢复。不要把 reflog 中最近一条不相关提交直接当作旧 tip。
 
-预防（与 [branch-lifecycle-and-cleanup.md](branch-lifecycle-and-cleanup.md) 一致）：删除前先跑 `scripts/branch-audit.sh` 只读盘点，squash/rebase 合并的分支用 MERGED PR 记录与 patch-id 双核对判死，不凭 `-D` 强删。
+预防（与 [branch-lifecycle-and-cleanup.md](branch-lifecycle-and-cleanup.md) 一致）：删除前先跑 `scripts/branch-audit.sh` 只读盘点，核当前 tip、真实目标、实际采用与生命周期、材料/占用及具名删除授权；MERGED 与 patch-id 仅作线索，不单独判死，不凭 `-D` 强删。
 
 ## 4. 误删远端分支（push origin --delete 错了）
 
-- 本地有同名分支或 reflog：重新 `git push origin <branch>` 即可恢复。
-- 本地也没有：GitHub 上 PR 的 head 分支被删后，PR 页面提供 **Restore branch** 按钮（GitHub 侧保留提交），恢复后本地 `git fetch` 取回。
+- 本地有同名分支或 reflog：先确认目标仓库/分支确属误删、核恢复的完整 tip 和授权，再按[身份与推送](identity-and-push.md)核完整范围并用 safe-push 发表已验 OID；旧提交身份或 base 不满足门禁时保留候选，不能缩窄范围或退回裸 push。
+- 本地也没有：GitHub 的 PR 页面可能提供 **Restore branch**；先核原 head OID、当前同名引用、具名恢复授权与完整历史的身份/隐私，符合条件才恢复并后验实际 ref/OID；fetch 取回更新远端跟踪引用，不改写当前检出。
 - 无 PR 且无人有副本：提交仍可按 SHA 访问（GitHub dangling 对象），但引用恢复没有机械路径——如实报告，不臆测。
 
 ## 5. 误 reset --hard / checkout . / clean -f（丢弃工作区未提交内容）
@@ -88,4 +88,4 @@ HEAD reflog 中没有候选时（例如分支从未检出），先核备份、�
 
 ## 6. 误 commit 到错分支（落到并行会话的分支上）
 
-不自创恢复路径，按主 Skill §10「共享检出的分支身份核验」的既定处理：不 `git branch -f` 强移并行会话正在检出的分支；开独立 worktree 从正确 base 重做提交并推送，原误落提交保留并在提交信息注明「整理时应丢弃，以 main 为准」。
+按[改动集成](change-integration.md)处理：不 `git branch -f` 强移并行会话正在检出的分支；先复用适合现场，必要时按[稀疏合同](sparse-worktree.md)从正确 base 创建窄范围候选，再采用已核改动并走身份/隐私发表门禁。保留原误落提交与来源映射，后续整理或丢弃另核归属与授权，不提前宣称 main 已采用。
