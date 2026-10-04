@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable；先跑 scripts/pre-worktree-check.sh 只读判读 IN_SYNC/AHEAD/BEHIND/DIVERGED，--pre-pr 模式以 merge-tree 做提 PR 前本地冲突模拟）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）、常见 Git 事故恢复（accident recovery；用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时同样适用——先 reflog/fsck 只读定位，恢复优先新建引用而非改写现态，reset/force 类补救仍须明确授权，详见 references/accident-recovery.md）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
+description: Git 工作流安全助手。本技能应在需要执行 GitHub Actions 额度治理（CI 分钟耗尽停挂止血、workflow 停挂/恢复）、分支管理、长期集成分支（long-lived integration branch）、Monorepo 安全合并、PR 创建/审查/合并、冲突处理、cherry-pick、安全回退、stale/已合并/冗余分支审计与清理（branch cleanup，含 squash/rebase merge 校验；用户以「分支有点多」「冗余分支」「清理一下分支」等口语提出时同样适用，先跑 scripts/branch-audit.sh 只读盘点再确认执行）、过期/失效 worktree 审计与批量清理（worktree cleanup；多 Agent 派发沉淀的一次性 worktree，用户以「清理 worktree」「过期 worktree」「失效 worktree」等口语提出时同样适用，先跑 scripts/worktree-audit.sh 只读盘点——按进程占用/dirty/分支补丁/PR 状态四维分类，绝不自行删除——再确认执行）、本地仓库 worktree→PR→merge 标准流程（maoscripts 类仓库 SOP）、开 worktree 前 base 同步检查（防 main drift 致 PR not mergeable；先跑 scripts/pre-worktree-check.sh 只读判读 IN_SYNC/AHEAD/BEHIND/DIVERGED，--pre-pr 模式以 merge-tree 做提 PR 前本地冲突模拟）、多 worktree 并行时 main worktree 占用处理、Git 提交身份自检与身份污染排查（identity-audit.sh whoami/history：提交前身份来源链自检、全仓 author/committer/Co-authored-by 尾注审计；用户以「提交身份不对」「多出 coauthor」「陌生作者」「冒出别的署名」等口语提出时同样适用）、敏感/私有文件误提交远端的全历史撤回（history rewrite；用户以「私有数据被上传了」「从历史里删掉」「把这个提交撤回」等口语提出时同样适用——先只读排查泄露范围与凭证暴露，再隔离 clone 做 filter-repo 重写、防复发 ignore 规则、全分支 force push 与主工作区深度分叉对齐，绝不在主工作区直接重写）、仓库膨胀审计与历史瘦身（repo slim；用户以「.git 太大」「仓库怎么这么大」「历史里有大文件」「瘦身」等口语提出时同样适用——先只读盘点 pack 构成/最大 blob/不可达对象/本地远端分叉，再谈 ignore 治理与历史重写授权；filter-repo 方向门与事故恢复见 §13）、常见 Git 事故恢复（accident recovery；用户以「amend 错了」「stash 找不到了」「分支误删了」「reset 丢了东西」等口语提出时同样适用——先 reflog/fsck 只读定位，恢复优先新建引用而非改写现态，reset/force 类补救仍须明确授权，详见 references/accident-recovery.md）时使用。不要用于：批量生成提交信息、项目任务分配、长期任务状态管理或本地多 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.13.0"
+  version: "1.14.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -972,6 +972,20 @@ git worktree list
 - **主工作区对齐走深度分叉剧本**（全量重写后 patch-id 失效，不能常规 rebase）：三层备份（backup 分支 + **整个文件夹 rsync 全量备份**——untracked 的本地特有文件 git 备份盖不住 + 反向 diff patch）→ 敏感数据文件单独 cp 出仓（`rm --cached` 的 staged deletion 会在 reset+pop 时删掉磁盘文件）→ 甄别本地提交是否需 cherry-pick（涉及文件两侧树 diff 为 0 = 内容已在远端）→ stash（不带 -u）→ `reset --hard origin/main` → pop 解冲突 → 数据文件放回原位。
 - **残留如实告知不催办**：GitHub dangling 提交仍可按 SHA 访问、fork 不跟随重写、其他本地分支/worktree 需各自 rebase、公开窗口时长——由用户评估，AI 只给事实。
 
+## 13. 仓库膨胀审计与瘦身
+
+**触发**：仓库或 `.git` 体积异常增长（「仓库怎么这么大」「.git 太大」「历史里有大文件」「瘦身」），高发于每日 auto-commit 的配置同步仓（dotfile/工具配置）——二进制运行时与 DB 每轮快照都进历史。
+
+核心纪律（完整五步审计、归因矩阵与事故恢复实录见 `references/repo-bloat-audit-and-slim.md`）：
+
+- **先只读审计，不改任何东西**：pack 构成 → 历史最大 blob 定名（`verify-pack` 排序 + `rev-list --objects` 反查；路径为空 = 不可达尸体）→ 当前跟踪构成 → `fsck --unreachable` → **本地/远端分叉检查**（配置同步仓高频病：远端早被别处重写、本地 push 长期静默失败，胖历史只活在本地一条线上）。
+- **ignore 治理是治本**：配置同步仓无论私有公开一律白名单制——只入库文本配置；二进制运行时（工具链/浏览器/venv）、DB 及其一切备份形态（`*.db*`/`*.bak`/retired-wal）、缓存、会话附件、日志全部排除。gitignore 对已跟踪文件无效，老文件随历史重写一并剥离。公开仓库另跑 privacy-preflight。
+- **重写前先造兜底**：filter-repo 自带 `gc --prune=now`，旧对象立即不可恢复——先确认远端完整（fetch 比对），再整目录 rsync 一份到仓外。
+- **方向门（漏 `--invert-paths` = 语义反转）**：`--path X --invert-paths` 才是「删 X」；漏写变成「只留 X」，配置全被剥掉且 checkout 连带删除工作区文件。重写后**立即** `git ls-files` 按顶层核对构成 + `git log` 核对提交数，方向不对马上停——此时尚未深埋、远端未动，恢复成本最低。
+- **预判两个连带损伤**：①被剥离路径的原跟踪文件会被 checkout 从磁盘删掉——是运行时目录时先确认可重装或提前 `git archive origin/main` 落盘备份；②重写前只动了被剥离路径的 chore 提交会被 prune 成空提交消失。
+- **私有/公开分轨**：私有单人仓经用户明示可 force 重写全史；公开/多人仓的重写协调边界见 §12（其隔离 clone 流程同样适用瘦身场景）。
+- **事故恢复按优先级**：远端未动 = 第一恢复源（fetch + reset --hard 可救回被删工作区文件）→ 应用自备份目录 → 运行中进程 `ps eww` 静默重建 env（只回填已有键，值不外显）→ APFS 快照 / Time Machine。全部落盘核对后才重推。
+
 ## 参考资源
 
 - `references/branch-lifecycle-and-cleanup.md` — 一次性/长期分支判定、单 Worker 自动清理、批量 stale 审计、批量删除执行坑与长期功能线关闭
@@ -981,6 +995,7 @@ git worktree list
 - `references/gh-cli-quickref.md` — gh CLI 常用命令速查
 - `references/github-actions-quota-guard.md` — Actions 额度诊断、停挂配方（workflow_dispatch 化）、仓级总闸、恢复与红线
 - `references/history-rewrite-and-removal.md` — 敏感文件全历史撤回 SOP：只读排查、隔离 filter-repo 重写、全分支 force push、主工作区深度分叉对齐（含 stash 冲突语义与 zsh refspec 坑）、残留边界
+- `references/repo-bloat-audit-and-slim.md` — 仓库膨胀审计与瘦身 SOP：五步只读审计、四类膨胀源归因矩阵、配置同步仓 ignore 白名单制、filter-repo 方向门与连带损伤预判、四级事故恢复路径（2026-10-04 Hermes 实录）
 - `scripts/check-outgoing-identities.sh` — feature/PR push 前完整 PR range 的 author/committer 身份门禁
 - `scripts/safe-push.sh` — 把身份与隐私核验绑定实际 immutable OID push
 - `scripts/privacy_check.py` — staged/message/完整历史共用隐私检查器
