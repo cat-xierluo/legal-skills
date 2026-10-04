@@ -1,6 +1,6 @@
 # gh CLI 常用命令速查
 
-基于 GitHub CLI (`gh`) 的常用操作参考。
+按需查询 GitHub CLI (`gh`) 参数。只读命令可用于核查；review、Issue 写入、关闭、更新分支与远端操作须有对应授权。PR 与发布的安全规则由场景合同维护，速查不构成额外授权。
 
 ## 认证
 
@@ -36,25 +36,7 @@ gh pr review <number> --comment --body "评论"
 
 ### 合并
 
-合并前先检查 PR 状态、diff 和 checks：
-
-```bash
-gh pr view <number> --json title,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName
-gh pr diff <number> --name-only
-gh pr diff <number> --stat
-gh pr checks <number>
-```
-
-diff 不可读、checks 未知、review 不明确、PR 是 draft、mergeable 不明确或 diff 超范围时，不要 merge。
-
-PR 正文缺少 Summary、Test plan、Agent Attribution 或 Issue/Task 关联时，先要求补齐。Monorepo PR 如果出现跨目录污染、大量删除、敏感配置或版本清单不一致，不要 merge。
-
-```bash
-python3 "$git_workflow_dir/scripts/safe-pr.py" squash --number "$pr_number" \
-  --expected-head "$verified_head" --title-file "$title_file" --body-file "$body_file"
-```
-
-其它合并方式/API仍须绑定完整范围、精确最终文本与真实head；长期线保护、波次同步及已发布GitHub身份差异读取[功能线合同](long-lived-integration-branch.md)。合并与删除分开核授权，不能绕过仓库保护。
+读取[PR 合同](pr-workflow.md)满足范围、review、最终 checks 和授权后，按[隐私预检](privacy-preflight.md)使用 safe-pr.py，绑定完整受审 head 与最终说明；合并后核实际回执。不要裸 merge 或 admin override。
 
 ### 其他
 
@@ -102,10 +84,11 @@ gh repo fork <owner>/<repo>           # Fork
 
 ## Release
 
+发版与上传资产读取 release-workflow，不由速查触发发布。只读查询：
+
 ```bash
-gh release create v1.0.0 --title "v1.0.0" --notes "发布说明"
 gh release list
-gh release download v1.0.0
+gh release view '<tag>'
 ```
 
 ## Actions

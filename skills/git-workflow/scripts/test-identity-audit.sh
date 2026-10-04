@@ -173,13 +173,15 @@ expect_exit_1_contains "history: 污染仓发现可疑作者/尾注" \
   "IDENTITY_AUDIT_FINDINGS" history --repo "$DIRTY"
 
 HIST_OUT="$WORK/hist.txt"
-"$AUDIT" history --repo "$DIRTY" >"$HIST_OUT" 2>&1 || true
+hist_rc=0
+"$AUDIT" history --repo "$DIRTY" >"$HIST_OUT" 2>&1 || hist_rc=$?
 # 脚本会剥掉 "Co-authored-by:" 前缀，故按分布表标题断言
-grep -qF "info-assistant@hermes.local" "$HIST_OUT" && \
+[ "$hist_rc" -eq 1 ] && \
+  grep -qF "info-assistant@hermes.local" "$HIST_OUT" && \
   grep -qF "Co-authored-by 尾注分布" "$HIST_OUT" && \
   grep -qF "[可疑" "$HIST_OUT" \
   && ok "history: 尾注与作者均被标注" \
-  || { cat "$HIST_OUT" >&2; not_ok "history: 尾注与作者均被标注"; }
+  || { cat "$HIST_OUT" >&2; not_ok "history: 尾注与作者均被标注（expected exit 1, got ${hist_rc}）"; }
 
 expect_exit_1_contains "history: --range 只审指定范围" \
   "IDENTITY_AUDIT_FINDINGS" history --repo "$DIRTY" \

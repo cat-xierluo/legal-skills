@@ -70,7 +70,7 @@ gh pr list --state all --limit 100 \
 git -C <worktree> status --short
 ```
 
-日常巡检可先跑只读盘点脚本生成三档候选表（脚本绝不删除；gh 缺失或未认证时自动降级为 merge-base+日期判定并标注「PR 状态未核对」，squash 分支会漏判为 NEEDS_CONFIRM——宁漏勿错）：
+日常巡检可先跑只读盘点脚本生成三档候选表（脚本不 fetch/prune/删除；gh 缺失、失败或查询截断时保守 KEEP，PR 未核完整不输出可删除候选；patch-id 不证明当前 tip 已交付）：
 
 ```bash
 scripts/branch-audit.sh [base-ref] [remote]   # 默认 origin/main origin
@@ -131,18 +131,18 @@ git update-ref -d "refs/heads/$branch" "$expected_local_tip"
 ```bash
 git rev-list --count origin/main..<branch>                    # ahead N（squash 后虚高）
 git cherry origin/main <branch> | grep -c '^+'                # 补丁不在 base 的条数
-# ahead>0 但 cherry '+' 计数为 0 → 补丁等价已全部在 base，分支纯死
+# '+' 为 0 仅为补丁等价线索，不证明当前 tip 已交付或允许删除
 ```
 
-- 优先级：**MERGED PR 记录 > patch-id > merge-base**。多 commit 被 squash 成单个时 patch-id 不匹配（归 NEEDS_CONFIRM，宁漏勿错）；PR 已 MERGED 则直接判死，不受任何 git 指标迷惑。
-- 每分支 PR 命运精查：`gh pr list --state all --head <branch> --json number,state --limit 1`。CLOSED 且非 MERGED 的分支**内容未进 base**，删除即丢失——先看评论确认是否被后续 PR 取代（见下）。
+- MERGED 回执、patch-id 和祖先关系均是交付线索，必须绑定当前 tip、真实目标和实际采用关系，沿 §3.1/§3.3 核授权。历史 PR 已合不等于该分支后续新 tip 已交付；多 commit squash 后 patch-id 不匹配也不能证明未交付。
+- PR 查询须覆盖有关状态、head OID 和目标，检查分页/截断，不以 `--limit 1` 作完整结论。CLOSED 不等于内容未进目标，可能被另一个 PR/窄采用取代；必须核覆盖与未采用处置，未知即保留。
 
 #### worktree 批量清理五步（先展示后执行）
 
-1. **prune 悬空记录**：`git worktree prune` 先清掉目录已不存在的挂载（worktree list 仍显示但 remove 报 "not a working tree" 的都是这类）。
+1. **核悬空登记**：先只读盘点路径、管理目录和归属；挂载暂不可用、locked 或坏登记不能直接当过期。prune 是登记写操作，只有本次授权和归属核定后才执行，失败保留原因。
 2. **查进程占用（硬保护）**：`lsof -w -d cwd -F n | sed -n 's/^n//p'` 拿全量 cwd 路径，与 worktree 路径前缀匹配。有占用的（活跃 PM/agent 会话）**绝不删**——lsof 列宽截断用 `-F n` 全路径输出规避，路径匹配用 awk `index($0,p)==1`（防空格/正则元字符）。日常巡检直接跑 `scripts/worktree-audit.sh`（只读，含占用/dirty/patch/PR 四维分类）。
 3. **dirty 分类**：`git -C <wt> status --porcelain`——modified/untracked 是**会话工作现场**：已终结会话仍须核完整已交付成果和精确删除授权；dirty/untracked须先保留备份并解决归属，不默认force删；untracked可能是无备份的研究材料（实战：R15 研究脚本只存在于 worktree 未提交区）——删除前确认正式版已入库，必要时拷出归档。
-4. **按分支死活定删除范围**：补丁全在 base/PR 已合并 → worktree+本地分支一起删；分支是 open PR head 或有补丁未交付 → **只删 worktree 保分支**（内容在分支/远端，返修时重新 checkout）。
+4. **分别定范围**：交付、生命周期与当前 tip 全部核定后分别检查工作树、本地/远端 ref 的授权。open PR 或未交付分支保留；只移除树亦须 owner、全部本地材料与业务生命周期已结算，不能认为分支存在便覆盖 ignored/untracked/Session。
 5. **执行**：只对已授权、无占用且已处理dirty的精确Worktree执行普通remove；按§3.1/§3.3绑定expected tip删除允许的ref。不默认force、-D或扩大到integration target，失败记录CLEANUP_PENDING并保留现场。
 
 #### 已验证的坑
@@ -172,7 +172,7 @@ git cherry origin/main <branch> | grep -c '^+'                # 补丁不在 bas
 gh pr view <n> --json mergeable,mergeStateStatus   # 期望 MERGEABLE + CLEAN
 ```
 
-任何一项不符就从本轮名单剔除、单独报告原因。`UNKNOWN` 是 GitHub 重算 mergeability 的暂态（刚有提交进 main 后必然出现），等 10–15 秒重查，不要当成坏状态。
+任何一项不符就从本轮名单剔除、单独报告原因。`UNKNOWN` 不能判为通过或冲突。核权限、服务端计算和候选变化，可有界等待重查；持续未知时保留未验，不进入合并。
 
 同时复核合并方式仍然成立：squash 是本仓惯例（历史一致、main 每 PR 一提交）；有约在先的例外（如「不合并，供 PM 对照」的对照型 PR）即使 CLEAN 也不进名单。
 
@@ -183,7 +183,7 @@ gh pr view <n> --json mergeable,mergeStateStatus   # 期望 MERGEABLE + CLEAN
 
 #### 第 3 步：绑定 head 的 squash 与独立清理
 
-核当前state/draft、head/base、独立review、实际checks及范围，完成授权与验收后转ready。按主Skill使用 safe-pr.py squash，提供完整已审head OID及明确最终标题/正文文件；当前PR文本与每笔历史也需隐私复核。
+核当前state/draft、head/base、独立review、实际checks及范围，完成授权与验收后转ready。按[PR 合同](pr-workflow.md)使用 safe-pr.py squash，提供完整已审head OID及明确最终标题/正文文件；当前PR文本与每笔历史也需隐私复核。
 
 事后读取 state=MERGED、mergedAt、mergeCommit 并核实际交付树；不只信命令exit或静默输出。合并默认不附 --delete-branch，后续清理按生命周期、精确tip、归属/占用及删除授权执行；长期线与固定Worktree保留。关闭旧PR、合并新PR的授权不自动包含删除所有相关分支。
 
@@ -191,11 +191,7 @@ gh pr view <n> --json mergeable,mergeStateStatus   # 期望 MERGEABLE + CLEAN
 
 同族 PR 的冲突几乎都落在 CHANGELOG.md / TASKS.md 这类**追加型文档**——两边各自追加了版本记录/任务卡，语义上互不重复。解法是把 main merge 进 PR 分支（不是 rebase——分支可能有 PM 回写历史，merge 保留双方）：
 
-```bash
-git fetch origin --prune
-git worktree add /tmp/<pr>-fix <pr-branch>          # 隔离 worktree，不碰主工作区
-cd /tmp/<pr>-fix && git merge origin/main            # 冲突文件清单在此暴露
-```
+先按[本地 SOP](local-worktree-sop.md)核原 PR head、归属和真实 base，复用适合的隔离树；需新树时，Skill/套件按[稀疏合同](sparse-worktree.md)在创建前固定目标与依赖，不先全量检出。仅在已核隔离 PR 分支内同步实际远端 base，不切换共享主源。
 
 解冲突三原则：
 
@@ -205,7 +201,9 @@ cd /tmp/<pr>-fix && git merge origin/main            # 冲突文件清单在此�
 
 ```bash
 # 解完（文件中无 <<<<<<< 残留）：
-git add <冲突文件> && git commit -m "merge: 解 <PR#> 与 main 的 <文件> 追加冲突，两侧记录全保留"
+git add -- <已核冲突文件>
+# 身份已核，最终说明亦须隐私检查；实际 base 未必是 main
+git commit -m "merge: 解决 <PR#> 与目标基准的追加冲突" -m "保留双方有效记录；说明实际验证结果。"
 bash "$git_workflow_dir/scripts/safe-push.sh" --base "origin/$actual_base" --branch "$pr_branch" \
   --expected-name "$expected_name" --expected-email "$expected_email"
 ```
@@ -236,7 +234,7 @@ git worktree list               # 确认临时 worktree 已清
 #### 本节已验证的坑
 
 - **合并顺序敏感**：同族 PR 一次性连续合并，必然有一个被甩冲突；先合一个、重查下一个。
-- **UNKNOWN 暂态**：新提交进 main 后所有 open PR 的 mergeability 会被 GitHub 异步重算，立即查询显示 UNKNOWN，等 10 秒重查。
+- **UNKNOWN 暂态**：主干更新可能触发异步重算；有界等待重查，持续 UNKNOWN 或不可读时保持未验，不能推断已可合并。
 - **close与删除独立**：旧分支是否保留按实际采用范围、归属及删除授权决定；CLOSED不等于MERGED，也不自动成为可删候选。
 - **gh 输出不可全信**：连续合并时命令静默但成功，`state=MERGED` 复核为准。
 - **解冲突方向**：把 main merge 进 PR 分支（PR head 前进、包含 main），不要把 PR 分支 rebase 到 main（PM 回写历史会被重写）。
