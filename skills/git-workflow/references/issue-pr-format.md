@@ -2,7 +2,7 @@
 
 本规范只管理 GitHub Issue / PR 的标题、关闭标记和合并提交格式，确保 Git 历史可读、可追溯。
 
-边界说明：项目任务状态不由本文档维护。常规任务领取、依赖和状态判断以项目自己的任务源为准；若项目使用 `cross-agent-collab`，则以其配置解析出的任务源为准。GitHub Issue 只作为远程协作入口或外部问题追踪入口。
+边界说明：项目任务状态不由本文档维护。常规任务领取、依赖和状态判断以项目自己的任务源为准；若项目配置协调技能，仍以其明确的任务源为准。GitHub Issue 只作为远程协作入口或外部问题追踪入口。
 
 ## Issue 命名格式
 
@@ -117,18 +117,18 @@ chore: 更新 GitHub Actions 依赖版本
 
 1. **commit 标题末尾必须带 `(#N)`**，其中 N 是 PR 编号
 2. 通过 GitHub API 的 `merge_pull_request` 执行 squash merge 时，自定义 `commit_title` 不会自动追加编号，必须手动写入
-3. commit body 中使用 `Closes #<issue编号>` 关联相关 Issue
+3. 只有实际完成且已授权关闭的 GitHub Issue 才使用 `Closes #<issue编号>`；仅关联或本地任务使用 `Refs`，不误关 GitHub Issue
 
 ### 示例
 
 ```
 # 正确
-feat(funasr-transcribe): 新增 ONNX 优化转录路径 (#16)
+feat(local-asr): 新增 ONNX 优化转录路径 (#16)
 fix(skill-manager): 修复符号链接创建位置问题 (#12)
 docs: 更新 README (#8)
 
 # 错误 — 缺少 PR 编号
-feat(funasr-transcribe): 新增 ONNX 优化转录路径
+feat(local-asr): 新增 ONNX 优化转录路径
 ```
 
 ### 为什么需要手动加编号？
@@ -139,26 +139,20 @@ GitHub 网页端 squash merge 会自动在标题末尾追加 `(#N)`，但通过 
 
 | 对象 | 格式 | 模块标识 | PR 编号 |
 |------|------|----------|--------|
-| Commit | `<类型>: <描述>` | 可选（多 Skill 仓库建议加） | 不需要 |
+| Commit | `<类型>: <描述>` | 多 Skill/模块必须加 | 不需要 |
 | Issue | `<类型>: <描述>` | 不需要 | 不需要 |
 | PR | `<类型>(<模块>): <描述>` | 必须（多 Skill 仓库） | 不需要 |
 | Merge Commit | `<类型>(<模块>): <描述> (#N)` | 必须 | **必须** |
 
-## 规范依据
+## 提交正文与任务来源
 
-### 为什么使用统一格式？
+提交信息使用英文类型前缀与中文内容，每笔含说明正文；一个提交表达一个目的，独立 Skill/模块按目的拆分。用户明确要求批量拆分/生成提交说明时由 git-batch-commit 处理，仍满足[身份](identity-and-push.md)和[隐私](privacy-preflight.md)合同。
 
-1. **一致性**：Issue、PR、Commit 使用相似格式，便于理解和检索
-2. **可追溯**：通过类型前缀快速识别变更性质
-3. **AI 可读**：AI 能根据 `[done]` 等标记区分已处理和待处理任务
-4. **GitHub 集成**：GitHub 能自动识别并为 PR 添加标签颜色
+```text
+fix(skill-name): 修复解析失败
 
-### 成熟项目参考
+- 描述实际修改与验证
+Refs: <项目任务 ID>
+```
 
-| 项目 | Issue 标题前缀 | PR 标题前缀 |
-|------|--------------|-----------|
-| Electron | 无（用 Labels） | **有**（`fix:`, `feat:` 等） |
-| Vue | 无（用 Labels） | 无 |
-| Angular | 无（用 Labels） | 无 |
-
-本项目采用折中方案：Issue 和 PR 都使用类型前缀，但通过状态标记区分处理结果。
+直接解决 GitHub Issue 时标题带 `(#N)`，正文使用已授权的 `Closes #N`；它与 PR 编号相似，但来源须核清。不把项目本地 Issue #13 写成 `Closes #13`，改用 `Refs: project-task Issue #13`。

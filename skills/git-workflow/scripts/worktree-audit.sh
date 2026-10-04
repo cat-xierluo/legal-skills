@@ -1,130 +1,71 @@
 #!/usr/bin/env bash
-# worktree 冗余只读盘点：对 git worktree list 中每个挂载输出死活分类，辅助过期/失效 worktree 清理。
-# 本脚本绝不执行任何删除；删除必须按 references/branch-lifecycle-and-cleanup.md §3.4
-# 展示候选并取得用户确认后，由会话/人工执行。
-#
-# 用法: worktree-audit.sh [base-ref]
-#   base-ref 默认 origin/main
-#
-# 判定规则（与 references/branch-lifecycle-and-cleanup.md §3.4 一致）：
-#   GONE            目录已不存在（悬空记录）→ git worktree prune 候选
-#   KEEP_ACTIVE     有进程 cwd 占用（活跃 PM/agent 会话），绝不列入清理
-#   KEEP_DIRTY      有未提交内容 → 人工查看后再定（untracked 可能是无备份的研究材料）
-#   KEEP_OPEN_PR    分支是 open PR head 或补丁未进 base → 可删 worktree 保分支（不自动列删）
-#   REMOVE_ALL      分支补丁等价已全部在 base，且 PR 已合并/无 PR → worktree+本地分支均为候选
-#   SKIP            主工作区 / detached 的工具自管目录（如 eval-harness sources）
-#
-# 降级：gh 缺失时 PR 状态标注「未核对」；lsof 缺失时进程占用标注「未核对」（一律保守保留）。
-
+# 只读候选盘点；不 prune/remove/删分支。实际登记/材料详细审计使用 sparse-worktree-audit.py。
 set -u
-
 BASE_REF="${1:-origin/main}"
-
-command -v git >/dev/null 2>&1 || {
-  echo "❌ 缺少依赖: git"
-  echo "   macOS: xcode-select --install 或 brew install git"
-  exit 1
-}
-
-HAS_GH=0
-OPEN_PRS=""
-MERGED_PRS=""
+for key in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_NAMESPACE; do
+  if [ -n "${!key:-}" ]; then echo '拒绝 Git 仓库/索引环境覆盖' >&2; exit 2; fi
+done
+git_read() { GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false "$@"; }
+command -v git >/dev/null 2>&1 || { echo '缺少依赖: git' >&2; exit 2; }
+BASE_SHA=$(git_read rev-parse --verify "$BASE_REF^{commit}" 2>/dev/null) || { echo 'base-ref 不可读' >&2; exit 2; }
+COMMON=$(git_read rev-parse --path-format=absolute --git-common-dir) || exit 2
+INFO=$(git_read worktree list --porcelain) || exit 2
+MAIN_WT=$(printf '%s\n' "$INFO" | sed -n '1s/^worktree //p')
+HAS_GH=0; OPEN_PRS=''
 if command -v gh >/dev/null 2>&1; then
-  REPO_SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || REPO_SLUG=""
-  if [ -n "$REPO_SLUG" ]; then
-    HAS_GH=1
-    OPEN_PRS=$(gh pr list --repo "$REPO_SLUG" --state open --limit 200 \
-      --json headRefName --jq '.[].headRefName' 2>/dev/null) || OPEN_PRS=""
-    MERGED_PRS=$(gh pr list --repo "$REPO_SLUG" --state merged --limit 200 \
-      --json headRefName --jq '.[].headRefName' 2>/dev/null) || MERGED_PRS=""
+  if SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) && [ -n "$SLUG" ]; then
+    if OPEN_PRS=$(gh pr list --repo "$SLUG" --state open --limit 201 --json headRefName --jq '.[].headRefName' 2>/dev/null); then
+      count=$(printf '%s\n' "$OPEN_PRS" | awk 'NF {n++} END {print n+0}')
+      [ "$count" -lt 201 ] && HAS_GH=1
+    fi
   fi
 fi
-
-# 进程占用探测：lsof 全量 cwd 记录缓存一次（-F n 输出完整路径，避免列宽截断）
-CWD_PATHS=""
-HAS_LSOF=0
+HAS_LSOF=0; CWD_PATHS=''
 if command -v lsof >/dev/null 2>&1; then
-  HAS_LSOF=1
-  CWD_PATHS=$(lsof -w -d cwd -F n 2>/dev/null | sed -n 's/^n//p')
+  if CWD_RAW=$(lsof -w -d cwd -F n 2>/dev/null); then
+    CWD_PATHS=$(printf '%s\n' "$CWD_RAW" | sed -n 's/^n//p'); HAS_LSOF=1
+  fi
 fi
-
-in_set() { printf '%s\n' "$1" | grep -Fxq -- "$2"; }
-
-cwd_occupied() { # $1=worktree 路径 → 输出占用进程数（awk 前缀匹配，防路径空格/正则元字符）
-  [ "$HAS_LSOF" = 1 ] || { echo "?"; return; }
-  printf '%s\n' "$CWD_PATHS" | awk -v p="$1" 'index($0, p) == 1' | grep -c . || true
-}
-
-BASE_SHA=$(git rev-parse --verify --quiet "$BASE_REF")
-if [ -z "$BASE_SHA" ]; then
-  echo "❌ base-ref 不存在: $BASE_REF（先 git fetch，或显式传入，如: worktree-audit.sh origin/master）"
-  exit 1
-fi
-
-MAIN_WT=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
-
-echo "== worktree 冗余盘点（只读，不删除） =="
-echo "base=$BASE_REF repo=${REPO_SLUG:-未知} lsof=$([ "$HAS_LSOF" = 1 ] && echo ok || echo 缺失) gh=$([ "$HAS_GH" = 1 ] && echo ok || echo 缺失)"
-echo
-
-git worktree list --porcelain |
+printf '== worktree 候选盘点（只读，不删除） ==\nbase=%s\n' "$BASE_REF"
+WT=''; REG_HEAD=''
 while IFS= read -r line; do
   case "$line" in
-    worktree\ *) WT="${line#worktree }" ;;
-    branch\ *)
-      BR="${line#branch refs/heads/}"
-      [ -d "$WT" ] || { printf 'GONE          %s\n' "$WT"; continue; }
-      [ "$WT" = "$MAIN_WT" ] && { printf 'SKIP          %-70s 主工作区\n' "$WT"; continue; }
-      occ=$(cwd_occupied "$WT")
-      [ "$occ" != "?" ] && [ "$occ" -gt 0 ] 2>/dev/null && {
-        printf 'KEEP_ACTIVE   %-70s [%s] %s 个进程占用\n' "$WT" "$BR" "$occ"; continue; }
-      dirty=$(git -C "$WT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-      [ "${dirty:-0}" -gt 0 ] 2>/dev/null && {
-        printf 'KEEP_DIRTY    %-70s [%s] %s 个未提交项\n' "$WT" "$BR" "$dirty"; continue; }
-      if [ -n "$BASE_SHA" ]; then
-        new=$(git cherry "$BASE_SHA" "$BR" 2>/dev/null | grep -c '^+')
-        if [ "${new:-1}" -eq 0 ] 2>/dev/null; then
-          if in_set "$OPEN_PRS" "$BR"; then
-            printf 'REMOVE_ALL*   %-70s [%s] 补丁已全在 base，但为 open PR head——删前先核对 PR\n' "$WT" "$BR"
-          elif in_set "$MERGED_PRS" "$BR"; then
-            printf 'REMOVE_ALL    %-70s [%s] PR 已合并且补丁在 base\n' "$WT" "$BR"
-          else
-            printf 'REMOVE_ALL    %-70s [%s] 补丁等价已全在 %s（patch-id 0）\n' "$WT" "$BR" "$BASE_REF"
-          fi
-        else
-          printf 'KEEP_OPEN_PR  %-70s [%s] %s 个补丁未进 base（open PR/待交付），可仅删 worktree 保分支\n' "$WT" "$BR" "$new"
-        fi
+    worktree\ *) WT="${line#worktree }";;
+    HEAD\ *) REG_HEAD="${line#HEAD }";;
+    branch\ *|detached*)
+      BR="${line#branch refs/heads/}"; [ "$line" = detached ] && BR=DETACHED
+      [ -d "$WT" ] || { printf 'GONE          %s 登记缺目录，保留待核，不自动 prune\n' "$WT"; continue; }
+      [ "$WT" = "$MAIN_WT" ] && { printf 'SKIP          %s 主工作区\n' "$WT"; continue; }
+      if [ "$HAS_LSOF" != 1 ]; then printf 'KEEP_UNKNOWN  %s 占用未核\n' "$WT"; continue; fi
+      occ=$(printf '%s\n' "$CWD_PATHS" | awk -v p="$WT" '$0==p || index($0,p"/")==1 {n++} END {print n+0}')
+      [ "$occ" -gt 0 ] && { printf 'KEEP_ACTIVE   %s cwd 占用\n' "$WT"; continue; }
+      [ "$BR" = DETACHED ] && { printf 'KEEP_UNKNOWN  %s detached 归属待核\n' "$WT"; continue; }
+      if ! root=$(git_read -C "$WT" rev-parse --show-toplevel) || [ "$root" != "$WT" ]; then printf 'KEEP_UNKNOWN %s 实际根与登记不符\n' "$WT"; continue; fi
+      if ! actual_common=$(git_read -C "$WT" rev-parse --path-format=absolute --git-common-dir) || [ "$actual_common" != "$COMMON" ]; then printf 'KEEP_UNKNOWN %s 仓库身份与登记不符\n' "$WT"; continue; fi
+      if ! tip=$(git_read -C "$WT" rev-parse HEAD) || [ "$tip" != "$REG_HEAD" ]; then printf 'KEEP_UNKNOWN %s HEAD 已漂移\n' "$WT"; continue; fi
+      if ! actual=$(git_read -C "$WT" symbolic-ref -q HEAD); then printf 'KEEP_UNKNOWN %s 分支不可读\n' "$WT"; continue; fi
+      [ "$actual" = "refs/heads/$BR" ] || { printf 'KEEP_UNKNOWN %s 登记身份变化\n' "$WT"; continue; }
+      # 该旧格式审计保守跳过配置了外部过滤器的树；精确属性判定由 sparse-worktree-audit.py 维护。
+      if filters=$(git_read -C "$WT" config --name-only --get-regexp '^filter\..*\.(clean|process)$'); then
+        printf 'KEEP_UNKNOWN  %s 外部过滤器配置，材料未验\n' "$WT"; continue
       else
-        printf 'KEEP_OPEN_PR  %-70s [%s] 补丁状态未知（保守保留）\n' "$WT" "$BR"
+        code=$?; [ "$code" = 1 ] || { printf 'KEEP_UNKNOWN %s 配置不可读\n' "$WT"; continue; }
       fi
-      ;;
-    detached*)
-      [ -d "$WT" ] || { printf 'GONE          %s\n' "$WT"; continue; }
-      [ "$WT" = "$MAIN_WT" ] && continue
-      occ=$(cwd_occupied "$WT")
-      if [ "$occ" != "?" ] && [ "$occ" -gt 0 ] 2>/dev/null; then
-        printf 'KEEP_ACTIVE   %-70s [detached] %s 个进程占用\n' "$WT" "$occ"
+      if ! dirty=$(git_read -C "$WT" status --porcelain --untracked-files=all); then printf 'KEEP_UNKNOWN %s status 不可读\n' "$WT"; continue; fi
+      if ! ignored=$(git_read -C "$WT" ls-files --others --ignored --exclude-standard); then printf 'KEEP_UNKNOWN %s 本地材料不可读\n' "$WT"; continue; fi
+      if [ -n "$dirty" ] || [ -n "$ignored" ]; then printf 'KEEP_DIRTY    %s dirty/untracked/ignored 材料待保护\n' "$WT"; continue; fi
+      if [ "$HAS_GH" != 1 ] || printf '%s\n' "$OPEN_PRS" | grep -Fxq -- "$BR"; then printf 'KEEP_OPEN_PR  %s PR 未核完整或为 open head\n' "$WT"; continue; fi
+      if git_read merge-base --is-ancestor "$actual" "$BASE_SHA"; then
+        printf 'REMOVE_ALL    %s 当前 tip 在 base，仅为生命周期/owner 待复核候选\n' "$WT"
       else
-        printf 'KEEP_DIRTY*   %-70s [detached] 无分支挂载——确认非工具自管目录后人工定夺\n' "$WT"
-      fi
-      ;;
+        printf 'KEEP_OPEN_PR  %s 当前 tip 未证明已交付；不按 patch-id/历史 MERGED 判死\n' "$WT"
+      fi;;
   esac
-done
+done <<< "$INFO"
+cat <<'NOTICE'
 
-cat <<'EOF'
-
----- 执行须知（删除前必读） ----
-1. 本表只是「候选」：批量删除前必须展示给用户并取得确认（红线，见 references §5）。
-2. KEEP_ACTIVE 是硬保护：lsof 检出进程 cwd 占用的 worktree 属于活跃会话，绝不删除；
-   lsof 缺失时占用显示 "?"，一律保守保留。
-3. KEEP_DIRTY 中的 untracked 文件可能是无备份的研究材料（实战：R15 研究脚本只存在于
-   worktree 未提交区）——删除前先确认正式版已入库，必要时拷出归档。
-4. REMOVE_ALL 同时覆盖 worktree 与本地分支；KEEP_OPEN_PR 只可「删 worktree 保分支」
-   （内容仍在分支/远端）。带 * 的行有附加条件，删前逐条核对。
-5. detached worktree 先确认不是其他工具自管目录（评测/harness 类 sources 目录等）再处置。
-6. 删除顺序：先 git worktree prune 清悬空记录，再逐个 remove（dirty 需 --force，须用户
-   确认放弃未提交内容）；本地分支删除前对每条重跑 git cherry 校验。
-7. 执行中可能遇到目录权限拒绝（实战：orca 工作区 Permission denied）——权限失败
-   不继续删该 worktree 的关联分支，整项保留并按 CLEANUP_PENDING 如实报告；空壳目录
-   由用户自行处置（如需提权删除须用户亲手执行，Agent 不代跑），勿反复重试。
-EOF
+本表只是候选，cwd 无命中不证明无 writer/Session。删除前核生命周期、精确 tip、全部本地材料备份及具名授权。
+主源、长期线、活跃/未知归属和未交付成果保留；分支存在不代表 ignored/untracked/Session 已备份。
+prune 是独立登记写操作，不自动执行；ordinary remove 失败即保留现场，不继续删除关联 ref，不强删、不绕权限。
+记录 CLEANUP_PENDING 或 RETAINED_WITH_REASON；已交付的 push/merge 不重放。详细合同见 references/branch-lifecycle-and-cleanup.md。
+NOTICE

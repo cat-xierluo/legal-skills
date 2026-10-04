@@ -34,8 +34,8 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-04 | 更新 | [git-workflow](skills/git-workflow/) | v1.17.1 | 默认创建时稀疏检出；精简触发说明与主入口，按场景读取参考；修复只读审计的未知/失败处理和身份测试退出码，新增隔离 Git 回归。 |
 | 2026-10-04 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.8 | 整合已独审派发准入、业务产物与持续配置检查，保留 GUI 和工程证据链；公开关闭恢复诊断，原生身份缺口继续阻断真实业务恢复。 |
-| 2026-10-03 | 更新 | [git-workflow](skills/git-workflow/) | v1.11.2→v1.13.0 | 新增 pre-worktree-check.sh 只读四态判读（IN_SYNC/AHEAD/BEHIND/DIVERGED）与 --pre-pr merge-tree 提 PR 前冲突模拟；入册误 amend/误 stash/误删分支/误 reset 事故恢复路径；纠正删除分支 reflog 与未提交内容恢复边界，增加真实 Git 回归；修正 worktree-audit 清理须知；新增 receipt 精确回执核验，查询截断时 UNKNOWN、不误判伪造。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
 | 2026-10-01 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.2 | 修复 ZIP 资产路径假通过；显式区分源码待发布、Preview 和本地 Release staging，保留真实公开链接，按实际成员 ZIP 全量字节核验。自身5套本地构建通过，9套仅本地合成验证；源码1.6.2尚未发布，下载保留1.6.0。 |
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
@@ -711,7 +711,7 @@
 <td>工具·Git</td>
 <td style="word-break:break-word">Git 工作流安全助手，覆盖分支管理、长期集成分支、Monorepo 安全合并、PR、冲突处理、安全回退、分支清理、身份绑定 safe-push、提交身份自检/污染审计、worktree 前 3 查判读与常见事故恢复</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.13.0</td>
+<td style="text-align:center">v1.17.1</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/git-workflow-1.8.7.zip">旧版ZIP（内容版本待核）</a></td>
 <td></td>
 </tr>
@@ -729,7 +729,7 @@
 <td>工具·Agent协作</td>
 <td style="word-break:break-word">Orca-first 多 Agent 本地编排，支持 Wave receipt、worktree/terminal、Run/Task/Dispatch、额度与生命周期门禁；按需接入独立 ZCode CLI、MiniMax Code、CodeBuddy、Qoder CN 与千问办公，日常池保持 Claude Code/Codex</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v2.36.8</td>
+<td style="text-align:center">v2.36.7</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/multi-agent-orchestration-2.30.5.zip">已发布 v2.30.5</a></td>
 <td></td>
 </tr>
