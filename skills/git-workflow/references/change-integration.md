@@ -6,7 +6,7 @@
 
 普通短分支以最新远端默认目标为基准；已声明功能线的 worker 从最新远端功能线创建，显式使用该 PR base。先复用适合的隔离现场，刷新所选 ref，保留原源 dirty/本地独有提交；[本地 SOP](local-worktree-sop.md)维护基准检查。
 
-分支按任务语义使用 `feat/`、`fix/`、`docs/`、`research/`、`refactor/` 或 `chore/` 加简短描述，不使用 tmux/subagent/team 等本地执行来源前缀。Session 与 worktree 名由宿主/编排层管理，不代替分支或基准身份。
+分支命名统一见[命名合同](issue-pr-format.md#分支名称先看角色再看-skill-和目标)：新短任务用类型/Skill/主题，里程碑用 milestone/Skill/目标，短子任务显式携带父目标。旧分支沿原身份继续，不批量改名；生命周期和实际 PR base 不由名称单独决定。Session 与 worktree 名由宿主/编排层管理，不代替分支或基准身份。
 
 ## 2. Monorepo 窄采用
 

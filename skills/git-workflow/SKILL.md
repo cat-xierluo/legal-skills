@@ -1,9 +1,9 @@
 ---
 name: git-workflow
-description: Git 工作流安全助手。用于分支与 worktree 管理、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
+description: Git 工作流安全助手。用于分支与 worktree 管理、主目录 main 防切换保护、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.17.1"
+  version: "1.23.0"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---
@@ -22,11 +22,12 @@ metadata:
 | 新建或限缩 Skill/套件工作树、跨目录占用审计 | [稀疏工作树](references/sparse-worktree.md)；创建用 `scoped-worktree.py`，完整登记只读审计用 `sparse-worktree-audit.py` |
 | 提交身份、Co-authored-by 污染、已合历史回执、完整 PR 范围推送 | [身份与推送](references/identity-and-push.md)，再按内容读取[隐私预检](references/privacy-preflight.md) |
 | PR 创建/审查/合并、CI 未知、冲突或更新 base | [PR 流程](references/pr-workflow.md)；文本与完整历史核验读取[隐私预检](references/privacy-preflight.md) |
+| 主目录固定 main、所有 Agent 独立 worktree 开发、具名集成 | [主目录分支保护](references/main-directory-protection.md)；主目录默认只读、具名采用的命令前门禁用 `main-git-gate.py` / `test-main-git-gate.py`；历史索引锁只核验/解除 |
 | Monorepo 窄采用、cherry-pick 与冲突 | [改动集成](references/change-integration.md) |
 | 误 amend / stash / 删分支 / reset 的事故恢复 | [事故恢复](references/accident-recovery.md)；先定位证据，再按授权恢复 |
-| 长期功能线、子 PR、波次同步或里程碑 | [长期集成分支](references/long-lived-integration-branch.md) |
+| Skill 连续迭代、候选观察、长期功能线或里程碑 | [长期集成分支](references/long-lived-integration-branch.md) |
 | 分支/工作树清理、批量验收或取代关闭旧 PR | [生命周期与清理](references/branch-lifecycle-and-cleanup.md)；只读盘点用 `branch-audit.sh` / `worktree-audit.sh` |
-| Commit / Issue / PR 标题、编号与关闭语义 | [命名与提交格式](references/issue-pr-format.md) |
+| 短任务/里程碑/子分支命名，Commit / Issue / PR 标题与关闭语义 | [命名与提交格式](references/issue-pr-format.md) |
 | GitHub Actions 分钟耗尽、停挂或恢复 | [CI 额度治理](references/github-actions-quota-guard.md) |
 | 敏感/私有材料已经发表，需从历史撤回 | [历史撤回](references/history-rewrite-and-removal.md) |
 | 仓库或对象库膨胀、配置同步仓瘦身 | [膨胀审计](references/repo-bloat-audit-and-slim.md)；先区分历史、检出、缓存和任务材料 |
@@ -44,6 +45,8 @@ metadata:
 - Monorepo 不在本地直接 feature→main merge。按实际允许范围窄采用或正式 PR 保留目标侧其他模块；主干→长期功能线同步属于另一个方向，遵循功能线合同。
 - 单任务清理绑定生命周期及精确 tip；长期分支与固定树不随子 PR 删除。已合并后的清理失败记录 `CLEANUP_PENDING`，不重放 push/merge；批量候选不等于删除授权。
 - 依赖缺失、验证失败或网络结果不明时保留首失败及现场；先核真实结果再重试。缺工具不自动安装、不降级绕过门禁，环境安装沿用户及项目已有授权。
+
+所有项目的 Agent 开发、修改、测试和提交在各自独立 worktree 中完成。主目录固定 main，仅用于稳定加载和具名集成者串行采用；禁止为了修复漂移切回 main。采用须绑定完整候选、当前 HEAD、逐文件范围和原 index/dirty，遇到并发变化停止该次采用。命令门禁默认拒绝主目录 add/commit，只有具名 owner 与匹配的 expected HEAD 可进入采用路径；这不是对任意程序的强制安全边界。GUI/绝对路径/旧 runtime 未接入仍为 NOT_VERIFIED；不重装常驻 index.lock，不擅自删除现存他人锁。
 
 ## 执行与收口
 

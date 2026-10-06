@@ -5,6 +5,7 @@
 ## 1. 确认目标与现场
 
 - 读取用户授权、项目规则与当前完整任务卡，固定允许路径、产物、验收和目标分支。
+- 先区分单项交付与跨轮里程碑迭代，后者可只有一个 Agent；分支生命周期不按一周/两周划分。复用原任务的适用分支/worktree，观察阶段固定候选，选择与退出统一见[里程碑迭代合同](long-lived-integration-branch.md)。
 - 普通任务以最新默认主干为 base；有功能线时按[功能线合同](long-lived-integration-branch.md)固定目标、生命周期与本波 OID。
 - 查看 Worktree 状态、占用与未推送成果，优先复用适合的干净隔离现场；主源 dirty 时不 stash/reset/checkout 清掉别人的工作，不在主源 `gh pr checkout`。
 - 刷新所选远端 ref 后建短分支，核真实起点。Task/session/Worktree 名不能代替远端分支/base/OID。

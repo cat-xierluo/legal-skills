@@ -1,8 +1,36 @@
-# Issue 与 PR 命名规范
+# 分支、Issue 与 PR 命名规范
 
-本规范只管理 GitHub Issue / PR 的标题、关闭标记和合并提交格式，确保 Git 历史可读、可追溯。
+本规范统一维护新分支名称、GitHub Issue / PR 标题、关闭标记和提交格式；PR 执行沿 [PR 流程](pr-workflow.md)，生命周期与资源删除沿 [清理合同](branch-lifecycle-and-cleanup.md)。
 
 边界说明：项目任务状态不由本文档维护。常规任务领取、依赖和状态判断以项目自己的任务源为准；若项目配置协调技能，仍以其明确的任务源为准。GitHub Issue 只作为远程协作入口或外部问题追踪入口。
+
+## 分支名称：先看角色，再看 Skill 和目标
+
+新命名区分“单项任务”和“里程碑迭代线”。分支名是人可读的用途提示；实际生命周期、owner、PR base、完整 OID 与清理权限仍以任务合同和当前现场为准，不因 `fix/` 就判可删，也不因 `milestone/` 就认定已注册长期保护。
+
+| 角色 | 新分支格式 | 示例 | 通常的 PR base |
+|---|---|---|---|
+| 独立短任务 | `<type>/<skill>/<topic>` | `fix/legal-ai-wiki/module-index` | 声明的默认主干 |
+| 有限里程碑迭代线 | `milestone/<skill>/<goal>` | `milestone/legal-ai-wiki/workshop-v2` | 声明的默认主干 |
+| 里程碑内的短子任务 | `<type>/<skill>/<goal>--<topic>` | `feat/legal-ai-wiki/workshop-v2--student-pack` | 完整父分支 `milestone/legal-ai-wiki/workshop-v2` |
+
+短任务的 type 使用 `feat`、`fix`、`docs`、`test`、`refactor`、`chore`，必要时使用 `style`、`config`、`license`、`research`。`feat` 表示新增功能，不表示长期；大版本整体使用 `milestone/`，其 PR/commit 仍按真实改动使用 feat/refactor 等类型，不创建 `milestone:` commit 类型。
+
+### 字段和长度
+
+- skill 使用仓库正式 Skill slug；跨 Skill 的具名套件使用其明确的套件 slug，仓库级事项用 `repo`。不放客户名称、案件号、机器用户、Agent/Session ID。
+- topic/goal 使用简短英文小写、数字和连字符；`--` 专门分隔父目标与子任务，字段自身不含连续连字符。一个名称只表达一个交付目标，避免 `misc`、`latest`、`temp`、`dev`、`fix2` 等无法解释范围的词。
+- 已明确的目标版本可写入 goal，如 `workshop-v2`；未确定发布版本时用能力名，不能为命名而虚构版本或提前改稳定版版本号。日期只在确有重名时作区分，不表示过期/删除期限。
+- 不用 `short/long`、运行平台或执行主体代替语义；也不写 `draft/ready/done/merged` 等会变化的状态。阶段放任务卡，PR 用真实 Draft/Ready 状态。
+- 新建前运行 `git check-ref-format --branch '<完整分支名>'`，并查本地/远端的同名及 ref 路径前缀冲突（如已存在 `feat/foo`，不能再建 `feat/foo/bar`）。该检查只证明 Git 格式合法，不证明符合本命名约定、没有远端重名或可以清理。
+
+### 旧线接续与查询
+
+已有分支不因新格式批量改名，特别是有 open PR、worktree 或活跃 owner 的线。继续原目标时优先复用；短任务扩大成里程碑时，先在原任务中登记 `long-lived`、目标与退出条件，保留旧名并明确映射也可以。若确需改名或迁移，逐项核远端、PR、worktree、自动化引用与 owner 后具名处理，不以“整理名称”重建成果或改写历史。命名约定不自动修改现有 launcher/清理脚本。
+
+可以用 `git branch --list 'milestone/*'` 快速查看采用新格式的本地里程碑线；旧名和仅远端的分支不会被该命令列全，所以它不能替代完整盘点。
+
+同一 Skill、同一目标默认一条权威迭代线；分支长期性、观察验证和续线条件统一见 [里程碑合同](long-lived-integration-branch.md)。开 PR、合并后收尾与未合并关闭的对应关系见 [PR 路径](pr-workflow.md#0-按分支角色确定-pr-路径)。
 
 ## Issue 命名格式
 
@@ -83,6 +111,18 @@ question: 能接入 qclaw 吗
 | `license` | 许可证更新 | `license: 更新 XXX 许可证` |
 | `config` | 配置变更 | `config: 更新 CI 配置` |
 | `test` | 测试相关 | `test: 添加单元测试` |
+
+### 里程碑与子 PR 的可读标识
+
+保留上述 `<类型>(<模块>): <描述>`，里程碑整体交付的描述末尾加 `（里程碑）`，子 PR 不冒充整体完成。例如：
+
+```text
+feat(legal-ai-wiki): 完成一日共创教学包 v2（里程碑）
+feat(legal-ai-wiki): 增加 workshop-v2 学员练习包
+fix(legal-ai-wiki): 修正模块索引
+```
+
+里程碑 PR 的摘要先说明最终能力和交付范围，再列实际子 PR/证据；子 PR 明确父线和自身退出条件。状态使用 GitHub 的 Draft/Ready 与任务记录，不额外在标题中维护 `[完成]` 等重复状态。`Refs` 用于父任务/父 PR 关联；子 PR 合并不能用 `Closes` 自动关闭尚未整体达标的里程碑 Issue。
 
 ### 模块名称（用于多 Skill 仓库）
 

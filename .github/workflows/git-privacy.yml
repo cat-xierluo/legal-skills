@@ -37,6 +37,8 @@ jobs:
           python3 skills/git-workflow/scripts/test-identity-audit-exit.py
           python3 skills/git-workflow/scripts/test-cleanup-audits.py
           python3 skills/git-workflow/scripts/test-scoped-worktree.py
+          python3 skills/git-workflow/scripts/test-main-git-gate.py
+          python3 skills/git-workflow/scripts/test-main-guard.py
           python3 skills/git-workflow/scripts/test-sparse-worktree-audit.py
           bash skills/git-workflow/scripts/test-pre-worktree-check.sh
           bash skills/git-workflow/scripts/test-accident-recovery.sh

@@ -304,20 +304,11 @@ Skill 开发与合规规范以 [skills/skill-lint](./skills/skill-lint/) 为唯�
 
 本项目的 Monorepo 仓库（如 private-skills、legal-skills）中，每个子目录是独立 Skill。
 
-**禁止 `git merge` 直接合并 feature 分支到 main**——feature 分支若从旧 commit 创建，直接合并会误删所有不在分支里的文件。
+所有 Agent 的开发、修改、测试和提交在独立 worktree 中完成；主目录固定 main，只作稳定加载入口和具名集成者的串行采用目标。已有主目录身份异常时保留现场，不自行 checkout/switch 回 main。此项按 2026-10-06 用户最新要求执行，替代旧的主目录开发与目录 checkout 示例。
 
-正确做法：只 checkout 目标 Skill 目录的改动：
+集成前固定候选 OID、允许路径、当前主目录 HEAD、index 和 dirty；逐文件对账，保留本机较新成果与其他会话改动。主目录有并发漂移或同一路径在途写入时停止该次采用。禁止以 checkout/pull/reset/整分支合并或旧整目录复制修复主目录。更新路径与验证方法统一读取 [git-workflow 主目录合同](skills/git-workflow/references/main-directory-protection.md) 和 [改动集成](skills/git-workflow/references/change-integration.md)，不在本规范复制命令。
 
-```bash
-git checkout main && git pull origin main
-git checkout <feature-branch> -- <skill-directory>/
-git diff --cached --stat   # 确认只改了目标目录
-git commit -m "feat(<skill>): 描述"
-```
-
-涉及多个 Skill 时逐个目录 checkout，每个目录一个提交。合并后验证：`git diff HEAD~1 --stat` 确认无误删，`.gitignore` 和 `.env` 文件还在。
-
-若用 GitHub PR 合并，须先 rebase feature 分支到最新 main，确保 base commit 包含所有文件。
+单 Skill/套件从创建开始按 [稀疏工作树](skills/git-workflow/references/sparse-worktree.md) 检出目标及必要依赖。主目录安装入口不指向临时开发分支；Skill 稳定快照或具名采用后的 main 才作为共享加载源。
 
 ## ClawHub 发布适配
 
@@ -394,6 +385,7 @@ AI 代理在修改 AGENTS.md 时，必须：
 
 | 版本   | 日期       | 更新内容                                                                                                                              |
 | :----- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.9.3 | 2026-10-06 | 所有 Agent 开发改用独立 worktree；主目录固定 main、具名串行采用；删除主目录 checkout/pull 及整目录覆盖示例 |
 | v1.9.2 | 2026-09-23 | Skill 开发规范唯一维护源改为 skill-lint（细则在其 references/），删除 docs/ 下已内化的 8 份开发/协作指南文档 |
 | v1.9.1 | 2026-09-23 | 将通用工具及协作技能示例由旧名 funasr-transcribe 更新为 local-asr |
 | v1.9.0 | 2026-08-09 | 停用 Cloud Plugin Marketplace，删除 `.claude-plugin/marketplace.json` 与 `plugin.json` 及对应配置规范；公开 Skill 以 `skills/` 为交付源，发布索引由 README 与实际启用渠道维护 |
