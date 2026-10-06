@@ -2,7 +2,7 @@
 name: github-star-manager
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "0.6.6"
+version: "0.6.7"
 license: MIT
 description: GitHub Star 项目管理工具，支持从内容自动发现并 Star 项目，同步追踪更新，生成可视化 Dashboard
 ---
@@ -54,6 +54,11 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
    - 评论区/回复也是提取源：作者在评论区亲授的 `owner/repo` 全称是最高优先级证据，优先于一切启发式消歧
 
 2. **仓库发现与智能匹配**
+   - **模糊口述线索推理（内容里**没有** GitHub URL、只有用户口述的零散线索时）**：当用户以自然语言描述项目（如"ascll simulation art console"、"8 月 24 号左右更新的"、"ID 可能含 skent"），GitHub 站内搜索通常 0 命中（关键词含 OCR 噪声、用户名被拼写截断、无完整 owner/repo）。走三步推理锚定唯一候选：
+     1. **拆解线索为可枚举字段**：① 主题关键词（项目做什么——本例"ascii simulation art console"，可拆 ascii + simulation + art + console）；② 创建/更新时间窗口（"8 月 24 号左右"→ `created:2026-08-20..2026-08-28`）；③ 用户名/owner 片段（"skent"→ 搜索 `skent` 找到候选 owner `skent`、`Skentir`、`skent259` 等）；④ 其它旁证（"近期更新"、"MIT 协议"等可加 `--sort=updated`、license filter）
+     2. **GitHub Search API 多条件缩范围**：用 `gh api search/repositories?q=<关键词>+created:<date-range>` 拿到 ≤30 条候选。若零命中放宽日期±3 天再试；若仍零命中改用关键词子集（先只搜 `simulation + art`）让噪声筛过滤掉，再逐步加严。**单字段多关键词 OR / 多字段 AND 的组合顺序决定召回：先粗后细**（先 OR 让候选宽一点，再用 AND 紧），避免一开始就用 `ascii+simulation+art+console` 拼长串触发 0 命中
+     3. **候选消歧到唯一**：在候选列表上跑与"同名候选消歧"相同的证据链——**亲授全称 > 语义锚定 > 衍生排除 > 创建时间匹配 > Star 数量级（仅参考）**。本场景无亲授/截图，所以重点是：① `created_at` 落在用户口述的时间窗口内（误差 ±3 天）；② `description` 含线索关键词（"ascii"/"simulation"/"art"/"console"任一）；③ owner 名含候选用户片段（`Skent*`、`skent*` 任一前缀）。三条都满足即可定为唯一，置信度反映给用户
+     - **使用约束**：① 不要把"用户名片段"当成"完整 owner"——它只用于 owner 候选枚举，不参与最终判定；② 时间窗口比关键词更重要——近期项目关键词噪声大，时间是更稳的锚；③ 候选命中但 `created_at` 偏离用户口述超 ±5 天，要么放宽/收严窗口与用户核对，要么放弃。实测反例：直接搜 `ascii simulation art console` 在 8 月 24 号前后日期范围内 GitHub 站内搜索 0 命中，但按"主题 + 时间窗口 + 用户片段"三段拆解后 API 检索唯一命中——这就是本规则的必要性证据
    - 直接匹配：内容中找到的完整 GitHub URL
    - 半截 URL 补全：owner 确定而 name 截断（如 `mcncarl/jianyi…`）时，列该 owner 名下仓库（`gh api users/OWNER/repos`），按名称前缀 + description 语义匹配补全（实测：jianyi…→jianying-headless，yichen…→yichen-skills）
    - owner 拼写修正：截图直读的 owner 404 时先怀疑 OCR 误读而非仓库不存在——按 repo 名搜索锁定真身，用星数量级与截图侧栏数字互证（实测：截图误读 `webadderalorg`→真身 `webadderallorg/Recordly`，30.9k⭐ 与侧栏 20.1k 同量级确认）
