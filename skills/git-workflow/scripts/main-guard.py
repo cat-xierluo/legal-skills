@@ -160,6 +160,7 @@ def install(a):
         unchanged(repo, rows, locked=True)
         identity(repo, a.expected_head)
         doc.update(state='INSTALLED', installed_at=now())
+        save(state, doc)
     except BaseException:
         errors = []
         for r in reversed(added):
@@ -174,7 +175,6 @@ def install(a):
         doc.update(state='INSTALL_FAILED', rollback_errors=errors)
         save(state, doc)
         raise
-    save(state, doc)
     return dict(state='INSTALLED', mode='BRANCH_ONLY', head=doc['head'], protected_metadata=4,
                 primary_files='可正常编辑', primary_git_writes='转独立 worktree')
 

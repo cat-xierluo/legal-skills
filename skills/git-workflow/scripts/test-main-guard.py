@@ -231,6 +231,22 @@ class Tests(unittest.TestCase):
         self.args.repo = str(w)
         with self.assertRaises(guard.GuardError): self.install()
 
+    def test_install_final_state_failure_rolls_back(self):
+        head = self.repo / '.git/HEAD'
+        os.chflags(head, stat.UF_IMMUTABLE)
+        real = guard.save
+        def fail_final(p, doc, **kwargs):
+            if doc.get('state') == 'INSTALLED':
+                raise OSError('injected install state write failure')
+            return real(p, doc, **kwargs)
+        with patch.object(guard, 'save', side_effect=fail_final):
+            with self.assertRaises(OSError): self.install()
+        self.assertEqual(json.loads(self.state.read_text())['state'], 'INSTALL_FAILED')
+        self.assertFalse((self.repo / '.git/index.lock').exists())
+        self.assertTrue(head.stat().st_flags & stat.UF_IMMUTABLE)
+        for name in ('index', 'refs/heads/main'):
+            self.assertFalse((self.repo / '.git' / name).stat().st_flags & stat.UF_IMMUTABLE)
+
     def test_partial_install_rolls_back_only_own_flags(self):
         real = os.chflags
         calls = 0
