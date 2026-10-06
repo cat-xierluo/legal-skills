@@ -118,6 +118,59 @@ class Tests(unittest.TestCase):
         self.args.state = str(self.root / 'state-2.json')
         self.install()
 
+    def test_release_retries_after_partial_unlock_failure(self):
+        self.install()
+        args = SimpleNamespace(state=str(self.state), owner='fixture-owner', reason='retry')
+        real = os.chflags
+        calls = 0
+        def fail_once(*a, **kw):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError('injected release failure')
+            return real(*a, **kw)
+        with patch.object(guard.os, 'chflags', side_effect=fail_once):
+            with self.assertRaises(OSError): guard.release(args)
+        self.assertEqual(json.loads(self.state.read_text())['state'], 'RELEASING')
+        with self.assertRaises(guard.GuardError):
+            guard.release(SimpleNamespace(state=str(self.state), owner='wrong', reason='retry'))
+        self.assertTrue((self.repo / '.git/index.lock').exists())
+        self.assertEqual(guard.release(args)['state'], 'RELEASED')
+        self.assertFalse((self.repo / '.git/index.lock').exists())
+        self.git('add', 'skill/TASKS.md')
+
+    def test_release_retries_after_final_state_write_failure(self):
+        self.install()
+        args = SimpleNamespace(state=str(self.state), owner='fixture-owner', reason='retry')
+        real = guard.save
+        def fail_final(p, doc, **kwargs):
+            if doc.get('state') == 'RELEASED':
+                raise OSError('injected state write failure')
+            return real(p, doc, **kwargs)
+        with patch.object(guard, 'save', side_effect=fail_final):
+            with self.assertRaises(OSError): guard.release(args)
+        self.assertFalse((self.repo / '.git/index.lock').exists())
+        self.assertEqual(json.loads(self.state.read_text())['state'], 'RELEASING')
+        self.assertEqual(guard.release(args)['state'], 'RELEASED')
+
+    def test_release_retry_refuses_replaced_lock(self):
+        self.install()
+        args = SimpleNamespace(state=str(self.state), owner='fixture-owner', reason='retry')
+        with patch.object(guard.os, 'chflags', side_effect=OSError('injected')):
+            with self.assertRaises(OSError): guard.release(args)
+        lock = self.repo / '.git/index.lock'
+        os.chflags(lock, 0)
+        lock.write_text('different owner lock\n')
+        with self.assertRaises(guard.GuardError): guard.release(args)
+        self.assertEqual(lock.read_text(), 'different owner lock\n')
+
+    def test_state_write_failure_keeps_previous_json(self):
+        guard.save(self.state, {'state': 'RELEASING'}, new=True)
+        before = self.state.read_bytes()
+        with patch.object(guard.os, 'replace', side_effect=OSError('injected')):
+            with self.assertRaises(OSError): guard.save(self.state, {'state': 'RELEASED'})
+        self.assertEqual(self.state.read_bytes(), before)
+
     def test_existing_flags_preserved_and_external_symlink_untouched(self):
         target = self.root / 'external'
         target.write_text('outside\n')

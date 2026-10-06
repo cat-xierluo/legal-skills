@@ -134,6 +134,43 @@ class GateTest(unittest.TestCase):
         self.assertEqual(self.file.read_text(), "keep working file\n")
         self.deny_unchanged("restore", "--staged", "--worktree", "skill/a.txt")
 
+    def test_integration_rejects_commit_option_variants_before_change(self):
+        self.file.write_text("preserve unfinished edit\n")
+        for option in ("--amend", "--amen", "--am", "--no-no-amend",
+                       "--no-verify", "-n"):
+            with self.subTest(option=option):
+                self.deny_unchanged("commit", option, "-m", "rewrite", integration=True)
+
+    def test_integration_rejects_restore_option_variants_before_change(self):
+        self.file.write_text("preserve unfinished edit\n")
+        self.raw("add", "skill/a.txt")
+        for option in ("--worktree", "--work", "-W", "-SW", "-WS", "-Wq",
+                       "-sother", "--source=other", "--sour=other", "--no-staged"):
+            with self.subTest(option=option):
+                self.deny_unchanged("restore", "--staged", option,
+                                    "skill/a.txt", integration=True)
+
+    def test_commit_messages_and_pathspecs_are_not_options(self):
+        for options in (("-am", "--amend"), ("--message=--amend", "--all"),
+                        ("-qm--amend", "--all")):
+            self.file.write_text(repr(options) + "\n")
+            result = self.run_gate("commit", *options, integration=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        odd = self.root / "--worktree"
+        odd.write_text("keep\n")
+        self.raw("add", "--", odd.name)
+        result = self.run_gate("restore", "-S", "--", odd.name, integration=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(odd.read_text(), "keep\n")
+
+    def test_reflog_output_cannot_overwrite_files(self):
+        self.file.write_text("preserve unfinished edit\n")
+        for args in (("reflog", "show", "--output=skill/a.txt"),
+                     ("reflog", "show", "--output", "skill/a.txt")):
+            self.deny_unchanged(*args)
+        result = self.run_gate("reflog", "show", "-1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_non_main_identity_fails_closed(self):
         self.raw("switch", "other")
         before = self.snapshot()

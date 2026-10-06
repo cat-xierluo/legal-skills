@@ -11,6 +11,7 @@ import platform
 import stat
 import subprocess
 import sys
+import tempfile
 import uuid
 
 
@@ -51,10 +52,24 @@ def external(p, repo):
 
 
 def save(p, data, new=False):
-    with p.open('x' if new else 'w', encoding='utf-8') as f:
-        os.chmod(p, 0o600)
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write('\n')
+    if new:
+        with p.open('x', encoding='utf-8') as f:
+            os.chmod(p, 0o600)
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+        return
+    # Keep the previous recovery state intact if writing the next state fails.
+    fd, temp = tempfile.mkstemp(prefix=p.name + '.', dir=p.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, p)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
 
 
 def layout(repo):
@@ -164,17 +179,31 @@ def install(a):
                 primary_files='可正常编辑', primary_git_writes='转独立 worktree')
 
 
-def load(a):
+def load(a, *, releasing=False):
     state = Path(a.state).expanduser().resolve(strict=True)
     doc = json.loads(state.read_text())
     repo = layout(doc['repo'])
     external(state, repo)
-    require(doc['version'] == 1 and doc['mode'] == 'BRANCH_ONLY' and doc['state'] == 'INSTALLED',
+    allowed_states = {'INSTALLED', 'RELEASING'} if releasing else {'INSTALLED'}
+    require(doc['version'] == 1 and doc['mode'] == 'BRANCH_ONLY' and doc['state'] in allowed_states,
             '非已安装分支保护清单')
     require([x['name'] for x in doc['paths']] == ['HEAD', 'index', 'refs/heads/main', 'index.lock'],
             '保护清单范围不符')
     identity(repo, doc['head'])
-    unchanged(repo, doc['paths'], locked=True)
+    if doc['state'] == 'RELEASING':
+        # A failed release may already have unlocked metadata or removed its lock.
+        # Never accept replacement files/locks, drift, or removal of original flags.
+        paths = doc['paths']
+        if not os.path.lexists(repo / '.git/index.lock'):
+            paths = paths[:-1]
+            require(all(row(repo, r['name'])['flags'] == r['flags'] for r in paths),
+                    '锁已移除但元数据未完成释放')
+        unchanged(repo, paths)
+        for r in paths:
+            require(row(repo, r['name'])['flags'] in
+                    (r['flags'], r['flags'] | stat.UF_IMMUTABLE), '释放期间 flags 已漂移')
+    else:
+        unchanged(repo, doc['paths'], locked=True)
     return state, doc, repo
 
 
@@ -203,18 +232,20 @@ def verify(a):
 
 
 def release(a):
-    state, doc, repo = load(a)
+    state, doc, repo = load(a, releasing=True)
     require(a.owner == doc['owner'] and a.reason.strip(), '维护 owner/原因不符')
     doc.update(state='RELEASING', reason=a.reason, maintenance_at=now())
     save(state, doc)
     # 保留既有 flags；最后解除并移除本工具的 index.lock，避免提前让 Git 进入。
-    for r in doc['paths']:
+    paths = doc['paths'] if os.path.lexists(repo / '.git/index.lock') else doc['paths'][:-1]
+    for r in paths:
         if not r['flags'] & stat.UF_IMMUTABLE:
             p = repo / '.git' / r['name']
             unchanged(repo, [r])
             os.chflags(p, p.lstat().st_flags & ~stat.UF_IMMUTABLE, follow_symlinks=False)
-    unchanged(repo, doc['paths'])
-    (repo / '.git/index.lock').unlink()
+    unchanged(repo, paths)
+    if len(paths) == 4:
+        (repo / '.git/index.lock').unlink()
     doc.update(state='RELEASED', released_at=now())
     save(state, doc)
     return dict(state='RELEASED', note='维护完毕须用新回执/新清单重装并核验')

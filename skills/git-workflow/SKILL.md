@@ -3,7 +3,7 @@ name: git-workflow
 description: Git 工作流安全助手。用于分支与 worktree 管理、主目录 main 防切换保护、Skill 稀疏检出、PR 创建/审查/合并，以及提交身份和隐私检查；也支持 CI 额度治理、敏感文件历史撤回与仓库瘦身。不要用于批量生成提交信息、项目任务分配或本地 Agent 会话编排。
 license: MIT
 metadata:
-  version: "1.23.0"
+  version: "1.23.1"
   homepage: https://github.com/cat-xierluo/legal-skills
   author: 杨卫薪律师（微信ywxlaw）
 ---

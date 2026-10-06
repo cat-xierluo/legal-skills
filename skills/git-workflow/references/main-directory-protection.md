@@ -40,6 +40,8 @@ python3 "$git_workflow_dir/scripts/main-git-gate.py" \
 | -C 路由、环境路由与配置覆写 | 核真实受管目录；不接受未知路由/配置绕过 |
 | linked worktree 的 add/commit | 正常执行，仍受其任务允许路径与 owner 约束 |
 
+具名 commit 只接受明确列出的普通选项（`-m/--message`、`-F/--file`、`-a/--all`、`-q/--quiet`、`-v/--verbose`、`-s/--signoff`、`--no-edit`、`--allow-empty`、`--allow-empty-message`、`--dry-run`）；不接受 Git 长选项缩写、历史改写或跳过 hooks。取消暂存只接受 `--staged/-S`、`--quiet/-q` 与路径；`--` 后按路径解释。其他形式拒绝后改用明确支持的写法，不能绕开门禁。
+
 不修改系统 Git、全局 PATH，不覆盖原 commit hooks。只有经过此入口的命令受到这层保护。新 worker 启动时由其 runtime 接入并实测；不能只放脚本就记录“已接入”。旧 worker 不强制重启。全局 AGENTS 属协作规则，不能替代运行时执行控制。
 
 ## 验收与未覆盖边界
@@ -127,7 +129,7 @@ python3 "$git_workflow_dir/scripts/main-guard.py" release \
   --state "$external_guard_state" --owner "$maintenance_owner" --reason "$maintenance_reason"
 ```
 
-仅解除本工具新增的 flags，保留原有标记；最后移除本工具常驻锁。清单转为 `RELEASED`，不是安装完成态。之后按范围集成，核 main 身份、完整材料/台账来源、最新基准与关键业务引用；用新 HEAD 停写回执、新清单路径重新 `install` 并 `verify --probe`，再实际核独立树提交。不能自动循环解锁/切回 main，不通过覆盖旧清单丢掉原 flags。
+仅解除本工具新增的 flags，保留原有标记；最后移除本工具常驻锁。清单转为 `RELEASED`，不是安装完成态。中途失败保留 `RELEASING` 与首失败，同一 owner 可重新运行 release；续跑仍核 HEAD、文件身份/内容和原 flags，不删除已被替换的锁。状态原子保存，最后状态落盘失败也可在现场未漂移时收口。之后按范围集成，核 main 身份、完整材料/台账来源、最新基准与关键业务引用；用新 HEAD 停写回执、新清单路径重新 `install` 并 `verify --probe`，再实际核独立树提交。不能自动循环解锁/切回 main，不通过覆盖旧清单丢掉原 flags。
 
 若此前安装了“整树不可写”保护，改为分支保护必须先建立常驻索引护栏，再按原安装清单解除**本次安装新增**的业务文件/目录标记，保留原有 flags；核文件写入与 Git 拦截后才更新模式。不得直接 `chflags -R nouchg` 抹掉用户原有保护，也不得将旧整树清单交给本脚本重复安装。
 

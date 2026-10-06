@@ -55,6 +55,54 @@ def query(git, cwd, *args):
     return r.returncode, r.stdout.strip()
 
 
+def check_commit_options(args):
+    """Accept explicit ordinary commit options; never Git's abbreviations."""
+    flags = {"--all", "--quiet", "--verbose", "--no-edit", "--allow-empty",
+             "--allow-empty-message", "--dry-run", "--signoff"}
+    values = {"--message", "--file"}
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            return  # Remaining tokens are pathspecs, not options.
+        if arg in flags or not arg.startswith("-"):
+            i += 1
+            continue
+        if arg.startswith("--"):
+            key, sep, _ = arg.partition("=")
+            if key not in values:
+                refuse("commit 仅接受明确的普通提交选项：" + key)
+            if not sep:
+                i += 1
+                if i == len(args):
+                    refuse("commit 选项缺少值：" + key)
+        elif arg.startswith("-") and arg != "-":
+            # Git accepts -amVALUE / -qm VALUE. Value suffixes are opaque.
+            for offset, char in enumerate(arg[1:], 1):
+                if char in "aqvs":
+                    continue
+                if char in "mF":
+                    if offset == len(arg) - 1:
+                        i += 1
+                        if i == len(args):
+                            refuse("commit 选项缺少值：-" + char)
+                    break
+                refuse("commit 短选项不在普通提交范围：-" + char)
+        else:
+            refuse("commit 未知选项")
+        i += 1
+
+
+def check_unstage_options(args):
+    """Only unstage from HEAD; reject abbreviations, sources and worktree flags."""
+    options = args[:args.index("--")] if "--" in args else args
+    if not any(arg in {"--staged", "-S"} for arg in options):
+        refuse("restore 仅支持明确的 --staged 或 -S 取消暂存")
+    for arg in options:
+        if arg.startswith("-") and arg not in {"--staged", "-S", "--quiet", "-q"}:
+            refuse("restore 未知或可能覆盖文件/来源的选项：" + arg)
+
+
 def check(git, protected, argv, integration_owner=None, expected_head=None):
     for key in ROUTING_ENV:
         if os.environ.get(key):
@@ -68,9 +116,10 @@ def check(git, protected, argv, integration_owner=None, expected_head=None):
     code, branch = query(git, cwd, "symbolic-ref", "-q", "HEAD")
     if code or branch != "refs/heads/main":
         refuse("受管主目录身份不是 main；保留现场，由具名 owner 处理")
-    if command in READ:
+    if command in READ or command == "reflog":
         if any(a == "--output" or a.startswith("--output=") for a in args):
             refuse("读取命令的文件输出覆写需单独维护")
+    if command in READ:
         return
     if command in {"add", "commit", "restore"}:
         if not integration_owner or not integration_owner.strip() or not expected_head:
@@ -81,15 +130,11 @@ def check(git, protected, argv, integration_owner=None, expected_head=None):
     if command == "add":
         return
     if command == "commit":
-        if "--amend" in args:
-            refuse("amend 改写历史，需具名维护")
+        check_commit_options(args)
         return
     if command == "restore":
-        options = args[:args.index("--")] if "--" in args else args
-        if "--staged" in options or "-S" in options:
-            if not any(a in {"--worktree", "-W", "-SW", "-WS", "-s", "--source"}
-                       or a.startswith("--source=") for a in options):
-                return  # Unstage from HEAD only; do not overwrite business files.
+        check_unstage_options(args)
+        return
     if command == "config":
         if args and args[0] in {"--get", "--get-all", "--get-regexp", "--list", "-l"}:
             return
