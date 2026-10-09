@@ -1,7 +1,7 @@
 ---
 name: release-workflow
 description: 本技能应在 GitHub 项目发布新版本时使用，覆盖版本号管理、CHANGELOG 同步、Release Notes 撰写、tag 创建、CI 构建监控、发布验证和历史清理全流程。适用于桌面应用、CLI 工具、Web 应用、库/SDK 等任何基于 GitHub 的软件项目。当用户提到"发布"、"release"、"打 tag"、"新版本"、"更新版本号"、"写 release notes"、"发布失败了"、"CI 挂了"、"Actions 配额告急"、"短时间内多次发版"、"monorepo"、"批量打包"、"多 skill 发布"、"skill zip"、"专家套件 zip"时触发。也用于拒绝把 release 当作 CI 验证机制（"打 tag 看一下"）的反模式场景。不要用于非 GitHub 项目（如纯 GitLab / Gitea 项目）或无需 CI 的手动发布场景。
-version: "1.6.2"
+version: "1.6.3"
 license: MIT License - 详见 LICENSE.txt
 ---
 
@@ -18,6 +18,8 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 ## 项目配置
 
 `config/projects.yaml` 集中管理各项目的发布配置（仓库、平台、自动更新、排除产物等）。发布时先读取对应项目配置，按配置决定构建矩阵和预期产物。模板见 `config/projects.example.yaml`。
+
+带应用内更新的桌面项目，还必须读取 [真实升级与热修门禁](references/updater-hotfix.md)：验签、旧客户端能力、进程回收、数据恢复和实际安装路径分别验收。
 
 ## 发布前检查
 
@@ -70,11 +72,11 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 - 等攒到 3-5 个实质修复（bug fix / feature / 性能 / 兼容性改动）
 - 一次性打 tag 发版，**只发一次**
 - CHANGELOG 必须有结构化条目，不能空
-- 距离上次 tag 至少 24 小时（防止把单个 hotfix 拆成多个 patch）
+- 常规发布距离上次 tag 至少 24 小时；真实用户的安装/更新阻断 hotfix 可按下方例外提前发布（防止把同一问题的试错拆成多个 patch）
 
 ### 打 tag 前强制自检（AI 不得跳过）
 
-打 tag 之前，**必须回答下面 5 个问题**。AI 代理被请求发布新版本时，必须**主动**逐条打印结果让用户确认，禁止直接进入打 tag 流程。
+打 tag 之前，**必须回答下面 5 个问题**。AI 代理被请求发布新版本时，必须**主动**逐条打印最终候选自检结果；缺少该版本的明确发布授权时再请用户确认，不得跳过验证直接打 tag。
 
 1. 这是给真实用户装的，还是只给自己看 artifact？
 2. CHANGELOG 已经有结构化的本版本条目（不是空、不是单行 typo）？
@@ -82,9 +84,9 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 4. 本次累计有 ≥ 1 个实质修复 / 特性 / 改动（纯文档 / typo / 单行 README 修改不算）？
 5. 如果上述任一不满足：能合并到下次发版吗？
 
-**任一答"否"或"不知道"：不要打 tag，改走 preview workflow 或合并到下次。**
+**第 1、2、4 问答“否”或关键证据未知：不要打 tag。第 3 问不足 24 小时，只有已复现的真实安装/更新阻断且用户明确授权的 hotfix 才可例外；说明原因、独立审查和完整候选验证结果，禁止用例外进行发行试错。**
 
-**AI 代理实操规则**：用户说「发布新版本」「打 tag」「release」时，AI 必须先在响应中**显式列出 5 问的答案**，等用户确认后再继续。这是硬约束，不允许跳过——v0.4.0 发布时 AI 跳过此步骤导致 3 次重打 tag 才修好，是真实教训。
+**AI 代理实操规则**：打 tag 前显式列出五问答案，并绑定最终候选与验证。用户已明确授权该版本及 hotfix 范围时，沿用授权，不重复索取同一确认；未获授权时先完成可审阅候选再确认。授权不代替验证，禁止通过反复移动同一个 tag 排查问题。
 
 ### 借口反驳表
 
@@ -110,21 +112,21 @@ GitHub 项目的完整发布周期：从版本号确定到 CI 构建验证。CI 
 - 本次只有 typo / 文档 / 单行修改
 - macOS 10× 配额当月累计用量已 > 70%
 
-**以上任一出现：删掉 tag（如已打），改走 preview workflow 或合并到下次。**
+**出现红灯先停止发行副作用并核对原因。真实 hotfix 频率例外见上文；保留失败证据，不自动删除或移动 tag，已公开版本不得覆写。**
 
 ## 🔥 修复 hotfix 与 CI retry 边界（关键）
 
 patch 版本（X.Y.Z+1）可以是 **新功能累积**，也可以是 **hotfix 单一修复**。区分清楚才能避免「把 release 当测试」反模式。
 
-### 何时属于「hotfix 真实修复」（可以重打 tag）
+### 何时属于「hotfix 真实修复」（发布新的 patch 版本）
 
 - 第一次 release 后用户**实际收到 broken build**（自动更新坏 / 安装失败 / 启动崩溃）
-- CI 日志明确指向**代码层 bug**（编译错、依赖配置错、产物链断裂）
-- 每次重打 tag 都**有可验证的 commit 推进**（修一行、改一个配置、新增测试）
+- 根因明确指向**代码或配置 bug**，已有可复现失败和修复验证；只有 CI 构建失败但尚无用户收到的版本，不以 hotfix 理由对外发行
+- 每个新版本都**有可验证的 commit 推进**（修一行、改一个配置、新增测试）
 
 判定信号：`gh run view --log-failed` 输出包含具体 error line（不是单纯的 `Timeout` / `Resource exhausted` 这种 transient 错误）。
 
-### 何时属于「把 release 当测试」（禁止重打 tag）
+### 何时属于「把 release 当测试」（禁止发行试错）
 
 - 单纯想看 CI 跑没跑通、看 artifact 长什么样
 - 上一次 build 失败但**没看失败原因**就直接重打
@@ -147,15 +149,15 @@ publish job 失败：
   - 多条/全量复现、或错误指向具体代码行为 → 真实回归，先修代码再发版
 ```
 
-最佳实践：先 `gh release view <tag> --json assets` 看产物清单，再决定修代码还是重打 tag。
+最佳实践：先 `gh release view <tag> --json assets,isDraft,targetCommitish` 看产物与状态，再决定修代码或重跑固定候选构建。
 
 ### 修复 hotfix 的标准动作序列
 
-1. 删旧 tag + draft release（如已创建）：`git push origin :refs/tags/vX.Y.Z` + `gh release delete vX.Y.Z --yes`
-2. 在 main 上 commit 修复（**必须包括版本号同步**——commit history 必须含 4 处版本号文件：package.json / Cargo.toml / tauri.conf.json / pyproject.toml 等）
-3. 重打 tag 指向修复 commit
-4. 推 tag 触发 CI
-5. **重打 tag 总次数上限 3 次**（含初始 publish）。超过说明根因判断有误，应停下来重新调查。
+1. 复现失败发生在哪个旧版本、哪个阶段，区分验签、准备、安装、重启和恢复；读取日志，不用新 Release 试错。
+2. 在独立工作树修复并同步版本/CHANGELOG，完成固定候选独立审查、项目检查及真实升级验证。
+3. 已公开版本使用新的 patch 版本，禁止移动原 tag 或覆盖原二进制、签名、manifest。仅 Draft 重传也须先确认仍为 Draft、冻结候选并重新验收，不能 upload 后才检查状态。
+4. 五问自检通过（或已授权且有证据的 hotfix 频率例外）后，给最终已验 commit 打新 tag，生成 Draft。
+5. 核对安装包、updater、标准验签、manifest 与实际运行版本；明确旧客户端是否需先手动覆盖一次，最后按既有授权公开。完整合同见 [真实升级与热修门禁](references/updater-hotfix.md)。
 
 ## 模式 B:monorepo 多组件批量发布
 
@@ -283,14 +285,7 @@ git show vX.Y.Z --stat | head -20
 git push origin "vX.Y.Z"
 ```
 
-如果有同名旧 tag（如发布失败后重试）：
-
-```bash
-git push origin :refs/tags/vX.Y.Z
-git tag -d vX.Y.Z 2>/dev/null
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+若同名 tag 已存在，先核其完整 OID、Release 状态及用户可见性。不得删除并重打已公开 tag。代码修复使用新 patch；固定候选的 transient 构建故障可重跑同一 workflow，仍须保留证据。未公开 Draft 的资产重传按 [热修门禁](references/updater-hotfix.md) 执行。
 
 ### 第 4 步：监控 CI 构建
 
@@ -341,12 +336,12 @@ gh release view vX.Y.Z --json assets --jq '.assets[].name'
 | darwin-x86_64 | `App_X.Y.Z_x64.dmg` | `App_x64.app.tar.gz` | `App_x64.app.tar.gz.sig` | `darwin-x86_64` |
 | windows-x86_64 | `App_X.Y.Z_x64-setup.exe` | （NSIS 自带） | `App_X.Y.Z_x64-setup.exe.sig` | `windows-x86_64` |
 
-macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历史约定），Windows .exe.sig 带版本号。任何一项缺失都让该平台用户升不到 vX.Y.Z——**不要 publish draft release**，先修配置 / 代码再重打 tag。
+macOS 原始产物与上传后的文件名可能不同（例如 Fathom 上传前加版本号），以项目配置和实际资产为准，manifest URL 必须逐字匹配最终名称。任何必需项缺失都禁止 publish；修配置/代码后重新验证，已公开版本使用新 patch。资产齐全与 JSON 校验不等于密码学验签或真实升级成功，继续执行 [升级门禁](references/updater-hotfix.md)。
 
 ### 第 7 步：清理
 
-- 删除失败的 Actions runs：`gh run delete <ID>`
-- 清理旧的 draft release（如有）
+- 保留诊断所需的失败日志与产物；删除 Actions run / Draft 需另核目标、归属与已有授权
+- 不删除或覆写已公开版本的 tag / 二进制 / 签名 / manifest
 - 确认镜像同步是否成功（如已配置）
 
 ## 特定项目类型指南
@@ -361,7 +356,7 @@ macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历�
 
 - [ ] 这是给真实用户装的，不是只给自己看 artifact
 - [ ] CHANGELOG 有结构化的本版本条目
-- [ ] 距上次 tag ≥ 24 小时
+- [ ] 距上次 tag ≥ 24 小时，或已记录真实阻断 hotfix 的证据与明确授权
 - [ ] 本次有 ≥ 1 个实质修复 / 特性 / 改动
 - [ ] 已通过五问自检
 
@@ -373,6 +368,7 @@ macOS .app.tar.gz / .sig 文件名**不带版本号前缀**（tauri-action 历�
 - [ ] 外部贡献者已在 Release Notes 致谢（本版有外部 PR 合入时，含被承接的原始 PR）
 - [ ] **README 技能列表已同步**：`check-readme-coverage.py` 通过（无缺行/缺链接），分节归属与描述正确（见模式 B「README 结构性同步」）
 - [ ] 镜像同步成功（如已配置）
-- [ ] 旧的失败 Actions runs 已清理
+- [ ] 自动更新项目已完成标准验签与真实升级/失败恢复，旧客户端手动引导准确
+- [ ] 诊断证据保留，清理仅限已授权目标
 - [ ] 项目文档已更新（TASKS / DECISIONS / CHANGELOG 等）
 - [ ] tag 指向正确的 commit
