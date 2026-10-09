@@ -196,7 +196,7 @@ gh release download vX.Y.Z --pattern latest.json --dir /tmp/check
 grep -o 'releases/download/[^/]*/' /tmp/check/latest.json   # 必须输出 releases/download/vX.Y.Z/
 ```
 
-线上已发错的 latest.json **不必重跑整个 build**：本地下 `*.sig` + 重跑 manifest 脚本生成新 `latest.json` + `gh release upload vX.Y.Z latest.json --clobber` 覆盖线上坏的（asset 本身不用动）。详见 `tauri-release.md` §8。
+未公开 Draft 的 manifest 可在上传前确认 Draft/固定候选并重新验签、核对后修正；已公开 manifest 不覆写，发新 patch 并说明旧客户端手动引导。详见 [热修门禁](updater-hotfix.md) 和 `tauri-release.md` §8。
 
 ## 12. 本机 `gh api` 大请求体 PUT 被 EOF 掐断（GET 正常）
 

@@ -1,6 +1,6 @@
 # Tauri 桌面应用发布指南
 
-基于 Tauri v2 的桌面应用发布特有事项。
+基于 Tauri v2 的桌面应用发布特有事项。带 updater 时还须执行 [真实升级与热修门禁](updater-hotfix.md)，下面的示例不代替固定候选验证。
 
 ## CI 工作流配置
 
@@ -75,10 +75,17 @@ jobs:
       - name: Generate latest.json
         run: |
           # 从 draft release 下载 .sig 文件，生成 latest.json
-      - name: Upload and publish
+      - name: Upload to verified draft
         run: |
-          gh release upload "${{ github.ref_name }}" latest.json --clobber
-          gh release edit "${{ github.ref_name }}" --draft=false
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          # 先核实际 tag OID、目标与独立验证记录；任何不明状态不得上传。
+          EXPECTED_COMMIT="${{ github.sha }}"
+          [ "$(git rev-list -n1 "$TAG")" = "$EXPECTED_COMMIT" ]
+          [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = "true" ]
+          # 标准验签/真实升级验证须已通过，且上传与发布者串行。
+          gh release upload "$TAG" latest.json --clobber
+          # 保留 Draft，完成资产后验后沿既有明确授权公开。
 ```
 
 ## 配置要点
@@ -95,11 +102,11 @@ jobs:
 
 ### 分离 build 和 publish
 
-单 job 模式无法在发布前验证所有平台构建成功，也无法在发布前自定义 `latest.json`。build job 上传到 draft release，publish job 在全部成功后发布。
+单 job 模式无法在发布前验证所有平台构建成功，也无法在发布前自定义 `latest.json`。build job 上传到 draft release；后续 job 核固定候选、标准验签与真实升级后，才按既有明确授权公开。
 
 ### concurrency
 
-移动 tag 会触发重复构建，添加 `concurrency` 配置避免。
+同一固定 tag 的重试应串行并核状态；不要移动公开 tag。`concurrency` 只控制 workflow，不能代替发布者串行与资产不可变合同。
 
 ## 构建产物
 
@@ -304,7 +311,7 @@ gh release download vX.Y.Z --pattern latest.json --dir /tmp/check
 grep -o 'releases/download/[^/]*/' /tmp/check/latest.json   # 应输出 releases/download/vX.Y.Z/
 ```
 
-如果线上 latest.json 已带错 URL，**不必重跑整个 build**——本地下 sigs + 重跑 manifest 脚本生成新 latest.json + `gh release upload vX.Y.Z latest.json --clobber` 覆盖线上坏的（asset 本身不用动）。
+如果未公开 Draft 的 latest.json URL 有误，先核仍为 Draft 和固定候选，再重新生成、标准验签并核对资产后上传；已公开版本不得覆盖线上 manifest，改用新 patch 和准确的手动升级引导。见 [热修门禁](updater-hotfix.md)。
 
 ### 9. tauri 2 主 crate 没有 `updater` feature（v2 plugin 拆分）
 
