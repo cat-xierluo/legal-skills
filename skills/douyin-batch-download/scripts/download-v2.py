@@ -28,6 +28,7 @@ DY-001（2026-10-10）下载隔离与身份/路径契约：
 """
 
 import shutil
+import json
 import sqlite3
 import asyncio
 import sys
@@ -55,6 +56,7 @@ from utils.config import (
 
 # 导入 F2 模块
 from f2.apps.douyin.handler import DouyinHandler
+from f2.apps.douyin.utils import format_file_name
 from f2.apps.douyin.db import AsyncUserDB, AsyncVideoDB
 from f2.utils.conf_manager import ConfigManager
 import f2
@@ -97,6 +99,10 @@ def get_f2_kwargs(staging_root: Path) -> dict:
 
     # 设置路径 - 指向本次运行的独立 staging（F2 落盘 <path>/douyin/post/<昵称>/）
     kwargs["path"] = str(staging_root)
+
+    # 封面下载显式声明(Task-002): 配置未写 cover 时默认开启;
+    # F2 落盘 <naming>_cover.webp(动态)/.jpeg(静态),由 reorganize 按 aweme_id 绑定
+    kwargs["cover"] = bool(douyin_custom.get("cover", True))
 
     # 确保 cookie 存在
     if not kwargs.get("cookie"):
@@ -255,7 +261,70 @@ def cleanup_staging(staging_root: Path):
         shutil.rmtree(staging_root, ignore_errors=True)
 
 
-def reorganize_files(nickname: str, uid: str, staging_root: Path) -> str:
+# ============ 封面绑定(Task-002) ============
+
+COVER_INDEX = "_covers.json"
+COVER_INDEX_SCHEMA = 1
+
+
+def _image_signature_ok(path: Path) -> bool:
+    """轻量图片签名校验(不引第三方依赖): JPEG/WEBP/PNG 魔数。"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(16)
+        if len(head) < 12:
+            return False
+        if head[:3] == b"\xff\xd8\xff":                       # JPEG
+            return True
+        if head[:4] == b"RIFF" and head[8:12] == b"WEBP":       # WEBP
+            return True
+        if head[:8] == b"\x89PNG\r\n\x1a\n":                 # PNG
+            return True
+        return False
+    except OSError:
+        return False
+
+
+def _load_cover_index(author_dir: Path) -> dict:
+    idx_path = author_dir / COVER_INDEX
+    if not idx_path.exists():
+        return {"schema_version": COVER_INDEX_SCHEMA, "covers": {}}
+    try:
+        data = json.loads(idx_path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("covers"), dict):
+            return data
+    except Exception:
+        pass
+    return {"schema_version": COVER_INDEX_SCHEMA, "covers": {}}
+
+
+def build_cover_map(kwargs: dict, video_list: list) -> dict:
+    """从模型字典列表复算 F2 命名,建立 <stem>_cover → {aweme_id, kind, url} 映射。
+
+    与 F2 download_cover 同源(format_file_name + 同一 video_list item),
+    命名模板一致时映射即准确;不含封面的作品不进映射。
+    """
+    naming_tpl = kwargs.get("naming", "{create}_{desc}")
+    mapping = {}
+    for item in video_list or []:
+        try:
+            stem = format_file_name(naming_tpl, item) + "_cover"
+        except Exception:
+            continue
+        animated = item.get("animated_cover")
+        url = item.get("cover")
+        if not (animated or url):
+            continue  # 无封面的作品:缺项保留,不伪造
+        mapping[stem] = {
+            "aweme_id": str(item.get("aweme_id", "")),
+            "kind": "animated" if animated else "cover",
+            "url": animated or url,
+        }
+    return mapping
+
+
+def reorganize_files(nickname: str, uid: str, staging_root: Path,
+                     cover_map: dict = None) -> str:
     """把 staging 内该作者的有效媒体发布到 <root>/<安全昵称>/
 
     只读自己的 staging，不动共享 <root>/douyin/ 与其他作者的目录。
@@ -271,14 +340,64 @@ def reorganize_files(nickname: str, uid: str, staging_root: Path) -> str:
     new_path = downloads_path / folder_name
     new_path.mkdir(parents=True, exist_ok=True)
 
-    # 移动文件
+    # 移动文件(F2 静态封面为 .jpeg,旧清单漏了该扩展名——Task-002 修正)
     moved_count = 0
-    for pattern in ["*.mp4", "*.jpg", "*.webp"]:
+    cover_files = []  # (staging内文件, 命名stem)
+    for pattern in ["*.mp4", "*.jpg", "*.jpeg", "*.webp"]:
         for f in old_path.glob(pattern):
+            if f.stem.endswith("_cover"):
+                cover_files.append(f)
+                continue
             dest = new_path / f.name
             if not dest.exists():
                 shutil.move(str(f), str(dest))
                 moved_count += 1
+
+    # 封面按 aweme_id 绑定改名后落作者目录,并维护 _covers.json 索引
+    bound = unbound = invalid = 0
+    if cover_files:
+        cover_map = cover_map or {}
+        index = _load_cover_index(new_path)
+        now_iso = datetime.now().isoformat()
+        for f in cover_files:
+            meta = cover_map.get(f.stem)
+            if meta and meta.get("aweme_id"):
+                dest_name = f"{meta['aweme_id']}_cover{f.suffix}"
+                dest = new_path / dest_name
+                if not dest.exists():
+                    shutil.move(str(f), str(dest))
+                ok = _image_signature_ok(dest)
+                entry = {
+                    "file": dest_name,
+                    "kind": meta.get("kind"),
+                    "source_url": meta.get("url"),
+                    "fetched_at": now_iso,
+                    "bytes": dest.stat().st_size,
+                    "signature_ok": ok,
+                }
+                # 幂等: 已有有效产物不重写(重复执行不覆盖)
+                existing = index["covers"].get(meta["aweme_id"])
+                if not (existing and existing.get("signature_ok") and
+                        (new_path / existing["file"]).exists()):
+                    index["covers"][meta["aweme_id"]] = entry
+                else:
+                    # 已有有效条目:保留原条目,清理本次重复文件
+                    if dest.exists() and existing["file"] != dest_name:
+                        dest.unlink()
+                bound += 1 if ok else 0
+                invalid += 0 if ok else 1
+            else:
+                # 无法绑定命名(历史遗留/命名漂移):原样移动并在索引记 unbound,不伪造 aweme_id
+                dest = new_path / f.name
+                if not dest.exists():
+                    shutil.move(str(f), str(dest))
+                index.setdefault("_unbound", []).append(
+                    {"file": f.name, "fetched_at": now_iso})
+                unbound += 1
+        idx_path = new_path / COVER_INDEX
+        idx_path.write_text(json.dumps(index, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+        print(f"  [封面] {nickname}: 绑定 {bound} 无效 {invalid} 未绑定 {unbound}")
 
     if moved_count > 0:
         print(f"  [移动] {nickname} -> {folder_name} ({moved_count} 文件)")
@@ -387,6 +506,7 @@ async def download_with_stats(url: str, max_counts: int = None,
         # 收集所有视频数据
         total_downloaded = 0
         total_stats_saved = 0
+        cover_map = {}  # <naming>_cover → {aweme_id, kind, url}
 
         print("[下载] 正在获取视频列表...")
 
@@ -402,6 +522,9 @@ async def download_with_stats(url: str, max_counts: int = None,
                 raw_data = aweme_data_list._to_raw()
                 stats_saved = save_video_metadata_from_raw(raw_data, nickname)
                 total_stats_saved += stats_saved
+
+                # 封面命名→aweme_id 映射(Task-002,reorganize 绑定用)
+                cover_map.update(build_cover_map(kwargs, video_list))
 
                 # 创建下载任务
                 await handler.downloader.create_download_tasks(
@@ -421,7 +544,7 @@ async def download_with_stats(url: str, max_counts: int = None,
         if post_path.exists():
             for folder in sorted(post_path.iterdir()):
                 if folder.is_dir():
-                    folder_name = reorganize_files(folder.name, uid, staging_root)
+                    folder_name = reorganize_files(folder.name, uid, staging_root, cover_map)
 
         # 同步 following.json：仅默认库模式（跨库重建会污染默认清单）
         sync_ok = True

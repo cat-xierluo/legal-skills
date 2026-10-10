@@ -189,6 +189,29 @@ def export_manifest(db_path: Path, out_dir: Path, root: Path = None,
                 }
                 snapshots.setdefault(r["aweme_id"], []).append(snap)
 
+        # 封面索引(Task-002): <root>/<作者目录>/_covers.json → assets.cover
+        cover_index = {}
+        if root and Path(root).exists():
+            import re as _re
+            for author_dir in Path(root).iterdir():
+                idx = author_dir / "_covers.json"
+                if not (author_dir.is_dir() and idx.exists()):
+                    continue
+                try:
+                    data = json.loads(idx.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                for aid, entry in (data.get("covers") or {}).items():
+                    f = author_dir / entry.get("file", "")
+                    cover_index[aid] = {
+                        "path": str(f.relative_to(root)),
+                        "kind": entry.get("kind"),
+                        "signature_ok": entry.get("signature_ok"),
+                        "exists": f.exists(),
+                        "note": None if (f.exists() and entry.get("signature_ok"))
+                                else ("file_missing" if not f.exists() else "signature_invalid"),
+                    }
+
         items = []
         for aweme_id, v in sorted(videos.items()):
             author = authors.get(v["author_uid"])
@@ -238,11 +261,13 @@ def export_manifest(db_path: Path, out_dir: Path, root: Path = None,
                           ("aweme_id", "desc", "published_at", "duration_ms", "local_filename")},
                 "assets": {
                     "source_video": None,
-                    "cover": None,
+                    "cover": cover_index.get(aweme_id),
                     "raw_transcript": None,
                     "corrected_transcript": None,
                     "frames": None,
-                    "note": "v1 未绑定本地资产路径;由后续封面/流水线卡补齐",
+                    "note": ("cover 已按 aweme_id 绑定(见 _covers.json);其余资产 v1 未绑定"
+                             if aweme_id in cover_index else
+                             "v1 未绑定本地资产路径(封面缺项保留,不伪造)"),
                 },
                 "metrics_snapshot": {
                     "current": metrics,

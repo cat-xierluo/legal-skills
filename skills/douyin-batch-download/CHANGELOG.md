@@ -4,6 +4,19 @@
 
 ---
 
+## [1.11.0] - 2026-10-10
+
+### 新增（Task-002：复用 F2 封面能力并补齐封面证据）
+
+- 封面按 aweme_id 绑定：`reorganize_files` 用 F2 同源 `format_file_name` 建 `<命名>_cover → aweme_id` 映射，封面改名 `<aweme_id>_cover.<ext>` 落作者目录；无法绑定命名的封面原样保留并记 `_unbound`（缺项保留，不伪造 ID）
+- 每作者 `_covers.json` 索引（schema 1）：file/kind(cover|animated)/source_url/fetched_at/bytes/signature_ok；轻量图片签名校验（JPEG/WEBP/PNG 魔数，无第三方依赖）；重复执行不重写有效产物
+- 封面开关显式声明：配置 `cover: true/false`（默认开启，`config.yaml.example` 已文档化）
+- 修复静态封面丢失缺口：F2 静态封面落盘为 `.jpeg`，旧搬运清单只有 `*.jpg`——静态封面此前会随 staging 清理掉；现 `*.mp4/*.jpg/*.jpeg/*.webp` 全覆盖
+- `manifest.py export --root` 读取 `_covers.json` 填 `assets.cover`（path/kind/signature_ok/exists/缺项 note），缺失为 null 不伪造
+- `tests/test_task002_covers.py` 隔离回归 9 用例：jpeg/webp 绑定、同描述不同 create_time 不串片、损坏图片 signature_ok=false、unbound 保留、幂等不重写、与 F2 同源命名、遗留 .jpeg 搬运、manifest 封面字段
+
+---
+
 ## [1.10.0] - 2026-10-10
 
 ### 新增（DY-003：manifest v1、指标缺失与历史快照）

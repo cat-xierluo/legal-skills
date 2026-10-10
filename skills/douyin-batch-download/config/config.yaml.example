@@ -12,6 +12,12 @@ cookie:
 download_path: ""
 naming_template: "{create}_{desc}_{aweme_id}"
 
+# 封面下载(v1.11.0 起,Task-002)
+# true: F2 下载 <命名>_cover.webp(动态)/.jpeg(静态),下载器按 aweme_id 改名
+#       为 <aweme_id>_cover.<ext> 并维护 <作者>/_covers.json 索引(签名校验/幂等)
+# false: 不下载封面;manifest 导出的 assets.cover 为缺项(null),不伪造
+cover: true
+
 # 增量模式
 incremental:
   enabled: true

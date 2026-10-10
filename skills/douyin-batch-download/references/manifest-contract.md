@@ -72,6 +72,13 @@ CREATE TABLE metric_snapshots (
 - `migrate-legacy --db <副本>`：在**副本**上把旧表行转为 `source='legacy/video_metadata'` 快照（play 置 NULL）；默认拒绝名为 `douyin_users.db` 的主位库。迁移只增表增行，旧表不动；回滚 = `DROP TABLE metric_snapshots`（可恢复）。
 - 生产库的正式迁移须先在副本上完整验证并经用户采用确认，本契约不构成生产迁移授权。
 
+## 封面字段（Task-002 起）
+
+- `assets.cover`：来自 `<root>/<作者>/_covers.json`（下载器维护）；`null` = 缺项（未下载/未绑定/无索引），不得当作"确认无封面"的最终结论
+- `path` 相对 `video_root`；`kind ∈ cover|animated`（原发布封面；首帧/关键帧属另一类证据，由 teardown 抽帧产生，不得互相冒充）
+- `signature_ok=false` = 文件在但魔数不符（损坏/占位）；`exists=false` = 索引有但文件丢失
+- 位置绑定键：`_covers.json` 的键即 aweme_id——按稳定 ID 引用，不按文件名或昵称
+
 ## 消费端注意
 
 - 作者与作品用 `uid`/`sec_user_id`/`aweme_id` 关联；**不得按 nickname JOIN**。
