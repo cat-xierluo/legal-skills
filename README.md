@@ -38,6 +38,7 @@
 | 2026-10-06 | 更新 | [git-workflow](skills/git-workflow/) | v1.23.1 | 统一分支命名与 PR 生命周期；主目录门禁拒绝 Git 缩写和组合参数造成的历史/文件覆写。 |
 | 2026-10-04 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.8 | 整合已独审派发准入、业务产物与持续配置检查，保留 GUI 和工程证据链；公开关闭恢复诊断，原生身份缺口继续阻断真实业务恢复。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
+| 2026-09-30 | 更新 | [elements-complaint-generator](skills/elements-complaint-generator/) | v0.16.1 | 修复09原模板字段串栏、金额尾注/单位和布尔/枚举/调解错位；新增逐栏OOXML正反例，正式版PDF及DSH宿主验收仍独立阻断。 |
 | 2026-09-30 | 更新 | [legal-text-format](skills/legal-text-format/) | v1.2.2→v1.2.3 | 修复固定窗口、日期与关键词导致的案例内容丢失；保留序号、数字、链接和 CLI 尾字符，补充合成回归与保守清理边界。 |
 | 2026-09-30 | 更新 | [pdf-organizer](skills/pdf-organizer/) | v0.6.1 | 修复重复清单编号掩盖覆盖异常、严格模式不完整编译/审计失败未阻断、交错来源溯源顺序丢失；页码范围展开前检查边界，补合成 PDF 回归与执行非事务边界。 |
 | 2026-09-30 | 更新 | [trademark-assistant](skills/trademark-assistant/) | v1.7.3 | 商品名称以明确文字单元格保存，精确保留前缀与首尾空白；超长名称拒绝，新增真实 XLSX/XML 回归。不证明分类正确或官方系统接收。 |
@@ -836,3 +837,4 @@
 | zhihe-legal-research     | v1.2.2 | 已归档（2026-08-09 复测：报告接口自 2026-04-08 起 has_report 持续 false，智合法律研究已整体迁移至新平台 zhiexa.com；老 API submit 端点持续 500，无法提交新问题。技能暂不可用，待后续迁移至新平台 zhiexa.com）。技能目录已从仓库移除                                                                                                          |
 
 </details>
+
