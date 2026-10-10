@@ -266,6 +266,61 @@ def cleanup_staging(staging_root: Path):
 COVER_INDEX = "_covers.json"
 COVER_INDEX_SCHEMA = 1
 
+VIDEO_INDEX = "_videos.json"   # DCM-004: 视频文件→aweme_id 稳定映射(消费端 manifest 适配用)
+VIDEO_INDEX_SCHEMA = 1
+
+
+def update_video_index(author_dir: Path, video_map: dict):
+    """把 <naming> → aweme_id 映射与实际落盘文件名写入/合并 _videos.json(幂等)。"""
+    idx_path = author_dir / VIDEO_INDEX
+    index = {"schema_version": VIDEO_INDEX_SCHEMA, "videos": {}}
+    if idx_path.exists():
+        try:
+            data = json.loads(idx_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("videos"), dict):
+                index = data
+        except Exception:
+            pass
+    changed = False
+    now_iso = datetime.now().isoformat()
+    for naming, meta in (video_map or {}).items():
+        aid = str(meta.get("aweme_id", ""))
+        if not aid:
+            continue
+        # 实际文件: 优先 exact naming.mp4, 否则任何以 naming 开头的 mp4
+        cand = author_dir / f"{naming}.mp4"
+        if not cand.exists():
+            matches = sorted(author_dir.glob(f"{naming}*.mp4"))
+            cand = matches[0] if matches else None
+        entry = {
+            "aweme_id": aid,
+            "file": cand.name if cand else None,
+            "file_missing": cand is None,
+            "fetched_at": now_iso,
+        }
+        existing = index["videos"].get(aid)
+        if not (existing and existing.get("file") == entry["file"]):
+            index["videos"][aid] = entry
+            changed = True
+    if changed or not idx_path.exists():
+        idx_path.write_text(json.dumps(index, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+
+
+def build_video_map(kwargs: dict, video_list: list) -> dict:
+    """video_list(model dict) → {naming: {aweme_id}}(与 F2 download_video 同源命名)"""
+    naming_tpl = kwargs.get("naming", "{create}_{desc}")
+    mapping = {}
+    for item in video_list or []:
+        try:
+            stem = format_file_name(naming_tpl, item)
+        except Exception:
+            continue
+        aid = str(item.get("aweme_id", ""))
+        if aid:
+            mapping[stem] = {"aweme_id": aid}
+    return mapping
+
 
 def _image_signature_ok(path: Path) -> bool:
     """轻量图片签名校验(不引第三方依赖): JPEG/WEBP/PNG 魔数。"""
@@ -507,6 +562,7 @@ async def download_with_stats(url: str, max_counts: int = None,
         total_downloaded = 0
         total_stats_saved = 0
         cover_map = {}  # <naming>_cover → {aweme_id, kind, url}
+        video_map = {}  # <naming> → {aweme_id}(DCM-004)
 
         print("[下载] 正在获取视频列表...")
 
@@ -525,6 +581,8 @@ async def download_with_stats(url: str, max_counts: int = None,
 
                 # 封面命名→aweme_id 映射(Task-002,reorganize 绑定用)
                 cover_map.update(build_cover_map(kwargs, video_list))
+                # 视频命名→aweme_id 映射(DCM-004,_videos.json 索引用)
+                video_map.update(build_video_map(kwargs, video_list))
 
                 # 创建下载任务
                 await handler.downloader.create_download_tasks(
@@ -545,6 +603,8 @@ async def download_with_stats(url: str, max_counts: int = None,
             for folder in sorted(post_path.iterdir()):
                 if folder.is_dir():
                     folder_name = reorganize_files(folder.name, uid, staging_root, cover_map)
+                    if folder_name:
+                        update_video_index(downloads_path / folder_name, video_map)
 
         # 同步 following.json：仅默认库模式（跨库重建会污染默认清单）
         sync_ok = True

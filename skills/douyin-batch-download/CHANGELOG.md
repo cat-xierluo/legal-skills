@@ -15,6 +15,10 @@
 - `manifest.py export --root` 读取 `_covers.json` 填 `assets.cover`（path/kind/signature_ok/exists/缺项 note），缺失为 null 不伪造
 - `tests/test_task002_covers.py` 隔离回归 9 用例：jpeg/webp 绑定、同描述不同 create_time 不串片、损坏图片 signature_ok=false、unbound 保留、幂等不重写、与 F2 同源命名、遗留 .jpeg 搬运、manifest 封面字段
 
+### 新增（DCM-004 公开侧：视频索引）
+
+- `_videos.json` 每作者视频索引（`build_video_map` 与 F2 `download_video` 同源命名）：`aweme_id → {file, file_missing, fetched_at}`，幂等合并；为处理流水线/分析端的文件↔ID 稳定映射提供唯一权威来源（回归 +1 用例，共 10）
+
 ---
 
 ## [1.10.0] - 2026-10-10

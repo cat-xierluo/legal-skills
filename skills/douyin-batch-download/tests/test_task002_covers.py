@@ -167,6 +167,23 @@ class Task002Test(unittest.TestCase):
         self._reorg({})
         self.assertTrue((self.root / "作者甲" / "普通图.jpeg").exists())
 
+    def test_08b_video_index(self):
+        """DCM-004: 视频文件→aweme_id 索引(_videos.json,幂等合并)"""
+        # staging 放一个视频文件,模拟 reorganize 后的 author 目录
+        (self.nick_dir / "20260107_新视频.mp4").write_bytes(JPEG)
+        cmap = {}
+        vmap = {"20260107_新视频": {"aweme_id": "AW7"}}
+        self.dl.reorganize_files("作者甲", "UID1", self.staging, cmap)
+        adir = self.root / "作者甲"
+        self.dl.update_video_index(adir, vmap)
+        idx = json.loads((adir / "_videos.json").read_text(encoding="utf-8"))
+        self.assertEqual(idx["videos"]["AW7"]["file"], "20260107_新视频.mp4")
+        self.assertFalse(idx["videos"]["AW7"]["file_missing"])
+        # 幂等: 重复登记不产生重复/漂移
+        self.dl.update_video_index(adir, vmap)
+        idx2 = json.loads((adir / "_videos.json").read_text(encoding="utf-8"))
+        self.assertEqual(idx2, idx)
+
     def test_09_manifest_cover_field(self):
         """manifest export: 绑定封面→assets.cover;缺失→null+说明"""
         db = self.tmp / "users.db"
