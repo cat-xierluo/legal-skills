@@ -15,7 +15,7 @@ description: 案件进度与状态台账管理。案件 case.yaml 的唯一写�
 
 | 功能 | 形式 |
 | --- | --- |
-| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
+| 状态写入 | `scripts/case_store.py` CLI：show / list / add-task / set-status / add-deadline / **add-mailing / set-mailing** / set-stage / set-fields / validate / migrate / render（audit / report 留 M6） |
 | 视图渲染 | `render <短码>`：生成 `案件视图.md` + `案件视图.html`（00 目录，一页纸派生视图，勿手改）；**每次写入自动刷新已存在的视图文件**——无需 hooks 即保持新鲜 |
 | 会话契约 | `references/contract.md`：Agent 会话开始 `show` 加载状态 + 按 context 指针读叙事文档；结束经 CLI 写回，**禁止手改 yaml** |
 | **列表写入陷阱（set-fields）** | `set-fields` 的**列表是整体替换而非追加**：传 `{"任务": [新增一条]}` 会把该列表原有的全部条目冲掉。schema 校验（每行需 `source`）拦不住"漏传其余条目"——新条目若恰好带合法 `source`，校验直接通过、数据已被清空。**追加一条前必须先 `show`/读出该列表全量，把原条目 + 新条目一起传入**；写入后立刻复核条数与关键 id，异常从备份恢复 |
