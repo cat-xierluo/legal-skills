@@ -73,6 +73,7 @@ description: GitHub Star 项目管理工具，支持从内容自动发现并 Sta
      5. **Star 数量级（仅参考）**：多数情况下原仓库比 fork/搬运高 1–2 个数量级（mono-color-skill 3250 vs 0~3；native-subtitle-quote-image 795 vs 5/7），但同名高星同类项目随时可能推翻它——高星候选与亲授/语义证据冲突时，以后者为准
    - 候选仍无法唯一确定时：不凭猜测 star，列出候选与判断依据请用户确认
    - 上下文相关性验证：检查 topics、description、技术栈是否匹配
+   - **截图/视频帧输入专用**：OCR 直读的 owner/repo 404 时**不**判定"找不到"，按 [`references/owner-repo-disambiguation.md`](references/owner-repo-disambiguation.md) 的 7 条视觉消歧规则重新尝试（字母形态漂移、整 owner 错读、README 迁移公告、截图只露目录名、跨项目互引等）
 
 3. **检查是否已 Star**
    ```bash
