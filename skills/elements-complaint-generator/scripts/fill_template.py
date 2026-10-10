@@ -2,7 +2,7 @@
 """要素式起诉状 docx 渲染器（v0.2 · OOXML 源码树版）。
 
 把 elements.json 按"特征文本+字段规则"写入 templates/<案由>/ 模板树，
-打包输出符合法〔2025〕82 号《要素式起诉状示范文本》格式的官方立案版 docx。
+打包输出基于法〔2025〕82 号《要素式起诉状示范文本》的候选 docx；法律内容另行复核。
 
 v0.2 架构（相对 v0.1 python-docx 版）：
 - 模板源 = **解包 OOXML 目录树**（git 可 diff，见 skill 根级 templates/）
@@ -13,7 +13,7 @@ v0.2 架构（相对 v0.1 python-docx 版）：
 - 渲染流程：复制模板树 → 编辑 XML → pack_docx 打包 → 校验
 - 发布完整性：全部门禁通过后，先写输出同目录临时文件再原子替换正式产物，
   任何失败不留临时文件、不覆盖已有输出；未知/错位的业务字段路径按路径级
-  Schema 默认 fail-closed（--allow-unknown-fields 可显式放行）
+  Schema 默认 fail-closed（--allow-unknown-fields 仅可放行真正未知字段）
 
 依赖
 ----
@@ -366,6 +366,7 @@ def make_text_replace_rule(path: str, match_text: str, value_key: str | None = N
             replace_in_paragraph(p, match_text, new_text)
         return True
     rule.__name__ = f"replace[{path}]"
+    rule.match_text = match_text
     return rule
 
 
@@ -394,6 +395,7 @@ def make_text_fill_rule(path: str, prefix: str, suffix: str,
         for p in targets:
             fill_blanks(p, prefix, suffix, str(value))
         return True
+    rule.match_text = prefix
     return rule
 
 
@@ -413,6 +415,7 @@ def make_gender_rule(path: str, occurrence: int = 0) -> RuleFunc:
             return False
         return replace_option_check(matches[occurrence], v)
     rule.__name__ = f"gender[{path}]"
+    rule.match_text = "性别："
     return rule
 
 
@@ -727,74 +730,180 @@ def build_common_mediation_rules() -> list[RuleFunc]:
 # 09-民间借贷 规则集（与 references/case-types/09-private-lending.md §二 对应）
 # ---------------------------------------------------------------------------
 
-def build_rules_02_private_lending(tree_dir=None, elements=None) -> list[RuleFunc]:
+def _lending_answer_doc(doc: DocParts, label: str) -> DocParts:
+    """09 按唯一问题行定位回答单元格，不依赖全局姓名/电话/是/否的序号。"""
+    compact = lambda text: re.sub(r"\s+", "", text)
+    rows = []
+    tree = doc.parts.get("word/document.xml")
+    if tree is not None:
+        for row in tree.iter(f"{{{W_NS}}}tr"):
+            cells = row.findall(f"{{{W_NS}}}tc")
+            if len(cells) >= 2 and compact("".join(t.text or "" for t in cells[0].iter(Wt))) == compact(label):
+                rows.append(cells[1:])
+    if len(rows) != 1:
+        raise ValueError(f"09 模板问题行应唯一：{label}（实际 {len(rows)}）")
+    return DocParts({str(i): etree.ElementTree(cell) for i, cell in enumerate(rows[0])})
+
+
+def _lending_scoped(label: str, path: str, inner: RuleFunc) -> RuleFunc:
+    def rule(doc, elements):
+        value = _get_path(elements, path)
+        if value is None or value == "":
+            return False
+        scoped = _lending_answer_doc(doc, label)
+        anchor = getattr(inner, "match_text", None)
+        if anchor and sum(p.text.count(anchor) for p in iter_paragraphs(scoped)) != 1:
+            raise ValueError(f"09 字段锚点应唯一：{path}")
+        before = tuple(p.text for p in iter_paragraphs(scoped)) if anchor else None
+        if not inner(scoped, elements):
+            raise ValueError(f"09 有值字段未匹配回答区：{path}")
+        # 共享 fill 规则可能在 fill_blanks 拒绝已填/漂移占位后仍返回 True。
+        # 09 文本规则必须实际改变回答区；不改变其他案由的旧行为。
+        if anchor and before == tuple(p.text for p in iter_paragraphs(scoped)):
+            raise ValueError(f"09 文本字段未实际写入：{path}")
+        return True
+    rule.__name__ = f"replace[{path}]"
+    return rule
+
+
+def _lending_choice(label: str, path: str, choices: dict) -> RuleFunc:
+    def inner(doc, elements):
+        value = _get_path(elements, path)
+        # bool 字段不能把字符串 "false"、数字 0/1 或枚举当 truthy。
+        if (True in choices and type(value) is not bool) or value not in choices:
+            raise ValueError(f"09 勾选值不受支持：{path}")
+        selected = choices[value]
+        if selected is None:  # 子选项 false = 不勾选，不等于主问题的“否”
+            return True
+        if selected == "其他：":
+            matches = [p for p in iter_paragraphs(doc) if selected in p.text]
+            return len(matches) == 1 and replace_in_paragraph(matches[0], selected, "其他：待补充具体方式")
+        matches = [p for p in iter_paragraphs(doc) if selected + "□" in p.text]
+        pattern = re.compile(r"(?<!不)" + re.escape(selected + "□"))
+        if len(matches) != 1 or sum(len(pattern.findall(p.text)) for p in matches) != 1:
+            raise ValueError(f"09 选项应唯一：{path}")
+        return replace_option_check(matches[0], selected)
+    wrapped = _lending_scoped(label, path, inner)
+    wrapped.__name__ = f"pick[{path}]"
+    wrapped.lending_boolean = True in choices
+    return wrapped
+
+
+def _lending_empty_cell(label: str, path: str) -> RuleFunc:
+    def inner(doc, elements):
+        paragraphs = list(iter_paragraphs(doc))
+        if not paragraphs or any(p.text.strip() for p in paragraphs):
+            return False
+        paragraphs[0].text = str(_get_path(elements, path))
+        return True
+    return _lending_scoped(label, path, inner)
+
+
+def _lending_signature_rule(path: str, inner: RuleFunc) -> RuleFunc:
+    def rule(doc, elements):
+        if not _get_path(elements, path):
+            return False
+        tree = doc.parts["word/document.xml"]
+        body = tree.find(f"{{{W_NS}}}body")
+        paragraphs = body.findall(Wp)
+        if path == "具状日期":
+            # 固定09署名/日期同处一个body段；先填日期，再填署名，
+            # 避免署名文本中的“日期：”抢走模板锚点。
+            targets = [Para(p) for p in paragraphs
+                       if Para(p).text.strip().startswith("具状人（签字、盖章）：")
+                       and "日期：" in Para(p).text]
+            if len(targets) != 1 or targets[0].text.count("日期：") != 1:
+                raise ValueError("09 落款日期锚点应唯一")
+            return replace_in_paragraph(targets[0], "日期：", "日期：" + fmt_date(_get_path(elements, path)))
+        scoped = DocParts({str(i): etree.ElementTree(p) for i, p in enumerate(paragraphs)})
+        anchor = "具状人（签字、盖章）："
+        if sum(p.text.count(anchor) for p in iter_paragraphs(scoped)) != 1:
+            raise ValueError("09 具状人段应唯一")
+        if not inner(scoped, elements):
+            raise ValueError(f"09 落款字段未匹配：{path}")
+        return True
+    rule.__name__ = f"replace[{path}]"
+    return rule
+
+
+def build_rules_02_private_lending(tree_dir=None, elements=None, *, allow_unknown_fields=False) -> list[RuleFunc]:
     rules: list[RuleFunc] = []
 
-    # --- 通用层：当事人块（09 布局：代理人表独立，被告 姓名=1 单位/职务/电话=1）---
-    rules += build_common_party_rules()
+    # 09 原生模板含法人空槽和原被告之间的代理人，不能使用全局 occurrence。
+    for role in ("原告", "被告"):
+        prefix = f"当事人.{role}"
+        row = f"{role}（自然人）"
+        for field, label in (
+            ("姓名", "姓名："), ("民族", "民族："), ("工作单位", "工作单位："),
+            ("职务", "职务："), ("联系电话", "联系电话："),
+            ("住所地", "住所地（户籍所在地）："), ("经常居住地", "经常居住地："),
+            ("证件类型", "证件类型："), ("证件号码", "证件号码："),
+        ):
+            rules.append(_lending_scoped(row, f"{prefix}.{field}",
+                         make_text_replace_rule(f"{prefix}.{field}", label)))
+        rules.append(_lending_scoped(row, f"{prefix}.性别", make_gender_rule(f"{prefix}.性别")))
+        rules.append(_lending_scoped(row, f"{prefix}.出生日期", make_text_fill_rule(
+            f"{prefix}.出生日期", "出生日期：", "日", transform=fmt_date)))
+    agent = "当事人.委托诉讼代理人.0"
+    for field in ("姓名", "单位", "职务", "联系电话"):
+        rules.append(_lending_scoped("委托诉讼代理人", f"{agent}.{field}",
+                     make_text_replace_rule(f"{agent}.{field}", f"{field}：")))
+    rules.append(_lending_choice("委托诉讼代理人", f"{agent}.是否委托", {True: "有", False: "无"}))
+    rules.append(_lending_choice("委托诉讼代理人", f"{agent}.代理权限",
+                                {"一般授权": "一般授权", "特别授权": "特别授权"}))
 
     # --- 诉讼请求 ---
-    def rule_benjin(doc, elements):
-        v = _get_path(elements, "诉讼请求.本金")
-        if not v or not (v.get("尚欠金额") or v.get("截至日期")):
-            return False
-        date = fmt_date(v.get("截至日期", ""))
-        amount = v.get("尚欠金额", "")
-        new_text = f"截至{date}止，尚欠本金{amount}元（人民币，下同；如外"
-        for p in iter_paragraphs(doc):
-            if "尚欠本金" in p.text and "（人民币" in p.text:
-                p.text = re.sub(r"截至.*?（人民币", new_text, p.text, count=1)
-                return True
-        return False
-    rules.append(rule_benjin)
-
-    def rule_lixi(doc, elements):
-        v = _get_path(elements, "诉讼请求.利息")
-        if not v or not (v.get("尚欠利息") or v.get("截至日期")):
-            return False
-        date = fmt_date(v.get("截至日期", ""))
-        amount = v.get("尚欠利息", "")
-        new_text = f"截至{date}止，尚欠利息{amount}元；"
-        for p in iter_paragraphs(doc):
-            if "尚欠利息" in p.text:
-                p.text = re.sub(r"截至.*?；", new_text, p.text, count=1)
-                return True
-        return False
-    rules.append(rule_lixi)
+    # 金额与日期分别填充，保留本金币种尾注，以及利息跨单元格的「元；」。
+    for path, row, label in (
+        ("诉讼请求.本金", "1. 本金", "尚欠本金"),
+        ("诉讼请求.利息", "2. 利息", "尚欠利息"),
+    ):
+        date_path = f"{path}.截至日期"
+        rules.append(_lending_scoped(row, date_path, make_text_fill_rule(
+            date_path, "截至", "日止", transform=lambda v: fmt_date(v).removesuffix("日"))))
+        amount_path = f"{path}.{'尚欠金额' if label == '尚欠本金' else '尚欠利息'}"
+        amount_rule = (make_text_fill_rule(amount_path, label, "元")
+                       if label == "尚欠本金" else make_text_replace_rule(amount_path, label))
+        rules.append(_lending_scoped(row, amount_path, amount_rule))
 
     rules += [
-        make_text_replace_rule("诉讼请求.利息.计算方式", "计算方式："),
+        _lending_scoped('2. 利息', '诉讼请求.利息.计算方式', make_text_replace_rule("诉讼请求.利息.计算方式", "计算方式：")),
         # 新版原生 docx 中"是□"与"否□"分属不同段落，只锚定"…：是□"
-        make_checkbox_rule("诉讼请求.利息.请求至实际清偿之日", "实际清偿之日止：是□"),
-        make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.勾选", "是□    提前还款（加速到期）□ / 解除合同□"),
-        make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.提前还款_加速到期", "提前还款（加速到期）□"),
-        make_checkbox_rule("诉讼请求.是否要求提前还款或解除合同.解除合同", "解除合同□"),
-        make_checkbox_rule("诉讼请求.是否主张担保权利.勾选", "是□    内容："),
-        make_text_replace_rule("诉讼请求.是否主张担保权利.内容", "内容："),
-        make_checkbox_rule("诉讼请求.是否主张实现债权的费用.勾选", "是□    明细："),
-        make_text_replace_rule("诉讼请求.是否主张实现债权的费用.明细", "明细："),
-        make_checkbox_rule("诉讼请求.是否主张诉讼费用", "是□ 否□"),
+        _lending_choice('2. 利息', '诉讼请求.利息.请求至实际清偿之日', {True: '是', False: '否'}),
+        _lending_choice('3. 是否要求提前还款或 解除合同', '诉讼请求.是否要求提前还款或解除合同.勾选', {True: '是', False: '否'}),
+        _lending_choice('3. 是否要求提前还款或 解除合同', '诉讼请求.是否要求提前还款或解除合同.提前还款_加速到期', {True: '提前还款（加速到期）', False: None}),
+        _lending_choice('3. 是否要求提前还款或 解除合同', '诉讼请求.是否要求提前还款或解除合同.解除合同', {True: '解除合同', False: None}),
+        _lending_choice('4. 是否主张担保权利', '诉讼请求.是否主张担保权利.勾选', {True: '是', False: '否'}),
+        _lending_scoped('4. 是否主张担保权利', '诉讼请求.是否主张担保权利.内容', make_text_replace_rule("诉讼请求.是否主张担保权利.内容", "内容：")),
+        _lending_choice('5. 是否主张实现债权的 费用', '诉讼请求.是否主张实现债权的费用.勾选', {True: '是', False: '否'}),
+        _lending_scoped('5. 是否主张实现债权的 费用', '诉讼请求.是否主张实现债权的费用.明细', make_text_replace_rule("诉讼请求.是否主张实现债权的费用.明细", "明细：")),
+        _lending_choice('6. 是否主张诉讼费用', '诉讼请求.是否主张诉讼费用', {True: '是', False: '否'}),
+    ]
+
+    rules += [
+        _lending_empty_cell("7. 其他请求", "诉讼请求.其他请求"),
+        _lending_empty_cell("8. 标的总额", "诉讼请求.标的总额"),
     ]
 
     # --- 约定管辖和诉前保全 ---
     rules += [
-        make_checkbox_rule("约定管辖和诉前保全.有无仲裁_法院管辖约定", "有□                合同条款及内容："),
-        make_text_replace_rule("约定管辖和诉前保全.合同条款及内容", "合同条款及内容："),
-        make_checkbox_rule("约定管辖和诉前保全.是否已经诉前保全", "保全法院：              保全时间："),
-        make_text_replace_rule("约定管辖和诉前保全.保全法院", "保全法院："),
-        make_text_fill_rule("约定管辖和诉前保全.保全时间", "保全时间：", "日", transform=fmt_date),
-        make_text_replace_rule("约定管辖和诉前保全.保全案号", "保全案号："),
+        _lending_choice('1. 有无仲裁、法院管辖 约定', '约定管辖和诉前保全.有无仲裁_法院管辖约定', {True: '有', False: '无'}),
+        _lending_scoped('1. 有无仲裁、法院管辖 约定', '约定管辖和诉前保全.合同条款及内容', make_text_replace_rule("约定管辖和诉前保全.合同条款及内容", "合同条款及内容：")),
+        _lending_choice('2. 是否已经诉前保全', '约定管辖和诉前保全.是否已经诉前保全', {True: '是', False: '否'}),
+        _lending_scoped('2. 是否已经诉前保全', '约定管辖和诉前保全.保全法院', make_text_replace_rule("约定管辖和诉前保全.保全法院", "保全法院：")),
+        _lending_scoped('2. 是否已经诉前保全', '约定管辖和诉前保全.保全时间', make_text_replace_rule('约定管辖和诉前保全.保全时间', '保全时间：', transform=fmt_date)),
+        _lending_scoped('2. 是否已经诉前保全', '约定管辖和诉前保全.保全案号', make_text_replace_rule("约定管辖和诉前保全.保全案号", "保全案号：")),
     ]
 
     # --- 事实与理由 ---
     rules += [
-        make_text_replace_rule("事实与理由.合同签订情况_名称_编号_签订时间_地点", "1. 合同签订情况（名称、 编号、签订时间、地点   等）"),
-        make_text_replace_rule("事实与理由.签订主体.出借人", "出借人："),
-        make_text_replace_rule("事实与理由.签订主体.借款人", "借款人："),
-        make_text_replace_rule("事实与理由.借款金额.约定", "约定："),
-        make_text_replace_rule("事实与理由.借款金额.实际提供", "实际提供："),
-        make_checkbox_rule("事实与理由.借款金额.提供方式", "现金□"),
-        make_checkbox_rule("事实与理由.借款期限.是否到期", "是否到期：是□    否□"),
+        _lending_empty_cell('1. 合同签订情况（名称、 编号、签订时间、地点   等）', '事实与理由.合同签订情况_名称_编号_签订时间_地点'),
+        _lending_scoped('2. 签订主体', '事实与理由.签订主体.出借人', make_text_replace_rule("事实与理由.签订主体.出借人", "出借人：")),
+        _lending_scoped('2. 签订主体', '事实与理由.签订主体.借款人', make_text_replace_rule("事实与理由.签订主体.借款人", "借款人：")),
+        _lending_scoped('3. 借款金额', '事实与理由.借款金额.约定', make_text_replace_rule("事实与理由.借款金额.约定", "约定：")),
+        _lending_scoped('3. 借款金额', '事实与理由.借款金额.实际提供', make_text_replace_rule("事实与理由.借款金额.实际提供", "实际提供：")),
+        _lending_choice('3. 借款金额', '事实与理由.借款金额.提供方式', {'现金': '现金', '转账': '转账', '其他': '其他：'}),
+        _lending_choice('4. 借款期限', '事实与理由.借款期限.是否到期', {True: '是', False: '否'}),
     ]
 
     def rule_qixian(doc, elements):
@@ -806,7 +915,7 @@ def build_rules_02_private_lending(tree_dir=None, elements=None) -> list[RuleFun
         if not start and not end:
             return False
         new_text = f"约定期限：{start}起至{end}止"
-        for p in iter_paragraphs(doc):
+        for p in iter_paragraphs(_lending_answer_doc(doc, '4. 借款期限')):
             if "约定期限：" in p.text and "起至" in p.text:
                 p.text = re.sub(r"约定期限：.*?止", new_text, p.text, count=1)
                 return True
@@ -823,7 +932,7 @@ def build_rules_02_private_lending(tree_dir=None, elements=None) -> list[RuleFun
             return False
         # 模板原句: "利率□    %/ 年（季 / 月）（合同条款：第    条）"
         # 改后:     "利率{rate}% / {unit}（合同条款：第    条）"
-        for p in iter_paragraphs(doc):
+        for p in iter_paragraphs(_lending_answer_doc(doc, '5. 借款利率')):
             if "利率□" in p.text and "%/ 年" in p.text and "季 / 月" in p.text:
                 p.text = re.sub(r"利率□\s*%\s*/\s*年\s*（季\s*/\s*月）", f"利率{rate}% / {unit}", p.text, count=1)
                 return True
@@ -832,8 +941,8 @@ def build_rules_02_private_lending(tree_dir=None, elements=None) -> list[RuleFun
 
     rules += [
         # "第    条" → "第三条"（复合占位整体替换，保留前缀"合同条款："）
-        make_text_replace_rule("事实与理由.借款利率.合同条款", "第    条",
-                               transform=lambda v: f"第{v}条", append=False),
+        _lending_scoped('5. 借款利率', '事实与理由.借款利率.合同条款', make_text_replace_rule("事实与理由.借款利率.合同条款", "第    条",
+                               transform=lambda v: f"第{v}条", append=False)),
     ]
 
     def rule_jiekuan_time(doc, elements):
@@ -842,78 +951,170 @@ def build_rules_02_private_lending(tree_dir=None, elements=None) -> list[RuleFun
         if not v_time and not v_amount:
             return False
         date = fmt_date(v_time) if v_time else "        年        月         日"
-        amount = v_amount if v_amount else "          元"
-        new_text = f"{date}，{amount}"
-        for p in iter_paragraphs(doc):
-            if "年        月         日，          元" in p.text:
-                replace_in_paragraph(p, "        年        月         日，          元", new_text)
-                return True
-        return False
+        amount = (str(v_amount).removesuffix("元") + "元") if v_amount else "          元"
+        scoped = _lending_answer_doc(doc, "6. 借款提供时间")
+        for p in iter_paragraphs(scoped):
+            if re.fullmatch(r"\s*年\s*月\s*日，\s*元", p.text):
+                return replace_in_paragraph(p, p.text, f"{date}，{amount}")
+        raise ValueError("09 借款提供时间/金额未匹配回答区")
     rules.append(rule_jiekuan_time)
 
     def rule_huankuan_fangshi(doc, elements):
         v = _get_path(elements, "事实与理由.还款方式")
         if not v:
             return False
-        options = [
-            ("到期一次性还本付息", "到期一次性还本付息□"),
-            ("按月计息、到期一次性还本", "按月计息、到期一次性还本□"),
-            ("按季计息、到期一次性还本", "按季计息、到期一次性还本□"),
-            ("按年计息、到期一次性还本", "按年计息、到期一次性还本□"),
-        ]
-        applied = False
-        for key, match in options:
-            if key in str(v):
-                for p in iter_paragraphs(doc):
-                    if match in p.text:
-                        replace_in_paragraph(p, match, match.replace("□", "☑"))
-                        applied = True
-                        break
-        return applied
+        scoped = _lending_answer_doc(doc, "7. 还款方式")
+        options = ("到期一次性还本付息", "按月计息、到期一次性还本",
+                   "按季计息、到期一次性还本", "按年计息、到期一次性还本")
+        for p in iter_paragraphs(scoped):
+            if v in options and v + "□" in p.text:
+                return replace_option_check(p, v)
+            if v not in options and "其他：" in p.text:
+                return replace_in_paragraph(p, "其他：", f"其他：{v}")
+        raise ValueError("09 还款方式未匹配回答区")
     rules.append(rule_huankuan_fangshi)
 
     rules += [
-        make_text_replace_rule("事实与理由.还款情况.已还本金", "已还本金：          元",
-                               transform=lambda v: f"已还本金：{v} 元", append=False),
-        make_text_replace_rule("事实与理由.还款情况.已还利息", "已还利息：          元",
-                               transform=lambda v: f"已还利息：{v} 元", append=False),
-        make_text_fill_rule("事实与理由.还款情况.还息至", "还息至", "日", transform=fmt_date),
-        make_checkbox_rule("事实与理由.是否存在逾期还款.勾选", "是□    逾期时间：              至今已逾期"),
-        make_text_replace_rule("事实与理由.是否存在逾期还款.逾期时间", "逾期时间：              至今已逾期",
-                               transform=lambda v: f"逾期时间：{v}", append=False),
-        make_checkbox_rule("事实与理由.是否签订物的担保_抵押_质押_合同.勾选", "是□    签订时间："),
-        make_text_replace_rule("事实与理由.是否签订物的担保_抵押_质押_合同.签订时间", "签订时间："),
-        make_text_replace_rule("事实与理由.担保人", "担保人："),
-        make_text_replace_rule("事实与理由.担保物", "担保物："),
-        make_checkbox_rule("事实与理由.是否最高额担保_抵押_质押", "担保债权的确定时间： 担保额度："),
-        make_text_replace_rule("事实与理由.担保债权的确定时间", "担保债权的确定时间："),
-        make_text_replace_rule("事实与理由.担保额度", "担保额度："),
-        make_checkbox_rule("事实与理由.是否办理抵押_质押_登记.勾选", "是□    正式登记□"),
-        make_checkbox_rule("事实与理由.是否办理抵押_质押_登记.正式登记", "正式登记□"),
-        make_checkbox_rule("事实与理由.是否办理抵押_质押_登记.预告登记", "预告登记□"),
-        make_checkbox_rule("事实与理由.是否签订保证合同.勾选", "是□    签订时间：              保证人："),
-        make_text_replace_rule("事实与理由.是否签订保证合同.签订时间", "签订时间：              保证人："),
-        make_text_replace_rule("事实与理由.是否签订保证合同.保证人", "保证人："),
-        make_text_replace_rule("事实与理由.是否签订保证合同.主要内容", "主要内容："),
-        make_checkbox_rule("事实与理由.是否签订保证合同.保证方式", "一般保证□"),
-        make_checkbox_rule("事实与理由.其他担保方式.勾选", "是□    形式：    签订时间："),
-        make_text_replace_rule("事实与理由.其他担保方式.形式", "形式：    签订时间："),
-        make_text_fill_rule("事实与理由.其他担保方式.签订时间", "签订时间：", "日", transform=fmt_date),
-        make_text_replace_rule("事实与理由.其他需要说明的内容", "16. 其他需要说明的内容 （可另附页）"),
-        make_text_replace_rule("事实与理由.请求依据_合同约定", "合同约定："),
-        make_text_replace_rule("事实与理由.请求依据_法律规定", "法律规定："),
-        make_text_replace_rule("事实与理由.证据清单", "18. 证据清单（可另附 页）"),
+        _lending_scoped('8. 还款情况', '事实与理由.还款情况.已还本金', make_text_replace_rule("事实与理由.还款情况.已还本金", "已还本金：          元",
+                               transform=lambda v: f"已还本金：{v} 元", append=False)),
+        _lending_scoped('8. 还款情况', '事实与理由.还款情况.已还利息', make_text_replace_rule("事实与理由.还款情况.已还利息", "已还利息：          元",
+                               transform=lambda v: f"已还利息：{v} 元", append=False)),
+        _lending_scoped('8. 还款情况', '事实与理由.还款情况.还息至', make_text_fill_rule("事实与理由.还款情况.还息至", "还息至", "日", transform=fmt_date)),
+        _lending_choice('9. 是否存在逾期还款', '事实与理由.是否存在逾期还款.勾选', {True: '是', False: '否'}),
+        _lending_scoped('9. 是否存在逾期还款', '事实与理由.是否存在逾期还款.逾期时间', make_text_replace_rule("事实与理由.是否存在逾期还款.逾期时间", "逾期时间：              至今已逾期",
+                               transform=lambda v: f"逾期时间：{v}", append=False)),
+        _lending_choice('10. 是否签订物的担保 （抵押、质押）合同', '事实与理由.是否签订物的担保_抵押_质押_合同.勾选', {True: '是', False: '否'}),
+        _lending_scoped('10. 是否签订物的担保 （抵押、质押）合同', '事实与理由.是否签订物的担保_抵押_质押_合同.签订时间', make_text_replace_rule("事实与理由.是否签订物的担保_抵押_质押_合同.签订时间", "签订时间：")),
+        _lending_scoped('11. 担保人、担保物', '事实与理由.担保人', make_text_replace_rule("事实与理由.担保人", "担保人：")),
+        _lending_scoped('11. 担保人、担保物', '事实与理由.担保物', make_text_replace_rule("事实与理由.担保物", "担保物：")),
+        _lending_choice('12. 是否最高额担保（抵 押、质押）', '事实与理由.是否最高额担保_抵押_质押', {True: '是', False: '否'}),
+        _lending_scoped('12. 是否最高额担保（抵 押、质押）', '事实与理由.担保债权的确定时间', make_text_replace_rule("事实与理由.担保债权的确定时间", "担保债权的确定时间：")),
+        _lending_scoped('12. 是否最高额担保（抵 押、质押）', '事实与理由.担保额度', make_text_replace_rule("事实与理由.担保额度", "担保额度：")),
+        _lending_choice('13. 是否办理抵押、质押 登记', '事实与理由.是否办理抵押_质押_登记.勾选', {True: '是', False: '否'}),
+        _lending_choice('13. 是否办理抵押、质押 登记', '事实与理由.是否办理抵押_质押_登记.正式登记', {True: '正式登记', False: None}),
+        _lending_choice('13. 是否办理抵押、质押 登记', '事实与理由.是否办理抵押_质押_登记.预告登记', {True: '预告登记', False: None}),
+        _lending_choice('14. 是否签订保证合同', '事实与理由.是否签订保证合同.勾选', {True: '是', False: '否'}),
+        _lending_scoped('14. 是否签订保证合同', '事实与理由.是否签订保证合同.签订时间', make_text_fill_rule("事实与理由.是否签订保证合同.签订时间", "签订时间：", "保证人：", transform=fmt_date)),
+        _lending_scoped('14. 是否签订保证合同', '事实与理由.是否签订保证合同.保证人', make_text_replace_rule("事实与理由.是否签订保证合同.保证人", "保证人：")),
+        _lending_scoped('14. 是否签订保证合同', '事实与理由.是否签订保证合同.主要内容', make_text_replace_rule("事实与理由.是否签订保证合同.主要内容", "主要内容：")),
+        _lending_choice('14. 是否签订保证合同', '事实与理由.是否签订保证合同.保证方式', {'一般保证': '一般保证', '连带责任保证': '连带责任保证'}),
+        _lending_choice('15. 其他担保方式', '事实与理由.其他担保方式.勾选', {True: '是', False: '否'}),
+        _lending_scoped('15. 其他担保方式', '事实与理由.其他担保方式.形式', make_text_fill_rule("事实与理由.其他担保方式.形式", "形式：", "签订时间：")),
+        _lending_scoped('15. 其他担保方式', '事实与理由.其他担保方式.签订时间', make_text_replace_rule('事实与理由.其他担保方式.签订时间', '签订时间：', transform=fmt_date)),
+        _lending_empty_cell('16. 其他需要说明的内容 （可另附页）', '事实与理由.其他需要说明的内容'),
+        _lending_scoped('17. 请求依据', '事实与理由.请求依据_合同约定', make_text_replace_rule("事实与理由.请求依据_合同约定", "合同约定：")),
+        _lending_scoped('17. 请求依据', '事实与理由.请求依据_法律规定', make_text_replace_rule("事实与理由.请求依据_法律规定", "法律规定：")),
+        _lending_empty_cell('18. 证据清单（可另附 页）', '事实与理由.证据清单'),
     ]
 
-    # --- 通用层：调解意愿块 ---
-    rules += build_common_mediation_rules()
+    # 09 的总述和五项好处各自定位，不让缺省总述改变选项序号。
+    rules += [
+        _lending_choice("是否了解调解作为非诉讼纠纷解决方式，能及时、高效、低成本、不伤和气地解决纠纷",
+                        "对纠纷解决方式的意愿.是否了解调解", {"了解": "了解", "不了解": "不了解"}),
+        _lending_choice("是否考虑先行调解", "对纠纷解决方式的意愿.是否考虑先行调解",
+                        {"是": "是", "否": "否", "暂不确定": "暂不确定，想要了解更多内容"}),
+    ]
+    def rule_benefits(doc, elements):
+        path = "对纠纷解决方式的意愿.是否了解先行调解好处"
+        values = _get_path(elements, path)
+        if values is None:
+            return False
+        if not isinstance(values, list) or len(values) != 5 or any(v not in ("了解", "不了解") for v in values):
+            raise ValueError("09 调解好处需为五项了解/不了解数组")
+        scoped = _lending_answer_doc(doc, "是否了解先行调解解决纠纷的好处")
+        targets = [p for p in iter_paragraphs(scoped) if "了解□" in p.text and "不了解□" in p.text]
+        if len(targets) != 5:
+            raise ValueError("09 调解好处的五个选项行未匹配")
+        return all(replace_option_check(p, value) for p, value in zip(targets, values))
+    rules.append(rule_benefits)
 
     # --- 具状人/日期 ---
     rules += [
-        make_text_replace_rule("具状人_签字_盖章", "具状人（签字、盖章）："),
-        make_signature_date_rule(),
+        _lending_signature_rule("具状日期", make_signature_date_rule()),
+        _lending_signature_rule("具状人_签字_盖章", make_text_replace_rule("具状人_签字_盖章", "具状人（签字、盖章）：")),
     ]
 
+    # 复合/共享规则显式绑定输入，避免模板漂移时“有值却全跳过”。
+    watched = {
+        "rule_qixian": ("事实与理由.借款期限.约定期限起", "事实与理由.借款期限.约定期限止"),
+        "rule_lilv": ("事实与理由.借款利率.数值", "事实与理由.借款利率.单位"),
+        "rule_jiekuan_time": ("事实与理由.借款提供时间", "事实与理由.借款提供金额"),
+        "rule_huankuan_fangshi": ("事实与理由.还款方式",),
+        "mediation[总述]": ("对纠纷解决方式的意愿.是否了解调解",),
+        "mediation[好处×5]": ("对纠纷解决方式的意愿.是否了解先行调解好处",),
+        "mediation[考虑调解]": ("对纠纷解决方式的意愿.是否考虑先行调解",),
+        "signature[日期]": ("具状日期",),
+    }
+    def require_consumption(inner, paths):
+        def rule(doc, elements):
+            applied = inner(doc, elements)
+            if not applied and any(not _is_empty_value(_get_path(elements, path)) for path in paths):
+                raise ValueError(f"09 有值字段未消费：{', '.join(paths)}")
+            return applied
+        rule.__name__ = inner.__name__
+        return rule
+    rules = [require_consumption(rule, watched[rule.__name__])
+             if rule.__name__ in watched else rule for rule in rules]
+
+    allowed = {match.group(1) for rule in rules
+               if (match := re.fullmatch(r"(?:replace|pick)\[(.+)\]", rule.__name__))}
+    boolean_paths = {match.group(1) for rule in rules
+                     if getattr(rule, "lending_boolean", False)
+                     and (match := re.fullmatch(r"(?:replace|pick)\[(.+)\]", rule.__name__))}
+    allowed.update({
+        "当事人.原告.主体类型", "当事人.被告.主体类型", "当事人.委托诉讼代理人.0.主体类型",
+        "事实与理由.借款期限.约定期限起", "事实与理由.借款期限.约定期限止",
+        "事实与理由.借款利率.数值", "事实与理由.借款利率.单位",
+        "事实与理由.借款提供时间", "事实与理由.借款提供金额",
+        "事实与理由.还款方式", "事实与理由.还款情况.还息至", "具状日期",
+        "对纠纷解决方式的意愿.是否了解调解", "对纠纷解决方式的意愿.是否考虑先行调解",
+        *(f"对纠纷解决方式的意愿.是否了解先行调解好处.{i}" for i in range(5)),
+    })
+
+    def validate_09(doc, elements):
+        if not isinstance(elements, dict):
+            raise ValueError("09 要素必须为对象")
+        parties = elements.get("当事人", {})
+        if not isinstance(parties, dict):
+            raise ValueError("09 当事人必须为对象")
+        for role in ("原告", "被告"):
+            party = parties.get(role, {})
+            if not isinstance(party, dict) or party.get("主体类型", "自然人") not in ("", "自然人"):
+                raise ValueError(f"09 当前只支持单个自然人{role}对象；数组和组织不得静默降级")
+        agents = parties.get("委托诉讼代理人", [])
+        if not isinstance(agents, list) or len(agents) > 1 or any(not isinstance(v, dict) for v in agents):
+            raise ValueError("09 当前只支持最多一个代理人的数组")
+        if agents and agents[0].get("主体类型", "自然人") not in ("", "自然人"):
+            raise ValueError("09 代理人的主体类型只接受自然人")
+        for segments, value in _iter_leaf_paths(elements):
+            path = ".".join(segments)
+            if not _is_empty_value(value) and path not in allowed:
+                normalized = ".".join("#" if key.isdigit() else key for key in segments)
+                # 保留显式debug旗标对真正未知字段的旧合同；已知但不受09支持的
+                # 字段/自由填空不能绕过，主体形状/类型与锚点校验也不受旗标影响。
+                if (allow_unknown_fields and normalized not in KNOWN_PATH_PATTERNS
+                        and segments[0] not in ("勾选", "填空", "标签")):
+                    continue
+                raise ValueError(f"09 未支持字段：{path}")
+            expected = bool if path in boolean_paths else str
+            if not _is_empty_value(value) and type(value) is not expected:
+                raise ValueError(f"09 字段类型错误：{path}（应为 {expected.__name__}）")
+        for path, options in (
+            ("事实与理由.借款利率.单位", ("年", "季", "月")),
+            ("对纠纷解决方式的意愿.是否了解调解", ("了解", "不了解")),
+            ("对纠纷解决方式的意愿.是否考虑先行调解", ("是", "否", "暂不确定")),
+        ):
+            value = _get_path(elements, path)
+            if not _is_empty_value(value) and value not in options:
+                raise ValueError(f"09 枚举值错误：{path}")
+        benefits = _get_path(elements, "对纠纷解决方式的意愿.是否了解先行调解好处")
+        if benefits is not None and (not isinstance(benefits, list) or len(benefits) != 5
+                                    or any(v not in ("了解", "不了解") for v in benefits)):
+            raise ValueError("09 调解好处需为五项了解/不了解数组")
+        if _get_path(elements, "事实与理由.借款利率.单位") and not _get_path(elements, "事实与理由.借款利率.数值"):
+            raise ValueError("09 借款利率仅有单位、无数值，无法写入")
+        return True
+    rules.insert(0, validate_09)
     return rules
 
 
@@ -3586,7 +3787,7 @@ def main() -> int:
     parser.add_argument(
         "--allow-unknown-fields", action="store_true",
         help="放行未知/错位的业务字段路径（默认 fail-closed，仅限排查时使用，"
-             "产物不得标记为可交付）",
+             "产物不得标记为可交付；不绕过09已知字段、主体形状与模板完整性检查）",
     )
     parser.add_argument(
         "--batch", type=Path, default=None,
@@ -3623,7 +3824,7 @@ def main() -> int:
             print(
                 f"[fill_template] 阻断：{len(unknown_fields)} 个未知或错位的业务字段路径，未发布输出"
                 f"（路径 Schema 见 fill_template.KNOWN_PATH_PATTERNS；"
-                f"如确认可忽略请改用 --allow-unknown-fields）",
+                f"调试时可用 --allow-unknown-fields 忽略真正未知字段，但不绕过09已知字段契约）",
                 file=sys.stderr,
             )
             for path in unknown_fields:
@@ -3644,7 +3845,9 @@ def main() -> int:
         # 加载 → 应用规则 → 写回 → 临时打包
         parts = load_text_parts(tree_work)
         doc = DocParts(parts)
-        rules = rules_builder(elements)
+        rules = (build_rules_02_private_lending(tree_work, elements,
+                    allow_unknown_fields=args.allow_unknown_fields)
+                 if args.case_type == "09-private-lending" else rules_builder(elements))
         result = apply_rules(doc, rules, elements)
         errors = [name for status, name in result["details"] if status == "error"]
         if errors:
