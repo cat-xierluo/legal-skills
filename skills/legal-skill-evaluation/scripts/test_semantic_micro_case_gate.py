@@ -17,6 +17,45 @@ MICRO = ROOT / "evals" / "contract-calibration-260730" / "micro-runs"
 
 
 class SemanticMicroCaseGateTests(unittest.TestCase):
+    def run_context_mutation(self, input_name: str, output_name: str, field: str, value) -> tuple[int, dict]:
+        payload = json.loads((MICRO / input_name).read_text(encoding="utf-8"))
+        payload["provided_context"][field] = value
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(GATE), "--input", str(input_path),
+                 "--output", str(MICRO / output_name)],
+                capture_output=True, text=True, check=False,
+            )
+        self.assertTrue(completed.stdout.strip(), completed.stderr)
+        return completed.returncode, json.loads(completed.stdout)
+
+    def test_contract_available_rejects_truthy_non_booleans(self) -> None:
+        for fixture in ("objective-missing", "attachment-missing", "service-scope"):
+            for value in ("false", "true", 1, -1, [False], {"available": False}):
+                with self.subTest(fixture=fixture, value=value):
+                    code, payload = self.run_context_mutation(
+                        fixture + "-input.json", fixture + "-output.md", "contract_available", value)
+                    self.assertEqual(2, code)
+                    self.assertEqual("error", payload["status"])
+
+    def test_contract_available_false_is_valid_input_but_not_passing_boundary(self) -> None:
+        for fixture in ("objective-missing", "attachment-missing", "service-scope"):
+            with self.subTest(fixture=fixture):
+                code, payload = self.run_context_mutation(
+                    fixture + "-input.json", fixture + "-output.md", "contract_available", False)
+                self.assertEqual(3, code)
+                self.assertFalse(payload["measurements"]["input_boundary_valid"])
+
+    def test_clause_excerpt_wrong_type_returns_structured_error(self) -> None:
+        for value in (1, ["excerpt"], {"text": "excerpt"}):
+            with self.subTest(value=value):
+                code, payload = self.run_context_mutation(
+                    "service-scope-input.json", "service-scope-output.md", "contract_excerpt", value)
+                self.assertEqual(2, code)
+                self.assertEqual("error", payload["status"])
+
     def run_gate(self, input_name: str, output_name: str) -> tuple[int, dict]:
         completed = subprocess.run(
             [

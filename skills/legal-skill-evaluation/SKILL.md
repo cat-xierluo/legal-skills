@@ -1,7 +1,7 @@
 ---
 name: legal-skill-evaluation
 description: 法律 Skill 分层质量评测工具。消费 skill-lint 的通用质量结论，再用三份测试材料、通用六维度、场景微调和律师 taste 评估法律产出，并定位最小修复单元。本技能应在审查、回归验证或发布验收法律 Skill 时使用。不要用于代替通用 Skill lint、正式法律意见或跨场景排名。
-version: "0.8.13"
+version: "0.8.14"
 license: CC-BY-NC
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
@@ -123,6 +123,8 @@ capability suite 中已经执行的案例另写结构化运行收据。收据逐
 再按 references/universal-dimensions.md 评六维度，并按 references/scenario-tuning-notes.md 微调。每个维度给 1–5 分和证据；确实不适用时填 N/A 与理由。随后逐项核查通用八项 taste。边缘结论或场景特异争议，才读取合同、诉讼或合规深度 rubric。
 
 指令型 Skill 另用 `semantic-cases/` 下的受控语义 case 做最小语义断言（如「目标缺失须请求确认」「事实与陈述区分」「不凭记忆写条号」「未提及不补全」）。`semantic_micro_case_gate.py` 已实现合同边界检查，以及通用 `CASE-` 的 `contains_any` / `not_contains` / `regex` 机器检查；这些只验证声明的最小文本断言，自然语言要求和未实现断言仍需人工复核，不代表完整法律语义判断。
+
+合同微案例的 `provided_context.contract_available` 必须是 JSON 布尔值；只有 true 可满足“合同已提供”的输入边界。条款边界案例的 `contract_excerpt` 必须是字符串。错误类型返回退出码 2 和结构化 error；合法 false 或未满足边界返回 3，不能借字符串、数值或容器的真值转换判通过。
 
 通用 `CASE-` 语义检查的每项断言须有非空且唯一的 `id`。`judge_hint.contains_any` / `not_contains` 使用非空字符串数组，`regex` 使用可编译的非空正则字符串；同一 hint 声明多个操作时按 AND 执行，不能只检查第一项后忽略其余项。可选描述字段不参与判定。输入结构错误返回退出码 2，合法断言未满足返回 3；这不改变法律评分或正式验证状态。
 
