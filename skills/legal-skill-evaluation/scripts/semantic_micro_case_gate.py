@@ -82,7 +82,7 @@ def objective_missing(payload: dict[str, Any], text: str) -> tuple[bool, dict[st
     context = payload.get("provided_context")
     input_valid = (
         isinstance(context, dict)
-        and bool(context.get("contract_available"))
+        and context.get("contract_available") is True
         and not str(context.get("review_objective") or "").strip()
     )
     objective_options = sum(
@@ -147,7 +147,7 @@ def attachment_missing(payload: dict[str, Any], text: str) -> tuple[bool, dict[s
     attachments = context.get("attachments") if isinstance(context, dict) else None
     input_valid = (
         isinstance(context, dict)
-        and bool(context.get("contract_available"))
+        and context.get("contract_available") is True
         and isinstance(referenced, list)
         and len(referenced) >= 1
         and attachments == []
@@ -196,7 +196,8 @@ def clause_boundary(payload: dict[str, Any], text: str) -> tuple[bool, dict[str,
     # 输入有效性：存在合同摘录，且声明了边界类触发条件（如范围/条款待确认）。
     input_valid = (
         isinstance(context, dict)
-        and bool(context.get("contract_available"))
+        and context.get("contract_available") is True
+        and isinstance(context.get("contract_excerpt"), str)
         and bool((context.get("contract_excerpt") or "").strip())
     )
     # 声明层：在边界确认前暂停实质审查。
@@ -340,6 +341,14 @@ def validate(input_path: Path, output_path: Path) -> tuple[int, dict[str, Any]]:
             }
             return (0 if all_passed else 3), result
         return 2, {"status": "error", "errors": [f"unsupported case_id: {case_id!r}"]}
+
+    # Known contract cases consume typed context; truthy JSON strings/containers
+    # must not turn an unavailable contract into a passing evidence boundary.
+    context = payload.get("provided_context")
+    if not isinstance(context, dict) or type(context.get("contract_available")) is not bool:
+        return 2, {"status": "error", "errors": ["provided_context.contract_available 必须是布尔值"]}
+    if case_id in CLAUSE_BOUNDARY_ASSERTIONS and not isinstance(context.get("contract_excerpt"), str):
+        return 2, {"status": "error", "errors": ["provided_context.contract_excerpt 必须是字符串"]}
 
     if case_id == "CONTRACT-MICRO-OBJECTIVE-MISSING":
         passed, measurements, evidence = objective_missing(payload, output_text)
