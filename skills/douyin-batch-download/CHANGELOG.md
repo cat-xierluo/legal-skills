@@ -4,6 +4,19 @@
 
 ---
 
+## [1.10.0] - 2026-10-10
+
+### 新增（DY-003：manifest v1、指标缺失与历史快照）
+
+- `scripts/manifest.py`：manifest v1 只读导出 CLI（`export` 子命令，源库 `mode=ro` 只读打开、输出目录已存在即拒绝）与旧库副本迁移（`migrate-legacy` 子命令，默认拒绝主位库名，只增表增行、DROP 新表即回滚）
+- 历史快照表 `metric_snapshots`：`(aweme_id, observed_at, source)` 主键；同键同值幂等、同键不同值拒绝（退出码 2）；指标缺失存 NULL、真实 0 存 0——旧表"缺失填 0"语义自此可区分
+- `download-v2.py` 采集端逐条追加快照（现行 `video_metadata` 写入语义不变）；遇快照冲突该轮以失败收场
+- 导出规则：旧 `play_count=0` 一律标 `unknown_legacy`（值置 NULL）；播放分母缺失/未知/为 0 时 `digg_per_play` 为 null，不以其他指标反推播放
+- `references/manifest-contract.md`：schema_version=1 版本化契约（字段/单位/缺失语义/幂等冲突/消费端规则），消费端以该文件为唯一维护源
+- `tests/test_dy003_manifest.py` 隔离回归 13 用例：双时间快照留存、幂等/冲突、NULL 与 0 区分、比例 null、非法输入拒绝、输出保护、源库字节不变、副本迁移+unknown_legacy+可恢复、主位库拒绝、迁移幂等
+
+---
+
 ## [1.9.0] - 2026-10-10
 
 ### 修复

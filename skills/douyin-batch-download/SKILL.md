@@ -2,7 +2,7 @@
 name: douyin-batch-download
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.9.0"
+version: "1.10.0"
 license: MIT
 description: 抖音视频批量下载工具 - 基于 F2 框架实现高效、增量的视频下载功能。支持单个/批量博主下载，自动 Cookie 管理，差量更新机制。本技能应在用户需要批量下载特定博主视频、服务器部署自动化下载、或定期更新视频库时使用。
 ---
@@ -118,6 +118,9 @@ python scripts/batch-download.py --sample
 
 # 自定义下载根目录/元数据库（v1.9.0+，staging 按运行隔离）
 python scripts/download-v2.py "https://www.douyin.com/user/MS4wLjABAAAA..." --root /path/to/videos --db /path/to/users.db
+
+# 导出只读 manifest v1（数据交接给分析端）
+python scripts/manifest.py export --db douyin_users.db --out <新目录>
 
 # 生成 Web 界面数据
 python scripts/generate-data.py

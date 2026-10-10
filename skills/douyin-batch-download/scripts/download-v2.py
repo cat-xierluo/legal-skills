@@ -152,17 +152,28 @@ def create_video_metadata_table():
 
 
 def save_video_metadata_from_raw(raw_data: dict, nickname: str = ""):
-    """从原始 API 响应中提取并保存视频统计数据"""
+    """从原始 API 响应中提取并保存视频统计数据。
+
+    DY-003: 除写 video_metadata(现行兼容行为不变)外,逐条追加
+    metric_snapshots 历史快照(同键同值幂等/同键不同值拒绝)。
+    指标缺失存 NULL,真实 0 存 0——旧表把缺失填 0 的语义自此可区分。
+    """
     aweme_list = raw_data.get("aweme_list", [])
     if not aweme_list:
         return 0
+
+    from manifest import ensure_snapshot_table, append_snapshot, ConflictError
 
     db_path = get_db_path()
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
     fetch_time = int(datetime.now().timestamp())
+    observed_at = datetime.now().isoformat(timespec="seconds")
     saved_count = 0
+    conflicts = []
+
+    ensure_snapshot_table(conn)
 
     for video in aweme_list:
         aweme_id = video.get("aweme_id", "")
@@ -196,8 +207,17 @@ def save_video_metadata_from_raw(raw_data: dict, nickname: str = ""):
         ))
         saved_count += 1
 
+        try:
+            append_snapshot(conn, aweme_id, observed_at, "download-v2/aweme_list", stats)
+        except ConflictError as e:
+            conflicts.append(str(e))
+
     conn.commit()
     conn.close()
+    if conflicts:
+        for c in conflicts[:5]:
+            print(f"[冲突] {c}")
+        raise ConflictError(f"{len(conflicts)} 条快照冲突(同键不同值),已拒绝;video_metadata 已按现行语义写入")
     return saved_count
 
 
