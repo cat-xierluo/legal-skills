@@ -88,8 +88,14 @@ def append_snapshot(conn: sqlite3.Connection, aweme_id: str, observed_at: str,
     ).fetchone()
     if row is not None:
         existing = {k: row[i] for i, k in enumerate(METRIC_KEYS)}
+        existing_window = row[len(METRIC_KEYS)]
+        if existing == values and existing_window == window:
+            return False  # 幂等: 指标与窗口完全一致的重复快照
         if existing == values:
-            return False  # 幂等: 完全一致的重复快照
+            raise ConflictError(
+                f"快照冲突: aweme_id={aweme_id} observed_at={observed_at} "
+                f"source={source} 指标一致但 window 不同"
+                f"(存量={existing_window!r} vs 本次={window!r});拒绝覆盖")
         raise ConflictError(
             f"快照冲突: aweme_id={aweme_id} observed_at={observed_at} "
             f"source={source} 已存在且值不同(拒绝覆盖)")
@@ -321,6 +327,20 @@ def migrate_legacy(db_path: Path, in_place_confirm: str = None) -> dict:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
+        # 守卫(审计 R1-P2):已有采集快照时 DROP 会误删——生产库必须先备份并
+        # 由明确采用方案处理,本工具只在"迁移前无快照表/空表"的副本上执行
+        pre = conn.execute(
+            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{SNAPSHOT_TABLE}'"
+        ).fetchone()
+        if pre is not None:
+            n_real = conn.execute(
+                f"SELECT count(*) FROM {SNAPSHOT_TABLE} WHERE source != 'legacy/video_metadata'"
+            ).fetchone()[0]
+            if n_real > 0:
+                raise ManifestError(
+                    f"{SNAPSHOT_TABLE} 已含 {n_real} 条非 legacy 采集快照——回滚(DROP)会误删;"
+                    f"生产采用须先备份并单独立案,不在本工具范围"
+                    f"(纯 legacy 快照的幂等重跑不受此限)")
         ensure_snapshot_table(conn)
         rows = conn.execute(
             "SELECT aweme_id, digg_count, comment_count, collect_count, share_count, "

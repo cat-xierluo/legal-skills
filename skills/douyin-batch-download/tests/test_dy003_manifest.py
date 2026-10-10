@@ -125,6 +125,27 @@ class TestSnapshots(unittest.TestCase):
         with self.assertRaises(mf.ManifestError):
             mf.append_snapshot(self.conn, "AW1", "t1", "t/source", {"digg_count": "很多"})
 
+    def test_23_window_in_idempotency(self):
+        """审计 R1-P2:同键同指标不同 window → 冲突拒绝(不再误判幂等)"""
+        mf.append_snapshot(self.conn, "AW1", "t1", "s/x",
+                           {"digg_count": 10}, window="daily")
+        with self.assertRaises(mf.ConflictError):
+            mf.append_snapshot(self.conn, "AW1", "t1", "s/x",
+                               {"digg_count": 10}, window="weekly")
+        # 完全一致(含 window)仍幂等
+        self.assertFalse(mf.append_snapshot(self.conn, "AW1", "t1", "s/x",
+                                            {"digg_count": 10}, window="daily"))
+
+    def test_24_migrate_refuses_existing_snapshots(self):
+        """审计 R1-P2:已有采集快照的库拒绝 migrate(DROP 会误删)"""
+        conn = sqlite3.connect(str(self.db))
+        mf.ensure_snapshot_table(conn)
+        mf.append_snapshot(conn, "AW1", "t1", "download-v2/aweme_list", {"digg_count": 1})
+        conn.commit(); conn.close()
+        with self.assertRaises(mf.ManifestError) as cm:
+            mf.migrate_legacy(self.db)
+        self.assertIn("误删", str(cm.exception))
+
 
 class TestExportCLI(unittest.TestCase):
     """真实 CLI: 只读导出、缺播放比例 null、输出保护、源库不变"""
