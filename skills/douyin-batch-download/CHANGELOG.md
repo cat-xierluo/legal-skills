@@ -15,8 +15,17 @@
   - 退出码契约：0=成功（含零新增），1=失败（无法解析用户/下载异常/同步失败）；失败不更新 `last_fetch_time`，已有视频与状态保持原样
 - `sync-following.py`：db 缺失/写入失败返回非零（旧版恒退出 0）；视频计数改用与下载器同一配置源（`utils.config`），不再硬编码 `~/Downloads/抖音视频下载`
 
+### 修复
+
+- `compress.py` 失败退出码与源文件替换保护（DY-002）：
+  - 单文件/目录/全量模式失败返回退出码 `1`（旧版失败也退出 0，上层把失败当成功）；跳过小文件仍是成功结果（退出 0）
+  - 替换改为「校验后原子替换」：ffprobe 核输出可读 + 时长与源一致（容差 max(1s,2%)），`os.replace` 原子落盘——废除旧版「先 unlink 原片再 rename」的失败窗口
+  - 临时输出命名 `.<stem>.compressing.mp4.tmp`：不匹配 `*.mp4`/`*_compressed.mp4`，旧版 `.tmp.mp4` 会被扫描器/pipeline 当有效视频消费的隐患消除；ffmpeg 显式 `-f mp4`
+  - 符号链接源在替换模式下拒绝压缩（归属不明）
+
 ### 新增
 
+- `tests/test_dy002_compress_safety.py` 隔离回归 10 用例：真实 ffmpeg 合成视频成功/替换/跳过路径、垃圾输入失败源 SHA 不变、故障注入（输出无效/时长漂移/替换失败）源保全与临时清理、临时命名扫描不可见、符号链接拒绝、旧命令兼容
 - `download-v2.py --root/--db` 显式覆盖下载根目录与元数据库；`--db` 覆盖时不写默认 `following.json`（防跨库污染清单）
 - `sync-following.py --root/--db/--following/--no-html`（测试与流水线隔离用；`--following` 覆盖时默认不生成 index.html 防覆写技能页）
 - `utils/config.py` 运行时覆盖机制（`set_overrides`/`get_active_overrides`），CLI 显式传参、不经环境变量

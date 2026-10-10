@@ -125,6 +125,8 @@ python scripts/compress.py --file video.mp4
 python scripts/compress.py --replace
 ```
 
+**退出码与安全契约（v1.9.0 起）**：`0`=成功或明确跳过（小文件/低分辨率）；`1`=失败（ffmpeg 非零、输出校验不过、替换失败、符号链接拒绝替换），失败时源文件字节不变。替换前会经 ffprobe 校验输出可读且时长与源一致（容差 max(1s, 2%)），再用原子替换落盘；压缩中的临时文件命名为 `.<stem>.compressing.mp4.tmp`，不会被 `*.mp4` 扫描当作有效视频。
+
 ## Web 管理界面
 
 **简洁方案（推荐）**：双击直接打开，无需服务器

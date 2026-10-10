@@ -16,6 +16,16 @@
     python scripts/compress.py --user <folder>          # 压缩指定用户视频
     python scripts/compress.py --file <video.mp4>        # 压缩单个文件
     python scripts/compress.py --keep                    # 保留原文件
+
+DY-002（2026-10-10）失败退出码与源文件替换保护：
+- 临时输出命名为隐藏文件 `.<stem>.compressing.mp4.tmp`（不匹配 *.mp4 /
+  *_compressed.mp4，扫描器与 pipeline 不会当作有效视频消费）。
+- 替换前用 ffprobe 核验输出可读、时长与源一致（容差 1s 或 2%），
+  校验通过后用 os.replace 原子替换——不再先 unlink 原片（旧版失败窗口
+  可能留下无原文件的现场）。
+- 失败（ffmpeg 非零/输出无效/替换失败/符号链接或归属不明）只清理本次
+  临时文件，源文件字节不变，返回 False；单文件模式退出码 1，目录/全量
+  模式任一失败退出码 1。跳过小文件属明确成功结果（退出码 0）。
 """
 
 import subprocess
@@ -40,6 +50,10 @@ SMALL_FILE_THRESHOLD = 5 * 1024 * 1024  # 5MB
 # 低分辨率阈值（高度），低于此值的视频跳过压缩
 # 原因：激进模式会降低分辨率，对已低分辨率视频无意义
 LOW_RESOLUTION_THRESHOLD = 720  # 720p 高度
+
+# 输出时长校验容差：绝对 1s 与相对 2% 取大者
+DURATION_TOLERANCE_SEC = 1.0
+DURATION_TOLERANCE_RATIO = 0.02
 
 
 def check_ffmpeg():
@@ -105,6 +119,7 @@ def compress_video(input_path, output_path, replace=True, crf=32, preset="fast",
     """
     info = get_video_info(input_path)
     original_size = info["size"] if info else 0
+    src_duration = info.get("duration", 0.0) if info else 0.0
     height = info.get("height", 0) if info else 0
 
     print(f"  压缩: {input_path.name}")
@@ -120,6 +135,11 @@ def compress_video(input_path, output_path, replace=True, crf=32, preset="fast",
         print(f"    跳过 (分辨率 {height}p 已低于阈值 {LOW_RESOLUTION_THRESHOLD}p)")
         return None  # 返回 None 表示跳过
 
+    # 替换模式下拒绝符号链接：替换会动到链接目标，归属无法保证
+    if replace and input_path.is_symlink():
+        print(f"    ✗ 拒绝替换 (源是符号链接, 归属不明): {input_path}")
+        return False
+
     # ffmpeg 命令
     if aggressive:
         # 激进模式：降低分辨率 + 降低音频码率
@@ -132,6 +152,7 @@ def compress_video(input_path, output_path, replace=True, crf=32, preset="fast",
             "-c:a", "aac",
             "-b:a", "64k",  # 降低音频码率
             "-movflags", "+faststart",
+            "-f", "mp4",  # 临时输出以 .tmp 结尾,显式指定容器格式
             "-y",
             str(output_path)
         ]
@@ -145,6 +166,7 @@ def compress_video(input_path, output_path, replace=True, crf=32, preset="fast",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
+            "-f", "mp4",  # 临时输出以 .tmp 结尾,显式指定容器格式
             "-y",
             str(output_path)
         ]
@@ -152,27 +174,68 @@ def compress_video(input_path, output_path, replace=True, crf=32, preset="fast",
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"    ✗ 压缩失败: {result.stderr}")
+        print(f"    ✗ 压缩失败: {result.stderr[-500:]}")
+        _cleanup(output_path)
+        return False
+
+    # 校验输出：ffprobe 可读 + 大小 > 0 + 时长与源一致
+    # （不能凭 ffmpeg 退出 0 就认定产出了有效媒体）
+    out_info = get_video_info(output_path)
+    if not out_info or out_info.get("size", 0) <= 0:
+        print(f"    ✗ 输出无效 (ffprobe 不可读或大小为 0), 已清理临时文件, 源保持原样")
+        _cleanup(output_path)
+        return False
+    if not _duration_ok(src_duration, out_info.get("duration", 0.0)):
+        print(f"    ✗ 输出时长异常 (源 {src_duration:.2f}s vs 输出 {out_info.get('duration', 0.0):.2f}s), 已清理, 源保持原样")
+        _cleanup(output_path)
         return False
 
     # 获取压缩后大小
-    compressed_info = get_video_info(output_path)
-    compressed_size = compressed_info["size"] if compressed_info else 0
+    compressed_size = out_info["size"]
 
     # 计算压缩率
     if original_size > 0 and compressed_size > 0:
         ratio = (1 - compressed_size / original_size) * 100
         print(f"    压缩后: {format_size(compressed_size)} (压缩率: {ratio:.1f}%)")
 
-    # 如果需要替换原文件
+    # 替换原文件：os.replace 原子替换（临时文件与源同目录, 同一文件系统）。
+    # 不再先 unlink 原片——旧版失败窗口可能留下无原文件的现场。
     if replace:
-        input_path.unlink()
-        output_path.rename(input_path)
-        print(f"    已替换原文件")
+        try:
+            os.replace(output_path, input_path)
+            print(f"    已替换原文件")
+        except OSError as e:
+            print(f"    ✗ 替换失败 ({e}), 已清理临时文件, 源保持原样")
+            _cleanup(output_path)
+            return False
     else:
         print(f"    输出: {output_path}")
 
     return True
+
+
+def _cleanup(path):
+    """仅清理本次临时输出；失败容忍（不存在即无事）"""
+    try:
+        if path and Path(path).exists():
+            Path(path).unlink()
+    except OSError:
+        pass
+
+
+def temp_output_path(input_path) -> Path:
+    """本次压缩的临时输出：同目录隐藏文件、.tmp 结尾——
+    不匹配 *.mp4 与 *_compressed.mp4，扫描器/pipeline 不会当有效视频消费。"""
+    p = Path(input_path)
+    return p.parent / f".{p.stem}.compressing.mp4.tmp"
+
+
+def _duration_ok(src_duration: float, out_duration: float) -> bool:
+    """输出时长与源一致校验（容差 = max(1s, 2%));源时长未知时不做时长卡口"""
+    if src_duration <= 0:
+        return True
+    tol = max(DURATION_TOLERANCE_SEC, src_duration * DURATION_TOLERANCE_RATIO)
+    return abs(out_duration - src_duration) <= tol
 
 
 def is_already_compressed(video_path):
@@ -208,7 +271,7 @@ def compress_user_dir(user_dir, replace=True, skip_small=True, **kwargs):
             continue
 
         if replace:
-            output = video.parent / f"{video.stem}.tmp.mp4"
+            output = temp_output_path(video)
         else:
             output = video.parent / f"{video.stem}_compressed.mp4"
 
@@ -223,6 +286,7 @@ def compress_user_dir(user_dir, replace=True, skip_small=True, **kwargs):
         print()
 
     print(f"完成: {success_count} 成功, {skipped_count} 跳过, {failed_count} 失败")
+    return failed_count
 
 
 def compress_all(replace=True, skip_small=True, **kwargs):
@@ -239,8 +303,10 @@ def compress_all(replace=True, skip_small=True, **kwargs):
     print(f"下载目录: {DOWNLOADS_PATH}")
     print(f"找到 {len(user_dirs)} 个用户目录\n")
 
+    total_failed = 0
     for user_dir in sorted(user_dirs):
-        compress_user_dir(user_dir, replace, skip_small, **kwargs)
+        total_failed += compress_user_dir(user_dir, replace, skip_small, **kwargs) or 0
+    return total_failed
 
 
 def main():
@@ -325,20 +391,25 @@ def main():
             sys.exit(1)
 
         if replace:
-            output = file_path.parent / f"{file_path.stem}.tmp.mp4"
+            output = temp_output_path(file_path)
         else:
             output = file_path.parent / f"{file_path.stem}_compressed.mp4"
 
-        compress_video(file_path, output, replace, args.crf, args.preset, skip_small, args.aggressive)
+        result = compress_video(file_path, output, replace, args.crf, args.preset, skip_small, args.aggressive)
+        if result is False:
+            sys.exit(1)  # 失败必须非零退出,源文件已保持原样
+        sys.exit(0)
 
     elif args.user:
         # 压缩指定用户目录
         user_dir = DOWNLOADS_PATH / args.user
-        compress_user_dir(user_dir, replace, skip_small, crf=args.crf, preset=args.preset, aggressive=args.aggressive)
+        failed = compress_user_dir(user_dir, replace, skip_small, crf=args.crf, preset=args.preset, aggressive=args.aggressive)
+        sys.exit(1 if failed else 0)
 
     else:
         # 压缩全部
-        compress_all(replace, skip_small, crf=args.crf, preset=args.preset, aggressive=args.aggressive)
+        failed = compress_all(replace, skip_small, crf=args.crf, preset=args.preset, aggressive=args.aggressive)
+        sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":
