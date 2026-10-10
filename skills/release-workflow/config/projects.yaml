@@ -149,20 +149,22 @@ fathom:
   project_notes:
     platform_scope: macOS only (Apple Silicon arm64); Intel Mac 在计划中；Windows 不在当前计划（DEC-026）
     signing: 未签名 + DMG 内放行指引（DEC-022）
-    upgrade_path: v0.3.0 → v0.3.1 须手动下载覆盖一次（dev 公钥验不了生产签名）；v0.3.1+ 应用内更新启用
+    upgrade_path: v0.3.0 及更早需手动覆盖（公钥变化）；0.3.6 已实测 helper 未回收导致安装准备失败，0.4.0 代码仍无修复，旧客户端先手动安装含修复的新版本一次。中间版本未逐一实测，不笼统保证 v0.3.1+ 更新成功。
   release_rules:
     发布顺序:
     - tag 推送触发 workflow（Draft，绝不跳过 draft 直发）
     - 构建全绿后 verify_release_candidate.sh --release <tag> 六项校验全过
     - verify_update_manifest.py --manifest latest.json --allow-single-platform 通过
+    - 标准 minisign 验证 tar.gz 与解码的 sig，公钥取自旧客户端；latest.json signature 与 sig 完全一致
+    - 真实隔离 .app 入口验证 prepare 退出与回收、备份、替换、重启及失败恢复，不以额外测试回收线程替代生产路径
     - 按 desktop-standard 模板写 release notes 后 gh release edit
-    - 用户确认后才 publish（publish 前更新源不可达属预期）
+    - 完整候选验证后沿该版本既有明确发布授权 publish，缺授权才确认（publish 前更新源不可达属预期）
     发版前门禁:
-    - ci_pytest.sh 全量（当前断言 720，计数变更须四处同步）
+    - ci_pytest.sh 全量，期望计数以当前 CI 与本地入口为准，变更须同步
     - check_version_consistency.sh ok（单一版本源四处：fathom/__init__.py / Cargo.toml / Cargo.lock
       / tauri.conf.json）
     - 版本 bump 后字面锚检查：test_version_consistency 已动态化（CURRENT 常量）、build_helper 身份面断言已动态化——新增测试/脚本禁止硬编码版本号
-    - verify_frontend_refresh.cjs（当前 132）+ ci_browser_checks.sh 39
+    - ci_browser_checks.sh 全部套件，期望计数以当前 CI 与本地入口为准
     产物特例:
     - Tauri v2 updater 产物名为 <App>.app.tar.gz（不带版本）——workflow 上传前重命名为 Fathom_<版本>_aarch64.app.tar.gz
       以过 040A 清单工具的版本-产物守卫
@@ -170,11 +172,11 @@ fathom:
     - 仅 arm64（--allow-single-platform）；Intel/Windows 不在计划（DEC-026）
     已知陷阱（v0.3.1 六轮实战）:
     - git push 代理挂（127.0.0.1:1082 拒连）时直连：git -c http.proxy= -c https.proxy= push
-    - gh pr merge 偶发 TLS/EOF：重试；持续失败走本地 git merge + push（PR 自动标 MERGED）
+    - PR 合并故障先只读核状态与精确 head，沿 git-workflow 处理；不在共享主目录 merge/push 绕过审查门禁
     - GitHub mergeability 计算有延迟：UNKNOWN 时等 5-8 秒重查
     - 编辑脚本改文件必须读/改/写三步分离（open(w) 先清空文件的求值陷阱）
     - release.yml 的 shell 里 $() 命令替换内嵌双引号段会切碎参数——用相对路径+完整闭合写法（与版本门同款）
     - '红态基线演示测试（test_zz_red_demo）依赖历史提交——CI checkout 必须 fetch-depth: 0'
     notes_规范补充: v0.3.1 的 Release notes 为范本（摘要 blockquote + Highlights 分条 + 下载表 + 放行指引
       + 验证 + 已知限制 + 升级路径）；未签名提示与 xattr -cr 命令必含；语言 zh-CN
-    升级路径提醒: v0.3.0 及更早用户须手动下载覆盖一次（dev 公钥验不了生产签名）；v0.3.1+ 应用内更新——首个真实 N→N+1 实测待下一版触发
+    升级路径提醒: 按已验证旧客户端范围分别记录；0.3.6→0.4.0 实测在 prepare 失败，需手动覆盖含修复的版本一次；新壳的准备/回滚已验不等于完整 GUI 下载/替换/重启已验。
