@@ -12,23 +12,31 @@
 用法：
     python scripts/download-v2.py <主页URL>
     python scripts/download-v2.py <主页URL> --max-counts=10
+    python scripts/download-v2.py <主页URL> --root <目录> --db <douyin_users.db>
 
-优势：
-- 不增加额外 API 请求（数据在下载时已获取）
-- 自动保存视频统计数据到数据库
-- 使用博主昵称作为文件夹名（更易识别）
+DY-001（2026-10-10）下载隔离与身份/路径契约：
+- 下载 staging 按「每次运行」隔离：<root>/.f2-staging/run-<时间戳>-<pid>/，
+  F2 仍写 <staging>/douyin/post/<昵称>/；整理完成后把有效媒体发布到
+  <root>/<安全昵称>/，再清理本次 staging。绝不触碰共享 <root>/douyin/
+  （旧版启动时 rmtree 该目录会删除并发运行的在途材料）。
+- 超过 24h 的历史 staging 视为崩溃残留可清理（下载单博主上限 900s）。
+- 作者身份按当前 URL 解析出的 sec_user_id 精确查询，不再取数据库最后一行。
+- --root/--db 显式覆盖下载根目录与元数据库；db 覆盖时不写默认 following.json
+  （following.json 绑定默认库，跨库重建会污染清单）。
+- 退出码：0=成功（含零新增）；1=失败（无法解析用户/下载异常/同步失败），
+  失败时不更新 last_fetch_time，已有视频与状态保持原样。
 """
 
 import shutil
 import sqlite3
 import asyncio
 import sys
-import yaml
 import os
-import re
+import time
+import uuid
+import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List
 
 # 强制使用脚本所在目录作为工作目录
 SKILL_DIR = Path(__file__).parent.parent.resolve()
@@ -41,6 +49,8 @@ from utils.config import (
     get_user_folder_name,
     sanitize_folder_name,
     load_config,
+    set_overrides,
+    get_active_overrides,
 )
 
 # 导入 F2 模块
@@ -48,6 +58,9 @@ from f2.apps.douyin.handler import DouyinHandler
 from f2.apps.douyin.db import AsyncUserDB, AsyncVideoDB
 from f2.utils.conf_manager import ConfigManager
 import f2
+
+# staging 清理阈值：下载单博主超时 900s，24h 远超任何合法运行
+STAGING_MAX_AGE_HOURS = 24
 
 
 def merge_config(main_conf: dict, custom_conf: dict) -> dict:
@@ -61,8 +74,8 @@ def merge_config(main_conf: dict, custom_conf: dict) -> dict:
     return result
 
 
-def get_f2_kwargs() -> dict:
-    """获取 F2 所需的配置参数"""
+def get_f2_kwargs(staging_root: Path) -> dict:
+    """获取 F2 所需的配置参数（下载写入本次运行独立的 staging 目录）"""
     # 加载 F2 默认配置
     try:
         main_conf_manager = ConfigManager(f2.F2_CONFIG_FILE_PATH)
@@ -82,8 +95,8 @@ def get_f2_kwargs() -> dict:
     kwargs["app_name"] = "douyin"
     kwargs["mode"] = "post"
 
-    # 设置路径 - 使用统一配置模块
-    kwargs["path"] = str(get_download_path())
+    # 设置路径 - 指向本次运行的独立 staging（F2 落盘 <path>/douyin/post/<昵称>/）
+    kwargs["path"] = str(staging_root)
 
     # 确保 cookie 存在
     if not kwargs.get("cookie"):
@@ -188,15 +201,52 @@ def save_video_metadata_from_raw(raw_data: dict, nickname: str = ""):
     return saved_count
 
 
-def reorganize_files(nickname: str, uid: str) -> str:
-    """整理文件到下载目录/{博主昵称}/"""
+# ============ staging 管理（DY-001：每次运行只操作自己的临时材料） ============
+
+def make_staging_root(downloads_path: Path) -> Path:
+    """创建本次运行独立的 staging 目录，并清理超龄崩溃残留"""
+    staging_base = downloads_path / ".f2-staging"
+    staging_base.mkdir(parents=True, exist_ok=True)
+    _sweep_stale_staging(staging_base)
+    staging_root = staging_base / f"run-{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    staging_root.mkdir(parents=True, exist_ok=True)
+    return staging_root
+
+
+def _sweep_stale_staging(staging_base: Path, max_age_hours: int = STAGING_MAX_AGE_HOURS):
+    """清理超过阈值的 run-* staging 目录（只匹配本命名约定，绝不碰共享 douyin/）"""
+    cutoff = time.time() - max_age_hours * 3600
+    if not staging_base.exists():
+        return
+    for d in staging_base.iterdir():
+        if not d.is_dir() or not d.name.startswith("run-"):
+            continue
+        try:
+            if d.stat().st_mtime < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+                print(f"[清理] 过期 staging 残留: {d.name}")
+        except OSError:
+            pass  # 正被并发访问等异常时留给下一轮
+
+
+def cleanup_staging(staging_root: Path):
+    """清理本次运行自己的 staging 目录（失败容忍：残留交给超龄清扫）"""
+    if staging_root and staging_root.exists():
+        shutil.rmtree(staging_root, ignore_errors=True)
+
+
+def reorganize_files(nickname: str, uid: str, staging_root: Path) -> str:
+    """把 staging 内该作者的有效媒体发布到 <root>/<安全昵称>/
+
+    只读自己的 staging，不动共享 <root>/douyin/ 与其他作者的目录。
+    """
     downloads_path = get_download_path()
-    old_path = downloads_path / "douyin" / "post" / nickname
+    old_path = staging_root / "douyin" / "post" / nickname
 
     if not old_path.exists():
         return None
 
-    # 使用博主昵称作为文件夹名
+    # 使用博主昵称作为文件夹名（清理非法字符）
     folder_name = get_user_folder_name(nickname, uid)
     new_path = downloads_path / folder_name
     new_path.mkdir(parents=True, exist_ok=True)
@@ -210,13 +260,6 @@ def reorganize_files(nickname: str, uid: str) -> str:
                 shutil.move(str(f), str(dest))
                 moved_count += 1
 
-    # 清理旧文件夹
-    if old_path.exists():
-        try:
-            shutil.rmtree(old_path)
-        except:
-            pass
-
     if moved_count > 0:
         print(f"  [移动] {nickname} -> {folder_name} ({moved_count} 文件)")
 
@@ -224,7 +267,7 @@ def reorganize_files(nickname: str, uid: str) -> str:
 
 
 def update_last_fetch_time(uid: str, nickname: str = ""):
-    """更新 following.json 中的 last_fetch_time"""
+    """更新 following.json 中的 last_fetch_time（仅默认库模式）"""
     try:
         from following import update_fetch_time
         update_fetch_time(uid, nickname)
@@ -233,160 +276,199 @@ def update_last_fetch_time(uid: str, nickname: str = ""):
         pass
 
 
-def run_sync():
-    """运行 sync-following.py"""
+def run_sync(root: Path) -> bool:
+    """运行 sync-following.py（跟随实际 root）；失败返回 False"""
     import subprocess
-    subprocess.run([sys.executable, str(SKILL_DIR / "scripts" / "sync-following.py")])
+    proc = subprocess.run(
+        [sys.executable, str(SKILL_DIR / "scripts" / "sync-following.py"),
+         "--root", str(root)],
+    )
+    return proc.returncode == 0
 
 
-async def download_with_stats(url: str, max_counts: int = None):
+def get_author_by_sec_uid(sec_user_id: str):
+    """按当前 URL 解析出的 sec_user_id 精确查询作者（不再取数据库最后一行）"""
+    conn = sqlite3.connect(str(get_db_path()))
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT uid, nickname FROM user_info_web WHERE sec_user_id = ? "
+        "ORDER BY ROWID DESC LIMIT 1",
+        (sec_user_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return (row[0], row[1]) if row else (None, None)
+
+
+async def download_with_stats(url: str, max_counts: int = None,
+                              root: str = None, db: str = None) -> bool:
     """
     使用 F2 API 下载视频并保存统计数据
 
     Args:
         url: 用户主页 URL
         max_counts: 最大下载数量
+        root: 显式下载根目录覆盖（None=配置/默认）
+        db: 显式元数据库覆盖（None=默认；覆盖时不写默认 following.json）
+
+    Returns:
+        bool: True=成功（含零新增）；False=失败（不更新 last_fetch_time）
     """
-    # 获取配置
-    kwargs = get_f2_kwargs()
-    kwargs["url"] = url
+    # 应用运行时覆盖（影响 get_download_path/get_db_path 及其所有消费者）
+    set_overrides(download_root=root, db_path=db)
+    using_default_db = not get_active_overrides()["db_path"]
+
+    try:
+        kwargs = get_f2_kwargs(Path(get_download_path()))  # cookie 校验提前
+    except ValueError as e:
+        print(f"[错误] {e}")
+        return False
+
+    downloads_path = get_download_path()
+    staging_root = make_staging_root(downloads_path)
+    kwargs["path"] = str(staging_root)
 
     if max_counts:
         kwargs["max_counts"] = max_counts
-
-    downloads_path = get_download_path()
-
-    # 清理临时目录
-    f2_temp_path = downloads_path / "douyin"
-    if f2_temp_path.exists():
-        shutil.rmtree(f2_temp_path)
-        print("[清理] F2 临时目录")
+    kwargs["url"] = url
 
     print(f"[下载] 开始下载...")
-    print(f"[路径] {downloads_path}")
+    print(f"[路径] {downloads_path} (staging: {staging_root.name})")
 
     # 创建元数据表
     create_video_metadata_table()
 
-    # 初始化 Handler
-    handler = DouyinHandler(kwargs)
+    try:
+        # 初始化 Handler
+        handler = DouyinHandler(kwargs)
 
-    # 解析 sec_user_id
-    from f2.apps.douyin.utils import SecUserIdFetcher
-    sec_user_id = await SecUserIdFetcher.get_sec_user_id(url)
+        # 解析 sec_user_id
+        from f2.apps.douyin.utils import SecUserIdFetcher
+        sec_user_id = await SecUserIdFetcher.get_sec_user_id(url)
 
-    if not sec_user_id:
-        print("[错误] 无法解析用户 ID")
-        return
+        if not sec_user_id:
+            print("[错误] 无法解析用户 ID")
+            return False
 
-    print(f"[信息] sec_user_id: {sec_user_id[:30]}...")
+        print(f"[信息] sec_user_id: {sec_user_id[:30]}...")
 
-    # 获取用户信息并保存
-    async with AsyncUserDB(str(get_db_path())) as db:
-        user_path = await handler.get_or_add_user_data(kwargs, sec_user_id, db)
+        # 获取用户信息并保存
+        async with AsyncUserDB(str(get_db_path())) as db_conn:
+            user_path = await handler.get_or_add_user_data(kwargs, sec_user_id, db_conn)
 
-    # 从数据库获取用户信息（昵称）
-    conn = sqlite3.connect(str(get_db_path()))
-    cursor = conn.cursor()
-    cursor.execute("SELECT uid, nickname FROM user_info_web ORDER BY ROWID DESC LIMIT 1")
-    user_info = cursor.fetchone()
-    conn.close()
+        # 按当前作者精确取身份（历史 bug：取最后一行会在并发/多作者时串号）
+        uid, nickname = get_author_by_sec_uid(sec_user_id)
+        if not uid:
+            print(f"[错误] 数据库中找不到 sec_user_id={sec_user_id[:20]}... 的作者记录")
+            return False
 
-    uid = user_info[0] if user_info else ""
-    nickname = user_info[1] if user_info else ""
-
-    if nickname:
         print(f"[博主] {nickname} (UID: {uid})")
 
-    # 收集所有视频数据
-    all_videos = []
-    total_downloaded = 0
-    total_stats_saved = 0
+        # 收集所有视频数据
+        total_downloaded = 0
+        total_stats_saved = 0
 
-    print("[下载] 正在获取视频列表...")
+        print("[下载] 正在获取视频列表...")
 
-    async for aweme_data_list in handler.fetch_user_post_videos(
-        sec_user_id,
-        max_counts=max_counts or float("inf")
-    ):
-        # 获取视频数据列表（用于下载）
-        video_list = aweme_data_list._to_list()
+        async for aweme_data_list in handler.fetch_user_post_videos(
+            sec_user_id,
+            max_counts=max_counts or float("inf")
+        ):
+            # 获取视频数据列表（用于下载）
+            video_list = aweme_data_list._to_list()
 
-        if video_list:
-            all_videos.extend(video_list)
+            if video_list:
+                # 从原始数据中保存统计数据（不增加额外请求）
+                raw_data = aweme_data_list._to_raw()
+                stats_saved = save_video_metadata_from_raw(raw_data, nickname)
+                total_stats_saved += stats_saved
 
-            # 从原始数据中保存统计数据（不增加额外请求）
-            raw_data = aweme_data_list._to_raw()
-            stats_saved = save_video_metadata_from_raw(raw_data, nickname)
-            total_stats_saved += stats_saved
+                # 创建下载任务
+                await handler.downloader.create_download_tasks(
+                    kwargs, video_list, user_path
+                )
 
-            # 创建下载任务
-            await handler.downloader.create_download_tasks(
-                kwargs, video_list, user_path
-            )
+                total_downloaded += len(video_list)
+                print(f"[下载] 已处理 {total_downloaded} 个视频...")
 
-            total_downloaded += len(video_list)
-            print(f"[下载] 已处理 {total_downloaded} 个视频...")
+        # 显示统计结果
+        print(f"[统计] 保存了 {total_stats_saved} 条视频元数据（含点赞/评论等数据）")
 
-    # 显示统计结果
-    print(f"[统计] 保存了 {total_stats_saved} 条视频元数据（含点赞/评论等数据）")
+        # 整理文件（只从本次 staging 发布）
+        print("[整理] 重新组织文件...")
+        post_path = staging_root / "douyin" / "post"
+        folder_name = None
+        if post_path.exists():
+            for folder in sorted(post_path.iterdir()):
+                if folder.is_dir():
+                    folder_name = reorganize_files(folder.name, uid, staging_root)
 
-    # 整理文件
-    print("[整理] 重新组织文件...")
-    post_path = downloads_path / "douyin" / "post"
-    folder_name = None
-    if post_path.exists():
-        for folder in post_path.iterdir():
-            if folder.is_dir():
-                folder_name = reorganize_files(folder.name, uid)
+        # 同步 following.json：仅默认库模式（跨库重建会污染默认清单）
+        sync_ok = True
+        if using_default_db:
+            print("[同步] 更新 following.json...")
+            sync_ok = run_sync(downloads_path)
+            if not sync_ok:
+                print("[失败] sync-following 返回非零，last_fetch_time 不更新")
+        else:
+            print("[跳过] 使用自定义 --db，不更新默认 following.json")
 
-    # 更新 last_fetch_time
-    if folder_name:
-        update_last_fetch_time(uid, nickname or folder_name)
+        # 更新 last_fetch_time：仅全部成功时
+        if sync_ok and using_default_db:
+            update_last_fetch_time(uid, nickname or (folder_name or ""))
 
-    # 同步 following.json
-    print("[同步] 更新 following.json...")
-    run_sync()
+        print(f"\n[完成] 共下载 {total_downloaded} 个视频")
+        if folder_name:
+            print(f"[位置] {downloads_path / folder_name}")
 
-    print(f"\n[完成] 共下载 {total_downloaded} 个视频")
-    if folder_name:
-        print(f"[位置] {downloads_path / folder_name}")
+        return sync_ok
+
+    except Exception as e:
+        print(f"[失败] 下载中断: {e}")
+        return False
+    finally:
+        # 只清理本次运行自己的 staging；已有视频/状态/共享 douyin/ 不受影响
+        cleanup_staging(staging_root)
 
 
-async def main():
-    # 检查是否需要作为守护进程运行（由 batch-download.py 调用）
-    daemon_mode = "--daemon" in sys.argv
-    if daemon_mode:
-        sys.argv.remove("--daemon")
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        description="抖音视频下载 v2（staging 隔离 + 精确作者身份）",
+    )
+    parser.add_argument("url", nargs="?", help="用户主页 URL")
+    parser.add_argument("--max-counts", type=int, default=None, help="最大下载数量")
+    parser.add_argument("--daemon", action="store_true", help="后台守护模式（日志落盘）")
+    parser.add_argument("--task-id", default=None, help="守护模式任务 ID")
+    parser.add_argument("--root", default=None,
+                        help="显式下载根目录覆盖（默认: config.yaml download_path 或 ~/Downloads/抖音视频下载）")
+    parser.add_argument("--db", default=None,
+                        help="显式元数据库覆盖（默认: 技能目录 douyin_users.db；覆盖时不写默认 following.json）")
+    return parser.parse_args(argv)
 
-    if len(sys.argv) < 2:
+
+async def main(argv=None):
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+
+    if not args.url:
         print("用法: python scripts/download-v2.py <主页URL>")
         print("  示例: python scripts/download-v2.py https://www.douyin.com/user/xxx")
         print("  限制数量: python scripts/download-v2.py <URL> --max-counts=10")
+        print("  自定义目录/库: python scripts/download-v2.py <URL> --root <目录> --db <db>")
         print("  后台运行: python scripts/download-v2.py <URL> --daemon")
-        return
+        return 0
 
-    url = sys.argv[1]
-
-    # 解析参数
-    max_counts = None
-    task_id = None  # 任务 ID（守护模式使用）
-
-    for arg in sys.argv[2:]:
-        if arg.startswith("--max-counts="):
-            max_counts = int(arg.split("=")[1])
-        elif arg.startswith("--task-id="):
-            task_id = arg.split("=")[1]
+    url = args.url
 
     # 守护进程模式：立即输出进度信息后开始下载
-    if daemon_mode and task_id:
+    log_handle = None
+    if args.daemon and args.task_id:
         downloads_path = get_download_path()
-        log_file = downloads_path / "logs" / f"{task_id}.log"
+        log_file = downloads_path / "logs" / f"{args.task_id}.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
 
         # 打开日志文件并保持打开状态
         log_handle = open(log_file, "w", encoding="utf-8")
-        log_handle.write(f"[任务启动] {task_id}\n")
+        log_handle.write(f"[任务启动] {args.task_id}\n")
         log_handle.write(f"[URL] {url}\n")
         log_handle.write(f"[时间] {datetime.now().isoformat()}\n")
         log_handle.write("=" * 60 + "\n")
@@ -396,15 +478,16 @@ async def main():
         sys.stdout = log_handle
         sys.stderr = log_handle
 
-        print(f"[守护模式] 任务 {task_id} 已启动")
+        print(f"[守护模式] 任务 {args.task_id} 已启动")
         print(f"[日志] {log_file}")
 
-    await download_with_stats(url, max_counts)
+    ok = await download_with_stats(url, args.max_counts, args.root, args.db)
 
-    # 守护进程模式：关闭日志文件
-    if daemon_mode and task_id:
+    if log_handle:
         log_handle.close()
+
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

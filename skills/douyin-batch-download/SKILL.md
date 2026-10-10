@@ -2,7 +2,7 @@
 name: douyin-batch-download
 homepage: https://github.com/cat-xierluo/legal-skills
 author: 杨卫薪律师（微信ywxlaw）
-version: "1.8.1"
+version: "1.9.0"
 license: MIT
 description: 抖音视频批量下载工具 - 基于 F2 框架实现高效、增量的视频下载功能。支持单个/批量博主下载，自动 Cookie 管理，差量更新机制。本技能应在用户需要批量下载特定博主视频、服务器部署自动化下载、或定期更新视频库时使用。
 ---
@@ -46,7 +46,7 @@ description: 抖音视频批量下载工具 - 基于 F2 框架实现高效、增
 download_path: ""
 
 # 自定义路径示例：
-# download_path: "/Users/maoking/Movies/抖音"
+# download_path: "~/Movies/抖音"
 # download_path: "D:\\Videos\\抖音"
 ```
 
@@ -116,6 +116,9 @@ python scripts/batch-download.py
 # 采样下载（每个博主1个视频，快速更新数据）
 python scripts/batch-download.py --sample
 
+# 自定义下载根目录/元数据库（v1.9.0+，staging 按运行隔离）
+python scripts/download-v2.py "https://www.douyin.com/user/MS4wLjABAAAA..." --root /path/to/videos --db /path/to/users.db
+
 # 生成 Web 界面数据
 python scripts/generate-data.py
 
@@ -147,7 +150,7 @@ skills/douyin-batch-download/
 ├── scripts/
 │   ├── utils/                # 工具模块
 │   │   └── config.py         # 统一配置加载
-│   ├── download-v2.py        # ✅ 推荐下载脚本（自动保存统计数据）
+│   ├── download-v2.py        # ✅ 推荐下载脚本（自动保存统计数据；v1.9.0 起 staging 按运行隔离 + sec_user_id 精确身份 + --root/--db）
 │   ├── batch-download.py     # 批量下载入口
 │   ├── download.py           # ⚠️ 旧版下载脚本（已废弃）
 │   ├── manage-following.py   # 关注列表管理（添加/删除/搜索）

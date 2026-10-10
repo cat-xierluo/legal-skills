@@ -19,6 +19,27 @@ from typing import Optional, Dict, Any
 SKILL_DIR = Path(__file__).parent.parent.parent.resolve()
 CONFIG_PATH = SKILL_DIR / "config" / "config.yaml"
 
+# 运行时显式覆盖(DY-001):由 CLI --root/--db 设置,优先于配置文件与默认值。
+# 只影响当前进程;子进程通过显式 CLI 参数继承,不依赖环境变量。
+_OVERRIDE: Dict[str, Optional[str]] = {"download_root": None, "db_path": None, "following_path": None}
+
+
+def set_overrides(download_root: Optional[str] = None, db_path: Optional[str] = None,
+                  following_path: Optional[str] = None) -> None:
+    """设置运行时路径覆盖(None 表示该项不变;传入空字符串按清除处理)"""
+    if download_root is not None:
+        _OVERRIDE["download_root"] = str(download_root) if download_root else None
+    if db_path is not None:
+        _OVERRIDE["db_path"] = str(db_path) if db_path else None
+    if following_path is not None:
+        _OVERRIDE["following_path"] = str(following_path) if following_path else None
+    Paths.reset()
+
+
+def get_active_overrides() -> Dict[str, Optional[str]]:
+    """读取当前生效的覆盖(供调用方判断是否处于自定义 root/db 模式)"""
+    return dict(_OVERRIDE)
+
 
 def get_default_download_path() -> Path:
     """获取默认下载路径（系统 Downloads 目录下的抖音视频下载子目录）"""
@@ -91,18 +112,21 @@ def get_download_path() -> Path:
     """
     config = load_config()
 
-    # 从配置中读取
-    custom_path = config.get("download_path", "")
-
-    if custom_path:
-        # 展开用户目录 (~)
-        path = Path(custom_path).expanduser()
-        # 如果是相对路径，相对于技能目录
-        if not path.is_absolute():
-            path = SKILL_DIR / path
+    # 运行时显式覆盖优先(DY-001)
+    if _OVERRIDE["download_root"]:
+        path = Path(_OVERRIDE["download_root"]).expanduser()
     else:
-        # 使用默认路径
-        path = get_default_download_path()
+        # 从配置中读取
+        custom_path = config.get("download_path", "")
+        if custom_path:
+            # 展开用户目录 (~)
+            path = Path(custom_path).expanduser()
+            # 如果是相对路径，相对于技能目录
+            if not path.is_absolute():
+                path = SKILL_DIR / path
+        else:
+            # 使用默认路径
+            path = get_default_download_path()
 
     # 确保目录存在
     path.mkdir(parents=True, exist_ok=True)
@@ -162,21 +186,25 @@ def get_db_path() -> Path:
     """
     获取数据库路径
 
-    数据库统一存放在技能目录下，而不是下载目录
+    优先级：运行时显式覆盖(DY-001 --db) > 技能目录默认
 
     Returns:
-        数据库路径
+        数据库路径（绝对路径）
     """
+    if _OVERRIDE["db_path"]:
+        return Path(_OVERRIDE["db_path"]).expanduser().resolve()
     return SKILL_DIR / "douyin_users.db"
 
 
 def get_following_path() -> Path:
     """
-    获取 following.json 路径
+    获取 following.json 路径（运行时显式覆盖优先，DY-001）
 
     Returns:
         following.json 路径
     """
+    if _OVERRIDE["following_path"]:
+        return Path(_OVERRIDE["following_path"]).expanduser().resolve()
     return SKILL_DIR / "config" / "following.json"
 
 

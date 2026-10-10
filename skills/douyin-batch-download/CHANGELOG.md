@@ -4,6 +4,31 @@
 
 ---
 
+## [1.9.0] - 2026-10-10
+
+### 修复
+
+- `download-v2.py` 下载隔离与作者身份（DY-001）：
+  - 下载 staging 改为按运行隔离：`<root>/.f2-staging/run-<时间戳>-<pid>-<随机>/`，整理完成后把有效媒体发布到 `<root>/<安全昵称>/` 再清理本次 staging；不再于启动时 `rmtree` 共享 `<root>/douyin/`（旧版会删除并发运行的在途材料）
+  - 超 24h 的 `run-*` staging 视为崩溃残留自动清理（单博主下载上限 900s）
+  - 作者身份按当前 URL 解析出的 `sec_user_id` 精确查询，不再取数据库最后一行（多作者/并发写库时串号根因）
+  - 退出码契约：0=成功（含零新增），1=失败（无法解析用户/下载异常/同步失败）；失败不更新 `last_fetch_time`，已有视频与状态保持原样
+- `sync-following.py`：db 缺失/写入失败返回非零（旧版恒退出 0）；视频计数改用与下载器同一配置源（`utils.config`），不再硬编码 `~/Downloads/抖音视频下载`
+
+### 新增
+
+- `download-v2.py --root/--db` 显式覆盖下载根目录与元数据库；`--db` 覆盖时不写默认 `following.json`（防跨库污染清单）
+- `sync-following.py --root/--db/--following/--no-html`（测试与流水线隔离用；`--following` 覆盖时默认不生成 index.html 防覆写技能页）
+- `utils/config.py` 运行时覆盖机制（`set_overrides`/`get_active_overrides`），CLI 显式传参、不经环境变量
+- `tests/test_dy001_download_isolation.py` 隔离回归 13 用例：并发不互删、共享 douyin/ 不被触碰、非末行作者不串号、特殊字符昵称、--db 跳过默认清单、下载中断/同步失败保留旧视频与旧成功时间、真实 CLI 退出码
+
+### 改进
+
+- `following.py` 路径改为经 `utils.config` 动态解析（原模块常量在测试/覆盖场景不可注入）
+- F2 网络面在本轮回归中全部替身，真实联网下载行为 `NOT_VERIFIED`
+
+---
+
 ## [1.8.1] - 2026-09-23
 
 ### 文档完善
@@ -306,7 +331,7 @@ python scripts/download.py "https://www.douyin.com/user/xxx" --max-counts=3
 python scripts/download.py "https://www.douyin.com/user/xxx"
 
 # 直接用浏览器打开 index.html（或双击文件）
-open /Users/maoking/Library/Application\\ Support/maoscripts/skills/legal-skills/test/douyin-batch-download/downloads/index.html
+open <技能根>/test/douyin-batch-download/downloads/index.html
 ```
 
 ---
@@ -347,7 +372,7 @@ open /Users/maoking/Library/Application\\ Support/maoscripts/skills/legal-skills
 python scripts/generate-data.py
 
 # 2. 直接用浏览器打开 index.html（或双击文件）
-open /Users/maoking/Library/Application\\ Support/maoscripts/skills/legal-skills/test/douyin-batch-download/downloads/index.html
+open <技能根>/test/douyin-batch-download/downloads/index.html
 ```
 
 ---
@@ -388,7 +413,7 @@ open /Users/maoking/Library/Application\\ Support/maoscripts/skills/legal-skills
 
 ```bash
 # 直接用浏览器打开 index.html（无需服务器）
-open /Users/maoking/Library/Application\ Support/maoscripts/skills/legal-skills/test/douyin-batch-download/downloads/index.html
+open <技能根>/test/douyin-batch-download/downloads/index.html
 
 # 或者双击文件打开
 ```
@@ -414,7 +439,7 @@ open /Users/maoking/Library/Application\ Support/maoscripts/skills/legal-skills/
 
 ```bash
 # 启动本地 Web 服务器
-cd /Users/maoking/Library/Application\ Support/maoscripts/skills/legal-skills/test/douyin-batch-download
+cd <技能根>/test/douyin-batch-download
 python downloads/server.py
 
 # 然后在浏览器打开

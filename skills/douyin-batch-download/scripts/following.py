@@ -14,13 +14,27 @@ from typing import Optional
 
 # 获取 skill 根目录（scripts/ 的上一级）
 SKILL_DIR = Path(__file__).parent.parent.resolve()
-FOLLOWING_PATH = SKILL_DIR / "config" / "following.json"
-DB_PATH = SKILL_DIR / "douyin_users.db"
 
-# 导入配置工具
+# 导入配置工具（路径经 utils.config 统一解析，支持 DY-001 运行时覆盖）
 try:
-    from utils.config import sanitize_folder_name
+    from utils.config import sanitize_folder_name, get_following_path, get_db_path
+
+    def _following_path() -> Path:
+        return get_following_path()
+
+    def _db_path() -> Path:
+        return get_db_path()
+
 except ImportError:
+    FOLLOWING_PATH = SKILL_DIR / "config" / "following.json"
+    DB_PATH = SKILL_DIR / "douyin_users.db"
+
+    def _following_path() -> Path:
+        return FOLLOWING_PATH
+
+    def _db_path() -> Path:
+        return DB_PATH
+
     def sanitize_folder_name(name: str) -> str:
         """简单的文件夹名称清理"""
         import re
@@ -35,9 +49,10 @@ except ImportError:
 
 def load_following() -> dict:
     """加载 following.json，返回 {users: [...]} 格式"""
-    if FOLLOWING_PATH.exists():
+    following_path = _following_path()
+    if following_path.exists():
         try:
-            with open(FOLLOWING_PATH, encoding="utf-8") as f:
+            with open(following_path, encoding="utf-8") as f:
                 data = json.load(f)
                 # 确保格式正确
                 if "users" not in data:
@@ -50,8 +65,9 @@ def load_following() -> dict:
 
 def save_following(data: dict):
     """保存 following.json"""
-    FOLLOWING_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(FOLLOWING_PATH, "w", encoding="utf-8") as f:
+    following_path = _following_path()
+    following_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(following_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -193,7 +209,7 @@ def update_user_info_from_db(uid: str, last_fetch_time: str = None) -> bool:
         是否成功更新
     """
     try:
-        conn = sqlite3.connect(str(DB_PATH))
+        conn = sqlite3.connect(str(_db_path()))
         cursor = conn.cursor()
 
         # 先尝试用 uid 查找
