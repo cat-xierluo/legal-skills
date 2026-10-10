@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-10 | 更新 | [douyin-batch-download](skills/douyin-batch-download/) | v1.8.1→v1.11.0 | 下载 staging 按运行隔离+作者 sec_user_id 精确身份+--root/--db；压缩校验后原子替换与失败退出码；manifest v1 只读导出与指标历史快照（缺失≠0、播放分母缺失为 null）；封面按 aweme_id 绑定（修静态封面丢失缺口）。下载 zip 仍为已发布 1.8.1。 |
 | 2026-10-04 | 更新 | [git-workflow](skills/git-workflow/) | v1.17.1 | 默认创建时稀疏检出；精简触发说明与主入口，按场景读取参考；修复只读审计的未知/失败处理和身份测试退出码，新增隔离 Git 回归。 |
 | 2026-10-04 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.8 | 整合已独审派发准入、业务产物与持续配置检查，保留 GUI 和工程证据链；公开关闭恢复诊断，原生身份缺口继续阻断真实业务恢复。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
@@ -170,7 +171,7 @@
 <td>工具·下载</td>
 <td style="word-break:break-word">抖音视频批量下载工具，基于 F2 框架，支持单个/批量博主下载，自动 Cookie 管理，差量更新机制</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v1.8.1</td>
+<td style="text-align:center">v1.11.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/douyin-batch-download-1.8.1.zip">下载</a></td>
 <td></td>
 </tr>
