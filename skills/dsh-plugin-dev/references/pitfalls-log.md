@@ -67,3 +67,15 @@
 ## 记录约定
 
 新坑按症状入上表：症状（可 grep 的错误特征）→ 先查 → 曾见原因与修复 → 出处（仓内 PR/commit/evidence 路径）。版本敏感结论标注核对版本；被后续版本推翻时保留原条目并加"已失效于 x.y.z"注记，不删历史。
+
+## 宿主 ctx 语义与插件激活（内容工厂 001b-001e 实测批，2026-10-11）
+
+| 症状 | 先查 | 曾见原因与修复 | 出处 |
+|---|---|---|---|
+| 插件整体不激活（`1 entry did not activate`），headless RPC 全 404，含此前已验收的旧功能 | 辅助模块是否直接读 cordis `ctx` 的未 inject 属性 | **cordis ctx 是 Proxy：未在 inject 声明的属性「读取即抛」**（`cannot get property X without inject`）——`?.` 只防 null/undefined 不防 getter throw。辅助模块签名收 `{ host: ctx }`、模块内读 `host.sessionController` ⇒ apply() 抛错全灭。修复：inject 声明该服务（orchestrator 先例证明可注入）+ 调用点传**已解构纯对象**（不传裸 ctx） | 内容工厂 W7 真机（PR #259） |
+| 上述缺陷在单测全绿下漏网 | 测试假件是否模拟宿主语义 | 普通 fakeCtx 读未声明属性返回 undefined **永不抛**——Proxy 语义类缺陷（读取即抛）在普通对象假件下结构性不可见。回归门=**cordis Proxy 语义假件**（get trap 对白名单外属性抛错）+ 形状断言（禁止裸 ctx 下传） | 同上（W7 审查 F1 三重静默教训） |
+| 交付轮 PR 夹带「已修复」实为漏提交（同族二次） | 多文件同款修复是否逐文件入库 | 同款修复分散多测试文件时**逐文件 add**，交付前 `git status` 必须干净 + `git branch --show-current` 核对（防 detached/串树） | PR #260/#266 拦截记录 |
+| GUI 显示「Unknown client plugin」+ Renderer 30s boot health 超时 | **先对照已知显示伪影**（见 desktop-load-and-isolation「renderer 偶发 boot failed」条的 2026-09-29 静态归因） | 该文案是插件列表空时的**占位伪影**，真实含义=渲染器 30s 整体静默，与被测插件无关。W7 时段与系统代理（scutil --proxy 的 1082）瞬断吻合——三假设中「系统代理」假设的实证。**勿据伪影文案把静默归因为插件问题**（内容工厂 W7 曾误定性后勘正） | 内容工厂 W7（PR #274）+ desktop-load-and-isolation |
+| 真机取证（boot 日志/cookie 文件）入库含活凭证 | 入库前脱敏 | boot 日志的 `token=`、cookie 文件的 `v1.eyJ` 签名都是凭证。入库前正则脱敏（**正则须含 cookie 名下划线** `[A-Za-z0-9_]+`——曾漏匹配）；配套销毁隔离 home 的 credentials 使泄露 Cookie 失效 | 内容工厂 W7→PR #268 |
+| 多轮真机探针共用实例的结果被串轮污染 | 删除类探针是否破坏后续探针的夹具前提 | R18c 删 objB 批后 R11②④ 被「批不存在」污染——探针幂等重建夹具，或删除类探针放最后 | 内容工厂 W8 复跑 |
+| Web 页面路径验证通过 ≠ Desktop GUI 路径通过 | 两条 client 装配链分开验证 | client bundle 在 web server combo（外部 Chromium 连）与 desktop-shell Renderer（Electron 内置）是**两条装配链**——Web 多次通过、GUI 同代码可能「Unknown client plugin」（见上伪影条）。验收口径分开陈述 | 内容工厂 001b-001d |
