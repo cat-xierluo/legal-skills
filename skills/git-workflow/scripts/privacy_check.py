@@ -143,24 +143,81 @@ class Checker:
             return
         self.scan_text(text, source)
 
+    def scan_patch(self, data, source):
+        # Scan original bytes first: preserve review hashes and all other rules.
+        first = len(self.findings)
+        self.scan_bytes(data, source)
+        try:
+            text = data.decode('utf-8')
+        except UnicodeError:
+            return
+        if '\0' in text:
+            return
+        removed = set()
+        pending = set()
+        remaining = None
+        hunk = re.compile(r'^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(?:.*)$')
+        for number, line in enumerate(text.split('\n'), 1):
+            match = hunk.match(line)
+            if match:
+                remaining = [int(n) if n is not None else 1 for n in match.groups()]
+                pending = set()
+                continue
+            if remaining is None:
+                continue
+            if line.startswith('\\ No newline at end of file'):
+                continue
+            if line.startswith('-'):
+                remaining[0] -= 1
+                pending.add(number)
+            elif line.startswith('+'):
+                remaining[1] -= 1
+            elif line.startswith(' '):
+                remaining[0] -= 1
+                remaining[1] -= 1
+            else:
+                remaining = None
+                pending = set()
+                continue
+            if min(remaining) < 0:
+                remaining = None
+                pending = set()
+            elif remaining == [0, 0]:
+                removed.update(pending)
+                remaining = None
+                pending = set()
+        # Only complete Git hunks qualify. Headers, context and added lines do not.
+        self.findings[first:] = [finding for finding in self.findings[first:]
+                                 if not (finding[0] == 'local-user-path' and finding[3] in removed)]
+
     def scan_tree_changes(self, tree, paths):
+        seen = set()
         for path in sorted(set(paths)):
             if path == '.githooks/local-denylist':
                 raise PrivacyError('PRIVACY_LOCAL_POLICY_TRACKED: 本地黑名单不得出现在待发布变更')
             self.scan_text(path, 'path:' + path)
-            entries = self.git('ls-tree', '-z', tree, '--', path).split(b'\0')
+            # A deleted symlink can now name a directory. Inspect its actual blobs.
+            entries = self.git('ls-tree', '-r', '-z', tree, '--', path).split(b'\0')
             for entry in filter(None, entries):
-                meta, _ = entry.split(b'\t', 1)
+                meta, entry_path = entry.split(b'\t', 1)
                 mode, kind, oid = meta.split()
                 if kind != b'blob':
-                    raise PrivacyError('PRIVACY_UNREADABLE_CONTENT: 子模块或目录不能按文本检查')
-                self.scan_bytes(self.git('cat-file', 'blob', oid.decode('ascii')), 'blob:' + path)
+                    raise PrivacyError('PRIVACY_UNREADABLE_CONTENT: 子模块不能按文本检查')
+                actual_path = os.fsdecode(entry_path)
+                if actual_path in seen:
+                    continue
+                seen.add(actual_path)
+                if actual_path == '.githooks/local-denylist':
+                    raise PrivacyError('PRIVACY_LOCAL_POLICY_TRACKED: 本地黑名单不得出现在待发布变更')
+                if actual_path != path:
+                    self.scan_text(actual_path, 'path:' + actual_path)
+                self.scan_bytes(self.git('cat-file', 'blob', oid.decode('ascii')), 'blob:' + actual_path)
 
     def scan_staged(self):
         tree = self.git('write-tree').decode('ascii').strip()
         paths = [os.fsdecode(p) for p in self.git('diff', '--cached', '--name-only', '-z', '--no-renames').split(b'\0') if p]
         self.scan_tree_changes(tree, paths)
-        self.scan_bytes(self.git('diff', '--cached', '--no-ext-diff', '--no-textconv',
+        self.scan_patch(self.git('diff', '--cached', '--no-ext-diff', '--no-textconv',
                                  '--no-renames', '--full-index', '--binary'), 'staged-patch')
         return tree
 
@@ -187,7 +244,7 @@ class Checker:
             if not OID.fullmatch(oid):
                 raise PrivacyError('PRIVACY_RANGE_INVALID: 无效提交列表')
             self.scan_bytes(self.git('show', '-s', '--format=%B', oid), 'commit:' + oid + ':message')
-            self.scan_bytes(self.git('show', '--format=', '--root', '-m', '--no-ext-diff',
+            self.scan_patch(self.git('show', '--format=', '--root', '-m', '--no-ext-diff',
                                      '--no-textconv', '--no-renames', '--full-index', '--binary', oid),
                             'commit:' + oid + ':patch')
             paths = [os.fsdecode(p) for p in self.git('diff-tree', '--root', '-m', '-r',

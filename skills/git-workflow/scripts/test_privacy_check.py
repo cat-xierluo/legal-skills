@@ -70,6 +70,121 @@ class PrivacyIntegration(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertNotIn(marker, result.stdout + result.stderr)
 
+    def existing_baseline(self, name, text):
+        self.write(name, text)
+        self.base = self.commit('existing baseline')
+        self.git('push', 'origin', self.base + ':refs/heads/main')
+
+    def staged(self):
+        self.git('add', '-A')
+        checker = Checker(self.repo)
+        checker.scan_staged()
+        checker.finish()
+
+    def test_cleanup_existing_user_path_passes_staged_and_range(self):
+        old = os.path.join(os.sep, 'Users', 'fixture-user', 'project')
+        self.existing_baseline('install.md', old + '\n')
+        self.write('install.md', '$HOME/project\n')
+        self.staged()
+        self.commit('make installation portable')
+        self.outgoing()
+
+    def test_deleted_user_path_file_passes(self):
+        self.existing_baseline('old.md', os.path.join(os.sep, 'home', 'fixture-user', 'project'))
+        (self.repo / 'old.md').unlink()
+        self.staged()
+        self.commit('remove obsolete instruction')
+        self.outgoing()
+
+    def test_new_user_path_still_blocks(self):
+        self.write('install.md', os.path.join(os.sep, 'Users', 'fixture-user', 'project'))
+        with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+            self.staged()
+        self.commit('add instruction')
+        with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+            self.outgoing()
+
+    def test_user_path_added_then_removed_still_blocks_history(self):
+        self.write('install.md', os.path.join(os.sep, 'Users', 'fixture-user', 'project'))
+        self.commit('add instruction')
+        self.write('install.md', '$HOME/project')
+        self.commit('portable instruction')
+        with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+            self.outgoing()
+
+    def test_user_path_context_and_message_still_block(self):
+        old = os.path.join(os.sep, 'Users', 'fixture-user', 'project')
+        self.existing_baseline('install.md', old + '\noriginal\n')
+        self.write('install.md', old + '\nupdated\n')
+        with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+            self.staged()
+        checker = Checker(self.repo)
+        checker.scan_text(old, 'commit-message')
+        with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+            checker.finish()
+
+    def test_deleted_other_sensitive_rules_still_block(self):
+        private_key = '-----BEGIN ' + 'PRIVATE KEY-----'
+        for value, rule in ((CASE, 'case-number'), (PHONE, 'mobile'), (private_key, 'private-key')):
+            with self.subTest(rule=rule):
+                self.existing_baseline('old.md', value)
+                (self.repo / 'old.md').unlink()
+                with self.assertRaisesRegex(PrivacyError, rule):
+                    self.staged()
+                self.commit('remove old material')
+                with self.assertRaisesRegex(PrivacyError, rule):
+                    self.outgoing()
+
+    def link_conversion(self, content='portable content\n'):
+        (self.repo / 'suite').symlink_to('shared')
+        self.base = self.commit('existing link')
+        self.git('push', 'origin', self.base + ':refs/heads/main')
+        (self.repo / 'suite').unlink()
+        self.write('suite/sub/instruction.md', content)
+
+    def test_link_to_directory_passes_staged_and_range(self):
+        self.link_conversion()
+        self.staged()
+        self.commit('move skill into suite')
+        self.outgoing()
+
+    def test_link_to_directory_checks_descendant_content(self):
+        self.link_conversion(CASE)
+        with self.assertRaisesRegex(PrivacyError, 'case-number'):
+            self.staged()
+        self.commit('move skill into suite')
+        with self.assertRaisesRegex(PrivacyError, 'case-number'):
+            self.outgoing()
+
+    def test_gitlink_still_fails_closed(self):
+        self.git('update-index', '--add', '--cacheinfo', '160000,' + self.base + ',module')
+        checker = Checker(self.repo)
+        with self.assertRaisesRegex(PrivacyError, 'UNREADABLE_CONTENT'):
+            checker.scan_staged()
+
+    def test_safe_push_cleanup_and_link_conversion_reaches_remote(self):
+        (self.repo / 'suite').symlink_to('shared')
+        old = os.path.join(os.sep, 'Users', 'fixture-user', 'project')
+        self.existing_baseline('install.md', old)
+        (self.repo / 'suite').unlink()
+        self.write('suite/sub/instruction.md', 'portable content')
+        self.write('install.md', '$HOME/project')
+        head = self.commit('portable suite installation')
+        result = self.cmd('bash', str(SCRIPTS / 'safe-push.sh'), '--base', 'main',
+                          '--expected-name', 'Privacy Test', '--expected-email', 'privacy@example.invalid', check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(head, self.git('ls-remote', 'origin', 'refs/heads/feat/privacy').stdout.split()[0])
+
+    def test_patch_headers_and_incomplete_hunks_still_block_paths(self):
+        old = os.path.join(os.sep, 'Users', 'fixture-user', 'project')
+        for data in ('--- a/' + old + '\n+++ b/file\n',
+                     '@@ -1,2 +1,1 @@\n-' + old + '\n+portable\n'):
+            with self.subTest(data=data):
+                checker = Checker(self.repo)
+                checker.scan_patch(data.encode(), 'staged-patch')
+                with self.assertRaisesRegex(PrivacyError, 'local-user-path'):
+                    checker.finish()
+
     def test_message_only_leak_is_blocked(self):
         self.git('commit', '--allow-empty', '-m', 'docs: normal\n\n' + CASE)
         with self.assertRaisesRegex(PrivacyError, 'case-number') as error:
