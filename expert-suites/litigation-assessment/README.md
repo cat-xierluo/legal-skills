@@ -1,7 +1,7 @@
 # 诉讼案件前期研判专家套件
 
 > [下载已发布套件（0.1.0）](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/suite-litigation-assessment-0.1.0.zip)
-> 整套源码 v0.1.1 待发布
+> 整套源码 v0.1.2 待发布
 > 上方旧包内容不随源码变化。
 
 用于从新案接收、材料整理和事实证据分析，一路推进到法律检索、风险判断、策略方案和客户可读交付。
@@ -23,7 +23,7 @@
 | Skill | 在本套件中的作用 | 单独下载 |
 | :--- | :--- | :--- |
 | [new-case](../../skills/new-case/) | 建立标准案件目录、信息看板和期限底座 | [已发布 v1.5.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/new-case-1.5.0.zip) |
-| [legal-case-analysis](../../skills/legal-case-analysis/) | 梳理事实、证据、争点、风险和诉讼策略 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
+| [legal-case-analysis](../../skills/legal-case-analysis/) | 综合材料、组织检索并形成风险与诉讼策略；源码 v1.1.0 待发布 | [已发布 v1.0.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip) |
 | [yuandian-law-search](../../skills/yuandian-law-search/) | 设计检索矩阵并核验法规与正反类案 | [已发布 v1.10.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/yuandian-law-search-1.10.0.zip) |
 | [legal-proposal-generator](../../skills/legal-proposal-generator/) | 把研判结果转成诉讼方案、咨询或沟通报告 | [已发布 v0.4.1](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-proposal-generator-0.4.1.zip) |
 | [legal-ocr](../../skills/legal-ocr/) | 把扫描件和多格式材料转换为可分析文本 | [已发布 v1.6.0](https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-ocr-1.6.0.zip) |
@@ -40,6 +40,12 @@
 4. 需要沟通时用 `legal-visualization` 解释复杂关系；
 5. 用 `legal-proposal-generator` 形成可交付方案，审定后再用 `md2word` 排版。
 
+## 与判决分析入口的区别
+
+本套件处理围绕案件目标的综合研判，材料可以从一份开始，不以文件数量决定是否适用。只需读懂单份判决时，可独立使用 `litigation-analysis`（未包含在本套件）；需要结合其他材料判断救济路径时，由本套件的 `legal-case-analysis` 主导。
+
+当前源码已将起诉状证据初评、庭审复盘纳入综合研判的按需参考。已发布套件与单 Skill ZIP 仍是原版本，不包含本次调整。
+
 ## 安装方法
 
 下载并解压完整套件 ZIP，把其中 `skills/*` 复制到 Agent 的 Skills 根目录，然后按各成员 `SKILL.md` 配置依赖。也可以只下载成员表中的单个 Skill。
@@ -50,4 +56,4 @@
 
 ## 版本与许可证
 
-当前套件版本为 `0.1.1`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
+当前套件版本为 `0.1.2`。套件本身不设独立许可证；各成员 Skill 按其目录内 `LICENSE.txt` 分别授权，下载或使用套件不改变成员原有许可条件。
