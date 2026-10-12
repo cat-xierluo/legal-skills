@@ -14,6 +14,8 @@
     add-task <短码> <标题> [--priority p] [--deadline D] [--owner X] [--desc S]
     set-status <短码> <task_id> <todo|in_progress|done>
     add-deadline <短码> <名称> --end <日期> [--type T] [--days N] [--start D] [--basis S]
+    add-mailing <短码> <单号> --carrier ems|sf|other [--content S] [--sent D] [--sender X] [--to Y] [--file F]
+    set-mailing <短码> <单号> [--status S] [--latest S] [--signed D] [--file F]
     set-stage <短码> <阶段> [--lock] [--unlock]
     validate <短码>                          schema 校验
 
@@ -40,7 +42,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    print("缺少依赖 PyYAML，请运行: python3 -m pip install PyYAML", file=sys.stderr)
+    raise SystemExit(1)
 
 # ---------------------------------------------------------------------------
 # 常量与契约枚举（与 schema.md v4.0 对齐）
@@ -62,6 +68,9 @@ REQUIRED_SECTIONS = ("meta", "案件基本信息", "当事人与代理", "任务
                      "费用信息", "上下文", "同步", "更新历史")
 LIST_SECTIONS_WITH_SOURCE = ("任务", "法定期限", "案件时间线", "证据索引",
                              "开庭与听证", "审级记录")
+
+CARRIER = ("ems", "sf", "other")
+MAILING_STATE = ("pending", "in_transit", "signed", "abnormal")
 
 TODAY = datetime.date.today()
 
@@ -223,6 +232,35 @@ def validate_data(data, case_id):
     for d in data.get("开庭与听证") or []:
         if not DATE_RE.match(str(d.get("日期") or "")):
             errs.append(f"开庭与听证行日期非法: {d.get('日期')}")
+    mailings = data.get("邮寄跟踪", [])
+    if not isinstance(mailings, list):
+        errs.append("邮寄跟踪须为列表")
+        mailings = []
+    nums = set()
+    for m in mailings:
+        if not isinstance(m, dict):
+            errs.append("邮寄跟踪行须为映射")
+            continue
+        num = m.get("单号")
+        if not isinstance(num, str) or not num.strip() or num != num.strip():
+            errs.append("邮寄跟踪单号须为非空、无首尾空白的字符串")
+        elif num in nums:
+            errs.append(f"邮寄跟踪单号重复: {num}")
+        else:
+            nums.add(num)
+        if m.get("source") not in ("user", "ai"):
+            errs.append("邮寄跟踪行缺/非法 source")
+        if m.get("承运商") not in CARRIER:
+            errs.append("邮寄跟踪承运商枚举非法")
+        if m.get("状态") not in MAILING_STATE:
+            errs.append("邮寄跟踪状态枚举非法")
+        for field in ("寄出日期", "签收日期"):
+            value = m.get(field)
+            if value is not None and not _mailing_date(value):
+                errs.append(f"邮寄跟踪 {field} 须为有效 YYYY-MM-DD 日期")
+        files = m.get("凭证文件")
+        if not isinstance(files, list) or any(not _mailing_relative_file(f) for f in files):
+            errs.append("邮寄跟踪凭证文件须为案件内相对路径列表")
 
     for s in _walk_strings(data.get("上下文")):
         if s.startswith("/") or re.match(r"^[A-Za-z]:\\\\", s):
@@ -306,6 +344,7 @@ def build_show(data):
         "任务统计": counts,
         "法定期限": [deadline_display(d) for d in data.get("法定期限") or []],
         "开庭与听证": data.get("开庭与听证") or [],
+        "邮寄跟踪": data.get("邮寄跟踪") or [],
         "审级记录": data.get("审级记录") or [],
         "工时统计": data.get("工时统计") or {},
         "上下文": data.get("上下文"),
@@ -397,6 +436,105 @@ def cmd_add_deadline(root, case_id, args):
         data.setdefault("法定期限", []).append(row)
         commit_write(path, data, args.actor, "登记期限", f"{dtype}|{args.name} 截止 {args.end}")
     print(f"✅ 已登记期限 {args.name}（截止 {args.end}，剩余 {days_left(args.end)} 天）")
+
+
+def _mailing_date(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _mailing_relative_file(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    normalized = value.replace(chr(92), "/")
+    return (not normalized.startswith(("/", "~"))
+            and not re.match(r"^[A-Za-z]:", normalized)
+            and ".." not in normalized.split("/")
+            and "\x00" not in normalized)
+
+
+def _check_mailing_file(value, case_path):
+    if value is None:
+        return
+    if not _mailing_relative_file(value):
+        die("--file 须为案件内相对路径，不得使用绝对路径或上级目录")
+    case_dir = case_path.parent.parent.resolve()
+    try:
+        (case_dir / value.replace(chr(92), "/")).resolve().relative_to(case_dir)
+    except (ValueError, OSError, RuntimeError):
+        die("--file 指向案件目录外或无法安全解析")
+
+
+def _load_mailing_case(path, case_id):
+    data = load_case(path)
+    errs, _ = validate_data(data, case_id)
+    if errs:
+        die("邮寄写入前校验失败：" + "; ".join(errs))
+    return data
+
+
+def cmd_add_mailing(root, case_id, args):
+    path = case_yaml_path(root, case_id)
+    with case_lock(path):
+        data = _load_mailing_case(path, case_id)
+        _check_mailing_file(args.file, path)
+        mailings = data.setdefault("邮寄跟踪", [])
+        num = str(args.number).strip()
+        if not num:
+            die("单号不能为空")
+        if any(str(m.get("单号")) == num for m in mailings):
+            die(f"单号 {num} 已登记（set-mailing 可更新）")
+        if args.carrier not in CARRIER:
+            die(f"--carrier 枚举非法（{CARRIER}）")
+        if args.sent is not None and not _mailing_date(args.sent):
+            die("--sent 须 YYYY-MM-DD")
+        mailings.append({"单号": num, "承运商": args.carrier, "内容": args.content,
+                         "寄出日期": args.sent, "寄件人": args.sender, "收件方": args.to,
+                         "状态": "pending", "最新轨迹": None, "签收日期": None,
+                         "凭证文件": [args.file] if args.file else [], "source": args.actor})
+        commit_write(path, data, args.actor, "登记邮寄",
+                     f"{args.carrier} {num} → {args.to or '?'}（{args.content or '?'}）")
+    print(f"✅ 已登记邮寄 {args.carrier} {num}（source={args.actor}）")
+
+
+def cmd_set_mailing(root, case_id, args):
+    path = case_yaml_path(root, case_id)
+    with case_lock(path):
+        data = _load_mailing_case(path, case_id)
+        _check_mailing_file(args.file, path)
+        num = str(args.number).strip()
+        m = next((x for x in data.get("邮寄跟踪") or [] if str(x.get("单号")) == num), None)
+        if not m:
+            die(f"未找到邮寄单号 {num}（add-mailing 先登记）")
+        if m.get("source") == "user" and args.actor != "user":
+            die(f"邮寄 {num} 由律师手工登记（source=user），AI 不得改写；请律师经看板操作，或 --actor user 显式代行")
+        if args.signed and args.status not in (None, "signed"):
+            die("--signed 与非 signed 状态冲突")
+        old = m.get("状态")
+        if args.status and args.status not in MAILING_STATE:
+            die(f"--status 枚举非法（{MAILING_STATE}）")
+        if args.status:
+            m["状态"] = args.status
+        if args.latest:
+            m["最新轨迹"] = args.latest
+        if args.signed is not None:
+            if not _mailing_date(args.signed):
+                die("--signed 须 YYYY-MM-DD")
+            m["签收日期"] = args.signed
+            m["状态"] = "signed"
+        if args.file:
+            files = m.setdefault("凭证文件", [])
+            if args.file not in files:
+                files.append(args.file)
+        commit_write(path, data, args.actor, "更新邮寄",
+                     f"{num}: {old} → {m.get('状态')}"
+                     + (f"，签收 {m.get('签收日期')}" if args.signed else ""))
+    print(f"✅ 邮寄 {num}: {old} → {m.get('状态')}")
 
 
 def cmd_set_stage(root, case_id, args):
@@ -1850,6 +1988,8 @@ def cmd_set_fields(root, case_id, args):
     raw = getattr(args, "json_")
     src = Path(payload).read_text(encoding="utf-8") if payload != raw else raw
     patch = json.loads(src)
+    if "邮寄跟踪" in patch:
+        die("邮寄跟踪请用 add-mailing/set-mailing；禁止 set-fields 整表替换")
     with case_lock(path):
         data = load_case(path)
         if data.get("案件基本信息", {}).get("生命周期状态") == CLOSED and args.actor != "user":
@@ -1971,6 +2111,21 @@ def main():
     sp.add_argument("--days", type=int, default=None)
     sp.add_argument("--start", default=None)
     sp.add_argument("--basis", default=None)
+    sp = sub.add_parser("add-mailing", help="登记邮寄（快递跟踪）"); common(sp)
+    sp.add_argument("number", metavar="单号")
+    sp.add_argument("--carrier", required=True, choices=list(CARRIER), help="承运商：ems/sf/other")
+    sp.add_argument("--content", default=None, help="内装材料")
+    sp.add_argument("--sent", default=None, help="寄出日期 YYYY-MM-DD")
+    sp.add_argument("--sender", default=None, help="寄件人")
+    sp.add_argument("--to", default=None, help="收件方")
+    sp.add_argument("--file", default=None, help="下单/交寄凭证相对路径")
+    sp = sub.add_parser("set-mailing", help="更新邮寄状态（单号定位）"); common(sp)
+    sp.add_argument("number", metavar="单号")
+    sp.add_argument("--status", default=None, choices=list(MAILING_STATE),
+                    help="pending待揽收/in_transit在途/signed签收/abnormal异常")
+    sp.add_argument("--latest", default=None, help="最新轨迹摘要")
+    sp.add_argument("--signed", default=None, help="签收日期 YYYY-MM-DD（同时置状态 signed）")
+    sp.add_argument("--file", default=None, help="轨迹凭证 PDF 相对路径（追加）")
     sp = sub.add_parser("set-stage", help="更新程序阶段"); common(sp)
     sp.add_argument("stage", metavar="阶段")
     sp.add_argument("--lock", action="store_true")
@@ -2009,7 +2164,8 @@ def main():
     sp.add_argument("--apply", action="store_true", help="真正写盘（默认只演练）")
     sp.add_argument("--enrich", default=None, help="补充字段 JSON（@文件路径 或内联），深合并进生成结果")
 
-    for name in ("show", "add-task", "set-status", "add-deadline", "set-stage", "validate", "set-fields", "log-work"):
+    for name in ("show", "add-task", "set-status", "add-deadline", "add-mailing",
+                 "set-mailing", "set-stage", "validate", "set-fields", "log-work"):
         sub.choices[name].add_argument("--actor", default="ai", choices=["user", "ai"],
                                        help="操作者（source=user 行与锁定阶段仅接受 user）")
 
@@ -2017,6 +2173,7 @@ def main():
     root = find_root(args.root)
     table = {"show": cmd_show, "list": cmd_list, "add-task": cmd_add_task,
              "set-status": cmd_set_status, "add-deadline": cmd_add_deadline,
+             "add-mailing": cmd_add_mailing, "set-mailing": cmd_set_mailing,
              "set-stage": cmd_set_stage, "validate": cmd_validate, "migrate": cmd_migrate,
              "set-fields": cmd_set_fields, "render": cmd_render, "report": cmd_report,
              "log-work": cmd_log_work, "backfill-work": cmd_backfill_work, "scan": cmd_scan, "extract": cmd_extract}
