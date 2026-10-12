@@ -4,6 +4,11 @@
 
 ---
 
+## [0.6.8] - 2026-10-12
+
+### 新增
+- references/owner-repo-disambiguation.md：截图/OCR 来源提取 owner/repo 的视觉消歧手册——SKILL.md §2 常见启发式之外的全量失败模式与处理动作。
+
 ## [0.6.7] - 2026-10-06
 
 ### 改进

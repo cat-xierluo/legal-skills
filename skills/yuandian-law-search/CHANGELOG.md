@@ -1,5 +1,10 @@
 # 变更日志
 
+## [1.10.1] - 2026-10-12
+
+### 新增
+- evals 补录开发诊断资产：diagnostic-selection.json（首批八题选题索引）与 additional-diagnostic-cases.json（Agent 设定诊断题，与 lightweight-regression-cases 互补）；均标注非正式评测证据。
+
 ## [1.10.0] - 2026-09-22
 
 ### 改进

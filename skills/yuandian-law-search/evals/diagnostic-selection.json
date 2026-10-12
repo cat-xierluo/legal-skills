@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "purpose": "首批八题开发诊断选题索引，不是已完成运行或正式评测证据",
+  "selected_cases": [
+    {"file": "lightweight-regression-cases.json", "id": "exact-article"},
+    {"file": "lightweight-regression-cases.json", "id": "client-list"},
+    {"file": "lightweight-regression-cases.json", "id": "transfer-balance"},
+    {"file": "lightweight-regression-cases.json", "id": "rental-deposit-report"},
+    {"file": "additional-diagnostic-cases.json", "id": "merchant-video-link"},
+    {"file": "additional-diagnostic-cases.json", "id": "patent-seller-lawful-source"},
+    {"file": "additional-diagnostic-cases.json", "id": "credit-assignment-notice"},
+    {"file": "additional-diagnostic-cases.json", "id": "historical-contract-law"}
+  ],
+  "first_frozen_response_batch": ["client-list", "transfer-balance", "rental-deposit-report"],
+  "excluded_from_first_business_batch": [
+    {"id": "mcp-without-cli-key", "reason": "工具环境控制题；实际 MCP fixture 和隔离环境未齐"},
+    {"id": "deep-conflicting-claims", "reason": "深度研究路由题；所称已有案件材料未绑定"}
+  ],
+  "execution_status": "NOT_RUN",
+  "required_before_dispatch": [
+    "固定本次要测的题目及完整输入哈希",
+    "固定相同模型、设置、工具、执行与采样预算，以及 A/B/C 的提示差异",
+    "将评分与来源标签留在评测侧，不提供给被测 Agent",
+    "按现有评测流程核对独立执行环境，不建立额外通用框架"
+  ],
+  "limitations": [
+    "不要求用户另行出题，Agent 可依据公开规则、已有历史主题与已知失败自行设题",
+    "首批冻结返回对照的三题有完整历史响应；其余题尚需合法取得真实返回，禁止编造检索结果",
+    "候选作者已见题目；不声明严格盲测、人工金标准或晋级通过",
+    "缺少人工校准不阻断开发诊断，但相关法律判断保留未经人工校准标记",
+    "未获对应预算不批量请求收费接口；API 诊断不冒充真实 MCP 对照"
+  ]
+}
