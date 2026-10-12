@@ -34,6 +34,7 @@
 
 | 日期       | 类型   | Skill                                                                 | 版本    | 更新要点                                                                                                                                                                                                                                       |
 | :--------- | :----- | :-------------------------------------------------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-12 | 新上传 | [express-tracking](skills/express-tracking/) | v0.2.1 | 快递邮寄跟踪与证据留痕（EMS/顺丰官网轨迹+水印 PDF 凭证归档）；登录态持久化与 trusted 输入反风控；首次公开登记。 |
 | 2026-10-11 | 更新 | [litigation-analysis](skills/litigation-analysis/) | v1.5.0 | 聚焦单份判决深析；起诉状与庭审参考迁至综合研判，重整模板与交接，源码待发布。 |
 | 2026-10-11 | 更新 | [legal-case-analysis](skills/legal-case-analysis/) | v1.1.0 | 明确综合研判与检索职责，承接起诉状、庭审参考，复用判决节点成果；源码待发布。 |
 | 2026-10-09 | 更新 | [release-workflow](skills/release-workflow/) | v1.6.3 | 增加标准 updater 验签、真实进程回收/安装/恢复门禁、旧客户端手动引导及不可变发布规则；源码候选1.6.3尚未发布，下载保留1.6.0。 |
@@ -41,7 +42,6 @@
 | 2026-10-06 | 更新 | [git-workflow](skills/git-workflow/) | v1.17.1→v1.23.1 | 默认创建时稀疏检出与场景化参考读取；统一分支命名与 PR 生命周期；主目录门禁拒绝 Git 缩写和组合参数造成的历史/文件覆写。 |
 | 2026-10-04 | 更新 | [multi-agent-orchestration](skills/multi-agent-orchestration/) | v2.36.8 | 整合已独审派发准入、业务产物与持续配置检查，保留 GUI 和工程证据链；公开关闭恢复诊断，原生身份缺口继续阻断真实业务恢复。 |
 | 2026-10-02 | 更新 | [moot-court](skills/moot-court/) | v1.2.4 | 增加 Claude 原生子代理调用的被动索引与14项回归，绑定日志来源并区分完成和未完成；保留完整庭审的有界部分实测，G5及多轮稳定性仍未验证。 |
-| 2026-09-30 | 更新 | [elements-complaint-generator](skills/elements-complaint-generator/) | v0.16.1 | 修复09原模板字段串栏、金额尾注/单位和布尔/枚举/调解错位；新增逐栏OOXML正反例，正式版PDF及DSH宿主验收仍独立阻断。 |
 
 </details>
 
@@ -257,6 +257,15 @@
 <td style="text-align:center">v1.1.0</td>
 <td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/legal-case-analysis-1.0.0.zip">下载</a></td>
 <td>源码待发布；下载仍为上一已发布包</td>
+</tr>
+<tr>
+<td><a href="skills/express-tracking/"><strong>express-tracking</strong></a></td>
+<td>通用·案件管理</td>
+<td style="word-break:break-word">快递邮寄跟踪与证据留痕：登记寄件、浏览器自动化查 EMS/顺丰官网轨迹、生成带时间戳+URL 水印的 PDF 凭证归档、回写签收状态；不走第三方聚合 API（证据效力考虑）</td>
+<td style="text-align:center">CC-BY-NC</td>
+<td style="text-align:center">v0.2.1</td>
+<td style="text-align:center">—</td>
+<td>首次公开登记，源码与发布包待发布</td>
 </tr>
 <tr>
 <td><a href="skills/legal-proposal-generator/"><strong>legal-proposal-generator</strong></a></td>
