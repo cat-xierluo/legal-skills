@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.36.9] - 2026-10-12
+
+### 新增
+- 补录 zcode-gui 波次配套资产（多会话积压恢复）：references 34（本地 Web 与官方远控浏览器派发过渡路径）/35（浏览器自动化操作映射）/37（worker 资源收尾）/39（稀疏 worktree 派发）。
+- scripts 补录：checkout-plan.py（只读检出准入）、read-worker-result.sh、spawn-worker-checkout.sh、zcode-browser-driver.cjs 及配套测试。
+- 方向注记：zcode-gui 专线分支已于 2026-10-12 清理冻结；本批为通用编排能力留档入库。
+
 ## [2.36.8] - 2026-10-04
 
 ### 修复
