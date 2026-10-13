@@ -58,7 +58,7 @@ records:
         changelog_summary: null
         url: null
         publish_id: null
-  litigation-analysis:
+  judgment-analysis:
     platforms:
       clawhub:
         version: null

@@ -1,0 +1,10 @@
+{
+  "schema_version": "video-screenshot-benchmark-summary/v1",
+  "privacy": {"source_paths_stored": false, "ocr_text_stored": false, "annotation_intervals_stored": false, "frame_filenames_stored": false},
+  "corpus": {"kind": "synthetic", "distinct_categories": ["xiaohongshu", "wechat_chat", "product_work", "qualification_document", "long_scroll"]},
+  "cases": [{"case_id": "CASE-001", "expected_outcome": "success", "profiles": {"visual": {"status": "scored"}, "ocr": {"status": "scored"}}}],
+  "baseline_complete": true,
+  "real_baseline_status": "recorded_requires_human_review",
+  "comparative_evaluation_ready": false,
+  "accuracy_improvement_claim_allowed": false
+}

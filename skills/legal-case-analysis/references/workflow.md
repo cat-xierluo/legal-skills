@@ -6,7 +6,7 @@
 
 ## 一、启动阶段
 
-先按 SKILL.md 的相邻节点分工识别目标。仅解读单份判决时使用 `litigation-analysis`，不强制启动本流程；起诉状与证据初评按需读 `complaint-evidence-extraction.md`，庭审复盘按需读 `hearing-transcript-extraction.md`。这两类参考提供材料处理细节，涉及法律判断时仍进入本工作流的检索和论证阶段。
+先按 SKILL.md 的相邻节点分工识别目标。仅解读单份判决时使用 `judgment-analysis`，不强制启动本流程；起诉状与证据初评按需读 `complaint-evidence-extraction.md`，庭审复盘按需读 `hearing-transcript-extraction.md`。这两类参考提供材料处理细节，涉及法律判断时仍进入本工作流的检索和论证阶段。
 
 收到已有判决分析时先核来源定位、已读范围、法院认定与待核问题，再补充案件目标所必需的材料，不机械重做判决报告。
 

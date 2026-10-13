@@ -1,7 +1,7 @@
 ---
 name: video-screenshot
-description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
-version: "0.8.2"
+description: 视频截图提取与证据线索精筛工具。从微信、小红书、网页、会议等录屏中以有界高召回抽取关键帧，控制截图密度并过滤切换中间态；可用本地 OCR 多锚点和无文字图像主体生成不保存原文的证据线索索引，用匿名标注私有语料建立脱敏双路径基线，再为普通或较弱多模态模型提供受预算、封闭类别、非破坏性的分类/概括包，以及只做减法且有覆盖存活门禁的去重审计包。纯文字模型可完成全部本地代码流程。触发词：视频截图、录屏截图、聊天记录截图、证据截图、视频证据线索、抽帧去重、关键帧提取、截图太密、过渡帧、切换页、弱多模态截图审计。不要用于视频压缩、视频剪辑、法律证明力认定或音频提取。
+version: "0.9.1"
 author: 杨卫薪律师（微信ywxlaw）
 homepage: https://github.com/cat-xierluo/legal-skills
 license: MIT
@@ -58,7 +58,21 @@ uv run scripts/extract.py -i <视频路径> --keep-drop-candidates --drop-candid
 
 不要只因帧数减少就判定准确率提高。基础结果不调用大模型，并在报告中保留 `vision_audit_status=not_prepared`。
 
-### 4. 生成高价值证据线索包
+### 4. 建立可比较基线（仅算法迭代时）
+
+<!-- skill-lint:constraint PRIVATE-BENCHMARK-NO-OVERCLAIM -->
+需要比较算法版本、OCR 路径或参数时，先在 Git 仓库外为真实私有视频建立候选外人工标注，再运行：
+
+```bash
+uv run --with rapidocr-onnxruntime scripts/benchmark.py run \
+  --manifest /绝对路径/私有评测/manifest.json \
+  --workspace /绝对路径/私有评测/workspace \
+  --profiles visual,ocr
+```
+
+manifest 只使用 `CASE-001` 这类匿名编号；workspace、视频、基础报告与标注不得进入仓库。脱敏汇总不保存源路径、OCR 原文、标注时间点或帧名。少于指定五类真实页面、缺少候选外标注或双路径未跑齐时，必须保持 `real_baseline_status=not_verified`；合成回归不得替代真实准确率结论。全部跑齐也只标记 `recorded_requires_human_review`，真实来源和标注语义仍由人工确认。完整协议见 `references/benchmarking.md`。
+
+### 5. 生成高价值证据线索包
 
 基础结果确认完整后，先用代码生成一个独立的高价值索引；这一步也适用于纯文字模型：
 
@@ -87,7 +101,7 @@ python3 scripts/apply_evidence_review.py \
 
 应用器只接受封闭类别、可见事实和“可能用途”，拒绝“足以证明”等法律结论，并生成 `_evidence_leads/evidence_review.json`。能力较弱的模型使用默认 2 列大图，不扩大图片预算；不能读图时交付代码排序结果，并明确 `evidence_review` 未执行。详细合同见 `references/evidence-leads.md`。
 
-### 5. 按能力选择去重多模态分支
+### 6. 按能力选择去重多模态分支
 
 如果当前模型或工具不能读取图片，停止在基础结果，明确说明视觉审计未执行。不要根据文件名或算法分数伪造图像判断。
 
@@ -114,7 +128,7 @@ uv run scripts/prepare_vision_audit.py \
 <!-- skill-lint:constraint FINAL-COVERAGE-SURVIVAL -->
 `weak` 默认最多 6 组、18 张唯一图片；每张联系表只有一个红框判断目标，A/B/C 角色清晰标注，并生成 `review_template.json` 与 `MODEL_INSTRUCTIONS.md`。按组逐张查看，原位填写模板。weak 与 balanced 提出的删除或替换都只有在“置信度至少 0.90 + 本地核准覆盖候选 + 本地风险信号 + 覆盖帧最终存活”同时满足时才会生效；覆盖链、覆盖环或其他不足均安全降级为保留。
 
-### 6. 应用去重视觉审计
+### 7. 应用去重视觉审计
 
 ```bash
 python3 scripts/apply_vision_review.py \
@@ -143,6 +157,7 @@ python3 scripts/apply_vision_review.py \
 | `_vision_review.json` | 多模态模型的结构化审计结果；weak 使用模板 schema 1.1 |
 | `_curated/` | 不修改基础结果的视觉精选副本 |
 | `_curated/_curated_report.json` | 精选帧来源、排除清单和全链路哈希 |
+| 仓库外 `benchmark_summary.json` | 匿名真实语料的双路径召回、过渡泄漏、重复、密度与耗时汇总；不含路径、原文、标注时间点或帧名 |
 
 ## 参数选择
 
@@ -176,6 +191,7 @@ python3 scripts/apply_vision_review.py \
 ## 验收与安全边界
 
 - 运行 `uv run scripts/check_pipeline.py --case all`，要求全部领域回归通过并输出 `DOMAIN_CHECKS_PASSED`。
+- 评测底座可单独运行 `uv run scripts/check_pipeline.py --case benchmark`；该合成 CLI 回归只证明评测合同、FFmpeg 兼容和脱敏汇总可用，不证明真实截图准确率。
 - 输出事务可单独运行 `uv run scripts/check_pipeline.py --case transactional-output`，必须覆盖坏视频、非法参数、符号链接、未知文件、下游产物保护、成功替换和提交回滚。
 - 行为变化必须用代表视频复测，并通过联系表或逐图查看进行视觉抽查；静态检查或帧数减少不能单独证明准确。
 - 不修改原视频，不把完整录屏默认上传云端。
