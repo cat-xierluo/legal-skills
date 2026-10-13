@@ -474,9 +474,9 @@
 <td>工具·视频处理</td>
 <td style="word-break:break-word">从录屏视频中以有界高召回抽取证据截图并过滤切换中间态；可用本地 OCR 多锚点与无文字图像主体生成不保存原文的证据线索包，再为普通或较弱多模态模型提供封闭分类/概括及只做减法的去重审计</td>
 <td style="text-align:center">MIT</td>
-<td style="text-align:center">v0.8.2</td>
-<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip">下载</a></td>
-<td>所属套件：[法律材料与证据处理](expert-suites/legal-material-evidence/)</td>
+<td style="text-align:center">v0.9.1</td>
+<td style="text-align:center"><a href="https://github.com/cat-xierluo/legal-skills/releases/download/v2026.09.30/video-screenshot-0.8.2.zip">下载 v0.8.2</a></td>
+<td>源码 v0.9.1 待发布；下载为已发布 v0.8.2；所属套件：[法律材料与证据处理](expert-suites/legal-material-evidence/)</td>
 </tr>
 <tr>
 <td><a href="skills/article2book/"><strong>article2book</strong></a></td>
